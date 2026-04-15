@@ -1,0 +1,46 @@
+{
+  "template_name": "3d-platformer",
+  "engine": "threejs",
+  "threejs_version": "0.172.0",
+  "physics": "cannon-es",
+  "view": "third_person",
+  "aspect_ratio": "16:9",
+  "target_fps": 60,
+  "features": {
+    "camera": {
+      "type": "third_person_follow",
+      "distance": 8,
+      "height": 5,
+      "smooth_follow": true
+    },
+    "player": {
+      "movement": ["run", "jump", "double_jump", "wall_jump", "dash", "ground_pound"],
+      "controls": {
+        "move": "WASD/arrows",
+        "jump": "Space (hold for higher)",
+        "dash": "Shift",
+        "ground_pound": "Down + Space in air"
+      }
+    },
+    "levels": {
+      "format": "procedural_platforms",
+      "features": ["floating_platforms", "moving_platforms", "springs", "coins", "enemies", "checkpoints", "goal"]
+    },
+    "collectibles": ["coins", "gems", "power_stars"],
+    "enemies": {
+      "types": ["walker", "jumper", "chaser", "shooter"],
+      "death": "stomp_from_above"
+    }
+  },
+  "test_hooks": {
+    "expose_on_window": true,
+    "api": {
+      "getPlayer": "returns {x, y, z, health, lives, onGround}",
+      "getScore": "returns coin count",
+      "getLives": "returns lives",
+      "getEnemies": "returns [{x, y, z, type, alive}]",
+      "getCurrentScene": "returns game state string",
+      "getLevel": "returns level number"
+    }
+  }
+}
