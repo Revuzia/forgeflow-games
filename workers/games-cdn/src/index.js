@@ -58,8 +58,12 @@ export default {
     headers.set("access-control-allow-methods", "GET, HEAD, OPTIONS");
     headers.set("cross-origin-embedder-policy", "credentialless");
 
-    // Cache for 1 hour (games don't change often)
-    headers.set("cache-control", "public, max-age=3600");
+    // HTML: no-cache (always get latest version). Assets: cache 1 day.
+    if (ext === "html") {
+      headers.set("cache-control", "no-cache, must-revalidate");
+    } else {
+      headers.set("cache-control", "public, max-age=86400");
+    }
 
     return new Response(object.body, { headers });
   },
