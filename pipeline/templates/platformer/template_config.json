@@ -1,0 +1,69 @@
+{
+  "template_name": "platformer",
+  "engine": "phaser",
+  "phaser_version": "3.90.0",
+  "physics": "arcade",
+  "aspect_ratio": "16:9",
+  "target_fps": 60,
+  "scenes": ["BootScene", "PreloadScene", "MenuScene", "GameScene", "PauseScene", "GameOverScene", "WinScene"],
+  "features": {
+    "player": {
+      "movement": ["run", "jump", "double_jump", "wall_slide", "wall_jump", "dash", "ground_pound"],
+      "physics": "arcade_gravity",
+      "sprite_type": "spritesheet",
+      "animation_states": ["idle", "run", "jump", "fall", "wall_slide", "dash", "hurt", "die"]
+    },
+    "enemies": {
+      "types": ["patrol", "chase", "flying", "shooter", "boss"],
+      "ai": "state_machine",
+      "death": "stomp_or_attack"
+    },
+    "levels": {
+      "format": "tilemap_json",
+      "min_count": 5,
+      "tileset": "kenney_pixel_platformer",
+      "features": ["platforms", "spikes", "moving_platforms", "springs", "checkpoints", "secrets"]
+    },
+    "collectibles": ["coins", "gems", "power_ups", "health"],
+    "power_ups": ["speed_boost", "invincibility", "double_jump", "magnet"],
+    "ui": {
+      "hud": ["score", "lives", "level_name", "timer"],
+      "menus": ["main_menu", "pause", "game_over", "level_complete", "settings"]
+    },
+    "audio": {
+      "sfx": ["jump", "land", "coin", "hit", "enemy_die", "power_up", "checkpoint", "game_over", "level_complete"],
+      "music": ["menu_theme", "level_theme", "boss_theme", "game_over_theme"]
+    },
+    "effects": {
+      "particles": ["dust", "sparkle", "explosion", "trail"],
+      "screen": ["shake", "flash", "slow_motion"],
+      "visual": ["parallax_background", "animated_tiles", "weather"]
+    }
+  },
+  "test_hooks": {
+    "expose_on_window": true,
+    "api": {
+      "getPlayer": "returns {x, y, health, lives, state}",
+      "getScore": "returns number",
+      "getLives": "returns number",
+      "getEnemies": "returns [{x, y, type, alive}]",
+      "getCurrentScene": "returns scene key string",
+      "getLevel": "returns current level number",
+      "getCollectibles": "returns [{x, y, collected}]",
+      "simulateInput": "triggers key events for automated testing"
+    }
+  },
+  "kenney_assets": {
+    "tileset": "pixel-platformer/Tilemap/tilemap_packed.png",
+    "characters": "pixel-platformer/Tilemap/tilemap-characters_packed.png",
+    "backgrounds": "pixel-platformer/Tilemap/tilemap-backgrounds_packed.png",
+    "tile_width": 18,
+    "tile_height": 18
+  },
+  "deployment": {
+    "bundle_type": "folder",
+    "build_tool": "vite",
+    "output": "dist/",
+    "files": ["index.html", "game.js", "assets/"]
+  }
+}
