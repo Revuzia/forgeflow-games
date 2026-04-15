@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@layer base {
+  body {
+    @apply bg-surface-900 text-gray-100 font-body antialiased;
+  }
+
+  ::selection {
+    @apply bg-brand-blue/30 text-white;
+  }
+
+  ::-webkit-scrollbar {
+    @apply w-2;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-surface-900;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-600 rounded-full hover:bg-surface-500;
+  }
+}
+
+@layer components {
+  .game-card {
+    @apply relative rounded-xl overflow-hidden bg-surface-800 border border-surface-600/30
+           transition-all duration-300 cursor-pointer;
+  }
+  .game-card:hover {
+    @apply border-brand-blue/50 -translate-y-1;
+    box-shadow: 0 8px 30px rgba(0, 212, 255, 0.15);
+  }
+
+  .neon-text {
+    text-shadow: 0 0 10px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.2);
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 bg-brand-blue text-surface-900 font-display font-bold rounded-lg
+           hover:bg-brand-blue/90 transition-all duration-200 active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-surface-700 text-gray-100 font-display font-semibold rounded-lg
+           border border-surface-600 hover:border-brand-blue/50 transition-all duration-200;
+  }
+
+  .category-pill {
+    @apply px-4 py-2 rounded-full text-sm font-medium bg-surface-700 text-gray-300
+           border border-surface-600/50 hover:border-brand-blue/50 hover:text-brand-blue
+           transition-all duration-200 cursor-pointer whitespace-nowrap;
+  }
+  .category-pill.active {
+    @apply bg-brand-blue/10 text-brand-blue border-brand-blue/50;
+  }
+}
