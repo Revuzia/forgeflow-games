@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { Game } from "../../lib/supabase";
+import { initGameBridge, destroyGameBridge } from "../../lib/gameBridge";
 
 type Props = {
   game: Game;
@@ -56,7 +57,14 @@ export default function GamePlayer({ game }: Props) {
 
   const startGame = () => {
     setShowPreroll(false);
+    // Initialize game-to-portal bridge (scores, achievements, saves, play time)
+    initGameBridge(game.slug, game.id);
   };
+
+  // Cleanup bridge on unmount
+  useEffect(() => {
+    return () => destroyGameBridge();
+  }, []);
 
   return (
     <div ref={containerRef} className="relative bg-black rounded-xl overflow-hidden">
