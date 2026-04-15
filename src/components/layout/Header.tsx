@@ -15,22 +15,41 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 bg-surface-900 border-b border-surface-600/40">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center h-[72px] gap-3">
 
-        {/* Top row: Logo left — Search + Sign In right */}
-        <div className="flex items-center justify-between h-[70px]">
-          {/* Logo — left, slightly larger */}
-          <a href="/" className="flex items-center shrink-0">
+          {/* Logo — far left */}
+          <a href="/" className="flex items-center shrink-0 mr-4">
             <img
               src="/images/logo.png"
               alt="ForgeFlow Games"
-              className="h-[56px] sm:h-[64px] w-auto drop-shadow-[0_2px_10px_rgba(255,136,0,0.4)]"
+              className="h-[54px] sm:h-[60px] w-auto drop-shadow-[0_2px_10px_rgba(255,136,0,0.4)]"
             />
           </a>
 
-          {/* Right side: Search + Sign In */}
-          <div className="flex items-center gap-3">
-            {/* Search */}
+          {/* Category nav — fills middle space */}
+          <nav className="hidden lg:flex items-center gap-1.5 flex-1 justify-center">
+            <a href="/games" className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-surface-700 hover:bg-surface-600 transition-all whitespace-nowrap">
+              All Games
+            </a>
+            {CATEGORIES.map((cat) => (
+              <a
+                key={cat.slug}
+                href={`/category/${cat.slug}`}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:scale-105 whitespace-nowrap"
+                style={{
+                  color: cat.color,
+                  backgroundColor: cat.color + "12",
+                  border: `1px solid ${cat.color}25`,
+                }}
+              >
+                {cat.label}
+              </a>
+            ))}
+          </nav>
+
+          {/* Right side — search + sign in, far right */}
+          <div className="flex items-center gap-3 shrink-0 ml-auto">
             <form onSubmit={handleSearch} className="hidden md:flex items-center">
               <div className="relative">
                 <input
@@ -38,7 +57,7 @@ export default function Header() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search games..."
-                  className="w-48 lg:w-64 pl-10 pr-4 py-2 rounded-xl bg-surface-800 border border-surface-600/50
+                  className="w-40 lg:w-52 pl-9 pr-3 py-2 rounded-xl bg-surface-800 border border-surface-600/50
                              text-sm text-gray-100 placeholder-gray-500
                              focus:outline-none focus:border-brand-orange/50 focus:ring-2 focus:ring-brand-orange/20
                              transition-all duration-200"
@@ -49,7 +68,6 @@ export default function Header() {
               </div>
             </form>
 
-            {/* Sign In / User Menu */}
             <div className="hidden md:block">
               <UserMenu />
             </div>
@@ -69,27 +87,6 @@ export default function Header() {
             </button>
           </div>
         </div>
-
-        {/* Bottom row: Category navigation — centered */}
-        <nav className="hidden lg:flex items-center justify-center gap-1.5 pb-2.5 -mt-1">
-          <a href="/games" className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-surface-700 hover:bg-surface-600 transition-all">
-            All Games
-          </a>
-          {CATEGORIES.map((cat) => (
-            <a
-              key={cat.slug}
-              href={`/category/${cat.slug}`}
-              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all hover:scale-105"
-              style={{
-                color: cat.color,
-                backgroundColor: cat.color + "12",
-                border: `1px solid ${cat.color}25`,
-              }}
-            >
-              {cat.label}
-            </a>
-          ))}
-        </nav>
 
         {/* Mobile menu */}
         {mobileMenuOpen && (
