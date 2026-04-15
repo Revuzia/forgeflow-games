@@ -39,6 +39,7 @@ export type GameCategory = {
 };
 
 export const CATEGORIES: GameCategory[] = [
+  { label: "Arcade", slug: "arcade", icon: "joystick", color: "#ffcc00" },
   { label: "Platformers", slug: "platformer", icon: "gamepad-2", color: "#00d4ff" },
   { label: "Adventure", slug: "adventure", icon: "compass", color: "#00ff88" },
   { label: "RPG", slug: "rpg", icon: "sword", color: "#a855f7" },
