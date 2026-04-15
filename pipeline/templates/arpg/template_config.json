@@ -1,0 +1,92 @@
+{
+  "template_name": "arpg",
+  "engine": "phaser",
+  "phaser_version": "3.90.0",
+  "physics": "arcade_no_gravity",
+  "aspect_ratio": "16:9",
+  "target_fps": 60,
+  "scenes": ["BootScene", "PreloadScene", "MenuScene", "GameScene", "PauseScene", "GameOverScene", "WinScene"],
+  "features": {
+    "player": {
+      "movement": ["walk_8dir", "click_to_move", "attack_melee"],
+      "physics": "arcade_no_gravity",
+      "sprite_type": "spritesheet",
+      "animation_states": ["idle", "walk", "attack", "hurt", "die"],
+      "stats": ["health", "mana", "xp", "level", "attack", "defense", "speed"]
+    },
+    "enemies": {
+      "types": ["patrol", "chase"],
+      "ai": "state_machine",
+      "death": "attack",
+      "wave_spawning": true,
+      "scaling_difficulty": true
+    },
+    "levels": {
+      "format": "tilemap_json_or_procedural",
+      "min_count": 5,
+      "tileset": "kenney_pixel_platformer",
+      "features": ["rooms", "corridors", "stairs", "procedural_generation"],
+      "procedural": {
+        "room_count": 5,
+        "min_room_size": 10,
+        "max_room_size": 18,
+        "corridor_width": 3
+      }
+    },
+    "loot": {
+      "types": ["health_potion", "mana_potion", "weapon", "armor", "ring"],
+      "drop_chance": 0.4,
+      "scaling_stats": true
+    },
+    "inventory": {
+      "slots": 3,
+      "equipment": ["weapon", "armor", "ring"],
+      "stat_bonuses": true
+    },
+    "progression": {
+      "xp_system": true,
+      "level_up_stat_boosts": true,
+      "scaling_formula": "xpPerLevel * 1.4^level"
+    },
+    "ui": {
+      "hud": ["health_bar", "mana_bar", "xp_bar", "level", "score", "floor", "inventory_slots"],
+      "menus": ["main_menu", "pause", "game_over", "win"]
+    },
+    "audio": {
+      "sfx": ["attack", "hit", "enemy_die", "pickup", "levelup", "potion", "equip", "game_over", "level_complete"],
+      "music": ["menu_theme", "level_theme", "dungeon_theme", "boss_theme"]
+    },
+    "effects": {
+      "particles": ["hit_sparks"],
+      "screen": ["shake", "flash"],
+      "visual": ["float_text", "slash_effect", "loot_bounce"]
+    }
+  },
+  "test_hooks": {
+    "expose_on_window": true,
+    "api": {
+      "getPlayer": "returns {x, y, health, mana, level, xp, alive, inventory}",
+      "getScore": "returns number",
+      "getLives": "returns approximate lives from health",
+      "getEnemies": "returns [{x, y, type, hp, maxHp}]",
+      "getCurrentScene": "returns scene key string",
+      "getLevel": "returns current dungeon floor",
+      "getPlayerLevel": "returns character level",
+      "getInventory": "returns {weapon, armor, ring}",
+      "simulateInput": "triggers key events for automated testing"
+    }
+  },
+  "kenney_assets": {
+    "tileset": "pixel-platformer/Tilemap/tilemap_packed.png",
+    "characters": "pixel-platformer/Tilemap/tilemap-characters_packed.png",
+    "backgrounds": "pixel-platformer/Tilemap/tilemap-backgrounds_packed.png",
+    "tile_width": 18,
+    "tile_height": 18
+  },
+  "deployment": {
+    "bundle_type": "folder",
+    "build_tool": "vite",
+    "output": "dist/",
+    "files": ["index.html", "game.js", "assets/"]
+  }
+}

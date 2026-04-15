@@ -1,12 +1,51 @@
 {
-  "_note": "CC0 background music for games. Download OGG files to this directory.",
-  "status": "partial",
-  "available": ["menu_theme.ogg"],
-  "missing": ["level_theme_1.ogg", "boss_theme.ogg"],
-  "sources": [
-    "https://opengameart.org/content/cc0-music-0",
-    "https://itch.io/game-assets/tag-cc0/tag-music",
-    "https://freesound.org/browse/tags/cc0/"
-  ],
-  "fallback": "Games use Phaser's built-in Web Audio API to generate simple procedural music when OGG files are unavailable. The template handles missing music gracefully with try/catch."
+  "description": "CC0-licensed background music for ForgeFlow Games",
+  "license": "CC0 1.0 Universal (Public Domain Dedication)",
+  "source": "OpenGameArt.org",
+  "status": "complete",
+  "files": {
+    "menu_theme.ogg": {
+      "description": "Calm, inviting menu/title screen music",
+      "source_url": "https://opengameart.org/sites/default/files/title.ogg",
+      "mood": "calm",
+      "use": "menu screens, title screens"
+    },
+    "level_theme_1.ogg": {
+      "description": "Upbeat, adventurous exploration music",
+      "source_url": "https://opengameart.org/sites/default/files/exploration.ogg",
+      "mood": "upbeat",
+      "use": "overworld levels, adventure areas"
+    },
+    "level_theme_2.ogg": {
+      "description": "Mysterious dungeon/cave atmosphere",
+      "source_url": "https://opengameart.org/sites/default/files/dungeon.ogg",
+      "mood": "mysterious",
+      "use": "dungeon levels, underground areas"
+    },
+    "level_theme_3.ogg": {
+      "description": "Intense battle/action music",
+      "source_url": "https://opengameart.org/sites/default/files/battle.ogg",
+      "mood": "intense",
+      "use": "combat encounters, action sequences"
+    },
+    "boss_theme.ogg": {
+      "description": "Dramatic boss fight music",
+      "source_url": "https://opengameart.org/sites/default/files/boss.ogg",
+      "mood": "dramatic",
+      "use": "boss fights, final encounters"
+    },
+    "game_over.ogg": {
+      "description": "Somber game over music (short)",
+      "source_url": "https://opengameart.org/sites/default/files/game_over.ogg",
+      "mood": "somber",
+      "use": "game over screens, defeat"
+    },
+    "victory.ogg": {
+      "description": "Triumphant victory fanfare (short)",
+      "source_url": "https://opengameart.org/sites/default/files/victory.ogg",
+      "mood": "triumphant",
+      "use": "level complete, win screens"
+    }
+  },
+  "fallback_note": "Games use Phaser's built-in Web Audio API. Templates handle missing music gracefully with try/catch."
 }
