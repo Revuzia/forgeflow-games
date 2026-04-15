@@ -18,14 +18,7 @@ export default function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <a href="/" className="flex items-center gap-2 shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-blue to-brand-green flex items-center justify-center">
-              <span className="text-surface-900 font-display font-bold text-sm">FF</span>
-            </div>
-            <span className="font-display font-bold text-xl hidden sm:block">
-              <span className="text-brand-blue">Forge</span>
-              <span className="text-brand-green">Flow</span>
-              <span className="text-gray-300 ml-1">Games</span>
-            </span>
+            <img src="/images/logo.png" alt="ForgeFlow Games" className="h-10 sm:h-12 w-auto" />
           </a>
 
           {/* Desktop Nav */}

@@ -8,13 +8,7 @@ export default function Footer() {
           {/* Brand */}
           <div className="md:col-span-1">
             <a href="/" className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-blue to-brand-green flex items-center justify-center">
-                <span className="text-surface-900 font-display font-bold text-sm">FF</span>
-              </div>
-              <span className="font-display font-bold text-lg">
-                <span className="text-brand-blue">Forge</span>
-                <span className="text-brand-green">Flow</span>
-              </span>
+              <img src="/images/logo.png" alt="ForgeFlow Games" className="h-10 w-auto" />
             </a>
             <p className="text-sm text-surface-500 leading-relaxed">
               Premium browser games for everyone. No downloads, no signups. Just play.
