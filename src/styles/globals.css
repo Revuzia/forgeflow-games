@@ -10,7 +10,8 @@
   }
 
   ::selection {
-    @apply bg-brand-blue/30 text-white;
+    background: rgba(255, 136, 0, 0.3);
+    color: white;
   }
 
   ::-webkit-scrollbar {
@@ -30,30 +31,43 @@
            transition-all duration-300 cursor-pointer;
   }
   .game-card:hover {
-    @apply border-brand-blue/50 -translate-y-1;
-    box-shadow: 0 8px 30px rgba(0, 212, 255, 0.15);
-  }
-
-  .neon-text {
-    text-shadow: 0 0 10px rgba(0, 212, 255, 0.5), 0 0 40px rgba(0, 212, 255, 0.2);
+    @apply -translate-y-1;
+    border-color: rgba(255, 136, 0, 0.4);
+    box-shadow: 0 8px 30px rgba(255, 136, 0, 0.12);
   }
 
   .btn-primary {
-    @apply px-6 py-3 bg-brand-blue text-surface-900 font-display font-bold rounded-lg
-           hover:bg-brand-blue/90 transition-all duration-200 active:scale-95;
+    @apply px-6 py-3 font-display font-bold rounded-xl
+           transition-all duration-200 active:scale-95;
+    background: linear-gradient(135deg, #ff8800, #ff5500);
+    color: white;
+    box-shadow: 0 4px 15px rgba(255, 136, 0, 0.3);
+  }
+  .btn-primary:hover {
+    box-shadow: 0 6px 25px rgba(255, 136, 0, 0.5);
+    transform: translateY(-1px);
   }
 
   .btn-secondary {
-    @apply px-6 py-3 bg-surface-700 text-gray-100 font-display font-semibold rounded-lg
-           border border-surface-600 hover:border-brand-blue/50 transition-all duration-200;
+    @apply px-6 py-3 bg-surface-700 text-gray-100 font-display font-semibold rounded-xl
+           border border-surface-600 transition-all duration-200;
+  }
+  .btn-secondary:hover {
+    border-color: rgba(255, 136, 0, 0.4);
+    color: white;
   }
 
   .category-pill {
     @apply px-4 py-2 rounded-full text-sm font-medium bg-surface-700 text-gray-300
-           border border-surface-600/50 hover:border-brand-blue/50 hover:text-brand-blue
-           transition-all duration-200 cursor-pointer whitespace-nowrap;
+           border border-surface-600/50 transition-all duration-200 cursor-pointer whitespace-nowrap;
+  }
+  .category-pill:hover {
+    border-color: rgba(255, 136, 0, 0.4);
+    color: #ff8800;
   }
   .category-pill.active {
-    @apply bg-brand-blue/10 text-brand-blue border-brand-blue/50;
+    background: rgba(255, 136, 0, 0.1);
+    color: #ff8800;
+    border-color: rgba(255, 136, 0, 0.4);
   }
 }

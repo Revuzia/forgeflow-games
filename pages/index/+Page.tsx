@@ -22,7 +22,7 @@ export default function HomePage() {
         {/* Animated background grid */}
         <div className="absolute inset-0 opacity-5">
           <div className="absolute inset-0" style={{
-            backgroundImage: "linear-gradient(rgba(0,212,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.3) 1px, transparent 1px)",
+            backgroundImage: "linear-gradient(rgba(255,136,0,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(0,180,255,0.15) 1px, transparent 1px)",
             backgroundSize: "60px 60px"
           }} />
         </div>
@@ -30,10 +30,10 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24 relative">
           <div className="text-center max-w-3xl mx-auto">
             <h1 className="font-display font-bold text-4xl sm:text-5xl lg:text-6xl mb-6">
-              <span className="text-brand-blue neon-text">Premium</span>{" "}
-              <span className="text-gray-100">Browser Games</span>
+              <span className="text-brand-orange" style={{ textShadow: "0 0 30px rgba(255,136,0,0.4)" }}>Premium</span>{" "}
+              <span className="text-white">Browser Games</span>
             </h1>
-            <p className="text-lg sm:text-xl text-surface-500 mb-8 leading-relaxed">
+            <p className="text-lg sm:text-xl text-gray-400 mb-8 leading-relaxed">
               55+ original games. No downloads. No signups. Just hit play.
               Platformers, RPGs, adventure, strategy, and more.
             </p>
