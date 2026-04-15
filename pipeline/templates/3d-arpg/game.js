@@ -325,23 +325,56 @@ function createPlayer(spawnX, spawnZ) {
   const ts = CONFIG.tileSize;
   const group = new THREE.Group();
 
-  // Body (capsule shape)
-  const bodyGeo = new THREE.CapsuleGeometry(0.3, 0.8, 4, 8);
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x4488ff, roughness: 0.5 });
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
-  body.position.y = 0.7;
-  body.castShadow = true;
-  group.add(body);
+  // Try to load 3D character model (glTF), fall back to procedural geometry
+  const loader = new GLTFLoader();
+  const modelPath = CONFIG.playerModel || 'assets/models/hero.gltf';
 
-  // Head
-  const headGeo = new THREE.SphereGeometry(0.25, 8, 8);
-  const headMat = new THREE.MeshStandardMaterial({ color: 0xffcc88, roughness: 0.6 });
-  const head = new THREE.Mesh(headGeo, headMat);
-  head.position.y = 1.4;
-  head.castShadow = true;
-  group.add(head);
+  loader.load(modelPath, (gltf) => {
+    // Success: use actual 3D model
+    const model = gltf.scene;
+    model.scale.setScalar(CONFIG.playerModelScale || 0.8);
+    model.traverse(child => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    group.add(model);
+    player.model = model;
 
-  // Weapon (sword)
+    // Set up animations if available
+    if (gltf.animations && gltf.animations.length > 0) {
+      player.mixer = new THREE.AnimationMixer(model);
+      player.animations = {};
+      for (const clip of gltf.animations) {
+        player.animations[clip.name.toLowerCase()] = player.mixer.clipAction(clip);
+      }
+      // Play idle by default
+      const idleClip = player.animations['idle'] || player.animations['tpose'] || Object.values(player.animations)[0];
+      if (idleClip) idleClip.play();
+    }
+    console.log('[player] 3D model loaded with', gltf.animations?.length || 0, 'animations');
+  }, undefined, (err) => {
+    // Failed: use procedural geometry fallback
+    console.log('[player] Model not found, using procedural geometry');
+    const bodyGeo = new THREE.CapsuleGeometry(0.3, 0.8, 4, 8);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x4488ff, roughness: 0.5 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.y = 0.7;
+    body.castShadow = true;
+    group.add(body);
+    player.body = body;
+
+    const headGeo = new THREE.SphereGeometry(0.25, 8, 8);
+    const headMat = new THREE.MeshStandardMaterial({ color: 0xffcc88, roughness: 0.6 });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.y = 1.4;
+    head.castShadow = true;
+    group.add(head);
+    player.head = head;
+  });
+
+  // Weapon (sword) — always procedural, or loaded separately
   const swordGeo = new THREE.BoxGeometry(0.08, 0.8, 0.04);
   const swordMat = new THREE.MeshStandardMaterial({ color: 0xccccdd, metalness: 0.8, roughness: 0.2 });
   const sword = new THREE.Mesh(swordGeo, swordMat);
@@ -383,6 +416,9 @@ function createPlayer(spawnX, spawnZ) {
 
 function updatePlayer(dt) {
   if (!player || !player.alive) return;
+
+  // Update animation mixer
+  if (player.mixer) player.mixer.update(dt);
 
   const p = player;
   const pos = p.mesh.position;
@@ -484,30 +520,62 @@ function performAttack() {
 // ═══════════════════════════════════════════════════════════════
 // MODULE: ENEMIES — AI with state machine
 // ═══════════════════════════════════════════════════════════════
+// Pool of monster GLB file names (from Ultimate Monsters Bundle)
+const MONSTER_MODELS = [
+  'Alien.glb', 'Blue Demon.glb', 'Bunny.glb', 'Cactoro.glb',
+  'Armabee.glb', 'Birb.glb', 'Green Blob.glb', 'Mushroom.glb',
+  'Orc Enemy.glb', 'Pink Slime.glb', 'Skeleton.glb', 'Spider.glb',
+];
+const monsterModelCache = {};
+
 function spawnEnemy(type, x, z) {
   const ts = CONFIG.tileSize;
   const group = new THREE.Group();
 
-  // Enemy body (color-coded by type)
-  const colors = { melee: 0xcc3333, ranged: 0x8833cc, tank: 0x336633, boss: 0xcc6600 };
-  const sizes = { melee: 0.35, ranged: 0.3, tank: 0.5, boss: 0.7 };
+  // Try to load a GLB monster model, fall back to procedural
+  const modelFile = MONSTER_MODELS[Math.floor(Math.random() * MONSTER_MODELS.length)];
+  const modelPath = `assets/models/monsters/${modelFile}`;
+  const loader = new GLTFLoader();
 
-  const bodyGeo = new THREE.CapsuleGeometry(sizes[type] || 0.35, 0.6, 4, 8);
-  const bodyMat = new THREE.MeshStandardMaterial({ color: colors[type] || 0xcc3333, roughness: 0.5 });
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
-  body.position.y = 0.6;
-  body.castShadow = true;
-  group.add(body);
+  loader.load(modelPath, (gltf) => {
+    const model = gltf.scene;
+    const scale = type === 'boss' ? 1.5 : type === 'tank' ? 1.2 : 0.8;
+    model.scale.setScalar(scale);
+    model.traverse(child => {
+      if (child.isMesh) { child.castShadow = true; }
+    });
+    group.add(model);
 
-  // Eyes
-  const eyeGeo = new THREE.SphereGeometry(0.08, 6, 6);
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-  eyeL.position.set(-0.12, 1.0, -0.2);
-  group.add(eyeL);
-  const eyeR = eyeL.clone();
-  eyeR.position.x = 0.12;
-  group.add(eyeR);
+    // Play animations if available
+    if (gltf.animations?.length > 0) {
+      const mixer = new THREE.AnimationMixer(model);
+      const action = mixer.clipAction(gltf.animations[0]);
+      action.play();
+      // Store mixer on enemy for update loop
+      const enemyObj = enemies.find(e => e.mesh === group);
+      if (enemyObj) enemyObj.mixer = mixer;
+    }
+    console.log(`[enemy] Loaded ${modelFile}`);
+  }, undefined, () => {
+    // Fallback: procedural geometry
+    const colors = { melee: 0xcc3333, ranged: 0x8833cc, tank: 0x336633, boss: 0xcc6600 };
+    const sizes = { melee: 0.35, ranged: 0.3, tank: 0.5, boss: 0.7 };
+    const bodyGeo = new THREE.CapsuleGeometry(sizes[type] || 0.35, 0.6, 4, 8);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: colors[type] || 0xcc3333, roughness: 0.5 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.y = 0.6;
+    body.castShadow = true;
+    group.add(body);
+
+    const eyeGeo = new THREE.SphereGeometry(0.08, 6, 6);
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+    eyeL.position.set(-0.12, 1.0, -0.2);
+    group.add(eyeL);
+    const eyeR = eyeL.clone();
+    eyeR.position.x = 0.12;
+    group.add(eyeR);
+  });
 
   // Health bar (CSS2D)
   const hpBarContainer = document.createElement('div');
@@ -548,6 +616,9 @@ function updateEnemies(dt) {
 
   for (const e of enemies) {
     if (!e.alive) continue;
+
+    // Update animation mixer if loaded
+    if (e.mixer) e.mixer.update(dt);
 
     const pos = e.mesh.position;
     const dist = pos.distanceTo(playerPos);
