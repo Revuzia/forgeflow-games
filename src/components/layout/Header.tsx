@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { CATEGORIES } from "../../lib/supabase";
+import UserMenu from "../auth/UserMenu";
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -64,6 +65,11 @@ export default function Header() {
               </svg>
             </div>
           </form>
+
+          {/* User account menu */}
+          <div className="hidden md:block">
+            <UserMenu />
+          </div>
 
           {/* Mobile menu button */}
           <button
