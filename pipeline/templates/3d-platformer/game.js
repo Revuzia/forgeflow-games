@@ -14,6 +14,7 @@
  */
 
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ═══════════════════════════════════════════════════════════════
 // CONFIG
@@ -126,34 +127,51 @@ function init() {
 // ═══════════════════════════════════════════════════════════════
 function createPlayer(x, y, z) {
   const group = new THREE.Group();
+  const loader = new GLTFLoader();
+  const modelPath = CONFIG.playerModel || 'assets/models/hero.gltf';
 
-  // Body
-  const bodyGeo = new THREE.CapsuleGeometry(0.35, 0.7, 4, 8);
-  const bodyMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.player, roughness: 0.4, metalness: 0.1 });
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
-  body.position.y = 0.7;
-  body.castShadow = true;
-  group.add(body);
+  // Load 3D character model
+  loader.load(modelPath, (gltf) => {
+    const model = gltf.scene;
+    model.scale.setScalar(CONFIG.playerModelScale || 0.6);
+    model.traverse(child => {
+      if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }
+    });
+    group.add(model);
 
-  // Eyes
-  const eyeGeo = new THREE.SphereGeometry(0.08, 8, 8);
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-  eyeL.position.set(-0.15, 1.1, -0.25);
-  group.add(eyeL);
-  const eyeR = eyeL.clone();
-  eyeR.position.x = 0.15;
-  group.add(eyeR);
-
-  // Pupils
-  const pupilGeo = new THREE.SphereGeometry(0.04, 8, 8);
-  const pupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-  const pupilL = new THREE.Mesh(pupilGeo, pupilMat);
-  pupilL.position.set(-0.15, 1.1, -0.32);
-  group.add(pupilL);
-  const pupilR = pupilL.clone();
-  pupilR.position.x = 0.15;
-  group.add(pupilR);
+    // Animations
+    if (gltf.animations?.length > 0) {
+      player.mixer = new THREE.AnimationMixer(model);
+      player.animations = {};
+      for (const clip of gltf.animations) {
+        player.animations[clip.name.toLowerCase()] = player.mixer.clipAction(clip);
+      }
+      const idle = player.animations['idle'] || Object.values(player.animations)[0];
+      if (idle) idle.play();
+    }
+    console.log('[player] 3D model loaded:', modelPath);
+  }, undefined, (err) => {
+    // Try alternatives
+    const alts = ['assets/models/hero.glb', 'assets/models/character.glb'];
+    for (const alt of alts) {
+      loader.load(alt, (gltf) => {
+        const model = gltf.scene;
+        model.scale.setScalar(0.6);
+        model.traverse(child => { if (child.isMesh) child.castShadow = true; });
+        group.add(model);
+      }, undefined, () => {});
+    }
+    // Red error marker if nothing loads
+    setTimeout(() => {
+      if (group.children.length <= 1) {
+        console.error('[player] NO MODEL — needs assets/models/hero.gltf');
+        group.add(new THREE.Mesh(
+          new THREE.BoxGeometry(0.5, 1.5, 0.5),
+          new THREE.MeshBasicMaterial({ color: 0xff0000 })
+        ));
+      }
+    }, 3000);
+  });
 
   group.position.set(x, y, z);
   scene.add(group);
@@ -168,6 +186,7 @@ function createPlayer(x, y, z) {
 
 function updatePlayer(dt) {
   if (!player) return;
+  if (player.mixer) player.mixer.update(dt);
   const pos = player.mesh.position;
   const cfg = CONFIG.player;
 
@@ -448,33 +467,65 @@ function createCoin(x, y, z, value) {
   coins.push({ mesh, value, light, bobPhase: Math.random() * Math.PI * 2 });
 }
 
-function createEnemy(x, y, z, type, range) {
-  const geo = new THREE.SphereGeometry(0.4, 8, 8);
-  const mat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.enemy, roughness: 0.4 });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(x, y + 0.4, z);
-  mesh.castShadow = true;
-  scene.add(mesh);
+// Monster model names from Ultimate Monsters Bundle
+const PLATFORMER_MONSTERS = [
+  'Bunny.glb', 'Green Blob.glb', 'Mushroom.glb', 'Pink Slime.glb',
+  'Cactoro.glb', 'Birb.glb', 'Armabee.glb', 'Alpaking.glb',
+];
 
-  // Eyes
-  const eyeGeo = new THREE.SphereGeometry(0.1, 6, 6);
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-  eyeL.position.set(-0.15, 0.1, -0.35);
-  mesh.add(eyeL);
-  const eyeR = eyeL.clone();
-  eyeR.position.x = 0.15;
-  mesh.add(eyeR);
+function createEnemy(x, y, z, type, range) {
+  const group = new THREE.Group();
+  group.position.set(x, y + 0.4, z);
+  scene.add(group);
+
+  // Load a random monster GLB
+  const loader = new GLTFLoader();
+  const modelFile = PLATFORMER_MONSTERS[Math.floor(Math.random() * PLATFORMER_MONSTERS.length)];
+  loader.load(`assets/models/monsters/${modelFile}`, (gltf) => {
+    const model = gltf.scene;
+    model.scale.setScalar(0.6);
+    model.traverse(child => { if (child.isMesh) child.castShadow = true; });
+    group.add(model);
+    // Play animation
+    if (gltf.animations?.length > 0) {
+      const mixer = new THREE.AnimationMixer(model);
+      mixer.clipAction(gltf.animations[0]).play();
+      const enemy = enemies.find(e => e.mesh === group);
+      if (enemy) enemy.mixer = mixer;
+    }
+  }, undefined, () => {
+    // Try alternatives
+    for (const alt of PLATFORMER_MONSTERS.slice(0, 3)) {
+      loader.load(`assets/models/monsters/${alt}`, (gltf) => {
+        if (group.children.length > 0) return;
+        const model = gltf.scene;
+        model.scale.setScalar(0.6);
+        model.traverse(child => { if (child.isMesh) child.castShadow = true; });
+        group.add(model);
+      }, undefined, () => {});
+    }
+    // Error marker if nothing loads
+    setTimeout(() => {
+      if (group.children.length === 0) {
+        group.add(new THREE.Mesh(
+          new THREE.BoxGeometry(0.4, 0.8, 0.4),
+          new THREE.MeshBasicMaterial({ color: 0xff0000 })
+        ));
+      }
+    }, 3000);
+  });
 
   enemies.push({
-    mesh, type, alive: true, range,
+    mesh: group, type, alive: true, range,
     startX: x, dir: 1, speed: type === 'chaser' ? 5 : 3,
+    mixer: null,
   });
 }
 
 function updateEnemies(dt) {
   for (const e of enemies) {
     if (!e.alive) continue;
+    if (e.mixer) e.mixer.update(dt);
 
     if (e.type === 'walker') {
       e.mesh.position.x += e.dir * e.speed * dt;

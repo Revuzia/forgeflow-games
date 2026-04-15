@@ -355,23 +355,41 @@ function createPlayer(spawnX, spawnZ) {
     }
     console.log('[player] 3D model loaded with', gltf.animations?.length || 0, 'animations');
   }, undefined, (err) => {
-    // Failed: use procedural geometry fallback
-    console.log('[player] Model not found, using procedural geometry');
-    const bodyGeo = new THREE.CapsuleGeometry(0.3, 0.8, 4, 8);
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x4488ff, roughness: 0.5 });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.7;
-    body.castShadow = true;
-    group.add(body);
-    player.body = body;
-
-    const headGeo = new THREE.SphereGeometry(0.25, 8, 8);
-    const headMat = new THREE.MeshStandardMaterial({ color: 0xffcc88, roughness: 0.6 });
-    const head = new THREE.Mesh(headGeo, headMat);
-    head.position.y = 1.4;
-    head.castShadow = true;
-    group.add(head);
-    player.head = head;
+    // Model REQUIRED — try alternative paths before giving up
+    console.error('[player] Primary model failed, trying alternatives...');
+    const altPaths = [
+      'assets/models/hero.glb',
+      'assets/models/Superhero_Male_FullBody.gltf',
+      'assets/models/character.glb',
+    ];
+    let loaded = false;
+    for (const alt of altPaths) {
+      try {
+        loader.load(alt, (gltf) => {
+          if (loaded) return;
+          loaded = true;
+          const model = gltf.scene;
+          model.scale.setScalar(CONFIG.playerModelScale || 0.8);
+          model.traverse(child => { if (child.isMesh) { child.castShadow = true; } });
+          group.add(model);
+          player.model = model;
+          console.log('[player] Loaded alternative model:', alt);
+        });
+      } catch(e) {}
+    }
+    // If ALL alternatives fail, the game should still not crash — use a minimal visible marker
+    setTimeout(() => {
+      if (!loaded && group.children.length <= 1) {
+        console.error('[player] NO MODEL LOADED — game needs 3D character assets. Check assets/models/');
+        // Bright red marker so it's obvious models are missing during QA
+        const marker = new THREE.Mesh(
+          new THREE.BoxGeometry(0.5, 1.5, 0.5),
+          new THREE.MeshBasicMaterial({ color: 0xff0000 })
+        );
+        marker.position.y = 0.75;
+        group.add(marker);
+      }
+    }, 3000);
   });
 
   // Weapon (sword) — always procedural, or loaded separately
@@ -557,24 +575,36 @@ function spawnEnemy(type, x, z) {
     }
     console.log(`[enemy] Loaded ${modelFile}`);
   }, undefined, () => {
-    // Fallback: procedural geometry
-    const colors = { melee: 0xcc3333, ranged: 0x8833cc, tank: 0x336633, boss: 0xcc6600 };
-    const sizes = { melee: 0.35, ranged: 0.3, tank: 0.5, boss: 0.7 };
-    const bodyGeo = new THREE.CapsuleGeometry(sizes[type] || 0.35, 0.6, 4, 8);
-    const bodyMat = new THREE.MeshStandardMaterial({ color: colors[type] || 0xcc3333, roughness: 0.5 });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.6;
-    body.castShadow = true;
-    group.add(body);
-
-    const eyeGeo = new THREE.SphereGeometry(0.08, 6, 6);
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-    eyeL.position.set(-0.12, 1.0, -0.2);
-    group.add(eyeL);
-    const eyeR = eyeL.clone();
-    eyeR.position.x = 0.12;
-    group.add(eyeR);
+    // Try loading from alternative monster model paths
+    const altMonsters = MONSTER_MODELS.filter(m => m !== modelFile).slice(0, 3);
+    let loaded = false;
+    for (const alt of altMonsters) {
+      const altPath = `assets/models/monsters/${alt}`;
+      try {
+        loader.load(altPath, (gltf) => {
+          if (loaded) return;
+          loaded = true;
+          const model = gltf.scene;
+          const scale = type === 'boss' ? 1.5 : type === 'tank' ? 1.2 : 0.8;
+          model.scale.setScalar(scale);
+          model.traverse(child => { if (child.isMesh) { child.castShadow = true; } });
+          group.add(model);
+          console.log(`[enemy] Loaded alternative: ${alt}`);
+        });
+      } catch(e) {}
+    }
+    // Red marker if NO model loads — makes QA fail visually
+    setTimeout(() => {
+      if (!loaded && group.children.length === 0) {
+        console.error('[enemy] NO MODEL LOADED — check assets/models/monsters/');
+        const marker = new THREE.Mesh(
+          new THREE.BoxGeometry(0.4, 0.8, 0.4),
+          new THREE.MeshBasicMaterial({ color: 0xff0000 })
+        );
+        marker.position.y = 0.4;
+        group.add(marker);
+      }
+    }, 3000);
   });
 
   // Health bar (CSS2D)
