@@ -149,21 +149,37 @@ def copy_audio_for_game(genre: str, output_dir: str) -> dict:
         else:
             print(f"  [audio] WARNING: No file found for {sound_name}")
 
-    # Music: Kenney audio packs do NOT include background music tracks.
-    # For music, the pipeline has two options:
-    # 1. Use PixelLab or another API for music generation (future)
-    # 2. Use ambient/loop-friendly SFX as placeholder
-    # 3. Skip music (games work without it, SFX are more important)
-    #
-    # For now: create silent placeholder files so the game doesn't error on load.
-    # The pipeline's BUILD phase prompt tells Claude to handle missing audio gracefully.
-    for music_name in ["music_menu", "music_level", "music_boss"]:
+    # Music: check if CC0 music pack has been downloaded
+    music_dir = ASSETS_DIR / "music"
+    MUSIC_MAP = {
+        "music_menu": ["menu_theme.ogg", "calm_theme.ogg"],
+        "music_level": ["level_theme_1.ogg", "adventure_theme.ogg", "upbeat_theme.ogg"],
+        "music_boss": ["boss_theme.ogg", "battle_theme.ogg", "intense_theme.ogg"],
+    }
+
+    for music_name, candidates in MUSIC_MAP.items():
         dst = audio_dir / f"{music_name}.ogg"
-        if not dst.exists():
-            # Create a tiny silent OGG placeholder (games should check if audio loaded)
-            # This prevents Phaser load errors while not playing annoying SFX as music
-            result[music_name] = None  # Signal that music is not available
-            log(f"  [audio] NOTE: No music track for {music_name} (SFX only)")
+        found = False
+        if music_dir.exists():
+            for candidate in candidates:
+                src = music_dir / candidate
+                if src.exists():
+                    shutil.copy2(src, dst)
+                    result[music_name] = str(dst)
+                    log(f"  [audio] {music_name} -> {candidate}")
+                    found = True
+                    break
+            if not found:
+                # Try any .ogg in music dir
+                oggs = sorted(music_dir.glob("*.ogg"))
+                if oggs:
+                    src = oggs[hash(music_name) % len(oggs)]
+                    shutil.copy2(src, dst)
+                    result[music_name] = str(dst)
+                    log(f"  [audio] {music_name} -> {src.name} (fallback)")
+                    found = True
+        if not found:
+            log(f"  [audio] NOTE: No music for {music_name} — download CC0 music to pipeline/assets/music/")
 
     return result
 

@@ -1,0 +1,69 @@
+{
+  "template_name": "topdown",
+  "engine": "phaser",
+  "phaser_version": "3.90.0",
+  "physics": "arcade_no_gravity",
+  "aspect_ratio": "16:9",
+  "target_fps": 60,
+  "scenes": ["BootScene", "PreloadScene", "MenuScene", "GameScene", "PauseScene", "GameOverScene", "WinScene"],
+  "features": {
+    "player": {
+      "movement": ["walk_8dir", "attack_sword", "interact"],
+      "physics": "arcade_no_gravity",
+      "sprite_type": "spritesheet",
+      "animation_states": ["idle_down", "idle_up", "idle_left", "idle_right", "walk_down", "walk_up", "walk_left", "walk_right", "attack", "hurt"]
+    },
+    "enemies": {
+      "types": ["patrol", "chase", "ranged"],
+      "ai": "state_machine",
+      "death": "sword_attack"
+    },
+    "levels": {
+      "format": "tilemap_json",
+      "min_count": 3,
+      "tileset": "kenney_pixel_platformer",
+      "features": ["walls", "doors", "keys", "npc_zones", "spawn_points", "exit"]
+    },
+    "collectibles": ["gems", "keys", "hearts"],
+    "mechanics": ["attack_cooldown", "knockback", "invincibility_frames", "dialog_system", "locked_doors"],
+    "ui": {
+      "hud": ["hearts", "keys", "score", "area_name"],
+      "menus": ["main_menu", "pause", "game_over", "win"]
+    },
+    "audio": {
+      "sfx": ["attack", "hit", "pickup", "key", "door", "enemy_die", "heal", "game_over", "level_complete"],
+      "music": ["menu_theme", "level_theme", "dungeon_theme", "boss_theme"]
+    },
+    "effects": {
+      "particles": ["sparks"],
+      "screen": ["shake", "flash"],
+      "visual": ["float_text", "slash_effect"]
+    }
+  },
+  "test_hooks": {
+    "expose_on_window": true,
+    "api": {
+      "getPlayer": "returns {x, y, hearts, keys, alive, facing, attacking}",
+      "getScore": "returns number",
+      "getLives": "returns hearts count",
+      "getEnemies": "returns [{x, y, type, hp}]",
+      "getCurrentScene": "returns scene key string",
+      "getLevel": "returns current level number",
+      "getCollectibles": "returns [{x, y, type, value}]",
+      "simulateInput": "triggers key events for automated testing"
+    }
+  },
+  "kenney_assets": {
+    "tileset": "pixel-platformer/Tilemap/tilemap_packed.png",
+    "characters": "pixel-platformer/Tilemap/tilemap-characters_packed.png",
+    "backgrounds": "pixel-platformer/Tilemap/tilemap-backgrounds_packed.png",
+    "tile_width": 18,
+    "tile_height": 18
+  },
+  "deployment": {
+    "bundle_type": "folder",
+    "build_tool": "vite",
+    "output": "dist/",
+    "files": ["index.html", "game.js", "assets/"]
+  }
+}

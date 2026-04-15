@@ -1,0 +1,12 @@
+{
+  "_note": "CC0 background music for games. Download OGG files to this directory.",
+  "status": "partial",
+  "available": ["menu_theme.ogg"],
+  "missing": ["level_theme_1.ogg", "boss_theme.ogg"],
+  "sources": [
+    "https://opengameart.org/content/cc0-music-0",
+    "https://itch.io/game-assets/tag-cc0/tag-music",
+    "https://freesound.org/browse/tags/cc0/"
+  ],
+  "fallback": "Games use Phaser's built-in Web Audio API to generate simple procedural music when OGG files are unavailable. The template handles missing music gracefully with try/catch."
+}

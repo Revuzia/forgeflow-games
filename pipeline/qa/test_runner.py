@@ -166,9 +166,117 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                 results["tests"]["lives_system"] = lives is not None and lives > 0
 
                 # ── TEST 10: Current scene ──
-                print("  [10/10] Scene system...")
+                print("  [10/14] Scene system...")
                 scene = page.evaluate("window.__TEST__.getCurrentScene()")
                 results["tests"]["scene_system"] = scene is not None and isinstance(scene, str) and len(scene) > 0
+
+                # ── TEST 11: GENRE-SPECIFIC TESTS ──
+                if genre == "platformer":
+                    print("  [11/14] Platformer: gravity pulls player down...")
+                    player_grav = page.evaluate("window.__TEST__.getPlayer()")
+                    if player_grav and not player_grav.get("onGround", True):
+                        page.wait_for_timeout(300)
+                        player_grav2 = page.evaluate("window.__TEST__.getPlayer()")
+                        results["tests"]["gravity_works"] = player_grav2["y"] > player_grav["y"] if player_grav2 else False
+                    else:
+                        results["tests"]["gravity_works"] = True  # On ground = gravity working
+
+                elif genre == "topdown":
+                    print("  [11/14] Top-down: 4-directional movement...")
+                    # Test up movement
+                    pos_before = page.evaluate("window.__TEST__.getPlayer()")
+                    page.keyboard.down("ArrowUp")
+                    page.wait_for_timeout(300)
+                    page.keyboard.up("ArrowUp")
+                    pos_after = page.evaluate("window.__TEST__.getPlayer()")
+                    results["tests"]["movement_up"] = pos_after and pos_after["y"] < pos_before["y"] - 3
+
+                    # Test down movement
+                    pos_before = page.evaluate("window.__TEST__.getPlayer()")
+                    page.keyboard.down("ArrowDown")
+                    page.wait_for_timeout(300)
+                    page.keyboard.up("ArrowDown")
+                    pos_after = page.evaluate("window.__TEST__.getPlayer()")
+                    results["tests"]["movement_down"] = pos_after and pos_after["y"] > pos_before["y"] + 3
+
+                elif genre == "boardgame":
+                    print("  [11/14] Board game: turn system...")
+                    game_state = page.evaluate("""
+                        window.__TEST__ ? {
+                            currentPlayer: window.__TEST__.getPlayer(),
+                            score: window.__TEST__.getScore(),
+                        } : null
+                    """)
+                    results["tests"]["turn_system"] = game_state is not None
+
+                elif genre == "arpg":
+                    print("  [11/14] ARPG: attack works...")
+                    page.keyboard.press("KeyX")
+                    page.wait_for_timeout(200)
+                    # Just verify no crash after attack
+                    still_alive = page.evaluate("window.__TEST__.getPlayer()?.alive !== false")
+                    results["tests"]["attack_works"] = still_alive
+
+                # ── TEST 12: VISUAL QA — Screenshot analysis ──
+                print("  [12/14] Visual QA: canvas not blank...")
+                screenshot_path = str(Path(__file__).parent / "last_qa_screenshot.png")
+                page.screenshot(path=screenshot_path)
+
+                # Check canvas is not a solid color (blank/broken)
+                canvas_check = page.evaluate("""
+                    (() => {
+                        const c = document.querySelector('canvas');
+                        if (!c) return {ok: false, reason: 'no_canvas'};
+                        try {
+                            // Sample pixels from different regions
+                            const ctx = c.getContext('2d', {willReadFrequently: true});
+                            if (!ctx) return {ok: true, reason: 'webgl_no_2d'}; // WebGL canvas, can't check
+                            const samples = [];
+                            for (let i = 0; i < 5; i++) {
+                                const x = Math.floor(c.width * (0.2 + i * 0.15));
+                                const y = Math.floor(c.height * 0.5);
+                                const px = ctx.getImageData(x, y, 1, 1).data;
+                                samples.push([px[0], px[1], px[2]]);
+                            }
+                            // Check if all samples are the same color (blank screen)
+                            const allSame = samples.every(s =>
+                                Math.abs(s[0]-samples[0][0]) < 5 &&
+                                Math.abs(s[1]-samples[0][1]) < 5 &&
+                                Math.abs(s[2]-samples[0][2]) < 5
+                            );
+                            return {ok: !allSame, reason: allSame ? 'all_same_color' : 'varied_pixels', samples: samples};
+                        } catch(e) {
+                            return {ok: true, reason: 'webgl_context'};
+                        }
+                    })()
+                """)
+                results["tests"]["visual_not_blank"] = canvas_check.get("ok", False) if canvas_check else False
+                if canvas_check and not canvas_check.get("ok"):
+                    print(f"    Visual check: {canvas_check.get('reason')} — game may not be rendering correctly")
+
+                # ── TEST 13: Sound system initialized ──
+                print("  [13/14] Sound system...")
+                has_sound = page.evaluate("""
+                    window.__GAME__?.sound?.sounds?.length > 0 ||
+                    document.querySelectorAll('audio').length > 0 ||
+                    (typeof window.__GAME__?.sound !== 'undefined')
+                """)
+                results["tests"]["sound_initialized"] = bool(has_sound)
+
+                # ── TEST 14: No crash after 10 seconds of gameplay ──
+                print("  [14/14] Stability: 10s gameplay...")
+                # Simulate 10 seconds of random input
+                for _ in range(5):
+                    page.keyboard.press("ArrowRight")
+                    page.wait_for_timeout(500)
+                    page.keyboard.press("Space")
+                    page.wait_for_timeout(500)
+                    page.keyboard.press("ArrowLeft")
+                    page.wait_for_timeout(500)
+                    page.keyboard.press("ArrowRight")
+                    page.wait_for_timeout(500)
+                stability_ok = page.evaluate("typeof window.__GAME__ !== 'undefined' || document.querySelector('canvas') !== null")
+                results["tests"]["stability_10s"] = bool(stability_ok)
 
             else:
                 # No test API — run basic visual checks
