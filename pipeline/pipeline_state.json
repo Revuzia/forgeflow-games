@@ -1,11 +1,10 @@
 {
   "current_game": null,
-  "current_phase": "deploy",
+  "current_phase": null,
   "current_sub_phase": null,
-  "checkpoint": null,
   "games_completed": 0,
-  "games_in_progress": 0,
-  "last_run": "2026-04-15T18:59:48Z",
+  "last_run": null,
   "last_completed_game": null,
-  "total_build_nights": 0
+  "qa_debug_attempt": 0,
+  "sessions_on_current_game": 0
 }
