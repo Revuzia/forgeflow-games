@@ -15,13 +15,13 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 bg-surface-900 border-b border-surface-600/40">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-[72px]">
-          {/* Logo — large and prominent like Poki/CrazyGames */}
+        <div className="flex items-center justify-between h-[84px]">
+          {/* Logo — transparent bg, full size */}
           <a href="/" className="flex items-center shrink-0">
             <img
               src="/images/logo.png"
               alt="ForgeFlow Games"
-              className="h-14 sm:h-16 w-auto drop-shadow-[0_0_12px_rgba(255,136,0,0.3)]"
+              className="h-[60px] sm:h-[70px] w-auto drop-shadow-[0_2px_10px_rgba(255,136,0,0.4)]"
             />
           </a>
 

@@ -11,7 +11,7 @@ export default function Footer() {
               <img
                 src="/images/logo.png"
                 alt="ForgeFlow Games"
-                className="h-16 w-auto drop-shadow-[0_0_10px_rgba(255,136,0,0.25)]"
+                className="h-[60px] w-auto drop-shadow-[0_2px_10px_rgba(255,136,0,0.35)]"
               />
             </a>
             <p className="text-sm text-gray-400 leading-relaxed">
