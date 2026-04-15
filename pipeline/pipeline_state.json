@@ -1,0 +1,11 @@
+{
+  "current_game": null,
+  "current_phase": "select",
+  "current_sub_phase": null,
+  "checkpoint": null,
+  "games_completed": 0,
+  "games_in_progress": 0,
+  "last_run": "2026-04-15T17:10:39Z",
+  "last_completed_game": null,
+  "total_build_nights": 0
+}

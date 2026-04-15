@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jungle Surge - ForgeFlow Games</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0e1a;font-family:'Segoe UI',system-ui,sans-serif}
+canvas{display:block;margin:0 auto;image-rendering:pixelated}
+#overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;background:rgba(10,14,26,0.92)}
+#overlay h1{font-size:52px;font-weight:900;margin-bottom:8px}
+#overlay .title-koa{background:linear-gradient(135deg,#ff8800,#ff5500);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#overlay .title-surge{color:#00e676}
+#overlay .subtitle{color:#888;font-size:16px;margin-bottom:24px}
+#overlay .controls{color:#666;font-size:13px;line-height:1.8;margin-bottom:24px;text-align:center}
+#overlay .controls kbd{background:#222;color:#ddd;padding:2px 8px;border-radius:4px;font-size:12px;border:1px solid #444}
+#overlay button{padding:16px 52px;font-size:22px;font-weight:700;border:none;border-radius:14px;cursor:pointer;background:linear-gradient(135deg,#ff8800,#ff5500);color:#fff;box-shadow:0 4px 20px rgba(255,136,0,0.4);transition:transform 0.15s}
+#overlay button:hover{transform:scale(1.06)}
+#hud{position:absolute;top:12px;left:50%;transform:translateX(-50%);color:#fff;font-size:16px;font-weight:600;pointer-events:none;display:flex;gap:24px;text-shadow:0 2px 8px rgba(0,0,0,0.6)}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="overlay">
+  <h1><span class="title-koa">Jungle</span> <span class="title-surge">Surge</span></h1>
+  <p class="subtitle">A Tropical Platforming Adventure</p>
+  <div class="controls">
+    <kbd>←</kbd> <kbd>→</kbd> or <kbd>A</kbd> <kbd>D</kbd> Move &nbsp;|&nbsp;
+    <kbd>Space</kbd> Jump (hold for higher) &nbsp;|&nbsp;
+    <kbd>Shift</kbd> Dash<br>
+    <kbd>↓</kbd>+<kbd>Space</kbd> Ground Pound &nbsp;|&nbsp;
+    Bounce on enemies to defeat them!
+  </div>
+  <button id="playBtn">Play</button>
+</div>
+<div id="hud" class="hidden">
+  <span>❤️ <span id="hp">3</span></span>
+  <span>💎 <span id="crystals">0</span></span>
+  <span>⭐ <span id="score">0</span></span>
+  <span id="levelLabel">World 1-1</span>
+</div>
+<canvas id="c"></canvas>
+<script src="game.js"></script>
+</body>
+</html>

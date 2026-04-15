@@ -70,17 +70,6 @@ export default function GamePage() {
 
             {/* Stats row */}
             <div className="flex flex-wrap items-center gap-4 text-sm mb-4">
-              <span className="flex items-center gap-1 text-surface-500">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z"/></svg>
-                {game.play_count.toLocaleString()} plays
-              </span>
-              {rating && (
-                <span className="flex items-center gap-1">
-                  <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                  <span className="text-gray-300 font-medium">{rating}</span>
-                  <span className="text-surface-500">({game.rating_count})</span>
-                </span>
-              )}
               <span className="px-2 py-0.5 rounded text-xs font-bold" style={{ color: diff.color, backgroundColor: diff.color + "15" }}>
                 {diff.label}
               </span>

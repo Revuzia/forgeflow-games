@@ -1,0 +1,13 @@
+{
+  "title": "Block Breaker",
+  "slug": "block-breaker",
+  "description": "A classic breakout-style arcade game with neon visuals and smooth physics. Break all the glowing blocks with your paddle and ball. Each row scores higher points, and the ball speeds up as you progress. How many levels can you clear?",
+  "short_description": "Classic breakout arcade with neon visuals. Break blocks, score points!",
+  "genre": "platformer",
+  "sub_genre": "arcade",
+  "controls_keyboard": "Arrow keys or A/D to move paddle. Click or press any key to launch ball.",
+  "controls_gamepad": "Left stick to move paddle. A button to launch.",
+  "difficulty": "easy",
+  "has_mobile_support": false,
+  "tags": ["arcade", "classic", "breakout", "casual", "neon"]
+}

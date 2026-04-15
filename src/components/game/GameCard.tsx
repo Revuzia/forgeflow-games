@@ -66,15 +66,13 @@ export default function GameCard({ game, size = "md" }: Props) {
         {game.short_description && size !== "sm" && (
           <p className="text-xs text-surface-500 mt-1 line-clamp-2">{game.short_description}</p>
         )}
-        <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center gap-1 text-xs text-surface-500">
-            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-            <span>{formatPlayCount(game.play_count)}</span>
-          </div>
-          <div className="flex items-center gap-1 text-xs">
-            <svg className="w-3.5 h-3.5 text-yellow-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-            <span className="text-gray-300 font-medium">{getRating(game)}</span>
-          </div>
+        <div className="flex items-center justify-end mt-2">
+          <span
+            className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
+            style={{ color: accentColor, backgroundColor: accentColor + "15" }}
+          >
+            {game.difficulty}
+          </span>
         </div>
       </div>
     </a>
