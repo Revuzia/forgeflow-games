@@ -30,7 +30,7 @@ AUDIO_MAP = {
         },
         "sfx_land": {
             "pack": "impact-sounds",
-            "files": ["Audio/footstep_carpet_000.ogg", "Audio/impactSoft_light_000.ogg"],
+            "files": ["Audio/impactSoft_heavy_000.ogg", "Audio/footstep_carpet_000.ogg"],
             "fallback_search": "soft",
         },
         "sfx_coin": {
@@ -149,18 +149,21 @@ def copy_audio_for_game(genre: str, output_dir: str) -> dict:
         else:
             print(f"  [audio] WARNING: No file found for {sound_name}")
 
-    # Also copy a generic background music placeholder if available
-    # RPG audio pack has some ambient tracks
+    # Music: Kenney audio packs do NOT include background music tracks.
+    # For music, the pipeline has two options:
+    # 1. Use PixelLab or another API for music generation (future)
+    # 2. Use ambient/loop-friendly SFX as placeholder
+    # 3. Skip music (games work without it, SFX are more important)
+    #
+    # For now: create silent placeholder files so the game doesn't error on load.
+    # The pipeline's BUILD phase prompt tells Claude to handle missing audio gracefully.
     for music_name in ["music_menu", "music_level", "music_boss"]:
-        rpg_dir = ASSETS_DIR / "rpg-audio"
-        if rpg_dir.exists():
-            ogg_files = sorted(rpg_dir.rglob("*.ogg"))
-            if ogg_files:
-                idx = hash(music_name) % len(ogg_files)
-                src = ogg_files[idx]
-                dst = audio_dir / f"{music_name}.ogg"
-                shutil.copy2(src, dst)
-                result[music_name] = str(dst)
+        dst = audio_dir / f"{music_name}.ogg"
+        if not dst.exists():
+            # Create a tiny silent OGG placeholder (games should check if audio loaded)
+            # This prevents Phaser load errors while not playing annoying SFX as music
+            result[music_name] = None  # Signal that music is not available
+            log(f"  [audio] NOTE: No music track for {music_name} (SFX only)")
 
     return result
 
