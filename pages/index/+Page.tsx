@@ -49,23 +49,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Category pills */}
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-12">
-            {CATEGORIES.map((cat) => (
-              <a
-                key={cat.slug}
-                href={`/category/${cat.slug}`}
-                className="px-5 py-2.5 rounded-full font-display font-semibold text-sm border transition-all duration-300 hover:scale-105"
-                style={{
-                  color: cat.color,
-                  borderColor: cat.color + "40",
-                  backgroundColor: cat.color + "10",
-                }}
-              >
-                {cat.label}
-              </a>
-            ))}
-          </div>
+          {/* Categories already in header nav — no duplicate here */}
         </div>
 
         {/* Bottom fade */}

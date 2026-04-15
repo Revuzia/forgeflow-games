@@ -38,11 +38,15 @@ export type GameCategory = {
   color: string;
 };
 
+// Ordered by global browser game popularity (most played first)
 export const CATEGORIES: GameCategory[] = [
+  { label: "Action", slug: "action", icon: "zap", color: "#ff3366" },
   { label: "Arcade", slug: "arcade", icon: "joystick", color: "#ffcc00" },
-  { label: "Platformers", slug: "platformer", icon: "gamepad-2", color: "#00d4ff" },
+  { label: "Puzzle", slug: "puzzle", icon: "puzzle", color: "#00d4ff" },
   { label: "Adventure", slug: "adventure", icon: "compass", color: "#00ff88" },
+  { label: "Platformers", slug: "platformer", icon: "gamepad-2", color: "#4488ff" },
   { label: "RPG", slug: "rpg", icon: "sword", color: "#a855f7" },
-  { label: "Action RPG", slug: "arpg", icon: "zap", color: "#ff3366" },
-  { label: "Board Games", slug: "board_game", icon: "dice-5", color: "#ff8800" },
+  { label: "Strategy", slug: "strategy", icon: "crown", color: "#ff8800" },
+  { label: "Racing", slug: "racing", icon: "trophy", color: "#44ddff" },
+  { label: "Board Games", slug: "board_game", icon: "dice-5", color: "#88cc44" },
 ];
