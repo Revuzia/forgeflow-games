@@ -59,11 +59,11 @@ export default function GameCarousel({ title, games, accentColor = "#00d4ff", vi
       {/* Scroll container */}
       <div
         ref={scrollRef}
-        className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 snap-x snap-mandatory"
+        className="flex items-stretch gap-4 overflow-x-auto scrollbar-hide pb-2 snap-x snap-mandatory"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         {games.map((game) => (
-          <div key={game.id} className="min-w-[200px] max-w-[240px] flex-shrink-0 snap-start">
+          <div key={game.id} className="min-w-[200px] max-w-[240px] flex-shrink-0 snap-start flex">
             <GameCard game={game} size="md" />
           </div>
         ))}

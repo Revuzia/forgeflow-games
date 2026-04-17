@@ -31,10 +31,14 @@ export default function GameCard({ game, size = "md" }: Props) {
   const accentColor = GENRE_COLORS[game.genre] || "#00d4ff";
   const imgHeight = size === "lg" ? "h-56" : size === "sm" ? "h-32" : "h-40";
 
+  // 2026-04-17: enforce uniform card heights regardless of description length.
+  // Info block is a fixed-height flex column so all cards in a grid align.
+  const infoMinH = size === "lg" ? "min-h-[112px]" : size === "sm" ? "min-h-[64px]" : "min-h-[96px]";
+
   return (
-    <a href={`/games/${game.slug}`} className="game-card block">
+    <a href={`/games/${game.slug}`} className="game-card block flex flex-col h-full">
       {/* Thumbnail */}
-      <div className={`relative ${imgHeight} overflow-hidden`}>
+      <div className={`relative ${imgHeight} overflow-hidden flex-shrink-0`}>
         <img
           src={game.thumbnail_url || PLACEHOLDER_THUMB}
           alt={game.title}
@@ -58,13 +62,15 @@ export default function GameCard({ game, size = "md" }: Props) {
         </div>
       </div>
 
-      {/* Info */}
-      <div className="p-3">
+      {/* Info — uniform height regardless of description presence */}
+      <div className={`p-3 flex flex-col flex-1 ${infoMinH}`}>
         <h3 className="font-display font-semibold text-sm text-gray-100 truncate group-hover:text-brand-blue transition-colors">
           {game.title}
         </h3>
-        {game.short_description && size !== "sm" && (
-          <p className="text-xs text-surface-500 mt-1 line-clamp-2">{game.short_description}</p>
+        {size !== "sm" && (
+          <p className="text-xs text-surface-500 mt-1 line-clamp-2 flex-1">
+            {game.short_description || "\u00A0"}
+          </p>
         )}
         <div className="flex items-center justify-end mt-2">
           <span
