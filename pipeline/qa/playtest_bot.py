@@ -230,22 +230,26 @@ def run_playtest(game_url: str, trials: int = 5, time_limit_sec: int = 60,
                         k=1
                     )[0]
 
+                    # 2026-04-27: hold keys for 200ms instead of instant
+                    # press(). Phaser only registers movement on isDown=true
+                    # frames; an instant tap moves the player ~3 pixels per
+                    # action (~150 actions × 3px = 450px in 30s — bot reaches
+                    # ~25 tiles into a 1000-tile level). Holding for 200ms
+                    # lets the player traverse continuously.
                     try:
                         if action == "right":
-                            page.keyboard.press("ArrowRight")
+                            page.keyboard.down("ArrowRight"); time.sleep(0.25); page.keyboard.up("ArrowRight")
                         elif action == "right_jump":
-                            page.keyboard.down("ArrowRight")
-                            page.keyboard.press("Space")
-                            time.sleep(0.1)
-                            page.keyboard.up("ArrowRight")
+                            page.keyboard.down("ArrowRight"); page.keyboard.down("Space")
+                            time.sleep(0.2); page.keyboard.up("Space"); time.sleep(0.15); page.keyboard.up("ArrowRight")
                         elif action == "jump":
-                            page.keyboard.press("Space")
+                            page.keyboard.down("Space"); time.sleep(0.2); page.keyboard.up("Space")
                         elif action == "left":
-                            page.keyboard.press("ArrowLeft")
+                            page.keyboard.down("ArrowLeft"); time.sleep(0.2); page.keyboard.up("ArrowLeft")
                         elif action == "dash":
-                            page.keyboard.press("Shift")
+                            page.keyboard.down("Shift"); time.sleep(0.15); page.keyboard.up("Shift")
                         elif action == "attack":
-                            page.keyboard.press("X")
+                            page.keyboard.down("X"); time.sleep(0.1); page.keyboard.up("X")
                         # idle = do nothing
                     except Exception:
                         pass
