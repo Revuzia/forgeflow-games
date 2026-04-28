@@ -139,7 +139,15 @@ def validate(design_path: Path, levels_path: Path, qa_results_path: Path,
         findings["stats"]["enemies_per_difficulty"] = {str(d): round(v, 1) for d, v in avg_per_diff.items()}
 
     findings["score"] = max(0, findings["score"])
-    findings["verdict"] = "pass" if findings["score"] >= 75 else "borderline" if findings["score"] >= 50 else "fail"
+    # 2026-04-28: AAA standard — L4 must be 100/100 to pass. Anything less
+    # means a balance warning fired (weak difficulty correlation, levels
+    # unreachable, enemy scaling not increasing) which represents real game
+    # design issues that should be fixed before ship.
+    findings["verdict"] = (
+        "pass" if findings["score"] == 100 else
+        "borderline" if findings["score"] >= 75 else
+        "fail"
+    )
     return findings
 
 

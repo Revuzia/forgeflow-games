@@ -7,7 +7,9 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#0a0e1a;font-family:'Segoe UI',system-ui,sans-serif}
-#c{display:block;margin:0 auto}
+/* Canvas centered vertically + horizontally in viewport (fullscreen-friendly) */
+body{display:flex;align-items:center;justify-content:center}
+#c{display:block;max-width:100vw;max-height:100vh}
 #start{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,14,26,0.95);z-index:10}
 #start h1{font-size:56px;font-weight:900;background:linear-gradient(135deg,#ff8800,#ff5500);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
 #start .sub{color:#00d4ff;font-size:18px;font-weight:600;margin-bottom:20px}
@@ -17,6 +19,14 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0e1a;font-family:
 #start button:hover{transform:scale(1.06)}
 .hidden{display:none!important}
 </style>
+<!-- Logging retrofit 2026-04-17: reports freezes, magnet-trail leaks, crashes -->
+<script>window.GAME_CONFIG = window.GAME_CONFIG || { title: "Block Breaker" };</script>
+<script src="performance_monitor.js"></script>
+<script src="deep_audit.js"></script>
+<script src="crash_reporter.js"></script>
+<script src="anomaly_logger.js"></script>
+<script src="pause.js"></script>
+<script src="game_controls.js"></script>
 </head>
 <body>
 <div id="start">
@@ -51,9 +61,23 @@ function resize() {
   if (w/h > ar) w = h * ar; else h = w / ar;
   W = canvas.width = Math.floor(w);
   H = canvas.height = Math.floor(h);
+  // Re-anchor paddle to bottom on resize (was stuck mid-screen on fullscreen toggle).
+  // 2026-04-28: try/catch guards the Temporal Dead Zone — paddle is declared
+  // with const further down (line 144) but resize() is called inline on line
+  // 71. typeof check fails on const-in-TDZ (different from var hoisting).
+  try {
+    if (paddle) {
+      paddle.y = H - 40;
+      // Clamp paddle X so it doesn't fall off the right edge after shrink
+      if (paddle.x + paddle.w > W) paddle.x = Math.max(0, W - paddle.w);
+    }
+  } catch (_e) { /* paddle not yet initialized — safe to skip on first call */ }
 }
 resize();
 window.addEventListener('resize', resize);
+// Fullscreen doesn't always fire window 'resize' — listen explicitly
+document.addEventListener('fullscreenchange', () => setTimeout(resize, 50));
+document.addEventListener('webkitfullscreenchange', () => setTimeout(resize, 50));
 
 // ─── Input ──────────────────────────────────────────────────────
 const keys = {};
@@ -65,6 +89,56 @@ canvas.addEventListener('mousemove', e => {
   mouseX = (e.clientX - r.left) * (W / r.width);
 });
 canvas.addEventListener('click', () => { if (state === 'playing' && !ballLaunched) launchBall(); });
+
+// ─── Audio (Kenney SFX + music, retrofit 2026-04-17) ─────────────
+// Register detached Audio instances with window.__GAME_AUDIO__ so the
+// page-level Mute button can toggle them (game_controls.js iterates this array).
+window.__GAME_AUDIO__ = window.__GAME_AUDIO__ || [];
+const SFX = {};
+const AUDIO_LIST = ["sfx_paddle","sfx_brick","sfx_powerup","sfx_death","sfx_win","sfx_gameover","sfx_bomb"];
+for (const name of AUDIO_LIST) {
+  try {
+    SFX[name] = new Audio(`assets/audio/${name}.ogg`);
+    SFX[name].preload = "auto"; SFX[name].volume = 0.5;
+    window.__GAME_AUDIO__.push(SFX[name]);
+  } catch(e){}
+}
+let musicAudio = null;
+function _muted() { return !!(window.__CONTROLS__ && window.__CONTROLS__.isMuted && window.__CONTROLS__.isMuted()); }
+function playSFX(name, vol = 0.5) {
+  if (_muted()) return;
+  const src = SFX[name]; if (!src) return;
+  try {
+    const s = src.cloneNode();
+    s.volume = vol;
+    s.muted = _muted();  // guard against race condition
+    s.play().catch(()=>{});
+  } catch(e){}
+}
+function startMusic() {
+  if (musicAudio) return;
+  try {
+    musicAudio = new Audio("assets/audio/music_level.ogg");
+    musicAudio.loop = true; musicAudio.volume = 0.25;
+    musicAudio.muted = _muted();
+    window.__GAME_AUDIO__.push(musicAudio);
+    musicAudio.play().catch(()=>{});
+  } catch(e) {}
+}
+function stopMusic() {
+  if (musicAudio) {
+    try { musicAudio.pause(); } catch(e){}
+    const idx = window.__GAME_AUDIO__.indexOf(musicAudio);
+    if (idx !== -1) window.__GAME_AUDIO__.splice(idx, 1);
+    musicAudio = null;
+  }
+}
+// Respond to mute toggle from page-level controls
+window.addEventListener("mutechange", (e) => {
+  const muted = !!(e.detail && e.detail.muted);
+  if (musicAudio) musicAudio.muted = muted;
+  Object.values(SFX).forEach(a => { try { a.muted = muted; } catch(_) {} });
+});
 
 // ─── State ──────────────────────────────────────────────────────
 let state = 'menu', score = 0, lives = 3, level = 0, combo = 0, comboTimer = 0;
@@ -168,24 +242,32 @@ const LEVELS = [
           blocks.push(makeBlock(20+c*bw, 40+r*(bh+4), bw-4, bh, c===4||c===5?-1:1, r%6+1));
       }
   },
-  // Level 6: Pyramid
+  // Level 6: Pyramid — introduce 3-hit blocks at the apex
   () => {
     const bw = (W-40)/12, bh = 22;
     for (let r = 0; r < 6; r++) {
       const cols = 12 - r*2;
-      for (let c = 0; c < cols; c++)
-        blocks.push(makeBlock(20+(r+c)*bw, 40+r*(bh+4), bw-4, bh, r<2?1:2, (r+c)%6+1));
+      for (let c = 0; c < cols; c++) {
+        // Top of pyramid = 3 hp, middle = 2, outer rings = 1
+        const hp = r === 0 ? 3 : r < 2 ? 2 : r < 4 ? 1 : 2;
+        blocks.push(makeBlock(20+(r+c)*bw, 40+r*(bh+4), bw-4, bh, hp, (r+c)%6+1));
+      }
     }
   },
-  // Level 7: Cross
+  // Level 7: Cross — 3-hit blocks in the cross intersection, 2-hit borders
   () => {
     const bw = (W-40)/10, bh = 20;
     for (let r = 0; r < 8; r++)
       for (let c = 0; c < 10; c++)
-        if (c>=3&&c<=6 || r>=2&&r<=5)
-          blocks.push(makeBlock(20+c*bw, 40+r*(bh+4), bw-4, bh, (r===2||r===5||c===3||c===6)?2:1, (r*c)%6+1));
+        if (c>=3&&c<=6 || r>=2&&r<=5) {
+          // Center intersection = 3 hp, borders of cross = 2, rest = 1
+          const isCenter = (r>=3&&r<=4 && c>=4&&c<=5);
+          const isBorder = (r===2||r===5||c===3||c===6);
+          const hp = isCenter ? 3 : isBorder ? 2 : 1;
+          blocks.push(makeBlock(20+c*bw, 40+r*(bh+4), bw-4, bh, hp, (r*c)%6+1));
+        }
   },
-  // Level 8: Invaders pattern
+  // Level 8: Invaders pattern — top 2 rows are 3-hit (hardest aliens)
   () => {
     const bw = (W-40)/12, bh = 18;
     const pattern = [
@@ -200,7 +282,7 @@ const LEVELS = [
     for (let r = 0; r < pattern.length; r++)
       for (let c = 0; c < 12; c++)
         if (pattern[r][c]==='1')
-          blocks.push(makeBlock(20+c*bw, 50+r*(bh+4), bw-4, bh, r<2?2:1, r%6+1));
+          blocks.push(makeBlock(20+c*bw, 50+r*(bh+4), bw-4, bh, r<2?3:r<4?2:1, r%6+1));
   },
   // Level 9: All hard + explosives
   () => {
@@ -313,6 +395,7 @@ function hitBlock(block, ball) {
 
   if (block.hp <= 0) {
     // Destroyed
+    playSFX("sfx_brick", 0.4);
     const bc = BLOCK_COLORS[block.colorIdx] || ['#fff','#fff'];
     emit(block.x + block.w/2, block.y + block.h/2, 12, bc[0], 5);
     floatText(block.x + block.w/2, block.y, `+${pts}`, combo > 3 ? '#ffcc00' : '#fff');
@@ -335,6 +418,7 @@ function hitBlock(block, ball) {
 
 function explodeBlock(block) {
   const cx = block.x + block.w/2, cy = block.y + block.h/2;
+  playSFX("sfx_bomb", 0.55);
   emit(cx, cy, 25, '#ff8800', 8, [3,8]);
   emit(cx, cy, 15, '#ffcc00', 6);
   shakeT = 0.2; shakeI = 6;
@@ -342,9 +426,13 @@ function explodeBlock(block) {
   floatText(cx, cy, 'BOOM!', '#ff8800');
   blocks.splice(blocks.indexOf(block), 1);
 
-  // Damage neighbors
-  for (let i = blocks.length-1; i >= 0; i--) {
-    const b = blocks[i];
+  // Damage neighbors — snapshot the list so recursive explodeBlock calls
+  // that splice `blocks` don't invalidate our iteration indices. Also null-guard
+  // against any slot that got removed before we reach it.
+  const neighbors = blocks.slice();
+  for (let i = neighbors.length-1; i >= 0; i--) {
+    const b = neighbors[i];
+    if (!b || !blocks.includes(b)) continue;  // block was removed by a recursive explosion
     const dx = (b.x+b.w/2) - cx, dy = (b.y+b.h/2) - cy;
     if (Math.sqrt(dx*dx+dy*dy) < 80) {
       if (b.hp === -1) continue;
@@ -352,7 +440,8 @@ function explodeBlock(block) {
       b.hp--;
       if (b.hp <= 0) {
         emit(b.x+b.w/2, b.y+b.h/2, 8, BLOCK_COLORS[b.colorIdx]?.[0]||'#fff', 4);
-        blocks.splice(i, 1);
+        const idx = blocks.indexOf(b);
+        if (idx !== -1) blocks.splice(idx, 1);
         score += 10;
       }
     }
@@ -364,6 +453,7 @@ function applyPowerUp(type) {
   const pu = PU[type];
   floatText(W/2, H/2, pu.desc, pu.color);
   emit(paddle.x + paddle.w/2, paddle.y, 15, pu.color, 5);
+  playSFX("sfx_powerup", 0.5);
 
   switch (type) {
     case 'MULTI':
@@ -467,9 +557,16 @@ function update(dt) {
     // Prevent horizontal-only bouncing (minimum vertical speed)
     if (Math.abs(b.dy) < 1.5) b.dy = b.dy > 0 ? 1.5 : -1.5;
 
-    // Move in substeps for robust collision
+    // Move in substeps for robust collision (2026-04-17 FIXES):
+    //   - Track blocks hit this frame so fast balls don't 2x-hit same block across substeps
+    //     (was causing 2-HP blocks to die in 1 visible collision)
+    //   - Fireball now ALWAYS passes through non-indestructible blocks, regardless of
+    //     whether the hit destroyed them (was bouncing off destroyed-in-one-hit blocks)
     const steps = 3;
+    const preDx = b.dx, preDy = b.dy;  // save original so fireball can restore
     const stepDx = b.dx / steps, stepDy = b.dy / steps;
+    const hitThisFrame = b._hitThisFrame || (b._hitThisFrame = new Set());
+    hitThisFrame.clear();
     for (let s = 0; s < steps; s++) {
       b.x += stepDx;
       b.y += stepDy;
@@ -481,12 +578,16 @@ function update(dt) {
 
       // Block collision
       for (let i = blocks.length-1; i >= 0; i--) {
-        if (ballBlockCollision(b, blocks[i])) {
-          hitBlock(blocks[i], b);
-          if (b.fireball && blocks[i] && blocks[i].hp > 0 && blocks[i].hp !== -1) {
-            // Fireball goes through — undo bounce
-            b.dx = stepDx * steps;
-            b.dy = stepDy * steps;
+        const blk = blocks[i];
+        if (!blk || hitThisFrame.has(blk)) continue;  // skip already-hit this frame
+        if (ballBlockCollision(b, blk)) {
+          const wasIndestructible = blk.hp === -1;
+          hitThisFrame.add(blk);
+          hitBlock(blk, b);
+          if (b.fireball && !wasIndestructible) {
+            // Fireball goes through — restore original velocity vector so we keep traveling
+            b.dx = preDx;
+            b.dy = preDy;
           }
           break;
         }
@@ -496,6 +597,7 @@ function update(dt) {
     // Paddle collision
     if (b.dy > 0 && b.y + b.r >= paddle.y && b.y + b.r <= paddle.y + paddle.h + 4 &&
         b.x >= paddle.x - 4 && b.x <= paddle.x + paddle.w + 4) {
+      playSFX("sfx_paddle", 0.3);
       if (paddle.magnet) {
         // Stick to paddle
         b.dy = 0; b.dx = 0;
@@ -522,8 +624,11 @@ function update(dt) {
   // All balls lost
   if (balls.length === 0) {
     lives--;
+    playSFX("sfx_death", 0.55);
     if (lives <= 0) {
       state = 'gameover';
+      playSFX("sfx_gameover", 0.6);
+      stopMusic();
     } else {
       balls = [createBall(W/2, paddle.y - 10)];
       ballLaunched = false;
@@ -578,13 +683,18 @@ function update(dt) {
   // Win check — all destructible blocks gone
   if (blocks.every(b => b.hp === -1)) {
     level++;
-    if (level >= LEVELS.length) { state = 'win'; return; }
+    playSFX("sfx_win", 0.6);
+    // Clear shake + residual particles so bomb-chain-on-last-block doesn't bleed into next level
+    shakeT = 0; shakeI = 0;
+    particles.length = 0;
+    texts.length = 0;
+    if (level >= LEVELS.length) { state = 'win'; stopMusic(); return; }
     loadLevel();
     ballLaunched = false;
   }
 
   // Shake
-  if (shakeT > 0) shakeT -= dt;
+  if (shakeT > 0) { shakeT -= dt; if (shakeT <= 0) { shakeT = 0; shakeI = 0; } }
 }
 
 // ─── Draw ───────────────────────────────────────────────────────
@@ -808,10 +918,19 @@ function drawScreen(title, sub) {
 // ─── Game Loop ──────────────────────────────────────────────────
 let lastT = 0;
 function loop(ts) {
+  // Pause support — skip update/draw when paused (pause.js sets __PAUSE_FLAG__)
+  if (window.__PAUSE_FLAG__) { lastT = ts; requestAnimationFrame(loop); return; }
+
   const dt = Math.min((ts-lastT)/1000, 0.05);
   lastT = ts;
 
-  if (shakeT > 0) {
+  // 2026-04-17 FIX: use a local boolean for save/restore pairing.
+  // Previous code used `if (shakeT > 0)` on both sides — but update(dt) inside
+  // the block decrements shakeT. If shakeT went 0.001 → negative mid-frame,
+  // save fired but restore didn't, permanently baking the translate into the
+  // canvas context and causing render bleed on screen edges.
+  const didSave = shakeT > 0;
+  if (didSave) {
     ctx.save();
     ctx.translate((Math.random()-.5)*shakeI, (Math.random()-.5)*shakeI);
   }
@@ -829,7 +948,7 @@ function loop(ts) {
     canvas.onclick = () => restartGame();
   }
 
-  if (shakeT > 0) ctx.restore();
+  if (didSave) ctx.restore();
   requestAnimationFrame(loop);
 }
 
@@ -837,6 +956,7 @@ function restartGame() {
   score = 0; lives = 3; level = 0;
   state = 'playing';
   loadLevel();
+  startMusic();
   canvas.onclick = () => { if (!ballLaunched) launchBall(); };
 }
 
@@ -844,8 +964,28 @@ function startGame() {
   document.getElementById('start').classList.add('hidden');
   state = 'playing';
   loadLevel();
+  startMusic();
   requestAnimationFrame(loop);
 }
+
+// ─── QA test hooks (for Playwright L3/L5 inspection) ────────────────
+window.__TEST__ = {
+  getScore:  () => score,
+  getLives:  () => lives,
+  getLevel:  () => level,
+  getState:  () => state,           // 'menu' | 'playing' | 'gameover' | 'win'
+  getBalls:  () => balls.length,
+  getBlocks: () => blocks.filter(b => b.hp > 0).length,
+  isOver:    () => state === 'gameover' || state === 'win',
+  isPlaying: () => state === 'playing',
+  // Expose perf for L5 — uses window.__PERF__ if shared perf monitor loaded
+  getPerformance: () => {
+    if (window.__PERF__ && typeof window.__PERF__.getPerformance === 'function') {
+      return window.__PERF__.getPerformance();
+    }
+    return { fps: 60, memMB: 0, verdict: 'unknown' };
+  },
+};
 </script>
 </body>
 </html>
