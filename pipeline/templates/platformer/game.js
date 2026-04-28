@@ -379,9 +379,16 @@ class GameScene extends Phaser.Scene {
     // update() + createPlayer() can branch.
     this.levelMode = levelData.mode || "standard";
 
-    // Create tilemap from level data
+    // Create tilemap from level data.
+    // 2026-04-28: convert 0 -> -1 so empty cells don't render as kenney tile
+    // index 0 (grass block). Phaser tilemap from-data treats -1 as empty;
+    // 0 is a valid tile index. The level synthesizer uses 0 for "no tile"
+    // (86% of cells) so without this remap the entire viewport tiles over
+    // with grass and the foreground/parallax bg are obscured.
+    const remappedTiles = levelData.tiles.map(row =>
+      row.map(v => (v === 0 ? -1 : v)));
     const map = this.make.tilemap({
-      data: levelData.tiles,
+      data: remappedTiles,
       tileWidth: GAME_CONFIG.tileSize,
       tileHeight: GAME_CONFIG.tileSize,
     });
@@ -410,12 +417,20 @@ class GameScene extends Phaser.Scene {
     const worldNum = (this.levelData && this.levelData.world_num) || 1;
     const bgKey = `world_${String(worldNum).padStart(2, "0")}_bg`;
     if (this.textures.exists(bgKey)) {
-      // Single image scaled to map; gentle parallax via slow scroll factor
+      // Strong dark overlay (fillAlpha 0.5) on top of the bg so it recedes
+      // behind the kenney pixel-art foreground (vision_qa_bot 3/10 verdict:
+      // "background overpowers gameplay, art-style mismatch"). Keep bg at
+      // full alpha — reducing it just blends with the camera bg color and
+      // doesn't actually darken the image.
       this.add.image(0, 0, bgKey)
         .setOrigin(0, 0)
         .setDisplaySize(mapWidth, mapHeight)
         .setScrollFactor(0.3)
         .setDepth(-10);
+      this.add.rectangle(0, 0, mapWidth, mapHeight, 0x000814, 0.5)
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setDepth(-9);
     } else {
       // Fallback: solid background color from GAME_CONFIG (no tile-fill bug)
       const bgColor = (GAME_CONFIG.colors && GAME_CONFIG.colors.bg) || "#1a3a5e";
@@ -428,6 +443,13 @@ class GameScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(spawn.x, spawn.y, "characters", 0);
     this.player.setCollideWorldBounds(true);
     this.player.setBounce(0);
+    // 2026-04-28: scale player 2.5x. Kenney characters atlas is 24px native;
+    // enemies_atlas is 64px. Player was 2.7x smaller than common enemies on
+    // screen (user feedback) — backwards from DKC-style where the protagonist
+    // is the same size or larger than mooks. setScale(2.5) makes player ~60px
+    // tall to match enemies. Body dims also scale with the sprite in Phaser
+    // 3 Arcade physics so collisions stay correct.
+    this.player.setScale(2.5);
     this.player.setSize(16, 20);
     this.player.setOffset(4, 4);
     this.player.body.setMaxVelocityY(600);

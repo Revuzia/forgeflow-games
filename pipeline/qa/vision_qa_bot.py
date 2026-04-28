@@ -61,6 +61,20 @@ def _capture_screenshots(game_url: str, count: int = 3,
         try:
             page.goto(game_url, timeout=30000, wait_until="domcontentloaded")
             page.wait_for_function("() => window.__GAME__", timeout=10000)
+            # 2026-04-28: WAIT FOR ALL TEXTURES TO LOAD before forcing scene.start.
+            # Forcing Game scene before preload completes captured Phaser
+            # missing-texture fallback squares (caught by vision_qa_bot 2/10
+            # verdict). Real users wait for the menu naturally.
+            try:
+                page.wait_for_function(
+                    "() => window.__GAME__ && window.__GAME__.textures && "
+                    "window.__GAME__.textures.list && "
+                    "window.__GAME__.textures.list['tiles'] && "
+                    "window.__GAME__.textures.list['characters']",
+                    timeout=20000)
+            except Exception:
+                pass
+            # Now dismiss menu + start Game (preload finished, textures loaded)
             for k in ("Space", "Enter"):
                 page.keyboard.press(k); page.wait_for_timeout(150)
             try:
