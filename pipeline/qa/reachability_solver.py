@@ -174,9 +174,17 @@ def _parse_level(level_data: dict) -> tuple:
     return [], (0, 0), (0, 0)
 
 
-def _is_standing(grid, x, y) -> bool:
+def _is_standing(grid, x, y, body_tiles: int = 1) -> bool:
     """A tile position is 'standing' if the tile itself is walkable (empty/oneway top)
-    AND the tile below is solid."""
+    AND the tile below is solid AND the player's BODY fits in the column above.
+
+    body_tiles: vertical extent of the player body in tiles. Default 1 keeps the
+    legacy single-tile player. Real platformer bodies are 2-3 tiles tall after
+    the template's setScale; placing a platform at body height creates an
+    unjumpable wall at torso height (real bug from barrel-blitz: player got
+    stuck at x=1726 because solver said "standing valid" but the body clipped
+    a platform at the level above).
+    """
     if not (0 <= y < len(grid)) or not (0 <= x < len(grid[0])):
         return False
     if grid[y][x] in SOLID_TILES:
@@ -186,15 +194,26 @@ def _is_standing(grid, x, y) -> bool:
     if y + 1 >= len(grid):
         return False
     below = grid[y + 1][x]
-    return below in SOLID_TILES or below in ONE_WAY_TILES
+    if not (below in SOLID_TILES or below in ONE_WAY_TILES):
+        return False
+    # 2026-04-28: validate body clearance — every tile from (x, y) up to
+    # (x, y - body_tiles + 1) must be non-solid. body_tiles=1 → only the
+    # foot tile (x, y) is checked, matching legacy behavior.
+    for dy in range(1, body_tiles):
+        cy = y - dy
+        if cy < 0:
+            break
+        if grid[cy][x] in SOLID_TILES:
+            return False
+    return True
 
 
-def _collect_standing_nodes(grid) -> list:
+def _collect_standing_nodes(grid, body_tiles: int = 1) -> list:
     """Return every (x, y) position where the player can stand."""
     nodes = []
     for y in range(len(grid)):
         for x in range(len(grid[0]) if grid else 0):
-            if _is_standing(grid, x, y):
+            if _is_standing(grid, x, y, body_tiles):
                 nodes.append((x, y))
     return nodes
 
@@ -237,9 +256,14 @@ def check_level(level_data: dict, physics: dict = None) -> tuple:
     horizontal_speed = float(physics.get("horizontal_speed_tiles", 5))
     double_jump = bool(physics.get("double_jump", False))
     dash_tiles = int(physics.get("dash_tiles", 0))
+    # 2026-04-28: body_tiles default 3 (matches default platformer player after
+    # setScale(2.5)). Solver previously assumed 1 → false-positive reachability
+    # for levels with platforms at body-height (player blocked by torso, but
+    # solver said reachable because foot tile was clear).
+    body_tiles = int(physics.get("player_body_tiles", 3))
 
     reach_offsets = _jump_reach(jump_height, horizontal_speed, double_jump, dash_tiles)
-    standing = set(_collect_standing_nodes(grid))
+    standing = set(_collect_standing_nodes(grid, body_tiles))
 
     if not standing:
         return False, ["No standing positions in level — is it all solid or all hazard?"]
@@ -327,10 +351,11 @@ def find_softlocks(level_data: dict, physics: dict = None) -> dict:
     horizontal_speed = float(physics.get("horizontal_speed_tiles", 5))
     double_jump = bool(physics.get("double_jump", False))
     dash_tiles = int(physics.get("dash_tiles", 0))
+    body_tiles = int(physics.get("player_body_tiles", 3))
 
     forward_offsets = _jump_reach(jump_height, horizontal_speed, double_jump, dash_tiles)
     backward_offsets = _backward_jump_reach(forward_offsets)
-    standing = set(_collect_standing_nodes(grid))
+    standing = set(_collect_standing_nodes(grid, body_tiles))
 
     # Snap start to nearest standing if needed
     if start not in standing and standing:

@@ -80,6 +80,23 @@ class BootScene extends Phaser.Scene {
   }
 
   create() {
+    // 2026-04-28: generate fallback textures so any code that calls
+    // group.create(x, y, null) doesn't TypeError on undefined.sys.
+    // Caught by AAA audit on barrel-blitz: enemy fireProjectile and
+    // moving-platform creates were passing null → silent crash in
+    // updateEnemies (suppressed by try/catch but projectiles never
+    // appeared). Pipeline-driven fix so all generated games are safe.
+    const makeRect = (key, w, h, color) => {
+      if (this.textures.exists(key)) return;
+      const g = this.add.graphics({ x: 0, y: 0 });
+      g.fillStyle(color, 1);
+      g.fillRect(0, 0, w, h);
+      g.generateTexture(key, w, h);
+      g.destroy();
+    };
+    makeRect("__pixel", 1, 1, 0xffffff);          // 1x1 white
+    makeRect("__projectile", 12, 12, 0xff5040);   // small red dot for projectiles
+    makeRect("__platform", 48, 16, 0x7a5230);     // 48x16 brown for moving platforms
     this.scene.start("Preload");
   }
 }
@@ -470,9 +487,18 @@ class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.groundLayer);
 
     // Player animations
-    this.anims.create({ key: "player_idle", frames: this.anims.generateFrameNumbers("characters", { start: 0, end: 1 }), frameRate: 4, repeat: -1 });
-    this.anims.create({ key: "player_run", frames: this.anims.generateFrameNumbers("characters", { start: 0, end: 1 }), frameRate: 10, repeat: -1 });
-    this.anims.create({ key: "player_jump", frames: [{ key: "characters", frame: 1 }], frameRate: 1 });
+    // 2026-04-28: guard against re-registration on scene restart (was
+    // logging "AnimationManager key already exists" warning every level
+    // change). The AnimationManager is per-Game not per-Scene.
+    if (!this.anims.exists("player_idle")) {
+      this.anims.create({ key: "player_idle", frames: this.anims.generateFrameNumbers("characters", { start: 0, end: 1 }), frameRate: 4, repeat: -1 });
+    }
+    if (!this.anims.exists("player_run")) {
+      this.anims.create({ key: "player_run", frames: this.anims.generateFrameNumbers("characters", { start: 0, end: 1 }), frameRate: 10, repeat: -1 });
+    }
+    if (!this.anims.exists("player_jump")) {
+      this.anims.create({ key: "player_jump", frames: [{ key: "characters", frame: 1 }], frameRate: 1 });
+    }
   }
 
   createEnemies() {
@@ -582,9 +608,19 @@ class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.collectibles, this.collectItem, null, this);
 
     if (this.levelData.exit) {
+      // 2026-04-28: scale up the exit visual + body so the player can't
+      // overshoot it. Was: 18x18 sprite — a player body of 40x50 walking
+      // past at 200 px/s could traverse the exit's 18-px hot zone in a
+      // single physics frame and never trigger overlap (caught by AAA
+      // play-through audit on barrel-blitz: player reached x=3940, exit
+      // at 3906, no overlap fired). Display 2x scale + body 60x80 = a
+      // reliable end-of-level target that visibly reads as "the goal".
       this.exit = this.physics.add.staticSprite(
         this.levelData.exit.x, this.levelData.exit.y, "tiles", 120
-      );
+      ).setScale(2);
+      this.exit.body.setSize(60, 80);
+      this.exit.body.setOffset(-21, -31);
+      this.exit.refreshBody();
       this.physics.add.overlap(this.player, this.exit, this.reachExit, null, this);
     }
   }
@@ -596,7 +632,9 @@ class GameScene extends Phaser.Scene {
     for (const p of data) {
       const w = (p.w || 3) * (GAME_CONFIG.tileSize || 18);
       const h = (p.h || 1) * (GAME_CONFIG.tileSize || 18);
-      const plat = this.movingPlatforms.create(p.x, p.y, null);
+      // 2026-04-28: use the BootScene-generated __platform texture instead
+      // of null (which TypeError'd on undefined.sys). Tint applies on top.
+      const plat = this.movingPlatforms.create(p.x, p.y, "__platform");
       if (plat.setDisplaySize) plat.setDisplaySize(w, h);
       plat.body.setSize(w, h);
       plat.setTintFill ? plat.setTintFill(0x7a5230) : null;
