@@ -180,6 +180,13 @@ def run_playtest(game_url: str, trials: int = 5, time_limit_sec: int = 60,
                 last_x = None
                 stuck_ticks = 0
                 max_x_seen = 0
+                # 2026-04-28: levels in barrel-blitz / platformer-template
+                # restart the Game scene with level+1 instead of changing the
+                # scene name. Track currentLevel — any increment counts as a win.
+                try:
+                    initial_level = page.evaluate("() => window.__TEST__.getLevel ? window.__TEST__.getLevel() : 0")
+                except Exception:
+                    initial_level = 0
 
                 # Action loop — 200ms between inputs
                 while time.time() - start_time < time_limit_sec:
@@ -195,6 +202,18 @@ def run_playtest(game_url: str, trials: int = 5, time_limit_sec: int = 60,
                         trial["outcome"] = "win"
                         results["wins"] += 1
                         break
+
+                    # 2026-04-28: level-increment win detection (bot beat at
+                    # least one level, even if not the last one)
+                    try:
+                        cur_level = page.evaluate("() => window.__TEST__.getLevel ? window.__TEST__.getLevel() : 0")
+                        if cur_level is not None and cur_level > initial_level:
+                            trial["outcome"] = "win"
+                            trial["levels_completed"] = cur_level - initial_level
+                            results["wins"] += 1
+                            break
+                    except Exception:
+                        pass
                     if scene and any(s in str(scene) for s in ("GameOver", "Death")):
                         trial["outcome"] = "death"
                         results["deaths"] += 1

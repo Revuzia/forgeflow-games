@@ -177,6 +177,11 @@ def run_coverage_bot(game_url: str,
                     timeout=10000
                 )
                 page.wait_for_timeout(500)
+                # 2026-04-28: track initial level so level-increment counts as a win
+                try:
+                    initial_level_for_trial = page.evaluate("() => window.__TEST__ && window.__TEST__.getLevel ? window.__TEST__.getLevel() : 0")
+                except Exception:
+                    initial_level_for_trial = 0
             except Exception:
                 page.close()
                 continue
@@ -222,8 +227,16 @@ def run_coverage_bot(game_url: str,
                 if not alive:
                     deaths += 1
                     break
-                if scene and any(s in str(scene) for s in ("Win", "Victory", "LevelComplete")):
-                    # WIN! Record the trajectory.
+                # 2026-04-28: detect win via scene-name OR level-increment
+                won_by_scene = scene and any(s in str(scene) for s in ("Win", "Victory", "LevelComplete"))
+                won_by_level = False
+                try:
+                    cur_lvl = page.evaluate("() => window.__TEST__ && window.__TEST__.getLevel ? window.__TEST__.getLevel() : null")
+                    if cur_lvl is not None and cur_lvl > initial_level_for_trial:
+                        won_by_level = True
+                except Exception:
+                    pass
+                if won_by_scene or won_by_level:
                     archive[("__WIN__",)] = {"trajectory": list(current_trajectory),
                                               "visits": 1}
                     break

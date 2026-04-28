@@ -245,15 +245,22 @@ def run_speedrun(game_url: str, levels: list, design: dict, trials: int = 1,
                             page.keyboard.up(k); held_keys.discard(k)
                         time.sleep(dur)
 
-                    # Check completion
+                    # Check completion — 2026-04-28: substring match on scene
+                    # name OR level-increment (intermediate level beats stay
+                    # in Game scene with currentLevel+1).
                     try:
                         scene = page.evaluate("() => window.__TEST__.getCurrentScene()")
-                        if scene in ("WinScene", "LevelCompleteScene", "VictoryScene"):
+                        if scene and any(s in str(scene) for s in ("Win", "Victory", "LevelComplete")):
                             completed = True
                             level_result["outcome"] = "completed"
                             break
-                        if scene in ("GameOverScene", "DeathScene"):
+                        if scene and any(s in str(scene) for s in ("GameOver", "Death")):
                             level_result["outcome"] = "death_during_scripted_run"
+                            break
+                        cur_lvl = page.evaluate("() => window.__TEST__.getLevel ? window.__TEST__.getLevel() : null")
+                        if cur_lvl is not None and cur_lvl > lvl_idx:
+                            completed = True
+                            level_result["outcome"] = "completed_level_advanced"
                             break
                     except Exception:
                         pass
