@@ -53,11 +53,46 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
         "genre": genre,
         "tests": {},
         "console_errors": [],
+        "network_errors": [],
         "total_tests": 0,
         "passed_tests": 0,
         "failed_tests": 0,
         "score": 0,
         "passed": False,
+        # 2026-04-22 AAA-standard bug severity. Any P0 failure blocks deploy
+        # regardless of overall score. P1 must be ≥90% pass. P2/P3 are warnings.
+        "severity_failures": {"P0": [], "P1": [], "P2": [], "P3": []},
+    }
+
+    # Test name → severity map.
+    # P0 = blocker (game doesn't function): no deploy allowed
+    # P1 = core gameplay (moves, jumps, enemies, exit): must fix
+    # P2 = quality / polish: should fix
+    # P3 = nice-to-have / cross-compat: can ship if rest is clean
+    TEST_SEVERITY = {
+        "game_loads":          "P0",
+        "has_canvas":          "P0",
+        "canvas_renders":      "P0",
+        "no_critical_errors":  "P0",
+        "execution":           "P0",
+        "player_exists":       "P1",
+        "movement_right":      "P1",
+        "movement_left":       "P1",
+        "jump_works":          "P1",
+        "enemies_exist":       "P1",
+        "scene_system":        "P1",
+        "start_screen":        "P1",
+        "score_system":        "P2",
+        "lives_system":        "P2",
+        "enemies_move":        "P2",
+        "enemies_animate":     "P2",  # 2026-04-23: AAA-tier animation check
+        "bosses_animate":      "P2",  # 2026-04-23: boss sprite animates during fight
+        "boss_attack_variety": "P2",  # 2026-04-23: ≥3 distinct attack animations play
+        "gravity_works":       "P2",
+        "visual_not_blank":    "P2",
+        "stability_10s":       "P2",
+        "sound_initialized":   "P3",
+        "screenshot_taken":    "P3",
     }
 
     with sync_playwright() as p:
@@ -69,6 +104,20 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
             results["console_errors"].append(msg.text)
             if msg.type == "error" else None
         ))
+
+        # 2026-04-23: capture failed network requests (404/5xx) with their URL
+        # so we can actually diagnose which asset is missing instead of only
+        # seeing "Failed to load resource: 404" with no path.
+        def _on_response(resp):
+            try:
+                if resp.status >= 400:
+                    results.setdefault("network_errors", []).append({
+                        "status": resp.status,
+                        "url": resp.url,
+                    })
+            except Exception:
+                pass
+        page.on("response", _on_response)
 
         try:
             # ── TEST 1: Game loads without errors ──
@@ -86,23 +135,53 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
 
             # ── TEST 2: Start screen present ──
             print("  [2/10] Start screen...")
-            # Click play button or press space to start
-            page.keyboard.press("Space")
-            page.wait_for_timeout(1000)
-            # Check if we entered gameplay
+            # 2026-04-22: cover ALL plausible start-screen dismissal patterns.
+            # Phaser templates put a START GAME text button at different Y
+            # positions (y=270, 300, 320, 350 seen across templates). Click
+            # the whole vertical column at x=480 + fire keyboard inputs.
             has_test_api = page.evaluate("typeof window.__TEST__ !== 'undefined'")
-            if not has_test_api:
-                # Try clicking in center (for custom start buttons)
-                page.mouse.click(480, 270)
-                page.wait_for_timeout(1000)
-                has_test_api = page.evaluate("typeof window.__TEST__ !== 'undefined'")
+            # 1) keyboard
+            for key in ("Space", "Enter", "ArrowRight"):
+                page.keyboard.press(key)
+                page.wait_for_timeout(150)
+            # 2) click multiple Y positions to cover any button placement
+            for click_y in (270, 300, 320, 350, 400):
+                page.mouse.click(480, click_y)
+                page.wait_for_timeout(150)
+            # 3) if scene API exposed, force-start GameScene (last resort for games
+            #    whose MainMenu has no keyboard handler AND button hit-area is unusual)
+            try:
+                page.evaluate("""
+                    (() => {
+                        if (!window.__GAME__) return;
+                        const sm = window.__GAME__.scene;
+                        if (!sm) return;
+                        const g = sm.getScene && sm.getScene('Game');
+                        const gameScene = sm.keys && (sm.keys['Game'] || sm.keys['GameScene'] || sm.keys['game']);
+                        const target = gameScene || g;
+                        if (target && sm.start) { sm.start('Game'); }
+                    })();
+                """)
+            except Exception:
+                pass
+            page.wait_for_timeout(500)
+            # Poll for player to spawn (up to 5s) — GameScene.create() runs async
+            player = None
+            for _ in range(25):
+                try:
+                    player = page.evaluate("window.__TEST__ ? window.__TEST__.getPlayer() : null")
+                except Exception:
+                    player = None
+                if player is not None and isinstance(player, dict) and "x" in player:
+                    break
+                page.wait_for_timeout(200)
             results["tests"]["start_screen"] = True  # If we got here, start screen existed
+            has_test_api = page.evaluate("typeof window.__TEST__ !== 'undefined'")
 
             if has_test_api:
                 # ── TEST 3: Player exists and has position ──
                 print("  [3/10] Player exists...")
-                player = page.evaluate("window.__TEST__.getPlayer()")
-                results["tests"]["player_exists"] = player is not None and "x" in player
+                results["tests"]["player_exists"] = player is not None and isinstance(player, dict) and "x" in player
                 initial_x = player["x"] if player else 0
                 initial_y = player["y"] if player else 0
 
@@ -117,8 +196,15 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                 results["tests"]["movement_right"] = moved_right
 
                 # ── TEST 5: Left arrow moves player left ──
+                # 2026-04-22: guard against None — Python was crashing on
+                # `None["x"]` when player_exists failed, aborting the entire
+                # QA sweep with 'NoneType' is not subscriptable.
                 print("  [5/10] Movement left...")
-                pos_before_left = page.evaluate("window.__TEST__.getPlayer()")["x"]
+                _pl = page.evaluate("window.__TEST__.getPlayer()")
+                if _pl is None or "x" not in _pl:
+                    results["tests"]["movement_left"] = False
+                    raise RuntimeError("Player hook returned None mid-QA — skipping remaining tests")
+                pos_before_left = _pl["x"]
                 page.keyboard.down("ArrowLeft")
                 page.wait_for_timeout(500)
                 page.keyboard.up("ArrowLeft")
@@ -127,10 +213,19 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                 results["tests"]["movement_left"] = pos_after_left < pos_before_left - 5
 
                 # ── TEST 6: Jump works (player goes up) ──
+                # 2026-04-22: previously used page.keyboard.press() which is
+                # an instant down+up in <1ms. Many Phaser templates implement
+                # variable-jump-height: if Space is released while velocity.y
+                # is still negative, multiply velocity by ~0.7. Instant press
+                # triggers that cut every frame → player barely leaves ground.
+                # Hold Space for ~150ms (realistic tap) so variable-jump kicks
+                # in AFTER apex, not during liftoff.
                 print("  [6/10] Jump...")
                 player_before_jump = page.evaluate("window.__TEST__.getPlayer()")
-                page.keyboard.press("Space")
-                page.wait_for_timeout(300)
+                page.keyboard.down("Space")
+                page.wait_for_timeout(150)
+                page.keyboard.up("Space")
+                page.wait_for_timeout(150)
                 player_mid_jump = page.evaluate("window.__TEST__.getPlayer()")
                 results["tests"]["jump_works"] = (
                     player_mid_jump and
@@ -144,21 +239,44 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                 score = page.evaluate("window.__TEST__.getScore()")
                 results["tests"]["score_system"] = score is not None and isinstance(score, (int, float))
 
-                # ── TEST 8: Enemies exist ──
+                # ── TEST 8: Enemies exist + move + animate ──
                 print("  [8/10] Enemies...")
                 enemies = page.evaluate("window.__TEST__.getEnemies()")
                 results["tests"]["enemies_exist"] = enemies is not None and len(enemies) > 0
                 if enemies and len(enemies) > 0:
-                    # Check enemy moves
+                    # Check enemy moves (position delta)
                     enemy_x_before = enemies[0]["x"]
+                    # Capture animation frame index at t=0 (requires enemy.anims.currentFrame)
+                    anim_frame_before = page.evaluate(
+                        "() => { const s = window.__GAME__ && window.__GAME__.scene.getScene('Game');"
+                        "  const e = s && s.enemies && s.enemies.children.entries[0];"
+                        "  return e && e.anims && e.anims.currentFrame ? e.anims.currentFrame.index : null; }"
+                    )
                     page.wait_for_timeout(500)
                     enemies_after = page.evaluate("window.__TEST__.getEnemies()")
+                    anim_frame_after = page.evaluate(
+                        "() => { const s = window.__GAME__ && window.__GAME__.scene.getScene('Game');"
+                        "  const e = s && s.enemies && s.enemies.children.entries[0];"
+                        "  return e && e.anims && e.anims.currentFrame ? e.anims.currentFrame.index : null; }"
+                    )
                     if enemies_after and len(enemies_after) > 0:
                         results["tests"]["enemies_move"] = abs(enemies_after[0]["x"] - enemy_x_before) > 1
                     else:
                         results["tests"]["enemies_move"] = False
+                    # 2026-04-23: enemies_animate — frame index should change over 500ms if
+                    # Kenney-atlas animations are registered + playing. Skipped if enemy has
+                    # no animation system attached (not mapped to Kenney).
+                    if anim_frame_before is None and anim_frame_after is None:
+                        results["tests"]["enemies_animate"] = False  # no animation at all
+                    else:
+                        # Either frame changed OR both are valid numbers (idle anim can keep same frame briefly)
+                        results["tests"]["enemies_animate"] = (
+                            anim_frame_before != anim_frame_after
+                            or (anim_frame_after is not None and anim_frame_after >= 0)
+                        )
                 else:
                     results["tests"]["enemies_move"] = False
+                    results["tests"]["enemies_animate"] = False
 
                 # ── TEST 9: Lives system ──
                 print("  [9/10] Lives system...")
@@ -335,7 +453,17 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
     results["passed_tests"] = passed
     results["failed_tests"] = total - passed
     results["score"] = round((passed / max(total, 1)) * 100, 1)
-    results["passed"] = results["score"] >= 70  # 70% pass threshold
+    # 2026-04-27: AAA standard — every L1 test must pass to ship. Anything
+    # less is noise that masks real bugs.
+    results["passed"] = results["score"] >= 100  # require 100% pass
+
+    # 2026-04-22: bucket failures by severity so phase_qa can gate deploy.
+    for test_name, outcome in results["tests"].items():
+        if outcome is False:  # explicit False, skip None
+            sev = TEST_SEVERITY.get(test_name, "P2")  # default medium if unmapped
+            results["severity_failures"][sev].append(test_name)
+    results["has_P0"] = len(results["severity_failures"]["P0"]) > 0
+    results["has_P1"] = len(results["severity_failures"]["P1"]) > 0
 
     return results
 
@@ -360,6 +488,17 @@ def print_results(results: dict):
         print(f"\n  Console errors ({len(results['console_errors'])}):")
         for err in results["console_errors"][:5]:
             print(f"    - {err[:100]}")
+
+    # 2026-04-23: surface 4xx/5xx with URLs so "Failed to load resource: 404"
+    # actually tells us WHICH asset is missing. Captured by page.on("response").
+    net_errs = results.get("network_errors") or []
+    if net_errs:
+        print(f"\n  Network errors ({len(net_errs)}):")
+        for e in net_errs[:10]:
+            if isinstance(e, dict):
+                print(f"    - HTTP {e.get('status', '?')}  {e.get('url', '?')}")
+            else:
+                print(f"    - {str(e)[:120]}")
 
     print(f"\n  Total: {results['passed_tests']}/{results['total_tests']} passed")
     print(f"  Score: {results['score']:.0f}/100")

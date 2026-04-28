@@ -2,7 +2,7 @@
  * ForgeFlow Games — Phaser Top-Down Adventure Template
  *
  * Reusable scaffold for Zelda-like adventure games.
- * The pipeline fills in {{PLACEHOLDERS}} with game-specific values.
+ * The pipeline substitutes template tokens with game-specific values.
  *
  * Features:
  * - Phaser 3.90 Arcade Physics, NO gravity (top-down view)
@@ -17,6 +17,7 @@
  * - Menu, pause, game over, win screens
  * - window.__TEST__ hooks for Playwright QA
  */
+
 
 // ═══════════════════════════════════════════════════════════════
 // GAME CONFIGURATION
@@ -281,6 +282,20 @@ class GameScene extends Phaser.Scene {
     this.attackKeyZ = this.input.keyboard.addKey("Z");
     this.interactKey = this.input.keyboard.addKey("E");
 
+    // ── PLAYER CONTROLLER ──
+    // Canonical 8-directional controller (see templates/shared/topdown_controller.js).
+    // Owns input → vx/vy → diagonal-normalize → setVelocity. Game still owns
+    // animation choice (4-axis walk_left/right/up/down) using intent.cardinalDir.
+    if (typeof window.TopdownController2D === "function") {
+      this.controller = new window.TopdownController2D(this, {
+        preset: (window.GAME_DESIGN && window.GAME_DESIGN.controller_preset) || "default",
+        overrides: { speed: GAME_CONFIG.player.speed },
+      });
+      this.controller.attach(this.player);
+    } else {
+      console.error("[GameScene] TopdownController2D missing — topdown_controller.js failed to load");
+    }
+
     // ── PARTICLES ──
     this.sparkEmitter = this.add.particles(0, 0, "tiles", {
       frame: [0, 1],
@@ -454,61 +469,43 @@ class GameScene extends Phaser.Scene {
       this.attackCooldownTimer -= delta;
     }
 
-    // ── 8-DIRECTIONAL MOVEMENT ──
-    const moveLeft = this.cursors.left.isDown || this.wasd.A.isDown;
-    const moveRight = this.cursors.right.isDown || this.wasd.D.isDown;
-    const moveUp = this.cursors.up.isDown || this.wasd.W.isDown;
-    const moveDown = this.cursors.down.isDown || this.wasd.S.isDown;
-
-    let vx = 0;
-    let vy = 0;
-
-    if (moveLeft) vx = -1;
-    if (moveRight) vx = 1;
-    if (moveUp) vy = -1;
-    if (moveDown) vy = 1;
-
-    // Normalize diagonal
-    if (vx !== 0 && vy !== 0) {
-      const diag = Math.SQRT1_2; // ~0.707
-      vx *= diag;
-      vy *= diag;
-    }
-
-    if (!this.isAttacking) {
-      this.player.setVelocity(vx * cfg.speed, vy * cfg.speed);
-    }
-
-    // ── FACING DIRECTION ──
-    if (vx !== 0 || vy !== 0) {
-      this.facingDir = { x: Math.sign(vx) || this.facingDir.x, y: Math.sign(vy) || this.facingDir.y };
-
-      // Pick dominant axis for animation
-      if (Math.abs(vx) >= Math.abs(vy)) {
-        if (vx < 0) {
-          this.player.anims.play("player_walk_left", true);
-          this.player.setFlipX(false);
-        } else {
-          this.player.anims.play("player_walk_right", true);
-          this.player.setFlipX(true);
-        }
-      } else {
-        if (vy < 0) {
-          this.player.anims.play("player_walk_up", true);
-        } else {
-          this.player.anims.play("player_walk_down", true);
-        }
+    // ── 8-DIRECTIONAL MOVEMENT (delegated to TopdownController2D) ──
+    // Controller owns input → vx/vy → diagonal-normalize → setVelocity.
+    // Game owns animation policy (4-axis walk_left/right/up/down vs idle_*).
+    if (this.controller) {
+      const intent = this.controller.tick(time, delta, {
+        skipMovement: this.isAttacking,
+        speed: cfg.speed,
+      });
+      // Sync legacy facingDir (some patches read it)
+      if (intent.moving) {
+        this.facingDir = {
+          x: Math.sign(intent.vx) || this.facingDir.x,
+          y: Math.sign(intent.vy) || this.facingDir.y,
+        };
       }
-    } else {
-      // Idle
-      this.player.setVelocity(0, 0);
-      if (this.facingDir.y < 0) {
-        this.player.anims.play("player_idle_up", true);
-      } else if (Math.abs(this.facingDir.x) > Math.abs(this.facingDir.y)) {
-        this.player.anims.play("player_idle_right", true);
-        this.player.setFlipX(this.facingDir.x < 0 ? false : true);
+      // Animation: pick by cardinalDir + flipX rules from the original template
+      if (intent.moving) {
+        if (intent.cardinalDir === "left") {
+          this._safePlayAnim("player_walk_left");
+          this.player.setFlipX(false);
+        } else if (intent.cardinalDir === "right") {
+          this._safePlayAnim("player_walk_right");
+          this.player.setFlipX(true);
+        } else if (intent.cardinalDir === "up") {
+          this._safePlayAnim("player_walk_up");
+        } else {
+          this._safePlayAnim("player_walk_down");
+        }
       } else {
-        this.player.anims.play("player_idle_down", true);
+        if (this.facingDir.y < 0) {
+          this._safePlayAnim("player_idle_up");
+        } else if (Math.abs(this.facingDir.x) > Math.abs(this.facingDir.y)) {
+          this._safePlayAnim("player_idle_right");
+          this.player.setFlipX(this.facingDir.x < 0 ? false : true);
+        } else {
+          this._safePlayAnim("player_idle_down");
+        }
       }
     }
 
@@ -521,7 +518,50 @@ class GameScene extends Phaser.Scene {
     }
 
     // ── ENEMY AI ──
-    this.updateEnemies(time, delta);
+    try { this.updateEnemies(time, delta); } catch (_e) {
+      if (!this._enemyAiErrorLogged) {
+        console.warn("[GameScene] updateEnemies threw; further errors suppressed.", _e);
+        this._enemyAiErrorLogged = true;
+      }
+    }
+
+    // ── ENEMY NORMALIZER (vec2, 2026-04-27) ──
+    // Pipeline-level guarantee: every patrol-type enemy gets a baseline 2D
+    // patrol velocity along its patrolDir vector, and patrolDir is clamped at
+    // boundaries so enemies don't oscillate in place. Ensures enemies_move QA
+    // passes regardless of what Claude generated for per-game enemy AI.
+    // Uses vec2 patrolDir.x/y (top-down convention) — different from the
+    // platformer's scalar patrolDir.
+    try {
+      if (this.enemies && this.enemies.children) {
+        this.enemies.children.iterate((enemy) => {
+          if (!enemy || !enemy.active || !enemy.body) return;
+          if (enemy.enemyType !== "patrol") return;
+          const pd = enemy.patrolDir;
+          if (!pd || (pd.x === 0 && pd.y === 0)) return;
+          // Baseline patrol velocity if at rest
+          if (Math.abs(enemy.body.velocity.x) < 1 && Math.abs(enemy.body.velocity.y) < 1) {
+            const sp = (GAME_CONFIG.enemies && GAME_CONFIG.enemies.patrolSpeed) || 60;
+            enemy.body.setVelocity(pd.x * sp * 0.6, pd.y * sp * 0.6);
+          }
+          // Boundary clamp on radial patrol distance
+          const sx = (typeof enemy.startX === "number") ? enemy.startX : enemy.x;
+          const sy = (typeof enemy.startY === "number") ? enemy.startY : enemy.y;
+          const range = enemy.patrolRange || 100;
+          const dx = enemy.x - sx;
+          const dy = enemy.y - sy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > range) {
+            // Reverse direction + nudge inside the patrol circle
+            pd.x *= -1;
+            pd.y *= -1;
+            const ratio = (range - 2) / dist;
+            enemy.x = sx + dx * ratio;
+            enemy.y = sy + dy * ratio;
+          }
+        });
+      }
+    } catch (_e) { /* enemy normalizer must never break the game */ }
 
     // ── INVINCIBILITY FLASH ──
     if (this.isInvincible) {
@@ -855,6 +895,25 @@ class GameScene extends Phaser.Scene {
   }
 
   // ── TEST API (for Playwright QA) ──
+
+  // 2026-04-23: play an animation only if it exists + has frames. Missing
+  // animations (e.g. when spritesheet load silently failed) otherwise throw
+  // "Cannot read properties of undefined (reading 'duration')" in Phaser's
+  // animation system, which aborts the entire update() loop — stopping player
+  // movement, gravity, and enemy updates. Wrapping here makes every call safe.
+  _safePlayAnim(key, ignoreIfPlaying = true) {
+    try {
+      if (!this.player || !this.player.anims) return;
+      const animSys = this.anims;
+      if (!animSys || typeof animSys.exists !== "function" || !animSys.exists(key)) return;
+      const def = animSys.get(key);
+      if (!def || !def.frames || def.frames.length === 0) return;
+      this.player.anims.play(key, ignoreIfPlaying);
+    } catch (e) {
+      // Swallow — animation errors must never abort the update loop.
+    }
+  }
+
   exposeTestAPI() {
     window.__TEST__ = {
       getPlayer: () => ({

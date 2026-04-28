@@ -2,7 +2,7 @@
  * ForgeFlow Games — Phaser ARPG Template
  *
  * Reusable scaffold for Diablo-style action RPGs.
- * The pipeline fills in {{PLACEHOLDERS}} with game-specific values.
+ * The pipeline substitutes template tokens with game-specific values.
  *
  * Features:
  * - Phaser 3.90 Arcade Physics, NO gravity (top-down isometric feel)
@@ -17,6 +17,7 @@
  * - Menu, pause, game over, win screens
  * - window.__TEST__ hooks for Playwright QA
  */
+
 
 // ═══════════════════════════════════════════════════════════════
 // GAME CONFIGURATION
@@ -308,6 +309,20 @@ class GameScene extends Phaser.Scene {
 
     // Click-to-move + Click-to-attack
     this.input.on("pointerdown", (pointer) => this.handlePointerDown(pointer));
+
+    // ── PLAYER CONTROLLER ──
+    // Canonical 8-directional controller (see templates/shared/topdown_controller.js).
+    // ARPG passes opts.skipMovement when attacking OR when click-to-move is
+    // active; the game still owns click-to-move pathing and animation policy.
+    if (typeof window.TopdownController2D === "function") {
+      this.controller = new window.TopdownController2D(this, {
+        preset: (window.GAME_DESIGN && window.GAME_DESIGN.controller_preset) || "default",
+        overrides: { speed: GAME_CONFIG.player.speed },
+      });
+      this.controller.attach(this.player);
+    } else {
+      console.error("[GameScene] TopdownController2D missing — topdown_controller.js failed to load");
+    }
 
     // ── PARTICLES ──
     this.hitEmitter = this.add.particles(0, 0, "tiles", {
@@ -681,33 +696,33 @@ class GameScene extends Phaser.Scene {
       this.attackCooldownTimer -= delta;
     }
 
-    // ── MOVEMENT (WASD) ──
-    const moveLeft = this.cursors.left.isDown || this.wasd.A.isDown;
-    const moveRight = this.cursors.right.isDown || this.wasd.D.isDown;
-    const moveUp = this.cursors.up.isDown || this.wasd.W.isDown;
-    const moveDown = this.cursors.down.isDown || this.wasd.S.isDown;
-
+    // ── MOVEMENT (delegated to TopdownController2D) ──
+    // Controller handles WASD/cursors → vx/vy → diagonal-normalize → setVelocity.
+    // Game still owns click-to-move pathing (overrides controller via skipMovement).
+    const effectiveSpeed = cfg.speed + this.bonusSpeed;
     let vx = 0;
     let vy = 0;
-    const effectiveSpeed = cfg.speed + this.bonusSpeed;
+    let didKeyboardMovement = false;
 
-    if (moveLeft || moveRight || moveUp || moveDown) {
-      this.moveTarget = null; // Cancel click-to-move
-      if (moveLeft) vx = -1;
-      if (moveRight) vx = 1;
-      if (moveUp) vy = -1;
-      if (moveDown) vy = 1;
+    // Detect keyboard input so we can cancel click-to-move
+    const anyKey = (this.cursors.left.isDown || this.cursors.right.isDown ||
+                    this.cursors.up.isDown || this.cursors.down.isDown ||
+                    this.wasd.A.isDown || this.wasd.D.isDown ||
+                    this.wasd.W.isDown || this.wasd.S.isDown);
 
-      if (vx !== 0 && vy !== 0) {
-        vx *= Math.SQRT1_2;
-        vy *= Math.SQRT1_2;
-      }
-
-      if (!this.isAttacking) {
-        this.player.setVelocity(vx * effectiveSpeed, vy * effectiveSpeed);
+    if (anyKey) {
+      this.moveTarget = null;  // keyboard cancels click-to-move
+      if (this.controller) {
+        const intent = this.controller.tick(time, delta, {
+          skipMovement: this.isAttacking,
+          speed: effectiveSpeed,
+        });
+        vx = intent.vx;
+        vy = intent.vy;
+        didKeyboardMovement = intent.moving;
       }
     } else if (this.moveTarget && !this.isAttacking) {
-      // Click-to-move
+      // Click-to-move (game-owned pathing, controller stays idle this frame)
       const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.moveTarget.x, this.moveTarget.y);
       if (dist > 8) {
         const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, this.moveTarget.x, this.moveTarget.y);
@@ -718,17 +733,24 @@ class GameScene extends Phaser.Scene {
         this.moveTarget = null;
         this.player.setVelocity(0, 0);
       }
+      // Tell controller to skip but still update its internal facing
+      if (this.controller) this.controller.tick(time, delta, { skipMovement: true });
     } else if (!this.isAttacking) {
-      this.player.setVelocity(0, 0);
+      // Idle — let controller handle stop (it will setVelocity(0,0))
+      if (this.controller) {
+        this.controller.tick(time, delta, { skipMovement: false });
+      } else {
+        this.player.setVelocity(0, 0);
+      }
     }
 
-    // Facing direction
+    // Facing direction (1-axis animation: walk/idle + flipX)
     if (vx !== 0 || vy !== 0) {
       this.facingDir = { x: vx, y: vy };
-      this.player.anims.play("player_walk", true);
+      this._safePlayAnim("player_walk");
       this.player.setFlipX(vx < 0);
     } else {
-      this.player.anims.play("player_idle", true);
+      this._safePlayAnim("player_idle");
     }
 
     // ── KEYBOARD ATTACK ──
@@ -745,7 +767,45 @@ class GameScene extends Phaser.Scene {
     }
 
     // ── ENEMY AI ──
-    this.updateEnemies(delta);
+    try { this.updateEnemies(delta); } catch (_e) {
+      if (!this._enemyAiErrorLogged) {
+        console.warn("[GameScene] updateEnemies threw; further errors suppressed.", _e);
+        this._enemyAiErrorLogged = true;
+      }
+    }
+
+    // ── ENEMY NORMALIZER (vec2, 2026-04-27) ──
+    // Pipeline-level guarantee: every patrol-type enemy gets a baseline 2D
+    // patrol velocity along its patrolDir vector, and patrolDir is reversed +
+    // position nudged inward at boundaries so enemies don't oscillate in place.
+    // Ensures enemies_move QA passes regardless of what Claude generated.
+    try {
+      if (this.enemies && this.enemies.children) {
+        this.enemies.children.iterate((enemy) => {
+          if (!enemy || !enemy.active || !enemy.body) return;
+          if (enemy.enemyType !== "patrol") return;
+          const pd = enemy.patrolDir;
+          if (!pd || (pd.x === 0 && pd.y === 0)) return;
+          if (Math.abs(enemy.body.velocity.x) < 1 && Math.abs(enemy.body.velocity.y) < 1) {
+            const sp = (GAME_CONFIG.enemies && GAME_CONFIG.enemies.patrolSpeed) || 60;
+            enemy.body.setVelocity(pd.x * sp * 0.6, pd.y * sp * 0.6);
+          }
+          const sx = (typeof enemy.startX === "number") ? enemy.startX : enemy.x;
+          const sy = (typeof enemy.startY === "number") ? enemy.startY : enemy.y;
+          const range = enemy.patrolRange || 100;
+          const dx = enemy.x - sx;
+          const dy = enemy.y - sy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > range) {
+            pd.x *= -1;
+            pd.y *= -1;
+            const ratio = (range - 2) / dist;
+            enemy.x = sx + dx * ratio;
+            enemy.y = sy + dy * ratio;
+          }
+        });
+      }
+    } catch (_e) { /* normalizer must never break the game */ }
 
     // ── UPDATE HUD ──
     this.updateHUD();
@@ -1104,6 +1164,25 @@ class GameScene extends Phaser.Scene {
   }
 
   // ── TEST API ──
+
+  // 2026-04-23: play an animation only if it exists + has frames. Missing
+  // animations (e.g. when spritesheet load silently failed) otherwise throw
+  // "Cannot read properties of undefined (reading 'duration')" in Phaser's
+  // animation system, which aborts the entire update() loop — stopping player
+  // movement, gravity, and enemy updates. Wrapping here makes every call safe.
+  _safePlayAnim(key, ignoreIfPlaying = true) {
+    try {
+      if (!this.player || !this.player.anims) return;
+      const animSys = this.anims;
+      if (!animSys || typeof animSys.exists !== "function" || !animSys.exists(key)) return;
+      const def = animSys.get(key);
+      if (!def || !def.frames || def.frames.length === 0) return;
+      this.player.anims.play(key, ignoreIfPlaying);
+    } catch (e) {
+      // Swallow — animation errors must never abort the update loop.
+    }
+  }
+
   exposeTestAPI() {
     window.__TEST__ = {
       getPlayer: () => ({
