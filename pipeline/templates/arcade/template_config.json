@@ -1,0 +1,14 @@
+{
+  "genre": "arcade",
+  "sub_genre": "twin-stick-shooter",
+  "engine": "Phaser 3.90 Arcade Physics",
+  "viewport": { "width": 960, "height": 720 },
+  "design_emphasis": "fast-twitch action; arena stays mostly static; player + enemies move continuously; score multipliers reward chained kills",
+  "controls": {
+    "move": "WASD or Arrow keys",
+    "aim": "Mouse cursor (or right stick on gamepad)",
+    "fire": "Auto-fire (held space toggles burst)",
+    "bomb": "Q (clear-screen, limited)"
+  },
+  "notes": "All gameplay happens in a single arena (no level scrolling). Levels are WAVES of enemies, not horizontal stages. WIN = survive all waves. LOSE = lives depleted."
+}
