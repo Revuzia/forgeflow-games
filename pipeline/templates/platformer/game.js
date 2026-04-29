@@ -438,6 +438,11 @@ class GameScene extends Phaser.Scene {
       if (typeof window.LevelModes !== "undefined" && window.LevelModes.attach) {
         try { window.LevelModes.attach(this); } catch (e) { console.warn("[LevelModes]", e); }
       }
+      // 2026-04-29: completion tracker (BLITZ letters + puzzle pieces +
+      // hard-mode toggle). Persisted via SaveLoad to localStorage.
+      if (typeof window.Completion !== "undefined" && window.Completion.attach) {
+        try { window.Completion.attach(this); } catch (e) { console.warn("[Completion]", e); }
+      }
       // Power-ups: scatter 1-2 per level based on design.power_ups
       if (typeof window.PowerUps !== "undefined") {
         const pu = (window.GAME_DESIGN && window.GAME_DESIGN.power_ups) || [];
@@ -527,25 +532,21 @@ class GameScene extends Phaser.Scene {
     const worldNum = (this.levelData && this.levelData.world_num) || 1;
     const bgKey = `world_${String(worldNum).padStart(2, "0")}_bg`;
     if (this.textures.exists(bgKey)) {
-      // 2026-04-29: TileSprite instead of stretched Image — stretching a
-      // 1920px bg across a 21,600px level (5.5x map at 1.8 min playthrough)
-      // looked like horizontal streaks. TileSprite tiles horizontally;
-      // setScrollFactor 0.3 still parallaxes for depth. The bg height is
-      // scaled up to camera height so vertical doesn't tile (we only want
-      // horizontal repetition).
-      const tex = this.textures.get(bgKey);
-      const camH = this.cameras.main.height;
-      const ts = this.add.tileSprite(0, 0, mapWidth, camH, bgKey)
-        .setOrigin(0, 0)
-        .setScrollFactor(0.3)
-        .setDepth(-10);
-      // Scale tile so 1 source-image height = camera height (no vertical wrap)
-      const srcH = tex.source[0].height || 1;
-      ts.setTileScale(camH / srcH, camH / srcH);
-      this.add.rectangle(0, 0, mapWidth, mapHeight, 0x000814, 0.5)
-        .setOrigin(0, 0)
-        .setScrollFactor(0)
-        .setDepth(-9);
+      // 2026-04-29: prefer multi-layer Parallax lib (3 layers at 0.15,
+      // 0.4, 0.75 scroll factors). Falls back to single TileSprite if
+      // lib not loaded.
+      if (typeof window.Parallax !== "undefined" && window.Parallax.build) {
+        window.Parallax.build(this, mapWidth, mapHeight, worldNum);
+      } else {
+        const tex = this.textures.get(bgKey);
+        const camH = this.cameras.main.height;
+        const ts = this.add.tileSprite(0, 0, mapWidth, camH, bgKey)
+          .setOrigin(0, 0).setScrollFactor(0.3).setDepth(-10);
+        const srcH = tex.source[0].height || 1;
+        ts.setTileScale(camH / srcH, camH / srcH);
+        this.add.rectangle(0, 0, mapWidth, mapHeight, 0x000814, 0.5)
+          .setOrigin(0, 0).setScrollFactor(0).setDepth(-9);
+      }
     } else {
       // Fallback: solid background color from GAME_CONFIG (no tile-fill bug)
       const bgColor = (GAME_CONFIG.colors && GAME_CONFIG.colors.bg) || "#1a3a5e";
