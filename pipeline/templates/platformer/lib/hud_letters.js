@@ -31,6 +31,24 @@
     const word = _spellFromProto(protoName);
     scene._hudLetters = { word, slots: [], collected: 0, rewardFired: false };
 
+    // 2026-04-29: defensively remove any pre-existing letter pip Text
+    // objects from Claude-generated patches (e.g. createCustomHUD adding
+    // its own BLITZ pips at depth 1000 with reverse-positioning →
+    // visually reads as ZTILB). User-flagged. Match: HUD-pinned
+    // (scrollFactorX === 0) Text objects whose content is one of our
+    // letters AND aren't from THIS attach call.
+    try {
+      const letters = new Set(word.split(""));
+      const toKill = [];
+      scene.children.list.forEach(c => {
+        if (c.type === "Text" && c.scrollFactorX === 0 &&
+            letters.has((c.text || "").trim())) {
+          toKill.push(c);
+        }
+      });
+      toKill.forEach(c => { try { c.destroy(); } catch (_e) {} });
+    } catch (_e) {}
+
     const cam = scene.cameras.main;
     const slotSize = 28;
     const padding = 6;
