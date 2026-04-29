@@ -443,6 +443,30 @@ class GameScene extends Phaser.Scene {
       if (typeof window.Completion !== "undefined" && window.Completion.attach) {
         try { window.Completion.attach(this); } catch (e) { console.warn("[Completion]", e); }
       }
+      // 2026-04-29: helpers (Squawks-style guide reveals hidden items)
+      if (typeof window.Helpers !== "undefined" && window.Helpers.attach) {
+        try { window.Helpers.attach(this); } catch (e) { console.warn("[Helpers]", e); }
+      }
+      // PartnerSystem: 2-hit health via partner barrel pickup
+      if (typeof window.PartnerSystem !== "undefined" && window.PartnerSystem.attach) {
+        try { window.PartnerSystem.attach(this); } catch (e) { console.warn("[PartnerSystem]", e); }
+      }
+      // Spawn 1 partner barrel per level (every 4th level type rotates)
+      if (typeof window.PartnerSystem !== "undefined" && (this.currentLevel || 0) % 4 === 2) {
+        try {
+          const types = ["fast", "high", "heavy"];
+          const t = types[(this.currentLevel || 0) % 3];
+          window.PartnerSystem.spawnBarrel(this, this.map.widthInPixels * 0.25, (this.map.height - 5) * (this.map.tileWidth || 18), t);
+        } catch (e) { console.warn("[PartnerSystem.spawn]", e); }
+      }
+      // AdaptiveMusic: switch tracks based on game state
+      if (typeof window.AdaptiveMusic !== "undefined" && window.AdaptiveMusic.attach) {
+        try { window.AdaptiveMusic.attach(this); } catch (e) { console.warn("[AdaptiveMusic]", e); }
+      }
+      // TimeAttack: per-level timer + best-time tracking (only if enabled)
+      if (typeof window.TimeAttack !== "undefined" && window.TimeAttack.attach) {
+        try { window.TimeAttack.attach(this); } catch (e) { console.warn("[TimeAttack]", e); }
+      }
       // Power-ups: scatter 1-2 per level based on design.power_ups
       if (typeof window.PowerUps !== "undefined") {
         const pu = (window.GAME_DESIGN && window.GAME_DESIGN.power_ups) || [];

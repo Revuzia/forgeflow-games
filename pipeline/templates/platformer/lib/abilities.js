@@ -355,16 +355,100 @@
     tick(scene, time, delta) { /* handled in controller */ },
   };
 
+  // ── VINE CLIMB ─────────────────────────────────────────────────────────
+  // Distinct from VINE SWING: when overlapping a vine sprite, UP/DOWN
+  // climbs the vine without pendulum motion. Useful for tall vertical
+  // sections in jungle/abyss worlds.
+  const vineClimb = {
+    key: "vine_climb",
+    bind(scene) { scene._vcState = { onVine: false }; },
+    tick(scene, time, delta) {
+      const p = scene.player;
+      const st = scene._vcState;
+      if (!p || !p.body || !st || !scene.vines) return;
+      let onVine = false;
+      scene.vines.children && scene.vines.children.iterate(v => {
+        if (!v || !v.active) return;
+        if (Math.abs(v.x - p.x) < 16 && Math.abs(v.y - p.y) < (v.displayHeight || 80)) onVine = true;
+      });
+      if (onVine) {
+        const up = (scene.cursors && scene.cursors.up && scene.cursors.up.isDown) || (scene.wasd && scene.wasd.W && scene.wasd.W.isDown);
+        const dn = (scene.cursors && scene.cursors.down && scene.cursors.down.isDown) || (scene.wasd && scene.wasd.S && scene.wasd.S.isDown);
+        if (up || dn) {
+          try { p.body.setAllowGravity(false); } catch (_e) {}
+          p.body.velocity.y = up ? -120 : 120;
+          st.onVine = true;
+        }
+      } else if (st.onVine) {
+        try { p.body.setAllowGravity(true); } catch (_e) {}
+        st.onVine = false;
+      }
+    },
+  };
+
+  // ── GRAB / THROW ───────────────────────────────────────────────────────
+  // Press G near a stunned enemy or small object → carry. Press G again
+  // to throw forward. Carried object damages enemies on hit.
+  const grabThrow = {
+    key: "grab_throw",
+    bind(scene) {
+      scene._gtState = { carrying: null };
+      try { scene._gtKey = scene.input.keyboard.addKey("G"); } catch (_e) { scene._gtKey = null; }
+    },
+    tick(scene, time, delta) {
+      const p = scene.player;
+      const st = scene._gtState;
+      if (!p || !st || !scene._gtKey) return;
+      const justPressed = Phaser.Input.Keyboard.JustDown(scene._gtKey);
+      if (st.carrying) {
+        // Hold above head
+        st.carrying.x = p.x;
+        st.carrying.y = p.y - 40;
+        if (justPressed) {
+          // Throw forward
+          const dir = p.flipX ? -1 : 1;
+          const obj = st.carrying;
+          st.carrying = null;
+          obj.body && obj.body.setAllowGravity && obj.body.setAllowGravity(true);
+          if (obj.setVelocity) obj.setVelocity(dir * 500, -150);
+          // Damage on enemy contact
+          if (scene.enemies && scene.physics) {
+            scene.physics.add.overlap(obj, scene.enemies, (o, en) => {
+              if (en && en.active && scene.killEnemy) scene.killEnemy(en);
+              o.destroy();
+            });
+          }
+          scene.time.delayedCall(2500, () => obj && obj.active && obj.destroy());
+        }
+      } else if (justPressed && scene.enemies) {
+        // Try to grab nearest stunned enemy
+        let nearest = null, nd = 50;
+        scene.enemies.children.iterate(en => {
+          if (!en || !en.active || !en._stunned) return;
+          const d = Math.hypot(en.x - p.x, en.y - p.y);
+          if (d < nd) { nearest = en; nd = d; }
+        });
+        if (nearest) {
+          st.carrying = nearest;
+          if (nearest.body && nearest.body.setAllowGravity) nearest.body.setAllowGravity(false);
+          if (nearest.setVelocity) nearest.setVelocity(0, 0);
+        }
+      }
+    },
+  };
+
   // ── REGISTRY ───────────────────────────────────────────────────────────
   // Map normalised name → implementation. Aliases handled via array of names.
   const REGISTRY = [
     { names: ["barrel_roll", "roll", "spin_attack"], impl: barrelRoll },
     { names: ["ground_slam", "ground_pound", "slam"], impl: groundSlam },
-    { names: ["vine_swing", "vine", "grapple"], impl: vineSwing },
+    { names: ["vine_swing", "swing", "grapple"], impl: vineSwing },
+    { names: ["vine_climb", "climb", "ladder_climb"], impl: vineClimb },
     { names: ["barrel_boost", "boost", "fruit_boost", "speed_surge"], impl: barrelBoost },
     { names: ["wall_cling", "wall_slide", "cling"], impl: wallCling },
     { names: ["dash", "sprint"], impl: dash },
     { names: ["double_jump", "double"], impl: doubleJump },
+    { names: ["grab", "throw", "carry"], impl: grabThrow },
   ];
 
   function _resolve(name) {

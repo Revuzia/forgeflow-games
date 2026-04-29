@@ -83,19 +83,48 @@
       });
     }
 
+    // 2026-04-29: interactive selection. LEFT/RIGHT moves cursor between
+    // unlocked worlds; ENTER/SPACE confirms and starts that world's
+    // first level. (Locked worlds — currentWorld + 1 onward — can't be
+    // selected.)
+    let cursor = targetWorld;
+    const cursorRing = scene.add.circle(nodes[cursor].x, yMid, 38, 0xffffff, 0)
+      .setStrokeStyle(3, 0xffffff, 0.8).setScrollFactor(0).setDepth(2004);
+    function updateCursor() {
+      cursorRing.x = nodes[cursor].x;
+    }
+    const keyL = scene.input.keyboard.addKey("LEFT");
+    const keyR = scene.input.keyboard.addKey("RIGHT");
+    const keyA = scene.input.keyboard.addKey("A");
+    const keyD = scene.input.keyboard.addKey("D");
+    keyL.on("down", () => { if (cursor > 0) { cursor--; updateCursor(); } });
+    keyA.on("down", () => { if (cursor > 0) { cursor--; updateCursor(); } });
+    keyR.on("down", () => { if (cursor < targetWorld) { cursor++; updateCursor(); } });
+    keyD.on("down", () => { if (cursor < targetWorld) { cursor++; updateCursor(); } });
+
     let dismissed = false;
-    const dismiss = () => {
+    const dismiss = (chosenLevel) => {
       if (dismissed) return;
       dismissed = true;
-      try { bg.destroy(); title.destroy(); statsTxt.destroy(); hint.destroy(); } catch (_e) {}
+      try { bg.destroy(); title.destroy(); statsTxt.destroy(); hint.destroy(); cursorRing.destroy(); } catch (_e) {}
       try { nodes.forEach(n => { n.node.destroy(); n.lbl.destroy(); }); } catch (_e) {}
-      if (typeof opts.onDone === "function") opts.onDone();
+      try { keyL.destroy(); keyR.destroy(); keyA.destroy(); keyD.destroy(); } catch (_e) {}
+      if (typeof opts.onDone === "function") opts.onDone(chosenLevel);
+    };
+    const startSelected = () => {
+      // Compute first-level index of selected world
+      let firstLvl = 0;
+      for (let i = 0; i < cursor; i++) firstLvl += worlds[i].level_count || 7;
+      dismiss(firstLvl);
     };
     try {
-      const k = scene.input.keyboard.addKey("SPACE");
-      k.once("down", dismiss);
+      const kSpace = scene.input.keyboard.addKey("SPACE");
+      const kEnter = scene.input.keyboard.addKey("ENTER");
+      kSpace.once("down", startSelected);
+      kEnter.once("down", startSelected);
     } catch (_e) {}
-    scene.time.delayedCall(opts.durationMs || 6000, dismiss);
+    // Auto-progress after 8s if no selection
+    scene.time.delayedCall(opts.durationMs || 8000, () => dismiss());
   }
 
   root.WorldMap = { show };
