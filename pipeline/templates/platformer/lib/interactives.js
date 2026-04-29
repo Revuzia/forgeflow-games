@@ -34,28 +34,42 @@
   }
 
   // ── SPRING / SPRINGBOARD ───────────────────────────────────────────────
-  // Player landing on top → upward velocity boost.
+  // Player landing on top → upward velocity boost. Cooldown prevents the
+  // overlap from firing 60×/sec while the player is on top of the spring
+  // (was: continuous launch loop + sound spam, character looked stuck).
   function spring(scene, x, y, opts) {
     if (!scene.springs) {
       scene.springs = scene.physics.add.staticGroup();
       if (scene.player) {
         scene.physics.add.overlap(scene.player, scene.springs, (p, sp) => {
-          if (p.body.velocity.y >= 0 && p.y < sp.y) {
-            p.setVelocityY((opts && opts.power) || -700);
-            // Briefly show "active" texture
-            if (sp._activeKey && _has(scene, sp._activeKey)) {
-              const orig = sp.texture.key;
-              sp.setTexture(sp._activeKey);
-              scene.time.delayedCall(150, () => sp.setTexture(orig));
-            }
-            if (typeof scene.playSound === "function") scene.playSound("sfx_jump");
+          // Per-spring cooldown: 600ms between bounces from the same spring
+          if (sp._cooldown && scene.time.now < sp._cooldown) return;
+          // Player must be at or above spring top (y is screen coords; lower = higher)
+          if (p.body.velocity.y < 0) return;  // already going up; don't double-boost
+          if (p.y > sp.y + 8) return;          // player below spring top (came from side); skip
+          sp._cooldown = scene.time.now + 600;
+          // 2026-04-29 BUGFIX: bumped power so spring actually launches the
+          // player (was: 700 not enough vs. 800 gravity → only ~half tile rise)
+          const power = (opts && opts.power) || (sp._power) || 850;
+          p.setVelocityY(-Math.abs(power));
+          // Visual feedback
+          if (sp._activeKey && _has(scene, sp._activeKey)) {
+            const orig = sp.texture.key;
+            sp.setTexture(sp._activeKey);
+            scene.time.delayedCall(150, () => sp.setTexture(orig));
           }
+          // Squish animation
+          scene.tweens.add({
+            targets: sp, scaleY: 0.5, duration: 80, yoyo: true,
+          });
+          if (typeof scene.playSound === "function") scene.playSound("sfx_jump");
         });
       }
     }
     const key = _safeKey(scene, "spring", 0xffeb3b);
     const sp = scene.springs.create(x, y, key);
     sp._activeKey = "spring_out";
+    sp._power = (opts && opts.power) || 850;
     if (!_has(scene, "spring")) sp.setTint(0xffeb3b).setDisplaySize(28, 16);
     return sp;
   }

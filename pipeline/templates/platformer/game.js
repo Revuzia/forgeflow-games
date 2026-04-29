@@ -334,7 +334,10 @@ class GameScene extends Phaser.Scene {
     // and moving platforms — registered AFTER player + enemies exist so the
     // collider/overlap calls have valid targets.
     try { this.setupTileHazards(); } catch (_e) { console.warn("setupTileHazards failed:", _e); }
-    try { this.createMovingPlatforms(); } catch (_e) { console.warn("createMovingPlatforms failed:", _e); }
+    // 2026-04-29: createMovingPlatforms moved to AFTER _spawnSetPieces (in
+    // the lib-wiring block below) so set-piece-driven moving_platform_def
+    // entries get created. Was running too early; specs added by
+    // _spawnSetPieces never got physics bodies.
 
     // ── COLLECTIBLES ──
     this.createCollectibles();
@@ -391,12 +394,22 @@ class GameScene extends Phaser.Scene {
       if (typeof window.WorldMechanics !== "undefined" && designWorld) {
         window.WorldMechanics.attach(this, designWorld);
       }
-      if (typeof window.Dialog !== "undefined") {
-        const npcs = (window.GAME_DESIGN && window.GAME_DESIGN.npc_cast) || [];
-        if (npcs.length) window.Dialog.spawnForWorld(this, npcs, worldNum);
-      }
-      // Set pieces from the synthesizer (vines, NPC markers, etc.)
+      // 2026-04-29: NPCs removed from in-level spawn. Real DKC has no
+      // mid-level NPCs — story is told between levels via cutscene cards
+      // and a world-map hub. Dialog.js still loaded for the new Cutscene
+      // scene (handles between-level story beats) and for any per-game
+      // patch that wants in-level dialog.
+
+      // Set pieces from the synthesizer (vines, KONG letters, checkpoints,
+      // moving platforms, fire columns, springs, barrel cannons)
       this._spawnSetPieces();
+      // 2026-04-29: build moving platforms NOW that set pieces have added
+      // their specs into levelData.moving_platforms.
+      try { this.createMovingPlatforms(); } catch (_e) { console.warn("createMovingPlatforms failed:", _e); }
+      // HUD letter slots top-right (KONG-style spelling tracker)
+      if (typeof window.HudLetters !== "undefined") {
+        try { window.HudLetters.attach(this); } catch (e) { console.warn("[HudLetters]", e); }
+      }
       // Power-ups: scatter 1-2 per level based on design.power_ups
       if (typeof window.PowerUps !== "undefined") {
         const pu = (window.GAME_DESIGN && window.GAME_DESIGN.power_ups) || [];
@@ -486,16 +499,21 @@ class GameScene extends Phaser.Scene {
     const worldNum = (this.levelData && this.levelData.world_num) || 1;
     const bgKey = `world_${String(worldNum).padStart(2, "0")}_bg`;
     if (this.textures.exists(bgKey)) {
-      // Strong dark overlay (fillAlpha 0.5) on top of the bg so it recedes
-      // behind the kenney pixel-art foreground (vision_qa_bot 3/10 verdict:
-      // "background overpowers gameplay, art-style mismatch"). Keep bg at
-      // full alpha — reducing it just blends with the camera bg color and
-      // doesn't actually darken the image.
-      this.add.image(0, 0, bgKey)
+      // 2026-04-29: TileSprite instead of stretched Image — stretching a
+      // 1920px bg across a 21,600px level (5.5x map at 1.8 min playthrough)
+      // looked like horizontal streaks. TileSprite tiles horizontally;
+      // setScrollFactor 0.3 still parallaxes for depth. The bg height is
+      // scaled up to camera height so vertical doesn't tile (we only want
+      // horizontal repetition).
+      const tex = this.textures.get(bgKey);
+      const camH = this.cameras.main.height;
+      const ts = this.add.tileSprite(0, 0, mapWidth, camH, bgKey)
         .setOrigin(0, 0)
-        .setDisplaySize(mapWidth, mapHeight)
         .setScrollFactor(0.3)
         .setDepth(-10);
+      // Scale tile so 1 source-image height = camera height (no vertical wrap)
+      const srcH = tex.source[0].height || 1;
+      ts.setTileScale(camH / srcH, camH / srcH);
       this.add.rectangle(0, 0, mapWidth, mapHeight, 0x000814, 0.5)
         .setOrigin(0, 0)
         .setScrollFactor(0)
@@ -507,34 +525,134 @@ class GameScene extends Phaser.Scene {
     }
   }
 
-  // 2026-04-28: spawn entities from levelData.set_pieces[] (vine, npc_marker,
-  // etc.) into the right Phaser groups so the abilities/dialog libraries
-  // can interact with them. Set pieces come from the level synthesizer
-  // which reads design.json's per-level set_pieces strings.
+  // 2026-04-29: spawn entities from levelData.set_pieces[]. Handles all
+  // segment-driven set-piece types: vine, kong_letter, dk_barrel/checkpoint,
+  // moving_platform_def, fire_column (pulsing damage), spring, barrel_cannon
+  // (auto-launch). NPCs removed from level-level — story moves to cutscene.
   _spawnSetPieces() {
     const sps = (this.levelData && this.levelData.set_pieces) || [];
     if (!sps.length) return;
     if (!this.vines) this.vines = this.physics.add.staticGroup();
+    if (!this.kongLetters) this.kongLetters = this.physics.add.staticGroup();
+    if (!this.checkpoints) this.checkpoints = this.physics.add.staticGroup();
+    if (!this.fireColumns) this.fireColumns = this.physics.add.staticGroup();
+    if (!this.barrelCannons) this.barrelCannons = this.physics.add.staticGroup();
+    if (!this._kongCollected) this._kongCollected = {};
+
+    const reg = this.physics.add;
     for (const sp of sps) {
       try {
         if (sp.type === "vine") {
-          // Tall thin vertical green sprite, grabbable by Abilities.vine_swing
           const v = this.vines.create(sp.x, sp.y, "__pixel");
           v.setDisplaySize(4, 100).setTint(0x4caf50);
           v.isVine = true;
           v.refreshBody && v.refreshBody();
-        } else if (sp.type === "npc_marker") {
-          // If we have a per-world NPC, place one HERE instead of default
-          const designNpcs = (window.GAME_DESIGN && window.GAME_DESIGN.npc_cast) || [];
-          const worldNum = (this.levelData && this.levelData.world_num) || 1;
-          const npc = designNpcs.find(n => !n.location_world || n.location_world === worldNum);
-          if (npc && window.Dialog && window.Dialog.spawn) {
-            window.Dialog.spawn(this, sp.x, sp.y, npc);
+
+        } else if (sp.type === "kong_letter") {
+          // Big floating letter — collect to spell out the protagonist name
+          const letter = sp.letter || "?";
+          const tex = this.textures.exists("hud_coins") ? "hud_coins" : "__pixel";
+          const k = this.kongLetters.create(sp.x, sp.y, tex);
+          k.setDisplaySize(28, 28).setTint(0xffd700);
+          // Letter label on top
+          const label = this.add.text(sp.x, sp.y, letter, {
+            fontSize: "20px", color: "#000000", fontStyle: "bold"
+          }).setOrigin(0.5).setDepth(60);
+          k._label = label; k._letter = letter;
+          k.body.setSize(28, 28);
+          k.refreshBody && k.refreshBody();
+          // Bobbing
+          this.tweens.add({ targets: [k, label], y: sp.y - 6, duration: 800, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+          // Collect handler
+          if (this.player) {
+            reg.overlap(this.player, k, () => {
+              if (k._collected) return;
+              k._collected = true;
+              this._kongCollected[k._letter] = true;
+              this.score = (this.score || 0) + 100;
+              if (typeof this.updateHUD === "function") this.updateHUD();
+              if (typeof this.showFloatText === "function") this.showFloatText(k.x, k.y - 30, k._letter, "#ffd700");
+              if (typeof this.playSound === "function") this.playSound("sfx_collect");
+              try { k._label && k._label.destroy(); } catch(_e) {}
+              k.destroy();
+            });
           }
+
+        } else if (sp.type === "dk_barrel" || sp.type === "checkpoint" || sp.type === "checkpoint_barrel") {
+          // Mid-level checkpoint: respawn point + 1 life back if available
+          const tex = this.textures.exists("__platform") ? "__platform" : "__pixel";
+          const c = this.checkpoints.create(sp.x, sp.y, tex);
+          c.setDisplaySize(24, 32).setTint(0x8d4f1a);
+          // Sparkle ring
+          const ring = this.add.circle(sp.x, sp.y, 18, 0xffeb3b, 0);
+          ring.setStrokeStyle(2, 0xffeb3b, 0.7);
+          this.tweens.add({ targets: ring, radius: 36, alpha: 0, duration: 1500, repeat: -1 });
+          if (this.player) {
+            reg.overlap(this.player, c, () => {
+              if (c._activated) return;
+              c._activated = true;
+              this.respawnPoint = { x: c.x, y: c.y - 30 };
+              if (typeof this.showFloatText === "function") this.showFloatText(c.x, c.y - 40, "CHECKPOINT", "#ffeb3b");
+              if (typeof this.playSound === "function") this.playSound("sfx_collect");
+              c.setTint(0x4caf50);
+            });
+          }
+
+        } else if (sp.type === "moving_platform_def") {
+          // Pre-built moving platform spec consumed by createMovingPlatforms
+          if (!this.levelData.moving_platforms) this.levelData.moving_platforms = [];
+          this.levelData.moving_platforms.push({
+            x: sp.x, y: sp.y, axis: sp.axis || "x",
+            range: sp.range || 120, speed: sp.speed || 80,
+            w: sp.w || 3, h: sp.h || 1,
+          });
+
+        } else if (sp.type === "fire_column") {
+          // Pulsing fire damage zone. Uses spike tile for visual; we add an
+          // overlap that damages player only when pulse is "on" (visible).
+          const tex = this.textures.exists("lava") ? "lava" : "__projectile";
+          const f = this.fireColumns.create(sp.x, sp.y, tex);
+          const h = (sp.height || 2) * (GAME_CONFIG.tileSize || 18);
+          f.setDisplaySize(GAME_CONFIG.tileSize || 18, h).setTint(0xff5722);
+          f._on = true; f._pulse = sp.pulse_ms || 1500;
+          f.refreshBody && f.refreshBody();
+          // Pulse: alpha 0.2 ↔ 1.0 every pulse_ms; while alpha ≥ 0.5 = damaging
+          this.tweens.add({
+            targets: f, alpha: { from: 1, to: 0.2 },
+            duration: f._pulse / 2, yoyo: true, repeat: -1, ease: "Sine.easeInOut",
+          });
+          if (this.player) {
+            reg.overlap(this.player, f, () => {
+              if (f.alpha >= 0.5 && !this.isInvincible && typeof this.playerHit === "function") this.playerHit();
+            });
+          }
+
+        } else if (sp.type === "spring") {
+          // Use Interactives.spring if available, else rectangle
+          if (typeof window.Interactives !== "undefined" && window.Interactives.spring) {
+            window.Interactives.spring(this, sp.x, sp.y, { power: sp.power || 800 });
+          }
+
+        } else if (sp.type === "barrel_cannon") {
+          // Auto-launch pad: player overlap → fixed velocity vector
+          const tex = this.textures.exists("__platform") ? "__platform" : "__pixel";
+          const b = this.barrelCannons.create(sp.x, sp.y, tex);
+          b.setDisplaySize(28, 28).setTint(0x8b4513);
+          b._vx = sp.vx || 600; b._vy = sp.vy || -200;
+          b.refreshBody && b.refreshBody();
+          if (this.player) {
+            reg.overlap(this.player, b, () => {
+              if (b._cooldown && this.time.now < b._cooldown) return;
+              b._cooldown = this.time.now + 1000;
+              this.player.setVelocity(b._vx, b._vy);
+              if (typeof this.playSound === "function") this.playSound("sfx_jump");
+              if (typeof this.cameras !== "undefined" && this.cameras.main) this.cameras.main.shake(120, 0.005);
+            });
+          }
+
         } else if (sp.type === "structure") {
-          // Decorative block already added to tiles in synthesizer; nothing to do
+          // Already added as platform tiles by synthesizer
         }
-        // fruit_cluster / barrel / marker entries are already in collectibles
       } catch (e) { console.warn("[setpiece] spawn failed:", sp, e); }
     }
   }
@@ -910,6 +1028,9 @@ class GameScene extends Phaser.Scene {
     try {
       if (window.Dialog && window.Dialog.checkInteraction) window.Dialog.checkInteraction(this);
     } catch (_e) {}
+    try {
+      if (window.HudLetters && window.HudLetters.tick) window.HudLetters.tick(this);
+    } catch (_e) {}
 
     // ── ENEMY AI ──
     // 2026-04-23: wrapped in try/catch. AAA pipeline patches may replace
@@ -1206,14 +1327,35 @@ class GameScene extends Phaser.Scene {
     } catch (_e) { /* non-fatal */ }
 
     this.time.delayedCall(800, () => {
-      if (this.currentLevel + 1 >= GAME_CONFIG.levels.length) {
-        this.scene.start("Win", { score: this.score });
-      } else {
-        this.scene.start("Game", {
-          level: this.currentLevel + 1,
-          score: this.score,
-          lives: this.lives,
+      const nextLvl = this.currentLevel + 1;
+      const isLastLevel = nextLvl >= GAME_CONFIG.levels.length;
+      // 2026-04-29: between every level, show Cutscene (story beat) +
+      // WorldMap (progress hub). Final level → Cutscene.victory then Win.
+      const goToNext = () => {
+        if (isLastLevel) {
+          if (window.Cutscene && window.Cutscene.victory) {
+            window.Cutscene.victory(this, () => this.scene.start("Win", { score: this.score }));
+          } else {
+            this.scene.start("Win", { score: this.score });
+          }
+        } else {
+          this.scene.start("Game", {
+            level: nextLvl, score: this.score, lives: this.lives,
+          });
+        }
+      };
+      // Cutscene first (1-3 lines of story), then WorldMap, then next level
+      if (window.Cutscene && window.Cutscene.show && !isLastLevel) {
+        window.Cutscene.show(this, {
+          toLevel: nextLvl,
+          onDone: () => {
+            if (window.WorldMap && window.WorldMap.show) {
+              window.WorldMap.show(this, { toLevel: nextLvl, onDone: goToNext });
+            } else { goToNext(); }
+          },
         });
+      } else {
+        goToNext();
       }
     });
 

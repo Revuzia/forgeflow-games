@@ -69,13 +69,15 @@
       const moving = Math.abs(p.body.velocity.x) > 30;
 
       if (st.launching) {
-        // Maintain launch velocity, end on timer
         if (time >= st.launchEnd) {
+          // 2026-04-29 BUGFIX: clear angularVelocity + rotation EVERY launch
+          // end. Was leaving spin enabled — character spun forever.
           st.launching = false;
           if (st.lastTint != null) p.clearTint();
           st.lastTint = null;
+          if (p.setAngularVelocity) p.setAngularVelocity(0);
+          if (p.setRotation) p.setRotation(0);
         } else {
-          // Damage enemies on touch while launching
           if (scene.enemies && scene.physics) {
             scene.enemies.children && scene.enemies.children.iterate(function (en) {
               if (!en || !en.active) return;
@@ -90,17 +92,14 @@
 
       if (shiftDown && moving && _onGround(p)) {
         st.charging = true;
-        st.charge = Math.min(1.0, st.charge + delta / 600);  // 0 → 1 over 600ms
-        // Boost horizontal speed proportional to charge
+        st.charge = Math.min(1.0, st.charge + delta / 600);
         const dir = p.flipX ? -1 : 1;
         const baseV = 200, maxV = 500;
         p.setVelocityX(dir * (baseV + (maxV - baseV) * st.charge));
-        // Visual: tint warmer + spin
         p.setTint(0xffaa44);
         st.lastTint = 0xffaa44;
-        p.setAngularVelocity ? p.setAngularVelocity(dir * 720) : null;
+        if (p.setAngularVelocity) p.setAngularVelocity(dir * 720);
       } else if (st.charging && !shiftDown) {
-        // Release → launch
         st.charging = false;
         st.launching = true;
         st.launchEnd = time + 600;
@@ -110,15 +109,22 @@
         if (typeof scene.playSound === "function") scene.playSound("sfx_jump");
         _firePuff(scene, p.x, p.y, 0xffaa44, 10);
         st.charge = 0;
-      } else if (!shiftDown) {
-        // Reset
-        if (st.charging || st.charge > 0) {
-          st.charging = false;
-          st.charge = 0;
-          if (st.lastTint != null) p.clearTint();
+      } else {
+        // 2026-04-29 BUGFIX: ALWAYS clear spin/tint when not charging or
+        // launching. Was conditional on (charging || charge > 0) which left
+        // residual angularVelocity from prior frames. Now: hard reset every
+        // tick when neither charging nor launching.
+        if (st.charging) st.charging = false;
+        st.charge = 0;
+        if (st.lastTint != null) {
+          p.clearTint();
           st.lastTint = null;
-          if (p.setAngularVelocity) p.setAngularVelocity(0);
-          if (p.setRotation) p.setRotation(0);
+        }
+        if (p.setAngularVelocity && p.body && p.body.angularVelocity !== 0) {
+          p.setAngularVelocity(0);
+        }
+        if (p.setRotation && p.rotation !== 0) {
+          p.setRotation(0);
         }
       }
     },
