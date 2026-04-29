@@ -21,6 +21,12 @@
 // GAME CONFIGURATION
 // ═══════════════════════════════════════════════════════════════
 
+// 2026-04-28: full design.json exposed at runtime so the ability /
+// power-up / world-mechanic / dialog libraries can read protagonist,
+// worlds, power_ups, npc_cast, etc. without their own fetch.
+// {{GAME_DESIGN_JSON}} is replaced by the pipeline at integrate time.
+window.GAME_DESIGN = {{GAME_DESIGN_JSON}};
+
 const GAME_CONFIG = {
   title: "{{GAME_TITLE}}",
   width: 960,
@@ -80,23 +86,8 @@ class BootScene extends Phaser.Scene {
   }
 
   create() {
-    // 2026-04-28: generate fallback textures so any code that calls
-    // group.create(x, y, null) doesn't TypeError on undefined.sys.
-    // Caught by AAA audit on barrel-blitz: enemy fireProjectile and
-    // moving-platform creates were passing null → silent crash in
-    // updateEnemies (suppressed by try/catch but projectiles never
-    // appeared). Pipeline-driven fix so all generated games are safe.
-    const makeRect = (key, w, h, color) => {
-      if (this.textures.exists(key)) return;
-      const g = this.add.graphics({ x: 0, y: 0 });
-      g.fillStyle(color, 1);
-      g.fillRect(0, 0, w, h);
-      g.generateTexture(key, w, h);
-      g.destroy();
-    };
-    makeRect("__pixel", 1, 1, 0xffffff);          // 1x1 white
-    makeRect("__projectile", 12, 12, 0xff5040);   // small red dot for projectiles
-    makeRect("__platform", 48, 16, 0x7a5230);     // 48x16 brown for moving platforms
+    // Fallback textures moved to PreloadScene.preload (using make.graphics
+    // with add:false so no scene-attached objects block auto-transition).
     this.scene.start("Preload");
   }
 }
@@ -123,7 +114,27 @@ class PreloadScene extends Phaser.Scene {
       loadText.setText(`Loading... ${Math.floor(value * 100)}%`);
     });
 
+    // 2026-04-28: fallback textures so any group.create(x, y, null) call
+    // (e.g. enemy projectiles, moving platforms in patches) has a valid
+    // texture instead of TypeError on undefined.sys.
+    const makeRect = (key, w, h, color) => {
+      if (this.textures.exists(key)) return;
+      const g = this.make.graphics({ x: 0, y: 0, add: false });
+      g.fillStyle(color, 1);
+      g.fillRect(0, 0, w, h);
+      g.generateTexture(key, w, h);
+      g.destroy();
+    };
+    makeRect("__pixel", 1, 1, 0xffffff);
+    makeRect("__projectile", 12, 12, 0xff5040);
+    makeRect("__platform", 48, 16, 0x7a5230);
+
     // ── SPRITES ──
+    // 2026-04-28: Load the SHARED ASSET LIBRARY (springs, switches, ladders,
+    // doors, lava, water, castle bg, HUD icons, gems, flags).
+    if (typeof window.AssetLoader !== "undefined" && window.AssetLoader.preload) {
+      window.AssetLoader.preload(this);
+    }
     // Tileset (Kenney Pixel Platformer)
     this.load.spritesheet("tiles", "assets/tilemap_packed.png", {
       frameWidth: 18, frameHeight: 18,
@@ -364,6 +375,47 @@ class GameScene extends Phaser.Scene {
       try { this.setupCustomAbilityControls(); } catch (_e) { /* non-fatal */ }
     }
 
+    // 2026-04-28: ABILITY / POWER-UP / WORLD-MECHANIC / DIALOG WIRING.
+    // Each library reads the design (window.GAME_DESIGN injected at boot)
+    // and configures itself for the current world/level. These are NO-OPS
+    // if the library wasn't loaded (graceful degradation).
+    try {
+      // Resolve the current world's design data
+      const worldNum = (this.levelData && this.levelData.world_num) || 1;
+      const designWorlds = (window.GAME_DESIGN && window.GAME_DESIGN.worlds) || [];
+      const designWorld = designWorlds.find(w => (w.num || 0) === worldNum) || designWorlds[worldNum - 1] || null;
+
+      if (typeof window.Abilities !== "undefined") {
+        window.Abilities.attach(this);
+      }
+      if (typeof window.WorldMechanics !== "undefined" && designWorld) {
+        window.WorldMechanics.attach(this, designWorld);
+      }
+      if (typeof window.Dialog !== "undefined") {
+        const npcs = (window.GAME_DESIGN && window.GAME_DESIGN.npc_cast) || [];
+        if (npcs.length) window.Dialog.spawnForWorld(this, npcs, worldNum);
+      }
+      // Set pieces from the synthesizer (vines, NPC markers, etc.)
+      this._spawnSetPieces();
+      // Power-ups: scatter 1-2 per level based on design.power_ups
+      if (typeof window.PowerUps !== "undefined") {
+        const pu = (window.GAME_DESIGN && window.GAME_DESIGN.power_ups) || [];
+        if (pu.length && this.map) {
+          const cols = this.map.width;
+          const tile = this.map.tileWidth || 18;
+          const floorY = (this.map.height - 4) * tile - 32;
+          // Pick 1-2 power-ups for this level (deterministic per level index)
+          const seed = (this.currentLevel || 0) * 7919;
+          const i1 = (seed) % pu.length;
+          const i2 = (seed + 3) % pu.length;
+          window.PowerUps.spawn(this, cols * 0.4 * tile, floorY, pu[i1]);
+          if (this.currentLevel >= 2) window.PowerUps.spawn(this, cols * 0.8 * tile, floorY, pu[i2]);
+        }
+      }
+    } catch (libErr) {
+      console.warn("[GameScene] library wiring failed:", libErr);
+    }
+
     // ── PARTICLES ──
     this.dustEmitter = this.add.particles(0, 0, "tiles", {
       frame: [0, 1],
@@ -452,6 +504,38 @@ class GameScene extends Phaser.Scene {
       // Fallback: solid background color from GAME_CONFIG (no tile-fill bug)
       const bgColor = (GAME_CONFIG.colors && GAME_CONFIG.colors.bg) || "#1a3a5e";
       this.cameras.main.setBackgroundColor(bgColor);
+    }
+  }
+
+  // 2026-04-28: spawn entities from levelData.set_pieces[] (vine, npc_marker,
+  // etc.) into the right Phaser groups so the abilities/dialog libraries
+  // can interact with them. Set pieces come from the level synthesizer
+  // which reads design.json's per-level set_pieces strings.
+  _spawnSetPieces() {
+    const sps = (this.levelData && this.levelData.set_pieces) || [];
+    if (!sps.length) return;
+    if (!this.vines) this.vines = this.physics.add.staticGroup();
+    for (const sp of sps) {
+      try {
+        if (sp.type === "vine") {
+          // Tall thin vertical green sprite, grabbable by Abilities.vine_swing
+          const v = this.vines.create(sp.x, sp.y, "__pixel");
+          v.setDisplaySize(4, 100).setTint(0x4caf50);
+          v.isVine = true;
+          v.refreshBody && v.refreshBody();
+        } else if (sp.type === "npc_marker") {
+          // If we have a per-world NPC, place one HERE instead of default
+          const designNpcs = (window.GAME_DESIGN && window.GAME_DESIGN.npc_cast) || [];
+          const worldNum = (this.levelData && this.levelData.world_num) || 1;
+          const npc = designNpcs.find(n => !n.location_world || n.location_world === worldNum);
+          if (npc && window.Dialog && window.Dialog.spawn) {
+            window.Dialog.spawn(this, sp.x, sp.y, npc);
+          }
+        } else if (sp.type === "structure") {
+          // Decorative block already added to tiles in synthesizer; nothing to do
+        }
+        // fruit_cluster / barrel / marker entries are already in collectibles
+      } catch (e) { console.warn("[setpiece] spawn failed:", sp, e); }
     }
   }
 
@@ -803,6 +887,19 @@ class GameScene extends Phaser.Scene {
       this.canDoubleJump = this.controller.canDoubleJump;
       this.coyoteTimer = this.controller.coyoteTimer;
     }
+
+    // ── ABILITIES + WORLD MECHANICS + DIALOG (2026-04-28) ──
+    // Per-frame ticks for the libraries wired in create(). All gracefully
+    // no-op if their library wasn't loaded.
+    try {
+      if (window.Abilities && window.Abilities.tick) window.Abilities.tick(this, time, delta);
+    } catch (_e) {}
+    try {
+      if (window.WorldMechanics && window.WorldMechanics.tick) window.WorldMechanics.tick(this, time, delta);
+    } catch (_e) {}
+    try {
+      if (window.Dialog && window.Dialog.checkInteraction) window.Dialog.checkInteraction(this);
+    } catch (_e) {}
 
     // ── ENEMY AI ──
     // 2026-04-23: wrapped in try/catch. AAA pipeline patches may replace

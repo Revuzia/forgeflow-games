@@ -285,19 +285,28 @@ def run_speedrun(game_url: str, levels: list, design: dict, trials: int = 1,
 
         browser.close()
 
-    # Verdict — 2026-04-28: speedrun_bot's PRIMARY value is the Cooper
-    # backward-reachability / softlock check (see softlock_summary). The
-    # scripted-input level-completion is unreliable on procgen levels with
-    # enemies (random key timings vs deterministic enemy AI). PASS when
-    # 0 softlocks regardless of how many scripted runs completed; the
-    # other 5 bots are responsible for proving levels are beatable.
+    # Verdict — 2026-04-28 v2: speedrun_bot now has TWO checks:
+    #   1) Cooper backward-reachability (softlock tiles must be 0)
+    #   2) Scripted-input completion rate ≥ 33% (was unconditional PASS)
+    # The audit caught a level shipped where 0/3 scripted runs completed
+    # but verdict was PASS. Real users couldn't beat it. New rule: if scripted
+    # runs are reliably failing AND there's a level we tested, downgrade to
+    # FAIL — the level is unbeatable in physics even if not graph-softlocked.
     sl_count = (results.get("softlocks") or {}).get("total_softlock_tiles", 0)
+    completion_rate = results["levels_completed"] / max(1, results["levels_tested"])
+    results["completion_rate"] = round(completion_rate, 2)
     if results["levels_tested"] == 0:
         results["verdict"] = "NO_LEVELS_TESTABLE"
-    elif sl_count == 0:
-        results["verdict"] = "PASS"
-    else:
+    elif sl_count > 0:
         results["verdict"] = "FAIL"
+    elif completion_rate < 0.34:
+        # Scripted-input completion is unreliable due to enemy timing, but
+        # 0% suggests a real geometry problem (jump unreachable, exit
+        # overshot, etc.). 33% threshold is a balance — gives benefit of
+        # doubt to enemy-RNG variance while flagging total failures.
+        results["verdict"] = "FAIL"
+    else:
+        results["verdict"] = "PASS"
 
     return results
 
