@@ -511,8 +511,12 @@ class GameScene extends Phaser.Scene {
     this.groundLayer = map.createLayer(0, tileset);
     this.groundLayer.setCollisionByExclusion([-1, 0]);
 
-    // World bounds
-    this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
+    // 2026-04-29: extend world height by 400px below the map so the
+    // player physically falls through pits (otherwise setCollideWorld
+    // Bounds traps them at mapHeight). Death detection in update()
+    // fires before they reach this extended bound. Camera bounds match
+    // visible map only (so screen doesn't pan into the void).
+    this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels + 400);
     this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
 
     // Parallax background
@@ -892,6 +896,18 @@ class GameScene extends Phaser.Scene {
     this.hazardTiles = this.physics.add.staticGroup();
     this.vineTiles = this.physics.add.staticGroup();
     this.crumbleTiles = [];
+    // 2026-04-29: register player overlap with hazardTiles ONCE so any
+    // hazard added below (lava/spikes/saw) damages on touch.
+    if (this.player && !this._hazardOverlapWired) {
+      this.physics.add.overlap(this.player, this.hazardTiles, () => {
+        if (!this.isInvincible && typeof this.playerHit === "function") this.playerHit();
+      });
+      this._hazardOverlapWired = true;
+    }
+    // 2026-04-29: also exclude T_SPIKE (4) from being a collision wall so
+    // the player can WALK INTO the spike row and trigger the overlap
+    // damage (instead of being blocked by it like a wall).
+    try { this.groundLayer.setCollision([4, 6, 7, 8], false); } catch (_e) {}
     const tiles = (this.levelData.tiles || []);
     for (let r = 0; r < tiles.length; r++) {
       const row = tiles[r];
@@ -899,18 +915,27 @@ class GameScene extends Phaser.Scene {
         const id = row[c];
         const px = c * t + t / 2;
         const py = r * t + t / 2;
-        if (id === 6 || id === 7 || id === 8) {
-          // lava / saw / spike_ceiling — damage on overlap
-          const hz = this.hazardTiles.create(px, py, null);
+        // 2026-04-29: T_SPIKE (4) is the synthesizer's hazard tile — wire
+        // it as a damaging hazard, not a collision wall (was: collidable
+        // via setCollisionByExclusion → spikes acted as walls, no damage).
+        if (id === 4) {
+          const hz = this.hazardTiles.create(px, py, "__pixel");
+          hz.setDisplaySize(t, t).setTint(0xc62828);
+          hz.body.setSize(t, t);
+          hz.hazardKind = "spike";
+        } else if (id === 6 || id === 7 || id === 8) {
+          // lava / saw / spike_ceiling
+          const hz = this.hazardTiles.create(px, py, "__pixel");
+          hz.setDisplaySize(t, t);
           hz.body.setSize(t, t);
           hz.hazardKind = id === 6 ? "lava" : id === 7 ? "saw" : "spike_ceiling";
           const colors = { 6: 0xff4422, 7: 0xcccccc, 8: 0xdd5555 };
           hz.setTintFill ? hz.setTintFill(colors[id] || 0xff0000) : null;
         } else if (id === 9) {
-          // crumble — tracks player stand, breaks 400ms later
           this.crumbleTiles.push({ tileX: c, tileY: r, broken: false, standStart: 0 });
         } else if (id === 10) {
-          const v = this.vineTiles.create(px, py, null);
+          const v = this.vineTiles.create(px, py, "__pixel");
+          v.setDisplaySize(t, t);
           v.body.setSize(t, t);
           v.setTintFill ? v.setTintFill(0x228833) : null;
         }
@@ -1035,14 +1060,25 @@ class GameScene extends Phaser.Scene {
       this.coyoteTimer = this.controller.coyoteTimer;
     }
 
-    // 2026-04-28: BOTTOMLESS PIT DEATH — segment-based levels intentionally
-    // include pits as challenges. Falling past map height = death (lose a
-    // life + respawn at start or last checkpoint).
-    if (this.player && this.map && this.player.y > this.map.heightInPixels + 50) {
-      if (typeof this.playerHit === "function") this.playerHit();
-      const sp = this.respawnPoint || this.levelData.playerSpawn || { x: 50, y: 200 };
-      this.player.setPosition(sp.x, sp.y);
-      this.player.setVelocity(0, 0);
+    // 2026-04-29 BUGFIX: pit-fall threshold was mapHeight + 50 but
+    // setCollideWorldBounds(true) traps the player AT mapHeight — they
+    // never reached the threshold and just stood at the bottom of the
+    // pit. Fix: trigger death the moment they fall PAST the floor row
+    // (no platform under them + below floor level).
+    if (this.player && this.map && !this._pitDeathFiring) {
+      const tile = this.map.tileWidth || 18;
+      const floorY = (this.map.height - 4) * tile;  // top of floor tile
+      // Player feet (body bottom) below floor row + small buffer = pit
+      if (this.player.body.bottom > floorY + tile * 0.5) {
+        this._pitDeathFiring = true;
+        if (typeof this.cameras !== "undefined" && this.cameras.main) this.cameras.main.flash(180, 200, 0, 0);
+        if (typeof this.playerHit === "function") this.playerHit();
+        const sp = this.respawnPoint || this.levelData.playerSpawn || { x: 50, y: 200 };
+        this.player.setPosition(sp.x, sp.y);
+        this.player.setVelocity(0, 0);
+        // Brief invuln + cooldown so we don't fire repeatedly
+        this.time.delayedCall(800, () => { this._pitDeathFiring = false; });
+      }
     }
 
     // ── ABILITIES + WORLD MECHANICS + DIALOG (2026-04-28) ──
