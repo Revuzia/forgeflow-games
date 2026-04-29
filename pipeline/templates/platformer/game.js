@@ -410,6 +410,34 @@ class GameScene extends Phaser.Scene {
       if (typeof window.HudLetters !== "undefined") {
         try { window.HudLetters.attach(this); } catch (e) { console.warn("[HudLetters]", e); }
       }
+      // 2026-04-29: items (heart/extra-life/puzzle-piece) scattered per level
+      if (typeof window.Items !== "undefined" && window.Items.scatter) {
+        try { window.Items.scatter(this); } catch (e) { console.warn("[Items]", e); }
+      }
+      // Animal buddy crate (every 3rd level gets one)
+      if (typeof window.AnimalBuddy !== "undefined" && (this.currentLevel || 0) % 3 === 1) {
+        try {
+          const buddyTypes = ["charger", "flyer", "hopper"];
+          const t = buddyTypes[(this.currentLevel || 0) % 3];
+          window.AnimalBuddy.spawn(this,
+            this.map.widthInPixels * 0.45,
+            (this.map.height - 5) * (this.map.tileWidth || 18),
+            t);
+        } catch (e) { console.warn("[AnimalBuddy]", e); }
+      }
+      // Bonus room entry (every 2nd level gets one, hidden in upper-right area)
+      if (typeof window.BonusRoom !== "undefined" && (this.currentLevel || 0) % 2 === 0) {
+        try {
+          window.BonusRoom.placeEntry(this,
+            this.map.widthInPixels * 0.65,
+            80);  // up high, requires jump+vine to reach
+        } catch (e) { console.warn("[BonusRoom]", e); }
+      }
+      // Level mode (minecart/rocket_barrel/underwater) — wires the
+      // scene.applyLevelModeSetup + applyLevelModeMovement hooks
+      if (typeof window.LevelModes !== "undefined" && window.LevelModes.attach) {
+        try { window.LevelModes.attach(this); } catch (e) { console.warn("[LevelModes]", e); }
+      }
       // Power-ups: scatter 1-2 per level based on design.power_ups
       if (typeof window.PowerUps !== "undefined") {
         const pu = (window.GAME_DESIGN && window.GAME_DESIGN.power_ups) || [];
@@ -1030,6 +1058,12 @@ class GameScene extends Phaser.Scene {
     } catch (_e) {}
     try {
       if (window.HudLetters && window.HudLetters.tick) window.HudLetters.tick(this);
+    } catch (_e) {}
+    try {
+      if (window.AnimalBuddy && window.AnimalBuddy.tick) window.AnimalBuddy.tick(this, time, delta);
+    } catch (_e) {}
+    try {
+      if (window.LevelModes && window.LevelModes.tick) window.LevelModes.tick(this, time, delta);
     } catch (_e) {}
 
     // ── ENEMY AI ──
