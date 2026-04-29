@@ -888,6 +888,16 @@ class GameScene extends Phaser.Scene {
       this.coyoteTimer = this.controller.coyoteTimer;
     }
 
+    // 2026-04-28: BOTTOMLESS PIT DEATH — segment-based levels intentionally
+    // include pits as challenges. Falling past map height = death (lose a
+    // life + respawn at start or last checkpoint).
+    if (this.player && this.map && this.player.y > this.map.heightInPixels + 50) {
+      if (typeof this.playerHit === "function") this.playerHit();
+      const sp = this.respawnPoint || this.levelData.playerSpawn || { x: 50, y: 200 };
+      this.player.setPosition(sp.x, sp.y);
+      this.player.setVelocity(0, 0);
+    }
+
     // ── ABILITIES + WORLD MECHANICS + DIALOG (2026-04-28) ──
     // Per-frame ticks for the libraries wired in create(). All gracefully
     // no-op if their library wasn't loaded.

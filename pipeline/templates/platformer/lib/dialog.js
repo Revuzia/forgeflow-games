@@ -35,7 +35,20 @@
       const d = Math.hypot(n.x - p.x, n.y - p.y);
       if (d < 80) near = n;
     });
+    // Show / hide the "Press E to talk" prompt
+    if (near && !scene._dlgActive) {
+      if (!scene._dlgPrompt) {
+        scene._dlgPrompt = scene.add.text(0, 0, "[ E ] Talk", {
+          fontSize: "14px", color: "#ffd700", backgroundColor: "#000000aa", padding: {x: 6, y: 3}
+        }).setOrigin(0.5, 1).setDepth(950);
+      }
+      scene._dlgPrompt.setPosition(near.x, near.y - 50);
+      scene._dlgPrompt.visible = true;
+    } else if (scene._dlgPrompt && !scene._dlgActive) {
+      scene._dlgPrompt.visible = false;
+    }
     if (near && scene._dlgKey && Phaser.Input.Keyboard.JustDown(scene._dlgKey) && !scene._dlgActive) {
+      if (scene._dlgPrompt) scene._dlgPrompt.visible = false;
       _openSpeechBox(scene, near.npc);
     }
   }
