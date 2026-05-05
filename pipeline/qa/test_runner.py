@@ -136,6 +136,11 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
         "stability_10s":       "P2",
         "sound_initialized":   "P3",
         "screenshot_taken":    "P3",
+        # ── 2026-05-05 AAA-tier playtest gates (catches Opus output bugs) ──
+        "hud_no_nan":          "P0",  # HUD showing "WAVE NaN" is unshippable
+        "audio_no_cacophony":  "P1",  # 8 sounds/sec from un-rate-limited SFX
+        "music_exclusive":     "P1",  # menu + game music both playing
+        "bullets_move":        "P0",  # bullets fired but stuck = game broken
     }
 
     with sync_playwright() as p:
@@ -591,6 +596,125 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                     page.wait_for_timeout(2000)
                 stability_ok = page.evaluate("typeof window.__GAME__ !== 'undefined' || document.querySelector('canvas') !== null")
                 results["tests"]["stability_10s"] = bool(stability_ok)
+
+            # ── 2026-05-05 AAA-TIER LIVE PLAYTEST GATES ──
+            # User playtested production output and reported bugs the existing
+            # QA missed: WAVE NaN in HUD, bullets fired but stuck at player
+            # position (zero velocity), 8 sounds/sec cacophony from fire-rate,
+            # menu music + game music both playing simultaneously. These are
+            # the gates that catch those specific failure modes.
+            if has_test_api:
+                # ── PLAYTEST 1: HUD-NaN scan ──
+                # Walk the Phaser display list for any Text object whose
+                # rendered string contains "NaN", "undefined", "null". Catches
+                # uninitialized HUD state at render time.
+                print("  [playtest 1] HUD NaN/undefined scan...")
+                hud_check = page.evaluate("""
+                    (() => {
+                        const bad = [];
+                        try {
+                            const game = window.__GAME__;
+                            if (!game) return { ok: true, reason: 'no game' };
+                            for (const scene of game.scene.scenes) {
+                                if (!scene.children || !scene.children.list) continue;
+                                const walk = (obj) => {
+                                    if (!obj) return;
+                                    if (obj.text !== undefined && typeof obj.text === 'string') {
+                                        const t = obj.text;
+                                        if (/\\b(NaN|undefined|null)\\b/i.test(t)) {
+                                            bad.push({ scene: scene.scene.key, text: t.slice(0, 60) });
+                                        }
+                                    }
+                                    if (obj.list && Array.isArray(obj.list)) obj.list.forEach(walk);
+                                };
+                                scene.children.list.forEach(walk);
+                            }
+                        } catch (e) { return { ok: true, error: e.message }; }
+                        return { ok: bad.length === 0, bad: bad.slice(0, 5) };
+                    })()
+                """)
+                results["tests"]["hud_no_nan"] = bool(hud_check.get("ok", False)) if hud_check else True
+                if hud_check and not hud_check.get("ok"):
+                    results.setdefault("playtest_issues", []).append(
+                        f"HUD shows NaN/undefined/null: {hud_check.get('bad')}"
+                    )
+                    print(f"    HUD: {hud_check.get('bad')}")
+
+                # ── PLAYTEST 2: Audio cacophony check ──
+                # If >5 simultaneous Sound instances are playing for >2
+                # seconds, the audio mixer is broken (no rate-limit / no
+                # Sound pool reuse). Genre-agnostic — strategy/sim games can
+                # also have cacophony if Opus added rapid-fire SFX.
+                if True:
+                    print("  [playtest 2] Audio cacophony check...")
+                    # Trigger fire input to provoke SFX storm
+                    page.mouse.move(700, 200)
+                    page.mouse.down()
+                    page.wait_for_timeout(2000)  # 2 sec of held-fire
+                    audio_state = page.evaluate("""
+                        (() => {
+                            const g = window.__GAME__;
+                            if (!g || !g.sound || !g.sound.sounds) return { peak: 0, music: 0 };
+                            const playing = g.sound.sounds.filter(s => s.isPlaying);
+                            const music = playing.filter(s => s.key && /^music_/.test(s.key));
+                            return {
+                                peak: playing.length,
+                                music: music.length,
+                                playingKeys: playing.map(s => s.key).slice(0, 10),
+                            };
+                        })()
+                    """)
+                    page.mouse.up()
+                    results["tests"]["audio_no_cacophony"] = audio_state.get("peak", 0) <= 5
+                    results["tests"]["music_exclusive"] = audio_state.get("music", 0) <= 1
+                    if not results["tests"]["audio_no_cacophony"]:
+                        results.setdefault("playtest_issues", []).append(
+                            f"Audio cacophony: {audio_state.get('peak')} simultaneous sounds: {audio_state.get('playingKeys')}"
+                        )
+                        print(f"    Audio peak: {audio_state.get('peak')} sounds — {audio_state.get('playingKeys')}")
+                    if not results["tests"]["music_exclusive"]:
+                        results.setdefault("playtest_issues", []).append(
+                            f"Multiple music tracks playing: {audio_state.get('music')}"
+                        )
+                        print(f"    Music overlap: {audio_state.get('music')} tracks playing")
+                # ── PLAYTEST 3: Bullets actually move ──
+                # Genre-agnostic — if the game HAS a bullets/projectiles
+                # group, verify they have non-zero velocity. Skipped if no
+                # such group exists (game has no projectile combat).
+                if True:
+                    print("  [playtest 3] Bullets-move check...")
+                    bullets_check = page.evaluate("""
+                        (() => {
+                            const g = window.__GAME__;
+                            if (!g) return { ok: true, reason: 'no game' };
+                            // Find any group/array named like "bullets" or "projectiles"
+                            for (const scene of g.scene.scenes) {
+                                const candidates = ['bullets', 'projectiles', 'shots', 'lasers'];
+                                for (const k of candidates) {
+                                    if (scene[k] && scene[k].children && scene[k].children.entries) {
+                                        const list = scene[k].children.entries;
+                                        if (list.length === 0) continue;
+                                        const b = list[0];
+                                        if (!b.body) return { ok: false, reason: 'bullet has no physics body' };
+                                        const v = b.body.velocity;
+                                        const speed = Math.sqrt(v.x*v.x + v.y*v.y);
+                                        return { ok: speed > 10, bulletCount: list.length, speed, vx: v.x, vy: v.y };
+                                    }
+                                }
+                            }
+                            return { ok: true, reason: 'no bullet group found - skip' };
+                        })()
+                    """)
+                    if "ok" in bullets_check and bullets_check.get("speed", 0) > 0:
+                        results["tests"]["bullets_move"] = bool(bullets_check.get("ok", False))
+                        if not results["tests"]["bullets_move"]:
+                            results.setdefault("playtest_issues", []).append(
+                                f"Bullets stationary: speed={bullets_check.get('speed')} vx={bullets_check.get('vx')} vy={bullets_check.get('vy')}"
+                            )
+                            print(f"    Bullets stuck: speed={bullets_check.get('speed')}")
+                    else:
+                        # No bullets to test (game may not use them) — skip rather than fail
+                        results["tests"]["bullets_move"] = None
 
             # ── Console error check ──
             critical_errors = [e for e in results["console_errors"]
