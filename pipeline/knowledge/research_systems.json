@@ -1,0 +1,818 @@
+{
+  "_meta": {
+    "generated": "2026-05-05T00:00:00Z",
+    "agent": "researcher",
+    "purpose": "Genre conventions for automated game-generation pipeline. Each genre defines what the engine MUST emit (controls, scenes, HUD, sounds, mechanics) so a generated game is recognizable as that genre.",
+    "sources": [
+      "https://www.gamedeveloper.com/design/reimagining-failure-in-strategy-game-design-in-i-into-the-breach-i-",
+      "https://ubm-twvideo01.s3.amazonaws.com/o1/vault/gdc2019/presentations/Into%20the%20Breach%20Postmortem%20Final.pdf",
+      "https://www.gdcvault.com/play/1025772/-Into-the-Breach-Design",
+      "https://www.gamedeveloper.com/design/the-three-layers-of-control-in-strategy-games-",
+      "https://www.gamedeveloper.com/design/ui-strategy-game-design-dos-and-don-ts",
+      "https://en.wikipedia.org/wiki/HUD_(video_gaming)",
+      "https://en.wikipedia.org/wiki/XCOM",
+      "https://en.wikipedia.org/wiki/Construction_and_management_simulation",
+      "https://store.steampowered.com/app/294100/RimWorld/",
+      "https://stardewvalleywiki.com/Day_Cycle",
+      "https://stardewvalleywiki.com/Crops",
+      "https://stardewvalley.fandom.com/wiki/Time",
+      "https://docs.ficsit.app/satisfactory-modding/latest/Development/Satisfactory/FactoryTick.html",
+      "https://hero.handmade.network/forums/code-discussion/t/1417-fixed_vs_variable_game_loop_update__frame_rate_independence",
+      "https://en.wikipedia.org/wiki/Tetris",
+      "https://en.wikipedia.org/wiki/Sokoban",
+      "https://www.puzzles.wiki/wiki/Sokoban",
+      "https://machinations.io/articles/how-to-design-a-puzzle-game",
+      "https://gamedesignskills.com/game-design/puzzle/",
+      "https://phaser.io/news/2026/01/build-a-sokoban-puzzle-game-in-phaser",
+      "https://phaser.io/news/2019/04/match-3-tutorial-part-1",
+      "https://phaser.io/news/2024/07/sea-match",
+      "https://blog.ourcade.co/posts/2020/command-pattern-undo-player-actions/",
+      "https://en.wikipedia.org/wiki/Catan",
+      "https://www.ultraboardgames.com/catan/trade.php",
+      "https://en.wikipedia.org/wiki/Codenames_(board_game)",
+      "https://boardgamegeek.com/boardgame/178900/codenames",
+      "https://medium.com/@michaelwesthadley/modular-game-worlds-in-phaser-3-tilemaps-1-958fc7e6bbd6",
+      "https://generalistprogrammer.com/tutorials/phaser-isometric-game-tutorial"
+    ]
+  },
+
+  "strategy": {
+    "identity": {
+      "summary": "Turn-based grid tactics. The defining property is discrete turns separated by an explicit end-turn action, with units occupying tiles on a 2D grid (square or hex). Adjacent genres distinguished by: real-time strategy lacks the turn boundary; tactical RPG centers on a small named party with leveling rather than faction-scale resource pipelines; 4X adds the macro layer of empire (cities, tech tree, diplomacy) on top of unit movement.",
+      "must_have": ["explicit turn boundary", "grid-based positioning", "deterministic movement range per unit", "click-to-select-then-click-to-target action model"],
+      "must_not_have": ["continuous time advance during active play", "twitch reflex requirements", "pixel-perfect collision (grid cells own the game)"]
+    },
+    "controls": {
+      "primary_input": "mouse",
+      "scheme": [
+        "Left-click on unit -> select; show movement range + attack range overlays",
+        "Left-click on highlighted tile -> issue move/attack/ability",
+        "Right-click -> deselect / cancel pending order",
+        "Spacebar or End-Turn button -> commit turn",
+        "Tab -> cycle to next unit with actions remaining",
+        "Mouse wheel / WASD -> camera pan when map exceeds viewport",
+        "Hover -> tooltip showing unit stats, terrain bonus, hit chance"
+      ],
+      "telegraphing": "Per Into the Breach GDC 2019: enemies show their next-turn intent BEFORE the player commits. This is core to modern tactics design and should be the default for generated games."
+    },
+    "player_actions": [
+      "select_unit",
+      "move_unit (along path within movement points)",
+      "attack (melee adjacent or ranged with line-of-sight)",
+      "use_ability (CO power, special, overwatch)",
+      "build (in 4X / Advance Wars: produce unit at factory/city)",
+      "research (in 4X: spend science on tech node)",
+      "diplomacy (in 4X: declare war/peace/trade)",
+      "found_city (in 4X: place new settlement)",
+      "end_turn"
+    ],
+    "win_conditions": [
+      "domination: all enemy faction units/cities destroyed",
+      "objective: capture N specific tiles (Advance Wars HQ capture)",
+      "wonder: complete a long build chain (4X)",
+      "score: highest score when turn limit reached",
+      "survival: survive N turns (Into the Breach: protect grid power)"
+    ],
+    "lose_conditions": [
+      "faction destroyed (last unit/city lost)",
+      "key objective destroyed (e.g., HQ captured, power grid drained in Into the Breach)",
+      "turn limit exceeded without meeting win condition",
+      "unit-permadeath cascade (XCOM: lose enough soldiers, run ends)"
+    ],
+    "scene_structure": {
+      "Boot": "load assets, theme",
+      "Menu": "new game / continue / options",
+      "FactionSelect": "choose faction or pre-set scenario",
+      "WorldMap": "primary battle scene with grid, units, fog of war",
+      "UnitDetail": "modal showing stats / abilities for selected unit",
+      "TechTree": "research nodes graph (4X only)",
+      "Diplomacy": "AI faction relationship panel (4X only)",
+      "EndOfTurn": "AI moves animate sequentially; UI input disabled",
+      "Victory": "win screen with stats",
+      "Defeat": "loss screen, retry / back to menu"
+    },
+    "standard_unit_types": [
+      "infantry (cheap, generalist, captures tiles)",
+      "cavalry / mech (high movement, flanker)",
+      "ranged (attacks at distance, low HP)",
+      "siege / artillery (high damage, long range, slow)",
+      "builder / engineer (constructs improvements, repairs)",
+      "wizard / hero / commander (special abilities, often 1 per side)",
+      "air unit (ignores terrain, expensive)",
+      "naval unit (water-only)"
+    ],
+    "resources": {
+      "currency": "gold (recruit/build)",
+      "food": "limits population growth (4X)",
+      "science": "advances tech tree (4X)",
+      "production": "speeds construction in cities (4X)",
+      "manpower": "limits army size",
+      "action_points": "per-unit movement+attack budget (tactical)",
+      "command_points": "spent on CO powers (Advance Wars / XCOM-style)"
+    },
+    "hud_elements": [
+      "turn_counter (top-left or top-center)",
+      "end_turn_button (bottom-right, always reachable)",
+      "minimap (bottom-left or top-right with fog overlay)",
+      "resource_bar (top-strip: gold/food/science icons + values)",
+      "selected_unit_panel (bottom: portrait, HP, action points, abilities)",
+      "movement_range_overlay (blue tiles)",
+      "attack_range_overlay (red tiles)",
+      "enemy_intent_arrows (Into the Breach: arrow showing next-turn attack)",
+      "tooltip (on hover, terrain + unit + hit chance)",
+      "objective_tracker (top-center: 'Capture HQ' or 'Survive 5 turns')"
+    ],
+    "iconic_mechanics": [
+      "fog_of_war: tiles outside vision are dark or remembered-but-stale",
+      "zones_of_control: enemy units freeze movement of adjacent friendlies",
+      "terrain_bonuses: forest +cover, hill +range, road +movement",
+      "line_of_sight: ranged attacks blocked by walls/forest",
+      "permadeath: lost units do not return (XCOM)",
+      "telegraphed_threats: enemy intent shown next turn before player commits (Into the Breach)",
+      "fog_lift_on_kill: killing scout reveals area",
+      "captures: infantry standing on tile for N turns flips ownership"
+    ],
+    "sound_design": [
+      "unit_select (clipped affirm: 'sir', 'ready', or short stinger)",
+      "unit_move (footstep loop or vehicle rumble, gated to movement length)",
+      "attack (per-weapon: rifle pop, sword swing, missile launch)",
+      "hit_confirm (impact)",
+      "miss (whoosh)",
+      "unit_death (low impact + voice cry)",
+      "capture (rising flourish)",
+      "end_turn (drum hit or stamped seal)",
+      "enemy_turn_stinger (low ominous note)",
+      "build_complete (chime)",
+      "research_complete (longer chime)",
+      "victory_sting",
+      "defeat_sting",
+      "alert (low HP unit, urgent threat)",
+      "ui_hover, ui_click"
+    ],
+    "common_bugs": [
+      "TURN_REENTRY: end-turn handler triggers on stale state and cascades 5+ turns in a single frame. Cause: not gating input or using a state machine flag. Fix: explicit turn_state ENUM (PLAYER_TURN / RESOLVING / AI_TURN / RESOLVING / NEXT_TURN) and disable end-turn button during RESOLVING.",
+      "UNIT_DUPLICATION: save/load creates duplicate sprites for the same unit ID. Cause: spawning from save without clearing prior scene state. Fix: serialize by id, clear sprite cache on scene restart.",
+      "AI_INFINITE_LOOP: AI considers same unit twice in same turn. Fix: mark each AI unit acted=true and skip; cap thinking time per unit.",
+      "MOVEMENT_PATH_DESYNC: visual sprite arrives at wrong tile because pathfinding ran on grid but tween ran on pixels. Fix: snap sprite to tile center on path complete.",
+      "ZOC_MISS: enemy unit attacks through a zone-of-control zone because adjacency check ignored ZoC layer. Fix: ZoC is a separate validation step in move resolver.",
+      "FOG_BLEED: unit visible through fog because vision was checked against unit position only, not the path it walked. Fix: re-evaluate vision after each tile of a multi-tile move.",
+      "OFF_BY_ONE_RANGE: 'range 3' actually allows range 4 because Chebyshev vs Manhattan distance was mixed.",
+      "DEAD_UNIT_RETURNS: unit killed mid-turn still on action queue. Fix: filter dead units before AI iteration."
+    ],
+    "phaser_implementation": {
+      "works": [
+        "Phaser.Tilemaps.Tilemap with a single static layer for terrain + a dynamic layer for unit overlay",
+        "GameObject Group per faction so AI iteration is one loop",
+        "Pointer events on tile coords (worldToTileXY) not on sprite hit areas",
+        "Tween chain for AI move animations with onComplete -> next_unit",
+        "Camera bounds set to map extents, drag-to-pan with this.input.on('pointermove')",
+        "Container per unit holding sprite + healthbar + status icons; one transform updates them together",
+        "Easystar.js or A* for pathfinding on a JS grid mirror of tilemap"
+      ],
+      "avoid": [
+        "Arcade physics for unit movement (overkill, causes pixel drift)",
+        "Per-tile sprite for terrain (use tilemap layer instead, 100x faster)",
+        "Synchronous AI thinking on update() loop (blocks render)",
+        "Storing unit state on the sprite itself (separate model+view)",
+        "Phaser.Geom.Polygon for fog of war (use a RenderTexture mask instead)"
+      ],
+      "scene_skeleton": "BootScene -> MenuScene -> WorldMapScene (main) with parallel UIScene overlay for HUD, EndOfTurnScene as modal"
+    },
+    "examples_referenced": ["Civilization VI", "XCOM 2", "Advance Wars", "Into the Breach", "Fire Emblem"]
+  },
+
+  "simulation": {
+    "identity": {
+      "summary": "Real-time management. The game advances on a fixed-rate simulation tick (decoupled from render framerate), and the player's primary verb is placement/zoning/scheduling rather than direct unit control. Distinguished from strategy by absence of explicit turns; from action games by absence of avatar control (or the avatar is a thin wrapper around economy actions).",
+      "must_have": ["fixed-rate sim tick independent of FPS", "build/place mode toggle", "stat decay over time (need to refill)", "speed control (1x / 2x / 3x / pause)"],
+      "must_not_have": ["turn boundary", "instant resource production (everything is over-time)", "single-screen win on first action"]
+    },
+    "controls": {
+      "primary_input": "mouse",
+      "scheme": [
+        "Left-click on palette item -> enter build mode for that item",
+        "Left-click on world tile -> place item",
+        "Left-click + drag -> zone or path placement (roads, fields)",
+        "Right-click -> cancel build mode / deselect / interact",
+        "Mouse wheel -> zoom",
+        "WASD or middle-drag -> pan camera",
+        "Number keys 1/2/3 -> game speed (pause/normal/fast)",
+        "Spacebar -> pause/unpause",
+        "Tab or M -> toggle map / overlay layer (heatmap, pollution, happiness)"
+      ]
+    },
+    "player_actions": [
+      "place_building (house, factory, farm)",
+      "zone_area (residential, commercial, industrial)",
+      "draw_path (road, water pipe, electrical line)",
+      "demolish (bulldozer/delete)",
+      "set_policy (tax rate, work shift, law)",
+      "manage_citizen (RimWorld: assign job priority)",
+      "respond_to_disaster (firefighter dispatch, evacuate)",
+      "advance_time (set speed)",
+      "trade (buy/sell with caravan or world market)",
+      "research (Two Point: unlock new room types)"
+    ],
+    "win_conditions": [
+      "scenario_objective_met (e.g., reach 50k population, hit profit target by year 5)",
+      "happiness_milestone (citizens averaged at X for N days)",
+      "campaign_chapter_complete (Two Point: stars rating)",
+      "endless: no win, score-driven (SimCity sandbox, RimWorld)"
+    ],
+    "lose_conditions": [
+      "bankruptcy (cash below threshold for N consecutive ticks)",
+      "disaster_overwhelms (too many citizens dead/leaving)",
+      "no_colonists_remain (RimWorld: all pawns dead/captured)",
+      "happiness_collapse (unrest threshold exceeded)",
+      "scenario_failure (failed to meet milestone by deadline)"
+    ],
+    "scene_structure": {
+      "Boot": "asset load",
+      "Menu": "new colony / continue / scenario picker",
+      "WorldGen": "map generation + difficulty (RimWorld storyteller pick)",
+      "PlayScene": "main world view, persistent",
+      "BuildModeOverlay": "palette UI shown when build active (sub-state of PlayScene, not separate scene)",
+      "InfoOverlays": "heatmap toggles for pollution / happiness / traffic / power (mask layers)",
+      "Calendar": "modal showing season, upcoming events",
+      "ResearchTree": "modal for tech progression (Two Point Hospital)",
+      "CitizenInspector": "click on pawn -> modal with needs, schedule, traits",
+      "PauseMenu": "save / load / settings",
+      "EndOfYearReport": "annual summary modal",
+      "GameOver": "win or lose screen"
+    },
+    "standard_entity_types": [
+      "house / dwelling (population produces workers, consumes food/water/power)",
+      "farm / resource_extractor (produces raw resource on tick)",
+      "factory / processor (consumes raw + worker, produces goods)",
+      "shop / market (consumes goods, produces money)",
+      "road / path (connects buildings, enables citizen pathing)",
+      "utility (power plant, water tower, sewage)",
+      "service (school, hospital, police, fire)",
+      "decoration / park (boosts happiness in radius)",
+      "citizen / pawn (the simulated agent: needs, job, mood)",
+      "vehicle (truck, ambulance, taxi: spawns from building, traverses roads)"
+    ],
+    "resources": {
+      "money": "primary currency, drained by upkeep and gained by taxes/sales",
+      "energy_power": "produced by plants, consumed by buildings; outage cascades",
+      "water": "similar to power, gates housing growth",
+      "happiness_satisfaction": "aggregate of citizen moods, gates growth + triggers riots",
+      "pollution": "negative side effect of industry; reduces nearby happiness",
+      "population": "head count, driver of demand",
+      "food": "per-citizen consumption per tick",
+      "raw_materials": "wood, stone, iron — supply chain inputs",
+      "goods": "manufactured outputs",
+      "research_points": "earned per tick at universities/labs"
+    },
+    "hud_elements": [
+      "money_counter (top-left, with delta /sec or /day)",
+      "population_counter",
+      "date_calendar (year / season / day)",
+      "speed_controls (pause / 1x / 2x / 3x with current highlighted)",
+      "build_palette (bottom strip: categorized building icons)",
+      "alert_feed (right side: 'fire on Elm St', 'citizen left town')",
+      "minimap (bottom-right with overlay toggle)",
+      "happiness_meter (smiley gauge or %)",
+      "resource_bars (power/water/food: green to red gauge)",
+      "tooltip (on hover: building type + stats)",
+      "info_overlay_toggles (icons for heatmap layers)",
+      "objective_panel (scenario goals checklist)"
+    ],
+    "iconic_mechanics": [
+      "tick_based_simulation: world updates every fixed delta (e.g., 100ms) regardless of render FPS. Per Satisfactory factory tick model.",
+      "supply_chain: building A produces good X, building B requires X within delivery range",
+      "stat_decay: citizens lose hunger/sleep/comfort each tick; must be refilled at appropriate building",
+      "happiness_radius: parks/decorations boost happiness within N tiles",
+      "pollution_radius: factories drop happiness within N tiles",
+      "RCI_demand (residential/commercial/industrial): zoned tiles fill based on demand bars",
+      "pathing_simulation: citizens walk roads from home to work to shop, taking time",
+      "disaster_events: random fires, disease, raids force reactive play",
+      "speed_control: pause to think, fast-forward to skip dead time",
+      "save_anywhere: state must serialize cleanly mid-tick",
+      "AI_storyteller: RimWorld-style event director balances pressure"
+    ],
+    "sound_design": [
+      "place_building (satisfying click + thud)",
+      "place_invalid (low buzzer)",
+      "demolish (rubble crash)",
+      "money_in (coin chime)",
+      "money_out (subtle paper rustle)",
+      "day_tick (faint chime when day changes)",
+      "season_change (longer flourish)",
+      "disaster_alert (siren, urgent)",
+      "disaster_resolved (sigh of relief / chime)",
+      "citizen_death (low bell)",
+      "citizen_birth (light chime)",
+      "build_complete (constructor finishes)",
+      "research_complete",
+      "level_up_milestone (population threshold crossed)",
+      "ambient_loop (city hum or farm wind)",
+      "ui_click, ui_hover, panel_open, panel_close"
+    ],
+    "common_bugs": [
+      "TICK_DESYNC: sim tick coupled to delta time, so faster machines simulate faster. Fix: accumulator pattern, fixed timestep, render with interpolation. Per Handmade Network and gamedev.net consensus.",
+      "FRAMERATE_TIED_PHYSICS: citizen movement uses delta directly, so 144Hz monitor moves them faster. Fix: separate sim update from render update.",
+      "SAVE_STATE_INTEGRITY: serialization mid-build leaves orphan ghost building. Fix: pause sim during save, atomic write.",
+      "PATHFINDING_STALE: citizen path computed at spawn never re-evaluated; bulldozed road leaves citizen walking through air. Fix: re-path on graph change.",
+      "FLOATING_POINT_DRIFT: long sessions accumulate floating errors in stat decay. Fix: integer ticks for sim, float only for render interpolation.",
+      "OVERLAPPING_BUILDS: two buildings placed on same tile via race condition. Fix: tile-occupancy guard before placement commit.",
+      "MEMORY_LEAK_SPRITES: bulldozed buildings leak sprite refs. Fix: explicit destroy() and pool reuse.",
+      "ALERT_SPAM: same fire reported every tick. Fix: dedupe alerts by source+type with cooldown.",
+      "BANKRUPTCY_OSCILLATION: cash dips to negative for one tick, triggers game over even though next tick recovers. Fix: require N consecutive ticks below threshold.",
+      "ZONE_FLOOD_FILL: drag-zone fills wrong region because flood-fill ran on stale grid."
+    ],
+    "phaser_implementation": {
+      "works": [
+        "Custom fixed-tick scheduler: this.simAccumulator += delta; while (simAccumulator >= TICK_MS) { tick(); simAccumulator -= TICK_MS; }",
+        "Tilemap layer for ground; separate dynamic-tilemap or sprite-group layer for buildings",
+        "Citizens as Container with sprite + label; pooled via Phaser.GameObjects.Group with maxSize",
+        "Heatmap overlays as RenderTexture or BitmapData updated every N ticks (not every frame)",
+        "RexUI or custom HTML overlay for build palette + alert feed",
+        "Pathfinding with Easystar.js on a numeric grid mirror, run on web worker for large maps",
+        "Camera with setBounds + drag-pan + mouse-wheel zoom"
+      ],
+      "avoid": [
+        "Arcade physics for citizen movement (overkill and tied to render delta)",
+        "Per-frame stat updates (do them on tick, interpolate visually)",
+        "Phaser timers for the main sim clock (drift); use accumulator on update()",
+        "Storing sim state in scene properties only (use a plain JS model object so save/load is JSON.stringify)"
+      ],
+      "scene_skeleton": "BootScene -> MenuScene -> PlayScene + UIScene overlay; modals (CitizenInspector, ResearchTree) as paused-PlayScene with launched scene"
+    },
+    "examples_referenced": ["SimCity", "Stardew Valley", "RimWorld", "Two Point Hospital", "Banished", "Cities: Skylines"]
+  },
+
+  "puzzle": {
+    "identity": {
+      "summary": "Single-board problem-solving with discrete moves toward a goal state. The defining property is that every state is reproducible from start + move list, and the goal is a recognizable winning configuration. Distinguished from strategy by absence of opponents (or a degenerate solo opponent like falling Tetrominoes); from sim by no time decay between player actions (Tetris is a hybrid).",
+      "must_have": ["clearly defined goal state", "discrete moves", "deterministic outcomes (same input = same result)", "level_complete check after every move"],
+      "must_not_have": ["random AI opponents", "twitch reflex beyond optional time pressure", "ambiguous win condition"]
+    },
+    "controls": {
+      "primary_input": "varies by sub-genre",
+      "by_subgenre": {
+        "match3 (Bejeweled, Candy Crush)": "click-then-click adjacent OR click-and-drag swap; pointerdown -> pointerup direction = swap axis",
+        "tile_pusher (Sokoban)": "arrow keys / WASD / swipe; one cell per input; double-tap or Z for undo",
+        "drop_block (Tetris)": "left/right arrow for horizontal, up or X/Z for rotate, down for soft-drop, space for hard-drop",
+        "logic_grid (Picross, Sudoku)": "left-click fill, right-click flag/cross, number keys for digits",
+        "physics_puzzle (Portal-style 2D)": "WASD move + mouse aim + click to use tool",
+        "draw_path (Flow Free)": "click and drag to draw connection",
+        "rotate_pipe": "click on tile to rotate 90 degrees"
+      }
+    },
+    "player_actions": [
+      "select_piece",
+      "swap (match3: with adjacent piece)",
+      "rotate (Tetris piece, pipe tile)",
+      "place (Tetris drop, Picross fill)",
+      "push (Sokoban: walk into block adjacent to empty)",
+      "connect (Flow Free: draw line between matching dots)",
+      "undo (last move, with optional limit)",
+      "redo",
+      "use_hint (consume hint resource to highlight valid move)",
+      "reset_level"
+    ],
+    "win_conditions": [
+      "board_clear (Bejeweled: clear N gems / Tetris: lines per level)",
+      "all_targets_filled (Sokoban: every box on a goal tile)",
+      "configuration_match (Picross: revealed image matches solution)",
+      "score_threshold (reach N points before move limit)",
+      "puzzle_solved (Sudoku: all cells filled validly)",
+      "all_pieces_placed (jigsaw)",
+      "complete_N_puzzles (campaign completion)"
+    ],
+    "lose_conditions": [
+      "out_of_moves (move counter reaches 0 without win)",
+      "out_of_time (timed mode)",
+      "stack_overflow (Tetris: blocks reach top)",
+      "deadlock (Sokoban: pushed box into corner; usually allows reset)",
+      "wrong_answer_limit (Picross: 3 mistakes)"
+    ],
+    "scene_structure": {
+      "Boot": "load assets",
+      "Menu": "play / level select / options",
+      "LevelSelect": "grid of unlocked levels with star ratings",
+      "Puzzle": "the actual playfield (main scene)",
+      "Pause": "pause overlay",
+      "WinModal": "stars earned + next-level / replay / menu",
+      "FailModal": "retry / hint / menu",
+      "Tutorial": "first-time scripted overlay (optional but standard)"
+    },
+    "standard_piece_types_by_subgenre": {
+      "match3": "5 to 7 colored gems + 2 to 3 power-ups (line bomb, color bomb, area blast)",
+      "tetris": "7 standard tetrominoes (I, O, T, S, Z, J, L)",
+      "sokoban": "player, wall, floor, box, goal_tile, box_on_goal",
+      "picross": "filled cell, marked-empty cell, unknown cell, row/column number clue",
+      "sudoku": "digits 1 to 9, given vs entered cells",
+      "flow_free": "endpoint dots in N colors, drawn path segments",
+      "portal_2d": "player, cube, button, door, portal_orange, portal_blue, hazard"
+    },
+    "resources": {
+      "moves_remaining": "cap on inputs before fail",
+      "time_remaining": "countdown for timed mode",
+      "hints_available": "consumable to reveal valid move",
+      "undos_available": "limited or unlimited per design",
+      "score": "accumulated, drives star rating",
+      "stars": "1 to 3 per level, persists across runs",
+      "lives": "shared across levels (mobile freemium pattern)"
+    },
+    "hud_elements": [
+      "score_counter (top)",
+      "moves_or_time_remaining (top, prominent)",
+      "objective_panel ('clear 20 blue gems' / 'reach goal in 15 moves')",
+      "next_piece_preview (Tetris: top-right)",
+      "hold_slot (Tetris modern: top-left)",
+      "hints_remaining_counter",
+      "undo_button (visible, large, common)",
+      "reset_button",
+      "pause_button",
+      "level_number_label",
+      "progress_bar (toward objective)",
+      "combo_meter (multiplier on chained matches)"
+    ],
+    "iconic_mechanics": [
+      "undo_redo: per Phaser Sokoban tutorial — Command Pattern, store inverse of each move; double-tap or dedicated button",
+      "hint_system: precomputed solver indicates a valid next move",
+      "chain_combos: match3 cascades when falling pieces form new matches",
+      "level_progression: solve N to unlock N+1; star rating per level",
+      "deterministic_replay: same seed + same inputs = same game (essential for daily challenge / leaderboard)",
+      "telegraphing_failures: Sokoban shows when box is dead-stuck (wall corner)",
+      "soft_lock_detection: Tetris top-out, Sokoban deadlock — explicit fail-state check",
+      "tutorialization: first 3 levels teach one mechanic each"
+    ],
+    "sound_design": [
+      "click_select (light tick)",
+      "place_or_swap (soft pop)",
+      "match_or_correct (bright affirm chime, often pitched up per combo)",
+      "invalid_move (low buzz or thud)",
+      "level_complete (rising flourish)",
+      "combo_chain (each step pitches up)",
+      "undo (reverse swoosh)",
+      "hint_used (subtle sparkle)",
+      "perfect_or_3_star (extra-rich chime)",
+      "fail (descending notes)",
+      "tetromino_lock (Tetris: low click)",
+      "line_clear (Tetris: longer chime, scaled to lines cleared)",
+      "music_loop (calm, looping, tempo can rise on near-fail)"
+    ],
+    "common_bugs": [
+      "UNDO_STATE_CORRUPTION: undo restores moving pieces but not chain state (e.g., undo after a Bejeweled cascade leaves missing gems). Fix: snapshot full board state on each move OR store full inverse including post-cascade resolution. Phaser Sokoban tutorial explicitly addresses this: only restore moving entities, but for cascade games full snapshot is required.",
+      "CLICK_HITBOX_OFF_BY_ONE: pointer between two cells registers on wrong cell because hit area is 32px but tile is 33px. Fix: align hit area exactly with tile bounds, use floor(x/tileWidth).",
+      "DOUBLE_INPUT: rapid click registers as two swaps. Fix: input lockout while animation in progress (this.busy=true).",
+      "ANIMATION_RACE: piece dropped mid-swap-animation breaks board state. Fix: queue all input during animations, gate on tween onComplete.",
+      "MATCH_DETECTION_MISSED: 4-in-a-row not detected because scan only checked 3-in-a-row patterns. Fix: scan from longest match to shortest, or run length-encoding pass per row+column.",
+      "DEADLOCK_NOT_DETECTED: Sokoban lets player play after impossible state. Fix: deadlock detector after each push, surface as 'No more solutions — undo or reset?'",
+      "TETROMINO_KICK_FAIL: rotation against wall fails when SRS wall-kick should allow it. Fix: implement SRS table.",
+      "SCORE_OVERFLOW: long-run integer overflow on combo multiplier. Fix: cap multiplier or use BigInt.",
+      "STARS_REGRESSION: replaying with worse score overwrites better score. Fix: store max(old, new).",
+      "RNG_NOT_SEEDED: same level plays differently between sessions. Fix: seed RNG from level number for reproducibility."
+    ],
+    "phaser_implementation": {
+      "works": [
+        "Logical board as 2D JS array; sprites are visual mirror only — keep the model authoritative",
+        "Match3 swap: pointerdown stores origin tile, pointerup measures direction (>32px on axis), validates adjacency, applies swap with tween",
+        "Tween chain for cascades: gravity tween onComplete -> match scan -> if matches, tween clear -> repeat",
+        "Sokoban: cursor keys via this.input.keyboard.on('keydown-LEFT'), gate on !this.busy",
+        "Tetris: timer event for gravity tick; rotate via Phaser tween or instant snap",
+        "Object pooling for gems/pieces (Group with createMultiple) — reuse on cascade",
+        "Tweens.timeline for sequenced animations (clear -> drop -> refill)"
+      ],
+      "avoid": [
+        "Putting board state on sprites (sprites are presentation; model is source of truth)",
+        "Using Arcade physics for falling gems (too imprecise; use tween to row Y)",
+        "Skipping the lockout flag — simultaneous inputs corrupt state",
+        "Dynamic tilemap for the puzzle grid (pieces move per cell — sprite group is simpler and cleaner)"
+      ],
+      "scene_skeleton": "BootScene -> MenuScene -> LevelSelectScene -> PuzzleScene; WinModal and PauseModal as launched overlay scenes"
+    },
+    "examples_referenced": ["Tetris", "Bejeweled", "Candy Crush", "Sokoban", "Picross", "Sudoku", "Flow Free", "Portal", "Baba Is You"]
+  },
+
+  "boardgame": {
+    "identity": {
+      "summary": "Digital adaptation of a tabletop board game. The defining property is fidelity to physical rules with rule-enforcement automation: the digital version enforces what humans would otherwise check (legal moves, scoring, turn order). Distinguished from strategy by smaller and tighter rule sets, often a fixed board (or modular but shuffled once), and per-turn phases that are explicit and named in the rulebook.",
+      "must_have": ["faithful turn structure with explicit phases", "rule-enforcement (cannot make illegal move)", "automated scoring", "multi-player support local or online"],
+      "must_not_have": ["real-time elements (the genre IS turn-based by definition)", "fog of war for fully open-info games like Chess (vs hidden-info games like Codenames)", "departures from physical rules without an explicit 'house rules' option"]
+    },
+    "controls": {
+      "primary_input": "click + drag",
+      "scheme": [
+        "Left-click on piece -> select; legal destinations highlight",
+        "Click-and-drag piece to destination, OR click destination to confirm",
+        "Drag card from hand to play area",
+        "Right-click -> cancel / inspect (zoom card)",
+        "Per-phase action buttons (Roll Dice, End Turn, Pass)",
+        "Hover -> rulebook tooltip on game element",
+        "Chat / emote panel for online multiplayer"
+      ]
+    },
+    "player_actions": {
+      "common": [
+        "roll_dice (Catan, Monopoly)",
+        "play_card (most card-driven games)",
+        "place_piece (Catan settlement, Chess move, Azul tile)",
+        "trade (Catan: propose to other players, bank trade 4:1 / 3:1 / 2:1)",
+        "buy (development card, building)",
+        "draft_pick (Azul: take all of one color from a factory)",
+        "give_clue (Codenames spymaster: word + number)",
+        "guess (Codenames operative: click word card)",
+        "pass / end_turn",
+        "concede"
+      ]
+    },
+    "win_conditions": {
+      "examples": {
+        "Catan": "first to 10 victory points (settlements, cities, longest road, largest army, dev cards)",
+        "Azul": "highest score after a round ends with someone completing a horizontal row",
+        "Codenames": "team identifies all their agents before opposing team OR opposing team picks the assassin",
+        "Chess": "checkmate opposing king OR opponent resigns OR time forfeit",
+        "generic": "reach point threshold OR last player standing OR specific objective complete"
+      }
+    },
+    "lose_conditions": [
+      "opponent achieves win condition first",
+      "Codenames: pick the assassin card",
+      "Chess: checkmate, resignation, time-out",
+      "concede"
+    ],
+    "scene_structure": {
+      "Boot": "asset load",
+      "Menu": "new game / join / how to play",
+      "Lobby": "configure players, choose color/seat, ready-up (multiplayer)",
+      "Setup": "deal cards, place initial pieces (e.g., Catan starting settlements)",
+      "PlayScene": "main board view",
+      "ActionPhasePanel": "per-phase UI shown contextually (Catan: roll -> trade -> build; Codenames: clue -> guess)",
+      "CardZoom": "modal for inspecting a card",
+      "ScoreBoard": "side panel or modal showing each player's score",
+      "Rulebook": "modal with rules reference",
+      "EndOfRound": "scoring tally animation",
+      "Victory": "winner announced + final scores"
+    },
+    "standard_piece_archetypes": {
+      "Catan": ["settlement", "city", "road", "robber", "resource_card (5 types)", "dev_card", "number_token", "hex_tile (5 resource types + desert)"],
+      "Azul": ["factory_display (5)", "tile (5 colors)", "player_board", "score_track marker", "first-player marker"],
+      "Codenames": ["word_card (25)", "key_card (1, only spymasters see)", "agent_marker (red/blue/neutral/assassin)"],
+      "Chess": ["king", "queen", "rook", "bishop", "knight", "pawn", "board_square (light/dark)"],
+      "generic": ["pawn", "card", "die", "marker", "board_tile", "resource_token"]
+    },
+    "resources": {
+      "by_game": {
+        "Catan": "wood, brick, sheep, wheat, ore, victory_points",
+        "Azul": "tiles by color, score, broken-tiles penalty",
+        "Codenames": "guesses_remaining (clue_number + 1)",
+        "Chess": "captured_pieces (no consumable resource — purely positional)"
+      },
+      "common": ["actions_remaining_per_turn", "hand_size", "victory_points", "turn_number"]
+    },
+    "hud_elements": [
+      "current_player_indicator (whose turn, with timer in online play)",
+      "phase_label ('Roll' / 'Trade' / 'Build')",
+      "score_panel (each player's points, current leader highlighted)",
+      "hand (player's cards, fanned at bottom)",
+      "deck / discard pile counts",
+      "dice_roll_display",
+      "action_buttons (context-dependent per phase)",
+      "end_turn_button",
+      "rulebook_button",
+      "history_log ('P1 built a settlement at H3' — feed of every action)",
+      "trade_proposal_modal (Catan)",
+      "chat_panel (multiplayer)",
+      "turn_timer (online)"
+    ],
+    "iconic_mechanics": [
+      "phased_turns: each turn has named phases the player progresses through (Catan: Roll -> Trade -> Build), with a button to advance phase",
+      "rule_enforcement: cannot make illegal moves — UI greys out invalid options",
+      "hidden_information: cards in hand visible only to owner; Codenames key_card visible only to spymasters",
+      "deterministic_with_RNG: shuffled deck order is deterministic from seed; replays possible",
+      "trading_interface: structured proposal form (Catan: 'I offer X for Y from any player')",
+      "tableau_building: cards/tokens accumulate in personal play area",
+      "drafting: pick from a shared pool (Azul factories)",
+      "scoring_animation: end-of-round tallies highlight each scoring rule",
+      "asynchronous_play: online games may allow long turn timers (24h)",
+      "AI_opponents: rule-bound bots with difficulty levels"
+    ],
+    "sound_design": [
+      "card_draw (paper rustle)",
+      "card_play (firm slap)",
+      "piece_place (soft thud, satisfying)",
+      "dice_roll (rattle + click on stop)",
+      "tile_take (Azul: ceramic clink)",
+      "score_tally (chime per point)",
+      "turn_transition (gentle bell)",
+      "your_turn_alert (in multiplayer: distinct ping)",
+      "trade_proposed (notification chime)",
+      "trade_accepted (positive)",
+      "trade_rejected (neutral)",
+      "victory_fanfare",
+      "defeat_low_note",
+      "ui_click, hover, modal_open, modal_close",
+      "ambient_table (light wood/cloth shuffle, optional)"
+    ],
+    "common_bugs": [
+      "ILLEGAL_MOVE_ALLOWED: rule check missed an edge case (Catan: settlement placed within 2 of another). Fix: comprehensive legal-move generator, used both for highlighting AND for validation, single source of truth.",
+      "PHASE_SKIP: 'End Turn' clickable during build phase before resources subtracted. Fix: phase state machine with explicit transitions; disable buttons not valid for current phase.",
+      "HIDDEN_INFO_LEAK: opponent's cards visible due to client-side rendering of full state. Fix: server-authoritative state; clients only receive what they should see.",
+      "TURN_DESYNC_ONLINE: client and server disagree on whose turn. Fix: server is authoritative; clients reconcile on every action ack.",
+      "RECONNECT_LOSES_HAND: rejoining player loses card knowledge. Fix: persist per-player view on server, replay on reconnect.",
+      "AI_TIMEOUT: bot thinks too long, blocks game. Fix: hard time cap with fallback to random legal move.",
+      "TIE_BREAK_NOT_HANDLED: two players reach 10 VP simultaneously. Fix: explicit tiebreak rules per game (Catan: most resources; Azul: most rows; Chess: not possible).",
+      "UNDO_VS_RULES: undo allowed in single-player but breaks online competitive integrity. Fix: undo only with opponent consent.",
+      "DRAG_CANCEL_KEEPS_PIECE_OFFBOARD: aborted drag leaves piece visually disconnected. Fix: snap-back animation on dragend if invalid.",
+      "SHUFFLE_NOT_RANDOM: deterministic shuffle by accident reveals card order. Fix: cryptographically seeded shuffle, server-side."
+    ],
+    "phaser_implementation": {
+      "works": [
+        "Plain JS state object as authoritative source; Phaser scene reads and renders from it",
+        "Pointer events with hitarea per board cell / card / piece",
+        "this.input.setDraggable(piece) + dragstart/drag/dragend events for click+drag movement",
+        "Containers per player area (hand, board, score panel) for organized layout",
+        "Modals as launched scenes layered on the play scene",
+        "Tweens for piece movement, dice roll bounce, card flip",
+        "RexUI plugin (or simple sprite buttons) for context action panels",
+        "Color matrix or tint for player-color theming"
+      ],
+      "avoid": [
+        "Storing game state on sprites (sprite is view; logical game is the model)",
+        "Phaser Arcade Physics (irrelevant for board games)",
+        "Per-piece sprite update on every frame (only redraw on state change)",
+        "Hardcoding rules in UI handlers — keep rules in a Rules class so headless tests can run them"
+      ],
+      "scene_skeleton": "BootScene -> MenuScene -> LobbyScene (multiplayer) -> SetupScene -> PlayScene + UIScene; modals (CardZoom, Rulebook, ScoreBoard, EndOfRound) as overlay scenes",
+      "headless_test_path": "Rules class must be Phaser-free so unit tests can verify legal moves, scoring, and win detection without rendering"
+    },
+    "examples_referenced": ["Catan", "Azul", "Codenames", "Chess", "Carcassonne", "Ticket to Ride", "Splendor"]
+  },
+
+  "3d-arpg": {
+    "identity": {
+      "summary": "Action RPG with 3D rendering and isometric or over-the-shoulder camera. The defining property over 2D ARPG is 3D mesh-based rendering, depth sorting, and (typically) free camera rotation; the gameplay loop (click-to-move, click-to-attack, loot drops, skill bar) is shared with 2D ARPG. In Phaser/web context this is achieved with isometric 2.5D tilemaps and depth sorting rather than full 3D. Distinguished from full 3D action games by fixed-angle (or limited-rotation) camera and grid-snapped pathfinding under a 3D-rendered surface.",
+      "must_have": ["3D or 2.5D isometric rendering", "depth sorting (entities behind objects occluded correctly)", "click-to-move pathfinding", "skill bar with cooldowns", "loot drops on kill", "character progression (XP, levels, gear slots)"],
+      "must_not_have": ["fixed flat 2D top-down only (that's 2D ARPG)", "turn-based movement (that's tactics)"]
+    },
+    "controls": {
+      "primary_input": "mouse + hotkeys",
+      "scheme": [
+        "Left-click on ground -> move",
+        "Left-click on enemy -> auto-engage (move into range, attack)",
+        "Left-click on item -> pick up",
+        "Right-click -> cast skill bound to right mouse OR alt-fire",
+        "Number keys 1 to 6 -> activate skill from skill bar",
+        "Q / E -> rotate camera (if rotatable) OR potion / dodge",
+        "Tab -> toggle inventory",
+        "C -> toggle character sheet",
+        "M -> toggle map",
+        "Spacebar -> dodge or jump",
+        "Mouse wheel -> zoom in/out (if allowed)"
+      ]
+    },
+    "player_actions": [
+      "move (click destination)",
+      "attack (click target, auto-pathing into range)",
+      "use_skill (hotbar slot)",
+      "drink_potion (hotkey)",
+      "equip_gear (drag from inventory to slot)",
+      "loot (click ground item)",
+      "interact (NPC dialog, door, chest)",
+      "dodge / roll",
+      "level_up_skill (spend point in skill tree)",
+      "salvage / sell gear"
+    ],
+    "win_conditions": [
+      "story_complete (campaign final boss defeated)",
+      "act_complete (chapter milestone)",
+      "endless_progression (Diablo: greater rifts, no win, just power scaling)",
+      "objective_quest (clear N waves, kill boss in level)"
+    ],
+    "lose_conditions": [
+      "character_death (HP to 0; respawn at checkpoint OR hardcore: permadeath)",
+      "session_failure (party wipe in group)",
+      "objective_timer_expired"
+    ],
+    "scene_structure": {
+      "Boot": "asset load, model preload",
+      "MainMenu": "new char / continue / multiplayer",
+      "CharacterCreation": "class pick + cosmetics",
+      "TownHub": "social area, vendors, stash, no enemies",
+      "PlayScene": "active dungeon / overworld with enemies",
+      "InventoryOverlay": "modal for gear management (often pauses game)",
+      "SkillTreeOverlay": "spend skill points",
+      "MapOverlay": "minimap toggle / full map",
+      "Dialog": "NPC conversation modal",
+      "BossArena": "scripted boss fight (sub-scene)",
+      "DeathScreen": "respawn / quit",
+      "LoadingScreen": "between zones"
+    },
+    "standard_entity_types": [
+      "player_character (with class, level, gear)",
+      "enemy_minion (low HP, common drop)",
+      "enemy_elite (modifiers, guaranteed magic drop)",
+      "enemy_boss (scripted phases, unique drops)",
+      "destructible (barrel/crate dropping gold)",
+      "chest (interactable, contains loot)",
+      "shrine / altar (temporary buff)",
+      "npc_vendor",
+      "npc_questgiver",
+      "portal / waypoint",
+      "ground_item (loot pickup)",
+      "projectile (skill or arrow)",
+      "ground_effect (fire patch, poison cloud)"
+    ],
+    "resources": {
+      "health_hp": "primary survival resource, regenerates or via potion",
+      "mana_or_resource": "skill cost (mana, fury, energy, spirit — class-specific)",
+      "potions": "consumable inventory item, hotkey-bound",
+      "gold": "currency for vendors and repair",
+      "experience_xp": "fills toward next level",
+      "skill_points": "earned per level, spent in skill tree",
+      "stat_points": "earned per level (or auto-allocated)",
+      "inventory_slots": "grid capacity for items",
+      "stash_tabs": "shared persistent storage",
+      "cooldowns": "per-skill timer before reuse"
+    },
+    "hud_elements": [
+      "health_globe (left bottom corner, classic Diablo)",
+      "resource_globe (right bottom corner)",
+      "skill_bar (center bottom: 4 to 8 slots with cooldown overlays)",
+      "potion_belt (hotkeyed consumables)",
+      "minimap (top-right)",
+      "experience_bar (along bottom edge)",
+      "buff_debuff_icons (top-center, with timers)",
+      "quest_tracker (top-right under minimap)",
+      "damage_numbers (floating combat text)",
+      "loot_labels (tab to highlight, color-coded by rarity)",
+      "boss_health_bar (top of screen during boss)",
+      "compass (zone direction indicator)",
+      "combo_or_special_meter"
+    ],
+    "iconic_mechanics": [
+      "click_to_move_pathfinding: navmesh or grid A* under 3D mesh",
+      "depth_sorting_isometric: y-coord (or world-z) sorts draw order so trees/walls occlude correctly. Per Phaser isometric tutorial: cartesian-to-iso transform + depth = y + z * 1000",
+      "loot_explosion: enemies drop items in radial burst",
+      "loot_rarity_tiers: white/blue/yellow/orange/green color coding (Diablo standard)",
+      "skill_cooldowns: each skill has individual recharge",
+      "level_scaling: zone monsters scale with player level (or fixed difficulty bands)",
+      "checkpoints / waypoints: fast travel between unlocked points",
+      "boss_telegraphs: AoE indicators show where attacks will land",
+      "gear_affixes: random stat suffixes (+5 fire dmg, +10% movement)",
+      "set_bonuses: wearing N pieces of a set grants combined bonus",
+      "respawn_with_gear_loss: hardcore vs softcore modes",
+      "town_portal: return to safe zone from anywhere"
+    ],
+    "sound_design": [
+      "footsteps (per surface: stone, grass, wood)",
+      "swing_attack",
+      "spell_cast (per element)",
+      "skill_activate",
+      "hit_flesh / hit_armor / hit_critical",
+      "monster_death",
+      "boss_death (longer, more dramatic)",
+      "loot_drop_common (clink)",
+      "loot_drop_magic (chime)",
+      "loot_drop_rare (resonant chime)",
+      "loot_drop_legendary (signature stinger, audible across screen)",
+      "potion_drink",
+      "level_up (rising fanfare + visual flash)",
+      "low_health_heartbeat (looping warning)",
+      "town_ambient (peaceful music)",
+      "combat_music (intensifies in combat, fades out after)",
+      "ui_click, ui_hover, inventory_open, item_pickup",
+      "vendor_voicelines (greeting, transaction)",
+      "quest_complete"
+    ],
+    "common_bugs": [
+      "PATHFINDING_FALLS_THROUGH_FLOOR: 3D collision with stairs / sloped terrain; navmesh boundary missed. Fix: navmesh stitched at transitions, fallback ground-snap.",
+      "DEPTH_SORTING_WRONG: tall tree drawn behind player when player is in front. Fix: depth = y + z bias; recompute every frame for moving entities.",
+      "ENTITY_FLICKER: two entities at same y oscillate draw order each frame. Fix: stable secondary sort key (entity ID).",
+      "CAMERA_CLIPS_GEOMETRY: camera goes inside wall on rotation. Fix: camera collision sphere, push out.",
+      "AOE_HITBOX_2D_ON_3D: skill targets pixel position not world position. Fix: transform pointer to world coords with iso-to-cartesian inverse.",
+      "LOOT_INSIDE_WALL: dropped item lands in geometry. Fix: validate drop position against navmesh before spawn.",
+      "INVENTORY_DUPE: drag-and-drop race creates duplicate item. Fix: server-authoritative inventory, atomic move.",
+      "SKILL_INFINITE_COMBO: cooldown not started because skill canceled. Fix: cooldown starts on cast intent, not on completion.",
+      "MEMORY_LEAK_PROJECTILES: projectiles not despawned after timeout. Fix: TTL on every projectile.",
+      "LEVEL_UP_DURING_DEATH: kill XP counted after death animation, level-up triggers on dead character. Fix: gate level-up on alive==true.",
+      "RESPAWN_LOOP: respawn point inside enemy pack causes instant re-death. Fix: respawn invuln window + safe-position check."
+    ],
+    "phaser_implementation": {
+      "note": "Phaser is 2D, but isometric 2.5D achieves the 3D-ARPG feel. For true 3D consider three.js + a separate ECS layer.",
+      "works": [
+        "Isometric tilemap with diamond-shape tiles (32x16 or 64x32) and cartesian-to-iso transform",
+        "Depth sorting: scene.children.sort by gameObject.y for ground entities; static occluders given fixed depth",
+        "Easystar.js or A* for click-to-move on a flat 2D grid mirror, mapped back to iso for visuals",
+        "Particle emitters for attack / spell impacts",
+        "RenderTexture for fog of war (dark layer with cleared circle around player)",
+        "Container per entity bundling sprite + healthbar + name label + status icons",
+        "Skill cooldowns via simple { skillId, readyAt } map; UI reads timestamp per frame",
+        "Loot as pooled sprite group with rarity tinting"
+      ],
+      "avoid": [
+        "Trying to do real 3D in Phaser (use three.js for that)",
+        "Per-frame depth sort on hundreds of entities with full sort (use insertion sort on near-sorted list, or Phaser's built-in displayList sort)",
+        "Storing entity state on sprites only (use ECS or plain model objects so combat math is testable)",
+        "Pixel-perfect collision (use grid-cell or circle hitboxes; pixel-perfect is too expensive)",
+        "Flat top-down sprites in iso world without 8-directional facing"
+      ],
+      "scene_skeleton": "BootScene -> MainMenu -> CharCreation -> TownHub <-> PlayScene; UIScene overlay (skillbar, globes, minimap); InventoryOverlay + SkillTreeOverlay as launched scenes that pause PlayScene"
+    },
+    "examples_referenced": ["Diablo 3", "Diablo 4", "Path of Exile", "Torchlight", "Lost Ark", "Last Epoch"]
+  }
+}

@@ -1,0 +1,299 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-05T00:00:00Z",
+  "purpose": "Phaser 3 bug patterns and gotchas to harden code-generation prompt against amateur mistakes. Each entry has a wrong pattern, a right pattern, and a one-line prompt directive.",
+  "sources": [
+    "https://docs.phaser.io/phaser/concepts/physics/arcade",
+    "https://docs.phaser.io/phaser/concepts/gameobjects/container",
+    "https://docs.phaser.io/phaser/concepts/audio",
+    "https://docs.phaser.io/phaser/concepts/scenes",
+    "https://docs.phaser.io/phaser/concepts/events",
+    "https://docs.phaser.io/phaser/concepts/cameras",
+    "https://docs.phaser.io/phaser/concepts/animations",
+    "https://docs.phaser.io/phaser/concepts/textures",
+    "https://docs.phaser.io/api-documentation/class/physics-arcade-body",
+    "https://docs.phaser.io/api-documentation/class/physics-arcade-group",
+    "https://docs.phaser.io/api-documentation/class/tweens-tweenmanager",
+    "https://docs.phaser.io/api-documentation/class/tilemaps-tilemaplayer",
+    "https://docs.phaser.io/api-documentation/event/scenes-events",
+    "https://docs.phaser.io/api-documentation/event/sound-events",
+    "https://docs.phaser.io/api-documentation/event/input-events",
+    "https://newdocs.phaser.io/docs/3.55.1/focus/Phaser.Physics.Arcade.Body-reset",
+    "https://newdocs.phaser.io/docs/3.55.2/focus/Phaser.Physics.Arcade.Sprite-setVelocity",
+    "https://newdocs.phaser.io/docs/3.60.0/focus/Phaser.GameObjects.Text-setText",
+    "https://newdocs.phaser.io/docs/3.55.2/focus/Phaser.Cameras.Scene2D.Camera-setBounds",
+    "https://phaser.discourse.group/t/sound-duplicates-in-one-scene-when-using-scene-restart/8720",
+    "https://phaser.discourse.group/t/audio-background-music-playing-over-itself/3386",
+    "https://phaser.discourse.group/t/container-physics/365",
+    "https://phaser.discourse.group/t/cannot-settext-after-first-run-through-of-the-game-switching-scenes/11074",
+    "https://phaser.discourse.group/t/please-unconfuse-me-about-the-lifecycle-of-scenes/9198",
+    "https://phaser.discourse.group/t/do-i-need-to-manually-dispose-of-event-listeners/13429",
+    "https://phaser.discourse.group/t/another-infinite-loop-this-time-on-scene-restart-please-help/3415",
+    "https://phaser.discourse.group/t/cannot-load-localstorage/2931",
+    "https://github.com/photonstorm/phaser/issues/4323",
+    "https://github.com/photonstorm/phaser/issues/3887",
+    "https://github.com/photonstorm/phaser/issues/3670",
+    "https://github.com/photonstorm/phaser/issues/2138",
+    "https://github.com/photonstorm/phaser/issues/2408",
+    "https://blog.ourcade.co/posts/2020/phaser-3-web-audio-best-practices-games/",
+    "https://gist.github.com/samme/01a33324a427f626254c1a4da7f9b6a3",
+    "https://github.com/samme/phaser3-faq/wiki/FAQ",
+    "https://stackabuse.com/phaser-3-and-tiled-building-a-platformer/",
+    "https://rexrainbow.github.io/phaser3-rex-notes/docs/site/arcade-body/",
+    "https://rexrainbow.github.io/phaser3-rex-notes/docs/site/container/",
+    "https://www.mindfulchase.com/explore/troubleshooting-tips/game-development-tools/troubleshooting-scene,-performance,-and-input-issues-in-phaser-game-development.html",
+    "https://www.mindfulchase.com/explore/troubleshooting-tips/game-development-tools/troubleshooting-phaser-performance-and-memory-issues-in-large-scale-games.html"
+  ],
+  "patterns": [
+    {
+      "id": "physics_group_reset_clobber",
+      "category": "physics_group_ordering",
+      "title": "Body.reset() clobbers velocity set before it",
+      "description": "Phaser.Physics.Arcade.Body.reset(x, y) sets the body to the new position AND zeroes velocity, acceleration, and speed. Calling setVelocity() BEFORE reset() means the velocity is silently destroyed. This is the most common amateur bug when respawning enemies/projectiles from a Group: you grab a sleeping member, set its velocity, then reset its position, and it appears stuck because reset just wiped the velocity you set.",
+      "wrong_pattern": "// WRONG: velocity is wiped by reset\nconst bullet = bullets.get();\nif (bullet) {\n  bullet.setActive(true).setVisible(true);\n  bullet.setVelocityY(-400);   // set velocity first\n  bullet.body.reset(player.x, player.y - 20);  // reset wipes it\n}",
+      "right_pattern": "// RIGHT: position via reset(), then velocity\nconst bullet = bullets.get();\nif (bullet) {\n  bullet.body.reset(player.x, player.y - 20);  // position first\n  bullet.setActive(true).setVisible(true);\n  bullet.setVelocityY(-400);                    // velocity AFTER reset\n  bullet.body.setAllowGravity(false);           // re-assert any flags reset clears\n}",
+      "prompt_directive": "Always call body.reset(x, y) BEFORE setVelocity/setAcceleration; reset() zeroes motion. Re-apply allowGravity flags after reset on Group members.",
+      "sources": [
+        "https://newdocs.phaser.io/docs/3.55.1/focus/Phaser.Physics.Arcade.Body-reset",
+        "https://docs.phaser.io/api-documentation/class/physics-arcade-body",
+        "https://rexrainbow.github.io/phaser3-rex-notes/docs/site/arcade-body/"
+      ]
+    },
+    {
+      "id": "physics_group_get_active",
+      "category": "physics_group_ordering",
+      "title": "Group.get() returns inactive sprite without resetting body state",
+      "description": "Group.get() recycles a member that was disabled (kill pattern: setActive(false), setVisible(false), disableBody). The recycled body still has the old velocity, position, and disabled state. Amateurs forget to re-enable the body or expect the body to be 'fresh'. The right call is enableBody(true, x, y, true, true) which re-enables the body, repositions it, and shows the sprite in one shot.",
+      "wrong_pattern": "// WRONG: stale body state, sprite visible at old position\nconst enemy = enemies.get();\nenemy.x = spawnX;            // changes sprite x but body stays at old x\nenemy.y = spawnY;\nenemy.setVelocityX(-100);    // body might still be disabled",
+      "right_pattern": "// RIGHT: enableBody syncs sprite+body+state\nconst enemy = enemies.get();\nif (enemy) {\n  enemy.enableBody(true, spawnX, spawnY, true, true); // reset, reposition, show, activate\n  enemy.setVelocityX(-100);\n}",
+      "prompt_directive": "When recycling Group members, call enableBody(true, x, y, true, true) to reset position+visibility+active in one atomic call before setting velocity.",
+      "sources": [
+        "https://newdocs.phaser.io/docs/3.54.0/focus/Phaser.Physics.Arcade.Sprite-enableBody",
+        "https://docs.phaser.io/api-documentation/class/physics-arcade-group"
+      ]
+    },
+    {
+      "id": "container_physics_offset",
+      "category": "container_physics",
+      "title": "Adding a physics body to a child of a non-zero Container yields offset bodies",
+      "description": "Phaser's Arcade physics intentionally does NOT factor Container transforms into child bodies (per official docs: 'Container children with physics do not factor in the Container due to the excessive extra calculations needed'). If your Container is positioned anywhere except 0,0, child sprites with physics bodies render at one location but their bodies are at another. Symptom: collisions fire in empty space.",
+      "wrong_pattern": "// WRONG: container at (200,300), child body is at child's local (10,0)\nconst container = this.add.container(200, 300);\nconst sprite = this.physics.add.sprite(10, 0, 'enemy');\ncontainer.add(sprite);\n// sprite renders at (210,300) but body is at (10,0)",
+      "right_pattern": "// RIGHT (option A): keep Container at 0,0 and offset children\nconst container = this.add.container(0, 0);\nconst sprite = this.physics.add.sprite(210, 300, 'enemy');\ncontainer.add(sprite);\n\n// RIGHT (option B): don't use Container for physics objects; group them in a Layer or just track them in an array",
+      "prompt_directive": "Never put physics-enabled sprites inside a Container that is not at (0,0). Use this.add.layer() or a plain array for grouping physics sprites; Containers are visual-only.",
+      "sources": [
+        "https://docs.phaser.io/phaser/concepts/gameobjects/container",
+        "https://phaser.discourse.group/t/container-physics/365"
+      ]
+    },
+    {
+      "id": "container_world_position",
+      "category": "container_physics",
+      "title": "Container.x/y is local, not world; child.x is local to the container",
+      "description": "Container's transform point is fixed at [0,0] local space. A child sprite's .x and .y are relative to the Container origin. To get world coordinates of a child, use child.getWorldTransformMatrix() and read .tx/.ty, or container.localTransform.transformPoint(child.x, child.y). Amateurs use child.x as world position, leading to camera follow targets, particle spawn points, and collision tests being wrong.",
+      "wrong_pattern": "// WRONG: child.x is local to container, not world\nconst playerSprite = container.list[0];\nthis.cameras.main.startFollow({ x: playerSprite.x, y: playerSprite.y }); // follows wrong point",
+      "right_pattern": "// RIGHT: get world coords via transform matrix\nconst m = playerSprite.getWorldTransformMatrix();\nconst worldX = m.tx, worldY = m.ty;\n// Or follow the container itself if appropriate:\nthis.cameras.main.startFollow(container);",
+      "prompt_directive": "Container child .x/.y are LOCAL coords. For world position use child.getWorldTransformMatrix().tx/.ty. Prefer following the Container itself for camera tracking.",
+      "sources": [
+        "https://phaser.io/examples/v3.85.0/game-objects/container/view/get-child-world-position",
+        "https://docs.phaser.io/phaser/concepts/gameobjects/components"
+      ]
+    },
+    {
+      "id": "audio_play_cacophony",
+      "category": "audio_cacophony",
+      "title": "this.sound.play(key) replays from start instead of overlapping",
+      "description": "this.sound.play('shoot') uses a single shared Sound instance; rapid-fire calls cut off the previous play. For overlapping rapid-fire SFX (laser, hit, coin), each call needs a separate Sound instance. Use this.sound.add(key) to create instances, or pool them. For HTML5 audio, you must declare instances at load time: this.load.audio('shoot', url, { instances: 4 }).",
+      "wrong_pattern": "// WRONG: rapid clicks cut each other off\nfunction onClick() {\n  this.sound.play('laser');  // re-uses one Sound; cancels previous\n}",
+      "right_pattern": "// RIGHT (Web Audio): play() creates a new fire-and-forget instance\n// Phaser's Web Audio Sound Manager handles overlap automatically when sound.play(key) is called WITHOUT a stored reference, but reliable pooling looks like:\nconst sfxPool = Array.from({length: 4}, () => this.sound.add('laser'));\nlet idx = 0;\nfunction onClick() {\n  const s = sfxPool[idx]; idx = (idx + 1) % sfxPool.length;\n  if (s.isPlaying) s.stop();\n  s.play();\n}\n\n// HTML5 fallback: declare instances at load time\nthis.load.audio('laser', 'laser.mp3', { instances: 4 });",
+      "prompt_directive": "For rapid-fire SFX use a small pool of this.sound.add(key) instances and round-robin them; for HTML5 audio set { instances: N } at load time.",
+      "sources": [
+        "https://blog.ourcade.co/posts/2020/phaser-3-web-audio-best-practices-games/",
+        "https://docs.phaser.io/phaser/concepts/audio",
+        "https://phaser.discourse.group/t/repeat-sound-issue/5347"
+      ]
+    },
+    {
+      "id": "audio_music_duplicate_on_restart",
+      "category": "audio_cacophony",
+      "title": "Background music duplicates on scene.restart()",
+      "description": "The Sound Manager is GLOBAL to the Game, not per-Scene. Calling this.sound.play('bgm', { loop: true }) in create() and then scene.restart() creates a second BGM instance; the original keeps looping. Symptom: every restart layers another music track over the previous. Fix: stop the existing instance before starting (or, better, store the music instance on the registry and only create it once).",
+      "wrong_pattern": "// WRONG: every restart adds another layer\ncreate() {\n  this.sound.play('bgm', { loop: true });\n}",
+      "right_pattern": "// RIGHT (option A): stop matching key before play\ncreate() {\n  this.sound.stopByKey('bgm');\n  this.bgm = this.sound.add('bgm', { loop: true });\n  this.bgm.play();\n  this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.bgm.stop());\n}\n\n// RIGHT (option B): persistent music in registry, started once\ncreate() {\n  if (!this.registry.get('bgm')) {\n    const bgm = this.sound.add('bgm', { loop: true });\n    bgm.play();\n    this.registry.set('bgm', bgm);\n  }\n}",
+      "prompt_directive": "Sound Manager is GLOBAL: stop existing music (this.sound.stopByKey or stored ref) before starting new music in create(); always stop scene-owned music on SHUTDOWN event.",
+      "sources": [
+        "https://phaser.discourse.group/t/sound-duplicates-in-one-scene-when-using-scene-restart/8720",
+        "https://phaser.discourse.group/t/audio-background-music-playing-over-itself/3386",
+        "https://docs.phaser.io/phaser/concepts/audio"
+      ]
+    },
+    {
+      "id": "scene_lifecycle_start_vs_launch",
+      "category": "scene_lifecycle",
+      "title": "Confusing scene.start, scene.launch, scene.switch — and skipping cleanup",
+      "description": "scene.start(key) STOPS the calling scene and starts the target. scene.launch(key) starts the target IN PARALLEL (caller keeps running, useful for HUD overlays). scene.switch(key) SLEEPS the caller and starts/wakes the target. A shutdown scene is not destroyed; only the DESTROY event fully clears resources. Amateurs use scene.launch when they meant scene.start and end up with two GameScenes running simultaneously, both processing input and physics.",
+      "wrong_pattern": "// WRONG: launch leaves GameOverScene + GameScene both active\nthis.scene.launch('GameOverScene');  // GameScene still updating\n\n// WRONG: never registers cleanup, listeners leak across restarts\ncreate() {\n  this.input.keyboard.on('keydown-SPACE', () => this.fire());\n}",
+      "right_pattern": "// RIGHT: stop the gameplay scene when transitioning to game-over\nthis.scene.start('GameOverScene', { score: this.score });\n\n// RIGHT: register cleanup on SHUTDOWN\ncreate() {\n  const handler = () => this.fire();\n  this.input.keyboard.on('keydown-SPACE', handler);\n  this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {\n    this.input.keyboard.off('keydown-SPACE', handler);\n  });\n}",
+      "prompt_directive": "Use scene.start to replace, scene.launch only for parallel HUD overlays; always register a SHUTDOWN handler that stops timers, sounds, and removes event listeners added in create().",
+      "sources": [
+        "https://docs.phaser.io/phaser/concepts/scenes",
+        "https://gist.github.com/samme/01a33324a427f626254c1a4da7f9b6a3",
+        "https://docs.phaser.io/api-documentation/event/scenes-events"
+      ]
+    },
+    {
+      "id": "update_loop_state_cascade",
+      "category": "update_loop_hazards",
+      "title": "Single-frame state cascade — wave-cleared trigger fires every frame",
+      "description": "When checking 'is wave cleared' in update() with a condition like (enemies.countActive() === 0 && !waveCompleted), if you forget to set waveCompleted=true BEFORE doing async-feeling work (spawning the next wave one tick later, awaiting a promise, etc.), the condition stays true on the very next frame and triggers again. Worse: a condition like (this.time.now - this.lastWaveAt > 5000) is true every frame after the threshold until you update lastWaveAt. This is the #1 cause of 'multiple wave spawns at once' or 'instant game over loop' bugs.",
+      "wrong_pattern": "// WRONG: condition stays true frame after frame\nupdate() {\n  if (this.enemies.countActive() === 0) {\n    this.spawnWave();   // fires every frame after wave is cleared\n  }\n  if (this.time.now - this.lastShotAt > 200) {\n    this.fire();        // fires every frame past 200ms\n  }\n}",
+      "right_pattern": "// RIGHT: re-entry guard flag, set BEFORE starting work\nupdate() {\n  if (!this.waveActive && this.enemies.countActive() === 0) {\n    this.waveActive = true;          // GUARD set before spawn\n    this.time.delayedCall(2000, () => {\n      this.spawnWave();\n      this.waveActive = false;       // released only after spawn completes\n    });\n  }\n  // For cooldowns, advance the timestamp on the side-effect:\n  if (this.time.now - this.lastShotAt > 200) {\n    this.lastShotAt = this.time.now; // bump BEFORE firing\n    this.fire();\n  }\n}",
+      "prompt_directive": "Every update()-driven trigger needs a re-entry guard: set the flag/timestamp BEFORE the side effect, not after. Never assume scheduled callbacks fire before the next update tick.",
+      "sources": [
+        "https://phaser.io/news/2016/07/update-loop-tutorial",
+        "https://phaser.discourse.group/t/another-infinite-loop-this-time-on-scene-restart-please-help/3415",
+        "https://github.com/samme/phaser3-faq/wiki/FAQ"
+      ]
+    },
+    {
+      "id": "tween_timer_listener_cleanup",
+      "category": "tween_sound_timer_cleanup",
+      "title": "Tweens, TimerEvents, and listeners leaked into next scene run",
+      "description": "Tweens auto-destroy on completion BUT looping tweens, persistent tweens (yoyo+repeat:-1), TimerEvents, and external event listeners (this.events.on, this.input.on, this.scene.scene.events.on, registry.events.on) survive scene shutdown unless the Scene is fully torn down. After scene.restart() the new instance creates fresh ones; old ones still hold references to destroyed sprites. Symptoms: 'Cannot read property of null', 'this.frame.source is null on setText', and runaway memory growth.",
+      "wrong_pattern": "// WRONG: looping tween + timer + listener never cleaned up\ncreate() {\n  this.tweens.add({ targets: this.title, alpha: 0.5, yoyo: true, repeat: -1 });\n  this.time.addEvent({ delay: 1000, callback: this.tick, loop: true });\n  this.registry.events.on('changedata', this.onData, this);\n}",
+      "right_pattern": "// RIGHT: own references and tear them down on shutdown\ncreate() {\n  this.titleTween = this.tweens.add({ targets: this.title, alpha: 0.5, yoyo: true, repeat: -1 });\n  this.tickEvt = this.time.addEvent({ delay: 1000, callback: this.tick, callbackScope: this, loop: true });\n  this.registry.events.on('changedata', this.onData, this);\n\n  this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {\n    this.titleTween.stop(); this.titleTween.remove();\n    this.tickEvt.remove(false);\n    this.registry.events.off('changedata', this.onData, this);\n  });\n}",
+      "prompt_directive": "Save references to looping tweens, TimerEvents, and external emitter listeners; remove all of them in a SHUTDOWN handler registered with this.events.once.",
+      "sources": [
+        "https://docs.phaser.io/api-documentation/class/tweens-tweenmanager",
+        "https://github.com/photonstorm/phaser/issues/2408",
+        "https://github.com/photonstorm/phaser/issues/2138",
+        "https://www.mindfulchase.com/explore/troubleshooting-tips/game-development-tools/troubleshooting-phaser-performance-and-memory-issues-in-large-scale-games.html"
+      ]
+    },
+    {
+      "id": "texture_atlas_pitfalls",
+      "category": "texture_atlas_pitfalls",
+      "title": "Null texture key, missing frame name, animation referencing unloaded atlas",
+      "description": "If a texture key is undefined, Phaser returns the __DEFAULT magenta texture. If the key exists but the frame name does not, you get __MISSING. Animations created with generateFrameNames/generateFrameNumbers silently skip non-existent frames; an empty animation plays nothing with no error. Common amateur mistakes: (1) creating animations in create() before the atlas finished loading in another scene, (2) using a frame name with a typo, (3) calling sprite.play('walk') with an anim key that was never registered.",
+      "wrong_pattern": "// WRONG: animation defined but frame names don't match the atlas\nthis.anims.create({\n  key: 'walk',\n  frames: this.anims.generateFrameNames('hero', { prefix: 'walk_', start: 1, end: 4 }),\n  frameRate: 10, repeat: -1\n});\nsprite.play('walk');  // silent no-op if hero atlas has 'run_1'..'run_4'",
+      "right_pattern": "// RIGHT: verify frame generation, guard play(), and load atlas in a Boot/Preload scene\n// In Preload scene:\nthis.load.atlas('hero', 'hero.png', 'hero.json');\n\n// In Game scene create():\nconst frames = this.anims.generateFrameNames('hero', { prefix: 'walk_', start: 1, end: 4 });\nif (frames.length === 0) {\n  console.error('No frames generated for walk anim — check atlas keys');\n}\nthis.anims.create({ key: 'walk', frames, frameRate: 10, repeat: -1 });\n\n// Defensive play:\nif (this.anims.exists('walk')) sprite.play('walk');\nelse sprite.setFrame('walk_1');",
+      "prompt_directive": "Load all atlases in a Preload scene (never in Game create); verify generateFrameNames returns non-empty before anims.create; guard sprite.play with this.anims.exists.",
+      "sources": [
+        "https://docs.phaser.io/phaser/concepts/animations",
+        "https://docs.phaser.io/phaser/concepts/textures",
+        "https://phaser.discourse.group/t/texture-atlas-anim-issue-with-generateframenumbers/1264"
+      ]
+    },
+    {
+      "id": "input_event_double_fire",
+      "category": "input_event_hazards",
+      "title": "pointerdown/keydown firing twice across scene restarts and DOM/Phaser overlap",
+      "description": "Three common causes: (1) listener added in create() but not removed in SHUTDOWN, then scene.restart() runs create() again and there are now TWO listeners; (2) DOM listener AND Phaser input both attached and both firing; (3) keydown event fires repeatedly while held — by default Phaser's keydown emits once per OS repeat, but if you bind your own emitter without checking event.repeat you can fire on every repeat. Mobile pause-during-pointerdown can drop the pointerup, leaving stuck pointers (Phaser issue #3887).",
+      "wrong_pattern": "// WRONG: listener added every create(); accumulates across restarts\ncreate() {\n  this.input.on('pointerdown', () => this.fire());  // 2 instances after 1 restart, 3 after 2\n}\n\n// WRONG: keydown without repeat guard\nthis.input.keyboard.on('keydown-SPACE', this.fire, this);  // fires on every OS repeat",
+      "right_pattern": "// RIGHT: bind once, clean up on SHUTDOWN\ncreate() {\n  this.fireHandler = () => this.fire();\n  this.input.on('pointerdown', this.fireHandler);\n  this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {\n    this.input.off('pointerdown', this.fireHandler);\n  });\n}\n\n// RIGHT: use JustDown to fire only on the leading edge\nupdate() {\n  if (Phaser.Input.Keyboard.JustDown(this.cursors.space)) this.fire();\n}",
+      "prompt_directive": "For continuous-action triggers use Phaser.Input.Keyboard.JustDown in update; for event-style listeners always pair .on with .off in a SHUTDOWN handler.",
+      "sources": [
+        "https://docs.phaser.io/api-documentation/event/input-events",
+        "https://docs.phaser.io/api-documentation/class/input-inputplugin",
+        "https://github.com/photonstorm/phaser/issues/3670",
+        "https://github.com/photonstorm/phaser/issues/3887"
+      ]
+    },
+    {
+      "id": "hud_text_nan_undefined",
+      "category": "hud_text_rendering",
+      "title": "HUD shows 'Score: NaN' or 'Score: undefined' on first frame or after restart",
+      "description": "Two failure modes: (1) Text initialized with `'Score: ' + this.score` while this.score is undefined → 'Score: undefined'; subsequent +=1 yields NaN. (2) After scene.restart(), referencing a stale Text reference from a destroyed scene throws 'this.frame.source is null on setText' (Phaser issue #4323) because the previous scene's Text was destroyed but a global/registry holds the old reference.",
+      "wrong_pattern": "// WRONG: undefined score and stale Text reference\nclass GameScene extends Phaser.Scene {\n  create() {\n    // this.score never initialized → undefined\n    this.scoreText = this.add.text(10, 10, 'Score: ' + this.score);\n  }\n  hit() {\n    this.score += 10;  // undefined + 10 = NaN forever after\n    this.scoreText.setText('Score: ' + this.score);\n  }\n}\n\n// WRONG: external module holds stale text\nimport { hud } from './hud';\ncreate() { hud.scoreText = this.add.text(...); }  // survives scene.restart with broken ref",
+      "right_pattern": "// RIGHT: explicit init in init(), fresh Text in create()\nclass GameScene extends Phaser.Scene {\n  init(data) {\n    this.score = data?.score ?? 0;   // explicit default\n  }\n  create() {\n    this.scoreText = this.add.text(10, 10, `Score: ${this.score}`);\n  }\n  hit() {\n    this.score += 10;\n    this.scoreText.setText(`Score: ${this.score}`);  // template literal, never NaN if init guarded\n  }\n}",
+      "prompt_directive": "Initialize all HUD numeric state in init() with explicit defaults (?? 0), use template literals (not concatenation) in setText, and never store Text refs outside the Scene that owns them.",
+      "sources": [
+        "https://newdocs.phaser.io/docs/3.60.0/focus/Phaser.GameObjects.Text-setText",
+        "https://github.com/photonstorm/phaser/issues/4323",
+        "https://phaser.discourse.group/t/cannot-settext-after-first-run-through-of-the-game-switching-scenes/11074"
+      ]
+    },
+    {
+      "id": "localstorage_save_load",
+      "category": "save_localstorage",
+      "title": "JSON.parse on null/corrupt save crashes scene; no schema migration",
+      "description": "localStorage.getItem returns null when the key doesn't exist; JSON.parse(null) returns null (not throw), but JSON.parse('') and JSON.parse(corrupt) throw SyntaxError that crashes create(). Amateur saves omit a version field; when the schema changes (added a new field, renamed one) old saves break silently or crash. Storage may also be disabled (private mode, quota exceeded) — setItem throws QuotaExceededError.",
+      "wrong_pattern": "// WRONG: crashes on corrupt data, no version check, no try/catch\nconst save = JSON.parse(localStorage.getItem('save'));\nthis.score = save.score;        // TypeError if save is null\nthis.level = save.level;        // undefined if old schema\nlocalStorage.setItem('save', JSON.stringify(this));  // no quota guard",
+      "right_pattern": "// RIGHT: defensive load with version, defaults, and migration\nconst CURRENT_VERSION = 2;\nconst DEFAULT_SAVE = { version: CURRENT_VERSION, score: 0, level: 1, unlocks: [] };\n\nfunction loadSave() {\n  try {\n    const raw = localStorage.getItem('save');\n    if (!raw) return { ...DEFAULT_SAVE };\n    const parsed = JSON.parse(raw);\n    return migrate(parsed);\n  } catch (e) {\n    console.warn('Save corrupt, resetting:', e);\n    return { ...DEFAULT_SAVE };\n  }\n}\n\nfunction migrate(save) {\n  if (!save.version) save = { ...save, version: 1, unlocks: [] }; // v0 -> v1\n  if (save.version === 1) save = { ...save, version: 2 };          // v1 -> v2 (no field changes here)\n  return { ...DEFAULT_SAVE, ...save };  // fill any missing fields\n}\n\nfunction saveSave(save) {\n  try { localStorage.setItem('save', JSON.stringify(save)); }\n  catch (e) { console.warn('Save failed (quota or disabled):', e); }\n}",
+      "prompt_directive": "All localStorage I/O wrapped in try/catch; saves carry a version field; migrate() fills missing fields from a DEFAULT_SAVE; never assume getItem returned valid JSON.",
+      "sources": [
+        "https://phaser.discourse.group/t/cannot-load-localstorage/2931",
+        "https://rexrainbow.github.io/phaser3-rex-notes/docs/site/localstorage/",
+        "https://app.studyraid.com/en/read/12499/404270/local-storage-implementation"
+      ]
+    },
+    {
+      "id": "tilemap_layer_depth",
+      "category": "tilemap_ordering",
+      "title": "Player drawn below collision layer / above foreground because creation order or depth wrong",
+      "description": "Phaser renders Game Objects in display-list order (creation order) UNLESS depth is set explicitly. The conventional layer pattern is: ground -> objects/decoration -> player+enemies -> foreground/canopy. If you create the player BEFORE the ground layer, the player draws under it. setDepth() overrides the display-list order — use it for predictable z-stacking. Note: the .z property does NOT control 2D rendering, only .depth does.",
+      "wrong_pattern": "// WRONG: player created before ground layer; player hidden\nthis.player = this.physics.add.sprite(100, 100, 'hero');\nthis.groundLayer = map.createLayer('Ground', tileset, 0, 0);\nthis.foregroundLayer = map.createLayer('Foreground', tileset, 0, 0);\n// player is rendered first => behind ground",
+      "right_pattern": "// RIGHT: explicit depths, decoupled from creation order\nthis.groundLayer = map.createLayer('Ground', tileset, 0, 0).setDepth(0);\nthis.objectLayer = map.createLayer('Objects', tileset, 0, 0).setDepth(10);\nthis.player = this.physics.add.sprite(100, 100, 'hero').setDepth(20);\nthis.foregroundLayer = map.createLayer('Foreground', tileset, 0, 0).setDepth(30);\n\nthis.groundLayer.setCollisionByProperty({ collides: true });\nthis.physics.add.collider(this.player, this.groundLayer);",
+      "prompt_directive": "Set explicit setDepth on every tilemap layer and on the player; never rely on creation order for z-stacking; .z does NOT affect 2D rendering, only .depth does.",
+      "sources": [
+        "https://docs.phaser.io/api-documentation/class/tilemaps-tilemaplayer",
+        "https://stackabuse.com/phaser-3-and-tiled-building-a-platformer/",
+        "https://phaser.discourse.group/t/phaser-3-arcade-physics-tilemap-collision/6091"
+      ]
+    },
+    {
+      "id": "camera_world_bounds",
+      "category": "camera_viewport",
+      "title": "Camera follows target into the void; no world bounds set",
+      "description": "By default camera bounds are 0,0 to canvas width/height — this clamps the camera to the visible canvas only. With a larger world, you must call camera.setBounds(0, 0, worldW, worldH) AND physics.world.setBounds(...) separately. Without camera bounds, startFollow makes the camera scroll into negative space when the player walks off-screen. Without physics bounds, the player can leave the world. These are TWO different APIs and amateurs forget one or the other.",
+      "wrong_pattern": "// WRONG: only one bounds set; camera scrolls into emptiness\nthis.physics.world.setBounds(0, 0, 2000, 600);\nthis.cameras.main.startFollow(player);  // no setBounds, follows into void",
+      "right_pattern": "// RIGHT: both physics world AND camera bounds, plus setCollideWorldBounds\nthis.physics.world.setBounds(0, 0, 2000, 600);\nthis.cameras.main.setBounds(0, 0, 2000, 600);\nthis.cameras.main.startFollow(player, true, 0.1, 0.1);  // lerpX/Y for smoothing\nplayer.setCollideWorldBounds(true);",
+      "prompt_directive": "Always set BOTH physics.world.setBounds(...) AND cameras.main.setBounds(...) to the same world rect; call startFollow with lerp 0.1 for smooth tracking; player.setCollideWorldBounds(true).",
+      "sources": [
+        "https://docs.phaser.io/phaser/concepts/cameras",
+        "https://newdocs.phaser.io/docs/3.55.2/focus/Phaser.Cameras.Scene2D.Camera-setBounds",
+        "https://janisjenny.medium.com/how-to-set-world-bounds-with-phaser-99bde692970e"
+      ]
+    },
+    {
+      "id": "performance_listener_subscription",
+      "category": "performance",
+      "title": "Listener and tween over-subscription via repeated this.events.on across restarts",
+      "description": "Each scene.restart() runs create() again. Any listener attached with this.events.on (or this.input.on, registry.events.on, or DOM addEventListener) without an off in SHUTDOWN accumulates linearly with restarts. After 10 restarts your damage handler runs 11 times per hit. Same with tween targets — orphaned tweens hold references to destroyed sprites and continue calling onUpdate. Particle emitters left running burn GPU.",
+      "wrong_pattern": "// WRONG: listener stacks on every restart\ncreate() {\n  this.events.on('damage', this.onDamage, this);\n  document.addEventListener('visibilitychange', this.onVisibility);\n  this.particles = this.add.particles(0, 0, 'spark', { lifespan: 1000, quantity: 100, frequency: 16 });\n  // 100 particles every 16ms forever, no cleanup\n}",
+      "right_pattern": "// RIGHT: cleanup, particle quantity sanity, off-pattern with same handler ref\ncreate() {\n  this.onDamageBound = this.onDamage.bind(this);\n  this.events.on('damage', this.onDamageBound);\n\n  this.onVisibilityBound = () => this.handleVis();\n  document.addEventListener('visibilitychange', this.onVisibilityBound);\n\n  this.particles = this.add.particles(0, 0, 'spark', {\n    lifespan: 600, quantity: 1, frequency: 50, maxParticles: 50  // cap explicitly\n  });\n\n  this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {\n    this.events.off('damage', this.onDamageBound);\n    document.removeEventListener('visibilitychange', this.onVisibilityBound);\n    this.particles.destroy();\n  });\n}",
+      "prompt_directive": "Cap particle quantity/frequency, store bound handler refs so .off can match them, register cleanup for ALL non-Phaser listeners (DOM, registry, external) in SHUTDOWN.",
+      "sources": [
+        "https://docs.phaser.io/phaser/concepts/events",
+        "https://phaser.discourse.group/t/do-i-need-to-manually-dispose-of-event-listeners/13429",
+        "https://www.mindfulchase.com/explore/troubleshooting-tips/game-development-tools/troubleshooting-phaser-performance-and-memory-issues-in-large-scale-games.html",
+        "https://github.com/photonstorm/phaser/issues/2138"
+      ]
+    },
+    {
+      "id": "scene_data_passing",
+      "category": "scene_lifecycle",
+      "title": "Scene data passed to scene.start vanishes after scene.restart()",
+      "description": "scene.start('Game', { level: 3 }) delivers data to init(data). But scene.restart() (no args) passes nothing — init runs with undefined data. Reading data?.level then defaults to undefined and your level resets. Same trap with scene.launch — data is one-shot, not persistent. Persist cross-scene state in this.registry (Data Manager attached to the Game), not scene properties.",
+      "wrong_pattern": "// WRONG: restart loses level state\ninit(data) {\n  this.level = data.level;  // crashes on restart() with no args\n}\nonDie() { this.scene.restart(); }",
+      "right_pattern": "// RIGHT: data init defensive AND use registry for persistence\ninit(data = {}) {\n  this.level = data.level ?? this.registry.get('level') ?? 1;\n  this.registry.set('level', this.level);\n}\nonDie() { this.scene.restart(); }  // registry survives",
+      "prompt_directive": "Default destructure scene init data with `init(data = {})` and `data.x ?? fallback`; persist cross-restart state in this.registry, never in module-level vars.",
+      "sources": [
+        "https://docs.phaser.io/phaser/concepts/scenes",
+        "https://gist.github.com/samme/01a33324a427f626254c1a4da7f9b6a3"
+      ]
+    },
+    {
+      "id": "physics_collider_overlap",
+      "category": "physics_group_ordering",
+      "title": "Collider added inside update() — accumulates one new collider per frame",
+      "description": "this.physics.add.collider(a, b) registers a persistent collider; it should run ONCE in create(). Calling it inside update() (or inside a per-frame branch) accumulates colliders, doubling, tripling, ... CPU time. Same trap with overlap. Symptom: game gets progressively slower; collision callbacks fire many times per single overlap event.",
+      "wrong_pattern": "// WRONG: collider added every frame\nupdate() {\n  this.physics.add.collider(this.player, this.platforms);  // 60/sec\n}",
+      "right_pattern": "// RIGHT: register colliders once in create()\ncreate() {\n  this.physics.add.collider(this.player, this.platforms);\n  this.physics.add.overlap(this.player, this.coins, this.collectCoin, null, this);\n}",
+      "prompt_directive": "Register all this.physics.add.collider/overlap pairs ONCE in create(); never inside update(), event handlers, or per-frame conditional branches.",
+      "sources": [
+        "https://docs.phaser.io/phaser/concepts/physics/arcade",
+        "https://docs.phaser.io/api-documentation/class/physics-arcade-group"
+      ]
+    }
+  ]
+}
