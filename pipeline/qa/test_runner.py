@@ -51,6 +51,26 @@ ACTION_GENRES     = {"platformer", "topdown", "adventure", "rpg", "arpg", "actio
 TURN_BASED_GENRES = {"strategy", "puzzle", "boardgame", "board_game"}
 MANAGEMENT_GENRES = {"simulation"}
 
+# Genres where the player jumps (Space = up). Twin-stick arcades use Space
+# for bombs, top-down RPGs walk in 4-directions, simulation/strategy don't
+# have a player. Failing jump_works on these is a false-positive QA failure
+# that masks real bugs by lowering the overall score.
+JUMP_GENRES = {"platformer", "obby", "3d-platformer"}
+
+# Genres whose enemies use Phaser atlas-frame animations (changing
+# currentFrame.index over time). Vector-graphics genres render enemies
+# with Graphics + tween-based motion — frame index doesn't change.
+ATLAS_ANIM_GENRES = {"platformer", "topdown", "adventure", "rpg", "arpg",
+                     "action", "obby", "3d-platformer", "3d-arpg"}
+
+
+def _has_jump(genre: str) -> bool:
+    return (genre or "").lower() in JUMP_GENRES
+
+
+def _has_atlas_anims(genre: str) -> bool:
+    return (genre or "").lower() in ATLAS_ANIM_GENRES
+
 
 def _is_action_genre(genre: str) -> bool:
     return (genre or "").lower() in ACTION_GENRES
@@ -312,19 +332,27 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                 # triggers that cut every frame → player barely leaves ground.
                 # Hold Space for ~150ms (realistic tap) so variable-jump kicks
                 # in AFTER apex, not during liftoff.
-                print("  [6/10] Jump...")
-                player_before_jump = page.evaluate(_NORMALIZE_PLAYER_JS)
-                page.keyboard.down("Space")
-                page.wait_for_timeout(150)
-                page.keyboard.up("Space")
-                page.wait_for_timeout(150)
-                player_mid_jump = page.evaluate(_NORMALIZE_PLAYER_JS)
-                results["tests"]["jump_works"] = bool(
-                    isinstance(player_mid_jump, dict) and isinstance(player_before_jump, dict)
-                    and isinstance(player_mid_jump.get("y"), (int, float))
-                    and isinstance(player_before_jump.get("y"), (int, float))
-                    and player_mid_jump["y"] < player_before_jump["y"] - 5
-                )
+                # Jump is genre-conditional: twin-stick arcade uses Space for
+                # BOMB, top-down RPGs don't jump, only platformer/obby/3D-
+                # platformer have vertical jump. SKIP rather than FAIL for
+                # genres where Space is a different action.
+                if _has_jump(genre):
+                    print("  [6/10] Jump...")
+                    player_before_jump = page.evaluate(_NORMALIZE_PLAYER_JS)
+                    page.keyboard.down("Space")
+                    page.wait_for_timeout(150)
+                    page.keyboard.up("Space")
+                    page.wait_for_timeout(150)
+                    player_mid_jump = page.evaluate(_NORMALIZE_PLAYER_JS)
+                    results["tests"]["jump_works"] = bool(
+                        isinstance(player_mid_jump, dict) and isinstance(player_before_jump, dict)
+                        and isinstance(player_mid_jump.get("y"), (int, float))
+                        and isinstance(player_before_jump.get("y"), (int, float))
+                        and player_mid_jump["y"] < player_before_jump["y"] - 5
+                    )
+                else:
+                    print(f"  [6/10] Jump... SKIP ({genre} has no jump action)")
+                    results["tests"]["jump_works"] = None  # explicit skip
 
                 page.wait_for_timeout(500)  # Wait to land
 
@@ -339,9 +367,15 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                 enemies = page.evaluate(_NORMALIZE_ENEMIES_JS)
                 results["tests"]["enemies_exist"] = enemies is not None and len(enemies) > 0
                 if enemies and len(enemies) > 0 and isinstance(enemies[0], dict):
-                    # Check enemy moves (position delta) — defensive .get() in
-                    # case the entry is missing x (shape varies across Opus runs)
-                    enemy_x_before = enemies[0].get("x", 0)
+                    # Check enemy moves: capture ALL enemy positions (not just
+                    # entries[0]) so dying/respawning enemies don't false-positive
+                    # the test. Test passes if ANY enemy moved >5px in 500ms,
+                    # which is what we actually care about ("the swarm moves").
+                    enemies_before_pos = [
+                        (e.get("x", 0), e.get("y", 0))
+                        for e in enemies if isinstance(e, dict)
+                    ]
+                    enemy_x_before = enemies[0].get("x", 0)  # legacy compat for anim test below
                     # Capture animation frame index at t=0 (requires enemy.anims.currentFrame)
                     anim_frame_before = page.evaluate(
                         "() => { const s = window.__GAME__ && window.__GAME__.scene.getScene('Game');"
@@ -355,18 +389,43 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                         "  const e = s && s.enemies && s.enemies.children.entries[0];"
                         "  return e && e.anims && e.anims.currentFrame ? e.anims.currentFrame.index : null; }"
                     )
-                    if enemies_after and len(enemies_after) > 0 and isinstance(enemies_after[0], dict):
-                        ex_after = enemies_after[0].get("x")
-                        results["tests"]["enemies_move"] = (
-                            isinstance(ex_after, (int, float))
-                            and abs(ex_after - enemy_x_before) > 1
-                        )
+                    # Test passes if ANY enemy in the after-snapshot is far
+                    # enough from EVERY enemy in the before-snapshot. Robust
+                    # to enemies dying/respawning between probes.
+                    if enemies_after and len(enemies_after) > 0:
+                        any_moved = False
+                        for e in enemies_after:
+                            if not isinstance(e, dict):
+                                continue
+                            x, y = e.get("x"), e.get("y")
+                            if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+                                continue
+                            # Match against the closest before-snapshot enemy
+                            if not enemies_before_pos:
+                                continue
+                            min_dist = min(
+                                ((x - bx) ** 2 + (y - by) ** 2) ** 0.5
+                                for bx, by in enemies_before_pos
+                            )
+                            # Closest enemy moved at least 3px? Treat as motion.
+                            # (Static enemies have min_dist≈0; moving enemies
+                            # have min_dist >> 3 over 500ms at 60+ px/sec.)
+                            if min_dist > 3:
+                                any_moved = True
+                                break
+                        results["tests"]["enemies_move"] = any_moved
                     else:
                         results["tests"]["enemies_move"] = False
-                    # 2026-04-23: enemies_animate — frame index should change over 500ms if
-                    # Kenney-atlas animations are registered + playing. Skipped if enemy has
-                    # no animation system attached (not mapped to Kenney).
-                    if anim_frame_before is None and anim_frame_after is None:
+                    # 2026-04-23: enemies_animate — frame index should change over
+                    # 500ms if Kenney-atlas animations are registered + playing.
+                    # 2026-05-05: SKIP for vector-graphics genres (twin-stick arcade,
+                    # arcade in general). Those use Phaser.Graphics + tween-based
+                    # rotation/motion instead of atlas frames. anim_frame_index is
+                    # legitimately null for them — failing this gate would be a
+                    # false-positive blocking otherwise-AAA games.
+                    if not _has_atlas_anims(genre):
+                        results["tests"]["enemies_animate"] = None  # explicit skip
+                    elif anim_frame_before is None and anim_frame_after is None:
                         results["tests"]["enemies_animate"] = False  # no animation at all
                     else:
                         # Either frame changed OR both are valid numbers (idle anim can keep same frame briefly)
@@ -731,43 +790,71 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                         )
                         print(f"    Music overlap: {audio_state.get('music')} tracks playing")
                 # ── PLAYTEST 3: Bullets actually move ──
-                # Genre-agnostic — if the game HAS a bullets/projectiles
-                # group, verify they have non-zero velocity. Skipped if no
-                # such group exists (game has no projectile combat).
-                if True:
-                    print("  [playtest 3] Bullets-move check...")
+                # Genre-agnostic — only run if game has a bullets-like group.
+                # Probe sequence: hold mouse-fire for 600ms, then immediately
+                # snapshot. By cacophony-test time bullets have all flown off-
+                # screen, so we re-fire right before checking.
+                print("  [playtest 3] Bullets-move check...")
+                # First detect: is there a bullet group at all?
+                has_bullet_group = page.evaluate("""
+                    (() => {
+                        const g = window.__GAME__;
+                        if (!g) return false;
+                        for (const scene of g.scene.scenes) {
+                            for (const k of ['bullets', 'projectiles', 'shots', 'lasers']) {
+                                if (scene[k] && scene[k].children) return true;
+                            }
+                        }
+                        return false;
+                    })()
+                """)
+                if not has_bullet_group:
+                    results["tests"]["bullets_move"] = None  # no projectile combat — skip
+                else:
+                    # Position mouse over the canvas + fire briefly to spawn bullets
+                    try:
+                        canvas_rect = page.evaluate("(() => { const c = document.querySelector('canvas'); const r = c.getBoundingClientRect(); return { left: r.left, top: r.top, w: r.width, h: r.height }; })()")
+                        if canvas_rect:
+                            # Aim at upper-right of canvas, click-and-hold
+                            target_x = canvas_rect["left"] + canvas_rect["w"] * 0.8
+                            target_y = canvas_rect["top"] + canvas_rect["h"] * 0.3
+                            page.mouse.move(target_x, target_y)
+                            page.mouse.down()
+                            page.wait_for_timeout(300)  # 300ms = ~3 shots at 8/sec
+                    except Exception:
+                        pass
                     bullets_check = page.evaluate("""
                         (() => {
                             const g = window.__GAME__;
-                            if (!g) return { ok: true, reason: 'no game' };
-                            // Find any group/array named like "bullets" or "projectiles"
                             for (const scene of g.scene.scenes) {
-                                const candidates = ['bullets', 'projectiles', 'shots', 'lasers'];
-                                for (const k of candidates) {
-                                    if (scene[k] && scene[k].children && scene[k].children.entries) {
-                                        const list = scene[k].children.entries;
-                                        if (list.length === 0) continue;
-                                        const b = list[0];
-                                        if (!b.body) return { ok: false, reason: 'bullet has no physics body' };
-                                        const v = b.body.velocity;
+                                for (const k of ['bullets', 'projectiles', 'shots', 'lasers']) {
+                                    const grp = scene[k];
+                                    if (!grp || !grp.children || !grp.children.entries) continue;
+                                    const list = grp.children.entries;
+                                    if (list.length === 0) continue;
+                                    // Find any bullet with non-zero velocity
+                                    for (const b of list) {
+                                        const v = b.body && b.body.velocity;
+                                        if (!v) continue;
                                         const speed = Math.sqrt(v.x*v.x + v.y*v.y);
-                                        return { ok: speed > 10, bulletCount: list.length, speed, vx: v.x, vy: v.y };
+                                        if (speed > 10) return { ok: true, speed, count: list.length, group: k };
                                     }
+                                    return { ok: false, reason: 'all bullets stationary', count: list.length, group: k };
                                 }
                             }
-                            return { ok: true, reason: 'no bullet group found - skip' };
+                            return { ok: false, reason: 'no bullets after fire' };
                         })()
                     """)
-                    if "ok" in bullets_check and bullets_check.get("speed", 0) > 0:
-                        results["tests"]["bullets_move"] = bool(bullets_check.get("ok", False))
-                        if not results["tests"]["bullets_move"]:
-                            results.setdefault("playtest_issues", []).append(
-                                f"Bullets stationary: speed={bullets_check.get('speed')} vx={bullets_check.get('vx')} vy={bullets_check.get('vy')}"
-                            )
-                            print(f"    Bullets stuck: speed={bullets_check.get('speed')}")
-                    else:
-                        # No bullets to test (game may not use them) — skip rather than fail
-                        results["tests"]["bullets_move"] = None
+                    try:
+                        page.mouse.up()
+                    except Exception:
+                        pass
+                    results["tests"]["bullets_move"] = bool(bullets_check and bullets_check.get("ok"))
+                    if not results["tests"]["bullets_move"]:
+                        results.setdefault("playtest_issues", []).append(
+                            f"Bullets-move FAIL: {bullets_check}"
+                        )
+                        print(f"    Bullets-move: {bullets_check}")
 
             # ── Console error check ──
             critical_errors = [e for e in results["console_errors"]
