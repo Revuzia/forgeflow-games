@@ -64,6 +64,33 @@ def _is_management(genre: str) -> bool:
     return (genre or "").lower() in MANAGEMENT_GENRES
 
 
+# 2026-05-05: Whole-game generation can return Player as a wrapper class
+# instance (`{container: {x, y}, ...}`) instead of a flat sprite (`{x, y, ...}`).
+# The legacy QA hardcoded `player["x"]` and KeyError'd on the wrapper shape,
+# crashing the test suite mid-run. This JS helper normalizes either shape into
+# a flat `{x, y, alive}` so every QA test reads the same contract regardless
+# of how Opus chose to expose the Player. Same logic for getEnemies() entries.
+_NORMALIZE_PLAYER_JS = """(() => {
+  const p = window.__TEST__ && window.__TEST__.getPlayer ? window.__TEST__.getPlayer() : null;
+  if (!p) return null;
+  const x = (typeof p.x === 'number') ? p.x : (p.container && typeof p.container.x === 'number' ? p.container.x : null);
+  const y = (typeof p.y === 'number') ? p.y : (p.container && typeof p.container.y === 'number' ? p.container.y : null);
+  if (x === null || y === null) return null;  // shape unrecognized
+  return { x, y, alive: p.alive !== false, onGround: p.onGround === true || (p.body && p.body.touching && p.body.touching.down) };
+})()"""
+
+_NORMALIZE_ENEMIES_JS = """(() => {
+  const list = window.__TEST__ && window.__TEST__.getEnemies ? window.__TEST__.getEnemies() : null;
+  if (!Array.isArray(list)) return null;
+  return list.map(e => {
+    if (!e) return null;
+    const x = (typeof e.x === 'number') ? e.x : (e.container && typeof e.container.x === 'number' ? e.container.x : null);
+    const y = (typeof e.y === 'number') ? e.y : (e.container && typeof e.container.y === 'number' ? e.container.y : null);
+    return (x === null || y === null) ? null : { x, y };
+  }).filter(e => e !== null);
+})()"""
+
+
 def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 30000) -> dict:
     """
     Run automated QA tests against a game.
@@ -213,11 +240,13 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
             except Exception:
                 pass
             page.wait_for_timeout(500)
-            # Poll for player to spawn (up to 5s) — GameScene.create() runs async
+            # Poll for player to spawn (up to 5s) — GameScene.create() runs async.
+            # Uses _NORMALIZE_PLAYER_JS so either flat {x,y} or wrapper
+            # {container:{x,y}} shape resolves to a flat {x,y,alive} dict.
             player = None
             for _ in range(25):
                 try:
-                    player = page.evaluate("window.__TEST__ ? window.__TEST__.getPlayer() : null")
+                    player = page.evaluate(_NORMALIZE_PLAYER_JS)
                 except Exception:
                     player = None
                 if player is not None and isinstance(player, dict) and "x" in player:
@@ -229,9 +258,14 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
             if has_test_api and _is_action_genre(genre):
                 # ── TEST 3: Player exists and has position ──
                 print(f"  [3/10] Player exists... (action genre: {genre})")
-                results["tests"]["player_exists"] = player is not None and isinstance(player, dict) and "x" in player
-                initial_x = player["x"] if player else 0
-                initial_y = player["y"] if player else 0
+                # Defensive — `player` is the normalized dict from
+                # _NORMALIZE_PLAYER_JS, so `.get("x", 0)` never KeyErrors.
+                results["tests"]["player_exists"] = (
+                    player is not None and isinstance(player, dict)
+                    and isinstance(player.get("x"), (int, float))
+                )
+                initial_x = (player.get("x", 0) if isinstance(player, dict) else 0) or 0
+                initial_y = (player.get("y", 0) if isinstance(player, dict) else 0) or 0
 
                 # ── TEST 4: Right arrow moves player right ──
                 print("  [4/10] Movement right...")
@@ -239,8 +273,12 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                 page.wait_for_timeout(500)
                 page.keyboard.up("ArrowRight")
                 page.wait_for_timeout(100)
-                player_after = page.evaluate("window.__TEST__.getPlayer()")
-                moved_right = player_after and player_after["x"] > initial_x + 5
+                player_after = page.evaluate(_NORMALIZE_PLAYER_JS)
+                moved_right = bool(
+                    player_after and isinstance(player_after, dict)
+                    and isinstance(player_after.get("x"), (int, float))
+                    and player_after["x"] > initial_x + 5
+                )
                 results["tests"]["movement_right"] = moved_right
 
                 # ── TEST 5: Left arrow moves player left ──
@@ -248,17 +286,23 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                 # `None["x"]` when player_exists failed, aborting the entire
                 # QA sweep with 'NoneType' is not subscriptable.
                 print("  [5/10] Movement left...")
-                _pl = page.evaluate("window.__TEST__.getPlayer()")
-                if _pl is None or "x" not in _pl:
+                _pl = page.evaluate(_NORMALIZE_PLAYER_JS)
+                if not isinstance(_pl, dict) or not isinstance(_pl.get("x"), (int, float)):
                     results["tests"]["movement_left"] = False
-                    raise RuntimeError("Player hook returned None mid-QA — skipping remaining tests")
-                pos_before_left = _pl["x"]
-                page.keyboard.down("ArrowLeft")
-                page.wait_for_timeout(500)
-                page.keyboard.up("ArrowLeft")
-                page.wait_for_timeout(100)
-                pos_after_left = page.evaluate("window.__TEST__.getPlayer()")["x"]
-                results["tests"]["movement_left"] = pos_after_left < pos_before_left - 5
+                    # 2026-05-05: don't raise — let later tests run + bullet/audio
+                    # gates still apply. Movement-left fail = recorded; sweep continues.
+                else:
+                    pos_before_left = _pl["x"]
+                    page.keyboard.down("ArrowLeft")
+                    page.wait_for_timeout(500)
+                    page.keyboard.up("ArrowLeft")
+                    page.wait_for_timeout(100)
+                    _pl2 = page.evaluate(_NORMALIZE_PLAYER_JS)
+                    pos_after_left = _pl2.get("x") if isinstance(_pl2, dict) else None
+                    results["tests"]["movement_left"] = (
+                        isinstance(pos_after_left, (int, float))
+                        and pos_after_left < pos_before_left - 5
+                    )
 
                 # ── TEST 6: Jump works (player goes up) ──
                 # 2026-04-22: previously used page.keyboard.press() which is
@@ -269,31 +313,35 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                 # Hold Space for ~150ms (realistic tap) so variable-jump kicks
                 # in AFTER apex, not during liftoff.
                 print("  [6/10] Jump...")
-                player_before_jump = page.evaluate("window.__TEST__.getPlayer()")
+                player_before_jump = page.evaluate(_NORMALIZE_PLAYER_JS)
                 page.keyboard.down("Space")
                 page.wait_for_timeout(150)
                 page.keyboard.up("Space")
                 page.wait_for_timeout(150)
-                player_mid_jump = page.evaluate("window.__TEST__.getPlayer()")
-                results["tests"]["jump_works"] = (
-                    player_mid_jump and
-                    player_mid_jump["y"] < player_before_jump["y"] - 5
+                player_mid_jump = page.evaluate(_NORMALIZE_PLAYER_JS)
+                results["tests"]["jump_works"] = bool(
+                    isinstance(player_mid_jump, dict) and isinstance(player_before_jump, dict)
+                    and isinstance(player_mid_jump.get("y"), (int, float))
+                    and isinstance(player_before_jump.get("y"), (int, float))
+                    and player_mid_jump["y"] < player_before_jump["y"] - 5
                 )
 
                 page.wait_for_timeout(500)  # Wait to land
 
                 # ── TEST 7: Score system works ──
                 print("  [7/10] Score system...")
-                score = page.evaluate("window.__TEST__.getScore()")
+                # Defensive __TEST__ method call — game may not expose every hook
+                score = page.evaluate("(window.__TEST__ && window.__TEST__.getScore) ? window.__TEST__.getScore() : null")
                 results["tests"]["score_system"] = score is not None and isinstance(score, (int, float))
 
                 # ── TEST 8: Enemies exist + move + animate ──
                 print("  [8/10] Enemies...")
-                enemies = page.evaluate("window.__TEST__.getEnemies()")
+                enemies = page.evaluate(_NORMALIZE_ENEMIES_JS)
                 results["tests"]["enemies_exist"] = enemies is not None and len(enemies) > 0
-                if enemies and len(enemies) > 0:
-                    # Check enemy moves (position delta)
-                    enemy_x_before = enemies[0]["x"]
+                if enemies and len(enemies) > 0 and isinstance(enemies[0], dict):
+                    # Check enemy moves (position delta) — defensive .get() in
+                    # case the entry is missing x (shape varies across Opus runs)
+                    enemy_x_before = enemies[0].get("x", 0)
                     # Capture animation frame index at t=0 (requires enemy.anims.currentFrame)
                     anim_frame_before = page.evaluate(
                         "() => { const s = window.__GAME__ && window.__GAME__.scene.getScene('Game');"
@@ -301,14 +349,18 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                         "  return e && e.anims && e.anims.currentFrame ? e.anims.currentFrame.index : null; }"
                     )
                     page.wait_for_timeout(500)
-                    enemies_after = page.evaluate("window.__TEST__.getEnemies()")
+                    enemies_after = page.evaluate(_NORMALIZE_ENEMIES_JS)
                     anim_frame_after = page.evaluate(
                         "() => { const s = window.__GAME__ && window.__GAME__.scene.getScene('Game');"
                         "  const e = s && s.enemies && s.enemies.children.entries[0];"
                         "  return e && e.anims && e.anims.currentFrame ? e.anims.currentFrame.index : null; }"
                     )
-                    if enemies_after and len(enemies_after) > 0:
-                        results["tests"]["enemies_move"] = abs(enemies_after[0]["x"] - enemy_x_before) > 1
+                    if enemies_after and len(enemies_after) > 0 and isinstance(enemies_after[0], dict):
+                        ex_after = enemies_after[0].get("x")
+                        results["tests"]["enemies_move"] = (
+                            isinstance(ex_after, (int, float))
+                            and abs(ex_after - enemy_x_before) > 1
+                        )
                     else:
                         results["tests"]["enemies_move"] = False
                     # 2026-04-23: enemies_animate — frame index should change over 500ms if
@@ -328,21 +380,21 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
 
                 # ── TEST 9: Lives system ──
                 print("  [9/10] Lives system...")
-                lives = page.evaluate("window.__TEST__.getLives()")
-                results["tests"]["lives_system"] = lives is not None and lives > 0
+                lives = page.evaluate("(window.__TEST__ && window.__TEST__.getLives) ? window.__TEST__.getLives() : null")
+                results["tests"]["lives_system"] = lives is not None and isinstance(lives, (int, float)) and lives > 0
 
                 # ── TEST 10: Current scene ──
                 print("  [10/14] Scene system...")
-                scene = page.evaluate("window.__TEST__.getCurrentScene()")
+                scene = page.evaluate("(window.__TEST__ && window.__TEST__.getCurrentScene) ? window.__TEST__.getCurrentScene() : null")
                 results["tests"]["scene_system"] = scene is not None and isinstance(scene, str) and len(scene) > 0
 
                 # ── TEST 11: GENRE-SPECIFIC TESTS ──
                 if genre == "platformer":
                     print("  [11/14] Platformer: gravity pulls player down...")
-                    player_grav = page.evaluate("window.__TEST__.getPlayer()")
+                    player_grav = page.evaluate(_NORMALIZE_PLAYER_JS)
                     if player_grav and not player_grav.get("onGround", True):
                         page.wait_for_timeout(300)
-                        player_grav2 = page.evaluate("window.__TEST__.getPlayer()")
+                        player_grav2 = page.evaluate(_NORMALIZE_PLAYER_JS)
                         results["tests"]["gravity_works"] = player_grav2["y"] > player_grav["y"] if player_grav2 else False
                     else:
                         results["tests"]["gravity_works"] = True  # On ground = gravity working
@@ -350,19 +402,19 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                 elif genre == "topdown":
                     print("  [11/14] Top-down: 4-directional movement...")
                     # Test up movement
-                    pos_before = page.evaluate("window.__TEST__.getPlayer()")
+                    pos_before = page.evaluate(_NORMALIZE_PLAYER_JS)
                     page.keyboard.down("ArrowUp")
                     page.wait_for_timeout(300)
                     page.keyboard.up("ArrowUp")
-                    pos_after = page.evaluate("window.__TEST__.getPlayer()")
+                    pos_after = page.evaluate(_NORMALIZE_PLAYER_JS)
                     results["tests"]["movement_up"] = pos_after and pos_after["y"] < pos_before["y"] - 3
 
                     # Test down movement
-                    pos_before = page.evaluate("window.__TEST__.getPlayer()")
+                    pos_before = page.evaluate(_NORMALIZE_PLAYER_JS)
                     page.keyboard.down("ArrowDown")
                     page.wait_for_timeout(300)
                     page.keyboard.up("ArrowDown")
-                    pos_after = page.evaluate("window.__TEST__.getPlayer()")
+                    pos_after = page.evaluate(_NORMALIZE_PLAYER_JS)
                     results["tests"]["movement_down"] = pos_after and pos_after["y"] > pos_before["y"] + 3
 
                 elif genre == "boardgame":
@@ -379,8 +431,9 @@ def run_qa_tests(game_url: str, genre: str = "platformer", timeout_ms: int = 300
                     print("  [11/14] ARPG: attack works...")
                     page.keyboard.press("KeyX")
                     page.wait_for_timeout(200)
-                    # Just verify no crash after attack
-                    still_alive = page.evaluate("window.__TEST__.getPlayer()?.alive !== false")
+                    # Just verify no crash after attack (use normalizer for shape-tolerance)
+                    pl = page.evaluate(_NORMALIZE_PLAYER_JS)
+                    still_alive = pl is not None and pl.get("alive", True) is not False
                     results["tests"]["attack_works"] = still_alive
 
             # 2026-05-05: TURN-BASED genre tests (strategy, puzzle, boardgame).
