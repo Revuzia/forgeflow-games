@@ -281,6 +281,57 @@ def find_audio_file(pack_name: str, file_paths: list, fallback_search: str = Non
     return None
 
 
+def remap_music_from_per_game(output_dir: str) -> dict:
+    """2026-05-05: post-music-generator remap. Override the music_*.ogg files
+    in <game>/assets/audio/ with the per-game Stable Audio tracks from
+    <game>/assets/music/*.mp3 (if they exist).
+
+    music_generator writes design-driven tracks named `menu_theme.mp3`,
+    `boss_theme.mp3`, `world_01.mp3`, etc. This function maps them to the
+    audio_mapper slot names (music_menu, music_level, music_boss) that
+    game.js loads.
+
+    Called by phase_assets AFTER music_generator finishes — must be after
+    so the per-game tracks exist on disk.
+    """
+    audio_dir = Path(output_dir) / "assets" / "audio"
+    music_dir = Path(output_dir) / "assets" / "music"
+    if not music_dir.exists():
+        return {"remapped": 0, "reason": "no music/ dir"}
+
+    SLOT_TO_STEMS = {
+        "music_menu":  ["menu_theme", "menu", "title"],
+        "music_level": ["world_01", "level_theme", "level", "main"],
+        "music_boss":  ["boss_theme", "boss", "battle"],
+    }
+    remapped = 0
+    for slot_name, stems in SLOT_TO_STEMS.items():
+        src = None
+        for stem in stems:
+            for ext in (".mp3", ".ogg", ".wav"):
+                candidate = music_dir / f"{stem}{ext}"
+                if candidate.exists():
+                    src = candidate
+                    break
+            if src:
+                break
+        if not src:
+            continue
+        # Wipe any prior Kenney fallback for this slot, then copy per-game
+        for ext in (".ogg", ".mp3", ".wav"):
+            stale = audio_dir / f"{slot_name}{ext}"
+            if stale.exists():
+                try:
+                    stale.unlink()
+                except Exception:
+                    pass
+        dst = audio_dir / f"{slot_name}{src.suffix}"
+        shutil.copy2(src, dst)
+        log(f"  [audio remap] {slot_name} <- {src.name} (per-game Stable Audio)")
+        remapped += 1
+    return {"remapped": remapped}
+
+
 def copy_audio_for_game(genre: str, output_dir: str) -> dict:
     """
     Copy appropriate audio files to a game's assets/audio/ folder.
@@ -321,35 +372,99 @@ def copy_audio_for_game(genre: str, output_dir: str) -> dict:
         else:
             log(f"  [audio] WARNING: No file found for {sound_name}")
 
-    # Music: check if CC0 music pack has been downloaded
+    # ── 2026-05-05 PER-GAME MUSIC RESOLUTION (priority order) ──
+    # Previously: every game shipped with menu_theme.ogg / level_theme_1.ogg
+    # / boss_theme.ogg from the shared Kenney pool. MD5-verified across 3
+    # production games (barrel-blitz, wilds-of-aether, nebula-drift) — all
+    # IDENTICAL music files. With 138 games that's a non-shippable failure.
+    #
+    # Architectural fix: phase_assets calls music_generator (Stable Audio)
+    # per game. Output lands in <game>/assets/music/*.mp3 with prompt-driven
+    # names (menu_theme, boss_theme, world_NN). audio_mapper used to ignore
+    # those entirely and write Kenney fallback to <game>/assets/audio/.
+    # Now the priority is:
+    #   1. <game>/assets/music/menu_theme.{mp3,ogg}    (per-game generated)
+    #   2. <game>/assets/music/world_01.{mp3,ogg}      (per-game level)
+    #   3. <game>/assets/music/boss_theme.{mp3,ogg}    (per-game boss)
+    #   4. Shared Kenney pool, seed-picked by game slug for variation
+    per_game_music_dir = audio_dir.parent / "music"
+
+    def _per_game_track(slot_name):
+        """Return the per-game generated track for this slot, if any."""
+        if not per_game_music_dir.exists():
+            return None
+        slot_to_stems = {
+            "music_menu":  ["menu_theme", "menu", "title"],
+            "music_level": ["world_01", "level_theme", "level", "main"],
+            "music_boss":  ["boss_theme", "boss", "battle"],
+        }
+        for stem in slot_to_stems.get(slot_name, []):
+            for ext in (".mp3", ".ogg", ".wav"):
+                p = per_game_music_dir / f"{stem}{ext}"
+                if p.exists():
+                    return p
+        return None
+
     music_dir = ASSETS_DIR / "music"
-    MUSIC_MAP = {
-        "music_menu": ["menu_theme.ogg", "calm_theme.ogg"],
-        "music_level": ["level_theme_1.ogg", "adventure_theme.ogg", "upbeat_theme.ogg"],
-        "music_boss": ["boss_theme.ogg", "battle_theme.ogg", "intense_theme.ogg"],
+    # Each slot has keyword filters used to expand the pool from whatever's
+    # actually in /music/ (we have menu_theme, level_theme_1/2/3, boss_theme,
+    # game_over, victory; expanding logic also tolerates future additions).
+    MUSIC_SLOTS = {
+        "music_menu":  {"primary": ["menu_theme", "calm"],   "fallback_keywords": ["menu", "title", "intro", "ambient"]},
+        "music_level": {"primary": ["level_theme", "adventure", "upbeat"], "fallback_keywords": ["level", "play", "action", "loop", "main"]},
+        "music_boss":  {"primary": ["boss_theme", "battle", "intense"],   "fallback_keywords": ["boss", "battle", "fight", "intense", "epic"]},
     }
 
-    for music_name, candidates in MUSIC_MAP.items():
+    def _music_pool_for_slot(slot_cfg):
+        """Build pool: curated names first, then keyword-matched siblings."""
+        pool = []
+        if not music_dir.exists():
+            return pool
+        seen = set()
+        # All available music files
+        all_oggs = sorted(music_dir.glob("*.ogg")) + sorted(music_dir.glob("*.mp3"))
+        # Primary: any file matching a curated stem
+        for stem in slot_cfg["primary"]:
+            for f in all_oggs:
+                if stem.lower() in f.stem.lower() and f not in seen:
+                    pool.append(f); seen.add(f)
+        # Fallback: keyword-matched
+        for kw in slot_cfg["fallback_keywords"]:
+            for f in all_oggs:
+                if kw.lower() in f.stem.lower() and f not in seen:
+                    pool.append(f); seen.add(f)
+        # Last resort: ALL music files (deterministic ordering)
+        for f in all_oggs:
+            if f not in seen:
+                pool.append(f); seen.add(f)
+        return pool
+
+    for music_idx, (music_name, slot_cfg) in enumerate(MUSIC_SLOTS.items()):
         dst = audio_dir / f"{music_name}.ogg"
         found = False
-        if music_dir.exists():
-            for candidate in candidates:
-                src = music_dir / candidate
-                if src.exists():
-                    shutil.copy2(src, dst)
-                    result[music_name] = str(dst)
-                    log(f"  [audio] {music_name} -> {candidate}")
-                    found = True
-                    break
-            if not found:
-                # Try any .ogg in music dir
-                oggs = sorted(music_dir.glob("*.ogg"))
-                if oggs:
-                    src = oggs[hash(music_name) % len(oggs)]
-                    shutil.copy2(src, dst)
-                    result[music_name] = str(dst)
-                    log(f"  [audio] {music_name} -> {src.name} (fallback)")
-                    found = True
+
+        # PRIORITY 1: per-game generated music (Stable Audio, design-driven)
+        per_game_src = _per_game_track(music_name)
+        if per_game_src and per_game_src.exists():
+            dst = audio_dir / f"{music_name}{per_game_src.suffix}"
+            shutil.copy2(per_game_src, dst)
+            result[music_name] = str(dst)
+            log(f"  [audio] {music_name} -> {per_game_src.name} (PER-GAME generated)")
+            found = True
+            continue
+
+        # PRIORITY 2: shared Kenney pool — seed-picked per game slug so
+        # each game gets a deterministic but DIFFERENT track when Stable
+        # Audio fallback is in play.
+        pool = _music_pool_for_slot(slot_cfg)
+        if pool:
+            slot_seed = base_seed + music_idx * 91
+            src = pool[slot_seed % len(pool)]
+            dst = audio_dir / f"{music_name}{src.suffix}"
+            shutil.copy2(src, dst)
+            result[music_name] = str(dst)
+            log(f"  [audio] {music_name} -> {src.name} (seed-pick from {len(pool)} candidates)")
+            found = True
         if not found and _jamendo_fetch_music is not None:
             # 2026-04-17: Instead of just warning, fetch from Jamendo live
             try:
