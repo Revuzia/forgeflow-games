@@ -33,7 +33,29 @@ export default function UserMenu() {
   }, []);
 
   async function loadProfile(userId: string) {
-    const p = await getProfile(userId);
+    let p = await getProfile(userId);
+    // Defense in depth: if the auth.users → profiles trigger ever silently
+    // fails (it didn't on isimcha85@gmail.com's first signup), make sure the
+    // profile exists by upserting from the user object. RLS allows self-insert.
+    if (!p) {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      if (u && u.id === userId) {
+        const meta = (u.user_metadata || {}) as Record<string, any>;
+        const username =
+          (meta.username as string) ||
+          ((meta.name as string) || "").split(/\s+/)[0]?.toLowerCase() ||
+          (u.email || "").split("@")[0] ||
+          `player_${userId.slice(0, 8)}`;
+        await supabase.from("profiles").upsert({
+          id: userId,
+          username,
+          avatar_url: meta.avatar_url || meta.picture || null,
+          level: 1,
+          xp: 0,
+        }, { onConflict: "id" });
+        p = await getProfile(userId);
+      }
+    }
     setProfile(p);
   }
 

@@ -14,7 +14,14 @@
       "smooth_follow": true
     },
     "player": {
-      "movement": ["run", "jump", "double_jump", "wall_jump", "dash", "ground_pound"],
+      "movement": [
+        "run",
+        "jump",
+        "double_jump",
+        "wall_jump",
+        "dash",
+        "ground_pound"
+      ],
       "controls": {
         "move": "WASD/arrows",
         "jump": "Space (hold for higher)",
@@ -24,11 +31,28 @@
     },
     "levels": {
       "format": "procedural_platforms",
-      "features": ["floating_platforms", "moving_platforms", "springs", "coins", "enemies", "checkpoints", "goal"]
+      "features": [
+        "floating_platforms",
+        "moving_platforms",
+        "springs",
+        "coins",
+        "enemies",
+        "checkpoints",
+        "goal"
+      ]
     },
-    "collectibles": ["coins", "gems", "power_stars"],
+    "collectibles": [
+      "coins",
+      "gems",
+      "power_stars"
+    ],
     "enemies": {
-      "types": ["walker", "jumper", "chaser", "shooter"],
+      "types": [
+        "walker",
+        "jumper",
+        "chaser",
+        "shooter"
+      ],
       "death": "stomp_from_above"
     }
   },
@@ -42,5 +66,6 @@
       "getCurrentScene": "returns game state string",
       "getLevel": "returns level number"
     }
-  }
+  },
+  "main_scene_class": null
 }

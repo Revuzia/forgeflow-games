@@ -1,0 +1,561 @@
+{
+  "core_mechanics": "Twin-stick arcade shooter with 6 game modes. Primary verbs: move (left stick), shoot (right stick), detonate bomb (clear screen, limited). Core loop: destroy geometric enemies, collect green geoms (multiplier pickups) to increase score multiplier (up to x150), maintain multiplier by continuous kills without dying. Win condition varies by mode (survival time, point threshold, wave completion). Lose: ship collides with enemy or gets caught in geometry. Physics: momentum-based inertial movement with smooth acceleration/deceleration, no friction on open grid. Enemies spawn from grid perimeter, move in pattern-specific behaviors. Camera: fixed overhead view of arena grid, slight zoom based on enemy density in some modes. Grid warps and deforms based on movement and explosions creating dynamic spatial awareness challenges.",
+  "controls": "Left analog stick: 360-degree movement with analog precision. Right analog stick: 360-degree shooting direction, auto-fire when stick held in any direction. Bombs: face button (limited quantity, refills at score thresholds). No jump, no melee. Movement has ~100ms acceleration curve from stop to max speed. No coyote time (not a platformer). No animation cancels - shooting is instant directional. Shooting does not affect movement speed. Bombs have ~500ms detonation animation with expanding circular shockwave, grants brief invincibility during animation.",
+  "characters": {
+    "protagonist": "Small neon claw/arrowhead ship. No upgrade paths - abilities are fixed. Single weapon: continuous stream of white/cyan energy bullets in aimed direction. 3 bombs per life, earn +1 bomb at score milestones (25k, 100k, etc). No special abilities, no alt-fire, no power-ups. Core strength is maneuverability and precision aiming. Ship has small hitbox (approx 3x5 pixels in classic mode) critical for dodging dense bullet patterns.",
+    "visual_description": "Bright cyan/white geometric claw shape, appears as small arrowhead or angular ship ~8-12 pixels. Sharp angular design with subtle glow/bloom effect. Leaves short particle trail when moving. Death explosion creates white starburst particle effect. Visual style: vector-like neon wireframe aesthetic with intense bloom lighting.",
+    "alt_characters": []
+  },
+  "visual_style": "Retro vector arcade aesthetic with modern particle effects and HDR bloom. Black grid background with bright neon wireframe enemies and effects. Color palette: intense cyan, electric blue, hot pink/magenta, yellow, orange, green (for geoms), white (player bullets). Enemies color-coded by type: pink squares, blue diamonds, green snakes, orange pinwheels. Heavy bloom/glow post-processing creates light bleed effect. Particle explosions in matching enemy colors. Grid deformation creates visual rhythm. Character proportions: minimalist geometric shapes, player ship ~10-15 pixels, enemies range 8-40 pixels. Effect style: thousands of particles, additive blending, trailing motion blur on fast objects, screen-shake on bomb detonation.",
+  "audio": "Electronic/synthwave soundtrack with pulsing basslines and driving beats. Music dynamically layers intensity based on multiplier level - more instrumentation at higher multipliers. Key SFX: shooting (continuous electronic buzz), enemy destruction (pitched synth pops varying by enemy type), geom collection (ascending chime), multiplier increase (rising electronic tone), bomb detonation (deep bass whoosh + white noise burst), death (discordant crash + silence), respawn (ascending build tone). Ambient: subtle grid hum, enemy movement whooshes for large formations. Dynamic audio: music mutes briefly on death, SFX pitch increases with multiplier tier, enemy spawn warnings (subtle audio cue before wave).",
+  "enemies": [
+    {
+      "name": "Pink Dart",
+      "behavior": "chase",
+      "hp": 1,
+      "damage": 10,
+      "attack_pattern": "Relentlessly pursues player at moderate speed, adjusts trajectory continuously",
+      "weakness": "Low health, easily destroyed but dangerous in swarms",
+      "visual_description": "Small pink diamond shape with trailing particles, pulsing glow"
+    },
+    {
+      "name": "Blue Diamond",
+      "behavior": "patrol",
+      "hp": 1,
+      "damage": 10,
+      "attack_pattern": "Bounces off arena walls in straight lines, reflects at angles like a pinball",
+      "weakness": "Predictable trajectory once direction is established",
+      "visual_description": "Blue diamond-shaped enemy with crystalline edges, leaves light trails"
+    },
+    {
+      "name": "Green Snake",
+      "behavior": "chase",
+      "hp": 3,
+      "damage": 15,
+      "attack_pattern": "Serpentine movement following player, body segments trail behind head",
+      "weakness": "Must destroy head first, body segments collapse afterward",
+      "visual_description": "Segmented snake with glowing green head and connected body parts, undulates smoothly"
+    },
+    {
+      "name": "Orange Weaver",
+      "behavior": "patrol",
+      "hp": 2,
+      "damage": 10,
+      "attack_pattern": "Moves in geometric patterns across screen, weaves between other enemies",
+      "weakness": "Slow turning speed, vulnerable during pattern transitions",
+      "visual_description": "Orange square with rotating inner core, leaves web-like trail patterns"
+    },
+    {
+      "name": "Red Pinwheel",
+      "behavior": "fly",
+      "hp": 1,
+      "damage": 10,
+      "attack_pattern": "Spawns in groups, slowly drifts toward player while spinning",
+      "weakness": "Very slow movement, easy to avoid but lethal in clusters",
+      "visual_description": "Red circular enemy with rotating pinwheel blades, emanates red particles"
+    },
+    {
+      "name": "Yellow Grunt",
+      "behavior": "patrol",
+      "hp": 1,
+      "damage": 10,
+      "attack_pattern": "Moves in straight lines until hitting wall, then changes direction randomly",
+      "weakness": "Completely predictable once direction locked",
+      "visual_description": "Small yellow cube with sharp corners, basic geometric form"
+    },
+    {
+      "name": "Purple Repulsor",
+      "behavior": "ambush",
+      "hp": 2,
+      "damage": 20,
+      "attack_pattern": "Remains stationary until player approaches, then releases shockwave and teleports",
+      "weakness": "Vulnerable during teleport cooldown period",
+      "visual_description": "Purple sphere with pulsing energy rings, distorts space around it"
+    },
+    {
+      "name": "Cyan Spawner",
+      "behavior": "shoot",
+      "hp": 5,
+      "damage": 5,
+      "attack_pattern": "Stays in place, periodically spawns small cyan orbs that track player",
+      "weakness": "Immobile, priority target to stop enemy multiplication",
+      "visual_description": "Large cyan hexagon with rotating satellite orbs, pulses when spawning"
+    },
+    {
+      "name": "White Evader",
+      "behavior": "ambush",
+      "hp": 1,
+      "damage": 10,
+      "attack_pattern": "Flees directly away from player when approached, attempts to lead into other enemies",
+      "weakness": "Predictable escape vector, trap against walls",
+      "visual_description": "White elongated triangle pointing away from player, jittery movement"
+    },
+    {
+      "name": "Magenta Exploder",
+      "behavior": "charge",
+      "hp": 2,
+      "damage": 25,
+      "attack_pattern": "Charges toward player in straight line, explodes into bullet spread on death",
+      "weakness": "Destroy from distance to avoid explosion radius",
+      "visual_description": "Magenta star shape with unstable pulsing core, grows brighter before charge"
+    },
+    {
+      "name": "Teal Swarmer",
+      "behavior": "chase",
+      "hp": 1,
+      "damage": 8,
+      "attack_pattern": "Spawns in massive groups, individually weak but overwhelming in numbers",
+      "weakness": "Low health, bomb clears entire swarms effectively",
+      "visual_description": "Tiny teal dots with faint glow, moves in coordinated swarm patterns"
+    },
+    {
+      "name": "Gold Carrier",
+      "behavior": "fly",
+      "hp": 8,
+      "damage": 15,
+      "attack_pattern": "Slowly drifts across arena, releases smaller enemies when damaged",
+      "weakness": "High multiplier reward, focus fire to maximize score",
+      "visual_description": "Large golden dodecahedron with cargo pods attached, majestic slow rotation"
+    },
+    {
+      "name": "Black Hole",
+      "behavior": "ambush",
+      "hp": 10,
+      "damage": 50,
+      "attack_pattern": "Pulls player and enemies toward center with gravity field, crushes on contact",
+      "weakness": "Slow movement, can be orbited if maintaining speed",
+      "visual_description": "Swirling black vortex with purple event horizon, distorts grid underneath"
+    },
+    {
+      "name": "Silver Splitter",
+      "behavior": "patrol",
+      "hp": 4,
+      "damage": 10,
+      "attack_pattern": "Splits into two smaller enemies when destroyed, each split inherits movement",
+      "weakness": "Creates more targets, prioritize other enemies first",
+      "visual_description": "Silver octagon with visible seam down middle, wobbles when near death"
+    },
+    {
+      "name": "Crimson Bomber",
+      "behavior": "shoot",
+      "hp": 3,
+      "damage": 15,
+      "attack_pattern": "Fires explosive projectiles in arc toward player position",
+      "weakness": "Slow fire rate, dodge projectiles and close distance",
+      "visual_description": "Dark red triangle with cannon protrusion, recoils when firing"
+    },
+    {
+      "name": "Lime Zigzagger",
+      "behavior": "patrol",
+      "hp": 2,
+      "damage": 10,
+      "attack_pattern": "Moves in sharp zigzag pattern across screen, unpredictable direction changes",
+      "weakness": "Pattern repeats every 5 seconds, time shots accordingly",
+      "visual_description": "Lime green chevron shape with motion blur trails, erratic energy"
+    },
+    {
+      "name": "Amber Pulsator",
+      "behavior": "shoot",
+      "hp": 4,
+      "damage": 12,
+      "attack_pattern": "Emits concentric ring waves that damage on contact, pulses every 3 seconds",
+      "weakness": "Vulnerable between pulse cycles, rush in after wave passes",
+      "visual_description": "Amber circle with rhythmic expansion/contraction, hypnotic glow"
+    },
+    {
+      "name": "Violet Teleporter",
+      "behavior": "ambush",
+      "hp": 3,
+      "damage": 18,
+      "attack_pattern": "Blinks in and out of existence, appears near player unpredictably",
+      "weakness": "Brief vulnerability window when materializing",
+      "visual_description": "Violet phantom shape with flickering opacity, leaves afterimage trails"
+    },
+    {
+      "name": "Indigo Orbiter",
+      "behavior": "patrol",
+      "hp": 2,
+      "damage": 10,
+      "attack_pattern": "Orbits around central point in circular path, maintains fixed radius",
+      "weakness": "Completely predictable orbit, easy interception",
+      "visual_description": "Indigo crescent moon shape, smooth circular motion with trail"
+    },
+    {
+      "name": "Scarlet Berserker",
+      "behavior": "charge",
+      "hp": 6,
+      "damage": 30,
+      "attack_pattern": "Locks onto player, charges at high speed in straight line, briefly stuns on impact",
+      "weakness": "Long cooldown after charge, dodge and counterattack",
+      "visual_description": "Aggressive scarlet spike cluster, glows intensely before charge, exhaust trail"
+    }
+  ],
+  "bosses": [
+    {
+      "name": "The Convergence Gate",
+      "phases": [
+        {
+          "attacks": [
+            "Spawns waves of Pink Darts from four directional gates",
+            "Gates rotate slowly around arena perimeter",
+            "Occasional Purple Repulsor spawns near player"
+          ],
+          "tells": [
+            "Gates glow brighter before spawn wave",
+            "Rotation speed increases as phase progresses",
+            "Screen edges pulse with spawning rhythm"
+          ],
+          "weakness": "Destroy gates to reduce spawn rate, prioritize gate closest to highest density"
+        },
+        {
+          "attacks": [
+            "Gates begin firing bullet streams toward center",
+            "Spawns Green Snakes that patrol gate connections",
+            "Arena grid warps and twists, affecting movement"
+          ],
+          "tells": [
+            "Gates lock position and angle toward center",
+            "Red targeting lasers appear before bullet streams",
+            "Grid distortion intensifies near active gates"
+          ],
+          "weakness": "Snakes are invulnerable until all gates destroyed, focus gates first"
+        },
+        {
+          "attacks": [
+            "All remaining gates converge to center, forming mega-gate",
+            "Rapid-fire spawn of mixed enemy types in all directions",
+            "Mega-gate emits expanding shockwave rings every 5 seconds"
+          ],
+          "tells": [
+            "Gates pulse synchronously before convergence",
+            "Center screen glows with increasing intensity",
+            "Audio cue (deep bass pulse) before shockwave"
+          ],
+          "weakness": "Mega-gate core exposed between shockwaves, bombs highly effective"
+        }
+      ],
+      "arena": "Standard rectangular arena with glowing grid, four corners marked by spawn gates",
+      "visual_description": "Four massive triangular gates at cardinal directions, neon blue energy frames, connected by pulsing light beams, mega-gate forms as swirling vortex of all gate colors"
+    },
+    {
+      "name": "Serpent King Ouroboros",
+      "phases": [
+        {
+          "attacks": [
+            "Giant Green Snake with 20 segments circles arena slowly",
+            "Tail chases head in continuous loop",
+            "Contact with any segment deals damage"
+          ],
+          "tells": [
+            "Head glows brighter when about to accelerate",
+            "Segments pulse in wave pattern before direction change",
+            "Arena perimeter glows indicating safe zones"
+          ],
+          "weakness": "Shoot head continuously, avoid body segments by staying in center"
+        },
+        {
+          "attacks": [
+            "Ouroboros splits into three smaller snakes",
+            "Each snake moves independently with aggressive AI",
+            "Periodically reconnect into larger formations"
+          ],
+          "tells": [
+            "Splitting point marked by bright flash at segment",
+            "Snakes flash yellow when about to reconnect",
+            "Reconnection pulls all three toward merge point"
+          ],
+          "weakness": "Target weakest snake first to prevent reconnection, bombs break formations"
+        },
+        {
+          "attacks": [
+            "Reforms into single massive snake filling most of arena",
+            "Spawns Teal Swarmers from body segments continuously",
+            "Creates spiral pattern forcing player to constant movement"
+          ],
+          "tells": [
+            "All segments glow in sequence before spawning swarmers",
+            "Spiral tightens gradually, reducing safe space",
+            "Head charges briefly before each spiral loop"
+          ],
+          "weakness": "Focus fire on head only, ignore body and swarmers, prioritize survival"
+        }
+      ],
+      "arena": "Circular arena with grid warping in spiral pattern, shrinks slightly in final phase",
+      "visual_description": "Enormous segmented serpent with emerald scales, each segment larger than standard snake, head features glowing eyes and fanged appearance, segments connected by elastic energy bands"
+    },
+    {
+      "name": "Nexus Swarm Intelligence",
+      "phases": [
+        {
+          "attacks": [
+            "Hundreds of Teal Swarmers move in organized geometric patterns",
+            "Patterns shift between grid, spiral, and wave formations",
+            "Individual swarmers occasionally break formation to chase player"
+          ],
+          "tells": [
+            "Formation shift announced by brief freeze and color pulse",
+            "Breaking swarmers flash white before detaching",
+            "Pattern edges glow to show next formation shape"
+          ],
+          "weakness": "Bombs clear large sections, maintain multiplier by sustained fire into formations"
+        },
+        {
+          "attacks": [
+            "Swarm forms into giant enemy shapes (mimics other enemies)",
+            "Each mimic uses attack patterns of copied enemy type",
+            "Destroying mimic releases component swarmers"
+          ],
+          "tells": [
+            "Swarm coalesces with enemy silhouette preview",
+            "Mimic glows at weak point (usually center mass)",
+            "Released swarmers briefly disoriented before reforming"
+          ],
+          "weakness": "Target mimic weak points before full formation, AOE weapons highly effective"
+        },
+        {
+          "attacks": [
+            "Entire swarm forms sentient mega-entity with humanoid shape",
+            "Mega-entity fires massive beam from hands",
+            "Summons Silver Splitters as support units",
+            "Creates safe zones that collapse unexpectedly"
+          ],
+          "tells": [
+            "Mega-entity raises hand before beam attack, 2-second charge",
+            "Beam tracking path shown as faint line before firing",
+            "Safe zones pulse faster as collapse approaches",
+            "Splitter spawn points marked by grid distortion"
+          ],
+          "weakness": "Core located in chest region, exposed after beam attacks during cooldown"
+        }
+      ],
+      "arena": "Large square arena with dynamic grid that responds to swarm density, brighter where swarm is thickest",
+      "visual_description": "Massive coordinated swarm of thousands of tiny teal dots, forms distinct shapes and silhouettes, mega-entity phase shows towering humanoid figure made entirely of swarming particles with glowing core"
+    },
+    {
+      "name": "Singularity Engine",
+      "phases": [
+        {
+          "attacks": [
+            "Single large Black Hole at arena center with strong gravity pull",
+            "Periodically spawns Purple Repulsors at random positions",
+            "Gravity strength pulses rhythmically, creating push-pull effect"
+          ],
+          "tells": [
+            "Black hole expansion indicates pull strength increase",
+            "Repulsor spawn locations telegraph with purple circles 1 second early",
+            "Gravity pulse rhythm shown by concentric ring animations"
+          ],
+          "weakness": "Circle at mid-range to maintain position, shoot continuously at core"
+        },
+        {
+          "attacks": [
+            "Black hole splits into three smaller singularities in triangle formation",
+            "Each singularity orbits while maintaining gravity field",
+            "Spawns White Evaders that flee between singularities",
+            "Gravity fields overlap creating turbulent zones"
+          ],
+          "tells": [
+            "Singularities glow before changing orbit direction",
+            "Turbulent zones visible as distorted grid regions",
+            "Evaders spawn from singularity surfaces with flash"
+          ],
+          "weakness": "Target one singularity at a time, use gravity to slingshot between them"
+        },
+        {
+          "attacks": [
+            "All singularities merge into unstable super-massive black hole",
+            "Extreme gravity pull toward center, nearly inescapable",
+            "Fires radial bullet spreads outward while pulling inward simultaneously",
+            "Spawns all enemy types from event horizon",
+            "Creates temporary white holes that push player toward black hole"
+          ],
+          "tells": [
+            "Screen-wide red flash before bullet spread",
+            "White holes appear with blinding white flash at spawn",
+            "Enemy spawn types previewed at horizon before emergence",
+            "Core destabilizes with increasing frequency as health drops"
+          ],
+          "weakness": "Core fully exposed but requires maximum thrust to maintain safe orbit, bombs negate gravity briefly"
+        }
+      ],
+      "arena": "Octagonal arena with grid heavily distorted by gravitational lensing, walls can be used to slingshot momentum",
+      "visual_description": "Massive swirling black void with purple and blue accretion disk, space-time visibly warped around it, event horizon crackles with energy, surrounded by debris and particle streams being pulled inward, final phase features unstable core with lightning-like energy arcs"
+    }
+  ],
+  "level_design": {
+    "world_count": 0,
+    "levels_per_world": 0,
+    "total_level_count": 6,
+    "worlds": [],
+    "game_modes": [
+      {
+        "name": "Deadline",
+        "theme": "Time attack survival",
+        "unique_mechanic": "3-minute timed sessions, score multiplier based on geom collection speed",
+        "environment": "Rectangular arena with hard boundaries",
+        "primary_enemies": [
+          "Pink squares",
+          "Blue diamonds",
+          "Green snakes",
+          "Orange circles"
+        ],
+        "color_palette": "Neon grid on black void, vibrant particle trails"
+      },
+      {
+        "name": "King",
+        "theme": "Defend the core",
+        "unique_mechanic": "Protect a stationary king piece, lose if it's destroyed",
+        "environment": "Open arena with central zone",
+        "primary_enemies": [
+          "Targeted seekers",
+          "Wanderers",
+          "Spawners"
+        ],
+        "color_palette": "Royal blue and gold accents on grid"
+      },
+      {
+        "name": "Evolved",
+        "theme": "Classic endless survival",
+        "unique_mechanic": "Lives system, progressively harder enemy waves, gate-based spawning",
+        "environment": "Bounded rectangle with gates on edges",
+        "primary_enemies": [
+          "All enemy types in escalating combinations"
+        ],
+        "color_palette": "Rainbow spectrum on black grid"
+      },
+      {
+        "name": "Pacifism",
+        "theme": "No-shooting challenge",
+        "unique_mechanic": "Cannot fire weapons, destroy enemies by passing through gates",
+        "environment": "Arena with horizontal and vertical safe-zone gates",
+        "primary_enemies": [
+          "Passive drifters",
+          "Slow seekers"
+        ],
+        "color_palette": "Calming blues and purples"
+      },
+      {
+        "name": "Waves",
+        "theme": "Staged enemy waves",
+        "unique_mechanic": "60 distinct numbered waves, clear all enemies to advance",
+        "environment": "Standard arena",
+        "primary_enemies": [
+          "Wave-specific formations of all types"
+        ],
+        "color_palette": "Dynamic shifts per wave"
+      },
+      {
+        "name": "Sequence",
+        "theme": "Gauntlet of 20 mini-levels",
+        "unique_mechanic": "Progress through 20 stages, each 30 seconds, one life total",
+        "environment": "Varied arena layouts per stage",
+        "primary_enemies": [
+          "Stage-specific challenges"
+        ],
+        "color_palette": "Evolving palette across 20 stages"
+      }
+    ],
+    "secret_levels": 0,
+    "difficulty_ramp": "No traditional level progression. Each game mode has internal difficulty scaling: enemy density increases, spawn rates accelerate, and enemy types combine in deadlier formations as time/score/wave count increases. Mastery comes from perfecting each mode independently."
+  },
+  "progression": {
+    "xp_system": "None",
+    "currency": "Geoms (green multiplier pickups dropped by enemies)",
+    "multiplier_system": "Core progression mechanic: collect geoms rapidly to build score multiplier (up to 150x in some modes). Multiplier decays if not collected quickly. Death resets multiplier.",
+    "unlockables": "Game modes unlock sequentially by achieving score thresholds or medal ranks in previous modes",
+    "gear": "None",
+    "skill_points": "None",
+    "power_ups": [
+      "Bombs (smart bombs that clear screen)",
+      "Extra lives (rare drops in certain modes)"
+    ],
+    "achievement_driven": "Xbox Live achievements and leaderboards drive replayability. Medals (Bronze/Silver/Gold) awarded per mode based on score thresholds."
+  },
+  "items": [
+    {
+      "name": "Geom (Green)",
+      "effect": "Increases score multiplier by 1x when collected, decays over time if not collected",
+      "visual": "Small glowing green cube/crystal"
+    },
+    {
+      "name": "Geom (Orange)",
+      "effect": "Higher value geom, spawns from tougher enemies or chains",
+      "visual": "Larger glowing orange cube"
+    },
+    {
+      "name": "Smart Bomb",
+      "effect": "Clears all enemies on screen, converts them to geoms",
+      "visual": "Expanding shockwave ring with particle burst"
+    },
+    {
+      "name": "Extra Life",
+      "effect": "Grants one additional life (mode-dependent)",
+      "visual": "1UP icon with ship silhouette"
+    },
+    {
+      "name": "Black Hole",
+      "effect": "Enemy spawned obstacle that sucks in nearby entities and warps geometry grid",
+      "visual": "Swirling vortex distorting grid lines"
+    },
+    {
+      "name": "Gate (Pacifism mode)",
+      "effect": "Passing through destroys nearby enemies, temporary invincibility",
+      "visual": "Glowing rectangular frame, collapses after use"
+    },
+    {
+      "name": "King Piece",
+      "effect": "Stationary ally in King mode, must be defended",
+      "visual": "Large crown-shaped geometric form"
+    },
+    {
+      "name": "Enemy Spawner",
+      "effect": "Spawns waves of smaller enemies until destroyed",
+      "visual": "Pulsing diamond that births smaller shapes"
+    },
+    {
+      "name": "Snake Segment",
+      "effect": "Chain enemy that fragments when shot, each piece dangerous",
+      "visual": "Segmented glowing trail"
+    },
+    {
+      "name": "Repulsor",
+      "effect": "Enemy that pushes player ship away, disrupts positioning",
+      "visual": "Spiky geometric sphere"
+    },
+    {
+      "name": "Weaver",
+      "effect": "Enemy that moves in unpredictable sine-wave patterns",
+      "visual": "Ribbon-like trailing form"
+    },
+    {
+      "name": "Gravity Well",
+      "effect": "Pulls player and enemies toward center, alters movement physics",
+      "visual": "Grid depression with radial particle pull"
+    }
+  ],
+  "ui_ux": {
+    "hud_layout": "Minimal overlay: score (top left), multiplier (top right), lives/bombs (bottom left), timer (bottom right in timed modes). All text uses glowing vector font matching neon aesthetic.",
+    "menus": "Sleek 3D rotating geometric menu system. Mode selection shows thumbnail preview + medal status + high score. Leaderboard integration prominent.",
+    "map_system": "None (arena-based, no exploration)",
+    "inventory": "None (power-ups used instantly or on button press)",
+    "dialog_style": "No story dialog. Pure arcade presentation.",
+    "feedback": "Heavy particle effects for every action: enemy destruction erupts in geom showers, bombs create radial waves, death triggers screen-filling explosion. Grid surface warps dynamically with gravity and impacts. Audio-visual synesthesia: every shot, explosion, and collection has distinct sound + particle signature.",
+    "accessibility": "Color-coded enemies with distinct shapes. High contrast neon-on-black. No accessibility assists (2008 arcade design philosophy)."
+  },
+  "difficulty_curve": {
+    "early_game": "First 30-60 seconds of any mode: sparse enemy spawns, slow movement, forgiving spacing. Player learns enemy patterns.",
+    "mid_game": "1-3 minutes: spawn gates open more frequently, multiple enemy types overlap, black holes and gravity wells appear, multiplier management becomes critical.",
+    "late_game": "3+ minutes / high waves: screen floods with enemies, safe space shrinks, requires perfect multiplier chains and bomb timing. Difficulty caps vary by mode (Deadline at 3min, Evolved endless, Sequence has fixed 20-stage cap).",
+    "assist_modes": "None. Pure skill-based arcade challenge.",
+    "skill_expression": "Mastery comes from movement precision (twin-stick control), geom route optimization, bomb timing, and risk/reward decisions (chase high multipliers vs. survive)."
+  },
+  "replayability": {
+    "leaderboards": "Global Xbox Live leaderboards per mode drive competitive replay. Friend score comparisons prominent.",
+    "medals": "Bronze/Silver/Gold thresholds per mode unlock bragging rights and subsequent modes.",
+    "achievements": "Xbox achievements for score milestones, mode-specific feats (e.g., Pacifism pacifist run, Sequence one-life clear).",
+    "score_chasing": "Core loop: beat personal best, climb leaderboards, optimize multiplier chains.",
+    "mode_variety": "6 distinct game modes require different skills: time attack, defense, survival, pacifist, wave clear, gauntlet.",
+    "mastery_ceiling": "Extremely high skill ceiling. Top players perfect geom routes, memorize spawn timings, execute frame-perfect maneuvers.",
+    "no_content_unlocks": "No cosmetic skins, ship upgrades, or story content. Replayability purely intrinsic: perfecting scores and leaderboard rank."
+  }
+}

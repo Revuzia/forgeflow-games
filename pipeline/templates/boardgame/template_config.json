@@ -5,7 +5,15 @@
   "physics": "none",
   "aspect_ratio": "16:9",
   "target_fps": 60,
-  "scenes": ["BootScene", "PreloadScene", "MenuScene", "GameScene", "PauseScene", "GameOverScene", "WinScene"],
+  "scenes": [
+    "BootScene",
+    "PreloadScene",
+    "MenuScene",
+    "GameScene",
+    "PauseScene",
+    "GameOverScene",
+    "WinScene"
+  ],
   "features": {
     "player": {
       "movement": [],
@@ -17,7 +25,10 @@
       "max_players": 4,
       "default_players": 2,
       "ai_opponents": true,
-      "ai_strategies": ["random", "greedy"]
+      "ai_strategies": [
+        "random",
+        "greedy"
+      ]
     },
     "board": {
       "type": "grid",
@@ -25,23 +36,59 @@
       "default_rows": 8,
       "default_cols": 8,
       "cell_size": 48,
-      "features": ["piece_placement", "selection", "capture", "hover_highlight"]
+      "features": [
+        "piece_placement",
+        "selection",
+        "capture",
+        "hover_highlight"
+      ]
     },
     "scoring": {
       "per_player": true,
-      "win_conditions": ["score_threshold", "board_full", "no_valid_moves"],
-      "resources": ["score"]
+      "win_conditions": [
+        "score_threshold",
+        "board_full",
+        "no_valid_moves"
+      ],
+      "resources": [
+        "score"
+      ]
     },
     "ui": {
-      "hud": ["current_player", "scores", "turn_number"],
-      "menus": ["main_menu", "pause", "game_over", "win", "mode_select"]
+      "hud": [
+        "current_player",
+        "scores",
+        "turn_number"
+      ],
+      "menus": [
+        "main_menu",
+        "pause",
+        "game_over",
+        "win",
+        "mode_select"
+      ]
     },
     "audio": {
-      "sfx": ["place", "select", "invalid", "capture", "turn", "win", "game_over"],
-      "music": ["menu_theme", "game_theme"]
+      "sfx": [
+        "place",
+        "select",
+        "invalid",
+        "capture",
+        "turn",
+        "win",
+        "game_over"
+      ],
+      "music": [
+        "menu_theme",
+        "game_theme"
+      ]
     },
     "effects": {
-      "visual": ["hover_highlight", "float_text", "piece_animation"]
+      "visual": [
+        "hover_highlight",
+        "float_text",
+        "piece_animation"
+      ]
     }
   },
   "test_hooks": {
@@ -69,6 +116,11 @@
     "bundle_type": "folder",
     "build_tool": "vite",
     "output": "dist/",
-    "files": ["index.html", "game.js", "assets/"]
-  }
+    "files": [
+      "index.html",
+      "game.js",
+      "assets/"
+    ]
+  },
+  "main_scene_class": "GameScene"
 }

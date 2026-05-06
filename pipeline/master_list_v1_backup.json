@@ -1,0 +1,416 @@
+{
+  "version": 1,
+  "total_games": 55,
+  "categories": {
+    "platformer": {
+      "label": "Mario-style Platformers",
+      "games": [
+        {
+          "id": 1,
+          "inspired_by": "Donkey Kong Country: Tropical Freeze",
+          "genre": "platformer",
+          "sub_genre": "2.5d-platformer",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "inspired_by": "Super Mario Bros. Wonder",
+          "genre": "platformer",
+          "sub_genre": "2d-platformer",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "inspired_by": "Rayman Legends",
+          "genre": "platformer",
+          "sub_genre": "2d-platformer",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "inspired_by": "Celeste",
+          "genre": "platformer",
+          "sub_genre": "precision-platformer",
+          "status": "pending"
+        },
+        {
+          "id": 5,
+          "inspired_by": "Crash Bandicoot 4: It's About Time",
+          "genre": "platformer",
+          "sub_genre": "3d-platformer",
+          "status": "pending"
+        },
+        {
+          "id": 6,
+          "inspired_by": "Sonic Mania",
+          "genre": "platformer",
+          "sub_genre": "speed-platformer",
+          "status": "pending"
+        },
+        {
+          "id": 7,
+          "inspired_by": "Shovel Knight",
+          "genre": "platformer",
+          "sub_genre": "retro-platformer",
+          "status": "pending"
+        },
+        {
+          "id": 8,
+          "inspired_by": "New Super Mario Bros. U Deluxe",
+          "genre": "platformer",
+          "sub_genre": "2d-platformer",
+          "status": "pending"
+        },
+        {
+          "id": 9,
+          "inspired_by": "Ori and the Will of the Wisps",
+          "genre": "platformer",
+          "sub_genre": "metroidvania",
+          "status": "pending"
+        },
+        {
+          "id": 10,
+          "inspired_by": "Pizza Tower",
+          "genre": "platformer",
+          "sub_genre": "speed-platformer",
+          "status": "pending"
+        },
+        {
+          "id": 11,
+          "inspired_by": "Kirby and the Forgotten Land",
+          "genre": "platformer",
+          "sub_genre": "3d-platformer",
+          "status": "pending"
+        },
+        {
+          "id": 12,
+          "inspired_by": "Hollow Knight",
+          "genre": "platformer",
+          "sub_genre": "metroidvania",
+          "status": "pending"
+        }
+      ]
+    },
+    "adventure": {
+      "label": "Zelda-style Action-Adventure",
+      "games": [
+        {
+          "id": 13,
+          "inspired_by": "Okami HD",
+          "genre": "adventure",
+          "sub_genre": "action-adventure",
+          "status": "pending"
+        },
+        {
+          "id": 14,
+          "inspired_by": "Tunic",
+          "genre": "adventure",
+          "sub_genre": "isometric-adventure",
+          "status": "pending"
+        },
+        {
+          "id": 15,
+          "inspired_by": "Immortals Fenyx Rising",
+          "genre": "adventure",
+          "sub_genre": "open-world",
+          "status": "pending"
+        },
+        {
+          "id": 16,
+          "inspired_by": "Darksiders II",
+          "genre": "adventure",
+          "sub_genre": "action-adventure",
+          "status": "pending"
+        },
+        {
+          "id": 17,
+          "inspired_by": "Blossom Tales",
+          "genre": "adventure",
+          "sub_genre": "top-down-adventure",
+          "status": "pending"
+        },
+        {
+          "id": 18,
+          "inspired_by": "Oceanhorn",
+          "genre": "adventure",
+          "sub_genre": "action-adventure",
+          "status": "pending"
+        },
+        {
+          "id": 19,
+          "inspired_by": "Hyper Light Drifter",
+          "genre": "adventure",
+          "sub_genre": "action-adventure",
+          "status": "pending"
+        },
+        {
+          "id": 20,
+          "inspired_by": "Death's Door",
+          "genre": "adventure",
+          "sub_genre": "isometric-adventure",
+          "status": "pending"
+        },
+        {
+          "id": 21,
+          "inspired_by": "Eastward",
+          "genre": "adventure",
+          "sub_genre": "action-adventure",
+          "status": "pending"
+        },
+        {
+          "id": 22,
+          "inspired_by": "Ori and the Blind Forest",
+          "genre": "adventure",
+          "sub_genre": "metroidvania",
+          "status": "pending"
+        }
+      ]
+    },
+    "rpg": {
+      "label": "JRPGs like Final Fantasy",
+      "games": [
+        {
+          "id": 23,
+          "inspired_by": "Dragon Quest XI S",
+          "genre": "rpg",
+          "sub_genre": "turn-based-jrpg",
+          "status": "pending"
+        },
+        {
+          "id": 24,
+          "inspired_by": "Persona 5 Royal",
+          "genre": "rpg",
+          "sub_genre": "social-sim-jrpg",
+          "status": "pending"
+        },
+        {
+          "id": 25,
+          "inspired_by": "Chrono Trigger",
+          "genre": "rpg",
+          "sub_genre": "classic-jrpg",
+          "status": "pending"
+        },
+        {
+          "id": 26,
+          "inspired_by": "Metaphor: ReFantazio",
+          "genre": "rpg",
+          "sub_genre": "turn-based-jrpg",
+          "status": "pending"
+        },
+        {
+          "id": 27,
+          "inspired_by": "Octopath Traveler II",
+          "genre": "rpg",
+          "sub_genre": "hd2d-jrpg",
+          "status": "pending"
+        },
+        {
+          "id": 28,
+          "inspired_by": "Chained Echoes",
+          "genre": "rpg",
+          "sub_genre": "classic-jrpg",
+          "status": "pending"
+        },
+        {
+          "id": 29,
+          "inspired_by": "Xenoblade Chronicles",
+          "genre": "rpg",
+          "sub_genre": "action-jrpg",
+          "status": "pending"
+        },
+        {
+          "id": 30,
+          "inspired_by": "Like a Dragon: Infinite Wealth",
+          "genre": "rpg",
+          "sub_genre": "turn-based-jrpg",
+          "status": "pending"
+        },
+        {
+          "id": 31,
+          "inspired_by": "Tales of Arise",
+          "genre": "rpg",
+          "sub_genre": "action-jrpg",
+          "status": "pending"
+        },
+        {
+          "id": 32,
+          "inspired_by": "Earthbound",
+          "genre": "rpg",
+          "sub_genre": "quirky-jrpg",
+          "status": "pending"
+        },
+        {
+          "id": 33,
+          "inspired_by": "Shin Megami Tensei V",
+          "genre": "rpg",
+          "sub_genre": "demon-collector",
+          "status": "pending"
+        },
+        {
+          "id": 34,
+          "inspired_by": "Final Fantasy VII Remake",
+          "genre": "rpg",
+          "sub_genre": "action-jrpg",
+          "status": "pending"
+        }
+      ]
+    },
+    "arpg": {
+      "label": "Diablo-style ARPGs",
+      "games": [
+        {
+          "id": 35,
+          "inspired_by": "Path of Exile 2",
+          "genre": "arpg",
+          "sub_genre": "isometric-arpg",
+          "status": "pending"
+        },
+        {
+          "id": 36,
+          "inspired_by": "Grim Dawn",
+          "genre": "arpg",
+          "sub_genre": "isometric-arpg",
+          "status": "pending"
+        },
+        {
+          "id": 37,
+          "inspired_by": "Last Epoch",
+          "genre": "arpg",
+          "sub_genre": "isometric-arpg",
+          "status": "pending"
+        },
+        {
+          "id": 38,
+          "inspired_by": "Torchlight II",
+          "genre": "arpg",
+          "sub_genre": "isometric-arpg",
+          "status": "pending"
+        },
+        {
+          "id": 39,
+          "inspired_by": "Titan Quest",
+          "genre": "arpg",
+          "sub_genre": "isometric-arpg",
+          "status": "pending"
+        },
+        {
+          "id": 40,
+          "inspired_by": "Hades 2",
+          "genre": "arpg",
+          "sub_genre": "roguelike-arpg",
+          "status": "pending"
+        },
+        {
+          "id": 41,
+          "inspired_by": "Diablo IV",
+          "genre": "arpg",
+          "sub_genre": "isometric-arpg",
+          "status": "pending"
+        },
+        {
+          "id": 42,
+          "inspired_by": "Wolcen: Lords of Mayhem",
+          "genre": "arpg",
+          "sub_genre": "isometric-arpg",
+          "status": "pending"
+        },
+        {
+          "id": 43,
+          "inspired_by": "Victor Vran",
+          "genre": "arpg",
+          "sub_genre": "isometric-arpg",
+          "status": "pending"
+        },
+        {
+          "id": 44,
+          "inspired_by": "Minecraft Dungeons",
+          "genre": "arpg",
+          "sub_genre": "dungeon-crawler",
+          "status": "pending"
+        }
+      ]
+    },
+    "board_game": {
+      "label": "Top Board Games (digital)",
+      "games": [
+        {
+          "id": 45,
+          "inspired_by": "Catan",
+          "genre": "board_game",
+          "sub_genre": "resource-trading",
+          "status": "pending"
+        },
+        {
+          "id": 46,
+          "inspired_by": "Ticket to Ride",
+          "genre": "board_game",
+          "sub_genre": "route-building",
+          "status": "pending"
+        },
+        {
+          "id": 47,
+          "inspired_by": "Carcassonne",
+          "genre": "board_game",
+          "sub_genre": "tile-placement",
+          "status": "pending"
+        },
+        {
+          "id": 48,
+          "inspired_by": "Wingspan",
+          "genre": "board_game",
+          "sub_genre": "engine-building",
+          "status": "pending"
+        },
+        {
+          "id": 49,
+          "inspired_by": "Azul",
+          "genre": "board_game",
+          "sub_genre": "pattern-building",
+          "status": "pending"
+        },
+        {
+          "id": 50,
+          "inspired_by": "Dominion",
+          "genre": "board_game",
+          "sub_genre": "deck-building",
+          "status": "pending"
+        },
+        {
+          "id": 51,
+          "inspired_by": "7 Wonders",
+          "genre": "board_game",
+          "sub_genre": "card-drafting",
+          "status": "pending"
+        },
+        {
+          "id": 52,
+          "inspired_by": "Pandemic",
+          "genre": "board_game",
+          "sub_genre": "cooperative",
+          "status": "pending"
+        },
+        {
+          "id": 53,
+          "inspired_by": "Codenames",
+          "genre": "board_game",
+          "sub_genre": "word-game",
+          "status": "pending"
+        },
+        {
+          "id": 54,
+          "inspired_by": "Brass: Birmingham",
+          "genre": "board_game",
+          "sub_genre": "economic-strategy",
+          "status": "pending"
+        },
+        {
+          "id": 55,
+          "inspired_by": "Gloomhaven",
+          "genre": "board_game",
+          "sub_genre": "dungeon-crawl-boardgame",
+          "status": "pending"
+        }
+      ]
+    }
+  }
+}

@@ -74,17 +74,25 @@ def main():
         print(r.stdout[-2000:])
         print(r.stderr[-2000:])
         sys.exit(1)
-    # Find pre-render summary
+    # Find pre-render summary (sanitize unicode for Windows cp1252 stdout)
     last_lines = (r.stdout or "").splitlines()[-12:]
     for line in last_lines:
         if line.strip():
-            print(f"  {line}")
+            try:
+                print(f"  {line}")
+            except UnicodeEncodeError:
+                print(f"  {line.encode('ascii', 'replace').decode('ascii')}")
 
-    # Step 2: wrangler pages deploy
+    # Step 2: wrangler pages deploy.
+    # 2026-05-05 — DON'T set CLOUDFLARE_API_TOKEN here. The available cfut_*
+    # tokens are scoped to Workers/R2 but lack Pages write. Wrangler's OAuth
+    # token (from `wrangler login`, stored in ~/.wrangler/config/default.toml)
+    # has Pages scope. If we set CLOUDFLARE_API_TOKEN, wrangler uses the
+    # weaker token and fails with 10000 Authentication error. Letting OAuth
+    # take precedence Just Works.
     print("\n[2/2] Uploading to Cloudflare Pages (master branch)...")
-    token = _load_cf_token()
     env = os.environ.copy()
-    env["CLOUDFLARE_API_TOKEN"] = token
+    env.pop("CLOUDFLARE_API_TOKEN", None)
     cmd = [
         "npx", "wrangler", "pages", "deploy", "dist/client",
         "--project-name", "forgeflow-games",
@@ -97,7 +105,8 @@ def main():
         shell=True, timeout=300,
     )
     out = (r.stdout or "") + (r.stderr or "")
-    print(out[-2000:])
+    safe_out = out[-2000:].encode("ascii", "replace").decode("ascii")
+    print(safe_out)
     if r.returncode != 0 or "Deployment complete" not in out:
         print("\nDEPLOY FAILED")
         sys.exit(1)

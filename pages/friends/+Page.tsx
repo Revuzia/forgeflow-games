@@ -51,14 +51,17 @@ export default function FriendsPage() {
   }
 
   async function searchUsers() {
-    if (!searchQuery.trim()) return;
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .ilike("username", `%${searchQuery}%`)
-      .neq("id", userId)
-      .limit(10);
-    setSearchResults(data || []);
+    const q = searchQuery.trim();
+    if (!q) return;
+    // find_users RPC: matches exact email OR partial username. Email match
+    // requires a SECURITY DEFINER function because auth.users isn't anon-readable.
+    const { data, error } = await supabase.rpc("find_users", { query: q });
+    if (error) {
+      console.error("find_users error:", error);
+      setSearchResults([]);
+      return;
+    }
+    setSearchResults((data || []).filter((u: any) => u.id !== userId));
   }
 
   async function sendRequest(friendId: string) {
@@ -99,7 +102,7 @@ export default function FriendsPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by username..."
+            placeholder="Search by username or email..."
             className="flex-1 px-4 py-2 rounded-lg bg-surface-900 border border-surface-600/50 text-sm text-gray-100
                        placeholder-gray-500 focus:outline-none focus:border-brand-orange/50"
           />

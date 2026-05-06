@@ -92,9 +92,12 @@ function handleGameMessage(event: MessageEvent) {
       break;
 
     case "forgeflow:achievement":
-      // Game reports an achievement unlock
+      // Game reports an achievement unlock — by numeric id OR by slug.
+      // The SDK prefers slug because games don't know DB ids at build time.
       if (currentUserId && payload.achievementId) {
         unlockAchievement(currentUserId, payload.achievementId);
+      } else if (currentUserId && payload.achievementSlug && currentGameId) {
+        unlockAchievementBySlug(currentUserId, currentGameId, payload.achievementSlug);
       }
       break;
 
@@ -124,20 +127,33 @@ function handleGameMessage(event: MessageEvent) {
       break;
 
     case "forgeflow:load":
-      // Load cloud save — respond back to game
+      // Load cloud save — respond back to game. Echo _reqId so the SDK can
+      // correlate concurrent loads to their Promise resolvers.
       if (currentUserId && currentGameId) {
+        const reqId = payload._reqId;
         loadGameData(currentUserId, currentGameId, payload.slot || 1).then(data => {
           const iframe = document.querySelector("iframe");
           if (iframe?.contentWindow) {
             iframe.contentWindow.postMessage({
               type: "forgeflow:save_loaded",
               data,
+              _reqId: reqId,
             }, "*");
           }
         });
       }
       break;
   }
+}
+
+async function unlockAchievementBySlug(userId: string, gameId: number, slug: string) {
+  const { data } = await supabase
+    .from("achievements")
+    .select("id")
+    .eq("game_id", gameId)
+    .eq("slug", slug)
+    .single();
+  if (data?.id) await unlockAchievement(userId, data.id);
 }
 
 async function unlockAchievement(userId: string, achievementId: number) {

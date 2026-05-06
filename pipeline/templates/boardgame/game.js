@@ -2,7 +2,7 @@
  * ForgeFlow Games — Phaser Board Game Template
  *
  * Reusable scaffold for digital board games (Catan, Azul, Codenames, etc.).
- * The pipeline fills in {{PLACEHOLDERS}} with game-specific values.
+ * The pipeline substitutes template tokens with game-specific values.
  *
  * Features:
  * - Phaser 3.90, NO physics engine

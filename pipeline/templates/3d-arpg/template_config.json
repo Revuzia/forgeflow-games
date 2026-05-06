@@ -15,7 +15,14 @@
       "smooth_follow": true
     },
     "player": {
-      "movement": ["click_to_move", "wasd", "attack_melee", "attack_ranged", "dodge", "use_potion"],
+      "movement": [
+        "click_to_move",
+        "wasd",
+        "attack_melee",
+        "attack_ranged",
+        "dodge",
+        "use_potion"
+      ],
       "controls": {
         "move": "WASD or click ground",
         "attack": "Click enemy or X key",
@@ -23,16 +30,37 @@
         "potions": "1 = health, 2 = mana",
         "inventory": "I key"
       },
-      "stats": ["health", "mana", "attack", "defense", "speed", "xp", "level"]
+      "stats": [
+        "health",
+        "mana",
+        "attack",
+        "defense",
+        "speed",
+        "xp",
+        "level"
+      ]
     },
     "enemies": {
-      "types": ["melee_patrol", "melee_chase", "ranged", "tank", "boss"],
+      "types": [
+        "melee_patrol",
+        "melee_chase",
+        "ranged",
+        "tank",
+        "boss"
+      ],
       "ai": "state_machine",
       "loot_drops": true
     },
     "dungeon": {
       "generation": "procedural_rooms",
-      "features": ["rooms", "corridors", "doors", "torches", "traps", "stairs_down"]
+      "features": [
+        "rooms",
+        "corridors",
+        "doors",
+        "torches",
+        "traps",
+        "stairs_down"
+      ]
     },
     "combat": {
       "type": "real_time",
@@ -41,16 +69,49 @@
       "screen_shake": true
     },
     "loot": {
-      "types": ["weapon", "armor", "ring", "potion_health", "potion_mana", "gold"],
-      "rarity": ["common", "uncommon", "rare", "epic"]
+      "types": [
+        "weapon",
+        "armor",
+        "ring",
+        "potion_health",
+        "potion_mana",
+        "gold"
+      ],
+      "rarity": [
+        "common",
+        "uncommon",
+        "rare",
+        "epic"
+      ]
     },
     "ui": {
       "type": "html_css_overlay",
-      "elements": ["health_bar", "mana_bar", "xp_bar", "minimap", "inventory", "loot_popup", "damage_numbers"]
+      "elements": [
+        "health_bar",
+        "mana_bar",
+        "xp_bar",
+        "minimap",
+        "inventory",
+        "loot_popup",
+        "damage_numbers"
+      ]
     },
     "audio": {
-      "sfx": ["attack_swing", "hit_enemy", "hit_player", "enemy_die", "pickup_item", "level_up", "potion_use", "door_open"],
-      "music": ["dungeon_ambient", "boss_battle", "menu_theme"]
+      "sfx": [
+        "attack_swing",
+        "hit_enemy",
+        "hit_player",
+        "enemy_die",
+        "pickup_item",
+        "level_up",
+        "potion_use",
+        "door_open"
+      ],
+      "music": [
+        "dungeon_ambient",
+        "boss_battle",
+        "menu_theme"
+      ]
     },
     "lighting": {
       "ambient": "dim_blue",
@@ -59,8 +120,17 @@
       "fog": "exponential_dark"
     },
     "effects": {
-      "particles": ["blood_splatter", "magic_sparkle", "loot_glow", "torch_fire", "death_smoke"],
-      "post_processing": ["bloom", "vignette"]
+      "particles": [
+        "blood_splatter",
+        "magic_sparkle",
+        "loot_glow",
+        "torch_fire",
+        "death_smoke"
+      ],
+      "post_processing": [
+        "bloom",
+        "vignette"
+      ]
     }
   },
   "test_hooks": {
@@ -80,5 +150,6 @@
     "characters": "quaternius",
     "environments": "kenney_dungeon + quaternius_dungeons",
     "weapons": "quaternius_weapons"
-  }
+  },
+  "main_scene_class": null
 }

@@ -11,6 +11,8 @@ Pricing: Free tier available, pay-per-generation after quota.
 import base64
 import json
 import os
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -57,31 +59,55 @@ def generate_sprite(
     }
 
     data = json.dumps(payload).encode()
-    req = urllib.request.Request(url, data=data, method="POST", headers={
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}",
-    })
 
-    try:
-        resp = urllib.request.urlopen(req, timeout=30)
-        result = json.loads(resp.read())
-        img_b64 = result["image"]["base64"]
-        img_bytes = base64.b64decode(img_b64)
-        cost = result.get("usage", {}).get("usd", 0)
+    # 2026-04-22 FIX: PixelLab silently dropped sprites (enemy_10, enemy_11) when
+    # the API timed out mid-generation. Retry twice with backoff on timeout / 5xx,
+    # then verify the output file exists before returning success.
+    last_err = "unknown"
+    for attempt in range(3):
+        req = urllib.request.Request(url, data=data, method="POST", headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        })
+        try:
+            resp = urllib.request.urlopen(req, timeout=60)
+            result = json.loads(resp.read())
+            img_b64 = result["image"]["base64"]
+            img_bytes = base64.b64decode(img_b64)
+            cost = result.get("usage", {}).get("usd", 0)
 
-        if output_path:
-            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-            Path(output_path).write_bytes(img_bytes)
-            print(f"[pixellab] Generated: {output_path} ({len(img_bytes)} bytes, ${cost})")
+            if output_path:
+                Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                Path(output_path).write_bytes(img_bytes)
+                # Verify file landed on disk before claiming success
+                if not Path(output_path).exists() or Path(output_path).stat().st_size < 100:
+                    print(f"[pixellab] Write verification failed for {output_path}")
+                    last_err = "write_verification_failed"
+                    continue
+                print(f"[pixellab] Generated: {output_path} ({len(img_bytes)} bytes, ${cost})")
 
-        return img_bytes
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()[:200]
-        print(f"[pixellab] Error {e.code}: {body}")
-        return None
-    except Exception as e:
-        print(f"[pixellab] Error: {e}")
-        return None
+            return img_bytes
+        except urllib.error.HTTPError as e:
+            body = e.read().decode(errors="replace")[:200]
+            last_err = f"HTTP {e.code}: {body}"
+            # 401/403/400 are logic errors — don't retry
+            if e.code in (400, 401, 403):
+                print(f"[pixellab] Non-retryable error {e.code}: {body}")
+                return None
+            print(f"[pixellab] Error {e.code} (attempt {attempt+1}/3): {body}")
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            last_err = f"timeout/network: {e}"
+            print(f"[pixellab] Timeout/network error (attempt {attempt+1}/3): {e}")
+        except Exception as e:
+            last_err = str(e)
+            print(f"[pixellab] Error (attempt {attempt+1}/3): {e}")
+
+        if attempt < 2:
+            delay = 10 * (2 ** attempt)  # 10s, 20s
+            time.sleep(delay)
+
+    print(f"[pixellab] FAILED after 3 attempts: {last_err}")
+    return None
 
 
 def generate_character_set(

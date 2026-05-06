@@ -5,17 +5,46 @@
   "physics": "arcade_no_gravity",
   "aspect_ratio": "16:9",
   "target_fps": 60,
-  "scenes": ["BootScene", "PreloadScene", "MenuScene", "GameScene", "PauseScene", "GameOverScene", "WinScene"],
+  "scenes": [
+    "BootScene",
+    "PreloadScene",
+    "MenuScene",
+    "GameScene",
+    "PauseScene",
+    "GameOverScene",
+    "WinScene"
+  ],
   "features": {
     "player": {
-      "movement": ["walk_8dir", "click_to_move", "attack_melee"],
+      "movement": [
+        "walk_8dir",
+        "click_to_move",
+        "attack_melee"
+      ],
       "physics": "arcade_no_gravity",
       "sprite_type": "spritesheet",
-      "animation_states": ["idle", "walk", "attack", "hurt", "die"],
-      "stats": ["health", "mana", "xp", "level", "attack", "defense", "speed"]
+      "animation_states": [
+        "idle",
+        "walk",
+        "attack",
+        "hurt",
+        "die"
+      ],
+      "stats": [
+        "health",
+        "mana",
+        "xp",
+        "level",
+        "attack",
+        "defense",
+        "speed"
+      ]
     },
     "enemies": {
-      "types": ["patrol", "chase"],
+      "types": [
+        "patrol",
+        "chase"
+      ],
       "ai": "state_machine",
       "death": "attack",
       "wave_spawning": true,
@@ -25,7 +54,12 @@
       "format": "tilemap_json_or_procedural",
       "min_count": 5,
       "tileset": "kenney_pixel_platformer",
-      "features": ["rooms", "corridors", "stairs", "procedural_generation"],
+      "features": [
+        "rooms",
+        "corridors",
+        "stairs",
+        "procedural_generation"
+      ],
       "procedural": {
         "room_count": 5,
         "min_room_size": 10,
@@ -34,13 +68,23 @@
       }
     },
     "loot": {
-      "types": ["health_potion", "mana_potion", "weapon", "armor", "ring"],
+      "types": [
+        "health_potion",
+        "mana_potion",
+        "weapon",
+        "armor",
+        "ring"
+      ],
       "drop_chance": 0.4,
       "scaling_stats": true
     },
     "inventory": {
       "slots": 3,
-      "equipment": ["weapon", "armor", "ring"],
+      "equipment": [
+        "weapon",
+        "armor",
+        "ring"
+      ],
       "stat_bonuses": true
     },
     "progression": {
@@ -49,17 +93,54 @@
       "scaling_formula": "xpPerLevel * 1.4^level"
     },
     "ui": {
-      "hud": ["health_bar", "mana_bar", "xp_bar", "level", "score", "floor", "inventory_slots"],
-      "menus": ["main_menu", "pause", "game_over", "win"]
+      "hud": [
+        "health_bar",
+        "mana_bar",
+        "xp_bar",
+        "level",
+        "score",
+        "floor",
+        "inventory_slots"
+      ],
+      "menus": [
+        "main_menu",
+        "pause",
+        "game_over",
+        "win"
+      ]
     },
     "audio": {
-      "sfx": ["attack", "hit", "enemy_die", "pickup", "levelup", "potion", "equip", "game_over", "level_complete"],
-      "music": ["menu_theme", "level_theme", "dungeon_theme", "boss_theme"]
+      "sfx": [
+        "attack",
+        "hit",
+        "enemy_die",
+        "pickup",
+        "levelup",
+        "potion",
+        "equip",
+        "game_over",
+        "level_complete"
+      ],
+      "music": [
+        "menu_theme",
+        "level_theme",
+        "dungeon_theme",
+        "boss_theme"
+      ]
     },
     "effects": {
-      "particles": ["hit_sparks"],
-      "screen": ["shake", "flash"],
-      "visual": ["float_text", "slash_effect", "loot_bounce"]
+      "particles": [
+        "hit_sparks"
+      ],
+      "screen": [
+        "shake",
+        "flash"
+      ],
+      "visual": [
+        "float_text",
+        "slash_effect",
+        "loot_bounce"
+      ]
     }
   },
   "test_hooks": {
@@ -87,6 +168,11 @@
     "bundle_type": "folder",
     "build_tool": "vite",
     "output": "dist/",
-    "files": ["index.html", "game.js", "assets/"]
-  }
+    "files": [
+      "index.html",
+      "game.js",
+      "assets/"
+    ]
+  },
+  "main_scene_class": "GameScene"
 }

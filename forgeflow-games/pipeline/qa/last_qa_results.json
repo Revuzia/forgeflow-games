@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8765/index.html",
+  "genre": "platformer",
+  "tests": {
+    "game_loads": true,
+    "start_screen": true,
+    "player_exists": true,
+    "movement_right": true,
+    "movement_left": true,
+    "jump_works": true,
+    "score_system": true,
+    "enemies_exist": true,
+    "enemies_move": true,
+    "enemies_animate": true,
+    "lives_system": true,
+    "scene_system": true,
+    "gravity_works": true,
+    "visual_not_blank": true,
+    "sound_initialized": true,
+    "stability_10s": true,
+    "no_critical_errors": true
+  },
+  "console_errors": [],
+  "network_errors": [],
+  "total_tests": 17,
+  "passed_tests": 17,
+  "failed_tests": 0,
+  "score": 100.0,
+  "passed": true,
+  "severity_failures": {
+    "P0": [],
+    "P1": [],
+    "P2": [],
+    "P3": []
+  },
+  "has_P0": false,
+  "has_P1": false
+}
