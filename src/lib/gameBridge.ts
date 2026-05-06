@@ -14,6 +14,8 @@
 
 import { supabase } from "./supabase";
 import { addXP, setOnlineStatus, submitScore, addRecentlyPlayed, getCurrentSeasonWeek } from "./auth";
+// addXP is still imported because unlockAchievement() inside this file
+// still calls it — that's the ONE remaining XP source by design.
 
 let currentUserId: string | null = null;
 let currentGameId: number | null = null;
@@ -35,27 +37,36 @@ export function initGameBridge(gameSlug: string, gameId: number) {
       currentUserId = user.id;
       setOnlineStatus(user.id, true, gameSlug);
 
-      // Track play time every 60 seconds for XP
+      // 2026-05-06 — log the recently-played row IMMEDIATELY on game start.
+      // Previously we only upserted every 5 minutes, so a quick play left
+      // no trace and the profile's "Recently Played" list stayed empty.
+      // Subsequent ticks update last_played_at + total_play_seconds; this
+      // first call is the one that establishes the row.
+      supabase.from("user_game_activity").upsert({
+        user_id: currentUserId,
+        game_id: currentGameId,
+        last_played_at: new Date().toISOString(),
+        total_play_seconds: 0,
+        play_count: 1,
+      }, { onConflict: "user_id,game_id" });
+
+      // 2026-05-06 — XP comes ONLY from earned achievements now. Previously
+      // we credited 1 XP per 5 minutes of play time, which made the user
+      // level up while their achievements page still showed 0/71 earned.
+      // The two now stay in lockstep: total XP === sum of achievement
+      // points the user has unlocked. Activity row is still refreshed
+      // for "Recently Played" tracking — just no XP side-effect.
       playTimeInterval = setInterval(() => {
         if (currentUserId) {
-          // 1 XP per 5 minutes of play
-          addXP(currentUserId, 1, "play_time");
-
-          // Update total play time in profile
-          supabase.from("profiles").update({
-            total_play_time_seconds: supabase.rpc ? undefined : undefined, // Use RPC for increment
-          }).eq("id", currentUserId);
-
-          // Update activity
           supabase.from("user_game_activity").upsert({
             user_id: currentUserId,
             game_id: currentGameId,
             last_played_at: new Date().toISOString(),
             total_play_seconds: Math.floor((Date.now() - (playStartTime || Date.now())) / 1000),
-            play_count: 1, // Will be incremented by the DB
+            play_count: 1,
           }, { onConflict: "user_id,game_id" });
         }
-      }, 300_000); // Every 5 minutes
+      }, 300_000);
     }
   });
 
@@ -102,13 +113,13 @@ function handleGameMessage(event: MessageEvent) {
       break;
 
     case "forgeflow:level_complete":
-      // Level completed — good time for an interstitial ad
+      // Level completed — submit score to leaderboards. Good time for an
+      // interstitial ad. NO direct XP grant: XP only flows from earned
+      // achievements (by design). Games that want XP for "completed level N"
+      // should declare it as an achievement (`level_5`, `world_1` etc.) and
+      // grant it via ForgeFlow.unlockAchievement().
       if (currentUserId && payload.score) {
         submitScore(currentUserId, currentGameId!, payload.score);
-      }
-      // XP bonus for level completion
-      if (currentUserId) {
-        addXP(currentUserId, 5, "level_complete");
       }
       break;
 
