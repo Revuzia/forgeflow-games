@@ -119,7 +119,13 @@ export default function GamePlayer({ game }: Props) {
         {!showPreroll && (
           <iframe
             ref={iframeRef}
-            src={game.game_url}
+            // 2026-05-06 — ?v=<build_version|updated_at> cache-buster so the
+            // browser fetches the latest game.js + levels.json every time the
+            // games row updates, instead of serving stale iframe assets.
+            // Without this, players who'd already loaded an old version of
+            // the game would keep seeing the pre-deploy build until they
+            // cleared their browser cache.
+            src={`${game.game_url}${game.game_url.includes("?") ? "&" : "?"}v=${encodeURIComponent(game.build_version || game.updated_at || "1")}`}
             className="w-full h-full border-0"
             allow="autoplay; fullscreen; gamepad"
             sandbox="allow-scripts allow-same-origin allow-popups"
