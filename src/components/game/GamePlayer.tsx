@@ -12,6 +12,13 @@ export default function GamePlayer({ game }: Props) {
   const [showPreroll, setShowPreroll] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  // 2026-05-06 — Stable per-mount nonce that forces the iframe URL to differ
+  // between page loads, so the browser always refetches game.js + levels.json.
+  // Combined with build_version (which captures intentional deploys) this
+  // makes the cache-bust 100% reliable. We capture it in useRef so the iframe
+  // src doesn't change WITHIN a session (would re-mount iframe on every state
+  // update — kills the running game).
+  const mountNonce = useRef<string>(String(Date.now()));
 
   const toggleFullscreen = useCallback(() => {
     if (!containerRef.current) return;
@@ -125,7 +132,7 @@ export default function GamePlayer({ game }: Props) {
             // Without this, players who'd already loaded an old version of
             // the game would keep seeing the pre-deploy build until they
             // cleared their browser cache.
-            src={`${game.game_url}${game.game_url.includes("?") ? "&" : "?"}v=${encodeURIComponent(game.build_version || game.updated_at || "1")}`}
+            src={`${game.game_url}${game.game_url.includes("?") ? "&" : "?"}v=${encodeURIComponent(game.build_version || game.updated_at || "1")}-${mountNonce.current}`}
             className="w-full h-full border-0"
             allow="autoplay; fullscreen; gamepad"
             sandbox="allow-scripts allow-same-origin allow-popups"
