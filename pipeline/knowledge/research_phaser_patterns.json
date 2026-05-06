@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-05T00:00:00Z",
-  "purpose": "Phaser 3 bug patterns and gotchas to harden code-generation prompt against amateur mistakes. Each entry has a wrong pattern, a right pattern, and a one-line prompt directive.",
+  "generated_at": "2026-05-05T22:55:00Z",
+  "purpose": "Phaser 3 bug patterns and gotchas to harden code-generation prompt against amateur mistakes. Each entry has a wrong pattern, a right pattern, and a one-line prompt directive. | 2026-05-05: extended with 12 anti-patterns from Vector Storm playtest (hit-stop multi-kill freeze, tween-on-destroyed, bomb-on-boss softlock, wave-timer race, per-bullet Graphics no-batching, etc.).",
   "sources": [
     "https://docs.phaser.io/phaser/concepts/physics/arcade",
     "https://docs.phaser.io/phaser/concepts/gameobjects/container",
@@ -293,6 +293,146 @@
       "sources": [
         "https://docs.phaser.io/phaser/concepts/physics/arcade",
         "https://docs.phaser.io/api-documentation/class/physics-arcade-group"
+      ]
+    },
+    {
+      "id": "hit_stop_timescale_capture",
+      "category": "physics_world_state",
+      "title": "Hit-stop captures stale timeScale → multi-kill freezes the game at slow-mo",
+      "description": "The standard hit-stop pattern is `oldTS = world.timeScale; world.timeScale = 5; delayedCall(50, () => world.timeScale = oldTS)`. With a single kill it works, but with multi-kill frames (chain explosion, AOE, bomb, dense waves) kill #2 captures the value kill #1 just set (5), schedules a restore-TO-5, and the LAST callback wins → game stuck at timeScale=5 forever (i.e. permanent 5x slow-motion). Looks like a freeze, is actually slow-mo. Single most important Phaser bug class to gate against because it ONLY surfaces in chaotic moments.",
+      "wrong_pattern": "// WRONG: captures stale value when multiple kills happen in same frame\nbulletHitEnemy(bullet, enemy) {\n  if (enemy.hp <= 0) {\n    const oldTS = this.physics.world.timeScale;\n    this.physics.world.timeScale = 5;  // 5x slower\n    this.time.delayedCall(50, () => { this.physics.world.timeScale = oldTS; });\n    // ...kill processing...\n  }\n}",
+      "right_pattern": "// RIGHT: guard with a flag so only ONE hit-stop is ever queued, and ALWAYS restore to 1\nbulletHitEnemy(bullet, enemy) {\n  if (enemy.hp <= 0) {\n    if (!this._hitStopActive) {\n      this._hitStopActive = true;\n      this.physics.world.timeScale = 5;\n      this.time.delayedCall(50, () => {\n        this.physics.world.timeScale = 1;\n        this._hitStopActive = false;\n      });\n    }\n    // ...kill processing...\n  }\n}",
+      "prompt_directive": "NEVER capture timeScale with `oldTS = world.timeScale` inside a kill callback — multi-kill frames pin it. Use `if (!this._hitStopActive)` flag, set timeScale to 5, schedule a restore-to-1 (literal 1, NOT a captured value), and clear the flag in the same callback.",
+      "sources": [
+        "https://docs.phaser.io/api-documentation/class/physics-arcade-world",
+        "https://newdocs.phaser.io/docs/3.55.2/focus/Phaser.Physics.Arcade.World-timeScale"
+      ]
+    },
+    {
+      "id": "tween_on_destroyed_target",
+      "category": "lifecycle_cleanup",
+      "title": "Destroying a Graphics object mid-tween leaks the tween and freezes the renderer",
+      "description": "If a tween is animating `enemy.graphics.scale` and the player kills the enemy mid-tween, calling `enemy.graphics.destroy()` leaves the tween writing to a destroyed object. Phaser sometimes tolerates this, sometimes throws, sometimes silently corrupts the tween manager — at scale (boss telegraph + fast kill = guaranteed) the renderer chokes. Same applies to score-popup tweens, banner tweens, bullet tweens, anything.",
+      "wrong_pattern": "// WRONG: tween targets enemy.graphics; kill happens mid-tween\nthis.tweens.add({ targets: enemy.graphics, scale: 1.4, duration: 450, yoyo: true });\n// ...later, in another method...\nenemy.graphics.destroy();  // tween still running, now writing to a destroyed object",
+      "right_pattern": "// RIGHT: kill any tweens on the target BEFORE destroying it\n_killEnemy(enemy) {\n  if (enemy.graphics) {\n    this.tweens.killTweensOf(enemy.graphics);  // critical\n    if (enemy.graphics.glow) {\n      this.tweens.killTweensOf(enemy.graphics.glow);\n      enemy.graphics.glow.destroy();\n    }\n    enemy.graphics.destroy();\n    enemy.graphics = null;\n  }\n  this.tweens.killTweensOf(enemy);\n  enemy.destroy();\n}",
+      "prompt_directive": "Before destroy()ing any Graphics/Image/Sprite that may have an active tween, call `this.tweens.killTweensOf(target)`. Apply this in every cleanup helper (enemy death, satellite death, projectile expiry).",
+      "sources": [
+        "https://docs.phaser.io/api-documentation/class/tweens-tweenmanager#killTweensOf",
+        "https://phaser.discourse.group/t/tween-target-destroyed-best-practices/9013"
+      ]
+    },
+    {
+      "id": "bomb_kills_boss_skips_death_flow",
+      "category": "boss_lifecycle",
+      "title": "Clear-screen bombs that destroy bosses softlock the wave",
+      "description": "A bomb that iterates all enemies and calls `_killEnemy(e)` works for regular enemies but silently breaks boss fights: it destroys the boss sprite without firing the boss-death pipeline (`_onBossDefeated()`, world-clear flag, music ramp, advance timer). `bossActive` stays true forever, the HP bar lingers, and the wave can't progress. User loses the bomb AND the run.",
+      "wrong_pattern": "// WRONG: bomb insta-kills boss, bypassing _onBossDefeated\nuseBomb() {\n  this.enemyGroup.children.entries.forEach(enemy => {\n    if (!enemy.active) return;\n    this._killEnemy(enemy);  // boss disappears but bossActive=true forever\n  });\n}",
+      "right_pattern": "// RIGHT: bombs DAMAGE bosses (e.g., 25% maxHP) and route through proper death flow if it kills\nuseBomb() {\n  this.enemyGroup.children.entries.slice().forEach(enemy => {\n    if (!enemy.active) return;\n    const isBoss = enemy.bossId !== undefined;\n    const isSat  = enemy.enemyType === 'boss_satellite';\n    if (isBoss || isSat) {\n      enemy.hp -= (enemy.maxHp || enemy.hp) * 0.25;\n      if (enemy.hp <= 0) {\n        this._killEnemy(enemy);\n        if (isBoss) this._onBossDefeated();\n        // satellites: remove from boss.satellites array, fire 'shields down' if last\n      }\n      return;\n    }\n    this._killEnemy(enemy);  // regular enemies: insta-kill\n  });\n}",
+      "prompt_directive": "Clear-screen bombs/AOE/special weapons that 'kill all enemies' MUST special-case bosses + satellites: deal partial damage (e.g., 25% maxHP) and route through the same death flow regular-bullet kills use (_onBossDefeated, satellite-removal, shield-down trigger). Never bypass the boss death pipeline.",
+      "sources": []
+    },
+    {
+      "id": "wave_timer_race_with_boss_death",
+      "category": "scene_lifecycle",
+      "title": "Wave timer fires _advanceWave on the frame the boss dies → double-advance + chaos",
+      "description": "Boss waves typically run for 30-60s. When the boss dies, `bossActive=false` and the next frame the wave-management code sees `waveElapsed > waveTimer` (because the timer kept ticking through the boss fight) and immediately calls `_advanceWave()`. Meanwhile, `_onBossDefeated()` queued a `delayedCall(2200ms, _advanceWave)` for the celebration. Both fire — wave counter advances TWICE, two burst-spawns happen in 2.2s, enemies pile up, world-music swap stomps itself, freeze.",
+      "wrong_pattern": "// WRONG: timer keeps running through boss fight, fires after boss death\nupdate(time, delta) {\n  if (waveElapsed >= this.waveTimer) {\n    this._advanceWave();  // fires next frame after boss dies, before the 2.2s delayedCall\n  }\n}",
+      "right_pattern": "// RIGHT: gate timer-driven advance behind a boss-death-pending flag\n_onBossDefeated() {\n  this.bossActive = false;\n  this._bossDeathPending = true;  // <-- flag\n  this.time.delayedCall(2200, () => {\n    this._isBossClearAdvance = true;\n    this._advanceWave();  // properly advances and clears the flag\n  });\n}\n_advanceWave() {\n  this._bossDeathPending = false;  // clear at top\n  // ... rest of advance logic\n}\nupdate(time, delta) {\n  if (this.bossActive || this._bossDeathPending) return;  // skip timer-advance during these states\n  if (waveElapsed >= this.waveTimer) this._advanceWave();\n}",
+      "prompt_directive": "If your game has boss waves with timed advances, gate the wave-timer-based `_advanceWave()` call behind both `!this.bossActive` AND `!this._bossDeathPending`. Set the pending flag in `_onBossDefeated`, clear it at the top of `_advanceWave`.",
+      "sources": []
+    },
+    {
+      "id": "per_bullet_graphics_no_batching",
+      "category": "performance",
+      "title": "One Graphics object per projectile breaks the renderer at 100+ bullets",
+      "description": "Spawning bullets as `physics.add.sprite('_invisible') + this.add.graphics().lineBetween(...)` creates a separate Graphics GameObject per bullet. Each Graphics is its own draw call — not batched, geometry re-tessellated every frame. A QUAD-spread weapon with x4 stack fires 12 bullets per click at 8/sec = 96 bullets/sec, peaking ~190 alive at once. The display list grows by 100+ Graphics nodes, GPU chokes, framerate collapses. Pre-bake one texture per weapon tier ONCE, use `physics.add.image(x, y, 'bullet_tN')` — all bullets of the same tier share a texture and Phaser batches them into a single draw call.",
+      "wrong_pattern": "// WRONG: Graphics per bullet, not batched\n_spawnBullet(angle) {\n  const bullet = this.physics.add.sprite(px, py, '_invisible');\n  const g = this.add.graphics();\n  g.lineStyle(3, 0x00ffff, 1);\n  g.lineBetween(-10, 0, 10, 0);\n  bullet.graphics = g;  // separate Graphics every bullet\n  // ...100+ of these alive = 100+ draw calls\n}",
+      "right_pattern": "// RIGHT: pre-bake textures in create(), use add.image() — all batched\ncreate() {\n  this._bakeBulletTextures();\n}\n_bakeBulletTextures() {\n  for (const t of [{key:'bullet_t0', color:0x00ffff}, {key:'bullet_t1', color:0xffff44}]) {\n    if (this.textures.exists(t.key)) continue;\n    const g = this.make.graphics({add:false});\n    g.lineStyle(3, t.color, 1);\n    g.lineBetween(4, 8, 24, 8);\n    g.generateTexture(t.key, 28, 16);\n    g.destroy();\n  }\n}\n_spawnBullet(angle, tier) {\n  const bullet = this.physics.add.image(px, py, `bullet_t${tier}`);\n  // single texture, shared, Phaser batches all bullets in one draw call\n}",
+      "prompt_directive": "NEVER allocate a per-bullet Phaser.Graphics object. Pre-bake one texture per weapon tier in create() via `make.graphics({add:false}) + generateTexture(key, w, h)`, then use `physics.add.image(x, y, key)` for bullets. Phaser batches same-texture sprites; per-Graphics bullets do not batch and tank the renderer at 100+ projectiles.",
+      "sources": [
+        "https://docs.phaser.io/api-documentation/class/gameobjects-graphics#generateTexture",
+        "https://phaser.discourse.group/t/best-practice-for-many-projectiles/3217"
+      ]
+    },
+    {
+      "id": "graphics_clear_redraw_per_frame",
+      "category": "performance",
+      "title": "Calling clear()+lineStyle()+strokeCircle() per frame on Graphics is way more expensive than tween-driven scale",
+      "description": "Animated Graphics elements (damage rings, expanding shockwaves, black-hole vortices) often look like: `gfx.clear(); gfx.lineStyle(3, color, alpha); gfx.strokeCircle(0, 0, currentRadius)` every frame. That tessellates new geometry every tick — at 60 fps with N rings active, that's N×60 tessellations per second. The right pattern: draw the shape ONCE at radius=1 (or fixed size), then animate via `tweens.add({ targets: gfx, scale: maxRadius, alpha: 0, duration: 700 })`. Phaser tweens just write to the GameObject's transform — no re-tessellation, no draw-call overhead beyond the original shape.",
+      "wrong_pattern": "// WRONG: re-tessellate every frame\nupdate(time, delta) {\n  for (const r of this.damageRings) {\n    const t = (time - r.birthTime) / r.lifetime;\n    r.gfx.clear();\n    r.gfx.lineStyle(3, r.color, 1 - t);\n    r.gfx.strokeCircle(0, 0, 8 + (r.maxRadius - 8) * t);\n  }\n}",
+      "right_pattern": "// RIGHT: draw once, animate via Phaser tween\n_emitDamageRing(x, y, color, maxRadius) {\n  const ring = this.add.graphics().setDepth(150);\n  ring.lineStyle(3, color, 1);\n  ring.strokeCircle(0, 0, 1);  // unit ring; scaled via tween\n  ring.x = x; ring.y = y;\n  ring.scale = 8;\n  this.tweens.add({\n    targets: ring,\n    scale: maxRadius,\n    alpha: 0,\n    duration: 700,\n    ease: 'Cubic.easeOut',\n    onComplete: () => ring.destroy(),\n  });\n  return ring;\n}",
+      "prompt_directive": "For animated Graphics (rings, vortices, expanding effects), draw the shape ONCE at unit size in the spawn function, then drive scale/alpha/rotation via Phaser tween. Never call clear() + redraw inside an update loop — re-tessellation per frame collapses framerate at scale.",
+      "sources": [
+        "https://docs.phaser.io/api-documentation/class/tweens-tweenmanager",
+        "https://phaser.io/examples/v3.85.0/tweens"
+      ]
+    },
+    {
+      "id": "score_popup_unbounded_spam",
+      "category": "performance",
+      "title": "One Text+tween per kill spams 30+ GameObjects per second at high multiplier",
+      "description": "Score popups feel great visually but become a perf cliff. A chain-lightning kill cascade or rocket AOE can wipe 10 enemies in one frame; with QUAD bursts hitting a swarm, you can sustain 30+ kills/sec. Each spawns a Text object (font rendering, atlas) + a Phaser tween. The tween manager's tick cost grows linearly with active tweens. Cap concurrent popups (e.g., 6) — past that, skip the popup. The HUD multiplier counter pulses on every kill anyway, so feedback fidelity stays high.",
+      "wrong_pattern": "// WRONG: every kill spawns a Text+tween, no cap\nbulletHitEnemy(bullet, enemy) {\n  if (enemy.hp <= 0) {\n    const popup = this.add.text(enemy.x, enemy.y, `+${pts}`, { font: 'bold 18px Arial' });\n    this.tweens.add({ targets: popup, y: popup.y - 50, alpha: 0, duration: 700, onComplete: () => popup.destroy() });\n  }\n}",
+      "right_pattern": "// RIGHT: cap concurrent popups\nbulletHitEnemy(bullet, enemy) {\n  if (enemy.hp <= 0) {\n    if (!this._scorePopups) this._scorePopups = [];\n    this._scorePopups = this._scorePopups.filter(p => p && p.active);\n    if (this._scorePopups.length < 6) {\n      const popup = this.add.text(enemy.x, enemy.y, `+${pts}`, { font: 'bold 18px Arial' });\n      this._scorePopups.push(popup);\n      this.tweens.add({ targets: popup, y: popup.y - 50, alpha: 0, duration: 700, onComplete: () => popup.destroy() });\n    }\n  }\n}",
+      "prompt_directive": "Cap concurrent score-popup Text objects at 6. Filter out destroyed entries before testing the cap. Skipping popups beyond the cap is fine — the HUD multiplier counter already provides per-kill feedback.",
+      "sources": []
+    },
+    {
+      "id": "enemy_orphan_graphics_on_clear",
+      "category": "lifecycle_cleanup",
+      "title": "enemyGroup.clear(true, true) destroys sprites but leaks per-enemy Graphics children",
+      "description": "Enemies often have an associated `enemy.graphics` Graphics object (drawn via createNeonGraphics) that follows the sprite position. The Graphics is NOT in the physics group — it's an independent display-list child. `enemyGroup.clear(true, true)` destroys the sprites but leaks the Graphics. Symptom: skipping waves with N leaves a snake's segments / pinwheel's spinning shape stuck on screen, accumulating each skip until the renderer chokes.",
+      "wrong_pattern": "// WRONG: enemy.graphics, enemy.segments, enemy.graphics.glow leak\n_advanceWave() {\n  this.enemyGroup.clear(true, true);  // destroys sprites only\n}",
+      "right_pattern": "// RIGHT: helper that destroys ALL the orphan visuals attached to each enemy\n_killEnemy(enemy) {\n  if (enemy.segments) {\n    enemy.segments.forEach(s => { if (s) { this.tweens.killTweensOf(s); s.destroy(); }});\n    enemy.segments = null;\n  }\n  if (enemy.graphics) {\n    this.tweens.killTweensOf(enemy.graphics);\n    if (enemy.graphics.glow) {\n      this.tweens.killTweensOf(enemy.graphics.glow);\n      enemy.graphics.glow.destroy();\n    }\n    enemy.graphics.destroy();\n    enemy.graphics = null;\n  }\n  this.tweens.killTweensOf(enemy);\n  enemy.destroy();\n}\n_advanceWave() {\n  if (gameState.enemies) gameState.enemies.slice().forEach(e => this._killEnemy(e));\n  gameState.enemies = [];\n  if (this.enemyGroup) this.enemyGroup.clear(true, false);\n}",
+      "prompt_directive": "When enemies have attached `.graphics`, `.segments[]`, `.graphics.glow`, or any other display-list children NOT in the enemy group, write a `_killEnemy(enemy)` helper that destroys all of them (with tween-kill first), and ALWAYS use that helper. Never trust `group.clear(true, true)` to clean up enemy auxiliary visuals.",
+      "sources": []
+    },
+    {
+      "id": "split_children_chase_player",
+      "category": "ai_design",
+      "title": "Split-on-death debris that chases the player feels like a missile-guided bug",
+      "description": "Pinwheel/jelly/cluster split-on-death pieces are usually thrown outward with initial velocity, but if their AI defaults to the 'chase player' case in the enemy switch, they curve back and home in like missiles. Players experience this as 'a glowing ball followed me across the screen and killed me.' Debris should DRIFT in their initial direction with mild deceleration and self-destruct after ~2.5s — pure hazards, not enemies.",
+      "wrong_pattern": "// WRONG: shard children fall through to default chase AI\nupdate() {\n  for (const e of gameState.enemies) {\n    switch (e.enemyType) {\n      case 'blue_square': /* chase */ break;\n      // ...\n      default:\n        // ALL un-cased types end up chasing the player, including 'shard'\n        const a = angleToTarget(e, gameState.player);\n        e.setVelocity(Math.cos(a) * 50, Math.sin(a) * 50);\n    }\n  }\n}",
+      "right_pattern": "// RIGHT: dedicated 'drift' enemyType for split-children\nspawnDriftDebris(x, y, angle, speed, color, points, paintFn) {\n  const d = this.physics.add.sprite(x, y, '_invisible');\n  d.graphics = createNeonGraphics(this, 0, 0, paintFn, color, 0.5);\n  d.hp = 1; d.points = points; d.enemyType = 'drift'; d.bornAt = this.time.now;\n  this.enemyGroup.add(d); gameState.enemies.push(d);\n  d.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);\n}\n// In update switch:\ncase 'drift':\n  if (time - (e.bornAt || 0) > 2500) { this._killEnemy(e); break; }\n  if (e.body) {\n    e.setVelocity(e.body.velocity.x * 0.985, e.body.velocity.y * 0.985);  // drift + decel\n  }\n  break;",
+      "prompt_directive": "Split-on-death debris (pinwheel/jelly/cluster fragments) MUST use a dedicated `'drift'` enemyType that keeps initial outward velocity with mild deceleration (0.985 per tick) and self-destructs after 2.5s. Never let split-children fall through to a chase-player default — they read as missile-guided and feel buggy.",
+      "sources": []
+    },
+    {
+      "id": "text_setinteractive_unreliable_hit",
+      "category": "input_system",
+      "title": "Text + setInteractive + backgroundColor padding has unreliable hit area",
+      "description": "Text GameObjects with `backgroundColor` + `padding` look like buttons (rendered rectangle around text) but `setInteractive()` defaults to the TEXT GLYPH bounds, not the visible padded rect. Clicks on the colored padding miss; only clicks directly on letters register. The standard Phaser button pattern that ships with most tutorials suffers from this. Use `add.rectangle()` (which has a true bounded shape primitive) + an explicit `setInteractive(new Phaser.Geom.Rectangle(-w/2, -h/2, w, h), Phaser.Geom.Rectangle.Contains)`. For maximum reliability across scene transitions, combine THREE input paths: per-rectangle setInteractive, scene-level pointerdown with manual hit-test using `pointer.x/y`, and a native DOM mousedown listener on the canvas.",
+      "wrong_pattern": "// WRONG: hit area is the text glyph bounds, not the padded rectangle\nconst btn = this.add.text(x, y, 'TRY AGAIN', {\n  font: '24px Arial', color: '#fff',\n  backgroundColor: '#aa0044', padding: { x: 20, y: 10 }\n}).setOrigin(0.5).setInteractive({ useHandCursor: true });\nbtn.on('pointerdown', () => this.scene.start('Game'));",
+      "right_pattern": "// RIGHT: Rectangle + explicit hit area + redundant input paths\n_makeButton(x, y, w, h, label, color, onClick) {\n  const rect = this.add.rectangle(x, y, w, h, color, 0.22).setStrokeStyle(2, color, 1);\n  rect.setInteractive(new Phaser.Geom.Rectangle(-w/2, -h/2, w, h), Phaser.Geom.Rectangle.Contains);\n  rect.on('pointerdown', onClick);\n  this.add.text(x, y, label, { font: 'bold 22px Arial', color: '#fff' }).setOrigin(0.5);\n  if (!this._buttons) this._buttons = [];\n  this._buttons.push({ x, y, w, h, rect, onClick });\n}\ncreate() {\n  this._buttons = [];\n  this._makeButton(width/2, 400, 240, 56, 'TRY AGAIN', 0x00ff88, () => this.scene.start('Game'));\n  // Path B: scene-level pointerdown fallback\n  this.input.on('pointerdown', (p) => {\n    for (const b of this._buttons) {\n      if (Math.abs(p.x - b.x) <= b.w/2 && Math.abs(p.y - b.y) <= b.h/2) { b.onClick(); return; }\n    }\n  });\n  // Path C: native DOM listener (works even if Phaser input is wedged)\n  const canvas = this.game.canvas;\n  const onDown = (cx, cy) => {\n    const r = canvas.getBoundingClientRect();\n    const gx = (cx - r.left) * (this.cameras.main.width / r.width);\n    const gy = (cy - r.top) * (this.cameras.main.height / r.height);\n    for (const b of this._buttons) {\n      if (Math.abs(gx - b.x) <= b.w/2 && Math.abs(gy - b.y) <= b.h/2) { b.onClick(); return; }\n    }\n  };\n  this._domHandler = (e) => onDown(e.clientX, e.clientY);\n  canvas.addEventListener('mousedown', this._domHandler);\n  this.events.once('shutdown', () => canvas.removeEventListener('mousedown', this._domHandler));\n  // Keyboard fallback\n  this.input.keyboard.on('keydown-ENTER', () => this.scene.start('Game'));\n}",
+      "prompt_directive": "For menu/game-over buttons NEVER use Text+backgroundColor+padding+setInteractive — the hit area is the glyph bounds, not the padded rectangle. Use `add.rectangle()` with explicit `setInteractive(new Phaser.Geom.Rectangle(...), Contains)`. For critical buttons (TRY AGAIN, START), add a redundant scene-level `input.on('pointerdown')` with manual hit-test AND a native DOM mousedown listener on `this.game.canvas` (cleaned up on scene shutdown). Plus an ENTER keyboard fallback.",
+      "sources": [
+        "https://docs.phaser.io/api-documentation/class/gameobjects-text",
+        "https://docs.phaser.io/api-documentation/class/gameobjects-rectangle"
+      ]
+    },
+    {
+      "id": "music_swap_during_chaos",
+      "category": "audio_lifecycle",
+      "title": "Crossfading music during high-action moments triggers audio context stalls",
+      "description": "A 'world transition' that swaps music tracks (fade-out old, fade-in new) sounds clean in isolation, but when the swap fires the same frame as a boss-clear cleanup (destroying many enemies + tweens + graphics), the Sound Manager can stall. The browser's audio context creates a new BufferSource on play, the old one's tween is mid-fade, and combined with renderer pressure, the game freezes. Either decouple music swaps from gameplay state changes (defer them to a quiet frame) or just don't swap music at all — let world identity live in enemy visuals + boss themes, not background tracks.",
+      "wrong_pattern": "// WRONG: music swap fires inside _advanceWave during boss-clear cleanup\n_advanceWave() {\n  // ...destroy 80 enemies, clear damage rings, kill tweens...\n  this._switchMusic(this._musicKeyForWorld(newWorld));  // tween-fade-out + sound.add + tween-fade-in\n  // ...spawn 12 burst enemies...\n}",
+      "right_pattern": "// RIGHT (option A): drop music swaps entirely; world identity = enemy theme\n_advanceWave() {\n  // ...cleanup, advance, burst-spawn...\n  // No music swap. Single track plays the whole game. Boss has its own theme only if isolated to fight start.\n}\n\n// RIGHT (option B): defer the swap to a quiet frame\n_advanceWave() {\n  // ...cleanup, advance, burst-spawn...\n  this.time.delayedCall(800, () => this._switchMusic(newKey));  // run when scene is calm\n}",
+      "prompt_directive": "Avoid fading + replacing background music during gameplay state transitions (wave advance, boss death, world clear). Either keep one track for the whole game (use enemy visuals to convey world identity) OR defer the music swap to a quiet frame via delayedCall. Never run a music tween-fade in the same frame as a wave-cleanup.",
+      "sources": [
+        "https://blog.ourcade.co/posts/2020/phaser-3-web-audio-best-practices-games/"
+      ]
+    },
+    {
+      "id": "fit_scale_canvas_too_small_or_pixelated",
+      "category": "scale_mode",
+      "title": "Default 960×540 canvas + Phaser.Scale.NONE leaves the game tiny on big monitors",
+      "description": "Many tutorials set up a 960×540 game with no scale mode, so on a 1920×1080 monitor the canvas is tiny and centered. Switching to `Phaser.Scale.FIT` upscales the same 960×540 to 1920×1080 — that's a 2× bilinear stretch, looks pixel-y. The right pattern: set INTRINSIC resolution to 1280×720 (matches most laptops natively, and only 1.5× scale on 1080p fullscreen — significantly sharper) AND use Phaser.Scale.FIT with autoCenter, AND CSS-fill the parent container with `100vw / 100vh, position: fixed, inset: 0`.",
+      "wrong_pattern": "// WRONG: 960x540, scale.NONE, default CSS — canvas is tiny on big screens\nconst phaserConfig = {\n  width: 960, height: 540,\n  parent: 'game-container',\n  // no `scale` block, defaults to NONE\n};\n// index.html: #game-container { width: 100%; height: 100%; }",
+      "right_pattern": "// RIGHT: 1280x720, FIT mode, viewport-fill CSS\nconst GAME_CONFIG = { width: 1280, height: 720 };\nconst phaserConfig = {\n  width: GAME_CONFIG.width, height: GAME_CONFIG.height,\n  parent: 'game-container',\n  scale: {\n    mode: Phaser.Scale.FIT,\n    autoCenter: Phaser.Scale.CENTER_BOTH,\n    width: GAME_CONFIG.width, height: GAME_CONFIG.height,\n  },\n};\n// index.html:\n// html, body { width: 100vw; height: 100vh; overflow: hidden; }\n// #game-container { position: fixed; inset: 0; width: 100vw; height: 100vh;\n//                   display: flex; align-items: center; justify-content: center; }\n// canvas { display: block; max-width: 100%; max-height: 100%; }",
+      "prompt_directive": "Default game resolution should be 1280×720 (NOT 960×540). Use `scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }` in the Phaser config. The parent container CSS must be viewport-filling (`position: fixed; inset: 0; width: 100vw; height: 100vh`) for the FIT mode to scale up correctly on large monitors and in fullscreen.",
+      "sources": [
+        "https://docs.phaser.io/api-documentation/class/scale-scalemanager",
+        "https://phaser.io/examples/v3.85.0/scalemanager"
       ]
     }
   ]

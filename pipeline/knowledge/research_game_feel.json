@@ -1,0 +1,611 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-05-05",
+  "purpose": "Canonical reference for juice/game-feel patterns to be applied automatically by ForgeFlow's game-generation pipeline. Each pattern has a directive (what to do), a Phaser-3 implementation hint (how to do it), and a reference to a primary source.",
+  "primary_sources": [
+    {
+      "id": "vlambeer_screenshake",
+      "title": "The Art of Screenshake",
+      "author": "Jan Willem Nijman (Vlambeer)",
+      "url": "https://www.youtube.com/watch?v=AJdEqssNZ-U",
+      "archive_url": "https://archive.org/details/the-art-of-screenshake",
+      "summary": "31 progressive 'juice' steps applied to a top-down shooter prototype: bigger bullets, more bullets, less bullet speed, kickback, screenshake, hit animations, enemy explosions, permanence (corpses, casings, decals), gun delay, decoupled gun position, camera lerp, sleep-on-hit (hit-stop), HP juice, sound, music."
+    },
+    {
+      "id": "juice_or_lose_it",
+      "title": "Juice It Or Lose It",
+      "author": "Martin Jonasson and Petri Purho",
+      "url": "https://www.youtube.com/watch?v=Fy0aCDmgnxg",
+      "gdc_vault_url": "https://www.gdcvault.com/play/1016487/Juice-It-or-Lose",
+      "summary": "Breakout clone is gradually 'juiced' with tweens, color, scaling, particles, screen shake, sound layering and music. Defines juice as 'constant, bountiful user feedback' for trivial actions."
+    },
+    {
+      "id": "swink_game_feel",
+      "title": "Game Feel: A Game Designer's Guide to Virtual Sensation",
+      "author": "Steve Swink",
+      "url": "https://www.gamedeveloper.com/design/principles-of-virtual-sensation",
+      "archive_url": "https://archive.org/details/game-feel",
+      "summary": "Defines game feel as the tactile, kinesthetic sense of manipulating a virtual object. Three building blocks: real-time control, simulated space, polish. Polish = visual/audio/haptic effects amplifying the interaction."
+    },
+    {
+      "id": "designing_game_feel_survey",
+      "title": "Designing Game Feel: A Survey",
+      "author": "Pichlmair & Johansen",
+      "url": "https://arxiv.org/pdf/2011.09201",
+      "summary": "Academic survey enumerating juice patterns across genres: hit-stop, camera shake, particles, squash/stretch, post-processing, layered audio."
+    },
+    {
+      "id": "vlambeer_explosions",
+      "title": "Explosions In Vlambeer's Nuclear Throne",
+      "url": "https://ctrl500.com/game-design/explosions-in-vlambeers-nuclear-throne/",
+      "summary": "Documents Nuclear Throne's permanence layers: bodies, bullet casings, level destruction. Dust ring (short-lived, communicates motion) vs smoke ring (lingers)."
+    },
+    {
+      "id": "davetech_screenshake_types",
+      "title": "Analysis of Screenshake Types",
+      "url": "http://www.davetech.co.uk/gamedevscreenshake",
+      "summary": "Random offset is the default and works fine. Diminishing-strength shake (strong peak, long tail) feels best. Horizontal-only shake suits side-on platformers."
+    },
+    {
+      "id": "phaser_camera_docs",
+      "title": "Phaser 3 Camera + FX docs",
+      "url": "https://docs.phaser.io/api-documentation/class/cameras-scene2d-camera",
+      "fx_url": "https://docs.phaser.io/api-documentation/class/gameobjects-components-fx",
+      "bloom_url": "https://docs.phaser.io/api-documentation/class/fx-bloom",
+      "glow_example": "https://phaser.io/examples/v3.85.0/fx/glow/view/glow-post-fx",
+      "shake_example": "https://phaser.io/examples/v3.85.0/camera/view/shake",
+      "summary": "Phaser 3.60+ ships built-in postFX (bloom, glow, blur, shine, vignette, wipe, pixelate, displacement) plus camera shake/flash/fade as core APIs."
+    },
+    {
+      "id": "vector_storm_playtest_2026_05_05",
+      "title": "Vector Storm playtest 2026-05-05 (5-10h iterative session)",
+      "url": "internal://state/_smoke_whole_game_real/vector-storm/",
+      "summary": "Live playtest of a generated arena shooter that uncovered cumulative-wave skip pattern, world-themed enemy rosters (vs music swaps), weapon stack-bonus system, boss-telegraphed attacks, instant-zap weapons, save-gated wave skip, polished GameOver with redundant-input buttons, and concurrent-object hard caps."
+    }
+  ],
+  "juice_principles": [
+    {
+      "name": "camera_shake_on_impact",
+      "directive": "Shake the camera on every meaningful impact (kill, hit-taken, explosion); scale duration + intensity by combo size or damage tier.",
+      "phaser_hint": "this.cameras.main.shake(80, 0.005)  // ms, normalized intensity 0..1; for big hits use 200ms @ 0.015",
+      "tunables": {
+        "normal_hit": "60ms @ 0.003",
+        "kill": "100ms @ 0.006",
+        "boss_hit": "180ms @ 0.012",
+        "explosion": "300ms @ 0.02"
+      },
+      "source_id": "vlambeer_screenshake"
+    },
+    {
+      "name": "hit_stop_freeze_frame",
+      "directive": "Freeze the world for 50-150ms on big hits to sell weight. Never exceed 200ms.",
+      "phaser_hint": "this.physics.world.timeScale = 0.05; this.tweens.timeScale = 0.05; this.time.delayedCall(80, () => { this.physics.world.timeScale = 1; this.tweens.timeScale = 1; });",
+      "tunables": {
+        "normal": "0ms (skip)",
+        "kill": "60ms",
+        "boss_hit": "120ms",
+        "death": "300ms then slow-mo"
+      },
+      "source_id": "juice_or_lose_it"
+    },
+    {
+      "name": "particle_burst_on_state_change",
+      "directive": "Emit a particle burst on every kill, pickup, level-up, door-open, and tier-transition. Bursts live <600ms and never obscure gameplay.",
+      "phaser_hint": "this.add.particles(x, y, 'spark', { speed: {min:80, max:240}, lifespan: 400, quantity: 12, scale: {start:0.6, end:0}, blendMode:'ADD' }).explode(12);",
+      "tunables": {
+        "kill": "12 particles, 400ms",
+        "pickup": "6 particles, 300ms",
+        "level_up": "30 particles, 800ms"
+      },
+      "source_id": "juice_or_lose_it"
+    },
+    {
+      "name": "score_popup_float_fade",
+      "directive": "Every score gain spawns a text that floats up ~40px and fades over 600ms with eased motion.",
+      "phaser_hint": "const t = this.add.text(x, y, '+'+pts, {fontFamily:'Arial', fontSize:'18px', color:'#fff', stroke:'#000', strokeThickness:3}).setOrigin(0.5); this.tweens.add({ targets:t, y:t.y-40, alpha:0, duration:600, ease:'Cubic.easeOut', onComplete:()=>t.destroy() });",
+      "source_id": "juice_or_lose_it"
+    },
+    {
+      "name": "damage_number_popup",
+      "directive": "Floating damage numbers from each enemy hit (skip if 50+ enemies on screen — toggle off for bullet-hell).",
+      "phaser_hint": "Same as score_popup but anchored to enemy.x,enemy.y - 20; use color tier (white=normal, yellow=crit, red=heavy).",
+      "tunables": {
+        "max_concurrent": 40,
+        "auto_disable_threshold": "60+ enemies"
+      },
+      "source_id": "designing_game_feel_survey"
+    },
+    {
+      "name": "background_pulse_on_wave",
+      "directive": "Shift background hue or brightness as waves/levels escalate; pulse on beat in arcade games.",
+      "phaser_hint": "this.tweens.addCounter({ from:0, to:1, duration:2000, yoyo:true, repeat:-1, onUpdate: t => this.cameras.main.setBackgroundColor( Phaser.Display.Color.Interpolate.ColorWithColor(c1,c2,1,t.getValue()) ) });",
+      "source_id": "juice_or_lose_it"
+    },
+    {
+      "name": "bloom_glow_on_neon",
+      "directive": "Apply bloom to bullets, explosions, pickups and any 'neon' element. Use sparingly — only on bright/saturated objects, never on UI text.",
+      "phaser_hint": "bullet.postFX.addBloom(0xffffff, 1, 1, 1.2, 1.5, 4);  // color, offsetX, offsetY, blurStrength, strength, steps",
+      "anti_pattern": "Do NOT bloom the whole scene; only bright objects.",
+      "source_id": "phaser_camera_docs"
+    },
+    {
+      "name": "chromatic_aberration_on_big_impact",
+      "directive": "Brief RGB-channel split on death, boss hit, or screen-clear bombs. Pulse in then out over 200ms.",
+      "phaser_hint": "Use a custom post-pipeline or simulate via 3 stacked tinted copies offset by 1-2px on the X axis; tween offset 0->2->0 over 200ms.",
+      "tunables": {
+        "max_offset_px": 2,
+        "duration_ms": 200,
+        "frequency": "boss hits and death only"
+      },
+      "source_id": "designing_game_feel_survey"
+    },
+    {
+      "name": "anticipation_followthrough",
+      "directive": "Squash before action, stretch during, settle after. Apply to jumps, attacks, projectile launches.",
+      "phaser_hint": "this.tweens.chain({ targets:player, tweens:[ {scaleX:1.2, scaleY:0.8, duration:80}, {scaleX:0.85, scaleY:1.2, duration:120}, {scaleX:1, scaleY:1, duration:150, ease:'Back.out'} ] });",
+      "source_id": "juice_or_lose_it"
+    },
+    {
+      "name": "telegraph_then_impact",
+      "directive": "Enemy attacks flash a warning shape (red zone, charge glow) for 200-500ms BEFORE damage lands.",
+      "phaser_hint": "const tel = this.add.rectangle(x,y,w,h,0xff0000,0.3); this.tweens.add({targets:tel, alpha:{from:0.2,to:0.6}, yoyo:true, repeat:2, duration:120, onComplete:()=>{ tel.destroy(); spawnHitbox(); }});",
+      "source_id": "designing_game_feel_survey"
+    },
+    {
+      "name": "audio_layer_intensity",
+      "directive": "Music has 2-3 stems (drums, bass, melody). Combo/wave triggers add or remove stems via volume tween.",
+      "phaser_hint": "this.sound.add('drums',{loop:true,volume:0}).play(); this.tweens.add({targets:drums, volume:0.8, duration:1000});",
+      "source_id": "vlambeer_screenshake"
+    },
+    {
+      "name": "rate_pitch_modulation",
+      "directive": "Multiplier ticks, combo counters, and pickup chimes rise in pitch as the streak grows. Reset on miss.",
+      "phaser_hint": "sfx.play({ rate: 1 + Math.min(combo*0.05, 1.0), detune: combo*30 });",
+      "tunables": {
+        "max_rate": 2.0,
+        "max_detune_cents": 1200
+      },
+      "source_id": "juice_or_lose_it"
+    },
+    {
+      "name": "easing_on_ui",
+      "directive": "Every UI motion uses an easing curve. Default to Back.out for popups, Cubic.out for fades, Elastic.out for celebrations.",
+      "phaser_hint": "this.tweens.add({ targets:menu, scale:{from:0,to:1}, duration:280, ease:'Back.out(1.7)' });",
+      "anti_pattern": "Linear motion on UI feels robotic and cheap.",
+      "source_id": "juice_or_lose_it"
+    },
+    {
+      "name": "death_slow_mo_fast_restart",
+      "directive": "On player death: slow time to 10-25%, hold 600-1200ms, fast wipe to restart. Restart loads in <1s.",
+      "phaser_hint": "this.physics.world.timeScale = 0.1; this.cameras.main.zoomTo(1.5, 800); this.time.delayedCall(1200, () => this.scene.restart());",
+      "source_id": "designing_game_feel_survey"
+    },
+    {
+      "name": "damage_flash_red_overlay",
+      "directive": "On player damage: full-screen red flash (alpha 0.3, 80ms). On enemy hit: 50ms white tint.",
+      "phaser_hint": "this.cameras.main.flash(80, 255, 0, 0, false);  // player damage  enemy.setTint(0xffffff); this.time.delayedCall(50, ()=>enemy.clearTint());",
+      "source_id": "vlambeer_screenshake"
+    },
+    {
+      "name": "tier_palette_shift",
+      "directive": "On tier-up (level, biome, difficulty), shift the global palette. Color quantization sells progression.",
+      "phaser_hint": "this.tweens.addCounter({from:0,to:1,duration:1500,onUpdate:t=>{ /* lerp tint of shared atlas frames */ }});",
+      "source_id": "juice_or_lose_it"
+    },
+    {
+      "name": "camera_zoom_punch",
+      "directive": "On bombs / wave-clear / boss-defeat: zoom out 5-10%, hold 80ms, ease back to 1.0 over 200ms.",
+      "phaser_hint": "this.cameras.main.zoomTo(0.92, 80, 'Cubic.easeOut'); this.time.delayedCall(120, () => this.cameras.main.zoomTo(1.0, 200, 'Back.easeOut'));",
+      "source_id": "designing_game_feel_survey"
+    },
+    {
+      "name": "permanence_corpses_decals",
+      "directive": "Killed enemies leave bodies, casings, blood splats or charred craters that stay until level end. Sells player agency.",
+      "phaser_hint": "Spawn a static sprite into a 'decals' RenderTexture on each kill rather than as a live sprite — keeps fill-rate flat.",
+      "source_id": "vlambeer_explosions"
+    },
+    {
+      "name": "kickback_recoil",
+      "directive": "Player nudges backward 2-6px on shoot/hit. Sells weapon weight without changing input.",
+      "phaser_hint": "this.tweens.add({ targets:player, x:player.x - 4*facing, duration:60, yoyo:true, ease:'Quad.out' });",
+      "source_id": "vlambeer_screenshake"
+    },
+    {
+      "name": "diminishing_shake_curve",
+      "directive": "Use a perlin-or-decay shake (strong peak, long soft tail) over flat random — same energy budget, much less fatigue.",
+      "phaser_hint": "Phaser's built-in shake already decays linearly; for stronger effect run two shakes: shake(60, 0.012) + shake(180, 0.004) overlapping.",
+      "source_id": "davetech_screenshake_types"
+    },
+    {
+      "name": "input_buffering_coyote",
+      "directive": "Buffer jump/attack inputs 100-150ms before legality and grant 80-120ms coyote-time after leaving a ledge. Feels precise even on dropped frames.",
+      "phaser_hint": "Track lastJumpPressedAt and lastGroundedAt; on any frame where (now - lastJumpPressedAt < 120 && now - lastGroundedAt < 100) execute jump.",
+      "source_id": "designing_game_feel_survey"
+    },
+    {
+      "name": "cumulative_wave_skip_only_boss_clears",
+      "directive": "In wave-based games, the natural wave timer expiring (or a player-triggered N-skip) should NOT clear existing enemies — leftover enemies stack into the next wave. Only a real boss-clear earns a screen wipe. This makes skips a real difficulty escalation (they 'stack' enemies) rather than a free reset.",
+      "phaser_hint": "_advanceWave() { const isBossClear = this._isBossClearAdvance === true; this._isBossClearAdvance = false; if (isBossClear) { gameState.enemies.slice().forEach(e => this._killEnemy(e)); gameState.enemies = []; if (this.enemyGroup) this.enemyGroup.clear(true, false); /* + clear damage rings, enemy bullets, black holes */ } /* timer/skip advances skip the cleanup block */ }",
+      "tunables": {
+        "skip_clears": "false",
+        "timer_clears": "false",
+        "boss_clears": "true"
+      },
+      "source_id": "vector_storm_playtest_2026_05_05"
+    },
+    {
+      "name": "world_themed_enemy_rosters",
+      "directive": "Convey 'world' identity via enemy species changes, not music swaps. Each world (group of N waves) gets a distinct enemy roster with different visuals + AI behaviors. Music can stay constant the whole game; the player's eye reads the world transition from the new shapes/colors that arrive.",
+      "phaser_hint": "_availableEnemyTypes(wave) { if (wave <= 3) return ['blue_square','diamond','snake','shooter']; if (wave <= 6) return ['squid','squiggle','jelly','waver']; return ['crystal','glitcher','cluster','gravity_well']; }",
+      "tunables": {
+        "enemies_per_world": "3-5 unique types",
+        "world_size": "3 waves",
+        "music_swaps": "0 (or boss only)"
+      },
+      "source_id": "vector_storm_playtest_2026_05_05"
+    },
+    {
+      "name": "weapon_stack_bonus_system",
+      "directive": "Weapon-upgrade pickups should reward DUPLICATES instead of being wasted. Picking up the same weapon you already have should: (a) extend the duration by N seconds, (b) increment a stack counter (cap 4), (c) grant a stack-scaled bonus per fire (extra projectile, +damage, wider spread, more chains). New tier resets stacks. Display stack count on HUD.",
+      "phaser_hint": "_grantWeaponUpgrade(tier, durationMs=9000) { const sameTier = (this.weaponTier === tier && now < this.weaponTierExpiresAt); if (sameTier) { this.weaponStacks = Math.min(this.weaponStacks + 1, 4); this.weaponTierExpiresAt += durationMs; gameState.score += 250 * this.weaponStacks; } else { this.weaponTier = tier; this.weaponStacks = 0; this.weaponTierExpiresAt = now + durationMs; } }",
+      "tunables": {
+        "stack_cap": 4,
+        "duration_extension": "9000ms",
+        "stack_score_bonus": "250 * stack"
+      },
+      "source_id": "vector_storm_playtest_2026_05_05"
+    },
+    {
+      "name": "boss_telegraphed_attacks",
+      "directive": "Every boss attack should telegraph 0.4-0.6s before it fires. Common telegraph patterns: (a) brief scale-pulse on the boss graphics (1.0 → 1.4, yoyo), (b) bright color pulse, (c) tracer line preview for aimed shots. Without telegraphs, players feel cheated; with them, the boss feels readable and 'fair-hard'.",
+      "phaser_hint": "if (time > enemy.lastShock - 500 && !enemy._shockTelegraphed) { enemy._shockTelegraphed = true; this.tweens.add({ targets: enemy.graphics, scale: 1.4, duration: 450, yoyo: true, ease: 'Cubic.easeOut' }); } if (time > enemy.lastShock) { this._emitDamageRing(enemy.x, enemy.y, color, radius); enemy.lastShock = time + cooldown; enemy._shockTelegraphed = false; }",
+      "tunables": {
+        "telegraph_duration": "450ms",
+        "scale_pulse": "1.0→1.4 yoyo",
+        "min_attack_cooldown": "3000ms"
+      },
+      "source_id": "vector_storm_playtest_2026_05_05"
+    },
+    {
+      "name": "concurrent_object_hard_caps",
+      "directive": "At high-stack/high-multiplier moments, gameplay objects can grow unbounded (bullets, enemy bullets, score popups, chain bolts, enemies). Apply hard caps with oldest-first eviction. The player won't notice missing extras at the cap — but they'll definitely notice the freeze without caps.",
+      "phaser_hint": "// In _spawnBullet:\nif (gameState.bullets.length >= 150) {\n  const oldest = gameState.bullets.shift();\n  if (oldest && oldest.active) oldest.destroy();\n}\n// Similar pattern for enemy bullets (80), score popups (6), concurrent chain bolts (12), active enemies (80).",
+      "tunables": {
+        "player_bullets": 150,
+        "enemy_bullets": 80,
+        "score_popups": 6,
+        "chain_bolts": 12,
+        "active_enemies": 80
+      },
+      "source_id": "vector_storm_playtest_2026_05_05"
+    },
+    {
+      "name": "instant_zap_weapon_no_projectile",
+      "directive": "Some weapons feel better as INSTANT zaps from player to nearest enemy — no projectile travel, immediate visual + damage. Best fit: chain-lightning, laser, beam weapons. Implementation: skip the bullet system, find nearest enemy in forward arc, draw zigzag bolt directly, apply damage instantly, recurse for chain effects.",
+      "phaser_hint": "_fireChainZap(baseAngle, stacks) {\n  const target = this._findNearestEnemyInArc(baseAngle, /*range*/ 480, /*arcDeg*/ 60);\n  if (!target) { this._drawZapBolt(px, py, px + Math.cos(baseAngle)*240, py + Math.sin(baseAngle)*240, 0.5); return; }\n  target.hp -= 3 + stacks;\n  this._drawZapBolt(px, py, target.x, target.y, 1);\n  if (target.hp <= 0) this._killEnemy(target);\n  this._chainLightning(target, 3 + stacks, (3 + stacks) * 0.7);  // recurse\n}",
+      "tunables": {
+        "range": "480px",
+        "forward_arc": "120deg (cos>=0.5)",
+        "base_damage": "3 + stacks",
+        "chain_falloff": "0.7",
+        "fire_rate": "200ms (slower than base)"
+      },
+      "source_id": "vector_storm_playtest_2026_05_05"
+    },
+    {
+      "name": "save_gated_wave_skip",
+      "directive": "Wave-skip ('N' key) should be gated by a localStorage 'maxWaveReached' record — players can only skip TO a wave they've previously REACHED. This prevents fresh-save players from blasting to the final boss; rewards persistence. Save the high-water mark on every wave entry. UI: show 'Max Wave Reached: N' on the menu, with a 'Reset Save' option.",
+      "phaser_hint": "// Initial state:\nmaxWaveReached: parseInt(localStorage.getItem('maxWave') || '1'),\n// On wave start:\nif (gameState.currentWave > gameState.maxWaveReached) {\n  gameState.maxWaveReached = gameState.currentWave;\n  localStorage.setItem('maxWave', String(gameState.maxWaveReached));\n}\n// N-key skip gate:\nif (Phaser.Input.Keyboard.JustDown(this.cursors.n) && gameState.currentWave + 1 <= gameState.maxWaveReached && !this.bossActive) { this._advanceWave(); }",
+      "tunables": {
+        "storage_key": "<game>MaxWave",
+        "show_on_menu": "true",
+        "reset_button": "true"
+      },
+      "source_id": "vector_storm_playtest_2026_05_05"
+    },
+    {
+      "name": "polished_gameover_with_redundant_input",
+      "directive": "The GameOver screen MUST work on first click — players who lost a great run will rage-quit if 'TRY AGAIN' doesn't respond. Use Rectangle-based buttons (NOT Text+backgroundColor) AND a scene-level pointerdown listener AND a native DOM canvas listener AND keyboard ENTER/SPACE/R fallback. Reset any de-bounce flags on every create() call so re-entering GameOver works.",
+      "phaser_hint": "// See research_phaser_patterns.json#text_setinteractive_unreliable_hit for full pattern. Game-over create() should reset this._goneToScene = false at the top, set up Rectangle buttons via _makeButton(), add scene-level input.on('pointerdown') with hit-test, add canvas DOM mousedown handler (with shutdown cleanup), and bind ENTER/SPACE to retry.",
+      "tunables": {
+        "button_redundancy": "4 paths (Phaser+scene+DOM+keyboard)",
+        "de_bounce_reset_on_create": "true"
+      },
+      "source_id": "vector_storm_playtest_2026_05_05"
+    }
+  ],
+  "per_genre_juice_priorities": {
+    "platformer": [
+      "anticipation_followthrough (squash on jump, stretch in air, squash on landing)",
+      "particle_burst_on_state_change (run dust, jump dust, ground-pound shockwave)",
+      "camera_shake_on_impact (heavy landings + ground-pounds only, never on every step)",
+      "input_buffering_coyote (the platformer juice that lives in feel, not visuals)",
+      "audio_layer_intensity (footsteps shift surface SFX; combat layer fades in)"
+    ],
+    "arcade_twin_stick": [
+      "bloom_glow_on_neon (bullets and pickups must glow)",
+      "particle_burst_on_state_change (kill bursts; bullet trails)",
+      "camera_zoom_punch (screen-clear bomb)",
+      "rate_pitch_modulation (combo tick rising in pitch)",
+      "diminishing_shake_curve (kill = small, bomb = huge)"
+    ],
+    "shmup": [
+      "bullet trails (additive-blend particle stream behind every projectile)",
+      "telegraph_then_impact (boss patterns telegraph 0.4-0.8s before fire)",
+      "damage_flash_red_overlay (on player; white tint on boss)",
+      "audio_layer_intensity (boss arrival fanfare, music intensifies at low boss HP)",
+      "camera_shake_on_impact (only on player hit and boss death)"
+    ],
+    "flight": [
+      "engine_glow (postFX bloom on thruster sprite, intensity tied to throttle)",
+      "particle_burst_on_state_change (missile trails, contrails, hit sparks)",
+      "camera_tilt_on_bank (camera roll 5-10 deg following player input, not raw)",
+      "audio_layer_intensity (engine pitch tracks throttle; combat stem on lock-on)",
+      "tier_palette_shift (sky color shifts per altitude band)"
+    ],
+    "rpg": [
+      "damage_number_popup (always on; color-tier by element/crit)",
+      "telegraph_then_impact (every enemy ability has wind-up)",
+      "audio_layer_intensity (level-up fanfare; boss music swap)",
+      "camera_zoom_punch (zoom in on encounter start; zoom out on victory)",
+      "easing_on_ui (menus open with Back.out, close with Cubic.in)"
+    ],
+    "arpg": [
+      "particle_burst_on_state_change (every ability has its own particle shape + color)",
+      "tier_palette_shift (loot rarity = white/blue/yellow/orange beam-of-light + sound tier)",
+      "hit_stop_freeze_frame (60-100ms on heavy attacks, 0 on light)",
+      "damage_flash_red_overlay (player hit + boss hit-flash)",
+      "diminishing_shake_curve (scale by ability tier, not per-tick of DoT)"
+    ],
+    "puzzle": [
+      "easing_on_ui (snap-to-grid uses Back.out; pieces overshoot then settle)",
+      "particle_burst_on_state_change (match cascade emits 1 burst per chain step)",
+      "rate_pitch_modulation (cascade chime rises per step)",
+      "score_popup_float_fade (per match, scaled by chain length)",
+      "audio_layer_intensity (chain reaction adds drums; resets on no-move)"
+    ],
+    "strategy": [
+      "telegraph_then_impact (preview damage / movement before commit)",
+      "camera_zoom_punch (dramatic zoom on unit-killed or critical hit)",
+      "audio_layer_intensity (turn-end fanfare; victory parade)",
+      "particle_burst_on_state_change (capture, build-complete, research-done)",
+      "easing_on_ui (cards/menus use elastic; counters tween rather than snap)"
+    ],
+    "simulation": [
+      "easing_on_ui (placement snap with Back.out; satisfying click-into-place)",
+      "score_popup_float_fade (money +/- floats up green/red; experience bar tweens)",
+      "audio_layer_intensity (day-tick chime; ambient layer adds populace-noise as town grows)",
+      "particle_burst_on_state_change (build-complete confetti; harvest sparkle)",
+      "rate_pitch_modulation (UI clicks rise in pitch on streak buys)"
+    ],
+    "adventure": [
+      "easing_on_ui (cinematic camera moves use ease-in-out, not lerp)",
+      "telegraph_then_impact (door opens after pause; chest opens with anticipation)",
+      "audio_layer_intensity (item-get pause + jingle, world music ducks)",
+      "tier_palette_shift (biome transitions cross-fade palette)",
+      "dialogue typewriter + ducking music while text appears"
+    ]
+  },
+  "modern_indie_references": [
+    {
+      "game": "Hades / Hades II (Supergiant 2020 / 2024)",
+      "signature": "Cast-frame hit-flash + screen-shake gated by Aspect, plus boon-pickup zoom and god-voice chime. Screenshake is intense enough that the team ships an explicit accessibility toggle.",
+      "lesson": "Every god boon = unique color + voice + UI takeover. Pickups are events, not menu items.",
+      "source": "https://kotaku.com/hades-2-early-access-god-mode-autofire-timer-1851461987"
+    },
+    {
+      "game": "Dead Cells (Motion Twin 2018-)",
+      "signature": "Combo escalation: each successful hit ramps the combat audio stem and adds a 1-frame hit-stop; weapon-specific impact VFX read clearly even at 12 enemies on-screen.",
+      "lesson": "VFX must read at speed. 2D-from-3D pipeline gives consistent silhouettes that survive screen shake + particles.",
+      "source": "https://www.gamedeveloper.com/production/art-design-deep-dive-using-a-3d-pipeline-for-2d-animation-in-i-dead-cells-i-"
+    },
+    {
+      "game": "Vampire Survivors (poncle 2022)",
+      "signature": "Number-soup damage popups + screen-fill weapon effects + EXP-gem 'ching' chorus. So loud the dev added a damage-number toggle when fans complained.",
+      "lesson": "Density is the juice. Every gem-pickup ching layered together becomes the music.",
+      "source": "https://lapfullofcrumbs.net/2023/09/24/vampire-survivors-review/"
+    },
+    {
+      "game": "Risk of Rain 2 (Hopoo 2020)",
+      "signature": "Item-pickup fanfare + tier-color shift (white/green/red/yellow border) + layered sound stinger per tier. Stacking triggers cascading screen-fill.",
+      "lesson": "Color-coded rarity + escalating audio = the player learns the rarity system without reading.",
+      "source": "https://riskofrain2.wiki.gg/wiki/Items"
+    },
+    {
+      "game": "Nuclear Throne (Vlambeer 2015)",
+      "signature": "3 layers of permanence (corpses, casings, decals) + dust ring (motion) vs smoke ring (lingering) + gun kickback + weapon-pickup pause.",
+      "lesson": "Permanence = retroactive proof of player agency. Cheap to ship if you bake decals into a RenderTexture.",
+      "source": "https://ctrl500.com/game-design/explosions-in-vlambeers-nuclear-throne/"
+    },
+    {
+      "game": "Luftrausers (Vlambeer 2014)",
+      "signature": "Whole-screen monochrome palette per run + chunky low-res spritework + heavy weighty kickback on the plane + bouncy water.",
+      "lesson": "A single global palette can be juice on its own — palette swap = whole new game-feel."
+    },
+    {
+      "game": "Geometry Wars / Resogun",
+      "signature": "Bloom on every neon stroke, bullet trails, particle storm on death, on-beat enemy spawns synced to music.",
+      "lesson": "Vector neon games live or die by bloom + additive blending. No bloom = student project."
+    },
+    {
+      "game": "Celeste (Maddy Makes Games 2018)",
+      "signature": "Dash freeze-frame (~2 frames) + particle burst + camera-no-shake (game uses input precision over camera juice). Coyote time + jump buffer set the platformer standard.",
+      "lesson": "Hit-stop on the PLAYER's actions (dash) is as juicy as on enemies. Skip shake when you want the player to feel in control."
+    },
+    {
+      "game": "Tunic (Andrew Shouldice 2022)",
+      "signature": "Shield-impact freeze-frame + sword-arc trail particles + sub-second camera bump on heavy enemies; otherwise restrained.",
+      "lesson": "Restraint is juice too. Save the big effects for the moments that earn them."
+    },
+    {
+      "game": "Brotato (Blobfish 2023)",
+      "signature": "Damage number tornado + per-weapon SFX layering + simple pulse on the character on hit; 60-second pacing with stat fanfare on shop entry.",
+      "lesson": "Even a 1-screen autoshooter can feel premium if pickups, levelups and shop transitions each get their own audio + particle signature."
+    }
+  ],
+  "anti_juice_warnings": [
+    {
+      "anti_pattern": "shake_on_every_frame",
+      "why_bad": "Constant shake -> motion sickness, accessibility complaint, players turn it off. Hades shipped a toggle because of this.",
+      "rule": "Shake only on discrete events. Never tie shake to a continuous variable like 'fire-held'."
+    },
+    {
+      "anti_pattern": "hit_stop_too_long",
+      "why_bad": ">200ms feels like the game froze. Players think it's a bug.",
+      "rule": "Cap hit-stop at 150ms. Use 50-80ms for normal hits, 120ms for boss/heavy."
+    },
+    {
+      "anti_pattern": "bloom_global",
+      "why_bad": "Bloom-on-everything washes out the scene, kills text legibility, and makes every game look identical.",
+      "rule": "Apply bloom per-object only on bright/saturated sprites. Never on UI, never on the whole camera."
+    },
+    {
+      "anti_pattern": "particle_clouds_obscure_play",
+      "why_bad": "Vampire Survivors at endgame is the cautionary tale — players couldn't see their character.",
+      "rule": "Cap particle alpha + lifetime; particles must self-extinguish in <800ms. Add a 'reduce VFX' toggle if entity counts can exceed 200."
+    },
+    {
+      "anti_pattern": "audio_layering_no_ducking",
+      "why_bad": "Without sidechain ducking, simultaneous SFX become noise; the cymbal never lands.",
+      "rule": "Side-chain SFX bus on important events; cap concurrent voices (Phaser default 32 is too many — use 8-12)."
+    },
+    {
+      "anti_pattern": "zoom_on_every_kill",
+      "why_bad": "Disorienting; loses the meaning of the zoom punch.",
+      "rule": "Reserve zoom for: bombs, wave-clears, boss-deaths. Once per ~30s ceiling."
+    },
+    {
+      "anti_pattern": "linear_ui_motion",
+      "why_bad": "Linear tweens feel cheap and robotic. No commercial polished game uses linear UI motion.",
+      "rule": "Default UI ease = Back.out for entrances, Cubic.in for exits."
+    },
+    {
+      "anti_pattern": "no_silence",
+      "why_bad": "Constant music + SFX = nothing feels important. Quiet moments make loud moments hit.",
+      "rule": "Drop music to 30% on boss intro, restore on first hit. Use 0.4s of silence before a phase change."
+    },
+    {
+      "anti_pattern": "chromatic_aberration_always_on",
+      "why_bad": "Permanent CA reads as 'broken display' and creates eye-strain in 30 seconds.",
+      "rule": "CA is a punctuation mark, not a paragraph. Pulse-only on major impacts, max 200ms."
+    },
+    {
+      "anti_pattern": "damage_numbers_at_high_density",
+      "why_bad": "Number soup obscures gameplay (Vampire Survivors lesson).",
+      "rule": "Auto-disable damage numbers when entity count > threshold; or aggregate ('x12') instead of per-hit."
+    }
+  ],
+  "phaser_3_implementation_recipes": [
+    {
+      "id": "camera_shake",
+      "code": "this.cameras.main.shake(80, 0.005);  // duration ms, intensity 0..1\n// big hit:\nthis.cameras.main.shake(200, 0.015);",
+      "doc": "https://docs.phaser.io/api-documentation/class/cameras-scene2d-camera",
+      "notes": "Phaser's shake decays linearly. Stack two for diminishing-strength curve: shake(60, 0.012); then shake(180, 0.004)."
+    },
+    {
+      "id": "camera_flash",
+      "code": "this.cameras.main.flash(80, 255, 0, 0, false);  // duration, r, g, b, force\n// white screen-clear bomb:\nthis.cameras.main.flash(180, 255, 255, 255, false);",
+      "doc": "https://docs.phaser.io/api-documentation/class/cameras-scene2d-camera"
+    },
+    {
+      "id": "bloom_glow_neon",
+      "code": "// Per-object bloom (Phaser 3.60+):\nbullet.postFX.addBloom(0xffffff, 1, 1, 1.2, 1.5, 4);\n// Outer glow on a pickup:\npickup.postFX.addGlow(0x00ffff, 8, 0, false, 0.1, 16);",
+      "doc": "https://phaser.io/examples/v3.85.0/fx/glow/view/glow-post-fx"
+    },
+    {
+      "id": "hit_stop",
+      "code": "function hitStop(scene, ms = 80) {\n  const tw = scene.tweens.timeScale;\n  scene.physics.world.timeScale = 0.05;  // physics slowdown is INVERTED in Phaser (high=slow)\n  scene.tweens.timeScale = 0.05;\n  scene.time.delayedCall(ms, () => {\n    scene.physics.world.timeScale = 1;\n    scene.tweens.timeScale = tw;\n  });\n}\nhitStop(this, 80);",
+      "notes": "Phaser arcade physics uses INVERTED timeScale: 1 = normal, higher = slower. Tweens use 1=normal, 0=paused."
+    },
+    {
+      "id": "score_popup",
+      "code": "function popup(scene, x, y, text, color = '#ffffff') {\n  const t = scene.add.text(x, y, text, {\n    fontFamily: 'Arial Black', fontSize: '20px',\n    color, stroke: '#000', strokeThickness: 4\n  }).setOrigin(0.5).setDepth(1000);\n  scene.tweens.add({\n    targets: t, y: y - 40, alpha: 0,\n    duration: 600, ease: 'Cubic.easeOut',\n    onComplete: () => t.destroy()\n  });\n}\npopup(this, enemy.x, enemy.y, '+100');",
+      "notes": "setDepth(1000) keeps popup above gameplay sprites."
+    },
+    {
+      "id": "particle_burst",
+      "code": "// Phaser 3.60+ particle API\nthis.add.particles(x, y, 'spark', {\n  speed: { min: 80, max: 240 },\n  angle: { min: 0, max: 360 },\n  scale: { start: 0.6, end: 0 },\n  lifespan: 400,\n  quantity: 12,\n  blendMode: 'ADD'\n}).explode(12);",
+      "notes": "blendMode:'ADD' is essential for neon/spark feel. Auto-destroys after lifespan."
+    },
+    {
+      "id": "enemy_hit_flash",
+      "code": "function hitFlash(sprite, scene, ms = 50) {\n  sprite.setTintFill(0xffffff);\n  scene.time.delayedCall(ms, () => sprite.clearTint());\n}\nhitFlash(enemy, this);",
+      "notes": "setTintFill (not setTint) gives the flat white-out look used by Hades / Dead Cells."
+    },
+    {
+      "id": "background_color_tween",
+      "code": "const c1 = Phaser.Display.Color.IntegerToColor(0x002288);\nconst c2 = Phaser.Display.Color.IntegerToColor(0x880033);\nthis.tweens.addCounter({\n  from: 0, to: 1, duration: 2000, yoyo: true, repeat: -1,\n  onUpdate: tw => {\n    const c = Phaser.Display.Color.Interpolate.ColorWithColor(c1, c2, 1, tw.getValue());\n    this.cameras.main.setBackgroundColor(\n      Phaser.Display.Color.GetColor(c.r, c.g, c.b)\n    );\n  }\n});"
+    },
+    {
+      "id": "camera_zoom_punch",
+      "code": "// Bomb / wave-clear punch\nthis.cameras.main.zoomTo(0.92, 80, 'Cubic.easeOut');\nthis.time.delayedCall(120, () => {\n  this.cameras.main.zoomTo(1.0, 200, 'Back.easeOut');\n});",
+      "notes": "Combine with camera.flash() and camera.shake() for full bomb feel."
+    },
+    {
+      "id": "squash_stretch_jump",
+      "code": "this.tweens.chain({\n  targets: player,\n  tweens: [\n    { scaleX: 1.2, scaleY: 0.8, duration: 60 },   // squash (anticipation)\n    { scaleX: 0.85, scaleY: 1.2, duration: 120 }, // stretch (in air)\n    { scaleX: 1.0, scaleY: 1.0, duration: 150, ease: 'Back.out(2)' }\n  ]\n});",
+      "notes": "Sprite must have origin set to bottom-center for landing squash to read correctly."
+    },
+    {
+      "id": "death_slowmo_restart",
+      "code": "function playerDeath(scene) {\n  scene.physics.world.timeScale = 0.2;\n  scene.tweens.timeScale = 0.4;\n  scene.cameras.main.zoomTo(1.5, 800, 'Cubic.easeIn');\n  scene.cameras.main.shake(800, 0.01);\n  scene.time.delayedCall(1200, () => {\n    scene.physics.world.timeScale = 1;\n    scene.tweens.timeScale = 1;\n    scene.scene.restart();\n  });\n}"
+    },
+    {
+      "id": "rate_pitch_combo",
+      "code": "// combo is current streak count\nconst rate = Math.min(1.0 + combo * 0.05, 2.0);\nconst detune = Math.min(combo * 30, 1200);\nthis.sound.play('tick', { rate, detune });"
+    },
+    {
+      "id": "audio_layer_fade",
+      "code": "// Pre-create stems muted\nconst drums = this.sound.add('drums', { loop: true, volume: 0 });\nconst lead  = this.sound.add('lead',  { loop: true, volume: 0 });\ndrums.play(); lead.play();\n// On combat enter:\nthis.tweens.add({ targets: drums, volume: 0.7, duration: 800 });\n// On combat exit:\nthis.tweens.add({ targets: drums, volume: 0,   duration: 1200 });"
+    },
+    {
+      "id": "telegraph_zone",
+      "code": "function telegraph(scene, x, y, w, h, ms, onImpact) {\n  const tel = scene.add.rectangle(x, y, w, h, 0xff2244, 0.25).setStrokeStyle(2, 0xff2244, 0.9);\n  scene.tweens.add({\n    targets: tel, alpha: { from: 0.25, to: 0.65 },\n    yoyo: true, repeat: Math.floor(ms / 240),\n    duration: 120,\n    onComplete: () => { tel.destroy(); onImpact(); }\n  });\n}"
+    },
+    {
+      "id": "permanence_decals_rendertexture",
+      "code": "// In create():\nthis.decals = this.add.renderTexture(0, 0, this.scale.width, this.scale.height).setDepth(-1);\n\n// On enemy death:\nthis.decals.draw('blood_splat', enemy.x, enemy.y);\n// Sprite is destroyed; pixel stays. Zero ongoing cost.",
+      "notes": "Renders into a single texture — keeps fill-rate flat regardless of decal count."
+    }
+  ],
+  "default_tunables_reference_table": {
+    "shake_normal_hit_ms": 60,
+    "shake_normal_intensity": 0.003,
+    "shake_kill_ms": 100,
+    "shake_kill_intensity": 0.006,
+    "shake_explosion_ms": 280,
+    "shake_explosion_intensity": 0.018,
+    "hit_stop_normal_ms": 0,
+    "hit_stop_heavy_ms": 80,
+    "hit_stop_boss_ms": 120,
+    "hit_stop_max_safe_ms": 150,
+    "hit_flash_white_ms": 50,
+    "damage_flash_red_ms": 80,
+    "damage_flash_red_alpha": 0.3,
+    "score_popup_rise_px": 40,
+    "score_popup_duration_ms": 600,
+    "particle_burst_kill_count": 12,
+    "particle_burst_pickup_count": 6,
+    "particle_burst_levelup_count": 30,
+    "particle_lifespan_ms": 400,
+    "zoom_punch_out_pct": 0.92,
+    "zoom_punch_out_ms": 80,
+    "zoom_punch_back_ms": 200,
+    "ui_ease_default": "Back.easeOut(1.7)",
+    "ui_motion_min_duration_ms": 180,
+    "death_slowmo_factor": 0.2,
+    "death_slowmo_hold_ms": 1200,
+    "music_combat_layer_fade_in_ms": 800,
+    "music_combat_layer_fade_out_ms": 1200,
+    "max_concurrent_audio_voices": 12,
+    "damage_numbers_disable_threshold_entities": 60,
+    "particle_disable_threshold_entities": 200
+  },
+  "pipeline_application_notes": [
+    "For every game generated by the pipeline, assert the following minimum juice baseline before shipping: camera_shake_on_impact, hit_stop_freeze_frame, particle_burst_on_state_change, score_popup_float_fade, easing_on_ui, audio_layer_intensity. These six are the floor.",
+    "Additional juice is selected from per_genre_juice_priorities[<genre>] — pick the top 3-5 for that genre.",
+    "All numerical values come from default_tunables_reference_table — never invent timings.",
+    "Always wire an accessibility toggle for screen shake (boolean: shakeEnabled) — Hades shipped one for a reason.",
+    "Bloom and chromatic aberration are OFF by default; enable per-object only when sprite is flagged 'neon' or on explicit boss-death events."
+  ]
+}

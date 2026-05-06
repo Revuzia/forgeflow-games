@@ -82,7 +82,8 @@ def insert_game_metadata(slug: str, metadata: dict):
         print(f"[supabase] Check failed: {e}")
         existing = []
 
-    # Build the row
+    # Build the row. 2026-05-05: hero_image_url added so the game-detail page
+    # gets a key-art image too (was previously null → empty banner).
     row = {
         "slug": slug,
         "title": metadata.get("title", slug.replace("-", " ").title()),
@@ -91,7 +92,8 @@ def insert_game_metadata(slug: str, metadata: dict):
         "genre": metadata.get("genre", "platformer"),
         "sub_genre": metadata.get("sub_genre", ""),
         "thumbnail_url": metadata.get("thumbnail_url", ""),
-        "game_url": metadata.get("game_url", f"/games-cdn/{slug}/index.html"),
+        "hero_image_url": metadata.get("hero_image_url", metadata.get("thumbnail_url", "")),
+        "game_url": metadata.get("game_url", f"https://forgeflow-games-cdn.isimcha85.workers.dev/{slug}/index.html"),
         "controls_keyboard": metadata.get("controls_keyboard", ""),
         "controls_gamepad": metadata.get("controls_gamepad", ""),
         "difficulty": metadata.get("difficulty", "medium"),
@@ -159,15 +161,54 @@ def main():
         print("[dry-run] Would upload to R2 and insert into Supabase")
         return
 
+    # 2026-05-05 — Generate cover image FIRST so it ships in the same R2
+    # upload as the rest of the files. Uses xAI grok-imagine-image (~$0.02/img).
+    # If thumbnail.png already exists in the game dir we keep it (allows manual
+    # override). Otherwise we derive description + art-direction from the
+    # metadata.json or design.json sitting next to game.js.
+    thumb_path = game_dir / "thumbnail.png"
+    if not thumb_path.exists():
+        try:
+            from generate_cover import generate_cover  # type: ignore
+            # Pull art_direction + description from metadata, fall back to design.json
+            description = metadata.get("description") or metadata.get("short_description") or args.slug
+            art_direction = metadata.get("art_direction", "")
+            if not art_direction:
+                design_path = game_dir / "design.json"
+                if design_path.exists():
+                    try:
+                        design = json.loads(design_path.read_text(encoding="utf-8"))
+                        art_direction = design.get("art_direction", "") or design.get("art_style", "")
+                    except Exception:
+                        pass
+            if not art_direction:
+                art_direction = "Polished, vibrant indie game art with strong silhouette and dramatic lighting."
+            title = metadata.get("title", args.slug.replace("-", " ").title())
+            generate_cover(
+                slug=args.slug,
+                title=title,
+                description=description,
+                art_direction=art_direction,
+                out_dir=game_dir,
+            )
+        except Exception as e:
+            print(f"[cover] WARN: cover generation failed ({e}); proceeding without cover")
+
     # Upload to R2
     uploaded = upload_to_r2(game_dir, args.slug)
     print(f"  [r2] {uploaded} files uploaded to {R2_BUCKET}/{args.slug}/")
 
-    # Insert metadata
-    metadata["game_url"] = f"/games-cdn/{args.slug}/index.html"
+    # Insert metadata. game_url uses the workers.dev CDN pattern other games
+    # use; thumbnail_url + hero_image_url point at the freshly-generated PNG.
+    cdn_base = "https://forgeflow-games-cdn.isimcha85.workers.dev"
+    metadata["game_url"] = f"{cdn_base}/{args.slug}/index.html"
+    if thumb_path.exists() and not metadata.get("thumbnail_url"):
+        metadata["thumbnail_url"] = f"{cdn_base}/{args.slug}/thumbnail.png"
+    if thumb_path.exists() and not metadata.get("hero_image_url"):
+        metadata["hero_image_url"] = f"{cdn_base}/{args.slug}/thumbnail.png"
     insert_game_metadata(args.slug, metadata)
 
-    print(f"Done! Game available at: {R2_PUBLIC_URL}/games/{args.slug}")
+    print(f"Done! Game available at: {cdn_base}/{args.slug}/index.html")
 
 
 if __name__ == "__main__":

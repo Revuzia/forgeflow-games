@@ -68,14 +68,26 @@ export default function GamePlayer({ game }: Props) {
 
   return (
     <div ref={containerRef} className="relative bg-black rounded-xl overflow-hidden">
-      {/* Pre-roll ad / Play button overlay */}
+      {/* Pre-roll: game cover image (or ad placeholder fallback) + Play button */}
       {showPreroll && (
         <div className="absolute inset-0 z-20 bg-surface-900 flex flex-col items-center justify-center">
-          {/* Ad container placeholder */}
+          {/* 2026-05-05 — Hero/cover image takes the slot that used to be a
+              house-ad placeholder. If a thumbnail/hero is set, render it; if
+              neither exists, fall back to the ad-shaped placeholder so the
+              layout doesn't collapse. */}
           <div className="w-full max-w-lg mx-auto mb-8 px-4">
-            <div className="aspect-video bg-surface-800 rounded-lg border border-surface-600/30 flex items-center justify-center">
-              <p className="text-xs text-surface-500">Advertisement</p>
-            </div>
+            {(game.hero_image_url || game.thumbnail_url) ? (
+              <img
+                src={game.hero_image_url || game.thumbnail_url}
+                alt={`${game.title} cover art`}
+                className="aspect-video w-full rounded-lg object-cover border border-surface-600/30 shadow-lg"
+                loading="eager"
+              />
+            ) : (
+              <div className="aspect-video bg-surface-800 rounded-lg border border-surface-600/30 flex items-center justify-center">
+                <p className="text-xs text-surface-500">Advertisement</p>
+              </div>
+            )}
           </div>
           <button
             onClick={startGame}
