@@ -1,10 +1,75 @@
 {
   "current_game": null,
-  "current_phase": null,
+  "current_phase": "select",
   "current_sub_phase": null,
-  "games_completed": 0,
-  "last_run": null,
-  "last_completed_game": null,
-  "qa_debug_attempt": 0,
-  "sessions_on_current_game": 0
+  "games_completed": 2,
+  "last_run": "2026-05-05T06:20:39Z",
+  "last_completed_game": "Barrel Blitz: Jungle Uprising",
+  "sessions_on_current_game": 0,
+  "_note": "2026-04-23 T4 Path A: full AAA rebuild. Design regenerates with special_level_modes + collectible_types + 1 boss per world. Build uses 4-section levels (46 levels \u00d7 4 sections = 184 content_unit calls) for 3-10 min DKC runtime. Estimated total: ~6-7 hours.",
+  "qa_failures": [],
+  "l2_reachability": {
+    "checked": 7,
+    "completable": 0,
+    "issues": [
+      {
+        "level": 0,
+        "issues": [
+          "Could not parse level data"
+        ]
+      },
+      {
+        "level": 1,
+        "issues": [
+          "Could not parse level data"
+        ]
+      },
+      {
+        "level": 2,
+        "issues": [
+          "Could not parse level data"
+        ]
+      },
+      {
+        "level": 3,
+        "issues": [
+          "Could not parse level data"
+        ]
+      },
+      {
+        "level": 4,
+        "issues": [
+          "Could not parse level data"
+        ]
+      },
+      {
+        "level": 5,
+        "issues": [
+          "Could not parse level data"
+        ]
+      },
+      {
+        "level": 6,
+        "issues": [
+          "Could not parse level data"
+        ]
+      }
+    ]
+  },
+  "history": [
+    {
+      "game": {
+        "id": 20,
+        "inspired_by": "The Legend of Zelda: Breath of the Wild",
+        "genre": "adventure",
+        "sub_genre": "3d-open-world",
+        "slug": "wilds-of-aether",
+        "category": "adventure"
+      },
+      "final_phase": "build",
+      "sessions": 7,
+      "status": "attic_2026_05_05",
+      "reason": "audit found 3 pipeline bugs causing category-violation build (see CLAUDE-CLAW notes); attic + retry next game from queue with bugs patched"
+    }
+  ]
 }

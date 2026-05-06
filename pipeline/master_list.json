@@ -1,86 +1,1194 @@
 {
-  "version": 1,
-  "total_games": 55,
+  "version": 2,
+  "updated": "2026-04-17",
+  "note": "Every entry is inspired by a critically-acclaimed original rated 80%+/8.0+/3.5+ stars. We build ORIGINAL IP \u2014 no copyrighted names. Ratings sourced from Metacritic/IMDB/IGDB.",
+  "total_games": 138,
   "categories": {
     "platformer": {
-      "label": "Mario-style Platformers",
+      "label": "2D + 3D Platformers",
       "games": [
-        {"id": 1, "inspired_by": "Donkey Kong Country: Tropical Freeze", "genre": "platformer", "sub_genre": "2.5d-platformer", "status": "pending"},
-        {"id": 2, "inspired_by": "Super Mario Bros. Wonder", "genre": "platformer", "sub_genre": "2d-platformer", "status": "pending"},
-        {"id": 3, "inspired_by": "Rayman Legends", "genre": "platformer", "sub_genre": "2d-platformer", "status": "pending"},
-        {"id": 4, "inspired_by": "Celeste", "genre": "platformer", "sub_genre": "precision-platformer", "status": "pending"},
-        {"id": 5, "inspired_by": "Crash Bandicoot 4: It's About Time", "genre": "platformer", "sub_genre": "3d-platformer", "status": "pending"},
-        {"id": 6, "inspired_by": "Sonic Mania", "genre": "platformer", "sub_genre": "speed-platformer", "status": "pending"},
-        {"id": 7, "inspired_by": "Shovel Knight", "genre": "platformer", "sub_genre": "retro-platformer", "status": "pending"},
-        {"id": 8, "inspired_by": "New Super Mario Bros. U Deluxe", "genre": "platformer", "sub_genre": "2d-platformer", "status": "pending"},
-        {"id": 9, "inspired_by": "Ori and the Will of the Wisps", "genre": "platformer", "sub_genre": "metroidvania", "status": "pending"},
-        {"id": 10, "inspired_by": "Pizza Tower", "genre": "platformer", "sub_genre": "speed-platformer", "status": "pending"},
-        {"id": 11, "inspired_by": "Kirby and the Forgotten Land", "genre": "platformer", "sub_genre": "3d-platformer", "status": "pending"},
-        {"id": 12, "inspired_by": "Hollow Knight", "genre": "platformer", "sub_genre": "metroidvania", "status": "pending"}
+        {
+          "id": 1,
+          "inspired_by": "Donkey Kong Country: Tropical Freeze",
+          "genre": "platformer",
+          "sub_genre": "2.5d-platformer",
+          "rating": 83,
+          "status": "completed"
+        },
+        {
+          "id": 2,
+          "inspired_by": "Super Mario Bros. Wonder",
+          "genre": "platformer",
+          "sub_genre": "2d-platformer",
+          "rating": 92,
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "inspired_by": "Rayman Legends",
+          "genre": "platformer",
+          "sub_genre": "2d-platformer",
+          "rating": 91,
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "inspired_by": "Celeste",
+          "genre": "platformer",
+          "sub_genre": "precision-platformer",
+          "rating": 92,
+          "status": "pending"
+        },
+        {
+          "id": 5,
+          "inspired_by": "Super Mario Galaxy",
+          "genre": "platformer",
+          "sub_genre": "3d-platformer",
+          "rating": 97,
+          "status": "pending"
+        },
+        {
+          "id": 6,
+          "inspired_by": "Sonic Mania",
+          "genre": "platformer",
+          "sub_genre": "speed-platformer",
+          "rating": 86,
+          "status": "pending"
+        },
+        {
+          "id": 7,
+          "inspired_by": "Shovel Knight",
+          "genre": "platformer",
+          "sub_genre": "retro-platformer",
+          "rating": 91,
+          "status": "pending"
+        },
+        {
+          "id": 8,
+          "inspired_by": "Ori and the Will of the Wisps",
+          "genre": "platformer",
+          "sub_genre": "metroidvania",
+          "rating": 90,
+          "status": "pending"
+        },
+        {
+          "id": 9,
+          "inspired_by": "Pizza Tower",
+          "genre": "platformer",
+          "sub_genre": "speed-platformer",
+          "rating": 87,
+          "status": "pending"
+        },
+        {
+          "id": 10,
+          "inspired_by": "Super Meat Boy",
+          "genre": "platformer",
+          "sub_genre": "precision-platformer",
+          "rating": 87,
+          "status": "pending"
+        },
+        {
+          "id": 11,
+          "inspired_by": "Hollow Knight",
+          "genre": "platformer",
+          "sub_genre": "metroidvania",
+          "rating": 90,
+          "status": "pending"
+        },
+        {
+          "id": 12,
+          "inspired_by": "Super Metroid",
+          "genre": "platformer",
+          "sub_genre": "metroidvania",
+          "rating": 96,
+          "status": "pending"
+        },
+        {
+          "id": 13,
+          "inspired_by": "Crash Bandicoot 4",
+          "genre": "platformer",
+          "sub_genre": "3d-platformer",
+          "rating": 85,
+          "status": "pending"
+        },
+        {
+          "id": 14,
+          "inspired_by": "Kirby and the Forgotten Land",
+          "genre": "platformer",
+          "sub_genre": "3d-platformer",
+          "rating": 85,
+          "status": "pending"
+        },
+        {
+          "id": 15,
+          "inspired_by": "Psychonauts 2",
+          "genre": "platformer",
+          "sub_genre": "3d-platformer",
+          "rating": 87,
+          "status": "pending"
+        },
+        {
+          "id": 16,
+          "inspired_by": "Rain World",
+          "genre": "platformer",
+          "sub_genre": "survival-platformer",
+          "rating": 83,
+          "status": "pending"
+        },
+        {
+          "id": 17,
+          "inspired_by": "Dead Cells",
+          "genre": "platformer",
+          "sub_genre": "roguevania",
+          "rating": 89,
+          "status": "pending"
+        }
       ]
     },
     "adventure": {
-      "label": "Zelda-style Action-Adventure",
+      "label": "Adventure, Exploration, Narrative",
       "games": [
-        {"id": 13, "inspired_by": "Okami HD", "genre": "adventure", "sub_genre": "action-adventure", "status": "pending"},
-        {"id": 14, "inspired_by": "Tunic", "genre": "adventure", "sub_genre": "isometric-adventure", "status": "pending"},
-        {"id": 15, "inspired_by": "Immortals Fenyx Rising", "genre": "adventure", "sub_genre": "open-world", "status": "pending"},
-        {"id": 16, "inspired_by": "Darksiders II", "genre": "adventure", "sub_genre": "action-adventure", "status": "pending"},
-        {"id": 17, "inspired_by": "Blossom Tales", "genre": "adventure", "sub_genre": "top-down-adventure", "status": "pending"},
-        {"id": 18, "inspired_by": "Oceanhorn", "genre": "adventure", "sub_genre": "action-adventure", "status": "pending"},
-        {"id": 19, "inspired_by": "Hyper Light Drifter", "genre": "adventure", "sub_genre": "action-adventure", "status": "pending"},
-        {"id": 20, "inspired_by": "Death's Door", "genre": "adventure", "sub_genre": "isometric-adventure", "status": "pending"},
-        {"id": 21, "inspired_by": "Eastward", "genre": "adventure", "sub_genre": "action-adventure", "status": "pending"},
-        {"id": 22, "inspired_by": "Ori and the Blind Forest", "genre": "adventure", "sub_genre": "metroidvania", "status": "pending"}
+        {
+          "id": 20,
+          "inspired_by": "The Legend of Zelda: Breath of the Wild",
+          "genre": "adventure",
+          "sub_genre": "3d-open-world",
+          "rating": 97,
+          "status": "deferred_unsupported"
+        },
+        {
+          "id": 21,
+          "inspired_by": "The Legend of Zelda: A Link to the Past",
+          "genre": "adventure",
+          "sub_genre": "top-down-2d",
+          "rating": 95,
+          "status": "pending"
+        },
+        {
+          "id": 22,
+          "inspired_by": "Journey",
+          "genre": "adventure",
+          "sub_genre": "atmospheric-3d",
+          "rating": 92,
+          "status": "pending"
+        },
+        {
+          "id": 23,
+          "inspired_by": "Monkey Island 2",
+          "genre": "adventure",
+          "sub_genre": "point-and-click",
+          "rating": 91,
+          "status": "pending"
+        },
+        {
+          "id": 24,
+          "inspired_by": "Grim Fandango",
+          "genre": "adventure",
+          "sub_genre": "point-and-click",
+          "rating": 94,
+          "status": "pending"
+        },
+        {
+          "id": 25,
+          "inspired_by": "Firewatch",
+          "genre": "adventure",
+          "sub_genre": "walking-sim",
+          "rating": 81,
+          "status": "pending"
+        },
+        {
+          "id": 26,
+          "inspired_by": "Return of the Obra Dinn",
+          "genre": "adventure",
+          "sub_genre": "mystery-puzzle",
+          "rating": 89,
+          "status": "pending"
+        },
+        {
+          "id": 27,
+          "inspired_by": "Undertale",
+          "genre": "adventure",
+          "sub_genre": "narrative-rpg",
+          "rating": 92,
+          "status": "pending"
+        },
+        {
+          "id": 28,
+          "inspired_by": "Outer Wilds",
+          "genre": "adventure",
+          "sub_genre": "exploration-3d",
+          "rating": 90,
+          "status": "pending"
+        },
+        {
+          "id": 29,
+          "inspired_by": "Night in the Woods",
+          "genre": "adventure",
+          "sub_genre": "narrative-2d",
+          "rating": 87,
+          "status": "pending"
+        },
+        {
+          "id": 30,
+          "inspired_by": "What Remains of Edith Finch",
+          "genre": "adventure",
+          "sub_genre": "walking-sim",
+          "rating": 88,
+          "status": "pending"
+        },
+        {
+          "id": 31,
+          "inspired_by": "Phoenix Wright: Ace Attorney",
+          "genre": "adventure",
+          "sub_genre": "visual-novel",
+          "rating": 84,
+          "status": "pending"
+        }
       ]
     },
     "rpg": {
-      "label": "JRPGs like Final Fantasy",
+      "label": "RPG, JRPG, Turn-Based",
       "games": [
-        {"id": 23, "inspired_by": "Dragon Quest XI S", "genre": "rpg", "sub_genre": "turn-based-jrpg", "status": "pending"},
-        {"id": 24, "inspired_by": "Persona 5 Royal", "genre": "rpg", "sub_genre": "social-sim-jrpg", "status": "pending"},
-        {"id": 25, "inspired_by": "Chrono Trigger", "genre": "rpg", "sub_genre": "classic-jrpg", "status": "pending"},
-        {"id": 26, "inspired_by": "Metaphor: ReFantazio", "genre": "rpg", "sub_genre": "turn-based-jrpg", "status": "pending"},
-        {"id": 27, "inspired_by": "Octopath Traveler II", "genre": "rpg", "sub_genre": "hd2d-jrpg", "status": "pending"},
-        {"id": 28, "inspired_by": "Chained Echoes", "genre": "rpg", "sub_genre": "classic-jrpg", "status": "pending"},
-        {"id": 29, "inspired_by": "Xenoblade Chronicles", "genre": "rpg", "sub_genre": "action-jrpg", "status": "pending"},
-        {"id": 30, "inspired_by": "Like a Dragon: Infinite Wealth", "genre": "rpg", "sub_genre": "turn-based-jrpg", "status": "pending"},
-        {"id": 31, "inspired_by": "Tales of Arise", "genre": "rpg", "sub_genre": "action-jrpg", "status": "pending"},
-        {"id": 32, "inspired_by": "Earthbound", "genre": "rpg", "sub_genre": "quirky-jrpg", "status": "pending"},
-        {"id": 33, "inspired_by": "Shin Megami Tensei V", "genre": "rpg", "sub_genre": "demon-collector", "status": "pending"},
-        {"id": 34, "inspired_by": "Final Fantasy VII Remake", "genre": "rpg", "sub_genre": "action-jrpg", "status": "pending"}
+        {
+          "id": 40,
+          "inspired_by": "Chrono Trigger",
+          "genre": "rpg",
+          "sub_genre": "jrpg",
+          "rating": 97,
+          "status": "pending"
+        },
+        {
+          "id": 41,
+          "inspired_by": "Final Fantasy VI",
+          "genre": "rpg",
+          "sub_genre": "jrpg",
+          "rating": 94,
+          "status": "pending"
+        },
+        {
+          "id": 42,
+          "inspired_by": "Pokemon Red / Blue",
+          "genre": "rpg",
+          "sub_genre": "creature-collector",
+          "rating": 87,
+          "status": "pending"
+        },
+        {
+          "id": 43,
+          "inspired_by": "Earthbound",
+          "genre": "rpg",
+          "sub_genre": "jrpg",
+          "rating": 89,
+          "status": "pending"
+        },
+        {
+          "id": 44,
+          "inspired_by": "Persona 5",
+          "genre": "rpg",
+          "sub_genre": "jrpg-social-sim",
+          "rating": 93,
+          "status": "pending"
+        },
+        {
+          "id": 45,
+          "inspired_by": "Octopath Traveler",
+          "genre": "rpg",
+          "sub_genre": "jrpg",
+          "rating": 82,
+          "status": "pending"
+        },
+        {
+          "id": 46,
+          "inspired_by": "Baldur's Gate 3",
+          "genre": "rpg",
+          "sub_genre": "crpg-tactical",
+          "rating": 96,
+          "status": "pending"
+        },
+        {
+          "id": 47,
+          "inspired_by": "Divinity: Original Sin 2",
+          "genre": "rpg",
+          "sub_genre": "crpg-tactical",
+          "rating": 94,
+          "status": "pending"
+        },
+        {
+          "id": 48,
+          "inspired_by": "The Elder Scrolls V: Skyrim",
+          "genre": "rpg",
+          "sub_genre": "3d-open-world",
+          "rating": 94,
+          "status": "pending"
+        },
+        {
+          "id": 49,
+          "inspired_by": "Mass Effect 2",
+          "genre": "rpg",
+          "sub_genre": "3d-action-rpg",
+          "rating": 94,
+          "status": "pending"
+        },
+        {
+          "id": 50,
+          "inspired_by": "Disco Elysium",
+          "genre": "rpg",
+          "sub_genre": "crpg-narrative",
+          "rating": 97,
+          "status": "pending"
+        },
+        {
+          "id": 51,
+          "inspired_by": "Fire Emblem: Three Houses",
+          "genre": "rpg",
+          "sub_genre": "tactical-rpg",
+          "rating": 89,
+          "status": "pending"
+        },
+        {
+          "id": 52,
+          "inspired_by": "Might and Magic VI",
+          "genre": "rpg",
+          "sub_genre": "dungeon-crawler",
+          "rating": 83,
+          "status": "pending"
+        },
+        {
+          "id": 53,
+          "inspired_by": "Legend of Grimrock",
+          "genre": "rpg",
+          "sub_genre": "dungeon-crawler",
+          "rating": 82,
+          "status": "pending"
+        }
       ]
     },
     "arpg": {
-      "label": "Diablo-style ARPGs",
+      "label": "Action RPG, Hack-and-Slash",
       "games": [
-        {"id": 35, "inspired_by": "Path of Exile 2", "genre": "arpg", "sub_genre": "isometric-arpg", "status": "pending"},
-        {"id": 36, "inspired_by": "Grim Dawn", "genre": "arpg", "sub_genre": "isometric-arpg", "status": "pending"},
-        {"id": 37, "inspired_by": "Last Epoch", "genre": "arpg", "sub_genre": "isometric-arpg", "status": "pending"},
-        {"id": 38, "inspired_by": "Torchlight II", "genre": "arpg", "sub_genre": "isometric-arpg", "status": "pending"},
-        {"id": 39, "inspired_by": "Titan Quest", "genre": "arpg", "sub_genre": "isometric-arpg", "status": "pending"},
-        {"id": 40, "inspired_by": "Hades 2", "genre": "arpg", "sub_genre": "roguelike-arpg", "status": "pending"},
-        {"id": 41, "inspired_by": "Diablo IV", "genre": "arpg", "sub_genre": "isometric-arpg", "status": "pending"},
-        {"id": 42, "inspired_by": "Wolcen: Lords of Mayhem", "genre": "arpg", "sub_genre": "isometric-arpg", "status": "pending"},
-        {"id": 43, "inspired_by": "Victor Vran", "genre": "arpg", "sub_genre": "isometric-arpg", "status": "pending"},
-        {"id": 44, "inspired_by": "Minecraft Dungeons", "genre": "arpg", "sub_genre": "dungeon-crawler", "status": "pending"}
+        {
+          "id": 60,
+          "inspired_by": "Diablo II",
+          "genre": "arpg",
+          "sub_genre": "isometric",
+          "rating": 88,
+          "status": "pending"
+        },
+        {
+          "id": 61,
+          "inspired_by": "Diablo IV",
+          "genre": "arpg",
+          "sub_genre": "isometric",
+          "rating": 86,
+          "status": "pending"
+        },
+        {
+          "id": 62,
+          "inspired_by": "Path of Exile",
+          "genre": "arpg",
+          "sub_genre": "isometric",
+          "rating": 87,
+          "status": "pending"
+        },
+        {
+          "id": 63,
+          "inspired_by": "Dark Souls III",
+          "genre": "arpg",
+          "sub_genre": "3d-souls-like",
+          "rating": 89,
+          "status": "pending"
+        },
+        {
+          "id": 64,
+          "inspired_by": "Elden Ring",
+          "genre": "arpg",
+          "sub_genre": "3d-open-world-souls",
+          "rating": 96,
+          "status": "pending"
+        },
+        {
+          "id": 65,
+          "inspired_by": "Sekiro: Shadows Die Twice",
+          "genre": "arpg",
+          "sub_genre": "3d-souls-like",
+          "rating": 90,
+          "status": "pending"
+        },
+        {
+          "id": 66,
+          "inspired_by": "Hades",
+          "genre": "arpg",
+          "sub_genre": "isometric-roguelike",
+          "rating": 93,
+          "status": "pending"
+        },
+        {
+          "id": 67,
+          "inspired_by": "Binding of Isaac: Rebirth",
+          "genre": "arpg",
+          "sub_genre": "2d-roguelike",
+          "rating": 88,
+          "status": "pending"
+        },
+        {
+          "id": 68,
+          "inspired_by": "Nioh 2",
+          "genre": "arpg",
+          "sub_genre": "3d-souls-like",
+          "rating": 85,
+          "status": "pending"
+        },
+        {
+          "id": 69,
+          "inspired_by": "Enter the Gungeon",
+          "genre": "arpg",
+          "sub_genre": "bullet-hell-roguelike",
+          "rating": 84,
+          "status": "pending"
+        }
+      ]
+    },
+    "strategy": {
+      "label": "Strategy, RTS, Turn-Based, Tactical",
+      "games": [
+        {
+          "id": 80,
+          "inspired_by": "Civilization IV",
+          "genre": "strategy",
+          "sub_genre": "4x-turn-based",
+          "rating": 94,
+          "status": "pending"
+        },
+        {
+          "id": 81,
+          "inspired_by": "Civilization VI",
+          "genre": "strategy",
+          "sub_genre": "4x-turn-based",
+          "rating": 88,
+          "status": "pending"
+        },
+        {
+          "id": 82,
+          "inspired_by": "StarCraft II",
+          "genre": "strategy",
+          "sub_genre": "rts",
+          "rating": 93,
+          "status": "pending"
+        },
+        {
+          "id": 83,
+          "inspired_by": "Warcraft III",
+          "genre": "strategy",
+          "sub_genre": "rts",
+          "rating": 92,
+          "status": "pending"
+        },
+        {
+          "id": 84,
+          "inspired_by": "Age of Empires II",
+          "genre": "strategy",
+          "sub_genre": "rts",
+          "rating": 92,
+          "status": "pending"
+        },
+        {
+          "id": 85,
+          "inspired_by": "Command & Conquer: Red Alert 2",
+          "genre": "strategy",
+          "sub_genre": "rts",
+          "rating": 87,
+          "status": "pending"
+        },
+        {
+          "id": 86,
+          "inspired_by": "XCOM 2",
+          "genre": "strategy",
+          "sub_genre": "tactical-turn-based",
+          "rating": 88,
+          "status": "pending"
+        },
+        {
+          "id": 87,
+          "inspired_by": "Into the Breach",
+          "genre": "strategy",
+          "sub_genre": "tactical-turn-based",
+          "rating": 90,
+          "status": "pending"
+        },
+        {
+          "id": 88,
+          "inspired_by": "Advance Wars",
+          "genre": "strategy",
+          "sub_genre": "tactical-turn-based",
+          "rating": 92,
+          "status": "pending"
+        },
+        {
+          "id": 89,
+          "inspired_by": "Total War: Three Kingdoms",
+          "genre": "strategy",
+          "sub_genre": "hybrid-rts",
+          "rating": 86,
+          "status": "pending"
+        },
+        {
+          "id": 90,
+          "inspired_by": "Crusader Kings III",
+          "genre": "strategy",
+          "sub_genre": "grand-strategy",
+          "rating": 91,
+          "status": "pending"
+        },
+        {
+          "id": 91,
+          "inspired_by": "Bloons TD 6",
+          "genre": "strategy",
+          "sub_genre": "tower-defense",
+          "rating": 82,
+          "status": "pending"
+        },
+        {
+          "id": 92,
+          "inspired_by": "Plants vs Zombies",
+          "genre": "strategy",
+          "sub_genre": "tower-defense",
+          "rating": 87,
+          "status": "pending"
+        },
+        {
+          "id": 93,
+          "inspired_by": "Kingdom Rush",
+          "genre": "strategy",
+          "sub_genre": "tower-defense",
+          "rating": 85,
+          "status": "pending"
+        }
+      ]
+    },
+    "simulation": {
+      "label": "Simulation, Life Sim, Management",
+      "games": [
+        {
+          "id": 100,
+          "inspired_by": "The Sims 3",
+          "genre": "simulation",
+          "sub_genre": "life-sim",
+          "rating": 86,
+          "status": "pending"
+        },
+        {
+          "id": 101,
+          "inspired_by": "Animal Crossing: New Horizons",
+          "genre": "simulation",
+          "sub_genre": "life-sim",
+          "rating": 90,
+          "status": "pending"
+        },
+        {
+          "id": 102,
+          "inspired_by": "Stardew Valley",
+          "genre": "simulation",
+          "sub_genre": "farming-life",
+          "rating": 89,
+          "status": "pending"
+        },
+        {
+          "id": 103,
+          "inspired_by": "Harvest Moon: Friends of Mineral Town",
+          "genre": "simulation",
+          "sub_genre": "farming-life",
+          "rating": 88,
+          "status": "pending"
+        },
+        {
+          "id": 104,
+          "inspired_by": "SimCity 4",
+          "genre": "simulation",
+          "sub_genre": "city-builder",
+          "rating": 84,
+          "status": "pending"
+        },
+        {
+          "id": 105,
+          "inspired_by": "Cities: Skylines",
+          "genre": "simulation",
+          "sub_genre": "city-builder",
+          "rating": 85,
+          "status": "pending"
+        },
+        {
+          "id": 106,
+          "inspired_by": "Black & White",
+          "genre": "simulation",
+          "sub_genre": "god-sim",
+          "rating": 90,
+          "status": "pending"
+        },
+        {
+          "id": 107,
+          "inspired_by": "Populous",
+          "genre": "simulation",
+          "sub_genre": "god-sim",
+          "rating": 85,
+          "status": "pending"
+        },
+        {
+          "id": 108,
+          "inspired_by": "Roller Coaster Tycoon 2",
+          "genre": "simulation",
+          "sub_genre": "management",
+          "rating": 90,
+          "status": "pending"
+        },
+        {
+          "id": 109,
+          "inspired_by": "Two Point Hospital",
+          "genre": "simulation",
+          "sub_genre": "management",
+          "rating": 82,
+          "status": "pending"
+        },
+        {
+          "id": 110,
+          "inspired_by": "Rust",
+          "genre": "simulation",
+          "sub_genre": "survival-crafting",
+          "rating": 81,
+          "status": "pending"
+        },
+        {
+          "id": 111,
+          "inspired_by": "Terraria",
+          "genre": "simulation",
+          "sub_genre": "2d-sandbox-survival",
+          "rating": 93,
+          "status": "pending"
+        },
+        {
+          "id": 112,
+          "inspired_by": "Minecraft",
+          "genre": "simulation",
+          "sub_genre": "voxel-sandbox",
+          "rating": 93,
+          "status": "pending"
+        },
+        {
+          "id": 113,
+          "inspired_by": "Don't Starve Together",
+          "genre": "simulation",
+          "sub_genre": "survival-crafting",
+          "rating": 85,
+          "status": "pending"
+        },
+        {
+          "id": 114,
+          "inspired_by": "Valheim",
+          "genre": "simulation",
+          "sub_genre": "survival-crafting",
+          "rating": 88,
+          "status": "pending"
+        }
+      ]
+    },
+    "action": {
+      "label": "Action, Fighting, FPS, Shmup",
+      "games": [
+        {
+          "id": 120,
+          "inspired_by": "DOOM (2016)",
+          "genre": "action",
+          "sub_genre": "fps",
+          "rating": 85,
+          "status": "pending"
+        },
+        {
+          "id": 121,
+          "inspired_by": "DOOM Eternal",
+          "genre": "action",
+          "sub_genre": "fps",
+          "rating": 87,
+          "status": "pending"
+        },
+        {
+          "id": 122,
+          "inspired_by": "Quake",
+          "genre": "action",
+          "sub_genre": "fps",
+          "rating": 94,
+          "status": "pending"
+        },
+        {
+          "id": 123,
+          "inspired_by": "Portal 2",
+          "genre": "action",
+          "sub_genre": "first-person-puzzle",
+          "rating": 95,
+          "status": "pending"
+        },
+        {
+          "id": 124,
+          "inspired_by": "Half-Life 2",
+          "genre": "action",
+          "sub_genre": "fps",
+          "rating": 96,
+          "status": "pending"
+        },
+        {
+          "id": 125,
+          "inspired_by": "Bioshock",
+          "genre": "action",
+          "sub_genre": "fps-narrative",
+          "rating": 96,
+          "status": "pending"
+        },
+        {
+          "id": 126,
+          "inspired_by": "Street Fighter II Turbo",
+          "genre": "action",
+          "sub_genre": "fighting",
+          "rating": 92,
+          "status": "pending"
+        },
+        {
+          "id": 127,
+          "inspired_by": "Super Smash Bros. Ultimate",
+          "genre": "action",
+          "sub_genre": "platform-fighter",
+          "rating": 93,
+          "status": "pending"
+        },
+        {
+          "id": 128,
+          "inspired_by": "Tekken 7",
+          "genre": "action",
+          "sub_genre": "fighting",
+          "rating": 84,
+          "status": "pending"
+        },
+        {
+          "id": 129,
+          "inspired_by": "Mortal Kombat 11",
+          "genre": "action",
+          "sub_genre": "fighting",
+          "rating": 83,
+          "status": "pending"
+        },
+        {
+          "id": 130,
+          "inspired_by": "Streets of Rage 4",
+          "genre": "action",
+          "sub_genre": "beat-em-up",
+          "rating": 84,
+          "status": "pending"
+        },
+        {
+          "id": 131,
+          "inspired_by": "Final Fight",
+          "genre": "action",
+          "sub_genre": "beat-em-up",
+          "rating": 85,
+          "status": "pending"
+        },
+        {
+          "id": 132,
+          "inspired_by": "Gradius V",
+          "genre": "action",
+          "sub_genre": "shmup",
+          "rating": 88,
+          "status": "pending"
+        },
+        {
+          "id": 133,
+          "inspired_by": "Ikaruga",
+          "genre": "action",
+          "sub_genre": "shmup",
+          "rating": 91,
+          "status": "pending"
+        },
+        {
+          "id": 134,
+          "inspired_by": "Touhou 8: Imperishable Night",
+          "genre": "action",
+          "sub_genre": "bullet-hell",
+          "rating": 89,
+          "status": "pending"
+        }
+      ]
+    },
+    "arcade": {
+      "label": "Arcade, Racing, Sports, Classics",
+      "games": [
+        {
+          "id": 150,
+          "inspired_by": "Pac-Man",
+          "genre": "arcade",
+          "sub_genre": "maze",
+          "rating": 94,
+          "status": "pending"
+        },
+        {
+          "id": 151,
+          "inspired_by": "Ms. Pac-Man",
+          "genre": "arcade",
+          "sub_genre": "maze",
+          "rating": 95,
+          "status": "pending"
+        },
+        {
+          "id": 152,
+          "inspired_by": "Space Invaders",
+          "genre": "arcade",
+          "sub_genre": "shmup",
+          "rating": 90,
+          "status": "pending"
+        },
+        {
+          "id": 153,
+          "inspired_by": "Galaga",
+          "genre": "arcade",
+          "sub_genre": "shmup",
+          "rating": 91,
+          "status": "pending"
+        },
+        {
+          "id": 154,
+          "inspired_by": "Asteroids",
+          "genre": "arcade",
+          "sub_genre": "twin-stick-shooter",
+          "rating": 89,
+          "status": "pending"
+        },
+        {
+          "id": 155,
+          "inspired_by": "Tetris Effect: Connected",
+          "genre": "arcade",
+          "sub_genre": "falling-puzzle",
+          "rating": 92,
+          "status": "pending"
+        },
+        {
+          "id": 156,
+          "inspired_by": "Dr. Mario",
+          "genre": "arcade",
+          "sub_genre": "falling-puzzle",
+          "rating": 84,
+          "status": "pending"
+        },
+        {
+          "id": 157,
+          "inspired_by": "Bubble Bobble",
+          "genre": "arcade",
+          "sub_genre": "single-screen-platformer",
+          "rating": 85,
+          "status": "pending"
+        },
+        {
+          "id": 158,
+          "inspired_by": "Mario Kart 8 Deluxe",
+          "genre": "arcade",
+          "sub_genre": "kart-racing",
+          "rating": 92,
+          "status": "pending"
+        },
+        {
+          "id": 159,
+          "inspired_by": "OutRun",
+          "genre": "arcade",
+          "sub_genre": "arcade-racing",
+          "rating": 89,
+          "status": "pending"
+        },
+        {
+          "id": 160,
+          "inspired_by": "F-Zero X",
+          "genre": "arcade",
+          "sub_genre": "futuristic-racing",
+          "rating": 89,
+          "status": "pending"
+        },
+        {
+          "id": 161,
+          "inspired_by": "Tony Hawk's Pro Skater 2",
+          "genre": "arcade",
+          "sub_genre": "sports-arcade",
+          "rating": 98,
+          "status": "pending"
+        },
+        {
+          "id": 162,
+          "inspired_by": "NBA Jam",
+          "genre": "arcade",
+          "sub_genre": "sports-arcade",
+          "rating": 86,
+          "status": "pending"
+        },
+        {
+          "id": 163,
+          "inspired_by": "Rocket League",
+          "genre": "arcade",
+          "sub_genre": "sports-vehicle",
+          "rating": 86,
+          "status": "pending"
+        },
+        {
+          "id": 164,
+          "inspired_by": "Geometry Wars: Retro Evolved 2",
+          "genre": "arcade",
+          "sub_genre": "twin-stick-shooter",
+          "rating": 90,
+          "status": "in_progress"
+        }
+      ]
+    },
+    "puzzle": {
+      "label": "Puzzle, Obby, Clicker, Rhythm",
+      "games": [
+        {
+          "id": 180,
+          "inspired_by": "Portal",
+          "genre": "puzzle",
+          "sub_genre": "first-person-puzzle",
+          "rating": 90,
+          "status": "pending"
+        },
+        {
+          "id": 181,
+          "inspired_by": "The Witness",
+          "genre": "puzzle",
+          "sub_genre": "first-person-puzzle",
+          "rating": 87,
+          "status": "pending"
+        },
+        {
+          "id": 182,
+          "inspired_by": "Baba Is You",
+          "genre": "puzzle",
+          "sub_genre": "logic-puzzle",
+          "rating": 87,
+          "status": "pending"
+        },
+        {
+          "id": 183,
+          "inspired_by": "Stephen's Sausage Roll",
+          "genre": "puzzle",
+          "sub_genre": "logic-puzzle",
+          "rating": 87,
+          "status": "pending"
+        },
+        {
+          "id": 184,
+          "inspired_by": "Lumines Remastered",
+          "genre": "puzzle",
+          "sub_genre": "falling-puzzle",
+          "rating": 83,
+          "status": "pending"
+        },
+        {
+          "id": 185,
+          "inspired_by": "Puyo Puyo Tetris",
+          "genre": "puzzle",
+          "sub_genre": "falling-puzzle",
+          "rating": 81,
+          "status": "pending"
+        },
+        {
+          "id": 186,
+          "inspired_by": "Tower of Heaven (obby)",
+          "genre": "puzzle",
+          "sub_genre": "obby",
+          "rating": 82,
+          "status": "pending"
+        },
+        {
+          "id": 187,
+          "inspired_by": "Getting Over It",
+          "genre": "puzzle",
+          "sub_genre": "rage-platformer",
+          "rating": 81,
+          "status": "pending"
+        },
+        {
+          "id": 188,
+          "inspired_by": "Cookie Clicker",
+          "genre": "puzzle",
+          "sub_genre": "idle-clicker",
+          "rating": 80,
+          "status": "pending"
+        },
+        {
+          "id": 189,
+          "inspired_by": "Adopt Me (Roblox pet clicker)",
+          "genre": "puzzle",
+          "sub_genre": "roblox-clicker",
+          "rating": 80,
+          "status": "pending"
+        },
+        {
+          "id": 190,
+          "inspired_by": "Beat Saber",
+          "genre": "puzzle",
+          "sub_genre": "rhythm",
+          "rating": 85,
+          "status": "pending"
+        },
+        {
+          "id": 191,
+          "inspired_by": "Dance Dance Revolution Supernova",
+          "genre": "puzzle",
+          "sub_genre": "rhythm",
+          "rating": 82,
+          "status": "pending"
+        },
+        {
+          "id": 192,
+          "inspired_by": "Rhythm Heaven Fever",
+          "genre": "puzzle",
+          "sub_genre": "rhythm",
+          "rating": 89,
+          "status": "pending"
+        }
+      ]
+    },
+    "flight": {
+      "label": "Flight, Space, Atmospheric",
+      "games": [
+        {
+          "id": 200,
+          "inspired_by": "Microsoft Flight Simulator (2020)",
+          "genre": "flight",
+          "sub_genre": "realistic-sim",
+          "rating": 91,
+          "status": "pending"
+        },
+        {
+          "id": 201,
+          "inspired_by": "Pilotwings 64",
+          "genre": "flight",
+          "sub_genre": "arcade-flight",
+          "rating": 80,
+          "status": "pending"
+        },
+        {
+          "id": 202,
+          "inspired_by": "Ace Combat 7",
+          "genre": "flight",
+          "sub_genre": "combat-flight",
+          "rating": 82,
+          "status": "pending"
+        },
+        {
+          "id": 203,
+          "inspired_by": "Star Fox 64",
+          "genre": "flight",
+          "sub_genre": "on-rails-shooter",
+          "rating": 88,
+          "status": "pending"
+        },
+        {
+          "id": 204,
+          "inspired_by": "Kerbal Space Program",
+          "genre": "flight",
+          "sub_genre": "space-sim",
+          "rating": 88,
+          "status": "pending"
+        },
+        {
+          "id": 205,
+          "inspired_by": "FTL: Faster Than Light",
+          "genre": "flight",
+          "sub_genre": "space-roguelike",
+          "rating": 84,
+          "status": "pending"
+        }
       ]
     },
     "board_game": {
-      "label": "Top Board Games (digital)",
+      "label": "Board Games, Classic Tabletop Digital",
       "games": [
-        {"id": 45, "inspired_by": "Catan", "genre": "board_game", "sub_genre": "resource-trading", "status": "pending"},
-        {"id": 46, "inspired_by": "Ticket to Ride", "genre": "board_game", "sub_genre": "route-building", "status": "pending"},
-        {"id": 47, "inspired_by": "Carcassonne", "genre": "board_game", "sub_genre": "tile-placement", "status": "pending"},
-        {"id": 48, "inspired_by": "Wingspan", "genre": "board_game", "sub_genre": "engine-building", "status": "pending"},
-        {"id": 49, "inspired_by": "Azul", "genre": "board_game", "sub_genre": "pattern-building", "status": "pending"},
-        {"id": 50, "inspired_by": "Dominion", "genre": "board_game", "sub_genre": "deck-building", "status": "pending"},
-        {"id": 51, "inspired_by": "7 Wonders", "genre": "board_game", "sub_genre": "card-drafting", "status": "pending"},
-        {"id": 52, "inspired_by": "Pandemic", "genre": "board_game", "sub_genre": "cooperative", "status": "pending"},
-        {"id": 53, "inspired_by": "Codenames", "genre": "board_game", "sub_genre": "word-game", "status": "pending"},
-        {"id": 54, "inspired_by": "Brass: Birmingham", "genre": "board_game", "sub_genre": "economic-strategy", "status": "pending"},
-        {"id": 55, "inspired_by": "Gloomhaven", "genre": "board_game", "sub_genre": "dungeon-crawl-boardgame", "status": "pending"}
+        {
+          "id": 220,
+          "inspired_by": "Chess (Stockfish-class AI)",
+          "genre": "board_game",
+          "sub_genre": "chess",
+          "rating": 95,
+          "status": "pending"
+        },
+        {
+          "id": 221,
+          "inspired_by": "Checkers",
+          "genre": "board_game",
+          "sub_genre": "checkers",
+          "rating": 85,
+          "status": "pending"
+        },
+        {
+          "id": 222,
+          "inspired_by": "Go (19x19)",
+          "genre": "board_game",
+          "sub_genre": "go",
+          "rating": 92,
+          "status": "pending"
+        },
+        {
+          "id": 223,
+          "inspired_by": "Catan",
+          "genre": "board_game",
+          "sub_genre": "euro-strategy",
+          "rating": 85,
+          "status": "pending"
+        },
+        {
+          "id": 224,
+          "inspired_by": "Carcassonne",
+          "genre": "board_game",
+          "sub_genre": "tile-placement",
+          "rating": 86,
+          "status": "pending"
+        },
+        {
+          "id": 225,
+          "inspired_by": "Ticket to Ride",
+          "genre": "board_game",
+          "sub_genre": "route-building",
+          "rating": 83,
+          "status": "pending"
+        },
+        {
+          "id": 226,
+          "inspired_by": "Scrabble",
+          "genre": "board_game",
+          "sub_genre": "word",
+          "rating": 82,
+          "status": "pending"
+        },
+        {
+          "id": 227,
+          "inspired_by": "Solitaire (Klondike)",
+          "genre": "board_game",
+          "sub_genre": "card",
+          "rating": 80,
+          "status": "pending"
+        },
+        {
+          "id": 228,
+          "inspired_by": "Hearthstone",
+          "genre": "board_game",
+          "sub_genre": "ccg",
+          "rating": 88,
+          "status": "pending"
+        }
       ]
     }
-  }
+  },
+  "rating_source": "Metacritic PC scores primarily, IMDB/IGDB fallback, minimum 80%/8.0/3.5-stars enforced",
+  "status_values": [
+    "pending",
+    "in_progress",
+    "candidate",
+    "validated",
+    "built",
+    "qa_failed",
+    "published",
+    "rejected"
+  ]
 }

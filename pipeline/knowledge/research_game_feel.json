@@ -312,6 +312,54 @@
         "de_bounce_reset_on_create": "true"
       },
       "source_id": "vector_storm_playtest_2026_05_05"
+    },
+    {
+      "name": "boss_telegraph_scale_pulse",
+      "directive": "Every boss area-attack telegraphs 0.4-0.5s before firing via a scale-pulse on the boss graphics (1.0 → 1.4 yoyo, ease Cubic.easeOut). Without telegraphs, the boss feels like cheap shots; with them, it reads as fair-hard. Stack with a tracer line preview for aimed shots.",
+      "phaser_hint": "if (time > enemy.lastShock - 500 && !enemy._shockTelegraphed) {\n  enemy._shockTelegraphed = true;\n  this.tweens.add({ targets: enemy.graphics, scale: 1.4, duration: 450, yoyo: true, ease: 'Cubic.easeOut' });\n}\nif (time > enemy.lastShock) {\n  this._emitDamageRing(enemy.x, enemy.y, color, radius);\n  enemy.lastShock = time + cooldown_ms;\n  enemy._shockTelegraphed = false;\n}",
+      "tunables": {
+        "telegraph_duration": "450ms",
+        "scale_pulse": "1.0->1.4 yoyo",
+        "min_attack_cooldown": "3000ms",
+        "scale_with_HP": "shorter cooldown at <33% HP"
+      },
+      "source_id": "vector_storm_playtest_2026_05_05"
+    },
+    {
+      "name": "boss_phase_banner",
+      "directive": "When a boss HP crosses a phase threshold (66% / 33%), camera-flash 180ms in a warm color + showBigBanner('PHASE 2', '#ff8800', 800ms). Immediately scale chase speed by 1+phase*0.4 and shorten attack cooldown by ~30%. Makes phase transitions feel like a beat, not a quiet stat change.",
+      "phaser_hint": "const phase = enemy.hp/enemy.maxHp < 0.33 ? 2 : enemy.hp/enemy.maxHp < 0.66 ? 1 : 0;\nif (phase !== enemy.bossPhase) {\n  enemy.bossPhase = phase;\n  this.cameras.main.flash(180, 255, 200, 100);\n  this._showBigBanner('PHASE ' + (phase + 1), '#ff8800', 800);\n}",
+      "tunables": {
+        "phases": [
+          0.66,
+          0.33
+        ],
+        "speed_scale": "1 + phase*0.4",
+        "attack_cooldown_scale": "0.7^phase"
+      },
+      "source_id": "vector_storm_playtest_2026_05_05"
+    },
+    {
+      "name": "world_identity_via_visual_change",
+      "directive": "When a game has 'worlds' or 'biomes' or 'chapters', the player's eye should read the boundary instantly. The strongest signal is changing enemy SHAPES (per-game research designs the rosters); secondary signals are background palette + tile theme. Avoid music swaps DURING active gameplay — they're jarring on single-screen games and the swap is often the most fragile path in the audio system. Keep music either constant for the whole run, or only swap on dramatic moments (boss intro, final-world reveal, win screen).",
+      "phaser_hint": "// Per-game research decides the species — this is just the pattern\n_availableEnemyTypes(wave) {\n  if (wave <= worldOneEnd) return WORLD_1_ROSTER;\n  if (wave <= worldTwoEnd) return WORLD_2_ROSTER;\n  return WORLD_3_ROSTER;\n}\n// Music: load multiple keys but call _switchMusic only on world-clear / boss-fight beats, never mid-action",
+      "tunables": {
+        "signal_priority": "1: enemy species, 2: palette, 3: tileset, 4 (optional): music",
+        "music_swaps": "0 during action; only at dramatic beats"
+      },
+      "source_id": "vector_storm_playtest_2026_05_05"
+    },
+    {
+      "name": "weapon_hud_with_duration_bar",
+      "directive": "When the player holds a non-base weapon, show a HUD readout in top-right: tier name in tier color + ' xN' stack suffix, with a 120×6 px duration-remaining bar below. When the tier expires, clear text+bar AND reset weaponTier=0/stacks=0 so the next pickup feels fresh. Without this UI, picking up a stack feels invisible.",
+      "phaser_hint": "// In createHUD: this.weaponText = this.add.text(width-20, 20, '').setOrigin(1,0).setDepth(50);\n//                this.weaponBarBg = this.add.graphics().setDepth(50);\n//                this.weaponBar = this.add.graphics().setDepth(51);\n// In update:\nif (this.weaponTier > 0 && time < this.weaponTierExpiresAt) {\n  const meta = WEAPON_TIERS[this.weaponTier];\n  const stackLabel = this.weaponStacks > 0 ? ' x' + (1 + this.weaponStacks) : '';\n  this.weaponText.setText(meta.name + stackLabel).setColor(meta.cssColor);\n  const pct = Math.max(0, (this.weaponTierExpiresAt - time) / 9000);\n  this.weaponBar.clear().fillStyle(meta.colorHex, 1).fillRect(width-20-120, 48, 120*pct, 6);\n} else { this.weaponText.setText(''); this.weaponBar.clear(); /* reset tier */ }",
+      "tunables": {
+        "bar_width": 120,
+        "bar_height": 6,
+        "duration_max_ms": 9000,
+        "anchor": "top-right"
+      },
+      "source_id": "vector_storm_playtest_2026_05_05"
     }
   ],
   "per_genre_juice_priorities": {

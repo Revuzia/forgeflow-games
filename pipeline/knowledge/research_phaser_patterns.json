@@ -434,6 +434,90 @@
         "https://docs.phaser.io/api-documentation/class/scale-scalemanager",
         "https://phaser.io/examples/v3.85.0/scalemanager"
       ]
+    },
+    {
+      "id": "phaser_method_vs_flag_truthy",
+      "category": "naming_pitfalls",
+      "title": "this.gameOver is the method (always truthy) — gating on it as a flag breaks every guard",
+      "description": "If a class has a method `gameOver()`, then `this.gameOver` is the method reference (a function), which is always truthy. Code that does `if (this.gameOver) return;` thinking it's checking a flag silently disables every guarded code path forever. Same applies to any method-named flag: `this.paused` (if paused() exists), `this.win` (if win() exists), etc.",
+      "wrong_pattern": "// WRONG: this.gameOver is the METHOD, always truthy\ngameOver() { /* ... */ }\nupdate() {\n  if (this.gameOver) return;  // always returns — game stops updating\n  // movement, AI, etc.\n}",
+      "right_pattern": "// RIGHT: explicit boolean flag with a different name\ngameOver() {\n  this._gameOverFired = true;\n  // ...\n}\nupdate() {\n  if (this._gameOverFired) return;  // checks the flag, not the method\n  // ...\n}",
+      "prompt_directive": "Never name a flag the same as a method. Use `_gameOverFired`, `_paused`, `_won` (underscore-prefixed) for boolean state when there's a same-named method. Always check `=== true` or compare to literal if any doubt about the property's value.",
+      "sources": [
+        "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/typeof"
+      ]
+    },
+    {
+      "id": "phaser_tween_not_clear_per_frame",
+      "category": "performance",
+      "title": "Animated Graphics: tween the transform, never clear()+redraw per frame",
+      "description": "Animated Phaser.Graphics elements (damage rings, expanding shockwaves, vortices) often use clear()+lineStyle()+strokeCircle()/redraw every frame. That re-tessellates geometry every tick — at 60 fps with N rings, that's N×60 tessellations per second, the silent perf killer. Right pattern: draw the shape ONCE at unit size in the spawn function, then drive scale/alpha/rotation via Phaser tween. Phaser tweens just write to the GameObject's transform — no re-tessellation, GPU-batched.",
+      "wrong_pattern": "update(time, delta) {\n  for (const r of this.damageRings) {\n    const t = (time - r.birthTime) / r.lifetime;\n    r.gfx.clear();\n    r.gfx.lineStyle(3, r.color, 1 - t);\n    r.gfx.strokeCircle(0, 0, 8 + (r.maxRadius - 8) * t);\n  }\n}",
+      "right_pattern": "// In spawn helper: draw ONCE, animate via tween\n_emitDamageRing(x, y, color, maxRadius) {\n  const ring = this.add.graphics().setDepth(150);\n  ring.lineStyle(3, color, 1);\n  ring.strokeCircle(0, 0, 1);  // unit ring\n  ring.x = x; ring.y = y;\n  ring.scale = 8;\n  this.tweens.add({\n    targets: ring, scale: maxRadius, alpha: 0,\n    duration: 700, ease: 'Cubic.easeOut',\n    onComplete: () => ring.destroy(),\n  });\n}",
+      "prompt_directive": "For animated Graphics shapes (rings, vortices, expanding effects), draw ONCE at unit size at spawn time, then drive scale/alpha/rotation via Phaser tween. NEVER call .clear()+redraw inside an update loop — re-tessellation per frame collapses framerate at scale.",
+      "sources": [
+        "https://docs.phaser.io/api-documentation/class/tweens-tweenmanager"
+      ]
+    },
+    {
+      "id": "phaser_decoupled_visual_physics",
+      "category": "rendering_architecture",
+      "title": "Decouple physics body and visual when the visual is vector-drawn",
+      "description": "When the visual is a Phaser.Graphics drawing (vector shapes, multi-component creature, etc.) instead of a sprite atlas frame, create the physics body on a 1×1 invisible texture and the visual as a separate Graphics. Update the graphics' x/y/rotation from the sprite each frame. Lets you customize body size independently from visual; lets visuals have multi-component pieces (snake segments, satellites, glow); lets you swap visuals without touching collision.",
+      "wrong_pattern": "// WRONG: trying to attach Graphics directly to physics body\nconst enemy = this.physics.add.existing(this.add.graphics());  // doesn't work cleanly",
+      "right_pattern": "// RIGHT: separate physics + visual, sync each frame\nenemy = this.physics.add.sprite(x, y, '_invisible');  // 1x1 transparent\nenemy.graphics = this.add.graphics();  // separate visual\nenemy.graphics.lineStyle(3, 0xff44ff, 1);\nenemy.graphics.strokePoints([{x:0,y:-12},{x:11,y:7},{x:-11,y:7}], true);\n// In update():\nenemy.graphics.x = enemy.x; enemy.graphics.y = enemy.y; enemy.graphics.rotation = enemy.rotation;\n// Cleanup: _killEnemy MUST destroy graphics + glow + segments + tweens BEFORE the sprite",
+      "prompt_directive": "When visual is vector-drawn (not a sprite frame): create physics on '_invisible' 1x1 transparent texture; create the visual as a separate Graphics; copy x/y/rotation from sprite to graphics in update(); ALWAYS clean up via a _killEnemy(e) helper that calls tweens.killTweensOf(e.graphics) and destroys e.graphics + .glow + .segments[] before the sprite.",
+      "sources": []
+    },
+    {
+      "id": "arcade_perf_caps_numeric",
+      "category": "performance",
+      "title": "Concurrent-object hard caps (numeric table) for arcade games",
+      "description": "Vector Storm proved exact thresholds where the renderer chokes. Cap concurrent active counts and on-overflow apply oldest-first FIFO eviction (or skip-spawn for cosmetic-only objects). Numbers below are the floor; less is fine, more risks freezing.",
+      "wrong_pattern": "// WRONG: unbounded spawning\nfireBullet() {\n  this.bullets.push(this.physics.add.image(...));\n}",
+      "right_pattern": "// RIGHT: cap + FIFO evict\nfireBullet() {\n  if (this.bullets.length >= 150) {\n    const oldest = this.bullets.shift();\n    if (oldest && oldest.active) oldest.destroy();\n  }\n  this.bullets.push(this.physics.add.image(...));\n}\n// Same pattern for enemyBullets (cap 80), _scorePopups (cap 6, skip spawn at cap),\n// _activeChainBolts (cap 12, skip visual at cap, damage still applies),\n// gameState.enemies (cap 80; pause drip-spawn while at cap, push nextSpawnTime by 400ms)",
+      "prompt_directive": "Hard caps for arcade games: player_bullets=150 (oldest-evict), enemy_bullets=80 (oldest-evict), score_popups=6 (skip spawn — HUD multiplier already pulses), chain_bolts=12 (skip visual; damage still applies), active_enemies=80 (pause drip-spawn). At cap, push nextSpawnTime forward 400ms.",
+      "sources": []
+    },
+    {
+      "id": "arcade_drip_spawn_curve",
+      "category": "balance",
+      "title": "Drip-spawn delay formula: spawnDelay = max(180, 1600 - wave*280)",
+      "description": "The wave-intensification curve for drip-spawning enemies. Floors at 180ms so renderer has breathing room. Wave 1 = 1320ms gaps (player gets to learn the mechanic), wave 5 = 200ms (constant pressure). Companion rule: when active_enemies cap is reached, push nextSpawnTime forward 400ms instead of insta-respawning into the cap.",
+      "wrong_pattern": "// WRONG: linear or exponential scaling without floor\nthis.spawnDelay = 2000 - currentWave * 200;  // wave 10 = 0ms, renderer dies",
+      "right_pattern": "this.spawnDelay = Math.max(180, 1600 - gameState.currentWave * 280);\nthis.nextSpawnTime = time + this.spawnDelay;\n// At cap:\nelse if (gameState.enemies.length >= 80) {\n  this.nextSpawnTime = time + 400;  // breathe before retrying\n}",
+      "prompt_directive": "Drip-spawn formula: `spawnDelay_ms = Math.max(180, 1600 - currentWave * 280)`. At active-enemies cap, push nextSpawnTime forward 400ms.",
+      "sources": []
+    },
+    {
+      "id": "arcade_save_gated_skip",
+      "category": "design",
+      "title": "N-key wave skip gated by localStorage maxWaveReached",
+      "description": "Wave-skip is a roguelite QoL feature, but unrestricted skipping trivializes the curve. Gate the N key on a persisted high-water mark — players can only skip TO a wave they've previously reached. Save maxWaveReached on every _advanceWave. Block skip during boss fights and during boss-death-pending. On illegal skip, show 'Reach wave N first' centered text 1200ms cubic-ease.",
+      "wrong_pattern": "// WRONG: ungated skip\nif (Phaser.Input.Keyboard.JustDown(this.cursors.n)) this._advanceWave();",
+      "right_pattern": "if (Phaser.Input.Keyboard.JustDown(this.cursors.n) && !this.waveSkipped\n    && gameState.currentWave + 1 <= gameState.maxWaveReached\n    && !this.bossActive && !this._bossDeathPending) {\n  this.waveSkipped = true;\n  this._advanceWave();\n  return;\n}\n// Persist:\n// _advanceWave() { ... if (currentWave > maxWaveReached) { maxWaveReached = currentWave; localStorage.setItem(...); } }",
+      "prompt_directive": "If the game has wave-skip (N key): save maxWaveReached to localStorage on every wave advance; gate skip on currentWave+1 <= maxWaveReached AND !bossActive AND !_bossDeathPending; show 'Reach wave N first' denial flash on illegal skip; show 'Max Wave Reached: N' on Menu + a 'Reset Save' link.",
+      "sources": []
+    },
+    {
+      "id": "arcade_cumulative_clear_rules",
+      "category": "design",
+      "title": "Cumulative-wave model: only boss-clears wipe the screen",
+      "description": "The 'natural' wave timer expiry and the player-triggered N skip should NOT clear existing enemies — they stack into the next wave (cumulative difficulty). Only a real boss-clear earns a screen wipe. Critical for difficulty curve to feel earned vs trivialized. Implementation: an `_isBossClearAdvance` flag, set true ONLY in `_onBossDefeated`'s delayedCall, false on timer-expiry/skip.",
+      "wrong_pattern": "// WRONG: every advance clears, skips become free resets\n_advanceWave() {\n  this.enemyGroup.clear(true, true);  // wrong: also leaks orphan graphics\n  // spawn next wave...\n}",
+      "right_pattern": "// RIGHT: only boss-clear wipes\n_advanceWave() {\n  const isBossClear = this._isBossClearAdvance === true;\n  this._isBossClearAdvance = false;\n  if (isBossClear) {\n    gameState.enemies.slice().forEach(e => this._killEnemy(e));\n    gameState.enemies = []; gameState.gravityWells = [];\n    if (this.enemyGroup) this.enemyGroup.clear(true, false);\n    // Also clear damage rings, enemy bullets, black-hole vortices\n  }\n  // Burst-spawn 4+wave*2 enemies (only on bossClear) — staggered 80ms apart\n}\n_onBossDefeated() {\n  this.bossActive = false; this._bossDeathPending = true;\n  this.time.delayedCall(2200, () => {\n    this._isBossClearAdvance = true;\n    this._advanceWave();\n  });\n}",
+      "prompt_directive": "In wave-based games: wave-timer expiry and N skip do NOT clear enemies (cumulative stacking); only boss-clear wipes. Set `_isBossClearAdvance=true` only in `_onBossDefeated`'s delayedCall; clear at top of `_advanceWave`. Also: gate the wave-timer's `_advanceWave()` call on `!this.bossActive && !this._bossDeathPending` to prevent the boss-death timer race.",
+      "sources": []
+    },
+    {
+      "id": "arcade_audio_load_strategy",
+      "category": "robustness",
+      "title": "Pre-load full music key set with try/catch per call",
+      "description": "Even when a game ships with one music track, the generator should pre-load the full slot set (music_menu, music_world1/2/3, music_boss) with each load.audio() in its own try/catch so a missing file silently no-ops instead of crashing the whole build. Companion: the music-switch helper should `if (!this.cache.audio.exists(key)) return` before adding/playing.",
+      "wrong_pattern": "// WRONG: bare load + no existence guard\nthis.load.audio('music_world1', 'assets/audio/music_world1.mp3');\nthis.bgMusic = this.sound.add('music_world1');\nthis.bgMusic.play();  // crashes if file 404",
+      "right_pattern": "// In preload:\nfor (const k of ['music_menu', 'music_world1', 'music_world2', 'music_world3', 'music_boss']) {\n  try { this.load.audio(k, `assets/audio/${k}.mp3`); } catch (_e) {}\n}\n// In _switchMusic:\n_switchMusic(key) {\n  if (!this.cache.audio.exists(key)) return;  // silent no-op\n  // ... fade-out old, play new ...\n}",
+      "prompt_directive": "Pre-load music_menu + music_world1/2/3 + music_boss in PreloadScene, each in its own try/catch. The _switchMusic helper must check `cache.audio.exists(key)` before adding/playing; silent no-op on miss prevents crashes from missing audio assets.",
+      "sources": []
     }
   ]
 }
