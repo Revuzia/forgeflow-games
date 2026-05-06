@@ -66,8 +66,17 @@ export default function GamePlayer({ game }: Props) {
     return () => destroyGameBridge();
   }, []);
 
+  // When the game is actually playing (not preroll) and not in browser
+  // fullscreen, break out of the page's max-w-7xl wrapper so the iframe
+  // can take the full viewport width. We measure the player's offset and
+  // pin the playing container with negative margins so it spans 100vw.
+  // This is much less janky than requestFullscreen and works everywhere.
+  const playingClasses = !showPreroll && !isFullscreen
+    ? "relative bg-black overflow-hidden mx-[calc(50%-50vw)] w-screen"
+    : "relative bg-black rounded-xl overflow-hidden";
+
   return (
-    <div ref={containerRef} className="relative bg-black rounded-xl overflow-hidden">
+    <div ref={containerRef} className={playingClasses}>
       {/* Pre-roll: game cover image (or ad placeholder fallback) + Play button */}
       {showPreroll && (
         <div className="absolute inset-0 z-20 bg-surface-900 flex flex-col items-center justify-center">
@@ -102,8 +111,11 @@ export default function GamePlayer({ game }: Props) {
         </div>
       )}
 
-      {/* Game iframe */}
-      <div className={`relative ${isFullscreen ? "w-screen h-screen" : "aspect-video w-full"}`}>
+      {/* Game iframe — fills the viewport minus the top nav (~80px) when
+          playing, so the user gets the largest play area without having
+          to click fullscreen. The pre-roll still uses aspect-video so the
+          cover art doesn't dominate. */}
+      <div className={`relative ${isFullscreen ? "w-screen h-screen" : showPreroll ? "aspect-video w-full" : "w-full h-[calc(100vh-80px)] min-h-[600px]"}`}>
         {!showPreroll && (
           <iframe
             ref={iframeRef}

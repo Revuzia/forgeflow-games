@@ -27,6 +27,9 @@ body{display:flex;align-items:center;justify-content:center}
 <script src="anomaly_logger.js"></script>
 <script src="pause.js"></script>
 <script src="game_controls.js"></script>
+<!-- Portal SDK: leaderboard scores + achievement unlocks. Always absolute URL
+     so the game works whether served from R2, the iframe, or directly. -->
+<script src="https://forgeflowgames.com/forgeflow-sdk.js"></script>
 </head>
 <body>
 <div id="start">
@@ -144,6 +147,51 @@ window.addEventListener("mutechange", (e) => {
 let state = 'menu', score = 0, lives = 3, level = 0, combo = 0, comboTimer = 0;
 let ballLaunched = false, shakeT = 0, shakeI = 0;
 let particles = [], powerUps = [], lasers = [], texts = [];
+
+// ─── Achievement tracker ───────────────────────────────────────
+// Tracks per-run state (resets on restartGame) and emits unlock calls
+// through window.ForgeFlow (the SDK script tag above). Achievements are
+// idempotent on the server side (UNIQUE on user_id, achievement_id) so
+// re-emitting is safe — we still cache locally to avoid spam.
+const ach = {
+  emitted: new Set(),
+  bricksThisRun: 0,
+  powerUpsThisRun: 0,
+  livesAtLevelStart: 3,  // for flawless_level
+  unlock(slug) {
+    if (this.emitted.has(slug)) return;
+    this.emitted.add(slug);
+    if (window.ForgeFlow && window.ForgeFlow.unlockAchievement) {
+      window.ForgeFlow.unlockAchievement(slug);
+    }
+  },
+  // Called on every brick break to re-check score/combo/brick milestones
+  onBrickBreak() {
+    this.bricksThisRun++;
+    if (this.bricksThisRun === 1) this.unlock("first_brick");
+    if (combo >= 5)  this.unlock("combo_5");
+    if (combo >= 10) this.unlock("combo_10");
+    if (score >= 2500) this.unlock("score_2500");
+    if (score >= 5000) this.unlock("score_5000");
+  },
+  onPowerUp() {
+    this.powerUpsThisRun++;
+    if (this.powerUpsThisRun >= 5) this.unlock("powerup_5");
+  },
+  onLevelClear() {
+    // level just incremented, so we cleared (level - 1) which is 1-indexed.
+    if (level >= 5)  this.unlock("level_5");
+    if (level >= 10) this.unlock("level_10");
+    if (lives === this.livesAtLevelStart) this.unlock("flawless_level");
+    this.livesAtLevelStart = lives;
+  },
+  onRestart() {
+    this.emitted.clear();
+    this.bricksThisRun = 0;
+    this.powerUpsThisRun = 0;
+    this.livesAtLevelStart = 3;
+  },
+};
 
 // ─── Paddle ─────────────────────────────────────────────────────
 const paddle = { x: 0, y: 0, w: 100, h: 14, baseW: 100, speed: 8, color: '#ff8800', magnet: false, magnetTimer: 0, laserTimer: 0 };
@@ -392,6 +440,7 @@ function hitBlock(block, ball) {
   comboTimer = 2;
   const pts = 10 * Math.min(combo, 10);
   score += pts;
+  ach.onBrickBreak();
 
   if (block.hp <= 0) {
     // Destroyed
@@ -454,6 +503,7 @@ function applyPowerUp(type) {
   floatText(W/2, H/2, pu.desc, pu.color);
   emit(paddle.x + paddle.w/2, paddle.y, 15, pu.color, 5);
   playSFX("sfx_powerup", 0.5);
+  ach.onPowerUp();
 
   switch (type) {
     case 'MULTI':
@@ -688,7 +738,16 @@ function update(dt) {
     shakeT = 0; shakeI = 0;
     particles.length = 0;
     texts.length = 0;
-    if (level >= LEVELS.length) { state = 'win'; stopMusic(); return; }
+    ach.onLevelClear();
+    if (level >= LEVELS.length) {
+      state = 'win';
+      stopMusic();
+      // Final score → portal leaderboard, plus the all-10 achievement.
+      if (window.ForgeFlow) {
+        window.ForgeFlow.submitScore(score);
+      }
+      return;
+    }
     loadLevel();
     ballLaunched = false;
   }
@@ -953,6 +1012,11 @@ function loop(ts) {
 }
 
 function restartGame() {
+  // Submit prior run's score to the leaderboard before resetting (no-op if guest).
+  if (window.ForgeFlow && score > 0) {
+    window.ForgeFlow.gameOver(score);
+  }
+  ach.onRestart();
   score = 0; lives = 3; level = 0;
   state = 'playing';
   loadLevel();

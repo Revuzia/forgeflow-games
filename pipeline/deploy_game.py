@@ -46,7 +46,11 @@ def upload_to_r2(game_dir: Path, slug: str) -> int:
             continue
         relative = file_path.relative_to(game_dir)
         r2_key = f"{slug}/{relative.as_posix()}"
-        cmd = f'npx wrangler r2 object put "{R2_BUCKET}/{r2_key}" --file="{file_path}"'
+        # 2026-05-05 — wrangler 4.x defaults to LOCAL storage simulator unless
+        # --remote is passed. Without it, uploads go to a local dev sandbox and
+        # never reach the actual R2 bucket. Symptoms: deploy log says "Upload
+        # complete" but the worker keeps serving stale content.
+        cmd = f'npx wrangler r2 object put "{R2_BUCKET}/{r2_key}" --file="{file_path}" --remote'
         result = subprocess.run(
             cmd, shell=True, capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=30

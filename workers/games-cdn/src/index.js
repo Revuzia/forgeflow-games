@@ -58,9 +58,14 @@ export default {
     headers.set("access-control-allow-methods", "GET, HEAD, OPTIONS");
     headers.set("cross-origin-embedder-policy", "credentialless");
 
-    // HTML: no-cache (always get latest version). Assets: cache 1 day.
-    if (ext === "html") {
-      headers.set("cache-control", "no-cache, must-revalidate");
+    // HTML: no-store (Cloudflare's edge cache will not retain). Assets: 1 day.
+    // 2026-05-05 — switched HTML from no-cache to no-store + private after
+    // observing CF edge serving stale game HTML even with no-cache, breaking
+    // SDK rollout. js+css are versioned by content so 24h is fine.
+    if (ext === "html" || ext === "js") {
+      headers.set("cache-control", "no-store, no-cache, must-revalidate, private");
+      headers.set("pragma", "no-cache");
+      headers.set("expires", "0");
     } else {
       headers.set("cache-control", "public, max-age=86400");
     }
