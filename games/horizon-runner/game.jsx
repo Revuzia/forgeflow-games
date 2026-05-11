@@ -3,7 +3,11 @@ import { Sparkles, Heart, Star, Zap, TreePine, Snowflake, Droplets, Flame, Cloud
 
 const GRAVITY = 0.8;
 const JUMP_FORCE = -14;  // Slightly reduced for lower platforms
-const RUN_SPEED = 7;
+// 2026-05-11 — Reduced from 7 to 5 per user feedback ("main character
+// movement is TOO fast and should be slowed down in general"). 5 px/frame
+// at 60fps = 300 px/s — still fast enough to feel responsive but the
+// player has time to react to obstacles and pits.
+const RUN_SPEED = 5;
 const PLAYER_WIDTH = 40;
 const PLAYER_HEIGHT = 50;
 // 2026-05-08 — FIXED virtual game world (16:9). Internal canvas resolution
@@ -518,22 +522,33 @@ const HorizonRunner = () => {
       createParticle(player.x + player.width / 2, player.y + player.height / 2, '#22c55e', 8);
     }
     
-    // Update power-up timer
+    // 2026-05-11 — Power-up expiration was unreliable because the
+    // `if (powerUpTimer <= deltaTime)` check read STALE React state
+    // (setPowerUpTimer queues an update that doesn't apply until next
+    // render). With deltaTime~1 and timer=300, the staleness usually
+    // worked out, but if a deltaTime spiked or two chests were opened
+    // back-to-back the reset never fired and the speed buff stuck the
+    // whole game. Fix: do the decrement + zero-cross inside the same
+    // functional setter so it works from the LATEST value every frame.
     if (powerUpTimer > 0) {
-      setPowerUpTimer(prev => prev - deltaTime);
-      if (powerUpTimer <= deltaTime) {
-        setPowerUp(null);
-        player.speedBoost = 1;
-        player.hasShield = false;
-      }
+      setPowerUpTimer(prev => {
+        const next = prev - deltaTime;
+        if (next <= 0) {
+          setPowerUp(null);
+          player.speedBoost = 1;
+          player.hasShield = false;
+          return 0;
+        }
+        return next;
+      });
     }
-    
-    // Update waypoint message timer
+
     if (waypointMessageTimer > 0) {
-      setWaypointMessageTimer(prev => prev - deltaTime);
-      if (waypointMessageTimer <= deltaTime) {
-        setWaypointMessage('');
-      }
+      setWaypointMessageTimer(prev => {
+        const next = prev - deltaTime;
+        if (next <= 0) { setWaypointMessage(''); return 0; }
+        return next;
+      });
     }
     
     // Update damage flash
@@ -811,17 +826,27 @@ const HorizonRunner = () => {
         state.y = enemy.y - Math.abs(Math.sin(state.time * enemy.bounceSpeed)) * enemy.bounceHeight;
         
       } else if (enemy.type === 'rollingBall') {
-        // Rolling ball - rolls back and forth on ground
-        const nextX = state.x + enemy.speed * state.direction * deltaTime;
-        // 2026-05-08 — Pit avoidance. Enemies used to walk straight off pits
-        // and disappear. Now we look ahead one frame and reverse direction
-        // if the next position would put the enemy's center over a pit.
-        const aboutToEnterPit = levelData.obstacles.some(o =>
-          o.type === 'pit' &&
-          nextX + 16 > o.x && nextX - 16 < o.x + o.width
+        // 2026-05-11 — Pit avoidance v2. Was: if next step would enter
+        // a pit, only flip direction (no position update). At a pit
+        // EDGE both directions overlapped the pit, so the enemy stayed
+        // pinned and flipped every frame — user reported enemy "stuck
+        // near a pit". Now: flip + step in the NEW direction in the
+        // same frame, guaranteeing forward progress. If the new dir
+        // ALSO hits a pit (sandwich), the enemy holds position rather
+        // than flailing.
+        const step = enemy.speed * state.direction * deltaTime;
+        let nextX = state.x + step;
+        const overlapsPit = (x) => levelData.obstacles.some(o =>
+          o.type === 'pit' && x + 16 > o.x && x - 16 < o.x + o.width
         );
-        if (aboutToEnterPit) state.direction *= -1;
-        else state.x = nextX;
+        if (overlapsPit(nextX)) {
+          state.direction *= -1;
+          const nextX2 = state.x + enemy.speed * state.direction * deltaTime;
+          if (!overlapsPit(nextX2)) state.x = nextX2;
+          // else: trapped between pits, hold position this frame
+        } else {
+          state.x = nextX;
+        }
         state.y = enemy.y;
 
         // Reverse direction at patrol boundaries
@@ -830,14 +855,19 @@ const HorizonRunner = () => {
         }
 
       } else if (enemy.type === 'bouncingSquare') {
-        // Bouncing square - moves back and forth on ground with bouncing
-        const nextX = state.x + enemy.speed * state.direction * deltaTime;
-        const aboutToEnterPit = levelData.obstacles.some(o =>
-          o.type === 'pit' &&
-          nextX + 16 > o.x && nextX - 16 < o.x + o.width
+        // Same pit-avoidance pattern as rollingBall.
+        const step = enemy.speed * state.direction * deltaTime;
+        let nextX = state.x + step;
+        const overlapsPit = (x) => levelData.obstacles.some(o =>
+          o.type === 'pit' && x + 16 > o.x && x - 16 < o.x + o.width
         );
-        if (aboutToEnterPit) state.direction *= -1;
-        else state.x = nextX;
+        if (overlapsPit(nextX)) {
+          state.direction *= -1;
+          const nextX2 = state.x + enemy.speed * state.direction * deltaTime;
+          if (!overlapsPit(nextX2)) state.x = nextX2;
+        } else {
+          state.x = nextX;
+        }
 
         // Reverse direction at patrol boundaries
         if (state.x < enemy.x - 150 || state.x > enemy.x + 150) {
@@ -2064,28 +2094,16 @@ const HorizonRunner = () => {
     setGameState('playing');
   };
 
-  // 2026-05-11 — Background music for Horizon Runner (distinct from Vector
-  // Storm's synthwave). Loops while menu/map/playing; muted on game-over
-  // and level-complete screens. Volume kept moderate (0.35) so SFX still
-  // read above it. Autoplay requires user gesture in modern browsers —
-  // we start it on the first menu click (handled implicitly by the user
-  // pressing Start Adventure / clicking a node which sets gameState).
+  // 2026-05-11 — Background music DISABLED. The chiptune track we had
+  // (borrowed from Vector Storm) felt painful per user feedback. Proper
+  // music generation via Stability Audio is a follow-up task (needs an
+  // API key + ~$0.30/track). Leaving the audio element + ref so we can
+  // flip it back on once a quality track lands at /music.mp3.
   const bgmRef = useRef(null);
-  useEffect(() => {
-    const a = bgmRef.current;
-    if (!a) return;
-    const wantsMusic = gameState === 'menu' || gameState === 'themeSelect' || gameState === 'playing';
-    if (wantsMusic) {
-      a.volume = 0.35;
-      a.play().catch(() => { /* autoplay blocked until first user gesture — that's fine */ });
-    } else {
-      a.pause();
-    }
-  }, [gameState]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 text-white p-4 relative overflow-hidden">
-      <audio ref={bgmRef} src="music.mp3" loop preload="auto" />
+      {/* <audio ref={bgmRef} src="music.mp3" loop preload="auto" /> disabled until a proper track is available */}
       <style>{`
         @keyframes float {
           0%, 100% { transform: translateY(0) rotate(0deg); }
