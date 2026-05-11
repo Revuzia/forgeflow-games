@@ -515,11 +515,13 @@ const HorizonRunner = () => {
       player.grounded = false;
       player.doubleJumpUsed = false; // Reset double jump when jumping from ground
       createParticle(player.x + player.width / 2, player.y + player.height, levelData.theme.accentColor, 3);
+      playSfx('jump');
     } else if ((keys['ArrowUp'] || keys['w'] || keys[' ']) && !player.grounded && !player.doubleJumpUsed && player.vy > 0) {
       // Double jump - only when falling and not used yet
       player.vy = JUMP_FORCE * 0.8;
       player.doubleJumpUsed = true;
       createParticle(player.x + player.width / 2, player.y + player.height / 2, '#22c55e', 8);
+      playSfx('jump');
     }
     
     // 2026-05-11 — Power-up expiration was unreliable because the
@@ -667,6 +669,7 @@ const HorizonRunner = () => {
           if (platform.type === 'bouncy') {
             player.vy = JUMP_FORCE * 1.5;
             createParticle(platformX + platform.width / 2, platformY, '#ffeb3b', 8);
+            playSfx('jump');
           } else if (platform.type === 'crumbling') {
             const stateKey = 'crumble-' + index;
             if (!game.platformStates.has(stateKey)) {
@@ -910,6 +913,7 @@ const HorizonRunner = () => {
           setScore(prev => prev + 50);
           player.vy = JUMP_FORCE * 0.7;
           createParticle(state.x, state.y, enemy.color, 15);
+          playSfx('stomp');
         } else if (!player.invulnerable) {
           // Take damage but check for shield first
           if (player.hasShield) {
@@ -918,6 +922,7 @@ const HorizonRunner = () => {
             setPowerUp(null);
             setPowerUpTimer(0);
             createParticle(player.x + player.width / 2, player.y + player.height / 2, '#3b82f6', 20);
+            playSfx('hurt');
             
             // Small knockback but no damage
             player.vx = (player.x > state.x ? 1 : -1) * 5;
@@ -933,6 +938,7 @@ const HorizonRunner = () => {
           } else {
             // No shield - take damage
             setLives(prev => prev - 1);
+            playSfx('hurt');
             createParticle(player.x + player.width / 2, player.y + player.height / 2, '#ef4444', 10);
             setDamageFlash(1); // Trigger damage flash
             
@@ -1202,6 +1208,7 @@ const HorizonRunner = () => {
           setCoins(prev => prev + box.coins);
           setScore(prev => prev + box.coins * 10);
           player.vy = JUMP_FORCE * 0.5;
+          playSfx('coin');
           
           // Explosion of coins
           for (let i = 0; i < box.coins; i++) {
@@ -1302,7 +1309,8 @@ const HorizonRunner = () => {
             setPowerUp('shield');
             createParticle(chestX + chest.width / 2, chestY, '#3b82f6', 20);
           }
-          
+          playSfx('powerup');
+
           setScore(prev => prev + 200);
         }
         
@@ -1398,6 +1406,7 @@ const HorizonRunner = () => {
           setScore(prev => prev + item.value);
           createParticle(itemX, itemY, levelData.theme.accentColor, 12);
         }
+        playSfx('coin');
       }
       
       const screenX = itemX - camera.x;
@@ -1504,6 +1513,7 @@ const HorizonRunner = () => {
             
             if (!player.invulnerable) {
               setLives(prev => prev - 1);
+              playSfx('hurt');
               createParticle(player.x + player.width / 2, player.y + player.height / 2, '#ef4444', 15);
               setDamageFlash(1); // Trigger damage flash
               
@@ -1564,6 +1574,7 @@ const HorizonRunner = () => {
         // Check if player reached door
         if (!game.doorReached && Math.abs(player.x - levelData.doorPosition.x - 30) < 30) {
           game.doorReached = true;
+          playSfx('levelup');
           setGameState('levelComplete');
         }
       }
@@ -1932,6 +1943,7 @@ const HorizonRunner = () => {
     // Fall detection
     if (player.y > CANVAS_HEIGHT + 100) {
       setLives(prev => prev - 1);
+      playSfx('hurt');
       createParticle(player.x + player.width / 2, CANVAS_HEIGHT - 100, '#ef4444', 20);
       setDamageFlash(1); // Trigger damage flash
       
@@ -2112,9 +2124,29 @@ const HorizonRunner = () => {
     }
   }, [gameState]);
 
+  const sfxRefs = {
+    jump: useRef(null),
+    coin: useRef(null),
+    hurt: useRef(null),
+    stomp: useRef(null),
+    powerup: useRef(null),
+    levelup: useRef(null),
+  };
+  const playSfx = useCallback((key) => {
+    const a = sfxRefs[key]?.current;
+    if (!a) return;
+    try { a.currentTime = 0; a.volume = 0.45; a.play().catch(() => {}); } catch {}
+  }, []);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 text-white p-4 relative overflow-hidden">
       <audio ref={bgmRef} src="music.ogg" loop preload="auto" />
+      <audio ref={sfxRefs.jump} src="sfx_jump.ogg" preload="auto" />
+      <audio ref={sfxRefs.coin} src="sfx_coin.ogg" preload="auto" />
+      <audio ref={sfxRefs.hurt} src="sfx_hurt.ogg" preload="auto" />
+      <audio ref={sfxRefs.stomp} src="sfx_stomp.ogg" preload="auto" />
+      <audio ref={sfxRefs.powerup} src="sfx_powerup.ogg" preload="auto" />
+      <audio ref={sfxRefs.levelup} src="sfx_levelup.ogg" preload="auto" />
       <style>{`
         @keyframes float {
           0%, 100% { transform: translateY(0) rotate(0deg); }

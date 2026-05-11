@@ -442,6 +442,7 @@ const ClimberGame = () => {
         player.jumpCount++;
         game.jumpPressed = true;
         createParticle(player.x + player.width / 2, player.y + player.height, levelData.theme.accentColor);
+        playSfx('jump');
       }
     } else {
       game.jumpPressed = false;
@@ -508,6 +509,7 @@ const ClimberGame = () => {
           } else if (platform.type === 'bouncy') {
             player.vy = JUMP_FORCE * 1.6;
             for (let i = 0; i < 5; i++) createParticle(platformX + platform.width / 2, platformY, '#ffeb3b');
+            playSfx('jump');
           } else if (platform.type === 'disappearing') {
             const stateKey = 'disappear-' + index;
             if (!game.platformStates.has(stateKey)) {
@@ -682,8 +684,10 @@ const ClimberGame = () => {
           for (let i = 0; i < 10; i++) {
             createParticle(state.x, state.y, levelData.theme.accentColor);
           }
+          playSfx('stomp');
         } else {
           setLives(prev => prev - 1);
+          playSfx('hurt');
           player.invulnerable = true;
           setTimeout(() => { player.invulnerable = false; }, 2000);
           for (let i = 0; i < 15; i++) {
@@ -801,16 +805,18 @@ const ClimberGame = () => {
       if (dist < 35) {
         game.collectedItems.add(index);
         setScore(prev => prev + (item.value || 10));
-        
+
         if (item.type === 'powerup') {
           player.hasDoubleJump = true;
           for (let i = 0; i < 20; i++) {
             createParticle(item.x, item.y, '#4caf50');
           }
+          playSfx('powerup');
         } else {
           for (let i = 0; i < 10; i++) {
             createParticle(item.x, item.y, levelData.theme.accentColor);
           }
+          playSfx('coin');
         }
       }
 
@@ -922,6 +928,7 @@ const ClimberGame = () => {
             playerBottom > obstacleTop &&
             playerTop < obstacleBottom) {
           setLives(prev => prev - 1);
+          playSfx('hurt');
           player.invulnerable = true;
           setTimeout(() => { player.invulnerable = false; }, 2000);
           for (let i = 0; i < 20; i++) {
@@ -933,6 +940,7 @@ const ClimberGame = () => {
     });
 
     if (player.y < (levelData.goalHeight || -4200)) {
+      playSfx('levelup');
       setGameState('levelComplete');
     }
 
@@ -1124,6 +1132,7 @@ const ClimberGame = () => {
 
     if (player.y > CANVAS_HEIGHT + 100) {
       setLives(prev => prev - 1);
+      playSfx('hurt');
       player.x = CANVAS_WIDTH / 2 - PLAYER_SIZE / 2;
       player.y = CANVAS_HEIGHT - 100;
       player.vx = 0;
@@ -1320,9 +1329,29 @@ const ClimberGame = () => {
     }
   }, [gameState]);
 
+  const sfxRefs = {
+    jump: useRef(null),
+    coin: useRef(null),
+    hurt: useRef(null),
+    stomp: useRef(null),
+    powerup: useRef(null),
+    levelup: useRef(null),
+  };
+  const playSfx = useCallback((key) => {
+    const a = sfxRefs[key]?.current;
+    if (!a) return;
+    try { a.currentTime = 0; a.volume = 0.45; a.play().catch(() => {}); } catch {}
+  }, []);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-4 relative overflow-hidden" style={{ fontFamily: 'Lexend, sans-serif' }}>
       <audio ref={bgmRef} src="music.ogg" loop preload="auto" />
+      <audio ref={sfxRefs.jump} src="sfx_jump.ogg" preload="auto" />
+      <audio ref={sfxRefs.coin} src="sfx_coin.ogg" preload="auto" />
+      <audio ref={sfxRefs.hurt} src="sfx_hurt.ogg" preload="auto" />
+      <audio ref={sfxRefs.stomp} src="sfx_stomp.ogg" preload="auto" />
+      <audio ref={sfxRefs.powerup} src="sfx_powerup.ogg" preload="auto" />
+      <audio ref={sfxRefs.levelup} src="sfx_levelup.ogg" preload="auto" />
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {Array.from({ length: 20 }, (_, i) => (
           <div
