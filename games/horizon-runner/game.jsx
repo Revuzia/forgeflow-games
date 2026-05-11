@@ -582,14 +582,20 @@ const HorizonRunner = () => {
     // Platform collision
     player.grounded = false;
     let isOverPit = false;
-    
-    // First check if player is over any pit
+
+    // 2026-05-11 — Pit detection rewritten. Was: required player to be 15px
+    // deep into pit x-range AND feet within +/-10px of pit y. Result: walking
+    // onto a pit edge didn't trigger fall-through, and the y-band missed
+    // when the player's feet had any jitter. User screenshot showed character
+    // standing ON a pit pillar instead of falling in.
+    // New rule: any horizontal overlap between player body and a pit
+    // counts as "over pit" — we let the ground-platform skip below take
+    // care of the rest. The pit always sits at ground level (obstacle.y),
+    // so there's no need to vertically gate the check.
     levelData.obstacles.forEach((obstacle) => {
       if (obstacle.type === 'pit' &&
-          player.x + 15 < obstacle.x + obstacle.width &&
-          player.x + player.width - 15 > obstacle.x &&
-          player.y + player.height >= obstacle.y - 10 &&
-          player.y + player.height <= obstacle.y + 10) {
+          player.x + player.width > obstacle.x &&
+          player.x < obstacle.x + obstacle.width) {
         isOverPit = true;
       }
     });
