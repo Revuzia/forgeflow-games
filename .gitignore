@@ -3,3 +3,11 @@ dist/
 .env
 *.local
 .DS_Store
+
+# 2026-05-11 — Downloaded asset cache (re-downloadable per pipeline/assets/_downloaded/TASKS.md)
+# Previously committed; 8.3 GB working tree + 1.15 GB mocap zip in pack history
+# caused GitHub HTTP 500 on push. History purged via git filter-repo.
+pipeline/assets/_downloaded/
+
+# Wrangler local-dev state (per-machine, not portable)
+.wrangler/state/
