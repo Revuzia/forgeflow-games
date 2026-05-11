@@ -2074,29 +2074,34 @@ const HorizonRunner = () => {
       `}</style>
 
       {gameState === 'menu' && (
-        <div className="text-center space-y-8 animate-fade-in z-10">
+        // 2026-05-11 — Menu compacted so it fits the embedded iframe's
+        // ~530-px height in the portal grid column. Was: text-7xl title,
+        // text-2xl subtitle, gap-8/my-8/p-6 spacing — overflowed and
+        // forced a scrollbar. Now uses smaller text + tighter spacing
+        // while keeping the same layout intent.
+        <div className="text-center space-y-3 animate-fade-in z-10 py-2">
           <div className="relative">
-            <h1 className="text-7xl font-bold bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-4">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent">
               Horizon Runner
             </h1>
-            <p className="text-2xl text-gray-300">Race to the door in each realm!</p>
+            <p className="text-base text-gray-300">Race to the door in each realm!</p>
           </div>
-          
-          <div className="flex justify-center gap-8 my-8">
-            <div className="text-4xl" style={{ animation: 'float 3s ease-in-out infinite' }}>🏃‍♂️</div>
-            <div className="text-4xl" style={{ animation: 'float 3s ease-in-out infinite 0.5s' }}>💎</div>
-            <div className="text-4xl" style={{ animation: 'float 3s ease-in-out infinite 1s' }}>🚪</div>
+
+          <div className="flex justify-center gap-6">
+            <div className="text-2xl" style={{ animation: 'float 3s ease-in-out infinite' }}>🏃‍♂️</div>
+            <div className="text-2xl" style={{ animation: 'float 3s ease-in-out infinite 0.5s' }}>💎</div>
+            <div className="text-2xl" style={{ animation: 'float 3s ease-in-out infinite 1s' }}>🚪</div>
           </div>
-          
-          <div className="flex flex-col gap-4">
+
+          <div className="flex flex-col gap-2">
             <button
               onClick={() => setGameState('themeSelect')}
-              className="px-12 py-5 bg-gradient-to-r from-green-500 to-blue-600 rounded-xl font-bold text-2xl hover:scale-110 transition-all duration-300 shadow-2xl hover:shadow-green-500/50 flex items-center gap-3 mx-auto"
+              className="px-8 py-3 bg-gradient-to-r from-green-500 to-blue-600 rounded-xl font-bold text-lg hover:scale-105 transition-all duration-300 shadow-xl hover:shadow-green-500/50 flex items-center gap-2 mx-auto"
             >
-              <Play className="w-8 h-8" />
+              <Play className="w-5 h-5" />
               Start Adventure
             </button>
-            
+
             <button
               onClick={() => {
                 if (confirm('Are you sure you want to reset all progress? This cannot be undone.')) {
@@ -2104,24 +2109,17 @@ const HorizonRunner = () => {
                   setProgress({ 'Mystic Plains': 0 });
                 }
               }}
-              className="px-8 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-bold text-sm transition-all mx-auto"
+              className="px-5 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg font-bold text-xs transition-all mx-auto"
             >
               Reset All Progress
             </button>
           </div>
-          
-          <div className="text-sm text-gray-400 mt-8 space-y-2 bg-black/30 p-6 rounded-lg backdrop-blur max-w-md mx-auto">
-            <p className="font-semibold text-cyan-400 text-lg">How to Play:</p>
-            <p>⬅️➡️ Arrow Keys or A/D - Run</p>
-            <p>⬆️ Up, W, or Space - Jump</p>
-            <p>✨ Press Jump again in air - Double Jump!</p>
-            <p>🚩 Waypoints save your progress for Game Over</p>
-            <p>📦 Jump on boxes to break them for coins</p>
-            <p>💎 Find treasure chests for power-ups</p>
-            <p>🚪 Reach the door to complete the level</p>
-            <div className="mt-2 pt-2 border-t border-gray-600">
-              <p className="text-xs text-gray-500">Enemy variety increases with each stage!</p>
-            </div>
+
+          <div className="text-xs text-gray-400 space-y-0.5 bg-black/30 p-3 rounded-lg backdrop-blur max-w-md mx-auto">
+            <p className="font-semibold text-cyan-400 text-sm mb-1">How to Play:</p>
+            <p>⬅️➡️ Arrow Keys or A/D - Run · ⬆️ Up/W/Space - Jump</p>
+            <p>✨ Jump again in air for double jump · 🚩 Waypoints save progress</p>
+            <p>📦 Jump on boxes for coins · 💎 Chests for power-ups · 🚪 Reach the door</p>
           </div>
         </div>
       )}
