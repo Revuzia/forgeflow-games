@@ -581,8 +581,23 @@ const ClimberGame = () => {
       let platformX = enemy.x;
       if (enemy.platformIndex !== undefined && levelData.platforms[enemy.platformIndex]) {
         const platform = levelData.platforms[enemy.platformIndex];
+
+        // 2026-05-11 — If the platform under this enemy disappeared,
+        // apply gravity so the enemy falls with it. Was: enemy stayed
+        // pinned at platform.y-20 floating in mid-air (user screenshot).
+        // We let the enemy fall until it's well off-screen, then mark
+        // it defeated so it doesn't accumulate forever.
+        if (platform.type === 'gone') {
+          state.vy = (state.vy || 0) + GRAVITY * deltaTime;
+          state.y = (state.y || enemy.y) + state.vy * deltaTime;
+          if (state.y > CANVAS_HEIGHT + 200 + (game.camera.y || 0)) {
+            game.defeatedEnemies.add(index);
+          }
+          game.enemyStates.set(index, state);
+          return;
+        }
+
         let platX = platform.x;
-        
         if (platform.type === 'moving') {
           const platformState = game.platformStates.get(enemy.platformIndex);
           if (platformState) {
@@ -591,7 +606,7 @@ const ClimberGame = () => {
         }
         platformY = platform.y - 20;
         platformX = platX + platform.width / 2;
-        
+
         enemy.x = platformX;
       }
       
@@ -1232,15 +1247,20 @@ const ClimberGame = () => {
       grounded: false, jumpCount: 0, hasDoubleJump: false, invulnerable: false, rotation: 0
     };
     
+    // 2026-05-11 — Reset opacity on EVERY disappearing platform (not just
+    // type==='gone'). The fade-out mutates `platform.opacity` directly on
+    // the level-data object; clearing platformStates loses the timer but
+    // leaves the cached opacity value, so partially-faded platforms kept
+    // rendering as translucent ghosts on retry.
     if (levelData && levelData.platforms) {
       levelData.platforms.forEach(platform => {
         if (platform.type === 'gone') {
           platform.type = 'disappearing';
-          platform.opacity = 1;
         }
+        platform.opacity = 1;
       });
     }
-    
+
     setGameState('playing');
   };
 
@@ -1282,8 +1302,26 @@ const ClimberGame = () => {
     };
   };
 
+  // 2026-05-11 — Background music. Distinct from Horizon Runner + VS.
+  // Loops during menu/themeSelect/playing; pauses on game-over and
+  // level-complete. Volume kept moderate (0.35). Autoplay needs a user
+  // gesture which the first menu click satisfies.
+  const bgmRef = useRef(null);
+  useEffect(() => {
+    const a = bgmRef.current;
+    if (!a) return;
+    const wantsMusic = gameState === 'menu' || gameState === 'themeSelect' || gameState === 'playing';
+    if (wantsMusic) {
+      a.volume = 0.35;
+      a.play().catch(() => { /* autoplay blocked until first user gesture — that's fine */ });
+    } else {
+      a.pause();
+    }
+  }, [gameState]);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-4 relative overflow-hidden" style={{ fontFamily: 'Lexend, sans-serif' }}>
+      <audio ref={bgmRef} src="music.mp3" loop preload="auto" />
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {Array.from({ length: 20 }, (_, i) => (
           <div
@@ -1502,30 +1540,12 @@ const ClimberGame = () => {
           </h2>
           <p className="text-sm text-cyan-300 mb-2 flex-shrink-0">Current Progress</p>
 
-          {/* 2026-05-11 — Scroll container with hidden bar. Was using
-              scrollIntoView({block:'center'}) on the current unlocked
-              theme, which scrolled PAST the earlier themes so the user
-              couldn't see the top of the list. New behavior: only auto-
-              scroll if the current target is below the visible area
-              (i.e. user has progressed past stage ~3). For early
-              progress (stages 1-3), keep the list anchored at the top
-              so users always see the full path. */}
+          {/* 2026-05-11 — User reported the auto-scroll-to-current
+              behavior pushed earlier themes off the top. Removed all
+              auto-scroll. List starts at the TOP (Mystic Plains visible
+              first) and the player can scroll manually if they want to
+              see locked themes deeper down. Scrollbar still hidden. */}
           <div
-            ref={(el) => {
-              if (!el || el._sbScrolled) return;
-              el._sbScrolled = true;
-              const targetIdx = themes.findIndex(t => progress.hasOwnProperty(t.name) && (progress[t.name] || 0) < 5);
-              const idx = targetIdx >= 0 ? targetIdx : (themes.findLastIndex?.(t => progress.hasOwnProperty(t.name)) ?? 0);
-              setTimeout(() => {
-                // Only scroll if the target card is below the viewport's natural top section.
-                // First 3 themes always fit visibly without scrolling.
-                if (idx < 3) return;
-                const card = el.children[idx];
-                if (card && typeof card.scrollIntoView === 'function') {
-                  card.scrollIntoView({ behavior: 'instant', block: 'center' });
-                }
-              }, 0);
-            }}
             className="flex flex-col gap-3 max-w-2xl mx-auto overflow-y-auto px-2 flex-1 [&::-webkit-scrollbar]:hidden"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
