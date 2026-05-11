@@ -51,9 +51,13 @@
        Tailwind `min-h-screen` on that div fixes its HEIGHT to 100vh, but
        width was auto (collapsed to natural content width) which made the
        game render in a small column in the center of #root with purple
-       gradient flanking it. */
+       gradient flanking it.
+       Also allow vertical scroll so tall menus (level-select list etc.)
+       don't get clipped by the 16:9 container — was cutting off the
+       "Current Progress" heading on Sky Battle's level picker. */
     #root > * { width: 100% !important; height: 100% !important;
-                min-height: 100% !important; max-width: 100% !important; }
+                min-height: 100% !important; max-width: 100% !important;
+                overflow-y: auto !important; }
     /* 2026-05-11 — Canvas HTML `width`/`height` attributes set BOTH the
        drawing buffer AND the CSS display size. With width=1280/height=720
        attributes the canvas was displaying at 1280x720 inside a 2048x1152
@@ -74,14 +78,24 @@
 </head>
 <body>
   <div id="root"></div>
-  <!-- F-key fullscreen toggle. The portal's iframe expand button also works,
-       but the in-game F binding gives players the keyboard shortcut they
-       expect from arcade titles. -->
+  <!-- Keyboard shortcuts.
+       F  -> toggle iframe fullscreen
+       P  -> pause overlay (synthesises Escape to leverage the React games'
+             existing ESC-pause handlers; both Sky Battle and Horizon Runner
+             listen for ESC to pause/resume). -->
   <script>
     window.addEventListener("keydown", (e) => {
       if (e.key === "f" || e.key === "F") {
         if (document.fullscreenElement) document.exitFullscreen();
         else document.documentElement.requestFullscreen().catch(() => {});
+        e.preventDefault();
+      }
+      if (e.key === "p" || e.key === "P") {
+        // 2026-05-11 — Forward P to the game as Escape so existing pause
+        // handlers fire. Dispatch a synthetic KeyboardEvent on window.
+        const esc = new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, which: 27, bubbles: true });
+        window.dispatchEvent(esc);
+        e.preventDefault();
       }
     });
   </script>
