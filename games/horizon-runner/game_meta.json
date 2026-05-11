@@ -1,0 +1,14 @@
+{
+  "title": "Horizon Runner",
+  "slug": "horizon-runner",
+  "description": "Run, jump, and dash across procedurally-shifting horizons. Each level builds itself around a fresh theme — forest, snowfield, lava cavern, twilight ruins — with platforms, coins, hazards, and a checkpoint banner. Three lives, infinite levels, climbing difficulty.",
+  "short_description": "A side-scrolling runner with procedurally-themed levels, coins, checkpoints, and three lives.",
+  "genre": "platformer",
+  "sub_genre": "runner",
+  "controls_keyboard": "Arrow keys or WASD to move and jump. Space to jump. Hold direction + jump for longer leaps.",
+  "controls_gamepad": "Left stick to move. A / South button to jump.",
+  "difficulty": "medium",
+  "has_mobile_support": false,
+  "tags": ["platformer", "runner", "procedural", "arcade", "indie"],
+  "art_direction": "Soft painterly side-scrolling platformer hero in a lush procedural landscape, vibrant gradient sky, dramatic horizon lighting, indie game key art."
+}

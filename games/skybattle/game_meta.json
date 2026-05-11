@@ -1,0 +1,14 @@
+{
+  "title": "Sky Battle",
+  "slug": "skybattle",
+  "description": "Climb through endless vertical battle zones. Hop platforms, stomp enemies, and ascend through procedurally-themed skies. Each level is a fresh challenge — volcano, ice palace, cloud kingdom, or anything you can name.",
+  "short_description": "Vertical platformer climber. Stomp enemies, scale procedural battle zones, ascend forever.",
+  "genre": "platformer",
+  "sub_genre": "vertical-climber",
+  "controls_keyboard": "Arrow keys or WASD to move. Up / W / Space to jump. Defeat enemies by jumping on them.",
+  "controls_gamepad": "Left stick to move. A / South button to jump.",
+  "difficulty": "medium",
+  "has_mobile_support": false,
+  "tags": ["platformer", "climber", "vertical", "procedural", "arcade"],
+  "art_direction": "Vertical sky platformer hero leaping between floating islands, vibrant gradient atmosphere, dramatic backlight, polished indie game key art."
+}

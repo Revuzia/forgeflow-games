@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Sky Battle</title>
+  <!-- Tailwind play CDN — both games use Tailwind utility classes throughout -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Babel standalone for in-browser JSX transpile (the games are React .jsx) -->
+  <script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
+  <!-- React 18 + lucide-react resolved via esm.sh import map. esm.sh delivers
+       per-icon tree-shaken modules and pins React so every package shares one
+       copy (avoids the "Invalid hook call" duplicate-React trap). -->
+  <script type="importmap">
+  {
+    "imports": {
+      "react":             "https://esm.sh/react@18.3.1",
+      "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
+      "react-dom":         "https://esm.sh/react-dom@18.3.1",
+      "react-dom/client":  "https://esm.sh/react-dom@18.3.1/client",
+      "lucide-react":      "https://esm.sh/lucide-react@0.400.0?external=react"
+    }
+  }
+  </script>
+  <style>
+    html, body, #root { margin:0; padding:0; height:100%; width:100%;
+                         background:#0f172a; color:#fff;
+                         font-family: 'Lexend', system-ui, -apple-system, sans-serif;
+                         overflow:hidden; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <!-- 2026-05-08 — Cache-bust pattern (mirrors vector-storm). Browsers
+       cached the resolved game.jsx URL across iframe reloads even with the
+       worker's no-store header, so each script tag URL must be unique per
+       iframe parse. -->
+  <script>
+    window.__GAME_JSX_URL = "game.jsx?v=" + Date.now();
+  </script>
+  <script type="module">
+    import React from "react";
+    import { createRoot } from "react-dom/client";
+
+    // 1. Fetch raw .jsx source (cache-busted)
+    const src = await fetch(window.__GAME_JSX_URL).then(r => r.text());
+
+    // 2. Strip the original `import ... from 'react'` and `import ... from
+    //    'lucide-react'` lines — we'll re-inject those imports ourselves.
+    //    Also strip `export default <Name>` so the transpiled output evaluates
+    //    as a top-level component declaration.
+    const lucideMatch = src.match(/import\s+\{([^}]+)\}\s+from\s+['"]lucide-react['"]/);
+    const lucideNames = lucideMatch ? lucideMatch[1].trim() : "";
+    const cleaned = src
+      .replace(/^\s*import\s+React.*?from\s+['"]react['"]\s*;?\s*$/m, "")
+      .replace(/^\s*import\s+\{[^}]+\}\s+from\s+['"]lucide-react['"]\s*;?\s*$/m, "")
+      .replace(/^\s*export\s+default\s+\w+\s*;?\s*$/m, "");
+
+    // 3. Re-inject explicit imports + a default export pointing at the
+    //    component name we know lives inside the file.
+    const reactImport = 'import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";';
+    const lucideImport = lucideNames
+      ? 'import { ' + lucideNames + ' } from "lucide-react";'
+      : '';
+    const wrapped =
+      reactImport + "\n" +
+      lucideImport + "\n" +
+      cleaned + "\n" +
+      "export default ClimberGame;";
+
+    // 4. Babel-transpile JSX → JS. Keep ES modules so dynamic import works.
+    const transpiled = Babel.transform(wrapped, {
+      presets: [["env", { modules: false, targets: { esmodules: true } }], "react"],
+    }).code;
+
+    // 5. Convert to a blob URL and dynamic-import as a real ES module so its
+    //    `import` statements resolve through the page's import map.
+    const blob = new Blob([transpiled], { type: "text/javascript" });
+    const moduleUrl = URL.createObjectURL(blob);
+    const mod = await import(moduleUrl);
+    const Component = mod.default;
+
+    createRoot(document.getElementById("root")).render(React.createElement(Component));
+  </script>
+</body>
+</html>
