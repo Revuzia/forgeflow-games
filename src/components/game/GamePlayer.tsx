@@ -126,30 +126,53 @@ export default function GamePlayer({ game }: Props) {
           comfortable.
         - Fullscreen (F key or button): the iframe spans 100vw/100vh.
        */}
-      <div className={`relative ${
-        isFullscreen
-          ? "w-screen h-screen"
-          : showPreroll
-            ? "aspect-video w-full"
-            : "flex items-center justify-center gap-4 py-2 min-h-[calc(100vh-100px)]"
-      }`}>
+      {/* 2026-05-11 — Layout v3. Playing mode breaks out of the page's
+          max-w-7xl wrapper (`mx-[calc(50%-50vw)] w-screen`) so the row
+          of [left ad | 16:9 game | right ad] uses the full viewport
+          width. Inline styles are used for the calc() math (max-w /
+          max-h) because Tailwind arbitrary values with nested min()+calc()
+          weren't being parsed reliably in production builds. */}
+      <div
+        className={
+          isFullscreen
+            ? "relative w-screen h-screen"
+            : showPreroll
+              ? "relative aspect-video w-full"
+              : "relative flex items-center justify-center gap-4 py-3 mx-[calc(50%-50vw)] w-screen"
+        }
+        style={!isFullscreen && !showPreroll ? { minHeight: "calc(100vh - 100px)" } : undefined}
+      >
         {/* LEFT ad slot — only when playing in windowed mode and viewport is
             wide enough (md+ ≈ 768px). Reserved space, will host real ads. */}
         {!showPreroll && !isFullscreen && (
-          <div className="hidden md:flex w-[160px] flex-shrink-0 self-stretch items-center justify-center bg-surface-800/60 border border-surface-600/30 rounded-lg">
+          <div
+            className="hidden md:flex w-[160px] flex-shrink-0 items-center justify-center bg-surface-800/60 border border-surface-600/30 rounded-lg"
+            style={{ height: "min(calc(100vh - 100px), calc((100vw - 360px) * 9 / 16))" }}
+          >
             <p className="text-xs text-surface-500 vertical-text">Advertisement</p>
           </div>
         )}
 
-        {/* GAME FRAME — strict 16:9 with hard caps so it never overruns the
-            viewport or eats the side ad slots. */}
-        <div className={
-          isFullscreen
-            ? "w-full h-full"
-            : showPreroll
-              ? "absolute inset-0"
-              : "aspect-video flex-shrink min-h-0 max-w-[min(100%,calc((100vh-100px)*16/9))] max-h-[calc(100vh-100px)] w-auto h-auto bg-black rounded-lg overflow-hidden"
-        }>
+        {/* GAME FRAME — strict 16:9. Inline-style max-w/max-h compute the
+            largest 16:9 box that fits given the available width (viewport
+            minus two 160-px ad columns + gaps) and available height
+            (viewport minus top nav + page padding). */}
+        <div
+          className={
+            isFullscreen
+              ? "w-full h-full"
+              : showPreroll
+                ? "absolute inset-0"
+                : "aspect-video flex-shrink min-h-0 bg-black rounded-lg overflow-hidden relative"
+          }
+          style={!isFullscreen && !showPreroll ? {
+            // Available width = 100vw - 2*160 ad slots - 2*gap (16px each) - safety
+            // We pick the SMALLER of width-fit and height-fit so the box stays 16:9
+            maxWidth: "min(calc(100vw - 360px), calc((100vh - 100px) * 16 / 9))",
+            maxHeight: "calc(100vh - 100px)",
+            width: "100%",
+          } : undefined}
+        >
         {!showPreroll && (
           <iframe
             ref={iframeRef}
