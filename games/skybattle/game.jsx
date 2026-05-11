@@ -1466,22 +1466,45 @@ const ClimberGame = () => {
       )}
 
       {gameState === 'themeSelect' && (
-        <div className="text-center space-y-8 animate-fade-in max-w-5xl">
-          <div className="flex items-center justify-center gap-4 mb-8">
+        // 2026-05-11 — Vertical-by-design (the game IS an ascend climb)
+        // but the full 10-theme list doesn't fit the iframe height.
+        // Now: outer container is the full iframe area (no overflow);
+        // inner scroll container holds the theme list with auto-scroll
+        // to current unlocked theme + hidden scrollbar (scrollbar-hide).
+        <div className="text-center animate-fade-in max-w-5xl h-full flex flex-col py-2">
+          <div className="flex items-center justify-center gap-3 mb-2 flex-shrink-0">
             <button
               onClick={resetGame}
-              className="px-6 py-3 bg-gradient-to-r from-slate-700 to-slate-600 rounded-xl font-bold text-lg hover:scale-105 transition-all duration-300 shadow-lg flex items-center gap-2"
+              className="px-4 py-2 bg-gradient-to-r from-slate-700 to-slate-600 rounded-lg font-bold text-sm hover:scale-105 transition-all duration-300 shadow-lg flex items-center gap-2"
             >
-              <ArrowUp className="w-5 h-5 rotate-180" />
-              Back to Menu
+              <ArrowUp className="w-4 h-4 rotate-180" />
+              Back
             </button>
           </div>
-          <h2 className="text-5xl font-bold bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent flex-shrink-0">
             Choose Your Battle Zone
           </h2>
-          <p className="text-2xl text-cyan-300">Current Progress</p>
-          
-          <div className="flex flex-col gap-4 max-w-3xl mx-auto">
+          <p className="text-sm text-cyan-300 mb-2 flex-shrink-0">Current Progress</p>
+
+          {/* Scroll container: hidden bar, auto-scrolls the current-unlocked theme into view on mount */}
+          <div
+            ref={(el) => {
+              if (!el || el._sbScrolled) return;
+              el._sbScrolled = true;
+              // Find the first unlocked-but-incomplete theme card; if all complete,
+              // scroll to the LAST unlocked. Center it in the viewport.
+              const targetIdx = themes.findIndex(t => progress.hasOwnProperty(t.name) && (progress[t.name] || 0) < 5);
+              const idx = targetIdx >= 0 ? targetIdx : themes.findLastIndex?.(t => progress.hasOwnProperty(t.name)) ?? 0;
+              setTimeout(() => {
+                const card = el.children[idx];
+                if (card && typeof card.scrollIntoView === 'function') {
+                  card.scrollIntoView({ behavior: 'instant', block: 'center' });
+                }
+              }, 0);
+            }}
+            className="flex flex-col gap-3 max-w-2xl mx-auto overflow-y-auto px-2 flex-1 [&::-webkit-scrollbar]:hidden"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
             {themes.map((themeItem, index) => {
               const Icon = themeItem.icon;
               const isUnlocked = progress.hasOwnProperty(themeItem.name);
@@ -1572,9 +1595,9 @@ const ClimberGame = () => {
             })}
           </div>
           
-          <div className="mt-8 text-sm text-gray-400">
-            <p>Complete all 5 levels (500m) in each zone to unlock the next!</p>
-          </div>
+          {/* 2026-05-11 — Removed bottom hint paragraph (it crowded the
+              scrollable theme list inside the iframe). Theme name+stage
+              numbers communicate progress unambiguously. */}
         </div>
       )}
 
