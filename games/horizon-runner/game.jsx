@@ -2178,10 +2178,12 @@ const HorizonRunner = () => {
           const currentPos = NODE_POS[currentIdx] || NODE_POS[0];
 
           return (
-            <div className="relative w-full h-full flex flex-col items-center justify-center p-2">
-              {/* Map frame: 16:9, max-w fits iframe, holds bg image + nodes + avatar */}
+            // 2026-05-11 — Fills the iframe. Removed max-w-4xl constraint
+            // that left ~400-px dead bands on a 1280-wide frame.
+            <div className="relative w-full h-full flex flex-col p-2">
+              {/* Map frame: 16:9, FILLS available width, holds bg image + nodes + avatar */}
               <div
-                className="relative w-full max-w-4xl rounded-xl overflow-hidden shadow-2xl border-2 border-amber-700/40"
+                className="relative w-full rounded-xl overflow-hidden shadow-2xl border-2 border-amber-700/40 flex-1"
                 style={{ aspectRatio: '16 / 9', backgroundImage: 'url(map.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}
               >
                 {/* Realm nodes */}
@@ -2269,8 +2271,10 @@ const HorizonRunner = () => {
                 </div>
               </div>
 
-              {/* Footer: current realm label + Back button */}
-              <div className="mt-3 flex items-center justify-between w-full max-w-4xl px-2 text-xs">
+              {/* Compact footer overlay so the map fills the iframe — Back
+                  + current realm label sit at the bottom-left in semi-transparent
+                  pill, no longer pushed below the map. */}
+              <div className="mt-2 flex items-center justify-between gap-2 px-1 text-xs flex-shrink-0">
                 <button
                   onClick={resetGame}
                   className="px-3 py-1 bg-slate-700/80 hover:bg-slate-600 rounded-lg font-bold transition-all"
@@ -2280,7 +2284,7 @@ const HorizonRunner = () => {
                 <div className="text-cyan-300 font-semibold">
                   {themes[currentIdx]?.name} — Stage {Math.min((progress[themes[currentIdx]?.name] || 0) + 1, 5)}/5
                 </div>
-                <div className="text-gray-500">Click a glowing realm to play</div>
+                <div className="text-gray-500 hidden sm:block">Click a glowing realm to play</div>
               </div>
             </div>
           );
