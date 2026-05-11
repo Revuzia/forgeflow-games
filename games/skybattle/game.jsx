@@ -1302,26 +1302,14 @@ const ClimberGame = () => {
     };
   };
 
-  // 2026-05-11 — Background music. Distinct from Horizon Runner + VS.
-  // Loops during menu/themeSelect/playing; pauses on game-over and
-  // level-complete. Volume kept moderate (0.35). Autoplay needs a user
-  // gesture which the first menu click satisfies.
+  // 2026-05-11 — Background music DISABLED for the same reason as
+  // Horizon Runner: the chiptune track was painful. Stability Audio
+  // generation is a separate follow-up.
   const bgmRef = useRef(null);
-  useEffect(() => {
-    const a = bgmRef.current;
-    if (!a) return;
-    const wantsMusic = gameState === 'menu' || gameState === 'themeSelect' || gameState === 'playing';
-    if (wantsMusic) {
-      a.volume = 0.35;
-      a.play().catch(() => { /* autoplay blocked until first user gesture — that's fine */ });
-    } else {
-      a.pause();
-    }
-  }, [gameState]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-4 relative overflow-hidden" style={{ fontFamily: 'Lexend, sans-serif' }}>
-      <audio ref={bgmRef} src="music.mp3" loop preload="auto" />
+      {/* <audio ref={bgmRef} src="music.mp3" loop preload="auto" /> disabled until proper track */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {Array.from({ length: 20 }, (_, i) => (
           <div
@@ -1525,7 +1513,15 @@ const ClimberGame = () => {
         // Now: outer container is the full iframe area (no overflow);
         // inner scroll container holds the theme list with auto-scroll
         // to current unlocked theme + hidden scrollbar (scrollbar-hide).
-        <div className="text-center animate-fade-in max-w-5xl h-full flex flex-col py-2">
+        // 2026-05-11 — Cap picker at 90vh so the parent's
+        // `justify-center` actually centers it in fullscreen (was h-full
+        // → filled the whole screen and pinned the header to the top
+        // edge per user screenshot). Below 90vh the picker shrinks and
+        // the inner list scrolls (flex-1 + overflow-y-auto).
+        <div
+          className="text-center animate-fade-in max-w-5xl w-full flex flex-col py-2"
+          style={{ maxHeight: '90vh' }}
+        >
           <div className="flex items-center justify-center gap-3 mb-2 flex-shrink-0">
             <button
               onClick={resetGame}
