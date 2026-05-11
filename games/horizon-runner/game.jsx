@@ -2094,16 +2094,27 @@ const HorizonRunner = () => {
     setGameState('playing');
   };
 
-  // 2026-05-11 — Background music DISABLED. The chiptune track we had
-  // (borrowed from Vector Storm) felt painful per user feedback. Proper
-  // music generation via Stability Audio is a follow-up task (needs an
-  // API key + ~$0.30/track). Leaving the audio element + ref so we can
-  // flip it back on once a quality track lands at /music.mp3.
+  // 2026-05-11 — Background music re-enabled with a proper Stability-
+  // generated track (barrel-blitz world_01 — jungle adventure theme).
+  // The previous chiptune (Vector Storm world3) was painful per user.
+  // Plays during menu/themeSelect/playing, pauses elsewhere. Volume
+  // 0.3. Autoplay requires a user gesture (first menu click fires it).
   const bgmRef = useRef(null);
+  useEffect(() => {
+    const a = bgmRef.current;
+    if (!a) return;
+    const wantsMusic = gameState === 'menu' || gameState === 'themeSelect' || gameState === 'playing';
+    if (wantsMusic) {
+      a.volume = 0.3;
+      a.play().catch(() => { /* blocked until first gesture */ });
+    } else {
+      a.pause();
+    }
+  }, [gameState]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 text-white p-4 relative overflow-hidden">
-      {/* <audio ref={bgmRef} src="music.mp3" loop preload="auto" /> disabled until a proper track is available */}
+      <audio ref={bgmRef} src="music.mp3" loop preload="auto" />
       <style>{`
         @keyframes float {
           0%, 100% { transform: translateY(0) rotate(0deg); }
