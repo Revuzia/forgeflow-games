@@ -7,9 +7,19 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#0a0e1a;font-family:'Segoe UI',system-ui,sans-serif}
-/* Canvas centered vertically + horizontally in viewport (fullscreen-friendly) */
+/* 2026-05-08 — FIXED virtual canvas (1280×720, 16:9). The canvas keeps
+   that internal resolution forever and CSS scales it to fit the viewport.
+   In a normal embed iframe → side margins (future ad slots). In fullscreen
+   → letterbox to 16:9. No more reflowing brick layouts on resize. */
 body{display:flex;align-items:center;justify-content:center}
-#c{display:block;max-width:100vw;max-height:100vh}
+#c{display:block;
+   width:auto;height:auto;
+   max-width:100vw;max-height:100vh;
+   aspect-ratio:16/9;
+   /* When viewport ratio matches 16:9 the canvas fills it; otherwise the
+      flex centering above gives equal margins (left/right or top/bottom). */
+   object-fit:contain;
+}
 #start{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,14,26,0.95);z-index:10}
 #start h1{font-size:56px;font-weight:900;background:linear-gradient(135deg,#ff8800,#ff5500);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:6px}
 #start .sub{color:#00d4ff;font-size:18px;font-weight:600;margin-bottom:20px}
@@ -56,29 +66,36 @@ body{display:flex;align-items:center;justify-content:center}
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
-let W, H;
 
+// 2026-05-08 — FIXED virtual game world. Internal canvas resolution stays
+// 1280×720 (16:9) forever; CSS scales the *display* size to fit whatever
+// viewport (embed iframe, fullscreen, mobile, ultrawide). This prevents
+// the previous bug where toggling fullscreen mid-game left bricks pinned
+// to their original W coords with empty real-estate on the right ("yellow
+// box" effect). Mouse coords already auto-map via (W / r.width).
+const VIRTUAL_W = 1280;
+const VIRTUAL_H = 720;
+let W = canvas.width = VIRTUAL_W;
+let H = canvas.height = VIRTUAL_H;
+
+// resize() is now a NO-OP for canvas dims — the only thing it still does
+// is re-clamp the paddle to the bottom in case a code path mutated H.
+// Kept as a hook so existing call sites (loadLevel, fullscreenchange) don't
+// need to change.
 function resize() {
-  const ar = 16/9;
-  let w = window.innerWidth, h = window.innerHeight;
-  if (w/h > ar) w = h * ar; else h = w / ar;
-  W = canvas.width = Math.floor(w);
-  H = canvas.height = Math.floor(h);
-  // Re-anchor paddle to bottom on resize (was stuck mid-screen on fullscreen toggle).
-  // 2026-04-28: try/catch guards the Temporal Dead Zone — paddle is declared
-  // with const further down (line 144) but resize() is called inline on line
-  // 71. typeof check fails on const-in-TDZ (different from var hoisting).
+  W = canvas.width = VIRTUAL_W;
+  H = canvas.height = VIRTUAL_H;
   try {
     if (paddle) {
       paddle.y = H - 40;
-      // Clamp paddle X so it doesn't fall off the right edge after shrink
       if (paddle.x + paddle.w > W) paddle.x = Math.max(0, W - paddle.w);
     }
-  } catch (_e) { /* paddle not yet initialized — safe to skip on first call */ }
+  } catch (_e) { /* paddle not yet initialized — first call is safe */ }
 }
 resize();
+// Listeners kept so any future ratio-aware UI hook still fires; CSS handles
+// the actual fit so they're now mostly inert.
 window.addEventListener('resize', resize);
-// Fullscreen doesn't always fire window 'resize' — listen explicitly
 document.addEventListener('fullscreenchange', () => setTimeout(resize, 50));
 document.addEventListener('webkitfullscreenchange', () => setTimeout(resize, 50));
 
