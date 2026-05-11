@@ -5,8 +5,11 @@ const GRAVITY = 0.6;
 const JUMP_FORCE = -13;
 const MOVE_SPEED = 5;
 const PLAYER_SIZE = 32;
-const CANVAS_WIDTH = window.innerWidth;
-const CANVAS_HEIGHT = window.innerHeight;
+// 2026-05-08 — FIXED virtual game world (16:9). Internal canvas resolution
+// is pinned at 1280x720 forever; the wrapper index.html scales the *display*
+// size to fit any viewport.
+const CANVAS_WIDTH = 1280;
+const CANVAS_HEIGHT = 720;
 
 const t = (key) => {
   const translations = {

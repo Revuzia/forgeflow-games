@@ -23,14 +23,40 @@
   }
   </script>
   <style>
-    html, body, #root { margin:0; padding:0; height:100%; width:100%;
-                         background:#0f172a; color:#fff;
-                         font-family: 'Lexend', system-ui, -apple-system, sans-serif;
-                         overflow:hidden; }
+    /* 2026-05-08 — Same fix as block-breaker. Canvas internal resolution is
+       FIXED at 1280x720 (16:9). The #root wrapper enforces aspect ratio +
+       max-width/height so the game scales to fit any viewport (small embed
+       iframe, fullscreen, ultrawide) with letterbox margins instead of
+       reflowing the in-game world coords. Side margins in normal embed
+       become ad slots later; F key (or the portal expand button) goes
+       full-bleed via Fullscreen API. */
+    html, body { margin:0; padding:0; height:100%; width:100%;
+                 background:#000; color:#fff;
+                 font-family: 'Lexend', system-ui, -apple-system, sans-serif;
+                 overflow:hidden;
+                 display:flex; align-items:center; justify-content:center; }
+    #root { width:auto; height:auto;
+            max-width:100vw; max-height:100vh;
+            aspect-ratio:16/9;
+            background:#0f172a; position:relative;
+            /* Force the React app's `inset-0` divs/canvases to fit the
+               16:9 container instead of stretching to the full viewport. */
+            overflow:hidden; }
   </style>
 </head>
 <body>
   <div id="root"></div>
+  <!-- F-key fullscreen toggle. The portal's iframe expand button also works,
+       but the in-game F binding gives players the keyboard shortcut they
+       expect from arcade titles. -->
+  <script>
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "f" || e.key === "F") {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.documentElement.requestFullscreen().catch(() => {});
+      }
+    });
+  </script>
   <!-- 2026-05-08 — Cache-bust pattern (mirrors vector-storm). Browsers
        cached the resolved game.jsx URL across iframe reloads even with the
        worker's no-store header, so each script tag URL must be unique per

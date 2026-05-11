@@ -6,8 +6,13 @@ const JUMP_FORCE = -14;  // Slightly reduced for lower platforms
 const RUN_SPEED = 7;
 const PLAYER_WIDTH = 40;
 const PLAYER_HEIGHT = 50;
-const CANVAS_WIDTH = window.innerWidth;
-const CANVAS_HEIGHT = window.innerHeight;
+// 2026-05-08 — FIXED virtual game world (16:9). Internal canvas resolution
+// is pinned at 1280x720 forever; the wrapper index.html scales the *display*
+// size to fit any viewport. Was: window.innerWidth/Height (evaluated once at
+// module load), which made every iframe load render at a different scale and
+// the "world" appear zoomed-in or zoomed-out depending on iframe size.
+const CANVAS_WIDTH = 1280;
+const CANVAS_HEIGHT = 720;
 
 const HorizonRunner = () => {
   const canvasRef = useRef(null);
@@ -801,26 +806,41 @@ const HorizonRunner = () => {
         
       } else if (enemy.type === 'rollingBall') {
         // Rolling ball - rolls back and forth on ground
-        state.x += enemy.speed * state.direction * deltaTime;
+        const nextX = state.x + enemy.speed * state.direction * deltaTime;
+        // 2026-05-08 — Pit avoidance. Enemies used to walk straight off pits
+        // and disappear. Now we look ahead one frame and reverse direction
+        // if the next position would put the enemy's center over a pit.
+        const aboutToEnterPit = levelData.obstacles.some(o =>
+          o.type === 'pit' &&
+          nextX + 16 > o.x && nextX - 16 < o.x + o.width
+        );
+        if (aboutToEnterPit) state.direction *= -1;
+        else state.x = nextX;
         state.y = enemy.y;
-        
-        // Reverse direction at boundaries
+
+        // Reverse direction at patrol boundaries
         if (state.x < enemy.x - 150 || state.x > enemy.x + 150) {
           state.direction *= -1;
         }
-        
+
       } else if (enemy.type === 'bouncingSquare') {
         // Bouncing square - moves back and forth on ground with bouncing
-        state.x += enemy.speed * state.direction * deltaTime;
-        
-        // Reverse direction at boundaries
+        const nextX = state.x + enemy.speed * state.direction * deltaTime;
+        const aboutToEnterPit = levelData.obstacles.some(o =>
+          o.type === 'pit' &&
+          nextX + 16 > o.x && nextX - 16 < o.x + o.width
+        );
+        if (aboutToEnterPit) state.direction *= -1;
+        else state.x = nextX;
+
+        // Reverse direction at patrol boundaries
         if (state.x < enemy.x - 150 || state.x > enemy.x + 150) {
           state.direction *= -1;
         }
-        
+
         // Bounce animation
         state.y = enemy.y - Math.abs(Math.sin(state.time * enemy.bounceSpeed)) * enemy.bounceHeight;
-        
+
       } else if (enemy.type === 'flyingDrone') {
         // Flying drone - moves in sine wave pattern
         state.x += enemy.speed * deltaTime;
@@ -1882,15 +1902,24 @@ const HorizonRunner = () => {
       if (lives <= 1) {
         setGameState('gameOver');
       } else {
-        // Only respawn when falling completely off the level
-        // Try to respawn just before the pit if possible
-        gameRefs.current.player.x = Math.max(150, gameRefs.current.player.x - 100);
-        gameRefs.current.player.y = CANVAS_HEIGHT - 150;
+        // 2026-05-08 — Pit-fall respawn now goes to the LAST WAYPOINT
+        // (was: nudged back 100px, which dropped the player straight back
+        // into the same pit on every life). Falls back to level start
+        // if no waypoint reached yet — same behavior as respawnFromWaypoint().
+        if (checkpoint) {
+          gameRefs.current.player.x = checkpoint.x;
+          gameRefs.current.player.y = checkpoint.y - 50;
+          gameRefs.current.camera.x = Math.max(0, checkpoint.x - CANVAS_WIDTH / 2);
+        } else {
+          gameRefs.current.player.x = 150;
+          gameRefs.current.player.y = CANVAS_HEIGHT - 150;
+          gameRefs.current.camera.x = 0;
+        }
         gameRefs.current.player.vx = 0;
         gameRefs.current.player.vy = 0;
         gameRefs.current.player.invulnerable = true;
         setIsInvulnerable(true);
-        setTimeout(() => { 
+        setTimeout(() => {
           gameRefs.current.player.invulnerable = false;
           setIsInvulnerable(false);
         }, 2000);
