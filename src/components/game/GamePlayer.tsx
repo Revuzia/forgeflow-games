@@ -146,7 +146,7 @@ export default function GamePlayer({ game }: Props) {
             wide enough (md+ ≈ 768px). Reserved space, will host real ads. */}
         {!showPreroll && !isFullscreen && (
           <div
-            className="hidden md:flex w-[160px] flex-shrink-0 items-center justify-center bg-surface-800/60 border border-surface-600/30 rounded-lg"
+            className="hidden md:flex w-[160px] flex-shrink-0 items-center justify-center bg-surface-800 border-2 border-surface-600/70 rounded-lg shadow-inner"
             style={{ height: "min(calc(100vh - 100px), calc((100vw - 360px) * 9 / 16))" }}
           >
             <p className="text-xs text-surface-500 vertical-text">Advertisement</p>
