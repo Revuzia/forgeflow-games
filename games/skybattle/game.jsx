@@ -1322,7 +1322,7 @@ const ClimberGame = () => {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-4 relative overflow-hidden" style={{ fontFamily: 'Lexend, sans-serif' }}>
-      <audio ref={bgmRef} src="music.mp3" loop preload="auto" />
+      <audio ref={bgmRef} src="music.ogg" loop preload="auto" />
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {Array.from({ length: 20 }, (_, i) => (
           <div
