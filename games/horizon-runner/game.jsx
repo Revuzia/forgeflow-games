@@ -2125,18 +2125,23 @@ const HorizonRunner = () => {
       )}
 
       {gameState === 'themeSelect' && (
-        <div className="text-center space-y-6 z-10 max-w-5xl">
-          <h2 className="text-5xl font-bold bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">
+        // 2026-05-11 — Theme picker compacted: was 2-col grid with p-6
+        // cards (5 rows ≈ 700px, overflowed iframe height). Now 3-col
+        // grid with tighter cards (4 rows ≈ ~400px). Fits without
+        // scrolling. Icon + name + 5 progress dots all retained, just
+        // smaller.
+        <div className="text-center space-y-3 z-10 max-w-4xl py-2">
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">
             Choose Your Realm
           </h2>
-          
-          <div className="grid grid-cols-2 gap-4">
-            {themes.map((themeItem, index) => {
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {themes.map((themeItem) => {
               const Icon = themeItem.icon;
               const isUnlocked = progress.hasOwnProperty(themeItem.name);
               const completedLevels = progress[themeItem.name] || 0;
               const isComplete = completedLevels >= 5;
-              
+
               return (
                 <button
                   key={themeItem.name}
@@ -2149,24 +2154,24 @@ const HorizonRunner = () => {
                     }
                   }}
                   disabled={!isUnlocked}
-                  className={`p-6 rounded-xl transition-all duration-300 ${
+                  className={`p-2 rounded-lg transition-all duration-300 ${
                     isUnlocked ? 'hover:scale-105 cursor-pointer' : 'cursor-not-allowed opacity-40'
                   }`}
-                  style={{ 
+                  style={{
                     backgroundColor: themeItem.bg,
-                    border: `3px solid ${isUnlocked ? themeItem.color : '#475569'}`
+                    border: `2px solid ${isUnlocked ? themeItem.color : '#475569'}`
                   }}
                 >
-                  <div className="flex items-center gap-4">
-                    <Icon className="w-12 h-12" style={{ color: themeItem.color }} />
-                    <div className="text-left">
-                      <div className="font-bold text-xl">{themeItem.name}</div>
+                  <div className="flex items-center gap-2">
+                    <Icon className="w-7 h-7 flex-shrink-0" style={{ color: themeItem.color }} />
+                    <div className="text-left min-w-0 flex-1">
+                      <div className="font-bold text-sm truncate">{themeItem.name}</div>
                       {isUnlocked && (
-                        <div className="flex gap-1 mt-2">
+                        <div className="flex gap-0.5 mt-0.5">
                           {[1, 2, 3, 4, 5].map(lvl => (
-                            <div 
+                            <div
                               key={lvl}
-                              className="w-6 h-2 rounded"
+                              className="w-3 h-1 rounded"
                               style={{
                                 backgroundColor: lvl <= completedLevels ? themeItem.color : '#334155'
                               }}
@@ -2174,8 +2179,8 @@ const HorizonRunner = () => {
                           ))}
                         </div>
                       )}
-                      <div className="text-xs text-gray-400 mt-1">
-                        {isComplete ? '✓ Complete' : isUnlocked ? `Stage ${completedLevels + 1}` : '🔒 Locked'}
+                      <div className="text-[10px] text-gray-400 mt-0.5">
+                        {isComplete ? '✓ Done' : isUnlocked ? `Stage ${completedLevels + 1}` : '🔒'}
                       </div>
                     </div>
                   </div>
@@ -2183,10 +2188,10 @@ const HorizonRunner = () => {
               );
             })}
           </div>
-          
+
           <button
             onClick={resetGame}
-            className="px-8 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold transition-all"
+            className="px-5 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg font-bold text-xs transition-all"
           >
             Back to Menu
           </button>
