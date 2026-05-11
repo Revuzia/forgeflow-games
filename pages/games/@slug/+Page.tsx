@@ -56,8 +56,22 @@ export default function GamePage() {
         <span className="text-gray-300">{game.title}</span>
       </nav>
 
-      {/* Main layout: Game + sidebar */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+      {/* 2026-05-11 — Main layout: [left-ad | game+info | right-sidebar].
+          Was a 2-column grid. Now 3 columns: left ad placeholder (160px,
+          hidden on mobile/tablet), 1fr game column in the middle, and the
+          existing 320px sidebar on the right. Ads are now SIBLINGS of the
+          GamePlayer rather than nested inside it, which avoids the
+          mx-[calc(50%-50vw)] breakout-misalignment bug (user screenshot
+          had the left ad at x=-154 off-screen because the GamePlayer's
+          parent wasn't centered in the viewport). */}
+      <div className="grid grid-cols-1 lg:grid-cols-[160px_1fr_320px] gap-6">
+        {/* LEFT ad column — hidden below lg breakpoint */}
+        <aside className="hidden lg:block">
+          <div className="bg-surface-800 rounded-lg border border-surface-600/30 sticky top-24 flex items-center justify-center" style={{ aspectRatio: "160 / 600" }}>
+            <p className="text-xs text-surface-500" style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}>Advertisement</p>
+          </div>
+        </aside>
+
         {/* Game player */}
         <div>
           <GamePlayer game={game} />

@@ -117,61 +117,28 @@ export default function GamePlayer({ game }: Props) {
       )}
 
       {/*
-        Iframe layout (post 2026-05-08 redesign):
-        - Pre-roll: aspect-video card (cover art + Play button), unchanged.
-        - Playing (windowed): 16:9 frame centered; flanked by two ad-slot
-          columns (~160px each) that are visible when the viewport is wide
-          enough to fit them without crowding the game. The frame caps at
-          calc(100vh - 100px) tall so the top nav + page padding stay
-          comfortable.
-        - Fullscreen (F key or button): the iframe spans 100vw/100vh.
+        2026-05-11 — Layout v4: GamePlayer is just a 16:9 frame.
+        The ad columns are NOT inside GamePlayer anymore — they belong to
+        the slug-page grid (pages/games/@slug/+Page.tsx), which now uses
+        `grid-cols-[160px_1fr_320px]` so ads + game + sidebar all sit in
+        the SAME grid. Previous version tried to add ad columns INSIDE
+        GamePlayer + break out of the page wrapper, but the page's parent
+        wasn't centered in the viewport so the breakout pulled the left
+        column off-screen (x=-154).
        */}
-      {/* 2026-05-11 — Layout v3. Playing mode breaks out of the page's
-          max-w-7xl wrapper (`mx-[calc(50%-50vw)] w-screen`) so the row
-          of [left ad | 16:9 game | right ad] uses the full viewport
-          width. Inline styles are used for the calc() math (max-w /
-          max-h) because Tailwind arbitrary values with nested min()+calc()
-          weren't being parsed reliably in production builds. */}
       <div
         className={
           isFullscreen
             ? "relative w-screen h-screen"
-            : showPreroll
-              ? "relative aspect-video w-full"
-              : "relative flex items-center justify-center gap-4 py-3 mx-[calc(50%-50vw)] w-screen"
+            : "relative aspect-video w-full bg-black rounded-lg overflow-hidden"
         }
-        style={!isFullscreen && !showPreroll ? { minHeight: "calc(100vh - 100px)" } : undefined}
       >
-        {/* LEFT ad slot — only when playing in windowed mode and viewport is
-            wide enough (md+ ≈ 768px). Reserved space, will host real ads. */}
-        {!showPreroll && !isFullscreen && (
-          <div
-            className="hidden md:flex w-[160px] flex-shrink-0 items-center justify-center bg-surface-800 border-2 border-surface-600/70 rounded-lg shadow-inner"
-            style={{ height: "min(calc(100vh - 100px), calc((100vw - 360px) * 9 / 16))" }}
-          >
-            <p className="text-xs text-surface-500 vertical-text">Advertisement</p>
-          </div>
-        )}
-
-        {/* GAME FRAME — strict 16:9. Inline-style max-w/max-h compute the
-            largest 16:9 box that fits given the available width (viewport
-            minus two 160-px ad columns + gaps) and available height
-            (viewport minus top nav + page padding). */}
         <div
           className={
             isFullscreen
               ? "w-full h-full"
-              : showPreroll
-                ? "absolute inset-0"
-                : "aspect-video flex-shrink min-h-0 bg-black rounded-lg overflow-hidden relative"
+              : "absolute inset-0"
           }
-          style={!isFullscreen && !showPreroll ? {
-            // Available width = 100vw - 2*160 ad slots - 2*gap (16px each) - safety
-            // We pick the SMALLER of width-fit and height-fit so the box stays 16:9
-            maxWidth: "min(calc(100vw - 360px), calc((100vh - 100px) * 16 / 9))",
-            maxHeight: "calc(100vh - 100px)",
-            width: "100%",
-          } : undefined}
         >
         {!showPreroll && (
           <iframe
@@ -222,12 +189,6 @@ export default function GamePlayer({ game }: Props) {
           </div>
         )}
         </div>
-        {/* RIGHT ad slot — mirror of the left slot. Same md+ visibility gate. */}
-        {!showPreroll && !isFullscreen && (
-          <div className="hidden md:flex w-[160px] flex-shrink-0 self-stretch items-center justify-center bg-surface-800/60 border border-surface-600/30 rounded-lg">
-            <p className="text-xs text-surface-500 vertical-text">Advertisement</p>
-          </div>
-        )}
       </div>
     </div>
   );
