@@ -2064,8 +2064,28 @@ const HorizonRunner = () => {
     setGameState('playing');
   };
 
+  // 2026-05-11 — Background music for Horizon Runner (distinct from Vector
+  // Storm's synthwave). Loops while menu/map/playing; muted on game-over
+  // and level-complete screens. Volume kept moderate (0.35) so SFX still
+  // read above it. Autoplay requires user gesture in modern browsers —
+  // we start it on the first menu click (handled implicitly by the user
+  // pressing Start Adventure / clicking a node which sets gameState).
+  const bgmRef = useRef(null);
+  useEffect(() => {
+    const a = bgmRef.current;
+    if (!a) return;
+    const wantsMusic = gameState === 'menu' || gameState === 'themeSelect' || gameState === 'playing';
+    if (wantsMusic) {
+      a.volume = 0.35;
+      a.play().catch(() => { /* autoplay blocked until first user gesture — that's fine */ });
+    } else {
+      a.pause();
+    }
+  }, [gameState]);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 text-white p-4 relative overflow-hidden">
+      <audio ref={bgmRef} src="music.mp3" loop preload="auto" />
       <style>{`
         @keyframes float {
           0%, 100% { transform: translateY(0) rotate(0deg); }
@@ -2125,77 +2145,146 @@ const HorizonRunner = () => {
       )}
 
       {gameState === 'themeSelect' && (
-        // 2026-05-11 — Theme picker compacted: was 2-col grid with p-6
-        // cards (5 rows ≈ 700px, overflowed iframe height). Now 3-col
-        // grid with tighter cards (4 rows ≈ ~400px). Fits without
-        // scrolling. Icon + name + 5 progress dots all retained, just
-        // smaller.
-        <div className="text-center space-y-3 z-10 max-w-4xl py-2">
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">
-            Choose Your Realm
-          </h2>
+        // 2026-05-11 — DKC/Mario-style overworld map. Replaces the grid
+        // picker with the generated map.png as background + 10 realm
+        // nodes positioned over the painted locations + the explorer
+        // avatar (red hat, yellow face) standing at the player's
+        // current realm. Node positions are hand-eyeballed against the
+        // xAI-generated map; they assume the map is rendered at its
+        // 16:9 aspect so % coords stay consistent at any size.
+        (() => {
+          // Per-theme position on the map (percent of map width/height).
+          // Order matches the `themes` array above.
+          const NODE_POS = [
+            { x: 10, y: 84 },  // Mystic Plains    — bottom-left meadow
+            { x: 22, y: 86 },  // Crystal Caverns  — blue crystals lower-left
+            { x: 18, y: 22 },  // Cloudtop Highway — clouds top-left
+            { x: 35, y: 56 },  // Lava Bridge      — red lava arch center
+            { x: 48, y: 28 },  // Frozen Tundra    — snowy center-top
+            { x: 52, y: 64 },  // Jungle Path      — green canopy center
+            { x: 72, y: 52 },  // Neon City        — pink cyber buildings right
+            { x: 85, y: 78 },  // Desert Ruins     — sandy pillars bottom-right
+            { x: 75, y: 22 },  // Moonlit Road     — purple mountains top
+            { x: 92, y: 24 },  // Golden Palace    — gold castle top-right
+          ];
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {themes.map((themeItem) => {
-              const Icon = themeItem.icon;
-              const isUnlocked = progress.hasOwnProperty(themeItem.name);
-              const completedLevels = progress[themeItem.name] || 0;
-              const isComplete = completedLevels >= 5;
+          // Find current realm: first unlocked-but-incomplete theme, else last unlocked, else 0.
+          const incompleteIdx = themes.findIndex(t => progress.hasOwnProperty(t.name) && (progress[t.name] || 0) < 5);
+          const lastUnlockedIdx = (() => {
+            for (let i = themes.length - 1; i >= 0; i--) if (progress.hasOwnProperty(themes[i].name)) return i;
+            return 0;
+          })();
+          const currentIdx = incompleteIdx >= 0 ? incompleteIdx : lastUnlockedIdx;
+          const currentPos = NODE_POS[currentIdx] || NODE_POS[0];
 
-              return (
-                <button
-                  key={themeItem.name}
-                  onClick={() => {
-                    if (isUnlocked) {
-                      const nextLevel = Math.min(completedLevels + 1, 5);
-                      setTheme(themeItem.name);
-                      setLevel(nextLevel);
-                      generateLevel(nextLevel, themeItem.name);
-                    }
-                  }}
-                  disabled={!isUnlocked}
-                  className={`p-2 rounded-lg transition-all duration-300 ${
-                    isUnlocked ? 'hover:scale-105 cursor-pointer' : 'cursor-not-allowed opacity-40'
-                  }`}
+          return (
+            <div className="relative w-full h-full flex flex-col items-center justify-center p-2">
+              {/* Map frame: 16:9, max-w fits iframe, holds bg image + nodes + avatar */}
+              <div
+                className="relative w-full max-w-4xl rounded-xl overflow-hidden shadow-2xl border-2 border-amber-700/40"
+                style={{ aspectRatio: '16 / 9', backgroundImage: 'url(map.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}
+              >
+                {/* Realm nodes */}
+                {themes.map((themeItem, idx) => {
+                  const isUnlocked = progress.hasOwnProperty(themeItem.name);
+                  const completedLevels = progress[themeItem.name] || 0;
+                  const isComplete = completedLevels >= 5;
+                  const pos = NODE_POS[idx];
+                  if (!pos) return null;
+                  return (
+                    <button
+                      key={themeItem.name}
+                      onClick={() => {
+                        if (isUnlocked) {
+                          const nextLevel = Math.min(completedLevels + 1, 5);
+                          setTheme(themeItem.name);
+                          setLevel(nextLevel);
+                          generateLevel(nextLevel, themeItem.name);
+                        }
+                      }}
+                      disabled={!isUnlocked}
+                      className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full border-2 transition-all ${
+                        isUnlocked ? 'hover:scale-125 cursor-pointer shadow-lg' : 'cursor-not-allowed opacity-60'
+                      } ${idx === currentIdx ? 'animate-pulse' : ''}`}
+                      style={{
+                        left: `${pos.x}%`,
+                        top: `${pos.y}%`,
+                        background: isUnlocked ? themeItem.color : '#1f2937',
+                        borderColor: isComplete ? '#fbbf24' : isUnlocked ? '#ffffff' : '#6b7280',
+                        boxShadow: isUnlocked ? `0 0 16px ${themeItem.color}aa` : 'none',
+                      }}
+                      title={themeItem.name + (isUnlocked ? ` — Stage ${completedLevels + 1}/5` : ' — Locked')}
+                    >
+                      {isComplete ? (
+                        <span className="text-yellow-200 text-base">★</span>
+                      ) : isUnlocked ? (
+                        <span className="text-slate-900 text-xs font-black">{idx + 1}</span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">🔒</span>
+                      )}
+                    </button>
+                  );
+                })}
+
+                {/* Player avatar — explorer with red hat + gold buckle, matches in-game character.
+                    Positioned at currentIdx; transition for smooth walk-along-path feel. */}
+                <div
+                  className="absolute -translate-x-1/2 pointer-events-none transition-all duration-700 ease-out"
                   style={{
-                    backgroundColor: themeItem.bg,
-                    border: `2px solid ${isUnlocked ? themeItem.color : '#475569'}`
+                    left: `${currentPos.x}%`,
+                    top: `calc(${currentPos.y}% - 32px)`,
+                    filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.6))',
                   }}
                 >
-                  <div className="flex items-center gap-2">
-                    <Icon className="w-7 h-7 flex-shrink-0" style={{ color: themeItem.color }} />
-                    <div className="text-left min-w-0 flex-1">
-                      <div className="font-bold text-sm truncate">{themeItem.name}</div>
-                      {isUnlocked && (
-                        <div className="flex gap-0.5 mt-0.5">
-                          {[1, 2, 3, 4, 5].map(lvl => (
-                            <div
-                              key={lvl}
-                              className="w-3 h-1 rounded"
-                              style={{
-                                backgroundColor: lvl <= completedLevels ? themeItem.color : '#334155'
-                              }}
-                            />
-                          ))}
-                        </div>
-                      )}
-                      <div className="text-[10px] text-gray-400 mt-0.5">
-                        {isComplete ? '✓ Done' : isUnlocked ? `Stage ${completedLevels + 1}` : '🔒'}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                  <svg width="36" height="44" viewBox="0 0 36 44" xmlns="http://www.w3.org/2000/svg">
+                    {/* Hat brim */}
+                    <rect x="3"  y="6"  width="30" height="2"  fill="#dc2626"/>
+                    {/* Hat body */}
+                    <rect x="5"  y="8"  width="26" height="9"  fill="#dc2626"/>
+                    {/* Hat band */}
+                    <rect x="5"  y="14" width="26" height="3"  fill="#991b1b"/>
+                    {/* Hat top */}
+                    <rect x="7"  y="3"  width="22" height="3"  fill="#dc2626"/>
+                    {/* Gold buckle */}
+                    <rect x="15" y="10" width="6"  height="4"  fill="#fbbf24" stroke="#d97706" strokeWidth="0.5"/>
+                    {/* Face (skin) */}
+                    <circle cx="18" cy="22" r="8"  fill="#fde68a" stroke="#d97706" strokeWidth="0.5"/>
+                    {/* Hair tufts */}
+                    <path d="M10 19 Q9 16 11 14 L13 20 Z" fill="#92400e"/>
+                    <path d="M26 19 Q27 16 25 14 L23 20 Z" fill="#92400e"/>
+                    {/* Eyes */}
+                    <ellipse cx="15" cy="22" rx="1.5" ry="2" fill="#1e3a8a"/>
+                    <ellipse cx="21" cy="22" rx="1.5" ry="2" fill="#1e3a8a"/>
+                    {/* Smile */}
+                    <path d="M14 26 Q18 29 22 26" stroke="#b45309" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+                    {/* Body */}
+                    <rect x="13" y="29" width="10" height="9" rx="2" fill="#2563eb"/>
+                    {/* Hands */}
+                    <circle cx="11" cy="33" r="2.5" fill="#fde68a"/>
+                    <circle cx="25" cy="33" r="2.5" fill="#fde68a"/>
+                    {/* Legs */}
+                    <rect x="14" y="37" width="3" height="5" fill="#1e40af"/>
+                    <rect x="19" y="37" width="3" height="5" fill="#1e40af"/>
+                  </svg>
+                </div>
+              </div>
 
-          <button
-            onClick={resetGame}
-            className="px-5 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg font-bold text-xs transition-all"
-          >
-            Back to Menu
-          </button>
-        </div>
+              {/* Footer: current realm label + Back button */}
+              <div className="mt-3 flex items-center justify-between w-full max-w-4xl px-2 text-xs">
+                <button
+                  onClick={resetGame}
+                  className="px-3 py-1 bg-slate-700/80 hover:bg-slate-600 rounded-lg font-bold transition-all"
+                >
+                  ← Menu
+                </button>
+                <div className="text-cyan-300 font-semibold">
+                  {themes[currentIdx]?.name} — Stage {Math.min((progress[themes[currentIdx]?.name] || 0) + 1, 5)}/5
+                </div>
+                <div className="text-gray-500">Click a glowing realm to play</div>
+              </div>
+            </div>
+          );
+        })()
       )}
 
       {isGenerating && (
