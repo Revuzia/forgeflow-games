@@ -1425,37 +1425,40 @@ const ClimberGame = () => {
       
       <div className="relative z-10">
       {gameState === 'menu' && (
-        <div className="text-center space-y-8 animate-fade-in">
+        // 2026-05-11 — Menu compacted to fit the embedded iframe's
+        // ~530-px height in the portal grid column. Was: 256-px logo
+        // disc + text-7xl title + text-2xl subtitle + 12-px margins +
+        // p-6 padding — overflowed and forced a scrollbar.
+        <div className="text-center space-y-2 animate-fade-in py-2">
           <div className="relative">
-            <div className="mx-auto w-64 h-64 mb-6 relative flex items-center justify-center">
-              <div className="w-48 h-48 rounded-full bg-gradient-to-br from-purple-600 via-blue-500 to-cyan-400 flex items-center justify-center shadow-2xl">
-                <div className="w-44 h-44 rounded-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-                  <Rocket className="w-24 h-24 text-cyan-400" />
+            <div className="mx-auto w-24 h-24 mb-2 relative flex items-center justify-center">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-600 via-blue-500 to-cyan-400 flex items-center justify-center shadow-xl">
+                <div className="w-[68px] h-[68px] rounded-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+                  <Rocket className="w-10 h-10 text-cyan-400" />
                 </div>
               </div>
             </div>
-            <h1 className="text-7xl font-bold bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 bg-clip-text text-transparent mb-2">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-500 bg-clip-text text-transparent">
               {t('gameTitle')}
             </h1>
           </div>
-          <p className="text-2xl text-gray-300 max-w-md mx-auto">
+          <p className="text-base text-gray-300 max-w-md mx-auto">
             {t('gameSubtitle')}
           </p>
           <button
             onClick={() => setGameState('themeSelect')}
-            className="px-10 py-5 bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-600 rounded-xl font-bold text-xl hover:scale-110 transition-all duration-300 shadow-2xl hover:shadow-cyan-500/50"
+            className="px-8 py-3 bg-gradient-to-r from-cyan-500 via-purple-600 to-pink-600 rounded-xl font-bold text-lg hover:scale-105 transition-all duration-300 shadow-xl hover:shadow-cyan-500/50"
           >
             {t('startAdventure')}
           </button>
-          <div className="text-sm text-gray-400 mt-12 space-y-2 bg-black/30 p-6 rounded-lg backdrop-blur">
-            <p className="font-semibold text-cyan-400">Controls:</p>
-            <p>{t('controlsArrow')}</p>
-            <p>{t('controlsJump')}</p>
+          <div className="text-xs text-gray-400 space-y-0.5 bg-black/30 px-4 py-2 rounded-lg backdrop-blur max-w-md mx-auto">
+            <p className="font-semibold text-cyan-400 text-sm">Controls:</p>
+            <p>{t('controlsArrow')} · {t('controlsJump')}</p>
             <p>{t('controlsDefeat')}</p>
           </div>
           <button
             onClick={resetProgress}
-            className="mt-4 px-6 py-2 bg-red-900/50 hover:bg-red-800/70 rounded-lg text-sm text-red-300 hover:text-red-100 transition-all"
+            className="px-4 py-1 bg-red-900/50 hover:bg-red-800/70 rounded-lg text-xs text-red-300 hover:text-red-100 transition-all"
           >
             Reset All Progress
           </button>
