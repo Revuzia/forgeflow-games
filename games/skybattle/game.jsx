@@ -219,23 +219,38 @@ const ClimberGame = () => {
       return min + (x - Math.floor(x)) * (max - min);
     };
     
+    // 2026-05-11 — Platform placement now respects the player's
+    // physical jump range. JUMP_FORCE=-13, GRAVITY=0.6, MOVE_SPEED=5
+    // → max vertical reach ~140 px, max horizontal reach ~210 px.
+    // Was: sin/cos horizontal variation could put adjacent platforms
+    // 1000+ px apart (user reported Level 2 unjumpable). Now: each
+    // platform's x is clamped to within MAX_HORIZ_REACH of the
+    // previous platform, guaranteeing reachability.
+    const MAX_HORIZ_REACH = 180;   // safe < the ~210-px theoretical max
+    const MAX_VERT_GAP    = 110;   // safe < the ~140-px theoretical max
+    let lastX = CANVAS_WIDTH / 2 - 50;
+
     for (let i = 1; i < platformCount; i++) {
-      const verticalGap = 50 + random(0, 1) * 40;
+      const verticalGap = 55 + random(0, 1) * (MAX_VERT_GAP - 55);
       const y = lastY - verticalGap;
-      const horizontalVariation = Math.sin(i * 0.5 + seed) * (CANVAS_WIDTH * 0.25) + Math.cos(i * 0.3 + seed) * (CANVAS_WIDTH * 0.15);
-      const x = CANVAS_WIDTH / 2 + horizontalVariation;
-      
-      const types = ['normal', 'moving', 'bouncy', 'disappearing', 'ice'];
+      const wanderTarget = CANVAS_WIDTH / 2 +
+        Math.sin(i * 0.5 + seed) * (CANVAS_WIDTH * 0.25) +
+        Math.cos(i * 0.3 + seed) * (CANVAS_WIDTH * 0.15);
+      // Clamp to within MAX_HORIZ_REACH of lastX so the next platform
+      // is always reachable. wanderTarget supplies the "intent"; the
+      // clamp enforces playability.
+      const x = Math.max(lastX - MAX_HORIZ_REACH, Math.min(lastX + MAX_HORIZ_REACH, wanderTarget));
+
       const typeChance = random(0, 1);
       let type = 'normal';
-      
       if (typeChance > 0.85) type = 'moving';
       else if (typeChance > 0.7) type = 'bouncy';
       else if (typeChance > 0.55) type = 'disappearing';
       else if (typeChance > 0.4) type = 'ice';
-      
+
+      const clampedX = Math.max(50, Math.min(CANVAS_WIDTH - 150, x));
       platforms.push({
-        x: Math.max(50, Math.min(CANVAS_WIDTH - 150, x)),
+        x: clampedX,
         y: y,
         width: 70 + random(0, 1) * 50,
         height: 18,
@@ -245,8 +260,9 @@ const ClimberGame = () => {
         movementDirection: type === 'moving' ? 'horizontal' : undefined,
         movementOffset: type === 'moving' ? random(0, 1) * 100 : 0
       });
-      
+
       lastY = y;
+      lastX = clampedX;
     }
 
     const enemies = [];
@@ -1486,16 +1502,24 @@ const ClimberGame = () => {
           </h2>
           <p className="text-sm text-cyan-300 mb-2 flex-shrink-0">Current Progress</p>
 
-          {/* Scroll container: hidden bar, auto-scrolls the current-unlocked theme into view on mount */}
+          {/* 2026-05-11 — Scroll container with hidden bar. Was using
+              scrollIntoView({block:'center'}) on the current unlocked
+              theme, which scrolled PAST the earlier themes so the user
+              couldn't see the top of the list. New behavior: only auto-
+              scroll if the current target is below the visible area
+              (i.e. user has progressed past stage ~3). For early
+              progress (stages 1-3), keep the list anchored at the top
+              so users always see the full path. */}
           <div
             ref={(el) => {
               if (!el || el._sbScrolled) return;
               el._sbScrolled = true;
-              // Find the first unlocked-but-incomplete theme card; if all complete,
-              // scroll to the LAST unlocked. Center it in the viewport.
               const targetIdx = themes.findIndex(t => progress.hasOwnProperty(t.name) && (progress[t.name] || 0) < 5);
-              const idx = targetIdx >= 0 ? targetIdx : themes.findLastIndex?.(t => progress.hasOwnProperty(t.name)) ?? 0;
+              const idx = targetIdx >= 0 ? targetIdx : (themes.findLastIndex?.(t => progress.hasOwnProperty(t.name)) ?? 0);
               setTimeout(() => {
+                // Only scroll if the target card is below the viewport's natural top section.
+                // First 3 themes always fit visibly without scrolling.
+                if (idx < 3) return;
                 const card = el.children[idx];
                 if (card && typeof card.scrollIntoView === 'function') {
                   card.scrollIntoView({ behavior: 'instant', block: 'center' });
