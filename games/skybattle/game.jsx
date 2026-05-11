@@ -1302,14 +1302,27 @@ const ClimberGame = () => {
     };
   };
 
-  // 2026-05-11 — Background music DISABLED for the same reason as
-  // Horizon Runner: the chiptune track was painful. Stability Audio
-  // generation is a separate follow-up.
+  // 2026-05-11 — Background music re-enabled with a proper Stability-
+  // generated track (nebula-drift world_04 — atmospheric cosmic theme,
+  // fitting for a sky-climber). Distinct from Horizon Runner's track
+  // and verifiably different from the Vector Storm chiptune set
+  // (MD5 b75c0b5e — not in VS).
   const bgmRef = useRef(null);
+  useEffect(() => {
+    const a = bgmRef.current;
+    if (!a) return;
+    const wantsMusic = gameState === 'menu' || gameState === 'themeSelect' || gameState === 'playing';
+    if (wantsMusic) {
+      a.volume = 0.3;
+      a.play().catch(() => { /* blocked until first gesture */ });
+    } else {
+      a.pause();
+    }
+  }, [gameState]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-4 relative overflow-hidden" style={{ fontFamily: 'Lexend, sans-serif' }}>
-      {/* <audio ref={bgmRef} src="music.mp3" loop preload="auto" /> disabled until proper track */}
+      <audio ref={bgmRef} src="music.mp3" loop preload="auto" />
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {Array.from({ length: 20 }, (_, i) => (
           <div
