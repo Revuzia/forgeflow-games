@@ -56,22 +56,12 @@ export default function GamePage() {
         <span className="text-gray-300">{game.title}</span>
       </nav>
 
-      {/* 2026-05-11 — Main layout: [left-ad | game+info | right-sidebar].
-          Was a 2-column grid. Now 3 columns: left ad placeholder (160px,
-          hidden on mobile/tablet), 1fr game column in the middle, and the
-          existing 320px sidebar on the right. Ads are now SIBLINGS of the
-          GamePlayer rather than nested inside it, which avoids the
-          mx-[calc(50%-50vw)] breakout-misalignment bug (user screenshot
-          had the left ad at x=-154 off-screen because the GamePlayer's
-          parent wasn't centered in the viewport). */}
-      <div className="grid grid-cols-1 lg:grid-cols-[160px_1fr_320px] gap-6">
-        {/* LEFT ad column — hidden below lg breakpoint */}
-        <aside className="hidden lg:block">
-          <div className="bg-surface-800 rounded-lg border border-surface-600/30 sticky top-24 flex items-center justify-center" style={{ aspectRatio: "160 / 600" }}>
-            <p className="text-xs text-surface-500" style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}>Advertisement</p>
-          </div>
-        </aside>
-
+      {/* 2026-05-11 — Reverted to the original 2-column grid per user
+          feedback. Real ads will live in the viewport whitespace OUTSIDE
+          this max-w-7xl wrapper (handled by the layout shell, not this
+          page). All in-page "Advertisement" placeholder boxes have been
+          removed below — they were noise. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
         {/* Game player */}
         <div>
           <GamePlayer game={game} />
@@ -128,18 +118,16 @@ export default function GamePage() {
             )}
           </div>
 
-          {/* Ad banner below game info */}
-          <div className="mt-6 bg-surface-800 rounded-lg border border-surface-600/30 h-24 flex items-center justify-center">
-            <p className="text-xs text-surface-500">Advertisement</p>
-          </div>
+          {/* 2026-05-11 — Removed fake bottom-banner Advertisement placeholder.
+              Real ads will live in the viewport whitespace outside this
+              page wrapper (handled by the layout shell), not as boxes
+              inside content. */}
         </div>
 
         {/* Sidebar */}
         <aside className="space-y-6">
-          {/* Sidebar ad */}
-          <div className="bg-surface-800 rounded-lg border border-surface-600/30 aspect-[300/250] flex items-center justify-center">
-            <p className="text-xs text-surface-500">Advertisement</p>
-          </div>
+          {/* 2026-05-11 — Removed fake sidebar Advertisement placeholder; same
+              reason as above. Screenshots remain — those are real content. */}
 
           {/* Screenshots */}
           {game.screenshot_urls && game.screenshot_urls.length > 0 && (
