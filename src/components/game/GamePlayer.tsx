@@ -73,14 +73,12 @@ export default function GamePlayer({ game }: Props) {
     return () => destroyGameBridge();
   }, []);
 
-  // When the game is actually playing (not preroll) and not in browser
-  // fullscreen, break out of the page's max-w-7xl wrapper so the iframe
-  // can take the full viewport width. We measure the player's offset and
-  // pin the playing container with negative margins so it spans 100vw.
-  // This is much less janky than requestFullscreen and works everywhere.
-  const playingClasses = !showPreroll && !isFullscreen
-    ? "relative bg-black overflow-hidden mx-[calc(50%-50vw)] w-screen"
-    : "relative bg-black rounded-xl overflow-hidden";
+  // 2026-05-08 — Layout pivot per user. Was: full 100vw breakout when
+  // playing, so the game ate the whole viewport edge-to-edge. New: keep
+  // the iframe centered with an ad-slot column on each side. Browser-
+  // fullscreen (F key or button) still spans 100vw/100vh. The pre-roll
+  // covers continue to use the page's normal max-w-7xl flow.
+  const playingClasses = "relative bg-black rounded-xl overflow-hidden";
 
   return (
     <div ref={containerRef} className={playingClasses}>
@@ -118,11 +116,40 @@ export default function GamePlayer({ game }: Props) {
         </div>
       )}
 
-      {/* Game iframe — fills the viewport minus the top nav (~80px) when
-          playing, so the user gets the largest play area without having
-          to click fullscreen. The pre-roll still uses aspect-video so the
-          cover art doesn't dominate. */}
-      <div className={`relative ${isFullscreen ? "w-screen h-screen" : showPreroll ? "aspect-video w-full" : "w-full h-[calc(100vh-80px)] min-h-[600px]"}`}>
+      {/*
+        Iframe layout (post 2026-05-08 redesign):
+        - Pre-roll: aspect-video card (cover art + Play button), unchanged.
+        - Playing (windowed): 16:9 frame centered; flanked by two ad-slot
+          columns (~160px each) that are visible when the viewport is wide
+          enough to fit them without crowding the game. The frame caps at
+          calc(100vh - 100px) tall so the top nav + page padding stay
+          comfortable.
+        - Fullscreen (F key or button): the iframe spans 100vw/100vh.
+       */}
+      <div className={`relative ${
+        isFullscreen
+          ? "w-screen h-screen"
+          : showPreroll
+            ? "aspect-video w-full"
+            : "flex items-center justify-center gap-4 py-2 min-h-[calc(100vh-100px)]"
+      }`}>
+        {/* LEFT ad slot — only when playing in windowed mode and viewport is
+            wide enough (md+ ≈ 768px). Reserved space, will host real ads. */}
+        {!showPreroll && !isFullscreen && (
+          <div className="hidden md:flex w-[160px] flex-shrink-0 self-stretch items-center justify-center bg-surface-800/60 border border-surface-600/30 rounded-lg">
+            <p className="text-xs text-surface-500 vertical-text">Advertisement</p>
+          </div>
+        )}
+
+        {/* GAME FRAME — strict 16:9 with hard caps so it never overruns the
+            viewport or eats the side ad slots. */}
+        <div className={
+          isFullscreen
+            ? "w-full h-full"
+            : showPreroll
+              ? "absolute inset-0"
+              : "aspect-video flex-shrink min-h-0 max-w-[min(100%,calc((100vh-100px)*16/9))] max-h-[calc(100vh-100px)] w-auto h-auto bg-black rounded-lg overflow-hidden"
+        }>
         {!showPreroll && (
           <iframe
             ref={iframeRef}
@@ -169,6 +196,13 @@ export default function GamePlayer({ game }: Props) {
                 </svg>
               )}
             </button>
+          </div>
+        )}
+        </div>
+        {/* RIGHT ad slot — mirror of the left slot. Same md+ visibility gate. */}
+        {!showPreroll && !isFullscreen && (
+          <div className="hidden md:flex w-[160px] flex-shrink-0 self-stretch items-center justify-center bg-surface-800/60 border border-surface-600/30 rounded-lg">
+            <p className="text-xs text-surface-500 vertical-text">Advertisement</p>
           </div>
         )}
       </div>
