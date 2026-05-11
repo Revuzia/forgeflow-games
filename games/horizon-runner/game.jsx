@@ -2114,7 +2114,7 @@ const HorizonRunner = () => {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 text-white p-4 relative overflow-hidden">
-      <audio ref={bgmRef} src="music.mp3" loop preload="auto" />
+      <audio ref={bgmRef} src="music.ogg" loop preload="auto" />
       <style>{`
         @keyframes float {
           0%, 100% { transform: translateY(0) rotate(0deg); }
