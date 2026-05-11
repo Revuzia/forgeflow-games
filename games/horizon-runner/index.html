@@ -57,7 +57,14 @@
        "Current Progress" heading on Sky Battle's level picker. */
     #root > * { width: 100% !important; height: 100% !important;
                 min-height: 100% !important; max-width: 100% !important;
-                overflow-y: auto !important; }
+                overflow-y: auto !important;
+                /* Hide scrollbar but keep scroll behavior. Cross-browser:
+                   IE/Edge legacy + Firefox + WebKit. Tailwind classes
+                   inside the games are inconsistent, so enforce here. */
+                scrollbar-width: none;
+                -ms-overflow-style: none; }
+    #root > *::-webkit-scrollbar,
+    #root *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
     /* 2026-05-11 — Canvas HTML `width`/`height` attributes set BOTH the
        drawing buffer AND the CSS display size. With width=1280/height=720
        attributes the canvas was displaying at 1280x720 inside a 2048x1152
