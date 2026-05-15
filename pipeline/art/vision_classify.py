@@ -25,6 +25,15 @@ Output: state/asset_vision_classifications.json
   { "path/to/file.glb": {"role", "era", "archetype", "themes",
     "incompatible_with", "visual_description", "confidence"}, ... }
 """
+# 2026-05-15: sys.path bootstrap so claw_lib (lives at <root>/scripts/claw_lib/)
+# is importable from this nested location (forgeflow-games/pipeline/art/).
+# The _migrate_secrets.py auto-inject on 2026-04-27 added the import below
+# but didn't add this path setup, which broke the Saturday classifier with
+# ModuleNotFoundError for ~3 weeks (May 2 + May 9 supervisor sessions).
+import sys
+from pathlib import Path as _BootstrapPath
+sys.path.insert(0, str(_BootstrapPath(__file__).resolve().parent.parent.parent.parent / "scripts"))
+
 from claw_lib.secrets import get as _secrets_get  # noqa: E402  (auto-injected by _migrate_secrets.py)
 import argparse
 import base64
@@ -72,7 +81,15 @@ CLASSIFY_KINDS = {"model_3d", "tileset_2d", "character_2d", "object_2d", "ui_2d"
 def _log(msg):
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{ts}] {msg}"
-    print(line, flush=True)
+    # 2026-05-15: when invoked without PYTHONIOENCODING=utf-8 (e.g. direct
+    # terminal run vs the supervisor which sets the env var), stdout falls
+    # back to Windows cp1252 and crashes on emoji like the 🏁 in the run-end
+    # summary. Encode-replace + reconfigure both protect against that.
+    try:
+        print(line, flush=True)
+    except UnicodeEncodeError:
+        sys.stdout.buffer.write((line + "\n").encode("utf-8", errors="replace"))
+        sys.stdout.buffer.flush()
     try:
         with open(LOG_PATH, "a", encoding="utf-8") as f:
             f.write(line + "\n")
