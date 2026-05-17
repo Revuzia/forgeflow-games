@@ -277,6 +277,16 @@
       const p = this.player;
       const sp = D.PLAYER.speed;
 
+      // Dialogue suspends gameplay — only handle advance/close input
+      if (this.dialogueActive) {
+        if (Phaser.Input.Keyboard.JustDown(this.keyZ) || Phaser.Input.Keyboard.JustDown(this.keyC) ||
+            Phaser.Input.Keyboard.JustDown(this.keys.space)) {
+          this._dialogueAdvance(time);
+        }
+        p.body.setVelocity(0, 0);
+        return;
+      }
+
       // Knockback overrides input
       if (p.knockback_until > time) {
         // Velocity already set by _damagePlayer; just hold it
@@ -308,8 +318,12 @@
       if (Phaser.Input.Keyboard.JustDown(this.keyZ)) this._swing(time);
       // Use selected item
       if (Phaser.Input.Keyboard.JustDown(this.keyX)) this._useItem(time);
-      // Cycle item slot
-      if (Phaser.Input.Keyboard.JustDown(this.keyC)) this._cycleItem();
+      // Action — context-sensitive: talk to adjacent NPC, otherwise cycle item slot
+      if (Phaser.Input.Keyboard.JustDown(this.keyC)) {
+        const npc = this._findAdjacentNPC();
+        if (npc) this._dialogueOpen(npc);
+        else this._cycleItem();
+      }
       // Sword hitbox tick (position + active-window check)
       this._tickHitbox(time);
       // Arrow projectile tick
@@ -1216,6 +1230,137 @@
           }
         }
       }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // NPC DIALOGUE
+    // ══════════════════════════════════════════════════════════════
+
+    _findAdjacentNPC() {
+      // Returns the closest NPC within 18px of the player, or null.
+      if (!this.npcsInRoom) return null;
+      const p = this.player;
+      let best = null;
+      let bestD = 18;
+      for (const npcObj of this.npcsInRoom) {
+        if (!npcObj || !npcObj._npcData) continue;   // labels don't have _npcData
+        const d = Phaser.Math.Distance.Between(npcObj.x, npcObj.y, p.x, p.y);
+        if (d < bestD) { bestD = d; best = npcObj; }
+      }
+      return best;
+    }
+
+    _dialogueOpen(npcObj) {
+      const data = npcObj._npcData;
+      if (!data) return;
+      // Pick which dialogue state to use
+      const stateKey = this._pickNpcDialogueState(data);
+      const lines = (data.dialogue && data.dialogue[stateKey]) || [];
+      if (lines.length === 0) return;
+      this.dialogueActive = true;
+      this.dialogueData = data;
+      this.dialogueLines = lines.slice();
+      this.dialogueIndex = 0;
+      this.dialogueStateKey = stateKey;
+      this._dialogueBuildBox();
+      this._dialogueRenderLine();
+      try { this.sound.play("sfx_menu_select", { volume: 0.4 }); } catch (_) {}
+    }
+
+    _pickNpcDialogueState(data) {
+      const q = this.quest;
+      const f = q.flags;
+      // Heda — flower side quest progression
+      if (data.id === "heda_herbalist") {
+        if (q.side_quest_flowers === "returned") return "complete";
+        if (q.side_quest_flowers !== "not_started") return "in_progress";
+        return "intro";
+      }
+      // Mira — different after dungeon clear
+      if (data.id === "elder_mira") {
+        if (q.main_quest === "act1_complete") return "after_dungeon";
+        return "intro";
+      }
+      // Liora — different after first talk (which gives bow)
+      if (data.id === "liora_scholar") {
+        if (f.has_bow) return "after_bow";
+        return "intro";
+      }
+      // Default
+      return data.default_state || "intro";
+    }
+
+    _dialogueBuildBox() {
+      // Build modal at bottom of screen — added to fxLayer (above tiles + entities)
+      const boxX = 4;
+      const boxY = SCREEN_H - 56;
+      const boxW = SCREEN_W - 8;
+      const boxH = 50;
+      this._dialogueBox = this.add.rectangle(boxX, boxY, boxW, boxH, 0x0f172a, 0.92).setOrigin(0, 0);
+      this._dialogueBox.setStrokeStyle(1, 0xfacc15);
+      this._dialogueName = this.add.text(boxX + 4, boxY + 2,
+        (this.dialogueData.name || "???") + ":",
+        { font: "8px monospace", color: "#fde047" });
+      this._dialogueText = this.add.text(boxX + 4, boxY + 14, "",
+        { font: "7px monospace", color: "#fff", wordWrap: { width: boxW - 8 } });
+      this._dialogueArrow = this.add.text(boxX + boxW - 12, boxY + boxH - 12, "▶",
+        { font: "8px monospace", color: "#fde047" });
+      // Blink the arrow
+      this._dialogueArrowTween = this.tweens.add({
+        targets: this._dialogueArrow, alpha: 0.2, duration: 500, yoyo: true, repeat: -1
+      });
+      this.fxLayer.add(this._dialogueBox);
+      this.fxLayer.add(this._dialogueName);
+      this.fxLayer.add(this._dialogueText);
+      this.fxLayer.add(this._dialogueArrow);
+    }
+
+    _dialogueRenderLine() {
+      if (!this._dialogueText) return;
+      const line = this.dialogueLines[this.dialogueIndex] || "";
+      this._dialogueText.setText(line);
+    }
+
+    _dialogueAdvance(time) {
+      if (this._dialogueLastAdvance && time - this._dialogueLastAdvance < 180) return;
+      this._dialogueLastAdvance = time;
+      this.dialogueIndex += 1;
+      if (this.dialogueIndex >= this.dialogueLines.length) {
+        this._dialogueClose();
+      } else {
+        this._dialogueRenderLine();
+        try { this.sound.play("sfx_menu_select", { volume: 0.3 }); } catch (_) {}
+      }
+    }
+
+    _dialogueClose() {
+      // Apply any on-close side-effects (give bow, advance quest state)
+      const data = this.dialogueData;
+      const stateKey = this.dialogueStateKey;
+      const q = this.quest;
+      const f = q.flags;
+      if (data) {
+        if (data.id === "elder_mira" && stateKey === "intro" && q.main_quest === "talk_to_mira") {
+          q.main_quest = "enter_thicket";
+        }
+        if (data.id === "liora_scholar" && stateKey === "intro" && data.gives_bow_on_first_talk && !f.has_bow) {
+          f.has_bow = true;
+          if (!this.currentItem) this.currentItem = "bow";
+          try { this.sound.play("sfx_levelup", { volume: 0.6 }); } catch (_) {}
+          this._refreshItemSlot();
+        }
+      }
+      // Tear down UI
+      [this._dialogueBox, this._dialogueName, this._dialogueText, this._dialogueArrow]
+        .forEach(el => { if (el && el.destroy) el.destroy(); });
+      if (this._dialogueArrowTween) this._dialogueArrowTween.stop();
+      this._dialogueBox = this._dialogueName = this._dialogueText = this._dialogueArrow = null;
+      this._dialogueArrowTween = null;
+      this.dialogueActive = false;
+      this.dialogueData = null;
+      this.dialogueLines = null;
+      this.dialogueIndex = 0;
+      try { this.sound.play("sfx_menu_confirm", { volume: 0.3 }); } catch (_) {}
     }
 
     _gameOver() {

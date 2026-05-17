@@ -2,9 +2,9 @@
   "_doc": "Pass 2 build state — read this at the start of every /loop iteration. Update at the end.",
   "version": 1,
   "started_at": "2026-05-11",
-  "last_iteration": 5,
-  "last_updated": "2026-05-11T14:42:00Z",
-  "current_phase": "npcs_dialogue",
+  "last_iteration": 6,
+  "last_updated": "2026-05-11T14:48:00Z",
+  "current_phase": "hud_save",
   "phases": {
     "scaffold": {
       "status": "done",
@@ -32,7 +32,8 @@
       "deliverable": "5 enemy AI behaviors as a state-machine library: patrol (Thornback Lurker), chase (Veilstalker), shoot (Wraithwhisper — projectile every 2s with 1s telegraph), guard (Geomancer Statue mini-boss — slam attack on 3s cadence), boss (Guardian — phase 1 slash-vulnerable, phase 2 weak-wall-bomb-then-arrow). HP/DMG from design.md."
     },
     "npcs_dialogue": {
-      "status": "pending",
+      "status": "done",
+      "_progress": "Iter #6: NPC dialogue modal UI + Liora NPC + bow gift. Liora added to thicket_waterfall (gives_bow_on_first_talk=true). C key is now context-sensitive: adjacent NPC = open dialogue, else cycle item slot. Dialogue suspends all gameplay (player input + AI), shows bottom-of-screen modal box w/ NPC name + line + blinking arrow, advances on Z/C/SPACE, closes on last-line advance. State picker: Heda (intro/in_progress/complete on side_quest_flowers), Mira (intro / after_dungeon on main_quest), Liora (intro → after_bow), default. Close-event side-effects: Mira's intro advances main_quest 'talk_to_mira' → 'enter_thicket'; Liora's intro gives bow + auto-equips. Bomb refill deferred (no bomb pickup yet).",
       "deliverable": "4 NPCs with multi-state dialogue. Elder Mira (quest-giver: Investigate Ruins → Return Relic), Dax the Trader (shop: 5 items, real rupee transactions), Liora (ally: gives map of Ruins, optional escort), Heda the Herbalist (side quest: 3 bioluminescent flowers in overworld). Dialogue tree: setHasSeen flag per topic."
     },
     "hud_save": {
@@ -49,12 +50,19 @@
     }
   },
   "queue": [
-    "npcs_dialogue",
     "hud_save",
     "polish",
     "qa"
   ],
   "log": [
+    {
+      "iteration": 6,
+      "phase": "npcs_dialogue",
+      "chunk": "NPC dialogue modal UI + Liora NPC + context-sensitive C key + dialogue close-event side-effects",
+      "what_done": "pass2.js 1276→1421 lines. Liora added to thicket_waterfall (gives_bow_on_first_talk). _findAdjacentNPC (18px range), _dialogueOpen/Close/Advance/RenderLine, _pickNpcDialogueState (picks intro vs in_progress vs after_X based on quest state). C key context-sensitive: NPC nearby → talk; else cycle item. Dialogue suspends gameplay + AI. UI: bottom modal box w/ NPC name + blinking arrow advance, advance on Z/C/SPACE. Close-event: Mira intro advances main_quest 'talk_to_mira'→'enter_thicket'; Liora intro grants bow + auto-equips. shroud_act1_data.js bumped to include Liora.",
+      "what_left": "Bomb refill drops still missing (no bomb_pickup item kind). Heda side quest UI works but flowers are not yet planted in overworld rooms (would close out side_quest_flowers progression).",
+      "blockers": "None. NPC phase done. Queue: 3 phases (hud_save, polish, qa)."
+    },
     {
       "iteration": 5,
       "phase": "enemies",

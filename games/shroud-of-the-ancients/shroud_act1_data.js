@@ -251,7 +251,26 @@
     "##################",
   ], { E: "thicket_b" },
   {
-    items: [{ kind: "rupee_blue", x: 200, y: 80 }, { kind: "heart_piece", x: 240, y: 96 }],
+    npcs: [{
+      id: "liora_scholar", name: "Liora",
+      x: 200, y: 64,
+      default_state: "intro",
+      gives_bow_on_first_talk: true,
+      dialogue: {
+        intro: [
+          "Kaelen! Mira sent word you'd come.",
+          "These ruins are guarded by Wraithwhispers — vile spirits that strike from above.",
+          "Take this. The Stormcrest Bow.",
+          "Aim true and the spirits cannot harm you.",
+          "(Got the BOW — press C to cycle items, X to fire!)",
+        ],
+        after_bow: [
+          "The Guardian below is wreathed in old magic.",
+          "Your blade alone won't fell it. Use bombs — or bow shafts — when its hide flares gold.",
+        ],
+      },
+    }],
+    items: [{ kind: "rupee_blue", x: 240, y: 96 }, { kind: "heart_piece", x: 240, y: 128 }],
   });
 
   R("thicket_vine", "emerald_thicket", [
