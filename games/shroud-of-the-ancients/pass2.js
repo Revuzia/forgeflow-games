@@ -325,6 +325,8 @@
 
       // Enemy AI tick
       this._tickEnemies(time, delta);
+      // Enemy projectiles
+      this._tickEnemyProjectiles(time);
 
       // Item pickup overlap
       this._tickPickups(time);
@@ -390,7 +392,7 @@
 
     _clearRoomEntities() {
       // Destroy any tracked room-scoped entities WITHOUT touching player or hitbox.
-      const lists = [this.enemies || [], this.itemsOnGround || [], this.npcsInRoom || []];
+      const lists = [this.enemies || [], this.itemsOnGround || [], this.npcsInRoom || [], this.bombs || [], this.enemyProjectiles || []];
       for (const list of lists) {
         for (const item of list) {
           if (item && item.destroy) item.destroy();
@@ -399,6 +401,18 @@
       this.enemies = [];
       this.itemsOnGround = [];
       this.npcsInRoom = [];
+      this.bombs = [];
+      this.enemyProjectiles = [];
+      // Also reset arrows in flight (recycle, don't destroy)
+      if (this.arrows) {
+        for (const a of this.arrows) {
+          a.active = false;
+          a.setVisible(false);
+          a._embed_until = 0;
+          if (a.body) a.body.setVelocity(0, 0);
+          a.x = -100; a.y = -100;
+        }
+      }
     }
 
     _enterRoom(id, fromDirection) {
@@ -545,24 +559,45 @@
         for (const e of this.enemies) {
           if (!e.active || e.dead || this.hitboxHitEnemies.has(e)) continue;
           if (Phaser.Geom.Intersects.RectangleToRectangle(hb.getBounds(), e.getBounds())) {
-            this._damageEnemy(e, 1);   // sword = 1 dmg per hit
+            this._damageEnemy(e, 1, "sword");
             this.hitboxHitEnemies.add(e);
           }
         }
       }
     }
 
-    _damageEnemy(e, amount) {
+    _damageEnemy(e, amount, source) {
+      source = source || "sword";
+      const time = this.time.now;
+      // Guardian phase-2 sword immunity — must use bomb or arrow
+      if (e._template === "guardian_of_first_light" && e._phase === 2 && source === "sword") {
+        e.flash_until = time + 80;   // light flash, no damage
+        try { this.sound.play("sfx_hit", { volume: 0.3 }); } catch (_) {}
+        return;
+      }
       e.hp -= amount;
-      e.flash_until = this.time.now + 120;
-      // Knockback in direction from player → enemy
+      e.flash_until = time + 120;
+      // Knockback away from player (or projectile origin)
       const dx = e.x - this.player.x;
       const dy = e.y - this.player.y;
       const len = Math.max(0.001, Math.hypot(dx, dy));
-      const kb = 140;   // knockback speed (px/s)
+      const kb = 140;
       e.body.setVelocity((dx/len) * kb, (dy/len) * kb);
-      e.knockback_until = this.time.now + 180;
+      e.knockback_until = time + 180;
       try { this.sound.play("sfx_hit", { volume: 0.5 }); } catch (_) {}
+      // Phase transition for Guardian
+      if (e._template === "guardian_of_first_light" && e._phase === 1 && e.hp <= 0) {
+        // Transition to phase 2
+        const tpl = D.BOSSES.guardian_of_first_light;
+        e._phase = 2;
+        e.hp = tpl.hp_phase2;
+        e.speed = (tpl.speed || 60) + 20;
+        e.color = 0xfde047;
+        e._stun_until = time + 1200;   // brief vulnerable stun
+        e.body.setVelocity(0, 0);
+        try { this.sound.play("sfx_levelup", { volume: 0.6 }); } catch (_) {}
+        return;
+      }
       if (e.hp <= 0) this._killEnemy(e);
     }
 
@@ -669,39 +704,256 @@
       for (const e of this.enemies) {
         if (!e.active || e.dead) continue;
         // Flash
-        e.fillColor = (e.flash_until > time) ? 0xffffff : e.color;
-        // Skip AI during knockback
-        if (e.knockback_until > time) continue;
-        // AI per behavior
-        if (e._behavior === "patrol") {
-          // Simple horizontal patrol, reverse on wall hit
-          if (!e._ai.change_at) e._ai.change_at = time + 1500;
-          if (time > e._ai.change_at) {
-            e._ai.dir *= -1;
-            e._ai.change_at = time + 1200 + Math.random() * 800;
-          }
-          e.body.setVelocity(e.speed * e._ai.dir, 0);
-          // Reverse on solid tile ahead
-          const aheadX = e.x + e._ai.dir * 8;
-          const tx = Math.floor(aheadX / TILE);
-          const ty = Math.floor(e.y / TILE);
-          const ch = (this.currentRoom.tiles[ty] || "")[tx];
-          if (SOLID_TILES.has(ch)) { e._ai.dir *= -1; e._ai.change_at = time + 1000; }
-        } else if (e._behavior === "chase") {
-          // Move toward player
-          const dx = p.x - e.x;
-          const dy = p.y - e.y;
-          const len = Math.max(0.001, Math.hypot(dx, dy));
-          e.body.setVelocity((dx/len) * e.speed, (dy/len) * e.speed);
-        } else {
-          // shoot / guard / charge / boss — placeholder: hold position
-          e.body.setVelocity(0, 0);
+        const baseColor = (e._phase === 2 && e._template === "guardian_of_first_light")
+          ? 0xfde047 : e.color;
+        e.fillColor = (e.flash_until > time) ? 0xffffff : baseColor;
+        // Telegraph indicator (shoot AI charges before firing)
+        if (e._telegraph_until > time) {
+          e.fillColor = ((Math.floor(time/80) % 2) === 0) ? 0xffffff : baseColor;
         }
-        // Contact damage to player
+        // Skip AI during knockback (except boss — boss is heavier)
+        if (e.knockback_until > time && e._role !== "boss") continue;
+
+        switch (e._behavior) {
+          case "patrol": this._ai_patrol(e, p, time); break;
+          case "chase":  this._ai_chase(e, p, time);  break;
+          case "shoot":  this._ai_shoot(e, p, time);  break;
+          case "guard":  this._ai_guard(e, p, time);  break;
+          case "charge": this._ai_charge(e, p, time); break;
+          default:
+            // Bosses get their own dispatcher (Guardian template)
+            if (e._template === "guardian_of_first_light") this._ai_boss_guardian(e, p, time);
+            else e.body.setVelocity(0, 0);
+        }
+        // Contact damage to player (skip during boss phase-transition stun)
+        if (e._stun_until > time) continue;
         if (Phaser.Geom.Intersects.RectangleToRectangle(p.getBounds(), e.getBounds())) {
-          this._damagePlayer(e.dmg * 0.5, e.x, e.y);   // 0.5 = half-heart unit, dmg=1 → 0.5 heart
+          this._damagePlayer(e.dmg * 0.5, e.x, e.y);
         }
       }
+    }
+
+    // ── Enemy AI behaviors ─────────────────────────────────────────
+
+    _ai_patrol(e, p, time) {
+      if (!e._ai.change_at) e._ai.change_at = time + 1500;
+      if (time > e._ai.change_at) {
+        e._ai.dir *= -1;
+        e._ai.change_at = time + 1200 + Math.random() * 800;
+      }
+      e.body.setVelocity(e.speed * e._ai.dir, 0);
+      const aheadX = e.x + e._ai.dir * 8;
+      const tx = Math.floor(aheadX / TILE);
+      const ty = Math.floor(e.y / TILE);
+      const ch = (this.currentRoom.tiles[ty] || "")[tx];
+      if (SOLID_TILES.has(ch)) { e._ai.dir *= -1; e._ai.change_at = time + 1000; }
+    }
+
+    _ai_chase(e, p, time) {
+      const dx = p.x - e.x;
+      const dy = p.y - e.y;
+      const len = Math.max(0.001, Math.hypot(dx, dy));
+      let vx = (dx/len) * e.speed;
+      let vy = (dy/len) * e.speed;
+      // Naive wall-avoidance: if blocked by solid tile ahead, sidestep
+      const aheadX = e.x + Math.sign(vx) * 8;
+      const aheadY = e.y + Math.sign(vy) * 8;
+      const txX = Math.floor(aheadX / TILE);
+      const tyY = Math.floor(aheadY / TILE);
+      const chX = (this.currentRoom.tiles[Math.floor(e.y/TILE)] || "")[txX];
+      const chY = (this.currentRoom.tiles[tyY] || "")[Math.floor(e.x/TILE)];
+      if (SOLID_TILES.has(chX)) vx = 0;
+      if (SOLID_TILES.has(chY)) vy = 0;
+      e.body.setVelocity(vx, vy);
+    }
+
+    _ai_shoot(e, p, time) {
+      // Wraithwhisper — hover near spawn, fire at player every 2s with 1s telegraph
+      if (!e._ai.last_shot) e._ai.last_shot = time + 1000;
+      const cd = 2000;
+      const telegraph_ms = 700;
+      // Gentle hover sway (sin pattern)
+      const swayX = Math.sin(time * 0.002) * 0.3;
+      const swayY = Math.cos(time * 0.0023) * 0.3;
+      // Always drift slightly toward player for menace
+      const dx = p.x - e.x;
+      const dy = p.y - e.y;
+      const len = Math.max(0.001, Math.hypot(dx, dy));
+      const driftSp = e.speed * 0.5;
+      e.body.setVelocity((dx/len) * driftSp + swayX, (dy/len) * driftSp + swayY);
+      // Fire cycle
+      if (time - e._ai.last_shot > cd) {
+        if (!e._telegraph_until) {
+          e._telegraph_until = time + telegraph_ms;
+        } else if (time > e._telegraph_until) {
+          this._enemyFireProjectile(e, p);
+          e._ai.last_shot = time;
+          e._telegraph_until = 0;
+        }
+      }
+    }
+
+    _ai_guard(e, p, time) {
+      // Geomancer Statue — stationary, slam attack every 3s shockwave
+      e.body.setVelocity(0, 0);
+      if (!e._ai.last_slam) e._ai.last_slam = time + 1500;
+      const cd = 3000;
+      const telegraph_ms = 600;
+      if (time - e._ai.last_slam > cd) {
+        if (!e._telegraph_until) {
+          e._telegraph_until = time + telegraph_ms;
+        } else if (time > e._telegraph_until) {
+          this._enemySlam(e);
+          e._ai.last_slam = time;
+          e._telegraph_until = 0;
+        }
+      }
+    }
+
+    _ai_charge(e, p, time) {
+      // Crystalspine Boar — line of sight horizontal/vertical, charge at high speed
+      if (!e._ai.charging) e._ai.charging = false;
+      if (e._ai.charging) {
+        // Continue current charge until wall hit or off-screen
+        const aheadX = e.x + e._ai.charge_dir.x * 8;
+        const aheadY = e.y + e._ai.charge_dir.y * 8;
+        const tx = Math.floor(aheadX / TILE);
+        const ty = Math.floor(aheadY / TILE);
+        const ch = (this.currentRoom.tiles[ty] || "")[tx];
+        if (SOLID_TILES.has(ch) || time > e._ai.charge_end) {
+          e._ai.charging = false;
+          e.body.setVelocity(0, 0);
+          e._stun_until = time + 600;   // boar stunned after wall slam
+        }
+      } else {
+        // Idle — wait, then check line of sight
+        if (!e._ai.next_check) e._ai.next_check = time + 800;
+        if (time > e._ai.next_check) {
+          e._ai.next_check = time + 600;
+          const dx = p.x - e.x;
+          const dy = p.y - e.y;
+          if (Math.abs(dx) < 16 && Math.abs(dy) > 16) {
+            // Vertical line of sight
+            e._ai.charging = true;
+            e._ai.charge_dir = { x: 0, y: Math.sign(dy) };
+            e._ai.charge_end = time + 1500;
+          } else if (Math.abs(dy) < 16 && Math.abs(dx) > 16) {
+            // Horizontal line of sight
+            e._ai.charging = true;
+            e._ai.charge_dir = { x: Math.sign(dx), y: 0 };
+            e._ai.charge_end = time + 1500;
+          }
+        }
+        if (e._ai.charging) {
+          e.body.setVelocity(e._ai.charge_dir.x * e.speed * 1.6, e._ai.charge_dir.y * e.speed * 1.6);
+        }
+      }
+    }
+
+    // ── Guardian boss AI (2 phases) ────────────────────────────────
+
+    _ai_boss_guardian(e, p, time) {
+      if (!e._phase) {
+        e._phase = 1;
+        e._ai.next_attack = time + 1200;
+      }
+      // Phase 1 — chase player + occasional slam shockwave
+      if (e._phase === 1) {
+        const dx = p.x - e.x;
+        const dy = p.y - e.y;
+        const len = Math.max(0.001, Math.hypot(dx, dy));
+        e.body.setVelocity((dx/len) * e.speed, (dy/len) * e.speed);
+        if (time > e._ai.next_attack) {
+          if (!e._telegraph_until) {
+            e._telegraph_until = time + 700;
+            e.body.setVelocity(0, 0);
+          } else if (time > e._telegraph_until) {
+            this._enemySlam(e, 38);  // wide shockwave
+            e._telegraph_until = 0;
+            e._ai.next_attack = time + 3500;
+          }
+        }
+      } else if (e._phase === 2) {
+        // Phase 2 — sword-immune, faster, fires projectile ring every 4s
+        const dx = p.x - e.x;
+        const dy = p.y - e.y;
+        const len = Math.max(0.001, Math.hypot(dx, dy));
+        e.body.setVelocity((dx/len) * e.speed * 1.4, (dy/len) * e.speed * 1.4);
+        if (time > e._ai.next_attack) {
+          // Burst-fire 4 projectiles in cardinal directions
+          for (const dir of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            this._enemyFireProjectileDir(e, dir[0], dir[1]);
+          }
+          e._ai.next_attack = time + 4000;
+        }
+      }
+    }
+
+    // ── Enemy projectiles + slam shockwave ─────────────────────────
+
+    _enemyFireProjectile(e, p) {
+      // Aim straight at player at fire time (no tracking)
+      const dx = p.x - e.x;
+      const dy = p.y - e.y;
+      const len = Math.max(0.001, Math.hypot(dx, dy));
+      this._enemyFireProjectileDir(e, dx/len, dy/len);
+    }
+    _enemyFireProjectileDir(e, dirX, dirY) {
+      if (!this.enemyProjectiles) this.enemyProjectiles = [];
+      const proj = this.add.circle(e.x, e.y, 3, 0xa855f7);
+      proj.setStrokeStyle(1, 0x4c1d95);
+      this.physics.add.existing(proj);
+      proj.body.setAllowGravity && proj.body.setAllowGravity(false);
+      proj.body.setSize(4, 4);
+      const speed = 140;
+      proj.body.setVelocity(dirX * speed, dirY * speed);
+      proj._dmg = e.dmg || 1;
+      proj._spawn_time = this.time.now;
+      this.fxLayer.add(proj);
+      this.enemyProjectiles.push(proj);
+      try { this.sound.play("sfx_shoot", { volume: 0.3 }); } catch (_) {}
+    }
+
+    _tickEnemyProjectiles(time) {
+      if (!this.enemyProjectiles) return;
+      for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
+        const pj = this.enemyProjectiles[i];
+        // Off-screen or stale → despawn
+        if (pj.x < 0 || pj.x > SCREEN_W || pj.y < 0 || pj.y > SCREEN_H || time - pj._spawn_time > 3500) {
+          pj.destroy();
+          this.enemyProjectiles.splice(i, 1);
+          continue;
+        }
+        // Hit player
+        if (Phaser.Geom.Intersects.RectangleToRectangle(pj.getBounds(), this.player.getBounds())) {
+          this._damagePlayer(pj._dmg * 0.5, pj.x, pj.y);
+          pj.destroy();
+          this.enemyProjectiles.splice(i, 1);
+          continue;
+        }
+        // Hit wall
+        const tx = Math.floor(pj.x / TILE);
+        const ty = Math.floor(pj.y / TILE);
+        const ch = (this.currentRoom.tiles[ty] || "")[tx];
+        if (SOLID_TILES.has(ch)) {
+          pj.destroy();
+          this.enemyProjectiles.splice(i, 1);
+        }
+      }
+    }
+
+    _enemySlam(e, radius) {
+      // Radial shockwave damages player if within radius
+      radius = radius || 28;
+      const ring = this.add.circle(e.x, e.y, 4, 0xff3344, 0.4);
+      ring.setStrokeStyle(2, 0xfde047, 1);
+      this.fxLayer.add(ring);
+      this.tweens.add({ targets: ring, radius: radius, alpha: 0,
+        duration: 280, onComplete: () => ring.destroy() });
+      if (Phaser.Math.Distance.Between(e.x, e.y, this.player.x, this.player.y) < radius) {
+        this._damagePlayer((e.dmg || 1) * 0.5, e.x, e.y);
+      }
+      try { this.sound.play("sfx_hit", { volume: 0.5 }); } catch (_) {}
     }
 
     _tickPickups(time) {
@@ -835,7 +1087,7 @@
         for (const e of this.enemies) {
           if (!e.active || e.dead) continue;
           if (Phaser.Geom.Intersects.RectangleToRectangle(a.getBounds(), e.getBounds())) {
-            this._damageEnemy(e, 1);
+            this._damageEnemy(e, 1, "arrow");
             a.active = false; a.setVisible(false);
             a.body.setVelocity(0, 0);
             a.x = -100; a.y = -100;
@@ -897,7 +1149,7 @@
       for (const e of this.enemies) {
         if (!e.active || e.dead) continue;
         if (Phaser.Math.Distance.Between(b.x, b.y, e.x, e.y) < radius) {
-          this._damageEnemy(e, 2);   // bombs do 2 dmg
+          this._damageEnemy(e, 2, "bomb");   // bombs do 2 dmg, can hit sword-immune bosses
         }
       }
       // Damage player if too close (Zelda canon: friendly fire!)

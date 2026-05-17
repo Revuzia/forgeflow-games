@@ -2,9 +2,9 @@
   "_doc": "Pass 2 build state — read this at the start of every /loop iteration. Update at the end.",
   "version": 1,
   "started_at": "2026-05-11",
-  "last_iteration": 4,
-  "last_updated": "2026-05-11T12:54:00Z",
-  "current_phase": "enemies",
+  "last_iteration": 5,
+  "last_updated": "2026-05-11T14:42:00Z",
+  "current_phase": "npcs_dialogue",
   "phases": {
     "scaffold": {
       "status": "done",
@@ -27,7 +27,8 @@
       "deliverable": "Sword slash (4-axis, 8-frame anim, ~100ms windup + ~200ms active hitbox + ~150ms recovery), spin attack (hold 1.0s charge), bow + arrow (projectile pool of 8, embeds 0.5s), bombs (2s fuse, 32px radius, breaks weak-walls). Knockback 8px. 600ms i-frames flicker. Half-heart damage. Audio hooks: sfx_attack, sfx_hit, sfx_bow, sfx_bomb_explode."
     },
     "enemies": {
-      "status": "pending",
+      "status": "done",
+      "_progress": "Iter #5: all 5 AI behaviors + Guardian 2-phase boss + enemy projectiles + radial-slam shockwave shipped. AIs: patrol (Thornback, reverses on solid), chase (Veilstalker w/ wall sidestep), shoot (Wraithwhisper hover-drift + 700ms telegraph + 2s fire CD), guard (Geomancer stationary + 600ms telegraph + 3s slam CD radial shockwave), charge (Crystalspine line-of-sight charge + wall-slam stun 600ms). Guardian boss: phase 1 chase + 3.5s slam CD wide-shockwave; phase 2 (auto-transitions at hp_phase1<=0) sword-immune (must bomb/arrow), 1.4x speed, fires cardinal 4-projectile burst every 4s. _damageEnemy refactored to take source='sword'|'arrow'|'bomb' for immunity gates. Telegraph visual = flash white. Enemy projectiles = 140px/s purple circles, despawn off-screen / after 3.5s / on wall hit. _clearRoomEntities now nukes bombs + projectiles + recycles arrows on room change.",
       "deliverable": "5 enemy AI behaviors as a state-machine library: patrol (Thornback Lurker), chase (Veilstalker), shoot (Wraithwhisper — projectile every 2s with 1s telegraph), guard (Geomancer Statue mini-boss — slam attack on 3s cadence), boss (Guardian — phase 1 slash-vulnerable, phase 2 weak-wall-bomb-then-arrow). HP/DMG from design.md."
     },
     "npcs_dialogue": {
@@ -48,13 +49,20 @@
     }
   },
   "queue": [
-    "enemies",
     "npcs_dialogue",
     "hud_save",
     "polish",
     "qa"
   ],
   "log": [
+    {
+      "iteration": 5,
+      "phase": "enemies",
+      "chunk": "5 AI behaviors + Guardian boss 2 phases + enemy projectile pool + radial slam shockwaves",
+      "what_done": "pass2.js 1024→1276 lines. New: switch-based AI dispatch — patrol/chase/shoot/guard/charge + boss-specific dispatcher. Wraithwhisper hover-drift + telegraphed projectile every 2s. Geomancer 3s slam CD with 28-radius shockwave. Crystalspine charge AI (line-of-sight detection + 1.5s charge + wall-slam stun). Guardian boss phase 1: chase + 3.5s wide-slam (38px); phase 2 auto-transition at hp<=0, sword-immune (must bomb/arrow), 1.4x speed, 4-projectile cardinal burst every 4s. _damageEnemy(e, amt, source) takes damage source for immunity gates. Telegraph visual = white flash. Enemy projectiles purple circles 140px/s, 3.5s lifespan. _clearRoomEntities purges projectiles+bombs+recycles arrows on transition.",
+      "what_left": "Boss phase 2 may be hard to kill with only 4 bombs from miniboss; bow source still missing — Liora NPC will provide bow (next iter). Bomb refills not implemented; player has finite supply.",
+      "blockers": "None. All 5 enemy behaviors live. Queue: 4 phases."
+    },
     {
       "iteration": 4,
       "phase": "combat",
