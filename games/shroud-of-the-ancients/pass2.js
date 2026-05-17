@@ -221,6 +221,30 @@
       this.hitbox.body.checkCollision.none = true;  // not blocked by anything
       this.fxLayer.add(this.hitbox);
 
+      // Item-slot state (B-button equivalent — cycled via C key)
+      // Player gains items by collecting them; flags govern availability.
+      this.currentItem = null;        // 'bow' | 'bombs' | 'boomerang' | null
+      this.bombCount = 0;             // depleted on use, refilled from pickups (will add bomb_pickup later)
+      this._refreshItemSlot();
+
+      // Arrow projectile pool (8 arrows — Zelda canon: cap concurrent shots)
+      this.arrows = [];
+      for (let i = 0; i < 8; i++) {
+        const a = this.add.rectangle(-100, -100, 6, 2, 0xfde047);
+        a.setStrokeStyle(1, 0x422006);
+        this.physics.add.existing(a);
+        a.body.setAllowGravity && a.body.setAllowGravity(false);
+        a.body.setSize(6, 4);
+        a.active = false;
+        a.setVisible(false);
+        a._embed_until = 0;
+        this.fxLayer.add(a);
+        this.arrows.push(a);
+      }
+
+      // Bomb list (sparse — max ~4 active bombs at once)
+      this.bombs = [];
+
       // Camera centers on the room — locked, NES-style edge transitions later
       this.cameras.main.centerOn(SCREEN_W / 2, SCREEN_H / 2);
 
@@ -282,8 +306,16 @@
 
       // Attack input
       if (Phaser.Input.Keyboard.JustDown(this.keyZ)) this._swing(time);
+      // Use selected item
+      if (Phaser.Input.Keyboard.JustDown(this.keyX)) this._useItem(time);
+      // Cycle item slot
+      if (Phaser.Input.Keyboard.JustDown(this.keyC)) this._cycleItem();
       // Sword hitbox tick (position + active-window check)
       this._tickHitbox(time);
+      // Arrow projectile tick
+      this._tickArrows(time);
+      // Bomb tick (fuse + explosion)
+      this._tickBombs(time);
 
       // Edge-of-screen transition (NES Zelda style — door tile triggers neighbor room)
       this._checkEdgeTransitions(p);
@@ -454,13 +486,24 @@
       // Static overlay — does NOT scale with camera zoom
       // Phaser tip: setScrollFactor(0) + use a separate UI cam is cleaner.
       // For Pass-2 #1: just stamp text in scene-space and let it scale with zoom.
+      // Note: HUD lives in fxLayer (never rebuilt), not tileLayer (rebuilt on room
+      // change). This was a bug in iter #3 — HUD was destroyed on every room
+      // transition because tileLayer.removeAll(true) ran in _buildRoom.
       this.hudHearts = this.add.text(2, 2, "♥".repeat(this.hearts), { font: "10px monospace", color: "#ff3344" });
-      this.hudHearts.setScrollFactor(0);
-      this.tileLayer.add(this.hudHearts);
+      this.hudRupees = this.add.text(2, 13, "₽ 0", { font: "8px monospace", color: "#22c55e" });
+      this.hudKeys = this.add.text(36, 13, "🔑 0", { font: "8px monospace", color: "#facc15" });
+      this.hudItem = this.add.text(SCREEN_W - 2, 2, "[(no item)]", { font: "8px monospace", color: "#94a3b8" }).setOrigin(1, 0);
+      this.fxLayer.add(this.hudHearts);
+      this.fxLayer.add(this.hudRupees);
+      this.fxLayer.add(this.hudKeys);
+      this.fxLayer.add(this.hudItem);
     }
 
     _refreshHUD() {
       if (this.hudHearts) this.hudHearts.setText("♥".repeat(Math.ceil(this.hearts)));
+      const q = this.quest.flags;
+      if (this.hudRupees) this.hudRupees.setText("$ " + q.rupees);
+      if (this.hudKeys) this.hudKeys.setText("K " + q.small_keys + (q.big_key ? "*" : ""));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -686,13 +729,14 @@
       else if (tpl.kind === "heart_piece") { q.heart_pieces += 1; sfx = "sfx_levelup"; if (q.heart_pieces >= 4) { q.heart_pieces -= 4; D.PLAYER.max_hearts += 1; this.hearts = D.PLAYER.max_hearts; } }
       else if (tpl.kind === "heart_container") { D.PLAYER.max_hearts += 1; this.hearts = D.PLAYER.max_hearts; sfx = "sfx_levelup"; }
       else if (tpl.kind === "weapon") {
-        if (tpl.id === "bow") q.has_bow = true;
-        else if (tpl.id === "bombs") q.has_bombs = true;
-        else if (tpl.id === "boomerang") q.has_boomerang = true;
+        if (tpl.id === "bow") { q.has_bow = true; if (!this.currentItem) this.currentItem = "bow"; }
+        else if (tpl.id === "bombs") { q.has_bombs = true; this.bombCount += 4; if (!this.currentItem) this.currentItem = "bombs"; }
+        else if (tpl.id === "boomerang") { q.has_boomerang = true; if (!this.currentItem) this.currentItem = "boomerang"; }
         sfx = "sfx_levelup";
       }
       try { this.sound.play(sfx, { volume: 0.5 }); } catch (_) {}
       this._refreshHUD();
+      this._refreshItemSlot();
     }
 
     _winAct1() {
@@ -700,6 +744,226 @@
       this.cameras.main.fade(1500, 255, 215, 0);
       this.time.delayedCall(1700, () => this.scene.start("P2_Menu"));
       // TODO (polish): proper Win scene
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // ITEMS — bow, bombs, item-slot cycling
+    // ══════════════════════════════════════════════════════════════
+
+    _cycleItem() {
+      const q = this.quest.flags;
+      const owned = [];
+      if (q.has_bow) owned.push("bow");
+      if (q.has_bombs) owned.push("bombs");
+      if (q.has_boomerang) owned.push("boomerang");
+      if (owned.length === 0) { this.currentItem = null; this._refreshItemSlot(); return; }
+      const idx = this.currentItem ? owned.indexOf(this.currentItem) : -1;
+      this.currentItem = owned[(idx + 1) % owned.length];
+      try { this.sound.play("sfx_menu_select", { volume: 0.4 }); } catch (_) {}
+      this._refreshItemSlot();
+    }
+
+    _useItem(time) {
+      const q = this.quest.flags;
+      if (!this.currentItem) return;
+      if (this.currentItem === "bow" && q.has_bow) {
+        this._fireArrow(time);
+      } else if (this.currentItem === "bombs" && q.has_bombs && this.bombCount > 0) {
+        this._dropBomb(time);
+      }
+      // boomerang reserved for future expansion (returns to player, stuns enemies)
+    }
+
+    _refreshItemSlot() {
+      if (!this.hudItem) return;
+      const label = this.currentItem
+        ? (this.currentItem === "bombs" ? `BOMBS x${this.bombCount}` : this.currentItem.toUpperCase())
+        : "(no item)";
+      this.hudItem.setText(`[${label}]`);
+    }
+
+    // ── Bow + arrows ──────────────────────────────────────────────
+
+    _fireArrow(time) {
+      if (this.lastArrowFire && time - this.lastArrowFire < 280) return;
+      const a = this.arrows.find(x => !x.active);
+      if (!a) return;
+      this.lastArrowFire = time;
+      a.active = true;
+      a.setVisible(true);
+      a._embed_until = 0;
+      const dirVec = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] }[this.player.facing] || [0,1];
+      a.x = this.player.x + dirVec[0] * 8;
+      a.y = this.player.y + dirVec[1] * 8;
+      // Orient arrow visually
+      if (dirVec[0] !== 0) { a.setSize(6, 2); a.body.setSize(6, 2); }
+      else { a.setSize(2, 6); a.body.setSize(2, 6); }
+      const speed = 220;
+      a.body.setVelocity(dirVec[0] * speed, dirVec[1] * speed);
+      a._dir = dirVec;
+      try { this.sound.play("sfx_shoot", { volume: 0.4 }); } catch (_) {}
+    }
+
+    _tickArrows(time) {
+      for (const a of this.arrows) {
+        if (!a.active) continue;
+        // Embedded (stuck in wall) — hide after embed_until
+        if (a._embed_until > 0) {
+          if (time > a._embed_until) {
+            a.active = false; a.setVisible(false);
+            a.x = -100; a.y = -100;
+            a.body.setVelocity(0, 0);
+          }
+          continue;
+        }
+        // Off-screen → recycle
+        if (a.x < 0 || a.x > SCREEN_W || a.y < 0 || a.y > SCREEN_H) {
+          a.active = false; a.setVisible(false);
+          a.body.setVelocity(0, 0);
+          continue;
+        }
+        // Solid-tile hit → embed
+        const tx = Math.floor(a.x / TILE);
+        const ty = Math.floor(a.y / TILE);
+        const ch = (this.currentRoom.tiles[ty] || "")[tx];
+        if (SOLID_TILES.has(ch) || WEAK_WALL_TILES.has(ch)) {
+          a.body.setVelocity(0, 0);
+          a._embed_until = time + 500;
+          continue;
+        }
+        // Enemy hit → damage + recycle
+        for (const e of this.enemies) {
+          if (!e.active || e.dead) continue;
+          if (Phaser.Geom.Intersects.RectangleToRectangle(a.getBounds(), e.getBounds())) {
+            this._damageEnemy(e, 1);
+            a.active = false; a.setVisible(false);
+            a.body.setVelocity(0, 0);
+            a.x = -100; a.y = -100;
+            break;
+          }
+        }
+      }
+    }
+
+    // ── Bombs ─────────────────────────────────────────────────────
+
+    _dropBomb(time) {
+      if (this.bombCount <= 0) return;
+      this.bombCount -= 1;
+      const b = this.add.rectangle(this.player.x, this.player.y + 4, 8, 8, 0x1f2937);
+      b.setStrokeStyle(1, 0xfacc15);
+      this.physics.add.existing(b);
+      b.body.setAllowGravity && b.body.setAllowGravity(false);
+      b.body.setSize(6, 6);
+      b._fuse_end = time + 2000;
+      b._exploded = false;
+      this.fxLayer.add(b);
+      this.bombs.push(b);
+      this._refreshItemSlot();
+    }
+
+    _tickBombs(time) {
+      for (let i = this.bombs.length - 1; i >= 0; i--) {
+        const b = this.bombs[i];
+        if (b._exploded) {
+          // Hold explosion VFX for 220ms then despawn
+          if (time > b._explode_until) {
+            b.destroy();
+            this.bombs.splice(i, 1);
+          }
+          continue;
+        }
+        // Pulse before exploding
+        const remaining = b._fuse_end - time;
+        if (remaining > 0) {
+          const flash = (Math.floor(time / (remaining < 500 ? 80 : 160)) % 2) === 0;
+          b.fillColor = flash ? 0xef4444 : 0x1f2937;
+          continue;
+        }
+        // Explode
+        this._explodeBomb(b, time);
+      }
+    }
+
+    _explodeBomb(b, time) {
+      b._exploded = true;
+      b._explode_until = time + 220;
+      // Visual: expand and brighten
+      b.fillColor = 0xfbbf24;
+      this.tweens.add({ targets: b, scaleX: 4, scaleY: 4, alpha: 0.6, duration: 180 });
+      try { this.sound.play("sfx_enemy_die", { volume: 0.7 }); } catch (_) {}
+      // Damage enemies in radius
+      const radius = 32;
+      for (const e of this.enemies) {
+        if (!e.active || e.dead) continue;
+        if (Phaser.Math.Distance.Between(b.x, b.y, e.x, e.y) < radius) {
+          this._damageEnemy(e, 2);   // bombs do 2 dmg
+        }
+      }
+      // Damage player if too close (Zelda canon: friendly fire!)
+      if (Phaser.Math.Distance.Between(b.x, b.y, this.player.x, this.player.y) < radius) {
+        this._damagePlayer(0.5, b.x, b.y);
+      }
+      // Destroy weak walls in radius
+      this._breakWeakWallsAround(b.x, b.y, radius);
+    }
+
+    _breakWeakWallsAround(cx, cy, radius) {
+      const room = this.currentRoom;
+      if (!room) return;
+      // Mutate the room tile string — break weak walls within radius into floor
+      const tiles = room.tiles.slice();
+      let changed = false;
+      const r2 = radius * radius;
+      for (let y = 0; y < ROOM_H; y++) {
+        let row = tiles[y];
+        for (let x = 0; x < ROOM_W; x++) {
+          const ch = row[x];
+          if (!WEAK_WALL_TILES.has(ch)) continue;
+          const px = x * TILE + TILE/2;
+          const py = y * TILE + TILE/2;
+          if ((px - cx) ** 2 + (py - cy) ** 2 < r2) {
+            row = row.substring(0, x) + '.' + row.substring(x + 1);
+            tiles[y] = row;
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        room.tiles = tiles;
+        // Spawn weak-wall reward (heart piece etc.) once per room
+        if (room.weak_wall_reward && !room._weak_wall_consumed) {
+          room._weak_wall_consumed = true;
+          this._spawnPickup(room.weak_wall_reward.kind, SCREEN_W/2, SCREEN_H/2);
+          try { this.sound.play("sfx_levelup", { volume: 0.5 }); } catch (_) {}
+        }
+        // Repaint tile layer
+        this._repaintTiles();
+      }
+    }
+
+    _repaintTiles() {
+      // Re-render just the tile layer without rebuilding entities
+      const room = this.currentRoom;
+      if (!room) return;
+      this.tileLayer.removeAll(true);
+      const g = this.add.graphics();
+      this.tileLayer.add(g);
+      for (let y = 0; y < ROOM_H; y++) {
+        const row = room.tiles[y];
+        for (let x = 0; x < ROOM_W; x++) {
+          const ch = row && row[x] ? row[x] : '.';
+          const color = TILE_COLORS[ch] ?? 0x222222;
+          g.fillStyle(color, 1);
+          g.fillRect(x * TILE, y * TILE, TILE, TILE);
+          if (ch === '#') { g.fillStyle(0x000000, 0.2); g.fillRect(x * TILE, y * TILE + TILE - 2, TILE, 2); }
+          if (ch === '*') {
+            g.fillStyle(0x14532d, 1);
+            g.fillCircle(x * TILE + 5, y * TILE + 7, 2);
+            g.fillCircle(x * TILE + 11, y * TILE + 9, 2);
+          }
+        }
+      }
     }
 
     _gameOver() {

@@ -2,9 +2,9 @@
   "_doc": "Pass 2 build state — read this at the start of every /loop iteration. Update at the end.",
   "version": 1,
   "started_at": "2026-05-11",
-  "last_iteration": 3,
-  "last_updated": "2026-05-11T12:46:00Z",
-  "current_phase": "combat",
+  "last_iteration": 4,
+  "last_updated": "2026-05-11T12:54:00Z",
+  "current_phase": "enemies",
   "phases": {
     "scaffold": {
       "status": "done",
@@ -22,8 +22,8 @@
       "deliverable": "10 rooms of the Ruins of First Light dungeon: entrance, 3 ante-rooms (puzzle + enemies), small-key room, mini-boss room (Geomancer Statue), dungeon-item room (Astral Blade level-2 OR Gale Boomerang), 2 puzzle rooms (push-block + 4-statue light puzzle), boss-key room, boss room (Guardian)."
     },
     "combat": {
-      "status": "in_progress",
-      "_progress": "Iter #3: sword combat shipped. Hitbox rectangle activates 80–280ms into 380ms swing in facing direction; multi-hit prevented per swing; sword damages enemies (1 dmg/hit) with knockback away from player + 120ms flash. Enemy contact damages player with knockback + 800ms i-frames + flicker. Enemy AI tick supports 'patrol' (Thornback) — reverses on solid tiles, random direction change every 1.2-2.0s. Chase AI placeholder for Veilstalker. Other AIs (shoot/guard/boss) hold position for now. Enemy death triggers random drop (30% rupee, 15% heart). Miniboss + boss rooms drop their configured reward. Boss kill triggers _winAct1() fade-out. Bow + bombs deferred to iter #4 (need projectile pool + explosion system).",
+      "status": "done",
+      "_progress": "Iter #3 + #4: full combat layer shipped. Sword swing (hitbox in facing dir, 80-280ms active window of 380ms swing, multi-hit prevention) + knockback both directions + 800ms i-frames + flicker. Bow (X to fire when equipped): 8-arrow pool, 220px/s, embeds in walls 500ms, damages enemies. Bombs (X when equipped): 2s fuse with pulse, 32px explosion radius dealing 2 dmg, friendly fire if too close, destroys weak walls. Weak-wall destruction triggers configured weak_wall_reward spawn (heart_piece in thicket_vine + ruins_north_b). C key cycles item slot through owned items. Bomb count tracked + displayed. HUD: hearts + rupees + key count + item slot.",
       "deliverable": "Sword slash (4-axis, 8-frame anim, ~100ms windup + ~200ms active hitbox + ~150ms recovery), spin attack (hold 1.0s charge), bow + arrow (projectile pool of 8, embeds 0.5s), bombs (2s fuse, 32px radius, breaks weak-walls). Knockback 8px. 600ms i-frames flicker. Half-heart damage. Audio hooks: sfx_attack, sfx_hit, sfx_bow, sfx_bomb_explode."
     },
     "enemies": {
@@ -48,7 +48,6 @@
     }
   },
   "queue": [
-    "combat",
     "enemies",
     "npcs_dialogue",
     "hud_save",
@@ -56,6 +55,14 @@
     "qa"
   ],
   "log": [
+    {
+      "iteration": 4,
+      "phase": "combat",
+      "chunk": "Bow (8-arrow pool) + bombs (2s fuse + 32px radius explosion + weak-wall destruction) + item-slot cycling + HUD upgrade",
+      "what_done": "pass2.js grew 760 → 1024 lines. Added: arrow pool (8 max concurrent, embed-on-wall 500ms then recycle), bomb objects with fuse pulse + radial-damage explosion + weak-wall demolition with reward spawn (heart_piece on bombing), item-slot state (currentItem) + cycling on C key + use on X key, bombs count refilled by +4 per bomb pickup. Friendly-fire damage if player too close to bomb. _repaintTiles helper for live tile mutations. Combat phase deliverable fully met → marked done; queue popped to 5 phases. HUD upgraded: hearts + rupees + keys + item slot (top-right). HUD moved from tileLayer → fxLayer (fixes bug where room transitions destroyed HUD). Parse OK 1024 lines. Deployed to R2.",
+      "what_left": "Bow currently has no in-game source room — players can't get bow until iter handles that. (Workaround: drop bow as Liora's gift in NPC iter, OR add a chest in thicket_waterfall.) Bomb refills (sub-item: bomb_pickup) not yet implemented; players have a finite 4-bomb supply from miniboss drop.",
+      "blockers": "None. Combat fully done. Next: enemies phase (3 more AI behaviors: shoot/guard/boss)."
+    },
     {
       "iteration": 3,
       "phase": "combat",
