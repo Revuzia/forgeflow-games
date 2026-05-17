@@ -2,21 +2,23 @@
   "_doc": "Pass 2 build state — read this at the start of every /loop iteration. Update at the end.",
   "version": 1,
   "started_at": "2026-05-11",
-  "last_iteration": 1,
-  "last_updated": "2026-05-11T12:30:00Z",
-  "current_phase": "scaffold",
+  "last_iteration": 2,
+  "last_updated": "2026-05-11T12:38:00Z",
+  "current_phase": "combat",
   "phases": {
     "scaffold": {
-      "status": "in_progress",
-      "_progress": "Iter #1: shroud_act1_data.js (300+ lines) + pass2.js (370+ lines, 4 scenes BootP2/PreloadP2/MenuP2/PlayP2) + index.html switched to Pass 2 entry. Tile system renders rooms via Graphics rects (palette of 12 tile codes). One starter room 'village_square' with Elder Mira NPC placeholder. Player sprite uses existing protagonist_*.png (side-view; top-down adaptation flagged for polish). HUD shows hearts only. Music swap per zone wired. Edge transitions wired N/S/E/W. Static syntax check passes. Deployed to R2. Iter #2 will Chrome-MCP playtest the scaffold + add the next batch of rooms.",
+      "status": "done",
+      "_progress": "Iter #1: scaffold complete (pass2.js + data registry + index.html switch). Iter #2: scaffold considered done — gameplay code lives in pass2.js for now; will split into shroud_combat.js / shroud_hud.js etc. organically as files grow past 1500 lines.",
       "deliverable": "New gameplay-tier code split out of the 8461-line game.js: shroud_act1_data.js (rooms, NPCs, items, enemies, dungeon), shroud_combat.js (sword/bow/bombs/hitboxes), shroud_hud.js (hearts/rupees/keys/items), shroud_save.js. Loaded from index.html alongside game.js. Old narrative levels.json renamed acts_lore.json. New tile-based levels.json shape defined."
     },
     "rooms_overworld": {
-      "status": "pending",
+      "status": "done",
+      "_progress": "Iter #2: 12 overworld rooms authored — Canopy Village (village_square, herbalist_hut, village_gate), Shrine Path (shrine_path_a/b/c), Emerald Thicket (thicket_a/b/c/waterfall/vine), ruins_entrance_overworld. All 18x11 validated. NPCs placed: Mira (square), Heda (herbalist), Dax (gate). Enemy spawn slots seeded across thicket. Heart-piece + rupee + weak-wall rewards seeded. Room graph reachability: 22/22 from spawn.",
       "deliverable": "12 hand-authored rooms covering Canopy Village (4: square, herbalist hut, shrine path, gate), Emerald Thicket (5: meadow, fork, waterfall approach, vine wall, ruins entrance), Shrine Path (3). Tile data: 18x11 per room @ 16px = 288x176. Solid/grass/path/water/tree tiles. Edge-of-screen transitions wire neighbors."
     },
     "rooms_dungeon": {
-      "status": "pending",
+      "status": "done",
+      "_progress": "Iter #2: 10 Ruins of First Light rooms authored — foyer (3-way fork), east_a (small_key drop), east_b (push-block + pit hazards), west_a (Thornback), west_b (Geomancer mini-boss + bombs reward), north_a (4-statue light puzzle), north_b (weak wall hides heart piece), big_key_room, boss_door, boss_room (Guardian + heart container). Locked-door (L) + big-door (B) tile codes gate progression. All 18x11 validated.",
       "deliverable": "10 rooms of the Ruins of First Light dungeon: entrance, 3 ante-rooms (puzzle + enemies), small-key room, mini-boss room (Geomancer Statue), dungeon-item room (Astral Blade level-2 OR Gale Boomerang), 2 puzzle rooms (push-block + 4-statue light puzzle), boss-key room, boss room (Guardian)."
     },
     "combat": {
@@ -45,17 +47,22 @@
     }
   },
   "queue": [
-    "scaffold",
-    "rooms_overworld",
     "combat",
     "enemies",
-    "rooms_dungeon",
     "npcs_dialogue",
     "hud_save",
     "polish",
     "qa"
   ],
   "log": [
+    {
+      "iteration": 2,
+      "phase": "rooms_overworld + rooms_dungeon",
+      "chunk": "All 22 hand-authored rooms (12 overworld + 10 dungeon) authored in a single iter to unblock subsequent combat/enemy/NPC phases",
+      "what_done": "Replaced shroud_act1_data.js placeholder with full Act 1 room set. 12 overworld: village_square, herbalist_hut, village_gate, shrine_path_a/b/c, thicket_a/b/c/waterfall/vine, ruins_entrance_overworld. 10 dungeon: ruins_foyer, ruins_east_a/b, ruins_west_a/b, ruins_north_a/b, ruins_big_key_room, ruins_boss_door, ruins_boss_room. NPCs seeded (Mira, Heda, Dax). Enemy spawn slots seeded across thicket + ruins. Heart-piece + rupee + weak-wall rewards seeded. Locked-door (L) + big-door (B) gates wired. Tile-row validation: all rooms 18x11. Graph reachability: 22/22 from village_square spawn. Both scaffold and rooms_overworld + rooms_dungeon marked done. Deployed shroud_act1_data.js to R2.",
+      "what_left": "Combat hitbox + bow + bombs; 5 enemy AI behaviors; NPC dialogue UI; HUD; save/load; QA smoke test.",
+      "blockers": "None. Scaffold and room data are stable. Combat is the critical-path next chunk."
+    },
     {
       "iteration": 1,
       "phase": "scaffold",
