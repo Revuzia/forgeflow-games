@@ -271,12 +271,20 @@
       // (rough but always reachable); otherwise use designed village_square spawn.
       const spawnX = this.fromSave ? SCREEN_W / 2 : D.PLAYER.spawn_x;
       const spawnY = this.fromSave ? SCREEN_H / 2 : D.PLAYER.spawn_y;
-      this.player = this.physics.add.sprite(spawnX, spawnY, "p_idle");
+      // Use a roguelike_chars frame for a proper top-down silhouette.
+      // Frame 26 (col 26 row 0) is typically a hooded adventurer in Kenney's
+      // pack — fits Kaelen's "hooded relic seeker" description.
+      const useRl = this.textures.exists("rl_chars");
+      this.player = useRl
+        ? this.physics.add.sprite(spawnX, spawnY, "rl_chars", 26)
+        : this.physics.add.sprite(spawnX, spawnY, "p_idle");
       this.player.setOrigin(0.5, 0.7);
-      this.player.body.setSize(10, 8).setOffset(7, 14);
+      // Body bounds in the lower half of the 16×16 sprite.
+      this.player.body.setSize(10, 6).setOffset(3, 9);
       this.player.facing = "down";
       this.player.invuln_until = 0;
       this.player.knockback_until = 0;
+      this.player._usingTopDown = useRl;
       this.entityLayer.add(this.player);
 
       // Enemies + items (spawned by _buildRoom for the current room)
@@ -343,14 +351,61 @@
       // player hasn't crossed a room threshold yet)
       this._writeSave();
 
-      // Test hook
+      // Test hook — used by smoke-test autoplayer
+      const self = this;
       window.__SHROUD_P2__ = {
         scene: this,
-        teleport: (x, y) => { this.player.x = x; this.player.y = y; },
-        goRoom: id => this._enterRoom(id, "S"),
-        quest: () => this.quest,
-        hurt: amt => this._damagePlayer(amt || 0.5),
-        version: 1,
+        version: 2,
+        teleport: (x, y) => { self.player.x = x; self.player.y = y; },
+        goRoom: id => self._enterRoom(id, "S"),
+        getRoom: () => self.currentRoomId,
+        quest: () => self.quest,
+        flags: () => self.quest.flags,
+        hearts: () => self.hearts,
+        bombs: () => self.bombCount,
+        currentItem: () => self.currentItem,
+        enemyCount: () => self.enemies.filter(e => e.active && !e.dead).length,
+        itemCount: () => self.itemsOnGround.length,
+        npcs: () => (self.npcsInRoom || []).filter(n => n && n._npcData).map(n => n._npcData.id),
+        dialogueActive: () => !!self.dialogueActive,
+        hurt: amt => self._damagePlayer(amt || 0.5),
+        // Programmatic input — used by autoplayer to walk + attack
+        swing: () => self._swing(self.time.now),
+        useItem: () => self._useItem(self.time.now),
+        cycleItem: () => self._cycleItem(),
+        talk: () => {
+          const npc = self._findAdjacentNPC();
+          if (npc) self._dialogueOpen(npc);
+          return !!npc;
+        },
+        advanceDialogue: () => self._dialogueAdvance(self.time.now),
+        // Test-only: close active dialogue immediately (bypasses 180ms throttle)
+        debugCloseDialogue: () => {
+          if (self.dialogueActive) {
+            // Walk to last line so side-effects fire correctly
+            self.dialogueIndex = self.dialogueLines.length;
+            self._dialogueClose();
+          }
+        },
+        // Debug — give bow / bombs for test scenarios
+        debugGiveBow: () => { self.quest.flags.has_bow = true; if (!self.currentItem) self.currentItem = "bow"; self._refreshItemSlot(); },
+        debugGiveBombs: (n) => { self.quest.flags.has_bombs = true; self.bombCount += (n||5); if (!self.currentItem) self.currentItem = "bombs"; self._refreshItemSlot(); },
+        debugGiveKey: () => { self.quest.flags.small_keys += 1; self._refreshHUD(); },
+        debugGiveBigKey: () => { self.quest.flags.big_key = true; self._refreshHUD(); },
+        // Force-kill all enemies in current room (for skipping past fights)
+        debugKillEnemies: () => {
+          for (const e of self.enemies) if (e.active && !e.dead) self._killEnemy(e);
+        },
+        // Force-set player position + velocity
+        move: (dx, dy) => {
+          const sp = D.PLAYER.speed;
+          self.player.body.setVelocity(dx * sp, dy * sp);
+          if (dx < 0) self.player.facing = "left";
+          else if (dx > 0) self.player.facing = "right";
+          else if (dy < 0) self.player.facing = "up";
+          else if (dy > 0) self.player.facing = "down";
+        },
+        stop: () => self.player.body.setVelocity(0, 0),
       };
     }
 
@@ -387,7 +442,16 @@
         p.body.setVelocity(vx, vy);
 
         // Walk anim
-        if ((vx || vy) && (!this.attackUntil || time > this.attackUntil)) {
+        if (p._usingTopDown) {
+          // Top-down: use a bob tween-equivalent (gentle y oscillation when moving)
+          if ((vx || vy)) {
+            p._walk_phase = (p._walk_phase || 0) + 0.4;
+            // Slight vertical bob (~1px) while walking
+            p.setScale(1, 1 + 0.08 * Math.sin(p._walk_phase));
+          } else {
+            p.setScale(1, 1);
+          }
+        } else if ((vx || vy) && (!this.attackUntil || time > this.attackUntil)) {
           if (!p.anims.isPlaying || p.anims.currentAnim?.key !== "p_walk") p.play("p_walk");
         } else if (!this.attackUntil || time > this.attackUntil) {
           if (p.anims.isPlaying) p.stop();
@@ -541,11 +605,13 @@
       // For now, we trust the data — locked rooms expose their keys before player can reach them.
       // Refine in iter polish.
       this.currentRoomId = id;
-      // Repaint (also clears entityLayer)
+      // Repaint — _clearRoomEntities preserves player + hitbox; _buildRoom
+      // only nukes tileLayer (tiles + decor) and re-adds NPCs.
       this._buildRoom(id);
-      // Re-add player to entity layer
-      this.entityLayer.add(this.player);
-      // Re-add the hitbox to fxLayer (entityLayer was cleared but fxLayer wasn't — keep hitbox where it is)
+      // Defensive re-add — only if player drifted out of entityLayer.
+      if (this.player && this.player.parentContainer !== this.entityLayer) {
+        try { this.entityLayer.add(this.player); } catch (e) { console.warn("[pass2] player re-add failed:", e.message); }
+      }
       // Spawn entities for the new room
       this._spawnRoomEntities();
       // Spawn position based on entry direction
@@ -786,6 +852,9 @@
     _damageEnemy(e, amount, source) {
       source = source || "sword";
       const time = this.time.now;
+      // Defensive: if Guardian is hit before its AI tick initializes _phase,
+      // treat it as phase 1 so the transition check below fires correctly.
+      if (e._template === "guardian_of_first_light" && !e._phase) e._phase = 1;
       // Guardian phase-2 sword immunity — must use bomb or arrow
       if (e._template === "guardian_of_first_light" && e._phase === 2 && source === "sword") {
         e.flash_until = time + 80;   // light flash, no damage
@@ -920,6 +989,9 @@
         e.knockback_until = 0;
         e.flash_until = 0;
         e._ai = { dir: 1, change_at: 0, last_shot: 0 };
+        // Initialize boss phase up-front so damage taken before first AI tick
+        // still triggers the phase-2 transition correctly.
+        if (e._template === "guardian_of_first_light") e._phase = 1;
         e.active = true;
         this.entityLayer.add(e);
         this.enemies.push(e);
@@ -1929,6 +2001,10 @@
   // Game init
   // ══════════════════════════════════════════════════════════════
   function start() {
+    // `?test=1` query param forces setTimeout-based game loop so the game
+    // ticks even in hidden/backgrounded tabs (raf throttles in inactive tabs).
+    // Used by the headless preview tool for automated playthrough.
+    const testMode = (typeof location !== "undefined" && location.search && location.search.indexOf("test=1") >= 0);
     const game = new Phaser.Game({
       type: Phaser.AUTO,
       width: SCREEN_W * SCALE,
@@ -1945,9 +2021,11 @@
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
       },
+      fps: testMode ? { forceSetTimeOut: true, target: 60 } : undefined,
       scene: [BootP2, PreloadP2, MenuP2, PlayP2, PauseP2, WinP2, GameOverP2],
     });
     window.__GAME_P2__ = game;
+    window.__TEST_MODE__ = testMode;
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", start);
