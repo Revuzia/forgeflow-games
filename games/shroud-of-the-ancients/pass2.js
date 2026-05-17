@@ -49,6 +49,32 @@
     '$': 0x4f7942,  // pickup spot (rendered as grass underneath)
   };
 
+  // Map tile code → Kenney roguelike_sheet frame index (col + row * 56).
+  // The sheet is 56 cols × 30 rows of 16×16 tiles with 1px gap. Frames are
+  // best-guess; tweak the indices if any look wrong in playtest.
+  const TILE_FRAMES = {
+    '.': 0,                  // grass (col 0, row 0)
+    '#': 5,                  // dark wall / stone
+    '~': 4 + 56 * 0,         // water (col 4 row 0 = 4)  [tweak if wrong]
+    ':': 1,                  // stone path (col 1 row 0)
+    'W': 5 + 56 * 1,         // weak wall (cracked stone, row 1 col 5)
+    'D': 1,                  // door tile floor (path)
+    'L': 1,                  // locked-door tile (path under lock icon)
+    'B': 1,                  // big-door tile (path under lock icon)
+    'P': null,               // pit — pure black (no sprite)
+    's': null,               // spike — drawn separately
+    '*': 6,                  // bush (col 6 row 0)
+    '$': 0,                  // pickup spot = grass
+  };
+
+  const TILE_DRAW_DECOR = {
+    'L': { color: 0xfacc15, shape: "lock_small" },
+    'B': { color: 0xa855f7, shape: "lock_big" },
+    'D': { color: 0x451a03, shape: "door" },
+    's': { color: 0xb91c1c, shape: "spike" },
+    'P': { color: 0x000000, shape: "pit" },
+  };
+
   const WALKABLE_TILES = new Set(['.', ':', 'D', 'L', 'B', '*', '$']);
   const SOLID_TILES = new Set(['#']);
   const HAZARD_TILES = new Set(['~', 'P', 's']);
@@ -89,6 +115,24 @@
       this.load.image("p_hurt",   "assets/protagonist_hurt.png");
       this.load.image("p_die",    "assets/protagonist_die.png");
 
+      // Real Kenney atlases — replace the colored-rectangle placeholders
+      this.load.atlasXML("enemies_atlas", "assets/enemies.png", "assets/enemies.xml");
+      // Kenney "Roguelike characters" sheet — 17×17 cell grid (16+1 spacing).
+      this.load.spritesheet("rl_chars", "assets/roguelike_chars.png", {
+        frameWidth: 16, frameHeight: 16, spacing: 1, margin: 0,
+      });
+      // Kenney "Roguelike/RPG" tilesheet — 968×526 = 57 cols × 31 rows of
+      // 16×16 cells with 1px gap (margin 0). Used for tile rendering.
+      this.load.spritesheet("rl_tiles", "assets/roguelike_sheet.png", {
+        frameWidth: 16, frameHeight: 16, spacing: 1, margin: 0,
+      });
+      this.load.image("uipack_rpg", "assets/uipack_rpg_sheet.png");
+      // Zone backgrounds (atmospheric — used as room backdrop when present)
+      this.load.image("world_01_bg", "assets/world_01_bg.jpg");
+      this.load.image("world_02_bg", "assets/world_02_bg.jpg");
+      this.load.image("world_03_bg", "assets/world_03_bg.jpg");
+      this.load.image("world_04_bg", "assets/world_04_bg.jpg");
+
       // Audio (deduplicated keys, lazy-load music)
       const seenAudio = new Set();
       Object.entries(D.AUDIO.music).forEach(([k, url]) => {
@@ -115,6 +159,20 @@
         frameRate: 18,
         repeat: 0,
       });
+      // Build per-enemy walk anims from the Kenney atlas
+      const animEnemies = Object.entries(D.ENEMIES).concat(Object.entries(D.BOSSES));
+      for (const [tplName, tpl] of animEnemies) {
+        if (!tpl.sprite_rest) continue;
+        const moveFrames = [tpl.sprite_move_a, tpl.sprite_move_b].filter(Boolean);
+        if (moveFrames.length > 0) {
+          this.anims.create({
+            key: "anim_" + tplName,
+            frames: moveFrames.map(f => ({ key: "enemies_atlas", frame: f })),
+            frameRate: 4,
+            repeat: -1,
+          });
+        }
+      }
       this.scene.start("P2_Menu");
     }
   }
@@ -396,38 +454,51 @@
       // DO NOT destroy the player — track and remove only OUR room-scoped entities.
       this._clearRoomEntities();
 
-      // Tile rendering (Graphics rect per tile)
+      // Tile rendering — Kenney sprite tiles where available, fillRect fallback.
+      const useTiles = this.textures.exists("rl_tiles");
       const g = this.add.graphics();
       this.tileLayer.add(g);
       for (let y = 0; y < ROOM_H; y++) {
         const row = room.tiles[y];
         for (let x = 0; x < ROOM_W; x++) {
           const ch = row && row[x] ? row[x] : '.';
-          const color = TILE_COLORS[ch] ?? 0x222222;
-          g.fillStyle(color, 1);
+          // 1. Base color underlay — always drawn so missing/transparent sprite
+          //    pixels don't show the void background.
+          const baseColor = TILE_COLORS[ch] ?? 0x222222;
+          g.fillStyle(baseColor, 1);
           g.fillRect(x * TILE, y * TILE, TILE, TILE);
+          // 2. Sprite tile overlay
+          if (useTiles && TILE_FRAMES[ch] !== null && TILE_FRAMES[ch] !== undefined) {
+            const tile = this.add.image(x * TILE, y * TILE, "rl_tiles", TILE_FRAMES[ch]).setOrigin(0, 0);
+            this.tileLayer.add(tile);
+          }
+          // 3. Special decorations (locks, spikes, pits) drawn via Graphics
+          const decor = TILE_DRAW_DECOR[ch];
+          if (decor) this._drawTileDecor(g, decor, x * TILE, y * TILE);
           if (ch === '#') {
             // Inner shadow for depth
             g.fillStyle(0x000000, 0.2);
             g.fillRect(x * TILE, y * TILE + TILE - 2, TILE, 2);
           }
-          if (ch === '*') {
-            // Bush — small dark dots
-            g.fillStyle(0x14532d, 1);
-            g.fillCircle(x * TILE + 5, y * TILE + 7, 2);
-            g.fillCircle(x * TILE + 11, y * TILE + 9, 2);
-          }
         }
       }
 
-      // NPCs
+      // NPCs — render from roguelike_chars spritesheet when available
       this.npcsInRoom = [];
       (room.npcs || []).forEach(n => {
-        const npc = this.add.rectangle(n.x, n.y, 12, 14, 0xfacc15);
-        npc.setStrokeStyle(1, 0x000000);
+        let npc;
+        if (typeof n.sprite_frame === "number" && this.textures.exists("rl_chars")) {
+          npc = this.add.sprite(n.x, n.y, "rl_chars", n.sprite_frame);
+          if (n.tint) npc.setTint(n.tint);
+        } else {
+          npc = this.add.rectangle(n.x, n.y, 12, 14, n.tint || 0xfacc15);
+          npc.setStrokeStyle(1, 0x000000);
+        }
         npc._npcData = n;
         this.entityLayer.add(npc);
-        const label = this.add.text(n.x, n.y - 14, n.name, { font: "6px monospace", color: "#fff" }).setOrigin(0.5);
+        const label = this.add.text(n.x, n.y - 12, n.name,
+          { font: "6px monospace", color: "#fff", stroke: "#000", strokeThickness: 2 })
+          .setOrigin(0.5);
         this.entityLayer.add(label);
         this.npcsInRoom.push(npc);
         this.npcsInRoom.push(label);
@@ -814,14 +885,27 @@
       this.itemsOnGround = [];
       const room = this.currentRoom;
       if (!room) return;
-      // Enemies
+      // Enemies — real Kenney atlas sprites (fallback to rectangle if atlas missing)
       (room.enemies || []).forEach(spec => {
         const tpl = (spec.template && D.ENEMIES[spec.template]) || (D.BOSSES[spec.template]);
         if (!tpl) { console.warn("[pass2] unknown enemy template:", spec.template); return; }
-        // Use rectangle + physics body — sprite swap is a polish-pass task
-        const e = this.add.rectangle(spec.x, spec.y, 12, 12, tpl.color || 0xff0000);
-        e.setStrokeStyle(1, 0x000000);
-        this.physics.add.existing(e);
+        const useAtlas = tpl.sprite_rest && this.textures.exists("enemies_atlas");
+        let e;
+        if (useAtlas) {
+          e = this.physics.add.sprite(spec.x, spec.y, "enemies_atlas", tpl.sprite_rest);
+          // Kenney creatures are 64×64; scale down to 14px (bosses 2× = 28px)
+          const targetPx = (tpl.scale || 1) * 14;
+          const s = targetPx / 64;
+          e.setScale(s);
+          e.setTint(tpl.color || 0xffffff);
+          if (this.anims.exists("anim_" + spec.template)) {
+            e.play("anim_" + spec.template);
+          }
+        } else {
+          e = this.add.rectangle(spec.x, spec.y, 12, 12, tpl.color || 0xff0000);
+          e.setStrokeStyle(1, 0x000000);
+          this.physics.add.existing(e);
+        }
         e.body.setCollideWorldBounds(false);
         e.body.setSize(10, 10);
         e._template = spec.template;
@@ -830,7 +914,8 @@
         e.hp = tpl.hp_phase1 || tpl.hp || 5;
         e.dmg = tpl.dmg || 1;
         e.speed = tpl.speed || 40;
-        e.color = tpl.color || 0xff0000;
+        e.color = tpl.color || 0xffffff;
+        e._useAtlas = useAtlas;
         e.dead = false;
         e.knockback_until = 0;
         e.flash_until = 0;
@@ -848,28 +933,124 @@
     _spawnPickup(kind, x, y) {
       const tpl = D.ITEMS[kind];
       if (!tpl) { console.warn("[pass2] unknown item kind:", kind); return; }
-      const it = this.add.rectangle(x, y, 8, 8, tpl.color || 0xfacc15);
-      it.setStrokeStyle(1, 0x000000);
-      this.physics.add.existing(it);
-      it.body.setSize(6, 6);
-      it.body.setAllowGravity && it.body.setAllowGravity(false);
+      // Draw an icon-shape via Graphics — gives each pickup type a distinct silhouette
+      const it = this._drawItemIcon(kind, tpl, x, y);
+      // No physics body needed — pickup uses distance check in _tickPickups
+      it.active = true;
       it._kind = kind;
       it._template = tpl;
       this.entityLayer.add(it);
       this.itemsOnGround.push(it);
+      // Gentle pulse — telegraphs "pickup me"
+      this.tweens.add({
+        targets: it, scaleX: 1.15, scaleY: 1.15, duration: 600, yoyo: true, repeat: -1, ease: "Sine.inOut",
+      });
+    }
+
+    _drawItemIcon(kind, tpl, x, y) {
+      // Container holding the shape — set its position so the body lives at (x, y)
+      const container = this.add.container(x, y);
+      const g = this.add.graphics();
+      container.add(g);
+      const baseCol = tpl.color || 0xfacc15;
+      const outline = 0x111111;
+      if (kind === "heart" || kind === "heart_container") {
+        const s = (kind === "heart_container") ? 1.7 : 1.0;
+        // Two circles + triangle bottom — classic heart silhouette
+        g.fillStyle(baseCol, 1);
+        g.fillCircle(-2*s, -1*s, 2.4*s);
+        g.fillCircle( 2*s, -1*s, 2.4*s);
+        g.fillTriangle(-4*s, 0.5*s, 4*s, 0.5*s, 0, 4.5*s);
+        g.lineStyle(1, outline, 1);
+        g.strokeCircle(-2*s, -1*s, 2.4*s);
+        g.strokeCircle( 2*s, -1*s, 2.4*s);
+        g.strokeTriangle(-4*s, 0.5*s, 4*s, 0.5*s, 0, 4.5*s);
+      } else if (kind === "heart_piece") {
+        // Quarter heart — top-right wedge of a heart
+        g.fillStyle(baseCol, 1);
+        g.fillCircle(0, -1, 2.5);
+        g.fillTriangle(-3, 0, 3, 0, 0, 4);
+        g.lineStyle(1, outline, 1);
+        g.strokeCircle(0, -1, 2.5);
+      } else if (kind === "rupee_green" || kind === "rupee_blue" || kind === "rupee_red") {
+        // Diamond gem
+        g.fillStyle(baseCol, 1);
+        g.fillPoints([{x:0,y:-4},{x:3,y:0},{x:0,y:4},{x:-3,y:0}], true);
+        g.lineStyle(1, outline, 1);
+        g.strokePoints([{x:0,y:-4},{x:3,y:0},{x:0,y:4},{x:-3,y:0}, {x:0,y:-4}]);
+        // Highlight
+        g.fillStyle(0xffffff, 0.5);
+        g.fillTriangle(-1, -3, 1, -3, 0, -1);
+      } else if (kind === "small_key") {
+        // Key — round bow on left + shaft + notch
+        g.fillStyle(baseCol, 1);
+        g.fillCircle(-2.5, 0, 2);
+        g.fillRect(-1, -1, 5, 2);
+        g.fillRect(3, -2, 1.2, 4);   // notch
+        g.lineStyle(1, outline, 1);
+        g.strokeCircle(-2.5, 0, 2);
+      } else if (kind === "big_key") {
+        // Big ornate key — bigger bow + cross + notch
+        g.fillStyle(baseCol, 1);
+        g.fillCircle(-3, 0, 3);
+        g.fillCircle(-3, 0, 1.5);    // inner ring (hole)
+        g.fillRect(-1, -1, 7, 2);
+        g.fillRect(4, -3, 1.5, 6);
+        g.lineStyle(1, outline, 1);
+        g.strokeCircle(-3, 0, 3);
+        // Center the hole — re-draw black
+        g.fillStyle(0x000000, 1);
+        g.fillCircle(-3, 0, 1);
+      } else if (kind === "bow") {
+        // Bow + arrow icon
+        g.lineStyle(1.5, baseCol, 1);
+        g.strokeCircle(-1, 0, 4);    // bow arc (partial via stroke)
+        g.fillStyle(0xfde047, 1);
+        g.fillRect(-4, -0.5, 8, 1);  // arrow shaft
+        g.fillTriangle(4, -2, 4, 2, 6, 0);  // arrowhead
+      } else if (kind === "bombs" || kind === "bomb_refill") {
+        // Black bomb with yellow spark fuse
+        g.fillStyle(0x1f2937, 1);
+        g.fillCircle(0, 1, 3.5);
+        g.lineStyle(1, outline, 1);
+        g.strokeCircle(0, 1, 3.5);
+        // Fuse
+        g.lineStyle(1, 0xfacc15, 1);
+        g.lineBetween(2, -2, 4, -4);
+        // Spark
+        g.fillStyle(0xfde047, 1);
+        g.fillCircle(4, -4, 1.2);
+      } else if (kind === "boomerang") {
+        // V-shape boomerang
+        g.fillStyle(baseCol, 1);
+        g.fillPoints([{x:-3,y:0},{x:-1,y:-3},{x:1,y:-1},{x:3,y:-3},{x:1,y:0},{x:-1,y:1}], true);
+        g.lineStyle(1, outline, 1);
+        g.strokePoints([{x:-3,y:0},{x:-1,y:-3},{x:1,y:-1},{x:3,y:-3},{x:1,y:0},{x:-1,y:1},{x:-3,y:0}]);
+      } else {
+        // Fallback — generic colored square
+        g.fillStyle(baseCol, 1);
+        g.fillRect(-4, -4, 8, 8);
+        g.lineStyle(1, outline, 1);
+        g.strokeRect(-4, -4, 8, 8);
+      }
+      return container;
     }
 
     _tickEnemies(time, delta) {
       const p = this.player;
       for (const e of this.enemies) {
         if (!e.active || e.dead) continue;
-        // Flash
+        // Flash + telegraph — works for both atlas sprites (setTint) and rectangles (fillColor)
         const baseColor = (e._phase === 2 && e._template === "guardian_of_first_light")
           ? 0xfde047 : e.color;
-        e.fillColor = (e.flash_until > time) ? 0xffffff : baseColor;
-        // Telegraph indicator (shoot AI charges before firing)
+        let drawColor = (e.flash_until > time) ? 0xffffff : baseColor;
         if (e._telegraph_until > time) {
-          e.fillColor = ((Math.floor(time/80) % 2) === 0) ? 0xffffff : baseColor;
+          drawColor = ((Math.floor(time/80) % 2) === 0) ? 0xffffff : baseColor;
+        }
+        if (e._useAtlas) {
+          if (e.setTint) e.setTint(drawColor);
+        } else {
+          e.fillColor = drawColor;
         }
         // Skip AI during knockback (except boss — boss is heavier)
         if (e.knockback_until > time && e._role !== "boss") continue;
@@ -1121,7 +1302,9 @@
       for (let i = this.itemsOnGround.length - 1; i >= 0; i--) {
         const it = this.itemsOnGround[i];
         if (!it.active) continue;
-        if (Phaser.Geom.Intersects.RectangleToRectangle(p.getBounds(), it.getBounds())) {
+        // Distance check — works regardless of whether `it` is a Container,
+        // Sprite, or Rectangle (Container.getBounds in Phaser 3 is unreliable).
+        if (Phaser.Math.Distance.Between(p.x, p.y, it.x, it.y) < 10) {
           this._collectItem(it);
           it.destroy();
           this.itemsOnGround.splice(i, 1);
@@ -1384,9 +1567,10 @@
     }
 
     _repaintTiles() {
-      // Re-render just the tile layer without rebuilding entities
+      // Re-render just the tile layer without rebuilding entities.
       const room = this.currentRoom;
       if (!room) return;
+      const useTiles = this.textures.exists("rl_tiles");
       this.tileLayer.removeAll(true);
       const g = this.add.graphics();
       this.tileLayer.add(g);
@@ -1394,15 +1578,78 @@
         const row = room.tiles[y];
         for (let x = 0; x < ROOM_W; x++) {
           const ch = row && row[x] ? row[x] : '.';
-          const color = TILE_COLORS[ch] ?? 0x222222;
-          g.fillStyle(color, 1);
+          const baseColor = TILE_COLORS[ch] ?? 0x222222;
+          g.fillStyle(baseColor, 1);
           g.fillRect(x * TILE, y * TILE, TILE, TILE);
-          if (ch === '#') { g.fillStyle(0x000000, 0.2); g.fillRect(x * TILE, y * TILE + TILE - 2, TILE, 2); }
-          if (ch === '*') {
-            g.fillStyle(0x14532d, 1);
-            g.fillCircle(x * TILE + 5, y * TILE + 7, 2);
-            g.fillCircle(x * TILE + 11, y * TILE + 9, 2);
+          if (useTiles && TILE_FRAMES[ch] !== null && TILE_FRAMES[ch] !== undefined) {
+            const tile = this.add.image(x * TILE, y * TILE, "rl_tiles", TILE_FRAMES[ch]).setOrigin(0, 0);
+            this.tileLayer.add(tile);
           }
+          const decor = TILE_DRAW_DECOR[ch];
+          if (decor) this._drawTileDecor(g, decor, x * TILE, y * TILE);
+          if (ch === '#') { g.fillStyle(0x000000, 0.2); g.fillRect(x * TILE, y * TILE + TILE - 2, TILE, 2); }
+        }
+      }
+    }
+
+    _drawTileDecor(g, decor, x, y) {
+      const cx = x + TILE/2, cy = y + TILE/2;
+      switch (decor.shape) {
+        case "lock_small": {
+          // Yellow padlock — small body + arc shackle
+          g.fillStyle(decor.color, 1);
+          g.fillRect(cx - 3, cy - 1, 6, 5);
+          g.lineStyle(1.5, decor.color, 1);
+          g.strokeCircle(cx, cy - 2, 2.4);
+          g.lineStyle(1, 0x111111, 1);
+          g.strokeRect(cx - 3, cy - 1, 6, 5);
+          // Keyhole dot
+          g.fillStyle(0x111111, 1);
+          g.fillCircle(cx, cy + 1, 0.8);
+          break;
+        }
+        case "lock_big": {
+          // Purple ornate lock
+          g.fillStyle(decor.color, 1);
+          g.fillRect(cx - 4, cy - 1, 8, 7);
+          g.lineStyle(2, decor.color, 1);
+          g.strokeCircle(cx, cy - 3, 3.2);
+          g.lineStyle(1, 0x111111, 1);
+          g.strokeRect(cx - 4, cy - 1, 8, 7);
+          // Center jewel
+          g.fillStyle(0xfde047, 1);
+          g.fillCircle(cx, cy + 2, 1.2);
+          break;
+        }
+        case "door": {
+          // Wooden door — vertical planks
+          g.fillStyle(decor.color, 1);
+          g.fillRect(cx - 5, cy - 6, 10, 12);
+          g.lineStyle(1, 0x1a0a00, 1);
+          g.strokeRect(cx - 5, cy - 6, 10, 12);
+          g.lineBetween(cx, cy - 6, cx, cy + 6);
+          g.fillStyle(0xfacc15, 1);
+          g.fillCircle(cx + 3, cy, 0.8);  // doorknob
+          break;
+        }
+        case "spike": {
+          // 3 dark triangles
+          g.fillStyle(0x9ca3af, 1);
+          g.fillTriangle(x + 2, y + TILE - 2, x + 5, y + 4, x + 8, y + TILE - 2);
+          g.fillTriangle(x + 8, y + TILE - 2, x + 11, y + 4, x + 14, y + TILE - 2);
+          g.lineStyle(0.5, 0x000000, 1);
+          g.strokeTriangle(x + 2, y + TILE - 2, x + 5, y + 4, x + 8, y + TILE - 2);
+          g.strokeTriangle(x + 8, y + TILE - 2, x + 11, y + 4, x + 14, y + TILE - 2);
+          break;
+        }
+        case "pit": {
+          // Pure-black hole with darker rim
+          g.fillStyle(0x000000, 1);
+          g.fillRect(x, y, TILE, TILE);
+          g.fillStyle(0x1f2937, 1);
+          g.fillRect(x, y, TILE, 2);   // top rim shadow
+          g.fillRect(x, y, 2, TILE);
+          break;
         }
       }
     }

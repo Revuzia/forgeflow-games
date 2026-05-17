@@ -75,6 +75,8 @@
     npcs: [{
       id: "elder_mira", name: "Elder Mira", x: 144, y: 56,
       default_state: "intro",
+      sprite_frame: 25,        // rl_chars frame index — elder-ish character (column 25 row 0)
+      tint: 0xfbbf24,           // warm gold
       dialogue: {
         intro: [
           "Kaelen, the jungle whispers of danger.",
@@ -107,6 +109,7 @@
     npcs: [{
       id: "heda_herbalist", name: "Heda the Herbalist", x: 144, y: 88,
       default_state: "intro",
+      sprite_frame: 27, tint: 0x22c55e,   // herbalist — green tint
       dialogue: {
         intro: [
           "Welcome, traveller.",
@@ -139,6 +142,7 @@
     npcs: [{
       id: "dax_trader", name: "Dax the Trader", x: 144, y: 80,
       default_state: "intro",
+      sprite_frame: 31, tint: 0xa78bfa,   // trader — purple cloak
       dialogue: {
         intro: [
           "Fresh off the vine! What'll it be?",
@@ -255,6 +259,7 @@
       id: "liora_scholar", name: "Liora",
       x: 200, y: 64,
       default_state: "intro",
+      sprite_frame: 29, tint: 0x60a5fa,   // scholar — blue
       gives_bow_on_first_talk: true,
       dialogue: {
         intro: [
@@ -520,12 +525,19 @@
   });
 
   // ── Enemy templates (instantiated by spawn_id from room.enemies) ──
+  // sprite_frames: rest/move pair from enemies.xml (Kenney "platformer creatures"
+  // 64×64 atlas — see assets/enemies.xml). Tinted via color hint. Displayed at 16px.
   const ENEMIES = {
-    thornback_lurker: { hp: 10, dmg: 1.0, behavior: "patrol", speed: 40, color: 0x2d5016 },
-    veilstalker:      { hp: 8,  dmg: 1.0, behavior: "chase",  speed: 60, color: 0x1a1a2e },
-    wraithwhisper:    { hp: 6,  dmg: 1.0, behavior: "shoot",  speed: 30, color: 0x9333ea, projectile_cd_ms: 2000 },
-    geomancer_statue: { hp: 20, dmg: 2.0, behavior: "guard",  speed: 0,  color: 0x7c7c7c, slam_cd_ms: 3000 },
-    crystalspine_boar:{ hp: 15, dmg: 2.0, behavior: "charge", speed: 80, color: 0x6b4423 },
+    thornback_lurker: { hp: 10, dmg: 1.0, behavior: "patrol", speed: 40, color: 0x2d5016,
+      sprite_rest: "slime_spike_rest", sprite_move_a: "slime_spike_walk_a", sprite_move_b: "slime_spike_walk_b" },
+    veilstalker:      { hp: 8,  dmg: 1.0, behavior: "chase",  speed: 60, color: 0x1a1a2e,
+      sprite_rest: "barnacle_attack_rest", sprite_move_a: "barnacle_attack_a", sprite_move_b: "barnacle_attack_b" },
+    wraithwhisper:    { hp: 6,  dmg: 1.0, behavior: "shoot",  speed: 30, color: 0x9333ea, projectile_cd_ms: 2000,
+      sprite_rest: "ladybug_rest", sprite_move_a: "ladybug_walk_a", sprite_move_b: "ladybug_walk_b" },
+    geomancer_statue: { hp: 20, dmg: 2.0, behavior: "guard",  speed: 0,  color: 0x7c7c7c, slam_cd_ms: 3000,
+      sprite_rest: "block_rest", sprite_move_a: "block_idle", sprite_move_b: "block_fall" },
+    crystalspine_boar:{ hp: 15, dmg: 2.0, behavior: "charge", speed: 80, color: 0x6b4423,
+      sprite_rest: "snail_rest", sprite_move_a: "snail_walk_a", sprite_move_b: "snail_walk_b" },
   };
 
   // ── Bosses ───────────────────────────────────────────────────────
@@ -537,6 +549,9 @@
       dmg: 2.0,
       phases: 2,
       color: 0xfacc15,
+      // Use a chunky enemy frame scaled up 2× for boss feel
+      sprite_rest: "frog_idle", sprite_move_a: "frog_jump", sprite_move_b: "frog_rest",
+      scale: 2.0,
     },
   };
 
