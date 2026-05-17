@@ -206,7 +206,20 @@
       this.player.body.setSize(10, 8).setOffset(7, 14);
       this.player.facing = "down";
       this.player.invuln_until = 0;
+      this.player.knockback_until = 0;
       this.entityLayer.add(this.player);
+
+      // Enemies + items (spawned by _buildRoom for the current room)
+      this.enemies = [];          // active enemy sprites
+      this.itemsOnGround = [];    // pickup sprites
+      this._spawnRoomEntities();
+
+      // Sword hitbox (recycled across swings)
+      this.hitbox = this.add.rectangle(0, 0, 14, 10, 0xfacc15, 0).setStrokeStyle(0).setVisible(false);
+      this.physics.add.existing(this.hitbox);
+      this.hitbox.body.setAllowGravity && this.hitbox.body.setAllowGravity(false);
+      this.hitbox.body.checkCollision.none = true;  // not blocked by anything
+      this.fxLayer.add(this.hitbox);
 
       // Camera centers on the room — locked, NES-style edge transitions later
       this.cameras.main.centerOn(SCREEN_W / 2, SCREEN_H / 2);
@@ -239,34 +252,50 @@
     update(time, delta) {
       const p = this.player;
       const sp = D.PLAYER.speed;
-      let vx = 0, vy = 0;
-      const up    = this.keys.up.isDown    || this.keysWASD.W.isDown;
-      const down  = this.keys.down.isDown  || this.keysWASD.S.isDown;
-      const left  = this.keys.left.isDown  || this.keysWASD.A.isDown;
-      const right = this.keys.right.isDown || this.keysWASD.D.isDown;
-      if (left) { vx = -sp; p.facing = "left"; p.setFlipX(true); }
-      else if (right) { vx = sp; p.facing = "right"; p.setFlipX(false); }
-      if (up) { vy = -sp; if (!left && !right) p.facing = "up"; }
-      else if (down) { vy = sp; if (!left && !right) p.facing = "down"; }
-      if (vx !== 0 && vy !== 0) { vx *= Math.SQRT1_2; vy *= Math.SQRT1_2; }
-      p.body.setVelocity(vx, vy);
 
-      // Walk anim
-      if ((vx || vy) && p.invuln_until < time) {
-        if (!p.anims.isPlaying || p.anims.currentAnim?.key !== "p_walk") p.play("p_walk");
-      } else if (!this.attackUntil || time > this.attackUntil) {
-        p.stop();
-        p.setTexture("p_idle");
+      // Knockback overrides input
+      if (p.knockback_until > time) {
+        // Velocity already set by _damagePlayer; just hold it
+      } else {
+        let vx = 0, vy = 0;
+        const up    = this.keys.up.isDown    || this.keysWASD.W.isDown;
+        const down  = this.keys.down.isDown  || this.keysWASD.S.isDown;
+        const left  = this.keys.left.isDown  || this.keysWASD.A.isDown;
+        const right = this.keys.right.isDown || this.keysWASD.D.isDown;
+        if (left) { vx = -sp; p.facing = "left"; p.setFlipX(true); }
+        else if (right) { vx = sp; p.facing = "right"; p.setFlipX(false); }
+        if (up) { vy = -sp; if (!left && !right) p.facing = "up"; }
+        else if (down) { vy = sp; if (!left && !right) p.facing = "down"; }
+        if (vx !== 0 && vy !== 0) { vx *= Math.SQRT1_2; vy *= Math.SQRT1_2; }
+        // Disable movement while attacking
+        if (this.attackUntil && time < this.attackUntil) { vx *= 0.3; vy *= 0.3; }
+        p.body.setVelocity(vx, vy);
+
+        // Walk anim
+        if ((vx || vy) && (!this.attackUntil || time > this.attackUntil)) {
+          if (!p.anims.isPlaying || p.anims.currentAnim?.key !== "p_walk") p.play("p_walk");
+        } else if (!this.attackUntil || time > this.attackUntil) {
+          if (p.anims.isPlaying) p.stop();
+          p.setTexture("p_idle");
+        }
       }
 
-      // Attack
+      // Attack input
       if (Phaser.Input.Keyboard.JustDown(this.keyZ)) this._swing(time);
+      // Sword hitbox tick (position + active-window check)
+      this._tickHitbox(time);
 
       // Edge-of-screen transition (NES Zelda style — door tile triggers neighbor room)
       this._checkEdgeTransitions(p);
 
       // Hazard tiles (spikes, pits, water)
       this._checkHazards(p, time);
+
+      // Enemy AI tick
+      this._tickEnemies(time, delta);
+
+      // Item pickup overlap
+      this._tickPickups(time);
 
       // i-frames flicker
       if (p.invuln_until > time) {
@@ -281,8 +310,13 @@
       const room = D.ROOMS[id];
       if (!room) { console.error("[pass2] unknown room", id); return; }
       this.currentRoom = room;
+
+      // tileLayer holds only tile graphics — safe to nuke.
       this.tileLayer.removeAll(true);
-      this.entityLayer.removeAll(true);
+
+      // entityLayer holds player + NPCs + enemies + items + name labels.
+      // DO NOT destroy the player — track and remove only OUR room-scoped entities.
+      this._clearRoomEntities();
 
       // Tile rendering (Graphics rect per tile)
       const g = this.add.graphics();
@@ -309,17 +343,30 @@
       }
 
       // NPCs
+      this.npcsInRoom = [];
       (room.npcs || []).forEach(n => {
         const npc = this.add.rectangle(n.x, n.y, 12, 14, 0xfacc15);
         npc.setStrokeStyle(1, 0x000000);
         npc._npcData = n;
         this.entityLayer.add(npc);
-        // Name label
         const label = this.add.text(n.x, n.y - 14, n.name, { font: "6px monospace", color: "#fff" }).setOrigin(0.5);
         this.entityLayer.add(label);
+        this.npcsInRoom.push(npc);
+        this.npcsInRoom.push(label);
       });
+    }
 
-      // Enemies + items rendered in later phases (combat + enemies)
+    _clearRoomEntities() {
+      // Destroy any tracked room-scoped entities WITHOUT touching player or hitbox.
+      const lists = [this.enemies || [], this.itemsOnGround || [], this.npcsInRoom || []];
+      for (const list of lists) {
+        for (const item of list) {
+          if (item && item.destroy) item.destroy();
+        }
+      }
+      this.enemies = [];
+      this.itemsOnGround = [];
+      this.npcsInRoom = [];
     }
 
     _enterRoom(id, fromDirection) {
@@ -328,11 +375,18 @@
         console.warn("[pass2] no neighbor room:", id);
         return;
       }
+      // Locked door gate (small key / big key)
+      // Check if the entering edge of the OLD room has L or B at the door tile
+      // For now, we trust the data — locked rooms expose their keys before player can reach them.
+      // Refine in iter polish.
       this.currentRoomId = id;
-      // Repaint
+      // Repaint (also clears entityLayer)
       this._buildRoom(id);
       // Re-add player to entity layer
       this.entityLayer.add(this.player);
+      // Re-add the hitbox to fxLayer (entityLayer was cleared but fxLayer wasn't — keep hitbox where it is)
+      // Spawn entities for the new room
+      this._spawnRoomEntities();
       // Spawn position based on entry direction
       const entryPos = {
         N: { x: SCREEN_W / 2, y: TILE * 1.5 },
@@ -409,23 +463,243 @@
       if (this.hudHearts) this.hudHearts.setText("♥".repeat(Math.ceil(this.hearts)));
     }
 
-    // ── Combat (placeholder — full impl in `combat` phase) ──
+    // ══════════════════════════════════════════════════════════════
+    // COMBAT — sword hitbox, enemy AI, damage, knockback
+    // ══════════════════════════════════════════════════════════════
+
     _swing(time) {
       if (this.attackUntil && time < this.attackUntil) return;
-      this.attackUntil = time + 280;
+      // Timings: 80ms windup (texture swap), 200ms active (hitbox lit), 100ms recovery
+      this.attackUntil = time + 380;
+      this.hitboxActiveFrom = time + 80;
+      this.hitboxActiveUntil = time + 280;
+      this.hitboxHitEnemies = new Set();   // prevents multi-hit per swing
       try { this.sound.play("sfx_attack", { volume: 0.6 }); } catch (_) {}
       this.player.play("p_attack");
-      // TODO: spawn hitbox in facing direction, check enemy overlap
     }
 
-    _damagePlayer(amount) {
+    _tickHitbox(time) {
+      const hb = this.hitbox;
+      if (!this.attackUntil || time > this.attackUntil) { hb.setVisible(false); return; }
+      // Position hitbox in facing direction
+      const p = this.player;
+      const off = 12;     // distance from player center
+      const dirOffsets = {
+        up:    { x: 0,    y: -off, w: 12, h: 14 },
+        down:  { x: 0,    y:  off, w: 12, h: 14 },
+        left:  { x: -off, y:  0,   w: 14, h: 12 },
+        right: { x:  off, y:  0,   w: 14, h: 12 },
+      };
+      const d = dirOffsets[p.facing] || dirOffsets.down;
+      hb.setPosition(p.x + d.x, p.y + d.y);
+      hb.setSize(d.w, d.h);
+      hb.body.setSize(d.w, d.h);
+      const active = time >= this.hitboxActiveFrom && time <= this.hitboxActiveUntil;
+      hb.setVisible(active);
+      hb.setFillStyle(0xfacc15, active ? 0.4 : 0);
+      if (active) {
+        // Check overlap with enemies
+        for (const e of this.enemies) {
+          if (!e.active || e.dead || this.hitboxHitEnemies.has(e)) continue;
+          if (Phaser.Geom.Intersects.RectangleToRectangle(hb.getBounds(), e.getBounds())) {
+            this._damageEnemy(e, 1);   // sword = 1 dmg per hit
+            this.hitboxHitEnemies.add(e);
+          }
+        }
+      }
+    }
+
+    _damageEnemy(e, amount) {
+      e.hp -= amount;
+      e.flash_until = this.time.now + 120;
+      // Knockback in direction from player → enemy
+      const dx = e.x - this.player.x;
+      const dy = e.y - this.player.y;
+      const len = Math.max(0.001, Math.hypot(dx, dy));
+      const kb = 140;   // knockback speed (px/s)
+      e.body.setVelocity((dx/len) * kb, (dy/len) * kb);
+      e.knockback_until = this.time.now + 180;
+      try { this.sound.play("sfx_hit", { volume: 0.5 }); } catch (_) {}
+      if (e.hp <= 0) this._killEnemy(e);
+    }
+
+    _killEnemy(e) {
+      e.dead = true;
+      e.active = false;
+      e.setVisible(false);
+      e.body.setVelocity(0, 0);
+      try { this.sound.play("sfx_enemy_die", { volume: 0.5 }); } catch (_) {}
+      // Random drop: 30% green rupee, 15% heart, 55% nothing
+      const r = Math.random();
+      let drop = null;
+      if (r < 0.30) drop = "rupee_green";
+      else if (r < 0.45) drop = "heart";
+      if (drop) this._spawnPickup(drop, e.x, e.y);
+      // If this enemy is a miniboss + room has miniboss_reward, drop it
+      const room = this.currentRoom;
+      if (e._role === "miniboss" && room && room.miniboss_reward) {
+        this._spawnPickup(room.miniboss_reward.kind, e.x, e.y);
+      }
+      if (e._role === "boss" && room && room.boss_reward) {
+        this._spawnPickup(room.boss_reward.kind, SCREEN_W/2, SCREEN_H/2);
+        // Trigger win
+        this._winAct1();
+      }
+    }
+
+    _damagePlayer(amount, sourceX, sourceY) {
       const time = this.time.now;
-      if (this.player.invuln_until > time) return;
+      const p = this.player;
+      if (p.invuln_until > time) return;
       this.hearts = Math.max(0, this.hearts - amount);
-      this.player.invuln_until = time + D.PLAYER.invuln_ms;
+      p.invuln_until = time + D.PLAYER.invuln_ms;
       try { this.sound.play("sfx_hurt", { volume: 0.6 }); } catch (_) {}
       this._refreshHUD();
+      // Knockback away from source
+      if (typeof sourceX === "number" && typeof sourceY === "number") {
+        const dx = p.x - sourceX;
+        const dy = p.y - sourceY;
+        const len = Math.max(0.001, Math.hypot(dx, dy));
+        const kb = 180;
+        p.body.setVelocity((dx/len) * kb, (dy/len) * kb);
+        p.knockback_until = time + 200;
+      }
       if (this.hearts <= 0) this._gameOver();
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // ENEMY SPAWNING + AI
+    // ══════════════════════════════════════════════════════════════
+
+    _spawnRoomEntities() {
+      this.enemies = [];
+      this.itemsOnGround = [];
+      const room = this.currentRoom;
+      if (!room) return;
+      // Enemies
+      (room.enemies || []).forEach(spec => {
+        const tpl = (spec.template && D.ENEMIES[spec.template]) || (D.BOSSES[spec.template]);
+        if (!tpl) { console.warn("[pass2] unknown enemy template:", spec.template); return; }
+        // Use rectangle + physics body — sprite swap is a polish-pass task
+        const e = this.add.rectangle(spec.x, spec.y, 12, 12, tpl.color || 0xff0000);
+        e.setStrokeStyle(1, 0x000000);
+        this.physics.add.existing(e);
+        e.body.setCollideWorldBounds(false);
+        e.body.setSize(10, 10);
+        e._template = spec.template;
+        e._behavior = tpl.behavior;
+        e._role = spec.role || null;
+        e.hp = tpl.hp_phase1 || tpl.hp || 5;
+        e.dmg = tpl.dmg || 1;
+        e.speed = tpl.speed || 40;
+        e.color = tpl.color || 0xff0000;
+        e.dead = false;
+        e.knockback_until = 0;
+        e.flash_until = 0;
+        e._ai = { dir: 1, change_at: 0, last_shot: 0 };
+        e.active = true;
+        this.entityLayer.add(e);
+        this.enemies.push(e);
+      });
+      // Items
+      (room.items || []).forEach(item => {
+        this._spawnPickup(item.kind, item.x, item.y);
+      });
+    }
+
+    _spawnPickup(kind, x, y) {
+      const tpl = D.ITEMS[kind];
+      if (!tpl) { console.warn("[pass2] unknown item kind:", kind); return; }
+      const it = this.add.rectangle(x, y, 8, 8, tpl.color || 0xfacc15);
+      it.setStrokeStyle(1, 0x000000);
+      this.physics.add.existing(it);
+      it.body.setSize(6, 6);
+      it.body.setAllowGravity && it.body.setAllowGravity(false);
+      it._kind = kind;
+      it._template = tpl;
+      this.entityLayer.add(it);
+      this.itemsOnGround.push(it);
+    }
+
+    _tickEnemies(time, delta) {
+      const p = this.player;
+      for (const e of this.enemies) {
+        if (!e.active || e.dead) continue;
+        // Flash
+        e.fillColor = (e.flash_until > time) ? 0xffffff : e.color;
+        // Skip AI during knockback
+        if (e.knockback_until > time) continue;
+        // AI per behavior
+        if (e._behavior === "patrol") {
+          // Simple horizontal patrol, reverse on wall hit
+          if (!e._ai.change_at) e._ai.change_at = time + 1500;
+          if (time > e._ai.change_at) {
+            e._ai.dir *= -1;
+            e._ai.change_at = time + 1200 + Math.random() * 800;
+          }
+          e.body.setVelocity(e.speed * e._ai.dir, 0);
+          // Reverse on solid tile ahead
+          const aheadX = e.x + e._ai.dir * 8;
+          const tx = Math.floor(aheadX / TILE);
+          const ty = Math.floor(e.y / TILE);
+          const ch = (this.currentRoom.tiles[ty] || "")[tx];
+          if (SOLID_TILES.has(ch)) { e._ai.dir *= -1; e._ai.change_at = time + 1000; }
+        } else if (e._behavior === "chase") {
+          // Move toward player
+          const dx = p.x - e.x;
+          const dy = p.y - e.y;
+          const len = Math.max(0.001, Math.hypot(dx, dy));
+          e.body.setVelocity((dx/len) * e.speed, (dy/len) * e.speed);
+        } else {
+          // shoot / guard / charge / boss — placeholder: hold position
+          e.body.setVelocity(0, 0);
+        }
+        // Contact damage to player
+        if (Phaser.Geom.Intersects.RectangleToRectangle(p.getBounds(), e.getBounds())) {
+          this._damagePlayer(e.dmg * 0.5, e.x, e.y);   // 0.5 = half-heart unit, dmg=1 → 0.5 heart
+        }
+      }
+    }
+
+    _tickPickups(time) {
+      const p = this.player;
+      for (let i = this.itemsOnGround.length - 1; i >= 0; i--) {
+        const it = this.itemsOnGround[i];
+        if (!it.active) continue;
+        if (Phaser.Geom.Intersects.RectangleToRectangle(p.getBounds(), it.getBounds())) {
+          this._collectItem(it);
+          it.destroy();
+          this.itemsOnGround.splice(i, 1);
+        }
+      }
+    }
+
+    _collectItem(it) {
+      const kind = it._kind;
+      const tpl = it._template;
+      const q = this.quest.flags;
+      let sfx = "sfx_pickup";
+      if (tpl.kind === "rupee") { q.rupees += tpl.value; sfx = "sfx_coin"; }
+      else if (tpl.kind === "key") { q.small_keys += 1; sfx = "sfx_pickup"; }
+      else if (tpl.kind === "big_key") { q.big_key = true; sfx = "sfx_levelup"; }
+      else if (tpl.kind === "heart_refill") { this.hearts = Math.min(D.PLAYER.max_hearts, this.hearts + 0.5); sfx = "sfx_heal"; }
+      else if (tpl.kind === "heart_piece") { q.heart_pieces += 1; sfx = "sfx_levelup"; if (q.heart_pieces >= 4) { q.heart_pieces -= 4; D.PLAYER.max_hearts += 1; this.hearts = D.PLAYER.max_hearts; } }
+      else if (tpl.kind === "heart_container") { D.PLAYER.max_hearts += 1; this.hearts = D.PLAYER.max_hearts; sfx = "sfx_levelup"; }
+      else if (tpl.kind === "weapon") {
+        if (tpl.id === "bow") q.has_bow = true;
+        else if (tpl.id === "bombs") q.has_bombs = true;
+        else if (tpl.id === "boomerang") q.has_boomerang = true;
+        sfx = "sfx_levelup";
+      }
+      try { this.sound.play(sfx, { volume: 0.5 }); } catch (_) {}
+      this._refreshHUD();
+    }
+
+    _winAct1() {
+      this.attackUntil = 999999;
+      this.cameras.main.fade(1500, 255, 215, 0);
+      this.time.delayedCall(1700, () => this.scene.start("P2_Menu"));
+      // TODO (polish): proper Win scene
     }
 
     _gameOver() {
