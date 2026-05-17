@@ -1,0 +1,69 @@
+{
+  "_doc": "Pass 2 build state — read this at the start of every /loop iteration. Update at the end.",
+  "version": 1,
+  "started_at": "2026-05-11",
+  "last_iteration": 1,
+  "last_updated": "2026-05-11T12:30:00Z",
+  "current_phase": "scaffold",
+  "phases": {
+    "scaffold": {
+      "status": "in_progress",
+      "_progress": "Iter #1: shroud_act1_data.js (300+ lines) + pass2.js (370+ lines, 4 scenes BootP2/PreloadP2/MenuP2/PlayP2) + index.html switched to Pass 2 entry. Tile system renders rooms via Graphics rects (palette of 12 tile codes). One starter room 'village_square' with Elder Mira NPC placeholder. Player sprite uses existing protagonist_*.png (side-view; top-down adaptation flagged for polish). HUD shows hearts only. Music swap per zone wired. Edge transitions wired N/S/E/W. Static syntax check passes. Deployed to R2. Iter #2 will Chrome-MCP playtest the scaffold + add the next batch of rooms.",
+      "deliverable": "New gameplay-tier code split out of the 8461-line game.js: shroud_act1_data.js (rooms, NPCs, items, enemies, dungeon), shroud_combat.js (sword/bow/bombs/hitboxes), shroud_hud.js (hearts/rupees/keys/items), shroud_save.js. Loaded from index.html alongside game.js. Old narrative levels.json renamed acts_lore.json. New tile-based levels.json shape defined."
+    },
+    "rooms_overworld": {
+      "status": "pending",
+      "deliverable": "12 hand-authored rooms covering Canopy Village (4: square, herbalist hut, shrine path, gate), Emerald Thicket (5: meadow, fork, waterfall approach, vine wall, ruins entrance), Shrine Path (3). Tile data: 18x11 per room @ 16px = 288x176. Solid/grass/path/water/tree tiles. Edge-of-screen transitions wire neighbors."
+    },
+    "rooms_dungeon": {
+      "status": "pending",
+      "deliverable": "10 rooms of the Ruins of First Light dungeon: entrance, 3 ante-rooms (puzzle + enemies), small-key room, mini-boss room (Geomancer Statue), dungeon-item room (Astral Blade level-2 OR Gale Boomerang), 2 puzzle rooms (push-block + 4-statue light puzzle), boss-key room, boss room (Guardian)."
+    },
+    "combat": {
+      "status": "pending",
+      "deliverable": "Sword slash (4-axis, 8-frame anim, ~100ms windup + ~200ms active hitbox + ~150ms recovery), spin attack (hold 1.0s charge), bow + arrow (projectile pool of 8, embeds 0.5s), bombs (2s fuse, 32px radius, breaks weak-walls). Knockback 8px. 600ms i-frames flicker. Half-heart damage. Audio hooks: sfx_attack, sfx_hit, sfx_bow, sfx_bomb_explode."
+    },
+    "enemies": {
+      "status": "pending",
+      "deliverable": "5 enemy AI behaviors as a state-machine library: patrol (Thornback Lurker), chase (Veilstalker), shoot (Wraithwhisper — projectile every 2s with 1s telegraph), guard (Geomancer Statue mini-boss — slam attack on 3s cadence), boss (Guardian — phase 1 slash-vulnerable, phase 2 weak-wall-bomb-then-arrow). HP/DMG from design.md."
+    },
+    "npcs_dialogue": {
+      "status": "pending",
+      "deliverable": "4 NPCs with multi-state dialogue. Elder Mira (quest-giver: Investigate Ruins → Return Relic), Dax the Trader (shop: 5 items, real rupee transactions), Liora (ally: gives map of Ruins, optional escort), Heda the Herbalist (side quest: 3 bioluminescent flowers in overworld). Dialogue tree: setHasSeen flag per topic."
+    },
+    "hud_save": {
+      "status": "pending",
+      "deliverable": "Hearts (half-heart resolution, max 3 + 1 per heart container), rupees (counter + wallet 99/300/999), keys (small key count), item B-slot (boomerang/bow/bombs cycle). Save to localStorage on every checkpoint (entering a town room). New Game / Continue title menu. 3 save slots."
+    },
+    "polish": {
+      "status": "pending",
+      "deliverable": "Screen shake on hit/boss-attack, hitstop 60ms, low-hearts beep, item-get fanfare, secret jingle on bombable-wall reveal. Music swap per zone: village (calm), overworld (level), dungeon (dungeon), boss (boss)."
+    },
+    "qa": {
+      "status": "pending",
+      "deliverable": "Chrome MCP playtest of critical path: title → new game → Mira intro → thicket → ruins entry → key room → mini-boss → dungeon item → puzzles → boss key → Guardian → heart container → win. Must run hands-off in <10 minutes. Screenshot every room. Fix any blocking bug discovered."
+    }
+  },
+  "queue": [
+    "scaffold",
+    "rooms_overworld",
+    "combat",
+    "enemies",
+    "rooms_dungeon",
+    "npcs_dialogue",
+    "hud_save",
+    "polish",
+    "qa"
+  ],
+  "log": [
+    {
+      "iteration": 1,
+      "phase": "scaffold",
+      "chunk": "Phaser scaffold + data registry + index.html switch",
+      "what_done": "Wrote shroud_act1_data.js (300L) and pass2.js (370L). Replaced index.html to load Pass 2. Added 4 scenes (Boot/Preload/Menu/Play). Tile-render via Graphics; 12 tile codes; edge transitions; minimal HUD; music swap; player movement; basic attack swing; i-frame flicker; localStorage save/load stub. 1 starter room (village_square) with Mira NPC. Static syntax check passed. Deployed to R2.",
+      "what_left": "Chrome-MCP smoke test in iter #2 to confirm scaffold paints. Then add real overworld rooms.",
+      "blockers": "Protagonist sprites are side-view (jump_up/jump_fall) not 4-direction top-down; using flip-X + facing-direction for now. Polish pass will swap to a real top-down sheet."
+    }
+  ],
+  "exit_criteria": "All 9 phases status=done AND the Chrome MCP smoke test in phase qa passes hands-off (title → win screen, no manual fixes). Total target: 22 rooms (12 overworld + 10 dungeon), 5 enemy AIs, 3 weapons, 4 NPCs, 1 boss with 2 phases, HUD + save."
+}
