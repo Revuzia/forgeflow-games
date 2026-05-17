@@ -267,6 +267,13 @@
       this.keyX = this.input.keyboard.addKey("X");
       this.keyC = this.input.keyboard.addKey("C");
       this.keyEsc = this.input.keyboard.addKey("ESC");
+      // ESC opens pause overlay (PauseP2 scene)
+      this.input.keyboard.on("keydown-ESC", () => {
+        if (this.scene.isPaused("P2_Play")) return;  // already paused
+        if (this.dialogueActive) return;
+        this.scene.pause();
+        this.scene.launch("P2_Pause");
+      });
 
       // HUD
       this._buildHUD();
@@ -366,6 +373,13 @@
         p.alpha = (Math.floor(time / 60) % 2) === 0 ? 0.4 : 1.0;
       } else {
         p.alpha = 1.0;
+      }
+      // Low-hearts warning beep (≤ 1 heart) every 900ms
+      if (this.hearts > 0 && this.hearts <= 1) {
+        if (!this._lowHeartLastBeep || time - this._lowHeartLastBeep > 900) {
+          this._lowHeartLastBeep = time;
+          try { this.sound.play("sfx_hit", { volume: 0.18 }); } catch (_) {}
+        }
       }
     }
 
@@ -717,6 +731,10 @@
       e.body.setVelocity((dx/len) * kb, (dy/len) * kb);
       e.knockback_until = time + 180;
       try { this.sound.play("sfx_hit", { volume: 0.5 }); } catch (_) {}
+      // Hitstop on sword/arrow hit — 40ms freeze for snappy feel
+      this._hitstop(source === "bomb" ? 100 : 40);
+      // Tiny shake on every enemy hit
+      this.cameras.main.shake(80, 0.002);
       // Phase transition for Guardian
       if (e._template === "guardian_of_first_light" && e._phase === 1 && e.hp <= 0) {
         // Transition to phase 2
@@ -765,6 +783,10 @@
       p.invuln_until = time + D.PLAYER.invuln_ms;
       try { this.sound.play("sfx_hurt", { volume: 0.6 }); } catch (_) {}
       this._refreshHUD();
+      // Screen shake — proportional to damage taken
+      this.cameras.main.shake(160, 0.006 + amount * 0.004);
+      // Hitstop — brief physics freeze on big hits (≥ 1 heart)
+      if (amount >= 1) this._hitstop(70);
       // Knockback away from source
       if (typeof sourceX === "number" && typeof sourceY === "number") {
         const dx = p.x - sourceX;
@@ -775,6 +797,12 @@
         p.knockback_until = time + 200;
       }
       if (this.hearts <= 0) this._gameOver();
+    }
+
+    _hitstop(ms) {
+      // Freeze physics + AI briefly for impact emphasis
+      this.physics.world.isPaused = true;
+      this.time.delayedCall(ms, () => { this.physics.world.isPaused = false; });
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1125,13 +1153,34 @@
       try { this.sound.play(sfx, { volume: 0.5 }); } catch (_) {}
       this._refreshHUD();
       this._refreshItemSlot();
+      // Item-get fanfare for high-value pickups
+      const fanfareKinds = new Set(["weapon", "big_key", "heart_container", "heart_piece"]);
+      if (fanfareKinds.has(tpl.kind)) {
+        const label = tpl.kind === "weapon"  ? "GOT: " + (tpl.id || "ITEM").toUpperCase()
+                    : tpl.kind === "big_key" ? "GOT: BIG KEY"
+                    : tpl.kind === "heart_container" ? "HEART CONTAINER!"
+                    : "HEART PIECE";
+        this._showFanfare(label);
+      }
+    }
+
+    _showFanfare(label) {
+      const t = this.add.text(SCREEN_W/2, 80, label,
+        { font: "bold 14px serif", color: "#fde047", stroke: "#000", strokeThickness: 2 })
+        .setOrigin(0.5);
+      this.fxLayer.add(t);
+      this.tweens.add({ targets: t, y: 50, alpha: 0,
+        duration: 1700, delay: 600, onComplete: () => t.destroy() });
     }
 
     _winAct1() {
       this.attackUntil = 999999;
+      // Big shake + gold fade
+      this.cameras.main.shake(420, 0.012);
       this.cameras.main.fade(1500, 255, 215, 0);
-      this.time.delayedCall(1700, () => this.scene.start("P2_Menu"));
-      // TODO (polish): proper Win scene
+      // Clear save so player can replay from scratch
+      try { localStorage.removeItem("shroud_save_v1"); } catch (_) {}
+      this.time.delayedCall(1700, () => this.scene.start("P2_Win"));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1490,9 +1539,12 @@
     }
 
     _gameOver() {
-      this.scene.pause();
-      this.cameras.main.fade(800, 0, 0, 0);
-      this.time.delayedCall(900, () => this.scene.start("P2_Menu"));
+      // Player.invuln_until set to high val so further damage doesn't re-fire
+      this.player.invuln_until = this.time.now + 99999;
+      this.player.body.setVelocity(0, 0);
+      this.cameras.main.shake(380, 0.012);
+      this.cameras.main.fade(900, 0, 0, 0);
+      this.time.delayedCall(1100, () => this.scene.start("P2_GameOver"));
     }
 
     _loadSave() {
@@ -1547,6 +1599,86 @@
   }
 
   // ══════════════════════════════════════════════════════════════
+  // P2_Pause — overlay paused scene (Esc to toggle)
+  // ══════════════════════════════════════════════════════════════
+  class PauseP2 extends Phaser.Scene {
+    constructor() { super("P2_Pause"); }
+    create() {
+      const w = this.cameras.main.width, h = this.cameras.main.height;
+      this.add.rectangle(0, 0, w, h, 0x000000, 0.6).setOrigin(0, 0);
+      this.add.text(w/2, h/2 - 20, "PAUSED", { font: "32px serif", color: "#facc15" }).setOrigin(0.5);
+      this.add.text(w/2, h/2 + 20, "Esc to resume  ·  Q to quit to menu",
+        { font: "14px monospace", color: "#94a3b8" }).setOrigin(0.5);
+      this.input.keyboard.on("keydown-ESC", () => {
+        this.scene.stop();
+        this.scene.resume("P2_Play");
+      });
+      this.input.keyboard.on("keydown-Q", () => {
+        this.scene.stop("P2_Play");
+        this.scene.stop();
+        this.scene.start("P2_Menu");
+      });
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // P2_Win — Act 1 cleared screen
+  // ══════════════════════════════════════════════════════════════
+  class WinP2 extends Phaser.Scene {
+    constructor() { super("P2_Win"); }
+    create() {
+      const w = this.cameras.main.width, h = this.cameras.main.height;
+      this.cameras.main.setBackgroundColor(0x1a0a2e);
+      this.add.text(w/2, h*0.20, "ACT I CLEARED",
+        { font: "bold 36px serif", color: "#fde047" }).setOrigin(0.5);
+      this.add.text(w/2, h*0.30, "The First Relic is yours.",
+        { font: "16px serif", color: "#e2e8f0" }).setOrigin(0.5);
+      this.add.text(w/2, h*0.42,
+        "Five seals remain.\nKaelen's journey continues in Acts II–VI.",
+        { font: "14px serif", color: "#94a3b8", align: "center" }).setOrigin(0.5);
+      this.add.text(w/2, h*0.65, "▶ Return to Menu",
+        { font: "20px monospace", color: "#22c55e" })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", () => this.scene.start("P2_Menu"));
+      this.input.keyboard.on("keydown-ENTER", () => this.scene.start("P2_Menu"));
+      this.input.keyboard.on("keydown-SPACE", () => this.scene.start("P2_Menu"));
+      try { this.sound.play("sfx_levelup", { volume: 0.6 }); } catch (_) {}
+      try {
+        if (this._music) this._music.stop();
+        this._music = this.sound.add("music_victory", { loop: false, volume: 0.4 });
+        this._music.play();
+        this.events.once("shutdown", () => this._music && this._music.stop());
+      } catch (_) {}
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // P2_GameOver — separate scene so Continue can pick up saved progress
+  // ══════════════════════════════════════════════════════════════
+  class GameOverP2 extends Phaser.Scene {
+    constructor() { super("P2_GameOver"); }
+    create() {
+      const w = this.cameras.main.width, h = this.cameras.main.height;
+      this.cameras.main.setBackgroundColor(0x0a0a0a);
+      this.add.text(w/2, h*0.35, "GAME OVER",
+        { font: "bold 40px serif", color: "#ef4444" }).setOrigin(0.5);
+      const hasSave = (() => { try { return !!localStorage.getItem("shroud_save_v1"); } catch(_) { return false; } })();
+      this.add.text(w/2, h*0.55, hasSave ? "▶ Continue" : "▶ New Game",
+        { font: "20px monospace", color: "#22c55e" })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", () => this.scene.start("P2_Play", { fromSave: hasSave }));
+      this.add.text(w/2, h*0.65, "Esc — Menu",
+        { font: "14px monospace", color: "#94a3b8" }).setOrigin(0.5);
+      this.input.keyboard.on("keydown-ENTER", () => this.scene.start("P2_Play", { fromSave: hasSave }));
+      this.input.keyboard.on("keydown-SPACE", () => this.scene.start("P2_Play", { fromSave: hasSave }));
+      this.input.keyboard.on("keydown-ESC", () => this.scene.start("P2_Menu"));
+      try { this.sound.play("sfx_death", { volume: 0.5 }); } catch (_) {}
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
   // Game init
   // ══════════════════════════════════════════════════════════════
   function start() {
@@ -1566,7 +1698,7 @@
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
       },
-      scene: [BootP2, PreloadP2, MenuP2, PlayP2],
+      scene: [BootP2, PreloadP2, MenuP2, PlayP2, PauseP2, WinP2, GameOverP2],
     });
     window.__GAME_P2__ = game;
   }

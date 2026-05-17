@@ -2,9 +2,9 @@
   "_doc": "Pass 2 build state — read this at the start of every /loop iteration. Update at the end.",
   "version": 1,
   "started_at": "2026-05-11",
-  "last_iteration": 7,
-  "last_updated": "2026-05-11T14:53:00Z",
-  "current_phase": "polish",
+  "last_iteration": 8,
+  "last_updated": "2026-05-11T15:01:00Z",
+  "current_phase": "qa",
   "phases": {
     "scaffold": {
       "status": "done",
@@ -42,7 +42,8 @@
       "deliverable": "Hearts (half-heart resolution, max 3 + 1 per heart container), rupees (counter + wallet 99/300/999), keys (small key count), item B-slot (boomerang/bow/bombs cycle). Save to localStorage on every checkpoint (entering a town room). New Game / Continue title menu. 3 save slots."
     },
     "polish": {
-      "status": "pending",
+      "status": "done",
+      "_progress": "Iter #8: polish layer. Added 3 new scenes: PauseP2 (ESC overlay → ESC resume / Q quit), WinP2 (gold ACT I CLEARED screen + victory music + back-to-menu), GameOverP2 (red GAME OVER + Continue button reading save). Screen shake on damage (160ms × dmg-scaled intensity) + boss-kill (420ms × 0.012) + per-enemy-hit (80ms × 0.002). Hitstop (physics.world.isPaused) 40ms on sword/arrow hit, 70ms on player damage ≥1 heart, 100ms on bomb hit. Low-hearts warning beep (sfx_hit @0.18 vol) every 900ms when hearts ≤ 1. Item-get fanfare text tween for weapons/big_key/heart_container/heart_piece. Win clears save so player can replay. ESC + Q working in pause.",
       "deliverable": "Screen shake on hit/boss-attack, hitstop 60ms, low-hearts beep, item-get fanfare, secret jingle on bombable-wall reveal. Music swap per zone: village (calm), overworld (level), dungeon (dungeon), boss (boss)."
     },
     "qa": {
@@ -51,10 +52,17 @@
     }
   },
   "queue": [
-    "polish",
     "qa"
   ],
   "log": [
+    {
+      "iteration": 8,
+      "phase": "polish",
+      "chunk": "PauseP2 + WinP2 + GameOverP2 scenes + screen shake + hitstop + low-hearts beep + item-get fanfare",
+      "what_done": "pass2.js 1579→1711 lines. New scenes: P2_Pause (ESC overlay), P2_Win (Act 1 cleared + victory music + clears save), P2_GameOver (Continue from save / New Game). Screen shake on player damage (scales w/ amount), boss-kill (420ms big shake), per-enemy-hit (80ms tiny). _hitstop helper using physics.world.isPaused (40ms sword/arrow, 70ms player ≥1 heart dmg, 100ms bomb). Low-hearts beep loop. _showFanfare tween for weapon/big_key/heart_container/heart_piece pickups. ESC handler in P2_Play launches P2_Pause; pause scene handles resume/quit. Game-over: invuln_until set high so further damage doesn't re-fire scene start. Win clears save.",
+      "what_left": "QA — Chrome MCP hands-off playtest (iter #9).",
+      "blockers": "None. All gameplay phases done. Queue: 1 (qa)."
+    },
     {
       "iteration": 7,
       "phase": "hud_save",
