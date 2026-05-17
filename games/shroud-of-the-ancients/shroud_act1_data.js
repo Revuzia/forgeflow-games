@@ -388,7 +388,10 @@
     "##################",
   ].map(r => r.replace(/B/g, '.')), { N: "ruins_east_a" },
   {
-    items: [{ kind: "rupee_red", x: 144, y: 144 }],
+    items: [
+      { kind: "rupee_red", x: 144, y: 144 },
+      { kind: "bomb_refill", x: 96, y: 64 },
+    ],
   });
 
   R("ruins_west_a", "ruins_of_first_light", [
@@ -480,7 +483,7 @@
   ].map(r => r.replace(/K/g, '.')), { N: "ruins_boss_door", S: "ruins_north_b" },
   {
     enemies: [{ template: "veilstalker", x: 64, y: 80 }, { template: "veilstalker", x: 224, y: 96 }],
-    items: [{ kind: "big_key", x: 144, y: 80 }],
+    items: [{ kind: "big_key", x: 144, y: 80 }, { kind: "bomb_refill", x: 80, y: 128 }],
   });
 
   R("ruins_boss_door", "ruins_of_first_light", [
@@ -549,6 +552,7 @@
     bow:             { kind: "weapon", id: "bow", color: 0x8b4513 },
     bombs:           { kind: "weapon", id: "bombs", color: 0x1f2937 },
     boomerang:       { kind: "weapon", id: "boomerang", color: 0xeab308 },
+    bomb_refill:     { kind: "bomb_refill", value: 3, color: 0x1f2937 },
   };
 
   // ── Music + SFX hooks (key → asset URL) ──────────────────────────

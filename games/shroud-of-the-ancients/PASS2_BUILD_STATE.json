@@ -2,9 +2,9 @@
   "_doc": "Pass 2 build state — read this at the start of every /loop iteration. Update at the end.",
   "version": 1,
   "started_at": "2026-05-11",
-  "last_iteration": 6,
-  "last_updated": "2026-05-11T14:48:00Z",
-  "current_phase": "hud_save",
+  "last_iteration": 7,
+  "last_updated": "2026-05-11T14:53:00Z",
+  "current_phase": "polish",
   "phases": {
     "scaffold": {
       "status": "done",
@@ -37,7 +37,8 @@
       "deliverable": "4 NPCs with multi-state dialogue. Elder Mira (quest-giver: Investigate Ruins → Return Relic), Dax the Trader (shop: 5 items, real rupee transactions), Liora (ally: gives map of Ruins, optional escort), Heda the Herbalist (side quest: 3 bioluminescent flowers in overworld). Dialogue tree: setHasSeen flag per topic."
     },
     "hud_save": {
-      "status": "pending",
+      "status": "done",
+      "_progress": "Iter #7: HUD with Graphics-drawn half-heart resolution (7×6 px hearts, red full / split red+dark / empty). Locked-door consumption: 'L' tile on edge consumes 1 small_key + permanent unlock per (room,dir); 'B' tile checks big_key flag (doesn't consume — Zelda canon). _showLockedFeedback + _bouncePlayer on no-key block. doorUnlocks tracked in save. Save/load full: quest + hearts + max_hearts + roomId + currentItem + bombCount + doorUnlocks + broken_walls. Save written on initial spawn + every room transition. _BASELINE_MAX_HEARTS prevents heart-container carryover between New Game runs. _brokenWalls tracks bombed tiles per room → preserved across save. bomb_refill item kind added; refills dropped in ruins_east_b + ruins_big_key_room (2 refills × 3 bombs = 6 extra bombs).",
       "deliverable": "Hearts (half-heart resolution, max 3 + 1 per heart container), rupees (counter + wallet 99/300/999), keys (small key count), item B-slot (boomerang/bow/bombs cycle). Save to localStorage on every checkpoint (entering a town room). New Game / Continue title menu. 3 save slots."
     },
     "polish": {
@@ -50,11 +51,18 @@
     }
   },
   "queue": [
-    "hud_save",
     "polish",
     "qa"
   ],
   "log": [
+    {
+      "iteration": 7,
+      "phase": "hud_save",
+      "chunk": "Half-heart HUD + locked-door key consumption + full save/load + bomb refill pickups + baseline-reset",
+      "what_done": "pass2.js 1421→1579 lines. HUD hearts drawn via Graphics with half-heart resolution (split red/dark fill). Edge-transition logic now inspects 'L' / 'B' tiles on the leaving edge: small-key door consumes 1 small_key + records doorUnlocks[room][dir]; big-door checks big_key flag only. _showLockedFeedback (text 'Locked — find a small key.' or 'The Big Door is sealed.') + _bouncePlayer on block. Save schema: { quest, hearts, max_hearts, roomId, currentItem, bombCount, doorUnlocks, broken_walls, ts }. Save written on initial spawn + every room transition. _BASELINE_MAX_HEARTS captured first-run prevents leak. _brokenWalls tracks bombed tiles per room and restores them on load. bomb_refill item kind added; 2 refills planted in ruins_east_b + ruins_big_key_room (+6 bombs total).",
+      "what_left": "Polish (screen shake on damage, hitstop on enemy hit, low-hearts beep, item-get fanfare). Then QA hands-off playtest.",
+      "blockers": "None. HUD + save phase done. Queue: 2 (polish, qa)."
+    },
     {
       "iteration": 6,
       "phase": "npcs_dialogue",

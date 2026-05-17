@@ -183,8 +183,16 @@
     create() {
       // Quest state (initial or loaded from save)
       this.quest = JSON.parse(JSON.stringify(D.INITIAL_QUEST_STATE));
+      // Reset max_hearts to baseline on every game start — singleton D.PLAYER
+      // is shared across scene restarts, so a previous run's heart-container
+      // pickups would leak into a New Game otherwise.
+      if (typeof D._BASELINE_MAX_HEARTS !== "number") D._BASELINE_MAX_HEARTS = D.PLAYER.max_hearts;
+      D.PLAYER.max_hearts = D._BASELINE_MAX_HEARTS;
       this.hearts = D.PLAYER.start_hearts;
       this.currentRoomId = D.PLAYER.spawn_room;
+      // Reset per-run state
+      this._doorUnlocks = {};
+      this._brokenWalls = {};
       if (this.fromSave) this._loadSave();
 
       // Camera + viewport
@@ -201,7 +209,11 @@
       this._buildRoom(this.currentRoomId);
 
       // Player
-      this.player = this.physics.add.sprite(D.PLAYER.spawn_x, D.PLAYER.spawn_y, "p_idle");
+      // Player spawn — if loaded from save, place in center of current room
+      // (rough but always reachable); otherwise use designed village_square spawn.
+      const spawnX = this.fromSave ? SCREEN_W / 2 : D.PLAYER.spawn_x;
+      const spawnY = this.fromSave ? SCREEN_H / 2 : D.PLAYER.spawn_y;
+      this.player = this.physics.add.sprite(spawnX, spawnY, "p_idle");
       this.player.setOrigin(0.5, 0.7);
       this.player.body.setSize(10, 8).setOffset(7, 14);
       this.player.facing = "down";
@@ -256,11 +268,15 @@
       this.keyC = this.input.keyboard.addKey("C");
       this.keyEsc = this.input.keyboard.addKey("ESC");
 
-      // HUD (minimal — full HUD shipped in hud_save phase)
+      // HUD
       this._buildHUD();
+      this._applyPendingSave();
 
       // Music
       this._setRoomMusic();
+      // Initial save (so Continue button works after Game Over even if
+      // player hasn't crossed a room threshold yet)
+      this._writeSave();
 
       // Test hook
       window.__SHROUD_P2__ = {
@@ -458,30 +474,106 @@
       this.player.body.setVelocity(0, 0);
       // Music swap if zone changes
       this._setRoomMusic();
+      // Save on every room transition (Zelda-ish: each new screen is a checkpoint)
+      this._writeSave();
     }
 
     _checkEdgeTransitions(p) {
       const r = this.currentRoom;
       if (!r || !r.exits) return;
-      // North
-      if (p.y < TILE && r.exits.N) { this._enterRoom(r.exits.N, "S"); return; }
-      // South
-      if (p.y > SCREEN_H - TILE * 0.5 && r.exits.S) { this._enterRoom(r.exits.S, "N"); return; }
-      // East
-      if (p.x > SCREEN_W - TILE * 0.5 && r.exits.E) { this._enterRoom(r.exits.E, "W"); return; }
-      // West
-      if (p.x < TILE * 0.5 && r.exits.W) { this._enterRoom(r.exits.W, "E"); return; }
+      // Find which edge (if any) we'd cross this frame.
+      let dir = null;
+      if (p.y < TILE && r.exits.N) dir = "N";
+      else if (p.y > SCREEN_H - TILE * 0.5 && r.exits.S) dir = "S";
+      else if (p.x > SCREEN_W - TILE * 0.5 && r.exits.E) dir = "E";
+      else if (p.x < TILE * 0.5 && r.exits.W) dir = "W";
+      if (dir) {
+        // Check for a locked-door tile at the edge — block unless we have a key.
+        // Door tile positions inferred from tile layout: any 'L' (small) / 'B' (big) on the corresponding edge.
+        const lockType = this._edgeLockType(r, dir);
+        if (lockType === "L") {
+          if (this.quest.flags.small_keys > 0) {
+            this.quest.flags.small_keys -= 1;
+            this._unlockEdge(r.id, dir);
+            try { this.sound.play("sfx_door", { volume: 0.6 }); } catch (_) {}
+            this._refreshHUD();
+          } else {
+            this._showLockedFeedback("locked");
+            // Bounce player off the edge
+            this._bouncePlayer(dir);
+            return;
+          }
+        } else if (lockType === "B") {
+          if (this.quest.flags.big_key) {
+            this._unlockEdge(r.id, dir);
+            try { this.sound.play("sfx_door", { volume: 0.6 }); } catch (_) {}
+          } else {
+            this._showLockedFeedback("big_locked");
+            this._bouncePlayer(dir);
+            return;
+          }
+        }
+        this._enterRoom(r.exits[dir], { N:"S", S:"N", E:"W", W:"E" }[dir]);
+        return;
+      }
       // Solid-wall collisions (clamp player to playable bounds)
       const tx = Math.floor(p.x / TILE);
       const ty = Math.floor(p.y / TILE);
       const ch = (r.tiles[ty] || "")[tx];
       if (SOLID_TILES.has(ch)) {
-        // Push player back to last safe pos — simplistic, will refine
         p.body.setVelocity(0, 0);
-        // Nudge toward center of the tile we came from
         p.x = Phaser.Math.Clamp(p.x, TILE * 1.2, SCREEN_W - TILE * 1.2);
         p.y = Phaser.Math.Clamp(p.y, TILE * 1.2, SCREEN_H - TILE * 1.2);
       }
+    }
+
+    _edgeLockType(room, dir) {
+      // Returns 'L' (small-key) | 'B' (big-key) | null. Looks at the tile
+      // on the relevant edge of the room. If door is already unlocked
+      // (this._doorUnlocks[room.id][dir]), returns null.
+      if (!this._doorUnlocks) this._doorUnlocks = {};
+      const u = (this._doorUnlocks[room.id] || {})[dir];
+      if (u) return null;
+      // Inspect the edge row/col for L or B characters
+      const t = room.tiles;
+      const has = (ch) => {
+        if (dir === "N") return (t[0] || "").includes(ch);
+        if (dir === "S") return (t[ROOM_H - 1] || "").includes(ch);
+        // Column edges
+        if (dir === "W") return t.some(row => row[0] === ch);
+        if (dir === "E") return t.some(row => row[ROOM_W - 1] === ch);
+        return false;
+      };
+      if (has("L")) return "L";
+      if (has("B")) return "B";
+      return null;
+    }
+
+    _unlockEdge(roomId, dir) {
+      if (!this._doorUnlocks) this._doorUnlocks = {};
+      this._doorUnlocks[roomId] = this._doorUnlocks[roomId] || {};
+      this._doorUnlocks[roomId][dir] = true;
+    }
+
+    _bouncePlayer(dir) {
+      const p = this.player;
+      const kb = 80;
+      if (dir === "N") { p.body.setVelocity(0, kb); p.y = TILE * 1.5; }
+      else if (dir === "S") { p.body.setVelocity(0, -kb); p.y = SCREEN_H - TILE * 1.5; }
+      else if (dir === "E") { p.body.setVelocity(-kb, 0); p.x = SCREEN_W - TILE * 1.5; }
+      else if (dir === "W") { p.body.setVelocity(kb, 0); p.x = TILE * 1.5; }
+      p.knockback_until = this.time.now + 180;
+    }
+
+    _showLockedFeedback(kind) {
+      try { this.sound.play("sfx_hit", { volume: 0.3 }); } catch (_) {}
+      // Flash a quick text in center of screen
+      const msg = kind === "big_locked" ? "The Big Door is sealed."
+                                        : "Locked — find a small key.";
+      const t = this.add.text(SCREEN_W/2, 24, msg,
+        { font: "8px monospace", color: "#fde047", backgroundColor: "rgba(0,0,0,0.7)" }).setOrigin(0.5, 0);
+      this.fxLayer.add(t);
+      this.time.delayedCall(1200, () => t && t.destroy && t.destroy());
     }
 
     _checkHazards(p, time) {
@@ -511,27 +603,53 @@
     }
 
     _buildHUD() {
-      // Static overlay — does NOT scale with camera zoom
-      // Phaser tip: setScrollFactor(0) + use a separate UI cam is cleaner.
-      // For Pass-2 #1: just stamp text in scene-space and let it scale with zoom.
-      // Note: HUD lives in fxLayer (never rebuilt), not tileLayer (rebuilt on room
-      // change). This was a bug in iter #3 — HUD was destroyed on every room
-      // transition because tileLayer.removeAll(true) ran in _buildRoom.
-      this.hudHearts = this.add.text(2, 2, "♥".repeat(this.hearts), { font: "10px monospace", color: "#ff3344" });
-      this.hudRupees = this.add.text(2, 13, "₽ 0", { font: "8px monospace", color: "#22c55e" });
-      this.hudKeys = this.add.text(36, 13, "🔑 0", { font: "8px monospace", color: "#facc15" });
-      this.hudItem = this.add.text(SCREEN_W - 2, 2, "[(no item)]", { font: "8px monospace", color: "#94a3b8" }).setOrigin(1, 0);
-      this.fxLayer.add(this.hudHearts);
+      // HUD lives in fxLayer (never rebuilt). tileLayer.removeAll(true) on
+      // room change would destroy HUD if it lived there.
+      this.hudHeartsG = this.add.graphics();
+      this.hudRupees = this.add.text(2, 14, "$0", { font: "8px monospace", color: "#22c55e" });
+      this.hudKeys = this.add.text(36, 14, "K0", { font: "8px monospace", color: "#facc15" });
+      this.hudItem = this.add.text(SCREEN_W - 2, 2, "[(no item)]",
+        { font: "8px monospace", color: "#94a3b8" }).setOrigin(1, 0);
+      this.fxLayer.add(this.hudHeartsG);
       this.fxLayer.add(this.hudRupees);
       this.fxLayer.add(this.hudKeys);
       this.fxLayer.add(this.hudItem);
+      this._refreshHUD();
     }
 
     _refreshHUD() {
-      if (this.hudHearts) this.hudHearts.setText("♥".repeat(Math.ceil(this.hearts)));
-      const q = this.quest.flags;
-      if (this.hudRupees) this.hudRupees.setText("$ " + q.rupees);
-      if (this.hudKeys) this.hudKeys.setText("K " + q.small_keys + (q.big_key ? "*" : ""));
+      // Draw hearts as little 7×6 rectangles with half-heart resolution.
+      if (this.hudHeartsG) {
+        const g = this.hudHeartsG;
+        g.clear();
+        const max = D.PLAYER.max_hearts;
+        const cur = this.hearts;
+        const startX = 2, startY = 2;
+        const w = 7, h = 6, gap = 1;
+        for (let i = 0; i < max; i++) {
+          const x = startX + i * (w + gap);
+          // Outline
+          g.lineStyle(1, 0x1f2937, 1);
+          g.strokeRect(x, startY, w, h);
+          // Fill
+          const filled = cur - i;
+          if (filled >= 1) {
+            g.fillStyle(0xef4444, 1);
+            g.fillRect(x + 1, startY + 1, w - 2, h - 2);
+          } else if (filled >= 0.5) {
+            g.fillStyle(0xef4444, 1);
+            g.fillRect(x + 1, startY + 1, Math.floor((w - 2) / 2), h - 2);
+            g.fillStyle(0x991b1b, 1);
+            g.fillRect(x + 1 + Math.floor((w - 2) / 2), startY + 1, Math.ceil((w - 2) / 2), h - 2);
+          } else {
+            g.fillStyle(0x1f2937, 1);
+            g.fillRect(x + 1, startY + 1, w - 2, h - 2);
+          }
+        }
+      }
+      const q = this.quest && this.quest.flags;
+      if (this.hudRupees && q) this.hudRupees.setText("$" + q.rupees);
+      if (this.hudKeys && q) this.hudKeys.setText("K" + q.small_keys + (q.big_key ? "*" : ""));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1000,6 +1118,10 @@
         else if (tpl.id === "boomerang") { q.has_boomerang = true; if (!this.currentItem) this.currentItem = "boomerang"; }
         sfx = "sfx_levelup";
       }
+      else if (tpl.kind === "bomb_refill") {
+        this.bombCount += (tpl.value || 3);
+        sfx = "sfx_pickup";
+      }
       try { this.sound.play(sfx, { volume: 0.5 }); } catch (_) {}
       this._refreshHUD();
       this._refreshItemSlot();
@@ -1192,6 +1314,10 @@
             row = row.substring(0, x) + '.' + row.substring(x + 1);
             tiles[y] = row;
             changed = true;
+            // Track for save
+            if (!this._brokenWalls) this._brokenWalls = {};
+            if (!this._brokenWalls[this.currentRoomId]) this._brokenWalls[this.currentRoomId] = [];
+            this._brokenWalls[this.currentRoomId].push([x, y]);
           }
         }
       }
@@ -1376,13 +1502,45 @@
         const s = JSON.parse(raw);
         if (s.quest) this.quest = s.quest;
         if (typeof s.hearts === "number") this.hearts = s.hearts;
+        if (typeof s.max_hearts === "number") D.PLAYER.max_hearts = s.max_hearts;
         if (s.roomId) this.currentRoomId = s.roomId;
+        if (s.currentItem) this._pendingItem = s.currentItem;   // applied after _refreshItemSlot exists
+        if (typeof s.bombCount === "number") this._pendingBomb = s.bombCount;
+        if (s.doorUnlocks) this._doorUnlocks = s.doorUnlocks;
+        if (s.broken_walls) this._brokenWalls = s.broken_walls;  // map of roomId → [tile coords]
       } catch (_) {}
+    }
+
+    _applyPendingSave() {
+      if (this._pendingItem) { this.currentItem = this._pendingItem; this._pendingItem = null; }
+      if (typeof this._pendingBomb === "number") { this.bombCount = this._pendingBomb; this._pendingBomb = null; }
+      this._refreshItemSlot();
+      this._refreshHUD();
+      // Re-apply room-specific broken weak-walls
+      if (this._brokenWalls && this._brokenWalls[this.currentRoomId]) {
+        const room = D.ROOMS[this.currentRoomId];
+        for (const [x, y] of this._brokenWalls[this.currentRoomId]) {
+          if (room.tiles[y] && WEAK_WALL_TILES.has(room.tiles[y][x])) {
+            room.tiles[y] = room.tiles[y].substring(0, x) + '.' + room.tiles[y].substring(x + 1);
+          }
+        }
+        this._repaintTiles();
+      }
     }
 
     _writeSave() {
       try {
-        const s = { quest: this.quest, hearts: this.hearts, roomId: this.currentRoomId };
+        const s = {
+          quest: this.quest,
+          hearts: this.hearts,
+          max_hearts: D.PLAYER.max_hearts,
+          roomId: this.currentRoomId,
+          currentItem: this.currentItem,
+          bombCount: this.bombCount,
+          doorUnlocks: this._doorUnlocks || {},
+          broken_walls: this._brokenWalls || {},
+          ts: Date.now(),
+        };
         localStorage.setItem("shroud_save_v1", JSON.stringify(s));
       } catch (_) {}
     }
