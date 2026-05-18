@@ -1105,9 +1105,13 @@
       // Defensive: if Guardian is hit before its AI tick initializes _phase,
       // treat it as phase 1 so the transition check below fires correctly.
       if (e._template === "guardian_of_first_light" && !e._phase) e._phase = 1;
-      // Guardian phase-2 sword immunity — must use bomb or arrow
-      if (e._template === "guardian_of_first_light" && e._phase === 2 && source === "sword") {
-        e.flash_until = time + 80;   // light flash, no damage
+      // Sword immunity — Guardian phase 2 OR any enemy with tpl.sword_immune=true
+      const tpl = D.ENEMIES[e._template] || D.BOSSES[e._template] || {};
+      const swordImmuneNow =
+        (e._template === "guardian_of_first_light" && e._phase === 2) ||
+        tpl.sword_immune;
+      if (swordImmuneNow && source === "sword") {
+        e.flash_until = time + 80;
         try { this.sound.play("sfx_hit", { volume: 0.3 }); } catch (_) {}
         return;
       }
@@ -1147,6 +1151,16 @@
       e.setVisible(false);
       e.body.setVelocity(0, 0);
       try { this.sound.play("sfx_enemy_die", { volume: 0.5 }); } catch (_) {}
+      // Split-on-death — spawn smaller copies (e.g. mudborn_shambler → 2 pups)
+      const eTpl = D.ENEMIES[e._template] || {};
+      if (eTpl.splits_on_death && !e._already_split) {
+        const split = eTpl.splits_on_death;
+        for (let i = 0; i < (split.count || 2); i++) {
+          const offset = (i - (split.count - 1) / 2) * 14;
+          const pup = this._spawnEnemyAt(split.kind, e.x + offset, e.y);
+          if (pup) pup._already_split = true;
+        }
+      }
       // Random drop: 30% green rupee, 15% heart, 55% nothing
       const r = Math.random();
       let drop = null;
@@ -1201,52 +1215,54 @@
     // ENEMY SPAWNING + AI
     // ══════════════════════════════════════════════════════════════
 
+    _spawnEnemyAt(template, x, y, role) {
+      // Spawn a single enemy at (x, y) using the same flow as _spawnRoomEntities.
+      // Used by split-on-death + room-spawned reinforcements.
+      const tpl = (template && D.ENEMIES[template]) || (D.BOSSES[template]);
+      if (!tpl) { console.warn("[pass2] unknown enemy template:", template); return null; }
+      const useAtlas = tpl.sprite_rest && this.textures.exists("enemies_atlas");
+      let e;
+      if (useAtlas) {
+        e = this.physics.add.sprite(x, y, "enemies_atlas", tpl.sprite_rest);
+        const targetPx = (tpl.scale || 1) * 14;
+        e.setScale(targetPx / 64);
+        e.setTint(tpl.color || 0xffffff);
+        if (this.anims.exists("anim_" + template)) e.play("anim_" + template);
+      } else {
+        e = this.add.rectangle(x, y, 12, 12, tpl.color || 0xff0000);
+        e.setStrokeStyle(1, 0x000000);
+        this.physics.add.existing(e);
+      }
+      e.body.setCollideWorldBounds(false);
+      e.body.setSize(10, 10);
+      e._template = template;
+      e._behavior = tpl.behavior;
+      e._role = role || null;
+      e.hp = tpl.hp_phase1 || tpl.hp || 5;
+      e.dmg = tpl.dmg || 1;
+      e.speed = tpl.speed || 40;
+      e.color = tpl.color || 0xffffff;
+      e._useAtlas = useAtlas;
+      e.dead = false;
+      e.knockback_until = 0;
+      e.flash_until = 0;
+      e._ai = { dir: 1, change_at: 0, last_shot: 0 };
+      if (e._template === "guardian_of_first_light") e._phase = 1;
+      e.active = true;
+      this.entityLayer.add(e);
+      this.enemies.push(e);
+      return e;
+    }
+
     _spawnRoomEntities() {
       this.enemies = [];
       this.itemsOnGround = [];
       const room = this.currentRoom;
       if (!room) return;
-      // Enemies — real Kenney atlas sprites (fallback to rectangle if atlas missing)
+      // Enemies — delegate to _spawnEnemyAt for consistency with split-on-death
+      // and any other dynamic-spawn paths.
       (room.enemies || []).forEach(spec => {
-        const tpl = (spec.template && D.ENEMIES[spec.template]) || (D.BOSSES[spec.template]);
-        if (!tpl) { console.warn("[pass2] unknown enemy template:", spec.template); return; }
-        const useAtlas = tpl.sprite_rest && this.textures.exists("enemies_atlas");
-        let e;
-        if (useAtlas) {
-          e = this.physics.add.sprite(spec.x, spec.y, "enemies_atlas", tpl.sprite_rest);
-          // Kenney creatures are 64×64; scale down to 14px (bosses 2× = 28px)
-          const targetPx = (tpl.scale || 1) * 14;
-          const s = targetPx / 64;
-          e.setScale(s);
-          e.setTint(tpl.color || 0xffffff);
-          if (this.anims.exists("anim_" + spec.template)) {
-            e.play("anim_" + spec.template);
-          }
-        } else {
-          e = this.add.rectangle(spec.x, spec.y, 12, 12, tpl.color || 0xff0000);
-          e.setStrokeStyle(1, 0x000000);
-          this.physics.add.existing(e);
-        }
-        e.body.setCollideWorldBounds(false);
-        e.body.setSize(10, 10);
-        e._template = spec.template;
-        e._behavior = tpl.behavior;
-        e._role = spec.role || null;
-        e.hp = tpl.hp_phase1 || tpl.hp || 5;
-        e.dmg = tpl.dmg || 1;
-        e.speed = tpl.speed || 40;
-        e.color = tpl.color || 0xffffff;
-        e._useAtlas = useAtlas;
-        e.dead = false;
-        e.knockback_until = 0;
-        e.flash_until = 0;
-        e._ai = { dir: 1, change_at: 0, last_shot: 0 };
-        // Initialize boss phase up-front so damage taken before first AI tick
-        // still triggers the phase-2 transition correctly.
-        if (e._template === "guardian_of_first_light") e._phase = 1;
-        e.active = true;
-        this.entityLayer.add(e);
-        this.enemies.push(e);
+        this._spawnEnemyAt(spec.template, spec.x, spec.y, spec.role);
       });
       // Items
       (room.items || []).forEach(item => {
@@ -1665,8 +1681,8 @@
           case "shoot":  this._ai_shoot(e, p, time);  break;
           case "guard":  this._ai_guard(e, p, time);  break;
           case "charge": this._ai_charge(e, p, time); break;
+          case "fly":    this._ai_fly(e, p, time);    break;
           default:
-            // Bosses get their own dispatcher (Guardian template)
             if (e._template === "guardian_of_first_light") this._ai_boss_guardian(e, p, time);
             else e.body.setVelocity(0, 0);
         }
@@ -1752,6 +1768,34 @@
           e._ai.last_slam = time;
           e._telegraph_until = 0;
         }
+      }
+    }
+
+    _ai_fly(e, p, time) {
+      // Hover with sin-sway, dive at player when within dive_range.
+      const tpl = D.ENEMIES[e._template] || {};
+      const diveRange = tpl.dive_range || 50;
+      const diveSpeed = tpl.dive_speed || 100;
+      const dist = Phaser.Math.Distance.Between(e.x, e.y, p.x, p.y);
+      if (!e._diving && dist < diveRange) {
+        e._diving = true;
+        e._dive_end = time + 800;
+      }
+      if (e._diving) {
+        if (time < e._dive_end) {
+          const dx = p.x - e.x, dy = p.y - e.y;
+          const len = Math.max(0.001, Math.hypot(dx, dy));
+          e.body.setVelocity((dx/len) * diveSpeed, (dy/len) * diveSpeed);
+        } else {
+          e._diving = false;
+        }
+      } else {
+        // Hover sway + slow drift toward player from far
+        const sx = Math.cos(time * 0.003) * 12;
+        const sy = Math.sin(time * 0.004) * 10;
+        const dx = p.x - e.x, dy = p.y - e.y;
+        const len = Math.max(0.001, Math.hypot(dx, dy));
+        e.body.setVelocity(sx + (dx/len) * 18, sy + (dy/len) * 18);
       }
     }
 

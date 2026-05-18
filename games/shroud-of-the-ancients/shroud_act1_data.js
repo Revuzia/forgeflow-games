@@ -646,11 +646,11 @@
   ], { W: "ruins_west_b" },
   {
     enemies: [
-      { template: "wraithwhisper", x: 64, y: 64 },
-      { template: "wraithwhisper", x: 224, y: 64 },
-      { template: "veilstalker", x: 144, y: 96 },
-      { template: "veilstalker", x: 64, y: 128 },
-      { template: "thornback_lurker", x: 224, y: 128 },
+      { template: "echo_knight", x: 144, y: 80 },   // sword-immune chase — must bow/bomb
+      { template: "bonechill_wraith", x: 64, y: 64 },
+      { template: "bonechill_wraith", x: 224, y: 64 },
+      { template: "ember_imp", x: 64, y: 128 },
+      { template: "ember_imp", x: 224, y: 128 },
     ],
     items: [
       { kind: "dungeon_compass", x: 144, y: 80 },
@@ -686,12 +686,12 @@
     lock_until_cleared: true,
   });
 
-  // Trap room — spike rows + enemies; bridge to big_key_room
+  // Trap room — spike rows + mudborn ambush (splits on death!)
   R("ruins_trap_room", "ruins_of_first_light", [
     "########D#########",
     "#:::::::::::::::::".slice(0,18),
     "#:::::::::::::::::".slice(0,18),
-    "#::::::ssss::::::#",   // spike row
+    "#::::::ssss::::::#",
     "#:::::........:::#",
     "#:::::........:::#",
     "#:::::........:::#",
@@ -702,9 +702,10 @@
   ], { N: "ruins_big_key_room", S: "ruins_mid_corridor" },
   {
     enemies: [
-      { template: "veilstalker", x: 144, y: 80 },
-      { template: "wraithwhisper", x: 64, y: 80 },
-      { template: "wraithwhisper", x: 224, y: 80 },
+      { template: "mudborn_shambler", x: 144, y: 96 },   // splits into 2 pups on death
+      { template: "bonechill_wraith", x: 64, y: 80 },    // flying dive-bomber
+      { template: "bonechill_wraith", x: 224, y: 80 },
+      { template: "echo_knight", x: 144, y: 144 },       // sword-immune
     ],
     lock_until_cleared: true,
     items: [{ kind: "bomb_refill", x: 80, y: 144 }],
@@ -874,6 +875,21 @@
       sprite_rest: "block_rest", sprite_move_a: "block_idle", sprite_move_b: "block_fall" },
     crystalspine_boar:{ hp: 10, dmg: 2.0, behavior: "charge", speed: 70, color: 0x6b4423,
       sprite_rest: "snail_rest", sprite_move_a: "snail_walk_a", sprite_move_b: "snail_walk_b" },
+    // NEW (iter 21) — broader threat variety
+    echo_knight:      { hp: 12, dmg: 1.5, behavior: "chase",  speed: 50, color: 0x60a5fa,
+      sword_immune: true,   // must use bow / bombs
+      sprite_rest: "fish_blue_rest", sprite_move_a: "fish_blue_swim_a", sprite_move_b: "fish_blue_swim_b" },
+    ember_imp:        { hp: 4,  dmg: 1.5, behavior: "shoot",  speed: 50, color: 0xea580c,
+      projectile_cd_ms: 1500, projectile_speed: 180, lead_target: true,
+      sprite_rest: "slime_fire_rest", sprite_move_a: "slime_fire_walk_a", sprite_move_b: "slime_fire_walk_b" },
+    bonechill_wraith: { hp: 5,  dmg: 1.0, behavior: "fly",    speed: 40, color: 0xe0f2fe,
+      dive_range: 50, dive_speed: 110,
+      sprite_rest: "fly_rest", sprite_move_a: "fly_a", sprite_move_b: "fly_b" },
+    mudborn_shambler: { hp: 8,  dmg: 1.0, behavior: "chase",  speed: 30, color: 0x57534e,
+      splits_on_death: { count: 2, kind: "mudborn_pup" },
+      sprite_rest: "frog_rest", sprite_move_a: "frog_jump", sprite_move_b: "frog_idle" },
+    mudborn_pup:      { hp: 3,  dmg: 0.5, behavior: "chase",  speed: 50, color: 0x78716c,
+      sprite_rest: "worm_normal_rest", sprite_move_a: "worm_normal_move_a", sprite_move_b: "worm_normal_move_b" },
   };
 
   // ── Bosses ───────────────────────────────────────────────────────
