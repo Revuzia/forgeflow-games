@@ -80,6 +80,15 @@
   const HAZARD_TILES = new Set(['~', 'P', 's']);
   const WEAK_WALL_TILES = new Set(['W']);
 
+  // Item kinds that spawn inside a closed treasure chest (must be opened by
+  // walking onto them — animated lid lift + sparkles + item-rise overhead).
+  // Consumable kinds (heart/rupee/bomb_refill/flower) auto-pickup as floor icons.
+  const CHEST_KINDS = new Set([
+    'small_key', 'big_key', 'heart_piece', 'heart_container',
+    'bow', 'bombs', 'boomerang',
+    'dungeon_map', 'dungeon_compass',
+  ]);
+
   // ══════════════════════════════════════════════════════════════
   // P2_Boot — tiny bootstrap so Preload has a visible loading bar
   // ══════════════════════════════════════════════════════════════
@@ -1400,18 +1409,108 @@
     _spawnPickup(kind, x, y) {
       const tpl = D.ITEMS[kind];
       if (!tpl) { console.warn("[pass2] unknown item kind:", kind); return; }
-      // Draw an icon-shape via Graphics — gives each pickup type a distinct silhouette
-      const it = this._drawItemIcon(kind, tpl, x, y);
-      // No physics body needed — pickup uses distance check in _tickPickups
+      // Chest-worthy items get a closed-chest visual; consumables (heart,
+      // rupee, bomb_refill, side_quest_flower) lie on the floor as icons.
+      const isChest = CHEST_KINDS.has(kind);
+      let it;
+      if (isChest) {
+        it = this._drawClosedChest(x, y);
+        it._isChest = true;
+        it._opened = false;
+      } else {
+        it = this._drawItemIcon(kind, tpl, x, y);
+        // Gentle pulse — telegraphs "pickup me"
+        this.tweens.add({
+          targets: it, scaleX: 1.15, scaleY: 1.15, duration: 600, yoyo: true, repeat: -1, ease: "Sine.inOut",
+        });
+      }
       it.active = true;
       it._kind = kind;
       it._template = tpl;
       this.entityLayer.add(it);
       this.itemsOnGround.push(it);
-      // Gentle pulse — telegraphs "pickup me"
+    }
+
+    _drawClosedChest(x, y) {
+      const container = this.add.container(x, y);
+      const g = this.add.graphics();
+      container.add(g);
+      // Shadow at base
+      g.fillStyle(0x000000, 0.3);
+      g.fillEllipse(0, 5, 12, 3);
+      // Chest body (wooden box)
+      g.fillStyle(0x78350f, 1);
+      g.fillRect(-5, -2, 10, 7);
+      g.lineStyle(0.5, 0x451a03, 1);
+      g.strokeRect(-5, -2, 10, 7);
+      // Chest lid (curved top — approximated with a rect + corner shadow)
+      g.fillStyle(0x92400e, 1);
+      g.fillRect(-5, -5, 10, 4);
+      g.lineStyle(0.5, 0x451a03, 1);
+      g.strokeRect(-5, -5, 10, 4);
+      // Metal bands (gold)
+      g.fillStyle(0xfacc15, 1);
+      g.fillRect(-5, -1, 10, 1);
+      g.fillRect(-5, 2, 10, 1);
+      // Latch (center front)
+      g.fillStyle(0xeab308, 1);
+      g.fillRect(-1, -2, 2, 2);
+      g.fillStyle(0x000000, 1);
+      g.fillCircle(0, -1, 0.4);
+      // Subtle pulse to attract attention
       this.tweens.add({
-        targets: it, scaleX: 1.15, scaleY: 1.15, duration: 600, yoyo: true, repeat: -1, ease: "Sine.inOut",
+        targets: container, y: y - 1, duration: 800, yoyo: true, repeat: -1, ease: "Sine.inOut",
       });
+      return container;
+    }
+
+    _openChest(chest) {
+      if (chest._opened) return;
+      chest._opened = true;
+      // Draw open-chest state (lid lifted) + item icon rising overhead
+      // Wipe the existing Graphics and redraw open
+      const oldG = chest.list[0];
+      if (oldG && oldG.destroy) oldG.destroy();
+      const g = this.add.graphics();
+      chest.add(g);
+      // Shadow + body unchanged
+      g.fillStyle(0x000000, 0.3); g.fillEllipse(0, 5, 12, 3);
+      g.fillStyle(0x78350f, 1); g.fillRect(-5, -2, 10, 7);
+      g.lineStyle(0.5, 0x451a03, 1); g.strokeRect(-5, -2, 10, 7);
+      g.fillStyle(0xfacc15, 1); g.fillRect(-5, -1, 10, 1); g.fillRect(-5, 2, 10, 1);
+      // Dark inside (chest is open)
+      g.fillStyle(0x1a0a00, 1);
+      g.fillRect(-4, -1, 8, 5);
+      // Open lid tilted backward (rotated rect approximation — a polygon)
+      g.fillStyle(0x92400e, 1);
+      g.fillTriangle(-5, -5, 5, -5, 5, -2);
+      g.fillTriangle(-5, -5, 5, -2, -5, -2);
+      g.lineStyle(0.5, 0x451a03, 1);
+      g.strokeTriangle(-5, -5, 5, -5, 5, -2);
+      // Yellow flash burst (briefly)
+      const flash = this.add.circle(chest.x, chest.y - 2, 10, 0xfde047, 0.85);
+      this.fxLayer.add(flash);
+      this.tweens.add({ targets: flash, scaleX: 2.5, scaleY: 2.5, alpha: 0, duration: 360, onComplete: () => flash.destroy() });
+      // Sparkles
+      for (let i = 0; i < 6; i++) {
+        const sp = this.add.circle(chest.x + (Math.random() - 0.5) * 12, chest.y - 4, 0.8, 0xfde047, 1);
+        this.fxLayer.add(sp);
+        this.tweens.add({
+          targets: sp, x: chest.x + (Math.random() - 0.5) * 24, y: chest.y - 12 - Math.random() * 6, alpha: 0,
+          duration: 700 + Math.random() * 300, onComplete: () => sp.destroy(),
+        });
+      }
+      // Item icon rises overhead
+      const tpl = chest._template;
+      const innerIcon = this._drawItemIcon(chest._kind, tpl, chest.x, chest.y - 2);
+      this.fxLayer.add(innerIcon);
+      this.tweens.add({
+        targets: innerIcon, y: chest.y - 14, scaleX: 1.4, scaleY: 1.4, duration: 700, ease: "Sine.out",
+      });
+      this.tweens.add({
+        targets: innerIcon, alpha: 0, duration: 300, delay: 800, onComplete: () => innerIcon.destroy(),
+      });
+      try { this.sound.play("sfx_door", { volume: 0.5 }); } catch (_) {}
     }
 
     _drawItemIcon(kind, tpl, x, y) {
@@ -1807,12 +1906,26 @@
       for (let i = this.itemsOnGround.length - 1; i >= 0; i--) {
         const it = this.itemsOnGround[i];
         if (!it.active) continue;
-        // Distance check — works regardless of whether `it` is a Container,
-        // Sprite, or Rectangle (Container.getBounds in Phaser 3 is unreliable).
+        if (it._pending_collect) continue;  // already opening, waiting for delay
         if (Phaser.Math.Distance.Between(p.x, p.y, it.x, it.y) < 10) {
-          this._collectItem(it);
-          it.destroy();
-          this.itemsOnGround.splice(i, 1);
+          if (it._isChest && !it._opened) {
+            // Open chest with animation, collect after delay so the player
+            // sees the lid-lift + sparkle + item-rise sequence.
+            it._pending_collect = true;
+            this._openChest(it);
+            this.time.delayedCall(900, () => {
+              if (!it || !it.scene) return;
+              this._collectItem(it);
+              it.destroy();
+              const idx = this.itemsOnGround.indexOf(it);
+              if (idx >= 0) this.itemsOnGround.splice(idx, 1);
+            });
+          } else if (!it._isChest) {
+            // Consumable floor drop — instant pickup
+            this._collectItem(it);
+            it.destroy();
+            this.itemsOnGround.splice(i, 1);
+          }
         }
       }
     }
