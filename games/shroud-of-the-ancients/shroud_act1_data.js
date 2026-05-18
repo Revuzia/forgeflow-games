@@ -77,7 +77,8 @@
     npcs: [{
       id: "elder_mira", name: "Elder Mira", x: 144, y: 56,
       default_state: "intro",
-      sprite_frame: 25,        // rl_chars frame index — elder-ish character (column 25 row 0)
+      sprite_frame: 25,
+      p2_frame: 0,             // p2_npcs sheet — Elder Mira (4×1 grid)
       tint: 0xfbbf24,           // warm gold
       dialogue: {
         intro: [
@@ -111,7 +112,7 @@
     npcs: [{
       id: "heda_herbalist", name: "Heda the Herbalist", x: 144, y: 88,
       default_state: "intro",
-      sprite_frame: 27, tint: 0x22c55e,   // herbalist — green tint
+      sprite_frame: 27, p2_frame: 1, tint: 0x22c55e,   // herbalist — green apron
       dialogue: {
         intro: [
           "Welcome, traveller.",
@@ -148,7 +149,7 @@
     npcs: [{
       id: "dax_trader", name: "Dax the Trader", x: 144, y: 80,
       default_state: "intro",
-      sprite_frame: 31, tint: 0xa78bfa,   // trader — purple cloak
+      sprite_frame: 31, p2_frame: 2, tint: 0xa78bfa,   // trader — purple cloak
       dialogue: {
         intro: [
           "Fresh off the vine! What'll it be?",
@@ -266,7 +267,7 @@
       id: "liora_scholar", name: "Liora",
       x: 200, y: 64,
       default_state: "intro",
-      sprite_frame: 29, tint: 0x60a5fa,
+      sprite_frame: 29, p2_frame: 3, tint: 0x60a5fa,   // scholar — blue robes
       gives_bow_on_first_talk: true,
       dialogue: {
         intro: [
@@ -865,30 +866,30 @@
     // 3-hit kill (1 dmg sword) on grunts → 6 hits on heavy enemies → 25-40 hits
     // on mini-boss / boss. Matches genre-typical pacing where each encounter
     // demands real engagement instead of one-tap clear.
-    thornback_lurker: { hp: 6,  dmg: 1.0, behavior: "patrol", speed: 35, color: 0x2d5016,
+    // p2_frame = index in p2_enemies sheet (5x2 grid).
+    // sprite_rest = fallback Kenney atlas frame.
+    thornback_lurker: { hp: 6,  dmg: 1.0, behavior: "patrol", speed: 35, color: 0xffffff, p2_frame: 0,
       sprite_rest: "slime_spike_rest", sprite_move_a: "slime_spike_walk_a", sprite_move_b: "slime_spike_walk_b" },
-    veilstalker:      { hp: 4,  dmg: 1.0, behavior: "chase",  speed: 55, color: 0x1a1a2e,
+    veilstalker:      { hp: 4,  dmg: 1.0, behavior: "chase",  speed: 55, color: 0xffffff, p2_frame: 1,
       sprite_rest: "barnacle_attack_rest", sprite_move_a: "barnacle_attack_a", sprite_move_b: "barnacle_attack_b" },
-    wraithwhisper:    { hp: 3,  dmg: 1.0, behavior: "shoot",  speed: 25, color: 0x9333ea, projectile_cd_ms: 2000,
+    wraithwhisper:    { hp: 3,  dmg: 1.0, behavior: "shoot",  speed: 25, color: 0xffffff, projectile_cd_ms: 2000, p2_frame: 2,
       sprite_rest: "ladybug_rest", sprite_move_a: "ladybug_walk_a", sprite_move_b: "ladybug_walk_b" },
-    geomancer_statue: { hp: 12, dmg: 2.0, behavior: "guard",  speed: 0,  color: 0x7c7c7c, slam_cd_ms: 3000,
+    geomancer_statue: { hp: 12, dmg: 2.0, behavior: "guard",  speed: 0,  color: 0xffffff, slam_cd_ms: 3000, p2_frame: 3,
       sprite_rest: "block_rest", sprite_move_a: "block_idle", sprite_move_b: "block_fall" },
-    crystalspine_boar:{ hp: 10, dmg: 2.0, behavior: "charge", speed: 70, color: 0x6b4423,
+    crystalspine_boar:{ hp: 10, dmg: 2.0, behavior: "charge", speed: 70, color: 0xffffff, p2_frame: 4,
       sprite_rest: "snail_rest", sprite_move_a: "snail_walk_a", sprite_move_b: "snail_walk_b" },
-    // NEW (iter 21) — broader threat variety
-    echo_knight:      { hp: 12, dmg: 1.5, behavior: "chase",  speed: 50, color: 0x60a5fa,
-      sword_immune: true,   // must use bow / bombs
+    echo_knight:      { hp: 12, dmg: 1.5, behavior: "chase",  speed: 50, color: 0xffffff, sword_immune: true, p2_frame: 5,
       sprite_rest: "fish_blue_rest", sprite_move_a: "fish_blue_swim_a", sprite_move_b: "fish_blue_swim_b" },
-    ember_imp:        { hp: 4,  dmg: 1.5, behavior: "shoot",  speed: 50, color: 0xea580c,
-      projectile_cd_ms: 1500, projectile_speed: 180, lead_target: true,
+    ember_imp:        { hp: 4,  dmg: 1.5, behavior: "shoot",  speed: 50, color: 0xffffff,
+      projectile_cd_ms: 1500, projectile_speed: 180, lead_target: true, p2_frame: 6,
       sprite_rest: "slime_fire_rest", sprite_move_a: "slime_fire_walk_a", sprite_move_b: "slime_fire_walk_b" },
-    bonechill_wraith: { hp: 5,  dmg: 1.0, behavior: "fly",    speed: 40, color: 0xe0f2fe,
-      dive_range: 50, dive_speed: 110,
+    bonechill_wraith: { hp: 5,  dmg: 1.0, behavior: "fly",    speed: 40, color: 0xffffff,
+      dive_range: 50, dive_speed: 110, p2_frame: 7,
       sprite_rest: "fly_rest", sprite_move_a: "fly_a", sprite_move_b: "fly_b" },
-    mudborn_shambler: { hp: 8,  dmg: 1.0, behavior: "chase",  speed: 30, color: 0x57534e,
-      splits_on_death: { count: 2, kind: "mudborn_pup" },
+    mudborn_shambler: { hp: 8,  dmg: 1.0, behavior: "chase",  speed: 30, color: 0xffffff,
+      splits_on_death: { count: 2, kind: "mudborn_pup" }, p2_frame: 8,
       sprite_rest: "frog_rest", sprite_move_a: "frog_jump", sprite_move_b: "frog_idle" },
-    mudborn_pup:      { hp: 3,  dmg: 0.5, behavior: "chase",  speed: 50, color: 0x78716c,
+    mudborn_pup:      { hp: 3,  dmg: 0.5, behavior: "chase",  speed: 50, color: 0xffffff, p2_frame: 9,
       sprite_rest: "worm_normal_rest", sprite_move_a: "worm_normal_move_a", sprite_move_b: "worm_normal_move_b" },
   };
 

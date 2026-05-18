@@ -133,9 +133,45 @@
       this.load.spritesheet("p2_tileset", "assets/p2_tileset.png", {
         frameWidth: 352, frameHeight: 192,
       });
-      // Player 4-direction sheet — 4x2 grid on a 1408x768 sheet → 352x384 per cell
+      // Player 4-direction sheet — 4x2 grid → 352x384 per cell
       this.load.spritesheet("p2_player", "assets/p2_player_sheet.png", {
         frameWidth: 352, frameHeight: 384,
+      });
+      // ── BATCH 2 ASSETS (iter #26) ──
+      // 10-enemy sheet — 5x2 grid on 1408x768 → 281x384 per cell
+      this.load.spritesheet("p2_enemies", "assets/p2_enemies_sheet.png", {
+        frameWidth: 281, frameHeight: 384,
+      });
+      // Boss is a single image (no grid)
+      this.load.image("p2_boss_guardian", "assets/p2_boss_guardian.png");
+      // 4-NPC sheet — 4x1 grid on 1408x768 → 352x768 per cell
+      this.load.spritesheet("p2_npcs", "assets/p2_npcs_sheet.png", {
+        frameWidth: 352, frameHeight: 768,
+      });
+      // Dungeon-variant tileset — 4x4 grid → 352x192 per cell
+      this.load.spritesheet("p2_dungeon_tileset", "assets/p2_dungeon_tileset.png", {
+        frameWidth: 352, frameHeight: 192,
+      });
+      // Cave-variant tileset — 4x4 → 352x192
+      this.load.spritesheet("p2_cave_tileset", "assets/p2_cave_tileset.png", {
+        frameWidth: 352, frameHeight: 192,
+      });
+      // 16 item icons — 4x4 grid → 352x192 per cell
+      this.load.spritesheet("p2_items", "assets/p2_item_icons.png", {
+        frameWidth: 352, frameHeight: 192,
+      });
+      // Splash + UI + portraits (single images)
+      this.load.image("p2_title_screen", "assets/p2_title_screen.png");
+      this.load.image("p2_hud_panel",    "assets/p2_hud_panel.png");
+      this.load.image("p2_portrait_mira",    "assets/p2_mira_portrait.png");
+      this.load.image("p2_portrait_liora",   "assets/p2_liora_portrait.png");
+      this.load.image("p2_portrait_villain", "assets/p2_villain_portrait.png");
+      // FX strips — 4 frames in a row, 1408x768 → 352x768 per cell (4x1 grid)
+      this.load.spritesheet("p2_slash_fx", "assets/p2_slash_fx.png", {
+        frameWidth: 352, frameHeight: 768,
+      });
+      this.load.spritesheet("p2_explosion_fx", "assets/p2_explosion_fx.png", {
+        frameWidth: 352, frameHeight: 768,
       });
 
       // Real Kenney atlases — replace the colored-rectangle placeholders
@@ -218,16 +254,17 @@
       const h = this.cameras.main.height;
       this.cameras.main.setBackgroundColor(0x0a0e1a);
 
-      // Atmospheric background using the pre-loaded zone art.  Falls back to
-      // a solid color if the image hasn't loaded.
-      if (this.textures.exists("world_01_bg")) {
-        const bg = this.add.image(w/2, h/2, "world_01_bg");
-        // Cover the canvas (scale to fit while preserving aspect)
+      // AAA title-screen splash art (preferred) — Kaelen at the runic gate.
+      // Falls back to world_01_bg or solid color.
+      const splashKey = this.textures.exists("p2_title_screen") ? "p2_title_screen"
+                      : this.textures.exists("world_01_bg") ? "world_01_bg" : null;
+      if (splashKey) {
+        const bg = this.add.image(w/2, h/2, splashKey);
         const scale = Math.max(w / bg.width, h / bg.height);
         bg.setScale(scale);
-        bg.setAlpha(0.55);   // dimmed so text reads
-        // Dark vignette overlay
-        const vignette = this.add.rectangle(w/2, h/2, w, h, 0x000000, 0.35);
+        bg.setAlpha(splashKey === "p2_title_screen" ? 0.80 : 0.55);
+        // Vignette gradient for title readability
+        const vignette = this.add.rectangle(w/2, h/2, w, h, 0x000000, 0.30);
         vignette.setBlendMode(Phaser.BlendModes.MULTIPLY);
       }
 
@@ -722,10 +759,17 @@
     }
 
     _drawNpcFigure(n) {
-      // Draw an NPC as a procedural hooded figure with cloak in n.tint color.
-      // Container x = n.x, y = n.y. The figure is ~10 wide × 16 tall, with
-      // feet centered near the container origin.
       const container = this.add.container(n.x, n.y);
+      // Prefer the AAA-tier p2_npcs sheet (4×1 grid, 352×768 per frame)
+      if (typeof n.p2_frame === "number" && this.textures.exists("p2_npcs")) {
+        const sprite = this.add.image(0, 0, "p2_npcs", n.p2_frame);
+        sprite.setOrigin(0.5, 0.85);
+        // Source frames are 352x768; scale to ~22 px display
+        sprite.setScale(22 / 352);
+        container.add(sprite);
+        return container;
+      }
+      // Fallback: procedural hooded figure with cloak in n.tint color.
       const g = this.add.graphics();
       container.add(g);
       const cloak = n.tint || 0xfacc15;
@@ -1454,13 +1498,25 @@
     // ══════════════════════════════════════════════════════════════
 
     _spawnEnemyAt(template, x, y, role) {
-      // Spawn a single enemy at (x, y) using the same flow as _spawnRoomEntities.
-      // Used by split-on-death + room-spawned reinforcements.
       const tpl = (template && D.ENEMIES[template]) || (D.BOSSES[template]);
       if (!tpl) { console.warn("[pass2] unknown enemy template:", template); return null; }
-      const useAtlas = tpl.sprite_rest && this.textures.exists("enemies_atlas");
+      // 1. AAA: dedicated boss sprite for Guardian
+      // 2. AAA: p2_enemies sheet for the 10 grunts
+      // 3. Fallback: Kenney enemies_atlas
+      // 4. Final fallback: colored rectangle
+      const useP2Boss = template === "guardian_of_first_light" && this.textures.exists("p2_boss_guardian");
+      const useP2Enemy = typeof tpl.p2_frame === "number" && this.textures.exists("p2_enemies");
+      const useAtlas = !useP2Enemy && !useP2Boss && tpl.sprite_rest && this.textures.exists("enemies_atlas");
       let e;
-      if (useAtlas) {
+      if (useP2Boss) {
+        // Boss is 956x680ish; scale to ~48 px display (3-tile imposing presence)
+        e = this.physics.add.sprite(x, y, "p2_boss_guardian");
+        e.setScale(48 / e.width);
+      } else if (useP2Enemy) {
+        // p2_enemies frames are 281x384 source; scale to ~22 px display
+        e = this.physics.add.sprite(x, y, "p2_enemies", tpl.p2_frame);
+        e.setScale(22 / 281);
+      } else if (useAtlas) {
         e = this.physics.add.sprite(x, y, "enemies_atlas", tpl.sprite_rest);
         const targetPx = (tpl.scale || 1) * 14;
         e.setScale(targetPx / 64);
@@ -1761,8 +1817,22 @@
     }
 
     _drawItemIcon(kind, tpl, x, y) {
-      // Container holding the shape — set its position so the body lives at (x, y)
       const container = this.add.container(x, y);
+      // Prefer the AAA-tier p2_items sheet (4×4 grid, 352×192 per frame).
+      // Kind → frame index map:
+      const P2_FRAME = {
+        heart: 0, rupee_green: 1, rupee_blue: 2, rupee_red: 3,
+        small_key: 4, big_key: 5, dungeon_compass: 6, dungeon_map: 7,
+        bow: 8, bombs: 9, boomerang: 10, bomb_refill: 9,
+        heart_container: 12, heart_piece: 13, flower: 14,
+      };
+      if (P2_FRAME[kind] !== undefined && this.textures.exists("p2_items")) {
+        const ic = this.add.image(0, 0, "p2_items", P2_FRAME[kind]);
+        ic.setDisplaySize(10, 10);
+        container.add(ic);
+        return container;
+      }
+      // Fallback: Graphics-drawn icons (original approach)
       const g = this.add.graphics();
       container.add(g);
       const baseCol = tpl.color || 0xfacc15;
