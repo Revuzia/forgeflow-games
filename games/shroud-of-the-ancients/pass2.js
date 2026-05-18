@@ -166,13 +166,31 @@
       this.load.image("p2_portrait_mira",    "assets/p2_mira_portrait.png");
       this.load.image("p2_portrait_liora",   "assets/p2_liora_portrait.png");
       this.load.image("p2_portrait_villain", "assets/p2_villain_portrait.png");
-      // FX strips — 4 frames in a row, 1408x768 → 352x768 per cell (4x1 grid)
+      // FX strips — 4 frames in a row, 1408x768 → 352x768 per cell
       this.load.spritesheet("p2_slash_fx", "assets/p2_slash_fx.png", {
         frameWidth: 352, frameHeight: 768,
       });
       this.load.spritesheet("p2_explosion_fx", "assets/p2_explosion_fx.png", {
         frameWidth: 352, frameHeight: 768,
       });
+      // Animated enemy walk-cycle strips (1408x768 → 352x768 per 4-frame cell)
+      this.load.spritesheet("p2_anim_thornback",     "assets/p2_thornback_anim.png",     { frameWidth: 352, frameHeight: 768 });
+      this.load.spritesheet("p2_anim_veilstalker",   "assets/p2_veilstalker_anim.png",   { frameWidth: 352, frameHeight: 768 });
+      this.load.spritesheet("p2_anim_wraithwhisper", "assets/p2_wraithwhisper_anim.png", { frameWidth: 352, frameHeight: 768 });
+      this.load.spritesheet("p2_anim_ember_imp",     "assets/p2_ember_imp_anim.png",     { frameWidth: 352, frameHeight: 768 });
+      this.load.spritesheet("p2_anim_bonechill",     "assets/p2_bonechill_anim.png",     { frameWidth: 352, frameHeight: 768 });
+      // Animated chest opening + water
+      this.load.spritesheet("p2_anim_chest_open", "assets/p2_chest_open_anim.png", { frameWidth: 352, frameHeight: 768 });
+      this.load.spritesheet("p2_anim_water",      "assets/p2_water_anim.png",       { frameWidth: 352, frameHeight: 768 });
+      // Additional dialogue portraits + win/gameover/boss-intro splashes
+      this.load.image("p2_portrait_heda",   "assets/p2_heda_portrait.png");
+      this.load.image("p2_portrait_dax",    "assets/p2_dax_portrait.png");
+      this.load.image("p2_portrait_kaelen", "assets/p2_kaelen_portrait.png");
+      this.load.image("p2_win_screen",      "assets/p2_win_screen.png");
+      this.load.image("p2_gameover_screen", "assets/p2_gameover_screen.png");
+      this.load.image("p2_boss_intro",      "assets/p2_boss_intro.png");
+      this.load.image("p2_logo",            "assets/p2_logo.png");
+      this.load.image("p2_ui_buttons",      "assets/p2_ui_buttons.png");
 
       // Real Kenney atlases — replace the colored-rectangle placeholders
       this.load.atlasXML("enemies_atlas", "assets/enemies.png", "assets/enemies.xml");
@@ -220,11 +238,38 @@
       //   Row 1 (frames 0-3):  down_idle, down_step, up_idle, up_step
       //   Row 2 (frames 4-7):  left_idle, left_step, right_idle, right_step
       if (this.textures.exists("p2_player")) {
-        // 2-frame walk loops, 8 fps for stride
         this.anims.create({ key: "p2_walk_down",  frames: [{key:"p2_player", frame:0}, {key:"p2_player", frame:1}], frameRate: 6, repeat: -1 });
         this.anims.create({ key: "p2_walk_up",    frames: [{key:"p2_player", frame:2}, {key:"p2_player", frame:3}], frameRate: 6, repeat: -1 });
         this.anims.create({ key: "p2_walk_left",  frames: [{key:"p2_player", frame:4}, {key:"p2_player", frame:5}], frameRate: 6, repeat: -1 });
         this.anims.create({ key: "p2_walk_right", frames: [{key:"p2_player", frame:6}, {key:"p2_player", frame:7}], frameRate: 6, repeat: -1 });
+      }
+      // Enemy walk-cycle anims — each 4-frame strip at 6 fps repeating.
+      const mkAnim = (key, sheet, fps = 6) => {
+        if (!this.textures.exists(sheet)) return;
+        this.anims.create({
+          key, frames: [
+            { key: sheet, frame: 0 }, { key: sheet, frame: 1 },
+            { key: sheet, frame: 2 }, { key: sheet, frame: 3 },
+          ],
+          frameRate: fps, repeat: -1,
+        });
+      };
+      mkAnim("p2_anim_thornback_walk",     "p2_anim_thornback");
+      mkAnim("p2_anim_veilstalker_walk",   "p2_anim_veilstalker");
+      mkAnim("p2_anim_wraithwhisper_walk", "p2_anim_wraithwhisper", 4);  // hover slower
+      mkAnim("p2_anim_ember_imp_walk",     "p2_anim_ember_imp", 8);
+      mkAnim("p2_anim_bonechill_walk",     "p2_anim_bonechill", 4);
+      mkAnim("p2_anim_water_loop",         "p2_anim_water", 4);
+      // Chest open is a one-shot (no repeat)
+      if (this.textures.exists("p2_anim_chest_open")) {
+        this.anims.create({
+          key: "p2_anim_chest_open_play",
+          frames: [
+            { key: "p2_anim_chest_open", frame: 0 }, { key: "p2_anim_chest_open", frame: 1 },
+            { key: "p2_anim_chest_open", frame: 2 }, { key: "p2_anim_chest_open", frame: 3 },
+          ],
+          frameRate: 8, repeat: 0,
+        });
       }
       // Build per-enemy walk anims from the Kenney atlas
       const animEnemies = Object.entries(D.ENEMIES).concat(Object.entries(D.BOSSES));
@@ -630,8 +675,14 @@
         else this._cycleItem();
       }
       // Tutorial step 0 → 1: first movement
-      if ((this.player.body.velocity.x !== 0 || this.player.body.velocity.y !== 0)) {
+      const isMoving = (this.player.body.velocity.x !== 0 || this.player.body.velocity.y !== 0);
+      if (isMoving) {
         this._advanceTutorialIfStep(0);
+        // Footstep SFX while walking — every ~280ms (matches stride frame rate)
+        if (!this._lastFootstep || time - this._lastFootstep > 280) {
+          this._lastFootstep = time;
+          try { this.sound.play("sfx_footstep", { volume: 0.18 }); } catch (_) {}
+        }
       }
       // Floating "PRESS C" prompt above adjacent NPC
       this._updateNpcInteractionPrompt();
@@ -1300,7 +1351,6 @@
     _spawnSlashArc() {
       const p = this.player;
       const dir = p.facing;
-      // Position the arc in the facing direction
       const offsets = {
         up:    { x: 0, y: -10, rot: -Math.PI/2 },
         down:  { x: 0, y:  10, rot:  Math.PI/2 },
@@ -1308,35 +1358,37 @@
         right: { x:  10, y: 0, rot:  0 },
       };
       const o = offsets[dir] || offsets.down;
+      // Prefer the AAA animated slash FX sprite when available.
+      if (this.textures.exists("p2_slash_fx")) {
+        const slash = this.add.sprite(p.x + o.x, p.y + o.y, "p2_slash_fx", 0);
+        slash.setScale(20 / 352);   // source 352x768 → ~20 px display
+        slash.rotation = o.rot;
+        this.fxLayer.add(slash);
+        // Cycle frames manually over the 280ms attack-active window
+        const totalMs = 280;
+        const perFrame = totalMs / 4;
+        for (let f = 1; f < 4; f++) {
+          this.time.delayedCall(perFrame * f, () => {
+            if (slash.scene) slash.setFrame(f);
+          });
+        }
+        this.tweens.add({
+          targets: slash, alpha: 0, scaleX: 22/352, scaleY: 22/352,
+          duration: totalMs, onComplete: () => slash.destroy(),
+        });
+        return;
+      }
+      // Fallback: Graphics crescent
       const arc = this.add.graphics();
-      arc.x = p.x + o.x;
-      arc.y = p.y + o.y;
-      arc.rotation = o.rot;
-      // Draw a bright crescent slash (white-yellow with darker rim)
+      arc.x = p.x + o.x;  arc.y = p.y + o.y;  arc.rotation = o.rot;
       arc.lineStyle(2, 0xfafafa, 1);
-      arc.beginPath();
-      arc.arc(0, 0, 9, -Math.PI/3, Math.PI/3, false);
-      arc.strokePath();
+      arc.beginPath(); arc.arc(0, 0, 9, -Math.PI/3, Math.PI/3, false); arc.strokePath();
       arc.lineStyle(1.5, 0xfde047, 0.9);
-      arc.beginPath();
-      arc.arc(0, 0, 7, -Math.PI/3, Math.PI/3, false);
-      arc.strokePath();
-      // Small inner glow streak
+      arc.beginPath(); arc.arc(0, 0, 7, -Math.PI/3, Math.PI/3, false); arc.strokePath();
       arc.lineStyle(1, 0xffffff, 0.7);
-      arc.beginPath();
-      arc.arc(0, 0, 5, -Math.PI/4, Math.PI/4, false);
-      arc.strokePath();
+      arc.beginPath(); arc.arc(0, 0, 5, -Math.PI/4, Math.PI/4, false); arc.strokePath();
       this.fxLayer.add(arc);
-      // Sweep: rotate slightly + scale out + fade
-      this.tweens.add({
-        targets: arc,
-        rotation: arc.rotation + 0.4,
-        scaleX: 1.4,
-        scaleY: 1.4,
-        alpha: 0,
-        duration: 280,
-        onComplete: () => arc.destroy(),
-      });
+      this.tweens.add({ targets: arc, rotation: arc.rotation + 0.4, scaleX: 1.4, scaleY: 1.4, alpha: 0, duration: 280, onComplete: () => arc.destroy() });
     }
 
     _tickHitbox(time) {
@@ -1505,15 +1557,30 @@
       // 3. Fallback: Kenney enemies_atlas
       // 4. Final fallback: colored rectangle
       const useP2Boss = template === "guardian_of_first_light" && this.textures.exists("p2_boss_guardian");
-      const useP2Enemy = typeof tpl.p2_frame === "number" && this.textures.exists("p2_enemies");
-      const useAtlas = !useP2Enemy && !useP2Boss && tpl.sprite_rest && this.textures.exists("enemies_atlas");
+      // Animated walk-sheet mapping (5 enemies have their own 4-frame strips)
+      const ANIM_SHEET_BY_TEMPLATE = {
+        thornback_lurker: "p2_anim_thornback",
+        veilstalker:      "p2_anim_veilstalker",
+        wraithwhisper:    "p2_anim_wraithwhisper",
+        ember_imp:        "p2_anim_ember_imp",
+        bonechill_wraith: "p2_anim_bonechill",
+      };
+      const animSheet = ANIM_SHEET_BY_TEMPLATE[template];
+      const useAnimSheet = animSheet && this.textures.exists(animSheet);
+      const useP2Enemy = !useAnimSheet && typeof tpl.p2_frame === "number" && this.textures.exists("p2_enemies");
+      const useAtlas = !useAnimSheet && !useP2Enemy && !useP2Boss && tpl.sprite_rest && this.textures.exists("enemies_atlas");
       let e;
       if (useP2Boss) {
-        // Boss is 956x680ish; scale to ~48 px display (3-tile imposing presence)
+        // Boss is large source; scale to ~48 px display (3-tile imposing presence)
         e = this.physics.add.sprite(x, y, "p2_boss_guardian");
         e.setScale(48 / e.width);
+      } else if (useAnimSheet) {
+        // Animated walk strip — 352x768 source per frame → ~22 px display
+        e = this.physics.add.sprite(x, y, animSheet, 0);
+        e.setScale(22 / 352);
+        const animKey = animSheet + "_walk";
+        if (this.anims.exists(animKey)) e.play(animKey);
       } else if (useP2Enemy) {
-        // p2_enemies frames are 281x384 source; scale to ~22 px display
         e = this.physics.add.sprite(x, y, "p2_enemies", tpl.p2_frame);
         e.setScale(22 / 281);
       } else if (useAtlas) {
