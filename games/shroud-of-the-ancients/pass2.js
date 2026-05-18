@@ -271,23 +271,19 @@
       // (rough but always reachable); otherwise use designed village_square spawn.
       const spawnX = this.fromSave ? SCREEN_W / 2 : D.PLAYER.spawn_x;
       const spawnY = this.fromSave ? SCREEN_H / 2 : D.PLAYER.spawn_y;
-      // Use a roguelike_chars frame for a proper top-down silhouette.
-      // Frame 26 (col 26 row 0) is typically a hooded adventurer in Kenney's
-      // pack — fits Kaelen's "hooded relic seeker" description.
-      const useRl = this.textures.exists("rl_chars");
-      this.player = useRl
-        ? this.physics.add.sprite(spawnX, spawnY, "rl_chars", 26)
-        : this.physics.add.sprite(spawnX, spawnY, "p_idle");
-      this.player.setOrigin(0.5, 0.7);
-      // Body bounds in the lower half of the 16×16 sprite.
-      this.player.body.setSize(10, 6).setOffset(3, 9);
+      // Use the existing 64×64 protagonist_*.png — Kaelen the relic seeker.
+      // Scale down to 20px target so the character fits inside a tile-and-
+      // a-bit on screen but is still clearly visible (not the previous
+      // ~10px mushroom-looking Kenney frame).
+      this.player = this.physics.add.sprite(spawnX, spawnY, "p_idle");
+      const PLAYER_TARGET_PX = 22;
+      this.player.setScale(PLAYER_TARGET_PX / 64);
+      this.player.setOrigin(0.5, 0.85);  // feet near baseline
+      this.player.body.setSize(28, 18).setOffset(18, 42);
       this.player.facing = "down";
-      // When loading from save, grant 2.5s of grace invulnerability so the
-      // player isn't insta-shredded if save spawn-point is in a dungeon
-      // room with live enemies clustering around the center.
       this.player.invuln_until = this.fromSave ? (this.time.now + 2500) : 0;
       this.player.knockback_until = 0;
-      this.player._usingTopDown = useRl;
+      this.player._usingTopDown = false;  // side-view sprite, flip-X for L/R
       this.entityLayer.add(this.player);
 
       // Enemies + items (spawned by _buildRoom for the current room)
@@ -523,32 +519,25 @@
       // DO NOT destroy the player — track and remove only OUR room-scoped entities.
       this._clearRoomEntities();
 
-      // Tile rendering — Kenney sprite tiles where available, fillRect fallback.
-      const useTiles = this.textures.exists("rl_tiles");
+      // Tile rendering — rich Graphics-drawn tiles. The Kenney sprite-atlas
+      // overlay path looked wrong (frame indices were inverted vs. assumed
+      // layout, producing blue floors + green walls). Drawing tiles directly
+      // via Graphics gives full visual control and matches the game's color
+      // palette deterministically.
       const g = this.add.graphics();
       this.tileLayer.add(g);
+      // Pseudo-random for tile decoration (deterministic per room+tile)
+      const rng = (seed) => { let t = seed; return () => { t = (t * 1103515245 + 12345) & 0x7fffffff; return t / 0x7fffffff; }; };
+      const roomSeed = room.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+      const rnd = rng(roomSeed);
       for (let y = 0; y < ROOM_H; y++) {
         const row = room.tiles[y];
         for (let x = 0; x < ROOM_W; x++) {
           const ch = row && row[x] ? row[x] : '.';
-          // 1. Base color underlay — always drawn so missing/transparent sprite
-          //    pixels don't show the void background.
-          const baseColor = TILE_COLORS[ch] ?? 0x222222;
-          g.fillStyle(baseColor, 1);
-          g.fillRect(x * TILE, y * TILE, TILE, TILE);
-          // 2. Sprite tile overlay
-          if (useTiles && TILE_FRAMES[ch] !== null && TILE_FRAMES[ch] !== undefined) {
-            const tile = this.add.image(x * TILE, y * TILE, "rl_tiles", TILE_FRAMES[ch]).setOrigin(0, 0);
-            this.tileLayer.add(tile);
-          }
-          // 3. Special decorations (locks, spikes, pits) drawn via Graphics
+          this._drawTile(g, ch, x * TILE, y * TILE, rnd);
+          // Special decorations (locks, doors, spikes, pits) drawn via Graphics
           const decor = TILE_DRAW_DECOR[ch];
           if (decor) this._drawTileDecor(g, decor, x * TILE, y * TILE);
-          if (ch === '#') {
-            // Inner shadow for depth
-            g.fillStyle(0x000000, 0.2);
-            g.fillRect(x * TILE, y * TILE + TILE - 2, TILE, 2);
-          }
         }
       }
 
@@ -558,18 +547,28 @@
         let npc;
         if (typeof n.sprite_frame === "number" && this.textures.exists("rl_chars")) {
           npc = this.add.sprite(n.x, n.y, "rl_chars", n.sprite_frame);
+          // Scale up slightly so they read at game zoom (16px native → 18px)
+          npc.setScale(1.15);
           if (n.tint) npc.setTint(n.tint);
         } else {
-          npc = this.add.rectangle(n.x, n.y, 12, 14, n.tint || 0xfacc15);
+          npc = this.add.rectangle(n.x, n.y, 14, 16, n.tint || 0xfacc15);
           npc.setStrokeStyle(1, 0x000000);
         }
         npc._npcData = n;
         this.entityLayer.add(npc);
-        const label = this.add.text(n.x, n.y - 12, n.name,
-          { font: "6px monospace", color: "#fff", stroke: "#000", strokeThickness: 2 })
+        // Label BELOW the NPC (not above — was covering the sprite) + bg plate
+        const labelY = n.y + 13;   // just below NPC's feet
+        // Estimate text width so the background plate fits neatly
+        const textW = Math.max(20, n.name.length * 4 + 4);
+        const plate = this.add.rectangle(n.x, labelY, textW, 8, 0x0f172a, 0.85);
+        plate.setStrokeStyle(0.5, 0xfde047);
+        const label = this.add.text(n.x, labelY, n.name,
+          { font: "6px monospace", color: "#fde047" })
           .setOrigin(0.5);
+        this.entityLayer.add(plate);
         this.entityLayer.add(label);
         this.npcsInRoom.push(npc);
+        this.npcsInRoom.push(plate);
         this.npcsInRoom.push(label);
       });
     }
@@ -820,33 +819,62 @@
       this._refreshHUD();
     }
 
+    _heartPath(g, cx, cy, size, strokeOnly, strokeColor) {
+      // Heart silhouette = two circles + downward triangle.
+      const s = size / 8;   // scale factor (size 7 → ~0.875 scale)
+      const r = 2 * s;
+      // Bumps
+      if (!strokeOnly) {
+        g.fillCircle(cx - 2*s, cy - 1*s, r);
+        g.fillCircle(cx + 2*s, cy - 1*s, r);
+        g.fillTriangle(cx - 4*s, cy + 0.5*s, cx + 4*s, cy + 0.5*s, cx, cy + 4*s);
+      } else {
+        g.strokeCircle(cx - 2*s, cy - 1*s, r);
+        g.strokeCircle(cx + 2*s, cy - 1*s, r);
+        g.strokeTriangle(cx - 4*s, cy + 0.5*s, cx + 4*s, cy + 0.5*s, cx, cy + 4*s);
+      }
+    }
+
+    _heartLeftHalfPath(g, cx, cy, size) {
+      // Just the left half of a heart — for half-heart rendering.
+      const s = size / 8;
+      const r = 2 * s;
+      g.fillCircle(cx - 2*s, cy - 1*s, r);
+      // Half triangle (left side)
+      g.fillTriangle(cx - 4*s, cy + 0.5*s, cx, cy + 0.5*s, cx, cy + 4*s);
+    }
+
     _refreshHUD() {
-      // Draw hearts as little 7×6 rectangles with half-heart resolution.
+      // Draw real heart shapes (two circles + triangle silhouette).
       if (this.hudHeartsG) {
         const g = this.hudHeartsG;
         g.clear();
         const max = D.PLAYER.max_hearts;
         const cur = this.hearts;
-        const startX = 2, startY = 2;
-        const w = 7, h = 6, gap = 1;
+        const startX = 4, startY = 4;
+        const sizePx = 7;        // heart visual size (small for HUD)
+        const gap = 2;
         for (let i = 0; i < max; i++) {
-          const x = startX + i * (w + gap);
-          // Outline
-          g.lineStyle(1, 0x1f2937, 1);
-          g.strokeRect(x, startY, w, h);
-          // Fill
+          const cx = startX + i * (sizePx + gap) + sizePx / 2;
+          const cy = startY + sizePx / 2;
           const filled = cur - i;
+          // 1. Outline silhouette (always drawn)
+          g.lineStyle(1, 0x111111, 1);
+          this._heartPath(g, cx, cy, sizePx, true /* stroke */, 0x111111);
           if (filled >= 1) {
+            // Full red heart
             g.fillStyle(0xef4444, 1);
-            g.fillRect(x + 1, startY + 1, w - 2, h - 2);
+            this._heartPath(g, cx, cy, sizePx, false);
           } else if (filled >= 0.5) {
+            // Half — left half red, right half dark grey
+            g.fillStyle(0x4b1d1d, 1);
+            this._heartPath(g, cx, cy, sizePx, false);
             g.fillStyle(0xef4444, 1);
-            g.fillRect(x + 1, startY + 1, Math.floor((w - 2) / 2), h - 2);
-            g.fillStyle(0x991b1b, 1);
-            g.fillRect(x + 1 + Math.floor((w - 2) / 2), startY + 1, Math.ceil((w - 2) / 2), h - 2);
+            this._heartLeftHalfPath(g, cx, cy, sizePx);
           } else {
-            g.fillStyle(0x1f2937, 1);
-            g.fillRect(x + 1, startY + 1, w - 2, h - 2);
+            // Empty — dark heart outline only
+            g.fillStyle(0x4b1d1d, 1);
+            this._heartPath(g, cx, cy, sizePx, false);
           }
         }
       }
@@ -1922,24 +1950,147 @@
       // Re-render just the tile layer without rebuilding entities.
       const room = this.currentRoom;
       if (!room) return;
-      const useTiles = this.textures.exists("rl_tiles");
       this.tileLayer.removeAll(true);
       const g = this.add.graphics();
       this.tileLayer.add(g);
+      const rng = (seed) => { let t = seed; return () => { t = (t * 1103515245 + 12345) & 0x7fffffff; return t / 0x7fffffff; }; };
+      const rnd = rng(room.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0));
       for (let y = 0; y < ROOM_H; y++) {
         const row = room.tiles[y];
         for (let x = 0; x < ROOM_W; x++) {
           const ch = row && row[x] ? row[x] : '.';
-          const baseColor = TILE_COLORS[ch] ?? 0x222222;
-          g.fillStyle(baseColor, 1);
-          g.fillRect(x * TILE, y * TILE, TILE, TILE);
-          if (useTiles && TILE_FRAMES[ch] !== null && TILE_FRAMES[ch] !== undefined) {
-            const tile = this.add.image(x * TILE, y * TILE, "rl_tiles", TILE_FRAMES[ch]).setOrigin(0, 0);
-            this.tileLayer.add(tile);
-          }
+          this._drawTile(g, ch, x * TILE, y * TILE, rnd);
           const decor = TILE_DRAW_DECOR[ch];
           if (decor) this._drawTileDecor(g, decor, x * TILE, y * TILE);
-          if (ch === '#') { g.fillStyle(0x000000, 0.2); g.fillRect(x * TILE, y * TILE + TILE - 2, TILE, 2); }
+        }
+      }
+    }
+
+    _drawTile(g, ch, x, y, rnd) {
+      const T = TILE;
+      switch (ch) {
+        case '.': {
+          // Grass — base + detail tufts + occasional flower
+          g.fillStyle(0x4f7942, 1);
+          g.fillRect(x, y, T, T);
+          // Tufts (random across tile)
+          g.fillStyle(0x3d5f33, 1);
+          for (let i = 0; i < 3; i++) {
+            const tx = x + Math.floor(rnd() * (T - 2));
+            const ty = y + Math.floor(rnd() * (T - 2));
+            g.fillRect(tx, ty, 1, 1);
+          }
+          // Highlight strands
+          g.fillStyle(0x6b9a4f, 1);
+          for (let i = 0; i < 2; i++) {
+            const tx = x + Math.floor(rnd() * (T - 1));
+            const ty = y + Math.floor(rnd() * (T - 1));
+            g.fillRect(tx, ty, 1, 1);
+          }
+          break;
+        }
+        case '#': {
+          // Stone wall — brick pattern with shadow
+          g.fillStyle(0x52525b, 1);
+          g.fillRect(x, y, T, T);
+          // Mortar lines (horizontal)
+          g.fillStyle(0x27272a, 1);
+          g.fillRect(x, y + 5, T, 1);
+          g.fillRect(x, y + 11, T, 1);
+          // Vertical alternating mortar
+          g.fillRect(x + 7, y, 1, 5);
+          g.fillRect(x + 3, y + 6, 1, 5);
+          g.fillRect(x + 11, y + 6, 1, 5);
+          g.fillRect(x + 7, y + 12, 1, 4);
+          // Top-edge highlight
+          g.fillStyle(0x71717a, 1);
+          g.fillRect(x, y, T, 1);
+          // Bottom-edge shadow
+          g.fillStyle(0x18181b, 1);
+          g.fillRect(x, y + T - 1, T, 1);
+          break;
+        }
+        case '~': {
+          // Water — blue base + wave dashes
+          g.fillStyle(0x1e40af, 1);
+          g.fillRect(x, y, T, T);
+          g.fillStyle(0x3b82f6, 1);
+          g.fillRect(x + 2, y + 3, 4, 1);
+          g.fillRect(x + 9, y + 7, 4, 1);
+          g.fillRect(x + 4, y + 11, 4, 1);
+          g.fillStyle(0x60a5fa, 0.5);
+          g.fillRect(x + 2, y + 4, 4, 1);
+          break;
+        }
+        case ':': {
+          // Stone path — pale grey blocks
+          g.fillStyle(0x9ca3af, 1);
+          g.fillRect(x, y, T, T);
+          g.fillStyle(0x6b7280, 1);
+          g.fillRect(x, y + 7, T, 1);
+          g.fillRect(x + 7, y, 1, T);
+          // Crack detail
+          g.fillStyle(0x6b7280, 1);
+          g.fillRect(x + 3, y + 3, 1, 1);
+          g.fillRect(x + 11, y + 11, 1, 1);
+          break;
+        }
+        case 'W': {
+          // Weak wall — cracked stone (lighter, with X crack)
+          g.fillStyle(0x78350f, 1);
+          g.fillRect(x, y, T, T);
+          g.fillStyle(0x44200a, 1);
+          g.lineStyle(1, 0x44200a, 1);
+          g.lineBetween(x + 2, y + 2, x + T - 2, y + T - 2);
+          g.lineBetween(x + T - 2, y + 2, x + 2, y + T - 2);
+          // Highlight pebbles
+          g.fillStyle(0xa3621f, 1);
+          g.fillRect(x + 5, y + 5, 2, 2);
+          break;
+        }
+        case '*': {
+          // Bush — green base + leaf clusters
+          g.fillStyle(0x4f7942, 1);  // grass underneath
+          g.fillRect(x, y, T, T);
+          g.fillStyle(0x14532d, 1);
+          g.fillCircle(x + 5, y + 7, 3);
+          g.fillCircle(x + 11, y + 9, 3);
+          g.fillCircle(x + 8, y + 5, 2);
+          g.fillStyle(0x22c55e, 0.6);
+          g.fillCircle(x + 6, y + 6, 1);
+          break;
+        }
+        case 'D':
+        case 'L':
+        case 'B': {
+          // Door floor — path tile underneath (decor on top)
+          g.fillStyle(0x9ca3af, 1);
+          g.fillRect(x, y, T, T);
+          g.fillStyle(0x6b7280, 1);
+          g.fillRect(x, y + 7, T, 1);
+          break;
+        }
+        case 'P': {
+          // Pit — pure black void with rim shadow (decor handles the rim)
+          g.fillStyle(0x000000, 1);
+          g.fillRect(x, y, T, T);
+          break;
+        }
+        case 's': {
+          // Spike base — grass tile underneath (decor draws spikes on top)
+          g.fillStyle(0x9ca3af, 1);
+          g.fillRect(x, y, T, T);
+          break;
+        }
+        case '$': {
+          // Pickup spot = grass
+          g.fillStyle(0x4f7942, 1);
+          g.fillRect(x, y, T, T);
+          break;
+        }
+        default: {
+          g.fillStyle(0x222222, 1);
+          g.fillRect(x, y, T, T);
         }
       }
     }
