@@ -276,10 +276,10 @@
       // a-bit on screen but is still clearly visible (not the previous
       // ~10px mushroom-looking Kenney frame).
       this.player = this.physics.add.sprite(spawnX, spawnY, "p_idle");
-      const PLAYER_TARGET_PX = 22;
+      const PLAYER_TARGET_PX = 28;
       this.player.setScale(PLAYER_TARGET_PX / 64);
       this.player.setOrigin(0.5, 0.85);  // feet near baseline
-      this.player.body.setSize(28, 18).setOffset(18, 42);
+      this.player.body.setSize(28, 16).setOffset(18, 44);
       this.player.facing = "down";
       this.player.invuln_until = this.fromSave ? (this.time.now + 2500) : 0;
       this.player.knockback_until = 0;
@@ -1990,24 +1990,42 @@
           break;
         }
         case '#': {
-          // Stone wall — brick pattern with shadow
-          g.fillStyle(0x52525b, 1);
-          g.fillRect(x, y, T, T);
-          // Mortar lines (horizontal)
-          g.fillStyle(0x27272a, 1);
-          g.fillRect(x, y + 5, T, 1);
-          g.fillRect(x, y + 11, T, 1);
-          // Vertical alternating mortar
-          g.fillRect(x + 7, y, 1, 5);
-          g.fillRect(x + 3, y + 6, 1, 5);
-          g.fillRect(x + 11, y + 6, 1, 5);
-          g.fillRect(x + 7, y + 12, 1, 4);
-          // Top-edge highlight
-          g.fillStyle(0x71717a, 1);
-          g.fillRect(x, y, T, 1);
-          // Bottom-edge shadow
-          g.fillStyle(0x18181b, 1);
-          g.fillRect(x, y + T - 1, T, 1);
+          // Zone-aware solid tile: trees in overworld, stone walls in dungeon.
+          const zone = (this.currentRoom && this.currentRoom.zone) || '';
+          const isOverworld = (zone === 'canopy_village' || zone === 'emerald_thicket' || zone === 'shrine_path');
+          if (isOverworld) {
+            // Tree — green canopy with darker trunk shadow
+            g.fillStyle(0x365314, 1);          // shadow grass at base
+            g.fillRect(x, y, T, T);
+            // Canopy (mounded green)
+            g.fillStyle(0x14532d, 1);
+            g.fillCircle(x + 8, y + 6, 6);
+            g.fillCircle(x + 4, y + 9, 4);
+            g.fillCircle(x + 12, y + 9, 4);
+            g.fillStyle(0x22c55e, 1);
+            g.fillCircle(x + 6, y + 5, 2.5);
+            g.fillCircle(x + 11, y + 5, 2);
+            g.fillStyle(0x86efac, 0.8);
+            g.fillCircle(x + 7, y + 4, 1);
+            // Trunk hint at bottom
+            g.fillStyle(0x451a03, 1);
+            g.fillRect(x + 7, y + T - 3, 2, 3);
+          } else {
+            // Stone wall — brick pattern with shadow
+            g.fillStyle(0x52525b, 1);
+            g.fillRect(x, y, T, T);
+            g.fillStyle(0x27272a, 1);
+            g.fillRect(x, y + 5, T, 1);
+            g.fillRect(x, y + 11, T, 1);
+            g.fillRect(x + 7, y, 1, 5);
+            g.fillRect(x + 3, y + 6, 1, 5);
+            g.fillRect(x + 11, y + 6, 1, 5);
+            g.fillRect(x + 7, y + 12, 1, 4);
+            g.fillStyle(0x71717a, 1);
+            g.fillRect(x, y, T, 1);
+            g.fillStyle(0x18181b, 1);
+            g.fillRect(x, y + T - 1, T, 1);
+          }
           break;
         }
         case '~': {
@@ -2063,11 +2081,32 @@
         case 'D':
         case 'L':
         case 'B': {
-          // Door floor — path tile underneath (decor on top)
-          g.fillStyle(0x9ca3af, 1);
-          g.fillRect(x, y, T, T);
-          g.fillStyle(0x6b7280, 1);
-          g.fillRect(x, y + 7, T, 1);
+          // Door tile — render as wall-with-archway. Stone wall frames the
+          // doorway on the sides; a darker recess + wooden door fills the
+          // center. Looks integrated into the wall row instead of a
+          // floating wood-box on a path tile.
+          // Left wall frame
+          g.fillStyle(0x52525b, 1);
+          g.fillRect(x, y, 2, T);
+          // Right wall frame
+          g.fillRect(x + T - 2, y, 2, T);
+          // Top arch stones
+          g.fillRect(x, y, T, 3);
+          // Dark recess behind door
+          g.fillStyle(0x18181b, 1);
+          g.fillRect(x + 2, y + 3, T - 4, T - 3);
+          // Wooden door — vertical planks
+          g.fillStyle(0x78350f, 1);
+          g.fillRect(x + 3, y + 5, T - 6, T - 6);
+          // Plank seam
+          g.fillStyle(0x3f1d05, 1);
+          g.fillRect(x + 7, y + 5, 1, T - 6);
+          // Doorknob (small bronze dot)
+          g.fillStyle(0xfacc15, 1);
+          g.fillCircle(x + 11, y + 11, 0.8);
+          // Top arch highlight
+          g.fillStyle(0x71717a, 1);
+          g.fillRect(x, y, T, 1);
           break;
         }
         case 'P': {
@@ -2099,40 +2138,33 @@
       const cx = x + TILE/2, cy = y + TILE/2;
       switch (decor.shape) {
         case "lock_small": {
-          // Yellow padlock — small body + arc shackle
+          // Yellow padlock overlaid on door — sits centered on the door panel
           g.fillStyle(decor.color, 1);
-          g.fillRect(cx - 3, cy - 1, 6, 5);
-          g.lineStyle(1.5, decor.color, 1);
-          g.strokeCircle(cx, cy - 2, 2.4);
-          g.lineStyle(1, 0x111111, 1);
-          g.strokeRect(cx - 3, cy - 1, 6, 5);
+          g.fillRect(cx - 2, cy + 1, 4, 3);
+          g.lineStyle(1, decor.color, 1);
+          g.strokeCircle(cx, cy, 1.6);
+          g.lineStyle(0.5, 0x111111, 1);
+          g.strokeRect(cx - 2, cy + 1, 4, 3);
           // Keyhole dot
           g.fillStyle(0x111111, 1);
-          g.fillCircle(cx, cy + 1, 0.8);
+          g.fillCircle(cx, cy + 2, 0.5);
           break;
         }
         case "lock_big": {
-          // Purple ornate lock
+          // Purple ornate lock overlaid on door
           g.fillStyle(decor.color, 1);
-          g.fillRect(cx - 4, cy - 1, 8, 7);
-          g.lineStyle(2, decor.color, 1);
-          g.strokeCircle(cx, cy - 3, 3.2);
-          g.lineStyle(1, 0x111111, 1);
-          g.strokeRect(cx - 4, cy - 1, 8, 7);
+          g.fillRect(cx - 3, cy, 6, 4);
+          g.lineStyle(1.5, decor.color, 1);
+          g.strokeCircle(cx, cy - 1, 2);
+          g.lineStyle(0.5, 0x111111, 1);
+          g.strokeRect(cx - 3, cy, 6, 4);
           // Center jewel
           g.fillStyle(0xfde047, 1);
-          g.fillCircle(cx, cy + 2, 1.2);
+          g.fillCircle(cx, cy + 2, 0.8);
           break;
         }
         case "door": {
-          // Wooden door — vertical planks
-          g.fillStyle(decor.color, 1);
-          g.fillRect(cx - 5, cy - 6, 10, 12);
-          g.lineStyle(1, 0x1a0a00, 1);
-          g.strokeRect(cx - 5, cy - 6, 10, 12);
-          g.lineBetween(cx, cy - 6, cx, cy + 6);
-          g.fillStyle(0xfacc15, 1);
-          g.fillCircle(cx + 3, cy, 0.8);  // doorknob
+          // No-op — door art is now baked into _drawTile for 'D' tiles.
           break;
         }
         case "spike": {
