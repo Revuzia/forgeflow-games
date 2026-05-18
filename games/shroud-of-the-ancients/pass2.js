@@ -124,6 +124,20 @@
       this.load.image("p_hurt",   "assets/protagonist_hurt.png");
       this.load.image("p_die",    "assets/protagonist_die.png");
 
+      // ── PIXEL-ART ASSETS (iter #25, xAI-generated) ──
+      // Zone backdrops — atmospheric AAA-tier pixel-art layer behind tiles
+      this.load.image("p2_bg_overworld", "assets/p2_bg_overworld.png");
+      this.load.image("p2_bg_ruins",     "assets/p2_bg_ruins.png");
+      this.load.image("p2_bg_cave",      "assets/p2_bg_cave.png");
+      // Tileset — 4x4 grid on a 1408x768 sheet → 352x192 per cell
+      this.load.spritesheet("p2_tileset", "assets/p2_tileset.png", {
+        frameWidth: 352, frameHeight: 192,
+      });
+      // Player 4-direction sheet — 4x2 grid on a 1408x768 sheet → 352x384 per cell
+      this.load.spritesheet("p2_player", "assets/p2_player_sheet.png", {
+        frameWidth: 352, frameHeight: 384,
+      });
+
       // Real Kenney atlases — replace the colored-rectangle placeholders
       this.load.atlasXML("enemies_atlas", "assets/enemies.png", "assets/enemies.xml");
       // Kenney "Roguelike characters" sheet — 17×17 cell grid (16+1 spacing).
@@ -155,19 +169,27 @@
       });
     }
     create() {
-      // Build the player walk anim from the 3 run frames (used by P2_Play)
+      // Legacy side-view anims (fallback if p2_player sheet didn't load)
       this.anims.create({
         key: "p_walk",
         frames: [{ key: "p_run_1" }, { key: "p_run_2" }, { key: "p_run_3" }],
-        frameRate: 8,
-        repeat: -1,
+        frameRate: 8, repeat: -1,
       });
       this.anims.create({
         key: "p_attack",
         frames: [{ key: "p_attack_1" }, { key: "p_attack_2" }],
-        frameRate: 18,
-        repeat: 0,
+        frameRate: 18, repeat: 0,
       });
+      // 4-direction anims from the AAA pixel-art player sheet.  Frame layout:
+      //   Row 1 (frames 0-3):  down_idle, down_step, up_idle, up_step
+      //   Row 2 (frames 4-7):  left_idle, left_step, right_idle, right_step
+      if (this.textures.exists("p2_player")) {
+        // 2-frame walk loops, 8 fps for stride
+        this.anims.create({ key: "p2_walk_down",  frames: [{key:"p2_player", frame:0}, {key:"p2_player", frame:1}], frameRate: 6, repeat: -1 });
+        this.anims.create({ key: "p2_walk_up",    frames: [{key:"p2_player", frame:2}, {key:"p2_player", frame:3}], frameRate: 6, repeat: -1 });
+        this.anims.create({ key: "p2_walk_left",  frames: [{key:"p2_player", frame:4}, {key:"p2_player", frame:5}], frameRate: 6, repeat: -1 });
+        this.anims.create({ key: "p2_walk_right", frames: [{key:"p2_player", frame:6}, {key:"p2_player", frame:7}], frameRate: 6, repeat: -1 });
+      }
       // Build per-enemy walk anims from the Kenney atlas
       const animEnemies = Object.entries(D.ENEMIES).concat(Object.entries(D.BOSSES));
       for (const [tplName, tpl] of animEnemies) {
@@ -310,18 +332,26 @@
       // (rough but always reachable); otherwise use designed village_square spawn.
       const spawnX = this.fromSave ? SCREEN_W / 2 : D.PLAYER.spawn_x;
       const spawnY = this.fromSave ? SCREEN_H / 2 : D.PLAYER.spawn_y;
-      // Use the existing 64×64 protagonist_*.png — Kaelen the relic seeker.
-      // Scale down to 20px target so the character fits inside a tile-and-
-      // a-bit on screen but is still clearly visible (not the previous
-      // ~10px mushroom-looking Kenney frame).
-      this.player = this.physics.add.sprite(spawnX, spawnY, "p_idle");
-      const PLAYER_TARGET_PX = 32;
-      this.player.setScale(PLAYER_TARGET_PX / 64);
-      this.player.setOrigin(0.5, 0.85);
-      // Body footprint = bottom-center 24x14 of the 64x64 sprite. After scale
-      // 32/64=0.5, the actual body is 12x7 — fits comfortably inside one
-      // 16x16 tile so movement between tiles is smooth.
-      this.player.body.setSize(24, 14).setOffset(20, 46);
+      // AAA pixel-art player sheet (4-direction, 8 frames, 352x384 per frame).
+      // Falls back to the 64x64 protagonist_*.png if p2_player didn't load.
+      const useP2Sheet = this.textures.exists("p2_player");
+      this.player = useP2Sheet
+        ? this.physics.add.sprite(spawnX, spawnY, "p2_player", 0)
+        : this.physics.add.sprite(spawnX, spawnY, "p_idle");
+      if (useP2Sheet) {
+        // Scale 352x384 source → 28px display (so figure fits within 2 tiles tall)
+        const TARGET = 28;
+        this.player.setScale(TARGET / 352);
+        this.player.setOrigin(0.5, 0.85);
+        // Body footprint = ~70% width, lower 35% height of source frame
+        this.player.body.setSize(220, 130).setOffset(66, 240);
+      } else {
+        const TARGET = 32;
+        this.player.setScale(TARGET / 64);
+        this.player.setOrigin(0.5, 0.85);
+        this.player.body.setSize(24, 14).setOffset(20, 46);
+      }
+      this.player._useP2Sheet = useP2Sheet;
       this.player.facing = "down";
       this.player.invuln_until = this.fromSave ? (this.time.now + 2500) : 0;
       this.player.knockback_until = 0;
@@ -505,28 +535,44 @@
         if (this.attackUntil && time < this.attackUntil) { vx *= 0.3; vy *= 0.3; }
         p.body.setVelocity(vx, vy);
 
-        // Facing — ONLY changes on actual L/R input (stable when moving up/down)
-        if (left && p.facing !== "left")   { p.facing = "left";  p.setFlipX(true); }
-        else if (right && p.facing !== "right") { p.facing = "right"; p.setFlipX(false); }
-        else if (up && !left && !right && p.facing !== "up")     p.facing = "up";
-        else if (down && !left && !right && p.facing !== "down") p.facing = "down";
+        // Facing — primary axis wins (L/R takes priority over U/D when both held)
+        let newFacing = p.facing;
+        if (left)       newFacing = "left";
+        else if (right) newFacing = "right";
+        else if (up && !left && !right)    newFacing = "up";
+        else if (down && !left && !right)  newFacing = "down";
+        if (newFacing !== p.facing) {
+          p.facing = newFacing;
+          if (!p._useP2Sheet) {
+            // Legacy side-view: flipX for L/R
+            if (newFacing === "left")  p.setFlipX(true);
+            if (newFacing === "right") p.setFlipX(false);
+          }
+        }
 
         // Anim state machine — only triggers a state change on TRANSITION
         const isMoving = (vx !== 0 || vy !== 0);
         const isAttacking = (this.attackUntil && time < this.attackUntil);
         let wantAnim;
-        if (isAttacking) wantAnim = "p_attack";
-        else if (isMoving) wantAnim = "p_walk";
-        else wantAnim = "p_idle";
-        if (p._currentAnimState !== wantAnim) {
-          p._currentAnimState = wantAnim;
-          if (wantAnim === "p_walk") {
-            if (!p.anims.isPlaying || p.anims.currentAnim?.key !== "p_walk") p.play("p_walk");
-          } else if (wantAnim === "p_idle") {
+        if (isAttacking) wantAnim = p._useP2Sheet ? ("p2_walk_" + p.facing) : "p_attack";
+        else if (isMoving) wantAnim = p._useP2Sheet ? ("p2_walk_" + p.facing) : "p_walk";
+        else wantAnim = "_idle";   // sentinel for stop+setTexture path
+
+        const stateKey = wantAnim + (p._useP2Sheet ? "" : "");
+        if (p._currentAnimState !== stateKey) {
+          p._currentAnimState = stateKey;
+          if (wantAnim === "_idle") {
+            // Stop + set to facing-direction static frame (idle pose)
             if (p.anims.isPlaying) p.stop();
-            p.setTexture("p_idle");
+            if (p._useP2Sheet) {
+              const idleFrames = { down: 0, up: 2, left: 4, right: 6 };
+              p.setFrame(idleFrames[p.facing] ?? 0);
+            } else {
+              p.setTexture("p_idle");
+            }
+          } else if (this.anims.exists(wantAnim)) {
+            p.play(wantAnim);
           }
-          // wantAnim === "p_attack" — _swing() already called p.play("p_attack")
         }
       }
 
@@ -598,6 +644,23 @@
 
       // tileLayer holds only tile graphics — safe to nuke.
       this.tileLayer.removeAll(true);
+
+      // ── Backdrop (zone-aware atmospheric layer behind tiles) ──
+      const zoneToBg = {
+        canopy_village:        "p2_bg_overworld",
+        emerald_thicket:       "p2_bg_overworld",
+        shrine_path:           "p2_bg_overworld",
+        ruins_of_first_light:  "p2_bg_ruins",
+        boss_arena:            "p2_bg_ruins",
+        cave_system:           "p2_bg_cave",
+      };
+      const bgKey = zoneToBg[room.zone];
+      if (bgKey && this.textures.exists(bgKey)) {
+        const bg = this.add.image(SCREEN_W/2, SCREEN_H/2, bgKey);
+        bg.setDisplaySize(SCREEN_W, SCREEN_H);
+        bg.setAlpha(0.85);   // tiles drawn on top will overlay this
+        this.tileLayer.add(bg);
+      }
 
       // entityLayer holds player + NPCs + enemies + items + name labels.
       // DO NOT destroy the player — track and remove only OUR room-scoped entities.
@@ -1624,30 +1687,23 @@
 
     _drawClosedChest(x, y) {
       const container = this.add.container(x, y);
-      const g = this.add.graphics();
-      container.add(g);
-      // Shadow at base
-      g.fillStyle(0x000000, 0.3);
-      g.fillEllipse(0, 5, 12, 3);
-      // Chest body (wooden box)
-      g.fillStyle(0x78350f, 1);
-      g.fillRect(-5, -2, 10, 7);
-      g.lineStyle(0.5, 0x451a03, 1);
-      g.strokeRect(-5, -2, 10, 7);
-      // Chest lid (curved top — approximated with a rect + corner shadow)
-      g.fillStyle(0x92400e, 1);
-      g.fillRect(-5, -5, 10, 4);
-      g.lineStyle(0.5, 0x451a03, 1);
-      g.strokeRect(-5, -5, 10, 4);
-      // Metal bands (gold)
-      g.fillStyle(0xfacc15, 1);
-      g.fillRect(-5, -1, 10, 1);
-      g.fillRect(-5, 2, 10, 1);
-      // Latch (center front)
-      g.fillStyle(0xeab308, 1);
-      g.fillRect(-1, -2, 2, 2);
-      g.fillStyle(0x000000, 1);
-      g.fillCircle(0, -1, 0.4);
+      // Prefer the AAA pixel-art chest sprite (frame 14 of the xAI tilesheet).
+      if (this.textures.exists("p2_tileset")) {
+        const chestImg = this.add.image(0, 0, "p2_tileset", 14);
+        chestImg.setDisplaySize(14, 14);
+        container.add(chestImg);
+      } else {
+        // Fallback procedural chest
+        const g = this.add.graphics();
+        container.add(g);
+        g.fillStyle(0x000000, 0.3); g.fillEllipse(0, 5, 12, 3);
+        g.fillStyle(0x78350f, 1); g.fillRect(-5, -2, 10, 7);
+        g.lineStyle(0.5, 0x451a03, 1); g.strokeRect(-5, -2, 10, 7);
+        g.fillStyle(0x92400e, 1); g.fillRect(-5, -5, 10, 4);
+        g.lineStyle(0.5, 0x451a03, 1); g.strokeRect(-5, -5, 10, 4);
+        g.fillStyle(0xfacc15, 1); g.fillRect(-5, -1, 10, 1); g.fillRect(-5, 2, 10, 1);
+        g.fillStyle(0xeab308, 1); g.fillRect(-1, -2, 2, 2);
+      }
       // Subtle pulse to attract attention
       this.tweens.add({
         targets: container, y: y - 1, duration: 800, yoyo: true, repeat: -1, ease: "Sine.inOut",
@@ -2456,6 +2512,35 @@
     }
 
     _drawTile(g, ch, x, y, rnd) {
+      // Prefer the AAA-tier xAI-generated tilesheet sprites when available.
+      // Each tilesheet frame is 352x192 source → scaled to 16x16 display.
+      // Tile-code → frame index mapping (with zone variants for # and :):
+      if (this.textures.exists("p2_tileset")) {
+        const zone = (this.currentRoom && this.currentRoom.zone) || "";
+        const isOverworld = (zone === "canopy_village" || zone === "emerald_thicket" || zone === "shrine_path");
+        let frame = null;
+        switch (ch) {
+          case '.': frame = 0; break;                          // grass (with flowers)
+          case ':': frame = isOverworld ? 1 : 12; break;       // path: stone (over) or dungeon floor
+          case '~': frame = 2; break;                          // water
+          case '#': frame = isOverworld ? 4 : 13; break;       // wall: tree (over) or dungeon wall
+          case '*': frame = 5; break;                          // bush
+          case 'W': frame = 9; break;                          // cracked / weak wall
+          case 'D': case 'L': case 'B': frame = 10; break;     // wooden door
+          case 's': frame = 11; break;                         // spike trap
+          case 'P': frame = 15; break;                         // pit
+          case '$': frame = 0; break;                          // pickup spot = grass
+          default: frame = 0;
+        }
+        if (frame !== null) {
+          const tile = this.add.image(x + TILE/2, y + TILE/2, "p2_tileset", frame);
+          tile.setDisplaySize(TILE, TILE);
+          this.tileLayer.add(tile);
+          return;
+        }
+      }
+      // FALLBACK: Graphics primitives (for environments where the tilesheet
+      // texture didn't load — keeps the game playable, just lower-fi).
       const T = TILE;
       switch (ch) {
         case '.': {
