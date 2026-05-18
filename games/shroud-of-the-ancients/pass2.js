@@ -282,7 +282,10 @@
       // Body bounds in the lower half of the 16×16 sprite.
       this.player.body.setSize(10, 6).setOffset(3, 9);
       this.player.facing = "down";
-      this.player.invuln_until = 0;
+      // When loading from save, grant 2.5s of grace invulnerability so the
+      // player isn't insta-shredded if save spawn-point is in a dungeon
+      // room with live enemies clustering around the center.
+      this.player.invuln_until = this.fromSave ? (this.time.now + 2500) : 0;
       this.player.knockback_until = 0;
       this.player._usingTopDown = useRl;
       this.entityLayer.add(this.player);
