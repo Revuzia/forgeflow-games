@@ -348,6 +348,12 @@
         this.scene.launch("P2_Pause");
       });
 
+      // Compute grid coords for every room (BFS from spawn following exit dirs).
+      // Used by the Map UI to render a minimap + full-map overlay.
+      this._roomGrid = this._computeRoomGridLayout();
+      this._visitedRooms = this._visitedRooms || new Set();
+      this._visitedRooms.add(this.currentRoomId);
+
       // HUD
       this._buildHUD();
       this._applyPendingSave();
@@ -631,6 +637,25 @@
       return container;
     }
 
+    _computeRoomGridLayout() {
+      // BFS from spawn. Exit direction → grid offset: N=(-y), S=(+y), E=(+x), W=(-x).
+      const grid = {};
+      const offsets = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
+      const queue = [{ id: D.PLAYER.spawn_room, gx: 0, gy: 0 }];
+      while (queue.length) {
+        const { id, gx, gy } = queue.shift();
+        if (grid[id]) continue;
+        const room = D.ROOMS[id];
+        if (!room) continue;
+        grid[id] = { gx, gy, zone: room.zone, id };
+        for (const [dir, off] of Object.entries(offsets)) {
+          const next = room.exits && room.exits[dir];
+          if (next && !grid[next]) queue.push({ id: next, gx: gx + off[0], gy: gy + off[1] });
+        }
+      }
+      return grid;
+    }
+
     _attachWallCollider() {
       // Re-bind the player ↔ wall static-group collider. Must be called
       // both after initial player creation in create() AND after every
@@ -703,12 +728,12 @@
       }[fromDirection] || { x: SCREEN_W / 2, y: SCREEN_H / 2 };
       this.player.setPosition(entryPos.x, entryPos.y);
       this.player.body.setVelocity(0, 0);
-      // Track the direction we entered from — lock-until-cleared exempts
-      // the entry door so the player can retreat.
       this._lastEntryDir = fromDirection;
-      // Music swap if zone changes
       this._setRoomMusic();
-      // Save on every room transition (Zelda-ish: each new screen is a checkpoint)
+      // Mark visited + refresh minimap so the new room appears
+      if (!this._visitedRooms) this._visitedRooms = new Set();
+      this._visitedRooms.add(this.currentRoomId);
+      this._updateMinimap();
       this._writeSave();
     }
 
@@ -867,6 +892,68 @@
       } catch (e) { /* missing audio — silent fail */ }
     }
 
+    _buildMinimap() {
+      // Top-right corner: a small 6-wide x 5-tall grid showing rooms in the
+      // current zone. Each cell ~6x4 px. Current room highlighted yellow.
+      // Visited rooms dim. With dungeon_map, unvisited rooms are outlined.
+      // With dungeon_compass, rooms still holding items get a dot.
+      if (this.minimapG) this.minimapG.destroy();
+      this.minimapG = this.add.graphics();
+      this.fxLayer.add(this.minimapG);
+      this._updateMinimap();
+    }
+
+    _updateMinimap() {
+      if (!this.minimapG || !this._roomGrid) return;
+      const g = this.minimapG;
+      g.clear();
+      const cur = this._roomGrid[this.currentRoomId];
+      if (!cur) return;
+      // Show only rooms in the current zone
+      const zoneRooms = Object.values(this._roomGrid).filter(r => r.zone === cur.zone);
+      if (zoneRooms.length === 0) return;
+      const minGX = Math.min(...zoneRooms.map(r => r.gx));
+      const minGY = Math.min(...zoneRooms.map(r => r.gy));
+      const cellW = 6, cellH = 4, pad = 1;
+      // Anchor minimap to top-right corner with 2px margin
+      const originX = SCREEN_W - 2 - (Math.max(...zoneRooms.map(r => r.gx)) - minGX + 1) * (cellW + pad) + pad;
+      const originY = 12;
+      // Background plate
+      const w = (Math.max(...zoneRooms.map(r => r.gx)) - minGX + 1) * (cellW + pad) + 2;
+      const h = (Math.max(...zoneRooms.map(r => r.gy)) - minGY + 1) * (cellH + pad) + 2;
+      g.fillStyle(0x0f172a, 0.85);
+      g.fillRect(originX - 2, originY - 2, w, h);
+      g.lineStyle(0.5, 0xfde047, 0.7);
+      g.strokeRect(originX - 2, originY - 2, w, h);
+      const hasMap = this.quest && this.quest.flags && this.quest.flags.has_map;
+      const hasCompass = this.quest && this.quest.flags && this.quest.flags.has_compass;
+      for (const room of zoneRooms) {
+        const px = originX + (room.gx - minGX) * (cellW + pad);
+        const py = originY + (room.gy - minGY) * (cellH + pad);
+        const visited = this._visitedRooms && this._visitedRooms.has(room.id);
+        const isCurrent = room.id === this.currentRoomId;
+        if (isCurrent) {
+          g.fillStyle(0xfde047, 1);
+          g.fillRect(px, py, cellW, cellH);
+        } else if (visited) {
+          g.fillStyle(0x475569, 1);
+          g.fillRect(px, py, cellW, cellH);
+        } else if (hasMap) {
+          g.lineStyle(0.5, 0x475569, 1);
+          g.strokeRect(px, py, cellW, cellH);
+        }
+        // Compass: dot for rooms with uncollected items
+        if (hasCompass && D.ROOMS[room.id]) {
+          const rd = D.ROOMS[room.id];
+          const hasUncollectedItem = (rd.items || []).length > 0 || rd.boss_reward || rd.miniboss_reward;
+          if (hasUncollectedItem && !this._collectedRoomItems?.has(room.id)) {
+            g.fillStyle(0xef4444, 1);
+            g.fillCircle(px + cellW/2, py + cellH/2, 0.7);
+          }
+        }
+      }
+    }
+
     _buildHUD() {
       // HUD lives in fxLayer (never rebuilt). tileLayer.removeAll(true) on
       // room change would destroy HUD if it lived there.
@@ -879,6 +966,7 @@
       this.fxLayer.add(this.hudRupees);
       this.fxLayer.add(this.hudKeys);
       this.fxLayer.add(this.hudItem);
+      this._buildMinimap();
       this._refreshHUD();
     }
 
@@ -1754,11 +1842,13 @@
         q.has_map = true;
         sfx = "sfx_levelup";
         this._showFanfare("GOT THE MAP");
+        this._updateMinimap && this._updateMinimap();
       }
       else if (tpl.kind === "dungeon_compass") {
         q.has_compass = true;
         sfx = "sfx_levelup";
         this._showFanfare("GOT THE COMPASS");
+        this._updateMinimap && this._updateMinimap();
       }
       else if (tpl.kind === "side_quest_flower") {
         // Heda's flower side quest — collect 3 and return to her for a heart piece.
@@ -1777,6 +1867,10 @@
         sfx = "sfx_pickup";
       }
       try { this.sound.play(sfx, { volume: 0.5 }); } catch (_) {}
+      // Mark the current room as having had an item collected (clears compass dot)
+      if (!this._collectedRoomItems) this._collectedRoomItems = new Set();
+      this._collectedRoomItems.add(this.currentRoomId);
+      this._updateMinimap && this._updateMinimap();
       this._refreshHUD();
       this._refreshItemSlot();
       // Item-get fanfare for high-value pickups
