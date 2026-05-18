@@ -365,7 +365,20 @@
 
       // HUD
       this._buildHUD();
+      this._buildTutorialOverlay();
       this._applyPendingSave();
+
+      // Tutorial state machine — fresh game starts at step 0.
+      // Steps:
+      //   0: MOVE — "Arrow keys / WASD to move"        → advance on first move
+      //   1: TALK — "Walk to Elder Mira (the yellow NPC) and press C" → advance on first dialogue close
+      //   2: SOUTH — "Press DOWN to head south to the Thicket"        → advance on entering thicket
+      //   3: ATTACK — "Press Z to swing your sword"                   → advance on first sword swing
+      //   4: ITEM — "Press X to use selected item, C to cycle"        → advance on first item use (or never)
+      //   5: DONE — no overlay
+      // Saved between rooms in this.quest.tutorial_step.
+      if (this.quest.tutorial_step === undefined) this.quest.tutorial_step = 0;
+      this._showTutorialStep(this.quest.tutorial_step);
 
       // Music
       this._setRoomMusic();
@@ -488,15 +501,27 @@
       }
 
       // Attack input
-      if (Phaser.Input.Keyboard.JustDown(this.keyZ)) this._swing(time);
+      if (Phaser.Input.Keyboard.JustDown(this.keyZ)) {
+        this._swing(time);
+        this._advanceTutorialIfStep(3);
+      }
       // Use selected item
-      if (Phaser.Input.Keyboard.JustDown(this.keyX)) this._useItem(time);
+      if (Phaser.Input.Keyboard.JustDown(this.keyX)) {
+        this._useItem(time);
+        this._advanceTutorialIfStep(4);
+      }
       // Action — context-sensitive: talk to adjacent NPC, otherwise cycle item slot
       if (Phaser.Input.Keyboard.JustDown(this.keyC)) {
         const npc = this._findAdjacentNPC();
         if (npc) this._dialogueOpen(npc);
         else this._cycleItem();
       }
+      // Tutorial step 0 → 1: first movement
+      if ((this.player.body.velocity.x !== 0 || this.player.body.velocity.y !== 0)) {
+        this._advanceTutorialIfStep(0);
+      }
+      // Floating "PRESS C" prompt above adjacent NPC
+      this._updateNpcInteractionPrompt();
       // Sword hitbox tick (position + active-window check)
       this._tickHitbox(time);
       // Arrow projectile tick
@@ -679,6 +704,9 @@
 
     _clearRoomEntities() {
       // Destroy any tracked room-scoped entities WITHOUT touching player or hitbox.
+      // Clear lingering NPC prompt + bombs+projectiles+puzzle entities.
+      if (this._npcPrompt) { this._npcPrompt.destroy(); this._npcPrompt = null; }
+      if (this._npcPromptPlate) { this._npcPromptPlate.destroy(); this._npcPromptPlate = null; }
       const lists = [this.enemies || [], this.itemsOnGround || [], this.npcsInRoom || [], this.bombs || [], this.enemyProjectiles || [], this.puzzleEntities || []];
       for (const list of lists) {
         for (const item of list) {
@@ -743,6 +771,10 @@
       if (!this._visitedRooms) this._visitedRooms = new Set();
       this._visitedRooms.add(this.currentRoomId);
       this._updateMinimap();
+      // Tutorial step 2 → 3: entered the Thicket
+      if (this.currentRoom && this.currentRoom.zone === "emerald_thicket") {
+        this._advanceTutorialIfStep(2);
+      }
       this._writeSave();
     }
 
@@ -899,6 +931,74 @@
         this._music = this.sound.add(key, { loop: true, volume: 0.3 });
         this._music.play();
       } catch (e) { /* missing audio — silent fail */ }
+    }
+
+    _buildTutorialOverlay() {
+      // Bottom-of-screen control hint. Black plate with yellow text.
+      if (this._tutPlate) this._tutPlate.destroy();
+      if (this._tutText) this._tutText.destroy();
+      if (this._tutArrow) this._tutArrow.destroy();
+      this._tutPlate = this.add.rectangle(SCREEN_W/2, SCREEN_H - 10, SCREEN_W - 8, 16, 0x0f172a, 0.92).setOrigin(0.5);
+      this._tutPlate.setStrokeStyle(0.5, 0xfde047);
+      this._tutText = this.add.text(SCREEN_W/2, SCREEN_H - 10, "",
+        { font: "7px monospace", color: "#fde047", align: "center" }).setOrigin(0.5);
+      this._tutArrow = this.add.text(SCREEN_W - 8, SCREEN_H - 10, "▶",
+        { font: "8px monospace", color: "#fde047" }).setOrigin(0.5);
+      this.fxLayer.add(this._tutPlate);
+      this.fxLayer.add(this._tutText);
+      this.fxLayer.add(this._tutArrow);
+      // Blink the arrow
+      this.tweens.add({ targets: this._tutArrow, alpha: 0.3, duration: 500, yoyo: true, repeat: -1 });
+    }
+
+    _showTutorialStep(step) {
+      const messages = [
+        "Use ARROW KEYS or WASD to move.",
+        "Walk up to Elder Mira (yellow NPC) and press C to talk.",
+        "Press DOWN to head south through the door to the Thicket.",
+        "Press Z to swing your sword. Try defeating an enemy.",
+        "Press X to use your selected item, C to cycle between them.",
+        "",
+      ];
+      if (!this._tutText) return;
+      const msg = messages[step] || "";
+      this._tutText.setText(msg);
+      const visible = !!msg;
+      this._tutPlate.setVisible(visible);
+      this._tutText.setVisible(visible);
+      this._tutArrow.setVisible(visible);
+    }
+
+    _advanceTutorialIfStep(expectedStep) {
+      if (this.quest.tutorial_step === expectedStep) {
+        this.quest.tutorial_step = expectedStep + 1;
+        this._showTutorialStep(this.quest.tutorial_step);
+        // Fanfare on each tutorial advance
+        try { this.sound.play("sfx_menu_confirm", { volume: 0.4 }); } catch (_) {}
+      }
+    }
+
+    _updateNpcInteractionPrompt() {
+      // Show a floating "PRESS C" hint above the nearest interactable NPC.
+      const npc = this._findAdjacentNPC();
+      if (npc && !this.dialogueActive) {
+        if (!this._npcPrompt || this._npcPrompt._forNpc !== npc) {
+          if (this._npcPrompt) this._npcPrompt.destroy();
+          if (this._npcPromptPlate) this._npcPromptPlate.destroy();
+          this._npcPromptPlate = this.add.rectangle(npc.x, npc.y - 16, 30, 8, 0x0f172a, 0.92);
+          this._npcPromptPlate.setStrokeStyle(0.5, 0xfde047);
+          this._npcPrompt = this.add.text(npc.x, npc.y - 16, "[C] TALK",
+            { font: "6px monospace", color: "#fde047" }).setOrigin(0.5);
+          this._npcPrompt._forNpc = npc;
+          this.entityLayer.add(this._npcPromptPlate);
+          this.entityLayer.add(this._npcPrompt);
+          // Gentle bob
+          this.tweens.add({ targets: [this._npcPrompt, this._npcPromptPlate], y: '-=1', duration: 400, yoyo: true, repeat: -1 });
+        }
+      } else {
+        if (this._npcPrompt) { this._npcPrompt.destroy(); this._npcPrompt = null; }
+        if (this._npcPromptPlate) { this._npcPromptPlate.destroy(); this._npcPromptPlate = null; }
+      }
     }
 
     _buildMinimap() {
@@ -2614,6 +2714,7 @@
       if (data) {
         if (data.id === "elder_mira" && stateKey === "intro" && q.main_quest === "talk_to_mira") {
           q.main_quest = "enter_thicket";
+          this._advanceTutorialIfStep(1);
         }
         if (data.id === "liora_scholar" && stateKey === "intro" && data.gives_bow_on_first_talk && !f.has_bow) {
           f.has_bow = true;
