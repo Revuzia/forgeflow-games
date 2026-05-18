@@ -276,15 +276,23 @@
       // a-bit on screen but is still clearly visible (not the previous
       // ~10px mushroom-looking Kenney frame).
       this.player = this.physics.add.sprite(spawnX, spawnY, "p_idle");
-      const PLAYER_TARGET_PX = 28;
+      const PLAYER_TARGET_PX = 32;
       this.player.setScale(PLAYER_TARGET_PX / 64);
-      this.player.setOrigin(0.5, 0.85);  // feet near baseline
-      this.player.body.setSize(28, 16).setOffset(18, 44);
+      this.player.setOrigin(0.5, 0.85);
+      // Body footprint = bottom-center 24x14 of the 64x64 sprite. After scale
+      // 32/64=0.5, the actual body is 12x7 — fits comfortably inside one
+      // 16x16 tile so movement between tiles is smooth.
+      this.player.body.setSize(24, 14).setOffset(20, 46);
       this.player.facing = "down";
       this.player.invuln_until = this.fromSave ? (this.time.now + 2500) : 0;
       this.player.knockback_until = 0;
-      this.player._usingTopDown = false;  // side-view sprite, flip-X for L/R
+      this.player._usingTopDown = false;
+      this.player._currentAnimState = null;
       this.entityLayer.add(this.player);
+      // Now that the player exists, hook up the wall collider for the
+      // initial room (was created during _buildRoom but didn't have a
+      // player to bind to).
+      this._attachWallCollider();
 
       // Enemies + items (spawned by _buildRoom for the current room)
       this.enemies = [];          // active enemy sprites
@@ -431,30 +439,36 @@
         const down  = this.keys.down.isDown  || this.keysWASD.S.isDown;
         const left  = this.keys.left.isDown  || this.keysWASD.A.isDown;
         const right = this.keys.right.isDown || this.keysWASD.D.isDown;
-        if (left) { vx = -sp; p.facing = "left"; p.setFlipX(true); }
-        else if (right) { vx = sp; p.facing = "right"; p.setFlipX(false); }
-        if (up) { vy = -sp; if (!left && !right) p.facing = "up"; }
-        else if (down) { vy = sp; if (!left && !right) p.facing = "down"; }
+        if (left)       vx = -sp;
+        else if (right) vx = sp;
+        if (up)         vy = -sp;
+        else if (down)  vy = sp;
         if (vx !== 0 && vy !== 0) { vx *= Math.SQRT1_2; vy *= Math.SQRT1_2; }
-        // Disable movement while attacking
         if (this.attackUntil && time < this.attackUntil) { vx *= 0.3; vy *= 0.3; }
         p.body.setVelocity(vx, vy);
 
-        // Walk anim
-        if (p._usingTopDown) {
-          // Top-down: use a bob tween-equivalent (gentle y oscillation when moving)
-          if ((vx || vy)) {
-            p._walk_phase = (p._walk_phase || 0) + 0.4;
-            // Slight vertical bob (~1px) while walking
-            p.setScale(1, 1 + 0.08 * Math.sin(p._walk_phase));
-          } else {
-            p.setScale(1, 1);
+        // Facing — ONLY changes on actual L/R input (stable when moving up/down)
+        if (left && p.facing !== "left")   { p.facing = "left";  p.setFlipX(true); }
+        else if (right && p.facing !== "right") { p.facing = "right"; p.setFlipX(false); }
+        else if (up && !left && !right && p.facing !== "up")     p.facing = "up";
+        else if (down && !left && !right && p.facing !== "down") p.facing = "down";
+
+        // Anim state machine — only triggers a state change on TRANSITION
+        const isMoving = (vx !== 0 || vy !== 0);
+        const isAttacking = (this.attackUntil && time < this.attackUntil);
+        let wantAnim;
+        if (isAttacking) wantAnim = "p_attack";
+        else if (isMoving) wantAnim = "p_walk";
+        else wantAnim = "p_idle";
+        if (p._currentAnimState !== wantAnim) {
+          p._currentAnimState = wantAnim;
+          if (wantAnim === "p_walk") {
+            if (!p.anims.isPlaying || p.anims.currentAnim?.key !== "p_walk") p.play("p_walk");
+          } else if (wantAnim === "p_idle") {
+            if (p.anims.isPlaying) p.stop();
+            p.setTexture("p_idle");
           }
-        } else if ((vx || vy) && (!this.attackUntil || time > this.attackUntil)) {
-          if (!p.anims.isPlaying || p.anims.currentAnim?.key !== "p_walk") p.play("p_walk");
-        } else if (!this.attackUntil || time > this.attackUntil) {
-          if (p.anims.isPlaying) p.stop();
-          p.setTexture("p_idle");
+          // wantAnim === "p_attack" — _swing() already called p.play("p_attack")
         }
       }
 
@@ -519,48 +533,49 @@
       // DO NOT destroy the player — track and remove only OUR room-scoped entities.
       this._clearRoomEntities();
 
-      // Tile rendering — rich Graphics-drawn tiles. The Kenney sprite-atlas
-      // overlay path looked wrong (frame indices were inverted vs. assumed
-      // layout, producing blue floors + green walls). Drawing tiles directly
-      // via Graphics gives full visual control and matches the game's color
-      // palette deterministically.
+      // Tile rendering — rich Graphics-drawn tiles + real physics wall colliders.
       const g = this.add.graphics();
       this.tileLayer.add(g);
-      // Pseudo-random for tile decoration (deterministic per room+tile)
       const rng = (seed) => { let t = seed; return () => { t = (t * 1103515245 + 12345) & 0x7fffffff; return t / 0x7fffffff; }; };
       const roomSeed = room.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
       const rnd = rng(roomSeed);
+      // Build a static physics group of wall colliders, one per '#' tile.
+      // Phaser handles sliding / no-clipping automatically via overlap-collide.
+      if (this.wallGroup) this.wallGroup.clear(true, true);
+      this.wallGroup = this.physics.add.staticGroup();
       for (let y = 0; y < ROOM_H; y++) {
         const row = room.tiles[y];
         for (let x = 0; x < ROOM_W; x++) {
           const ch = row && row[x] ? row[x] : '.';
           this._drawTile(g, ch, x * TILE, y * TILE, rnd);
-          // Special decorations (locks, doors, spikes, pits) drawn via Graphics
           const decor = TILE_DRAW_DECOR[ch];
           if (decor) this._drawTileDecor(g, decor, x * TILE, y * TILE);
+          // Static wall body for solid tiles
+          if (SOLID_TILES.has(ch)) {
+            const wall = this.wallGroup.create(x * TILE + TILE/2, y * TILE + TILE/2, null);
+            wall.setSize(TILE, TILE);
+            wall.setVisible(false);
+            wall.refreshBody();
+          }
         }
       }
+      // Player↔wall collider attached separately (see _attachWallCollider)
+      // because _buildRoom may run BEFORE this.player is created (initial
+      // create() path).
+      this._attachWallCollider();
 
-      // NPCs — render from roguelike_chars spritesheet when available
+      // NPCs — hooded-figure Graphics with cloak color from n.tint.
+      // The roguelike_chars sprite at 16x16 was illegible at game zoom; this
+      // procedural figure reads clearly even at small scale.
       this.npcsInRoom = [];
       (room.npcs || []).forEach(n => {
-        let npc;
-        if (typeof n.sprite_frame === "number" && this.textures.exists("rl_chars")) {
-          npc = this.add.sprite(n.x, n.y, "rl_chars", n.sprite_frame);
-          // Scale up slightly so they read at game zoom (16px native → 18px)
-          npc.setScale(1.15);
-          if (n.tint) npc.setTint(n.tint);
-        } else {
-          npc = this.add.rectangle(n.x, n.y, 14, 16, n.tint || 0xfacc15);
-          npc.setStrokeStyle(1, 0x000000);
-        }
+        const npc = this._drawNpcFigure(n);
         npc._npcData = n;
         this.entityLayer.add(npc);
-        // Label BELOW the NPC (not above — was covering the sprite) + bg plate
-        const labelY = n.y + 13;   // just below NPC's feet
-        // Estimate text width so the background plate fits neatly
-        const textW = Math.max(20, n.name.length * 4 + 4);
-        const plate = this.add.rectangle(n.x, labelY, textW, 8, 0x0f172a, 0.85);
+        // Label BELOW the NPC's feet + yellow-bordered dark plate
+        const labelY = n.y + 14;
+        const textW = Math.max(22, n.name.length * 4 + 4);
+        const plate = this.add.rectangle(n.x, labelY, textW, 8, 0x0f172a, 0.9);
         plate.setStrokeStyle(0.5, 0xfde047);
         const label = this.add.text(n.x, labelY, n.name,
           { font: "6px monospace", color: "#fde047" })
@@ -571,6 +586,61 @@
         this.npcsInRoom.push(plate);
         this.npcsInRoom.push(label);
       });
+    }
+
+    _drawNpcFigure(n) {
+      // Draw an NPC as a procedural hooded figure with cloak in n.tint color.
+      // Container x = n.x, y = n.y. The figure is ~10 wide × 16 tall, with
+      // feet centered near the container origin.
+      const container = this.add.container(n.x, n.y);
+      const g = this.add.graphics();
+      container.add(g);
+      const cloak = n.tint || 0xfacc15;
+      // Darker shade for shadow side
+      const cloakDark = (cloak & 0xfefefe) >>> 1;
+      // Shadow at feet
+      g.fillStyle(0x000000, 0.4);
+      g.fillEllipse(0, 7, 10, 3);
+      // Cloak body (trapezoid)
+      g.fillStyle(cloak, 1);
+      g.fillTriangle(-6, 7, 6, 7, 4, -3);
+      g.fillTriangle(-6, 7, 4, -3, -4, -3);
+      // Cloak shadow on right side
+      g.fillStyle(cloakDark, 1);
+      g.fillTriangle(0, 7, 6, 7, 4, -3);
+      // Outline
+      g.lineStyle(0.5, 0x111111, 1);
+      g.strokeTriangle(-6, 7, 6, 7, 4, -3);
+      g.strokeTriangle(-6, 7, 4, -3, -4, -3);
+      // Face area under hood (skin)
+      g.fillStyle(0xfde7c2, 1);
+      g.fillCircle(0, -5, 2.5);
+      // Hood (over head + drape)
+      g.fillStyle(cloak, 1);
+      g.fillCircle(0, -7, 3);
+      // Hood inner shadow
+      g.fillStyle(cloakDark, 1);
+      g.fillEllipse(0, -5, 4, 2);
+      // Eyes (two tiny dark dots)
+      g.fillStyle(0x111111, 1);
+      g.fillCircle(-1, -5.2, 0.5);
+      g.fillCircle(1, -5.2, 0.5);
+      // Small belt / sash
+      g.fillStyle(0x57534e, 1);
+      g.fillRect(-5, 0, 10, 1);
+      return container;
+    }
+
+    _attachWallCollider() {
+      // Re-bind the player ↔ wall static-group collider. Must be called
+      // both after initial player creation in create() AND after every
+      // _buildRoom rebuild (the wallGroup is replaced each room).
+      if (!this.player || !this.wallGroup) return;
+      if (this._wallCollider) {
+        this.physics.world.removeCollider(this._wallCollider);
+        this._wallCollider = null;
+      }
+      this._wallCollider = this.physics.add.collider(this.player, this.wallGroup);
     }
 
     _clearRoomEntities() {
@@ -717,15 +787,8 @@
         this._enterRoom(r.exits[dir], { N:"S", S:"N", E:"W", W:"E" }[dir]);
         return;
       }
-      // Solid-wall collisions (clamp player to playable bounds)
-      const tx = Math.floor(p.x / TILE);
-      const ty = Math.floor(p.y / TILE);
-      const ch = (r.tiles[ty] || "")[tx];
-      if (SOLID_TILES.has(ch)) {
-        p.body.setVelocity(0, 0);
-        p.x = Phaser.Math.Clamp(p.x, TILE * 1.2, SCREEN_W - TILE * 1.2);
-        p.y = Phaser.Math.Clamp(p.y, TILE * 1.2, SCREEN_H - TILE * 1.2);
-      }
+      // Physics collision is handled by this.wallGroup (a static body per '#'
+      // tile). Phaser auto-resolves sliding and prevents clipping.
     }
 
     _edgeLockType(room, dir) {
