@@ -26,11 +26,13 @@
   "use strict";
 
   // ── Player config ────────────────────────────────────────────────
+  // Speed dropped to 65 px/s (~4 tiles/sec) — classic top-down adventure
+  // pacing. Higher speeds let players blow through rooms in seconds.
   const PLAYER = {
     spawn_room: "village_square",
-    spawn_x: 144,     // tile col 9 * 16
-    spawn_y: 80,      // tile row 5 * 16
-    speed: 100,
+    spawn_x: 144,
+    spawn_y: 80,
+    speed: 65,
     max_hearts: 3,
     start_hearts: 3,
     invuln_ms: 800,
@@ -408,14 +410,14 @@
     "#:::::::::::::::::".slice(0,18),
     "#::....BB....::::#",
     "#::....BB....::::#",
-    "#::::::::::::::::#",
-    "#::PP::::::PP::::#",   // P = pit (hazard)
+    "#::::::::::::::::D",   // E to east_c
+    "#::PP::::::PP::::#",
     "#::PP::::::PP::::#",
     "#::::::::::::::::#",
     "#:::::::::::::::::".slice(0,18),
     "#................#",
     "##################",
-  ].map(r => r.replace(/B/g, '.')), { N: "ruins_east_a" },
+  ].map(r => r.replace(/B/g, '.')), { N: "ruins_east_a", E: "ruins_east_c" },
   {
     items: [{ kind: "bomb_refill", x: 96, y: 64 }],
     // Push-block puzzle — drag the 2 stone blocks onto the 2 pressure plates
@@ -462,14 +464,14 @@
     "#:::::::::::::::::".slice(0,18),
     "#:::::::::::::::::".slice(0,18),
     "#::::........::::#",
-    "#::::........::::#",
+    "#::::........::::D",   // E to west_c (post-miniboss)
     "#::::....G...::::#",   // G = Geomancer Statue mini-boss spawn
     "#::::........::::#",
     "#::::........::::#",
     "#:::::::::::::::::".slice(0,18),
     "#................#",
     "##################",
-  ].map(r => r.replace(/G/g, '.')), { N: "ruins_west_a" },
+  ].map(r => r.replace(/G/g, '.')), { N: "ruins_west_a", E: "ruins_west_c" },
   {
     enemies: [
       { template: "geomancer_statue", x: 144, y: 80, role: "miniboss" },
@@ -532,7 +534,7 @@
     "#................#",
     "#................#",
     "########D#########",
-  ], { N: "ruins_big_key_room", S: "ruins_north_a" },
+  ], { N: "ruins_mid_corridor", S: "ruins_north_a" },
   {
     weak_wall_reward: { kind: "heart_piece" },
   });
@@ -596,6 +598,116 @@
     boss_reward: { kind: "heart_container" },
     music: "music_boss",
     lock_until_cleared: true,
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  // ITER D — Extended dungeon: 4 more rooms (east_c, west_c,
+  // mid_corridor, trap_room) — Map + Compass + harder middle section.
+  // ════════════════════════════════════════════════════════════════
+
+  // East branch extension — bonus chamber with dungeon_map
+  R("ruins_east_c", "ruins_of_first_light", [
+    "##################",
+    "#:::::::::::::::::".slice(0,18),
+    "#::....::....::::#",
+    "#::....::....::::#",
+    "D::....::....::::#",   // W back to east_b
+    "#::....::....::::#",
+    "#::....::....::::#",
+    "#::....::....::::#",
+    "#:::::::::::::::::".slice(0,18),
+    "#:::::::::::::::::".slice(0,18),
+    "##################",
+  ], { W: "ruins_east_b" },
+  {
+    enemies: [
+      { template: "veilstalker", x: 64, y: 64 },
+      { template: "veilstalker", x: 224, y: 64 },
+      { template: "wraithwhisper", x: 144, y: 96 },
+      { template: "thornback_lurker", x: 96, y: 128 },
+    ],
+    items: [{ kind: "dungeon_map", x: 144, y: 80 }],
+    lock_until_cleared: true,
+  });
+
+  // West branch extension — bonus chamber with dungeon_compass
+  R("ruins_west_c", "ruins_of_first_light", [
+    "##################",
+    "#:::::::::::::::::".slice(0,18),
+    "#::....::....::::#",
+    "#::....::....::::#",
+    "D::....::....::::#",   // W back to west_b
+    "#::....::....::::#",
+    "#::....::....::::#",
+    "#::....::....::::#",
+    "#:::::::::::::::::".slice(0,18),
+    "#:::::::::::::::::".slice(0,18),
+    "##################",
+  ], { W: "ruins_west_b" },
+  {
+    enemies: [
+      { template: "wraithwhisper", x: 64, y: 64 },
+      { template: "wraithwhisper", x: 224, y: 64 },
+      { template: "veilstalker", x: 144, y: 96 },
+      { template: "veilstalker", x: 64, y: 128 },
+      { template: "thornback_lurker", x: 224, y: 128 },
+    ],
+    items: [
+      { kind: "dungeon_compass", x: 144, y: 80 },
+      { kind: "rupee_red", x: 80, y: 144 },
+    ],
+    lock_until_cleared: true,
+  });
+
+  // Mid corridor — heavier mid-dungeon gauntlet
+  R("ruins_mid_corridor", "ruins_of_first_light", [
+    "########D#########",
+    "#:::::::::::::::::".slice(0,18),
+    "#:::::::::::::::::".slice(0,18),
+    "#::....::....::::#",
+    "#::....::....::::#",
+    "#::....::....::::#",
+    "#::....::....::::#",
+    "#::....::....::::#",
+    "#:::::::::::::::::".slice(0,18),
+    "#................#",
+    "########D#########",
+  ], { N: "ruins_trap_room", S: "ruins_north_b" },
+  {
+    enemies: [
+      { template: "veilstalker", x: 64, y: 64 },
+      { template: "veilstalker", x: 224, y: 64 },
+      { template: "veilstalker", x: 64, y: 144 },
+      { template: "veilstalker", x: 224, y: 144 },
+      { template: "wraithwhisper", x: 96, y: 96 },
+      { template: "wraithwhisper", x: 192, y: 96 },
+      { template: "thornback_lurker", x: 144, y: 128 },
+    ],
+    lock_until_cleared: true,
+  });
+
+  // Trap room — spike rows + enemies; bridge to big_key_room
+  R("ruins_trap_room", "ruins_of_first_light", [
+    "########D#########",
+    "#:::::::::::::::::".slice(0,18),
+    "#:::::::::::::::::".slice(0,18),
+    "#::::::ssss::::::#",   // spike row
+    "#:::::........:::#",
+    "#:::::........:::#",
+    "#:::::........:::#",
+    "#::::::ssss::::::#",
+    "#:::::::::::::::::".slice(0,18),
+    "#................#",
+    "########D#########",
+  ], { N: "ruins_big_key_room", S: "ruins_mid_corridor" },
+  {
+    enemies: [
+      { template: "veilstalker", x: 144, y: 80 },
+      { template: "wraithwhisper", x: 64, y: 80 },
+      { template: "wraithwhisper", x: 224, y: 80 },
+    ],
+    lock_until_cleared: true,
+    items: [{ kind: "bomb_refill", x: 80, y: 144 }],
   });
 
   // ════════════════════════════════════════════════════════════════
@@ -748,15 +860,19 @@
   // sprite_frames: rest/move pair from enemies.xml (Kenney "platformer creatures"
   // 64×64 atlas — see assets/enemies.xml). Tinted via color hint. Displayed at 16px.
   const ENEMIES = {
-    thornback_lurker: { hp: 10, dmg: 1.0, behavior: "patrol", speed: 40, color: 0x2d5016,
+    // HP buffed 2× across the board so sword combat takes meaningful time.
+    // 3-hit kill (1 dmg sword) on grunts → 6 hits on heavy enemies → 25-40 hits
+    // on mini-boss / boss. Matches genre-typical pacing where each encounter
+    // demands real engagement instead of one-tap clear.
+    thornback_lurker: { hp: 6,  dmg: 1.0, behavior: "patrol", speed: 35, color: 0x2d5016,
       sprite_rest: "slime_spike_rest", sprite_move_a: "slime_spike_walk_a", sprite_move_b: "slime_spike_walk_b" },
-    veilstalker:      { hp: 8,  dmg: 1.0, behavior: "chase",  speed: 60, color: 0x1a1a2e,
+    veilstalker:      { hp: 4,  dmg: 1.0, behavior: "chase",  speed: 55, color: 0x1a1a2e,
       sprite_rest: "barnacle_attack_rest", sprite_move_a: "barnacle_attack_a", sprite_move_b: "barnacle_attack_b" },
-    wraithwhisper:    { hp: 6,  dmg: 1.0, behavior: "shoot",  speed: 30, color: 0x9333ea, projectile_cd_ms: 2000,
+    wraithwhisper:    { hp: 3,  dmg: 1.0, behavior: "shoot",  speed: 25, color: 0x9333ea, projectile_cd_ms: 2000,
       sprite_rest: "ladybug_rest", sprite_move_a: "ladybug_walk_a", sprite_move_b: "ladybug_walk_b" },
-    geomancer_statue: { hp: 20, dmg: 2.0, behavior: "guard",  speed: 0,  color: 0x7c7c7c, slam_cd_ms: 3000,
+    geomancer_statue: { hp: 12, dmg: 2.0, behavior: "guard",  speed: 0,  color: 0x7c7c7c, slam_cd_ms: 3000,
       sprite_rest: "block_rest", sprite_move_a: "block_idle", sprite_move_b: "block_fall" },
-    crystalspine_boar:{ hp: 15, dmg: 2.0, behavior: "charge", speed: 80, color: 0x6b4423,
+    crystalspine_boar:{ hp: 10, dmg: 2.0, behavior: "charge", speed: 70, color: 0x6b4423,
       sprite_rest: "snail_rest", sprite_move_a: "snail_walk_a", sprite_move_b: "snail_walk_b" },
   };
 
@@ -764,12 +880,15 @@
   const BOSSES = {
     guardian_of_first_light: {
       name: "Guardian of First Light",
-      hp_phase1: 30,
-      hp_phase2: 20,
+      // Buffed phase HP so the boss feels like an actual encounter, not
+      // a 5-second skirmish. Phase 1: ~50 sword hits (~30s of combat).
+      // Phase 2: ~12 bombs (player has ~10-14 available across the run) or
+      // ~25 arrow shots.
+      hp_phase1: 50,
+      hp_phase2: 25,
       dmg: 2.0,
       phases: 2,
       color: 0xfacc15,
-      // Use a chunky enemy frame scaled up 2× for boss feel
       sprite_rest: "frog_idle", sprite_move_a: "frog_jump", sprite_move_b: "frog_rest",
       scale: 2.0,
     },
@@ -790,6 +909,10 @@
     boomerang:       { kind: "weapon", id: "boomerang", color: 0xeab308 },
     bomb_refill:     { kind: "bomb_refill", value: 3, color: 0x1f2937 },
     flower:          { kind: "side_quest_flower", value: 1, color: 0x06b6d4 },
+    // Dungeon discovery items — show all-rooms map / chest+lock indicators
+    // in a screen-corner mini-overlay when collected.
+    dungeon_map:     { kind: "dungeon_map", value: 1, color: 0xfbbf24 },
+    dungeon_compass: { kind: "dungeon_compass", value: 1, color: 0xa78bfa },
   };
 
   // ── Music + SFX hooks (key → asset URL) ──────────────────────────

@@ -1305,6 +1305,32 @@
         // Spark
         g.fillStyle(0xfde047, 1);
         g.fillCircle(4, -4, 1.2);
+      } else if (kind === "dungeon_map") {
+        // Folded parchment with crease lines
+        g.fillStyle(baseCol, 1);
+        g.fillRect(-4, -3, 8, 6);
+        g.lineStyle(1, outline, 1);
+        g.strokeRect(-4, -3, 8, 6);
+        // Folds
+        g.lineStyle(0.5, 0x78350f, 1);
+        g.lineBetween(-1, -3, -1, 3);
+        g.lineBetween(2, -3, 2, 3);
+        // X marks the spot
+        g.fillStyle(0xef4444, 1);
+        g.fillCircle(0, 0, 0.6);
+      } else if (kind === "dungeon_compass") {
+        // Circular compass with N-S needle
+        g.fillStyle(baseCol, 1);
+        g.fillCircle(0, 0, 4);
+        g.lineStyle(1, outline, 1);
+        g.strokeCircle(0, 0, 4);
+        // Needle
+        g.fillStyle(0xef4444, 1);
+        g.fillTriangle(0, -3, -1, 0, 1, 0);
+        g.fillStyle(0xfff, 1);
+        g.fillTriangle(0, 3, -1, 0, 1, 0);
+        g.fillStyle(0x000, 1);
+        g.fillCircle(0, 0, 0.7);
       } else if (kind === "flower") {
         // Bioluminescent flower — 5 cyan petals + yellow center + green stem
         g.fillStyle(0x14532d, 1);
@@ -1629,6 +1655,16 @@
       else if (tpl.kind === "bomb_refill") {
         this.bombCount += (tpl.value || 3);
         sfx = "sfx_pickup";
+      }
+      else if (tpl.kind === "dungeon_map") {
+        q.has_map = true;
+        sfx = "sfx_levelup";
+        this._showFanfare("GOT THE MAP");
+      }
+      else if (tpl.kind === "dungeon_compass") {
+        q.has_compass = true;
+        sfx = "sfx_levelup";
+        this._showFanfare("GOT THE COMPASS");
       }
       else if (tpl.kind === "side_quest_flower") {
         // Heda's flower side quest — collect 3 and return to her for a heart piece.
