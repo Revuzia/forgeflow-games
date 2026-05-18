@@ -498,23 +498,37 @@ def main():
     total_all = sum(p.get("file_count", 0) for p in manifest.get("packs", {}).values() if p.get("kind") in CLASSIFY_KINDS)
     done_before = total_all - len(queue)
     _log(f"Vision classify starting — {len(queue)} files in queue, {done_before} already done ({100*done_before/max(1,total_all):.1f}%)")
-    _tg(f"👁️ Vision classify starting\n{len(queue)} files in queue\n{done_before}/{total_all} done previously\nWindow: Saturday 8 AM - 8 PM")
+
+    # 2026-05-18: send startup Telegram ONCE per day. The supervisor restarts
+    # the classifier on every crash (105x on Sat May 16). Without this sentinel
+    # the user got 105 startup Telegrams in one day. Sentinel file is purged
+    # at the start of each day's session via cleanup below.
+    _state_dir = PROGRESS_PATH.parent
+    SESSION_FLAG = _state_dir / f"vision_session_{datetime.date.today().isoformat()}.flag"
+    # Purge any older flag files from previous days
+    for stale in _state_dir.glob("vision_session_*.flag"):
+        if stale.name != SESSION_FLAG.name:
+            try: stale.unlink()
+            except Exception: pass
+    if not SESSION_FLAG.exists():
+        _tg(f"👁️ Vision classify starting\n{len(queue)} files in queue\n{done_before}/{total_all} done previously\nWindow: Saturday 8 AM - 8 PM")
+        try: SESSION_FLAG.touch()
+        except Exception: pass
 
     classified_this_run = 0
     errors_this_run = 0
     last_heartbeat = time.time()
 
     for idx, item in enumerate(queue):
-        # Hourly heartbeat — proves task is alive
+        # Hourly heartbeat — proves task is alive (LOG ONLY, no Telegram)
         if time.time() - last_heartbeat >= HEARTBEAT_SEC:
             pct = 100 * (done_before + classified_this_run) / max(1, total_all)
-            _log(f"💓 Heartbeat: {classified_this_run} this hour | {done_before + classified_this_run}/{total_all} total ({pct:.1f}%)")
-            _tg(f"💓 Vision classifier alive\n{classified_this_run} this run | {pct:.1f}% total\n{errors_this_run} errors")
+            _log(f"💓 Heartbeat: {classified_this_run} this hour | {done_before + classified_this_run}/{total_all} total ({pct:.1f}%) | {errors_this_run} errors")
             last_heartbeat = time.time()
         # Window + budget guards
         if not _in_window(args.force):
             _log(f"Hit end of window (8 PM). Pausing at {idx}/{len(queue)}.")
-            _tg(f"⏸️ Vision classify paused at 8 PM — {idx}/{len(queue)} this run. Will resume next Saturday.")
+            # Supervisor sends the end-of-day summary Telegram with full stats.
             break
         if args.limit and classified_this_run >= args.limit:
             _log(f"Hit --limit {args.limit}. Stopping."); break
@@ -562,8 +576,8 @@ def main():
                     break
                 if cls.get("_rate_limited"):
                     wait = BACKOFF_SCHEDULE[min(backoff_idx, len(BACKOFF_SCHEDULE) - 1)]
+                    # LOG ONLY — rate-limit backoff is normal behavior, not worth a Telegram per occurrence.
                     _log(f"  ⏳ Rate-limited. Sleeping {wait}s then retrying. (backoff step {backoff_idx+1})")
-                    _tg(f"⏳ Rate limit hit. Backing off {wait}s and retrying. Progress: {done_before + classified_this_run}/{total_all}")
                     chunked = 0
                     while chunked < wait:
                         if not _in_window(args.force):
@@ -605,10 +619,9 @@ def main():
         if classified_this_run % 10 == 0:
             _save_classifications(classifications)
 
-        # Telegram progress
-        if classified_this_run > 0 and classified_this_run % TELEGRAM_EVERY_N == 0:
-            pct = 100 * (done_before + classified_this_run) / max(1, total_all)
-            _tg(f"📊 Vision classify: {classified_this_run} this run | {done_before + classified_this_run}/{total_all} total ({pct:.1f}%) | {errors_this_run} errors")
+        # 2026-05-18: removed per-N-files Telegram (was firing every 25 files).
+        # All progress visible in vision_classify.log + state/vision_classify.progress.
+        # Supervisor sends ONE final summary Telegram at 8 PM.
 
         # Minimal polite pause (1 sec) after each successful call
         time.sleep(MIN_DELAY_SEC)
@@ -620,20 +633,12 @@ def main():
     total_done_now = done_before + classified_this_run
     _log(f"Run complete: {classified_this_run} new this run, {errors_this_run} errors, {total_done_now}/{total_all} total")
 
-    # 8 PM summary — user reviews before deleting task (no auto-delete)
-    pct_final = 100 * total_done_now / max(1, total_all)
-    is_complete = total_done_now >= total_all - 50
-    summary = (
-        f"🏁 Vision classify run ended at 8 PM\n"
-        f"Progress: {total_done_now}/{total_all} ({pct_final:.1f}%)\n"
-        f"This run: {classified_this_run} classified, {errors_this_run} errors\n"
-        + (f"✅ EFFECTIVELY COMPLETE — waiting for your review before task delete.\n"
-           f"Run: python forgeflow-games/pipeline/art/vision_classify.py --delete-task to self-delete."
-           if is_complete else
-           f"⏸️  Paused for the day. Will auto-resume next Saturday 8 AM.")
-    )
-    _log(summary)
-    _tg(summary)
+    # 2026-05-18: removed end-of-run Telegram from classifier. The classifier
+    # is restarted by the supervisor on every crash (up to 105x/day observed),
+    # so each instance hitting this code would have spammed the operator.
+    # The supervisor sends ONE end-of-day Telegram with cumulative stats at
+    # 8 PM, reading from the .progress file. The classifier logs everything
+    # to vision_classify.log; no per-instance Telegram is appropriate here.
 
 
 if __name__ == "__main__":
