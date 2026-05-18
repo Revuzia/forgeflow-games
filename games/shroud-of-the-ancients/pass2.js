@@ -486,6 +486,8 @@
       this._tickEnemies(time, delta);
       // Enemy projectiles
       this._tickEnemyProjectiles(time);
+      // Puzzles
+      this._tickPuzzles(time);
 
       // Item pickup overlap
       this._tickPickups(time);
@@ -571,7 +573,7 @@
 
     _clearRoomEntities() {
       // Destroy any tracked room-scoped entities WITHOUT touching player or hitbox.
-      const lists = [this.enemies || [], this.itemsOnGround || [], this.npcsInRoom || [], this.bombs || [], this.enemyProjectiles || []];
+      const lists = [this.enemies || [], this.itemsOnGround || [], this.npcsInRoom || [], this.bombs || [], this.enemyProjectiles || [], this.puzzleEntities || []];
       for (const list of lists) {
         for (const item of list) {
           if (item && item.destroy) item.destroy();
@@ -582,6 +584,12 @@
       this.npcsInRoom = [];
       this.bombs = [];
       this.enemyProjectiles = [];
+      this.puzzleEntities = [];
+      this.puzzleBlocks = null;
+      this.puzzlePlates = null;
+      this.puzzleStatues = null;
+      this._pushPuzzle = null;
+      this._lightPuzzle = null;
       // Also reset arrows in flight (recycle, don't destroy)
       if (this.arrows) {
         for (const a of this.arrows) {
@@ -623,10 +631,34 @@
       }[fromDirection] || { x: SCREEN_W / 2, y: SCREEN_H / 2 };
       this.player.setPosition(entryPos.x, entryPos.y);
       this.player.body.setVelocity(0, 0);
+      // Track the direction we entered from — lock-until-cleared exempts
+      // the entry door so the player can retreat.
+      this._lastEntryDir = fromDirection;
       // Music swap if zone changes
       this._setRoomMusic();
       // Save on every room transition (Zelda-ish: each new screen is a checkpoint)
       this._writeSave();
+    }
+
+    _roomCleared(roomId) {
+      if (!this._roomsCleared) this._roomsCleared = {};
+      return !!this._roomsCleared[roomId];
+    }
+
+    _maybeMarkRoomCleared() {
+      const r = this.currentRoom;
+      if (!r || !r.lock_until_cleared) return;
+      if (this._roomCleared(r.id)) return;
+      const alive = this.enemies.filter(e => e.active && !e.dead).length;
+      if (alive > 0) return;
+      // Mark + side-effects
+      if (!this._roomsCleared) this._roomsCleared = {};
+      this._roomsCleared[r.id] = true;
+      try { this.sound.play("sfx_door", { volume: 0.5 }); } catch (_) {}
+      this._showFanfare("ROOM CLEARED");
+      // drops_*_on_clear — spawn keys/items at room center on full clear
+      if (r.drops_key_on_clear) this._spawnPickup("small_key", SCREEN_W/2, SCREEN_H/2);
+      if (r.drops_big_key_on_clear) this._spawnPickup("big_key", SCREEN_W/2, SCREEN_H/2);
     }
 
     _checkEdgeTransitions(p) {
@@ -639,6 +671,22 @@
       else if (p.x > SCREEN_W - TILE * 0.5 && r.exits.E) dir = "E";
       else if (p.x < TILE * 0.5 && r.exits.W) dir = "W";
       if (dir) {
+        // Lock-until-cleared: room doors close if any enemy is alive.
+        // Doesn't apply to the entry direction (would trap player).
+        if (r.lock_until_cleared && !this._roomCleared(r.id)) {
+          if (dir !== this._lastEntryDir) {
+            this._showLockedFeedback("enemies_present");
+            this._bouncePlayer(dir);
+            return;
+          }
+        }
+        // Puzzle gating — light puzzle gates the N exit when configured.
+        if (r.puzzle && r.puzzle.kind === "light_4statue" && r.puzzle.gates_north_exit
+            && dir === "N" && this.puzzleState && !this.puzzleState.solved) {
+          this._showLockedFeedback("statue_puzzle");
+          this._bouncePlayer(dir);
+          return;
+        }
         // Check for a locked-door tile at the edge — block unless we have a key.
         // Door tile positions inferred from tile layout: any 'L' (small) / 'B' (big) on the corresponding edge.
         const lockType = this._edgeLockType(r, dir);
@@ -718,9 +766,10 @@
 
     _showLockedFeedback(kind) {
       try { this.sound.play("sfx_hit", { volume: 0.3 }); } catch (_) {}
-      // Flash a quick text in center of screen
-      const msg = kind === "big_locked" ? "The Big Door is sealed."
-                                        : "Locked — find a small key.";
+      const msg = kind === "big_locked"      ? "The Big Door is sealed."
+                : kind === "enemies_present" ? "Defeat all enemies first!"
+                : kind === "statue_puzzle"   ? "The statues must face the center."
+                : "Locked — find a small key.";
       const t = this.add.text(SCREEN_W/2, 24, msg,
         { font: "8px monospace", color: "#fde047", backgroundColor: "rgba(0,0,0,0.7)" }).setOrigin(0.5, 0);
       this.fxLayer.add(t);
@@ -846,6 +895,16 @@
             this.hitboxHitEnemies.add(e);
           }
         }
+        // Statues — sword hit rotates them
+        if (this.puzzleStatues) {
+          for (const s of this.puzzleStatues) {
+            if (this.hitboxHitEnemies.has(s)) continue;
+            if (Phaser.Geom.Intersects.RectangleToRectangle(hb.getBounds(), s.getBounds())) {
+              this._rotateStatue(s);
+              this.hitboxHitEnemies.add(s);
+            }
+          }
+        }
       }
     }
 
@@ -913,6 +972,8 @@
         // Trigger win
         this._winAct1();
       }
+      // Check for room-cleared
+      this._maybeMarkRoomCleared();
     }
 
     _damagePlayer(amount, sourceX, sourceY) {
@@ -1000,6 +1061,158 @@
       (room.items || []).forEach(item => {
         this._spawnPickup(item.kind, item.x, item.y);
       });
+      // Puzzles
+      this.puzzleEntities = [];
+      this.puzzleState = { solved: false };
+      const puz = room.puzzle;
+      if (puz) {
+        if (puz.kind === "push_block") this._buildPushBlockPuzzle(puz);
+        else if (puz.kind === "light_4statue") this._buildLightPuzzle(puz);
+      }
+    }
+
+    // ── Push-block puzzle ──────────────────────────────────────────
+    _buildPushBlockPuzzle(puz) {
+      // Plates: 10×10 cyan squares on the floor
+      this.puzzlePlates = puz.plates.map(p => {
+        const r = this.add.rectangle(p.x, p.y, 10, 10, 0x0891b2, 0.5);
+        r.setStrokeStyle(1, 0x0e7490);
+        this.entityLayer.add(r);
+        this.puzzleEntities.push(r);
+        return { plate: r, x: p.x, y: p.y, pressed: false };
+      });
+      // Blocks: 14×14 stone-grey draggable squares
+      this.puzzleBlocks = puz.blocks.map(b => {
+        const r = this.add.rectangle(b.x, b.y, 14, 14, 0x6b7280);
+        r.setStrokeStyle(1, 0x374151);
+        this.physics.add.existing(r);
+        r.body.setImmovable(true);
+        r.body.setSize(14, 14);
+        r._isPushBlock = true;
+        this.entityLayer.add(r);
+        this.puzzleEntities.push(r);
+        return r;
+      });
+      this._pushPuzzle = puz;
+    }
+
+    // ── 4-statue light puzzle ──────────────────────────────────────
+    _buildLightPuzzle(puz) {
+      // Statues — small grey blocks with an arrow indicating facing.
+      // Player strikes statue with sword to rotate facing 90°. Solved when
+      // all 4 face the center.
+      this.puzzleStatues = puz.statues.map((s, i) => {
+        const r = this.add.rectangle(s.x, s.y, 12, 12, 0x9ca3af);
+        r.setStrokeStyle(1, 0x374151);
+        this.physics.add.existing(r);
+        r.body.setImmovable(true);
+        r._isStatue = true;
+        r._facing = i;  // initial facings 0/1/2/3 (random-ish; need to rotate)
+        // Arrow indicator overlay
+        const arrow = this.add.text(s.x, s.y, "→",
+          { font: "10px monospace", color: "#fde047", stroke: "#000", strokeThickness: 2 })
+          .setOrigin(0.5);
+        r._arrow = arrow;
+        this.entityLayer.add(r);
+        this.entityLayer.add(arrow);
+        this.puzzleEntities.push(r);
+        this.puzzleEntities.push(arrow);
+        this._updateStatueArrow(r);
+        return r;
+      });
+      this._lightPuzzle = puz;
+    }
+
+    _updateStatueArrow(s) {
+      // facing 0=right, 1=down, 2=left, 3=up
+      // For "face center" — depends on quadrant.
+      const arrows = ["→", "↓", "←", "↑"];
+      s._arrow.setText(arrows[s._facing % 4]);
+    }
+
+    _rotateStatue(s) {
+      s._facing = (s._facing + 1) % 4;
+      this._updateStatueArrow(s);
+      try { this.sound.play("sfx_hit", { volume: 0.4 }); } catch (_) {}
+      // Visual hit-flash
+      s.fillColor = 0xffffff;
+      this.time.delayedCall(100, () => { if (s && s.fillColor !== undefined) s.fillColor = 0x9ca3af; });
+      this._checkLightPuzzle();
+    }
+
+    _tickPuzzles(time) {
+      // Push the blocks when the player walks into them
+      if (this.puzzleBlocks && this.puzzleBlocks.length) {
+        for (const b of this.puzzleBlocks) {
+          if (!b.active) continue;
+          if (Phaser.Geom.Intersects.RectangleToRectangle(this.player.getBounds(), b.getBounds())) {
+            // Push direction = player facing
+            const f = this.player.facing;
+            const step = 1.5;
+            const dx = (f === "left" ? -step : f === "right" ? step : 0);
+            const dy = (f === "up" ? -step : f === "down" ? step : 0);
+            if (dx || dy) {
+              // Don't push into solid tiles
+              const nx = b.x + dx, ny = b.y + dy;
+              const tx = Math.floor(nx / TILE), ty = Math.floor(ny / TILE);
+              const ch = (this.currentRoom.tiles[ty] || "")[tx];
+              if (!SOLID_TILES.has(ch)) {
+                b.x = nx; b.y = ny;
+                // Push player back so they don't constantly press through
+                this.player.x -= dx * 0.6;
+                this.player.y -= dy * 0.6;
+              }
+            }
+          }
+        }
+        // Plate detection
+        if (this.puzzlePlates && this._pushPuzzle && !this.puzzleState.solved) {
+          let allPressed = true;
+          for (const pInfo of this.puzzlePlates) {
+            const wasPressed = pInfo.pressed;
+            pInfo.pressed = this.puzzleBlocks.some(b =>
+              Phaser.Math.Distance.Between(b.x, b.y, pInfo.x, pInfo.y) < 8);
+            if (pInfo.pressed && !wasPressed) {
+              pInfo.plate.fillColor = 0x06b6d4;   // lit
+              try { this.sound.play("sfx_pickup", { volume: 0.3 }); } catch (_) {}
+            } else if (!pInfo.pressed && wasPressed) {
+              pInfo.plate.fillColor = 0x0891b2;
+            }
+            if (!pInfo.pressed) allPressed = false;
+          }
+          if (allPressed) {
+            this.puzzleState.solved = true;
+            try { this.sound.play("sfx_door", { volume: 0.6 }); } catch (_) {}
+            this._showFanfare("PUZZLE SOLVED");
+            if (this._pushPuzzle.reward_on_solve) {
+              const rew = this._pushPuzzle.reward_on_solve;
+              this._spawnPickup(rew.kind, rew.x, rew.y);
+            }
+          }
+        }
+      }
+    }
+
+    _checkLightPuzzle() {
+      const puz = this._lightPuzzle;
+      if (!puz || this.puzzleState.solved) return;
+      const cx = SCREEN_W / 2, cy = SCREEN_H / 2;
+      // Each statue must "face center" — facing dir is the dir of the arrow.
+      // We compute the dir-from-statue-to-center and require facing === that.
+      let allFacing = true;
+      for (const s of this.puzzleStatues) {
+        const dx = cx - s.x, dy = cy - s.y;
+        const wantHorizontal = Math.abs(dx) >= Math.abs(dy);
+        const want = wantHorizontal
+          ? (dx > 0 ? 0 : 2)   // right or left
+          : (dy > 0 ? 1 : 3);  // down or up
+        if (s._facing !== want) { allFacing = false; break; }
+      }
+      if (allFacing) {
+        this.puzzleState.solved = true;
+        try { this.sound.play("sfx_door", { volume: 0.6 }); } catch (_) {}
+        this._showFanfare("THE WAY OPENS");
+      }
     }
 
     _spawnPickup(kind, x, y) {
@@ -1092,6 +1305,18 @@
         // Spark
         g.fillStyle(0xfde047, 1);
         g.fillCircle(4, -4, 1.2);
+      } else if (kind === "flower") {
+        // Bioluminescent flower — 5 cyan petals + yellow center + green stem
+        g.fillStyle(0x14532d, 1);
+        g.fillRect(-0.5, 1, 1, 4);   // stem
+        g.fillStyle(baseCol, 1);     // cyan petals
+        const r = 1.8;
+        for (let i = 0; i < 5; i++) {
+          const a = i * (Math.PI * 2 / 5) - Math.PI / 2;
+          g.fillCircle(Math.cos(a) * r, Math.sin(a) * r - 1, 1.6);
+        }
+        g.fillStyle(0xfde047, 1);    // yellow center
+        g.fillCircle(0, -1, 1.0);
       } else if (kind === "boomerang") {
         // V-shape boomerang
         g.fillStyle(baseCol, 1);
@@ -1403,6 +1628,22 @@
       }
       else if (tpl.kind === "bomb_refill") {
         this.bombCount += (tpl.value || 3);
+        sfx = "sfx_pickup";
+      }
+      else if (tpl.kind === "side_quest_flower") {
+        // Heda's flower side quest — collect 3 and return to her for a heart piece.
+        // NOTE: `q` above is this.quest.flags; flower-quest state lives on this.quest
+        // directly (top-level fields), so we mutate `this.quest` here.
+        const Q = this.quest;
+        if (Q.flowers_collected === undefined) Q.flowers_collected = 0;
+        Q.flowers_collected += 1;
+        if (Q.side_quest_flowers === "not_started" || !Q.side_quest_flowers) Q.side_quest_flowers = "in_progress";
+        if (Q.flowers_collected >= 3 && Q.side_quest_flowers === "in_progress") {
+          Q.side_quest_flowers = "ready_to_return";
+          this._showFanfare("3 FLOWERS — RETURN TO HEDA");
+        } else {
+          this._showFanfare("FLOWER " + Q.flowers_collected + " / 3");
+        }
         sfx = "sfx_pickup";
       }
       try { this.sound.play(sfx, { volume: 0.5 }); } catch (_) {}
@@ -1766,8 +2007,9 @@
       const f = q.flags;
       // Heda — flower side quest progression
       if (data.id === "heda_herbalist") {
-        if (q.side_quest_flowers === "returned") return "complete";
-        if (q.side_quest_flowers !== "not_started") return "in_progress";
+        if (q.side_quest_flowers === "returned" || q.side_quest_flowers === "done") return "complete";
+        if (q.side_quest_flowers === "ready_to_return") return "complete";
+        if (q.side_quest_flowers === "in_progress") return "in_progress";
         return "intro";
       }
       // Mira — different after dungeon clear
@@ -1842,6 +2084,19 @@
           if (!this.currentItem) this.currentItem = "bow";
           try { this.sound.play("sfx_levelup", { volume: 0.6 }); } catch (_) {}
           this._refreshItemSlot();
+        }
+        // Heda turn-in: 3 flowers → heart piece reward + side quest closes
+        if (data.id === "heda_herbalist" && q.side_quest_flowers === "ready_to_return") {
+          q.side_quest_flowers = "done";
+          f.heart_pieces += 1;
+          if (f.heart_pieces >= 4) {
+            f.heart_pieces -= 4;
+            D.PLAYER.max_hearts += 1;
+            this.hearts = D.PLAYER.max_hearts;
+          }
+          this._showFanfare("HEART PIECE (" + f.heart_pieces + "/4)");
+          try { this.sound.play("sfx_levelup", { volume: 0.6 }); } catch (_) {}
+          this._refreshHUD();
         }
       }
       // Tear down UI

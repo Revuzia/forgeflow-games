@@ -114,9 +114,13 @@
         intro: [
           "Welcome, traveller.",
           "The bioluminescent flowers in the Thicket — bring me three?",
+          "Look in the corners — they grow where light slips through the canopy.",
           "I'll trade you a Heart Piece.",
         ],
-        in_progress: ["Find the glowing flowers among the bushes!"],
+        in_progress: [
+          "Have you found all three flowers?",
+          "Search the corners of the Thicket — and the waterfall hollow.",
+        ],
         complete: [
           "Three flowers! Just what I needed.",
           "Take this Heart Piece. May it strengthen you.",
@@ -219,6 +223,7 @@
   ], { N: "village_square", S: "thicket_b" },
   {
     enemies: [{ template: "thornback_lurker", x: 64, y: 80 }],
+    items: [{ kind: "flower", x: 48, y: 32 }],   // Heda flower #1 — top-left bush corner
   });
 
   R("thicket_b", "emerald_thicket", [
@@ -259,7 +264,7 @@
       id: "liora_scholar", name: "Liora",
       x: 200, y: 64,
       default_state: "intro",
-      sprite_frame: 29, tint: 0x60a5fa,   // scholar — blue
+      sprite_frame: 29, tint: 0x60a5fa,
       gives_bow_on_first_talk: true,
       dialogue: {
         intro: [
@@ -275,7 +280,12 @@
         ],
       },
     }],
-    items: [{ kind: "rupee_blue", x: 240, y: 96 }, { kind: "heart_piece", x: 240, y: 128 }],
+    // Flower #2 hidden in the lower-left corner among the waterfall mist
+    items: [
+      { kind: "rupee_blue", x: 240, y: 96 },
+      { kind: "heart_piece", x: 240, y: 128 },
+      { kind: "flower", x: 32, y: 144 },
+    ],
   });
 
   R("thicket_vine", "emerald_thicket", [
@@ -315,8 +325,12 @@
     enemies: [
       { template: "wraithwhisper", x: 64, y: 64 },
       { template: "wraithwhisper", x: 224, y: 96 },
+      { template: "veilstalker", x: 96, y: 128 },
     ],
-    items: [{ kind: "rupee_blue", x: 32, y: 128 }],
+    items: [
+      { kind: "rupee_blue", x: 32, y: 128 },
+      { kind: "flower", x: 240, y: 32 },  // Flower #3 — upper-right corner
+    ],
   });
 
   R("ruins_entrance_overworld", "emerald_thicket", [
@@ -355,7 +369,12 @@
     "########D#########",
   ], { N: "ruins_north_a", E: "ruins_east_a", W: "ruins_west_a", S: "ruins_entrance_overworld" },
   {
-    enemies: [{ template: "veilstalker", x: 144, y: 144 }],
+    enemies: [
+      { template: "veilstalker", x: 64, y: 144 },
+      { template: "veilstalker", x: 224, y: 144 },
+      { template: "wraithwhisper", x: 144, y: 96 },
+    ],
+    lock_until_cleared: true,
   });
 
   R("ruins_east_a", "ruins_of_first_light", [
@@ -373,16 +392,21 @@
   ], { W: "ruins_foyer", S: "ruins_east_b" },
   {
     enemies: [
-      { template: "wraithwhisper", x: 80, y: 80 },
-      { template: "veilstalker", x: 192, y: 80 },
+      { template: "wraithwhisper", x: 64, y: 64 },
+      { template: "wraithwhisper", x: 224, y: 64 },
+      { template: "veilstalker", x: 96, y: 96 },
+      { template: "veilstalker", x: 192, y: 96 },
+      { template: "thornback_lurker", x: 144, y: 128 },
     ],
     items: [{ kind: "small_key", x: 144, y: 80 }],
+    lock_until_cleared: true,
+    drops_key_on_clear: true,
   });
 
   R("ruins_east_b", "ruins_of_first_light", [
     "########D#########",
     "#:::::::::::::::::".slice(0,18),
-    "#::....BB....::::#",   // BB = push block (cosmetic, will be entity)
+    "#::....BB....::::#",
     "#::....BB....::::#",
     "#::::::::::::::::#",
     "#::PP::::::PP::::#",   // P = pit (hazard)
@@ -393,10 +417,21 @@
     "##################",
   ].map(r => r.replace(/B/g, '.')), { N: "ruins_east_a" },
   {
-    items: [
-      { kind: "rupee_red", x: 144, y: 144 },
-      { kind: "bomb_refill", x: 96, y: 64 },
-    ],
+    items: [{ kind: "bomb_refill", x: 96, y: 64 }],
+    // Push-block puzzle — drag the 2 stone blocks onto the 2 pressure plates
+    // to reveal the rupee_red reward.
+    puzzle: {
+      kind: "push_block",
+      blocks: [
+        { x: 96, y: 48 },
+        { x: 192, y: 48 },
+      ],
+      plates: [
+        { x: 96, y: 144 },
+        { x: 192, y: 144 },
+      ],
+      reward_on_solve: { kind: "rupee_red", x: 144, y: 96 },
+    },
   });
 
   R("ruins_west_a", "ruins_of_first_light", [
@@ -413,7 +448,13 @@
     "##################",
   ], { E: "ruins_foyer", S: "ruins_west_b" },
   {
-    enemies: [{ template: "thornback_lurker", x: 80, y: 80 }],
+    enemies: [
+      { template: "thornback_lurker", x: 64, y: 80 },
+      { template: "thornback_lurker", x: 224, y: 80 },
+      { template: "veilstalker", x: 144, y: 128 },
+      { template: "wraithwhisper", x: 144, y: 48 },
+    ],
+    lock_until_cleared: true,
   });
 
   R("ruins_west_b", "ruins_of_first_light", [
@@ -430,8 +471,14 @@
     "##################",
   ].map(r => r.replace(/G/g, '.')), { N: "ruins_west_a" },
   {
-    enemies: [{ template: "geomancer_statue", x: 144, y: 80, role: "miniboss" }],
-    miniboss_reward: { kind: "bombs" },   // mini-boss drops bombs (dungeon item)
+    enemies: [
+      { template: "geomancer_statue", x: 144, y: 80, role: "miniboss" },
+      // Statue's wraithwhisper guardians spawn in alongside the miniboss
+      { template: "wraithwhisper", x: 64, y: 64 },
+      { template: "wraithwhisper", x: 224, y: 64 },
+    ],
+    miniboss_reward: { kind: "bombs" },
+    lock_until_cleared: true,
   });
 
   R("ruins_north_a", "ruins_of_first_light", [
@@ -448,12 +495,29 @@
     "########L#########",   // L = locked back (south = foyer, was unlocked by key)
   ], { N: "ruins_north_b", S: "ruins_foyer" },
   {
-    // 4-statue light puzzle (puzzle logic in later iteration)
-    puzzle: { kind: "light_4statue", solved_reward: "open_north" },
     enemies: [
-      { template: "wraithwhisper", x: 80, y: 80 },
-      { template: "wraithwhisper", x: 192, y: 144 },
+      { template: "wraithwhisper", x: 64, y: 64 },
+      { template: "wraithwhisper", x: 224, y: 64 },
+      { template: "wraithwhisper", x: 64, y: 128 },
+      { template: "wraithwhisper", x: 224, y: 128 },
+      { template: "veilstalker", x: 144, y: 96 },
     ],
+    lock_until_cleared: true,
+    // 4-statue light puzzle — strike each statue (sword hit) until it faces
+    // center. When all 4 face center, the north door unlocks.
+    puzzle: {
+      kind: "light_4statue",
+      statues: [
+        { x: 64, y: 48 },   // NW
+        { x: 224, y: 48 },  // NE
+        { x: 64, y: 144 },  // SW
+        { x: 224, y: 144 }, // SE
+      ],
+      // After lock_until_cleared opens, the puzzle becomes the secondary
+      // gate to the north_b door — but we keep it independent by gating
+      // the N exit on `puzzle_solved`.
+      gates_north_exit: true,
+    },
   });
 
   R("ruins_north_b", "ruins_of_first_light", [
@@ -487,8 +551,17 @@
     "########D#########",
   ].map(r => r.replace(/K/g, '.')), { N: "ruins_boss_door", S: "ruins_north_b" },
   {
-    enemies: [{ template: "veilstalker", x: 64, y: 80 }, { template: "veilstalker", x: 224, y: 96 }],
+    enemies: [
+      { template: "veilstalker", x: 48, y: 64 },
+      { template: "veilstalker", x: 240, y: 64 },
+      { template: "veilstalker", x: 48, y: 128 },
+      { template: "veilstalker", x: 240, y: 128 },
+      { template: "wraithwhisper", x: 144, y: 64 },
+      { template: "wraithwhisper", x: 144, y: 128 },
+    ],
     items: [{ kind: "big_key", x: 144, y: 80 }, { kind: "bomb_refill", x: 80, y: 128 }],
+    lock_until_cleared: true,
+    drops_big_key_on_clear: true,
   });
 
   R("ruins_boss_door", "ruins_of_first_light", [
@@ -522,6 +595,7 @@
     enemies: [{ template: "guardian_of_first_light", x: 160, y: 80, role: "boss" }],
     boss_reward: { kind: "heart_container" },
     music: "music_boss",
+    lock_until_cleared: true,
   });
 
   // ── Enemy templates (instantiated by spawn_id from room.enemies) ──
@@ -568,6 +642,7 @@
     bombs:           { kind: "weapon", id: "bombs", color: 0x1f2937 },
     boomerang:       { kind: "weapon", id: "boomerang", color: 0xeab308 },
     bomb_refill:     { kind: "bomb_refill", value: 3, color: 0x1f2937 },
+    flower:          { kind: "side_quest_flower", value: 1, color: 0x06b6d4 },
   };
 
   // ── Music + SFX hooks (key → asset URL) ──────────────────────────
