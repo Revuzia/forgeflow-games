@@ -196,35 +196,58 @@
       const h = this.cameras.main.height;
       this.cameras.main.setBackgroundColor(0x0a0e1a);
 
+      // Atmospheric background using the pre-loaded zone art.  Falls back to
+      // a solid color if the image hasn't loaded.
+      if (this.textures.exists("world_01_bg")) {
+        const bg = this.add.image(w/2, h/2, "world_01_bg");
+        // Cover the canvas (scale to fit while preserving aspect)
+        const scale = Math.max(w / bg.width, h / bg.height);
+        bg.setScale(scale);
+        bg.setAlpha(0.55);   // dimmed so text reads
+        // Dark vignette overlay
+        const vignette = this.add.rectangle(w/2, h/2, w, h, 0x000000, 0.35);
+        vignette.setBlendMode(Phaser.BlendModes.MULTIPLY);
+      }
+
+      // Title with drop shadow for depth
+      const shadow = this.add.text(w/2 + 2, h*0.25 + 2, "SHROUD OF THE ANCIENTS", {
+        font: "bold 32px serif", color: "#000000",
+      }).setOrigin(0.5).setAlpha(0.7);
       this.add.text(w/2, h*0.25, "SHROUD OF THE ANCIENTS", {
         font: "bold 32px serif", color: "#facc15",
       }).setOrigin(0.5);
       this.add.text(w/2, h*0.32, "Act I — The Shattered Seal", {
-        font: "18px serif", color: "#94a3b8",
+        font: "italic 18px serif", color: "#fde68a",
       }).setOrigin(0.5);
 
-      const newBtn = this.add.text(w/2, h*0.55, "▶ New Game", {
-        font: "20px monospace", color: "#22c55e",
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-      const contBtn = this.add.text(w/2, h*0.62, "↻ Continue", {
-        font: "20px monospace", color: this._hasSave() ? "#22c55e" : "#475569",
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      // Decorative divider line
+      const line = this.add.graphics();
+      line.lineStyle(1.5, 0xfacc15, 0.8);
+      line.lineBetween(w*0.35, h*0.42, w*0.65, h*0.42);
+
+      const mkBtn = (y, label, color, action) => {
+        const plate = this.add.rectangle(w/2, y, 220, 30, 0x0f172a, 0.85);
+        plate.setStrokeStyle(1.5, 0xfacc15);
+        const txt = this.add.text(w/2, y, label, {
+          font: "20px monospace", color,
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        txt.on("pointerover", () => plate.setFillStyle(0x1e293b, 0.95));
+        txt.on("pointerout",  () => plate.setFillStyle(0x0f172a, 0.85));
+        txt.on("pointerdown", action);
+        plate.setInteractive({ useHandCursor: true });
+        plate.on("pointerdown", action);
+        return txt;
+      };
+      const newBtn  = mkBtn(h*0.55, "▶ New Game", "#22c55e", () => this._startNew());
+      const contBtn = mkBtn(h*0.65, "↻ Continue", this._hasSave() ? "#22c55e" : "#475569",
+                            () => this._hasSave() && this._startContinue());
 
       this.add.text(w/2, h*0.85, "Arrows/WASD: move  ·  Z: attack  ·  X: item  ·  C: action  ·  Esc: pause", {
-        font: "12px monospace", color: "#64748b",
+        font: "12px monospace", color: "#cbd5e1",
       }).setOrigin(0.5);
 
-      const startNew = () => {
-        try { localStorage.removeItem("shroud_save_v1"); } catch (_) {}
-        this.scene.start("P2_Play", { fromSave: false });
-      };
-      const startCont = () => {
-        if (this._hasSave()) this.scene.start("P2_Play", { fromSave: true });
-      };
-      newBtn.on("pointerdown", startNew);
-      contBtn.on("pointerdown", startCont);
-      this.input.keyboard.on("keydown-ENTER", startNew);
-      this.input.keyboard.on("keydown-SPACE", startNew);
+      this.input.keyboard.on("keydown-ENTER", () => this._startNew());
+      this.input.keyboard.on("keydown-SPACE", () => this._startNew());
 
       // Music
       try {
@@ -236,6 +259,13 @@
     }
     _hasSave() {
       try { return !!localStorage.getItem("shroud_save_v1"); } catch (_) { return false; }
+    }
+    _startNew() {
+      try { localStorage.removeItem("shroud_save_v1"); } catch (_) {}
+      this.scene.start("P2_Play", { fromSave: false });
+    }
+    _startContinue() {
+      this.scene.start("P2_Play", { fromSave: true });
     }
   }
 
@@ -1153,9 +1183,53 @@
       this.attackUntil = time + 380;
       this.hitboxActiveFrom = time + 80;
       this.hitboxActiveUntil = time + 280;
-      this.hitboxHitEnemies = new Set();   // prevents multi-hit per swing
+      this.hitboxHitEnemies = new Set();
       try { this.sound.play("sfx_attack", { volume: 0.6 }); } catch (_) {}
       this.player.play("p_attack");
+      // Visible slash arc — spawn a bright crescent particle that fades.
+      this._spawnSlashArc();
+    }
+
+    _spawnSlashArc() {
+      const p = this.player;
+      const dir = p.facing;
+      // Position the arc in the facing direction
+      const offsets = {
+        up:    { x: 0, y: -10, rot: -Math.PI/2 },
+        down:  { x: 0, y:  10, rot:  Math.PI/2 },
+        left:  { x: -10, y: 0, rot:  Math.PI },
+        right: { x:  10, y: 0, rot:  0 },
+      };
+      const o = offsets[dir] || offsets.down;
+      const arc = this.add.graphics();
+      arc.x = p.x + o.x;
+      arc.y = p.y + o.y;
+      arc.rotation = o.rot;
+      // Draw a bright crescent slash (white-yellow with darker rim)
+      arc.lineStyle(2, 0xfafafa, 1);
+      arc.beginPath();
+      arc.arc(0, 0, 9, -Math.PI/3, Math.PI/3, false);
+      arc.strokePath();
+      arc.lineStyle(1.5, 0xfde047, 0.9);
+      arc.beginPath();
+      arc.arc(0, 0, 7, -Math.PI/3, Math.PI/3, false);
+      arc.strokePath();
+      // Small inner glow streak
+      arc.lineStyle(1, 0xffffff, 0.7);
+      arc.beginPath();
+      arc.arc(0, 0, 5, -Math.PI/4, Math.PI/4, false);
+      arc.strokePath();
+      this.fxLayer.add(arc);
+      // Sweep: rotate slightly + scale out + fade
+      this.tweens.add({
+        targets: arc,
+        rotation: arc.rotation + 0.4,
+        scaleX: 1.4,
+        scaleY: 1.4,
+        alpha: 0,
+        duration: 280,
+        onComplete: () => arc.destroy(),
+      });
     }
 
     _tickHitbox(time) {
@@ -1175,8 +1249,9 @@
       hb.setSize(d.w, d.h);
       hb.body.setSize(d.w, d.h);
       const active = time >= this.hitboxActiveFrom && time <= this.hitboxActiveUntil;
-      hb.setVisible(active);
-      hb.setFillStyle(0xfacc15, active ? 0.4 : 0);
+      // Hitbox itself stays invisible — the slash arc (spawned in _swing)
+      // is the visible feedback. Hitbox is just for collision math.
+      hb.setVisible(false);
       if (active) {
         // Check overlap with enemies
         for (const e of this.enemies) {
