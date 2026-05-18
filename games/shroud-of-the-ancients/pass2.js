@@ -133,19 +133,18 @@
       this.load.spritesheet("p2_tileset", "assets/p2_tileset.png", {
         frameWidth: 352, frameHeight: 192,
       });
-      // Player 4-direction sheet — 4x2 grid → 352x384 per cell
-      this.load.spritesheet("p2_player", "assets/p2_player_sheet.png", {
+      // Player 4-direction sheet (alpha-keyed PNG — dark background → transparent)
+      this.load.spritesheet("p2_player", "assets/p2_player_sheet.alpha.png", {
         frameWidth: 352, frameHeight: 384,
       });
       // ── BATCH 2 ASSETS (iter #26) ──
-      // 10-enemy sheet — 5x2 grid on 1408x768 → 281x384 per cell
-      this.load.spritesheet("p2_enemies", "assets/p2_enemies_sheet.png", {
+      // 10-enemy sheet (alpha-keyed)
+      this.load.spritesheet("p2_enemies", "assets/p2_enemies_sheet.alpha.png", {
         frameWidth: 281, frameHeight: 384,
       });
-      // Boss is a single image (no grid)
-      this.load.image("p2_boss_guardian", "assets/p2_boss_guardian.png");
-      // 4-NPC sheet — 4x1 grid on 1408x768 → 352x768 per cell
-      this.load.spritesheet("p2_npcs", "assets/p2_npcs_sheet.png", {
+      this.load.image("p2_boss_guardian", "assets/p2_boss_guardian.alpha.png");
+      // 4-NPC sheet (alpha-keyed)
+      this.load.spritesheet("p2_npcs", "assets/p2_npcs_sheet.alpha.png", {
         frameWidth: 352, frameHeight: 768,
       });
       // Dungeon-variant tileset — 4x4 grid → 352x192 per cell
@@ -156,8 +155,8 @@
       this.load.spritesheet("p2_cave_tileset", "assets/p2_cave_tileset.png", {
         frameWidth: 352, frameHeight: 192,
       });
-      // 16 item icons — 4x4 grid → 352x192 per cell
-      this.load.spritesheet("p2_items", "assets/p2_item_icons.png", {
+      // 16 item icons (alpha-keyed)
+      this.load.spritesheet("p2_items", "assets/p2_item_icons.alpha.png", {
         frameWidth: 352, frameHeight: 192,
       });
       // Splash + UI + portraits (single images)
@@ -166,21 +165,21 @@
       this.load.image("p2_portrait_mira",    "assets/p2_mira_portrait.png");
       this.load.image("p2_portrait_liora",   "assets/p2_liora_portrait.png");
       this.load.image("p2_portrait_villain", "assets/p2_villain_portrait.png");
-      // FX strips — 4 frames in a row, 1408x768 → 352x768 per cell
-      this.load.spritesheet("p2_slash_fx", "assets/p2_slash_fx.png", {
+      // FX strips (alpha-keyed)
+      this.load.spritesheet("p2_slash_fx", "assets/p2_slash_fx.alpha.png", {
         frameWidth: 352, frameHeight: 768,
       });
-      this.load.spritesheet("p2_explosion_fx", "assets/p2_explosion_fx.png", {
+      this.load.spritesheet("p2_explosion_fx", "assets/p2_explosion_fx.alpha.png", {
         frameWidth: 352, frameHeight: 768,
       });
-      // Animated enemy walk-cycle strips (1408x768 → 352x768 per 4-frame cell)
-      this.load.spritesheet("p2_anim_thornback",     "assets/p2_thornback_anim.png",     { frameWidth: 352, frameHeight: 768 });
-      this.load.spritesheet("p2_anim_veilstalker",   "assets/p2_veilstalker_anim.png",   { frameWidth: 352, frameHeight: 768 });
-      this.load.spritesheet("p2_anim_wraithwhisper", "assets/p2_wraithwhisper_anim.png", { frameWidth: 352, frameHeight: 768 });
-      this.load.spritesheet("p2_anim_ember_imp",     "assets/p2_ember_imp_anim.png",     { frameWidth: 352, frameHeight: 768 });
-      this.load.spritesheet("p2_anim_bonechill",     "assets/p2_bonechill_anim.png",     { frameWidth: 352, frameHeight: 768 });
+      // Animated enemy walk-cycle strips (alpha-keyed)
+      this.load.spritesheet("p2_anim_thornback",     "assets/p2_thornback_anim.alpha.png",     { frameWidth: 352, frameHeight: 768 });
+      this.load.spritesheet("p2_anim_veilstalker",   "assets/p2_veilstalker_anim.alpha.png",   { frameWidth: 352, frameHeight: 768 });
+      this.load.spritesheet("p2_anim_wraithwhisper", "assets/p2_wraithwhisper_anim.alpha.png", { frameWidth: 352, frameHeight: 768 });
+      this.load.spritesheet("p2_anim_ember_imp",     "assets/p2_ember_imp_anim.alpha.png",     { frameWidth: 352, frameHeight: 768 });
+      this.load.spritesheet("p2_anim_bonechill",     "assets/p2_bonechill_anim.alpha.png",     { frameWidth: 352, frameHeight: 768 });
       // Animated chest opening + water
-      this.load.spritesheet("p2_anim_chest_open", "assets/p2_chest_open_anim.png", { frameWidth: 352, frameHeight: 768 });
+      this.load.spritesheet("p2_anim_chest_open", "assets/p2_chest_open_anim.alpha.png", { frameWidth: 352, frameHeight: 768 });
       this.load.spritesheet("p2_anim_water",      "assets/p2_water_anim.png",       { frameWidth: 352, frameHeight: 768 });
       // Additional dialogue portraits + win/gameover/boss-intro splashes
       this.load.image("p2_portrait_heda",   "assets/p2_heda_portrait.png");
@@ -746,7 +745,7 @@
       if (bgKey && this.textures.exists(bgKey)) {
         const bg = this.add.image(SCREEN_W/2, SCREEN_H/2, bgKey);
         bg.setDisplaySize(SCREEN_W, SCREEN_H);
-        bg.setAlpha(0.85);   // tiles drawn on top will overlay this
+        bg.setAlpha(1.0);   // floor tiles are now invisible — backdrop IS the floor
         this.tileLayer.add(bg);
       }
 
@@ -799,7 +798,7 @@
         const plate = this.add.rectangle(n.x, labelY, textW, 8, 0x0f172a, 0.9);
         plate.setStrokeStyle(0.5, 0xfde047);
         const label = this.add.text(n.x, labelY, n.name,
-          { font: "6px monospace", color: "#fde047" })
+          { font: "10px monospace", color: "#fde047" })
           .setOrigin(0.5);
         this.entityLayer.add(plate);
         this.entityLayer.add(label);
@@ -1090,7 +1089,7 @@
                 : kind === "statue_puzzle"   ? "The statues must face the center."
                 : "Locked — find a small key.";
       const t = this.add.text(SCREEN_W/2, 24, msg,
-        { font: "8px monospace", color: "#fde047", backgroundColor: "rgba(0,0,0,0.7)" }).setOrigin(0.5, 0);
+        { font: "11px monospace", color: "#fde047", backgroundColor: "rgba(0,0,0,0.85)", padding: { x: 4, y: 2 }, resolution: 2 }).setOrigin(0.5, 0);
       this.fxLayer.add(t);
       this.time.delayedCall(1200, () => t && t.destroy && t.destroy());
     }
@@ -1126,12 +1125,12 @@
       if (this._tutPlate) this._tutPlate.destroy();
       if (this._tutText) this._tutText.destroy();
       if (this._tutArrow) this._tutArrow.destroy();
-      this._tutPlate = this.add.rectangle(SCREEN_W/2, SCREEN_H - 10, SCREEN_W - 8, 16, 0x0f172a, 0.92).setOrigin(0.5);
+      this._tutPlate = this.add.rectangle(SCREEN_W/2, SCREEN_H - 12, SCREEN_W - 8, 20, 0x0f172a, 0.92).setOrigin(0.5);
       this._tutPlate.setStrokeStyle(0.5, 0xfde047);
       this._tutText = this.add.text(SCREEN_W/2, SCREEN_H - 10, "",
-        { font: "7px monospace", color: "#fde047", align: "center" }).setOrigin(0.5);
+        { font: "10px monospace", color: "#fde047", align: "center", resolution: 2 }).setOrigin(0.5);
       this._tutArrow = this.add.text(SCREEN_W - 8, SCREEN_H - 10, "▶",
-        { font: "8px monospace", color: "#fde047" }).setOrigin(0.5);
+        { font: "10px monospace", color: "#fde047", resolution: 2 }).setOrigin(0.5);
       this.fxLayer.add(this._tutPlate);
       this.fxLayer.add(this._tutText);
       this.fxLayer.add(this._tutArrow);
@@ -1176,7 +1175,7 @@
           this._npcPromptPlate = this.add.rectangle(npc.x, npc.y - 16, 30, 8, 0x0f172a, 0.92);
           this._npcPromptPlate.setStrokeStyle(0.5, 0xfde047);
           this._npcPrompt = this.add.text(npc.x, npc.y - 16, "[C] TALK",
-            { font: "6px monospace", color: "#fde047" }).setOrigin(0.5);
+            { font: "10px monospace", color: "#fde047" }).setOrigin(0.5);
           this._npcPrompt._forNpc = npc;
           this.entityLayer.add(this._npcPromptPlate);
           this.entityLayer.add(this._npcPrompt);
@@ -1255,10 +1254,10 @@
       // HUD lives in fxLayer (never rebuilt). tileLayer.removeAll(true) on
       // room change would destroy HUD if it lived there.
       this.hudHeartsG = this.add.graphics();
-      this.hudRupees = this.add.text(2, 14, "$0", { font: "8px monospace", color: "#22c55e" });
-      this.hudKeys = this.add.text(36, 14, "K0", { font: "8px monospace", color: "#facc15" });
+      this.hudRupees = this.add.text(2, 14, "$0", { font: "10px monospace", color: "#22c55e", resolution: 2 });
+      this.hudKeys = this.add.text(36, 14, "K0", { font: "10px monospace", color: "#facc15", resolution: 2 });
       this.hudItem = this.add.text(SCREEN_W - 2, 2, "[(no item)]",
-        { font: "8px monospace", color: "#94a3b8" }).setOrigin(1, 0);
+        { font: "10px monospace", color: "#fde047", resolution: 2 }).setOrigin(1, 0);
       this.fxLayer.add(this.hudHeartsG);
       this.fxLayer.add(this.hudRupees);
       this.fxLayer.add(this.hudKeys);
@@ -2649,25 +2648,36 @@
     }
 
     _drawTile(g, ch, x, y, rnd) {
-      // Prefer the AAA-tier xAI-generated tilesheet sprites when available.
-      // Each tilesheet frame is 352x192 source → scaled to 16x16 display.
-      // Tile-code → frame index mapping (with zone variants for # and :):
+      // Tiles render on TOP of the zone backdrop (which is a continuous
+      // illustrated scene). To avoid the "grid of identical patches" look,
+      // we DO NOT render tiles for floor types (grass/path/pickup-spot) —
+      // the backdrop already shows them. Only obstacle/decoration tiles
+      // get a sprite: walls, water, weak walls, doors, spikes, pits.
+      const FLOOR_TILES = new Set(['.', ':', '$']);
+      const hasBackdrop = this.currentRoom && (
+        this.currentRoom.zone === "canopy_village" ||
+        this.currentRoom.zone === "emerald_thicket" ||
+        this.currentRoom.zone === "shrine_path" ||
+        this.currentRoom.zone === "ruins_of_first_light" ||
+        this.currentRoom.zone === "boss_arena" ||
+        this.currentRoom.zone === "cave_system"
+      );
+      if (hasBackdrop && FLOOR_TILES.has(ch)) {
+        return;   // backdrop shows through — no per-tile rendering
+      }
+      // Prefer the AAA tilesheet sprites for obstacle tiles
       if (this.textures.exists("p2_tileset")) {
         const zone = (this.currentRoom && this.currentRoom.zone) || "";
         const isOverworld = (zone === "canopy_village" || zone === "emerald_thicket" || zone === "shrine_path");
         let frame = null;
         switch (ch) {
-          case '.': frame = 0; break;                          // grass (with flowers)
-          case ':': frame = isOverworld ? 1 : 12; break;       // path: stone (over) or dungeon floor
           case '~': frame = 2; break;                          // water
           case '#': frame = isOverworld ? 4 : 13; break;       // wall: tree (over) or dungeon wall
           case '*': frame = 5; break;                          // bush
-          case 'W': frame = 9; break;                          // cracked / weak wall
+          case 'W': frame = 9; break;                          // weak wall
           case 'D': case 'L': case 'B': frame = 10; break;     // wooden door
           case 's': frame = 11; break;                         // spike trap
           case 'P': frame = 15; break;                         // pit
-          case '$': frame = 0; break;                          // pickup spot = grass
-          default: frame = 0;
         }
         if (frame !== null) {
           const tile = this.add.image(x + TILE/2, y + TILE/2, "p2_tileset", frame);
@@ -2960,20 +2970,20 @@
     }
 
     _dialogueBuildBox() {
-      // Build modal at bottom of screen — added to fxLayer (above tiles + entities)
+      // Build modal at bottom of screen — sized to fit 10-11px fonts comfortably.
       const boxX = 4;
-      const boxY = SCREEN_H - 56;
+      const boxY = SCREEN_H - 64;
       const boxW = SCREEN_W - 8;
-      const boxH = 50;
+      const boxH = 58;
       this._dialogueBox = this.add.rectangle(boxX, boxY, boxW, boxH, 0x0f172a, 0.92).setOrigin(0, 0);
       this._dialogueBox.setStrokeStyle(1, 0xfacc15);
       this._dialogueName = this.add.text(boxX + 4, boxY + 2,
         (this.dialogueData.name || "???") + ":",
-        { font: "8px monospace", color: "#fde047" });
-      this._dialogueText = this.add.text(boxX + 4, boxY + 14, "",
-        { font: "7px monospace", color: "#fff", wordWrap: { width: boxW - 8 } });
+        { font: "bold 11px monospace", color: "#fde047", resolution: 2 });
+      this._dialogueText = this.add.text(boxX + 4, boxY + 16, "",
+        { font: "10px monospace", color: "#fff", wordWrap: { width: boxW - 8 }, resolution: 2 });
       this._dialogueArrow = this.add.text(boxX + boxW - 12, boxY + boxH - 12, "▶",
-        { font: "8px monospace", color: "#fde047" });
+        { font: "11px monospace", color: "#fde047", resolution: 2 });
       // Blink the arrow
       this._dialogueArrowTween = this.tweens.add({
         targets: this._dialogueArrow, alpha: 0.2, duration: 500, yoyo: true, repeat: -1
