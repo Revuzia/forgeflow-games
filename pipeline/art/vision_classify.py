@@ -199,7 +199,99 @@ def render_3d_thumbnail(src_path: Path, out_path: Path, size: int = 512) -> bool
 
     except Exception as e:
         _log(f"  trimesh load failed for {src_path.name}: {str(e)[:100]}")
+        # 2026-05-18: trimesh's FBX loader requires the assimp C++ backend
+        # (not installed) so EVERY .fbx file fails the trimesh path. ufbx is a
+        # pure-Python FBX parser; we extract vertices+faces and render via the
+        # same matplotlib path the trimesh fallback uses. Recovers ~1,562 FBX
+        # files that were previously 100% failing.
+        if src_path.suffix.lower() == ".fbx":
+            return _render_fbx_via_ufbx(src_path, out_path, size)
         return False
+
+
+def _render_fbx_via_ufbx(src_path: Path, out_path: Path, size: int = 512) -> bool:
+    """Render an FBX file using ufbx (pure Python parser) + matplotlib.
+
+    ufbx parses the FBX into Python data structures (vertex positions, face
+    indices); we feed those into matplotlib's 3D mesh renderer the same way
+    the trimesh fallback path does.
+    """
+    try:
+        import ufbx
+        import numpy as np
+        scene = ufbx.load_file(str(src_path))
+    except Exception as e:
+        _log(f"  ufbx load failed for {src_path.name}: {str(e)[:100]}")
+        return False
+    try:
+        verts = None
+        faces = None
+        # ufbx 0.0.5 API (verified 2026-05-18):
+        #   mesh.vertex_position.values  → vertex positions (Vec3 list, has .x/.y/.z)
+        #   mesh.vertex_indices          → flat Uint32List of indices
+        #   mesh.faces                   → FaceList; each Face has .index_begin + .num_indices
+        # Faces can be triangles OR quads OR larger n-gons. We fan-triangulate any
+        # face with >3 indices into (n-2) triangles for matplotlib.
+        for mesh in (scene.meshes or []):
+            if not (mesh.num_vertices and mesh.num_faces):
+                continue
+            pos = np.array(
+                [(v.x, v.y, v.z) for v in mesh.vertex_position.values],
+                dtype=np.float32,
+            )
+            indices = list(mesh.vertex_indices)
+            tri_list = []
+            for face in mesh.faces:
+                n = face.num_indices
+                begin = face.index_begin
+                if n < 3:
+                    continue
+                fv = [indices[begin + i] for i in range(n)]
+                if n == 3:
+                    tri_list.append(fv)
+                else:
+                    # Fan-triangulate quads + n-gons
+                    for i in range(1, n - 1):
+                        tri_list.append([fv[0], fv[i], fv[i + 1]])
+                if len(tri_list) >= 5000:
+                    break
+            if not tri_list:
+                continue
+            verts = pos
+            faces = np.array(tri_list, dtype=np.int32)
+            break
+        if verts is None or faces is None or len(verts) == 0:
+            return False
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+        fig = plt.figure(figsize=(4, 4))
+        ax = fig.add_subplot(111, projection="3d")
+        polys = [verts[face] for face in faces if max(face) < len(verts)]
+        if polys:
+            ax.add_collection3d(Poly3DCollection(polys, alpha=0.6, edgecolor="k", linewidth=0.1))
+            xs, ys, zs = verts[:, 0], verts[:, 1], verts[:, 2]
+            ax.set_xlim([xs.min(), xs.max() if xs.max() > xs.min() else xs.min() + 1])
+            ax.set_ylim([ys.min(), ys.max() if ys.max() > ys.min() else ys.min() + 1])
+            ax.set_zlim([zs.min(), zs.max() if zs.max() > zs.min() else zs.min() + 1])
+        ax.set_axis_off()
+        fig.savefig(out_path, dpi=100, bbox_inches="tight", pad_inches=0)
+        plt.close(fig)
+        return out_path.exists() and out_path.stat().st_size > 1000
+    except Exception as e:
+        _log(f"  ufbx render failed for {src_path.name}: {str(e)[:100]}")
+        return False
+
+
+# Explicitly-unsupported extensions — return None immediately so the per-asset
+# loop records them as failed and moves on, instead of asking a 3D renderer
+# to load them and crashing the process. HDR/EXR are environment maps (no
+# meaningful vision-classifiable content). Audio/font files can leak into the
+# manifest if asset_manifest.py doesn't filter them. .blend is a Blender
+# project file we can't render without Blender.
+_SKIP_EXTS = {".hdr", ".exr", ".blend", ".wav", ".mp3", ".ogg", ".m4a",
+              ".ttf", ".otf", ".woff", ".woff2"}
 
 
 # ── Prepare image bytes for classification ───────────────────────────────
@@ -207,26 +299,41 @@ def prepare_image(src_path: Path) -> Path | None:
     """Return a PNG path suitable for classification. For 2D assets returns
     the original. For 3D, renders a thumbnail. For unsupported, returns None."""
     ext = src_path.suffix.lower()
+    if ext in _SKIP_EXTS:
+        return None
     if ext in (".png", ".jpg", ".jpeg"):
         return src_path
     if ext in (".svg",):
-        # Convert SVG to PNG via cairosvg if available.
-        # 2026-04-26: also catch OSError — cairosvg requires libcairo-2.dll on
-        # Windows; if missing, the import succeeds but svg2png raises OSError
-        # at the dlopen layer. Without this except, the whole script crashed
-        # on every SVG file and the supervisor restarted it 107x = 200 TG msgs.
+        out = THUMB_DIR / (src_path.stem + ".png")
+        if out.exists() and out.stat().st_size > 100:
+            return out
+        # 2026-05-18: svglib + reportlab (+ pycairo) is the primary path.
+        # IMPORTANT: cairocffi must NOT be installed — rlPyCairo prefers it
+        # at import time and cairocffi can't find libcairo-2.dll on Windows,
+        # which crashes the whole chain at module import. When ONLY pycairo
+        # is installed, rlPyCairo falls back to pycairo (which bundles cairo
+        # in its Windows wheel) and SVG rendering works end-to-end.
+        # `pip uninstall cairocffi` if it ever sneaks back in via a transitive dep.
+        try:
+            from svglib.svglib import svg2rlg
+            from reportlab.graphics import renderPM
+            drawing = svg2rlg(str(src_path))
+            if drawing is not None:
+                renderPM.drawToFile(drawing, str(out), fmt="PNG")
+                if out.exists() and out.stat().st_size > 100:
+                    return out
+        except Exception:
+            pass
+        # Fallback: cairosvg (only if libcairo-2.dll happens to be present)
         try:
             import cairosvg
-            out = THUMB_DIR / (src_path.stem + ".png")
-            if not out.exists():
-                cairosvg.svg2png(url=str(src_path), write_to=str(out), output_width=256, output_height=256)
-            return out
-        except (ImportError, OSError) as e:
-            # Skip SVG silently — classifier treats unsupported files as None.
-            # Don't log per-file (would flood logs); a single startup warning is enough.
-            return None
+            cairosvg.svg2png(url=str(src_path), write_to=str(out),
+                             output_width=256, output_height=256)
+            if out.exists() and out.stat().st_size > 100:
+                return out
         except Exception:
-            return None
+            pass
+        return None
     if ext in (".glb", ".gltf", ".fbx", ".obj"):
         # Render via trimesh
         out = THUMB_DIR / (src_path.stem + "_" + str(abs(hash(str(src_path))))[:8] + ".png")
@@ -418,6 +525,7 @@ def main():
         if not src_path.exists():
             errors_this_run += 1
             progress.setdefault("failed", []).append(item["rel_path"])
+            _save_progress(progress)
             continue
 
         _log(f"[{idx+1}/{len(queue)}] {item['rel_path']}")
@@ -426,61 +534,76 @@ def main():
             _log("  [dry-run] would classify")
             continue
 
-        # Prepare image
-        img_path = prepare_image(src_path)
-        if not img_path:
-            _log(f"  SKIP — no image available")
-            errors_this_run += 1
-            progress.setdefault("failed", []).append(item["rel_path"])
-            continue
-
-        # Classify via Claude CLI — with rate-limit-aware retry
-        backoff_idx = 0
-        cls = None
-        while True:
-            cls = classify_via_claude(img_path, src_path.name)
-            if cls is None:
-                # Non-rate-limit failure — give up on this file, continue
+        # 2026-05-18: wrap per-asset work in try/except so a Python exception
+        # in prepare_image / classify_via_claude doesn't kill the whole loop
+        # AND so we mark the offending file as failed BEFORE any potential
+        # crash — preventing the exit-120 crash-loop where the supervisor
+        # restarted us on the same file repeatedly.
+        try:
+            # Prepare image
+            img_path = prepare_image(src_path)
+            if not img_path:
+                _log(f"  SKIP — no image available")
                 errors_this_run += 1
                 progress.setdefault("failed", []).append(item["rel_path"])
-                _log(f"  FAIL classification (non-rate-limit)")
-                break
-            if cls.get("_rate_limited"):
-                # Rate-limited. Back off exponentially. Check window between retries.
-                wait = BACKOFF_SCHEDULE[min(backoff_idx, len(BACKOFF_SCHEDULE) - 1)]
-                _log(f"  ⏳ Rate-limited. Sleeping {wait}s then retrying. (backoff step {backoff_idx+1})")
-                _tg(f"⏳ Rate limit hit. Backing off {wait}s and retrying. Progress: {done_before + classified_this_run}/{total_all}")
-                # Sleep in small chunks so we can still check window
-                chunked = 0
-                while chunked < wait:
+                _save_progress(progress)
+                continue
+
+            # Classify via Claude CLI — with rate-limit-aware retry
+            backoff_idx = 0
+            cls = None
+            while True:
+                cls = classify_via_claude(img_path, src_path.name)
+                if cls is None:
+                    errors_this_run += 1
+                    progress.setdefault("failed", []).append(item["rel_path"])
+                    _log(f"  FAIL classification (non-rate-limit)")
+                    _save_progress(progress)
+                    break
+                if cls.get("_rate_limited"):
+                    wait = BACKOFF_SCHEDULE[min(backoff_idx, len(BACKOFF_SCHEDULE) - 1)]
+                    _log(f"  ⏳ Rate-limited. Sleeping {wait}s then retrying. (backoff step {backoff_idx+1})")
+                    _tg(f"⏳ Rate limit hit. Backing off {wait}s and retrying. Progress: {done_before + classified_this_run}/{total_all}")
+                    chunked = 0
+                    while chunked < wait:
+                        if not _in_window(args.force):
+                            _log("  Hit 8 PM during backoff — stopping.")
+                            break
+                        time.sleep(min(60, wait - chunked))
+                        chunked += 60
                     if not _in_window(args.force):
-                        _log("  Hit 8 PM during backoff — stopping.")
                         break
-                    time.sleep(min(60, wait - chunked))
-                    chunked += 60
-                if not _in_window(args.force):
-                    break  # exit retry loop; outer loop will detect window end
-                backoff_idx += 1
-                continue  # retry same file
-            # Success
-            cls["classifier"] = "claude_vision_cli"
-            cls["kind"] = item["kind"]
-            cls["pack"] = item["pack"]
-            classifications[item["rel_path"]] = cls
-            progress.setdefault("completed", []).append(item["rel_path"])
-            classified_this_run += 1
-            _log(f"  OK: role={cls.get('role')} era={cls.get('era')} conf={cls.get('confidence')}")
-            break
+                    backoff_idx += 1
+                    continue
+                # Success
+                cls["classifier"] = "claude_vision_cli"
+                cls["kind"] = item["kind"]
+                cls["pack"] = item["pack"]
+                classifications[item["rel_path"]] = cls
+                progress.setdefault("completed", []).append(item["rel_path"])
+                classified_this_run += 1
+                _log(f"  OK: role={cls.get('role')} era={cls.get('era')} conf={cls.get('confidence')}")
+                _save_progress(progress)  # persist after each successful classification
+                break
+        except Exception as e:
+            # Catch ANY Python exception so a bad asset can't crash the loop.
+            # Native abort()s still kill the process but at least Python-level
+            # errors are now isolated to one file.
+            _log(f"  EXCEPTION on {item['rel_path']}: {type(e).__name__}: {str(e)[:200]}")
+            errors_this_run += 1
+            progress.setdefault("failed", []).append(item["rel_path"])
+            _save_progress(progress)
+            continue
 
         # Re-check window after possible long backoff
         if not _in_window(args.force):
             _log("Hit end of window during backoff. Pausing.")
             break
 
-        # Persist every 10 items (resumability)
+        # Persist classifications JSON every 10 successful items (full file
+        # write is more expensive than the per-file progress save above).
         if classified_this_run % 10 == 0:
             _save_classifications(classifications)
-            _save_progress(progress)
 
         # Telegram progress
         if classified_this_run > 0 and classified_this_run % TELEGRAM_EVERY_N == 0:
