@@ -195,13 +195,13 @@
     "#...##......##...#",
     "#..#..#....#..#..#",
     "#..#  #....#  #..#".replace(/ /g, '.'),
-    "#..#H #....# H#..#".replace(/[H ]/g, '.'),  // H = heart-piece slot
+    "#..#H #....# H#..D".replace(/[H ]/g, '.'),  // east exit to shrine_outer
     "#..#..#....#..#..#",
     "#...##......##...#",
     "#................#",
     "#................#",
     "########D#########",
-  ], { S: "shrine_path_b" },
+  ], { S: "shrine_path_b", E: "shrine_outer" },
   {
     items: [{ kind: "heart_piece", x: 80, y: 80 }],
   });
@@ -257,8 +257,8 @@
     "#~~~~~~..........#",
     "#~~~~............#",
     "#................#",
-    "##################",
-  ], { E: "thicket_b" },
+    "########D#########",
+  ], { E: "thicket_b", S: "cave_entrance" },
   {
     npcs: [{
       id: "liora_scholar", name: "Liora",
@@ -598,6 +598,152 @@
     lock_until_cleared: true,
   });
 
+  // ════════════════════════════════════════════════════════════════
+  // ITER C SUB-DUNGEONS — Cave system + Shrine sub-dungeon (6 rooms)
+  // ════════════════════════════════════════════════════════════════
+
+  // ── Cave system (off thicket_waterfall — 3 rooms) ─────────────────
+
+  R("cave_entrance", "cave_system", [
+    "########D#########",   // N back to thicket_waterfall
+    "#::::::::::::::::#",
+    "#::::........::::#",
+    "#::::........::::#",
+    "#::::........::::#",
+    "#::::........::::#",
+    "#::::........::::#",
+    "#::::........::::#",
+    "#::::........::::#",
+    "#:::::::::::::::::".slice(0,18),
+    "########D#########",
+  ], { N: "thicket_waterfall", S: "cave_chamber" },
+  {
+    enemies: [
+      { template: "thornback_lurker", x: 64, y: 80 },
+      { template: "veilstalker", x: 224, y: 80 },
+      { template: "wraithwhisper", x: 144, y: 48 },
+    ],
+    lock_until_cleared: true,
+  });
+
+  R("cave_chamber", "cave_system", [
+    "########D#########",
+    "#::::::::::::::::#",
+    "#::::::::::::::::#",
+    "#::....::::....::#",
+    "#::....::::....::#",
+    "#::....C...........",   // C = Crystalspine Boar miniboss (cosmetic '.')
+    "#::....::::....::#",
+    "#::....::::....::#",
+    "#::::::::::::::::#",
+    "#:::::::::::::::::".slice(0,18),
+    "########D#########",
+  ].map(r => r.replace(/C/g, '.').padEnd(18, '#').slice(0,18)), { N: "cave_entrance", S: "cave_treasure" },
+  {
+    enemies: [
+      { template: "crystalspine_boar", x: 144, y: 80, role: "miniboss" },
+      { template: "wraithwhisper", x: 64, y: 64 },
+      { template: "wraithwhisper", x: 224, y: 96 },
+    ],
+    miniboss_reward: { kind: "bomb_refill" },   // boar drops bomb refill
+    lock_until_cleared: true,
+    music: "music_ruins",
+  });
+
+  R("cave_treasure", "cave_system", [
+    "##################",
+    "#::::::::::::::::#",
+    "#::::........::::#",
+    "#::::........::::#",
+    "#::::....H...::::#".replace(/H/g, '.'),   // H = heart-piece slot
+    "#::::........::::#",
+    "#::::........::::#",
+    "#::::........::::#",
+    "#::::::::::::::::#",
+    "#:::::::::::::::::".slice(0,18),
+    "########D#########",
+  ], { N: "cave_chamber" },
+  {
+    items: [
+      { kind: "heart_piece", x: 144, y: 80 },
+      { kind: "rupee_red", x: 80, y: 80 },
+      { kind: "bomb_refill", x: 208, y: 80 },
+    ],
+  });
+
+  // ── Shrine sub-dungeon (off shrine_path_c — 3 rooms) ──────────────
+
+  R("shrine_outer", "shrine_path", [
+    "##################",
+    "#::::::::::::::::#",
+    "#::....::::....::#",
+    "#::....::::....::#",
+    "D::....::::....::D",   // W back to shrine_path_c, E to shrine_inner
+    "#::....::::....::#",
+    "#::....::::....::#",
+    "#::....::::....::#",
+    "#::::::::::::::::#",
+    "#:::::::::::::::::".slice(0,18),
+    "##################",
+  ], { W: "shrine_path_c", E: "shrine_inner" },
+  {
+    enemies: [
+      { template: "veilstalker", x: 64, y: 64 },
+      { template: "veilstalker", x: 224, y: 64 },
+      { template: "thornback_lurker", x: 144, y: 144 },
+      { template: "wraithwhisper", x: 144, y: 48 },
+    ],
+    lock_until_cleared: true,
+  });
+
+  R("shrine_inner", "shrine_path", [
+    "##################",
+    "#::::::::::::::::#",
+    "#::....BB....::::#",   // push-block puzzle
+    "#::....BB....::::#",
+    "D::::::::::::::::D",   // W back, E to shrine_relic
+    "#::PP::::::PP::::#",
+    "#::PP::::::PP::::#",
+    "#::::::::::::::::#",
+    "#:::::::::::::::::".slice(0,18),
+    "#................#",
+    "##################",
+  ].map(r => r.replace(/B/g, '.')), { W: "shrine_outer", E: "shrine_relic" },
+  {
+    puzzle: {
+      kind: "push_block",
+      blocks: [
+        { x: 96, y: 48 },
+        { x: 192, y: 48 },
+      ],
+      plates: [
+        { x: 96, y: 96 },
+        { x: 192, y: 96 },
+      ],
+      reward_on_solve: { kind: "rupee_red", x: 144, y: 80 },
+    },
+  });
+
+  R("shrine_relic", "shrine_path", [
+    "##################",
+    "#::::::::::::::::#",
+    "#::::::::::::::::#",
+    "#::::........::::#",
+    "D::::....H...::::#".replace(/H/g, '.'),   // W back to shrine_inner
+    "#::::........::::#",
+    "#::::........::::#",
+    "#::::::::::::::::#",
+    "#:::::::::::::::::".slice(0,18),
+    "#:::::::::::::::::".slice(0,18),
+    "##################",
+  ], { W: "shrine_inner" },
+  {
+    items: [
+      { kind: "heart_piece", x: 144, y: 80 },
+      { kind: "rupee_red", x: 80, y: 80 },
+    ],
+  });
+
   // ── Enemy templates (instantiated by spawn_id from room.enemies) ──
   // sprite_frames: rest/move pair from enemies.xml (Kenney "platformer creatures"
   // 64×64 atlas — see assets/enemies.xml). Tinted via color hint. Displayed at 16px.
@@ -632,6 +778,7 @@
   // ── Items / pickups ───────────────────────────────────────────────
   const ITEMS = {
     heart:           { kind: "heart_refill", value: 0.5, color: 0xff3344 },
+    heart_piece:     { kind: "heart_piece", value: 1, color: 0xff8888 },
     rupee_green:     { kind: "rupee", value: 1,   color: 0x22c55e },
     rupee_blue:      { kind: "rupee", value: 5,   color: 0x3b82f6 },
     rupee_red:       { kind: "rupee", value: 20,  color: 0xef4444 },

@@ -33,7 +33,7 @@ function check(name, cond, detail) {
 }
 
 console.log('\n=== Room inventory ===');
-check('22 rooms defined', Object.keys(ROOMS).length === 22, 'got ' + Object.keys(ROOMS).length);
+check('28+ rooms defined (iter C expanded)', Object.keys(ROOMS).length >= 28, 'got ' + Object.keys(ROOMS).length);
 
 // Reachability: BFS from spawn
 const visited = new Set();
