@@ -130,7 +130,9 @@
       this.load.image("p2_bg_ruins",     "assets/p2_bg_ruins.png");
       this.load.image("p2_bg_cave",      "assets/p2_bg_cave.png");
       // Tileset — 4x4 grid on a 1408x768 sheet → 352x192 per cell
-      this.load.spritesheet("p2_tileset", "assets/p2_tileset.png", {
+      // Alpha-keyed variant: dark slate xAI bg → transparent, so trees/walls
+      // sit cleanly on the zone backdrop without dark halos.
+      this.load.spritesheet("p2_tileset", "assets/p2_tileset.alpha.png", {
         frameWidth: 352, frameHeight: 192,
       });
       // Player 4-direction sheet (alpha-keyed PNG — dark background → transparent)
@@ -147,12 +149,12 @@
       this.load.spritesheet("p2_npcs", "assets/p2_npcs_sheet.alpha.png", {
         frameWidth: 352, frameHeight: 768,
       });
-      // Dungeon-variant tileset — 4x4 grid → 352x192 per cell
-      this.load.spritesheet("p2_dungeon_tileset", "assets/p2_dungeon_tileset.png", {
+      // Dungeon-variant tileset — 4x4 grid → 352x192 per cell (alpha-keyed)
+      this.load.spritesheet("p2_dungeon_tileset", "assets/p2_dungeon_tileset.alpha.png", {
         frameWidth: 352, frameHeight: 192,
       });
-      // Cave-variant tileset — 4x4 → 352x192
-      this.load.spritesheet("p2_cave_tileset", "assets/p2_cave_tileset.png", {
+      // Cave-variant tileset — 4x4 → 352x192 (alpha-keyed)
+      this.load.spritesheet("p2_cave_tileset", "assets/p2_cave_tileset.alpha.png", {
         frameWidth: 352, frameHeight: 192,
       });
       // 16 item icons (alpha-keyed)
@@ -792,13 +794,13 @@
         const npc = this._drawNpcFigure(n);
         npc._npcData = n;
         this.entityLayer.add(npc);
-        // Label BELOW the NPC's feet + yellow-bordered dark plate
+        // Label BELOW the NPC's feet. Small, unobtrusive — no yellow stroke
+        // box (which read as a UI seam in the screenshot critique).
         const labelY = n.y + 14;
-        const textW = Math.max(22, n.name.length * 4 + 4);
-        const plate = this.add.rectangle(n.x, labelY, textW, 8, 0x0f172a, 0.9);
-        plate.setStrokeStyle(0.5, 0xfde047);
+        const textW = Math.max(20, n.name.length * 3.5 + 4);
+        const plate = this.add.rectangle(n.x, labelY, textW, 7, 0x000000, 0.55);
         const label = this.add.text(n.x, labelY, n.name,
-          { font: "10px monospace", color: "#fde047" })
+          { font: "7px monospace", color: "#fde047", resolution: 2 })
           .setOrigin(0.5);
         this.entityLayer.add(plate);
         this.entityLayer.add(label);
@@ -810,12 +812,20 @@
 
     _drawNpcFigure(n) {
       const container = this.add.container(n.x, n.y);
-      // Prefer the AAA-tier p2_npcs sheet (4×1 grid, 352×768 per frame)
+      // Prefer the AAA-tier p2_npcs sheet (4×1 grid, 352×768 per frame).
+      // Source frame is portrait-orientation (352w × 768h) with the actual
+      // character standing in the top ~76% of the cell (content bottom ≈ y=582
+      // of 768). To make NPCs match the player's on-screen footprint (~28 px),
+      // we scale by content-height (not frame-height) and anchor the origin
+      // to the content's foot position so the character lands ON the tile
+      // coordinate instead of floating above it.
       if (typeof n.p2_frame === "number" && this.textures.exists("p2_npcs")) {
         const sprite = this.add.image(0, 0, "p2_npcs", n.p2_frame);
-        sprite.setOrigin(0.5, 0.85);
-        // Source frames are 352x768; scale to ~22 px display
-        sprite.setScale(22 / 352);
+        const CONTENT_BOTTOM_RATIO = 0.76;   // content fills top 76% of frame
+        const TARGET_H = 30;                  // ≈ player height
+        const contentSrcH = 768 * CONTENT_BOTTOM_RATIO;  // ≈ 583
+        sprite.setScale(TARGET_H / contentSrcH);
+        sprite.setOrigin(0.5, CONTENT_BOTTOM_RATIO);
         container.add(sprite);
         return container;
       }
@@ -1121,16 +1131,20 @@
     }
 
     _buildTutorialOverlay() {
-      // Bottom-of-screen control hint. Black plate with yellow text.
+      // Bottom-of-screen control hint. Tight black plate with yellow text.
+      // 7px monospace fits ~3.5 px/char; with wordWrap we never overflow the
+      // canvas (the previous 10px font + no-wrap was clipping both edges).
       if (this._tutPlate) this._tutPlate.destroy();
       if (this._tutText) this._tutText.destroy();
       if (this._tutArrow) this._tutArrow.destroy();
-      this._tutPlate = this.add.rectangle(SCREEN_W/2, SCREEN_H - 12, SCREEN_W - 8, 20, 0x0f172a, 0.92).setOrigin(0.5);
-      this._tutPlate.setStrokeStyle(0.5, 0xfde047);
+      const plateW = SCREEN_W - 16;
+      const plateH = 16;
+      this._tutPlate = this.add.rectangle(SCREEN_W/2, SCREEN_H - 10, plateW, plateH, 0x000000, 0.7).setOrigin(0.5);
       this._tutText = this.add.text(SCREEN_W/2, SCREEN_H - 10, "",
-        { font: "10px monospace", color: "#fde047", align: "center", resolution: 2 }).setOrigin(0.5);
-      this._tutArrow = this.add.text(SCREEN_W - 8, SCREEN_H - 10, "▶",
-        { font: "10px monospace", color: "#fde047", resolution: 2 }).setOrigin(0.5);
+        { font: "7px monospace", color: "#fde047", align: "center", resolution: 2,
+          wordWrap: { width: plateW - 14 } }).setOrigin(0.5);
+      this._tutArrow = this.add.text(SCREEN_W/2 + plateW/2 - 6, SCREEN_H - 10, "▶",
+        { font: "7px monospace", color: "#fde047", resolution: 2 }).setOrigin(0.5);
       this.fxLayer.add(this._tutPlate);
       this.fxLayer.add(this._tutText);
       this.fxLayer.add(this._tutArrow);
@@ -1172,10 +1186,9 @@
         if (!this._npcPrompt || this._npcPrompt._forNpc !== npc) {
           if (this._npcPrompt) this._npcPrompt.destroy();
           if (this._npcPromptPlate) this._npcPromptPlate.destroy();
-          this._npcPromptPlate = this.add.rectangle(npc.x, npc.y - 16, 30, 8, 0x0f172a, 0.92);
-          this._npcPromptPlate.setStrokeStyle(0.5, 0xfde047);
-          this._npcPrompt = this.add.text(npc.x, npc.y - 16, "[C] TALK",
-            { font: "10px monospace", color: "#fde047" }).setOrigin(0.5);
+          this._npcPromptPlate = this.add.rectangle(npc.x, npc.y - 18, 26, 7, 0x000000, 0.6);
+          this._npcPrompt = this.add.text(npc.x, npc.y - 18, "[C] TALK",
+            { font: "7px monospace", color: "#fde047", resolution: 2 }).setOrigin(0.5);
           this._npcPrompt._forNpc = npc;
           this.entityLayer.add(this._npcPromptPlate);
           this.entityLayer.add(this._npcPrompt);
@@ -1253,17 +1266,58 @@
     _buildHUD() {
       // HUD lives in fxLayer (never rebuilt). tileLayer.removeAll(true) on
       // room change would destroy HUD if it lived there.
+      //
+      // Layout (all top-left, compact):
+      //   Row 1 (y=2-9):  hearts row
+      //   Row 2 (y=12-19): [gem icon] N   [key icon] N
+      //   Top-right: small item slot frame with icon (no text label).
       this.hudHeartsG = this.add.graphics();
-      this.hudRupees = this.add.text(2, 14, "$0", { font: "10px monospace", color: "#22c55e", resolution: 2 });
-      this.hudKeys = this.add.text(36, 14, "K0", { font: "10px monospace", color: "#facc15", resolution: 2 });
-      this.hudItem = this.add.text(SCREEN_W - 2, 2, "[(no item)]",
-        { font: "10px monospace", color: "#fde047", resolution: 2 }).setOrigin(1, 0);
+      // Gem icon (procedural diamond) + count
+      this.hudGemG = this.add.graphics();
+      this.hudRupees = this.add.text(11, 13, "0", { font: "7px monospace", color: "#22c55e", resolution: 2 });
+      // Key icon (procedural) + count
+      this.hudKeyG = this.add.graphics();
+      this.hudKeys = this.add.text(34, 13, "0", { font: "7px monospace", color: "#facc15", resolution: 2 });
+      // Item slot — small rounded box in top-right with optional icon.
+      this.hudItemSlot = this.add.graphics();
+      this.hudItemIcon = null;   // image set in _refreshHUD when item picked
       this.fxLayer.add(this.hudHeartsG);
+      this.fxLayer.add(this.hudGemG);
       this.fxLayer.add(this.hudRupees);
+      this.fxLayer.add(this.hudKeyG);
       this.fxLayer.add(this.hudKeys);
-      this.fxLayer.add(this.hudItem);
+      this.fxLayer.add(this.hudItemSlot);
       this._buildMinimap();
       this._refreshHUD();
+    }
+
+    _drawHudGem(g, cx, cy, size) {
+      // Tiny rupee/gem diamond — emerald with highlight.
+      g.fillStyle(0x065f46, 1);
+      g.fillTriangle(cx, cy - size, cx - size*0.7, cy, cx + size*0.7, cy);
+      g.fillStyle(0x10b981, 1);
+      g.fillTriangle(cx - size*0.7, cy, cx + size*0.7, cy, cx, cy + size);
+      g.fillStyle(0x6ee7b7, 1);
+      g.fillTriangle(cx - 1, cy - size + 0.5, cx + 1, cy - size + 0.5, cx, cy - 0.5);
+    }
+
+    _drawHudKey(g, cx, cy) {
+      // Tiny key icon — circle bow + rectangular shaft + tooth.
+      g.fillStyle(0xfacc15, 1);
+      g.fillCircle(cx - 1.5, cy, 1.5);
+      g.fillStyle(0x713f12, 1);
+      g.fillCircle(cx - 1.5, cy, 0.6);
+      g.fillStyle(0xfacc15, 1);
+      g.fillRect(cx - 0.2, cy - 0.5, 3.5, 1);
+      g.fillRect(cx + 2, cy - 1, 0.8, 1);
+    }
+
+    _drawHudItemSlot(g, x, y) {
+      // 14x14 framed slot at (x,y) top-left.
+      g.fillStyle(0x000000, 0.55);
+      g.fillRect(x, y, 14, 14);
+      g.lineStyle(0.5, 0xfde047, 1);
+      g.strokeRect(x + 0.25, y + 0.25, 13.5, 13.5);
     }
 
     _heartPath(g, cx, cy, size, strokeOnly, strokeColor) {
@@ -1326,8 +1380,63 @@
         }
       }
       const q = this.quest && this.quest.flags;
-      if (this.hudRupees && q) this.hudRupees.setText("$" + q.rupees);
-      if (this.hudKeys && q) this.hudKeys.setText("K" + q.small_keys + (q.big_key ? "*" : ""));
+      // Gem icon + count
+      if (this.hudGemG) {
+        this.hudGemG.clear();
+        this._drawHudGem(this.hudGemG, 5, 14, 3);
+      }
+      if (this.hudRupees && q) this.hudRupees.setText(String(q.rupees));
+      // Key icon + count (asterisk after digit if big key)
+      if (this.hudKeyG) {
+        this.hudKeyG.clear();
+        this._drawHudKey(this.hudKeyG, 28, 14);
+      }
+      if (this.hudKeys && q) this.hudKeys.setText(q.small_keys + (q.big_key ? "*" : ""));
+      // Top-right: stacked inventory chips for items the player has actually
+      // earned (sword/bow/bomb). Each chip is a 12×12 framed glyph. No
+      // placeholder "[no item]" text — chips only appear once owned.
+      if (this.hudItemSlot) {
+        this.hudItemSlot.clear();
+        const items = [];
+        if (q && q.has_sword)  items.push("sword");
+        if (q && q.has_bow)    items.push("bow");
+        if (q && q.has_bombs)  items.push("bomb");
+        const slotSize = 13;
+        const gap = 2;
+        let x = SCREEN_W - 2 - slotSize;
+        const y = 2;
+        for (const kind of items) {
+          // Slot frame
+          this.hudItemSlot.fillStyle(0x000000, 0.55);
+          this.hudItemSlot.fillRect(x, y, slotSize, slotSize);
+          this.hudItemSlot.lineStyle(0.5, 0xfde047, 1);
+          this.hudItemSlot.strokeRect(x + 0.25, y + 0.25, slotSize - 0.5, slotSize - 0.5);
+          // Glyph
+          const cx = x + slotSize/2, cy = y + slotSize/2;
+          if (kind === "sword") {
+            this.hudItemSlot.fillStyle(0xe2e8f0, 1);
+            this.hudItemSlot.fillRect(cx - 0.5, cy - 4, 1, 7);
+            this.hudItemSlot.fillStyle(0xa16207, 1);
+            this.hudItemSlot.fillRect(cx - 2, cy + 3, 4, 1);
+            this.hudItemSlot.fillRect(cx - 0.5, cy + 4, 1, 1);
+          } else if (kind === "bow") {
+            this.hudItemSlot.lineStyle(0.8, 0xd97706, 1);
+            this.hudItemSlot.beginPath();
+            this.hudItemSlot.arc(cx + 1, cy, 3.5, Math.PI * 0.6, Math.PI * 1.4, false);
+            this.hudItemSlot.strokePath();
+            this.hudItemSlot.fillStyle(0xe2e8f0, 1);
+            this.hudItemSlot.fillRect(cx - 2, cy - 0.3, 6, 0.6);
+          } else if (kind === "bomb") {
+            this.hudItemSlot.fillStyle(0x111111, 1);
+            this.hudItemSlot.fillCircle(cx, cy + 1, 3);
+            this.hudItemSlot.fillStyle(0xfacc15, 1);
+            this.hudItemSlot.fillRect(cx - 0.3, cy - 3, 0.6, 1.5);
+            this.hudItemSlot.fillStyle(0xef4444, 1);
+            this.hudItemSlot.fillCircle(cx, cy - 3, 0.6);
+          }
+          x -= (slotSize + gap);
+        }
+      }
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1570,18 +1679,29 @@
       const useAtlas = !useAnimSheet && !useP2Enemy && !useP2Boss && tpl.sprite_rest && this.textures.exists("enemies_atlas");
       let e;
       if (useP2Boss) {
-        // Boss is large source; scale to ~48 px display (3-tile imposing presence)
+        // Boss is large source; scale to ~52 px display (3-tile imposing presence).
+        // Origin anchored to bottom-center so the boss "stands" on its tile.
         e = this.physics.add.sprite(x, y, "p2_boss_guardian");
-        e.setScale(48 / e.width);
+        e.setScale(52 / e.width);
+        e.setOrigin(0.5, 0.9);
       } else if (useAnimSheet) {
-        // Animated walk strip — 352x768 source per frame → ~22 px display
+        // Animated walk strip — 352x768 source per frame. Content fills the
+        // top ~67% of the frame (varies by enemy 65-70%); scale by content
+        // height to keep enemies ≈ 28 px tall on screen.
         e = this.physics.add.sprite(x, y, animSheet, 0);
-        e.setScale(22 / 352);
+        const CONTENT_RATIO = 0.67;
+        const TARGET_H = 28;
+        e.setScale(TARGET_H / (768 * CONTENT_RATIO));
+        e.setOrigin(0.5, CONTENT_RATIO);
         const animKey = animSheet + "_walk";
         if (this.anims.exists(animKey)) e.play(animKey);
       } else if (useP2Enemy) {
+        // p2_enemies sheet: 281×384 per frame, content fills ~88%
         e = this.physics.add.sprite(x, y, "p2_enemies", tpl.p2_frame);
-        e.setScale(22 / 281);
+        const CONTENT_RATIO = 0.88;
+        const TARGET_H = 26;
+        e.setScale(TARGET_H / (384 * CONTENT_RATIO));
+        e.setOrigin(0.5, CONTENT_RATIO);
       } else if (useAtlas) {
         e = this.physics.add.sprite(x, y, "enemies_atlas", tpl.sprite_rest);
         const targetPx = (tpl.scale || 1) * 14;
