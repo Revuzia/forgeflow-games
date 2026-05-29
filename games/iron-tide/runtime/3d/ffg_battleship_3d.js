@@ -33,9 +33,14 @@ register3d("battleship", async function (kernel, content) {
   const scene = kernel.scene;
   const boardSpan = size * CELL;
   const sfx = content.sfx || {}; // { fire, hit, miss, sink } urls (optional)
-  // Pre-battle fleet placement is ON unless content opts out.
-  let phase = (content.setup && content.setup.placement === false) ? "battle" : "placement";
+  const music = (content.audio && content.audio.music) || null;
+  // Game-shell state machine: menu -> placement -> battle -> ended.
+  // (pause overlays on top of placement/battle without changing `phase`).
+  const placementEnabled = !(content.setup && content.setup.placement === false);
+  let phase = "menu";
+  let paused = false;
   let _placement = null; // test hook handle
+  let beginGame = null;  // assigned below; called by the menu Play button
 
   // ── Ocean ──────────────────────────────────────────────────────────────
   const oceanGeo = new THREE.PlaneGeometry(400, 400, 80, 80);
@@ -187,64 +192,67 @@ register3d("battleship", async function (kernel, content) {
     for (const ship of sim.player.ships) await placeShip("player", ship);
   }
 
-  if (phase === "battle") {
-    // No placement phase — fleet was placed by the sim constructor.
+  // ── Placement phase machinery (always defined; activated by beginGame) ─────
+  const fleet = sim.fleet;
+  let pIndex = 0, pHoriz = true, ghost = null;
+  const cellsFor = (x, y, len, h) => { const a = []; for (let i = 0; i < len; i++) a.push({ x: h ? x + i : x, y: h ? y : y + i }); return a; };
+  const valid = (cs) => cs.every((c) => c.x >= 0 && c.y >= 0 && c.x < size && c.y < size && sim.player.grid[c.y][c.x] === -1);
+  const clearGhost = () => { if (ghost) { scene.remove(ghost); ghost = null; } };
+  function placementHUD() {
+    const spec = fleet[pIndex];
+    kernel.hud(`<div style="position:absolute;top:10px;left:12px;font-size:15px"><b>${content.title || "Iron Tide"}</b><br>
+      <span style="font-size:12px;opacity:.9">${spec ? `Place your <b>${spec.name}</b> (${spec.len}) — click your waters · <b>R</b> rotate · <b>A</b> auto · <b>Esc</b> pause` : "Ready"}</span></div>
+      <div style="position:absolute;top:10px;right:12px;font-size:12px">Ships placed: ${pIndex}/${fleet.length}</div>`);
+  }
+  function showGhost(x, y) {
+    clearGhost(); const spec = fleet[pIndex]; if (!spec) return;
+    const cs = cellsFor(x, y, spec.len, pHoriz), ok = valid(cs);
+    ghost = new THREE.Group();
+    cs.forEach((c) => {
+      const w = cellWorld("player", Math.max(0, Math.min(size - 1, c.x)), Math.max(0, Math.min(size - 1, c.y)));
+      const b = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.8, 0.4, CELL * 0.8), new THREE.MeshBasicMaterial({ color: ok ? 0x3ddc84 : 0xff5a5a, transparent: true, opacity: 0.55 }));
+      b.position.set(w.x, 0.5, w.z); ghost.add(b);
+    });
+    scene.add(ghost);
+  }
+  async function commit(x, y) {
+    const spec = fleet[pIndex]; if (!spec) return;
+    if (!sim.placePlayerShip(spec.id, x, y, pHoriz)) return; // invalid placement
+    await placeShip("player", sim.player.ships[sim.player.ships.length - 1]);
+    pIndex++; clearGhost();
+    if (pIndex >= fleet.length) startBattle(); else placementHUD();
+    kernel.playSound(sfx.fire, 0.25);
+  }
+  async function autoPlace() {
+    sim.resetPlayerBoard();
+    sim._place(sim.player, null); // seeded-random legal placement
+    await placePlayerFleetVisuals();
+    pIndex = fleet.length; clearGhost(); startBattle();
+  }
+  function startBattle() {
+    phase = "battle"; clearGhost();
+    playerCells.forEach((m) => scene.remove(m));
+    setHUD();
+  }
+  function beginPlacement() {
+    sim.resetPlayerBoard(); pIndex = 0; phase = "placement"; placementHUD();
+  }
+  async function beginBattleDirect() {
     await placePlayerFleetVisuals();
     playerCells.forEach((m) => scene.remove(m));
-  } else {
-    // ── Placement phase: player positions their own fleet ──────────────────
-    sim.resetPlayerBoard();
-    const fleet = sim.fleet;
-    let pIndex = 0, pHoriz = true, ghost = null;
-    const cellsFor = (x, y, len, h) => { const a = []; for (let i = 0; i < len; i++) a.push({ x: h ? x + i : x, y: h ? y : y + i }); return a; };
-    const valid = (cs) => cs.every((c) => c.x >= 0 && c.y >= 0 && c.x < size && c.y < size && sim.player.grid[c.y][c.x] === -1);
-    const clearGhost = () => { if (ghost) { scene.remove(ghost); ghost = null; } };
-    function placementHUD() {
-      const spec = fleet[pIndex];
-      kernel.hud(`<div style="position:absolute;top:10px;left:12px;font-size:15px"><b>${content.title || "Iron Tide"}</b><br>
-        <span style="font-size:12px;opacity:.9">${spec ? `Place your <b>${spec.name}</b> (${spec.len}) — click your waters · <b>R</b> rotate · <b>A</b> auto` : "Ready"}</span></div>
-        <div style="position:absolute;top:10px;right:12px;font-size:12px">Ships placed: ${pIndex}/${fleet.length}</div>`);
-    }
-    function showGhost(x, y) {
-      clearGhost(); const spec = fleet[pIndex]; if (!spec) return;
-      const cs = cellsFor(x, y, spec.len, pHoriz), ok = valid(cs);
-      ghost = new THREE.Group();
-      cs.forEach((c) => {
-        const w = cellWorld("player", Math.max(0, Math.min(size - 1, c.x)), Math.max(0, Math.min(size - 1, c.y)));
-        const b = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.8, 0.4, CELL * 0.8), new THREE.MeshBasicMaterial({ color: ok ? 0x3ddc84 : 0xff5a5a, transparent: true, opacity: 0.55 }));
-        b.position.set(w.x, 0.5, w.z); ghost.add(b);
-      });
-      scene.add(ghost);
-    }
-    async function commit(x, y) {
-      const spec = fleet[pIndex]; if (!spec) return;
-      if (!sim.placePlayerShip(spec.id, x, y, pHoriz)) return; // invalid placement
-      await placeShip("player", sim.player.ships[sim.player.ships.length - 1]);
-      pIndex++; clearGhost();
-      if (pIndex >= fleet.length) startBattle(); else placementHUD();
-      kernel.playSound(sfx.fire, 0.25);
-    }
-    async function autoPlace() {
-      sim.resetPlayerBoard();
-      sim._place(sim.player, null); // seeded-random legal placement
-      await placePlayerFleetVisuals();
-      pIndex = fleet.length; clearGhost(); startBattle();
-    }
-    function startBattle() {
-      phase = "battle"; clearGhost();
-      playerCells.forEach((m) => scene.remove(m));
-      setHUD();
-    }
+    phase = "battle"; setHUD();
+  }
+  beginGame = () => { if (placementEnabled) beginPlacement(); else beginBattleDirect(); };
+  {
     const dom0 = kernel.renderer.domElement;
-    dom0.addEventListener("pointermove", (ev) => { if (phase !== "placement") return; const h = kernel.raycast(ev.clientX, ev.clientY, playerCells); if (h.length) showGhost(h[0].object.userData.x, h[0].object.userData.y); });
-    dom0.addEventListener("pointerdown", (ev) => { if (phase !== "placement") return; const h = kernel.raycast(ev.clientX, ev.clientY, playerCells); if (h.length) commit(h[0].object.userData.x, h[0].object.userData.y); });
+    dom0.addEventListener("pointermove", (ev) => { if (phase !== "placement" || paused) return; const h = kernel.raycast(ev.clientX, ev.clientY, playerCells); if (h.length) showGhost(h[0].object.userData.x, h[0].object.userData.y); });
+    dom0.addEventListener("pointerdown", (ev) => { if (phase !== "placement" || paused) return; const h = kernel.raycast(ev.clientX, ev.clientY, playerCells); if (h.length) commit(h[0].object.userData.x, h[0].object.userData.y); });
     window.addEventListener("keydown", (e) => {
-      if (phase !== "placement") return;
+      if (phase !== "placement" || paused) return;
       if (e.key === "r" || e.key === "R") { pHoriz = !pHoriz; }
       else if (e.key === "a" || e.key === "A") { autoPlace(); }
     });
     _placement = { autoPlace, commit, rotate: () => { pHoriz = !pHoriz; }, state: () => ({ phase, pIndex, total: fleet.length }) };
-    placementHUD();
   }
 
   // ── Camera framing — clean 3/4 overhead that reads both boards evenly ─────
@@ -371,7 +379,7 @@ register3d("battleship", async function (kernel, content) {
       <div style="position:absolute;top:10px;right:12px;font-size:13px;text-align:right">
         Your fleet: ${dots(ps)}<br>Enemy fleet: ${dots(es)}
       </div>
-      ${sim.ended ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:52px;color:${sim.winner === "player" ? "#7CFC9A" : "#ff5a5a"}">${sim.winner === "player" ? "VICTORY" : "DEFEAT"}</div>` : ""}
+      <div style="position:absolute;bottom:8px;left:12px;font-size:11px;opacity:.6">Esc: pause</div>
     `);
   }
   if (phase === "battle") setHUD(); // placement phase keeps its own HUD until Ready
@@ -389,6 +397,7 @@ register3d("battleship", async function (kernel, content) {
         kernel.playSound(sfx.sink, 0.7);
       }
       setHUD();
+      if (sim.ended) showEnd(sim.winner === "player");
       setTimeout(after, reducedMotion ? 50 : (r.result === "sink" ? 900 : 450));
     });
   }
@@ -452,11 +461,75 @@ register3d("battleship", async function (kernel, content) {
     }
   });
 
+  // ── Game shell: menu / pause / end overlays (DOM, pointer-interactive) ─────
+  const overlay = document.createElement("div");
+  Object.assign(overlay.style, {
+    position: "absolute", inset: "0", display: "none", alignItems: "center",
+    justifyContent: "center", flexDirection: "column", gap: "14px", zIndex: "50",
+    background: "rgba(6,14,26,0.84)", color: "#dfeaff", fontFamily: "monospace", textAlign: "center",
+  });
+  kernel.parent.appendChild(overlay);
+  function ovBtn(label, onClick, primary) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    Object.assign(b.style, {
+      font: "bold 16px monospace", padding: "10px 22px", cursor: "pointer", minWidth: "160px",
+      color: primary ? "#0a1622" : "#dfeaff", background: primary ? "#7CFC9A" : "#1c3148",
+      border: "1px solid #3a6c8c", borderRadius: "6px",
+    });
+    b.onclick = onClick; return b;
+  }
+  function hideOverlay() { overlay.style.display = "none"; overlay.innerHTML = ""; }
+  let chosenDiff = sim.difficulty || "normal";
+  function showMenu() {
+    phase = "menu"; paused = false; overlay.dataset.end = ""; overlay.innerHTML = "";
+    const t = document.createElement("div");
+    t.innerHTML = `<div style="font-size:46px;font-weight:bold;letter-spacing:3px">${(content.title || "IRON TIDE").toUpperCase()}</div>
+      <div style="font-size:14px;opacity:.8;margin-top:6px">${content.tagline || "Call your salvos. Sink the enemy fleet."}</div>`;
+    overlay.appendChild(t);
+    const lbl = document.createElement("div"); lbl.textContent = "Difficulty"; lbl.style.cssText = "font-size:12px;opacity:.7;margin-top:6px"; overlay.appendChild(lbl);
+    const row = document.createElement("div"); row.style.cssText = "display:flex;gap:8px";
+    ["easy", "normal", "hard"].forEach((d) => { const b = ovBtn(d.toUpperCase(), () => { chosenDiff = d; sim.difficulty = d; mark(); }, false); b.dataset.diff = d; b.style.minWidth = "96px"; row.appendChild(b); });
+    function mark() { Array.from(row.children).forEach((b) => { b.style.outline = b.dataset.diff === chosenDiff ? "2px solid #7CFC9A" : "none"; }); }
+    overlay.appendChild(row); mark();
+    overlay.appendChild(ovBtn("▶ PLAY", () => { hideOverlay(); if (music) kernel.playMusic(music, 0.3); beginGame(); }, true));
+    overlay.style.display = "flex";
+  }
+  function showPause() {
+    if (phase !== "placement" && phase !== "battle") return;
+    paused = true; overlay.innerHTML = "";
+    overlay.appendChild(Object.assign(document.createElement("div"), { textContent: "PAUSED", style: "font-size:40px;font-weight:bold" }));
+    overlay.appendChild(ovBtn("RESUME", () => { paused = false; hideOverlay(); kernel.start(); }, true));
+    overlay.appendChild(ovBtn("RESTART", () => location.reload(), false));
+    overlay.style.display = "flex";
+    kernel.stop(); // freeze render/physics while paused
+  }
+  function showEnd(victory) {
+    if (overlay.dataset.end === "1") return; overlay.dataset.end = "1";
+    phase = "ended"; overlay.innerHTML = "";
+    overlay.appendChild(Object.assign(document.createElement("div"), {
+      innerHTML: `<div style="font-size:54px;font-weight:bold;color:${victory ? "#7CFC9A" : "#ff5a5a"}">${victory ? "VICTORY" : "DEFEAT"}</div>
+        <div style="font-size:14px;opacity:.85;margin-top:8px">${victory ? "Enemy fleet destroyed" : "Your fleet was sunk"} · ${sim.turnNumber} turns</div>`,
+    }));
+    overlay.appendChild(ovBtn("▶ PLAY AGAIN", () => location.reload(), true));
+    overlay.style.display = "flex";
+    kernel.stopMusic();
+  }
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (paused) { paused = false; hideOverlay(); kernel.start(); }
+    else showPause();
+  });
+  showMenu(); // boot into the title menu
+
   // ── controller + test hooks ─────────────────────────────────────────────────
   const controller = {
     sim,
     __test: {
       sim,
+      menuPlay: () => { hideOverlay(); if (music) kernel.playMusic(music, 0.3); return beginGame(); },
+      pause: () => showPause(), resume: () => { paused = false; hideOverlay(); kernel.start(); },
+      isPaused: () => paused,
       state: () => ({
         phase: phase, turn: sim.turn, turnNumber: sim.turnNumber, ended: sim.ended, winner: sim.winner,
         playerShips: sim.player.ships.length, playerAlive: sim.alive("player"), enemyAlive: sim.alive("enemy"),
@@ -479,6 +552,18 @@ register3d("battleship", async function (kernel, content) {
           if (!pick) break;
           window.__bs_playerFire(sim, pick.x, pick.y);
         }
+        return { ended: sim.ended, winner: sim.winner, turns: sim.turnNumber };
+      },
+      // Play through to a finish (targets every enemy cell), then surface the
+      // end screen — verifies the full game reaches VICTORY/DEFEAT.
+      playToEnd: () => {
+        // Target known enemy ship cells so the player wins promptly (this is a
+        // verification hook, not normal play).
+        for (const ship of sim.enemy.ships) for (const c of ship.cells) {
+          if (sim.ended) break;
+          if (sim.enemy.shots[c.y][c.x] === 0) window.__bs_playerFire(sim, c.x, c.y);
+        }
+        if (sim.ended) showEnd(sim.winner === "player");
         return { ended: sim.ended, winner: sim.winner, turns: sim.turnNumber };
       },
     },

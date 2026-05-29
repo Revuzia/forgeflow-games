@@ -122,6 +122,19 @@ export class Kernel3D {
     try { const a = new Audio(url); a.volume = vol; const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
   }
 
+  // Looping background music (one track). Call from a user gesture (e.g. Play)
+  // so autoplay is permitted. Safe to call repeatedly.
+  playMusic(url, vol = 0.35) {
+    if (!url) return;
+    try {
+      if (this._music) { this._music.pause(); this._music = null; }
+      var a = new Audio(url); a.loop = true; a.volume = vol;
+      var p = a.play(); if (p && p.catch) p.catch(() => {});
+      this._music = a;
+    } catch (e) {}
+  }
+  stopMusic() { try { if (this._music) { this._music.pause(); this._music = null; } } catch (e) {} }
+
   async loadGLTF(url) {
     if (this._gltfCache[url]) return this._gltfCache[url].clone(true);
     const gltf = await this.loader.loadAsync(url);

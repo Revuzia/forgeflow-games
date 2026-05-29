@@ -24,6 +24,9 @@
     "miss": "assets/audio/splash.ogg",
     "sink": "assets/audio/sink.ogg"
   },
+  "audio": {
+    "music": "assets/audio/music.ogg"
+  },
   "setup": {
     "board_size": 10,
     "difficulty": "normal",
