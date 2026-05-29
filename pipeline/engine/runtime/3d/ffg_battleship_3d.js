@@ -33,6 +33,9 @@ register3d("battleship", async function (kernel, content) {
   const scene = kernel.scene;
   const boardSpan = size * CELL;
   const sfx = content.sfx || {}; // { fire, hit, miss, sink } urls (optional)
+  // Pre-battle fleet placement is ON unless content opts out.
+  let phase = (content.setup && content.setup.placement === false) ? "battle" : "placement";
+  let _placement = null; // test hook handle
 
   // ── Ocean ──────────────────────────────────────────────────────────────
   const oceanGeo = new THREE.PlaneGeometry(400, 400, 80, 80);
@@ -160,10 +163,89 @@ register3d("battleship", async function (kernel, content) {
     return g;
   }
 
-  // place the player's fleet (visible). Enemy fleet stays hidden until sunk.
-  for (const ship of sim.player.ships) await placeShip("player", ship);
   label("player", content.title || "YOUR FLEET");
   label("enemy", "ENEMY WATERS");
+
+  // Player-board cells (raycast targets) — used during the placement phase.
+  const playerCells = [];
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const cw = cellWorld("player", x, y);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(CELL * 0.95, CELL * 0.95), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, color: 0xffffff }));
+      m.rotation.x = -Math.PI / 2; m.position.set(cw.x, 0.3, cw.z); m.userData = { x, y }; scene.add(m); playerCells.push(m);
+    }
+  }
+
+  // Preload every unique ship GLB up-front so placement/auto-place don't stutter
+  // while models stream in (and so the placement->battle transition is instant).
+  if (content.ship_models) {
+    const urls = Array.from(new Set(Object.values(content.ship_models)));
+    await Promise.all(urls.map((u) => kernel.loadGLTF(u).catch(() => null)));
+  }
+
+  async function placePlayerFleetVisuals() {
+    for (const ship of sim.player.ships) await placeShip("player", ship);
+  }
+
+  if (phase === "battle") {
+    // No placement phase — fleet was placed by the sim constructor.
+    await placePlayerFleetVisuals();
+    playerCells.forEach((m) => scene.remove(m));
+  } else {
+    // ── Placement phase: player positions their own fleet ──────────────────
+    sim.resetPlayerBoard();
+    const fleet = sim.fleet;
+    let pIndex = 0, pHoriz = true, ghost = null;
+    const cellsFor = (x, y, len, h) => { const a = []; for (let i = 0; i < len; i++) a.push({ x: h ? x + i : x, y: h ? y : y + i }); return a; };
+    const valid = (cs) => cs.every((c) => c.x >= 0 && c.y >= 0 && c.x < size && c.y < size && sim.player.grid[c.y][c.x] === -1);
+    const clearGhost = () => { if (ghost) { scene.remove(ghost); ghost = null; } };
+    function placementHUD() {
+      const spec = fleet[pIndex];
+      kernel.hud(`<div style="position:absolute;top:10px;left:12px;font-size:15px"><b>${content.title || "Iron Tide"}</b><br>
+        <span style="font-size:12px;opacity:.9">${spec ? `Place your <b>${spec.name}</b> (${spec.len}) — click your waters · <b>R</b> rotate · <b>A</b> auto` : "Ready"}</span></div>
+        <div style="position:absolute;top:10px;right:12px;font-size:12px">Ships placed: ${pIndex}/${fleet.length}</div>`);
+    }
+    function showGhost(x, y) {
+      clearGhost(); const spec = fleet[pIndex]; if (!spec) return;
+      const cs = cellsFor(x, y, spec.len, pHoriz), ok = valid(cs);
+      ghost = new THREE.Group();
+      cs.forEach((c) => {
+        const w = cellWorld("player", Math.max(0, Math.min(size - 1, c.x)), Math.max(0, Math.min(size - 1, c.y)));
+        const b = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.8, 0.4, CELL * 0.8), new THREE.MeshBasicMaterial({ color: ok ? 0x3ddc84 : 0xff5a5a, transparent: true, opacity: 0.55 }));
+        b.position.set(w.x, 0.5, w.z); ghost.add(b);
+      });
+      scene.add(ghost);
+    }
+    async function commit(x, y) {
+      const spec = fleet[pIndex]; if (!spec) return;
+      if (!sim.placePlayerShip(spec.id, x, y, pHoriz)) return; // invalid placement
+      await placeShip("player", sim.player.ships[sim.player.ships.length - 1]);
+      pIndex++; clearGhost();
+      if (pIndex >= fleet.length) startBattle(); else placementHUD();
+      kernel.playSound(sfx.fire, 0.25);
+    }
+    async function autoPlace() {
+      sim.resetPlayerBoard();
+      sim._place(sim.player, null); // seeded-random legal placement
+      await placePlayerFleetVisuals();
+      pIndex = fleet.length; clearGhost(); startBattle();
+    }
+    function startBattle() {
+      phase = "battle"; clearGhost();
+      playerCells.forEach((m) => scene.remove(m));
+      setHUD();
+    }
+    const dom0 = kernel.renderer.domElement;
+    dom0.addEventListener("pointermove", (ev) => { if (phase !== "placement") return; const h = kernel.raycast(ev.clientX, ev.clientY, playerCells); if (h.length) showGhost(h[0].object.userData.x, h[0].object.userData.y); });
+    dom0.addEventListener("pointerdown", (ev) => { if (phase !== "placement") return; const h = kernel.raycast(ev.clientX, ev.clientY, playerCells); if (h.length) commit(h[0].object.userData.x, h[0].object.userData.y); });
+    window.addEventListener("keydown", (e) => {
+      if (phase !== "placement") return;
+      if (e.key === "r" || e.key === "R") { pHoriz = !pHoriz; }
+      else if (e.key === "a" || e.key === "A") { autoPlace(); }
+    });
+    _placement = { autoPlace, commit, rotate: () => { pHoriz = !pHoriz; }, state: () => ({ phase, pIndex, total: fleet.length }) };
+    placementHUD();
+  }
 
   // ── Camera framing — clean 3/4 overhead that reads both boards evenly ─────
   // Narrower FOV (less perspective looming) + high, centered vantage looking at
@@ -292,7 +374,7 @@ register3d("battleship", async function (kernel, content) {
       ${sim.ended ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:52px;color:${sim.winner === "player" ? "#7CFC9A" : "#ff5a5a"}">${sim.winner === "player" ? "VICTORY" : "DEFEAT"}</div>` : ""}
     `);
   }
-  setHUD();
+  if (phase === "battle") setHUD(); // placement phase keeps its own HUD until Ready
 
   function resolveShot(side, r, after) {
     const to = cellWorld(side === "player" ? "enemy" : "player", r.x, r.y);
@@ -312,7 +394,7 @@ register3d("battleship", async function (kernel, content) {
   }
 
   function doPlayerFire(x, y) {
-    if (busy || sim.ended || sim.turn !== "player") return false;
+    if (phase !== "battle" || busy || sim.ended || sim.turn !== "player") return false;
     const pre = sim.fire.bind(sim); // not used; we go through playerFire to also run AI
     // peek validity without mutating: check shots grid
     if (sim.enemy.shots[y][x] !== 0) return false;
@@ -332,7 +414,7 @@ register3d("battleship", async function (kernel, content) {
   const dom = kernel.renderer.domElement;
   dom.style.touchAction = "none";
   dom.addEventListener("pointermove", (ev) => {
-    if (busy || sim.ended) return;
+    if (phase !== "battle" || busy || sim.ended) return;
     const hits = kernel.raycast(ev.clientX, ev.clientY, cellMeshes);
     if (hovered) { hovered.material.opacity = 0.0; hovered = null; }
     if (hits.length) {
@@ -341,7 +423,7 @@ register3d("battleship", async function (kernel, content) {
     }
   });
   dom.addEventListener("pointerdown", (ev) => {
-    if (busy || sim.ended) return;
+    if (phase !== "battle" || busy || sim.ended) return;
     const hits = kernel.raycast(ev.clientX, ev.clientY, cellMeshes);
     if (hits.length) { const c = hits[0].object; doPlayerFire(c.userData.x, c.userData.y); }
   });
@@ -356,7 +438,7 @@ register3d("battleship", async function (kernel, content) {
     if (c && sim.enemy.shots[kbCursor.y][kbCursor.x] === 0) { c.material.color.set(0x66e0ff); c.material.opacity = 0.5; }
   }
   window.addEventListener("keydown", (e) => {
-    if (sim.ended || sim.turn !== "player") return;
+    if (phase !== "battle" || sim.ended || sim.turn !== "player") return;
     const k = e.key;
     const nav = { ArrowUp: [0, -1], w: [0, -1], ArrowDown: [0, 1], s: [0, 1], ArrowLeft: [-1, 0], a: [-1, 0], ArrowRight: [1, 0], d: [1, 0] };
     if (nav[k]) {
@@ -376,11 +458,14 @@ register3d("battleship", async function (kernel, content) {
     __test: {
       sim,
       state: () => ({
-        turn: sim.turn, turnNumber: sim.turnNumber, ended: sim.ended, winner: sim.winner,
-        playerAlive: sim.alive("player"), enemyAlive: sim.alive("enemy"),
+        phase: phase, turn: sim.turn, turnNumber: sim.turnNumber, ended: sim.ended, winner: sim.winner,
+        playerShips: sim.player.ships.length, playerAlive: sim.alive("player"), enemyAlive: sim.alive("enemy"),
         sceneChildren: scene.children.length,
         cellTargets: cellMeshes.length,
       }),
+      // placement-phase hooks for capture/verification
+      placeAuto: () => _placement && _placement.autoPlace(),
+      placeShipAt: (x, y) => _placement && _placement.commit(x, y),
       // drive logic without animation (instant) for gates/play-bot
       fireInstant: (x, y) => window.__bs_playerFire(sim, x, y),
       // drive the full ANIMATED path (places pegs, plays cinematic) — used by

@@ -96,6 +96,15 @@
       }
     }
 
+    // Interactive placement support (player positions their own fleet).
+    resetPlayerBoard() { this.player = makeBoard(this.size); }
+    placePlayerShip(specId, x, y, horizontal) {
+      var spec = null;
+      for (var i = 0; i < this.fleet.length; i++) if (this.fleet[i].id === specId) spec = this.fleet[i];
+      if (!spec) return false;
+      return this._placeShip(this.player, spec, x, y, horizontal);
+    }
+
     _placeShip(board, spec, x, y, horizontal) {
       var cells = [];
       for (var i = 0; i < spec.len; i++) {
