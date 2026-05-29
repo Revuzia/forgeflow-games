@@ -46,10 +46,32 @@
       this._buildHUD();
       this._wireInput();
 
-      if (content.audio && content.audio.music) FFG.audio.music(content.audio.music, 0.35);
+      this._exposeTestHooks();
+      // Standard engine shell (menu / pause / win-lose / music) — same one the
+      // 3D games use. Gameplay starts on Play.
+      this._started = false; this._paused = false;
+      var self2 = this;
+      if (root.FFG && root.FFG.Shell) {
+        this._shell = new root.FFG.Shell({
+          parent: (this.game.canvas && this.game.canvas.parentNode) || root.document.body,
+          title: content.title || "Mission",
+          tagline: content.tagline || "",
+          music: (content.audio && content.audio.music) || null,
+          difficulties: [],
+          onPlay: function () { self2._begin(); },
+          onPause: function () { self2._paused = true; },
+          onResume: function () { self2._paused = false; },
+        });
+        this._shell.start();
+      } else {
+        this._begin(); // shell unavailable -> play immediately (back-compat)
+      }
+    };
+
+    TacticsScene.prototype._begin = function () {
+      this._started = true;
       this._announce(this._mission.name || content.title || "Mission", "#fde047");
       this._setPhaseBanner("PLAYER PHASE");
-      this._exposeTestHooks();
     };
 
     TacticsScene.prototype._buildSim = function () {
@@ -174,7 +196,7 @@
     };
 
     TacticsScene.prototype._onTileClick = function (tx, ty) {
-      if (this._inputLocked || this.sim.ended || this.sim.currentPhase !== "player") return;
+      if (!this._started || this._paused || this._inputLocked || this.sim.ended || this.sim.currentPhase !== "player") return;
       var occupant = this.sim.unitAt(tx, ty);
       if (occupant && occupant.side === "player") { this._select(occupant); return; }
       if (occupant && occupant.side === "enemy") { this._tryAttack(occupant); return; }
@@ -182,7 +204,7 @@
     };
 
     TacticsScene.prototype._onHover = function (tx, ty) {
-      if (this._inputLocked || !this._selected) return;
+      if (!this._started || this._paused || this._inputLocked || !this._selected) return;
       this._clearPath();
       var occupant = this.sim.unitAt(tx, ty);
       if (occupant && occupant.side === "enemy") { this._showHitPreview(this._selected, occupant); return; }
@@ -370,12 +392,18 @@
     };
 
     TacticsScene.prototype._win = function (victory) {
+      root.__FFG_RESULT__ = { victory: victory, turns: this.sim.turnNumber };
+      FFG.audio.sfx(victory ? "win" : "lose", 0.6);
+      // Standard end screen via the engine shell (with Play Again). Fallback to
+      // an in-canvas overlay if the shell isn't present.
+      if (this._shell) {
+        this._shell.end(victory, (victory ? "Mission complete" : "Squad eliminated") + " · " + this.sim.turnNumber + " turns");
+        return;
+      }
       var W = this.scale.width, H = this.scale.height;
       this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.6).setDepth(200);
       FFG.text(this, W / 2, H / 2 - 10, victory ? "VICTORY" : "DEFEAT", { size: 48, color: victory ? "#7CFC9A" : "#ff6b6b", origin: 0.5, stroke: "#000", strokeThickness: 5, depth: 201 });
       FFG.text(this, W / 2, H / 2 + 36, victory ? "Mission complete" : "Squad eliminated", { size: 16, color: "#ffffff", origin: 0.5, depth: 201 });
-      FFG.audio.sfx(victory ? "win" : "lose", 0.6);
-      root.__FFG_RESULT__ = { victory: victory, turns: this.sim.turnNumber };
     };
 
     // ── Test hooks: let gates + play-bots drive without clicking ────────────────
@@ -383,6 +411,8 @@
       var self = this;
       this.__test = {
         sim: this.sim,
+        // Standard cross-genre hook: dismiss the menu + begin gameplay.
+        start: function () { if (self._shell) { self._shell.hide(); self._shell.phase = "playing"; self._shell._playMusic(); } self._begin(); },
         state: function () {
           return {
             phase: self.sim.currentPhase, turn: self.sim.turnNumber, ended: self.sim.ended,
@@ -395,6 +425,28 @@
         move: function (id, x, y) { self._select(self.sim.getUnit(id)); return !!self.sim.moveUnit(id, x, y) && (self._refreshAfterScripted(), true); },
         attack: function (aid, tid) { var r = self.sim.attackUnit(aid, tid); self._refreshAfterScripted(); return r; },
         endTurn: function () { self.sim.endTurn(); self._refreshAfterScripted(); },
+        // Standard cross-genre hook: greedily play to a resolution (used by the
+        // feel gate). Each turn: move toward + shoot nearest enemy, then end turn.
+        autoResolve: function (maxTurns) {
+          var sim = self.sim, n = 0;
+          while (!sim.ended && n++ < (maxTurns || 40)) {
+            if (sim.currentPhase !== "player") { sim.endTurn(); continue; }
+            var allies = sim.aliveAllies();
+            for (var i = 0; i < allies.length; i++) {
+              var u = sim.getUnit(allies[i].id), guard = 0;
+              while (u.actionPoints > 0 && guard++ < 4 && !sim.ended) {
+                var es = sim.aliveEnemies(); if (!es.length) break;
+                es.sort(function (a, b) { return (Math.abs(a.x - u.x) + Math.abs(a.y - u.y)) - (Math.abs(b.x - u.x) + Math.abs(b.y - u.y)); });
+                var e = es[0], d = Math.abs(e.x - u.x) + Math.abs(e.y - u.y);
+                if (d <= u.range && sim.hasLineOfSight(u.x, u.y, e.x, e.y)) { sim.attackUnit(u.id, e.id); }
+                else { var p = sim.findPath(u.x, u.y, e.x, e.y); if (!p || !p.length) break; var s = Math.min(p.length, u.movement); var dst = p[s - 1]; if (dst.x === e.x && dst.y === e.y) { if (s < 2) break; dst = p[s - 2]; } if (!sim.moveUnit(u.id, dst.x, dst.y)) break; }
+              }
+            }
+            sim.endTurn();
+          }
+          self._refreshAfterScripted();
+          return { ended: sim.ended, victory: sim.aliveAllies().length > 0, turns: sim.turnNumber };
+        },
       };
     };
 

@@ -461,75 +461,34 @@ register3d("battleship", async function (kernel, content) {
     }
   });
 
-  // ── Game shell: menu / pause / end overlays (DOM, pointer-interactive) ─────
-  const overlay = document.createElement("div");
-  Object.assign(overlay.style, {
-    position: "absolute", inset: "0", display: "none", alignItems: "center",
-    justifyContent: "center", flexDirection: "column", gap: "14px", zIndex: "50",
-    background: "rgba(6,14,26,0.84)", color: "#dfeaff", fontFamily: "monospace", textAlign: "center",
+  // ── Standard game shell (menu / pause / win-lose / music) — engine-provided.
+  // The genre only supplies hooks; FFG.Shell renders the rest the same for every
+  // game (2D or 3D).
+  const shell = new FFG.Shell({
+    parent: kernel.parent,
+    title: content.title || "Iron Tide",
+    tagline: content.tagline || "Call your salvos. Sink the enemy fleet.",
+    music: music,
+    difficulties: ["easy", "normal", "hard"],
+    defaultDifficulty: sim.difficulty || "normal",
+    onPlay: (diff) => { sim.difficulty = diff; beginGame(); },
+    onPause: () => { paused = true; kernel.stop(); },
+    onResume: () => { paused = false; kernel.start(); },
   });
-  kernel.parent.appendChild(overlay);
-  function ovBtn(label, onClick, primary) {
-    const b = document.createElement("button");
-    b.textContent = label;
-    Object.assign(b.style, {
-      font: "bold 16px monospace", padding: "10px 22px", cursor: "pointer", minWidth: "160px",
-      color: primary ? "#0a1622" : "#dfeaff", background: primary ? "#7CFC9A" : "#1c3148",
-      border: "1px solid #3a6c8c", borderRadius: "6px",
-    });
-    b.onclick = onClick; return b;
-  }
-  function hideOverlay() { overlay.style.display = "none"; overlay.innerHTML = ""; }
-  let chosenDiff = sim.difficulty || "normal";
-  function showMenu() {
-    phase = "menu"; paused = false; overlay.dataset.end = ""; overlay.innerHTML = "";
-    const t = document.createElement("div");
-    t.innerHTML = `<div style="font-size:46px;font-weight:bold;letter-spacing:3px">${(content.title || "IRON TIDE").toUpperCase()}</div>
-      <div style="font-size:14px;opacity:.8;margin-top:6px">${content.tagline || "Call your salvos. Sink the enemy fleet."}</div>`;
-    overlay.appendChild(t);
-    const lbl = document.createElement("div"); lbl.textContent = "Difficulty"; lbl.style.cssText = "font-size:12px;opacity:.7;margin-top:6px"; overlay.appendChild(lbl);
-    const row = document.createElement("div"); row.style.cssText = "display:flex;gap:8px";
-    ["easy", "normal", "hard"].forEach((d) => { const b = ovBtn(d.toUpperCase(), () => { chosenDiff = d; sim.difficulty = d; mark(); }, false); b.dataset.diff = d; b.style.minWidth = "96px"; row.appendChild(b); });
-    function mark() { Array.from(row.children).forEach((b) => { b.style.outline = b.dataset.diff === chosenDiff ? "2px solid #7CFC9A" : "none"; }); }
-    overlay.appendChild(row); mark();
-    overlay.appendChild(ovBtn("▶ PLAY", () => { hideOverlay(); if (music) kernel.playMusic(music, 0.3); beginGame(); }, true));
-    overlay.style.display = "flex";
-  }
-  function showPause() {
-    if (phase !== "placement" && phase !== "battle") return;
-    paused = true; overlay.innerHTML = "";
-    overlay.appendChild(Object.assign(document.createElement("div"), { textContent: "PAUSED", style: "font-size:40px;font-weight:bold" }));
-    overlay.appendChild(ovBtn("RESUME", () => { paused = false; hideOverlay(); kernel.start(); }, true));
-    overlay.appendChild(ovBtn("RESTART", () => location.reload(), false));
-    overlay.style.display = "flex";
-    kernel.stop(); // freeze render/physics while paused
-  }
   function showEnd(victory) {
-    if (overlay.dataset.end === "1") return; overlay.dataset.end = "1";
-    phase = "ended"; overlay.innerHTML = "";
-    overlay.appendChild(Object.assign(document.createElement("div"), {
-      innerHTML: `<div style="font-size:54px;font-weight:bold;color:${victory ? "#7CFC9A" : "#ff5a5a"}">${victory ? "VICTORY" : "DEFEAT"}</div>
-        <div style="font-size:14px;opacity:.85;margin-top:8px">${victory ? "Enemy fleet destroyed" : "Your fleet was sunk"} · ${sim.turnNumber} turns</div>`,
-    }));
-    overlay.appendChild(ovBtn("▶ PLAY AGAIN", () => location.reload(), true));
-    overlay.style.display = "flex";
-    kernel.stopMusic();
+    shell.end(victory, (victory ? "Enemy fleet destroyed" : "Your fleet was sunk") + " · " + sim.turnNumber + " turns");
   }
-  window.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    if (paused) { paused = false; hideOverlay(); kernel.start(); }
-    else showPause();
-  });
-  showMenu(); // boot into the title menu
+  shell.start(); // boot into the title menu
 
   // ── controller + test hooks ─────────────────────────────────────────────────
   const controller = {
-    sim,
+    sim, shell,
     __test: {
       sim,
-      menuPlay: () => { hideOverlay(); if (music) kernel.playMusic(music, 0.3); return beginGame(); },
-      pause: () => showPause(), resume: () => { paused = false; hideOverlay(); kernel.start(); },
-      isPaused: () => paused,
+      start: () => { shell.hide(); shell.phase = "playing"; shell._playMusic(); return beginGame(); },
+      menuPlay: () => { shell.hide(); shell.phase = "playing"; shell._playMusic(); return beginGame(); },
+      pause: () => shell.pause(), resume: () => shell.resume(),
+      isPaused: () => shell.phase === "paused",
       state: () => ({
         phase: phase, turn: sim.turn, turnNumber: sim.turnNumber, ended: sim.ended, winner: sim.winner,
         playerShips: sim.player.ships.length, playerAlive: sim.alive("player"), enemyAlive: sim.alive("enemy"),
@@ -554,6 +513,8 @@ register3d("battleship", async function (kernel, content) {
         }
         return { ended: sim.ended, winner: sim.winner, turns: sim.turnNumber };
       },
+      // Standard cross-genre hook (alias of playToEnd) for the feel gate.
+      autoResolve: () => controller.__test.playToEnd(),
       // Play through to a finish (targets every enemy cell), then surface the
       // end screen — verifies the full game reaches VICTORY/DEFEAT.
       playToEnd: () => {

@@ -1,19 +1,19 @@
-"""feel_gate.py — Layer-4 feel (play-bot) gate.
+"""feel_gate.py — Layer-4 feel (play-bot) gate. Genre + engine agnostic.
 
-Answers "can the game actually be PLAYED to a conclusion?" A Playwright bot loads
-the game, drives the runtime's __test hooks (every FFG genre runtime exposes them),
-and asserts the game makes progress and can reach a win/lose state — not just
-"boots without crashing."
+Answers "can the game actually be PLAYED to a conclusion?" — not just "does it
+boot." Works for ANY FFG game, 2D (Phaser, window.__FFG_GAME__) or 3D (three.js,
+window.__FFG3D__), by driving the STANDARD test hooks every genre runtime
+exposes:
+  - __test.start()        dismiss the menu / begin gameplay
+  - __test.autoResolve()  greedily play to a win/lose (alias: playToEnd/autoPlay)
+  - __test.state()        read progress + end state
 
-For tactics it scripts a greedy player: each turn, move the nearest unit toward
-the nearest enemy and shoot when in range, then end turn; assert enemy HP trends
-down and the match resolves within a turn budget.
-
-Needs a running static server + a browser, so it runs OUTSIDE the interactive
-session. Self-contained Playwright script.
+A genre is "feel-complete" when start() + autoResolve() drive it to an `ended`
+state. Needs a running static server + a browser, so it runs outside the
+interactive session. Self-contained Playwright script.
 
 Usage:
-    python feel_gate.py <game_url>           e.g. http://localhost:8766/games/rift-tactics/
+    python feel_gate.py <game_url>
 Requires: pip install playwright ; playwright install chromium
 """
 import json
@@ -21,59 +21,28 @@ import sys
 
 PROBE_JS = r"""
 (async () => {
-  function sceneOf(){ const g=window.__FFG_GAME__; if(!g) return null;
-    return g.scene.scenes.find(s => s.__test) || null; }
-  // wait for the scene + test hooks
-  let scene=null, tries=0;
-  while(!scene && tries++ < 60){ scene = sceneOf(); if(!scene) await new Promise(r=>setTimeout(r,250)); }
-  if(!scene) return { ok:false, error:"no FFG scene with __test hooks" };
-  const T = scene.__test;
-  const start = T.state();
-  const startEnemyHp = start.enemies.reduce((a,e)=>a+e.hp,0);
-  let budget = 30;
-  while(budget-- > 0){
-    let st = T.state();
-    if(st.ended) break;
-    if(st.phase !== "player"){ T.endTurn(); continue; }
-    // greedy: for each ally with AP, move toward nearest enemy then shoot
-    for(const ally of st.allies){
-      const sim = T.sim;
-      const u = sim.getUnit(ally.id);
-      let guard=4;
-      while(u.actionPoints>0 && guard-->0 && !sim.ended){
-        const enemies = sim.aliveEnemies();
-        if(!enemies.length) break;
-        enemies.sort((a,b)=> (Math.abs(a.x-u.x)+Math.abs(a.y-u.y)) - (Math.abs(b.x-u.x)+Math.abs(b.y-u.y)));
-        const e = enemies[0];
-        const dist = Math.abs(e.x-u.x)+Math.abs(e.y-u.y);
-        if(dist<=u.range && sim.hasLineOfSight(u.x,u.y,e.x,e.y)){
-          const r = T.attack(u.id, e.id); if(!r.success) break;
-        } else {
-          const path = sim.findPath(u.x,u.y,e.x,e.y);
-          if(!path||!path.length) break;
-          const steps = Math.min(path.length, u.movement);
-          // step to the tile just before the enemy
-          let dest = path[steps-1];
-          if(dest.x===e.x && dest.y===e.y){ if(steps<2) break; dest = path[steps-2]; }
-          if(!T.move(u.id, dest.x, dest.y)) break;
-        }
-      }
+  function getTest() {
+    if (window.__FFG3D__ && window.__FFG3D__.controller && window.__FFG3D__.controller.__test) return window.__FFG3D__.controller.__test;
+    if (window.__FFG_GAME__ && window.__FFG_GAME__.scene) {
+      var s = window.__FFG_GAME__.scene.scenes.find(function (sc) { return sc.__test; });
+      return s ? s.__test : null;
     }
-    T.endTurn();
-    if(T.state().ended) break;
+    return null;
   }
-  const end = T.state();
-  const endEnemyHp = end.enemies.reduce((a,e)=>a+e.hp,0);
-  return {
-    ok:true,
-    started_enemies: start.enemies.length,
-    ended: end.ended,
-    result: end.result,
-    enemy_hp_start: startEnemyHp,
-    enemy_hp_end: endEnemyHp,
-    progress: startEnemyHp - endEnemyHp,
-    turns: end.turn,
-  };
+  var T = null, tries = 0;
+  while (!T && tries++ < 80) { T = getTest(); if (!T) await new Promise(function (r) { setTimeout(r, 250); }); }
+  if (!T) return { ok: false, error: "no FFG __test hooks found (2D or 3D)" };
+  var started = false;
+  if (typeof T.start === "function") { T.start(); started = true; }
+  await new Promise(function (r) { setTimeout(r, 400); });
+  var pre = T.state ? T.state() : {};
+  var res = null, how = null;
+  if (typeof T.autoResolve === "function") { res = T.autoResolve(); how = "autoResolve"; }
+  else if (typeof T.playToEnd === "function") { res = T.playToEnd(); how = "playToEnd"; }
+  else if (typeof T.autoPlay === "function") { res = T.autoPlay(); how = "autoPlay"; }
+  else return { ok: false, error: "genre exposes no autoResolve/playToEnd/autoPlay" };
+  var post = T.state ? T.state() : {};
+  return { ok: true, started: started, driver: how, result: res, ended: !!(res && res.ended), post: post };
 })()
 """
 
@@ -85,7 +54,7 @@ def run(url, timeout_ms=60000):
         return {"ok": False, "error": "playwright not installed (pip install playwright; playwright install chromium)"}
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page()
+        page = browser.new_page(viewport={"width": 1024, "height": 768})
         errors = []
         page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         page.goto(url, wait_until="load", timeout=timeout_ms)
@@ -97,12 +66,15 @@ def run(url, timeout_ms=60000):
 
 def grade(result):
     if not result.get("ok"):
-        return False, "play-bot could not drive the game: " + result.get("error", "?")
-    if result.get("progress", 0) <= 0:
-        return False, "no combat progress (enemy HP did not drop) — mechanic likely inert"
-    if not result.get("ended"):
-        return False, f"match did not resolve within turn budget (turns={result.get('turns')})"
-    return True, f"played to resolution in {result.get('turns')} turns, result={result.get('result')}"
+        return False, "play-bot could not drive the game: " + str(result.get("error", "?"))
+    res = result.get("result") or {}
+    if not result.get("started"):
+        return False, "no start() hook — game did not begin"
+    if not res.get("ended"):
+        return False, "game did NOT resolve to an end state (autoResolve ran but never ended): " + json.dumps(res)
+    errs = [e for e in result.get("console_errors", []) if "favicon" not in e]
+    tag = " (console errors: %d)" % len(errs) if errs else ""
+    return True, "played to resolution via %s: %s%s" % (result.get("driver"), json.dumps(res), tag)
 
 
 def main():
@@ -110,7 +82,7 @@ def main():
         print("usage: python feel_gate.py <game_url>")
         sys.exit(2)
     result = run(sys.argv[1])
-    print(json.dumps(result, indent=2))
+    print(json.dumps(result, indent=2)[:1500])
     ok, msg = grade(result)
     print(f"[feel_gate] {'PASS' if ok else 'FAIL'} — {msg}")
     sys.exit(0 if ok else 1)

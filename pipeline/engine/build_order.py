@@ -184,8 +184,9 @@ def assemble(slug, content):
     is3d = _is_3d(prof)
     gdir = GAMES / slug
     (gdir / "runtime" / "sim").mkdir(parents=True, exist_ok=True)
+    # Every game gets the standard shell (menu/pause/win-lose/music).
     # 2D needs the classic loader + VERSION; 3D boots via its own ESM entry.
-    needed = set(prof["runtime"])
+    needed = set(prof["runtime"]) | {"ffg_shell.js"}
     if not is3d:
         needed |= {"ffg_loader.js", "VERSION"}
     for rel in sorted(needed):
@@ -226,8 +227,13 @@ def _copy_3d_assets(gdir, content):
 
 
 def _index_html_2d(content, prof):
+    # Ensure the shell loads right after the kernel for every 2D game.
+    runtime = list(prof["runtime"])
+    if "ffg_shell.js" not in runtime:
+        k = runtime.index("ffg_kernel.js") + 1 if "ffg_kernel.js" in runtime else 0
+        runtime.insert(k, "ffg_shell.js")
     tags = []
-    for rel in prof["runtime"]:
+    for rel in runtime:
         if rel == "ffg_loader.js":
             continue
         tags.append(f'<script src="runtime/{rel}"></script>')

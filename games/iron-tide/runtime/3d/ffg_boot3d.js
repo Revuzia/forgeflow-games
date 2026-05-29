@@ -11,7 +11,8 @@
 const V = new URL(import.meta.url).search; // e.g. "?v=1717000000"
 
 const { boot3d } = await import("./ffg_kernel_3d.js" + V);
-await import("./ffg_battleship_3d.js" + V); // registers genre "battleship"
+await import("../ffg_shell.js" + V);          // standard menu/pause/win-lose/music shell (sets FFG.Shell)
+await import("./ffg_battleship_3d.js" + V);   // registers genre "battleship"
 
 async function resolveContent() {
   if (window.FFG_CONTENT) return window.FFG_CONTENT;
