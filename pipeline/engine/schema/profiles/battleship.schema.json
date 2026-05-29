@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "ffg://profiles/battleship.schema.json",
+  "title": "FFG Battleship (hybrid salvo + 3D cinematic) content profile",
+  "description": "Turn-based salvo naval combat rendered as a 3D cinematic. Validated on top of content.schema.json. Consumed by 3d/ffg_battleship_3d.js. Signature mechanic: salvo fire with hit/miss/sink + a real hunt/target AI.",
+  "type": "object",
+  "required": ["genre", "setup"],
+  "properties": {
+    "genre": { "const": "battleship" },
+    "renderer": { "const": "three" },
+    "ship_models": {
+      "type": "object",
+      "description": "Map ship length (as string) -> GLB url, plus optional 'default'.",
+      "additionalProperties": { "type": "string" }
+    },
+    "setup": {
+      "type": "object",
+      "required": ["board_size", "fleet"],
+      "properties": {
+        "board_size": { "type": "integer", "minimum": 6, "maximum": 16 },
+        "fleet": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "len"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "len": { "type": "integer", "minimum": 2, "maximum": 6 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "player_placements": { "$ref": "#/definitions/placements" },
+        "enemy_placements": { "$ref": "#/definitions/placements" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "definitions": {
+    "placements": {
+      "type": "array",
+      "description": "Optional fixed placements (one per fleet ship, in order). Omit for seeded-random placement.",
+      "items": {
+        "type": "object",
+        "required": ["id", "x", "y"],
+        "properties": {
+          "id": { "type": "string" },
+          "x": { "type": "integer", "minimum": 0 },
+          "y": { "type": "integer", "minimum": 0 },
+          "horizontal": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

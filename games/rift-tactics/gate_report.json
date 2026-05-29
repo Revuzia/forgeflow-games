@@ -1,0 +1,31 @@
+{
+  "game": "..\\..\\games\\rift-tactics",
+  "genre": "tactics",
+  "blocking_pass": true,
+  "gates": [
+    {
+      "gate": "contract",
+      "blocking": true,
+      "pass": true,
+      "output": "[contract_gate] PASS  ..\\..\\games\\rift-tactics\\content.json"
+    },
+    {
+      "gate": "signature",
+      "blocking": true,
+      "pass": true,
+      "output": "[signature_gate] genre=tactics  PASS\n  PASS  movement.reachable_nonempty  (unit can reach 13 tiles)\n  PASS  movement.respects_budget  (max cost 4)\n  PASS  movement.no_walls  (no tile is a wall/full-cover)\n  PASS  movement.rejects_unreachable  (move to far edge rejected)\n  PASS  movement.valid_move_works  (AP 2->1)\n  PASS  cover.reduces_hitchance  (covered 0.45 < open 0.95)\n  PASS  combat.attack_hits  ({\"success\":true,\"hit\":true,\"damage\":7,\"killed\":true,\"chance\":0.9199999999999999})\n  PASS  combat.deals_damage  (6->0)\n  PASS  combat.damage_formula  (dmg 7)\n  PASS  win.victory_on_elimination  (ended=true victory=true)\n  PASS  turns.ap_refilled  (ap after round restored)"
+    },
+    {
+      "gate": "feel",
+      "blocking": false,
+      "pass": null,
+      "output": "deferred \u2014 re-run with --url <running game url>"
+    },
+    {
+      "gate": "fidelity",
+      "blocking": false,
+      "pass": null,
+      "output": "deferred \u2014 capture a screenshot then re-run with --shot <png> (needs claude -p)"
+    }
+  ]
+}

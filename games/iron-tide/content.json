@@ -1,0 +1,40 @@
+{
+  "title": "Iron Tide",
+  "slug": "iron-tide",
+  "genre": "battleship",
+  "renderer": "three",
+  "tagline": "Call your salvos. Sink the enemy fleet.",
+  "seed": 4242,
+  "view": { "width": 1024, "height": 640, "background": "#0a1622", "fog": 0.01 },
+  "ship_models": {
+    "5": "assets/ship-large.glb",
+    "4": "assets/ship-medium.glb",
+    "3": "assets/ship-small.glb",
+    "2": "assets/boat-row-small.glb",
+    "default": "assets/ship-small.glb"
+  },
+  "setup": {
+    "board_size": 10,
+    "fleet": [
+      { "id": "carrier", "name": "Carrier", "len": 5 },
+      { "id": "battleship", "name": "Dreadnought", "len": 4 },
+      { "id": "cruiser", "name": "Cruiser", "len": 3 },
+      { "id": "submarine", "name": "Submersible", "len": 3 },
+      { "id": "destroyer", "name": "Destroyer", "len": 2 }
+    ],
+    "player_placements": [
+      { "id": "carrier", "x": 0, "y": 0, "horizontal": true },
+      { "id": "battleship", "x": 0, "y": 2, "horizontal": true },
+      { "id": "cruiser", "x": 0, "y": 4, "horizontal": true },
+      { "id": "submarine", "x": 6, "y": 6, "horizontal": false },
+      { "id": "destroyer", "x": 8, "y": 0, "horizontal": false }
+    ],
+    "enemy_placements": [
+      { "id": "carrier", "x": 5, "y": 9, "horizontal": true },
+      { "id": "battleship", "x": 2, "y": 7, "horizontal": true },
+      { "id": "cruiser", "x": 0, "y": 0, "horizontal": false },
+      { "id": "submarine", "x": 9, "y": 2, "horizontal": false },
+      { "id": "destroyer", "x": 4, "y": 4, "horizontal": true }
+    ]
+  }
+}

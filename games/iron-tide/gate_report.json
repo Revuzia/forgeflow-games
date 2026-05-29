@@ -1,0 +1,31 @@
+{
+  "game": "..\\..\\games\\iron-tide",
+  "genre": "battleship",
+  "blocking_pass": true,
+  "gates": [
+    {
+      "gate": "contract",
+      "blocking": true,
+      "pass": true,
+      "output": "[contract_gate] PASS  ..\\..\\games\\iron-tide\\content.json"
+    },
+    {
+      "gate": "signature",
+      "blocking": true,
+      "pass": true,
+      "output": "[signature_gate] genre=battleship  PASS\n  PASS  placement.player_legal  (cells=17 expect 17)\n  PASS  placement.enemy_legal  (cells=17)\n  PASS  placement.fleet_count\n  PASS  fire.hit_on_ship  (hit)\n  PASS  fire.repeat_invalid  (invalid)\n  PASS  fire.miss_on_empty\n  PASS  fire.sink_full_ship  (sink)\n  PASS  ai.hunt_target_beats_random  (AI cleared player fleet in 50 shots (cap 70, random~94))\n  PASS  win.player_wins_on_clear  (ended=true winner=player)"
+    },
+    {
+      "gate": "feel",
+      "blocking": false,
+      "pass": null,
+      "output": "deferred \u2014 re-run with --url <running game url>"
+    },
+    {
+      "gate": "fidelity",
+      "blocking": false,
+      "pass": null,
+      "output": "deferred \u2014 capture a screenshot then re-run with --shot <png> (needs claude -p)"
+    }
+  ]
+}
