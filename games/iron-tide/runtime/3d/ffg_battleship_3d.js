@@ -27,6 +27,7 @@ register3d("battleship", async function (kernel, content) {
     seed: content.seed != null ? content.seed : 4242,
     player_placements: m.player_placements,
     enemy_placements: m.enemy_placements,
+    difficulty: m.difficulty || content.difficulty || "normal",
   });
 
   const scene = kernel.scene;

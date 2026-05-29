@@ -18,6 +18,7 @@
       "required": ["board_size", "fleet"],
       "properties": {
         "board_size": { "type": "integer", "minimum": 6, "maximum": 16 },
+        "difficulty": { "type": "string", "enum": ["easy", "normal", "hard"] },
         "fleet": {
           "type": "array",
           "minItems": 2,

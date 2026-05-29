@@ -66,6 +66,10 @@
       this.winner = null;
       this.log = [];
       this.onEvent = config.onEvent || function () {};
+      // Difficulty tunes the AI: easy = no parity + sometimes abandons a wounded
+      // ship (gives the player breathing room); normal = parity hunt + target;
+      // hard = parity + relentless target work. Default normal.
+      this.difficulty = config.difficulty || "normal";
       // AI hunt/target memory (the AI fires at the PLAYER board)
       this._ai = { mode: "hunt", queue: [], hits: [], parity: 0 };
     }
@@ -174,12 +178,21 @@
         if (c.x >= 0 && c.y >= 0 && c.x < size && c.y < size && b.shots[c.y][c.x] === UNKNOWN) return c;
       }
       this._ai.mode = "hunt";
-      // HUNT mode: fire on a parity grid (can't hide a length>=2 ship from parity)
+      // HARD: probability-density hunt — fire where the smallest remaining ship
+      // can fit the most ways (the strong Battleship-AI technique). Uses only
+      // fair info (shot grid + fleet lengths + which ships were announced sunk).
+      if (this.difficulty === "hard") {
+        var dp = this._densityPick(b, size);
+        if (dp) return dp;
+      }
+      // HUNT mode: parity grid (can't hide a length>=2 ship from parity) on
+      // normal; easy fires fully at random (much less efficient).
+      var useParity = this.difficulty !== "easy";
       var candidates = [];
       for (var y = 0; y < size; y++) {
         for (var x = 0; x < size; x++) {
           if (b.shots[y][x] !== UNKNOWN) continue;
-          if (((x + y) % 2) === this._ai.parity) candidates.push({ x: x, y: y });
+          if (!useParity || ((x + y) % 2) === this._ai.parity) candidates.push({ x: x, y: y });
         }
       }
       if (!candidates.length) {
@@ -188,7 +201,39 @@
       return candidates[Math.floor(this.rng() * candidates.length)];
     }
 
+    // HARD hunt: pick the unknown cell where the smallest still-floating ship
+    // could be placed the most ways (probability density). Fair info only.
+    _densityPick(b, size) {
+      var minLen = 99;
+      for (var i = 0; i < this.player.ships.length; i++) if (!this.player.ships[i].sunk) minLen = Math.min(minLen, this.player.ships[i].len);
+      if (minLen === 99) minLen = 2;
+      var best = null, bestv = -1;
+      for (var y = 0; y < size; y++) {
+        for (var x = 0; x < size; x++) {
+          if (b.shots[y][x] !== UNKNOWN) continue;
+          var count = 0, off, k, ok;
+          for (off = 0; off < minLen; off++) { // horizontal placements covering (x,y)
+            var sx = x - off; if (sx < 0 || sx + minLen > size) continue;
+            ok = true; for (k = 0; k < minLen; k++) if (b.shots[y][sx + k] === MISS) { ok = false; break; }
+            if (ok) count++;
+          }
+          for (off = 0; off < minLen; off++) { // vertical
+            var sy = y - off; if (sy < 0 || sy + minLen > size) continue;
+            ok = true; for (k = 0; k < minLen; k++) if (b.shots[sy + k][x] === MISS) { ok = false; break; }
+            if (ok) count++;
+          }
+          if (count > bestv) { bestv = count; best = { x: x, y: y }; }
+        }
+      }
+      return best;
+    }
+
     _aiTurn() {
+      // Easy AI sometimes loses the scent of a wounded ship (forgets its
+      // target queue), so the player isn't relentlessly finished off.
+      if (this.difficulty === "easy" && this._ai.mode === "target" && this.rng() < 0.35) {
+        this._ai.queue = []; this._ai.hits = []; this._ai.mode = "hunt";
+      }
       var pick = this._aiPick();
       if (!pick) return null;
       var r = this.fire("enemy", pick.x, pick.y);
