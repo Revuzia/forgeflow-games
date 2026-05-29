@@ -14,7 +14,7 @@ import sys
 from playwright.sync_api import sync_playwright
 
 
-def capture(url, out, settle_ms=3500):
+def capture(url, out, settle_ms=3500, pre_eval=None, post_eval_ms=2500):
     with sync_playwright() as p:
         b = p.chromium.launch()
         pg = b.new_page(viewport={"width": 1280, "height": 800})
@@ -28,6 +28,15 @@ def capture(url, out, settle_ms=3500):
         except Exception:
             pass  # capture whatever rendered anyway
         pg.wait_for_timeout(settle_ms)  # let GLB models + first frames settle
+        if pre_eval:
+            # Run a JS snippet to reach a specific game state (e.g. fire some
+            # shots) before the screenshot — lets the fidelity gate capture
+            # mid-game, not just the opening frame.
+            try:
+                pg.evaluate(pre_eval)
+                pg.wait_for_timeout(post_eval_ms)
+            except Exception as e:
+                print("pre_eval error:", e)
         pg.screenshot(path=out)
         b.close()
     return out
@@ -35,6 +44,7 @@ def capture(url, out, settle_ms=3500):
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("usage: python capture.py <url> <out.png>")
+        print("usage: python capture.py <url> <out.png> [--eval '<js>']")
         sys.exit(2)
-    print("saved", capture(sys.argv[1], sys.argv[2]))
+    ev = sys.argv[sys.argv.index("--eval") + 1] if "--eval" in sys.argv else None
+    print("saved", capture(sys.argv[1], sys.argv[2], pre_eval=ev))

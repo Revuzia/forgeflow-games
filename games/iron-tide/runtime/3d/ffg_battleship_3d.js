@@ -44,7 +44,9 @@ register3d("battleship", async function (kernel, content) {
     const p = oceanGeo.attributes.position.array;
     for (let i = 0; i < p.length; i += 3) {
       const x = basePos[i], z = basePos[i + 2];
-      p[i + 1] = Math.sin(x * 0.08 + t * 1.1) * 0.35 + Math.cos(z * 0.11 + t * 0.9) * 0.3;
+      // Keep crests below the board top (~0.2) so waves never clip through the
+      // grids. Subtle ripple, not a swell.
+      p[i + 1] = Math.sin(x * 0.08 + t * 1.1) * 0.08 + Math.cos(z * 0.11 + t * 0.9) * 0.06;
     }
     oceanGeo.attributes.position.needsUpdate = true;
     oceanGeo.computeVertexNormals();
@@ -171,15 +173,26 @@ register3d("battleship", async function (kernel, content) {
   // Look slightly toward the player board (+z) so the near row isn't clipped.
   const LOOK_Z = boardSpan * 0.18;
   kernel.camera.lookAt(0, 0, LOOK_Z);
+  // Accessibility: honour the OS reduced-motion preference — no camera drift,
+  // and cinematics resolve fast (see _playEvent delays).
+  const reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   let camIdle = 0;
-  kernel.onUpdate((dt) => { camIdle += dt; kernel.camera.position.x = Math.sin(camIdle * 0.12) * 1.5; kernel.camera.lookAt(0, 0, LOOK_Z); });
+  kernel.onUpdate((dt) => {
+    if (reducedMotion) return;
+    camIdle += dt; kernel.camera.position.x = Math.sin(camIdle * 0.12) * 1.5; kernel.camera.lookAt(0, 0, LOOK_Z);
+  });
 
   // ── Pegs + effects ─────────────────────────────────────────────────────────
-  const pegGeo = new THREE.SphereGeometry(0.5, 12, 12);
+  // Colorblind-safe markers: differ by SHAPE, not just colour.
+  //   hit  = red SPIKE (cone, point up)   miss = white flat DISC
+  const hitGeo = new THREE.ConeGeometry(0.32, 1.1, 14);
+  const missGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.16, 16);
   function placePeg(side, x, y, hit) {
     const w = cellWorld(side, x, y);
-    const peg = new THREE.Mesh(pegGeo, new THREE.MeshStandardMaterial({ color: hit ? 0xff3b30 : 0xf2f2f2, emissive: hit ? 0x551111 : 0x000000 }));
-    peg.position.set(w.x, 0.6, w.z); peg.castShadow = true; scene.add(peg);
+    const peg = new THREE.Mesh(
+      hit ? hitGeo : missGeo,
+      new THREE.MeshStandardMaterial({ color: hit ? 0xff3b30 : 0xeaeaea, emissive: hit ? 0x551111 : 0x000000, roughness: 0.5 }));
+    peg.position.set(w.x, hit ? 0.75 : 0.32, w.z); peg.castShadow = true; scene.add(peg);
   }
   function splash(pos) {
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.5, 24), new THREE.MeshBasicMaterial({ color: 0xbfe9ff, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
@@ -206,6 +219,7 @@ register3d("battleship", async function (kernel, content) {
     ball.position.copy(from); ball.castShadow = true; scene.add(ball);
     const C = kernel.CANNON;
     const T = 0.72;
+    if (reducedMotion) { scene.remove(ball); onImpact(); return; }
     if (C && kernel.world) {
       // Real ballistic arc — solve launch velocity so gravity lands it on target.
       const g = kernel.world.gravity.y; // negative
@@ -289,7 +303,7 @@ register3d("battleship", async function (kernel, content) {
         if (ship) revealAndSink(tb, ship);
       }
       setHUD();
-      setTimeout(after, r.result === "sink" ? 900 : 450);
+      setTimeout(after, reducedMotion ? 50 : (r.result === "sink" ? 900 : 450));
     });
   }
 
@@ -328,6 +342,30 @@ register3d("battleship", async function (kernel, content) {
     if (hits.length) { const c = hits[0].object; doPlayerFire(c.userData.x, c.userData.y); }
   });
 
+  // Keyboard targeting (a11y) — arrows/WASD move a cursor on enemy waters,
+  // Enter/Space fires. Works without a mouse and without focusing the canvas.
+  const cellMeshAt = (x, y) => cellMeshes.find((c) => c.userData.x === x && c.userData.y === y);
+  const kbCursor = { x: 0, y: 0 };
+  function showCursor() {
+    cellMeshes.forEach((c) => { if (c !== hovered) c.material.opacity = 0.0; });
+    const c = cellMeshAt(kbCursor.x, kbCursor.y);
+    if (c && sim.enemy.shots[kbCursor.y][kbCursor.x] === 0) { c.material.color.set(0x66e0ff); c.material.opacity = 0.5; }
+  }
+  window.addEventListener("keydown", (e) => {
+    if (sim.ended || sim.turn !== "player") return;
+    const k = e.key;
+    const nav = { ArrowUp: [0, -1], w: [0, -1], ArrowDown: [0, 1], s: [0, 1], ArrowLeft: [-1, 0], a: [-1, 0], ArrowRight: [1, 0], d: [1, 0] };
+    if (nav[k]) {
+      e.preventDefault();
+      kbCursor.x = Math.max(0, Math.min(size - 1, kbCursor.x + nav[k][0]));
+      kbCursor.y = Math.max(0, Math.min(size - 1, kbCursor.y + nav[k][1]));
+      if (!busy) showCursor();
+    } else if (k === " " || k === "Enter") {
+      e.preventDefault();
+      if (!busy) doPlayerFire(kbCursor.x, kbCursor.y);
+    }
+  });
+
   // ── controller + test hooks ─────────────────────────────────────────────────
   const controller = {
     sim,
@@ -341,6 +379,9 @@ register3d("battleship", async function (kernel, content) {
       }),
       // drive logic without animation (instant) for gates/play-bot
       fireInstant: (x, y) => window.__bs_playerFire(sim, x, y),
+      // drive the full ANIMATED path (places pegs, plays cinematic) — used by
+      // capture.py to grab mid-game frames for the fidelity gate.
+      fireAnimated: (x, y) => doPlayerFire(x, y),
       autoPlay: (maxTurns) => {
         let n = 0;
         while (!sim.ended && n++ < (maxTurns || 200)) {
