@@ -30,7 +30,13 @@ from pathlib import Path
 ENGINE = Path(__file__).resolve().parent
 RUNTIME = ENGINE / "runtime"
 GAMES = ENGINE.parent.parent / "games"
+ASSETS = ENGINE.parent / "assets"
+PIRATE_KIT = ASSETS / "_downloaded" / "pirate-kit" / "Models" / "GLB format"
 REGISTRY = json.loads((ENGINE / "registry.json").read_text(encoding="utf-8"))
+
+
+def _is_3d(prof):
+    return prof.get("track") == "3d" or prof.get("renderer") == "three"
 
 sys.path.insert(0, str(ENGINE))
 import learn  # noqa: E402
@@ -102,13 +108,17 @@ def gate_content(content_path, genre):
 
 # ── Assemble ──────────────────────────────────────────────────────────────────
 def assemble(slug, content):
-    """Write the game folder: copy the pinned runtime, write content.json + index.html."""
+    """Write the game folder: copy the pinned runtime, write content.json + index.html.
+    Branches 2D (Phaser classic scripts) vs 3D (three.js ESM + importmap)."""
     genre = content["genre"]
     prof = genre_profile(genre)
+    is3d = _is_3d(prof)
     gdir = GAMES / slug
     (gdir / "runtime" / "sim").mkdir(parents=True, exist_ok=True)
-    # copy runtime modules this genre needs (+ loader + version)
-    needed = set(prof["runtime"]) | {"ffg_loader.js", "VERSION"}
+    # 2D needs the classic loader + VERSION; 3D boots via its own ESM entry.
+    needed = set(prof["runtime"])
+    if not is3d:
+        needed |= {"ffg_loader.js", "VERSION"}
     for rel in sorted(needed):
         src = RUNTIME / rel
         if not src.exists():
@@ -117,12 +127,36 @@ def assemble(slug, content):
         dst = gdir / "runtime" / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
+    if is3d:
+        _copy_3d_assets(gdir, content)
     (gdir / "content.json").write_text(json.dumps(content, indent=2), encoding="utf-8")
-    (gdir / "index.html").write_text(_index_html(content, prof), encoding="utf-8")
+    (gdir / "index.html").write_text(_index_html_3d(content) if is3d else _index_html_2d(content, prof), encoding="utf-8")
     return gdir
 
 
-def _index_html(content, prof):
+def _copy_3d_assets(gdir, content):
+    """Copy any referenced GLB ship models (+ their sibling Textures/) from the
+    pirate-kit into the game so 3D models render textured (the colormap lesson)."""
+    models = content.get("ship_models", {})
+    copied_texture = False
+    for rel in set(models.values()):
+        dst = gdir / rel  # e.g. assets/ship-large.glb
+        src = PIRATE_KIT / Path(rel).name
+        if src.exists():
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            if not copied_texture:
+                tex_src = PIRATE_KIT / "Textures" / "colormap.png"
+                if tex_src.exists():
+                    tex_dst = dst.parent / "Textures" / "colormap.png"
+                    tex_dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(tex_src, tex_dst)
+                    copied_texture = True
+        else:
+            print(f"[build_order] WARN ship model not found in pirate-kit: {src.name}")
+
+
+def _index_html_2d(content, prof):
     tags = []
     for rel in prof["runtime"]:
         if rel == "ffg_loader.js":
@@ -142,6 +176,22 @@ def _index_html(content, prof):
 fetch("content.json").then(function(r){{return r.json()}}).then(function(c){{window.FFG_CONTENT=c}})
  .finally(function(){{var s=document.createElement("script");s.src="runtime/ffg_loader.js?v="+Date.now();document.body.appendChild(s)}});
 </script>
+</body></html>
+"""
+
+
+def _index_html_3d(content):
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{content.get('title','FFG Game')} — ForgeFlow Games</title>
+<style>*{{margin:0;padding:0;box-sizing:border-box}}html,body{{width:100%;height:100%;overflow:hidden;background:#0a1622}}#game-container{{width:100%;height:100%;position:relative}}canvas{{display:block}}</style>
+<script type="importmap">
+{{ "imports": {{ "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/" }} }}
+</script>
+</head><body>
+<div id="game-container"></div>
+<script type="module" src="runtime/3d/ffg_boot3d.js"></script>
 </body></html>
 """
 
