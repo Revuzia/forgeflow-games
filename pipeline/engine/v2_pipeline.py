@@ -46,6 +46,47 @@ WIP = ENGINE / "_wip"
 HARD_STOP_MINUTES = 3 * 60 + 30      # 3:30 AM — matches the owner's 1:30-3:30 window
 SERVE_PORT = 8791
 
+# Telegram audit channel (automation -> owner). Best-effort; never fatal.
+sys.path.insert(0, str(ROOT.parent / "scripts"))
+try:
+    from claw_lib import telegram as _tg
+except Exception:
+    _tg = None
+
+
+def notify(text):
+    """Send a Telegram audit line (this is an AUTOMATION reporting what it did,
+    per the 'Telegram = automations only' rule). Logged to the outbox by the helper."""
+    if _tg is None:
+        log("telegram helper unavailable; skipping notify")
+        return
+    try:
+        _tg.send(text, pipeline="forgeflow_games_v2", disable_web_page_preview=True)
+    except Exception as e:
+        log(f"telegram send failed: {e}")
+
+
+# Base-schema fields the generator keeps getting wrong. We fix them
+# deterministically so a malformed `view`/missing `title` never wastes a slice
+# (the 2026-05-29 first-run failures: claude -p emitted view:{camera,zoom}).
+_VIEW_ALLOWED = {"width", "height", "background", "pixelArt", "fog"}
+
+
+def normalize_content(content, item):
+    content.setdefault("slug", item["slug"])
+    content.setdefault("genre", item["genre"])
+    content.setdefault("title", item.get("title") or item["slug"].replace("-", " ").title())
+    try:
+        is3d = build_order._is_3d(build_order.genre_profile(content.get("genre", item["genre"])))
+    except Exception:
+        is3d = content.get("renderer") == "three"
+    v = content.get("view") if isinstance(content.get("view"), dict) else {}
+    clean = {k: v[k] for k in v if k in _VIEW_ALLOWED}
+    clean.setdefault("width", 1024 if is3d else 960)
+    clean.setdefault("height", 640 if is3d else 600)
+    content["view"] = clean
+    return content
+
 
 def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] [v2] {msg}", flush=True)
@@ -130,10 +171,7 @@ def feel_and_fidelity(slug, genre, deploy_shot=None):
 # ── generation ────────────────────────────────────────────────────────────────
 def generate_slice(item):
     content = build_order.run_claude_p(build_order.slice_prompt(item["genre"], item["brief"]))
-    content.setdefault("slug", item["slug"])
-    content.setdefault("genre", item["genre"])
-    content.setdefault("title", item.get("title", item["slug"].replace("-", " ").title()))
-    return content
+    return normalize_content(content, item)
 
 
 def regenerate_with_feedback(item, prior_errors):
@@ -141,9 +179,7 @@ def regenerate_with_feedback(item, prior_errors):
         "\n\nYOUR PREVIOUS ATTEMPT FAILED THESE GATES — fix EXACTLY these:\n" + prior_errors + \
         "\nReturn only the corrected JSON object."
     content = build_order.run_claude_p(prompt)
-    content.setdefault("slug", item["slug"])
-    content.setdefault("genre", item["genre"])
-    return content
+    return normalize_content(content, item)
 
 
 # ── build one game ───────────────────────────────────────────────────────────────
@@ -171,8 +207,7 @@ def build_one(item, deploy=False):
     # EXPAND + re-gate (fall back to slice-only content if expansion regresses)
     try:
         expanded = build_order.run_claude_p(build_order.expand_prompt(genre, content))
-        expanded.setdefault("slug", slug)
-        expanded.setdefault("genre", genre)
+        expanded = normalize_content(expanded, item)
         wip.write_text(json.dumps(expanded, indent=2), encoding="utf-8")
         ok2, out2 = gate(wip, genre)
         if ok2:
@@ -238,8 +273,12 @@ def main():
     if time_left(force) <= 5:
         log(f"outside run window (now {_minutes_now()}m, stop {HARD_STOP_MINUTES}m). Exiting.")
         return
-    log(f"v2 autonomous run start — {time_left(force)} min left in window, deploy={deploy}")
-    built = 0
+
+    pending = [i for i in _load_queue().get("queue", []) if i.get("status", "pending") == "pending"]
+    log(f"v2 autonomous run start — {time_left(force)} min left, {len(pending)} pending, deploy={deploy}")
+    notify(f"🎮 FFG v2 games pipeline started — {len(pending)} game(s) queued, {time_left(force)} min in window (deploy={'on' if deploy else 'off, staging only'}).")
+
+    built, failed = [], []
     while time_left(force) > 5:
         q = _load_queue()
         item = select_next(q)
@@ -247,14 +286,26 @@ def main():
             log("build queue empty — nothing pending. Done.")
             break
         try:
-            build_one(item, deploy=deploy)
+            ok = build_one(item, deploy=deploy)
+            (built if ok else failed).append(item["slug"])
         except Exception as e:
             log(f"build error for {item['slug']}: {e}")
             _mark(item["slug"], "failed", str(e)[:200])
-        built += 1
+            failed.append(item["slug"])
         if once:
             break
-    log(f"v2 run complete: {built} game(s) attempted")
+
+    # End-of-run audit summary to the owner.
+    lines = [f"✅ FFG v2 run complete — built {len(built)}, failed {len(failed)}."]
+    if built:
+        lines.append("Built (staged for review): " + ", ".join(built))
+    if failed:
+        lines.append("Failed gates (not shipped): " + ", ".join(failed))
+    if not built and not failed:
+        lines.append("Nothing pending in the queue.")
+    summary = "\n".join(lines)
+    log(summary.replace("\n", " | "))
+    notify(summary)
 
 
 if __name__ == "__main__":

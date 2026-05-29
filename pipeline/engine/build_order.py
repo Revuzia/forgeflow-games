@@ -63,6 +63,15 @@ the FIRST mission (the vertical slice) — one tight, winnable encounter that fu
 exercises the signature mechanic: {prof['signature_mechanic']}.
 Do not invent fields outside the schema. Use original IP (no trademarked names).
 
+HARD REQUIREMENTS (these caused real rejections — obey exactly):
+  - Top-level MUST include: "title" (string), "slug" ("{genre}"-style kebab), "genre".
+  - "view" MUST be exactly {{"width": <int 240-1920>, "height": <int 180-1080>}}
+    (plus optional "background"/"pixelArt"/"fog"). Do NOT put camera/zoom/lookAt
+    in "view" — the engine owns the camera.
+  - Tactics: EVERY unit (player AND enemy) MUST spawn on a floor tile (0). NEVER
+    place a unit on a wall (1) or full-cover (3) tile. Verify each (x,y) before output.
+  - Every map must be winnable and every enemy reachable.
+
 SCHEMA:
 {schema}
 

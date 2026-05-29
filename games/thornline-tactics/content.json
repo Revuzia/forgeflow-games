@@ -1,0 +1,230 @@
+{
+  "genre": "tactics",
+  "title": "Thornline Ambush",
+  "view": {
+    "width": 800,
+    "height": 600
+  },
+  "missions": [
+    {
+      "name": "River Crossing",
+      "objective": "Eliminate all raiders",
+      "grid": [
+        [
+          3,
+          3,
+          0,
+          2,
+          0,
+          0,
+          2,
+          3,
+          3
+        ],
+        [
+          3,
+          0,
+          0,
+          0,
+          2,
+          0,
+          0,
+          0,
+          3
+        ],
+        [
+          0,
+          0,
+          3,
+          0,
+          0,
+          0,
+          3,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          2,
+          0,
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          0,
+          0,
+          2,
+          0,
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        [
+          0,
+          0,
+          0,
+          2,
+          0,
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          2,
+          0,
+          0,
+          0,
+          2
+        ],
+        [
+          0,
+          0,
+          3,
+          0,
+          0,
+          0,
+          3,
+          0,
+          0
+        ],
+        [
+          3,
+          0,
+          0,
+          0,
+          2,
+          0,
+          0,
+          0,
+          3
+        ],
+        [
+          3,
+          3,
+          0,
+          2,
+          0,
+          0,
+          2,
+          3,
+          3
+        ]
+      ],
+      "player_units": [
+        {
+          "id": "ranger_1",
+          "name": "Thornwatch Alpha",
+          "x": 1,
+          "y": 1,
+          "hp": 12,
+          "atk": 5,
+          "def": 2,
+          "movement": 4,
+          "range": 6,
+          "aim": 0.85,
+          "tint": "#4a9eff",
+          "sprite": "ranger"
+        },
+        {
+          "id": "ranger_2",
+          "name": "Thornwatch Beta",
+          "x": 7,
+          "y": 1,
+          "hp": 12,
+          "atk": 5,
+          "def": 2,
+          "movement": 4,
+          "range": 6,
+          "aim": 0.85,
+          "tint": "#4a9eff",
+          "sprite": "ranger"
+        }
+      ],
+      "enemy_units": [
+        {
+          "id": "raider_1",
+          "name": "Marauder",
+          "x": 1,
+          "y": 9,
+          "hp": 8,
+          "atk": 4,
+          "def": 1,
+          "movement": 3,
+          "range": 5,
+          "aim": 0.75,
+          "ai": "aggressive",
+          "tint": "#ff4444",
+          "sprite": "raider"
+        },
+        {
+          "id": "raider_2",
+          "name": "Marauder",
+          "x": 4,
+          "y": 9,
+          "hp": 8,
+          "atk": 4,
+          "def": 1,
+          "movement": 3,
+          "range": 5,
+          "aim": 0.75,
+          "ai": "aggressive",
+          "tint": "#ff4444",
+          "sprite": "raider"
+        },
+        {
+          "id": "raider_3",
+          "name": "Marauder",
+          "x": 7,
+          "y": 9,
+          "hp": 8,
+          "atk": 4,
+          "def": 1,
+          "movement": 3,
+          "range": 5,
+          "aim": 0.75,
+          "ai": "aggressive",
+          "tint": "#ff4444",
+          "sprite": "raider"
+        },
+        {
+          "id": "raider_4",
+          "name": "Raider Leader",
+          "x": 4,
+          "y": 7,
+          "hp": 10,
+          "atk": 5,
+          "def": 2,
+          "movement": 3,
+          "range": 6,
+          "aim": 0.8,
+          "ai": "sniper",
+          "tint": "#cc2222",
+          "sprite": "raider"
+        }
+      ]
+    }
+  ],
+  "slug": "thornline-tactics"
+}

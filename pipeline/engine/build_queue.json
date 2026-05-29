@@ -6,22 +6,26 @@
       "slug": "void-skirmish",
       "genre": "tactics",
       "status": "pending",
-      "brief": "Tactics skirmish aboard a fractured orbital station. 3 player units (a frontline Vanguard, a long-range Sentinel, a support Medic) vs 4 hostiles. Cover-heavy 12x9 grid with a hazard vent strip down the middle. Winnable in 4-6 turns with smart cover use.",
-      "master_list_bucket": "strategy"
+      "brief": "Tactics skirmish aboard a fractured orbital station. 3 player units (a frontline Vanguard, a long-range Sentinel, a support Medic) vs 4 hostiles. Cover-heavy 12x9 grid with a hazard vent strip down the middle. Winnable in 4-6 turns with smart cover use. CRITICAL: every unit must spawn on a floor tile (0), never on a wall (1) or full-cover (3).",
+      "master_list_bucket": "strategy",
+      "history": "2026-05-29 first run: failed (claude -p set view:{camera,zoom} + no title; retry placed an enemy on a full-cover tile). Fix shipped: title/view auto-normalized + prompt now forbids units on blocking tiles."
     },
     {
       "slug": "deep-strike",
       "genre": "battleship",
       "status": "pending",
       "brief": "Classic 10x10 salvo naval duel vs a competent hunt/target AI. Standard 5-ship fleet. Original IP naval theme.",
-      "master_list_bucket": "board_game"
+      "master_list_bucket": "board_game",
+      "history": "2026-05-29 first run: failed only on view shape (camera/lookAt) + missing title. Proven to pass after the title/view normalization fix."
     },
     {
       "slug": "thornline-tactics",
       "genre": "tactics",
-      "status": "pending",
+      "status": "built",
       "brief": "Forest-ambush grid tactics. 2 player rangers vs 4 raiders. Dense tree full-cover, a river hazard line, tight 11x9 map favoring flanking. Punishes standing in the open.",
-      "master_list_bucket": "strategy"
+      "master_list_bucket": "strategy",
+      "detail": "staged; awaiting deploy approval",
+      "updated": "2026-05-29T06:33:06.764412+00:00"
     }
   ]
 }
