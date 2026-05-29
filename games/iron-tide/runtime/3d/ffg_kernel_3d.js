@@ -114,6 +114,14 @@ export class Kernel3D {
 
   hud(html) { if (this.hudEl) this.hudEl.innerHTML = html; }
 
+  // Simple SFX: a fresh HTMLAudio per call (allows overlap). Browser autoplay
+  // policy means sound starts after the player's first interaction — fine for
+  // a click-driven game; no-ops safely if the url is missing/blocked.
+  playSound(url, vol = 0.6) {
+    if (!url) return;
+    try { const a = new Audio(url); a.volume = vol; const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+  }
+
   async loadGLTF(url) {
     if (this._gltfCache[url]) return this._gltfCache[url].clone(true);
     const gltf = await this.loader.loadAsync(url);

@@ -31,6 +31,7 @@ register3d("battleship", async function (kernel, content) {
 
   const scene = kernel.scene;
   const boardSpan = size * CELL;
+  const sfx = content.sfx || {}; // { fire, hit, miss, sink } urls (optional)
 
   // ── Ocean ──────────────────────────────────────────────────────────────
   const oceanGeo = new THREE.PlaneGeometry(400, 400, 80, 80);
@@ -294,13 +295,15 @@ register3d("battleship", async function (kernel, content) {
 
   function resolveShot(side, r, after) {
     const to = cellWorld(side === "player" ? "enemy" : "player", r.x, r.y);
+    kernel.playSound(sfx.fire, 0.45); // gun report on launch
     fireCannonball(side, to, () => {
-      if (r.result === "miss") { splash(to); placePeg(side === "player" ? "enemy" : "player", r.x, r.y, false); }
-      else { explosion(to); placePeg(side === "player" ? "enemy" : "player", r.x, r.y, true); }
+      if (r.result === "miss") { splash(to); placePeg(side === "player" ? "enemy" : "player", r.x, r.y, false); kernel.playSound(sfx.miss, 0.5); }
+      else { explosion(to); placePeg(side === "player" ? "enemy" : "player", r.x, r.y, true); kernel.playSound(sfx.hit, 0.6); }
       if (r.result === "sink") {
         const tb = side === "player" ? "enemy" : "player";
         const ship = sim.boardOf(tb).ships.find((s) => s.id === r.ship);
         if (ship) revealAndSink(tb, ship);
+        kernel.playSound(sfx.sink, 0.7);
       }
       setHUD();
       setTimeout(after, reducedMotion ? 50 : (r.result === "sink" ? 900 : 450));

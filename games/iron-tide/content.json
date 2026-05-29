@@ -18,6 +18,12 @@
     "2": "assets/boat-row-small.glb",
     "default": "assets/ship-small.glb"
   },
+  "sfx": {
+    "fire": "assets/audio/fire.ogg",
+    "hit": "assets/audio/hit.ogg",
+    "miss": "assets/audio/splash.ogg",
+    "sink": "assets/audio/sink.ogg"
+  },
   "setup": {
     "board_size": 10,
     "fleet": [
