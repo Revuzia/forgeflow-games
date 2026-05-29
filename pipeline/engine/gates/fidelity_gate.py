@@ -69,10 +69,31 @@ def score_screenshot(img_path, genre, reference_note=None, timeout=120):
     return {"ok": False, "error": "could not parse vision JSON", "raw": raw[:400], "genre_fidelity": None}
 
 
+def capture_then_score(url, genre, out_png, reference_note=None):
+    """Full vision gate: screenshot the running game (Playwright/CDP, reliable for
+    WebGL) then score it. The capture half now works headlessly — capture.py."""
+    from capture import capture  # gates/ is on sys.path when run from there
+    capture(url, out_png)
+    return score_screenshot(out_png, genre, reference_note)
+
+
 def main():
     if len(sys.argv) < 3:
-        print("usage: python fidelity_gate.py <screenshot.png> <genre> [--run]")
+        print("usage: python fidelity_gate.py <screenshot.png|--url URL> <genre> [--run]")
         sys.exit(2)
+    # --url mode: capture first (needs Playwright), then score (needs claude -p).
+    if sys.argv[1] == "--url":
+        url, genre = sys.argv[2], sys.argv[3]
+        out = sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else "fidelity_shot.png"
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        if "--run" in sys.argv:
+            print(json.dumps(capture_then_score(url, genre, out), indent=2))
+            sys.exit(0)
+        from capture import capture
+        capture(url, out)
+        print(f"[fidelity_gate] captured {out}. Operator: score with claude -p:")
+        print("  " + " ".join(f'"{c}"' if " " in c else c for c in build_command(out, genre)))
+        sys.exit(0)
     img, genre = sys.argv[1], sys.argv[2]
     run = "--run" in sys.argv
     if not Path(img).exists():

@@ -9,8 +9,11 @@
  * Exposes controller.__test so the feel/signature checks can drive it headlessly.
  */
 import * as THREE from "three";
-import { register3d } from "./ffg_kernel_3d.js";
 import "../sim/battleship.js"; // side-effect: sets window.FFG.sim.Battleship
+
+// Import the kernel with the SAME version query the boot entry used, so genre
+// registration targets the same kernel module instance the boot uses.
+const { register3d } = await import("./ffg_kernel_3d.js" + new URL(import.meta.url).search);
 
 const CELL = 2.4;
 
@@ -55,8 +58,11 @@ register3d("battleship", async function (kernel, content) {
   }
 
   // ── Boards: player (near, z+) and enemy (far, z-) ─────────────────────────
-  const PLAYER_Z = boardSpan * 0.62;
-  const ENEMY_Z = -boardSpan * 0.62;
+  // Keep a SMALL gap (one cell) between the two boards so a single framed
+  // camera reads both clearly — previously they sat ~30u apart, so the near
+  // board loomed and the far one shrank into the distance.
+  const PLAYER_Z = boardSpan / 2 + CELL * 1.2;
+  const ENEMY_Z = -(boardSpan / 2 + CELL * 1.2);
   function boardOrigin(side) { return new THREE.Vector3(-boardSpan / 2, 0.2, (side === "player" ? PLAYER_Z : ENEMY_Z) - boardSpan / 2); }
   function cellWorld(side, x, y) {
     const o = boardOrigin(side);
@@ -119,17 +125,21 @@ register3d("battleship", async function (kernel, content) {
       try { obj = await kernel.loadGLTF(url); } catch (e) { obj = null; }
     }
     if (!obj) obj = proceduralShip(ship.len);
-    // scale to span the ship length
+    // Scale so the hull spans ~62% of its cell-length (was 82% — ships were
+    // overspilling their cells and crowding neighbours). Also cap the across-
+    // axis width so wide models don't bleed into adjacent rows.
     const box = new THREE.Box3().setFromObject(obj);
     const dim = box.getSize(new THREE.Vector3());
     const longest = Math.max(dim.x, dim.z) || 1;
-    const targetLen = ship.len * CELL * 0.82;
-    const s = targetLen / longest;
+    const targetLen = ship.len * CELL * 0.62;
+    let s = targetLen / longest;
+    const across = Math.min(dim.x, dim.z) || 1;
+    s = Math.min(s, (CELL * 0.85) / across); // keep width within ~1 cell
     obj.scale.setScalar(s);
     // orient: align longest axis with ship axis
     if (ship.horizontal && dim.z > dim.x) obj.rotation.y = Math.PI / 2;
     if (!ship.horizontal && dim.x > dim.z) obj.rotation.y = Math.PI / 2;
-    obj.position.set(center.x, 0.35, center.z);
+    obj.position.set(center.x, 0.28, center.z);
     obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; } });
     scene.add(obj);
     ship._obj = obj;
@@ -151,11 +161,18 @@ register3d("battleship", async function (kernel, content) {
   label("player", content.title || "YOUR FLEET");
   label("enemy", "ENEMY WATERS");
 
-  // ── Camera framing (cinematic, gentle idle drift) ─────────────────────────
-  kernel.camera.position.set(0, boardSpan * 1.05, PLAYER_Z + boardSpan * 0.9);
-  kernel.camera.lookAt(0, 0, 0);
+  // ── Camera framing — clean 3/4 overhead that reads both boards evenly ─────
+  // Narrower FOV (less perspective looming) + high, centered vantage looking at
+  // the midpoint between the boards. Tiny idle drift only.
+  kernel.camera.fov = 40;
+  kernel.camera.updateProjectionMatrix();
+  const CAM = { x: 0, y: boardSpan * 1.85, z: boardSpan * 1.78 };
+  kernel.camera.position.set(CAM.x, CAM.y, CAM.z);
+  // Look slightly toward the player board (+z) so the near row isn't clipped.
+  const LOOK_Z = boardSpan * 0.18;
+  kernel.camera.lookAt(0, 0, LOOK_Z);
   let camIdle = 0;
-  kernel.onUpdate((dt) => { camIdle += dt; kernel.camera.position.x = Math.sin(camIdle * 0.15) * 4; kernel.camera.lookAt(0, 0, -boardSpan * 0.1); });
+  kernel.onUpdate((dt) => { camIdle += dt; kernel.camera.position.x = Math.sin(camIdle * 0.12) * 1.5; kernel.camera.lookAt(0, 0, LOOK_Z); });
 
   // ── Pegs + effects ─────────────────────────────────────────────────────────
   const pegGeo = new THREE.SphereGeometry(0.5, 12, 12);

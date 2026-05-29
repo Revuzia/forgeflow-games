@@ -27,7 +27,10 @@ export class Kernel3D {
     this.camera.position.set(0, 26, 30);
     this.camera.lookAt(0, 0, 0);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    // preserveDrawingBuffer:true lets toDataURL()/the vision fidelity gate
+    // capture the rendered frame (default false returns a blank canvas for
+    // WebGL). Negligible perf cost at our scale; unlocks automated visual QA.
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;

@@ -260,7 +260,7 @@ def _index_html_3d(content):
 </script>
 </head><body>
 <div id="game-container"></div>
-<script type="module" src="runtime/3d/ffg_boot3d.js"></script>
+<script type="module" src="runtime/3d/ffg_boot3d.js?v={int(__import__('time').time())}"></script>
 </body></html>
 """
 
