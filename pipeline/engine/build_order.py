@@ -49,6 +49,66 @@ def genre_profile(genre):
     return g
 
 
+# ── Self-healing repair (deterministic) ──────────────────────────────────────
+# Auto-fixes the recoverable failure classes the live run hit, so the autonomous
+# loop fills/fixes and CONTINUES instead of stopping. Idempotent — safe to run
+# after every generation step.
+_VIEW_ALLOWED = {"width", "height", "background", "pixelArt", "fog"}
+
+
+def repair(content, *, slug, genre, title=None):
+    content.setdefault("slug", slug)
+    content.setdefault("genre", genre)
+    content.setdefault("title", title or slug.replace("-", " ").title())
+    is3d = _is_3d(genre_profile(genre))
+    # view: keep only schema-allowed keys; ensure required dims (the model loves
+    # to emit view:{camera,zoom,lookAt} — the engine owns the camera).
+    v = content.get("view") if isinstance(content.get("view"), dict) else {}
+    clean = {k: v[k] for k in v if k in _VIEW_ALLOWED}
+    clean.setdefault("width", 1024 if is3d else 960)
+    clean.setdefault("height", 640 if is3d else 600)
+    content["view"] = clean
+    if genre == "tactics":
+        _repair_tactics_placements(content)
+    return content
+
+
+def _nearest_free_floor(grid, x, y, occupied, W, H):
+    best, bestd = None, 10 ** 9
+    for yy in range(H):
+        row = grid[yy]
+        for xx in range(min(W, len(row))):
+            if row[xx] == 0 and (xx, yy) not in occupied:
+                d = abs(xx - x) + abs(yy - y)
+                if d < bestd:
+                    bestd, best = d, (xx, yy)
+    return best
+
+
+def _repair_tactics_placements(content):
+    """Move any unit off a wall(1)/full-cover(3)/out-of-bounds/overlapping tile
+    onto the nearest free floor(0) tile. This is the auto-fix that turns the
+    void-skirmish 'enemy spawned in cover' failure into a clean build."""
+    for m in content.get("missions", []):
+        grid = m.get("grid")
+        if not grid:
+            continue
+        H = len(grid)
+        W = len(grid[0]) if H else 0
+        occupied = set()
+        for side in ("player_units", "enemy_units"):
+            for u in m.get(side, []):
+                x, y = u.get("x"), u.get("y")
+                in_bounds = isinstance(x, int) and isinstance(y, int) and 0 <= y < H and 0 <= x < W
+                blocked = in_bounds and grid[y][x] in (1, 3)
+                overlap = (x, y) in occupied
+                if (not in_bounds) or blocked or overlap:
+                    nf = _nearest_free_floor(grid, x if in_bounds else 0, y if in_bounds else 0, occupied, W, H)
+                    if nf:
+                        u["x"], u["y"] = nf
+                occupied.add((u.get("x"), u.get("y")))
+
+
 # ── Prompt construction (the constrained generator) ──────────────────────────
 def slice_prompt(genre, brief):
     prof = genre_profile(genre)
@@ -196,7 +256,7 @@ def _index_html_3d(content):
 <title>{content.get('title','FFG Game')} — ForgeFlow Games</title>
 <style>*{{margin:0;padding:0;box-sizing:border-box}}html,body{{width:100%;height:100%;overflow:hidden;background:#0a1622}}#game-container{{width:100%;height:100%;position:relative}}canvas{{display:block}}</style>
 <script type="importmap">
-{{ "imports": {{ "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/" }} }}
+{{ "imports": {{ "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/", "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js" }} }}
 </script>
 </head><body>
 <div id="game-container"></div>

@@ -66,26 +66,15 @@ def notify(text):
         log(f"telegram send failed: {e}")
 
 
-# Base-schema fields the generator keeps getting wrong. We fix them
-# deterministically so a malformed `view`/missing `title` never wastes a slice
-# (the 2026-05-29 first-run failures: claude -p emitted view:{camera,zoom}).
-_VIEW_ALLOWED = {"width", "height", "background", "pixelArt", "fog"}
+class TransientError(Exception):
+    """Infra failure (claude -p / network unavailable) — abort the run cleanly
+    WITHOUT marking games failed, so they retry next window."""
 
 
 def normalize_content(content, item):
-    content.setdefault("slug", item["slug"])
-    content.setdefault("genre", item["genre"])
-    content.setdefault("title", item.get("title") or item["slug"].replace("-", " ").title())
-    try:
-        is3d = build_order._is_3d(build_order.genre_profile(content.get("genre", item["genre"])))
-    except Exception:
-        is3d = content.get("renderer") == "three"
-    v = content.get("view") if isinstance(content.get("view"), dict) else {}
-    clean = {k: v[k] for k in v if k in _VIEW_ALLOWED}
-    clean.setdefault("width", 1024 if is3d else 960)
-    clean.setdefault("height", 640 if is3d else 600)
-    content["view"] = clean
-    return content
+    """Deterministic self-heal — delegates to the shared repair() in build_order
+    (fills title/view, moves units off blocking tiles, etc.). Idempotent."""
+    return build_order.repair(content, slug=item["slug"], genre=item["genre"], title=item.get("title"))
 
 
 def log(msg):
@@ -169,8 +158,17 @@ def feel_and_fidelity(slug, genre, deploy_shot=None):
 
 
 # ── generation ────────────────────────────────────────────────────────────────
+def _gen(prompt):
+    """Call claude -p; classify failures. An infra/network/no-output failure is
+    TRANSIENT (abort run, retry next window) — NOT a content error."""
+    try:
+        return build_order.run_claude_p(prompt)
+    except Exception as e:
+        raise TransientError(f"claude -p unavailable or returned no JSON: {e}")
+
+
 def generate_slice(item):
-    content = build_order.run_claude_p(build_order.slice_prompt(item["genre"], item["brief"]))
+    content = _gen(build_order.slice_prompt(item["genre"], item["brief"]))
     return normalize_content(content, item)
 
 
@@ -178,8 +176,7 @@ def regenerate_with_feedback(item, prior_errors):
     prompt = build_order.slice_prompt(item["genre"], item["brief"]) + \
         "\n\nYOUR PREVIOUS ATTEMPT FAILED THESE GATES — fix EXACTLY these:\n" + prior_errors + \
         "\nReturn only the corrected JSON object."
-    content = build_order.run_claude_p(prompt)
-    return normalize_content(content, item)
+    return normalize_content(_gen(prompt), item)
 
 
 # ── build one game ───────────────────────────────────────────────────────────────
@@ -262,10 +259,44 @@ def selftest(content_path):
     return 0 if ok2 else 1
 
 
+def smoke(genre):
+    """Pre-enable generation smoke test: run ONE generate->repair->gate cycle for
+    the first queued game of `genre` (or a synthetic brief). Proves the slice
+    PROMPT produces gate-passing content — the test that was missing before the
+    first live run. Needs claude -p (run via operator/Task Scheduler, not in an
+    interactive session). No assemble, no deploy."""
+    q = _load_queue()
+    item = next((i for i in q.get("queue", []) if i.get("genre") == genre), {"slug": f"smoke-{genre}", "genre": genre, "brief": "smoke test"})
+    log(f"SMOKE [{genre}] generating one slice for {item['slug']}...")
+    try:
+        content = generate_slice(item)
+    except TransientError as e:
+        log(f"SMOKE inconclusive — {e}")
+        return 2
+    WIP.mkdir(exist_ok=True)
+    wip = WIP / f"smoke-{genre}.json"
+    wip.write_text(json.dumps(content, indent=2), encoding="utf-8")
+    ok, out = gate(wip, genre)
+    if not ok:
+        # one self-heal+reflexion pass, like the real loop
+        log(f"SMOKE first gate failed; reflexion. {out[:160]}")
+        try:
+            content = regenerate_with_feedback(item, out)
+        except TransientError as e:
+            log(f"SMOKE inconclusive — {e}")
+            return 2
+        wip.write_text(json.dumps(content, indent=2), encoding="utf-8")
+        ok, out = gate(wip, genre)
+    log(f"SMOKE [{genre}] {'PASS' if ok else 'FAIL'}\n{out}")
+    return 0 if ok else 1
+
+
 def main():
     args = sys.argv[1:]
     if "--selftest" in args:
         sys.exit(selftest(args[args.index("--selftest") + 1]))
+    if "--smoke" in args:
+        sys.exit(smoke(args[args.index("--smoke") + 1]))
     force = "--force" in args
     deploy = "--deploy" in args
     once = "--once" in args
@@ -278,7 +309,7 @@ def main():
     log(f"v2 autonomous run start — {time_left(force)} min left, {len(pending)} pending, deploy={deploy}")
     notify(f"🎮 FFG v2 games pipeline started — {len(pending)} game(s) queued, {time_left(force)} min in window (deploy={'on' if deploy else 'off, staging only'}).")
 
-    built, failed = [], []
+    built, failed, aborted = [], [], False
     while time_left(force) > 5:
         q = _load_queue()
         item = select_next(q)
@@ -288,12 +319,21 @@ def main():
         try:
             ok = build_one(item, deploy=deploy)
             (built if ok else failed).append(item["slug"])
+        except TransientError as e:
+            # infra/network down — do NOT mark games failed; stop and retry next window
+            log(f"ABORT (transient): {e}")
+            notify(f"⚠️ FFG v2 aborted — generation backend unavailable ({e}). No games marked failed; will retry next window.")
+            aborted = True
+            break
         except Exception as e:
             log(f"build error for {item['slug']}: {e}")
             _mark(item["slug"], "failed", str(e)[:200])
             failed.append(item["slug"])
         if once:
             break
+
+    if aborted:
+        return
 
     # End-of-run audit summary to the owner.
     lines = [f"✅ FFG v2 run complete — built {len(built)}, failed {len(failed)}."]

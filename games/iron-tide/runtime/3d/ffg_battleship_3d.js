@@ -47,6 +47,13 @@ register3d("battleship", async function (kernel, content) {
     oceanGeo.computeVertexNormals();
   });
 
+  // ── Real physics (cannon-es): cannonball ballistics + ship sinking + debris ─
+  try {
+    await kernel.initPhysics({ gravity: -22 });
+  } catch (e) {
+    console.warn("[battleship] physics unavailable; tween fallback:", e);
+  }
+
   // ── Boards: player (near, z+) and enemy (far, z-) ─────────────────────────
   const PLAYER_Z = boardSpan * 0.62;
   const ENEMY_Z = -boardSpan * 0.62;
@@ -176,20 +183,59 @@ register3d("battleship", async function (kernel, content) {
   }
   function fireCannonball(fromSide, to, onImpact) {
     const from = cellWorld(fromSide, size / 2, fromSide === "player" ? size - 1 : 0).clone();
-    from.y = 1.2;
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 10), new THREE.MeshStandardMaterial({ color: 0x111111 }));
-    ball.position.copy(from); scene.add(ball);
-    const peak = 9 + Math.random() * 3;
-    kernel.tween({
-      target: ball.position, to: { x: to.x, z: to.z }, duration: 0.6,
-      onUpdate: (e) => { ball.position.y = from.y + Math.sin(e * Math.PI) * peak; },
-      onComplete: () => { scene.remove(ball); onImpact(); },
-    });
+    from.y = 1.4;
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12),
+      new THREE.MeshStandardMaterial({ color: 0x0a0a0a, metalness: 0.7, roughness: 0.3 }));
+    ball.position.copy(from); ball.castShadow = true; scene.add(ball);
+    const C = kernel.CANNON;
+    const T = 0.72;
+    if (C && kernel.world) {
+      // Real ballistic arc — solve launch velocity so gravity lands it on target.
+      const g = kernel.world.gravity.y; // negative
+      const vel = { x: (to.x - from.x) / T, y: (to.y - from.y) / T - 0.5 * g * T, z: (to.z - from.z) / T };
+      kernel.addPhysicsBody({ mesh: ball, shape: new C.Sphere(0.3), mass: 3, position: from, velocity: vel, despawnAfter: T + 0.1, removeMesh: true });
+      setTimeout(onImpact, T * 1000);
+    } else {
+      const peak = 9 + Math.random() * 3;
+      kernel.tween({
+        target: ball.position, to: { x: to.x, z: to.z }, duration: 0.6,
+        onUpdate: (e) => { ball.position.y = from.y + Math.sin(e * Math.PI) * peak; },
+        onComplete: () => { scene.remove(ball); onImpact(); },
+      });
+    }
   }
   function sinkShip(ship) {
     if (!ship._obj) return;
-    kernel.tween({ target: ship._obj.position, to: { y: -2.5 }, duration: 1.6 });
-    kernel.tween({ target: ship._obj.rotation, to: { z: 0.6 }, duration: 1.6 });
+    const obj = ship._obj;
+    const C = kernel.CANNON;
+    if (C && kernel.world) {
+      // Convert the ship into a dynamic rigid body: gravity sinks it, a random
+      // torque makes it list and roll under. Real physics, not a tween.
+      kernel.addPhysicsBody({
+        mesh: obj,
+        shape: new C.Box(new C.Vec3(Math.max(0.6, ship.len * CELL * 0.35), 0.5, CELL * 0.35)),
+        mass: 6,
+        position: { x: obj.position.x, y: obj.position.y, z: obj.position.z },
+        angularVelocity: { x: (Math.random() - 0.5) * 2.5, y: (Math.random() - 0.5), z: (Math.random() - 0.5) * 2.5 },
+        linearDamping: 0.4, despawnAfter: 4.5, removeMesh: true,
+      });
+      // Flying debris flung up from the impact.
+      for (let i = 0; i < 5; i++) {
+        const d = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5),
+          new THREE.MeshStandardMaterial({ color: 0x6b5535, roughness: 0.9 }));
+        d.position.set(obj.position.x + (Math.random() - 0.5) * 2, 1, obj.position.z + (Math.random() - 0.5) * 2);
+        d.castShadow = true; scene.add(d);
+        kernel.addPhysicsBody({
+          mesh: d, shape: new C.Box(new C.Vec3(0.25, 0.25, 0.25)), mass: 0.6, position: d.position,
+          velocity: { x: (Math.random() - 0.5) * 5, y: 3 + Math.random() * 3, z: (Math.random() - 0.5) * 5 },
+          angularVelocity: { x: Math.random() * 4, y: Math.random() * 4, z: Math.random() * 4 },
+          despawnAfter: 3, removeMesh: true,
+        });
+      }
+    } else {
+      kernel.tween({ target: obj.position, to: { y: -2.5 }, duration: 1.6 });
+      kernel.tween({ target: obj.rotation, to: { z: 0.6 }, duration: 1.6 });
+    }
   }
   async function revealAndSink(side, ship) {
     if (!ship._obj) { await placeShip(side, ship); ship._obj.position.y = 0.35; }

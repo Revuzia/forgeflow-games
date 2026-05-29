@@ -56,6 +56,33 @@ export class Kernel3D {
     this._updaters = [];
     this._tweens = [];
     this._running = false;
+    // physics (cannon-es) — created lazily via initPhysics()
+    this.world = null;
+    this.CANNON = null;
+    this._phys = [];
+  }
+
+  // ── Real physics (cannon-es, rigid-body) ──────────────────────────────────
+  // Optional: only genres that call this load cannon-es (dynamic import keeps it
+  // out of non-physics 3D games). Bodies linked to meshes are synced each frame.
+  async initPhysics(opts = {}) {
+    const CANNON = await import("cannon-es");
+    this.CANNON = CANNON;
+    this.world = new CANNON.World({ gravity: new CANNON.Vec3(0, opts.gravity != null ? opts.gravity : -20, 0) });
+    this.world.allowSleep = true;
+    return CANNON;
+  }
+
+  addPhysicsBody(o) {
+    const C = this.CANNON;
+    const body = new C.Body({ mass: o.mass != null ? o.mass : 1, shape: o.shape });
+    if (o.position) body.position.set(o.position.x, o.position.y, o.position.z);
+    if (o.velocity) body.velocity.set(o.velocity.x, o.velocity.y, o.velocity.z);
+    if (o.angularVelocity) body.angularVelocity.set(o.angularVelocity.x, o.angularVelocity.y, o.angularVelocity.z);
+    if (o.linearDamping != null) body.linearDamping = o.linearDamping;
+    this.world.addBody(body);
+    this._phys.push({ body, mesh: o.mesh || null, die: o.despawnAfter != null ? this.clock.elapsedTime + o.despawnAfter : null, removeMesh: !!o.removeMesh });
+    return body;
   }
 
   mount(parentId) {
@@ -135,6 +162,18 @@ export class Kernel3D {
       if (!this._running) return;
       const dt = Math.min(0.05, this.clock.getDelta());
       this._stepTweens(dt);
+      if (this.world) {
+        this.world.step(1 / 60, dt, 3);
+        for (let i = this._phys.length - 1; i >= 0; i--) {
+          const r = this._phys[i];
+          if (r.mesh) { r.mesh.position.copy(r.body.position); r.mesh.quaternion.copy(r.body.quaternion); }
+          if (r.die != null && this.clock.elapsedTime > r.die) {
+            this.world.removeBody(r.body);
+            if (r.mesh && r.removeMesh) this.scene.remove(r.mesh);
+            this._phys.splice(i, 1);
+          }
+        }
+      }
       for (const u of this._updaters) u(dt, this.clock.elapsedTime);
       this.renderer.render(this.scene, this.camera);
       this._raf = requestAnimationFrame(loop);
