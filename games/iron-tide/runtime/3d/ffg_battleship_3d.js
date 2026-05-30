@@ -106,31 +106,65 @@ register3d("battleship", async function (kernel, content) {
     const o = boardOrigin(side);
     return new THREE.Vector3(o.x + x * CELL + CELL / 2, 0.25, o.z + y * CELL + CELL / 2);
   }
-  function makeBoard(side, color) {
+  function makeBoard(side, tint, rimColor) {
     const g = new THREE.Group();
     const o = boardOrigin(side);
-    // platform
-    const plat = new THREE.Mesh(new THREE.BoxGeometry(boardSpan + 0.6, 0.4, boardSpan + 0.6),
-      new THREE.MeshStandardMaterial({ color: color, roughness: 0.8 }));
-    plat.position.set(o.x + boardSpan / 2, 0.0, o.z + boardSpan / 2);
-    plat.receiveShadow = true; g.add(plat);
-    // grid lines
-    const grid = new THREE.GridHelper(boardSpan, size, 0x9fd2ff, 0x5a8fb5);
-    grid.position.set(o.x + boardSpan / 2, 0.22, o.z + boardSpan / 2);
-    g.add(grid);
+    const cx = o.x + boardSpan / 2, cz = o.z + boardSpan / 2;
+    // Translucent tactical surface — the living sea shows through, so the board
+    // reads as a lit "zone of the ocean", not a dead opaque panel floating on it.
+    const surf = new THREE.Mesh(
+      new THREE.PlaneGeometry(boardSpan, boardSpan),
+      new THREE.MeshStandardMaterial({
+        color: tint, transparent: true, opacity: 0.5, roughness: 0.45, metalness: 0.15,
+        emissive: tint, emissiveIntensity: 0.18, side: THREE.DoubleSide, depthWrite: false,
+      }));
+    surf.rotation.x = -Math.PI / 2; surf.position.set(cx, 0.16, cz); surf.receiveShadow = true; g.add(surf);
+    // Glowing tactical grid (unlit lines read at full colour regardless of light).
+    const grid = new THREE.GridHelper(boardSpan, size,
+      side === "player" ? 0x8fefff : 0xffc070,
+      side === "player" ? 0x3f7da0 : 0x9a5a36);
+    grid.material.transparent = true; grid.material.opacity = 0.92; grid.material.depthWrite = false;
+    grid.position.set(cx, 0.2, cz); g.add(grid);
+    // Beveled gunmetal rim — frames the zone so it reads as a deliberate object.
+    const rimMat = new THREE.MeshStandardMaterial({ color: rimColor, metalness: 0.85, roughness: 0.35, emissive: rimColor, emissiveIntensity: 0.06 });
+    const T = 0.5, H = 0.55, L = boardSpan + T * 2;
+    const mkBar = (w, d, px, pz) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, H, d), rimMat); b.position.set(px, 0.18, pz); b.castShadow = true; b.receiveShadow = true; g.add(b); };
+    mkBar(L, T, cx, cz - boardSpan / 2 - T / 2);
+    mkBar(L, T, cx, cz + boardSpan / 2 + T / 2);
+    mkBar(T, boardSpan, cx - boardSpan / 2 - T / 2, cz);
+    mkBar(T, boardSpan, cx + boardSpan / 2 + T / 2, cz);
     scene.add(g);
     return g;
   }
-  makeBoard("player", 0x16384f);
-  makeBoard("enemy", 0x4f1f24);
+  makeBoard("player", 0x103f58, 0x2b3540);
+  makeBoard("enemy", 0x5a1f2a, 0x3c2b2b);
 
-  // label
+  // Big board title sprite, seated just off the outer edge (not floating mid-air).
   function label(side, text) {
-    const c = cellWorld(side, size / 2, side === "player" ? size + 0.6 : -1.2);
-    const sprite = makeTextSprite(text);
-    sprite.position.set(c.x, 2.4, c.z);
+    const c = cellWorld(side, (size - 1) / 2, side === "player" ? size + 1.1 : -2.1);
+    const sprite = makeTextSprite(text, { glow: side === "player" ? "#8fefff" : "#ffc070" });
+    sprite.position.set(c.x, 1.4, c.z);
     scene.add(sprite);
   }
+
+  // Coordinate labels (A–J across the front, 1–10 down the left edge) — standard
+  // Battleship, and a real usability win for calling/reading shots.
+  const COLS = "ABCDEFGHIJ".split("");
+  function coordLabels(side) {
+    const o = boardOrigin(side);
+    const col = side === "player" ? "#bfe6ff" : "#ffd9b0";
+    for (let x = 0; x < size; x++) {
+      const w = cellWorld(side, x, 0);
+      const s = makeTextSprite(COLS[x], { sx: 1.5, sy: 1.5, color: col, font: "bold 40px monospace" });
+      s.position.set(w.x, 0.55, o.z - 1.0); scene.add(s);
+    }
+    for (let y = 0; y < size; y++) {
+      const w = cellWorld(side, 0, y);
+      const s = makeTextSprite(String(y + 1), { sx: 1.5, sy: 1.5, color: col, font: "bold 40px monospace" });
+      s.position.set(o.x - 1.0, 0.55, w.z); scene.add(s);
+    }
+  }
+  coordLabels("player"); coordLabels("enemy");
 
   // ── Click targets on enemy board ──────────────────────────────────────────
   const cellMeshes = [];
@@ -207,7 +241,7 @@ register3d("battleship", async function (kernel, content) {
     return g;
   }
 
-  label("player", content.title || "YOUR FLEET");
+  label("player", "YOUR FLEET");
   label("enemy", "ENEMY WATERS");
 
   // Player-board cells (raycast targets) — used during the placement phase.
@@ -301,15 +335,17 @@ register3d("battleship", async function (kernel, content) {
   // ── Camera framing — clean 3/4 overhead that reads both boards evenly ─────
   // Narrower FOV (less perspective looming) + high, centered vantage looking at
   // the midpoint between the boards. Tiny idle drift only.
-  kernel.camera.fov = 40;
+  kernel.camera.fov = 42;
   kernel.camera.updateProjectionMatrix();
-  kernel.camera.position.set(0, boardSpan * 1.85, boardSpan * 1.78);
-  const LOOK_Z = boardSpan * 0.1;
+  // Tighter default framing: both boards fill the frame with little dead water,
+  // player board in the foreground (target biased toward +z).
+  kernel.camera.position.set(0, boardSpan * 1.35, boardSpan * 1.62);
+  const LOOK_Z = boardSpan * 0.06;
   // Rotatable/zoomable orbit camera (drag to rotate, scroll to zoom) — the
   // engine provides this for every 3D game. Auto-rotates gently on the menu.
   const orbit = kernel.enableOrbit({
     target: { x: 0, y: 0, z: LOOK_Z },
-    minDistance: boardSpan * 0.95, maxDistance: boardSpan * 3.2,
+    minDistance: boardSpan * 0.7, maxDistance: boardSpan * 3.0,
     minPolarAngle: 0.18, maxPolarAngle: Math.PI * 0.46,
     autoRotate: true, autoRotateSpeed: 0.5,
   });
@@ -318,18 +354,30 @@ register3d("battleship", async function (kernel, content) {
 
   // ── Pegs + effects ─────────────────────────────────────────────────────────
   // Colorblind-safe markers: differ by SHAPE, not just colour.
-  //   hit  = short fat red peg (stub cone, point up)   miss = white flat DISC
-  // The hit peg is deliberately STUBBY (h 0.5, base 0.34) and seated low so it
-  // reads as a marker pressed INTO the cell — the tall thin spike before looked
-  // like a stray cone, not a hit.
-  const hitGeo = new THREE.ConeGeometry(0.34, 0.5, 16);
-  const missGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.16, 16);
+  //   hit  = stubby glowing-red peg + hot impact disc   miss = white disc + ring
+  // Both are sized/lit to POP against the dark translucent board — the previous
+  // markers were tiny and dark and got lost on the enemy grid.
+  const hitGeo = new THREE.ConeGeometry(0.4, 0.7, 18);
   function placePeg(side, x, y, hit) {
     const w = cellWorld(side, x, y);
-    const peg = new THREE.Mesh(
-      hit ? hitGeo : missGeo,
-      new THREE.MeshStandardMaterial({ color: hit ? 0xff3b30 : 0xeaeaea, emissive: hit ? 0x6e1410 : 0x000000, emissiveIntensity: hit ? 0.6 : 0, roughness: 0.5 }));
-    peg.position.set(w.x, hit ? 0.42 : 0.32, w.z); peg.castShadow = true; scene.add(peg);
+    if (hit) {
+      const peg = new THREE.Mesh(hitGeo, new THREE.MeshStandardMaterial({ color: 0xff4334, emissive: 0xff2a18, emissiveIntensity: 0.95, roughness: 0.45 }));
+      peg.position.set(w.x, 0.5, w.z); peg.castShadow = true; scene.add(peg);
+      // Hot impact disc — flat additive glow on the cell so the hit reads from any angle.
+      const glow = new THREE.Mesh(new THREE.CircleGeometry(0.72, 24),
+        new THREE.MeshBasicMaterial({ color: 0xff5a2a, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
+      glow.rotation.x = -Math.PI / 2; glow.position.set(w.x, 0.27, w.z); scene.add(glow);
+    } else {
+      // White peg DOME (rounded) — distinct shape from the pointed red hit
+      // (colorblind-safe) and reads from any angle, unlike a flat disc.
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+        new THREE.MeshStandardMaterial({ color: 0xf4f8ff, emissive: 0x9fc4e6, emissiveIntensity: 0.6, roughness: 0.3 }));
+      dome.position.set(w.x, 0.32, w.z); dome.castShadow = true; scene.add(dome);
+      // Cool glow disc so a miss reads at distance too (the hit has a hot one).
+      const glow = new THREE.Mesh(new THREE.CircleGeometry(0.66, 24),
+        new THREE.MeshBasicMaterial({ color: 0x8fd6ff, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false }));
+      glow.rotation.x = -Math.PI / 2; glow.position.set(w.x, 0.27, w.z); scene.add(glow);
+    }
   }
   function splash(pos) {
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.5, 24), new THREE.MeshBasicMaterial({ color: 0xbfe9ff, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
@@ -454,16 +502,32 @@ register3d("battleship", async function (kernel, content) {
   let busy = false;
   function setHUD(msg) {
     const ps = sim.fleetStatus("player"), es = sim.fleetStatus("enemy");
-    const dots = (arr) => arr.map((s) => `<span style="color:${s.sunk ? "#ff5a5a" : "#7CFC9A"}">${s.sunk ? "✖" : "▰"}</span>`).join(" ");
+    const pip = (bg, glow) => `<span style="display:inline-block;width:9px;height:9px;margin:0 1.5px;border-radius:2px;background:${bg};box-shadow:${glow ? "0 0 5px " + glow : "none"}"></span>`;
+    // Your fleet: per-cell damage (you know your own ships).
+    const mine = ps.map((s) => {
+      let cells = ""; for (let i = 0; i < s.len; i++) cells += pip(s.sunk ? "#7a2020" : i < s.hits ? "#ff5a5a" : "#7CFC9A", s.sunk ? null : i < s.hits ? "#ff5a5a" : "#7CFC9A");
+      return `<div style="margin:2px 0;${s.sunk ? "opacity:.45" : ""}"><span style="font-size:10px;opacity:.75;display:inline-block;width:66px;text-align:right;margin-right:7px">${s.name}${s.sunk ? " ✖" : ""}</span>${cells}</div>`;
+    }).join("");
+    // Enemy fleet: one pip per ship (afloat/sunk) — don't leak their layout.
+    const foe = es.map((s) => pip(s.sunk ? "#7a2020" : "#9fb4c8", s.sunk ? null : "#9fb4c8")).join("");
+    const foeSunk = es.filter((s) => s.sunk).length;
+    const playerTurn = sim.turn === "player";
+    const banner = msg || (playerTurn ? "Your move — click enemy waters" : "Enemy firing…");
+    const bc = playerTurn ? "#7CFC9A" : "#ffb454";
     kernel.hud(`
-      <div style="position:absolute;top:10px;left:12px;font-size:15px">
-        <b>${content.title || "Iron Tide"}</b><br>
-        <span style="font-size:12px;opacity:.85">Turn ${sim.turnNumber} — ${msg || (sim.turn === "player" ? "Your move: click enemy waters" : "Enemy firing…")}</span>
+      <div style="position:absolute;top:12px;left:14px;font-family:'Segoe UI',system-ui,monospace">
+        <div style="font-size:19px;font-weight:800;letter-spacing:2px;text-shadow:0 2px 10px #000">${content.title || "Iron Tide"}</div>
+        <div style="margin-top:7px;display:inline-block;background:rgba(8,18,32,.72);border:1px solid ${bc}55;border-left:3px solid ${bc};border-radius:4px;padding:5px 13px;font-size:13px">
+          <span style="opacity:.7">Turn ${sim.turnNumber}</span> &nbsp;·&nbsp; <span style="color:${bc};font-weight:700">${banner}</span>
+        </div>
       </div>
-      <div style="position:absolute;top:10px;right:12px;font-size:13px;text-align:right">
-        Your fleet: ${dots(ps)}<br>Enemy fleet: ${dots(es)}
+      <div style="position:absolute;top:12px;right:14px;font-family:'Segoe UI',system-ui,monospace;background:rgba(8,18,32,.62);border:1px solid #2a4458;border-radius:9px;padding:9px 13px;text-align:right">
+        <div style="font-size:10px;letter-spacing:1.5px;opacity:.7">ENEMY FLEET <span style="opacity:.6">${foeSunk}/${es.length} sunk</span></div>
+        <div style="margin:3px 0 7px">${foe}</div>
+        <div style="font-size:10px;letter-spacing:1.5px;opacity:.7;text-align:left">YOUR FLEET</div>
+        <div style="text-align:left;margin-top:2px">${mine}</div>
       </div>
-      <div style="position:absolute;bottom:8px;left:12px;font-size:11px;opacity:.6">Esc: pause</div>
+      <div style="position:absolute;bottom:10px;left:14px;font-size:11px;opacity:.55;font-family:monospace">Drag: orbit · Scroll: zoom · Esc: pause</div>
     `);
   }
   if (phase === "battle") setHUD(); // placement phase keeps its own HUD until Ready
@@ -640,14 +704,19 @@ register3d("battleship", async function (kernel, content) {
 window.__bs_playerFire = function (sim, x, y) { return sim.playerFire(x, y); };
 
 // ── tiny canvas text sprite for board labels ──────────────────────────────────
-function makeTextSprite(text) {
+function makeTextSprite(text, opts) {
+  opts = opts || {};
   const c = document.createElement("canvas"); c.width = 256; c.height = 64;
   const ctx = c.getContext("2d");
-  ctx.fillStyle = "rgba(0,0,0,0)"; ctx.fillRect(0, 0, 256, 64);
-  ctx.font = "bold 34px monospace"; ctx.fillStyle = "#dfeaff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.clearRect(0, 0, 256, 64);
+  ctx.font = opts.font || "bold 34px monospace";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  if (opts.glow) { ctx.shadowColor = opts.glow; ctx.shadowBlur = 14; }
+  ctx.fillStyle = opts.color || "#eaf3ff";
   ctx.fillText(text, 128, 32);
+  if (opts.glow) { ctx.shadowBlur = 0; ctx.fillText(text, 128, 32); } // double-pass for a crisp glowing core
   const tex = new THREE.CanvasTexture(c);
-  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
-  spr.scale.set(8, 2, 1);
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  spr.scale.set(opts.sx != null ? opts.sx : 8, opts.sy != null ? opts.sy : 2, 1);
   return spr;
 }
