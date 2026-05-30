@@ -163,21 +163,34 @@ register3d("battleship", async function (kernel, content) {
       try { obj = await kernel.loadGLTF(url); } catch (e) { obj = null; }
     }
     if (!obj) obj = proceduralShip(ship.len);
-    // Scale so the hull spans ~62% of its cell-length (was 82% — ships were
-    // overspilling their cells and crowding neighbours). Also cap the across-
-    // axis width so wide models don't bleed into adjacent rows.
-    const box = new THREE.Box3().setFromObject(obj);
-    const dim = box.getSize(new THREE.Vector3());
-    const longest = Math.max(dim.x, dim.z) || 1;
-    const targetLen = ship.len * CELL * 0.62;
-    let s = targetLen / longest;
-    const across = Math.min(dim.x, dim.z) || 1;
-    s = Math.min(s, (CELL * 0.85) / across); // keep width within ~1 cell
-    obj.scale.setScalar(s);
-    // orient: align longest axis with ship axis
-    if (ship.horizontal && dim.z > dim.x) obj.rotation.y = Math.PI / 2;
-    if (!ship.horizontal && dim.x > dim.z) obj.rotation.y = Math.PI / 2;
-    obj.position.set(center.x, 0.28, center.z);
+    // Fit the model to its ACTUAL footprint: a length-N ship must visibly span
+    // N cells along its axis and ~1 cell across. The long and short axes are
+    // scaled INDEPENDENTLY (warships are long + narrow, so this reads naturally)
+    // so a "5" really fills 5 squares. The old uniform scale used 62% of the
+    // length AND a width clamp, collapsing every hull to ~2 cells regardless of
+    // its claimed size — the bug this fixes.
+    const box0 = new THREE.Box3().setFromObject(obj);
+    const dim = box0.getSize(new THREE.Vector3());
+    const longIsX = dim.x >= dim.z;
+    const footLong = ship.len * CELL * 0.94; // ~94% of len cells (thin gutter)
+    const footShort = CELL * 0.84;           // ~84% of one cell across
+    let sx, sz, rotY = 0;
+    if (ship.horizontal) {                    // long axis runs along world X
+      if (longIsX) { rotY = 0;           sx = footLong / dim.x; sz = footShort / dim.z; }
+      else         { rotY = Math.PI / 2; sz = footLong / dim.z; sx = footShort / dim.x; }
+    } else {                                  // long axis runs along world Z
+      if (longIsX) { rotY = Math.PI / 2; sx = footLong / dim.x; sz = footShort / dim.z; }
+      else         { rotY = 0;           sz = footLong / dim.z; sx = footShort / dim.x; }
+    }
+    obj.scale.set(sx, (sx + sz) / 2, sz);
+    obj.rotation.y = rotY;
+    // Recenter on the cell span and seat the hull on the surface — the model's
+    // pivot isn't its centroid, so position by the post-transform AABB.
+    obj.position.set(0, 0, 0);
+    obj.updateMatrixWorld(true);
+    const box1 = new THREE.Box3().setFromObject(obj);
+    const ctr = box1.getCenter(new THREE.Vector3());
+    obj.position.set(center.x - ctr.x, 0.2 - box1.min.y, center.z - ctr.z);
     obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; } });
     scene.add(obj);
     ship._obj = obj;
