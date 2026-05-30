@@ -9,6 +9,8 @@
  * Exposes controller.__test so the feel/signature checks can drive it headlessly.
  */
 import * as THREE from "three";
+import { Water } from "three/addons/objects/Water.js";
+import { Sky } from "three/addons/objects/Sky.js";
 import "../sim/battleship.js"; // side-effect: sets window.FFG.sim.Battleship
 
 // Import the kernel with the SAME version query the boot entry used, so genre
@@ -42,25 +44,49 @@ register3d("battleship", async function (kernel, content) {
   let _placement = null; // test hook handle
   let beginGame = null;  // assigned below; called by the menu Play button
 
-  // ── Ocean ──────────────────────────────────────────────────────────────
-  const oceanGeo = new THREE.PlaneGeometry(400, 400, 80, 80);
-  oceanGeo.rotateX(-Math.PI / 2);
-  const oceanMat = new THREE.MeshStandardMaterial({ color: 0x12466b, metalness: 0.1, roughness: 0.55, flatShading: false });
-  const ocean = new THREE.Mesh(oceanGeo, oceanMat);
-  ocean.receiveShadow = true;
-  scene.add(ocean);
-  const basePos = oceanGeo.attributes.position.array.slice();
-  kernel.onUpdate((dt, t) => {
-    const p = oceanGeo.attributes.position.array;
-    for (let i = 0; i < p.length; i += 3) {
-      const x = basePos[i], z = basePos[i + 2];
-      // Keep crests below the board top (~0.2) so waves never clip through the
-      // grids. Subtle ripple, not a swell.
-      p[i + 1] = Math.sin(x * 0.08 + t * 1.1) * 0.08 + Math.cos(z * 0.11 + t * 0.9) * 0.06;
-    }
-    oceanGeo.attributes.position.needsUpdate = true;
-    oceanGeo.computeVertexNormals();
+  // ── Ocean — real reflective water (three.js Water): flowing normal-mapped
+  // waves, sun glint, fresnel shine. Flat plane (shader-faked waves), so it
+  // never clips the boards. The normal map is bundled in the runtime (NOT a
+  // CDN) — a missing normal map collapses the shader to a flat sky-mirror that
+  // reads as "blank background", the exact bug this replaced.
+  const waterGeo = new THREE.PlaneGeometry(2000, 2000);
+  const _texURL = new URL("./textures/waternormals.jpg", import.meta.url).href;
+  const water = new Water(waterGeo, {
+    textureWidth: 512, textureHeight: 512,
+    waterNormals: new THREE.TextureLoader().load(
+      _texURL, (t) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; }),
+    sunDirection: new THREE.Vector3(0.6, 0.8, 0.4),
+    sunColor: 0xffe7b3,
+    waterColor: 0x0f4a6e,
+    distortionScale: 3.4,
+    fog: scene.fog !== undefined,
   });
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = 0.05;
+  water.material.uniforms["size"].value = 4.0; // finer, more frequent waves on our scale
+  scene.add(water);
+  kernel.onUpdate((dt) => { water.material.uniforms["time"].value += dt * 0.8; });
+
+  // Sky + sun — a real procedural sky for the water to reflect (late-afternoon
+  // clear tone, not a hazy white-out) plus a proper sun glint. Drives the
+  // water's sunDirection. Exposure pulled back so neither sky nor sea blows out.
+  kernel.renderer.toneMappingExposure = 0.62;
+  const sky = new Sky();
+  sky.scale.setScalar(14000);
+  scene.add(sky);
+  const skyU = sky.material.uniforms;
+  skyU["turbidity"].value = 4.0;
+  skyU["rayleigh"].value = 1.4;
+  skyU["mieCoefficient"].value = 0.004;
+  skyU["mieDirectionalG"].value = 0.85;
+  const sunPos = new THREE.Vector3();
+  const phi = THREE.MathUtils.degToRad(90 - 24);   // sun elevation ~24° (afternoon)
+  const theta = THREE.MathUtils.degToRad(150);
+  sunPos.setFromSphericalCoords(1, phi, theta);
+  skyU["sunPosition"].value.copy(sunPos);
+  water.material.uniforms["sunDirection"].value.copy(sunPos).normalize();
+  if (kernel.sun) kernel.sun.position.copy(sunPos).multiplyScalar(120); // match shadow light to the sun
+  scene.fog = null; // let the sky show on the horizon
 
   // ── Real physics (cannon-es): cannonball ballistics + ship sinking + debris ─
   try {
@@ -200,8 +226,11 @@ register3d("battleship", async function (kernel, content) {
   const clearGhost = () => { if (ghost) { scene.remove(ghost); ghost = null; } };
   function placementHUD() {
     const spec = fleet[pIndex];
-    kernel.hud(`<div style="position:absolute;top:10px;left:12px;font-size:15px"><b>${content.title || "Iron Tide"}</b><br>
-      <span style="font-size:12px;opacity:.9">${spec ? `Place your <b>${spec.name}</b> (${spec.len}) — click your waters · <b>R</b> rotate · <b>A</b> auto · <b>Esc</b> pause` : "Ready"}</span></div>
+    // Concise contextual prompt only — full rules/controls live in How-to-Play.
+    kernel.hud(`<div style="position:absolute;top:10px;left:12px;font-size:15px"><b>${content.title || "Iron Tide"}</b></div>
+      <div style="position:absolute;left:0;right:0;bottom:18px;text-align:center;font-size:14px">
+        ${spec ? `Place your <b>${spec.name}</b> <span style="opacity:.7">(${spec.len})</span> &nbsp;·&nbsp; <b>R</b> rotate &nbsp; <b>A</b> auto-place` : "Ready"}
+      </div>
       <div style="position:absolute;top:10px;right:12px;font-size:12px">Ships placed: ${pIndex}/${fleet.length}</div>`);
   }
   function showGhost(x, y) {
@@ -242,11 +271,12 @@ register3d("battleship", async function (kernel, content) {
     playerCells.forEach((m) => scene.remove(m));
     phase = "battle"; setHUD();
   }
-  beginGame = () => { if (placementEnabled) beginPlacement(); else beginBattleDirect(); };
+  beginGame = () => { if (typeof orbit !== "undefined" && orbit) orbit.autoRotate = false; if (placementEnabled) beginPlacement(); else beginBattleDirect(); };
   {
     const dom0 = kernel.renderer.domElement;
+    // Hover preview only (the ghost). Clicks are handled by the unified
+    // click-vs-drag detector below so dragging rotates the camera, not fires.
     dom0.addEventListener("pointermove", (ev) => { if (phase !== "placement" || paused) return; const h = kernel.raycast(ev.clientX, ev.clientY, playerCells); if (h.length) showGhost(h[0].object.userData.x, h[0].object.userData.y); });
-    dom0.addEventListener("pointerdown", (ev) => { if (phase !== "placement" || paused) return; const h = kernel.raycast(ev.clientX, ev.clientY, playerCells); if (h.length) commit(h[0].object.userData.x, h[0].object.userData.y); });
     window.addEventListener("keydown", (e) => {
       if (phase !== "placement" || paused) return;
       if (e.key === "r" || e.key === "R") { pHoriz = !pHoriz; }
@@ -260,31 +290,33 @@ register3d("battleship", async function (kernel, content) {
   // the midpoint between the boards. Tiny idle drift only.
   kernel.camera.fov = 40;
   kernel.camera.updateProjectionMatrix();
-  const CAM = { x: 0, y: boardSpan * 1.85, z: boardSpan * 1.78 };
-  kernel.camera.position.set(CAM.x, CAM.y, CAM.z);
-  // Look slightly toward the player board (+z) so the near row isn't clipped.
-  const LOOK_Z = boardSpan * 0.18;
-  kernel.camera.lookAt(0, 0, LOOK_Z);
-  // Accessibility: honour the OS reduced-motion preference — no camera drift,
-  // and cinematics resolve fast (see _playEvent delays).
-  const reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-  let camIdle = 0;
-  kernel.onUpdate((dt) => {
-    if (reducedMotion) return;
-    camIdle += dt; kernel.camera.position.x = Math.sin(camIdle * 0.12) * 1.5; kernel.camera.lookAt(0, 0, LOOK_Z);
+  kernel.camera.position.set(0, boardSpan * 1.85, boardSpan * 1.78);
+  const LOOK_Z = boardSpan * 0.1;
+  // Rotatable/zoomable orbit camera (drag to rotate, scroll to zoom) — the
+  // engine provides this for every 3D game. Auto-rotates gently on the menu.
+  const orbit = kernel.enableOrbit({
+    target: { x: 0, y: 0, z: LOOK_Z },
+    minDistance: boardSpan * 0.95, maxDistance: boardSpan * 3.2,
+    minPolarAngle: 0.18, maxPolarAngle: Math.PI * 0.46,
+    autoRotate: true, autoRotateSpeed: 0.5,
   });
+  const reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  if (reducedMotion) orbit.autoRotate = false;
 
   // ── Pegs + effects ─────────────────────────────────────────────────────────
   // Colorblind-safe markers: differ by SHAPE, not just colour.
-  //   hit  = red SPIKE (cone, point up)   miss = white flat DISC
-  const hitGeo = new THREE.ConeGeometry(0.32, 1.1, 14);
+  //   hit  = short fat red peg (stub cone, point up)   miss = white flat DISC
+  // The hit peg is deliberately STUBBY (h 0.5, base 0.34) and seated low so it
+  // reads as a marker pressed INTO the cell — the tall thin spike before looked
+  // like a stray cone, not a hit.
+  const hitGeo = new THREE.ConeGeometry(0.34, 0.5, 16);
   const missGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.16, 16);
   function placePeg(side, x, y, hit) {
     const w = cellWorld(side, x, y);
     const peg = new THREE.Mesh(
       hit ? hitGeo : missGeo,
-      new THREE.MeshStandardMaterial({ color: hit ? 0xff3b30 : 0xeaeaea, emissive: hit ? 0x551111 : 0x000000, roughness: 0.5 }));
-    peg.position.set(w.x, hit ? 0.75 : 0.32, w.z); peg.castShadow = true; scene.add(peg);
+      new THREE.MeshStandardMaterial({ color: hit ? 0xff3b30 : 0xeaeaea, emissive: hit ? 0x6e1410 : 0x000000, emissiveIntensity: hit ? 0.6 : 0, roughness: 0.5 }));
+    peg.position.set(w.x, hit ? 0.42 : 0.32, w.z); peg.castShadow = true; scene.add(peg);
   }
   function splash(pos) {
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.5, 24), new THREE.MeshBasicMaterial({ color: 0xbfe9ff, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
@@ -302,6 +334,45 @@ register3d("battleship", async function (kernel, content) {
     smoke.position.copy(pos); smoke.position.y = 1.2; scene.add(smoke);
     kernel.tween({ target: smoke.position, to: { y: 4.5 }, duration: 1.4 });
     kernel.tween({ target: smoke.material, to: { opacity: 0 }, duration: 1.4, onComplete: () => scene.remove(smoke) });
+  }
+  // Persistent damage: a smouldering scorch + slow rising smoke at a hit cell,
+  // so a hit reads as a hit (enemy ships are hidden, so the marker must carry
+  // it). When the hit lands on a VISIBLE ship (the player's own fleet) we raise
+  // it to deck height and add a blown-out "hole" (dark recessed disc), a glowing
+  // ember + fire light, and a longer-burning smoke column so it reads as a
+  // damaged, smoking hull — not just a scorch on the water.
+  function spawnSmokePuff(pos, dark) {
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.35 + Math.random() * 0.25, 8, 8),
+      new THREE.MeshStandardMaterial({ color: dark ? 0x2a2a2a : 0x4a4a4a, transparent: true, opacity: 0.6, depthWrite: false }));
+    puff.position.set(pos.x + (Math.random() - 0.5) * 0.6, pos.y + 0.4, pos.z + (Math.random() - 0.5) * 0.6);
+    scene.add(puff);
+    const dur = 2.6 + Math.random() * 1.6;
+    kernel.tween({ target: puff.position, to: { y: puff.position.y + 4.2 }, duration: dur });
+    kernel.tween({ target: puff.scale, to: { x: 2.4, y: 2.4, z: 2.4 }, duration: dur });
+    kernel.tween({ target: puff.material, to: { opacity: 0 }, duration: dur, onComplete: () => scene.remove(puff) });
+  }
+  function damageMarker(pos, onShip) {
+    const y = onShip ? 0.62 : 0.4;
+    // Blown-out hole: a dark recessed disc reads as a hull breach / scorch crater.
+    const hole = new THREE.Mesh(new THREE.CircleGeometry(onShip ? 0.42 : 0.55, 18),
+      new THREE.MeshBasicMaterial({ color: 0x0a0604, transparent: true, opacity: 0.92 }));
+    hole.rotation.x = -Math.PI / 2; hole.position.set(pos.x, y, pos.z); scene.add(hole);
+    if (onShip) {
+      // Charred lip around the hole + a glowing ember + firelight in the breach.
+      const lip = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.62, 18),
+        new THREE.MeshBasicMaterial({ color: 0x21130b, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
+      lip.rotation.x = -Math.PI / 2; lip.position.set(pos.x, y + 0.01, pos.z); scene.add(lip);
+      const ember = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10),
+        new THREE.MeshBasicMaterial({ color: 0xff6320 }));
+      ember.position.set(pos.x, y + 0.08, pos.z); scene.add(ember);
+      let emT = 0; const emU = (dt) => { emT += dt; ember.material.color.setHSL(0.05, 1, 0.45 + 0.12 * Math.sin(emT * 9)); };
+      kernel.onUpdate(emU);
+      const fire = new THREE.PointLight(0xff7a2a, 2.2, 8); fire.position.set(pos.x, y + 0.6, pos.z); scene.add(fire);
+      // Burning column: re-emit puffs for a few seconds, not one burst.
+      let n = 0; const iv = setInterval(() => { if (n++ > 9) { clearInterval(iv); return; } spawnSmokePuff({ x: pos.x, y: y, z: pos.z }, true); }, 380);
+    } else {
+      for (let i = 0; i < 3; i++) spawnSmokePuff({ x: pos.x, y: y + i * 0.25, z: pos.z }, false);
+    }
   }
   function fireCannonball(fromSide, to, onImpact) {
     const from = cellWorld(fromSide, size / 2, fromSide === "player" ? size - 1 : 0).clone();
@@ -389,7 +460,7 @@ register3d("battleship", async function (kernel, content) {
     kernel.playSound(sfx.fire, 0.45); // gun report on launch
     fireCannonball(side, to, () => {
       if (r.result === "miss") { splash(to); placePeg(side === "player" ? "enemy" : "player", r.x, r.y, false); kernel.playSound(sfx.miss, 0.5); }
-      else { explosion(to); placePeg(side === "player" ? "enemy" : "player", r.x, r.y, true); kernel.playSound(sfx.hit, 0.6); }
+      else { explosion(to); damageMarker(to, side === "enemy"); placePeg(side === "player" ? "enemy" : "player", r.x, r.y, true); kernel.playSound(sfx.hit, 0.6); }
       if (r.result === "sink") {
         const tb = side === "player" ? "enemy" : "player";
         const ship = sim.boardOf(tb).ships.find((s) => s.id === r.ship);
@@ -431,10 +502,22 @@ register3d("battleship", async function (kernel, content) {
       if (sim.enemy.shots[c.userData.y][c.userData.x] === 0) { c.material.color.set(0xffd166); c.material.opacity = 0.28; hovered = c; }
     }
   });
-  dom.addEventListener("pointerdown", (ev) => {
-    if (phase !== "battle" || busy || sim.ended) return;
-    const hits = kernel.raycast(ev.clientX, ev.clientY, cellMeshes);
-    if (hits.length) { const c = hits[0].object; doPlayerFire(c.userData.x, c.userData.y); }
+  // Unified click-vs-drag: a drag rotates the orbit camera; a click (little
+  // movement) acts on the board (place in placement, fire in battle).
+  let _down = null;
+  dom.addEventListener("pointerdown", (ev) => { _down = { x: ev.clientX, y: ev.clientY }; });
+  dom.addEventListener("pointerup", (ev) => {
+    if (!_down) return;
+    const moved = Math.hypot(ev.clientX - _down.x, ev.clientY - _down.y);
+    _down = null;
+    if (moved > 6 || paused) return; // it was a drag (camera rotate) — ignore
+    if (phase === "placement") {
+      const h = kernel.raycast(ev.clientX, ev.clientY, playerCells);
+      if (h.length) commit(h[0].object.userData.x, h[0].object.userData.y);
+    } else if (phase === "battle" && !busy && !sim.ended) {
+      const h = kernel.raycast(ev.clientX, ev.clientY, cellMeshes);
+      if (h.length) doPlayerFire(h[0].object.userData.x, h[0].object.userData.y);
+    }
   });
 
   // Keyboard targeting (a11y) — arrows/WASD move a cursor on enemy waters,
@@ -469,8 +552,16 @@ register3d("battleship", async function (kernel, content) {
     title: content.title || "Iron Tide",
     tagline: content.tagline || "Call your salvos. Sink the enemy fleet.",
     music: music,
+    menuImage: (content.assets && content.assets.menu_image) || content.menu_image || null,
     difficulties: ["easy", "normal", "hard"],
     defaultDifficulty: sim.difficulty || "normal",
+    howTo: [
+      { h: "GOAL", p: "Sink the enemy's entire fleet before they sink yours. Each ship occupies a row of cells; sink one by hitting every cell it covers." },
+      { h: "YOUR FLEET", p: "Carrier (5) · Battleship (4) · Cruiser (3) · Submarine (3) · Destroyer (2)." },
+      { h: "PLACING SHIPS", p: "Click a cell on your waters to drop the current ship. Press <b>R</b> to rotate it, or <b>A</b> to auto-place the rest of the fleet." },
+      { h: "FIRING", p: "On your turn, click a cell on the enemy waters (the far board) to fire. A red marker means a hit, a white disc a miss. Hit ships smoke and burn; a sunk ship rolls under." },
+      { h: "CAMERA", p: "Drag to orbit the battlefield, scroll to zoom — look around freely. Press <b>Esc</b> any time to pause." },
+    ],
     onPlay: (diff) => { sim.difficulty = diff; beginGame(); },
     onPause: () => { paused = true; kernel.stop(); },
     onResume: () => { paused = false; kernel.start(); },

@@ -206,7 +206,17 @@ def assemble(slug, content):
 
 def _copy_3d_assets(gdir, content):
     """Copy any referenced GLB ship models (+ their sibling Textures/) from the
-    pirate-kit into the game so 3D models render textured (the colormap lesson)."""
+    pirate-kit into the game so 3D models render textured (the colormap lesson).
+    Also bundles shared runtime textures (e.g. the water normal map) so the
+    three.js Water shader works offline instead of 404ing on a CDN."""
+    # Shared runtime textures (water normals, etc.) ride alongside the 3D runtime.
+    tex_dir = RUNTIME / "3d" / "textures"
+    if tex_dir.is_dir():
+        dst_tex = gdir / "runtime" / "3d" / "textures"
+        dst_tex.mkdir(parents=True, exist_ok=True)
+        for f in tex_dir.iterdir():
+            if f.is_file():
+                shutil.copy2(f, dst_tex / f.name)
     models = content.get("ship_models", {})
     copied_texture = False
     for rel in set(models.values()):

@@ -121,5 +121,8 @@
         "horizontal": true
       }
     ]
+  },
+  "assets": {
+    "menu_image": "assets/menu.png"
   }
 }

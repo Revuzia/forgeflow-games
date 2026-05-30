@@ -10,6 +10,7 @@
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 export const genres3d = {};
 export function register3d(name, builder) { genres3d[name] = builder; }
@@ -114,12 +115,37 @@ export class Kernel3D {
 
   hud(html) { if (this.hudEl) this.hudEl.innerHTML = html; }
 
+  // Orbit camera — drag to rotate, scroll to zoom (industry-standard for 3D).
+  // Clamped so the player can't flip under the world. Returns the controls.
+  enableOrbit(opts) {
+    opts = opts || {};
+    var c = new OrbitControls(this.camera, this.renderer.domElement);
+    c.enableDamping = true; c.dampingFactor = 0.08;
+    c.rotateSpeed = 0.6; c.zoomSpeed = 0.8;
+    c.minDistance = opts.minDistance != null ? opts.minDistance : 20;
+    c.maxDistance = opts.maxDistance != null ? opts.maxDistance : 200;
+    c.minPolarAngle = opts.minPolarAngle != null ? opts.minPolarAngle : 0.15;
+    c.maxPolarAngle = opts.maxPolarAngle != null ? opts.maxPolarAngle : Math.PI * 0.49; // stay above the horizon
+    c.enablePan = !!opts.enablePan;
+    if (opts.target) c.target.set(opts.target.x, opts.target.y, opts.target.z);
+    if (opts.autoRotate) { c.autoRotate = true; c.autoRotateSpeed = opts.autoRotateSpeed || 0.6; }
+    c.update();
+    this.controls = c;
+    this.onUpdate(function () { c.update(); });
+    return c;
+  }
+
   // Simple SFX: a fresh HTMLAudio per call (allows overlap). Browser autoplay
   // policy means sound starts after the player's first interaction — fine for
   // a click-driven game; no-ops safely if the url is missing/blocked.
   playSound(url, vol = 0.6) {
     if (!url) return;
-    try { const a = new Audio(url); a.volume = vol; const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+    // Scale by the shell's SFX volume setting (window.FFG.sfxVolume), so the
+    // Settings slider controls effects without per-genre wiring.
+    const mul = (typeof window !== "undefined" && window.FFG && window.FFG.sfxVolume != null) ? window.FFG.sfxVolume : 1;
+    const v = Math.max(0, Math.min(1, vol * mul));
+    if (v <= 0) return;
+    try { const a = new Audio(url); a.volume = v; const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
   }
 
   // Looping background music (one track). Call from a user gesture (e.g. Play)
