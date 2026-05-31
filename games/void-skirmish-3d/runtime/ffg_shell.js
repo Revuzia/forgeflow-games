@@ -101,10 +101,16 @@
       'text-shadow:0 3px 22px rgba(0,0,0,.7),0 0 30px rgba(80,200,255,.25)">' +
       (this.o.title || "FFG GAME").toUpperCase() + '</div>' +
       (this.o.tagline ? '<div style="font-size:15px;opacity:.82;margin-top:8px;letter-spacing:1px">' + this.o.tagline + '</div>' : "")));
+    // PLAY first (top of the menu), difficulty selector beneath it.
+    this.ov.appendChild(el("div", "height:8px"));
+    this.ov.appendChild(this._btn("▶  PLAY", function () {
+      self.hide(); self.phase = "playing"; self._playMusic();
+      if (self.o.onPlay) self.o.onPlay(self.difficulty);
+    }, true));
     var diffs = this.o.difficulties || [];
     if (diffs.length) {
-      this.ov.appendChild(el("div", "font-size:12px;opacity:.7;margin-top:10px;letter-spacing:2px", "DIFFICULTY"));
-      var row = el("div", "display:flex;gap:8px");
+      this.ov.appendChild(el("div", "font-size:12px;opacity:.7;margin-top:14px;letter-spacing:2px", "DIFFICULTY"));
+      var row = el("div", "display:flex;gap:8px;margin-top:2px");
       diffs.forEach(function (d) {
         var b = self._btn(d.toUpperCase(), function () { self.difficulty = d; mark(); }, false);
         b.dataset.diff = d; b.style.minWidth = "104px"; b.style.padding = "9px 16px"; row.appendChild(b);
@@ -112,12 +118,7 @@
       function mark() { Array.prototype.forEach.call(row.children, function (b) { b.style.outline = b.dataset.diff === self.difficulty ? "2px solid #7CFC9A" : "none"; }); }
       this.ov.appendChild(row); mark();
     }
-    this.ov.appendChild(el("div", "height:4px"));
-    this.ov.appendChild(this._btn("▶  PLAY", function () {
-      self.hide(); self.phase = "playing"; self._playMusic();
-      if (self.o.onPlay) self.o.onPlay(self.difficulty);
-    }, true));
-    var sub = el("div", "display:flex;gap:8px;margin-top:2px");
+    var sub = el("div", "display:flex;gap:8px;margin-top:14px");
     if (this.o.howTo) sub.appendChild(this._smallBtn("HOW TO PLAY", function () { self.tutorial(); }));
     sub.appendChild(this._smallBtn("SETTINGS", function () { self.settings(); }));
     this.ov.appendChild(sub);

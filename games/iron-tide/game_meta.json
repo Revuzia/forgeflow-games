@@ -1,0 +1,10 @@
+{
+  "title": "Iron Tide",
+  "short_description": "Call your salvos and sink the enemy fleet in a 3D naval duel.",
+  "description": "Iron Tide is a 3D naval battleship duel. Place your fleet, then trade salvos with a hunting AI across two side-by-side seas. Sink an enemy ship to earn a one-use upgrade — Recon Scan, Barrage, Salvo, Sonar, or Double Tap — and chain sinks for escalating power. Rotate the camera freely, pick your difficulty, and watch stricken ships founder into burning wrecks that slowly slip beneath the waves.",
+  "genre": "strategy",
+  "sub_genre": "naval-tactics",
+  "difficulty": "medium",
+  "controls_keyboard": "Left-click to place ships / fire · R rotate ship · A auto-place · Right-drag rotate camera · WASD move · scroll zoom · 1-5 abilities · Esc pause",
+  "tags": ["strategy", "naval", "battleship", "turn-based", "3d", "tactics"]
+}
