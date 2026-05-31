@@ -54,6 +54,50 @@ function makeFloorTexture() {
   tex.anisotropy = 8; _floorTex = tex; return tex;
 }
 
+// Grid-AWARE baked ground: ONE texture for the whole plot drawn from the tile
+// grid, so the ground itself reads as a city — asphalt streets, concrete
+// sidewalks ringing every building, grass in the parks — instead of a uniform
+// sci-fi panel tiled everywhere. The single biggest "real place vs blocks on a
+// void" lever (XCOM research: dense, grounded, consistent surfaces).
+function makeGroundTexture(grid, gw, gh) {
+  const PX = 16, W = gw * PX, H = gh * PX;
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const g = cv.getContext("2d");
+  const isB = (x, y) => x >= 0 && y >= 0 && x < gw && y < gh && grid[y][x] === 1;
+  const near = (x, y) => isB(x - 1, y) || isB(x + 1, y) || isB(x, y - 1) || isB(x, y + 1) ||
+    isB(x - 1, y - 1) || isB(x + 1, y - 1) || isB(x - 1, y + 1) || isB(x + 1, y + 1);
+  // deterministic speckle (asphalt/concrete grain) — seeded so it's stable
+  let s = (gw * 73856093 ^ gh * 19349663) >>> 0;
+  const rnd = () => (s = (s * 1103515245 + 12345) >>> 0) / 4294967296;
+  for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+    const t = grid[y][x];
+    let base;
+    if (t === 4) base = ["#2c4528", "#314c2b", "#26401f"][((x ^ y) % 3 + 3) % 3];        // park grass
+    else if (t === 1 || near(x, y)) base = ["#44454b", "#494a51", "#3f4046"][((x + y) % 3)]; // concrete sidewalk/foundation
+    else base = ["#2a2a30", "#2d2d33", "#26262b"][((x * 3 + y) % 3)];                       // asphalt street
+    g.fillStyle = base; g.fillRect(x * PX, y * PX, PX, PX);
+    // grain
+    for (let k = 0; k < 5; k++) {
+      const gx = x * PX + (rnd() * PX | 0), gy = y * PX + (rnd() * PX | 0);
+      g.fillStyle = rnd() > 0.5 ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.10)";
+      g.fillRect(gx, gy, 1, 1);
+    }
+    if (t === 4) for (let k = 0; k < 3; k++) { g.fillStyle = "rgba(120,170,90,0.18)"; g.fillRect(x * PX + (rnd() * PX | 0), y * PX + (rnd() * PX | 0), 1, 2); }
+    // subtle tactical grid seam (so tiles stay readable for movement)
+    g.strokeStyle = "rgba(0,0,0,0.16)"; g.lineWidth = 1; g.strokeRect(x * PX + 0.5, y * PX + 0.5, PX - 1, PX - 1);
+  }
+  // faint dashed lane markings down long open street runs (horizontal + vertical)
+  g.fillStyle = "rgba(196,176,96,0.30)";
+  for (let y = 1; y < gh - 1; y++) for (let x = 1; x < gw - 1; x++) {
+    if (grid[y][x] !== 0) continue;
+    const hRoad = grid[y][x - 1] === 0 && grid[y][x + 1] === 0 && (isB(x, y - 2) || isB(x, y + 2));
+    if (hRoad && (x % 3 === 0)) g.fillRect(x * PX + PX * 0.3, y * PX + PX * 0.46, PX * 0.4, 1.5);
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8; tex.needsUpdate = true; return tex;
+}
+
 // Building facades as a small CACHED set of textures (a window grid baked once),
 // not a mesh per window pane — so a 60×60 map of towers stays a few thousand
 // draw-calls instead of tens of thousands. Returns {map, glow} pairs: `map` is a
@@ -109,26 +153,26 @@ register3d("tactics3d", async (kernel, content) => {
   // world position of a tile centre (board centred on origin; +z = "south")
   const cell = (x, y) => new THREE.Vector3((x + 0.5) * T - W / 2, 0, (y + 0.5) * T - H / 2);
 
-  scene.background = new THREE.Color(0x0c1422);
-  scene.fog = new THREE.FogExp2(0x111c2e, 0.0055);
+  scene.background = new THREE.Color(0x1a2740); // dusk navy (was near-black night)
+  scene.fog = new THREE.FogExp2(0x1f2d46, 0.0050);
   // Cinematic 3-point rig: warm key, cool fill, and a bright COOL RIM/back light
   // that separates soldiers + cover from the dark ground — the single biggest
   // "they pop as characters" lever. Soft shadows for grounded depth.
   try { kernel.renderer.shadowMap.type = THREE.PCFSoftShadowMap; } catch (e) {}
-  const key = new THREE.DirectionalLight(0xfff2e0, 2.15); key.position.set(46, 72, 30); key.castShadow = true;
+  const key = new THREE.DirectionalLight(0xfff2e0, 2.55); key.position.set(46, 72, 30); key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = -60; key.shadow.camera.right = 60; key.shadow.camera.top = 60; key.shadow.camera.bottom = -60; key.shadow.camera.far = 240;
   key.shadow.bias = -0.0004; key.shadow.normalBias = 0.045; scene.add(key);
   scene.add(new THREE.DirectionalLight(0x7aa0e0, 0.62).translateX(-46).translateY(38).translateZ(-20)); // cool fill
   const rim = new THREE.DirectionalLight(0xbfe2ff, 1.25); rim.position.set(-24, 34, -72); scene.add(rim); // back/rim
-  scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x121826, 0.72));
-  scene.add(new THREE.AmbientLight(0x9fb4d0, 0.26));
-  kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = 1.36;
+  scene.add(new THREE.HemisphereLight(0xd6e4ff, 0x2a3242, 1.3)); // brighter sky-fill so the city GROUND (asphalt/sidewalks/grass) reads
+  scene.add(new THREE.AmbientLight(0xaec2d8, 0.58));
+  kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = 1.56;
   if (kernel.enableBloom) kernel.enableBloom({ strength: 0.72, radius: 0.7, threshold: 0.8 });
   // Cinematic vignette (DOM overlay under the HUD) — frames the action + adds depth.
   try {
     const _vig = document.createElement("div");
     Object.assign(_vig.style, { position: "absolute", inset: "0", pointerEvents: "none", zIndex: "4",
-      background: "radial-gradient(125% 105% at 50% 44%, rgba(0,0,0,0) 52%, rgba(2,6,14,0.5) 100%)" });
+      background: "radial-gradient(135% 115% at 50% 46%, rgba(0,0,0,0) 62%, rgba(2,6,14,0.34) 100%)" });
     kernel.parent.appendChild(_vig);
   } catch (e) {}
 
@@ -166,11 +210,10 @@ register3d("tactics3d", async (kernel, content) => {
     const plat = new THREE.Mesh(new THREE.BoxGeometry(W + 1.4, 0.6, H + 1.4),
       new THREE.MeshStandardMaterial({ color: 0x0c1626, roughness: 0.9, metalness: 0.2 }));
     plat.position.set(0, -0.35, 0); plat.receiveShadow = true; scene.add(plat);
-    // Tiled tech-panel floor (one plane, repeated texture).
-    const ftex = makeFloorTexture(); ftex.wrapS = ftex.wrapT = THREE.RepeatWrapping; ftex.repeat.set(gridW, gridH);
-    if (THREE.SRGBColorSpace) ftex.colorSpace = THREE.SRGBColorSpace;
+    // Grid-aware baked city ground (asphalt streets + concrete sidewalks + grass).
+    const ftex = makeGroundTexture(mission.grid, gridW, gridH);
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, H),
-      new THREE.MeshStandardMaterial({ map: ftex, color: 0x9fb3c8, roughness: 0.72, metalness: 0.35 }));
+      new THREE.MeshStandardMaterial({ map: ftex, color: 0xb9bcc4, roughness: 0.86, metalness: 0.12 }));
     floor.rotation.x = -Math.PI / 2; floor.position.set(0, FT, 0); floor.receiveShadow = true; scene.add(floor);
     groundPlane = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ visible: false }));
     groundPlane.rotation.x = -Math.PI / 2; groundPlane.position.set(0, FT + 0.02, 0); scene.add(groundPlane);
@@ -230,7 +273,7 @@ register3d("tactics3d", async (kernel, content) => {
     const lid = _bx(T * 0.7, T * 0.08, T * 0.54, shade(col, 0.18), 0.6, 0.3); lid.position.set(0, T * 0.66, -T * 0.04); lid.rotation.x = -0.18; g.add(lid);
   }
   function _propContainer(g, hsh) {
-    const col = [0xb5562e, 0x2e6fb5, 0x3a7a55, 0xb5a52e][hsh % 4];
+    const col = [0x9c4f30, 0x355f80, 0x3d6e52, 0x86773a][hsh % 4]; // muted shipping-container tones
     const body = _bx(T * 0.92, T * 0.62, T * 0.5, col, 0.78, 0.25); body.position.y = T * 0.36; g.add(body);
     // corrugation ridges
     for (let i = -3; i <= 3; i++) { const rib = _bx(T * 0.02, T * 0.58, T * 0.5, shade(col, -0.25), 0.8, 0.2); rib.position.set(i * T * 0.12, T * 0.36, T * 0.255); g.add(rib); }
@@ -258,7 +301,7 @@ register3d("tactics3d", async (kernel, content) => {
   function _propCrate(g) {
     const base = _bx(T * 0.6, T * 0.5, T * 0.6, 0x33414f, 0.5, 0.6); base.position.y = T * 0.3; g.add(base);
     const cap = _bx(T * 0.62, T * 0.08, T * 0.62, shade(0x33414f, 0.35), 0.4, 0.7); cap.position.y = T * 0.56; g.add(cap);
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(T * 0.61, T * 0.05, T * 0.61), new THREE.MeshBasicMaterial({ color: 0x5fd0ff })); trim.position.y = T * 0.4; g.add(trim);
+    const trim = _bx(T * 0.62, T * 0.05, T * 0.62, 0x2a3340, 0.5, 0.55); trim.position.y = T * 0.4; g.add(trim); // dark metal banding (was a glowing cyan sci-fi line)
   }
   // Frag shredded this tile: full(3)->half(2) rebuilds smaller; half(2)->floor(0)
   // removes it. Mirrors the sim's grid mutation so visuals stay truthful.
@@ -325,7 +368,9 @@ register3d("tactics3d", async (kernel, content) => {
     const kind = hsh % 5; // 0-1 tall, 2-3 mid, 4 low
     const PAL = [0x2b3442, 0x313b4b, 0x26303d, 0x463a31, 0x4d473d, 0x39414c, 0x3a3340];
     const shellCol = PAL[hsh % PAL.length];
-    const winCol = [0xbfe6ff, 0xffdca8, 0x9fe6c0, 0xd8c8ff][hsh % 4];
+    // Warm office-window glow (amber/gold) + a little cool fluorescent — grounded
+    // night-city light, NOT cyberpunk green/purple (the old rainbow read as arcade).
+    const winCol = [0xffe1ad, 0xffcf86, 0xdfeaff, 0xfff1cf][hsh % 4];
     const floors = kind <= 1 ? (5 + (hsh % 5)) : kind <= 3 ? (3 + (hsh % 3)) : (1 + (hsh % 2));
     const bh = T * 0.92 * floors;
     // Single textured box per building — facade map tinted by the shell colour,
