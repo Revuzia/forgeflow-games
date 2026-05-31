@@ -15,7 +15,31 @@
   FFG.register("tactics", function (content) {
     var Phaser = root.Phaser;
 
-    var TILE_COLORS = { 0: 0x1c2433, 1: 0x4a5568, 2: 0x6b5535, 3: 0x8a6d3b, 4: 0x5b2a2a };
+    // Tile base fills (floor / wall / half-cover / full-cover / hazard).
+    var TILE_COLORS = { 0: 0x141d2b, 1: 0x2b3647, 2: 0x6b5535, 3: 0x8a6d3b, 4: 0x3a1414 };
+
+    // Unit-class icons (white game-icons SVGs, tinted per faction). Resolved from
+    // the unit's sprite/name so a Vanguard reads as a soldier, a Sniper as a
+    // crosshair, a Defender as a mech — never a lettered circle again.
+    var UNIT_ICONS = ["soldier", "rifle", "medic", "drone", "crosshair", "mech", "robot", "person"];
+    function iconForUnit(u) {
+      var s = ((u.sprite || "") + " " + (u.name || "")).toLowerCase();
+      if (/medic|heal|support|drip/.test(s)) return "medic";
+      if (/sniper|scope|crosshair|marksman/.test(s)) return u.side === "player" ? "rifle" : "crosshair";
+      if (/sentinel|rifle|gun|ranger/.test(s)) return "rifle";
+      if (/drone/.test(s)) return "drone";
+      if (/defender|heavy|mech|golem|tank|titan|brute/.test(s)) return "mech";
+      if (/vanguard|assault|trooper|flame|soldier|infantry|grunt/.test(s)) return "soldier";
+      if (/robot|android|cyborg|bot/.test(s)) return "robot";
+      return u.side === "player" ? "soldier" : "robot";
+    }
+    function _clamp8(v) { return v < 0 ? 0 : v > 255 ? 255 : v | 0; }
+    function shade(hex, f) { // f>0 lighten toward white, f<0 darken toward black
+      var r = (hex >> 16) & 255, g = (hex >> 8) & 255, b = hex & 255;
+      if (f >= 0) { r += (255 - r) * f; g += (255 - g) * f; b += (255 - b) * f; }
+      else { r *= (1 + f); g *= (1 + f); b *= (1 + f); }
+      return (_clamp8(r) << 16) | (_clamp8(g) << 8) | _clamp8(b);
+    }
 
     function TacticsScene() { Phaser.Scene.call(this, { key: "FFGTactics" }); }
     TacticsScene.prototype = Object.create(Phaser.Scene.prototype);
@@ -26,6 +50,9 @@
       var self = this;
       (a.images || []).forEach(function (im) { try { self.load.image(im.key, im.url); } catch (e) {} });
       (a.audio || []).forEach(function (au) { try { self.load.audio(au.key, au.url); } catch (e) {} });
+      // Unit-class icons (vector SVG -> crisp raster). Bundled by the pipeline at
+      // assets/icons/. Falls back to a letter token if a load fails.
+      UNIT_ICONS.forEach(function (k) { try { self.load.svg("ti_" + k, "assets/icons/" + k + ".svg", { width: 96, height: 96 }); } catch (e) {} });
     };
 
     TacticsScene.prototype.create = function () {
@@ -47,6 +74,7 @@
 
       this._buildSim();
       this._computeLayout();
+      this._drawBackground();
       this._drawGrid();
       this._drawUnits();
       this._buildHUD();
@@ -123,30 +151,88 @@
       return { x: Math.floor((wx - this.ox) / this.tile), y: Math.floor((wy - this.oy) / this.tile) };
     };
 
+    // Gradient backdrop + a recessed tactical "console" panel under the grid +
+    // an edge vignette. Turns the dead black void into a lit command-table scene.
+    TacticsScene.prototype._drawBackground = function () {
+      var W = this.scale.width, H = this.scale.height;
+      var bg = this.add.graphics().setDepth(-30);
+      bg.fillGradientStyle(0x070b14, 0x0a1120, 0x0c1626, 0x0a1322, 1);
+      bg.fillRect(0, 0, W, H);
+      // board platform under the grid
+      var gx0 = this.ox, gy0 = this.oy, gw = this.tile * this.sim.gridW, gh = this.tile * this.sim.gridH;
+      var p = this.add.graphics().setDepth(-10);
+      p.fillStyle(0x0b1422, 1); p.fillRoundedRect(gx0 - 16, gy0 - 16, gw + 32, gh + 32, 14);
+      p.lineStyle(2, 0x33506f, 0.9); p.strokeRoundedRect(gx0 - 16, gy0 - 16, gw + 32, gh + 32, 14);
+      p.lineStyle(1, 0x4a6f93, 0.5); p.strokeRoundedRect(gx0 - 7, gy0 - 7, gw + 14, gh + 14, 9);
+      // edge vignette
+      var d = Math.min(150, H * 0.22), vg = this.add.graphics().setDepth(-8);
+      vg.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.5, 0.5, 0, 0); vg.fillRect(0, 0, W, d);
+      vg.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.55, 0.55); vg.fillRect(0, H - d, W, d);
+      vg.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.45, 0, 0.45, 0); vg.fillRect(0, 0, d, H);
+      vg.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0.45, 0, 0.45); vg.fillRect(W - d, 0, d, H);
+    };
+
     TacticsScene.prototype._drawGrid = function () {
-      var self = this;
+      var self = this, T = this.tile;
       this._tileRects = [];
+      this._hazardGlows = [];
       for (var y = 0; y < this.sim.gridH; y++) {
         for (var x = 0; x < this.sim.gridW; x++) {
           var t = this.sim.grid[y][x];
           var w = this.t2w(x, y);
-          var rect = this.add.rectangle(w.x, w.y, this.tile - 1, this.tile - 1, TILE_COLORS[t] != null ? TILE_COLORS[t] : 0x000000);
-          rect.setStrokeStyle(1, 0x0c1018);
+          // --- floor substrate (under everything except solid walls) ---
+          var floorCol = (x + y) % 2 === 0 ? 0x141d2b : 0x121925; // subtle checker
+          if (t === 1) {
+            // Solid tech wall: raised steel block with a lit top edge.
+            this.add.rectangle(w.x, w.y, T, T, 0x222d3e).setDepth(1);
+            this.add.rectangle(w.x, w.y - T * 0.42, T, T * 0.16, shade(0x222d3e, 0.28)).setDepth(1); // top highlight
+            this.add.rectangle(w.x, w.y + T * 0.44, T, T * 0.12, shade(0x222d3e, -0.4)).setDepth(1); // base shadow
+          } else {
+            var fl = this.add.rectangle(w.x, w.y, T, T, floorCol).setDepth(0);
+            this.add.rectangle(w.x, w.y, T - 6, T - 6, shade(floorCol, 0.06)).setDepth(0); // inset panel
+          }
+          // grid line
+          this.add.rectangle(w.x, w.y, T, T, 0x000000, 0).setStrokeStyle(1, 0x223247, 0.7).setDepth(0.5);
+          // --- interactive hit target (transparent, on top) ---
+          var rect = this.add.rectangle(w.x, w.y, T, T, 0xffffff, 0.001).setDepth(2);
           rect.setData("tx", x); rect.setData("ty", y);
           rect.setInteractive();
           (function (gx, gy) {
             rect.on("pointerover", function () { self._onHover(gx, gy); });
             rect.on("pointerdown", function () { self._onTileClick(gx, gy); });
           })(x, y);
-          // cover glyph
-          if (t === 2 || t === 3) {
-            FFG.text(this, w.x, w.y, t === 3 ? "■" : "▫", { size: Math.floor(this.tile * 0.4), color: "#d9b779", origin: 0.5, depth: 2 });
-          } else if (t === 4) {
-            FFG.text(this, w.x, w.y, "♨", { size: Math.floor(this.tile * 0.4), color: "#ff7a7a", origin: 0.5, depth: 2 });
-          }
+          // --- cover / hazard decor ---
+          if (t === 2 || t === 3) this._drawCover(w, t === 3);
+          else if (t === 4) this._drawHazard(w);
           this._tileRects.push(rect);
         }
       }
+    };
+
+    // Beveled sci-fi cover block. Half cover = low; full cover = tall + bright.
+    TacticsScene.prototype._drawCover = function (w, full) {
+      var T = this.tile, s = full ? T * 0.78 : T * 0.6, h = full ? T * 0.62 : T * 0.42;
+      var base = full ? 0x7b6326 : 0x5e4d22;
+      this.add.ellipse(w.x, w.y + T * 0.3, s * 1.05, T * 0.28, 0x000000, 0.3).setDepth(2); // shadow
+      this.add.rectangle(w.x, w.y + (T - h) * 0.18, s, h, base).setStrokeStyle(2, shade(base, -0.45)).setDepth(3);
+      this.add.rectangle(w.x, w.y + (T - h) * 0.18 - h * 0.34, s, h * 0.3, shade(base, 0.3)).setDepth(3); // top light
+      this.add.rectangle(w.x, w.y + (T - h) * 0.18, s * 0.5, 2, shade(base, -0.3)).setDepth(3); // seam
+      if (full) this.add.rectangle(w.x, w.y + (T - h) * 0.18, s * 0.7, 2, shade(base, -0.3)).setDepth(3);
+    };
+
+    // Hazard tile: dark scorched floor, hazard-stripe border, pulsing ember glow,
+    // and a danger triangle — replaces the emoji that read as a coffee cup.
+    TacticsScene.prototype._drawHazard = function (w) {
+      var T = this.tile;
+      this.add.rectangle(w.x, w.y, T - 2, T - 2, 0x2a0f0f).setDepth(1);
+      var glow = this.add.rectangle(w.x, w.y, T - 4, T - 4, 0xff5520, 0.28).setDepth(1.5);
+      this._hazardGlows.push(glow);
+      this.tweens.add({ targets: glow, alpha: 0.55, duration: 700 + Math.random() * 300, yoyo: true, repeat: -1, ease: "Sine.inOut" });
+      this.add.rectangle(w.x, w.y, T - 4, T - 4, 0x000000, 0).setStrokeStyle(2, 0xff7a2a, 0.8).setDepth(2);
+      // danger triangle
+      var g = this.add.graphics().setDepth(2.2); var r = T * 0.18;
+      g.fillStyle(0xffb454, 0.95); g.fillTriangle(w.x, w.y - r, w.x - r * 0.9, w.y + r * 0.7, w.x + r * 0.9, w.y + r * 0.7);
+      g.fillStyle(0x2a0f0f, 1); g.fillRect(w.x - 1.4, w.y - r * 0.35, 2.8, r * 0.7); g.fillRect(w.x - 1.4, w.y + r * 0.45, 2.8, 2.6);
     };
 
     TacticsScene.prototype._drawUnits = function () {
@@ -155,15 +241,27 @@
     };
 
     TacticsScene.prototype._makeUnitView = function (u) {
-      var w = this.t2w(u.x, u.y);
+      var w = this.t2w(u.x, u.y), R = this.tile * 0.38;
       var c = this.add.container(w.x, w.y).setDepth(10);
-      var col = u.tint != null ? FFG.color(u.tint) : (u.side === "player" ? 0x47b4ff : 0xff5a5a);
-      var ring = this.add.circle(0, 0, this.tile * 0.36, col).setStrokeStyle(2, 0x0c1018);
-      var initial = this.add.text(0, 0, (u.name || u.id)[0].toUpperCase(), { fontFamily: "monospace", fontSize: Math.floor(this.tile * 0.34) + "px", color: "#0a0e1a", resolution: 2 }).setOrigin(0.5);
-      var hpBg = this.add.rectangle(0, -this.tile * 0.5, this.tile * 0.7, 4, 0x222a38).setOrigin(0.5);
-      var hpFill = this.add.rectangle(-this.tile * 0.35, -this.tile * 0.5, this.tile * 0.7, 4, 0x3ddc84).setOrigin(0, 0.5);
-      c.add([ring, initial, hpBg, hpFill]);
-      this._unitViews[u.id] = { c: c, ring: ring, hpFill: hpFill, col: col };
+      var col = u.tint != null ? FFG.color(u.tint) : (u.side === "player" ? 0x3aa0ff : 0xff5a4a);
+      var dark = shade(col, -0.5), hpW = R * 1.9;
+      var shadow = this.add.ellipse(0, R * 0.78, R * 1.7, R * 0.7, 0x000000, 0.38);
+      var base = this.add.circle(0, 0, R, col).setStrokeStyle(3, dark);
+      var hi = this.add.circle(0, -R * 0.22, R * 0.74, shade(col, 0.28), 0.4); // top sheen
+      var parts = [shadow, base, hi];
+      var iconKey = "ti_" + iconForUnit(u), icon;
+      if (this.textures.exists(iconKey)) {
+        icon = this.add.image(0, -R * 0.04, iconKey).setDisplaySize(R * 1.2, R * 1.2);
+        icon.setTint(u.side === "player" ? 0x06101c : 0xfff0ee);
+      } else {
+        icon = this.add.text(0, 0, (u.name || u.id)[0].toUpperCase(), { fontFamily: "monospace", fontSize: Math.floor(R * 0.95) + "px", color: "#06101c", resolution: 2 }).setOrigin(0.5);
+      }
+      parts.push(icon);
+      var hpBg = this.add.rectangle(0, -R * 1.32, hpW + 2, 6, 0x0a0f17).setStrokeStyle(1, 0x000000);
+      var hpFill = this.add.rectangle(-hpW / 2, -R * 1.32, hpW, 5, 0x3ddc84).setOrigin(0, 0.5);
+      parts.push(hpBg, hpFill);
+      c.add(parts);
+      this._unitViews[u.id] = { c: c, ring: base, hpFill: hpFill, hpW: hpW, col: col, dark: dark };
     };
 
     TacticsScene.prototype._refreshUnit = function (u) {
@@ -171,7 +269,7 @@
       if (!v) return;
       if (u.hp <= 0) { v.c.setVisible(false); return; }
       var pct = Math.max(0, u.hp / u.maxHp);
-      v.hpFill.width = this.tile * 0.7 * pct;
+      v.hpFill.width = v.hpW * pct;
       v.hpFill.fillColor = pct > 0.5 ? 0x3ddc84 : pct > 0.25 ? 0xf5c518 : 0xff5a5a;
     };
 
@@ -250,7 +348,8 @@
       reach.forEach(function (r) {
         self._reachSet[r.x + "," + r.y] = r.cost;
         var w = self.t2w(r.x, r.y);
-        var hl = self.add.rectangle(w.x, w.y, self.tile - 4, self.tile - 4, 0x47b4ff, u.actionPoints > 0 ? 0.18 : 0.06).setDepth(3);
+        var hl = self.add.rectangle(w.x, w.y, self.tile - 3, self.tile - 3, 0x4fd0ff, u.actionPoints > 0 ? 0.24 : 0.08).setDepth(3);
+        hl.setStrokeStyle(1, 0x8fe6ff, u.actionPoints > 0 ? 0.55 : 0.2);
         self._highlights.push(hl);
       });
       // ring pulse on selected
@@ -272,7 +371,7 @@
       this._reachSet = null;
       var self = this;
       // reset selection ring on all player units
-      this.sim.player_units.forEach(function (pu) { var v = self._unitViews[pu.id]; if (v && pu.hp > 0) v.ring.setStrokeStyle(2, 0x0c1018); });
+      this.sim.player_units.forEach(function (pu) { var v = self._unitViews[pu.id]; if (v && pu.hp > 0) v.ring.setStrokeStyle(3, v.dark); });
     };
 
     TacticsScene.prototype._clearPath = function () {
@@ -362,16 +461,23 @@
       }
       if (e.type === "attack") {
         var a = e.payload.attacker, t = e.payload.target;
-        // tracer line
         var wa = this.t2w(a.x, a.y), wt = this.t2w(t.x, t.y);
-        var line = this.add.line(0, 0, wa.x, wa.y, wt.x, wt.y, e.payload.hit ? 0xffe066 : 0x8899aa, 0.9).setOrigin(0, 0).setLineWidth(2).setDepth(15);
-        this.tweens.add({ targets: line, alpha: 0, duration: 280, onComplete: function () { line.destroy(); } });
+        // muzzle flash at the shooter
+        var mz = this.add.circle(wa.x, wa.y, this.tile * 0.16, 0xfff2b0).setDepth(16);
+        this.tweens.add({ targets: mz, scale: 2.2, alpha: 0, duration: 180, onComplete: function () { mz.destroy(); } });
+        // tracer
+        var line = this.add.line(0, 0, wa.x, wa.y, wt.x, wt.y, e.payload.hit ? 0xffe066 : 0x8aa0bc, 1).setOrigin(0, 0).setLineWidth(e.payload.hit ? 3 : 2).setDepth(15);
+        this.tweens.add({ targets: line, alpha: 0, duration: 260, onComplete: function () { line.destroy(); } });
         if (e.payload.hit) {
           FFG.audio.sfx("hit", 0.5);
-          this._floatText(t, "-" + e.payload.damage, "#ff6b6b");
+          // impact burst + ring at target
+          var burst = this.add.circle(wt.x, wt.y, this.tile * 0.2, 0xffd27a).setDepth(17);
+          this.tweens.add({ targets: burst, scale: 2.6, alpha: 0, duration: 300, onComplete: function () { burst.destroy(); } });
+          this.cameras.main.shake(120, 0.004);
+          this._floatText(t, "-" + e.payload.damage, "#ff8a7a");
           this._flash(t);
           this._refreshUnit(t);
-          if (e.payload.killed) { this._floatText(t, "DOWN", "#ffffff"); }
+          if (e.payload.killed) { this._floatText(t, "ELIMINATED", "#ffffff"); }
         } else {
           FFG.audio.sfx("miss", 0.4);
           this._floatText(t, "MISS", "#aab4c8");

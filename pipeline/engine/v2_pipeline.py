@@ -124,9 +124,26 @@ def gate(content_path, genre):
     return ok, (cout + "\n" + sout).strip()
 
 
-def feel_and_fidelity(slug, genre, deploy_shot=None):
-    """Soft gates — best effort; never fatal. Returns dict of results."""
-    results = {"feel": "skipped", "fidelity": "skipped"}
+# Generic "begin gameplay" snippet so the fidelity screenshot shows the ACTUAL
+# game (not just the title menu), for any genre (2D or 3D).
+_START_EVAL = (
+    "(async()=>{const s=ms=>new Promise(r=>setTimeout(r,ms));"
+    "function T(){if(window.__FFG3D__&&window.__FFG3D__.controller)return window.__FFG3D__.controller.__test;"
+    "if(window.__FFG_GAME__&&window.__FFG_GAME__.scene){var x=window.__FFG_GAME__.scene.scenes.find(z=>z.__test);return x&&x.__test;}return null;}"
+    "var t=null,n=0;while(!t&&n++<40){t=T();if(!t)await s(200);}"
+    "if(t&&t.start)t.start();await s(900);if(t&&t.placeAuto){t.placeAuto();await s(700);}})()"
+)
+
+
+def feel_and_fidelity(slug, genre):
+    """Feel (Playwright play-bot, reliable) + fidelity (claude -p vision). Captures
+    its OWN in-game screenshot so fidelity actually runs every time. Returns a
+    structured verdict; build_one decides ship/hold from it.
+
+    Conservative by design: a build only counts as fidelity-passing if the vision
+    call ran AND approved it. claude -p unavailable / capture failure => NOT pass
+    (we never ship a build we couldn't see)."""
+    results = {"feel": "skipped", "feel_detail": "", "fidelity": "skipped", "fidelity_detail": "", "shot": None}
     server = None
     try:
         server = subprocess.Popen(
@@ -142,13 +159,23 @@ def feel_and_fidelity(slug, genre, deploy_shot=None):
             results["feel_detail"] = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else ""
         except Exception as e:
             results["feel"] = f"error: {e}"
-        # fidelity needs a screenshot (the feel gate / a capture step would provide it);
-        # left as deferred unless a shot path is supplied by a capture step.
-        if deploy_shot and Path(deploy_shot).exists():
+        # Capture a representative in-game frame (reliable Playwright capture).
+        shot = ROOT / "games" / slug / "_fidelity.png"
+        try:
+            sys.path.insert(0, str(ENGINE / "gates"))
+            from capture import capture  # noqa
+            capture(url, str(shot), pre_eval=_START_EVAL)
+            if shot.exists():
+                results["shot"] = str(shot)
+        except Exception as e:
+            results["fidelity"] = f"capture_error: {e}"
+        # Vision fidelity (claude -p) on the captured frame.
+        if results.get("shot"):
             try:
-                r2 = subprocess.run([sys.executable, str(ENGINE / "gates" / "fidelity_gate.py"), deploy_shot, genre, "--run"],
+                r2 = subprocess.run([sys.executable, str(ENGINE / "gates" / "fidelity_gate.py"), str(shot), genre, "--run"],
                                     capture_output=True, text=True, timeout=180)
                 results["fidelity"] = "pass" if r2.returncode == 0 else "fail"
+                results["fidelity_detail"] = (r2.stdout or r2.stderr or "").strip()[-500:]
             except Exception as e:
                 results["fidelity"] = f"error: {e}"
     finally:
@@ -220,11 +247,35 @@ def build_one(item, deploy=False):
     gdir = build_order.assemble(slug, content)
     log(f"assembled -> {gdir}")
 
-    # SOFT gates (feel/fidelity) — best effort
+    # PLAY + LOOK gates. These are now BLOCKING for shipping: a build must both
+    # play to a resolution (feel) AND look like a finished game of its genre
+    # (fidelity vision). The lettered-circle tactics build shipped because these
+    # were "best effort" and fidelity never even ran — never again.
     soft = feel_and_fidelity(slug, genre)
-    log(f"soft gates: {soft}")
+    log(f"feel+fidelity gates: feel={soft.get('feel')} fidelity={soft.get('fidelity')} :: {soft.get('fidelity_detail','')[:200]}")
 
-    # DEPLOY (gated)
+    feel_ok = soft.get("feel") == "pass"
+    fid = soft.get("fidelity")
+    fidelity_ok = fid == "pass"
+    if not feel_ok or not fidelity_ok:
+        # Build something, but it does NOT look/play shippable — HOLD it. No
+        # READY_TO_DEPLOY, no publish. Flag it for repair + record a learning.
+        reasons = []
+        if not feel_ok:
+            reasons.append(f"feel={soft.get('feel')} ({soft.get('feel_detail','')[:80]})")
+        if not fidelity_ok:
+            reasons.append(f"fidelity={fid} ({soft.get('fidelity_detail','')[:140]})")
+        reason = "; ".join(reasons)
+        learn.record(genre, f"{slug} held: failed play/look gate", "do not ship below the genre's visual+feel bar; inspect the held build and fix the renderer/content: " + reason, slug)
+        _mark(slug, "held", "blocked from shipping: " + reason)
+        try:
+            (gdir / "HELD_NOT_SHIPPABLE").write_text(reason + "\n", encoding="utf-8")
+        except Exception:
+            pass
+        log(f"HELD {slug}: NOT shipping — {reason}")
+        return False
+
+    # DEPLOY (only reached when feel + fidelity both pass)
     if deploy:
         try:
             dep = subprocess.run([sys.executable, str(ROOT / "pipeline" / "deploy_game.py"), slug],
@@ -237,8 +288,8 @@ def build_one(item, deploy=False):
             log(f"deploy error: {e}")
     else:
         (gdir / "READY_TO_DEPLOY").write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
-        _mark(slug, "built", "staged; awaiting deploy approval")
-        log(f"{slug} BUILT + staged (no auto-publish). Review then run deploy_game.py {slug}")
+        _mark(slug, "built", "staged; passed feel+fidelity; awaiting deploy approval")
+        log(f"{slug} BUILT + staged (passed feel+fidelity, no auto-publish).")
     return True
 
 

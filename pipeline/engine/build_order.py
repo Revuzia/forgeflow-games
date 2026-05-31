@@ -199,9 +199,25 @@ def assemble(slug, content):
         shutil.copy2(src, dst)
     if is3d:
         _copy_3d_assets(gdir, content)
+    if genre == "tactics":
+        _copy_tactics_assets(gdir)
     (gdir / "content.json").write_text(json.dumps(content, indent=2), encoding="utf-8")
     (gdir / "index.html").write_text(_index_html_3d(content) if is3d else _index_html_2d(content, prof), encoding="utf-8")
     return gdir
+
+
+def _copy_tactics_assets(gdir):
+    """Bundle the tactics unit-class icons (recolored white game-icons SVGs) so
+    the renderer draws real unit silhouettes instead of lettered circles."""
+    src = RUNTIME / "tactics-assets"
+    if not src.is_dir():
+        return
+    for f in src.rglob("*"):
+        if f.is_file():
+            rel = f.relative_to(src)
+            dst = gdir / "assets" / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(f, dst)
 
 
 def _copy_3d_assets(gdir, content):

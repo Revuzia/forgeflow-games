@@ -24,20 +24,35 @@ import sys
 from pathlib import Path
 
 PROMPT_TEMPLATE = (
-    "You are a game art director doing QA. The attached screenshot is from a "
-    "browser game in the '{genre}' genre. {reference}\n\n"
-    "Score it and return ONLY compact JSON: "
+    "You are a strict game art director doing ship/no-ship QA on a COMMERCIAL "
+    "game. The attached screenshot is from a browser game in the '{genre}' genre. "
+    "{reference}\n\n"
+    "Hold it to a published-indie-game bar. AUTOMATICALLY fail (reads_as_genre=false, "
+    "genre_fidelity<=30) if you see PLACEHOLDER / programmer-art, e.g.: units drawn "
+    "as plain circles/squares with a LETTER on them; emoji used as sprites/objects; "
+    "flat single-colour debug tiles with no texture or theme; objects that are just "
+    "geometric primitives with no art; a scene that looks like a prototype or a "
+    "developer test rather than a finished game. A real game has themed, textured, "
+    "lit art with clear iconography — not labelled tokens.\n\n"
+    "Return ONLY compact JSON: "
     '{{"genre_fidelity":0-100,"visual_defects":["..."],"reads_as_genre":true/false,'
-    '"notes":"one sentence"}}.\n'
-    "genre_fidelity = how much it looks like a polished example of this genre. "
-    "visual_defects = concrete problems (dark boxes around sprites, blurry text, "
-    "overlapping HUD, inconsistent perspective, placeholder rectangles). Be strict."
+    '"placeholder_art":true/false,"notes":"one sentence"}}.\n'
+    "genre_fidelity = how much it looks like a polished, SHIPPED example of this genre. "
+    "placeholder_art = true if any of the placeholder signs above are present. "
+    "visual_defects = concrete problems (lettered-circle units, emoji objects, dark "
+    "boxes around sprites, blurry text, overlapping HUD, untextured debug grid, "
+    "placeholder rectangles). Be harsh — when in doubt, fail."
 )
 
 GENRE_REFERENCE = {
-    "tactics": "It should read as a turn-based tactics grid (clear tiles, unit tokens, cover, a HUD with turn/objective).",
-    "topdown": "It should read as a top-down adventure (character on a tiled map, HUD with hearts).",
-    "platformer": "It should read as a side-view platformer (ground, platforms, a character, parallax).",
+    "tactics": "It should read as a polished turn-based tactics game like XCOM / Into the Breach: "
+               "themed unit sprites or clear class iconography (NOT lettered circles), textured/lit "
+               "tiles, real cover objects, hazard tiles that look hazardous (not an emoji), and a "
+               "styled HUD with turn/objective/fleet status.",
+    "battleship": "It should read as a polished naval game: a real water surface, 3D ship models, "
+                  "clear hit/miss markers, a styled HUD — not flat coloured panels.",
+    "topdown": "It should read as a top-down adventure (character sprite on a tiled, textured map, HUD with hearts).",
+    "platformer": "It should read as a side-view platformer (textured ground, platforms, a character sprite, parallax).",
 }
 
 
@@ -67,6 +82,19 @@ def score_screenshot(img_path, genre, reference_note=None, timeout=120):
         except json.JSONDecodeError:
             pass
     return {"ok": False, "error": "could not parse vision JSON", "raw": raw[:400], "genre_fidelity": None}
+
+
+def _passes(result):
+    """Ship/no-ship verdict. Requires a parsed result, a genre-appropriate read,
+    no placeholder art, and a solid score. Conservative: an unparseable/errored
+    vision call does NOT pass (we never ship a build we couldn't actually see)."""
+    if not result.get("ok"):
+        return False
+    if result.get("placeholder_art") is True:
+        return False
+    if result.get("reads_as_genre") is False:
+        return False
+    return (result.get("genre_fidelity") or 0) >= 65
 
 
 def capture_then_score(url, genre, out_png, reference_note=None):
@@ -102,7 +130,7 @@ def main():
     if run:
         result = score_screenshot(img, genre)
         print(json.dumps(result, indent=2))
-        sys.exit(0 if result.get("ok") and (result.get("genre_fidelity") or 0) >= 60 else 1)
+        sys.exit(0 if _passes(result) else 1)
     # Default: print the operator command (safe inside interactive sessions).
     cmd = build_command(img, genre)
     print("[fidelity_gate] vision call deferred (claude -p blocked in interactive session).")
