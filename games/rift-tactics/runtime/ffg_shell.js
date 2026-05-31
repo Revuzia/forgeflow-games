@@ -68,6 +68,7 @@
       "position:absolute;inset:0;display:none;align-items:center;justify-content:center;" +
       "flex-direction:column;gap:14px;z-index:60;" + bg +
       "color:#eaf3ff;font-family:'Segoe UI',system-ui,monospace;text-align:center");
+    this.ov.className = "ffg-shell-overlay"; // tagged so a restarting scene can clean up orphans
     this.parent.appendChild(this.ov);
   };
 

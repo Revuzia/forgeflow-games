@@ -31,8 +31,14 @@
     TacticsScene.prototype.create = function () {
       var self = this;
       FFG.audio.bind(this);
-      this._mission = (content.missions && content.missions[0]) || content;
-      this._missionIndex = 0;
+      // Campaign: which mission are we on? Persisted on `root` so scene.restart()
+      // can advance through content.missions[] (the engine used to only ever play
+      // mission 0, stranding every later mission).
+      var missionList = (content.missions && content.missions.length) ? content.missions : [content];
+      this._missionIndex = Math.max(0, Math.min((root.__FFG_TACTICS_MISSION__ | 0), missionList.length - 1));
+      this._mission = missionList[this._missionIndex] || content;
+      this._missionCount = missionList.length;
+      root.__FFG_RESULT__ = null; // fresh result for this mission/run
       this._inputLocked = false;
       this._selected = null;
       this._highlights = [];
@@ -51,6 +57,12 @@
       // 3D games use. Gameplay starts on Play.
       this._started = false; this._paused = false;
       var self2 = this;
+      // scene.restart() (campaign advance) leaves the prior shell's DOM overlay
+      // orphaned — remove any before building a fresh one.
+      try {
+        var olds = root.document.querySelectorAll(".ffg-shell-overlay");
+        for (var oi = 0; oi < olds.length; oi++) olds[oi].remove();
+      } catch (e) {}
       if (root.FFG && root.FFG.Shell) {
         this._shell = new root.FFG.Shell({
           parent: (this.game.canvas && this.game.canvas.parentNode) || root.document.body,
@@ -62,7 +74,13 @@
           onPause: function () { self2._paused = true; },
           onResume: function () { self2._paused = false; },
         });
-        this._shell.start();
+        // Mid-campaign (advanced from a prior mission) -> skip the title menu and
+        // drop straight into the next briefing; show the menu only on a cold start.
+        if (root.__FFG_TACTICS_AUTOSTART__) {
+          root.__FFG_TACTICS_AUTOSTART__ = false;
+          this._shell.hide(); this._shell.phase = "playing"; // so Esc-pause works mid-campaign
+          this._begin();
+        } else { this._shell.start(); }
       } else {
         this._begin(); // shell unavailable -> play immediately (back-compat)
       }
@@ -160,7 +178,8 @@
     // ── HUD ────────────────────────────────────────────────────────────────
     TacticsScene.prototype._buildHUD = function () {
       var W = this.scale.width, H = this.scale.height;
-      this._objText = FFG.text(this, 10, 8, "Objective: " + (this._mission.objective || "Eliminate all hostiles"), { size: 13, color: "#cfe3ff" });
+      var missionTag = this._missionCount > 1 ? ("Mission " + (this._missionIndex + 1) + "/" + this._missionCount + "  ·  ") : "";
+      this._objText = FFG.text(this, 10, 8, missionTag + "Objective: " + (this._mission.objective || "Eliminate all hostiles"), { size: 13, color: "#cfe3ff" });
       this._turnText = FFG.text(this, W - 10, 8, "Turn 1", { size: 13, color: "#cfe3ff", origin: 1, originY: 0 });
       this._panel = FFG.text(this, 10, H - 24, "", { size: 13, color: "#fde047" });
       // End Turn button
@@ -392,18 +411,52 @@
     };
 
     TacticsScene.prototype._win = function (victory) {
-      root.__FFG_RESULT__ = { victory: victory, turns: this.sim.turnNumber };
+      if (this._ending) return; // guard: only fire once per mission resolution
+      this._ending = true;
       FFG.audio.sfx(victory ? "win" : "lose", 0.6);
-      // Standard end screen via the engine shell (with Play Again). Fallback to
-      // an in-canvas overlay if the shell isn't present.
-      if (this._shell) {
-        this._shell.end(victory, (victory ? "Mission complete" : "Squad eliminated") + " · " + this.sim.turnNumber + " turns");
+      var self = this;
+      var hasNext = victory && (this._missionIndex + 1 < this._missionCount);
+      if (hasNext) {
+        // Campaign advance — briefing for the next mission, then load it.
+        var missions = content.missions || [];
+        var next = missions[this._missionIndex + 1] || {};
+        this._campaignOverlay("MISSION COMPLETE", "#7CFC9A",
+          "Cleared in " + this.sim.turnNumber + " turns  ·  Next: " + (next.name || ("Mission " + (this._missionIndex + 2))),
+          "NEXT MISSION ▶", function () {
+            root.__FFG_TACTICS_MISSION__ = self._missionIndex + 1;
+            root.__FFG_TACTICS_AUTOSTART__ = true;
+            self.scene.restart();
+          });
         return;
       }
-      var W = this.scale.width, H = this.scale.height;
-      this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.6).setDepth(200);
-      FFG.text(this, W / 2, H / 2 - 10, victory ? "VICTORY" : "DEFEAT", { size: 48, color: victory ? "#7CFC9A" : "#ff6b6b", origin: 0.5, stroke: "#000", strokeThickness: 5, depth: 201 });
-      FFG.text(this, W / 2, H / 2 + 36, victory ? "Mission complete" : "Squad eliminated", { size: 16, color: "#ffffff", origin: 0.5, depth: 201 });
+      // Terminal state: full campaign cleared, or defeat.
+      root.__FFG_RESULT__ = { victory: victory, turns: this.sim.turnNumber, mission: this._missionIndex + 1, missions: this._missionCount };
+      if (!victory) {
+        this._campaignOverlay("DEFEAT", "#ff6b6b",
+          "Squad eliminated  ·  Mission " + (this._missionIndex + 1) + "/" + this._missionCount,
+          "RETRY MISSION", function () { root.__FFG_TACTICS_AUTOSTART__ = true; self.scene.restart(); });
+      } else if (this._shell) {
+        this._shell.end(true, "Campaign complete · " + this._missionCount + " missions cleared");
+      } else {
+        this._campaignOverlay("CAMPAIGN COMPLETE", "#7CFC9A", this._missionCount + " missions cleared",
+          "PLAY AGAIN", function () { root.__FFG_TACTICS_MISSION__ = 0; root.location.reload(); });
+      }
+    };
+
+    // Styled in-canvas overlay with a single action button — used for the
+    // between-mission briefing and the retry/complete screens.
+    TacticsScene.prototype._campaignOverlay = function (title, color, subtitle, btnLabel, onClick) {
+      var W = this.scale.width, H = this.scale.height, D = 300;
+      this.add.rectangle(W / 2, H / 2, W, H, 0x06101c, 0.82).setDepth(D);
+      FFG.text(this, W / 2, H / 2 - 46, title, { size: 46, color: color, origin: 0.5, stroke: "#000", strokeThickness: 6, depth: D + 1 });
+      FFG.text(this, W / 2, H / 2 + 4, subtitle, { size: 15, color: "#cfe3ff", origin: 0.5, depth: D + 1 });
+      var bw = 240, bh = 46, by = H / 2 + 58;
+      var btn = this.add.rectangle(W / 2, by, bw, bh, 0x1c8a4a).setStrokeStyle(2, 0x7CFC9A).setDepth(D + 1).setInteractive({ useHandCursor: true });
+      FFG.text(this, W / 2, by, btnLabel, { size: 16, color: "#eafff0", origin: 0.5, depth: D + 2 });
+      var self = this;
+      btn.on("pointerover", function () { btn.setFillStyle(0x25a85b); });
+      btn.on("pointerout", function () { btn.setFillStyle(0x1c8a4a); });
+      btn.on("pointerdown", function () { FFG.audio.sfx("click", 0.5); onClick.call(self); });
     };
 
     // ── Test hooks: let gates + play-bots drive without clicking ────────────────
