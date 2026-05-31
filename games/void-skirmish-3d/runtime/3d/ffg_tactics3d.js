@@ -28,6 +28,32 @@ function shade(hex, f) {
   return (c(r) << 16) | (c(g) << 8) | c(b);
 }
 
+// One tileable tech-panel tile drawn to a canvas; repeated gridW×gridH over the
+// floor plane so a big map stays one draw-call. Edge-symmetric so seams line up.
+let _floorTex = null;
+function makeFloorTexture() {
+  if (_floorTex) return _floorTex;
+  const S = 256, cv = document.createElement("canvas"); cv.width = cv.height = S;
+  const g = cv.getContext("2d");
+  const grd = g.createLinearGradient(0, 0, S, S);
+  grd.addColorStop(0, "#26313f"); grd.addColorStop(0.5, "#2d3a4a"); grd.addColorStop(1, "#222c39");
+  g.fillStyle = grd; g.fillRect(0, 0, S, S);
+  // faint diagonal panel hatching
+  g.strokeStyle = "rgba(255,255,255,0.025)"; g.lineWidth = 1;
+  for (let i = -S; i < S * 2; i += 14) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + S, S); g.stroke(); }
+  // beveled tile border (split so the seam is symmetric across edges)
+  const b = 6;
+  g.fillStyle = "rgba(120,170,210,0.16)"; g.fillRect(0, 0, S, b); g.fillRect(0, 0, b, S);
+  g.fillStyle = "rgba(0,0,0,0.30)"; g.fillRect(0, S - b, S, b); g.fillRect(S - b, 0, b, S);
+  // inner inset frame + corner bolts
+  g.strokeStyle = "rgba(95,208,255,0.10)"; g.lineWidth = 2; g.strokeRect(18, 18, S - 36, S - 36);
+  g.fillStyle = "rgba(159,196,255,0.22)";
+  for (const [bx, by] of [[24, 24], [S - 24, 24], [24, S - 24], [S - 24, S - 24]]) { g.beginPath(); g.arc(bx, by, 3.2, 0, 7); g.fill(); }
+  const tex = new THREE.CanvasTexture(cv);
+  if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8; _floorTex = tex; return tex;
+}
+
 register3d("tactics3d", async (kernel, content) => {
   const scene = kernel.scene;
   const TB = window.FFG.sim.TacticalBattle;
@@ -68,30 +94,35 @@ register3d("tactics3d", async (kernel, content) => {
   }
 
   // ── Board ─────────────────────────────────────────────────────────────────
-  const floorTargets = []; // interactive tile meshes for raycasting
+  // Big maps: ONE tiled floor plane + a single invisible ground plane for
+  // raycasting (convert hit point -> tile), instead of a mesh per tile. Keeps
+  // draw-calls + hit-testing cheap so the map can be XCOM-scale.
+  const FT = 0.16; // floor-top height
+  let groundPlane = null;
+  function tileAt(px, pz) {
+    const x = Math.floor((px + W / 2) / T), y = Math.floor((pz + H / 2) / T);
+    return (x >= 0 && y >= 0 && x < gridW && y < gridH) ? { x, y } : null;
+  }
   async function buildBoard() {
-    // Real textured sci-fi floor panels (modular-space-kit GLB) instead of plain
-    // boxes — a genuine facility floor. Walls/cover/hazard stay procedural.
-    const SK = new URL("./spacekit/", import.meta.url).href;
-    let floorProto = null, floorScale = 1, floorTop = 0.18;
-    try {
-      floorProto = await kernel.loadGLTF(SK + "template-floor.glb");
-      const bb = new THREE.Box3().setFromObject(floorProto); const d = bb.getSize(new THREE.Vector3());
-      floorScale = (T * 0.99) / (Math.max(d.x, d.z) || 1);
-      floorTop = (d.y || 0.2) * floorScale; // panel thickness after scaling
-    } catch (e) { floorProto = null; }
-
     const plat = new THREE.Mesh(new THREE.BoxGeometry(W + 1.4, 0.6, H + 1.4),
       new THREE.MeshStandardMaterial({ color: 0x0c1626, roughness: 0.9, metalness: 0.2 }));
     plat.position.set(0, -0.35, 0); plat.receiveShadow = true; scene.add(plat);
+    // Tiled tech-panel floor (one plane, repeated texture).
+    const ftex = makeFloorTexture(); ftex.wrapS = ftex.wrapT = THREE.RepeatWrapping; ftex.repeat.set(gridW, gridH);
+    if (THREE.SRGBColorSpace) ftex.colorSpace = THREE.SRGBColorSpace;
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, H),
+      new THREE.MeshStandardMaterial({ map: ftex, color: 0x9fb3c8, roughness: 0.72, metalness: 0.35 }));
+    floor.rotation.x = -Math.PI / 2; floor.position.set(0, FT, 0); floor.receiveShadow = true; scene.add(floor);
+    groundPlane = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ visible: false }));
+    groundPlane.rotation.x = -Math.PI / 2; groundPlane.position.set(0, FT + 0.02, 0); scene.add(groundPlane);
 
     for (let y = 0; y < gridH; y++) {
       for (let x = 0; x < gridW; x++) {
         const t = mission.grid[y][x];
         const w = cell(x, y);
-        if (t === 1) { // WALL = a BUILDING block — tall tower with lit window rows on street faces
+        if (t === 1) { // BUILDING tower — varied height, lit window rows on street faces
           const hsh = ((x * 73856093) ^ (y * 19349663)) >>> 0;
-          const bh = T * (2.4 + (hsh % 5) * 0.45); // varied building heights
+          const bh = T * (2.6 + (hsh % 6) * 0.6);
           const shellCol = [0x2b3442, 0x313b4b, 0x26303d][hsh % 3];
           const m = new THREE.Mesh(new THREE.BoxGeometry(T, bh, T),
             new THREE.MeshStandardMaterial({ color: shellCol, roughness: 0.7, metalness: 0.35 }));
@@ -99,19 +130,18 @@ register3d("tactics3d", async (kernel, content) => {
           const roof = new THREE.Mesh(new THREE.BoxGeometry(T, T * 0.12, T),
             new THREE.MeshStandardMaterial({ color: shade(shellCol, 0.2), roughness: 0.5, metalness: 0.6 }));
           roof.position.set(w.x, bh, w.z); scene.add(roof);
-          // Glowing window rows on STREET-FACING sides only (bloom makes them shine).
           const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
           const winCol = [0xbfe6ff, 0xffdca8, 0x9fe6c0][hsh % 3];
           for (const d of dirs) {
             const nx = x + d[0], ny = y + d[1];
             const ng = (ny >= 0 && ny < gridH && nx >= 0 && nx < gridW) ? mission.grid[ny][nx] : 0;
-            if (ng === 1) continue; // interior face (against another building) — no windows
+            if (ng === 1) continue; // skip faces against another building
             const rows = Math.max(2, Math.floor(bh / (T * 0.7)));
             for (let r = 0; r < rows; r++) {
               const wy = (r + 0.7) * (bh / (rows + 0.4));
-              const lit = ((hsh >> r) & 1) || Math.random() < 0.5;
-              const winMat = new THREE.MeshBasicMaterial({ color: lit ? winCol : 0x12202c });
-              const pane = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.66, bh / (rows + 1) * 0.5), winMat);
+              const lit = ((hsh >> r) & 1) || ((x + y + r) % 3 === 0);
+              const pane = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.66, bh / (rows + 1) * 0.5),
+                new THREE.MeshBasicMaterial({ color: lit ? winCol : 0x12202c }));
               pane.position.set(w.x + d[0] * (T * 0.505), wy, w.z + d[1] * (T * 0.505));
               pane.rotation.y = d[0] !== 0 ? Math.PI / 2 : 0;
               scene.add(pane);
@@ -119,25 +149,6 @@ register3d("tactics3d", async (kernel, content) => {
           }
           continue;
         }
-        // FLOOR — textured GLB panel (fallback: a lit tech box).
-        if (floorProto) {
-          const f = floorProto.clone(true); f.scale.setScalar(floorScale);
-          f.position.set(w.x, 0, w.z); f.traverse((o) => { if (o.isMesh) o.receiveShadow = true; }); scene.add(f);
-        } else {
-          const checker = (x + y) % 2 === 0 ? 0x223044 : 0x1a2636;
-          const tile = new THREE.Mesh(new THREE.BoxGeometry(T * 0.97, 0.3, T * 0.97),
-            new THREE.MeshStandardMaterial({ color: checker, roughness: 0.6, metalness: 0.5 }));
-          tile.position.set(w.x, 0.02, w.z); tile.receiveShadow = true; scene.add(tile);
-        }
-        const edge = new THREE.Mesh(new THREE.RingGeometry(T * 0.46, T * 0.485, 4),
-          new THREE.MeshBasicMaterial({ color: 0x2f6c8f, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
-        edge.rotation.x = -Math.PI / 2; edge.rotation.z = Math.PI / 4; edge.position.set(w.x, floorTop + 0.02, w.z); scene.add(edge);
-        // interactive overlay
-        const hit = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.96, T * 0.96),
-          new THREE.MeshBasicMaterial({ color: 0x4fd0ff, transparent: true, opacity: 0, side: THREE.DoubleSide }));
-        hit.rotation.x = -Math.PI / 2; hit.position.set(w.x, floorTop + 0.03, w.z); hit.userData = { x, y };
-        scene.add(hit); floorTargets.push(hit);
-
         if (t === 2 || t === 3) buildCover(w, t === 3);
         else if (t === 4) buildHazard(w);
       }
@@ -466,18 +477,23 @@ register3d("tactics3d", async (kernel, content) => {
   dom.addEventListener("pointerup", (ev) => {
     if (!down) return; const moved = Math.hypot(ev.clientX - down.x, ev.clientY - down.y); const left = down.b === 0; down = null;
     if (!left || moved > 6) return; // right/drag = camera
-    const hit = kernel.raycast(ev.clientX, ev.clientY, floorTargets);
-    if (hit.length) onTileClick(hit[0].object.userData.x, hit[0].object.userData.y);
+    if (!groundPlane) return;
+    const hit = kernel.raycast(ev.clientX, ev.clientY, [groundPlane]);
+    if (!hit.length) return;
+    const tile = tileAt(hit[0].point.x, hit[0].point.z);
+    if (tile) onTileClick(tile.x, tile.y);
   });
   // Hover hit-preview: standing over an enemy with a soldier selected shows the
   // shot odds + FLANKED, the XCOM targeting read.
   let hoverTip = null;
   dom.addEventListener("pointermove", (ev) => {
     if (phase !== "battle" || busy || sim.ended || sim.currentPhase !== "player" || !selected) { if (hoverTip) { scene.remove(hoverTip); hoverTip = null; } return; }
-    const hit = kernel.raycast(ev.clientX, ev.clientY, floorTargets);
+    if (!groundPlane) return;
+    const hit = kernel.raycast(ev.clientX, ev.clientY, [groundPlane]);
     if (hoverTip) { scene.remove(hoverTip); hoverTip = null; }
     if (!hit.length) return;
-    const { x, y } = hit[0].object.userData;
+    const tile = tileAt(hit[0].point.x, hit[0].point.z); if (!tile) return;
+    const { x, y } = tile;
     const occ = sim.allUnits().find((u) => u.hp > 0 && u.x === x && u.y === y && u.side === "enemy");
     if (!occ) return;
     const bd = sim.hitBreakdown(selected, occ); const los = sim.hasLineOfSight(selected.x, selected.y, occ.x, occ.y);
