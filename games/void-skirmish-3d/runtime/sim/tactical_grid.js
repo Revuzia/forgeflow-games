@@ -56,6 +56,73 @@
       this.onEvent = config.onEvent || function () {}; // (type, payload) for the renderer
       this.ended = false;
       this.log = [];
+      // Concealment + pods (XCOM): the squad starts hidden; enemies are grouped
+      // into pods that stay dormant until SPOTTED, then scamper to cover.
+      this.concealed = config.concealment !== false;
+      this.sightRange = config.sightRange != null ? config.sightRange : 9;
+      this._assignPods();
+    }
+
+    // Cluster enemies into pods by proximity (greedy). Each pod reveals/acts as a
+    // unit. Honors an explicit `pod` field on a unit if present.
+    _assignPods() {
+      this.pods = {}; let auto = 0;
+      const placed = [];
+      for (const e of this.enemy_units) {
+        if (e.pod != null) { (this.pods[e.pod] = this.pods[e.pod] || { id: e.pod, revealed: false }); placed.push(e); continue; }
+        let best = null, bestD = 1e9;
+        for (const p of placed) {
+          const d = Math.abs(p.x - e.x) + Math.abs(p.y - e.y);
+          if (d < bestD) { bestD = d; best = p; }
+        }
+        e.pod = (best && bestD <= 6) ? best.pod : ("pod" + (auto++));
+        this.pods[e.pod] = this.pods[e.pod] || { id: e.pod, revealed: false };
+        placed.push(e);
+      }
+      // a single-pod fallback so "concealment off" content still works
+      if (!this.enemy_units.length) this.concealed = false;
+    }
+
+    podRevealed(id) { return !this.pods[id] || this.pods[id].revealed; }
+
+    // Reveal a pod: mark it + break squad concealment. On reveal during the enemy
+    // turn the pod "scampers" (repositions toward nearby cover) instead of firing.
+    revealPod(id, opts) {
+      const pod = this.pods[id];
+      if (!pod || pod.revealed) return false;
+      pod.revealed = true; this.concealed = false;
+      const members = this.enemy_units.filter((e) => e.pod === id && e.hp > 0);
+      members.forEach((m) => { m.revealed = true; });
+      this.onEvent("reveal", { pod: id, units: members.map((m) => m.id) });
+      this.log.push("pod " + id + " revealed");
+      if (opts && opts.scamper) members.forEach((m) => this._scamper(m));
+      return true;
+    }
+
+    // Move a freshly-revealed enemy one step toward the nearest cover-adjacent tile.
+    _scamper(e) {
+      if (e.actionPoints < 1) return;
+      let best = null, bestScore = -1;
+      for (const r of this.reachableTiles(e)) {
+        // prefer tiles that have adjacent cover (defensive) and are closer to a foe
+        const hasCover = this.hasAnyCover({ x: r.x, y: r.y });
+        const nearestFoe = this.aliveAllies().reduce((m, a) => Math.min(m, Math.abs(a.x - r.x) + Math.abs(a.y - r.y)), 1e9);
+        const score = (hasCover ? 10 : 0) - r.cost * 0.5 - nearestFoe * 0.1;
+        if (score > bestScore) { bestScore = score; best = r; }
+      }
+      if (best && (best.x !== e.x || best.y !== e.y)) { this.moveUnit(e.id, best.x, best.y); e.actionPoints = 0; }
+      else e.actionPoints = 0; // brace in place
+    }
+
+    // Any unrevealed pod with a member that can see a player (LOS within sight)?
+    _spotCheck(opts) {
+      for (const e of this.aliveEnemies()) {
+        if (this.podRevealed(e.pod)) continue;
+        for (const a of this.aliveAllies()) {
+          const d = Math.abs(e.x - a.x) + Math.abs(e.y - a.y);
+          if (d <= this.sightRange && this.hasLineOfSight(e.x, e.y, a.x, a.y)) { this.revealPod(e.pod, opts); break; }
+        }
+      }
     }
 
     _initUnit(u, side) {
@@ -91,6 +158,8 @@
         suppressedBy: null,           // id of unit suppressing this one
         suppressAimPenalty: 0,        // aim debuff while suppressed
         overwatch: false,             // holding a reaction shot
+        pod: u.pod != null ? u.pod : null, // enemy pod id (assigned in _assignPods)
+        revealed: side === "player",  // players always "revealed"; enemies start hidden
       };
     }
 
@@ -248,9 +317,11 @@
       const flanked = this.isFlanked(attacker, target);
       const flankBonus = flanked ? 0.25 : (cover === 0 ? 0.1 : 0);
       const suppress = attacker.suppressAimPenalty || 0; // pinned shooters fire wild
-      const chance = inRange ? Math.max(0.05, Math.min(0.99, attacker.aim - distancePenalty - coverPenalty + flankBonus - suppress)) : 0;
-      const critChance = flanked ? 0.5 : 0.1;
-      return { chance, critChance, cover, coverPenalty, distancePenalty, flankBonus, suppress, flanked, dist, inRange };
+      const ambush = !!this.concealed && attacker.side === "player"; // firing from concealment = the drop
+      const ambushBonus = ambush ? 0.15 : 0;
+      const chance = inRange ? Math.max(0.05, Math.min(0.99, attacker.aim - distancePenalty - coverPenalty + flankBonus + ambushBonus - suppress)) : 0;
+      const critChance = (flanked || ambush) ? 0.5 : 0.1;
+      return { chance, critChance, cover, coverPenalty, distancePenalty, flankBonus, ambush, ambushBonus, suppress, flanked, dist, inRange };
     }
 
     calculateHitChance(attacker, target) { return this.hitBreakdown(attacker, target).chance; }
@@ -267,6 +338,8 @@
       // Hazard tile damage
       if (this.grid[toY][toX] === 4) { u.hp = Math.max(0, u.hp - 2); this.log.push(u.id + " took 2 hazard dmg"); }
       this.onEvent("move", { unit: u, path: path });
+      // A player walking into an enemy's sight trips the pod — it reveals + scampers.
+      if (u.side === "player") this._spotCheck({ scamper: true });
       this._triggerOverwatch(u); // opposing overwatchers fire on the mover
       this._checkEnd();
       return path;
@@ -285,21 +358,25 @@
       // Shooting ENDS the turn (XCOM 2 action economy); reaction shots are free.
       if (!reaction) a.actionPoints = 0;
       const roll = this.rng();
+      let res;
       if (roll <= chance) {
-        const crit = !reaction && bd.flanked && this.rng() < bd.critChance;
+        const crit = !reaction && (bd.flanked || bd.ambush) && this.rng() < bd.critChance;
         let dmg = Math.max(1, a.atk - t.def);
         if (crit) dmg = Math.round(dmg * 1.5);
         t.hp = Math.max(0, t.hp - dmg);
         if (t.hp <= 0) a._kills = (a._kills || 0) + 1;
-        this.log.push(a.id + (reaction ? " overwatch-hit " : crit ? " CRIT " : " hit ") + t.id + " for " + dmg);
-        this.onEvent("attack", { attacker: a, target: t, hit: true, damage: dmg, chance: chance, killed: t.hp <= 0, crit: crit, flanked: bd.flanked, reaction: reaction });
-        this._checkEnd();
-        return { success: true, hit: true, damage: dmg, killed: t.hp <= 0, chance: chance, crit: crit, flanked: bd.flanked };
+        this.log.push(a.id + (reaction ? " overwatch-hit " : crit ? " CRIT " : bd.ambush ? " ambush-hit " : " hit ") + t.id + " for " + dmg);
+        this.onEvent("attack", { attacker: a, target: t, hit: true, damage: dmg, chance: chance, killed: t.hp <= 0, crit: crit, flanked: bd.flanked, ambush: bd.ambush, reaction: reaction });
+        res = { success: true, hit: true, damage: dmg, killed: t.hp <= 0, chance: chance, crit: crit, flanked: bd.flanked };
+      } else {
+        this.log.push(a.id + (reaction ? " overwatch-missed " : " missed ") + t.id);
+        this.onEvent("attack", { attacker: a, target: t, hit: false, chance: chance, reaction: reaction });
+        res = { success: true, hit: false, chance: chance };
       }
-      this.log.push(a.id + (reaction ? " overwatch-missed " : " missed ") + t.id);
-      this.onEvent("attack", { attacker: a, target: t, hit: false, chance: chance, reaction: reaction });
+      // Firing breaks the squad's concealment + reveals the target's pod.
+      if (a.side === "player" && !reaction) { this.revealPod(t.pod); this.concealed = false; }
       this._checkEnd();
-      return { success: true, hit: false, chance: chance };
+      return res;
     }
 
     // ── Class abilities (Phase 3) ──────────────────────────────────────────────
@@ -340,6 +417,14 @@
         u.actionPoints = 0; // abilities end the unit's turn
         if (def.charges != null) u.charges[abilityId] = Math.max(0, (u.charges[abilityId] || 0) - 1);
         if (def.cooldown) u.cooldowns[abilityId] = def.cooldown;
+        // Offensive abilities break concealment + reveal the affected pod(s).
+        if (u.side === "player" && def.target !== "ally") {
+          this.concealed = false;
+          const tgt = opts.targetId ? this.getUnit(opts.targetId) : null;
+          if (tgt && tgt.pod != null) this.revealPod(tgt.pod);
+          // a tile blast reveals any pod with a member caught in/near the radius
+          if (def.target === "tile") this.enemy_units.forEach((e) => { if (e.hp > 0 && Math.max(Math.abs(e.x - opts.tileX), Math.abs(e.y - opts.tileY)) <= (def.radius || 1) + 1) this.revealPod(e.pod); });
+        }
         this._checkEnd();
       }
       return res;
@@ -482,8 +567,10 @@
     }
 
     _runEnemyTurn() {
+      this._spotCheck(); // pods that can see a soldier at turn start activate + engage
       for (const e of this.aliveEnemies()) {
         if (this.ended) return;
+        if (!this.podRevealed(e.pod)) continue; // dormant pod stays put until spotted
         let targets = this.aliveAllies();
         if (!targets.length) break;
         targets = targets.slice().sort((p, q) =>

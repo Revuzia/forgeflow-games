@@ -406,6 +406,12 @@ register3d("tactics3d", async (kernel, content) => {
     unitViews[u.id] = { group: g, ring, hpFill, cover, base: col, dark, hpW: T * 0.58, char, clips, dead: false };
     faceUnit(u, isPlayer ? -1 : 1); // players look "north" toward the enemy, enemies "south"
     updateCover(u);
+    // Fog of war: an enemy whose pod isn't revealed stays hidden until spotted.
+    if (!isPlayer && !sim.podRevealed(u.pod)) g.visible = false;
+  }
+  // Reveal a pod's units in the scene (called from the sim's "reveal" event).
+  function revealPodView(ids) {
+    (ids || []).forEach((id) => { const v = unitViews[id]; if (v) { v.group.visible = true; const u = sim.getUnit(id); if (u) { const w = cell(u.x, u.y); floatText({ x: w.x, y: T * 1.9, z: w.z }, "CONTACT!", 0xff5a3c); } } });
   }
   // Show each unit's best available cover as an XCOM-style shield over its head.
   function updateCover(u) {
@@ -539,7 +545,7 @@ register3d("tactics3d", async (kernel, content) => {
       <div style="position:absolute;top:12px;left:14px;font-family:'Segoe UI',system-ui,monospace">
         <div style="font-size:19px;font-weight:800;letter-spacing:2px;text-shadow:0 2px 10px #000">${content.title || "Operation"}</div>
         <div style="margin-top:6px;display:inline-block;background:rgba(8,18,32,.72);border:1px solid ${bc}55;border-left:3px solid ${bc};border-radius:4px;padding:5px 13px;font-size:13px">
-          ${missions.length > 1 ? `<span style="opacity:.7">Mission ${missionIndex + 1}/${missions.length}</span> · ` : ""}<span style="opacity:.7">Turn ${sim.turnNumber}</span> · <span style="color:${bc};font-weight:700">${banner}</span>
+          ${missions.length > 1 ? `<span style="opacity:.7">Mission ${missionIndex + 1}/${missions.length}</span> · ` : ""}<span style="opacity:.7">Turn ${sim.turnNumber}</span> · <span style="color:${bc};font-weight:700">${banner}</span>${sim.concealed ? ` · <span style="color:#9fe6c0;font-weight:700;letter-spacing:1px">◑ CONCEALED</span>` : ""}
         </div>${sel}
       </div>
       <div style="position:absolute;top:12px;right:14px;font-family:'Segoe UI',monospace;background:rgba(8,18,32,.62);border:1px solid #2a4458;border-radius:9px;padding:9px 13px;text-align:right;font-size:12px">
@@ -762,6 +768,12 @@ register3d("tactics3d", async (kernel, content) => {
       if (v) floatText({ x: v.group.position.x, y: T, z: v.group.position.z }, "OVERWATCH", 0x9fd0ff);
       sfx("overwatch", 0.5);
       return 150;
+    }
+    if (e.type === "reveal") {
+      revealPodView(e.payload.units);
+      sfx("overwatch", 0.5); // a sharp "contact" cue
+      setHUD();
+      return 360;
     }
     if (e.type === "ability") return playAbilityEvent(e.payload);
     if (e.type === "end") { return 100; }
