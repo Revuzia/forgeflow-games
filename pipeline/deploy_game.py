@@ -56,9 +56,12 @@ def resolve_cf_api_token():
     """env → repo .secrets/cf_api_token.txt → api_config providers.cloudflare.api_token.
     An R2-Edit API token (Option B) is the portable, no-interactive-OAuth path that
     works the same on any PC."""
+    cfg = _read_api_config()
     return (os.environ.get("CLOUDFLARE_API_TOKEN")
             or _read_secret_file("cf_api_token.txt")
-            or ((_read_api_config().get("providers", {}).get("cloudflare", {}) or {}).get("api_token")))
+            or ((cfg.get("providers", {}).get("cloudflare", {}) or {}).get("api_token"))
+            # existing config slot (a wrangler/user token granted R2 Edit works here too)
+            or ((((cfg.get("cloudflare", {}) or {}).get("tokens", {}) or {}).get("isimcha85", {}) or {}).get("token")))
 
 
 def ensure_cf_env():
