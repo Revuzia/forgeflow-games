@@ -146,23 +146,27 @@ register3d("tactics3d", async (kernel, content) => {
   }
 
   // ── Units (REAL rigged + animated characters) ───────────────────────────────
-  // Players = an animated soldier; enemies = an animated combat robot, tinted +
-  // scaled per class so they read as distinct, escalating threats.
-  const SOLDIER_URL = new URL("./characters/soldier.glb", import.meta.url).href;
-  const ROBOT_URL = new URL("./characters/robot.glb", import.meta.url).href;
-  const CLIPS = { // map our intents to each model's clip names
-    soldier: { idle: "Idle", walk: "Walk", run: "Run", die: null, attack: null },
-    robot: { idle: "Idle", walk: "Walking", run: "Running", die: "Death", attack: "Punch" },
+  // Players = an animated soldier; enemies come in distinct animated species —
+  // a combat robot (drones), a heavy cyborg (defenders), and a beast (stalkers)
+  // — so the player faces visibly different, escalating threats.
+  const CHAR_BASE = new URL("./characters/", import.meta.url).href;
+  const MODELS = {
+    //                native height (measured)   target tile-height   clip name map
+    soldier:   { url: "soldier.glb",   h: 1.82,  th: T * 1.45, clips: { idle: "Idle", walk: "Walk", die: null, attack: null } },
+    robot:     { url: "robot.glb",     h: 4.38,  th: T * 1.05, clips: { idle: "Idle", walk: "Walking", die: "Death", attack: "Punch" } },
+    brainstem: { url: "brainstem.glb", h: 1.83,  th: T * 1.45, clips: { idle: "animation_0", walk: "animation_0", die: null, attack: null } },
+    fox:       { url: "fox.glb",       h: 79.03, th: T * 0.95, clips: { idle: "Survey", walk: "Walk", die: null, attack: null } },
   };
-  // enemy class -> { tint, scale } for visual variety + escalation
-  function enemyStyle(u) {
+  // enemy class -> model + tint (genuine model variety, not just a recolor)
+  function enemyKind(u) {
     const s = ((u.sprite || "") + " " + (u.name || "")).toLowerCase();
-    if (/sniper|marksman/.test(s)) return { tint: 0xb86bff, scale: 0.95 };   // purple sniper-bot
-    if (/defender|heavy|mech|tank|brute|elite/.test(s)) return { tint: 0xff5a3c, scale: 1.25 }; // big red heavy
-    if (/drone|assault/.test(s)) return { tint: 0xff9a3c, scale: 0.9 };       // orange drone
-    return { tint: 0xff6a5a, scale: 1.0 };
+    if (/defender|heavy|mech|tank|brute|titan|elite/.test(s)) return { model: "brainstem", tint: 0xff5a3c, scale: 1.18 }; // heavy cyborg
+    if (/sniper|scout|stalker|beast|hound|ranger|marksman/.test(s)) return { model: "fox", tint: 0xb86bff, scale: 1.0 };   // agile beast
+    if (/drone|assault/.test(s)) return { model: "robot", tint: 0xff9a3c, scale: 0.92 };                                    // drone
+    return { model: "robot", tint: 0xff6a5a, scale: 1.0 };
   }
   function unitColor(u) { return u.tint != null ? new THREE.Color(u.tint).getHex() : (u.side === "player" ? 0x3aa0ff : 0xff5a4a); }
+  function resolveClip(char, name) { return (name && char.actions[name]) ? name : (char.animations[0] && char.animations[0].name) || null; }
 
   async function makeUnit(u) {
     const w = cell(u.x, u.y);
@@ -174,24 +178,31 @@ register3d("tactics3d", async (kernel, content) => {
     ring.position.y = 0.06; g.add(ring);
 
     const isPlayer = u.side === "player";
-    const url = isPlayer ? SOLDIER_URL : ROBOT_URL;
-    const clips = isPlayer ? CLIPS.soldier : CLIPS.robot;
+    const kind = isPlayer ? { model: "soldier", scale: 1 } : enemyKind(u);
+    const def = MODELS[kind.model];
     let char = null;
-    try { char = await kernel.loadCharacter(url); } catch (e) { char = null; }
+    try { char = await kernel.loadCharacter(CHAR_BASE + def.url); } catch (e) { char = null; }
+    // resolve this model's actual clip names (some models name clips differently)
+    let clips = { idle: null, walk: null, die: null, attack: null };
     if (char) {
+      clips = {
+        idle: resolveClip(char, def.clips.idle), walk: resolveClip(char, def.clips.walk),
+        die: def.clips.die && char.actions[def.clips.die] ? def.clips.die : null,
+        attack: def.clips.attack && char.actions[def.clips.attack] ? def.clips.attack : null,
+      };
       const mdl = char.scene;
       g.add(mdl);
       // Skinned-mesh clones carry stale bounding volumes -> the renderer culls
       // them even when on-screen (and Box3.setFromObject mis-measures them). Use
       // the models' KNOWN native heights (feet at origin) for a correct scale.
       mdl.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) o.frustumCulled = false; });
-      const NATIVE_H = isPlayer ? 1.82 : 4.38; // measured: Soldier.glb / RobotExpressive.glb
-      const targetH = T * (isPlayer ? 1.45 : 1.05) * (isPlayer ? 1 : enemyStyle(u).scale);
+      const NATIVE_H = def.h;
+      const targetH = def.th * (kind.scale || 1);
       mdl.scale.setScalar(targetH / NATIVE_H);
       mdl.position.y = 0.05; // model origin is at the feet -> sit on the base ring
       // enemy class tint; players get a faint team-coloured emissive so the dark
       // camo soldier reads against the dark board.
-      const accent = isPlayer ? col : enemyStyle(u).tint;
+      const accent = isPlayer ? col : (kind.tint || 0xff6a5a);
       mdl.traverse((o) => {
         if ((o.isMesh || o.isSkinnedMesh) && o.material) {
           o.material = o.material.clone();
