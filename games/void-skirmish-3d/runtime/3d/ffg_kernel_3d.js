@@ -11,6 +11,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { clone as skeletonClone } from "three/addons/utils/SkeletonUtils.js";
 
 export const genres3d = {};
 export function register3d(name, builder) { genres3d[name] = builder; }
@@ -57,6 +58,8 @@ export class Kernel3D {
     this.pointer = new THREE.Vector2();
     this.loader = new GLTFLoader();
     this._gltfCache = {};
+    this._charCache = {};
+    this._mixers = [];
     this._updaters = [];
     this._tweens = [];
     this._running = false;
@@ -207,6 +210,39 @@ export class Kernel3D {
     return root.clone(true);
   }
 
+  /** Load a RIGGED + ANIMATED glTF (soldiers, robots). Returns a fresh instance:
+   * { scene, mixer, actions, play(name,opts), animations }. Uses SkeletonUtils to
+   * clone skinned meshes correctly, wires an AnimationMixer, and registers it for
+   * per-frame updates. `play(name)` crossfades to a clip (loops by default). */
+  async loadCharacter(url) {
+    if (!this._charCache[url]) {
+      const gltf = await this.loader.loadAsync(url);
+      gltf.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      this._charCache[url] = gltf;
+    }
+    const gltf = this._charCache[url];
+    const scene = skeletonClone(gltf.scene);
+    const mixer = new THREE.AnimationMixer(scene);
+    this._mixers.push(mixer);
+    const actions = {};
+    (gltf.animations || []).forEach((clip) => { actions[clip.name] = mixer.clipAction(clip); });
+    let current = null;
+    function play(name, opts) {
+      opts = opts || {};
+      const next = actions[name]; if (!next) return null;
+      if (current === next && !opts.force) return next;
+      next.reset();
+      next.setLoop(opts.once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
+      next.clampWhenFinished = !!opts.once;
+      next.enabled = true; next.setEffectiveTimeScale(opts.timeScale || 1); next.setEffectiveWeight(1);
+      if (current && current !== next) { next.crossFadeFrom(current, opts.fade != null ? opts.fade : 0.2, false); }
+      next.play(); current = next; return next;
+    }
+    return { scene, mixer, actions, play, animations: gltf.animations || [] };
+  }
+
+  disposeMixer(mixer) { const i = this._mixers.indexOf(mixer); if (i >= 0) this._mixers.splice(i, 1); }
+
   /** Screen pointer (clientX/Y) -> intersections against `objects`. */
   raycast(clientX, clientY, objects) {
     const rect = this.renderer.domElement.getBoundingClientRect();
@@ -261,6 +297,7 @@ export class Kernel3D {
           }
         }
       }
+      for (let i = 0; i < this._mixers.length; i++) this._mixers[i].update(dt);
       for (const u of this._updaters) u(dt, this.clock.elapsedTime);
       this.renderer.render(this.scene, this.camera);
       this._raf = requestAnimationFrame(loop);

@@ -107,44 +107,99 @@ register3d("tactics3d", async (kernel, content) => {
     kernel.onUpdate((dt) => { tt += dt; tile.material.emissiveIntensity = 0.3 + 0.25 * (0.5 + 0.5 * Math.sin(tt * 3)); });
   }
 
-  // ── Units (procedural low-poly soldiers) ────────────────────────────────────
+  // ── Units (REAL rigged + animated characters) ───────────────────────────────
+  // Players = an animated soldier; enemies = an animated combat robot, tinted +
+  // scaled per class so they read as distinct, escalating threats.
+  const SOLDIER_URL = new URL("./characters/soldier.glb", import.meta.url).href;
+  const ROBOT_URL = new URL("./characters/robot.glb", import.meta.url).href;
+  const CLIPS = { // map our intents to each model's clip names
+    soldier: { idle: "Idle", walk: "Walk", run: "Run", die: null, attack: null },
+    robot: { idle: "Idle", walk: "Walking", run: "Running", die: "Death", attack: "Punch" },
+  };
+  // enemy class -> { tint, scale } for visual variety + escalation
+  function enemyStyle(u) {
+    const s = ((u.sprite || "") + " " + (u.name || "")).toLowerCase();
+    if (/sniper|marksman/.test(s)) return { tint: 0xb86bff, scale: 0.95 };   // purple sniper-bot
+    if (/defender|heavy|mech|tank|brute|elite/.test(s)) return { tint: 0xff5a3c, scale: 1.25 }; // big red heavy
+    if (/drone|assault/.test(s)) return { tint: 0xff9a3c, scale: 0.9 };       // orange drone
+    return { tint: 0xff6a5a, scale: 1.0 };
+  }
   function unitColor(u) { return u.tint != null ? new THREE.Color(u.tint).getHex() : (u.side === "player" ? 0x3aa0ff : 0xff5a4a); }
-  function makeUnit(u) {
+
+  async function makeUnit(u) {
     const w = cell(u.x, u.y);
     const g = new THREE.Group(); g.position.set(w.x, 0.2, w.z);
     const col = unitColor(u), dark = shade(col, -0.5);
-    // faction base ring
-    const ring = new THREE.Mesh(new THREE.CylinderGeometry(T * 0.34, T * 0.34, 0.12, 24),
+    // faction base ring (selection + team id)
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(T * 0.36, T * 0.36, 0.1, 26),
       new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.35, roughness: 0.5 }));
-    ring.position.y = 0.07; g.add(ring);
-    // body (tapered) + head — a clean low-poly trooper silhouette
-    const bodyMat = new THREE.MeshStandardMaterial({ color: shade(col, -0.15), roughness: 0.6, metalness: 0.3 });
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(T * 0.15, T * 0.22, T * 0.7, 12), bodyMat);
-    body.position.y = T * 0.45; body.castShadow = true; g.add(body);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(T * 0.15, 14, 12),
-      new THREE.MeshStandardMaterial({ color: shade(col, 0.25), roughness: 0.4, metalness: 0.4 }));
-    head.position.y = T * 0.92; head.castShadow = true; g.add(head);
-    // weapon nub
-    const gun = new THREE.Mesh(new THREE.BoxGeometry(T * 0.5, T * 0.07, T * 0.07),
-      new THREE.MeshStandardMaterial({ color: 0x20262e, roughness: 0.5, metalness: 0.6 }));
-    gun.position.set(T * 0.22, T * 0.55, 0); g.add(gun);
+    ring.position.y = 0.06; g.add(ring);
+
+    const isPlayer = u.side === "player";
+    const url = isPlayer ? SOLDIER_URL : ROBOT_URL;
+    const clips = isPlayer ? CLIPS.soldier : CLIPS.robot;
+    let char = null;
+    try { char = await kernel.loadCharacter(url); } catch (e) { char = null; }
+    if (char) {
+      const mdl = char.scene;
+      g.add(mdl);
+      // Skinned-mesh clones carry stale bounding volumes -> the renderer culls
+      // them even when on-screen (and Box3.setFromObject mis-measures them). Use
+      // the models' KNOWN native heights (feet at origin) for a correct scale.
+      mdl.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) o.frustumCulled = false; });
+      const NATIVE_H = isPlayer ? 1.82 : 4.38; // measured: Soldier.glb / RobotExpressive.glb
+      const targetH = T * (isPlayer ? 1.45 : 1.05) * (isPlayer ? 1 : enemyStyle(u).scale);
+      mdl.scale.setScalar(targetH / NATIVE_H);
+      mdl.position.y = 0.05; // model origin is at the feet -> sit on the base ring
+      // enemy class tint; players get a faint team-coloured emissive so the dark
+      // camo soldier reads against the dark board.
+      const accent = isPlayer ? col : enemyStyle(u).tint;
+      mdl.traverse((o) => {
+        if ((o.isMesh || o.isSkinnedMesh) && o.material) {
+          o.material = o.material.clone();
+          if (!isPlayer && o.material.color) o.material.color.lerp(new THREE.Color(accent), 0.6);
+          o.material.emissive = new THREE.Color(accent).multiplyScalar(isPlayer ? 0.22 : 0.18);
+        }
+      });
+      char.play(clips.idle, { fade: 0 });
+    } else {
+      // fallback: simple capsule so the unit still exists if the GLB fails
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(T * 0.16, T * 0.22, T * 0.8, 10), new THREE.MeshStandardMaterial({ color: col }));
+      body.position.y = T * 0.5; g.add(body);
+    }
     // HP bar (billboard)
-    const hpBg = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.6, 0.16), new THREE.MeshBasicMaterial({ color: 0x0a0f17 }));
-    const hpFill = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.56, 0.1), new THREE.MeshBasicMaterial({ color: 0x3ddc84 }));
-    hpBg.position.set(0, T * 1.25, 0); hpFill.position.set(0, T * 1.25, 0.01);
+    const hpY = T * 1.7;
+    const hpBg = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.62, 0.16), new THREE.MeshBasicMaterial({ color: 0x0a0f17 }));
+    const hpFill = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.58, 0.1), new THREE.MeshBasicMaterial({ color: 0x3ddc84 }));
+    hpBg.position.set(0, hpY, 0); hpFill.position.set(0, hpY, 0.01);
     g.add(hpBg); g.add(hpFill);
     scene.add(g);
     kernel.onUpdate(() => { hpBg.quaternion.copy(kernel.camera.quaternion); hpFill.quaternion.copy(kernel.camera.quaternion); });
-    unitViews[u.id] = { group: g, ring, hpFill, base: col, dark, hpW: T * 0.56 };
+    unitViews[u.id] = { group: g, ring, hpFill, base: col, dark, hpW: T * 0.58, char, clips, dead: false };
+    faceUnit(u, isPlayer ? -1 : 1); // players look "north" toward the enemy, enemies "south"
   }
+  function faceUnit(u, dir) { const v = unitViews[u.id]; if (v && v.char) v.char.scene.rotation.y = dir > 0 ? 0 : Math.PI; }
+  function faceToward(u, tx, ty) {
+    const v = unitViews[u.id]; if (!v || !v.char) return;
+    const a = Math.atan2(tx - u.x, ty - u.y); // grid +z is "down"; model faces +z at rot 0
+    v.char.scene.rotation.y = a;
+  }
+  function anim(u, intent, opts) { const v = unitViews[u.id]; if (v && v.char && v.clips[intent]) v.char.play(v.clips[intent], opts); }
   function refreshUnit(u) {
     const v = unitViews[u.id]; if (!v) return;
-    if (u.hp <= 0) { v.group.visible = false; return; }
+    if (u.hp <= 0) { killUnit(u); return; }
     const pct = Math.max(0, u.hp / u.maxHp);
     v.hpFill.scale.x = Math.max(0.001, pct);
     v.hpFill.position.x = -(v.hpW * (1 - pct)) / 2;
     v.hpFill.material.color.setHex(pct > 0.5 ? 0x3ddc84 : pct > 0.25 ? 0xf5c518 : 0xff5a5a);
   }
+  function killUnit(u) {
+    const v = unitViews[u.id]; if (!v || v.dead) return; v.dead = true;
+    v.hpFill.visible = false;
+    if (v.char && v.clips.die) { v.char.play(v.clips.die, { once: true, fade: 0.15 }); kernel.tween({ target: v.group.position, to: { y: v.group.position.y }, duration: 1.0, onComplete: () => fadeOut(v) }); }
+    else { kernel.tween({ target: v.group.rotation, to: { z: Math.PI / 2 }, duration: 0.5 }); kernel.tween({ target: v.group.position, to: { y: -0.4 }, duration: 0.8, onComplete: () => fadeOut(v) }); }
+  }
+  function fadeOut(v) { setTimeout(() => { v.group.visible = false; }, 700); }
 
   // ── Camera (iso, rotatable) ─────────────────────────────────────────────────
   const span = Math.max(W, H);
@@ -228,13 +283,17 @@ register3d("tactics3d", async (kernel, content) => {
     const path = sim.moveUnit(u.id, x, y); if (!path) return;
     busy = true; clearHighlights();
     const w = cell(x, y);
-    kernel.tween({ target: unitViews[u.id].group.position, to: { x: w.x, z: w.z }, duration: 0.32, onComplete: () => { busy = false; if (u.hp > 0 && u.actionPoints > 0) selectUnit(u); else deselect(); } });
-    kernel.playSound("", 0);
+    faceToward(u, x, y); anim(u, "walk", { fade: 0.15 });
+    const dur = Math.max(0.3, Math.min(1.1, (path.length || 1) * 0.18));
+    kernel.tween({ target: unitViews[u.id].group.position, to: { x: w.x, z: w.z }, duration: dur, onComplete: () => { anim(u, "idle", { fade: 0.2 }); busy = false; if (u.hp > 0 && u.actionPoints > 0) selectUnit(u); else deselect(); } });
   }
   function tryAttack(target) {
     const u = selected; if (!u || u.actionPoints < 1) return;
     const r = sim.attackUnit(u.id, target.id); if (!r || r.invalid) return;
     busy = true; clearHighlights();
+    faceToward(u, target.x, target.y);
+    anim(u, "attack", { once: true, fade: 0.1 }); // robot punches; soldier has none (recoil below)
+    if (!unitViews[u.id].clips.attack) { const gp = unitViews[u.id].group; const oz = gp.position.z; kernel.tween({ target: gp.position, to: { z: oz - 0.15 }, duration: 0.08, onComplete: () => kernel.tween({ target: gp.position, to: { z: oz }, duration: 0.12 }) }); }
     const a = unitViews[u.id].group.position.clone(); a.y = T * 0.55;
     const b = unitViews[target.id].group.position.clone(); b.y = T * 0.55;
     // tracer
@@ -250,7 +309,7 @@ register3d("tactics3d", async (kernel, content) => {
       refreshUnit(target);
       if (r.killed) floatText(b, "DOWN", 0xffffff);
     } else { floatText(b, "MISS", 0xaab4c8); }
-    setTimeout(() => { busy = false; if (sim.ended) return showEnd(); if (u.hp > 0 && u.actionPoints > 0) selectUnit(u); else deselect(); }, 380);
+    setTimeout(() => { anim(u, "idle", { fade: 0.2 }); busy = false; if (sim.ended) return showEnd(); if (u.hp > 0 && u.actionPoints > 0) selectUnit(u); else deselect(); }, 480);
   }
   function floatText(pos, txt, color) {
     const spr = makeTextSprite(txt, color);
@@ -274,13 +333,22 @@ register3d("tactics3d", async (kernel, content) => {
   }
   function playEvent(e) {
     if (e.type === "move") {
-      const v = unitViews[e.payload.unit.id], path = e.payload.path || [];
-      if (v && path.length) { const last = path[path.length - 1]; const w = cell(last.x, last.y); kernel.tween({ target: v.group.position, to: { x: w.x, z: w.z }, duration: 0.3 }); return Math.min(path.length, 6) * 80 + 60; }
+      const mu = e.payload.unit, v = unitViews[mu.id], path = e.payload.path || [];
+      if (v && path.length) {
+        const last = path[path.length - 1], w = cell(last.x, last.y);
+        faceToward(mu, last.x, last.y); anim(mu, "walk", { fade: 0.15 });
+        const dur = Math.max(0.3, Math.min(1.1, path.length * 0.16));
+        kernel.tween({ target: v.group.position, to: { x: w.x, z: w.z }, duration: dur, onComplete: () => anim(mu, "idle", { fade: 0.2 }) });
+        return dur * 1000 + 60;
+      }
       return 30;
     }
     if (e.type === "attack") {
-      const a = unitViews[e.payload.attacker.id], t = unitViews[e.payload.target.id];
+      const au = e.payload.attacker, tu = e.payload.target;
+      const a = unitViews[au.id], t = unitViews[tu.id];
       if (a && t) {
+        faceToward(au, tu.x, tu.y); anim(au, "attack", { once: true, fade: 0.1 });
+        setTimeout(() => { if (!a.dead) anim(au, "idle", { fade: 0.2 }); }, 520);
         const pa = a.group.position.clone(); pa.y = T * 0.55; const pb = t.group.position.clone(); pb.y = T * 0.55;
         const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pa, pb]), new THREE.LineBasicMaterial({ color: e.payload.hit ? 0xffe066 : 0x88aacc, transparent: true }));
         scene.add(line); kernel.tween({ target: line.material, to: { opacity: 0 }, duration: 0.3, onComplete: () => scene.remove(line) });
@@ -306,7 +374,7 @@ register3d("tactics3d", async (kernel, content) => {
 
   // ── Boot ────────────────────────────────────────────────────────────────────
   buildSim(); buildBoard();
-  sim.allUnits().forEach(makeUnit);
+  for (const u of sim.allUnits()) await makeUnit(u); // load + instance the animated models
   sim.allUnits().forEach(refreshUnit);
 
   let shell = null;
