@@ -89,13 +89,34 @@ register3d("tactics3d", async (kernel, content) => {
       for (let x = 0; x < gridW; x++) {
         const t = mission.grid[y][x];
         const w = cell(x, y);
-        if (t === 1) { // WALL — tall steel block with a cyan tech seam, blocks move + LOS
-          const m = new THREE.Mesh(new THREE.BoxGeometry(T * 0.98, T * 1.2, T * 0.98),
-            new THREE.MeshStandardMaterial({ color: 0x39506b, roughness: 0.55, metalness: 0.55 }));
-          m.position.set(w.x, T * 0.55, w.z); m.castShadow = true; m.receiveShadow = true; scene.add(m);
-          const seam = new THREE.Mesh(new THREE.BoxGeometry(T * 1.0, 0.06, T * 1.0),
-            new THREE.MeshBasicMaterial({ color: 0x4fd0ff }));
-          seam.position.set(w.x, T * 1.15, w.z); scene.add(seam);
+        if (t === 1) { // WALL = a BUILDING block — tall tower with lit window rows on street faces
+          const hsh = ((x * 73856093) ^ (y * 19349663)) >>> 0;
+          const bh = T * (2.4 + (hsh % 5) * 0.45); // varied building heights
+          const shellCol = [0x2b3442, 0x313b4b, 0x26303d][hsh % 3];
+          const m = new THREE.Mesh(new THREE.BoxGeometry(T, bh, T),
+            new THREE.MeshStandardMaterial({ color: shellCol, roughness: 0.7, metalness: 0.35 }));
+          m.position.set(w.x, bh / 2, w.z); m.castShadow = true; m.receiveShadow = true; scene.add(m);
+          const roof = new THREE.Mesh(new THREE.BoxGeometry(T, T * 0.12, T),
+            new THREE.MeshStandardMaterial({ color: shade(shellCol, 0.2), roughness: 0.5, metalness: 0.6 }));
+          roof.position.set(w.x, bh, w.z); scene.add(roof);
+          // Glowing window rows on STREET-FACING sides only (bloom makes them shine).
+          const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+          const winCol = [0xbfe6ff, 0xffdca8, 0x9fe6c0][hsh % 3];
+          for (const d of dirs) {
+            const nx = x + d[0], ny = y + d[1];
+            const ng = (ny >= 0 && ny < gridH && nx >= 0 && nx < gridW) ? mission.grid[ny][nx] : 0;
+            if (ng === 1) continue; // interior face (against another building) — no windows
+            const rows = Math.max(2, Math.floor(bh / (T * 0.7)));
+            for (let r = 0; r < rows; r++) {
+              const wy = (r + 0.7) * (bh / (rows + 0.4));
+              const lit = ((hsh >> r) & 1) || Math.random() < 0.5;
+              const winMat = new THREE.MeshBasicMaterial({ color: lit ? winCol : 0x12202c });
+              const pane = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.66, bh / (rows + 1) * 0.5), winMat);
+              pane.position.set(w.x + d[0] * (T * 0.505), wy, w.z + d[1] * (T * 0.505));
+              pane.rotation.y = d[0] !== 0 ? Math.PI / 2 : 0;
+              scene.add(pane);
+            }
+          }
           continue;
         }
         // FLOOR — textured GLB panel (fallback: a lit tech box).
