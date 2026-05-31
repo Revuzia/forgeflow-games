@@ -115,8 +115,11 @@ export class Kernel3D {
 
   hud(html) { if (this.hudEl) this.hudEl.innerHTML = html; }
 
-  // Orbit camera — drag to rotate, scroll to zoom (industry-standard for 3D).
-  // Clamped so the player can't flip under the world. Returns the controls.
+  // Orbit camera — scroll to zoom; rotate on a configurable mouse button;
+  // optional WASD panning to survey the whole scene. Clamped so the player can't
+  // flip under the world. Returns the controls.
+  //   opts.rotateButton: "left" (default) | "right"  — which drag rotates
+  //   opts.wasdPan: true  — W/A/S/D glide the camera across the ground plane
   enableOrbit(opts) {
     opts = opts || {};
     var c = new OrbitControls(this.camera, this.renderer.domElement);
@@ -127,11 +130,45 @@ export class Kernel3D {
     c.minPolarAngle = opts.minPolarAngle != null ? opts.minPolarAngle : 0.15;
     c.maxPolarAngle = opts.maxPolarAngle != null ? opts.maxPolarAngle : Math.PI * 0.49; // stay above the horizon
     c.enablePan = !!opts.enablePan;
+    // Map rotate to the right mouse button when asked, leaving the LEFT button
+    // free for in-world clicks (e.g. firing). Right-drag then rotates the view.
+    if (opts.rotateButton === "right") {
+      c.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+      var dom = this.renderer.domElement;
+      dom.addEventListener("contextmenu", function (e) { e.preventDefault(); }); // no menu on right-drag
+    }
     if (opts.target) c.target.set(opts.target.x, opts.target.y, opts.target.z);
     if (opts.autoRotate) { c.autoRotate = true; c.autoRotateSpeed = opts.autoRotateSpeed || 0.6; }
     c.update();
     this.controls = c;
     this.onUpdate(function () { c.update(); });
+
+    // WASD glide-pan across the ground plane (forward = toward the look target).
+    if (opts.wasdPan) {
+      var cam = this.camera, keys = {}, speed = opts.panSpeed != null ? opts.panSpeed : 26;
+      var tag = function (down) { return function (e) {
+        var k = (e.key || "").toLowerCase();
+        if (k === "w" || k === "a" || k === "s" || k === "d") { keys[k] = down; if (down) e.preventDefault(); }
+      }; };
+      window.addEventListener("keydown", tag(true));
+      window.addEventListener("keyup", tag(false));
+      var fwd = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), mv = new THREE.Vector3();
+      this.onUpdate(function (dt) {
+        if (opts.autoRotate && c.autoRotate) return; // don't pan while the menu auto-rotates
+        mv.set(0, 0, 0);
+        fwd.subVectors(c.target, cam.position); fwd.y = 0;
+        if (fwd.lengthSq() < 1e-4) return;
+        fwd.normalize(); right.crossVectors(fwd, up).normalize();
+        if (keys.w) mv.add(fwd);
+        if (keys.s) mv.sub(fwd);
+        if (keys.d) mv.add(right);
+        if (keys.a) mv.sub(right);
+        if (mv.lengthSq() > 0) {
+          mv.normalize().multiplyScalar(speed * Math.min(0.05, dt || 0.016));
+          cam.position.add(mv); c.target.add(mv);
+        }
+      });
+    }
     return c;
   }
 

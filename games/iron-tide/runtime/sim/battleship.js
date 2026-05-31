@@ -177,6 +177,24 @@
       return resp;
     }
 
+    /** Player fires at SEVERAL cells (an ability — salvo/barrage), then the AI
+     * takes ONE turn. Returns {player:[results], ai?, multi:true}. */
+    playerMultiFire(cells) {
+      var results = [];
+      for (var i = 0; i < cells.length; i++) {
+        if (this.ended) break;
+        var r = this.fire("player", cells[i].x, cells[i].y);
+        if (r.result !== "invalid") results.push(r);
+      }
+      var resp = { player: results, multi: true };
+      if (!this.ended && results.length) {
+        this.turn = "enemy";
+        resp.ai = this._aiTurn();
+        if (!this.ended) { this.turn = "player"; this.turnNumber++; }
+      }
+      return resp;
+    }
+
     // ── AI: hunt/target ──────────────────────────────────────────────────────
     _aiPick() {
       var b = this.player; // AI shoots the player's board

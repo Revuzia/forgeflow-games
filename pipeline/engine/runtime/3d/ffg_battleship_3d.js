@@ -341,12 +341,14 @@ register3d("battleship", async function (kernel, content) {
   // player board in the foreground (target biased toward +z).
   kernel.camera.position.set(0, boardSpan * 1.35, boardSpan * 1.62);
   const LOOK_Z = boardSpan * 0.06;
-  // Rotatable/zoomable orbit camera (drag to rotate, scroll to zoom) — the
-  // engine provides this for every 3D game. Auto-rotates gently on the menu.
+  // Camera: RIGHT-drag rotates, WASD glides across the battlefield, scroll zooms
+  // (left click stays free to fire). Wide range so you can pull back and survey
+  // the full enemy fleet / both boards in a landscape view.
   const orbit = kernel.enableOrbit({
     target: { x: 0, y: 0, z: LOOK_Z },
-    minDistance: boardSpan * 0.7, maxDistance: boardSpan * 3.0,
-    minPolarAngle: 0.18, maxPolarAngle: Math.PI * 0.46,
+    minDistance: boardSpan * 0.55, maxDistance: boardSpan * 4.2,
+    minPolarAngle: 0.12, maxPolarAngle: Math.PI * 0.47,
+    rotateButton: "right", wasdPan: true, panSpeed: boardSpan * 1.1,
     autoRotate: true, autoRotateSpeed: 0.5,
   });
   const reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -512,8 +514,9 @@ register3d("battleship", async function (kernel, content) {
     const foe = es.map((s) => pip(s.sunk ? "#7a2020" : "#9fb4c8", s.sunk ? null : "#9fb4c8")).join("");
     const foeSunk = es.filter((s) => s.sunk).length;
     const playerTurn = sim.turn === "player";
-    const banner = msg || (playerTurn ? "Your move — click enemy waters" : "Enemy firing…");
-    const bc = playerTurn ? "#7CFC9A" : "#ffb454";
+    let banner = msg || (playerTurn ? "Your move — click enemy waters" : "Enemy firing…");
+    let bc = playerTurn ? "#7CFC9A" : "#ffb454";
+    if (armed) { banner = "ARMED: " + ABILITY[armed].label + " — click a target (Esc to cancel)"; bc = ABILITY[armed].color; }
     kernel.hud(`
       <div style="position:absolute;top:12px;left:14px;font-family:'Segoe UI',system-ui,monospace">
         <div style="font-size:19px;font-weight:800;letter-spacing:2px;text-shadow:0 2px 10px #000">${content.title || "Iron Tide"}</div>
@@ -527,10 +530,111 @@ register3d("battleship", async function (kernel, content) {
         <div style="font-size:10px;letter-spacing:1.5px;opacity:.7;text-align:left">YOUR FLEET</div>
         <div style="text-align:left;margin-top:2px">${mine}</div>
       </div>
-      <div style="position:absolute;bottom:10px;left:14px;font-size:11px;opacity:.55;font-family:monospace">Drag: orbit · Scroll: zoom · Esc: pause</div>
+      <div style="position:absolute;bottom:10px;left:14px;font-size:11px;opacity:.55;font-family:monospace">Right-drag: rotate · WASD: move · Scroll: zoom · Esc: pause</div>
     `);
   }
   if (phase === "battle") setHUD(); // placement phase keeps its own HUD until Ready
+
+  // ── Upgrade-on-sink abilities ────────────────────────────────────────────────
+  // Sinking an enemy ship awards a one-use ability. Bigger hull = bigger upgrade.
+  // A COMBO meter scales potency and is ORDER-SENSITIVE (each successive sink is
+  // worth more), so sinking 5→2 differs from 2→5.
+  const ABILITY = {
+    scan:    { label: "RECON SCAN", color: "#5fd0ff" },
+    barrage: { label: "BARRAGE",    color: "#ff7a3c" },
+    salvo:   { label: "SALVO",      color: "#ffd166" },
+    sonar:   { label: "SONAR PING", color: "#7CFC9A" },
+    double:  { label: "DOUBLE TAP", color: "#c9a0ff" },
+  };
+  const SHIP_ABILITY = { carrier: "scan", battleship: "barrage", cruiser: "salvo", submarine: "sonar", destroyer: "double" };
+  const ammo = { scan: 0, barrage: 0, salvo: 0, sonar: 0, double: 0 };
+  let comboPower = 0, comboChain = 0, armed = null;
+  const salvoShots = () => Math.max(2, Math.min(6, 2 + Math.floor(comboPower / 6)));
+  const scanR = () => (comboPower >= 14 ? 2 : 1);
+
+  // bottom ability bar (own DOM layer so setHUD()'s innerHTML reset can't wipe it)
+  const abilityBarEl = document.createElement("div");
+  Object.assign(abilityBarEl.style, { position: "absolute", left: "0", right: "0", bottom: "44px", display: "flex", justifyContent: "center", gap: "8px", pointerEvents: "auto", fontFamily: "'Segoe UI',system-ui,monospace", zIndex: "50" });
+  kernel.parent.appendChild(abilityBarEl);
+
+  function grantUpgrade(ship) {
+    const ab = SHIP_ABILITY[ship.id] || "salvo";
+    ammo[ab] = (ammo[ab] || 0) + 1;
+    comboChain++; comboPower += ship.len * (1 + 0.25 * (comboChain - 1));
+    flashUpgrade(ab, ship);
+    renderAbilityBar();
+  }
+  function renderAbilityBar() {
+    const keys = Object.keys(ABILITY).filter((k) => ammo[k] > 0);
+    if (!keys.length) { abilityBarEl.innerHTML = ""; return; }
+    const meter = comboPower > 0 ? `<span style="align-self:center;font-size:11px;letter-spacing:1px;color:#ffd166;margin-right:4px">COMBO ${comboPower.toFixed(0)}</span>` : "";
+    abilityBarEl.innerHTML = meter + keys.map((k) => {
+      const on = armed === k, c = ABILITY[k].color;
+      return `<button data-ab="${k}" style="font:bold 12px 'Segoe UI',monospace;letter-spacing:1px;padding:7px 12px;border-radius:7px;cursor:pointer;color:${on ? "#06101c" : c};background:${on ? c : "rgba(10,20,34,.82)"};border:1px solid ${c};box-shadow:${on ? "0 0 12px " + c : "none"}">${ABILITY[k].label} <b>×${ammo[k]}</b></button>`;
+    }).join("");
+    Array.prototype.forEach.call(abilityBarEl.querySelectorAll("button"), (b) => { b.onclick = () => armAbility(b.dataset.ab); });
+  }
+  function armAbility(k) { if (!ammo[k] || busy || phase !== "battle") return; armed = (armed === k) ? null : k; renderAbilityBar(); setHUD(); }
+  function flashUpgrade(ab, ship) {
+    const el = document.createElement("div");
+    el.innerHTML = `<div style="font-size:13px;opacity:.85">${ship.name} sunk — upgrade acquired</div><div style="font-size:26px;font-weight:800;color:${ABILITY[ab].color};text-shadow:0 2px 10px #000">${ABILITY[ab].label}</div>`;
+    Object.assign(el.style, { position: "absolute", left: "0", right: "0", top: "38%", textAlign: "center", color: "#eaf3ff", fontFamily: "'Segoe UI',monospace", pointerEvents: "none", zIndex: "55", transition: "opacity .5s,transform .5s", opacity: "0", transform: "translateY(8px)" });
+    kernel.parent.appendChild(el);
+    requestAnimationFrame(() => { el.style.opacity = "1"; el.style.transform = "translateY(0)"; });
+    setTimeout(() => { el.style.opacity = "0"; setTimeout(() => el.remove(), 500); }, 1500);
+  }
+
+  // cell helpers (enemy board)
+  const _unshot = (x, y) => x >= 0 && y >= 0 && x < size && y < size && sim.enemy.shots[y][x] === 0;
+  function areaCells(x, y, r) { const a = []; for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < size && ny < size) a.push({ x: nx, y: ny }); } return a; }
+  function rowCells(y) { const a = []; for (let x = 0; x < size; x++) a.push({ x, y }); return a; }
+  function plusCells(x, y) { return [{ x, y }, { x: x + 1, y }, { x: x - 1, y }, { x, y: y + 1 }, { x, y: y - 1 }].filter((c) => _unshot(c.x, c.y)); }
+  function pickUnshot(x, y, n) {
+    const all = []; for (let yy = 0; yy < size; yy++) for (let xx = 0; xx < size; xx++) if (_unshot(xx, yy)) all.push({ x: xx, y: yy });
+    all.sort((a, b) => (Math.abs(a.x - x) + Math.abs(a.y - y)) - (Math.abs(b.x - x) + Math.abs(b.y - y)));
+    return all.slice(0, n);
+  }
+  function revealIntel(cells) {
+    let found = 0;
+    cells.forEach((c) => {
+      if (!_unshot(c.x, c.y)) return;
+      const hasShip = sim.enemy.ships.some((s) => !s.sunk && s.cells.some((cc) => cc.x === c.x && cc.y === c.y));
+      const w = cellWorld("enemy", c.x, c.y);
+      const m = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.32, 4), new THREE.MeshBasicMaterial({ color: hasShip ? 0xff4d4d : 0x66ccff, transparent: true, opacity: 0, side: THREE.DoubleSide }));
+      m.rotation.x = -Math.PI / 2; m.rotation.z = Math.PI / 4; m.position.set(w.x, 0.4, w.z); scene.add(m);
+      kernel.tween({ target: m.material, to: { opacity: hasShip ? 0.95 : 0.35 }, duration: 0.4 });
+      if (hasShip) {
+        found++;
+        const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3, 6), new THREE.MeshBasicMaterial({ color: 0xff4d4d, transparent: true, opacity: 0.55 }));
+        beam.position.set(w.x, 1.6, w.z); scene.add(beam);
+        kernel.tween({ target: beam.material, to: { opacity: 0 }, duration: 1.3, onComplete: () => scene.remove(beam) });
+      }
+    });
+    kernel.playSound(sfx.miss, 0.4);
+    return found;
+  }
+  function animateResults(resp) {
+    const pr = resp.player || []; let i = 0;
+    const nextP = () => { if (i >= pr.length) return afterP(); resolveShot("player", pr[i++], nextP); };
+    const afterP = () => { if (sim.ended || !resp.ai) { busy = false; setHUD(); return; } setHUD("Enemy firing…"); resolveShot("enemy", resp.ai, () => { busy = false; setHUD(); }); };
+    nextP();
+  }
+  function useAbilityAt(x, y) {
+    const k = armed; if (!k || !ammo[k] || busy || phase !== "battle" || sim.ended || sim.turn !== "player") return false;
+    if (k === "scan" || k === "sonar") { // intel only — does not consume a turn
+      ammo[k]--; armed = null;
+      revealIntel(k === "sonar" ? rowCells(y) : areaCells(x, y, scanR()));
+      renderAbilityBar(); setHUD(); return true;
+    }
+    let cells;
+    if (k === "barrage") cells = plusCells(x, y);
+    else if (k === "double") cells = pickUnshot(x, y, 2);
+    else cells = pickUnshot(x, y, salvoShots());
+    if (!cells.length) return false;
+    ammo[k]--; armed = null; busy = true; renderAbilityBar();
+    animateResults(sim.playerMultiFire(cells));
+    return true;
+  }
 
   function resolveShot(side, r, after) {
     const to = cellWorld(side === "player" ? "enemy" : "player", r.x, r.y);
@@ -543,6 +647,9 @@ register3d("battleship", async function (kernel, content) {
         const ship = sim.boardOf(tb).ships.find((s) => s.id === r.ship);
         if (ship) revealAndSink(tb, ship);
         kernel.playSound(sfx.sink, 0.7);
+        // Salvage: sinking an ENEMY ship grants a one-use ability. Bigger hull =
+        // bigger upgrade; the COMBO meter scales potency and is order-sensitive.
+        if (side === "player" && ship) grantUpgrade(ship);
       }
       setHUD();
       if (sim.ended) showEnd(sim.winner === "player");
@@ -582,23 +689,29 @@ register3d("battleship", async function (kernel, content) {
   // Unified click-vs-drag: a drag rotates the orbit camera; a click (little
   // movement) acts on the board (place in placement, fire in battle).
   let _down = null;
-  dom.addEventListener("pointerdown", (ev) => { _down = { x: ev.clientX, y: ev.clientY }; });
+  dom.addEventListener("pointerdown", (ev) => { _down = { x: ev.clientX, y: ev.clientY, button: ev.button }; });
   dom.addEventListener("pointerup", (ev) => {
     if (!_down) return;
     const moved = Math.hypot(ev.clientX - _down.x, ev.clientY - _down.y);
+    const wasLeft = _down.button === 0;
     _down = null;
-    if (moved > 6 || paused) return; // it was a drag (camera rotate) — ignore
+    if (!wasLeft || moved > 6 || paused) return; // right/middle = camera; drag = rotate — ignore
     if (phase === "placement") {
       const h = kernel.raycast(ev.clientX, ev.clientY, playerCells);
       if (h.length) commit(h[0].object.userData.x, h[0].object.userData.y);
     } else if (phase === "battle" && !busy && !sim.ended) {
       const h = kernel.raycast(ev.clientX, ev.clientY, cellMeshes);
-      if (h.length) doPlayerFire(h[0].object.userData.x, h[0].object.userData.y);
+      if (h.length) {
+        const cx = h[0].object.userData.x, cy = h[0].object.userData.y;
+        if (armed) useAbilityAt(cx, cy); else doPlayerFire(cx, cy);
+      }
     }
   });
 
-  // Keyboard targeting (a11y) — arrows/WASD move a cursor on enemy waters,
-  // Enter/Space fires. Works without a mouse and without focusing the canvas.
+  // Keyboard targeting (a11y) — ARROW keys move a cursor on enemy waters,
+  // Enter/Space fires (or triggers the armed ability). WASD is reserved for the
+  // camera now, so the cursor uses arrows only. Number keys 1-5 arm abilities,
+  // Esc cancels an armed ability.
   const cellMeshAt = (x, y) => cellMeshes.find((c) => c.userData.x === x && c.userData.y === y);
   const kbCursor = { x: 0, y: 0 };
   function showCursor() {
@@ -607,9 +720,18 @@ register3d("battleship", async function (kernel, content) {
     if (c && sim.enemy.shots[kbCursor.y][kbCursor.x] === 0) { c.material.color.set(0x66e0ff); c.material.opacity = 0.5; }
   }
   window.addEventListener("keydown", (e) => {
-    if (phase !== "battle" || sim.ended || sim.turn !== "player") return;
+    if (phase !== "battle" || sim.ended) return;
     const k = e.key;
-    const nav = { ArrowUp: [0, -1], w: [0, -1], ArrowDown: [0, 1], s: [0, 1], ArrowLeft: [-1, 0], a: [-1, 0], ArrowRight: [1, 0], d: [1, 0] };
+    if (k === "Escape" && armed) { armed = null; renderAbilityBar(); setHUD(); return; }
+    // number keys 1-5 arm the earned abilities, in display order
+    if (/^[1-5]$/.test(k)) {
+      const earned = Object.keys(ABILITY).filter((a) => ammo[a] > 0);
+      const pick = earned[parseInt(k, 10) - 1];
+      if (pick) { e.preventDefault(); armAbility(pick); }
+      return;
+    }
+    if (sim.turn !== "player") return;
+    const nav = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
     if (nav[k]) {
       e.preventDefault();
       kbCursor.x = Math.max(0, Math.min(size - 1, kbCursor.x + nav[k][0]));
@@ -617,7 +739,7 @@ register3d("battleship", async function (kernel, content) {
       if (!busy) showCursor();
     } else if (k === " " || k === "Enter") {
       e.preventDefault();
-      if (!busy) doPlayerFire(kbCursor.x, kbCursor.y);
+      if (!busy) { if (armed) useAbilityAt(kbCursor.x, kbCursor.y); else doPlayerFire(kbCursor.x, kbCursor.y); }
     }
   });
 
@@ -636,8 +758,9 @@ register3d("battleship", async function (kernel, content) {
       { h: "GOAL", p: "Sink the enemy's entire fleet before they sink yours. Each ship occupies a row of cells; sink one by hitting every cell it covers." },
       { h: "YOUR FLEET", p: "Carrier (5) · Battleship (4) · Cruiser (3) · Submarine (3) · Destroyer (2)." },
       { h: "PLACING SHIPS", p: "Click a cell on your waters to drop the current ship. Press <b>R</b> to rotate it, or <b>A</b> to auto-place the rest of the fleet." },
-      { h: "FIRING", p: "On your turn, click a cell on the enemy waters (the far board) to fire. A red marker means a hit, a white disc a miss. Hit ships smoke and burn; a sunk ship rolls under." },
-      { h: "CAMERA", p: "Drag to orbit the battlefield, scroll to zoom — look around freely. Press <b>Esc</b> any time to pause." },
+      { h: "FIRING", p: "On your turn, left-click a cell on the enemy waters (the far board) to fire. A red marker means a hit, a white disc a miss. Hit ships smoke and burn; a sunk ship rolls under." },
+      { h: "UPGRADES", p: "Sink an enemy ship to earn a one-use ability — the bigger the hull, the bigger the upgrade (Carrier → Recon Scan, Battleship → Barrage, Cruiser → Salvo, Submarine → Sonar, Destroyer → Double Tap). A COMBO meter scales their power, and sink ORDER matters. Click an ability in the bottom bar (or press 1–5) to arm it, then click a target." },
+      { h: "CAMERA", p: "<b>Right-drag</b> to rotate, <b>WASD</b> to move around, scroll to zoom — survey the whole battlefield. Press <b>Esc</b> to pause." },
     ],
     onPlay: (diff) => { sim.difficulty = diff; beginGame(); },
     onPause: () => { paused = true; kernel.stop(); },
@@ -671,6 +794,11 @@ register3d("battleship", async function (kernel, content) {
       // drive the full ANIMATED path (places pegs, plays cinematic) — used by
       // capture.py to grab mid-game frames for the fidelity gate.
       fireAnimated: (x, y) => doPlayerFire(x, y),
+      // abilities (verification)
+      abilityState: () => ({ ammo: { ...ammo }, comboPower: +comboPower.toFixed(1), comboChain, armed }),
+      grantTestUpgrade: (shipId) => { const s = sim.enemy.ships.find((z) => z.id === shipId) || sim.enemy.ships[0]; grantUpgrade(s); return { ...ammo }; },
+      armAbility: (k) => armAbility(k),
+      useAbilityAt: (x, y) => useAbilityAt(x, y),
       autoPlay: (maxTurns) => {
         let n = 0;
         while (!sim.ended && n++ < (maxTurns || 200)) {
