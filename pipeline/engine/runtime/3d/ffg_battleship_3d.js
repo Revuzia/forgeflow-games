@@ -26,12 +26,23 @@ register3d("battleship", async function (kernel, content) {
   const Battleship = window.FFG.sim.Battleship;
   const m = content.setup || content;
   const size = m.board_size || 10;
+  // ALWAYS random per game (enemy layout, AI targeting, auto-placement differ
+  // every playthrough). crypto.getRandomValues is genuine entropy — robust even
+  // where Math.random/Date is deterministic per page-load. Gates build their own
+  // sim with a fixed rng, so verification stays reproducible.
+  const _gameSeed = (function () {
+    try { const a = new Uint32Array(1); (self.crypto || window.crypto).getRandomValues(a); return (a[0] >>> 0) || 1; }
+    catch (e) { return (((Date.now() & 0x7fffffff) ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0) || 1; }
+  })();
   const sim = new Battleship({
     size: size,
     fleet: m.fleet,
-    seed: content.seed != null ? content.seed : 4242,
+    seed: _gameSeed,
     player_placements: m.player_placements,
-    enemy_placements: m.enemy_placements,
+    // NEVER use a fixed enemy layout — the content shipped a hardcoded
+    // enemy_placements which made the enemy fleet identical every game. null =
+    // seeded-random placement, so each match's enemy layout is fresh.
+    enemy_placements: null,
     difficulty: m.difficulty || content.difficulty || "normal",
   });
 
