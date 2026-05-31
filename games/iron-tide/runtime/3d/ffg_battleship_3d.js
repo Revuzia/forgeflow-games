@@ -311,7 +311,7 @@ register3d("battleship", async function (kernel, content) {
     await placeShip("player", sim.player.ships[sim.player.ships.length - 1]);
     pIndex++; clearGhost();
     if (pIndex >= fleet.length) startBattle(); else placementHUD();
-    kernel.playSound(sfx.fire, 0.25);
+    kernel.playSound(sfx.fire, 0.55);
   }
   async function autoPlace() {
     sim.resetPlayerBoard();
@@ -673,7 +673,7 @@ register3d("battleship", async function (kernel, content) {
 
   function resolveShot(side, r, after) {
     const to = cellWorld(side === "player" ? "enemy" : "player", r.x, r.y);
-    kernel.playSound(sfx.fire, 0.45); // gun report on launch
+    kernel.playSound(sfx.fire, 0.9); // gun report on launch
     fireCannonball(side, to, () => {
       // Fail-safe: a VFX exception must NEVER strand the turn (the enemy-impact
       // freeze). Whatever happens, `after` always runs so `busy` is released.
