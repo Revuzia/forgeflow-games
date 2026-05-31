@@ -55,6 +55,21 @@
     root.addEventListener("keydown", function (e) {
       if (e.key === "Escape") { e.preventDefault(); self.togglePause(); }
     });
+    // Hooks for the page-level control bar (game_controls.js: Fullscreen / Mute /
+    // Pause). Lets the shared bar drive FFG pause + audio the way the other games' do.
+    try {
+      FFG.shell = self;
+      root.__PAUSE__ = {
+        toggle: function () { self.togglePause(); },
+        pause: function () { if (self.phase === "playing") self.pause(); },
+        resume: function () { if (self.phase === "paused") self.resume(); },
+      };
+      root.addEventListener("mutechange", function (e) {
+        var m = !!(e.detail && e.detail.muted);
+        FFG.sfxVolume = m ? 0 : self.sfxVolume;       // kernel.playSound scales by this
+        if (self._music) { try { self._music.muted = m; } catch (x) {} }
+      });
+    } catch (e) {}
   }
 
   Shell.prototype._build = function () {
