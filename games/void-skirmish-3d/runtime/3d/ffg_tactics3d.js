@@ -49,6 +49,10 @@ register3d("tactics3d", async (kernel, content) => {
   scene.add(key);
   scene.add(new THREE.DirectionalLight(0x4f78c8, 0.55).translateX(-40).translateY(35).translateZ(-25));
   scene.add(new THREE.HemisphereLight(0x9fc4ff, 0x0a0f18, 0.55));
+  // HDR bloom over the emissive sci-fi elements (grid seams, cover trim, hazard,
+  // tracers, unit accents) — a big step toward a polished, lit XCOM look.
+  kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = 1.0;
+  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.7, radius: 0.6, threshold: 0.8 });
 
   let sim, events = [], busy = false, selected = null, phase = "menu";
   const unitViews = {}; // id -> { group, ring, hpFill, base }
