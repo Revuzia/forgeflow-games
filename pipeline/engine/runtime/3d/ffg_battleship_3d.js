@@ -56,6 +56,8 @@ register3d("battleship", async function (kernel, content) {
   let phase = "menu";
   let paused = false;
   let _placement = null; // test hook handle
+  const gunnerMuzzle = { player: null, enemy: null }; // where each side's cannonballs launch from
+  const gunnerCannon = { player: null, enemy: null }; // cannon group, for recoil on fire
   let beginGame = null;  // assigned below; called by the menu Play button
 
   // ── Ocean — real reflective water (three.js Water): flowing normal-mapped
@@ -259,6 +261,60 @@ register3d("battleship", async function (kernel, content) {
   label("player", "YOUR FLEET");
   label("enemy", "ENEMY WATERS");
 
+  // ── Gunner stations ─────────────────────────────────────────────────────────
+  // A deck on each board's near-inner side with a built cannon + a gunner who
+  // LAUNCHES the cannonballs — so shots visibly originate from the gunner, off
+  // the grid, arcing across to the enemy waters.
+  const _wood = (c) => new THREE.MeshStandardMaterial({ color: c || 0x5a3d22, roughness: 0.85, metalness: 0.05 });
+  const _iron = (c) => new THREE.MeshStandardMaterial({ color: c || 0x21232b, roughness: 0.45, metalness: 0.85 });
+  async function buildGunnerStation(side) {
+    const myX = side === "player" ? PLAYER_X : ENEMY_X;
+    const oppX = side === "player" ? ENEMY_X : PLAYER_X;
+    const sx = myX;                              // centred in front of THIS board
+    const sz = boardSpan / 2 + CELL * 0.95;      // off the grid, at the camera-near front
+    const dir = new THREE.Vector3(oppX - sx, 0, 0 - sz).normalize(); // aim across at the opposing board
+    const station = new THREE.Group(); station.position.set(sx, 0, sz); scene.add(station);
+    // round wooden gun deck
+    const deck = new THREE.Mesh(new THREE.CylinderGeometry(CELL * 1.0, CELL * 1.12, 0.55, 20), _wood(0x4a3320));
+    deck.position.y = 0.27; deck.castShadow = true; deck.receiveShadow = true; station.add(deck);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(CELL * 1.0, 0.07, 8, 24), _wood(0x6a4a2c));
+    rim.rotation.x = Math.PI / 2; rim.position.y = 0.55; station.add(rim);
+    // cannon group, aimed across the water
+    const cannon = new THREE.Group(); cannon.position.set(0, 0.55, 0); cannon.rotation.y = Math.atan2(dir.x, dir.z); station.add(cannon);
+    cannon.userData.dir = dir.clone();
+    gunnerCannon[side] = cannon;
+    const carriage = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.46, 0.34, CELL * 0.72), _wood(0x5a3d22));
+    carriage.position.set(0, 0.2, CELL * 0.12); carriage.castShadow = true; cannon.add(carriage);
+    for (const wz of [-CELL * 0.18, CELL * 0.34]) for (const wx of [-CELL * 0.26, CELL * 0.26]) {
+      const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.12, 12), _iron(0x2a2118));
+      wh.rotation.z = Math.PI / 2; wh.position.set(wx, 0.08, wz); cannon.add(wh);
+    }
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.23, CELL * 1.0, 18), _iron());
+    barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.46, CELL * 0.5); barrel.castShadow = true; cannon.add(barrel);
+    for (const rz of [CELL * 0.18, CELL * 0.55, CELL * 0.86]) {
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.05, 18), _iron(0x14151a));
+      ring.rotation.x = Math.PI / 2; ring.position.set(0, 0.46, rz); cannon.add(ring);
+    }
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), _iron(0x14151a)); knob.position.set(0, 0.46, -0.02); cannon.add(knob);
+    // muzzle (barrel tip) in world space — cannonballs launch from here
+    gunnerMuzzle[side] = new THREE.Vector3(sx + dir.x * (CELL * 1.02), 1.0, sz + dir.z * (CELL * 1.02));
+    // the gunner — a real 3D figure beside the cannon, facing the enemy
+    try {
+      const g = await kernel.loadGLTF("assets/gunner.glb");
+      if (g) {
+        const box = new THREE.Box3().setFromObject(g); const h = Math.max(0.001, box.getSize(new THREE.Vector3()).y);
+        g.scale.setScalar((CELL * 0.78) / h);
+        g.traverse((o) => { if (o.isMesh && o.material) { o.material = o.material.clone(); if (o.material.color) o.material.color.lerp(new THREE.Color(0x2a3340), 0.55); o.castShadow = true; o.frustumCulled = false; } });
+        const perp = new THREE.Vector3(dir.z, 0, -dir.x);
+        g.position.set(sx + perp.x * CELL * 0.5, 0.55, sz + perp.z * CELL * 0.5);
+        g.rotation.y = Math.atan2(dir.x, dir.z);
+        scene.add(g);
+      }
+    } catch (e) { /* gunner optional */ }
+  }
+  await buildGunnerStation("player");
+  await buildGunnerStation("enemy");
+
   // Player-board cells (raycast targets) — used during the placement phase.
   const playerCells = [];
   for (let y = 0; y < size; y++) {
@@ -312,13 +368,26 @@ register3d("battleship", async function (kernel, content) {
     await placeShip("player", sim.player.ships[sim.player.ships.length - 1]);
     pIndex++; clearGhost();
     if (pIndex >= fleet.length) startBattle(); else placementHUD();
-    kernel.playSound(sfx.fire, 0.55);
+    kernel.playSound(sfx.splash, 0.22); // soft water plonk on placing — NOT the cannon
   }
+  // Auto-place only the REMAINING (unplaced) ships, keeping any the player already
+  // set. Was: reset + place a full fleet, which left the manually-placed meshes in
+  // the scene → 6 ships. Now total is always exactly fleet.length.
   async function autoPlace() {
-    sim.resetPlayerBoard();
-    sim._place(sim.player, null); // seeded-random legal placement
-    await placePlayerFleetVisuals();
-    pIndex = fleet.length; clearGhost(); startBattle();
+    while (pIndex < fleet.length) {
+      const spec = fleet[pIndex];
+      let ok = false;
+      for (let tries = 0; tries < 300 && !ok; tries++) {
+        const horiz = Math.random() < 0.5;
+        const x = Math.floor(Math.random() * size), y = Math.floor(Math.random() * size);
+        if (sim.placePlayerShip(spec.id, x, y, horiz)) {
+          await placeShip("player", sim.player.ships[sim.player.ships.length - 1]);
+          ok = true;
+        }
+      }
+      pIndex++;
+    }
+    clearGhost(); startBattle();
   }
   function startBattle() {
     phase = "battle"; clearGhost();
@@ -454,9 +523,26 @@ register3d("battleship", async function (kernel, content) {
       for (let i = 0; i < 3; i++) spawnSmokePuff({ x: pos.x, y: y + i * 0.25, z: pos.z }, false);
     }
   }
+  // Muzzle flash + smoke + cannon recoil at the gunner station that's firing.
+  function gunnerFireFX(side, muzzle) {
+    const flash = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 10), new THREE.MeshBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 0.95 }));
+    flash.position.copy(muzzle); scene.add(flash);
+    kernel.tween({ target: flash.scale, to: { x: 3.2, y: 3.2, z: 3.2 }, duration: 0.18 });
+    kernel.tween({ target: flash.material, to: { opacity: 0 }, duration: 0.18, onComplete: () => scene.remove(flash) });
+    for (let i = 0; i < 3; i++) spawnSmokePuff({ x: muzzle.x, y: muzzle.y + i * 0.15, z: muzzle.z }, false);
+    const c = gunnerCannon[side];
+    if (c && c.userData.dir) {
+      const d = c.userData.dir, z0 = c.userData.baseZ != null ? c.userData.baseZ : 0.55;
+      kernel.tween({ target: c.position, to: { x: -d.x * 0.32, z: -d.z * 0.32 }, duration: 0.06,
+        onComplete: () => kernel.tween({ target: c.position, to: { x: 0, z: 0 }, duration: 0.24 }) });
+      void z0;
+    }
+  }
   function fireCannonball(fromSide, to, onImpact) {
-    const from = cellWorld(fromSide, size / 2, fromSide === "player" ? size - 1 : 0).clone();
-    from.y = 1.4;
+    // Launch from the gunner's cannon muzzle (off-grid, on the side), not the board.
+    const from = (gunnerMuzzle[fromSide] ? gunnerMuzzle[fromSide].clone()
+      : (function () { const f = cellWorld(fromSide, size / 2, fromSide === "player" ? size - 1 : 0).clone(); f.y = 1.4; return f; })());
+    gunnerFireFX(fromSide, from);
     const ball = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12),
       new THREE.MeshStandardMaterial({ color: 0x0a0a0a, metalness: 0.7, roughness: 0.3 }));
     ball.position.copy(from); ball.castShadow = true; scene.add(ball);
@@ -500,14 +586,17 @@ register3d("battleship", async function (kernel, content) {
         });
       }
     }
-    // Kinematic founder + slow-sink state machine (works with or without physics).
+    // Kinematic founder + slow-sink: the ship goes DOWN (settles to the waterline
+    // as a wreck, then descends straight under), with only a gentle bow/stern dip
+    // and a tiny list — NOT capsizing sideways.
     const startY = obj.position.y;
-    const list = (Math.random() < 0.5 ? 1 : -1) * (0.5 + Math.random() * 0.3); // final list angle
-    const pitch = (Math.random() - 0.5) * 0.25;                                 // slight bow/stern dip
-    const WRECK_Y = -0.5;        // half-submerged: hull under, superstructure above the surface
-    const FOUNDER = 2.6;         // seconds to roll over + settle
-    const FLOAT = 8.0;           // seconds it lingers as a visible wreck
-    const SINK_RATE = 0.06;      // units/sec it slips under after that (~75s to vanish)
+    const baseZ = obj.rotation.z, baseX = obj.rotation.x;
+    const dip = (Math.random() < 0.5 ? 1 : -1) * (0.10 + Math.random() * 0.08); // small bow/stern pitch
+    const listMax = (Math.random() - 0.5) * 0.12;                               // barely-there roll
+    const WRECK_Y = -0.45;      // half-submerged wreck at the waterline
+    const FOUNDER = 2.4;        // settle down to the wreck line
+    const FLOAT = 7.0;          // linger as a wreck
+    const SINK_RATE = 0.08;     // units/sec straight down after that
     ship._wreck = true; ship._sinkT = 0;
     obj.castShadow = true;
     kernel.onUpdate((dt) => {
@@ -517,16 +606,14 @@ register3d("battleship", async function (kernel, content) {
       if (t < FOUNDER) {
         const k = t / FOUNDER, e = k * k * (3 - 2 * k); // smoothstep
         obj.position.y = startY + (WRECK_Y - startY) * e;
-        obj.rotation.z = list * e;
-        obj.rotation.x = pitch * e;
+        obj.rotation.x = baseX + dip * e;          // bow/stern dips as it settles
+        obj.rotation.z = baseZ + listMax * e;      // a hair of list, no capsize
       } else if (t < FOUNDER + FLOAT) {
-        // bob + creak at the waterline as a wreck
-        obj.position.y = WRECK_Y + Math.sin(t * 1.1) * 0.06;
-        obj.rotation.z = list + Math.sin(t * 0.7) * 0.03;
+        obj.position.y = WRECK_Y + Math.sin(t * 1.1) * 0.05; // gentle bob at the waterline
       } else {
-        // slow, final descent — rolls a little further and slips under
+        // straight down — pitch a touch steeper as the bow/stern leads it under
         obj.position.y -= SINK_RATE * dt;
-        obj.rotation.z = list + (list > 0 ? 1 : -1) * Math.min(0.4, (t - FOUNDER - FLOAT) * 0.02);
+        obj.rotation.x = baseX + dip * (1 + Math.min(1.5, (t - FOUNDER - FLOAT) * 0.06));
         if (obj.position.y < -4.5) { obj.visible = false; ship._wreck = false; }
       }
     });
@@ -696,7 +783,7 @@ register3d("battleship", async function (kernel, content) {
 
   function resolveShot(side, r, after) {
     const to = cellWorld(side === "player" ? "enemy" : "player", r.x, r.y);
-    kernel.playSound(sfx.fire, 0.9); // gun report on launch
+    kernel.playSound(sfx.fire, 0.4); // gun report on launch (toned down)
     fireCannonball(side, to, () => {
       // Fail-safe: a VFX exception must NEVER strand the turn (the enemy-impact
       // freeze). Whatever happens, `after` always runs so `busy` is released.
