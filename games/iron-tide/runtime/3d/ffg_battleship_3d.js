@@ -528,7 +528,7 @@ register3d("battleship", async function (kernel, content) {
         </div>
       </div>
       <div style="position:absolute;top:12px;right:14px;font-family:'Segoe UI',system-ui,monospace;background:rgba(8,18,32,.62);border:1px solid #2a4458;border-radius:9px;padding:9px 13px;text-align:right">
-        <div style="font-size:10px;letter-spacing:1.5px;opacity:.7">ENEMY FLEET <span style="opacity:.6">${foeSunk}/${es.length} sunk</span></div>
+        <div style="font-size:10px;letter-spacing:1.5px;opacity:.7">ENEMY FLEET <span style="color:#ffb454;opacity:.85">[${(sim.difficulty || "normal").toUpperCase()}]</span> <span style="opacity:.6">${foeSunk}/${es.length} sunk</span></div>
         <div style="margin:3px 0 7px">${foe}</div>
         <div style="font-size:10px;letter-spacing:1.5px;opacity:.7;text-align:left">YOUR FLEET</div>
         <div style="text-align:left;margin-top:2px">${mine}</div>
@@ -552,6 +552,7 @@ register3d("battleship", async function (kernel, content) {
   const SHIP_ABILITY = { carrier: "scan", battleship: "barrage", cruiser: "salvo", submarine: "sonar", destroyer: "double" };
   const ammo = { scan: 0, barrage: 0, salvo: 0, sonar: 0, double: 0 };
   let comboPower = 0, comboChain = 0, armed = null;
+  let enemyCharges = 0; // banked bonus shots the AI earns by sinking your ships
   const salvoShots = () => Math.max(2, Math.min(6, 2 + Math.floor(comboPower / 6)));
   const scanR = () => (comboPower >= 14 ? 2 : 1);
 
@@ -560,12 +561,32 @@ register3d("battleship", async function (kernel, content) {
   Object.assign(abilityBarEl.style, { position: "absolute", left: "0", right: "0", bottom: "44px", display: "flex", justifyContent: "center", gap: "8px", pointerEvents: "none", fontFamily: "'Segoe UI',system-ui,monospace", zIndex: "50" });
   kernel.parent.appendChild(abilityBarEl);
 
-  function grantUpgrade(ship) {
+  // Whoever sinks a ship earns an upgrade. The player banks usable abilities; the
+  // AI banks bonus shots (bigger hull sunk = more), so the enemy gets stronger as
+  // it sinks your fleet — symmetric escalation.
+  function grantUpgrade(ship, side) {
+    if (side === "enemy") {
+      // Difficulty makes the enemy's salvage tangibly different: EASY enemies
+      // squander it (no bonus), NORMAL bank it, HARD weaponise it harder.
+      const mult = sim.difficulty === "hard" ? 1.6 : sim.difficulty === "easy" ? 0 : 1;
+      const gained = Math.round((ship.len >= 5 ? 3 : ship.len >= 4 ? 2 : 1) * mult);
+      enemyCharges += gained;
+      if (gained > 0) flashToast(ship.name + " lost — enemy salvages a SALVO", "#ff6a5a");
+      return;
+    }
     const ab = SHIP_ABILITY[ship.id] || "salvo";
     ammo[ab] = (ammo[ab] || 0) + 1;
     comboChain++; comboPower += ship.len * (1 + 0.25 * (comboChain - 1));
     flashUpgrade(ab, ship);
     renderAbilityBar();
+  }
+  function flashToast(text, color) {
+    const el = document.createElement("div");
+    el.textContent = text;
+    Object.assign(el.style, { position: "absolute", left: "0", right: "0", top: "30%", textAlign: "center", color: color || "#eaf3ff", fontFamily: "'Segoe UI',monospace", fontSize: "20px", fontWeight: "700", textShadow: "0 2px 10px #000", pointerEvents: "none", zIndex: "55", transition: "opacity .5s", opacity: "0" });
+    kernel.parent.appendChild(el);
+    requestAnimationFrame(() => { el.style.opacity = "1"; });
+    setTimeout(() => { el.style.opacity = "0"; setTimeout(() => el.remove(), 500); }, 1400);
   }
   function renderAbilityBar() {
     const keys = Object.keys(ABILITY).filter((k) => ammo[k] > 0);
@@ -619,7 +640,7 @@ register3d("battleship", async function (kernel, content) {
   function animateResults(resp) {
     const pr = resp.player || []; let i = 0;
     const nextP = () => { if (i >= pr.length) return afterP(); resolveShot("player", pr[i++], nextP); };
-    const afterP = () => { if (sim.ended || !resp.ai) { busy = false; setHUD(); return; } setHUD("Enemy firing…"); resolveShot("enemy", resp.ai, () => { busy = false; setHUD(); }); };
+    const afterP = () => { if (sim.ended || !resp.ai) { busy = false; setHUD(); return; } setHUD("Enemy firing…"); resolveShot("enemy", resp.ai, () => { runEnemyBonus(() => { busy = false; setHUD(); if (sim.ended) showEnd(sim.winner === "player"); }); }); };
     nextP();
   }
   function useAbilityAt(x, y) {
@@ -643,26 +664,39 @@ register3d("battleship", async function (kernel, content) {
     const to = cellWorld(side === "player" ? "enemy" : "player", r.x, r.y);
     kernel.playSound(sfx.fire, 0.45); // gun report on launch
     fireCannonball(side, to, () => {
-      if (r.result === "miss") { splash(to); placePeg(side === "player" ? "enemy" : "player", r.x, r.y, false); kernel.playSound(sfx.miss, 0.5); }
-      else { explosion(to); damageMarker(to, side === "enemy"); placePeg(side === "player" ? "enemy" : "player", r.x, r.y, true); kernel.playSound(sfx.hit, 0.6); }
-      if (r.result === "sink") {
-        const tb = side === "player" ? "enemy" : "player";
-        const ship = sim.boardOf(tb).ships.find((s) => s.id === r.ship);
-        if (ship) revealAndSink(tb, ship);
-        kernel.playSound(sfx.sink, 0.7);
-        // Salvage: sinking an ENEMY ship grants a one-use ability. Bigger hull =
-        // bigger upgrade; the COMBO meter scales potency and is order-sensitive.
-        if (side === "player" && ship) grantUpgrade(ship);
-      }
-      setHUD();
-      if (sim.ended) showEnd(sim.winner === "player");
+      // Fail-safe: a VFX exception must NEVER strand the turn (the enemy-impact
+      // freeze). Whatever happens, `after` always runs so `busy` is released.
+      try {
+        if (r.result === "miss") { splash(to); placePeg(side === "player" ? "enemy" : "player", r.x, r.y, false); kernel.playSound(sfx.miss, 0.5); }
+        else { explosion(to); damageMarker(to, side === "enemy"); placePeg(side === "player" ? "enemy" : "player", r.x, r.y, true); kernel.playSound(sfx.hit, 0.6); }
+        if (r.result === "sink") {
+          const tb = side === "player" ? "enemy" : "player";
+          const ship = sim.boardOf(tb).ships.find((s) => s.id === r.ship);
+          if (ship) revealAndSink(tb, ship);
+          kernel.playSound(sfx.sink, 0.7);
+          // Salvage: whoever sinks a ship earns a one-use ability (player AND AI).
+          if (ship) grantUpgrade(ship, side);
+        }
+        setHUD();
+        if (sim.ended) showEnd(sim.winner === "player");
+      } catch (e) { console.error("[battleship] resolveShot VFX error (recovered):", e); }
       setTimeout(after, reducedMotion ? 50 : (r.result === "sink" ? 900 : 450));
     });
   }
 
+  // The enemy cashes its banked salvage (bonus shots) after its normal shot.
+  function runEnemyBonus(done) {
+    if (enemyCharges <= 0 || sim.ended) { done(); return; }
+    const k = Math.min(enemyCharges, 2); enemyCharges -= k;
+    const shots = sim.aiBonusShots(k);
+    if (!shots.length) { done(); return; }
+    flashToast("ENEMY SALVO! ×" + shots.length, "#ff6a5a");
+    let i = 0;
+    const next = () => { if (i >= shots.length) { done(); return; } resolveShot("enemy", shots[i++], next); };
+    next();
+  }
   function doPlayerFire(x, y) {
     if (phase !== "battle" || busy || sim.ended || sim.turn !== "player") return false;
-    const pre = sim.fire.bind(sim); // not used; we go through playerFire to also run AI
     // peek validity without mutating: check shots grid
     if (sim.enemy.shots[y][x] !== 0) return false;
     busy = true;
@@ -671,7 +705,9 @@ register3d("battleship", async function (kernel, content) {
     resolveShot("player", resp.player, () => {
       if (sim.ended || !resp.ai) { busy = false; setHUD(); return; }
       setHUD("Enemy firing…");
-      resolveShot("enemy", resp.ai, () => { busy = false; setHUD(); });
+      resolveShot("enemy", resp.ai, () => {
+        runEnemyBonus(() => { busy = false; setHUD(); if (sim.ended) showEnd(sim.winner === "player"); });
+      });
     });
     return true;
   }

@@ -278,6 +278,19 @@
       return r;
     }
 
+    // Extra AI shots from banked enemy upgrades (the AI's earned "salvo"). Fires
+    // up to n more shots at the player; returns the results for the renderer to
+    // animate. Doesn't change whose turn it is — the enemy is cashing salvage.
+    aiBonusShots(n) {
+      var out = [];
+      for (var i = 0; i < n && !this.ended; i++) {
+        var r = this._aiTurn();
+        if (!r || r.result === "invalid") break;
+        out.push(r);
+      }
+      return out;
+    }
+
     // If two known hits share a row/col, extend along that axis first.
     _axisCells(latest) {
       var hits = this._ai.hits;
