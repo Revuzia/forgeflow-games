@@ -406,6 +406,7 @@ register3d("battleship", async function (kernel, content) {
     phase = "battle"; clearGhost();
     playerCells.forEach((m) => scene.remove(m));
     setHUD();
+    revealEnemyFleet();
   }
   function beginPlacement() {
     sim.resetPlayerBoard(); pIndex = 0; phase = "placement"; placementHUD();
@@ -414,6 +415,7 @@ register3d("battleship", async function (kernel, content) {
     await placePlayerFleetVisuals();
     playerCells.forEach((m) => scene.remove(m));
     phase = "battle"; setHUD();
+    revealEnemyFleet();
   }
   beginGame = () => { if (typeof orbit !== "undefined" && orbit) orbit.autoRotate = false; if (placementEnabled) beginPlacement(); else beginBattleDirect(); };
   {
@@ -513,6 +515,28 @@ register3d("battleship", async function (kernel, content) {
     kernel.tween({ target: puff.scale, to: { x: 2.4, y: 2.4, z: 2.4 }, duration: dur });
     kernel.tween({ target: puff.material, to: { opacity: 0 }, duration: dur, onComplete: () => scene.remove(puff) });
   }
+  // Hull-breach embers: a SINGLE shared per-frame updater drives + disposes ALL
+  // active embers, so a hit never adds a real light (a runtime light recompiles
+  // every material's shader — that WAS the hit-freeze) nor a per-hit updater
+  // (callback leak). Embers fade out and free themselves.
+  const _embers = [];
+  let _emberUpdaterOn = false;
+  function _ensureEmberUpdater() {
+    if (_emberUpdaterOn) return; _emberUpdaterOn = true;
+    kernel.onUpdate((dt) => {
+      const d = dt || 0.016;
+      for (let i = _embers.length - 1; i >= 0; i--) {
+        const e = _embers[i]; e.t += d;
+        const k = Math.max(0, 1 - e.t / e.life), flick = 0.4 + 0.14 * Math.sin(e.t * 9);
+        e.ember.material.color.setHSL(0.05, 1, 0.4 + flick * 0.3); e.ember.material.opacity = k;
+        e.glow.material.opacity = 0.5 * k * (0.7 + 0.3 * Math.sin(e.t * 7));
+        if (e.t >= e.life) {
+          for (const m of [e.ember, e.glow]) { scene.remove(m); m.geometry.dispose(); m.material.dispose(); }
+          _embers.splice(i, 1);
+        }
+      }
+    });
+  }
   function damageMarker(pos, onShip) {
     const y = onShip ? 0.62 : 0.4;
     // Blown-out hole: a dark recessed disc reads as a hull breach / scorch crater.
@@ -525,11 +549,14 @@ register3d("battleship", async function (kernel, content) {
         new THREE.MeshBasicMaterial({ color: 0x21130b, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
       lip.rotation.x = -Math.PI / 2; lip.position.set(pos.x, y + 0.01, pos.z); scene.add(lip);
       const ember = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10),
-        new THREE.MeshBasicMaterial({ color: 0xff6320 }));
+        new THREE.MeshBasicMaterial({ color: 0xff6320, transparent: true }));
       ember.position.set(pos.x, y + 0.08, pos.z); scene.add(ember);
-      let emT = 0; const emU = (dt) => { emT += dt; ember.material.color.setHSL(0.05, 1, 0.45 + 0.12 * Math.sin(emT * 9)); };
-      kernel.onUpdate(emU);
-      const fire = new THREE.PointLight(0xff7a2a, 2.2, 8); fire.position.set(pos.x, y + 0.6, pos.z); scene.add(fire);
+      // FAKE firelight: an additive glow halo (NOT a real PointLight — that would
+      // recompile every shader on each hit). Fades + disposes via the ember updater.
+      const glow = new THREE.Mesh(new THREE.SphereGeometry(0.62, 12, 12),
+        new THREE.MeshBasicMaterial({ color: 0xff7a2a, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+      glow.position.set(pos.x, y + 0.24, pos.z); scene.add(glow);
+      _ensureEmberUpdater(); _embers.push({ ember, glow, t: 0, life: 6 });
       // Burning column: re-emit puffs for a few seconds, not one burst.
       let n = 0; const iv = setInterval(() => { if (n++ > 9) { clearInterval(iv); return; } spawnSmokePuff({ x: pos.x, y: y, z: pos.z }, true); }, 380);
     } else {
@@ -637,8 +664,30 @@ register3d("battleship", async function (kernel, content) {
       }
     });
   }
+  // Show the ENEMY FLEET on their board as translucent "intel" silhouettes so
+  // the player can see all of their boats (requested). They solidify when hit/sunk.
+  async function revealEnemyFleet() {
+    const ships = sim.boardOf("enemy").ships || [];
+    for (const ship of ships) {
+      if (ship._obj || ship.sunk) continue;
+      try { await placeShip("enemy", ship); } catch (e) { continue; }
+      if (ship._obj) {
+        ship._revealed = true;
+        ship._obj.traverse((o) => {
+          if (o.isMesh && o.material) {
+            o.material = o.material.clone();
+            o.material.transparent = true; o.material.opacity = 0.42; o.material.depthWrite = false;
+          }
+        });
+      }
+    }
+  }
+  function _solidifyShip(ship) {
+    if (ship && ship._obj) ship._obj.traverse((o) => { if (o.isMesh && o.material) { o.material.opacity = 1; o.material.depthWrite = true; o.material.transparent = false; } });
+  }
   async function revealAndSink(side, ship) {
     if (!ship._obj) { await placeShip(side, ship); ship._obj.position.y = 0.35; }
+    _solidifyShip(ship);
     explosion(cellWorld(side, ship.cells[Math.floor(ship.cells.length / 2)].x, ship.cells[Math.floor(ship.cells.length / 2)].y));
     sinkShip(ship);
   }
@@ -661,9 +710,9 @@ register3d("battleship", async function (kernel, content) {
     let bc = playerTurn ? "#7CFC9A" : "#ffb454";
     if (armed) { banner = "ARMED: " + ABILITY[armed].label + " — click a target (Esc to cancel)"; bc = ABILITY[armed].color; }
     kernel.hud(`
-      <div style="position:absolute;top:12px;left:14px;font-family:'Segoe UI',system-ui,monospace">
-        <div style="font-size:19px;font-weight:800;letter-spacing:2px;text-shadow:0 2px 10px #000">${content.title || "Iron Tide"}</div>
-        <div style="margin-top:7px;display:inline-block;background:rgba(8,18,32,.72);border:1px solid ${bc}55;border-left:3px solid ${bc};border-radius:4px;padding:5px 13px;font-size:13px">
+      <div style="position:absolute;top:10px;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:34px;font-weight:900;letter-spacing:6px;text-transform:uppercase;line-height:1;background:linear-gradient(180deg,#fff2d2,#f1c468,#c2862f);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 6px rgba(0,0,0,.55))">${content.title || "Iron Tide"}</div>
+        <div style="margin-top:8px;display:inline-block;background:rgba(8,18,32,.74);border:1px solid ${bc}55;border-left:3px solid ${bc};border-right:3px solid ${bc};border-radius:5px;padding:5px 16px;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px">
           <span style="opacity:.7">Turn ${sim.turnNumber}</span> &nbsp;·&nbsp; <span style="color:${bc};font-weight:700">${banner}</span>
         </div>
       </div>
