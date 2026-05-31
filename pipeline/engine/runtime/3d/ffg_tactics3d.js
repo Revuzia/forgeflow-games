@@ -132,56 +132,86 @@ register3d("tactics3d", async (kernel, content) => {
       for (let x = 0; x < gridW; x++) {
         const t = mission.grid[y][x];
         const w = cell(x, y);
-        if (t === 1) { // BUILDING tower — varied height, lit window rows on street faces
-          const hsh = ((x * 73856093) ^ (y * 19349663)) >>> 0;
-          const bh = T * (2.6 + (hsh % 6) * 0.6);
-          const shellCol = [0x2b3442, 0x313b4b, 0x26303d][hsh % 3];
-          const m = new THREE.Mesh(new THREE.BoxGeometry(T, bh, T),
-            new THREE.MeshStandardMaterial({ color: shellCol, roughness: 0.7, metalness: 0.35 }));
-          m.position.set(w.x, bh / 2, w.z); m.castShadow = true; m.receiveShadow = true; scene.add(m);
-          const roof = new THREE.Mesh(new THREE.BoxGeometry(T, T * 0.12, T),
-            new THREE.MeshStandardMaterial({ color: shade(shellCol, 0.2), roughness: 0.5, metalness: 0.6 }));
-          roof.position.set(w.x, bh, w.z); scene.add(roof);
-          const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-          const winCol = [0xbfe6ff, 0xffdca8, 0x9fe6c0][hsh % 3];
-          for (const d of dirs) {
-            const nx = x + d[0], ny = y + d[1];
-            const ng = (ny >= 0 && ny < gridH && nx >= 0 && nx < gridW) ? mission.grid[ny][nx] : 0;
-            if (ng === 1) continue; // skip faces against another building
-            const rows = Math.max(2, Math.floor(bh / (T * 0.7)));
-            for (let r = 0; r < rows; r++) {
-              const wy = (r + 0.7) * (bh / (rows + 0.4));
-              const lit = ((hsh >> r) & 1) || ((x + y + r) % 3 === 0);
-              const pane = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.66, bh / (rows + 1) * 0.5),
-                new THREE.MeshBasicMaterial({ color: lit ? winCol : 0x12202c }));
-              pane.position.set(w.x + d[0] * (T * 0.505), wy, w.z + d[1] * (T * 0.505));
-              pane.rotation.y = d[0] !== 0 ? Math.PI / 2 : 0;
-              scene.add(pane);
-            }
-          }
-          continue;
-        }
+        if (t === 1) { buildStructure(x, y, w); continue; }
         if (t === 2 || t === 3) buildCover(x, y, w, t === 3);
         else if (t === 4) buildHazard(w);
       }
     }
   }
+  function _smat(col, r, m) { return new THREE.MeshStandardMaterial({ color: col, roughness: r == null ? 0.75 : r, metalness: m == null ? 0.2 : m }); }
+  function _bx(wd, ht, dp, col, r, m) { return new THREE.Mesh(new THREE.BoxGeometry(wd, ht, dp), _smat(col, r, m)); }
+  // Cover tiles render as recognisable STREET OBJECTS (XCOM-style), not identical
+  // crates: full cover = cars / dumpsters / shipping containers; half cover =
+  // jersey barriers / planters / sandbags / sci-fi crates. All are non-walkable
+  // (the sim already treats 2/3 as solid) so a car genuinely IS the cover.
   function buildCover(x, y, w, full) {
-    // Sci-fi crate/barricade: dark metal body, beveled lit cap + an emissive trim
-    // line (amber=full cover, cyan=half) so cover reads at a glance. Tracked per
-    // tile so a frag grenade can shred it.
-    const s = full ? T * 0.74 : T * 0.6, h = full ? T * 1.0 : T * 0.52;
-    const base = full ? 0x3a4658 : 0x33414f, trim = full ? 0xffae5a : 0x5fd0ff;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(s, h, s),
-      new THREE.MeshStandardMaterial({ color: base, roughness: 0.5, metalness: 0.6 }));
-    m.position.set(w.x, h / 2 + 0.05, w.z); m.castShadow = true; m.receiveShadow = true; scene.add(m);
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(s * 1.04, h * 0.14, s * 1.04),
-      new THREE.MeshStandardMaterial({ color: shade(base, 0.35), roughness: 0.4, metalness: 0.7 }));
-    cap.position.set(w.x, h + 0.05, w.z); cap.castShadow = true; scene.add(cap);
-    const trimBand = new THREE.Mesh(new THREE.BoxGeometry(s * 1.02, h * 0.08, s * 1.02),
-      new THREE.MeshBasicMaterial({ color: trim }));
-    trimBand.position.set(w.x, h * 0.62 + 0.05, w.z); scene.add(trimBand);
-    coverTiles[x + "," + y] = [m, cap, trimBand];
+    const hsh = ((x * 374761393) ^ (y * 668265263)) >>> 0;
+    const meshes = [];
+    const g = new THREE.Group();
+    if (full) {
+      const k = hsh % 3;
+      if (k === 0) _propCar(g, hsh);
+      else if (k === 1) _propDumpster(g, hsh);
+      else _propContainer(g, hsh);
+    } else {
+      const k = hsh % 4;
+      if (k === 0) _propBarrier(g, hsh);
+      else if (k === 1) _propPlanter(g, hsh);
+      else if (k === 2) _propSandbags(g, hsh);
+      else _propCrate(g);
+    }
+    g.position.set(w.x, 0.1, w.z);
+    g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    scene.add(g); meshes.push(g);
+    coverTiles[x + "," + y] = meshes;
+  }
+  function _propCar(g, hsh) {
+    const cols = [0x9a3b3b, 0x35506e, 0x6e6a35, 0x49505a, 0x2f6e4f, 0x7a4a2c];
+    const col = cols[hsh % cols.length];
+    g.rotation.y = (hsh & 1) ? 0 : Math.PI / 2; // sit along the street
+    const body = _bx(T * 0.84, T * 0.32, T * 0.44, col, 0.42, 0.5); body.position.set(0, T * 0.3, 0); g.add(body);
+    const cabin = _bx(T * 0.5, T * 0.26, T * 0.4, shade(col, 0.12), 0.35, 0.4); cabin.position.set(-T * 0.02, T * 0.55, 0); g.add(cabin);
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(T * 0.46, T * 0.2, T * 0.42), _smat(0x16242f, 0.1, 0.7)); glass.position.set(-T * 0.02, T * 0.56, 0); g.add(glass);
+    for (const wx of [-T * 0.3, T * 0.3]) for (const wz of [-T * 0.18, T * 0.18]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(T * 0.1, T * 0.1, T * 0.08, 12), _smat(0x101316, 0.85, 0.1));
+      wheel.rotation.x = Math.PI / 2; wheel.position.set(wx, T * 0.12, wz); g.add(wheel);
+    }
+  }
+  function _propDumpster(g, hsh) {
+    const col = [0x2f7a4a, 0x7a5a2c, 0x6e3030][hsh % 3];
+    const body = _bx(T * 0.66, T * 0.6, T * 0.5, col, 0.7, 0.3); body.position.set(0, T * 0.35, 0); g.add(body);
+    const lid = _bx(T * 0.7, T * 0.08, T * 0.54, shade(col, 0.18), 0.6, 0.3); lid.position.set(0, T * 0.66, -T * 0.04); lid.rotation.x = -0.18; g.add(lid);
+  }
+  function _propContainer(g, hsh) {
+    const col = [0xb5562e, 0x2e6fb5, 0x3a7a55, 0xb5a52e][hsh % 4];
+    const body = _bx(T * 0.92, T * 0.62, T * 0.5, col, 0.78, 0.25); body.position.y = T * 0.36; g.add(body);
+    // corrugation ridges
+    for (let i = -3; i <= 3; i++) { const rib = _bx(T * 0.02, T * 0.58, T * 0.5, shade(col, -0.25), 0.8, 0.2); rib.position.set(i * T * 0.12, T * 0.36, T * 0.255); g.add(rib); }
+    const door = _bx(T * 0.04, T * 0.5, T * 0.46, shade(col, -0.15), 0.7, 0.3); door.position.set(T * 0.46, T * 0.34, 0); g.add(door);
+  }
+  function _propBarrier(g, hsh) {
+    // concrete jersey barrier (low, angled sides)
+    const base = _bx(T * 0.72, T * 0.18, T * 0.34, 0x8a8f96, 0.9, 0.05); base.position.y = T * 0.11; g.add(base);
+    const top = _bx(T * 0.5, T * 0.3, T * 0.18, 0x969aa3, 0.9, 0.05);
+    top.position.y = T * 0.3; g.add(top);
+  }
+  function _propPlanter(g, hsh) {
+    const pot = _bx(T * 0.5, T * 0.3, T * 0.5, 0x6f6257, 0.85, 0.1); pot.position.y = T * 0.17; g.add(pot);
+    for (let i = 0; i < 3; i++) {
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(T * 0.18, 8, 8), _smat([0x3a7a3a, 0x4f8f3f, 0x2f6e35][i % 3], 0.9, 0));
+      leaf.position.set((i - 1) * T * 0.14, T * 0.42 + (i % 2) * T * 0.06, (i % 2 ? 1 : -1) * T * 0.08); leaf.scale.y = 1.2; g.add(leaf);
+    }
+  }
+  function _propSandbags(g) {
+    for (let r = 0; r < 2; r++) for (let i = 0; i < 3 - r; i++) {
+      const bag = new THREE.Mesh(new THREE.CapsuleGeometry(T * 0.1, T * 0.22, 4, 8), _smat([0x9a8b5e, 0x8a7c52][(i + r) % 2], 0.95, 0));
+      bag.rotation.z = Math.PI / 2; bag.position.set((i - (2 - r) / 2) * T * 0.24 + r * T * 0.12, T * 0.1 + r * T * 0.2, 0); g.add(bag);
+    }
+  }
+  function _propCrate(g) {
+    const base = _bx(T * 0.6, T * 0.5, T * 0.6, 0x33414f, 0.5, 0.6); base.position.y = T * 0.3; g.add(base);
+    const cap = _bx(T * 0.62, T * 0.08, T * 0.62, shade(0x33414f, 0.35), 0.4, 0.7); cap.position.y = T * 0.56; g.add(cap);
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(T * 0.61, T * 0.05, T * 0.61), new THREE.MeshBasicMaterial({ color: 0x5fd0ff })); trim.position.y = T * 0.4; g.add(trim);
   }
   // Frag shredded this tile: full(3)->half(2) rebuilds smaller; half(2)->floor(0)
   // removes it. Mirrors the sim's grid mutation so visuals stay truthful.
@@ -196,6 +226,50 @@ register3d("tactics3d", async (kernel, content) => {
     tile.position.set(w.x, 0.04, w.z); scene.add(tile);
     let tt = Math.random() * 6;
     kernel.onUpdate((dt) => { tt += dt; tile.material.emissiveIntensity = 0.3 + 0.25 * (0.5 + 0.5 * Math.sin(tt * 3)); });
+  }
+  // Buildings come in 3 silhouettes — tall office tower, mid-rise, low storefront
+  // — across a varied concrete/brick/tan palette, so the skyline reads like a
+  // real city block instead of a uniform box-forest. Lit window rows + a
+  // ground-floor accent (storefront on the low ones, with an awning).
+  function buildStructure(x, y, w) {
+    const hsh = ((x * 73856093) ^ (y * 19349663)) >>> 0;
+    const kind = hsh % 5; // 0-1 tall, 2-3 mid, 4 low
+    const PAL = [0x2b3442, 0x313b4b, 0x26303d, 0x463a31, 0x4d473d, 0x39414c, 0x3a3340];
+    const shellCol = PAL[hsh % PAL.length];
+    const bh = kind <= 1 ? T * (3.4 + (hsh % 5) * 0.5)
+      : kind <= 3 ? T * (2.0 + (hsh % 4) * 0.4)
+        : T * (1.1 + (hsh % 3) * 0.28);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(T, bh, T), _smat(shellCol, 0.74, 0.3));
+    m.position.set(w.x, bh / 2, w.z); m.castShadow = true; m.receiveShadow = true; scene.add(m);
+    const roof = _bx(T * 1.02, T * 0.14, T * 1.02, shade(shellCol, 0.22), 0.5, 0.55);
+    roof.position.set(w.x, bh, w.z); roof.castShadow = true; scene.add(roof);
+    // rooftop kit on taller buildings (AC unit / vent) for silhouette interest
+    if (kind <= 3 && (hsh & 4)) { const ac = _bx(T * 0.34, T * 0.22, T * 0.3, shade(shellCol, 0.3), 0.6, 0.5); ac.position.set(w.x + T * 0.18, bh + T * 0.12, w.z - T * 0.12); ac.castShadow = true; scene.add(ac); }
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const winCol = [0xbfe6ff, 0xffdca8, 0x9fe6c0, 0xd8c8ff][hsh % 4];
+    for (const d of dirs) {
+      const nx = x + d[0], ny = y + d[1];
+      const ng = (ny >= 0 && ny < gridH && nx >= 0 && nx < gridW) ? mission.grid[ny][nx] : 0;
+      if (ng === 1) continue; // interior face — skip
+      const faceX = w.x + d[0] * (T * 0.505), faceZ = w.z + d[1] * (T * 0.505);
+      const rotY = d[0] !== 0 ? Math.PI / 2 : 0;
+      if (kind === 4) {
+        // low storefront: big lit ground window + an awning
+        const store = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.74, bh * 0.5), new THREE.MeshBasicMaterial({ color: winCol }));
+        store.position.set(faceX, bh * 0.34, faceZ); store.rotation.y = rotY; scene.add(store);
+        const awn = _bx(T * 0.82, T * 0.06, T * 0.22, [0x9a3b3b, 0x35506e, 0x2f6e4f][hsh % 3], 0.7, 0.1);
+        awn.position.set(w.x + d[0] * (T * 0.62), bh * 0.6, w.z + d[1] * (T * 0.62)); awn.rotation.y = rotY; awn.castShadow = true; scene.add(awn);
+      } else {
+        const rows = Math.max(2, Math.floor(bh / (T * 0.7)));
+        for (let r = 0; r < rows; r++) {
+          const wy = (r + 0.7) * (bh / (rows + 0.4));
+          const lit = ((hsh >> r) & 1) || ((x + y + r) % 3 === 0);
+          const pane = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.66, bh / (rows + 1) * 0.5),
+            new THREE.MeshBasicMaterial({ color: lit ? winCol : 0x12202c }));
+          pane.position.set(faceX, wy, faceZ); pane.rotation.y = rotY; scene.add(pane);
+        }
+      }
+    }
   }
 
   // ── Units (REAL rigged + animated characters) ───────────────────────────────
