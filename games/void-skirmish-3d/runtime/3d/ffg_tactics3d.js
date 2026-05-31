@@ -75,18 +75,20 @@ register3d("tactics3d", async (kernel, content) => {
   const cell = (x, y) => new THREE.Vector3((x + 0.5) * T - W / 2, 0, (y + 0.5) * T - H / 2);
 
   scene.background = new THREE.Color(0x0b1420);
-  scene.fog = new THREE.FogExp2(0x0b1420, 0.008);
+  scene.fog = new THREE.FogExp2(0x0e1828, 0.006);
   // Cinematic facility lighting: a warm key from one side, a cool fill from the
-  // other, + a soft top light — far less flat/dark than the bare kernel rig.
-  const key = new THREE.DirectionalLight(0xfff0d8, 1.25); key.position.set(40, 60, 25); key.castShadow = true;
+  // other, + a soft top light. Brighter than before so the playable zone reads
+  // clearly (was too dark — units lost in shadow).
+  const key = new THREE.DirectionalLight(0xfff0d8, 1.7); key.position.set(40, 60, 25); key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = -60; key.shadow.camera.right = 60; key.shadow.camera.top = 60; key.shadow.camera.bottom = -60; key.shadow.camera.far = 220;
   scene.add(key);
-  scene.add(new THREE.DirectionalLight(0x4f78c8, 0.55).translateX(-40).translateY(35).translateZ(-25));
-  scene.add(new THREE.HemisphereLight(0x9fc4ff, 0x0a0f18, 0.55));
+  scene.add(new THREE.DirectionalLight(0x6f94d8, 0.8).translateX(-40).translateY(35).translateZ(-25));
+  scene.add(new THREE.HemisphereLight(0xbcd4ff, 0x141c28, 0.85));
+  scene.add(new THREE.AmbientLight(0x9fb4d0, 0.32)); // lift the deep shadows
   // HDR bloom over the emissive sci-fi elements (grid seams, cover trim, hazard,
   // tracers, unit accents) — a big step toward a polished, lit XCOM look.
-  kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = 1.0;
-  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.7, radius: 0.6, threshold: 0.8 });
+  kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = 1.28;
+  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.6, radius: 0.6, threshold: 0.82 });
 
   let sim, events = [], busy = false, selected = null, phase = "menu";
   const unitViews = {}; // id -> { group, ring, hpFill, base }
@@ -314,16 +316,26 @@ register3d("tactics3d", async (kernel, content) => {
   }
   function fadeOut(v) { setTimeout(() => { v.group.visible = false; }, 700); }
 
-  // ── Camera (iso, rotatable) ─────────────────────────────────────────────────
+  // ── Camera (cinematic, rotatable) ───────────────────────────────────────────
+  // Frame CLOSE behind the squad at a low XCOM-style angle so soldiers read
+  // large and you're down in the streets — not a tiny diorama seen from orbit.
+  // The player can still scroll out to the full-map overview (maxDistance) or
+  // WASD-glide across the board.
   const span = Math.max(W, H);
-  kernel.camera.fov = 38; kernel.camera.updateProjectionMatrix();
-  kernel.camera.position.set(span * 0.9, span * 1.0, span * 0.9);
+  let scx = 0, scy = 0;
+  for (const u of deployUnits) { scx += u.x; scy += u.y; }
+  scx = deployUnits.length ? scx / deployUnits.length : gridW / 2;
+  scy = deployUnits.length ? scy / deployUnits.length : gridH / 2;
+  const focus = cell(Math.round(scx), Math.round(scy)); focus.y = 0;
+  const camDist = T * 17; // close enough that a soldier fills a good chunk of frame
+  kernel.camera.fov = 40; kernel.camera.updateProjectionMatrix();
+  kernel.camera.position.set(focus.x + camDist * 0.6, camDist * 0.62, focus.z + camDist * 0.8);
   const orbit = kernel.enableOrbit({
-    target: { x: 0, y: 0, z: 0 },
-    minDistance: span * 0.5, maxDistance: span * 2.4,
-    minPolarAngle: 0.25, maxPolarAngle: Math.PI * 0.46,
-    rotateButton: "right", wasdPan: true, panSpeed: span * 0.9,
-    autoRotate: true, autoRotateSpeed: 0.4,
+    target: { x: focus.x, y: 0, z: focus.z },
+    minDistance: T * 7, maxDistance: span * 2.2,
+    minPolarAngle: 0.22, maxPolarAngle: Math.PI * 0.47,
+    rotateButton: "right", wasdPan: true, panSpeed: span * 0.7,
+    autoRotate: true, autoRotateSpeed: 0.32,
   });
 
   // ── Highlights + selection ──────────────────────────────────────────────────
