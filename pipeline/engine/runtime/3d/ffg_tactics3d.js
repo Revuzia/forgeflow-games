@@ -131,6 +131,9 @@ register3d("tactics3d", async (kernel, content) => {
   let abilityMode = null;     // armed ability id (Phase 3) — next click resolves it
   const coverTiles = {};      // "x,y" -> [meshes] so frag can shred cover visually
   const buildingTiles = {};   // "x,y" -> [meshes] so frag can demolish a wall
+  // Combat + UI audio — resolves a name from content.sfx and plays via the
+  // kernel (which scales by the Settings SFX-volume slider, no-ops if missing).
+  function sfx(name, vol) { const u = content.sfx && content.sfx[name]; if (u) kernel.playSound(u, vol == null ? 0.55 : vol); }
 
   function buildSim() {
     events = [];
@@ -507,7 +510,9 @@ register3d("tactics3d", async (kernel, content) => {
   function clearHighlights() { highlights.forEach((h) => scene.remove(h)); highlights = []; rangeTargets = []; }
   function selectUnit(u) {
     if (!u || u.side !== "player" || u.hp <= 0) return;
+    const reselect = selected === u;
     selected = u; abilityMode = null; clearHighlights();
+    if (!reselect) sfx("select", 0.4);
     const v = unitViews[u.id]; if (v) v.ring.material.emissiveIntensity = 1.0;
     (sim.reachableTiles(u) || []).forEach((r) => {
       const w = cell(r.x, r.y);
@@ -639,7 +644,7 @@ register3d("tactics3d", async (kernel, content) => {
     const a = abilityDef(id); if (!a || !a.ready) { if (a && !a.ready) flashToast(a.name + " not ready"); return; }
     abilityMode = (abilityMode === id) ? null : id; // toggle
     clearHighlights();
-    if (abilityMode) showAbilityTargets(a); else selectUnit(selected);
+    if (abilityMode) { sfx("confirm", 0.4); showAbilityTargets(a); } else selectUnit(selected);
     setHUD(abilityMode ? "Pick a target for " + a.name : null);
   }
   function disarmAbility() { if (abilityMode) { abilityMode = null; if (selected) selectUnit(selected); } }
@@ -732,6 +737,8 @@ register3d("tactics3d", async (kernel, content) => {
         const col = p.reaction ? 0x9fd0ff : p.crit ? 0xff5a3c : p.hit ? 0xffe066 : 0x8aa0bc;
         const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pa, pb]), new THREE.LineBasicMaterial({ color: col, transparent: true }));
         scene.add(line); kernel.tween({ target: line.material, to: { opacity: 0 }, duration: 0.3, onComplete: () => scene.remove(line) });
+        sfx("shot", p.reaction ? 0.4 : 0.55);
+        setTimeout(() => sfx(p.hit ? (p.crit || p.killed ? "hit_heavy" : "hit") : "miss", p.hit ? 0.6 : 0.5), 120);
         if (p.reaction) floatText({ x: pa.x, y: pa.y + 0.4, z: pa.z }, "OVERWATCH!", 0x9fd0ff);
         if (p.hit) {
           const big = !!p.crit;
@@ -753,6 +760,7 @@ register3d("tactics3d", async (kernel, content) => {
     if (e.type === "overwatch") {
       const v = unitViews[e.payload.unit.id];
       if (v) floatText({ x: v.group.position.x, y: T, z: v.group.position.z }, "OVERWATCH", 0x9fd0ff);
+      sfx("overwatch", 0.5);
       return 150;
     }
     if (e.type === "ability") return playAbilityEvent(e.payload);
@@ -766,6 +774,7 @@ register3d("tactics3d", async (kernel, content) => {
     if (p.ability === "slash") {
       const t = unitViews[p.target.id];
       faceToward(p.attacker, p.target.x, p.target.y);
+      sfx("hit_heavy", 0.6);
       anim(p.attacker, a && a.clips && a.clips.attack ? "attack" : "idle", { once: true, fade: 0.1 });
       if (t) {
         const tp = t.group.position.clone(); tp.y = T * 0.7;
@@ -786,6 +795,7 @@ register3d("tactics3d", async (kernel, content) => {
     if (p.ability === "headshot") {
       const t = unitViews[p.target.id];
       faceToward(p.attacker, p.target.x, p.target.y);
+      sfx("shot", 0.6); setTimeout(() => sfx(p.hit ? "hit_heavy" : "miss", 0.6), 130);
       if (t) {
         const pa = apos.clone(); pa.y = T * 0.65; const pb = t.group.position.clone(); pb.y = T * 0.65;
         const beam = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pa, pb]),
@@ -808,6 +818,7 @@ register3d("tactics3d", async (kernel, content) => {
     }
     if (p.ability === "heal") {
       const t = unitViews[p.target.id];
+      sfx("heal", 0.6);
       if (t) {
         const tp = t.group.position.clone();
         const ring = new THREE.Mesh(new THREE.RingGeometry(T * 0.2, T * 0.5, 24), new THREE.MeshBasicMaterial({ color: 0x3ddc84, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
@@ -821,6 +832,7 @@ register3d("tactics3d", async (kernel, content) => {
     }
     if (p.ability === "frag") {
       const w = cell(p.tileX, p.tileY);
+      sfx("explosion", 0.75);
       // lobbed grenade -> blast sphere + shockwave ring
       const blast = new THREE.Mesh(new THREE.SphereGeometry(0.5, 14, 14), new THREE.MeshBasicMaterial({ color: 0xffae5a }));
       blast.position.set(w.x, T * 0.4, w.z); scene.add(blast);
@@ -842,6 +854,7 @@ register3d("tactics3d", async (kernel, content) => {
     if (p.ability === "suppress") {
       const t = unitViews[p.target.id];
       faceToward(p.attacker, p.target.x, p.target.y);
+      sfx("shot", 0.35); setTimeout(() => sfx("shot", 0.3), 110); setTimeout(() => sfx("shot", 0.28), 220);
       if (t) {
         const pa = apos.clone(); pa.y = T * 0.6; const pb = t.group.position.clone(); pb.y = T * 0.6;
         for (let i = 0; i < 4; i++) {
@@ -909,6 +922,7 @@ register3d("tactics3d", async (kernel, content) => {
   function showEnd() {
     if (endShown) return; endShown = true;
     const win = sim.aliveAllies().length > 0;
+    sfx(win ? "victory" : "defeat", 0.6);
     window.__FFG_RESULT__ = { victory: win, turns: sim.turnNumber };
     // Campaign run: record permadeath/XP/doom, then show the Barracks debrief
     // (which deploys the next op or ends the campaign). Otherwise a one-off result.

@@ -20670,5 +20670,24 @@
     }
   ],
   "renderer": "three",
-  "tagline": "Lead the squad. Take the map."
+  "tagline": "Lead the squad. Take the map.",
+  "audio": {
+    "music": "assets/audio/music.ogg",
+    "menu_music": "assets/audio/menu_music.ogg"
+  },
+  "sfx": {
+    "shot": "assets/audio/shot.ogg",
+    "hit": "assets/audio/hit.ogg",
+    "hit_heavy": "assets/audio/hit_heavy.ogg",
+    "miss": "assets/audio/miss.ogg",
+    "explosion": "assets/audio/explosion.ogg",
+    "select": "assets/audio/select.ogg",
+    "click": "assets/audio/click.ogg",
+    "confirm": "assets/audio/confirm.ogg",
+    "heal": "assets/audio/heal.ogg",
+    "overwatch": "assets/audio/overwatch.ogg",
+    "victory": "assets/audio/victory.ogg",
+    "defeat": "assets/audio/defeat.ogg"
+  },
+  "assets": {}
 }
