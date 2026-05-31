@@ -196,11 +196,23 @@ register3d("tactics3d", async (kernel, content) => {
     const hpFill = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.58, 0.1), new THREE.MeshBasicMaterial({ color: 0x3ddc84 }));
     hpBg.position.set(0, hpY, 0); hpFill.position.set(0, hpY, 0.01);
     g.add(hpBg); g.add(hpFill);
+    // Cover-shield badge (the iconic XCOM read): solid = full cover, half = half.
+    const cover = makeShieldSprite(); cover.position.set(0, hpY + 0.55, 0); cover.visible = false; g.add(cover);
     scene.add(g);
-    kernel.onUpdate(() => { hpBg.quaternion.copy(kernel.camera.quaternion); hpFill.quaternion.copy(kernel.camera.quaternion); });
-    unitViews[u.id] = { group: g, ring, hpFill, base: col, dark, hpW: T * 0.58, char, clips, dead: false };
+    kernel.onUpdate(() => { hpBg.quaternion.copy(kernel.camera.quaternion); hpFill.quaternion.copy(kernel.camera.quaternion); cover.quaternion.copy(kernel.camera.quaternion); });
+    unitViews[u.id] = { group: g, ring, hpFill, cover, base: col, dark, hpW: T * 0.58, char, clips, dead: false };
     faceUnit(u, isPlayer ? -1 : 1); // players look "north" toward the enemy, enemies "south"
+    updateCover(u);
   }
+  // Show each unit's best available cover as an XCOM-style shield over its head.
+  function updateCover(u) {
+    const v = unitViews[u.id]; if (!v || !v.cover) return;
+    if (u.hp <= 0) { v.cover.visible = false; return; }
+    const cov = sim.coverAt(u); // 0 none / 1 half / 2 full (best adjacent)
+    if (cov === 0) { v.cover.visible = false; return; }
+    v.cover.visible = true; v.cover.material.map = shieldTex(cov === 2); v.cover.material.needsUpdate = true;
+  }
+  function refreshAllCover() { sim.allUnits().forEach((u) => { if (u.hp > 0) updateCover(u); }); }
   function faceUnit(u, dir) { const v = unitViews[u.id]; if (v && v.char) v.char.scene.rotation.y = dir > 0 ? 0 : Math.PI; }
   function faceToward(u, tx, ty) {
     const v = unitViews[u.id]; if (!v || !v.char) return;
@@ -215,6 +227,7 @@ register3d("tactics3d", async (kernel, content) => {
     v.hpFill.scale.x = Math.max(0.001, pct);
     v.hpFill.position.x = -(v.hpW * (1 - pct)) / 2;
     v.hpFill.material.color.setHex(pct > 0.5 ? 0x3ddc84 : pct > 0.25 ? 0xf5c518 : 0xff5a5a);
+    updateCover(u);
   }
   function killUnit(u) {
     const v = unitViews[u.id]; if (!v || v.dead) return; v.dead = true;
@@ -309,7 +322,7 @@ register3d("tactics3d", async (kernel, content) => {
   // All actions flow through the sim then animate the resulting EVENT queue, so
   // reaction fire (enemy overwatch on a player move) is shown automatically.
   function afterAction(u) {
-    busy = false;
+    busy = false; refreshAllCover();
     if (sim.ended) return showEnd();
     if (u && u.hp > 0 && u.actionPoints > 0 && u.side === "player") selectUnit(u); else deselect();
   }
@@ -342,7 +355,7 @@ register3d("tactics3d", async (kernel, content) => {
     if (phase !== "battle" || busy || sim.ended || sim.currentPhase !== "player") return;
     deselect(); busy = true; setHUD("Enemy phase…");
     sim.endTurn();
-    drainEvents(() => { busy = false; if (sim.ended) return showEnd(); setHUD(); });
+    drainEvents(() => { busy = false; refreshAllCover(); if (sim.ended) return showEnd(); setHUD(); });
   }
   function drainEvents(done) {
     const q = events.slice(); events = []; let i = 0;
@@ -507,5 +520,27 @@ function makeTextSprite(text, colorHex) {
   const tex = new THREE.CanvasTexture(c);
   const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
   spr.scale.set(2.6, 0.65, 1);
+  return spr;
+}
+
+// XCOM-style cover shield: a crisp white shield, full (solid) or half (split).
+const _shieldTexCache = {};
+function shieldTex(full) {
+  const key = full ? "full" : "half";
+  if (_shieldTexCache[key]) return _shieldTexCache[key];
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const ctx = c.getContext("2d");
+  function shieldPath() { ctx.beginPath(); ctx.moveTo(32, 6); ctx.lineTo(56, 16); ctx.lineTo(56, 34); ctx.quadraticCurveTo(56, 52, 32, 60); ctx.quadraticCurveTo(8, 52, 8, 34); ctx.lineTo(8, 16); ctx.closePath(); }
+  // glow backing
+  ctx.shadowColor = full ? "#bfe9ff" : "#ffd27a"; ctx.shadowBlur = 10;
+  shieldPath(); ctx.fillStyle = full ? "#dff4ff" : "#3a2c14"; ctx.fill();
+  ctx.shadowBlur = 0;
+  if (!full) { ctx.save(); shieldPath(); ctx.clip(); ctx.fillStyle = "#ffcf6a"; ctx.fillRect(0, 34, 64, 30); ctx.restore(); }
+  shieldPath(); ctx.lineWidth = 4; ctx.strokeStyle = full ? "#7fd6ff" : "#ffb454"; ctx.stroke();
+  const tex = new THREE.CanvasTexture(c); _shieldTexCache[key] = tex; return tex;
+}
+function makeShieldSprite() {
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: shieldTex(true), transparent: true, depthTest: false }));
+  spr.scale.set(0.9, 0.9, 1);
   return spr;
 }
