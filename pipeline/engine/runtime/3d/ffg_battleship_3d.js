@@ -109,13 +109,14 @@ register3d("battleship", async function (kernel, content) {
     console.warn("[battleship] physics unavailable; tween fallback:", e);
   }
 
-  // ── Boards: player (near, z+) and enemy (far, z-) ─────────────────────────
-  // Keep a SMALL gap (one cell) between the two boards so a single framed
-  // camera reads both clearly — previously they sat ~30u apart, so the near
-  // board loomed and the far one shrank into the distance.
-  const PLAYER_Z = boardSpan / 2 + CELL * 1.2;
-  const ENEMY_Z = -(boardSpan / 2 + CELL * 1.2);
-  function boardOrigin(side) { return new THREE.Vector3(-boardSpan / 2, 0.2, (side === "player" ? PLAYER_Z : ENEMY_Z) - boardSpan / 2); }
+  // ── Boards: SIDE BY SIDE — player (left, x-) and enemy (right, x+) ─────────
+  // The two grids sit beside each other along X so the default landscape camera
+  // shows both at once with no rotation needed (was stacked front/back along Z,
+  // which read as "one map on top of the other"). A one-cell gap keeps them
+  // visually distinct.
+  const PLAYER_X = -(boardSpan / 2 + CELL * 1.2);
+  const ENEMY_X = boardSpan / 2 + CELL * 1.2;
+  function boardOrigin(side) { return new THREE.Vector3((side === "player" ? PLAYER_X : ENEMY_X) - boardSpan / 2, 0.2, -boardSpan / 2); }
   function cellWorld(side, x, y) {
     const o = boardOrigin(side);
     return new THREE.Vector3(o.x + x * CELL + CELL / 2, 0.25, o.z + y * CELL + CELL / 2);
@@ -351,19 +352,21 @@ register3d("battleship", async function (kernel, content) {
   // the midpoint between the boards. Tiny idle drift only.
   kernel.camera.fov = 42;
   kernel.camera.updateProjectionMatrix();
-  // Tighter default framing: both boards fill the frame with little dead water,
-  // player board in the foreground (target biased toward +z).
-  kernel.camera.position.set(0, boardSpan * 1.35, boardSpan * 1.62);
-  const LOOK_Z = boardSpan * 0.06;
+  // Landscape framing of the two SIDE-BY-SIDE boards: pull back along +Z and up,
+  // looking at the midpoint so player (left) + enemy (right) both fill the frame
+  // with their grids facing the camera. The layout now spans ~2.2× a board wide,
+  // so the camera sits a touch further back than a single board would need.
+  kernel.camera.position.set(0, boardSpan * 1.5, boardSpan * 1.95);
+  const LOOK_Z = 0;
   // Camera: RIGHT-drag rotates, WASD glides across the battlefield, scroll zooms
-  // (left click stays free to fire). Wide range so you can pull back and survey
-  // the full enemy fleet / both boards in a landscape view.
+  // (left click stays free to fire). autoRotate OFF so the game opens on a stable
+  // side-by-side view — the player rotates only if they choose to.
   const orbit = kernel.enableOrbit({
     target: { x: 0, y: 0, z: LOOK_Z },
-    minDistance: boardSpan * 0.55, maxDistance: boardSpan * 4.2,
+    minDistance: boardSpan * 0.6, maxDistance: boardSpan * 4.6,
     minPolarAngle: 0.12, maxPolarAngle: Math.PI * 0.47,
     rotateButton: "right", wasdPan: true, panSpeed: boardSpan * 1.1,
-    autoRotate: true, autoRotateSpeed: 0.5,
+    autoRotate: false,
   });
   const reducedMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   if (reducedMotion) orbit.autoRotate = false;
@@ -475,22 +478,15 @@ register3d("battleship", async function (kernel, content) {
       });
     }
   }
+  // A sunk ship does NOT vanish — it FOUNDERS: lists hard to one side, settles
+  // half-submerged as a visible wreck at the waterline, then over ~75s slowly
+  // slips under (rolling further as it goes). Debris still bursts up on impact.
   function sinkShip(ship) {
-    if (!ship._obj) return;
+    if (!ship._obj || ship._wreck) return;
     const obj = ship._obj;
     const C = kernel.CANNON;
+    // Impact debris (physics flair) — small planks flung up, despawn quickly.
     if (C && kernel.world) {
-      // Convert the ship into a dynamic rigid body: gravity sinks it, a random
-      // torque makes it list and roll under. Real physics, not a tween.
-      kernel.addPhysicsBody({
-        mesh: obj,
-        shape: new C.Box(new C.Vec3(Math.max(0.6, ship.len * CELL * 0.35), 0.5, CELL * 0.35)),
-        mass: 6,
-        position: { x: obj.position.x, y: obj.position.y, z: obj.position.z },
-        angularVelocity: { x: (Math.random() - 0.5) * 2.5, y: (Math.random() - 0.5), z: (Math.random() - 0.5) * 2.5 },
-        linearDamping: 0.4, despawnAfter: 4.5, removeMesh: true,
-      });
-      // Flying debris flung up from the impact.
       for (let i = 0; i < 5; i++) {
         const d = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5),
           new THREE.MeshStandardMaterial({ color: 0x6b5535, roughness: 0.9 }));
@@ -503,10 +499,37 @@ register3d("battleship", async function (kernel, content) {
           despawnAfter: 3, removeMesh: true,
         });
       }
-    } else {
-      kernel.tween({ target: obj.position, to: { y: -2.5 }, duration: 1.6 });
-      kernel.tween({ target: obj.rotation, to: { z: 0.6 }, duration: 1.6 });
     }
+    // Kinematic founder + slow-sink state machine (works with or without physics).
+    const startY = obj.position.y;
+    const list = (Math.random() < 0.5 ? 1 : -1) * (0.5 + Math.random() * 0.3); // final list angle
+    const pitch = (Math.random() - 0.5) * 0.25;                                 // slight bow/stern dip
+    const WRECK_Y = -0.5;        // half-submerged: hull under, superstructure above the surface
+    const FOUNDER = 2.6;         // seconds to roll over + settle
+    const FLOAT = 8.0;           // seconds it lingers as a visible wreck
+    const SINK_RATE = 0.06;      // units/sec it slips under after that (~75s to vanish)
+    ship._wreck = true; ship._sinkT = 0;
+    obj.castShadow = true;
+    kernel.onUpdate((dt) => {
+      if (!ship._wreck) return;
+      ship._sinkT += dt;
+      const t = ship._sinkT;
+      if (t < FOUNDER) {
+        const k = t / FOUNDER, e = k * k * (3 - 2 * k); // smoothstep
+        obj.position.y = startY + (WRECK_Y - startY) * e;
+        obj.rotation.z = list * e;
+        obj.rotation.x = pitch * e;
+      } else if (t < FOUNDER + FLOAT) {
+        // bob + creak at the waterline as a wreck
+        obj.position.y = WRECK_Y + Math.sin(t * 1.1) * 0.06;
+        obj.rotation.z = list + Math.sin(t * 0.7) * 0.03;
+      } else {
+        // slow, final descent — rolls a little further and slips under
+        obj.position.y -= SINK_RATE * dt;
+        obj.rotation.z = list + (list > 0 ? 1 : -1) * Math.min(0.4, (t - FOUNDER - FLOAT) * 0.02);
+        if (obj.position.y < -4.5) { obj.visible = false; ship._wreck = false; }
+      }
+    });
   }
   async function revealAndSink(side, ship) {
     if (!ship._obj) { await placeShip(side, ship); ship._obj.position.y = 0.35; }
