@@ -230,7 +230,7 @@ register3d("tactics3d", async (kernel, content) => {
     const lid = _bx(T * 0.7, T * 0.08, T * 0.54, shade(col, 0.18), 0.6, 0.3); lid.position.set(0, T * 0.66, -T * 0.04); lid.rotation.x = -0.18; g.add(lid);
   }
   function _propContainer(g, hsh) {
-    const col = [0xb5562e, 0x2e6fb5, 0x3a7a55, 0xb5a52e][hsh % 4];
+    const col = [0x9c4f30, 0x355f80, 0x3d6e52, 0x86773a][hsh % 4]; // muted shipping-container tones
     const body = _bx(T * 0.92, T * 0.62, T * 0.5, col, 0.78, 0.25); body.position.y = T * 0.36; g.add(body);
     // corrugation ridges
     for (let i = -3; i <= 3; i++) { const rib = _bx(T * 0.02, T * 0.58, T * 0.5, shade(col, -0.25), 0.8, 0.2); rib.position.set(i * T * 0.12, T * 0.36, T * 0.255); g.add(rib); }
@@ -258,7 +258,7 @@ register3d("tactics3d", async (kernel, content) => {
   function _propCrate(g) {
     const base = _bx(T * 0.6, T * 0.5, T * 0.6, 0x33414f, 0.5, 0.6); base.position.y = T * 0.3; g.add(base);
     const cap = _bx(T * 0.62, T * 0.08, T * 0.62, shade(0x33414f, 0.35), 0.4, 0.7); cap.position.y = T * 0.56; g.add(cap);
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(T * 0.61, T * 0.05, T * 0.61), new THREE.MeshBasicMaterial({ color: 0x5fd0ff })); trim.position.y = T * 0.4; g.add(trim);
+    const trim = _bx(T * 0.62, T * 0.05, T * 0.62, 0x2a3340, 0.5, 0.55); trim.position.y = T * 0.4; g.add(trim); // dark metal banding (was a glowing cyan sci-fi line)
   }
   // Frag shredded this tile: full(3)->half(2) rebuilds smaller; half(2)->floor(0)
   // removes it. Mirrors the sim's grid mutation so visuals stay truthful.
@@ -325,7 +325,9 @@ register3d("tactics3d", async (kernel, content) => {
     const kind = hsh % 5; // 0-1 tall, 2-3 mid, 4 low
     const PAL = [0x2b3442, 0x313b4b, 0x26303d, 0x463a31, 0x4d473d, 0x39414c, 0x3a3340];
     const shellCol = PAL[hsh % PAL.length];
-    const winCol = [0xbfe6ff, 0xffdca8, 0x9fe6c0, 0xd8c8ff][hsh % 4];
+    // Warm office-window glow (amber/gold) + a little cool fluorescent — grounded
+    // night-city light, NOT cyberpunk green/purple (the old rainbow read as arcade).
+    const winCol = [0xffe1ad, 0xffcf86, 0xdfeaff, 0xfff1cf][hsh % 4];
     const floors = kind <= 1 ? (5 + (hsh % 5)) : kind <= 3 ? (3 + (hsh % 3)) : (1 + (hsh % 2));
     const bh = T * 0.92 * floors;
     // Single textured box per building — facade map tinted by the shell colour,
