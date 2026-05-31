@@ -290,6 +290,7 @@
         let dmg = Math.max(1, a.atk - t.def);
         if (crit) dmg = Math.round(dmg * 1.5);
         t.hp = Math.max(0, t.hp - dmg);
+        if (t.hp <= 0) a._kills = (a._kills || 0) + 1;
         this.log.push(a.id + (reaction ? " overwatch-hit " : crit ? " CRIT " : " hit ") + t.id + " for " + dmg);
         this.onEvent("attack", { attacker: a, target: t, hit: true, damage: dmg, chance: chance, killed: t.hp <= 0, crit: crit, flanked: bd.flanked, reaction: reaction });
         this._checkEnd();
@@ -351,6 +352,7 @@
       let dmg = Math.max(1, Math.round(u.atk * def.dmgMult)); // ignores cover/armor
       const crit = this.rng() < def.crit; if (crit) dmg = Math.round(dmg * 1.5);
       t.hp = Math.max(0, t.hp - dmg);
+      if (t.hp <= 0) u._kills = (u._kills || 0) + 1;
       this.log.push(u.id + " slashed " + t.id + " for " + dmg + (crit ? " CRIT" : ""));
       this.onEvent("ability", { ability: "slash", attacker: u, target: t, hit: true, damage: dmg, crit, killed: t.hp <= 0 });
       return { success: true, hit: true, damage: dmg, crit, killed: t.hp <= 0 };
@@ -369,6 +371,7 @@
         let dmg = Math.max(1, Math.round(u.atk * def.dmgMult) - t.def);
         if (crit) dmg = Math.round(dmg * 1.5);
         t.hp = Math.max(0, t.hp - dmg);
+        if (t.hp <= 0) u._kills = (u._kills || 0) + 1;
         this.log.push(u.id + " headshot " + t.id + " for " + dmg + (crit ? " CRIT" : ""));
         this.onEvent("ability", { ability: "headshot", attacker: u, target: t, hit: true, damage: dmg, crit, chance, killed: t.hp <= 0 });
         return { success: true, hit: true, damage: dmg, crit, killed: t.hp <= 0 };
@@ -399,6 +402,7 @@
         if (Math.max(Math.abs(v.x - tx), Math.abs(v.y - ty)) > def.radius) continue;
         const dmg = Math.max(1, Math.round(u.atk * def.dmgMult) - Math.floor(v.def / 2));
         v.hp = Math.max(0, v.hp - dmg);
+        if (v.hp <= 0 && v.side !== u.side) u._kills = (u._kills || 0) + 1;
         hits.push({ id: v.id, side: v.side, damage: dmg, killed: v.hp <= 0 });
       }
       const shredded = [];

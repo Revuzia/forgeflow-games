@@ -7,6 +7,7 @@ const V = new URL(import.meta.url).search;
 
 const { boot3d } = await import("./ffg_kernel_3d.js" + V);
 await import("../ffg_shell.js" + V);        // menu / pause / win-lose / music shell
+await import("../ffg_campaign.js" + V);     // strategic meta-layer (window.FFG.Campaign)
 await import("./ffg_tactics3d.js" + V);     // registers genre "tactics3d"
 
 async function resolveContent() {

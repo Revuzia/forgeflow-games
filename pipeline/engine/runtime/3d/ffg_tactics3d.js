@@ -58,8 +58,16 @@ register3d("tactics3d", async (kernel, content) => {
   const scene = kernel.scene;
   const TB = window.FFG.sim.TacticalBattle;
   const missions = (content.missions && content.missions.length) ? content.missions : [content];
-  let missionIndex = Math.max(0, Math.min((window.__FFG_TACTICS_MISSION__ | 0), missions.length - 1));
+  // Strategic meta-layer (Phase 4): a persistent campaign decides WHICH mission
+  // deploys and WHO is in the squad. Falls back to a one-off if unavailable.
+  const campaign = (window.FFG && window.FFG.Campaign && missions.length > 1)
+    ? new window.FFG.Campaign(content.slug || "tactics", missions) : null;
+  const campaignRun = !!(campaign && campaign.isActive());
+  let missionIndex = campaignRun ? campaign.currentMission()
+    : Math.max(0, Math.min((window.__FFG_TACTICS_MISSION__ | 0), missions.length - 1));
   let mission = missions[missionIndex];
+  // squad that actually deploys this mission (campaign roster overlay, or content)
+  const deployUnits = campaignRun ? campaign.rosterForMission(mission) : mission.player_units;
 
   const gridH = mission.grid.length, gridW = mission.grid[0].length;
   const W = gridW * T, H = gridH * T;
@@ -89,7 +97,7 @@ register3d("tactics3d", async (kernel, content) => {
   function buildSim() {
     events = [];
     sim = new TB({
-      grid: mission.grid, player_units: mission.player_units, enemy_units: mission.enemy_units,
+      grid: mission.grid, player_units: deployUnits, enemy_units: mission.enemy_units,
       seed: content.seed != null ? content.seed : 12345,
       onEvent: (type, payload) => events.push({ type, payload }),
     });
@@ -710,11 +718,19 @@ register3d("tactics3d", async (kernel, content) => {
   for (const u of sim.allUnits()) await makeUnit(u); // load + instance the animated models
   sim.allUnits().forEach(refreshUnit);
 
-  let shell = null;
+  let shell = null, endShown = false;
   function beginBattle() { phase = "battle"; orbit.autoRotate = false; setHUD(); }
   function showEnd() {
+    if (endShown) return; endShown = true;
     const win = sim.aliveAllies().length > 0;
     window.__FFG_RESULT__ = { victory: win, turns: sim.turnNumber };
+    // Campaign run: record permadeath/XP/doom, then show the Barracks debrief
+    // (which deploys the next op or ends the campaign). Otherwise a one-off result.
+    if (campaignRun) {
+      campaign.recordMissionResult(sim.player_units, win);
+      campaign.renderBarracks(kernel.parent, {});
+      return;
+    }
     if (shell) shell.end(win, win ? "Mission complete · " + sim.turnNumber + " turns" : "Squad eliminated");
   }
   if (window.FFG && window.FFG.Shell) {
@@ -733,7 +749,12 @@ register3d("tactics3d", async (kernel, content) => {
       onPlay: () => beginBattle(),
       onPause: () => kernel.stop(), onResume: () => kernel.start(),
     });
-    shell.start();
+    // After a Barracks "Deploy", we reload straight into the next op — skip the
+    // title menu and drop the player into the fight.
+    let autostart = false;
+    try { const k = "ffg_autostart_" + (content.slug || "tactics"); autostart = window.sessionStorage.getItem(k) === "1"; if (autostart) window.sessionStorage.removeItem(k); } catch (e) {}
+    if (autostart) { shell.hide(); shell.phase = "playing"; if (shell._playMusic) shell._playMusic(); beginBattle(); }
+    else shell.start();
   } else { beginBattle(); }
 
   const controller = {
@@ -748,6 +769,8 @@ register3d("tactics3d", async (kernel, content) => {
       abilitiesFor: (uid) => sim.abilitiesFor(uid),
       overwatch: (id) => { if (id) selectUnit(sim.getUnit(id)); overwatchSelected(); },
       endTurn: () => endTurn(),
+      debrief: () => showEnd(), // force the end/barracks screen (test affordance)
+      campaign: () => campaign ? { active: campaign.isActive(), mission: campaign.currentMission(), doom: campaign.state.doom, doomMax: campaign.state.doomMax, supplies: campaign.state.supplies, roster: campaign.state.roster.map((s) => s && { cls: s.cls, rank: s.rank, xp: s.xp, kills: s.kills }) } : null,
       autoResolve: (maxTurns) => {
         let n = 0;
         while (!sim.ended && n++ < (maxTurns || 40)) {
