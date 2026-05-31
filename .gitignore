@@ -11,3 +11,5 @@ pipeline/assets/_downloaded/
 
 # Wrangler local-dev state (per-machine, not portable)
 .wrangler/state/
+
+.secrets/

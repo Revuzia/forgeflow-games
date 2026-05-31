@@ -27,22 +27,56 @@ R2_BUCKET = "forgeflow-games"
 R2_PUBLIC_URL = "https://forgeflow-games.pages.dev"  # Will be updated once R2 custom domain is set
 
 
-def ensure_cf_env():
-    """wrangler r2 needs CLOUDFLARE_ACCOUNT_ID to target the right account, and
-    utf-8 output so colored errors don't crash the print path on Windows. Auto-load
-    the account id from api_config.json so a bare `python deploy_game.py` just works
-    (no need to export secrets by hand)."""
-    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
-    if os.environ.get("CLOUDFLARE_ACCOUNT_ID"):
-        return
+SECRETS_DIR = ROOT / ".secrets"
+
+
+def _read_secret_file(name):
+    p = SECRETS_DIR / name
     try:
-        cfg = json.loads((NOMI / "api_config.json").read_text(encoding="utf-8"))
-        acct = (cfg.get("providers", {}).get("cloudflare", {}) or {}).get("account_id_isimcha85")
-        if acct:
-            os.environ["CLOUDFLARE_ACCOUNT_ID"] = acct
-            print(f"[cf] CLOUDFLARE_ACCOUNT_ID set from api_config (…{acct[-4:]})")
-    except Exception as e:
-        print(f"[cf] WARN: could not auto-load account id ({e}); set CLOUDFLARE_ACCOUNT_ID manually")
+        return p.read_text(encoding="utf-8").strip() if p.exists() else None
+    except Exception:
+        return None
+
+
+def _read_api_config():
+    try:
+        return json.loads((NOMI / "api_config.json").read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def resolve_cf_account_id():
+    """env → repo .secrets/cf_account_id.txt → api_config (isimcha85)."""
+    return (os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+            or _read_secret_file("cf_account_id.txt")
+            or ((_read_api_config().get("providers", {}).get("cloudflare", {}) or {}).get("account_id_isimcha85")))
+
+
+def resolve_cf_api_token():
+    """env → repo .secrets/cf_api_token.txt → api_config providers.cloudflare.api_token.
+    An R2-Edit API token (Option B) is the portable, no-interactive-OAuth path that
+    works the same on any PC."""
+    return (os.environ.get("CLOUDFLARE_API_TOKEN")
+            or _read_secret_file("cf_api_token.txt")
+            or ((_read_api_config().get("providers", {}).get("cloudflare", {}) or {}).get("api_token")))
+
+
+def ensure_cf_env():
+    """Populate the env wrangler needs so a bare deploy 'just works' on any machine:
+    utf-8 output (colored wrangler errors don't crash the print path on Windows),
+    CLOUDFLARE_ACCOUNT_ID, and — if available — a CLOUDFLARE_API_TOKEN with R2 Edit
+    (preferred over interactive `wrangler login`, which lacks R2 scope here)."""
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+    acct = resolve_cf_account_id()
+    if acct and not os.environ.get("CLOUDFLARE_ACCOUNT_ID"):
+        os.environ["CLOUDFLARE_ACCOUNT_ID"] = acct
+        print(f"[cf] CLOUDFLARE_ACCOUNT_ID set (…{acct[-4:]})")
+    token = resolve_cf_api_token()
+    if token and not os.environ.get("CLOUDFLARE_API_TOKEN"):
+        os.environ["CLOUDFLARE_API_TOKEN"] = token
+        print("[cf] CLOUDFLARE_API_TOKEN loaded (R2 Edit) — using API token auth")
+    elif not token:
+        print("[cf] No API token found — wrangler will use its OAuth login (may lack R2 scope).")
 
 # Load Supabase credentials for the forgeflow-games project
 def load_supabase_creds():
@@ -155,46 +189,51 @@ def insert_game_metadata(slug: str, metadata: dict):
         return False
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Deploy a game to R2 + Supabase")
-    parser.add_argument("--game-dir", required=True, help="Path to built game directory")
-    parser.add_argument("--slug", required=True, help="URL slug for the game")
-    parser.add_argument("--metadata", help="Path to game metadata JSON file")
-    parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
-    ensure_cf_env()
+CDN_BASE = "https://forgeflow-games-cdn.isimcha85.workers.dev"
 
-    game_dir = Path(args.game_dir)
+
+def verify_live(slug, files=("index.html", "thumbnail.png", "content.json")):
+    """GET key files from the CDN and report their HTTP status. Returns a dict."""
+    out = {}
+    for f in files:
+        url = f"{CDN_BASE}/{slug}/{f}"
+        try:
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=15) as r:
+                out[f] = r.status
+        except urllib.error.HTTPError as e:
+            out[f] = e.code
+        except Exception as e:
+            out[f] = f"ERR {e}"
+    return out
+
+
+def deploy_one(game_dir, slug, metadata_path=None, dry_run=False):
+    """Deploy a single game: optional cover-gen, R2 upload, Supabase upsert.
+    Returns {ok, uploaded, total, url}. Reused by deploy_game.main + upload_game.py."""
+    game_dir = Path(game_dir)
     if not game_dir.exists():
         print(f"Error: {game_dir} does not exist")
-        sys.exit(1)
+        return {"ok": False, "uploaded": 0, "total": 0, "url": None, "reason": "missing dir"}
 
-    # Load metadata
     metadata = {}
-    if args.metadata:
-        metadata = json.loads(Path(args.metadata).read_text(encoding="utf-8"))
+    if metadata_path:
+        metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
     elif (game_dir / "game_meta.json").exists():
         metadata = json.loads((game_dir / "game_meta.json").read_text(encoding="utf-8"))
 
-    print(f"Deploying game: {args.slug}")
-    print(f"  Source: {game_dir}")
-    print(f"  Files: {sum(1 for _ in game_dir.rglob('*') if _.is_file())}")
+    total = sum(1 for _ in game_dir.rglob("*") if _.is_file())
+    print(f"Deploying game: {slug}\n  Source: {game_dir}\n  Files: {total}")
+    if dry_run:
+        print("[dry-run] Would upload to R2 and upsert Supabase")
+        return {"ok": True, "uploaded": 0, "total": total, "url": f"{CDN_BASE}/{slug}/index.html", "dry": True}
 
-    if args.dry_run:
-        print("[dry-run] Would upload to R2 and insert into Supabase")
-        return
-
-    # 2026-05-05 — Generate cover image FIRST so it ships in the same R2
-    # upload as the rest of the files. Uses xAI grok-imagine-image (~$0.02/img).
-    # If thumbnail.png already exists in the game dir we keep it (allows manual
-    # override). Otherwise we derive description + art-direction from the
-    # metadata.json or design.json sitting next to game.js.
+    # Cover: keep an existing thumbnail.png; otherwise try to generate one (xAI).
     thumb_path = game_dir / "thumbnail.png"
     if not thumb_path.exists():
         try:
             from generate_cover import generate_cover  # type: ignore
-            # Pull art_direction + description from metadata, fall back to design.json
-            description = metadata.get("description") or metadata.get("short_description") or args.slug
+            description = metadata.get("description") or metadata.get("short_description") or slug
             art_direction = metadata.get("art_direction", "")
             if not art_direction:
                 design_path = game_dir / "design.json"
@@ -206,32 +245,38 @@ def main():
                         pass
             if not art_direction:
                 art_direction = "Polished, vibrant indie game art with strong silhouette and dramatic lighting."
-            title = metadata.get("title", args.slug.replace("-", " ").title())
-            generate_cover(
-                slug=args.slug,
-                title=title,
-                description=description,
-                art_direction=art_direction,
-                out_dir=game_dir,
-            )
+            title = metadata.get("title", slug.replace("-", " ").title())
+            generate_cover(slug=slug, title=title, description=description, art_direction=art_direction, out_dir=game_dir)
         except Exception as e:
             print(f"[cover] WARN: cover generation failed ({e}); proceeding without cover")
 
-    # Upload to R2
-    uploaded = upload_to_r2(game_dir, args.slug)
-    print(f"  [r2] {uploaded} files uploaded to {R2_BUCKET}/{args.slug}/")
+    uploaded = upload_to_r2(game_dir, slug)
+    print(f"  [r2] {uploaded}/{total} files uploaded to {R2_BUCKET}/{slug}/")
+    if uploaded == 0:
+        print("  [r2] ERROR: 0 files uploaded — R2 auth/network failed. Skipping Supabase so the")
+        print("       portal isn't left pointing at missing files. Fix the R2 token, then re-run.")
+        return {"ok": False, "uploaded": 0, "total": total, "url": None, "reason": "r2 upload failed"}
 
-    # Insert metadata. game_url uses the workers.dev CDN pattern other games
-    # use; thumbnail_url + hero_image_url point at the freshly-generated PNG.
-    cdn_base = "https://forgeflow-games-cdn.isimcha85.workers.dev"
-    metadata["game_url"] = f"{cdn_base}/{args.slug}/index.html"
+    metadata["game_url"] = f"{CDN_BASE}/{slug}/index.html"
     if thumb_path.exists() and not metadata.get("thumbnail_url"):
-        metadata["thumbnail_url"] = f"{cdn_base}/{args.slug}/thumbnail.png"
+        metadata["thumbnail_url"] = f"{CDN_BASE}/{slug}/thumbnail.png"
     if thumb_path.exists() and not metadata.get("hero_image_url"):
-        metadata["hero_image_url"] = f"{cdn_base}/{args.slug}/thumbnail.png"
-    insert_game_metadata(args.slug, metadata)
+        metadata["hero_image_url"] = f"{CDN_BASE}/{slug}/thumbnail.png"
+    insert_game_metadata(slug, metadata)
+    print(f"Done! Game available at: {CDN_BASE}/{slug}/index.html")
+    return {"ok": uploaded == total, "uploaded": uploaded, "total": total, "url": f"{CDN_BASE}/{slug}/index.html"}
 
-    print(f"Done! Game available at: {cdn_base}/{args.slug}/index.html")
+
+def main():
+    parser = argparse.ArgumentParser(description="Deploy a game to R2 + Supabase")
+    parser.add_argument("--game-dir", required=True, help="Path to built game directory")
+    parser.add_argument("--slug", required=True, help="URL slug for the game")
+    parser.add_argument("--metadata", help="Path to game metadata JSON file")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+    ensure_cf_env()
+    res = deploy_one(args.game_dir, args.slug, metadata_path=args.metadata, dry_run=args.dry_run)
+    sys.exit(0 if res.get("ok") or res.get("dry") else 1)
 
 
 if __name__ == "__main__":
