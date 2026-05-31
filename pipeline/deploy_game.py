@@ -26,6 +26,24 @@ NOMI = Path(os.path.expandvars("%APPDATA%")) / "Nomi"
 R2_BUCKET = "forgeflow-games"
 R2_PUBLIC_URL = "https://forgeflow-games.pages.dev"  # Will be updated once R2 custom domain is set
 
+
+def ensure_cf_env():
+    """wrangler r2 needs CLOUDFLARE_ACCOUNT_ID to target the right account, and
+    utf-8 output so colored errors don't crash the print path on Windows. Auto-load
+    the account id from api_config.json so a bare `python deploy_game.py` just works
+    (no need to export secrets by hand)."""
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+    if os.environ.get("CLOUDFLARE_ACCOUNT_ID"):
+        return
+    try:
+        cfg = json.loads((NOMI / "api_config.json").read_text(encoding="utf-8"))
+        acct = (cfg.get("providers", {}).get("cloudflare", {}) or {}).get("account_id_isimcha85")
+        if acct:
+            os.environ["CLOUDFLARE_ACCOUNT_ID"] = acct
+            print(f"[cf] CLOUDFLARE_ACCOUNT_ID set from api_config (…{acct[-4:]})")
+    except Exception as e:
+        print(f"[cf] WARN: could not auto-load account id ({e}); set CLOUDFLARE_ACCOUNT_ID manually")
+
 # Load Supabase credentials for the forgeflow-games project
 def load_supabase_creds():
     env_path = ROOT / ".env"
@@ -144,6 +162,7 @@ def main():
     parser.add_argument("--metadata", help="Path to game metadata JSON file")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+    ensure_cf_env()
 
     game_dir = Path(args.game_dir)
     if not game_dir.exists():
