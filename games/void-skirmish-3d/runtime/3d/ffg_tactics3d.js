@@ -109,21 +109,28 @@ register3d("tactics3d", async (kernel, content) => {
   // world position of a tile centre (board centred on origin; +z = "south")
   const cell = (x, y) => new THREE.Vector3((x + 0.5) * T - W / 2, 0, (y + 0.5) * T - H / 2);
 
-  scene.background = new THREE.Color(0x0b1420);
-  scene.fog = new THREE.FogExp2(0x0e1828, 0.006);
-  // Cinematic facility lighting: a warm key from one side, a cool fill from the
-  // other, + a soft top light. Brighter than before so the playable zone reads
-  // clearly (was too dark — units lost in shadow).
-  const key = new THREE.DirectionalLight(0xfff0d8, 1.7); key.position.set(40, 60, 25); key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = -60; key.shadow.camera.right = 60; key.shadow.camera.top = 60; key.shadow.camera.bottom = -60; key.shadow.camera.far = 220;
-  scene.add(key);
-  scene.add(new THREE.DirectionalLight(0x6f94d8, 0.8).translateX(-40).translateY(35).translateZ(-25));
-  scene.add(new THREE.HemisphereLight(0xbcd4ff, 0x141c28, 0.85));
-  scene.add(new THREE.AmbientLight(0x9fb4d0, 0.32)); // lift the deep shadows
-  // HDR bloom over the emissive sci-fi elements (grid seams, cover trim, hazard,
-  // tracers, unit accents) — a big step toward a polished, lit XCOM look.
-  kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = 1.28;
-  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.6, radius: 0.6, threshold: 0.82 });
+  scene.background = new THREE.Color(0x0c1422);
+  scene.fog = new THREE.FogExp2(0x111c2e, 0.0055);
+  // Cinematic 3-point rig: warm key, cool fill, and a bright COOL RIM/back light
+  // that separates soldiers + cover from the dark ground — the single biggest
+  // "they pop as characters" lever. Soft shadows for grounded depth.
+  try { kernel.renderer.shadowMap.type = THREE.PCFSoftShadowMap; } catch (e) {}
+  const key = new THREE.DirectionalLight(0xfff2e0, 2.15); key.position.set(46, 72, 30); key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = -60; key.shadow.camera.right = 60; key.shadow.camera.top = 60; key.shadow.camera.bottom = -60; key.shadow.camera.far = 240;
+  key.shadow.bias = -0.0004; key.shadow.normalBias = 0.045; scene.add(key);
+  scene.add(new THREE.DirectionalLight(0x7aa0e0, 0.62).translateX(-46).translateY(38).translateZ(-20)); // cool fill
+  const rim = new THREE.DirectionalLight(0xbfe2ff, 1.25); rim.position.set(-24, 34, -72); scene.add(rim); // back/rim
+  scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x121826, 0.72));
+  scene.add(new THREE.AmbientLight(0x9fb4d0, 0.26));
+  kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = 1.36;
+  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.72, radius: 0.7, threshold: 0.8 });
+  // Cinematic vignette (DOM overlay under the HUD) — frames the action + adds depth.
+  try {
+    const _vig = document.createElement("div");
+    Object.assign(_vig.style, { position: "absolute", inset: "0", pointerEvents: "none", zIndex: "4",
+      background: "radial-gradient(125% 105% at 50% 44%, rgba(0,0,0,0) 52%, rgba(2,6,14,0.5) 100%)" });
+    kernel.parent.appendChild(_vig);
+  } catch (e) {}
 
   let sim, events = [], busy = false, selected = null, phase = "menu";
   const unitViews = {}; // id -> { group, ring, hpFill, base }
