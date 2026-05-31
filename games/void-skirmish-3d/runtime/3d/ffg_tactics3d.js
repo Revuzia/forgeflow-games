@@ -140,6 +140,7 @@ register3d("tactics3d", async (kernel, content) => {
     sim = new TB({
       grid: mission.grid, player_units: deployUnits, enemy_units: mission.enemy_units,
       seed: content.seed != null ? content.seed : 12345,
+      goal: mission.goal || {},
       onEvent: (type, payload) => events.push({ type, payload }),
     });
   }
@@ -283,6 +284,30 @@ register3d("tactics3d", async (kernel, content) => {
     tile.position.set(w.x, 0.04, w.z); scene.add(tile);
     let tt = Math.random() * 6;
     kernel.onUpdate((dt) => { tt += dt; tile.material.emissiveIntensity = 0.3 + 0.25 * (0.5 + 0.5 * Math.sin(tt * 3)); });
+  }
+  let terminalMesh = null;
+  // Objective markers: pulsing green EVAC pads + a cyan hack TERMINAL console.
+  function buildObjective() {
+    const g = mission.goal || {};
+    (g.evac || []).forEach((t) => {
+      const w = cell(t.x, t.y);
+      const pad = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.92, T * 0.92),
+        new THREE.MeshBasicMaterial({ color: 0x3ddc84, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
+      pad.rotation.x = -Math.PI / 2; pad.position.set(w.x, 0.27, w.z); scene.add(pad);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(T * 0.3, T * 0.42, 24), new THREE.MeshBasicMaterial({ color: 0x9dffb6, transparent: true, opacity: 0.8, side: THREE.DoubleSide }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(w.x, 0.3, w.z); scene.add(ring);
+      let tt = Math.random() * 6; kernel.onUpdate((dt) => { tt += dt; const s = 1 + 0.12 * Math.sin(tt * 3); ring.scale.set(s, s, s); pad.material.opacity = 0.35 + 0.2 * (0.5 + 0.5 * Math.sin(tt * 3)); });
+    });
+    if (g.target) {
+      const w = cell(g.target.x, g.target.y);
+      const base = _bx(T * 0.5, T * 0.5, T * 0.5, 0x223240, 0.5, 0.6); base.position.set(w.x, T * 0.3, w.z); base.castShadow = true; scene.add(base);
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.4, T * 0.3), new THREE.MeshBasicMaterial({ color: 0x5fd0ff }));
+      screen.position.set(w.x, T * 0.5, w.z + T * 0.26); scene.add(screen);
+      const beacon = new THREE.Mesh(new THREE.SphereGeometry(T * 0.12, 12, 12), new THREE.MeshBasicMaterial({ color: 0x5fd0ff }));
+      beacon.position.set(w.x, T * 0.78, w.z); scene.add(beacon);
+      terminalMesh = { base, screen, beacon };
+      let tt = 0; kernel.onUpdate((dt) => { tt += dt; const lit = sim.goal && sim.goal.hacked; const c = lit ? 0x3ddc84 : 0x5fd0ff; screen.material.color.setHex(c); beacon.material.color.setHex(c); beacon.position.y = T * 0.78 + (lit ? 0 : 0.06 * Math.sin(tt * 4)); });
+    }
   }
   // Buildings come in 3 silhouettes — tall office tower, mid-rise, low storefront
   // — across a varied concrete/brick/tan palette, so the skyline reads like a
@@ -550,6 +575,9 @@ register3d("tactics3d", async (kernel, content) => {
       </div>
       <div style="position:absolute;top:12px;right:14px;font-family:'Segoe UI',monospace;background:rgba(8,18,32,.62);border:1px solid #2a4458;border-radius:9px;padding:9px 13px;text-align:right;font-size:12px">
         <div style="color:#7CFC9A">SQUAD ${me}</div><div style="color:#ff7a6a;margin-top:3px">HOSTILES ${foe}</div>
+        ${(sim.goal && sim.goal.turnLimit != null) ? `<div style="margin-top:3px;color:${sim.turnNumber > sim.goal.turnLimit - 2 ? "#ff6a5a" : "#ffd27a"};font-weight:700">⏱ ${Math.max(0, sim.goal.turnLimit - sim.turnNumber + 1)} turns left</div>` : ""}
+        ${(sim.goal && sim.goal.type === "hack") ? `<div style="margin-top:3px;color:${sim.goal.hacked ? "#3ddc84" : "#5fd0ff"}">TERMINAL: ${sim.goal.hacked ? "HACKED ✓" : "reach it"}</div>` : ""}
+        ${(sim.goal && sim.goal.type === "evac") ? `<div style="margin-top:3px;color:#9dffb6">EVAC: get all soldiers to the pad</div>` : ""}
         <div style="font-size:11px;opacity:.6;margin-top:5px">Objective: ${mission.objective || "Eliminate all hostiles"}</div>
       </div>
       <div style="position:absolute;bottom:10px;left:14px;font-size:11px;opacity:.55;font-family:monospace">Click soldier → move/shoot · Right-drag: rotate · WASD: move · Esc: pause</div>
@@ -775,6 +803,12 @@ register3d("tactics3d", async (kernel, content) => {
       setHUD();
       return 360;
     }
+    if (e.type === "objective") {
+      sfx("confirm", 0.7); setHUD();
+      const v = unitViews[e.payload.unit];
+      if (v) floatText({ x: v.group.position.x, y: T * 1.7, z: v.group.position.z }, "TERMINAL HACKED", 0x5fd0ff);
+      return 320;
+    }
     if (e.type === "ability") return playAbilityEvent(e.payload);
     if (e.type === "end") { return 100; }
     return 20;
@@ -925,7 +959,7 @@ register3d("tactics3d", async (kernel, content) => {
   });
 
   // ── Boot ────────────────────────────────────────────────────────────────────
-  buildSim(); await buildBoard();
+  buildSim(); await buildBoard(); buildObjective();
   for (const u of sim.allUnits()) await makeUnit(u); // load + instance the animated models
   sim.allUnits().forEach(refreshUnit);
 
@@ -933,7 +967,7 @@ register3d("tactics3d", async (kernel, content) => {
   function beginBattle() { phase = "battle"; orbit.autoRotate = false; setHUD(); }
   function showEnd() {
     if (endShown) return; endShown = true;
-    const win = sim.aliveAllies().length > 0;
+    const win = !!sim.victory; // objective-aware (evac/hack wins keep allies alive)
     sfx(win ? "victory" : "defeat", 0.6);
     window.__FFG_RESULT__ = { victory: win, turns: sim.turnNumber };
     // Campaign run: record permadeath/XP/doom, then show the Barracks debrief

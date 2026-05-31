@@ -55,7 +55,19 @@
       this.onEnd = config.onEnd || function () {};
       this.onEvent = config.onEvent || function () {}; // (type, payload) for the renderer
       this.ended = false;
+      this.victory = false;
       this.log = [];
+      // Objective (XCOM mission variety). Default: eliminate all. Others: "evac"
+      // (get every soldier onto an evac tile) and "hack" (a soldier reaches the
+      // terminal, then evac if one is set). Optional turnLimit fails on overrun.
+      const gg = config.goal || {};
+      this.goal = {
+        type: gg.type || "eliminate",
+        turnLimit: gg.turnLimit != null ? gg.turnLimit : null,
+        evac: gg.evac || [],
+        target: gg.target || null,
+        hacked: false,
+      };
       // Concealment + pods (XCOM): the squad starts hidden; enemies are grouped
       // into pods that stay dormant until SPOTTED, then scamper to cover.
       this.concealed = config.concealment !== false;
@@ -338,6 +350,10 @@
       // Hazard tile damage
       if (this.grid[toY][toX] === 4) { u.hp = Math.max(0, u.hp - 2); this.log.push(u.id + " took 2 hazard dmg"); }
       this.onEvent("move", { unit: u, path: path });
+      // Objective progress: a soldier reaching the terminal hacks it.
+      if (u.side === "player" && this.goal.type === "hack" && !this.goal.hacked && this.goal.target && this.goal.target.x === toX && this.goal.target.y === toY) {
+        this.goal.hacked = true; this.log.push(u.id + " hacked the terminal"); this.onEvent("objective", { kind: "hacked", unit: u.id });
+      }
       // A player walking into an enemy's sight trips the pod — it reveals + scampers.
       if (u.side === "player") this._spotCheck({ scamper: true });
       this._triggerOverwatch(u); // opposing overwatchers fire on the mover
@@ -561,6 +577,8 @@
           for (const u of this.player_units) { u.actionPoints = u.maxAP; u.overwatch = false; }
           this._tickCooldowns(this.player_units);           // ability cooldowns recover
           for (const e of this.enemy_units) { e.suppressedBy = null; e.suppressAimPenalty = 0; } // pins expire at our next turn
+          // Mission timer: overrunning the limit fails the op.
+          if (this.goal.turnLimit != null && this.turnNumber > this.goal.turnLimit) { this._finish(false, "timeout"); return; }
           this.onEvent("phase", { phase: "player", turn: this.turnNumber });
         }
       }
@@ -598,15 +616,35 @@
       }
     }
 
+    _finish(victory, reason) {
+      if (this.ended) return;
+      this.ended = true; this.victory = victory;
+      this.onEvent("end", { victory: victory, reason: reason || null });
+      this.onEnd({ victory: victory, reason: reason || null, log: this.log, turns: this.turnNumber });
+    }
+
+    // Is a soldier standing on an objective tile (evac zone / terminal)?
+    _allyOn(tiles) {
+      if (!tiles || !tiles.length) return false;
+      return this.aliveAllies().some((a) => tiles.some((t) => t.x === a.x && t.y === a.y));
+    }
+    _allAlliesOn(tiles) {
+      const al = this.aliveAllies();
+      return al.length > 0 && !!tiles && al.every((a) => tiles.some((t) => t.x === a.x && t.y === a.y));
+    }
+
     _checkEnd() {
       if (this.ended) return;
       const allies = this.aliveAllies().length;
       const enemies = this.aliveEnemies().length;
-      if (allies === 0 || enemies === 0) {
-        this.ended = true;
-        const victory = allies > 0;
-        this.onEvent("end", { victory: victory });
-        this.onEnd({ victory: victory, log: this.log, turns: this.turnNumber });
+      if (allies === 0) return this._finish(false, "wiped"); // squad lost = always a loss
+      const g = this.goal;
+      if (g.type === "hack") {
+        if (g.hacked && (!g.evac || g.evac.length === 0 || this._allyOn(g.evac))) return this._finish(true, "hacked");
+      } else if (g.type === "evac") {
+        if (this._allAlliesOn(g.evac)) return this._finish(true, "evac");
+      } else { // eliminate (default)
+        if (enemies === 0) return this._finish(true, "cleared");
       }
     }
   }

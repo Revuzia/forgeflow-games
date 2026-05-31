@@ -7093,7 +7093,7 @@
     },
     {
       "name": "Power Substation",
-      "objective": "Hold the substation approaches and wipe the defenders.",
+      "objective": "Reach and hack the substation relay before the grid locks down.",
       "grid": [
         [
           0,
@@ -9921,7 +9921,15 @@
           "x": 18,
           "y": 6
         }
-      ]
+      ],
+      "goal": {
+        "type": "hack",
+        "turnLimit": 16,
+        "target": {
+          "x": 28,
+          "y": 23
+        }
+      }
     },
     {
       "name": "Old Town Siege",
@@ -13100,7 +13108,7 @@
     },
     {
       "name": "Spire Approach",
-      "objective": "Break the cordon guarding the spire approach.",
+      "objective": "Fight to the extraction zone and evac the whole squad.",
       "grid": [
         [
           0,
@@ -16630,7 +16638,25 @@
           "x": 8,
           "y": 3
         }
-      ]
+      ],
+      "goal": {
+        "type": "evac",
+        "turnLimit": 18,
+        "evac": [
+          {
+            "x": 30,
+            "y": 2
+          },
+          {
+            "x": 31,
+            "y": 3
+          },
+          {
+            "x": 28,
+            "y": 4
+          }
+        ]
+      }
     },
     {
       "name": "Avatar Spire",

@@ -38,9 +38,9 @@ const MISSIONS = [
   { name: "Downtown Insertion", objective: "Eliminate all hostile contacts across the downtown sector.", w: 48, h: 38, enemies: 10, mix: ["drone", "drone", "stalker", "sniper", "defender"], seed: 0xA1 },
   { name: "Market Sweep", objective: "Clear the open market plaza of the alien advance party.", w: 50, h: 40, enemies: 11, mix: ["drone", "stalker", "stalker", "sniper", "defender"], seed: 0xB7 },
   { name: "Rail Yard", objective: "Secure the rail yard and destroy the hostile garrison.", w: 54, h: 42, enemies: 12, mix: ["drone", "stalker", "sniper", "sniper", "defender"], seed: 0xC3 },
-  { name: "Power Substation", objective: "Hold the substation approaches and wipe the defenders.", w: 56, h: 44, enemies: 13, mix: ["stalker", "sniper", "defender", "defender", "drone"], seed: 0xD9 },
+  { name: "Power Substation", objective: "Reach and hack the substation relay before the grid locks down.", w: 56, h: 44, enemies: 13, mix: ["stalker", "sniper", "defender", "defender", "drone"], seed: 0xD9, goal: { type: "hack", turnLimit: 16 } },
   { name: "Old Town Siege", objective: "Push through Old Town against entrenched resistance.", w: 58, h: 48, enemies: 14, mix: ["stalker", "stalker", "sniper", "defender", "defender"], seed: 0xE5 },
-  { name: "Spire Approach", objective: "Break the cordon guarding the spire approach.", w: 60, h: 52, enemies: 15, mix: ["sniper", "sniper", "defender", "defender", "stalker"], seed: 0xF2 },
+  { name: "Spire Approach", objective: "Fight to the extraction zone and evac the whole squad.", w: 60, h: 52, enemies: 15, mix: ["sniper", "sniper", "defender", "defender", "stalker"], seed: 0xF2, goal: { type: "evac", turnLimit: 18 } },
   { name: "Avatar Spire", objective: "Assault the spire and shatter the Avatar Project.", w: 64, h: 56, enemies: 17, mix: ["defender", "defender", "sniper", "sniper", "stalker", "stalker"], seed: 0x5C },
 ];
 
@@ -137,7 +137,29 @@ function buildMission(spec) {
   reach = reachable(players[0].x, players[0].y);
   const allReach = [...players, ...enemies].every((u) => reach.has(u.x + "," + u.y));
 
-  return { mission: { name: spec.name, objective: spec.objective, grid, player_units: players, enemy_units: enemies }, allReach, GW, GH };
+  // Objective tiles (must be reachable floor): a central terminal for "hack",
+  // a 3-tile evac pad near the far (top) edge for "evac".
+  let goal = null;
+  const reachList = [...reach].map((k) => k.split(",").map(Number));
+  const nearestReach = (tx, ty) => reachList.reduce((best, [x, y]) => {
+    const d = Math.abs(x - tx) + Math.abs(y - ty); return d < best.d ? { x, y, d } : best;
+  }, { x: players[0].x, y: players[0].y, d: 1e9 });
+  if (spec.goal && spec.goal.type === "hack") {
+    const c = nearestReach(Math.floor(GW / 2), Math.floor(GH / 2));
+    goal = { type: "hack", turnLimit: spec.goal.turnLimit, target: { x: c.x, y: c.y } };
+  } else if (spec.goal && spec.goal.type === "evac") {
+    const cx = Math.floor(GW / 2), pads = [];
+    for (let off = 0; off < 9 && pads.length < 3; off++) {
+      const c = nearestReach(cx + (off % 2 ? off : -off), 2 + (off % 3));
+      const k = c.x + "," + c.y;
+      if (!pads.some((p) => p.x === c.x && p.y === c.y)) pads.push({ x: c.x, y: c.y });
+    }
+    goal = { type: "evac", turnLimit: spec.goal.turnLimit, evac: pads };
+  }
+
+  const m = { name: spec.name, objective: spec.objective, grid, player_units: players, enemy_units: enemies };
+  if (goal) m.goal = goal;
+  return { mission: m, allReach, goal, GW, GH };
 }
 
 const out = [];
@@ -147,7 +169,8 @@ for (const spec of MISSIONS) {
   out.push(r.mission);
   if (!r.allReach) okAll = false;
   const floor = r.mission.grid.flat().filter((t) => t === 0 || t === 4).length;
-  console.log(`${spec.name.padEnd(20)} ${r.GW}x${r.GH}  enemies ${r.mission.enemy_units.length}  floor ${floor}  reachable:${r.allReach}`);
+  const gtxt = r.goal ? `  goal:${r.goal.type}${r.goal.turnLimit ? "(≤" + r.goal.turnLimit + "t)" : ""}${r.goal.target ? " term@" + r.goal.target.x + "," + r.goal.target.y : ""}${r.goal.evac ? " evac×" + r.goal.evac.length : ""}` : "";
+  console.log(`${spec.name.padEnd(20)} ${r.GW}x${r.GH}  enemies ${r.mission.enemy_units.length}  floor ${floor}  reachable:${r.allReach}${gtxt}`);
 }
 console.log("\nall missions connected:", okAll);
 
