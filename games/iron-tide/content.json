@@ -19,7 +19,7 @@
     "default": "assets/ship-small.glb"
   },
   "sfx": {
-    "fire": "assets/audio/fire.ogg",
+    "fire": "assets/audio/cannon.ogg",
     "hit": "assets/audio/hit.ogg",
     "miss": "assets/audio/splash.ogg",
     "sink": "assets/audio/sink.ogg"
