@@ -58,6 +58,7 @@ register3d("battleship", async function (kernel, content) {
   let _placement = null; // test hook handle
   const gunnerMuzzle = { player: null, enemy: null }; // where each side's cannonballs launch from
   const gunnerCannon = { player: null, enemy: null }; // cannon group, for recoil on fire
+  const gunnerChar = { player: null, enemy: null };   // animated gunner figure, for fire reaction
   let beginGame = null;  // assigned below; called by the menu Play button
 
   // ── Ocean — real reflective water (three.js Water): flowing normal-mapped
@@ -265,50 +266,54 @@ register3d("battleship", async function (kernel, content) {
   // A deck on each board's near-inner side with a built cannon + a gunner who
   // LAUNCHES the cannonballs — so shots visibly originate from the gunner, off
   // the grid, arcing across to the enemy waters.
-  const _wood = (c) => new THREE.MeshStandardMaterial({ color: c || 0x5a3d22, roughness: 0.85, metalness: 0.05 });
-  const _iron = (c) => new THREE.MeshStandardMaterial({ color: c || 0x21232b, roughness: 0.45, metalness: 0.85 });
+  const _wood = (c) => new THREE.MeshStandardMaterial({ color: c || 0x6e4a2a, roughness: 0.82, metalness: 0.05 });
+  const _grey = (c) => new THREE.MeshStandardMaterial({ color: c || 0x8c9098, roughness: 0.5, metalness: 0.7 }); // grey gunmetal — visible
   async function buildGunnerStation(side) {
     const myX = side === "player" ? PLAYER_X : ENEMY_X;
     const oppX = side === "player" ? ENEMY_X : PLAYER_X;
     const sx = myX;                              // centred in front of THIS board
-    const sz = boardSpan / 2 + CELL * 0.95;      // off the grid, at the camera-near front
+    const sz = boardSpan / 2 + CELL * 1.05;      // off the grid, at the camera-near front
     const dir = new THREE.Vector3(oppX - sx, 0, 0 - sz).normalize(); // aim across at the opposing board
+    const DH = 0.62;                             // deck-top height
     const station = new THREE.Group(); station.position.set(sx, 0, sz); scene.add(station);
-    // round wooden gun deck
-    const deck = new THREE.Mesh(new THREE.CylinderGeometry(CELL * 1.0, CELL * 1.12, 0.55, 20), _wood(0x4a3320));
-    deck.position.y = 0.27; deck.castShadow = true; deck.receiveShadow = true; station.add(deck);
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(CELL * 1.0, 0.07, 8, 24), _wood(0x6a4a2c));
-    rim.rotation.x = Math.PI / 2; rim.position.y = 0.55; station.add(rim);
-    // cannon group, aimed across the water
-    const cannon = new THREE.Group(); cannon.position.set(0, 0.55, 0); cannon.rotation.y = Math.atan2(dir.x, dir.z); station.add(cannon);
+    // round wooden gun deck (lighter so it doesn't read black)
+    const deck = new THREE.Mesh(new THREE.CylinderGeometry(CELL * 1.25, CELL * 1.38, DH, 22), _wood(0x7a5430));
+    deck.position.y = DH / 2; deck.castShadow = true; deck.receiveShadow = true; station.add(deck);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(CELL * 1.25, 0.09, 8, 26), _wood(0x9a6e3c));
+    rim.rotation.x = Math.PI / 2; rim.position.y = DH; station.add(rim);
+    // cannon group, aimed across the water — GREY gunmetal, bigger so it reads clearly
+    const cannon = new THREE.Group(); cannon.position.set(0, DH, 0); cannon.rotation.y = Math.atan2(dir.x, dir.z); station.add(cannon);
     cannon.userData.dir = dir.clone();
     gunnerCannon[side] = cannon;
-    const carriage = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.46, 0.34, CELL * 0.72), _wood(0x5a3d22));
-    carriage.position.set(0, 0.2, CELL * 0.12); carriage.castShadow = true; cannon.add(carriage);
-    for (const wz of [-CELL * 0.18, CELL * 0.34]) for (const wx of [-CELL * 0.26, CELL * 0.26]) {
-      const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.12, 12), _iron(0x2a2118));
-      wh.rotation.z = Math.PI / 2; wh.position.set(wx, 0.08, wz); cannon.add(wh);
+    const carriage = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.5, 0.4, CELL * 0.8), _wood(0x6e4a2a));
+    carriage.position.set(0, 0.24, CELL * 0.14); carriage.castShadow = true; cannon.add(carriage);
+    for (const wz of [-CELL * 0.2, CELL * 0.4]) for (const wx of [-CELL * 0.3, CELL * 0.3]) {
+      const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.14, 14), _wood(0x4a3320));
+      wh.rotation.z = Math.PI / 2; wh.position.set(wx, 0.1, wz); cannon.add(wh);
     }
-    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.23, CELL * 1.0, 18), _iron());
-    barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.46, CELL * 0.5); barrel.castShadow = true; cannon.add(barrel);
-    for (const rz of [CELL * 0.18, CELL * 0.55, CELL * 0.86]) {
-      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.05, 18), _iron(0x14151a));
-      ring.rotation.x = Math.PI / 2; ring.position.set(0, 0.46, rz); cannon.add(ring);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, CELL * 1.25, 20), _grey());
+    barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.58, CELL * 0.6); barrel.castShadow = true; cannon.add(barrel);
+    for (const rz of [CELL * 0.22, CELL * 0.65, CELL * 1.02]) {
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.07, 20), _grey(0x6a6e76));
+      ring.rotation.x = Math.PI / 2; ring.position.set(0, 0.58, rz); cannon.add(ring);
     }
-    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), _iron(0x14151a)); knob.position.set(0, 0.46, -0.02); cannon.add(knob);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 12), _grey(0x6a6e76)); knob.position.set(0, 0.58, -0.06); cannon.add(knob);
     // muzzle (barrel tip) in world space — cannonballs launch from here
-    gunnerMuzzle[side] = new THREE.Vector3(sx + dir.x * (CELL * 1.02), 1.0, sz + dir.z * (CELL * 1.02));
-    // the gunner — a real 3D figure beside the cannon, facing the enemy
+    gunnerMuzzle[side] = new THREE.Vector3(sx + dir.x * (CELL * 1.22), DH + 0.58, sz + dir.z * (CELL * 1.22));
+    // the gunner — a real, full-colour, ANIMATED figure standing AT the cannon breech
     try {
-      const g = await kernel.loadGLTF("assets/gunner.glb");
-      if (g) {
-        const box = new THREE.Box3().setFromObject(g); const h = Math.max(0.001, box.getSize(new THREE.Vector3()).y);
-        g.scale.setScalar((CELL * 0.78) / h);
-        g.traverse((o) => { if (o.isMesh && o.material) { o.material = o.material.clone(); if (o.material.color) o.material.color.lerp(new THREE.Color(0x2a3340), 0.55); o.castShadow = true; o.frustumCulled = false; } });
-        const perp = new THREE.Vector3(dir.z, 0, -dir.x);
-        g.position.set(sx + perp.x * CELL * 0.5, 0.55, sz + perp.z * CELL * 0.5);
-        g.rotation.y = Math.atan2(dir.x, dir.z);
-        scene.add(g);
+      const ch = await kernel.loadCharacter("assets/gunner.glb");
+      if (ch && ch.scene) {
+        const NATIVE_H = 1.82, targetH = CELL * 1.15;     // known height (Box3 mis-measures skinned meshes)
+        ch.scene.scale.setScalar(targetH / NATIVE_H);
+        ch.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } }); // keep FULL colour
+        ch.scene.position.set(sx - dir.x * CELL * 0.62, DH, sz - dir.z * CELL * 0.62); // behind the breech, feet on deck
+        ch.scene.rotation.y = Math.atan2(dir.x, dir.z);   // face the enemy
+        ch.scene.userData.basePos = ch.scene.position.clone();
+        scene.add(ch.scene);
+        const idle = ch.actions["Idle"] ? "Idle" : (ch.animations[0] && ch.animations[0].name);
+        if (idle) ch.play(idle, { fade: 0 });
+        gunnerChar[side] = ch;
       }
     } catch (e) { /* gunner optional */ }
   }
@@ -532,10 +537,16 @@ register3d("battleship", async function (kernel, content) {
     for (let i = 0; i < 3; i++) spawnSmokePuff({ x: muzzle.x, y: muzzle.y + i * 0.15, z: muzzle.z }, false);
     const c = gunnerCannon[side];
     if (c && c.userData.dir) {
-      const d = c.userData.dir, z0 = c.userData.baseZ != null ? c.userData.baseZ : 0.55;
+      const d = c.userData.dir;
       kernel.tween({ target: c.position, to: { x: -d.x * 0.32, z: -d.z * 0.32 }, duration: 0.06,
         onComplete: () => kernel.tween({ target: c.position, to: { x: 0, z: 0 }, duration: 0.24 }) });
-      void z0;
+      // gunner reacts to the shot — a quick brace/step back, then settle
+      const gc = gunnerChar[side];
+      if (gc && gc.scene && gc.scene.userData.basePos) {
+        const bp = gc.scene.userData.basePos;
+        kernel.tween({ target: gc.scene.position, to: { x: bp.x - d.x * 0.28, z: bp.z - d.z * 0.28 }, duration: 0.08,
+          onComplete: () => kernel.tween({ target: gc.scene.position, to: { x: bp.x, z: bp.z }, duration: 0.32 }) });
+      }
     }
   }
   function fireCannonball(fromSide, to, onImpact) {
