@@ -411,7 +411,10 @@
           for (let xx = tx - def.radius; xx <= tx + def.radius; xx++) {
             if (!this.inBounds(xx, yy)) continue;
             const c = this.grid[yy][xx];
-            if (c === 2 || c === 3) { this.grid[yy][xx] = c === 3 ? 2 : 0; shredded.push({ x: xx, y: yy, to: c === 3 ? 2 : 0 }); }
+            // Blow a HOLE in a building wall (1 -> rubble/floor 0): opens LOS +
+            // a new path, true XCOM destructible cover. Cover degrades 3->2->0.
+            if (c === 1) { this.grid[yy][xx] = 0; shredded.push({ x: xx, y: yy, from: 1, to: 0 }); }
+            else if (c === 2 || c === 3) { const to = c === 3 ? 2 : 0; this.grid[yy][xx] = to; shredded.push({ x: xx, y: yy, from: c, to: to }); }
           }
       }
       this.log.push(u.id + " fragged (" + tx + "," + ty + ") hit " + hits.length);

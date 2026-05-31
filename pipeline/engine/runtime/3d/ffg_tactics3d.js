@@ -130,6 +130,7 @@ register3d("tactics3d", async (kernel, content) => {
   let highlights = [], rangeTargets = [];
   let abilityMode = null;     // armed ability id (Phase 3) — next click resolves it
   const coverTiles = {};      // "x,y" -> [meshes] so frag can shred cover visually
+  const buildingTiles = {};   // "x,y" -> [meshes] so frag can demolish a wall
 
   function buildSim() {
     events = [];
@@ -255,6 +256,24 @@ register3d("tactics3d", async (kernel, content) => {
     if (meshes) { meshes.forEach((mm) => scene.remove(mm)); delete coverTiles[key]; }
     if (toType === 2) buildCover(x, y, cell(x, y), false); // downgraded to half cover
   }
+  // A grenade blew a hole in this wall: remove the building, drop a rubble pile +
+  // dust, and leave the floor (continuous floor plane) exposed + walkable.
+  function demolishBuilding(x, y) {
+    const key = x + "," + y, meshes = buildingTiles[key];
+    if (!meshes) return;
+    meshes.forEach((mm) => scene.remove(mm)); delete buildingTiles[key];
+    const w = cell(x, y);
+    for (let i = 0; i < 5; i++) {
+      const r = _bx(T * (0.18 + Math.random() * 0.22), T * (0.12 + Math.random() * 0.2), T * (0.18 + Math.random() * 0.22), [0x3a4048, 0x4d473d, 0x2b3442][i % 3], 0.95, 0.1);
+      r.position.set(w.x + (Math.random() - 0.5) * T * 0.7, T * 0.12 + Math.random() * T * 0.1, w.z + (Math.random() - 0.5) * T * 0.7);
+      r.rotation.set(Math.random(), Math.random(), Math.random()); r.castShadow = true; scene.add(r);
+    }
+    // dust puff
+    const dust = new THREE.Mesh(new THREE.SphereGeometry(T * 0.5, 10, 10), new THREE.MeshBasicMaterial({ color: 0x9a958c, transparent: true, opacity: 0.6 }));
+    dust.position.set(w.x, T * 0.8, w.z); scene.add(dust);
+    kernel.tween({ target: dust.scale, to: { x: 2.6, y: 2.6, z: 2.6 }, duration: 0.6 });
+    kernel.tween({ target: dust.material, to: { opacity: 0 }, duration: 0.6, onComplete: () => scene.remove(dust) });
+  }
   function buildHazard(w) {
     const tile = new THREE.Mesh(new THREE.BoxGeometry(T * 0.96, 0.32, T * 0.96),
       new THREE.MeshStandardMaterial({ color: 0x2a0f0f, emissive: 0xff4010, emissiveIntensity: 0.35, roughness: 0.8 }));
@@ -282,9 +301,10 @@ register3d("tactics3d", async (kernel, content) => {
     const mat = new THREE.MeshStandardMaterial({ map, color: shellCol, emissive: winCol, emissiveMap: glow, emissiveIntensity: 0.9, roughness: 0.78, metalness: 0.25 });
     const m = new THREE.Mesh(new THREE.BoxGeometry(T, bh, T), mat);
     m.position.set(w.x, bh / 2, w.z); m.castShadow = true; m.receiveShadow = true; scene.add(m);
+    const parts = [m];
     const roof = _bx(T * 1.02, T * 0.14, T * 1.02, shade(shellCol, 0.22), 0.5, 0.55);
-    roof.position.set(w.x, bh, w.z); roof.castShadow = true; scene.add(roof);
-    if (kind <= 3 && (hsh & 4)) { const ac = _bx(T * 0.34, T * 0.22, T * 0.3, shade(shellCol, 0.3), 0.6, 0.5); ac.position.set(w.x + T * 0.18, bh + T * 0.12, w.z - T * 0.12); ac.castShadow = true; scene.add(ac); }
+    roof.position.set(w.x, bh, w.z); roof.castShadow = true; scene.add(roof); parts.push(roof);
+    if (kind <= 3 && (hsh & 4)) { const ac = _bx(T * 0.34, T * 0.22, T * 0.3, shade(shellCol, 0.3), 0.6, 0.5); ac.position.set(w.x + T * 0.18, bh + T * 0.12, w.z - T * 0.12); ac.castShadow = true; scene.add(ac); parts.push(ac); }
     // low buildings get a coloured awning on their street faces (storefront read)
     if (kind === 4) {
       const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -293,9 +313,10 @@ register3d("tactics3d", async (kernel, content) => {
         const ng = (ny >= 0 && ny < gridH && nx >= 0 && nx < gridW) ? mission.grid[ny][nx] : 0;
         if (ng === 1) continue;
         const awn = _bx(T * 0.82, T * 0.06, T * 0.24, [0x9a3b3b, 0x35506e, 0x2f6e4f][hsh % 3], 0.7, 0.1);
-        awn.position.set(w.x + d[0] * (T * 0.6), bh * 0.62, w.z + d[1] * (T * 0.6)); awn.rotation.y = d[0] !== 0 ? Math.PI / 2 : 0; awn.castShadow = true; scene.add(awn);
+        awn.position.set(w.x + d[0] * (T * 0.6), bh * 0.62, w.z + d[1] * (T * 0.6)); awn.rotation.y = d[0] !== 0 ? Math.PI / 2 : 0; awn.castShadow = true; scene.add(awn); parts.push(awn);
       }
     }
+    buildingTiles[x + "," + y] = parts; // tracked so a grenade can demolish it
   }
 
   // ── Units (REAL rigged + animated characters) ───────────────────────────────
@@ -808,7 +829,7 @@ register3d("tactics3d", async (kernel, content) => {
       const ring = new THREE.Mesh(new THREE.RingGeometry(T * 0.3, T * (0.4 + (p.radius || 1)), 28), new THREE.MeshBasicMaterial({ color: 0xff7a3c, transparent: true, opacity: 0.7, side: THREE.DoubleSide }));
       ring.rotation.x = -Math.PI / 2; ring.position.set(w.x, 0.3, w.z); scene.add(ring);
       kernel.tween({ target: ring.material, to: { opacity: 0 }, duration: 0.5, onComplete: () => scene.remove(ring) });
-      (p.shredded || []).forEach((c) => shredCoverVisual(c.x, c.y, c.to));
+      (p.shredded || []).forEach((c) => { if (c.from === 1) demolishBuilding(c.x, c.y); else shredCoverVisual(c.x, c.y, c.to); });
       (p.hits || []).forEach((h) => {
         const u = sim.getUnit(h.id); if (!u) return;
         const hp = cell(u.x, u.y); refreshUnit(u);
