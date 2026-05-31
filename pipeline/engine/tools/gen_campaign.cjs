@@ -31,14 +31,17 @@ const ARCH = {
   defender: { name: "Defender Bot", hp: 95, atk: 22, def: 12, movement: 2, range: 2, aim: 0.62, ai: "defensive", tint: "#ff7a3c", sprite: "defender" },
 };
 
+// XCOM-scale plots (toward ~64×64). The cinematic camera sits close, so the
+// player scrolls/WASD-glides across the sector over several turns — the map is
+// not meant to be seen all at once.
 const MISSIONS = [
-  { name: "Downtown Insertion", objective: "Eliminate all hostile contacts across the downtown sector.", w: 40, h: 28, enemies: 9, mix: ["drone", "drone", "stalker", "sniper", "defender"], seed: 0xA1 },
-  { name: "Market Sweep", objective: "Clear the open market plaza of the alien advance party.", w: 38, h: 26, enemies: 9, mix: ["drone", "stalker", "stalker", "sniper", "defender"], seed: 0xB7 },
-  { name: "Rail Yard", objective: "Secure the rail yard and destroy the hostile garrison.", w: 42, h: 28, enemies: 10, mix: ["drone", "stalker", "sniper", "sniper", "defender"], seed: 0xC3 },
-  { name: "Power Substation", objective: "Hold the substation approaches and wipe the defenders.", w: 40, h: 30, enemies: 11, mix: ["stalker", "sniper", "defender", "defender", "drone"], seed: 0xD9 },
-  { name: "Old Town Siege", objective: "Push through Old Town against entrenched resistance.", w: 44, h: 30, enemies: 11, mix: ["stalker", "stalker", "sniper", "defender", "defender"], seed: 0xE5 },
-  { name: "Spire Approach", objective: "Break the cordon guarding the spire approach.", w: 44, h: 32, enemies: 12, mix: ["sniper", "sniper", "defender", "defender", "stalker"], seed: 0xF2 },
-  { name: "Avatar Spire", objective: "Assault the spire and shatter the Avatar Project.", w: 46, h: 32, enemies: 13, mix: ["defender", "defender", "sniper", "sniper", "stalker", "stalker"], seed: 0x5C },
+  { name: "Downtown Insertion", objective: "Eliminate all hostile contacts across the downtown sector.", w: 48, h: 38, enemies: 10, mix: ["drone", "drone", "stalker", "sniper", "defender"], seed: 0xA1 },
+  { name: "Market Sweep", objective: "Clear the open market plaza of the alien advance party.", w: 50, h: 40, enemies: 11, mix: ["drone", "stalker", "stalker", "sniper", "defender"], seed: 0xB7 },
+  { name: "Rail Yard", objective: "Secure the rail yard and destroy the hostile garrison.", w: 54, h: 42, enemies: 12, mix: ["drone", "stalker", "sniper", "sniper", "defender"], seed: 0xC3 },
+  { name: "Power Substation", objective: "Hold the substation approaches and wipe the defenders.", w: 56, h: 44, enemies: 13, mix: ["stalker", "sniper", "defender", "defender", "drone"], seed: 0xD9 },
+  { name: "Old Town Siege", objective: "Push through Old Town against entrenched resistance.", w: 58, h: 48, enemies: 14, mix: ["stalker", "stalker", "sniper", "defender", "defender"], seed: 0xE5 },
+  { name: "Spire Approach", objective: "Break the cordon guarding the spire approach.", w: 60, h: 52, enemies: 15, mix: ["sniper", "sniper", "defender", "defender", "stalker"], seed: 0xF2 },
+  { name: "Avatar Spire", objective: "Assault the spire and shatter the Avatar Project.", w: 64, h: 56, enemies: 17, mix: ["defender", "defender", "sniper", "sniper", "stalker", "stalker"], seed: 0x5C },
 ];
 
 function buildMission(spec) {

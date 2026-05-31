@@ -54,6 +54,41 @@ function makeFloorTexture() {
   tex.anisotropy = 8; _floorTex = tex; return tex;
 }
 
+// Building facades as a small CACHED set of textures (a window grid baked once),
+// not a mesh per window pane — so a 60×60 map of towers stays a few thousand
+// draw-calls instead of tens of thousands. Returns {map, glow} pairs: `map` is a
+// neutral grey wall + windows (tinted per-building via material.color); `glow` is
+// black walls + white lit windows for the emissiveMap (only windows bloom).
+let _facades = null;
+function buildingFacades() {
+  if (_facades) return _facades;
+  _facades = [];
+  for (let v = 0; v < 6; v++) {
+    const Wd = 96, Ht = 128, cols = 3, rows = 4;
+    const cMap = document.createElement("canvas"); cMap.width = Wd; cMap.height = Ht;
+    const cGlow = document.createElement("canvas"); cGlow.width = Wd; cGlow.height = Ht;
+    const m = cMap.getContext("2d"), gl = cGlow.getContext("2d");
+    m.fillStyle = "#5a626e"; m.fillRect(0, 0, Wd, Ht);          // neutral wall (tinted by material.color)
+    m.fillStyle = "rgba(0,0,0,0.18)"; for (let i = 0; i < Wd; i += 6) m.fillRect(i, 0, 1, Ht); // faint vertical seams
+    gl.fillStyle = "#000"; gl.fillRect(0, 0, Wd, Ht);
+    const pad = 12, gw = (Wd - pad * (cols + 1)) / cols, gh = (Ht - pad * (rows + 1)) / rows;
+    let seed = (v * 2654435761) >>> 0;
+    const nx = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const x = pad + c * (gw + pad), y = pad + r * (gh + pad);
+      const lit = nx() > 0.42;
+      m.fillStyle = lit ? "#cfe6ff" : "#1a2632"; m.fillRect(x, y, gw, gh);
+      m.strokeStyle = "rgba(10,16,24,0.7)"; m.lineWidth = 2; m.strokeRect(x, y, gw, gh);
+      gl.fillStyle = lit ? "#ffffff" : "#000000"; gl.fillRect(x, y, gw, gh);
+    }
+    const map = new THREE.CanvasTexture(cMap), glow = new THREE.CanvasTexture(cGlow);
+    if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace;
+    map.wrapS = map.wrapT = glow.wrapS = glow.wrapT = THREE.RepeatWrapping;
+    _facades.push({ map, glow });
+  }
+  return _facades;
+}
+
 register3d("tactics3d", async (kernel, content) => {
   const scene = kernel.scene;
   const TB = window.FFG.sim.TacticalBattle;
@@ -236,38 +271,29 @@ register3d("tactics3d", async (kernel, content) => {
     const kind = hsh % 5; // 0-1 tall, 2-3 mid, 4 low
     const PAL = [0x2b3442, 0x313b4b, 0x26303d, 0x463a31, 0x4d473d, 0x39414c, 0x3a3340];
     const shellCol = PAL[hsh % PAL.length];
-    const bh = kind <= 1 ? T * (3.4 + (hsh % 5) * 0.5)
-      : kind <= 3 ? T * (2.0 + (hsh % 4) * 0.4)
-        : T * (1.1 + (hsh % 3) * 0.28);
-    const m = new THREE.Mesh(new THREE.BoxGeometry(T, bh, T), _smat(shellCol, 0.74, 0.3));
+    const winCol = [0xbfe6ff, 0xffdca8, 0x9fe6c0, 0xd8c8ff][hsh % 4];
+    const floors = kind <= 1 ? (5 + (hsh % 5)) : kind <= 3 ? (3 + (hsh % 3)) : (1 + (hsh % 2));
+    const bh = T * 0.92 * floors;
+    // Single textured box per building — facade map tinted by the shell colour,
+    // glow map drives the emissive (lit) windows. Texture repeats once per floor.
+    const fac = buildingFacades()[hsh % 6];
+    const map = fac.map.clone(), glow = fac.glow.clone();
+    map.repeat.set(1, floors); glow.repeat.set(1, floors); map.needsUpdate = glow.needsUpdate = true;
+    const mat = new THREE.MeshStandardMaterial({ map, color: shellCol, emissive: winCol, emissiveMap: glow, emissiveIntensity: 0.9, roughness: 0.78, metalness: 0.25 });
+    const m = new THREE.Mesh(new THREE.BoxGeometry(T, bh, T), mat);
     m.position.set(w.x, bh / 2, w.z); m.castShadow = true; m.receiveShadow = true; scene.add(m);
     const roof = _bx(T * 1.02, T * 0.14, T * 1.02, shade(shellCol, 0.22), 0.5, 0.55);
     roof.position.set(w.x, bh, w.z); roof.castShadow = true; scene.add(roof);
-    // rooftop kit on taller buildings (AC unit / vent) for silhouette interest
     if (kind <= 3 && (hsh & 4)) { const ac = _bx(T * 0.34, T * 0.22, T * 0.3, shade(shellCol, 0.3), 0.6, 0.5); ac.position.set(w.x + T * 0.18, bh + T * 0.12, w.z - T * 0.12); ac.castShadow = true; scene.add(ac); }
-    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    const winCol = [0xbfe6ff, 0xffdca8, 0x9fe6c0, 0xd8c8ff][hsh % 4];
-    for (const d of dirs) {
-      const nx = x + d[0], ny = y + d[1];
-      const ng = (ny >= 0 && ny < gridH && nx >= 0 && nx < gridW) ? mission.grid[ny][nx] : 0;
-      if (ng === 1) continue; // interior face — skip
-      const faceX = w.x + d[0] * (T * 0.505), faceZ = w.z + d[1] * (T * 0.505);
-      const rotY = d[0] !== 0 ? Math.PI / 2 : 0;
-      if (kind === 4) {
-        // low storefront: big lit ground window + an awning
-        const store = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.74, bh * 0.5), new THREE.MeshBasicMaterial({ color: winCol }));
-        store.position.set(faceX, bh * 0.34, faceZ); store.rotation.y = rotY; scene.add(store);
-        const awn = _bx(T * 0.82, T * 0.06, T * 0.22, [0x9a3b3b, 0x35506e, 0x2f6e4f][hsh % 3], 0.7, 0.1);
-        awn.position.set(w.x + d[0] * (T * 0.62), bh * 0.6, w.z + d[1] * (T * 0.62)); awn.rotation.y = rotY; awn.castShadow = true; scene.add(awn);
-      } else {
-        const rows = Math.max(2, Math.floor(bh / (T * 0.7)));
-        for (let r = 0; r < rows; r++) {
-          const wy = (r + 0.7) * (bh / (rows + 0.4));
-          const lit = ((hsh >> r) & 1) || ((x + y + r) % 3 === 0);
-          const pane = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.66, bh / (rows + 1) * 0.5),
-            new THREE.MeshBasicMaterial({ color: lit ? winCol : 0x12202c }));
-          pane.position.set(faceX, wy, faceZ); pane.rotation.y = rotY; scene.add(pane);
-        }
+    // low buildings get a coloured awning on their street faces (storefront read)
+    if (kind === 4) {
+      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (const d of dirs) {
+        const nx = x + d[0], ny = y + d[1];
+        const ng = (ny >= 0 && ny < gridH && nx >= 0 && nx < gridW) ? mission.grid[ny][nx] : 0;
+        if (ng === 1) continue;
+        const awn = _bx(T * 0.82, T * 0.06, T * 0.24, [0x9a3b3b, 0x35506e, 0x2f6e4f][hsh % 3], 0.7, 0.1);
+        awn.position.set(w.x + d[0] * (T * 0.6), bh * 0.62, w.z + d[1] * (T * 0.6)); awn.rotation.y = d[0] !== 0 ? Math.PI / 2 : 0; awn.castShadow = true; scene.add(awn);
       }
     }
   }
