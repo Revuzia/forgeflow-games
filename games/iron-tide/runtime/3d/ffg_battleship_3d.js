@@ -159,9 +159,17 @@ register3d("battleship", async function (kernel, content) {
 
   // Big board title sprite, seated just off the outer edge (not floating mid-air).
   function label(side, text) {
-    const c = cellWorld(side, (size - 1) / 2, side === "player" ? size + 1.1 : -2.1);
-    const sprite = makeTextSprite(text, { glow: side === "player" ? "#8fefff" : "#ffc070" });
-    sprite.position.set(c.x, 1.4, c.z);
+    // Both labels sit on the BACK edge (top of screen) — YOUR FLEET now matches
+    // ENEMY WATERS. Polished engraved gold/steel plate, not plain white.
+    const c = cellWorld(side, (size - 1) / 2, -2.2);
+    const sprite = makeTextSprite(text, {
+      w: 512, h: 96, sx: 13, sy: 2.45,
+      font: "800 50px 'Trebuchet MS', 'Segoe UI', sans-serif",
+      color: side === "player" ? "#cfe9ff" : "#ffd089",
+      glow: side === "player" ? "#3aa6d8" : "#d98a2a",
+      outline: 5,
+    });
+    sprite.position.set(c.x, 1.7, c.z);
     scene.add(sprite);
   }
 
@@ -308,7 +316,7 @@ register3d("battleship", async function (kernel, content) {
         ch.scene.scale.setScalar(targetH / NATIVE_H);
         ch.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } }); // keep FULL colour
         ch.scene.position.set(sx - dir.x * CELL * 0.62, DH, sz - dir.z * CELL * 0.62); // behind the breech, feet on deck
-        ch.scene.rotation.y = Math.atan2(dir.x, dir.z);   // face the enemy
+        ch.scene.rotation.y = Math.atan2(dir.x, dir.z) + Math.PI; // face the cannon (toward the enemy)
         ch.scene.userData.basePos = ch.scene.position.clone();
         scene.add(ch.scene);
         const idle = ch.actions["Idle"] ? "Idle" : (ch.animations[0] && ch.animations[0].name);
@@ -1005,16 +1013,18 @@ window.__bs_playerFire = function (sim, x, y) { return sim.playerFire(x, y); };
 // ── tiny canvas text sprite for board labels ──────────────────────────────────
 function makeTextSprite(text, opts) {
   opts = opts || {};
-  const c = document.createElement("canvas"); c.width = 256; c.height = 64;
+  const W = opts.w || 256, Hc = opts.h || 64;
+  const c = document.createElement("canvas"); c.width = W; c.height = Hc;
   const ctx = c.getContext("2d");
-  ctx.clearRect(0, 0, 256, 64);
+  ctx.clearRect(0, 0, W, Hc);
   ctx.font = opts.font || "bold 34px monospace";
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  if (opts.glow) { ctx.shadowColor = opts.glow; ctx.shadowBlur = 14; }
+  if (opts.outline) { ctx.lineWidth = opts.outline; ctx.strokeStyle = "rgba(4,10,18,0.85)"; ctx.strokeText(text, W / 2, Hc / 2); }
+  if (opts.glow) { ctx.shadowColor = opts.glow; ctx.shadowBlur = 16; }
   ctx.fillStyle = opts.color || "#eaf3ff";
-  ctx.fillText(text, 128, 32);
-  if (opts.glow) { ctx.shadowBlur = 0; ctx.fillText(text, 128, 32); } // double-pass for a crisp glowing core
-  const tex = new THREE.CanvasTexture(c);
+  ctx.fillText(text, W / 2, Hc / 2);
+  if (opts.glow) { ctx.shadowBlur = 0; ctx.fillText(text, W / 2, Hc / 2); } // double-pass for a crisp glowing core
+  const tex = new THREE.CanvasTexture(c); tex.anisotropy = 4;
   const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
   spr.scale.set(opts.sx != null ? opts.sx : 8, opts.sy != null ? opts.sy : 2, 1);
   return spr;

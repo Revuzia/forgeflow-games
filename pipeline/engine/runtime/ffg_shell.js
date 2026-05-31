@@ -112,10 +112,12 @@
   Shell.prototype.menu = function () {
     this.phase = "menu"; this.ov.dataset.ended = ""; this.ov.innerHTML = "";
     var self = this;
-    this.ov.appendChild(el("div", "", '<div style="font-size:58px;font-weight:800;letter-spacing:6px;' +
-      'text-shadow:0 3px 22px rgba(0,0,0,.7),0 0 30px rgba(80,200,255,.25)">' +
+    this.ov.appendChild(el("div", "text-align:center", '<div style="font-size:clamp(46px,8vw,88px);font-weight:900;letter-spacing:10px;' +
+      "font-family:Georgia,'Times New Roman',serif;" +
+      'background:linear-gradient(180deg,#fff0c8 0%,#f0c065 55%,#c98a32 100%);-webkit-background-clip:text;background-clip:text;color:transparent;' +
+      'text-shadow:0 4px 26px rgba(0,0,0,.65),0 0 46px rgba(224,162,60,.28);padding:0 8px">' +
       (this.o.title || "FFG GAME").toUpperCase() + '</div>' +
-      (this.o.tagline ? '<div style="font-size:15px;opacity:.82;margin-top:8px;letter-spacing:1px">' + this.o.tagline + '</div>' : "")));
+      (this.o.tagline ? '<div style="font-size:16px;opacity:.88;margin-top:10px;letter-spacing:2px;color:#dfe8f4;text-shadow:0 2px 10px #000">' + this.o.tagline + '</div>' : "")));
     // PLAY first (top of the menu), difficulty selector beneath it.
     this.ov.appendChild(el("div", "height:8px"));
     this.ov.appendChild(this._btn("▶  PLAY", function () {
