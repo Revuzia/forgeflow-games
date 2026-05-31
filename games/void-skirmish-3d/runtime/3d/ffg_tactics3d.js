@@ -955,6 +955,8 @@ register3d("tactics3d", async (kernel, content) => {
       attackAnimated: (aid, tid) => { selectUnit(sim.getUnit(aid)); tryAttack(sim.getUnit(tid)); },
       killCamActive: () => !!kc,
       ability: (uid, abId, opts) => sim.useAbility(uid, abId, opts),
+      // animated ability path (drives playAbilityEvent -> demolish/shred VFX)
+      abilityAnimated: (uid, abId, opts) => { selectUnit(sim.getUnit(uid)); abilityMode = abId; useAbilityAt((opts && opts.tileX), (opts && opts.tileY)); },
       abilitiesFor: (uid) => sim.abilitiesFor(uid),
       overwatch: (id) => { if (id) selectUnit(sim.getUnit(id)); overwatchSelected(); },
       endTurn: () => endTurn(),
