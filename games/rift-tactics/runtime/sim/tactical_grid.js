@@ -70,7 +70,11 @@
     isWalkable(x, y) {
       if (!this.inBounds(x, y)) return false;
       const t = this.grid[y][x];
-      return t === 0 || t === 2 || t === 4; // floor / half-cover / hazard
+      // Cover tiles are SOLID objects (crates/barricades) — units path AROUND
+      // them and take cover beside them, never walk through. Only open floor and
+      // hazard lanes are walkable. (Was: half-cover walkable, so units stood on
+      // crates / appeared to walk through obstacles.)
+      return t === 0 || t === 4; // floor / hazard
     }
 
     unitAt(x, y) {
