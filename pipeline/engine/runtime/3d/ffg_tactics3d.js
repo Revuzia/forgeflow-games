@@ -438,6 +438,50 @@ register3d("tactics3d", async (kernel, content) => {
     autoRotate: true, autoRotateSpeed: 0.32,
   });
 
+  // ── Cinematic kill-cam ──────────────────────────────────────────────────────
+  // On a kill, swoop CLOSE to frame the shooter→victim, hold, then glide back to
+  // the tactical camera. The updater runs AFTER OrbitControls.update() so it can
+  // override the camera while active; orbit input is paused for the duration.
+  const reducedMotionKC = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  let kc = null; // { t, dur, savedPos, savedTarget, cinePos, focus }
+  function triggerKillCam(shooterPos, targetPos) {
+    if (kc || reducedMotionKC || phase !== "battle") return false;
+    const dir = new THREE.Vector3().subVectors(targetPos, shooterPos); dir.y = 0;
+    if (dir.lengthSq() < 1e-4) dir.set(0, 0, 1); dir.normalize();
+    const side = new THREE.Vector3(-dir.z, 0, dir.x);
+    const cinePos = targetPos.clone()
+      .addScaledVector(dir, -T * 2.4)      // back toward the shooter
+      .addScaledVector(side, T * 1.7)      // off to one side
+      .add(new THREE.Vector3(0, T * 1.7, 0)); // raised
+    kc = {
+      t: 0, dur: 1.15,
+      savedPos: kernel.camera.position.clone(),
+      savedTarget: kernel.controls.target.clone(),
+      cinePos, focus: targetPos.clone().add(new THREE.Vector3(0, T * 0.4, 0)),
+    };
+    kernel.controls.enabled = false;
+    return true;
+  }
+  const _kcTmp = new THREE.Vector3();
+  kernel.onUpdate((dt) => {
+    if (!kc) return;
+    kc.t += dt;
+    const p = Math.min(1, kc.t / kc.dur);
+    const ease = (a) => a * a * (3 - 2 * a);
+    if (p < 0.32) { const k = ease(p / 0.32); _kcTmp.lerpVectors(kc.savedPos, kc.cinePos, k); }      // swoop in
+    else if (p < 0.72) { _kcTmp.copy(kc.cinePos); }                                                   // hold
+    else { const k = ease((p - 0.72) / 0.28); _kcTmp.lerpVectors(kc.cinePos, kc.savedPos, k); }       // glide back
+    kernel.camera.position.copy(_kcTmp);
+    const f = p < 0.72 ? kc.focus : kc.focus.clone().lerp(kc.savedTarget, ease((p - 0.72) / 0.28));
+    kernel.camera.lookAt(f);
+    if (p >= 1) {
+      kernel.camera.position.copy(kc.savedPos);
+      kernel.controls.target.copy(kc.savedTarget);
+      kernel.controls.enabled = true; kernel.controls.update();
+      kc = null;
+    }
+  });
+
   // ── Highlights + selection ──────────────────────────────────────────────────
   function clearHighlights() { highlights.forEach((h) => scene.remove(h)); highlights = []; rangeTargets = []; }
   function selectUnit(u) {
@@ -677,7 +721,10 @@ register3d("tactics3d", async (kernel, content) => {
           floatText(pb, (p.crit ? "CRIT −" : "−") + (p.damage != null ? p.damage : ""), p.crit ? 0xff5a3c : 0xff7a6a);
           if (p.flanked && !p.crit) floatText({ x: pb.x, y: pb.y + 0.5, z: pb.z }, "FLANKED", 0xffae5a);
           refreshUnit(tu);
-          if (p.killed) floatText({ x: pb.x, y: pb.y + 0.8, z: pb.z }, "ELIMINATED", 0xffffff);
+          if (p.killed) {
+            floatText({ x: pb.x, y: pb.y + 0.8, z: pb.z }, "ELIMINATED", 0xffffff);
+            if (au.side === "player" && !p.reaction && triggerKillCam(a.group.position, t.group.position)) return 1250;
+          }
         } else floatText(pb, "MISS", 0xaab4c8);
       }
       return p.crit ? 460 : 340;
@@ -708,7 +755,10 @@ register3d("tactics3d", async (kernel, content) => {
         kernel.tween({ target: arc.material, to: { opacity: 0 }, duration: 0.3, onUpdate: () => { arc.material.transparent = true; }, onComplete: () => scene.remove(arc) });
         floatText(tp, (p.crit ? "CRIT −" : "−") + p.damage, p.crit ? 0xff5a3c : 0x9fe6ff);
         refreshUnit(p.target);
-        if (p.killed) floatText({ x: tp.x, y: tp.y + 0.8, z: tp.z }, "ELIMINATED", 0xffffff);
+        if (p.killed) {
+          floatText({ x: tp.x, y: tp.y + 0.8, z: tp.z }, "ELIMINATED", 0xffffff);
+          if (a && triggerKillCam(a.group.position, t.group.position)) return 1300;
+        }
       }
       return 480;
     }
@@ -727,7 +777,10 @@ register3d("tactics3d", async (kernel, content) => {
           kernel.tween({ target: burst.material, to: { opacity: 0 }, duration: 0.32, onUpdate: () => { burst.material.transparent = true; }, onComplete: () => scene.remove(burst) });
           floatText(pb, (p.crit ? "HEADSHOT −" : "−") + p.damage, p.crit ? 0xff5a3c : 0xffd27a);
           refreshUnit(p.target);
-          if (p.killed) floatText({ x: pb.x, y: pb.y + 0.8, z: pb.z }, "ELIMINATED", 0xffffff);
+          if (p.killed) {
+            floatText({ x: pb.x, y: pb.y + 0.8, z: pb.z }, "ELIMINATED", 0xffffff);
+            if (a && triggerKillCam(a.group.position, t.group.position)) return 1300;
+          }
         } else floatText(pb, "MISS", 0xaab4c8);
       }
       return 520;
@@ -877,6 +930,9 @@ register3d("tactics3d", async (kernel, content) => {
       select: (id) => { selectUnit(sim.getUnit(id)); return !!sim.getUnit(id); },
       move: (id, x, y) => { selectUnit(sim.getUnit(id)); return !!sim.moveUnit(id, x, y); },
       attack: (aid, tid) => sim.attackUnit(aid, tid),
+      // animated path (drives drainEvents -> playEvent -> kill-cam) for verification
+      attackAnimated: (aid, tid) => { selectUnit(sim.getUnit(aid)); tryAttack(sim.getUnit(tid)); },
+      killCamActive: () => !!kc,
       ability: (uid, abId, opts) => sim.useAbility(uid, abId, opts),
       abilitiesFor: (uid) => sim.abilitiesFor(uid),
       overwatch: (id) => { if (id) selectUnit(sim.getUnit(id)); overwatchSelected(); },
