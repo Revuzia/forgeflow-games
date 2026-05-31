@@ -11,10 +11,11 @@
  * systems (overwatch, flanking crit, classes/abilities) layer onto the sim next.
  */
 import * as THREE from "three";
-import "../sim/tactical_grid.js"; // side-effect: window.FFG.sim.TacticalBattle
-// Resolve register3d from the SAME (version-matched) kernel instance the boot
-// uses — a bare import would be a different module + an empty genre registry.
-const { register3d } = await import("./ffg_kernel_3d.js" + new URL(import.meta.url).search);
+// Resolve from the SAME (version-matched) URLs the boot used — a bare import is a
+// different kernel instance (empty genre registry) and a cache-stale sim.
+const _V = new URL(import.meta.url).search;
+await import("../sim/tactical_grid.js" + _V); // sets window.FFG.sim.TacticalBattle
+const { register3d } = await import("./ffg_kernel_3d.js" + _V);
 
 const T = 2.4;            // world units per tile
 const TILE_TINT = { 0: 0x1b2738, 1: 0x39506b, 2: 0x6b5a30, 3: 0x877046, 4: 0x401818 };

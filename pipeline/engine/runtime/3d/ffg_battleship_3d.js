@@ -11,7 +11,10 @@
 import * as THREE from "three";
 import { Water } from "three/addons/objects/Water.js";
 import { Sky } from "three/addons/objects/Sky.js";
-import "../sim/battleship.js"; // side-effect: sets window.FFG.sim.Battleship
+// Version-busted so a redeploy never serves a STALE sim (a bare import is cached
+// under an unversioned URL — that shipped an old sim with no playerMultiFire, so
+// the fire-abilities silently threw in already-loaded browsers).
+await import("../sim/battleship.js" + new URL(import.meta.url).search); // sets window.FFG.sim.Battleship
 
 // Import the kernel with the SAME version query the boot entry used, so genre
 // registration targets the same kernel module instance the boot uses.
@@ -554,7 +557,7 @@ register3d("battleship", async function (kernel, content) {
 
   // bottom ability bar (own DOM layer so setHUD()'s innerHTML reset can't wipe it)
   const abilityBarEl = document.createElement("div");
-  Object.assign(abilityBarEl.style, { position: "absolute", left: "0", right: "0", bottom: "44px", display: "flex", justifyContent: "center", gap: "8px", pointerEvents: "auto", fontFamily: "'Segoe UI',system-ui,monospace", zIndex: "50" });
+  Object.assign(abilityBarEl.style, { position: "absolute", left: "0", right: "0", bottom: "44px", display: "flex", justifyContent: "center", gap: "8px", pointerEvents: "none", fontFamily: "'Segoe UI',system-ui,monospace", zIndex: "50" });
   kernel.parent.appendChild(abilityBarEl);
 
   function grantUpgrade(ship) {
@@ -570,7 +573,7 @@ register3d("battleship", async function (kernel, content) {
     const meter = comboPower > 0 ? `<span style="align-self:center;font-size:11px;letter-spacing:1px;color:#ffd166;margin-right:4px">COMBO ${comboPower.toFixed(0)}</span>` : "";
     abilityBarEl.innerHTML = meter + keys.map((k) => {
       const on = armed === k, c = ABILITY[k].color;
-      return `<button data-ab="${k}" style="font:bold 12px 'Segoe UI',monospace;letter-spacing:1px;padding:7px 12px;border-radius:7px;cursor:pointer;color:${on ? "#06101c" : c};background:${on ? c : "rgba(10,20,34,.82)"};border:1px solid ${c};box-shadow:${on ? "0 0 12px " + c : "none"}">${ABILITY[k].label} <b>×${ammo[k]}</b></button>`;
+      return `<button data-ab="${k}" style="pointer-events:auto;font:bold 12px 'Segoe UI',monospace;letter-spacing:1px;padding:7px 12px;border-radius:7px;cursor:pointer;color:${on ? "#06101c" : c};background:${on ? c : "rgba(10,20,34,.82)"};border:1px solid ${c};box-shadow:${on ? "0 0 12px " + c : "none"}">${ABILITY[k].label} <b>×${ammo[k]}</b></button>`;
     }).join("");
     Array.prototype.forEach.call(abilityBarEl.querySelectorAll("button"), (b) => { b.onclick = () => armAbility(b.dataset.ab); });
   }
@@ -722,7 +725,7 @@ register3d("battleship", async function (kernel, content) {
   window.addEventListener("keydown", (e) => {
     if (phase !== "battle" || sim.ended) return;
     const k = e.key;
-    if (k === "Escape" && armed) { armed = null; renderAbilityBar(); setHUD(); return; }
+    if (k === "Escape" && armed) { armed = null; renderAbilityBar(); setHUD(); e.stopImmediatePropagation(); e.preventDefault(); return; } // disarm only — don't let the shell pause
     // number keys 1-5 arm the earned abilities, in display order
     if (/^[1-5]$/.test(k)) {
       const earned = Object.keys(ABILITY).filter((a) => ammo[a] > 0);
