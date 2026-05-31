@@ -69,8 +69,18 @@ register3d("tactics3d", async (kernel, content) => {
 
   // ── Board ─────────────────────────────────────────────────────────────────
   const floorTargets = []; // interactive tile meshes for raycasting
-  function buildBoard() {
-    // platform base
+  async function buildBoard() {
+    // Real textured sci-fi floor panels (modular-space-kit GLB) instead of plain
+    // boxes — a genuine facility floor. Walls/cover/hazard stay procedural.
+    const SK = new URL("./spacekit/", import.meta.url).href;
+    let floorProto = null, floorScale = 1, floorTop = 0.18;
+    try {
+      floorProto = await kernel.loadGLTF(SK + "template-floor.glb");
+      const bb = new THREE.Box3().setFromObject(floorProto); const d = bb.getSize(new THREE.Vector3());
+      floorScale = (T * 0.99) / (Math.max(d.x, d.z) || 1);
+      floorTop = (d.y || 0.2) * floorScale; // panel thickness after scaling
+    } catch (e) { floorProto = null; }
+
     const plat = new THREE.Mesh(new THREE.BoxGeometry(W + 1.4, 0.6, H + 1.4),
       new THREE.MeshStandardMaterial({ color: 0x0c1626, roughness: 0.9, metalness: 0.2 }));
     plat.position.set(0, -0.35, 0); plat.receiveShadow = true; scene.add(plat);
@@ -88,18 +98,23 @@ register3d("tactics3d", async (kernel, content) => {
           seam.position.set(w.x, T * 1.15, w.z); scene.add(seam);
           continue;
         }
-        // FLOOR tile (lit tech panel) for everything walkable, with a glowing seam border
-        const checker = (x + y) % 2 === 0 ? 0x223044 : 0x1a2636;
-        const tile = new THREE.Mesh(new THREE.BoxGeometry(T * 0.97, 0.3, T * 0.97),
-          new THREE.MeshStandardMaterial({ color: checker, roughness: 0.6, metalness: 0.5 }));
-        tile.position.set(w.x, 0.02, w.z); tile.receiveShadow = true; scene.add(tile);
+        // FLOOR — textured GLB panel (fallback: a lit tech box).
+        if (floorProto) {
+          const f = floorProto.clone(true); f.scale.setScalar(floorScale);
+          f.position.set(w.x, 0, w.z); f.traverse((o) => { if (o.isMesh) o.receiveShadow = true; }); scene.add(f);
+        } else {
+          const checker = (x + y) % 2 === 0 ? 0x223044 : 0x1a2636;
+          const tile = new THREE.Mesh(new THREE.BoxGeometry(T * 0.97, 0.3, T * 0.97),
+            new THREE.MeshStandardMaterial({ color: checker, roughness: 0.6, metalness: 0.5 }));
+          tile.position.set(w.x, 0.02, w.z); tile.receiveShadow = true; scene.add(tile);
+        }
         const edge = new THREE.Mesh(new THREE.RingGeometry(T * 0.46, T * 0.485, 4),
           new THREE.MeshBasicMaterial({ color: 0x2f6c8f, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
-        edge.rotation.x = -Math.PI / 2; edge.rotation.z = Math.PI / 4; edge.position.set(w.x, 0.19, w.z); scene.add(edge);
+        edge.rotation.x = -Math.PI / 2; edge.rotation.z = Math.PI / 4; edge.position.set(w.x, floorTop + 0.02, w.z); scene.add(edge);
         // interactive overlay
         const hit = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.96, T * 0.96),
           new THREE.MeshBasicMaterial({ color: 0x4fd0ff, transparent: true, opacity: 0, side: THREE.DoubleSide }));
-        hit.rotation.x = -Math.PI / 2; hit.position.set(w.x, 0.2, w.z); hit.userData = { x, y };
+        hit.rotation.x = -Math.PI / 2; hit.position.set(w.x, floorTop + 0.03, w.z); hit.userData = { x, y };
         scene.add(hit); floorTargets.push(hit);
 
         if (t === 2 || t === 3) buildCover(w, t === 3);
@@ -446,7 +461,7 @@ register3d("tactics3d", async (kernel, content) => {
   });
 
   // ── Boot ────────────────────────────────────────────────────────────────────
-  buildSim(); buildBoard();
+  buildSim(); await buildBoard();
   for (const u of sim.allUnits()) await makeUnit(u); // load + instance the animated models
   sim.allUnits().forEach(refreshUnit);
 
