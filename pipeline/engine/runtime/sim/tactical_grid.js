@@ -59,6 +59,8 @@
         ai: u.ai || "aggressive",
         sprite: u.sprite || null,
         tint: u.tint != null ? u.tint : null,
+        cls: u.cls || u.class || null, // soldier class (Phase 3)
+        overwatch: false,             // holding a reaction shot
       };
     }
 
@@ -188,15 +190,35 @@
       return best;
     }
 
-    calculateHitChance(attacker, target) {
+    // Does `target` have any adjacent cover at all (regardless of angle)?
+    hasAnyCover(target) {
+      for (const d of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const t = this.grid[target.y + d[1]] && this.grid[target.y + d[1]][target.x + d[0]];
+        if (t === 2 || t === 3) return true;
+      }
+      return false;
+    }
+    // FLANKED: the target relies on cover, but this attacker's angle bypasses it
+    // (XCOM: ignores cover defense AND grants a big crit chance).
+    isFlanked(attacker, target) {
+      return this.hasAnyCover(target) && this.coverAt(target, attacker.x, attacker.y) === 0;
+    }
+
+    // Full hit breakdown so the UI can show WHY a shot is what it is.
+    hitBreakdown(attacker, target) {
       const dist = Math.abs(attacker.x - target.x) + Math.abs(attacker.y - target.y);
-      if (dist > attacker.range) return 0;
+      const inRange = dist <= attacker.range;
       const distancePenalty = Math.max(0, (dist - 3) * 0.05);
       const cover = this.coverAt(target, attacker.x, attacker.y);
       const coverPenalty = cover === 2 ? 0.4 : cover === 1 ? 0.2 : 0;
-      const flank = cover === 0 ? 0.1 : 0; // open target = slight bonus
-      return Math.max(0.05, Math.min(0.99, attacker.aim - distancePenalty - coverPenalty + flank));
+      const flanked = this.isFlanked(attacker, target);
+      const flankBonus = flanked ? 0.25 : (cover === 0 ? 0.1 : 0);
+      const chance = inRange ? Math.max(0.05, Math.min(0.99, attacker.aim - distancePenalty - coverPenalty + flankBonus)) : 0;
+      const critChance = flanked ? 0.5 : 0.1;
+      return { chance, critChance, cover, coverPenalty, distancePenalty, flankBonus, flanked, dist, inRange };
     }
+
+    calculateHitChance(attacker, target) { return this.hitBreakdown(attacker, target).chance; }
 
     // ── Actions ──────────────────────────────────────────────────────────────
     moveUnit(unitId, toX, toY) {
@@ -210,31 +232,61 @@
       // Hazard tile damage
       if (this.grid[toY][toX] === 4) { u.hp = Math.max(0, u.hp - 2); this.log.push(u.id + " took 2 hazard dmg"); }
       this.onEvent("move", { unit: u, path: path });
+      this._triggerOverwatch(u); // opposing overwatchers fire on the mover
       this._checkEnd();
       return path;
     }
 
-    attackUnit(attackerId, targetId) {
+    attackUnit(attackerId, targetId, opts) {
+      opts = opts || {};
+      const reaction = !!opts.reaction; // overwatch reaction shot (penalised, no crit, no AP/turn cost)
       const a = this.getUnit(attackerId), t = this.getUnit(targetId);
       if (!a || !t || a.hp <= 0 || t.hp <= 0) return { success: false, reason: "invalid" };
-      if (a.actionPoints < 1) return { success: false, reason: "no AP" };
+      if (!reaction && a.actionPoints < 1) return { success: false, reason: "no AP" };
       if (!this.hasLineOfSight(a.x, a.y, t.x, t.y)) return { success: false, reason: "no LOS" };
-      const chance = this.calculateHitChance(a, t);
-      if (chance <= 0) return { success: false, reason: "out of range" };
-      a.actionPoints--;
+      const bd = this.hitBreakdown(a, t);
+      if (bd.chance <= 0) return { success: false, reason: "out of range" };
+      const chance = reaction ? bd.chance * 0.7 : bd.chance; // reaction fire is less accurate
+      // Shooting ENDS the turn (XCOM 2 action economy); reaction shots are free.
+      if (!reaction) a.actionPoints = 0;
       const roll = this.rng();
       if (roll <= chance) {
-        const dmg = Math.max(1, a.atk - t.def);
+        const crit = !reaction && bd.flanked && this.rng() < bd.critChance;
+        let dmg = Math.max(1, a.atk - t.def);
+        if (crit) dmg = Math.round(dmg * 1.5);
         t.hp = Math.max(0, t.hp - dmg);
-        this.log.push(a.id + " hit " + t.id + " for " + dmg + " (" + Math.round(chance * 100) + "%)");
-        this.onEvent("attack", { attacker: a, target: t, hit: true, damage: dmg, chance: chance, killed: t.hp <= 0 });
+        this.log.push(a.id + (reaction ? " overwatch-hit " : crit ? " CRIT " : " hit ") + t.id + " for " + dmg);
+        this.onEvent("attack", { attacker: a, target: t, hit: true, damage: dmg, chance: chance, killed: t.hp <= 0, crit: crit, flanked: bd.flanked, reaction: reaction });
         this._checkEnd();
-        return { success: true, hit: true, damage: dmg, killed: t.hp <= 0, chance: chance };
+        return { success: true, hit: true, damage: dmg, killed: t.hp <= 0, chance: chance, crit: crit, flanked: bd.flanked };
       }
-      this.log.push(a.id + " missed " + t.id + " (" + Math.round(chance * 100) + "%)");
-      this.onEvent("attack", { attacker: a, target: t, hit: false, chance: chance });
+      this.log.push(a.id + (reaction ? " overwatch-missed " : " missed ") + t.id);
+      this.onEvent("attack", { attacker: a, target: t, hit: false, chance: chance, reaction: reaction });
       this._checkEnd();
       return { success: true, hit: false, chance: chance };
+    }
+
+    // Hold a reaction shot: ends the unit's turn, fires on the first enemy that
+    // moves into LOS+range during the opponent's turn (XCOM overwatch).
+    overwatchUnit(unitId) {
+      const u = this.getUnit(unitId);
+      if (!u || u.hp <= 0 || u.actionPoints < 1) return false;
+      u.overwatch = true; u.actionPoints = 0;
+      this.onEvent("overwatch", { unit: u });
+      return true;
+    }
+
+    // Any opposing overwatcher with LOS + range fires one reaction shot at `mover`.
+    _triggerOverwatch(mover) {
+      const foes = mover.side === "player" ? this.aliveEnemies() : this.aliveAllies();
+      for (const w of foes) {
+        if (this.ended || mover.hp <= 0) break;
+        if (!w.overwatch || w.hp <= 0) continue;
+        const dist = Math.abs(w.x - mover.x) + Math.abs(w.y - mover.y);
+        if (dist > w.range || !this.hasLineOfSight(w.x, w.y, mover.x, mover.y)) continue;
+        w.overwatch = false;
+        this.attackUnit(w.id, mover.id, { reaction: true });
+      }
     }
 
     endTurn() {
@@ -243,12 +295,13 @@
       for (const u of side) u.actionPoints = u.maxAP;
       if (this.currentPhase === "player") {
         this.currentPhase = "enemy";
+        for (const e of this.enemy_units) e.overwatch = false; // their turn — clear their watch
         this.onEvent("phase", { phase: "enemy", turn: this.turnNumber });
         this._runEnemyTurn();
         if (!this.ended) {
           this.currentPhase = "player";
           this.turnNumber++;
-          for (const u of this.player_units) u.actionPoints = u.maxAP;
+          for (const u of this.player_units) { u.actionPoints = u.maxAP; u.overwatch = false; }
           this.onEvent("phase", { phase: "player", turn: this.turnNumber });
         }
       }
@@ -261,13 +314,14 @@
         if (!targets.length) break;
         targets = targets.slice().sort((p, q) =>
           (Math.abs(p.x - e.x) + Math.abs(p.y - e.y)) - (Math.abs(q.x - e.x) + Math.abs(q.y - e.y)));
-        // Try to shoot, otherwise advance, then maybe shoot again.
-        let guard = 0;
+        // Try to shoot (ends turn); otherwise advance; if it still can't fire,
+        // hold overwatch rather than waste the turn.
+        let guard = 0, shot = false;
         while (e.actionPoints > 0 && guard++ < 6) {
           const tgt = targets[0];
           const dist = Math.abs(tgt.x - e.x) + Math.abs(tgt.y - e.y);
           if (dist <= e.range && this.hasLineOfSight(e.x, e.y, tgt.x, tgt.y)) {
-            this.attackUnit(e.id, tgt.id);
+            this.attackUnit(e.id, tgt.id); shot = true; break; // shooting ends the turn
           } else {
             const path = this.findPath(e.x, e.y, tgt.x, tgt.y);
             if (!path || !path.length) break;
@@ -279,6 +333,7 @@
             else break;
           }
         }
+        if (!shot && e.hp > 0 && e.actionPoints > 0) this.overwatchUnit(e.id); // guard the approach
       }
     }
 

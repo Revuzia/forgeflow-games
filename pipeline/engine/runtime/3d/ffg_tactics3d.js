@@ -274,7 +274,7 @@ register3d("tactics3d", async (kernel, content) => {
     `);
     renderEndBtn(ph);
   }
-  let endBtnEl = null;
+  let endBtnEl = null, owBtnEl = null;
   function renderEndBtn(show) {
     if (!endBtnEl) {
       endBtnEl = document.createElement("button");
@@ -282,8 +282,15 @@ register3d("tactics3d", async (kernel, content) => {
       endBtnEl.textContent = "END TURN";
       endBtnEl.onclick = () => endTurn();
       kernel.parent.appendChild(endBtnEl);
+      owBtnEl = document.createElement("button");
+      Object.assign(owBtnEl.style, { position: "absolute", right: "140px", bottom: "16px", zIndex: "50", font: "bold 13px 'Segoe UI',monospace", letterSpacing: "1px", padding: "10px 18px", borderRadius: "7px", cursor: "pointer", color: "#06101c", background: "linear-gradient(#bfe6ff,#5fb0e0)", border: "1px solid #9fd0ff" });
+      owBtnEl.textContent = "OVERWATCH (Y)";
+      owBtnEl.onclick = () => overwatchSelected();
+      kernel.parent.appendChild(owBtnEl);
     }
-    endBtnEl.style.display = (show && phase === "battle" && !busy && !sim.ended) ? "block" : "none";
+    const playable = show && phase === "battle" && !busy && !sim.ended;
+    endBtnEl.style.display = playable ? "block" : "none";
+    owBtnEl.style.display = (playable && selected && selected.actionPoints > 0) ? "block" : "none";
   }
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -295,40 +302,31 @@ register3d("tactics3d", async (kernel, content) => {
     if (occupant && occupant.side === "enemy") { tryAttack(occupant); return; }
     tryMove(x, y);
   }
+  // All actions flow through the sim then animate the resulting EVENT queue, so
+  // reaction fire (enemy overwatch on a player move) is shown automatically.
+  function afterAction(u) {
+    busy = false;
+    if (sim.ended) return showEnd();
+    if (u && u.hp > 0 && u.actionPoints > 0 && u.side === "player") selectUnit(u); else deselect();
+  }
   function tryMove(x, y) {
     const u = selected; if (!u || u.actionPoints < 1) return;
-    const reach = (sim.reachableTiles(u) || []).some((r) => r.x === x && r.y === y);
-    if (!reach) return;
+    if (!(sim.reachableTiles(u) || []).some((r) => r.x === x && r.y === y)) return;
     const path = sim.moveUnit(u.id, x, y); if (!path) return;
     busy = true; clearHighlights();
-    const w = cell(x, y);
-    faceToward(u, x, y); anim(u, "walk", { fade: 0.15 });
-    const dur = Math.max(0.3, Math.min(1.1, (path.length || 1) * 0.18));
-    kernel.tween({ target: unitViews[u.id].group.position, to: { x: w.x, z: w.z }, duration: dur, onComplete: () => { anim(u, "idle", { fade: 0.2 }); busy = false; if (u.hp > 0 && u.actionPoints > 0) selectUnit(u); else deselect(); } });
+    drainEvents(() => afterAction(u));
   }
   function tryAttack(target) {
     const u = selected; if (!u || u.actionPoints < 1) return;
-    const r = sim.attackUnit(u.id, target.id); if (!r || r.invalid) return;
+    const r = sim.attackUnit(u.id, target.id); if (!r || !r.success) return;
     busy = true; clearHighlights();
-    faceToward(u, target.x, target.y);
-    anim(u, "attack", { once: true, fade: 0.1 }); // robot punches; soldier has none (recoil below)
-    if (!unitViews[u.id].clips.attack) { const gp = unitViews[u.id].group; const oz = gp.position.z; kernel.tween({ target: gp.position, to: { z: oz - 0.15 }, duration: 0.08, onComplete: () => kernel.tween({ target: gp.position, to: { z: oz }, duration: 0.12 }) }); }
-    const a = unitViews[u.id].group.position.clone(); a.y = T * 0.55;
-    const b = unitViews[target.id].group.position.clone(); b.y = T * 0.55;
-    // tracer
-    const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
-    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: r.hit ? 0xffe066 : 0x88aacc, transparent: true, opacity: 0.95 }));
-    scene.add(line); kernel.tween({ target: line.material, to: { opacity: 0 }, duration: 0.3, onComplete: () => scene.remove(line) });
-    if (r.hit) {
-      floatText(b, "-" + (r.damage != null ? r.damage : ""), 0xff7a6a);
-      const burst = new THREE.Mesh(new THREE.SphereGeometry(0.4, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffd27a }));
-      burst.position.copy(b); scene.add(burst);
-      kernel.tween({ target: burst.scale, to: { x: 3, y: 3, z: 3 }, duration: 0.3 });
-      kernel.tween({ target: burst.material, to: { opacity: 0 }, duration: 0.3, onUpdate: () => { burst.material.transparent = true; }, onComplete: () => scene.remove(burst) });
-      refreshUnit(target);
-      if (r.killed) floatText(b, "DOWN", 0xffffff);
-    } else { floatText(b, "MISS", 0xaab4c8); }
-    setTimeout(() => { anim(u, "idle", { fade: 0.2 }); busy = false; if (sim.ended) return showEnd(); if (u.hp > 0 && u.actionPoints > 0) selectUnit(u); else deselect(); }, 480);
+    drainEvents(() => afterAction(u));
+  }
+  function overwatchSelected() {
+    const u = selected; if (!u || u.actionPoints < 1 || busy || sim.ended) return;
+    if (!sim.overwatchUnit(u.id)) return;
+    busy = true; clearHighlights();
+    drainEvents(() => afterAction(u));
   }
   function floatText(pos, txt, color) {
     const spr = makeTextSprite(txt, color);
@@ -363,18 +361,35 @@ register3d("tactics3d", async (kernel, content) => {
       return 30;
     }
     if (e.type === "attack") {
-      const au = e.payload.attacker, tu = e.payload.target;
+      const p = e.payload, au = p.attacker, tu = p.target;
       const a = unitViews[au.id], t = unitViews[tu.id];
       if (a && t) {
-        faceToward(au, tu.x, tu.y); anim(au, "attack", { once: true, fade: 0.1 });
-        setTimeout(() => { if (!a.dead) anim(au, "idle", { fade: 0.2 }); }, 520);
-        const pa = a.group.position.clone(); pa.y = T * 0.55; const pb = t.group.position.clone(); pb.y = T * 0.55;
-        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pa, pb]), new THREE.LineBasicMaterial({ color: e.payload.hit ? 0xffe066 : 0x88aacc, transparent: true }));
+        faceToward(au, tu.x, tu.y);
+        if (a.clips && a.clips.attack) { anim(au, "attack", { once: true, fade: 0.1 }); setTimeout(() => { if (!a.dead) anim(au, "idle", { fade: 0.2 }); }, 520); }
+        else { const gp = a.group.position, ox = gp.x, oz = gp.z, dx = Math.sign(tu.x - au.x) * 0.18, dz = Math.sign(tu.y - au.y) * 0.18; kernel.tween({ target: gp, to: { x: ox - dx, z: oz - dz }, duration: 0.07, onComplete: () => kernel.tween({ target: gp, to: { x: ox, z: oz }, duration: 0.13 }) }); }
+        const pa = a.group.position.clone(); pa.y = T * 0.6; const pb = t.group.position.clone(); pb.y = T * 0.6;
+        const col = p.reaction ? 0x9fd0ff : p.crit ? 0xff5a3c : p.hit ? 0xffe066 : 0x8aa0bc;
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pa, pb]), new THREE.LineBasicMaterial({ color: col, transparent: true }));
         scene.add(line); kernel.tween({ target: line.material, to: { opacity: 0 }, duration: 0.3, onComplete: () => scene.remove(line) });
-        if (e.payload.hit) { floatText(pb, "-" + (e.payload.damage != null ? e.payload.damage : ""), 0xff7a6a); refreshUnit(e.payload.target); if (e.payload.killed) floatText(pb, "DOWN", 0xffffff); }
-        else floatText(pb, "MISS", 0xaab4c8);
+        if (p.reaction) floatText({ x: pa.x, y: pa.y + 0.4, z: pa.z }, "OVERWATCH!", 0x9fd0ff);
+        if (p.hit) {
+          const big = !!p.crit;
+          const burst = new THREE.Mesh(new THREE.SphereGeometry(big ? 0.6 : 0.4, 12, 12), new THREE.MeshBasicMaterial({ color: big ? 0xff5a3c : 0xffd27a }));
+          burst.position.copy(pb); scene.add(burst);
+          kernel.tween({ target: burst.scale, to: { x: big ? 4 : 3, y: big ? 4 : 3, z: big ? 4 : 3 }, duration: 0.3 });
+          kernel.tween({ target: burst.material, to: { opacity: 0 }, duration: 0.3, onUpdate: () => { burst.material.transparent = true; }, onComplete: () => scene.remove(burst) });
+          floatText(pb, (p.crit ? "CRIT −" : "−") + (p.damage != null ? p.damage : ""), p.crit ? 0xff5a3c : 0xff7a6a);
+          if (p.flanked && !p.crit) floatText({ x: pb.x, y: pb.y + 0.5, z: pb.z }, "FLANKED", 0xffae5a);
+          refreshUnit(tu);
+          if (p.killed) floatText({ x: pb.x, y: pb.y + 0.8, z: pb.z }, "ELIMINATED", 0xffffff);
+        } else floatText(pb, "MISS", 0xaab4c8);
       }
-      return 340;
+      return p.crit ? 460 : 340;
+    }
+    if (e.type === "overwatch") {
+      const v = unitViews[e.payload.unit.id];
+      if (v) floatText({ x: v.group.position.x, y: T, z: v.group.position.z }, "OVERWATCH", 0x9fd0ff);
+      return 150;
     }
     if (e.type === "end") { return 100; }
     return 20;
@@ -389,6 +404,28 @@ register3d("tactics3d", async (kernel, content) => {
     if (!left || moved > 6) return; // right/drag = camera
     const hit = kernel.raycast(ev.clientX, ev.clientY, floorTargets);
     if (hit.length) onTileClick(hit[0].object.userData.x, hit[0].object.userData.y);
+  });
+  // Hover hit-preview: standing over an enemy with a soldier selected shows the
+  // shot odds + FLANKED, the XCOM targeting read.
+  let hoverTip = null;
+  dom.addEventListener("pointermove", (ev) => {
+    if (phase !== "battle" || busy || sim.ended || sim.currentPhase !== "player" || !selected) { if (hoverTip) { scene.remove(hoverTip); hoverTip = null; } return; }
+    const hit = kernel.raycast(ev.clientX, ev.clientY, floorTargets);
+    if (hoverTip) { scene.remove(hoverTip); hoverTip = null; }
+    if (!hit.length) return;
+    const { x, y } = hit[0].object.userData;
+    const occ = sim.allUnits().find((u) => u.hp > 0 && u.x === x && u.y === y && u.side === "enemy");
+    if (!occ) return;
+    const bd = sim.hitBreakdown(selected, occ); const los = sim.hasLineOfSight(selected.x, selected.y, occ.x, occ.y);
+    const label = !los ? "NO LOS" : !bd.inRange ? "OUT OF RANGE" : Math.round(bd.chance * 100) + "%" + (bd.flanked ? " ⚑FLANK" : "");
+    const col = !los || !bd.inRange ? 0xff8888 : bd.flanked ? 0xffae5a : bd.chance >= 0.7 ? 0x88ff88 : 0xffe066;
+    hoverTip = makeTextSprite(label, col); const w = cell(x, y); hoverTip.position.set(w.x, T * 1.9, w.z); hoverTip.scale.set(3.4, 0.85, 1); scene.add(hoverTip);
+  });
+  window.addEventListener("keydown", (e) => {
+    if (phase !== "battle" || sim.ended) return;
+    const k = (e.key || "").toLowerCase();
+    if (k === "y") { e.preventDefault(); overwatchSelected(); }
+    else if (k === "escape" && selected) { e.stopImmediatePropagation(); e.preventDefault(); deselect(); }
   });
 
   // ── Boot ────────────────────────────────────────────────────────────────────
@@ -429,6 +466,7 @@ register3d("tactics3d", async (kernel, content) => {
       select: (id) => { selectUnit(sim.getUnit(id)); return !!sim.getUnit(id); },
       move: (id, x, y) => { selectUnit(sim.getUnit(id)); return !!sim.moveUnit(id, x, y); },
       attack: (aid, tid) => sim.attackUnit(aid, tid),
+      overwatch: (id) => { if (id) selectUnit(sim.getUnit(id)); overwatchSelected(); },
       endTurn: () => endTurn(),
       autoResolve: (maxTurns) => {
         let n = 0;
