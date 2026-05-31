@@ -40,8 +40,15 @@ register3d("tactics3d", async (kernel, content) => {
   // world position of a tile centre (board centred on origin; +z = "south")
   const cell = (x, y) => new THREE.Vector3((x + 0.5) * T - W / 2, 0, (y + 0.5) * T - H / 2);
 
-  scene.background = new THREE.Color(0x0a1018);
-  scene.fog = new THREE.FogExp2(0x0a1018, 0.012);
+  scene.background = new THREE.Color(0x0b1420);
+  scene.fog = new THREE.FogExp2(0x0b1420, 0.008);
+  // Cinematic facility lighting: a warm key from one side, a cool fill from the
+  // other, + a soft top light — far less flat/dark than the bare kernel rig.
+  const key = new THREE.DirectionalLight(0xfff0d8, 1.25); key.position.set(40, 60, 25); key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = -60; key.shadow.camera.right = 60; key.shadow.camera.top = 60; key.shadow.camera.bottom = -60; key.shadow.camera.far = 220;
+  scene.add(key);
+  scene.add(new THREE.DirectionalLight(0x4f78c8, 0.55).translateX(-40).translateY(35).translateZ(-25));
+  scene.add(new THREE.HemisphereLight(0x9fc4ff, 0x0a0f18, 0.55));
 
   let sim, events = [], busy = false, selected = null, phase = "menu";
   const unitViews = {}; // id -> { group, ring, hpFill, base }
@@ -68,17 +75,23 @@ register3d("tactics3d", async (kernel, content) => {
       for (let x = 0; x < gridW; x++) {
         const t = mission.grid[y][x];
         const w = cell(x, y);
-        if (t === 1) { // WALL — tall steel block, blocks move + LOS
-          const m = new THREE.Mesh(new THREE.BoxGeometry(T * 0.98, T * 1.15, T * 0.98),
-            new THREE.MeshStandardMaterial({ color: 0x2c3b50, roughness: 0.7, metalness: 0.35 }));
-          m.position.set(w.x, T * 0.5, w.z); m.castShadow = true; m.receiveShadow = true; scene.add(m);
+        if (t === 1) { // WALL — tall steel block with a cyan tech seam, blocks move + LOS
+          const m = new THREE.Mesh(new THREE.BoxGeometry(T * 0.98, T * 1.2, T * 0.98),
+            new THREE.MeshStandardMaterial({ color: 0x39506b, roughness: 0.55, metalness: 0.55 }));
+          m.position.set(w.x, T * 0.55, w.z); m.castShadow = true; m.receiveShadow = true; scene.add(m);
+          const seam = new THREE.Mesh(new THREE.BoxGeometry(T * 1.0, 0.06, T * 1.0),
+            new THREE.MeshBasicMaterial({ color: 0x4fd0ff }));
+          seam.position.set(w.x, T * 1.15, w.z); scene.add(seam);
           continue;
         }
-        // FLOOR tile (beveled panel) for everything walkable
-        const checker = (x + y) % 2 === 0 ? 0x18222f : 0x141d29;
-        const tile = new THREE.Mesh(new THREE.BoxGeometry(T * 0.96, 0.3, T * 0.96),
-          new THREE.MeshStandardMaterial({ color: checker, roughness: 0.85, metalness: 0.25 }));
+        // FLOOR tile (lit tech panel) for everything walkable, with a glowing seam border
+        const checker = (x + y) % 2 === 0 ? 0x223044 : 0x1a2636;
+        const tile = new THREE.Mesh(new THREE.BoxGeometry(T * 0.97, 0.3, T * 0.97),
+          new THREE.MeshStandardMaterial({ color: checker, roughness: 0.6, metalness: 0.5 }));
         tile.position.set(w.x, 0.02, w.z); tile.receiveShadow = true; scene.add(tile);
+        const edge = new THREE.Mesh(new THREE.RingGeometry(T * 0.46, T * 0.485, 4),
+          new THREE.MeshBasicMaterial({ color: 0x2f6c8f, transparent: true, opacity: 0.5, side: THREE.DoubleSide }));
+        edge.rotation.x = -Math.PI / 2; edge.rotation.z = Math.PI / 4; edge.position.set(w.x, 0.19, w.z); scene.add(edge);
         // interactive overlay
         const hit = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.96, T * 0.96),
           new THREE.MeshBasicMaterial({ color: 0x4fd0ff, transparent: true, opacity: 0, side: THREE.DoubleSide }));
@@ -91,13 +104,19 @@ register3d("tactics3d", async (kernel, content) => {
     }
   }
   function buildCover(w, full) {
-    const s = full ? T * 0.72 : T * 0.56, h = full ? T * 0.95 : T * 0.5, base = full ? 0x7d6428 : 0x5f4d24;
+    // Sci-fi crate/barricade: dark metal body, beveled lit cap + an emissive trim
+    // line (amber=full cover, cyan=half) so cover reads at a glance.
+    const s = full ? T * 0.74 : T * 0.6, h = full ? T * 1.0 : T * 0.52;
+    const base = full ? 0x3a4658 : 0x33414f, trim = full ? 0xffae5a : 0x5fd0ff;
     const m = new THREE.Mesh(new THREE.BoxGeometry(s, h, s),
-      new THREE.MeshStandardMaterial({ color: base, roughness: 0.7, metalness: 0.3 }));
+      new THREE.MeshStandardMaterial({ color: base, roughness: 0.5, metalness: 0.6 }));
     m.position.set(w.x, h / 2 + 0.05, w.z); m.castShadow = true; m.receiveShadow = true; scene.add(m);
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(s, h * 0.16, s),
-      new THREE.MeshStandardMaterial({ color: shade(base, 0.3), roughness: 0.6, metalness: 0.4 }));
-    cap.position.set(w.x, h + 0.05, w.z); scene.add(cap);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(s * 1.04, h * 0.14, s * 1.04),
+      new THREE.MeshStandardMaterial({ color: shade(base, 0.35), roughness: 0.4, metalness: 0.7 }));
+    cap.position.set(w.x, h + 0.05, w.z); cap.castShadow = true; scene.add(cap);
+    const trimBand = new THREE.Mesh(new THREE.BoxGeometry(s * 1.02, h * 0.08, s * 1.02),
+      new THREE.MeshBasicMaterial({ color: trim }));
+    trimBand.position.set(w.x, h * 0.62 + 0.05, w.z); scene.add(trimBand);
   }
   function buildHazard(w) {
     const tile = new THREE.Mesh(new THREE.BoxGeometry(T * 0.96, 0.32, T * 0.96),
