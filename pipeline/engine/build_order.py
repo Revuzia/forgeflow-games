@@ -202,8 +202,36 @@ def assemble(slug, content):
     if genre == "tactics":
         _copy_tactics_assets(gdir)
     (gdir / "content.json").write_text(json.dumps(content, indent=2), encoding="utf-8")
+    if genre == "tactics":
+        _structure_tactics_maps(gdir / "content.json")  # XCOM parcel/plot structure (not flat LLM grids)
     (gdir / "index.html").write_text(_index_html_3d(content) if is3d else _index_html_2d(content, prof), encoding="utf-8")
     return gdir
+
+
+def _structure_tactics_maps(content_path):
+    """Restructure a tactics game's maps onto the deterministic parcel/plot model
+    (XCOM-style: a road network divides each plot into lots — enterable multi-room
+    buildings, walled compounds, plazas, parks — with dense clustered cover) so
+    tactics games never ship as flat, hand-drawn LLM grids. Preserves each
+    mission's name/objective/goal, squad, and enemy stats; only the GRID + unit
+    positions are regenerated, and connectivity is verified before write.
+    Defensive: any failure (no node, tool missing, connectivity abort) leaves the
+    already-written content.json untouched and the build continues."""
+    tool = ENGINE / "tools" / "gen_campaign.cjs"
+    if not tool.exists():
+        print("[build_order] WARN gen_campaign.cjs missing — tactics maps left as-is")
+        return
+    try:
+        r = subprocess.run(["node", str(tool), "--regen", str(content_path)],
+                           capture_output=True, text=True, timeout=120)
+        if r.returncode == 0:
+            print("[build_order] tactics maps restructured onto the parcel/plot model:")
+            for line in (r.stdout or "").strip().splitlines()[-8:]:
+                print("   " + line)
+        else:
+            print(f"[build_order] WARN tactics map regen rc={r.returncode} — keeping existing maps\n{(r.stderr or '')[:300]}")
+    except Exception as e:
+        print(f"[build_order] WARN tactics map regen skipped ({e}) — keeping existing maps")
 
 
 def _copy_tactics_assets(gdir):

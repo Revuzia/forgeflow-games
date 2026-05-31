@@ -204,7 +204,10 @@ function buildMission(spec) {
   }
 
   // Player deploy: bottom-centre street, spread across the open lane.
-  const players = SQUAD.map((s, i) => {
+  // Uses spec.squad when provided (regen of an existing game's roster), else
+  // the fixed 5-class SQUAD (fresh campaign generation).
+  const squad = (spec.squad && spec.squad.length) ? spec.squad : SQUAD;
+  const players = squad.map((s, i) => {
     const p = snap(Math.floor(GW / 2) - 4 + i * 2, GH - 3);
     return Object.assign({}, s, { x: p.x, y: p.y });
   });
@@ -216,14 +219,24 @@ function buildMission(spec) {
     [Math.floor(GW * 0.7), Math.floor(GH * 0.18)], [Math.floor(GW * 0.5), Math.floor(GH * 0.46)],
     [Math.floor(GW * 0.2), Math.floor(GH * 0.55)], [Math.floor(GW * 0.8), Math.floor(GH * 0.55)],
   ];
-  const enemies = [];
-  for (let i = 0; i < spec.enemies; i++) {
-    const kind = spec.mix[i % spec.mix.length];
+  // Enemy roster: reposition spec.enemyTemplates when regenerating an existing
+  // game (preserves each enemy's stats), else build fresh from spec.mix + ARCH.
+  let roster;
+  if (spec.enemyTemplates && spec.enemyTemplates.length) {
+    roster = spec.enemyTemplates.map((e) => Object.assign({}, e));
+  } else {
+    roster = [];
+    for (let i = 0; i < spec.enemies; i++) {
+      const kind = spec.mix[i % spec.mix.length];
+      roster.push(Object.assign({ id: "e_" + kind + "_" + i }, ARCH[kind]));
+    }
+  }
+  const enemies = roster.map((e, i) => {
     const z = zones[i % zones.length];
     const jitter = (n) => n + (ri(6) - 3);
     const p = snap(jitter(z[0]), Math.max(1, jitter(z[1])));
-    enemies.push(Object.assign({ id: "e_" + kind + "_" + i }, ARCH[kind], { x: p.x, y: p.y }));
-  }
+    return Object.assign(e, { x: p.x, y: p.y });
+  });
 
   // Connectivity: BFS from a player tile; snap any unreachable unit onto reachable floor.
   function reachable(sx, sy) {
@@ -263,6 +276,44 @@ function buildMission(spec) {
   const m = { name: spec.name, objective: spec.objective, grid, player_units: players, enemy_units: enemies };
   if (goal) m.goal = goal;
   return { mission: m, allReach, goal, GW, GH };
+}
+
+// ── --regen <content.json>: restructure an EXISTING tactics game's maps onto
+// the parcel/plot model in place (preserving each mission's name/objective/goal,
+// squad, and enemy stats — only the GRID + positions are regenerated). This is
+// what the build pipeline calls so tactics games ship XCOM-structured without a
+// human (or an LLM) hand-drawing tile grids. Connectivity-verified before write.
+if (process.argv.includes("--regen")) {
+  const cp = process.argv[process.argv.indexOf("--regen") + 1];
+  if (!cp) { console.error("usage: gen_campaign.cjs --regen <content.json>"); process.exit(2); }
+  const content = JSON.parse(fs.readFileSync(cp, "utf8"));
+  const single = !content.missions;
+  const ms = content.missions || [content];
+  const slug = content.slug || "tactics";
+  let ok = true;
+  const regen = ms.map((m, i) => {
+    if (!m.grid || !m.grid.length) return m; // not a tactics mission — leave it
+    const GW0 = m.grid[0].length, GH0 = m.grid.length;
+    // keep the map's intended size but never below XCOM plot scale (bump tiny LLM grids up)
+    const GW = Math.max(GW0, 58 + i * 3), GH = Math.max(GH0, 48 + i * 3);
+    let seed = 0x9e3779b9; const key = slug + ":" + i; for (let k = 0; k < key.length; k++) seed = (Math.imul(seed, 131) + key.charCodeAt(k)) >>> 0;
+    const r = buildMission({
+      name: m.name, objective: m.objective, w: GW, h: GH, seed,
+      squad: m.player_units, enemyTemplates: m.enemy_units, goal: m.goal,
+    });
+    if (!r.allReach) ok = false;
+    const nm = { name: m.name, objective: m.objective, grid: r.mission.grid, player_units: r.mission.player_units, enemy_units: r.mission.enemy_units };
+    if (m.goal) nm.goal = r.mission.goal || m.goal;
+    const floor = r.mission.grid.flat().filter((t) => t === 0 || t === 4).length;
+    const cov = r.mission.grid.flat().filter((t) => t === 2 || t === 3).length;
+    console.log(`  ${String(m.name || ("mission " + i)).padEnd(22)} ${GW}x${GH}  cover ${((cov / (GW * GH)) * 100).toFixed(1)}%  reach:${r.allReach}`);
+    return nm;
+  });
+  if (!ok) { console.error("ABORT --regen: a mission failed connectivity — original left untouched."); process.exit(1); }
+  if (single) { Object.assign(content, regen[0]); } else { content.missions = regen; }
+  fs.writeFileSync(cp, JSON.stringify(content, null, 2));
+  console.log(`regenerated ${regen.length} tactics mission(s) onto the parcel/plot model -> ${cp}`);
+  process.exit(0);
 }
 
 const out = [];
