@@ -24,6 +24,23 @@
     };
   }
 
+  // ── Soldier-class abilities (XCOM 2-style) ───────────────────────────────────
+  // Each player class unlocks one signature ability. target: enemy|ally|tile.
+  const CLASS_ABILITIES = {
+    ranger:       ["slash"],
+    sharpshooter: ["headshot"],
+    specialist:   ["heal"],
+    grenadier:    ["frag"],
+    vanguard:     ["suppress"],
+  };
+  const ABILITY_DEFS = {
+    slash:    { name: "Slash",        key: "1", target: "enemy", range: 1,    dmgMult: 1.6, crit: 0.5, cooldown: 1,            desc: "Melee strike — ignores cover, high crit." },
+    headshot: { name: "Headshot",     key: "2", target: "enemy", range: null, dmgMult: 2.0, crit: 0.5, charges: 2,             desc: "Charged precision shot — heavy damage + crit." },
+    heal:     { name: "Field Medic",  key: "3", target: "ally",  range: 6,    heal: 45,                charges: 3, selfOk: true, desc: "Restore HP to an ally (or self)." },
+    frag:     { name: "Frag Grenade", key: "4", target: "tile",  range: 6,    radius: 1, dmgMult: 0.9, charges: 2, destroysCover: true, desc: "AoE blast — damages all in radius, shreds cover." },
+    suppress: { name: "Suppression",  key: "5", target: "enemy", range: 8,    aimPenalty: 0.35,        cooldown: 2,            desc: "Pin a target: −aim and reaction fire if it moves." },
+  };
+
   class TacticalBattle {
     constructor(config) {
       this.grid = config.grid;
@@ -42,6 +59,14 @@
     }
 
     _initUnit(u, side) {
+      const cls = (u.cls || u.class || "").toLowerCase() || null;
+      const abilityIds = side === "player" ? (CLASS_ABILITIES[cls] || []).slice() : [];
+      const charges = {}, cooldowns = {};
+      for (const id of abilityIds) {
+        const d = ABILITY_DEFS[id];
+        if (d && d.charges != null) charges[id] = d.charges;
+        cooldowns[id] = 0;
+      }
       return {
         id: u.id,
         name: u.name || u.id,
@@ -59,7 +84,12 @@
         ai: u.ai || "aggressive",
         sprite: u.sprite || null,
         tint: u.tint != null ? u.tint : null,
-        cls: u.cls || u.class || null, // soldier class (Phase 3)
+        cls: cls,                     // soldier class (Phase 3)
+        abilities: abilityIds,        // ability ids this unit can use
+        charges: charges,             // {abilityId: remaining}
+        cooldowns: cooldowns,         // {abilityId: turns until ready}
+        suppressedBy: null,           // id of unit suppressing this one
+        suppressAimPenalty: 0,        // aim debuff while suppressed
         overwatch: false,             // holding a reaction shot
       };
     }
@@ -217,9 +247,10 @@
       const coverPenalty = cover === 2 ? 0.4 : cover === 1 ? 0.2 : 0;
       const flanked = this.isFlanked(attacker, target);
       const flankBonus = flanked ? 0.25 : (cover === 0 ? 0.1 : 0);
-      const chance = inRange ? Math.max(0.05, Math.min(0.99, attacker.aim - distancePenalty - coverPenalty + flankBonus)) : 0;
+      const suppress = attacker.suppressAimPenalty || 0; // pinned shooters fire wild
+      const chance = inRange ? Math.max(0.05, Math.min(0.99, attacker.aim - distancePenalty - coverPenalty + flankBonus - suppress)) : 0;
       const critChance = flanked ? 0.5 : 0.1;
-      return { chance, critChance, cover, coverPenalty, distancePenalty, flankBonus, flanked, dist, inRange };
+      return { chance, critChance, cover, coverPenalty, distancePenalty, flankBonus, suppress, flanked, dist, inRange };
     }
 
     calculateHitChance(attacker, target) { return this.hitBreakdown(attacker, target).chance; }
@@ -270,6 +301,136 @@
       return { success: true, hit: false, chance: chance };
     }
 
+    // ── Class abilities (Phase 3) ──────────────────────────────────────────────
+    // Metadata for the renderer's ability bar: name/key/target + live readiness.
+    abilitiesFor(unitId) {
+      const u = this.getUnit(unitId);
+      if (!u || !u.abilities) return [];
+      return u.abilities.map((id) => {
+        const d = ABILITY_DEFS[id];
+        const charges = d.charges != null ? (u.charges[id] || 0) : null;
+        const cd = u.cooldowns[id] || 0;
+        return {
+          id, name: d.name, key: d.key, target: d.target, desc: d.desc,
+          range: d.range, radius: d.radius || 0, charges, cooldown: cd,
+          ready: u.hp > 0 && u.actionPoints >= 1 && cd === 0 && (d.charges == null || charges > 0),
+        };
+      });
+    }
+
+    useAbility(unitId, abilityId, opts) {
+      opts = opts || {};
+      const u = this.getUnit(unitId), def = ABILITY_DEFS[abilityId];
+      if (!u || u.hp <= 0 || !def) return { success: false, reason: "invalid" };
+      if (!u.abilities || u.abilities.indexOf(abilityId) < 0) return { success: false, reason: "not available" };
+      if (u.actionPoints < 1) return { success: false, reason: "no AP" };
+      if ((u.cooldowns[abilityId] || 0) > 0) return { success: false, reason: "cooldown" };
+      if (def.charges != null && (u.charges[abilityId] || 0) <= 0) return { success: false, reason: "no charges" };
+      let res;
+      switch (abilityId) {
+        case "slash": res = this._abSlash(u, def, opts); break;
+        case "headshot": res = this._abHeadshot(u, def, opts); break;
+        case "heal": res = this._abHeal(u, def, opts); break;
+        case "frag": res = this._abFrag(u, def, opts); break;
+        case "suppress": res = this._abSuppress(u, def, opts); break;
+        default: res = { success: false, reason: "unimplemented" };
+      }
+      if (res && res.success) {
+        u.actionPoints = 0; // abilities end the unit's turn
+        if (def.charges != null) u.charges[abilityId] = Math.max(0, (u.charges[abilityId] || 0) - 1);
+        if (def.cooldown) u.cooldowns[abilityId] = def.cooldown;
+        this._checkEnd();
+      }
+      return res;
+    }
+
+    _abSlash(u, def, opts) {
+      const t = this.getUnit(opts.targetId);
+      if (!t || t.side === u.side || t.hp <= 0) return { success: false, reason: "need enemy" };
+      if (Math.abs(u.x - t.x) + Math.abs(u.y - t.y) > def.range) return { success: false, reason: "not adjacent" };
+      let dmg = Math.max(1, Math.round(u.atk * def.dmgMult)); // ignores cover/armor
+      const crit = this.rng() < def.crit; if (crit) dmg = Math.round(dmg * 1.5);
+      t.hp = Math.max(0, t.hp - dmg);
+      this.log.push(u.id + " slashed " + t.id + " for " + dmg + (crit ? " CRIT" : ""));
+      this.onEvent("ability", { ability: "slash", attacker: u, target: t, hit: true, damage: dmg, crit, killed: t.hp <= 0 });
+      return { success: true, hit: true, damage: dmg, crit, killed: t.hp <= 0 };
+    }
+
+    _abHeadshot(u, def, opts) {
+      const t = this.getUnit(opts.targetId);
+      if (!t || t.side === u.side || t.hp <= 0) return { success: false, reason: "need enemy" };
+      const range = def.range != null ? def.range : u.range;
+      if (Math.abs(u.x - t.x) + Math.abs(u.y - t.y) > range) return { success: false, reason: "out of range" };
+      if (!this.hasLineOfSight(u.x, u.y, t.x, t.y)) return { success: false, reason: "no LOS" };
+      const bd = this.hitBreakdown(u, t);
+      const chance = Math.min(0.99, bd.chance + 0.15); // steadied
+      if (this.rng() <= chance) {
+        const crit = this.rng() < def.crit;
+        let dmg = Math.max(1, Math.round(u.atk * def.dmgMult) - t.def);
+        if (crit) dmg = Math.round(dmg * 1.5);
+        t.hp = Math.max(0, t.hp - dmg);
+        this.log.push(u.id + " headshot " + t.id + " for " + dmg + (crit ? " CRIT" : ""));
+        this.onEvent("ability", { ability: "headshot", attacker: u, target: t, hit: true, damage: dmg, crit, chance, killed: t.hp <= 0 });
+        return { success: true, hit: true, damage: dmg, crit, killed: t.hp <= 0 };
+      }
+      this.log.push(u.id + " headshot MISS " + t.id);
+      this.onEvent("ability", { ability: "headshot", attacker: u, target: t, hit: false, chance });
+      return { success: true, hit: false, chance };
+    }
+
+    _abHeal(u, def, opts) {
+      const t = opts.targetId ? this.getUnit(opts.targetId) : (def.selfOk ? u : null);
+      if (!t || t.side !== u.side || t.hp <= 0) return { success: false, reason: "need ally" };
+      if (t.id !== u.id && Math.abs(u.x - t.x) + Math.abs(u.y - t.y) > def.range) return { success: false, reason: "out of range" };
+      const before = t.hp; t.hp = Math.min(t.maxHp, t.hp + def.heal);
+      const healed = t.hp - before;
+      this.log.push(u.id + " healed " + t.id + " for " + healed);
+      this.onEvent("ability", { ability: "heal", attacker: u, target: t, heal: healed });
+      return { success: true, heal: healed };
+    }
+
+    _abFrag(u, def, opts) {
+      const tx = opts.tileX, ty = opts.tileY;
+      if (tx == null || ty == null || !this.inBounds(tx, ty)) return { success: false, reason: "need tile" };
+      if (Math.abs(u.x - tx) + Math.abs(u.y - ty) > def.range) return { success: false, reason: "out of range" };
+      const hits = [];
+      for (const v of this.allUnits()) {
+        if (v.hp <= 0) continue;
+        if (Math.max(Math.abs(v.x - tx), Math.abs(v.y - ty)) > def.radius) continue;
+        const dmg = Math.max(1, Math.round(u.atk * def.dmgMult) - Math.floor(v.def / 2));
+        v.hp = Math.max(0, v.hp - dmg);
+        hits.push({ id: v.id, side: v.side, damage: dmg, killed: v.hp <= 0 });
+      }
+      const shredded = [];
+      if (def.destroysCover) {
+        for (let yy = ty - def.radius; yy <= ty + def.radius; yy++)
+          for (let xx = tx - def.radius; xx <= tx + def.radius; xx++) {
+            if (!this.inBounds(xx, yy)) continue;
+            const c = this.grid[yy][xx];
+            if (c === 2 || c === 3) { this.grid[yy][xx] = c === 3 ? 2 : 0; shredded.push({ x: xx, y: yy, to: c === 3 ? 2 : 0 }); }
+          }
+      }
+      this.log.push(u.id + " fragged (" + tx + "," + ty + ") hit " + hits.length);
+      this.onEvent("ability", { ability: "frag", attacker: u, tileX: tx, tileY: ty, radius: def.radius, hits, shredded });
+      return { success: true, hits, shredded };
+    }
+
+    _abSuppress(u, def, opts) {
+      const t = this.getUnit(opts.targetId);
+      if (!t || t.side === u.side || t.hp <= 0) return { success: false, reason: "need enemy" };
+      if (Math.abs(u.x - t.x) + Math.abs(u.y - t.y) > def.range) return { success: false, reason: "out of range" };
+      if (!this.hasLineOfSight(u.x, u.y, t.x, t.y)) return { success: false, reason: "no LOS" };
+      t.suppressedBy = u.id; t.suppressAimPenalty = def.aimPenalty;
+      u.overwatch = true; // reaction-fire if the pinned target moves
+      this.log.push(u.id + " suppressing " + t.id);
+      this.onEvent("ability", { ability: "suppress", attacker: u, target: t });
+      return { success: true };
+    }
+
+    _tickCooldowns(units) {
+      for (const u of units) for (const id in u.cooldowns) if (u.cooldowns[id] > 0) u.cooldowns[id]--;
+    }
+
     // Hold a reaction shot: ends the unit's turn, fires on the first enemy that
     // moves into LOS+range during the opponent's turn (XCOM overwatch).
     overwatchUnit(unitId) {
@@ -306,6 +467,8 @@
           this.currentPhase = "player";
           this.turnNumber++;
           for (const u of this.player_units) { u.actionPoints = u.maxAP; u.overwatch = false; }
+          this._tickCooldowns(this.player_units);           // ability cooldowns recover
+          for (const e of this.enemy_units) { e.suppressedBy = null; e.suppressAimPenalty = 0; } // pins expire at our next turn
           this.onEvent("phase", { phase: "player", turn: this.turnNumber });
         }
       }

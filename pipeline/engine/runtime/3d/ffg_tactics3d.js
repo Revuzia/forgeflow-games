@@ -83,6 +83,8 @@ register3d("tactics3d", async (kernel, content) => {
   let sim, events = [], busy = false, selected = null, phase = "menu";
   const unitViews = {}; // id -> { group, ring, hpFill, base }
   let highlights = [], rangeTargets = [];
+  let abilityMode = null;     // armed ability id (Phase 3) — next click resolves it
+  const coverTiles = {};      // "x,y" -> [meshes] so frag can shred cover visually
 
   function buildSim() {
     events = [];
@@ -149,14 +151,15 @@ register3d("tactics3d", async (kernel, content) => {
           }
           continue;
         }
-        if (t === 2 || t === 3) buildCover(w, t === 3);
+        if (t === 2 || t === 3) buildCover(x, y, w, t === 3);
         else if (t === 4) buildHazard(w);
       }
     }
   }
-  function buildCover(w, full) {
+  function buildCover(x, y, w, full) {
     // Sci-fi crate/barricade: dark metal body, beveled lit cap + an emissive trim
-    // line (amber=full cover, cyan=half) so cover reads at a glance.
+    // line (amber=full cover, cyan=half) so cover reads at a glance. Tracked per
+    // tile so a frag grenade can shred it.
     const s = full ? T * 0.74 : T * 0.6, h = full ? T * 1.0 : T * 0.52;
     const base = full ? 0x3a4658 : 0x33414f, trim = full ? 0xffae5a : 0x5fd0ff;
     const m = new THREE.Mesh(new THREE.BoxGeometry(s, h, s),
@@ -168,6 +171,14 @@ register3d("tactics3d", async (kernel, content) => {
     const trimBand = new THREE.Mesh(new THREE.BoxGeometry(s * 1.02, h * 0.08, s * 1.02),
       new THREE.MeshBasicMaterial({ color: trim }));
     trimBand.position.set(w.x, h * 0.62 + 0.05, w.z); scene.add(trimBand);
+    coverTiles[x + "," + y] = [m, cap, trimBand];
+  }
+  // Frag shredded this tile: full(3)->half(2) rebuilds smaller; half(2)->floor(0)
+  // removes it. Mirrors the sim's grid mutation so visuals stay truthful.
+  function shredCoverVisual(x, y, toType) {
+    const key = x + "," + y, meshes = coverTiles[key];
+    if (meshes) { meshes.forEach((mm) => scene.remove(mm)); delete coverTiles[key]; }
+    if (toType === 2) buildCover(x, y, cell(x, y), false); // downgraded to half cover
   }
   function buildHazard(w) {
     const tile = new THREE.Mesh(new THREE.BoxGeometry(T * 0.96, 0.32, T * 0.96),
@@ -311,7 +322,7 @@ register3d("tactics3d", async (kernel, content) => {
   function clearHighlights() { highlights.forEach((h) => scene.remove(h)); highlights = []; rangeTargets = []; }
   function selectUnit(u) {
     if (!u || u.side !== "player" || u.hp <= 0) return;
-    selected = u; clearHighlights();
+    selected = u; abilityMode = null; clearHighlights();
     const v = unitViews[u.id]; if (v) v.ring.material.emissiveIntensity = 1.0;
     (sim.reachableTiles(u) || []).forEach((r) => {
       const w = cell(r.x, r.y);
@@ -323,7 +334,7 @@ register3d("tactics3d", async (kernel, content) => {
   }
   function deselect() {
     if (selected) { const v = unitViews[selected.id]; if (v) v.ring.material.emissiveIntensity = 0.35; }
-    selected = null; clearHighlights(); setHUD();
+    selected = null; abilityMode = null; clearHighlights(); setHUD();
   }
 
   // ── HUD ─────────────────────────────────────────────────────────────────────
@@ -366,11 +377,43 @@ register3d("tactics3d", async (kernel, content) => {
     const playable = show && phase === "battle" && !busy && !sim.ended;
     endBtnEl.style.display = playable ? "block" : "none";
     owBtnEl.style.display = (playable && selected && selected.actionPoints > 0) ? "block" : "none";
+    renderAbilityBar(playable);
+  }
+  // Bottom-centre ability bar — one button per class ability of the selected
+  // soldier, with hotkey, charges/cooldown, and an armed (highlighted) state.
+  let abilityBarEl = null;
+  function renderAbilityBar(playable) {
+    if (!abilityBarEl) {
+      abilityBarEl = document.createElement("div");
+      Object.assign(abilityBarEl.style, { position: "absolute", left: "50%", bottom: "16px", transform: "translateX(-50%)", zIndex: "50", display: "flex", gap: "8px", fontFamily: "'Segoe UI',monospace" });
+      kernel.parent.appendChild(abilityBarEl);
+    }
+    const abils = (playable && selected) ? sim.abilitiesFor(selected.id) : [];
+    if (!abils.length) { abilityBarEl.style.display = "none"; abilityBarEl.innerHTML = ""; return; }
+    abilityBarEl.style.display = "flex";
+    abilityBarEl.innerHTML = "";
+    for (const a of abils) {
+      const armed = abilityMode === a.id;
+      const meta = a.charges != null ? ("×" + a.charges) : (a.cooldown > 0 ? ("CD " + a.cooldown) : "");
+      const b = document.createElement("button");
+      b.title = a.desc;
+      b.innerHTML = `<span style="font-size:10px;opacity:.7">[${a.key}]</span> ${a.name}${meta ? ` <span style="opacity:.7;font-size:11px">${meta}</span>` : ""}`;
+      Object.assign(b.style, {
+        font: "600 12px 'Segoe UI',monospace", letterSpacing: ".5px", padding: "9px 13px", borderRadius: "7px",
+        cursor: a.ready ? "pointer" : "not-allowed", color: a.ready ? (armed ? "#06101c" : "#e8f2ff") : "#5b6b7e",
+        background: armed ? "linear-gradient(#ffd27a,#ffae5a)" : (a.ready ? "rgba(20,38,58,.92)" : "rgba(16,24,34,.7)"),
+        border: "1px solid " + (armed ? "#ffd27a" : a.ready ? "#3a5e7e" : "#26303d"),
+        boxShadow: armed ? "0 0 14px rgba(255,180,90,.6)" : "none",
+      });
+      b.onclick = () => { if (a.ready) armAbility(a.id); };
+      abilityBarEl.appendChild(b);
+    }
   }
 
   // ── Actions ───────────────────────────────────────────────────────────────
   function onTileClick(x, y) {
     if (phase !== "battle" || busy || sim.ended || sim.currentPhase !== "player") return;
+    if (abilityMode) { useAbilityAt(x, y); return; } // an ability is armed
     const occupant = sim.allUnits().find((u) => u.hp > 0 && u.x === x && u.y === y);
     if (occupant && occupant.side === "player") { selectUnit(occupant); return; }
     if (!selected) return;
@@ -402,6 +445,64 @@ register3d("tactics3d", async (kernel, content) => {
     if (!sim.overwatchUnit(u.id)) return;
     busy = true; clearHighlights();
     drainEvents(() => afterAction(u));
+  }
+
+  // ── Class abilities (Phase 3) ───────────────────────────────────────────────
+  function abilityDef(id) { return (sim.abilitiesFor(selected ? selected.id : "") || []).find((a) => a.id === id); }
+  function armAbility(id) {
+    if (!selected || busy || sim.ended) return;
+    const a = abilityDef(id); if (!a || !a.ready) { if (a && !a.ready) flashToast(a.name + " not ready"); return; }
+    abilityMode = (abilityMode === id) ? null : id; // toggle
+    clearHighlights();
+    if (abilityMode) showAbilityTargets(a); else selectUnit(selected);
+    setHUD(abilityMode ? "Pick a target for " + a.name : null);
+  }
+  function disarmAbility() { if (abilityMode) { abilityMode = null; if (selected) selectUnit(selected); } }
+  // Highlight valid targets for the armed ability (enemies / allies / tiles).
+  function showAbilityTargets(a) {
+    const u = selected; if (!u) return;
+    const within = (tx, ty) => (Math.abs(u.x - tx) + Math.abs(u.y - ty)) <= (a.range != null ? a.range : u.range);
+    if (a.target === "enemy") {
+      sim.aliveEnemies().forEach((e) => { if (within(e.x, e.y) && (a.id === "slash" || sim.hasLineOfSight(u.x, u.y, e.x, e.y))) markTile(e.x, e.y, 0xff5a3c); });
+    } else if (a.target === "ally") {
+      sim.aliveAllies().forEach((p) => { if (p.id === u.id || within(p.x, p.y)) markTile(p.x, p.y, 0x3ddc84); });
+    } else if (a.target === "tile") {
+      const R = a.range != null ? a.range : 6;
+      for (let yy = u.y - R; yy <= u.y + R; yy++) for (let xx = u.x - R; xx <= u.x + R; xx++) {
+        if (!sim.inBounds(xx, yy)) continue;
+        if ((Math.abs(u.x - xx) + Math.abs(u.y - yy)) <= R && sim.grid[yy][xx] !== 1) markTile(xx, yy, 0xffae5a, 0.16);
+      }
+    }
+  }
+  function markTile(x, y, color, opacity) {
+    const w = cell(x, y);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.86, T * 0.86),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: opacity != null ? opacity : 0.34, side: THREE.DoubleSide }));
+    m.rotation.x = -Math.PI / 2; m.position.set(w.x, 0.26, w.z); scene.add(m); highlights.push(m);
+  }
+  function useAbilityAt(x, y) {
+    const u = selected, id = abilityMode; if (!u || !id) return;
+    const a = abilityDef(id); if (!a) { disarmAbility(); return; }
+    const occ = sim.allUnits().find((v) => v.hp > 0 && v.x === x && v.y === y);
+    let opts = null;
+    if (a.target === "enemy") { if (occ && occ.side === "enemy") opts = { targetId: occ.id }; }
+    else if (a.target === "ally") { if (occ && occ.side === "player") opts = { targetId: occ.id }; }
+    else if (a.target === "tile") { opts = { tileX: x, tileY: y }; }
+    if (!opts) { flashToast("Invalid target"); return; }
+    const r = sim.useAbility(u.id, id, opts);
+    if (!r || !r.success) { flashToast(r && r.reason ? r.reason : "Can't do that"); return; }
+    abilityMode = null; busy = true; clearHighlights();
+    drainEvents(() => afterAction(u));
+  }
+  let toastEl = null;
+  function flashToast(txt) {
+    if (!toastEl) {
+      toastEl = document.createElement("div");
+      Object.assign(toastEl.style, { position: "absolute", left: "50%", top: "72px", transform: "translateX(-50%)", zIndex: "60", background: "rgba(20,10,10,.85)", color: "#ffd27a", font: "600 13px 'Segoe UI',monospace", padding: "7px 16px", borderRadius: "6px", border: "1px solid #6a4a2a", pointerEvents: "none", transition: "opacity .3s", opacity: "0" });
+      kernel.parent.appendChild(toastEl);
+    }
+    toastEl.textContent = txt; toastEl.style.opacity = "1";
+    clearTimeout(toastEl._t); toastEl._t = setTimeout(() => { toastEl.style.opacity = "0"; }, 1400);
   }
   function floatText(pos, txt, color) {
     const spr = makeTextSprite(txt, color);
@@ -466,8 +567,98 @@ register3d("tactics3d", async (kernel, content) => {
       if (v) floatText({ x: v.group.position.x, y: T, z: v.group.position.z }, "OVERWATCH", 0x9fd0ff);
       return 150;
     }
+    if (e.type === "ability") return playAbilityEvent(e.payload);
     if (e.type === "end") { return 100; }
     return 20;
+  }
+  // VFX per class ability — a distinct, readable signature for each.
+  function playAbilityEvent(p) {
+    const a = unitViews[p.attacker.id];
+    const apos = a ? a.group.position.clone() : cell(p.attacker.x, p.attacker.y);
+    if (p.ability === "slash") {
+      const t = unitViews[p.target.id];
+      faceToward(p.attacker, p.target.x, p.target.y);
+      anim(p.attacker, a && a.clips && a.clips.attack ? "attack" : "idle", { once: true, fade: 0.1 });
+      if (t) {
+        const tp = t.group.position.clone(); tp.y = T * 0.7;
+        const arc = new THREE.Mesh(new THREE.TorusGeometry(T * 0.55, 0.06, 6, 16, Math.PI),
+          new THREE.MeshBasicMaterial({ color: 0x9fe6ff }));
+        arc.position.copy(tp); arc.rotation.x = Math.PI / 2; arc.rotation.z = Math.random() * 6; scene.add(arc);
+        kernel.tween({ target: arc.scale, to: { x: 2.4, y: 2.4, z: 2.4 }, duration: 0.3 });
+        kernel.tween({ target: arc.material, to: { opacity: 0 }, duration: 0.3, onUpdate: () => { arc.material.transparent = true; }, onComplete: () => scene.remove(arc) });
+        floatText(tp, (p.crit ? "CRIT −" : "−") + p.damage, p.crit ? 0xff5a3c : 0x9fe6ff);
+        refreshUnit(p.target);
+        if (p.killed) floatText({ x: tp.x, y: tp.y + 0.8, z: tp.z }, "ELIMINATED", 0xffffff);
+      }
+      return 480;
+    }
+    if (p.ability === "headshot") {
+      const t = unitViews[p.target.id];
+      faceToward(p.attacker, p.target.x, p.target.y);
+      if (t) {
+        const pa = apos.clone(); pa.y = T * 0.65; const pb = t.group.position.clone(); pb.y = T * 0.65;
+        const beam = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pa, pb]),
+          new THREE.LineBasicMaterial({ color: p.hit ? 0xffd27a : 0x8aa0bc, transparent: true }));
+        scene.add(beam); kernel.tween({ target: beam.material, to: { opacity: 0 }, duration: 0.45, onComplete: () => scene.remove(beam) });
+        if (p.hit) {
+          const burst = new THREE.Mesh(new THREE.SphereGeometry(p.crit ? 0.7 : 0.5, 12, 12), new THREE.MeshBasicMaterial({ color: p.crit ? 0xff5a3c : 0xffd27a }));
+          burst.position.copy(pb); scene.add(burst);
+          kernel.tween({ target: burst.scale, to: { x: 4, y: 4, z: 4 }, duration: 0.32 });
+          kernel.tween({ target: burst.material, to: { opacity: 0 }, duration: 0.32, onUpdate: () => { burst.material.transparent = true; }, onComplete: () => scene.remove(burst) });
+          floatText(pb, (p.crit ? "HEADSHOT −" : "−") + p.damage, p.crit ? 0xff5a3c : 0xffd27a);
+          refreshUnit(p.target);
+          if (p.killed) floatText({ x: pb.x, y: pb.y + 0.8, z: pb.z }, "ELIMINATED", 0xffffff);
+        } else floatText(pb, "MISS", 0xaab4c8);
+      }
+      return 520;
+    }
+    if (p.ability === "heal") {
+      const t = unitViews[p.target.id];
+      if (t) {
+        const tp = t.group.position.clone();
+        const ring = new THREE.Mesh(new THREE.RingGeometry(T * 0.2, T * 0.5, 24), new THREE.MeshBasicMaterial({ color: 0x3ddc84, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
+        ring.rotation.x = -Math.PI / 2; ring.position.set(tp.x, 0.3, tp.z); scene.add(ring);
+        kernel.tween({ target: ring.scale, to: { x: 2.2, y: 2.2, z: 2.2 }, duration: 0.5 });
+        kernel.tween({ target: ring.material, to: { opacity: 0 }, duration: 0.5, onComplete: () => scene.remove(ring) });
+        floatText({ x: tp.x, y: T * 0.8, z: tp.z }, "+" + p.heal, 0x3ddc84);
+        refreshUnit(p.target);
+      }
+      return 460;
+    }
+    if (p.ability === "frag") {
+      const w = cell(p.tileX, p.tileY);
+      // lobbed grenade -> blast sphere + shockwave ring
+      const blast = new THREE.Mesh(new THREE.SphereGeometry(0.5, 14, 14), new THREE.MeshBasicMaterial({ color: 0xffae5a }));
+      blast.position.set(w.x, T * 0.4, w.z); scene.add(blast);
+      kernel.tween({ target: blast.scale, to: { x: 6, y: 6, z: 6 }, duration: 0.4 });
+      kernel.tween({ target: blast.material, to: { opacity: 0 }, duration: 0.4, onUpdate: () => { blast.material.transparent = true; }, onComplete: () => scene.remove(blast) });
+      const ring = new THREE.Mesh(new THREE.RingGeometry(T * 0.3, T * (0.4 + (p.radius || 1)), 28), new THREE.MeshBasicMaterial({ color: 0xff7a3c, transparent: true, opacity: 0.7, side: THREE.DoubleSide }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(w.x, 0.3, w.z); scene.add(ring);
+      kernel.tween({ target: ring.material, to: { opacity: 0 }, duration: 0.5, onComplete: () => scene.remove(ring) });
+      (p.shredded || []).forEach((c) => shredCoverVisual(c.x, c.y, c.to));
+      (p.hits || []).forEach((h) => {
+        const u = sim.getUnit(h.id); if (!u) return;
+        const hp = cell(u.x, u.y); refreshUnit(u);
+        floatText({ x: hp.x, y: T * 0.7, z: hp.z }, "−" + h.damage, h.side === "player" ? 0xff9a9a : 0xff7a6a);
+        if (h.killed) floatText({ x: hp.x, y: T * 1.2, z: hp.z }, "ELIMINATED", 0xffffff);
+      });
+      refreshAllCover();
+      return 560;
+    }
+    if (p.ability === "suppress") {
+      const t = unitViews[p.target.id];
+      faceToward(p.attacker, p.target.x, p.target.y);
+      if (t) {
+        const pa = apos.clone(); pa.y = T * 0.6; const pb = t.group.position.clone(); pb.y = T * 0.6;
+        for (let i = 0; i < 4; i++) {
+          const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pa, pb]), new THREE.LineBasicMaterial({ color: 0xffc04a, transparent: true, opacity: 0.7 }));
+          scene.add(line); kernel.tween({ target: line.material, to: { opacity: 0 }, duration: 0.25 + i * 0.08, onComplete: () => scene.remove(line) });
+        }
+        floatText({ x: pb.x, y: T * 0.9, z: pb.z }, "SUPPRESSED", 0xffc04a);
+      }
+      return 420;
+    }
+    return 200;
   }
 
   // ── Pointer ─────────────────────────────────────────────────────────────────
@@ -505,7 +696,13 @@ register3d("tactics3d", async (kernel, content) => {
     if (phase !== "battle" || sim.ended) return;
     const k = (e.key || "").toLowerCase();
     if (k === "y") { e.preventDefault(); overwatchSelected(); }
-    else if (k === "escape" && selected) { e.stopImmediatePropagation(); e.preventDefault(); deselect(); }
+    else if (k === "escape") {
+      if (abilityMode) { e.stopImmediatePropagation(); e.preventDefault(); disarmAbility(); setHUD(); }
+      else if (selected) { e.stopImmediatePropagation(); e.preventDefault(); deselect(); }
+    } else if (selected && /^[1-5]$/.test(k)) { // ability hotkeys
+      const a = (sim.abilitiesFor(selected.id) || []).find((x) => x.key === k);
+      if (a) { e.preventDefault(); armAbility(a.id); }
+    }
   });
 
   // ── Boot ────────────────────────────────────────────────────────────────────
@@ -529,7 +726,8 @@ register3d("tactics3d", async (kernel, content) => {
       howTo: [
         { h: "GOAL", p: (mission.objective || "Eliminate all hostiles") + "." },
         { h: "ORDERS", p: "Click a soldier to select, click a glowing tile to move, click an enemy in range to fire. Each soldier has action points (AP)." },
-        { h: "COVER", p: "Stand beside cover (crates/walls) to cut the enemy's hit chance. Move carefully — open ground is deadly." },
+        { h: "ABILITIES", p: "Every class has a signature skill on the bottom bar (hotkeys 1–5): Slash, Headshot, Field Medic, Frag Grenade, Suppression. Click to arm, then pick a target." },
+        { h: "COVER", p: "Stand beside cover (crates/walls) to cut the enemy's hit chance. Move carefully — open ground is deadly. Frag grenades shred cover." },
         { h: "CAMERA", p: "<b>Right-drag</b> rotate, <b>WASD</b> move, scroll zoom. <b>Esc</b> pauses." },
       ],
       onPlay: () => beginBattle(),
@@ -546,6 +744,8 @@ register3d("tactics3d", async (kernel, content) => {
       select: (id) => { selectUnit(sim.getUnit(id)); return !!sim.getUnit(id); },
       move: (id, x, y) => { selectUnit(sim.getUnit(id)); return !!sim.moveUnit(id, x, y); },
       attack: (aid, tid) => sim.attackUnit(aid, tid),
+      ability: (uid, abId, opts) => sim.useAbility(uid, abId, opts),
+      abilitiesFor: (uid) => sim.abilitiesFor(uid),
       overwatch: (id) => { if (id) selectUnit(sim.getUnit(id)); overwatchSelected(); },
       endTurn: () => endTurn(),
       autoResolve: (maxTurns) => {
