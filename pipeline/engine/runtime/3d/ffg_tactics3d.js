@@ -410,7 +410,7 @@ register3d("tactics3d", async (kernel, content) => {
   // the FBX "Armature|Idle" prefix) except the alien, whose clips are "Alien_*".
   const MODELS = {
     //                native height          target tile-height    clip name map
-    soldier: { url: "adventurer.glb", h: 1.857, th: T * 1.52, clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Gun_Shoot" } },
+    soldier: { url: "adventurer.glb", h: 1.857, th: T * 1.52, clips: { idle: "Idle_Gun", walk: "Walk", die: "Death", attack: "Gun_Shoot" } }, // Idle_Gun = rifle in hands (visible weapon)
     drone:   { url: "robot_enemy.glb", h: 0.711, th: T * 1.18, clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Shoot" } },
     alien:   { url: "alien.glb",       h: 2.947, th: T * 1.72, clips: { idle: "Alien_Idle", walk: "Alien_Walk", die: "Alien_Death", attack: "Alien_Punch" } },
     mech:    { url: "mech.glb",        h: 3.095, th: T * 2.0,  clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Shoot_Big" } },
@@ -489,7 +489,13 @@ register3d("tactics3d", async (kernel, content) => {
     faceUnit(u, isPlayer ? -1 : 1); // players look "north" toward the enemy, enemies "south"
     updateCover(u);
     // Fog of war: an enemy whose pod isn't revealed stays hidden until spotted.
-    if (!isPlayer && !sim.podRevealed(u.pod)) g.visible = false;
+    // Enemies are VISIBLE on the map from the start (you can see your targets —
+    // an empty board reads as "no game"). Concealment stays a GAMEPLAY state
+    // (ambush + they don't act until spotted), it no longer hides them visually.
+    // Unspotted foes are dimmed slightly so a revealed CONTACT still reads.
+    if (!isPlayer && !sim.podRevealed(u.pod)) {
+      g.traverse((o) => { if ((o.isMesh || o.isSkinnedMesh) && o.material) { o.material.transparent = true; o.material.opacity = 0.82; } });
+    }
   }
   // Reveal a pod's units in the scene (called from the sim's "reveal" event).
   function revealPodView(ids) {
@@ -706,7 +712,19 @@ register3d("tactics3d", async (kernel, content) => {
   function afterAction(u) {
     busy = false; refreshAllCover();
     if (sim.ended) return showEnd();
-    if (u && u.hp > 0 && u.actionPoints > 0 && u.side === "player") selectUnit(u); else deselect();
+    autoSelectNext(u); // keep u if it still has actions, else jump to the next ready soldier
+  }
+  // Auto-advance selection so the player never has to hunt for the next unit:
+  // keep the just-acted soldier while it still has actions, otherwise select the
+  // remaining soldier with the MOST movement (then most actions). When the whole
+  // squad is spent, deselect + nudge the player to End Turn.
+  function autoSelectNext(keep) {
+    if (phase !== "battle" || sim.ended || sim.currentPhase !== "player") return;
+    if (keep && keep.hp > 0 && keep.actionPoints > 0 && keep.side === "player") { selectUnit(keep); return; }
+    const ready = sim.aliveAllies().filter((u) => u.actionPoints > 0);
+    if (!ready.length) { deselect(); setHUD("All soldiers have acted — End Turn"); return; }
+    ready.sort((a, b) => ((b.movement || 0) - (a.movement || 0)) || (b.actionPoints - a.actionPoints));
+    selectUnit(ready[0]);
   }
   function tryMove(x, y) {
     const u = selected; if (!u || u.actionPoints < 1) return;
@@ -795,7 +813,7 @@ register3d("tactics3d", async (kernel, content) => {
     if (phase !== "battle" || busy || sim.ended || sim.currentPhase !== "player") return;
     deselect(); busy = true; setHUD("Enemy phase…");
     sim.endTurn();
-    drainEvents(() => { busy = false; refreshAllCover(); if (sim.ended) return showEnd(); setHUD(); });
+    drainEvents(() => { busy = false; refreshAllCover(); if (sim.ended) return showEnd(); setHUD(); autoSelectNext(); });
   }
   function drainEvents(done) {
     const q = events.slice(); events = []; let i = 0;
@@ -1021,7 +1039,7 @@ register3d("tactics3d", async (kernel, content) => {
   sim.allUnits().forEach(refreshUnit);
 
   let shell = null, endShown = false;
-  function beginBattle() { phase = "battle"; orbit.autoRotate = false; setHUD(); }
+  function beginBattle() { phase = "battle"; orbit.autoRotate = false; setHUD(); autoSelectNext(); }
   function showEnd() {
     if (endShown) return; endShown = true;
     const win = !!sim.victory; // objective-aware (evac/hack wins keep allies alive)
