@@ -1,0 +1,10 @@
+{
+  "title": "Warboard Chess",
+  "short_description": "3D battle-chess: command living pieces that fight to the death on every capture, across shifting battlefields.",
+  "description": "Warboard Chess is full 3D chess where every piece is an animated warrior. Play the classic game — legal moves, check, checkmate, castling and en passant — but when you capture, your piece marches in and strikes while the defender falls before it leaves the board. Each match is set in a different environment (mountain pass, forest clearing, desert mesa, frozen tundra), with the sky, ground and lighting changing to match. Face a tactical AI, orbit the board freely, and hunt the enemy king.",
+  "genre": "strategy",
+  "sub_genre": "chess-tactics",
+  "difficulty": "medium",
+  "controls_keyboard": "Left-click a piece to select · click a highlighted square to move · Right-drag rotate camera · scroll zoom · Esc pause",
+  "tags": ["strategy", "chess", "turn-based", "3d", "tactics", "board-game"]
+}

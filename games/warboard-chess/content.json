@@ -1,0 +1,26 @@
+{
+  "title": "Warboard Chess",
+  "slug": "warboard-chess",
+  "genre": "chess3d",
+  "tagline": "Command an army of living pieces across the warboard.",
+  "playerSide": "w",
+  "aiDepth": 2,
+  "view": { "width": 960, "height": 600, "background": "#0a1018" },
+  "audio": {
+    "music": "assets/audio/music.ogg",
+    "menu_music": "assets/audio/menu_music.ogg"
+  },
+  "sfx": {
+    "click": "assets/audio/click.ogg",
+    "select": "assets/audio/select.ogg",
+    "confirm": "assets/audio/confirm.ogg",
+    "hit": "assets/audio/hit.ogg",
+    "hit_heavy": "assets/audio/hit_heavy.ogg",
+    "miss": "assets/audio/miss.ogg",
+    "overwatch": "assets/audio/overwatch.ogg",
+    "explosion": "assets/audio/explosion.ogg",
+    "victory": "assets/audio/victory.ogg",
+    "defeat": "assets/audio/defeat.ogg"
+  },
+  "assets": {}
+}
