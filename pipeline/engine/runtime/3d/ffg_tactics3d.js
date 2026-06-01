@@ -83,6 +83,12 @@ function makeGroundTexture(grid, gw, gh) {
       g.fillRect(gx, gy, 1, 1);
     }
     if (t === 4) for (let k = 0; k < 3; k++) { g.fillStyle = "rgba(120,170,90,0.18)"; g.fillRect(x * PX + (rnd() * PX | 0), y * PX + (rnd() * PX | 0), 1, 2); }
+    // occasional MANHOLE on asphalt streets (dark disc + ring)
+    if (t === 0 && !near(x, y) && rnd() < 0.05) {
+      const cx = x * PX + PX / 2, cy = y * PX + PX / 2, r = PX * 0.3;
+      g.fillStyle = "#161616"; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
+      g.strokeStyle = "rgba(90,90,96,0.6)"; g.lineWidth = 1.5; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke();
+    }
     // subtle tactical grid seam (so tiles stay readable for movement)
     g.strokeStyle = "rgba(0,0,0,0.16)"; g.lineWidth = 1; g.strokeRect(x * PX + 0.5, y * PX + 0.5, PX - 1, PX - 1);
   }
@@ -301,6 +307,16 @@ register3d("tactics3d", async (kernel, content) => {
     beacon.position.y = T * 2.5; g.add(beacon);
     return g;
   }
+  // Backlit BILLBOARD on posts (iconic urban prop) — warm or teal LCD face.
+  function _billboard() {
+    const g = new THREE.Group();
+    for (const px of [-T * 0.45, T * 0.45]) { const post = _bx(T * 0.08, T * 1.6, T * 0.08, 0x1c2027, 0.7, 0.3); post.position.set(px, T * 0.8, 0); post.castShadow = true; g.add(post); }
+    const panel = _bx(T * 1.2, T * 0.72, T * 0.09, 0x14181f, 0.5, 0.2); panel.position.y = T * 1.72; panel.castShadow = true; g.add(panel);
+    const teal = (((g.uuid.charCodeAt(0) || 0) + Math.round(g.position.x)) & 1) === 0;
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(T * 1.12, T * 0.64), new THREE.MeshStandardMaterial({ color: 0x10202a, emissive: teal ? 0x34d6e8 : 0xffb24d, emissiveIntensity: 0.85, roughness: 0.4 }));
+    face.position.set(0, T * 1.72, T * 0.05); g.add(face);
+    return g;
+  }
   function scatterAdvent() {
     const grid = mission.grid, cand = [];
     for (let y = 3; y < gridH - 3; y++) for (let x = 3; x < gridW - 3; x++) {
@@ -311,7 +327,7 @@ register3d("tactics3d", async (kernel, content) => {
     }
     if (!cand.length) return;
     const n = Math.min(5, Math.max(2, (cand.length / 130) | 0));
-    for (let i = 0; i < n; i++) { const [x, y] = cand[Math.floor((i + 0.5) * cand.length / n)]; const g = _adventKiosk(); const w = cell(x, y); g.position.set(w.x, FT, w.z); g.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(g); }
+    for (let i = 0; i < n; i++) { const [x, y] = cand[Math.floor((i + 0.5) * cand.length / n)]; const g = (i % 2 === 0) ? _adventKiosk() : _billboard(); const w = cell(x, y); g.position.set(w.x, FT, w.z); g.rotation.y = (i * 1.7) % (Math.PI * 2); g.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(g); }
   }
   // Decorative street furniture (hydrants, lamps, trees, planters, cones) on
   // curb tiles — VISUAL ONLY (not registered as cover, the sim never sees them),
@@ -690,6 +706,12 @@ register3d("tactics3d", async (kernel, content) => {
     const v = unitViews[u.id]; if (!v || !v.cover) return;
     if (u.hp <= 0) { v.cover.visible = false; return; }
     const cov = sim.coverAt(u); // 0 none / 1 half / 2 full (best adjacent)
+    // HUNKER pose: player soldiers squash down behind cover (feet planted) — a
+    // crouch read without a dedicated crouch clip. Full cover crouches lower.
+    if (v.char && v.char.scene && u.side === "player") {
+      const baseS = v.char.scene.scale.x || 1;
+      v.char.scene.scale.y = baseS * (cov === 2 ? 0.74 : cov === 1 ? 0.84 : 1);
+    }
     if (cov === 0) { v.cover.visible = false; return; }
     v.cover.visible = true; v.cover.material.map = shieldTex(cov === 2); v.cover.material.needsUpdate = true;
   }
