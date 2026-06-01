@@ -117,3 +117,27 @@ export class NetPlay {
     this.channel = this.lobby = null; this.peerPresent = false;
   }
 }
+
+/**
+ * TurnClock — a per-turn countdown so online play can't stall. Default 15s.
+ * onTick(secondsLeft) updates the UI; onExpire() fires once at 0 (the game then
+ * auto-passes/forfeits the turn). Game-agnostic + reusable across Iron Tide and
+ * the new naval/chess games. `_step()` is exposed so the countdown is unit-testable
+ * without waiting on the wall clock.
+ */
+export class TurnClock {
+  constructor(seconds) { this.total = seconds != null ? seconds : 15; this.left = this.total; this._iv = null; this.onTick = null; this.onExpire = null; }
+  start(onTick, onExpire) {
+    this.stop(); this.left = this.total; this.onTick = onTick || null; this.onExpire = onExpire || null;
+    if (this.onTick) this.onTick(this.left);
+    this._iv = setInterval(() => this._step(), 1000);
+    return this;
+  }
+  _step() {
+    this.left -= 1;
+    if (this.onTick) this.onTick(Math.max(0, this.left));
+    if (this.left <= 0) { this.stop(); if (this.onExpire) this.onExpire(); }
+  }
+  running() { return !!this._iv; }
+  stop() { if (this._iv) { clearInterval(this._iv); this._iv = null; } }
+}
