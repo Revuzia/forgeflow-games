@@ -29,6 +29,10 @@ await import("../sim/navalfree.js" + new URL(import.meta.url).search); // sets w
 // registration targets the same kernel module instance the boot uses.
 const { register3d } = await import("./ffg_kernel_3d.js" + new URL(import.meta.url).search);
 
+// Procedural OPEN-OCEAN ambient — UNIQUE to this game (the studio never duplicates
+// music across games); replaces the shared music.ogg the shell used to loop.
+const { createNavalMusic } = await import("./ffg_navalmusic.js" + new URL(import.meta.url).search);
+
 // World->scene scale: sim units are ~0..220; we render at 1 sim-unit = 1 scene-unit
 // but the camera/lighting are tuned for that span. Y up; sim (x,y) maps to scene
 // (x, 0, y) so "north" (sim -Y) is -Z (away from the default camera).
@@ -38,7 +42,8 @@ register3d("navalfree", async function (kernel, content) {
   const NavalFree = window.FFG.sim.NavalFree;
   const m = content.setup || content;
   const sfx = content.sfx || {};
-  const music = (content.audio && content.audio.music) || null;
+  const music = (content.audio && content.audio.music) || null; // (legacy file track — superseded by navalMusic)
+  const navalMusic = createNavalMusic(0.15); // procedural; unique across the studio
 
   // Fresh entropy per match so enemy AI + any randomness differs each playthrough;
   // gates build their own sim with a fixed seed for reproducibility.
@@ -773,8 +778,9 @@ register3d("navalfree", async function (kernel, content) {
     sim = new NavalFree({ width: ARENA_W, height: ARENA_H, seed: _gameSeed, firstSide: "player", actionsPerTurn: m.actionsPerTurn || 2, ships: fleet });
     for (const s of sim.ships) await buildShipVisual(s);
     phase = "battle"; busy = false;
-    // NOTE: the shell owns the looping music (it's passed `music` below). Do NOT
-    // also play it here — that stacked two copies of the track ("two songs").
+    // Procedural ocean music. The PLAY click is the user gesture that unlocks audio;
+    // it's the ONLY music source now (shell music is null), so no double-play.
+    try { navalMusic.start(); } catch (e) {}
     setHUD(`<span style="opacity:.85">Drive and fire. Sink the enemy fleet.</span>`);
     autoSelectNextShip(); // auto-pick the first ship to act (no manual boat-by-boat selecting)
   };
@@ -799,7 +805,7 @@ register3d("navalfree", async function (kernel, content) {
       parent: kernel.parent,
       title: content.title || "Tide Breakers",
       tagline: content.tagline || "Open-water naval skirmish.",
-      music,
+      music: null, // procedural OPEN-OCEAN loop (createNavalMusic), not a shared file
       menuImage: (content.assets && content.assets.menu_image) || null,
       difficulties: ["easy", "normal", "hard"],
       defaultDifficulty: content.difficulty || "normal",
@@ -812,8 +818,8 @@ register3d("navalfree", async function (kernel, content) {
         { h: "Camera", p: "Right-drag to orbit · scroll to zoom · WASD to pan across the sea." },
       ],
       onPlay: (d) => { beginGame(d); },
-      onPause: () => {},
-      onResume: () => {},
+      onPause: () => { try { navalMusic.stop(); } catch (e) {} },
+      onResume: () => { try { navalMusic.start(); } catch (e) {} },
     });
     shell.start();
   } else {

@@ -343,9 +343,13 @@ register3d("chess3d", async (kernel, content) => {
   let legalForSel = [];         // detailed legal moves for the selected piece
   let busy = false;             // true while an animation/AI turn is playing
   let phase = "menu";           // menu | playing | ended
-  const playerSide = (content.playerSide === "b") ? "b" : "w"; // human plays white by default
-  const aiSide = playerSide === "w" ? "b" : "w";
+  let playerSide = (content.playerSide === "b") ? "b" : "w"; // human plays white by default (online flips this)
+  let aiSide = playerSide === "w" ? "b" : "w";
   const aiDepth = content.aiDepth != null ? content.aiDepth : 2;
+  // ── online play (lazy) ──────────────────────────────────────────────────────
+  let netMode = false;          // true once PLAY ONLINE starts a networked match
+  let online = null;            // OnlineController (move-relay turn machine)
+  let _onlineApi = null;
   let moveLog = [];
 
   function sfx(name, vol) { const u = content.sfx && content.sfx[name]; if (u) kernel.playSound(u, vol == null ? 0.55 : vol); }
@@ -580,7 +584,7 @@ register3d("chess3d", async (kernel, content) => {
   // Apply a move on the sim + animate it; then check status and either let the
   // human move (if it's their turn) or fire the AI. `byAI` flags AI-originated.
   let suppressAI = false; // test-only: when true, doMove won't auto-fire the AI reply
-  async function doMove(from, to, promo) {
+  async function doMove(from, to, promo, remote) {
     if (busy) return false;
     const result = sim.move(from, to, promo);
     if (!result.ok) return false;
@@ -589,19 +593,24 @@ register3d("chess3d", async (kernel, content) => {
     moveLog.push((result.mover === "w" ? "" : "… ") + result.san);
     setHUD();
     await animateMove(result);
+    // ONLINE: a LOCAL move (user click or timeout) is broadcast so the opponent's
+    // sim applies the same move. A `remote` move came FROM the opponent — don't echo.
+    if (netMode && !remote && online) {
+      try { online.localMoved({ from, to, promo: (result.promotion || promo) || null }); } catch (e) {}
+    }
     // status banners
     if (result.checkmate) { onCheckmate(result); busy = false; return true; }
     if (result.stalemate || result.draw) { onDraw(result); busy = false; return true; }
     if (result.check) { banner("CHECK!", theme.accent, 900); sfx("overwatch", 0.5); }
     busy = false;
     setHUD();
-    // hand off to the AI if it's now the AI's move
-    if (!suppressAI && phase === "playing" && sim.turn === aiSide) { setTimeout(aiTurn, 420); }
+    // hand off to the AI if it's now the AI's move (single-player only — never online)
+    if (!suppressAI && !netMode && phase === "playing" && sim.turn === aiSide) { setTimeout(aiTurn, 420); }
     return true;
   }
 
   async function aiTurn() {
-    if (busy || phase !== "playing" || sim.turn !== aiSide) return;
+    if (netMode || busy || phase !== "playing" || sim.turn !== aiSide) return;
     busy = true; setHUD("AI is thinking…");
     // compute on a microtask so the HUD repaints
     await new Promise((r) => setTimeout(r, 30));
@@ -634,6 +643,7 @@ register3d("chess3d", async (kernel, content) => {
 
   function onCheckmate(result) {
     phase = "ended"; clearHighlights();
+    if (netMode && online) { try { online.finish(); } catch (e) {} }
     const winner = result.mover; // the side that delivered mate
     const youWin = winner === playerSide;
     banner(youWin ? "CHECKMATE — YOU WIN" : "CHECKMATE — YOU LOSE", youWin ? 0x4fd06a : 0xff5a3c, 2600);
@@ -642,6 +652,7 @@ register3d("chess3d", async (kernel, content) => {
   }
   function onDraw(result) {
     phase = "ended"; clearHighlights();
+    if (netMode && online) { try { online.finish(); } catch (e) {} }
     const why = result.stalemate ? "Stalemate" : result.fiftyMove ? "50-move draw" : result.insufficient ? "Insufficient material" : "Draw";
     banner("DRAW — " + why, theme.accent, 2400);
     sfx("confirm", 0.6);
@@ -754,8 +765,8 @@ register3d("chess3d", async (kernel, content) => {
     setHUD();
     sfx("confirm", 0.5);
     if (content.audio && content.audio.music && shell && shell._playMusic) { /* shell handles music */ }
-    // if the human plays black, the AI (white) moves first
-    if (sim.turn === aiSide) setTimeout(aiTurn, 600);
+    // if the human plays black, the AI (white) moves first (single-player only)
+    if (!netMode && sim.turn === aiSide) setTimeout(aiTurn, 600);
   }
 
   buildBoard();
@@ -783,8 +794,86 @@ register3d("chess3d", async (kernel, content) => {
     try { const k = "ffg_autostart_" + (content.slug || "chess"); autostart = window.sessionStorage.getItem(k) === "1"; if (autostart) window.sessionStorage.removeItem(k); } catch (e) {}
     if (autostart) { shell.hide(); shell.phase = "playing"; if (shell._playMusic) shell._playMusic(); beginGame(); }
     else shell.start();
+
+    // ── PLAY ONLINE: inject a button beside the shell's PLAY without editing the
+    // shared shell. The shell rebuilds ov.innerHTML on every menu(), so re-add it
+    // each time the title returns. (Same technique Iron Tide uses.)
+    const _origMenu = shell.menu.bind(shell);
+    shell.menu = function () {
+      _origMenu();
+      try {
+        if (shell.phase !== "menu" || !shell.ov) return;
+        const ob = document.createElement("button");
+        ob.textContent = "🌐  PLAY ONLINE";
+        ob.style.cssText = "font:bold 15px 'Segoe UI',system-ui,monospace;padding:11px 26px;cursor:pointer;min-width:200px;" +
+          "letter-spacing:1px;border-radius:7px;margin-top:8px;color:#06121f;background:linear-gradient(#9fe0ff,#4fb6e0);" +
+          "border:1px solid #7fd0f0;box-shadow:0 4px 18px rgba(80,180,224,.32);transition:transform .08s";
+        ob.onmouseenter = () => { ob.style.transform = "translateY(-1px)"; };
+        ob.onmouseleave = () => { ob.style.transform = "none"; };
+        ob.onclick = () => { shell.hide(); shell.phase = "playing"; startOnline(); };
+        const playBtn = Array.prototype.find.call(shell.ov.querySelectorAll("button"), (b) => /PLAY/i.test(b.textContent) && !/ONLINE/i.test(b.textContent));
+        if (playBtn && playBtn.parentNode) playBtn.parentNode.insertBefore(ob, playBtn.nextSibling);
+        else shell.ov.appendChild(ob);
+      } catch (e) { /* additive — never block the menu */ }
+    };
+    // If we're sitting on the title right now, re-render so the button appears.
+    if (shell.phase === "menu") shell.menu();
   } else {
     beginGame();
+  }
+
+  // ── online play (lazy) ────────────────────────────────────────────────────────
+  // A tiny HUD line for the online turn timer / status (single-player ignores it).
+  let _onlineHud = null;
+  function onlineStatus(o) {
+    if (!o) { if (_onlineHud) _onlineHud.style.display = "none"; return; }
+    if (!_onlineHud) {
+      _onlineHud = document.createElement("div");
+      _onlineHud.style.cssText = "position:absolute;top:64px;left:0;right:0;text-align:center;z-index:40;" +
+        "font-family:'Segoe UI',monospace;pointer-events:none";
+      (kernel.parent || document.body).appendChild(_onlineHud);
+    }
+    _onlineHud.style.display = "block";
+    const t = o.secsLeft != null ? o.secsLeft : "";
+    const col = o.myTurn ? "#7CFC9A" : "#ff9a6a";
+    const clock = o.secsLeft != null ? `<span style="font-weight:900"> · ⏱ ${t}s</span>` : "";
+    _onlineHud.innerHTML = `<div style="display:inline-block;background:rgba(8,14,24,.78);border:1px solid ${col};border-radius:9px;padding:6px 16px;color:${col};font-size:14px;font-weight:700;letter-spacing:1px">${o.banner || ""}${clock}</div>`;
+  }
+
+  function buildOnlineIface() {
+    return {
+      parent: kernel.parent,
+      gameId: "warboard-chess",
+      onLobbyOpen: () => { if (orbit) orbit.autoRotate = false; },
+      onLobbyBack: () => { netMode = false; phase = "menu"; onlineStatus(null); shell && shell.start(); },
+      startGame: (isHost) => {
+        netMode = true; suppressAI = true;
+        playerSide = isHost ? "w" : "b";   // host plays White (moves first)
+        aiSide = playerSide === "w" ? "b" : "w";
+        onlineStatus({ myTurn: isHost, banner: isHost ? "You play White" : "You play Black", secsLeft: null });
+        beginGame();
+      },
+      isMyTurn: () => !!sim && phase === "playing" && sim.turn === playerSide,
+      isOver: () => phase === "ended",
+      applyRemoteMove: (p) => { if (!p) return; return doMove(p.from, p.to, p.promo || undefined, true); },
+      randomMove: () => {
+        if (!sim) return;
+        const mv = sim.allLegalMoves(playerSide);
+        if (mv.length) { const m = mv[(Math.random() * mv.length) | 0]; doMove(m.from, m.to, m.promotion || undefined); }
+      },
+      setStatus: (s) => onlineStatus(s),
+      end: (victory, sub) => { phase = "ended"; clearHighlights(); onlineStatus(null); banner(victory ? "YOU WIN" : "YOU LOSE", victory ? 0x4fd06a : 0xff5a3c, 2400); setTimeout(() => { if (shell) shell.end(victory, sub || ""); }, 1400); },
+      onError: (msg) => { try { console.warn("[online]", msg); } catch (e) {} },
+    };
+  }
+  async function startOnline() {
+    if (!_onlineApi) {
+      const mod = await import("../net/ffg_online.js" + new URL(import.meta.url).search);
+      _onlineApi = mod.installOnline(buildOnlineIface());
+      online = _onlineApi.controller;
+    }
+    netMode = true;
+    _onlineApi.openLobby();
   }
 
   // ── controller + test affordances ────────────────────────────────────────────
