@@ -71,6 +71,8 @@ register3d("navalfree", async function (kernel, content) {
   let netMode = false, online = null, _onlineApi = null;
   let myActions = [];        // this turn's local actions, awaiting broadcast
   let netFirstSide = "player";
+  // ranking (online-only, vs logged-in players)
+  let myProfile = null, oppProfile = null, matchNonce = null, _ratings = null, _rankLine = "", _lastStatus = null;
 
   // ── Ocean — real reflective water (three.js Water): flowing normal-mapped
   // waves, sun glint, fresnel shine. The normal map is bundled in the runtime.
@@ -774,7 +776,41 @@ register3d("navalfree", async function (kernel, content) {
       const subtitle = win ? `Enemy fleet sunk · Turn ${sim.turnNumber}` : `Your fleet was lost · Turn ${sim.turnNumber}`;
       window.FFG.shell.end(win, subtitle);
     }
-    if (netMode && online) { try { online.finish(); } catch (e) {} }
+    if (netMode && online) { try { online.finish(); } catch (e) {} try { reportOnlineResult(win); } catch (e) {} }
+  }
+
+  // ── ranking glue (W/L + Elo, online vs logged-in players only) ──────────────
+  async function loadRatings() {
+    if (!_ratings) _ratings = await import("../net/ffg_ratings.js" + new URL(import.meta.url).search);
+    return _ratings;
+  }
+  async function setupRatingHandshake(isHost) {
+    myProfile = null; oppProfile = null; matchNonce = isHost ? Math.random().toString(36).slice(2, 10) : null;
+    try {
+      const R = await loadRatings();
+      myProfile = await R.currentPlayer();
+      if (online) online.sendRaw("hello", { id: myProfile ? myProfile.id : null, name: myProfile ? myProfile.username : null, nonce: matchNonce });
+      if (myProfile) { const r = await R.getRating(myProfile.id, "tide-breakers"); const tier = R.rankTier(r.rating);
+        _rankLine = `${myProfile.username} · ${r.rating} ${tier.name} · ${r.wins}W-${r.losses}L`; }
+      else { _rankLine = "Playing unrated — sign in on the site to rank up"; }
+      if (_lastStatus) onlineStatus(_lastStatus);
+    } catch (e) {}
+  }
+  function reportOnlineResult(iWon) {
+    if (!netMode || !myProfile || !oppProfile || !matchNonce || !online) return;
+    const room = online.net ? online.net.room : "r";
+    const matchId = "tide-breakers:" + room + ":" + matchNonce;
+    const result = online.isHost ? (iWon ? "white" : "black") : (iWon ? "black" : "white");
+    const whiteId = online.isHost ? myProfile.id : oppProfile.id;
+    const blackId = online.isHost ? oppProfile.id : myProfile.id;
+    loadRatings().then((R) => R.reportResult("tide-breakers", whiteId, blackId, result, matchId).then((res) => {
+      if (!res) return;
+      const mine = online.isHost ? res.white : res.black;
+      const after = mine && mine.after != null ? mine.after : null;
+      const delta = mine && mine.delta != null ? mine.delta : (after != null && mine.before != null ? after - mine.before : 0);
+      if (after != null) { const tier = R.rankTier(after);
+        setHUD(`<span style="color:${delta >= 0 ? "#7CFC9A" : "#ff8a6a"}">${delta >= 0 ? "+" : ""}${delta} → ${after} (${tier.name})</span>`); }
+    }));
   }
 
   // ── ONLINE: replay the opponent's relayed turn, MIRRORED onto my enemy fleet ──
@@ -825,10 +861,11 @@ register3d("navalfree", async function (kernel, content) {
       _onlineHud.style.cssText = "position:absolute;top:60px;left:0;right:0;text-align:center;z-index:40;font-family:'Segoe UI',monospace;pointer-events:none";
       (kernel.parent || document.body).appendChild(_onlineHud);
     }
-    _onlineHud.style.display = "block";
+    _onlineHud.style.display = "block"; _lastStatus = o;
     const col = o.myTurn ? "#37e0c0" : "#ff8a6a";
     const clock = o.secsLeft != null ? ` · ⏱ ${o.secsLeft}s` : "";
-    _onlineHud.innerHTML = `<div style="display:inline-block;background:rgba(8,16,26,.78);border:1px solid ${col};border-radius:9px;padding:6px 16px;color:${col};font-size:14px;font-weight:700;letter-spacing:1px">${o.banner || ""}${clock}</div>`;
+    const rank = _rankLine ? `<div style="font-size:11px;opacity:.8;margin-top:3px;color:#bcd">${_rankLine}</div>` : "";
+    _onlineHud.innerHTML = `<div style="display:inline-block;background:rgba(8,16,26,.78);border:1px solid ${col};border-radius:9px;padding:6px 16px;color:${col};font-size:14px;font-weight:700;letter-spacing:1px">${o.banner || ""}${clock}${rank}</div>`;
   }
 
   function buildOnlineIface() {
@@ -837,10 +874,12 @@ register3d("navalfree", async function (kernel, content) {
       gameId: "tide-breakers",
       onLobbyOpen: () => {},
       onLobbyBack: () => { netMode = false; phase = "menu"; onlineStatus(null); if (window.FFG && window.FFG.shell) window.FFG.shell.start(); },
+      onPeerMessage: (t, d) => { if (t === "hello" && d) { oppProfile = d.id ? { id: d.id, username: d.name || "Opponent" } : null; if (d.nonce && !matchNonce) matchNonce = d.nonce; } },
       startGame: (isHost) => {
         netMode = true; netFirstSide = isHost ? "player" : "enemy"; myActions = [];
         onlineStatus({ myTurn: isHost, banner: isHost ? "You move first" : "Opponent moves first", secsLeft: null });
         beginGame(content.difficulty || "normal");
+        setupRatingHandshake(isHost);
       },
       isMyTurn: () => !!sim && phase === "battle" && sim.turn === "player",
       isOver: () => !!sim && sim.ended,

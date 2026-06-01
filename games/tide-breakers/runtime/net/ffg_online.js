@@ -287,10 +287,13 @@ export class OnlineController {
     this._pushStatus(false, "Opponent's move…");
   }
 
+  /** Send an app-level message (e.g. profile handshake) over the same channel. */
+  sendRaw(t, d) { try { if (this.net) this.net.send(t, d); } catch (e) {} }
+
   async _onMsg(m) {
     if (!m || this.ended) return;
     if (m.t === "bye") { this._opponentLeft(); return; }
-    if (m.t !== "mv") return;
+    if (m.t !== "mv") { if (this.if.onPeerMessage) this.if.onPeerMessage(m.t, m.d); return; }
     // Apply the opponent's move (may animate). Then it's my turn.
     try { await this.if.applyRemoteMove(m.d && m.d.p); } catch (e) {}
     if (this.ended) return;

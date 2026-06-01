@@ -350,6 +350,11 @@ register3d("chess3d", async (kernel, content) => {
   let netMode = false;          // true once PLAY ONLINE starts a networked match
   let online = null;            // OnlineController (move-relay turn machine)
   let _onlineApi = null;
+  // ── ranking (online-only, vs logged-in players) ─────────────────────────────
+  let myProfile = null;         // {id, username} of the signed-in player (or null)
+  let oppProfile = null;        // opponent's {id, username} (exchanged at match start)
+  let matchNonce = null;        // host-generated; makes a deterministic match_id
+  let _ratings = null;          // lazy ffg_ratings module
   let moveLog = [];
 
   function sfx(name, vol) { const u = content.sfx && content.sfx[name]; if (u) kernel.playSound(u, vol == null ? 0.55 : vol); }
@@ -643,7 +648,7 @@ register3d("chess3d", async (kernel, content) => {
 
   function onCheckmate(result) {
     phase = "ended"; clearHighlights();
-    if (netMode && online) { try { online.finish(); } catch (e) {} }
+    if (netMode && online) { try { online.finish(); } catch (e) {} try { reportOnlineResult(result.mover === "w" ? "white" : "black"); } catch (e) {} }
     const winner = result.mover; // the side that delivered mate
     const youWin = winner === playerSide;
     banner(youWin ? "CHECKMATE — YOU WIN" : "CHECKMATE — YOU LOSE", youWin ? 0x4fd06a : 0xff5a3c, 2600);
@@ -652,7 +657,7 @@ register3d("chess3d", async (kernel, content) => {
   }
   function onDraw(result) {
     phase = "ended"; clearHighlights();
-    if (netMode && online) { try { online.finish(); } catch (e) {} }
+    if (netMode && online) { try { online.finish(); } catch (e) {} try { reportOnlineResult("draw"); } catch (e) {} }
     const why = result.stalemate ? "Stalemate" : result.fiftyMove ? "50-move draw" : result.insufficient ? "Insufficient material" : "Draw";
     banner("DRAW — " + why, theme.accent, 2400);
     sfx("confirm", 0.6);
@@ -823,10 +828,11 @@ register3d("chess3d", async (kernel, content) => {
   }
 
   // ── online play (lazy) ────────────────────────────────────────────────────────
-  // A tiny HUD line for the online turn timer / status (single-player ignores it).
-  let _onlineHud = null;
+  // A tiny HUD line for the online turn timer / status + a rank chip (SP ignores it).
+  let _onlineHud = null, _rankLine = "", _lastStatus = null;
   function onlineStatus(o) {
     if (!o) { if (_onlineHud) _onlineHud.style.display = "none"; return; }
+    _lastStatus = o;
     if (!_onlineHud) {
       _onlineHud = document.createElement("div");
       _onlineHud.style.cssText = "position:absolute;top:64px;left:0;right:0;text-align:center;z-index:40;" +
@@ -837,8 +843,51 @@ register3d("chess3d", async (kernel, content) => {
     const t = o.secsLeft != null ? o.secsLeft : "";
     const col = o.myTurn ? "#7CFC9A" : "#ff9a6a";
     const clock = o.secsLeft != null ? `<span style="font-weight:900"> · ⏱ ${t}s</span>` : "";
-    _onlineHud.innerHTML = `<div style="display:inline-block;background:rgba(8,14,24,.78);border:1px solid ${col};border-radius:9px;padding:6px 16px;color:${col};font-size:14px;font-weight:700;letter-spacing:1px">${o.banner || ""}${clock}</div>`;
+    const rank = _rankLine ? `<div style="font-size:11px;opacity:.8;margin-top:3px;color:#bcd">${_rankLine}</div>` : "";
+    _onlineHud.innerHTML = `<div style="display:inline-block;background:rgba(8,14,24,.78);border:1px solid ${col};border-radius:9px;padding:6px 16px;color:${col};font-size:14px;font-weight:700;letter-spacing:1px">${o.banner || ""}${clock}${rank}</div>`;
   }
+
+  // ── ranking glue ──────────────────────────────────────────────────────────
+  async function loadRatings() {
+    if (!_ratings) _ratings = await import("../net/ffg_ratings.js" + new URL(import.meta.url).search);
+    return _ratings;
+  }
+  // On match start: learn who I am (if signed in), tell the opponent, learn who they
+  // are. Host coins a nonce so both sides derive the same match_id. All best-effort —
+  // a signed-out player just plays unrated.
+  async function setupRatingHandshake(isHost) {
+    myProfile = null; oppProfile = null; matchNonce = isHost ? Math.random().toString(36).slice(2, 10) : null;
+    try {
+      const R = await loadRatings();
+      myProfile = await R.currentPlayer();
+      if (online) online.sendRaw("hello", { id: myProfile ? myProfile.id : null, name: myProfile ? myProfile.username : null, nonce: matchNonce });
+      if (myProfile) {
+        const r = await R.getRating(myProfile.id, "warboard-chess");
+        const tier = R.rankTier(r.rating);
+        _rankLine = `${myProfile.username} · ${r.rating} ${tier.name} · ${r.wins}W-${r.losses}L-${r.draws}D`;
+      } else { _rankLine = "Playing unrated — sign in on the site to rank up"; }
+      _repaintStatus();
+    } catch (e) {}
+  }
+  // Report the finished online game (online + both signed in only). Shows the delta.
+  function reportOnlineResult(outcome /* 'white'|'black'|'draw' */) {
+    if (!netMode || !myProfile || !oppProfile || !matchNonce) return;
+    const room = (online && online.net) ? online.net.room : "r";
+    const matchId = "warboard-chess:" + room + ":" + matchNonce;
+    const whiteId = (playerSide === "w") ? myProfile.id : oppProfile.id;
+    const blackId = (playerSide === "w") ? oppProfile.id : myProfile.id;
+    loadRatings().then((R) => R.reportResult("warboard-chess", whiteId, blackId, outcome, matchId).then((res) => {
+      if (!res) return;
+      const mine = (playerSide === "w") ? res.white : res.black;
+      const delta = mine && mine.delta != null ? mine.delta : (mine && mine.after != null ? mine.after - (mine.before || 0) : 0);
+      const after = mine && mine.after != null ? mine.after : null;
+      if (after != null) {
+        const tier = R.rankTier(after);
+        banner(`${delta >= 0 ? "+" : ""}${delta} → ${after} (${tier.name})`, delta >= 0 ? 0x7CFC9A : 0xff8a6a, 3200);
+      }
+    }));
+  }
+  function _repaintStatus() { if (_lastStatus) onlineStatus(_lastStatus); }
 
   function buildOnlineIface() {
     return {
@@ -846,12 +895,19 @@ register3d("chess3d", async (kernel, content) => {
       gameId: "warboard-chess",
       onLobbyOpen: () => { if (orbit) orbit.autoRotate = false; },
       onLobbyBack: () => { netMode = false; phase = "menu"; onlineStatus(null); shell && shell.start(); },
+      onPeerMessage: (t, d) => {
+        if (t === "hello" && d) {
+          oppProfile = d.id ? { id: d.id, username: d.name || "Opponent" } : null;
+          if (d.nonce && !matchNonce) matchNonce = d.nonce; // guest adopts host's nonce
+        }
+      },
       startGame: (isHost) => {
         netMode = true; suppressAI = true;
         playerSide = isHost ? "w" : "b";   // host plays White (moves first)
         aiSide = playerSide === "w" ? "b" : "w";
         onlineStatus({ myTurn: isHost, banner: isHost ? "You play White" : "You play Black", secsLeft: null });
         beginGame();
+        setupRatingHandshake(isHost);
       },
       isMyTurn: () => !!sim && phase === "playing" && sim.turn === playerSide,
       isOver: () => phase === "ended",
