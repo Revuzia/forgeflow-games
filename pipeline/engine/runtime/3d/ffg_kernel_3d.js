@@ -17,6 +17,12 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
+// Edge AA + better AO (Tier 3 fidelity post). Static imports resolve from the
+// SAME r0.172 CDN the boot uses; construction is still feature-detected +
+// try/caught in enableBloom() so a build missing any of these never breaks the
+// render loop (it silently falls back to the prior pass set).
+import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
+import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 
 export const genres3d = {};
 export function register3d(name, builder) { genres3d[name] = builder; }
@@ -135,18 +141,37 @@ export class Kernel3D {
     const h = this.parent.clientHeight || window.innerHeight;
     const composer = new EffectComposer(this.renderer);
     composer.addPass(new RenderPass(this.scene, this.camera));
-    // Opt-in SSAO (contact shadows / ambient occlusion) — grounds props + units
-    // in their environment, the single biggest "not flat-lit" fidelity jump.
-    // Wrapped so a pass failure never breaks rendering (falls back to bloom-only).
-    if (opts.ssao) {
-      try {
-        const ssao = new SSAOPass(this.scene, this.camera, w, h);
-        ssao.kernelRadius = opts.ssaoRadius != null ? opts.ssaoRadius : 1.1;
-        ssao.minDistance = opts.ssaoMin != null ? opts.ssaoMin : 0.0015;
-        ssao.maxDistance = opts.ssaoMax != null ? opts.ssaoMax : 0.06;
-        composer.addPass(ssao);
-        this.ssao = ssao;
-      } catch (e) { console.warn("[kernel] SSAO unavailable:", e && e.message); }
+    // Ambient occlusion (contact shadows) — grounds props + units in their
+    // environment, the single biggest "not flat-lit" fidelity jump. PREFER GTAO
+    // (ground-truth AO: physically-based horizon-search, far cleaner + less
+    // haloing than SSAO) when the addon is present; fall back to SSAO; and if
+    // BOTH throw, render bloom-only. Every branch is try/caught so a missing or
+    // broken pass can never break the render loop.
+    if (opts.ssao || opts.gtao) {
+      const wantGTAO = opts.gtao !== false; // default on whenever AO is requested
+      let aoAdded = false;
+      if (wantGTAO && typeof GTAOPass !== "undefined") {
+        try {
+          const gtao = new GTAOPass(this.scene, this.camera, w, h);
+          // Subtle, tactical AO — readable contact shadows without crushing the
+          // moody mid-tones into mud. radius in world units (our tile ~ 2.4u).
+          gtao.output = (GTAOPass.OUTPUT && GTAOPass.OUTPUT.Default != null) ? GTAOPass.OUTPUT.Default : 0;
+          gtao.blendIntensity = opts.aoIntensity != null ? opts.aoIntensity : 0.9;
+          try { gtao.updateGtaoMaterial({ radius: opts.ssaoRadius != null ? opts.ssaoRadius : 1.1, distanceExponent: 1.0, thickness: 1.0, scale: 1.0, samples: 16 }); } catch (e2) {}
+          composer.addPass(gtao);
+          this.gtao = gtao; aoAdded = true;
+        } catch (e) { console.warn("[kernel] GTAO unavailable, trying SSAO:", e && e.message); }
+      }
+      if (!aoAdded) {
+        try {
+          const ssao = new SSAOPass(this.scene, this.camera, w, h);
+          ssao.kernelRadius = opts.ssaoRadius != null ? opts.ssaoRadius : 1.1;
+          ssao.minDistance = opts.ssaoMin != null ? opts.ssaoMin : 0.0015;
+          ssao.maxDistance = opts.ssaoMax != null ? opts.ssaoMax : 0.06;
+          composer.addPass(ssao);
+          this.ssao = ssao;
+        } catch (e) { console.warn("[kernel] SSAO unavailable:", e && e.message); }
+      }
     }
     const bloom = new UnrealBloomPass(new THREE.Vector2(w, h),
       opts.strength != null ? opts.strength : 0.6,
@@ -154,6 +179,17 @@ export class Kernel3D {
       opts.threshold != null ? opts.threshold : 0.85);
     composer.addPass(bloom);
     composer.addPass(new OutputPass());
+    // SMAA — sharp morphological edge AA over the FINAL graded frame (after
+    // OutputPass tonemap/colorspace). Cleans the stair-stepping on building +
+    // unit silhouettes that the renderer's MSAA can't touch through the
+    // composer. Last pass, feature-detected + try/caught (falls back to none).
+    if (opts.smaa !== false && typeof SMAAPass !== "undefined") {
+      try {
+        const smaa = new SMAAPass(w, h);
+        composer.addPass(smaa);
+        this.smaa = smaa;
+      } catch (e) { console.warn("[kernel] SMAA unavailable:", e && e.message); }
+    }
     this.composer = composer;
     this.bloom = bloom;
     return composer;
