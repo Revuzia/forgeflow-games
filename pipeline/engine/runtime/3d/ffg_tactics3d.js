@@ -284,6 +284,8 @@ register3d("tactics3d", async (kernel, content) => {
         const w = cell(x, y);
         if (t === 1) { buildStructure(x, y, w); continue; }
         if (t === 5) { buildWall(x, y, w); continue; } // enterable building: low open-top wall
+        if (t === 6) { buildDeck(x, y, w); continue; }  // raised rooftop deck (high ground)
+        if (t === 7) { buildRamp(x, y, w); continue; }  // ramp/stairs up to a deck
         if (t === 2 || t === 3) buildCover(x, y, w, t === 3);
         else if (t === 4) buildHazard(w);
       }
@@ -581,6 +583,34 @@ register3d("tactics3d", async (kernel, content) => {
     scene.add(g); buildingTiles[x + "," + y] = [g];
   }
 
+  // ── Verticality: rooftop decks (tile 6) + ramps (tile 7) ────────────────────
+  const DECK_H = T * 1.3; // rooftop height — units climb up for high-ground advantage
+  function _tileLift(x, y) { const t = (mission.grid[y] || [])[x]; return (t === 6 || t === 7) ? DECK_H : 0; }
+  function buildDeck(x, y, w) {
+    const support = _bx(T, DECK_H, T, 0x33373f, 0.88, 0.18); support.position.set(w.x, DECK_H / 2, w.z); support.castShadow = true; support.receiveShadow = true; scene.add(support);
+    const slab = _bx(T * 1.0, T * 0.14, T * 1.0, 0x6a6e77, 0.8, 0.15); slab.position.set(w.x, DECK_H + 0.07, w.z); slab.receiveShadow = true; scene.add(slab);
+    // parapet on edges that face a non-deck tile (so the roof reads as an edge)
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nt = (mission.grid[y + dy] || [])[x + dx];
+      if (nt === 6 || nt === 7) continue;
+      const horiz = dy !== 0;
+      const rail = _bx(horiz ? T : T * 0.12, T * 0.3, horiz ? T * 0.12 : T, 0x4a4e57, 0.85, 0.1);
+      rail.position.set(w.x + dx * T * 0.46, DECK_H + 0.28, w.z + dy * T * 0.46); rail.castShadow = true; scene.add(rail);
+    }
+  }
+  function buildRamp(x, y, w) {
+    // a landing at deck height + stairs descending toward the ground foot
+    const land = _bx(T * 0.92, T * 0.14, T * 0.92, 0x62666e, 0.82, 0.15); land.position.set(w.x, DECK_H + 0.07, w.z); land.receiveShadow = true; scene.add(land);
+    // find the ground-side direction (a neighbour that is NOT deck/ramp)
+    let gx = 0, gz = 0;
+    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) { const nt = (mission.grid[y + dy] || [])[x + dx]; if (nt !== 6 && nt !== 7 && nt !== 1 && nt !== 5) { gx = dx; gz = dy; break; } }
+    for (let i = 0; i < 3; i++) {
+      const h = DECK_H * (1 - (i + 1) / 4);
+      const step = _bx(gx ? T * 0.34 : T * 0.7, T * 0.16, gz ? T * 0.34 : T * 0.7, 0x52565e, 0.85, 0.12);
+      step.position.set(w.x + gx * (i + 1) * T * 0.3, h, w.z + gz * (i + 1) * T * 0.3); step.castShadow = true; scene.add(step);
+    }
+  }
+
   // ── Units (REAL rigged + animated characters) ───────────────────────────────
   // Players = an animated soldier; enemies come in distinct animated species —
   // a combat robot (drones), a heavy cyborg (defenders), and a beast (stalkers)
@@ -612,7 +642,7 @@ register3d("tactics3d", async (kernel, content) => {
 
   async function makeUnit(u) {
     const w = cell(u.x, u.y);
-    const g = new THREE.Group(); g.position.set(w.x, 0.2, w.z);
+    const g = new THREE.Group(); g.position.set(w.x, 0.2 + _tileLift(u.x, u.y), w.z);
     const col = unitColor(u), dark = shade(col, -0.5);
     // faction base ring (selection + team id)
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(T * 0.36, T * 0.36, 0.1, 26),
@@ -1153,7 +1183,7 @@ register3d("tactics3d", async (kernel, content) => {
         const last = path[path.length - 1], w = cell(last.x, last.y);
         faceToward(mu, last.x, last.y); anim(mu, "walk", { fade: 0.15 });
         const dur = Math.max(0.3, Math.min(1.1, path.length * 0.16));
-        kernel.tween({ target: v.group.position, to: { x: w.x, z: w.z }, duration: dur, onComplete: () => anim(mu, "idle", { fade: 0.2 }) });
+        kernel.tween({ target: v.group.position, to: { x: w.x, y: 0.2 + _tileLift(last.x, last.y), z: w.z }, duration: dur, onComplete: () => anim(mu, "idle", { fade: 0.2 }) });
         return dur * 1000 + 60;
       }
       return 30;

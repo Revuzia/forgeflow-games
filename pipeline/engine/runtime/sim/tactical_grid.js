@@ -181,11 +181,19 @@
     isWalkable(x, y) {
       if (!this.inBounds(x, y)) return false;
       const t = this.grid[y][x];
-      // Cover tiles are SOLID objects (crates/barricades) — units path AROUND
-      // them and take cover beside them, never walk through. Only open floor and
-      // hazard lanes are walkable. (Was: half-cover walkable, so units stood on
-      // crates / appeared to walk through obstacles.)
-      return t === 0 || t === 4; // floor / hazard
+      // Walkable: open floor / hazard / ROOFTOP (6) / RAMP (7). Cover tiles are
+      // solid (units path around). Verticality: 6 = elevated rooftop deck, 7 =
+      // ramp/stair connecting ground<->roof.
+      return t === 0 || t === 4 || t === 6 || t === 7;
+    }
+    // 0 = ground level, 1 = rooftop. A ramp (7) is the climb connector.
+    elevationAt(x, y) { return (this.inBounds(x, y) && this.grid[y][x] === 6) ? 1 : 0; }
+    // Can a unit step between adjacent tiles a->b? Same elevation, OR one is a ramp.
+    canStep(ax, ay, bx, by) {
+      if (!this.isWalkable(bx, by)) return false;
+      const ta = this.grid[ay][ax], tb = this.grid[by][bx];
+      if (ta === 7 || tb === 7) return true; // ramp connects elevations
+      return this.elevationAt(ax, ay) === this.elevationAt(bx, by);
     }
 
     unitAt(x, y) {
@@ -215,7 +223,7 @@
             const nx = node.x + d[0], ny = node.y + d[1];
             const cost = node.cost + 1;
             if (cost > unit.movement) continue;
-            if (!this.isWalkable(nx, ny)) continue;
+            if (!this.canStep(node.x, node.y, nx, ny)) continue; // elevation-aware (climb only via ramps)
             if (this.unitAt(nx, ny)) continue;
             const k = nx + "," + ny;
             if (seen[k] != null && seen[k] <= cost) continue;
@@ -251,7 +259,7 @@
         open.delete(cur);
         for (const d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           const nx = cx + d[0], ny = cy + d[1];
-          if (!this.isWalkable(nx, ny)) continue;
+          if (!this.canStep(cx, cy, nx, ny)) continue; // elevation-aware
           if (this.unitAt(nx, ny) && !(nx === ex && ny === ey)) continue;
           const nk = key(nx, ny);
           const tg = (g[cur] != null ? g[cur] : Infinity) + 1;
@@ -324,16 +332,19 @@
       const dist = Math.abs(attacker.x - target.x) + Math.abs(attacker.y - target.y);
       const inRange = dist <= attacker.range;
       const distancePenalty = Math.max(0, (dist - 3) * 0.05);
-      const cover = this.coverAt(target, attacker.x, attacker.y);
+      const rawCover = this.coverAt(target, attacker.x, attacker.y);
+      const highGround = this.elevationAt(attacker.x, attacker.y) > this.elevationAt(target.x, target.y);
+      const cover = (highGround && rawCover === 1) ? 0 : rawCover; // high ground negates HALF cover
       const coverPenalty = cover === 2 ? 0.4 : cover === 1 ? 0.2 : 0;
       const flanked = this.isFlanked(attacker, target);
       const flankBonus = flanked ? 0.25 : (cover === 0 ? 0.1 : 0);
       const suppress = attacker.suppressAimPenalty || 0; // pinned shooters fire wild
       const ambush = !!this.concealed && attacker.side === "player"; // firing from concealment = the drop
       const ambushBonus = ambush ? 0.15 : 0;
-      const chance = inRange ? Math.max(0.05, Math.min(0.99, attacker.aim - distancePenalty - coverPenalty + flankBonus + ambushBonus - suppress)) : 0;
+      const heightBonus = highGround ? 0.2 : 0; // XCOM high-ground aim bonus
+      const chance = inRange ? Math.max(0.05, Math.min(0.99, attacker.aim - distancePenalty - coverPenalty + flankBonus + ambushBonus + heightBonus - suppress)) : 0;
       const critChance = (flanked || ambush) ? 0.5 : 0.1;
-      return { chance, critChance, cover, coverPenalty, distancePenalty, flankBonus, ambush, ambushBonus, suppress, flanked, dist, inRange };
+      return { chance, critChance, cover, coverPenalty, distancePenalty, flankBonus, ambush, ambushBonus, suppress, flanked, highGround, heightBonus, dist, inRange };
     }
 
     calculateHitChance(attacker, target) { return this.hitBreakdown(attacker, target).chance; }

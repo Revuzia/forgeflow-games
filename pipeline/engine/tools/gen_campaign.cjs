@@ -169,6 +169,18 @@ function buildMission(spec) {
     for (let i = 0; i < n; i++) coverCluster(lx + 2 + ri(Math.max(1, lw - 4)), ly + 2 + ri(Math.max(1, lh - 4)), 1 + ri(2), 0.5);
   }
 
+  // Raised ROOFTOP DECK (type 6) + RAMP (7) to the ground — optional high-ground
+  // (units climb for +aim and line-of-sight over low cover). Verticality.
+  function stampPlatform(lx, ly, lw, lh) {
+    const bw = Math.min(lw - 2, 5), bh = Math.min(lh - 2, 5);
+    if (bw < 3 || bh < 3) return stampPlaza(lx, ly, lw, lh);
+    const bx = lx + 1, by = ly + 1;
+    for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) set(x, y, 6); // deck
+    const rx = bx + (bw >> 1);
+    set(rx, by + bh - 1, 7);                       // bottom-centre deck tile -> ramp
+    if (inB(rx, by + bh)) set(rx, by + bh, 0);     // ground at the ramp foot
+  }
+
   for (let ri_ = 0; ri_ < rowStarts.length; ri_++) {
     for (let ci = 0; ci < colStarts.length; ci++) {
       const lx = colStarts[ci], ly = rowStarts[ri_];
@@ -178,10 +190,11 @@ function buildMission(spec) {
       const deployLot = ri_ === rowStarts.length - 1 && Math.abs((lx + lw / 2) - GW / 2) < lotW;
       const r = rng();
       if (deployLot) stampPlaza(lx, ly, lw, lh);
-      else if (r < 0.44) stampBuilding(lx, ly, lw, lh);
-      else if (r < 0.62) stampCompound(lx, ly, lw, lh);
-      else if (r < 0.82) stampPlaza(lx, ly, lw, lh);
-      else stampPark(lx, ly, lw, lh);
+      else if (r < 0.42) stampBuilding(lx, ly, lw, lh);
+      else if (r < 0.60) stampCompound(lx, ly, lw, lh);
+      else if (r < 0.78) stampPlaza(lx, ly, lw, lh);
+      else if (r < 0.90) stampPark(lx, ly, lw, lh);
+      else stampPlatform(lx, ly, lw, lh);
     }
   }
 
