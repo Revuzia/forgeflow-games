@@ -274,7 +274,7 @@
         const isEndpoint = (x === fromX && y === fromY) || (x === toX && y === toY);
         if (!isEndpoint) {
           const t = this.grid[y] && this.grid[y][x];
-          if (t === 1 || t === 3) return false;
+          if (t === 1 || t === 3 || t === 5) return false; // 5 = building wall blocks sight
         }
         const e2 = 2 * err;
         if (e2 > -dy) { err -= dy; x += sx; }
@@ -293,7 +293,7 @@
         const dx = d[0], dy = d[1];
         const nx = unit.x + dx, ny = unit.y + dy;
         const t = this.grid[ny] && this.grid[ny][nx];
-        const cv = t === 3 ? 2 : t === 2 ? 1 : 0;
+        const cv = (t === 3 || t === 5) ? 2 : t === 2 ? 1 : 0; // a building wall (5) = full cover
         if (cv === 0) continue;
         if (fromX != null) {
           const ax = Math.sign(fromX - unit.x), ay = Math.sign(fromY - unit.y);
@@ -309,7 +309,7 @@
     hasAnyCover(target) {
       for (const d of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
         const t = this.grid[target.y + d[1]] && this.grid[target.y + d[1]][target.x + d[0]];
-        if (t === 2 || t === 3) return true;
+        if (t === 2 || t === 3 || t === 5) return true;
       }
       return false;
     }
@@ -514,7 +514,7 @@
             const c = this.grid[yy][xx];
             // Blow a HOLE in a building wall (1 -> rubble/floor 0): opens LOS +
             // a new path, true XCOM destructible cover. Cover degrades 3->2->0.
-            if (c === 1) { this.grid[yy][xx] = 0; shredded.push({ x: xx, y: yy, from: 1, to: 0 }); }
+            if (c === 1 || c === 5) { this.grid[yy][xx] = 0; shredded.push({ x: xx, y: yy, from: c, to: 0 }); }
             else if (c === 2 || c === 3) { const to = c === 3 ? 2 : 0; this.grid[yy][xx] = to; shredded.push({ x: xx, y: yy, from: c, to: to }); }
           }
       }

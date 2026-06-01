@@ -96,22 +96,27 @@ function buildMission(spec) {
   }
   function stampOneBuilding(bx, by, bw, bh) {
     if (bw < 3 || bh < 3) return;
-    for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) set(x, y, 1);
-    const enterable = bw >= 4 && bh >= 4 && rng() < 0.62;
+    // Most buildings are ENTERABLE: a low perimeter WALL (type 5 — you see over/
+    // into it from the iso camera) around an open, FURNISHED interior with a door
+    // gap. The rest are solid towers (type 1) for the skyline + hard cover.
+    const enterable = bw >= 4 && bh >= 4 && rng() < 0.74;
     if (enterable) {
-      for (let y = by + 1; y < by + bh - 1; y++) for (let x = bx + 1; x < bx + bw - 1; x++) set(x, y, 0);
+      for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) {
+        const edge = (x === bx || x === bx + bw - 1 || y === by || y === by + bh - 1);
+        set(x, y, edge ? 5 : 0); // 5 = enterable wall, 0 = room floor
+      }
       // Interior cross-wall → 2 rooms (with a 1-tile internal doorway).
-      if (bw >= 6 && rng() < 0.6) {
+      if (bw >= 6 && rng() < 0.55) {
         const wx = bx + 2 + ri(Math.max(1, bw - 4));
-        for (let y = by + 1; y < by + bh - 1; y++) set(wx, y, 1);
+        for (let y = by + 1; y < by + bh - 1; y++) set(wx, y, 5);
         set(wx, by + 1 + ri(Math.max(1, bh - 2)), 0);
-      } else if (bh >= 6 && rng() < 0.6) {
+      } else if (bh >= 6 && rng() < 0.55) {
         const wy = by + 2 + ri(Math.max(1, bh - 4));
-        for (let x = bx + 1; x < bx + bw - 1; x++) set(x, wy, 1);
+        for (let x = bx + 1; x < bx + bw - 1; x++) set(x, wy, 5);
         set(bx + 1 + ri(Math.max(1, bw - 2)), wy, 0);
       }
-      // 1–2 exterior doors onto the street.
-      const doors = 1 + (rng() < 0.5 ? 1 : 0);
+      // 1–2 exterior doors (gaps in the perimeter wall).
+      const doors = 1 + (rng() < 0.6 ? 1 : 0);
       for (let d = 0; d < doors; d++) {
         const side = ri(4);
         if (side === 0) set(bx + 1 + ri(Math.max(1, bw - 2)), by, 0);
@@ -119,8 +124,11 @@ function buildMission(spec) {
         else if (side === 2) set(bx, by + 1 + ri(Math.max(1, bh - 2)), 0);
         else set(bx + bw - 1, by + 1 + ri(Math.max(1, bh - 2)), 0);
       }
-      // Interior cover (desks/crates) + cover flanking each door outside.
-      if (rng() < 0.8) coverCluster(bx + (bw >> 1), by + (bh >> 1), 2 + ri(2), 0.3);
+      // Interior FURNITURE (desks/crates as cover) — the "stuff in the building".
+      const fc = 1 + ri(2);
+      for (let c = 0; c < fc; c++) coverCluster(bx + 1 + ri(Math.max(1, bw - 2)), by + 1 + ri(Math.max(1, bh - 2)), 1 + ri(2), 0.3);
+    } else {
+      for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) set(x, y, 1); // solid tower
     }
     // Street cover hugging the building footprint (cars / barriers along the curb).
     const curb = 2 + ri(3);

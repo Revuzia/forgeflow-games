@@ -223,6 +223,7 @@ register3d("tactics3d", async (kernel, content) => {
         const t = mission.grid[y][x];
         const w = cell(x, y);
         if (t === 1) { buildStructure(x, y, w); continue; }
+        if (t === 5) { buildWall(x, y, w); continue; } // enterable building: low open-top wall
         if (t === 2 || t === 3) buildCover(x, y, w, t === 3);
         else if (t === 4) buildHazard(w);
       }
@@ -397,6 +398,25 @@ register3d("tactics3d", async (kernel, content) => {
       }
     }
     buildingTiles[x + "," + y] = parts; // tracked so a grenade can demolish it
+  }
+
+  // Enterable-building WALL (tile type 5): a low concrete wall + lit window band,
+  // OPEN-TOP so the iso camera sees down into the furnished room behind it. Reads
+  // as a real building you walk into (through the door gaps), full cover + sight-
+  // blocking in the sim, and frag-destructible (tracked in buildingTiles).
+  function buildWall(x, y, w) {
+    const hsh = ((x * 73856093) ^ (y * 19349663)) >>> 0;
+    const wallCol = [0x4a4e57, 0x52514b, 0x474b52, 0x55504a][hsh % 4]; // concrete / brick
+    const wh = T * 1.55;
+    const base = _bx(T, wh * 0.6, T, wallCol, 0.92, 0.06);
+    base.position.set(w.x, wh * 0.3, w.z); base.castShadow = true; base.receiveShadow = true; scene.add(base);
+    const parts = [base];
+    const band = new THREE.Mesh(new THREE.BoxGeometry(T, wh * 0.4, T),
+      new THREE.MeshStandardMaterial({ color: 0x26323f, emissive: 0xffe1ad, emissiveIntensity: (hsh & 1) ? 0.4 : 0.12, roughness: 0.5, metalness: 0.1 }));
+    band.position.set(w.x, wh * 0.8, w.z); band.castShadow = true; scene.add(band); parts.push(band);
+    const cap = _bx(T * 1.05, T * 0.1, T * 1.05, shade(wallCol, -0.25), 0.85, 0.08);
+    cap.position.set(w.x, wh, w.z); cap.castShadow = true; scene.add(cap); parts.push(cap);
+    buildingTiles[x + "," + y] = parts;
   }
 
   // ── Units (REAL rigged + animated characters) ───────────────────────────────
