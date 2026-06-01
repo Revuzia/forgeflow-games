@@ -63,6 +63,18 @@ inherits them via golden_seed.
   highest-severity gap that night, re-gates, commits if green, and repeats the
   next night until MATCH.
 
+## Render-pipeline standard (the "right way" out of the low-poly look — 2026)
+The low-poly LOOK is the SHADING pipeline, not polygon count. Every 3D game MUST use:
+- **IBL**: `scene.environment` from a PMREM-prefiltered sky/HDRI (kernel.setEnvironment)
+  — real ambient + reflections, not flat fill. The single biggest fidelity jump.
+- **AgX tone mapping** (ACES fallback) + sRGB output; exposure ~1.0-1.1.
+- **PBR materials**: albedo + NORMAL + ROUGHNESS (+ AO) maps, not flat colors. Wet/
+  metal surfaces get LOW roughness so they reflect the IBL. Reflective accents (cars,
+  kiosks, rails, weapons) are what make IBL visible.
+- Tight bloom (≤0.35 / threshold ≥0.85), SSAO/GTAO, dense dark fog (moody, no white-out).
+Geometry may stay low/mid-poly — PBR + IBL carry the fidelity (how stylized AAA indies
+do it). Verify on a REAL GPU; headless SwiftShader under-shows reflections/AA.
+
 ## Honest ceiling note (for the operator, not the scorer)
 Free CC0 low-poly + browser tops out at "stylized / Roblox-tier," not pixel-
 identical XCOM-2 AAA. The score should judge STRUCTURE, SYSTEMS, COMPOSITION and
