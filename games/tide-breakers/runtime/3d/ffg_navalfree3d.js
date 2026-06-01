@@ -63,6 +63,14 @@ register3d("navalfree", async function (kernel, content) {
   let busy = false;          // true while an animation/turn is resolving (locks input)
   let selectedId = null;     // currently selected friendly ship
   let beginGame = null;
+  // ── online play (lazy; mirror-relay over Supabase Realtime) ──────────────────
+  // Both clients run the SAME deterministic sim; each controls its own "player"
+  // (south) fleet. A turn's actions are batched + broadcast on End Turn; the peer
+  // replays them MIRRORED onto its "enemy" fleet (P-k<->E-k, x->W-x, y->H-y). Host's
+  // sim starts firstSide "player" (acts first); guest starts "enemy" (waits first).
+  let netMode = false, online = null, _onlineApi = null;
+  let myActions = [];        // this turn's local actions, awaiting broadcast
+  let netFirstSide = "player";
 
   // ── Ocean — real reflective water (three.js Water): flowing normal-mapped
   // waves, sun glint, fresnel shine. The normal map is bundled in the runtime.
@@ -617,6 +625,7 @@ register3d("navalfree", async function (kernel, content) {
   function tryMove(s, simX, simY) {
     const r = sim.moveShip(s.id, { x: simX, y: simY });
     if (!r.ok) { setHUD(reasonText(r.reason)); return; }
+    if (netMode) myActions.push({ k: "m", id: s.id, x: r.x, y: r.y }); // relay the RESOLVED pose
     busy = true; hideGizmos(); destGhost.visible = false;
     kernel.playSound(sfx.move || sfx.splash, 0.18);
     animateMove(s, () => {
@@ -629,6 +638,7 @@ register3d("navalfree", async function (kernel, content) {
     // Pre-check so we can explain misses without burning surprise.
     const chk = sim.canFireAt(shooter.id, targetShip.x, targetShip.y, targetShip.id);
     const r = sim.fireAt(shooter.id, targetShip.id);
+    if (netMode) myActions.push({ k: "f", id: shooter.id, tid: targetShip.id }); // relay (even a miss burns an action)
     busy = true; hideGizmos();
     kernel.playSound(sfx.fire, 0.5);
     const impact = toScene(targetShip.x, targetShip.y); impact.y = 2.0;
@@ -697,6 +707,14 @@ register3d("navalfree", async function (kernel, content) {
     if (sim.ended || sim.turn !== "player" || busy) return;
     selectedId = null; hideGizmos();
     sim.endTurn(); // -> enemy
+    if (netMode) {
+      // ONLINE: hand the opponent my turn's actions; lock input until theirs arrive.
+      const batch = myActions; myActions = [];
+      setHUD(`<span style="color:#ff8a6a">Opponent's move…</span>`);
+      busy = true;
+      if (online) online.localMoved(batch);
+      return;
+    }
     setHUD(`<span style="color:#ff8a6a">Enemy is maneuvering…</span>`);
     busy = true;
     runAITurn();
@@ -751,6 +769,91 @@ register3d("navalfree", async function (kernel, content) {
       const subtitle = win ? `Enemy fleet sunk · Turn ${sim.turnNumber}` : `Your fleet was lost · Turn ${sim.turnNumber}`;
       window.FFG.shell.end(win, subtitle);
     }
+    if (netMode && online) { try { online.finish(); } catch (e) {} }
+  }
+
+  // ── ONLINE: replay the opponent's relayed turn, MIRRORED onto my enemy fleet ──
+  // P-k<->E-k (their player == my enemy) and coords flip across the arena centre, so
+  // both deterministic sims stay mirror-consistent (moveShip/fireAt carry no RNG).
+  function mirrorId(id) { return id && id[0] === "P" ? "E" + id.slice(1) : "P" + id.slice(1); }
+  async function applyRemoteBatch(batch) {
+    busy = true;
+    const acts = batch || [];
+    for (const a of acts) {
+      if (sim.ended) break;
+      if (a.k === "m") {
+        const id = mirrorId(a.id);
+        sim.moveShip(id, { x: ARENA_W - a.x, y: ARENA_H - a.y });
+        const s = sim.shipById(id);
+        if (s) await new Promise((res) => animateMove(s, res));
+      } else if (a.k === "f") {
+        const sid = mirrorId(a.id), tid = mirrorId(a.tid);
+        const shooter = sim.shipById(sid), target = sim.shipById(tid);
+        const r = sim.fireAt(sid, tid);
+        if (shooter && target) {
+          const impact = toScene(target.x, target.y); impact.y = 2.0;
+          kernel.playSound(sfx.fire, 0.5);
+          await new Promise((res) => fireShell(shooter, impact, () => {
+            if (r.result === "hit" || r.result === "sink") {
+              explosion(impact); kernel.playSound(sfx.hit, 0.5);
+              updateHealthBar(sim.shipById(tid) || target); damageText(impact, r.dmg);
+              if (r.result === "sink") { kernel.playSound(sfx.sink, 0.6); sinkVisual(target); }
+            } else { splash(impact); kernel.playSound(sfx.miss || sfx.splash, 0.4); }
+            res();
+          }));
+        }
+      }
+    }
+    if (sim.ended) { busy = false; finishMatch(); return; }
+    sim.endTurn(); // -> my turn
+    busy = false;
+    setHUD(`<span style="color:#37e0c0">Your move.</span>`);
+    autoSelectNextShip();
+  }
+
+  // small online status HUD (turn + 15s timer)
+  let _onlineHud = null;
+  function onlineStatus(o) {
+    if (!o) { if (_onlineHud) _onlineHud.style.display = "none"; return; }
+    if (!_onlineHud) {
+      _onlineHud = document.createElement("div");
+      _onlineHud.style.cssText = "position:absolute;top:60px;left:0;right:0;text-align:center;z-index:40;font-family:'Segoe UI',monospace;pointer-events:none";
+      (kernel.parent || document.body).appendChild(_onlineHud);
+    }
+    _onlineHud.style.display = "block";
+    const col = o.myTurn ? "#37e0c0" : "#ff8a6a";
+    const clock = o.secsLeft != null ? ` · ⏱ ${o.secsLeft}s` : "";
+    _onlineHud.innerHTML = `<div style="display:inline-block;background:rgba(8,16,26,.78);border:1px solid ${col};border-radius:9px;padding:6px 16px;color:${col};font-size:14px;font-weight:700;letter-spacing:1px">${o.banner || ""}${clock}</div>`;
+  }
+
+  function buildOnlineIface() {
+    return {
+      parent: kernel.parent,
+      gameId: "tide-breakers",
+      onLobbyOpen: () => {},
+      onLobbyBack: () => { netMode = false; phase = "menu"; onlineStatus(null); if (window.FFG && window.FFG.shell) window.FFG.shell.start(); },
+      startGame: (isHost) => {
+        netMode = true; netFirstSide = isHost ? "player" : "enemy"; myActions = [];
+        onlineStatus({ myTurn: isHost, banner: isHost ? "You move first" : "Opponent moves first", secsLeft: null });
+        beginGame(content.difficulty || "normal");
+      },
+      isMyTurn: () => !!sim && phase === "battle" && sim.turn === "player",
+      isOver: () => !!sim && sim.ended,
+      applyRemoteMove: (batch) => applyRemoteBatch(batch),
+      randomMove: () => { if (sim && sim.turn === "player" && !busy) endPlayerTurn(); }, // timeout = end my turn
+      setStatus: (s) => onlineStatus(s),
+      end: (victory, sub) => { phase = "ended"; hideGizmos(); onlineStatus(null); if (window.FFG && window.FFG.shell) window.FFG.shell.end(victory, sub || ""); },
+      onError: (msg) => { try { console.warn("[online]", msg); } catch (e) {} },
+    };
+  }
+  async function startOnline() {
+    if (!_onlineApi) {
+      const mod = await import("../net/ffg_online.js" + new URL(import.meta.url).search);
+      _onlineApi = mod.installOnline(buildOnlineIface());
+      online = _onlineApi.controller;
+    }
+    netMode = true;
+    _onlineApi.openLobby();
   }
 
   // ── Camera (orbit + zoom), framed on the arena ──────────────────────────────
@@ -775,7 +878,7 @@ register3d("navalfree", async function (kernel, content) {
     if (diff === "hard") fleet.forEach((s) => { if (s.side === "enemy") { s.gun.range *= 1.12; s.gun.dmg = Math.round(s.gun.dmg * 1.18); s.hp = Math.round(s.hp * 1.1); s.maxHp = s.hp; } });
     if (diff === "easy") fleet.forEach((s) => { if (s.side === "enemy") { s.gun.range *= 0.9; s.gun.dmg = Math.round(s.gun.dmg * 0.82); } });
 
-    sim = new NavalFree({ width: ARENA_W, height: ARENA_H, seed: _gameSeed, firstSide: "player", actionsPerTurn: m.actionsPerTurn || 2, ships: fleet });
+    sim = new NavalFree({ width: ARENA_W, height: ARENA_H, seed: _gameSeed, firstSide: netMode ? netFirstSide : "player", actionsPerTurn: m.actionsPerTurn || 2, ships: fleet });
     for (const s of sim.ships) await buildShipVisual(s);
     phase = "battle"; busy = false;
     // Procedural ocean music. The PLAY click is the user gesture that unlocks audio;
@@ -816,12 +919,34 @@ register3d("navalfree", async function (kernel, content) {
         { h: "Drive", p: "Click open water inside the teal disc. The ship turns toward the heading and steams there (capped by its turn rate + speed)." },
         { h: "Fire", p: "Click an enemy ship that sits inside your amber arc. Out of range / out of arc / blocked by a hull = the shot won't connect, so reposition. <b>Q/E</b> rotate the selected ship in place." },
         { h: "Camera", p: "Right-drag to orbit · scroll to zoom · WASD to pan across the sea." },
+        { h: "Play Online", p: "From the title, choose <b>PLAY ONLINE</b> to face a live opponent: <b>Quick Match</b> pairs you with anyone waiting, or <b>Create Room</b> / <b>Join Room</b> with a shared 4-character code to play a friend. Each side commands its own fleet with a <b>15-second turn timer</b>." },
       ],
       onPlay: (d) => { beginGame(d); },
       onPause: () => { try { navalMusic.stop(); } catch (e) {} },
       onResume: () => { try { navalMusic.start(); } catch (e) {} },
     });
     shell.start();
+
+    // Inject a "PLAY ONLINE" button beside PLAY (additive; re-added on each menu render).
+    const _origMenu = shell.menu.bind(shell);
+    shell.menu = function () {
+      _origMenu();
+      try {
+        if (shell.phase !== "menu" || !shell.ov) return;
+        const ob = document.createElement("button");
+        ob.textContent = "🌐  PLAY ONLINE";
+        ob.style.cssText = "font:bold 15px 'Segoe UI',system-ui,monospace;padding:11px 26px;cursor:pointer;min-width:200px;" +
+          "letter-spacing:1px;border-radius:7px;margin-top:8px;color:#06121f;background:linear-gradient(#9fe0ff,#4fb6e0);" +
+          "border:1px solid #7fd0f0;box-shadow:0 4px 18px rgba(80,180,224,.32);transition:transform .08s";
+        ob.onmouseenter = () => { ob.style.transform = "translateY(-1px)"; };
+        ob.onmouseleave = () => { ob.style.transform = "none"; };
+        ob.onclick = () => { shell.hide(); shell.phase = "playing"; startOnline(); };
+        const playBtn = Array.prototype.find.call(shell.ov.querySelectorAll("button"), (b) => /PLAY/i.test(b.textContent) && !/ONLINE/i.test(b.textContent));
+        if (playBtn && playBtn.parentNode) playBtn.parentNode.insertBefore(ob, playBtn.nextSibling);
+        else shell.ov.appendChild(ob);
+      } catch (e) { /* additive — never block the menu */ }
+    };
+    if (shell.phase === "menu") shell.menu();
   } else {
     // No shell available — boot straight into a match (headless/test fallback).
     beginGame(content.difficulty || "normal");
