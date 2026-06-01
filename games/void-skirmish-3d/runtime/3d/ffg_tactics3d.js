@@ -133,6 +133,25 @@ function buildingFacades() {
   return _facades;
 }
 
+// Dusk SKY gradient (steel-blue twilight — the XCOM 2 city/slums look): a tall
+// vertical canvas gradient used as scene.background, warm haze at the horizon.
+let _skyTex = null;
+function makeSkyTexture() {
+  if (_skyTex) return _skyTex;
+  const c = document.createElement("canvas"); c.width = 8; c.height = 256;
+  const g = c.getContext("2d");
+  const grd = g.createLinearGradient(0, 0, 0, 256);
+  grd.addColorStop(0.00, "#0e1a32"); // deep zenith
+  grd.addColorStop(0.42, "#21395c"); // mid sky
+  grd.addColorStop(0.74, "#3a5a82"); // horizon steel-blue
+  grd.addColorStop(0.90, "#6f6a74"); // warm-grey haze band
+  grd.addColorStop(1.00, "#86604f"); // warm dusk at the very bottom
+  g.fillStyle = grd; g.fillRect(0, 0, 8, 256);
+  const tex = new THREE.CanvasTexture(c);
+  if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+  _skyTex = tex; return tex;
+}
+
 register3d("tactics3d", async (kernel, content) => {
   const scene = kernel.scene;
   const TB = window.FFG.sim.TacticalBattle;
@@ -153,21 +172,21 @@ register3d("tactics3d", async (kernel, content) => {
   // world position of a tile centre (board centred on origin; +z = "south")
   const cell = (x, y) => new THREE.Vector3((x + 0.5) * T - W / 2, 0, (y + 0.5) * T - H / 2);
 
-  scene.background = new THREE.Color(0x1a2740); // dusk navy (was near-black night)
-  scene.fog = new THREE.FogExp2(0x1f2d46, 0.0050);
-  // Cinematic 3-point rig: warm key, cool fill, and a bright COOL RIM/back light
-  // that separates soldiers + cover from the dark ground — the single biggest
-  // "they pop as characters" lever. Soft shadows for grounded depth.
+  // Dusk steel-blue gradient sky + horizon-tinted depth fog — the XCOM 2 city/
+  // slums twilight look (grounded in real reference). Sky-tinted ambient + a LOW
+  // WARM key for long shadows and crushed blacks.
+  scene.background = makeSkyTexture();
+  scene.fog = new THREE.FogExp2(0x2c476b, 0.0058);
   try { kernel.renderer.shadowMap.type = THREE.PCFSoftShadowMap; } catch (e) {}
-  const key = new THREE.DirectionalLight(0xfff2e0, 2.55); key.position.set(46, 72, 30); key.castShadow = true;
+  const key = new THREE.DirectionalLight(0xffd7a0, 2.5); key.position.set(58, 44, 24); key.castShadow = true; // warm gold, low angle
   key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = -60; key.shadow.camera.right = 60; key.shadow.camera.top = 60; key.shadow.camera.bottom = -60; key.shadow.camera.far = 240;
   key.shadow.bias = -0.0004; key.shadow.normalBias = 0.045; scene.add(key);
-  scene.add(new THREE.DirectionalLight(0x7aa0e0, 0.62).translateX(-46).translateY(38).translateZ(-20)); // cool fill
-  const rim = new THREE.DirectionalLight(0xbfe2ff, 1.25); rim.position.set(-24, 34, -72); scene.add(rim); // back/rim
-  scene.add(new THREE.HemisphereLight(0xd6e4ff, 0x2a3242, 1.3)); // brighter sky-fill so the city GROUND (asphalt/sidewalks/grass) reads
-  scene.add(new THREE.AmbientLight(0xaec2d8, 0.58));
-  kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = 1.56;
-  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.42, radius: 0.6, threshold: 0.85 }); // restrained — grittier, less neon
+  scene.add(new THREE.DirectionalLight(0x6b88c0, 0.5).translateX(-46).translateY(38).translateZ(-20)); // cool sky fill
+  const rim = new THREE.DirectionalLight(0x9fd8e8, 1.2); rim.position.set(-24, 30, -72); scene.add(rim); // cool teal-ish rim (ADVENT)
+  scene.add(new THREE.HemisphereLight(0x9fb6d8, 0x2a2630, 1.05)); // sky-fill tinted to dusk
+  scene.add(new THREE.AmbientLight(0x8ea2bd, 0.42)); // lower → deep XCOM shadows
+  kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = 1.34;
+  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.55, radius: 0.62, threshold: 0.8, ssao: true, ssaoRadius: 1.1 }); // dusk bloom + SSAO contact shadows
   // Cinematic vignette (DOM overlay under the HUD) — frames the action + adds depth.
   try {
     const _vig = document.createElement("div");
@@ -371,7 +390,7 @@ register3d("tactics3d", async (kernel, content) => {
     const shellCol = PAL[hsh % PAL.length];
     // Warm office-window glow (amber/gold) + a little cool fluorescent — grounded
     // night-city light, NOT cyberpunk green/purple (the old rainbow read as arcade).
-    const winCol = [0xffe1ad, 0xffcf86, 0xdfeaff, 0xfff1cf][hsh % 4];
+    const winCol = [0xffb24d, 0xffc678, 0xdfe8ff, 0xffd089][hsh % 4]; // warm dusk window-glow (XCOM amber) + a few cool
     const floors = kind <= 1 ? (4 + (hsh % 3)) : kind <= 3 ? (2 + (hsh % 2)) : 1; // lower-rise urban (XCOM), not a skyscraper metropolis
     const bh = T * 0.92 * floors;
     // Single textured box per building — facade map tinted by the shell colour,
@@ -412,7 +431,7 @@ register3d("tactics3d", async (kernel, content) => {
     base.position.set(w.x, wh * 0.3, w.z); base.castShadow = true; base.receiveShadow = true; scene.add(base);
     const parts = [base];
     const band = new THREE.Mesh(new THREE.BoxGeometry(T, wh * 0.4, T),
-      new THREE.MeshStandardMaterial({ color: 0x26323f, emissive: 0xffe1ad, emissiveIntensity: (hsh & 1) ? 0.4 : 0.12, roughness: 0.5, metalness: 0.1 }));
+      new THREE.MeshStandardMaterial({ color: 0x26323f, emissive: (hsh & 2) ? 0x34d6e8 : 0xffb24d, emissiveIntensity: (hsh & 1) ? 0.5 : 0.16, roughness: 0.5, metalness: 0.1 }));
     band.position.set(w.x, wh * 0.8, w.z); band.castShadow = true; scene.add(band); parts.push(band);
     const cap = _bx(T * 1.05, T * 0.1, T * 1.05, shade(wallCol, -0.25), 0.85, 0.08);
     cap.position.set(w.x, wh, w.z); cap.castShadow = true; scene.add(cap); parts.push(cap);
@@ -552,6 +571,17 @@ register3d("tactics3d", async (kernel, content) => {
       el.style.transform = `translate(${(Math.random() * 2 - 1) * k}px, ${(Math.random() * 2 - 1) * k}px)`;
       requestAnimationFrame(frame);
     })(start);
+  }
+  // Muzzle flash — a brief additive warm burst at the shooter's gun (NO point
+  // light; that would recompile shaders). Nudged toward the target.
+  function muzzleFlash(shooterPos, targetPos) {
+    const m = shooterPos.clone(); m.y = T * 0.62;
+    if (targetPos) { const d = targetPos.clone().sub(shooterPos); d.y = 0; if (d.lengthSq() > 0.001) m.add(d.normalize().multiplyScalar(T * 0.42)); }
+    const f = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffe6a8, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
+    f.position.copy(m); scene.add(f);
+    kernel.tween({ target: f.scale, to: { x: 2.8, y: 2.8, z: 2.8 }, duration: 0.11 });
+    kernel.tween({ target: f.material, to: { opacity: 0 }, duration: 0.11, onComplete: () => scene.remove(f) });
   }
   // Hit-react: play the model's flinch clip if it has one, else a quick punch.
   function flinch(u) {
@@ -889,6 +919,7 @@ register3d("tactics3d", async (kernel, content) => {
         const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pa, pb]), new THREE.LineBasicMaterial({ color: col, transparent: true }));
         scene.add(line); kernel.tween({ target: line.material, to: { opacity: 0 }, duration: 0.3, onComplete: () => scene.remove(line) });
         sfx("shot", p.reaction ? 0.4 : 0.55);
+        muzzleFlash(a.group.position, t.group.position);
         setTimeout(() => sfx(p.hit ? (p.crit || p.killed ? "hit_heavy" : "hit") : "miss", p.hit ? 0.6 : 0.5), 120);
         if (p.reaction) floatText({ x: pa.x, y: pa.y + 0.4, z: pa.z }, "OVERWATCH!", 0x9fd0ff);
         if (p.hit) {
@@ -966,6 +997,7 @@ register3d("tactics3d", async (kernel, content) => {
         const beam = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pa, pb]),
           new THREE.LineBasicMaterial({ color: p.hit ? 0xffd27a : 0x8aa0bc, transparent: true }));
         scene.add(beam); kernel.tween({ target: beam.material, to: { opacity: 0 }, duration: 0.45, onComplete: () => scene.remove(beam) });
+        if (a && t) muzzleFlash(a.group.position, t.group.position);
         if (p.hit) {
           screenShake(p.crit ? 16 : 8);
           const burst = new THREE.Mesh(new THREE.SphereGeometry(p.crit ? 0.7 : 0.5, 12, 12), new THREE.MeshBasicMaterial({ color: p.crit ? 0xff5a3c : 0xffd27a }));

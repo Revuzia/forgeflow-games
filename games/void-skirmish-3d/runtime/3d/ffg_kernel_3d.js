@@ -16,6 +16,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
 
 export const genres3d = {};
 export function register3d(name, builder) { genres3d[name] = builder; }
@@ -130,6 +131,19 @@ export class Kernel3D {
     const h = this.parent.clientHeight || window.innerHeight;
     const composer = new EffectComposer(this.renderer);
     composer.addPass(new RenderPass(this.scene, this.camera));
+    // Opt-in SSAO (contact shadows / ambient occlusion) — grounds props + units
+    // in their environment, the single biggest "not flat-lit" fidelity jump.
+    // Wrapped so a pass failure never breaks rendering (falls back to bloom-only).
+    if (opts.ssao) {
+      try {
+        const ssao = new SSAOPass(this.scene, this.camera, w, h);
+        ssao.kernelRadius = opts.ssaoRadius != null ? opts.ssaoRadius : 1.1;
+        ssao.minDistance = opts.ssaoMin != null ? opts.ssaoMin : 0.0015;
+        ssao.maxDistance = opts.ssaoMax != null ? opts.ssaoMax : 0.06;
+        composer.addPass(ssao);
+        this.ssao = ssao;
+      } catch (e) { console.warn("[kernel] SSAO unavailable:", e && e.message); }
+    }
     const bloom = new UnrealBloomPass(new THREE.Vector2(w, h),
       opts.strength != null ? opts.strength : 0.6,
       opts.radius != null ? opts.radius : 0.5,
