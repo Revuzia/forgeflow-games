@@ -749,10 +749,19 @@ register3d("tactics3d", async (kernel, content) => {
   // gun arms); tint is very light just for faction warmth.
   function enemyKind(u) {
     const s = ((u.sprite || "") + " " + (u.name || "")).toLowerCase();
-    if (/defender|heavy|mech|tank|brute|titan|elite/.test(s)) return { model: "heavy",  tint: 0xff6a4a, scale: 1.1 };  // heavy gun-platform bot
-    if (/sniper|scout|stalker|beast|hound|ranger|marksman/.test(s)) return { model: "walker", tint: 0xffae5a, scale: 1.0 }; // walker trooper-bot
-    if (/drone|assault/.test(s)) return { model: "drone", tint: 0xff7a5a, scale: 1.05 };                                 // fast flying drone
-    return { model: "drone", tint: 0xff6a5a, scale: 1.0 };
+    // TIER escalation: later missions field visibly bigger, hotter-glowing
+    // "upgraded" variants of each bot — the threat reads as it ramps (XCOM ADVENT
+    // Mk I→III). A `boss` enemy is a single oversized command unit.
+    const tier = Math.min(2, Math.floor(missionIndex / 3)); // 0 early, 1 mid, 2 late
+    const boss = !!u.boss || /avatar|boss|overlord|sectopod/.test(s);
+    let k;
+    if (boss) k = { model: "heavy", tint: 0xff2a3a, scale: 1.7, boss: true };          // command unit
+    else if (/defender|heavy|mech|tank|brute|titan|elite/.test(s)) k = { model: "heavy",  tint: 0xff6a4a, scale: 1.1 };
+    else if (/sniper|scout|stalker|beast|hound|ranger|marksman/.test(s)) k = { model: "walker", tint: 0xffae5a, scale: 1.0 };
+    else if (/drone|assault/.test(s)) k = { model: "drone", tint: 0xff7a5a, scale: 1.05 };
+    else k = { model: "drone", tint: 0xff6a5a, scale: 1.0 };
+    if (!boss) { k.scale *= 1 + tier * 0.1; if (tier >= 2) k.tint = 0xff4030; } // late-game bots bigger + angrier
+    return k;
   }
   function unitColor(u) { return u.tint != null ? new THREE.Color(u.tint).getHex() : (u.side === "player" ? 0x3aa0ff : 0xff5a4a); }
   function resolveClip(char, name) { return (name && char.actions[name]) ? name : (char.animations[0] && char.animations[0].name) || null; }
@@ -1522,6 +1531,16 @@ register3d("tactics3d", async (kernel, content) => {
 
   // ── Boot ────────────────────────────────────────────────────────────────────
   buildSim(); await buildBoard(); buildObjective();
+  // FINALE BOSS: on the last mission, the toughest enemy becomes an oversized
+  // command unit — a real bullet-sponge fight to cap the campaign (XCOM Avatar).
+  if (missionIndex === missions.length - 1) {
+    const foes = sim.aliveEnemies();
+    if (foes.length) {
+      const bz = foes.reduce((m, e) => (e.hp > m.hp ? e : m), foes[0]);
+      bz.boss = true; bz.name = "Avatar Sentinel"; bz.maxHp = Math.round(bz.maxHp * 2.4); bz.hp = bz.maxHp;
+      bz.atk = Math.round(bz.atk * 1.3); bz.def = (bz.def || 0) + 3;
+    }
+  }
   for (const u of sim.allUnits()) await makeUnit(u); // load + instance the animated models
   sim.allUnits().forEach(refreshUnit);
 
