@@ -38,7 +38,7 @@ export class Kernel3D {
     // capture the rendered frame (default false returns a blank canvas for
     // WebGL). Negligible perf cost at our scale; unlocks automated visual QA.
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     // AgX is the modern filmic tonemap (Blender 4.0 default, three r0.160+) — it
@@ -54,7 +54,7 @@ export class Kernel3D {
     const sun = new THREE.DirectionalLight(0xffffff, 1.6);
     sun.position.set(40, 70, 30);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(1024, 1024);
     const d = 80;
     sun.shadow.camera.left = -d; sun.shadow.camera.right = d;
     sun.shadow.camera.top = d; sun.shadow.camera.bottom = -d;
@@ -269,7 +269,9 @@ export class Kernel3D {
     if (this._gltfCache[url]) return this._gltfCache[url].clone(true);
     const gltf = await this.loader.loadAsync(url);
     const root = gltf.scene;
-    root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    const _lts = [];
+    root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } else if (o.isLight) _lts.push(o); });
+    _lts.forEach((l) => l.parent && l.parent.remove(l)); // PERF: drop model-embedded lights
     this._gltfCache[url] = root;
     return root.clone(true);
   }
@@ -281,7 +283,9 @@ export class Kernel3D {
   async loadCharacter(url) {
     if (!this._charCache[url]) {
       const gltf = await this.loader.loadAsync(url);
-      gltf.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      const _lts = [];
+      gltf.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } else if (o.isLight) _lts.push(o); });
+      _lts.forEach((l) => l.parent && l.parent.remove(l)); // PERF: drop model-embedded lights
       this._charCache[url] = gltf;
     }
     const gltf = this._charCache[url];
