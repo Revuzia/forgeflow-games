@@ -229,18 +229,18 @@ register3d("tactics3d", async (kernel, content) => {
   // dusk fog — the XCOM "the city extends past the playable area" backdrop. Cheap
   // boxes with faint window glow; they sit beyond the board and recede into haze.
   function buildSkyline() {
-    const hx = W / 2, hz = H / 2, gap = T * 5, margin = T * 30, step = T * 3.6;
+    const hx = W / 2, hz = H / 2, gap = T * 9, margin = T * 34, step = T * 4;
     let seed = 0x1234abcd;
     const rnd = () => { seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
     const geo = new THREE.BoxGeometry(1, 1, 1);
     for (let px = -hx - margin; px <= hx + margin; px += step) {
       for (let pz = -hz - margin; pz <= hz + margin; pz += step) {
-        if (Math.abs(px) <= hx + gap && Math.abs(pz) <= hz + gap) continue; // skip the playfield
-        if (rnd() > 0.42) continue;
-        const tw = T * (1.5 + rnd() * 1.6), th = T * (3 + rnd() * 12), td = T * (1.5 + rnd() * 1.6);
+        if (Math.abs(px) <= hx + gap && Math.abs(pz) <= hz + gap) continue; // keep clear of the playfield
+        if (rnd() > 0.36) continue;
+        const tw = T * (1.5 + rnd() * 1.6), th = T * (3 + rnd() * 8), td = T * (1.5 + rnd() * 1.6);
         const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-          color: 0x131e31, roughness: 0.94, metalness: 0.06,
-          emissive: (rnd() > 0.4) ? 0xffb24d : 0x3a5070, emissiveIntensity: 0.06 + rnd() * 0.12 }));
+          color: 0x101a2c, roughness: 0.95, metalness: 0.05,
+          emissive: 0xffb24d, emissiveIntensity: 0.015 + rnd() * 0.03 })); // very dim — distant, no bloom-wash
         m.scale.set(tw, th, td);
         m.position.set(px + (rnd() - 0.5) * step * 0.5, th / 2 - T * 0.5, pz + (rnd() - 0.5) * step * 0.5);
         scene.add(m);
@@ -546,20 +546,21 @@ register3d("tactics3d", async (kernel, content) => {
   // measured height for correct scaling; clip names are bare (the kernel aliases
   // the FBX "Armature|Idle" prefix) except the alien, whose clips are "Alien_*".
   const MODELS = {
-    //                native height          target tile-height    clip name map
-    soldier: { url: "adventurer.glb", h: 1.857, th: T * 1.52, clips: { idle: "Idle_Gun", walk: "Walk", die: "Death", attack: "Gun_Shoot", hurt: "HitRecieve" } }, // Idle_Gun = rifle in hands (visible weapon)
-    drone:   { url: "robot_enemy.glb", h: 0.711, th: T * 1.18, clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Shoot" } },
-    alien:   { url: "alien.glb",       h: 2.947, th: T * 1.72, clips: { idle: "Alien_Idle", walk: "Alien_Walk", die: "Alien_Death", attack: "Alien_Punch" } },
-    mech:    { url: "mech.glb",        h: 3.095, th: T * 2.0,  clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Shoot_Big", hurt: "HitRecieve_1" } },
+    //  player = armored SWAT trooper; enemies = a cohesive weaponized ROBOT army
+    //  (flying drone -> walker bot -> heavy gun-platform). native height / target / clips.
+    soldier: { url: "swat.glb",                   h: 1.854, th: T * 1.52, clips: { idle: "Idle_Gun", walk: "Walk", die: "Death", attack: "Gun_Shoot", hurt: "HitRecieve" } },
+    drone:   { url: "robot_enemy_flying_gun.glb", h: 0.696, th: T * 1.15, clips: { idle: "Idle", walk: "Walk", die: "Dead",  attack: "Shoot" } }, // NB: death clip is "Dead"
+    walker:  { url: "robot_enemy_legs_gun.glb",   h: 0.952, th: T * 1.45, clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Shoot" } },
+    heavy:   { url: "robot_enemy_large_gun.glb",  h: 1.279, th: T * 1.95, clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Shoot" } },
   };
-  // enemy class -> model + tint (genuine model variety, not just a recolor). Tint
-  // is light so each model keeps its own identity (a mech reads as a mech).
+  // enemy class -> model + tint. The bots already read as menacing (red eyes,
+  // gun arms); tint is very light just for faction warmth.
   function enemyKind(u) {
     const s = ((u.sprite || "") + " " + (u.name || "")).toLowerCase();
-    if (/defender|heavy|mech|tank|brute|titan|elite/.test(s)) return { model: "mech",  tint: 0xff6a4a, scale: 1.05 }; // heavy battlemech
-    if (/sniper|scout|stalker|beast|hound|ranger|marksman/.test(s)) return { model: "alien", tint: 0x9a6bff, scale: 1.0 }; // agile alien
-    if (/drone|assault/.test(s)) return { model: "drone", tint: 0xff9a3c, scale: 1.15 };                                  // skittering drone
-    return { model: "drone", tint: 0xff6a5a, scale: 1.05 };
+    if (/defender|heavy|mech|tank|brute|titan|elite/.test(s)) return { model: "heavy",  tint: 0xff6a4a, scale: 1.1 };  // heavy gun-platform bot
+    if (/sniper|scout|stalker|beast|hound|ranger|marksman/.test(s)) return { model: "walker", tint: 0xffae5a, scale: 1.0 }; // walker trooper-bot
+    if (/drone|assault/.test(s)) return { model: "drone", tint: 0xff7a5a, scale: 1.05 };                                 // fast flying drone
+    return { model: "drone", tint: 0xff6a5a, scale: 1.0 };
   }
   function unitColor(u) { return u.tint != null ? new THREE.Color(u.tint).getHex() : (u.side === "player" ? 0x3aa0ff : 0xff5a4a); }
   function resolveClip(char, name) { return (name && char.actions[name]) ? name : (char.animations[0] && char.animations[0].name) || null; }
@@ -729,10 +730,7 @@ register3d("tactics3d", async (kernel, content) => {
   const focus = cell(Math.round(scx), Math.round(scy)); focus.y = 0;
   const camDist = T * 17; // close enough that a soldier fills a good chunk of frame
   kernel.camera.fov = 40; kernel.camera.updateProjectionMatrix();
-  const gamePos = { x: focus.x + camDist * 0.6, y: camDist * 0.62, z: focus.z + camDist * 0.8 };
-  // Wide cinematic ESTABLISHING shot while the menu is up (shows the city + skyline,
-  // slowly rotating); PLAY zooms into the squad (see beginBattle).
-  kernel.camera.position.set(focus.x + span * 0.5, span * 0.82, focus.z + span * 0.95);
+  kernel.camera.position.set(focus.x + camDist * 0.6, camDist * 0.62, focus.z + camDist * 0.8);
   const orbit = kernel.enableOrbit({
     target: { x: focus.x, y: 0, z: focus.z },
     minDistance: T * 7, maxDistance: span * 2.2,
@@ -1232,11 +1230,7 @@ register3d("tactics3d", async (kernel, content) => {
   sim.allUnits().forEach(refreshUnit);
 
   let shell = null, endShown = false;
-  function beginBattle() {
-    phase = "battle"; orbit.autoRotate = false;
-    kernel.tween({ target: kernel.camera.position, to: gamePos, duration: 1.2, ease: (t) => 1 - Math.pow(1 - t, 3) }); // cinematic zoom into the squad
-    setHUD(); autoSelectNext();
-  }
+  function beginBattle() { phase = "battle"; orbit.autoRotate = false; setHUD(); autoSelectNext(); }
   function showEnd() {
     if (endShown) return; endShown = true;
     const win = !!sim.victory; // objective-aware (evac/hack wins keep allies alive)
