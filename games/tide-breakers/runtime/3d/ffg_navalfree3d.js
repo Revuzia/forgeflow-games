@@ -394,20 +394,25 @@ register3d("navalfree", async function (kernel, content) {
   }
 
   // ── Combat FX (reused patterns from iron-tide, adapted) ─────────────────────
+  // Free a transient mesh's GPU buffers — scene.remove() alone leaks geometry/material
+  // (renderer keeps them until dispose()). Called when each VFX finishes.
+  function disposeMesh(o) {
+    try { if (o.geometry) o.geometry.dispose(); const m = o.material; if (Array.isArray(m)) m.forEach((x) => { if (x) { if (x.map) x.map.dispose(); x.dispose(); } }); else if (m) { if (m.map) m.map.dispose(); m.dispose(); } } catch (e) {}
+  }
   function spawnSmoke(pos, dark) {
     const mat = new THREE.MeshBasicMaterial({ color: dark ? 0x222222 : 0xcfd6dd, transparent: true, opacity: 0.7 });
     const puff = new THREE.Mesh(new THREE.SphereGeometry(1.4, 8, 8), mat);
     puff.position.set(pos.x, pos.y, pos.z); scene.add(puff);
     kernel.tween({ target: puff.scale, to: { x: 4, y: 4, z: 4 }, duration: 1.1 });
     kernel.tween({ target: puff.position, to: { y: pos.y + 6 }, duration: 1.1 });
-    kernel.tween({ target: puff.material, to: { opacity: 0 }, duration: 1.1, onComplete: () => scene.remove(puff) });
+    kernel.tween({ target: puff.material, to: { opacity: 0 }, duration: 1.1, onComplete: () => { scene.remove(puff); disposeMesh(puff); } });
   }
   function explosion(pos) {
     const flash = new THREE.Mesh(new THREE.SphereGeometry(2.2, 12, 12),
       new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.95 }));
     flash.position.set(pos.x, pos.y + 1.5, pos.z); scene.add(flash);
     kernel.tween({ target: flash.scale, to: { x: 3.4, y: 3.4, z: 3.4 }, duration: 0.4 });
-    kernel.tween({ target: flash.material, to: { opacity: 0 }, duration: 0.4, onComplete: () => scene.remove(flash) });
+    kernel.tween({ target: flash.material, to: { opacity: 0 }, duration: 0.4, onComplete: () => { scene.remove(flash); disposeMesh(flash); } });
     for (let i = 0; i < 4; i++) spawnSmoke({ x: pos.x, y: pos.y + 1 + i * 0.5, z: pos.z }, i % 2 === 0);
   }
   function splash(pos) {
@@ -415,7 +420,7 @@ register3d("navalfree", async function (kernel, content) {
       new THREE.MeshBasicMaterial({ color: 0xbfe3ff, transparent: true, opacity: 0.8 }));
     m.position.set(pos.x, 1.5, pos.z); scene.add(m);
     kernel.tween({ target: m.scale, to: { x: 1.8, y: 1.8, z: 1.8 }, duration: 0.5 });
-    kernel.tween({ target: m.material, to: { opacity: 0 }, duration: 0.5, onComplete: () => scene.remove(m) });
+    kernel.tween({ target: m.material, to: { opacity: 0 }, duration: 0.5, onComplete: () => { scene.remove(m); disposeMesh(m); } });
   }
   // muzzle flash at the firing ship's bow
   function muzzleFX(s) {
@@ -426,7 +431,7 @@ register3d("navalfree", async function (kernel, content) {
       new THREE.MeshBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 0.95 }));
     flash.position.copy(p); scene.add(flash);
     kernel.tween({ target: flash.scale, to: { x: 3, y: 3, z: 3 }, duration: 0.18 });
-    kernel.tween({ target: flash.material, to: { opacity: 0 }, duration: 0.18, onComplete: () => scene.remove(flash) });
+    kernel.tween({ target: flash.material, to: { opacity: 0 }, duration: 0.18, onComplete: () => { scene.remove(flash); disposeMesh(flash); } });
     spawnSmoke({ x: p.x, y: p.y, z: p.z }, false);
     return p;
   }
@@ -447,7 +452,7 @@ register3d("navalfree", async function (kernel, content) {
       const peak = 14;
       kernel.tween({ target: ball.position, to: { x: toVec.x, z: toVec.z }, duration: 0.6,
         onUpdate: (e) => { ball.position.y = from.y + Math.sin(e * Math.PI) * peak; },
-        onComplete: () => { scene.remove(ball); onImpact(); } });
+        onComplete: () => { scene.remove(ball); disposeMesh(ball); onImpact(); } });
     }
   }
   // founder + slow sink (reused founder logic, scaled to this game's units)
@@ -672,7 +677,7 @@ register3d("navalfree", async function (kernel, content) {
     const spr = makeFloatText("-" + dmg, "#ffd166");
     spr.position.set(pos.x, pos.y + 4, pos.z); scene.add(spr);
     kernel.tween({ target: spr.position, to: { y: pos.y + 12 }, duration: 1.0 });
-    kernel.tween({ target: spr.material, to: { opacity: 0 }, duration: 1.0, onComplete: () => scene.remove(spr) });
+    kernel.tween({ target: spr.material, to: { opacity: 0 }, duration: 1.0, onComplete: () => { scene.remove(spr); disposeMesh(spr); } });
   }
   function makeFloatText(text, color) {
     const c = document.createElement("canvas"); c.width = 128; c.height = 64;
