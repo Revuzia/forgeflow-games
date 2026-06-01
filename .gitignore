@@ -13,3 +13,8 @@ pipeline/assets/_downloaded/
 .wrangler/state/
 
 .secrets/
+
+# XCOM autopipe runtime artifacts
+pipeline/engine/_match_*.png
+pipeline/engine/xcom_match_report.json
+pipeline/engine/xcom_autopipe_log.jsonl
