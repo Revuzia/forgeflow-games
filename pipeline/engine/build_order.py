@@ -41,6 +41,31 @@ def _is_3d(prof):
 sys.path.insert(0, str(ENGINE))
 import learn  # noqa: E402
 
+GOLDEN = ENGINE / "golden"
+
+
+def golden_seed(genre, item):
+    """HIGH-BASELINE START: if a genre has a GOLDEN template (a polished, fully
+    gated reference game snapshotted under engine/golden/<genre>.content.json),
+    start a NEW game from it instead of a weak from-scratch LLM slice. Re-themes
+    slug/title/seed; everything else (the polished maps/systems/audio) comes in at
+    the high bar, and the autopipe improves from there. Returns content or None."""
+    p = GOLDEN / f"{genre}.content.json"
+    if not p.exists():
+        return None
+    try:
+        c = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if item.get("slug"):
+        c["slug"] = item["slug"]
+    if item.get("title"):
+        c["title"] = item["title"]
+    if item.get("seed") is not None:
+        c["seed"] = item["seed"]
+    c["_from_golden"] = True
+    return c
+
 
 def genre_profile(genre):
     g = REGISTRY["genres"].get(genre)

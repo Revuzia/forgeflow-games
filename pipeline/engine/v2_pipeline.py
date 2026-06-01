@@ -195,6 +195,13 @@ def _gen(prompt):
 
 
 def generate_slice(item):
+    # HIGH-BASELINE START: if this genre has a golden template, seed from it (a
+    # polished, gated reference) instead of a weak from-scratch LLM slice — so the
+    # FIRST build is already at the high bar and the operator never sees a rough start.
+    golden = build_order.golden_seed(item["genre"], item)
+    if golden is not None:
+        log(f"seeding {item['slug']} from GOLDEN {item['genre']} template (high baseline)")
+        return normalize_content(golden, item)
     content = _gen(build_order.slice_prompt(item["genre"], item["brief"]))
     return normalize_content(content, item)
 
@@ -228,8 +235,14 @@ def build_one(item, deploy=False):
             log(f"SKIP {slug}: slice failed twice")
             return False
 
-    # EXPAND + re-gate (fall back to slice-only content if expansion regresses)
-    try:
+    # EXPAND + re-gate (fall back to slice-only content if expansion regresses).
+    # Golden-seeded builds are already a full polished campaign — skip expansion
+    # so claude -p can't regress the high baseline.
+    if content.get("_from_golden"):
+        log(f"{slug}: golden baseline — skipping expand")
+        wip.write_text(json.dumps(content, indent=2), encoding="utf-8")
+    else:
+      try:
         expanded = build_order.run_claude_p(build_order.expand_prompt(genre, content))
         expanded = normalize_content(expanded, item)
         wip.write_text(json.dumps(expanded, indent=2), encoding="utf-8")
@@ -239,7 +252,7 @@ def build_one(item, deploy=False):
         else:
             log(f"expansion failed gates; keeping slice-only content. {out2[:160]}")
             wip.write_text(json.dumps(content, indent=2), encoding="utf-8")
-    except Exception as e:
+      except Exception as e:
         log(f"expansion error ({e}); keeping slice-only content")
         wip.write_text(json.dumps(content, indent=2), encoding="utf-8")
 
