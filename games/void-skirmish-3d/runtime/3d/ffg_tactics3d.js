@@ -248,6 +248,31 @@ register3d("tactics3d", async (kernel, content) => {
         else if (t === 4) buildHazard(w);
       }
     }
+    scatterDecor();
+  }
+  // Decorative street furniture (hydrants, lamps, trees, planters, cones) on
+  // curb tiles — VISUAL ONLY (not registered as cover, the sim never sees them),
+  // offset to the building edge so units don't stand in them. Fills the city.
+  function scatterDecor() {
+    const grid = mission.grid;
+    for (let y = 1; y < gridH - 1; y++) for (let x = 1; x < gridW - 1; x++) {
+      if (grid[y][x] !== 0) continue;
+      const hsh = ((x * 2654435761) ^ (y * 40503)) >>> 0;
+      if ((hsh % 100) >= 16) continue; // ~16% of eligible curb tiles
+      let ox = 0, oz = 0, near = false;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const t = (grid[y + dy] || [])[x + dx];
+        if (t === 1 || t === 5) { ox = dx * T * 0.42; oz = dy * T * 0.42; near = true; break; }
+      }
+      if (!near) continue;
+      const pick = DECOR[hsh % DECOR.length];
+      const g = new THREE.Group();
+      if (placeCity(pick.n, g, (hsh % 4) * (Math.PI / 2))) {
+        const w = cell(x, y); g.position.set(w.x + ox, FT, w.z + oz);
+        g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+        scene.add(g);
+      }
+    }
   }
   function _smat(col, r, m) { return new THREE.MeshStandardMaterial({ color: col, roughness: r == null ? 0.75 : r, metalness: m == null ? 0.2 : m }); }
   function _bx(wd, ht, dp, col, r, m) { return new THREE.Mesh(new THREE.BoxGeometry(wd, ht, dp), _smat(col, r, m)); }
@@ -288,8 +313,10 @@ register3d("tactics3d", async (kernel, content) => {
   const WALLS = [ {n:"wall.glb",t:1.0}, {n:"wallWindow.glb",t:1.0}, {n:"wallDoorway.glb",t:1.0}, {n:"wallHalf.glb",t:1.0}, {n:"wallCorner.glb",t:1.0} ];
   // solid backdrop towers (Kenney City Kit Commercial; commercial/ has its colormap)
   const BUILDINGS = [ {n:"commercial/building-a.glb",t:1.0}, {n:"commercial/building-b.glb",t:1.0}, {n:"commercial/building-skyscraper-a.glb",t:1.0}, {n:"commercial/building-skyscraper-b.glb",t:1.0} ];
+  // decorative street furniture (non-blocking, visual only) — fills the city
+  const DECOR = [ {n:"hydrant-quaternius.glb",t:0.45}, {n:"car/cone-traffic.glb",t:0.4}, {n:"grave/grave-lightpost-single.glb",t:0.5}, {n:"suburban/planter.glb",t:0.6}, {n:"suburban/tree-small.glb",t:0.7} ];
   async function preloadCity() {
-    const all = [...FULL_COVER, ...HALF_COVER, ...FURNITURE, ...WALLS, ...BUILDINGS];
+    const all = [...FULL_COVER, ...HALF_COVER, ...FURNITURE, ...WALLS, ...BUILDINGS, ...DECOR];
     await Promise.all(all.map((m) => loadCityModel(m.n, m.t)));
   }
   function _tilesOf(list, name) { const e = list.find((m) => m.n === name); return e ? e.t : 1; }
