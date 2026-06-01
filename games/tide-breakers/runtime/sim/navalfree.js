@@ -81,19 +81,26 @@
     this._refreshActions(this.turn);
   }
 
-  // A sensible default scenario: 2 player ships vs 2 enemy ships, facing off
-  // across the arena. Used when no explicit fleet is provided.
+  // A FLEET OF 5 per side, facing off across the arena. STRONGER ships shoot
+  // FURTHER (range tracks strength); weaker ships are faster + turn quicker.
+  // (range: battleship 140 → gunboat 60.) Used when no explicit fleet is provided.
   NavalFree.defaultFleet = function (w, h) {
     function gun(range, arc, dmg) { return { range: range, arc: arc * Math.PI / 180, dmg: dmg }; }
-    var cx = w / 2;
-    return [
-      // Player line (south, heading "north" = -Y, i.e. heading toward smaller y).
-      { id: "P-cruiser", side: "player", x: cx - 34, y: h - 40, heading: -Math.PI / 2, hp: 100, speed: 30, turnRate: 70, gun: gun(95, 70, 26) },
-      { id: "P-frigate", side: "player", x: cx + 30, y: h - 30, heading: -Math.PI / 2, hp: 70, speed: 42, turnRate: 95, gun: gun(78, 80, 20) },
-      // Enemy line (north, heading "south" = +Y).
-      { id: "E-cruiser", side: "enemy", x: cx + 30, y: 40, heading: Math.PI / 2, hp: 100, speed: 28, turnRate: 65, gun: gun(95, 70, 26) },
-      { id: "E-frigate", side: "enemy", x: cx - 34, y: 32, heading: Math.PI / 2, hp: 70, speed: 40, turnRate: 90, gun: gun(78, 80, 20) },
+    var CLASSES = [
+      { k: "battleship", hp: 150, speed: 22, turnRate: 50,  g: gun(140, 58, 34) },
+      { k: "cruiser",    hp: 110, speed: 30, turnRate: 68,  g: gun(112, 68, 26) },
+      { k: "destroyer",  hp: 85,  speed: 40, turnRate: 88,  g: gun(90,  80, 20) },
+      { k: "frigate",    hp: 68,  speed: 48, turnRate: 104, g: gun(74,  86, 16) },
+      { k: "gunboat",    hp: 48,  speed: 56, turnRate: 120, g: gun(60,  96, 12) },
     ];
+    var xs = [0.16, 0.33, 0.5, 0.67, 0.84], ships = [];
+    for (var i = 0; i < CLASSES.length; i++) {
+      var c = CLASSES[i];
+      // fresh gun object per ship (difficulty tweaks mutate s.gun — no shared refs)
+      ships.push({ id: "P-" + c.k, side: "player", x: w * xs[i], y: h - 40, heading: -Math.PI / 2, hp: c.hp, speed: c.speed, turnRate: c.turnRate, gun: { range: c.g.range, arc: c.g.arc, dmg: c.g.dmg } });
+      ships.push({ id: "E-" + c.k, side: "enemy",  x: w * xs[CLASSES.length - 1 - i], y: 40, heading: Math.PI / 2, hp: c.hp, speed: c.speed, turnRate: c.turnRate, gun: { range: c.g.range, arc: c.g.arc, dmg: c.g.dmg } });
+    }
+    return ships;
   };
 
   NavalFree.prototype._addShip = function (s) {

@@ -429,17 +429,23 @@ register3d("navalfree", async function (kernel, content) {
     let dyaw = targetYaw - startYaw;
     while (dyaw > Math.PI) dyaw -= Math.PI * 2;
     while (dyaw < -Math.PI) dyaw += Math.PI * 2;
-    // wake trail puffs while moving
-    let wakeT = 0;
-    const proxy = { p: 0 };
+    // SAIL: a slow, smooth glide (was a 0.85s zip with a frame-rate-dependent lerp).
+    // Duration scales with distance; the ship finishes turning early then eases
+    // across the water on a smoothstep curve, leaving a wake.
+    const startX = v.group.position.x, startZ = v.group.position.z;
+    const dist = Math.hypot(target.x - startX, target.z - startZ);
+    const dur = Math.max(1.5, Math.min(3.4, dist * 0.07));
+    let wakeT = 0; const proxy = { p: 0 };
     kernel.tween({
-      target: proxy, to: { p: 1 }, duration: 0.85,
+      target: proxy, to: { p: 1 }, duration: dur,
       onUpdate: (e) => {
-        v.group.rotation.y = startYaw + dyaw * e;
-        v.group.position.x = v.group.position.x + (target.x - v.group.position.x) * 0.18;
-        v.group.position.z = v.group.position.z + (target.z - v.group.position.z) * 0.18;
+        const turnP = Math.min(1, e / 0.3);             // finish the turn in the first 30%
+        v.group.rotation.y = startYaw + dyaw * turnP;
+        const g = e * e * (3 - 2 * e);                  // smoothstep glide
+        v.group.position.x = startX + (target.x - startX) * g;
+        v.group.position.z = startZ + (target.z - startZ) * g;
         wakeT += 1;
-        if (wakeT % 8 === 0) {
+        if (wakeT % 9 === 0) {
           const stern = new THREE.Vector3(-Math.cos(s.heading) * (s.radius + 1), 0.4, -Math.sin(s.heading) * (s.radius + 1));
           spawnSmoke(v.group.position.clone().add(stern), false);
         }
@@ -708,7 +714,8 @@ register3d("navalfree", async function (kernel, content) {
     sim = new NavalFree({ width: ARENA_W, height: ARENA_H, seed: _gameSeed, firstSide: "player", actionsPerTurn: m.actionsPerTurn || 2, ships: fleet });
     for (const s of sim.ships) await buildShipVisual(s);
     phase = "battle"; busy = false;
-    if (music) kernel.playMusic(music, 0.32);
+    // NOTE: the shell owns the looping music (it's passed `music` below). Do NOT
+    // also play it here — that stacked two copies of the track ("two songs").
     setHUD(`<span style="opacity:.85">Drive and fire. Sink the enemy fleet.</span>`);
   };
 

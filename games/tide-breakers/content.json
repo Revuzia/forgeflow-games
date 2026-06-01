@@ -10,7 +10,7 @@
     "height": 640,
     "background": "#0a1622"
   },
-  "arena": { "width": 220, "height": 220 },
+  "arena": { "width": 380, "height": 300 },
   "ship_models": {
     "large": "assets/ship-large.glb",
     "medium": "assets/ship-medium.glb",
@@ -30,7 +30,7 @@
   "setup": {
     "difficulty": "normal",
     "actionsPerTurn": 2,
-    "arena": { "width": 220, "height": 220 }
+    "arena": { "width": 380, "height": 300 }
   },
   "assets": {
     "menu_image": ""
