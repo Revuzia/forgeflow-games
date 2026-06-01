@@ -226,6 +226,7 @@ register3d("tactics3d", async (kernel, content) => {
     return (x >= 0 && y >= 0 && x < gridW && y < gridH) ? { x, y } : null;
   }
   async function buildBoard() {
+    await preloadCity(); // load the real CC0 models before placing tiles
     const plat = new THREE.Mesh(new THREE.BoxGeometry(W + 1.4, 0.6, H + 1.4),
       new THREE.MeshStandardMaterial({ color: 0x0c1626, roughness: 0.9, metalness: 0.2 }));
     plat.position.set(0, -0.35, 0); plat.receiveShadow = true; scene.add(plat);
@@ -250,30 +251,60 @@ register3d("tactics3d", async (kernel, content) => {
   }
   function _smat(col, r, m) { return new THREE.MeshStandardMaterial({ color: col, roughness: r == null ? 0.75 : r, metalness: m == null ? 0.2 : m }); }
   function _bx(wd, ht, dp, col, r, m) { return new THREE.Mesh(new THREE.BoxGeometry(wd, ht, dp), _smat(col, r, m)); }
+
+  // ── Real CC0 city MODELS (Kenney + Quaternius) — replace the box geometry with
+  // actual low-poly models (cars, dumpsters, walls with real windows/doors,
+  // furniture). 1 model-unit = 1 tile in the source kits; we auto-scale each to a
+  // target tile footprint + seat it on the ground, then clone per placement.
+  const CITY = new URL("./city/", import.meta.url).href;
+  const _city = {};
+  async function loadCityModel(name, tiles) {
+    try {
+      const g = await kernel.loadGLTF(CITY + name);
+      let box = new THREE.Box3().setFromObject(g);
+      const size = box.getSize(new THREE.Vector3());
+      const maxH = Math.max(size.x, size.z) || 1;
+      g.scale.setScalar((tiles * T) / maxH);
+      g.updateMatrixWorld(true);
+      box = new THREE.Box3().setFromObject(g);
+      g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      _city[name] = { tpl: g, baseY: -box.min.y };
+    } catch (e) { _city[name] = null; }
+  }
+  function placeCity(name, group, rotY) {
+    const e = _city[name]; if (!e || !e.tpl) return false;
+    const m = e.tpl.clone();
+    m.position.set(0, e.baseY || 0, 0);
+    if (rotY) m.rotation.y = rotY;
+    group.add(m); return true;
+  }
+  // cover model pools: {n: file, t: target tiles across}
+  const FULL_COVER = [ {n:"sedan.glb",t:1.55}, {n:"suv.glb",t:1.6}, {n:"van.glb",t:1.7}, {n:"truck.glb",t:1.9}, {n:"taxi.glb",t:1.55}, {n:"dumpster-quaternius.glb",t:1.15}, {n:"shipping-container-quaternius.glb",t:1.9}, {n:"grave-pillar-square.glb",t:0.7} ];
+  const HALF_COVER = [ {n:"box-crate.glb",t:0.95}, {n:"barrier-traffic-quaternius.glb",t:1.1}, {n:"grave-bench.glb",t:1.1}, {n:"ac-unit-quaternius.glb",t:0.95}, {n:"market-stalls-quaternius.glb",t:1.6}, {n:"grave-iron-fence.glb",t:1.0} ];
+  const FURNITURE = [ {n:"desk.glb",t:0.95}, {n:"bookcaseClosed.glb",t:0.7}, {n:"kitchenCabinet.glb",t:0.7}, {n:"table.glb",t:0.95}, {n:"loungeSofa.glb",t:1.0}, {n:"cardboardBoxClosed.glb",t:0.55} ];
+  const WALLS = [ {n:"wall.glb",t:1.0}, {n:"wallWindow.glb",t:1.0}, {n:"wallDoorway.glb",t:1.0}, {n:"wallHalf.glb",t:1.0}, {n:"wallCorner.glb",t:1.0} ];
+  async function preloadCity() {
+    const all = [...FULL_COVER, ...HALF_COVER, ...FURNITURE, ...WALLS];
+    await Promise.all(all.map((m) => loadCityModel(m.n, m.t)));
+  }
+  function _tilesOf(list, name) { const e = list.find((m) => m.n === name); return e ? e.t : 1; }
   // Cover tiles render as recognisable STREET OBJECTS (XCOM-style), not identical
   // crates: full cover = cars / dumpsters / shipping containers; half cover =
   // jersey barriers / planters / sandbags / sci-fi crates. All are non-walkable
   // (the sim already treats 2/3 as solid) so a car genuinely IS the cover.
   function buildCover(x, y, w, full) {
     const hsh = ((x * 374761393) ^ (y * 668265263)) >>> 0;
-    const meshes = [];
     const g = new THREE.Group();
-    if (full) {
-      const k = hsh % 3;
-      if (k === 0) _propCar(g, hsh);
-      else if (k === 1) _propDumpster(g, hsh);
-      else _propContainer(g, hsh);
-    } else {
-      const k = hsh % 4;
-      if (k === 0) _propBarrier(g, hsh);
-      else if (k === 1) _propPlanter(g, hsh);
-      else if (k === 2) _propSandbags(g, hsh);
-      else _propCrate(g);
+    const list = full ? FULL_COVER : HALF_COVER;
+    const pick = list[hsh % list.length];
+    const rotY = (hsh % 4) * (Math.PI / 2);
+    if (!placeCity(pick.n, g, rotY)) {
+      // fallback box if a model failed to load
+      if (full) _propContainer(g, hsh); else _propBarrier(g, hsh);
     }
-    g.position.set(w.x, 0.1, w.z);
+    g.position.set(w.x, FT, w.z);
     g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    scene.add(g); meshes.push(g);
-    coverTiles[x + "," + y] = meshes;
+    scene.add(g); coverTiles[x + "," + y] = [g];
   }
   function _propCar(g, hsh) {
     const cols = [0x9a3b3b, 0x35506e, 0x6e6a35, 0x49505a, 0x2f6e4f, 0x7a4a2c];
@@ -425,17 +456,20 @@ register3d("tactics3d", async (kernel, content) => {
   // blocking in the sim, and frag-destructible (tracked in buildingTiles).
   function buildWall(x, y, w) {
     const hsh = ((x * 73856093) ^ (y * 19349663)) >>> 0;
-    const wallCol = [0x4a4e57, 0x52514b, 0x474b52, 0x55504a][hsh % 4]; // concrete / brick
-    const wh = T * 1.55;
-    const base = _bx(T, wh * 0.6, T, wallCol, 0.92, 0.06);
-    base.position.set(w.x, wh * 0.3, w.z); base.castShadow = true; base.receiveShadow = true; scene.add(base);
-    const parts = [base];
-    const band = new THREE.Mesh(new THREE.BoxGeometry(T, wh * 0.4, T),
-      new THREE.MeshStandardMaterial({ color: 0x26323f, emissive: (hsh & 2) ? 0x34d6e8 : 0xffb24d, emissiveIntensity: (hsh & 1) ? 0.5 : 0.16, roughness: 0.5, metalness: 0.1 }));
-    band.position.set(w.x, wh * 0.8, w.z); band.castShadow = true; scene.add(band); parts.push(band);
-    const cap = _bx(T * 1.05, T * 0.1, T * 1.05, shade(wallCol, -0.25), 0.85, 0.08);
-    cap.position.set(w.x, wh, w.z); cap.castShadow = true; scene.add(cap); parts.push(cap);
-    buildingTiles[x + "," + y] = parts;
+    const grid = mission.grid;
+    const wallish = (xx, yy) => { const t = (yy >= 0 && yy < gridH && xx >= 0 && xx < gridW) ? grid[yy][xx] : 5; return t === 5 || t === 1; };
+    const g = new THREE.Group();
+    const horiz = wallish(x - 1, y) || wallish(x + 1, y);
+    const vert = wallish(x, y - 1) || wallish(x, y + 1);
+    const name = (hsh % 10 < 7) ? "wallWindow.glb" : "wall.glb"; // mostly windowed
+    let ok = false;
+    if (horiz) ok = placeCity(name, g, 0) || ok;                 // wall slab spanning X
+    if (vert) ok = placeCity(name, g, Math.PI / 2) || ok;        // spanning Z (corner gets both)
+    if (!horiz && !vert) ok = placeCity(name, g, 0) || ok;
+    if (!ok) { const b = _bx(T, T * 1.3, T * 0.16, 0x4a4e57, 0.9, 0.06); b.position.y = T * 0.65; g.add(b); }
+    g.position.set(w.x, FT, w.z);
+    g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    scene.add(g); buildingTiles[x + "," + y] = [g];
   }
 
   // ── Units (REAL rigged + animated characters) ───────────────────────────────
