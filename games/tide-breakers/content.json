@@ -33,6 +33,6 @@
     "arena": { "width": 220, "height": 220 }
   },
   "assets": {
-    "menu_image": "assets/menu.png"
+    "menu_image": ""
   }
 }
