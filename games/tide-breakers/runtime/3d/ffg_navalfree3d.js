@@ -567,9 +567,7 @@ register3d("navalfree", async function (kernel, content) {
     kernel.playSound(sfx.move || sfx.splash, 0.18);
     animateMove(s, () => {
       busy = false;
-      selectedId = s.id;
-      showSelectionGizmos(s);
-      setHUD();
+      autoSelectNextShip(s.id); // keep this ship if it still has actions, else auto-advance
       maybeAutoEndPlayerTurn();
     });
   }
@@ -591,7 +589,7 @@ register3d("navalfree", async function (kernel, content) {
       }
       busy = false;
       if (sim.ended) { finishMatch(); return; }
-      selectedId = shooter.id; showSelectionGizmos(shooter); setHUD(shotBanner(r, chk));
+      autoSelectNextShip(shooter.id); setHUD(shotBanner(r, chk));
       maybeAutoEndPlayerTurn();
     });
   }
@@ -630,6 +628,17 @@ register3d("navalfree", async function (kernel, content) {
       setTimeout(() => { if (!sim.ended) endPlayerTurn(); }, 700);
     }
   }
+  // AUTO-SELECT the ship that should act so you never hand-pick boats one at a time:
+  // keep the just-acted ship while it still has actions, else jump to the readiest
+  // (most actions, then most movement/speed). The turn auto-ends when none are left.
+  function autoSelectNextShip(preferId) {
+    if (!sim || sim.ended || sim.turn !== "player") return;
+    const ready = sim.shipsOf("player").filter((s) => !s.sunk && s.actionsLeft > 0);
+    if (!ready.length) { selectedId = null; hideGizmos(); return; }
+    let pick = preferId ? ready.find((s) => s.id === preferId) : null;
+    if (!pick) { ready.sort((a, b) => (b.actionsLeft - a.actionsLeft) || (b.speed - a.speed)); pick = ready[0]; }
+    selectedId = pick.id; showSelectionGizmos(pick); setHUD();
+  }
   function endPlayerTurn() {
     if (sim.ended || sim.turn !== "player" || busy) return;
     selectedId = null; hideGizmos();
@@ -649,6 +658,7 @@ register3d("navalfree", async function (kernel, content) {
         sim.endTurn(); // -> player
         busy = false;
         setHUD(`<span style="color:#37e0c0">Your move.</span>`);
+        autoSelectNextShip(); // auto-pick the first ready ship for the new turn
         return;
       }
       const a = acts[i++];
@@ -717,6 +727,7 @@ register3d("navalfree", async function (kernel, content) {
     // NOTE: the shell owns the looping music (it's passed `music` below). Do NOT
     // also play it here — that stacked two copies of the track ("two songs").
     setHUD(`<span style="opacity:.85">Drive and fire. Sink the enemy fleet.</span>`);
+    autoSelectNextShip(); // auto-pick the first ship to act (no manual boat-by-boat selecting)
   };
 
   // ── DOM listeners ─────────────────────────────────────────────────────────────

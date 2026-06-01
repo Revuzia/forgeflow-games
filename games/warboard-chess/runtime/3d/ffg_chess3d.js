@@ -17,6 +17,7 @@
  * applyRemoteMove() in place of the AI.
  */
 import * as THREE from "three";
+import { createClassicalMusic } from "./ffg_chessmusic.js";
 const _V = new URL(import.meta.url).search;
 await import("../sim/chess.js" + _V);                 // sets window.FFG.sim.Chess
 const { register3d } = await import("./ffg_kernel_3d.js" + _V);
@@ -92,6 +93,7 @@ register3d("chess3d", async (kernel, content) => {
   const scene = kernel.scene;
   const Chess = window.FFG.sim.Chess;
   const H = window.FFG.sim.ChessHelpers;
+  const chessMusic = createClassicalMusic(0.16); // procedural classical piano (no naval track)
   const { fileOf, rankOf, algebraic } = H;
 
   // pick a theme: explicit content.theme, else cycle by a persisted match counter
@@ -747,6 +749,7 @@ register3d("chess3d", async (kernel, content) => {
     for (const k in squareToId) delete squareToId[k];
     moveLog = []; selected = null; busy = false;
     if (orbit) orbit.autoRotate = false; // stop the menu spin once playing
+    try { chessMusic.start(); } catch (e) {} // gentle classical piano (PLAY click = the audio gesture)
     await buildGame();
     setHUD();
     sfx("confirm", 0.5);
@@ -763,7 +766,7 @@ register3d("chess3d", async (kernel, content) => {
       parent: kernel.parent,
       title: content.title || "Warboard Chess",
       tagline: content.tagline || "Command an army of living pieces.",
-      music: (content.audio && content.audio.music) || null,
+      music: null, // chess uses the procedural CLASSICAL loop (createClassicalMusic), not a file track
       menuImage: (content.assets && content.assets.menu_image) || null,
       howTo: [
         { h: "GOAL", p: "Checkmate the enemy king. Standard chess rules — but your pieces are living warriors who fight when they capture." },
@@ -772,8 +775,8 @@ register3d("chess3d", async (kernel, content) => {
         { h: "CAMERA", p: "<b>Right-drag</b> to orbit the board, scroll to zoom. The match is set in a different environment each time." },
       ],
       onPlay: () => { beginGame(); },
-      onPause: () => kernel.stop(),
-      onResume: () => kernel.start(),
+      onPause: () => { kernel.stop(); try { chessMusic.stop(); } catch (e) {} },
+      onResume: () => { kernel.start(); try { chessMusic.start(); } catch (e) {} },
     });
     // optional autostart (for the smoke test / uploader)
     let autostart = false;
