@@ -344,7 +344,7 @@ register3d("tactics3d", async (kernel, content) => {
   scene.fog = new THREE.FogExp2(TOD.fog, TOD.fogD);
   try { kernel.renderer.shadowMap.type = THREE.PCFSoftShadowMap; } catch (e) {}
   const key = new THREE.DirectionalLight(TOD.key, TOD.keyI); key.position.set(58, 44, 24); key.castShadow = true; // sun (dusk) / moon (night), low angle
-  key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = -60; key.shadow.camera.right = 60; key.shadow.camera.top = 60; key.shadow.camera.bottom = -60; key.shadow.camera.far = 240;
+  key.shadow.mapSize.set(1024, 1024); key.shadow.camera.left = -60; key.shadow.camera.right = 60; key.shadow.camera.top = 60; key.shadow.camera.bottom = -60; key.shadow.camera.far = 240;
   key.shadow.bias = -0.0004; key.shadow.normalBias = 0.045; scene.add(key);
   scene.add(new THREE.DirectionalLight(TOD.fill, TOD.fillI).translateX(-46).translateY(38).translateZ(-20)); // cool sky fill
   const rim = new THREE.DirectionalLight(TOD.rim, TOD.rimI); rim.position.set(-24, 30, -72); scene.add(rim); // cool teal-ish rim (ADVENT)
@@ -354,7 +354,7 @@ register3d("tactics3d", async (kernel, content) => {
   // Tier-3 post: GTAO (preferred over SSAO) + tight bloom + SMAA edge AA. Bloom
   // kept inside the no-whiteout envelope (strength <= 0.35, threshold >= 0.85) so
   // only true highlights bloom; GTAO grounds props/units, SMAA cleans silhouettes.
-  if (kernel.enableBloom) kernel.enableBloom({ strength: _night ? 0.34 : 0.3, radius: 0.6, threshold: _night ? 0.85 : 0.86, ssao: true, gtao: true, ssaoRadius: 1.1, aoIntensity: 0.9, smaa: true });
+  if (kernel.enableBloom) kernel.enableBloom({ strength: _night ? 0.34 : 0.3, radius: 0.6, threshold: _night ? 0.85 : 0.86, ssao: true, gtao: false, ssaoRadius: 1.1, aoIntensity: 0.9, smaa: true }); // GTAO dropped — too costly; SSAO+SMAA+bloom kept
   // SUN / MOON disc high in the sky, in the key-light direction (emissive billboard,
   // NOT a light). fog:false so it stays crisp; bloom turns it into a soft glow.
   try {
@@ -564,6 +564,19 @@ register3d("tactics3d", async (kernel, content) => {
     buildUpperFloor(); // raised second storey (rooms above rooms), if this map has one
     scatterDecor();
     scatterAdvent();
+    // PERF: small ground clutter doesn't need to cast shadows — the shadow pass was
+    // re-rendering ~2600 casters/frame. Keep shadows only on sizable objects
+    // (buildings/walls/decks); units (built later) keep theirs. Big FPS win.
+    try {
+      let _off = 0;
+      scene.traverse((o) => {
+        if (!o.isMesh || !o.castShadow) return;
+        if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+        const bs = o.geometry.boundingSphere;
+        const r = (bs ? bs.radius : 0) * Math.max(o.scale.x, o.scale.y, o.scale.z);
+        if (r < T * 0.75) { o.castShadow = false; _off++; }
+      });
+    } catch (e) {}
   }
   // The ground-floor footprint of a staircase cell (type 8): a small base plinth so
   // the stairwell reads as built-in. The climbing steps themselves are in buildUpperFloor.
