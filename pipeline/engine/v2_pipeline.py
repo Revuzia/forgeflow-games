@@ -399,6 +399,17 @@ def main():
     if aborted:
         return
 
+    # NIGHTLY SELF-IMPROVEMENT: after the build queue, run ONE gated XCOM-match
+    # improvement pass on the flagship tactics game — it builds the game toward the
+    # XCOM reference "a little at a time" every night (verify -> claude -p fixes the
+    # top gap -> gates -> commit only if green). Non-fatal; skipped in --once/smoke.
+    if not once:
+        try:
+            log("XCOM-match autopipe: one nightly improvement pass…")
+            subprocess.run([sys.executable, str(ENGINE / "xcom_autopipe.py"), "--max-fixes", "1"], timeout=1800)
+        except Exception as e:
+            log(f"autopipe pass skipped ({e})")
+
     # End-of-run audit summary to the owner.
     lines = [f"✅ FFG v2 run complete — built {len(built)}, failed {len(failed)}."]
     if built:
