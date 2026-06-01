@@ -647,6 +647,18 @@ register3d("tactics3d", async (kernel, content) => {
     kernel.tween({ target: f.scale, to: { x: 2.8, y: 2.8, z: 2.8 }, duration: 0.11 });
     kernel.tween({ target: f.material, to: { opacity: 0 }, duration: 0.11, onComplete: () => scene.remove(f) });
   }
+  // Impact spark/debris burst — small bits fly out + fall, fading. Sells hits.
+  function sparkBurst(pos, color, n) {
+    const c = color || 0xffd27a, count = n || 6;
+    for (let i = 0; i < count; i++) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(0.05 + Math.random() * 0.06, 5, 4),
+        new THREE.MeshBasicMaterial({ color: c, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      s.position.copy(pos); scene.add(s);
+      const a = Math.random() * Math.PI * 2, sp = 0.7 + Math.random() * 1.1, up = 0.6 + Math.random() * 1.0;
+      kernel.tween({ target: s.position, to: { x: pos.x + Math.cos(a) * sp, y: pos.y + up, z: pos.z + Math.sin(a) * sp }, duration: 0.42, ease: (t) => 1 - (1 - t) * (1 - t) });
+      kernel.tween({ target: s.material, to: { opacity: 0 }, duration: 0.42, onComplete: () => scene.remove(s) });
+    }
+  }
   // Hit-react: play the model's flinch clip if it has one, else a quick punch.
   function flinch(u) {
     const v = unitViews[u.id]; if (!v || v.dead) return;
@@ -989,6 +1001,7 @@ register3d("tactics3d", async (kernel, content) => {
         if (p.hit) {
           const big = !!p.crit;
           screenShake(big ? 13 : 6);
+          sparkBurst(pb, big ? 0xff7a4a : 0xffd27a, big ? 10 : 6);
           const burst = new THREE.Mesh(new THREE.SphereGeometry(big ? 0.6 : 0.4, 12, 12), new THREE.MeshBasicMaterial({ color: big ? 0xff5a3c : 0xffd27a }));
           burst.position.copy(pb); scene.add(burst);
           kernel.tween({ target: burst.scale, to: { x: big ? 4 : 3, y: big ? 4 : 3, z: big ? 4 : 3 }, duration: 0.3 });
@@ -1064,6 +1077,7 @@ register3d("tactics3d", async (kernel, content) => {
         if (a && t) muzzleFlash(a.group.position, t.group.position);
         if (p.hit) {
           screenShake(p.crit ? 16 : 8);
+          sparkBurst(pb, p.crit ? 0xff7a4a : 0xffd27a, p.crit ? 11 : 7);
           const burst = new THREE.Mesh(new THREE.SphereGeometry(p.crit ? 0.7 : 0.5, 12, 12), new THREE.MeshBasicMaterial({ color: p.crit ? 0xff5a3c : 0xffd27a }));
           burst.position.copy(pb); scene.add(burst);
           kernel.tween({ target: burst.scale, to: { x: 4, y: 4, z: 4 }, duration: 0.32 });
