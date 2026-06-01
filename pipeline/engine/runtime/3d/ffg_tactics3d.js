@@ -229,6 +229,20 @@ register3d("tactics3d", async (kernel, content) => {
   // light) and lays a green NV overlay. Auto-armed on night missions as a hint.
   let _nvOn = false, _nvOverlay = null, _nvChip = null;
   const _baseExp = TOD.exp, _baseAmbI = TOD.ambI;
+  // Night vision is LOOT-GATED (XCOM-style): you can only use it once the squad has
+  // recovered NIGHT OPTICS — from a field loot drop this mission, or the campaign
+  // inventory (a prior recovery). Not a free toggle.
+  function _hasNightOptics() {
+    try { if (sim && sim.hasSalvage && sim.hasSalvage("night_optics")) return true; } catch (e) {}
+    try { if (campaignRun && campaign.state.inventory && campaign.state.inventory.some((it) => it.def === "night_optics")) return true; } catch (e) {}
+    return false;
+  }
+  function _updateNVChip() {
+    if (!_nvChip) return;
+    if (!_hasNightOptics()) { _nvChip.textContent = "◐ NIGHT VISION 🔒"; _nvChip.style.color = "#6b7b92"; _nvChip.style.borderColor = "#2a3a52"; _nvChip.title = "Recover Night Optics from a fallen enemy to unlock"; return; }
+    _nvChip.textContent = "◐ NIGHT VISION " + (_nvOn ? "ON" : "OFF") + "  (V)";
+    _nvChip.style.color = _nvOn ? "#39ff9a" : "#9fb6d8"; _nvChip.style.borderColor = _nvOn ? "#39ff9a" : "#2a3a52";
+  }
   function setNightVision(on) {
     _nvOn = !!on;
     try { kernel.renderer.toneMappingExposure = _nvOn ? _baseExp * 1.7 : _baseExp; } catch (e) {}
@@ -241,14 +255,17 @@ register3d("tactics3d", async (kernel, content) => {
       kernel.parent.appendChild(_nvOverlay);
     }
     if (_nvOverlay) _nvOverlay.style.display = _nvOn ? "block" : "none";
-    if (_nvChip) { _nvChip.textContent = "◐ NIGHT VISION " + (_nvOn ? "ON" : "OFF") + "  (V)"; _nvChip.style.color = _nvOn ? "#39ff9a" : "#9fb6d8"; _nvChip.style.borderColor = _nvOn ? "#39ff9a" : "#2a3a52"; }
+    _updateNVChip();
   }
-  function toggleNightVision() { setNightVision(!_nvOn); }
+  function toggleNightVision() {
+    if (!_nvOn && !_hasNightOptics()) { try { setHUD("◐ No NIGHT OPTICS — recover one from a fallen enemy in the field"); } catch (e) {} return; }
+    setNightVision(!_nvOn);
+  }
   try {
     _nvChip = document.createElement("button");
     Object.assign(_nvChip.style, { position: "absolute", right: "14px", bottom: "62px", zIndex: "50", cursor: "pointer",
       font: "600 12px 'Segoe UI',monospace", color: "#9fb6d8", background: "rgba(10,16,24,0.72)", border: "1px solid #2a3a52", borderRadius: "7px", padding: "6px 10px" });
-    _nvChip.textContent = "◐ NIGHT VISION OFF  (V)";
+    _nvChip.textContent = "◐ NIGHT VISION 🔒";
     _nvChip.onclick = toggleNightVision;
     kernel.parent.appendChild(_nvChip);
   } catch (e) {}
@@ -263,12 +280,23 @@ register3d("tactics3d", async (kernel, content) => {
   // kernel (which scales by the Settings SFX-volume slider, no-ops if missing).
   function sfx(name, vol) { const u = content.sfx && content.sfx[name]; if (u) kernel.playSound(u, vol == null ? 0.55 : vol); }
 
+  // Field LOOT pool (XCOM 2 model): a kill MAY drop one of these as a timed marker
+  // you must reach with a soldier. Night Optics is what UNLOCKS night vision.
+  const LOOT_TABLE = [
+    { id: "night_optics",   name: "Night Optics" },
+    { id: "combat_scope",   name: "Combat Scope" },
+    { id: "battle_scanner", name: "Battle Scanner" },
+    { id: "ap_rounds",      name: "AP Rounds" },
+    { id: "alloy_plating",  name: "Alloy Plating" },
+    { id: "elerium_core",   name: "Elerium Core" },
+  ];
   function buildSim() {
     events = [];
     sim = new TB({
       grid: mission.grid, upper: mission.upper || null, player_units: deployUnits, enemy_units: mission.enemy_units,
       seed: content.seed != null ? content.seed : 12345,
       goal: mission.goal || {},
+      lootTable: LOOT_TABLE, lootChance: 0.4, lootTurns: 3,
       onEvent: (type, payload) => events.push({ type, payload }),
     });
   }
@@ -1340,7 +1368,40 @@ register3d("tactics3d", async (kernel, content) => {
     };
     next();
   }
+  // Field-loot markers (glowing crate + beam + spinning ring) keyed by the sim's
+  // marker object so loot_grab / loot_expire can remove the exact one.
+  const lootMeshes = new Map();
+  function makeLootMarker(L) {
+    const w = cell(L.x, L.y), lift = _floorLift(L.x, L.y, L.floor || 0);
+    const g = new THREE.Group(); g.position.set(w.x, lift, w.z);
+    const crate = _bx(T * 0.34, T * 0.28, T * 0.34, 0xb9892f, 0.5, 0.5);
+    crate.position.y = T * 0.2; crate.castShadow = true;
+    crate.material.emissive = new THREE.Color(0xffc24a); crate.material.emissiveIntensity = 0.75; g.add(crate);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(T * 0.12, T * 0.2, T * 3.2, 12, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.26, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    beam.position.y = T * 1.7; g.add(beam);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(T * 0.42, T * 0.52, 24), new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.07; g.add(ring);
+    let sp = 0; kernel.onUpdate((dt) => { sp += dt; ring.rotation.z = sp; crate.position.y = T * 0.2 + Math.sin(sp * 2) * 0.05; });
+    scene.add(g); return g;
+  }
   function playEvent(e) {
+    if (e.type === "loot_drop") {
+      const L = e.payload.loot, m = makeLootMarker(L); lootMeshes.set(L, m);
+      const w = cell(L.x, L.y); floatText({ x: w.x, y: T * 2.0 + _floorLift(L.x, L.y, L.floor || 0), z: w.z }, "◆ LOOT", 0xffd27a); sfx("select", 0.35);
+      return 240;
+    }
+    if (e.type === "loot_grab") {
+      const L = e.payload.loot, m = lootMeshes.get(L); if (m) { scene.remove(m); lootMeshes.delete(L); }
+      const w = cell(L.x, L.y); floatText({ x: w.x, y: T * 2.0 + _floorLift(L.x, L.y, L.floor || 0), z: w.z }, "ACQUIRED: " + ((L.item && L.item.name) || "GEAR"), 0x6cff9a); sfx("victory", 0.3);
+      if (L.item && L.item.id === "night_optics") _updateNVChip();
+      return 300;
+    }
+    if (e.type === "loot_expire") {
+      const L = e.payload.loot, m = lootMeshes.get(L); if (m) { scene.remove(m); lootMeshes.delete(L); }
+      const w = cell(L.x, L.y); floatText({ x: w.x, y: T * 1.8 + _floorLift(L.x, L.y, L.floor || 0), z: w.z }, "LOOT LOST", 0x8aa0bc);
+      return 180;
+    }
     if (e.type === "move") {
       const mu = e.payload.unit, v = unitViews[mu.id], path = e.payload.path || [];
       if (v && path.length) {
@@ -1603,7 +1664,7 @@ register3d("tactics3d", async (kernel, content) => {
   }
 
   let shell = null, endShown = false;
-  function beginBattle() { phase = "battle"; orbit.autoRotate = false; setHUD(); autoSelectNext(); }
+  function beginBattle() { phase = "battle"; orbit.autoRotate = false; setHUD(); autoSelectNext(); try { _updateNVChip(); } catch (e) {} }
   // ── STORY: mission BRIEFING card (XCOM-style) ───────────────────────────────
   // Shown between the title and the battle on a real PLAY (not __test, so gates
   // stay unblocked). Premise on the first op, per-mission flavor + the live
@@ -1651,6 +1712,7 @@ register3d("tactics3d", async (kernel, content) => {
     // Campaign run: record permadeath/XP/doom, then show the Barracks debrief
     // (which deploys the next op or ends the campaign). Otherwise a one-off result.
     if (campaignRun) {
+      try { if (sim.salvage && sim.salvage.length) campaign.addSalvage(sim.salvage); } catch (e) {} // recovered field loot → permanent gear/resources
       campaign.recordMissionResult(sim.player_units, win);
       campaign.renderBarracks(kernel.parent, {});
       return;

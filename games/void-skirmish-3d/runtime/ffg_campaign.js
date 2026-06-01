@@ -33,21 +33,38 @@
   // the Loadout. Three equip slots per soldier: weapon / armor / item. Equipped
   // gear modifies the deployed unit's stats (a beam rifle really hits harder).
   const ITEM_DEFS = {
-    // WEAPONS — attack + aim
+    // ── WEAPONS — three tech tiers × four classes (XCOM conventional→mag→beam). ──
+    // CONVENTIONAL (starting kit, cheap)
+    rifle_conv:    { type: "weapon", name: "Assault Rifle",    atk: 6,  aim: 0.00, cost: { supplies: 0 } },
+    shotgun_conv:  { type: "weapon", name: "Combat Shotgun",   atk: 8,  aim: -0.04, cost: { supplies: 10 } },
+    sniper_conv:   { type: "weapon", name: "Sniper Rifle",     atk: 7,  aim: 0.10, cost: { supplies: 14 } },
+    cannon_conv:   { type: "weapon", name: "Heavy Cannon",     atk: 9,  aim: -0.05, cost: { supplies: 16 } },
+    // MAGNETIC (mid)
     rifle_mag:     { type: "weapon", name: "Magnetic Rifle",   atk: 8,  aim: 0.05, cost: { supplies: 25, alloys: 4 } },
     lance_mag:     { type: "weapon", name: "Mag Lance",        atk: 13, aim: 0.07, cost: { supplies: 32, alloys: 5 } },
     stormgun:      { type: "weapon", name: "Storm Cannon",     atk: 11, aim: 0.03, cost: { supplies: 28, alloys: 4 } },
+    sniper_mag:    { type: "weapon", name: "Mag Sniper",       atk: 14, aim: 0.12, cost: { supplies: 34, alloys: 5 } },
+    // BEAM / PLASMA (late)
     rifle_beam:    { type: "weapon", name: "Beam Rifle",       atk: 16, aim: 0.08, cost: { supplies: 50, alloys: 8, elerium: 4 } },
-    // ARMOR — HP + defence
+    shotgun_beam:  { type: "weapon", name: "Plasma Shotgun",   atk: 18, aim: 0.02, cost: { supplies: 52, alloys: 8, elerium: 5 } },
+    cannon_beam:   { type: "weapon", name: "Plasma Cannon",    atk: 20, aim: -0.04, cost: { supplies: 58, alloys: 10, elerium: 6 } },
+    // ── ARMOR — HP + defence (helmet/plates are cosmetic-optional) ──
     armor_plated:  { type: "armor",  name: "Plated Armor",     hp: 25, def: 3, cost: { supplies: 30, alloys: 6 } },
     armor_powered: { type: "armor",  name: "Powered Armor",    hp: 50, def: 5, cost: { supplies: 60, alloys: 10, elerium: 6 } },
-    // UTILITY — one item slot
+    // ── UTILITY / PERCEPTION — one item slot ──
     nanovest:      { type: "item",   name: "Nanofiber Vest",   hp: 14, cost: { supplies: 18, alloys: 2 } },
     scope:         { type: "item",   name: "Targeting Scope",  aim: 0.07, cost: { supplies: 20, alloys: 2 } },
+    combat_scope:  { type: "item",   name: "Combat Scope",     aim: 0.10, loot: true, cost: { supplies: 24, alloys: 3 } },
+    night_optics:  { type: "item",   name: "Night Optics",     aim: 0.03, loot: true, perk: "nightvision", cost: { supplies: 22, alloys: 3 } },
+    battle_scanner:{ type: "item",   name: "Battle Scanner",   loot: true, perk: "scan", cost: { supplies: 18, alloys: 2 } },
     medkit:        { type: "item",   name: "Combat Medkit",    hp: 8, cost: { supplies: 15 } },
     fragpack:      { type: "item",   name: "Frag Pack",        atk: 3, cost: { supplies: 14 } },
+    ap_rounds:     { type: "item",   name: "AP Rounds",        atk: 2, loot: true, cost: { supplies: 12 } },
+    // ── SALVAGE MATERIALS (loot only; grant resources, don't equip) ──
+    alloy_plating: { type: "mat",    name: "Alloy Plating",    grant: { alloys: 3 }, loot: true },
+    elerium_core:  { type: "mat",    name: "Elerium Core",     grant: { elerium: 2 }, loot: true },
   };
-  const ITEM_ORDER = ["rifle_mag", "lance_mag", "stormgun", "rifle_beam", "armor_plated", "armor_powered", "nanovest", "scope", "medkit", "fragpack"];
+  const ITEM_ORDER = ["rifle_conv", "shotgun_conv", "sniper_conv", "cannon_conv", "rifle_mag", "lance_mag", "stormgun", "sniper_mag", "rifle_beam", "shotgun_beam", "cannon_beam", "armor_plated", "armor_powered", "nanovest", "scope", "combat_scope", "night_optics", "battle_scanner", "medkit", "fragpack", "ap_rounds"];
   const SLOT_OF = { weapon: "weapon", armor: "armor", item: "item" };
 
   function rankIndexForXp(xp) {
@@ -131,6 +148,24 @@
 
     // ── Debrief ───────────────────────────────────────────────────────────────
     // survivorIds: ids (== soldier uids) of player units alive at mission end.
+    // Field loot recovered in a mission → permanent campaign gear/resources.
+    // Equippable items land in the inventory; salvage materials grant resources.
+    addSalvage(salvage) {
+      if (!salvage || !salvage.length) return [];
+      const added = [];
+      for (const s of salvage) {
+        const id = s && s.item && s.item.id; const def = id && ITEM_DEFS[id]; if (!def) continue;
+        if (def.type === "mat" && def.grant) {
+          for (const k in def.grant) this.state[k] = (this.state[k] || 0) + def.grant[k];
+        } else {
+          this.state.inventory.push({ id: "loot_" + this.state.inventory.length + "_" + id, def: id, equippedBy: null });
+        }
+        added.push(def.name || id);
+      }
+      this.save();
+      return added;
+    }
+
     recordMissionResult(allPlayerUnits, won) {
       const survivors = new Set((allPlayerUnits || []).filter((u) => u.hp > 0).map((u) => u.id));
       const kills = {}; (allPlayerUnits || []).forEach((u) => { kills[u.id] = u._kills || 0; });

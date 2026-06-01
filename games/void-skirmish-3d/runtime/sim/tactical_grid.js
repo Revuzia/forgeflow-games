@@ -85,6 +85,14 @@
       // into pods that stay dormant until SPOTTED, then scamper to cover.
       this.concealed = config.concealment !== false;
       this.sightRange = config.sightRange != null ? config.sightRange : 9;
+      // LOOT (XCOM 2 model): only SOME kills drop a timed loot marker you must
+      // reach with a soldier before it expires (explosive kills DESTROY the loot).
+      // lootTable = [{id,name}] of droppable field gear; lootChance = per-kill odds.
+      this.lootTable = config.lootTable || [];
+      this.lootChance = config.lootChance != null ? config.lootChance : 0.35;
+      this.lootTurns = config.lootTurns != null ? config.lootTurns : 3; // turns before it's lost
+      this.loot = [];      // active markers: {x,y,floor,turnsLeft,item}
+      this.salvage = [];   // items the squad has GRABBED this mission: {item}
       this._assignPods();
     }
 
@@ -247,6 +255,45 @@
     allUnits() { return this.player_units.concat(this.enemy_units); }
     aliveAllies() { return this.player_units.filter((u) => u.hp > 0); }
     aliveEnemies() { return this.enemy_units.filter((u) => u.hp > 0); }
+
+    // ── LOOT (XCOM 2 timed battlefield drops) ─────────────────────────────────
+    // Some enemy kills drop a marker you must REACH with a soldier before it
+    // expires; explosive kills destroy the loot (never call this on a frag kill).
+    _maybeDropLoot(victim, byExplosive) {
+      if (!victim || victim.side !== "enemy" || byExplosive) return;
+      if (!this.lootTable.length || this.rng() > this.lootChance) return;
+      const item = this.lootTable[(this.rng() * this.lootTable.length) | 0];
+      const marker = { x: victim.x, y: victim.y, floor: victim.floor || 0, turnsLeft: this.lootTurns, item: item };
+      this.loot.push(marker);
+      this.onEvent("loot_drop", { loot: marker });
+      return marker;
+    }
+    // A player who ends a move on/adjacent to a marker recovers it (LOS implied by
+    // having pathed there). Recovered gear lands in this.salvage for the debrief.
+    _grabLootAt(u) {
+      if (!u || u.side !== "player") return;
+      for (let i = this.loot.length - 1; i >= 0; i--) {
+        const L = this.loot[i];
+        if ((L.floor || 0) !== (u.floor || 0)) continue;
+        if (Math.abs(L.x - u.x) + Math.abs(L.y - u.y) <= 1) {
+          this.salvage.push({ item: L.item, by: u.id });
+          this.loot.splice(i, 1);
+          this.log.push(u.id + " recovered " + (L.item.name || L.item.id));
+          this.onEvent("loot_grab", { loot: L, unit: u.id });
+        }
+      }
+    }
+    // Each fresh player turn, every marker loses a turn; at zero it's lost forever.
+    _tickLoot() {
+      for (let i = this.loot.length - 1; i >= 0; i--) {
+        if (--this.loot[i].turnsLeft <= 0) {
+          const L = this.loot.splice(i, 1)[0];
+          this.onEvent("loot_expire", { loot: L });
+          this.log.push("loot lost: " + (L.item.name || L.item.id));
+        }
+      }
+    }
+    hasSalvage(id) { return this.salvage.some((s) => s.item && s.item.id === id); }
 
     /**
      * Tiles a unit can reach this action, respecting movement budget, walls, and
@@ -431,6 +478,7 @@
       // Hazard tile damage (ground floor only)
       if (toFloor === 0 && this.grid[toY][toX] === 4) { u.hp = Math.max(0, u.hp - 2); this.log.push(u.id + " took 2 hazard dmg"); }
       this.onEvent("move", { unit: u, path: path });
+      if (u.side === "player") this._grabLootAt(u); // recover any field loot reached this move
       // Objective progress: a soldier reaching the terminal hacks it.
       if (u.side === "player" && this.goal.type === "hack" && !this.goal.hacked && this.goal.target && this.goal.target.x === toX && this.goal.target.y === toY) {
         this.goal.hacked = true; this.log.push(u.id + " hacked the terminal"); this.onEvent("objective", { kind: "hacked", unit: u.id });
@@ -461,7 +509,7 @@
         let dmg = Math.max(1, a.atk - t.def);
         if (crit) dmg = Math.round(dmg * 1.5);
         t.hp = Math.max(0, t.hp - dmg);
-        if (t.hp <= 0) a._kills = (a._kills || 0) + 1;
+        if (t.hp <= 0) { a._kills = (a._kills || 0) + 1; this._maybeDropLoot(t, false); }
         this.log.push(a.id + (reaction ? " overwatch-hit " : crit ? " CRIT " : bd.ambush ? " ambush-hit " : " hit ") + t.id + " for " + dmg);
         this.onEvent("attack", { attacker: a, target: t, hit: true, damage: dmg, chance: chance, killed: t.hp <= 0, crit: crit, flanked: bd.flanked, ambush: bd.ambush, reaction: reaction });
         res = { success: true, hit: true, damage: dmg, killed: t.hp <= 0, chance: chance, crit: crit, flanked: bd.flanked };
@@ -534,7 +582,7 @@
       let dmg = Math.max(1, Math.round(u.atk * def.dmgMult)); // ignores cover/armor
       const crit = this.rng() < def.crit; if (crit) dmg = Math.round(dmg * 1.5);
       t.hp = Math.max(0, t.hp - dmg);
-      if (t.hp <= 0) u._kills = (u._kills || 0) + 1;
+      if (t.hp <= 0) { u._kills = (u._kills || 0) + 1; this._maybeDropLoot(t, false); }
       this.log.push(u.id + " slashed " + t.id + " for " + dmg + (crit ? " CRIT" : ""));
       this.onEvent("ability", { ability: "slash", attacker: u, target: t, hit: true, damage: dmg, crit, killed: t.hp <= 0 });
       return { success: true, hit: true, damage: dmg, crit, killed: t.hp <= 0 };
@@ -553,7 +601,7 @@
         let dmg = Math.max(1, Math.round(u.atk * def.dmgMult) - t.def);
         if (crit) dmg = Math.round(dmg * 1.5);
         t.hp = Math.max(0, t.hp - dmg);
-        if (t.hp <= 0) u._kills = (u._kills || 0) + 1;
+        if (t.hp <= 0) { u._kills = (u._kills || 0) + 1; this._maybeDropLoot(t, false); }
         this.log.push(u.id + " headshot " + t.id + " for " + dmg + (crit ? " CRIT" : ""));
         this.onEvent("ability", { ability: "headshot", attacker: u, target: t, hit: true, damage: dmg, crit, chance, killed: t.hp <= 0 });
         return { success: true, hit: true, damage: dmg, crit, killed: t.hp <= 0 };
@@ -656,6 +704,7 @@
           this.currentPhase = "player";
           this.turnNumber++;
           for (const u of this.player_units) { u.actionPoints = u.maxAP; u.overwatch = false; }
+          this._tickLoot(); // field loot decays each fresh player turn (grab it fast)
           this._tickCooldowns(this.player_units);           // ability cooldowns recover
           for (const e of this.enemy_units) { e.suppressedBy = null; e.suppressAimPenalty = 0; } // pins expire at our next turn
           // Mission timer: overrunning the limit fails the op.
@@ -699,6 +748,11 @@
 
     _finish(victory, reason) {
       if (this.ended) return;
+      // XCOM rule: any non-expired loot still on the field is AUTO-RECOVERED on a win.
+      if (victory && this.loot && this.loot.length) {
+        for (const L of this.loot) this.salvage.push({ item: L.item, by: null, auto: true });
+        this.loot = [];
+      }
       this.ended = true; this.victory = victory;
       this.onEvent("end", { victory: victory, reason: reason || null });
       this.onEnd({ victory: victory, reason: reason || null, log: this.log, turns: this.turnNumber });
