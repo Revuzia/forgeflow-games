@@ -120,11 +120,14 @@ register3d("chess3d", async (kernel, content) => {
   scene.fog = new THREE.FogExp2(theme.fog, theme.fogD);
   // recolour the kernel's existing sun + add theme fill/hemi/ambient (never ADD a
   // runtime light per-move — shader recompiles freeze the game; we set these once)
-  if (kernel.sun) { kernel.sun.color = new THREE.Color(theme.light.key); kernel.sun.intensity = theme.light.keyI; kernel.sun.position.set(W * 0.5, Hd * 0.9, -Hd * 0.4); }
-  scene.add(new THREE.HemisphereLight(theme.light.hemiSky, theme.light.hemiGround, theme.light.hemiI));
-  scene.add(new THREE.AmbientLight(0xffffff, theme.light.ambI));
-  kernel.renderer.toneMappingExposure = theme.exposure;
-  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.28, radius: 0.6, threshold: 0.85, ssao: true, ssaoRadius: 1.0 });
+  // De-washed for a clean, industry-standard chess presentation: a directional key
+  // for crisp piece shadows + restrained fill, so the CHECKER reads with contrast
+  // (the themes were over-lit — keyI 2+, exposure 1+ — flattening the board to grey).
+  if (kernel.sun) { kernel.sun.color = new THREE.Color(theme.light.key); kernel.sun.intensity = theme.light.keyI * 0.62; kernel.sun.position.set(W * 0.45, Hd * 1.1, -Hd * 0.35); }
+  scene.add(new THREE.HemisphereLight(theme.light.hemiSky, theme.light.hemiGround, theme.light.hemiI * 0.6));
+  scene.add(new THREE.AmbientLight(0xffffff, theme.light.ambI * 0.5));
+  kernel.renderer.toneMappingExposure = theme.exposure * 0.88;
+  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.22, radius: 0.55, threshold: 0.9, ssao: true, ssaoRadius: 1.0 });
 
   // distant horizon ring (a big inverted cone of theme colour) so the board isn't
   // floating in a void — recedes into the fog. Cheap, single mesh.
@@ -144,17 +147,26 @@ register3d("chess3d", async (kernel, content) => {
     const plinth = new THREE.Mesh(new THREE.BoxGeometry(W + T * 0.8, T * 0.5, Hd + T * 0.8),
       new THREE.MeshStandardMaterial({ color: shade(theme.ring, -0.2), roughness: theme.ringRough, metalness: 0.15, envMapIntensity: 1.0 }));
     plinth.position.set(0, -T * 0.25 + FT, 0); plinth.receiveShadow = true; scene.add(plinth);
-    // decorative border frame
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(W + T * 0.4, T * 0.18, Hd + T * 0.4),
-      new THREE.MeshStandardMaterial({ color: theme.ring, roughness: theme.ringRough * 0.8, metalness: 0.25, envMapIntensity: 1.1 }));
-    frame.position.set(0, FT - 0.02, 0); frame.receiveShadow = true; scene.add(frame);
+    // decorative border frame — MUST sit BELOW the play surface (it was a tall slab
+    // whose top covered the whole checker). Thin + low so it only peeks as a rim.
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(W + T * 0.4, T * 0.12, Hd + T * 0.4),
+      new THREE.MeshStandardMaterial({ color: theme.ring, roughness: theme.ringRough * 0.8, metalness: 0.2, envMapIntensity: 0.5 }));
+    frame.position.set(0, FT - 0.22, 0); frame.receiveShadow = true; scene.add(frame);
 
     // 64 square tiles (checker pattern). Slight bevel via inset top box.
     // De-shined + high-contrast so the CHECKER reads (metal/IBL was mirroring the
     // bright sky and washing the board to a uniform light grey). Matte, low env,
     // light squares lifted + dark squares pushed well down.
-    const lightMat = new THREE.MeshStandardMaterial({ color: shade(theme.light_sq, 0.08), roughness: 0.92, metalness: 0.0, envMapIntensity: 0.3 });
-    const darkMat = new THREE.MeshStandardMaterial({ color: shade(theme.dark_sq, -0.32), roughness: 0.9, metalness: 0.0, envMapIntensity: 0.3 });
+    // CLASSIC high-contrast chess squares (cream vs deep brown) with a light theme
+    // tint so it still belongs to the environment but unmistakably reads as a board.
+    // The IBL env was flooding the matte board to a uniform sky-grey (proven by
+    // pixel-sampling). Opt the squares OUT of IBL (envMapIntensity 0) and give each
+    // an EMISSIVE tint of its own colour so the cream/dark checker renders no matter
+    // the lighting — guaranteed contrast, the industry-standard board read.
+    const lc = new THREE.Color(0xece2cb).lerp(new THREE.Color(theme.light_sq), 0.1);
+    const dc = new THREE.Color(0x231d15).lerp(new THREE.Color(theme.dark_sq), 0.1);
+    const lightMat = new THREE.MeshStandardMaterial({ color: lc, emissive: lc.clone().multiplyScalar(0.28), roughness: 0.9, metalness: 0.0, envMapIntensity: 0.12 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: dc, emissive: dc.clone().multiplyScalar(0.35), roughness: 0.85, metalness: 0.0, envMapIntensity: 0.12 });
     const geo = new THREE.BoxGeometry(T * 0.98, T * 0.12, T * 0.98);
     for (let y = 0; y < BOARD_N; y++) {
       for (let x = 0; x < BOARD_N; x++) {
@@ -170,9 +182,9 @@ register3d("chess3d", async (kernel, content) => {
     // Explicit GRID LINES on the cell boundaries so the 8x8 board reads instantly
     // in every theme/lighting (the checker fill alone can wash out). Dark, thin.
     try {
-      const grid = new THREE.GridHelper(T * BOARD_N, BOARD_N, 0x0b0f16, 0x0b0f16);
-      grid.position.set(0, FT + 0.135, 0);
-      if (grid.material) { grid.material.transparent = true; grid.material.opacity = 0.6; grid.material.depthWrite = false; }
+      const grid = new THREE.GridHelper(T * BOARD_N, BOARD_N, 0x05080d, 0x05080d);
+      grid.position.set(0, FT + 0.14, 0);
+      if (grid.material) { grid.material.transparent = true; grid.material.opacity = 0.78; grid.material.depthWrite = false; }
       scene.add(grid);
     } catch (e) {}
     // invisible ground plane for raycasting clicks -> square
@@ -428,7 +440,7 @@ register3d("chess3d", async (kernel, content) => {
         const ax = v.x, ay = v.y;
         const dirx = Math.sign(toX - ax), diry = Math.sign(toY - ay);
         const stageX = dv.x - dirx * T * 0.5, stageZ = dv.z - diry * T * 0.5;
-        const walkDur = Math.max(0.32, Math.min(0.9, (Math.abs(toX - ax) + Math.abs(toY - ay)) * 0.16));
+        const walkDur = Math.max(0.7, Math.min(2.2, (Math.abs(toX - ax) + Math.abs(toY - ay)) * 0.42)); // SAIL/walk pace, not a zip
         kernel.tween({
           target: v.group.position, to: { x: stageX, z: stageZ }, duration: walkDur,
           onComplete: () => {
@@ -452,9 +464,9 @@ register3d("chess3d", async (kernel, content) => {
               setTimeout(() => { fadeOutAndRemove(defender); }, removeDelay);
               // attacker steps onto the now-empty square + returns to idle
               setTimeout(() => {
-                anim(v, "walk", { fade: 0.12 });
+                anim(v, "walk", { fade: 0.12, timeScale: 0.85 });
                 kernel.tween({
-                  target: v.group.position, to: { x: targetW.x, z: targetW.z }, duration: 0.28,
+                  target: v.group.position, to: { x: targetW.x, z: targetW.z }, duration: 0.5,
                   onComplete: () => { anim(v, "idle", { fade: 0.2 }); faceForward(v); finalize(); }
                 });
               }, 360);
@@ -463,7 +475,7 @@ register3d("chess3d", async (kernel, content) => {
         });
       } else {
         // quiet move: walk to the square
-        const walkDur = Math.max(0.32, Math.min(1.0, (Math.abs(toX - v.x) + Math.abs(toY - v.y)) * 0.16));
+        const walkDur = Math.max(0.7, Math.min(2.4, (Math.abs(toX - v.x) + Math.abs(toY - v.y)) * 0.42)); // proper walking pace
         kernel.tween({
           target: v.group.position, to: { x: targetW.x, z: targetW.z }, duration: walkDur,
           onComplete: () => { anim(v, "idle", { fade: 0.2 }); faceForward(v); finalize(); }
@@ -713,14 +725,16 @@ register3d("chess3d", async (kernel, content) => {
   const span = Math.max(W, Hd);
   kernel.camera.fov = 42; kernel.camera.updateProjectionMatrix();
   // start behind the player's back rank looking up the board
-  const startZ = playerSide === "w" ? -span * 0.95 : span * 0.95;
-  kernel.camera.position.set(0, span * 0.78, startZ);
+  // Proper chess look-DOWN (~58°) so the whole board + grid read — not the old
+  // near-horizontal angle that foreshortened it. Stable (no auto-rotate in play).
+  const startZ = playerSide === "w" ? -span * 0.72 : span * 0.72;
+  kernel.camera.position.set(0, span * 1.18, startZ);
   const orbit = kernel.enableOrbit({
     target: { x: 0, y: 0, z: 0 },
     minDistance: T * 6, maxDistance: span * 2.4,
-    minPolarAngle: 0.18, maxPolarAngle: Math.PI * 0.46,
+    minPolarAngle: 0.12, maxPolarAngle: Math.PI * 0.44,
     rotateButton: "right",
-    autoRotate: true, autoRotateSpeed: 0.3,
+    autoRotate: false,
   });
 
   // ── shell wiring ────────────────────────────────────────────────────────────
