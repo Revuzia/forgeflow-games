@@ -406,7 +406,6 @@ register3d("battleship", async function (kernel, content) {
     phase = "battle"; clearGhost();
     playerCells.forEach((m) => scene.remove(m));
     setHUD();
-    revealEnemyFleet();
   }
   function beginPlacement() {
     sim.resetPlayerBoard(); pIndex = 0; phase = "placement"; placementHUD();
@@ -415,7 +414,6 @@ register3d("battleship", async function (kernel, content) {
     await placePlayerFleetVisuals();
     playerCells.forEach((m) => scene.remove(m));
     phase = "battle"; setHUD();
-    revealEnemyFleet();
   }
   beginGame = () => { if (typeof orbit !== "undefined" && orbit) orbit.autoRotate = false; if (placementEnabled) beginPlacement(); else beginBattleDirect(); };
   {
@@ -664,24 +662,8 @@ register3d("battleship", async function (kernel, content) {
       }
     });
   }
-  // Show the ENEMY FLEET on their board as translucent "intel" silhouettes so
-  // the player can see all of their boats (requested). They solidify when hit/sunk.
-  async function revealEnemyFleet() {
-    const ships = sim.boardOf("enemy").ships || [];
-    for (const ship of ships) {
-      if (ship._obj || ship.sunk) continue;
-      try { await placeShip("enemy", ship); } catch (e) { continue; }
-      if (ship._obj) {
-        ship._revealed = true;
-        ship._obj.traverse((o) => {
-          if (o.isMesh && o.material) {
-            o.material = o.material.clone();
-            o.material.transparent = true; o.material.opacity = 0.42; o.material.depthWrite = false;
-          }
-        });
-      }
-    }
-  }
+  // Enemy ships stay HIDDEN on their board (proper Battleship) — fleet status is
+  // shown in the top-right HUD panel only. Make a ship solid when it's revealed on sink.
   function _solidifyShip(ship) {
     if (ship && ship._obj) ship._obj.traverse((o) => { if (o.isMesh && o.material) { o.material.opacity = 1; o.material.depthWrite = true; o.material.transparent = false; } });
   }
