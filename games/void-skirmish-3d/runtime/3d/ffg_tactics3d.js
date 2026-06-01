@@ -286,8 +286,10 @@ register3d("tactics3d", async (kernel, content) => {
   const HALF_COVER = [ {n:"car/box-crate.glb",t:0.95}, {n:"barrier-traffic-quaternius.glb",t:1.1}, {n:"grave/grave-bench.glb",t:1.1}, {n:"ac-unit-quaternius.glb",t:0.95}, {n:"market-stalls-quaternius.glb",t:1.6}, {n:"grave/grave-iron-fence.glb",t:1.0} ];
   const FURNITURE = [ {n:"desk.glb",t:0.95}, {n:"bookcaseClosed.glb",t:0.7}, {n:"kitchenCabinet.glb",t:0.7}, {n:"table.glb",t:0.95}, {n:"loungeSofa.glb",t:1.0}, {n:"cardboardBoxClosed.glb",t:0.55} ];
   const WALLS = [ {n:"wall.glb",t:1.0}, {n:"wallWindow.glb",t:1.0}, {n:"wallDoorway.glb",t:1.0}, {n:"wallHalf.glb",t:1.0}, {n:"wallCorner.glb",t:1.0} ];
+  // solid backdrop towers (Kenney City Kit Commercial; commercial/ has its colormap)
+  const BUILDINGS = [ {n:"commercial/building-a.glb",t:1.0}, {n:"commercial/building-b.glb",t:1.0}, {n:"commercial/building-skyscraper-a.glb",t:1.0}, {n:"commercial/building-skyscraper-b.glb",t:1.0} ];
   async function preloadCity() {
-    const all = [...FULL_COVER, ...HALF_COVER, ...FURNITURE, ...WALLS];
+    const all = [...FULL_COVER, ...HALF_COVER, ...FURNITURE, ...WALLS, ...BUILDINGS];
     await Promise.all(all.map((m) => loadCityModel(m.n, m.t)));
   }
   function _tilesOf(list, name) { const e = list.find((m) => m.n === name); return e ? e.t : 1; }
@@ -432,40 +434,23 @@ register3d("tactics3d", async (kernel, content) => {
   // — across a varied concrete/brick/tan palette, so the skyline reads like a
   // real city block instead of a uniform box-forest. Lit window rows + a
   // ground-floor accent (storefront on the low ones, with an awning).
+  // Solid backdrop tower (tile type 1): a real Kenney building model per tile
+  // (commercial buildings + skyscrapers). Clusters of type-1 tiles read as a
+  // building block. Frag-destructible (tracked in buildingTiles).
   function buildStructure(x, y, w) {
     const hsh = ((x * 73856093) ^ (y * 19349663)) >>> 0;
-    const kind = hsh % 5; // 0-1 tall, 2-3 mid, 4 low
-    const PAL = [0x2b3442, 0x313b4b, 0x26303d, 0x463a31, 0x4d473d, 0x39414c, 0x3a3340];
-    const shellCol = PAL[hsh % PAL.length];
-    // Warm office-window glow (amber/gold) + a little cool fluorescent — grounded
-    // night-city light, NOT cyberpunk green/purple (the old rainbow read as arcade).
-    const winCol = [0xffb24d, 0xffc678, 0xdfe8ff, 0xffd089][hsh % 4]; // warm dusk window-glow (XCOM amber) + a few cool
-    const floors = kind <= 1 ? (4 + (hsh % 3)) : kind <= 3 ? (2 + (hsh % 2)) : 1; // lower-rise urban (XCOM), not a skyscraper metropolis
-    const bh = T * 0.92 * floors;
-    // Single textured box per building — facade map tinted by the shell colour,
-    // glow map drives the emissive (lit) windows. Texture repeats once per floor.
-    const fac = buildingFacades()[hsh % 6];
-    const map = fac.map.clone(), glow = fac.glow.clone();
-    map.repeat.set(1, floors); glow.repeat.set(1, floors); map.needsUpdate = glow.needsUpdate = true;
-    const mat = new THREE.MeshStandardMaterial({ map, color: shellCol, emissive: winCol, emissiveMap: glow, emissiveIntensity: 0.45, roughness: 0.86, metalness: 0.15 });
-    const m = new THREE.Mesh(new THREE.BoxGeometry(T, bh, T), mat);
-    m.position.set(w.x, bh / 2, w.z); m.castShadow = true; m.receiveShadow = true; scene.add(m);
-    const parts = [m];
-    const roof = _bx(T * 1.02, T * 0.14, T * 1.02, shade(shellCol, 0.22), 0.5, 0.55);
-    roof.position.set(w.x, bh, w.z); roof.castShadow = true; scene.add(roof); parts.push(roof);
-    if (kind <= 3 && (hsh & 4)) { const ac = _bx(T * 0.34, T * 0.22, T * 0.3, shade(shellCol, 0.3), 0.6, 0.5); ac.position.set(w.x + T * 0.18, bh + T * 0.12, w.z - T * 0.12); ac.castShadow = true; scene.add(ac); parts.push(ac); }
-    // low buildings get a coloured awning on their street faces (storefront read)
-    if (kind === 4) {
-      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-      for (const d of dirs) {
-        const nx = x + d[0], ny = y + d[1];
-        const ng = (ny >= 0 && ny < gridH && nx >= 0 && nx < gridW) ? mission.grid[ny][nx] : 0;
-        if (ng === 1) continue;
-        const awn = _bx(T * 0.82, T * 0.06, T * 0.24, [0x9a3b3b, 0x35506e, 0x2f6e4f][hsh % 3], 0.7, 0.1);
-        awn.position.set(w.x + d[0] * (T * 0.6), bh * 0.62, w.z + d[1] * (T * 0.6)); awn.rotation.y = d[0] !== 0 ? Math.PI / 2 : 0; awn.castShadow = true; scene.add(awn); parts.push(awn);
-      }
+    const g = new THREE.Group();
+    const tall = (hsh % 5 < 2);
+    const name = tall ? (hsh & 1 ? "commercial/building-skyscraper-a.glb" : "commercial/building-skyscraper-b.glb")
+                      : (hsh & 1 ? "commercial/building-a.glb" : "commercial/building-b.glb");
+    if (!placeCity(name, g, (hsh % 4) * (Math.PI / 2))) {
+      const bh = T * (tall ? 3 : 1.5); // fallback box if the model failed
+      const b = new THREE.Mesh(new THREE.BoxGeometry(T, bh, T), _smat(0x39414c, 0.85, 0.2));
+      b.position.y = bh / 2; g.add(b);
     }
-    buildingTiles[x + "," + y] = parts; // tracked so a grenade can demolish it
+    g.position.set(w.x, FT, w.z);
+    g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    scene.add(g); buildingTiles[x + "," + y] = [g];
   }
 
   // Enterable-building WALL (tile type 5): a low concrete wall + lit window band,
