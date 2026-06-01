@@ -61,6 +61,17 @@ register3d("battleship", async function (kernel, content) {
   const gunnerChar = { player: null, enemy: null };   // animated gunner figure, for fire reaction
   let beginGame = null;  // assigned below; called by the menu Play button
 
+  // ── ONLINE MULTIPLAYER state ───────────────────────────────────────────────
+  // netMode flips the click-to-fire path from "fire + run the AI" to "broadcast a
+  // shot to a live opponent". The single-player vs-AI path is completely unchanged
+  // when netMode is false. `online` is the lazily-loaded OnlineController.
+  let netMode = false;
+  let online = null;               // OnlineController (set on PLAY ONLINE)
+  let onPlacementDone = null;      // when set, placement completion calls this
+                                   // INSTEAD of starting the AI battle (online flow)
+  let netEnemySunk = 0;            // attacker-side count of enemy ships we've sunk
+  const netEnemyTotal = (m.fleet || sim.fleet).length;
+
   // ── Ocean — real reflective water (three.js Water): flowing normal-mapped
   // waves, sun glint, fresnel shine. Flat plane (shader-faked waves), so it
   // never clips the boards. The normal map is bundled in the runtime (NOT a
@@ -405,6 +416,9 @@ register3d("battleship", async function (kernel, content) {
   function startBattle() {
     phase = "battle"; clearGhost();
     playerCells.forEach((m) => scene.remove(m));
+    // ONLINE: placement is done, but we don't start firing until BOTH players are
+    // ready and the network says it's our turn. Hand control to the online flow.
+    if (onPlacementDone) { const cb = onPlacementDone; onPlacementDone = null; cb(); return; }
     setHUD();
   }
   function beginPlacement() {
@@ -883,6 +897,160 @@ register3d("battleship", async function (kernel, content) {
     return true;
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // ONLINE MULTIPLAYER rendering + interface
+  // The networked match reuses every cinematic primitive above. The ONLY new
+  // logic: turns + shots come from the network (not the AI), the DEFENDER resolves
+  // each shot on its own fleet, and an attacker's "sink" reveal builds the wreck
+  // from the shipCells the defender broadcast (we don't know the enemy layout).
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // Online HUD: title + turn banner + a 15s countdown ring + fleet pips. Kept
+  // separate from setHUD() (which assumes the AI/abilities model).
+  function setNetHUD(st) {
+    st = st || {};
+    const myTurn = !!st.myTurn;
+    const secs = st.secsLeft;
+    const banner = st.banner || (myTurn ? "Your move — click enemy waters" : "Opponent's move…");
+    const bc = myTurn ? "#7CFC9A" : "#ffb454";
+    const ps = sim.fleetStatus("player");
+    const pip = (bg, glow) => `<span style="display:inline-block;width:9px;height:9px;margin:0 1.5px;border-radius:2px;background:${bg};box-shadow:${glow ? "0 0 5px " + glow : "none"}"></span>`;
+    const mine = ps.map((s) => {
+      let cells = ""; for (let i = 0; i < s.len; i++) cells += pip(s.sunk ? "#7a2020" : i < s.hits ? "#ff5a5a" : "#7CFC9A", s.sunk ? null : i < s.hits ? "#ff5a5a" : "#7CFC9A");
+      return `<div style="margin:2px 0;${s.sunk ? "opacity:.45" : ""}"><span style="font-size:10px;opacity:.75;display:inline-block;width:66px;text-align:right;margin-right:7px">${s.name}${s.sunk ? " ✖" : ""}</span>${cells}</div>`;
+    }).join("");
+    // Enemy: one pip per ship; we know how many we've sunk, not their layout.
+    let foe = "";
+    for (let i = 0; i < netEnemyTotal; i++) foe += pip(i < netEnemySunk ? "#7a2020" : "#9fb4c8", i < netEnemySunk ? null : "#9fb4c8");
+    // Countdown timer chip (only while a clock is running on the active turn).
+    const timer = (secs != null)
+      ? `<span style="margin-left:10px;display:inline-block;min-width:34px;font-weight:800;color:${secs <= 5 ? "#ff6a5a" : "#eaf3ff"}">⏱ ${secs}s</span>`
+      : "";
+    kernel.hud(`
+      <div style="position:absolute;top:10px;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:34px;font-weight:900;letter-spacing:6px;text-transform:uppercase;line-height:1;background:linear-gradient(180deg,#fff2d2,#f1c468,#c2862f);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 6px rgba(0,0,0,.55))">${content.title || "Iron Tide"} <span style="font-size:13px;letter-spacing:2px;color:#7CFC9A">· ONLINE</span></div>
+        <div style="margin-top:8px;display:inline-block;background:rgba(8,18,32,.74);border:1px solid ${bc}55;border-left:3px solid ${bc};border-right:3px solid ${bc};border-radius:5px;padding:5px 16px;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px">
+          <span style="color:${bc};font-weight:700">${banner}</span>${timer}
+        </div>
+      </div>
+      <div style="position:absolute;top:12px;right:14px;font-family:'Segoe UI',system-ui,monospace;background:rgba(8,18,32,.62);border:1px solid #2a4458;border-radius:9px;padding:9px 13px;text-align:right">
+        <div style="font-size:10px;letter-spacing:1.5px;opacity:.7">ENEMY FLEET <span style="opacity:.6">${netEnemySunk}/${netEnemyTotal} sunk</span></div>
+        <div style="margin:3px 0 7px">${foe}</div>
+        <div style="font-size:10px;letter-spacing:1.5px;opacity:.7;text-align:left">YOUR FLEET</div>
+        <div style="text-align:left;margin-top:2px">${mine}</div>
+      </div>
+      <div style="position:absolute;bottom:10px;left:14px;font-size:11px;opacity:.55;font-family:monospace">Right-drag: rotate · WASD: move · Scroll: zoom</div>
+    `);
+  }
+
+  // DEFENDER: resolve an incoming shot on MY OWN fleet (sim.fire("enemy",…) targets
+  // this.player), render it on the PLAYER board, and return the authoritative
+  // outcome for the attacker. shipCells (on a sink) let the attacker draw the wreck.
+  function netResolveIncoming(x, y) {
+    const r = sim.fire("enemy", x, y); // shoots THIS client's own board (this.player)
+    if (r.result === "invalid") return { outcome: "miss", invalid: true };
+    busy = true;
+    // resolveShot("enemy", …) draws the cannonball from the enemy gunner onto MY
+    // board, places the peg/explosion/damage, and reveal-sinks my ship if needed.
+    resolveShot("enemy", r, () => { busy = false; setNetHUD({ myTurn: false, banner: "Incoming fire…" }); });
+    return {
+      outcome: r.result,                 // 'miss' | 'hit' | 'sink'
+      ship: r.ship || null,
+      shipCells: r.result === "sink" ? (r.shipCells || null) : null,
+      win: !!r.win,                      // true => my last ship just sank (attacker wins)
+    };
+  }
+
+  // ATTACKER: render the result of MY shot on the ENEMY board. We never knew the
+  // enemy layout, so a sink builds the wreck from the broadcast shipCells.
+  function netRenderOutgoing(x, y, outcome, shipCells, done) {
+    busy = true;
+    const to = cellWorld("enemy", x, y);
+    kernel.playSound(sfx.fire, 0.4);
+    fireCannonball("player", to, () => {
+      try {
+        if (outcome === "miss") {
+          splash(to); placePeg("enemy", x, y, false); kernel.playSound(sfx.miss, 0.5);
+        } else {
+          explosion(to); damageMarker(to, false); placePeg("enemy", x, y, true); kernel.playSound(sfx.hit, 0.6);
+        }
+        if (outcome === "sink") {
+          kernel.playSound(sfx.sink, 0.7);
+          if (shipCells && shipCells.length) netRevealEnemyWreck(shipCells);
+        }
+      } catch (e) { console.error("[battleship] netRenderOutgoing VFX (recovered):", e); }
+      busy = false;
+      setTimeout(done, reducedMotion ? 50 : (outcome === "sink" ? 900 : 450));
+    });
+  }
+
+  // Build + sink a visible enemy wreck from the cells the defender revealed on a
+  // sink (online has no local enemy ship object to reveal).
+  async function netRevealEnemyWreck(cells) {
+    const horizontal = cells.length < 2 || cells[0].y === cells[1].y;
+    const ship = {
+      id: "wreck_" + cells[0].x + "_" + cells[0].y,
+      name: "Wreck", len: cells.length, cells: cells.slice(),
+      hits: cells.length, sunk: true, horizontal: horizontal, _obj: null,
+    };
+    try {
+      await placeShip("enemy", ship);
+      _solidifyShip(ship);
+      sinkShip(ship);
+    } catch (e) { /* wreck is cosmetic — never block the turn */ }
+  }
+
+  // Pick a random un-shot enemy cell (15s timeout auto-forfeit fires one).
+  function netRandomUnshotCell() {
+    const all = [];
+    for (let yy = 0; yy < size; yy++) for (let xx = 0; xx < size; xx++) if (sim.enemy.shots[yy][xx] === 0) all.push({ x: xx, y: yy });
+    if (!all.length) return null;
+    return all[Math.floor(Math.random() * all.length)];
+  }
+
+  // The interface the OnlineController drives (it knows no three.js).
+  function buildOnlineIface() {
+    return {
+      parent: kernel.parent,
+      onLobbyOpen: () => { if (orbit) orbit.autoRotate = false; },
+      onLobbyBack: () => { netMode = false; shell.menu(); },
+      beginPlacement: (onAllPlaced) => {
+        netMode = true;
+        onPlacementDone = onAllPlaced;       // startBattle() will call this
+        if (placementEnabled) beginPlacement();
+        else { beginBattleDirect(); onPlacementDone = null; onAllPlaced(); }
+      },
+      autoPlace: (onAllPlaced) => {
+        netMode = true;
+        onPlacementDone = onAllPlaced;
+        if (placementEnabled) autoPlace();   // ends in startBattle() -> onAllPlaced
+        else { beginBattleDirect(); onPlacementDone = null; onAllPlaced(); }
+      },
+      resolveIncoming: (x, y) => netResolveIncoming(x, y),
+      renderOutgoing: (x, y, outcome, shipCells, done) => netRenderOutgoing(x, y, outcome, shipCells, done),
+      markEnemySunk: () => { netEnemySunk = Math.min(netEnemyTotal, netEnemySunk + 1); setNetHUD({ myTurn: false }); },
+      setStatus: (st) => setNetHUD(st),
+      canFire: (x, y) => x >= 0 && y >= 0 && x < size && y < size && sim.enemy.shots[y][x] === 0,
+      markShot: (x, y) => { if (sim.enemy.shots[y] && sim.enemy.shots[y][x] === 0) sim.enemy.shots[y][x] = 1; }, // pending; result repaints the peg
+      randomUnshotCell: () => netRandomUnshotCell(),
+      end: (victory, subtitle) => { phase = "ended"; busy = false; shell.end(victory, subtitle); },
+      onError: (msg) => { console.warn("[online]", msg); },
+    };
+  }
+
+  // Lazy-load the online module ONLY when PLAY ONLINE is chosen (keeps supabase-js
+  // and all networking out of the single-player bundle).
+  let _onlineApi = null;
+  async function startOnline() {
+    if (!_onlineApi) {
+      const mod = await import("../net/ffg_online.js" + new URL(import.meta.url).search);
+      _onlineApi = mod.installOnline(buildOnlineIface());
+      online = _onlineApi.controller;
+    }
+    netMode = true;
+    _onlineApi.openLobby();
+  }
+
   // pointer input
   let hovered = null;
   const dom = kernel.renderer.domElement;
@@ -913,7 +1081,9 @@ register3d("battleship", async function (kernel, content) {
       const h = kernel.raycast(ev.clientX, ev.clientY, cellMeshes);
       if (h.length) {
         const cx = h[0].object.userData.x, cy = h[0].object.userData.y;
-        if (armed) useAbilityAt(cx, cy); else doPlayerFire(cx, cy);
+        if (netMode && online) { online.fire(cx, cy); }   // ONLINE: broadcast the shot (guards turn/repeat itself)
+        else if (armed) useAbilityAt(cx, cy);
+        else doPlayerFire(cx, cy);
       }
     }
   });
@@ -932,6 +1102,20 @@ register3d("battleship", async function (kernel, content) {
   window.addEventListener("keydown", (e) => {
     if (phase !== "battle" || sim.ended) return;
     const k = e.key;
+    // ONLINE: no abilities; arrow cursor + Space/Enter fire over the network on my turn.
+    if (netMode && online) {
+      const nav = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+      if (nav[k]) {
+        e.preventDefault();
+        kbCursor.x = Math.max(0, Math.min(size - 1, kbCursor.x + nav[k][0]));
+        kbCursor.y = Math.max(0, Math.min(size - 1, kbCursor.y + nav[k][1]));
+        if (!busy && online.myTurn) showCursor();
+      } else if (k === " " || k === "Enter") {
+        e.preventDefault();
+        if (!busy) online.fire(kbCursor.x, kbCursor.y);
+      }
+      return;
+    }
     if (k === "Escape" && armed) { armed = null; renderAbilityBar(); setHUD(); e.stopImmediatePropagation(); e.preventDefault(); return; } // disarm only — don't let the shell pause
     // number keys 1-5 arm the earned abilities, in display order
     if (/^[1-5]$/.test(k)) {
@@ -971,6 +1155,7 @@ register3d("battleship", async function (kernel, content) {
       { h: "FIRING", p: "On your turn, left-click a cell on the enemy waters (the far board) to fire. A red marker means a hit, a white disc a miss. Hit ships smoke and burn; a sunk ship rolls under." },
       { h: "UPGRADES", p: "Sink an enemy ship to earn a one-use ability — the bigger the hull, the bigger the upgrade (Carrier → Recon Scan, Battleship → Barrage, Cruiser → Salvo, Submarine → Sonar, Destroyer → Double Tap). A COMBO meter scales their power, and sink ORDER matters. Click an ability in the bottom bar (or press 1–5) to arm it, then click a target." },
       { h: "CAMERA", p: "<b>Right-drag</b> to rotate, <b>WASD</b> to move around, scroll to zoom — survey the whole battlefield. Press <b>Esc</b> to pause." },
+      { h: "PLAY ONLINE", p: "From the title, choose <b>PLAY ONLINE</b> to battle a live opponent: <b>Quick Match</b> pairs you with anyone waiting, or use <b>Create Room</b> / <b>Join Room</b> with a shared 4-character code to play a friend. Both captains deploy their fleets, then trade salvos with a 15-second timer per turn." },
     ],
     onPlay: (diff) => { sim.difficulty = diff; beginGame(); },
     onPause: () => { paused = true; kernel.stop(); },
@@ -979,6 +1164,30 @@ register3d("battleship", async function (kernel, content) {
   function showEnd(victory) {
     shell.end(victory, (victory ? "Enemy fleet destroyed" : "Your fleet was sunk") + " · " + sim.turnNumber + " turns");
   }
+
+  // Inject a "PLAY ONLINE" button into the shell's title menu WITHOUT editing the
+  // shared shell: wrap shell.menu() so every time the menu renders, we slot the
+  // button right under PLAY. (The shell rebuilds ov.innerHTML each menu(), so the
+  // button is re-added on every return to the title.)
+  const _origMenu = shell.menu.bind(shell);
+  shell.menu = function () {
+    _origMenu();
+    try {
+      if (shell.phase !== "menu" || !shell.ov) return;
+      const ob = document.createElement("button");
+      ob.textContent = "🌐  PLAY ONLINE";
+      ob.style.cssText = "font:bold 15px 'Segoe UI',system-ui,monospace;padding:11px 26px;cursor:pointer;min-width:200px;" +
+        "letter-spacing:1px;border-radius:7px;margin-top:8px;color:#06121f;background:linear-gradient(#9fe0ff,#4fb6e0);" +
+        "border:1px solid #7fd0f0;box-shadow:0 4px 18px rgba(80,180,224,.32);transition:transform .08s";
+      ob.onmouseenter = () => { ob.style.transform = "translateY(-1px)"; };
+      ob.onmouseleave = () => { ob.style.transform = "none"; };
+      ob.onclick = () => { shell.hide(); shell.phase = "playing"; startOnline(); };
+      // place it directly after the PLAY button
+      const playBtn = Array.prototype.find.call(shell.ov.querySelectorAll("button"), (b) => /PLAY/i.test(b.textContent) && !/ONLINE/i.test(b.textContent));
+      if (playBtn && playBtn.parentNode) playBtn.parentNode.insertBefore(ob, playBtn.nextSibling);
+      else shell.ov.appendChild(ob);
+    } catch (e) { /* button is additive — never block the menu */ }
+  };
   shell.start(); // boot into the title menu
 
   // ── controller + test hooks ─────────────────────────────────────────────────
@@ -995,7 +1204,12 @@ register3d("battleship", async function (kernel, content) {
         playerShips: sim.player.ships.length, playerAlive: sim.alive("player"), enemyAlive: sim.alive("enemy"),
         sceneChildren: scene.children.length,
         cellTargets: cellMeshes.length,
+        netMode: netMode, netEnemySunk: netEnemySunk,
       }),
+      // ── ONLINE hooks (the 2-client e2e test drives these; also installs window.__mp*) ──
+      startOnline: () => startOnline(),       // boots the online module + lobby
+      netMode: () => netMode,
+      netState: () => ({ netMode, netEnemySunk, playerAlive: sim.alive("player") }),
       // placement-phase hooks for capture/verification
       placeAuto: () => _placement && _placement.autoPlace(),
       placeShipAt: (x, y) => _placement && _placement.commit(x, y),
