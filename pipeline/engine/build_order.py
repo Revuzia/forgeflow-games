@@ -227,8 +227,8 @@ def assemble(slug, content):
     if genre in ("tactics", "tactics3d"):
         _copy_tactics_assets(gdir)
     (gdir / "content.json").write_text(json.dumps(content, indent=2), encoding="utf-8")
-    if genre in ("tactics", "tactics3d"):
-        _structure_tactics_maps(gdir / "content.json")  # XCOM parcel/plot structure (not flat LLM grids)
+    if genre == "tactics3d":
+        _structure_tactics_maps(gdir / "content.json")  # XCOM parcel/plot — 3D ONLY (a 2D top-down camera fits the whole grid, so big parcel maps make units tiny; 2D tactics keeps small readable grids)
     (gdir / "index.html").write_text(_index_html_3d(content, prof) if is3d else _index_html_2d(content, prof), encoding="utf-8")
     return gdir
 

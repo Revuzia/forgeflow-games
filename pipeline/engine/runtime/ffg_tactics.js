@@ -75,6 +75,7 @@
       this._buildSim();
       this._computeLayout();
       this._drawBackground();
+      if (FFG.fx) { FFG.fx.bind(this); FFG.fx.bloom(1.0); } // juice engine: postFX glow/bloom + particles
       this._drawGrid();
       this._drawUnits();
       this._buildHUD();
@@ -247,6 +248,7 @@
       var dark = shade(col, -0.5), hpW = R * 1.9;
       var shadow = this.add.ellipse(0, R * 0.78, R * 1.7, R * 0.7, 0x000000, 0.38);
       var base = this.add.circle(0, 0, R, col).setStrokeStyle(3, dark);
+      if (FFG.fx) FFG.fx.glow(base, col, 3); // real postFX glow per unit (was a flat disc)
       var hi = this.add.circle(0, -R * 0.22, R * 0.74, shade(col, 0.28), 0.4); // top sheen
       var parts = [shadow, base, hi];
       var iconKey = "ti_" + iconForUnit(u), icon;
@@ -470,10 +472,19 @@
         this.tweens.add({ targets: line, alpha: 0, duration: 260, onComplete: function () { line.destroy(); } });
         if (e.payload.hit) {
           FFG.audio.sfx("hit", 0.5);
-          // impact burst + ring at target
-          var burst = this.add.circle(wt.x, wt.y, this.tile * 0.2, 0xffd27a).setDepth(17);
-          this.tweens.add({ targets: burst, scale: 2.6, alpha: 0, duration: 300, onComplete: function () { burst.destroy(); } });
-          this.cameras.main.shake(120, 0.004);
+          // impact: additive particle burst + shockwave ring + shake (juice engine);
+          // a kill adds hit-stop + a red flash for weight.
+          if (FFG.fx) {
+            var killed = e.payload.killed;
+            FFG.fx.burst(wt.x, wt.y, { color: 0xffd27a, count: killed ? 22 : 12, speed: 230, scale: 0.7, life: 460, spark: true });
+            FFG.fx.shockwave(wt.x, wt.y, { color: killed ? 0xff5a4a : 0xffd27a, r1: this.tile * (killed ? 1.6 : 1.0) });
+            FFG.fx.shake(killed ? 220 : 110, killed ? 0.009 : 0.004);
+            if (killed) { FFG.fx.hitstop(60); FFG.fx.flash(0xff5a4a, 90); }
+          } else {
+            var burst = this.add.circle(wt.x, wt.y, this.tile * 0.2, 0xffd27a).setDepth(17);
+            this.tweens.add({ targets: burst, scale: 2.6, alpha: 0, duration: 300, onComplete: function () { burst.destroy(); } });
+            this.cameras.main.shake(120, 0.004);
+          }
           this._floatText(t, "-" + e.payload.damage, "#ff8a7a");
           this._flash(t);
           this._refreshUnit(t);
