@@ -247,9 +247,20 @@ register3d("tactics3d", async (kernel, content) => {
       }
     }
   }
+  // Ambient dusk atmosphere: warm dust motes / embers drifting up through the
+  // low sun — slow additive points. Cheap, adds "lived-in air".
+  function buildAmbientMotes() {
+    const N = 90, geo = new THREE.BufferGeometry(), pos = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) { pos[i * 3] = (Math.random() - 0.5) * W; pos[i * 3 + 1] = Math.random() * T * 9; pos[i * 3 + 2] = (Math.random() - 0.5) * H; }
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffcf9a, size: T * 0.07, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }));
+    scene.add(pts);
+    kernel.onUpdate((dt) => { const p = geo.attributes.position.array; for (let i = 0; i < N; i++) { p[i * 3 + 1] += dt * T * 0.35; if (p[i * 3 + 1] > T * 9) p[i * 3 + 1] = 0; } geo.attributes.position.needsUpdate = true; });
+  }
   async function buildBoard() {
     await preloadCity(); // load the real CC0 models before placing tiles
     buildSkyline();
+    buildAmbientMotes();
     const plat = new THREE.Mesh(new THREE.BoxGeometry(W + 1.4, 0.6, H + 1.4),
       new THREE.MeshStandardMaterial({ color: 0x0c1626, roughness: 0.9, metalness: 0.2 }));
     plat.position.set(0, -0.35, 0); plat.receiveShadow = true; scene.add(plat);
