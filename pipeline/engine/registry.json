@@ -63,7 +63,7 @@
       ]
     },
     "arcade": {
-      "status": "planned",
+      "status": "live",
       "label": "Arcade (breakout / snake / pac-man)",
       "sim": "sim/arcade_core.js",
       "runtime": [
@@ -80,7 +80,8 @@
         "Breakout",
         "Snake",
         "Pac-Man"
-      ]
+      ],
+      "proof_game": "neon-breakout"
     },
     "shmup": {
       "status": "planned",
@@ -121,7 +122,7 @@
       ]
     },
     "platformer": {
-      "status": "planned",
+      "status": "live",
       "label": "Platformer",
       "sim": "sim/platformer_controller.js",
       "runtime": [
@@ -137,7 +138,8 @@
       "master_list_examples": [
         "DKC",
         "Celeste"
-      ]
+      ],
+      "proof_game": "lumen-run"
     },
     "rts": {
       "status": "planned",
