@@ -93,7 +93,7 @@ def repair(content, *, slug, genre, title=None):
     clean.setdefault("width", 1024 if is3d else 960)
     clean.setdefault("height", 640 if is3d else 600)
     content["view"] = clean
-    if genre == "tactics":
+    if genre in ("tactics", "tactics3d"):
         _repair_tactics_placements(content)
     return content
 
@@ -224,12 +224,12 @@ def assemble(slug, content):
         shutil.copy2(src, dst)
     if is3d:
         _copy_3d_assets(gdir, content)
-    if genre == "tactics":
+    if genre in ("tactics", "tactics3d"):
         _copy_tactics_assets(gdir)
     (gdir / "content.json").write_text(json.dumps(content, indent=2), encoding="utf-8")
-    if genre == "tactics":
+    if genre in ("tactics", "tactics3d"):
         _structure_tactics_maps(gdir / "content.json")  # XCOM parcel/plot structure (not flat LLM grids)
-    (gdir / "index.html").write_text(_index_html_3d(content) if is3d else _index_html_2d(content, prof), encoding="utf-8")
+    (gdir / "index.html").write_text(_index_html_3d(content, prof) if is3d else _index_html_2d(content, prof), encoding="utf-8")
     return gdir
 
 
@@ -346,7 +346,15 @@ fetch("content.json").then(function(r){{return r.json()}}).then(function(c){{win
 """
 
 
-def _index_html_3d(content):
+def _index_html_3d(content, prof=None):
+    # Pick the genre's ESM boot entry from its runtime list (the *boot3d* file) so
+    # tactics3d boots via ffg_boot3d_tactics.js, battleship via ffg_boot3d.js, etc.
+    boot = "ffg_boot3d.js"
+    if prof:
+        for rel in prof.get("runtime", []):
+            if "boot3d" in rel:
+                boot = Path(rel).name
+                break
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -357,7 +365,7 @@ def _index_html_3d(content):
 </script>
 </head><body>
 <div id="game-container"></div>
-<script type="module" src="runtime/3d/ffg_boot3d.js?v={int(__import__('time').time())}"></script>
+<script type="module" src="runtime/3d/{boot}?v={int(__import__('time').time())}"></script>
 </body></html>
 """
 

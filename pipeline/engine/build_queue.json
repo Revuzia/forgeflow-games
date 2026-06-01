@@ -4,7 +4,7 @@
   "queue": [
     {
       "slug": "void-skirmish",
-      "genre": "tactics",
+      "genre": "tactics3d",
       "status": "pending",
       "brief": "Tactics skirmish aboard a fractured orbital station. 3 player units (a frontline Vanguard, a long-range Sentinel, a support Medic) vs 4 hostiles. Cover-heavy 12x9 grid with a hazard vent strip down the middle. Winnable in 4-6 turns with smart cover use. CRITICAL: every unit must spawn on a floor tile (0), never on a wall (1) or full-cover (3).",
       "master_list_bucket": "strategy",

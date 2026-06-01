@@ -1,117 +1,200 @@
 {
-  "_comment": "Genre registry — maps a genre bucket to the fixed engine assets that build it. 'status: live' = runtime exists and a game has shipped on it. 'status: schema' = contract defined, runtime is the next build. 'status: planned' = sim core exists, runtime + schema pending. The build_order selects a profile here from the design's classified genre. This is how ONE engine investment unlocks a whole bucket of the ~140-game master list.",
+  "_comment": "Genre registry \u2014 maps a genre bucket to the fixed engine assets that build it. 'status: live' = runtime exists and a game has shipped on it. 'status: schema' = contract defined, runtime is the next build. 'status: planned' = sim core exists, runtime + schema pending. The build_order selects a profile here from the design's classified genre. This is how ONE engine investment unlocks a whole bucket of the ~140-game master list.",
   "version": "2.0.0",
   "genres": {
     "tactics": {
       "status": "live",
       "label": "Grid tactics (XCOM / Fire Emblem / Into the Breach)",
       "sim": "sim/tactical_grid.js",
-      "runtime": ["ffg_kernel.js", "ffg_shell.js", "sim/tactical_grid.js", "ffg_tactics.js", "ffg_loader.js"],
+      "runtime": [
+        "ffg_kernel.js",
+        "ffg_shell.js",
+        "sim/tactical_grid.js",
+        "ffg_tactics.js",
+        "ffg_loader.js"
+      ],
       "schema": "schema/profiles/tactics.schema.json",
       "signature_mechanic": "path-constrained grid movement + cover-modified ranged hit% + turn phases + win on elimination",
       "signature_test": "tactics",
       "proof_game": "rift-tactics",
       "verify_difficulty": "easy",
-      "master_list_examples": ["XCOM", "Advance Wars", "Into the Breach", "Fire Emblem"]
+      "master_list_examples": [
+        "XCOM",
+        "Advance Wars",
+        "Into the Breach",
+        "Fire Emblem"
+      ]
     },
     "topdown": {
       "status": "schema",
       "label": "Top-down ARPG (Zelda-like)",
       "sim": "sim/topdown_controller.js",
-      "runtime": ["ffg_kernel.js", "ffg_topdown.js", "ffg_loader.js"],
+      "runtime": [
+        "ffg_kernel.js",
+        "ffg_topdown.js",
+        "ffg_loader.js"
+      ],
       "schema": "schema/profiles/topdown.schema.json",
       "signature_mechanic": "room-to-room navigation + lock-and-key gating + melee/projectile combat",
       "signature_test": "topdown",
       "verify_difficulty": "medium",
-      "master_list_examples": ["Zelda: A Link to the Past", "Hyper Light Drifter"]
+      "master_list_examples": [
+        "Zelda: A Link to the Past",
+        "Hyper Light Drifter"
+      ]
     },
     "turn-rpg": {
       "status": "planned",
       "label": "Turn-based RPG / monster-catcher",
       "sim": "sim/turn_based_combat.js",
-      "runtime": ["ffg_kernel.js", "sim/turn_based_combat.js", "ffg_turnrpg.js", "ffg_loader.js"],
+      "runtime": [
+        "ffg_kernel.js",
+        "sim/turn_based_combat.js",
+        "ffg_turnrpg.js",
+        "ffg_loader.js"
+      ],
       "schema": "schema/profiles/turnrpg.schema.json",
       "signature_mechanic": "speed-ordered turns + type effectiveness + status effects + level-up",
       "signature_test": "turnrpg",
       "verify_difficulty": "easy",
-      "master_list_examples": ["Pokemon", "Final Fantasy"]
+      "master_list_examples": [
+        "Pokemon",
+        "Final Fantasy"
+      ]
     },
     "arcade": {
       "status": "planned",
       "label": "Arcade (breakout / snake / pac-man)",
       "sim": "sim/arcade_core.js",
-      "runtime": ["ffg_kernel.js", "sim/arcade_core.js", "ffg_arcade.js", "ffg_loader.js"],
+      "runtime": [
+        "ffg_kernel.js",
+        "sim/arcade_core.js",
+        "ffg_arcade.js",
+        "ffg_loader.js"
+      ],
       "schema": "schema/profiles/arcade.schema.json",
       "signature_mechanic": "single-screen reflex loop with score + lives",
       "signature_test": "arcade",
       "verify_difficulty": "easy",
-      "master_list_examples": ["Breakout", "Snake", "Pac-Man"]
+      "master_list_examples": [
+        "Breakout",
+        "Snake",
+        "Pac-Man"
+      ]
     },
     "shmup": {
       "status": "planned",
       "label": "Shoot-em-up / bullet-hell",
       "sim": "sim/shmup_core.js",
-      "runtime": ["ffg_kernel.js", "sim/shmup_core.js", "ffg_shmup.js", "ffg_loader.js"],
+      "runtime": [
+        "ffg_kernel.js",
+        "sim/shmup_core.js",
+        "ffg_shmup.js",
+        "ffg_loader.js"
+      ],
       "schema": "schema/profiles/shmup.schema.json",
       "signature_mechanic": "scrolling field + bullet patterns + score multiplier",
       "signature_test": "shmup",
       "verify_difficulty": "medium",
-      "master_list_examples": ["Geometry Wars", "Ikaruga"]
+      "master_list_examples": [
+        "Geometry Wars",
+        "Ikaruga"
+      ]
     },
     "tower-defense": {
       "status": "planned",
       "label": "Tower defense",
       "sim": "sim/tower_defense.js",
-      "runtime": ["ffg_kernel.js", "sim/tower_defense.js", "ffg_td.js", "ffg_loader.js"],
+      "runtime": [
+        "ffg_kernel.js",
+        "sim/tower_defense.js",
+        "ffg_td.js",
+        "ffg_loader.js"
+      ],
       "schema": "schema/profiles/td.schema.json",
       "signature_mechanic": "path waves + tower placement economy + upgrade tree",
       "signature_test": "td",
       "verify_difficulty": "easy",
-      "master_list_examples": ["Kingdom Rush", "Bloons TD"]
+      "master_list_examples": [
+        "Kingdom Rush",
+        "Bloons TD"
+      ]
     },
     "platformer": {
       "status": "planned",
       "label": "Platformer",
       "sim": "sim/platformer_controller.js",
-      "runtime": ["ffg_kernel.js", "sim/platformer_controller.js", "ffg_platformer.js", "ffg_loader.js"],
+      "runtime": [
+        "ffg_kernel.js",
+        "sim/platformer_controller.js",
+        "ffg_platformer.js",
+        "ffg_loader.js"
+      ],
       "schema": "schema/profiles/platformer.schema.json",
       "signature_mechanic": "gravity + jump/coyote/dash feel + hazard traversal + goal",
       "signature_test": "platformer",
       "verify_difficulty": "hard",
-      "master_list_examples": ["DKC", "Celeste"]
+      "master_list_examples": [
+        "DKC",
+        "Celeste"
+      ]
     },
     "rts": {
       "status": "planned",
       "label": "Real-time strategy",
       "sim": "sim/rts_core.js",
-      "runtime": ["ffg_kernel.js", "sim/rts_core.js", "ffg_rts.js", "ffg_loader.js"],
+      "runtime": [
+        "ffg_kernel.js",
+        "sim/rts_core.js",
+        "ffg_rts.js",
+        "ffg_loader.js"
+      ],
       "schema": "schema/profiles/rts.schema.json",
       "signature_mechanic": "resource economy + unit production + fog + AI opponent",
       "signature_test": "rts",
       "verify_difficulty": "hard",
-      "master_list_examples": ["StarCraft", "Age of Empires"]
+      "master_list_examples": [
+        "StarCraft",
+        "Age of Empires"
+      ]
     },
     "beatemup": {
       "status": "planned",
       "label": "Beat-em-up",
       "sim": "sim/beatem_up_core.js",
-      "runtime": ["ffg_kernel.js", "sim/beatem_up_core.js", "ffg_beatemup.js", "ffg_loader.js"],
+      "runtime": [
+        "ffg_kernel.js",
+        "sim/beatem_up_core.js",
+        "ffg_beatemup.js",
+        "ffg_loader.js"
+      ],
       "schema": "schema/profiles/beatemup.schema.json",
       "signature_mechanic": "side-scroll brawl + combo strings + enemy waves",
       "signature_test": "beatemup",
       "verify_difficulty": "medium",
-      "master_list_examples": ["Streets of Rage", "Double Dragon"]
+      "master_list_examples": [
+        "Streets of Rage",
+        "Double Dragon"
+      ]
     },
     "metroidvania": {
       "status": "planned",
       "label": "Metroidvania",
       "sim": "sim/metroidvania_core.js",
-      "runtime": ["ffg_kernel.js", "sim/metroidvania_core.js", "ffg_metroidvania.js", "ffg_loader.js"],
+      "runtime": [
+        "ffg_kernel.js",
+        "sim/metroidvania_core.js",
+        "ffg_metroidvania.js",
+        "ffg_loader.js"
+      ],
       "schema": "schema/profiles/metroidvania.schema.json",
       "signature_mechanic": "interconnected map + ability-gated traversal + backtracking",
       "signature_test": "metroidvania",
       "verify_difficulty": "hard",
-      "master_list_examples": ["Metroid", "Castlevania: SotN"]
+      "master_list_examples": [
+        "Metroid",
+        "Castlevania: SotN"
+      ]
     },
     "battleship": {
       "status": "live",
@@ -119,18 +202,57 @@
       "renderer": "three",
       "label": "Hybrid salvo + 3D cinematic naval combat (Battleship-type)",
       "sim": "sim/battleship.js",
-      "runtime": ["3d/ffg_kernel_3d.js", "3d/ffg_battleship_3d.js", "3d/ffg_boot3d.js", "sim/battleship.js", "ffg_shell.js"],
+      "runtime": [
+        "3d/ffg_kernel_3d.js",
+        "3d/ffg_battleship_3d.js",
+        "3d/ffg_boot3d.js",
+        "sim/battleship.js",
+        "ffg_shell.js"
+      ],
       "schema": "schema/profiles/battleship.schema.json",
       "signature_mechanic": "salvo fire (hit/miss/sink) on hidden boards + a real hunt/target AI that plays far better than random",
       "signature_test": "battleship",
       "proof_game": "iron-tide",
       "verify_difficulty": "easy",
-      "master_list_examples": ["Battleship", "salvo naval combat"]
+      "master_list_examples": [
+        "Battleship",
+        "salvo naval combat"
+      ]
+    },
+    "tactics3d": {
+      "status": "live",
+      "track": "3d",
+      "renderer": "three",
+      "label": "3D turn-based squad tactics (XCOM-style) \u2014 cinematic, real city maps, distinct soldier classes",
+      "sim": "sim/tactical_grid.js",
+      "runtime": [
+        "3d/ffg_kernel_3d.js",
+        "3d/ffg_tactics3d.js",
+        "3d/ffg_boot3d_tactics.js",
+        "sim/tactical_grid.js",
+        "ffg_shell.js",
+        "ffg_campaign.js"
+      ],
+      "schema": "schema/profiles/tactics.schema.json",
+      "signature_mechanic": "path-constrained grid movement + cover-modified ranged hit% + turn phases + win on elimination",
+      "signature_test": "tactics",
+      "proof_game": "void-skirmish",
+      "verify_difficulty": "easy",
+      "golden_only": true,
+      "master_list_examples": [
+        "XCOM 2",
+        "3D squad tactics"
+      ]
     }
   },
   "track_3d": {
     "_comment": "Phase 2. Same 5-layer architecture, three.js kernel (ffg_kernel_3d). Deferred until the 2D loop ships >=3 buckets reliably.",
-    "buckets": ["3d-platformer", "3d-arpg", "voxel-sandbox", "god-sim"],
+    "buckets": [
+      "3d-platformer",
+      "3d-arpg",
+      "voxel-sandbox",
+      "god-sim"
+    ],
     "assets_ready": "3d-models/ (135 models, 63 browser-ready) + voxel_engine.js",
     "status": "deferred"
   }
