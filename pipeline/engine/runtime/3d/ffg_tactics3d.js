@@ -729,7 +729,10 @@ register3d("tactics3d", async (kernel, content) => {
   const focus = cell(Math.round(scx), Math.round(scy)); focus.y = 0;
   const camDist = T * 17; // close enough that a soldier fills a good chunk of frame
   kernel.camera.fov = 40; kernel.camera.updateProjectionMatrix();
-  kernel.camera.position.set(focus.x + camDist * 0.6, camDist * 0.62, focus.z + camDist * 0.8);
+  const gamePos = { x: focus.x + camDist * 0.6, y: camDist * 0.62, z: focus.z + camDist * 0.8 };
+  // Wide cinematic ESTABLISHING shot while the menu is up (shows the city + skyline,
+  // slowly rotating); PLAY zooms into the squad (see beginBattle).
+  kernel.camera.position.set(focus.x + span * 0.5, span * 0.82, focus.z + span * 0.95);
   const orbit = kernel.enableOrbit({
     target: { x: focus.x, y: 0, z: focus.z },
     minDistance: T * 7, maxDistance: span * 2.2,
@@ -1229,7 +1232,11 @@ register3d("tactics3d", async (kernel, content) => {
   sim.allUnits().forEach(refreshUnit);
 
   let shell = null, endShown = false;
-  function beginBattle() { phase = "battle"; orbit.autoRotate = false; setHUD(); autoSelectNext(); }
+  function beginBattle() {
+    phase = "battle"; orbit.autoRotate = false;
+    kernel.tween({ target: kernel.camera.position, to: gamePos, duration: 1.2, ease: (t) => 1 - Math.pow(1 - t, 3) }); // cinematic zoom into the squad
+    setHUD(); autoSelectNext();
+  }
   function showEnd() {
     if (endShown) return; endShown = true;
     const win = !!sim.victory; // objective-aware (evac/hack wins keep allies alive)
