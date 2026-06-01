@@ -714,6 +714,31 @@
       }
     }
 
+    // BOSS turn: a phase-change ENRAGE at <=50% HP (once), then an AoE PSI SLAM on
+    // cooldown that hits every soldier near the boss. Returns true if the boss spent
+    // its turn on a special; false to fall back to normal aggressive AI.
+    _bossAct(e) {
+      if (!e.enraged && e.hp <= e.maxHp * 0.5) {
+        e.enraged = true; e.atk = Math.round(e.atk * 1.3); e.movement = (e.movement || 4) + 1; e._bossCd = 0;
+        this.log.push(e.id + " ENRAGED");
+        this.onEvent("boss_phase", { unit: e, phase: "enrage" });
+      }
+      if ((e._bossCd || 0) > 0) { e._bossCd--; return false; }
+      const R = 3, hits = [];
+      for (const a of this.aliveAllies()) {
+        if (Math.max(Math.abs(a.x - e.x), Math.abs(a.y - e.y)) <= R) {
+          const dmg = Math.max(2, Math.round(e.atk * (e.enraged ? 0.7 : 0.5)));
+          a.hp = Math.max(0, a.hp - dmg); hits.push({ id: a.id, damage: dmg, killed: a.hp <= 0 });
+        }
+      }
+      if (!hits.length) return false; // no soldier in slam range → behave normally
+      e._bossCd = e.enraged ? 2 : 3; e.actionPoints = 0;
+      this.log.push(e.id + " PSI SLAM hit " + hits.length);
+      this.onEvent("boss_ability", { kind: "slam", unit: e, x: e.x, y: e.y, radius: R, hits: hits });
+      this._checkEnd();
+      return true;
+    }
+
     _runEnemyTurn() {
       this._spotCheck(); // pods that can see a soldier at turn start activate + engage
       for (const e of this.aliveEnemies()) {
@@ -723,6 +748,7 @@
         if (!targets.length) break;
         targets = targets.slice().sort((p, q) =>
           (Math.abs(p.x - e.x) + Math.abs(p.y - e.y)) - (Math.abs(q.x - e.x) + Math.abs(q.y - e.y)));
+        if (e.boss && this._bossAct(e)) continue; // boss spent its turn on a phase/slam special
         // Try to shoot (ends turn); otherwise advance; if it still can't fire,
         // hold overwatch rather than waste the turn.
         let guard = 0, shot = false;

@@ -1402,6 +1402,25 @@ register3d("tactics3d", async (kernel, content) => {
       const w = cell(L.x, L.y); floatText({ x: w.x, y: T * 1.8 + _floorLift(L.x, L.y, L.floor || 0), z: w.z }, "LOOT LOST", 0x8aa0bc);
       return 180;
     }
+    if (e.type === "boss_ability") { // PSI SLAM — expanding red shockwave + AoE damage
+      const p = e.payload, w = cell(p.x, p.y);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(T * 0.2, T * 0.5, 28),
+        new THREE.MeshBasicMaterial({ color: 0xff3344, transparent: true, opacity: 0.72, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(w.x, 0.3 + _floorLift(p.x, p.y, (p.unit && p.unit.floor) || 0), w.z); scene.add(ring);
+      let s = 0, done = false;
+      kernel.onUpdate((dt) => { if (done) return; s += dt; const r = 1 + s * ((p.radius || 3) * 2.0); ring.scale.set(r, r, r); ring.material.opacity = Math.max(0, 0.72 - s * 0.85); if (s > 0.85) { done = true; scene.remove(ring); } });
+      screenShake(0.6);
+      (p.hits || []).forEach((h) => { const u = sim.getUnit(h.id); if (!u) return; const c = cell(u.x, u.y); floatText({ x: c.x, y: T * 1.8, z: c.z }, "-" + h.damage, 0xff5a3c); refreshUnit(u); if (h.killed) killUnit(u); });
+      sfx("hit", 0.6);
+      return 720;
+    }
+    if (e.type === "boss_phase") { // ENRAGE at 50% HP — flash the boss red
+      const u = e.payload.unit, w = cell(u.x, u.y);
+      floatText({ x: w.x, y: T * 2.3, z: w.z }, "◆ ENRAGED ◆", 0xff2a3a);
+      const v = unitViews[u.id]; if (v && v.char && v.char.scene) v.char.scene.traverse((o) => { if (o.material && o.material.emissive) { o.material.emissive = new THREE.Color(0xff2a2a); o.material.emissiveIntensity = 0.55; } });
+      screenShake(0.7); sfx("hit", 0.5);
+      return 640;
+    }
     if (e.type === "move") {
       const mu = e.payload.unit, v = unitViews[mu.id], path = e.payload.path || [];
       if (v && path.length) {
