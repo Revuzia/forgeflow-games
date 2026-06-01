@@ -279,8 +279,11 @@ register3d("tactics3d", async (kernel, content) => {
     group.add(m); return true;
   }
   // cover model pools: {n: file, t: target tiles across}
-  const FULL_COVER = [ {n:"sedan.glb",t:1.55}, {n:"suv.glb",t:1.6}, {n:"van.glb",t:1.7}, {n:"truck.glb",t:1.9}, {n:"taxi.glb",t:1.55}, {n:"dumpster-quaternius.glb",t:1.15}, {n:"shipping-container-quaternius.glb",t:1.9}, {n:"grave-pillar-square.glb",t:0.7} ];
-  const HALF_COVER = [ {n:"box-crate.glb",t:0.95}, {n:"barrier-traffic-quaternius.glb",t:1.1}, {n:"grave-bench.glb",t:1.1}, {n:"ac-unit-quaternius.glb",t:0.95}, {n:"market-stalls-quaternius.glb",t:1.6}, {n:"grave-iron-fence.glb",t:1.0} ];
+  // paths are kit-subfoldered so each GLB's relative Textures/colormap.png resolves
+  // to the RIGHT Kenney palette (car/ = car colormap, grave/ = graveyard); Quaternius
+  // props are self-contained (flat); walls/furniture use solid colors (flat, no atlas).
+  const FULL_COVER = [ {n:"car/sedan.glb",t:1.55}, {n:"car/suv.glb",t:1.6}, {n:"car/van.glb",t:1.7}, {n:"car/truck.glb",t:1.9}, {n:"car/taxi.glb",t:1.55}, {n:"dumpster-quaternius.glb",t:1.15}, {n:"shipping-container-quaternius.glb",t:1.9}, {n:"grave/grave-pillar-square.glb",t:0.7} ];
+  const HALF_COVER = [ {n:"car/box-crate.glb",t:0.95}, {n:"barrier-traffic-quaternius.glb",t:1.1}, {n:"grave/grave-bench.glb",t:1.1}, {n:"ac-unit-quaternius.glb",t:0.95}, {n:"market-stalls-quaternius.glb",t:1.6}, {n:"grave/grave-iron-fence.glb",t:1.0} ];
   const FURNITURE = [ {n:"desk.glb",t:0.95}, {n:"bookcaseClosed.glb",t:0.7}, {n:"kitchenCabinet.glb",t:0.7}, {n:"table.glb",t:0.95}, {n:"loungeSofa.glb",t:1.0}, {n:"cardboardBoxClosed.glb",t:0.55} ];
   const WALLS = [ {n:"wall.glb",t:1.0}, {n:"wallWindow.glb",t:1.0}, {n:"wallDoorway.glb",t:1.0}, {n:"wallHalf.glb",t:1.0}, {n:"wallCorner.glb",t:1.0} ];
   async function preloadCity() {
