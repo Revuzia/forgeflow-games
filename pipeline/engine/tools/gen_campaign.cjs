@@ -127,6 +127,15 @@ function buildMission(spec) {
       // Interior FURNITURE (desks/crates as cover) — the "stuff in the building".
       const fc = 1 + ri(2);
       for (let c = 0; c < fc; c++) coverCluster(bx + 1 + ri(Math.max(1, bw - 2)), by + 1 + ri(Math.max(1, bh - 2)), 1 + ri(2), 0.3);
+      // Split-level MEZZANINE: the back interior rows become a raised upper deck
+      // (type 6) reached by interior STAIRS (ramp 7) — vertical play indoors.
+      if (bw >= 5 && bh >= 7 && rng() < 0.42) {
+        const mz = by + 2; // back 2 interior rows -> upper deck
+        for (let y = by + 1; y <= mz; y++) for (let x = bx + 1; x < bx + bw - 1; x++) set(x, y, 6);
+        const cx = bx + (bw >> 1);
+        set(cx, mz + 1, 7);   // interior stairs just in front of the deck
+        set(cx, mz + 2, 0);   // ground landing at the stair foot
+      }
     } else {
       for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) set(x, y, 1); // solid tower
     }
