@@ -150,8 +150,11 @@ register3d("chess3d", async (kernel, content) => {
     frame.position.set(0, FT - 0.02, 0); frame.receiveShadow = true; scene.add(frame);
 
     // 64 square tiles (checker pattern). Slight bevel via inset top box.
-    const lightMat = new THREE.MeshStandardMaterial({ color: theme.light_sq, roughness: 0.7, metalness: 0.08, envMapIntensity: 1.0 });
-    const darkMat = new THREE.MeshStandardMaterial({ color: theme.dark_sq, roughness: 0.72, metalness: 0.1, envMapIntensity: 1.0 });
+    // De-shined + high-contrast so the CHECKER reads (metal/IBL was mirroring the
+    // bright sky and washing the board to a uniform light grey). Matte, low env,
+    // light squares lifted + dark squares pushed well down.
+    const lightMat = new THREE.MeshStandardMaterial({ color: shade(theme.light_sq, 0.08), roughness: 0.92, metalness: 0.0, envMapIntensity: 0.3 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: shade(theme.dark_sq, -0.32), roughness: 0.9, metalness: 0.0, envMapIntensity: 0.3 });
     const geo = new THREE.BoxGeometry(T * 0.98, T * 0.12, T * 0.98);
     for (let y = 0; y < BOARD_N; y++) {
       for (let x = 0; x < BOARD_N; x++) {
@@ -164,6 +167,14 @@ register3d("chess3d", async (kernel, content) => {
         scene.add(m); squareMeshes[x + "," + y] = m;
       }
     }
+    // Explicit GRID LINES on the cell boundaries so the 8x8 board reads instantly
+    // in every theme/lighting (the checker fill alone can wash out). Dark, thin.
+    try {
+      const grid = new THREE.GridHelper(T * BOARD_N, BOARD_N, 0x0b0f16, 0x0b0f16);
+      grid.position.set(0, FT + 0.135, 0);
+      if (grid.material) { grid.material.transparent = true; grid.material.opacity = 0.6; grid.material.depthWrite = false; }
+      scene.add(grid);
+    } catch (e) {}
     // invisible ground plane for raycasting clicks -> square
     groundPlane = new THREE.Mesh(new THREE.PlaneGeometry(W, Hd), new THREE.MeshBasicMaterial({ visible: false }));
     groundPlane.rotation.x = -Math.PI / 2; groundPlane.position.set(0, FT + 0.13, 0); scene.add(groundPlane);
