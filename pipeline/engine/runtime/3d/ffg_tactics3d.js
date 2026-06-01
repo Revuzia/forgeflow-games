@@ -410,10 +410,10 @@ register3d("tactics3d", async (kernel, content) => {
   // the FBX "Armature|Idle" prefix) except the alien, whose clips are "Alien_*".
   const MODELS = {
     //                native height          target tile-height    clip name map
-    soldier: { url: "adventurer.glb", h: 1.857, th: T * 1.52, clips: { idle: "Idle_Gun", walk: "Walk", die: "Death", attack: "Gun_Shoot" } }, // Idle_Gun = rifle in hands (visible weapon)
+    soldier: { url: "adventurer.glb", h: 1.857, th: T * 1.52, clips: { idle: "Idle_Gun", walk: "Walk", die: "Death", attack: "Gun_Shoot", hurt: "HitRecieve" } }, // Idle_Gun = rifle in hands (visible weapon)
     drone:   { url: "robot_enemy.glb", h: 0.711, th: T * 1.18, clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Shoot" } },
     alien:   { url: "alien.glb",       h: 2.947, th: T * 1.72, clips: { idle: "Alien_Idle", walk: "Alien_Walk", die: "Alien_Death", attack: "Alien_Punch" } },
-    mech:    { url: "mech.glb",        h: 3.095, th: T * 2.0,  clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Shoot_Big" } },
+    mech:    { url: "mech.glb",        h: 3.095, th: T * 2.0,  clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Shoot_Big", hurt: "HitRecieve_1" } },
   };
   // enemy class -> model + tint (genuine model variety, not just a recolor). Tint
   // is light so each model keeps its own identity (a mech reads as a mech).
@@ -448,6 +448,7 @@ register3d("tactics3d", async (kernel, content) => {
         idle: resolveClip(char, def.clips.idle), walk: resolveClip(char, def.clips.walk),
         die: def.clips.die && char.actions[def.clips.die] ? def.clips.die : null,
         attack: def.clips.attack && char.actions[def.clips.attack] ? def.clips.attack : null,
+        hurt: def.clips.hurt && char.actions[def.clips.hurt] ? def.clips.hurt : null,
       };
       const mdl = char.scene;
       g.add(mdl);
@@ -517,6 +518,27 @@ register3d("tactics3d", async (kernel, content) => {
     v.char.scene.rotation.y = a;
   }
   function anim(u, intent, opts) { const v = unitViews[u.id]; if (v && v.char && v.clips[intent]) v.char.play(v.clips[intent], opts); }
+  // ── Game feel (juice) ───────────────────────────────────────────────────────
+  // Canvas screen-shake via a CSS transform on the renderer element — decoupled
+  // from the orbit camera so it never fights the controls. Decays over ~260ms.
+  function screenShake(mag) {
+    const el = kernel.renderer && kernel.renderer.domElement; if (!el || !mag) return;
+    const reduce = (window.FFG && window.FFG.reducedMotion) ? 0.3 : 1;
+    const start = performance.now(), dur = 260;
+    (function frame(now) {
+      const p = (now - start) / dur;
+      if (p >= 1) { el.style.transform = ""; return; }
+      const k = mag * (1 - p) * reduce;
+      el.style.transform = `translate(${(Math.random() * 2 - 1) * k}px, ${(Math.random() * 2 - 1) * k}px)`;
+      requestAnimationFrame(frame);
+    })(start);
+  }
+  // Hit-react: play the model's flinch clip if it has one, else a quick punch.
+  function flinch(u) {
+    const v = unitViews[u.id]; if (!v || v.dead) return;
+    if (v.char && v.clips.hurt) { v.char.play(v.clips.hurt, { once: true, fade: 0.06 }); setTimeout(() => { if (!v.dead) anim(u, "idle", { fade: 0.16 }); }, 460); }
+    else { const g = v.group, oy = g.position.y; kernel.tween({ target: g.position, to: { y: oy + 0.1 }, duration: 0.05, onComplete: () => kernel.tween({ target: g.position, to: { y: oy }, duration: 0.13 }) }); }
+  }
   function refreshUnit(u) {
     const v = unitViews[u.id]; if (!v) return;
     if (u.hp <= 0) { killUnit(u); return; }
@@ -851,6 +873,7 @@ register3d("tactics3d", async (kernel, content) => {
         if (p.reaction) floatText({ x: pa.x, y: pa.y + 0.4, z: pa.z }, "OVERWATCH!", 0x9fd0ff);
         if (p.hit) {
           const big = !!p.crit;
+          screenShake(big ? 13 : 6);
           const burst = new THREE.Mesh(new THREE.SphereGeometry(big ? 0.6 : 0.4, 12, 12), new THREE.MeshBasicMaterial({ color: big ? 0xff5a3c : 0xffd27a }));
           burst.position.copy(pb); scene.add(burst);
           kernel.tween({ target: burst.scale, to: { x: big ? 4 : 3, y: big ? 4 : 3, z: big ? 4 : 3 }, duration: 0.3 });
@@ -859,9 +882,10 @@ register3d("tactics3d", async (kernel, content) => {
           if (p.flanked && !p.crit) floatText({ x: pb.x, y: pb.y + 0.5, z: pb.z }, "FLANKED", 0xffae5a);
           refreshUnit(tu);
           if (p.killed) {
+            screenShake(15);
             floatText({ x: pb.x, y: pb.y + 0.8, z: pb.z }, "ELIMINATED", 0xffffff);
             if (au.side === "player" && !p.reaction && triggerKillCam(a.group.position, t.group.position)) return 1250;
-          }
+          } else flinch(tu);
         } else floatText(pb, "MISS", 0xaab4c8);
       }
       return p.crit ? 460 : 340;
@@ -923,6 +947,7 @@ register3d("tactics3d", async (kernel, content) => {
           new THREE.LineBasicMaterial({ color: p.hit ? 0xffd27a : 0x8aa0bc, transparent: true }));
         scene.add(beam); kernel.tween({ target: beam.material, to: { opacity: 0 }, duration: 0.45, onComplete: () => scene.remove(beam) });
         if (p.hit) {
+          screenShake(p.crit ? 16 : 8);
           const burst = new THREE.Mesh(new THREE.SphereGeometry(p.crit ? 0.7 : 0.5, 12, 12), new THREE.MeshBasicMaterial({ color: p.crit ? 0xff5a3c : 0xffd27a }));
           burst.position.copy(pb); scene.add(burst);
           kernel.tween({ target: burst.scale, to: { x: 4, y: 4, z: 4 }, duration: 0.32 });
@@ -930,9 +955,10 @@ register3d("tactics3d", async (kernel, content) => {
           floatText(pb, (p.crit ? "HEADSHOT −" : "−") + p.damage, p.crit ? 0xff5a3c : 0xffd27a);
           refreshUnit(p.target);
           if (p.killed) {
+            screenShake(15);
             floatText({ x: pb.x, y: pb.y + 0.8, z: pb.z }, "ELIMINATED", 0xffffff);
             if (a && triggerKillCam(a.group.position, t.group.position)) return 1300;
-          }
+          } else flinch(p.target);
         } else floatText(pb, "MISS", 0xaab4c8);
       }
       return 520;
@@ -953,7 +979,7 @@ register3d("tactics3d", async (kernel, content) => {
     }
     if (p.ability === "frag") {
       const w = cell(p.tileX, p.tileY);
-      sfx("explosion", 0.75);
+      sfx("explosion", 0.75); screenShake(17);
       // lobbed grenade -> blast sphere + shockwave ring
       const blast = new THREE.Mesh(new THREE.SphereGeometry(0.5, 14, 14), new THREE.MeshBasicMaterial({ color: 0xffae5a }));
       blast.position.set(w.x, T * 0.4, w.z); scene.add(blast);
