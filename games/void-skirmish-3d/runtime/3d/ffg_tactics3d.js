@@ -270,6 +270,47 @@ register3d("tactics3d", async (kernel, content) => {
     kernel.parent.appendChild(_nvChip);
   } catch (e) {}
 
+  // ── TACTICAL MAP / minimap (TAB) ────────────────────────────────────────────
+  // A top-down 2D overview of the whole plot: terrain, objective, loot, your squad
+  // (cyan) and any SPOTTED hostiles (red; boss = bright red). The navigation read
+  // XCOM-scale maps need. Toggle with TAB or the chip; redraws live while open.
+  let _miniOn = false, _miniWrap = null, _miniCv = null, _miniAcc = 0;
+  function _drawMinimap() {
+    if (!_miniCv || !sim) return;
+    const g = sim.grid, H = g.length, W = g[0].length, cv = _miniCv, cx = cv.getContext("2d"), ps = cv.width / W;
+    cx.fillStyle = "#070b12"; cx.fillRect(0, 0, cv.width, cv.height);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const t = g[y][x]; let c = null;
+      if (t === 0 || t === 4) c = "#1a2434"; else if (t === 2 || t === 3) c = "#3a4760";
+      else if (t === 1) c = "#0e141d"; else if (t === 5) c = "#283750"; else if (t === 6 || t === 7 || t === 8) c = "#46618a";
+      if (c) { cx.fillStyle = c; cx.fillRect(x * ps, y * ps, Math.ceil(ps), Math.ceil(ps)); }
+    }
+    const goal = sim.goal;
+    if (goal && goal.target) { cx.fillStyle = "#34d6e8"; cx.fillRect(goal.target.x * ps - 1, goal.target.y * ps - 1, ps + 2, ps + 2); }
+    ((goal && goal.evac) || []).forEach((p) => { cx.fillStyle = "#3ddc84"; cx.fillRect(p.x * ps, p.y * ps, ps + 1, ps + 1); });
+    (sim.loot || []).forEach((L) => { cx.fillStyle = "#ffd27a"; cx.fillRect(L.x * ps, L.y * ps, ps + 1, ps + 1); });
+    const dot = (u, col, r) => { cx.fillStyle = col; cx.beginPath(); cx.arc(u.x * ps + ps / 2, u.y * ps + ps / 2, r, 0, 7); cx.fill(); };
+    sim.aliveAllies().forEach((u) => dot(u, u === selected ? "#ffffff" : "#4fd0ff", Math.max(1.8, ps * 0.7)));
+    sim.aliveEnemies().forEach((u) => { if (sim.podRevealed(u.pod)) dot(u, u.boss ? "#ff2a3a" : "#ff6a4a", Math.max(1.8, ps * (u.boss ? 1.0 : 0.7))); });
+  }
+  function toggleMinimap(force) {
+    if (!sim) return;
+    _miniOn = (force != null) ? force : !_miniOn;
+    if (_miniOn && !_miniWrap) {
+      try {
+        const g = sim.grid, W = g[0].length, H = g.length, scale = Math.max(2.2, Math.min(280 / W, 230 / H, 6));
+        _miniWrap = document.createElement("div");
+        Object.assign(_miniWrap.style, { position: "absolute", top: "54px", right: "14px", zIndex: "60", padding: "9px", background: "rgba(8,12,20,0.9)", border: "1px solid #34d6e8", borderRadius: "10px", boxShadow: "0 10px 34px rgba(0,0,0,0.55)" });
+        const ttl = document.createElement("div"); Object.assign(ttl.style, { font: "700 11px 'Segoe UI',monospace", letterSpacing: "2px", color: "#34d6e8", marginBottom: "6px" }); ttl.textContent = "◰ TACTICAL MAP  (TAB)"; _miniWrap.appendChild(ttl);
+        _miniCv = document.createElement("canvas"); _miniCv.width = Math.round(W * scale); _miniCv.height = Math.round(H * scale); _miniCv.style.display = "block"; _miniWrap.appendChild(_miniCv);
+        kernel.parent.appendChild(_miniWrap);
+      } catch (e) { _miniOn = false; return; }
+    }
+    if (_miniWrap) _miniWrap.style.display = _miniOn ? "block" : "none";
+    if (_miniOn) _drawMinimap();
+  }
+  kernel.onUpdate((dt) => { if (!_miniOn) return; _miniAcc += dt; if (_miniAcc < 0.3) return; _miniAcc = 0; _drawMinimap(); });
+
   let sim, events = [], busy = false, selected = null, phase = "menu";
   const unitViews = {}; // id -> { group, ring, hpFill, base }
   let highlights = [], rangeTargets = [];
@@ -1627,7 +1668,9 @@ register3d("tactics3d", async (kernel, content) => {
     hoverTip = makeTextSprite(label, col); const w = cell(x, y); hoverTip.position.set(w.x, T * 1.9, w.z); hoverTip.scale.set(3.4, 0.85, 1); scene.add(hoverTip);
   });
   window.addEventListener("keydown", (e) => {
-    if ((e.key || "").toLowerCase() === "v") { e.preventDefault(); toggleNightVision(); return; } // NV works any time
+    const _kk = (e.key || "").toLowerCase();
+    if (_kk === "v") { e.preventDefault(); toggleNightVision(); return; } // NV works any time
+    if (_kk === "tab") { e.preventDefault(); toggleMinimap(); return; }    // tactical map
     if (phase !== "battle" || sim.ended) return;
     const k = (e.key || "").toLowerCase();
     if (k === "y") { e.preventDefault(); overwatchSelected(); }
