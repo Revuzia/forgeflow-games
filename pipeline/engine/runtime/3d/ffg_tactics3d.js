@@ -28,6 +28,114 @@ function shade(hex, f) {
   return (c(r) << 16) | (c(g) << 8) | c(b);
 }
 
+// ── PBR uplift layer (Tier 2/3) ──────────────────────────────────────────────
+// The "low-poly look" is the SHADING, not the poly count: flat high-roughness
+// boxes never catch the IBL sky, so the world reads matte + dead. This layer
+// gives world props/buildings/units cheap procedural NORMAL maps + sensible,
+// VARIED roughness + envMapIntensity so the prefiltered sky environment actually
+// shows up (micro relief + grazing reflections). Generated ONCE and cached — no
+// per-frame allocation; the normal textures + materials are reused everywhere.
+//
+// Roles (roughness / metalness / which normal / envMapIntensity):
+//   concrete   — buildings, enterable walls, jersey barriers, plinths (matte, micro-pitted)
+//   metal      — shipping containers, dumpsters, AC units, deck rails, weapons (semi-reflective)
+//   painted    — car/vehicle bodies (clear-coat-ish: low rough, faint metal, strong env)
+//   glass      — car windows, kiosk/billboard faces (very low rough, high env -> mirror sky)
+//   deck       — rooftop slabs / second-storey floor plates (worn, mild relief)
+//   unit_armor — SWAT trooper plating (kept dark, mild metal so the sky grazes it)
+//   unit_bot   — robot enemies (machined metal, brighter env so they read as hardware)
+const _normTexCache = {};
+function _procNormalTex(kind) {
+  if (_normTexCache[kind]) return _normTexCache[kind];
+  const S = 128, cv = document.createElement("canvas"); cv.width = cv.height = S;
+  const g = cv.getContext("2d");
+  // 1) paint a tileable greyscale HEIGHT field per surface kind, then 2) emboss
+  //    it into a tangent-space normal via a Sobel pass (same trick the ground uses).
+  let seed = ((kind.charCodeAt(0) || 7) * 2654435761) >>> 0;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296;
+  g.fillStyle = "#808080"; g.fillRect(0, 0, S, S); // mid height
+  if (kind === "concrete") {
+    // fine aggregate speckle + a few hairline cracks
+    for (let i = 0; i < 2600; i++) { const v = 110 + (rnd() * 70 | 0); g.fillStyle = "rgb(" + v + "," + v + "," + v + ")"; g.fillRect(rnd() * S | 0, rnd() * S | 0, 1, 1); }
+    g.strokeStyle = "rgba(60,60,60,0.7)"; g.lineWidth = 1;
+    for (let i = 0; i < 5; i++) { g.beginPath(); let x = rnd() * S, y = rnd() * S; g.moveTo(x, y); for (let k = 0; k < 6; k++) { x += (rnd() - 0.5) * 26; y += (rnd() - 0.5) * 26; g.lineTo(x, y); } g.stroke(); }
+  } else if (kind === "metal") {
+    // brushed horizontal striations + occasional panel seam + rivets
+    for (let y = 0; y < S; y++) { const v = 120 + (rnd() * 26 | 0); g.fillStyle = "rgba(" + v + "," + v + "," + v + ",0.5)"; g.fillRect(0, y, S, 1); }
+    g.fillStyle = "rgba(70,70,70,0.8)"; for (let x = 16; x < S; x += 32) g.fillRect(x, 0, 1, S);
+    g.fillStyle = "rgba(200,200,200,0.7)"; for (let x = 8; x < S; x += 32) for (let y = 8; y < S; y += 32) { g.beginPath(); g.arc(x, y, 1.6, 0, 7); g.fill(); }
+  } else { // "panel" — subtle plate grid, the default for decks / slabs
+    g.strokeStyle = "rgba(70,70,70,0.6)"; g.lineWidth = 1;
+    for (let i = 16; i < S; i += 24) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, S); g.moveTo(0, i); g.lineTo(S, i); g.stroke(); }
+    for (let i = 0; i < 900; i++) { const v = 120 + (rnd() * 40 | 0); g.fillStyle = "rgb(" + v + "," + v + "," + v + ")"; g.fillRect(rnd() * S | 0, rnd() * S | 0, 1, 1); }
+  }
+  const img = g.getImageData(0, 0, S, S).data;
+  const lum = (x, y) => { const i = (((y + S) % S) * S + ((x + S) % S)) * 4; return img[i]; };
+  const ncv = document.createElement("canvas"); ncv.width = ncv.height = S; const ng = ncv.getContext("2d"); const nd = ng.createImageData(S, S);
+  const str = kind === "metal" ? 1.4 : 2.0;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = (y * S + x) * 4;
+    const dx = (lum(x + 1, y) - lum(x - 1, y)) / 255, dy = (lum(x, y + 1) - lum(x, y - 1)) / 255;
+    let nx = -dx * str, ny = -dy * str, nz = 1; const il = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz); nx *= il; ny *= il; nz *= il;
+    nd.data[i] = (nx * 0.5 + 0.5) * 255; nd.data[i + 1] = (ny * 0.5 + 0.5) * 255; nd.data[i + 2] = (nz * 0.5 + 0.5) * 255; nd.data[i + 3] = 255;
+  }
+  ng.putImageData(nd, 0, 0);
+  const tex = new THREE.CanvasTexture(ncv);
+  if (THREE.NoColorSpace) tex.colorSpace = THREE.NoColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 4; tex.needsUpdate = true;
+  _normTexCache[kind] = tex; return tex;
+}
+// role -> {rough, metal, norm, env, nscale, repeat} (repeat = normal-map tiling)
+const PBR_ROLES = {
+  concrete:   { rough: 0.82, metal: 0.04, norm: "concrete", env: 0.7,  nscale: 0.7,  repeat: 1.6 },
+  metal:      { rough: 0.45, metal: 0.62, norm: "metal",    env: 1.15, nscale: 0.5,  repeat: 2.0 },
+  painted:    { rough: 0.34, metal: 0.45, norm: "metal",    env: 1.25, nscale: 0.28, repeat: 1.4 },
+  glass:      { rough: 0.08, metal: 0.20, norm: null,       env: 1.5,  nscale: 0,    repeat: 1 },
+  deck:       { rough: 0.7,  metal: 0.12, norm: "panel",    env: 0.85, nscale: 0.5,  repeat: 1.3 },
+  // units: NO tiling normal map (character UVs would smear a brushed pattern at
+  // the wrong scale) — just roughness/metalness/env so the SWAT armor + robot
+  // hulls catch the IBL sky and stop looking flat-shaded. Identity/tint preserved.
+  unit_armor: { rough: 0.52, metal: 0.32, norm: null,       env: 1.0,  nscale: 0,    repeat: 1 },
+  unit_bot:   { rough: 0.38, metal: 0.6,  norm: null,       env: 1.2,  nscale: 0,    repeat: 1 },
+};
+// Apply a PBR role to a single material (roughness/metalness/envMapIntensity +
+// an optional shared normal map). `vary` jitters roughness deterministically per
+// placement so a row of identical props isn't uniformly matte (the dead-flat tell).
+function _applyRoleToMaterial(mat, role, vary) {
+  if (!mat || !mat.isMeshStandardMaterial) return; // only PBR materials read IBL
+  const R = PBR_ROLES[role]; if (!R) return;
+  const v = (vary == null) ? 0 : (((vary % 7) / 7) - 0.5) * 0.18; // +/-0.09 roughness wobble
+  mat.roughness = Math.max(0.04, Math.min(1, R.rough + v));
+  mat.metalness = R.metal;
+  if ("envMapIntensity" in mat) mat.envMapIntensity = R.env;
+  if (R.norm && !mat.normalMap) {
+    mat.normalMap = _procNormalTex(R.norm);
+    if (mat.normalScale) mat.normalScale.set(R.nscale, R.nscale);
+  }
+  mat.needsUpdate = true;
+}
+// Walk an Object3D (a single mesh OR a group of Kenney GLB parts) and uplift
+// every PBR material to `role`. For vehicles/props we auto-route dark, bluish
+// sub-materials to the GLASS role so windows mirror the sky. Cheap; runs once.
+function pbrApply(obj, role, vary) {
+  if (!obj) return;
+  obj.traverse((o) => {
+    if (!(o.isMesh || o.isSkinnedMesh) || !o.material) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      if (!m || !m.isMeshStandardMaterial) continue;
+      let r = role;
+      if ((role === "painted" || role === "metal") && m.color) {
+        const nm = (m.name || "").toLowerCase();
+        const isGlass = /glass|window|windshield|screen/.test(nm) || (m.color.b > m.color.r && (m.color.r + m.color.g + m.color.b) < 0.6);
+        if (isGlass) r = "glass";
+      }
+      _applyRoleToMaterial(m, r, vary);
+    }
+  });
+}
+
+
 // One tileable tech-panel tile drawn to a canvas; repeated gridW×gridH over the
 // floor plane so a big map stays one draw-call. Edge-symmetric so seams line up.
 let _floorTex = null;
@@ -124,6 +232,9 @@ function makeGroundTexture(grid, gw, gh) {
       nd.data[i] = (nx * 0.5 + 0.5) * 255; nd.data[i + 1] = (ny * 0.5 + 0.5) * 255; nd.data[i + 2] = (nz * 0.5 + 0.5) * 255; nd.data[i + 3] = 255;
       // roughness: base rough; wet puddles smooth (low) so they mirror the sky
       let rough = 0.82; for (const p of puddles) { const d = Math.hypot(x - p[0], y - p[1]); if (d < p[2]) rough = Math.min(rough, 0.26 + 0.5 * (d / p[2])); }
+      // MANHOLE iron (the near-black #161616 discs baked into the albedo) reads as
+      // polished cast metal: drop its roughness hard so it grazes the IBL sky.
+      if (img[i] < 28 && img[i + 1] < 28 && img[i + 2] < 28) rough = 0.22;
       const rv = (rough * 255) | 0; rd.data[i] = rd.data[i + 1] = rd.data[i + 2] = rv; rd.data[i + 3] = 255;
     }
     ng.putImageData(nd, 0, 0); rg.putImageData(rd, 0, 0);
@@ -240,7 +351,10 @@ register3d("tactics3d", async (kernel, content) => {
   scene.add(new THREE.HemisphereLight(TOD.hemiS, TOD.hemiG, TOD.hemiI)); // sky-fill tinted to the hour
   const _amb = new THREE.AmbientLight(TOD.amb, TOD.ambI); scene.add(_amb); // lower → deep XCOM shadows (NV boosts this)
   kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = TOD.exp;
-  if (kernel.enableBloom) kernel.enableBloom({ strength: _night ? 0.42 : 0.3, radius: 0.6, threshold: _night ? 0.78 : 0.86, ssao: true, ssaoRadius: 1.1 }); // tighter bloom: only true highlights, no whiteout
+  // Tier-3 post: GTAO (preferred over SSAO) + tight bloom + SMAA edge AA. Bloom
+  // kept inside the no-whiteout envelope (strength <= 0.35, threshold >= 0.85) so
+  // only true highlights bloom; GTAO grounds props/units, SMAA cleans silhouettes.
+  if (kernel.enableBloom) kernel.enableBloom({ strength: _night ? 0.34 : 0.3, radius: 0.6, threshold: _night ? 0.85 : 0.86, ssao: true, gtao: true, ssaoRadius: 1.1, aoIntensity: 0.9, smaa: true });
   // SUN / MOON disc high in the sky, in the key-light direction (emissive billboard,
   // NOT a light). fog:false so it stays crisp; bloom turns it into a soft glow.
   try {
@@ -455,15 +569,15 @@ register3d("tactics3d", async (kernel, content) => {
   // the stairwell reads as built-in. The climbing steps themselves are in buildUpperFloor.
   function buildStairBase(x, y, w) {
     const base = _bx(T * 0.96, T * 0.12, T * 0.96, 0x3b3f47, 0.85, 0.14);
-    base.position.set(w.x, FT + 0.06, w.z); base.receiveShadow = true; scene.add(base);
+    base.position.set(w.x, FT + 0.06, w.z); base.receiveShadow = true; pbrApply(base, "deck", (x ^ y)); scene.add(base);
   }
   // Signature ADVENT propaganda KIOSK — the cyan-teal tech pillar that is the
   // single most "XCOM" environmental cue. Procedural (concrete pillar + glowing
   // #34d6e8 screens + beacon). Placed in open plazas. Visual only.
   function _adventKiosk() {
     const g = new THREE.Group();
-    const base = _bx(T * 0.82, T * 0.12, T * 0.82, 0x1c2027, 0.8, 0.2); base.position.y = T * 0.06; base.castShadow = true; g.add(base);
-    const pillar = _bx(T * 0.5, T * 2.3, T * 0.5, 0x2a2f38, 0.6, 0.45); pillar.position.y = T * 1.2; pillar.castShadow = true; g.add(pillar);
+    const base = _bx(T * 0.82, T * 0.12, T * 0.82, 0x1c2027, 0.8, 0.2); base.position.y = T * 0.06; base.castShadow = true; pbrApply(base, "metal", 3); g.add(base);
+    const pillar = _bx(T * 0.5, T * 2.3, T * 0.5, 0x2a2f38, 0.6, 0.45); pillar.position.y = T * 1.2; pillar.castShadow = true; pbrApply(pillar, "metal", 5); g.add(pillar); // brushed-metal tech pillar grazes the sky env (the signature ADVENT accent)
     for (const zf of [1, -1]) {
       const screen = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.42, T * 1.3),
         new THREE.MeshStandardMaterial({ color: 0x08222c, emissive: 0x34d6e8, emissiveIntensity: 1.0, roughness: 0.3 }));
@@ -476,8 +590,8 @@ register3d("tactics3d", async (kernel, content) => {
   // Backlit BILLBOARD on posts (iconic urban prop) — warm or teal LCD face.
   function _billboard() {
     const g = new THREE.Group();
-    for (const px of [-T * 0.45, T * 0.45]) { const post = _bx(T * 0.08, T * 1.6, T * 0.08, 0x1c2027, 0.7, 0.3); post.position.set(px, T * 0.8, 0); post.castShadow = true; g.add(post); }
-    const panel = _bx(T * 1.2, T * 0.72, T * 0.09, 0x14181f, 0.5, 0.2); panel.position.y = T * 1.72; panel.castShadow = true; g.add(panel);
+    for (const px of [-T * 0.45, T * 0.45]) { const post = _bx(T * 0.08, T * 1.6, T * 0.08, 0x1c2027, 0.7, 0.3); post.position.set(px, T * 0.8, 0); post.castShadow = true; pbrApply(post, "metal", 1); g.add(post); }
+    const panel = _bx(T * 1.2, T * 0.72, T * 0.09, 0x14181f, 0.5, 0.2); panel.position.y = T * 1.72; panel.castShadow = true; pbrApply(panel, "metal", 2); g.add(panel);
     const teal = (((g.uuid.charCodeAt(0) || 0) + Math.round(g.position.x)) & 1) === 0;
     const face = new THREE.Mesh(new THREE.PlaneGeometry(T * 1.12, T * 0.64), new THREE.MeshStandardMaterial({ color: 0x10202a, emissive: teal ? 0x34d6e8 : 0xffb24d, emissiveIntensity: 0.85, roughness: 0.4 }));
     face.position.set(0, T * 1.72, T * 0.05); g.add(face);
@@ -515,6 +629,8 @@ register3d("tactics3d", async (kernel, content) => {
       if (placeCity(pick.n, g, (hsh % 4) * (Math.PI / 2))) {
         const w = cell(x, y); g.position.set(w.x + ox, FT, w.z + oz);
         g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+        // hydrants / lampposts / cones = painted metal (catch the sky); trees + planters = matte
+        pbrApply(g, /hydrant|lightpost|cone/.test(pick.n) ? "metal" : "concrete", hsh);
         scene.add(g);
       }
     }
@@ -596,7 +712,19 @@ register3d("tactics3d", async (kernel, content) => {
     }
     g.position.set(w.x, FT, w.z);
     g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    // PBR role from the prop kind: painted clear-coat on vehicles (catch the sky),
+    // brushed metal on containers/dumpsters/AC/barriers, matte concrete on grave
+    // stone + furniture. Vehicle windows auto-route to glass inside pbrApply.
+    pbrApply(g, _coverRole(pick.n), hsh);
     scene.add(g); coverTiles[x + "," + y] = [g];
+  }
+  // Map a cover-prop filename to a PBR role (vehicles = painted, metal props =
+  // metal, stone/wood/fabric = concrete-ish matte).
+  function _coverRole(name) {
+    name = name || "";
+    if (/^car\//.test(name) && !/box-crate|cone/.test(name)) return "painted"; // sedan/suv/van/truck/taxi
+    if (/container|dumpster|ac-unit|barrier-traffic|iron-fence/.test(name)) return "metal";
+    return "concrete"; // graves, market stalls, crates, furniture (desks/sofas read close enough matte)
   }
   function _propCar(g, hsh) {
     const cols = [0x9a3b3b, 0x35506e, 0x6e6a35, 0x49505a, 0x2f6e4f, 0x7a4a2c];
@@ -722,6 +850,7 @@ register3d("tactics3d", async (kernel, content) => {
     }
     g.position.set(w.x, FT, w.z);
     g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    pbrApply(g, "concrete", hsh); // micro-pitted concrete relief + sky-grazed roughness so towers aren't flat slabs
     scene.add(g); buildingTiles[x + "," + y] = [g];
   }
 
@@ -744,6 +873,7 @@ register3d("tactics3d", async (kernel, content) => {
     if (!ok) { const b = _bx(T, T * 1.3, T * 0.16, 0x4a4e57, 0.9, 0.06); b.position.y = T * 0.65; g.add(b); }
     g.position.set(w.x, FT, w.z);
     g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    pbrApply(g, "concrete", hsh); // concrete relief on the building face; windowed GLBs keep their lit panes
     scene.add(g); buildingTiles[x + "," + y] = [g];
   }
 
@@ -755,20 +885,21 @@ register3d("tactics3d", async (kernel, content) => {
   function _floorLift(x, y, floor) { return (floor === 1) ? FLOOR_H : _tileLift(x, y); }
   const _upper = mission.upper || null; // optional FLOOR-1 grid (second storey)
   function buildDeck(x, y, w) {
-    const support = _bx(T, DECK_H, T, 0x33373f, 0.88, 0.18); support.position.set(w.x, DECK_H / 2, w.z); support.castShadow = true; support.receiveShadow = true; scene.add(support);
-    const slab = _bx(T * 1.0, T * 0.14, T * 1.0, 0x6a6e77, 0.8, 0.15); slab.position.set(w.x, DECK_H + 0.07, w.z); slab.receiveShadow = true; scene.add(slab);
+    const hsh = ((x * 73856093) ^ (y * 19349663)) >>> 0;
+    const support = _bx(T, DECK_H, T, 0x33373f, 0.88, 0.18); support.position.set(w.x, DECK_H / 2, w.z); support.castShadow = true; support.receiveShadow = true; pbrApply(support, "concrete", hsh); scene.add(support);
+    const slab = _bx(T * 1.0, T * 0.14, T * 1.0, 0x6a6e77, 0.8, 0.15); slab.position.set(w.x, DECK_H + 0.07, w.z); slab.receiveShadow = true; pbrApply(slab, "deck", hsh); scene.add(slab);
     // parapet on edges that face a non-deck tile (so the roof reads as an edge)
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nt = (mission.grid[y + dy] || [])[x + dx];
       if (nt === 6 || nt === 7) continue;
       const horiz = dy !== 0;
       const rail = _bx(horiz ? T : T * 0.12, T * 0.3, horiz ? T * 0.12 : T, 0x4a4e57, 0.85, 0.1);
-      rail.position.set(w.x + dx * T * 0.46, DECK_H + 0.28, w.z + dy * T * 0.46); rail.castShadow = true; scene.add(rail);
+      rail.position.set(w.x + dx * T * 0.46, DECK_H + 0.28, w.z + dy * T * 0.46); rail.castShadow = true; pbrApply(rail, "metal", dx + dy); scene.add(rail); // metal rail catches the sky = visible IBL accent
     }
   }
   function buildRamp(x, y, w) {
     // a landing at deck height + stairs descending toward the ground foot
-    const land = _bx(T * 0.92, T * 0.14, T * 0.92, 0x62666e, 0.82, 0.15); land.position.set(w.x, DECK_H + 0.07, w.z); land.receiveShadow = true; scene.add(land);
+    const land = _bx(T * 0.92, T * 0.14, T * 0.92, 0x62666e, 0.82, 0.15); land.position.set(w.x, DECK_H + 0.07, w.z); land.receiveShadow = true; pbrApply(land, "deck", (x + y)); scene.add(land);
     // find the ground-side direction (a neighbour that is NOT deck/ramp)
     let gx = 0, gz = 0;
     for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) { const nt = (mission.grid[y + dy] || [])[x + dx]; if (nt !== 6 && nt !== 7 && nt !== 1 && nt !== 5) { gx = dx; gz = dy; break; } }
@@ -814,7 +945,7 @@ register3d("tactics3d", async (kernel, content) => {
         // interior floor slab (also under stairs landings, walls, cover)
         if (t === 9 || t === 8 || t === 5 || t === 2 || t === 3) {
           const slab = _bx(T * 0.98, T * 0.16, T * 0.98, slabMat.c, slabMat.r, slabMat.m);
-          slab.position.set(w.x, FLOOR_H + 0.08, w.z); slab.receiveShadow = true; slab.castShadow = true; scene.add(slab); _regU(slab, true);
+          slab.position.set(w.x, FLOOR_H + 0.08, w.z); slab.receiveShadow = true; slab.castShadow = true; pbrApply(slab, "deck", (x ^ y)); scene.add(slab); _regU(slab, true);
         }
         // support columns + glowing edge trim on OUTER edges (neighbour not part of the storey)
         if (t === 9 || t === 8) {
@@ -822,13 +953,13 @@ register3d("tactics3d", async (kernel, content) => {
             const nt = _up(x + dx, y + dy);
             if (nt === 9 || nt === 8 || nt === 5 || nt === 2 || nt === 3) continue; // interior edge — no column
             const col = _bx(T * 0.18, FLOOR_H, T * 0.18, 0x262a32, 0.82, 0.25);
-            col.position.set(w.x + dx * T * 0.45, FLOOR_H / 2, w.z + dy * T * 0.45); col.castShadow = true; scene.add(col); _regU(col, true);
+            col.position.set(w.x + dx * T * 0.45, FLOOR_H / 2, w.z + dy * T * 0.45); col.castShadow = true; pbrApply(col, "concrete", x + y); scene.add(col); _regU(col, true);
             const horiz = dy !== 0;
             // glowing teal floor-edge strip (reads the raised plate's footprint instantly)
             const edge = new THREE.Mesh(new THREE.BoxGeometry(horiz ? T : T * 0.08, T * 0.1, horiz ? T * 0.08 : T), edgeMat);
             edge.position.set(w.x + dx * T * 0.47, FLOOR_H + 0.2, w.z + dy * T * 0.47); scene.add(edge);
             const rail = _bx(horiz ? T : T * 0.1, T * 0.3, horiz ? T * 0.1 : T, 0x4a4e57, 0.85, 0.12);
-            rail.position.set(w.x + dx * T * 0.46, FLOOR_H + 0.34, w.z + dy * T * 0.46); rail.castShadow = true; scene.add(rail); _regU(rail, false);
+            rail.position.set(w.x + dx * T * 0.46, FLOOR_H + 0.34, w.z + dy * T * 0.46); rail.castShadow = true; pbrApply(rail, "metal", dx - dy); scene.add(rail); _regU(rail, false);
           }
         }
         // interior walls (5) — a KNEE-HIGH parapet so the storey stays an OPEN
@@ -836,13 +967,13 @@ register3d("tactics3d", async (kernel, content) => {
         // Sim-side these still block LOS/cover; visually they're a low lip.
         if (t === 5) {
           const wl = _bx(T * 0.96, T * 0.5, T * 0.96, 0x5f636b, 0.86, 0.12);
-          wl.position.set(w.x, FLOOR_H + 0.16 + T * 0.25, w.z); wl.castShadow = true; wl.receiveShadow = true; scene.add(wl); _regU(wl, false);
+          wl.position.set(w.x, FLOOR_H + 0.16 + T * 0.25, w.z); wl.castShadow = true; wl.receiveShadow = true; pbrApply(wl, "concrete", (x * 3 + y)); scene.add(wl); _regU(wl, false);
         }
         // interior cover (2 half / 3 full) — low blocks on the slab
         if (t === 2 || t === 3) {
           const ch = t === 3 ? T * 0.7 : T * 0.42;
           const cb = _bx(T * 0.62, ch, T * 0.62, t === 3 ? 0x6b5340 : 0x5a6470, 0.8, 0.15);
-          cb.position.set(w.x, FLOOR_H + 0.13 + ch / 2, w.z); cb.castShadow = true; cb.receiveShadow = true; scene.add(cb); _regU(cb, false);
+          cb.position.set(w.x, FLOOR_H + 0.13 + ch / 2, w.z); cb.castShadow = true; cb.receiveShadow = true; pbrApply(cb, "concrete", (x + y * 3)); scene.add(cb); _regU(cb, false);
         }
         // STAIRCASE in a type-8 cell: ~6 steps rising ground -> FLOOR_H, run aimed
         // toward an adjacent interior(9) cell (else +x). A handrail on one side.
@@ -945,6 +1076,7 @@ register3d("tactics3d", async (kernel, content) => {
             const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.5, 8), _smat(0x141518, 0.4, 0.6)); barrel.position.y = 0.46; rifle.add(barrel);
             const mag = _bx(0.05, 0.13, 0.06, 0x16181c, 0.6, 0.3); mag.position.set(0, 0.06, -0.09); rifle.add(mag);
             rifle.position.set(0.0, 0.03, 0.03);
+            pbrApply(rifle, "metal", 4); // gunmetal: low roughness + metal so the weapon glints under the sky env
             wrist.add(rifle);
           }
         } catch (e) {}
@@ -952,11 +1084,17 @@ register3d("tactics3d", async (kernel, content) => {
       // enemy class tint; players get a faint team-coloured emissive so the dark
       // camo soldier reads against the dark board.
       const accent = isPlayer ? col : (kind.tint || 0xff6a5a);
+      const unitRole = isPlayer ? "unit_armor" : "unit_bot";
+      let _uv = 0;
       mdl.traverse((o) => {
         if ((o.isMesh || o.isSkinnedMesh) && o.material) {
           o.material = o.material.clone();
           if (!isPlayer && o.material.color) o.material.color.lerp(new THREE.Color(accent), 0.32); // light menace tint — keep model identity
           o.material.emissive = new THREE.Color(accent).multiplyScalar(isPlayer ? 0.22 : 0.18);
+          // PBR pass: armor/hull roughness + metalness + envMapIntensity so the
+          // sky env grazes the units (no longer flat-shaded). Per-mesh roughness
+          // wobble keeps plates/joints from reading as one uniform surface.
+          _applyRoleToMaterial(o.material, unitRole, _uv++);
         }
       });
       char.play(clips.idle, { fade: 0 });
