@@ -404,20 +404,25 @@ register3d("tactics3d", async (kernel, content) => {
   // a combat robot (drones), a heavy cyborg (defenders), and a beast (stalkers)
   // — so the player faces visibly different, escalating threats.
   const CHAR_BASE = new URL("./characters/", import.meta.url).href;
+  // Quaternius CC0 rigged + animated models (adventurer soldier + escalating
+  // robot/alien/mech foes). Native heights vary a lot, so each carries its own
+  // measured height for correct scaling; clip names are bare (the kernel aliases
+  // the FBX "Armature|Idle" prefix) except the alien, whose clips are "Alien_*".
   const MODELS = {
-    //                native height (measured)   target tile-height   clip name map
-    soldier:   { url: "soldier.glb",   h: 1.82,  th: T * 1.45, clips: { idle: "Idle", walk: "Walk", die: null, attack: null } },
-    robot:     { url: "robot.glb",     h: 4.38,  th: T * 1.05, clips: { idle: "Idle", walk: "Walking", die: "Death", attack: "Punch" } },
-    brainstem: { url: "brainstem.glb", h: 1.83,  th: T * 1.45, clips: { idle: "animation_0", walk: "animation_0", die: null, attack: null } },
-    fox:       { url: "fox.glb",       h: 79.03, th: T * 0.95, clips: { idle: "Survey", walk: "Walk", die: null, attack: null } },
+    //                native height          target tile-height    clip name map
+    soldier: { url: "adventurer.glb", h: 1.857, th: T * 1.52, clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Gun_Shoot" } },
+    drone:   { url: "robot_enemy.glb", h: 0.711, th: T * 1.18, clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Shoot" } },
+    alien:   { url: "alien.glb",       h: 2.947, th: T * 1.72, clips: { idle: "Alien_Idle", walk: "Alien_Walk", die: "Alien_Death", attack: "Alien_Punch" } },
+    mech:    { url: "mech.glb",        h: 3.095, th: T * 2.0,  clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Shoot_Big" } },
   };
-  // enemy class -> model + tint (genuine model variety, not just a recolor)
+  // enemy class -> model + tint (genuine model variety, not just a recolor). Tint
+  // is light so each model keeps its own identity (a mech reads as a mech).
   function enemyKind(u) {
     const s = ((u.sprite || "") + " " + (u.name || "")).toLowerCase();
-    if (/defender|heavy|mech|tank|brute|titan|elite/.test(s)) return { model: "brainstem", tint: 0xff5a3c, scale: 1.18 }; // heavy cyborg
-    if (/sniper|scout|stalker|beast|hound|ranger|marksman/.test(s)) return { model: "fox", tint: 0xb86bff, scale: 1.0 };   // agile beast
-    if (/drone|assault/.test(s)) return { model: "robot", tint: 0xff9a3c, scale: 0.92 };                                    // drone
-    return { model: "robot", tint: 0xff6a5a, scale: 1.0 };
+    if (/defender|heavy|mech|tank|brute|titan|elite/.test(s)) return { model: "mech",  tint: 0xff6a4a, scale: 1.05 }; // heavy battlemech
+    if (/sniper|scout|stalker|beast|hound|ranger|marksman/.test(s)) return { model: "alien", tint: 0x9a6bff, scale: 1.0 }; // agile alien
+    if (/drone|assault/.test(s)) return { model: "drone", tint: 0xff9a3c, scale: 1.15 };                                  // skittering drone
+    return { model: "drone", tint: 0xff6a5a, scale: 1.05 };
   }
   function unitColor(u) { return u.tint != null ? new THREE.Color(u.tint).getHex() : (u.side === "player" ? 0x3aa0ff : 0xff5a4a); }
   function resolveClip(char, name) { return (name && char.actions[name]) ? name : (char.animations[0] && char.animations[0].name) || null; }
@@ -460,7 +465,7 @@ register3d("tactics3d", async (kernel, content) => {
       mdl.traverse((o) => {
         if ((o.isMesh || o.isSkinnedMesh) && o.material) {
           o.material = o.material.clone();
-          if (!isPlayer && o.material.color) o.material.color.lerp(new THREE.Color(accent), 0.6);
+          if (!isPlayer && o.material.color) o.material.color.lerp(new THREE.Color(accent), 0.32); // light menace tint — keep model identity
           o.material.emissive = new THREE.Color(accent).multiplyScalar(isPlayer ? 0.22 : 0.18);
         }
       });

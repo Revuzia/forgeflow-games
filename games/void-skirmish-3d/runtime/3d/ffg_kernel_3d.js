@@ -250,7 +250,15 @@ export class Kernel3D {
     const mixer = new THREE.AnimationMixer(scene);
     this._mixers.push(mixer);
     const actions = {};
-    (gltf.animations || []).forEach((clip) => { actions[clip.name] = mixer.clipAction(clip); });
+    (gltf.animations || []).forEach((clip) => {
+      const act = mixer.clipAction(clip);
+      actions[clip.name] = act;
+      // FBX2glTF exports name clips "<Armature>|Idle"; callers crossfade bare
+      // names ("Idle"/"Walk"/"Run"). Alias the part after the last "|" so both
+      // forms resolve (additive — never clobbers an existing exact name).
+      const bar = clip.name.lastIndexOf("|");
+      if (bar >= 0) { const s = clip.name.slice(bar + 1); if (!(s in actions)) actions[s] = act; }
+    });
     let current = null;
     function play(name, opts) {
       opts = opts || {};
