@@ -205,7 +205,7 @@ register3d("tactics3d", async (kernel, content) => {
   scene.add(new THREE.DirectionalLight(TOD.fill, TOD.fillI).translateX(-46).translateY(38).translateZ(-20)); // cool sky fill
   const rim = new THREE.DirectionalLight(TOD.rim, TOD.rimI); rim.position.set(-24, 30, -72); scene.add(rim); // cool teal-ish rim (ADVENT)
   scene.add(new THREE.HemisphereLight(TOD.hemiS, TOD.hemiG, TOD.hemiI)); // sky-fill tinted to the hour
-  scene.add(new THREE.AmbientLight(TOD.amb, TOD.ambI)); // lower → deep XCOM shadows
+  const _amb = new THREE.AmbientLight(TOD.amb, TOD.ambI); scene.add(_amb); // lower → deep XCOM shadows (NV boosts this)
   kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = TOD.exp;
   if (kernel.enableBloom) kernel.enableBloom({ strength: _night ? 0.72 : 0.55, radius: 0.62, threshold: _night ? 0.7 : 0.8, ssao: true, ssaoRadius: 1.1 }); // night blooms lit windows harder
   // SUN / MOON disc high in the sky, in the key-light direction (emissive billboard,
@@ -221,6 +221,36 @@ register3d("tactics3d", async (kernel, content) => {
     Object.assign(_vig.style, { position: "absolute", inset: "0", pointerEvents: "none", zIndex: "4",
       background: "radial-gradient(135% 115% at 50% 46%, rgba(0,0,0,0) 62%, rgba(2,6,14,0.34) 100%)" });
     kernel.parent.appendChild(_vig);
+  } catch (e) {}
+
+  // ── NIGHT VISION (toggle: V / the HUD chip) ─────────────────────────────────
+  // Brightens the field with a green-phosphor wash so you can fight in the dark —
+  // boosts the EXISTING ambient light + tone-map exposure (never adds a runtime
+  // light) and lays a green NV overlay. Auto-armed on night missions as a hint.
+  let _nvOn = false, _nvOverlay = null, _nvChip = null;
+  const _baseExp = TOD.exp, _baseAmbI = TOD.ambI;
+  function setNightVision(on) {
+    _nvOn = !!on;
+    try { kernel.renderer.toneMappingExposure = _nvOn ? _baseExp * 1.7 : _baseExp; } catch (e) {}
+    if (_amb) _amb.intensity = _nvOn ? _baseAmbI * 2.7 : _baseAmbI;
+    if (_nvOn && !_nvOverlay) {
+      _nvOverlay = document.createElement("div");
+      Object.assign(_nvOverlay.style, { position: "absolute", inset: "0", pointerEvents: "none", zIndex: "5", mixBlendMode: "screen",
+        background: "radial-gradient(120% 100% at 50% 48%, rgba(46,255,150,0.12), rgba(0,38,16,0.20))",
+        boxShadow: "inset 0 0 160px rgba(0,40,18,0.6)" });
+      kernel.parent.appendChild(_nvOverlay);
+    }
+    if (_nvOverlay) _nvOverlay.style.display = _nvOn ? "block" : "none";
+    if (_nvChip) { _nvChip.textContent = "◐ NIGHT VISION " + (_nvOn ? "ON" : "OFF") + "  (V)"; _nvChip.style.color = _nvOn ? "#39ff9a" : "#9fb6d8"; _nvChip.style.borderColor = _nvOn ? "#39ff9a" : "#2a3a52"; }
+  }
+  function toggleNightVision() { setNightVision(!_nvOn); }
+  try {
+    _nvChip = document.createElement("button");
+    Object.assign(_nvChip.style, { position: "absolute", right: "14px", bottom: "62px", zIndex: "50", cursor: "pointer",
+      font: "600 12px 'Segoe UI',monospace", color: "#9fb6d8", background: "rgba(10,16,24,0.72)", border: "1px solid #2a3a52", borderRadius: "7px", padding: "6px 10px" });
+    _nvChip.textContent = "◐ NIGHT VISION OFF  (V)";
+    _nvChip.onclick = toggleNightVision;
+    kernel.parent.appendChild(_nvChip);
   } catch (e) {}
 
   let sim, events = [], busy = false, selected = null, phase = "menu";
@@ -1517,6 +1547,7 @@ register3d("tactics3d", async (kernel, content) => {
     hoverTip = makeTextSprite(label, col); const w = cell(x, y); hoverTip.position.set(w.x, T * 1.9, w.z); hoverTip.scale.set(3.4, 0.85, 1); scene.add(hoverTip);
   });
   window.addEventListener("keydown", (e) => {
+    if ((e.key || "").toLowerCase() === "v") { e.preventDefault(); toggleNightVision(); return; } // NV works any time
     if (phase !== "battle" || sim.ended) return;
     const k = (e.key || "").toLowerCase();
     if (k === "y") { e.preventDefault(); overwatchSelected(); }
