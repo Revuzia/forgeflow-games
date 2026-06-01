@@ -53,8 +53,13 @@ function buildMission(spec) {
   const GW = spec.w, GH = spec.h, rng = mulberry32(spec.seed >>> 0);
   const ri = (n) => (rng() * n) | 0;
   const grid = Array.from({ length: GH }, () => Array(GW).fill(0));
+  // FLOOR-1 (second storey) grid — all 0 (open air) until a building grows upward.
+  // 9 = interior floor, 8 = stairs (mirrored on the ground grid), 5 = wall, 2/3 = cover.
+  const upper = Array.from({ length: GH }, () => Array(GW).fill(0));
+  let hasUpper = false;
   const inB = (x, y) => x >= 0 && y >= 0 && x < GW && y < GH;
   const set = (x, y, v) => { if (inB(x, y)) grid[y][x] = v; };
+  const setU = (x, y, v) => { if (inB(x, y)) { upper[y][x] = v; if (v) hasUpper = true; } };
   const isFloor = (x, y) => inB(x, y) && grid[y][x] === 0;
   // A half/full cover tile; clustered, never blocking a road.
   const cover = (x, y, fullBias) => { if (isFloor(x, y)) grid[y][x] = rng() < fullBias ? 3 : 2; };
@@ -127,14 +132,30 @@ function buildMission(spec) {
       // Interior FURNITURE (desks/crates as cover) — the "stuff in the building".
       const fc = 1 + ri(2);
       for (let c = 0; c < fc; c++) coverCluster(bx + 1 + ri(Math.max(1, bw - 2)), by + 1 + ri(Math.max(1, bh - 2)), 1 + ri(2), 0.3);
-      // Split-level MEZZANINE: the back interior rows become a raised upper deck
-      // (type 6) reached by interior STAIRS (ramp 7) — vertical play indoors.
-      if (bw >= 5 && bh >= 7 && rng() < 0.42) {
-        const mz = by + 2; // back 2 interior rows -> upper deck
+      // SECOND STOREY (true multi-floor): the interior grows a full upper level on
+      // FLOOR 1 — interior floor (9) ringed by (half-height) walls (5), reached by
+      // an interior STAIRCASE (8, mirrored onto the ground grid). A little balcony
+      // cover for firefights up top. This is the XCOM "rooms above rooms": fight
+      // downstairs, climb and flank from the landing above with the high-ground bonus.
+      if (bw >= 5 && bh >= 6 && rng() < 0.5) {
+        for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) {
+          const edge = (x === bx || x === bx + bw - 1 || y === by || y === by + bh - 1);
+          setU(x, y, edge ? 5 : 9); // upper perimeter wall / interior floor
+        }
+        // staircase: an interior cell beside the perimeter — type 8 on BOTH grids.
+        const sx = bx + 1, sy = by + 1 + ri(Math.max(1, bh - 2));
+        set(sx, sy, 8); setU(sx, sy, 8);
+        // 1–2 cover pieces on the upper floor (crates / railing on the balcony)
+        for (let c = 0, uc = 1 + ri(2); c < uc; c++) {
+          const ux = bx + 1 + ri(Math.max(1, bw - 2)), uy = by + 1 + ri(Math.max(1, bh - 2));
+          if (upper[uy] && upper[uy][ux] === 9) setU(ux, uy, rng() < 0.4 ? 3 : 2);
+        }
+      } else if (bw >= 5 && bh >= 7 && rng() < 0.3) {
+        // (fallback) older single-floor MEZZANINE deck — outdoor-style high ground indoors.
+        const mz = by + 2;
         for (let y = by + 1; y <= mz; y++) for (let x = bx + 1; x < bx + bw - 1; x++) set(x, y, 6);
         const cx = bx + (bw >> 1);
-        set(cx, mz + 1, 7);   // interior stairs just in front of the deck
-        set(cx, mz + 2, 0);   // ground landing at the stair foot
+        set(cx, mz + 1, 7); set(cx, mz + 2, 0);
       }
     } else {
       for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) set(x, y, 1); // solid tower
@@ -222,7 +243,7 @@ function buildMission(spec) {
     i++;
   }
 
-  const walkable = (x, y) => inB(x, y) && (grid[y][x] === 0 || grid[y][x] === 4);
+  const walkable = (x, y) => inB(x, y) && (grid[y][x] === 0 || grid[y][x] === 4 || grid[y][x] === 8);
   const taken = new Set();
   function snap(x, y) {
     for (let r = 0; r < 20; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
@@ -304,6 +325,7 @@ function buildMission(spec) {
   }
 
   const m = { name: spec.name, objective: spec.objective, grid, player_units: players, enemy_units: enemies };
+  if (hasUpper) m.upper = upper; // FLOOR-1 second-storey grid (omitted on single-floor maps)
   if (goal) m.goal = goal;
   return { mission: m, allReach, goal, GW, GH };
 }
@@ -333,10 +355,12 @@ if (process.argv.includes("--regen")) {
     });
     if (!r.allReach) ok = false;
     const nm = { name: m.name, objective: m.objective, grid: r.mission.grid, player_units: r.mission.player_units, enemy_units: r.mission.enemy_units };
+    if (r.mission.upper) nm.upper = r.mission.upper; // carry the FLOOR-1 second storey
     if (m.goal) nm.goal = r.mission.goal || m.goal;
-    const floor = r.mission.grid.flat().filter((t) => t === 0 || t === 4).length;
     const cov = r.mission.grid.flat().filter((t) => t === 2 || t === 3).length;
-    console.log(`  ${String(m.name || ("mission " + i)).padEnd(22)} ${GW}x${GH}  cover ${((cov / (GW * GH)) * 100).toFixed(1)}%  reach:${r.allReach}`);
+    const up = r.mission.upper ? r.mission.upper.flat().filter((t) => t === 9 || t === 8).length : 0;
+    const stairs = r.mission.upper ? r.mission.upper.flat().filter((t) => t === 8).length : 0;
+    console.log(`  ${String(m.name || ("mission " + i)).padEnd(22)} ${GW}x${GH}  cover ${((cov / (GW * GH)) * 100).toFixed(1)}%  2F:${up}(${stairs} stairs)  reach:${r.allReach}`);
     return nm;
   });
   if (!ok) { console.error("ABORT --regen: a mission failed connectivity — original left untouched."); process.exit(1); }

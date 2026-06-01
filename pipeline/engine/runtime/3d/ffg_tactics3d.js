@@ -214,7 +214,7 @@ register3d("tactics3d", async (kernel, content) => {
   function buildSim() {
     events = [];
     sim = new TB({
-      grid: mission.grid, player_units: deployUnits, enemy_units: mission.enemy_units,
+      grid: mission.grid, upper: mission.upper || null, player_units: deployUnits, enemy_units: mission.enemy_units,
       seed: content.seed != null ? content.seed : 12345,
       goal: mission.goal || {},
       onEvent: (type, payload) => events.push({ type, payload }),
@@ -286,12 +286,20 @@ register3d("tactics3d", async (kernel, content) => {
         if (t === 5) { buildWall(x, y, w); continue; } // enterable building: low open-top wall
         if (t === 6) { buildDeck(x, y, w); continue; }  // raised rooftop deck (high ground)
         if (t === 7) { buildRamp(x, y, w); continue; }  // ramp/stairs up to a deck
+        if (t === 8) { buildStairBase(x, y, w); continue; } // ground-floor foot of an interior staircase
         if (t === 2 || t === 3) buildCover(x, y, w, t === 3);
         else if (t === 4) buildHazard(w);
       }
     }
+    buildUpperFloor(); // raised second storey (rooms above rooms), if this map has one
     scatterDecor();
     scatterAdvent();
+  }
+  // The ground-floor footprint of a staircase cell (type 8): a small base plinth so
+  // the stairwell reads as built-in. The climbing steps themselves are in buildUpperFloor.
+  function buildStairBase(x, y, w) {
+    const base = _bx(T * 0.96, T * 0.12, T * 0.96, 0x3b3f47, 0.85, 0.14);
+    base.position.set(w.x, FT + 0.06, w.z); base.receiveShadow = true; scene.add(base);
   }
   // Signature ADVENT propaganda KIOSK — the cyan-teal tech pillar that is the
   // single most "XCOM" environmental cue. Procedural (concrete pillar + glowing
@@ -585,7 +593,11 @@ register3d("tactics3d", async (kernel, content) => {
 
   // ── Verticality: rooftop decks (tile 6) + ramps (tile 7) ────────────────────
   const DECK_H = T * 1.3; // rooftop height — units climb up for high-ground advantage
+  const FLOOR_H = T * 2.7; // SECOND-STOREY height (floor 1) — a full interior storey above ground
   function _tileLift(x, y) { const t = (mission.grid[y] || [])[x]; return (t === 6 || t === 7) ? DECK_H : 0; }
+  // Floor-aware world-Y lift: floor 1 = full storey; floor 0 keeps deck/ramp logic.
+  function _floorLift(x, y, floor) { return (floor === 1) ? FLOOR_H : _tileLift(x, y); }
+  const _upper = mission.upper || null; // optional FLOOR-1 grid (second storey)
   function buildDeck(x, y, w) {
     const support = _bx(T, DECK_H, T, 0x33373f, 0.88, 0.18); support.position.set(w.x, DECK_H / 2, w.z); support.castShadow = true; support.receiveShadow = true; scene.add(support);
     const slab = _bx(T * 1.0, T * 0.14, T * 1.0, 0x6a6e77, 0.8, 0.15); slab.position.set(w.x, DECK_H + 0.07, w.z); slab.receiveShadow = true; scene.add(slab);
@@ -608,6 +620,71 @@ register3d("tactics3d", async (kernel, content) => {
       const h = DECK_H * (1 - (i + 1) / 4);
       const step = _bx(gx ? T * 0.34 : T * 0.7, T * 0.16, gz ? T * 0.34 : T * 0.7, 0x52565e, 0.85, 0.12);
       step.position.set(w.x + gx * (i + 1) * T * 0.3, h, w.z + gz * (i + 1) * T * 0.3); step.castShadow = true; scene.add(step);
+    }
+  }
+
+  // ── SECOND STOREY (floor 1) ────────────────────────────────────────────────
+  // Reads the optional `mission.upper` grid and builds a raised, OPEN-TOP interior
+  // level you climb to via stairs (type 8) and fight on/inside (type 9 floor, plus
+  // 5=wall, 2/3=cover). No roof => the camera sees both storeys at once (the XCOM
+  // dollhouse cross-section). Slab is inset so the ground floor stays visible below.
+  const _up = (x, y) => (_upper && _upper[y]) ? _upper[y][x] : 0;
+  function buildUpperFloor() {
+    if (!_upper) return;
+    const slabMat = { c: 0x7c6f5d, r: 0.8, m: 0.12 }; // WARM interior floorboards — distinct from grey street/walls
+    const edgeMat = new THREE.MeshStandardMaterial({ color: 0x0c2a30, emissive: 0x34d6e8, emissiveIntensity: 0.9, roughness: 0.4 }); // teal ADVENT trim
+    for (let y = 0; y < gridH; y++) {
+      for (let x = 0; x < gridW; x++) {
+        const t = _up(x, y);
+        if (t !== 9 && t !== 8 && t !== 5 && t !== 3 && t !== 2) continue;
+        const w = cell(x, y);
+        // interior floor slab (also under stairs landings, walls, cover)
+        if (t === 9 || t === 8 || t === 5 || t === 2 || t === 3) {
+          const slab = _bx(T * 0.98, T * 0.16, T * 0.98, slabMat.c, slabMat.r, slabMat.m);
+          slab.position.set(w.x, FLOOR_H + 0.08, w.z); slab.receiveShadow = true; slab.castShadow = true; scene.add(slab);
+        }
+        // support columns + glowing edge trim on OUTER edges (neighbour not part of the storey)
+        if (t === 9 || t === 8) {
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nt = _up(x + dx, y + dy);
+            if (nt === 9 || nt === 8 || nt === 5 || nt === 2 || nt === 3) continue; // interior edge — no column
+            const col = _bx(T * 0.18, FLOOR_H, T * 0.18, 0x262a32, 0.82, 0.25);
+            col.position.set(w.x + dx * T * 0.45, FLOOR_H / 2, w.z + dy * T * 0.45); col.castShadow = true; scene.add(col);
+            const horiz = dy !== 0;
+            // glowing teal floor-edge strip (reads the raised plate's footprint instantly)
+            const edge = new THREE.Mesh(new THREE.BoxGeometry(horiz ? T : T * 0.08, T * 0.1, horiz ? T * 0.08 : T), edgeMat);
+            edge.position.set(w.x + dx * T * 0.47, FLOOR_H + 0.2, w.z + dy * T * 0.47); scene.add(edge);
+            const rail = _bx(horiz ? T : T * 0.1, T * 0.3, horiz ? T * 0.1 : T, 0x4a4e57, 0.85, 0.12);
+            rail.position.set(w.x + dx * T * 0.46, FLOOR_H + 0.34, w.z + dy * T * 0.46); rail.castShadow = true; scene.add(rail);
+          }
+        }
+        // interior walls (5) — a KNEE-HIGH parapet so the storey stays an OPEN
+        // raised platform (never occludes the camera; you always see units on it).
+        // Sim-side these still block LOS/cover; visually they're a low lip.
+        if (t === 5) {
+          const wl = _bx(T * 0.96, T * 0.5, T * 0.96, 0x5f636b, 0.86, 0.12);
+          wl.position.set(w.x, FLOOR_H + 0.16 + T * 0.25, w.z); wl.castShadow = true; wl.receiveShadow = true; scene.add(wl);
+        }
+        // interior cover (2 half / 3 full) — low blocks on the slab
+        if (t === 2 || t === 3) {
+          const ch = t === 3 ? T * 0.7 : T * 0.42;
+          const cb = _bx(T * 0.62, ch, T * 0.62, t === 3 ? 0x6b5340 : 0x5a6470, 0.8, 0.15);
+          cb.position.set(w.x, FLOOR_H + 0.13 + ch / 2, w.z); cb.castShadow = true; cb.receiveShadow = true; scene.add(cb);
+        }
+        // STAIRCASE in a type-8 cell: ~6 steps rising ground -> FLOOR_H, run aimed
+        // toward an adjacent interior(9) cell (else +x). A handrail on one side.
+        if (t === 8) {
+          let rx = 1, rz = 0;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { if (_up(x + dx, y + dy) === 9) { rx = dx; rz = dy; break; } }
+          const N = 6;
+          for (let i = 0; i < N; i++) {
+            const h = FLOOR_H * (i + 1) / N;
+            const along = (i - (N - 1) / 2) * (T * 0.92 / N);
+            const step = _bx(rx ? T * 0.92 / N : T * 0.6, T * 0.12, rz ? T * 0.92 / N : T * 0.6, 0x52565e, 0.85, 0.12);
+            step.position.set(w.x + rx * along, h, w.z + rz * along); step.castShadow = true; step.receiveShadow = true; scene.add(step);
+          }
+        }
+      }
     }
   }
 
@@ -642,7 +719,7 @@ register3d("tactics3d", async (kernel, content) => {
 
   async function makeUnit(u) {
     const w = cell(u.x, u.y);
-    const g = new THREE.Group(); g.position.set(w.x, 0.2 + _tileLift(u.x, u.y), w.z);
+    const g = new THREE.Group(); g.position.set(w.x, 0.2 + _floorLift(u.x, u.y, u.floor || 0), w.z);
     const col = unitColor(u), dark = shade(col, -0.5);
     // faction base ring (selection + team id)
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(T * 0.36, T * 0.36, 0.1, 26),
@@ -905,9 +982,10 @@ register3d("tactics3d", async (kernel, content) => {
     const ch = ensureChevron(); ch.visible = true; ch._target = v ? v.group : null;
     (sim.reachableTiles(u) || []).forEach((r) => {
       const w = cell(r.x, r.y);
+      const up = (r.floor || 0) === 1; // upper-storey reachable tile → warm marker, raised to the slab
       const m = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.84, T * 0.84),
-        new THREE.MeshBasicMaterial({ color: 0x4fd0ff, transparent: true, opacity: u.actionPoints > 0 ? 0.22 : 0.08, side: THREE.DoubleSide }));
-      m.rotation.x = -Math.PI / 2; m.position.set(w.x, 0.24, w.z); scene.add(m); highlights.push(m);
+        new THREE.MeshBasicMaterial({ color: up ? 0xffc04a : 0x4fd0ff, transparent: true, opacity: u.actionPoints > 0 ? (up ? 0.3 : 0.22) : 0.08, side: THREE.DoubleSide }));
+      m.rotation.x = -Math.PI / 2; m.position.set(w.x, up ? FLOOR_H + 0.22 : 0.24, w.z); scene.add(m); highlights.push(m);
     });
     setHUD();
   }
@@ -1079,10 +1157,16 @@ register3d("tactics3d", async (kernel, content) => {
     ready.sort((a, b) => ((b.movement || 0) - (a.movement || 0)) || (b.actionPoints - a.actionPoints));
     selectUnit(ready[0]);
   }
-  function tryMove(x, y) {
+  function tryMove(x, y, floor) {
     const u = selected; if (!u || u.actionPoints < 1) return;
-    if (!(sim.reachableTiles(u) || []).some((r) => r.x === x && r.y === y)) return;
-    const path = sim.moveUnit(u.id, x, y); if (!path) return;
+    let cands = (sim.reachableTiles(u) || []).filter((r) => r.x === x && r.y === y);
+    if (floor != null) cands = cands.filter((r) => (r.floor || 0) === floor);
+    if (!cands.length) return;
+    // ambiguous cell reachable on BOTH storeys (a stairwell): prefer the floor the
+    // unit is NOT on, so a click climbs up / steps down intuitively.
+    let pick = cands[0];
+    if (cands.length > 1) pick = cands.find((r) => (r.floor || 0) !== (u.floor || 0)) || cands[0];
+    const path = sim.moveUnit(u.id, x, y, pick.floor || 0); if (!path) return;
     busy = true; clearHighlights();
     drainEvents(() => afterAction(u));
   }
@@ -1183,7 +1267,8 @@ register3d("tactics3d", async (kernel, content) => {
         const last = path[path.length - 1], w = cell(last.x, last.y);
         faceToward(mu, last.x, last.y); anim(mu, "walk", { fade: 0.15 });
         const dur = Math.max(0.3, Math.min(1.1, path.length * 0.16));
-        kernel.tween({ target: v.group.position, to: { x: w.x, y: 0.2 + _tileLift(last.x, last.y), z: w.z }, duration: dur, onComplete: () => anim(mu, "idle", { fade: 0.2 }) });
+        const endLift = 0.2 + _floorLift(last.x, last.y, (last.floor != null ? last.floor : (mu.floor || 0)));
+        kernel.tween({ target: v.group.position, to: { x: w.x, y: endLift, z: w.z }, duration: dur, onComplete: () => anim(mu, "idle", { fade: 0.2 }) });
         return dur * 1000 + 60;
       }
       return 30;
@@ -1445,7 +1530,7 @@ register3d("tactics3d", async (kernel, content) => {
       start: () => { if (shell) { shell.hide(); shell.phase = "playing"; } beginBattle(); },
       state: () => ({ phase, turn: sim.turnNumber, ended: sim.ended, allies: sim.aliveAllies().length, enemies: sim.aliveEnemies().length, sceneChildren: scene.children.length }),
       select: (id) => { selectUnit(sim.getUnit(id)); return !!sim.getUnit(id); },
-      move: (id, x, y) => { selectUnit(sim.getUnit(id)); return !!sim.moveUnit(id, x, y); },
+      move: (id, x, y, floor) => { selectUnit(sim.getUnit(id)); return !!sim.moveUnit(id, x, y, floor); },
       attack: (aid, tid) => sim.attackUnit(aid, tid),
       // animated path (drives drainEvents -> playEvent -> kill-cam) for verification
       attackAnimated: (aid, tid) => { selectUnit(sim.getUnit(aid)); tryAttack(sim.getUnit(tid)); },

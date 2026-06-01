@@ -7,7 +7,15 @@
  * drive it headlessly in Node and assert the defining mechanics actually work.
  *
  * Grid tile codes: 0=floor, 1=wall(blocks move+LOS), 2=half_cover(passable),
- *                  3=full_cover(blocks move, grants cover), 4=hazard(passable, dmg).
+ *                  3=full_cover(blocks move, grants cover), 4=hazard(passable, dmg),
+ *                  5=building wall(blocks move+LOS, = full cover), 6=rooftop deck
+ *                  (elevation 1), 7=ramp (climb connector ground<->deck).
+ * Multi-floor (2-layer): an optional `config.upper` grid (same WxH) is FLOOR 1 —
+ *                  the second storey you fight inside/on. Upper-floor codes:
+ *                  9=interior floor (walkable), 8=STAIRS (present on BOTH floors at
+ *                  the same cell, the only vertical connector), plus 1/2/3/5 walls &
+ *                  cover. Upper-floor 0 = open air (NOT walkable — no floor there).
+ *                  No `upper` grid => single-floor, behaves exactly as before.
  *
  * Dual export: Node `require()` (gates) and browser `window.FFG.sim.TacticalBattle`.
  */
@@ -46,6 +54,11 @@
       this.grid = config.grid;
       this.gridW = (this.grid[0] && this.grid[0].length) || 0;
       this.gridH = this.grid.length;
+      // FLOOR 1 (optional second storey). Same dims as the ground grid. Cells:
+      // 9 = interior floor (walkable), 8 = stairs (shared with ground), 1/2/3/5 =
+      // walls & cover, 0 = open air (not walkable). Null => single-floor map.
+      this.upper = config.upper || null;
+      this.floors = this.upper ? 2 : 1;
       this.rng = config.rng || (typeof config.seed === "number" ? mulberry32(config.seed) : Math.random);
       this.player_units = (config.player_units || []).map((u) => this._initUnit(u, "player"));
       this.enemy_units = (config.enemy_units || []).map((u) => this._initUnit(u, "enemy"));
@@ -117,12 +130,12 @@
       let best = null, bestScore = -1;
       for (const r of this.reachableTiles(e)) {
         // prefer tiles that have adjacent cover (defensive) and are closer to a foe
-        const hasCover = this.hasAnyCover({ x: r.x, y: r.y });
+        const hasCover = this.hasAnyCover({ x: r.x, y: r.y, floor: r.floor });
         const nearestFoe = this.aliveAllies().reduce((m, a) => Math.min(m, Math.abs(a.x - r.x) + Math.abs(a.y - r.y)), 1e9);
         const score = (hasCover ? 10 : 0) - r.cost * 0.5 - nearestFoe * 0.1;
         if (score > bestScore) { bestScore = score; best = r; }
       }
-      if (best && (best.x !== e.x || best.y !== e.y)) { this.moveUnit(e.id, best.x, best.y); e.actionPoints = 0; }
+      if (best && (best.x !== e.x || best.y !== e.y || (best.floor || 0) !== (e.floor || 0))) { this.moveUnit(e.id, best.x, best.y, best.floor); e.actionPoints = 0; }
       else e.actionPoints = 0; // brace in place
     }
 
@@ -132,7 +145,7 @@
         if (this.podRevealed(e.pod)) continue;
         for (const a of this.aliveAllies()) {
           const d = Math.abs(e.x - a.x) + Math.abs(e.y - a.y);
-          if (d <= this.sightRange && this.hasLineOfSight(e.x, e.y, a.x, a.y)) { this.revealPod(e.pod, opts); break; }
+          if (d <= this.sightRange && this.hasLineOfSight(e.x, e.y, a.x, a.y, e.floor || 0, a.floor || 0)) { this.revealPod(e.pod, opts); break; }
         }
       }
     }
@@ -151,6 +164,7 @@
         name: u.name || u.id,
         side: side,
         x: u.x, y: u.y,
+        floor: u.floor != null ? u.floor : 0, // 0 = ground, 1 = second storey
         hp: u.hp != null ? u.hp : 10,
         maxHp: u.hp != null ? u.hp : 10,
         atk: u.atk != null ? u.atk : 5,
@@ -178,26 +192,55 @@
     // ── Queries ────────────────────────────────────────────────────────────
     inBounds(x, y) { return x >= 0 && y >= 0 && x < this.gridW && y < this.gridH; }
 
-    isWalkable(x, y) {
-      if (!this.inBounds(x, y)) return false;
-      const t = this.grid[y][x];
-      // Walkable: open floor / hazard / ROOFTOP (6) / RAMP (7). Cover tiles are
-      // solid (units path around). Verticality: 6 = elevated rooftop deck, 7 =
-      // ramp/stair connecting ground<->roof.
-      return t === 0 || t === 4 || t === 6 || t === 7;
-    }
-    // 0 = ground level, 1 = rooftop. A ramp (7) is the climb connector.
-    elevationAt(x, y) { return (this.inBounds(x, y) && this.grid[y][x] === 6) ? 1 : 0; }
-    // Can a unit step between adjacent tiles a->b? Same elevation, OR one is a ramp.
-    canStep(ax, ay, bx, by) {
-      if (!this.isWalkable(bx, by)) return false;
-      const ta = this.grid[ay][ax], tb = this.grid[by][bx];
-      if (ta === 7 || tb === 7) return true; // ramp connects elevations
-      return this.elevationAt(ax, ay) === this.elevationAt(bx, by);
+    // The grid for a given floor (0 = ground, 1 = upper). Helpers below default to
+    // floor 0 so every legacy single-floor call site keeps working unchanged.
+    gridForFloor(floor) { return floor === 1 ? this.upper : this.grid; }
+    tileAt(x, y, floor) {
+      if (!this.inBounds(x, y)) return undefined;
+      const g = this.gridForFloor(floor || 0);
+      return g ? g[y][x] : undefined;
     }
 
-    unitAt(x, y) {
-      return this.allUnits().find((u) => u.x === x && u.y === y && u.hp > 0) || null;
+    isWalkable(x, y, floor) {
+      if (!this.inBounds(x, y)) return false;
+      floor = floor || 0;
+      if (floor === 1) {
+        if (!this.upper) return false;
+        const t = this.upper[y][x];
+        return t === 9 || t === 8; // interior floor or stairs (air/walls/cover not walkable)
+      }
+      const t = this.grid[y][x];
+      // Floor 0 walkable: open floor / hazard / ROOFTOP deck (6) / RAMP (7) /
+      // STAIRS (8). Cover tiles are solid (units path around them).
+      return t === 0 || t === 4 || t === 6 || t === 7 || t === 8;
+    }
+    // Height for the high-ground bonus & cross-floor LOS. Upper storey (floor 1)
+    // = 2, a ground rooftop deck (6) = 1, plain ground = 0.
+    elevationAt(x, y, floor) {
+      if ((floor || 0) === 1) return 2;
+      return (this.inBounds(x, y) && this.grid[y][x] === 6) ? 1 : 0;
+    }
+    // Can a unit step a->b? LATERAL (same floor, adjacent): walkable + same deck
+    // elevation, unless a ramp(7) bridges it. VERTICAL (same cell, |Δfloor|=1):
+    // only through a STAIRS cell (8) present on both floors.
+    canStep(ax, ay, af, bx, by, bf) {
+      af = af || 0; bf = bf || 0;
+      if (af === bf) {
+        if (Math.abs(ax - bx) + Math.abs(ay - by) !== 1) return false; // must be orthogonally adjacent
+        if (!this.isWalkable(bx, by, bf)) return false;
+        if (bf === 1) return true; // upper storey is a single flat interior level
+        const ta = this.grid[ay][ax], tb = this.grid[by][bx];
+        if (ta === 7 || tb === 7) return true; // ramp connects deck<->ground
+        return this.elevationAt(ax, ay, 0) === this.elevationAt(bx, by, 0);
+      }
+      // vertical move: same column, one floor apart, both ends are stairs
+      if (ax !== bx || ay !== by || Math.abs(af - bf) !== 1) return false;
+      return this.tileAt(ax, ay, af) === 8 && this.tileAt(bx, by, bf) === 8;
+    }
+
+    unitAt(x, y, floor) {
+      floor = floor || 0;
+      return this.allUnits().find((u) => u.x === x && u.y === y && (u.floor || 0) === floor && u.hp > 0) || null;
     }
 
     getUnit(id) { return this.allUnits().find((u) => u.id === id) || null; }
@@ -213,23 +256,28 @@
     reachableTiles(unit) {
       const out = [];
       const seen = {};
-      const start = unit.x + "," + unit.y;
-      seen[start] = 0;
-      let frontier = [{ x: unit.x, y: unit.y, cost: 0 }];
+      const sf = unit.floor || 0;
+      seen[unit.x + "," + unit.y + "," + sf] = 0;
+      let frontier = [{ x: unit.x, y: unit.y, f: sf, cost: 0 }];
       while (frontier.length) {
         const next = [];
         for (const node of frontier) {
-          for (const d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-            const nx = node.x + d[0], ny = node.y + d[1];
+          // 4 lateral neighbours on this floor + 1 vertical (stairs) neighbour
+          const cands = [
+            { x: node.x + 1, y: node.y, f: node.f }, { x: node.x - 1, y: node.y, f: node.f },
+            { x: node.x, y: node.y + 1, f: node.f }, { x: node.x, y: node.y - 1, f: node.f },
+            { x: node.x, y: node.y, f: node.f === 0 ? 1 : 0 },
+          ];
+          for (const c of cands) {
             const cost = node.cost + 1;
             if (cost > unit.movement) continue;
-            if (!this.canStep(node.x, node.y, nx, ny)) continue; // elevation-aware (climb only via ramps)
-            if (this.unitAt(nx, ny)) continue;
-            const k = nx + "," + ny;
+            if (!this.canStep(node.x, node.y, node.f, c.x, c.y, c.f)) continue; // floor- & elevation-aware
+            if (this.unitAt(c.x, c.y, c.f)) continue;
+            const k = c.x + "," + c.y + "," + c.f;
             if (seen[k] != null && seen[k] <= cost) continue;
             seen[k] = cost;
-            out.push({ x: nx, y: ny, cost: cost });
-            next.push({ x: nx, y: ny, cost: cost });
+            out.push({ x: c.x, y: c.y, floor: c.f, cost: cost });
+            next.push({ x: c.x, y: c.y, f: c.f, cost: cost });
           }
         }
         frontier = next;
@@ -237,35 +285,43 @@
       return out;
     }
 
-    // A* (orthogonal, unit-blocking). Returns path excluding the start tile.
-    findPath(sx, sy, ex, ey) {
-      const key = (x, y) => x + "," + y;
-      const open = new Set([key(sx, sy)]);
+    // A* (orthogonal + stairs, unit-blocking). Returns path excluding the start
+    // tile; each step is {x,y,floor}. sf/ef = start/end floor (default ground).
+    findPath(sx, sy, ex, ey, sf, ef) {
+      sf = sf || 0; ef = ef || 0;
+      const key = (x, y, fl) => x + "," + y + "," + fl;
+      const h = (x, y, fl) => Math.abs(ex - x) + Math.abs(ey - y) + Math.abs(ef - fl);
+      const start = key(sx, sy, sf);
+      const open = new Set([start]);
       const cameFrom = {};
-      const g = { [key(sx, sy)]: 0 };
-      const f = { [key(sx, sy)]: Math.abs(ex - sx) + Math.abs(ey - sy) };
+      const g = { [start]: 0 };
+      const f = { [start]: h(sx, sy, sf) };
       while (open.size) {
         let cur = null, best = Infinity;
         for (const k of open) { const v = f[k] != null ? f[k] : Infinity; if (v < best) { best = v; cur = k; } }
         if (!cur) break;
         const parts = cur.split(",");
-        const cx = +parts[0], cy = +parts[1];
-        if (cx === ex && cy === ey) {
-          const path = [{ x: cx, y: cy }];
+        const cx = +parts[0], cy = +parts[1], cf = +parts[2];
+        if (cx === ex && cy === ey && cf === ef) {
+          const path = [{ x: cx, y: cy, floor: cf }];
           let c = cur;
-          while (cameFrom[c]) { c = cameFrom[c]; const p = c.split(","); path.unshift({ x: +p[0], y: +p[1] }); }
+          while (cameFrom[c]) { c = cameFrom[c]; const p = c.split(","); path.unshift({ x: +p[0], y: +p[1], floor: +p[2] }); }
           return path.slice(1);
         }
         open.delete(cur);
-        for (const d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const nx = cx + d[0], ny = cy + d[1];
-          if (!this.canStep(cx, cy, nx, ny)) continue; // elevation-aware
-          if (this.unitAt(nx, ny) && !(nx === ex && ny === ey)) continue;
-          const nk = key(nx, ny);
+        const cands = [
+          { x: cx + 1, y: cy, f: cf }, { x: cx - 1, y: cy, f: cf },
+          { x: cx, y: cy + 1, f: cf }, { x: cx, y: cy - 1, f: cf },
+          { x: cx, y: cy, f: cf === 0 ? 1 : 0 }, // stairs
+        ];
+        for (const c of cands) {
+          if (!this.canStep(cx, cy, cf, c.x, c.y, c.f)) continue; // floor- & elevation-aware
+          if (this.unitAt(c.x, c.y, c.f) && !(c.x === ex && c.y === ey && c.f === ef)) continue;
+          const nk = key(c.x, c.y, c.f);
           const tg = (g[cur] != null ? g[cur] : Infinity) + 1;
           if (tg < (g[nk] != null ? g[nk] : Infinity)) {
             cameFrom[nk] = cur; g[nk] = tg;
-            f[nk] = tg + Math.abs(ex - nx) + Math.abs(ey - ny);
+            f[nk] = tg + h(c.x, c.y, c.f);
             open.add(nk);
           }
         }
@@ -273,16 +329,26 @@
       return null;
     }
 
-    // Bresenham LOS; walls (1) and full cover (3) block sight.
-    hasLineOfSight(fromX, fromY, toX, toY) {
+    // Bresenham LOS; walls (1) and full cover (3/5) block sight. Floor-aware:
+    // same-floor sight traces THAT floor's grid; cross-floor sight (a soldier on
+    // the upper storey shooting down, or vice-versa) traces the ground grid but
+    // only SOLID BUILDINGS (1) block — you see over cover/walls from height.
+    hasLineOfSight(fromX, fromY, toX, toY, fromFloor, toFloor) {
+      fromFloor = fromFloor || 0; toFloor = toFloor || 0;
+      const cross = fromFloor !== toFloor;
+      const grid = cross ? this.grid : this.gridForFloor(fromFloor);
+      if (!grid) return false;
+      const blocks = cross
+        ? (t) => t === 1
+        : (t) => t === 1 || t === 3 || t === 5;
       const dx = Math.abs(toX - fromX), dy = Math.abs(toY - fromY);
       const sx = fromX < toX ? 1 : -1, sy = fromY < toY ? 1 : -1;
       let err = dx - dy, x = fromX, y = fromY;
       while (x !== toX || y !== toY) {
         const isEndpoint = (x === fromX && y === fromY) || (x === toX && y === toY);
         if (!isEndpoint) {
-          const t = this.grid[y] && this.grid[y][x];
-          if (t === 1 || t === 3 || t === 5) return false; // 5 = building wall blocks sight
+          const t = grid[y] && grid[y][x];
+          if (blocks(t)) return false;
         }
         const e2 = 2 * err;
         if (e2 > -dy) { err -= dy; x += sx; }
@@ -296,11 +362,12 @@
     // that side: cover to my east shields me from attackers to my east.
     coverAt(unit, fromX, fromY) {
       const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+      const g = this.gridForFloor(unit.floor || 0); if (!g) return 0;
       let best = 0;
       for (const d of dirs) {
         const dx = d[0], dy = d[1];
         const nx = unit.x + dx, ny = unit.y + dy;
-        const t = this.grid[ny] && this.grid[ny][nx];
+        const t = g[ny] && g[ny][nx];
         const cv = (t === 3 || t === 5) ? 2 : t === 2 ? 1 : 0; // a building wall (5) = full cover
         if (cv === 0) continue;
         if (fromX != null) {
@@ -315,8 +382,9 @@
 
     // Does `target` have any adjacent cover at all (regardless of angle)?
     hasAnyCover(target) {
+      const g = this.gridForFloor(target.floor || 0); if (!g) return false;
       for (const d of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-        const t = this.grid[target.y + d[1]] && this.grid[target.y + d[1]][target.x + d[0]];
+        const t = g[target.y + d[1]] && g[target.y + d[1]][target.x + d[0]];
         if (t === 2 || t === 3 || t === 5) return true;
       }
       return false;
@@ -333,7 +401,7 @@
       const inRange = dist <= attacker.range;
       const distancePenalty = Math.max(0, (dist - 3) * 0.05);
       const rawCover = this.coverAt(target, attacker.x, attacker.y);
-      const highGround = this.elevationAt(attacker.x, attacker.y) > this.elevationAt(target.x, target.y);
+      const highGround = this.elevationAt(attacker.x, attacker.y, attacker.floor || 0) > this.elevationAt(target.x, target.y, target.floor || 0);
       const cover = (highGround && rawCover === 1) ? 0 : rawCover; // high ground negates HALF cover
       const coverPenalty = cover === 2 ? 0.4 : cover === 1 ? 0.2 : 0;
       const flanked = this.isFlanked(attacker, target);
@@ -350,16 +418,18 @@
     calculateHitChance(attacker, target) { return this.hitBreakdown(attacker, target).chance; }
 
     // ── Actions ──────────────────────────────────────────────────────────────
-    moveUnit(unitId, toX, toY) {
+    moveUnit(unitId, toX, toY, toFloor) {
       const u = this.getUnit(unitId);
       if (!u || u.hp <= 0 || u.actionPoints < 1) return null;
-      const path = this.findPath(u.x, u.y, toX, toY);
+      const sf = u.floor || 0;
+      toFloor = toFloor != null ? toFloor : sf; // default: stay on the same storey
+      const path = this.findPath(u.x, u.y, toX, toY, sf, toFloor);
       if (!path || path.length === 0 || path.length > u.movement) return null;
-      if (this.unitAt(toX, toY)) return null;
-      u.x = toX; u.y = toY;
+      if (this.unitAt(toX, toY, toFloor)) return null;
+      u.x = toX; u.y = toY; u.floor = toFloor;
       u.actionPoints--;
-      // Hazard tile damage
-      if (this.grid[toY][toX] === 4) { u.hp = Math.max(0, u.hp - 2); this.log.push(u.id + " took 2 hazard dmg"); }
+      // Hazard tile damage (ground floor only)
+      if (toFloor === 0 && this.grid[toY][toX] === 4) { u.hp = Math.max(0, u.hp - 2); this.log.push(u.id + " took 2 hazard dmg"); }
       this.onEvent("move", { unit: u, path: path });
       // Objective progress: a soldier reaching the terminal hacks it.
       if (u.side === "player" && this.goal.type === "hack" && !this.goal.hacked && this.goal.target && this.goal.target.x === toX && this.goal.target.y === toY) {
@@ -378,7 +448,7 @@
       const a = this.getUnit(attackerId), t = this.getUnit(targetId);
       if (!a || !t || a.hp <= 0 || t.hp <= 0) return { success: false, reason: "invalid" };
       if (!reaction && a.actionPoints < 1) return { success: false, reason: "no AP" };
-      if (!this.hasLineOfSight(a.x, a.y, t.x, t.y)) return { success: false, reason: "no LOS" };
+      if (!this.hasLineOfSight(a.x, a.y, t.x, t.y, a.floor || 0, t.floor || 0)) return { success: false, reason: "no LOS" };
       const bd = this.hitBreakdown(a, t);
       if (bd.chance <= 0) return { success: false, reason: "out of range" };
       const chance = reaction ? bd.chance * 0.7 : bd.chance; // reaction fire is less accurate
@@ -475,7 +545,7 @@
       if (!t || t.side === u.side || t.hp <= 0) return { success: false, reason: "need enemy" };
       const range = def.range != null ? def.range : u.range;
       if (Math.abs(u.x - t.x) + Math.abs(u.y - t.y) > range) return { success: false, reason: "out of range" };
-      if (!this.hasLineOfSight(u.x, u.y, t.x, t.y)) return { success: false, reason: "no LOS" };
+      if (!this.hasLineOfSight(u.x, u.y, t.x, t.y, u.floor || 0, t.floor || 0)) return { success: false, reason: "no LOS" };
       const bd = this.hitBreakdown(u, t);
       const chance = Math.min(0.99, bd.chance + 0.15); // steadied
       if (this.rng() <= chance) {
@@ -538,7 +608,7 @@
       const t = this.getUnit(opts.targetId);
       if (!t || t.side === u.side || t.hp <= 0) return { success: false, reason: "need enemy" };
       if (Math.abs(u.x - t.x) + Math.abs(u.y - t.y) > def.range) return { success: false, reason: "out of range" };
-      if (!this.hasLineOfSight(u.x, u.y, t.x, t.y)) return { success: false, reason: "no LOS" };
+      if (!this.hasLineOfSight(u.x, u.y, t.x, t.y, u.floor || 0, t.floor || 0)) return { success: false, reason: "no LOS" };
       t.suppressedBy = u.id; t.suppressAimPenalty = def.aimPenalty;
       u.overwatch = true; // reaction-fire if the pinned target moves
       this.log.push(u.id + " suppressing " + t.id);
@@ -567,7 +637,7 @@
         if (this.ended || mover.hp <= 0) break;
         if (!w.overwatch || w.hp <= 0) continue;
         const dist = Math.abs(w.x - mover.x) + Math.abs(w.y - mover.y);
-        if (dist > w.range || !this.hasLineOfSight(w.x, w.y, mover.x, mover.y)) continue;
+        if (dist > w.range || !this.hasLineOfSight(w.x, w.y, mover.x, mover.y, w.floor || 0, mover.floor || 0)) continue;
         w.overwatch = false;
         this.attackUnit(w.id, mover.id, { reaction: true });
       }
@@ -610,16 +680,16 @@
         while (e.actionPoints > 0 && guard++ < 6) {
           const tgt = targets[0];
           const dist = Math.abs(tgt.x - e.x) + Math.abs(tgt.y - e.y);
-          if (dist <= e.range && this.hasLineOfSight(e.x, e.y, tgt.x, tgt.y)) {
+          if (dist <= e.range && this.hasLineOfSight(e.x, e.y, tgt.x, tgt.y, e.floor || 0, tgt.floor || 0)) {
             this.attackUnit(e.id, tgt.id); shot = true; break; // shooting ends the turn
           } else {
-            const path = this.findPath(e.x, e.y, tgt.x, tgt.y);
+            const path = this.findPath(e.x, e.y, tgt.x, tgt.y, e.floor || 0, tgt.floor || 0);
             if (!path || !path.length) break;
             const steps = Math.min(path.length, e.movement);
             const dest = path[steps - 1];
             // don't step onto the target's tile
-            if (dest.x === tgt.x && dest.y === tgt.y && steps > 1) { const d2 = path[steps - 2]; this.moveUnit(e.id, d2.x, d2.y); }
-            else if (!(dest.x === tgt.x && dest.y === tgt.y)) this.moveUnit(e.id, dest.x, dest.y);
+            if (dest.x === tgt.x && dest.y === tgt.y && steps > 1) { const d2 = path[steps - 2]; this.moveUnit(e.id, d2.x, d2.y, d2.floor); }
+            else if (!(dest.x === tgt.x && dest.y === tgt.y)) this.moveUnit(e.id, dest.x, dest.y, dest.floor);
             else break;
           }
         }
