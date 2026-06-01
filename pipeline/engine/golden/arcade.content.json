@@ -1,0 +1,41 @@
+{
+  "slug": "neon-breakout",
+  "genre": "arcade",
+  "title": "Neon Breakout",
+  "tagline": "Smash the grid. Chain the combo. Don't drop the ball.",
+  "view": {
+    "width": 960,
+    "height": 600,
+    "background": "#0a0612"
+  },
+  "palette": "neon",
+  "rows": 7,
+  "cols": 12,
+  "brickTop": 86,
+  "sideMargin": 36,
+  "paddleW": 130,
+  "paddleY": 556,
+  "ballSpeed": 380,
+  "lives": 3,
+  "dropChance": 0.17,
+  "seed": 1337,
+  "bloom": 1.2,
+  "starCount": 130,
+  "controls": {
+    "move": "Mouse / Touch or ← →",
+    "launch": "Click / Space",
+    "restart": "R or Play Again"
+  },
+  "powerups": [
+    { "kind": "expand", "label": "WIDE", "desc": "Wider paddle" },
+    { "kind": "multi", "label": "MULTI", "desc": "Split into 3 balls" },
+    { "kind": "slow", "label": "SLOW", "desc": "Slow the ball" },
+    { "kind": "life", "label": "+1UP", "desc": "Extra life" },
+    { "kind": "laser", "label": "LASER", "desc": "Charged paddle" },
+    { "kind": "score", "label": "+250", "desc": "Bonus points" }
+  ],
+  "assets": {
+    "images": [],
+    "audio": []
+  }
+}
