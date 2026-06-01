@@ -238,14 +238,26 @@ def _copy_tactics_assets(gdir):
     """Bundle the tactics unit-class icons (recolored white game-icons SVGs) so
     the renderer draws real unit silhouettes instead of lettered circles."""
     src = RUNTIME / "tactics-assets"
-    if not src.is_dir():
-        return
-    for f in src.rglob("*"):
-        if f.is_file():
-            rel = f.relative_to(src)
-            dst = gdir / "assets" / rel
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(f, dst)
+    if src.is_dir():
+        for f in src.rglob("*"):
+            if f.is_file():
+                rel = f.relative_to(src)
+                dst = gdir / "assets" / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(f, dst)
+    # Bundle the rigged CHARACTER models (soldiers + aliens/robots/mech) and the
+    # real CC0 CITY model set (walls/cover/buildings/furniture/decor + their
+    # per-kit colormap subfolders) so a fresh tactics build renders real models,
+    # not boxes — these ride next to the renderer under runtime/3d/.
+    for sub in ("characters", "city"):
+        msrc = RUNTIME / "3d" / sub
+        if not msrc.is_dir():
+            continue
+        for f in msrc.rglob("*"):
+            if f.is_file():
+                dst = gdir / "runtime" / "3d" / sub / f.relative_to(msrc)
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(f, dst)
 
 
 def _copy_3d_assets(gdir, content):
