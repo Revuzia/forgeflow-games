@@ -225,8 +225,31 @@ register3d("tactics3d", async (kernel, content) => {
     const x = Math.floor((px + W / 2) / T), y = Math.floor((pz + H / 2) / T);
     return (x >= 0 && y >= 0 && x < gridW && y < gridH) ? { x, y } : null;
   }
+  // Distant CITY SKYLINE: dark tower silhouettes ringing the plot, fading into the
+  // dusk fog — the XCOM "the city extends past the playable area" backdrop. Cheap
+  // boxes with faint window glow; they sit beyond the board and recede into haze.
+  function buildSkyline() {
+    const hx = W / 2, hz = H / 2, gap = T * 5, margin = T * 30, step = T * 3.6;
+    let seed = 0x1234abcd;
+    const rnd = () => { seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    for (let px = -hx - margin; px <= hx + margin; px += step) {
+      for (let pz = -hz - margin; pz <= hz + margin; pz += step) {
+        if (Math.abs(px) <= hx + gap && Math.abs(pz) <= hz + gap) continue; // skip the playfield
+        if (rnd() > 0.42) continue;
+        const tw = T * (1.5 + rnd() * 1.6), th = T * (3 + rnd() * 12), td = T * (1.5 + rnd() * 1.6);
+        const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+          color: 0x131e31, roughness: 0.94, metalness: 0.06,
+          emissive: (rnd() > 0.4) ? 0xffb24d : 0x3a5070, emissiveIntensity: 0.06 + rnd() * 0.12 }));
+        m.scale.set(tw, th, td);
+        m.position.set(px + (rnd() - 0.5) * step * 0.5, th / 2 - T * 0.5, pz + (rnd() - 0.5) * step * 0.5);
+        scene.add(m);
+      }
+    }
+  }
   async function buildBoard() {
     await preloadCity(); // load the real CC0 models before placing tiles
+    buildSkyline();
     const plat = new THREE.Mesh(new THREE.BoxGeometry(W + 1.4, 0.6, H + 1.4),
       new THREE.MeshStandardMaterial({ color: 0x0c1626, roughness: 0.9, metalness: 0.2 }));
     plat.position.set(0, -0.35, 0); plat.receiveShadow = true; scene.add(plat);
