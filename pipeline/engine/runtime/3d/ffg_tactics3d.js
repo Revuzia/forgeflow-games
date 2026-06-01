@@ -101,7 +101,36 @@ function makeGroundTexture(grid, gw, gh) {
   }
   const tex = new THREE.CanvasTexture(cv);
   if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8; tex.needsUpdate = true; return tex;
+  tex.anisotropy = 8; tex.needsUpdate = true;
+  // PBR companions: a NORMAL map (micro surface relief from the albedo grain +
+  // tile seams as grooves) and a ROUGHNESS map (asphalt rough, with scattered WET
+  // patches that go smooth → they catch the IBL sky = the wet-dusk-street look).
+  // Built by reading the albedo back, so detail lines up with what you see.
+  let normalMap = null, roughnessMap = null;
+  try {
+    const img = g.getImageData(0, 0, W, H).data;
+    const lum = (x, y) => { const i = (((y + H) % H) * W + ((x + W) % W)) * 4; return (img[i] * 0.299 + img[i + 1] * 0.587 + img[i + 2] * 0.114); };
+    const ncv = document.createElement("canvas"); ncv.width = W; ncv.height = H; const ng = ncv.getContext("2d"); const nd = ng.createImageData(W, H);
+    const rcv = document.createElement("canvas"); rcv.width = W; rcv.height = H; const rg = rcv.getContext("2d"); const rd = rg.createImageData(W, H);
+    let ws = (gw * 2654435761 ^ gh * 40503) >>> 0; const wr = () => (ws = (ws * 1103515245 + 12345) >>> 0) / 4294967296;
+    // sparse wet-puddle centres on the open streets
+    const puddles = []; for (let i = 0; i < Math.max(6, (gw * gh) / 90); i++) puddles.push([wr() * W, wr() * H, (10 + wr() * 26)]);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      // Sobel-ish normal from albedo luminance (cheap emboss)
+      const dx = (lum(x + 1, y) - lum(x - 1, y)) / 255, dy = (lum(x, y + 1) - lum(x, y - 1)) / 255;
+      const str = 2.2; let nx = -dx * str, ny = -dy * str, nz = 1;
+      const il = 1 / Math.sqrt(nx * nx + ny * ny + nz * nz); nx *= il; ny *= il; nz *= il;
+      nd.data[i] = (nx * 0.5 + 0.5) * 255; nd.data[i + 1] = (ny * 0.5 + 0.5) * 255; nd.data[i + 2] = (nz * 0.5 + 0.5) * 255; nd.data[i + 3] = 255;
+      // roughness: base rough; wet puddles smooth (low) so they mirror the sky
+      let rough = 0.82; for (const p of puddles) { const d = Math.hypot(x - p[0], y - p[1]); if (d < p[2]) rough = Math.min(rough, 0.26 + 0.5 * (d / p[2])); }
+      const rv = (rough * 255) | 0; rd.data[i] = rd.data[i + 1] = rd.data[i + 2] = rv; rd.data[i + 3] = 255;
+    }
+    ng.putImageData(nd, 0, 0); rg.putImageData(rd, 0, 0);
+    normalMap = new THREE.CanvasTexture(ncv); roughnessMap = new THREE.CanvasTexture(rcv);
+    for (const m of [normalMap, roughnessMap]) { if (THREE.NoColorSpace) m.colorSpace = THREE.NoColorSpace; m.anisotropy = 8; m.needsUpdate = true; }
+  } catch (e) {}
+  return { map: tex, normalMap: normalMap, roughnessMap: roughnessMap };
 }
 
 // Building facades as a small CACHED set of textures (a window grid baked once),
@@ -197,6 +226,10 @@ register3d("tactics3d", async (kernel, content) => {
     ? { fog: 0x070e1c, fogD: 0.0072, key: 0xaec6ff, keyI: 1.35, fill: 0x35507e, fillI: 0.32, rim: 0x6fb0d8, rimI: 0.8, hemiS: 0x3c5070, hemiG: 0x121020, hemiI: 0.6, amb: 0x46566f, ambI: 0.26, exp: 1.0, disc: 0xe2e9ff, discR: 2.0, discO: 0.95 }
     : { fog: 0x101c30, fogD: 0.0066, key: 0xffd7a0, keyI: 1.95, fill: 0x6b88c0, fillI: 0.42, rim: 0x9fd8e8, rimI: 1.0, hemiS: 0x8aa0c4, hemiG: 0x241f24, hemiI: 0.78, amb: 0x7e8ea8, ambI: 0.36, exp: 1.04, disc: 0xffce93, discR: 2.6, discO: 0.78 };
   scene.background = makeSkyTexture(_night);
+  // IBL — light every PBR material from the sky (sky-tinted ambient + faint
+  // reflections), the biggest "not flat-lit" jump. Modest intensity so it adds
+  // material realism without washing out the moody key/shadow contrast.
+  if (kernel.setEnvironment) kernel.setEnvironment(scene.background, _night ? 0.35 : 0.55);
   scene.fog = new THREE.FogExp2(TOD.fog, TOD.fogD);
   try { kernel.renderer.shadowMap.type = THREE.PCFSoftShadowMap; } catch (e) {}
   const key = new THREE.DirectionalLight(TOD.key, TOD.keyI); key.position.set(58, 44, 24); key.castShadow = true; // sun (dusk) / moon (night), low angle
@@ -392,9 +425,11 @@ register3d("tactics3d", async (kernel, content) => {
       new THREE.MeshStandardMaterial({ color: 0x0c1626, roughness: 0.9, metalness: 0.2 }));
     plat.position.set(0, -0.35, 0); plat.receiveShadow = true; scene.add(plat);
     // Grid-aware baked city ground (asphalt streets + concrete sidewalks + grass).
-    const ftex = makeGroundTexture(mission.grid, gridW, gridH);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, H),
-      new THREE.MeshStandardMaterial({ map: ftex, color: 0xb9bcc4, roughness: 0.86, metalness: 0.12 }));
+    const gtex = makeGroundTexture(mission.grid, gridW, gridH);
+    const fmat = new THREE.MeshStandardMaterial({ map: gtex.map, color: 0xb9bcc4, roughness: 1.0, metalness: 0.14, envMapIntensity: 0.95 });
+    if (gtex.normalMap) { fmat.normalMap = gtex.normalMap; fmat.normalScale = new THREE.Vector2(0.55, 0.55); } // micro surface relief
+    if (gtex.roughnessMap) fmat.roughnessMap = gtex.roughnessMap; // wet patches go reflective (mirror the IBL sky)
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, H), fmat);
     floor.rotation.x = -Math.PI / 2; floor.position.set(0, FT, 0); floor.receiveShadow = true; scene.add(floor);
     groundPlane = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ visible: false }));
     groundPlane.rotation.x = -Math.PI / 2; groundPlane.position.set(0, FT + 0.02, 0); scene.add(groundPlane);

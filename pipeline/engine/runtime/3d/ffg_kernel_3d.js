@@ -41,8 +41,12 @@ export class Kernel3D {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    // AgX is the modern filmic tonemap (Blender 4.0 default, three r0.160+) — it
+    // grades HDR far more naturally than ACES (softer highlight roll-off, no neon
+    // clipping). Feature-detected with an ACES fallback for older builds.
+    this.renderer.toneMapping = (THREE.AgXToneMapping != null) ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     // Lights — hemisphere fill + key sun with shadows.
     const hemi = new THREE.HemisphereLight(0xbfe3ff, 0x223344, 0.9);
@@ -153,6 +157,27 @@ export class Kernel3D {
     this.composer = composer;
     this.bloom = bloom;
     return composer;
+  }
+
+  // IMAGE-BASED LIGHTING (IBL): prefilter an equirectangular sky into a PMREM
+  // environment map and set it as scene.environment, so EVERY PBR material
+  // (MeshStandard/Physical) picks up real sky-tinted ambient + reflections instead
+  // of flat fill light. This is the single biggest "not-flat / not-low-poly"
+  // fidelity jump in three.js, and it's effectively free at runtime (prefiltered
+  // mips, generated once). Pass the scene's sky CanvasTexture; intensity tunes it.
+  setEnvironment(equirectTex, intensity) {
+    try {
+      if (!equirectTex) return null;
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      pmrem.compileEquirectangularShader();
+      const env = pmrem.fromEquirectangular(equirectTex).texture;
+      this.scene.environment = env;
+      if ("environmentIntensity" in this.scene) this.scene.environmentIntensity = intensity != null ? intensity : 1.0;
+      pmrem.dispose();
+      if (this.env) this.env.dispose();
+      this.env = env;
+      return env;
+    } catch (e) { console.warn("[kernel] IBL environment unavailable:", e && e.message); return null; }
   }
 
   hud(html) { if (this.hudEl) this.hudEl.innerHTML = html; }
