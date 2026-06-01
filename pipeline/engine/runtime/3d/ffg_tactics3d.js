@@ -1577,6 +1577,45 @@ register3d("tactics3d", async (kernel, content) => {
 
   let shell = null, endShown = false;
   function beginBattle() { phase = "battle"; orbit.autoRotate = false; setHUD(); autoSelectNext(); }
+  // ── STORY: mission BRIEFING card (XCOM-style) ───────────────────────────────
+  // Shown between the title and the battle on a real PLAY (not __test, so gates
+  // stay unblocked). Premise on the first op, per-mission flavor + the live
+  // objective, doom-clock, and squad-vs-hostiles read, then BEGIN MISSION.
+  const BRIEFINGS = [
+    "ADVENT patrols flood the downtown grid. Slip in, hit hard, and vanish before reinforcements lock the sector.",
+    "The market district has gone dark. Resistance cells report an alien advance party staging in the plaza.",
+    "Rail-yard intel points to a weapons cache. Secure it before the garrison moves the shipment.",
+    "The substation feeds half the city's surveillance net. Reach the relay and pull the plug.",
+    "Old Town's holdouts are pinned. Punch a corridor through the occupation and relieve them.",
+    "The extraction window is narrow. Fight to the LZ and get every soldier aboard the Skyranger.",
+    "The Avatar spire looms over the skyline. End the Project — whatever it costs.",
+  ];
+  const PREMISE = "Earth is occupied. ADVENT rules the cities; the aliens rule ADVENT. You command what's left of XCOM. Take the streets back — one operation at a time.";
+  function showBriefing(onContinue) {
+    let card;
+    try {
+      const wrap = document.createElement("div");
+      Object.assign(wrap.style, { position: "absolute", inset: "0", zIndex: "80", display: "flex", alignItems: "center", justifyContent: "center",
+        background: "radial-gradient(120% 120% at 50% 30%, rgba(8,16,28,0.72), rgba(2,5,10,0.92))", fontFamily: "'Segoe UI',system-ui,monospace" });
+      card = document.createElement("div");
+      Object.assign(card.style, { width: "min(560px,86%)", padding: "26px 28px", borderRadius: "14px", color: "#dfe9f5",
+        background: "linear-gradient(180deg,rgba(16,24,38,0.96),rgba(10,16,26,0.96))", border: "1px solid #34d6e8", boxShadow: "0 24px 80px rgba(0,0,0,0.6), inset 0 0 60px rgba(52,214,232,0.06)" });
+      const opNo = missionIndex + 1, opTot = missions.length;
+      const doom = campaignRun ? `<span style="color:#ff8a5a">DOOM ${campaign.state.doom}/${campaign.state.doomMax}</span> · ` : "";
+      card.innerHTML =
+        `<div style="font:600 12px 'Segoe UI';letter-spacing:3px;color:#34d6e8">OPERATION ${opNo} / ${opTot}</div>` +
+        `<div style="font:800 26px 'Segoe UI';margin:4px 0 2px">${(mission.name || content.title || "Operation").toUpperCase()}</div>` +
+        `<div style="font-size:12px;color:#8ea6c4;margin-bottom:14px">${doom}${sim.aliveAllies().length} OPERATIVES · ${sim.aliveEnemies().length} HOSTILES</div>` +
+        (missionIndex === 0 ? `<div style="font-size:13px;line-height:1.5;color:#9fb6d8;margin-bottom:10px">${PREMISE}</div>` : "") +
+        `<div style="font-size:14px;line-height:1.55;margin-bottom:14px">${BRIEFINGS[missionIndex % BRIEFINGS.length]}</div>` +
+        `<div style="font-size:12px;color:#34d6e8;letter-spacing:1px;margin-bottom:18px">▸ OBJECTIVE: ${(mission.objective || "Eliminate all hostile contacts").toUpperCase()}</div>`;
+      const btn = document.createElement("button");
+      Object.assign(btn.style, { font: "700 14px 'Segoe UI'", color: "#04222a", background: "#34d6e8", border: "0", borderRadius: "9px", padding: "11px 22px", cursor: "pointer", letterSpacing: "1px" });
+      btn.textContent = "BEGIN MISSION ▸";
+      btn.onclick = () => { try { kernel.parent.removeChild(wrap); } catch (e) {} onContinue(); };
+      card.appendChild(btn); wrap.appendChild(card); kernel.parent.appendChild(wrap);
+    } catch (e) { onContinue(); }
+  }
   function showEnd() {
     if (endShown) return; endShown = true;
     const win = !!sim.victory; // objective-aware (evac/hack wins keep allies alive)
@@ -1604,7 +1643,7 @@ register3d("tactics3d", async (kernel, content) => {
         { h: "COVER", p: "Stand beside cover (crates/walls) to cut the enemy's hit chance. Move carefully — open ground is deadly. Frag grenades shred cover." },
         { h: "CAMERA", p: "<b>Right-drag</b> rotate, <b>WASD</b> move, scroll zoom. <b>Esc</b> pauses." },
       ],
-      onPlay: () => beginBattle(),
+      onPlay: () => showBriefing(beginBattle), // XCOM briefing card, then drop into the fight
       onPause: () => kernel.stop(), onResume: () => kernel.start(),
     });
     // After a Barracks "Deploy", we reload straight into the next op — skip the
