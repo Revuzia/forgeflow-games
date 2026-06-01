@@ -1,0 +1,38 @@
+{
+  "title": "Tide Breakers",
+  "slug": "tide-breakers",
+  "genre": "navalfree",
+  "renderer": "three",
+  "tagline": "Drive. Aim. Sink them.",
+  "seed": 7311,
+  "view": {
+    "width": 1024,
+    "height": 640,
+    "background": "#0a1622"
+  },
+  "arena": { "width": 220, "height": 220 },
+  "ship_models": {
+    "large": "assets/ship-large.glb",
+    "medium": "assets/ship-medium.glb",
+    "small": "assets/ship-small.glb",
+    "default": "assets/ship-small.glb"
+  },
+  "sfx": {
+    "fire": "assets/audio/cannon.ogg",
+    "hit": "assets/audio/hit.ogg",
+    "miss": "assets/audio/splash.ogg",
+    "move": "assets/audio/splash.ogg",
+    "sink": "assets/audio/sink.ogg"
+  },
+  "audio": {
+    "music": "assets/audio/music.ogg"
+  },
+  "setup": {
+    "difficulty": "normal",
+    "actionsPerTurn": 2,
+    "arena": { "width": 220, "height": 220 }
+  },
+  "assets": {
+    "menu_image": "assets/menu.png"
+  }
+}

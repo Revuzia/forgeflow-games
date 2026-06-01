@@ -1,0 +1,10 @@
+{
+  "title": "Tide Breakers",
+  "short_description": "Free-movement turn-based naval combat — drive your fleet across open water and trade salvos. No grid.",
+  "description": "Tide Breakers is a 3D open-water naval skirmish. Unlike grid battleship, your warships DRIVE freely: each turn every ship spends actions to steer to a new position (capped by its speed and turn rate) and to fire its guns (limited by range, a firing arc, and line of sight). Enemies are always visible — this is a tactical duel of angles and positioning, not hidden-grid guessing. Line up a broadside, close the distance for full damage, or use a friendly hull to block a shot. Sink the whole enemy fleet to win. Single-player vs an AI that maneuvers for firing solutions; built on the same three.js kernel, reflective ocean, and ship models as Iron Tide.",
+  "genre": "strategy",
+  "sub_genre": "naval-tactics",
+  "difficulty": "medium",
+  "controls_keyboard": "Left-click your ship to select · click open water to drive · click an enemy in your arc to fire · Q/E rotate in place · Right-drag rotate camera · WASD pan · scroll zoom · Esc pause",
+  "tags": ["strategy", "naval", "turn-based", "3d", "tactics", "free-movement"]
+}
