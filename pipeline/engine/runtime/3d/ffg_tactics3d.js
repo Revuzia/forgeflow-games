@@ -821,13 +821,34 @@ register3d("tactics3d", async (kernel, content) => {
   }
 
   // ── HUD ─────────────────────────────────────────────────────────────────────
+  // Class identity for the HUD + roster bar (role label, icon, colour, signature power).
+  const CLASS_INFO = {
+    vanguard:     { role: "Assault",      icon: "▲", color: "#3aa0ff", power: "Suppression" },
+    sharpshooter: { role: "Sharpshooter", icon: "◎", color: "#ff9a3c", power: "Headshot" },
+    specialist:   { role: "Specialist",   icon: "✚", color: "#3ddc84", power: "Field Medic" },
+    ranger:       { role: "Ranger",       icon: "⚔", color: "#22d3ee", power: "Slash" },
+    grenadier:    { role: "Grenadier",    icon: "✸", color: "#a3e635", power: "Frag Grenade" },
+  };
+  function classInfo(cls) { return CLASS_INFO[cls] || { role: cls || "Soldier", icon: "•", color: "#9fb4d0", power: "" }; }
   function setHUD(msg) {
     const me = sim.aliveAllies().length, foe = sim.aliveEnemies().length;
     const ph = sim.currentPhase === "player";
     const banner = msg || (ph ? "Your phase — select a soldier" : "Enemy phase…");
     const bc = ph ? "#7CFC9A" : "#ffb454";
-    const sel = selected ? `<div style="margin-top:6px;background:rgba(8,18,32,.7);border-left:3px solid ${"#" + unitViews[selected.id].base.toString(16).padStart(6, "0")};padding:5px 12px;border-radius:4px;font-size:12px">
-        <b>${selected.name}</b> &nbsp; HP ${selected.hp}/${selected.maxHp} &nbsp; AP ${selected.actionPoints}/${selected.maxAP} &nbsp; AIM ${Math.round(selected.aim * 100)}%</div>` : "";
+    let sel = "";
+    if (selected) {
+      const ci = classInfo(selected.cls);
+      const col = "#" + unitViews[selected.id].base.toString(16).padStart(6, "0");
+      sel = `<div style="margin-top:6px;background:rgba(8,18,32,.8);border-left:3px solid ${ci.color};padding:6px 12px;border-radius:5px;font-size:12px;max-width:360px">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
+          <span style="font-size:16px;color:${ci.color}">${ci.icon}</span>
+          <b style="font-size:13px">${selected.name}</b>
+          <span style="color:${ci.color};font-weight:700;letter-spacing:1px;font-size:11px">${ci.role.toUpperCase()}</span>
+        </div>
+        <span style="opacity:.9">HP ${selected.hp}/${selected.maxHp} &nbsp;·&nbsp; AP ${selected.actionPoints}/${selected.maxAP} &nbsp;·&nbsp; AIM ${Math.round(selected.aim * 100)}% &nbsp;·&nbsp; RANGE ${selected.range || 1}</span>
+        ${ci.power ? `<div style="margin-top:3px;font-size:11px;opacity:.75">⚡ Special power: <b style="color:${ci.color}">${ci.power}</b> — see the ability bar below</div>` : ""}
+      </div>`;
+    }
     kernel.hud(`
       <div style="position:absolute;top:12px;left:14px;font-family:'Segoe UI',system-ui,monospace">
         <div style="font-size:19px;font-weight:800;letter-spacing:2px;text-shadow:0 2px 10px #000">${content.title || "Operation"}</div>
@@ -864,6 +885,7 @@ register3d("tactics3d", async (kernel, content) => {
     endBtnEl.style.display = playable ? "block" : "none";
     owBtnEl.style.display = (playable && selected && selected.actionPoints > 0) ? "block" : "none";
     renderAbilityBar(playable);
+    renderRosterBar(playable);
   }
   // Bottom-centre ability bar — one button per class ability of the selected
   // soldier, with hotkey, charges/cooldown, and an armed (highlighted) state.
@@ -883,9 +905,10 @@ register3d("tactics3d", async (kernel, content) => {
       const meta = a.charges != null ? ("×" + a.charges) : (a.cooldown > 0 ? ("CD " + a.cooldown) : "");
       const b = document.createElement("button");
       b.title = a.desc;
-      b.innerHTML = `<span style="font-size:10px;opacity:.7">[${a.key}]</span> ${a.name}${meta ? ` <span style="opacity:.7;font-size:11px">${meta}</span>` : ""}`;
+      b.innerHTML = `<div style="font-weight:700"><span style="font-size:10px;opacity:.7">[${a.key}]</span> ${a.name}${meta ? ` <span style="opacity:.7;font-size:11px">${meta}</span>` : ""}</div>` +
+        `<div style="font-size:10px;opacity:.72;font-weight:400;max-width:150px;white-space:normal;line-height:1.2;margin-top:2px">${a.desc || ""}</div>`;
       Object.assign(b.style, {
-        font: "600 12px 'Segoe UI',monospace", letterSpacing: ".5px", padding: "9px 13px", borderRadius: "7px",
+        font: "600 12px 'Segoe UI',monospace", letterSpacing: ".5px", padding: "8px 12px", borderRadius: "7px", textAlign: "left",
         cursor: a.ready ? "pointer" : "not-allowed", color: a.ready ? (armed ? "#06101c" : "#e8f2ff") : "#5b6b7e",
         background: armed ? "linear-gradient(#ffd27a,#ffae5a)" : (a.ready ? "rgba(20,38,58,.92)" : "rgba(16,24,34,.7)"),
         border: "1px solid " + (armed ? "#ffd27a" : a.ready ? "#3a5e7e" : "#26303d"),
@@ -893,6 +916,41 @@ register3d("tactics3d", async (kernel, content) => {
       });
       b.onclick = () => { if (a.ready) armAbility(a.id); };
       abilityBarEl.appendChild(b);
+    }
+  }
+  // ── Soldier ROSTER bar (XCOM-style): a card per squad member showing class,
+  // role, HP, action points; the active soldier is highlighted; click to select.
+  let rosterBarEl = null;
+  function renderRosterBar(playable) {
+    if (!rosterBarEl) {
+      rosterBarEl = document.createElement("div");
+      Object.assign(rosterBarEl.style, { position: "absolute", left: "14px", bottom: "54px", zIndex: "50", display: "flex", gap: "6px", fontFamily: "'Segoe UI',monospace" });
+      kernel.parent.appendChild(rosterBarEl);
+    }
+    const squad = sim.allUnits().filter((u) => u.side === "player");
+    if (!squad.length || phase !== "battle") { rosterBarEl.style.display = "none"; return; }
+    rosterBarEl.style.display = "flex";
+    rosterBarEl.innerHTML = "";
+    for (const u of squad) {
+      const ci = classInfo(u.cls), dead = u.hp <= 0, isSel = selected && selected.id === u.id;
+      const hpPct = Math.max(0, u.hp / (u.maxHp || 1)), apN = dead ? 0 : (u.actionPoints || 0), apMax = u.maxAP || 2;
+      const card = document.createElement("div");
+      card.title = dead ? `${ci.role} — KIA` : `${ci.role} · power: ${ci.power}`;
+      const pips = Array.from({ length: apMax }, (_, i) => `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:2px;background:${i < apN ? ci.color : "#26303d"}"></span>`).join("");
+      card.innerHTML = `
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="font-size:15px;color:${ci.color}">${ci.icon}</span>
+          <div style="font-size:10px;font-weight:800;color:${ci.color};letter-spacing:.5px">${ci.role.toUpperCase()}</div>
+        </div>
+        <div style="height:4px;background:#0a141f;border-radius:2px;margin:4px 0 3px;overflow:hidden"><div style="height:100%;width:${hpPct * 100}%;background:${hpPct > 0.5 ? "#3ddc84" : hpPct > 0.25 ? "#f5c518" : "#ff5a5a"}"></div></div>
+        <div style="display:flex;align-items:center;justify-content:space-between"><span style="opacity:.6;font-size:9px">${dead ? "KIA" : "HP " + u.hp}</span><span>${pips}</span></div>`;
+      Object.assign(card.style, {
+        minWidth: "78px", padding: "6px 8px", borderRadius: "7px", cursor: (!dead && playable) ? "pointer" : "default",
+        background: isSel ? "rgba(28,50,72,.96)" : "rgba(8,18,32,.82)", border: "1px solid " + (isSel ? ci.color : "#2a4458"),
+        boxShadow: isSel ? `0 0 12px ${ci.color}99` : "none", opacity: dead ? "0.4" : "1", transition: "all .12s",
+      });
+      if (!dead && playable) card.onclick = () => selectUnit(u);
+      rosterBarEl.appendChild(card);
     }
   }
 
