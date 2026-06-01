@@ -50,14 +50,14 @@ def _free_port():
     s = socket.socket(); s.bind(("127.0.0.1", 0)); p = s.getsockname()[1]; s.close(); return p
 
 
-def capture_shots(port):
+def capture_shots(port, slug=SLUG):
     """Start a static server, capture menu + gameplay PNGs via the gate's Playwright
     helper, return [menu_png, play_png]. Returns [] on failure."""
     srv = subprocess.Popen([sys.executable, "-m", "http.server", str(port)], cwd=str(ROOT),
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         time.sleep(1.5)
-        url = f"http://localhost:{port}/games/{SLUG}/"
+        url = f"http://localhost:{port}/games/{slug}/"
         sys.path.insert(0, str(GATES))
         import capture  # the Playwright screenshot helper
         out_menu = ENGINE / "_match_menu.png"
@@ -74,9 +74,13 @@ def capture_shots(port):
 
 def main():
     dry = "--dry" in sys.argv
+    slug = SLUG
+    if "--game" in sys.argv:
+        try: slug = sys.argv[sys.argv.index("--game") + 1]
+        except Exception: pass
     ref = (ENGINE / "xcom_reference.md").read_text(encoding="utf-8")
     port = _free_port()
-    shots = capture_shots(port)
+    shots = capture_shots(port, slug)
     if not shots:
         notify("⚠️ *XCOM-match*: capture failed — could not screenshot the game.")
         print(json.dumps({"ok": False, "error": "capture failed"})); return 1
