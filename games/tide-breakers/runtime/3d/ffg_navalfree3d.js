@@ -154,6 +154,55 @@ register3d("navalfree", async function (kernel, content) {
   }
   buildArenaBounds();
 
+  // ── Ambient OCEAN LIFE — seagulls glide + flap overhead; a dolphin breaches in
+  // arcs, a shark fin cuts the surface, a whale glides just under: a living sea.
+  // Cheap low-poly meshes, moved + wrapped each frame (no per-frame allocs/lights).
+  function buildOceanLife() {
+    const EX = ARENA_W * 0.6, EZ = ARENA_H * 0.6;
+    const wrap = (v, lim) => (v > lim ? -lim : v < -lim ? lim : v);
+    // seagulls (a shallow-V wing pair each)
+    const birdMat = new THREE.MeshStandardMaterial({ color: 0xeef2f7, roughness: 0.7, metalness: 0, emissive: 0x2a323c, emissiveIntensity: 0.25, envMapIntensity: 0.4 });
+    const wingGeo = new THREE.ConeGeometry(0.5, 4.0, 4);
+    const birds = [];
+    for (let i = 0; i < 6; i++) {
+      const g = new THREE.Group();
+      const L = new THREE.Mesh(wingGeo, birdMat), R = new THREE.Mesh(wingGeo, birdMat);
+      L.rotation.z = Math.PI / 2; R.rotation.z = -Math.PI / 2; L.position.x = -1.8; R.position.x = 1.8;
+      g.add(L); g.add(R); g.scale.setScalar(1.3 + (i % 3) * 0.35);
+      g.position.set(Math.cos(i * 1.3) * EX * 0.7, 34 + (i % 3) * 9, Math.sin(i * 1.9) * EZ * 0.7);
+      scene.add(g); birds.push({ g, L, R, vx: (i % 2 ? 1 : -1) * (7 + i), vz: (i % 2 ? -1 : 1) * (2 + (i % 3)), ph: i });
+    }
+    // sea creatures
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2b3742, roughness: 0.5, metalness: 0.12, envMapIntensity: 0.6 });
+    const finMat = new THREE.MeshStandardMaterial({ color: 0x32424e, roughness: 0.55, metalness: 0.1 });
+    const creatures = [];
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(1.5, 4, 3), finMat); fin.position.set(-EX * 0.5, 0.9, EZ * 0.25); scene.add(fin);
+    creatures.push({ m: fin, vx: 9, vz: 1.4, kind: "fin", base: 0.9 });
+    const dolphin = new THREE.Mesh(new THREE.CapsuleGeometry(0.9, 4, 4, 8), bodyMat); dolphin.rotation.z = Math.PI / 2; dolphin.position.set(EX * 0.4, 0, -EZ * 0.3); scene.add(dolphin);
+    creatures.push({ m: dolphin, vx: -12, vz: 2, kind: "dolphin", base: 0, t: 0 });
+    const whale = new THREE.Mesh(new THREE.CapsuleGeometry(3.0, 15, 4, 10), bodyMat); whale.rotation.z = Math.PI / 2; whale.position.set(-EX * 0.2, -1.4, -EZ * 0.5); scene.add(whale);
+    creatures.push({ m: whale, vx: 5, vz: 0.6, kind: "whale", base: -1.4 });
+    let bt = 0;
+    kernel.onUpdate((dt) => {
+      bt += dt;
+      for (const b of birds) {
+        b.g.position.x = wrap(b.g.position.x + b.vx * dt, EX);
+        b.g.position.z = wrap(b.g.position.z + b.vz * dt, EZ);
+        b.g.position.y += Math.sin(bt * 1.1 + b.ph) * dt * 1.4;
+        b.g.rotation.y = Math.atan2(b.vz, b.vx);
+        const flap = Math.sin(bt * 7 + b.ph) * 0.5;
+        b.L.rotation.x = flap; b.R.rotation.x = -flap;
+      }
+      for (const c of creatures) {
+        c.m.position.x = wrap(c.m.position.x + c.vx * dt, EX);
+        c.m.position.z = wrap(c.m.position.z + c.vz * dt, EZ);
+        if (c.kind === "dolphin") { c.t += dt; c.m.position.y = c.base + Math.max(0, Math.sin(c.t * 1.0)) * 5 - 0.6; c.m.rotation.z = Math.PI / 2 + Math.cos(c.t * 1.0) * 0.55; }
+        else if (c.kind === "fin") { c.m.position.y = c.base + Math.sin(bt * 2) * 0.15; }
+      }
+    });
+  }
+  buildOceanLife();
+
   // ── Ship visuals ────────────────────────────────────────────────────────────
   const modelForShip = (s) => {
     const mm = content.ship_models || {};
