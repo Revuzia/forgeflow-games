@@ -27,6 +27,29 @@
   const FIRST_NAMES = ["Vega", "Kane", "Reyes", "Okonkwo", "Petrov", "Hase", "Lindqvist", "Maro", "Tanaka", "Cruz", "Adeyemi", "Novak", "Salihu", "Bauer", "Costa", "Iqbal", "Mwangi", "Sorensen", "Park", "Rossi"];
   const CALLSIGNS = ["Reaper", "Wraith", "Stalker", "Ghost", "Patch", "Hammer", "Vortex", "Cinder", "Echo", "Rook", "Hex", "Slate", "Tundra", "Vapor"];
 
+  // ── Engineering catalog ─────────────────────────────────────────────────────
+  // Craft gear with SUPPLIES + ALLOYS (salvaged from kills) + ELERIUM (rare, late
+  // ops). Crafted items enter the shared INVENTORY; assign them to soldiers in
+  // the Loadout. Three equip slots per soldier: weapon / armor / item. Equipped
+  // gear modifies the deployed unit's stats (a beam rifle really hits harder).
+  const ITEM_DEFS = {
+    // WEAPONS — attack + aim
+    rifle_mag:     { type: "weapon", name: "Magnetic Rifle",   atk: 8,  aim: 0.05, cost: { supplies: 25, alloys: 4 } },
+    lance_mag:     { type: "weapon", name: "Mag Lance",        atk: 13, aim: 0.07, cost: { supplies: 32, alloys: 5 } },
+    stormgun:      { type: "weapon", name: "Storm Cannon",     atk: 11, aim: 0.03, cost: { supplies: 28, alloys: 4 } },
+    rifle_beam:    { type: "weapon", name: "Beam Rifle",       atk: 16, aim: 0.08, cost: { supplies: 50, alloys: 8, elerium: 4 } },
+    // ARMOR — HP + defence
+    armor_plated:  { type: "armor",  name: "Plated Armor",     hp: 25, def: 3, cost: { supplies: 30, alloys: 6 } },
+    armor_powered: { type: "armor",  name: "Powered Armor",    hp: 50, def: 5, cost: { supplies: 60, alloys: 10, elerium: 6 } },
+    // UTILITY — one item slot
+    nanovest:      { type: "item",   name: "Nanofiber Vest",   hp: 14, cost: { supplies: 18, alloys: 2 } },
+    scope:         { type: "item",   name: "Targeting Scope",  aim: 0.07, cost: { supplies: 20, alloys: 2 } },
+    medkit:        { type: "item",   name: "Combat Medkit",    hp: 8, cost: { supplies: 15 } },
+    fragpack:      { type: "item",   name: "Frag Pack",        atk: 3, cost: { supplies: 14 } },
+  };
+  const ITEM_ORDER = ["rifle_mag", "lance_mag", "stormgun", "rifle_beam", "armor_plated", "armor_powered", "nanovest", "scope", "medkit", "fragpack"];
+  const SLOT_OF = { weapon: "weapon", armor: "armor", item: "item" };
+
   function rankIndexForXp(xp) {
     let r = 0;
     for (let i = 0; i < XP_FOR_RANK.length; i++) if (xp >= XP_FOR_RANK[i]) r = i;
@@ -49,7 +72,8 @@
       return {
         v: 1, active: true, mission: 0,
         doom: 0, doomMax: Math.max(4, this.missions.length + 1),
-        supplies: 0,
+        supplies: 0, alloys: 0, elerium: 0,
+        inventory: [],           // owned gear: {id, def, equippedBy:uid|null}
         roster,                  // array aligned to deploy slots; entry may be null after a wipe-fill
         kia: [],                 // memorial: {name, cls, rank, mission}
         upgrades: { aim: 0, armor: 0, charge: 0 },
@@ -60,7 +84,7 @@
     _newRookie(slot, cls) {
       const fn = FIRST_NAMES[(Math.random() * FIRST_NAMES.length) | 0];
       const cs = CALLSIGNS[(Math.random() * CALLSIGNS.length) | 0];
-      return { uid: "s" + slot + "_" + Date.now().toString(36) + ((Math.random() * 1e4) | 0), slot, cls, name: fn + ' "' + cs + '"', rank: 0, xp: 0, kills: 0, missions: 0 };
+      return { uid: "s" + slot + "_" + Date.now().toString(36) + ((Math.random() * 1e4) | 0), slot, cls, name: fn + ' "' + cs + '"', rank: 0, xp: 0, kills: 0, missions: 0, equip: { weapon: null, armor: null, item: null } };
     }
 
     _load() { try { const s = JSON.parse(root.localStorage.getItem(this.key)); return (s && s.v === 1) ? s : null; } catch (e) { return null; } }
@@ -88,15 +112,17 @@
         sol.rank = rank;
         const hpBonus = rank * 8 + (up.armor || 0) * 10;
         const aimBonus = rank * 0.02 + (up.aim || 0) * 0.04;
+        const eb = this._equipBonus(sol);     // equipped weapon/armor/item bonuses
         out.push(Object.assign({}, slot, {
           id: sol.uid,                          // sim unit id == persistent soldier id
           name: sol.name + "  ·  " + RANKS[rank],
           cls,
-          hp: (slot.hp || 10) + hpBonus,
-          atk: (slot.atk || 5) + rank,
-          def: (slot.def || 0) + (up.armor || 0) * 2,
-          aim: Math.min(0.97, (slot.aim || 0.75) + aimBonus),
+          hp: (slot.hp || 10) + hpBonus + eb.hp,
+          atk: (slot.atk || 5) + rank + eb.atk,
+          def: (slot.def || 0) + (up.armor || 0) * 2 + eb.def,
+          aim: Math.min(0.97, (slot.aim || 0.75) + aimBonus + eb.aim),
           _soldier: sol.uid,
+          _loadout: this._loadoutNames(sol),  // for HUD/tooltip
         }));
       }
       this.save();
@@ -135,10 +161,12 @@
         if (!this.state.roster[i]) this.state.roster[i] = this._newRookie(i, (slots[i] && (slots[i].cls || slots[i].class)) || "soldier");
       }
 
-      let supplies = 0;
+      let supplies = 0, loot = [];
       if (won) {
         supplies = 12 + mi * 3 + (casualties === 0 ? 6 : 0); // clean-win bonus
         this.state.supplies += supplies;
+        this._awardResources(mi, casualties === 0);          // alloys + elerium salvage
+        loot = this.dropLoot(mi);                            // a finished item or two
         // Doom: rises each mission; a no-casualty win pushes it back.
         this.state.doom += 1; if (casualties === 0) this.state.doom = Math.max(0, this.state.doom - 1);
       } else {
@@ -147,7 +175,7 @@
 
       const finished = won && this.isFinalMission();
       const doomOut = this.state.doom >= this.state.doomMax;
-      this.state.lastResult = { won, mission: mi + 1, casualties, promotions, supplies, doomOut, finished };
+      this.state.lastResult = { won, mission: mi + 1, casualties, promotions, supplies, loot, doomOut, finished };
 
       if (finished) { this.state.won = true; this.state.active = false; }
       else if (doomOut) { this.state.lost = true; this.state.active = false; }
@@ -168,6 +196,74 @@
       this.state.upgrades[id] = (this.state.upgrades[id] || 0) + 1;
       this.save();
       return true;
+    }
+
+    // ── Inventory / engineering / loadout ───────────────────────────────────────
+    _itemDef(invItem) { return invItem && ITEM_DEFS[invItem.def]; }
+    _equipBonus(sol) {
+      const b = { hp: 0, atk: 0, def: 0, aim: 0 };
+      if (!sol || !sol.equip) return b;
+      const inv = this.state.inventory || [];
+      for (const slot of ["weapon", "armor", "item"]) {
+        const id = sol.equip[slot]; if (!id) continue;
+        const it = inv.find((x) => x.id === id); const d = this._itemDef(it); if (!d) continue;
+        b.hp += d.hp || 0; b.atk += d.atk || 0; b.def += d.def || 0; b.aim += d.aim || 0;
+      }
+      return b;
+    }
+    _loadoutNames(sol) {
+      const inv = this.state.inventory || [], out = {};
+      for (const slot of ["weapon", "armor", "item"]) {
+        const id = sol && sol.equip && sol.equip[slot];
+        const it = id && inv.find((x) => x.id === id); out[slot] = it ? ITEM_DEFS[it.def].name : null;
+      }
+      return out;
+    }
+    canAfford(cost) { return ["supplies", "alloys", "elerium"].every((r) => (this.state[r] || 0) >= ((cost || {})[r] || 0)); }
+    craftItem(defId) {
+      const d = ITEM_DEFS[defId]; if (!d) return null;
+      if (!this.canAfford(d.cost)) return null;
+      for (const r of ["supplies", "alloys", "elerium"]) this.state[r] = (this.state[r] || 0) - ((d.cost || {})[r] || 0);
+      const id = "i_" + defId + "_" + Date.now().toString(36) + ((Math.random() * 1e4) | 0);
+      this.state.inventory.push({ id, def: defId, equippedBy: null });
+      this.save(); return id;
+    }
+    equipItem(uid, itemId) {
+      const sol = this.state.roster.find((s) => s && s.uid === uid); if (!sol) return false;
+      const inv = this.state.inventory || [];
+      const it = inv.find((x) => x.id === itemId); const d = this._itemDef(it); if (!d) return false;
+      if (!sol.equip) sol.equip = { weapon: null, armor: null, item: null };
+      const slot = SLOT_OF[d.type]; if (!slot) return false;
+      // free whatever this soldier currently has in that slot
+      const prev = sol.equip[slot]; if (prev) { const p = inv.find((x) => x.id === prev); if (p) p.equippedBy = null; }
+      // steal the item from any other soldier holding it
+      if (it.equippedBy && it.equippedBy !== uid) {
+        const owner = this.state.roster.find((s) => s && s.uid === it.equippedBy);
+        if (owner && owner.equip) for (const k of ["weapon", "armor", "item"]) if (owner.equip[k] === itemId) owner.equip[k] = null;
+      }
+      sol.equip[slot] = itemId; it.equippedBy = uid; this.save(); return true;
+    }
+    unequipSlot(uid, slot) {
+      const sol = this.state.roster.find((s) => s && s.uid === uid); if (!sol || !sol.equip) return false;
+      const id = sol.equip[slot]; if (!id) return false;
+      const it = (this.state.inventory || []).find((x) => x.id === id); if (it) it.equippedBy = null;
+      sol.equip[slot] = null; this.save(); return true;
+    }
+    _awardResources(mi, clean) {
+      this.state.alloys = (this.state.alloys || 0) + 3 + mi;                       // salvage from the field
+      if (mi >= 2 || clean) this.state.elerium = (this.state.elerium || 0) + (mi >= 4 ? 2 : 1); // rare crystal, later ops / clean wins
+    }
+    // A winning op sometimes yields a finished item straight to the stash (loot).
+    dropLoot(mi) {
+      const pool = ITEM_ORDER.filter((id) => mi >= 3 ? true : !(ITEM_DEFS[id].cost.elerium));
+      const out = [], n = 1 + (mi >= 3 ? 1 : 0);
+      for (let k = 0; k < n; k++) if (Math.random() < 0.6) {
+        const defId = pool[(Math.random() * pool.length) | 0];
+        const id = "i_" + defId + "_" + Date.now().toString(36) + ((Math.random() * 1e4) | 0) + k;
+        this.state.inventory.push({ id, def: defId, equippedBy: null });
+        out.push(ITEM_DEFS[defId].name);
+      }
+      return out;
     }
 
     // ── Barracks / debrief screen ───────────────────────────────────────────────
@@ -197,7 +293,8 @@
 
       ov.innerHTML = `
         <div style="font-size:30px;font-weight:800;letter-spacing:4px;margin-bottom:2px">BARRACKS</div>
-        <div style="font-size:15px;margin-bottom:14px">${banner}</div>
+        <div style="font-size:15px;margin-bottom:4px">${banner}</div>
+        ${res.won ? `<div style="font-size:12px;opacity:.8;margin-bottom:12px">+${res.supplies} supplies · +${3 + (res.mission - 1)} alloys${(res.loot && res.loot.length) ? ` · <span style="color:#9dffb6">recovered ${res.loot.join(", ")}</span>` : ""}</div>` : `<div style="margin-bottom:10px"></div>`}
         <div style="display:flex;gap:18px;flex-wrap:wrap;justify-content:center;max-width:920px;width:100%">
           <div style="flex:1;min-width:320px">
             <div style="font-size:13px;letter-spacing:2px;opacity:.7;margin-bottom:4px">SQUAD</div>
@@ -212,8 +309,19 @@
               <div style="height:100%;width:${doomPct}%;background:linear-gradient(90deg,#ff7a3c,#ff3a3a)"></div>
             </div>
             <div style="font-size:12px;opacity:.7;margin-bottom:14px">Doom ${st.doom} / ${st.doomMax} — win clean to push it back.</div>
-            <div id="ffg-supplies" style="font-size:13px;letter-spacing:2px;opacity:.7;margin-bottom:4px">SUPPLIES · <b style="color:#ffd27a">${st.supplies}</b></div>
+            <div id="ffg-res" style="font-size:13px;letter-spacing:.5px;margin-bottom:8px">SUPPLIES <b style="color:#ffd27a">${st.supplies}</b> &nbsp;·&nbsp; ALLOYS <b style="color:#bfe6ff">${st.alloys || 0}</b> &nbsp;·&nbsp; ELERIUM <b style="color:#c9a6ff">${st.elerium || 0}</b></div>
+            <div style="font-size:13px;letter-spacing:2px;opacity:.7;margin-bottom:4px">SQUAD UPGRADES</div>
             <div id="ffg-upg"></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;justify-content:center;max-width:920px;width:100%;margin-top:16px">
+          <div style="flex:1;min-width:320px">
+            <div style="font-size:13px;letter-spacing:2px;opacity:.7;margin-bottom:6px">⚙ ENGINEERING — craft gear</div>
+            <div id="ffg-eng" style="display:grid;grid-template-columns:1fr 1fr;gap:6px"></div>
+          </div>
+          <div style="flex:1;min-width:320px">
+            <div style="font-size:13px;letter-spacing:2px;opacity:.7;margin-bottom:6px">🎖 LOADOUT — assign gear to squad</div>
+            <div id="ffg-loadout" style="display:flex;flex-direction:column;gap:6px"></div>
           </div>
         </div>
         <div id="ffg-bar-actions" style="margin-top:20px;display:flex;gap:10px"></div>
@@ -239,7 +347,7 @@
           Object.assign(b.style, { display: "block", width: "100%", textAlign: "left", margin: "4px 0", padding: "8px 11px", borderRadius: "6px", cursor: can ? "pointer" : "not-allowed", color: can ? "#e8f2ff" : "#5b6b7e", background: can ? "rgba(20,38,58,.9)" : "rgba(16,24,34,.7)", border: "1px solid " + (can ? "#3a5e7e" : "#26303d"), font: "600 13px 'Segoe UI',monospace" });
           b.onclick = () => {
             if (can && self.buyUpgrade(u.id)) {
-              ov.querySelector("#ffg-supplies").innerHTML = 'SUPPLIES · <b style="color:#ffd27a">' + self.state.supplies + "</b>";
+              paintRes();
               paintUpg();
             }
           };
@@ -247,6 +355,59 @@
         });
       }
       paintUpg();
+
+      // live resource line (shared by upgrades + engineering)
+      function paintRes() {
+        const el = ov.querySelector("#ffg-res");
+        if (el) el.innerHTML = `SUPPLIES <b style="color:#ffd27a">${self.state.supplies}</b> &nbsp;·&nbsp; ALLOYS <b style="color:#bfe6ff">${self.state.alloys || 0}</b> &nbsp;·&nbsp; ELERIUM <b style="color:#c9a6ff">${self.state.elerium || 0}</b>`;
+      }
+      function _costStr(cost) { return ["supplies", "alloys", "elerium"].filter((r) => cost[r]).map((r) => `${cost[r]} ${r.slice(0, 3)}`).join(" + "); }
+      function _statStr(d) {
+        const p = [];
+        if (d.atk) p.push(`+${d.atk} dmg`); if (d.aim) p.push(`+${Math.round(d.aim * 100)}% aim`);
+        if (d.hp) p.push(`+${d.hp} HP`); if (d.def) p.push(`+${d.def} DEF`);
+        return p.join(", ");
+      }
+      // ENGINEERING — craft buttons
+      function paintEng() {
+        const wrap = ov.querySelector("#ffg-eng"); if (!wrap) return; wrap.innerHTML = "";
+        ITEM_ORDER.forEach((id) => {
+          const d = ITEM_DEFS[id], can = self.canAfford(d.cost);
+          const tc = d.type === "weapon" ? "#ff9a6a" : d.type === "armor" ? "#7ad0ff" : "#c9a6ff";
+          const b = document.createElement("button");
+          b.innerHTML = `<span style="color:${tc};font-weight:700">${d.name}</span> <span style="opacity:.5;font-size:10px">${d.type}</span><br><span style="font-size:11px;opacity:.85">${_statStr(d)}</span><br><span style="font-size:10px;opacity:.6">${_costStr(d.cost)}</span>`;
+          Object.assign(b.style, { textAlign: "left", padding: "7px 9px", borderRadius: "6px", cursor: can ? "pointer" : "not-allowed", color: can ? "#e8f2ff" : "#56657a", background: can ? "rgba(20,38,58,.9)" : "rgba(16,24,34,.65)", border: "1px solid " + (can ? "#3a5e7e" : "#26303d"), font: "600 12px 'Segoe UI',monospace", lineHeight: "1.4" });
+          b.onclick = () => { if (self.canAfford(d.cost) && self.craftItem(id)) { paintRes(); paintEng(); paintLoadout(); } };
+          wrap.appendChild(b);
+        });
+      }
+      // LOADOUT — per-soldier weapon/armor/item selects
+      function paintLoadout() {
+        const wrap = ov.querySelector("#ffg-loadout"); if (!wrap) return; wrap.innerHTML = "";
+        const inv = self.state.inventory || [];
+        (self.state.roster || []).forEach((sol) => {
+          if (!sol) return;
+          if (!sol.equip) sol.equip = { weapon: null, armor: null, item: null };
+          const row = document.createElement("div");
+          Object.assign(row.style, { background: "rgba(10,20,34,.6)", border: "1px solid #2a4458", borderRadius: "6px", padding: "7px 9px" });
+          const eb = self._equipBonus(sol);
+          const bonus = (eb.hp || eb.atk || eb.def || eb.aim) ? ` <span style="opacity:.7;font-size:10px;color:#9dffb6">${[eb.atk ? "+" + eb.atk + "dmg" : "", eb.hp ? "+" + eb.hp + "hp" : "", eb.def ? "+" + eb.def + "def" : "", eb.aim ? "+" + Math.round(eb.aim * 100) + "%aim" : ""].filter(Boolean).join(" ")}</span>` : "";
+          row.innerHTML = `<div style="margin-bottom:5px;font-size:12px"><b>${sol.name}</b> <span style="opacity:.55">· ${sol.cls}</span>${bonus}</div>`;
+          const slots = document.createElement("div"); slots.style.cssText = "display:flex;gap:5px";
+          ["weapon", "armor", "item"].forEach((slot) => {
+            const sel = document.createElement("select");
+            Object.assign(sel.style, { flex: "1", minWidth: "0", background: "#0c1726", color: "#cfe0f2", border: "1px solid #2a4458", borderRadius: "4px", padding: "4px", font: "11px 'Segoe UI',monospace" });
+            const none = document.createElement("option"); none.value = ""; none.textContent = slot + ": —"; sel.appendChild(none);
+            inv.filter((it) => { const d = ITEM_DEFS[it.def]; return d && d.type === slot && (!it.equippedBy || it.equippedBy === sol.uid); })
+              .forEach((it) => { const o = document.createElement("option"); o.value = it.id; o.textContent = ITEM_DEFS[it.def].name; if (sol.equip[slot] === it.id) o.selected = true; sel.appendChild(o); });
+            sel.onchange = () => { if (sel.value) self.equipItem(sol.uid, sel.value); else self.unequipSlot(sol.uid, slot); paintLoadout(); };
+            slots.appendChild(sel);
+          });
+          row.appendChild(slots); wrap.appendChild(row);
+        });
+        if (!(self.state.inventory || []).length) wrap.innerHTML = `<div style="opacity:.45;font-size:12px">No gear yet — craft weapons & armor in Engineering, or win ops to recover loot.</div>`;
+      }
+      paintEng(); paintLoadout();
 
       // actions
       const actions = ov.querySelector("#ffg-bar-actions");
