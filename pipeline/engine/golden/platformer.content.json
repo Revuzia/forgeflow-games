@@ -1,0 +1,62 @@
+{
+  "slug": "lumen-run",
+  "genre": "platformer",
+  "title": "Lumen Run",
+  "tagline": "A luminous precision dash to the goal.",
+  "view": { "width": 960, "height": 540, "background": "#120806" },
+  "palette": "ember",
+  "hero": { "w": 26, "h": 34 },
+  "tuning": {
+    "gravity": 2100,
+    "jumpVel": 760,
+    "jumpCutMul": 0.42,
+    "runAccel": 5200,
+    "runDecel": 6400,
+    "airAccel": 3200,
+    "maxRun": 320,
+    "maxFall": 1180,
+    "coyoteMs": 110,
+    "jumpBufferMs": 120,
+    "bounceVel": 560,
+    "maxHealth": 3,
+    "invulnMs": 1100,
+    "knockback": 280
+  },
+  "level": {
+    "tile": 36,
+    "width": 2304,
+    "height": 576,
+    "groundY": 576,
+    "spawn": { "x": 80, "y": 516 },
+    "goal": { "x": 2232, "y": 468, "w": 30, "h": 108 },
+    "platforms": [
+      { "x": 0,    "y": 576, "w": 792,  "h": 144, "kind": "ground" },
+      { "x": 936,  "y": 576, "w": 1368, "h": 144, "kind": "ground" },
+      { "x": 252,  "y": 432, "w": 144,  "h": 36,  "kind": "float" },
+      { "x": 432,  "y": 324, "w": 144,  "h": 36,  "kind": "float" },
+      { "x": 630,  "y": 396, "w": 126,  "h": 36,  "kind": "float" },
+      { "x": 1116, "y": 432, "w": 144,  "h": 36,  "kind": "float" },
+      { "x": 1332, "y": 324, "w": 144,  "h": 36,  "kind": "float" },
+      { "x": 1548, "y": 432, "w": 180,  "h": 36,  "kind": "float" }
+    ],
+    "coins": [
+      { "x": 306,  "y": 382, "value": 5 },
+      { "x": 486,  "y": 274, "value": 5 },
+      { "x": 540,  "y": 252, "value": 10 },
+      { "x": 594,  "y": 274, "value": 5 },
+      { "x": 684,  "y": 346, "value": 5 },
+      { "x": 1008, "y": 526, "value": 5 },
+      { "x": 1170, "y": 382, "value": 5 },
+      { "x": 1386, "y": 274, "value": 5 },
+      { "x": 1602, "y": 382, "value": 5 },
+      { "x": 1728, "y": 526, "value": 5 }
+    ],
+    "hazards": [
+      { "x": 792, "y": 578, "w": 144, "h": 22, "kind": "spike" }
+    ],
+    "enemies": [
+      { "x": 1080, "y": 546, "w": 30, "h": 30, "kind": "patrol", "range": 180, "speed": 90, "dir": 1 },
+      { "x": 1368, "y": 296, "w": 28, "h": 28, "kind": "patrol", "range": 86,  "speed": 70, "dir": -1 }
+    ]
+  }
+}
