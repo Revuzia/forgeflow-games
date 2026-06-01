@@ -629,6 +629,23 @@ register3d("tactics3d", async (kernel, content) => {
   // 5=wall, 2/3=cover). No roof => the camera sees both storeys at once (the XCOM
   // dollhouse cross-section). Slab is inset so the ground floor stays visible below.
   const _up = (x, y) => (_upper && _upper[y]) ? _upper[y][x] : 0;
+  // CUTAWAY tracking: the raised STRUCTURE (slabs+columns) vs the see-in OCCLUDERS
+  // (parapets, rails, balcony cover). applyCutaway() fades these by which floor the
+  // player is looking at so a multi-storey building never hides the action (XCOM).
+  const _upperSlabs = [], _upperWalls = [];
+  function _regU(mesh, isSlab) { mesh.material.transparent = true; (isSlab ? _upperSlabs : _upperWalls).push(mesh); }
+  // Looking at the UPPER floor → keep its slabs solid but drop the see-in occluders
+  // (parapets/rails/balcony cover) so you can read the room. Looking at the GROUND
+  // (or nothing selected) → make the upper slabs translucent so the floor below is
+  // never hidden. This is the XCOM dynamic cutaway, done with opacity (no shader
+  // recompiles — materials were flagged transparent at build time).
+  function applyCutaway(focusFloor) {
+    if (!_upper) return;
+    const slabOp = focusFloor === 1 ? 1.0 : 0.34;
+    const wallOp = focusFloor === 1 ? 0.18 : 0.12;
+    for (const m of _upperSlabs) m.material.opacity = slabOp;
+    for (const m of _upperWalls) m.material.opacity = wallOp;
+  }
   function buildUpperFloor() {
     if (!_upper) return;
     const slabMat = { c: 0x7c6f5d, r: 0.8, m: 0.12 }; // WARM interior floorboards — distinct from grey street/walls
@@ -641,7 +658,7 @@ register3d("tactics3d", async (kernel, content) => {
         // interior floor slab (also under stairs landings, walls, cover)
         if (t === 9 || t === 8 || t === 5 || t === 2 || t === 3) {
           const slab = _bx(T * 0.98, T * 0.16, T * 0.98, slabMat.c, slabMat.r, slabMat.m);
-          slab.position.set(w.x, FLOOR_H + 0.08, w.z); slab.receiveShadow = true; slab.castShadow = true; scene.add(slab);
+          slab.position.set(w.x, FLOOR_H + 0.08, w.z); slab.receiveShadow = true; slab.castShadow = true; scene.add(slab); _regU(slab, true);
         }
         // support columns + glowing edge trim on OUTER edges (neighbour not part of the storey)
         if (t === 9 || t === 8) {
@@ -649,13 +666,13 @@ register3d("tactics3d", async (kernel, content) => {
             const nt = _up(x + dx, y + dy);
             if (nt === 9 || nt === 8 || nt === 5 || nt === 2 || nt === 3) continue; // interior edge — no column
             const col = _bx(T * 0.18, FLOOR_H, T * 0.18, 0x262a32, 0.82, 0.25);
-            col.position.set(w.x + dx * T * 0.45, FLOOR_H / 2, w.z + dy * T * 0.45); col.castShadow = true; scene.add(col);
+            col.position.set(w.x + dx * T * 0.45, FLOOR_H / 2, w.z + dy * T * 0.45); col.castShadow = true; scene.add(col); _regU(col, true);
             const horiz = dy !== 0;
             // glowing teal floor-edge strip (reads the raised plate's footprint instantly)
             const edge = new THREE.Mesh(new THREE.BoxGeometry(horiz ? T : T * 0.08, T * 0.1, horiz ? T * 0.08 : T), edgeMat);
             edge.position.set(w.x + dx * T * 0.47, FLOOR_H + 0.2, w.z + dy * T * 0.47); scene.add(edge);
             const rail = _bx(horiz ? T : T * 0.1, T * 0.3, horiz ? T * 0.1 : T, 0x4a4e57, 0.85, 0.12);
-            rail.position.set(w.x + dx * T * 0.46, FLOOR_H + 0.34, w.z + dy * T * 0.46); rail.castShadow = true; scene.add(rail);
+            rail.position.set(w.x + dx * T * 0.46, FLOOR_H + 0.34, w.z + dy * T * 0.46); rail.castShadow = true; scene.add(rail); _regU(rail, false);
           }
         }
         // interior walls (5) — a KNEE-HIGH parapet so the storey stays an OPEN
@@ -663,13 +680,13 @@ register3d("tactics3d", async (kernel, content) => {
         // Sim-side these still block LOS/cover; visually they're a low lip.
         if (t === 5) {
           const wl = _bx(T * 0.96, T * 0.5, T * 0.96, 0x5f636b, 0.86, 0.12);
-          wl.position.set(w.x, FLOOR_H + 0.16 + T * 0.25, w.z); wl.castShadow = true; wl.receiveShadow = true; scene.add(wl);
+          wl.position.set(w.x, FLOOR_H + 0.16 + T * 0.25, w.z); wl.castShadow = true; wl.receiveShadow = true; scene.add(wl); _regU(wl, false);
         }
         // interior cover (2 half / 3 full) — low blocks on the slab
         if (t === 2 || t === 3) {
           const ch = t === 3 ? T * 0.7 : T * 0.42;
           const cb = _bx(T * 0.62, ch, T * 0.62, t === 3 ? 0x6b5340 : 0x5a6470, 0.8, 0.15);
-          cb.position.set(w.x, FLOOR_H + 0.13 + ch / 2, w.z); cb.castShadow = true; cb.receiveShadow = true; scene.add(cb);
+          cb.position.set(w.x, FLOOR_H + 0.13 + ch / 2, w.z); cb.castShadow = true; cb.receiveShadow = true; scene.add(cb); _regU(cb, false);
         }
         // STAIRCASE in a type-8 cell: ~6 steps rising ground -> FLOOR_H, run aimed
         // toward an adjacent interior(9) cell (else +x). A handrail on one side.
@@ -686,6 +703,7 @@ register3d("tactics3d", async (kernel, content) => {
         }
       }
     }
+    applyCutaway(null); // establishing view: upper storey translucent so both floors read
   }
 
   // ── Units (REAL rigged + animated characters) ───────────────────────────────
@@ -987,11 +1005,12 @@ register3d("tactics3d", async (kernel, content) => {
         new THREE.MeshBasicMaterial({ color: up ? 0xffc04a : 0x4fd0ff, transparent: true, opacity: u.actionPoints > 0 ? (up ? 0.3 : 0.22) : 0.08, side: THREE.DoubleSide }));
       m.rotation.x = -Math.PI / 2; m.position.set(w.x, up ? FLOOR_H + 0.22 : 0.24, w.z); scene.add(m); highlights.push(m);
     });
+    applyCutaway(u.floor || 0); // cut away the storey the player isn't on so the action stays visible
     setHUD();
   }
   function deselect() {
     if (selected) { const v = unitViews[selected.id]; if (v) v.ring.material.emissiveIntensity = 0.35; }
-    selected = null; abilityMode = null; clearHighlights(); if (_chevron) _chevron.visible = false; setHUD();
+    selected = null; abilityMode = null; clearHighlights(); if (_chevron) _chevron.visible = false; applyCutaway(null); setHUD();
   }
 
   // ── HUD ─────────────────────────────────────────────────────────────────────
