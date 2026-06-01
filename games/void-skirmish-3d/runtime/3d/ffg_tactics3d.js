@@ -155,11 +155,11 @@ function makeSkyTexture(night) {
     grd.addColorStop(0.92, "#243450"); // moonlit haze
     grd.addColorStop(1.00, "#33415c"); // cool horizon glow
   } else {
-    grd.addColorStop(0.00, "#0e1a32"); // deep zenith
-    grd.addColorStop(0.42, "#21395c"); // mid sky
-    grd.addColorStop(0.74, "#3a5a82"); // horizon steel-blue
-    grd.addColorStop(0.90, "#6f6a74"); // warm-grey haze band
-    grd.addColorStop(1.00, "#86604f"); // warm dusk at the very bottom
+    grd.addColorStop(0.00, "#060d1c"); // deep moody zenith
+    grd.addColorStop(0.45, "#102038"); // mid sky
+    grd.addColorStop(0.78, "#1b3150"); // horizon steel-blue (darker, no whiteout)
+    grd.addColorStop(0.92, "#283142"); // muted haze band
+    grd.addColorStop(1.00, "#372c2a"); // dim warm dusk at the very bottom
   }
   g.fillStyle = grd; g.fillRect(0, 0, 8, 256);
   const tex = new THREE.CanvasTexture(c);
@@ -194,8 +194,8 @@ register3d("tactics3d", async (kernel, content) => {
   // colour + sky + fog + exposure + a celestial disc.
   const _night = (missionIndex % 2 === 1) || (missionIndex === missions.length - 1);
   const TOD = _night
-    ? { fog: 0x0b1426, fogD: 0.0072, key: 0xaec6ff, keyI: 1.5, fill: 0x35507e, fillI: 0.34, rim: 0x6fb0d8, rimI: 0.9, hemiS: 0x4a5f86, hemiG: 0x141220, hemiI: 0.72, amb: 0x53627e, ambI: 0.3, exp: 1.16, disc: 0xe2e9ff, discR: 2.0, discO: 0.95 }
-    : { fog: 0x2c476b, fogD: 0.0058, key: 0xffd7a0, keyI: 2.5, fill: 0x6b88c0, fillI: 0.5, rim: 0x9fd8e8, rimI: 1.2, hemiS: 0x9fb6d8, hemiG: 0x2a2630, hemiI: 1.05, amb: 0x8ea2bd, ambI: 0.42, exp: 1.34, disc: 0xffce93, discR: 2.6, discO: 0.78 };
+    ? { fog: 0x070e1c, fogD: 0.0072, key: 0xaec6ff, keyI: 1.35, fill: 0x35507e, fillI: 0.32, rim: 0x6fb0d8, rimI: 0.8, hemiS: 0x3c5070, hemiG: 0x121020, hemiI: 0.6, amb: 0x46566f, ambI: 0.26, exp: 1.0, disc: 0xe2e9ff, discR: 2.0, discO: 0.95 }
+    : { fog: 0x101c30, fogD: 0.0066, key: 0xffd7a0, keyI: 1.95, fill: 0x6b88c0, fillI: 0.42, rim: 0x9fd8e8, rimI: 1.0, hemiS: 0x8aa0c4, hemiG: 0x241f24, hemiI: 0.78, amb: 0x7e8ea8, ambI: 0.36, exp: 1.04, disc: 0xffce93, discR: 2.6, discO: 0.78 };
   scene.background = makeSkyTexture(_night);
   scene.fog = new THREE.FogExp2(TOD.fog, TOD.fogD);
   try { kernel.renderer.shadowMap.type = THREE.PCFSoftShadowMap; } catch (e) {}
@@ -207,7 +207,7 @@ register3d("tactics3d", async (kernel, content) => {
   scene.add(new THREE.HemisphereLight(TOD.hemiS, TOD.hemiG, TOD.hemiI)); // sky-fill tinted to the hour
   const _amb = new THREE.AmbientLight(TOD.amb, TOD.ambI); scene.add(_amb); // lower → deep XCOM shadows (NV boosts this)
   kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = TOD.exp;
-  if (kernel.enableBloom) kernel.enableBloom({ strength: _night ? 0.72 : 0.55, radius: 0.62, threshold: _night ? 0.7 : 0.8, ssao: true, ssaoRadius: 1.1 }); // night blooms lit windows harder
+  if (kernel.enableBloom) kernel.enableBloom({ strength: _night ? 0.42 : 0.3, radius: 0.6, threshold: _night ? 0.78 : 0.86, ssao: true, ssaoRadius: 1.1 }); // tighter bloom: only true highlights, no whiteout
   // SUN / MOON disc high in the sky, in the key-light direction (emissive billboard,
   // NOT a light). fog:false so it stays crisp; bloom turns it into a soft glow.
   try {
