@@ -283,6 +283,35 @@ register3d("tactics3d", async (kernel, content) => {
       }
     }
     scatterDecor();
+    scatterAdvent();
+  }
+  // Signature ADVENT propaganda KIOSK — the cyan-teal tech pillar that is the
+  // single most "XCOM" environmental cue. Procedural (concrete pillar + glowing
+  // #34d6e8 screens + beacon). Placed in open plazas. Visual only.
+  function _adventKiosk() {
+    const g = new THREE.Group();
+    const base = _bx(T * 0.82, T * 0.12, T * 0.82, 0x1c2027, 0.8, 0.2); base.position.y = T * 0.06; base.castShadow = true; g.add(base);
+    const pillar = _bx(T * 0.5, T * 2.3, T * 0.5, 0x2a2f38, 0.6, 0.45); pillar.position.y = T * 1.2; pillar.castShadow = true; g.add(pillar);
+    for (const zf of [1, -1]) {
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.42, T * 1.3),
+        new THREE.MeshStandardMaterial({ color: 0x08222c, emissive: 0x34d6e8, emissiveIntensity: 1.0, roughness: 0.3 }));
+      screen.position.set(0, T * 1.45, zf * T * 0.262); if (zf < 0) screen.rotation.y = Math.PI; g.add(screen);
+    }
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(T * 0.15, 12, 12), new THREE.MeshBasicMaterial({ color: 0x7ff2ff }));
+    beacon.position.y = T * 2.5; g.add(beacon);
+    return g;
+  }
+  function scatterAdvent() {
+    const grid = mission.grid, cand = [];
+    for (let y = 3; y < gridH - 3; y++) for (let x = 3; x < gridW - 3; x++) {
+      if (grid[y][x] !== 0) continue;
+      let open = true;
+      for (let dy = -2; dy <= 2 && open; dy++) for (let dx = -2; dx <= 2; dx++) { const t = (grid[y + dy] || [])[x + dx]; if (t === 1 || t === 5) { open = false; break; } }
+      if (open) cand.push([x, y]);
+    }
+    if (!cand.length) return;
+    const n = Math.min(5, Math.max(2, (cand.length / 130) | 0));
+    for (let i = 0; i < n; i++) { const [x, y] = cand[Math.floor((i + 0.5) * cand.length / n)]; const g = _adventKiosk(); const w = cell(x, y); g.position.set(w.x, FT, w.z); g.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(g); }
   }
   // Decorative street furniture (hydrants, lamps, trees, planters, cones) on
   // curb tiles — VISUAL ONLY (not registered as cover, the sim never sees them),
@@ -801,12 +830,27 @@ register3d("tactics3d", async (kernel, content) => {
 
   // ── Highlights + selection ──────────────────────────────────────────────────
   function clearHighlights() { highlights.forEach((h) => scene.remove(h)); highlights = []; rangeTargets = []; }
+  // Yellow ACTIVE-SOLDIER chevron (the XCOM "this is the unit you control" marker)
+  // — a spinning gold cone bobbing above the selected soldier.
+  let _chevron = null;
+  function ensureChevron() {
+    if (_chevron) return _chevron;
+    const m = new THREE.Mesh(new THREE.ConeGeometry(T * 0.2, T * 0.34, 4), new THREE.MeshBasicMaterial({ color: 0xffe24a }));
+    m.rotation.x = Math.PI; m.visible = false; scene.add(m);
+    kernel.onUpdate((dt) => {
+      if (!m.visible || !m._target) return;
+      m._t = (m._t || 0) + dt; const p = m._target.position;
+      m.position.set(p.x, T * 2.05 + Math.sin(m._t * 3) * 0.12, p.z); m.rotation.z = m._t * 1.6;
+    });
+    _chevron = m; return m;
+  }
   function selectUnit(u) {
     if (!u || u.side !== "player" || u.hp <= 0) return;
     const reselect = selected === u;
     selected = u; abilityMode = null; clearHighlights();
     if (!reselect) sfx("select", 0.4);
     const v = unitViews[u.id]; if (v) v.ring.material.emissiveIntensity = 1.0;
+    const ch = ensureChevron(); ch.visible = true; ch._target = v ? v.group : null;
     (sim.reachableTiles(u) || []).forEach((r) => {
       const w = cell(r.x, r.y);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(T * 0.84, T * 0.84),
@@ -817,7 +861,7 @@ register3d("tactics3d", async (kernel, content) => {
   }
   function deselect() {
     if (selected) { const v = unitViews[selected.id]; if (v) v.ring.material.emissiveIntensity = 0.35; }
-    selected = null; abilityMode = null; clearHighlights(); setHUD();
+    selected = null; abilityMode = null; clearHighlights(); if (_chevron) _chevron.visible = false; setHUD();
   }
 
   // ── HUD ─────────────────────────────────────────────────────────────────────
