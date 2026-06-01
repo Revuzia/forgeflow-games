@@ -598,6 +598,22 @@ register3d("tactics3d", async (kernel, content) => {
       const targetH = def.th * (kind.scale || 1);
       mdl.scale.setScalar(targetH / NATIVE_H);
       mdl.position.y = 0.05; // model origin is at the feet -> sit on the base ring
+      // Give the SWAT trooper a RIFLE in the right hand (the model ships no weapon
+      // mesh). Parented to the Wrist.R bone so it follows the hands through every
+      // animation. Bone +Y runs toward the fingers, so the rifle's long axis = Y.
+      if (isPlayer) {
+        try {
+          let wrist = null; mdl.traverse((o) => { if (o.isBone && o.name === "Wrist.R") wrist = o; });
+          if (wrist) {
+            const rifle = new THREE.Group();
+            rifle.add(_bx(0.06, 0.46, 0.1, 0x202327, 0.5, 0.4)).position.y = 0.18;        // receiver/stock
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.5, 8), _smat(0x141518, 0.4, 0.6)); barrel.position.y = 0.46; rifle.add(barrel);
+            const mag = _bx(0.05, 0.13, 0.06, 0x16181c, 0.6, 0.3); mag.position.set(0, 0.06, -0.09); rifle.add(mag);
+            rifle.position.set(0.0, 0.03, 0.03);
+            wrist.add(rifle);
+          }
+        } catch (e) {}
+      }
       // enemy class tint; players get a faint team-coloured emissive so the dark
       // camo soldier reads against the dark board.
       const accent = isPlayer ? col : (kind.tint || 0xff6a5a);
