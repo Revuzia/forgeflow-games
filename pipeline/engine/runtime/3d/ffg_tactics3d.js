@@ -141,21 +141,30 @@ function buildingFacades() {
 
 // Dusk SKY gradient (steel-blue twilight — the XCOM 2 city/slums look): a tall
 // vertical canvas gradient used as scene.background, warm haze at the horizon.
-let _skyTex = null;
-function makeSkyTexture() {
-  if (_skyTex) return _skyTex;
+const _skyCache = {};
+function makeSkyTexture(night) {
+  const key = night ? "night" : "dusk";
+  if (_skyCache[key]) return _skyCache[key];
   const c = document.createElement("canvas"); c.width = 8; c.height = 256;
   const g = c.getContext("2d");
   const grd = g.createLinearGradient(0, 0, 0, 256);
-  grd.addColorStop(0.00, "#0e1a32"); // deep zenith
-  grd.addColorStop(0.42, "#21395c"); // mid sky
-  grd.addColorStop(0.74, "#3a5a82"); // horizon steel-blue
-  grd.addColorStop(0.90, "#6f6a74"); // warm-grey haze band
-  grd.addColorStop(1.00, "#86604f"); // warm dusk at the very bottom
+  if (night) {
+    grd.addColorStop(0.00, "#05080f"); // near-black zenith
+    grd.addColorStop(0.45, "#0a1426"); // deep night blue
+    grd.addColorStop(0.76, "#16243f"); // horizon indigo
+    grd.addColorStop(0.92, "#243450"); // moonlit haze
+    grd.addColorStop(1.00, "#33415c"); // cool horizon glow
+  } else {
+    grd.addColorStop(0.00, "#0e1a32"); // deep zenith
+    grd.addColorStop(0.42, "#21395c"); // mid sky
+    grd.addColorStop(0.74, "#3a5a82"); // horizon steel-blue
+    grd.addColorStop(0.90, "#6f6a74"); // warm-grey haze band
+    grd.addColorStop(1.00, "#86604f"); // warm dusk at the very bottom
+  }
   g.fillStyle = grd; g.fillRect(0, 0, 8, 256);
   const tex = new THREE.CanvasTexture(c);
   if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
-  _skyTex = tex; return tex;
+  _skyCache[key] = tex; return tex;
 }
 
 register3d("tactics3d", async (kernel, content) => {
@@ -178,21 +187,34 @@ register3d("tactics3d", async (kernel, content) => {
   // world position of a tile centre (board centred on origin; +z = "south")
   const cell = (x, y) => new THREE.Vector3((x + 0.5) * T - W / 2, 0, (y + 0.5) * T - H / 2);
 
-  // Dusk steel-blue gradient sky + horizon-tinted depth fog — the XCOM 2 city/
-  // slums twilight look (grounded in real reference). Sky-tinted ambient + a LOW
-  // WARM key for long shadows and crushed blacks.
-  scene.background = makeSkyTexture();
-  scene.fog = new THREE.FogExp2(0x2c476b, 0.0058);
+  // TIME OF DAY — warm DUSK (low sun) vs cool MOONLIT NIGHT (darker, lit windows
+  // pop). Night falls on odd missions + the finale, so a campaign cycles day/night
+  // like XCOM. We only RECOLOUR the existing lights here — never ADD a runtime
+  // light (that recompiles every shader and freezes the game); the mood swing is
+  // colour + sky + fog + exposure + a celestial disc.
+  const _night = (missionIndex % 2 === 1) || (missionIndex === missions.length - 1);
+  const TOD = _night
+    ? { fog: 0x0b1426, fogD: 0.0072, key: 0xaec6ff, keyI: 1.5, fill: 0x35507e, fillI: 0.34, rim: 0x6fb0d8, rimI: 0.9, hemiS: 0x4a5f86, hemiG: 0x141220, hemiI: 0.72, amb: 0x53627e, ambI: 0.3, exp: 1.16, disc: 0xe2e9ff, discR: 2.0, discO: 0.95 }
+    : { fog: 0x2c476b, fogD: 0.0058, key: 0xffd7a0, keyI: 2.5, fill: 0x6b88c0, fillI: 0.5, rim: 0x9fd8e8, rimI: 1.2, hemiS: 0x9fb6d8, hemiG: 0x2a2630, hemiI: 1.05, amb: 0x8ea2bd, ambI: 0.42, exp: 1.34, disc: 0xffce93, discR: 2.6, discO: 0.78 };
+  scene.background = makeSkyTexture(_night);
+  scene.fog = new THREE.FogExp2(TOD.fog, TOD.fogD);
   try { kernel.renderer.shadowMap.type = THREE.PCFSoftShadowMap; } catch (e) {}
-  const key = new THREE.DirectionalLight(0xffd7a0, 2.5); key.position.set(58, 44, 24); key.castShadow = true; // warm gold, low angle
+  const key = new THREE.DirectionalLight(TOD.key, TOD.keyI); key.position.set(58, 44, 24); key.castShadow = true; // sun (dusk) / moon (night), low angle
   key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = -60; key.shadow.camera.right = 60; key.shadow.camera.top = 60; key.shadow.camera.bottom = -60; key.shadow.camera.far = 240;
   key.shadow.bias = -0.0004; key.shadow.normalBias = 0.045; scene.add(key);
-  scene.add(new THREE.DirectionalLight(0x6b88c0, 0.5).translateX(-46).translateY(38).translateZ(-20)); // cool sky fill
-  const rim = new THREE.DirectionalLight(0x9fd8e8, 1.2); rim.position.set(-24, 30, -72); scene.add(rim); // cool teal-ish rim (ADVENT)
-  scene.add(new THREE.HemisphereLight(0x9fb6d8, 0x2a2630, 1.05)); // sky-fill tinted to dusk
-  scene.add(new THREE.AmbientLight(0x8ea2bd, 0.42)); // lower → deep XCOM shadows
-  kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = 1.34;
-  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.55, radius: 0.62, threshold: 0.8, ssao: true, ssaoRadius: 1.1 }); // dusk bloom + SSAO contact shadows
+  scene.add(new THREE.DirectionalLight(TOD.fill, TOD.fillI).translateX(-46).translateY(38).translateZ(-20)); // cool sky fill
+  const rim = new THREE.DirectionalLight(TOD.rim, TOD.rimI); rim.position.set(-24, 30, -72); scene.add(rim); // cool teal-ish rim (ADVENT)
+  scene.add(new THREE.HemisphereLight(TOD.hemiS, TOD.hemiG, TOD.hemiI)); // sky-fill tinted to the hour
+  scene.add(new THREE.AmbientLight(TOD.amb, TOD.ambI)); // lower → deep XCOM shadows
+  kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = TOD.exp;
+  if (kernel.enableBloom) kernel.enableBloom({ strength: _night ? 0.72 : 0.55, radius: 0.62, threshold: _night ? 0.7 : 0.8, ssao: true, ssaoRadius: 1.1 }); // night blooms lit windows harder
+  // SUN / MOON disc high in the sky, in the key-light direction (emissive billboard,
+  // NOT a light). fog:false so it stays crisp; bloom turns it into a soft glow.
+  try {
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(T * TOD.discR, 32),
+      new THREE.MeshBasicMaterial({ color: TOD.disc, transparent: true, opacity: TOD.discO, fog: false }));
+    disc.position.set(W * 0.42, H * 0.6, -H * 0.66); disc.lookAt(0, 0, 0); scene.add(disc);
+  } catch (e) {}
   // Cinematic vignette (DOM overlay under the HUD) — frames the action + adds depth.
   try {
     const _vig = document.createElement("div");
