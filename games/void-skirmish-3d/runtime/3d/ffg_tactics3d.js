@@ -120,7 +120,7 @@ function buildingFacades() {
     const nx = () => (seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296;
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
       const x = pad + c * (gw + pad), y = pad + r * (gh + pad);
-      const lit = nx() > 0.42;
+      const lit = nx() > 0.66;
       m.fillStyle = lit ? "#cfe6ff" : "#1a2632"; m.fillRect(x, y, gw, gh);
       m.strokeStyle = "rgba(10,16,24,0.7)"; m.lineWidth = 2; m.strokeRect(x, y, gw, gh);
       gl.fillStyle = lit ? "#ffffff" : "#000000"; gl.fillRect(x, y, gw, gh);
@@ -167,7 +167,7 @@ register3d("tactics3d", async (kernel, content) => {
   scene.add(new THREE.HemisphereLight(0xd6e4ff, 0x2a3242, 1.3)); // brighter sky-fill so the city GROUND (asphalt/sidewalks/grass) reads
   scene.add(new THREE.AmbientLight(0xaec2d8, 0.58));
   kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; kernel.renderer.toneMappingExposure = 1.56;
-  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.72, radius: 0.7, threshold: 0.8 });
+  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.42, radius: 0.6, threshold: 0.85 }); // restrained — grittier, less neon
   // Cinematic vignette (DOM overlay under the HUD) — frames the action + adds depth.
   try {
     const _vig = document.createElement("div");
@@ -288,7 +288,7 @@ register3d("tactics3d", async (kernel, content) => {
   function _propPlanter(g, hsh) {
     const pot = _bx(T * 0.5, T * 0.3, T * 0.5, 0x6f6257, 0.85, 0.1); pot.position.y = T * 0.17; g.add(pot);
     for (let i = 0; i < 3; i++) {
-      const leaf = new THREE.Mesh(new THREE.SphereGeometry(T * 0.18, 8, 8), _smat([0x3a7a3a, 0x4f8f3f, 0x2f6e35][i % 3], 0.9, 0));
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(T * 0.18, 8, 8), _smat([0x47583a, 0x55663f, 0x3c4a30][i % 3], 0.95, 0)); // muted olive, not toy-green
       leaf.position.set((i - 1) * T * 0.14, T * 0.42 + (i % 2) * T * 0.06, (i % 2 ? 1 : -1) * T * 0.08); leaf.scale.y = 1.2; g.add(leaf);
     }
   }
@@ -371,14 +371,14 @@ register3d("tactics3d", async (kernel, content) => {
     // Warm office-window glow (amber/gold) + a little cool fluorescent — grounded
     // night-city light, NOT cyberpunk green/purple (the old rainbow read as arcade).
     const winCol = [0xffe1ad, 0xffcf86, 0xdfeaff, 0xfff1cf][hsh % 4];
-    const floors = kind <= 1 ? (5 + (hsh % 5)) : kind <= 3 ? (3 + (hsh % 3)) : (1 + (hsh % 2));
+    const floors = kind <= 1 ? (4 + (hsh % 3)) : kind <= 3 ? (2 + (hsh % 2)) : 1; // lower-rise urban (XCOM), not a skyscraper metropolis
     const bh = T * 0.92 * floors;
     // Single textured box per building — facade map tinted by the shell colour,
     // glow map drives the emissive (lit) windows. Texture repeats once per floor.
     const fac = buildingFacades()[hsh % 6];
     const map = fac.map.clone(), glow = fac.glow.clone();
     map.repeat.set(1, floors); glow.repeat.set(1, floors); map.needsUpdate = glow.needsUpdate = true;
-    const mat = new THREE.MeshStandardMaterial({ map, color: shellCol, emissive: winCol, emissiveMap: glow, emissiveIntensity: 0.9, roughness: 0.78, metalness: 0.25 });
+    const mat = new THREE.MeshStandardMaterial({ map, color: shellCol, emissive: winCol, emissiveMap: glow, emissiveIntensity: 0.45, roughness: 0.86, metalness: 0.15 });
     const m = new THREE.Mesh(new THREE.BoxGeometry(T, bh, T), mat);
     m.position.set(w.x, bh / 2, w.z); m.castShadow = true; m.receiveShadow = true; scene.add(m);
     const parts = [m];
