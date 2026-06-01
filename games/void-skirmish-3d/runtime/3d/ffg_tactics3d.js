@@ -16,6 +16,9 @@ import * as THREE from "three";
 const _V = new URL(import.meta.url).search;
 await import("../sim/tactical_grid.js" + _V); // sets window.FFG.sim.TacticalBattle
 const { register3d } = await import("./ffg_kernel_3d.js" + _V);
+// Procedural DARK MILITARISTIC SCI-FI score — version-matched like the kernel so a
+// stale cache can't load an old copy. Unique per game (no shared audio asset).
+const { createTacticalMusic } = await import("./ffg_voidmusic.js" + _V);
 
 const T = 2.4;            // world units per tile
 const TILE_TINT = { 0: 0x1b2738, 1: 0x39506b, 2: 0x6b5a30, 3: 0x877046, 4: 0x401818 };
@@ -459,6 +462,11 @@ register3d("tactics3d", async (kernel, content) => {
   kernel.onUpdate((dt) => { if (!_miniOn) return; _miniAcc += dt; if (_miniAcc < 0.3) return; _miniAcc = 0; _drawMinimap(); });
 
   let sim, events = [], busy = false, selected = null, phase = "menu";
+  // ONE procedural tactical-music instance for the whole session. Started on the
+  // Play click (the audio gesture), stopped/restarted on pause/resume + end. This
+  // REPLACES the shell's file-music (shell `music:` is set to null below) so we
+  // never double up audio — the owner already hit a double-audio bug elsewhere.
+  const tacticalMusic = createTacticalMusic(0.14); // dark droning pad + minor ostinato + sparse war-drum
   const unitViews = {}; // id -> { group, ring, hpFill, base }
   let highlights = [], rangeTargets = [];
   let abilityMode = null;     // armed ability id (Phase 3) — next click resolves it
@@ -499,25 +507,47 @@ register3d("tactics3d", async (kernel, content) => {
     const x = Math.floor((px + W / 2) / T), y = Math.floor((pz + H / 2) / T);
     return (x >= 0 && y >= 0 && x < gridW && y < gridH) ? { x, y } : null;
   }
-  // Distant CITY SKYLINE: dark tower silhouettes ringing the plot, fading into the
-  // dusk fog — the XCOM "the city extends past the playable area" backdrop. Cheap
-  // boxes with faint window glow; they sit beyond the board and recede into haze.
+  // Distant CITY SKYLINE: the town CONTINUES past the playfield as organized
+  // BLOCKS — rows of window-faced towers separated by street gaps, receding into
+  // the dusk fog — not boxes scattered at random. Towers carry the same baked
+  // window facade as the play-area buildings (dim/distant) so the backdrop reads
+  // as a real city, taller toward the back. A handful of SHARED materials + ONE
+  // shared box geometry keep this to a few dozen extra draw calls + materials.
   function buildSkyline() {
-    const hx = W / 2, hz = H / 2, gap = T * 9, margin = T * 34, step = T * 4;
+    const hx = W / 2, hz = H / 2, gap = T * 8, margin = T * 40;
+    const blk = T * 7, road = T * 3.2, cell2 = blk + road; // block + street pitch
     let seed = 0x1234abcd;
     const rnd = () => { seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
     const geo = new THREE.BoxGeometry(1, 1, 1);
-    for (let px = -hx - margin; px <= hx + margin; px += step) {
-      for (let pz = -hz - margin; pz <= hz + margin; pz += step) {
-        if (Math.abs(px) <= hx + gap && Math.abs(pz) <= hz + gap) continue; // keep clear of the playfield
-        if (rnd() > 0.36) continue;
-        const tw = T * (1.5 + rnd() * 1.6), th = T * (3 + rnd() * 8), td = T * (1.5 + rnd() * 1.6);
-        const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-          color: 0x101a2c, roughness: 0.95, metalness: 0.05,
-          emissive: 0xffb24d, emissiveIntensity: 0.015 + rnd() * 0.03 })); // very dim — distant, no bloom-wash
-        m.scale.set(tw, th, td);
-        m.position.set(px + (rnd() - 0.5) * step * 0.5, th / 2 - T * 0.5, pz + (rnd() - 0.5) * step * 0.5);
-        scene.add(m);
+    const facs = buildingFacades();
+    // a small SHARED material set (window facade, tinted to a few concrete tones),
+    // reused across every distant tower — keeps material count tiny.
+    const tones = [0x16202f, 0x1a2434, 0x131b29, 0x1e2638];
+    const skyMats = tones.map((c, i) => {
+      const f = facs[i % facs.length];
+      const m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.95, metalness: 0.06, map: f.map, emissive: 0xffc070, emissiveIntensity: 0.05, emissiveMap: f.glow });
+      m.map.repeat.set(1, 2); m.emissiveMap && m.emissiveMap.repeat && m.emissiveMap.repeat.set(1, 2);
+      return m;
+    });
+    let n = 0;
+    for (let px = -hx - margin; px <= hx + margin; px += cell2) {
+      for (let pz = -hz - margin; pz <= hz + margin; pz += cell2) {
+        if (Math.abs(px) <= hx + gap && Math.abs(pz) <= hz + gap) continue; // keep the playfield clear
+        if (rnd() > 0.82) continue;            // a few empty lots
+        // farther from the centre → taller towers (a real skyline rises behind you)
+        const dist = Math.max(Math.abs(px), Math.abs(pz)) - hx;
+        const tier = Math.max(0, Math.min(1, dist / (margin * 0.9)));
+        // 1–3 towers per block (a clustered block, not one lonely box)
+        const towers = 1 + (rnd() * 2 | 0);
+        for (let t = 0; t < towers; t++) {
+          const tw = blk * (0.34 + rnd() * 0.3), td = blk * (0.34 + rnd() * 0.3);
+          const th = T * (4 + tier * 12 + rnd() * 7);
+          const m = new THREE.Mesh(geo, skyMats[(n + t) % skyMats.length]);
+          m.scale.set(tw, th, td);
+          m.position.set(px + (rnd() - 0.5) * blk * 0.5, th / 2 - T * 0.5, pz + (rnd() - 0.5) * blk * 0.5);
+          m.castShadow = false; m.receiveShadow = false; // distant backdrop — never in the shadow pass
+          scene.add(m); n++;
+        }
       }
     }
   }
@@ -531,8 +561,86 @@ register3d("tactics3d", async (kernel, content) => {
     scene.add(pts);
     kernel.onUpdate((dt) => { const p = geo.attributes.position.array; for (let i = 0; i < N; i++) { p[i * 3 + 1] += dt * T * 0.35; if (p[i * 3 + 1] > T * 9) p[i * 3 + 1] = 0; } geo.attributes.position.needsUpdate = true; });
   }
+  // ── CITY ANALYSIS — turn the raw tile grid into an URBAN-AWARE model so props
+  //    land where they belong in a real town (cars parallel to the curb, hydrants
+  //    along sidewalks, dumpsters in alleys, cones at intersections) instead of
+  //    scattered at random angles. Computed ONCE per map (deterministic), then
+  //    read by buildCover / scatterDecor / buildCurbs. The owner's core fix.
+  let _ci = null; // city info: { solid, isStreet, front[], axis[], alley[], inter[], frontage[] }
+  function analyzeCity() {
+    if (_ci) return _ci;
+    const grid = mission.grid;
+    const solid = (x, y) => { const t = (grid[y] || [])[x]; return t === 1 || t === 5; }; // a building face blocks/anchors props
+    const open = (x, y) => (grid[y] || [])[x] === 0;
+    const front = [], axis = [], alley = [], inter = [], curbDir = [];
+    const CARD = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    // run length of open tiles through (x,y) along an axis (how "street-like" it is)
+    const run = (x, y, dx, dy) => { let n = 0; for (let k = 1; k <= 6; k++) { if (open(x + dx * k, y + dy * k)) n++; else break; } for (let k = 1; k <= 6; k++) { if (open(x - dx * k, y - dy * k)) n++; else break; } return n; };
+    for (let y = 0; y < gridH; y++) {
+      front[y] = []; axis[y] = []; alley[y] = []; inter[y] = []; curbDir[y] = [];
+      for (let x = 0; x < gridW; x++) {
+        if (!open(x, y)) { front[y][x] = null; continue; }
+        // nearest building face (the curb the sidewalk hugs). Prefer a face that is
+        // exactly 1 tile away (true curb tile); record its direction.
+        let fd = null, walls = 0;
+        for (const [dx, dy] of CARD) { if (solid(x + dx, y + dy)) { if (!fd) fd = [dx, dy]; walls++; } }
+        front[y][x] = fd; curbDir[y][x] = fd;
+        // road axis: the longer open run is the direction traffic flows
+        const rh = run(x, y, 1, 0), rv = run(x, y, 0, 1);
+        axis[y][x] = rh >= rv ? "h" : "v";
+        // alley: hemmed in by buildings on 3+ sides → back-of-house (dumpsters)
+        alley[y][x] = walls >= 3;
+        // intersection: a broad opening (long runs BOTH ways, no adjacent wall) → cones/barriers
+        inter[y][x] = (rh >= 4 && rv >= 4 && walls === 0);
+      }
+    }
+    _ci = { solid, open, front, axis, alley, inter, curbDir, run };
+    return _ci;
+  }
+  // Raised concrete CURBS + painted CROSSWALKS — physical street geometry along the
+  // building frontages so the sidewalk reads as a real raised kerb, not a paint
+  // line. Thin shared-geometry boxes (no shadow casting; instanced material) laid
+  // on the open side of every building face. The single cheapest "real concrete"
+  // tell after the baked ground. Visual only — no cover, no collision.
+  function buildCurbs() {
+    const ci = analyzeCity(), grid = mission.grid;
+    const curbMat = new THREE.MeshStandardMaterial({ color: 0x5b5f67, roughness: 0.92, metalness: 0.05, envMapIntensity: 0.7 });
+    const curbTopMat = new THREE.MeshStandardMaterial({ color: 0x6a6e76, roughness: 0.9, metalness: 0.05, envMapIntensity: 0.7 });
+    const stripeMat = new THREE.MeshStandardMaterial({ color: 0xb9b08a, roughness: 0.85, metalness: 0.04, emissive: 0x423d2a, emissiveIntensity: 0.12 });
+    const curbGeoH = new THREE.BoxGeometry(T, T * 0.1, T * 0.12); // curb segment spanning X (faces N/S)
+    const curbGeoV = new THREE.BoxGeometry(T * 0.12, T * 0.1, T);  // curb segment spanning Z (faces E/W)
+    const capGeoH = new THREE.BoxGeometry(T, T * 0.03, T * 0.13);
+    const capGeoV = new THREE.BoxGeometry(T * 0.13, T * 0.03, T);
+    const stripeGeo = new THREE.BoxGeometry(T * 0.16, 0.02, T * 0.5);
+    let placed = 0;
+    for (let y = 1; y < gridH - 1; y++) for (let x = 1; x < gridW - 1; x++) {
+      if (!ci.open(x, y)) continue;
+      const w = cell(x, y);
+      // a curb on every open edge that borders a building face (the kerb line)
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (!ci.solid(x + dx, y + dy)) continue;
+        const horiz = dx === 0; // wall is N/S of us → curb runs E-W (spanning X)
+        const curb = new THREE.Mesh(horiz ? curbGeoH : curbGeoV, curbMat);
+        curb.position.set(w.x + dx * T * 0.46, FT + T * 0.05, w.z + dy * T * 0.46);
+        curb.receiveShadow = true; curb.castShadow = false; scene.add(curb);
+        const cap = new THREE.Mesh(horiz ? capGeoH : capGeoV, curbTopMat);
+        cap.position.set(w.x + dx * T * 0.46, FT + T * 0.105, w.z + dy * T * 0.46);
+        cap.castShadow = false; scene.add(cap);
+        placed++;
+      }
+      // CROSSWALK: zebra stripes across intersections (broad openings)
+      if (ci.inter[y][x] && ((x + y) % 5 === 0)) {
+        for (let s = -2; s <= 2; s++) {
+          const st = new THREE.Mesh(stripeGeo, stripeMat);
+          st.position.set(w.x + s * T * 0.2, FT + 0.012, w.z); st.castShadow = false; scene.add(st);
+        }
+      }
+    }
+    return placed;
+  }
   async function buildBoard() {
     await preloadCity(); // load the real CC0 models before placing tiles
+    analyzeCity();       // urban-aware placement model (curbs, road axes, alleys)
     buildSkyline();
     buildAmbientMotes();
     const plat = new THREE.Mesh(new THREE.BoxGeometry(W + 1.4, 0.6, H + 1.4),
@@ -562,6 +670,7 @@ register3d("tactics3d", async (kernel, content) => {
       }
     }
     buildUpperFloor(); // raised second storey (rooms above rooms), if this map has one
+    buildCurbs();      // raised concrete kerbs along every building frontage + crosswalks
     scatterDecor();
     scatterAdvent();
     // PERF: small ground clutter doesn't need to cast shadows — the shadow pass was
@@ -622,30 +731,44 @@ register3d("tactics3d", async (kernel, content) => {
     const n = Math.min(5, Math.max(2, (cand.length / 130) | 0));
     for (let i = 0; i < n; i++) { const [x, y] = cand[Math.floor((i + 0.5) * cand.length / n)]; const g = (i % 2 === 0) ? _adventKiosk() : _billboard(); const w = cell(x, y); g.position.set(w.x, FT, w.z); g.rotation.y = (i * 1.7) % (Math.PI * 2); g.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(g); }
   }
-  // Decorative street furniture (hydrants, lamps, trees, planters, cones) on
-  // curb tiles — VISUAL ONLY (not registered as cover, the sim never sees them),
-  // offset to the building edge so units don't stand in them. Fills the city.
+  // STREET FURNITURE placed where a real town puts it (the core "not randomly
+  // scattered" fix). Walks CURB tiles (open, against a building face) and places by
+  // ROLE at REGULAR intervals along each frontage — lampposts on a fixed cadence,
+  // hydrants offset between them, trees/planters on the wider sidewalk runs, cones
+  // by intersections. All hug the kerb (offset to the building edge, rotated to
+  // face the street) so units never stand in them. VISUAL ONLY — not cover.
   function scatterDecor() {
-    const grid = mission.grid;
+    const ci = analyzeCity(), grid = mission.grid;
+    const place = (name, x, y, dx, dy, rotY, role) => {
+      const g = new THREE.Group();
+      if (!placeCity(name, g, rotY)) return;
+      const w = cell(x, y); g.position.set(w.x + dx * T * 0.4, FT, w.z + dy * T * 0.4);
+      g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      pbrApply(g, role, ((x * 2654435761) ^ (y * 40503)) >>> 0);
+      scene.add(g);
+    };
     for (let y = 1; y < gridH - 1; y++) for (let x = 1; x < gridW - 1; x++) {
       if (grid[y][x] !== 0) continue;
-      const hsh = ((x * 2654435761) ^ (y * 40503)) >>> 0;
-      if ((hsh % 100) >= 16) continue; // ~16% of eligible curb tiles
-      let ox = 0, oz = 0, near = false;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const t = (grid[y + dy] || [])[x + dx];
-        if (t === 1 || t === 5) { ox = dx * T * 0.42; oz = dy * T * 0.42; near = true; break; }
+      const fd = ci.curbDir[y][x]; if (!fd) continue;        // only kerb tiles get furniture
+      const [dx, dy] = fd;
+      // rotate the prop so its "front" faces AWAY from the wall (into the street).
+      const faceStreet = Math.atan2(-dx, -dy);
+      // a coordinate that runs ALONG the frontage (so spacing is even down a block)
+      const along = (dx === 0) ? x : y;
+      const cross = (dx === 0) ? y : x;
+      // cones cluster at intersections; everything else lines the kerb on a cadence
+      if (ci.inter[y][x]) {
+        if ((x + y) % 3 === 0) place("car/cone-traffic.glb", x, y, dx, dy, faceStreet, "metal");
+        continue;
       }
-      if (!near) continue;
-      const pick = DECOR[hsh % DECOR.length];
-      const g = new THREE.Group();
-      if (placeCity(pick.n, g, (hsh % 4) * (Math.PI / 2))) {
-        const w = cell(x, y); g.position.set(w.x + ox, FT, w.z + oz);
-        g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-        // hydrants / lampposts / cones = painted metal (catch the sky); trees + planters = matte
-        pbrApply(g, /hydrant|lightpost|cone/.test(pick.n) ? "metal" : "concrete", hsh);
-        scene.add(g);
-      }
+      // deterministic cadence keyed to the frontage coordinate — a steady rhythm of
+      // posts, not noise. Phase by the cross coord so opposite kerbs aren't mirrored.
+      const phase = (cross * 2) >>> 0;
+      const slot = (along + phase);
+      if (slot % 6 === 0)      place("grave/grave-lightpost-single.glb", x, y, dx, dy, faceStreet, "metal"); // lamppost every 6 tiles
+      else if (slot % 6 === 3) place("hydrant-quaternius.glb", x, y, dx, dy, faceStreet, "metal");           // hydrant between lamps
+      else if (slot % 4 === 1) place("suburban/tree-small.glb", x, y, dx, dy, 0, "concrete");                 // street trees
+      else if (slot % 4 === 2) place("suburban/planter.glb", x, y, dx, dy, faceStreet, "concrete");           // planters
     }
   }
   function _smat(col, r, m) { return new THREE.MeshStandardMaterial({ color: col, roughness: r == null ? 0.75 : r, metalness: m == null ? 0.2 : m }); }
@@ -713,22 +836,68 @@ register3d("tactics3d", async (kernel, content) => {
     }
     return walls >= 2;
   }
+  // Pick the right cover PROP for a tile's urban role + orient it like a real city
+  // would: parked cars PARALLEL to the kerb nudged to the curb, dumpsters/containers
+  // in alleys, AC units flat against a building face, barriers square to the street.
+  // Returns { name, rotY, ox, oz } (ox/oz = small on-tile nudge toward the kerb).
+  function _coverPlacement(x, y, full, hsh) {
+    const ci = analyzeCity();
+    const fd = ci.curbDir[y][x];           // direction to the nearest building face
+    const alley = ci.alley[y][x];
+    const axis = ci.axis[y][x];            // 'h' = E-W road, 'v' = N-S road
+    // angle that runs ALONG the road (so a car body lies parallel to traffic)
+    const alongRot = axis === "h" ? Math.PI / 2 : 0; // car model long-axis is X at rot0
+    if (full) {
+      // ALLEY → dumpster / shipping container, shoved against the back wall
+      if (alley) {
+        const name = (hsh & 1) ? "dumpster-quaternius.glb" : "shipping-container-quaternius.glb";
+        const r = fd ? Math.atan2(-fd[0], -fd[1]) : alongRot;
+        return { name, rotY: r, ox: fd ? fd[0] * 0.16 : 0, oz: fd ? fd[1] * 0.16 : 0 };
+      }
+      // KERB → PARKED CAR parallel to the road, nudged to the curb (the big fix)
+      if (fd) {
+        const cars = ["car/sedan.glb", "car/suv.glb", "car/van.glb", "car/truck.glb", "car/taxi.glb"];
+        const name = cars[hsh % cars.length];
+        // car lies along the road; pull it toward the kerb side
+        return { name, rotY: alongRot, ox: fd[0] * 0.14, oz: fd[1] * 0.14 };
+      }
+      // open street full cover → a car parked along the lane (still parallel)
+      const cars = ["car/sedan.glb", "car/suv.glb", "car/taxi.glb"];
+      return { name: cars[hsh % cars.length], rotY: alongRot, ox: 0, oz: 0 };
+    }
+    // HALF COVER
+    if (fd) {
+      // against a building face: AC unit (flat to the wall) or a planter/bench
+      const r = Math.atan2(-fd[0], -fd[1]);
+      const opts = ["ac-unit-quaternius.glb", "grave/grave-bench.glb", "barrier-traffic-quaternius.glb"];
+      const name = opts[hsh % opts.length];
+      return { name, rotY: name.indexOf("barrier") >= 0 ? alongRot : r, ox: fd[0] * 0.16, oz: fd[1] * 0.16 };
+    }
+    // open ground half cover: jersey barrier square to the road, or a market stall
+    const opts = ["barrier-traffic-quaternius.glb", "market-stalls-quaternius.glb", "car/box-crate.glb", "grave/grave-iron-fence.glb"];
+    const name = opts[hsh % opts.length];
+    return { name, rotY: name.indexOf("barrier") >= 0 || name.indexOf("fence") >= 0 ? alongRot : (hsh % 2) * (Math.PI / 2), ox: 0, oz: 0 };
+  }
   function buildCover(x, y, w, full) {
     const hsh = ((x * 374761393) ^ (y * 668265263)) >>> 0;
     const g = new THREE.Group();
-    const list = isIndoor(x, y) ? FURNITURE : (full ? FULL_COVER : HALF_COVER);
-    const pick = list[hsh % list.length];
-    const rotY = (hsh % 4) * (Math.PI / 2);
-    if (!placeCity(pick.n, g, rotY)) {
+    let name, rotY = 0, ox = 0, oz = 0;
+    if (isIndoor(x, y)) {
+      // indoor cover = the furniture in the room (unchanged: desks/shelves/sofas)
+      const pick = FURNITURE[hsh % FURNITURE.length]; name = pick.n; rotY = (hsh % 4) * (Math.PI / 2);
+    } else {
+      const p = _coverPlacement(x, y, full, hsh); name = p.name; rotY = p.rotY; ox = p.ox; oz = p.oz;
+    }
+    if (!placeCity(name, g, rotY)) {
       // fallback box if a model failed to load
       if (full) _propContainer(g, hsh); else _propBarrier(g, hsh);
     }
-    g.position.set(w.x, FT, w.z);
+    g.position.set(w.x + ox * T, FT, w.z + oz * T); // small on-tile kerb nudge — the cover tile is unchanged for the sim
     g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     // PBR role from the prop kind: painted clear-coat on vehicles (catch the sky),
     // brushed metal on containers/dumpsters/AC/barriers, matte concrete on grave
     // stone + furniture. Vehicle windows auto-route to glass inside pbrApply.
-    pbrApply(g, _coverRole(pick.n), hsh);
+    pbrApply(g, _coverRole(name), hsh);
     scene.add(g); coverTiles[x + "," + y] = [g];
   }
   // Map a cover-prop filename to a PBR role (vehicles = painted, metal props =
@@ -852,11 +1021,23 @@ register3d("tactics3d", async (kernel, content) => {
   // building block. Frag-destructible (tracked in buildingTiles).
   function buildStructure(x, y, w) {
     const hsh = ((x * 73856093) ^ (y * 19349663)) >>> 0;
+    const grid = mission.grid;
     const g = new THREE.Group();
+    // FACE THE STREET: a real building fronts the road, not a random direction.
+    // Kenney commercial facades face +Z at rot0, so rotate the front toward the
+    // nearest OPEN tile (the street). Interior block tiles (no adjacent street)
+    // get a deterministic rotation so the block isn't uniform.
+    const openAt = (xx, yy) => ((grid[yy] || [])[xx] === 0);
+    let faceRot = null;
+    if (openAt(x, y + 1)) faceRot = 0;            // street to the south → face +Z
+    else if (openAt(x, y - 1)) faceRot = Math.PI; // street to the north → face -Z
+    else if (openAt(x + 1, y)) faceRot = Math.PI / 2;  // street to the east
+    else if (openAt(x - 1, y)) faceRot = -Math.PI / 2; // street to the west
+    const rotY = faceRot != null ? faceRot : (hsh % 4) * (Math.PI / 2);
     const tall = (hsh % 5 < 2);
     const name = tall ? (hsh & 1 ? "commercial/building-skyscraper-a.glb" : "commercial/building-skyscraper-b.glb")
                       : (hsh & 1 ? "commercial/building-a.glb" : "commercial/building-b.glb");
-    if (!placeCity(name, g, (hsh % 4) * (Math.PI / 2))) {
+    if (!placeCity(name, g, rotY)) {
       const bh = T * (tall ? 3 : 1.5); // fallback box if the model failed
       const b = new THREE.Mesh(new THREE.BoxGeometry(T, bh, T), _smat(0x39414c, 0.85, 0.2));
       b.position.y = bh / 2; g.add(b);
@@ -1016,13 +1197,37 @@ register3d("tactics3d", async (kernel, content) => {
   // measured height for correct scaling; clip names are bare (the kernel aliases
   // the FBX "Armature|Idle" prefix) except the alien, whose clips are "Alien_*".
   const MODELS = {
-    //  player = armored SWAT trooper; enemies = a cohesive weaponized ROBOT army
-    //  (flying drone -> walker bot -> heavy gun-platform). native height / target / clips.
-    soldier: { url: "swat.glb",                   h: 1.854, th: T * 1.52, clips: { idle: "Idle_Gun", walk: "Walk", die: "Death", attack: "Gun_Shoot", hurt: "HitRecieve" } },
+    //  PLAYERS = three distinct humanoid bodies (so the squad isn't one re-tinted
+    //  soldier). swat + adventurer share the Quaternius "CharacterArmature" rig —
+    //  identical full clip set (Idle_Gun/Walk/Death/Gun_Shoot/HitRecieve) + a
+    //  Wrist.R bone for the rifle. soldier.glb is a Mixamo body (only Idle/Run/Walk,
+    //  bone "mixamorig:RightHand"); we resolve clips defensively + the death falls
+    //  back to a topple tween, so it still reads correctly. Measured native heights.
+    //  ENEMIES = a cohesive weaponized ROBOT army (drone -> walker -> heavy).
+    swat:       { url: "swat.glb",       h: 1.854, th: T * 1.52, clips: { idle: "Idle_Gun", walk: "Walk", die: "Death", attack: "Gun_Shoot", hurt: "HitRecieve" } },
+    adventurer: { url: "adventurer.glb", h: 1.827, th: T * 1.52, clips: { idle: "Idle_Gun", walk: "Walk", die: "Death", attack: "Gun_Shoot", hurt: "HitRecieve" } },
+    grunt:      { url: "soldier.glb",    h: 1.832, th: T * 1.55, clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Gun_Shoot", hurt: "HitRecieve" } }, // Mixamo: only idle/walk resolve; die/attack/hurt fall back gracefully
+    soldier:    { url: "swat.glb",       h: 1.854, th: T * 1.52, clips: { idle: "Idle_Gun", walk: "Walk", die: "Death", attack: "Gun_Shoot", hurt: "HitRecieve" } }, // legacy alias (kept so any old reference still resolves)
     drone:   { url: "robot_enemy_flying_gun.glb", h: 0.696, th: T * 1.15, clips: { idle: "Idle", walk: "Walk", die: "Dead",  attack: "Shoot" } }, // NB: death clip is "Dead"
     walker:  { url: "robot_enemy_legs_gun.glb",   h: 0.952, th: T * 1.45, clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Shoot" } },
     heavy:   { url: "robot_enemy_large_gun.glb",  h: 1.279, th: T * 1.95, clips: { idle: "Idle", walk: "Walk", die: "Death", attack: "Shoot" } },
   };
+  // PER-CLASS player body + scale. Bodies are assigned so ADJACENT roster roles
+  // never share a body (vanguard→sharpshooter→specialist→ranger→grenadier =
+  // swat→adventurer→grunt→adventurer→swat), and the two most combat-forward
+  // shooters sit on the fully-animated Quaternius rigs. grenadier is bulkier,
+  // ranger/sharpshooter leaner — silhouette scale on top of the procedural gear.
+  const PLAYER_CLASS = {
+    vanguard:     { model: "swat",       scale: 1.04 }, // Assault — armored breacher
+    sharpshooter: { model: "adventurer", scale: 0.97 }, // lean marksman
+    specialist:   { model: "grunt",      scale: 1.0  }, // field medic (Mixamo body, distinct proportions)
+    ranger:       { model: "adventurer", scale: 0.96 }, // agile scout
+    grenadier:    { model: "swat",       scale: 1.16 }, // heavy weapons — bulkiest
+  };
+  function playerKind(u) {
+    const k = PLAYER_CLASS[(u.cls || "").toLowerCase()] || { model: "swat", scale: 1 };
+    return { model: k.model, scale: k.scale };
+  }
   // enemy class -> model + tint. The bots already read as menacing (red eyes,
   // gun arms); tint is very light just for faction warmth.
   function enemyKind(u) {
@@ -1044,6 +1249,83 @@ register3d("tactics3d", async (kernel, content) => {
   function unitColor(u) { return u.tint != null ? new THREE.Color(u.tint).getHex() : (u.side === "player" ? 0x3aa0ff : 0xff5a4a); }
   function resolveClip(char, name) { return (name && char.actions[name]) ? name : (char.animations[0] && char.animations[0].name) || null; }
 
+  // ── Per-class PROCEDURAL GEAR (real silhouette difference) ──────────────────
+  // Each class gets a distinct kit built from THREE primitives, parented to the
+  // UNIT GROUP (world-scale, so sizing is identical across the swat/adventurer/
+  // grunt bodies regardless of their internal rig scale). Landmarks are derived
+  // from the unit's RENDERED height (targetH) so gear sits on head/shoulders/back
+  // for any body. Gear is class-accent coloured (reinforces team id) BUT the
+  // SHAPES differ enough to name the class in grayscale. Small props → no shadow
+  // casting + no PBR normal maps (kept off the heavy passes per the perf budget).
+  // Geometry + materials are CACHED per (class+accent) so 5 units don't re-alloc.
+  const _gearCache = {};
+  function _gmat(hex, rough, metal) { return new THREE.MeshStandardMaterial({ color: hex, roughness: rough == null ? 0.6 : rough, metalness: metal == null ? 0.3 : metal, envMapIntensity: 0.9 }); }
+  function _gearGroup(cls, accentHex, targetH) {
+    const key = cls + ":" + accentHex + ":" + targetH.toFixed(3);
+    if (_gearCache[key]) return _gearCache[key].clone(true);
+    const G = new THREE.Group();
+    const A = accentHex;                          // class accent (team identity)
+    const dk = shade(A, -0.55), lt = shade(A, 0.18);
+    const matte = 0x2a2e36, darkMatte = 0x202329; // neutral kit base (armor/cloth)
+    const matA = _gmat(A, 0.5, 0.35), matDk = _gmat(dk, 0.7, 0.2), matLt = _gmat(lt, 0.45, 0.4);
+    const matBase = _gmat(matte, 0.78, 0.12), matDark = _gmat(darkMatte, 0.82, 0.1);
+    // body landmarks (world Y; model feet ~0.05, head top ~targetH)
+    const headY = targetH * 0.9, headTop = targetH * 0.98, shoY = targetH * 0.80, backY = targetH * 0.6, chestY = targetH * 0.66;
+    const headR = targetH * 0.11, shoX = targetH * 0.18;
+    const box = (w, h, d, m) => { const x = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); x.castShadow = false; x.receiveShadow = false; return x; };
+    const cyl = (rt, rb, h, m, seg) => { const x = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 12), m); x.castShadow = false; x.receiveShadow = false; return x; };
+    const sph = (r, m) => { const x = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), m); x.castShadow = false; x.receiveShadow = false; return x; };
+    const con = (r, h, m, seg) => { const x = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg || 12), m); x.castShadow = false; x.receiveShadow = false; return x; };
+
+    if (cls === "vanguard") {
+      // ASSAULT: combat helmet (dome + brim) + chunky shoulder pads + chest plate.
+      const dome = sph(headR * 1.18, matBase); dome.scale.y = 0.82; dome.position.set(0, headTop - headR * 0.5, 0); G.add(dome);
+      const brim = box(headR * 2.2, headR * 0.28, headR * 1.1, matDark); brim.position.set(0, headTop - headR * 0.7, headR * 0.55); G.add(brim);
+      const stripe = box(headR * 2.0, headR * 0.34, headR * 0.34, matA); stripe.position.set(0, headTop - headR * 0.1, 0); G.add(stripe); // accent crest
+      for (const sx of [-1, 1]) { const pad = box(shoX * 0.9, targetH * 0.12, targetH * 0.16, matBase); pad.position.set(sx * shoX, shoY, 0); G.add(pad); const trim = box(shoX * 0.92, targetH * 0.03, targetH * 0.17, matA); trim.position.set(sx * shoX, shoY + targetH * 0.06, 0); G.add(trim); }
+      const plate = box(targetH * 0.2, targetH * 0.22, targetH * 0.07, matBase); plate.position.set(0, chestY, targetH * 0.11); G.add(plate);
+      const plTrim = box(targetH * 0.1, targetH * 0.05, targetH * 0.02, matA); plTrim.position.set(0, chestY + targetH * 0.04, targetH * 0.15); G.add(plTrim);
+    } else if (cls === "sharpshooter") {
+      // MARKSMAN: pointed ghillie HOOD (cowl cone) + forward scope/visor optic.
+      const hood = con(headR * 1.7, targetH * 0.34, matDark, 10); hood.position.set(0, headTop - targetH * 0.05, -headR * 0.1); G.add(hood);
+      const cowl = con(headR * 2.0, targetH * 0.2, matBase, 10); cowl.position.set(0, shoY + targetH * 0.04, -headR * 0.2); G.add(cowl); // cowl draping onto shoulders
+      const visor = box(headR * 1.9, headR * 0.5, headR * 0.5, matDark); visor.position.set(0, headY, headR * 0.7); G.add(visor);
+      const scope = cyl(headR * 0.26, headR * 0.26, headR * 1.6, matA, 10); scope.rotation.x = Math.PI / 2; scope.position.set(headR * 0.5, headY + headR * 0.05, headR * 1.3); G.add(scope); // monocular optic jutting forward
+      const lens = sph(headR * 0.28, matLt); lens.position.set(headR * 0.5, headY + headR * 0.05, headR * 2.0); G.add(lens);
+    } else if (cls === "specialist") {
+      // FIELD MEDIC: square backpack with a RED CROSS + headset/antenna.
+      const pack = box(targetH * 0.26, targetH * 0.3, targetH * 0.16, matBase); pack.position.set(0, backY, -targetH * 0.13); G.add(pack);
+      const crossMat = _gmat(0xe23b3b, 0.5, 0.1); // unmistakable red medic cross (NOT the team accent)
+      const cv = box(targetH * 0.06, targetH * 0.17, targetH * 0.02, crossMat); cv.position.set(0, backY + targetH * 0.02, -targetH * 0.215); G.add(cv);
+      const ch = box(targetH * 0.15, targetH * 0.06, targetH * 0.02, crossMat); ch.position.set(0, backY + targetH * 0.02, -targetH * 0.215); G.add(ch);
+      const band = cyl(headR * 1.12, headR * 1.12, headR * 0.4, matA, 14); band.scale.z = 0.72; band.position.set(0, headY + headR * 0.2, 0); G.add(band); // headset band
+      const earcup = box(headR * 0.4, headR * 0.5, headR * 0.4, matDark); earcup.position.set(headR * 0.95, headY, 0); G.add(earcup);
+      const ant = cyl(headR * 0.05, headR * 0.05, targetH * 0.16, matDark, 6); ant.position.set(headR * 0.95, headY + targetH * 0.12, 0); G.add(ant);
+      const tip = sph(headR * 0.12, matA); tip.position.set(headR * 0.95, headY + targetH * 0.2, 0); G.add(tip); // glowing antenna tip
+      tip.material = _gmat(lt, 0.3, 0.1); tip.material.emissive = new THREE.Color(A).multiplyScalar(0.6);
+    } else if (cls === "ranger") {
+      // SCOUT: low beret + a back-slung KNIFE over the shoulder; no heavy armor.
+      const beret = cyl(headR * 1.15, headR * 1.05, headR * 0.5, matA, 12); beret.scale.y = 0.7; beret.rotation.z = 0.18; beret.position.set(headR * 0.12, headTop - headR * 0.25, 0); G.add(beret);
+      const tab = box(headR * 0.3, headR * 0.3, headR * 0.3, matLt); tab.position.set(-headR * 0.7, headTop - headR * 0.1, 0); G.add(tab); // beret flash
+      const hood = box(headR * 1.9, targetH * 0.14, headR * 1.6, matDark); hood.position.set(0, shoY + targetH * 0.03, -headR * 0.3); G.add(hood); // light shoulder hood/scarf
+      // back-mounted blade jutting up past the shoulder (the agile-knife read)
+      const sheath = box(targetH * 0.05, targetH * 0.24, targetH * 0.03, matDark); sheath.position.set(-targetH * 0.14, backY + targetH * 0.05, -targetH * 0.1); sheath.rotation.z = 0.32; G.add(sheath);
+      const blade = box(targetH * 0.035, targetH * 0.2, targetH * 0.012, matLt); blade.position.set(-targetH * 0.2, backY + targetH * 0.2, -targetH * 0.1); blade.rotation.z = 0.32; G.add(blade);
+      const hilt = box(targetH * 0.09, targetH * 0.03, targetH * 0.03, matA); hilt.position.set(-targetH * 0.11, backY - targetH * 0.06, -targetH * 0.1); hilt.rotation.z = 0.32; G.add(hilt);
+    } else if (cls === "grenadier") {
+      // HEAVY WEAPONS: oversized pauldrons + a big back CANISTER/grenade rack.
+      for (const sx of [-1, 1]) { const pad = box(shoX * 1.15, targetH * 0.17, targetH * 0.2, matBase); pad.position.set(sx * shoX * 1.12, shoY + targetH * 0.02, 0); G.add(pad); const ridge = box(shoX * 1.16, targetH * 0.05, targetH * 0.06, matA); ridge.position.set(sx * shoX * 1.12, shoY + targetH * 0.1, 0); G.add(ridge); const stud = sph(targetH * 0.04, matDark); stud.position.set(sx * shoX * 1.35, shoY + targetH * 0.02, 0); G.add(stud); }
+      const tank = cyl(targetH * 0.11, targetH * 0.11, targetH * 0.34, matBase, 14); tank.position.set(0, backY + targetH * 0.02, -targetH * 0.14); G.add(tank); // back canister
+      const tankCap = cyl(targetH * 0.115, targetH * 0.115, targetH * 0.04, matA, 14); tankCap.position.set(0, backY + targetH * 0.2, -targetH * 0.14); G.add(tankCap);
+      for (let i = 0; i < 3; i++) { const nade = sph(targetH * 0.045, matDark); nade.position.set((i - 1) * targetH * 0.1, chestY - targetH * 0.04, targetH * 0.12); G.add(nade); const pin = sph(targetH * 0.018, matA); pin.position.set((i - 1) * targetH * 0.1, chestY + targetH * 0.0, targetH * 0.12); G.add(pin); } // grenade bandolier
+      const collar = box(targetH * 0.3, targetH * 0.08, targetH * 0.22, matBase); collar.position.set(0, shoY - targetH * 0.02, 0); G.add(collar); // bulky armored collar
+    }
+    // light team-accent emissive so the gear reads in the dark dusk board (no light added)
+    G.traverse((o) => { if (o.isMesh && o.material && o.material.emissive && o.material.color && o.material.color.getHex() === A) o.material.emissive = new THREE.Color(A).multiplyScalar(0.18); });
+    _gearCache[key] = G;
+    return G.clone(true);
+  }
+
   async function makeUnit(u) {
     const w = cell(u.x, u.y);
     const g = new THREE.Group(); g.position.set(w.x, 0.2 + _floorLift(u.x, u.y, u.floor || 0), w.z);
@@ -1054,9 +1336,9 @@ register3d("tactics3d", async (kernel, content) => {
     ring.position.y = 0.06; g.add(ring);
 
     const isPlayer = u.side === "player";
-    const kind = isPlayer ? { model: "soldier", scale: 1 } : enemyKind(u);
+    const kind = isPlayer ? playerKind(u) : enemyKind(u); // per-class body+scale for players; species for enemies
     const def = MODELS[kind.model];
-    let char = null;
+    let char = null, unitGear = null; // unitGear = per-class procedural kit (silhouette)
     try { char = await kernel.loadCharacter(CHAR_BASE + def.url); } catch (e) { char = null; }
     // resolve this model's actual clip names (some models name clips differently)
     let clips = { idle: null, walk: null, die: null, attack: null };
@@ -1077,21 +1359,43 @@ register3d("tactics3d", async (kernel, content) => {
       const targetH = def.th * (kind.scale || 1);
       mdl.scale.setScalar(targetH / NATIVE_H);
       mdl.position.y = 0.05; // model origin is at the feet -> sit on the base ring
-      // Give the SWAT trooper a RIFLE in the right hand (the model ships no weapon
-      // mesh). Parented to the Wrist.R bone so it follows the hands through every
-      // animation. Bone +Y runs toward the fingers, so the rifle's long axis = Y.
-      if (isPlayer) {
+      // Give the trooper a RIFLE in the right hand (the models ship no weapon mesh).
+      // Parented to the right-hand BONE so it follows the hands through every
+      // animation. Quaternius rigs (swat/adventurer) name it "Wrist.R"; the Mixamo
+      // body (grunt) names it "mixamorig:RightHand" and lives in cm-scale joint
+      // space, so we size the rifle to the bone's own world scale. The medic
+      // (specialist=grunt) carries no rifle — a field-medic read (medkit instead).
+      const noRifle = isPlayer && kind.model === "grunt"; // medic stays unarmed
+      if (isPlayer && !noRifle) {
         try {
-          let wrist = null; mdl.traverse((o) => { if (o.isBone && o.name === "Wrist.R") wrist = o; });
+          let wrist = null; mdl.traverse((o) => { if (o.isBone && (o.name === "Wrist.R" || o.name === "mixamorig:RightHand")) wrist = o; });
           if (wrist) {
+            // size the rifle to the bone's WORLD scale so it's the same real size on
+            // any rig (Quaternius bone ~1u; Mixamo bone ~0.01u → big local numbers).
+            wrist.updateWorldMatrix(true, false);
+            const bs = new THREE.Vector3(); wrist.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), bs);
+            const inv = 1 / Math.max(1e-4, (bs.x + bs.y + bs.z) / 3);
             const rifle = new THREE.Group();
             rifle.add(_bx(0.06, 0.46, 0.1, 0x202327, 0.5, 0.4)).position.y = 0.18;        // receiver/stock
             const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.5, 8), _smat(0x141518, 0.4, 0.6)); barrel.position.y = 0.46; rifle.add(barrel);
             const mag = _bx(0.05, 0.13, 0.06, 0x16181c, 0.6, 0.3); mag.position.set(0, 0.06, -0.09); rifle.add(mag);
             rifle.position.set(0.0, 0.03, 0.03);
+            rifle.scale.setScalar(inv);            // normalise to world size across rigs
             pbrApply(rifle, "metal", 4); // gunmetal: low roughness + metal so the weapon glints under the sky env
             wrist.add(rifle);
           }
+        } catch (e) {}
+      }
+      // ── PER-CLASS GEAR — the real silhouette difference (owner: "must look
+      //    different, not just colours"). Attached to the UNIT GROUP at body
+      //    landmarks scaled to the rendered height, so it fits every body the same.
+      if (isPlayer && u.cls) {
+        try {
+          const renderedH = def.th * (kind.scale || 1);   // world-space unit height
+          const gear = _gearGroup((u.cls || "").toLowerCase(), col, renderedH);
+          gear.position.y = 0.05;                          // align with model feet
+          g.add(gear);
+          unitGear = gear; // so HUNKER squash can scale it with the body
         } catch (e) {}
       }
       // enemy class tint; players get a faint team-coloured emissive so the dark
@@ -1126,7 +1430,7 @@ register3d("tactics3d", async (kernel, content) => {
     const cover = makeShieldSprite(); cover.position.set(0, hpY + 0.55, 0); cover.visible = false; g.add(cover);
     scene.add(g);
     kernel.onUpdate(() => { hpBg.quaternion.copy(kernel.camera.quaternion); hpFill.quaternion.copy(kernel.camera.quaternion); cover.quaternion.copy(kernel.camera.quaternion); });
-    unitViews[u.id] = { group: g, ring, hpFill, cover, base: col, dark, hpW: T * 0.58, char, clips, dead: false };
+    unitViews[u.id] = { group: g, ring, hpFill, cover, base: col, dark, hpW: T * 0.58, char, clips, gear: unitGear, dead: false };
     faceUnit(u, isPlayer ? -1 : 1); // players look "north" toward the enemy, enemies "south"
     updateCover(u);
     // Fog of war: an enemy whose pod isn't revealed stays hidden until spotted.
@@ -1151,17 +1455,20 @@ register3d("tactics3d", async (kernel, content) => {
     // crouch read without a dedicated crouch clip. Full cover crouches lower.
     if (v.char && v.char.scene && u.side === "player") {
       const baseS = v.char.scene.scale.x || 1;
-      v.char.scene.scale.y = baseS * (cov === 2 ? 0.74 : cov === 1 ? 0.84 : 1);
+      const sq = (cov === 2 ? 0.74 : cov === 1 ? 0.84 : 1);
+      v.char.scene.scale.y = baseS * sq;
+      if (v.gear) v.gear.scale.y = sq; // squash the kit with the body so it stays seated (gear is group-parented, not bone-parented)
     }
     if (cov === 0) { v.cover.visible = false; return; }
     v.cover.visible = true; v.cover.material.map = shieldTex(cov === 2); v.cover.material.needsUpdate = true;
   }
   function refreshAllCover() { sim.allUnits().forEach((u) => { if (u.hp > 0) updateCover(u); }); }
-  function faceUnit(u, dir) { const v = unitViews[u.id]; if (v && v.char) v.char.scene.rotation.y = dir > 0 ? 0 : Math.PI; }
+  function faceUnit(u, dir) { const v = unitViews[u.id]; if (v && v.char) { const a = dir > 0 ? 0 : Math.PI; v.char.scene.rotation.y = a; if (v.gear) v.gear.rotation.y = a; } } // turn the kit with the body (gear is group-parented)
   function faceToward(u, tx, ty) {
     const v = unitViews[u.id]; if (!v || !v.char) return;
     const a = Math.atan2(tx - u.x, ty - u.y); // grid +z is "down"; model faces +z at rot 0
     v.char.scene.rotation.y = a;
+    if (v.gear) v.gear.rotation.y = a; // keep helmet/scope/backpack aligned to facing
   }
   function anim(u, intent, opts) { const v = unitViews[u.id]; if (v && v.char && v.clips[intent]) v.char.play(v.clips[intent], opts); }
   // ── Game feel (juice) ───────────────────────────────────────────────────────
@@ -1912,7 +2219,7 @@ register3d("tactics3d", async (kernel, content) => {
   }
 
   let shell = null, endShown = false;
-  function beginBattle() { phase = "battle"; orbit.autoRotate = false; setHUD(); autoSelectNext(); try { _updateNVChip(); } catch (e) {} }
+  function beginBattle() { phase = "battle"; orbit.autoRotate = false; setHUD(); autoSelectNext(); try { _updateNVChip(); } catch (e) {} try { tacticalMusic.start(); } catch (e) {} }
   // ── STORY: mission BRIEFING card (XCOM-style) ───────────────────────────────
   // Shown between the title and the battle on a real PLAY (not __test, so gates
   // stay unblocked). Premise on the first op, per-mission flavor + the live
@@ -1954,6 +2261,7 @@ register3d("tactics3d", async (kernel, content) => {
   }
   function showEnd() {
     if (endShown) return; endShown = true;
+    try { tacticalMusic.stop(); } catch (e) {} // battle's over — fade the score (no music over the result screen)
     const win = !!sim.victory; // objective-aware (evac/hack wins keep allies alive)
     sfx(win ? "victory" : "defeat", 0.6);
     window.__FFG_RESULT__ = { victory: win, turns: sim.turnNumber };
@@ -1971,7 +2279,7 @@ register3d("tactics3d", async (kernel, content) => {
     shell = new window.FFG.Shell({
       parent: kernel.parent, title: content.title || "Operation",
       tagline: content.tagline || "Lead the squad. Take the map.",
-      music: (content.audio && content.audio.music) || null,
+      music: null, // Void Skirmish uses the procedural createTacticalMusic loop, NOT a file track (unique audio, no double-play)
       menuImage: (content.assets && content.assets.menu_image) || null,
       howTo: [
         { h: "GOAL", p: (mission.objective || "Eliminate all hostiles") + "." },
@@ -1981,7 +2289,8 @@ register3d("tactics3d", async (kernel, content) => {
         { h: "CAMERA", p: "<b>Right-drag</b> rotate, <b>WASD</b> move, scroll zoom. <b>Esc</b> pauses." },
       ],
       onPlay: () => showBriefing(beginBattle), // XCOM briefing card, then drop into the fight
-      onPause: () => kernel.stop(), onResume: () => kernel.start(),
+      onPause: () => { kernel.stop(); try { tacticalMusic.stop(); } catch (e) {} },
+      onResume: () => { kernel.start(); try { tacticalMusic.start(); } catch (e) {} },
     });
     // After a Barracks "Deploy", we reload straight into the next op — skip the
     // title menu and drop the player into the fight.
