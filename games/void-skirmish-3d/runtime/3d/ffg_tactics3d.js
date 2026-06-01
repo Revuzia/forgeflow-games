@@ -292,10 +292,25 @@ register3d("tactics3d", async (kernel, content) => {
   // crates: full cover = cars / dumpsters / shipping containers; half cover =
   // jersey barriers / planters / sandbags / sci-fi crates. All are non-walkable
   // (the sim already treats 2/3 as solid) so a car genuinely IS the cover.
+  // A cover tile is "indoors" if it's enclosed by building walls (type 5) on ≥2
+  // sides within a few tiles — those get FURNITURE (desks/shelves) as cover, the
+  // "stuff in the buildings"; outdoor tiles get street props (cars/dumpsters).
+  function isIndoor(x, y) {
+    const grid = mission.grid; let walls = 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      for (let r = 1; r <= 3; r++) {
+        const nx = x + dx * r, ny = y + dy * r;
+        const t = (ny >= 0 && ny < gridH && nx >= 0 && nx < gridW) ? grid[ny][nx] : 0;
+        if (t === 5) { walls++; break; }
+        if (t === 1) break;
+      }
+    }
+    return walls >= 2;
+  }
   function buildCover(x, y, w, full) {
     const hsh = ((x * 374761393) ^ (y * 668265263)) >>> 0;
     const g = new THREE.Group();
-    const list = full ? FULL_COVER : HALF_COVER;
+    const list = isIndoor(x, y) ? FURNITURE : (full ? FULL_COVER : HALF_COVER);
     const pick = list[hsh % list.length];
     const rotY = (hsh % 4) * (Math.PI / 2);
     if (!placeCity(pick.n, g, rotY)) {
