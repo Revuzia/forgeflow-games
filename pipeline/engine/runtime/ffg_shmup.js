@@ -788,6 +788,7 @@
           };
           root.__test.state = function () { return self.sim.state(); };
           root.__test.scene = self;
+          self.__test = root.__test; // the standard feel-gate finds __test ON THE SCENE (window.__FFG_GAME__.scene.scenes.find(sc=>sc.__test))
           // TEST-ONLY: advance the LIVE rendered sim by `seconds` of fixed steps
           // and re-sync sprites, so a slow headless (software-GL) renderer can be
           // fast-forwarded to a frame with real on-screen combat for screenshots.

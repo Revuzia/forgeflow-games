@@ -84,7 +84,7 @@
       "proof_game": "neon-breakout"
     },
     "shmup": {
-      "status": "planned",
+      "status": "live",
       "label": "Shoot-em-up / bullet-hell",
       "sim": "sim/shmup_core.js",
       "runtime": [
@@ -100,7 +100,8 @@
       "master_list_examples": [
         "Geometry Wars",
         "Ikaruga"
-      ]
+      ],
+      "proof_game": "starlance"
     },
     "tower-defense": {
       "status": "planned",
