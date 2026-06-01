@@ -1575,6 +1575,33 @@ register3d("tactics3d", async (kernel, content) => {
   for (const u of sim.allUnits()) await makeUnit(u); // load + instance the animated models
   sim.allUnits().forEach(refreshUnit);
 
+  // BOSS HEALTH BAR (top-centre HUD) — reveals when the Avatar boss is spotted,
+  // tracks its HP, hides on death. Only exists on a mission that has a boss.
+  let _bossUnit = sim.allUnits().find((u) => u.boss) || null, _bossBar = null, _bossFill = null;
+  if (_bossUnit) {
+    try {
+      _bossBar = document.createElement("div");
+      Object.assign(_bossBar.style, { position: "absolute", top: "56px", left: "50%", transform: "translateX(-50%)", zIndex: "45", width: "min(440px,70%)", display: "none", fontFamily: "'Segoe UI',monospace", textAlign: "center" });
+      const label = document.createElement("div");
+      Object.assign(label.style, { font: "800 13px 'Segoe UI'", letterSpacing: "2px", color: "#ff5a5a", textShadow: "0 1px 5px #000", marginBottom: "4px" });
+      label.textContent = "◆ " + (_bossUnit.name || "BOSS").toUpperCase() + " ◆";
+      const track = document.createElement("div");
+      Object.assign(track.style, { height: "13px", background: "rgba(8,10,16,0.85)", border: "1px solid #ff5a5a", borderRadius: "7px", overflow: "hidden", boxShadow: "0 0 18px rgba(255,60,60,0.4)" });
+      _bossFill = document.createElement("div");
+      Object.assign(_bossFill.style, { height: "100%", width: "100%", background: "linear-gradient(90deg,#ff2a3a,#ff7a4a)", transition: "width 0.25s ease" });
+      track.appendChild(_bossFill); _bossBar.appendChild(label); _bossBar.appendChild(track);
+      kernel.parent.appendChild(_bossBar);
+      let _bacc = 0;
+      kernel.onUpdate((dt) => {
+        _bacc += dt; if (_bacc < 0.2) return; _bacc = 0;
+        if (!_bossUnit) return;
+        const show = sim.podRevealed(_bossUnit.pod) && _bossUnit.hp > 0 && phase === "battle";
+        _bossBar.style.display = show ? "block" : "none";
+        if (show) _bossFill.style.width = Math.max(0, (_bossUnit.hp / _bossUnit.maxHp) * 100) + "%";
+      });
+    } catch (e) {}
+  }
+
   let shell = null, endShown = false;
   function beginBattle() { phase = "battle"; orbit.autoRotate = false; setHUD(); autoSelectNext(); }
   // ── STORY: mission BRIEFING card (XCOM-style) ───────────────────────────────
