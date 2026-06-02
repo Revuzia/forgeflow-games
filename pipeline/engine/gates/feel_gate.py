@@ -82,7 +82,7 @@ def main():
         print("usage: python feel_gate.py <game_url>")
         sys.exit(2)
     result = run(sys.argv[1])
-    print(json.dumps(result, indent=2)[:1500])
+    print(json.dumps(result, indent=2))  # full object (NOT truncated — a cut JSON can't be parsed by the gate)
     ok, msg = grade(result)
     print(f"[feel_gate] {'PASS' if ok else 'FAIL'} — {msg}")
     sys.exit(0 if ok else 1)

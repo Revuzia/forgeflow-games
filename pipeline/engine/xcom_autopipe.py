@@ -87,8 +87,15 @@ def gates_pass(game):
         r = run([sys.executable, str(ENGINE / "gates" / "feel_gate.py"),
                  f"http://localhost:{port}/games/{game['slug']}/"], timeout=240)
         out = r.stdout or ""
-        s, e = out.find("{"), out.rfind("}")
-        data = json.loads(out[s:e + 1]) if s >= 0 and e > s else {}
+        # Parse only the FIRST JSON object in feel_gate's stdout. feel_gate prints
+        # the result object first, then a human "[feel_gate] PASS/FAIL …{…}" summary
+        # line — a naive first-{ .. last-} slice spans BOTH, so json.loads threw
+        # "Extra data" and failed EVERY gate (2026-06-02 bug). raw_decode reads one
+        # object and ignores the trailing summary.
+        s = out.find("{")
+        if s < 0:
+            return False, "feel_gate produced no JSON output"
+        data, _ = json.JSONDecoder().raw_decode(out[s:])
         ok = bool(data.get("ok")) and not data.get("console_errors")
         return ok, ("feel_gate ok" if ok else f"feel_gate fail: {str(data)[:160]}")
     except Exception as ex:
@@ -155,14 +162,38 @@ def git_tag(slug):
 
 def attempt_fix(game, gap, pre_total, regression_guard=True):
     """Snapshot HEAD, let claude -p (tool-enabled) implement the gap fix, gate it,
-    commit LOCALLY, regression-guard (re-score), and only THEN push. Hard-reset on
-    any failure so nothing bad reaches the remote. Returns (committed, detail)."""
+    commit LOCALLY, regression-guard (re-score), and only THEN push. Reverts on any
+    failure so nothing bad reaches the remote. Returns (committed, detail).
+
+    SAFETY (2026-06-02): the rollback below does `git reset --hard` + `git clean -fd`,
+    which on the SHARED working tree once DESTROYED a concurrent interactive session's
+    uncommitted work. We now STASH any pre-existing uncommitted/untracked changes
+    first — so reset/clean only ever touch the autopipe's own edits — and RESTORE
+    them on every exit path. We also stage only games+pipeline (never `git add -A`),
+    so a concurrent session's stray files are never swept into an autopipe commit."""
     base, tag = git_tag(game["slug"])
+
+    # Isolate from concurrent uncommitted work: stash it (incl. untracked, -u) so our
+    # reset/clean can't reach it. Restored at every return via restore().
+    pre_dirty = bool(run(["git", "status", "--porcelain"], timeout=30).stdout.strip())
+    stashed = False
+    if pre_dirty:
+        sr = run(["git", "stash", "push", "-u", "-m",
+                  f"autopipe-preserve-{game['slug']}-{int(time.time())}"], timeout=90)
+        stashed = sr.returncode == 0 and "No local changes" not in (sr.stdout or "")
+
+    def restore():
+        if stashed:
+            rp = run(["git", "stash", "pop"], timeout=90)
+            if rp.returncode != 0:
+                print("[autopipe] WARN concurrent work kept safe in `git stash` "
+                      "(pop conflicted, resolve manually): " + (rp.stderr or "")[:160])
 
     def rollback():
         if base:
             run(["git", "reset", "--hard", base], timeout=60)
             run(["git", "clean", "-fd", "games", "pipeline"], timeout=60)
+        restore()
 
     run(["claude", "-p", _fix_prompt(game, gap, pre_total)], timeout=1200)
 
@@ -171,11 +202,13 @@ def attempt_fix(game, gap, pre_total, regression_guard=True):
     if not ok:
         rollback()
         return False, "reverted (gate) — " + detail
-    if run(["git", "diff", "--quiet"], timeout=30).returncode == 0:
+    if not run(["git", "status", "--porcelain"], timeout=30).stdout.strip():
+        restore()
         return False, "no change produced"
 
-    # Commit LOCALLY (not pushed yet — the regression guard decides).
-    run(["git", "add", "-A"], timeout=60)
+    # Commit LOCALLY (not pushed yet — the regression guard decides). Stage only the
+    # autopipe's surface (games + pipeline), never `-A`.
+    run(["git", "add", "games", "pipeline"], timeout=60)
     msg = (f"autopipe[{game['slug']}]: close XCOM gap [{gap.get('dimension')}] "
            f"{str(gap.get('issue',''))[:70]}\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>")
     run(["git", "commit", "-q", "-m", msg], timeout=60)
@@ -192,8 +225,9 @@ def attempt_fix(game, gap, pre_total, regression_guard=True):
     else:
         post_note = " (regression-guard off)"
 
-    # Clean + improved → publish.
+    # Clean + improved → publish, then restore any concurrent work on top.
     pr = run(["git", "push", "origin", "master"], timeout=90)
+    restore()
     if pr.returncode != 0:
         return False, "commit ok but push failed: " + (pr.stderr or "")[:120]
     return True, "committed + pushed (gates green," + post_note + ")"
