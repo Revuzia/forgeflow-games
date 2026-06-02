@@ -145,6 +145,8 @@
         // far hazy glow orbs (mountainscape feel), then mid, then near drifting motes
         layer(D.far, 0.12, 10, 38, 90, FFG.shade(pal.primary, -0.2), 0.10);
         layer(D.mid, 0.30, 14, 14, 46, FFG.shade(pal.accent, -0.1), 0.10);
+        // a closer band of small bright embers for parallax depth nearer the play plane
+        layer(D.near, 0.55, 20, 4, 11, FFG.shade(pal.warn, 0.1), 0.16);
 
         // distant silhouette ridge line for grounded depth
         var ridge = this.add.graphics().setScrollFactor(0.18).setDepth(D.far + 1);
@@ -216,8 +218,15 @@
           self.tweens.add({ targets: sp, scaleY: 0.9, duration: 420, yoyo: true, repeat: -1, ease: "Sine.inOut" });
         });
 
-        // GOAL — a luminous flag/portal pillar
+        // GOAL — a luminous flag/portal pillar with a sky-beacon light shaft so it
+        // reads as the destination from across the level.
         var g = L.goal;
+        // a tall, soft light shaft rising from the goal (additive, behind the pillar)
+        var shaft = this.add.triangle(g.x + g.w / 2, g.y - g.h * 0.5,
+          -g.w * 0.9, g.h * 1.4, g.w * 0.9, g.h * 1.4, 0, -g.h * 2.2,
+          pal.good, 0.16).setDepth(D.coin - 1).setBlendMode("ADD");
+        this.tweens.add({ targets: shaft, alpha: 0.30, scaleX: 1.12, duration: 1300, yoyo: true, repeat: -1, ease: "Sine.inOut" });
+
         this.goal = this.add.container(g.x + g.w / 2, g.y + g.h / 2).setDepth(D.coin);
         var pillar = this.add.rectangle(0, 0, g.w, g.h, FFG.shade(pal.good, -0.1), 0.9);
         var inner = this.add.rectangle(0, 0, g.w * 0.5, g.h * 0.86, FFG.shade(pal.good, 0.4), 0.95);
@@ -226,6 +235,15 @@
         FFG.fx.glow(pillar, pal.good, 6); FFG.fx.glow(topOrb, pal.good, 8);
         this.tweens.add({ targets: this.goal, scaleX: 1.05, duration: 700, yoyo: true, repeat: -1, ease: "Sine.inOut" });
         this.tweens.add({ targets: topOrb, y: -g.h / 2 - 6, duration: 1100, yoyo: true, repeat: -1, ease: "Sine.inOut" });
+
+        // beacon: rings that periodically rise from the goal orb (a clear "here!")
+        this.time.addEvent({
+          delay: 1400, loop: true, callback: function () {
+            if (!self.scene || !self.scene.isActive()) return;
+            FFG.fx.shockwave(g.x + g.w / 2, g.y - g.h / 2, { color: pal.good, r0: 6, r1: 60, dur: 1100, thickness: 2 });
+          },
+        });
+
         // goal sensor
         this.goalZone = this.add.rectangle(g.x + g.w / 2, g.y + g.h / 2, g.w, g.h, 0x000000, 0);
         this.physics.add.existing(this.goalZone, true);
@@ -247,8 +265,10 @@
         // a soft ground-shadow ellipse that tracks the hero
         this.heroShadow = this.add.ellipse(hx, hy, 26, 8, 0x000000, 0.28).setDepth(D.hero - 1);
 
-        // control state (coyote / buffer / variable jump)
+        // control state (coyote / buffer / variable jump / double jump)
         this.coyote = 0; this.jumpBuffer = 0; this.wasOnGround = false; this.jumpHeldPrev = false; this._wasRising = false;
+        this.jumpsUsed = 0;          // jumps since last leaving ground (0..maxJumps); reset on land
+        this._trailLast = 0;         // throttle for the fast-movement afterglow trail
 
         // colliders
         this.physics.add.collider(this.hero, this.platforms, this._onPlatformTouch, null, this);
@@ -285,22 +305,92 @@
 
       _buildHUD() {
         var self = this;
-        // coin pip
-        this.coinIcon = this.add.image(22, 22, "coin").setScrollFactor(0).setDepth(D.ui).setScale(0.9);
-        FFG.fx.glow(this.coinIcon, pal.warn, 3);
-        this.coinText = FFG.text(this, 40, 12, "0 / " + this.level.coins.length, { size: 20, color: "#fff0e0", stroke: "#000", strokeThickness: 4, depth: D.ui });
-        this.coinText.setScrollFactor(0);
+        var hud = this.add.container(0, 0).setScrollFactor(0).setDepth(D.ui);
+        this.hud = hud;
 
-        // health pips
+        // ── subtle backing panels so the HUD reads over the bright parallax ──
+        function panel(x, y, w, h) {
+          var g = self.add.graphics().setScrollFactor(0);
+          g.fillStyle(FFG.shade(pal.bg, 0.02), 0.42); g.fillRoundedRect(x, y, w, h, 9);
+          g.lineStyle(1.5, FFG.shade(pal.primary, 0.1), 0.30); g.strokeRoundedRect(x, y, w, h, 9);
+          return g;
+        }
+        // left panel: coins.  right panel: hearts + double-jump pip.
+        var coinPanelW = 116;
+        hud.add(panel(10, 10, coinPanelW, 34));
+
+        // coin icon + "got / total"
+        this.coinIcon = this.add.image(30, 27, "coin").setScrollFactor(0).setScale(0.92);
+        FFG.fx.glow(this.coinIcon, pal.warn, 3);
+        this.coinText = FFG.text(this, 48, 16, "0 / " + this.level.coins.length, { size: 20, color: "#fff0e0", stroke: "#1a0d06", strokeThickness: 4 }).setScrollFactor(0);
+        hud.add([this.coinIcon, this.coinText]);
+
+        // right panel sizing: hearts + a divider + the double-jump pip + label
+        var nHearts = this.tuning.maxHealth;
+        var heartsW = nHearts * 24;
+        var rPanelW = heartsW + 86;
+        var rx = VW - rPanelW - 10;
+        hud.add(panel(rx, 10, rPanelW, 34));
+
+        // HEARTS — drawn as little glowing hearts (two lobes + a point), brighter
+        // than flat pips so health reads instantly.
         this.healthPips = [];
-        for (var i = 0; i < this.tuning.maxHealth; i++) {
-          var p = this.add.circle(VW - 24 - i * 26, 22, 9, pal.danger, 1).setScrollFactor(0).setDepth(D.ui);
-          FFG.fx.glow(p, pal.danger, 4);
-          this.healthPips.push(p);
+        for (var i = 0; i < nHearts; i++) {
+          var hxp = rx + 18 + i * 24;
+          var heart = this._makeHeart(hxp, 27, pal.danger);
+          heart.setScrollFactor(0);
+          FFG.fx.glow(heart, pal.danger, 4);
+          hud.add(heart);
+          this.healthPips.push(heart);
         }
 
-        // title flourish
-        this.titleText = FFG.text(this, VW / 2, 16, (content.title || "Lumen Run"), { size: 14, color: "#fff0e0", origin: 0.5, depth: D.ui }).setScrollFactor(0).setAlpha(0.55);
+        // divider between hearts and the double-jump indicator
+        var divX = rx + heartsW + 16;
+        var div = this.add.rectangle(divX, 27, 1.5, 18, FFG.shade(pal.primary, 0.1), 0.4).setScrollFactor(0);
+        hud.add(div);
+
+        // DOUBLE-JUMP READY pip — a bright ring+dot that DIMS after the 2nd jump and
+        // re-lights on landing (driven each frame in _updateHUD).
+        var djX = divX + 18;
+        this.djRing = this.add.circle(djX, 27, 8).setStrokeStyle(2, pal.accent, 1).setScrollFactor(0);
+        this.djPip = this.add.circle(djX, 27, 4, pal.accent, 1).setScrollFactor(0);
+        FFG.fx.glow(this.djPip, pal.accent, 4);
+        var djLabel = FFG.text(this, djX + 12, 19, "2×", { size: 14, color: "#ffe6b8", stroke: "#1a0d06", strokeThickness: 3 }).setScrollFactor(0);
+        hud.add([this.djRing, this.djPip, djLabel]);
+
+        // level name — centered, tasteful, with its own slim backing chip
+        var name = content.title || "Lumen Run";
+        var nameW = Math.max(120, name.length * 9 + 28);
+        hud.add(panel(VW / 2 - nameW / 2, 10, nameW, 26));
+        this.titleText = FFG.text(this, VW / 2, 14, name, { size: 15, color: "#ffe2c2", origin: 0.5, stroke: "#1a0d06", strokeThickness: 3 }).setScrollFactor(0);
+        hud.add(this.titleText);
+      }
+
+      // a small heart shape as a single Graphics object (so it can glow + tween).
+      // Drawn around the LOCAL origin (0,0) and positioned via setPosition so that
+      // scale/alpha tweens (the hurt-pop) scale in place, not toward the corner.
+      _makeHeart(cx, cy, color) {
+        var g = this.add.graphics().setDepth(D.ui);
+        g.fillStyle(color, 1);
+        g.fillCircle(-3.4, -2, 4.2);                          // left lobe
+        g.fillCircle(3.4, -2, 4.2);                           // right lobe
+        g.fillTriangle(-7.2, -0.2, 7.2, -0.2, 0, 7.4);        // bottom point
+        g.fillStyle(FFG.shade(color, 0.5), 0.85);
+        g.fillCircle(-3.4, -3, 1.6);                          // shine
+        g.setPosition(cx, cy);
+        return g;
+      }
+
+      // per-frame HUD upkeep: keep the double-jump-ready pip in sync with state.
+      _updateHUD() {
+        if (!this.djPip) return;
+        var ready = (this.jumpsUsed || 0) < ((this.tuning.maxJumps || 2)) && (this.jumpsUsed || 0) < 2;
+        // "ready" = a mid-air jump still available (covers grounded too)
+        var avail = (this.jumpsUsed || 0) < (this.tuning.maxJumps || 2);
+        var tgtA = avail ? 1 : 0.18, tgtS = avail ? 1 : 0.7;
+        this.djPip.alpha = Phaser.Math.Linear(this.djPip.alpha, tgtA, 0.2);
+        this.djPip.scale = Phaser.Math.Linear(this.djPip.scale, tgtS, 0.2);
+        if (this.djRing) this.djRing.alpha = Phaser.Math.Linear(this.djRing.alpha, avail ? 1 : 0.35, 0.2);
       }
 
       _buildMenu() {
@@ -310,9 +400,10 @@
         var t1 = FFG.text(this, VW / 2, VH / 2 - 40, (content.title || "Lumen Run"), { size: 44, color: "#fff0e0", stroke: "#000", strokeThickness: 6, origin: 0.5 });
         FFG.fx.glow(t1, pal.primary, 6);
         var t2 = FFG.text(this, VW / 2, VH / 2 + 18, "Arrows / A·D to run  ·  Space / W to jump", { size: 16, color: "#ffd9b0", origin: 0.5 });
-        var t3 = FFG.text(this, VW / 2, VH / 2 + 50, "Reach the glowing goal. Grab the orbs.", { size: 14, color: "#ffb98a", origin: 0.5 });
-        var t4 = FFG.text(this, VW / 2, VH / 2 + 92, "▶  CLICK / SPACE TO PLAY", { size: 18, color: "#fff", origin: 0.5, stroke: "#000", strokeThickness: 4 });
-        this.menu.add([dim, t1, t2, t3, t4]);
+        var t2b = FFG.text(this, VW / 2, VH / 2 + 42, "Press jump again in mid-air for a DOUBLE JUMP", { size: 14, color: "#ffe6b8", origin: 0.5 });
+        var t3 = FFG.text(this, VW / 2, VH / 2 + 70, "Reach the glowing goal. Grab the orbs.", { size: 14, color: "#ffb98a", origin: 0.5 });
+        var t4 = FFG.text(this, VW / 2, VH / 2 + 108, "▶  CLICK / SPACE TO PLAY", { size: 18, color: "#fff", origin: 0.5, stroke: "#000", strokeThickness: 4 });
+        this.menu.add([dim, t1, t2, t2b, t3, t4]);
         this.tweens.add({ targets: t4, alpha: 0.35, duration: 700, yoyo: true, repeat: -1 });
         // space starts too
         this.input.keyboard.on("keydown-SPACE", function () { if (!self.started) self.start(); });
@@ -459,6 +550,8 @@
         // keep shadow + enemy patrol + bg alive even before start (feels live)
         this._updateEnemies(dtMs);
         this._updateHeroShadow();
+        this._updateHUD();
+        this._updateTrail(time);
 
         if (!this.started || this.ended) { if (!this.started) this.hero.setVelocityX(0); return; }
 
@@ -493,17 +586,30 @@
           h.setScale(Phaser.Math.Linear(h.scaleX, 1, 0.2), Phaser.Math.Linear(h.scaleY, 1, 0.2));
         }
 
-        // ── jump: buffer + coyote + variable height ──
+        // ── jump: buffer + coyote (FIRST) then DOUBLE jump (mid-air) ──
+        // jumpsUsed restored to 0 on landing (see _onLand + the onGround branch).
+        var maxJumps = T.maxJumps || 2;
+        if (onGround) this.jumpsUsed = 0;
         var jumpDown = this.cursors.up.isDown || this.keys.up.isDown || this.keys.jump.isDown;
         var jumpEdge = jumpDown && !this.jumpHeldPrev;
         if (jumpEdge) this.jumpBuffer = T.jumpBufferMs; else this.jumpBuffer = Math.max(0, this.jumpBuffer - dtMs);
         this.jumpHeldPrev = jumpDown;
 
-        if (this.jumpBuffer > 0 && (onGround || this.coyote > 0)) {
+        if (this.jumpBuffer > 0 && (onGround || this.coyote > 0) && this.jumpsUsed === 0) {
+          // FIRST jump (ground / coyote)
           h.setVelocityY(-T.jumpVel);
-          this.jumpBuffer = 0; this.coyote = 0;
+          this.jumpBuffer = 0; this.coyote = 0; this.jumpsUsed = 1;
           this._onJump();
+        } else if (jumpEdge && !onGround && this.jumpsUsed >= 1 && this.jumpsUsed < maxJumps) {
+          // DOUBLE jump (deliberate fresh mid-air press; uses the softer impulse)
+          h.setVelocityY(-(T.doubleJumpVel || T.jumpVel));
+          this.jumpBuffer = 0; this.coyote = 0; this.jumpsUsed += 1;
+          this._onDoubleJump();
         }
+        // walked off a ledge without jumping: once coyote lapses the ground jump is
+        // forfeit, so the next air press is the DOUBLE (mirrors the sim authority).
+        if (!onGround && this.jumpsUsed === 0 && this.coyote <= 0) this.jumpsUsed = 1;
+
         // variable height: release while rising clips upward velocity once
         var rising = b.velocity.y < 0;
         if (!jumpDown && rising && this._wasRising) h.setVelocityY(b.velocity.y * T.jumpCutMul);
@@ -525,7 +631,26 @@
         FFG.audio.sfx("jump", 0.4);
       }
 
+      // DOUBLE jump — the headline feature. A juicy mid-air pop: a sparkle ring of
+      // dust at the launch point, a squash on the hero, a bright ring, and a quick
+      // spin flourish so the second jump reads as a deliberate, satisfying "flip".
+      _onDoubleJump() {
+        var hx = this.hero.x, hy = this.hero.y, by = this.hero.body.bottom;
+        FFG.fx.pop(this.hero, 0.7, 220);                                  // stretch tall again
+        // dust + sparkle burst radiating from under the hero at the air-hop
+        FFG.fx.burst(hx, by, { color: FFG.shade(pal.accent, 0.2), count: 16, speed: 200, scale: 0.6, life: 460, spark: true, gravityY: -20 });
+        FFG.fx.burst(hx, by, { color: FFG.shade(pal.ink, -0.1), count: 8, speed: 130, scale: 0.5, life: 360, angle: { min: 50, max: 130 }, gravityY: 40 });
+        FFG.fx.shockwave(hx, hy + this.hero.height * 0.2, { color: pal.accent, r0: 6, r1: 46, dur: 360, thickness: 3 });
+        // a quick 360 spin in the launch direction for flair (settles in update's tilt)
+        var spin = (this.hero.flipX ? -1 : 1) * Phaser.Math.PI2;
+        this.tweens.add({ targets: this.hero, rotation: this.hero.rotation + spin, duration: 320, ease: "Cubic.out" });
+        // dim the double-jump-ready pip immediately (also enforced in _updateHUD)
+        if (this.djPip) this.tweens.add({ targets: this.djPip, alpha: 0.18, scale: 0.7, duration: 140 });
+        FFG.audio.sfx("jump", 0.5);
+      }
+
       _onLand() {
+        this.jumpsUsed = 0;                                  // restore the double-jump budget
         var hardness = Phaser.Math.Clamp(this.hero.body.velocity.y / this.tuning.maxFall, 0, 1);
         // squash on land
         FFG.fx.pop(this.hero, 1.35, 220);
@@ -548,6 +673,21 @@
           if (en.x < en.home - 15) { en.x = en.home - 15; en.dir = 1; en.setFlipX(false); }
           if (en.body) en.body.updateFromGameObject();
         });
+      }
+
+      // subtle afterglow trail: when the hero is moving fast (or falling fast),
+      // leave fading ember ghosts behind for a sense of speed. Throttled so it never
+      // spams the display list.
+      _updateTrail(time) {
+        if (!this.hero || !this.hero.body || !this.started || this.ended) return;
+        var b = this.hero.body, T = this.tuning;
+        var fast = Math.abs(b.velocity.x) > T.maxRun * 0.7 || b.velocity.y > T.maxFall * 0.45 || b.velocity.y < -T.jumpVel * 0.5;
+        if (!fast || time - this._trailLast < 45) return;
+        this._trailLast = time;
+        var ghost = this.add.image(this.hero.x, this.hero.y, "hero").setDepth(D.hero - 1)
+          .setScale(this.hero.scaleX, this.hero.scaleY).setRotation(this.hero.rotation)
+          .setFlipX(this.hero.flipX).setAlpha(0.32).setTint(FFG.shade(pal.primary, 0.25)).setBlendMode("ADD");
+        this.tweens.add({ targets: ghost, alpha: 0, scaleX: ghost.scaleX * 0.82, scaleY: ghost.scaleY * 0.82, duration: 240, ease: "Quad.out", onComplete: function () { try { ghost.destroy(); } catch (e) {} } });
       }
 
       _updateHeroShadow() {
