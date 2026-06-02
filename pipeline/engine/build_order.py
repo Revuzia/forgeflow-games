@@ -224,6 +224,7 @@ def assemble(slug, content):
         shutil.copy2(src, dst)
     if is3d:
         _copy_3d_assets(gdir, content)
+        _copy_creature_assets(gdir, content)  # bundle CREATURES_INDEX models the content requests
     if genre in ("tactics", "tactics3d"):
         _copy_tactics_assets(gdir)
     (gdir / "content.json").write_text(json.dumps(content, indent=2), encoding="utf-8")
@@ -315,6 +316,98 @@ def _copy_3d_assets(gdir, content):
                     copied_texture = True
         else:
             print(f"[build_order] WARN ship model not found in pirate-kit: {src.name}")
+
+
+def _copy_creature_assets(gdir, content):
+    """Bundle creature GLBs from the unified library (CREATURES_INDEX.json) for any
+    game that requests them, and preserve CC-BY attribution. This is how the 1,555-
+    model creature library is wired INTO the build pipeline.
+
+    Request forms in content:
+      * content['ocean_life'] = { slot: { model, file?, ... } }   (naval games)
+          `model` is the in-game path (e.g. assets/creatures/shark.glb). If a library
+          `file` (rel to 3d-models/) is given, copy it to `model`; otherwise keep an
+          already-present file.
+      * content['creatures'] = { slot: { dest?, file? | type/license/name } }  (generic)
+          Resolve a query against the library, copy to `dest`, and write the resolved
+          {model, source, license, attribution} back into the slot.
+
+    Naval / battleship 3D games with NO ocean_life get a DEFAULT ocean set
+    auto-provisioned (real CC0 sea life + a flying seagull). Missing library binaries
+    (gitignored / not downloaded on a fresh checkout) degrade gracefully: a warning
+    prints and that creature is skipped — the game still builds.
+    """
+    try:
+        if str(ENGINE) not in sys.path:
+            sys.path.insert(0, str(ENGINE))
+        import creature_library as CL
+    except Exception as e:
+        print(f"[build_order] WARN creature_library unavailable ({e}); skipping creatures")
+        return
+
+    credits = content.setdefault("credits", {})
+    cred_list = credits.setdefault("creatures", [])
+
+    def _credit(entry):
+        line = CL.attribution_line(entry)
+        if line and line not in cred_list:
+            cred_list.append(line)
+
+    # Auto-provision default ocean life for naval games that didn't specify any.
+    if content.get("genre") in ("battleship", "navalfree") and not content.get("ocean_life"):
+        content["ocean_life"] = json.loads(json.dumps(CL.DEFAULT_OCEAN_LIFE))
+        print("[build_order] auto-provisioned default ocean_life (gull/dolphin/shark/whale/manta)")
+
+    # ocean_life slots — copy each referenced library model into the game
+    for slot, cfg in (content.get("ocean_life") or {}).items():
+        if not isinstance(cfg, dict):
+            continue
+        model = cfg.get("model") or cfg.get("dest")
+        if not model:
+            continue
+        cfg["model"] = model
+        lib_file = cfg.get("file")
+        dst = gdir / model
+        if lib_file:
+            entry = CL.find(lib_file)
+            if CL.bundle(lib_file, dst):
+                if entry:
+                    cfg.setdefault("source", entry.get("source"))
+                    cfg.setdefault("license", entry.get("license_class"))
+                    _credit(entry)
+            else:
+                print(f"[build_order] WARN creature model missing in library: {lib_file} (game still builds)")
+        elif not dst.exists():
+            print(f"[build_order] WARN ocean_life '{slot}' has no library file and none bundled: {model}")
+
+    # generic creatures slots — resolve a query, copy, write resolved metadata back
+    for slot, req in (content.get("creatures") or {}).items():
+        if not isinstance(req, dict):
+            continue
+        dest = req.get("dest") or f"assets/creatures/{slot}.glb"
+        if req.get("file"):
+            entry = CL.find(req["file"]) or {"file": req["file"]}
+        else:
+            picks = CL.pick(n=1, seed=req.get("seed", slot), type=req.get("type"),
+                            license_class=req.get("license"), name_contains=req.get("name"))
+            entry = picks[0] if picks else None
+        if not entry:
+            print(f"[build_order] WARN no creature match for '{slot}' ({req})")
+            continue
+        if CL.bundle(entry, gdir / dest):
+            req["model"] = dest
+            req["source"] = entry.get("source")
+            req["license"] = entry.get("license_class")
+            req["attribution"] = entry.get("attribution")
+            _credit(entry)
+        else:
+            print(f"[build_order] WARN creature binary absent for '{slot}': {entry.get('file')}")
+
+    # keep content tidy: drop empty credit scaffolding when nothing CC-BY was used
+    if not cred_list:
+        credits.pop("creatures", None)
+        if not credits:
+            content.pop("credits", None)
 
 
 def _index_html_2d(content, prof):

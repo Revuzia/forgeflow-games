@@ -124,5 +124,49 @@
   },
   "assets": {
     "menu_image": "assets/menu.png"
+  },
+  "ocean_life": {
+    "gull": {
+      "model": "assets/creatures/gull.glb",
+      "rotY": 0,
+      "count": 4,
+      "air": true,
+      "source": "Poly by Google",
+      "license": "CC-BY",
+      "attribution": "Flying seagull — Poly by Google (CC-BY)"
+    },
+    "dolphin": {
+      "model": "assets/creatures/dolphin.glb",
+      "rotY": 1.5707963267948966,
+      "count": 2,
+      "source": "Poly Pizza",
+      "license": "CC0"
+    },
+    "shark": {
+      "model": "assets/creatures/shark.glb",
+      "rotY": 1.5707963267948966,
+      "count": 1,
+      "source": "Poly Pizza",
+      "license": "CC0"
+    },
+    "whale": {
+      "model": "assets/creatures/whale.glb",
+      "rotY": 1.5707963267948966,
+      "count": 1,
+      "source": "Poly Pizza",
+      "license": "CC0"
+    },
+    "manta": {
+      "model": "assets/creatures/manta.glb",
+      "rotY": 1.5707963267948966,
+      "count": 1,
+      "source": "Poly Pizza",
+      "license": "CC0"
+    }
+  },
+  "credits": {
+    "creatures": [
+      "Flying seagull — Poly by Google (CC-BY 3.0), via Poly Pizza"
+    ]
   }
 }

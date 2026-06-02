@@ -169,245 +169,158 @@ register3d("navalfree", async function (kernel, content) {
   }
   buildArenaBounds();
 
-  // ── Ambient OCEAN LIFE — properly-modeled low-poly wildlife: seagulls (anatomy:
-  // body+head+beak+forked tail + two 2-segment hinged wings) glide + flap + bank
-  // overhead; dolphins (rostrum->barrel->tail-stock body + dorsal + 2 pectorals +
-  // horizontal fluke) breach in nose-first arcs and splash on entry; a shark
-  // (torpedo body + TALL triangular dorsal + 2 pectorals + vertical crescent
-  // caudal) weaves with just its dorsal cutting the surface. Each is a Group of
-  // grouped THREE primitives, naturally coloured, animated every frame. Geometry &
-  // materials are shared/reused; NO creature casts a shadow; no per-frame allocs;
-  // NO lights are ever added (shader-recompile freeze). All transforms via
-  // .position.set / .rotation (Object3D.position is read-only -> use .set()).
-  function buildOceanLife() {
+  // ── Ambient OCEAN LIFE — REAL low-poly creature models (from the ForgeFlow CC0/
+  // CC-BY creature library) replace the old procedural primitives the user rejected.
+  // A flock of seagulls glides + banks overhead; dolphins breach nose-first in arcs
+  // and splash on re-entry; a shark cruises with its dorsal slicing the surface
+  // (periodic lunges show the back); a whale rises from the deep to show its back +
+  // a blowhole spout; a manta ray glides at the surface and breaches. Each real GLB
+  // is NORMALIZED (centered on a pivot via its native box, scaled so its body length
+  // == a target, nose rotated to +X) then wrapped in an outer group the per-frame
+  // code moves/orients. The reflective Water hides anything below y=0, so sea
+  // creatures break the surface to read (and show as dark forms — how you spot real
+  // sea life from above); the gull keeps its light plumage against the sky. NO
+  // creature casts a shadow; clones share geometry; NO lights are added (shader
+  // freeze); all transforms via .position.set / .rotation. Models + per-type config
+  // come from content.ocean_life (pipeline-wired), with a built-in default.
+  const OCEAN_LIFE_DEFAULT = {
+    gull:    { model: "assets/creatures/gull.glb",    length: 4.5, rotY: 0,           count: 5, air: true },
+    dolphin: { model: "assets/creatures/dolphin.glb", length: 8,   rotY: Math.PI / 2, count: 2 },
+    shark:   { model: "assets/creatures/shark.glb",   length: 13,  rotY: Math.PI / 2, count: 1 },
+    whale:   { model: "assets/creatures/whale.glb",   length: 24,  rotY: Math.PI / 2, count: 1 },
+    manta:   { model: "assets/creatures/manta.glb",   length: 11,  rotY: Math.PI / 2, count: 1 },
+  };
+  async function buildOceanLife() {
     const EX = ARENA_W * 0.62, EZ = ARENA_H * 0.62;
     const wrap = (v, lim) => (v > lim ? -lim : v < -lim ? lim : v);
-    const noShadow = (g) => g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+    const cfg = Object.assign({}, OCEAN_LIFE_DEFAULT, (content.ocean_life || {}));
 
-    // ── Shared materials (gull palette: white body, grey wings, dark tips, orange
-    // beak; sea-creature palette: slate top + pale belly) ──────────────────────
-    const matGullBody = new THREE.MeshStandardMaterial({ color: 0xf5f8fc, roughness: 0.85, metalness: 0, emissive: 0x252b34, emissiveIntensity: 0.2, envMapIntensity: 0.35 });
-    const matGullWing = new THREE.MeshStandardMaterial({ color: 0x97a4b0, roughness: 0.9, metalness: 0, emissive: 0x161c24, emissiveIntensity: 0.16, envMapIntensity: 0.3, side: THREE.DoubleSide });
-    const matGullTip = new THREE.MeshStandardMaterial({ color: 0x23282f, roughness: 0.95, metalness: 0, envMapIntensity: 0.2, side: THREE.DoubleSide });
-    const matBeak = new THREE.MeshStandardMaterial({ color: 0xf2a23a, roughness: 0.6, metalness: 0, emissive: 0x3a2305, emissiveIntensity: 0.3 });
-    const matEye = new THREE.MeshStandardMaterial({ color: 0x0a0c0e, roughness: 0.4, metalness: 0.1 });
-    const matSeaTop = new THREE.MeshStandardMaterial({ color: 0x4a5560, roughness: 0.45, metalness: 0.18, envMapIntensity: 0.7 });
-    const matSeaBelly = new THREE.MeshStandardMaterial({ color: 0xcdd6dc, roughness: 0.55, metalness: 0.08, envMapIntensity: 0.5 });
-    const matSharkTop = new THREE.MeshStandardMaterial({ color: 0x5a6670, roughness: 0.5, metalness: 0.16, envMapIntensity: 0.65 });
-    const matSharkBelly = new THREE.MeshStandardMaterial({ color: 0xe2e8ec, roughness: 0.6, metalness: 0.06, envMapIntensity: 0.45 });
-
-    // ── Shared geometries (reused across every instance) ───────────────────────
-    // Gull: a slim torso (thin elongated capsule) tapering to the tail, a small
-    // head + a hooked-looking pointed beak, a fanned/forked tail, and two wings
-    // each built from a SWEPT, TAPERED airfoil PLANE (custom quad: wide chord at
-    // the root, narrow at the tip, leading edge swept back) so it reads as a wing
-    // from any angle — not a plank. The wing roots span +Z (outboard); the bird's
-    // nose is +X.  A flat quad in the XZ plane, root at z0..tip at z1.
-    function wingQuad(z0, z1, rootChord, tipChord, sweep) {
-      // chord runs along X (leading edge -X..? we centre chord on x=0, lead at +x)
-      const geo = new THREE.BufferGeometry();
-      const lr = rootChord * 0.55, tr = rootChord * 0.45;   // root leading/trailing from x=0
-      const lt = tipChord * 0.55, tt = tipChord * 0.45;
-      const verts = new Float32Array([
-        +lr, 0, z0,            // root leading
-        -tr, 0, z0,            // root trailing
-        -tt - sweep, 0, z1,    // tip trailing (swept back)
-        +lt - sweep, 0, z1,    // tip leading (swept back)
-      ]);
-      geo.setAttribute("position", new THREE.BufferAttribute(verts, 3));
-      geo.setIndex([0, 1, 2, 0, 2, 3]);
-      geo.computeVertexNormals();
-      return geo;
+    // Load + normalize: measure the NATIVE box (a post-rotation setFromObject does
+    // NOT reliably reflect the rotation here, which silently mis-scaled ~2.6x), pick
+    // the native axis that becomes world-X after the Y-rotation as the body length,
+    // center the model on a PIVOT (bulletproof — scaling/rotating the pivot keeps the
+    // body centered), then darken sea creatures for contrast / keep the gull light.
+    async function loadCreature(c) {
+      if (!c || !c.model) return null;
+      let m;
+      try { m = await kernel.loadGLTF(c.model); }
+      catch (e) { console.warn("[ocean-life] load failed:", c.model, e && e.message); return null; }
+      const rotY = c.rotY || 0;
+      m.rotation.set(0, 0, 0); m.scale.setScalar(1); m.position.set(0, 0, 0);
+      m.updateMatrixWorld(true);
+      const nbox = new THREE.Box3().setFromObject(m);
+      const nsize = new THREE.Vector3(); nbox.getSize(nsize);
+      const nctr = new THREE.Vector3(); nbox.getCenter(nctr);
+      const bodyLen = (Math.abs(Math.cos(rotY)) * nsize.x + Math.abs(Math.sin(rotY)) * nsize.z) || 1;
+      m.position.set(-nctr.x, -nctr.y, -nctr.z);
+      m.traverse((o) => {
+        if (!o.isMesh) return;
+        o.castShadow = false; o.receiveShadow = false;
+        const mat = o.material; if (!mat) return;
+        if (c.air) {                                   // bird against the sky: keep light, faint emissive lift
+          if (mat.emissive) { mat.emissive.copy(mat.color || mat.emissive); mat.emissiveIntensity = 0.12; }
+        } else {                                       // sea creature: dark form reads against the bright water
+          if (mat.color) mat.color.lerp(new THREE.Color(0x1d2a33), 0.42);
+          if (mat.emissive) { mat.emissive.setHex(0x0a1014); mat.emissiveIntensity = 0.12; }
+          if (mat.roughness != null) mat.roughness = Math.min(mat.roughness, 0.5);
+          if (mat.metalness != null) mat.metalness = Math.max(mat.metalness, 0.12);
+        }
+        mat.envMapIntensity = 1.0;
+      });
+      const pivot = new THREE.Group(); pivot.add(m);
+      pivot.scale.setScalar((c.length || 6) / bodyLen);
+      pivot.rotation.y = rotY;
+      return pivot;
     }
-    const gBody = new THREE.CapsuleGeometry(0.34, 2.0, 6, 10); gBody.rotateZ(Math.PI / 2); gBody.scale(1, 0.85, 0.7); // slim torso, long axis +X
-    const gHead = new THREE.SphereGeometry(0.33, 10, 8); gHead.scale(1.1, 1, 0.95);
-    const gNeck = new THREE.CapsuleGeometry(0.2, 0.5, 4, 8); gNeck.rotateZ(Math.PI / 2 - 0.5);
-    const gBeak = new THREE.ConeGeometry(0.11, 0.62, 6); gBeak.rotateZ(-Math.PI / 2);
-    const gWingInner = wingQuad(0.0, 1.5, 1.35, 1.0, 0.25); // broad shoulder panel
-    const gWingOuter = wingQuad(0.0, 2.0, 1.0, 0.28, 0.9);  // long swept hand, tapers to a point
-    const gTail = new THREE.ConeGeometry(0.62, 1.5, 6); gTail.rotateZ(Math.PI / 2 + Math.PI); gTail.scale(1, 0.18, 1.1); // flat fanned tail behind
-    const gEye = new THREE.SphereGeometry(0.075, 6, 6);
-
-    function makeGull() {
-      const g = new THREE.Group();
-      const body = new THREE.Mesh(gBody, matGullBody); g.add(body);
-      const neck = new THREE.Mesh(gNeck, matGullBody); neck.position.set(1.05, 0.16, 0); g.add(neck);
-      const head = new THREE.Mesh(gHead, matGullBody); head.position.set(1.42, 0.34, 0); g.add(head);
-      const beak = new THREE.Mesh(gBeak, matBeak); beak.position.set(1.78, 0.28, 0); beak.rotation.z = -0.18; g.add(beak);
-      const eL = new THREE.Mesh(gEye, matEye); eL.position.set(1.52, 0.45, 0.2); g.add(eL);
-      const eR = new THREE.Mesh(gEye, matEye); eR.position.set(1.52, 0.45, -0.2); g.add(eR);
-      // fanned/forked tail behind the body
-      const tail = new THREE.Mesh(gTail, matGullWing); tail.position.set(-1.5, 0.02, 0); g.add(tail);
-      // WINGS: a shoulder pivot beside the body hinges the broad inner panel up/down;
-      // a wrist pivot further out hinges the long swept outer panel so the wingtip
-      // leads on the upstroke / trails on the downstroke. Slight dihedral baked in.
-      function wing(sign) {
-        const shoulder = new THREE.Group(); shoulder.position.set(0.15, 0.28, sign * 0.3);
-        const inner = new THREE.Mesh(gWingInner, matGullWing);
-        inner.scale.z = sign; // mirror the +Z span to -Z for the left wing
-        shoulder.add(inner);
-        const wrist = new THREE.Group(); wrist.position.set(-0.2, 0, sign * 1.5);
-        const outer = new THREE.Mesh(gWingOuter, matGullWing); outer.scale.z = sign;
-        // dark wingtip: paint the outer third by overlaying a small tip wedge
-        const tip = new THREE.Mesh(gWingOuter, matGullTip); tip.scale.set(0.6, 1, sign * 0.42); tip.position.set(-0.55, 0.005, sign * 1.18);
-        wrist.add(outer); wrist.add(tip);
-        shoulder.add(wrist); g.add(shoulder);
-        return { shoulder, wrist, sign };
-      }
-      const wL = wing(1), wR = wing(-1);
-      noShadow(g);
-      return { g, wings: [wL, wR], body };
+    function spawn(tpl, x, y, z, name) {
+      const g = new THREE.Group(); g.add(tpl.clone(true)); g.position.set(x, y, z); g.name = name || "ocean"; scene.add(g); return g;
     }
+
+    const [gullT, dolphinT, sharkT, whaleT, mantaT] = await Promise.all([
+      loadCreature(cfg.gull), loadCreature(cfg.dolphin), loadCreature(cfg.shark), loadCreature(cfg.whale), loadCreature(cfg.manta),
+    ]);
 
     const birds = [];
-    for (let i = 0; i < 4; i++) {
-      const gull = makeGull();
-      gull.g.scale.setScalar(1.25 + (i % 3) * 0.35);
-      gull.g.position.set(Math.cos(i * 1.7) * EX * 0.7, 30 + (i % 3) * 10, Math.sin(i * 2.3) * EZ * 0.7);
-      scene.add(gull.g);
-      birds.push({ ...gull, vx: (i % 2 ? 1 : -1) * (9 + i * 1.5), vz: (i % 2 ? -1 : 1) * (3 + (i % 3) * 1.5), ph: i * 1.7, baseY: gull.g.position.y });
+    if (gullT) for (let i = 0; i < (cfg.gull.count || 0); i++) {
+      const g = spawn(gullT, Math.cos(i * 1.7) * EX * 0.7, 14 + (i % 3) * 10, Math.sin(i * 2.3) * EZ * 0.7, "ocean_gull");
+      g.scale.setScalar(1 + (i % 3) * 0.3);
+      birds.push({ g, vx: (i % 2 ? 1 : -1) * (10 + i * 1.6), vz: (i % 2 ? -1 : 1) * (4 + (i % 3) * 1.8), ph: i * 1.7, baseY: g.position.y });
     }
-
-    // A flat, swept-back FIN in the XY plane (vertical), base on x-axis from x0..x1
-    // (trailing..leading along the body) rising to an apex that rakes backward.
-    // Used for crisp triangular dorsals/flukes that read as fins (vs chunky cones).
-    function finTri(baseFront, baseBack, apexX, apexY) {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
-        baseFront, 0, 0,   // base, toward the head
-        baseBack, 0, 0,    // base, toward the tail
-        apexX, apexY, 0,   // raked apex
-      ]), 3));
-      geo.setIndex([0, 1, 2]); geo.computeVertexNormals();
-      return geo;
-    }
-    const matFin = new THREE.MeshStandardMaterial({ color: 0x3e4954, roughness: 0.5, metalness: 0.14, envMapIntensity: 0.6, side: THREE.DoubleSide });
-    const matSharkFin = new THREE.MeshStandardMaterial({ color: 0x4e5a64, roughness: 0.52, metalness: 0.14, envMapIntensity: 0.55, side: THREE.DoubleSide });
-
-    // ── Dolphin (slate top + pale belly): long rostrum -> melon -> barrel body ->
-    // narrow tail stock, a curved-back DORSAL, two PECTORALS, a HORIZONTAL fluke.
-    // Local long axis = +X (nose at +X). ───────────────────────────────────────
-    const dBody = new THREE.CapsuleGeometry(0.9, 3.4, 8, 14); dBody.rotateZ(Math.PI / 2); dBody.scale(1, 0.92, 0.82); // long axis +X, slightly flattened
-    const dBelly = new THREE.CapsuleGeometry(0.72, 3.0, 6, 12); dBelly.rotateZ(Math.PI / 2);
-    const dSnout = new THREE.ConeGeometry(0.34, 1.7, 10); dSnout.rotateZ(-Math.PI / 2); dSnout.scale(1, 0.8, 0.8); // slim rostrum, points +X
-    const dDorsal = finTri(0.5, -0.9, -0.7, 1.5);        // swept-back dorsal
-    const dPec = finTri(0.5, -0.6, -0.5, -1.3);          // pectoral (rakes down/back)
-    const dFlukeHalf = new THREE.ConeGeometry(0.55, 1.4, 6); dFlukeHalf.scale(0.32, 1, 1); // flat lobe, splays along Z
-    function makeDolphin() {
-      const g = new THREE.Group();
-      const body = new THREE.Mesh(dBody, matSeaTop); g.add(body);
-      const belly = new THREE.Mesh(dBelly, matSeaBelly); belly.position.y = -0.26; belly.scale.set(1, 0.62, 0.96); g.add(belly);
-      const snout = new THREE.Mesh(dSnout, matSeaTop); snout.position.set(2.45, -0.08, 0); g.add(snout); // rostrum/beak
-      const melon = new THREE.Mesh(new THREE.SphereGeometry(0.48, 12, 10), matSeaTop); melon.position.set(1.55, 0.16, 0); melon.scale.set(1.1, 0.95, 1); g.add(melon);
-      const dorsal = new THREE.Mesh(dDorsal, matFin); dorsal.position.set(0.0, 0.82, 0); g.add(dorsal); // tall curved-back dorsal
-      const pL = new THREE.Mesh(dPec, matFin); pL.position.set(1.0, -0.45, 0.6); pL.rotation.x = -0.5; g.add(pL);
-      const pR = new THREE.Mesh(dPec, matFin); pR.position.set(1.0, -0.45, -0.6); pR.rotation.x = Math.PI + 0.5; g.add(pR);
-      // horizontal fluke (two lobes splayed along Z, lying flat) on a flexing stock
-      const fl = new THREE.Group(); fl.position.set(-2.25, 0, 0);
-      const flL = new THREE.Mesh(dFlukeHalf, matFin); flL.rotation.x = -Math.PI / 2; flL.position.set(0, 0, 0.5); fl.add(flL);
-      const flR = new THREE.Mesh(dFlukeHalf, matFin); flR.rotation.x = Math.PI / 2; flR.position.set(0, 0, -0.5); fl.add(flR);
-      g.add(fl);
-      noShadow(g);
-      return { g, fluke: fl };
-    }
-    // ── Shark (grey top + white underside): torpedo body (pointed snout -> broad
-    // middle -> tapering tail), the iconic TALL triangular DORSAL, two PECTORALS,
-    // a VERTICAL crescent CAUDAL that sweeps to propel it. Long axis = +X. ───────
-    const sBody = new THREE.CapsuleGeometry(1.0, 4.2, 8, 14); sBody.rotateZ(Math.PI / 2); sBody.scale(1, 0.95, 0.85);
-    const sBelly = new THREE.CapsuleGeometry(0.8, 3.8, 6, 12); sBelly.rotateZ(Math.PI / 2);
-    const sSnout = new THREE.ConeGeometry(0.5, 2.2, 10); sSnout.rotateZ(-Math.PI / 2); sSnout.scale(1, 0.85, 0.85);
-    const sDorsal = finTri(1.0, -0.7, -0.5, 2.7);        // the iconic tall raked dorsal
-    const sPec = finTri(0.7, -0.7, -0.8, -1.7);          // big pectoral
-    const sCaudUp = finTri(0.2, -1.0, -1.0, 2.3);        // tall upper caudal lobe (vertical, in XY)
-    const sCaudLo = finTri(0.2, -0.7, -0.6, -1.2);       // short lower lobe
-    function makeShark() {
-      const g = new THREE.Group();
-      const body = new THREE.Mesh(sBody, matSharkTop); g.add(body);
-      const belly = new THREE.Mesh(sBelly, matSharkBelly); belly.position.y = -0.3; belly.scale.set(1, 0.62, 0.96); g.add(belly);
-      const snout = new THREE.Mesh(sSnout, matSharkTop); snout.position.set(2.95, -0.12, 0); g.add(snout);
-      const dorsal = new THREE.Mesh(sDorsal, matSharkFin); dorsal.position.set(0.2, 1.0, 0); g.add(dorsal); // slices the surface
-      const pL = new THREE.Mesh(sPec, matSharkFin); pL.position.set(1.25, -0.5, 0.8); pL.rotation.x = -0.6; g.add(pL);
-      const pR = new THREE.Mesh(sPec, matSharkFin); pR.position.set(1.25, -0.5, -0.8); pR.rotation.x = Math.PI + 0.6; g.add(pR);
-      // vertical crescent caudal (both lobes in the XY plane) on a swinging stock
-      const tail = new THREE.Group(); tail.position.set(-2.9, 0, 0);
-      const cu = new THREE.Mesh(sCaudUp, matSharkFin); tail.add(cu);
-      const cl = new THREE.Mesh(sCaudLo, matSharkFin); tail.add(cl);
-      g.add(tail);
-      noShadow(g);
-      return { g, tail, dorsal };
-    }
-
     const dolphins = [];
-    for (let i = 0; i < 2; i++) {
-      const d = makeDolphin();
-      d.g.scale.setScalar(1.5);
-      d.g.position.set((i ? 1 : -1) * EX * 0.4, -2.0, (i ? -1 : 1) * EZ * 0.35);
-      scene.add(d.g);
-      dolphins.push({ ...d, vx: (i ? -1 : 1) * 13, vz: (i ? 2 : -2.2), t: i * 2.4, period: 5.5 + i * 1.3, arc: 6 + i });
+    if (dolphinT) for (let i = 0; i < (cfg.dolphin.count || 0); i++) {
+      const g = spawn(dolphinT, (i ? 1 : -1) * EX * 0.4, -2.2, (i ? -1 : 1) * EZ * 0.35, "ocean_dolphin");
+      dolphins.push({ g, vx: (i ? -1 : 1) * 14, vz: (i ? 2 : -2.2), t: i * 2.4, period: 5.5 + i * 1.3, arc: 7 + i });
     }
-    const shark = makeShark(); shark.g.scale.setScalar(1.7);
-    shark.g.position.set(-EX * 0.5, -0.9, EZ * 0.2); scene.add(shark.g);
-    const sharkState = { ...shark, vx: 9, baseY: -0.9, t: 0 };
+    const sharks = [];
+    if (sharkT) for (let i = 0; i < (cfg.shark.count || 0); i++) {
+      const g = spawn(sharkT, -EX * 0.5, -1.6, EZ * 0.2, "ocean_shark");
+      sharks.push({ g, vx: 9 + i * 2, baseY: -1.6, t: i * 1.5 });   // dorsal sits ~+0.8 above the surface at rest
+    }
+    const whales = [];
+    if (whaleT) for (let i = 0; i < (cfg.whale.count || 0); i++) {
+      const g = spawn(whaleT, EX * 0.35, -4.4, -EZ * 0.45, "ocean_whale");
+      whales.push({ g, vx: -5.5, baseY: -4.4, t: i * 3, spoutAt: -99 });  // deep at rest; rises to show its back
+    }
+    const mantas = [];
+    if (mantaT) for (let i = 0; i < (cfg.manta.count || 0); i++) {
+      const g = spawn(mantaT, -EX * 0.3, 0.4, -EZ * 0.3, "ocean_manta");
+      mantas.push({ g, vx: 7, vz: 3.5, baseY: 0.4, t: i * 2 });    // glides with its back at the surface
+    }
+    try { window.__OCEAN__ = { birds, dolphins, sharks, whales, mantas }; } catch (e) {}
 
     let bt = 0;
     kernel.onUpdate((dt) => {
       bt += dt;
-      // ── seagulls: glide + bob, flap inner up/down with the outer trailing, BANK
-      // into turns (roll on Z), yaw to heading. Wingtips lead/trail via wrist hinge.
+      // seagulls: glide + bob, yaw to heading, bank/roll into the lateral component of travel
       for (const b of birds) {
-        b.g.position.set(
-          wrap(b.g.position.x + b.vx * dt, EX),
-          b.baseY + Math.sin(bt * 0.7 + b.ph) * 1.6,
-          wrap(b.g.position.z + b.vz * dt, EZ));
-        const heading = Math.atan2(b.vz, b.vx);
-        const flap = Math.sin(bt * 4.2 + b.ph);          // main beat
-        const lead = Math.cos(bt * 4.2 + b.ph);          // wrist lags the shoulder
-        for (const w of b.wings) {
-          w.shoulder.rotation.x = flap * 0.85 * w.sign;   // up/down stroke (mirrored)
-          w.wrist.rotation.x = lead * 0.5 * w.sign;       // wingtip leads/trails
-        }
-        // bank: roll into the lateral component of travel + a gentle glide tilt
-        b.g.rotation.set(0, heading, 0);
-        b.g.rotateX(Math.sin(bt * 0.7 + b.ph) * -0.12);   // pitch with the bob
-        b.g.rotateZ(-0.35 * (b.vz / (Math.abs(b.vx) + Math.abs(b.vz) + 1e-3)) - flap * 0.04); // bank
+        b.g.position.set(wrap(b.g.position.x + b.vx * dt, EX), b.baseY + Math.sin(bt * 0.7 + b.ph) * 1.7, wrap(b.g.position.z + b.vz * dt, EZ));
+        b.g.rotation.set(0, Math.atan2(b.vz, b.vx), 0);
+        b.g.rotateX(Math.sin(bt * 0.7 + b.ph) * -0.10);
+        b.g.rotateZ(-0.4 * (b.vz / (Math.abs(b.vx) + Math.abs(b.vz) + 1e-3)) + Math.sin(bt * 2.1 + b.ph) * 0.06);
       }
-      // ── dolphins: travel along the surface, then leap nose-first in an arc and
-      // re-enter; pitch follows the arc (nose up on the rise, down on the dive); a
-      // splash when it re-enters. fluke oscillates for life.
+      // dolphins: cruise the surface, leap nose-first in an arc, re-enter with a splash
       for (const d of dolphins) {
         d.t += dt;
-        d.g.position.set(
-          wrap(d.g.position.x + d.vx * dt, EX),
-          0, // y set below
-          wrap(d.g.position.z + d.vz * dt, EZ));
-        const phase = (d.t % d.period) / d.period;        // 0..1
-        const breach = Math.sin(phase * Math.PI);          // 0 at water, 1 at apex
-        const air = breach > 0.02;
-        const y = air ? (breach * d.arc - 1.0) : -2.2;     // submerged between leaps
-        d.g.position.y = y;
-        // pitch: derivative of the arc -> nose up rising, nose down falling
-        const pitch = air ? Math.cos(phase * Math.PI) * 0.95 : 0;
+        d.g.position.set(wrap(d.g.position.x + d.vx * dt, EX), 0, wrap(d.g.position.z + d.vz * dt, EZ));
+        const phase = (d.t % d.period) / d.period, breach = Math.sin(phase * Math.PI), air = breach > 0.02;
+        d.g.position.y = air ? (breach * d.arc - 1.0) : -2.4;
         d.g.rotation.set(0, Math.atan2(d.vz, d.vx), 0);
-        d.g.rotateZ(pitch);                                // nose pitches up/down along travel
-        d.fluke.rotation.z = Math.sin(d.t * 8) * 0.4;      // tail pumps
-        // splash on entry (just dipped below after being airborne)
-        if (d._wasAir && !air) { const p = d.g.position; splash({ x: p.x, y: 0, z: p.z }); }
+        d.g.rotateZ(air ? Math.cos(phase * Math.PI) * 0.95 : 0);
+        if (d._wasAir && !air) splash({ x: d.g.position.x, y: 0, z: d.g.position.z });
         d._wasAir = air;
       }
-      // ── shark: weaves across the surface (sine sway) mostly submerged so only the
-      // tall dorsal slices the water; caudal sweeps side-to-side to propel it;
-      // occasionally rises to show more of the body.
-      const sh = sharkState;
-      sh.t += dt;
-      const weaveVz = Math.sin(sh.t * 0.5) * 9;            // lateral velocity (z drift)
-      sh.g.position.set(
-        wrap(sh.g.position.x + sh.vx * dt, EX),
-        sh.baseY + Math.max(0, Math.sin(sh.t * 0.22)) * 1.3 - 0.4, // mostly under; rises now and then
-        wrap(sh.g.position.z + weaveVz * dt, EZ));
-      // heading follows actual travel (vx forward + the lateral weave velocity).
-      sh.g.rotation.set(0, Math.atan2(weaveVz, sh.vx), 0);
-      sh.g.rotateZ(Math.sin(sh.t * 0.5) * 0.05);           // slight roll into the weave
-      sh.tail.rotation.y = Math.sin(sh.t * 5.5) * 0.6;     // caudal sweep (propulsion)
+      // shark: cruises with its dorsal slicing the surface, weaving; periodic surface lunges lift the back clear
+      for (const sh of sharks) {
+        sh.t += dt;
+        const weaveVz = Math.sin(sh.t * 0.5) * 9;
+        const lunge = Math.pow(Math.max(0, Math.sin(sh.t * 0.27)), 3);
+        sh.g.position.set(wrap(sh.g.position.x + sh.vx * dt, EX), sh.baseY + lunge * 1.9, wrap(sh.g.position.z + weaveVz * dt, EZ));
+        sh.g.rotation.set(0, Math.atan2(weaveVz, sh.vx), 0);
+        sh.g.rotateZ(Math.sin(sh.t * 0.5) * 0.06);
+        sh.g.rotateX(lunge * 0.14);
+      }
+      // whale: a long majestic cycle — rises from the deep to show its back + a blowhole spout, then sounds (dives)
+      for (const w of whales) {
+        w.t += dt;
+        const c = Math.sin(w.t * 0.11);
+        const rise = c > 0 ? c : c * 0.12;
+        w.g.position.set(wrap(w.g.position.x + w.vx * dt, EX), w.baseY + rise * 5.4, wrap(w.g.position.z + Math.sin(w.t * 0.08) * 1.5 * dt, EZ));
+        w.g.rotation.set(0, Math.atan2(0.0001, w.vx), 0);
+        w.g.rotateZ(rise * 0.10);
+        if (c > 0.86 && w.t - w.spoutAt > 5) { w.spoutAt = w.t; splash({ x: w.g.position.x, y: 0, z: w.g.position.z }); }
+      }
+      // manta: glides with its back at the surface banking its broad wings; periodic graceful breach lifts it clear
+      for (const mt of mantas) {
+        mt.t += dt;
+        const weave = Math.sin(mt.t * 0.4);
+        const breach = Math.pow(Math.max(0, Math.sin(mt.t * 0.33)), 2);
+        mt.g.position.set(wrap(mt.g.position.x + mt.vx * dt, EX), mt.baseY + breach * 2.6, wrap(mt.g.position.z + (mt.vz + weave * 4) * dt, EZ));
+        mt.g.rotation.set(0, Math.atan2(mt.vz + weave * 4, mt.vx), 0);
+        mt.g.rotateZ(Math.sin(mt.t * 0.8) * 0.28);
+        mt.g.rotateX(-breach * 0.5);
+        if (mt._wasUp && breach < 0.05) splash({ x: mt.g.position.x, y: 0, z: mt.g.position.z });
+        mt._wasUp = breach > 0.5;
+      }
     });
   }
   buildOceanLife();
@@ -1270,6 +1183,13 @@ register3d("navalfree", async function (kernel, content) {
       } catch (e) { /* additive — never block the menu */ }
     };
     if (shell.phase === "menu") shell.menu();
+    // Launcher deep-link: ?mode=ai jumps straight into a vs-Computer match;
+    // ?mode=online opens the vs-People (online) flow. Additive; menu is the default.
+    try {
+      const _m = new URLSearchParams(location.search).get("mode");
+      if (_m === "ai") { shell.hide(); shell.phase = "playing"; beginGame(content.difficulty || "normal"); }
+      else if (_m === "online") { shell.hide(); shell.phase = "playing"; startOnline(); }
+    } catch (e) { /* deep-link is optional — never block boot */ }
   } else {
     // No shell available — boot straight into a match (headless/test fallback).
     beginGame(content.difficulty || "normal");

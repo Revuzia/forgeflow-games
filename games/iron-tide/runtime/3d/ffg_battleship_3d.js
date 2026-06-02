@@ -95,6 +95,114 @@ register3d("battleship", async function (kernel, content) {
   scene.add(water);
   kernel.onUpdate((dt) => { water.material.uniforms["time"].value += dt * 0.8; });
 
+  // ── Ambient OCEAN LIFE (pipeline-wired) — renders REAL creature models from the
+  // ForgeFlow creature library when content.ocean_life is present (the build
+  // pipeline auto-provisions it for naval games and bundles the GLBs). DORMANT when
+  // absent, so games without it (e.g. the original iron-tide content) are unchanged.
+  // Self-contained: own splash + model normalizer; sizes creatures relative to the
+  // board so they fit any board_size; NO shadows, NO runtime lights, clones share
+  // geometry. Wrapped in try/catch so it can never break the match.
+  (function buildOceanLife() {
+    const ol = content.ocean_life;
+    if (!ol) return;
+    try {
+      const EX = boardSpan * 2.2, EZ = boardSpan * 1.7, WY = water.position.y;
+      const wrap = (v, lim) => (v > lim ? -lim : v < -lim ? lim : v);
+      // size each creature as a fraction of the board so it fits any scale
+      const SIZE = { gull: 0.11, dolphin: 0.17, shark: 0.26, whale: 0.46, manta: 0.24 };
+      const tmp = new THREE.Group(); // splash pool parent (kept simple)
+      function splash(x, z) {
+        const m = new THREE.Mesh(new THREE.ConeGeometry(boardSpan * 0.03, boardSpan * 0.12, 12),
+          new THREE.MeshBasicMaterial({ color: 0xbfe3ff, transparent: true, opacity: 0.8 }));
+        m.position.set(x, WY + boardSpan * 0.03, z); scene.add(m);
+        kernel.tween && kernel.tween({ target: m.scale, to: { x: 1.8, y: 1.8, z: 1.8 }, duration: 0.5 });
+        kernel.tween && kernel.tween({ target: m.material, to: { opacity: 0 }, duration: 0.5, onComplete: () => { scene.remove(m); m.geometry.dispose(); m.material.dispose(); } });
+        if (!kernel.tween) setTimeout(() => { scene.remove(m); }, 600);
+      }
+      async function loadCreature(slot, c) {
+        if (!c || !c.model) return null;
+        let m; try { m = await kernel.loadGLTF(c.model); } catch (e) { return null; }
+        const rotY = c.rotY || 0;
+        m.rotation.set(0, 0, 0); m.scale.setScalar(1); m.position.set(0, 0, 0); m.updateMatrixWorld(true);
+        const nb = new THREE.Box3().setFromObject(m), ns = new THREE.Vector3(); nb.getSize(ns);
+        const nc = new THREE.Vector3(); nb.getCenter(nc);
+        const bodyLen = (Math.abs(Math.cos(rotY)) * ns.x + Math.abs(Math.sin(rotY)) * ns.z) || 1;
+        const target = boardSpan * (SIZE[slot] || 0.2);
+        m.position.set(-nc.x, -nc.y, -nc.z);
+        m.traverse((o) => {
+          if (!o.isMesh) return; o.castShadow = false; o.receiveShadow = false;
+          const mt = o.material; if (!mt) return;
+          if (!c.air) { if (mt.color) mt.color.lerp(new THREE.Color(0x1d2a33), 0.4); }
+          if (mt.emissive) { if (c.air) mt.emissive.copy(mt.color || mt.emissive); else mt.emissive.setHex(0x0a1014); mt.emissiveIntensity = c.air ? 0.12 : 0.12; }
+          mt.envMapIntensity = 1.0;
+        });
+        const pivot = new THREE.Group(); pivot.add(m);
+        pivot.scale.setScalar(target / bodyLen); pivot.rotation.y = rotY;
+        return pivot;
+      }
+      function spawn(tpl, x, y, z) { const g = new THREE.Group(); g.add(tpl.clone(true)); g.position.set(x, y, z); scene.add(g); return g; }
+
+      Promise.all(["gull", "dolphin", "shark", "whale", "manta"].map((k) => loadCreature(k, ol[k]))).then((T) => {
+        const [gullT, dolT, shkT, whlT, mntT] = T;
+        const S = boardSpan / 24; // height scale relative to the reference board
+        const birds = [], dolphins = [], sharks = [], whales = [], mantas = [];
+        if (gullT) for (let i = 0; i < ((ol.gull && ol.gull.count) || 0); i++) {
+          const g = spawn(gullT, Math.cos(i * 1.7) * EX * 0.7, (10 + (i % 3) * 6) * S, Math.sin(i * 2.3) * EZ * 0.7);
+          birds.push({ g, vx: (i % 2 ? 1 : -1) * (8 + i) * S, vz: (i % 2 ? -1 : 1) * (3 + i) * S, ph: i * 1.7, baseY: g.position.y });
+        }
+        if (dolT) for (let i = 0; i < ((ol.dolphin && ol.dolphin.count) || 0); i++) {
+          const g = spawn(dolT, (i ? 1 : -1) * EX * 0.5, -2.0 * S, (i ? -1 : 1) * EZ * 0.5);
+          dolphins.push({ g, vx: (i ? -1 : 1) * 9 * S, vz: (i ? 1.6 : -1.8) * S, t: i * 2.4, period: 5.5 + i * 1.3, arc: 4.5 * S });
+        }
+        if (shkT) for (let i = 0; i < ((ol.shark && ol.shark.count) || 0); i++) {
+          const g = spawn(shkT, -EX * 0.6, -1.0 * S, EZ * 0.3); sharks.push({ g, vx: 7 * S, baseY: -1.0 * S, t: i * 1.5 });
+        }
+        if (whlT) for (let i = 0; i < ((ol.whale && ol.whale.count) || 0); i++) {
+          const g = spawn(whlT, EX * 0.5, -3.0 * S, -EZ * 0.5); whales.push({ g, vx: -4 * S, baseY: -3.0 * S, t: i * 3, spoutAt: -99 });
+        }
+        if (mntT) for (let i = 0; i < ((ol.manta && ol.manta.count) || 0); i++) {
+          const g = spawn(mntT, -EX * 0.4, 0.3 * S, -EZ * 0.4); mantas.push({ g, vx: 5 * S, vz: 2.5 * S, baseY: 0.3 * S, t: i * 2 });
+        }
+        let bt = 0;
+        kernel.onUpdate((dt) => {
+          bt += dt;
+          for (const b of birds) {
+            b.g.position.set(wrap(b.g.position.x + b.vx * dt, EX), b.baseY + Math.sin(bt * 0.7 + b.ph) * 1.3 * S, wrap(b.g.position.z + b.vz * dt, EZ));
+            b.g.rotation.set(0, Math.atan2(b.vz, b.vx), 0);
+            b.g.rotateZ(-0.4 * (b.vz / (Math.abs(b.vx) + Math.abs(b.vz) + 1e-3)) + Math.sin(bt * 2.1 + b.ph) * 0.06);
+          }
+          for (const d of dolphins) {
+            d.t += dt;
+            d.g.position.set(wrap(d.g.position.x + d.vx * dt, EX), 0, wrap(d.g.position.z + d.vz * dt, EZ));
+            const ph = (d.t % d.period) / d.period, br = Math.sin(ph * Math.PI), air = br > 0.02;
+            d.g.position.y = air ? (br * d.arc - 0.8 * S) : -2.2 * S;
+            d.g.rotation.set(0, Math.atan2(d.vz, d.vx), 0); d.g.rotateZ(air ? Math.cos(ph * Math.PI) * 0.95 : 0);
+            if (d._wasAir && !air) splash(d.g.position.x, d.g.position.z); d._wasAir = air;
+          }
+          for (const sh of sharks) {
+            sh.t += dt; const wv = Math.sin(sh.t * 0.5) * 8 * S, ln = Math.pow(Math.max(0, Math.sin(sh.t * 0.27)), 3);
+            sh.g.position.set(wrap(sh.g.position.x + sh.vx * dt, EX), sh.baseY + ln * 1.6 * S, wrap(sh.g.position.z + wv * dt, EZ));
+            sh.g.rotation.set(0, Math.atan2(wv, sh.vx), 0); sh.g.rotateZ(Math.sin(sh.t * 0.5) * 0.06);
+          }
+          for (const w of whales) {
+            w.t += dt; const c2 = Math.sin(w.t * 0.11), rise = c2 > 0 ? c2 : c2 * 0.12;
+            w.g.position.set(wrap(w.g.position.x + w.vx * dt, EX), w.baseY + rise * 4.6 * S, wrap(w.g.position.z + Math.sin(w.t * 0.08) * 1.2 * dt, EZ));
+            w.g.rotation.set(0, Math.atan2(0.0001, w.vx), 0); w.g.rotateZ(rise * 0.1);
+            if (c2 > 0.86 && w.t - w.spoutAt > 5) { w.spoutAt = w.t; splash(w.g.position.x, w.g.position.z); }
+          }
+          for (const mt of mantas) {
+            mt.t += dt; const wv = Math.sin(mt.t * 0.4), br = Math.pow(Math.max(0, Math.sin(mt.t * 0.33)), 2);
+            mt.g.position.set(wrap(mt.g.position.x + mt.vx * dt, EX), mt.baseY + br * 2.2 * S, wrap(mt.g.position.z + (mt.vz + wv * 3 * S) * dt, EZ));
+            mt.g.rotation.set(0, Math.atan2(mt.vz + wv * 3 * S, mt.vx), 0); mt.g.rotateZ(Math.sin(mt.t * 0.8) * 0.26); mt.g.rotateX(-br * 0.5);
+            if (mt._wasUp && br < 0.05) splash(mt.g.position.x, mt.g.position.z); mt._wasUp = br > 0.5;
+          }
+        });
+        try { window.__OCEAN__ = { birds, dolphins, sharks, whales, mantas }; } catch (e) {}
+      });
+    } catch (e) { console.warn("[battleship] ocean life skipped:", e && e.message); }
+  })();
+
+
   // Sky + sun — a real procedural sky for the water to reflect (late-afternoon
   // clear tone, not a hazy white-out) plus a proper sun glint. Drives the
   // water's sunDirection. Exposure pulled back so neither sky nor sea blows out.
@@ -1189,6 +1297,12 @@ register3d("battleship", async function (kernel, content) {
     } catch (e) { /* button is additive — never block the menu */ }
   };
   shell.start(); // boot into the title menu
+  // Launcher deep-link: ?mode=ai -> vs-Computer match, ?mode=online -> vs-People flow.
+  try {
+    const _m = new URLSearchParams(location.search).get("mode");
+    if (_m === "ai") { shell.hide(); shell.phase = "playing"; if (shell._playMusic) shell._playMusic(); beginGame(); }
+    else if (_m === "online") { shell.hide(); shell.phase = "playing"; startOnline(); }
+  } catch (e) { /* deep-link optional */ }
 
   // ── controller + test hooks ─────────────────────────────────────────────────
   const controller = {

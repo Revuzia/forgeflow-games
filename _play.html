@@ -2,96 +2,122 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ForgeFlow Games — Local Test</title>
 <style>
-  :root{--teal:#34d6e8;--bg:#0a1018;--card:#121b28;--ink:#dfe9f5;--mut:#8ea6c4}
+  :root{--teal:#34d6e8;--bg:#0a1018;--card:#121b28;--ink:#dfe9f5;--mut:#8ea6c4;--cpu:#3ddc84;--ppl:#9fe0ff}
   *{box-sizing:border-box} body{margin:0;background:radial-gradient(120% 120% at 50% 0%,#13202f,#070c14);color:var(--ink);font:15px/1.5 'Segoe UI',system-ui,sans-serif;min-height:100vh}
-  .wrap{max-width:1040px;margin:0 auto;padding:34px 22px 60px}
+  .wrap{max-width:1060px;margin:0 auto;padding:34px 22px 60px}
   h1{font-size:30px;margin:0 0 4px;letter-spacing:.5px} h1 .t{color:var(--teal)}
-  .sub{color:var(--mut);margin:0 0 26px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+  .sub{color:var(--mut);margin:0 0 22px}
+  .sech{display:flex;align-items:center;gap:10px;margin:30px 0 14px;font-size:13px;font-weight:800;letter-spacing:2px;color:var(--mut);text-transform:uppercase}
+  .sech::after{content:"";flex:1;height:1px;background:#21354a}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:18px}
   .card{background:linear-gradient(180deg,#152130,#101824);border:1px solid #243447;border-radius:14px;padding:20px;display:flex;flex-direction:column}
   .card h2{margin:0 0 2px;font-size:19px} .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:20px;margin-bottom:10px}
-  .new{background:#13312a;color:#3ddc84;border:1px solid #2f6} .live{background:#2a2030;color:#ffb24d;border:1px solid #6a4}
+  .new{background:#13312a;color:#3ddc84;border:1px solid #2f6} .live{background:#2a2030;color:#ffb24d;border:1px solid #6a4} .vs{background:#10283a;color:#7fd0f0;border:1px solid #2b6f93}
   .card p{color:var(--mut);font-size:13.5px;margin:0 0 16px;flex:1}
-  .btn{display:inline-block;text-align:center;text-decoration:none;font-weight:700;letter-spacing:.5px;padding:11px 16px;border-radius:9px;background:var(--teal);color:#04222a;border:0;cursor:pointer}
-  .btn.ghost{background:transparent;color:var(--teal);border:1px solid var(--teal);margin-left:8px}
-  .row{display:flex;flex-wrap:wrap;gap:8px}
-  .mp{margin-top:26px;background:#0f1a26;border:1px solid #243447;border-radius:14px;padding:18px 20px}
-  .mp h3{margin:0 0 6px;color:var(--teal)} .mp ol{margin:8px 0 0 18px;color:var(--mut);font-size:13.5px} .mp code{background:#0a131c;padding:1px 6px;border-radius:5px;color:#cfe}
+  .row{display:flex;flex-wrap:wrap;gap:9px}
+  .btn{display:inline-flex;align-items:center;gap:7px;text-align:center;text-decoration:none;font-weight:700;letter-spacing:.4px;padding:11px 16px;border-radius:9px;border:0;cursor:pointer;font-size:14px}
+  .cpu{background:linear-gradient(#46e89a,#28b673);color:#04221a}
+  .ppl{background:linear-gradient(#9fe0ff,#4fb6e0);color:#04222a}
+  .solo{background:var(--teal);color:#04222a;min-width:150px;justify-content:center}
+  .btn:hover{filter:brightness(1.07);transform:translateY(-1px)} .btn{transition:transform .08s,filter .08s}
+  .self{margin-top:10px;font-size:12px;color:#6f86a3} .self a{color:var(--ppl);cursor:pointer;text-decoration:underline dotted}
+  .mp{margin-top:28px;background:#0f1a26;border:1px solid #243447;border-radius:14px;padding:18px 20px}
+  .mp h3{margin:0 0 6px;color:var(--teal)} .mp ol{margin:8px 0 0 18px;color:var(--mut);font-size:13.5px}
+  code{background:#0a131c;padding:1px 6px;border-radius:5px;color:#cfe}
   .note{color:#62748c;font-size:12px;margin-top:24px}
 </style></head>
 <body><div class="wrap">
   <h1>ForgeFlow <span class="t">Games</span> — Local Test</h1>
-  <p class="sub">Served locally at <code style="background:#0a131c;padding:1px 6px;border-radius:5px">localhost:8788</code>. Nothing here is deployed. Click a game to open it in a new tab.</p>
+  <p class="sub">Served locally — nothing here is deployed. <b>Versus</b> games give you two ways to play: <b style="color:var(--cpu)">vs&nbsp;Computer</b> or <b style="color:var(--ppl)">vs&nbsp;People</b> (live online). Each opens in a new tab.</p>
 
+  <div class="sech">Versus — play vs Computer or vs People</div>
   <div class="grid">
-    <div class="card">
-      <span class="tag live">UPDATED · ONLINE</span>
-      <h2>Iron Tide</h2>
-      <p>Battleship. Play vs AI, or <b>PLAY ONLINE</b> against another browser (random Quick Match or a private room code) with a <b>15-second</b> turn timer.</p>
-      <div class="row">
-        <a class="btn" href="/games/iron-tide/" target="_blank">Play vs AI</a>
-        <button class="btn ghost" onclick="window.open('/games/iron-tide/','t1','width=900,height=680');window.open('/games/iron-tide/','t2','width=900,height=680');">Open ×2 for Online</button>
-      </div>
-    </div>
 
     <div class="card">
-      <span class="tag new">NEW</span>
-      <h2>Tide Breakers</h2>
-      <p>Free-movement naval combat — <b>no grid</b>. Drive + rotate a 5-ship fleet across open water and fire within your arc. Play vs AI, or <b>PLAY ONLINE</b> (Quick Match / room code, 15s turns).</p>
-      <div class="row">
-        <a class="btn" href="/games/tide-breakers/" target="_blank">Play vs AI</a>
-        <button class="btn ghost" onclick="window.open('/games/tide-breakers/','tb1','width=900,height=680');window.open('/games/tide-breakers/','tb2','width=900,height=680');">Open ×2 for Online</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <span class="tag new">NEW</span>
+      <span class="tag vs">3D · ONLINE · ELO</span>
       <h2>Warboard Chess</h2>
-      <p>3D battle-chess — character pieces that <b>fight</b> when they capture. Full chess rules in rotating environments. Play vs AI, or <b>PLAY ONLINE</b> with Elo ranking (sign in to rank up).</p>
+      <p>3D battle-chess — character pieces that <b>fight</b> when they capture, full rules, rotating environments, move hints + WASD camera. Online play is <b>Elo-ranked</b> (sign in to rank up).</p>
       <div class="row">
-        <a class="btn" href="/games/warboard-chess/" target="_blank">Play vs AI</a>
-        <button class="btn ghost" onclick="window.open('/games/warboard-chess/','wc1','width=900,height=680');window.open('/games/warboard-chess/','wc2','width=900,height=680');">Open ×2 for Online</button>
+        <a class="btn cpu" href="/games/warboard-chess/?mode=ai" target="_blank">🤖 Play vs Computer</a>
+        <a class="btn ppl" href="/games/warboard-chess/?mode=online" target="_blank">👥 Play vs People</a>
       </div>
+      <div class="self">Solo-test online: <a onclick="duo('warboard-chess')">open two tabs ↗</a></div>
     </div>
 
     <div class="card">
-      <span class="tag live">FIDELITY ↑</span>
+      <span class="tag vs">3D · ONLINE</span>
+      <h2>Iron Tide</h2>
+      <p>Classic salvo Battleship in 3D — hidden boards, a real hunt/target AI, cinematic cannon-fire &amp; sinkings, now with ambient <b>ocean life</b>. Online pairs you by <b>Quick Match</b> or a private <b>room code</b>, 15-second turns.</p>
+      <div class="row">
+        <a class="btn cpu" href="/games/iron-tide/?mode=ai" target="_blank">🤖 Play vs Computer</a>
+        <a class="btn ppl" href="/games/iron-tide/?mode=online" target="_blank">👥 Play vs People</a>
+      </div>
+      <div class="self">Solo-test online: <a onclick="duo('iron-tide')">open two tabs ↗</a></div>
+    </div>
+
+    <div class="card">
+      <span class="tag vs">3D · ONLINE</span>
+      <h2>Tide Breakers</h2>
+      <p>Free-movement naval combat — <b>no grid</b>. Drive + rotate a 5-ship fleet across open water and fire within your arc. Now with <b>real ocean life</b> — gulls, breaching dolphins, a shark, a whale &amp; a manta. Online: Quick Match / room code, 15s turns.</p>
+      <div class="row">
+        <a class="btn cpu" href="/games/tide-breakers/?mode=ai" target="_blank">🤖 Play vs Computer</a>
+        <a class="btn ppl" href="/games/tide-breakers/?mode=online" target="_blank">👥 Play vs People</a>
+      </div>
+      <div class="self">Solo-test online: <a onclick="duo('tide-breakers')">open two tabs ↗</a></div>
+    </div>
+
+  </div>
+
+  <div class="sech">Solo — single-player</div>
+  <div class="grid">
+
+    <div class="card">
+      <span class="tag live">3D · FIDELITY ↑</span>
       <h2>Void Skirmish</h2>
-      <p>XCOM-style 3D tactics — multi-floor, loot, boss, tactical map (Tab), night-vision. Now with the Tier 2/3 PBR + GTAO/SMAA fidelity pass.</p>
-      <a class="btn" href="/games/void-skirmish-3d/" target="_blank">Play</a>
+      <p>XCOM-style 3D tactics — multi-floor maps, loot, a boss, tactical overlay (Tab), night-vision, Tier 2/3 PBR + GTAO/SMAA fidelity.</p>
+      <div class="row"><a class="btn solo" href="/games/void-skirmish-3d/" target="_blank">▶ Play</a></div>
     </div>
 
     <div class="card">
-      <span class="tag new">NEW · 2D</span>
+      <span class="tag new">2D · ARCADE</span>
       <h2>Neon Breakout</h2>
-      <p>Juicy neon brick-breaker — glowing bricks shatter into sparks + shockwaves, combo multipliers, power-ups (multiball, laser, wide paddle). Mouse or arrow keys. <i>Arcade.</i></p>
-      <a class="btn" href="/games/neon-breakout/" target="_blank">Play</a>
+      <p>Juicy neon brick-breaker — bricks shatter into sparks + shockwaves, combo multipliers, power-ups (multiball, laser, wide paddle). Mouse / arrows.</p>
+      <div class="row"><a class="btn solo" href="/games/neon-breakout/" target="_blank">▶ Play</a></div>
     </div>
 
     <div class="card">
-      <span class="tag new">NEW · 2D</span>
+      <span class="tag new">2D · SHMUP</span>
       <h2>Starlance</h2>
-      <p>Vertical bullet-storm shmup — blast through enemy waves to a 3-phase <b>Dreadnought</b> boss. Spread/power pickups, additive bullet glow. Arrows/WASD + Space. <i>Shmup.</i></p>
-      <a class="btn" href="/games/starlance/" target="_blank">Play</a>
+      <p>Vertical bullet-storm shmup — <b>6 escalating worlds</b>, each doubling its waves into a multi-phase boss. Spread/power pickups, additive glow. Arrows/WASD + Space.</p>
+      <div class="row"><a class="btn solo" href="/games/starlance/" target="_blank">▶ Play</a></div>
     </div>
 
     <div class="card">
-      <span class="tag new">NEW · 2D</span>
+      <span class="tag new">2D · PLATFORMER</span>
       <h2>Lumen Run</h2>
-      <p>Precision platformer — tight run/jump (coyote time, variable height), glowing coins, spikes, stompable enemies, a goal flag. Squash + dust juice. Arrows + Space. <i>Platformer.</i></p>
-      <a class="btn" href="/games/lumen-run/" target="_blank">Play</a>
+      <p>Precision platformer — <b>double jump</b>, coyote time, variable height, glowing coins, spikes, stompable foes, a goal flag. Every platform reachable. Arrows + Space.</p>
+      <div class="row"><a class="btn solo" href="/games/lumen-run/" target="_blank">▶ Play</a></div>
     </div>
+
   </div>
 
   <div class="mp">
-    <h3>Testing Iron Tide ONLINE solo (no friend needed)</h3>
+    <h3>How “Play vs People” works</h3>
     <ol>
-      <li>Click <b>“Open ×2 for Online”</b> above (or open <code>/games/iron-tide/</code> in two windows).</li>
-      <li>In <b>window 1</b>: PLAY ONLINE → <b>Create Room</b> → note the 4-letter code.</li>
-      <li>In <b>window 2</b>: PLAY ONLINE → <b>Join Room</b> → enter that code. (Or just hit <b>Quick Match</b> in both windows — they’ll auto-pair.)</li>
-      <li>Place ships in both, then play — you control both sides. Watch the 15s timer auto-pass a stalled turn.</li>
+      <li><b style="color:var(--ppl)">Play vs People</b> opens the game straight into the online lobby.</li>
+      <li>With a friend: one picks <b>Create Room</b> and shares the 4-character code; the other picks <b>Join Room</b>. (Or both hit <b>Quick Match</b> to auto-pair.)</li>
+      <li>No friend handy? Use <b>“open two tabs”</b> under a game to play both sides yourself — Create in one tab, Join (same code) in the other.</li>
+      <li>A <b>15-second</b> turn timer auto-passes a stalled turn. Chess online is <b>Elo-ranked</b>.</li>
     </ol>
   </div>
 
-  <p class="note">Start the server first: run <b>play-games-local.bat</b> (in the Claude Claw folder), or in a terminal: <code style="background:#0a131c;padding:1px 6px;border-radius:5px">cd "C:\Users\TestRun\Claude Claw\forgeflow-games" &amp;&amp; python serve_nocache.py 8788</code> — then open <code style="background:#0a131c;padding:1px 6px;border-radius:5px">http://localhost:8788/_play.html</code>. (No-cache server: edits show on a normal reload.)</p>
-</div></body></html>
+  <p class="note">Start the server first: run <b>play-games-local.bat</b> (in the Claude Claw folder), or in a terminal: <code>cd "C:\Users\TestRun\Claude Claw\forgeflow-games" &amp;&amp; python serve_nocache.py 8788</code> — then open <code>http://localhost:8788/_play.html</code>. (No-cache server: edits show on a normal reload.)</p>
+</div>
+<script>
+  // Solo-test an online game: open two tabs in the online flow so you can play both sides.
+  function duo(slug){
+    window.open('/games/'+slug+'/?mode=online','d1_'+slug,'width=940,height=700');
+    window.open('/games/'+slug+'/?mode=online','d2_'+slug,'width=940,height=700');
+  }
+</script>
+</body></html>

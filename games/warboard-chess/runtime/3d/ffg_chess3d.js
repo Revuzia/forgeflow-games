@@ -901,6 +901,12 @@ register3d("chess3d", async (kernel, content) => {
     };
     // If we're sitting on the title right now, re-render so the button appears.
     if (shell.phase === "menu") shell.menu();
+    // Launcher deep-link: ?mode=ai -> vs-Computer match, ?mode=online -> vs-People flow.
+    try {
+      const _m = new URLSearchParams(location.search).get("mode");
+      if (_m === "ai") { shell.hide(); shell.phase = "playing"; if (shell._playMusic) shell._playMusic(); beginGame(); }
+      else if (_m === "online") { shell.hide(); shell.phase = "playing"; startOnline(); }
+    } catch (e) { /* deep-link optional */ }
   } else {
     beginGame();
   }

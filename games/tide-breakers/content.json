@@ -10,7 +10,10 @@
     "height": 640,
     "background": "#0a1622"
   },
-  "arena": { "width": 380, "height": 300 },
+  "arena": {
+    "width": 380,
+    "height": 300
+  },
   "ship_models": {
     "battleship": "assets/ship-large.glb",
     "cruiser": "assets/ship-pirate-large.glb",
@@ -35,9 +38,61 @@
   "setup": {
     "difficulty": "normal",
     "actionsPerTurn": 2,
-    "arena": { "width": 380, "height": 300 }
+    "arena": {
+      "width": 380,
+      "height": 300
+    }
   },
   "assets": {
     "menu_image": ""
+  },
+  "ocean_life": {
+    "gull": {
+      "model": "assets/creatures/gull.glb",
+      "length": 4.5,
+      "rotY": 0,
+      "count": 5,
+      "air": true,
+      "source": "Poly by Google (Poly Pizza)",
+      "license": "CC-BY",
+      "attribution": "Flying seagull — Poly by Google (CC-BY)"
+    },
+    "dolphin": {
+      "model": "assets/creatures/dolphin.glb",
+      "length": 8,
+      "rotY": 1.5707963267948966,
+      "count": 2,
+      "source": "Poly Pizza",
+      "license": "CC0"
+    },
+    "shark": {
+      "model": "assets/creatures/shark.glb",
+      "length": 13,
+      "rotY": 1.5707963267948966,
+      "count": 1,
+      "source": "Poly Pizza",
+      "license": "CC0"
+    },
+    "whale": {
+      "model": "assets/creatures/whale.glb",
+      "length": 24,
+      "rotY": 1.5707963267948966,
+      "count": 1,
+      "source": "Poly Pizza",
+      "license": "CC0"
+    },
+    "manta": {
+      "model": "assets/creatures/manta.glb",
+      "length": 11,
+      "rotY": 1.5707963267948966,
+      "count": 1,
+      "source": "Poly Pizza",
+      "license": "CC0"
+    }
+  },
+  "credits": {
+    "creatures": [
+      "Flying seagull — Poly by Google (CC-BY 3.0), via Poly Pizza"
+    ]
   }
 }
