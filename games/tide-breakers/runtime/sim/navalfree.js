@@ -69,6 +69,12 @@
     this.height = config.height || 220;
     this.rng = config.rng || mulberry32(typeof config.seed === "number" ? config.seed : 1337);
     this.actionsPerTurn = config.actionsPerTurn != null ? config.actionsPerTurn : 2;
+    // Extra actions granted to ENEMY ships each turn (single-player HARD edge). Stays
+    // 0 for online/mirror play so both deterministic sims match exactly.
+    this.enemyActionsBonus = config.enemyActionsBonus != null ? config.enemyActionsBonus : 0;
+    // AI persona ("easy" | "normal" | "hard") — tunes how aggressively the planner
+    // focus-fires, kites, and positions. Deterministic (no rng in planning).
+    this.aiSkill = config.aiSkill || "normal";
     this.onEvent = config.onEvent || function () {};
     this.ships = [];
     var spawn = config.ships || NavalFree.defaultFleet(this.width, this.height);
@@ -154,7 +160,10 @@
   NavalFree.prototype._refreshActions = function (side) {
     for (var i = 0; i < this.ships.length; i++) {
       var s = this.ships[i];
-      s.actionsLeft = (s.side === side && !s.sunk) ? this.actionsPerTurn : 0;
+      var base = (s.side === side && !s.sunk) ? this.actionsPerTurn : 0;
+      // Enemy ships get the single-player HARD action bonus when it's their turn.
+      if (base > 0 && side === "enemy") base += this.enemyActionsBonus;
+      s.actionsLeft = base;
     }
   };
 
@@ -380,40 +389,122 @@
     return true;
   };
 
-  // ── basic AI ────────────────────────────────────────────────────────────────
-  // A simple but real opponent: for each of its ships, pick the nearest living
-  // enemy; if a shot is already legal, fire; otherwise steer toward a firing
-  // solution (close distance + turn to bear) and fire if it opens up. Spends all
-  // actions, then the caller (or aiTakeTurn) ends the turn. Returns a list of the
-  // actions taken (so the renderer can animate them in sequence).
-  NavalFree.prototype.aiPlan = function () {
+  // ── AI ──────────────────────────────────────────────────────────────────────
+  // A REAL opponent (deterministic — no rng in planning). For each ship it:
+  //   • picks a target by THREAT, biased to FINISH low-HP ships (focus fire) and to
+  //     prefer the most dangerous (longest-ranged / highest-value) and in-arc foes;
+  //   • KITES by range: if it out-ranges the target it holds near its OWN max range
+  //     (stay outside the foe's reach); if out-ranged it closes hard to its own
+  //     effective range; it lines the standoff so the bearing lands inside its arc;
+  //   • fires whenever a clean shot exists, spending every action on shoot/maneuver.
+  // Returns the action list so the renderer animates them in sequence.
+
+  // Effective gun reach used for kiting decisions (full-damage band ~ chk falloff).
+  NavalFree.prototype._effRange = function (s) { return s.gun.range; };
+
+  // Threat/priority score for `s` choosing among living enemies. Higher = better
+  // target. Deterministic; ties broken by id for stability.
+  NavalFree.prototype._aiPickTarget = function (s) {
+    var foes = this.enemiesOf(s.side);
+    if (!foes.length) return null;
+    var skill = this.aiSkill || "normal";
+    var best = null, bestScore = -Infinity;
+    for (var i = 0; i < foes.length; i++) {
+      var f = foes[i];
+      var d = dist(s.x, s.y, f.x, f.y);
+      var inRange = d <= s.gun.range;
+      var bearing = Math.atan2(f.y - s.y, f.x - s.x);
+      var off = Math.abs(angDelta(s.heading, bearing));
+      var inArc = off <= s.gun.arc / 2;
+      var canHitNow = inRange && inArc && this._losClear(s, f.x, f.y, f.id);
+      var score = 0;
+      // 1) FINISH: if we can drop it within ~1-2 of our salvos, prioritise hard.
+      var shotsToKill = Math.max(1, Math.ceil(f.hp / Math.max(1, s.gun.dmg)));
+      score += (6 - Math.min(6, shotsToKill)) * 14;        // fewer shots-to-kill = far better
+      if (f.hp <= s.gun.dmg) score += 60;                  // outright finisher this shot
+      // 2) Low absolute HP (focus the wounded).
+      score += (1 - f.hp / Math.max(1, f.maxHp)) * 30;
+      // 3) Threat value: longer-ranged + harder-hitting foes are more dangerous.
+      score += (f.gun.range / 140) * 12 + (f.gun.dmg / 34) * 10;
+      // 4) Reachability now / soon: in-arc & in-range shots are cheap to take.
+      if (canHitNow) score += 28; else if (inRange) score += 10;
+      // 5) Distance: gentle pull toward nearer foes so ships don't all chase one far away.
+      score += (1 - Math.min(1, d / (this.width + this.height))) * 8;
+      // Easy AI: flatten the smarts toward "nearest", so it plays softer.
+      if (skill === "easy") score = (1 - Math.min(1, d / (this.width + this.height))) * 10 + (canHitNow ? 5 : 0);
+      // stable tiebreak
+      score += (f.id < s.id ? 0.001 : 0);
+      if (score > bestScore || (score === bestScore && (!best || f.id < best.id))) { bestScore = score; best = f; }
+    }
+    return best;
+  };
+
+  // Plan + execute the acting SIDE's whole turn (defaults to this.turn). Used by
+  // the live enemy turn (aiPlan) AND by autoResolve to drive BOTH fleets.
+  NavalFree.prototype.aiPlanSide = function (side) {
+    side = side || this.turn;
     var acts = [];
-    if (this.ended || this.turn !== "enemy") return acts;
-    var mine = this.shipsOf("enemy");
+    if (this.ended) return acts;
+    var mine = this.shipsOf(side);
     for (var i = 0; i < mine.length; i++) {
       var s = mine[i];
       var guard = 0;
-      while (s.actionsLeft > 0 && !this.ended && guard++ < 8) {
-        var foe = this._nearestEnemy(s);
+      while (s.actionsLeft > 0 && !this.ended && guard++ < 10) {
+        var foe = this._aiPickTarget(s) || this._nearestEnemy(s);
         if (!foe) break;
+        // 1) Clean shot available now? Take it (focus fire / finish).
         var chk = this.canFireAt(s.id, foe.x, foe.y, foe.id);
         if (chk.ok) {
           var r = this.fireAt(s.id, foe.id);
           acts.push({ kind: "fire", id: s.id, target: foe.id, result: r });
+          if (r && r.result === "sink") continue; // target down — re-pick next loop
           continue;
         }
-        // Not a clean shot — maneuver. Aim a point that closes range and lines us
-        // up: a spot just inside our gun range along the bearing to the foe.
+        // 2) No shot — maneuver to a firing solution that respects KITING.
         var bearing = Math.atan2(foe.y - s.y, foe.x - s.x);
-        var standoff = s.gun.range * 0.7;
+        var d = dist(s.x, s.y, foe.x, foe.y);
+        var myR = this._effRange(s), foeR = this._effRange(foe);
+        // Desired standoff distance from the foe:
+        //  • out-range them  -> sit near MY max range (just inside), outside their reach;
+        //  • out-ranged      -> close to a strong band of my range to start hitting;
+        //  • even            -> a touch inside my range for full-damage falloff.
+        var skill = this.aiSkill || "normal";
+        var standoff;
+        if (myR > foeR + 4) standoff = Math.min(myR * 0.95, Math.max(foeR + 8, myR * 0.8));
+        else if (foeR > myR + 4) standoff = myR * (skill === "hard" ? 0.6 : 0.7);
+        else standoff = myR * (skill === "hard" ? 0.78 : 0.82);
+        if (skill === "easy") standoff = myR * 0.7; // simpler closing behaviour
+        // Target point at `standoff` from the foe, on the bearing line toward us.
         var destX = foe.x - Math.cos(bearing) * standoff;
         var destY = foe.y - Math.sin(bearing) * standoff;
+        // If we're already roughly at standoff but just need to TURN to bear, aim a
+        // point straight ahead toward the foe so moveShip rotates us onto target
+        // without overshooting (heading turns toward travel dir, capped by turnRate).
+        var off = Math.abs(angDelta(s.heading, bearing));
+        if (Math.abs(d - standoff) < s.speed * 0.5 && off > s.gun.arc / 2) {
+          destX = s.x + Math.cos(bearing) * Math.min(s.speed, 6);
+          destY = s.y + Math.sin(bearing) * Math.min(s.speed, 6);
+        }
         var mv = this.moveShip(s.id, { x: destX, y: destY });
         acts.push({ kind: "move", id: s.id, result: mv });
-        if (!mv.ok) break;
+        if (!mv.ok || mv.moved < 0.05) {
+          // Couldn't make progress (blocked/at-bound). Try a pure rotate to bring
+          // guns to bear so the next action can fire; else bail to avoid spinning.
+          if (s.actionsLeft > 0 && off > s.gun.arc / 2) {
+            var rot = this.rotateShip(s.id, angDelta(s.heading, bearing));
+            acts.push({ kind: "move", id: s.id, result: { ok: rot.ok, x: s.x, y: s.y, heading: s.heading, moved: 0 } });
+            if (!rot.ok) break;
+          } else break;
+        }
       }
     }
     return acts;
+  };
+
+  // Live enemy turn: plan the ENEMY side (guarded so clicks/tests can't mis-fire it).
+  NavalFree.prototype.aiPlan = function () {
+    if (this.ended || this.turn !== "enemy") return [];
+    return this.aiPlanSide("enemy");
   };
 
   // Convenience: plan + end turn in one call (headless tests / simple drivers).
