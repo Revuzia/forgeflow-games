@@ -39,7 +39,17 @@
   // and a capped fall so long drops stay readable. Units: pixels, ms, px/s, px/s^2.
   var DEFAULT_TUNING = {
     gravity: 2100,          // px/s^2 downward
-    jumpVel: 760,           // initial upward velocity on jump (px/s)
+    jumpVel: 820,           // initial upward velocity on jump (px/s) -> single-jump
+                            // apex = 820^2/(2*2100) ≈ 160px, so the lowest floats
+                            // (≈144px above ground) clear with headroom. Was 760
+                            // (≈137px) which left EVERY float just out of reach —
+                            // the owner literally could not climb. See reachability
+                            // note above defaultLevel().
+    doubleJumpVel: 760,     // upward velocity of the SECOND (mid-air) jump (px/s).
+                            // Slightly softer than the first so the air-hop reads as
+                            // a lighter "flutter"; still adds ~138px on top of the
+                            // first arc for generous vertical reach.
+    maxJumps: 2,            // total jumps before landing (1 ground + 1 air = double)
     jumpCutMul: 0.42,       // on early release while rising, vy *= this (variable height)
     runAccel: 5200,         // ground horizontal accel (px/s^2)
     runDecel: 6400,         // ground friction when no input (px/s^2)
@@ -57,11 +67,19 @@
   // ── DEFAULT LEVEL ─────────────────────────────────────────────────────────
   // A hand-shaped, clearly-completable run. Coords are world px (y down). Ground
   // is one long strip; floating platforms make a readable left->right ascent with
-  // a coin trail, one spike pit to hop, one patroller, and a goal flag at the end.
+  // a coin trail, one spike pit to hop, two patrollers, and a goal flag at the end.
   // Built procedurally-but-fixed so it's identical every load.
+  //
+  // REACHABILITY CONTRACT (the owner couldn't climb the old layout):
+  //   single-jump apex H = jumpVel^2 / (2*gravity) = 820^2 / 4200 ≈ 160px.
+  //   Every step-UP onto a platform here is <= ~120px above the surface you launch
+  //   from, so the staircase is climbable with the FIRST jump alone — double jump
+  //   is pure insurance/expression, not a requirement. The single deliberately-big
+  //   horizontal traverse is on flat ground (no jump needed). The spike pit is
+  //   144px wide; the single-jump horizontal arc (~250px) clears it comfortably.
   function defaultLevel() {
     var T = 36;                 // tile size used for snapping the layout
-    var groundY = 16 * T;       // 576
+    var groundY = 16 * T;       // 576 (top of the ground strip)
     var W = 64 * T;             // 2304 world width
     var H = 16 * T;             // 540-ish (view is 540; world taller via ground)
     var plats = [];
@@ -76,33 +94,35 @@
 
     // continuous ground with ONE gap (spike pit) the player must jump
     plat(0, groundY, 22 * T, 4 * T);                    // ground segment A (0..792)
-    spikePit(22 * T, groundY + 2, 4 * T);               // spike pit in the gap
+    spikePit(22 * T, groundY + 2, 4 * T);               // spike pit in the gap (792..936)
     plat(26 * T, groundY, 38 * T, 4 * T);               // ground segment B (936..end)
 
-    // floating step platforms — a clean ascending arc, then back down
-    plat(7 * T, groundY - 4 * T, 4 * T, T);             // step 1
-    plat(12 * T, groundY - 7 * T, 4 * T, T);            // step 2 (over the pit approach)
-    plat(17.5 * T, groundY - 5 * T, 3.5 * T, T);        // step 3 (landing past pit start)
-    plat(31 * T, groundY - 4 * T, 4 * T, T);            // mid float
-    plat(37 * T, groundY - 7 * T, 4 * T, T);            // high float
-    plat(43 * T, groundY - 4 * T, 5 * T, T);            // pre-goal ledge
+    // floating step platforms — a GENTLE ascending staircase (each step <=120px up
+    // from the prior surface), readable and climbable with a single jump. Heights
+    // are whole tiles so coordinates stay clean integers.
+    plat(7 * T,  groundY - 3 * T, 3 * T, T, "float");   // step 1 (108px above ground A)
+    plat(11 * T, groundY - 6 * T, 3 * T, T, "float");   // step 2 (108px above step 1)
+    plat(15 * T, groundY - 3 * T, 4 * T, T, "float");   // step 3 (eases back down to the pit lip)
+    plat(30 * T, groundY - 3 * T, 3 * T, T, "float");   // mid float A (108px above ground B)
+    plat(34 * T, groundY - 6 * T, 3 * T, T, "float");   // mid float B (108px above mid A) — high reward
+    plat(39 * T, groundY - 3 * T, 5 * T, T, "float");   // pre-goal ledge (eases back to ground)
 
-    // coin trail (arcs over the platforms + a reward line above the pit)
-    coin(8.5 * T, groundY - 5.4 * T);
-    coin(13.5 * T, groundY - 8.4 * T);
-    coin(15 * T, groundY - 9.0 * T, 10);                // peak coin (worth more)
-    coin(16.5 * T, groundY - 8.4 * T);
-    coin(19 * T, groundY - 6.4 * T);
-    coin(28 * T, groundY - 1.4 * T);
-    coin(32.5 * T, groundY - 5.4 * T);
-    coin(38.5 * T, groundY - 8.4 * T);
-    coin(44.5 * T, groundY - 5.4 * T);
-    coin(48 * T, groundY - 1.4 * T);
+    // coin trail — arcs that hug the jump paths so collecting them rewards the climb
+    coin(8.5 * T,  groundY - 4.4 * T);
+    coin(11.5 * T, groundY - 6.4 * T);
+    coin(13 * T,   groundY - 7.2 * T, 10);             // peak coin over step 2 (worth more)
+    coin(14.5 * T, groundY - 6.4 * T);
+    coin(17.5 * T, groundY - 4.4 * T);
+    coin(24 * T,   groundY - 2.6 * T);                 // arc over the spike pit landing
+    coin(31.5 * T, groundY - 4.4 * T);
+    coin(35.5 * T, groundY - 7.2 * T);                 // top of the mid staircase
+    coin(41.5 * T, groundY - 4.4 * T);
+    coin(48 * T,   groundY - 1.4 * T);
 
-    // a patrolling enemy on ground segment B (between mid float and pre-goal)
-    enemies.push({ x: 30 * T, y: groundY - 30, w: 30, h: 30, kind: "patrol", range: 5 * T, speed: 90, dir: 1 });
-    // a second patroller up on the high float for a stomp opportunity
-    enemies.push({ x: 38 * T, y: groundY - 7 * T - 28, w: 28, h: 28, kind: "patrol", range: 2.4 * T, speed: 70, dir: -1 });
+    // a patrolling enemy on ground segment B (kept clear of the staircase footing)
+    enemies.push({ x: 27 * T, y: groundY - 30, w: 30, h: 30, kind: "patrol", range: 2 * T, speed: 90, dir: 1 });
+    // a second patroller up on mid float B for a stomp opportunity
+    enemies.push({ x: 35 * T, y: groundY - 6 * T - 28, w: 28, h: 28, kind: "patrol", range: 1 * T, speed: 70, dir: -1 });
 
     return {
       tile: T,
@@ -196,6 +216,7 @@
           w: heroW, h: heroH, vx: 0, vy: 0,
           onGround: false, faceDir: 1,
           coyote: 0, jumpBuffer: 0, jumpHeldPrev: false,
+          jumpsUsed: 0,             // jumps taken since last leaving the ground (0..maxJumps)
           health: tuning.maxHealth, invuln: 0, dead: false,
         },
         coinsGot: 0, score: 0,
@@ -242,15 +263,37 @@
       }
       h.vx = clamp(h.vx, -T.maxRun, T.maxRun);
 
-      // ── jump (coyote OR grounded) + buffered ─────────────────────────────
-      var canJump = (h.onGround || h.coyote > 0);
-      if (h.jumpBuffer > 0 && canJump) {
+      // ── jump: FIRST (coyote OR grounded) then DOUBLE (mid-air) ─────────────
+      // The buffer is edge-triggered (set once per fresh press), so a single held
+      // press can never consume both jumps. Coyote + buffer apply to the FIRST jump;
+      // the second is a deliberate mid-air press that just needs a jump remaining.
+      var maxJumps = T.maxJumps || 2;
+      var canGroundJump = (h.onGround || h.coyote > 0);
+      if (h.jumpBuffer > 0 && canGroundJump && h.jumpsUsed === 0) {
+        // FIRST jump (from ground / within coyote window)
         h.vy = -T.jumpVel;
         h.onGround = false;
         h.coyote = 0;
         h.jumpBuffer = 0;
-        st.events.push({ type: "jump", x: h.x + h.w / 2, y: h.y + h.h });
+        h.jumpsUsed = 1;
+        st.events.push({ type: "jump", x: h.x + h.w / 2, y: h.y + h.h, n: 1 });
+      } else if (h.jumpBuffer > 0 && !h.onGround && h.jumpsUsed >= 1 && h.jumpsUsed < maxJumps) {
+        // DOUBLE jump (second mid-air impulse). If we left a ledge without ever
+        // jumping (walked off), the coyote window covers the first press; once that
+        // expires jumpsUsed is bumped to 1 (see coyote-expiry below) so the very
+        // next air press becomes the *second* jump, never a free extra.
+        h.vy = -(T.doubleJumpVel || T.jumpVel);
+        h.coyote = 0;
+        h.jumpBuffer = 0;
+        h.jumpsUsed = Math.max(h.jumpsUsed + 1, 2);
+        // juicy double-jump: a flip flourish + dust/sparkle pop at the launch
+        st.events.push({ type: "djump", x: h.x + h.w / 2, y: h.y + h.h / 2, n: h.jumpsUsed });
       }
+      // walked off a ledge without jumping: once coyote lapses, the "ground jump"
+      // is forfeit — bump jumpsUsed to 1 so the next air press is the DOUBLE, not a
+      // bonus first jump from mid-air.
+      if (!h.onGround && h.jumpsUsed === 0 && h.coyote <= 0) h.jumpsUsed = 1;
+
       // variable height: releasing jump while rising clips upward velocity once
       if (!inp.jumpHeld && h.vy < 0 && h._wasRising) {
         h.vy *= T.jumpCutMul;
@@ -292,10 +335,13 @@
           }
         }
       }
-      // landing event + refresh coyote on leaving ground
+      // landing event + refresh coyote on leaving ground; reset the jump count so
+      // the next leap is a fresh FIRST jump (double-jump budget restored on land).
       if (h.onGround && !wasOnGround && h.vy === 0) {
+        h.jumpsUsed = 0;
         st.events.push({ type: "land", x: h.x + h.w / 2, y: h.y + h.h });
       }
+      if (h.onGround) h.jumpsUsed = 0;
       if (wasOnGround && !h.onGround) h.coyote = T.coyoteMs;
       if (h.onGround) h.coyote = T.coyoteMs;
 
@@ -480,9 +526,25 @@
       }
 
       var wantJump = (wallAhead || higherStep || enemyAhead || atGapLip || hazardLip);
-      if (wantJump && (h.onGround || h.coyote > 0)) {
+      var maxJumps = T.maxJumps || 2;
+      if (wantJump && (h.onGround || h.coyote > 0) && h.jumpsUsed === 0) {
+        // FIRST jump (ground / coyote)
         input.jump = true;
         input.jumpHeld = true;
+      } else if (!h.onGround && h.jumpsUsed >= 1 && h.jumpsUsed < maxJumps) {
+        // DOUBLE-JUMP recovery: if airborne with a jump to spare and we've stalled
+        // (apex reached / now falling) but a higher foothold or a wall/enemy/gap is
+        // still ahead and unreached, fire the second jump to clear it. The new
+        // golden staircase is single-jump-reachable, so this rarely triggers — it's
+        // robustness so taller future golden-seeded levels still auto-complete.
+        var stalled = h.vy > -120;            // past the strong part of the rise
+        var stillNeedUp = (higherStep || wallAhead || enemyAhead);
+        // also rescue a long-gap arc that's dropping toward a lip/hazard short
+        var droppingShort = (h.vy > 60 && (hazardLip || (!groundUnderNext && nearGapEdgeDist === Infinity)));
+        if (stalled && (stillNeedUp || droppingShort)) {
+          input.jump = true;
+          input.jumpHeld = true;
+        }
       }
       return input;
     },
