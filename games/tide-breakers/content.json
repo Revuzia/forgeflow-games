@@ -12,6 +12,11 @@
   },
   "arena": { "width": 380, "height": 300 },
   "ship_models": {
+    "battleship": "assets/ship-large.glb",
+    "cruiser": "assets/ship-pirate-large.glb",
+    "destroyer": "assets/ship-medium.glb",
+    "frigate": "assets/ship-pirate-medium.glb",
+    "gunboat": "assets/ship-small.glb",
     "large": "assets/ship-large.glb",
     "medium": "assets/ship-medium.glb",
     "small": "assets/ship-small.glb",

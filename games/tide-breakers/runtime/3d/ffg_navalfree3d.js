@@ -169,66 +169,273 @@ register3d("navalfree", async function (kernel, content) {
   }
   buildArenaBounds();
 
-  // ── Ambient OCEAN LIFE — seagulls glide + flap overhead; a dolphin breaches in
-  // arcs, a shark fin cuts the surface, a whale glides just under: a living sea.
-  // Cheap low-poly meshes, moved + wrapped each frame (no per-frame allocs/lights).
+  // ── Ambient OCEAN LIFE — properly-modeled low-poly wildlife: seagulls (anatomy:
+  // body+head+beak+forked tail + two 2-segment hinged wings) glide + flap + bank
+  // overhead; dolphins (rostrum->barrel->tail-stock body + dorsal + 2 pectorals +
+  // horizontal fluke) breach in nose-first arcs and splash on entry; a shark
+  // (torpedo body + TALL triangular dorsal + 2 pectorals + vertical crescent
+  // caudal) weaves with just its dorsal cutting the surface. Each is a Group of
+  // grouped THREE primitives, naturally coloured, animated every frame. Geometry &
+  // materials are shared/reused; NO creature casts a shadow; no per-frame allocs;
+  // NO lights are ever added (shader-recompile freeze). All transforms via
+  // .position.set / .rotation (Object3D.position is read-only -> use .set()).
   function buildOceanLife() {
-    const EX = ARENA_W * 0.6, EZ = ARENA_H * 0.6;
+    const EX = ARENA_W * 0.62, EZ = ARENA_H * 0.62;
     const wrap = (v, lim) => (v > lim ? -lim : v < -lim ? lim : v);
-    // seagulls (a shallow-V wing pair each)
-    const birdMat = new THREE.MeshStandardMaterial({ color: 0xeef2f7, roughness: 0.7, metalness: 0, emissive: 0x2a323c, emissiveIntensity: 0.25, envMapIntensity: 0.4 });
-    const wingGeo = new THREE.ConeGeometry(0.5, 4.0, 4);
-    const birds = [];
-    for (let i = 0; i < 6; i++) {
-      const g = new THREE.Group();
-      const L = new THREE.Mesh(wingGeo, birdMat), R = new THREE.Mesh(wingGeo, birdMat);
-      L.rotation.z = Math.PI / 2; R.rotation.z = -Math.PI / 2; L.position.x = -1.8; R.position.x = 1.8;
-      g.add(L); g.add(R); g.scale.setScalar(1.3 + (i % 3) * 0.35);
-      g.position.set(Math.cos(i * 1.3) * EX * 0.7, 34 + (i % 3) * 9, Math.sin(i * 1.9) * EZ * 0.7);
-      scene.add(g); birds.push({ g, L, R, vx: (i % 2 ? 1 : -1) * (7 + i), vz: (i % 2 ? -1 : 1) * (2 + (i % 3)), ph: i });
+    const noShadow = (g) => g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+
+    // ── Shared materials (gull palette: white body, grey wings, dark tips, orange
+    // beak; sea-creature palette: slate top + pale belly) ──────────────────────
+    const matGullBody = new THREE.MeshStandardMaterial({ color: 0xf5f8fc, roughness: 0.85, metalness: 0, emissive: 0x252b34, emissiveIntensity: 0.2, envMapIntensity: 0.35 });
+    const matGullWing = new THREE.MeshStandardMaterial({ color: 0x97a4b0, roughness: 0.9, metalness: 0, emissive: 0x161c24, emissiveIntensity: 0.16, envMapIntensity: 0.3, side: THREE.DoubleSide });
+    const matGullTip = new THREE.MeshStandardMaterial({ color: 0x23282f, roughness: 0.95, metalness: 0, envMapIntensity: 0.2, side: THREE.DoubleSide });
+    const matBeak = new THREE.MeshStandardMaterial({ color: 0xf2a23a, roughness: 0.6, metalness: 0, emissive: 0x3a2305, emissiveIntensity: 0.3 });
+    const matEye = new THREE.MeshStandardMaterial({ color: 0x0a0c0e, roughness: 0.4, metalness: 0.1 });
+    const matSeaTop = new THREE.MeshStandardMaterial({ color: 0x4a5560, roughness: 0.45, metalness: 0.18, envMapIntensity: 0.7 });
+    const matSeaBelly = new THREE.MeshStandardMaterial({ color: 0xcdd6dc, roughness: 0.55, metalness: 0.08, envMapIntensity: 0.5 });
+    const matSharkTop = new THREE.MeshStandardMaterial({ color: 0x5a6670, roughness: 0.5, metalness: 0.16, envMapIntensity: 0.65 });
+    const matSharkBelly = new THREE.MeshStandardMaterial({ color: 0xe2e8ec, roughness: 0.6, metalness: 0.06, envMapIntensity: 0.45 });
+
+    // ── Shared geometries (reused across every instance) ───────────────────────
+    // Gull: a slim torso (thin elongated capsule) tapering to the tail, a small
+    // head + a hooked-looking pointed beak, a fanned/forked tail, and two wings
+    // each built from a SWEPT, TAPERED airfoil PLANE (custom quad: wide chord at
+    // the root, narrow at the tip, leading edge swept back) so it reads as a wing
+    // from any angle — not a plank. The wing roots span +Z (outboard); the bird's
+    // nose is +X.  A flat quad in the XZ plane, root at z0..tip at z1.
+    function wingQuad(z0, z1, rootChord, tipChord, sweep) {
+      // chord runs along X (leading edge -X..? we centre chord on x=0, lead at +x)
+      const geo = new THREE.BufferGeometry();
+      const lr = rootChord * 0.55, tr = rootChord * 0.45;   // root leading/trailing from x=0
+      const lt = tipChord * 0.55, tt = tipChord * 0.45;
+      const verts = new Float32Array([
+        +lr, 0, z0,            // root leading
+        -tr, 0, z0,            // root trailing
+        -tt - sweep, 0, z1,    // tip trailing (swept back)
+        +lt - sweep, 0, z1,    // tip leading (swept back)
+      ]);
+      geo.setAttribute("position", new THREE.BufferAttribute(verts, 3));
+      geo.setIndex([0, 1, 2, 0, 2, 3]);
+      geo.computeVertexNormals();
+      return geo;
     }
-    // sea creatures
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2b3742, roughness: 0.5, metalness: 0.12, envMapIntensity: 0.6 });
-    const finMat = new THREE.MeshStandardMaterial({ color: 0x32424e, roughness: 0.55, metalness: 0.1 });
-    const creatures = [];
-    const fin = new THREE.Mesh(new THREE.ConeGeometry(1.5, 4, 3), finMat); fin.position.set(-EX * 0.5, 0.9, EZ * 0.25); scene.add(fin);
-    creatures.push({ m: fin, vx: 9, vz: 1.4, kind: "fin", base: 0.9 });
-    const dolphin = new THREE.Mesh(new THREE.CapsuleGeometry(0.9, 4, 4, 8), bodyMat); dolphin.rotation.z = Math.PI / 2; dolphin.position.set(EX * 0.4, 0, -EZ * 0.3); scene.add(dolphin);
-    creatures.push({ m: dolphin, vx: -12, vz: 2, kind: "dolphin", base: 0, t: 0 });
-    const whale = new THREE.Mesh(new THREE.CapsuleGeometry(3.0, 15, 4, 10), bodyMat); whale.rotation.z = Math.PI / 2; whale.position.set(-EX * 0.2, -1.4, -EZ * 0.5); scene.add(whale);
-    creatures.push({ m: whale, vx: 5, vz: 0.6, kind: "whale", base: -1.4 });
+    const gBody = new THREE.CapsuleGeometry(0.34, 2.0, 6, 10); gBody.rotateZ(Math.PI / 2); gBody.scale(1, 0.85, 0.7); // slim torso, long axis +X
+    const gHead = new THREE.SphereGeometry(0.33, 10, 8); gHead.scale(1.1, 1, 0.95);
+    const gNeck = new THREE.CapsuleGeometry(0.2, 0.5, 4, 8); gNeck.rotateZ(Math.PI / 2 - 0.5);
+    const gBeak = new THREE.ConeGeometry(0.11, 0.62, 6); gBeak.rotateZ(-Math.PI / 2);
+    const gWingInner = wingQuad(0.0, 1.5, 1.35, 1.0, 0.25); // broad shoulder panel
+    const gWingOuter = wingQuad(0.0, 2.0, 1.0, 0.28, 0.9);  // long swept hand, tapers to a point
+    const gTail = new THREE.ConeGeometry(0.62, 1.5, 6); gTail.rotateZ(Math.PI / 2 + Math.PI); gTail.scale(1, 0.18, 1.1); // flat fanned tail behind
+    const gEye = new THREE.SphereGeometry(0.075, 6, 6);
+
+    function makeGull() {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(gBody, matGullBody); g.add(body);
+      const neck = new THREE.Mesh(gNeck, matGullBody); neck.position.set(1.05, 0.16, 0); g.add(neck);
+      const head = new THREE.Mesh(gHead, matGullBody); head.position.set(1.42, 0.34, 0); g.add(head);
+      const beak = new THREE.Mesh(gBeak, matBeak); beak.position.set(1.78, 0.28, 0); beak.rotation.z = -0.18; g.add(beak);
+      const eL = new THREE.Mesh(gEye, matEye); eL.position.set(1.52, 0.45, 0.2); g.add(eL);
+      const eR = new THREE.Mesh(gEye, matEye); eR.position.set(1.52, 0.45, -0.2); g.add(eR);
+      // fanned/forked tail behind the body
+      const tail = new THREE.Mesh(gTail, matGullWing); tail.position.set(-1.5, 0.02, 0); g.add(tail);
+      // WINGS: a shoulder pivot beside the body hinges the broad inner panel up/down;
+      // a wrist pivot further out hinges the long swept outer panel so the wingtip
+      // leads on the upstroke / trails on the downstroke. Slight dihedral baked in.
+      function wing(sign) {
+        const shoulder = new THREE.Group(); shoulder.position.set(0.15, 0.28, sign * 0.3);
+        const inner = new THREE.Mesh(gWingInner, matGullWing);
+        inner.scale.z = sign; // mirror the +Z span to -Z for the left wing
+        shoulder.add(inner);
+        const wrist = new THREE.Group(); wrist.position.set(-0.2, 0, sign * 1.5);
+        const outer = new THREE.Mesh(gWingOuter, matGullWing); outer.scale.z = sign;
+        // dark wingtip: paint the outer third by overlaying a small tip wedge
+        const tip = new THREE.Mesh(gWingOuter, matGullTip); tip.scale.set(0.6, 1, sign * 0.42); tip.position.set(-0.55, 0.005, sign * 1.18);
+        wrist.add(outer); wrist.add(tip);
+        shoulder.add(wrist); g.add(shoulder);
+        return { shoulder, wrist, sign };
+      }
+      const wL = wing(1), wR = wing(-1);
+      noShadow(g);
+      return { g, wings: [wL, wR], body };
+    }
+
+    const birds = [];
+    for (let i = 0; i < 4; i++) {
+      const gull = makeGull();
+      gull.g.scale.setScalar(1.25 + (i % 3) * 0.35);
+      gull.g.position.set(Math.cos(i * 1.7) * EX * 0.7, 30 + (i % 3) * 10, Math.sin(i * 2.3) * EZ * 0.7);
+      scene.add(gull.g);
+      birds.push({ ...gull, vx: (i % 2 ? 1 : -1) * (9 + i * 1.5), vz: (i % 2 ? -1 : 1) * (3 + (i % 3) * 1.5), ph: i * 1.7, baseY: gull.g.position.y });
+    }
+
+    // A flat, swept-back FIN in the XY plane (vertical), base on x-axis from x0..x1
+    // (trailing..leading along the body) rising to an apex that rakes backward.
+    // Used for crisp triangular dorsals/flukes that read as fins (vs chunky cones).
+    function finTri(baseFront, baseBack, apexX, apexY) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
+        baseFront, 0, 0,   // base, toward the head
+        baseBack, 0, 0,    // base, toward the tail
+        apexX, apexY, 0,   // raked apex
+      ]), 3));
+      geo.setIndex([0, 1, 2]); geo.computeVertexNormals();
+      return geo;
+    }
+    const matFin = new THREE.MeshStandardMaterial({ color: 0x3e4954, roughness: 0.5, metalness: 0.14, envMapIntensity: 0.6, side: THREE.DoubleSide });
+    const matSharkFin = new THREE.MeshStandardMaterial({ color: 0x4e5a64, roughness: 0.52, metalness: 0.14, envMapIntensity: 0.55, side: THREE.DoubleSide });
+
+    // ── Dolphin (slate top + pale belly): long rostrum -> melon -> barrel body ->
+    // narrow tail stock, a curved-back DORSAL, two PECTORALS, a HORIZONTAL fluke.
+    // Local long axis = +X (nose at +X). ───────────────────────────────────────
+    const dBody = new THREE.CapsuleGeometry(0.9, 3.4, 8, 14); dBody.rotateZ(Math.PI / 2); dBody.scale(1, 0.92, 0.82); // long axis +X, slightly flattened
+    const dBelly = new THREE.CapsuleGeometry(0.72, 3.0, 6, 12); dBelly.rotateZ(Math.PI / 2);
+    const dSnout = new THREE.ConeGeometry(0.34, 1.7, 10); dSnout.rotateZ(-Math.PI / 2); dSnout.scale(1, 0.8, 0.8); // slim rostrum, points +X
+    const dDorsal = finTri(0.5, -0.9, -0.7, 1.5);        // swept-back dorsal
+    const dPec = finTri(0.5, -0.6, -0.5, -1.3);          // pectoral (rakes down/back)
+    const dFlukeHalf = new THREE.ConeGeometry(0.55, 1.4, 6); dFlukeHalf.scale(0.32, 1, 1); // flat lobe, splays along Z
+    function makeDolphin() {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(dBody, matSeaTop); g.add(body);
+      const belly = new THREE.Mesh(dBelly, matSeaBelly); belly.position.y = -0.26; belly.scale.set(1, 0.62, 0.96); g.add(belly);
+      const snout = new THREE.Mesh(dSnout, matSeaTop); snout.position.set(2.45, -0.08, 0); g.add(snout); // rostrum/beak
+      const melon = new THREE.Mesh(new THREE.SphereGeometry(0.48, 12, 10), matSeaTop); melon.position.set(1.55, 0.16, 0); melon.scale.set(1.1, 0.95, 1); g.add(melon);
+      const dorsal = new THREE.Mesh(dDorsal, matFin); dorsal.position.set(0.0, 0.82, 0); g.add(dorsal); // tall curved-back dorsal
+      const pL = new THREE.Mesh(dPec, matFin); pL.position.set(1.0, -0.45, 0.6); pL.rotation.x = -0.5; g.add(pL);
+      const pR = new THREE.Mesh(dPec, matFin); pR.position.set(1.0, -0.45, -0.6); pR.rotation.x = Math.PI + 0.5; g.add(pR);
+      // horizontal fluke (two lobes splayed along Z, lying flat) on a flexing stock
+      const fl = new THREE.Group(); fl.position.set(-2.25, 0, 0);
+      const flL = new THREE.Mesh(dFlukeHalf, matFin); flL.rotation.x = -Math.PI / 2; flL.position.set(0, 0, 0.5); fl.add(flL);
+      const flR = new THREE.Mesh(dFlukeHalf, matFin); flR.rotation.x = Math.PI / 2; flR.position.set(0, 0, -0.5); fl.add(flR);
+      g.add(fl);
+      noShadow(g);
+      return { g, fluke: fl };
+    }
+    // ── Shark (grey top + white underside): torpedo body (pointed snout -> broad
+    // middle -> tapering tail), the iconic TALL triangular DORSAL, two PECTORALS,
+    // a VERTICAL crescent CAUDAL that sweeps to propel it. Long axis = +X. ───────
+    const sBody = new THREE.CapsuleGeometry(1.0, 4.2, 8, 14); sBody.rotateZ(Math.PI / 2); sBody.scale(1, 0.95, 0.85);
+    const sBelly = new THREE.CapsuleGeometry(0.8, 3.8, 6, 12); sBelly.rotateZ(Math.PI / 2);
+    const sSnout = new THREE.ConeGeometry(0.5, 2.2, 10); sSnout.rotateZ(-Math.PI / 2); sSnout.scale(1, 0.85, 0.85);
+    const sDorsal = finTri(1.0, -0.7, -0.5, 2.7);        // the iconic tall raked dorsal
+    const sPec = finTri(0.7, -0.7, -0.8, -1.7);          // big pectoral
+    const sCaudUp = finTri(0.2, -1.0, -1.0, 2.3);        // tall upper caudal lobe (vertical, in XY)
+    const sCaudLo = finTri(0.2, -0.7, -0.6, -1.2);       // short lower lobe
+    function makeShark() {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(sBody, matSharkTop); g.add(body);
+      const belly = new THREE.Mesh(sBelly, matSharkBelly); belly.position.y = -0.3; belly.scale.set(1, 0.62, 0.96); g.add(belly);
+      const snout = new THREE.Mesh(sSnout, matSharkTop); snout.position.set(2.95, -0.12, 0); g.add(snout);
+      const dorsal = new THREE.Mesh(sDorsal, matSharkFin); dorsal.position.set(0.2, 1.0, 0); g.add(dorsal); // slices the surface
+      const pL = new THREE.Mesh(sPec, matSharkFin); pL.position.set(1.25, -0.5, 0.8); pL.rotation.x = -0.6; g.add(pL);
+      const pR = new THREE.Mesh(sPec, matSharkFin); pR.position.set(1.25, -0.5, -0.8); pR.rotation.x = Math.PI + 0.6; g.add(pR);
+      // vertical crescent caudal (both lobes in the XY plane) on a swinging stock
+      const tail = new THREE.Group(); tail.position.set(-2.9, 0, 0);
+      const cu = new THREE.Mesh(sCaudUp, matSharkFin); tail.add(cu);
+      const cl = new THREE.Mesh(sCaudLo, matSharkFin); tail.add(cl);
+      g.add(tail);
+      noShadow(g);
+      return { g, tail, dorsal };
+    }
+
+    const dolphins = [];
+    for (let i = 0; i < 2; i++) {
+      const d = makeDolphin();
+      d.g.scale.setScalar(1.5);
+      d.g.position.set((i ? 1 : -1) * EX * 0.4, -2.0, (i ? -1 : 1) * EZ * 0.35);
+      scene.add(d.g);
+      dolphins.push({ ...d, vx: (i ? -1 : 1) * 13, vz: (i ? 2 : -2.2), t: i * 2.4, period: 5.5 + i * 1.3, arc: 6 + i });
+    }
+    const shark = makeShark(); shark.g.scale.setScalar(1.7);
+    shark.g.position.set(-EX * 0.5, -0.9, EZ * 0.2); scene.add(shark.g);
+    const sharkState = { ...shark, vx: 9, baseY: -0.9, t: 0 };
+
     let bt = 0;
     kernel.onUpdate((dt) => {
       bt += dt;
+      // ── seagulls: glide + bob, flap inner up/down with the outer trailing, BANK
+      // into turns (roll on Z), yaw to heading. Wingtips lead/trail via wrist hinge.
       for (const b of birds) {
-        b.g.position.x = wrap(b.g.position.x + b.vx * dt, EX);
-        b.g.position.z = wrap(b.g.position.z + b.vz * dt, EZ);
-        b.g.position.y += Math.sin(bt * 1.1 + b.ph) * dt * 1.4;
-        b.g.rotation.y = Math.atan2(b.vz, b.vx);
-        const flap = Math.sin(bt * 7 + b.ph) * 0.5;
-        b.L.rotation.x = flap; b.R.rotation.x = -flap;
+        b.g.position.set(
+          wrap(b.g.position.x + b.vx * dt, EX),
+          b.baseY + Math.sin(bt * 0.7 + b.ph) * 1.6,
+          wrap(b.g.position.z + b.vz * dt, EZ));
+        const heading = Math.atan2(b.vz, b.vx);
+        const flap = Math.sin(bt * 4.2 + b.ph);          // main beat
+        const lead = Math.cos(bt * 4.2 + b.ph);          // wrist lags the shoulder
+        for (const w of b.wings) {
+          w.shoulder.rotation.x = flap * 0.85 * w.sign;   // up/down stroke (mirrored)
+          w.wrist.rotation.x = lead * 0.5 * w.sign;       // wingtip leads/trails
+        }
+        // bank: roll into the lateral component of travel + a gentle glide tilt
+        b.g.rotation.set(0, heading, 0);
+        b.g.rotateX(Math.sin(bt * 0.7 + b.ph) * -0.12);   // pitch with the bob
+        b.g.rotateZ(-0.35 * (b.vz / (Math.abs(b.vx) + Math.abs(b.vz) + 1e-3)) - flap * 0.04); // bank
       }
-      for (const c of creatures) {
-        c.m.position.x = wrap(c.m.position.x + c.vx * dt, EX);
-        c.m.position.z = wrap(c.m.position.z + c.vz * dt, EZ);
-        if (c.kind === "dolphin") { c.t += dt; c.m.position.y = c.base + Math.max(0, Math.sin(c.t * 1.0)) * 5 - 0.6; c.m.rotation.z = Math.PI / 2 + Math.cos(c.t * 1.0) * 0.55; }
-        else if (c.kind === "fin") { c.m.position.y = c.base + Math.sin(bt * 2) * 0.15; }
+      // ── dolphins: travel along the surface, then leap nose-first in an arc and
+      // re-enter; pitch follows the arc (nose up on the rise, down on the dive); a
+      // splash when it re-enters. fluke oscillates for life.
+      for (const d of dolphins) {
+        d.t += dt;
+        d.g.position.set(
+          wrap(d.g.position.x + d.vx * dt, EX),
+          0, // y set below
+          wrap(d.g.position.z + d.vz * dt, EZ));
+        const phase = (d.t % d.period) / d.period;        // 0..1
+        const breach = Math.sin(phase * Math.PI);          // 0 at water, 1 at apex
+        const air = breach > 0.02;
+        const y = air ? (breach * d.arc - 1.0) : -2.2;     // submerged between leaps
+        d.g.position.y = y;
+        // pitch: derivative of the arc -> nose up rising, nose down falling
+        const pitch = air ? Math.cos(phase * Math.PI) * 0.95 : 0;
+        d.g.rotation.set(0, Math.atan2(d.vz, d.vx), 0);
+        d.g.rotateZ(pitch);                                // nose pitches up/down along travel
+        d.fluke.rotation.z = Math.sin(d.t * 8) * 0.4;      // tail pumps
+        // splash on entry (just dipped below after being airborne)
+        if (d._wasAir && !air) { const p = d.g.position; splash({ x: p.x, y: 0, z: p.z }); }
+        d._wasAir = air;
       }
+      // ── shark: weaves across the surface (sine sway) mostly submerged so only the
+      // tall dorsal slices the water; caudal sweeps side-to-side to propel it;
+      // occasionally rises to show more of the body.
+      const sh = sharkState;
+      sh.t += dt;
+      const weaveVz = Math.sin(sh.t * 0.5) * 9;            // lateral velocity (z drift)
+      sh.g.position.set(
+        wrap(sh.g.position.x + sh.vx * dt, EX),
+        sh.baseY + Math.max(0, Math.sin(sh.t * 0.22)) * 1.3 - 0.4, // mostly under; rises now and then
+        wrap(sh.g.position.z + weaveVz * dt, EZ));
+      // heading follows actual travel (vx forward + the lateral weave velocity).
+      sh.g.rotation.set(0, Math.atan2(weaveVz, sh.vx), 0);
+      sh.g.rotateZ(Math.sin(sh.t * 0.5) * 0.05);           // slight roll into the weave
+      sh.tail.rotation.y = Math.sin(sh.t * 5.5) * 0.6;     // caudal sweep (propulsion)
     });
   }
   buildOceanLife();
 
   // ── Ship visuals ────────────────────────────────────────────────────────────
+  // The five classes map to DISTINCT pirate-kit hulls so no two ships look alike —
+  // and each NAMED ship (P-battleship, E-cruiser, …) is visually identifiable. We
+  // derive the class from the ship id ("P-battleship" -> "battleship").
+  const shipClass = (s) => (s && s.id ? String(s.id).replace(/^[PE]-/, "") : "");
+  // class -> target on-water length (scene units); bigger class = bigger hull.
+  const CLASS_LEN = { battleship: 26, cruiser: 23, destroyer: 19, frigate: 16, gunboat: 13 };
   const modelForShip = (s) => {
     const mm = content.ship_models || {};
-    // bigger hp/range ship => larger hull model
+    const cls = shipClass(s);
+    if (mm[cls]) return mm[cls];                       // distinct hull per class (preferred)
+    // legacy fallback: bigger hp => larger hull
     if (s.maxHp >= 100) return mm.large || mm.default;
     if (s.maxHp >= 80) return mm.medium || mm.default;
     return mm.small || mm.default;
   };
+  const targetLenForShip = (s) => {
+    const cls = shipClass(s);
+    if (CLASS_LEN[cls] != null) return CLASS_LEN[cls];
+    return s.maxHp >= 100 ? 22 : s.maxHp >= 80 ? 18 : 14;
+  };
   // per-ship visual record { group, hull, ring, healthBar, sunk }
   const vis = {};
-  const HULL_LEN = { large: 22, medium: 18, small: 14 }; // target on-water length (scene units)
+  const HULL_LEN = { large: 22, medium: 18, small: 14 }; // (legacy procedural fallback sizes)
 
   async function buildShipVisual(s) {
     const url = modelForShip(s);
@@ -253,10 +460,11 @@ register3d("navalfree", async function (kernel, content) {
       }
     });
 
-    // Fit length to a target on-water size (long axis), uniform-ish scale.
+    // Fit length to a target on-water size (long axis), uniform-ish scale. Bigger
+    // CLASS -> bigger hull, so the 5 ships read apart by silhouette + size both.
     const box0 = new THREE.Box3().setFromObject(obj);
     const dim = box0.getSize(new THREE.Vector3());
-    const targetLen = HULL_LEN[s.maxHp >= 100 ? "large" : s.maxHp >= 80 ? "medium" : "small"];
+    const targetLen = targetLenForShip(s);
     const longIsX = dim.x >= dim.z;
     const longDim = Math.max(dim.x, dim.z) || 1;
     const scale = targetLen / longDim;
@@ -271,6 +479,19 @@ register3d("navalfree", async function (kernel, content) {
     const ctr = box1.getCenter(new THREE.Vector3());
     obj.position.set(-ctr.x, -box1.min.y, -ctr.z); // center on group origin, seat keel at y=0
     group.add(obj);
+
+    // Side ID flag — a small pennant on a thin mast so player (teal) vs enemy (red)
+    // reads instantly even on hulls of similar palette. No light, no shadow.
+    const hullH = (box1.max.y - box1.min.y) || 4;
+    const flagCol = s.side === "player" ? 0x37e0c0 : 0xff5a4a;
+    const mastMat = new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 0.8, metalness: 0.1 });
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, hullH * 0.95 + 4, 6), mastMat);
+    mast.position.set(targetLen * 0.04, hullH + (hullH * 0.95 + 4) / 2 - 0.5, 0);
+    mast.castShadow = false; mast.receiveShadow = false; group.add(mast);
+    const flagMat = new THREE.MeshStandardMaterial({ color: flagCol, roughness: 0.6, metalness: 0, emissive: flagCol, emissiveIntensity: 0.25, side: THREE.DoubleSide });
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.4), flagMat);
+    flag.position.set(targetLen * 0.04 - 1.35, hullH + (hullH * 0.95 + 4) - 1.4, 0);
+    flag.castShadow = false; flag.receiveShadow = false; group.add(flag);
 
     // wake/selection ring (flat torus on the water under the ship)
     const ringMat = new THREE.MeshBasicMaterial({ color: s.side === "player" ? 0x37e0c0 : 0xff7a5a, transparent: true, opacity: 0.0 });
@@ -293,7 +514,7 @@ register3d("navalfree", async function (kernel, content) {
   }
   function proceduralHull(s) {
     const g = new THREE.Group();
-    const len = HULL_LEN[s.maxHp >= 100 ? "large" : s.maxHp >= 80 ? "medium" : "small"];
+    const len = targetLenForShip(s);
     const hull = new THREE.Mesh(new THREE.BoxGeometry(len, 3.2, len * 0.34),
       new THREE.MeshStandardMaterial({ color: 0x42505e, roughness: 0.55, metalness: 0.55 }));
     hull.position.y = 1.6; g.add(hull);
@@ -526,38 +747,75 @@ register3d("navalfree", async function (kernel, content) {
     });
   }
 
-  // ── HUD ──────────────────────────────────────────────────────────────────────
-  function fleetPips(side) {
-    return sim.ships.filter((s) => s.side === side).map((s) => {
+  // ── HUD (DOM via kernel.hud; on-brand dusk/teal) ─────────────────────────────
+  const CLASS_LABEL = { battleship: "Battleship", cruiser: "Cruiser", destroyer: "Destroyer", frigate: "Frigate", gunboat: "Gunboat" };
+  const classOf = (s) => String(s.id || "").replace(/^[PE]-/, "");
+  const classLabel = (s) => CLASS_LABEL[classOf(s)] || classOf(s) || "Ship";
+
+  // Fleet ROSTER strip: one small card per ship (class name + HP bar). Sunk ships
+  // dim out; the selected ship glows. This makes the DISTINCT hulls + names matter.
+  function fleetRoster(side) {
+    const teal = side === "player";
+    const accent = teal ? "#37e0c0" : "#ff8a6a";
+    const cards = sim.ships.filter((s) => s.side === side).map((s) => {
       const frac = Math.max(0, s.hp / s.maxHp);
-      const col = s.sunk ? "#7a2020" : side === "player" ? "#37e0c0" : "#ff8a6a";
-      const w = Math.max(3, Math.round(22 * frac));
-      return `<span title="${s.id}: ${s.hp}/${s.maxHp}" style="display:inline-block;height:8px;width:${s.sunk ? 22 : 22}px;margin:0 2px;border-radius:2px;background:#10202e;vertical-align:middle">
-        <span style="display:block;height:8px;width:${s.sunk ? 0 : w}px;border-radius:2px;background:${col};box-shadow:${s.sunk ? "none" : "0 0 5px " + col}"></span></span>`;
+      const hpCol = s.sunk ? "#5a2030" : frac > 0.5 ? accent : frac > 0.25 ? "#ffd166" : "#ff5a5a";
+      const isSel = !s.sunk && s.id === selectedId;
+      const op = s.sunk ? 0.34 : 1;
+      const bd = isSel ? accent : "rgba(120,150,170,.28)";
+      const bg = isSel ? "rgba(40,80,90,.5)" : "rgba(10,22,32,.62)";
+      const strike = s.sunk ? "text-decoration:line-through;" : "";
+      return `<div title="${s.id} · HP ${s.hp}/${s.maxHp} · range ${Math.round(s.gun.range)}" style="opacity:${op};min-width:74px;padding:3px 7px 4px;border:1px solid ${bd};border-radius:6px;background:${bg};${isSel ? "box-shadow:0 0 9px " + accent + "55;" : ""}">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.3px;color:${s.sunk ? "#8a93a0" : "#dfeaf0"};${strike}white-space:nowrap">${s.sunk ? "✕ " : ""}${classLabel(s)}</div>
+        <div style="margin-top:3px;height:6px;border-radius:3px;background:#0b1722;overflow:hidden">
+          <div style="height:6px;width:${Math.round(100 * (s.sunk ? 0 : frac))}%;background:${hpCol};${s.sunk ? "" : "box-shadow:0 0 5px " + hpCol}"></div></div>
+      </div>`;
     }).join("");
+    return `<div style="display:flex;gap:5px;flex-wrap:wrap;${teal ? "" : "justify-content:flex-end"}">${cards}</div>`;
   }
+
   function setHUD(banner) {
     if (!sim) return;
     const sel = selectedId ? sim.shipById(selectedId) : null;
     const yourTurn = sim.turn === "player";
-    const turnTag = sim.ended ? "" : yourTurn ? `<span style="color:#37e0c0">YOUR TURN</span>` : `<span style="color:#ff8a6a">ENEMY TURN</span>`;
+    const alpHp = (side) => sim.shipsOf(side).reduce((a, s) => a + Math.max(0, s.hp), 0);
+    const aliveCt = (side) => sim.shipsOf(side).length;
+    // Big, unmistakable turn banner.
+    const turnBanner = sim.ended ? ""
+      : yourTurn
+        ? `<span style="color:#06231c;background:linear-gradient(#7fffd4,#37e0c0);padding:3px 14px;border-radius:20px;font-weight:800;letter-spacing:1.5px;box-shadow:0 2px 12px rgba(55,224,192,.45)">YOUR TURN</span>`
+        : `<span style="color:#2a0e0a;background:linear-gradient(#ffb199,#ff6a4d);padding:3px 14px;border-radius:20px;font-weight:800;letter-spacing:1.5px;box-shadow:0 2px 12px rgba(255,90,74,.4)">ENEMY TURN</span>`;
+    // Selected-ship stat panel.
     const selInfo = sel && !sel.sunk
-      ? `<div style="margin-top:4px;font-size:12px">Selected <b>${sel.id}</b> · HP ${sel.hp}/${sel.maxHp} · Actions <b>${sel.actionsLeft}</b>/${sim.actionsPerTurn}<br>
-         <span style="opacity:.7">click open water to <b>DRIVE</b> · click an enemy in the amber arc to <b>FIRE</b></span></div>`
-      : (yourTurn ? `<div style="margin-top:4px;font-size:12px;opacity:.75">Click one of your <span style="color:#37e0c0">teal</span> ships to select it.</div>` : "");
+      ? `<div style="display:inline-block;margin-top:6px;padding:7px 14px;border:1px solid rgba(55,224,192,.5);border-radius:9px;background:rgba(8,24,30,.72);font-size:12px;text-align:left;min-width:300px">
+           <div style="font-size:13px;font-weight:800;color:#9dffd0;letter-spacing:.4px">${sel.id} <span style="opacity:.8;font-weight:600">· ${classLabel(sel)}</span></div>
+           <div style="margin-top:4px;display:flex;gap:14px;flex-wrap:wrap">
+             <span>HP <b style="color:#cdeee2">${sel.hp}<span style="opacity:.6">/${sel.maxHp}</span></b></span>
+             <span>Actions <b style="color:${sel.actionsLeft > 0 ? "#7fffd4" : "#ff8a6a"}">${sel.actionsLeft}</b><span style="opacity:.6">/${sim.actionsPerTurn}</span></span>
+             <span>Range <b style="color:#ffd79a">${Math.round(sel.gun.range)}</b></span>
+             <span>Speed <b style="color:#bcdcff">${Math.round(sel.speed)}</b></span>
+           </div>
+           <div style="margin-top:4px;opacity:.72;font-size:11px">click open water to <b style="color:#9dffd0">DRIVE</b> · click an enemy in the amber arc to <b style="color:#ffd79a">FIRE</b> · <b>Q/E</b> turn</div>
+         </div>`
+      : (yourTurn && !sim.ended ? `<div style="display:inline-block;margin-top:6px;font-size:12px;opacity:.8;padding:6px 12px;border-radius:8px;background:rgba(8,24,30,.6)">Click one of your <span style="color:#37e0c0;font-weight:700">teal</span> ships to select it.</div>` : "");
     const endBtn = (yourTurn && !sim.ended)
-      ? `<button id="nf-endturn" style="pointer-events:auto;margin-top:8px;font:bold 13px monospace;padding:7px 16px;border-radius:6px;cursor:pointer;color:#062018;background:linear-gradient(#9dffb6,#4fe084);border:1px solid #7CFC9A">END TURN ▸</button>`
+      ? `<button id="nf-endturn" style="pointer-events:auto;display:block;margin:8px auto 0;font:800 13px 'Segoe UI',monospace;letter-spacing:1px;padding:8px 22px;border-radius:8px;cursor:pointer;color:#06231c;background:linear-gradient(#9dffb6,#3fd97f);border:1px solid #7CFC9A;box-shadow:0 4px 16px rgba(63,217,127,.35)">END TURN ▸</button>`
       : "";
     kernel.hud(`
-      <div style="position:absolute;top:10px;left:0;right:0;text-align:center;font-size:20px;font-weight:800;letter-spacing:2px;text-shadow:0 2px 10px #000">
-        ${content.title || "Tide Breakers"} &nbsp; <span style="font-size:13px;font-weight:600">· Turn ${sim.turnNumber} · ${turnTag}</span>
+      <div style="position:absolute;top:9px;left:0;right:0;text-align:center;text-shadow:0 2px 10px #000;font-family:'Segoe UI',system-ui,sans-serif">
+        <div style="font-size:19px;font-weight:800;letter-spacing:2px">${content.title || "Tide Breakers"}</div>
+        <div style="margin-top:4px;font-size:12px;font-weight:600">Turn ${sim.turnNumber} &nbsp; ${turnBanner}</div>
       </div>
-      <div style="position:absolute;top:46px;left:12px;font-size:12px">
-        <div><b style="color:#37e0c0">YOUR FLEET</b> &nbsp;${fleetPips("player")}</div>
-        <div style="margin-top:3px"><b style="color:#ff8a6a">ENEMY</b> &nbsp;&nbsp;&nbsp;&nbsp;${fleetPips("enemy")}</div>
+      <div style="position:absolute;top:54px;left:12px;max-width:46%;font-family:'Segoe UI',system-ui,sans-serif">
+        <div style="font-size:11px;font-weight:800;color:#37e0c0;letter-spacing:1px;margin-bottom:3px;text-shadow:0 1px 4px #000">YOUR FLEET <span style="opacity:.6;font-weight:600">· ${aliveCt("player")} afloat · ${alpHp("player")} hp</span></div>
+        ${fleetRoster("player")}
       </div>
-      <div style="position:absolute;left:0;right:0;bottom:16px;text-align:center">
-        ${banner ? `<div style="font-size:14px;margin-bottom:4px;opacity:.95">${banner}</div>` : ""}
+      <div style="position:absolute;top:54px;right:12px;max-width:46%;text-align:right;font-family:'Segoe UI',system-ui,sans-serif">
+        <div style="font-size:11px;font-weight:800;color:#ff8a6a;letter-spacing:1px;margin-bottom:3px;text-shadow:0 1px 4px #000">ENEMY FLEET <span style="opacity:.6;font-weight:600">· ${aliveCt("enemy")} afloat · ${alpHp("enemy")} hp</span></div>
+        ${fleetRoster("enemy")}
+      </div>
+      <div style="position:absolute;left:0;right:0;bottom:16px;text-align:center;font-family:'Segoe UI',system-ui,sans-serif;text-shadow:0 1px 6px #000">
+        ${banner ? `<div style="font-size:14px;margin-bottom:2px;opacity:.95">${banner}</div>` : ""}
         ${selInfo}
         ${endBtn}
       </div>`);
@@ -918,11 +1176,32 @@ register3d("navalfree", async function (kernel, content) {
 
     const diff = difficulty || content.difficulty || "normal";
     const fleet = NavalFree.defaultFleet(ARENA_W, ARENA_H);
-    // difficulty tweaks the enemy a touch (range/dmg), player unchanged
-    if (diff === "hard") fleet.forEach((s) => { if (s.side === "enemy") { s.gun.range *= 1.12; s.gun.dmg = Math.round(s.gun.dmg * 1.18); s.hp = Math.round(s.hp * 1.1); s.maxHp = s.hp; } });
-    if (diff === "easy") fleet.forEach((s) => { if (s.side === "enemy") { s.gun.range *= 0.9; s.gun.dmg = Math.round(s.gun.dmg * 0.82); } });
+    // Difficulty buffs the ENEMY fleet only (player untouched). Tuned UP after the
+    // owner found the NPC "playing weak" on medium: NORMAL now gets a real edge,
+    // HARD gets a bigger range/dmg/hp edge AND an extra action per ship per turn
+    // (more salvos/maneuvers) plus a smarter AI persona. Online play is always
+    // unbuffed (both sides run the identical deterministic sim).
+    // Tuning note: combat is swingy + the PLAYER always acts first, so an unbuffed
+    // enemy (even with the smart AI) loses the opening exchange. The smart AI is the
+    // QUALITATIVE upgrade (focus-fire, kiting, threat targeting — vs the old passive
+    // "close & plink nearest"); a MODEST stat edge then makes it a genuine threat.
+    // HARD additionally gets an extra action/turn (more salvos) + the "hard" AI
+    // persona. Buffs were kept moderate so HARD is a real fight, not a 4-turn stomp.
+    let enemyActionsBonus = 0, aiSkill = "normal";
+    if (!netMode) {
+      if (diff === "hard") {
+        fleet.forEach((s) => { if (s.side === "enemy") { s.gun.range = Math.round(s.gun.range * 1.12); s.gun.dmg = Math.round(s.gun.dmg * 1.18); s.hp = Math.round(s.hp * 1.15); s.maxHp = s.hp; s.speed = Math.round(s.speed * 1.05); s.turnRate = s.turnRate * 1.05; } });
+        enemyActionsBonus = 1; aiSkill = "hard";
+      } else if (diff === "easy") {
+        fleet.forEach((s) => { if (s.side === "enemy") { s.gun.range = Math.round(s.gun.range * 0.9); s.gun.dmg = Math.round(s.gun.dmg * 0.8); } });
+        aiSkill = "easy";
+      } else { // normal — smart AI + a small felt edge so it's challenging (was weak)
+        fleet.forEach((s) => { if (s.side === "enemy") { s.gun.range = Math.round(s.gun.range * 1.08); s.gun.dmg = Math.round(s.gun.dmg * 1.12); s.hp = Math.round(s.hp * 1.10); s.maxHp = s.hp; } });
+        aiSkill = "normal";
+      }
+    }
 
-    sim = new NavalFree({ width: ARENA_W, height: ARENA_H, seed: _gameSeed, firstSide: netMode ? netFirstSide : "player", actionsPerTurn: m.actionsPerTurn || 2, ships: fleet });
+    sim = new NavalFree({ width: ARENA_W, height: ARENA_H, seed: _gameSeed, firstSide: netMode ? netFirstSide : "player", actionsPerTurn: m.actionsPerTurn || 2, enemyActionsBonus, aiSkill, ships: fleet });
     for (const s of sim.ships) await buildShipVisual(s);
     phase = "battle"; busy = false;
     // Procedural ocean music. The PLAY click is the user gesture that unlocks audio;
@@ -1014,24 +1293,16 @@ register3d("navalfree", async function (kernel, content) {
       endTurn: () => endPlayerTurn(),
       isBusy: () => busy,
       phase: () => phase,
-      // play a FRESH battle out to a resolution (both fleets driven by the same
-      // nearest-enemy fire/maneuver AI) so the feel-gate can certify tide reaches an
-      // end state. Pure sim — never touches the live battle.
+      // play a FRESH battle out to a resolution — BOTH fleets driven by the smart
+      // sim AI (aiPlanSide) so the feel-gate certifies tide reaches an end state.
+      // Pure sim — never touches the live battle. Guaranteed terminating: each side
+      // either acts (consuming actions) or the per-ship guard / turn cap stops it.
       autoResolve: () => {
         try {
-          const g = new NavalFree({ width: ARENA_W, height: ARENA_H, seed: _gameSeed, firstSide: "player", actionsPerTurn: (m.actionsPerTurn || 2), ships: NavalFree.defaultFleet(ARENA_W, ARENA_H) });
+          const g = new NavalFree({ width: ARENA_W, height: ARENA_H, seed: _gameSeed, firstSide: "player", actionsPerTurn: (m.actionsPerTurn || 2), aiSkill: "normal", ships: NavalFree.defaultFleet(ARENA_W, ARENA_H) });
           let turns = 0;
-          while (!g.ended && turns++ < 80) {
-            const mine = g.shipsOf(g.turn);
-            for (const s of mine) {
-              let guard = 0;
-              while (s.actionsLeft > 0 && !g.ended && guard++ < 8) {
-                const foe = g._nearestEnemy(s); if (!foe) break;
-                if (g.canFireAt(s.id, foe.x, foe.y, foe.id).ok) { g.fireAt(s.id, foe.id); continue; }
-                const br = Math.atan2(foe.y - s.y, foe.x - s.x), off = s.gun.range * 0.7;
-                if (!g.moveShip(s.id, { x: foe.x - Math.cos(br) * off, y: foe.y - Math.sin(br) * off }).ok) break;
-              }
-            }
+          while (!g.ended && turns++ < 120) {
+            g.aiPlanSide(g.turn);   // smart planner drives whichever side is active
             if (!g.ended) g.endTurn();
           }
           return { ended: !!g.ended, victory: g.winner === "player", winner: g.winner || null, turns: g.turnNumber };
