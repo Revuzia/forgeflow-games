@@ -13,7 +13,7 @@
   "theme": {
     "ship": "#36e0ff",
     "shipGlow": "#54ffb0",
-    "bullet": "#9bffd4",
+    "bullet": "#7dffb0",
     "enemyBullet": "#ff3bd4",
     "enemy": "#ff5ea8",
     "tank": "#ffd166",
@@ -33,62 +33,366 @@
     "maxWeapon": 4,
     "pickupSpeed": 120,
     "pickupRadius": 16,
-    "dropChance": 0.16,
+    "dropChance": 0.17,
     "invuln": 1.8,
     "comboWindow": 2.2,
-    "bossHpBase": 140,
+    "bossHpBase": 160,
     "seed": 1337
   },
-  "waves": [
+  "worlds": [
     {
-      "kind": "grunt",
-      "count": 6,
-      "hp": 1,
-      "pattern": "sineDrift",
-      "fire": "aimedSlow",
-      "gap": 0.45,
-      "delay": 0.6,
-      "score": 100
+      "name": "ASTEROID FRINGE",
+      "waves": [
+        {
+          "kind": "grunt",
+          "count": 12,
+          "hp": 1,
+          "pattern": "sineDrift",
+          "fire": "aimedSlow",
+          "gap": 0.5,
+          "delay": 0.8,
+          "score": 100
+        },
+        {
+          "kind": "grunt",
+          "count": 14,
+          "hp": 1,
+          "pattern": "swoopV",
+          "fire": "straight",
+          "gap": 0.4,
+          "delay": 0.7,
+          "score": 100
+        },
+        {
+          "kind": "darter",
+          "count": 8,
+          "hp": 2,
+          "pattern": "zigzag",
+          "fire": "aimedSlow",
+          "gap": 0.45,
+          "delay": 0.8,
+          "score": 160
+        }
+      ],
+      "boss": {
+        "name": "WARDEN MK-I",
+        "hp": 170,
+        "phases": 3,
+        "r": 64,
+        "fireScale": 1.0,
+        "sweepAmp": 0.26,
+        "patterns": [
+          "fan3",
+          "ring8",
+          "spray5"
+        ]
+      }
     },
     {
-      "kind": "grunt",
-      "count": 7,
-      "hp": 1,
-      "pattern": "swoopV",
-      "fire": "straight",
-      "gap": 0.3,
-      "delay": 0.5,
-      "score": 100
+      "name": "DRIFT CORRIDOR",
+      "waves": [
+        {
+          "kind": "grunt",
+          "count": 14,
+          "hp": 1,
+          "pattern": "swoopV",
+          "fire": "straight",
+          "gap": 0.38,
+          "delay": 0.7,
+          "score": 100
+        },
+        {
+          "kind": "weaver",
+          "count": 14,
+          "hp": 1,
+          "pattern": "sineDrift",
+          "fire": "spread3",
+          "gap": 0.34,
+          "delay": 0.6,
+          "score": 120
+        },
+        {
+          "kind": "darter",
+          "count": 9,
+          "hp": 2,
+          "pattern": "zigzag",
+          "fire": "aimedSlow",
+          "gap": 0.4,
+          "delay": 0.7,
+          "score": 160
+        },
+        {
+          "kind": "tank",
+          "count": 5,
+          "hp": 4,
+          "pattern": "marchDown",
+          "fire": "aimedFast",
+          "gap": 0.7,
+          "delay": 0.8,
+          "score": 260
+        }
+      ],
+      "boss": {
+        "name": "WARDEN MK-II",
+        "hp": 240,
+        "phases": 3,
+        "r": 66,
+        "fireScale": 1.08,
+        "sweepAmp": 0.28,
+        "patterns": [
+          "fan5",
+          "ring8",
+          "spray5"
+        ]
+      }
     },
     {
-      "kind": "darter",
-      "count": 5,
-      "hp": 2,
-      "pattern": "zigzag",
-      "fire": "aimedSlow",
-      "gap": 0.4,
-      "delay": 0.7,
-      "score": 160
+      "name": "NEBULA REACH",
+      "waves": [
+        {
+          "kind": "weaver",
+          "count": 16,
+          "hp": 1,
+          "pattern": "sineDrift",
+          "fire": "spread3",
+          "gap": 0.3,
+          "delay": 0.6,
+          "score": 120
+        },
+        {
+          "kind": "darter",
+          "count": 12,
+          "hp": 2,
+          "pattern": "zigzag",
+          "fire": "aimedFast",
+          "gap": 0.34,
+          "delay": 0.6,
+          "score": 160
+        },
+        {
+          "kind": "grunt",
+          "count": 16,
+          "hp": 2,
+          "pattern": "swoopV",
+          "fire": "aimedSlow",
+          "gap": 0.3,
+          "delay": 0.6,
+          "score": 120
+        },
+        {
+          "kind": "tank",
+          "count": 6,
+          "hp": 5,
+          "pattern": "marchDown",
+          "fire": "spread3",
+          "gap": 0.62,
+          "delay": 0.8,
+          "score": 300
+        }
+      ],
+      "boss": {
+        "name": "SIEGE-CORE",
+        "hp": 310,
+        "phases": 4,
+        "r": 68,
+        "fireScale": 1.12,
+        "sweepAmp": 0.29,
+        "patterns": [
+          "fan5",
+          "ring8",
+          "spiral",
+          "spray5"
+        ]
+      }
     },
     {
-      "kind": "weaver",
-      "count": 8,
-      "hp": 1,
-      "pattern": "sineDrift",
-      "fire": "spread3",
-      "gap": 0.26,
-      "delay": 0.4,
-      "score": 120
+      "name": "ION STORM",
+      "waves": [
+        {
+          "kind": "darter",
+          "count": 14,
+          "hp": 2,
+          "pattern": "zigzag",
+          "fire": "aimedFast",
+          "gap": 0.3,
+          "delay": 0.6,
+          "score": 180
+        },
+        {
+          "kind": "weaver",
+          "count": 18,
+          "hp": 2,
+          "pattern": "sineDrift",
+          "fire": "spread3",
+          "gap": 0.26,
+          "delay": 0.5,
+          "score": 140
+        },
+        {
+          "kind": "tank",
+          "count": 7,
+          "hp": 5,
+          "pattern": "marchDown",
+          "fire": "aimedFast",
+          "gap": 0.58,
+          "delay": 0.7,
+          "score": 320
+        },
+        {
+          "kind": "grunt",
+          "count": 18,
+          "hp": 2,
+          "pattern": "swoopV",
+          "fire": "spread3",
+          "gap": 0.26,
+          "delay": 0.6,
+          "score": 130
+        }
+      ],
+      "boss": {
+        "name": "STORMBRINGER",
+        "hp": 380,
+        "phases": 4,
+        "r": 70,
+        "fireScale": 1.16,
+        "sweepAmp": 0.3,
+        "patterns": [
+          "fan5",
+          "ring12",
+          "spiral",
+          "spray5"
+        ]
+      }
     },
     {
-      "kind": "tank",
-      "count": 4,
-      "hp": 4,
-      "pattern": "marchDown",
-      "fire": "aimedFast",
-      "gap": 0.7,
-      "delay": 0.8,
-      "score": 260
+      "name": "GRAVE TIDE",
+      "waves": [
+        {
+          "kind": "weaver",
+          "count": 20,
+          "hp": 2,
+          "pattern": "sineDrift",
+          "fire": "spread3",
+          "gap": 0.24,
+          "delay": 0.5,
+          "score": 150
+        },
+        {
+          "kind": "darter",
+          "count": 16,
+          "hp": 3,
+          "pattern": "zigzag",
+          "fire": "aimedFast",
+          "gap": 0.26,
+          "delay": 0.5,
+          "score": 200
+        },
+        {
+          "kind": "tank",
+          "count": 8,
+          "hp": 6,
+          "pattern": "marchDown",
+          "fire": "spread5",
+          "gap": 0.54,
+          "delay": 0.7,
+          "score": 360
+        },
+        {
+          "kind": "grunt",
+          "count": 20,
+          "hp": 2,
+          "pattern": "swoopV",
+          "fire": "aimedFast",
+          "gap": 0.24,
+          "delay": 0.5,
+          "score": 140
+        }
+      ],
+      "boss": {
+        "name": "VOID HIEROPHANT",
+        "hp": 450,
+        "phases": 5,
+        "r": 72,
+        "fireScale": 1.2,
+        "sweepAmp": 0.31,
+        "patterns": [
+          "fan5",
+          "ring12",
+          "spiral",
+          "spray7",
+          "cross"
+        ]
+      }
+    },
+    {
+      "name": "STARLANCE CORE",
+      "waves": [
+        {
+          "kind": "darter",
+          "count": 18,
+          "hp": 3,
+          "pattern": "zigzag",
+          "fire": "aimedFast",
+          "gap": 0.22,
+          "delay": 0.5,
+          "score": 220
+        },
+        {
+          "kind": "weaver",
+          "count": 22,
+          "hp": 2,
+          "pattern": "sineDrift",
+          "fire": "spread5",
+          "gap": 0.22,
+          "delay": 0.5,
+          "score": 160
+        },
+        {
+          "kind": "tank",
+          "count": 10,
+          "hp": 7,
+          "pattern": "marchDown",
+          "fire": "spread5",
+          "gap": 0.5,
+          "delay": 0.6,
+          "score": 400
+        },
+        {
+          "kind": "grunt",
+          "count": 22,
+          "hp": 3,
+          "pattern": "swoopV",
+          "fire": "spread3",
+          "gap": 0.22,
+          "delay": 0.5,
+          "score": 150
+        },
+        {
+          "kind": "darter",
+          "count": 16,
+          "hp": 3,
+          "pattern": "zigzag",
+          "fire": "aimedFast",
+          "gap": 0.22,
+          "delay": 0.5,
+          "score": 240
+        }
+      ],
+      "boss": {
+        "name": "OMEGA DREADNOUGHT",
+        "hp": 560,
+        "phases": 5,
+        "r": 76,
+        "fireScale": 1.28,
+        "sweepAmp": 0.32,
+        "patterns": [
+          "fan5",
+          "ring12",
+          "spiral",
+          "spray7",
+          "cross"
+        ]
+      }
     }
   ],
   "_from_golden": true

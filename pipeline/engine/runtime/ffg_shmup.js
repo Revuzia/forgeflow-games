@@ -200,11 +200,19 @@
   }
 
   // ── parallax rushing starfield ──────────────────────────────────────────────
+  // WHITE / cool-neutral stars ONLY. The enemy bullets are MAGENTA/pink, so the
+  // starfield must never share that hue or the bullets vanish into it (owner
+  // feedback: "hard to see the pink enemy attacks because of all the green
+  // stars"). Far layer = faint cool blue-white, near layers = white. No accent
+  // (pink) and no good (green) tint anywhere in the field.
   function makeStarfield(scene, W, H, pal) {
+    var FAR = 0x9fb4d8;   // faint cool blue-white (depth)
+    var MID = 0xdfe8f5;   // cool neutral white
+    var NEAR = 0xffffff;  // pure white (closest, brightest)
     var layers = [
-      { n: 70, speed: 90, scale: 0.6, alpha: 0.5, tint: shade(pal.primary, 0.4) },
-      { n: 55, speed: 180, scale: 0.9, alpha: 0.7, tint: 0xffffff },
-      { n: 32, speed: 340, scale: 1.4, alpha: 0.95, tint: shade(pal.accent, 0.5) },
+      { n: 70, speed: 90,  scale: 0.55, alpha: 0.40, tint: FAR },
+      { n: 55, speed: 180, scale: 0.85, alpha: 0.65, tint: MID },
+      { n: 32, speed: 340, scale: 1.30, alpha: 0.92, tint: NEAR },
     ];
     var stars = [];
     layers.forEach(function (L) {
@@ -335,11 +343,13 @@
             g.fillStyle(Phaser.Display.Color.GetColor(c.r, c.g, c.b), 1);
             g.fillRect(0, Math.floor(this.H * t), this.W, Math.ceil(this.H / bands) + 1);
           }
-          // faint nebula blobs for depth
+          // faint nebula blobs for depth — COOL hues only (cyan / deep indigo).
+          // Magenta/pink is reserved exclusively for ENEMY FIRE so bullets read.
+          var nebTints = [hexNum(this.pal.primary), 0x2a4a8c, 0x1c6f8c];
           for (var k = 0; k < 5; k++) {
             var nb = this.add.image(Math.random() * this.W, Math.random() * this.H, "fx_dot")
               .setScale(6 + Math.random() * 6).setAlpha(0.06)
-              .setTint(k % 2 ? hexNum(this.pal.accent) : hexNum(this.pal.primary))
+              .setTint(nebTints[k % nebTints.length])
               .setBlendMode(Phaser.BlendModes.ADD).setDepth(1);
           }
         }
@@ -432,16 +442,18 @@
           var pad = 14;
           // top backing strip so the HUD stays readable over the bullet-storm
           var bar = this.add.graphics().setDepth(95).setScrollFactor(0);
-          bar.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.6, 0.6, 0, 0); bar.fillRect(0, 0, this.W, 54);
+          bar.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.62, 0.62, 0, 0); bar.fillRect(0, 0, this.W, 56);
           this.hudScore = FFG.text(this, pad, pad, "SCORE 0", { size: 20, color: "#ffffff", stroke: "#000", strokeThickness: 3, depth: 100 });
           this.hudCombo = FFG.text(this, pad, pad + 26, "", { size: 14, color: this.pal.warn, stroke: "#000", strokeThickness: 3, depth: 100 });
           this.hudLives = FFG.text(this, this.W - pad, pad, "", { size: 18, color: this.pal.danger, stroke: "#000", strokeThickness: 3, origin: 1, originY: 0, depth: 100 });
           this.hudWeapon = FFG.text(this, this.W - pad, pad + 24, "", { size: 14, color: this.pal.good, stroke: "#000", strokeThickness: 3, origin: 1, originY: 0, depth: 100 });
-          this.hudWave = FFG.text(this, this.W / 2, pad, "", { size: 13, color: this.pal.ink, stroke: "#000", strokeThickness: 3, origin: 0.5, originY: 0, depth: 100 });
+          // centre column: WORLD x/6 (bright) over WAVE n/m
+          this.hudWorld = FFG.text(this, this.W / 2, pad - 1, "", { size: 16, color: "#ffffff", stroke: "#000", strokeThickness: 3, origin: 0.5, originY: 0, depth: 100 });
+          this.hudWave = FFG.text(this, this.W / 2, pad + 21, "", { size: 12, color: this.pal.ink, stroke: "#000", strokeThickness: 3, origin: 0.5, originY: 0, depth: 100 });
           // boss bar (hidden until boss)
-          this.bossBarBg = this.add.rectangle(this.W / 2, 64, this.W - 120, 16, 0x000000, 0.55).setStrokeStyle(2, hexNum(this.pal.danger), 0.9).setDepth(100).setVisible(false);
-          this.bossBarFill = this.add.rectangle(this.W / 2 - (this.W - 124) / 2, 64, this.W - 124, 12, hexNum(this.pal.danger), 1).setOrigin(0, 0.5).setDepth(101).setVisible(false);
-          this.bossBarLabel = FFG.text(this, this.W / 2, 64, "BOSS", { size: 11, color: "#ffffff", stroke: "#000", strokeThickness: 3, origin: 0.5, depth: 102 });
+          this.bossBarBg = this.add.rectangle(this.W / 2, 66, this.W - 120, 16, 0x000000, 0.55).setStrokeStyle(2, hexNum(this.pal.danger), 0.9).setDepth(100).setVisible(false);
+          this.bossBarFill = this.add.rectangle(this.W / 2 - (this.W - 124) / 2, 66, this.W - 124, 12, hexNum(this.pal.danger), 1).setOrigin(0, 0.5).setDepth(101).setVisible(false);
+          this.bossBarLabel = FFG.text(this, this.W / 2, 66, "BOSS", { size: 11, color: "#ffffff", stroke: "#000", strokeThickness: 3, origin: 0.5, depth: 102 });
           this.bossBarLabel.setVisible(false);
           this._updateHUD();
         }
@@ -454,8 +466,12 @@
           this.hudLives.setText(hearts.trim());
           var wn = ["", "SINGLE", "DOUBLE", "TRIPLE", "SPREAD-5"][Math.min(4, s.player.weapon)];
           this.hudWeapon.setText("WPN " + wn);
+          // always show the current world; only show WAVE while clearing waves
+          this.hudWorld.setText("WORLD " + s.worldNum + " / " + s.totalWorlds);
           if (s.boss) {
-            this.hudWave.setText("");
+            this.hudWave.setText("BOSS");
+          } else if (s.interWorld) {
+            this.hudWave.setText("CLEARED");
           } else {
             this.hudWave.setText("WAVE " + Math.min(s.wave + 1, s.totalWaves) + " / " + s.totalWaves);
           }
@@ -468,7 +484,8 @@
           var dim = this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, 0x000000, 0.45);
           var t1 = FFG.text(this, this.W / 2, this.H * 0.36, content.title || "STARLANCE", { size: 46, color: "#ffffff", stroke: "#000", strokeThickness: 5, origin: 0.5 });
           t1.setTint(hexNum(this.pal.primary), hexNum(this.pal.primary), hexNum(this.pal.accent), hexNum(this.pal.accent));
-          var t2 = FFG.text(this, this.W / 2, this.H * 0.36 + 44, content.subtitle || "vertical bullet storm", { size: 15, color: this.pal.ink, origin: 0.5 });
+          var wc = (this.sim && this.sim.totalWorlds) || 6;
+          var t2 = FFG.text(this, this.W / 2, this.H * 0.36 + 44, (content.subtitle || "vertical bullet storm") + "  •  " + wc + " worlds", { size: 15, color: this.pal.ink, origin: 0.5 });
           var t3 = FFG.text(this, this.W / 2, this.H * 0.56, "Arrows / WASD  move      SPACE  fire", { size: 14, color: this.pal.good, origin: 0.5 });
           var t4 = FFG.text(this, this.W / 2, this.H * 0.56 + 24, "or steer with the mouse", { size: 12, color: this.pal.ink, origin: 0.5 });
           var t5 = FFG.text(this, this.W / 2, this.H * 0.66, "CLICK / press SPACE to launch", { size: 18, color: "#ffffff", stroke: "#000", strokeThickness: 3, origin: 0.5 });
@@ -490,16 +507,20 @@
           var s = this.sim.state();
           this.endC = this.add.container(0, 0).setDepth(130);
           var dim = this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, 0x000000, 0.6);
-          var title = victory ? "VICTORY" : "SHIP DOWN";
+          var title = victory ? "CAMPAIGN CLEAR" : "SHIP DOWN";
           var col = victory ? this.pal.good : this.pal.danger;
-          var tt = FFG.text(this, this.W / 2, this.H * 0.4, title, { size: 56, color: col, stroke: "#000", strokeThickness: 6, origin: 0.5 });
+          var tt = FFG.text(this, this.W / 2, this.H * 0.4, title, { size: victory ? 46 : 56, color: col, stroke: "#000", strokeThickness: 6, origin: 0.5 });
           tt.setScale(0);
           this.tweens.add({ targets: tt, scale: 1, duration: 420, ease: "Back.easeOut" });
-          var sc = FFG.text(this, this.W / 2, this.H * 0.4 + 64, "SCORE  " + s.score, { size: 24, color: "#ffffff", stroke: "#000", strokeThickness: 3, origin: 0.5 });
-          var cb = FFG.text(this, this.W / 2, this.H * 0.4 + 96, "BEST COMBO  " + s.bestCombo + "x", { size: 16, color: this.pal.warn, origin: 0.5 });
+          var subLine = victory
+            ? ("ALL " + s.totalWorlds + " WORLDS CLEARED")
+            : ("REACHED WORLD " + s.worldNum + " / " + s.totalWorlds);
+          var ws = FFG.text(this, this.W / 2, this.H * 0.4 + 40, subLine, { size: 16, color: this.pal.ink, origin: 0.5 });
+          var sc = FFG.text(this, this.W / 2, this.H * 0.4 + 72, "SCORE  " + s.score, { size: 24, color: "#ffffff", stroke: "#000", strokeThickness: 3, origin: 0.5 });
+          var cb = FFG.text(this, this.W / 2, this.H * 0.4 + 104, "BEST COMBO  " + s.bestCombo + "x", { size: 16, color: this.pal.warn, origin: 0.5 });
           var rs = FFG.text(this, this.W / 2, this.H * 0.62, "CLICK / press R to fly again", { size: 18, color: "#ffffff", stroke: "#000", strokeThickness: 3, origin: 0.5 });
           this.tweens.add({ targets: rs, alpha: 0.3, duration: 700, yoyo: true, repeat: -1 });
-          this.endC.add([dim, tt, sc, cb, rs]);
+          this.endC.add([dim, tt, ws, sc, cb, rs]);
           if (victory) { this.fx.flash(this.pal.good, 240); }
           else { this.fx.flash(this.pal.danger, 220); this.fx.shake(360, 0.012); }
         }
@@ -555,14 +576,21 @@
                 this._playerExplode(e.x, e.y);
                 break;
               case "bossWarn":
-                this._bossWarn();
+                this._bossWarn(e.name);
                 break;
               case "bossKill":
                 this._bossDeath(e.x, e.y);
                 break;
+              case "worldStart":
+                this._worldBanner("WORLD " + e.world, (this.sim._world && this.sim._world.name) || "", this.pal.primary);
+                break;
+              case "worldClear":
+                this._worldBanner("WORLD " + e.world + " CLEARED", "stand by — next sector inbound", this.pal.good);
+                this.fx.flash(this.pal.good, 200);
+                break;
               case "win":
                 // win overlay deferred until boss death animation reads nicely
-                this.time.delayedCall(700, function () { if (!this.over) this._endOverlay(true); }.bind(this));
+                this.time.delayedCall(900, function () { if (!this.over) this._endOverlay(true); }.bind(this));
                 break;
               case "lose":
                 this.time.delayedCall(500, function () { if (!this.over) this._endOverlay(false); }.bind(this));
@@ -574,6 +602,24 @@
                 break;
             }
           }
+        }
+
+        // big centred "WORLD n" / "WORLD n CLEARED" banner between worlds
+        _worldBanner(title, sub, color) {
+          var c = "#" + hexNum(color).toString(16).padStart(6, "0");
+          var t1 = FFG.text(this, this.W / 2, this.H * 0.40, title, { size: 44, color: "#ffffff", stroke: "#000", strokeThickness: 6, origin: 0.5, depth: 115 });
+          t1.setTint(hexNum(color));
+          t1.setScale(0.5); t1.setAlpha(0);
+          this.tweens.add({ targets: t1, scale: 1, alpha: 1, duration: 320, ease: "Back.easeOut" });
+          var t2 = null;
+          if (sub) {
+            t2 = FFG.text(this, this.W / 2, this.H * 0.40 + 40, sub, { size: 15, color: c, origin: 0.5, depth: 115 });
+            t2.setAlpha(0);
+            this.tweens.add({ targets: t2, alpha: 1, duration: 320, delay: 120 });
+          }
+          var targets = t2 ? [t1, t2] : [t1];
+          this.tweens.add({ targets: targets, alpha: 0, y: "-=20", delay: 1500, duration: 420, ease: "Cubic.easeIn",
+            onComplete: function () { t1.destroy(); if (t2) t2.destroy(); } });
         }
 
         _explode(x, y, kind) {
@@ -600,9 +646,9 @@
           FFG.audio.sfx("explode_big", 0.6);
         }
 
-        _bossWarn() {
+        _bossWarn(name) {
           var t = FFG.text(this, this.W / 2, this.H * 0.42, "!! WARNING !!", { size: 34, color: "#" + this.COL.boss.toString(16), stroke: "#000", strokeThickness: 5, origin: 0.5, depth: 110 });
-          var t2 = FFG.text(this, this.W / 2, this.H * 0.42 + 36, "DREADNOUGHT INBOUND", { size: 16, color: this.pal.warn, origin: 0.5, depth: 110 });
+          var t2 = FFG.text(this, this.W / 2, this.H * 0.42 + 36, (name || "DREADNOUGHT") + " INBOUND", { size: 16, color: this.pal.warn, origin: 0.5, depth: 110 });
           t.setScale(0.6);
           this.tweens.add({ targets: t, scale: 1.05, duration: 200, yoyo: true, repeat: 2, ease: "Sine.easeInOut" });
           this.tweens.add({ targets: [t, t2], alpha: 0, delay: 1400, duration: 400, onComplete: function () { t.destroy(); t2.destroy(); } });
@@ -652,28 +698,41 @@
           this.flame.setPosition(s.player.x, s.player.y + 18).setVisible(s.player.alive);
           this.flame.setScale(0.55 + Math.random() * 0.35, 0.8 + Math.random() * 0.5);
 
-          // player bullets — reconcile pool
+          // player bullets — distinct BRIGHT CYAN/GREEN so they never blend with
+          // the pink enemy fire (owner note). Green halo + solid green disc core,
+          // with only a small white-hot tip (a vertical streak shape via scaleY).
           this._reconcile(this._pbSprites, s.pbullets, function (b) {
             var img = this.add.image(b.x, b.y, "fx_dot").setTint(this.COL.pbullet).setBlendMode(Phaser.BlendModes.ADD).setDepth(35);
-            img.setScale(0.5);
-            // bright core
-            img._core = this.add.image(b.x, b.y, "fx_dot").setTint(0xffffff).setBlendMode(Phaser.BlendModes.ADD).setDepth(36).setScale(0.22);
+            img.setScale(0.6, 0.95);
+            img._disc = this.add.circle(b.x, b.y, Math.max(3, b.r * 0.8), this.COL.pbullet, 1).setDepth(36);
+            // small white-hot tip keeps player shots crisp; player bullets travel
+            // fast & upward so a touch of white reads as a tracer, not confusion.
+            img._core = this.add.image(b.x, b.y, "fx_dot").setTint(0xffffff).setBlendMode(Phaser.BlendModes.ADD).setDepth(37).setScale(0.18);
             return img;
           }.bind(this), function (img, b) {
-            img.setPosition(b.x, b.y); img.setScale(0.62, 0.95);
+            img.setPosition(b.x, b.y); img.setScale(0.6, 0.95);
+            if (img._disc) img._disc.setPosition(b.x, b.y);
             if (img._core) img._core.setPosition(b.x, b.y);
-          }, function (img) { if (img._core) img._core.destroy(); img.destroy(); });
+          }, function (img) { if (img._disc) img._disc.destroy(); if (img._core) img._core.destroy(); img.destroy(); });
 
-          // enemy bullets
+          // enemy bullets — MUST read clearly as PINK against the white stars
+          // (owner's #1 note). So: a wide MAGENTA additive halo + a SOLID magenta
+          // disc core (not a white core — a white core made them read white and
+          // vanish into the starfield). A small hot-pink highlight keeps them
+          // punchy without washing out to white.
           this._reconcile(this._ebSprites, s.ebullets, function (b) {
             var img = this.add.image(b.x, b.y, "fx_dot").setTint(this.COL.ebullet).setBlendMode(Phaser.BlendModes.ADD).setDepth(33);
-            img.setScale(0.55);
-            img._core = this.add.image(b.x, b.y, "fx_dot").setTint(0xffffff).setBlendMode(Phaser.BlendModes.ADD).setDepth(34).setScale(0.2);
+            img.setScale(0.85);                       // bigger magenta glow halo
+            // solid opaque magenta disc so the bullet body itself is unmistakably pink
+            img._disc = this.add.circle(b.x, b.y, Math.max(4, b.r), this.COL.ebullet, 1).setDepth(34);
+            // small hot highlight (light pink, NOT white) for a bright center
+            img._core = this.add.image(b.x, b.y, "fx_dot").setTint(shade(this.COL.ebullet, 0.55)).setBlendMode(Phaser.BlendModes.ADD).setDepth(35).setScale(0.28);
             return img;
           }.bind(this), function (img, b) {
             img.setPosition(b.x, b.y);
+            if (img._disc) img._disc.setPosition(b.x, b.y);
             if (img._core) img._core.setPosition(b.x, b.y);
-          }, function (img) { if (img._core) img._core.destroy(); img.destroy(); });
+          }, function (img) { if (img._disc) img._disc.destroy(); if (img._core) img._core.destroy(); img.destroy(); });
 
           // pickups
           this._reconcile(this._pkSprites, s.pickups, function (pk) {
@@ -729,7 +788,7 @@
             this.bossBarFill.width = fullW * frac;
             var barCol = frac > 0.5 ? hexNum(this.pal.danger) : frac > 0.25 ? hexNum(this.pal.warn) : 0xff2222;
             this.bossBarFill.setFillStyle(barCol, 1);
-            this.bossBarLabel.setText("DREADNOUGHT  P" + s.boss.phase);
+            this.bossBarLabel.setText((s.boss.name || "DREADNOUGHT") + "  P" + s.boss.phase + "/" + (s.boss.maxPhase || 3));
           }
         }
 
@@ -784,10 +843,18 @@
           root.__test = root.__test || {};
           root.__test.start = function () { self._begin(); return true; };
           root.__test.autoResolve = function (maxSeconds) {
-            // run the PURE sim to a resolution with no rendering/real input
+            // Run the PURE sim through the FULL six-world campaign with no
+            // rendering / no real input. Returns {ended, victory, world, score,
+            // totalWorlds, ...}. The default budget scales with world count so a
+            // clean 6-world bot run completes; it always terminates (capped).
             var fresh = new (FFG.sim.Shmup)(content);
-            var r = fresh.autoResolve(maxSeconds || 160);
-            return r;
+            var r = fresh.autoResolve(maxSeconds);   // undefined => sim picks 110s/world
+            // surface the headline fields the feel-gate asserts on
+            return {
+              ended: r.ended, victory: r.victory, world: r.world,
+              totalWorlds: r.totalWorlds, score: r.score, status: r.status,
+              bestCombo: r.bestCombo, seconds: r.seconds, timedOut: r.timedOut,
+            };
           };
           root.__test.state = function () { return self.sim.state(); };
           root.__test.scene = self;
