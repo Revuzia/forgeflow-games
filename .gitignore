@@ -18,3 +18,12 @@ pipeline/assets/_downloaded/
 pipeline/engine/_match_*.png
 pipeline/engine/xcom_match_report.json
 pipeline/engine/xcom_autopipe_log.jsonl
+
+# 2026-06-02 — Bulk CC0/CC-BY creature library (~820 MB, 1,500+ models from Quaternius /
+# Poly Pizza / Kenney / OpenGameArt). Kept OUT of git: the 2026-05-11 large-asset push
+# already hit GitHub HTTP 500 + needed a history purge — don't repeat it. Binaries are
+# local + re-downloadable (per-model source_url in CREATURES_INDEX.json, which IS tracked).
+pipeline/assets/3d-models/polypizza/
+pipeline/assets/3d-models/quaternius/
+pipeline/assets/3d-models/kenney-creatures/
+pipeline/assets/3d-models/opengameart-creatures/
