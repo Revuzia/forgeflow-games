@@ -37,15 +37,21 @@
     <div class="card">
       <span class="tag new">NEW</span>
       <h2>Tide Breakers</h2>
-      <p>Free-movement naval combat — <b>no grid</b>. Drive + rotate your ships across open water and fire on visible enemies. Turn-based, vs AI.</p>
-      <a class="btn" href="/games/tide-breakers/" target="_blank">Play</a>
+      <p>Free-movement naval combat — <b>no grid</b>. Drive + rotate a 5-ship fleet across open water and fire within your arc. Play vs AI, or <b>PLAY ONLINE</b> (Quick Match / room code, 15s turns).</p>
+      <div class="row">
+        <a class="btn" href="/games/tide-breakers/" target="_blank">Play vs AI</a>
+        <button class="btn ghost" onclick="window.open('/games/tide-breakers/','tb1','width=900,height=680');window.open('/games/tide-breakers/','tb2','width=900,height=680');">Open ×2 for Online</button>
+      </div>
     </div>
 
     <div class="card">
       <span class="tag new">NEW</span>
       <h2>Warboard Chess</h2>
-      <p>3D battle-chess — character pieces that <b>fight</b> when they capture. Full chess rules vs AI, set in rotating environments (mountains / forest / desert / snow).</p>
-      <a class="btn" href="/games/warboard-chess/" target="_blank">Play</a>
+      <p>3D battle-chess — character pieces that <b>fight</b> when they capture. Full chess rules in rotating environments. Play vs AI, or <b>PLAY ONLINE</b> with Elo ranking (sign in to rank up).</p>
+      <div class="row">
+        <a class="btn" href="/games/warboard-chess/" target="_blank">Play vs AI</a>
+        <button class="btn ghost" onclick="window.open('/games/warboard-chess/','wc1','width=900,height=680');window.open('/games/warboard-chess/','wc2','width=900,height=680');">Open ×2 for Online</button>
+      </div>
     </div>
 
     <div class="card">
@@ -53,6 +59,27 @@
       <h2>Void Skirmish</h2>
       <p>XCOM-style 3D tactics — multi-floor, loot, boss, tactical map (Tab), night-vision. Now with the Tier 2/3 PBR + GTAO/SMAA fidelity pass.</p>
       <a class="btn" href="/games/void-skirmish-3d/" target="_blank">Play</a>
+    </div>
+
+    <div class="card">
+      <span class="tag new">NEW · 2D</span>
+      <h2>Neon Breakout</h2>
+      <p>Juicy neon brick-breaker — glowing bricks shatter into sparks + shockwaves, combo multipliers, power-ups (multiball, laser, wide paddle). Mouse or arrow keys. <i>Arcade.</i></p>
+      <a class="btn" href="/games/neon-breakout/" target="_blank">Play</a>
+    </div>
+
+    <div class="card">
+      <span class="tag new">NEW · 2D</span>
+      <h2>Starlance</h2>
+      <p>Vertical bullet-storm shmup — blast through enemy waves to a 3-phase <b>Dreadnought</b> boss. Spread/power pickups, additive bullet glow. Arrows/WASD + Space. <i>Shmup.</i></p>
+      <a class="btn" href="/games/starlance/" target="_blank">Play</a>
+    </div>
+
+    <div class="card">
+      <span class="tag new">NEW · 2D</span>
+      <h2>Lumen Run</h2>
+      <p>Precision platformer — tight run/jump (coyote time, variable height), glowing coins, spikes, stompable enemies, a goal flag. Squash + dust juice. Arrows + Space. <i>Platformer.</i></p>
+      <a class="btn" href="/games/lumen-run/" target="_blank">Play</a>
     </div>
   </div>
 
@@ -66,5 +93,5 @@
     </ol>
   </div>
 
-  <p class="note">Start the server first: run <b>play-games-local.bat</b> (in the Claude Claw folder), or in a terminal: <code style="background:#0a131c;padding:1px 6px;border-radius:5px">cd "C:\Users\TestRun\Claude Claw\forgeflow-games" &amp;&amp; python -m http.server 8788</code> — then open <code style="background:#0a131c;padding:1px 6px;border-radius:5px">http://localhost:8788/_play.html</code></p>
+  <p class="note">Start the server first: run <b>play-games-local.bat</b> (in the Claude Claw folder), or in a terminal: <code style="background:#0a131c;padding:1px 6px;border-radius:5px">cd "C:\Users\TestRun\Claude Claw\forgeflow-games" &amp;&amp; python serve_nocache.py 8788</code> — then open <code style="background:#0a131c;padding:1px 6px;border-radius:5px">http://localhost:8788/_play.html</code>. (No-cache server: edits show on a normal reload.)</p>
 </div></body></html>

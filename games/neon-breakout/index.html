@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neon Breakout — ForgeFlow Games</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;overflow:hidden;background:#0a0e1a}#game-container{width:100%;height:100%;display:flex;align-items:center;justify-content:center}</style>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+</head><body>
+<div id="game-container"></div>
+<script src="runtime/ffg_kernel.js"></script>
+<script src="runtime/ffg_shell.js"></script>
+<script src="runtime/sim/arcade_core.js"></script>
+<script src="runtime/ffg_arcade.js"></script>
+<script>
+fetch("content.json").then(function(r){return r.json()}).then(function(c){window.FFG_CONTENT=c})
+ .finally(function(){var s=document.createElement("script");s.src="runtime/ffg_loader.js?v="+Date.now();document.body.appendChild(s)});
+</script>
+</body></html>
