@@ -215,8 +215,13 @@
     var view = content.view || {};
     var W = view.width || 960, H = view.height || 600;
     var testMode = (typeof location !== "undefined" && location.search && location.search.indexOf("test=1") >= 0);
+    // ?canvas=1 forces the Canvas2D renderer — a fallback for machines whose WebGL is
+    // broken/blocklisted, and the only path that screenshots reliably in headless
+    // (WebGL's drawing buffer reads back blank). postFX glow/bloom are WebGL-only, so
+    // Canvas mode just skips them (FFG.fx already feature-detects); everything else renders.
+    var forceCanvas = (typeof location !== "undefined" && location.search && location.search.indexOf("canvas=1") >= 0);
     var game = new root.Phaser.Game({
-      type: root.Phaser.AUTO,
+      type: forceCanvas ? root.Phaser.CANVAS : root.Phaser.AUTO,
       width: W, height: H,
       parent: content.parent || "game-container",
       backgroundColor: view.background || "#0a0e1a",

@@ -750,9 +750,12 @@
       this._frame = (this._frame || 0) + 1;
       var dt = Math.min(delta / 1000, 0.05);
 
-      // Drift parallax stars even before play starts (alive backdrop).
-      if (this._stars) this._stars.update(dt);
-      if (this._stars2) this._stars2.update(dt);
+      // Drift parallax stars even before play starts (alive backdrop). The kernel's
+      // FFG.fx.starfield self-animates + returns an ARRAY (no .update); the embedded
+      // fallback returns an {update} object. Guard so either works (was throwing
+      // "this._stars.update is not a function" every frame on the kernel path).
+      if (this._stars && this._stars.update) this._stars.update(dt);
+      if (this._stars2 && this._stars2.update) this._stars2.update(dt);
 
       if (!this._started) { return; }
       if (this.__ffgHitstop) { /* time frozen for tweens; sim still steps lightly */ }
