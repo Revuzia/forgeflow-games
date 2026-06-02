@@ -430,6 +430,9 @@
         // ── HUD ──
         _buildHUD() {
           var pad = 14;
+          // top backing strip so the HUD stays readable over the bullet-storm
+          var bar = this.add.graphics().setDepth(95).setScrollFactor(0);
+          bar.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.6, 0.6, 0, 0); bar.fillRect(0, 0, this.W, 54);
           this.hudScore = FFG.text(this, pad, pad, "SCORE 0", { size: 20, color: "#ffffff", stroke: "#000", strokeThickness: 3, depth: 100 });
           this.hudCombo = FFG.text(this, pad, pad + 26, "", { size: 14, color: this.pal.warn, stroke: "#000", strokeThickness: 3, depth: 100 });
           this.hudLives = FFG.text(this, this.W - pad, pad, "", { size: 18, color: this.pal.danger, stroke: "#000", strokeThickness: 3, origin: 1, originY: 0, depth: 100 });

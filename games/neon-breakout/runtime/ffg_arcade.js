@@ -474,6 +474,9 @@
     // ── HUD: score / lives / combo, top corners, sharp text.
     Scene.prototype._buildHUD = function () {
       var pad = 14;
+      // top backing strip so SCORE/LIVES read over the bright brick wall
+      var bar = this.add.graphics().setDepth(85).setScrollFactor(0);
+      bar.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.6, 0.6, 0, 0); bar.fillRect(0, 0, this.W, 46);
       this._hudScore = FFG.text(this, pad, 12, "SCORE 0", { size: 18, color: pal.ink, depth: 90, stroke: "#000", strokeThickness: 4 });
       this._hudLives = FFG.text(this, this.W - pad, 12, "", { size: 18, color: pal.danger, origin: 0, originY: 0, depth: 90, stroke: "#000", strokeThickness: 4 });
       this._hudLives.setOrigin(1, 0);

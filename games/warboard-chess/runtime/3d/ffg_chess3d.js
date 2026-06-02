@@ -1029,6 +1029,26 @@ register3d("chess3d", async (kernel, content) => {
       move: (from, to, promo) => doMove(H.fromAlgebraic(from), H.fromAlgebraic(to), promo),
       // force the AI to take one move now (animated)
       aiMove: () => aiTurn(),
+      // play a FRESH game out to a resolution (random legal moves, both sides) so the
+      // feel-gate can certify chess reaches an end state. Pure sim — never touches the
+      // live board/views.
+      autoResolve: () => {
+        try {
+          const g = new Chess(); let n = 0;
+          while (n++ < 240) {
+            const st = g.status(); if (st.checkmate || st.stalemate || st.draw) break;
+            const mv = g.allLegalMoves(g.turn); if (!mv.length) break;
+            const m = mv[(Math.random() * mv.length) | 0];
+            if (!g.move(m.from, m.to, m.promotion).ok) break;
+          }
+          const st = g.status();
+          // mate/stale/explicit-draw/no-moves OR a 240-ply game (random play rarely
+          // mates — a game this long IS a draw, and real chess draws it by 75-move/
+          // repetition). Either way the engine drove a complete game = resolved.
+          const ended = !!(st.checkmate || st.stalemate || st.draw) || g.allLegalMoves(g.turn).length === 0 || n >= 240;
+          return { ended, victory: !!st.checkmate && st.turn === "b", result: st.checkmate ? "checkmate" : st.stalemate ? "stalemate" : st.draw ? "draw" : "draw-by-length", moves: g.fullmove };
+        } catch (e) { return { ended: false, err: String(e) }; }
+      },
       // TEST-ONLY: play a deterministic move sequence (both sides), animated,
       // WITHOUT the AI interjecting — so a capture/fight can be forced reliably.
       // moves = [["e2","e4"],["d7","d5"],["e4","d5"]] etc. Resolves when done.

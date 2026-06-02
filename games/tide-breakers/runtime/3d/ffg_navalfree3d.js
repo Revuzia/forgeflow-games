@@ -1014,6 +1014,29 @@ register3d("navalfree", async function (kernel, content) {
       endTurn: () => endPlayerTurn(),
       isBusy: () => busy,
       phase: () => phase,
+      // play a FRESH battle out to a resolution (both fleets driven by the same
+      // nearest-enemy fire/maneuver AI) so the feel-gate can certify tide reaches an
+      // end state. Pure sim — never touches the live battle.
+      autoResolve: () => {
+        try {
+          const g = new NavalFree({ width: ARENA_W, height: ARENA_H, seed: _gameSeed, firstSide: "player", actionsPerTurn: (m.actionsPerTurn || 2), ships: NavalFree.defaultFleet(ARENA_W, ARENA_H) });
+          let turns = 0;
+          while (!g.ended && turns++ < 80) {
+            const mine = g.shipsOf(g.turn);
+            for (const s of mine) {
+              let guard = 0;
+              while (s.actionsLeft > 0 && !g.ended && guard++ < 8) {
+                const foe = g._nearestEnemy(s); if (!foe) break;
+                if (g.canFireAt(s.id, foe.x, foe.y, foe.id).ok) { g.fireAt(s.id, foe.id); continue; }
+                const br = Math.atan2(foe.y - s.y, foe.x - s.x), off = s.gun.range * 0.7;
+                if (!g.moveShip(s.id, { x: foe.x - Math.cos(br) * off, y: foe.y - Math.sin(br) * off }).ok) break;
+              }
+            }
+            if (!g.ended) g.endTurn();
+          }
+          return { ended: !!g.ended, victory: g.winner === "player", winner: g.winner || null, turns: g.turnNumber };
+        } catch (e) { return { ended: false, err: String(e) }; }
+      },
     },
   };
   return controller;
