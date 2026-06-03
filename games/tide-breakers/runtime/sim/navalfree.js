@@ -164,7 +164,32 @@
       // Enemy ships get the single-player HARD action bonus when it's their turn.
       if (base > 0 && side === "enemy") base += this.enemyActionsBonus;
       s.actionsLeft = base;
+      // A DEFEND (overwatch) stance lasts through the OTHER side's turn and clears
+      // when this side becomes active again (its reaction shots are spent).
+      if (s.side === side) { s.defending = false; s._reacted = false; }
     }
+  };
+
+  // OVERWATCH reaction shot — a DEFENDING ship fires at an enemy that moved into its
+  // range + arc + LOS, WITHOUT spending an action (it committed its turn to defend).
+  // Same hit/falloff/sink/win resolution as fireAt. Returns { ok, result, dmg?, sunk? }.
+  NavalFree.prototype.reactionFire = function (shooterId, targetId) {
+    if (this.ended) return { ok: false, reason: "ended" };
+    var s = this.shipById(shooterId), t = this.shipById(targetId);
+    if (!s || s.sunk || !t || t.sunk || s.side === t.side) return { ok: false, reason: "invalid" };
+    var chk = this.canFireAt(shooterId, t.x, t.y, t.id);
+    if (!chk.ok) return { ok: false, reason: chk.reason };
+    var rangeFrac = chk.range / s.gun.range;
+    var falloff = rangeFrac <= 0.6 ? 1 : (1 - 0.45 * ((rangeFrac - 0.6) / 0.4));
+    var dmg = Math.max(1, Math.round(s.gun.dmg * falloff));
+    t.hp -= dmg;
+    var out = { ok: true, result: "hit", x: t.x, y: t.y, by: s.id, target: t.id, dmg: dmg, range: chk.range, reaction: true };
+    if (t.hp <= 0) { t.hp = 0; t.sunk = true; out.result = "sink"; out.sunk = true; this.log.push(s.id + " OVERWATCH SANK " + t.id); }
+    else { this.log.push(s.id + " OVERWATCH hit " + t.id + " for " + dmg + " (hp " + t.hp + ")"); }
+    var foeSide = s.side === "player" ? "enemy" : "player";
+    if (this.alive(foeSide) === 0) { this.ended = true; this.winner = s.side; out.win = true; this.onEvent("fire", out); this.onEvent("end", { winner: s.side }); return out; }
+    this.onEvent("fire", out);
+    return out;
   };
 
   // ── line of sight ─────────────────────────────────────────────────────────────

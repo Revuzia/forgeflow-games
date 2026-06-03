@@ -693,26 +693,48 @@ register3d("navalfree", async function (kernel, content) {
   const classOf = (s) => String(s.id || "").replace(/^[PE]-/, "");
   const classLabel = (s) => CLASS_LABEL[classOf(s)] || classOf(s) || "Ship";
 
-  // Fleet ROSTER strip: one small card per ship (class name + HP bar). Sunk ships
-  // dim out; the selected ship glows. This makes the DISTINCT hulls + names matter.
-  function fleetRoster(side) {
+  // class strength rank (for ordering strongest -> weakest) + a parametric ship
+  // SILHOUETTE so each portrait card shows the actual hull class (bigger class =
+  // bigger ship, more turrets), tinted by side.
+  const CLASS_RANK = { battleship: 5, cruiser: 4, destroyer: 3, frigate: 2, gunboat: 1 };
+  function shipSVG(s, col) {
+    const rank = CLASS_RANK[classLabel(s).toLowerCase()] || 2;
+    const turrets = rank >= 5 ? 3 : rank >= 3 ? 2 : 1;
+    const W = 84, H = 30, hullW = 30 + rank * 9, x0 = (W - hullW) / 2;
+    let t = "";
+    for (let i = 0; i < turrets; i++) {
+      const tx = x0 + hullW * (turrets === 1 ? 0.5 : 0.26 + 0.48 * (i / (turrets - 1)));
+      t += `<rect x="${(tx - 2.5).toFixed(1)}" y="9" width="5" height="6" rx="1" fill="${col}"/>`;
+    }
+    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+      <polygon points="${x0},19 ${x0 + hullW},19 ${x0 + hullW - 6},26 ${x0 + 6},26" fill="${col}" opacity="0.92"/>
+      <rect x="${(x0 + hullW * 0.36).toFixed(1)}" y="10" width="${(hullW * 0.26).toFixed(1)}" height="9" rx="1.5" fill="${col}" opacity="0.82"/>
+      ${t}
+      <line x1="${(x0 + hullW * 0.49).toFixed(1)}" y1="3" x2="${(x0 + hullW * 0.49).toFixed(1)}" y2="10" stroke="${col}" stroke-width="1.3"/>
+    </svg>`;
+  }
+  // Fleet COLUMN of PORTRAIT cards (silhouette + class + HP + DEF badge), ordered
+  // STRONGEST -> WEAKEST. Mine on the LEFT, enemy on the RIGHT. Sunk ships dim; the
+  // selected ship glows; a defending ship gets a gold outline.
+  function fleetColumn(side) {
     const teal = side === "player";
     const accent = teal ? "#37e0c0" : "#ff8a6a";
-    const cards = sim.ships.filter((s) => s.side === side).map((s) => {
+    const order = sim.ships.filter((s) => s.side === side).sort((a, b) => (b.maxHp - a.maxHp) || (CLASS_RANK[classLabel(b).toLowerCase()] || 0) - (CLASS_RANK[classLabel(a).toLowerCase()] || 0));
+    return order.map((s) => {
       const frac = Math.max(0, s.hp / s.maxHp);
       const hpCol = s.sunk ? "#5a2030" : frac > 0.5 ? accent : frac > 0.25 ? "#ffd166" : "#ff5a5a";
       const isSel = !s.sunk && s.id === selectedId;
-      const op = s.sunk ? 0.34 : 1;
-      const bd = isSel ? accent : "rgba(120,150,170,.28)";
-      const bg = isSel ? "rgba(40,80,90,.5)" : "rgba(10,22,32,.62)";
-      const strike = s.sunk ? "text-decoration:line-through;" : "";
-      return `<div title="${s.id} · HP ${s.hp}/${s.maxHp} · range ${Math.round(s.gun.range)}" style="opacity:${op};min-width:74px;padding:3px 7px 4px;border:1px solid ${bd};border-radius:6px;background:${bg};${isSel ? "box-shadow:0 0 9px " + accent + "55;" : ""}">
-        <div style="font-size:10px;font-weight:700;letter-spacing:.3px;color:${s.sunk ? "#8a93a0" : "#dfeaf0"};${strike}white-space:nowrap">${s.sunk ? "✕ " : ""}${classLabel(s)}</div>
+      const def = !!s.defending && !s.sunk;
+      const bd = isSel ? accent : (def ? "#ffd166" : "rgba(120,150,170,.26)");
+      const bg = isSel ? "rgba(40,80,90,.55)" : "rgba(9,20,30,.66)";
+      return `<div title="${s.id} · HP ${s.hp}/${s.maxHp} · range ${Math.round(s.gun.range)}" style="opacity:${s.sunk ? 0.32 : 1};width:94px;padding:5px 6px 6px;border:1px solid ${bd};border-radius:8px;background:${bg};${isSel ? "box-shadow:0 0 10px " + accent + "66;" : ""}">
+        <div style="height:30px;display:flex;align-items:center;justify-content:center;${s.sunk ? "filter:grayscale(1)" : ""}">${shipSVG(s, s.sunk ? "#6a7480" : accent)}</div>
+        <div style="font-size:10px;font-weight:700;color:${s.sunk ? "#8a93a0" : "#e7f1f6"};text-align:center;white-space:nowrap;${s.sunk ? "text-decoration:line-through;" : ""}">${classLabel(s)}</div>
         <div style="margin-top:3px;height:6px;border-radius:3px;background:#0b1722;overflow:hidden">
           <div style="height:6px;width:${Math.round(100 * (s.sunk ? 0 : frac))}%;background:${hpCol};${s.sunk ? "" : "box-shadow:0 0 5px " + hpCol}"></div></div>
+        <div style="margin-top:2px;font-size:9px;text-align:center;color:#9fb0be">${s.sunk ? "SUNK" : "HP " + s.hp + "/" + s.maxHp}${def ? ' · <b style="color:#ffd166">DEF</b>' : ""}</div>
       </div>`;
     }).join("");
-    return `<div style="display:flex;gap:5px;flex-wrap:wrap;${teal ? "" : "justify-content:flex-end"}">${cards}</div>`;
   }
 
   function setHUD(banner) {
@@ -737,6 +759,7 @@ register3d("navalfree", async function (kernel, content) {
              <span>Speed <b style="color:#bcdcff">${Math.round(sel.speed)}</b></span>
            </div>
            <div style="margin-top:4px;opacity:.72;font-size:11px">click open water to <b style="color:#9dffd0">DRIVE</b> · click an enemy in the amber arc to <b style="color:#ffd79a">FIRE</b> · <b>Q/E</b> turn</div>
+           ${sel.actionsLeft > 0 && yourTurn && !sel.defending ? `<button id="nf-defend" style="pointer-events:auto;margin-top:7px;font:800 12px 'Segoe UI',monospace;letter-spacing:.5px;padding:6px 14px;border-radius:7px;cursor:pointer;color:#1c1605;background:linear-gradient(#ffe08a,#ffc14d);border:1px solid #ffd166;box-shadow:0 3px 12px rgba(255,209,102,.3)">🛡 DEFEND (overwatch)</button> <span style="font-size:10px;opacity:.66">hold position — fire on any enemy that enters your arc</span>` : (sel.defending ? `<div style="margin-top:7px;font-size:12px;font-weight:800;color:#ffd166">🛡 DEFENDING — overwatch armed</div>` : "")}
          </div>`
       : (yourTurn && !sim.ended ? `<div style="display:inline-block;margin-top:6px;font-size:12px;opacity:.8;padding:6px 12px;border-radius:8px;background:rgba(8,24,30,.6)">Click one of your <span style="color:#37e0c0;font-weight:700">teal</span> ships to select it.</div>` : "");
     const endBtn = (yourTurn && !sim.ended)
@@ -747,13 +770,13 @@ register3d("navalfree", async function (kernel, content) {
         <div style="font-size:19px;font-weight:800;letter-spacing:2px">${content.title || "Tide Breakers"}</div>
         <div style="margin-top:4px;font-size:12px;font-weight:600">Turn ${sim.turnNumber} &nbsp; ${turnBanner}</div>
       </div>
-      <div style="position:absolute;top:54px;left:12px;max-width:46%;font-family:'Segoe UI',system-ui,sans-serif">
-        <div style="font-size:11px;font-weight:800;color:#37e0c0;letter-spacing:1px;margin-bottom:3px;text-shadow:0 1px 4px #000">YOUR FLEET <span style="opacity:.6;font-weight:600">· ${aliveCt("player")} afloat · ${alpHp("player")} hp</span></div>
-        ${fleetRoster("player")}
+      <div style="position:absolute;top:50px;left:10px;font-family:'Segoe UI',system-ui,sans-serif">
+        <div style="font-size:11px;font-weight:800;color:#37e0c0;letter-spacing:1px;margin-bottom:5px;text-shadow:0 1px 4px #000">YOUR FLEET <span style="opacity:.6;font-weight:600">· ${aliveCt("player")} afloat</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px">${fleetColumn("player")}</div>
       </div>
-      <div style="position:absolute;top:54px;right:12px;max-width:46%;text-align:right;font-family:'Segoe UI',system-ui,sans-serif">
-        <div style="font-size:11px;font-weight:800;color:#ff8a6a;letter-spacing:1px;margin-bottom:3px;text-shadow:0 1px 4px #000">ENEMY FLEET <span style="opacity:.6;font-weight:600">· ${aliveCt("enemy")} afloat · ${alpHp("enemy")} hp</span></div>
-        ${fleetRoster("enemy")}
+      <div style="position:absolute;top:50px;right:10px;text-align:right;font-family:'Segoe UI',system-ui,sans-serif">
+        <div style="font-size:11px;font-weight:800;color:#ff8a6a;letter-spacing:1px;margin-bottom:5px;text-shadow:0 1px 4px #000">ENEMY FLEET <span style="opacity:.6;font-weight:600">· ${aliveCt("enemy")} afloat</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">${fleetColumn("enemy")}</div>
       </div>
       <div style="position:absolute;left:0;right:0;bottom:16px;text-align:center;font-family:'Segoe UI',system-ui,sans-serif;text-shadow:0 1px 6px #000">
         ${banner ? `<div style="font-size:14px;margin-bottom:2px;opacity:.95">${banner}</div>` : ""}
@@ -762,6 +785,18 @@ register3d("navalfree", async function (kernel, content) {
       </div>`);
     const eb = document.getElementById("nf-endturn");
     if (eb) eb.onclick = () => { if (!busy) endPlayerTurn(); };
+    const db = document.getElementById("nf-defend");
+    if (db) db.onclick = () => { if (!busy && sel) defendShip(sel); };
+  }
+  // DEFEND: the selected ship commits to OVERWATCH — it spends its remaining actions
+  // and will fire a preemptive reaction shot at any enemy that moves into its range +
+  // arc during the enemy turn. (Clears automatically when your next turn begins.)
+  function defendShip(s) {
+    if (!s || s.sunk || sim.turn !== "player" || s.actionsLeft <= 0) return;
+    s.defending = true; s._reacted = false; s.actionsLeft = 0;
+    banner(`${s.id} holds — OVERWATCH`, 0xffd166, 900);
+    autoSelectNextShip(); // advance to the next ready ship (or end turn if none)
+    setHUD();
   }
 
   // ── Input: pick water point / ship under the cursor ─────────────────────────
@@ -925,6 +960,34 @@ register3d("navalfree", async function (kernel, content) {
     busy = true;
     runAITurn();
   }
+  // OVERWATCH: after an enemy ship moves, any DEFENDING player ship that now has it
+  // in range + arc + LOS fires a preemptive reaction shot (no action cost). Each
+  // defender reacts at most once per enemy turn. Reactions play out sequentially,
+  // then `done()` continues the AI playback.
+  function triggerOverwatch(enemyShip, done) {
+    if (!enemyShip || enemyShip.sunk || sim.ended) { done(); return; }
+    const defenders = sim.shipsOf("player").filter((d) => d.defending && !d.sunk && !d._reacted && sim.canFireAt(d.id, enemyShip.x, enemyShip.y, enemyShip.id).ok);
+    if (!defenders.length) { done(); return; }
+    let j = 0;
+    (function fireNext() {
+      if (j >= defenders.length || enemyShip.sunk || sim.ended) { done(); return; }
+      const d = defenders[j++];
+      d._reacted = true;
+      const res = sim.reactionFire(d.id, enemyShip.id);
+      if (!res || !res.ok) { fireNext(); return; }
+      const impact = toScene(enemyShip.x, enemyShip.y); impact.y = 2.0;
+      banner(`${d.id} OVERWATCH!`, 0xffd166, 800);
+      try { kernel.playSound(sfx.fire, 0.42); } catch (e) {}
+      fireShell(d, impact, () => {
+        explosion(impact); try { kernel.playSound(sfx.hit, 0.5); } catch (e) {}
+        updateHealthBar(enemyShip); damageText(impact, res.dmg);
+        if (res.result === "sink") { try { kernel.playSound(sfx.sink, 0.6); } catch (e) {} sinkVisual(enemyShip); }
+        setHUD();
+        if (sim.ended) { busy = false; finishMatch(); return; }
+        setTimeout(fireNext, 220);
+      });
+    })();
+  }
   // Play the AI's planned actions VISIBLY, one at a time, with animation.
   function runAITurn() {
     const acts = sim.aiPlan(); // resolves the whole enemy turn in the sim
@@ -941,10 +1004,11 @@ register3d("navalfree", async function (kernel, content) {
       }
       const a = acts[i++];
       const s = sim.shipById(a.id);
-      if (!s) { step(); return; }
+      if (!s || s.sunk) { step(); return; } // a defender's overwatch may have sunk it mid-turn
       if (a.kind === "move") {
-        // The sim already moved the ship; animate the visual to its NEW pose.
-        animateMove(s, () => setTimeout(step, 180));
+        // The sim already moved the ship; animate the visual to its NEW pose, THEN let
+        // any DEFENDING player ship that now has it in range/arc take a reaction shot.
+        animateMove(s, () => triggerOverwatch(s, () => setTimeout(step, 180)));
       } else if (a.kind === "fire") {
         const tgt = sim.shipById(a.target);
         const impact = tgt ? toScene(tgt.x, tgt.y) : toScene(s.x, s.y); impact.y = 2.0;
