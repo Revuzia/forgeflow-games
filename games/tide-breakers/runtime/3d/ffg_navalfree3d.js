@@ -1313,12 +1313,13 @@ register3d("navalfree", async function (kernel, content) {
       } catch (e) { /* additive — never block the menu */ }
     };
     if (shell.phase === "menu") shell.menu();
-    // Launcher deep-link: ?mode=ai jumps straight into a vs-Computer match;
-    // ?mode=online opens the vs-People (online) flow. Additive; menu is the default.
+    // Launcher deep-link. ?mode=ai -> SHOW THE MENU (so the difficulty picker + music
+    // appear; the PLAY gesture is what lets audio play). ?mode=online opens the vs-People
+    // flow. (Auto-starting on ?mode=ai skipped the menu — the _play.html launch bug.)
     try {
       const _m = new URLSearchParams(location.search).get("mode");
-      if (_m === "ai") { shell.hide(); shell.phase = "playing"; beginGame(content.difficulty || "normal"); }
-      else if (_m === "online") { shell.hide(); shell.phase = "playing"; startOnline(); }
+      if (_m === "online") { shell.hide(); shell.phase = "playing"; startOnline(); }
+      // _m === "ai" (or none): leave the menu up; PLAY starts the vs-Computer match.
     } catch (e) { /* deep-link is optional — never block boot */ }
   } else {
     // No shell available — boot straight into a match (headless/test fallback).

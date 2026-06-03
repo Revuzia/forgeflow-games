@@ -1321,11 +1321,13 @@ register3d("battleship", async function (kernel, content) {
     } catch (e) { /* button is additive — never block the menu */ }
   };
   shell.start(); // boot into the title menu
-  // Launcher deep-link: ?mode=ai -> vs-Computer match, ?mode=online -> vs-People flow.
+  // Launcher deep-link. ?mode=ai -> SHOW THE MENU (difficulty + music need the PLAY
+  // gesture; auto-starting skipped the menu and left audio suspended). ?mode=online ->
+  // straight to the online lobby. (Matches the chess fix — same _play.html launch path.)
   try {
     const _m = new URLSearchParams(location.search).get("mode");
-    if (_m === "ai") { shell.hide(); shell.phase = "playing"; if (shell._playMusic) shell._playMusic(); beginGame(); }
-    else if (_m === "online") { shell.hide(); shell.phase = "playing"; startOnline(); }
+    if (_m === "online") { shell.hide(); shell.phase = "playing"; startOnline(); }
+    // _m === "ai" (or none): leave the menu up; PLAY starts the vs-Computer match.
   } catch (e) { /* deep-link optional */ }
 
   // ── controller + test hooks ─────────────────────────────────────────────────

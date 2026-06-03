@@ -1024,11 +1024,16 @@ register3d("chess3d", async (kernel, content) => {
     };
     // If we're sitting on the title right now, re-render so the button appears.
     if (shell.phase === "menu") shell.menu();
-    // Launcher deep-link: ?mode=ai -> vs-Computer match, ?mode=online -> vs-People flow.
+    // Launcher deep-link. ?mode=ai -> just SHOW THE MENU (the owner wants the difficulty
+    // picker + music): the normal PLAY button starts the vs-Computer match with the chosen
+    // skill, and that click is the user gesture that lets the AudioContext play. Auto-
+    // starting here skipped the menu AND left music suspended (no gesture) — the recurring
+    // "no menu / no difficulty / no music" bug when launched from _play.html?mode=ai.
+    // ?mode=online still jumps straight to the online lobby (no difficulty there).
     try {
       const _m = new URLSearchParams(location.search).get("mode");
-      if (_m === "ai") { shell.hide(); shell.phase = "playing"; if (shell._playMusic) shell._playMusic(); beginGame(); }
-      else if (_m === "online") { shell.hide(); shell.phase = "playing"; startOnline(); }
+      if (_m === "online") { shell.hide(); shell.phase = "playing"; startOnline(); }
+      // _m === "ai" (or none): leave shell.start()'s menu up.
     } catch (e) { /* deep-link optional */ }
   } else {
     beginGame();
