@@ -346,9 +346,11 @@ if (process.argv.includes("--regen")) {
   const regen = ms.map((m, i) => {
     if (!m.grid || !m.grid.length) return m; // not a tactics mission — leave it
     const GW0 = m.grid[0].length, GH0 = m.grid.length;
-    // READABLE XCOM-skirmish scale: clamp to a focused ~26-32 x 20-26 plot. The old
-    // floor (58x48+) made maps gigantic, over-filled with cover, and units tiny.
-    const GW = Math.min(Math.max(GW0, 24), 30 + i * 2), GH = Math.min(Math.max(GH0, 18), 22 + i * 2);
+    // XCOM-scale plot. Research (state/research_xcom_design.json -> map_size) says a
+    // 24-40 tile grid is the faithful analog of one EU abduction map; the owner wants
+    // LARGE maps that "take a while to cross", so we lean to the top of that range and
+    // grow per mission — WITHOUT returning to the old 58x48 that made units tiny dots.
+    const GW = Math.min(Math.max(GW0, 36), 42 + i), GH = Math.min(Math.max(GH0, 30), 34 + i);
     let seed = 0x9e3779b9; const key = slug + ":" + i; for (let k = 0; k < key.length; k++) seed = (Math.imul(seed, 131) + key.charCodeAt(k)) >>> 0;
     const r = buildMission({
       name: m.name, objective: m.objective, w: GW, h: GH, seed,
