@@ -43,7 +43,7 @@ const THEMES = {
     name: "Mountain Pass",
     sky: ["#1a2740", "#33547e", "#6f93b8", "#9fb6cc"],
     light: { key: 0xfff1d8, keyI: 2.0, hemiSky: 0x9fc0e8, hemiGround: 0x3a4250, hemiI: 0.85, ambI: 0.34 },
-    fog: 0x9fb6cc, fogD: 0.0085, ibl: 0.62, exposure: 1.05,
+    fog: 0x8a9fb4, fogD: 0.0042, ibl: 0.5, exposure: 1.0,
     light_sq: 0xcfd6dc, dark_sq: 0x5b6b7e, ring: 0x4a5564, ringRough: 0.85,
     accent: 0x8fd0ff, ground: 0x3e4a3a, groundRough: 0.95, mote: 0xcfe0f0,
   },
@@ -51,7 +51,7 @@ const THEMES = {
     name: "Forest Clearing",
     sky: ["#13251c", "#1f3d2c", "#3f6b48", "#9fb87f"],
     light: { key: 0xfff0c0, keyI: 1.8, hemiSky: 0xbfe0a0, hemiGround: 0x2a3320, hemiI: 0.8, ambI: 0.32 },
-    fog: 0x6f8a5a, fogD: 0.0105, ibl: 0.5, exposure: 1.02,
+    fog: 0x5a7048, fogD: 0.0050, ibl: 0.46, exposure: 0.98,
     light_sq: 0xd7cfa8, dark_sq: 0x4f6b3c, ring: 0x3a4a28, ringRough: 0.95,
     accent: 0xbfff8f, ground: 0x2f4a28, groundRough: 1.0, mote: 0xd8ec9a,
   },
@@ -59,17 +59,17 @@ const THEMES = {
     name: "Desert Mesa",
     sky: ["#3a2b1c", "#8a6a3c", "#d9b06a", "#f0d8a0"],
     light: { key: 0xfff0c8, keyI: 2.3, hemiSky: 0xffe0a8, hemiGround: 0x6a5230, hemiI: 0.95, ambI: 0.4 },
-    fog: 0xe8cf9a, fogD: 0.0072, ibl: 0.7, exposure: 1.08,
+    fog: 0xcdb98a, fogD: 0.0040, ibl: 0.6, exposure: 1.02,
     light_sq: 0xe6d2a0, dark_sq: 0x9c7a48, ring: 0x7a5d34, ringRough: 1.0,
     accent: 0xffcf6a, ground: 0xb89055, groundRough: 1.0, mote: 0xf0dca8,
   },
   snow: {
     name: "Frozen Tundra",
-    sky: ["#22324a", "#506d8e", "#9fc0d8", "#dfeaf2"],
-    light: { key: 0xeaf2ff, keyI: 2.1, hemiSky: 0xcfe6ff, hemiGround: 0x6a7686, hemiI: 1.0, ambI: 0.46 },
-    fog: 0xdfeaf2, fogD: 0.0095, ibl: 0.72, exposure: 1.06,
+    sky: ["#1a2636", "#39506a", "#73879b", "#a7b4c0"],
+    light: { key: 0xdfe8f2, keyI: 1.8, hemiSky: 0xb4cae0, hemiGround: 0x5a6676, hemiI: 0.85, ambI: 0.4 },
+    fog: 0xaab8c6, fogD: 0.0052, ibl: 0.55, exposure: 0.95,
     light_sq: 0xeef4fa, dark_sq: 0x8fa6bc, ring: 0x7088a0, ringRough: 0.7,
-    accent: 0x9fe6ff, ground: 0xdfeaf2, groundRough: 0.7, mote: 0xffffff,
+    accent: 0x9fe6ff, ground: 0xccd8e2, groundRough: 0.7, mote: 0xffffff,
   },
 };
 const THEME_ORDER = ["mountains", "forest", "desert", "snow"];
@@ -125,10 +125,10 @@ register3d("chess3d", async (kernel, content) => {
   // De-washed for a clean, industry-standard chess presentation: a directional key
   // for crisp piece shadows + restrained fill, so the CHECKER reads with contrast
   // (the themes were over-lit — keyI 2+, exposure 1+ — flattening the board to grey).
-  if (kernel.sun) { kernel.sun.color = new THREE.Color(theme.light.key); kernel.sun.intensity = theme.light.keyI * 0.62; kernel.sun.position.set(W * 0.45, Hd * 1.1, -Hd * 0.35); }
-  scene.add(new THREE.HemisphereLight(theme.light.hemiSky, theme.light.hemiGround, theme.light.hemiI * 0.6));
-  scene.add(new THREE.AmbientLight(0xffffff, theme.light.ambI * 0.5));
-  kernel.renderer.toneMappingExposure = theme.exposure * 0.88;
+  if (kernel.sun) { kernel.sun.color = new THREE.Color(theme.light.key); kernel.sun.intensity = theme.light.keyI * 0.52; kernel.sun.position.set(W * 0.45, Hd * 1.1, -Hd * 0.35); }
+  scene.add(new THREE.HemisphereLight(theme.light.hemiSky, theme.light.hemiGround, theme.light.hemiI * 0.44));
+  scene.add(new THREE.AmbientLight(0xffffff, theme.light.ambI * 0.36));
+  kernel.renderer.toneMappingExposure = theme.exposure * 0.74;
   // SSAO was the main chess choppiness — a heavy full-screen depth pass for little gain
   // on a clean board. Drop it; keep cinematic bloom + SMAA (cheap) for the glow + edges.
   if (kernel.enableBloom) kernel.enableBloom({ strength: 0.26, radius: 0.6, threshold: 0.88, ssao: false, gtao: false, smaa: true });
@@ -218,8 +218,11 @@ register3d("chess3d", async (kernel, content) => {
       patch.rotation.x = -Math.PI / 2; patch.position.set(Math.cos(pa) * pr, 0.0, Math.sin(pa) * pr); patch.receiveShadow = true; scene.add(patch);
     }
 
-    // SCATTER props in a ring (trees / peaks / dunes / drifts), grounded at y=0.
-    const N = 38, ring0 = W * 0.72, ring1 = W * 2.6;
+    // SCATTER props in a ring, grounded at y=0. The ring starts WELL OUTSIDE the
+    // board (board corners reach 0.707·W) so peaks/trees never sit on the checker —
+    // each prop is also clamped so its base never reaches inside BOARD_CLEAR.
+    const N = 40, ring0 = W * 1.25, ring1 = W * 3.1;
+    const BOARD_CLEAR = W * 0.82;   // nothing's footprint may cross this radius
     function makeTree() {
       const g = new THREE.Group();
       const trunkH = T * (0.9 + rnd() * 0.5);
@@ -233,31 +236,91 @@ register3d("chess3d", async (kernel, content) => {
           new THREE.MeshStandardMaterial({ color: shade(base, t * 0.06), roughness: 0.92, flatShading: true }));
         cone.position.y = trunkH + t * (ch * 0.6); g.add(cone);
       }
+      g._br = T * 0.9;
       return g;
     }
-    for (let i = 0; i < N; i++) {
-      const ang = rnd() * Math.PI * 2, rad = ring0 + rnd() * (ring1 - ring0);
-      const px = Math.cos(ang) * rad, pz = Math.sin(ang) * rad;
-      let mesh;
-      if (themeKey === "forest") {
-        mesh = makeTree(); mesh.scale.setScalar(0.8 + rnd() * 0.9); mesh.rotation.y = rnd() * Math.PI * 2;
-      } else if (themeKey === "mountains" || themeKey === "snow") {
-        const h = T * (2.5 + rnd() * 5);
-        mesh = new THREE.Mesh(new THREE.ConeGeometry(T * (1.2 + rnd() * 1.5), h, 5),
-          new THREE.MeshStandardMaterial({ color: themeKey === "snow" ? shade(0xc8d6e2, rnd() * 0.15) : shade(0x4a5260, rnd() * 0.3 - 0.1), roughness: 0.95, flatShading: true }));
-        mesh.position.y = h / 2 - T * 0.1;
-      } else { // desert dunes / mesas
-        const h = T * (1.2 + rnd() * 2.2);
-        mesh = new THREE.Mesh(new THREE.BoxGeometry(T * (1.5 + rnd() * 2), h, T * (1.5 + rnd() * 2)),
-          new THREE.MeshStandardMaterial({ color: shade(0x9c7a48, rnd() * 0.25 - 0.1), roughness: 1.0, flatShading: true }));
-        mesh.position.y = h / 2 - T * 0.1;
+    // a JAGGED, ridged low-poly mountain (displaced cone) with a snow cap painted via
+    // per-vertex colour (snow above the snowline) — reads as a real rugged peak, not
+    // a smooth ice-cream cone. snowy=true (tundra) => more snow, lower snowline.
+    function makeMountain(snowy) {
+      const h = T * (3.2 + rnd() * 5.5), baseR = T * (1.4 + rnd() * 1.8);
+      const seg = 6 + (rnd() * 3 | 0);
+      const geo = new THREE.ConeGeometry(baseR, h, seg, 4, false);
+      const pos = geo.attributes.position, n = pos.count;
+      const col = new Float32Array(n * 3);
+      const rock = new THREE.Color(0x5b626c), snowC = new THREE.Color(0xeaf2fb);
+      const snowline = snowy ? 0.32 : 0.62;
+      for (let i = 0; i < n; i++) {
+        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+        const t = (y + h / 2) / h;                       // 0 base .. 1 apex
+        if (t > 0.02 && t < 0.985) {                     // ridge the sides, leave apex sharp
+          const j = 1 + (rnd() - 0.5) * 0.55;
+          pos.setX(i, x * j); pos.setZ(i, z * j);
+          pos.setY(i, y + (rnd() - 0.5) * h * 0.05);
+        }
+        const c = t >= snowline ? snowC : (t >= snowline - 0.12 ? rock.clone().lerp(snowC, (t - (snowline - 0.12)) / 0.12) : rock);
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
       }
-      mesh.position.x = px; mesh.position.z = pz;
-      // PERF: distant background decor doesn't cast/receive shadows (the shadow pass
-      // is for the board + pieces). Keeps the scene cheap despite the denser scatter.
+      geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+      geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, flatShading: true }));
+      m.position.y = h / 2 - T * 0.12; m._br = baseR * 1.5;
+      return m;
+    }
+    // a low grass tuft = a few thin blades; clusters of these read as real grass.
+    function makeGrassTuft() {
+      const g = new THREE.Group();
+      const base = shade(0x4a7a32, rnd() * 0.22 - 0.08);
+      const blades = 4 + (rnd() * 4 | 0);
+      for (let b = 0; b < blades; b++) {
+        const bh = T * (0.18 + rnd() * 0.28);
+        const blade = new THREE.Mesh(new THREE.ConeGeometry(T * 0.03, bh, 3),
+          new THREE.MeshStandardMaterial({ color: shade(base, rnd() * 0.12 - 0.06), roughness: 1.0, flatShading: true }));
+        blade.position.set((rnd() - 0.5) * T * 0.4, bh / 2, (rnd() - 0.5) * T * 0.4);
+        blade.rotation.z = (rnd() - 0.5) * 0.5; g.add(blade);
+      }
+      g._br = T * 0.3;
+      return g;
+    }
+    function place(mesh, rad, ang) {
+      const br = mesh._br || (mesh.geometry && mesh.geometry.boundingSphere ? mesh.geometry.boundingSphere.radius : T);
+      if (rad - br < BOARD_CLEAR) rad = BOARD_CLEAR + br;     // never let a footprint touch the board
+      mesh.position.x = Math.cos(ang) * rad; mesh.position.z = Math.sin(ang) * rad;
       mesh.traverse && mesh.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
       if (mesh.isMesh) { mesh.castShadow = false; mesh.receiveShadow = false; }
       scene.add(mesh);
+    }
+    for (let i = 0; i < N; i++) {
+      const ang = rnd() * Math.PI * 2, rad = ring0 + rnd() * (ring1 - ring0);
+      let mesh;
+      if (themeKey === "forest") { mesh = makeTree(); mesh.scale.setScalar(0.8 + rnd() * 0.9); mesh.rotation.y = rnd() * Math.PI * 2; }
+      else if (themeKey === "mountains") mesh = makeMountain(false);
+      else if (themeKey === "snow") mesh = makeMountain(true);
+      else { // desert mesas
+        const h = T * (1.2 + rnd() * 2.2);
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(T * (1.5 + rnd() * 2), h, T * (1.5 + rnd() * 2)),
+          new THREE.MeshStandardMaterial({ color: shade(0x9c7a48, rnd() * 0.25 - 0.1), roughness: 1.0, flatShading: true }));
+        mesh.position.y = h / 2 - T * 0.1; mesh._br = T * 2.5;
+      }
+      place(mesh, rad, ang);
+    }
+    // GROUND DETAIL ring (closer in, but still clear of the board): grass tufts in the
+    // forest, low snow drifts on the tundra — so the surface reads as real grass / snow.
+    if (themeKey === "forest" || themeKey === "snow") {
+      for (let i = 0; i < 60; i++) {
+        const ang = rnd() * Math.PI * 2, rad = BOARD_CLEAR + rnd() * W * 1.8;
+        let m;
+        if (themeKey === "forest") { m = makeGrassTuft(); m.scale.setScalar(0.8 + rnd() * 1.1); }
+        else { // snow drift: a low, wide, irregular white mound
+          const dr = T * (0.6 + rnd() * 1.6);
+          const dg = new THREE.SphereGeometry(dr, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2);
+          const dp = dg.attributes.position; for (let k = 0; k < dp.count; k++) { dp.setX(k, dp.getX(k) * (1 + (rnd() - 0.5) * 0.4)); dp.setZ(k, dp.getZ(k) * (1 + (rnd() - 0.5) * 0.4)); }
+          dg.computeVertexNormals();
+          m = new THREE.Mesh(dg, new THREE.MeshStandardMaterial({ color: shade(0xe6eef6, rnd() * 0.06 - 0.03), roughness: 0.55, flatShading: true }));
+          m.scale.y = 0.4;
+        }
+        place(m, rad, ang);
+      }
     }
 
     buildAmbientParticles();
@@ -516,7 +579,7 @@ register3d("chess3d", async (kernel, content) => {
 
       faceToward(v, toX, toY);
       anim(v, "walk", { fade: 0.12 });
-      sfx("select", 0.3);
+      // (per-click select blip removed — SFX kept minimal; capture/check/win sounds remain)
 
       if (defender) {
         // ── THE FIGHT ──────────────────────────────────────────────────────────
@@ -672,7 +735,7 @@ register3d("chess3d", async (kernel, content) => {
     if (!result.ok) return false;
     busy = true;
     deselect();
-    moveLog.push((result.mover === "w" ? "" : "… ") + result.san);
+    moveLog.push({ side: result.mover, san: result.san });
     setHUD();
     await animateMove(result);
     // ONLINE: a LOCAL move (user click or timeout) is broadcast so the opponent's
@@ -737,7 +800,7 @@ register3d("chess3d", async (kernel, content) => {
     if (netMode && online) { try { online.finish(); } catch (e) {} try { reportOnlineResult("draw"); } catch (e) {} }
     const why = result.stalemate ? "Stalemate" : result.fiftyMove ? "50-move draw" : result.insufficient ? "Insufficient material" : "Draw";
     banner("DRAW — " + why, theme.accent, 2400);
-    sfx("confirm", 0.6);
+    // (per-move confirm blip removed — the move animation + capture hit carry it)
     setTimeout(() => { if (shell) shell.end(false, why + " · " + sim.fullmove + " moves"); }, 1700);
   }
 
@@ -786,9 +849,32 @@ register3d("chess3d", async (kernel, content) => {
     const youColor = playerSide === "w" ? "White" : "Black";
     const st = sim.status();
     const checkTag = st.inCheck ? `<span style="color:#ff6a4a;font-weight:700"> · CHECK</span>` : "";
-    const lastMoves = moveLog.slice(-6).join("  ");
     const tcol = turnSide === playerSide ? theme.accent : 0xff8a6a;
     const tHex = "#" + tcol.toString(16).padStart(6, "0");
+    // ── move-history panel: two columns (White left, Black right), paired by move
+    // number. Shows the most recent rows so a long game stays readable. (No bottom
+    // move line — that was the cramped single row the user asked to remove.)
+    const rows = [];
+    for (let i = 0; i < moveLog.length; i++) {
+      const m = moveLog[i]; const isW = m.side === "w";
+      let row = rows.length ? rows[rows.length - 1] : null;
+      if (isW || !row || row.b) { row = { n: rows.length + 1, w: "", b: "" }; rows.push(row); }
+      if (isW) row.w = m.san; else row.b = m.san;
+    }
+    const recent = rows.slice(-12);
+    const rowsHtml = recent.map(r =>
+      `<tr><td style="color:#6f7d92;text-align:right;padding-right:8px;width:22px">${r.n}.</td>` +
+      `<td style="color:#f1f4fa;width:60px">${r.w || ""}</td>` +
+      `<td style="color:#c8d2e2;width:60px">${r.b || "…"}</td></tr>`).join("") ||
+      `<tr><td colspan="3" style="color:#6f7d92;font-style:italic">no moves yet</td></tr>`;
+    const youW = playerSide === "w";
+    const movePanel =
+      `<div style="position:absolute;top:64px;left:14px;background:rgba(8,14,24,0.74);border:1px solid #2a3a52;border-radius:9px;padding:8px 10px;font-family:'Segoe UI Semibold',monospace;font-size:12.5px;min-width:172px">
+        <div style="display:flex;justify-content:space-between;font-size:10px;letter-spacing:1px;color:#8ea2bd;border-bottom:1px solid #2a3a52;padding-bottom:4px;margin-bottom:4px">
+          <span style="margin-left:30px;color:#f1f4fa">WHITE${youW ? " (you)" : ""}</span><span style="color:#c8d2e2">BLACK${!youW ? " (you)" : ""}</span>
+        </div>
+        <table style="border-collapse:collapse;line-height:1.45">${rowsHtml}</table>
+      </div>`;
     kernel.hud(
       `<div style="position:absolute;top:14px;left:0;right:0;text-align:center;font-family:'Segoe UI',monospace">
         <div style="display:inline-block;background:rgba(8,14,24,0.72);border:1px solid ${tHex};border-radius:10px;padding:8px 18px">
@@ -796,8 +882,8 @@ register3d("chess3d", async (kernel, content) => {
           <div style="font-size:11px;opacity:0.8;margin-top:2px">You play ${youColor} · ${theme.name} · move ${sim.fullmove}</div>
         </div>
       </div>
-      <div style="position:absolute;bottom:12px;left:0;right:0;text-align:center;font-family:monospace;font-size:12px;opacity:0.75;color:#dfeaff">${lastMoves}</div>
-      <div style="position:absolute;bottom:32px;right:14px;font-family:monospace;font-size:11px;opacity:0.6;color:#aab4c8">Left-click select + move · <b>WASD</b> pan · Right-drag rotate · scroll zoom</div>`
+      ${movePanel}
+      <div style="position:absolute;bottom:14px;right:14px;font-family:monospace;font-size:11px;opacity:0.6;color:#aab4c8">Left-click select + move · <b>WASD</b> pan · Right-drag rotate · scroll zoom</div>`
     );
   }
   let _bannerEl = null;
@@ -843,7 +929,15 @@ register3d("chess3d", async (kernel, content) => {
     for (const k in squareToId) delete squareToId[k];
     moveLog = []; selected = null; busy = false;
     if (orbit) orbit.autoRotate = false; // stop the menu spin once playing
-    try { chessMusic.start(); } catch (e) {} // gentle classical piano (PLAY click = the audio gesture)
+    // gentle classical piano. The ?mode=ai launcher deep-link auto-starts WITHOUT a
+    // user gesture on this page, so the AudioContext is suspended and start() can't
+    // resume — arm a one-shot gesture (any click/key) to resume it. A normal Play
+    // click already carries the gesture, so it begins immediately in that case.
+    try { chessMusic.start(); } catch (e) {}
+    try {
+      const _arm = () => { try { chessMusic.start(); } catch (e) {} window.removeEventListener("pointerdown", _arm); window.removeEventListener("keydown", _arm); };
+      window.addEventListener("pointerdown", _arm); window.addEventListener("keydown", _arm);
+    } catch (e) {}
     await buildGame();
     setHUD();
     sfx("confirm", 0.5);
