@@ -1407,7 +1407,12 @@ register3d("tactics3d", async (kernel, content) => {
         if ((o.isMesh || o.isSkinnedMesh) && o.material) {
           o.material = o.material.clone();
           if (!isPlayer && o.material.color) o.material.color.lerp(new THREE.Color(accent), 0.32); // light menace tint — keep model identity
-          o.material.emissive = new THREE.Color(accent).multiplyScalar(isPlayer ? 0.22 : 0.18);
+          // PLAYERS: the night map is dark, so LIFT the (near-black) camo armor to a
+          // readable steel — the armor + class silhouette read instead of a flat
+          // black blob — and apply only a FAINT team-colour emissive accent (the old
+          // 0.22 cyan emissive washed the whole body monochrome = "no armour/colour").
+          if (isPlayer && o.material.color) o.material.color.lerp(new THREE.Color(0x8c98a6), 0.34);
+          o.material.emissive = new THREE.Color(accent).multiplyScalar(isPlayer ? 0.05 : 0.18);
           // PBR pass: armor/hull roughness + metalness + envMapIntensity so the
           // sky env grazes the units (no longer flat-shaded). Per-mesh roughness
           // wobble keeps plates/joints from reading as one uniform surface.

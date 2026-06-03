@@ -74,7 +74,7 @@ function buildMission(spec) {
   // ---- 1. PLOT SKELETON: a road network of avenues (rows) + streets (cols).
   // Roads stay open (0) and guarantee connectivity; lots fill the gaps between.
   const ROAD = 3, MARGIN = 3;
-  const lotW = 15 + ri(3), lotH = 13 + ri(3);       // ~XCOM medium parcel footprint
+  const lotW = 9 + ri(2), lotH = 8 + ri(2);         // compact XCOM skirmish parcels (were 15x13 -> maps got huge + units tiny)
   const colStarts = [], rowStarts = [];
   for (let x = MARGIN; x < GW - 8; x += lotW + ROAD) colStarts.push(x);
   for (let y = MARGIN; y < GH - 8; y += lotH + ROAD) rowStarts.push(y);
@@ -346,8 +346,9 @@ if (process.argv.includes("--regen")) {
   const regen = ms.map((m, i) => {
     if (!m.grid || !m.grid.length) return m; // not a tactics mission — leave it
     const GW0 = m.grid[0].length, GH0 = m.grid.length;
-    // keep the map's intended size but never below XCOM plot scale (bump tiny LLM grids up)
-    const GW = Math.max(GW0, 58 + i * 3), GH = Math.max(GH0, 48 + i * 3);
+    // READABLE XCOM-skirmish scale: clamp to a focused ~26-32 x 20-26 plot. The old
+    // floor (58x48+) made maps gigantic, over-filled with cover, and units tiny.
+    const GW = Math.min(Math.max(GW0, 24), 30 + i * 2), GH = Math.min(Math.max(GH0, 18), 22 + i * 2);
     let seed = 0x9e3779b9; const key = slug + ":" + i; for (let k = 0; k < key.length; k++) seed = (Math.imul(seed, 131) + key.charCodeAt(k)) >>> 0;
     const r = buildMission({
       name: m.name, objective: m.objective, w: GW, h: GH, seed,

@@ -1406,7 +1406,8 @@ register3d("tactics3d", async (kernel, content) => {
         if ((o.isMesh || o.isSkinnedMesh) && o.material) {
           o.material = o.material.clone();
           if (!isPlayer && o.material.color) o.material.color.lerp(new THREE.Color(accent), 0.32); // light menace tint — keep model identity
-          o.material.emissive = new THREE.Color(accent).multiplyScalar(isPlayer ? 0.22 : 0.18);
+          if (isPlayer && o.material.color) o.material.color.lerp(new THREE.Color(0x8c98a6), 0.34); // lift dark camo to readable steel
+          o.material.emissive = new THREE.Color(accent).multiplyScalar(isPlayer ? 0.05 : 0.18);
           // PBR pass: armor/hull roughness + metalness + envMapIntensity so the
           // sky env grazes the units (no longer flat-shaded). Per-mesh roughness
           // wobble keeps plates/joints from reading as one uniform surface.
