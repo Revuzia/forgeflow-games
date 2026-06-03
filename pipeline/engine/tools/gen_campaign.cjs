@@ -365,14 +365,15 @@ if (process.argv.includes("--regen")) {
   const regen = ms.map((m, i) => {
     if (!m.grid || !m.grid.length) return m; // not a tactics mission — leave it
     const GW0 = m.grid[0].length, GH0 = m.grid.length;
-    // LARGE XCOM plots that GROW per mission (owner: 36-42 still felt small). The camera
-    // frames the action + follows units, so big maps don't shrink units to dots; cover
-    // stays sparse (~3-7%) so they aren't "overfilled" like the old 58x48. Never shrink
-    // below the existing grid. (Map size will be re-tuned from research_xcom_deep.json.)
-    const GW = Math.max(44 + i * 2, GW0), GH = Math.max(36 + i * 2, GH0); // 44x36 (M1) -> 56x48 (M7)
-    // XCOM fields far MORE aliens than the squad (you meet them pod-by-pod, not all at
-    // once), so a 5-soldier squad should face ~9-18 hostiles, ramping to the finale.
-    const enemyCount = [9, 10, 12, 13, 15, 16, 18][i] != null ? [9, 10, 12, 13, 15, 16, 18][i] : 10 + i * 2;
+    // LARGE ~SQUARE XCOM plots, sized from research_xcom_deep.json -> campaign_ramp.
+    // Research says EU maps are 40-60/side and to "push to 56-72"; a soldier crosses
+    // ~7-8 tiles/move so this is the "takes a while to cross" pacing. Ramp 48->66/side
+    // (capped a touch under 72 for 3D-render headroom). Never shrink below the grid.
+    const SIDE = 48 + i * 3;                                   // 48,51,54,57,60,63,66
+    const GW = Math.max(SIDE, GW0), GH = Math.max(SIDE, GH0);
+    // Enemy count from campaign_ramp (always > the 5-squad; pod-by-pod reveal keeps it
+    // fair): 8/10/12/14/16/18/22, ratio 1.6x -> 4.4x — XCOM's abduction->final-mission curve.
+    const enemyCount = [8, 10, 12, 14, 16, 18, 22][i] != null ? [8, 10, 12, 14, 16, 18, 22][i] : 10 + i * 2;
     let seed = 0x9e3779b9; const key = slug + ":" + i; for (let k = 0; k < key.length; k++) seed = (Math.imul(seed, 131) + key.charCodeAt(k)) >>> 0;
     const r = buildMission({
       name: m.name, objective: m.objective, w: GW, h: GH, seed,
