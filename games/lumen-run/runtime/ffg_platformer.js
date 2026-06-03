@@ -132,21 +132,23 @@
 
         // distant glowing shapes on parallax layers (drawn into RTs as tileable
         // bands; we just place groups of circles with scrollFactor for depth).
+        // PERF + CLARITY (2026-06-02): background orbs were the giant blurry clutter
+        // + a big FPS sink (44 circles EACH with its own postFX glow pipeline). They
+        // are pure ambiance, so: no per-object glow (the camera bloom + their alpha
+        // already read as soft light), fewer + smaller orbs, lower alpha.
         function layer(depth, scrollF, n, rMin, rMax, tint, alpha) {
           var worldW = self.level.width;
           for (var i = 0; i < n; i++) {
             var x = (i / n) * (worldW * scrollF + VW) + (Math.sin(i * 12.9898) * 0.5 + 0.5) * 80;
             var y = 40 + (Math.sin(i * 78.233) * 0.5 + 0.5) * (VH * 0.6);
             var r = rMin + (Math.sin(i * 43.17) * 0.5 + 0.5) * (rMax - rMin);
-            var c = self.add.circle(x % (worldW * scrollF + VW), y, r, tint, alpha).setScrollFactor(scrollF).setDepth(depth);
-            FFG.fx.glow(c, tint, 3);
+            self.add.circle(x % (worldW * scrollF + VW), y, r, tint, alpha).setScrollFactor(scrollF).setDepth(depth);
           }
         }
-        // far hazy glow orbs (mountainscape feel), then mid, then near drifting motes
-        layer(D.far, 0.12, 10, 38, 90, FFG.shade(pal.primary, -0.2), 0.10);
-        layer(D.mid, 0.30, 14, 14, 46, FFG.shade(pal.accent, -0.1), 0.10);
+        layer(D.far, 0.12, 6, 18, 40, FFG.shade(pal.primary, -0.2), 0.07);
+        layer(D.mid, 0.30, 8, 10, 26, FFG.shade(pal.accent, -0.1), 0.07);
         // a closer band of small bright embers for parallax depth nearer the play plane
-        layer(D.near, 0.55, 20, 4, 11, FFG.shade(pal.warn, 0.1), 0.16);
+        layer(D.near, 0.55, 14, 3, 8, FFG.shade(pal.warn, 0.1), 0.12);
 
         // distant silhouette ridge line for grounded depth
         var ridge = this.add.graphics().setScrollFactor(0.18).setDepth(D.far + 1);

@@ -112,12 +112,12 @@
     },
     // soft outer glow on a game object (WebGL only; harmless no-op on Canvas)
     glow: function (obj, color, outer) {
-      try { if (obj && this._webgl && obj.postFX) obj.postFX.addGlow(color == null ? 0xffffff : color, outer == null ? 4 : outer, 0, false, 0.1, 10); } catch (e) {}
+      try { if (obj && this._webgl && obj.postFX) obj.postFX.addGlow(color == null ? 0xffffff : color, outer == null ? 3 : outer, 0, false, 0.08, 4)  /* quality 10->4: cheaper per-object glow */; } catch (e) {}
       return obj;
     },
     // whole-scene bloom (call once after building the scene)
     bloom: function (strength) {
-      try { if (this._webgl && this._scene) this._scene.cameras.main.postFX.addBloom(0xffffff, 1, 1, 1.05, strength == null ? 1.1 : strength, 6); } catch (e) {}
+      try { if (this._webgl && this._scene) this._scene.cameras.main.postFX.addBloom(0xffffff, 1, 1, 0.7, strength == null ? 0.5 : Math.min(strength, 0.6), 1)  /* steps 6->1: full-screen bloom was the 2D FPS killer + the heavy blur */; } catch (e) {}
     },
     shake: function (dur, intensity) {
       try { if (this._scene) this._scene.cameras.main.shake(dur == null ? 180 : dur, intensity == null ? 0.006 : intensity); } catch (e) {}

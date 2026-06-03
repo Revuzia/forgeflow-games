@@ -57,7 +57,7 @@
       glow: function (obj, color, outer) {
         if (!obj) return obj;
         if (supportsPostFX && obj.postFX && obj.postFX.addGlow) {
-          try { obj.postFX.addGlow(color != null ? hexNum(color) : 0xffffff, outer || 4, 0, false, 0.1, 12); } catch (e) {}
+          try { obj.postFX.addGlow(color != null ? hexNum(color) : 0xffffff, outer || 4, 0, false, 0.08, 4); } catch (e) {} // quality 12->4 (per-entity glow FPS)
         }
         return obj;
       },
@@ -67,7 +67,7 @@
         if (!supportsPostFX) return;
         try {
           var cam = scene.cameras.main;
-          if (cam.postFX && cam.postFX.addBloom) cam.postFX.addBloom(0xffffff, 1, 1, 1, strength == null ? 0.9 : strength, 4);
+          if (cam.postFX && cam.postFX.addBloom) cam.postFX.addBloom(0xffffff, 1, 1, 0.7, strength == null ? 0.55 : Math.min(strength, 0.6), 1); // steps 4->1 (full-screen bloom FPS)
         } catch (e) {}
       },
       shake: function (dur, intensity) { scene.cameras.main.shake(dur || 160, intensity == null ? 0.006 : intensity); },
@@ -209,10 +209,12 @@
     var FAR = 0x9fb4d8;   // faint cool blue-white (depth)
     var MID = 0xdfe8f5;   // cool neutral white
     var NEAR = 0xffffff;  // pure white (closest, brightest)
+    // DIMMED hard (user: stars were still too prominent) — low alpha + smaller +
+    // fewer, so they read as faint depth and never compete with the pink bullets.
     var layers = [
-      { n: 70, speed: 90,  scale: 0.55, alpha: 0.40, tint: FAR },
-      { n: 55, speed: 180, scale: 0.85, alpha: 0.65, tint: MID },
-      { n: 32, speed: 340, scale: 1.30, alpha: 0.92, tint: NEAR },
+      { n: 44, speed: 90,  scale: 0.45, alpha: 0.16, tint: FAR },
+      { n: 34, speed: 180, scale: 0.65, alpha: 0.26, tint: MID },
+      { n: 18, speed: 340, scale: 0.95, alpha: 0.40, tint: NEAR },
     ];
     var stars = [];
     layers.forEach(function (L) {
@@ -486,7 +488,7 @@
           t1.setTint(hexNum(this.pal.primary), hexNum(this.pal.primary), hexNum(this.pal.accent), hexNum(this.pal.accent));
           var wc = (this.sim && this.sim.totalWorlds) || 6;
           var t2 = FFG.text(this, this.W / 2, this.H * 0.36 + 44, (content.subtitle || "vertical bullet storm") + "  •  " + wc + " worlds", { size: 15, color: this.pal.ink, origin: 0.5 });
-          var t3 = FFG.text(this, this.W / 2, this.H * 0.56, "Arrows / WASD  move      SPACE  fire", { size: 14, color: this.pal.good, origin: 0.5 });
+          var t3 = FFG.text(this, this.W / 2, this.H * 0.56, "Arrows / WASD  move   ·   HOLD Space or Mouse to FIRE", { size: 14, color: this.pal.good, origin: 0.5 });
           var t4 = FFG.text(this, this.W / 2, this.H * 0.56 + 24, "or steer with the mouse", { size: 12, color: this.pal.ink, origin: 0.5 });
           var t5 = FFG.text(this, this.W / 2, this.H * 0.66, "CLICK / press SPACE to launch", { size: 18, color: "#ffffff", stroke: "#000", strokeThickness: 3, origin: 0.5 });
           this.tweens.add({ targets: t5, alpha: 0.3, duration: 700, yoyo: true, repeat: -1 });
@@ -526,12 +528,12 @@
         }
 
         // ── input gather ──
-        // Classic shmup AUTO-FIRE: the ship always shoots once playing, so the
-        // player only has to think about movement (and SPACE still works as an
-        // explicit fire). Keyboard takes priority over pointer steering.
+        // HOLD TO FIRE (user: no auto-shoot): the ship only fires while SPACE is held
+        // or the mouse/touch is pressed. Keyboard takes priority over pointer steering.
         _gatherInput() {
           var k = this.keys;
-          var inp = { left: false, right: false, up: false, down: false, fire: true, moveTo: null };
+          var firing = !!(k.fire && k.fire.isDown) || !!(this.input && this.input.activePointer && this.input.activePointer.isDown);
+          var inp = { left: false, right: false, up: false, down: false, fire: firing, moveTo: null };
           if (this._pointer) inp.moveTo = this._pointer;
           var L = k.left.isDown || k.a.isDown, R = k.right.isDown || k.d.isDown;
           var U = k.up.isDown || k.w.isDown, D = k.down.isDown || k.s.isDown;
