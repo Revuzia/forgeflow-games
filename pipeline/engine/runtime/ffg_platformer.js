@@ -179,8 +179,11 @@
           g.fillStyle(body, 1); g.fillRect(p.x, p.y + 3, p.w, p.h - 3);                       // body
           g.fillStyle(lip, 1); g.fillRect(p.x, p.y, p.w, 4);                                  // glowing top lip
           g.fillStyle(FFG.shade(lip, 0.4), 0.9); g.fillRect(p.x, p.y, p.w, 1.5);              // highlight
-          // an invisible static rectangle is the actual collider
-          var s = self.add.rectangle(p.x + p.w / 2, p.y + p.h / 2, p.w, p.h, 0x000000, 0);
+          // an invisible static rectangle is the actual collider. GROUND extends far
+          // DOWN (a bottomless wall) so a fast fall / a low-FPS large step can never
+          // tunnel through the floor; floating platforms get a modest skirt too.
+          var colH = isGround ? p.h + 900 : p.h + 26;
+          var s = self.add.rectangle(p.x + p.w / 2, p.y + colH / 2, p.w, colH, 0x000000, 0);
           self.physics.add.existing(s, true);
           self.platforms.add(s);
         });
@@ -257,7 +260,8 @@
         this.hero.setOrigin(0.5, 0.5);
         this.hero.body.setSize(24, 34, true);
         this.hero.setCollideWorldBounds(false);
-        this.hero.setMaxVelocity(T.maxRun, T.maxFall);
+        this.hero.setMaxVelocity(T.maxRun, Math.min(T.maxFall || 1000, 1000)); // cap fall so a frame-step can't tunnel a platform
+        this._fallFloorY = (L.height || 720) + 500;
         // arcade gravity for the hero specifically (world gravity stays 0)
         this.hero.body.setGravityY(T.gravity);
         FFG.fx.glow(this.hero, pal.primary, 6);
@@ -547,6 +551,11 @@
       // ── per-frame update: tight controls + juice ────────────────────────────────
       update(time, dtMs) {
         if (!this.scene || !this.hero || !this.hero.body) return;
+        if (this.hero.y > this._fallFloorY) {
+          var sx = (this._lastSafe && this._lastSafe.x) || this.level.spawn.x;
+          var sy = (this._lastSafe && this._lastSafe.y) || (this.level.spawn.y - 40);
+          this.hero.setVelocity(0, 0); this.hero.setPosition(sx, sy);
+        }
         // keep shadow + enemy patrol + bg alive even before start (feels live)
         this._updateEnemies(dtMs);
         this._updateHeroShadow();
@@ -561,6 +570,7 @@
 
         // landing transition: dust + squash + (hard landing) shake
         if (onGround && !this.wasOnGround) this._onLand();
+        if (onGround) this._lastSafe = { x: this.hero.x, y: this.hero.y - 6 };
         // refresh coyote on ground; decay otherwise
         if (onGround) this.coyote = T.coyoteMs; else this.coyote = Math.max(0, this.coyote - dtMs);
 
