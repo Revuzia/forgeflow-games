@@ -2621,7 +2621,7 @@
     },
     {
       "name": "Rail Yard",
-      "objective": "Secure the rail yard and destroy the hostile garrison.",
+      "objective": "Fight through the rail yard to the extraction platform and evac the whole squad.",
       "grid": [
         [
           0,
@@ -3937,7 +3937,37 @@
           "x": 7,
           "y": 4
         }
-      ]
+      ],
+      "goal": {
+        "type": "evac",
+        "turnLimit": 15,
+        "evac": [
+          {
+            "x": 18,
+            "y": 2
+          },
+          {
+            "x": 18,
+            "y": 3
+          },
+          {
+            "x": 17,
+            "y": 2
+          },
+          {
+            "x": 19,
+            "y": 2
+          },
+          {
+            "x": 18,
+            "y": 1
+          },
+          {
+            "x": 17,
+            "y": 3
+          }
+        ]
+      }
     },
     {
       "name": "Power Substation",
@@ -6411,7 +6441,7 @@
     },
     {
       "name": "Old Town Siege",
-      "objective": "Push through Old Town against entrenched resistance.",
+      "objective": "Wipe the entrenched garrison before reinforcements lock down Old Town — clear all hostiles within 16 turns.",
       "grid": [
         [
           0,
@@ -7802,7 +7832,11 @@
           "x": 25,
           "y": 6
         }
-      ]
+      ],
+      "goal": {
+        "type": "eliminate",
+        "turnLimit": 16
+      }
     },
     {
       "name": "Spire Approach",
@@ -10697,11 +10731,23 @@
             "y": 2
           },
           {
-            "x": 21,
+            "x": 20,
             "y": 3
           },
           {
-            "x": 18,
+            "x": 19,
+            "y": 2
+          },
+          {
+            "x": 21,
+            "y": 2
+          },
+          {
+            "x": 20,
+            "y": 1
+          },
+          {
+            "x": 19,
             "y": 3
           }
         ]

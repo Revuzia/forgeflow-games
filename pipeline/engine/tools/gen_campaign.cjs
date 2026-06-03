@@ -42,9 +42,9 @@ const ARCH = {
 const MISSIONS = [
   { name: "Downtown Insertion", objective: "Eliminate all hostile contacts across the downtown sector.", w: 60, h: 50, enemies: 11, mix: ["drone", "drone", "stalker", "sniper", "defender"], seed: 0xA1 },
   { name: "Market Sweep", objective: "Clear the open market plaza of the alien advance party.", w: 64, h: 52, enemies: 12, mix: ["drone", "stalker", "stalker", "sniper", "defender"], seed: 0xB7 },
-  { name: "Rail Yard", objective: "Secure the rail yard and destroy the hostile garrison.", w: 68, h: 56, enemies: 14, mix: ["drone", "stalker", "sniper", "sniper", "defender"], seed: 0xC3 },
+  { name: "Rail Yard", objective: "Fight through the rail yard to the extraction platform and evac the whole squad.", w: 68, h: 56, enemies: 14, mix: ["drone", "stalker", "sniper", "sniper", "defender"], seed: 0xC3, goal: { type: "evac", turnLimit: 15 } },
   { name: "Power Substation", objective: "Reach and hack the substation relay before the grid locks down.", w: 70, h: 58, enemies: 15, mix: ["stalker", "sniper", "defender", "defender", "drone"], seed: 0xD9, goal: { type: "hack", turnLimit: 16 } },
-  { name: "Old Town Siege", objective: "Push through Old Town against entrenched resistance.", w: 74, h: 62, enemies: 17, mix: ["stalker", "stalker", "sniper", "defender", "defender"], seed: 0xE5 },
+  { name: "Old Town Siege", objective: "Wipe the entrenched garrison before reinforcements lock down Old Town — clear all hostiles within the turn limit.", w: 74, h: 62, enemies: 17, mix: ["stalker", "stalker", "sniper", "defender", "defender"], seed: 0xE5, goal: { type: "eliminate", turnLimit: 16 } },
   { name: "Spire Approach", objective: "Fight to the extraction zone and evac the whole squad.", w: 78, h: 64, enemies: 18, mix: ["sniper", "sniper", "defender", "defender", "stalker"], seed: 0xF2, goal: { type: "evac", turnLimit: 18 } },
   { name: "Avatar Spire", objective: "Assault the spire and shatter the Avatar Project.", w: 80, h: 68, enemies: 20, mix: ["defender", "defender", "sniper", "sniper", "stalker", "stalker"], seed: 0x5C },
 ];
@@ -316,12 +316,16 @@ function buildMission(spec) {
     const c = nearestReach(Math.floor(GW / 2), Math.floor(GH / 2));
     goal = { type: "hack", turnLimit: spec.goal.turnLimit, target: { x: c.x, y: c.y } };
   } else if (spec.goal && spec.goal.type === "evac") {
-    const cx = Math.floor(GW / 2), pads = [];
-    for (let off = 0; off < 9 && pads.length < 3; off++) {
-      const c = nearestReach(cx + (off % 2 ? off : -off), 2 + (off % 3));
-      if (!pads.some((p) => p.x === c.x && p.y === c.y)) pads.push({ x: c.x, y: c.y });
-    }
+    // Extraction ZONE: a contiguous cluster of reachable tiles big enough for the WHOLE
+    // squad (units can't stack, so the win needs >= squad-size pads — 3 pads for 5 soldiers
+    // was unwinnable). Pick the N reachable tiles nearest the far-edge extraction point.
+    const cx = Math.floor(GW / 2), cy = 2, need = players.length + 1;
+    const pads = reachList.slice()
+      .sort((a, b) => (Math.abs(a[0] - cx) + Math.abs(a[1] - cy)) - (Math.abs(b[0] - cx) + Math.abs(b[1] - cy)))
+      .slice(0, need).map(([x, y]) => ({ x, y }));
     goal = { type: "evac", turnLimit: spec.goal.turnLimit, evac: pads };
+  } else if (spec.goal && spec.goal.turnLimit) {
+    goal = { type: "eliminate", turnLimit: spec.goal.turnLimit }; // a TIMED assault (clear all in N turns)
   }
 
   const m = { name: spec.name, objective: spec.objective, grid, player_units: players, enemy_units: enemies };
