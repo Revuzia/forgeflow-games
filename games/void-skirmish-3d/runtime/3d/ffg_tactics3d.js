@@ -1688,7 +1688,7 @@ register3d("tactics3d", async (kernel, content) => {
     `);
     renderEndBtn(ph);
   }
-  let endBtnEl = null, owBtnEl = null;
+  let endBtnEl = null, owBtnEl = null, hkBtnEl = null;
   function renderEndBtn(show) {
     if (!endBtnEl) {
       endBtnEl = document.createElement("button");
@@ -1701,10 +1701,16 @@ register3d("tactics3d", async (kernel, content) => {
       owBtnEl.textContent = "OVERWATCH (Y)";
       owBtnEl.onclick = () => overwatchSelected();
       kernel.parent.appendChild(owBtnEl);
+      hkBtnEl = document.createElement("button");
+      Object.assign(hkBtnEl.style, { position: "absolute", right: "286px", bottom: "16px", zIndex: "50", font: "bold 13px 'Segoe UI',monospace", letterSpacing: "1px", padding: "10px 18px", borderRadius: "7px", cursor: "pointer", color: "#0c0a04", background: "linear-gradient(#ffe6a0,#e0b24f)", border: "1px solid #ffd27a" });
+      hkBtnEl.textContent = "HUNKER (H)";
+      hkBtnEl.onclick = () => hunkerSelected();
+      kernel.parent.appendChild(hkBtnEl);
     }
     const playable = show && phase === "battle" && !busy && !sim.ended;
     endBtnEl.style.display = playable ? "block" : "none";
     owBtnEl.style.display = (playable && selected && selected.actionPoints > 0) ? "block" : "none";
+    hkBtnEl.style.display = (playable && selected && selected.actionPoints > 0) ? "block" : "none";
     renderAbilityBar(playable);
     renderRosterBar(playable);
   }
@@ -1826,6 +1832,12 @@ register3d("tactics3d", async (kernel, content) => {
   function overwatchSelected() {
     const u = selected; if (!u || u.actionPoints < 1 || busy || sim.ended) return;
     if (!sim.overwatchUnit(u.id)) return;
+    busy = true; clearHighlights();
+    drainEvents(() => afterAction(u));
+  }
+  function hunkerSelected() {
+    const u = selected; if (!u || u.actionPoints < 1 || busy || sim.ended) return;
+    const r = sim.hunkerUnit(u.id); if (!r || !r.success) return;
     busy = true; clearHighlights();
     drainEvents(() => afterAction(u));
   }
@@ -2013,6 +2025,12 @@ register3d("tactics3d", async (kernel, content) => {
       sfx("overwatch", 0.5);
       return 150;
     }
+    if (e.type === "hunker") {
+      const v = unitViews[e.payload.unit.id];
+      if (v) floatText({ x: v.group.position.x, y: T, z: v.group.position.z }, "HUNKERED", 0xffd27a);
+      sfx("overwatch", 0.45);
+      return 150;
+    }
     if (e.type === "reveal") {
       revealPodView(e.payload.units);
       sfx("overwatch", 0.5); // a sharp "contact" cue
@@ -2164,7 +2182,8 @@ register3d("tactics3d", async (kernel, content) => {
     // full XCOM targeting read: hit% + WHY (flank / cover level / exposed) + crit flag
     const mod = bd.flanked ? " ⚑FLANK" : bd.cover === 2 ? " ▮FULL COVER" : bd.cover === 1 ? " ▯HALF COVER" : " ◦EXPOSED";
     const crit = bd.critChance >= 0.5 ? "  ✱CRIT" : "";
-    const label = !los ? "NO LOS" : !bd.inRange ? "OUT OF RANGE" : (Math.round(bd.chance * 100) + "%" + mod + crit);
+    const hunk = bd.hunkered ? " ⛊HUNKERED" : "";
+    const label = !los ? "NO LOS" : !bd.inRange ? "OUT OF RANGE" : (Math.round(bd.chance * 100) + "%" + mod + hunk + crit);
     const col = !los || !bd.inRange ? 0xff8888 : bd.flanked ? 0xffae5a : bd.chance >= 0.7 ? 0x88ff88 : 0xffe066;
     hoverTip = makeTextSprite(label, col); const w = cell(x, y); hoverTip.position.set(w.x, T * 1.9, w.z);
     hoverTip.scale.set(Math.max(3.4, label.length * 0.42), 0.85, 1); scene.add(hoverTip);
@@ -2176,6 +2195,7 @@ register3d("tactics3d", async (kernel, content) => {
     if (phase !== "battle" || sim.ended) return;
     const k = (e.key || "").toLowerCase();
     if (k === "y") { e.preventDefault(); overwatchSelected(); }
+    else if (k === "h") { e.preventDefault(); hunkerSelected(); }
     else if (k === "escape") {
       if (abilityMode) { e.stopImmediatePropagation(); e.preventDefault(); disarmAbility(); setHUD(); }
       else if (selected) { e.stopImmediatePropagation(); e.preventDefault(); deselect(); }
@@ -2325,6 +2345,7 @@ register3d("tactics3d", async (kernel, content) => {
       abilityAnimated: (uid, abId, opts) => { selectUnit(sim.getUnit(uid)); abilityMode = abId; useAbilityAt((opts && opts.tileX), (opts && opts.tileY)); },
       abilitiesFor: (uid) => sim.abilitiesFor(uid),
       overwatch: (id) => { if (id) selectUnit(sim.getUnit(id)); overwatchSelected(); },
+      hunker: (id) => { if (id) selectUnit(sim.getUnit(id)); hunkerSelected(); },
       endTurn: () => endTurn(),
       debrief: () => showEnd(), // force the end/barracks screen (test affordance)
       campaign: () => campaign ? { active: campaign.isActive(), mission: campaign.currentMission(), doom: campaign.state.doom, doomMax: campaign.state.doomMax, supplies: campaign.state.supplies, roster: campaign.state.roster.map((s) => s && { cls: s.cls, rank: s.rank, xp: s.xp, kills: s.kills }) } : null,

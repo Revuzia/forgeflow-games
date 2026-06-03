@@ -192,6 +192,7 @@
         suppressedBy: null,           // id of unit suppressing this one
         suppressAimPenalty: 0,        // aim debuff while suppressed
         overwatch: false,             // holding a reaction shot
+        hunkered: false,              // hunkered down — much harder to hit until next turn
         pod: u.pod != null ? u.pod : null, // enemy pod id (assigned in _assignPods)
         revealed: side === "player",  // players always "revealed"; enemies start hidden
       };
@@ -457,9 +458,13 @@
       const ambush = !!this.concealed && attacker.side === "player"; // firing from concealment = the drop
       const ambushBonus = ambush ? 0.15 : 0;
       const heightBonus = highGround ? 0.2 : 0; // XCOM high-ground aim bonus
-      const chance = inRange ? Math.max(0.05, Math.min(0.99, attacker.aim - distancePenalty - coverPenalty + flankBonus + ambushBonus + heightBonus - suppress)) : 0;
+      // HUNKER DOWN: a hunkered target is much harder to hit — roughly doubles its cover
+      // (XCOM EU), or grants flat dodge if caught in the open (XCOM2). Applies even vs a
+      // flank (the dodge still helps), which is why hunker is a real defensive option.
+      const hunkerPenalty = target.hunkered ? (cover > 0 ? coverPenalty + 0.1 : 0.25) : 0;
+      const chance = inRange ? Math.max(0.03, Math.min(0.99, attacker.aim - distancePenalty - coverPenalty - hunkerPenalty + flankBonus + ambushBonus + heightBonus - suppress)) : 0;
       const critChance = (flanked || ambush) ? 0.5 : 0.1;
-      return { chance, critChance, cover, coverPenalty, distancePenalty, flankBonus, ambush, ambushBonus, suppress, flanked, highGround, heightBonus, dist, inRange };
+      return { chance, critChance, cover, coverPenalty, hunkerPenalty, hunkered: !!target.hunkered, distancePenalty, flankBonus, ambush, ambushBonus, suppress, flanked, highGround, heightBonus, dist, inRange };
     }
 
     calculateHitChance(attacker, target) { return this.hitBreakdown(attacker, target).chance; }
@@ -678,6 +683,17 @@
       return true;
     }
 
+    // HUNKER DOWN (XCOM): end the turn braced — much harder to hit until your next turn
+    // (see hitBreakdown). The defensive answer when you're exposed with no good shot.
+    hunkerUnit(unitId) {
+      const u = this.getUnit(unitId);
+      if (!u || u.hp <= 0 || u.actionPoints < 1) return { success: false, reason: "no AP" };
+      u.hunkered = true; u.overwatch = false; u.actionPoints = 0;
+      this.log.push(u.id + " hunkered down");
+      this.onEvent("hunker", { unit: u });
+      return { success: true };
+    }
+
     // Any opposing overwatcher with LOS + range fires one reaction shot at `mover`.
     _triggerOverwatch(mover) {
       const foes = mover.side === "player" ? this.aliveEnemies() : this.aliveAllies();
@@ -698,13 +714,13 @@
         // FRESH ENEMY TURN: refill enemy AP + clear their watch. (Bug fix: the old code
         // reset the *player's* AP here because currentPhase is always "player" on entry,
         // so enemies kept 0 AP from turn 2 on and FROZE — the "enemies don't move" report.)
-        for (const e of this.enemy_units) { e.actionPoints = e.maxAP; e.overwatch = false; }
+        for (const e of this.enemy_units) { e.actionPoints = e.maxAP; e.overwatch = false; e.hunkered = false; }
         this.onEvent("phase", { phase: "enemy", turn: this.turnNumber });
         this._runEnemyTurn();
         if (!this.ended) {
           this.currentPhase = "player";
           this.turnNumber++;
-          for (const u of this.player_units) { u.actionPoints = u.maxAP; u.overwatch = false; }
+          for (const u of this.player_units) { u.actionPoints = u.maxAP; u.overwatch = false; u.hunkered = false; }
           this._tickLoot(); // field loot decays each fresh player turn (grab it fast)
           this._tickCooldowns(this.player_units);           // ability cooldowns recover
           for (const e of this.enemy_units) { e.suppressedBy = null; e.suppressAimPenalty = 0; } // pins expire at our next turn
@@ -853,7 +869,12 @@
           this._aiAdvance(e, ai);
           const now = this._bestShotFrom(e, e.x, e.y, e.floor || 0);
           if (now && e.hp > 0 && e.actionPoints > 0) this.attackUnit(e.id, now.target.id);
-          else if (e.hp > 0 && e.actionPoints > 0) this.overwatchUnit(e.id);
+          else if (e.hp > 0 && e.actionPoints > 0) {
+            // exposed defenders (and anyone badly hurt) HUNKER to survive; others OVERWATCH
+            const exposed = !this.hasAnyCover(e);
+            if (exposed && (ai === "defensive" || e.hp <= e.maxHp * 0.4)) this.hunkerUnit(e.id);
+            else this.overwatchUnit(e.id);
+          }
         }
       }
     }
