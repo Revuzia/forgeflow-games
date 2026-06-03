@@ -771,6 +771,49 @@
     // Would standing at `tile` give cover against `foe`?
     _coverVs(tile, foe) { return this.coverAt({ x: tile.x, y: tile.y, floor: tile.floor }, foe.x, foe.y) > 0; }
 
+    // Archetype temperament when SCORING a firing tile. `here` = scoring the unit's
+    // current tile (adds a "hold position" bias so ranged types don't pointlessly move).
+    _aiTileBias(ai, tile, shot, here) {
+      const standoff = this._distToNearestAlly(tile); // distance from this tile to nearest soldier
+      if (ai === "sniper") {
+        // snipers want RANGE + high-ground (baked into shot.score) + holding still; hate being close
+        return standoff * 0.03 + (here ? 0.18 : 0) - (standoff < 3 ? 0.6 : 0);
+      }
+      if (ai === "defensive") {
+        // defenders only reposition INTO cover and love staying put behind it
+        return (this._coverVs(tile, shot.target) ? 0.45 : -0.25) + (here ? 0.22 : 0);
+      }
+      // aggressive (drone/stalker): reward FLANKS + closing the distance + a little cover
+      return (shot.flanked ? 0.3 : 0) + (this._coverVs(tile, shot.target) ? 0.1 : 0) - standoff * 0.015;
+    }
+
+    // Archetype movement when there is NO shot available this turn.
+    _aiAdvance(e, ai) {
+      const tgt = this._nearestAlly(e); if (!tgt) return;
+      const cands = this.reachableTiles(e).filter((c) => !this.unitAt(c.x, c.y, c.floor));
+      if (!cands.length) return;
+      const d = (c) => Math.abs(c.x - tgt.x) + Math.abs(c.y - tgt.y);
+      let dest;
+      if (ai === "sniper") {
+        // KITE: a sniper never melee-rushes. If a soldier is close, fall back to MAXIMIZE
+        // distance; otherwise edge toward its ideal standoff band (~range-1) to open a lane.
+        if (this._distToNearestAlly(e) < 5) cands.sort((p, q) => d(q) - d(p));
+        else cands.sort((p, q) => Math.abs(d(p) - (e.range - 1)) - Math.abs(d(q) - (e.range - 1)));
+        dest = cands[0];
+      } else if (ai === "defensive") {
+        // hold the line: advance slowly toward the squad but only ENDING in cover
+        cands.sort((p, q) => (d(p) - (this._coverVs(p, tgt) ? 2.5 : 0)) - (d(q) - (this._coverVs(q, tgt) ? 2.5 : 0)));
+        dest = cands[0];
+      } else {
+        // aggressive: CLOSE the distance, cover only a tiebreak among the closest tiles
+        let minD = Infinity; for (const c of cands) { const dd = d(c); if (dd < minD) minD = dd; }
+        const lead = cands.filter((c) => d(c) <= minD + 1);
+        lead.sort((p, q) => (d(p) - (this._coverVs(p, tgt) ? 0.6 : 0) + p.cost * 0.02) - (d(q) - (this._coverVs(q, tgt) ? 0.6 : 0) + q.cost * 0.02));
+        dest = lead[0];
+      }
+      if (dest && (dest.x !== e.x || dest.y !== e.y)) this.moveUnit(e.id, dest.x, dest.y, dest.floor);
+    }
+
     _runEnemyTurn() {
       this._spotCheck(); // pods that can see a soldier at turn start activate + engage
       // front-liners (nearest a soldier) act first, so the squad focus-fires as a unit
@@ -780,48 +823,37 @@
         if (e.hp <= 0 || !this.podRevealed(e.pod)) continue; // dormant pod stays put until spotted
         if (!this.aliveAllies().length) break;
         if (e.boss && this._bossAct(e)) continue; // boss spent its turn on a phase/slam special
+        const ai = e.ai || "aggressive"; // drone/stalker=aggressive, sniper=kiter, defender=holds cover
 
-        // 1) best shot from where it stands now
+        // 1) shot from where it stands now (+ archetype hold-position bias)
         const here = this._bestShotFrom(e, e.x, e.y, e.floor || 0);
-        // 2) best FIRING POSITION it can move to — flank angles + better cover (needs move+shoot AP)
-        let moveTile = null, moveShot = null;
+        const hereScore = here ? here.score + this._aiTileBias(ai, e, here, true) : -Infinity;
+        // 2) best FIRING POSITION it can move to, scored by archetype temperament
+        let moveTile = null, moveShot = null, moveScore = -Infinity;
         if (e.actionPoints >= 2) {
           for (const c of this.reachableTiles(e)) {
             if (this.unitAt(c.x, c.y, c.floor)) continue;
             const s = this._bestShotFrom(e, c.x, c.y, c.floor);
             if (!s) continue;
-            const adj = s.score + (this._coverVs(c, s.target) ? 0.15 : 0) - c.cost * 0.02; // prefer cover, light travel cost
-            if (!moveShot || adj > moveShot._adj) { moveTile = c; moveShot = s; moveShot._adj = adj; }
+            const sc = s.score + this._aiTileBias(ai, c, s, false) - c.cost * 0.02;
+            if (sc > moveScore) { moveScore = sc; moveTile = c; moveShot = s; }
           }
         }
 
-        // DECIDE: fire from here if it's ~as good as repositioning; else move to the flank and fire.
-        if (here && (!moveShot || here.score >= moveShot.score - 0.12)) {
+        // DECIDE: fire in place if it's ~as good as repositioning (snipers/defenders favor
+        // this); else move to the archetype-preferred firing tile and fire.
+        if (here && (moveShot == null || hereScore >= moveScore - 0.12)) {
           this.attackUnit(e.id, here.target.id); // shooting ends the turn
         } else if (moveTile && moveShot) {
           this.moveUnit(e.id, moveTile.x, moveTile.y, moveTile.floor);
           if (e.hp > 0 && e.actionPoints > 0) this.attackUnit(e.id, moveShot.target.id);
         } else {
-          // 3) no shot reachable: CLOSE the distance to the nearest soldier. Cover is only a
-          // tiebreak among the tiles that make the MOST progress — otherwise enemies hunker in
-          // nearby cover and never get in range (they'd sit out the whole match).
-          const tgt = this._nearestAlly(e);
-          if (tgt) {
-            const cands = this.reachableTiles(e).filter((c) => !this.unitAt(c.x, c.y, c.floor));
-            if (cands.length) {
-              let minD = Infinity;
-              for (const c of cands) { const d = Math.abs(c.x - tgt.x) + Math.abs(c.y - tgt.y); if (d < minD) minD = d; }
-              const lead = cands.filter((c) => (Math.abs(c.x - tgt.x) + Math.abs(c.y - tgt.y)) <= minD + 1); // closest band
-              lead.sort((p, q) =>
-                ((Math.abs(p.x - tgt.x) + Math.abs(p.y - tgt.y)) - (this._coverVs(p, tgt) ? 0.6 : 0) + p.cost * 0.02) -
-                ((Math.abs(q.x - tgt.x) + Math.abs(q.y - tgt.y)) - (this._coverVs(q, tgt) ? 0.6 : 0) + q.cost * 0.02));
-              const dest = lead[0];
-              if (dest && (dest.x !== e.x || dest.y !== e.y)) this.moveUnit(e.id, dest.x, dest.y, dest.floor);
-              const now = this._bestShotFrom(e, e.x, e.y, e.floor || 0); // a lane may have opened after closing
-              if (now && e.hp > 0 && e.actionPoints > 0) { this.attackUnit(e.id, now.target.id); continue; }
-            }
-          }
-          if (e.hp > 0 && e.actionPoints > 0) this.overwatchUnit(e.id); // guard the approach
+          // 3) no shot reachable: move per archetype (kite / hold-cover / close), then a
+          // lane may have opened — take it; otherwise hold OVERWATCH to guard the approach.
+          this._aiAdvance(e, ai);
+          const now = this._bestShotFrom(e, e.x, e.y, e.floor || 0);
+          if (now && e.hp > 0 && e.actionPoints > 0) this.attackUnit(e.id, now.target.id);
+          else if (e.hp > 0 && e.actionPoints > 0) this.overwatchUnit(e.id);
         }
       }
     }
