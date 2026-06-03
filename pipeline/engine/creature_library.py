@@ -121,7 +121,7 @@ def attribution_line(entry):
 # creatures + a (CC-BY) flying seagull. Each slot: model dest + a library lookup
 # (file) + render hints (length, rotY so the nose faces +X, count, air flag).
 DEFAULT_OCEAN_LIFE = {
-    "gull":    {"file": "polypizza/animals/Flying seagull.glb", "dest": "assets/creatures/gull.glb",    "length": 4.5, "rotY": 0,                  "count": 5, "air": True},
+    "gull":    {"file": "polypizza/animals/Hawk Lp Rigged.glb",  "dest": "assets/creatures/bird.glb",    "length": 4.6, "rotY": -1.5707963267948966, "count": 5, "air": True, "animated": True, "clip": "Fly"},
     "dolphin": {"file": "polypizza/animals/Dolphin.glb",        "dest": "assets/creatures/dolphin.glb", "length": 8,   "rotY": 1.5707963267948966, "count": 2},
     "shark":   {"file": "polypizza/animals/Shark.glb",          "dest": "assets/creatures/shark.glb",   "length": 13,  "rotY": 1.5707963267948966, "count": 1},
     "whale":   {"file": "polypizza/animals/Whale-JGFwp6.glb",   "dest": "assets/creatures/whale.glb",   "length": 24,  "rotY": 1.5707963267948966, "count": 1},

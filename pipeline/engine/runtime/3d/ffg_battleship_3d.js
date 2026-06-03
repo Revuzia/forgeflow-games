@@ -130,13 +130,35 @@ register3d("battleship", async function (kernel, content) {
         return pivot;
       }
       function spawn(tpl, x, y, z) { const g = new THREE.Group(); g.add(tpl.clone(true)); g.position.set(x, y, z); scene.add(g); return g; }
+      // rigged FLAPPING bird via loadCharacter (a static mesh can't flap); one mixer
+      // per gull (auto-updated by the kernel), sized to the board like the rest.
+      async function makeBird(c) {
+        let ch; try { ch = await kernel.loadCharacter(c.model); } catch (e) { return null; }
+        const m = ch.scene, rotY = c.rotY || 0;
+        m.rotation.set(0, 0, 0); m.scale.setScalar(1); m.position.set(0, 0, 0); m.updateMatrixWorld(true);
+        const nb = new THREE.Box3().setFromObject(m), ns = new THREE.Vector3(); nb.getSize(ns);
+        const nc = new THREE.Vector3(); nb.getCenter(nc);
+        const bodyLen = (Math.abs(Math.cos(rotY)) * ns.x + Math.abs(Math.sin(rotY)) * ns.z) || 1;
+        m.position.set(-nc.x, -nc.y, -nc.z);
+        m.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; if (o.material) o.material.envMapIntensity = 1.0; } });
+        const pivot = new THREE.Group(); pivot.add(m);
+        pivot.scale.setScalar(boardSpan * (SIZE.gull || 0.11) / bodyLen); pivot.rotation.y = rotY;
+        const clip = (ch.animations || []).find((a) => new RegExp(c.clip || "fly", "i").test(a.name)) || (ch.animations || [])[0];
+        if (clip && ch.play) ch.play(clip.name, { fade: 0, timeScale: 0.85 + Math.random() * 0.4 });
+        return pivot;
+      }
 
-      Promise.all(["gull", "dolphin", "shark", "whale", "manta"].map((k) => loadCreature(k, ol[k]))).then((T) => {
+      const animGull = ol.gull && (ol.gull.animated || ol.gull.clip);
+      Promise.all(["gull", "dolphin", "shark", "whale", "manta"].map((k) => (k === "gull" && animGull) ? Promise.resolve(null) : loadCreature(k, ol[k]))).then(async (T) => {
         const [gullT, dolT, shkT, whlT, mntT] = T;
         const S = boardSpan / 24; // height scale relative to the reference board
         const birds = [], dolphins = [], sharks = [], whales = [], mantas = [];
-        if (gullT) for (let i = 0; i < ((ol.gull && ol.gull.count) || 0); i++) {
-          const g = spawn(gullT, Math.cos(i * 1.7) * EX * 0.7, (10 + (i % 3) * 6) * S, Math.sin(i * 2.3) * EZ * 0.7);
+        const gullN = (ol.gull && ol.gull.count) || 0;
+        const gullInst = await Promise.all(Array.from({ length: gullN }, () => animGull ? makeBird(ol.gull) : Promise.resolve(gullT && gullT.clone(true))));
+        for (let i = 0; i < gullN; i++) {
+          const inst = gullInst[i]; if (!inst) continue;
+          const g = new THREE.Group(); g.add(inst);
+          g.position.set(Math.cos(i * 1.7) * EX * 0.7, (10 + (i % 3) * 6) * S, Math.sin(i * 2.3) * EZ * 0.7); scene.add(g);
           birds.push({ g, vx: (i % 2 ? 1 : -1) * (8 + i) * S, vz: (i % 2 ? -1 : 1) * (3 + i) * S, ph: i * 1.7, baseY: g.position.y });
         }
         if (dolT) for (let i = 0; i < ((ol.dolphin && ol.dolphin.count) || 0); i++) {
@@ -225,8 +247,10 @@ register3d("battleship", async function (kernel, content) {
   // shows both at once with no rotation needed (was stacked front/back along Z,
   // which read as "one map on top of the other"). A one-cell gap keeps them
   // visually distinct.
-  const PLAYER_X = -(boardSpan / 2 + CELL * 1.2);
-  const ENEMY_X = boardSpan / 2 + CELL * 1.2;
+  // Boards sit close together (a thin one-cell seam) so they read as ONE arena —
+  // the old wide CELL*1.2 gap left an awkward empty water "channel" between them.
+  const PLAYER_X = -(boardSpan / 2 + CELL * 0.5);
+  const ENEMY_X = boardSpan / 2 + CELL * 0.5;
   function boardOrigin(side) { return new THREE.Vector3((side === "player" ? PLAYER_X : ENEMY_X) - boardSpan / 2, 0.2, -boardSpan / 2); }
   function cellWorld(side, x, y) {
     const o = boardOrigin(side);

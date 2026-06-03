@@ -48,14 +48,16 @@
   },
   "ocean_life": {
     "gull": {
-      "model": "assets/creatures/gull.glb",
-      "length": 4.5,
-      "rotY": 0,
+      "model": "assets/creatures/bird.glb",
+      "length": 4.6,
+      "rotY": -1.5707963267948966,
       "count": 5,
       "air": true,
-      "source": "Poly by Google (Poly Pizza)",
+      "animated": true,
+      "clip": "Fly",
+      "source": "Sherkiz (Poly Pizza)",
       "license": "CC-BY",
-      "attribution": "Flying seagull — Poly by Google (CC-BY)"
+      "attribution": "Hawk Lp Rigged — Sherkiz (CC-BY)"
     },
     "dolphin": {
       "model": "assets/creatures/dolphin.glb",
@@ -92,7 +94,7 @@
   },
   "credits": {
     "creatures": [
-      "Flying seagull — Poly by Google (CC-BY 3.0), via Poly Pizza"
+      "Hawk (flapping bird) — Sherkiz (CC-BY), via Poly Pizza"
     ]
   }
 }

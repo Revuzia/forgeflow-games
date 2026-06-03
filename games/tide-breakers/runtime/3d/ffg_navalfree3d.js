@@ -184,7 +184,7 @@ register3d("navalfree", async function (kernel, content) {
   // freeze); all transforms via .position.set / .rotation. Models + per-type config
   // come from content.ocean_life (pipeline-wired), with a built-in default.
   const OCEAN_LIFE_DEFAULT = {
-    gull:    { model: "assets/creatures/gull.glb",    length: 4.5, rotY: 0,           count: 5, air: true },
+    gull:    { model: "assets/creatures/bird.glb",    length: 4.6, rotY: -Math.PI / 2, count: 5, air: true, animated: true, clip: "Fly" },
     dolphin: { model: "assets/creatures/dolphin.glb", length: 8,   rotY: Math.PI / 2, count: 2 },
     shark:   { model: "assets/creatures/shark.glb",   length: 13,  rotY: Math.PI / 2, count: 1 },
     whale:   { model: "assets/creatures/whale.glb",   length: 24,  rotY: Math.PI / 2, count: 1 },
@@ -235,15 +235,43 @@ register3d("navalfree", async function (kernel, content) {
     function spawn(tpl, x, y, z, name) {
       const g = new THREE.Group(); g.add(tpl.clone(true)); g.position.set(x, y, z); g.name = name || "ocean"; scene.add(g); return g;
     }
+    // Animated BIRD (rigged) via loadCharacter so the wings actually FLAP — a static
+    // mesh can't. Each call returns a fresh rigged instance with its OWN mixer
+    // (auto-updated by the kernel), normalized into a pivot like the static creatures.
+    // Skinned meshes can't be plain-cloned, so we build one per gull (loadCharacter
+    // caches the parse; extra instances are cheap skeleton clones).
+    async function makeBird(c) {
+      let ch;
+      try { ch = await kernel.loadCharacter(c.model); }
+      catch (e) { console.warn("[ocean-life] bird load failed:", c.model, e && e.message); return null; }
+      const m = ch.scene, rotY = c.rotY || 0;
+      m.rotation.set(0, 0, 0); m.scale.setScalar(1); m.position.set(0, 0, 0); m.updateMatrixWorld(true);
+      const nb = new THREE.Box3().setFromObject(m), ns = new THREE.Vector3(); nb.getSize(ns);
+      const nc = new THREE.Vector3(); nb.getCenter(nc);
+      const bodyLen = (Math.abs(Math.cos(rotY)) * ns.x + Math.abs(Math.sin(rotY)) * ns.z) || 1;
+      m.position.set(-nc.x, -nc.y, -nc.z);
+      m.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; if (o.material) o.material.envMapIntensity = 1.0; } });
+      const pivot = new THREE.Group(); pivot.add(m);
+      pivot.scale.setScalar((c.length || 4) / bodyLen); pivot.rotation.y = rotY;
+      const clip = (ch.animations || []).find((a) => new RegExp(c.clip || "fly", "i").test(a.name)) || (ch.animations || [])[0];
+      if (clip && ch.play) ch.play(clip.name, { fade: 0, timeScale: 0.85 + Math.random() * 0.4 }); // desync the flock's wingbeats
+      return pivot;
+    }
 
+    const gullAnimated = cfg.gull && (cfg.gull.animated || cfg.gull.clip);
     const [gullT, dolphinT, sharkT, whaleT, mantaT] = await Promise.all([
-      loadCreature(cfg.gull), loadCreature(cfg.dolphin), loadCreature(cfg.shark), loadCreature(cfg.whale), loadCreature(cfg.manta),
+      gullAnimated ? null : loadCreature(cfg.gull), loadCreature(cfg.dolphin), loadCreature(cfg.shark), loadCreature(cfg.whale), loadCreature(cfg.manta),
     ]);
 
     const birds = [];
-    if (gullT) for (let i = 0; i < (cfg.gull.count || 0); i++) {
-      const g = spawn(gullT, Math.cos(i * 1.7) * EX * 0.7, 14 + (i % 3) * 10, Math.sin(i * 2.3) * EZ * 0.7, "ocean_gull");
-      g.scale.setScalar(1 + (i % 3) * 0.3);
+    const gullCount = (cfg.gull && cfg.gull.count) || 0;
+    // build the flock: rigged FLAPPING birds (one mixer each) when animated, else cloned static
+    const gullInstances = await Promise.all(Array.from({ length: gullCount }, () => gullAnimated ? makeBird(cfg.gull) : Promise.resolve(gullT && gullT.clone(true))));
+    for (let i = 0; i < gullCount; i++) {
+      const inst = gullInstances[i]; if (!inst) continue;
+      const g = new THREE.Group(); g.add(inst);
+      g.position.set(Math.cos(i * 1.7) * EX * 0.7, 14 + (i % 3) * 10, Math.sin(i * 2.3) * EZ * 0.7); g.name = "ocean_gull";
+      g.scale.setScalar(1 + (i % 3) * 0.3); scene.add(g);
       birds.push({ g, vx: (i % 2 ? 1 : -1) * (10 + i * 1.6), vz: (i % 2 ? -1 : 1) * (4 + (i % 3) * 1.8), ph: i * 1.7, baseY: g.position.y });
     }
     const dolphins = [];
