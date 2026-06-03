@@ -2509,8 +2509,8 @@
           "ai": "aggressive",
           "tint": "#ff3333",
           "sprite": "drone",
-          "x": 11,
-          "y": 4
+          "x": 26,
+          "y": 28
         },
         {
           "id": "e_drone_1",
@@ -2524,8 +2524,8 @@
           "ai": "aggressive",
           "tint": "#ff3333",
           "sprite": "walker",
-          "x": 3,
-          "y": 3
+          "x": 22,
+          "y": 27
         },
         {
           "id": "e_stalker_2",
@@ -2539,8 +2539,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "drone",
-          "x": 6,
-          "y": 3
+          "x": 23,
+          "y": 26
         },
         {
           "id": "e_sniper_3",
@@ -2554,8 +2554,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 36,
-          "y": 4
+          "x": 8,
+          "y": 22
         },
         {
           "id": "e_defender_4",
@@ -2569,8 +2569,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "heavy",
-          "x": 37,
-          "y": 2
+          "x": 9,
+          "y": 19
         },
         {
           "id": "e_drone_0_x5",
@@ -2584,8 +2584,8 @@
           "ai": "aggressive",
           "tint": "#ff3333",
           "sprite": "drone",
-          "x": 35,
-          "y": 3
+          "x": 8,
+          "y": 21
         },
         {
           "id": "e_drone_1_x6",
@@ -2599,8 +2599,8 @@
           "ai": "aggressive",
           "tint": "#ff3333",
           "sprite": "walker",
-          "x": 25,
-          "y": 9
+          "x": 37,
+          "y": 20
         },
         {
           "id": "e_stalker_2_x7",
@@ -2614,8 +2614,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "drone",
-          "x": 21,
-          "y": 9
+          "x": 33,
+          "y": 20
         },
         {
           "id": "e_sniper_3_x8",
@@ -2629,8 +2629,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 25,
-          "y": 11
+          "x": 37,
+          "y": 22
         }
       ],
       "upper": [
@@ -7839,8 +7839,8 @@
           "ai": "aggressive",
           "tint": "#ff3333",
           "sprite": "drone",
-          "x": 6,
-          "y": 6
+          "x": 23,
+          "y": 30
         },
         {
           "id": "e_stalker_1",
@@ -7854,8 +7854,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "walker",
-          "x": 7,
-          "y": 2
+          "x": 24,
+          "y": 26
         },
         {
           "id": "e_stalker_2",
@@ -7869,8 +7869,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "drone",
-          "x": 9,
-          "y": 2
+          "x": 26,
+          "y": 26
         },
         {
           "id": "e_sniper_3",
@@ -7884,8 +7884,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 40,
-          "y": 6
+          "x": 11,
+          "y": 24
         },
         {
           "id": "e_defender_4",
@@ -7899,8 +7899,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "heavy",
-          "x": 40,
-          "y": 4
+          "x": 11,
+          "y": 22
         },
         {
           "id": "e_drone_0_x5",
@@ -7914,8 +7914,8 @@
           "ai": "aggressive",
           "tint": "#ff3333",
           "sprite": "drone",
-          "x": 42,
-          "y": 3
+          "x": 13,
+          "y": 21
         },
         {
           "id": "e_stalker_1_x6",
@@ -7929,8 +7929,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "walker",
-          "x": 27,
-          "y": 13
+          "x": 40,
+          "y": 24
         },
         {
           "id": "e_stalker_2_x7",
@@ -7944,8 +7944,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "drone",
-          "x": 21,
-          "y": 11
+          "x": 35,
+          "y": 21
         },
         {
           "id": "e_sniper_3_x8",
@@ -7959,8 +7959,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 27,
-          "y": 10
+          "x": 40,
+          "y": 21
         },
         {
           "id": "e_defender_4_x9",
@@ -7974,8 +7974,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "heavy",
-          "x": 3,
-          "y": 21
+          "x": 25,
+          "y": 16
         }
       ]
     },
@@ -11103,8 +11103,8 @@
           "ai": "aggressive",
           "tint": "#ff3333",
           "sprite": "drone",
-          "x": 6,
-          "y": 6
+          "x": 25,
+          "y": 31
         },
         {
           "id": "e_stalker_1",
@@ -11118,8 +11118,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "walker",
-          "x": 8,
-          "y": 6
+          "x": 27,
+          "y": 31
         },
         {
           "id": "e_sniper_2",
@@ -11133,8 +11133,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "drone",
-          "x": 5,
-          "y": 4
+          "x": 24,
+          "y": 29
         },
         {
           "id": "e_sniper_3",
@@ -11148,8 +11148,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 42,
-          "y": 6
+          "x": 10,
+          "y": 25
         },
         {
           "id": "e_defender_4",
@@ -11163,8 +11163,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "heavy",
-          "x": 41,
-          "y": 5
+          "x": 9,
+          "y": 24
         },
         {
           "id": "e_drone_5",
@@ -11178,8 +11178,8 @@
           "ai": "aggressive",
           "tint": "#ff3333",
           "sprite": "walker",
-          "x": 43,
-          "y": 5
+          "x": 11,
+          "y": 24
         },
         {
           "id": "e_drone_0_x6",
@@ -11193,8 +11193,8 @@
           "ai": "aggressive",
           "tint": "#ff3333",
           "sprite": "drone",
-          "x": 29,
-          "y": 11
+          "x": 43,
+          "y": 23
         },
         {
           "id": "e_stalker_1_x7",
@@ -11208,8 +11208,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "walker",
-          "x": 27,
-          "y": 7
+          "x": 42,
+          "y": 20
         },
         {
           "id": "e_sniper_2_x8",
@@ -11223,8 +11223,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "drone",
-          "x": 24,
-          "y": 11
+          "x": 38,
+          "y": 23
         },
         {
           "id": "e_sniper_3_x9",
@@ -11238,8 +11238,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 3,
-          "y": 22
+          "x": 26,
+          "y": 18
         },
         {
           "id": "e_defender_4_x10",
@@ -11253,8 +11253,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "heavy",
-          "x": 3,
-          "y": 18
+          "x": 26,
+          "y": 14
         },
         {
           "id": "e_drone_5_x11",
@@ -11268,8 +11268,8 @@
           "ai": "aggressive",
           "tint": "#ff3333",
           "sprite": "walker",
-          "x": 1,
-          "y": 22
+          "x": 24,
+          "y": 18
         }
       ],
       "upper": [
@@ -17792,8 +17792,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "drone",
-          "x": 10,
-          "y": 2
+          "x": 29,
+          "y": 29
         },
         {
           "id": "e_sniper_1",
@@ -17807,8 +17807,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 8,
-          "y": 2
+          "x": 27,
+          "y": 29
         },
         {
           "id": "e_defender_2",
@@ -17822,8 +17822,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "drone",
-          "x": 7,
-          "y": 3
+          "x": 27,
+          "y": 31
         },
         {
           "id": "e_defender_3",
@@ -17837,8 +17837,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "walker",
-          "x": 48,
-          "y": 5
+          "x": 15,
+          "y": 26
         },
         {
           "id": "e_drone_4",
@@ -17852,8 +17852,8 @@
           "ai": "aggressive",
           "tint": "#ff3333",
           "sprite": "heavy",
-          "x": 45,
-          "y": 3
+          "x": 12,
+          "y": 24
         },
         {
           "id": "e_stalker_5",
@@ -17867,8 +17867,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "walker",
-          "x": 47,
-          "y": 1
+          "x": 14,
+          "y": 22
         },
         {
           "id": "e_stalker_0_x6",
@@ -17882,8 +17882,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "drone",
-          "x": 25,
-          "y": 13
+          "x": 40,
+          "y": 26
         },
         {
           "id": "e_sniper_1_x7",
@@ -17897,8 +17897,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 30,
-          "y": 10
+          "x": 45,
+          "y": 23
         },
         {
           "id": "e_defender_2_x8",
@@ -17912,8 +17912,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "drone",
-          "x": 30,
-          "y": 12
+          "x": 45,
+          "y": 25
         },
         {
           "id": "e_defender_3_x9",
@@ -17927,8 +17927,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "walker",
-          "x": 4,
-          "y": 19
+          "x": 28,
+          "y": 15
         },
         {
           "id": "e_drone_4_x10",
@@ -17942,8 +17942,8 @@
           "ai": "aggressive",
           "tint": "#ff3333",
           "sprite": "heavy",
-          "x": 3,
-          "y": 18
+          "x": 27,
+          "y": 14
         },
         {
           "id": "e_stalker_5_x11",
@@ -17957,8 +17957,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "walker",
-          "x": 1,
-          "y": 20
+          "x": 25,
+          "y": 16
         },
         {
           "id": "e_stalker_0_x12",
@@ -17972,8 +17972,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "drone",
-          "x": 51,
-          "y": 23
+          "x": 8,
+          "y": 13
         },
         {
           "id": "e_stalker_0_x13",
@@ -17987,8 +17987,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "drone",
-          "x": 53,
-          "y": 20
+          "x": 9,
+          "y": 9
         }
       ],
       "upper": [
@@ -25185,8 +25185,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "drone",
-          "x": 7,
-          "y": 3
+          "x": 29,
+          "y": 33
         },
         {
           "id": "e_stalker_1",
@@ -25200,8 +25200,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "walker",
-          "x": 11,
-          "y": 3
+          "x": 32,
+          "y": 32
         },
         {
           "id": "e_sniper_2",
@@ -25215,8 +25215,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "drone",
-          "x": 10,
-          "y": 2
+          "x": 31,
+          "y": 32
         },
         {
           "id": "e_defender_3",
@@ -25230,8 +25230,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "walker",
-          "x": 48,
-          "y": 1
+          "x": 13,
+          "y": 23
         },
         {
           "id": "e_defender_4",
@@ -25245,8 +25245,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "heavy",
-          "x": 47,
-          "y": 0
+          "x": 12,
+          "y": 22
         },
         {
           "id": "e_stalker_5",
@@ -25260,8 +25260,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "walker",
-          "x": 47,
-          "y": 5
+          "x": 13,
+          "y": 28
         },
         {
           "id": "e_stalker_6",
@@ -25275,8 +25275,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "drone",
-          "x": 30,
-          "y": 15
+          "x": 42,
+          "y": 25
         },
         {
           "id": "e_stalker_0_x7",
@@ -25290,8 +25290,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "drone",
-          "x": 28,
-          "y": 10
+          "x": 43,
+          "y": 23
         },
         {
           "id": "e_stalker_1_x8",
@@ -25305,8 +25305,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "walker",
-          "x": 29,
-          "y": 13
+          "x": 43,
+          "y": 25
         },
         {
           "id": "e_sniper_2_x9",
@@ -25320,8 +25320,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "drone",
-          "x": 0,
-          "y": 18
+          "x": 31,
+          "y": 15
         },
         {
           "id": "e_defender_3_x10",
@@ -25335,8 +25335,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "walker",
-          "x": 1,
-          "y": 22
+          "x": 27,
+          "y": 18
         },
         {
           "id": "e_defender_4_x11",
@@ -25350,8 +25350,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "heavy",
-          "x": 6,
-          "y": 22
+          "x": 32,
+          "y": 18
         },
         {
           "id": "e_stalker_5_x12",
@@ -25365,8 +25365,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "walker",
-          "x": 52,
-          "y": 23
+          "x": 6,
+          "y": 13
         },
         {
           "id": "e_stalker_6_x13",
@@ -25380,8 +25380,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "drone",
-          "x": 55,
-          "y": 19
+          "x": 9,
+          "y": 9
         },
         {
           "id": "e_stalker_0_x14",
@@ -25395,8 +25395,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "drone",
-          "x": 56,
-          "y": 23
+          "x": 10,
+          "y": 13
         },
         {
           "id": "e_stalker_0_x15",
@@ -25410,8 +25410,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "drone",
-          "x": 18,
-          "y": 11
+          "x": 50,
+          "y": 14
         }
       ],
       "upper": [
@@ -33336,8 +33336,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "drone",
-          "x": 11,
-          "y": 1
+          "x": 31,
+          "y": 30
         },
         {
           "id": "e_sniper_1",
@@ -33351,8 +33351,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 9,
-          "y": 3
+          "x": 30,
+          "y": 33
         },
         {
           "id": "e_defender_2",
@@ -33366,8 +33366,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "drone",
-          "x": 12,
-          "y": 5
+          "x": 33,
+          "y": 35
         },
         {
           "id": "e_defender_3",
@@ -33381,8 +33381,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "walker",
-          "x": 51,
-          "y": 6
+          "x": 15,
+          "y": 29
         },
         {
           "id": "e_stalker_4",
@@ -33396,8 +33396,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "heavy",
-          "x": 49,
-          "y": 6
+          "x": 13,
+          "y": 29
         },
         {
           "id": "e_sniper_5",
@@ -33411,8 +33411,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 52,
-          "y": 1
+          "x": 16,
+          "y": 24
         },
         {
           "id": "e_sniper_6",
@@ -33426,8 +33426,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "drone",
-          "x": 32,
-          "y": 14
+          "x": 49,
+          "y": 29
         },
         {
           "id": "e_sniper_0_x7",
@@ -33441,8 +33441,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "drone",
-          "x": 32,
-          "y": 11
+          "x": 48,
+          "y": 25
         },
         {
           "id": "e_sniper_1_x8",
@@ -33456,8 +33456,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 31,
-          "y": 14
+          "x": 48,
+          "y": 29
         },
         {
           "id": "e_defender_2_x9",
@@ -33471,8 +33471,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "drone",
-          "x": 3,
-          "y": 24
+          "x": 30,
+          "y": 19
         },
         {
           "id": "e_defender_3_x10",
@@ -33486,8 +33486,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "walker",
-          "x": 5,
-          "y": 23
+          "x": 32,
+          "y": 18
         },
         {
           "id": "e_stalker_4_x11",
@@ -33501,8 +33501,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "heavy",
-          "x": 3,
-          "y": 22
+          "x": 30,
+          "y": 17
         },
         {
           "id": "e_sniper_5_x12",
@@ -33516,8 +33516,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 58,
-          "y": 22
+          "x": 10,
+          "y": 11
         },
         {
           "id": "e_sniper_6_x13",
@@ -33531,8 +33531,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "drone",
-          "x": 59,
-          "y": 25
+          "x": 11,
+          "y": 14
         },
         {
           "id": "e_sniper_0_x14",
@@ -33546,8 +33546,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "drone",
-          "x": 56,
-          "y": 20
+          "x": 5,
+          "y": 10
         },
         {
           "id": "e_sniper_1_x15",
@@ -33561,8 +33561,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 15,
-          "y": 5
+          "x": 51,
+          "y": 9
         },
         {
           "id": "e_sniper_0_x16",
@@ -33576,8 +33576,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "drone",
-          "x": 15,
-          "y": 8
+          "x": 50,
+          "y": 10
         },
         {
           "id": "e_sniper_1_x17",
@@ -33591,8 +33591,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 18,
-          "y": 10
+          "x": 53,
+          "y": 11
         }
       ],
       "upper": [
@@ -42311,8 +42311,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "heavy",
-          "x": 11,
-          "y": 2,
+          "x": 34,
+          "y": 34,
           "boss": true
         },
         {
@@ -42327,8 +42327,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "walker",
-          "x": 7,
-          "y": 3
+          "x": 30,
+          "y": 35
         },
         {
           "id": "e_sniper_2",
@@ -42342,8 +42342,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "drone",
-          "x": 10,
-          "y": 6
+          "x": 33,
+          "y": 38
         },
         {
           "id": "e_sniper_3",
@@ -42357,8 +42357,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 53,
-          "y": 3
+          "x": 14,
+          "y": 28
         },
         {
           "id": "e_stalker_4",
@@ -42372,8 +42372,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "heavy",
-          "x": 52,
-          "y": 3
+          "x": 13,
+          "y": 28
         },
         {
           "id": "e_stalker_5",
@@ -42387,8 +42387,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "walker",
-          "x": 54,
-          "y": 4
+          "x": 16,
+          "y": 30
         },
         {
           "id": "e_defender_6",
@@ -42402,8 +42402,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "drone",
-          "x": 33,
-          "y": 12
+          "x": 50,
+          "y": 27
         },
         {
           "id": "e_defender_7",
@@ -42417,8 +42417,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "walker",
-          "x": 31,
-          "y": 16
+          "x": 47,
+          "y": 32
         },
         {
           "id": "e_defender_1_x8",
@@ -42432,8 +42432,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "walker",
-          "x": 33,
-          "y": 16
+          "x": 51,
+          "y": 30
         },
         {
           "id": "e_sniper_2_x9",
@@ -42447,8 +42447,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "drone",
-          "x": 1,
-          "y": 22
+          "x": 30,
+          "y": 16
         },
         {
           "id": "e_sniper_3_x10",
@@ -42462,8 +42462,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 2,
-          "y": 27
+          "x": 31,
+          "y": 21
         },
         {
           "id": "e_stalker_4_x11",
@@ -42477,8 +42477,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "heavy",
-          "x": 4,
-          "y": 24
+          "x": 33,
+          "y": 18
         },
         {
           "id": "e_stalker_5_x12",
@@ -42492,8 +42492,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "walker",
-          "x": 61,
-          "y": 25
+          "x": 10,
+          "y": 13
         },
         {
           "id": "e_defender_6_x13",
@@ -42507,8 +42507,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "drone",
-          "x": 62,
-          "y": 22
+          "x": 11,
+          "y": 10
         },
         {
           "id": "e_defender_7_x14",
@@ -42522,8 +42522,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "walker",
-          "x": 61,
-          "y": 27
+          "x": 10,
+          "y": 15
         },
         {
           "id": "e_defender_1_x15",
@@ -42537,8 +42537,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "walker",
-          "x": 17,
-          "y": 12
+          "x": 53,
+          "y": 15
         },
         {
           "id": "e_sniper_2_x16",
@@ -42552,8 +42552,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "drone",
-          "x": 19,
-          "y": 8
+          "x": 55,
+          "y": 11
         },
         {
           "id": "e_sniper_3_x17",
@@ -42567,8 +42567,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 20,
-          "y": 12
+          "x": 56,
+          "y": 15
         },
         {
           "id": "e_defender_1_x18",
@@ -42582,8 +42582,8 @@
           "ai": "defensive",
           "tint": "#ff7a3c",
           "sprite": "walker",
-          "x": 46,
-          "y": 8
+          "x": 25,
+          "y": 3
         },
         {
           "id": "e_sniper_2_x19",
@@ -42597,8 +42597,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "drone",
-          "x": 48,
-          "y": 8
+          "x": 27,
+          "y": 3
         },
         {
           "id": "e_sniper_3_x20",
@@ -42612,8 +42612,8 @@
           "ai": "sniper",
           "tint": "#cc0000",
           "sprite": "walker",
-          "x": 45,
-          "y": 11
+          "x": 24,
+          "y": 6
         },
         {
           "id": "e_stalker_4_x21",
@@ -42627,8 +42627,8 @@
           "ai": "aggressive",
           "tint": "#b86bff",
           "sprite": "heavy",
-          "x": 30,
-          "y": 33
+          "x": 39,
+          "y": 7
         }
       ],
       "upper": [

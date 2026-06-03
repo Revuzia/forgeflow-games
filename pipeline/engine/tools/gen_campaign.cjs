@@ -263,12 +263,17 @@ function buildMission(spec) {
     return Object.assign({}, s, { x: p.x, y: p.y });
   });
 
-  // Enemy pods: distributed across the plot (top, flanks, mid-lots) — never one line.
+  // Enemy pods, distributed across the map DEPTH (not all at the far edge). The squad
+  // spawns at the bottom (y≈GH-3); ordering zones from mid-map → far means the first
+  // pods sit closest, so the player engages PROGRESSIVELY as they advance (XCOM pacing)
+  // instead of crossing an empty map to a wall of enemies. Playtest fix 2026-06-03.
   const zones = [
-    [Math.floor(GW * 0.16), 4], [Math.floor(GW * 0.82), 4], [Math.floor(GW * 0.5), Math.floor(GH * 0.22)],
-    [4, Math.floor(GH * 0.38)], [GW - 5, Math.floor(GH * 0.38)], [Math.floor(GW * 0.3), Math.floor(GH * 0.16)],
-    [Math.floor(GW * 0.7), Math.floor(GH * 0.18)], [Math.floor(GW * 0.5), Math.floor(GH * 0.46)],
-    [Math.floor(GW * 0.2), Math.floor(GH * 0.55)], [Math.floor(GW * 0.8), Math.floor(GH * 0.55)],
+    [Math.floor(GW * 0.5),  Math.floor(GH * 0.55)],                                    // mid — first contact
+    [Math.floor(GW * 0.24), Math.floor(GH * 0.44)], [Math.floor(GW * 0.76), Math.floor(GH * 0.44)], // flanks
+    [Math.floor(GW * 0.5),  Math.floor(GH * 0.30)], [Math.floor(GW * 0.16), Math.floor(GH * 0.20)],
+    [Math.floor(GW * 0.84), Math.floor(GH * 0.20)], [Math.floor(GW * 0.38), Math.floor(GH * 0.10)],
+    [Math.floor(GW * 0.62), Math.floor(GH * 0.10)], [Math.floor(GW * 0.5), 4],          // far edge — last pods
+    [Math.floor(GW * 0.2),  Math.floor(GH * 0.5)],
   ];
   // Enemy roster: reposition spec.enemyTemplates when regenerating an existing
   // game (preserves each enemy's stats), else build fresh from spec.mix + ARCH.
