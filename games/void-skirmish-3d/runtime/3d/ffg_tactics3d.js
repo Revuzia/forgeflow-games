@@ -2161,9 +2161,13 @@ register3d("tactics3d", async (kernel, content) => {
     const occ = sim.allUnits().find((u) => u.hp > 0 && u.x === x && u.y === y && u.side === "enemy");
     if (!occ) return;
     const bd = sim.hitBreakdown(selected, occ); const los = sim.hasLineOfSight(selected.x, selected.y, occ.x, occ.y);
-    const label = !los ? "NO LOS" : !bd.inRange ? "OUT OF RANGE" : Math.round(bd.chance * 100) + "%" + (bd.flanked ? " ⚑FLANK" : "");
+    // full XCOM targeting read: hit% + WHY (flank / cover level / exposed) + crit flag
+    const mod = bd.flanked ? " ⚑FLANK" : bd.cover === 2 ? " ▮FULL COVER" : bd.cover === 1 ? " ▯HALF COVER" : " ◦EXPOSED";
+    const crit = bd.critChance >= 0.5 ? "  ✱CRIT" : "";
+    const label = !los ? "NO LOS" : !bd.inRange ? "OUT OF RANGE" : (Math.round(bd.chance * 100) + "%" + mod + crit);
     const col = !los || !bd.inRange ? 0xff8888 : bd.flanked ? 0xffae5a : bd.chance >= 0.7 ? 0x88ff88 : 0xffe066;
-    hoverTip = makeTextSprite(label, col); const w = cell(x, y); hoverTip.position.set(w.x, T * 1.9, w.z); hoverTip.scale.set(3.4, 0.85, 1); scene.add(hoverTip);
+    hoverTip = makeTextSprite(label, col); const w = cell(x, y); hoverTip.position.set(w.x, T * 1.9, w.z);
+    hoverTip.scale.set(Math.max(3.4, label.length * 0.42), 0.85, 1); scene.add(hoverTip);
   });
   window.addEventListener("keydown", (e) => {
     const _kk = (e.key || "").toLowerCase();
