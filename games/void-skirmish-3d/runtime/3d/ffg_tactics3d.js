@@ -486,6 +486,25 @@ register3d("tactics3d", async (kernel, content) => {
     { id: "alloy_plating",  name: "Alloy Plating" },
     { id: "elerium_core",   name: "Elerium Core" },
   ];
+  // DIFFICULTY (XCOM Rookie/Veteran/Commander). Per research_xcom_deep difficulty_knobs,
+  // the top levers are enemy HP + aim (pod size is fixed by the generator). The sim is
+  // built at init (menu backdrop) BEFORE the player picks, so we scale the live enemy
+  // units in place from their stored BASE stats — applied at build AND when PLAY is
+  // chosen. Persisted so auto-advanced campaign missions keep the choice.
+  const DIFF = { rookie: { aim: 0.85, hp: 0.8 }, veteran: { aim: 1.0, hp: 1.0 }, commander: { aim: 1.12, hp: 1.25 } };
+  let difficulty = "veteran";
+  try { difficulty = (window.localStorage.getItem("ffg_void_difficulty") || "veteran").toLowerCase(); } catch (e) {}
+  if (!DIFF[difficulty]) difficulty = "veteran";
+  function applyDifficulty() {
+    if (!sim) return;
+    const k = DIFF[difficulty] || DIFF.veteran;
+    (sim.enemy_units || []).forEach((e) => {
+      if (e._baseAim == null) { e._baseAim = e.aim; e._baseMaxHp = e.maxHp; } // stamp base once
+      if (e._baseAim != null) e.aim = Math.max(0.2, Math.min(0.95, e._baseAim * k.aim));
+      e.maxHp = Math.max(1, Math.round(e._baseMaxHp * k.hp));
+      e.hp = e.maxHp; // full health at mission start (only ever called pre-battle)
+    });
+  }
   function buildSim() {
     events = [];
     sim = new TB({
@@ -495,6 +514,7 @@ register3d("tactics3d", async (kernel, content) => {
       lootTable: LOOT_TABLE, lootChance: 0.4, lootTurns: 3,
       onEvent: (type, payload) => events.push({ type, payload }),
     });
+    applyDifficulty(); // scale the freshly-built enemy roster to the current difficulty
   }
 
   // ── Board ─────────────────────────────────────────────────────────────────
@@ -2310,14 +2330,20 @@ register3d("tactics3d", async (kernel, content) => {
       tagline: content.tagline || "Lead the squad. Take the map.",
       music: null, // Void Skirmish uses the procedural createTacticalMusic loop, NOT a file track (unique audio, no double-play)
       menuImage: (content.assets && content.assets.menu_image) || null,
+      // XCOM difficulty: scales enemy HP + aim (Rookie easiest, Commander hardest).
+      difficulties: ["Rookie", "Veteran", "Commander"], defaultDifficulty: "Veteran",
       howTo: [
         { h: "GOAL", p: (mission.objective || "Eliminate all hostiles") + "." },
-        { h: "ORDERS", p: "Click a soldier to select, click a glowing tile to move, click an enemy in range to fire. Each soldier has action points (AP)." },
+        { h: "ORDERS", p: "Click a soldier to select, click a glowing tile to move, click an enemy in range to fire. Hold <b>OVERWATCH (Y)</b> to fire on movers, or <b>HUNKER (H)</b> to brace behind cover. Each soldier has action points (AP)." },
         { h: "ABILITIES", p: "Every class has a signature skill on the bottom bar (hotkeys 1–5): Slash, Headshot, Field Medic, Frag Grenade, Suppression. Click to arm, then pick a target." },
         { h: "COVER", p: "Stand beside cover (crates/walls) to cut the enemy's hit chance. Move carefully — open ground is deadly. Frag grenades shred cover." },
         { h: "CAMERA", p: "<b>Right-drag</b> rotate, <b>WASD</b> move, scroll zoom. <b>Esc</b> pauses." },
       ],
-      onPlay: () => showBriefing(beginBattle), // XCOM briefing card, then drop into the fight
+      onPlay: (d) => { // difficulty scales enemy hp/aim (in place, from base), persist, then briefing -> fight
+        difficulty = String(d || "veteran").toLowerCase(); if (!DIFF[difficulty]) difficulty = "veteran";
+        try { window.localStorage.setItem("ffg_void_difficulty", difficulty); } catch (e) {}
+        applyDifficulty(); showBriefing(beginBattle);
+      },
       onPause: () => { kernel.stop(); try { tacticalMusic.stop(); } catch (e) {} },
       onResume: () => { kernel.start(); try { tacticalMusic.start(); } catch (e) {} },
     });
