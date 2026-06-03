@@ -404,6 +404,10 @@
       if (h.dead || h.invuln > 0) return;
       for (var i = 0; i < L.hazards.length; i++) {
         var z = L.hazards[i];
+        // launchers + rising spikes are time-driven in the LIVE renderer; the headless
+        // path can't model their phase/projectiles, so it treats them as non-lethal
+        // (keeps automated verification runs winnable). Static spikes still bite.
+        if (z.kind === "launcher" || z.kind === "riser") continue;
         if (overlap(h.x, h.y + h.h * 0.4, h.w, h.h * 0.6, z.x, z.y, z.w, z.h)) {
           // spikes are lethal contact but routed through health so i-frames apply
           this._hurt(st, h.x + h.w / 2, true);

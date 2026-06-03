@@ -111,6 +111,13 @@
             g.fillStyle(up, 1); g.fillTriangle(x + 2, 24, x + 4, 9, x + 6, 24);
           }
         });
+        // FIREBALL — launcher projectile: a hot core with a flame halo
+        tex("fireball", 22, 22, function (g) {
+          g.fillStyle(FFG.shade(pal2.danger, -0.1), 1); g.fillCircle(11, 11, 10);
+          g.fillStyle(pal2.warn, 1); g.fillCircle(11, 11, 7);
+          g.fillStyle(FFG.shade(pal2.warn, 0.6), 1); g.fillCircle(11, 11, 4);
+          g.fillStyle(0xffffff, 0.95); g.fillCircle(9, 9, 2);
+        });
         // ENEMY — squat menace with two glowing eyes
         tex("enemy", 30, 30, function (g) {
           g.fillStyle(FFG.shade(pal2.danger, -0.4), 1); g.fillRoundedRect(1, 4, 28, 25, 8);
@@ -191,9 +198,13 @@
           self.platforms.add(s);
         });
 
-        // HAZARDS (spikes) — tiled spike strip + a dim danger glow underline
-        this.hazards = this.physics.add.staticGroup();
+        // HAZARDS — static spikes, RISING spikes (cycle up/down), and FIREBALL LAUNCHERS.
+        this.hazards = this.physics.add.staticGroup();                 // contact-lethal bodies
+        this.fireballs = this.physics.add.group({ allowGravity: false }); // launcher projectiles
         L.hazards.forEach(function (z) {
+          if (z.kind === "launcher") { self._buildLauncher(z); return; }
+          if (z.kind === "riser") { self._buildRiser(z); return; }
+          // static spike strip (the classic jump-the-pit hazard)
           var ts = self.add.tileSprite(z.x, z.y, z.w, z.h, "spike").setOrigin(0, 0).setDepth(D.hazard);
           FFG.fx.glow(ts, pal.danger, 2);
           var s = self.add.rectangle(z.x + z.w / 2, z.y + z.h / 2, z.w, z.h * 0.7, 0x000000, 0);
@@ -255,6 +266,61 @@
         this.physics.add.existing(this.goalZone, true);
       }
 
+      // RISING SPIKE — thrusts up from the surface on a cycle; lethal only while up.
+      // Lethality is gated by a _riserUp flag checked in _touchHazard (robust regardless
+      // of static-body enable quirks); the spike sprite tweens between hidden + extended.
+      _buildRiser(z) {
+        var self = this;
+        var downY = z.y + z.h + 4;                  // hidden just below the surface lip
+        var ts = this.add.tileSprite(z.x, downY, z.w, z.h, "spike").setOrigin(0, 0).setDepth(D.hazard);
+        FFG.fx.glow(ts, pal.danger, 2);
+        // a faint base plate telegraphs "a riser lives here" even when retracted
+        this.add.rectangle(z.x + z.w / 2, z.y + z.h - 1, z.w, 4, FFG.shade(pal.danger, -0.2), 0.5).setDepth(D.hazard - 1);
+        var body = this.add.rectangle(z.x + z.w / 2, z.y + z.h / 2, z.w, z.h * 0.7, 0x000000, 0);
+        this.physics.add.existing(body, true);
+        body._hazard = true; body._isRiser = true; body._riserUp = false;
+        this.hazards.add(body);
+        var period = z.period || 2200, up = z.up || 800, offset = z.offset || 0;
+        function rise() {
+          if (!self.scene || !self.scene.isActive()) return;
+          body._riserUp = true;
+          self.tweens.add({ targets: ts, y: z.y, duration: 110, ease: "Back.out" });
+          self.time.delayedCall(up, function () {
+            body._riserUp = false;
+            self.tweens.add({ targets: ts, y: downY, duration: 180, ease: "Quad.in" });
+          });
+        }
+        this.time.delayedCall(offset, function () { rise(); self.time.addEvent({ delay: period, loop: true, callback: rise }); });
+      }
+
+      // FIREBALL LAUNCHER — emits a horizontal fireball on an interval (only while the
+      // hero is near, for perf). Fireballs hurt on contact and are culled off-screen.
+      _buildLauncher(z) {
+        var self = this;
+        var dir = z.dir || -1;
+        var base = this.add.rectangle(z.x + z.w / 2, z.y + z.h / 2, z.w, z.h, FFG.shade(pal.bg2, 0.3), 1)
+          .setStrokeStyle(2, FFG.shade(pal.danger, 0.1), 0.85).setDepth(D.hazard);
+        this.add.rectangle(z.x + z.w / 2 + dir * (z.w / 2), z.y + z.h * 0.4, 8, 12, FFG.shade(pal.danger, 0.2), 1).setDepth(D.hazard);
+        FFG.fx.glow(base, pal.danger, 3);
+        var interval = z.interval || 1800, speed = z.speed || 220, r = z.ballR || 11;
+        var muzzleX = z.x + z.w / 2 + dir * (z.w / 2 + 8), muzzleY = z.y + z.h * 0.4;
+        function fire() {
+          if (!self.scene || !self.scene.isActive() || self.ended || !self.started) return;
+          if (!self.hero || Math.abs(self.hero.x - z.x) > 720) return; // only when on-screen-ish
+          var fb = self.fireballs.create(muzzleX, muzzleY, "fireball").setDepth(D.hazard + 1);
+          if (!fb) return;
+          fb.body.setCircle(r, (fb.width / 2) - r, (fb.height / 2) - r);
+          fb.body.setAllowGravity(false);
+          fb.setVelocityX(dir * speed);
+          fb._born = self.time.now;
+          FFG.fx.glow(fb, pal.warn, 4);
+          self.tweens.add({ targets: fb, angle: 360, duration: 600, repeat: -1 });
+          FFG.fx.burst(muzzleX, muzzleY, { color: pal.danger, count: 5, speed: 120, scale: 0.4, life: 200 });
+          FFG.audio.sfx("shoot", 0.22);
+        }
+        this.time.delayedCall(700 + (z.x % 600), function () { fire(); self.time.addEvent({ delay: interval, loop: true, callback: fire }); });
+      }
+
       // ── hero ───────────────────────────────────────────────────────────────────
       _buildHero() {
         var L = this.level, T = this.tuning;
@@ -282,6 +348,7 @@
         this.physics.add.overlap(this.hero, this.coinGroup, this._collectCoin, null, this);
         this.physics.add.overlap(this.hero, this.enemyGroup, this._touchEnemy, null, this);
         this.physics.add.overlap(this.hero, this.hazards, this._touchHazard, null, this);
+        this.physics.add.overlap(this.hero, this.fireballs, this._touchFireball, null, this);
         this.physics.add.overlap(this.hero, this.goalZone, this._reachGoal, null, this);
       }
 
@@ -472,7 +539,28 @@
 
       _touchHazard(hero, hz) {
         if (this.ended) return;
+        if (hz._isRiser && !hz._riserUp) return;   // a retracted rising-spike is harmless
         this._hurt(hero.x, true);
+      }
+
+      _touchFireball(hero, fb) {
+        if (this.ended) return;
+        var fx = fb.x;
+        try { FFG.fx.burst(fb.x, fb.y, { color: pal.danger, count: 10, speed: 160, scale: 0.5, life: 300 }); fb.destroy(); } catch (e) {}
+        this._hurt(fx, true);
+      }
+
+      // cull launcher fireballs that left the view or outlived their 5s lifetime
+      _updateFireballs() {
+        if (!this.fireballs) return;
+        var cam = this.cameras.main, now = this.time.now, kids = this.fireballs.getChildren();
+        for (var i = kids.length - 1; i >= 0; i--) {
+          var fb = kids[i];
+          if (!fb || !fb.active) continue;
+          if (fb.x < cam.scrollX - 90 || fb.x > cam.scrollX + VW + 90 || (now - (fb._born || now)) > 5000) {
+            try { fb.destroy(); } catch (e) {}
+          }
+        }
       }
 
       _hurt(fromX, big) {
@@ -572,6 +660,7 @@
         }
         // keep shadow + enemy patrol + bg alive even before start (feels live)
         this._updateEnemies(dtMs);
+        this._updateFireballs();
         this._updateHeroShadow();
         this._updateHUD();
         this._updateTrail(time);
