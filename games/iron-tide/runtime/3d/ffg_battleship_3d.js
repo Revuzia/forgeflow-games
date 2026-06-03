@@ -190,7 +190,7 @@ register3d("battleship", async function (kernel, content) {
           bt += dt;
           for (const b of birds) {
             b.g.position.set(wrap(b.g.position.x + b.vx * dt, EX), b.baseY + Math.sin(bt * 0.7 + b.ph) * 1.3 * S, wrap(b.g.position.z + b.vz * dt, EZ));
-            b.g.rotation.set(0, Math.atan2(b.vz, b.vx), 0);
+            b.g.rotation.set(0, -Math.atan2(b.vz, b.vx), 0);
             b.g.rotateZ(-0.4 * (b.vz / (Math.abs(b.vx) + Math.abs(b.vz) + 1e-3)) + Math.sin(bt * 2.1 + b.ph) * 0.06);
           }
           for (const d of dolphins) {
@@ -198,24 +198,24 @@ register3d("battleship", async function (kernel, content) {
             d.g.position.set(wrap(d.g.position.x + d.vx * dt, EX), 0, wrap(d.g.position.z + d.vz * dt, EZ));
             const ph = (d.t % d.period) / d.period, br = Math.sin(ph * Math.PI), air = br > 0.02;
             d.g.position.y = air ? (br * d.arc - 0.8 * S) : -2.2 * S;
-            d.g.rotation.set(0, Math.atan2(d.vz, d.vx), 0); d.g.rotateZ(air ? Math.cos(ph * Math.PI) * 0.95 : 0);
+            d.g.rotation.set(0, -Math.atan2(d.vz, d.vx), 0); d.g.rotateZ(air ? Math.cos(ph * Math.PI) * 0.95 : 0);
             if (d._wasAir && !air) splash(d.g.position.x, d.g.position.z); d._wasAir = air;
           }
           for (const sh of sharks) {
             sh.t += dt; const wv = Math.sin(sh.t * 0.5) * 8 * S, ln = Math.pow(Math.max(0, Math.sin(sh.t * 0.27)), 3);
             sh.g.position.set(wrap(sh.g.position.x + sh.vx * dt, EX), sh.baseY + ln * 1.6 * S, wrap(sh.g.position.z + wv * dt, EZ));
-            sh.g.rotation.set(0, Math.atan2(wv, sh.vx), 0); sh.g.rotateZ(Math.sin(sh.t * 0.5) * 0.06);
+            sh.g.rotation.set(0, -Math.atan2(wv, sh.vx), 0); sh.g.rotateZ(Math.sin(sh.t * 0.5) * 0.06);
           }
           for (const w of whales) {
             w.t += dt; const c2 = Math.sin(w.t * 0.11), rise = c2 > 0 ? c2 : c2 * 0.12;
             w.g.position.set(wrap(w.g.position.x + w.vx * dt, EX), w.baseY + rise * 4.6 * S, wrap(w.g.position.z + Math.sin(w.t * 0.08) * 1.2 * dt, EZ));
-            w.g.rotation.set(0, Math.atan2(0.0001, w.vx), 0); w.g.rotateZ(rise * 0.1);
+            w.g.rotation.set(0, -Math.atan2(0.0001, w.vx), 0); w.g.rotateZ(rise * 0.1);
             if (c2 > 0.86 && w.t - w.spoutAt > 5) { w.spoutAt = w.t; splash(w.g.position.x, w.g.position.z); }
           }
           for (const mt of mantas) {
             mt.t += dt; const wv = Math.sin(mt.t * 0.4), br = Math.pow(Math.max(0, Math.sin(mt.t * 0.33)), 2);
             mt.g.position.set(wrap(mt.g.position.x + mt.vx * dt, EX), mt.baseY + br * 2.2 * S, wrap(mt.g.position.z + (mt.vz + wv * 3 * S) * dt, EZ));
-            mt.g.rotation.set(0, Math.atan2(mt.vz + wv * 3 * S, mt.vx), 0); mt.g.rotateZ(Math.sin(mt.t * 0.8) * 0.26); mt.g.rotateX(-br * 0.5);
+            mt.g.rotation.set(0, -Math.atan2(mt.vz + wv * 3 * S, mt.vx), 0); mt.g.rotateZ(Math.sin(mt.t * 0.8) * 0.26); mt.g.rotateX(-br * 0.5);
             if (mt._wasUp && br < 0.05) splash(mt.g.position.x, mt.g.position.z); mt._wasUp = br > 0.5;
           }
         });

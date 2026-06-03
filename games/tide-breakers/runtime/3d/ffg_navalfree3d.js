@@ -142,10 +142,12 @@ register3d("navalfree", async function (kernel, content) {
   const OX = -ARENA_W / 2, OZ = -ARENA_H / 2;
   function toScene(x, y) { return new THREE.Vector3((x + OX) * S, 0, (y + OZ) * S); }
   function simHeadingToYaw(h) {
-    // sim heading: angle in the (x,y) plane (atan2(dy,dx)). In scene, +x is east,
-    // +y(sim) is +z. A ship's forward (model +X after our orient) should point
-    // along (cos h, sin h) in sim => (cos h) x + (sin h) z in scene.
-    return Math.atan2(Math.sin(h), Math.cos(h)); // identity; kept explicit for clarity
+    // sim heading h: forward = (cos h, sin h) in sim; sim +y maps to scene +z (no
+    // flip). three.js rotation.y=θ sends model +X (the bow) to (cos θ, 0, -sin θ),
+    // so to face (cos h, 0, sin h) we need θ = -h. (The hull + move-anim were using
+    // +h while only the arc used -h — that mismatch made ships look broadside-on /
+    // "sideways". Now everything uses this one correct value.)
+    return -h;
   }
 
   // ── Arena boundary ring (subtle) — so "open water" still reads as a bounded
@@ -302,7 +304,7 @@ register3d("navalfree", async function (kernel, content) {
       // seagulls: glide + bob, yaw to heading, bank/roll into the lateral component of travel
       for (const b of birds) {
         b.g.position.set(wrap(b.g.position.x + b.vx * dt, EX), b.baseY + Math.sin(bt * 0.7 + b.ph) * 1.7, wrap(b.g.position.z + b.vz * dt, EZ));
-        b.g.rotation.set(0, Math.atan2(b.vz, b.vx), 0);
+        b.g.rotation.set(0, -Math.atan2(b.vz, b.vx), 0); // -atan2: face travel (three.js rotation.y sign)
         b.g.rotateX(Math.sin(bt * 0.7 + b.ph) * -0.10);
         b.g.rotateZ(-0.4 * (b.vz / (Math.abs(b.vx) + Math.abs(b.vz) + 1e-3)) + Math.sin(bt * 2.1 + b.ph) * 0.06);
       }
@@ -311,8 +313,8 @@ register3d("navalfree", async function (kernel, content) {
         d.t += dt;
         d.g.position.set(wrap(d.g.position.x + d.vx * dt, EX), 0, wrap(d.g.position.z + d.vz * dt, EZ));
         const phase = (d.t % d.period) / d.period, breach = Math.sin(phase * Math.PI), air = breach > 0.02;
-        d.g.position.y = air ? (breach * d.arc - 1.0) : -2.4;
-        d.g.rotation.set(0, Math.atan2(d.vz, d.vx), 0);
+        d.g.position.y = air ? (breach * d.arc - 1.0) : -0.7; // cruise shallow + VISIBLE between leaps (was hidden at -2.4)
+        d.g.rotation.set(0, -Math.atan2(d.vz, d.vx), 0); // -atan2: swim nose-first
         d.g.rotateZ(air ? Math.cos(phase * Math.PI) * 0.95 : 0);
         if (d._wasAir && !air) splash({ x: d.g.position.x, y: 0, z: d.g.position.z });
         d._wasAir = air;
@@ -323,7 +325,7 @@ register3d("navalfree", async function (kernel, content) {
         const weaveVz = Math.sin(sh.t * 0.5) * 9;
         const lunge = Math.pow(Math.max(0, Math.sin(sh.t * 0.27)), 3);
         sh.g.position.set(wrap(sh.g.position.x + sh.vx * dt, EX), sh.baseY + lunge * 1.9, wrap(sh.g.position.z + weaveVz * dt, EZ));
-        sh.g.rotation.set(0, Math.atan2(weaveVz, sh.vx), 0);
+        sh.g.rotation.set(0, -Math.atan2(weaveVz, sh.vx), 0);
         sh.g.rotateZ(Math.sin(sh.t * 0.5) * 0.06);
         sh.g.rotateX(lunge * 0.14);
       }
@@ -333,7 +335,7 @@ register3d("navalfree", async function (kernel, content) {
         const c = Math.sin(w.t * 0.11);
         const rise = c > 0 ? c : c * 0.12;
         w.g.position.set(wrap(w.g.position.x + w.vx * dt, EX), w.baseY + rise * 5.4, wrap(w.g.position.z + Math.sin(w.t * 0.08) * 1.5 * dt, EZ));
-        w.g.rotation.set(0, Math.atan2(0.0001, w.vx), 0);
+        w.g.rotation.set(0, -Math.atan2(0.0001, w.vx), 0);
         w.g.rotateZ(rise * 0.10);
         if (c > 0.86 && w.t - w.spoutAt > 5) { w.spoutAt = w.t; splash({ x: w.g.position.x, y: 0, z: w.g.position.z }); }
       }
@@ -343,7 +345,7 @@ register3d("navalfree", async function (kernel, content) {
         const weave = Math.sin(mt.t * 0.4);
         const breach = Math.pow(Math.max(0, Math.sin(mt.t * 0.33)), 2);
         mt.g.position.set(wrap(mt.g.position.x + mt.vx * dt, EX), mt.baseY + breach * 2.6, wrap(mt.g.position.z + (mt.vz + weave * 4) * dt, EZ));
-        mt.g.rotation.set(0, Math.atan2(mt.vz + weave * 4, mt.vx), 0);
+        mt.g.rotation.set(0, -Math.atan2(mt.vz + weave * 4, mt.vx), 0);
         mt.g.rotateZ(Math.sin(mt.t * 0.8) * 0.28);
         mt.g.rotateX(-breach * 0.5);
         if (mt._wasUp && breach < 0.05) splash({ x: mt.g.position.x, y: 0, z: mt.g.position.z });
@@ -546,7 +548,7 @@ register3d("navalfree", async function (kernel, content) {
       arcMesh.geometry.dispose();
       arcMesh.geometry = buildArcGeometry(s.gun.range, s.gun.arc);
       arcMesh.position.set(p.x, 0.13, p.z);
-      arcMesh.rotation.set(0, -simHeadingToYaw(s.heading), 0); // local +X faces bow
+      arcMesh.rotation.set(0, simHeadingToYaw(s.heading), 0); // local +X faces bow (now consistent with the hull)
     }
     // pulse the selected ship's ring
     for (const id in vis) vis[id].ring.material.opacity = 0.0;
