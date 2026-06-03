@@ -302,10 +302,9 @@
           jump: Phaser.Input.Keyboard.KeyCodes.SPACE,
           restart: Phaser.Input.Keyboard.KeyCodes.R,
         });
-        // pointer / tap also starts + restarts
+        // pointer / tap restarts after a run ends (the shell's PLAY button owns start).
         this.input.on("pointerdown", function () {
-          if (!this.started) this.start();
-          else if (this.ended) this._restart();
+          if (this.ended) this._restart();
         }, this);
         this.keys.restart.on("down", function () { if (this.ended) this._restart(); }, this);
       }
@@ -402,25 +401,35 @@
 
       _buildMenu() {
         var self = this;
-        this.menu = this.add.container(0, 0).setScrollFactor(0).setDepth(D.overlay);
-        var dim = this.add.rectangle(VW / 2, VH / 2, VW, VH, 0x000000, 0.55);
-        var t1 = FFG.text(this, VW / 2, VH / 2 - 40, (content.title || "Lumen Run"), { size: 44, color: "#fff0e0", stroke: "#000", strokeThickness: 6, origin: 0.5 });
-        FFG.fx.glow(t1, pal.primary, 6);
-        var t2 = FFG.text(this, VW / 2, VH / 2 + 18, "Arrows / A·D to run  ·  Space / W to jump", { size: 16, color: "#ffd9b0", origin: 0.5 });
-        var t2b = FFG.text(this, VW / 2, VH / 2 + 42, "Press jump again in mid-air for a DOUBLE JUMP", { size: 14, color: "#ffe6b8", origin: 0.5 });
-        var t3 = FFG.text(this, VW / 2, VH / 2 + 70, "Reach the glowing goal. Grab the orbs.", { size: 14, color: "#ffb98a", origin: 0.5 });
-        var t4 = FFG.text(this, VW / 2, VH / 2 + 108, "▶  CLICK / SPACE TO PLAY", { size: 18, color: "#fff", origin: 0.5, stroke: "#000", strokeThickness: 4 });
-        this.menu.add([dim, t1, t2, t2b, t3, t4]);
-        this.tweens.add({ targets: t4, alpha: 0.35, duration: 700, yoyo: true, repeat: -1 });
-        // space starts too
-        this.input.keyboard.on("keydown-SPACE", function () { if (!self.started) self.start(); });
-        this.input.keyboard.on("keydown-UP", function () { if (!self.started) self.start(); });
+        // STANDARD FFG shell (title / how-to / settings / Esc-pause / win-lose). It owns
+        // window.__PAUSE__ + Escape + the control-bar Mute (Lumen wired none before); we
+        // start the run on Play and freeze/thaw the Phaser scene on its hooks. Replaces
+        // the old in-canvas menu.
+        var shellParent = (this.game && this.game.canvas && this.game.canvas.parentNode) || document.body;
+        try { var _olds = shellParent.querySelectorAll(".ffg-shell-overlay"); for (var _oi = 0; _oi < _olds.length; _oi++) _olds[_oi].remove(); } catch (e) {}
+        this.shell = new FFG.Shell({
+          parent: shellParent,
+          title: content.title || "Lumen Run",
+          tagline: content.subtitle || "A precision light-runner",
+          music: null,
+          howTo: [
+            { h: "GOAL", p: "Run and leap to the glowing goal at the far end. Collect every light orb on the way." },
+            { h: "MOVE", p: "<b>Arrow keys</b> or <b>A / D</b> to run. <b>Space</b> or <b>W</b> to jump." },
+            { h: "DOUBLE JUMP", p: "Press jump again in mid-air for a second leap — clear wide gaps and reach high ledges." },
+            { h: "DANGER", p: "Spikes, fireballs and patrolling foes will drop you. Stomp a foe from above to pop it." },
+          ],
+          onPlay: function () { self.start(); },
+          onPause: function () { try { self.scene.pause(); } catch (e) {} },
+          onResume: function () { try { self.scene.resume(); } catch (e) {} },
+        });
+        this.shell.start();
       }
 
       start() {
         if (this.started) return true;
         this.started = true;
-        if (this.menu) { this.tweens.add({ targets: this.menu, alpha: 0, duration: 220, onComplete: () => { try { this.menu.destroy(); } catch (e) {} } }); this.menu = null; }
+        // Hide the shell menu (also covers the direct test-harness __test.start() path).
+        try { if (this.shell) { this.shell.hide(); this.shell.phase = "playing"; } } catch (e) {}
         FFG.fx.flash(FFG.shade(pal.primary, 0.2), 120);
         FFG.fx.pop(this.hero, 1.2, 240);
         return true;

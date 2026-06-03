@@ -200,13 +200,28 @@
     return (this._world && this._world.scale) || { speed: 1, fireRate: 1, fireSpeed: 1, spawnGap: 1 };
   };
 
+  // Per-kind movement stats: descent speed / collision radius / weave amplitude.
+  // The renderer draws a distinct silhouette per kind; these give each kind its own
+  // FEEL so a world's signature enemy MOVES differently, not just a recolor. New kinds
+  // (reaver/lancer/saucer/wisp) let each world field its own roster.
+  var ENEMY_KINDS = {
+    grunt:  { vy: 90,  r: 16, amp: 70 },   // baseline inverted-ship fodder
+    darter: { vy: 135, r: 14, amp: 70 },   // fast dart
+    weaver: { vy: 88,  r: 16, amp: 130 },  // wide sine weaver
+    tank:   { vy: 58,  r: 22, amp: 60 },   // slow bruiser
+    reaver: { vy: 74,  r: 20, amp: 95 },   // heavy interceptor (asteroid belt)
+    lancer: { vy: 158, r: 13, amp: 55 },   // very fast spear (corridors / ion storm)
+    saucer: { vy: 80,  r: 18, amp: 160 },  // big, lazy, very wide weave (nebula)
+    wisp:   { vy: 112, r: 12, amp: 115 },  // small erratic ghost (grave tide)
+  };
+
   // ── spawning ───────────────────────────────────────────────────────────────
   Shmup.prototype._spawnEnemy = function (wave) {
     var cfg = this.cfg;
     var sc = this._scale();
     var margin = 60;
     var x = margin + this.rng() * (cfg.width - margin * 2);
-    var baseVy = wave.kind === "tank" ? 60 : (wave.kind === "darter" ? 130 : 90);
+    var ek = ENEMY_KINDS[wave.kind] || ENEMY_KINDS.grunt;
     var e = {
       id: this._eid++,
       kind: wave.kind,
@@ -217,10 +232,10 @@
       // worlds wait longer before their first shot)
       fireT: (0.5 + this.rng() * 1.2) / Math.max(0.25, sc.fireRate),
       t: this.rng() * Math.PI * 2,     // per-enemy phase so a formation isn't lockstep
-      r: wave.kind === "tank" ? 22 : (wave.kind === "darter" ? 14 : 16),
+      r: ek.r,
       score: wave.score,
-      vy: baseVy * sc.speed,            // per-world descent speed
-      amp: wave.kind === "weaver" ? 130 : 70,
+      vy: ek.vy * sc.speed,            // per-world descent speed
+      amp: ek.amp,
     };
     this.enemies.push(e);
   };
@@ -234,6 +249,7 @@
       x: cfg.width / 2, y: -120,
       hp: hp, maxHp: hp,
       r: bdef.r || 64,
+      shape: bdef.shape || 1,        // renderer draws a distinct hull per world (1..6)
       phase: 1, maxPhase: maxPhase,
       // pattern set for this world's boss (drives _bossFire). Later worlds layer
       // on extra patterns (rings, spirals, curtains) for distinct, tougher bosses.

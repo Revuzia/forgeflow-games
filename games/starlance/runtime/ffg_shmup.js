@@ -309,9 +309,10 @@
           this._buildHUD();
 
           // input --------------------------------------------------------------
+          // Arrow keys + mouse only — WASD removed (redundant; user asked to drop it).
           this.keys = this.input.keyboard.addKeys({
             up: "UP", down: "DOWN", left: "LEFT", right: "RIGHT",
-            w: "W", a: "A", s: "S", d: "D", fire: "SPACE", restart: "R",
+            fire: "SPACE", restart: "R",
           });
           this._pointer = null;
           this.input.on("pointermove", function (p) { if (self.started && !self.over) self._pointer = { x: p.x, y: p.y }; });
@@ -322,36 +323,31 @@
           });
           this.input.keyboard.on("keydown-R", function () { if (self.over) self.scene.restart(); });
 
-          // ── PAUSE (Esc / control-bar button) — the shmup has no shell, so wire it
-          // here: Phaser scene pause halts the loop; a DOM overlay shows over it.
-          function pauseOverlay(on) {
-            var el = document.getElementById("__shmup_pause__");
-            if (on) {
-              if (!el) {
-                el = document.createElement("div"); el.id = "__shmup_pause__";
-                el.style.cssText = "position:absolute;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;background:rgba(6,12,22,.66);color:#eaf2ff;font:800 34px 'Segoe UI',monospace;letter-spacing:3px;pointer-events:none";
-                el.innerHTML = "PAUSED<div style='font:600 13px Segoe UI;opacity:.8;letter-spacing:1px'>press Esc to resume</div>";
-                ((self.game && self.game.canvas && self.game.canvas.parentNode) || document.body).appendChild(el);
-              }
-              el.style.display = "flex";
-            } else if (el) { el.style.display = "none"; }
-          }
-          self._paused = false;
-          self._setPaused = function (on) {
-            if (on === self._paused || !self.started || self.over) return;
-            self._paused = on;
-            if (on) { self.scene.pause(); pauseOverlay(true); } else { self.scene.resume(); pauseOverlay(false); }
-          };
-          try { window.__PAUSE__ = { toggle: function () { self._setPaused(!self._paused); }, pause: function () { self._setPaused(true); }, resume: function () { self._setPaused(false); } }; } catch (e) {}
-          if (!window.__SHMUP_ESC_WIRED__) {
-            window.__SHMUP_ESC_WIRED__ = true;
-            window.addEventListener("keydown", function (e) {
-              if (e.code === "Escape" && window.__PAUSE__ && window.__PAUSE__.toggle) { e.preventDefault(); window.__PAUSE__.toggle(); }
-            });
-          }
-
-          // start overlay
-          this._titleOverlay();
+          // ── MENU + PAUSE — the STANDARD FFG shell (title / difficulty / how-to /
+          // settings / Esc-pause / win-lose). It owns window.__PAUSE__ + Escape and the
+          // control-bar Mute; we just freeze/thaw the Phaser scene on its hooks and start
+          // the run (+ procedural music) on Play. Replaces the old in-canvas title.
+          var shellParent = (this.game && this.game.canvas && this.game.canvas.parentNode) || document.body;
+          // Drop any orphaned overlay left by a previous scene.restart() (death → replay).
+          try { var _olds = shellParent.querySelectorAll(".ffg-shell-overlay"); for (var _oi = 0; _oi < _olds.length; _oi++) _olds[_oi].remove(); } catch (e) {}
+          this.shell = new FFG.Shell({
+            parent: shellParent,
+            title: content.title || "Starlance",
+            tagline: content.subtitle || "Vertical bullet storm",
+            music: null, // procedural SPACE synth loop (FFG.createSpaceMusic), started on Play
+            difficulties: ["Cadet", "Pilot", "Ace"],
+            defaultDifficulty: "Pilot",
+            howTo: [
+              { h: "GOAL", p: "Fly up through " + ((this.sim && this.sim.totalWorlds) || 6) + " hostile sectors. Clear every wave, then destroy the sector boss to advance." },
+              { h: "MOVE", p: "<b>Arrow keys</b> to fly — or just steer with the <b>mouse</b>; the ship follows your cursor." },
+              { h: "FIRE", p: "<b>Hold Space</b> (or hold the mouse button) to fire. Release to stop — there is no auto-shoot." },
+              { h: "POWER", p: "Grab glowing pickups to upgrade your cannon and spread. A hit costs a life — don't get clipped." },
+            ],
+            onPlay: function (d) { self._difficulty = d; self._begin(); self._startMusic(); },
+            onPause: function () { try { self.scene.pause(); } catch (e) {} },
+            onResume: function () { try { self.scene.resume(); } catch (e) {} },
+          });
+          this.shell.start();
 
           // expose test hooks
           this._wireTestHooks();
@@ -408,11 +404,59 @@
           g.destroy();
         }
 
+        // Distinct hue per enemy kind (drawn from the world palette so it stays
+        // cohesive) — so each world's roster reads as its OWN species, not a recolor.
+        _enemyColor(kind) {
+          var m = {
+            tank: this.COL.tank,
+            darter: hexNum(this.pal.warn),
+            weaver: hexNum(this.pal.accent),
+            reaver: hexNum(this.pal.primary),
+            lancer: hexNum(this.pal.danger),
+            saucer: hexNum(this.pal.good),
+            wisp: 0xc89cff,
+          };
+          return m[kind] != null ? m[kind] : this.COL.enemy;
+        }
+
         _makeEnemyTexture(kind, color) {
           var key = "enemy_" + kind;
           if (this.textures.exists(key)) return key;
           var g = this.add.graphics();
           var c = hexNum(color), c2 = shade(c, 0.45), edge = shade(c, -0.35);
+          if (kind === "reaver") {
+            // heavy interceptor — broad hexagonal hull with twin prongs
+            g.fillStyle(edge, 1); g.fillRoundedRect(2, 6, 40, 30, 7);
+            g.fillStyle(c, 1); g.fillRoundedRect(7, 10, 30, 20, 5);
+            g.fillStyle(edge, 1); g.fillTriangle(2, 6, 2, 36, -6, 21); g.fillTriangle(42, 6, 42, 36, 50, 21);
+            g.fillStyle(c2, 1); g.fillCircle(22, 20, 6);
+            g.fillStyle(this.COL.ebullet, 1); g.fillCircle(22, 33, 3);
+            g.generateTexture(key, 46, 44); g.destroy(); return key;
+          }
+          if (kind === "lancer") {
+            // fast spear — long narrow dart, swept fins
+            g.fillStyle(edge, 1); g.fillTriangle(9, 34, 3, 8, 15, 8);
+            g.fillStyle(c, 1); g.fillTriangle(9, 30, 5, 11, 13, 11);
+            g.fillStyle(edge, 1); g.fillTriangle(3, 16, 0, 26, 6, 20); g.fillTriangle(15, 16, 18, 26, 12, 20);
+            g.fillStyle(c2, 1); g.fillRect(8, 4, 2, 8);
+            g.generateTexture(key, 18, 36); g.destroy(); return key;
+          }
+          if (kind === "saucer") {
+            // big lazy disc — wide ellipse with a dome + rim lights
+            g.fillStyle(edge, 1); g.fillEllipse(24, 18, 46, 20);
+            g.fillStyle(c, 1); g.fillEllipse(24, 17, 38, 15);
+            g.fillStyle(c2, 1); g.fillCircle(24, 12, 8);
+            g.fillStyle(0xffffff, 0.9); g.fillCircle(24, 11, 3);
+            g.fillStyle(this.COL.ebullet, 1); g.fillCircle(9, 19, 2); g.fillCircle(24, 22, 2); g.fillCircle(39, 19, 2);
+            g.generateTexture(key, 48, 32); g.destroy(); return key;
+          }
+          if (kind === "wisp") {
+            // small erratic ghost — soft diamond core with trailing wings
+            g.fillStyle(edge, 1); g.fillTriangle(12, 0, 0, 12, 12, 24); g.fillTriangle(12, 0, 24, 12, 12, 24);
+            g.fillStyle(c, 1); g.fillTriangle(12, 4, 4, 12, 12, 20); g.fillTriangle(12, 4, 20, 12, 12, 20);
+            g.fillStyle(0xffffff, 0.85); g.fillCircle(12, 12, 3);
+            g.generateTexture(key, 24, 24); g.destroy(); return key;
+          }
           if (kind === "tank") {
             g.fillStyle(edge, 1); g.fillRoundedRect(0, 0, 46, 40, 8);
             g.fillStyle(c, 1); g.fillRoundedRect(4, 4, 38, 30, 6);
@@ -444,23 +488,56 @@
           var b = this.sim.boss;
           var cont = this.add.container(b.x, b.y).setDepth(45);
           var g = this.add.graphics();
-          var c = this.COL.boss, c2 = shade(c, 0.4), edge = shade(c, -0.4), core = this.COL.bossGlow;
-          // body: menacing crescent dreadnought
-          g.fillStyle(edge, 1); g.fillRoundedRect(-70, -36, 140, 64, 14);
-          g.fillStyle(c, 1); g.fillRoundedRect(-62, -30, 124, 50, 12);
-          g.fillStyle(c2, 1); g.fillRoundedRect(-44, -22, 88, 20, 8);
-          // side cannons
-          g.fillStyle(edge, 1); g.fillRect(-78, -6, 16, 34); g.fillRect(62, -6, 16, 34);
-          g.fillStyle(c2, 1); g.fillRect(-74, 18, 8, 14); g.fillRect(66, 18, 8, 14);
-          // core
-          g.fillStyle(core, 1); g.fillCircle(0, 0, 16);
-          g.fillStyle(0xffffff, 0.9); g.fillCircle(0, 0, 7);
-          g.generateTexture("boss_tex", 160, 90);
+          var shape = (b && b.shape) || 1;
+          var wn = (this.sim.state && this.sim.state().worldNum) || shape;
+          // each world's flagship reads as its OWN ship: distinct hue + distinct hull.
+          var BOSSPAL = [0xff4d5e, 0xffa53b, 0x9b6bff, 0x3ad1ff, 0x49e08a, 0xff3bd4];
+          var c = BOSSPAL[(wn - 1) % BOSSPAL.length], c2 = shade(c, 0.4), edge = shade(c, -0.4), core = shade(c, 0.55);
+          var key = "boss_tex_" + wn + "_" + shape;
+          if (!this.textures.exists(key)) {
+            // All variants stay inside shape-1's proven 160x90 envelope (x:[-78,78],
+            // y:[-36,32]) so texture capture + placement are identical across worlds.
+            if (shape === 2) {           // GRINDER — twin forward pincers
+              g.fillStyle(edge, 1); g.fillRoundedRect(-64, -30, 128, 56, 10);
+              g.fillStyle(c, 1); g.fillRoundedRect(-56, -24, 112, 42, 8);
+              g.fillStyle(edge, 1); g.fillTriangle(-64, -30, -64, 26, -78, -2); g.fillTriangle(64, -30, 64, 26, 78, -2);
+              g.fillStyle(c2, 1); g.fillRect(-10, -28, 20, 50);
+            } else if (shape === 3) {    // SIEGE-CORE — hexagonal fortress
+              g.fillStyle(edge, 1); g.fillPoints([{ x: -40, y: -32 }, { x: 40, y: -32 }, { x: 74, y: 0 }, { x: 40, y: 32 }, { x: -40, y: 32 }, { x: -74, y: 0 }], true);
+              g.fillStyle(c, 1); g.fillPoints([{ x: -32, y: -24 }, { x: 32, y: -24 }, { x: 58, y: 0 }, { x: 32, y: 24 }, { x: -32, y: 24 }, { x: -58, y: 0 }], true);
+              g.fillStyle(c2, 1); g.fillRoundedRect(-30, -13, 60, 26, 6);
+            } else if (shape === 4) {    // STORMBRINGER — swept arrowhead with wings
+              g.fillStyle(edge, 1); g.fillTriangle(0, -36, 76, 30, -76, 30);
+              g.fillStyle(c, 1); g.fillTriangle(0, -26, 60, 24, -60, 24);
+              g.fillStyle(c2, 1); g.fillTriangle(0, -14, 28, 18, -28, 18);
+            } else if (shape === 5) {    // VOID HIEROPHANT — monolith with halo arms
+              g.fillStyle(edge, 1); g.fillRoundedRect(-28, -36, 56, 68, 10);
+              g.fillStyle(c, 1); g.fillRoundedRect(-20, -28, 40, 54, 8);
+              g.fillStyle(edge, 1); g.fillRoundedRect(-78, -8, 30, 16, 6); g.fillRoundedRect(48, -8, 30, 16, 6);
+              g.fillStyle(c2, 1); g.fillCircle(0, -14, 9);
+            } else if (shape === 6) {    // OMEGA DREADNOUGHT — layered battleship
+              g.fillStyle(edge, 1); g.fillRoundedRect(-78, -34, 156, 64, 12);
+              g.fillStyle(c, 1); g.fillRoundedRect(-70, -28, 140, 50, 10);
+              g.fillStyle(c2, 1); g.fillRoundedRect(-54, -20, 108, 24, 8);
+              g.fillStyle(edge, 1); g.fillRect(-46, 22, 18, 10); g.fillRect(28, 22, 18, 10);
+              g.fillStyle(c2, 1); g.fillTriangle(0, -36, 16, -22, -16, -22);
+            } else {                     // WARDEN (1) — crescent dreadnought (original)
+              g.fillStyle(edge, 1); g.fillRoundedRect(-70, -36, 140, 64, 14);
+              g.fillStyle(c, 1); g.fillRoundedRect(-62, -30, 124, 50, 12);
+              g.fillStyle(c2, 1); g.fillRoundedRect(-44, -22, 88, 20, 8);
+            }
+            // side cannons + core — common to every hull
+            g.fillStyle(edge, 1); g.fillRect(-78, -6, 16, 34); g.fillRect(62, -6, 16, 34);
+            g.fillStyle(c2, 1); g.fillRect(-74, 18, 8, 14); g.fillRect(66, 18, 8, 14);
+            g.fillStyle(core, 1); g.fillCircle(0, 0, 16);
+            g.fillStyle(0xffffff, 0.9); g.fillCircle(0, 0, 7);
+            g.generateTexture(key, 160, 90);
+          }
           g.destroy();
-          var body = this.add.image(0, 0, "boss_tex");
+          var body = this.add.image(0, 0, key);
           var coreGlow = this.add.image(0, 0, "fx_dot").setTint(core).setBlendMode(Phaser.BlendModes.ADD).setScale(2.2).setAlpha(0.8);
           cont.add([body, coreGlow]);
-          this.fx.glow(body, this.COL.bossGlow, 8);
+          this.fx.glow(body, core, 8);
           this._bossBody = body; this._bossCoreGlow = coreGlow;
           // pulsing core
           this.tweens.add({ targets: coreGlow, scale: 2.7, alpha: 0.55, duration: 700, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
@@ -508,32 +585,36 @@
         }
 
         // ── overlays ──
-        _titleOverlay() {
-          var self = this;
-          this.titleC = this.add.container(0, 0).setDepth(120);
-          var dim = this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, 0x000000, 0.45);
-          var t1 = FFG.text(this, this.W / 2, this.H * 0.36, content.title || "STARLANCE", { size: 46, color: "#ffffff", stroke: "#000", strokeThickness: 5, origin: 0.5 });
-          t1.setTint(hexNum(this.pal.primary), hexNum(this.pal.primary), hexNum(this.pal.accent), hexNum(this.pal.accent));
-          var wc = (this.sim && this.sim.totalWorlds) || 6;
-          var t2 = FFG.text(this, this.W / 2, this.H * 0.36 + 44, (content.subtitle || "vertical bullet storm") + "  •  " + wc + " worlds", { size: 15, color: this.pal.ink, origin: 0.5 });
-          var t3 = FFG.text(this, this.W / 2, this.H * 0.56, "Arrows / WASD  move   ·   HOLD Space or Mouse to FIRE", { size: 14, color: this.pal.good, origin: 0.5 });
-          var t4 = FFG.text(this, this.W / 2, this.H * 0.56 + 24, "or steer with the mouse", { size: 12, color: this.pal.ink, origin: 0.5 });
-          var t5 = FFG.text(this, this.W / 2, this.H * 0.66, "CLICK / press SPACE to launch", { size: 18, color: "#ffffff", stroke: "#000", strokeThickness: 3, origin: 0.5 });
-          this.tweens.add({ targets: t5, alpha: 0.3, duration: 700, yoyo: true, repeat: -1 });
-          this.titleC.add([dim, t1, t2, t3, t4, t5]);
-        }
-
         _begin() {
           if (this.started) return;
           this.started = true;
-          if (this.titleC) { this.titleC.destroy(); this.titleC = null; }
+          // Hide the shell menu (also covers the direct test-harness __test.start() path).
+          try { if (this.shell) { this.shell.hide(); this.shell.phase = "playing"; } } catch (e) {}
           this.fx.flash(this.pal.primary, 180);
           this.fx.shake(140, 0.004);
         }
 
+        // Procedural SPACE background score (Web Audio, no asset) — started on Play so
+        // browser autoplay is allowed. Honors the control-bar Mute + the shell volume.
+        _startMusic() {
+          try {
+            if (this._music || !(window.FFG && window.FFG.createSpaceMusic)) return;
+            var base = (this.shell && this.shell.musicVolume != null) ? this.shell.musicVolume : 0.3;
+            this._music = window.FFG.createSpaceMusic(base);
+            this._music.start();
+            var self = this;
+            window.addEventListener("mutechange", function (e) {
+              var m = !!(e.detail && e.detail.muted);
+              if (self._music) self._music.setVolume(m ? 0 : ((self.shell && self.shell.musicVolume != null) ? self.shell.musicVolume : base));
+            });
+          } catch (e) {}
+        }
+        _stopMusic() { try { if (this._music) { this._music.stop(); this._music = null; } } catch (e) {} }
+
         _endOverlay(victory) {
           var self = this;
           this.over = true;
+          this._stopMusic();
           var s = this.sim.state();
           this.endC = this.add.container(0, 0).setDepth(130);
           var dim = this.add.rectangle(this.W / 2, this.H / 2, this.W, this.H, 0x000000, 0.6);
@@ -563,8 +644,8 @@
           var firing = !!(k.fire && k.fire.isDown) || !!(this.input && this.input.activePointer && this.input.activePointer.isDown);
           var inp = { left: false, right: false, up: false, down: false, fire: firing, moveTo: null };
           if (this._pointer) inp.moveTo = this._pointer;
-          var L = k.left.isDown || k.a.isDown, R = k.right.isDown || k.d.isDown;
-          var U = k.up.isDown || k.w.isDown, D = k.down.isDown || k.s.isDown;
+          var L = k.left.isDown, R = k.right.isDown;
+          var U = k.up.isDown, D = k.down.isDown;
           if (L || R || U || D) {
             inp.moveTo = null;        // keyboard overrides pointer steering
             inp.left = L; inp.right = R; inp.up = U; inp.down = D;
@@ -784,14 +865,15 @@
             seen[en.id] = true;
             var spr = this._enemyMap[en.id];
             if (!spr) {
-              var color = en.kind === "tank" ? this.COL.tank : this.COL.enemy;
+              var color = this._enemyColor(en.kind);
               var key = this._makeEnemyTexture(en.kind, color);
               spr = this.add.image(en.x, en.y, key).setDepth(38);
               // cheap additive halo behind the enemy reads as a glow WITHOUT a
               // per-object postFX shader pass (those are costly on weak GPUs and
               // tank the framerate under software rendering).
+              var big = (en.kind === "tank" || en.kind === "reaver" || en.kind === "saucer");
               spr._halo = this.add.image(en.x, en.y, "fx_dot").setTint(color)
-                .setBlendMode(Phaser.BlendModes.ADD).setDepth(37).setScale(en.kind === "tank" ? 1.4 : 1.0).setAlpha(0.45);
+                .setBlendMode(Phaser.BlendModes.ADD).setDepth(37).setScale(big ? 1.4 : 1.0).setAlpha(0.45);
               spr.setScale(0);
               this.tweens.add({ targets: spr, scale: 1, duration: 220, ease: "Back.easeOut" });
               this._enemyMap[en.id] = spr;
