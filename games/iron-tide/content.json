@@ -136,34 +136,6 @@
       "source": "Sherkiz",
       "license": "CC-BY",
       "attribution": "Hawk Lp Rigged — Sherkiz (CC-BY)"
-    },
-    "dolphin": {
-      "model": "assets/creatures/dolphin.glb",
-      "rotY": 1.5707963267948966,
-      "count": 2,
-      "source": "Poly Pizza",
-      "license": "CC0"
-    },
-    "shark": {
-      "model": "assets/creatures/shark.glb",
-      "rotY": 1.5707963267948966,
-      "count": 1,
-      "source": "Poly Pizza",
-      "license": "CC0"
-    },
-    "whale": {
-      "model": "assets/creatures/whale.glb",
-      "rotY": 1.5707963267948966,
-      "count": 1,
-      "source": "Poly Pizza",
-      "license": "CC0"
-    },
-    "manta": {
-      "model": "assets/creatures/manta.glb",
-      "rotY": 1.5707963267948966,
-      "count": 1,
-      "source": "Poly Pizza",
-      "license": "CC0"
     }
   },
   "credits": {

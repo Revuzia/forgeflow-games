@@ -413,10 +413,11 @@ register3d("navalfree", async function (kernel, content) {
     const scale = targetLen / longDim;
     obj.scale.setScalar(scale);
 
-    // We want the model's LONG axis aligned to +X (so yaw=heading points the bow
-    // along the sim heading). If the long axis is Z, rotate 90deg.
+    // Align the model's LONG axis to +X so yaw=heading points the BOW along travel.
+    // The +Math.PI turns the hull around: these pirate hulls model their bow at the
+    // -X end, so without it the ship drove stern-first ("boats face/drive backwards").
     const group = new THREE.Group();
-    if (!longIsX) obj.rotation.y = -Math.PI / 2;
+    obj.rotation.y = (longIsX ? 0 : -Math.PI / 2) + Math.PI;
     obj.updateMatrixWorld(true);
     const box1 = new THREE.Box3().setFromObject(obj);
     const ctr = box1.getCenter(new THREE.Vector3());
@@ -990,6 +991,35 @@ register3d("navalfree", async function (kernel, content) {
       });
     })();
   }
+  // End-of-enemy-turn covering fire: each DEFENDING ship that hasn't reacted yet
+  // fires once at the NEAREST enemy still in its range + arc + LOS. Guarantees Defend
+  // pays off whenever a target sits in the watched zone (not only on a move into it).
+  function coveringFire(done) {
+    const defenders = sim.shipsOf("player").filter((d) => d.defending && !d.sunk && !d._reacted);
+    let j = 0;
+    (function next() {
+      if (j >= defenders.length || sim.ended) { done(); return; }
+      const d = defenders[j++];
+      const targets = sim.shipsOf("enemy").filter((e) => !e.sunk && sim.canFireAt(d.id, e.x, e.y, e.id).ok);
+      if (!targets.length) { next(); return; }
+      targets.sort((a, b) => Math.hypot(a.x - d.x, a.y - d.y) - Math.hypot(b.x - d.x, b.y - d.y));
+      const tgt = targets[0];
+      d._reacted = true;
+      const res = sim.reactionFire(d.id, tgt.id);
+      if (!res || !res.ok) { next(); return; }
+      const impact = toScene(tgt.x, tgt.y); impact.y = 2.0;
+      banner(`${d.id} OVERWATCH!`, 0xffd166, 800);
+      try { kernel.playSound(sfx.fire, 0.42); } catch (e) {}
+      fireShell(d, impact, () => {
+        explosion(impact); try { kernel.playSound(sfx.hit, 0.5); } catch (e) {}
+        updateHealthBar(tgt); damageText(impact, res.dmg);
+        if (res.result === "sink") { try { kernel.playSound(sfx.sink, 0.6); } catch (e) {} sinkVisual(tgt); }
+        setHUD();
+        if (sim.ended) { busy = false; finishMatch(); return; }
+        setTimeout(next, 220);
+      });
+    })();
+  }
   // Play the AI's planned actions VISIBLY, one at a time, with animation.
   function runAITurn() {
     const acts = sim.aiPlan(); // resolves the whole enemy turn in the sim
@@ -998,10 +1028,16 @@ register3d("navalfree", async function (kernel, content) {
       if (i >= acts.length) {
         // enemy turn done
         if (sim.ended) { busy = false; finishMatch(); return; }
-        sim.endTurn(); // -> player
-        busy = false;
-        setHUD(`<span style="color:#37e0c0">Your move.</span>`);
-        autoSelectNextShip(); // auto-pick the first ready ship for the new turn
+        // END-OF-TURN OVERWATCH: any DEFENDING ship that didn't already react fires on
+        // an enemy still sitting in its range+arc+LOS — so Defend reliably does
+        // something even when enemies kited/fired from range instead of charging in.
+        coveringFire(() => {
+          if (sim.ended) { busy = false; finishMatch(); return; }
+          sim.endTurn(); // -> player
+          busy = false;
+          setHUD(`<span style="color:#37e0c0">Your move.</span>`);
+          autoSelectNextShip(); // auto-pick the first ready ship for the new turn
+        });
         return;
       }
       const a = acts[i++];

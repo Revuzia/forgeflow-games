@@ -44,10 +44,15 @@ export function createClassicalMusic(volume) {
 
   return {
     start() {
-      if (playing) return;
       try {
         ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
-        if (ctx.state === "suspended") ctx.resume();
+        // ALWAYS try to resume first — the deep-link auto-start runs with a suspended
+        // context (no page gesture yet), and the gesture-arm re-calls start(); if we
+        // bailed on `playing` before resuming, the context stayed suspended = silent.
+        if (ctx.state === "suspended") { try { ctx.resume(); } catch (e) {} }
+      } catch (e) { return; }
+      if (playing) return;
+      try {
         master = ctx.createGain(); master.gain.value = vol; master.connect(ctx.destination);
         nextTime = ctx.currentTime + 0.12; step = 0; playing = true;
         schedule(); timer = setInterval(schedule, 140);

@@ -296,11 +296,22 @@ register3d("chess3d", async (kernel, content) => {
       if (themeKey === "forest") { mesh = makeTree(); mesh.scale.setScalar(0.8 + rnd() * 0.9); mesh.rotation.y = rnd() * Math.PI * 2; }
       else if (themeKey === "mountains") mesh = makeMountain(false);
       else if (themeKey === "snow") mesh = makeMountain(true);
-      else { // desert mesas
-        const h = T * (1.2 + rnd() * 2.2);
-        mesh = new THREE.Mesh(new THREE.BoxGeometry(T * (1.5 + rnd() * 2), h, T * (1.5 + rnd() * 2)),
-          new THREE.MeshStandardMaterial({ color: shade(0x9c7a48, rnd() * 0.25 - 0.1), roughness: 1.0, flatShading: true }));
-        mesh.position.y = h / 2 - T * 0.1; mesh._br = T * 2.5;
+      else { // desert BUTTES — flat-topped, jagged sandstone mesas (not crude boxes)
+        const h = T * (2 + rnd() * 4.5), rT = T * (1.0 + rnd() * 1.3), rB = rT * (1.35 + rnd() * 0.5);
+        const seg = 6 + (rnd() * 3 | 0);
+        const geo = new THREE.CylinderGeometry(rT, rB, h, seg, 3, false);
+        const pos = geo.attributes.position, n = pos.count;
+        const col = new Float32Array(n * 3);
+        const lo = new THREE.Color(0x9a6f3c), hi = new THREE.Color(0xc79a5c); // sandstone strata: darker base -> lighter cap
+        for (let i = 0; i < n; i++) {
+          const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), t = (y + h / 2) / h;
+          if (t > 0.02 && t < 0.985) { const j = 1 + (rnd() - 0.5) * 0.4; pos.setX(i, x * j); pos.setZ(i, z * j); }
+          const c = lo.clone().lerp(hi, t * 0.85 + (rnd() * 0.1));
+          col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+        }
+        geo.setAttribute("color", new THREE.BufferAttribute(col, 3)); geo.computeVertexNormals();
+        mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1.0, flatShading: true }));
+        mesh.position.y = h / 2 - T * 0.12; mesh._br = rB * 1.3;
       }
       place(mesh, rad, ang);
     }
@@ -430,7 +441,7 @@ register3d("chess3d", async (kernel, content) => {
           o.material.envMapIntensity = isW ? 0.8 : 0.55;
         }
       });
-      if (clips.idle) char.play(clips.idle, { fade: 0 });
+      if (clips.idle) char.play(clips.idle, { fade: 0, timeScale: 0.5 + Math.random() * 0.12 }); // calm, REGULAR idle (was twitchy/fast) + slight desync so the army doesn't breathe in lockstep
     } else {
       // fallback: a coloured obelisk so the piece still exists if a GLB fails
       const body = new THREE.Mesh(new THREE.ConeGeometry(T * 0.26, T * 0.9, 6), new THREE.MeshStandardMaterial({ color: SIDE_TINT[side] }));
@@ -468,7 +479,15 @@ register3d("chess3d", async (kernel, content) => {
   let phase = "menu";           // menu | playing | ended
   let playerSide = (content.playerSide === "b") ? "b" : "w"; // human plays white by default (online flips this)
   let aiSide = playerSide === "w" ? "b" : "w";
-  const aiDepth = content.aiDepth != null ? content.aiDepth : 2;
+  // AI strength by CHESS skill. The menu sets this; higher = deeper negamax search =
+  // genuinely stronger play. Novice also blunders sometimes (see chooseAIMove).
+  const SKILL_DEPTH = { novice: 1, intermediate: 2, master: 3, grandmaster: 4 };
+  let aiDepth = content.aiDepth != null ? content.aiDepth : 2;
+  let aiSkill = "intermediate";
+  function setAIDifficulty(d) {
+    aiSkill = String(d || "intermediate").toLowerCase();
+    aiDepth = SKILL_DEPTH[aiSkill] != null ? SKILL_DEPTH[aiSkill] : 2;
+  }
   // ── online play (lazy) ──────────────────────────────────────────────────────
   let netMode = false;          // true once PLAY ONLINE starts a networked match
   let online = null;            // OnlineController (move-relay turn machine)
@@ -773,6 +792,12 @@ register3d("chess3d", async (kernel, content) => {
   function chooseAIMove(depth) {
     const moves = sim.allLegalMoves(aiSide);
     if (!moves.length) return null;
+    // Novice blunders ~30% of the time (random legal move) so a beginner can actually
+    // win; deeper tiers never blunder and search deeper. This makes the curve FELT.
+    if (aiSkill === "novice" && Math.random() < 0.3) {
+      const r = moves[(Math.random() * moves.length) | 0];
+      return { from: r.from, to: r.to, promotion: r.promotion };
+    }
     moves.sort((a, b) => sim._moveOrder(b) - sim._moveOrder(a));
     let bestScore = -Infinity; const best = [];
     for (const m of moves) {
@@ -956,13 +981,17 @@ register3d("chess3d", async (kernel, content) => {
       tagline: content.tagline || "Command an army of living pieces.",
       music: null, // chess uses the procedural CLASSICAL loop (createClassicalMusic), not a file track
       menuImage: (content.assets && content.assets.menu_image) || null,
+      // difficulty BY CHESS SKILL — each maps to a real negamax search depth so the
+      // AI genuinely gets stronger (Novice also blunders; Grandmaster searches deepest).
+      difficulties: ["Novice", "Intermediate", "Master", "Grandmaster"],
+      defaultDifficulty: "Intermediate",
       howTo: [
         { h: "GOAL", p: "Checkmate the enemy king. Standard chess rules — but your pieces are living warriors who fight when they capture." },
         { h: "MOVE", p: "Click one of your pieces to select it; legal squares light up (green = move, red = capture). Click a lit square to move there." },
         { h: "BATTLE", p: "When you capture, your piece advances and strikes; the defender falls before it's removed from the board." },
         { h: "CAMERA", p: "<b>WASD</b> to pan around the board, <b>right-drag</b> to orbit, scroll to zoom. The match is set in a different environment each time." },
       ],
-      onPlay: () => { beginGame(); },
+      onPlay: (d) => { setAIDifficulty(d); beginGame(); },
       onPause: () => { kernel.stop(); try { chessMusic.stop(); } catch (e) {} },
       onResume: () => { kernel.start(); try { chessMusic.start(); } catch (e) {} },
     });
