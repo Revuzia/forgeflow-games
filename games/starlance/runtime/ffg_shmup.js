@@ -322,6 +322,34 @@
           });
           this.input.keyboard.on("keydown-R", function () { if (self.over) self.scene.restart(); });
 
+          // ── PAUSE (Esc / control-bar button) — the shmup has no shell, so wire it
+          // here: Phaser scene pause halts the loop; a DOM overlay shows over it.
+          function pauseOverlay(on) {
+            var el = document.getElementById("__shmup_pause__");
+            if (on) {
+              if (!el) {
+                el = document.createElement("div"); el.id = "__shmup_pause__";
+                el.style.cssText = "position:absolute;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;background:rgba(6,12,22,.66);color:#eaf2ff;font:800 34px 'Segoe UI',monospace;letter-spacing:3px;pointer-events:none";
+                el.innerHTML = "PAUSED<div style='font:600 13px Segoe UI;opacity:.8;letter-spacing:1px'>press Esc to resume</div>";
+                ((self.game && self.game.canvas && self.game.canvas.parentNode) || document.body).appendChild(el);
+              }
+              el.style.display = "flex";
+            } else if (el) { el.style.display = "none"; }
+          }
+          self._paused = false;
+          self._setPaused = function (on) {
+            if (on === self._paused || !self.started || self.over) return;
+            self._paused = on;
+            if (on) { self.scene.pause(); pauseOverlay(true); } else { self.scene.resume(); pauseOverlay(false); }
+          };
+          try { window.__PAUSE__ = { toggle: function () { self._setPaused(!self._paused); }, pause: function () { self._setPaused(true); }, resume: function () { self._setPaused(false); } }; } catch (e) {}
+          if (!window.__SHMUP_ESC_WIRED__) {
+            window.__SHMUP_ESC_WIRED__ = true;
+            window.addEventListener("keydown", function (e) {
+              if (e.code === "Escape" && window.__PAUSE__ && window.__PAUSE__.toggle) { e.preventDefault(); window.__PAUSE__.toggle(); }
+            });
+          }
+
           // start overlay
           this._titleOverlay();
 

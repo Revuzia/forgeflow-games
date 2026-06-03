@@ -227,6 +227,10 @@ def assemble(slug, content):
         _copy_creature_assets(gdir, content)  # bundle CREATURES_INDEX models the content requests
     if genre in ("tactics", "tactics3d"):
         _copy_tactics_assets(gdir)
+    # page-level control bar (Fullscreen / Mute / Pause) — every game ships with it
+    _gc = RUNTIME / "game_controls.js"
+    if _gc.exists():
+        shutil.copy2(_gc, gdir / "game_controls.js")
     (gdir / "content.json").write_text(json.dumps(content, indent=2), encoding="utf-8")
     if genre == "tactics3d":
         _structure_tactics_maps(gdir / "content.json")  # XCOM parcel/plot — 3D ONLY (a 2D top-down camera fits the whole grid, so big parcel maps make units tiny; 2D tactics keeps small readable grids)
@@ -430,6 +434,8 @@ def _index_html_2d(content, prof):
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
 </head><body>
 <div id="game-container"></div>
+<script>window.GAME_CONFIG=window.GAME_CONFIG||{{hide_bug_button:true}};</script>
+<script src="game_controls.js?v=1"></script>
 {scripts}
 <script>
 fetch("content.json").then(function(r){{return r.json()}}).then(function(c){{window.FFG_CONTENT=c}})
@@ -458,6 +464,8 @@ def _index_html_3d(content, prof=None):
 </script>
 </head><body>
 <div id="game-container"></div>
+<script>window.GAME_CONFIG=window.GAME_CONFIG||{{hide_bug_button:true}};</script>
+<script src="game_controls.js?v=1"></script>
 <script type="module" src="runtime/3d/{boot}?v={int(__import__('time').time())}"></script>
 </body></html>
 """
