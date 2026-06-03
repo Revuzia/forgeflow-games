@@ -274,7 +274,20 @@ function buildMission(spec) {
   // game (preserves each enemy's stats), else build fresh from spec.mix + ARCH.
   let roster;
   if (spec.enemyTemplates && spec.enemyTemplates.length) {
+    // Regen: keep every existing enemy (preserves stats + the boss), then SCALE UP to the
+    // mission's target count by cycling the non-boss templates with fresh unique ids.
+    // XCOM fields far more aliens than the squad (you face them pod-by-pod), so a 5-soldier
+    // squad should meet ~8-18 hostiles, not 5. (Owner: "more bad guys than the PCs".)
     roster = spec.enemyTemplates.map((e) => Object.assign({}, e));
+    const target = Math.max(roster.length, spec.enemyCount || roster.length);
+    const fillers = roster.filter((e) => !e.boss);
+    let fi = 0;
+    while (roster.length < target && fillers.length) {
+      const base = fillers[fi % fillers.length]; fi++;
+      const e = Object.assign({}, base); delete e.boss; delete e.pod; // no dup boss; re-cluster by proximity
+      e.id = (base.id || "e") + "_x" + roster.length;
+      roster.push(e);
+    }
   } else {
     roster = [];
     for (let i = 0; i < spec.enemies; i++) {
@@ -282,8 +295,10 @@ function buildMission(spec) {
       roster.push(Object.assign({ id: "e_" + kind + "_" + i }, ARCH[kind]));
     }
   }
+  // Cluster ~3 enemies per zone so the sim groups them into XCOM-style PODS of 3
+  // (a real threat that activates together), not 18 scattered singletons you pick off.
   const enemies = roster.map((e, i) => {
-    const z = zones[i % zones.length];
+    const z = zones[Math.floor(i / 3) % zones.length];
     const jitter = (n) => n + (ri(6) - 3);
     const p = snap(jitter(z[0]), Math.max(1, jitter(z[1])));
     return Object.assign(e, { x: p.x, y: p.y });
@@ -350,15 +365,18 @@ if (process.argv.includes("--regen")) {
   const regen = ms.map((m, i) => {
     if (!m.grid || !m.grid.length) return m; // not a tactics mission — leave it
     const GW0 = m.grid[0].length, GH0 = m.grid.length;
-    // XCOM-scale plot. Research (state/research_xcom_design.json -> map_size) says a
-    // 24-40 tile grid is the faithful analog of one EU abduction map; the owner wants
-    // LARGE maps that "take a while to cross", so we lean to the top of that range and
-    // grow per mission — WITHOUT returning to the old 58x48 that made units tiny dots.
-    const GW = Math.min(Math.max(GW0, 36), 42 + i), GH = Math.min(Math.max(GH0, 30), 34 + i);
+    // LARGE XCOM plots that GROW per mission (owner: 36-42 still felt small). The camera
+    // frames the action + follows units, so big maps don't shrink units to dots; cover
+    // stays sparse (~3-7%) so they aren't "overfilled" like the old 58x48. Never shrink
+    // below the existing grid. (Map size will be re-tuned from research_xcom_deep.json.)
+    const GW = Math.max(44 + i * 2, GW0), GH = Math.max(36 + i * 2, GH0); // 44x36 (M1) -> 56x48 (M7)
+    // XCOM fields far MORE aliens than the squad (you meet them pod-by-pod, not all at
+    // once), so a 5-soldier squad should face ~9-18 hostiles, ramping to the finale.
+    const enemyCount = [9, 10, 12, 13, 15, 16, 18][i] != null ? [9, 10, 12, 13, 15, 16, 18][i] : 10 + i * 2;
     let seed = 0x9e3779b9; const key = slug + ":" + i; for (let k = 0; k < key.length; k++) seed = (Math.imul(seed, 131) + key.charCodeAt(k)) >>> 0;
     const r = buildMission({
       name: m.name, objective: m.objective, w: GW, h: GH, seed,
-      squad: m.player_units, enemyTemplates: m.enemy_units, goal: m.goal,
+      squad: m.player_units, enemyTemplates: m.enemy_units, goal: m.goal, enemyCount: enemyCount,
     });
     if (!r.allReach) ok = false;
     const nm = { name: m.name, objective: m.objective, grid: r.mission.grid, player_units: r.mission.player_units, enemy_units: r.mission.enemy_units };
