@@ -693,11 +693,12 @@
 
     endTurn() {
       if (this.ended) return;
-      const side = this.currentPhase === "player" ? this.player_units : this.enemy_units;
-      for (const u of side) u.actionPoints = u.maxAP;
       if (this.currentPhase === "player") {
         this.currentPhase = "enemy";
-        for (const e of this.enemy_units) e.overwatch = false; // their turn — clear their watch
+        // FRESH ENEMY TURN: refill enemy AP + clear their watch. (Bug fix: the old code
+        // reset the *player's* AP here because currentPhase is always "player" on entry,
+        // so enemies kept 0 AP from turn 2 on and FROZE — the "enemies don't move" report.)
+        for (const e of this.enemy_units) { e.actionPoints = e.maxAP; e.overwatch = false; }
         this.onEvent("phase", { phase: "enemy", turn: this.turnNumber });
         this._runEnemyTurn();
         if (!this.ended) {
@@ -739,36 +740,89 @@
       return true;
     }
 
+    _nearestAlly(e) {
+      let best = null, bd = Infinity;
+      for (const a of this.aliveAllies()) { const d = Math.abs(a.x - e.x) + Math.abs(a.y - e.y); if (d < bd) { bd = d; best = a; } }
+      return best;
+    }
+    _distToNearestAlly(e) { const a = this._nearestAlly(e); return a ? Math.abs(a.x - e.x) + Math.abs(a.y - e.y) : 9999; }
+
+    // Best shot `e` could take standing at (x,y,f): {target, score, chance, flanked} or null.
+    // Temporarily relocates e to score cover/flank/LOS from that tile, then restores it
+    // (fully synchronous — no state leaks). Score rewards FLANKS and FINISHING low-HP
+    // soldiers (focus fire), so the AI plays like XCOM instead of charging in a line.
+    _bestShotFrom(e, x, y, f) {
+      const ox = e.x, oy = e.y, of = e.floor; e.x = x; e.y = y; e.floor = f;
+      let best = null;
+      for (const a of this.aliveAllies()) {
+        const dist = Math.abs(a.x - x) + Math.abs(a.y - y);
+        if (dist > e.range) continue;
+        if (!this.hasLineOfSight(x, y, a.x, a.y, f, a.floor || 0)) continue;
+        const bd = this.hitBreakdown(e, a);
+        if (bd.chance <= 0) continue;
+        const expDmg = bd.chance * (e.atk || 4);
+        const score = bd.chance + (bd.flanked ? 0.35 : 0) + (a.hp <= expDmg ? 0.6 : 0) + (a.hp <= (e.atk || 4) ? 0.25 : 0);
+        if (!best || score > best.score) best = { target: a, score: score, chance: bd.chance, flanked: bd.flanked };
+      }
+      e.x = ox; e.y = oy; e.floor = of;
+      return best;
+    }
+
+    // Would standing at `tile` give cover against `foe`?
+    _coverVs(tile, foe) { return this.coverAt({ x: tile.x, y: tile.y, floor: tile.floor }, foe.x, foe.y) > 0; }
+
     _runEnemyTurn() {
       this._spotCheck(); // pods that can see a soldier at turn start activate + engage
-      for (const e of this.aliveEnemies()) {
+      // front-liners (nearest a soldier) act first, so the squad focus-fires as a unit
+      const order = this.aliveEnemies().slice().sort((p, q) => this._distToNearestAlly(p) - this._distToNearestAlly(q));
+      for (const e of order) {
         if (this.ended) return;
-        if (!this.podRevealed(e.pod)) continue; // dormant pod stays put until spotted
-        let targets = this.aliveAllies();
-        if (!targets.length) break;
-        targets = targets.slice().sort((p, q) =>
-          (Math.abs(p.x - e.x) + Math.abs(p.y - e.y)) - (Math.abs(q.x - e.x) + Math.abs(q.y - e.y)));
+        if (e.hp <= 0 || !this.podRevealed(e.pod)) continue; // dormant pod stays put until spotted
+        if (!this.aliveAllies().length) break;
         if (e.boss && this._bossAct(e)) continue; // boss spent its turn on a phase/slam special
-        // Try to shoot (ends turn); otherwise advance; if it still can't fire,
-        // hold overwatch rather than waste the turn.
-        let guard = 0, shot = false;
-        while (e.actionPoints > 0 && guard++ < 6) {
-          const tgt = targets[0];
-          const dist = Math.abs(tgt.x - e.x) + Math.abs(tgt.y - e.y);
-          if (dist <= e.range && this.hasLineOfSight(e.x, e.y, tgt.x, tgt.y, e.floor || 0, tgt.floor || 0)) {
-            this.attackUnit(e.id, tgt.id); shot = true; break; // shooting ends the turn
-          } else {
-            const path = this.findPath(e.x, e.y, tgt.x, tgt.y, e.floor || 0, tgt.floor || 0);
-            if (!path || !path.length) break;
-            const steps = Math.min(path.length, e.movement);
-            const dest = path[steps - 1];
-            // don't step onto the target's tile
-            if (dest.x === tgt.x && dest.y === tgt.y && steps > 1) { const d2 = path[steps - 2]; this.moveUnit(e.id, d2.x, d2.y, d2.floor); }
-            else if (!(dest.x === tgt.x && dest.y === tgt.y)) this.moveUnit(e.id, dest.x, dest.y, dest.floor);
-            else break;
+
+        // 1) best shot from where it stands now
+        const here = this._bestShotFrom(e, e.x, e.y, e.floor || 0);
+        // 2) best FIRING POSITION it can move to — flank angles + better cover (needs move+shoot AP)
+        let moveTile = null, moveShot = null;
+        if (e.actionPoints >= 2) {
+          for (const c of this.reachableTiles(e)) {
+            if (this.unitAt(c.x, c.y, c.floor)) continue;
+            const s = this._bestShotFrom(e, c.x, c.y, c.floor);
+            if (!s) continue;
+            const adj = s.score + (this._coverVs(c, s.target) ? 0.15 : 0) - c.cost * 0.02; // prefer cover, light travel cost
+            if (!moveShot || adj > moveShot._adj) { moveTile = c; moveShot = s; moveShot._adj = adj; }
           }
         }
-        if (!shot && e.hp > 0 && e.actionPoints > 0) this.overwatchUnit(e.id); // guard the approach
+
+        // DECIDE: fire from here if it's ~as good as repositioning; else move to the flank and fire.
+        if (here && (!moveShot || here.score >= moveShot.score - 0.12)) {
+          this.attackUnit(e.id, here.target.id); // shooting ends the turn
+        } else if (moveTile && moveShot) {
+          this.moveUnit(e.id, moveTile.x, moveTile.y, moveTile.floor);
+          if (e.hp > 0 && e.actionPoints > 0) this.attackUnit(e.id, moveShot.target.id);
+        } else {
+          // 3) no shot reachable: CLOSE the distance to the nearest soldier. Cover is only a
+          // tiebreak among the tiles that make the MOST progress — otherwise enemies hunker in
+          // nearby cover and never get in range (they'd sit out the whole match).
+          const tgt = this._nearestAlly(e);
+          if (tgt) {
+            const cands = this.reachableTiles(e).filter((c) => !this.unitAt(c.x, c.y, c.floor));
+            if (cands.length) {
+              let minD = Infinity;
+              for (const c of cands) { const d = Math.abs(c.x - tgt.x) + Math.abs(c.y - tgt.y); if (d < minD) minD = d; }
+              const lead = cands.filter((c) => (Math.abs(c.x - tgt.x) + Math.abs(c.y - tgt.y)) <= minD + 1); // closest band
+              lead.sort((p, q) =>
+                ((Math.abs(p.x - tgt.x) + Math.abs(p.y - tgt.y)) - (this._coverVs(p, tgt) ? 0.6 : 0) + p.cost * 0.02) -
+                ((Math.abs(q.x - tgt.x) + Math.abs(q.y - tgt.y)) - (this._coverVs(q, tgt) ? 0.6 : 0) + q.cost * 0.02));
+              const dest = lead[0];
+              if (dest && (dest.x !== e.x || dest.y !== e.y)) this.moveUnit(e.id, dest.x, dest.y, dest.floor);
+              const now = this._bestShotFrom(e, e.x, e.y, e.floor || 0); // a lane may have opened after closing
+              if (now && e.hp > 0 && e.actionPoints > 0) { this.attackUnit(e.id, now.target.id); continue; }
+            }
+          }
+          if (e.hp > 0 && e.actionPoints > 0) this.overwatchUnit(e.id); // guard the approach
+        }
       }
     }
 
