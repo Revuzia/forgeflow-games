@@ -193,6 +193,7 @@
         suppressAimPenalty: 0,        // aim debuff while suppressed
         overwatch: false,             // holding a reaction shot
         hunkered: false,              // hunkered down — much harder to hit until next turn
+        marked: 0,                    // turns remaining as a MARKED target (takes +30% damage)
         pod: u.pod != null ? u.pod : null, // enemy pod id (assigned in _assignPods)
         revealed: side === "player",  // players always "revealed"; enemies start hidden
       };
@@ -513,6 +514,7 @@
         const crit = !reaction && (bd.flanked || bd.ambush) && this.rng() < bd.critChance;
         let dmg = Math.max(1, a.atk - t.def);
         if (crit) dmg = Math.round(dmg * 1.5);
+        if (t.marked > 0) dmg = Math.round(dmg * 1.3); // MARKED targets take +30% from all sources
         t.hp = Math.max(0, t.hp - dmg);
         if (t.hp <= 0) { a._kills = (a._kills || 0) + 1; this._maybeDropLoot(t, false); }
         this.log.push(a.id + (reaction ? " overwatch-hit " : crit ? " CRIT " : bd.ambush ? " ambush-hit " : " hit ") + t.id + " for " + dmg);
@@ -694,6 +696,18 @@
       return { success: true };
     }
 
+    // MARK TARGET (enemy sniper signature): paint a soldier who then takes +30% damage
+    // from ALL sources for 2 turns. Ends the marker's turn — a force-multiplier that sets
+    // up the pod's focus fire, and makes killing the sniper a real priority.
+    markUnit(attackerId, targetId) {
+      const a = this.getUnit(attackerId), t = this.getUnit(targetId);
+      if (!a || !t || a.hp <= 0 || t.hp <= 0 || a.actionPoints < 1) return { success: false };
+      t.marked = 2; a.actionPoints = 0;
+      this.log.push(a.id + " MARKED " + t.id);
+      this.onEvent("mark", { attacker: a, target: t });
+      return { success: true };
+    }
+
     // Any opposing overwatcher with LOS + range fires one reaction shot at `mover`.
     _triggerOverwatch(mover) {
       const foes = mover.side === "player" ? this.aliveEnemies() : this.aliveAllies();
@@ -720,7 +734,7 @@
         if (!this.ended) {
           this.currentPhase = "player";
           this.turnNumber++;
-          for (const u of this.player_units) { u.actionPoints = u.maxAP; u.overwatch = false; u.hunkered = false; }
+          for (const u of this.player_units) { u.actionPoints = u.maxAP; u.overwatch = false; u.hunkered = false; if (u.marked > 0) u.marked--; }
           this._tickLoot(); // field loot decays each fresh player turn (grab it fast)
           this._tickCooldowns(this.player_units);           // ability cooldowns recover
           for (const e of this.enemy_units) { e.suppressedBy = null; e.suppressAimPenalty = 0; } // pins expire at our next turn
@@ -777,7 +791,7 @@
         const bd = this.hitBreakdown(e, a);
         if (bd.chance <= 0) continue;
         const expDmg = bd.chance * (e.atk || 4);
-        const score = bd.chance + (bd.flanked ? 0.35 : 0) + (a.hp <= expDmg ? 0.6 : 0) + (a.hp <= (e.atk || 4) ? 0.25 : 0);
+        const score = bd.chance + (bd.flanked ? 0.35 : 0) + (a.hp <= expDmg ? 0.6 : 0) + (a.hp <= (e.atk || 4) ? 0.25 : 0) + (a.marked > 0 ? 0.4 : 0);
         if (!best || score > best.score) best = { target: a, score: score, chance: bd.chance, flanked: bd.flanked };
       }
       e.x = ox; e.y = oy; e.floor = of;
@@ -840,6 +854,15 @@
         if (!this.aliveAllies().length) break;
         if (e.boss && this._bossAct(e)) continue; // boss spent its turn on a phase/slam special
         const ai = e.ai || "aggressive"; // drone/stalker=aggressive, sniper=kiter, defender=holds cover
+
+        // SNIPER signature — MARK: paint a soldier it can see but can't one-shot, so the
+        // whole pod focus-fires it for +30%. Makes killing the sniper a real priority.
+        if (ai === "sniper" && e.actionPoints >= 1) {
+          const hs = this._bestShotFrom(e, e.x, e.y, e.floor || 0);
+          if (hs && hs.target && !hs.target.marked && hs.chance >= 0.4 && hs.target.hp > (e.atk || 4) * 1.4) {
+            this.markUnit(e.id, hs.target.id); continue;
+          }
+        }
 
         // 1) shot from where it stands now (+ archetype hold-position bias)
         const here = this._bestShotFrom(e, e.x, e.y, e.floor || 0);

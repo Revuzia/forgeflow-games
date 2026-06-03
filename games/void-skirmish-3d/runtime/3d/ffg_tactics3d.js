@@ -2051,6 +2051,12 @@ register3d("tactics3d", async (kernel, content) => {
       sfx("overwatch", 0.45);
       return 150;
     }
+    if (e.type === "mark") {
+      const v = unitViews[e.payload.target.id];
+      if (v) floatText({ x: v.group.position.x, y: T * 1.4, z: v.group.position.z }, "MARKED!", 0xff5a3c);
+      sfx("hit", 0.4);
+      return 220;
+    }
     if (e.type === "reveal") {
       revealPodView(e.payload.units);
       sfx("overwatch", 0.5); // a sharp "contact" cue
@@ -2372,6 +2378,7 @@ register3d("tactics3d", async (kernel, content) => {
       abilitiesFor: (uid) => sim.abilitiesFor(uid),
       overwatch: (id) => { if (id) selectUnit(sim.getUnit(id)); overwatchSelected(); },
       hunker: (id) => { if (id) selectUnit(sim.getUnit(id)); hunkerSelected(); },
+      mark: (aid, tid) => sim.markUnit(aid, tid),
       endTurn: () => endTurn(),
       debrief: () => showEnd(), // force the end/barracks screen (test affordance)
       campaign: () => campaign ? { active: campaign.isActive(), mission: campaign.currentMission(), doom: campaign.state.doom, doomMax: campaign.state.doomMax, supplies: campaign.state.supplies, roster: campaign.state.roster.map((s) => s && { cls: s.cls, rank: s.rank, xp: s.xp, kills: s.kills }) } : null,
