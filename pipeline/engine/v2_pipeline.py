@@ -9,9 +9,13 @@ each queued game it executes the vertical-slice-first loop, ON ITS OWN:
     -> expand content via `claude -p`
     -> re-gate
     -> assemble (copy runtime + write content.json + index.html)
-    -> feel gate (Playwright play-bot) + fidelity gate (claude -p vision)  [SOFT]
+    -> VERIFY (all BLOCKING): structure (scaffolding/menu/control-bar) + feel (play-bot:
+       plays to win/lose AND no crash / handler throw) + fidelity (claude -p vision: looks
+       finished) + review (claude -p: logic/completeness bugs)
+    -> AUTO-REPAIR loop: claude -p fixes the specific failing gaps -> re-assemble -> re-verify
+       (up to MAX_REPAIRS) ; HOLD only if still below bar
     -> record learnings
-    -> next game (until the 3:30 hard stop)
+    -> next game (until the hard stop)
 
 Deploy is GATED: by default the driver builds + gates + STAGES a game and writes a
 READY_TO_DEPLOY marker — it does NOT publish. Pass --deploy to auto-publish games
@@ -43,7 +47,9 @@ import learn        # noqa: E402
 
 QUEUE = ENGINE / "build_queue.json"
 WIP = ENGINE / "_wip"
-HARD_STOP_MINUTES = 3 * 60 + 30      # 3:30 AM — matches the owner's 1:30-3:30 window
+HARD_STOP_MINUTES = 4 * 60 + 30      # 4:30 AM Eastern (machine TZ) = 3:30 AM Central. Trigger
+                                     # fires 2:30 ET = 1:30 CT, so this gives the owner's full
+                                     # 1:30-3:30 CT / 120-min window. (Was 210/3:30 ET = only 60 min CT.)
 SERVE_PORT = 8791
 MAX_REPAIRS = 2                      # post-assemble auto-repair attempts before HOLDing (claude -p each; --max-repairs overrides)
 
@@ -185,13 +191,61 @@ def feel_and_fidelity(slug, genre):
     return results
 
 
+_CODE_REVIEW_PROMPT = (
+    "You are a senior game-build reviewer. Review this {genre} game's generated CONTENT for "
+    "LOGIC and COMPLETENESS bugs a player would actually hit — NOT art or style (other gates "
+    "cover those). Check: (1) BOTH a win condition and a lose condition exist and are REACHABLE; "
+    "(2) no degenerate values — speeds/counts/timers/health that make it instantly over or "
+    "impossible; (3) every referenced asset / sound / sprite / level / handler key actually "
+    "exists in the content; (4) the genre's required fields are present and sane; (5) no "
+    "placeholder / TODO / lorem / 'example' text shipped as real content. Return ONLY compact "
+    'JSON: {{"ok":true|false,"issues":[{{"field":"...","problem":"...","fix":"concrete change"}}]}}. '
+    "ok=true ONLY if there are zero player-facing logic/completeness bugs. CONTENT:\n{content}"
+)
+
+
+def code_review(slug, genre, gdir):
+    """claude -p LOGIC/COMPLETENESS review of the generated content — the bugs that the
+    structural schema gate (shape-only) and the vision gate (look-only) both miss: an
+    unreachable win condition, a speed of 0, a referenced sound that isn't in the set,
+    placeholder text. Returns (ok, issues[]). NON-FATAL by design: a backend/parse failure
+    returns ok=True (never block shipping on a flaky reviewer) but is logged. claude -p, so
+    it runs under Task Scheduler, not in an interactive session."""
+    cj = gdir / "content.json"
+    if not cj.exists():
+        return True, []  # the structure gate already FAILs a missing content.json
+    try:
+        content = cj.read_text(encoding="utf-8")[:9000]
+    except Exception:
+        return True, []
+    try:
+        out = subprocess.run(["claude", "-p", _CODE_REVIEW_PROMPT.format(genre=genre, content=content)],
+                             capture_output=True, text=True, timeout=160)
+        raw = (out.stdout or "").strip()
+        s, e = raw.find("{"), raw.rfind("}")
+        if s < 0 or e <= s:
+            log(f"code_review {slug}: unparseable reviewer output — not blocking")
+            return True, []
+        data = json.loads(raw[s:e + 1])
+        issues = [i for i in (data.get("issues") or []) if i]
+        return (bool(data.get("ok", not issues)) and not issues), issues
+    except Exception as ex:
+        log(f"code_review {slug} skipped ({ex})")
+        return True, []
+
+
 def verify_build(slug, genre, gdir):
-    """All shipping gates → (all_ok, verdict). Combines the deterministic STRUCTURE gate
-    (scaffolding / control-bar / test-hook) with the runtime FEEL (play-bot) and FIDELITY
-    (vision) gates. A build is shippable ONLY if structure passes AND feel passes AND
-    fidelity passes — the three together are what "a finished game" means here."""
+    """All shipping gates → (all_ok, verdict). The full "is this a finished game?" check:
+      • STRUCTURE  — deterministic scaffolding / control-bar / test-hook
+      • FEEL       — play-bot: plays to a win/lose AND no uncaught crash / handler throw
+      • FIDELITY   — claude -p vision: looks like a finished game of its genre
+      • REVIEW     — claude -p logic/completeness: reachable win-lose, no degenerate values,
+                     referenced keys exist, no placeholders
+    Shippable only if ALL four pass. Each failing dimension feeds the repair loop with its
+    own concrete, grounded fix list — so claude -p builds, tests, sees, reviews AND fixes."""
     verdict = {"structure_ok": True, "structure_issues": [],
-               "feel": "skipped", "feel_detail": "", "fidelity": "skipped", "fidelity_detail": ""}
+               "feel": "skipped", "feel_detail": "", "fidelity": "skipped", "fidelity_detail": "",
+               "review_ok": True, "review_issues": []}
     try:
         sys.path.insert(0, str(ENGINE / "gates"))
         import structure_gate  # noqa: E402
@@ -206,7 +260,15 @@ def verify_build(slug, genre, gdir):
     verdict["feel_detail"] = soft.get("feel_detail", "")
     verdict["fidelity"] = soft.get("fidelity")
     verdict["fidelity_detail"] = soft.get("fidelity_detail", "")
-    ok = verdict["structure_ok"] and soft.get("feel") == "pass" and soft.get("fidelity") == "pass"
+    try:
+        r_ok, r_issues = code_review(slug, genre, gdir)
+        verdict["review_ok"] = r_ok
+        verdict["review_issues"] = r_issues
+    except Exception as e:
+        verdict["review_ok"] = True  # non-fatal
+        log(f"code_review error ({e}); not blocking")
+    ok = (verdict["structure_ok"] and soft.get("feel") == "pass"
+          and soft.get("fidelity") == "pass" and verdict["review_ok"])
     return ok, verdict
 
 
@@ -225,6 +287,10 @@ def verdict_to_feedback(verdict, genre=""):
     if verdict.get("fidelity") != "pass":
         parts.append(f"VISUAL FIDELITY — the vision review says it does not yet look like a finished "
                      f"{genre or 'game'}: {verdict.get('fidelity')} {verdict.get('fidelity_detail','')[:300]}")
+    if not verdict.get("review_ok") and verdict.get("review_issues"):
+        lines = "; ".join(f"{i.get('field','?')}: {i.get('problem','')} -> fix: {i.get('fix','')}"
+                          for i in verdict["review_issues"][:6])
+        parts.append("CODE/CONTENT REVIEW — logic & completeness bugs to fix: " + lines)
     return "\n".join(parts) if parts else "below the quality bar"
 
 
@@ -324,7 +390,8 @@ def build_one(item, deploy=False):
 
     ok, verdict = verify_build(slug, genre, gdir)
     log(f"verify {slug}: structure={'ok' if verdict['structure_ok'] else 'FAIL'} "
-        f"feel={verdict['feel']} fidelity={verdict['fidelity']} :: {verdict.get('fidelity_detail','')[:160]}")
+        f"feel={verdict['feel']} fidelity={verdict['fidelity']} review={'ok' if verdict['review_ok'] else 'FAIL'} "
+        f":: {verdict.get('fidelity_detail','')[:140]}")
     attempt = 0
     while (not ok) and attempt < max_repairs and not content.get("_from_golden"):
         if time_left("--force" in sys.argv) <= 8:
@@ -339,7 +406,7 @@ def build_one(item, deploy=False):
             gdir = build_order.assemble(slug, content)
             ok, verdict = verify_build(slug, genre, gdir)
             log(f"re-verify {slug} (after repair {attempt}): structure={'ok' if verdict['structure_ok'] else 'FAIL'} "
-                f"feel={verdict['feel']} fidelity={verdict['fidelity']}")
+                f"feel={verdict['feel']} fidelity={verdict['fidelity']} review={'ok' if verdict['review_ok'] else 'FAIL'}")
         except TransientError:
             raise  # backend down — bubble up so main() aborts cleanly (game NOT marked failed)
         except Exception as e:
@@ -375,8 +442,8 @@ def build_one(item, deploy=False):
             log(f"deploy error: {e}")
     else:
         (gdir / "READY_TO_DEPLOY").write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
-        _mark(slug, "built", "staged; passed structure+feel+fidelity; awaiting deploy approval")
-        log(f"{slug} BUILT + staged (passed structure+feel+fidelity, no auto-publish).")
+        _mark(slug, "built", "staged; passed structure+feel+fidelity+review; awaiting deploy approval")
+        log(f"{slug} BUILT + staged (passed structure+feel+fidelity+review, no auto-publish).")
     return True
 
 

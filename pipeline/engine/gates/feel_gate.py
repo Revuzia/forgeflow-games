@@ -21,6 +21,15 @@ import sys
 
 PROBE_JS = r"""
 (async () => {
+  // Neutralize a TEST-HARNESS artifact: synthesized PointerEvents have no "active pointer",
+  // so a game's legitimate el.setPointerCapture(e.pointerId) throws "No active pointer" —
+  // which never happens with a real pointer. Stub the capture APIs so the handler exercise
+  // tests the REAL game logic, not this artifact. (3D camera/drag controls use these.)
+  try {
+    if (Element.prototype.setPointerCapture) Element.prototype.setPointerCapture = function () {};
+    if (Element.prototype.releasePointerCapture) Element.prototype.releasePointerCapture = function () {};
+    if (Element.prototype.hasPointerCapture) Element.prototype.hasPointerCapture = function () { return false; };
+  } catch (e) {}
   function getTest() {
     if (window.__FFG3D__ && window.__FFG3D__.controller && window.__FFG3D__.controller.__test) return window.__FFG3D__.controller.__test;
     if (window.__FFG_GAME__ && window.__FFG_GAME__.scene) {
@@ -35,14 +44,34 @@ PROBE_JS = r"""
   var started = false;
   if (typeof T.start === "function") { T.start(); started = true; }
   await new Promise(function (r) { setTimeout(r, 400); });
+  // EXERCISE INPUT HANDLERS on the LIVE game — they must not throw. This is the
+  // "do the handlers actually work?" check: synthesize the inputs a real player
+  // sends (arrows/space/enter + pointer) and record any synchronous exception.
+  var handlerError = null;
+  try {
+    var cvs = document.querySelector("canvas");
+    ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " ", "Enter"].forEach(function (k) {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent("keyup", { key: k, bubbles: true }));
+    });
+    if (cvs) {
+      var r = cvs.getBoundingClientRect();
+      var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      ["pointerdown", "pointermove", "pointerup"].forEach(function (t) {
+        try { cvs.dispatchEvent(new PointerEvent(t, { clientX: cx, clientY: cy, bubbles: true })); } catch (e) {}
+        try { cvs.dispatchEvent(new MouseEvent(t.replace("pointer", "mouse"), { clientX: cx, clientY: cy, bubbles: true })); } catch (e) {}
+      });
+    }
+  } catch (e) { handlerError = String(e && e.message || e); }
+  await new Promise(function (r) { setTimeout(r, 200); });
   var pre = T.state ? T.state() : {};
   var res = null, how = null;
   if (typeof T.autoResolve === "function") { res = T.autoResolve(); how = "autoResolve"; }
   else if (typeof T.playToEnd === "function") { res = T.playToEnd(); how = "playToEnd"; }
   else if (typeof T.autoPlay === "function") { res = T.autoPlay(); how = "autoPlay"; }
-  else return { ok: false, error: "genre exposes no autoResolve/playToEnd/autoPlay" };
+  else return { ok: false, error: "genre exposes no autoResolve/playToEnd/autoPlay", handlerError: handlerError };
   var post = T.state ? T.state() : {};
-  return { ok: true, started: started, driver: how, result: res, ended: !!(res && res.ended), post: post };
+  return { ok: true, started: started, driver: how, result: res, ended: !!(res && res.ended), post: post, handlerError: handlerError };
 })()
 """
 
@@ -53,13 +82,27 @@ def run(url, timeout_ms=60000):
     except ImportError:
         return {"ok": False, "error": "playwright not installed (pip install playwright; playwright install chromium)"}
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        # SwiftShader GL so 3D (three.js) games get a real WebGL context headless — without
+        # it a 3D game's renderer throws on boot and every run looks "crashed" (matches the
+        # capture-gate fix). Harmless for 2D/Phaser.
+        browser = p.chromium.launch(args=[
+            "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
+            "--ignore-gpu-blocklist", "--enable-webgl",
+        ])
         page = browser.new_page(viewport={"width": 1024, "height": 768})
-        errors = []
+        errors, page_errors = [], []
         page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
-        page.goto(url, wait_until="load", timeout=timeout_ms)
-        result = page.evaluate(PROBE_JS)
+        # pageerror = an UNCAUGHT exception (a real crash / broken handler), not just a logged
+        # error. These are the bugs the play-bot must FAIL on — "it played" means nothing if
+        # the game threw on input or mid-frame.
+        page.on("pageerror", lambda e: page_errors.append(str(e)))
+        try:
+            page.goto(url, wait_until="load", timeout=timeout_ms)
+            result = page.evaluate(PROBE_JS)
+        except Exception as e:
+            result = {"ok": False, "error": f"page/probe crashed: {e}"}
         result["console_errors"] = errors[:10]
+        result["page_errors"] = page_errors[:10]
         browser.close()
         return result
 
@@ -68,6 +111,15 @@ def grade(result):
     if not result.get("ok"):
         return False, "play-bot could not drive the game: " + str(result.get("error", "?"))
     res = result.get("result") or {}
+    # UNCAUGHT EXCEPTIONS = a crash. A game that "plays" but throws is not shippable.
+    # Filter known TEST-HARNESS artifacts (synthetic pointers have no active-pointer id).
+    _ARTIFACTS = ("favicon", "setPointerCapture", "releasePointerCapture", "No active pointer")
+    perrs = [e for e in result.get("page_errors", []) if not any(a in e for a in _ARTIFACTS)]
+    if perrs:
+        return False, "UNCAUGHT EXCEPTION(S) during play (the game crashes): " + " | ".join(perrs[:3])
+    # BROKEN HANDLERS = input throws. Real players press these keys/clicks.
+    if result.get("handlerError"):
+        return False, "input handler threw on a synthesized key/pointer event: " + str(result.get("handlerError"))
     if not result.get("started"):
         return False, "no start() hook — game did not begin"
     if not res.get("ended"):
