@@ -83,7 +83,22 @@ def main():
     shots = capture_shots(port, slug)
     if not shots:
         notify("⚠️ *XCOM-match*: capture failed — could not screenshot the game.")
+        REPORT.write_text(json.dumps({"ok": False, "error": "capture failed", "ts": int(time.time())}, indent=2), encoding="utf-8")
         print(json.dumps({"ok": False, "error": "capture failed"})); return 1
+    # BLANK-CAPTURE GUARD: if the gameplay shot is near-black (WebGL didn't render headless),
+    # do NOT grade an empty scene — write an ok:false report so the autopipe SKIPS this game
+    # rather than grinding the same phantom "flat grid / no buildings" gaps every night. This
+    # is the self-heal the loop was missing (claude -p can't fix a gap it's mis-seeing).
+    try:
+        litf = ENGINE / "_match_play.png.lit"
+        play_lit = float(litf.read_text(encoding="utf-8").strip() or "0") if litf.exists() else None
+    except Exception:
+        play_lit = None
+    if play_lit is not None and play_lit < 0.03:
+        rpt = {"ok": False, "error": "capture blank", "lit": play_lit, "ts": int(time.time())}
+        REPORT.write_text(json.dumps(rpt, indent=2), encoding="utf-8")
+        notify(f"⚠️ *XCOM-match* [{slug}]: capture BLANK (lit={play_lit:.3f}) — WebGL didn't render; skipping, fix capture.")
+        print(json.dumps(rpt)); return 1
     prompt = PROMPT.format(ref=ref)
     cmd = ["claude", "-p", prompt + "".join(f"\n\n@{p}" for p in shots)]
     if dry:

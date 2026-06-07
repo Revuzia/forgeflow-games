@@ -48,6 +48,36 @@ def game_paths(slug):
     }
 
 
+STATE = ENGINE / "xcom_autopipe_state.json"  # {done:[matched slugs], skip:[user-skipped]}
+
+
+def discover_games():
+    """Every shipped 3D-tactics game the autopipe can drive (has the tactics renderer).
+    This is the rotation; --game overrides it. Skips _scratch dirs."""
+    base = ROOT / "games"
+    out = []
+    if base.exists():
+        for d in sorted(base.iterdir()):
+            if d.is_dir() and not d.name.startswith("_") and (d / "runtime" / "3d" / "ffg_tactics3d.js").exists():
+                out.append(d.name)
+    return out or list(DEFAULT_GAMES)
+
+
+def load_state():
+    try:
+        s = json.loads(STATE.read_text(encoding="utf-8"))
+        return {"done": list(s.get("done", [])), "skip": list(s.get("skip", []))}
+    except Exception:
+        return {"done": [], "skip": []}
+
+
+def save_state(st):
+    try:
+        STATE.write_text(json.dumps(st, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
 def run(cmd, timeout=900):
     return subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=timeout)
 
@@ -234,18 +264,22 @@ def attempt_fix(game, gap, pre_total, regression_guard=True):
 
 
 def process_game(game, max_fixes, verify_only, regression_guard):
+    """Verify one game, fix one gap. Returns a status the window-loop uses to rotate:
+    'match' (done — rotate out), 'blank'/'skip' (can't grade — drop this run),
+    'fixed' / 'nofix' (keep cycling), 'verify-only'."""
     rep = verify(game["slug"])
     total = rep.get("total"); match = rep.get("match")
     logline({"phase": "verify", "game": game["slug"], "total": total, "match": match, "gaps": rep.get("gaps", [])[:5]})
     if not rep.get("ok", True) and total is None:
-        notify(f"⚠️ *XCOM-autopipe* [{game['slug']}]: verify failed (capture/vision). Skipping.")
-        return
+        why = str(rep.get("error", "capture/vision"))
+        notify(f"⚠️ *XCOM-autopipe* [{game['slug']}]: verify failed ({why}). Skipping this run.")
+        return "blank" if "blank" in why else "skip"
     if match:
-        notify(f"✅ *XCOM-autopipe* [{game['slug']}]: MATCH — {total}/100. Nothing to fix.")
-        return
+        notify(f"✅ *XCOM-autopipe* [{game['slug']}]: MATCH — {total}/100. Done; rotating to the next game.")
+        return "match"
     if verify_only:
         notify(f"🎯 *XCOM-autopipe* [{game['slug']}]: {total}/100 (verify-only).")
-        return
+        return "verify-only"
 
     fixed = []
     for gap in rep.get("gaps", [])[:max_fixes]:
@@ -253,35 +287,74 @@ def process_game(game, max_fixes, verify_only, regression_guard):
         logline({"phase": "fix", "game": game["slug"], "gap": gap, "committed": committed, "detail": detail})
         fixed.append((gap.get("dimension"), committed, detail))
         if committed:
-            break  # one solid green fix per game per night; re-verify next run
+            break  # one solid green fix per cycle; re-verify on the next loop pass
     summary = "\n".join(f"• {d}: {'✅ ' + det if c else '↩ ' + det}" for d, c, det in fixed) or "no gaps actioned"
-    notify(f"🤖 *XCOM-autopipe* [{game['slug']}] @ {total}/100 — tonight:\n{summary}\nRe-runs nightly until MATCH.")
+    notify(f"🤖 *XCOM-autopipe* [{game['slug']}] @ {total}/100:\n{summary}")
+    return "fixed" if any(c for _, c, _ in fixed) else "nofix"
 
 
 def main():
+    """LOOP the scheduled window (default ~110 min ≈ 1:30–3:30) across the game rotation,
+    one fix-cycle per game per pass, re-verifying as it goes — instead of doing one game and
+    stopping. A game that MATCHES is persisted as done and rotated out; a blank/unfixable game
+    is dropped for the run. So the autonomous window keeps improving games until time's up.
+
+    Flags: --minutes N (window budget) · --game a,b (override rotation) · --skip a,b
+    (don't touch these) · --reset (clear done/skip) · --verify-only · --max-fixes N."""
     argv = sys.argv
     verify_only = "--verify-only" in argv
     regression_guard = "--no-regression-guard" not in argv
-    max_fixes = 1
-    if "--max-fixes" in argv:
-        try: max_fixes = int(argv[argv.index("--max-fixes") + 1])
-        except Exception: pass
-    slugs = DEFAULT_GAMES
-    if "--game" in argv:
-        try: slugs = [s.strip() for s in argv[argv.index("--game") + 1].split(",") if s.strip()]
-        except Exception: pass
 
-    for slug in slugs:
-        game = game_paths(slug)
-        if not (ROOT / game["renderer"]).exists():
-            notify(f"⚠️ *XCOM-autopipe*: unknown game '{slug}' (no renderer at {game['renderer']}). Skipping.")
-            logline({"phase": "skip", "game": slug, "reason": "no renderer"})
-            continue
+    def argval(flag, default=None):
+        if flag in argv:
+            try: return argv[argv.index(flag) + 1]
+            except Exception: return default
+        return default
+
+    max_fixes = int(argval("--max-fixes", 1) or 1)
+    minutes = int(argval("--minutes", 110) or 110)
+    deadline = time.time() + minutes * 60
+
+    st = load_state()
+    if "--reset" in argv:
+        st = {"done": [], "skip": []}
+    sk = argval("--skip")
+    if sk:
+        for s in sk.split(","):
+            s = s.strip()
+            if s and s not in st["skip"]:
+                st["skip"].append(s)
+    save_state(st)
+
+    if "--game" in argv:
+        rotation = [s.strip() for s in (argval("--game") or "").split(",") if s.strip()]
+    else:
+        rotation = discover_games()
+    active = [g for g in rotation if g not in st["done"] and g not in st["skip"]
+              and (ROOT / game_paths(g)["renderer"]).exists()]
+    logline({"phase": "start", "rotation": rotation, "active": active, "done": st["done"], "skip": st["skip"], "minutes": minutes})
+    if not active:
+        notify(f"🤖 *XCOM-autopipe*: nothing to do — all eligible matched/skipped.\nrotation={rotation} done={st['done']} skip={st['skip']}")
+        return 0
+
+    cycles, i = 0, 0
+    while active and time.time() < deadline:
+        slug = active[i % len(active)]
         try:
-            process_game(game, max_fixes, verify_only, regression_guard)
+            status = process_game(game_paths(slug), max_fixes, verify_only, regression_guard)
         except Exception as ex:
             logline({"phase": "error", "game": slug, "error": str(ex)[:200]})
             notify(f"⚠️ *XCOM-autopipe* [{slug}]: run error — {str(ex)[:120]}")
+            status = "error"
+        cycles += 1
+        if status == "match":
+            if slug not in st["done"]: st["done"].append(slug); save_state(st)
+            active.remove(slug)              # rotate out (list shrank — don't advance i)
+        elif status == "fixed":
+            i += 1                           # progress made — re-verify it on the next pass, move to next game
+        else:                                # blank / skip / nofix / verify-only / error — can't progress this run
+            active.remove(slug)
+    notify(f"🤖 *XCOM-autopipe*: window complete — {cycles} cycle(s). done={st['done']} remaining={active}")
     return 0
 
 
