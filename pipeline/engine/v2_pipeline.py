@@ -508,6 +508,346 @@ def smoke(genre):
     return 0 if ok else 1
 
 
+# ══ DEPTH-FIRST single-game development (the "real game dev" driver) ════════════════
+# Builds ONE game properly, milestone by milestone, over as many nights as it takes — no
+# throughput, no rush. A persistent dev journal carries the design doc + milestone status +
+# live issue list + changelog across nights, so each run RESUMES the work like an engineer
+# returning to their project. The gates (structure/feel/fidelity/review) + a deep multi-run
+# playtest are the QA harness that feeds the next step's fixes. Only when a game reaches M5
+# (ship-ready) does the driver pick the next game from the backlog.
+DEV_JOURNAL = ENGINE / "dev_journal"
+MILESTONES = [
+    ("M0", "design",         "design doc written: core loop, verbs, scope, art direction, definition_of_done"),
+    ("M1", "vertical_slice", "core loop genuinely playable in ONE level: structure+feel green, no crash"),
+    ("M2", "mechanics",      "every verb in the design doc implemented and survives the play-bot"),
+    ("M3", "content",        "multiple levels + progression + a real difficulty curve; everything reachable"),
+    ("M4", "polish",         "menu + audio + game-feel/juice; vision fidelity high; zero crashes"),
+    ("M5", "ship_ready",     "deep QA: structure+feel+fidelity+review all green across repeated playthroughs"),
+]
+MILESTONE_IDS = [m[0] for m in MILESTONES]
+
+
+def _now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def load_journal(slug):
+    p = DEV_JOURNAL / f"{slug}.json"
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
+
+
+def save_journal(j):
+    DEV_JOURNAL.mkdir(exist_ok=True)
+    (DEV_JOURNAL / f"{j['slug']}.json").write_text(json.dumps(j, indent=2), encoding="utf-8")
+
+
+def init_journal(item):
+    j = {"slug": item["slug"], "genre": item["genre"], "title": None,
+         "brief": item.get("brief", ""), "inspired_by": item.get("inspired_by"), "rating": item.get("rating"),
+         "milestone": "M0",
+         "milestones": {mid: {"status": "todo", "done_when": dw} for mid, _, dw in MILESTONES},
+         "design_doc": None, "open_issues": [], "changelog": [], "sessions": 0, "created": _now_iso()}
+    j["milestones"]["M0"]["status"] = "in_progress"
+    save_journal(j)
+    return j
+
+
+def _changelog(j, mid, action, result):
+    j.setdefault("changelog", []).append({"ts": _now_iso(), "milestone": mid, "action": action, "result": result})
+
+
+def milestone_done(mid, verdict, pt):
+    """Definition-of-Done per milestone, judged by the gate verdict + the deep playtest. The
+    bar rises as milestones progress (slice just needs to play; ship-ready needs everything)."""
+    no_crash = pt.get("crashes", 1) == 0 and pt.get("passed", 0) >= max(1, pt.get("runs", 3) - 0)
+    feel, struct = verdict.get("feel") == "pass", verdict.get("structure_ok")
+    fid, review = verdict.get("fidelity") == "pass", verdict.get("review_ok")
+    return {
+        "M1": struct and feel and no_crash,
+        "M2": struct and feel and no_crash,
+        "M3": struct and feel and no_crash and review,
+        "M4": struct and feel and no_crash and fid,
+        "M5": struct and feel and no_crash and fid and review,
+    }.get(mid, False)
+
+
+def pick_dev_target():
+    """The ONE game in development: resume an unfinished journal (oldest first — finish what we
+    started), else promote the highest-rated BACKLOG game to a fresh journal. (None, None) if
+    there is nothing to build."""
+    DEV_JOURNAL.mkdir(exist_ok=True)
+    actives = []
+    for p in DEV_JOURNAL.glob("*.json"):
+        try:
+            jj = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if jj.get("milestone") != "DONE":
+            actives.append(jj)
+    if actives:
+        actives.sort(key=lambda jj: jj.get("created", ""))
+        jj = actives[0]
+        return ({"slug": jj["slug"], "genre": jj["genre"], "brief": jj.get("brief", ""),
+                 "inspired_by": jj.get("inspired_by"), "rating": jj.get("rating")}, jj)
+    q = _load_queue()
+    cands = [i for i in q.get("queue", []) if i.get("status") == "backlog"] or \
+            [i for i in q.get("queue", []) if i.get("status") == "pending"]
+    if not cands:
+        return None, None
+    cands.sort(key=lambda i: -(i.get("rating") or 0))
+    item = cands[0]
+    _mark(item["slug"], "developing", "active deep-dev target")
+    return item, init_journal(item)
+
+
+def _claude_json(prompt, timeout=240):
+    """claude -p -> first JSON object in its output. Raises TransientError on backend/timeout
+    (infra down -> abort the night cleanly, nothing marked failed); returns None on unparseable
+    output (a bad generation -> caller keeps prior state). claude -p: Task Scheduler only."""
+    try:
+        out = subprocess.run(["claude", "-p", prompt], capture_output=True, text=True, timeout=timeout)
+    except Exception as e:
+        raise TransientError(f"claude -p unavailable: {e}")
+    raw = (out.stdout or "").strip()
+    if out.returncode != 0 and not raw:
+        raise TransientError(f"claude -p rc={out.returncode}")
+    s, e = raw.find("{"), raw.rfind("}")
+    if s < 0 or e <= s:
+        return None
+    try:
+        return json.loads(raw[s:e + 1])
+    except Exception:
+        return None
+
+
+def generate_design_doc(item):
+    """M0: a real design doc BEFORE any code — core loop, verbs, scope, art direction, a
+    per-milestone plan, and an explicit definition_of_done. This is what makes the build
+    deliberate instead of a one-shot guess."""
+    prompt = (
+        f"You are a senior game designer. Write a concise but COMPLETE design doc for an original-IP "
+        f"{item['genre']} game. Brief: {item.get('brief','')}. Inspired by the FEEL of "
+        f"\"{item.get('inspired_by','a classic of the genre')}\" but with your own original name/theme/art. "
+        f"Return ONLY JSON: {{\"title\":\"original name\",\"core_loop\":\"one tight paragraph\","
+        f"\"verbs\":[\"the player actions\"],\"scope\":\"what is IN and explicitly OUT for v1\","
+        f"\"art_direction\":\"palette + mood\",\"milestone_plan\":{{\"M1\":\"vertical slice goal\","
+        f"\"M2\":\"mechanics goal\",\"M3\":\"content goal\",\"M4\":\"polish goal\",\"M5\":\"ship goal\"}},"
+        f"\"definition_of_done\":[\"specific, checkable criteria for a finished game\"]}}."
+    )
+    return _claude_json(prompt, timeout=200)
+
+
+def develop_step(journal, content):
+    """ONE focused unit of milestone work via claude -p — exactly how a dev iterates: given the
+    design doc, the current milestone + its done-when, the LIVE open issues, and the current
+    content, return improved content that advances THIS milestone and fixes the logged issues
+    first, without regressing what already works."""
+    mid = journal["milestone"]
+    dw = journal["milestones"][mid].get("plan") or journal["milestones"][mid]["done_when"]
+    issues = [i for i in journal.get("open_issues", []) if i.get("status", "open") == "open"]
+    issue_txt = "\n".join(f"- [{i.get('severity','?')}] {i.get('issue','')}"
+                          f"{(' -> ' + i['fix']) if i.get('fix') else ''}" for i in issues[:10]) or "(none)"
+    prompt = (
+        f"You are a senior game engineer iterating on an original-IP {journal['genre']} game, milestone by "
+        f"milestone like a real dev. DESIGN DOC:\n{json.dumps(journal.get('design_doc') or {}, separators=(',',':'))[:2600]}\n\n"
+        f"CURRENT MILESTONE {mid} — done when: {dw}.\n"
+        f"FIX THESE OPEN ISSUES FIRST (highest severity first):\n{issue_txt}\n\n"
+        f"CURRENT content.json:\n{json.dumps(content, separators=(',',':'))[:6500]}\n\n"
+        f"Return ONLY the improved content.json (same schema) that advances THIS milestone and fixes the "
+        f"issues. Do NOT regress working features. No prose, no markdown — just the JSON object."
+    )
+    data = _claude_json(prompt, timeout=300)
+    if data is None:
+        return None
+    return normalize_content(data, {"slug": journal["slug"], "genre": journal["genre"], "title": journal.get("title")})
+
+
+def deep_playtest(slug, runs=3):
+    """A real QA pass, not one pass/fail: play the game to a conclusion `runs` times and
+    aggregate crashes/consistency. Play-bot only (no claude -p). Returns issues for the journal."""
+    results, issues = [], []
+    server = None
+    try:
+        server = subprocess.Popen([sys.executable, "-m", "http.server", str(SERVE_PORT), "--directory", str(ROOT)],
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(1.5)
+        url = f"http://localhost:{SERVE_PORT}/games/{slug}/"
+        for _ in range(runs):
+            try:
+                r = subprocess.run([sys.executable, str(ENGINE / "gates" / "feel_gate.py"), url],
+                                   capture_output=True, text=True, timeout=120)
+                last = (r.stdout or "").strip().splitlines()[-1] if (r.stdout or "").strip() else ""
+                results.append({"rc": r.returncode, "summary": last})
+            except Exception as e:
+                results.append({"rc": -1, "summary": f"run error: {e}"})
+    finally:
+        if server:
+            server.terminate()
+    crashes = sum(1 for r in results if r["rc"] != 0)
+    if crashes:
+        detail = "; ".join(r["summary"][:120] for r in results if r["rc"] != 0)[:300]
+        issues.append({"severity": "high", "issue": f"{crashes}/{runs} playtests failed/crashed", "detail": detail})
+    return {"runs": runs, "crashes": crashes, "passed": runs - crashes, "results": results, "issues": issues}
+
+
+def _snapshot_issues(journal, mid, verdict, pt):
+    """Replace the journal's open issues with the LIVE state from this step's QA — so fixed
+    issues drop off and only what's still wrong remains for the next step to address."""
+    issues = []
+
+    def add(sev, text, fix=""):
+        issues.append({"id": len(issues) + 1, "milestone": mid, "severity": sev, "issue": text, "fix": fix, "status": "open", "found": _now_iso()})
+
+    for i in pt.get("issues", []):
+        add(i.get("severity", "med"), i["issue"], i.get("detail", ""))
+    if not verdict.get("structure_ok"):
+        for s in [x for x in verdict.get("structure_issues", []) if x.startswith("[FAIL]")]:
+            add("high", "structure: " + s)
+    if verdict.get("feel") != "pass":
+        add("high", "feel: " + str(verdict.get("feel_detail", ""))[:160])
+    if verdict.get("fidelity") != "pass":
+        add("med", "fidelity: " + str(verdict.get("fidelity_detail", ""))[:160])
+    for ri in (verdict.get("review_issues") or []):
+        add("med", f"review {ri.get('field','')}: {ri.get('problem','')}", ri.get("fix", ""))
+    journal["open_issues"] = issues
+    return issues
+
+
+def dev_loop(force=False, deploy=False, single_step=False):
+    """One night of deliberate, single-game development. Resumes the active project, advances its
+    current milestone with claude -p, QA's it with the gates + deep playtest, logs the live issue
+    list, and persists after every step. Stays on ONE game until M5."""
+    item, journal = pick_dev_target()
+    if not item:
+        log("deep-dev: nothing to develop (no active journal, empty backlog)."); return
+    slug, genre = item["slug"], item["genre"]
+    journal["sessions"] = journal.get("sessions", 0) + 1
+    log(f"DEEP-DEV target: {slug} ({genre}) — milestone {journal['milestone']}, session {journal['sessions']}")
+    notify(f"🛠️ FFG deep-dev: working *{slug}* ({genre}) at {journal['milestone']} — building it properly, one step at a time.")
+
+    WIP.mkdir(exist_ok=True)
+    wip = WIP / f"{slug}.json"
+    gdir = ROOT / "games" / slug
+
+    # M0 — DESIGN (write the doc before any code; fast, one claude -p call).
+    try:
+        if not journal.get("design_doc"):
+            log(f"{slug}: M0 — writing the design doc first")
+            dd = generate_design_doc(item)
+            if dd:
+                journal["design_doc"] = dd
+                journal["title"] = dd.get("title") or journal.get("title")
+                for mid, plan in (dd.get("milestone_plan") or {}).items():
+                    if mid in journal["milestones"]:
+                        journal["milestones"][mid]["plan"] = plan
+                journal["milestones"]["M0"]["status"] = "done"
+                journal["milestone"] = "M1"
+                journal["milestones"]["M1"]["status"] = "in_progress"
+                _changelog(journal, "M0", "wrote design doc", f"title={journal['title']}")
+                save_journal(journal)
+                log(f"{slug}: design doc done — '{journal['title']}'; advancing to M1")
+    except TransientError as e:
+        log(f"deep-dev abort (transient) during design: {e}")
+        save_journal(journal); return
+
+    # M1..M5 — iterate. One step per loop; persist each time; advance only on DoD.
+    steps = 0
+    while time_left(force) > 8 and journal["milestone"] != "DONE":
+        mid = journal["milestone"]
+        content = None
+        if wip.exists():
+            try: content = json.loads(wip.read_text(encoding="utf-8"))
+            except Exception: content = None
+        if content is None and (gdir / "content.json").exists():
+            try: content = json.loads((gdir / "content.json").read_text(encoding="utf-8"))
+            except Exception: content = None
+        try:
+            if content is None:
+                content = generate_slice(item)        # first slice from the design/brief
+            new_content = develop_step(journal, content)
+        except TransientError as e:
+            log(f"deep-dev abort (transient): {e}"); break
+        if new_content is not None:
+            content = new_content
+        wip.write_text(json.dumps(content, indent=2), encoding="utf-8")
+
+        ok_g, out_g = gate(wip, genre)               # schema gate before assemble
+        if not ok_g:
+            log(f"{slug}: step content failed schema gate; logging + next step. {out_g[:140]}")
+            journal["open_issues"] = [{"id": 1, "milestone": mid, "severity": "high",
+                                       "issue": "content failed schema gate", "fix": out_g[:200], "status": "open", "found": _now_iso()}]
+            _changelog(journal, mid, "develop step", "schema gate FAIL")
+            save_journal(journal); steps += 1
+            if single_step: break
+            continue
+
+        gdir = build_order.assemble(slug, content)
+        ok_v, verdict = verify_build(slug, genre, gdir)   # structure+feel+fidelity+review
+        pt = deep_playtest(slug, runs=3)                  # multi-run QA
+        _snapshot_issues(journal, mid, verdict, pt)
+        open_n = len(journal["open_issues"])
+        _changelog(journal, mid, "develop step", f"verify_ok={ok_v} playtest={pt['passed']}/{pt['runs']} open_issues={open_n}")
+        log(f"{slug} [{mid}] step {steps+1}: verify_ok={ok_v} playtest={pt['passed']}/{pt['runs']} open_issues={open_n}")
+
+        if milestone_done(mid, verdict, pt):
+            journal["milestones"][mid]["status"] = "done"
+            nxt = MILESTONE_IDS[MILESTONE_IDS.index(mid) + 1] if mid != "M5" else "DONE"
+            journal["milestone"] = nxt
+            if nxt != "DONE":
+                journal["milestones"][nxt]["status"] = "in_progress"
+            _changelog(journal, mid, "milestone complete", f"-> {nxt}")
+            log(f"{slug}: milestone {mid} DONE -> {nxt}")
+            notify(f"📈 FFG deep-dev: *{slug}* completed {mid} -> {nxt}.")
+        save_journal(journal)
+        steps += 1
+        if single_step:
+            break
+
+    # Ship-ready -> stage (never auto-publish unless --deploy).
+    if journal["milestone"] == "DONE":
+        if deploy:
+            try:
+                subprocess.run([sys.executable, str(ROOT / "pipeline" / "deploy_game.py"), slug], timeout=300)
+            except Exception as e:
+                log(f"deploy error: {e}")
+        else:
+            (gdir / "READY_TO_DEPLOY").write_text(_now_iso(), encoding="utf-8")
+        _mark(slug, "built", "deep-dev complete (M5 ship-ready); staged for review")
+        notify(f"✅ FFG deep-dev: *{slug}* reached M5 SHIP-READY — staged for your review.")
+
+    save_journal(journal)
+    open_n = len([i for i in journal.get("open_issues", []) if i.get("status", "open") == "open"])
+    log(f"DEEP-DEV night done: {slug} at {journal['milestone']}, {steps} step(s), {open_n} open issue(s), session {journal['sessions']}.")
+    notify(f"🌙 FFG deep-dev night: *{slug}* now at {journal['milestone']} — {steps} step(s), {open_n} open issue(s) logged.")
+
+
+# ── throughput (legacy multi-game batch) ────────────────────────────────────────
+def throughput_loop(force=False, deploy=False, once=False):
+    """The original build-as-many-as-fit loop. Kept behind --throughput for batch staging; the
+    DEFAULT run is now depth-first (dev_loop). Not used by the nightly task unless --throughput."""
+    pending = [i for i in _load_queue().get("queue", []) if i.get("status", "pending") == "pending"]
+    log(f"THROUGHPUT run — {time_left(force)} min left, {len(pending)} pending, deploy={deploy}")
+    notify(f"🎮 FFG throughput run — {len(pending)} game(s) queued, {time_left(force)} min (deploy={'on' if deploy else 'off'}).")
+    built, failed, aborted = [], [], False
+    while time_left(force) > 5:
+        item = select_next(_load_queue())
+        if not item:
+            log("build queue empty — nothing pending. Done."); break
+        try:
+            ok = build_one(item, deploy=deploy)
+            (built if ok else failed).append(item["slug"])
+        except TransientError as e:
+            log(f"ABORT (transient): {e}")
+            notify(f"⚠️ FFG aborted — backend unavailable ({e}). Retrying next window.")
+            aborted = True; break
+        except Exception as e:
+            log(f"build error for {item['slug']}: {e}")
+            _mark(item["slug"], "failed", str(e)[:200]); failed.append(item["slug"])
+        if once:
+            break
+    return aborted, built, failed
+
+
 def main():
     args = sys.argv[1:]
     if "--selftest" in args:
@@ -517,54 +857,33 @@ def main():
     force = "--force" in args
     deploy = "--deploy" in args
     once = "--once" in args
+    throughput = "--throughput" in args
 
     if time_left(force) <= 5:
         log(f"outside run window (now {_minutes_now()}m, stop {HARD_STOP_MINUTES}m). Exiting.")
         return
 
-    pending = [i for i in _load_queue().get("queue", []) if i.get("status", "pending") == "pending"]
-    log(f"v2 autonomous run start — {time_left(force)} min left, {len(pending)} pending, deploy={deploy}")
-    notify(f"🎮 FFG v2 games pipeline started — {len(pending)} game(s) queued, {time_left(force)} min in window (deploy={'on' if deploy else 'off, staging only'}).")
-
-    built, failed, aborted = [], [], False
-    while time_left(force) > 5:
-        q = _load_queue()
-        item = select_next(q)
-        if not item:
-            log("build queue empty — nothing pending. Done.")
-            break
+    # DEPTH-FIRST is the DEFAULT (owner: "one very well-built game, not 8-12 shallow ones").
+    # The nightly task runs this with no args -> dev_loop. --throughput is the legacy batch loop.
+    if not throughput:
         try:
-            ok = build_one(item, deploy=deploy)
-            (built if ok else failed).append(item["slug"])
-        except TransientError as e:
-            # infra/network down — do NOT mark games failed; stop and retry next window
-            log(f"ABORT (transient): {e}")
-            notify(f"⚠️ FFG v2 aborted — generation backend unavailable ({e}). No games marked failed; will retry next window.")
-            aborted = True
-            break
+            dev_loop(force=force, deploy=deploy, single_step=once)
         except Exception as e:
-            log(f"build error for {item['slug']}: {e}")
-            _mark(item["slug"], "failed", str(e)[:200])
-            failed.append(item["slug"])
-        if once:
-            break
+            log(f"dev_loop error: {e}")
+        if not once:
+            try:
+                log("XCOM-match autopipe: one nightly improvement pass…")
+                subprocess.run([sys.executable, str(ENGINE / "xcom_autopipe.py"), "--max-fixes", "1"], timeout=1800)
+            except Exception as e:
+                log(f"autopipe pass skipped ({e})")
+        return
 
+    aborted, built, failed = throughput_loop(force=force, deploy=deploy, once=once)
     if aborted:
         return
 
-    # NIGHTLY SELF-IMPROVEMENT: after the build queue, run ONE gated XCOM-match
-    # improvement pass on the flagship tactics game — it builds the game toward the
-    # XCOM reference "a little at a time" every night (verify -> claude -p fixes the
-    # top gap -> gates -> commit only if green). Non-fatal; skipped in --once/smoke.
-    if not once:
-        try:
-            log("XCOM-match autopipe: one nightly improvement pass…")
-            subprocess.run([sys.executable, str(ENGINE / "xcom_autopipe.py"), "--max-fixes", "1"], timeout=1800)
-        except Exception as e:
-            log(f"autopipe pass skipped ({e})")
-
-    # End-of-run audit summary to the owner.
-    lines = [f"✅ FFG v2 run complete — built {len(built)}, failed {len(failed)}."]
+    # End-of-run audit summary to the owner (throughput path only).
+    lines = [f"✅ FFG throughput run complete — built {len(built)}, failed {len(failed)}."]
     if built:
         lines.append("Built (staged for review): " + ", ".join(built))
     if failed:

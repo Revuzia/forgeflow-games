@@ -22,23 +22,24 @@ GAMES = ENGINE.parent.parent / "games"
 
 LIVE = {g for g, i in REGISTRY["genres"].items() if i.get("status") == "live"}
 
-# master-list sub_genre -> LIVE registry genre. Conservative: only confident matches are
-# queued; anything else is left for when its genre runtime ships (never queue a genre the
-# engine can't build — it just fails the unsupported-genre gate and churns).
+# master-list sub_genre -> LIVE registry genre. TRUE-FIT ONLY: a game is queued only when its
+# sub-genre genuinely matches the engine's signature mechanic (see registry.json). Force-fitting
+# a mismatched genre produces a bad game no matter how well it's built — so anything that needs
+# its own engine is left for when that runtime ships, NOT crammed into the closest live one.
 SUBGENRE_TO_GENRE = {
-    # platformer (live)
-    "2d-platformer": "platformer", "2.5d-platformer": "platformer", "3d-platformer": "platformer",
-    "precision-platformer": "platformer", "retro-platformer": "platformer", "speed-platformer": "platformer",
-    "survival-platformer": "platformer", "single-screen-platformer": "platformer", "obby": "platformer",
-    "rage-platformer": "platformer",
-    # shmup (live)
-    "shmup": "shmup", "bullet-hell": "shmup", "twin-stick-shooter": "shmup",
-    "on-rails-shooter": "shmup", "space-roguelike": "shmup",
-    # arcade (live)
-    "maze": "arcade", "falling-puzzle": "arcade", "logic-puzzle": "arcade",
-    "idle-clicker": "arcade", "roblox-clicker": "arcade", "sports-arcade": "arcade",
-    # tactics3d (live)
+    # platformer engine = "gravity + jump/coyote/dash + hazard traversal + goal" (2D side-scroller).
+    "2d-platformer": "platformer", "precision-platformer": "platformer", "retro-platformer": "platformer",
+    "speed-platformer": "platformer", "single-screen-platformer": "platformer",
+    "survival-platformer": "platformer", "rage-platformer": "platformer",
+    # shmup engine = "scrolling field + bullet patterns + score multiplier".
+    "shmup": "shmup", "bullet-hell": "shmup",
+    # tactics3d engine = "grid movement + cover hit% + turn phases".
     "turn-based-tactics": "tactics3d", "tactics": "tactics3d", "grid-tactics": "tactics3d",
+    # DELIBERATELY UNMAPPED (need their own engine — do not force-fit):
+    #   3d-platformer (Mario Galaxy) -> platformer engine is 2D.
+    #   maze (Pac-Man), falling-puzzle (Tetris), logic-puzzle, idle/roblox-clicker, sports-arcade
+    #     (Tony Hawk / NBA Jam) -> arcade engine is single-screen reflex (Breakout), not these.
+    #   twin-stick / on-rails / space-roguelike -> not a scrolling bullet-pattern shmup.
 }
 
 # original-IP slug word banks (seeded by id -> deterministic + unique; the real TITLE is
@@ -74,6 +75,7 @@ def brief_for(g, genre):
 
 def main():
     dry = "--dry" in sys.argv
+    reseed = "--reseed" in sys.argv   # drop prior feeder entries first, then re-add (clean replace)
     top = None
     if "--top" in sys.argv:
         try: top = int(sys.argv[sys.argv.index("--top") + 1])
@@ -81,6 +83,10 @@ def main():
 
     ml = json.loads(ML.read_text(encoding="utf-8"))
     q = json.loads(QUEUE.read_text(encoding="utf-8"))
+    if reseed:
+        before = len(q.get("queue", []))
+        q["queue"] = [i for i in q.get("queue", []) if not i.get("master_list_id")]
+        print(f"--reseed: dropped {before - len(q['queue'])} prior feeder entries")
     existing = {i["slug"] for i in q.get("queue", [])}
     shipped = {p.name for p in GAMES.iterdir()} if GAMES.exists() else set()
     used = set(existing) | set(shipped)
@@ -101,7 +107,7 @@ def main():
     for idx, (g, genre, cat) in enumerate(cand):
         slug = slugify(g.get("id", idx), used)
         item = {
-            "slug": slug, "genre": genre, "status": "pending",
+            "slug": slug, "genre": genre, "status": "backlog",   # depth-first promotes from backlog
             "brief": brief_for(g, genre),
             "master_list_bucket": cat, "master_list_id": g.get("id"),
             "inspired_by": g.get("inspired_by"), "rating": g.get("rating"),
@@ -109,14 +115,14 @@ def main():
         q["queue"].append(item)
         added.append((slug, genre, g.get("rating"), g.get("inspired_by")))
 
-    print(f"buildable pending (live genre): {len(cand)} | adding {len(added)} to the queue")
-    for s, gen, r, ib in added[:50]:
+    print(f"true-fit buildable (live genre): {len(cand)} | adding {len(added)} to backlog")
+    for s, gen, r, ib in added[:60]:
         print(f"  + {s:18} {gen:10} ({r}%, ~{ib})")
     if dry:
         print("\n--dry: nothing written.")
         return 0
     QUEUE.write_text(json.dumps(q, indent=2) + "\n", encoding="utf-8")
-    print(f"\nwrote {QUEUE} — queue now has {len([i for i in q['queue'] if i.get('status')=='pending'])} pending.")
+    print(f"\nwrote {QUEUE} — backlog now has {len([i for i in q['queue'] if i.get('status')=='backlog'])} games.")
     return 0
 
 
