@@ -45,6 +45,7 @@ QUEUE = ENGINE / "build_queue.json"
 WIP = ENGINE / "_wip"
 HARD_STOP_MINUTES = 3 * 60 + 30      # 3:30 AM — matches the owner's 1:30-3:30 window
 SERVE_PORT = 8791
+MAX_REPAIRS = 2                      # post-assemble auto-repair attempts before HOLDing (claude -p each; --max-repairs overrides)
 
 # Telegram audit channel (automation -> owner). Best-effort; never fatal.
 sys.path.insert(0, str(ROOT.parent / "scripts"))
@@ -184,6 +185,49 @@ def feel_and_fidelity(slug, genre):
     return results
 
 
+def verify_build(slug, genre, gdir):
+    """All shipping gates → (all_ok, verdict). Combines the deterministic STRUCTURE gate
+    (scaffolding / control-bar / test-hook) with the runtime FEEL (play-bot) and FIDELITY
+    (vision) gates. A build is shippable ONLY if structure passes AND feel passes AND
+    fidelity passes — the three together are what "a finished game" means here."""
+    verdict = {"structure_ok": True, "structure_issues": [],
+               "feel": "skipped", "feel_detail": "", "fidelity": "skipped", "fidelity_detail": ""}
+    try:
+        sys.path.insert(0, str(ENGINE / "gates"))
+        import structure_gate  # noqa: E402
+        s_ok, s_issues = structure_gate.check(gdir)
+        verdict["structure_ok"] = s_ok
+        verdict["structure_issues"] = [f"[{lvl}] {m}" for lvl, m in s_issues]
+    except Exception as e:
+        verdict["structure_ok"] = False
+        verdict["structure_issues"] = [f"[FAIL] structure gate error: {e}"]
+    soft = feel_and_fidelity(slug, genre)
+    verdict["feel"] = soft.get("feel")
+    verdict["feel_detail"] = soft.get("feel_detail", "")
+    verdict["fidelity"] = soft.get("fidelity")
+    verdict["fidelity_detail"] = soft.get("fidelity_detail", "")
+    ok = verdict["structure_ok"] and soft.get("feel") == "pass" and soft.get("fidelity") == "pass"
+    return ok, verdict
+
+
+def verdict_to_feedback(verdict, genre=""):
+    """Turn a failing verdict into a CONCRETE, grounded repair instruction for claude -p —
+    only the parts that actually failed, each with its specific evidence (structure issues,
+    the play-bot's failure detail, the vision review's gap list). This is what makes the
+    repair loop targeted instead of a blind regenerate."""
+    parts = []
+    sfails = [i for i in verdict.get("structure_issues", []) if i.startswith("[FAIL]")]
+    if not verdict.get("structure_ok") and sfails:
+        parts.append("STRUCTURE — the game is structurally incomplete; fix EXACTLY these:\n  " + "\n  ".join(sfails))
+    if verdict.get("feel") != "pass":
+        parts.append(f"FEEL/PLAYABILITY — the play-bot could not play it to a win/lose resolution: "
+                     f"{verdict.get('feel')} {verdict.get('feel_detail','')[:200]}")
+    if verdict.get("fidelity") != "pass":
+        parts.append(f"VISUAL FIDELITY — the vision review says it does not yet look like a finished "
+                     f"{genre or 'game'}: {verdict.get('fidelity')} {verdict.get('fidelity_detail','')[:300]}")
+    return "\n".join(parts) if parts else "below the quality bar"
+
+
 # ── generation ────────────────────────────────────────────────────────────────
 def _gen(prompt):
     """Call claude -p; classify failures. An infra/network/no-output failure is
@@ -265,35 +309,60 @@ def build_one(item, deploy=False):
     gdir = build_order.assemble(slug, content)
     log(f"assembled -> {gdir}")
 
-    # PLAY + LOOK gates. These are now BLOCKING for shipping: a build must both
-    # play to a resolution (feel) AND look like a finished game of its genre
-    # (fidelity vision). The lettered-circle tactics build shipped because these
-    # were "best effort" and fidelity never even ran — never again.
-    soft = feel_and_fidelity(slug, genre)
-    log(f"feel+fidelity gates: feel={soft.get('feel')} fidelity={soft.get('fidelity')} :: {soft.get('fidelity_detail','')[:200]}")
+    # VERIFY + AUTO-REPAIR. Shipping requires STRUCTURE (scaffolding/control-bar/test-hook)
+    # AND FEEL (plays to a resolution) AND FIDELITY (looks finished — via the now-working
+    # vision gate). Rather than HOLD a rough build for manual fixing (what made every game
+    # need hand-finishing), we LOOP: verify -> claude -p repairs the SPECIFIC failing gaps
+    # (grounded by the actual structure issues + play-bot detail + vision gap list) ->
+    # re-assemble -> re-verify, up to MAX_REPAIRS times. HOLD only if it still can't reach
+    # the bar (or the build window runs out). Golden-seeded builds are already at the bar,
+    # so they verify but don't enter the regenerate loop.
+    max_repairs = MAX_REPAIRS
+    if "--max-repairs" in sys.argv:
+        try: max_repairs = int(sys.argv[sys.argv.index("--max-repairs") + 1])
+        except Exception: pass
 
-    feel_ok = soft.get("feel") == "pass"
-    fid = soft.get("fidelity")
-    fidelity_ok = fid == "pass"
-    if not feel_ok or not fidelity_ok:
-        # Build something, but it does NOT look/play shippable — HOLD it. No
-        # READY_TO_DEPLOY, no publish. Flag it for repair + record a learning.
-        reasons = []
-        if not feel_ok:
-            reasons.append(f"feel={soft.get('feel')} ({soft.get('feel_detail','')[:80]})")
-        if not fidelity_ok:
-            reasons.append(f"fidelity={fid} ({soft.get('fidelity_detail','')[:140]})")
-        reason = "; ".join(reasons)
-        learn.record(genre, f"{slug} held: failed play/look gate", "do not ship below the genre's visual+feel bar; inspect the held build and fix the renderer/content: " + reason, slug)
-        _mark(slug, "held", "blocked from shipping: " + reason)
+    ok, verdict = verify_build(slug, genre, gdir)
+    log(f"verify {slug}: structure={'ok' if verdict['structure_ok'] else 'FAIL'} "
+        f"feel={verdict['feel']} fidelity={verdict['fidelity']} :: {verdict.get('fidelity_detail','')[:160]}")
+    attempt = 0
+    while (not ok) and attempt < max_repairs and not content.get("_from_golden"):
+        if time_left("--force" in sys.argv) <= 8:
+            log(f"{slug}: out of build window mid-repair — stopping repair loop")
+            break
+        attempt += 1
+        fb = verdict_to_feedback(verdict, genre)
+        log(f"{slug}: below bar — REPAIR attempt {attempt}/{max_repairs} on:\n{fb[:400]}")
+        try:
+            content = regenerate_with_feedback(item, fb)
+            wip.write_text(json.dumps(content, indent=2), encoding="utf-8")
+            gdir = build_order.assemble(slug, content)
+            ok, verdict = verify_build(slug, genre, gdir)
+            log(f"re-verify {slug} (after repair {attempt}): structure={'ok' if verdict['structure_ok'] else 'FAIL'} "
+                f"feel={verdict['feel']} fidelity={verdict['fidelity']}")
+        except TransientError:
+            raise  # backend down — bubble up so main() aborts cleanly (game NOT marked failed)
+        except Exception as e:
+            log(f"{slug}: repair attempt {attempt} errored ({e}); stopping repair loop")
+            break
+
+    if not ok:
+        reason = verdict_to_feedback(verdict, genre)
+        learn.record(genre, f"{slug} held after {attempt} repair attempt(s)",
+                     "still below the structure/feel/vision bar; inspect the held build: " + reason[:300], slug)
+        _mark(slug, "held", f"held after {attempt} repair(s) — below quality bar")
         try:
             (gdir / "HELD_NOT_SHIPPABLE").write_text(reason + "\n", encoding="utf-8")
         except Exception:
             pass
-        log(f"HELD {slug}: NOT shipping — {reason}")
+        log(f"HELD {slug}: not shippable after {attempt} repair(s) — {reason[:200]}")
+        notify(f"🛠️ FFG v2 HELD *{slug}* after {attempt} repair attempt(s) — below the quality bar. Staged for inspection, not shipped.")
         return False
 
-    # DEPLOY (only reached when feel + fidelity both pass)
+    if attempt > 0:
+        log(f"{slug}: auto-repaired to PASSING in {attempt} attempt(s).")
+
+    # DEPLOY (only reached when structure + feel + fidelity all pass)
     if deploy:
         try:
             dep = subprocess.run([sys.executable, str(ROOT / "pipeline" / "deploy_game.py"), slug],
@@ -306,8 +375,8 @@ def build_one(item, deploy=False):
             log(f"deploy error: {e}")
     else:
         (gdir / "READY_TO_DEPLOY").write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
-        _mark(slug, "built", "staged; passed feel+fidelity; awaiting deploy approval")
-        log(f"{slug} BUILT + staged (passed feel+fidelity, no auto-publish).")
+        _mark(slug, "built", "staged; passed structure+feel+fidelity; awaiting deploy approval")
+        log(f"{slug} BUILT + staged (passed structure+feel+fidelity, no auto-publish).")
     return True
 
 
@@ -324,8 +393,20 @@ def selftest(content_path):
         return 1
     gdir = build_order.assemble(content["slug"], content)
     ok2, _ = gate(gdir / "content.json", genre)
-    log(f"SELFTEST assembled -> {gdir}; post-assemble gates: {'PASS' if ok2 else 'FAIL'}")
-    return 0 if ok2 else 1
+    log(f"SELFTEST assembled -> {gdir}; post-assemble schema gates: {'PASS' if ok2 else 'FAIL'}")
+    # STRUCTURE gate (deterministic, no claude -p) — the scaffolding/control-bar/test-hook
+    # check that runs in the real loop. Surfaces here so the offline selftest covers it too.
+    try:
+        sys.path.insert(0, str(ENGINE / "gates"))
+        import structure_gate  # noqa: E402
+        s_ok, s_issues = structure_gate.check(gdir)
+        for lvl, m in s_issues:
+            log(f"  structure [{lvl}] {m}")
+        log(f"SELFTEST structure gate: {'PASS' if s_ok else 'FAIL'}")
+    except Exception as e:
+        log(f"SELFTEST structure gate error: {e}")
+        s_ok = False
+    return 0 if (ok2 and s_ok) else 1
 
 
 def smoke(genre):

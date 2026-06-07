@@ -5,18 +5,22 @@
     {
       "slug": "void-skirmish",
       "genre": "tactics3d",
-      "status": "pending",
+      "status": "held",
       "brief": "Tactics skirmish aboard a fractured orbital station. 3 player units (a frontline Vanguard, a long-range Sentinel, a support Medic) vs 4 hostiles. Cover-heavy 12x9 grid with a hazard vent strip down the middle. Winnable in 4-6 turns with smart cover use. CRITICAL: every unit must spawn on a floor tile (0), never on a wall (1) or full-cover (3).",
       "master_list_bucket": "strategy",
-      "history": "2026-05-29 first run: failed (claude -p set view:{camera,zoom} + no title; retry placed an enemy on a full-cover tile). Fix shipped: title/view auto-normalized + prompt now forbids units on blocking tiles."
+      "history": "2026-05-29 first run: failed (claude -p set view:{camera,zoom} + no title; retry placed an enemy on a full-cover tile). Fix shipped: title/view auto-normalized + prompt now forbids units on blocking tiles.",
+      "detail": "blocked from shipping: fidelity=fail (letters (A, B, C) as identifiers\",\n    \"Hex grid is untextured wireframe with no terrain variety or theming\",\n    \"UI elements are plain rec)",
+      "updated": "2026-06-03T06:30:47.983813+00:00"
     },
     {
       "slug": "deep-strike",
       "genre": "battleship",
-      "status": "pending",
+      "status": "failed",
       "brief": "Classic 10x10 salvo naval duel vs a competent hunt/target AI. Standard 5-ship fleet. Original IP naval theme.",
       "master_list_bucket": "board_game",
-      "history": "2026-05-29 first run: failed only on view shape (camera/lookAt) + missing title. Proven to pass after the title/view normalization fix."
+      "history": "2026-05-29 first run: failed only on view shape (camera/lookAt) + missing title. Proven to pass after the title/view normalization fix.",
+      "detail": "slice gate failed twice",
+      "updated": "2026-06-03T06:31:19.024692+00:00"
     },
     {
       "slug": "thornline-tactics",
@@ -26,6 +30,356 @@
       "master_list_bucket": "strategy",
       "detail": "staged; awaiting deploy approval",
       "updated": "2026-05-29T06:33:06.764412+00:00"
+    },
+    {
+      "slug": "neon-haven",
+      "genre": "arcade",
+      "status": "pending",
+      "brief": "Original-IP arcade game (sub-genre: sports-arcade). Capture the core mechanics and game-feel of \"Tony Hawk's Pro Skater 2\" (critically acclaimed, 98%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: single-screen reflex loop with score + lives. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "arcade",
+      "master_list_id": 161,
+      "inspired_by": "Tony Hawk's Pro Skater 2",
+      "rating": 98
+    },
+    {
+      "slug": "umbra-spire",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: 3d-platformer). Capture the core mechanics and game-feel of \"Super Mario Galaxy\" (critically acclaimed, 97%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "platformer",
+      "master_list_id": 5,
+      "inspired_by": "Super Mario Galaxy",
+      "rating": 97
+    },
+    {
+      "slug": "verdant-reaver",
+      "genre": "arcade",
+      "status": "pending",
+      "brief": "Original-IP arcade game (sub-genre: maze). Capture the core mechanics and game-feel of \"Ms. Pac-Man\" (critically acclaimed, 95%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: single-screen reflex loop with score + lives. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "arcade",
+      "master_list_id": 151,
+      "inspired_by": "Ms. Pac-Man",
+      "rating": 95
+    },
+    {
+      "slug": "onyx-reaver",
+      "genre": "arcade",
+      "status": "pending",
+      "brief": "Original-IP arcade game (sub-genre: maze). Capture the core mechanics and game-feel of \"Pac-Man\" (critically acclaimed, 94%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: single-screen reflex loop with score + lives. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "arcade",
+      "master_list_id": 150,
+      "inspired_by": "Pac-Man",
+      "rating": 94
+    },
+    {
+      "slug": "void-spire",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: 2d-platformer). Capture the core mechanics and game-feel of \"Super Mario Bros. Wonder\" (critically acclaimed, 92%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "platformer",
+      "master_list_id": 2,
+      "inspired_by": "Super Mario Bros. Wonder",
+      "rating": 92
+    },
+    {
+      "slug": "frost-spire",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: precision-platformer). Capture the core mechanics and game-feel of \"Celeste\" (critically acclaimed, 92%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "platformer",
+      "master_list_id": 4,
+      "inspired_by": "Celeste",
+      "rating": 92
+    },
+    {
+      "slug": "dusk-reaver",
+      "genre": "arcade",
+      "status": "pending",
+      "brief": "Original-IP arcade game (sub-genre: falling-puzzle). Capture the core mechanics and game-feel of \"Tetris Effect: Connected\" (critically acclaimed, 92%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: single-screen reflex loop with score + lives. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "arcade",
+      "master_list_id": 155,
+      "inspired_by": "Tetris Effect: Connected",
+      "rating": 92
+    },
+    {
+      "slug": "ember-spire",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: 2d-platformer). Capture the core mechanics and game-feel of \"Rayman Legends\" (critically acclaimed, 91%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "platformer",
+      "master_list_id": 3,
+      "inspired_by": "Rayman Legends",
+      "rating": 91
+    },
+    {
+      "slug": "solar-spire",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: retro-platformer). Capture the core mechanics and game-feel of \"Shovel Knight\" (critically acclaimed, 91%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "platformer",
+      "master_list_id": 7,
+      "inspired_by": "Shovel Knight",
+      "rating": 91
+    },
+    {
+      "slug": "cobalt-warden",
+      "genre": "shmup",
+      "status": "pending",
+      "brief": "Original-IP shmup game (sub-genre: shmup). Capture the core mechanics and game-feel of \"Ikaruga\" (critically acclaimed, 91%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: scrolling field + bullet patterns + score multiplier. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "action",
+      "master_list_id": 133,
+      "inspired_by": "Ikaruga",
+      "rating": 91
+    },
+    {
+      "slug": "cobalt-reaver",
+      "genre": "shmup",
+      "status": "pending",
+      "brief": "Original-IP shmup game (sub-genre: shmup). Capture the core mechanics and game-feel of \"Galaga\" (critically acclaimed, 91%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: scrolling field + bullet patterns + score multiplier. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "arcade",
+      "master_list_id": 153,
+      "inspired_by": "Galaga",
+      "rating": 91
+    },
+    {
+      "slug": "scarlet-reaver",
+      "genre": "shmup",
+      "status": "pending",
+      "brief": "Original-IP shmup game (sub-genre: shmup). Capture the core mechanics and game-feel of \"Space Invaders\" (critically acclaimed, 90%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: scrolling field + bullet patterns + score multiplier. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "arcade",
+      "master_list_id": 152,
+      "inspired_by": "Space Invaders",
+      "rating": 90
+    },
+    {
+      "slug": "amber-warden",
+      "genre": "shmup",
+      "status": "pending",
+      "brief": "Original-IP shmup game (sub-genre: bullet-hell). Capture the core mechanics and game-feel of \"Touhou 8: Imperishable Night\" (critically acclaimed, 89%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: scrolling field + bullet patterns + score multiplier. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "action",
+      "master_list_id": 134,
+      "inspired_by": "Touhou 8: Imperishable Night",
+      "rating": 89
+    },
+    {
+      "slug": "amber-reaver",
+      "genre": "shmup",
+      "status": "pending",
+      "brief": "Original-IP shmup game (sub-genre: twin-stick-shooter). Capture the core mechanics and game-feel of \"Asteroids\" (critically acclaimed, 89%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: scrolling field + bullet patterns + score multiplier. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "arcade",
+      "master_list_id": 154,
+      "inspired_by": "Asteroids",
+      "rating": 89
+    },
+    {
+      "slug": "scarlet-warden",
+      "genre": "shmup",
+      "status": "pending",
+      "brief": "Original-IP shmup game (sub-genre: shmup). Capture the core mechanics and game-feel of \"Gradius V\" (critically acclaimed, 88%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: scrolling field + bullet patterns + score multiplier. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "action",
+      "master_list_id": 132,
+      "inspired_by": "Gradius V",
+      "rating": 88
+    },
+    {
+      "slug": "ember-bastion",
+      "genre": "shmup",
+      "status": "pending",
+      "brief": "Original-IP shmup game (sub-genre: on-rails-shooter). Capture the core mechanics and game-feel of \"Star Fox 64\" (critically acclaimed, 88%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: scrolling field + bullet patterns + score multiplier. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "flight",
+      "master_list_id": 203,
+      "inspired_by": "Star Fox 64",
+      "rating": 88
+    },
+    {
+      "slug": "jade-spire",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: speed-platformer). Capture the core mechanics and game-feel of \"Pizza Tower\" (critically acclaimed, 87%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "platformer",
+      "master_list_id": 9,
+      "inspired_by": "Pizza Tower",
+      "rating": 87
+    },
+    {
+      "slug": "onyx-spire",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: precision-platformer). Capture the core mechanics and game-feel of \"Super Meat Boy\" (critically acclaimed, 87%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "platformer",
+      "master_list_id": 10,
+      "inspired_by": "Super Meat Boy",
+      "rating": 87
+    },
+    {
+      "slug": "dusk-spire",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: 3d-platformer). Capture the core mechanics and game-feel of \"Psychonauts 2\" (critically acclaimed, 87%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "platformer",
+      "master_list_id": 15,
+      "inspired_by": "Psychonauts 2",
+      "rating": 87
+    },
+    {
+      "slug": "void-pulse",
+      "genre": "arcade",
+      "status": "pending",
+      "brief": "Original-IP arcade game (sub-genre: logic-puzzle). Capture the core mechanics and game-feel of \"Baba Is You\" (critically acclaimed, 87%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: single-screen reflex loop with score + lives. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "puzzle",
+      "master_list_id": 182,
+      "inspired_by": "Baba Is You",
+      "rating": 87
+    },
+    {
+      "slug": "ember-pulse",
+      "genre": "arcade",
+      "status": "pending",
+      "brief": "Original-IP arcade game (sub-genre: logic-puzzle). Capture the core mechanics and game-feel of \"Stephen's Sausage Roll\" (critically acclaimed, 87%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: single-screen reflex loop with score + lives. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "puzzle",
+      "master_list_id": 183,
+      "inspired_by": "Stephen's Sausage Roll",
+      "rating": 87
+    },
+    {
+      "slug": "azure-spire",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: speed-platformer). Capture the core mechanics and game-feel of \"Sonic Mania\" (critically acclaimed, 86%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "platformer",
+      "master_list_id": 6,
+      "inspired_by": "Sonic Mania",
+      "rating": 86
+    },
+    {
+      "slug": "void-haven",
+      "genre": "arcade",
+      "status": "pending",
+      "brief": "Original-IP arcade game (sub-genre: sports-arcade). Capture the core mechanics and game-feel of \"NBA Jam\" (critically acclaimed, 86%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: single-screen reflex loop with score + lives. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "arcade",
+      "master_list_id": 162,
+      "inspired_by": "NBA Jam",
+      "rating": 86
+    },
+    {
+      "slug": "cobalt-spire",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: 3d-platformer). Capture the core mechanics and game-feel of \"Crash Bandicoot 4\" (critically acclaimed, 85%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "platformer",
+      "master_list_id": 13,
+      "inspired_by": "Crash Bandicoot 4",
+      "rating": 85
+    },
+    {
+      "slug": "amber-spire",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: 3d-platformer). Capture the core mechanics and game-feel of \"Kirby and the Forgotten Land\" (critically acclaimed, 85%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "platformer",
+      "master_list_id": 14,
+      "inspired_by": "Kirby and the Forgotten Land",
+      "rating": 85
+    },
+    {
+      "slug": "nova-reaver",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: single-screen-platformer). Capture the core mechanics and game-feel of \"Bubble Bobble\" (critically acclaimed, 85%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "arcade",
+      "master_list_id": 157,
+      "inspired_by": "Bubble Bobble",
+      "rating": 85
+    },
+    {
+      "slug": "lumen-reaver",
+      "genre": "arcade",
+      "status": "pending",
+      "brief": "Original-IP arcade game (sub-genre: falling-puzzle). Capture the core mechanics and game-feel of \"Dr. Mario\" (critically acclaimed, 84%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: single-screen reflex loop with score + lives. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "arcade",
+      "master_list_id": 156,
+      "inspired_by": "Dr. Mario",
+      "rating": 84
+    },
+    {
+      "slug": "umbra-bastion",
+      "genre": "shmup",
+      "status": "pending",
+      "brief": "Original-IP shmup game (sub-genre: space-roguelike). Capture the core mechanics and game-feel of \"FTL: Faster Than Light\" (critically acclaimed, 84%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: scrolling field + bullet patterns + score multiplier. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "flight",
+      "master_list_id": 205,
+      "inspired_by": "FTL: Faster Than Light",
+      "rating": 84
+    },
+    {
+      "slug": "lumen-spire",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: survival-platformer). Capture the core mechanics and game-feel of \"Rain World\" (critically acclaimed, 83%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "platformer",
+      "master_list_id": 16,
+      "inspired_by": "Rain World",
+      "rating": 83
+    },
+    {
+      "slug": "frost-pulse",
+      "genre": "arcade",
+      "status": "pending",
+      "brief": "Original-IP arcade game (sub-genre: falling-puzzle). Capture the core mechanics and game-feel of \"Lumines Remastered\" (critically acclaimed, 83%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: single-screen reflex loop with score + lives. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "puzzle",
+      "master_list_id": 184,
+      "inspired_by": "Lumines Remastered",
+      "rating": 83
+    },
+    {
+      "slug": "azure-pulse",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: obby). Capture the core mechanics and game-feel of \"Tower of Heaven (obby)\" (critically acclaimed, 82%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "puzzle",
+      "master_list_id": 186,
+      "inspired_by": "Tower of Heaven (obby)",
+      "rating": 82
+    },
+    {
+      "slug": "umbra-pulse",
+      "genre": "arcade",
+      "status": "pending",
+      "brief": "Original-IP arcade game (sub-genre: falling-puzzle). Capture the core mechanics and game-feel of \"Puyo Puyo Tetris\" (critically acclaimed, 81%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: single-screen reflex loop with score + lives. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "puzzle",
+      "master_list_id": 185,
+      "inspired_by": "Puyo Puyo Tetris",
+      "rating": 81
+    },
+    {
+      "slug": "solar-pulse",
+      "genre": "platformer",
+      "status": "pending",
+      "brief": "Original-IP platformer game (sub-genre: rage-platformer). Capture the core mechanics and game-feel of \"Getting Over It\" (critically acclaimed, 81%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "puzzle",
+      "master_list_id": 187,
+      "inspired_by": "Getting Over It",
+      "rating": 81
+    },
+    {
+      "slug": "iron-pulse",
+      "genre": "arcade",
+      "status": "pending",
+      "brief": "Original-IP arcade game (sub-genre: idle-clicker). Capture the core mechanics and game-feel of \"Cookie Clicker\" (critically acclaimed, 80%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: single-screen reflex loop with score + lives. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "puzzle",
+      "master_list_id": 188,
+      "inspired_by": "Cookie Clicker",
+      "rating": 80
+    },
+    {
+      "slug": "jade-pulse",
+      "genre": "arcade",
+      "status": "pending",
+      "brief": "Original-IP arcade game (sub-genre: roblox-clicker). Capture the core mechanics and game-feel of \"Adopt Me (Roblox pet clicker)\" (critically acclaimed, 80%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: single-screen reflex loop with score + lives. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+      "master_list_bucket": "puzzle",
+      "master_list_id": 189,
+      "inspired_by": "Adopt Me (Roblox pet clicker)",
+      "rating": 80
     }
   ]
 }
