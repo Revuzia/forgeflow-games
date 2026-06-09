@@ -60,6 +60,17 @@ try:
 except Exception:
     _tg = None
 
+# Central error feed (state/pipeline_errors.jsonl) — the file evolve_doctor scans daily for stuck/
+# repeated-failure patterns. Game-build failures (gate FAILs, engine HOLDs, dev_loop crashes) used to
+# write ONLY to the submodule pipeline_log.jsonl + Telegram, so the doctor was blind to them. Now they
+# land here too. (Had the 510 void-spire schema-gate FAILs been logged, the doctor would have flagged
+# "510 errors in 24h" and surfaced the stuck loop the same night.)
+try:
+    from pipeline_logger import log_error as _log_error
+except Exception:
+    _log_error = None
+_PIPELINE_ERRORS = ROOT.parent / "state" / "pipeline_errors.jsonl"
+
 
 def notify(text):
     """Send a Telegram audit line (this is an AUTOMATION reporting what it did,
@@ -86,6 +97,28 @@ def normalize_content(content, item):
 
 def log(msg):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] [v2] {msg}", flush=True)
+
+
+def track_error(stage, detail, **ctx):
+    """Append a structured row to the central state/pipeline_errors.jsonl (the feed evolve_doctor scans)
+    so game-build failures/HOLDs/gate-FAILs/crashes are findable in the daily doctor report. Uses the
+    canonical pipeline_logger.log_error if importable, else a local writer with the identical schema +
+    path. Best-effort — never throws (tracking must not break a build)."""
+    ctx = {"stage": stage, **{k: v for k, v in ctx.items() if v is not None}}
+    if _log_error is not None:
+        try:
+            _log_error("forgeflow_games_v2", detail, ctx)
+            return
+        except Exception:
+            pass
+    try:
+        _PIPELINE_ERRORS.parent.mkdir(parents=True, exist_ok=True)
+        row = {"ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+               "pipeline": "forgeflow_games_v2", "error": detail, "context": ctx}
+        with open(_PIPELINE_ERRORS, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
 
 
 def _minutes_now():
@@ -783,6 +816,7 @@ def dev_loop(force=False, deploy=False, single_step=False):
             notify(f"✅ FFG deep-dev: *{slug}* ({genre}) built on the NEW ENGINE with real assets — staged for review.")
             return
         log(f"DEEP-DEV {slug}: engine target unavailable ({detail_e}) -> Phaser deep-dev loop")
+        track_error("engine_build", f"engine build not accepted: {detail_e}", slug=slug, genre=genre)
 
     # M0 — DESIGN (write the doc before any code; fast, one claude -p call).
     try:
@@ -832,6 +866,8 @@ def dev_loop(force=False, deploy=False, single_step=False):
             journal["open_issues"] = [{"id": 1, "milestone": mid, "severity": "high",
                                        "issue": "content failed schema gate", "fix": out_g[:200], "status": "open", "found": _now_iso()}]
             _changelog(journal, mid, "develop step", "schema gate FAIL")
+            track_error("schema_gate", f"content failed schema gate: {out_g[:160]}",
+                        slug=slug, genre=genre, milestone=mid)   # makes a void-spire-style FAIL storm visible to the doctor
             save_journal(journal); steps += 1
             if single_step: break
             continue
@@ -925,12 +961,14 @@ def main():
             dev_loop(force=force, deploy=deploy, single_step=once)
         except Exception as e:
             log(f"dev_loop error: {e}")
+            track_error("dev_loop", f"dev_loop crashed: {type(e).__name__}: {str(e)[:200]}")
         if not once:
             try:
                 log("XCOM-match autopipe: one nightly improvement pass…")
                 subprocess.run([sys.executable, str(ENGINE / "xcom_autopipe.py"), "--max-fixes", "1"], timeout=1800)
             except Exception as e:
                 log(f"autopipe pass skipped ({e})")
+                track_error("xcom_autopipe", f"autopipe pass failed: {type(e).__name__}: {str(e)[:160]}")
         return
 
     aborted, built, failed = throughput_loop(force=force, deploy=deploy, once=once)
