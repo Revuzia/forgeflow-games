@@ -371,6 +371,28 @@ def build_one(item, deploy=False):
         log(f"expansion error ({e}); keeping slice-only content")
         wip.write_text(json.dumps(content, indent=2), encoding="utf-8")
 
+    # GS9: optional ENGINE target (FLAG-GATED, ADDITIVE). Default OFF -> the Phaser ASSEMBLE/verify path
+    # below is byte-for-byte unchanged. When FFG_ENGINE_TARGET=1 and the genre is emitter-supported, build
+    # a PLAYABLE game on the from-scratch ForgeFlow Engine; on ANY failure fall through to Phaser so the
+    # nightly never regresses. Engine builds stage for manual deploy (engine auto-deploy is a later step).
+    # Playability is proven by forgeflow-engine/tools/verify_engine_emit.py.
+    import build_target  # noqa: E402  (sibling; ENGINE already on sys.path)
+    if build_target.choose_target(genre, content):
+        try:
+            edir = build_target.engine_assemble(slug, content)
+            eok, edetail = build_target.engine_verify(slug, edir)
+        except Exception as e:
+            edir, eok, edetail = None, False, f"engine build error: {e}"
+        if eok:
+            try:
+                (edir / "READY_TO_DEPLOY").write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
+            except Exception:
+                pass
+            _mark(slug, "built", f"ENGINE target; passed structural verify ({edetail}); staged (engine deploy manual)")
+            log(f"{slug}: ENGINE target built + verified ({edetail}) -> {edir} [staged, no auto-publish]")
+            return True
+        log(f"{slug}: engine target not ready ({edetail}) -> Phaser fallback")
+
     # ASSEMBLE
     gdir = build_order.assemble(slug, content)
     log(f"assembled -> {gdir}")
