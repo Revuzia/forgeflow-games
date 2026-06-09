@@ -2,6 +2,7 @@
 """test_build_target.py — GS9 deterministic unit test for the nightly ENGINE/Phaser selector + fallback.
 No claude -p, no playwright, no network. Proves: Phaser is the DEFAULT; engine is opt-in + genre-gated;
 and ANY engine failure falls back to Phaser so the nightly always ships. Prints 'NIGHTLY-ROUTE: PASS'."""
+import json
 import os
 import sys
 import tempfile
@@ -21,9 +22,12 @@ def chk(label, ok):
         fails.append(label)
 
 
-def setenv(target=None, genres=None):
+def setenv(target=None, genres=None, config=None):
     for k in ("FFG_ENGINE_TARGET", "FFG_ENGINE_GENRES"):
         os.environ.pop(k, None)
+    # hermetic: point config at a nonexistent path so the real engine_target.json never leaks into the
+    # env-only routing tests (unless a case sets one explicitly).
+    os.environ["FFG_ENGINE_CONFIG"] = config or str(Path(tempfile.gettempdir()) / "ffg_no_such_engine_cfg.json")
     if target is not None:
         os.environ["FFG_ENGINE_TARGET"] = target
     if genres is not None:
@@ -47,6 +51,17 @@ chk("flag on + empty genre -> Phaser", build_target.choose_target("") is False)
 setenv(target="1", genres="shmup")          # allowlist excludes platformer
 chk("allowlist shmup: platformer -> Phaser", build_target.choose_target("platformer") is False)
 chk("allowlist shmup: shmup -> engine", build_target.choose_target("shmup") is True)
+
+# config-file opt-in (the committed flip, NOT a Task Scheduler env change)
+_cfg = Path(tempfile.mkdtemp()) / "engine_target.json"
+_cfg.write_text(json.dumps({"enabled": True, "genres": ["platformer"]}), encoding="utf-8")
+setenv(config=str(_cfg))                    # env target unset; only the config enables
+chk("config enabled: platformer -> engine", build_target.choose_target("platformer") is True)
+chk("config enabled: shmup not in cfg genres -> Phaser", build_target.choose_target("shmup") is False)
+_cfg.write_text(json.dumps({"enabled": False}), encoding="utf-8")
+setenv(config=str(_cfg))
+chk("config disabled -> Phaser", build_target.choose_target("platformer") is False)
+setenv()                                    # back to hermetic default for the rest
 
 
 # ── assemble_target: routing + automatic fallback (injected stubs) ────────────────────────────

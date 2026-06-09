@@ -26,16 +26,34 @@ ENGINE_GENRES = {
 }
 
 
+def _config():
+    """Opt-in config (committed, so the flip is a repo change — NOT a Task Scheduler env change).
+    Path overridable via FFG_ENGINE_CONFIG (used by tests to stay hermetic)."""
+    try:
+        p = Path(os.environ.get("FFG_ENGINE_CONFIG") or (ENGINE_DIR / "engine_target.json"))
+        if p.exists():
+            return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
 def engine_enabled():
-    """True only when the operator explicitly opts in. Default (unset) -> False -> Phaser."""
-    return os.environ.get("FFG_ENGINE_TARGET", "").strip().lower() in ("1", "true", "yes", "on")
+    """True when opted in — via env FFG_ENGINE_TARGET=1 OR engine_target.json {"enabled": true}.
+    Default (neither) -> False -> Phaser stays the nightly default."""
+    if os.environ.get("FFG_ENGINE_TARGET", "").strip().lower() in ("1", "true", "yes", "on"):
+        return True
+    return bool(_config().get("enabled"))
 
 
 def _allowed_genres():
     raw = os.environ.get("FFG_ENGINE_GENRES", "").strip()
-    if not raw:
-        return set(ENGINE_GENRES)
-    return {g.strip().lower() for g in raw.split(",") if g.strip()} & ENGINE_GENRES
+    if raw:
+        return {g.strip().lower() for g in raw.split(",") if g.strip()} & ENGINE_GENRES
+    cfg = _config().get("genres")
+    if cfg:
+        return {str(g).strip().lower() for g in cfg} & ENGINE_GENRES
+    return set(ENGINE_GENRES)
 
 
 def choose_target(genre, content=None):
@@ -101,3 +119,15 @@ def engine_verify(slug, gdir):
         checks.append(("index runs game mode", '"game"' in h))
     failed = [n for n, ok in checks if not ok]
     return (not failed), ("structural ok (%d checks)" % len(checks)) if not failed else ("missing: " + ", ".join(failed))
+
+
+def dev_engine_build(slug, content):
+    """Deep-dev path: build a REAL-asset engine game from a content/spec dict (deterministic — no claude -p,
+    no Phaser schema gate) and structural-verify it. Returns (ok, out_dir, detail). Never raises (the deep
+    loop falls back to the Phaser path on a False)."""
+    try:
+        out = engine_assemble(slug, content)
+    except Exception as e:
+        return False, None, "engine build error: " + type(e).__name__ + ": " + str(e)[:160]
+    ok, detail = engine_verify(slug, out)
+    return ok, str(out), detail

@@ -751,6 +751,36 @@ def dev_loop(force=False, deploy=False, single_step=False):
     wip = WIP / f"{slug}.json"
     gdir = ROOT / "games" / slug
 
+    # ENGINE TARGET (opt-in via build_target / engine_target.json) — for emitter-supported genres, build a
+    # REAL-ASSET game on the ForgeFlow Engine in ONE deterministic step (no claude -p, no Phaser schema
+    # gate) and stage it. This unblocks genres the Phaser path has no schema for (e.g. platformer). On ANY
+    # failure it falls through to the Phaser deep-dev loop below, so the nightly can't regress.
+    try:
+        sys.path.insert(0, str(ENGINE)); import build_target  # noqa: E402
+    except Exception:
+        build_target = None
+    if build_target and build_target.choose_target(genre):
+        content = {"slug": slug, "genre": genre, "title": journal.get("title") or item.get("title") or slug,
+                   "brief": item.get("brief", ""), "palette": item.get("palette")}
+        if wip.exists():
+            try: content.update({k: v for k, v in (json.loads(wip.read_text(encoding="utf-8")) or {}).items() if v is not None})
+            except Exception: pass
+        ok_e, out_e, detail_e = build_target.dev_engine_build(slug, content)
+        if ok_e:
+            journal["engine_build"] = {"out": out_e, "detail": detail_e, "ts": _now_iso()}
+            for m in journal.get("milestones", {}).values():
+                if m.get("status") in ("in_progress", "todo"): m["status"] = "done"
+            journal["milestone"] = "DONE"; journal["open_issues"] = []
+            _changelog(journal, "ENGINE", "engine build", f"real-asset game staged ({detail_e})")
+            save_journal(journal)
+            try: (Path(out_e) / "READY_TO_DEPLOY").write_text(_now_iso(), encoding="utf-8")
+            except Exception: pass
+            _mark(slug, "built", f"ENGINE target: real-asset game staged at {out_e}")
+            log(f"DEEP-DEV {slug}: built on the ENGINE -> {out_e} ({detail_e}) [staged, no Phaser schema needed]")
+            notify(f"✅ FFG deep-dev: *{slug}* ({genre}) built on the NEW ENGINE with real assets — staged for review.")
+            return
+        log(f"DEEP-DEV {slug}: engine target unavailable ({detail_e}) -> Phaser deep-dev loop")
+
     # M0 — DESIGN (write the doc before any code; fast, one claude -p call).
     try:
         if not journal.get("design_doc"):
