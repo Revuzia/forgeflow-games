@@ -23,7 +23,7 @@ def chk(label, ok):
 
 
 def setenv(target=None, genres=None, config=None):
-    for k in ("FFG_ENGINE_TARGET", "FFG_ENGINE_GENRES"):
+    for k in ("FFG_ENGINE_TARGET", "FFG_ENGINE_GENRES", "FFG_ENGINE_AUTHOR"):
         os.environ.pop(k, None)
     # hermetic: point config at a nonexistent path so the real engine_target.json never leaks into the
     # env-only routing tests (unless a case sets one explicitly).
@@ -62,6 +62,22 @@ _cfg.write_text(json.dumps({"enabled": False}), encoding="utf-8")
 setenv(config=str(_cfg))
 chk("config disabled -> Phaser", build_target.choose_target("platformer") is False)
 setenv()                                    # back to hermetic default for the rest
+
+
+# ── authoring_enabled: AI-authoring opt-in (env + config), default OFF ──────────────────────────
+setenv()
+chk("authoring default OFF", build_target.authoring_enabled() is False)
+setenv()
+os.environ["FFG_ENGINE_AUTHOR"] = "1"
+chk("FFG_ENGINE_AUTHOR=1 -> authoring on", build_target.authoring_enabled() is True)
+_acfg = Path(tempfile.mkdtemp()) / "engine_target.json"
+_acfg.write_text(json.dumps({"enabled": True, "author": True}), encoding="utf-8")
+setenv(config=str(_acfg))
+chk("config author:true -> authoring on", build_target.authoring_enabled() is True)
+_acfg.write_text(json.dumps({"enabled": True}), encoding="utf-8")    # enabled but no author key
+setenv(config=str(_acfg))
+chk("config without author key -> authoring OFF", build_target.authoring_enabled() is False)
+setenv()
 
 
 # ── assemble_target: routing + automatic fallback (injected stubs) ────────────────────────────

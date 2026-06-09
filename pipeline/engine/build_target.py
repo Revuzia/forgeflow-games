@@ -47,6 +47,16 @@ def engine_enabled():
     return bool(_config().get("enabled"))
 
 
+def authoring_enabled():
+    """True when AI AUTHORING is opted in — env FFG_ENGINE_AUTHOR=1 OR engine_target.json {"author": true}.
+    When on, dev_engine_build first asks claude -p to write a bespoke game.js for ANY genre (engine_authoring),
+    falling back to the deterministic emitter. Default OFF: the proven emitter stays the engine path until
+    authoring is validated in the nightly. (claude -p only fires in the non-interactive nightly / operator cmd.)"""
+    if os.environ.get("FFG_ENGINE_AUTHOR", "").strip().lower() in ("1", "true", "yes", "on"):
+        return True
+    return bool(_config().get("author"))
+
+
 def _allowed_genres():
     raw = os.environ.get("FFG_ENGINE_GENRES", "").strip()
     if raw:
@@ -166,12 +176,37 @@ def play_verify(slug, gdir, port=8788, timeout=200):
 
 
 def dev_engine_build(slug, content):
-    """Deep-dev path: build a REAL-asset engine game from a content/spec dict (deterministic — no claude -p,
-    no Phaser schema gate), structural-verify it, then PLAY-verify it (multi-inspector tester). The game is
-    only accepted (ok=True) when it both structures correctly AND actually plays. A lifeless/broken game
-    (play HOLD) returns False so the deep loop keeps iterating / falls back to Phaser — never ships a dead
-    game. If the play tester can't run (no playwright in this env), we keep the structural-only floor and
-    say so in the detail (never worse than before). Returns (ok, out_dir, detail). Never raises."""
+    """Build a REAL-asset engine game from a content/spec dict and PLAY-verify it (multi-inspector tester).
+    A game is only accepted (ok=True) when it actually PLAYS — a lifeless/broken game (play HOLD) returns
+    False so the deep loop iterates / falls back to Phaser, never shipping a dead game.
+
+    Two build strategies, in order:
+      1. AI AUTHORING (when authoring_enabled()): claude -p writes a bespoke game.js for ANY genre against
+         the engine API (engine_authoring). If it authors + PLAYS -> ship. Else fall through.
+      2. DETERMINISTIC EMIT (default): the 3 genre templates (engine_game_emit), no claude -p, no Phaser
+         schema gate. Structural-verify, then play-verify.
+    If the play tester can't run (no playwright), keep the structural-only floor and say so (never worse
+    than before). Returns (ok, out_dir, detail). Never raises."""
+    # 1. AI AUTHORING — primary path when opted in (claude -p; non-interactive only).
+    if authoring_enabled():
+        try:
+            if str(ENGINE_DIR) not in sys.path:
+                sys.path.insert(0, str(ENGINE_DIR))
+            import engine_authoring                       # sibling (lazy)
+            spec = {"slug": slug, "genre": content.get("genre"), "title": content.get("title"),
+                    "brief": content.get("brief"), "core_loop": content.get("core_loop")}
+            ok_a, out_a, det_a = engine_authoring.author_engine_game(spec, run=True)
+            if ok_a:
+                ship_a, pa = play_verify(slug, out_a)
+                if ship_a is True:
+                    return True, out_a, "AUTHORED: " + det_a + " | " + pa
+                if ship_a is None:                        # authored + valid but tester unavailable -> floor
+                    return True, out_a, "AUTHORED: " + det_a + " | play-test SKIPPED (" + pa + ")"
+                # authored but did not PLAY -> fall through to the deterministic emitter
+        except Exception:
+            pass                                          # any authoring failure -> deterministic emit below
+
+    # 2. DETERMINISTIC EMIT — proven 3-template path (default / fallback).
     try:
         out = engine_assemble(slug, content)
     except Exception as e:
