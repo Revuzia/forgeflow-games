@@ -12,6 +12,7 @@ is proven separately by forgeflow-engine/tools/verify_engine_emit.py (headless d
 """
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -121,13 +122,66 @@ def engine_verify(slug, gdir):
     return (not failed), ("structural ok (%d checks)" % len(checks)) if not failed else ("missing: " + ", ".join(failed))
 
 
+def _play_tester_path():
+    """Locate the general multi-inspector play tester (forgeflow-engine sibling). Override: FFG_PLAY_TESTER."""
+    env = os.environ.get("FFG_PLAY_TESTER")
+    if env and Path(env).exists():
+        return Path(env)
+    p = GAMES.parent / "forgeflow-engine" / "tools" / "verify_engine_game_play.py"
+    return p if p.exists() else None
+
+
+def play_verify(slug, gdir, port=8788, timeout=200):
+    """Run the multi-inspector PLAY tester (boots + drives the built game; checks boot/menu/start/liveness/
+    render/real_assets/controls/progression/audio/errors). Returns (ship, detail):
+      ship True  -> tester verdict SHIP (it actually plays)
+      ship False -> tester verdict HOLD (lifeless/broken — names the failed inspectors)
+      ship None  -> tester could NOT run (no playwright / tester missing) -> caller keeps structural-only floor
+    Never raises."""
+    tester = _play_tester_path()
+    if tester is None:
+        return None, "play tester not found (forgeflow-engine/tools/verify_engine_game_play.py)"
+    report = Path(gdir) / "play_report.json"
+    try:
+        report.unlink()
+    except OSError:
+        pass
+    try:
+        r = subprocess.run([sys.executable, str(tester), str(gdir), "--port", str(port),
+                            "--report", str(report)], capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None, "play tester timed out after %ds" % timeout
+    except Exception as e:
+        return None, "play tester spawn error: " + type(e).__name__
+    if not report.exists():
+        # rc 2 = no index.html / bad args; otherwise likely missing playwright -> infra, not a quality fail
+        return None, "play tester produced no report (rc=%s): %s" % (r.returncode, (r.stdout or r.stderr)[-160:])
+    try:
+        rep = json.loads(report.read_text(encoding="utf-8"))
+    except Exception:
+        return None, "play report unparseable"
+    if rep.get("verdict") == "SHIP":
+        return True, "play SHIP (10/10 inspectors%s)" % (", won" if rep.get("won") else "")
+    return False, "play HOLD — failed: " + ", ".join(rep.get("failed", []) or ["?"])
+
+
 def dev_engine_build(slug, content):
     """Deep-dev path: build a REAL-asset engine game from a content/spec dict (deterministic — no claude -p,
-    no Phaser schema gate) and structural-verify it. Returns (ok, out_dir, detail). Never raises (the deep
-    loop falls back to the Phaser path on a False)."""
+    no Phaser schema gate), structural-verify it, then PLAY-verify it (multi-inspector tester). The game is
+    only accepted (ok=True) when it both structures correctly AND actually plays. A lifeless/broken game
+    (play HOLD) returns False so the deep loop keeps iterating / falls back to Phaser — never ships a dead
+    game. If the play tester can't run (no playwright in this env), we keep the structural-only floor and
+    say so in the detail (never worse than before). Returns (ok, out_dir, detail). Never raises."""
     try:
         out = engine_assemble(slug, content)
     except Exception as e:
         return False, None, "engine build error: " + type(e).__name__ + ": " + str(e)[:160]
     ok, detail = engine_verify(slug, out)
-    return ok, str(out), detail
+    if not ok:
+        return False, str(out), detail
+    ship, pdetail = play_verify(slug, out)
+    if ship is False:
+        return False, str(out), "structural ok BUT " + pdetail          # lifeless -> iterate/fallback, don't ship
+    if ship is None:
+        return True, str(out), detail + " | play-test SKIPPED (" + pdetail + ")"   # structural-only floor
+    return True, str(out), detail + " | " + pdetail
