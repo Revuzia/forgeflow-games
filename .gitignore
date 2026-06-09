@@ -27,3 +27,8 @@ pipeline/assets/3d-models/polypizza/
 pipeline/assets/3d-models/quaternius/
 pipeline/assets/3d-models/kenney-creatures/
 pipeline/assets/3d-models/opengameart-creatures/
+
+# 2026-06-08 — ForgeFlow-Engine game builds (Phase-A wiring, pipeline/engine/engine_game_build.py).
+# Each bundles a copy of the engine runtime + scene.json; reproducible from content.json + the engine
+# repo, and deployed to R2. Keep OUT of git (don't duplicate the engine / bloat history).
+games/_engine/
