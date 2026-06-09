@@ -7,7 +7,8 @@ pending master-list game to a registry genre, keeps only those whose genre has a
 runtime (the rest need their engine built first), generates an original-IP slug + a
 quality-encoding brief, and appends them to build_queue.json as `pending` (deduped).
 
-Run: python seed_queue.py            # queue all buildable pending games
+Run: python seed_queue.py            # queue buildable pending games (ALL genres if authoring is on)
+     python seed_queue.py --all      # force ALL genres incl. indie (authoring builds them)
      python seed_queue.py --top N    # only the N highest-rated
      python seed_queue.py --dry       # show what would queue, write nothing
 """
@@ -21,6 +22,12 @@ REGISTRY = json.loads((ENGINE / "registry.json").read_text(encoding="utf-8"))
 GAMES = ENGINE.parent.parent / "games"
 
 LIVE = {g for g, i in REGISTRY["genres"].items() if i.get("status") == "live"}
+
+sys.path.insert(0, str(ENGINE))
+try:
+    import build_target as _bt          # auto-detect authoring mode (queue ALL genres when on)
+except Exception:
+    _bt = None
 
 # master-list sub_genre -> LIVE registry genre. TRUE-FIT ONLY: a game is queued only when its
 # sub-genre genuinely matches the engine's signature mechanic (see registry.json). Force-fitting
@@ -73,6 +80,32 @@ def brief_for(g, genre):
     )
 
 
+def genre_for(g, author):
+    """Genre to BUILD this master-list game as. True-fit template genre when known; when authoring is on,
+    fall back to the game's OWN sub-genre (authoring builds any genre). Returns None when not buildable
+    (authoring off + no true-fit LIVE genre)."""
+    sub = (g.get("sub_genre") or "").strip().lower()
+    mapped = SUBGENRE_TO_GENRE.get(sub)
+    if author:
+        return mapped or sub or "arcade"
+    return mapped if (mapped and mapped in LIVE) else None
+
+
+def select_candidates(ml, author):
+    """Pending master-list games to queue, highest-rated first. author=True -> ALL genres (authoring path);
+    author=False -> only true-fit LIVE template genres (no regression)."""
+    cand = []
+    for cat, info in ml.get("categories", {}).items():
+        for g in info.get("games", []):
+            if g.get("status") != "pending":
+                continue
+            genre = genre_for(g, author)
+            if genre:
+                cand.append((g, genre, cat))
+    cand.sort(key=lambda x: -(x[0].get("rating") or 0))
+    return cand
+
+
 def main():
     dry = "--dry" in sys.argv
     reseed = "--reseed" in sys.argv   # drop prior feeder entries first, then re-add (clean replace)
@@ -91,15 +124,10 @@ def main():
     shipped = {p.name for p in GAMES.iterdir()} if GAMES.exists() else set()
     used = set(existing) | set(shipped)
 
-    cand = []
-    for cat, info in ml.get("categories", {}).items():
-        for g in info.get("games", []):
-            if g.get("status") != "pending":
-                continue
-            genre = SUBGENRE_TO_GENRE.get(g.get("sub_genre", ""))
-            if genre and genre in LIVE:
-                cand.append((g, genre, cat))
-    cand.sort(key=lambda x: -(x[0].get("rating") or 0))
+    # AUTHORING ON (FFG_ENGINE_AUTHOR / engine_target.json {"author":true}) or explicit --all -> queue ALL
+    # genres (claude -p authors any genre). Else true-fit LIVE template genres only (no regression).
+    author = ("--all" in sys.argv) or bool(_bt and _bt.authoring_enabled())
+    cand = select_candidates(ml, author)
     if top:
         cand = cand[:top]
 
@@ -115,7 +143,8 @@ def main():
         q["queue"].append(item)
         added.append((slug, genre, g.get("rating"), g.get("inspired_by")))
 
-    print(f"true-fit buildable (live genre): {len(cand)} | adding {len(added)} to backlog")
+    mode = "AUTHORING (all genres)" if author else "true-fit (LIVE template genres only)"
+    print(f"mode: {mode} | buildable: {len(cand)} | adding {len(added)} to backlog")
     for s, gen, r, ib in added[:60]:
         print(f"  + {s:18} {gen:10} ({r}%, ~{ib})")
     if dry:

@@ -79,6 +79,17 @@ setenv(config=str(_acfg))
 chk("config without author key -> authoring OFF", build_target.authoring_enabled() is False)
 setenv()
 
+# choose_target: authoring routes ANY genre to the engine (indie incl.); off = template genres only
+setenv()
+os.environ["FFG_ENGINE_AUTHOR"] = "1"
+chk("authoring on: puzzle -> engine", build_target.choose_target("puzzle") is True)
+chk("authoring on: maze (indie) -> engine", build_target.choose_target("maze") is True)
+chk("authoring on: empty genre -> Phaser", build_target.choose_target("") is False)
+setenv(target="1")                          # engine enabled, authoring OFF
+chk("authoring off: puzzle -> Phaser (no template)", build_target.choose_target("puzzle") is False)
+chk("authoring off: platformer -> engine", build_target.choose_target("platformer") is True)
+setenv()
+
 
 # ── assemble_target: routing + automatic fallback (injected stubs) ────────────────────────────
 calls = {"phaser": 0, "engine": 0}

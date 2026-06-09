@@ -68,11 +68,18 @@ def _allowed_genres():
 
 
 def choose_target(genre, content=None):
-    """Return True to build on the ENGINE, False for Phaser (the default). Engine only when explicitly
-    enabled AND the genre is supported by the emitter AND inside the (optional) allowlist."""
+    """Return True to build on the ENGINE, False for Phaser (the default).
+      • AUTHORING ON  -> ANY non-empty genre routes to the engine (claude -p authors a bespoke game.js;
+        engine_authoring is genre-agnostic). This is how indie / non-template genres get built.
+      • AUTHORING OFF -> engine only when explicitly enabled AND the genre is one the deterministic
+        emitter supports AND inside the (optional) allowlist (unchanged — no regression)."""
+    g = (genre or "").strip().lower()
+    if not g:
+        return False
+    if authoring_enabled():                          # authoring builds any genre on the engine
+        return True
     if not engine_enabled():
         return False
-    g = (genre or "").lower()
     return g in ENGINE_GENRES and g in _allowed_genres()
 
 
