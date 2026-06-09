@@ -40,6 +40,21 @@ def run_fidelity(shot, genre):
     return {"gate": "fidelity", "blocking": False, "pass": r.returncode == 0, "output": r.stdout.strip()}
 
 
+def run_ai_qa(game_dir, genre, shot, run):
+    """Multi-agent AI QA panel (vision_fidelity / genre_fit / code_review / ux_hud) for an ENGINE game.
+    Soft at the ladder level — the panel's own report carries its blocking verdict; here it never blocks the
+    Phaser ladder. Deferred unless --run (needs claude -p; vision inspectors also need --shot)."""
+    if not run:
+        return {"gate": "ai_qa", "blocking": False, "pass": None,
+                "output": "deferred — re-run with --run (+ --shot <png> for the vision inspectors); needs claude -p"}
+    sys.path.insert(0, str(HERE))
+    import ai_qa_panel
+    rep = ai_qa_panel.run_panel(game_dir, genre, shot=shot, run=True)
+    out = (f"verdict={rep['verdict']} blocking_fails={rep['blocking_fails']} "
+           f"advisory_fails={rep['advisory_fails']} deferred={rep['deferred']}")
+    return {"gate": "ai_qa", "blocking": False, "pass": rep["verdict"] == "ship", "output": out}
+
+
 def main():
     if len(sys.argv) < 2:
         print("usage: python run_gates.py <game_dir> [--url URL] [--shot PNG]")
@@ -47,36 +62,46 @@ def main():
     game_dir = Path(sys.argv[1])
     url = None
     shot = None
+    genre_arg = None
     if "--url" in sys.argv:
         url = sys.argv[sys.argv.index("--url") + 1]
     if "--shot" in sys.argv:
         shot = sys.argv[sys.argv.index("--shot") + 1]
+    if "--genre" in sys.argv:
+        genre_arg = sys.argv[sys.argv.index("--genre") + 1]
+    run = "--run" in sys.argv
 
-    content_path = game_dir / "content.json"
-    if not content_path.exists():
-        print(f"[run_gates] no content.json in {game_dir}")
+    content_path = game_dir / "content.json"      # Phaser game spec
+    game_js = game_dir / "game.js"                # ENGINE game (authored or emitted)
+    if not content_path.exists() and not game_js.exists():
+        print(f"[run_gates] no content.json or game.js in {game_dir}")
         sys.exit(2)
-    content = json.loads(content_path.read_text(encoding="utf-8"))
-    genre = content.get("genre", "?")
 
     results = []
-    results.append(run_contract(content_path))
-    # signature only meaningful if contract passed
-    if results[0]["pass"]:
-        results.append(run_signature(content_path, genre))
-    else:
-        results.append({"gate": "signature", "blocking": True, "pass": False, "output": "skipped (contract failed)"})
+    genre = genre_arg or "?"
 
-    if url:
-        results.append(run_feel(url))
-    else:
-        results.append({"gate": "feel", "blocking": False, "pass": None, "output": "deferred — re-run with --url <running game url>"})
+    # ── Phaser ladder (contract/signature/feel/fidelity) — only when a content.json spec is present ──
+    if content_path.exists():
+        content = json.loads(content_path.read_text(encoding="utf-8"))
+        genre = content.get("genre", genre)
+        results.append(run_contract(content_path))
+        if results[0]["pass"]:                    # signature only meaningful if contract passed
+            results.append(run_signature(content_path, genre))
+        else:
+            results.append({"gate": "signature", "blocking": True, "pass": False, "output": "skipped (contract failed)"})
+        if url:
+            results.append(run_feel(url))
+        else:
+            results.append({"gate": "feel", "blocking": False, "pass": None, "output": "deferred — re-run with --url <running game url>"})
+        if shot:
+            results.append(run_fidelity(shot, genre))
+        else:
+            results.append({"gate": "fidelity", "blocking": False, "pass": None,
+                            "output": "deferred — capture a screenshot then re-run with --shot <png> (needs claude -p)"})
 
-    if shot:
-        results.append(run_fidelity(shot, genre))
-    else:
-        results.append({"gate": "fidelity", "blocking": False, "pass": None,
-                        "output": "deferred — capture a screenshot then re-run with --shot <png> (needs claude -p)"})
+    # ── ENGINE game: the multi-agent AI QA panel (additive, advisory at the ladder level) ──
+    if game_js.exists():
+        results.append(run_ai_qa(game_dir, genre, shot, run))
 
     blocking_fail = any(r["blocking"] and r["pass"] is False for r in results)
     report = {"game": str(game_dir), "genre": genre, "blocking_pass": not blocking_fail, "gates": results}
