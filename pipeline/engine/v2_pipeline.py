@@ -598,13 +598,16 @@ def pick_dev_target():
     started), else promote the highest-rated BACKLOG game to a fresh journal. (None, None) if
     there is nothing to build."""
     DEV_JOURNAL.mkdir(exist_ok=True)
+    # NO-REPEAT GUARD: a game already built locally (games/<slug>, the deploy source) is DONE — never
+    # re-develop it. This is what kept the loop re-doing Lumen Run.
+    shipped = {p.name for p in (ROOT / "games").iterdir() if p.is_dir() and not p.name.startswith("_")} if (ROOT / "games").exists() else set()
     actives = []
     for p in DEV_JOURNAL.glob("*.json"):
         try:
             jj = json.loads(p.read_text(encoding="utf-8"))
         except Exception:
             continue
-        if jj.get("milestone") != "DONE":
+        if jj.get("milestone") != "DONE" and jj.get("slug") not in shipped:
             actives.append(jj)
     if actives:
         actives.sort(key=lambda jj: jj.get("created", ""))
@@ -612,8 +615,8 @@ def pick_dev_target():
         return ({"slug": jj["slug"], "genre": jj["genre"], "brief": jj.get("brief", ""),
                  "inspired_by": jj.get("inspired_by"), "rating": jj.get("rating")}, jj)
     q = _load_queue()
-    cands = [i for i in q.get("queue", []) if i.get("status") == "backlog"] or \
-            [i for i in q.get("queue", []) if i.get("status") == "pending"]
+    cands = [i for i in q.get("queue", []) if i.get("status") == "backlog" and i["slug"] not in shipped] or \
+            [i for i in q.get("queue", []) if i.get("status") == "pending" and i["slug"] not in shipped]
     if not cands:
         return None, None
     cands.sort(key=lambda i: -(i.get("rating") or 0))

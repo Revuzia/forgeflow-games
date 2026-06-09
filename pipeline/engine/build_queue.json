@@ -34,12 +34,14 @@
     {
       "slug": "void-spire",
       "genre": "platformer",
-      "status": "backlog",
+      "status": "built",
       "brief": "Original-IP platformer game (sub-genre: 2d-platformer). Capture the core mechanics and game-feel of \"Super Mario Bros. Wonder\" (critically acclaimed, 92%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
       "master_list_bucket": "platformer",
       "master_list_id": 2,
       "inspired_by": "Super Mario Bros. Wonder",
-      "rating": 92
+      "rating": 92,
+      "detail": "shipped manually as lumen-run; auto-journal un-pinned",
+      "updated": "2026-06-08T06:30:02.095240+00:00"
     },
     {
       "slug": "frost-spire",
