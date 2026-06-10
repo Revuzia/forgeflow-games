@@ -33,6 +33,7 @@ whole pipeline WITHOUT `claude -p` (e.g. while developing), use:
     python v2_pipeline.py --deploy         # publish games that pass blocking gates
 """
 import json
+import os
 import subprocess
 import sys
 import time
@@ -1141,6 +1142,21 @@ def main():
     if time_left(force) <= 5:
         log(f"outside run window (now {_minutes_now()}m, stop {HARD_STOP_MINUTES}m). Exiting.")
         return
+
+    # ASSET AUTO-DISCOVERY: anything new dropped on F:\games (Unity downloads, GLBs, audio) gets
+    # ingested/converted/indexed before the night's builds, so authoring always sees the full
+    # library. Idempotent (marker files) -> seconds when nothing changed. FFG_SKIP_ASSET_REFRESH=1 skips.
+    if os.environ.get("FFG_SKIP_ASSET_REFRESH") != "1":
+        wire = ROOT.parent / "scripts" / "unity_ingest_and_wire.py"
+        if wire.exists():
+            try:
+                log("asset refresh: scanning F:\\games for new assets…")
+                r = subprocess.run([sys.executable, str(wire)], capture_output=True, text=True, timeout=2700)
+                tail = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()
+                log(f"asset refresh: {tail[-1] if tail else 'done'}")
+            except Exception as e:
+                log(f"asset refresh skipped ({type(e).__name__}: {str(e)[:120]})")
+                track_error("asset_refresh", f"unity_ingest_and_wire failed: {type(e).__name__}: {str(e)[:160]}")
 
     # DEPTH-FIRST is the DEFAULT (owner: "one very well-built game, not 8-12 shallow ones").
     # The nightly task runs this with no args -> dev_loop. --throughput is the legacy batch loop.

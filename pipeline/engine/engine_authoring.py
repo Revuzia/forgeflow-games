@@ -48,8 +48,15 @@ GENERIC_ASSETS = {
 # THE REAL LIBRARY: every authored game picks its CAST from the full F:\ asset library, slug-seeded —
 # 1,555 indexed creature/character GLBs (CREATURES_INDEX.json; we use CC0 + self-contained .glb only,
 # since a staged .gltf with external buffers would break) + 27 pixel-platformer character sprites.
+# Unity Asset Store haul (FBX->GLB via scripts/unity_fbx_convert.py): character-like models join the
+# cast pool; everything else is the PROP pool (scenery the author can place). Owner-licensed.
 CREATURES_INDEX = _emit.ASSETS_ROOT / "3d-models" / "CREATURES_INDEX.json"
+UNITY_MODELS_INDEX = _emit.ASSETS_ROOT / "3d-models" / "UNITY_MODELS_INDEX.json"
 SPRITE_CHAR_DIR = _emit.ASSETS_ROOT / "pixel-platformer" / "Tiles" / "Characters"
+_CHARACTER_WORDS = ("character", "monster", "creature", "knight", "skeleton", "zombie", "dragon",
+                    "goblin", "orc", "golem", "robot", "soldier", "warrior", "wizard", "demon",
+                    "animal", "enemy", "hero", "viking", "samurai", "ninja", "alien", "slime",
+                    "bandit", "guard", "troll", "elf", "dwarf", "rat", "spider", "wolf", "bear")
 _lib_cache = {}
 
 
@@ -73,6 +80,29 @@ def _creature_pool():
             pool = []
         _lib_cache["creatures"] = sorted(pool)
     return _lib_cache["creatures"]
+
+
+def _unity_pools():
+    """(characters, props) from the converted Unity GLB index. Character-like names (animated first)
+    can join the cast; the rest are scenery props. Empty pools when the index doesn't exist yet."""
+    if "unity" not in _lib_cache:
+        chars, props = [], []
+        try:
+            idx = json.loads(UNITY_MODELS_INDEX.read_text(encoding="utf-8"))
+            for e in idx.get("models", []):
+                f = str(e.get("file") or "")
+                if not (e.get("browser_ready") and f.lower().endswith(".glb")):
+                    continue
+                path = "3d-models/" + f
+                hay = (str(e.get("name", "")) + " " + str(e.get("pack", ""))).lower()
+                if any(w in hay for w in _CHARACTER_WORDS):
+                    chars.append((not e.get("animated"), path))  # animated sort first
+                else:
+                    props.append(path)
+        except Exception:
+            chars, props = [], []
+        _lib_cache["unity"] = ([p for _a, p in sorted(chars)], sorted(props))
+    return _lib_cache["unity"]
 
 
 def _sprite_chars():
@@ -100,7 +130,8 @@ def pick_assets(slug):
         base = "pixel-platformer/Tiles/Characters/"
         sets["sprites"]["hero"], sets["sprites"]["foe"] = base + picks[0], base + picks[1]
         sets["sprites"]["foe2"] = base + picks[2]
-    pool = _creature_pool()
+    u_chars, u_props = _unity_pools()
+    pool = _creature_pool() + u_chars            # Unity character-like GLBs join the cast pool
     if len(pool) >= 4:
         picks, i = [], 0
         while len(picks) < 4 and i < 40:
@@ -110,6 +141,12 @@ def pick_assets(slug):
             i += 1
         sets["models"]["hero"], sets["models"]["foe"] = picks[0], picks[1]
         sets["models"]["foe2"], sets["models"]["boss"] = picks[2], picks[3]
+    if len(u_props) >= 2:                        # slug-seeded scenery from the Unity prop pool
+        a = u_props[_seed(slug, "prp") % len(u_props)]
+        b = u_props[(_seed(slug, "prp") + 977) % len(u_props)]
+        sets["models"]["prop"] = a
+        if b != a:
+            sets["models"]["prop2"] = b
     return sets
 AUDIO_NAMES = list(_emit.AUDIO_NAMES)                     # per-game staged sound names (stage_audio provides them)
 
@@ -166,6 +203,8 @@ HARD REQUIREMENTS (a reviewer + an automated player will reject the game if any 
        e.g. 2D:  GAME.sprites = {{ hero:"./assets/sprites/hero.png", foe:"./assets/sprites/foe.png" }};
                  ctx.spawn({{ tag:"player", sprite:"hero", position:[x,y,0], scale:[1,1,1] }});
             3D:  GAME.models  = {{ hero:"./assets/models/hero.glb" }};  ctx.spawn({{ model:"hero", ... }});
+     hero/foe/foe2/boss are ACTORS; any prop/prop2 models are SCENERY — place them to dress the level
+     (platforms, obstacles, background décor), never as the player or an enemy.
   3. WINNABLE and LOSEABLE, with PROGRESSION: ship 3+ levels/waves/rounds with a DIFFICULTY RAMP (each
      stage bigger/faster/harder), scale speeds/counts by ctx.difficulty, and advance ctx.level as the
      player progresses (show it in the HUD). Win -> ctx.win() after the final stage; a real fail state ->
