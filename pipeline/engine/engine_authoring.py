@@ -31,8 +31,7 @@ if str(ENGINE_DIR) not in sys.path:
     sys.path.insert(0, str(ENGINE_DIR))
 import engine_game_emit as _emit                          # reuse staging (_stage_assets, INDEX_HTML, src/assets copy)
 
-# A GENERIC real-asset bundle staged for EVERY authored game (any genre) so real assets are ALWAYS available
-# regardless of genre — the authored game references them by name. Paths are the proven-existing ones the
+# FALLBACK bundle (used only when the library index is unavailable) — the proven-existing files the
 # templates already use (emit-platformer passed the real_assets inspector with these).
 GENERIC_ASSETS = {
     "sprites": {
@@ -45,6 +44,73 @@ GENERIC_ASSETS = {
         "coin": "3d-models/kenney-creatures/cube-pets/Models/GLB format/animal-chick.glb",
     },
 }
+
+# THE REAL LIBRARY: every authored game picks its CAST from the full F:\ asset library, slug-seeded —
+# 1,555 indexed creature/character GLBs (CREATURES_INDEX.json; we use CC0 + self-contained .glb only,
+# since a staged .gltf with external buffers would break) + 27 pixel-platformer character sprites.
+CREATURES_INDEX = _emit.ASSETS_ROOT / "3d-models" / "CREATURES_INDEX.json"
+SPRITE_CHAR_DIR = _emit.ASSETS_ROOT / "pixel-platformer" / "Tiles" / "Characters"
+_lib_cache = {}
+
+
+def _seed(slug, salt=""):
+    import hashlib
+    return int(hashlib.md5((slug + "|" + salt).encode("utf-8")).hexdigest()[:8], 16)
+
+
+def _creature_pool():
+    """Browser-ready, CC0, self-contained .glb entries from the library index (cached)."""
+    if "creatures" not in _lib_cache:
+        pool = []
+        try:
+            idx = json.loads(CREATURES_INDEX.read_text(encoding="utf-8"))
+            items = idx if isinstance(idx, list) else next((v for v in idx.values() if isinstance(v, list)), [])
+            for e in items:
+                f = str(e.get("file") or "")
+                if e.get("browser_ready") and e.get("license_class") == "CC0" and f.lower().endswith(".glb"):
+                    pool.append("3d-models/" + f)
+        except Exception:
+            pool = []
+        _lib_cache["creatures"] = sorted(pool)
+    return _lib_cache["creatures"]
+
+
+def _sprite_chars():
+    if "sprites" not in _lib_cache:
+        try:
+            _lib_cache["sprites"] = sorted(p.name for p in SPRITE_CHAR_DIR.glob("tile_*.png"))
+        except Exception:
+            _lib_cache["sprites"] = []
+    return _lib_cache["sprites"]
+
+
+def pick_assets(slug):
+    """The per-game CAST, slug-seeded over the full library: distinct hero/foe/foe2 sprites (2D) and
+    distinct hero/foe/foe2/boss creature GLBs (3D) + the coin/star pickup. Falls back to GENERIC_ASSETS
+    when the library is unavailable. Deterministic — same slug, same cast."""
+    sets = {"sprites": dict(GENERIC_ASSETS["sprites"]), "models": dict(GENERIC_ASSETS["models"])}
+    chars = _sprite_chars()
+    if len(chars) >= 3:
+        picks, i = [], 0
+        while len(picks) < 3 and i < len(chars) * 2:
+            c = chars[(_seed(slug, "spr") + i * 7) % len(chars)]
+            if c not in picks:
+                picks.append(c)
+            i += 1
+        base = "pixel-platformer/Tiles/Characters/"
+        sets["sprites"]["hero"], sets["sprites"]["foe"] = base + picks[0], base + picks[1]
+        sets["sprites"]["foe2"] = base + picks[2]
+    pool = _creature_pool()
+    if len(pool) >= 4:
+        picks, i = [], 0
+        while len(picks) < 4 and i < 40:
+            m = pool[(_seed(slug, "mdl") + i * 131) % len(pool)]
+            if m not in picks:
+                picks.append(m)
+            i += 1
+        sets["models"]["hero"], sets["models"]["foe"] = picks[0], picks[1]
+        sets["models"]["foe2"], sets["models"]["boss"] = picks[2], picks[3]
+    return sets
 AUDIO_NAMES = list(_emit.AUDIO_NAMES)                     # per-game staged sound names (stage_audio provides them)
 
 
@@ -60,7 +126,7 @@ def stage(slug, out_dir):
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(_emit.ENGINE / sub, dst)
-    refs = _emit._stage_assets(out, GENERIC_ASSETS)       # copies real files in, returns relative URL refs
+    refs = _emit._stage_assets(out, pick_assets(slug))    # slug-seeded CAST from the full library
     return out, refs
 
 

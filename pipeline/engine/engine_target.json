@@ -1,5 +1,6 @@
 {
   "_comment": "Opt-in for the ForgeFlow ENGINE build target (GS9/GS11). Read by build_target.engine_enabled(). enabled=true routes emitter-supported genres through the new engine (real-asset games, no Phaser schema gate) in v2_pipeline's deep-dev loop AND build_one; any failure falls back to Phaser. This is a committed flip (NOT a Task Scheduler change). Set enabled=false to revert to the Phaser-only nightly. Engine games STAGE for manual review (READY_TO_DEPLOY) — no auto-publish.",
   "enabled": true,
+  "author": true,
   "genres": ["platformer", "runner", "shmup", "shooter", "arcade", "bullet-hell", "tactics", "tactics3d", "collect", "pickup"]
 }
