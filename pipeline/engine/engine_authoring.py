@@ -100,9 +100,12 @@ HARD REQUIREMENTS (a reviewer + an automated player will reject the game if any 
        e.g. 2D:  GAME.sprites = {{ hero:"./assets/sprites/hero.png", foe:"./assets/sprites/foe.png" }};
                  ctx.spawn({{ tag:"player", sprite:"hero", position:[x,y,0], scale:[1,1,1] }});
             3D:  GAME.models  = {{ hero:"./assets/models/hero.glb" }};  ctx.spawn({{ model:"hero", ... }});
-  3. WINNABLE and LOSEABLE: reach a real win condition -> ctx.win(); a real fail state -> ctx.lose() or
-     ctx.hurt(). A bot pressing arrows/Space/F must be able to make score/progress within ~12s.
-  4. Respond to input every frame via ctx.input (axisX/axisY/pressed/down/pointerJustDown).
+  3. WINNABLE and LOSEABLE, with PROGRESSION: ship 3+ levels/waves/rounds with a DIFFICULTY RAMP (each
+     stage bigger/faster/harder), scale speeds/counts by ctx.difficulty, and advance ctx.level as the
+     player progresses (show it in the HUD). Win -> ctx.win() after the final stage; a real fail state ->
+     ctx.lose() or ctx.hurt(). A bot pressing arrows/Space/F must make score/progress within ~12s.
+  4. Respond to input every frame via ctx.input (axisX/axisY/pressed/down/pointerJustDown). Declare a
+     `controls: "..."` how-to line on the GAME object (shown on the menu).
   5. Call ctx.hud("...") each frame with a live status line. Call ctx.music("music") in setup and
      ctx.sound("jump")/ctx.sound("coin") on events. Available audio names: {", ".join(AUDIO_NAMES)}.
   6. Do NOT write the menu, the game loop, HUD rendering, the physics step, or restart logic — the engine

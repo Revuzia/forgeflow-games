@@ -39,8 +39,9 @@ INSPECTORS = [
                 "wireframes, flat rectangles)? Judge art + composition only.")},
     {"name": "genre_fit", "kind": "code", "blocking": True, "floor": 55,
      "rubric": ("Here is the game.js for a {genre} game. Does it implement the SIGNATURE MECHANIC of the "
-                "{genre} genre with real depth (a working core loop), NOT a cosmetic stub or a different "
-                "genre wearing its name?")},
+                "{genre} genre with real depth — a working core loop with 3+ levels/waves/rounds and a "
+                "difficulty ramp (ctx.level progression) — NOT a cosmetic stub, a single-screen one-shot, "
+                "or a different genre wearing its name?")},
     {"name": "code_review", "kind": "code", "blocking": False, "floor": 50,
      "rubric": ("You are a senior gameplay engineer. Review this game.js for logic/completeness bugs: a "
                 "reachable WIN and a reachable LOSE state, no degenerate/no-op values, input handled every "
