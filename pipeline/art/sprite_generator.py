@@ -75,6 +75,22 @@ def generate_sprite(
             img_b64 = result["image"]["base64"]
             img_bytes = base64.b64decode(img_b64)
             cost = result.get("usage", {}).get("usd", 0)
+            # USAGE LEDGER (2026-06-09): cost was read but never persisted — every generation now
+            # appends to state/pixellab_usage.jsonl so the asset inventory / client tracking can
+            # report generations + spend (scripts/asset_inventory.py reads this). Best-effort.
+            try:
+                from datetime import datetime, timezone
+                _ledger = Path(__file__).resolve().parents[3] / "state" / "pixellab_usage.jsonl"
+                _ledger.parent.mkdir(parents=True, exist_ok=True)
+                _kind = ("enemy" if "enemy" in str(output_path or "").lower()
+                         else "boss" if "boss" in str(output_path or "").lower() else "character")
+                with open(_ledger, "a", encoding="utf-8") as _f:
+                    _f.write(json.dumps({"ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                         "kind": _kind, "description": description[:120],
+                                         "size": [width, height], "cost_usd": cost,
+                                         "out": str(output_path or "")[-100:]}) + "\n")
+            except Exception:
+                pass
 
             if output_path:
                 Path(output_path).parent.mkdir(parents=True, exist_ok=True)
