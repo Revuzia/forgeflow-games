@@ -640,7 +640,10 @@ def pick_dev_target():
             jj = json.loads(p.read_text(encoding="utf-8"))
         except Exception:
             continue
-        if jj.get("milestone") != "DONE" and jj.get("slug") not in shipped:
+        # PARKED journals are skipped: a game that kept failing (e.g. 3 consecutive schema-gate fails)
+        # is benched so it can never monopolize the nightly window again (the void-spire failure class).
+        # Un-park by deleting the "parked" key in its dev_journal file.
+        if jj.get("milestone") != "DONE" and not jj.get("parked") and jj.get("slug") not in shipped:
             actives.append(jj)
     if actives:
         actives.sort(key=lambda jj: jj.get("created", ""))
@@ -772,12 +775,19 @@ def _snapshot_issues(journal, mid, verdict, pt):
 
 
 def dev_loop(force=False, deploy=False, single_step=False):
-    """One night of deliberate, single-game development. Resumes the active project, advances its
+    """One game's worth of deliberate development. Resumes the active project, advances its
     current milestone with claude -p, QA's it with the gates + deep playtest, logs the live issue
-    list, and persists after every step. Stays on ONE game until M5."""
+    list, and persists after every step.
+
+    Returns a status string so main() can run MULTIPLE games per night (engine builds are fast):
+      "built"     — game finished + staged -> pick the next one
+      "parked"    — game benched after repeated failures -> pick the next one
+      "no_target" — queue empty -> stop
+      "transient" — claude -p / infra down -> stop (no point continuing tonight)
+      "worked"    — made progress but window/steps ran out -> stop (resumes next night)"""
     item, journal = pick_dev_target()
     if not item:
-        log("deep-dev: nothing to develop (no active journal, empty backlog)."); return
+        log("deep-dev: nothing to develop (no active journal, empty backlog)."); return "no_target"
     slug, genre = item["slug"], item["genre"]
     journal["sessions"] = journal.get("sessions", 0) + 1
     log(f"DEEP-DEV target: {slug} ({genre}) — milestone {journal['milestone']}, session {journal['sessions']}")
@@ -814,7 +824,7 @@ def dev_loop(force=False, deploy=False, single_step=False):
             _mark(slug, "built", f"ENGINE target: real-asset game staged at {out_e}")
             log(f"DEEP-DEV {slug}: built on the ENGINE -> {out_e} ({detail_e}) [staged, no Phaser schema needed]")
             notify(f"✅ FFG deep-dev: *{slug}* ({genre}) built on the NEW ENGINE with real assets — staged for review.")
-            return
+            return "built"
         log(f"DEEP-DEV {slug}: engine target unavailable ({detail_e}) -> Phaser deep-dev loop")
         track_error("engine_build", f"engine build not accepted: {detail_e}", slug=slug, genre=genre)
 
@@ -837,10 +847,12 @@ def dev_loop(force=False, deploy=False, single_step=False):
                 log(f"{slug}: design doc done — '{journal['title']}'; advancing to M1")
     except TransientError as e:
         log(f"deep-dev abort (transient) during design: {e}")
-        save_journal(journal); return
+        save_journal(journal); return "transient"
 
     # M1..M5 — iterate. One step per loop; persist each time; advance only on DoD.
     steps = 0
+    status = "worked"            # default: progressed but didn't finish (window/steps ran out)
+    schema_fails = 0             # consecutive schema-gate fails -> 3-strike PARK (each fail costs a claude -p call)
     while time_left(force) > 8 and journal["milestone"] != "DONE":
         mid = journal["milestone"]
         content = None
@@ -855,22 +867,38 @@ def dev_loop(force=False, deploy=False, single_step=False):
                 content = generate_slice(item)        # first slice from the design/brief
             new_content = develop_step(journal, content)
         except TransientError as e:
-            log(f"deep-dev abort (transient): {e}"); break
+            log(f"deep-dev abort (transient): {e}"); status = "transient"; break
         if new_content is not None:
             content = new_content
         wip.write_text(json.dumps(content, indent=2), encoding="utf-8")
 
         ok_g, out_g = gate(wip, genre)               # schema gate before assemble
         if not ok_g:
-            log(f"{slug}: step content failed schema gate; logging + next step. {out_g[:140]}")
+            schema_fails += 1
+            log(f"{slug}: step content failed schema gate ({schema_fails}/3); logging + next step. {out_g[:140]}")
             journal["open_issues"] = [{"id": 1, "milestone": mid, "severity": "high",
                                        "issue": "content failed schema gate", "fix": out_g[:200], "status": "open", "found": _now_iso()}]
             _changelog(journal, mid, "develop step", "schema gate FAIL")
             track_error("schema_gate", f"content failed schema gate: {out_g[:160]}",
                         slug=slug, genre=genre, milestone=mid)   # makes a void-spire-style FAIL storm visible to the doctor
+            if schema_fails >= 3:
+                # 3-STRIKE PARK — this is what void-spire lacked: it logged 510 schema FAILs across two
+                # nights (each preceded by a claude -p call) without ever moving on. Bench the game so
+                # the rest of the night (and the queue) keeps building; un-park by editing its journal.
+                journal["parked"] = True
+                journal["parked_reason"] = f"3 consecutive schema-gate fails at {mid}: {out_g[:160]}"
+                journal["parked_at"] = _now_iso()
+                _changelog(journal, mid, "PARKED", "3 consecutive schema-gate fails — moving on to the next game")
+                _mark(slug, "held", "parked: 3 consecutive schema-gate fails")
+                track_error("parked", f"parked after 3 consecutive schema-gate fails at {mid}", slug=slug, genre=genre)
+                notify(f"🅿️ FFG deep-dev: *{slug}* ({genre}) PARKED after 3 schema-gate fails — moving on to the next game.")
+                save_journal(journal)
+                status = "parked"
+                break
             save_journal(journal); steps += 1
             if single_step: break
             continue
+        schema_fails = 0                              # a pass resets the strike counter
 
         gdir = build_order.assemble(slug, content)
         ok_v, verdict = verify_build(slug, genre, gdir)   # structure+feel+fidelity+review
@@ -905,11 +933,13 @@ def dev_loop(force=False, deploy=False, single_step=False):
             (gdir / "READY_TO_DEPLOY").write_text(_now_iso(), encoding="utf-8")
         _mark(slug, "built", "deep-dev complete (M5 ship-ready); staged for review")
         notify(f"✅ FFG deep-dev: *{slug}* reached M5 SHIP-READY — staged for your review.")
+        status = "built"
 
     save_journal(journal)
     open_n = len([i for i in journal.get("open_issues", []) if i.get("status", "open") == "open"])
-    log(f"DEEP-DEV night done: {slug} at {journal['milestone']}, {steps} step(s), {open_n} open issue(s), session {journal['sessions']}.")
-    notify(f"🌙 FFG deep-dev night: *{slug}* now at {journal['milestone']} — {steps} step(s), {open_n} open issue(s) logged.")
+    log(f"DEEP-DEV round done: {slug} at {journal['milestone']}, {steps} step(s), {open_n} open issue(s), session {journal['sessions']} -> {status}.")
+    notify(f"🌙 FFG deep-dev: *{slug}* now at {journal['milestone']} — {steps} step(s), {open_n} open issue(s) logged.")
+    return status
 
 
 # ── throughput (legacy multi-game batch) ────────────────────────────────────────
@@ -957,11 +987,27 @@ def main():
     # DEPTH-FIRST is the DEFAULT (owner: "one very well-built game, not 8-12 shallow ones").
     # The nightly task runs this with no args -> dev_loop. --throughput is the legacy batch loop.
     if not throughput:
-        try:
-            dev_loop(force=force, deploy=deploy, single_step=once)
-        except Exception as e:
-            log(f"dev_loop error: {e}")
-            track_error("dev_loop", f"dev_loop crashed: {type(e).__name__}: {str(e)[:200]}")
+        # MULTI-GAME NIGHTS: engine builds take ~1 min, so one 120-min window can ship several games.
+        # Keep developing targets while the window holds and each round ENDS its game ("built") or
+        # benches it ("parked") — any other status (worked/transient/no_target/error) means stop:
+        # the same target would just be re-picked (or the backend is down / queue is empty).
+        rounds, built_n = 0, 0
+        while True:
+            rounds += 1
+            try:
+                st = dev_loop(force=force, deploy=deploy, single_step=once)
+            except Exception as e:
+                log(f"dev_loop error: {e}")
+                track_error("dev_loop", f"dev_loop crashed: {type(e).__name__}: {str(e)[:200]}")
+                st = "error"
+            built_n += 1 if st == "built" else 0
+            if once or st not in ("built", "parked"):
+                break
+            if rounds >= 10 or time_left(force) <= 15:
+                log(f"night cap reached (rounds={rounds}, {time_left(force)} min left) — {built_n} built this night")
+                break
+        if built_n > 1:
+            notify(f"🌙 FFG multi-game night: {built_n} games built+staged this window.")
         if not once:
             try:
                 log("XCOM-match autopipe: one nightly improvement pass…")

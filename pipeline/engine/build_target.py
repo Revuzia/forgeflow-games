@@ -214,6 +214,13 @@ def dev_engine_build(slug, content):
             pass                                          # any authoring failure -> deterministic emit below
 
     # 2. DETERMINISTIC EMIT — proven 3-template path (default / fallback).
+    # GENRE GUARD: the emitter's template_of() defaults unknown genres to the "collect" template — with
+    # the queue un-restricted that would silently ship e.g. a *puzzle* title as a collect game (the
+    # "signature mechanic shipped as cosmetic" failure, reborn). Outside the emitter-supported genres
+    # there is NO honest deterministic fallback: fail so the caller parks/falls back instead.
+    g = (content.get("genre") or "").strip().lower()
+    if g not in ENGINE_GENRES:
+        return False, None, f"no deterministic template for genre '{g}' (authoring failed or off) — refusing wrong-genre fallback"
     try:
         out = engine_assemble(slug, content)
     except Exception as e:
