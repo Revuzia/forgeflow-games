@@ -45,7 +45,7 @@ GENERIC_ASSETS = {
         "coin": "3d-models/kenney-creatures/cube-pets/Models/GLB format/animal-chick.glb",
     },
 }
-AUDIO_NAMES = ["music", "jump", "coin"]                   # names the staged assets/audio provides (template-proven)
+AUDIO_NAMES = list(_emit.AUDIO_NAMES)                     # per-game staged sound names (stage_audio provides them)
 
 
 # ── staging ───────────────────────────────────────────────────────────────────────────────────────
@@ -181,6 +181,7 @@ def author_engine_game(spec, *, out_dir=None, run=False, timeout=300, _raw_overr
     out = Path(out_dir) if out_dir else (GAMES / "games" / "_engine" / slug)
     try:
         out, refs = stage(slug, out)
+        audio_extras = _emit.stage_audio(out, slug)   # per-game music + named SFX set (slug-seeded)
         prompt = build_prompt(spec, refs)
         (out / "_author_prompt.txt").write_text(prompt, encoding="utf-8")        # for operator inspection
         if _raw_override is None and not run:
@@ -192,6 +193,7 @@ def author_engine_game(spec, *, out_dir=None, run=False, timeout=300, _raw_overr
         ok, detail = validate(js, out)
         if not ok:
             return False, str(out), "authored game.js invalid: " + detail
+        js += _emit.audio_js_snippet(audio_extras)    # extra named sounds (mechanical JSON append)
         (out / "game.js").write_text(js, encoding="utf-8")
         (out / "index.html").write_text(_emit.INDEX_HTML.replace("__TITLE__", spec.get("title") or slug), encoding="utf-8")
         return True, str(out), "authored + validated (" + detail + ")"

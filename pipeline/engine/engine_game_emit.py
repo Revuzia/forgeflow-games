@@ -20,6 +20,7 @@ Usage:
       --out games/_engine/lumen-run --slug lumen-run-engine
 """
 import argparse
+import hashlib
 import json
 import shutil
 import sys
@@ -62,6 +63,83 @@ def _stage_assets(out, sets):
 
 def _name_or_null(refs_kind, name):
     return json.dumps(name) if name in refs_kind else "null"
+
+
+# ---- per-game AUDIO (GS-AUDIO): slug-seeded music + a named SFX set from the stock catalog -------
+# Music: 6 loopable themes under assets/music (+ victory/game_over as win/lose stingers).
+# SFX: 282 Kenney sounds across interface-sounds / impact-sounds / rpg-audio. The pick is HASH-SEEDED by
+# (slug, name) so each game gets a stable, diverse soundscape with no RNG in CI.
+MUSIC_DIR = ASSETS_ROOT / "music"
+MUSIC_THEMES = ["cinematic_epic.ogg", "level_theme_1.ogg", "level_theme_2.ogg",
+                "level_theme_3.ogg", "menu_theme.ogg", "boss_theme.ogg"]
+SFX_PACKS = [ASSETS_ROOT / "interface-sounds", ASSETS_ROOT / "impact-sounds", ASSETS_ROOT / "rpg-audio"]
+# contract names (overwrite the staged files in place — zero runtime change):
+CONTRACT_SFX = {"coin": ["confirmation", "coin", "select"], "jump": ["cloth", "swish", "jump", "drop"]}
+# EXTRA names (declared via GAME.audio; the runtime loads them in load()):
+EXTRA_SFX = {"hit": ["impact", "hurt"], "explosion": ["impactmetal", "impactplate", "error"],
+             "powerup": ["confirmation", "powerup", "bong"], "select": ["select", "click", "switch"],
+             "shoot": ["drawknife", "throw", "swish", "laser"], "land": ["footstep", "drop"]}
+EXTRA_STINGERS = {"win": "victory.ogg", "lose": "game_over.ogg"}   # from assets/music
+AUDIO_NAMES = ["music", "coin", "jump"] + sorted(EXTRA_SFX) + sorted(EXTRA_STINGERS)
+
+
+def _seed(slug, salt=""):
+    return int(hashlib.md5((slug + "|" + salt).encode("utf-8")).hexdigest()[:8], 16)
+
+
+def _pick_sfx(name, keywords, slug):
+    """Deterministically pick one SFX file matching the keywords (filename contains), seeded by
+    (slug, name). Falls back to the whole catalog if no keyword hit. None if no packs exist."""
+    pool = []
+    for pack in SFX_PACKS:
+        if pack.exists():
+            pool += [f for f in sorted(pack.rglob("*.ogg")) if any(k in f.name.lower() for k in keywords)]
+    if not pool:
+        for pack in SFX_PACKS:
+            if pack.exists():
+                pool += sorted(pack.rglob("*.ogg"))
+    return pool[_seed(slug, name) % len(pool)] if pool else None
+
+
+def stage_audio(out, slug):
+    """Stage PER-GAME audio into <out>/assets/audio/ (after the engine assets are copied):
+      * music: a slug-seeded theme OVERWRITES music_menu.ogg (the runtime's "music" contract file)
+      * coin/jump: slug-seeded picks OVERWRITE sfx_coin.ogg / sfx_jump.ogg (contract files)
+      * extras (hit/explosion/powerup/select/shoot/land + win/lose stingers): copied as sfx_<name>.ogg
+    Returns {extra_name: './assets/audio/sfx_<name>.ogg'} for the GAME.audio declaration. Missing catalog
+    (junction down) -> {} and the bundled engine defaults remain (never breaks the build)."""
+    adir = out / "assets" / "audio"
+    adir.mkdir(parents=True, exist_ok=True)
+    refs = {}
+    try:
+        if MUSIC_DIR.exists():
+            themes = [MUSIC_DIR / t for t in MUSIC_THEMES if (MUSIC_DIR / t).exists()]
+            if themes:
+                shutil.copyfile(themes[_seed(slug, "music") % len(themes)], adir / "music_menu.ogg")
+        for name, kws in CONTRACT_SFX.items():
+            f = _pick_sfx(name, kws, slug)
+            if f:
+                shutil.copyfile(f, adir / ("sfx_%s.ogg" % name))
+        for name, kws in EXTRA_SFX.items():
+            f = _pick_sfx(name, kws, slug)
+            if f:
+                shutil.copyfile(f, adir / ("sfx_%s.ogg" % name))
+                refs[name] = "./assets/audio/sfx_%s.ogg" % name
+        for name, fname in EXTRA_STINGERS.items():
+            src = MUSIC_DIR / fname
+            if src.exists():
+                shutil.copyfile(src, adir / ("sfx_%s.ogg" % name))
+                refs[name] = "./assets/audio/sfx_%s.ogg" % name
+    except OSError as e:
+        print(f"  [warn] audio staging incomplete ({e}); engine default audio remains", file=sys.stderr)
+    return refs
+
+
+def audio_js_snippet(extra_refs):
+    """The GAME.audio declaration appended after an emitted/authored game.js (new names only)."""
+    if not extra_refs:
+        return ""
+    return "\nGAME.audio = " + json.dumps(extra_refs) + ";   // per-game SFX set (staged by stage_audio)\n"
 
 # ---- palette / color helpers -------------------------------------------------------------------
 def hex2rgb(h, default=(0.8, 0.8, 0.85)):
@@ -293,11 +371,13 @@ def build(content_path, out_dir, slug="engine-game"):
             shutil.rmtree(dst)
         shutil.copytree(ENGINE / sub, dst)
     refs = _stage_assets(out, ASSET_SETS.get(template_of(content), {}))   # GS11(d): copy REAL assets into the game dir
+    audio_refs = stage_audio(out, slug)              # GS-AUDIO: per-game music + named SFX set (slug-seeded)
     js, meta = emit_game_js(content, refs)           # game.js references the copied assets by relative path
+    js += audio_js_snippet(audio_refs)               # declare the extra sounds (runtime loads GAME.audio)
     (out / "game.js").write_text(js, encoding="utf-8")
     (out / "index.html").write_text(INDEX_HTML.replace("__TITLE__", slug), encoding="utf-8")
     meta.update({"out": str(out), "genre": genre_of(content), "slug": slug,
-                 "assets": sum(len(v) for v in refs.values())})
+                 "assets": sum(len(v) for v in refs.values()), "audio": 3 + len(audio_refs)})
     return meta
 
 
