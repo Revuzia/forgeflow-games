@@ -32,3 +32,10 @@ pipeline/assets/3d-models/opengameart-creatures/
 # Each bundles a copy of the engine runtime + scene.json; reproducible from content.json + the engine
 # repo, and deployed to R2. Keep OUT of git (don't duplicate the engine / bloat history).
 games/_engine/
+
+# 2026-06-10 — Unity Asset Store haul (owner-licensed, NOT redistributable; regenerated nightly
+# from F:\games cache by scripts/unity_ingest_and_wire.py — committing would repeat the 8.3GB
+# push incident above AND violate the Asset Store license)
+pipeline/assets/3d-models/unity/
+pipeline/assets/3d-models/UNITY_MODELS_INDEX.json
+pipeline/assets/UNITY_ASSETS_INDEX.json
