@@ -99,13 +99,14 @@ def main():
         REPORT.write_text(json.dumps(rpt, indent=2), encoding="utf-8")
         notify(f"⚠️ *XCOM-match* [{slug}]: capture BLANK (lit={play_lit:.3f}) — WebGL didn't render; skipping, fix capture.")
         print(json.dumps(rpt)); return 1
-    prompt = PROMPT.format(ref=ref)
-    cmd = ["claude", "-p", prompt + "".join(f"\n\n@{p}" for p in shots)]
+    prompt = PROMPT.format(ref=ref) + "".join(f"\n\n@{p}" for p in shots)
+    cmd = ["claude", "-p"]   # prompt rides STDIN (Windows argv cap 32,767 -> WinError 206)
     if dry:
-        print("DRY — would run:\n", cmd[0], cmd[1], "[prompt+imgs]")
+        print("DRY — would run:\n", cmd[0], cmd[1], "[prompt+imgs via stdin]")
         print("shots:", shots); return 0
     try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+        out = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", timeout=240)
     except Exception as e:
         notify(f"⚠️ *XCOM-match*: claude -p failed — {e}")
         print(json.dumps({"ok": False, "error": str(e)})); return 1

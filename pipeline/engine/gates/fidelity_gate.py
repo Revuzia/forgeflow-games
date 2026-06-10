@@ -59,16 +59,18 @@ GENRE_REFERENCE = {
 def build_command(img_path, genre, reference_note=None):
     ref = reference_note or GENRE_REFERENCE.get(genre, "")
     prompt = PROMPT_TEMPLATE.format(genre=genre, reference=ref)
-    # claude -p with an image attachment via @path
-    return ["claude", "-p", f"{prompt}\n\n@{img_path}"]
+    # (argv, stdin_prompt) — image attaches via @path inside the prompt; prompt rides STDIN
+    # (Windows argv caps at 32,767 chars -> WinError 206).
+    return ["claude", "-p"], f"{prompt}\n\n@{img_path}"
 
 
 def score_screenshot(img_path, genre, reference_note=None, timeout=120):
     """Run the vision call. Returns dict with score + notes, or an error dict.
     Only call this from a NON-interactive context (Task Scheduler / cron)."""
-    cmd = build_command(img_path, genre, reference_note)
+    cmd, prompt = build_command(img_path, genre, reference_note)
     try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        out = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", timeout=timeout)
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         return {"ok": False, "error": str(e), "genre_fidelity": None}
     raw = (out.stdout or "").strip()
@@ -119,8 +121,11 @@ def main():
             sys.exit(0)
         from capture import capture
         capture(url, out)
-        print(f"[fidelity_gate] captured {out}. Operator: score with claude -p:")
-        print("  " + " ".join(f'"{c}"' if " " in c else c for c in build_command(out, genre)))
+        _cmd, _prompt = build_command(out, genre)
+        pf = Path(out).with_suffix(".prompt.txt")
+        pf.write_text(_prompt, encoding="utf-8")
+        print(f"[fidelity_gate] captured {out}. Operator: score with claude -p (prompt via stdin):")
+        print(f'  claude -p < "{pf}"')
         sys.exit(0)
     img, genre = sys.argv[1], sys.argv[2]
     run = "--run" in sys.argv
@@ -132,10 +137,12 @@ def main():
         print(json.dumps(result, indent=2))
         sys.exit(0 if _passes(result) else 1)
     # Default: print the operator command (safe inside interactive sessions).
-    cmd = build_command(img, genre)
+    _cmd, _prompt = build_command(img, genre)
+    pf = Path(img).with_suffix(".prompt.txt")
+    pf.write_text(_prompt, encoding="utf-8")
     print("[fidelity_gate] vision call deferred (claude -p blocked in interactive session).")
-    print("Operator: run this in cmd.exe / Task Scheduler:")
-    print("  " + " ".join(f'"{c}"' if " " in c else c for c in cmd))
+    print("Operator: run this in cmd.exe / Task Scheduler (prompt via stdin):")
+    print(f'  claude -p < "{pf}"')
 
 
 if __name__ == "__main__":

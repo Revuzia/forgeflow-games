@@ -78,8 +78,9 @@ def save_state(st):
         pass
 
 
-def run(cmd, timeout=900):
-    return subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=timeout)
+def run(cmd, timeout=900, input=None):
+    return subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", input=input, timeout=timeout)
 
 
 def notify(text):
@@ -225,7 +226,7 @@ def attempt_fix(game, gap, pre_total, regression_guard=True):
             run(["git", "clean", "-fd", "games", "pipeline"], timeout=60)
         restore()
 
-    run(["claude", "-p", _fix_prompt(game, gap, pre_total)], timeout=1200)
+    run(["claude", "-p"], input=_fix_prompt(game, gap, pre_total), timeout=1200)
 
     # Gate 1: syntax + feel play-bot.
     ok, detail = gates_pass(game)

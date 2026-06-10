@@ -1,0 +1,137 @@
+{
+ "slug": "umbra-spire",
+ "genre": "3d-platformer",
+ "title": "Orbit Runner",
+ "brief": "Original-IP 3d-platformer game (sub-genre: 3d-platformer). Capture the core mechanics and game-feel of \"Super Mario Galaxy\" (critically acclaimed, 97%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: . MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+ "inspired_by": "Super Mario Galaxy",
+ "rating": 97,
+ "milestone": "M1",
+ "milestones": {
+  "M0": {
+   "status": "done",
+   "done_when": "design doc written: core loop, verbs, scope, art direction, definition_of_done"
+  },
+  "M1": {
+   "status": "in_progress",
+   "done_when": "core loop genuinely playable in ONE level: structure+feel green, no crash"
+  },
+  "M2": {
+   "status": "todo",
+   "done_when": "every verb in the design doc implemented and survives the play-bot"
+  },
+  "M3": {
+   "status": "todo",
+   "done_when": "multiple levels + progression + a real difficulty curve; everything reachable"
+  },
+  "M4": {
+   "status": "todo",
+   "done_when": "menu + audio + game-feel/juice; vision fidelity high; zero crashes"
+  },
+  "M5": {
+   "status": "todo",
+   "done_when": "deep QA: structure+feel+fidelity+review all green across repeated playthroughs"
+  }
+ },
+ "design_doc": {
+  "title": "Orbit Runner",
+  "core_loop": "Players control Nova, a celestial courier navigating spherical micro-planets orbiting a dying star. Each planet has its own gravity field that pulls Nova toward its surface, allowing 360-degree traversal around floating orbs. Collect star fragments while platforming across chains of planets, using momentum-based jumps between gravitational fields to slingshot across voids. Time pressure comes from the star's instability\u00e2\u20ac\u201dplanets destabilize and explode after a timer, forcing players to keep moving. Levels end when you deliver enough fragments to the Star Core portal.",
+  "verbs": [
+   "run",
+   "jump",
+   "spin-attack",
+   "long-jump (charge mechanic)",
+   "wall-jump (on planet surfaces)",
+   "gravity-shift (auto when near planet)",
+   "collect fragments",
+   "ground-pound"
+  ],
+  "scope": "IN: 5 tutorial planets + 12 main planets across 3 orbits (easy/medium/hard), each orbit is one level. Player character with 3-hit health system. Gravity transitions between planets with visual trail effects. Star fragment collectibles (need 70% to unlock portal). Hazards: lava patches, enemy sentinels (stationary turrets), crumbling platforms, black holes (instant death). Timer per level (3min/5min/7min by difficulty). HUD shows fragment count, health, timer. OUT: boss fights, powerups beyond base moveset, multiplayer, cutscenes (text-only story), voice acting, procedural generation. Art is low-poly with emissive glow, not realistic.",
+  "art_direction": "Vibrant space-fantasy palette: deep purple/indigo voids, neon cyan/magenta planet surfaces, golden star fragments with particle trails. Low-poly geometric planets (icospheres, cubes, toruses) with emissive edge highlights. Nova is a simple humanoid silhouette with glowing cyan accents. Skybox: static starfield with larger pulsing star (the dying sun) as focal point. UI: clean sans-serif white text with cyan outlines. Mood: arcadey, energetic, slightly melancholic (you're racing against cosmic entropy).",
+  "milestone_plan": {
+   "M1": "Vertical slice: 1 planet with gravity mechanics working, jump/spin-attack/long-jump functional, 10 star fragments placed, portal appears at 7 collected, title screen + single test level playable start-to-finish with win state",
+   "M2": "Core mechanics locked: all 8 verbs implemented and tuned, 3-planet chain with gravity transitions smooth, health system + damage from hazards, lose state (timer expires or health depletes), HUD functional, pause/settings/how-to pages wired via FFG.Shell",
+   "M3": "Content complete: all 15 planets built and connected into 3 levels (Orbit 1/2/3), difficulty curve tested, enemy sentinels + black holes placed, fragment counts balanced per level, level-select screen functional",
+   "M4": "Polish pass: particle FX for jumps/landings/fragment collection, screen shake on ground-pound, spatial audio for hazards, UI animations (fragment counter ticks up, health depletes smoothly), fullscreen/mute/pause controls tested, difficulty settings actually modify timer/enemy count",
+   "M5": "Ship-ready: all definition-of-done items verified, builds tested in Chrome/Firefox/Edge, performance >30fps on mid-tier hardware, FFG.Shell integration confirmed (no manual config needed post-deploy), trailer footage captured, itch.io page assets prepared"
+  },
+  "definition_of_done": [
+   "Title screen \u00e2\u2020\u2019 difficulty select \u00e2\u2020\u2019 level 1 flows without errors",
+   "Player can complete all 3 levels on EASY without hitting undefined states",
+   "Win state triggers when fragments collected + portal entered, shows victory screen with time/fragments stats",
+   "Lose state triggers on timer expiry OR health depleted, shows retry/quit options",
+   "HUD always displays current fragment count / required count, health pips, countdown timer",
+   "All 8 verbs respond within 100ms of input, no dropped inputs during gravity transitions",
+   "Gravity transitions never teleport player or cause clipping through planet geometry",
+   "Pause menu accessible at any time, settings persist across sessions (volume/fullscreen prefs)",
+   "How-to-play screen shows all 8 verbs with visual diagrams, accessible from title + pause",
+   "Page control bar (fullscreen/mute/pause icons) visible and functional in all game states",
+   "No console errors in browser devtools during 10min continuous play session",
+   "Game runs at stable 30+ FPS on Intel i5/16GB RAM baseline",
+   "Itch.io build loads in <15sec on average broadband, no missing assets"
+  ]
+ },
+ "open_issues": [
+  {
+   "id": 7,
+   "milestone": "M1",
+   "severity": "high",
+   "issue": "play:controls \u2014 state responded to input",
+   "status": "open",
+   "found": "2026-06-10T06:40:28.162164+00:00"
+  },
+  {
+   "id": 8,
+   "milestone": "M1",
+   "severity": "high",
+   "issue": "play:progression \u2014 states=['play'] maxScore=0 maxLevel=1",
+   "status": "open",
+   "found": "2026-06-10T06:40:28.162196+00:00"
+  }
+ ],
+ "changelog": [
+  {
+   "ts": "2026-06-10T06:38:14.640200+00:00",
+   "milestone": "M0",
+   "action": "design doc",
+   "result": "title=Orbit Runner"
+  },
+  {
+   "ts": "2026-06-10T06:40:28.162214+00:00",
+   "milestone": "M1",
+   "action": "engine pass",
+   "result": "play=play HOLD \u2014 failed: controls, progression panel=ok open=2"
+  },
+  {
+   "ts": "2026-06-10T06:40:28.179031+00:00",
+   "milestone": "M1",
+   "action": "engine pass",
+   "result": "author/revise FAIL (1/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
+  },
+  {
+   "ts": "2026-06-10T06:40:28.217400+00:00",
+   "milestone": "M1",
+   "action": "engine pass",
+   "result": "author/revise FAIL (2/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
+  },
+  {
+   "ts": "2026-06-10T06:40:28.263517+00:00",
+   "milestone": "M1",
+   "action": "engine pass",
+   "result": "author/revise FAIL (3/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
+  },
+  {
+   "ts": "2026-06-10T06:40:28.264948+00:00",
+   "milestone": "M1",
+   "action": "PARKED",
+   "result": "3 consecutive authoring failures \u2014 moving on"
+  },
+  {
+   "ts": "2026-06-10T10:45:00+00:00",
+   "milestone": "M1",
+   "action": "UN-PARKED",
+   "result": "park cause was WinError 206 (prompt exceeded Windows argv limit) \u2014 fixed: prompts now ride stdin"
+  }
+ ],
+ "sessions": 1,
+ "created": "2026-06-10T06:37:12.843947+00:00"
+}

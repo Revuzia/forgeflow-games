@@ -1,0 +1,214 @@
+{
+ "slug": "frost-lance",
+ "genre": "3d-open-world-souls",
+ "title": "Shattered Covenant",
+ "brief": "Original-IP 3d-open-world-souls game (sub-genre: 3d-open-world-souls). Capture the core mechanics and game-feel of \"Elden Ring\" (critically acclaimed, 96%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: . MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+ "inspired_by": "Elden Ring",
+ "rating": 96,
+ "milestone": "M1",
+ "milestones": {
+  "M0": {
+   "status": "done",
+   "done_when": "design doc written: core loop, verbs, scope, art direction, definition_of_done"
+  },
+  "M1": {
+   "status": "in_progress",
+   "done_when": "core loop genuinely playable in ONE level: structure+feel green, no crash"
+  },
+  "M2": {
+   "status": "todo",
+   "done_when": "every verb in the design doc implemented and survives the play-bot"
+  },
+  "M3": {
+   "status": "todo",
+   "done_when": "multiple levels + progression + a real difficulty curve; everything reachable"
+  },
+  "M4": {
+   "status": "todo",
+   "done_when": "menu + audio + game-feel/juice; vision fidelity high; zero crashes"
+  },
+  "M5": {
+   "status": "todo",
+   "done_when": "deep QA: structure+feel+fidelity+review all green across repeated playthroughs"
+  }
+ },
+ "design_doc": {
+  "title": "Shattered Covenant",
+  "core_loop": "The player explores a vast, interconnected dying world as a Forsworn warrior seeking fragments of a broken divine pact. Combat is deliberate and punishing: stamina-based melee attacks, timed blocks, dodge-rolls with i-frames, and spell-casting require careful resource management. Death returns the player to the last sanctum (checkpoint) with lost essence (currency/xp) recoverable at death location. Defeating bosses yields covenant shards that unlock new traversal abilities (double-jump, wall-run, spirit-dash) and expand accessible regions. Progression is non-linear: player chooses which domain to tackle based on difficulty and reward signals.",
+  "verbs": [
+   "light_attack",
+   "heavy_attack",
+   "block",
+   "dodge_roll",
+   "parry",
+   "cast_spell",
+   "sprint",
+   "lock_on_target",
+   "rest_at_sanctum",
+   "level_up_stats",
+   "equip_weapon",
+   "equip_armor",
+   "use_consumable",
+   "interact_with_npc",
+   "open_shortcut",
+   "mount_spirit_steed"
+  ],
+  "scope": {
+   "IN": [
+    "3 major domains (forest/ruins/volcano) each with unique boss",
+    "8-12 enemy types with distinct attack patterns",
+    "Stamina-based combat with light/heavy attacks, dodge-roll i-frames, parry window",
+    "Lock-on targeting system",
+    "Death mechanic: drop essence at death location, one chance to recover",
+    "5 sanctums (checkpoints) that restore health/flasks and respawn enemies",
+    "Leveling system: 4 core stats (Vigor/Strength/Dexterity/Arcane)",
+    "6 weapon types (sword/greatsword/spear/dual-blades/staff/bow)",
+    "3 armor sets affecting weight/roll speed",
+    "4 spell schools (fire/lightning/heal/buff)",
+    "Spirit steed mount for overworld traversal",
+    "3 covenant shards unlocking double-jump, wall-run, spirit-dash",
+    "10+ consumables (health flask, stamina flask, cure poison, buff items)",
+    "Dynamic weather and day/night cycle affecting enemy behavior",
+    "Boss health bars, player HUD (health/stamina/essence counter)",
+    "Minimap with fog-of-war",
+    "Settings: difficulty (story/normal/brutal), volume, controls rebind"
+   ],
+   "OUT": [
+    "Multiplayer/co-op/PvP",
+    "Procedural generation (hand-crafted world only)",
+    "Crafting system beyond consumable purchase",
+    "More than 3 major bosses",
+    "Voice acting (text-only dialogue)",
+    "Cutscenes (environmental storytelling only)",
+    "Quest log (implicit objectives via world design)",
+    "Character customization beyond armor/weapon choice"
+   ]
+  },
+  "art_direction": {
+   "palette": "Desaturated earth tones (ochre, charcoal, rust) with accent pops of ethereal cyan for covenant energy and crimson for blood/danger. Sky gradients shift from bruised purple at dawn to sickly amber at dusk.",
+   "mood": "Melancholic grandeur. Crumbling gothic architecture overgrown with bioluminescent fungi. Monolithic statues of forgotten gods. Mist and volumetric lighting create oppressive atmosphere. Enemy designs blend corrupted nature (twisted roots, obsidian shells) with fractured holy iconography.",
+   "references": "Beksinski's decayed landscapes, Bloodborne's Victorian horror, Shadow of the Colossus scale"
+  },
+  "milestone_plan": {
+   "M1": "VERTICAL SLICE (Week 1-2): Single combat arena with 1 basic enemy type, player can light attack/heavy attack/dodge-roll/block, stamina drains and regenerates, death resets to arena start, readable HUD shows health/stamina bars. Settings menu with volume/difficulty functional.",
+   "M2": "CORE MECHANICS (Week 3-4): Lock-on system, parry timing window, 3 weapon types with different move-sets, spell-casting with mana cost, leveling UI (allocate stats at sanctum), death drops essence recoverable once, 3 enemy types with telegraphed attacks, first boss fight with phase transition at 50% health.",
+   "M3": "CONTENT EXPANSION (Week 5-7): All 3 domains playable with interconnected shortcuts, 8 enemy types, 3 full boss encounters, spirit steed mount, sanctum fast-travel, covenant shards unlock traversal abilities, full armor/weapon variety, consumable inventory system, minimap with fog-of-war.",
+   "M4": "POLISH & BALANCE (Week 8-9): Particle effects for hits/spells/death, sound design pass (footsteps/weapon swings/ambient wind), boss AI tuning, difficulty scaling tested across all 3 settings, tutorial sanctum with learn-by-doing prompts, enemy placement/difficulty curve validated, performance optimization (60fps target).",
+   "M5": "SHIP PREP (Week 10): Final bug sweep, how-to-play screen with control diagrams, win state (defeat final boss \u00e2\u2020\u2019 covenant restored cutscene card), lose state (run out of essence \u00e2\u2020\u2019 permadeath option on brutal mode), pause menu fully functional, fullscreen toggle, credits screen, build packaging and smoke test on target platforms."
+  },
+  "definition_of_done": [
+   "Player can complete a full run from title screen to final boss defeat in 45-90 minutes",
+   "All 3 difficulty modes balanced: story (forgiving stamina/damage), normal (as designed), brutal (limited sanctums + permadeath)",
+   "Death mechanic functions: essence drops, minimap shows corpse marker, recovery or permanent loss on second death",
+   "Lock-on targeting smoothly switches between enemies within camera view",
+   "Parry window is 0.2s with visual/audio feedback, successful parry staggers enemy for riposte",
+   "All 3 bosses have unique movesets with 5+ attacks and phase transitions",
+   "Covenant shards unlock traversal: double-jump at 33% progression, wall-run at 66%, spirit-dash at final boss",
+   "Settings persist: difficulty/volume/control bindings save and reload",
+   "HUD is readable at 1080p: health/stamina bars, essence counter, equipped weapon/spell icons, minimap, boss health bar during encounters",
+   "No softlocks: player can always return to sanctum via death or fast-travel after unlocking multiple sanctums",
+   "Spirit steed mount increases movement speed 2x, dismounts on combat initiation",
+   "Win state shows 'Covenant Restored' card with total playtime and death count",
+   "Lose state (brutal permadeath) shows 'Forsworn Forever' card with option to restart or quit",
+   "Tutorial sanctum teaches combat via environmental prompts (stone tablets) for attack/dodge/parry/spell within first 5 minutes",
+   "Audio: distinct SFX for each weapon type, spell school, enemy hit/death, ambient loops per domain, boss music triggers",
+   "Performance: maintains 60fps on mid-tier hardware (GTX 1060 equivalent) at 1080p medium settings"
+  ]
+ },
+ "open_issues": [
+  {
+   "id": 3,
+   "milestone": "M1",
+   "severity": "high",
+   "issue": "play:start \u2014 after_start=menu",
+   "status": "open",
+   "found": "2026-06-10T07:02:40.863274+00:00"
+  },
+  {
+   "id": 4,
+   "milestone": "M1",
+   "severity": "high",
+   "issue": "play:liveness \u2014 frames 49->49",
+   "status": "open",
+   "found": "2026-06-10T07:02:40.863296+00:00"
+  },
+  {
+   "id": 7,
+   "milestone": "M1",
+   "severity": "high",
+   "issue": "play:controls \u2014 state responded to input",
+   "status": "open",
+   "found": "2026-06-10T07:02:40.863302+00:00"
+  },
+  {
+   "id": 8,
+   "milestone": "M1",
+   "severity": "high",
+   "issue": "play:progression \u2014 states=['menu'] maxScore=0 maxLevel=1",
+   "status": "open",
+   "found": "2026-06-10T07:02:40.863306+00:00"
+  },
+  {
+   "id": 9,
+   "milestone": "M1",
+   "severity": "high",
+   "issue": "play:audio \u2014 buffers=10 music=False",
+   "status": "open",
+   "found": "2026-06-10T07:02:40.863314+00:00"
+  },
+  {
+   "id": 10,
+   "milestone": "M1",
+   "severity": "high",
+   "issue": "play:errors \u2014 console_errors=0 lastErr=ReferenceError: hash32 is not defined",
+   "status": "open",
+   "found": "2026-06-10T07:02:40.863318+00:00"
+  }
+ ],
+ "changelog": [
+  {
+   "ts": "2026-06-10T06:59:57.470037+00:00",
+   "milestone": "M0",
+   "action": "design doc",
+   "result": "title=Shattered Covenant"
+  },
+  {
+   "ts": "2026-06-10T07:02:40.863331+00:00",
+   "milestone": "M1",
+   "action": "engine pass",
+   "result": "play=play HOLD \u2014 failed: start, liveness, controls, progression,  panel=ok open=6"
+  },
+  {
+   "ts": "2026-06-10T07:02:40.877648+00:00",
+   "milestone": "M1",
+   "action": "engine pass",
+   "result": "author/revise FAIL (1/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
+  },
+  {
+   "ts": "2026-06-10T07:02:40.909265+00:00",
+   "milestone": "M1",
+   "action": "engine pass",
+   "result": "author/revise FAIL (2/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
+  },
+  {
+   "ts": "2026-06-10T07:02:40.947896+00:00",
+   "milestone": "M1",
+   "action": "engine pass",
+   "result": "author/revise FAIL (3/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
+  },
+  {
+   "ts": "2026-06-10T07:02:40.949314+00:00",
+   "milestone": "M1",
+   "action": "PARKED",
+   "result": "3 consecutive authoring failures \u2014 moving on"
+  },
+  {
+   "ts": "2026-06-10T10:45:00+00:00",
+   "milestone": "M1",
+   "action": "UN-PARKED",
+   "result": "park cause was WinError 206 (prompt exceeded Windows argv limit) \u2014 fixed: prompts now ride stdin"
+  }
+ ],
+ "sessions": 1,
+ "created": "2026-06-10T06:58:40.298146+00:00"
+}

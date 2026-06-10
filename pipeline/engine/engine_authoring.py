@@ -344,8 +344,12 @@ def revise_engine_game(gdir, spec, *, goal, issues=None, run=False, timeout=420,
 # ── claude -p call (NON-interactive only) ──────────────────────────────────────────────────────────
 def _claude_author(prompt, timeout=300):
     """Run claude -p to author the game.js; return raw stdout. FORBIDDEN in an interactive session (OAuth
-    lock) — only called when author_engine_game(run=True) in the nightly / an operator cmd."""
-    r = subprocess.run(["claude", "-p", prompt], capture_output=True, text=True, timeout=timeout)
+    lock) — only called when author_engine_game(run=True) in the nightly / an operator cmd.
+    Prompt goes via STDIN: revision prompts (full game.js + issues embedded) exceed Windows' 32,767-char
+    CreateProcess argv limit -> WinError 206 before spawn (killed all 10 games on 2026-06-10).
+    Explicit utf-8 both ways (cp1252 default mojibakes design docs)."""
+    r = subprocess.run(["claude", "-p"], input=prompt, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", timeout=timeout)
     return r.stdout or ""
 
 

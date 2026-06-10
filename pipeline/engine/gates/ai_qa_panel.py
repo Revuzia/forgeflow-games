@@ -75,11 +75,12 @@ def build_prompt(insp, ctx):
 
 
 def build_command(insp, ctx):
-    """The exact claude -p command for an inspector (vision attaches the screenshot via @path)."""
+    """(argv, stdin_prompt) for an inspector (vision attaches the screenshot via @path inside the prompt).
+    Prompt rides STDIN, never argv — Windows caps argv at 32,767 chars (WinError 206)."""
     prompt = build_prompt(insp, ctx)
     if insp["kind"] == "vision" and ctx.get("shot"):
         prompt = prompt + f"\n\n@{ctx['shot']}"
-    return ["claude", "-p", prompt]
+    return ["claude", "-p"], prompt
 
 
 def parse_verdict(raw):
@@ -114,8 +115,12 @@ def run_inspector(insp, ctx, *, run=False, _raw_override=None, timeout=120):
         base["error"] = "deferred (run=False)"
         return base
     try:
-        raw = _raw_override if _raw_override is not None else \
-            subprocess.run(build_command(insp, ctx), capture_output=True, text=True, timeout=timeout).stdout
+        if _raw_override is not None:
+            raw = _raw_override
+        else:
+            cmd, prompt = build_command(insp, ctx)
+            raw = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                                 encoding="utf-8", errors="replace", timeout=timeout).stdout
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         base["error"] = "claude -p unavailable: " + type(e).__name__
         return base

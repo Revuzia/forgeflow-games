@@ -253,8 +253,8 @@ def code_review(slug, genre, gdir):
     except Exception:
         return True, []
     try:
-        out = subprocess.run(["claude", "-p", _CODE_REVIEW_PROMPT.format(genre=genre, content=content)],
-                             capture_output=True, text=True, timeout=160)
+        out = subprocess.run(["claude", "-p"], input=_CODE_REVIEW_PROMPT.format(genre=genre, content=content),
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=160)
         raw = (out.stdout or "").strip()
         s, e = raw.find("{"), raw.rfind("}")
         if s < 0 or e <= s:
@@ -665,9 +665,11 @@ def pick_dev_target():
 def _claude_json(prompt, timeout=240):
     """claude -p -> first JSON object in its output. Raises TransientError on backend/timeout
     (infra down -> abort the night cleanly, nothing marked failed); returns None on unparseable
-    output (a bad generation -> caller keeps prior state). claude -p: Task Scheduler only."""
+    output (a bad generation -> caller keeps prior state). claude -p: Task Scheduler only.
+    Prompt via STDIN (Windows argv cap is 32,767 chars -> WinError 206 on big prompts)."""
     try:
-        out = subprocess.run(["claude", "-p", prompt], capture_output=True, text=True, timeout=timeout)
+        out = subprocess.run(["claude", "-p"], input=prompt, capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", timeout=timeout)
     except Exception as e:
         raise TransientError(f"claude -p unavailable: {e}")
     raw = (out.stdout or "").strip()
@@ -1182,13 +1184,8 @@ def main():
                 break
         if built_n > 1:
             notify(f"🌙 FFG multi-game night: {built_n} games built+staged this window.")
-        if not once:
-            try:
-                log("XCOM-match autopipe: one nightly improvement pass…")
-                subprocess.run([sys.executable, str(ENGINE / "xcom_autopipe.py"), "--max-fixes", "1"], timeout=1800)
-            except Exception as e:
-                log(f"autopipe pass skipped ({e})")
-                track_error("xcom_autopipe", f"autopipe pass failed: {type(e).__name__}: {str(e)[:160]}")
+        # XCOM autopipe REMOVED from the nightly 2026-06-10 (owner: "Xcom still appears but shouldn't").
+        # xcom_autopipe.py remains runnable standalone; the nightly is engine milestone dev only.
         return
 
     aborted, built, failed = throughput_loop(force=force, deploy=deploy, once=once)

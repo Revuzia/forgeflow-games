@@ -1,0 +1,165 @@
+{
+ "slug": "crimson-vault",
+ "genre": "jrpg",
+ "title": "Echoes of the Timeborn",
+ "brief": "Original-IP jrpg game (sub-genre: jrpg). Capture the core mechanics and game-feel of \"Chrono Trigger\" (critically acclaimed, 97%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: . MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+ "inspired_by": "Chrono Trigger",
+ "rating": 97,
+ "milestone": "M1",
+ "milestones": {
+  "M0": {
+   "status": "done",
+   "done_when": "design doc written: core loop, verbs, scope, art direction, definition_of_done"
+  },
+  "M1": {
+   "status": "in_progress",
+   "done_when": "core loop genuinely playable in ONE level: structure+feel green, no crash"
+  },
+  "M2": {
+   "status": "todo",
+   "done_when": "every verb in the design doc implemented and survives the play-bot"
+  },
+  "M3": {
+   "status": "todo",
+   "done_when": "multiple levels + progression + a real difficulty curve; everything reachable"
+  },
+  "M4": {
+   "status": "todo",
+   "done_when": "menu + audio + game-feel/juice; vision fidelity high; zero crashes"
+  },
+  "M5": {
+   "status": "todo",
+   "done_when": "deep QA: structure+feel+fidelity+review all green across repeated playthroughs"
+  }
+ },
+ "design_doc": {
+  "title": "Echoes of the Timeborn",
+  "core_loop": "Players control a party of three time-displaced heroes who discover they can manipulate temporal echoes\u00e2\u20ac\u201dghostly afterimages of past actions. In turn-based combat, characters can queue actions that leave echoes; when positioned correctly, echoes synchronize to unleash devastating combo attacks. Between battles, players explore a world fracturing across three eras (Ancient, Industrial, Neon), solving environmental puzzles by planting actions in one timeline that trigger effects in another. The core satisfaction comes from planning elaborate echo chains in combat and witnessing causality ripple across eras in exploration.",
+  "verbs": [
+   "queue_action",
+   "spawn_echo",
+   "combo_sync",
+   "timeline_shift",
+   "explore_node",
+   "trigger_puzzle",
+   "recruit_companion",
+   "upgrade_ability",
+   "save_checkpoint"
+  ],
+  "scope": "IN: 3 playable characters with 4 abilities each, 8-10 story nodes across 3 eras, turn-based combat with echo-combo system (2-3 character combos), 3 boss fights, linear narrative with branching dialogue (affects ending), grid-based tactical positioning, 5 equipment tiers, 2-3 environmental puzzle types (temporal triggers), autosave system, complete tutorial sequence. OUT: open world, random encounters (all battles story-triggered), crafting, side quests, towns with NPCs, romance systems, New Game+, difficulty scaling (preset difficulties only), voice acting, multiplayer, achievements.",
+  "art_direction": "Pixel art with 32x32 character sprites and 16-color-per-era palettes. Ancient era: warm ochre/terracotta/gold (crumbling temples). Industrial era: cool slate/iron/coal smoke (clockwork cities). Neon era: electric cyan/magenta/violet (holographic ruins). Echo effects render as translucent duplicates with chromatic aberration trails. UI uses clean sans-serif with era-specific accent colors. Combat backgrounds are stylized dioramas, not full scenes. Mood: melancholic wonder\u00e2\u20ac\u201dbeauty in decay, hope amid temporal collapse.",
+  "milestone_plan": {
+   "M1": "Vertical slice: Single combat encounter (3v3) with echo-combo system functional, one character with 4 abilities, basic grid movement, health/mana HUD, win/lose states, FFG.Shell menu integration (title/settings/how-to), page controls (fullscreen/mute/pause). Proves combat feel + echo mechanic.",
+   "M2": "Full combat system: 3 playable characters, all 12 abilities implemented, 2-3 character combo tables, enemy AI with basic targeting, equipment stat modifiers, Ancient era art pass complete, 1 boss fight, difficulty presets functional.",
+   "M3": "Content complete: 8-10 story nodes scripted with dialogue branches, all 3 eras visually distinct, 3 boss fights, 2 environmental puzzle types working, linear progression locks, autosave between nodes, all equipment tiers, particle effects for echoes/combos.",
+   "M4": "Polish pass: UI animations (turn indicators, damage numbers, menu transitions), screen shake/flash on crits, audio cues for echo triggers, tutorial tooltips, ability descriptions, enemy telegraph indicators, balance pass on damage/health pools, pacing audit (combat length), bugfix sweep.",
+   "M5": "Ship-ready: Three endings implemented based on dialogue choices, credits screen, how-to guide with echo-combo examples, final QA pass (win/lose reachable in all scenarios), performance optimization (60fps target), responsive design tested, export to FFG catalog format, trailer-ready gameplay loop."
+  },
+  "definition_of_done": [
+   "Player can complete story from title screen to one of three endings without manual intervention",
+   "All 3 characters unlock through story progression and are playable in final boss fight",
+   "Echo-combo system triggers correctly for all 2-character combos (minimum 6 unique combos)",
+   "Win state (boss defeated) and lose state (party wiped) display unique screens with restart/continue options",
+   "FFG.Shell menu allows title/settings/difficulty/how-to navigation and persists settings across sessions",
+   "Page controls (fullscreen/mute/pause) functional at all times during gameplay",
+   "HUD clearly displays party health, mana, turn order, active ability cooldowns, and echo positions",
+   "All 3 eras have unique color palettes and at least 2 environmental puzzle instances each",
+   "Autosave triggers after every story node; player can reload on death",
+   "Tutorial explains echo mechanics, combo triggers, timeline shifting, and grid positioning within first 3 combat encounters",
+   "No placeholder art or [TODO] text in shipped build",
+   "Game runs start-to-finish in under 90 minutes for speedrun, 2-3 hours for narrative playthrough"
+  ]
+ },
+ "open_issues": [
+  {
+   "id": 4,
+   "milestone": "M1",
+   "severity": "high",
+   "issue": "play:liveness \u2014 frames 78->78",
+   "status": "open",
+   "found": "2026-06-10T06:47:22.420638+00:00"
+  },
+  {
+   "id": 7,
+   "milestone": "M1",
+   "severity": "high",
+   "issue": "play:controls \u2014 state responded to input",
+   "status": "open",
+   "found": "2026-06-10T06:47:22.420660+00:00"
+  },
+  {
+   "id": 8,
+   "milestone": "M1",
+   "severity": "high",
+   "issue": "play:progression \u2014 states=['play'] maxScore=0 maxLevel=1",
+   "status": "open",
+   "found": "2026-06-10T06:47:22.420665+00:00"
+  },
+  {
+   "id": 10,
+   "milestone": "M1",
+   "severity": "high",
+   "issue": "play:errors \u2014 console_errors=0 lastErr=TypeError: Cannot set properties of undefined (setting '3')",
+   "status": "open",
+   "found": "2026-06-10T06:47:22.420670+00:00"
+  }
+ ],
+ "changelog": [
+  {
+   "ts": "2026-06-10T06:41:26.667400+00:00",
+   "milestone": "M0",
+   "action": "design doc",
+   "result": "title=Echoes of the Timeborn"
+  },
+  {
+   "ts": "2026-06-10T06:43:24.250590+00:00",
+   "milestone": "M1",
+   "action": "engine pass",
+   "result": "author/revise FAIL (1/3): no game.js code in claude output"
+  },
+  {
+   "ts": "2026-06-10T06:45:00.378708+00:00",
+   "milestone": "M1",
+   "action": "engine pass",
+   "result": "author/revise FAIL (2/3): no game.js code in claude output"
+  },
+  {
+   "ts": "2026-06-10T06:47:22.420681+00:00",
+   "milestone": "M1",
+   "action": "engine pass",
+   "result": "play=play HOLD \u2014 failed: liveness, controls, progression, errors panel=ok open=4"
+  },
+  {
+   "ts": "2026-06-10T06:47:22.433425+00:00",
+   "milestone": "M1",
+   "action": "engine pass",
+   "result": "author/revise FAIL (1/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
+  },
+  {
+   "ts": "2026-06-10T06:47:22.468109+00:00",
+   "milestone": "M1",
+   "action": "engine pass",
+   "result": "author/revise FAIL (2/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
+  },
+  {
+   "ts": "2026-06-10T06:47:22.505718+00:00",
+   "milestone": "M1",
+   "action": "engine pass",
+   "result": "author/revise FAIL (3/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
+  },
+  {
+   "ts": "2026-06-10T06:47:22.506979+00:00",
+   "milestone": "M1",
+   "action": "PARKED",
+   "result": "3 consecutive authoring failures \u2014 moving on"
+  },
+  {
+   "ts": "2026-06-10T10:45:00+00:00",
+   "milestone": "M1",
+   "action": "UN-PARKED",
+   "result": "park cause was WinError 206 (prompt exceeded Windows argv limit) \u2014 fixed: prompts now ride stdin"
+  }
+ ],
+ "sessions": 1,
+ "created": "2026-06-10T06:40:28.844666+00:00"
+}

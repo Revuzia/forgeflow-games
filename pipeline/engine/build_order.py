@@ -182,8 +182,10 @@ Return ONLY the full updated JSON object (slice + new missions)."""
 
 
 def run_claude_p(prompt, timeout=300):
-    """Run claude -p (NON-interactive contexts only). Returns parsed JSON or raises."""
-    out = subprocess.run(["claude", "-p", prompt], capture_output=True, text=True, timeout=timeout)
+    """Run claude -p (NON-interactive contexts only). Returns parsed JSON or raises.
+    Prompt via STDIN — Windows argv caps at 32,767 chars (WinError 206 on big prompts)."""
+    out = subprocess.run(["claude", "-p"], input=prompt, capture_output=True, text=True,
+                         encoding="utf-8", errors="replace", timeout=timeout)
     raw = (out.stdout or "").strip()
     s, e = raw.find("{"), raw.rfind("}")
     if s < 0 or e <= s:
