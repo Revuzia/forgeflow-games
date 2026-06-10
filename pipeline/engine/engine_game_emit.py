@@ -72,7 +72,9 @@ def _name_or_null(refs_kind, name):
 MUSIC_DIR = ASSETS_ROOT / "music"
 MUSIC_THEMES = ["cinematic_epic.ogg", "level_theme_1.ogg", "level_theme_2.ogg",
                 "level_theme_3.ogg", "menu_theme.ogg", "boss_theme.ogg"]
-SFX_PACKS = [ASSETS_ROOT / "interface-sounds", ASSETS_ROOT / "impact-sounds", ASSETS_ROOT / "rpg-audio"]
+SFX_PACKS = [ASSETS_ROOT / "interface-sounds", ASSETS_ROOT / "impact-sounds", ASSETS_ROOT / "rpg-audio",
+             ASSETS_ROOT / "_downloaded"]    # + Unity Asset Store audio (wired by unity_ingest_and_wire)
+SFX_MAX_BYTES = 2_500_000                    # skip uncompressed multi-MB wavs as per-game SFX
 # contract names (overwrite the staged files in place — zero runtime change):
 CONTRACT_SFX = {"coin": ["confirmation", "coin", "select"], "jump": ["cloth", "swish", "jump", "drop"]}
 # EXTRA names (declared via GAME.audio; the runtime loads them in load()):
@@ -87,17 +89,26 @@ def _seed(slug, salt=""):
     return int(hashlib.md5((slug + "|" + salt).encode("utf-8")).hexdigest()[:8], 16)
 
 
+def _sfx_files(pack):
+    """All usable SFX files in a pack: ogg/wav/mp3, size-capped (browsers decode by content, not
+    extension, so wav/mp3 staged under a .ogg name still play — but multi-MB wavs are skipped)."""
+    out = []
+    for ext in ("*.ogg", "*.wav", "*.mp3"):
+        out += [f for f in pack.rglob(ext) if f.stat().st_size <= SFX_MAX_BYTES]
+    return sorted(out)
+
+
 def _pick_sfx(name, keywords, slug):
     """Deterministically pick one SFX file matching the keywords (filename contains), seeded by
     (slug, name). Falls back to the whole catalog if no keyword hit. None if no packs exist."""
     pool = []
     for pack in SFX_PACKS:
         if pack.exists():
-            pool += [f for f in sorted(pack.rglob("*.ogg")) if any(k in f.name.lower() for k in keywords)]
+            pool += [f for f in _sfx_files(pack) if any(k in f.name.lower() for k in keywords)]
     if not pool:
         for pack in SFX_PACKS:
             if pack.exists():
-                pool += sorted(pack.rglob("*.ogg"))
+                pool += _sfx_files(pack)
     return pool[_seed(slug, name) % len(pool)] if pool else None
 
 
