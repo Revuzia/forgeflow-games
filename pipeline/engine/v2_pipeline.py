@@ -635,22 +635,30 @@ def pick_dev_target():
     # NO-REPEAT GUARD: a game already built locally (games/<slug>, the deploy source) is DONE — never
     # re-develop it. This is what kept the loop re-doing Lumen Run.
     shipped = {p.name for p in (ROOT / "games").iterdir() if p.is_dir() and not p.name.startswith("_")} if (ROOT / "games").exists() else set()
-    actives = []
+    actives, parked_blockers = [], []
     for p in DEV_JOURNAL.glob("*.json"):
         try:
             jj = json.loads(p.read_text(encoding="utf-8"))
         except Exception:
             continue
-        # PARKED journals are skipped: a game that kept failing (e.g. 3 consecutive schema-gate fails)
-        # is benched so it can never monopolize the nightly window again (the void-spire failure class).
-        # Un-park by deleting the "parked" key in its dev_journal file.
-        if jj.get("milestone") != "DONE" and not jj.get("parked") and jj.get("slug") not in shipped:
-            actives.append(jj)
+        if jj.get("milestone") == "DONE" or jj.get("slug") in shipped:
+            continue
+        # PARKED journals can't be developed, but under the ONE-GAME POLICY they still BLOCK new
+        # promotions: the unfinished game stays the only game until an operator un-parks (delete the
+        # "parked" key) or removes its journal. Never start game #2 while game #1 is unfinished.
+        (parked_blockers if jj.get("parked") else actives).append(jj)
     if actives:
         actives.sort(key=lambda jj: jj.get("created", ""))
         jj = actives[0]
         return ({"slug": jj["slug"], "genre": jj["genre"], "brief": jj.get("brief", ""),
                  "inspired_by": jj.get("inspired_by"), "rating": jj.get("rating")}, jj)
+    if parked_blockers:
+        slug = parked_blockers[0].get("slug")
+        log(f"ONE-GAME POLICY: '{slug}' is parked ({parked_blockers[0].get('parked_reason', '')[:100]}) — "
+            f"no new game starts until it is un-parked or its journal removed.")
+        notify(f"🅿️ FFG: *{slug}* is parked and blocks the pipeline (one-game policy). "
+               f"Un-park (delete its journal's \"parked\" key) or remove the journal to continue.")
+        return None, None
     q = _load_queue()
     cands = [i for i in q.get("queue", []) if i.get("status") == "backlog" and i["slug"] not in shipped] or \
             [i for i in q.get("queue", []) if i.get("status") == "pending" and i["slug"] not in shipped]
@@ -839,11 +847,17 @@ def engine_milestone_dev(item, journal, spec, force=False, single_step=False):
         goal = ENGINE_MILESTONES.get(mid, "Improve the game toward ship quality.")
         open_issues = [i["issue"] for i in journal.get("open_issues", []) if i.get("status", "open") == "open"]
 
-        # 1. AUTHOR (first pass) or REVISE (every later pass) — one claude -p call.
+        # 1. AUTHOR (first pass) or REVISE (every later pass) — one claude -p call (+ one self-heal
+        # retry inside on gate failure). The revision carries the journal's CROSS-PASS MEMORY:
+        # condensed design doc + the last 5 changelog lines (what was already tried) — never full history.
         if not (gdir / "game.js").exists():
             ok, _, detail = engine_authoring.author_engine_game(spec, out_dir=gdir, run=True)
         else:
-            ok, _, detail = engine_authoring.revise_engine_game(gdir, spec, goal=goal, issues=open_issues, run=True)
+            recent = [f"{c.get('milestone')}: {str(c.get('result', ''))[:160]}"
+                      for c in journal.get("changelog", [])[-5:]]
+            ok, _, detail = engine_authoring.revise_engine_game(
+                gdir, spec, goal=goal, issues=open_issues, recent_log=recent,
+                design_doc=journal.get("design_doc") or {}, run=True)
         steps += 1
         if not ok:
             fails += 1
@@ -1163,10 +1177,12 @@ def main():
     # DEPTH-FIRST is the DEFAULT (owner: "one very well-built game, not 8-12 shallow ones").
     # The nightly task runs this with no args -> dev_loop. --throughput is the legacy batch loop.
     if not throughput:
-        # MULTI-GAME NIGHTS: engine builds take ~1 min, so one 120-min window can ship several games.
-        # Keep developing targets while the window holds and each round ENDS its game ("built") or
-        # benches it ("parked") — any other status (worked/transient/no_target/error) means stop:
-        # the same target would just be re-picked (or the backend is down / queue is empty).
+        # ONE GAME AT A TIME (owner 2026-06-10: "ONLY 1 game at a time until it finishes ALL passes.
+        # Never do multiple games at a time."). The milestone loop already iterates passes on the ONE
+        # active game all night; a new round starts ONLY when that game fully finishes ("built" = M5
+        # DONE). "parked" now ENDS the night — the parked game stays the single active game and blocks
+        # any new promotion (see pick_dev_target) until it is fixed/un-parked. This replaces the
+        # multi-game-nights behavior that developed 10 different games on 2026-06-10.
         rounds, built_n = 0, 0
         while True:
             rounds += 1
@@ -1177,13 +1193,13 @@ def main():
                 track_error("dev_loop", f"dev_loop crashed: {type(e).__name__}: {str(e)[:200]}")
                 st = "error"
             built_n += 1 if st == "built" else 0
-            if once or st not in ("built", "parked"):
+            if once or st != "built":
                 break
             if rounds >= 10 or time_left(force) <= 15:
                 log(f"night cap reached (rounds={rounds}, {time_left(force)} min left) — {built_n} built this night")
                 break
         if built_n > 1:
-            notify(f"🌙 FFG multi-game night: {built_n} games built+staged this window.")
+            notify(f"🌙 FFG night: {built_n} games run to completion sequentially this window.")
         # XCOM autopipe REMOVED from the nightly 2026-06-10 (owner: "Xcom still appears but shouldn't").
         # xcom_autopipe.py remains runnable standalone; the nightly is engine milestone dev only.
         return

@@ -272,18 +272,44 @@ def validate(js_text, workdir=None):
 # revision of the COMPLETE game.js against (a) the milestone goal and (b) the open QA issues from the
 # play tester / AI QA panel. ~3-6 min per pass; a real game is ~12-40 passes (M1..M5), resuming across
 # nights via the dev journal — matching how the Phaser deep-dev loop built games.
-def build_revision_prompt(spec, current_js, goal, issues=None):
+# PROMPT BUDGET: stdin has no OS cap (argv did — WinError 206); the real ceiling is the model's
+# context window (~200K tokens ≈ 800K chars). 300K chars ≈ 75K tokens keeps passes fast + cheap with
+# 2.5x headroom even at M5 (API doc 24K + game.js up to ~80K + design/issues/history ~10K ≈ 115K).
+MAX_PROMPT_CHARS = 300_000
+
+
+def build_revision_prompt(spec, current_js, goal, issues=None, recent_log=None, design_doc=None):
     """Assemble the ITERATIVE pass prompt: keep what works, fix every QA issue, advance the milestone
-    goal, output the COMPLETE new game.js. Deterministic + fixture-testable."""
+    goal, output the COMPLETE new game.js. Deterministic + fixture-testable.
+    CROSS-PASS MEMORY without token bloat: the prompt carries (a) the condensed DESIGN DOC (the
+    "before" — what this game is supposed to be), (b) the CURRENT full game.js (the "during" — complete,
+    never truncated), (c) open issues + the last few changelog lines (the "after" — what QA found and
+    what was already tried). Full history/transcripts are never embedded — that's what made long-running
+    agent loops degrade; structured state beats raw history."""
     api = API_DOC.read_text(encoding="utf-8") if API_DOC.exists() else "(API doc missing)"
-    issue_lines = "\n".join(f"  - {i}" for i in (issues or [])) or "  (none open)"
-    return f"""You are the ForgeFlow game-writer doing an ITERATIVE DEVELOPMENT PASS on an EXISTING engine
+    issues = list(issues or [])
+    recent = list(recent_log or [])
+    dd_note = ""
+    if design_doc:
+        dd = {k: design_doc.get(k) for k in ("core_loop", "verbs", "win_condition", "lose_condition",
+                                             "definition_of_done") if design_doc.get(k)}
+        if dd:
+            dd_note = "\nDESIGN DOC (the contract for this game — stay true to it):\n" + \
+                      json.dumps(dd, indent=1)[:4000] + "\n"
+
+    def _assemble(issues_n, recent_n, api_text):
+        issue_lines = "\n".join(f"  - {i}" for i in issues[:issues_n]) or "  (none open)"
+        recent_block = ""
+        if recent[:recent_n]:
+            recent_block = "\nRECENT DEV HISTORY (already tried — do NOT repeat failed approaches):\n" + \
+                           "\n".join(f"  - {r}" for r in recent[:recent_n]) + "\n"
+        return f"""You are the ForgeFlow game-writer doing an ITERATIVE DEVELOPMENT PASS on an EXISTING engine
 game (title: {spec.get('title')}, genre: {spec.get('genre')}). This is real game development — you are
 deepening a working game, not starting over.
 
 MILESTONE GOAL FOR THIS PASS:
   {goal}
-
+{dd_note}{recent_block}
 OPEN QA ISSUES (from the automated play tester / AI QA panel — fix EVERY one):
 {issue_lines}
 
@@ -305,11 +331,21 @@ CURRENT game.js:
 ```
 
 === ENGINE_GAME_API.md (the contract) ===
-{api}
+{api_text}
 """
 
+    # Budget enforcement, trimming the least valuable context first; game.js is NEVER truncated.
+    p = _assemble(len(issues), len(recent), api)
+    if len(p) > MAX_PROMPT_CHARS:
+        p = _assemble(10, 0, api)                                   # drop history, cap issues
+    if len(p) > MAX_PROMPT_CHARS:
+        keep = MAX_PROMPT_CHARS - (len(p) - len(api)) - 200         # last resort: trim API doc tail
+        p = _assemble(10, 0, api[:max(8000, keep)] + "\n…(API doc trimmed for prompt budget)")
+    return p
 
-def revise_engine_game(gdir, spec, *, goal, issues=None, run=False, timeout=420, _raw_override=None):
+
+def revise_engine_game(gdir, spec, *, goal, issues=None, recent_log=None, design_doc=None,
+                       run=False, timeout=420, _raw_override=None):
     """One iterative milestone pass: claude -p rewrites the COMPLETE game.js against the goal + QA issues.
     The existing file is only replaced when the revision VALIDATES — a bad revision never destroys a
     working game. Returns (ok, out_dir, detail). Never raises."""
@@ -319,15 +355,21 @@ def revise_engine_game(gdir, spec, *, goal, issues=None, run=False, timeout=420,
         return False, str(gdir), "no game.js to revise (author it first)"
     current = gj.read_text(encoding="utf-8")
     try:
-        prompt = build_revision_prompt(spec, current, goal, issues)
+        prompt = build_revision_prompt(spec, current, goal, issues, recent_log=recent_log, design_doc=design_doc)
         (gdir / "_author_prompt_rev.txt").write_text(prompt, encoding="utf-8")
         if _raw_override is None and not run:
             return None, str(gdir), "revision prompt assembled; claude -p deferred (run=False)"
         raw = _raw_override if _raw_override is not None else _claude_author(prompt, timeout)
         js = extract_game_js(raw)
-        if not js:
-            return False, str(gdir), "no game.js code in revision output (old file kept)"
-        ok, detail = validate(js, gdir)
+        ok, detail = (False, "no game.js code in revision output") if not js else validate(js, gdir)
+        if not ok and run and _raw_override is None:
+            # SELF-HEAL: one reflexion pass grounded in the actual gate error (not self-review).
+            healed = _self_heal(raw, detail, f"MILESTONE GOAL: {goal}", timeout)
+            js2 = extract_game_js(healed)
+            if js2:
+                ok2, d2 = validate(js2, gdir)
+                if ok2:
+                    js, detail, ok = js2, d2 + "; self-healed", True
         if not ok:
             return False, str(gdir), "revision invalid: " + detail + " (old file kept)"
         # never lose the per-game audio declaration: re-attach it if the revision dropped it
@@ -339,6 +381,31 @@ def revise_engine_game(gdir, spec, *, goal, issues=None, run=False, timeout=420,
         return True, str(gdir), "revision applied (" + detail + ")"
     except Exception as e:
         return False, str(gdir), "revision error: " + type(e).__name__ + ": " + str(e)[:160]
+
+
+def _self_heal(bad_output, error_detail, goal_note, timeout=420):
+    """REFLEXION REPAIR (one pass): claude -p fixes the SPECIFIC build-gate failure. The critique is
+    grounded in the validator's actual error — not self-review (CoVe/Anthropic: independent grounding).
+    Used by author + revise when run=True; never on fixture (_raw_override) paths."""
+    api = API_DOC.read_text(encoding="utf-8") if API_DOC.exists() else "(API doc missing)"
+    prompt = f"""You are the ForgeFlow game-writer. Your previous game.js output FAILED the automated build gate.
+
+GATE FAILURE (fix EXACTLY this — it is from the real validator, not an opinion):
+  {error_detail}
+
+{goal_note}
+
+YOUR PREVIOUS OUTPUT (repair it — keep everything that is fine, fix what the gate rejected; if there is
+no usable code below, write the complete game.js from scratch per the contract):
+{str(bad_output)[:120_000]}
+
+OUTPUT ONLY the complete corrected game.js inside ONE ```js fenced block. No prose. It must keep the
+export shape: export const GAME = {{ title, dim, controls, sprites/models, setup(ctx), update(dt, ctx) }}.
+
+=== ENGINE_GAME_API.md (the contract) ===
+{api}
+"""
+    return _claude_author(prompt, timeout)
 
 
 # ── claude -p call (NON-interactive only) ──────────────────────────────────────────────────────────
@@ -374,9 +441,15 @@ def author_engine_game(spec, *, out_dir=None, run=False, timeout=300, _raw_overr
             return None, str(out), "prompt assembled; claude -p deferred (run=False)"
         raw = _raw_override if _raw_override is not None else _claude_author(prompt, timeout)
         js = extract_game_js(raw)
-        if not js:
-            return False, str(out), "no game.js code in claude output"
-        ok, detail = validate(js, out)
+        ok, detail = (False, "no game.js code in claude output") if not js else validate(js, out)
+        if not ok and run and _raw_override is None:
+            # SELF-HEAL: one reflexion pass grounded in the actual gate error.
+            healed = _self_heal(raw, detail, f"GAME BRIEF: {str(spec.get('brief', ''))[:600]}", timeout)
+            js2 = extract_game_js(healed)
+            if js2:
+                ok2, d2 = validate(js2, out)
+                if ok2:
+                    js, detail, ok = js2, d2 + "; self-healed", True
         if not ok:
             return False, str(out), "authored game.js invalid: " + detail
         js += _emit.audio_js_snippet(audio_extras)    # extra named sounds (mechanical JSON append)
