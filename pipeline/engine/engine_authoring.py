@@ -162,6 +162,80 @@ def validate(js_text, workdir=None):
     return True, "structural + node --check OK"
 
 
+# ── ITERATIVE DEVELOPMENT (the 2-6 hour real-game path) ───────────────────────────────────────────
+# A full game is NOT one authoring call. The nightly drives MILESTONE passes: each pass is a claude -p
+# revision of the COMPLETE game.js against (a) the milestone goal and (b) the open QA issues from the
+# play tester / AI QA panel. ~3-6 min per pass; a real game is ~12-40 passes (M1..M5), resuming across
+# nights via the dev journal — matching how the Phaser deep-dev loop built games.
+def build_revision_prompt(spec, current_js, goal, issues=None):
+    """Assemble the ITERATIVE pass prompt: keep what works, fix every QA issue, advance the milestone
+    goal, output the COMPLETE new game.js. Deterministic + fixture-testable."""
+    api = API_DOC.read_text(encoding="utf-8") if API_DOC.exists() else "(API doc missing)"
+    issue_lines = "\n".join(f"  - {i}" for i in (issues or [])) or "  (none open)"
+    return f"""You are the ForgeFlow game-writer doing an ITERATIVE DEVELOPMENT PASS on an EXISTING engine
+game (title: {spec.get('title')}, genre: {spec.get('genre')}). This is real game development — you are
+deepening a working game, not starting over.
+
+MILESTONE GOAL FOR THIS PASS:
+  {goal}
+
+OPEN QA ISSUES (from the automated play tester / AI QA panel — fix EVERY one):
+{issue_lines}
+
+RULES:
+  1. Output the COMPLETE new game.js (the full file, not a diff). Keep the exact export shape:
+     export const GAME = {{ title, dim, controls, sprites/models, setup(ctx), update(dt, ctx) }};
+     Helper functions above the export are encouraged for levels/waves/enemy behaviors.
+  2. KEEP everything that already works (assets, audio incl. any GAME.audio line, controls, win/lose,
+     ctx.level progression). Build on it; never regress it.
+  3. All previous hard requirements still apply: real sprites/models (never bare shapes), 3+ stages with
+     a ramp scaled by ctx.difficulty, ctx.level advanced and shown in the HUD, winnable AND loseable,
+     input every frame, ctx.hud each frame, per-event sounds ({", ".join(AUDIO_NAMES)}).
+  4. A bot pressing arrows/Space/F must still make progress within ~12s of starting.
+  5. OUTPUT ONLY the game.js code inside a single ```js fenced block. No prose.
+
+CURRENT game.js:
+```js
+{current_js}
+```
+
+=== ENGINE_GAME_API.md (the contract) ===
+{api}
+"""
+
+
+def revise_engine_game(gdir, spec, *, goal, issues=None, run=False, timeout=420, _raw_override=None):
+    """One iterative milestone pass: claude -p rewrites the COMPLETE game.js against the goal + QA issues.
+    The existing file is only replaced when the revision VALIDATES — a bad revision never destroys a
+    working game. Returns (ok, out_dir, detail). Never raises."""
+    gdir = Path(gdir)
+    gj = gdir / "game.js"
+    if not gj.exists():
+        return False, str(gdir), "no game.js to revise (author it first)"
+    current = gj.read_text(encoding="utf-8")
+    try:
+        prompt = build_revision_prompt(spec, current, goal, issues)
+        (gdir / "_author_prompt_rev.txt").write_text(prompt, encoding="utf-8")
+        if _raw_override is None and not run:
+            return None, str(gdir), "revision prompt assembled; claude -p deferred (run=False)"
+        raw = _raw_override if _raw_override is not None else _claude_author(prompt, timeout)
+        js = extract_game_js(raw)
+        if not js:
+            return False, str(gdir), "no game.js code in revision output (old file kept)"
+        ok, detail = validate(js, gdir)
+        if not ok:
+            return False, str(gdir), "revision invalid: " + detail + " (old file kept)"
+        # never lose the per-game audio declaration: re-attach it if the revision dropped it
+        if "GAME.audio" in current and "GAME.audio" not in js:
+            m = re.search(r"^GAME\.audio = .*$", current, re.MULTILINE)
+            if m:
+                js += "\n" + m.group(0) + "\n"
+        gj.write_text(js, encoding="utf-8")
+        return True, str(gdir), "revision applied (" + detail + ")"
+    except Exception as e:
+        return False, str(gdir), "revision error: " + type(e).__name__ + ": " + str(e)[:160]
+
+
 # ── claude -p call (NON-interactive only) ──────────────────────────────────────────────────────────
 def _claude_author(prompt, timeout=300):
     """Run claude -p to author the game.js; return raw stdout. FORBIDDEN in an interactive session (OAuth

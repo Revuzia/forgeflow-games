@@ -97,6 +97,44 @@ ok2, out2, det2 = A.author_engine_game({"slug": "_bad", "genre": "arcade", "titl
                                        out_dir=tmp / "_bad", _raw_override="I cannot write that.")
 chk("author garbage -> ok=False (" + det2 + ")", ok2 is False)
 
+# ── ITERATIVE REVISION (the multi-hour real-game path) — both ways ──────────────────────────────
+rev_dir = Path(tempfile.mkdtemp()) / "_rev"
+rev_dir.mkdir(parents=True)
+ORIG = GOOD_GAME_JS + "\nGAME.audio = {\"hit\": \"./assets/audio/sfx_hit.ogg\"};\n"
+(rev_dir / "game.js").write_text(ORIG, encoding="utf-8")
+
+pr2 = A.build_revision_prompt({"slug": "x", "genre": "platformer", "title": "Rev Test"},
+                              ORIG, "Content depth: 5+ levels", ["play:audio buffers=0", "enemy too slow"])
+for needle in ("ITERATIVE DEVELOPMENT PASS", "Content depth: 5+ levels", "enemy too slow",
+               "Fixture Collect", "COMPLETE new game.js", "```js", "ENGINE_GAME_API"):
+    chk(f"rev prompt contains {needle!r}", needle in pr2)
+
+# run=False -> deferred, file untouched
+ok_r0, _, det_r0 = A.revise_engine_game(rev_dir, {"title": "T"}, goal="g", run=False)
+chk("revise run=False -> None (deferred)", ok_r0 is None and (rev_dir / "game.js").read_text(encoding="utf-8") == ORIG)
+
+# good revision -> file REPLACED
+NEW = GOOD_GAME_JS.replace("Fixture Collect", "Fixture Collect DEEPENED")
+ok_r1, _, det_r1 = A.revise_engine_game(rev_dir, {"title": "T"}, goal="g", _raw_override="```js\n" + NEW + "\n```")
+after1 = (rev_dir / "game.js").read_text(encoding="utf-8")
+chk("good revision applied (" + det_r1[:40] + ")", ok_r1 is True and "DEEPENED" in after1)
+chk("revision re-attached GAME.audio (override dropped it)", "GAME.audio" in after1)
+
+# garbage revision -> ok False AND the working file is KEPT (never destroys a working game)
+ok_r2, _, det_r2 = A.revise_engine_game(rev_dir, {"title": "T"}, goal="g", _raw_override="I refuse.")
+chk("garbage revision rejected, old file kept", ok_r2 is False and
+    (rev_dir / "game.js").read_text(encoding="utf-8") == after1)
+
+# invalid revision (no win condition) -> rejected, file kept
+ok_r3, _, det_r3 = A.revise_engine_game(rev_dir, {"title": "T"}, goal="g",
+                                        _raw_override="```js\nexport const GAME = { sprites:{}, setup(ctx){}, update(dt,ctx){} };\n```")
+chk("invalid revision (no win) rejected, file kept (" + det_r3[:40] + ")", ok_r3 is False and
+    (rev_dir / "game.js").read_text(encoding="utf-8") == after1)
+
+# missing game.js -> clean failure
+ok_r4, _, det_r4 = A.revise_engine_game(Path(tempfile.mkdtemp()), {"title": "T"}, goal="g", _raw_override="x")
+chk("revise without game.js -> False", ok_r4 is False and "no game.js" in det_r4)
+
 print(f"checks run: {n}")
 if fails:
     print("FAILED:")

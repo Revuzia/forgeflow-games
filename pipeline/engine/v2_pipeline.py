@@ -774,6 +774,156 @@ def _snapshot_issues(journal, mid, verdict, pt):
     return issues
 
 
+# ── ENGINE deep-dev: ITERATIVE milestone development (the 2-6 hour real-game path) ────────────────
+# One authoring call makes a MINIGAME. A real game is built the way the Phaser deep-dev built games:
+# milestone passes all night — each pass is a claude -p revision of the complete game.js against the
+# milestone goal + the open QA issues, then a fresh play-test. ~3-6 min per pass; M1->M5 is typically
+# 12-40 passes (~1.5-4 h), and the journal resumes across nights exactly like the Phaser path.
+ENGINE_MILESTONES = {
+    "M1": "CORE LOOP: the genre's signature mechanic playable start-to-finish — real assets, win AND "
+          "lose reachable, ctx.level wired, controls declared.",
+    "M2": "CONTENT DEPTH: 5+ distinct levels/waves/rounds with a real difficulty ramp scaled by "
+          "ctx.difficulty — new layouts/elements appear as ctx.level rises, not just bigger numbers.",
+    "M3": "VARIETY & CHALLENGE: 3+ distinct enemy/hazard behaviors, a mid-run set-piece or boss "
+          "encounter, score/reward tuning so risk pays.",
+    "M4": "POLISH & FEEL: hit feedback (knockback/invuln moments/particle bursts via ctx.spawn), HUD "
+          "clarity, per-event SFX (hit/explosion/powerup/select/win/lose), difficulty balance pass.",
+    "M5": "SHIP-READY: every open QA issue closed, controls line accurate, no dead code, the whole "
+          "game plays clean start to finish at all three difficulties.",
+}
+
+
+def engine_milestone_dev(item, journal, spec, force=False, single_step=False):
+    """Iterative ENGINE development of one game (authoring mode): M0 design doc, M1 initial author,
+    M2..M5 revision passes (claude -p rewrites the full game.js against the milestone goal + open QA
+    issues), each pass play-verified; at M4/M5 the AI QA panel adds issues and gates M5. 3-strike park
+    on consecutive author/revision failures. Returns "built"|"parked"|"worked"|"transient",
+    or None when the authoring stack is unavailable (caller falls back to the one-shot path)."""
+    try:
+        sys.path.insert(0, str(ENGINE))
+        import engine_authoring
+        import build_target
+    except Exception as e:
+        log(f"engine authoring stack unavailable ({e}) -> one-shot path")
+        return None
+    slug, genre = item["slug"], item["genre"]
+    gdir = ROOT / "games" / "_engine" / slug
+
+    # M0 — design doc first (same as the Phaser path; feeds the authoring spec).
+    if journal["milestone"] == "M0":
+        try:
+            if not journal.get("design_doc"):
+                log(f"{slug}: ENGINE M0 — design doc")
+                dd = generate_design_doc(item)
+                if dd:
+                    journal["design_doc"] = dd
+                    journal["title"] = dd.get("title") or journal.get("title")
+            journal["milestones"]["M0"]["status"] = "done"
+            journal["milestone"] = "M1"
+            journal["milestones"]["M1"]["status"] = "in_progress"
+            _changelog(journal, "M0", "design doc", f"title={journal.get('title')}")
+            save_journal(journal)
+        except TransientError as e:
+            log(f"ENGINE M0 abort (transient): {e}"); save_journal(journal); return "transient"
+    dd = journal.get("design_doc") or {}
+    spec = dict(spec)
+    spec["title"] = journal.get("title") or spec.get("title")
+    spec["core_loop"] = dd.get("core_loop") or spec.get("core_loop")
+
+    steps, fails = 0, 0
+    while time_left(force) > 8 and journal["milestone"] != "DONE" and steps < 40:
+        mid = journal["milestone"]
+        goal = ENGINE_MILESTONES.get(mid, "Improve the game toward ship quality.")
+        open_issues = [i["issue"] for i in journal.get("open_issues", []) if i.get("status", "open") == "open"]
+
+        # 1. AUTHOR (first pass) or REVISE (every later pass) — one claude -p call.
+        if not (gdir / "game.js").exists():
+            ok, _, detail = engine_authoring.author_engine_game(spec, out_dir=gdir, run=True)
+        else:
+            ok, _, detail = engine_authoring.revise_engine_game(gdir, spec, goal=goal, issues=open_issues, run=True)
+        steps += 1
+        if not ok:
+            fails += 1
+            _changelog(journal, mid, "engine pass", f"author/revise FAIL ({fails}/3): {str(detail)[:140]}")
+            track_error("engine_author", str(detail)[:200], slug=slug, genre=genre, milestone=mid)
+            if any(t in str(detail) for t in ("unavailable", "spawn error", "timed out")):
+                save_journal(journal); return "transient"          # infra down -> retry next window
+            if fails >= 3:
+                journal["parked"] = True
+                journal["parked_reason"] = f"3 consecutive engine authoring failures at {mid}: {str(detail)[:160]}"
+                journal["parked_at"] = _now_iso()
+                _changelog(journal, mid, "PARKED", "3 consecutive authoring failures — moving on")
+                _mark(slug, "held", "parked: engine authoring failures")
+                notify(f"🅿️ FFG engine-dev: *{slug}* PARKED after 3 authoring failures at {mid}.")
+                save_journal(journal); return "parked"
+            save_journal(journal)
+            if single_step: break
+            continue
+        fails = 0
+
+        # 2. PLAY-VERIFY the new build; snapshot failed inspectors as the open issue list.
+        ship, pdetail = build_target.play_verify(slug, gdir)
+        rep = {}
+        try:
+            rep = json.loads((gdir / "play_report.json").read_text(encoding="utf-8"))
+        except Exception:
+            pass
+        journal["open_issues"] = [
+            {"id": k + 1, "milestone": mid, "severity": "high",
+             "issue": f"play:{name} — {info.get('detail','')[:140]}", "status": "open", "found": _now_iso()}
+            for k, (name, info) in enumerate((rep.get("inspectors") or {}).items()) if info.get("pass") is False]
+
+        # 3. At M4/M5 fold in the AI QA panel (vision/genre-fit/code-review/UX) for quality issues.
+        panel_ok = True
+        if mid in ("M4", "M5"):
+            try:
+                sys.path.insert(0, str(ENGINE / "gates"))
+                import ai_qa_panel
+                prep = ai_qa_panel.run_panel(gdir, genre, shot=str(gdir / "_play.png"), run=True,
+                                             title=spec.get("title"))
+                panel_ok = prep.get("verdict") == "ship"
+                base = len(journal["open_issues"])
+                for j, (insp, lst) in enumerate((prep.get("issues") or {}).items()):
+                    for issue in lst[:4]:
+                        journal["open_issues"].append({"id": base + j + 1, "milestone": mid, "severity": "med",
+                                                       "issue": f"ai:{insp} — {str(issue)[:140]}",
+                                                       "status": "open", "found": _now_iso()})
+            except Exception as e:
+                log(f"ai_qa panel skipped ({e})"); panel_ok = True       # panel infra missing -> don't block
+
+        _changelog(journal, mid, "engine pass",
+                   f"play={'SHIP' if ship else str(pdetail)[:60]} panel={'ok' if panel_ok else 'hold'} open={len(journal['open_issues'])}")
+        log(f"{slug} [ENGINE {mid}] pass {steps}: play={'SHIP' if ship else 'HOLD'} open={len(journal['open_issues'])}")
+
+        # 4. Definition of done: the build PLAYS (tester SHIP, or tester unavailable -> structural floor);
+        #    M5 additionally needs the AI QA panel to say ship (when it ran).
+        if (ship is True or ship is None) and (mid != "M5" or panel_ok):
+            nxt = MILESTONE_IDS[MILESTONE_IDS.index(mid) + 1] if mid != "M5" else "DONE"
+            journal["milestones"][mid]["status"] = "done"
+            journal["milestone"] = nxt
+            if nxt != "DONE":
+                journal["milestones"][nxt]["status"] = "in_progress"
+            _changelog(journal, mid, "milestone complete", f"-> {nxt}")
+            log(f"{slug}: ENGINE milestone {mid} DONE -> {nxt}")
+            notify(f"📈 FFG engine-dev: *{slug}* completed {mid} -> {nxt} (pass {steps}).")
+        save_journal(journal)
+        if single_step:
+            break
+
+    if journal["milestone"] == "DONE":
+        try:
+            (gdir / "READY_TO_DEPLOY").write_text(_now_iso(), encoding="utf-8")
+        except OSError:
+            pass
+        _mark(slug, "built", f"ENGINE deep-dev complete (M0-M5, {journal.get('sessions',1)} session(s)); staged for review")
+        notify(f"✅ FFG engine-dev: *{slug}* reached M5 SHIP-READY on the engine — staged for your review.")
+        save_journal(journal)
+        return "built"
+    save_journal(journal)
+    log(f"{slug}: ENGINE dev paused at {journal['milestone']} after {steps} pass(es) — resumes next window.")
+    return "worked"
+
+
 def dev_loop(force=False, deploy=False, single_step=False):
     """One game's worth of deliberate development. Resumes the active project, advances its
     current milestone with claude -p, QA's it with the gates + deep playtest, logs the live issue
@@ -811,6 +961,14 @@ def dev_loop(force=False, deploy=False, single_step=False):
         if wip.exists():
             try: content.update({k: v for k, v in (json.loads(wip.read_text(encoding="utf-8")) or {}).items() if v is not None})
             except Exception: pass
+        # AUTHORING ON -> ITERATIVE milestone development (the 2-6h real-game path: design doc, then
+        # claude -p revision passes against QA issues until M5). AUTHORING OFF -> the one-shot template
+        # build below (fast minigame floor; the proven fallback).
+        if build_target.authoring_enabled():
+            st = engine_milestone_dev(item, journal, content, force=force, single_step=single_step)
+            if st is not None:
+                return st
+            # authoring stack unavailable -> fall through to the deterministic one-shot path
         ok_e, out_e, detail_e = build_target.dev_engine_build(slug, content)
         if ok_e:
             journal["engine_build"] = {"out": out_e, "detail": detail_e, "ts": _now_iso()}
