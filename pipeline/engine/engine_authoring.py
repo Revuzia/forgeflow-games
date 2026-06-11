@@ -120,6 +120,18 @@ def pick_assets(slug):
     when the library is unavailable. Deterministic — same slug, same cast."""
     sets = {"sprites": dict(GENERIC_ASSETS["sprites"]), "models": dict(GENERIC_ASSETS["models"])}
     chars = _sprite_chars()
+    if not chars:
+        # LIBRARY-FIRST, GENERATE-WHEN-NEEDED (owner 2026-06-11): the 2D character library is
+        # unavailable -> one budgeted PixelLab hero; any failure keeps the GENERIC fallback.
+        try:
+            import art_fallback
+            gen = _emit.ASSETS_ROOT / "_generated" / "hero_fallback.png"
+            gen.parent.mkdir(parents=True, exist_ok=True)
+            if art_fallback.ensure_sprite(gen, "pixel art hero character, side view, 64x64 game "
+                                               "sprite, transparent background"):
+                sets["sprites"]["hero"] = "_generated/hero_fallback.png"
+        except Exception:
+            pass
     if len(chars) >= 3:
         picks, i = [], 0
         while len(picks) < 3 and i < len(chars) * 2:
@@ -231,6 +243,18 @@ HARD REQUIREMENTS (a reviewer + an automated player will reject the game if any 
 === ENGINE_GAME_API.md (the contract — follow it precisely) ===
 {api}
 """
+
+
+def write_validated_js(path, js, workdir=None):
+    """THE write gate for game.js (audit T4): the EXACT bytes written must pass validate().
+    Every writer (author, revise — any future mutation) routes through here, so the 2026-06-11
+    class of bug (post-validation append corrupting the file) is structurally impossible.
+    Returns (ok, detail); on failure NOTHING is written."""
+    ok, detail = validate(js, workdir)
+    if not ok:
+        return False, detail
+    Path(path).write_text(js, encoding="utf-8")
+    return True, detail
 
 
 # ── extraction + validation ─────────────────────────────────────────────────────────────────────
@@ -397,10 +421,9 @@ def revise_engine_game(gdir, spec, *, goal, issues=None, recent_log=None, design
                 re.search(r"^GAME\.audio = [\s\S]*", current, re.MULTILINE)
             if m:
                 js += "\n" + m.group(0).rstrip() + "\n"
-                ok3, d3 = validate(js, gdir)          # the EXACT bytes we write must validate
-                if not ok3:
-                    return False, str(gdir), "post-audio-reattach invalid: " + d3 + " (old file kept)"
-        gj.write_text(js, encoding="utf-8")
+        ok_w, d_w = write_validated_js(gj, js, gdir)   # INVARIANT: written bytes == validated bytes
+        if not ok_w:
+            return False, str(gdir), "final write rejected: " + d_w + " (old file kept)"
         return True, str(gdir), "revision applied (" + detail + ")"
     except Exception as e:
         return False, str(gdir), "revision error: " + type(e).__name__ + ": " + str(e)[:160]
@@ -475,8 +498,10 @@ def author_engine_game(spec, *, out_dir=None, run=False, timeout=300, _raw_overr
                     js, detail, ok = js2, d2 + "; self-healed", True
         if not ok:
             return False, str(out), "authored game.js invalid: " + detail
-        js += _emit.audio_js_snippet(audio_extras)    # extra named sounds (mechanical JSON append)
-        (out / "game.js").write_text(js, encoding="utf-8")
+        js += _emit.audio_js_snippet(audio_extras)    # extra named sounds (runtime loads GAME.audio)
+        ok_w, d_w = write_validated_js(out / "game.js", js, out)   # INVARIANT: written bytes == validated bytes
+        if not ok_w:
+            return False, str(out), "post-audio-append invalid: " + d_w
         (out / "index.html").write_text(_emit.INDEX_HTML.replace("__TITLE__", spec.get("title") or slug), encoding="utf-8")
         return True, str(out), "authored + validated (" + detail + ")"
     except Exception as e:

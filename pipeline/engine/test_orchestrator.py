@@ -38,6 +38,17 @@ def chk(label, ok):
 v2.notify = lambda *a, **k: None
 v2.track_error = lambda *a, **k: None
 
+# HERMETIC GUARD (2026-06-11): this suite once clobbered the REAL build_queue.json — it patched
+# _load_queue but not the SAVE path, so promoting the fixture slug wrote {"fresh"} over 155 games.
+# Now every mutable path is redirected to tmp BEFORE any test runs, and the suite ends by PROVING
+# the production files were untouched (mtime + content hash).
+import hashlib
+PROD = {p: (p.stat().st_mtime_ns, hashlib.md5(p.read_bytes()).hexdigest())
+        for p in (Path(__file__).parent / "build_queue.json",
+                  Path(__file__).parent / "engine_target.json")
+        if p.exists()}
+PROD_JOURNALS = {p: p.stat().st_mtime_ns for p in (Path(__file__).parent / "dev_journal").glob("*.json")}
+
 # ── 1. run lock ─────────────────────────────────────────────────────────────────────────────────
 tmp = Path(tempfile.mkdtemp())
 v2.RUN_LOCK = tmp / ".ffg_nightly.lock"
@@ -84,6 +95,10 @@ def _journal(slug, milestone="M1", parked=False, created="2026-01-01"):
     (jdir / f"{slug}.json").write_text(json.dumps(j), encoding="utf-8")
 
 
+v2.QUEUE = tmp / "build_queue.json"            # HERMETIC: _load_queue/_save_queue/_mark hit tmp only
+v2.QUEUE.write_text(json.dumps({"queue": [{"slug": "fresh", "genre": "shmup",
+                                           "status": "backlog", "rating": 90}]}), encoding="utf-8")
+
 _journal("older", created="2026-01-01")
 _journal("newer", created="2026-02-01")
 item, j = v2.pick_dev_target()
@@ -92,7 +107,6 @@ chk("pick: oldest active journal wins", item and item["slug"] == "older")
 for f in jdir.glob("*.json"):
     f.unlink()
 _journal("blocked-game", parked=True)
-v2._load_queue = lambda: {"queue": [{"slug": "fresh", "genre": "shmup", "status": "backlog", "rating": 90}]}
 item, j = v2.pick_dev_target()
 chk("pick: PARKED journal blocks promotion (one-game policy)", item is None and j is None)
 
@@ -132,6 +146,14 @@ os.environ.pop("FFG_ALLOW_PHASER", None)
 build_target.choose_target = lambda *a, **k: False
 st = v2.dev_loop()
 chk("T5: Phaser path quarantined => transient", st == "transient")
+
+# ── HERMETIC PROOF: production files untouched by this suite ───────────────────────────────────
+for p, (mt, h) in PROD.items():
+    chk(f"hermetic: {p.name} untouched",
+        p.stat().st_mtime_ns == mt and hashlib.md5(p.read_bytes()).hexdigest() == h)
+chk("hermetic: dev_journal untouched",
+    all(p.stat().st_mtime_ns == mt for p, mt in PROD_JOURNALS.items() if p.exists())
+    and len(list((Path(__file__).parent / "dev_journal").glob("*.json"))) == len(PROD_JOURNALS))
 
 print(f"\nchecks run: {N}")
 print("ORCHESTRATOR: " + ("PASS (%d checks)" % N if not FAILS else "FAIL — " + "; ".join(FAILS)))

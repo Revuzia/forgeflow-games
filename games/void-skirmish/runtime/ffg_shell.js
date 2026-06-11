@@ -55,6 +55,21 @@
     root.addEventListener("keydown", function (e) {
       if (e.key === "Escape") { e.preventDefault(); self.togglePause(); }
     });
+    // Hooks for the page-level control bar (game_controls.js: Fullscreen / Mute /
+    // Pause). Lets the shared bar drive FFG pause + audio the way the other games' do.
+    try {
+      FFG.shell = self;
+      root.__PAUSE__ = {
+        toggle: function () { self.togglePause(); },
+        pause: function () { if (self.phase === "playing") self.pause(); },
+        resume: function () { if (self.phase === "paused") self.resume(); },
+      };
+      root.addEventListener("mutechange", function (e) {
+        var m = !!(e.detail && e.detail.muted);
+        FFG.sfxVolume = m ? 0 : self.sfxVolume;       // kernel.playSound scales by this
+        if (self._music) { try { self._music.muted = m; } catch (x) {} }
+      });
+    } catch (e) {}
   }
 
   Shell.prototype._build = function () {
@@ -97,14 +112,22 @@
   Shell.prototype.menu = function () {
     this.phase = "menu"; this.ov.dataset.ended = ""; this.ov.innerHTML = "";
     var self = this;
-    this.ov.appendChild(el("div", "", '<div style="font-size:58px;font-weight:800;letter-spacing:6px;' +
-      'text-shadow:0 3px 22px rgba(0,0,0,.7),0 0 30px rgba(80,200,255,.25)">' +
+    this.ov.appendChild(el("div", "text-align:center", '<div style="font-size:clamp(46px,8vw,88px);font-weight:900;letter-spacing:10px;' +
+      "font-family:Georgia,'Times New Roman',serif;" +
+      'background:linear-gradient(180deg,#fff0c8 0%,#f0c065 55%,#c98a32 100%);-webkit-background-clip:text;background-clip:text;color:transparent;' +
+      'text-shadow:0 4px 26px rgba(0,0,0,.65),0 0 46px rgba(224,162,60,.28);padding:0 8px">' +
       (this.o.title || "FFG GAME").toUpperCase() + '</div>' +
-      (this.o.tagline ? '<div style="font-size:15px;opacity:.82;margin-top:8px;letter-spacing:1px">' + this.o.tagline + '</div>' : "")));
+      (this.o.tagline ? '<div style="font-size:16px;opacity:.88;margin-top:10px;letter-spacing:2px;color:#dfe8f4;text-shadow:0 2px 10px #000">' + this.o.tagline + '</div>' : "")));
+    // PLAY first (top of the menu), difficulty selector beneath it.
+    this.ov.appendChild(el("div", "height:8px"));
+    this.ov.appendChild(this._btn("▶  PLAY", function () {
+      self.hide(); self.phase = "playing"; self._playMusic();
+      if (self.o.onPlay) self.o.onPlay(self.difficulty);
+    }, true));
     var diffs = this.o.difficulties || [];
     if (diffs.length) {
-      this.ov.appendChild(el("div", "font-size:12px;opacity:.7;margin-top:10px;letter-spacing:2px", "DIFFICULTY"));
-      var row = el("div", "display:flex;gap:8px");
+      this.ov.appendChild(el("div", "font-size:12px;opacity:.7;margin-top:14px;letter-spacing:2px", "DIFFICULTY"));
+      var row = el("div", "display:flex;gap:8px;margin-top:2px");
       diffs.forEach(function (d) {
         var b = self._btn(d.toUpperCase(), function () { self.difficulty = d; mark(); }, false);
         b.dataset.diff = d; b.style.minWidth = "104px"; b.style.padding = "9px 16px"; row.appendChild(b);
@@ -112,12 +135,7 @@
       function mark() { Array.prototype.forEach.call(row.children, function (b) { b.style.outline = b.dataset.diff === self.difficulty ? "2px solid #7CFC9A" : "none"; }); }
       this.ov.appendChild(row); mark();
     }
-    this.ov.appendChild(el("div", "height:4px"));
-    this.ov.appendChild(this._btn("▶  PLAY", function () {
-      self.hide(); self.phase = "playing"; self._playMusic();
-      if (self.o.onPlay) self.o.onPlay(self.difficulty);
-    }, true));
-    var sub = el("div", "display:flex;gap:8px;margin-top:2px");
+    var sub = el("div", "display:flex;gap:8px;margin-top:14px");
     if (this.o.howTo) sub.appendChild(this._smallBtn("HOW TO PLAY", function () { self.tutorial(); }));
     sub.appendChild(this._smallBtn("SETTINGS", function () { self.settings(); }));
     this.ov.appendChild(sub);

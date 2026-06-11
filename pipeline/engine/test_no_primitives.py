@@ -42,13 +42,25 @@ def _actor_lines(js):
     return [ln for ln in js.splitlines() if any(f'tag: "{t}"' in ln for t in ACTOR_TAGS)]
 
 
+# matches NAME = "literal" / NAME = null inside single OR multi-declaration consts
+# (`const LEN = 60, COIN_SPR = "star", ...;` — the emitted-template shape)
+_CONST_RE = re.compile(r'\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*("([^"]*)"|null)\s*[,;)\n]')
+
+
 def actors_ok(js):
-    """An actor spawn line is OK iff it references a real asset: model:"name" or sprite:"name" (quoted,
-    non-null). Returns (ok, offenders[])."""
+    """An actor spawn line is OK iff it references a real asset: model:"name"/sprite:"name" (quoted),
+    OR an identifier resolving to a non-null const string (emitted templates use
+    `const COIN_SPR = "star"` + `sprite: COIN_SPR` — 2026-06-11 detector upgrade; the old line-literal
+    check false-failed every emitted template). Returns (ok, offenders[])."""
+    consts = {m.group(1): (m.group(3) if m.group(2) != "null" else None) for m in _CONST_RE.finditer(js)}
     bad = []
     for ln in _actor_lines(js):
-        if not re.search(r'(model|sprite):\s*"[^"]+"', ln):
-            bad.append(ln.strip()[:90])
+        if re.search(r'(model|sprite):\s*"[^"]+"', ln):
+            continue                                   # literal asset name
+        m = re.search(r'(model|sprite):\s*([A-Za-z_][A-Za-z0-9_]*)\b', ln)
+        if m and consts.get(m.group(2)):               # identifier resolved to a non-null name
+            continue
+        bad.append(ln.strip()[:90])
     return (len(bad) == 0, bad)
 
 
@@ -58,6 +70,10 @@ need("detector FAILS a null-sprite player", not actors_ok('ctx.spawn({ tag: "pla
 need("detector FAILS a bare-cube enemy", not actors_ok('const e = ctx.spawn({ tag: "enemy", color: [1,0,0] });')[0])
 need("detector PASSES a sprite player", actors_ok('ctx.spawn({ tag: "player", sprite: "hero" });')[0])
 need("detector PASSES a model player", actors_ok('ctx.spawn({ tag: "player", model: "hero" });')[0])
+need("detector PASSES const-resolved sprite (template style)",
+     actors_ok('const COIN_SPR = "star";\nctx.spawn({ tag: "coin", sprite: COIN_SPR });')[0])
+need("detector FAILS const-null sprite (asset missing at emit time)",
+     not actors_ok('const COIN_SPR = null;\nctx.spawn({ tag: "coin", sprite: COIN_SPR });')[0])
 need("detector ignores non-actors (ground color OK)", actors_ok('ctx.spawn({ tag: "ground", color: [0,1,0] });')[0])
 
 # ── A) PIPELINE GUARD: every emitter genre must produce real-asset actors + copy the files ────────

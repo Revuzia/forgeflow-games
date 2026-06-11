@@ -135,6 +135,28 @@ chk("invalid revision (no win) rejected, file kept (" + det_r3[:40] + ")", ok_r3
 ok_r4, _, det_r4 = A.revise_engine_game(Path(tempfile.mkdtemp()), {"title": "T"}, goal="g", _raw_override="x")
 chk("revise without game.js -> False", ok_r4 is False and "no game.js" in det_r4)
 
+# ── 2026-06-11 NIGHT-KILLER REGRESSION: multi-line GAME.audio re-attach must stay loadable ──────
+# The old single-line regex appended a dangling 'GAME.audio = {' AFTER validation -> every written
+# game.js failed to module-load and the tester crashed reportless all night (38 claude calls burned).
+nk_dir = Path(tempfile.mkdtemp()) / "_nk"
+nk_dir.mkdir(parents=True)
+MULTI = GOOD_GAME_JS + '\nGAME.audio = {\n  "hit": "./assets/audio/sfx_hit.ogg",\n  "win": "./assets/audio/sfx_win.ogg"\n};\n'
+(nk_dir / "game.js").write_text(MULTI, encoding="utf-8")
+ok_nk, _, det_nk = A.revise_engine_game(nk_dir, {"title": "T"}, goal="g",
+                                        _raw_override="```js\n" + NEW + "\n```")   # revision DROPS audio
+after_nk = (nk_dir / "game.js").read_text(encoding="utf-8")
+chk("night-killer: revision applied with multi-line audio in current", ok_nk is True)
+chk("night-killer: FULL audio block re-attached (closing brace + semicolon)",
+    '"win"' in after_nk and after_nk.rstrip().endswith(";"))
+chk("night-killer: written file still validates (no dangler)", A.validate(after_nk, nk_dir)[0] is True)
+
+# ── write_validated_js: THE write gate (audit T4) — both ways ───────────────────────────────────
+wv = Path(tempfile.mkdtemp())
+ok_w1, _ = A.write_validated_js(wv / "game.js", GOOD_GAME_JS, wv)
+chk("write gate: valid js written", ok_w1 is True and (wv / "game.js").exists())
+ok_w2, det_w2 = A.write_validated_js(wv / "bad.js", GOOD_GAME_JS + "\nGAME.audio = {\n", wv)
+chk("write gate: corrupted bytes REFUSED, nothing written", ok_w2 is False and not (wv / "bad.js").exists())
+
 print(f"checks run: {n}")
 if fails:
     print("FAILED:")

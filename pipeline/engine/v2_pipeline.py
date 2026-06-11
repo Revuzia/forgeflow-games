@@ -733,6 +733,35 @@ def milestone_done(mid, verdict, pt):
     }.get(mid, False)
 
 
+def reconcile_queue():
+    """Startup invariant (audit T7): the QUEUE must agree with the JOURNALS — exactly the active
+    journal's slug may hold status 'dev'. Heals drift from crashes/manual edits (and the 06-11
+    incident where a non-hermetic test overwrote the queue). Best-effort, never raises."""
+    try:
+        q = _load_queue()
+        actives = []
+        for p in DEV_JOURNAL.glob("*.json"):
+            try:
+                jj = json.loads(p.read_text(encoding="utf-8"))
+                if jj.get("milestone") != "DONE" and not jj.get("parked"):
+                    actives.append((jj.get("created", ""), jj["slug"]))
+            except Exception:
+                continue
+        active = sorted(actives)[0][1] if actives else None
+        fixed = 0
+        for item in q.get("queue", []):
+            st = item.get("status")
+            if item.get("slug") == active and st != "dev":
+                item["status"] = "dev"; item["detail"] = "active deep-dev target (reconciled)"; fixed += 1
+            elif item.get("slug") != active and st in ("dev", "developing"):
+                item["status"] = "backlog"; item.pop("detail", None); fixed += 1
+        if fixed:
+            _save_queue(q)
+            log(f"queue reconciled with journals ({fixed} row(s) healed; active={active})")
+    except Exception as e:
+        log(f"queue reconcile skipped ({e})")
+
+
 def pick_dev_target():
     """The ONE game in development: resume an unfinished journal (oldest first — finish what we
     started), else promote the highest-rated BACKLOG game to a fresh journal. (None, None) if
@@ -1331,7 +1360,10 @@ def main():
     # these rows. Guarded end-to-end: telemetry failure can never break a night.
     _rid = None
     try:
-        sys.path.insert(0, str(ROOT.parent.parent / "scripts"))
+        # claw_lib lives at <Claude Claw>/scripts = ROOT.parent/"scripts" (ROOT = forgeflow-games).
+        # The original parent.parent pointed at C:\Users\<user>\scripts (nonexistent) — telemetry only
+        # worked by accident under the scheduler via claw_wrapper's sys.path[0].
+        sys.path.insert(0, str(ROOT.parent / "scripts"))
         from claw_lib.agency_runs import start_run as _sr, finish_run as _fr
         _rid = _sr("forgeflow_games", summary=f"nightly v2 (deploy={deploy} once={once} throughput={throughput})")
     except Exception:
@@ -1366,6 +1398,8 @@ def _main_locked(*, force, deploy, once, throughput):
             except Exception as e:
                 log(f"asset refresh skipped ({type(e).__name__}: {str(e)[:120]})")
                 track_error("asset_refresh", f"unity_ingest_and_wire failed: {type(e).__name__}: {str(e)[:160]}")
+
+    reconcile_queue()                                  # audit T7: queue must agree with journals
 
     # DEPTH-FIRST is the DEFAULT (owner: "one very well-built game, not 8-12 shallow ones").
     # The nightly task runs this with no args -> dev_loop. --throughput is the legacy batch loop.

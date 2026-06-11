@@ -123,10 +123,19 @@ def stage_audio(out, slug):
     adir.mkdir(parents=True, exist_ok=True)
     refs = {}
     try:
-        if MUSIC_DIR.exists():
-            themes = [MUSIC_DIR / t for t in MUSIC_THEMES if (MUSIC_DIR / t).exists()]
-            if themes:
-                shutil.copyfile(themes[_seed(slug, "music") % len(themes)], adir / "music_menu.ogg")
+        themes = [MUSIC_DIR / t for t in MUSIC_THEMES if (MUSIC_DIR / t).exists()] if MUSIC_DIR.exists() else []
+        if not themes:
+            # LIBRARY-FIRST, GENERATE-WHEN-NEEDED (owner 2026-06-11): the music library is empty/missing
+            # -> one budgeted Stability generation; on any failure the engine's bundled default remains.
+            try:
+                import art_fallback
+                gen = MUSIC_DIR / "generated_theme.ogg"
+                if art_fallback.ensure_music(gen):
+                    themes = [gen]
+            except Exception:
+                pass
+        if themes:
+            shutil.copyfile(themes[_seed(slug, "music") % len(themes)], adir / "music_menu.ogg")
         for name, kws in CONTRACT_SFX.items():
             f = _pick_sfx(name, kws, slug)
             if f:

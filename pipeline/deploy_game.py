@@ -2,6 +2,10 @@
 """
 deploy_game.py — Upload a built game to Cloudflare R2 and insert metadata into Supabase.
 
+⚠ LIVE SHARED UPLOADER — NOT Phaser legacy (audit L1, 2026-06-11). Despite its era, this module is
+imported by deploy_engine_game.py, deploy_portal.py, engine_game_build.py and engine_game_emit.py.
+Do not attic/delete it during legacy cleanups.
+
 Usage:
   python pipeline/deploy_game.py --game-dir games/001-tropical-fury --slug tropical-fury
 
