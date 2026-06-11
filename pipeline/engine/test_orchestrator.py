@@ -49,6 +49,18 @@ os.utime(v2.RUN_LOCK, (time.time() - 4 * 3600, time.time() - 4 * 3600))   # stal
 chk("lock: stale lock broken + re-acquired", v2.acquire_run_lock() is True)
 v2.release_run_lock()
 
+# DEAD-HOLDER BREAK: a lock left by a hard-killed process (finally never ran) must be broken
+# immediately — not after 3h — or a killed --once test blocks the 2:30 nightly.
+import subprocess
+dead = subprocess.run([sys.executable, "-c", "import os; print(os.getpid())"],
+                      capture_output=True, text=True).stdout.strip()
+v2.RUN_LOCK.write_text(dead, encoding="utf-8")                      # fresh mtime, dead PID
+chk("lock: dead-holder lock broken instantly", v2.acquire_run_lock() is True)
+v2.release_run_lock()
+v2.RUN_LOCK.write_text(str(os.getpid()), encoding="utf-8")          # fresh mtime, LIVE pid (us)
+chk("lock: live-holder lock still blocks", v2.acquire_run_lock() is False)
+v2.release_run_lock()
+
 # ── 2. atomic write ─────────────────────────────────────────────────────────────────────────────
 tgt = tmp / "state.json"
 v2._atomic_write(tgt, '{"a": 1}')

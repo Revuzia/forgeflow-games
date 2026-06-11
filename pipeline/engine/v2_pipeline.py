@@ -137,6 +137,26 @@ def log(msg):
 RUN_LOCK = ROOT.parent / "state" / ".ffg_nightly.lock"
 
 
+def _pid_alive(pid):
+    """Is the lock-holder still running? (Windows: OpenProcess + GetExitCodeProcess==STILL_ACTIVE.)
+    Unknown/error -> assume alive (fall back to the time-based stale-break)."""
+    try:
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        h = k32.OpenProcess(0x1000, False, int(pid))   # PROCESS_QUERY_LIMITED_INFORMATION
+        if not h:
+            return False                               # no such process
+        try:
+            code = ctypes.c_ulong(0)
+            if k32.GetExitCodeProcess(h, ctypes.byref(code)):
+                return code.value == 259               # STILL_ACTIVE
+            return True
+        finally:
+            k32.CloseHandle(h)
+    except Exception:
+        return True
+
+
 def acquire_run_lock():
     try:
         RUN_LOCK.parent.mkdir(parents=True, exist_ok=True)
@@ -146,7 +166,14 @@ def acquire_run_lock():
         return True
     except FileExistsError:
         try:
-            if time.time() - RUN_LOCK.stat().st_mtime > 3 * 3600:
+            # DEAD-HOLDER BREAK: a hard kill (wrapper budget kill, power cut) skips finally/release.
+            # Without this, a --once test killed at 1:50am would block the 2:30 nightly for 3h.
+            holder = RUN_LOCK.read_text(encoding="utf-8", errors="replace").strip()
+            if holder.isdigit() and not _pid_alive(holder):
+                log(f"run-lock holder PID {holder} is dead — breaking stale lock.")
+                RUN_LOCK.unlink()
+                return acquire_run_lock()
+            if time.time() - RUN_LOCK.stat().st_mtime > 3 * 3600:   # PID-reuse fallback
                 RUN_LOCK.unlink()
                 return acquire_run_lock()
         except OSError:
