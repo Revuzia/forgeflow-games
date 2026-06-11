@@ -96,8 +96,69 @@ def normalize_content(content, item):
     return build_order.repair(content, slug=item["slug"], genre=item["genre"], title=item.get("title"))
 
 
+# ── per-run audit log (audit T4) ────────────────────────────────────────────────────────────────
+# Every run tees its log lines to state/logs/ffg_<stamp>.log so incident forensics is a 30-second
+# read instead of journal archaeology (the 2026-06-10 WinError-206 night had NO surviving stdout).
+LOGS_DIR = ROOT.parent / "state" / "logs"
+_RUN_LOG = None
+
+
+def _open_run_log():
+    global _RUN_LOG
+    try:
+        LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        _RUN_LOG = LOGS_DIR / f"ffg_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        # retention: drop run logs older than 30 days
+        cutoff = time.time() - 30 * 86400
+        for old in LOGS_DIR.glob("ffg_*.log"):
+            try:
+                if old.stat().st_mtime < cutoff:
+                    old.unlink()
+            except OSError:
+                pass
+    except Exception:
+        _RUN_LOG = None
+
+
 def log(msg):
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] [v2] {msg}", flush=True)
+    line = f"[{datetime.now().strftime('%H:%M:%S')}] [v2] {msg}"
+    print(line, flush=True)
+    if _RUN_LOG is not None:
+        try:
+            with open(_RUN_LOG, "a", encoding="utf-8", errors="replace") as f:
+                f.write(line + "\n")
+        except OSError:
+            pass
+
+
+# ── single-instance run lock (audit Q1) ─────────────────────────────────────────────────────────
+# A manual --once colliding with the 2:30 nightly would race the SAME dev journal (last writer
+# wins, passes lost). Same pattern as state/.unity_wire.lock. Stale-break: 3h (window is 2h).
+RUN_LOCK = ROOT.parent / "state" / ".ffg_nightly.lock"
+
+
+def acquire_run_lock():
+    try:
+        RUN_LOCK.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(str(RUN_LOCK), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return True
+    except FileExistsError:
+        try:
+            if time.time() - RUN_LOCK.stat().st_mtime > 3 * 3600:
+                RUN_LOCK.unlink()
+                return acquire_run_lock()
+        except OSError:
+            pass
+        return False
+
+
+def release_run_lock():
+    try:
+        RUN_LOCK.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def track_error(stage, detail, **ctx):
@@ -137,7 +198,7 @@ def _load_queue():
 
 
 def _save_queue(q):
-    QUEUE.write_text(json.dumps(q, indent=2), encoding="utf-8")
+    _atomic_write(QUEUE, json.dumps(q, indent=2))
 
 
 def select_next(q):
@@ -427,6 +488,14 @@ def build_one(item, deploy=False):
             return True
         log(f"{slug}: engine target not ready ({edetail}) -> Phaser fallback")
 
+    # LEGACY PHASER QUARANTINE (audit T5) — same contract as the deep-dev guard: never build
+    # Phaser games without the explicit opt-in.
+    if os.environ.get("FFG_ALLOW_PHASER") != "1":
+        log(f"{slug}: Phaser assemble blocked (FFG_ALLOW_PHASER!=1) — marking failed, not built.")
+        track_error("phaser_quarantine", "build_one reached Phaser path without opt-in", slug=slug, genre=genre)
+        _mark(slug, "failed", "phaser path quarantined (engine routing failed)")
+        return False
+
     # ASSEMBLE
     gdir = build_order.assemble(slug, content)
     log(f"assembled -> {gdir}")
@@ -592,9 +661,19 @@ def load_journal(slug):
     return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
 
 
+def _atomic_write(path, text):
+    """Temp-file + os.replace so a crash mid-write can NEVER corrupt state (audit T1). Under the
+    one-game policy the journal is the whole pipeline's database — a torn write would make
+    pick_dev_target skip it and silently promote game #2."""
+    path = Path(path)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def save_journal(j):
     DEV_JOURNAL.mkdir(exist_ok=True)
-    (DEV_JOURNAL / f"{j['slug']}.json").write_text(json.dumps(j, indent=2), encoding="utf-8")
+    _atomic_write(DEV_JOURNAL / f"{j['slug']}.json", json.dumps(j, indent=2))
 
 
 def init_journal(item):
@@ -980,12 +1059,21 @@ def dev_loop(force=False, deploy=False, single_step=False):
             except Exception: pass
         # AUTHORING ON -> ITERATIVE milestone development (the 2-6h real-game path: design doc, then
         # claude -p revision passes against QA issues until M5). AUTHORING OFF -> the one-shot template
-        # build below (fast minigame floor; the proven fallback).
+        # build below (fast minigame floor).
+        # AUDIT Q2 (2026-06-10): when authoring is ON, an authoring-stack failure (import error etc.)
+        # STOPS THE NIGHT LOUDLY. It must NEVER fall through to the one-shot template — that path marks
+        # every milestone DONE and would silently replace an iteratively-developed game with a minigame.
         if build_target.authoring_enabled():
             st = engine_milestone_dev(item, journal, content, force=force, single_step=single_step)
             if st is not None:
                 return st
-            # authoring stack unavailable -> fall through to the deterministic one-shot path
+            log(f"{slug}: AUTHORING STACK DOWN (import failure) — refusing one-shot downgrade; "
+                f"journal untouched at {journal.get('milestone')}.")
+            track_error("authoring_stack", "engine authoring unavailable — night aborted, no downgrade",
+                        slug=slug, milestone=journal.get("milestone"))
+            notify(f"🛑 FFG: authoring stack failed to load — *{slug}* left intact at "
+                   f"{journal.get('milestone')}; fix the import and re-run. (No template downgrade.)")
+            return "transient"
         ok_e, out_e, detail_e = build_target.dev_engine_build(slug, content)
         if ok_e:
             journal["engine_build"] = {"out": out_e, "detail": detail_e, "ts": _now_iso()}
@@ -1002,6 +1090,20 @@ def dev_loop(force=False, deploy=False, single_step=False):
             return "built"
         log(f"DEEP-DEV {slug}: engine target unavailable ({detail_e}) -> Phaser deep-dev loop")
         track_error("engine_build", f"engine build not accepted: {detail_e}", slug=slug, genre=genre)
+
+    # ── LEGACY PHASER PATH QUARANTINE (audit T5, 2026-06-10) ─────────────────────────────────────
+    # Everything below this guard is the pre-engine Phaser/content.json pipeline. The engine path
+    # covers every genre with stronger gates; the only ways to reach here are an engine-routing
+    # failure or a build_target import error — both of which previously flipped the WHOLE night to
+    # the old pipeline SILENTLY. Now reaching here without the explicit opt-in aborts loudly.
+    if os.environ.get("FFG_ALLOW_PHASER") != "1":
+        log(f"{slug}: legacy Phaser path reached but FFG_ALLOW_PHASER!=1 — aborting night (engine "
+            f"routing failed upstream; fix that instead of silently building Phaser games).")
+        track_error("phaser_quarantine", "legacy path reached without opt-in — night aborted",
+                    slug=slug, genre=genre)
+        notify(f"🛑 FFG: engine routing failed for *{slug}* and the legacy Phaser path is quarantined. "
+               f"Night aborted — investigate engine_target/build_target. (FFG_ALLOW_PHASER=1 overrides.)")
+        return "transient"
 
     # M0 — DESIGN (write the doc before any code; fast, one claude -p call).
     try:
@@ -1158,6 +1260,19 @@ def main():
     if time_left(force) <= 5:
         log(f"outside run window (now {_minutes_now()}m, stop {HARD_STOP_MINUTES}m). Exiting.")
         return
+
+    if not acquire_run_lock():
+        log("another FFG run holds state/.ffg_nightly.lock (manual --once vs nightly?) — exiting "
+            "cleanly; the running instance owns the journal.")
+        return
+    _open_run_log()
+    try:
+        _main_locked(force=force, deploy=deploy, once=once, throughput=throughput)
+    finally:
+        release_run_lock()
+
+
+def _main_locked(*, force, deploy, once, throughput):
 
     # ASSET AUTO-DISCOVERY: anything new dropped on F:\games (Unity downloads, GLBs, audio) gets
     # ingested/converted/indexed before the night's builds, so authoring always sees the full

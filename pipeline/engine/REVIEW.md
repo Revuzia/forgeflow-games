@@ -1,3 +1,5 @@
+> **HISTORICAL DOCUMENT (banner added 2026-06-10).** Superseded by the live design: ONE-GAME policy (single journal to M5 DONE; parked blocks promotions), claude -p prompts via STDIN (WinError 206 fix), XCOM detached from the nightly, legacy Phaser path quarantined behind FFG_ALLOW_PHASER=1. Current truth lives in v2_pipeline.py + engine_authoring.py docstrings and forgeflow-engine/ENGINE_GAME_API.md.
+
 # FFG Engine v2 — Build Review
 
 Reviewer pass over the v2 re-architecture build. Verdict: **the architecture is

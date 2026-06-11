@@ -39,3 +39,11 @@ games/_engine/
 pipeline/assets/3d-models/unity/
 pipeline/assets/3d-models/UNITY_MODELS_INDEX.json
 pipeline/assets/UNITY_ASSETS_INDEX.json
+
+# 2026-06-10 audit Q3 — runtime/test artifacts in pipeline/engine never belong in git
+pipeline/engine/__pycache__/
+pipeline/engine/gates/__pycache__/
+pipeline/engine/_wip/
+pipeline/engine/_captest.py
+pipeline/engine/_capfix_test.png
+pipeline/engine/*.png.lit
