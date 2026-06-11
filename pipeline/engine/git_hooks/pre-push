@@ -1,0 +1,11 @@
+#!/bin/sh
+# pre-push CI gate (audit 2026-06-11): every push to forgeflow-games runs the full hermetic suite
+# battery. A red suite blocks the push — a bad commit must never reach the 1:30 AM nightly untested.
+# Install (one-time, from the macro repo root):
+#   cp forgeflow-games/pipeline/engine/git_hooks/pre-push .git/modules/forgeflow-games/hooks/pre-push
+echo "[pre-push] running games-pipeline CI (6 suites)..."
+cd "$(git rev-parse --show-toplevel)" || exit 1
+python pipeline/engine/run_all_tests.py || {
+  echo "[pre-push] CI RED — push blocked. Fix the suites (or push with --no-verify only if you accept the risk)."
+  exit 1
+}

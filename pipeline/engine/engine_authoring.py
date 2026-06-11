@@ -224,6 +224,8 @@ HARD REQUIREMENTS (a reviewer + an automated player will reject the game if any 
      SCOPE CONTRACT: declare your content as ONE top-level array literal — `const LEVELS = [ ... ]`
      (or WORLDS/WAVES/...) with one element per level — a deterministic gate counts it against the
      design doc's promised count and BLOCKS milestones until you've built what the design promises.
+     ALSO implement `gotoLevel(n, ctx)` on the GAME object that rebuilds the world at level n —
+     QA boots EVERY declared level via ?level=N and fails the build if any level can't start.
   4. Respond to input every frame via ctx.input (axisX/axisY/pressed/down/pointerJustDown). Declare a
      `controls: "..."` how-to line on the GAME object (shown on the menu).
   5. Call ctx.hud("...") each frame with a live status line. Call ctx.music("music") in setup and
@@ -362,6 +364,8 @@ RULES:
      input every frame, ctx.hud each frame, per-event sounds ({", ".join(AUDIO_NAMES)}). Keep the
      SCOPE CONTRACT: content declared as ONE top-level `const LEVELS = [...]` array (one element per
      level/world) — a gate counts it against the design doc and blocks milestones on a shortfall.
+     Implement/keep `GAME.gotoLevel(n, ctx)` (rebuild the world at level n) — QA boots every declared
+     level via ?level=N; a level that can't start fails the build.
   4. ADD JUICE + DEPTH this pass if missing: ctx.shake() on death/hits (decaying camera shake — free
      quality), real physics (ctx.enablePhysics for 2D / ctx.enablePhysics3d for 3D obby), animate
      animated models (ctx.animate), and place prop/prop2 scenery so the world isn't an empty test scene.
@@ -466,9 +470,20 @@ def _claude_author(prompt, timeout=300):
     Prompt goes via STDIN: revision prompts (full game.js + issues embedded) exceed Windows' 32,767-char
     CreateProcess argv limit -> WinError 206 before spawn (killed all 10 games on 2026-06-10).
     Explicit utf-8 both ways (cp1252 default mojibakes design docs)."""
-    r = subprocess.run(["claude", "-p"], input=prompt, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", timeout=timeout)
-    return r.stdout or ""
+    for attempt in (1, 2):
+        try:
+            r = subprocess.run(["claude", "-p"], input=prompt, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=timeout)
+            if (r.stdout or "").strip():
+                return r.stdout
+        except subprocess.TimeoutExpired:
+            pass
+        if attempt == 1:
+            # one backoff retry: ClawCryptoWebSentiment_0345 shares the claude -p OAuth quota
+            # mid-window — a transient 429/empty answer shouldn't strike the game.
+            import time as _t
+            _t.sleep(75)
+    return ""
 
 
 # ── entry point ────────────────────────────────────────────────────────────────────────────────────

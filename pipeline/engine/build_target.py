@@ -148,7 +148,7 @@ def _play_tester_path():
     return p if p.exists() else None
 
 
-def play_verify(slug, gdir, port=8788, timeout=200):
+def play_verify(slug, gdir, port=8788, timeout=200, difficulty=None, genre=None, levels=None):
     """Run the multi-inspector PLAY tester (boots + drives the built game; checks boot/menu/start/liveness/
     render/real_assets/controls/progression/audio/errors). Returns (ship, detail):
       ship True  -> tester verdict SHIP (it actually plays)
@@ -163,9 +163,14 @@ def play_verify(slug, gdir, port=8788, timeout=200):
         report.unlink()
     except OSError:
         pass
+    cmd = [sys.executable, str(tester), str(gdir), "--port", str(port), "--report", str(report)]
+    if difficulty: cmd += ["--difficulty", str(difficulty)]
+    if genre:      cmd += ["--genre", str(genre)]
+    if levels and int(levels) > 1:
+        cmd += ["--levels", str(int(levels))]
+        timeout = timeout + min(int(levels), 10) * 6        # deep-level sweep needs headroom (~4-6s/level)
     try:
-        r = subprocess.run([sys.executable, str(tester), str(gdir), "--port", str(port),
-                            "--report", str(report)], capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return None, "play tester timed out after %ds" % timeout
     except Exception as e:

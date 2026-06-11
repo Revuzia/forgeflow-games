@@ -48,7 +48,11 @@ import learn        # noqa: E402
 
 QUEUE = ENGINE / "build_queue.json"
 WIP = ENGINE / "_wip"
-HARD_STOP_MINUTES = 4 * 60 + 30      # 4:30 AM Eastern (machine TZ) = 3:30 AM Central. Trigger
+HARD_STOP_MINUTES = 4 * 60           # 4:00 AM machine-local (Central since the 2026-06 Texas move).
+                                     # Send-time gating per the owner's rule (NOT a scheduler change):
+                                     # ClawSunoAlbum1 (browser/CDP) + ClawYouTubeRender (ffmpeg) both
+                                     # fire at 4:00 — the games window now ends before they start.
+                                     # Old comment said 4:30; trigger
                                      # fires 2:30 ET = 1:30 CT, so this gives the owner's full
                                      # 1:30-3:30 CT / 120-min window. (Was 210/3:30 ET = only 60 min CT.)
 SERVE_PORT = 8791
@@ -733,6 +737,40 @@ def milestone_done(mid, verdict, pt):
     }.get(mid, False)
 
 
+def _backup_state():
+    """Weekly zip of the pipeline's irreplaceable state to F:\\backups\\claude-claw (separate physical
+    drive): dev journals, build queue, engine config, core state/*.json(l), ffg run logs. Newest 8 kept."""
+    import zipfile
+    marker = ROOT.parent / "state" / ".last_state_backup"
+    now = time.time()
+    try:
+        if marker.exists() and now - marker.stat().st_mtime < 6.5 * 86400:
+            return
+    except OSError:
+        return
+    dest_dir = Path(r"F:\backups\claude-claw")
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"state_{datetime.now().strftime('%Y%m%d_%H%M')}.zip"
+    state = ROOT.parent / "state"
+    with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as z:
+        for p in DEV_JOURNAL.glob("*.json"):
+            z.write(p, f"dev_journal/{p.name}")
+        for name in ("build_queue.json", "engine_target.json", "registry.json", "learnings.jsonl"):
+            p = ENGINE / name
+            if p.exists():
+                z.write(p, name)
+        for p in list(state.glob("*.json")) + list(state.glob("*.jsonl")):
+            if p.stat().st_size < 20_000_000:              # skip pathological giants
+                z.write(p, f"state/{p.name}")
+        for p in (state / "logs").glob("ffg_*.log"):
+            z.write(p, f"state/logs/{p.name}")
+    marker.write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
+    old = sorted(dest_dir.glob("state_*.zip"), key=lambda p: p.stat().st_mtime)
+    for p in old[:-8]:
+        p.unlink()
+    log(f"state backup written: {dest.name} ({dest.stat().st_size // 1024} KB)")
+
+
 def reconcile_queue():
     """Startup invariant (audit T7): the QUEUE must agree with the JOURNALS — exactly the active
     journal's slug may hold status 'dev'. Heals drift from crashes/manual edits (and the 06-11
@@ -939,6 +977,59 @@ ENGINE_MILESTONES = {
 }
 
 
+def _snapshot_pass(journal, gdir, steps):
+    """Per-pass game.js history (audit, owner 2026-06-11): _history/pass_<session>_<step>.js, newest
+    ~50 kept. Forensics + the raw material for best-build revert. Best-effort."""
+    try:
+        import shutil
+        hist = Path(gdir) / "_history"
+        hist.mkdir(exist_ok=True)
+        shutil.copyfile(Path(gdir) / "game.js",
+                        hist / f"pass_s{journal.get('sessions', 0)}_{steps:03d}.js")
+        old = sorted(hist.glob("pass_*.js"), key=lambda p: p.stat().st_mtime)
+        for p in old[:-50]:
+            p.unlink()
+    except OSError:
+        pass
+
+
+def _update_best_or_revert(journal, gdir, ship, inspectors):
+    """BEST-BUILD TRACKING + AUTO-REVERT (industry rule: never lose a good build — owner 2026-06-11).
+    Every all-SHIP pass snapshots to _history/best_ship.js and records its green inspector set.
+    Iteration HOLDs are normal; but when TWO consecutive passes fail an inspector the best build had
+    GREEN, game.js is auto-reverted to the best build and the regression is named for the next
+    revision. Returns (reverted, regressed_list). Pure state-machine — unit-tested."""
+    import shutil
+    hist = Path(gdir) / "_history"
+    best_file = hist / "best_ship.js"
+    green_now = {k for k, v in (inspectors or {}).items() if v.get("pass") is True}
+    if ship is True:
+        try:
+            hist.mkdir(exist_ok=True)
+            shutil.copyfile(Path(gdir) / "game.js", best_file)
+        except OSError:
+            return False, []
+        journal["best"] = {"green": sorted(green_now), "ts": _now_iso()}
+        journal["regress_streak"] = 0
+        return False, []
+    best = journal.get("best")
+    if not best or not best_file.exists():
+        return False, []
+    regressed = sorted(set(best.get("green", [])) - green_now)
+    if not regressed:
+        journal["regress_streak"] = 0
+        return False, []
+    journal["regress_streak"] = int(journal.get("regress_streak", 0)) + 1
+    if journal["regress_streak"] < 2:
+        return False, regressed
+    try:
+        shutil.copyfile(best_file, Path(gdir) / "game.js")
+    except OSError:
+        return False, regressed
+    journal["regress_streak"] = 0
+    return True, regressed
+
+
 def engine_milestone_dev(item, journal, spec, force=False, single_step=False):
     """Iterative ENGINE development of one game (authoring mode): M0 design doc, M1 initial author,
     M2..M5 revision passes (claude -p rewrites the full game.js against the milestone goal + open QA
@@ -991,6 +1082,12 @@ def engine_milestone_dev(item, journal, spec, force=False, single_step=False):
     while time_left(force) > 8 and journal["milestone"] != "DONE" and steps < 40:
         mid = journal["milestone"]
         goal = ENGINE_MILESTONES.get(mid, "Improve the game toward ship quality.")
+        if mid == "M4" and journal.get("telemetry"):
+            t3 = journal["telemetry"][-3:]                  # bot skill telemetry feeds the balance pass
+            goal += " BALANCE DATA (recent automated runs — tune difficulty/pacing with it): " + "; ".join(
+                f"[{x.get('difficulty', '?')}/{x.get('genre_profile', '?')}] first-score "
+                f"{x.get('time_to_first_score_s')}s, lives lost {x.get('lives_lost')}, "
+                f"max L{x.get('max_level')}, end={x.get('end_state')}" for x in t3)
         open_issues = [i["issue"] for i in journal.get("open_issues", []) if i.get("status", "open") == "open"]
 
         # 1. AUTHOR (first pass) or REVISE (every later pass) — one claude -p call (+ one self-heal
@@ -1024,8 +1121,35 @@ def engine_milestone_dev(item, journal, spec, force=False, single_step=False):
             continue
         fails = 0
 
+        _snapshot_pass(journal, gdir, steps)               # per-pass history (forensics + revert material)
+
         # 2. PLAY-VERIFY the new build; snapshot failed inspectors as the open issue list.
-        ship, pdetail = build_target.play_verify(slug, gdir)
+        # Genre-shaped skill-bot input; from M2 the deep-level sweep boots EVERY declared level;
+        # at M5 ALL THREE difficulties must SHIP (owner: "that's all it needs to play").
+        declared_lv = 0
+        if mid in ("M2", "M3", "M4", "M5"):
+            try:
+                sys.path.insert(0, str(ENGINE / "gates"))
+                import scope_gate as _sg
+                declared_lv = _sg.declared_scope((gdir / "game.js").read_text(encoding="utf-8"))[0]
+            except Exception:
+                declared_lv = 0
+        diffs = ("easy", "normal", "hard") if mid == "M5" else (None,)
+        ship, pdetail, diff_fails, rep = True, "", [], {}
+        for dlevel in diffs:
+            s, det = build_target.play_verify(slug, gdir, difficulty=dlevel, genre=genre, levels=declared_lv)
+            if s is None:
+                ship, pdetail = None, det
+                break
+            try:
+                rep = json.loads((gdir / "play_report.json").read_text(encoding="utf-8"))
+            except Exception:
+                rep = {}
+            if s is False:
+                ship = False
+                diff_fails.append((dlevel or "normal", det))
+        if ship is not None and diff_fails:
+            pdetail = "; ".join(f"@{d}: {str(x)[:70]}" for d, x in diff_fails)
 
         # FAIL-CLOSED (2026-06-11): "no report" is NOT "no issues". Last night ship=None advanced
         # M1->M5 in 10 minutes while the tester crashed on an unloadable game.js. A missing report
@@ -1049,15 +1173,41 @@ def engine_milestone_dev(item, journal, spec, force=False, single_step=False):
             continue
         tester_fails = 0
 
-        rep = {}
-        try:
-            rep = json.loads((gdir / "play_report.json").read_text(encoding="utf-8"))
-        except Exception:
-            pass
         journal["open_issues"] = [
             {"id": k + 1, "milestone": mid, "severity": "high",
              "issue": f"play:{name} — {info.get('detail','')[:140]}", "status": "open", "found": _now_iso()}
             for k, (name, info) in enumerate((rep.get("inspectors") or {}).items()) if info.get("pass") is False]
+        for dlevel, det in diff_fails[:-1] if diff_fails else []:      # earlier difficulties' failures too
+            journal["open_issues"].append(
+                {"id": len(journal["open_issues"]) + 1, "milestone": mid, "severity": "high",
+                 "issue": f"play@{dlevel} — {str(det)[:140]}", "status": "open", "found": _now_iso()})
+
+        # 2a-tel. BOT TELEMETRY -> journal (balance data; the M4 tuning pass reads the recent rows).
+        if rep.get("telemetry"):
+            journal.setdefault("telemetry", []).append(
+                dict(rep["telemetry"], milestone=mid, ts=_now_iso()))
+            journal["telemetry"] = journal["telemetry"][-12:]
+
+        # 2a-best. BEST-BUILD / AUTO-REVERT: never lose a good build to a regressing revision.
+        reverted, regressed = _update_best_or_revert(journal, gdir, ship, rep.get("inspectors") or {})
+        if regressed and not reverted:
+            journal["open_issues"].append(
+                {"id": len(journal["open_issues"]) + 1, "milestone": mid, "severity": "high",
+                 "issue": f"regression — previously-green inspector(s) now failing: {', '.join(regressed)} "
+                          f"(strike {journal.get('regress_streak', 0)}/2 before auto-revert)",
+                 "status": "open", "found": _now_iso()})
+        if reverted:
+            _changelog(journal, mid, "AUTO-REVERT",
+                       f"restored last all-SHIP build — 2 consecutive passes broke: {', '.join(regressed)}")
+            log(f"{slug}: AUTO-REVERT to best_ship.js (broke: {', '.join(regressed)})")
+            journal["open_issues"].append(
+                {"id": len(journal["open_issues"]) + 1, "milestone": mid, "severity": "high",
+                 "issue": f"auto-reverted to the last all-SHIP build; your last 2 revisions broke "
+                          f"{', '.join(regressed)} — re-apply the improvements WITHOUT breaking those",
+                 "status": "open", "found": _now_iso()})
+            save_journal(journal)
+            if single_step: break
+            continue
 
         # 2b. SCOPE GATE (owner 2026-06-11): deterministic promised-vs-declared content count.
         # The design doc's promise ("5 worlds", "8 waves") must be DECLARED in code (LEVELS array /
@@ -1418,6 +1568,30 @@ def _main_locked(*, force, deploy, once, throughput):
             except Exception as e:
                 log(f"asset refresh skipped ({type(e).__name__}: {str(e)[:120]})")
                 track_error("asset_refresh", f"unity_ingest_and_wire failed: {type(e).__name__}: {str(e)[:160]}")
+
+    # PRE-FLIGHT CI (audit, owner 2026-06-11: "a bad commit must never reach 1:30 AM untested").
+    # Runs the full hermetic suite battery (~1-2 min). Red -> the night ABORTS with an alert; the
+    # journal/queue stay untouched. FFG_SKIP_SELFTEST=1 skips (e.g. for a quick manual --once).
+    if os.environ.get("FFG_SKIP_SELFTEST") != "1":
+        try:
+            r = subprocess.run([sys.executable, str(ENGINE / "run_all_tests.py")],
+                               capture_output=True, text=True, encoding="utf-8", errors="replace",
+                               timeout=600)
+            tail = (r.stdout or "").strip().splitlines()[-1:] or ["(no output)"]
+            log(f"pre-flight CI: {tail[0][:120]}")
+            if r.returncode != 0:
+                track_error("preflight_ci", f"suite battery RED — night aborted: {tail[0][:200]}")
+                notify(f"🛑 FFG pre-flight CI FAILED — night aborted before any build. {tail[0][:160]}")
+                return
+        except Exception as e:
+            log(f"pre-flight CI skipped ({type(e).__name__}: {str(e)[:100]})")
+
+    # WEEKLY STATE BACKUP (audit, owner 2026-06-11): journals/queue/core state zipped to the F: drive
+    # (separate physical disk). >6.5-day cadence, newest 8 kept, fully best-effort.
+    try:
+        _backup_state()
+    except Exception as e:
+        log(f"state backup skipped ({type(e).__name__}: {str(e)[:100]})")
 
     reconcile_queue()                                  # audit T7: queue must agree with journals
 

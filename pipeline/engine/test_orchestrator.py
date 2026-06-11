@@ -147,6 +147,28 @@ build_target.choose_target = lambda *a, **k: False
 st = v2.dev_loop()
 chk("T5: Phaser path quarantined => transient", st == "transient")
 
+# ── best-build / auto-revert state machine (owner 2026-06-11: never lose a good build) ─────────
+g2 = tmp / "revgame"
+g2.mkdir()
+(g2 / "game.js").write_text("GOOD v1", encoding="utf-8")
+J = {}
+GREEN = {"boot": {"pass": True}, "controls": {"pass": True}}
+MIX = {"boot": {"pass": True}, "controls": {"pass": False}}
+rev, reg = v2._update_best_or_revert(J, g2, True, GREEN)
+chk("best: SHIP records best snapshot + green set",
+    not rev and (g2 / "_history" / "best_ship.js").exists() and J["best"]["green"] == ["boot", "controls"])
+(g2 / "game.js").write_text("BAD v2", encoding="utf-8")
+rev, reg = v2._update_best_or_revert(J, g2, False, MIX)
+chk("revert: strike 1 names regression, no revert yet",
+    not rev and reg == ["controls"] and J["regress_streak"] == 1)
+rev, reg = v2._update_best_or_revert(J, g2, False, MIX)
+chk("revert: strike 2 AUTO-REVERTS to the best build",
+    rev and (g2 / "game.js").read_text(encoding="utf-8") == "GOOD v1" and J["regress_streak"] == 0)
+rev, reg = v2._update_best_or_revert(J, g2, False, dict(GREEN, render={"pass": False}))
+chk("revert: non-regressing HOLD (new scope failing) resets the streak", not rev and reg == [])
+chk("revert: without a recorded best it never reverts",
+    v2._update_best_or_revert({}, g2, False, MIX) == (False, []))
+
 # ── HERMETIC PROOF: production files untouched by this suite ───────────────────────────────────
 for p, (mt, h) in PROD.items():
     chk(f"hermetic: {p.name} untouched",
