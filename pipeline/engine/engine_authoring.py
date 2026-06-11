@@ -215,7 +215,18 @@ HARD REQUIREMENTS (a reviewer + an automated player will reject the game if any 
      ctx.sound("jump")/ctx.sound("coin") on events. Available audio names: {", ".join(AUDIO_NAMES)}.
   6. Do NOT write the menu, the game loop, HUD rendering, the physics step, or restart logic — the engine
      owns those (see the lifecycle in the contract). Only setup(ctx) + update(dt, ctx).
-  7. OUTPUT ONLY the game.js code inside a single ```js fenced block. No prose before or after.
+  7. USE THE ENGINE'S CAPABILITIES — a flat game scores low on the fidelity/genre gates. Reach for:
+       • JUICE (do this for EVERY action game): ctx.shake() on death/big hits, ctx.shake(0.2) on small
+         hits/landings — short, decaying camera shake. Free, huge perceived-quality lift.
+       • PHYSICS: 2D platformer/runner -> ctx.enablePhysics()+ctx.body() (gravity, solid ground, jumps);
+         3D obby/jump game -> ctx.enablePhysics3d()+ctx.body3d() (true-3D gravity, AABB platforms).
+         Pick exactly ONE world per game.
+       • ANIMATED MODELS: if a staged model ships clips, ctx.spawn({{model:"hero", animate:"Idle"}}) and
+         ctx.animate(node, "Run") on state changes — moving characters beat static ones on the vision gate.
+       • SCENERY: place any prop/prop2 models to dress the world (platforms, obstacles, backdrop) so it
+         doesn't read as an empty test scene.
+     Only use what fits the genre; never force a system that doesn't belong.
+  8. OUTPUT ONLY the game.js code inside a single ```js fenced block. No prose before or after.
 
 === ENGINE_GAME_API.md (the contract — follow it precisely) ===
 {api}
@@ -322,8 +333,12 @@ RULES:
   3. All previous hard requirements still apply: real sprites/models (never bare shapes), 3+ stages with
      a ramp scaled by ctx.difficulty, ctx.level advanced and shown in the HUD, winnable AND loseable,
      input every frame, ctx.hud each frame, per-event sounds ({", ".join(AUDIO_NAMES)}).
-  4. A bot pressing arrows/Space/F must still make progress within ~12s of starting.
-  5. OUTPUT ONLY the game.js code inside a single ```js fenced block. No prose.
+  4. ADD JUICE + DEPTH this pass if missing: ctx.shake() on death/hits (decaying camera shake — free
+     quality), real physics (ctx.enablePhysics for 2D / ctx.enablePhysics3d for 3D obby), animate
+     animated models (ctx.animate), and place prop/prop2 scenery so the world isn't an empty test scene.
+     Only what fits the genre.
+  5. A bot pressing arrows/Space/F must still make progress within ~12s of starting.
+  6. OUTPUT ONLY the game.js code inside a single ```js fenced block. No prose.
 
 CURRENT game.js:
 ```js
