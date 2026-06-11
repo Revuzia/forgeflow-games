@@ -1327,8 +1327,25 @@ def main():
             "cleanly; the running instance owns the journal.")
         return
     _open_run_log()
+    # Portal run telemetry (agency_runs) — the Automations card/Schedule read
+    # these rows. Guarded end-to-end: telemetry failure can never break a night.
+    _rid = None
+    try:
+        sys.path.insert(0, str(ROOT.parent.parent / "scripts"))
+        from claw_lib.agency_runs import start_run as _sr, finish_run as _fr
+        _rid = _sr("forgeflow_games", summary=f"nightly v2 (deploy={deploy} once={once} throughput={throughput})")
+    except Exception:
+        _fr = None
     try:
         _main_locked(force=force, deploy=deploy, once=once, throughput=throughput)
+        if _rid and _fr:
+            try: _fr(_rid, "success")
+            except Exception: pass
+    except Exception as e:
+        if _rid and _fr:
+            try: _fr(_rid, "error", error=str(e)[:300])
+            except Exception: pass
+        raise
     finally:
         release_run_lock()
 
