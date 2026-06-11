@@ -1,141 +1,394 @@
 {
- "slug": "frost-spire",
- "genre": "platformer",
- "title": "Ascent of the Ember Soul",
- "brief": "Original-IP platformer game (sub-genre: precision-platformer). Capture the core mechanics and game-feel of \"Celeste\" (critically acclaimed, 92%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
- "inspired_by": "Celeste",
- "rating": 92,
- "milestone": "M1",
- "milestones": {
-  "M0": {
-   "status": "done",
-   "done_when": "design doc written: core loop, verbs, scope, art direction, definition_of_done"
-  },
-  "M1": {
-   "status": "in_progress",
-   "done_when": "core loop genuinely playable in ONE level: structure+feel green, no crash"
-  },
-  "M2": {
-   "status": "todo",
-   "done_when": "every verb in the design doc implemented and survives the play-bot"
-  },
-  "M3": {
-   "status": "todo",
-   "done_when": "multiple levels + progression + a real difficulty curve; everything reachable"
-  },
-  "M4": {
-   "status": "todo",
-   "done_when": "menu + audio + game-feel/juice; vision fidelity high; zero crashes"
-  },
-  "M5": {
-   "status": "todo",
-   "done_when": "deep QA: structure+feel+fidelity+review all green across repeated playthroughs"
-  }
- },
- "design_doc": {
+  "slug": "frost-spire",
+  "genre": "platformer",
   "title": "Ascent of the Ember Soul",
-  "core_loop": "Navigate a dying volcanic world as Pyra, a spirit seeking rebirth at the summit. Each screen is a precision-platforming puzzle: dash through lava geysers, wall-slide on obsidian cliffs, and time double-jumps across collapsing platforms. Death is instant but respawn is immediate\u00e2\u20ac\u201diteration and muscle-memory mastery drive progress. Collect ember fragments to unlock harder optional paths. Reach the summit shrine to achieve transcendence and unlock harder difficulty tiers.",
-  "verbs": [
-   "run",
-   "jump",
-   "wall_slide",
-   "wall_jump",
-   "dash (8-directional, 1-second cooldown)",
-   "double_jump (unlocked after tutorial)",
-   "collect (ember fragments)",
-   "die",
-   "respawn"
+  "brief": "Original-IP platformer game (sub-genre: precision-platformer). Capture the core mechanics and game-feel of \"Celeste\" (critically acclaimed, 92%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+  "inspired_by": "Celeste",
+  "rating": 92,
+  "milestone": "M1",
+  "milestones": {
+    "M0": {
+      "status": "done",
+      "done_when": "design doc written: core loop, verbs, scope, art direction, definition_of_done"
+    },
+    "M1": {
+      "status": "in_progress",
+      "done_when": "core loop genuinely playable in ONE level: structure+feel green, no crash"
+    },
+    "M2": {
+      "status": "todo",
+      "done_when": "every verb in the design doc implemented and survives the play-bot"
+    },
+    "M3": {
+      "status": "todo",
+      "done_when": "multiple levels + progression + a real difficulty curve; everything reachable"
+    },
+    "M4": {
+      "status": "todo",
+      "done_when": "menu + audio + game-feel/juice; vision fidelity high; zero crashes"
+    },
+    "M5": {
+      "status": "todo",
+      "done_when": "deep QA: structure+feel+fidelity+review all green across repeated playthroughs"
+    }
+  },
+  "design_doc": {
+    "title": "Ascent of the Ember Soul",
+    "core_loop": "Navigate a dying volcanic world as Pyra, a spirit seeking rebirth at the summit. Each screen is a precision-platforming puzzle: dash through lava geysers, wall-slide on obsidian cliffs, and time double-jumps across collapsing platforms. Death is instant but respawn is immediate\u00e2\u20ac\u201diteration and muscle-memory mastery drive progress. Collect ember fragments to unlock harder optional paths. Reach the summit shrine to achieve transcendence and unlock harder difficulty tiers.",
+    "verbs": [
+      "run",
+      "jump",
+      "wall_slide",
+      "wall_jump",
+      "dash (8-directional, 1-second cooldown)",
+      "double_jump (unlocked after tutorial)",
+      "collect (ember fragments)",
+      "die",
+      "respawn"
+    ],
+    "scope": "IN: 5 hand-crafted worlds (10 screens each = 50 total). Tutorial world (5 screens). 3 difficulty modes (Normal/Hard/Deathless). Wall-slide/wall-jump/dash/double-jump mechanics. Instant-death hazards (lava, spikes, falling rocks). Collectible ember fragments (3 per screen, optional). Clear win state (reach summit shrine) and lose state (fall into void). FFG.Shell integration (title/difficulty/how-to/settings/pause/mute/fullscreen). Coyote-time (6 frames). Jump buffering (4 frames). Particle VFX on dash/death/collect. Ambient SFX (wind, lava rumble, footsteps). OUT: Boss fights. NPCs/dialogue. Inventory/upgrades beyond double-jump unlock. Procedural generation. Multiplayer. Cutscenes (static title card only). Music (ambient drone loop is sufficient).",
+    "art_direction": "Palette: deep crimson (#8B0000), burnt orange (#CC5500), obsidian black (#0A0A0A), ash gray (#4A4A4A), glowing ember yellow (#FFD700). Mood: desolate, oppressive heat, lonely pilgrimage. Minimalist geometric shapes\u00e2\u20ac\u201dplayer is a glowing humanoid silhouette, platforms are sharp angular obsidian slabs, hazards pulse with molten glow. Parallax background: distant volcanic peaks, ash clouds drifting. Particle systems for dash trails (ember sparks), death (soul fragmenting into embers), and collect (ember absorption). High contrast for readability.",
+    "milestone_plan": {
+      "M1": "Vertical slice (1 world = 10 screens playable start-to-finish). Core movement (run/jump/dash/wall-slide) feels tight. Instant death + instant respawn loop working. FFG.Shell menu integration (title/start/settings). Page controls (fullscreen/mute/pause) functional. HUD shows ember count and death counter.",
+      "M2": "All 5 mechanics locked in (dash cooldown visual, coyote-time tested, double-jump unlock after tutorial). Hazard variety implemented (lava pools, spike walls, timed falling platforms). Particle VFX for dash/death/collect polished. SFX integrated (jump/dash/death/collect/ambient loop).",
+      "M3": "All 6 worlds complete (tutorial + 5 main = 55 screens total). Ember fragment placement finalized (165 total collectibles). Difficulty modes implemented (Normal/Hard spawn more hazards, Deathless = permadeath to title). Win state (summit shrine cutscene card + stats screen) and lose state (void fall = respawn OR return to checkpoint) clearly defined.",
+      "M4": "Juice pass: screen-shake on death, dash after-images, ember fragment glow pulse, wall-slide dust particles. HUD polish (clean font, ember icon, death counter animates on increment). Tutorial signs (static text overlays for controls). Settings menu (volume sliders, keybind display, difficulty toggle). Playtesting for difficulty curve\u00e2\u20ac\u201dadjust hazard timing/placement.",
+      "M5": "Final QA: all 55 screens completable on all difficulties. No soft-locks. Page controls (pause/mute/fullscreen) work in all states. Win/lose states trigger correctly. Ember collection tracks properly. Build optimized for web (< 20MB, 60fps target). Deploy-ready package with start-to-finish loop verified. Definition of Done checklist 100% green."
+    },
+    "definition_of_done": [
+      "Game boots to FFG.Shell title screen with difficulty selection (Normal/Hard/Deathless), how-to-play screen, and settings menu",
+      "Page controls (fullscreen/mute/pause) functional at all times",
+      "All 55 screens (tutorial + 5 worlds \u00c3\u2014 10) playable and completable",
+      "Core mechanics working: run, jump, wall-slide, wall-jump, dash (8-dir, 1s cooldown), double-jump (unlocked post-tutorial)",
+      "Coyote-time (6 frames) and jump buffering (4 frames) implemented and tuned",
+      "Instant death on hazard contact, instant respawn at screen start",
+      "Ember fragments (3 per screen, 165 total) collectible and tracked in HUD",
+      "Win state: reaching summit shrine displays victory screen with stats (time, deaths, embers collected)",
+      "Lose state: falling into void respawns player at last checkpoint (or title screen in Deathless mode)",
+      "HUD displays ember count and death counter clearly",
+      "Particle VFX present: dash trails, death burst, ember collect glow",
+      "SFX integrated: jump, dash, death, collect, ambient lava/wind loop",
+      "Difficulty modes alter hazard density/timing appropriately",
+      "No soft-locks, no manual fixes required\u00e2\u20ac\u201dgame is start-to-finish playable",
+      "Build runs at 60fps on target hardware, total size < 20MB",
+      "Playtested on all difficulties by at least one external tester\u00e2\u20ac\u201dfeedback loop closed"
+    ]
+  },
+  "open_issues": [],
+  "changelog": [
+    {
+      "ts": "2026-06-10T06:31:09.666487+00:00",
+      "milestone": "M0",
+      "action": "design doc",
+      "result": "title=Ascent of the Ember Soul"
+    },
+    {
+      "ts": "2026-06-10T06:33:32.006799+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=play HOLD \u2014 failed: controls, progression panel=ok open=2"
+    },
+    {
+      "ts": "2026-06-10T06:33:32.023916+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "author/revise FAIL (1/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
+    },
+    {
+      "ts": "2026-06-10T06:33:32.059801+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "author/revise FAIL (2/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
+    },
+    {
+      "ts": "2026-06-10T06:33:32.096363+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "author/revise FAIL (3/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
+    },
+    {
+      "ts": "2026-06-10T06:33:32.097479+00:00",
+      "milestone": "M1",
+      "action": "PARKED",
+      "result": "3 consecutive authoring failures \u2014 moving on"
+    },
+    {
+      "ts": "2026-06-10T10:45:00+00:00",
+      "milestone": "M1",
+      "action": "UN-PARKED",
+      "result": "park cause was WinError 206 (prompt exceeded Windows argv limit) \u2014 fixed: prompts now ride stdin"
+    },
+    {
+      "ts": "2026-06-11T06:32:08.288685+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=play HOLD \u2014 failed: start, liveness, controls, progression,  panel=ok open=6"
+    },
+    {
+      "ts": "2026-06-11T06:33:50.587207+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=ok open=0"
+    },
+    {
+      "ts": "2026-06-11T06:33:50.587573+00:00",
+      "milestone": "M1",
+      "action": "milestone complete",
+      "result": "-> M2"
+    },
+    {
+      "ts": "2026-06-11T06:36:10.244924+00:00",
+      "milestone": "M2",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=ok open=0"
+    },
+    {
+      "ts": "2026-06-11T06:36:10.245371+00:00",
+      "milestone": "M2",
+      "action": "milestone complete",
+      "result": "-> M3"
+    },
+    {
+      "ts": "2026-06-11T06:39:09.927020+00:00",
+      "milestone": "M3",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=ok open=0"
+    },
+    {
+      "ts": "2026-06-11T06:39:09.927407+00:00",
+      "milestone": "M3",
+      "action": "milestone complete",
+      "result": "-> M4"
+    },
+    {
+      "ts": "2026-06-11T06:42:44.780548+00:00",
+      "milestone": "M4",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T06:42:44.781010+00:00",
+      "milestone": "M4",
+      "action": "milestone complete",
+      "result": "-> M5"
+    },
+    {
+      "ts": "2026-06-11T06:46:11.308082+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T06:49:37.821423+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T06:53:12.436979+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T06:56:50.078149+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T07:00:30.370060+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T07:04:06.210179+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T07:07:48.710633+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T07:11:20.754588+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T07:14:50.332862+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T07:18:17.042741+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T07:21:39.874106+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T07:25:07.625827+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=14"
+    },
+    {
+      "ts": "2026-06-11T07:28:41.735179+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T07:32:08.846863+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T07:35:37.345689+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T07:38:57.088104+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T07:42:31.962075+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=14"
+    },
+    {
+      "ts": "2026-06-11T07:46:01.945752+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T07:49:36.060382+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T07:53:08.293028+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=9"
+    },
+    {
+      "ts": "2026-06-11T07:56:37.937714+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T08:00:08.550930+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T08:03:40.218722+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T08:07:02.807451+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T08:10:19.883420+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T08:13:41.582526+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T08:17:07.548494+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T08:20:36.141284+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=12"
+    },
+    {
+      "ts": "2026-06-11T08:24:15.184912+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T08:27:39.333625+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T08:31:08.594434+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T08:34:28.476659+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T08:37:49.308703+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=14"
+    },
+    {
+      "ts": "2026-06-11T08:41:14.255305+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T08:44:45.221857+00:00",
+      "milestone": "M5",
+      "action": "engine pass",
+      "result": "play=play tester produced no report (rc=1):  eval (eval at evalua panel=hold open=13"
+    },
+    {
+      "ts": "2026-06-11T13:30:00+00:00",
+      "milestone": "M1",
+      "action": "STATE RESET",
+      "result": "M1-M4 advances were fail-open on tester crashes (truncated game.js from the audio re-attach bug). Reset to M1; gate is now fail-closed."
+    }
   ],
-  "scope": "IN: 5 hand-crafted worlds (10 screens each = 50 total). Tutorial world (5 screens). 3 difficulty modes (Normal/Hard/Deathless). Wall-slide/wall-jump/dash/double-jump mechanics. Instant-death hazards (lava, spikes, falling rocks). Collectible ember fragments (3 per screen, optional). Clear win state (reach summit shrine) and lose state (fall into void). FFG.Shell integration (title/difficulty/how-to/settings/pause/mute/fullscreen). Coyote-time (6 frames). Jump buffering (4 frames). Particle VFX on dash/death/collect. Ambient SFX (wind, lava rumble, footsteps). OUT: Boss fights. NPCs/dialogue. Inventory/upgrades beyond double-jump unlock. Procedural generation. Multiplayer. Cutscenes (static title card only). Music (ambient drone loop is sufficient).",
-  "art_direction": "Palette: deep crimson (#8B0000), burnt orange (#CC5500), obsidian black (#0A0A0A), ash gray (#4A4A4A), glowing ember yellow (#FFD700). Mood: desolate, oppressive heat, lonely pilgrimage. Minimalist geometric shapes\u00e2\u20ac\u201dplayer is a glowing humanoid silhouette, platforms are sharp angular obsidian slabs, hazards pulse with molten glow. Parallax background: distant volcanic peaks, ash clouds drifting. Particle systems for dash trails (ember sparks), death (soul fragmenting into embers), and collect (ember absorption). High contrast for readability.",
-  "milestone_plan": {
-   "M1": "Vertical slice (1 world = 10 screens playable start-to-finish). Core movement (run/jump/dash/wall-slide) feels tight. Instant death + instant respawn loop working. FFG.Shell menu integration (title/start/settings). Page controls (fullscreen/mute/pause) functional. HUD shows ember count and death counter.",
-   "M2": "All 5 mechanics locked in (dash cooldown visual, coyote-time tested, double-jump unlock after tutorial). Hazard variety implemented (lava pools, spike walls, timed falling platforms). Particle VFX for dash/death/collect polished. SFX integrated (jump/dash/death/collect/ambient loop).",
-   "M3": "All 6 worlds complete (tutorial + 5 main = 55 screens total). Ember fragment placement finalized (165 total collectibles). Difficulty modes implemented (Normal/Hard spawn more hazards, Deathless = permadeath to title). Win state (summit shrine cutscene card + stats screen) and lose state (void fall = respawn OR return to checkpoint) clearly defined.",
-   "M4": "Juice pass: screen-shake on death, dash after-images, ember fragment glow pulse, wall-slide dust particles. HUD polish (clean font, ember icon, death counter animates on increment). Tutorial signs (static text overlays for controls). Settings menu (volume sliders, keybind display, difficulty toggle). Playtesting for difficulty curve\u00e2\u20ac\u201dadjust hazard timing/placement.",
-   "M5": "Final QA: all 55 screens completable on all difficulties. No soft-locks. Page controls (pause/mute/fullscreen) work in all states. Win/lose states trigger correctly. Ember collection tracks properly. Build optimized for web (< 20MB, 60fps target). Deploy-ready package with start-to-finish loop verified. Definition of Done checklist 100% green."
-  },
-  "definition_of_done": [
-   "Game boots to FFG.Shell title screen with difficulty selection (Normal/Hard/Deathless), how-to-play screen, and settings menu",
-   "Page controls (fullscreen/mute/pause) functional at all times",
-   "All 55 screens (tutorial + 5 worlds \u00c3\u2014 10) playable and completable",
-   "Core mechanics working: run, jump, wall-slide, wall-jump, dash (8-dir, 1s cooldown), double-jump (unlocked post-tutorial)",
-   "Coyote-time (6 frames) and jump buffering (4 frames) implemented and tuned",
-   "Instant death on hazard contact, instant respawn at screen start",
-   "Ember fragments (3 per screen, 165 total) collectible and tracked in HUD",
-   "Win state: reaching summit shrine displays victory screen with stats (time, deaths, embers collected)",
-   "Lose state: falling into void respawns player at last checkpoint (or title screen in Deathless mode)",
-   "HUD displays ember count and death counter clearly",
-   "Particle VFX present: dash trails, death burst, ember collect glow",
-   "SFX integrated: jump, dash, death, collect, ambient lava/wind loop",
-   "Difficulty modes alter hazard density/timing appropriately",
-   "No soft-locks, no manual fixes required\u00e2\u20ac\u201dgame is start-to-finish playable",
-   "Build runs at 60fps on target hardware, total size < 20MB",
-   "Playtested on all difficulties by at least one external tester\u00e2\u20ac\u201dfeedback loop closed"
-  ]
- },
- "open_issues": [
-  {
-   "id": 7,
-   "milestone": "M1",
-   "severity": "high",
-   "issue": "play:controls \u2014 state responded to input",
-   "status": "open",
-   "found": "2026-06-10T06:33:32.006701+00:00"
-  },
-  {
-   "id": 8,
-   "milestone": "M1",
-   "severity": "high",
-   "issue": "play:progression \u2014 states=['play'] maxScore=0 maxLevel=1",
-   "status": "open",
-   "found": "2026-06-10T06:33:32.006767+00:00"
-  }
- ],
- "changelog": [
-  {
-   "ts": "2026-06-10T06:31:09.666487+00:00",
-   "milestone": "M0",
-   "action": "design doc",
-   "result": "title=Ascent of the Ember Soul"
-  },
-  {
-   "ts": "2026-06-10T06:33:32.006799+00:00",
-   "milestone": "M1",
-   "action": "engine pass",
-   "result": "play=play HOLD \u2014 failed: controls, progression panel=ok open=2"
-  },
-  {
-   "ts": "2026-06-10T06:33:32.023916+00:00",
-   "milestone": "M1",
-   "action": "engine pass",
-   "result": "author/revise FAIL (1/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
-  },
-  {
-   "ts": "2026-06-10T06:33:32.059801+00:00",
-   "milestone": "M1",
-   "action": "engine pass",
-   "result": "author/revise FAIL (2/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
-  },
-  {
-   "ts": "2026-06-10T06:33:32.096363+00:00",
-   "milestone": "M1",
-   "action": "engine pass",
-   "result": "author/revise FAIL (3/3): revision error: FileNotFoundError: [WinError 206] The filename or extension is too long"
-  },
-  {
-   "ts": "2026-06-10T06:33:32.097479+00:00",
-   "milestone": "M1",
-   "action": "PARKED",
-   "result": "3 consecutive authoring failures \u2014 moving on"
-  },
-  {
-   "ts": "2026-06-10T10:45:00+00:00",
-   "milestone": "M1",
-   "action": "UN-PARKED",
-   "result": "park cause was WinError 206 (prompt exceeded Windows argv limit) \u2014 fixed: prompts now ride stdin"
-  }
- ],
- "sessions": 1,
- "created": "2026-06-10T02:21:46.614351+00:00"
+  "sessions": 2,
+  "created": "2026-06-10T02:21:46.614351+00:00"
 }

@@ -69,7 +69,7 @@ def build_prompt(insp, ctx):
     rubric = insp["rubric"].format(genre=ctx.get("genre", "?"))
     base = f"You are an expert game QA reviewer ({insp['name']}). {rubric}{_FMT}"
     if insp["kind"] == "code":
-        gj = (ctx.get("game_js") or "")[:6000]
+        gj = (ctx.get("game_js") or "")[:60000]   # stdin transport: no need to starve the reviewer
         return base + f"\n\nTITLE: {ctx.get('title','?')}\n\n=== game.js ===\n{gj}"
     return base                                            # vision: screenshot attached by build_command
 
@@ -181,7 +181,8 @@ def main():
                 print(f"  - {insp['name']}: (needs --shot <png>)")
                 continue
             print(f"\n--- {insp['name']} ({'blocking' if _blocking(insp) else 'advisory'}) ---")
-            print(" ".join(json.dumps(a) if " " in a else a for a in build_command(insp, ctx))[:600] + " ...")
+            cmd, prompt = build_command(insp, ctx)
+            print(" ".join(cmd) + " <<< " + prompt[:500].replace("\n", " ") + " ...")
         sys.exit(0)
     report = run_panel(gdir, genre, shot=shot, run=True)
     print(json.dumps(report, indent=2))

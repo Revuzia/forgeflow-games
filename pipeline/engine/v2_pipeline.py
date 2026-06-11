@@ -947,7 +947,18 @@ def engine_milestone_dev(item, journal, spec, force=False, single_step=False):
     spec["title"] = journal.get("title") or spec.get("title")
     spec["core_loop"] = dd.get("core_loop") or spec.get("core_loop")
 
-    steps, fails = 0, 0
+    # SRC RE-SYNC (2026-06-11): dev-stage games always run the CURRENT engine. Last night's revisions
+    # called new engine APIs (ctx.shake) against the game's stale staged runtime copy from author-time.
+    # Only src/ is refreshed — assets/cast/game.js are never touched.
+    eng_src = ROOT.parent / "forgeflow-engine" / "src"
+    if (gdir / "src").exists() and eng_src.exists():
+        try:
+            import shutil
+            shutil.copytree(eng_src, gdir / "src", dirs_exist_ok=True)
+        except Exception as e:
+            log(f"engine src re-sync skipped ({e})")
+
+    steps, fails, tester_fails = 0, 0, 0
     while time_left(force) > 8 and journal["milestone"] != "DONE" and steps < 40:
         mid = journal["milestone"]
         goal = ENGINE_MILESTONES.get(mid, "Improve the game toward ship quality.")
@@ -986,6 +997,29 @@ def engine_milestone_dev(item, journal, spec, force=False, single_step=False):
 
         # 2. PLAY-VERIFY the new build; snapshot failed inspectors as the open issue list.
         ship, pdetail = build_target.play_verify(slug, gdir)
+
+        # FAIL-CLOSED (2026-06-11): "no report" is NOT "no issues". Last night ship=None advanced
+        # M1->M5 in 10 minutes while the tester crashed on an unloadable game.js. A missing report
+        # now blocks the milestone, surfaces as the ONLY open issue (so the next revision targets
+        # it), and 3 in a row aborts the night as infra (the game is never parked for tester downtime).
+        if ship is None:
+            tester_fails += 1
+            journal["open_issues"] = [{"id": 1, "milestone": mid, "severity": "high",
+                                       "issue": f"play:tester — NO REPORT ({str(pdetail)[:120]}). The game "
+                                                f"likely fails to boot/module-load; fix game.js so the engine starts.",
+                                       "status": "open", "found": _now_iso()}]
+            _changelog(journal, mid, "engine pass", f"play=NO-REPORT ({str(pdetail)[:60]}) — fail-closed, no advance")
+            log(f"{slug} [ENGINE {mid}] pass {steps}: play=NO-REPORT ({tester_fails}/3) — milestone blocked")
+            track_error("play_tester", f"no report: {str(pdetail)[:160]}", slug=slug, milestone=mid)
+            save_journal(journal)
+            if tester_fails >= 3:
+                notify(f"🛑 FFG: play tester produced no report {tester_fails}x on *{slug}* — night aborted "
+                       f"(game intact at {mid}; investigate tester/boot).")
+                return "transient"
+            if single_step: break
+            continue
+        tester_fails = 0
+
         rep = {}
         try:
             rep = json.loads((gdir / "play_report.json").read_text(encoding="utf-8"))
@@ -1018,9 +1052,9 @@ def engine_milestone_dev(item, journal, spec, force=False, single_step=False):
                    f"play={'SHIP' if ship else str(pdetail)[:60]} panel={'ok' if panel_ok else 'hold'} open={len(journal['open_issues'])}")
         log(f"{slug} [ENGINE {mid}] pass {steps}: play={'SHIP' if ship else 'HOLD'} open={len(journal['open_issues'])}")
 
-        # 4. Definition of done: the build PLAYS (tester SHIP, or tester unavailable -> structural floor);
-        #    M5 additionally needs the AI QA panel to say ship (when it ran).
-        if (ship is True or ship is None) and (mid != "M5" or panel_ok):
+        # 4. Definition of done: the build PLAYS — a real tester SHIP, never an absent report
+        #    (fail-closed since 2026-06-11); M5 additionally needs the AI QA panel to say ship.
+        if ship is True and (mid != "M5" or panel_ok):
             nxt = MILESTONE_IDS[MILESTONE_IDS.index(mid) + 1] if mid != "M5" else "DONE"
             journal["milestones"][mid]["status"] = "done"
             journal["milestone"] = nxt

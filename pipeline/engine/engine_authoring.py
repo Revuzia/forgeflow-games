@@ -387,11 +387,19 @@ def revise_engine_game(gdir, spec, *, goal, issues=None, recent_log=None, design
                     js, detail, ok = js2, d2 + "; self-healed", True
         if not ok:
             return False, str(gdir), "revision invalid: " + detail + " (old file kept)"
-        # never lose the per-game audio declaration: re-attach it if the revision dropped it
+        # never lose the per-game audio declaration: re-attach it if the revision dropped it.
+        # 2026-06-11 INCIDENT FIX: the old single-line regex (^GAME\.audio = .*$) captured only the
+        # OPENING line of a multi-line GAME.audio and appended a dangling `GAME.audio = {` AFTER
+        # validation — writing a file that cannot module-load. 38 claude calls burned on the corpse.
+        # Now: capture the FULL statement, and NEVER write bytes that didn't pass validate().
         if "GAME.audio" in current and "GAME.audio" not in js:
-            m = re.search(r"^GAME\.audio = .*$", current, re.MULTILINE)
+            m = re.search(r"^GAME\.audio = [\s\S]*?;", current, re.MULTILINE) or \
+                re.search(r"^GAME\.audio = [\s\S]*", current, re.MULTILINE)
             if m:
-                js += "\n" + m.group(0) + "\n"
+                js += "\n" + m.group(0).rstrip() + "\n"
+                ok3, d3 = validate(js, gdir)          # the EXACT bytes we write must validate
+                if not ok3:
+                    return False, str(gdir), "post-audio-reattach invalid: " + d3 + " (old file kept)"
         gj.write_text(js, encoding="utf-8")
         return True, str(gdir), "revision applied (" + detail + ")"
     except Exception as e:
