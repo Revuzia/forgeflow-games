@@ -221,6 +221,9 @@ HARD REQUIREMENTS (a reviewer + an automated player will reject the game if any 
      stage bigger/faster/harder), scale speeds/counts by ctx.difficulty, and advance ctx.level as the
      player progresses (show it in the HUD). Win -> ctx.win() after the final stage; a real fail state ->
      ctx.lose() or ctx.hurt(). A bot pressing arrows/Space/F must make score/progress within ~12s.
+     SCOPE CONTRACT: declare your content as ONE top-level array literal — `const LEVELS = [ ... ]`
+     (or WORLDS/WAVES/...) with one element per level — a deterministic gate counts it against the
+     design doc's promised count and BLOCKS milestones until you've built what the design promises.
   4. Respond to input every frame via ctx.input (axisX/axisY/pressed/down/pointerJustDown). Declare a
      `controls: "..."` how-to line on the GAME object (shown on the menu).
   5. Call ctx.hud("...") each frame with a live status line. Call ctx.music("music") in setup and
@@ -356,7 +359,9 @@ RULES:
      ctx.level progression). Build on it; never regress it.
   3. All previous hard requirements still apply: real sprites/models (never bare shapes), 3+ stages with
      a ramp scaled by ctx.difficulty, ctx.level advanced and shown in the HUD, winnable AND loseable,
-     input every frame, ctx.hud each frame, per-event sounds ({", ".join(AUDIO_NAMES)}).
+     input every frame, ctx.hud each frame, per-event sounds ({", ".join(AUDIO_NAMES)}). Keep the
+     SCOPE CONTRACT: content declared as ONE top-level `const LEVELS = [...]` array (one element per
+     level/world) — a gate counts it against the design doc and blocks milestones on a shortfall.
   4. ADD JUICE + DEPTH this pass if missing: ctx.shake() on death/hits (decaying camera shake — free
      quality), real physics (ctx.enablePhysics for 2D / ctx.enablePhysics3d for 3D obby), animate
      animated models (ctx.animate), and place prop/prop2 scenery so the world isn't an empty test scene.

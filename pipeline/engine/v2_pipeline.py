@@ -1059,6 +1059,24 @@ def engine_milestone_dev(item, journal, spec, force=False, single_step=False):
              "issue": f"play:{name} — {info.get('detail','')[:140]}", "status": "open", "found": _now_iso()}
             for k, (name, info) in enumerate((rep.get("inspectors") or {}).items()) if info.get("pass") is False]
 
+        # 2b. SCOPE GATE (owner 2026-06-11): deterministic promised-vs-declared content count.
+        # The design doc's promise ("5 worlds", "8 waves") must be DECLARED in code (LEVELS array /
+        # LEVEL_COUNT) before M2+ can complete; the shortfall is fed to the next revision as an issue.
+        scope_ok = True
+        try:
+            sys.path.insert(0, str(ENGINE / "gates"))
+            import scope_gate
+            sg = scope_gate.run_gate(journal.get("design_doc") or {},
+                                     (gdir / "game.js").read_text(encoding="utf-8"))
+            if not sg["ok"]:
+                if mid != "M1":
+                    scope_ok = False                       # blocks M2..M5 completion
+                journal["open_issues"].append(
+                    {"id": len(journal["open_issues"]) + 1, "milestone": mid, "severity": "high",
+                     "issue": f"scope — {sg['detail'][:180]}", "status": "open", "found": _now_iso()})
+        except Exception as e:
+            log(f"scope gate skipped ({e})")
+
         # 3. At M4/M5 fold in the AI QA panel (vision/genre-fit/code-review/UX) for quality issues.
         panel_ok = True
         if mid in ("M4", "M5"):
@@ -1078,12 +1096,14 @@ def engine_milestone_dev(item, journal, spec, force=False, single_step=False):
                 log(f"ai_qa panel skipped ({e})"); panel_ok = True       # panel infra missing -> don't block
 
         _changelog(journal, mid, "engine pass",
-                   f"play={'SHIP' if ship else str(pdetail)[:60]} panel={'ok' if panel_ok else 'hold'} open={len(journal['open_issues'])}")
+                   f"play={'SHIP' if ship else str(pdetail)[:60]} scope={'ok' if scope_ok else 'SHORT'} "
+                   f"panel={'ok' if panel_ok else 'hold'} open={len(journal['open_issues'])}")
         log(f"{slug} [ENGINE {mid}] pass {steps}: play={'SHIP' if ship else 'HOLD'} open={len(journal['open_issues'])}")
 
         # 4. Definition of done: the build PLAYS — a real tester SHIP, never an absent report
-        #    (fail-closed since 2026-06-11); M5 additionally needs the AI QA panel to say ship.
-        if ship is True and (mid != "M5" or panel_ok):
+        #    (fail-closed since 2026-06-11); M2+ additionally need the SCOPE gate (promised content
+        #    declared in code); M5 additionally needs the AI QA panel to say ship.
+        if ship is True and scope_ok and (mid != "M5" or panel_ok):
             nxt = MILESTONE_IDS[MILESTONE_IDS.index(mid) + 1] if mid != "M5" else "DONE"
             journal["milestones"][mid]["status"] = "done"
             journal["milestone"] = nxt
