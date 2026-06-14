@@ -1517,6 +1517,21 @@ def main():
     once = "--once" in args
     throughput = "--throughput" in args
 
+    # ADMIN KILL-SWITCH (2026-06-14 FIX): every other pipeline honors the portal toggle via
+    # claw_lib.agency_runs.is_enabled(); the games pipeline was the ONE that never checked, so
+    # toggling it off in the portal did nothing (owner hit this — the promised off-switch was dead).
+    # Checked FIRST, before the lock/CI/telemetry, so "off" means truly nothing runs.
+    # FFG_IGNORE_KILLSWITCH=1 bypasses (for a deliberate manual --once while toggled off).
+    if os.environ.get("FFG_IGNORE_KILLSWITCH") != "1":
+        try:
+            sys.path.insert(0, str(ROOT.parent / "scripts"))
+            from claw_lib.agency_runs import is_enabled
+            if not is_enabled("forgeflow_games"):
+                log("ADMIN KILL-SWITCH is OFF (portal) — forgeflow_games disabled. Exiting cleanly, nothing runs.")
+                return
+        except Exception as e:
+            log(f"kill-switch check failed ({type(e).__name__}: {str(e)[:80]}) — failing OPEN (continuing).")
+
     if time_left(force) <= 5:
         log(f"outside run window (now {_minutes_now()}m, stop {HARD_STOP_MINUTES}m). Exiting.")
         return
