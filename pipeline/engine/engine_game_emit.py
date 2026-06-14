@@ -112,6 +112,40 @@ def _pick_sfx(name, keywords, slug):
     return pool[_seed(slug, name) % len(pool)] if pool else None
 
 
+MUSIC_REGISTRY = GAMES.parent / "state" / "music_assignments.json"   # state/music_assignments.json
+def _assign_music(slug, themes):
+    """BACKGROUND-SONG BLACKLIST (owner 2026-06-14): once a game is assigned a track, that track is
+    'used' and no OTHER game gets it until the pool is exhausted — each game's bg song is unique while
+    distinct tracks remain. The assignment is recorded so it's stable across rebuilds. (With only the
+    stock pool, games beyond the track count fall back to the least-used track — true per-game
+    uniqueness comes from generated music; this registry already records generated tracks too.)"""
+    import json as _json
+    names = [t.name for t in themes]
+    reg = {"assignments": {}, "used": {}}
+    try:
+        if MUSIC_REGISTRY.exists():
+            reg = _json.loads(MUSIC_REGISTRY.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    reg.setdefault("assignments", {}); reg.setdefault("used", {})
+    prev = reg["assignments"].get(slug)
+    if prev and prev in names:
+        return next(t for t in themes if t.name == prev)          # stable: keep this game's song
+    unused = [n for n in names if n not in reg["used"]]
+    if unused:
+        pick = unused[_seed(slug, "music") % len(unused)]          # an as-yet-UNUSED track (blacklist honored)
+    else:
+        pick = min(names, key=lambda n: reg["used"].get(n, 0))     # pool exhausted -> least-reused
+    reg["assignments"][slug] = pick
+    reg["used"][pick] = reg["used"].get(pick, 0) + 1
+    try:
+        MUSIC_REGISTRY.parent.mkdir(parents=True, exist_ok=True)
+        MUSIC_REGISTRY.write_text(_json.dumps(reg, indent=1), encoding="utf-8")
+    except Exception:
+        pass
+    return next(t for t in themes if t.name == pick)
+
+
 def stage_audio(out, slug):
     """Stage PER-GAME audio into <out>/assets/audio/ (after the engine assets are copied):
       * music: a slug-seeded theme OVERWRITES music_menu.ogg (the runtime's "music" contract file)
@@ -135,7 +169,7 @@ def stage_audio(out, slug):
             except Exception:
                 pass
         if themes:
-            shutil.copyfile(themes[_seed(slug, "music") % len(themes)], adir / "music_menu.ogg")
+            shutil.copyfile(_assign_music(slug, themes), adir / "music_menu.ogg")
         for name, kws in CONTRACT_SFX.items():
             f = _pick_sfx(name, kws, slug)
             if f:
