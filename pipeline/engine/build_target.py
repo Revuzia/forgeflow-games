@@ -136,7 +136,21 @@ def engine_verify(slug, gdir):
         checks.append(("index injects __GAME_OBJECT__", "__GAME_OBJECT__" in h))
         checks.append(("index runs game mode", '"game"' in h))
     failed = [n for n, ok in checks if not ok]
-    return (not failed), ("structural ok (%d checks)" % len(checks)) if not failed else ("missing: " + ", ".join(failed))
+    if failed:
+        return False, "missing: " + ", ".join(failed)
+    # Tier 5 EMIT-INTEGRITY guard: a structurally-complete game can still ship a game.js with a
+    # leftover __TOKEN__ placeholder or a syntax error (black screen the file-exists checks miss).
+    # Token scan is hard; node --check is best-effort (skips if node absent). Never raises.
+    try:
+        if str(ENGINE_DIR / "gates") not in sys.path:
+            sys.path.insert(0, str(ENGINE_DIR / "gates"))
+        import emit_integrity_gate as _eig
+        ig = _eig.check_emit_integrity(gdir)
+        if not ig["ok"]:
+            return False, "emit integrity: " + ig["reason"]
+        return True, "structural ok (%d checks) + emit-integrity %s" % (len(checks), ig["verdict"])
+    except Exception:
+        return True, "structural ok (%d checks)" % len(checks)
 
 
 def _play_tester_path():

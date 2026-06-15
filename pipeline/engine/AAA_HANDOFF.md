@@ -59,8 +59,13 @@ The emitter's hardcoded 5-asset map shipped EVERY platformer with the same `tile
 - **`engine/engine_game_emit.py`** — `build()` now calls the selector first, falls back to `ASSET_SETS` on any failure. (NOTE: emitter renders STATIC sprite quads; animated walk-cycles — Kenney new-platformer-pack, absent on F: — are a future tier. See [[project_kenney_enemies]].)
 - **`engine/test_no_primitives.py`** — extended (now 39 checks, was 26): selector returns real on-disk files per template, hero≠foe (shooter), hero varies ≥3 distinct across 7 slugs, `collect`→None, deterministic, and an INTEGRATION check that two slugs emit different sprites AND both still pass the no-naked-primitives actor gate. **9/9 suites green.** (This gate CAUGHT a real regression mid-build: the selector first used key `coin`, but the platformer template reads `star` → `COIN_SPR` went null → naked-primitive fail; fixed by aligning keys.)
 
+## DONE — Tier 5 (slice 1): emit-integrity guard (CI-green, committed)
+- **`gates/emit_integrity_gate.py`** — `check_emit_integrity(game_dir)`: scans the emitted `game.js` for any leftover `__TOKEN__` placeholder (hard fail — a missed substitution ships a black screen the file-exists verify misses) + `node --check` validates the JS as an ES module (best-effort; skips clean if node absent — node v22 present here). index.html is intentionally NOT token-scanned (it keeps runtime-filled `__ENGINE__`/`__GAME_OBJECT__` etc.).
+- **`build_target.engine_verify`** now runs the guard after the structural checks — so the nightly rejects a broken emit instead of staging it.
+- **`gates/test_emit_integrity.py`** — in CI (10/10 suites green); 9 checks: every golden emits clean + valid; both-ways teeth (FAILS a leftover token, FAILS broken syntax, PASSES clean).
+
 ## NEXT (remaining on the loop)
-- **Tier 5** — feel/balance/audio gates + functional fixes (beatability hard-fail, placeholder/syntax guard, touch + CDN-vendor in emitter, false-gamepad strip, template logic bugs).
+- **Tier 5 (rest)** — feel/balance/audio gates; functional fixes: beatability hard-fail, touch + CDN-vendor in emitter, false-gamepad strip, template logic bugs (thornline AP reset, void-skirmish evac, shroud forced ranged pickup, tide-breakers difficulty). NOTE: the template logic fixes touch specific genre templates — riskier; verify each via the play tester.
 - **perf_gate.py** — deferred (needs the live headless harness for FPS/draw-calls); pairs with payload_gate.
 - **Tier 3b** (needs claude -p, owner-run) — kernel-authoring pass overriding `ffg_scene.js buildGameplay()` to add real gameplay on the kernel renderer. Gated behind owner sign-off of the Tier-3 render.
 - **3 existing 3D games** — already kernel PBR+IBL (procedural textures). Only genuinely-additive upgrade = real F: HDRI IBL (pipeline-level pass, theme-matched); do NOT inject mismatched ground photoscans. Deploy + browser eyeball = owner.
