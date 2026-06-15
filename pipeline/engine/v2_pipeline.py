@@ -1607,13 +1607,19 @@ def _main_locked(*, force, deploy, once, throughput):
 
     # ASSET AUTO-DISCOVERY: anything new dropped on F:\games (Unity downloads, GLBs, audio) gets
     # ingested/converted/indexed before the night's builds, so authoring always sees the full
-    # library. Idempotent (marker files) -> seconds when nothing changed. FFG_SKIP_ASSET_REFRESH=1 skips.
+    # library. BEST-EFFORT + resumable (marker files); on timeout it leaves marks and the build
+    # proceeds. TIMEOUT BOUNDED to 900s (was 2700) so this housekeeping can't eat the build window:
+    # 2026-06-15 it ran 45 min on a night with an EMPTY ingest cache (nothing new), pushing the first
+    # build to ~02:15 of the 01:30->04:00 window. The heavy first-pass ingest of new packs is a manual
+    # `python scripts/unity_ingest_and_wire.py` task (see its docstring), not a per-night necessity.
+    # FFG_SKIP_ASSET_REFRESH=1 skips entirely. TODO: the "idempotent -> seconds" claim is false on
+    # no-change nights (the scan/inventory re-runs); needs a real skip-if-unchanged guard.
     if os.environ.get("FFG_SKIP_ASSET_REFRESH") != "1":
         wire = ROOT.parent / "scripts" / "unity_ingest_and_wire.py"
         if wire.exists():
             try:
-                log("asset refresh: scanning F:\\games for new assets…")
-                r = subprocess.run([sys.executable, str(wire)], capture_output=True, text=True, timeout=2700)
+                log("asset refresh: scanning F:\\games for new assets… (<=15 min, best-effort)")
+                r = subprocess.run([sys.executable, str(wire)], capture_output=True, text=True, timeout=900)
                 tail = ((r.stdout or "") + (r.stderr or "")).strip().splitlines()
                 log(f"asset refresh: {tail[-1] if tail else 'done'}")
             except Exception as e:
@@ -1652,9 +1658,10 @@ def _main_locked(*, force, deploy, once, throughput):
         # ONE GAME AT A TIME (owner 2026-06-10: "ONLY 1 game at a time until it finishes ALL passes.
         # Never do multiple games at a time."). The milestone loop already iterates passes on the ONE
         # active game all night; a new round starts ONLY when that game fully finishes ("built" = M5
-        # DONE). "parked" now ENDS the night — the parked game stays the single active game and blocks
-        # any new promotion (see pick_dev_target) until it is fixed/un-parked. This replaces the
-        # multi-game-nights behavior that developed 10 different games on 2026-06-10.
+        # DONE). "parked" ENDS the night (the loop breaks on any non-"built" result below), but it NO
+        # LONGER blocks future nights: pick_dev_target (owner 2026-06-15) SETS parked games aside and
+        # promotes the next backlog game, so one un-fixable game can't halt all production. This replaces
+        # the multi-game-nights behavior that developed 10 different games on 2026-06-10.
         rounds, built_n = 0, 0
         while True:
             rounds += 1
