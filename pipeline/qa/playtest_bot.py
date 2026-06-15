@@ -112,18 +112,26 @@ def run_soak(game_url: str, duration_sec: int = 600, headless: bool = True) -> d
         result["memory_growth_pct"] = round((last - first) / max(1, first) * 100, 1)
         result["memory_verdict"] = "leak_suspected" if (last > first * 1.8 and last - first > 30) else "stable"
     # FPS perf gate (now that the kernel exposes window.__PERF__): catch sustained choppiness
-    # like lumen-run's. Drop the first 2 warmup samples (compile/asset spikes). avg + min both
-    # checked so one outlier dip doesn't fail, but real low-FPS does. No samples (Canvas mode /
-    # WebGL blocked / __PERF__ absent) -> "skip", never a false fail.
-    fps_vals = [s["fps"] for s in result["fps_samples"][2:] if s.get("fps")]
-    if fps_vals:
-        avg_fps = sum(fps_vals) / len(fps_vals)
-        min_fps = min(fps_vals)
-        result["avg_fps"] = round(avg_fps, 1)
-        result["min_fps"] = min_fps
-        result["fps_verdict"] = "pass" if (avg_fps >= 40 and min_fps >= 24) else "fail"
-    else:
-        result["fps_verdict"] = "skip"
+    # like lumen-run's. The verdict logic + thresholds live in ONE tested place — perf_gate.fps_verdict
+    # — so CI can exercise the gate deterministically without a live browser. (Falls back to the inline
+    # rule if the gate module isn't importable, so the bot never hard-depends on it.)
+    try:
+        _gates = Path(__file__).resolve().parents[1] / "engine" / "gates"
+        if str(_gates) not in sys.path:
+            sys.path.insert(0, str(_gates))
+        from perf_gate import fps_verdict as _fps_verdict
+        _v = _fps_verdict(result["fps_samples"])
+        result["fps_verdict"] = _v["verdict"]
+        if _v.get("avg_fps") is not None:
+            result["avg_fps"], result["min_fps"] = _v["avg_fps"], _v["min_fps"]
+    except Exception:
+        fps_vals = [s["fps"] for s in result["fps_samples"][2:] if s.get("fps")]
+        if fps_vals:
+            result["avg_fps"] = round(sum(fps_vals) / len(fps_vals), 1)
+            result["min_fps"] = min(fps_vals)
+            result["fps_verdict"] = "pass" if (result["avg_fps"] >= 40 and result["min_fps"] >= 24) else "fail"
+        else:
+            result["fps_verdict"] = "skip"
     return result
 
 
