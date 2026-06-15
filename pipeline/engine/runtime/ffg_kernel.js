@@ -110,14 +110,18 @@
         }
       } catch (e) {}
     },
-    // soft outer glow on a game object (WebGL only; harmless no-op on Canvas)
+    // soft outer glow on a game object (WebGL only; harmless no-op on Canvas).
+    // BOUNDED: 110+ coins each adding a glow shader (+ whole-scene bloom on top) was the 2D FPS
+    // killer (lumen-run choppiness). Cap per-object glows AND skip entirely once scene bloom is on —
+    // bloom already makes bright things glow globally, so per-object glow is redundant then.
     glow: function (obj, color, outer) {
-      try { if (obj && this._webgl && obj.postFX) obj.postFX.addGlow(color == null ? 0xffffff : color, outer == null ? 3 : outer, 0, false, 0.08, 4)  /* quality 10->4: cheaper per-object glow */; } catch (e) {}
+      try { if (obj && this._webgl && obj.postFX && !this._bloomActive && (this._glowCount = (this._glowCount || 0) + 1) <= 14) obj.postFX.addGlow(color == null ? 0xffffff : color, outer == null ? 3 : outer, 0, false, 0.08, 4); } catch (e) {}
       return obj;
     },
-    // whole-scene bloom (call once after building the scene)
+    // whole-scene bloom (call once after building the scene); flips _bloomActive so further
+    // per-object glows no-op (redundant cost).
     bloom: function (strength) {
-      try { if (this._webgl && this._scene) this._scene.cameras.main.postFX.addBloom(0xffffff, 1, 1, 0.7, strength == null ? 0.5 : Math.min(strength, 0.6), 1)  /* steps 6->1: full-screen bloom was the 2D FPS killer + the heavy blur */; } catch (e) {}
+      try { if (this._webgl && this._scene) { this._scene.cameras.main.postFX.addBloom(0xffffff, 1, 1, 0.7, strength == null ? 0.5 : Math.min(strength, 0.6), 1); this._bloomActive = true; } } catch (e) {}
     },
     shake: function (dur, intensity) {
       try { if (this._scene) this._scene.cameras.main.shake(dur == null ? 180 : dur, intensity == null ? 0.006 : intensity); } catch (e) {}
@@ -225,8 +229,9 @@
       width: W, height: H,
       parent: content.parent || "game-container",
       backgroundColor: view.background || "#0a0e1a",
-      pixelArt: !!view.pixelArt,
-      antialias: view.pixelArt ? false : true,
+      pixelArt: view.pixelArt !== false,                 // DEFAULT TRUE -> NEAREST filtering, crisp pixel art (owner: lumen-run was fuzzy). Opt out with content.view.pixelArt:false for smooth/vector art.
+      antialias: view.pixelArt === false,                // antialias only when pixelArt is explicitly disabled
+      roundPixels: true,                                 // snap sprites to whole pixels (no shimmer on the procedural pixel art)
       scale: { mode: root.Phaser.Scale.FIT, autoCenter: root.Phaser.Scale.CENTER_BOTH },
       physics: { default: "arcade", arcade: { gravity: { y: 0 }, debug: false } },
       fps: testMode ? { forceSetTimeOut: true, target: 60 } : undefined,
@@ -234,6 +239,9 @@
     });
     root.__FFG_GAME__ = game;
     root.__FFG_CONTENT__ = content;
+    // FPS telemetry for the playtest perf gate. Was ABSENT -> the play-tester read window.__PERF__,
+    // got null, and silently never failed on choppiness (lumen-run shipped at low FPS unnoticed).
+    root.__PERF__ = { getPerformance: function () { try { return { fps: Math.round((game.loop && game.loop.actualFps) || 0) }; } catch (e) { return { fps: 0 }; } } };
     return game;
   };
 

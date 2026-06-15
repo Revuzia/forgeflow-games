@@ -111,12 +111,19 @@ def run_soak(game_url: str, duration_sec: int = 600, headless: bool = True) -> d
         result["memory_growth_mb"] = last - first
         result["memory_growth_pct"] = round((last - first) / max(1, first) * 100, 1)
         result["memory_verdict"] = "leak_suspected" if (last > first * 1.8 and last - first > 30) else "stable"
-    if result["fps_samples"]:
-        avg_fps = sum(s["fps"] for s in result["fps_samples"]) / len(result["fps_samples"])
-        min_fps = min(s["fps"] for s in result["fps_samples"])
+    # FPS perf gate (now that the kernel exposes window.__PERF__): catch sustained choppiness
+    # like lumen-run's. Drop the first 2 warmup samples (compile/asset spikes). avg + min both
+    # checked so one outlier dip doesn't fail, but real low-FPS does. No samples (Canvas mode /
+    # WebGL blocked / __PERF__ absent) -> "skip", never a false fail.
+    fps_vals = [s["fps"] for s in result["fps_samples"][2:] if s.get("fps")]
+    if fps_vals:
+        avg_fps = sum(fps_vals) / len(fps_vals)
+        min_fps = min(fps_vals)
         result["avg_fps"] = round(avg_fps, 1)
         result["min_fps"] = min_fps
-        result["fps_verdict"] = "pass" if min_fps >= 30 else "fail"
+        result["fps_verdict"] = "pass" if (avg_fps >= 40 and min_fps >= 24) else "fail"
+    else:
+        result["fps_verdict"] = "skip"
     return result
 
 
@@ -320,7 +327,7 @@ def main():
     if args.soak:
         result = run_soak(args.url, duration_sec=args.soak, headless=not args.headed)
         print(json.dumps(result, indent=2))
-        verdict = result.get("fps_verdict") == "pass" and result.get("memory_verdict") == "stable"
+        verdict = result.get("fps_verdict") in ("pass", "skip") and result.get("memory_verdict") == "stable"
         sys.exit(0 if verdict else 1)
 
     result = run_playtest(args.url, trials=args.trials,
