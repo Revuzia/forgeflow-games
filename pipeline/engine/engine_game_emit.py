@@ -58,7 +58,39 @@ def _stage_assets(out, sets):
             dst_dir.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(src, dst_dir / (name + src.suffix))
             refs[kind][name] = f"./assets/{kind}/{name}{src.suffix}"
+            if kind == "models" and src.suffix.lower() == ".glb":
+                _copy_gltf_textures(src, dst_dir)        # #3: bring the GLB's external colormap PNGs along
     return refs
+
+
+def _copy_gltf_textures(src_glb, dst_dir):
+    """Copy a GLB's externally-referenced textures (e.g. Textures/colormap.png) next to the copied GLB,
+    preserving the relative path the GLB expects — so the engine's baseColor loader can fetch them. Embedded
+    (bufferView / data:) textures need no copy. Best-effort: a parse/copy failure just leaves the model flat."""
+    try:
+        import struct
+        from urllib.parse import unquote
+        data = src_glb.read_bytes()
+        if data[:4] != b"glTF":
+            return
+        off, js = 12, None
+        while off + 8 <= len(data):
+            ln, ty = struct.unpack_from("<II", data, off)
+            if ty == 0x4E4F534A:
+                js = json.loads(data[off + 8:off + 8 + ln].decode("utf-8", "replace"))
+            off += 8 + ln
+        for img in (js or {}).get("images", []):
+            uri = img.get("uri")
+            if not uri or uri.startswith("data:"):
+                continue
+            rel = unquote(uri)
+            srcf = src_glb.parent / rel
+            if srcf.exists():
+                dstf = dst_dir / rel
+                dstf.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(srcf, dstf)
+    except Exception as e:
+        print(f"  [warn] gltf texture copy ({src_glb.name}): {e}", file=sys.stderr)
 
 
 def _name_or_null(refs_kind, name):
