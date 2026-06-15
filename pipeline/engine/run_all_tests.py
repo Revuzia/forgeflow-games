@@ -17,6 +17,7 @@ SUITES = [
     "test_no_primitives.py",
     "gates/test_scope_gate.py",
     "gates/test_render_gates.py",
+    "gates/test_asset_staging.py",
 ]
 
 

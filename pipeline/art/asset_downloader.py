@@ -94,12 +94,17 @@ def polyhaven_download(slug: str, kind: str, resolution: str = "2k") -> bool:
             if _get(hdri["url"], dest):
                 downloaded += 1
     elif kind == "textures":
-        # Grab diffuse + normal + rough at chosen resolution
-        blend = files.get("blend", {}).get(resolution, {})
-        for map_type in ("Diffuse", "AO", "Normal", "Rough", "Displacement"):
-            m = files.get(map_type, {}).get(resolution, {}).get("jpg")
+        # Grab the PBR channels at chosen resolution.
+        # NOTE the Poly Haven files API names the normal map `nor_gl` (OpenGL) /
+        # `nor_dx` (DirectX) — NOT "Normal". The old code looked up "Normal", which
+        # never exists, so 0 normal maps ever downloaded (the on-disk sets have only
+        # diffuse/ao/rough/displacement). We fetch nor_gl as `nor_gl.jpg`, which
+        # material_library prefers over a displacement-derived normal. (api_key, out_name)
+        for api_key, out_name in (("Diffuse", "diffuse"), ("AO", "ao"), ("Rough", "rough"),
+                                  ("Displacement", "displacement"), ("nor_gl", "nor_gl")):
+            m = files.get(api_key, {}).get(resolution, {}).get("jpg")
             if m and m.get("url"):
-                dest = dest_dir / f"{map_type.lower()}.jpg"
+                dest = dest_dir / f"{out_name}.jpg"
                 if _get(m["url"], dest):
                     downloaded += 1
     elif kind == "models":
