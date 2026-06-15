@@ -166,7 +166,7 @@
       s.actionsLeft = base;
       // A DEFEND (overwatch) stance lasts through the OTHER side's turn and clears
       // when this side becomes active again (its reaction shots are spent).
-      if (s.side === side) { s.defending = false; s._reacted = false; }
+      if (s.side === side) { s.defending = false; s.overwatch = false; s._reacted = false; }
     }
   };
 
@@ -181,7 +181,7 @@
     if (!chk.ok) return { ok: false, reason: chk.reason };
     var rangeFrac = chk.range / s.gun.range;
     var falloff = rangeFrac <= 0.6 ? 1 : (1 - 0.45 * ((rangeFrac - 0.6) / 0.4));
-    var dmg = Math.max(1, Math.round(s.gun.dmg * falloff));
+    var dmg = Math.max(1, Math.round(s.gun.dmg * falloff * (t.defending ? 0.5 : 1)));   // DEFEND = shield: halves incoming damage
     t.hp -= dmg;
     var out = { ok: true, result: "hit", x: t.x, y: t.y, by: s.id, target: t.id, dmg: dmg, range: chk.range, reaction: true };
     if (t.hp <= 0) { t.hp = 0; t.sunk = true; out.result = "sink"; out.sunk = true; this.log.push(s.id + " OVERWATCH SANK " + t.id); }
@@ -370,7 +370,7 @@
     // tapering to 55% at max range — rewards closing distance without being swingy.
     var rangeFrac = chk.range / s.gun.range;
     var falloff = rangeFrac <= 0.6 ? 1 : (1 - 0.45 * ((rangeFrac - 0.6) / 0.4));
-    var dmg = Math.max(1, Math.round(s.gun.dmg * falloff));
+    var dmg = Math.max(1, Math.round(s.gun.dmg * falloff * (victim.defending ? 0.5 : 1)));   // DEFEND = shield: halves incoming damage
     victim.hp -= dmg;
 
     var out = { result: "hit", x: victim.x, y: victim.y, by: s.id, target: victim.id, dmg: dmg, range: chk.range, actionsLeft: s.actionsLeft };

@@ -727,15 +727,14 @@ register3d("navalfree", async function (kernel, content) {
       const frac = Math.max(0, s.hp / s.maxHp);
       const hpCol = s.sunk ? "#5a2030" : frac > 0.5 ? accent : frac > 0.25 ? "#ffd166" : "#ff5a5a";
       const isSel = !s.sunk && s.id === selectedId;
-      const def = !!s.defending && !s.sunk;
-      const bd = isSel ? accent : (def ? "#ffd166" : "rgba(120,150,170,.26)");
+      const bd = isSel ? accent : (s.defending && !s.sunk ? "#7fc8ff" : (s.overwatch && !s.sunk ? "#ffd166" : "rgba(120,150,170,.26)"));   // shield=blue, overwatch=amber
       const bg = isSel ? "rgba(40,80,90,.55)" : "rgba(9,20,30,.66)";
       return `<div title="${s.id} · HP ${s.hp}/${s.maxHp} · range ${Math.round(s.gun.range)}" style="opacity:${s.sunk ? 0.32 : 1};width:94px;padding:5px 6px 6px;border:1px solid ${bd};border-radius:8px;background:${bg};${isSel ? "box-shadow:0 0 10px " + accent + "66;" : ""}">
         <div style="height:30px;display:flex;align-items:center;justify-content:center;${s.sunk ? "filter:grayscale(1)" : ""}">${shipSVG(s, s.sunk ? "#6a7480" : accent)}</div>
         <div style="font-size:10px;font-weight:700;color:${s.sunk ? "#8a93a0" : "#e7f1f6"};text-align:center;white-space:nowrap;${s.sunk ? "text-decoration:line-through;" : ""}">${classLabel(s)}</div>
         <div style="margin-top:3px;height:6px;border-radius:3px;background:#0b1722;overflow:hidden">
           <div style="height:6px;width:${Math.round(100 * (s.sunk ? 0 : frac))}%;background:${hpCol};${s.sunk ? "" : "box-shadow:0 0 5px " + hpCol}"></div></div>
-        <div style="margin-top:2px;font-size:9px;text-align:center;color:#9fb0be">${s.sunk ? "SUNK" : "HP " + s.hp + "/" + s.maxHp}${def ? ' · <b style="color:#ffd166">DEF</b>' : ""}</div>
+        <div style="margin-top:2px;font-size:9px;text-align:center;color:#9fb0be">${s.sunk ? "SUNK" : "HP " + s.hp + "/" + s.maxHp}${s.defending && !s.sunk ? ' · <b style="color:#7fc8ff">🛡</b>' : (s.overwatch && !s.sunk ? ' · <b style="color:#ffd166">🎯</b>' : "")}</div>
       </div>`;
     }).join("");
   }
@@ -753,7 +752,7 @@ register3d("navalfree", async function (kernel, content) {
         : `<span style="color:#2a0e0a;background:linear-gradient(#ffb199,#ff6a4d);padding:3px 14px;border-radius:20px;font-weight:800;letter-spacing:1.5px;box-shadow:0 2px 12px rgba(255,90,74,.4)">ENEMY TURN</span>`;
     // Selected-ship stat panel.
     const selInfo = sel && !sel.sunk
-      ? `<div style="display:inline-block;margin-top:6px;padding:7px 14px;border:1px solid rgba(55,224,192,.5);border-radius:9px;background:rgba(8,24,30,.72);font-size:12px;text-align:left;min-width:300px">
+      ? `<div style="display:inline-block;margin-top:6px;padding:7px 14px;border:1px solid rgba(55,224,192,.5);border-radius:9px;background:rgba(8,24,30,.72);font-size:14px;text-align:left;min-width:300px">
            <div style="font-size:13px;font-weight:800;color:#9dffd0;letter-spacing:.4px">${sel.id} <span style="opacity:.8;font-weight:600">· ${classLabel(sel)}</span></div>
            <div style="margin-top:4px;display:flex;gap:14px;flex-wrap:wrap">
              <span>HP <b style="color:#cdeee2">${sel.hp}<span style="opacity:.6">/${sel.maxHp}</span></b></span>
@@ -761,8 +760,7 @@ register3d("navalfree", async function (kernel, content) {
              <span>Range <b style="color:#ffd79a">${Math.round(sel.gun.range)}</b></span>
              <span>Speed <b style="color:#bcdcff">${Math.round(sel.speed)}</b></span>
            </div>
-           <div style="margin-top:4px;opacity:.72;font-size:11px">click open water to <b style="color:#9dffd0">DRIVE</b> · click an enemy in the amber arc to <b style="color:#ffd79a">FIRE</b> · <b>Q/E</b> turn</div>
-           ${sel.actionsLeft > 0 && yourTurn && !sel.defending ? `<button id="nf-defend" style="pointer-events:auto;margin-top:7px;font:800 12px 'Segoe UI',monospace;letter-spacing:.5px;padding:6px 14px;border-radius:7px;cursor:pointer;color:#1c1605;background:linear-gradient(#ffe08a,#ffc14d);border:1px solid #ffd166;box-shadow:0 3px 12px rgba(255,209,102,.3)">🛡 DEFEND (overwatch)</button> <span style="font-size:10px;opacity:.66">hold position — fire on any enemy that enters your arc</span>` : (sel.defending ? `<div style="margin-top:7px;font-size:12px;font-weight:800;color:#ffd166">🛡 DEFENDING — overwatch armed</div>` : "")}
+           ${sel.actionsLeft > 0 && yourTurn && !sel.defending && !sel.overwatch ? `<div style="margin-top:7px;display:flex;gap:8px"><button id="nf-defend" style="pointer-events:auto;font:800 13px 'Segoe UI',monospace;letter-spacing:.5px;padding:6px 14px;border-radius:7px;cursor:pointer;color:#06231c;background:linear-gradient(#9bdcff,#4db4ff);border:1px solid #7fc8ff;box-shadow:0 3px 12px rgba(77,180,255,.3)">🛡 DEFEND</button><button id="nf-overwatch" style="pointer-events:auto;font:800 13px 'Segoe UI',monospace;letter-spacing:.5px;padding:6px 14px;border-radius:7px;cursor:pointer;color:#1c1605;background:linear-gradient(#ffe08a,#ffc14d);border:1px solid #ffd166;box-shadow:0 3px 12px rgba(255,209,102,.3)">🎯 OVERWATCH</button></div>` : (sel.defending ? `<div style="margin-top:7px;font-size:13px;font-weight:800;color:#7fc8ff">🛡 DEFENDING — incoming fire halved</div>` : (sel.overwatch ? `<div style="margin-top:7px;font-size:13px;font-weight:800;color:#ffd166">🎯 OVERWATCH — fires on enemies entering arc</div>` : ""))}
          </div>`
       : (yourTurn && !sim.ended ? `<div style="display:inline-block;margin-top:6px;font-size:12px;opacity:.8;padding:6px 12px;border-radius:8px;background:rgba(8,24,30,.6)">Click one of your <span style="color:#37e0c0;font-weight:700">teal</span> ships to select it.</div>` : "");
     const endBtn = (yourTurn && !sim.ended)
@@ -790,15 +788,26 @@ register3d("navalfree", async function (kernel, content) {
     if (eb) eb.onclick = () => { if (!busy) endPlayerTurn(); };
     const db = document.getElementById("nf-defend");
     if (db) db.onclick = () => { if (!busy && sel) defendShip(sel); };
+    const ob = document.getElementById("nf-overwatch");
+    if (ob) ob.onclick = () => { if (!busy && sel) overwatchShip(sel); };
   }
-  // DEFEND: the selected ship commits to OVERWATCH — it spends its remaining actions
-  // and will fire a preemptive reaction shot at any enemy that moves into its range +
-  // arc during the enemy turn. (Clears automatically when your next turn begins.)
+  // DEFEND: raise a SHIELD — the ship braces, taking HALF damage from incoming fire this
+  // round (no reaction fire). Spends its remaining actions (ends its turn). Clears when your
+  // next turn begins.
   function defendShip(s) {
     if (!s || s.sunk || sim.turn !== "player" || s.actionsLeft <= 0) return;
-    s.defending = true; s._reacted = false; s.actionsLeft = 0;
-    banner(`${s.id} holds — OVERWATCH`, 0xffd166, 900);
+    s.defending = true; s.overwatch = false; s.actionsLeft = 0;
+    banner(`${s.id} braces — SHIELD UP (½ damage)`, 0x4db4ff, 900);
     autoSelectNextShip(); // advance to the next ready ship (or end turn if none)
+    setHUD();
+  }
+  // OVERWATCH: hold position and fire a preemptive reaction shot at any enemy that moves into
+  // this ship's range + arc + LOS during the enemy turn (no shield). Spends its actions.
+  function overwatchShip(s) {
+    if (!s || s.sunk || sim.turn !== "player" || s.actionsLeft <= 0) return;
+    s.overwatch = true; s._reacted = false; s.actionsLeft = 0;
+    banner(`${s.id} holds — OVERWATCH`, 0xffd166, 900);
+    autoSelectNextShip();
     setHUD();
   }
 
@@ -969,7 +978,7 @@ register3d("navalfree", async function (kernel, content) {
   // then `done()` continues the AI playback.
   function triggerOverwatch(enemyShip, done) {
     if (!enemyShip || enemyShip.sunk || sim.ended) { done(); return; }
-    const defenders = sim.shipsOf("player").filter((d) => d.defending && !d.sunk && !d._reacted && sim.canFireAt(d.id, enemyShip.x, enemyShip.y, enemyShip.id).ok);
+    const defenders = sim.shipsOf("player").filter((d) => d.overwatch && !d.sunk && !d._reacted && sim.canFireAt(d.id, enemyShip.x, enemyShip.y, enemyShip.id).ok);
     if (!defenders.length) { done(); return; }
     let j = 0;
     (function fireNext() {
@@ -995,7 +1004,7 @@ register3d("navalfree", async function (kernel, content) {
   // fires once at the NEAREST enemy still in its range + arc + LOS. Guarantees Defend
   // pays off whenever a target sits in the watched zone (not only on a move into it).
   function coveringFire(done) {
-    const defenders = sim.shipsOf("player").filter((d) => d.defending && !d.sunk && !d._reacted);
+    const defenders = sim.shipsOf("player").filter((d) => d.overwatch && !d.sunk && !d._reacted);
     let j = 0;
     (function next() {
       if (j >= defenders.length || sim.ended) { done(); return; }
