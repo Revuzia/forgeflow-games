@@ -1303,6 +1303,44 @@ def dev_loop(force=False, deploy=False, single_step=False):
     wip = WIP / f"{slug}.json"
     gdir = ROOT / "games" / slug
 
+    # THREE-KERNEL 3D TARGET (opt-in via kernel_target.json {"enabled":true} / FFG_KERNEL_TARGET=1) —
+    # routes 3D genres to the AAA Three.js kernel (PBR + IBL + bloom) with REAL F: Poly Haven materials,
+    # instead of the from-scratch engine (Blinn-Phong, no PBR/tonemap/post-FX — the keystone bug). DEFAULT
+    # OFF -> choose_render_target() returns None -> this whole block is skipped and the routing below is
+    # byte-for-byte unchanged (no blind prod flip). The deterministic assembly emits a lit, textured,
+    # IBL scaffold that PASSES the render+payload gates; full gameplay is layered by the claude -p kernel
+    # author step (see AAA_HANDOFF.md). Any failure falls through to the existing engine/Phaser routing.
+    try:
+        sys.path.insert(0, str(ENGINE)); import kernel_target as _kt  # noqa: E402
+    except Exception:
+        _kt = None
+    if _kt and _kt.choose_render_target(genre, item) == "three-kernel":
+        kcontent = {"slug": slug, "genre": genre, "title": journal.get("title") or item.get("title") or slug,
+                    "brief": item.get("brief", ""), "theme": item.get("theme"), "palette": item.get("palette")}
+        if wip.exists():
+            try: kcontent.update({k: v for k, v in (json.loads(wip.read_text(encoding="utf-8")) or {}).items() if v is not None})
+            except Exception: pass
+        try:
+            kout = _kt.assemble_kernel_game(slug, kcontent)
+            kok, kdet = _kt.verify_kernel_game(kout)
+        except Exception as e:
+            kok, kout, kdet = False, None, "kernel assemble error: " + type(e).__name__ + ": " + str(e)[:160]
+        if kok:
+            journal["kernel_build"] = {"out": str(kout), "detail": kdet, "ts": _now_iso()}
+            for m in journal.get("milestones", {}).values():
+                if m.get("status") in ("in_progress", "todo"): m["status"] = "done"
+            journal["milestone"] = "DONE"; journal["open_issues"] = []
+            _changelog(journal, "KERNEL", "three-kernel build", f"AAA 3D staged ({kdet})")
+            save_journal(journal)
+            try: (Path(kout) / "READY_TO_DEPLOY").write_text(_now_iso(), encoding="utf-8")
+            except Exception: pass
+            _mark(slug, "built", f"THREE-KERNEL target: AAA 3D game staged at {kout}")
+            log(f"DEEP-DEV {slug}: built on the THREE KERNEL -> {kout} ({kdet})")
+            notify(f"✅ FFG deep-dev: *{slug}* ({genre}) built on the AAA THREE KERNEL with real PBR/IBL — staged for review.")
+            return "built"
+        log(f"DEEP-DEV {slug}: three-kernel target unavailable ({kdet}) -> existing routing")
+        track_error("kernel_build", f"kernel build not accepted: {kdet}", slug=slug, genre=genre)
+
     # ENGINE TARGET (opt-in via build_target / engine_target.json) — for emitter-supported genres, build a
     # REAL-ASSET game on the ForgeFlow Engine in ONE deterministic step (no claude -p, no Phaser schema
     # gate) and stage it. This unblocks genres the Phaser path has no schema for (e.g. platformer). On ANY
