@@ -453,7 +453,20 @@ def build(content_path, out_dir, slug="engine-game"):
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(ENGINE / sub, dst)
-    refs = _stage_assets(out, ASSET_SETS.get(template_of(content), {}))   # GS11(d): copy REAL assets into the game dir
+    template = template_of(content)
+    # Tier 4: slug-seeded REAL sprite variety from the F: pixel packs (so every platformer
+    # isn't the same tile_0000 hero). Falls back to the hardcoded ASSET_SETS / colour on any
+    # failure or when F: isn't mounted, and leaves the 3D "collect" template's GLB models alone.
+    sets = ASSET_SETS.get(template, {})
+    try:
+        sys.path.insert(0, str(GAMES / "pipeline" / "art"))
+        import twod_asset_selector as _tas
+        picked = _tas.select_asset_set(template, content.get("slug") or slug)
+        if picked:
+            sets = picked
+    except Exception:
+        pass
+    refs = _stage_assets(out, sets)                   # GS11(d): copy REAL assets into the game dir
     audio_refs = stage_audio(out, slug)              # GS-AUDIO: per-game music + named SFX set (slug-seeded)
     js, meta = emit_game_js(content, refs)           # game.js references the copied assets by relative path
     js += audio_js_snippet(audio_refs)               # declare the extra sounds (runtime loads GAME.audio)

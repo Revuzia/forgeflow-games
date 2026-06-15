@@ -112,6 +112,42 @@ for s in SHOWCASE:
     ok, bad = actors_ok(blk)
     need(f"sample {s}: actors use real assets", ok, "; ".join(bad))
 
+# ── D) TIER 4: slug-seeded real-sprite variety from the F: pixel packs ─────────────────────────────
+sys.path.insert(0, str(GAMES / "pipeline" / "art"))
+import twod_asset_selector as tas  # noqa: E402
+need("collect template keeps 3D models (selector returns None)", tas.select_asset_set("collect", "x") is None)
+if tas.root():
+    for tmpl in ("platformer", "shooter"):
+        s = tas.select_asset_set(tmpl, "lumen-run")
+        need(f"selector {tmpl}: returns sprites", bool(s and s.get("sprites")))
+        if s:
+            for role, rel in s["sprites"].items():
+                need(f"selector {tmpl}: {role} file exists on F:", (tas.ASSETS_ROOT / rel).exists(), rel)
+    sh = tas.select_asset_set("shooter", "lumen-run")
+    need("selector shooter: hero != foe", sh and sh["sprites"].get("hero") != sh["sprites"].get("foe"))
+    # variety: distinct slugs should not all collapse to one hero
+    slugs = ["lumen-run", "neon-breakout", "star-drift", "cave-hopper", "iron-gate", "frost-spire", "tide-pool"]
+    heroes = {tas.select_asset_set("platformer", s2)["sprites"].get("hero") for s2 in slugs}
+    need(f"selector platformer: hero varies across slugs ({len(heroes)} distinct of {len(slugs)})", len(heroes) >= 3)
+    # determinism
+    need("selector deterministic", tas.select_asset_set("platformer", "lumen-run") == tas.select_asset_set("platformer", "lumen-run"))
+    # integration: variety reaches the emitter — two slugs copy different hero sprites
+    if GENRE_GOLDEN["platformer"].exists():
+        oa = Path(tempfile.mkdtemp()) / "a"; ob = Path(tempfile.mkdtemp()) / "b"
+        ca = json.loads(GENRE_GOLDEN["platformer"].read_text(encoding="utf-8")); ca["slug"] = "variety-a"
+        cb = dict(ca); cb["slug"] = "variety-zzz"
+        fa = oa.parent / "a.json"; fb = ob.parent / "b.json"
+        fa.write_text(json.dumps(ca), encoding="utf-8"); fb.write_text(json.dumps(cb), encoding="utf-8")
+        emit.build(str(fa), oa, slug="variety-a"); emit.build(str(fb), ob, slug="variety-zzz")
+        ja = (oa / "game.js").read_text(encoding="utf-8"); jb = (ob / "game.js").read_text(encoding="utf-8")
+        ha = re.search(r'sprites:\s*(\{[^}]*\})', ja); hb = re.search(r'sprites:\s*(\{[^}]*\})', jb)
+        need("emitter: two slugs select sprites", bool(ha and hb))
+        # both must still pass the no-primitives actor gate
+        need("variety build A: actors real", actors_ok(ja)[0])
+        need("variety build B: actors real", actors_ok(jb)[0])
+else:
+    print("  (note: F: pixel packs not mounted — Tier-4 selector variety checks skipped; emitter falls back to ASSET_SETS)")
+
 print(f"checks run: {n}")
 if fails:
     print("NAKED PRIMITIVES / FAILURES:")

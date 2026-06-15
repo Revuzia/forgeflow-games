@@ -53,8 +53,14 @@ If the render looks AAA: (a) set `kernel_target.json {"enabled": true}` to route
 ## NEEDS OWNER claude -p (can't run in-session — OAuth lock)
 - Validating any **regenerated** game (the in-session work is pipeline code + CI; proving a *generated* game looks AAA needs a real nightly/operator run). Commands will be filled in here per phase as the Three-kernel author target lands.
 
+## DONE — Tier 4: 2D real-art variety from F: pixel packs (CI-green, committed)
+The emitter's hardcoded 5-asset map shipped EVERY platformer with the same `tile_0000` hero and every shooter the same pair — generated 2D games looked identical. Now slug-seeded from the real packs.
+- **`art/twod_asset_selector.py`** — scans the F: packs (pixel-platformer Characters, platformer-art-deluxe Base pack Player/Enemies/Items, pixel-shmup Ships) into role pools and `select_asset_set(template, slug)` deterministically picks a DIFFERENT real sprite per slug, returning the exact `{"sprites": {...}}` shape `_stage_assets` consumes. Role keys MATCH the templates: platformer=`hero`+`star`, shooter=`hero`+`foe`. Returns None for the 3D `collect` template (keeps GLB models) and when F: is absent (→ old ASSET_SETS/colour). Pools: platformer hero 33 / star 12, shooter hero 12 / foe 12.
+- **`engine/engine_game_emit.py`** — `build()` now calls the selector first, falls back to `ASSET_SETS` on any failure. (NOTE: emitter renders STATIC sprite quads; animated walk-cycles — Kenney new-platformer-pack, absent on F: — are a future tier. See [[project_kenney_enemies]].)
+- **`engine/test_no_primitives.py`** — extended (now 39 checks, was 26): selector returns real on-disk files per template, hero≠foe (shooter), hero varies ≥3 distinct across 7 slugs, `collect`→None, deterministic, and an INTEGRATION check that two slugs emit different sprites AND both still pass the no-naked-primitives actor gate. **9/9 suites green.** (This gate CAUGHT a real regression mid-build: the selector first used key `coin`, but the platformer template reads `star` → `COIN_SPR` went null → naked-primitive fail; fixed by aligning keys.)
+
 ## NEXT (remaining on the loop)
-- **Tier 3b** (needs claude -p, owner-run) — kernel-authoring pass overriding `ffg_scene.js buildGameplay()` to add real gameplay on the kernel renderer. Gated behind owner sign-off of the Tier-3 render (above).
-- **Tier 4** — 2D real art from F: pixel packs (replace the 5 hardcoded emitter assets).
 - **Tier 5** — feel/balance/audio gates + functional fixes (beatability hard-fail, placeholder/syntax guard, touch + CDN-vendor in emitter, false-gamepad strip, template logic bugs).
 - **perf_gate.py** — deferred (needs the live headless harness for FPS/draw-calls); pairs with payload_gate.
+- **Tier 3b** (needs claude -p, owner-run) — kernel-authoring pass overriding `ffg_scene.js buildGameplay()` to add real gameplay on the kernel renderer. Gated behind owner sign-off of the Tier-3 render.
+- **3 existing 3D games** — already kernel PBR+IBL (procedural textures). Only genuinely-additive upgrade = real F: HDRI IBL (pipeline-level pass, theme-matched); do NOT inject mismatched ground photoscans. Deploy + browser eyeball = owner.
