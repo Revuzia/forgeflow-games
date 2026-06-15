@@ -808,7 +808,7 @@ def pick_dev_target():
     # NO-REPEAT GUARD: a game already built locally (games/<slug>, the deploy source) is DONE — never
     # re-develop it. This is what kept the loop re-doing Lumen Run.
     shipped = {p.name for p in (ROOT / "games").iterdir() if p.is_dir() and not p.name.startswith("_")} if (ROOT / "games").exists() else set()
-    actives, parked_blockers = [], []
+    actives, parked = [], []
     for p in DEV_JOURNAL.glob("*.json"):
         try:
             jj = json.loads(p.read_text(encoding="utf-8"))
@@ -816,22 +816,20 @@ def pick_dev_target():
             continue
         if jj.get("milestone") == "DONE" or jj.get("slug") in shipped:
             continue
-        # PARKED journals can't be developed, but under the ONE-GAME POLICY they still BLOCK new
-        # promotions: the unfinished game stays the only game until an operator un-parks (delete the
-        # "parked" key) or removes its journal. Never start game #2 while game #1 is unfinished.
-        (parked_blockers if jj.get("parked") else actives).append(jj)
+        # PARKED journals can't be developed and are SET ASIDE — but they NO LONGER BLOCK the queue
+        # (owner 2026-06-15: a single un-fixable game must not halt ALL game production). They're
+        # skipped; the pipeline advances to the next active/backlog game. An operator can resume a
+        # parked game later by deleting its journal's "parked" key. (Was: one parked game froze the
+        # whole pipeline under the one-game policy — that was the "pipeline stuck" the owner hit.)
+        (parked if jj.get("parked") else actives).append(jj)
     if actives:
         actives.sort(key=lambda jj: jj.get("created", ""))
         jj = actives[0]
         return ({"slug": jj["slug"], "genre": jj["genre"], "brief": jj.get("brief", ""),
                  "inspired_by": jj.get("inspired_by"), "rating": jj.get("rating")}, jj)
-    if parked_blockers:
-        slug = parked_blockers[0].get("slug")
-        log(f"ONE-GAME POLICY: '{slug}' is parked ({parked_blockers[0].get('parked_reason', '')[:100]}) — "
-            f"no new game starts until it is un-parked or its journal removed.")
-        notify(f"🅿️ FFG: *{slug}* is parked and blocks the pipeline (one-game policy). "
-               f"Un-park (delete its journal's \"parked\" key) or remove the journal to continue.")
-        return None, None
+    if parked:
+        log(f"SKIPPING {len(parked)} parked game(s) [{', '.join(j.get('slug','?') for j in parked[:5])}] — "
+            f"advancing to the backlog (un-park a journal's \"parked\" key to resume it).")
     q = _load_queue()
     cands = [i for i in q.get("queue", []) if i.get("status") == "backlog" and i["slug"] not in shipped] or \
             [i for i in q.get("queue", []) if i.get("status") == "pending" and i["slug"] not in shipped]

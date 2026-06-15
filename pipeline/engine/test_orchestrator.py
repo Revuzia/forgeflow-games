@@ -5,7 +5,7 @@ No claude -p, no Telegram, no Playwright: everything monkeypatched/fixtured.
 Covers:
   1. run lock        — acquire / second-acquire fails / release / stale-break
   2. _atomic_write   — content lands, no .tmp残 left behind
-  3. pick_dev_target — oldest active wins; parked BLOCKS promotion (one-game policy);
+  3. pick_dev_target — oldest active wins; parked is SKIPPED (advances to backlog, never blocks);
                        DONE journals ignored; empty -> backlog promotion
   4. dev_loop Q2     — authoring stack down => "transient", journal untouched, NO template downgrade
   5. dev_loop T5     — Phaser path quarantined => "transient" unless FFG_ALLOW_PHASER=1
@@ -108,10 +108,14 @@ for f in jdir.glob("*.json"):
     f.unlink()
 _journal("blocked-game", parked=True)
 item, j = v2.pick_dev_target()
-chk("pick: PARKED journal blocks promotion (one-game policy)", item is None and j is None)
+chk("pick: PARKED journal is SKIPPED -> promotes from backlog (parked must NOT block the queue)",
+    item and item["slug"] == "fresh")
 
+# reset (the promote above wrote a 'fresh' journal + marked the queue) so the next case is independent
 for f in jdir.glob("*.json"):
     f.unlink()
+v2.QUEUE.write_text(json.dumps({"queue": [{"slug": "fresh", "genre": "shmup",
+                                           "status": "backlog", "rating": 90}]}), encoding="utf-8")
 _journal("done-game", milestone="DONE")
 item, j = v2.pick_dev_target()
 chk("pick: DONE ignored -> promotes from backlog", item and item["slug"] == "fresh")
