@@ -93,6 +93,17 @@ def test_no_false_gamepad_claim():
         _ok("gamepad" not in gamejs, f"{slug}: game.js makes a gamepad claim that isn't wired")
 
 
+def test_perf_telemetry_exposed():
+    # The engine runtime must expose window.__PERF__.getPerformance()->{fps} so the live play-tester's
+    # perf inspector can sample FPS (verified live on a golden platformer: avg ~59fps). Guarded here
+    # because the runtime is copied into every emitted game — strip it and per-build FPS scoring breaks.
+    for slug, cf in GENRES:
+        out = _build(slug, cf)
+        eng = _read(out / "src" / "engine.js")
+        _ok("window.__PERF__" in eng, f"{slug}: engine.js no longer exposes window.__PERF__ (play-tester FPS sampling breaks)")
+        _ok("getPerformance" in eng and "fps" in eng, f"{slug}: __PERF__ missing getPerformance()/fps shape")
+
+
 def run():
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0
