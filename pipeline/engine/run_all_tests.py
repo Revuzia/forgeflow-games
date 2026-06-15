@@ -21,6 +21,7 @@ SUITES = [
     "gates/test_kernel_target.py",
     "gates/test_emit_integrity.py",
     "tests/test_perf_gate.py",
+    "tests/test_emit_robustness.py",
 ]
 
 
