@@ -494,6 +494,13 @@
         //  • out-ranged      -> close to a strong band of my range to start hitting;
         //  • even            -> a touch inside my range for full-damage falloff.
         var skill = this.aiSkill || "normal";
+        // DEFENSIVE STANCES — the enemy GUARDS + OVERWATCHES too (owner: "enemy can do the same"). DETERMINISTIC
+        // (no RNG -> online stays mirror-consistent): on a ship's LAST action with no clean shot, a wounded ship
+        // BRACES (Guard = ½ incoming next turn); a healthy ship with a foe just out of reach HOLDS on OVERWATCH.
+        if (skill !== "easy" && s.actionsLeft <= 1) {
+          if (s.hp <= s.maxHp * 0.35) { s.defending = true; s.overwatch = false; s.actionsLeft = 0; acts.push({ kind: "defend", id: s.id }); break; }
+          if (d > myR && d <= myR * 1.5) { s.overwatch = true; s._reacted = false; s.actionsLeft = 0; acts.push({ kind: "overwatch", id: s.id }); break; }
+        }
         var standoff;
         if (myR > foeR + 4) standoff = Math.min(myR * 0.95, Math.max(foeR + 8, myR * 0.8));
         else if (foeR > myR + 4) standoff = myR * (skill === "hard" ? 0.6 : 0.7);

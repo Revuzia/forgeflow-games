@@ -604,23 +604,32 @@ register3d("navalfree", async function (kernel, content) {
   }
   // ballistic shell from shooter bow to impact point
   function fireShell(s, toVec, onImpact) {
+    // FREEZE FIX (owner: "game freezes sometimes on firing cannon"): tryFire() gates all input on busy=true and only
+    // clears it from THIS callback. If addPhysicsBody/tween ever threw, the impact callback never fired and the game
+    // hung. Now onImpact is fired exactly ONCE — guaranteed by a safety timeout + a try/catch — so busy always clears.
+    let fired = false;
+    const fire = () => { if (fired) return; fired = true; clearTimeout(safety); try { onImpact(); } catch (e) {} };
+    const safety = setTimeout(fire, 1400);   // hard guarantee: release within 1.4s no matter what stalled
     const from = muzzleFX(s) || (function () { const a = toScene(s.x, s.y); a.y = 2.5; return a; })();
-    if (reducedMotion) { onImpact(); return; }
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 12),
-      new THREE.MeshStandardMaterial({ color: 0x0c0c0c, metalness: 0.6, roughness: 0.4 }));
-    ball.position.copy(from); ball.castShadow = true; scene.add(ball);
-    const C = kernel.CANNON, T = 0.62;
-    if (C && kernel.world) {
-      const g = kernel.world.gravity.y;
-      const vel = { x: (toVec.x - from.x) / T, y: (toVec.y - from.y) / T - 0.5 * g * T, z: (toVec.z - from.z) / T };
-      kernel.addPhysicsBody({ mesh: ball, shape: new C.Sphere(0.55), mass: 3, position: from, velocity: vel, despawnAfter: T + 0.1, removeMesh: true });
-      setTimeout(onImpact, T * 1000);
-    } else {
-      const peak = 14;
-      kernel.tween({ target: ball.position, to: { x: toVec.x, z: toVec.z }, duration: 0.6,
-        onUpdate: (e) => { ball.position.y = from.y + Math.sin(e * Math.PI) * peak; },
-        onComplete: () => { scene.remove(ball); disposeMesh(ball); onImpact(); } });
-    }
+    if (reducedMotion) { fire(); return; }
+    let ball = null;
+    try {
+      ball = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 12),
+        new THREE.MeshStandardMaterial({ color: 0x0c0c0c, metalness: 0.6, roughness: 0.4 }));
+      ball.position.copy(from); ball.castShadow = true; scene.add(ball);
+      const C = kernel.CANNON, T = 0.62;
+      if (C && kernel.world) {
+        const g = kernel.world.gravity.y;
+        const vel = { x: (toVec.x - from.x) / T, y: (toVec.y - from.y) / T - 0.5 * g * T, z: (toVec.z - from.z) / T };
+        kernel.addPhysicsBody({ mesh: ball, shape: new C.Sphere(0.55), mass: 3, position: from, velocity: vel, despawnAfter: T + 0.1, removeMesh: true });
+        setTimeout(fire, T * 1000);
+      } else {
+        const peak = 14;
+        kernel.tween({ target: ball.position, to: { x: toVec.x, z: toVec.z }, duration: 0.6,
+          onUpdate: (e) => { ball.position.y = from.y + Math.sin(e * Math.PI) * peak; },
+          onComplete: () => { try { scene.remove(ball); disposeMesh(ball); } catch (e) {} fire(); } });
+      }
+    } catch (e) { try { if (ball) scene.remove(ball); } catch (_) {} fire(); }   // physics/visual failure must NOT hang the turn
   }
   // founder + slow sink (reused founder logic, scaled to this game's units)
   function sinkVisual(s) {
@@ -882,9 +891,11 @@ register3d("navalfree", async function (kernel, content) {
     busy = true; hideGizmos(); destGhost.visible = false;
     kernel.playSound(sfx.move || sfx.splash, 0.18);
     animateMove(s, () => {
-      busy = false;
-      autoSelectNextShip(s.id); // keep this ship if it still has actions, else auto-advance
-      maybeAutoEndPlayerTurn();
+      triggerEnemyOverwatch(s, () => {   // an enemy on OVERWATCH may fire on the player moving into its arc
+        busy = false;
+        autoSelectNextShip(s.id); // keep this ship if it still has actions, else auto-advance
+        maybeAutoEndPlayerTurn();
+      });
     });
   }
   function tryFire(shooter, targetShip) {
@@ -1000,6 +1011,31 @@ register3d("navalfree", async function (kernel, content) {
       });
     })();
   }
+  // ENEMY OVERWATCH (mirror): after the PLAYER ship moves, any enemy that is on OVERWATCH and now has it in
+  // range+arc+LOS fires a preemptive reaction shot (no action cost), once per player turn. (owner: "enemy can do the same")
+  function triggerEnemyOverwatch(playerShip, done) {
+    if (!playerShip || playerShip.sunk || sim.ended) { done(); return; }
+    const watchers = sim.shipsOf("enemy").filter((d) => d.overwatch && !d.sunk && !d._reacted && sim.canFireAt(d.id, playerShip.x, playerShip.y, playerShip.id).ok);
+    if (!watchers.length) { done(); return; }
+    let j = 0;
+    (function fireNext() {
+      if (j >= watchers.length || playerShip.sunk || sim.ended) { done(); return; }
+      const d = watchers[j++]; d._reacted = true;
+      const res = sim.reactionFire(d.id, playerShip.id);
+      if (!res || !res.ok) { fireNext(); return; }
+      const impact = toScene(playerShip.x, playerShip.y); impact.y = 2.0;
+      banner(`${d.id} OVERWATCH!`, 0xffd166, 800);
+      try { kernel.playSound(sfx.fire, 0.42); } catch (e) {}
+      fireShell(d, impact, () => {
+        explosion(impact); try { kernel.playSound(sfx.hit, 0.5); } catch (e) {}
+        updateHealthBar(playerShip); damageText(impact, res.dmg);
+        if (res.result === "sink") { try { kernel.playSound(sfx.sink, 0.6); } catch (e) {} sinkVisual(playerShip); }
+        setHUD();
+        if (sim.ended) { busy = false; finishMatch(); return; }
+        setTimeout(fireNext, 220);
+      });
+    })();
+  }
   // End-of-enemy-turn covering fire: each DEFENDING ship that hasn't reacted yet
   // fires once at the NEAREST enemy still in its range + arc + LOS. Guarantees Defend
   // pays off whenever a target sits in the watched zone (not only on a move into it).
@@ -1072,6 +1108,11 @@ register3d("navalfree", async function (kernel, content) {
           if (sim.ended) { busy = false; finishMatch(); return; }
           setTimeout(step, 240);
         });
+      } else if (a.kind === "defend" || a.kind === "overwatch") {   // enemy GUARD / OVERWATCH stance (sim already set the flag; show it)
+        const guard = a.kind === "defend";
+        banner(`${s.id} ${guard ? "braces — SHIELD UP" : "holds — OVERWATCH"}`, guard ? 0x4db4ff : 0xffd166, 850);
+        setHUD(`<span style="color:#ff8a6a">Enemy ${s.id} ${guard ? "shields" : "watches"}…</span>`);
+        setTimeout(step, 300);
       } else { step(); }
     }
     // small beat before the enemy acts so the player registers the turn flip
@@ -1247,8 +1288,7 @@ register3d("navalfree", async function (kernel, content) {
       } else if (diff === "easy") {
         fleet.forEach((s) => { if (s.side === "enemy") { s.gun.range = Math.round(s.gun.range * 0.9); s.gun.dmg = Math.round(s.gun.dmg * 0.8); } });
         aiSkill = "easy";
-      } else { // normal — smart AI + a small felt edge so it's challenging (was weak)
-        fleet.forEach((s) => { if (s.side === "enemy") { s.gun.range = Math.round(s.gun.range * 1.08); s.gun.dmg = Math.round(s.gun.dmg * 1.12); s.hp = Math.round(s.hp * 1.10); s.maxHp = s.hp; } });
+      } else { // normal / MEDIUM — EVEN: enemy stats are IDENTICAL to the player (owner: "on medium it should be even, all the same"). The smart AI (focus-fire/kiting) is the ONLY edge; no stat buff.
         aiSkill = "normal";
       }
     }
