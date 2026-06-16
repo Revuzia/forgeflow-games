@@ -26,6 +26,11 @@ ENGINE_GENRES = {
     "tactics", "tactics3d", "3d-tactics", "void-skirmish", "collect", "pickup",
 }
 
+# SPLIT (owner 2026-06-15): the 4 genres with strong, PROVEN Phaser kernel runtimes (FFG.register in
+# ffg_platformer/arcade/shmup/tactics.js). When the split is ON, these route to Phaser's stronger batched-WebGL
+# 2D renderer; everything else stays on engine-authoring (the only path that builds the ~122 non-template genres).
+PHASER_TEMPLATE_GENRES = {"platformer", "arcade", "shmup", "tactics"}
+
 
 def _config():
     """Opt-in config (committed, so the flip is a repo change — NOT a Task Scheduler env change).
@@ -67,14 +72,39 @@ def _allowed_genres():
     return set(ENGINE_GENRES)
 
 
+def phaser_2d_enabled():
+    """SPLIT flag (owner 2026-06-15): route the 4 Phaser-template genres (PHASER_TEMPLATE_GENRES) to Phaser's
+    stronger 2D renderer, keep engine-authoring for everything else. env FFG_PHASER_2D=1 OR engine_target.json
+    {"phaser_2d": true}. STAGED OFF by default — see route_target() for the activation prerequisites (the Phaser
+    path was quarantined in the AAA rebuild and must be re-validated with a claude -p build before this is flipped)."""
+    if os.environ.get("FFG_PHASER_2D", "").strip().lower() in ("1", "true", "yes", "on"):
+        return True
+    return bool(_config().get("phaser_2d"))
+
+
+def route_target(genre):
+    """The renderer a FRESH game of this genre should be built on: "phaser" or "engine". This is the SPLIT
+    decision, recorded once per game (sticky in the journal) so an in-flight build is never re-routed mid-stream.
+    ACTIVATION PREREQUISITES before phaser_2d is flipped on: (1) lift the FFG_ALLOW_PHASER quarantine for
+    phaser-targeted games in v2_pipeline, (2) honor the journal's recorded target in dev_loop (stickiness), and
+    (3) VALIDATE the (deprecated) Phaser path with a real claude -p build — it has not run since the engine rebuild."""
+    g = (genre or "").strip().lower()
+    if phaser_2d_enabled() and g in PHASER_TEMPLATE_GENRES:
+        return "phaser"
+    return "engine"
+
+
 def choose_target(genre, content=None):
     """Return True to build on the ENGINE, False for Phaser (the default).
+      • SPLIT ON      -> the 4 Phaser-template genres route to Phaser (False); everything else as below.
       • AUTHORING ON  -> ANY non-empty genre routes to the engine (claude -p authors a bespoke game.js;
         engine_authoring is genre-agnostic). This is how indie / non-template genres get built.
       • AUTHORING OFF -> engine only when explicitly enabled AND the genre is one the deterministic
         emitter supports AND inside the (optional) allowlist (unchanged — no regression)."""
     g = (genre or "").strip().lower()
     if not g:
+        return False
+    if phaser_2d_enabled() and g in PHASER_TEMPLATE_GENRES:   # SPLIT: these 4 genres prefer Phaser's renderer
         return False
     if authoring_enabled():                          # authoring builds any genre on the engine
         return True

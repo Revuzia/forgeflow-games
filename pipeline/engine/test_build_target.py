@@ -23,7 +23,7 @@ def chk(label, ok):
 
 
 def setenv(target=None, genres=None, config=None):
-    for k in ("FFG_ENGINE_TARGET", "FFG_ENGINE_GENRES", "FFG_ENGINE_AUTHOR"):
+    for k in ("FFG_ENGINE_TARGET", "FFG_ENGINE_GENRES", "FFG_ENGINE_AUTHOR", "FFG_PHASER_2D"):
         os.environ.pop(k, None)
     # hermetic: point config at a nonexistent path so the real engine_target.json never leaks into the
     # env-only routing tests (unless a case sets one explicitly).
@@ -88,6 +88,24 @@ chk("authoring on: empty genre -> Phaser", build_target.choose_target("") is Fal
 setenv(target="1")                          # engine enabled, authoring OFF
 chk("authoring off: puzzle -> Phaser (no template)", build_target.choose_target("puzzle") is False)
 chk("authoring off: platformer -> engine", build_target.choose_target("platformer") is True)
+setenv()
+
+# ── SPLIT (phaser_2d, owner 2026-06-15): the 4 Phaser-template genres route to Phaser; all else unchanged ──
+setenv()
+os.environ["FFG_ENGINE_AUTHOR"] = "1"        # authoring on = the LIVE config (engine builds everything)
+chk("split OFF: phaser_2d not set", build_target.phaser_2d_enabled() is False)
+chk("split OFF: platformer still -> engine", build_target.choose_target("platformer") is True)
+chk("split OFF: route_target(platformer) -> engine", build_target.route_target("platformer") == "engine")
+os.environ["FFG_PHASER_2D"] = "1"            # flip the split ON
+chk("split ON: enabled", build_target.phaser_2d_enabled() is True)
+chk("split ON: platformer -> Phaser", build_target.choose_target("platformer") is False)
+chk("split ON: arcade -> Phaser", build_target.choose_target("arcade") is False)
+chk("split ON: shmup -> Phaser", build_target.choose_target("shmup") is False)
+chk("split ON: tactics -> Phaser", build_target.choose_target("tactics") is False)
+chk("split ON: tactics3d (3D) STAYS engine", build_target.choose_target("tactics3d") is True)
+chk("split ON: maze (non-template) STAYS engine-authoring", build_target.choose_target("maze") is True)
+chk("split ON: route_target(platformer) -> phaser", build_target.route_target("platformer") == "phaser")
+chk("split ON: route_target(maze) -> engine", build_target.route_target("maze") == "engine")
 setenv()
 
 

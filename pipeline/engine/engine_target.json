@@ -2,5 +2,7 @@
   "_comment": "Opt-in for the ForgeFlow ENGINE build target (GS9/GS11). Read by build_target.engine_enabled(). enabled=true routes emitter-supported genres through the new engine (real-asset games, no Phaser schema gate) in v2_pipeline's deep-dev loop AND build_one; any failure falls back to Phaser. This is a committed flip (NOT a Task Scheduler change). Set enabled=false to revert to the Phaser-only nightly. Engine games STAGE for manual review (READY_TO_DEPLOY) — no auto-publish.",
   "enabled": true,
   "author": true,
-  "genres": ["platformer", "runner", "shmup", "shooter", "arcade", "bullet-hell", "tactics", "tactics3d", "collect", "pickup"]
+  "genres": ["platformer", "runner", "shmup", "shooter", "arcade", "bullet-hell", "tactics", "tactics3d", "collect", "pickup"],
+  "_phaser_2d_comment": "SPLIT (owner 2026-06-15): when true, the 4 Phaser-template genres (platformer/arcade/shmup/tactics) build on Phaser's stronger 2D renderer; all other genres stay on engine-authoring. STAGED OFF — DO NOT flip to true until: (1) dev_loop honors a per-journal sticky target so in-flight engine games aren't re-routed mid-build, (2) the FFG_ALLOW_PHASER quarantine is lifted for phaser-targeted games, and (3) a claude -p Phaser build is validated (that path has been quarantined since the engine rebuild). build_target.choose_target/route_target already implement the decision.",
+  "phaser_2d": false
 }
