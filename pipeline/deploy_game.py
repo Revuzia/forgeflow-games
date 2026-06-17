@@ -123,7 +123,13 @@ def upload_to_r2(game_dir: Path, slug: str) -> int:
 
 
 def insert_game_metadata(slug: str, metadata: dict):
-    """Insert or upsert game metadata into Supabase games table."""
+    """Insert or upsert game metadata into Supabase games table.
+
+    Publish state (games.status) is owned by the portal toggle
+    (admin-game-publish), NOT by deploys — so this never flips a game's
+    published state: an existing game keeps whatever status the toggle set,
+    and a brand-new game lands as 'unpublished' for the owner to publish
+    manually. Pass metadata['status'] to force a specific status."""
     creds = load_supabase_creds()
     supa_url = creds.get("VITE_SUPABASE_URL", "")
     supa_key = creds.get("VITE_SUPABASE_PUBLISHABLE_KEY", "")
@@ -161,8 +167,19 @@ def insert_game_metadata(slug: str, metadata: dict):
         "controls_gamepad": metadata.get("controls_gamepad", ""),
         "difficulty": metadata.get("difficulty", "medium"),
         "tags": metadata.get("tags", []),
-        "status": "published",
     }
+
+    # Publish control = the portal toggle, not the deploy. Preserve published
+    # state across deploys so a bug-fix re-deploy never silently re-publishes a
+    # game the owner toggled off:
+    #   • existing game  -> omit `status` from the PATCH (keep the toggle's value)
+    #   • brand-new game -> 'unpublished' (owner publishes manually via toggle)
+    # An explicit metadata['status'] still wins for callers that mean it.
+    explicit_status = metadata.get("status")
+    if explicit_status:
+        row["status"] = explicit_status
+    elif not existing:
+        row["status"] = "unpublished"
 
     if existing:
         # Update existing
