@@ -906,18 +906,21 @@ register3d("navalfree", async function (kernel, content) {
     // Pre-check so we can explain misses without burning surprise.
     const chk = sim.canFireAt(shooter.id, targetShip.x, targetShip.y, targetShip.id);
     const r = sim.fireAt(shooter.id, targetShip.id);
-    if (netMode) myActions.push({ k: "f", id: shooter.id, tid: targetShip.id }); // relay (even a miss burns an action)
+    // Relay the AUTHORITATIVE rolled outcome (the remote applies it without re-rolling,
+    // so dice can't desync online). Even a miss burns the action.
+    if (netMode) myActions.push({ k: "f", id: shooter.id, tid: targetShip.id, res: { result: r.result, dmg: r.dmg, crit: r.crit, d20: r.d20, toHit: r.toHit, sunk: r.sunk } });
     busy = true; hideGizmos();
     kernel.playSound(sfx.fire, 0.5);
     const impact = toScene(targetShip.x, targetShip.y); impact.y = 2.0;
     fireShell(shooter, impact, () => {
       if (r.result === "hit" || r.result === "sink") {
-        explosion(impact); kernel.playSound(sfx.hit, 0.5);
+        explosion(impact); kernel.playSound(sfx.hit, r.crit ? 0.7 : 0.5);
         updateHealthBar(sim.shipById(targetShip.id) || targetShip);
-        damageText(impact, r.dmg);
+        resultFloat(impact, r);
         if (r.result === "sink") { kernel.playSound(sfx.sink, 0.6); sinkVisual(targetShip); }
       } else {
         splash(impact); kernel.playSound(sfx.miss || sfx.splash, 0.4);
+        resultFloat(impact, r);   // shows "MISS" on a rolled miss
       }
       busy = false;
       if (sim.ended) { finishMatch(); return; }
@@ -926,9 +929,12 @@ register3d("navalfree", async function (kernel, content) {
     });
   }
   function shotBanner(r, chk) {
-    if (r.result === "sink") return `<span style="color:#ffd166">Direct hit — enemy ${r.target} SUNK!</span>`;
-    if (r.result === "hit") return `<span style="color:#9dffd0">Hit ${r.target} for ${r.dmg}.</span>`;
+    const roll = r.d20 != null ? ` <span style="opacity:.7">(d20 ${r.d20} vs ${r.toHit})</span>` : "";
+    if (r.result === "sink") return `<span style="color:#ffd166">${r.crit ? "CRITICAL hit — " : "Direct hit — "}enemy ${r.target} SUNK!</span>${roll}`;
+    if (r.result === "hit" && r.crit) return `<span style="color:#ff7a4a">CRITICAL HIT — ${r.target} takes ${r.dmg}!</span>${roll}`;
+    if (r.result === "hit") return `<span style="color:#9dffd0">Hit ${r.target} for ${r.dmg}.</span>${roll}`;
     if (r.result === "invalid") return `<span style="color:#ff8a6a">Shot failed: ${reasonText(r.reason)}.</span>`;
+    if (r.result === "miss") return `<span style="color:#ff8a6a">Missed ${r.target}!</span>${roll}`;
     return `Splash — missed.`;
   }
   function reasonText(reason) {
@@ -936,12 +942,26 @@ register3d("navalfree", async function (kernel, content) {
       los: "line of sight blocked by another hull", "no-actions": "no actions left this turn",
       "not-your-turn": "not your turn" })[reason] || reason || "invalid";
   }
-  function damageText(pos, dmg) {
-    const spr = makeFloatText("-" + dmg, "#ffd166");
+  // Rising world-space label. `big` crits float higher + linger.
+  function floatAt(pos, text, color, big) {
+    const spr = makeFloatText(text, color);
+    if (big) spr.scale.multiplyScalar(1.35);
     spr.position.set(pos.x, pos.y + 4, pos.z); scene.add(spr);
-    kernel.tween({ target: spr.position, to: { y: pos.y + 12 }, duration: 1.0 });
-    kernel.tween({ target: spr.material, to: { opacity: 0 }, duration: 1.0, onComplete: () => { scene.remove(spr); disposeMesh(spr); } });
+    const dur = big ? 1.4 : 1.0;
+    kernel.tween({ target: spr.position, to: { y: pos.y + (big ? 15 : 12) }, duration: dur });
+    kernel.tween({ target: spr.material, to: { opacity: 0 }, duration: dur, onComplete: () => { scene.remove(spr); disposeMesh(spr); } });
   }
+  // Show the DICE outcome over the target: a CRIT! pops bright, a normal hit shows
+  // the rolled damage, a rolled MISS shows "MISS". (Blocked/invalid shots: nothing.)
+  function resultFloat(pos, r) {
+    if (!r) return;
+    if (r.result === "miss") { floatAt(pos, "MISS", "#8fb0c4"); return; }
+    if (r.result === "hit" || r.result === "sink") {
+      if (r.crit) floatAt(pos, "CRIT! -" + r.dmg, "#ff5a3c", true);
+      else floatAt(pos, "-" + r.dmg, "#ffd166");
+    }
+  }
+  function damageText(pos, dmg) { floatAt(pos, "-" + dmg, "#ffd166"); }
   function makeFloatText(text, color) {
     const c = document.createElement("canvas"); c.width = 128; c.height = 64;
     const ctx = c.getContext("2d"); ctx.font = "bold 44px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -1023,9 +1043,14 @@ register3d("navalfree", async function (kernel, content) {
       banner(`${d.id} OVERWATCH!`, 0xffd166, 800);
       try { kernel.playSound(sfx.fire, 0.42); } catch (e) {}
       fireShell(d, impact, () => {
-        explosion(impact); try { kernel.playSound(sfx.hit, 0.5); } catch (e) {}
-        updateHealthBar(enemyShip); damageText(impact, res.dmg);
-        if (res.result === "sink") { try { kernel.playSound(sfx.sink, 0.6); } catch (e) {} sinkVisual(enemyShip); }
+        if (res.result === "miss") {
+          splash(impact); try { kernel.playSound(sfx.miss || sfx.splash, 0.4); } catch (e) {}
+          resultFloat(impact, res);
+        } else {
+          explosion(impact); try { kernel.playSound(sfx.hit, res.crit ? 0.7 : 0.5); } catch (e) {}
+          updateHealthBar(enemyShip); resultFloat(impact, res);
+          if (res.result === "sink") { try { kernel.playSound(sfx.sink, 0.6); } catch (e) {} sinkVisual(enemyShip); }
+        }
         setHUD();
         if (sim.ended) { busy = false; finishMatch(); return; }
         setTimeout(fireNext, 220);
@@ -1048,9 +1073,14 @@ register3d("navalfree", async function (kernel, content) {
       banner(`${d.id} OVERWATCH!`, 0xffd166, 800);
       try { kernel.playSound(sfx.fire, 0.42); } catch (e) {}
       fireShell(d, impact, () => {
-        explosion(impact); try { kernel.playSound(sfx.hit, 0.5); } catch (e) {}
-        updateHealthBar(playerShip); damageText(impact, res.dmg);
-        if (res.result === "sink") { try { kernel.playSound(sfx.sink, 0.6); } catch (e) {} sinkVisual(playerShip); }
+        if (res.result === "miss") {
+          splash(impact); try { kernel.playSound(sfx.miss || sfx.splash, 0.4); } catch (e) {}
+          resultFloat(impact, res);
+        } else {
+          explosion(impact); try { kernel.playSound(sfx.hit, res.crit ? 0.7 : 0.5); } catch (e) {}
+          updateHealthBar(playerShip); resultFloat(impact, res);
+          if (res.result === "sink") { try { kernel.playSound(sfx.sink, 0.6); } catch (e) {} sinkVisual(playerShip); }
+        }
         setHUD();
         if (sim.ended) { busy = false; finishMatch(); return; }
         setTimeout(fireNext, 220);
@@ -1077,9 +1107,14 @@ register3d("navalfree", async function (kernel, content) {
       banner(`${d.id} OVERWATCH!`, 0xffd166, 800);
       try { kernel.playSound(sfx.fire, 0.42); } catch (e) {}
       fireShell(d, impact, () => {
-        explosion(impact); try { kernel.playSound(sfx.hit, 0.5); } catch (e) {}
-        updateHealthBar(tgt); damageText(impact, res.dmg);
-        if (res.result === "sink") { try { kernel.playSound(sfx.sink, 0.6); } catch (e) {} sinkVisual(tgt); }
+        if (res.result === "miss") {
+          splash(impact); try { kernel.playSound(sfx.miss || sfx.splash, 0.4); } catch (e) {}
+          resultFloat(impact, res);
+        } else {
+          explosion(impact); try { kernel.playSound(sfx.hit, res.crit ? 0.7 : 0.5); } catch (e) {}
+          updateHealthBar(tgt); resultFloat(impact, res);
+          if (res.result === "sink") { try { kernel.playSound(sfx.sink, 0.6); } catch (e) {} sinkVisual(tgt); }
+        }
         setHUD();
         if (sim.ended) { busy = false; finishMatch(); return; }
         setTimeout(next, 220);
@@ -1122,12 +1157,14 @@ register3d("navalfree", async function (kernel, content) {
         fireShell(s, impact, () => {
           const res = a.result || {};
           if (res.result === "hit" || res.result === "sink") {
-            explosion(impact); kernel.playSound(sfx.hit, 0.5);
+            explosion(impact); kernel.playSound(sfx.hit, res.crit ? 0.7 : 0.5);
             if (tgt) updateHealthBar(tgt);
-            damageText(impact, res.dmg);
+            resultFloat(impact, res);
             if (res.result === "sink" && tgt) { kernel.playSound(sfx.sink, 0.6); sinkVisual(tgt); }
-          } else { splash(impact); }
-          setHUD(`<span style="color:#ff8a6a">Enemy ${s.id} fires…</span>`);
+          } else { splash(impact); kernel.playSound(sfx.miss || sfx.splash, 0.4); resultFloat(impact, res); }
+          setHUD(res.crit ? `<span style="color:#ff7a4a">Enemy ${s.id} CRITS for ${res.dmg}!</span>`
+                          : res.result === "miss" ? `<span style="color:#9dffd0">Enemy ${s.id} missed.</span>`
+                          : `<span style="color:#ff8a6a">Enemy ${s.id} fires…</span>`);
           if (sim.ended) { busy = false; finishMatch(); return; }
           setTimeout(step, 240);
         });
@@ -1205,16 +1242,17 @@ register3d("navalfree", async function (kernel, content) {
       } else if (a.k === "f") {
         const sid = mirrorId(a.id), tid = mirrorId(a.tid);
         const shooter = sim.shipById(sid), target = sim.shipById(tid);
-        const r = sim.fireAt(sid, tid);
+        // Apply the shooter's RELAYED roll (no re-roll -> dice stay in sync online).
+        const r = sim.applyFireResult(sid, tid, a.res);
         if (shooter && target) {
           const impact = toScene(target.x, target.y); impact.y = 2.0;
           kernel.playSound(sfx.fire, 0.5);
           await new Promise((res) => fireShell(shooter, impact, () => {
             if (r.result === "hit" || r.result === "sink") {
-              explosion(impact); kernel.playSound(sfx.hit, 0.5);
-              updateHealthBar(sim.shipById(tid) || target); damageText(impact, r.dmg);
+              explosion(impact); kernel.playSound(sfx.hit, r.crit ? 0.7 : 0.5);
+              updateHealthBar(sim.shipById(tid) || target); resultFloat(impact, r);
               if (r.result === "sink") { kernel.playSound(sfx.sink, 0.6); sinkVisual(target); }
-            } else { splash(impact); kernel.playSound(sfx.miss || sfx.splash, 0.4); }
+            } else { splash(impact); kernel.playSound(sfx.miss || sfx.splash, 0.4); resultFloat(impact, r); }
             res();
           }));
         }

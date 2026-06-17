@@ -45,6 +45,19 @@
     return a;
   }
 
+  // ── D&D-style combat tuning (all inspectable / easy to retune) ───────────────
+  // TO-HIT: roll a d20 vs a target number. The number rises with firing RANGE and
+  // the target's EVASION + DEFEND stance; a nat 1 always misses, a nat 20 always
+  // hits AND crits. Point-blank at an undefended battleship needs 4+ (~85%).
+  var TOHIT_BASE   = 3;    // floor target number (point-blank, no evasion -> ~90% hit)
+  var TOHIT_RANGE  = 6;    // spread across the range band (0 at muzzle -> +6 at max range)
+  var TOHIT_DEFEND = 4;    // a DEFENDing target is +4 harder to hit (on top of ½ damage)
+  var TOHIT_MIN = 2, TOHIT_MAX = 19;          // keep a ~5% miss floor and hit ceiling
+  // DAMAGE: each hit rolls within a band around the gun's nominal dmg (the "dice"),
+  // bell-weighted toward the average. Strong guns keep bigger numbers + wider bands.
+  var DMG_SPREAD = 0.30;   // ± fraction of nominal dmg (battleship 34 -> ~24..44)
+  var CRIT_MULT  = 1.5;    // natural-20 critical-hit multiplier
+
   /**
    * config: {
    *   width, height,                       // arena bounds (world units)
@@ -92,19 +105,21 @@
   // (range: battleship 140 → gunboat 60.) Used when no explicit fleet is provided.
   NavalFree.defaultFleet = function (w, h) {
     function gun(range, arc, dmg) { return { range: range, arc: arc * Math.PI / 180, dmg: dmg }; }
+    // ev = EVASION (added to the attacker's to-hit target number): small, fast
+    // ships are slippery (gunboat +4), big ships are easy to hit (battleship +0).
     var CLASSES = [
-      { k: "battleship", hp: 150, speed: 22, turnRate: 50,  g: gun(140, 58, 34) },
-      { k: "cruiser",    hp: 110, speed: 30, turnRate: 68,  g: gun(112, 68, 26) },
-      { k: "destroyer",  hp: 85,  speed: 40, turnRate: 88,  g: gun(90,  80, 20) },
-      { k: "frigate",    hp: 68,  speed: 48, turnRate: 104, g: gun(74,  86, 16) },
-      { k: "gunboat",    hp: 48,  speed: 56, turnRate: 120, g: gun(60,  96, 12) },
+      { k: "battleship", hp: 150, speed: 22, turnRate: 50,  g: gun(140, 58, 34), ev: 0 },
+      { k: "cruiser",    hp: 110, speed: 30, turnRate: 68,  g: gun(112, 68, 26), ev: 1 },
+      { k: "destroyer",  hp: 85,  speed: 40, turnRate: 88,  g: gun(90,  80, 20), ev: 2 },
+      { k: "frigate",    hp: 68,  speed: 48, turnRate: 104, g: gun(74,  86, 16), ev: 3 },
+      { k: "gunboat",    hp: 48,  speed: 56, turnRate: 120, g: gun(60,  96, 12), ev: 4 },
     ];
     var xs = [0.16, 0.33, 0.5, 0.67, 0.84], ships = [];
     for (var i = 0; i < CLASSES.length; i++) {
       var c = CLASSES[i];
       // fresh gun object per ship (difficulty tweaks mutate s.gun — no shared refs)
-      ships.push({ id: "P-" + c.k, side: "player", x: w * xs[i], y: h - 40, heading: -Math.PI / 2, hp: c.hp, speed: c.speed, turnRate: c.turnRate, gun: { range: c.g.range, arc: c.g.arc, dmg: c.g.dmg } });
-      ships.push({ id: "E-" + c.k, side: "enemy",  x: w * xs[CLASSES.length - 1 - i], y: 40, heading: Math.PI / 2, hp: c.hp, speed: c.speed, turnRate: c.turnRate, gun: { range: c.g.range, arc: c.g.arc, dmg: c.g.dmg } });
+      ships.push({ id: "P-" + c.k, side: "player", x: w * xs[i], y: h - 40, heading: -Math.PI / 2, hp: c.hp, speed: c.speed, turnRate: c.turnRate, evasion: c.ev, gun: { range: c.g.range, arc: c.g.arc, dmg: c.g.dmg } });
+      ships.push({ id: "E-" + c.k, side: "enemy",  x: w * xs[CLASSES.length - 1 - i], y: 40, heading: Math.PI / 2, hp: c.hp, speed: c.speed, turnRate: c.turnRate, evasion: c.ev, gun: { range: c.g.range, arc: c.g.arc, dmg: c.g.dmg } });
     }
     return ships;
   };
@@ -120,6 +135,7 @@
       maxHp: s.maxHp != null ? s.maxHp : (s.hp != null ? s.hp : 100),
       speed: s.speed != null ? s.speed : 30,        // movement budget (units per move action)
       turnRate: (s.turnRate != null ? s.turnRate : 80) * Math.PI / 180, // max radians turned per move/rotate action
+      evasion: s.evasion != null ? s.evasion : 0,   // to-hit penalty this ship imposes on attackers (0..4)
       gun: {
         range: gun.range != null ? gun.range : 90,
         arc: gun.arc != null ? gun.arc : (80 * Math.PI / 180),  // total cone width in radians
@@ -150,8 +166,8 @@
       ships: this.ships.map(function (s) {
         return {
           id: s.id, side: s.side, x: s.x, y: s.y, heading: s.heading, hp: s.hp, maxHp: s.maxHp,
-          speed: s.speed, turnRate: s.turnRate, gun: { range: s.gun.range, arc: s.gun.arc, dmg: s.gun.dmg },
-          radius: s.radius, actionsLeft: s.actionsLeft, sunk: s.sunk,
+          speed: s.speed, turnRate: s.turnRate, evasion: s.evasion, gun: { range: s.gun.range, arc: s.gun.arc, dmg: s.gun.dmg },
+          radius: s.radius, actionsLeft: s.actionsLeft, sunk: s.sunk, defending: s.defending, overwatch: s.overwatch,
         };
       }),
     };
@@ -179,13 +195,19 @@
     if (!s || s.sunk || !t || t.sunk || s.side === t.side) return { ok: false, reason: "invalid" };
     var chk = this.canFireAt(shooterId, t.x, t.y, t.id);
     if (!chk.ok) return { ok: false, reason: chk.reason };
-    var rangeFrac = chk.range / s.gun.range;
-    var falloff = rangeFrac <= 0.6 ? 1 : (1 - 0.45 * ((rangeFrac - 0.6) / 0.4));
-    var dmg = Math.max(1, Math.round(s.gun.dmg * falloff * (t.defending ? 0.5 : 1)));   // DEFEND = shield: halves incoming damage
+    // Roll to-hit — a reaction shot can miss too.
+    var atk = this._attackRoll(s, t, chk.range);
+    if (!atk.hit) {
+      this.log.push(s.id + " OVERWATCH MISSED " + t.id + " (d20 " + atk.d20 + " vs " + atk.toHit + ")");
+      var rmiss = { ok: true, result: "miss", x: t.x, y: t.y, by: s.id, target: t.id, d20: atk.d20, toHit: atk.toHit, range: chk.range, reaction: true };
+      this.onEvent("fire", rmiss);
+      return rmiss;
+    }
+    var dmg = this._damageRoll(s, atk.crit, t.defending);
     t.hp -= dmg;
-    var out = { ok: true, result: "hit", x: t.x, y: t.y, by: s.id, target: t.id, dmg: dmg, range: chk.range, reaction: true };
-    if (t.hp <= 0) { t.hp = 0; t.sunk = true; out.result = "sink"; out.sunk = true; this.log.push(s.id + " OVERWATCH SANK " + t.id); }
-    else { this.log.push(s.id + " OVERWATCH hit " + t.id + " for " + dmg + " (hp " + t.hp + ")"); }
+    var out = { ok: true, result: "hit", x: t.x, y: t.y, by: s.id, target: t.id, dmg: dmg, crit: atk.crit, d20: atk.d20, toHit: atk.toHit, range: chk.range, reaction: true };
+    if (t.hp <= 0) { t.hp = 0; t.sunk = true; out.result = "sink"; out.sunk = true; this.log.push(s.id + " OVERWATCH SANK " + t.id + (atk.crit ? " (CRIT)" : "")); }
+    else { this.log.push(s.id + " OVERWATCH " + (atk.crit ? "CRIT " : "hit ") + t.id + " for " + dmg + " (hp " + t.hp + ")"); }
     var foeSide = s.side === "player" ? "enemy" : "player";
     if (this.alive(foeSide) === 0) { this.ended = true; this.winner = s.side; out.win = true; this.onEvent("fire", out); this.onEvent("end", { winner: s.side }); return out; }
     this.onEvent("fire", out);
@@ -309,6 +331,51 @@
     return { ok: true, heading: s.heading, actionsLeft: s.actionsLeft };
   };
 
+  // ── dice resolution (D&D-style) ─────────────────────────────────────────────
+  // All rolls draw from the seeded rng, so a (seed + action order) reproduces a
+  // match exactly — the headless gate and online mirror both rely on this.
+
+  // Roll an integer in [1, sides] from the seeded rng.
+  NavalFree.prototype._d = function (sides) { return 1 + Math.floor(this.rng() * sides); };
+
+  // The to-hit TARGET NUMBER a shot must meet on a d20: rises with firing range,
+  // the target's evasion, and a DEFEND stance. Deterministic (no rng) so the AI
+  // and a UI preview can read it. Clamped so nat-1 misses / nat-20 hits always hold.
+  NavalFree.prototype._toHit = function (s, victim, range) {
+    var rangeFrac = clamp(range / Math.max(1, s.gun.range), 0, 1);
+    var n = TOHIT_BASE + Math.round(TOHIT_RANGE * rangeFrac)
+          + (victim.evasion || 0) + (victim.defending ? TOHIT_DEFEND : 0);
+    return clamp(n, TOHIT_MIN, TOHIT_MAX);
+  };
+
+  // Deterministic hit-probability ESTIMATE (no rng) — for AI planning + UI preview.
+  NavalFree.prototype._hitChance = function (s, victim, range) {
+    var p = (21 - this._toHit(s, victim, range)) / 20;   // P(d20 >= toHit)
+    return clamp(p, 0.05, 0.95);                          // nat-1 floor / nat-20 ceiling
+  };
+
+  // Roll the d20 to hit. Returns { hit, crit, d20, toHit }.
+  NavalFree.prototype._attackRoll = function (s, victim, range) {
+    var toHit = this._toHit(s, victim, range);
+    var d20 = this._d(20);
+    return {
+      d20: d20, toHit: toHit,
+      hit: d20 === 20 || (d20 !== 1 && d20 >= toHit),
+      crit: d20 === 20,
+    };
+  };
+
+  // Roll damage within ±DMG_SPREAD of the gun's nominal dmg, bell-weighted toward
+  // the average (mean of two rolls). Crit multiplies; a DEFENDing victim halves.
+  NavalFree.prototype._damageRoll = function (s, crit, defending) {
+    var nom = s.gun.dmg;
+    var lo = nom * (1 - DMG_SPREAD), hi = nom * (1 + DMG_SPREAD);
+    var dmg = lo + ((this.rng() + this.rng()) / 2) * (hi - lo);
+    if (crit) dmg *= CRIT_MULT;
+    if (defending) dmg *= 0.5;
+    return Math.max(1, Math.round(dmg));
+  };
+
   // ── FIRE ──────────────────────────────────────────────────────────────────────
   // Fire from `shooterId` at either a target ship id (string) or a point {x,y}/
   // (x,y). Resolves range + arc + LOS; on a clear shot, applies damage to the
@@ -366,20 +433,28 @@
       return miss;
     }
 
-    // Damage. Optional gentle range falloff: full damage to 60% of range, then
-    // tapering to 55% at max range — rewards closing distance without being swingy.
-    var rangeFrac = chk.range / s.gun.range;
-    var falloff = rangeFrac <= 0.6 ? 1 : (1 - 0.45 * ((rangeFrac - 0.6) / 0.4));
-    var dmg = Math.max(1, Math.round(s.gun.dmg * falloff * (victim.defending ? 0.5 : 1)));   // DEFEND = shield: halves incoming damage
+    // D&D resolution: roll a d20 to hit (range + the target's evasion + DEFEND set
+    // the number), then roll dice damage. A named, in-arc, in-range target CAN now
+    // miss — speed/evasion finally matters defensively. Nat-20 crits.
+    var atk = this._attackRoll(s, victim, chk.range);
+    if (!atk.hit) {
+      this.log.push(s.id + " MISSED " + victim.id + " (d20 " + atk.d20 + " vs " + atk.toHit + ")");
+      var rolledMiss = { result: "miss", x: victim.x, y: victim.y, by: s.id, target: victim.id, d20: atk.d20, toHit: atk.toHit, range: chk.range, actionsLeft: s.actionsLeft };
+      this.onEvent("fire", rolledMiss);
+      return rolledMiss;
+    }
+    var dmg = this._damageRoll(s, atk.crit, victim.defending);
     victim.hp -= dmg;
 
-    var out = { result: "hit", x: victim.x, y: victim.y, by: s.id, target: victim.id, dmg: dmg, range: chk.range, actionsLeft: s.actionsLeft };
+    // result stays "hit"/"sink" (so existing renderer checks keep working); `crit`
+    // is a flag the renderer reads for the flashy CRIT! float + banner.
+    var out = { result: "hit", x: victim.x, y: victim.y, by: s.id, target: victim.id, dmg: dmg, crit: atk.crit, d20: atk.d20, toHit: atk.toHit, range: chk.range, actionsLeft: s.actionsLeft };
     if (victim.hp <= 0) {
       victim.hp = 0; victim.sunk = true;
-      out.result = "sink";
-      this.log.push(s.id + " SANK " + victim.id);
+      out.result = "sink"; out.sunk = true;
+      this.log.push(s.id + " SANK " + victim.id + (atk.crit ? " (CRIT)" : ""));
     } else {
-      this.log.push(s.id + " hit " + victim.id + " for " + dmg + " (hp " + victim.hp + ")");
+      this.log.push(s.id + (atk.crit ? " CRIT " : " hit ") + victim.id + " for " + dmg + " (hp " + victim.hp + ")");
     }
 
     // Win check.
@@ -391,6 +466,32 @@
     }
     this.onEvent("fire", out);
     return out;
+  };
+
+  // ── ONLINE: apply a pre-rolled shot (no re-roll) ─────────────────────────────
+  // Dice now consume the rng, so two clients calling fireAt() independently would
+  // DESYNC. Instead the shooter is authoritative: it rolls locally and relays the
+  // outcome, and the remote applies it verbatim here (same hp/sink on both sims,
+  // regardless of each client's rng stream). Mirrors fireAt's bookkeeping + events.
+  NavalFree.prototype.applyFireResult = function (shooterId, targetId, res) {
+    res = res || {};
+    var s = this.shipById(shooterId), t = this.shipById(targetId);
+    if (s && s.actionsLeft > 0) s.actionsLeft--;          // mirror the action spend
+    if (!t || t.sunk) { var nt = { result: "miss", by: shooterId, target: targetId, reaction: !!res.reaction }; this.onEvent("fire", nt); return nt; }
+    if (res.result === "miss" || res.dmg == null) {
+      var miss = { result: "miss", x: t.x, y: t.y, by: shooterId, target: targetId, d20: res.d20, toHit: res.toHit, reaction: !!res.reaction };
+      this.onEvent("fire", miss); return miss;
+    }
+    var dmg = Math.max(1, Math.round(res.dmg));
+    t.hp -= dmg;
+    var out = { result: "hit", x: t.x, y: t.y, by: shooterId, target: targetId, dmg: dmg, crit: !!res.crit, d20: res.d20, toHit: res.toHit, reaction: !!res.reaction };
+    if (t.hp <= 0 || res.sunk) { t.hp = 0; t.sunk = true; out.result = "sink"; out.sunk = true; this.log.push(shooterId + " (relayed) SANK " + targetId); }
+    else { this.log.push(shooterId + " (relayed) hit " + targetId + " for " + dmg + " (hp " + t.hp + ")"); }
+    if (s) {
+      var foeSide = s.side === "player" ? "enemy" : "player";
+      if (this.alive(foeSide) === 0) { this.ended = true; this.winner = s.side; out.win = true; this.onEvent("fire", out); this.onEvent("end", { winner: s.side }); return out; }
+    }
+    this.onEvent("fire", out); return out;
   };
 
   // ── turn flow ───────────────────────────────────────────────────────────────
@@ -442,17 +543,22 @@
       var off = Math.abs(angDelta(s.heading, bearing));
       var inArc = off <= s.gun.arc / 2;
       var canHitNow = inRange && inArc && this._losClear(s, f.x, f.y, f.id);
+      var hc = this._hitChance(s, f, d);                   // P(hit) at this range/evasion
+      var expDmg = Math.max(1, s.gun.dmg * hc);            // expected damage per salvo
       var score = 0;
-      // 1) FINISH: if we can drop it within ~1-2 of our salvos, prioritise hard.
-      var shotsToKill = Math.max(1, Math.ceil(f.hp / Math.max(1, s.gun.dmg)));
+      // 1) FINISH: fewer EXPECTED salvos to sink it = prioritise hard.
+      var shotsToKill = Math.max(1, Math.ceil(f.hp / expDmg));
       score += (6 - Math.min(6, shotsToKill)) * 14;        // fewer shots-to-kill = far better
-      if (f.hp <= s.gun.dmg) score += 60;                  // outright finisher this shot
+      if (canHitNow && f.hp <= s.gun.dmg * (1 + DMG_SPREAD)) score += 60;  // a good roll finishes it now
       // 2) Low absolute HP (focus the wounded).
       score += (1 - f.hp / Math.max(1, f.maxHp)) * 30;
       // 3) Threat value: longer-ranged + harder-hitting foes are more dangerous.
       score += (f.gun.range / 140) * 12 + (f.gun.dmg / 34) * 10;
       // 4) Reachability now / soon: in-arc & in-range shots are cheap to take.
       if (canHitNow) score += 28; else if (inRange) score += 10;
+      // 4b) Hit probability: prefer targets we can actually land shots on (a fast,
+      //     evasive, or DEFENDing ship at long range is a poor use of a salvo).
+      score += hc * 18;
       // 5) Distance: gentle pull toward nearer foes so ships don't all chase one far away.
       score += (1 - Math.min(1, d / (this.width + this.height))) * 8;
       // Easy AI: flatten the smarts toward "nearest", so it plays softer.

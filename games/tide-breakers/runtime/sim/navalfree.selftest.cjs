@@ -73,18 +73,33 @@ console.log("navalfree self-test\n-------------------");
   ok(!chk.ok && chk.reason === "range", "canFireAt reports range failure for the far target");
 })();
 
-// ── 3. Firing IN RANGE (and in arc + LOS) damages the target ─────────────────
+// ── 3. Firing IN RANGE rolls a d20 to-hit, then dice damage ──────────────────
+//     (D&D combat 2026-06: an in-range/in-arc/LOS shot can HIT for a banded dice
+//      roll, or MISS on the to-hit roll. Damage accounting must be exact.)
 (function testFireInRange() {
-  const g = fresh();
-  const e1 = g.shipById("E1");
-  const hpBefore = e1.hp; // 50
-  const chk = g.canFireAt("P1", e1.x, e1.y);
-  ok(chk.ok, "canFireAt reports a clear shot on the near target");
-  const r = g.fireAt("P1", "E1");
-  ok(r.result === "hit" || r.result === "sink", "in-range fire HITS (got " + r.result + ")");
-  ok(r.dmg > 0, "in-range fire reports positive damage (" + r.dmg + ")");
-  ok(g.shipById("E1").hp === hpBefore - r.dmg, "target hp dropped by exactly the reported damage");
-  ok(g.shipById("E1").hp < hpBefore, "target hp decreased");
+  const g = new NavalFree({
+    width: 300, height: 300, seed: 7, actionsPerTurn: 2, firstSide: "player",
+    ships: [
+      { id: "P1", side: "player", x: 50, y: 150, heading: 0, hp: 100, speed: 40, turnRate: 180, gun: { range: 100, arc: 200 * Math.PI / 180, dmg: 30 }, radius: 6 },
+      { id: "E1", side: "enemy", x: 110, y: 150, heading: Math.PI, hp: 1e9, speed: 30, turnRate: 120, gun: { range: 90, arc: 120 * Math.PI / 180, dmg: 25 }, radius: 6 },
+    ],
+  });
+  ok(g.canFireAt("P1", 110, 150).ok, "canFireAt reports a clear shot on the near target");
+  let hits = 0, misses = 0, dmgMin = 1e9, dmgMax = 0, sawCrit = false, badAccounting = false;
+  for (let k = 0; k < 300; k++) {
+    g._refreshActions("player");
+    const before = g.shipById("E1").hp;
+    const r = g.fireAt("P1", "E1");
+    if (r.result === "miss") { misses++; if (g.shipById("E1").hp !== before) badAccounting = true; }
+    else { hits++; dmgMin = Math.min(dmgMin, r.dmg); dmgMax = Math.max(dmgMax, r.dmg);
+      if (r.crit) sawCrit = true;
+      if (r.dmg <= 0 || g.shipById("E1").hp !== before - r.dmg) badAccounting = true; }
+  }
+  ok(hits > 0 && misses > 0, `in-range fire both HITS and MISSES over 300 shots (hits ${hits}, misses ${misses})`);
+  ok(!badAccounting, "every hit drops hp by exactly the reported (positive) damage; misses deal none");
+  ok(dmgMin >= 30 * (1 - 0.30) - 1, `min rolled damage near the band floor ~21 (got ${dmgMin})`);
+  ok(dmgMax <= Math.round(30 * 1.30 * 1.5) + 1, `max rolled damage within the crit ceiling ~59 (got ${dmgMax})`);
+  ok(sawCrit, "at least one natural-20 CRIT occurred over 300 shots");
 })();
 
 // ── 3b. Firing OUT OF ARC fails (target behind the bow) ──────────────────────
@@ -130,9 +145,12 @@ console.log("navalfree self-test\n-------------------");
     ],
   });
   ok(g.ended === false, "match not over before the killing blow");
-  const r = g.fireAt("P1", "E1");
-  ok(r.result === "sink", "killing blow reports a SINK (got " + r.result + ")");
-  ok(r.win === true, "killing blow flags win=true");
+  // With dice a single shot may miss; fire until the killing blow lands (point-blank
+  // so the hit chance is high; the loop is capped so a broken roll can't hang).
+  let r = null, tries = 0;
+  while (!g.ended && tries++ < 60) { g._refreshActions("player"); r = g.fireAt("P1", "E1"); }
+  ok(r && r.result === "sink", "the landing killing blow reports a SINK (got " + (r && r.result) + ")");
+  ok(r && r.win === true, "killing blow flags win=true");
   ok(g.ended === true, "match is ended after the last enemy sinks");
   ok(g.winner === "player", "winner is the player");
   ok(g.alive("enemy") === 0, "enemy side has no ships left");
@@ -160,6 +178,48 @@ console.log("navalfree self-test\n-------------------");
   const acts = g.aiTakeTurn();
   ok(Array.isArray(acts) && acts.length > 0, "AI produced at least one action (" + acts.length + ")");
   ok(g.turn === "player", "after aiTakeTurn the turn is back to the player");
+})();
+
+// ── 6. To-hit scales with RANGE and target EVASION ───────────────────────────
+(function testToHitScaling() {
+  function hitRate(targetEvasion, distX, n) {
+    const g = new NavalFree({
+      width: 1000, height: 300, seed: 5, actionsPerTurn: 2, firstSide: "player",
+      ships: [
+        { id: "P1", side: "player", x: 50, y: 150, heading: 0, hp: 100, speed: 30, turnRate: 180, gun: { range: 300, arc: 200 * Math.PI / 180, dmg: 30 }, radius: 6 },
+        { id: "E1", side: "enemy", x: 50 + distX, y: 150, heading: Math.PI, hp: 1e9, speed: 30, turnRate: 30, evasion: targetEvasion, gun: { range: 90, arc: 90 * Math.PI / 180, dmg: 25 }, radius: 6 },
+      ],
+    });
+    let h = 0; for (let k = 0; k < 500; k++) { g._refreshActions("player"); if (g.fireAt("P1", "E1").result !== "miss") h++; }
+    return h / 500;
+  }
+  const close = hitRate(0, 30, 500);    // point-blank, no evasion
+  const far = hitRate(0, 270, 500);     // near max range (300), no evasion
+  const evasive = hitRate(4, 30, 500);  // point-blank, max evasion
+  ok(close > far + 0.10, `closer shots hit more than long-range (close ${(close*100)|0}% > far ${(far*100)|0}%)`);
+  ok(close > evasive + 0.10, `evasive targets are harder to hit (vs ev0 ${(close*100)|0}% > vs ev4 ${(evasive*100)|0}%)`);
+})();
+
+// ── 7. ONLINE: applyFireResult reproduces a relayed shot without re-rolling ───
+(function testApplyFireResult() {
+  function scene(seed) {
+    return new NavalFree({
+      width: 300, height: 300, seed, actionsPerTurn: 2, firstSide: "player",
+      ships: [
+        { id: "P1", side: "player", x: 110, y: 150, heading: 0, hp: 100, speed: 30, turnRate: 180, gun: { range: 200, arc: 200 * Math.PI / 180, dmg: 30 }, radius: 6 },
+        { id: "E1", side: "enemy", x: 130, y: 150, heading: Math.PI, hp: 1e9, speed: 30, turnRate: 30, gun: { range: 90, arc: 90 * Math.PI / 180, dmg: 25 }, radius: 6 },
+      ],
+    });
+  }
+  const A = scene(21), B = scene(999);   // DIFFERENT seeds on purpose
+  let consistent = true, n = 0;
+  for (let k = 0; k < 80; k++) {
+    A._refreshActions("player"); B._refreshActions("player");
+    const r = A.fireAt("P1", "E1"); n++;
+    B.applyFireResult("P1", "E1", { result: r.result, dmg: r.dmg, crit: r.crit, d20: r.d20, toHit: r.toHit, sunk: r.sunk });
+    if (A.shipById("E1").hp !== B.shipById("E1").hp || A.shipById("E1").sunk !== B.shipById("E1").sunk) { consistent = false; break; }
+  }
+  ok(consistent, `applyFireResult reproduces hp/sink exactly across ${n} relayed shots (online dice stay in sync despite different rng)`);
 })();
 
 // ── summary ──────────────────────────────────────────────────────────────────
