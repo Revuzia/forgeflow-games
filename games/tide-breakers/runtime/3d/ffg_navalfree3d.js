@@ -661,12 +661,18 @@ register3d("navalfree", async function (kernel, content) {
 
   // ── Smoothly drive a ship's visual to its sim pose (move animation) ─────────
   function animateMove(s, done) {
-    const v = vis[s.id]; if (!v) { done && done(); return; }
+    // FREEZE-PROOF: guarantee done() fires exactly ONCE even if the glide tween never completes
+    // (a throttled/hidden tab drops rAF frames, etc.). Without this, a stalled move tween hangs the
+    // entire enemy turn — fireShell already does this; animateMove did not. Snaps to the final pose.
+    const v = vis[s.id];
+    let fin = false, safety = null;
+    const finish = () => { if (fin) return; fin = true; if (safety) clearTimeout(safety);
+      try { if (v) { const tt = toScene(s.x, s.y); v.group.position.set(tt.x, 0.2, tt.z); v.group.rotation.y = simHeadingToYaw(s.heading); } } catch (e) {}
+      try { done && done(); } catch (e) {} };
+    if (!v) { finish(); return; }
     const target = toScene(s.x, s.y);
     const targetYaw = simHeadingToYaw(s.heading);
-    if (reducedMotion) {
-      v.group.position.set(target.x, 0.2, target.z); v.group.rotation.y = targetYaw; done && done(); return;
-    }
+    if (reducedMotion) { finish(); return; }
     // rotate first portion then glide; combined via tween on a proxy.
     const startYaw = v.group.rotation.y;
     let dyaw = targetYaw - startYaw;
@@ -678,6 +684,7 @@ register3d("navalfree", async function (kernel, content) {
     const startX = v.group.position.x, startZ = v.group.position.z;
     const dist = Math.hypot(target.x - startX, target.z - startZ);
     const dur = Math.max(1.5, Math.min(3.4, dist * 0.07));
+    safety = setTimeout(finish, dur * 1000 + 700);   // hard guarantee the move resolves even if the tween stalls
     let wakeT = 0; const proxy = { p: 0 };
     kernel.tween({
       target: proxy, to: { p: 1 }, duration: dur,
@@ -693,10 +700,7 @@ register3d("navalfree", async function (kernel, content) {
           spawnSmoke(v.group.position.clone().add(stern), false);
         }
       },
-      onComplete: () => {
-        v.group.position.set(target.x, 0.2, target.z); v.group.rotation.y = targetYaw;
-        done && done();
-      },
+      onComplete: () => { finish(); },
     });
   }
 
@@ -947,6 +951,23 @@ register3d("navalfree", async function (kernel, content) {
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
     spr.scale.set(8, 4, 1); return spr;
   }
+  // Transient on-screen BANNER for stance/overwatch callouts. MUST NEVER THROW — it runs inside the
+  // enemy-turn playback chain, and an UNDEFINED `banner` (added in e6d8a5e but never defined) was the
+  // ReferenceError that froze the whole enemy turn the instant a ship took a Guard/Overwatch stance.
+  let _bannerEl = null, _bannerTimer = null;
+  function banner(text, color, ms) {
+    try {
+      const col = (typeof color === "number") ? ("#" + (color >>> 0).toString(16).padStart(6, "0")) : (color || "#ffd166");
+      if (!_bannerEl) {
+        _bannerEl = document.createElement("div");
+        _bannerEl.style.cssText = "position:fixed;left:50%;top:16%;transform:translateX(-50%);z-index:60;pointer-events:none;font:800 17px 'Segoe UI',monospace;letter-spacing:.4px;padding:7px 18px;border-radius:10px;background:rgba(8,20,28,.82);box-shadow:0 4px 18px rgba(0,0,0,.45);opacity:0;transition:opacity .16s";
+        document.body.appendChild(_bannerEl);
+      }
+      _bannerEl.textContent = text; _bannerEl.style.color = col; _bannerEl.style.border = "1px solid " + col; _bannerEl.style.opacity = "1";
+      clearTimeout(_bannerTimer);
+      _bannerTimer = setTimeout(() => { if (_bannerEl) _bannerEl.style.opacity = "0"; }, ms || 850);
+    } catch (e) {}
+  }
 
   // ── Turn flow ─────────────────────────────────────────────────────────────────
   function maybeAutoEndPlayerTurn() {
@@ -1067,7 +1088,8 @@ register3d("navalfree", async function (kernel, content) {
   }
   // Play the AI's planned actions VISIBLY, one at a time, with animation.
   function runAITurn() {
-    const acts = sim.aiPlan(); // resolves the whole enemy turn in the sim
+    let acts = [];
+    try { acts = sim.aiPlan() || []; } catch (e) { console.warn("[tide] aiPlan threw — ending enemy turn safely", e); acts = []; } // resolves the whole enemy turn in the sim
     let i = 0;
     function step() {
       if (i >= acts.length) {
@@ -1085,6 +1107,7 @@ register3d("navalfree", async function (kernel, content) {
         });
         return;
       }
+      try {
       const a = acts[i++];
       const s = sim.shipById(a.id);
       if (!s || s.sunk) { step(); return; } // a defender's overwatch may have sunk it mid-turn
@@ -1114,6 +1137,7 @@ register3d("navalfree", async function (kernel, content) {
         setHUD(`<span style="color:#ff8a6a">Enemy ${s.id} ${guard ? "shields" : "watches"}…</span>`);
         setTimeout(step, 300);
       } else { step(); }
+      } catch (e) { console.warn("[tide] AI step threw — advancing safely", e); setTimeout(step, 60); }
     }
     // small beat before the enemy acts so the player registers the turn flip
     setTimeout(step, 500);
