@@ -1553,6 +1553,21 @@ def main():
     once = "--once" in args
     throughput = "--throughput" in args
 
+    # LOCAL ADMIN KILL-SWITCH (2026-06-17): the owner's off-switch that does NOT depend on the
+    # portal/Supabase and FAILS CLOSED. state/game_pipeline_disabled.json with {"disabled": true}
+    # stops the build even if the Task Scheduler task gets re-enabled. The portal is_enabled() check
+    # below fails OPEN (a transient outage lets it run) — this one does not. Checked FIRST so "off"
+    # means truly nothing runs. Bypass a single deliberate run with FFG_IGNORE_KILLSWITCH=1.
+    # Toggle with: python scripts/game_pipeline.py on|off|status
+    if os.environ.get("FFG_IGNORE_KILLSWITCH") != "1":
+        try:
+            _ks = ROOT.parent / "state" / "game_pipeline_disabled.json"
+            if _ks.exists() and json.loads(_ks.read_text(encoding="utf-8")).get("disabled") is True:
+                log("LOCAL KILL-SWITCH ON (state/game_pipeline_disabled.json) - game pipeline OFF by owner. Exiting cleanly, nothing runs.")
+                return
+        except Exception as _e:
+            log(f"local kill-switch read failed ({type(_e).__name__}: {str(_e)[:80]}) — treating as enabled.")
+
     # ADMIN KILL-SWITCH (2026-06-14 FIX): every other pipeline honors the portal toggle via
     # claw_lib.agency_runs.is_enabled(); the games pipeline was the ONE that never checked, so
     # toggling it off in the portal did nothing (owner hit this — the promised off-switch was dead).
