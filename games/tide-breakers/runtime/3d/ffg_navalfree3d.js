@@ -910,7 +910,7 @@ register3d("navalfree", async function (kernel, content) {
     // so dice can't desync online). Even a miss burns the action.
     if (netMode) myActions.push({ k: "f", id: shooter.id, tid: targetShip.id, res: { result: r.result, dmg: r.dmg, crit: r.crit, d20: r.d20, toHit: r.toHit, sunk: r.sunk } });
     busy = true; hideGizmos();
-    kernel.playSound(sfx.fire, 0.5);
+    kernel.playSound(sfx.fire, 0.25);
     const impact = toScene(targetShip.x, targetShip.y); impact.y = 2.0;
     fireShell(shooter, impact, () => {
       if (r.result === "hit" || r.result === "sink") {
@@ -1041,7 +1041,7 @@ register3d("navalfree", async function (kernel, content) {
       if (!res || !res.ok) { fireNext(); return; }
       const impact = toScene(enemyShip.x, enemyShip.y); impact.y = 2.0;
       banner(`${d.id} OVERWATCH!`, 0xffd166, 800);
-      try { kernel.playSound(sfx.fire, 0.42); } catch (e) {}
+      try { kernel.playSound(sfx.fire, 0.21); } catch (e) {}
       fireShell(d, impact, () => {
         if (res.result === "miss") {
           splash(impact); try { kernel.playSound(sfx.miss || sfx.splash, 0.4); } catch (e) {}
@@ -1071,7 +1071,7 @@ register3d("navalfree", async function (kernel, content) {
       if (!res || !res.ok) { fireNext(); return; }
       const impact = toScene(playerShip.x, playerShip.y); impact.y = 2.0;
       banner(`${d.id} OVERWATCH!`, 0xffd166, 800);
-      try { kernel.playSound(sfx.fire, 0.42); } catch (e) {}
+      try { kernel.playSound(sfx.fire, 0.21); } catch (e) {}
       fireShell(d, impact, () => {
         if (res.result === "miss") {
           splash(impact); try { kernel.playSound(sfx.miss || sfx.splash, 0.4); } catch (e) {}
@@ -1105,7 +1105,7 @@ register3d("navalfree", async function (kernel, content) {
       if (!res || !res.ok) { next(); return; }
       const impact = toScene(tgt.x, tgt.y); impact.y = 2.0;
       banner(`${d.id} OVERWATCH!`, 0xffd166, 800);
-      try { kernel.playSound(sfx.fire, 0.42); } catch (e) {}
+      try { kernel.playSound(sfx.fire, 0.21); } catch (e) {}
       fireShell(d, impact, () => {
         if (res.result === "miss") {
           splash(impact); try { kernel.playSound(sfx.miss || sfx.splash, 0.4); } catch (e) {}
@@ -1153,7 +1153,7 @@ register3d("navalfree", async function (kernel, content) {
       } else if (a.kind === "fire") {
         const tgt = sim.shipById(a.target);
         const impact = tgt ? toScene(tgt.x, tgt.y) : toScene(s.x, s.y); impact.y = 2.0;
-        kernel.playSound(sfx.fire, 0.45);
+        kernel.playSound(sfx.fire, 0.225);
         fireShell(s, impact, () => {
           const res = a.result || {};
           if (res.result === "hit" || res.result === "sink") {
@@ -1246,7 +1246,7 @@ register3d("navalfree", async function (kernel, content) {
         const r = sim.applyFireResult(sid, tid, a.res);
         if (shooter && target) {
           const impact = toScene(target.x, target.y); impact.y = 2.0;
-          kernel.playSound(sfx.fire, 0.5);
+          kernel.playSound(sfx.fire, 0.25);
           await new Promise((res) => fireShell(shooter, impact, () => {
             if (r.result === "hit" || r.result === "sink") {
               explosion(impact); kernel.playSound(sfx.hit, r.crit ? 0.7 : 0.5);
