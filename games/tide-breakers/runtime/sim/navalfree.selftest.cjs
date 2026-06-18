@@ -222,6 +222,67 @@ console.log("navalfree self-test\n-------------------");
   ok(consistent, `applyFireResult reproduces hp/sink exactly across ${n} relayed shots (online dice stay in sync despite different rng)`);
 })();
 
+// ── 8. FRIENDLY FIRE: a LOS-blocked shot hits the blocker in the way ──────────
+(function testFriendlyFireRedirect() {
+  // P1 -> (FRIENDLY P2 blocker) -> enemy E1, all on a line. Firing at E1 is blocked
+  // by P2, so the shell strikes P2 (friendly fire), NOT a fizzled "invalid".
+  const g = new NavalFree({
+    width: 300, height: 300, seed: 4, actionsPerTurn: 2, firstSide: "player",
+    ships: [
+      { id: "P1", side: "player", x: 50, y: 150, heading: 0, hp: 100, speed: 30, turnRate: 180, gun: { range: 200, arc: 200 * Math.PI / 180, dmg: 30 }, radius: 6 },
+      { id: "P2", side: "player", x: 100, y: 150, heading: 0, hp: 1e9, speed: 30, turnRate: 30, gun: { range: 90, arc: 90 * Math.PI / 180, dmg: 25 }, radius: 8 },
+      { id: "E1", side: "enemy", x: 150, y: 150, heading: 0, hp: 1e9, speed: 30, turnRate: 30, gun: { range: 90, arc: 90 * Math.PI / 180, dmg: 25 }, radius: 6 },
+    ],
+  });
+  ok(!g.canFireAt("P1", 150, 150, "E1").ok, "canFireAt still reports the shot at E1 is blocked");
+  let r = null, landed = false, tries = 0;
+  while (!landed && tries++ < 60) { g._refreshActions("player"); r = g.fireAt("P1", "E1"); if (r.result === "hit" || r.result === "sink") landed = true; }
+  ok(landed && r.target === "P2", "a blocked shot at E1 resolves onto the FRIENDLY blocker P2 (got " + (r && r.target) + ")");
+  ok(r.friendlyFire === true, "the redirected hit is flagged friendlyFire");
+  ok(r.intendedTarget === "E1", "the event records the intended target (E1)");
+  ok(g.shipById("E1").hp === 1e9, "the intended enemy E1 took NO damage — the blocker ate the shell");
+})();
+
+// ── 8b. A LOS-blocked shot through an ENEMY hull hits that enemy (not friendly) ─
+(function testEnemyBlockerRedirect() {
+  const g = new NavalFree({
+    width: 300, height: 300, seed: 6, actionsPerTurn: 2, firstSide: "player",
+    ships: [
+      { id: "P1", side: "player", x: 50, y: 150, heading: 0, hp: 100, speed: 30, turnRate: 180, gun: { range: 200, arc: 200 * Math.PI / 180, dmg: 30 }, radius: 6 },
+      { id: "BL", side: "enemy", x: 100, y: 150, heading: 0, hp: 1e9, speed: 30, turnRate: 30, gun: { range: 90, arc: 90 * Math.PI / 180, dmg: 25 }, radius: 8 },
+      { id: "E1", side: "enemy", x: 150, y: 150, heading: 0, hp: 1e9, speed: 30, turnRate: 30, gun: { range: 90, arc: 90 * Math.PI / 180, dmg: 25 }, radius: 6 },
+    ],
+  });
+  let r = null, landed = false, tries = 0;
+  while (!landed && tries++ < 60) { g._refreshActions("player"); r = g.fireAt("P1", "E1"); if (r.result === "hit" || r.result === "sink") landed = true; }
+  ok(landed && r.target === "BL", "a shot at E1 blocked by enemy BL strikes BL (got " + (r && r.target) + ")");
+  ok(r.redirected === true && r.friendlyFire === false, "redirected to the enemy blocker, NOT flagged friendly fire");
+})();
+
+// ── 9. SWIPE move: follow a multi-leg path, clamped to the speed budget ───────
+(function testSwipeMovePath() {
+  const g = new NavalFree({
+    width: 300, height: 300, seed: 8, actionsPerTurn: 2, firstSide: "player",
+    ships: [
+      { id: "P1", side: "player", x: 50, y: 50, heading: 0, hp: 100, speed: 40, turnRate: 180, gun: { range: 90, arc: 120 * Math.PI / 180, dmg: 20 }, radius: 6 },
+      { id: "E1", side: "enemy", x: 250, y: 250, heading: Math.PI, hp: 50, speed: 30, turnRate: 120, gun: { range: 90, arc: 120 * Math.PI / 180, dmg: 25 }, radius: 6 },
+    ],
+  });
+  // L-shaped swipe: east 30 then north 30 (path length 60 > budget 40 -> clamped).
+  const r = g.moveShipPath("P1", [{ x: 80, y: 50 }, { x: 80, y: 20 }]);
+  ok(r.ok, "moveShipPath returns ok");
+  ok(Array.isArray(r.path) && r.path.length >= 2, "returns a traced path (" + (r.path && r.path.length) + " pts)");
+  ok(r.actionsLeft === 1, "swipe consumed exactly 1 action (2 -> 1)");
+  const p1 = g.shipById("P1");
+  ok(Math.abs(p1.x - 80) < 1.0, "completed the east leg (x≈80, got " + p1.x.toFixed(1) + ")");
+  ok(p1.y < 49, "turned the corner onto the north leg (y dropped below 50, got " + p1.y.toFixed(1) + ")");
+  const moved = Math.hypot(p1.x - 50, p1.y - 50);
+  ok(moved <= 40 + 1e-6, "displacement (" + moved.toFixed(1) + ") within the speed budget 40");
+  // an empty path is rejected (no free action burn)
+  const bad = g.moveShipPath("P1", []);
+  ok(!bad.ok && bad.reason === "no-path", "an empty swipe path is rejected");
+})();
+
 // ── summary ──────────────────────────────────────────────────────────────────
 console.log("-------------------");
 console.log(`${passed} passed, ${failed} failed`);

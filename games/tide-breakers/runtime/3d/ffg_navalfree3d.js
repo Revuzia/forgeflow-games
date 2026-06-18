@@ -518,6 +518,34 @@ register3d("navalfree", async function (kernel, content) {
     new THREE.MeshBasicMaterial({ color: 0x9dffd0, transparent: true, opacity: 0.0, side: THREE.DoubleSide, depthWrite: false }));
   destGhost.rotation.x = -Math.PI / 2; destGhost.position.y = 0.14; destGhost.visible = false; scene.add(destGhost);
 
+  // SWIPE PATH preview — the teal trail the player drags out for a ship to follow.
+  // Built (clamped to the ship's move budget) live during a left-drag.
+  const pathLine = new THREE.Line(new THREE.BufferGeometry(),
+    new THREE.LineBasicMaterial({ color: 0x37e0c0, transparent: true, opacity: 0.9, depthTest: false }));
+  pathLine.visible = false; pathLine.renderOrder = 6; scene.add(pathLine);
+  // Walk the swiped sim-space points up to `s.speed` and return the scene polyline.
+  function clampPathScene(s, pathSim) {
+    let budget = s.speed, prevX = s.x, prevY = s.y;
+    const a = toScene(s.x, s.y); const pts = [new THREE.Vector3(a.x, 0.35, a.z)];
+    for (let i = 0; i < pathSim.length && budget > 1e-3; i++) {
+      const p = pathSim[i]; const dx = p.x - prevX, dy = p.y - prevY, L = Math.hypot(dx, dy);
+      if (L < 1e-3) continue;
+      const step = Math.min(L, budget), nx = prevX + dx / L * step, ny = prevY + dy / L * step;
+      const sc = toScene(nx, ny); pts.push(new THREE.Vector3(sc.x, 0.35, sc.z));
+      budget -= step; prevX = nx; prevY = ny;
+      if (step < L - 1e-6) break;
+    }
+    return pts;
+  }
+  function showPathPreview(s, pathSim) {
+    const pts = clampPathScene(s, pathSim);
+    if (pts.length < 2) { pathLine.visible = false; destGhost.visible = false; return; }
+    pathLine.geometry.dispose(); pathLine.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+    pathLine.visible = true;
+    const end = pts[pts.length - 1]; destGhost.position.set(end.x, 0.14, end.z); destGhost.visible = true; destGhost.material.opacity = 0.6;
+  }
+  function clearPathPreview() { pathLine.visible = false; }
+
   function buildArcGeometry(range, arc) {
     // a triangle-fan wedge centered on +X (local), width = arc, radius = range
     const seg = 40, pos = [0, 0, 0];
@@ -696,6 +724,47 @@ register3d("navalfree", async function (kernel, content) {
         v.group.position.z = startZ + (target.z - startZ) * g;
         wakeT += 1;
         if (wakeT % 9 === 0) {
+          const stern = new THREE.Vector3(-Math.cos(s.heading) * (s.radius + 1), 0.4, -Math.sin(s.heading) * (s.radius + 1));
+          spawnSmoke(v.group.position.clone().add(stern), false);
+        }
+      },
+      onComplete: () => { finish(); },
+    });
+  }
+
+  // Drive a ship's visual ALONG a multi-point path (the swipe), tracing each leg so
+  // diagonals + L-shapes read on screen. Freeze-proof like animateMove (safety timeout
+  // + single finish). `path` is sim-space waypoints from moveShipPath.
+  function animatePath(s, path, done) {
+    const v = vis[s.id];
+    let fin = false, safety = null;
+    const finish = () => { if (fin) return; fin = true; if (safety) clearTimeout(safety);
+      try { if (v) { const tt = toScene(s.x, s.y); v.group.position.set(tt.x, 0.2, tt.z); v.group.rotation.y = simHeadingToYaw(s.heading); } } catch (e) {}
+      try { done && done(); } catch (e) {} };
+    if (!v || !path || path.length < 2 || reducedMotion) { finish(); return; }
+    const pts = path.map((p) => { const sc = toScene(p.x, p.y); return new THREE.Vector3(sc.x, 0.2, sc.z); });
+    const seg = [], cum = [0]; let total = 0;
+    for (let i = 1; i < pts.length; i++) { const L = pts[i].distanceTo(pts[i - 1]); seg.push(L); total += L; cum.push(total); }
+    // per-leg yaw (ship faces along the leg it's currently driving)
+    const legYaw = [];
+    for (let i = 1; i < path.length; i++) legYaw.push(simHeadingToYaw(Math.atan2(path[i].y - path[i - 1].y, path[i].x - path[i - 1].x)));
+    if (total < 0.5) { finish(); return; }
+    const dur = Math.max(1.2, Math.min(3.8, total * 0.06));
+    safety = setTimeout(finish, dur * 1000 + 800);
+    let wakeT = 0; const proxy = { p: 0 };
+    kernel.tween({
+      target: proxy, to: { p: 1 }, duration: dur,
+      onUpdate: (e) => {
+        const d = e * total;
+        let i = 1; while (i < cum.length - 1 && cum[i] < d) i++;
+        const f = Math.min(1, Math.max(0, (d - cum[i - 1]) / (seg[i - 1] || 1e-6)));
+        const a = pts[i - 1], b = pts[i];
+        v.group.position.x = a.x + (b.x - a.x) * f;
+        v.group.position.z = a.z + (b.z - a.z) * f;
+        let dy = (legYaw[i - 1] != null ? legYaw[i - 1] : v.group.rotation.y) - v.group.rotation.y;
+        while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2;
+        v.group.rotation.y += dy * 0.35;                  // ease into each leg's heading
+        if ((++wakeT) % 9 === 0) {
           const stern = new THREE.Vector3(-Math.cos(s.heading) * (s.radius + 1), 0.4, -Math.sin(s.heading) * (s.radius + 1));
           spawnSmoke(v.group.position.clone().add(stern), false);
         }
@@ -887,6 +956,40 @@ register3d("navalfree", async function (kernel, content) {
 
   function paused() { return window.FFG && window.FFG.shell && window.FFG.shell.phase === "paused"; }
 
+  // ── SWIPE input: left-drag charts a path for the selected ship; a quick click
+  //    keeps the old behaviour (fire / select / move-to-point). Camera orbit is on
+  //    RIGHT-drag, so left-drag is ours. Pointer-up is on window so a release that
+  //    leaves the canvas still resolves the swipe. ──────────────────────────────
+  const SWIPE_PX = 7;          // drag past this (screen px) = a swipe, not a click
+  const ptr = { down: false, dragging: false, x0: 0, y0: 0, ship: null, pathSim: [] };
+  function onPointerDown(ev) {
+    if (ev.button !== 0) return;                                   // left button only
+    if (phase !== "battle" || busy || !sim || sim.ended || paused() || sim.turn !== "player") return;
+    ptr.down = true; ptr.dragging = false; ptr.x0 = ev.clientX; ptr.y0 = ev.clientY; ptr.pathSim = [];
+    const sel = selectedId ? sim.shipById(selectedId) : null;      // the swipe drives the selected ready ship
+    ptr.ship = (sel && sel.actionsLeft > 0) ? sel : null;
+  }
+  function onPointerMove(ev) {
+    if (!ptr.down) { onMove(ev); return; }                         // not dragging -> hover ghost
+    if (!ptr.ship) return;
+    if (!ptr.dragging && Math.hypot(ev.clientX - ptr.x0, ev.clientY - ptr.y0) < SWIPE_PX) return;
+    ptr.dragging = true;
+    const w = pickWater(ev.clientX, ev.clientY);
+    if (!w) return;
+    const last = ptr.pathSim[ptr.pathSim.length - 1];
+    if (!last || Math.hypot(w.simX - last.x, w.simY - last.y) > 1.5) ptr.pathSim.push({ x: w.simX, y: w.simY });
+    showPathPreview(ptr.ship, ptr.pathSim);
+  }
+  function onPointerUp(ev) {
+    if (!ptr.down) return;
+    ptr.down = false;
+    const wasDrag = ptr.dragging, ship = ptr.ship, pathSim = ptr.pathSim;
+    ptr.dragging = false; ptr.ship = null; ptr.pathSim = [];
+    clearPathPreview();
+    if (wasDrag && ship && pathSim.length >= 1) tryMovePath(ship, pathSim);
+    else onClick(ev);                                              // a tap = the old click action
+  }
+
   // ── Action wrappers (sim + animation) ────────────────────────────────────────
   function tryMove(s, simX, simY) {
     const r = sim.moveShip(s.id, { x: simX, y: simY });
@@ -902,25 +1005,45 @@ register3d("navalfree", async function (kernel, content) {
       });
     });
   }
+  // SWIPE: drive the ship along the dragged path (sim clamps it to the move budget),
+  // then trace it on screen and resolve any enemy overwatch the move triggers.
+  function tryMovePath(s, pathSim) {
+    const r = sim.moveShipPath(s.id, pathSim);
+    if (!r.ok) { setHUD(reasonText(r.reason)); return; }
+    if (netMode) myActions.push({ k: "mp", id: s.id, path: r.path }); // relay the RESOLVED path
+    busy = true; hideGizmos(); clearPathPreview();
+    kernel.playSound(sfx.move || sfx.splash, 0.18);
+    animatePath(s, r.path, () => {
+      triggerEnemyOverwatch(s, () => { busy = false; autoSelectNextShip(s.id); maybeAutoEndPlayerTurn(); });
+    });
+  }
+  function prettyShip(id) { const k = (id || "").split("-")[1] || id || "ship"; return k.charAt(0).toUpperCase() + k.slice(1); }
   function tryFire(shooter, targetShip) {
     // Pre-check so we can explain misses without burning surprise.
     const chk = sim.canFireAt(shooter.id, targetShip.x, targetShip.y, targetShip.id);
     const r = sim.fireAt(shooter.id, targetShip.id);
-    // Relay the AUTHORITATIVE rolled outcome (the remote applies it without re-rolling,
-    // so dice can't desync online). Even a miss burns the action.
-    if (netMode) myActions.push({ k: "f", id: shooter.id, tid: targetShip.id, res: { result: r.result, dmg: r.dmg, crit: r.crit, d20: r.d20, toHit: r.toHit, sunk: r.sunk } });
+    // Relay the AUTHORITATIVE rolled outcome INCL. the actual victim (a blocked shot
+    // hits a different hull — friendly fire) so the remote applies it correctly.
+    if (netMode) myActions.push({ k: "f", id: shooter.id, tid: targetShip.id, res: { result: r.result, dmg: r.dmg, crit: r.crit, d20: r.d20, toHit: r.toHit, sunk: r.sunk, victim: r.target, friendlyFire: r.friendlyFire, redirected: r.redirected } });
     busy = true; hideGizmos();
     kernel.playSound(sfx.fire, 0.25);
-    const impact = toScene(targetShip.x, targetShip.y); impact.y = 2.0;
+    // The shell flies to whatever it ACTUALLY hits — usually the target, but a ship in
+    // the line of fire (friend or foe) intercepts it.
+    const victim = (r.target && sim.shipById(r.target)) || targetShip;
+    const impact = toScene(r.x != null ? r.x : targetShip.x, r.y != null ? r.y : targetShip.y); impact.y = 2.0;
     fireShell(shooter, impact, () => {
       if (r.result === "hit" || r.result === "sink") {
         explosion(impact); kernel.playSound(sfx.hit, r.crit ? 0.7 : 0.5);
-        updateHealthBar(sim.shipById(targetShip.id) || targetShip);
+        updateHealthBar(victim);
         resultFloat(impact, r);
-        if (r.result === "sink") { kernel.playSound(sfx.sink, 0.6); sinkVisual(targetShip); }
+        if (r.result === "sink") { kernel.playSound(sfx.sink, 0.6); sinkVisual(victim); }
+        // Prominent callout: the line of fire was blocked and the shell hit a hull in the way.
+        if (r.friendlyFire) banner("⚠ FRIENDLY FIRE — your shot hit your own " + prettyShip(r.target) + "! Line of sight was blocked.", 0xff4d4d, 2600);
+        else if (r.redirected) banner("Shell blocked — it struck the " + prettyShip(r.target) + " in the line of fire.", 0xffa94d, 2000);
       } else {
         splash(impact); kernel.playSound(sfx.miss || sfx.splash, 0.4);
         resultFloat(impact, r);   // shows "MISS" on a rolled miss
+        if (r.friendlyFire) banner("Close call — a blocked shell just missed your own " + prettyShip(r.target) + ".", 0xffa94d, 1900);
       }
       busy = false;
       if (sim.ended) { finishMatch(); return; }
@@ -930,6 +1053,11 @@ register3d("navalfree", async function (kernel, content) {
   }
   function shotBanner(r, chk) {
     const roll = r.d20 != null ? ` <span style="opacity:.7">(d20 ${r.d20} vs ${r.toHit})</span>` : "";
+    if (r.friendlyFire) {
+      if (r.result === "miss") return `<span style="color:#ffa94d">Blocked shell just missed your own ${prettyShip(r.target)}.</span>${roll}`;
+      return `<span style="color:#ff5a5a">⚠ FRIENDLY FIRE — hit your own ${prettyShip(r.target)}${r.result === "sink" ? " — SUNK!" : ` for ${r.dmg}`}</span>${roll}`;
+    }
+    if (r.redirected && (r.result === "hit" || r.result === "sink")) return `<span style="color:#ffa94d">Blocked — shell struck ${prettyShip(r.target)}${r.result === "sink" ? " — SUNK!" : ` for ${r.dmg}`}</span>${roll}`;
     if (r.result === "sink") return `<span style="color:#ffd166">${r.crit ? "CRITICAL hit — " : "Direct hit — "}enemy ${r.target} SUNK!</span>${roll}`;
     if (r.result === "hit" && r.crit) return `<span style="color:#ff7a4a">CRITICAL HIT — ${r.target} takes ${r.dmg}!</span>${roll}`;
     if (r.result === "hit") return `<span style="color:#9dffd0">Hit ${r.target} for ${r.dmg}.</span>${roll}`;
@@ -944,8 +1072,7 @@ register3d("navalfree", async function (kernel, content) {
   }
   // Rising world-space label. `big` crits float higher + linger.
   function floatAt(pos, text, color, big) {
-    const spr = makeFloatText(text, color);
-    if (big) spr.scale.multiplyScalar(1.35);
+    const spr = makeFloatText(text, color, big ? 3.6 : 2.8);
     spr.position.set(pos.x, pos.y + 4, pos.z); scene.add(spr);
     const dur = big ? 1.4 : 1.0;
     kernel.tween({ target: spr.position, to: { y: pos.y + (big ? 15 : 12) }, duration: dur });
@@ -957,19 +1084,32 @@ register3d("navalfree", async function (kernel, content) {
     if (!r) return;
     if (r.result === "miss") { floatAt(pos, "MISS", "#8fb0c4"); return; }
     if (r.result === "hit" || r.result === "sink") {
-      if (r.crit) floatAt(pos, "CRIT! -" + r.dmg, "#ff5a3c", true);
+      if (r.friendlyFire) floatAt(pos, (r.crit ? "CRIT! " : "") + "-" + r.dmg, "#ff3b3b", !!r.crit);  // own ship — red
+      else if (r.crit) floatAt(pos, "CRIT! -" + r.dmg, "#ff5a3c", true);
       else floatAt(pos, "-" + r.dmg, "#ffd166");
     }
   }
   function damageText(pos, dmg) { floatAt(pos, "-" + dmg, "#ffd166"); }
-  function makeFloatText(text, color) {
-    const c = document.createElement("canvas"); c.width = 128; c.height = 64;
-    const ctx = c.getContext("2d"); ctx.font = "bold 44px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.lineWidth = 5; ctx.strokeStyle = "rgba(4,10,18,0.9)"; ctx.strokeText(text, 64, 32);
-    ctx.fillStyle = color || "#fff"; ctx.fillText(text, 64, 32);
-    const tex = new THREE.CanvasTexture(c);
+  // Float label sized to FIT its text: the canvas is measured to the string (so a
+  // long "CRIT! -71" never overflows + clips like the old fixed 128px canvas), and
+  // the world sprite keeps a constant HEIGHT with width tracking the canvas aspect
+  // (never stretched). worldH controls on-screen size.
+  function makeFloatText(text, color, worldH) {
+    worldH = worldH || 2.8;
+    const fontPx = 40, pad = 10;
+    const meas = document.createElement("canvas").getContext("2d");
+    meas.font = "bold " + fontPx + "px 'Segoe UI', monospace";
+    const tw = Math.max(1, Math.ceil(meas.measureText(text).width));
+    const cw = tw + pad * 2, ch = fontPx + pad * 2;
+    const c = document.createElement("canvas"); c.width = cw; c.height = ch;
+    const ctx = c.getContext("2d");
+    ctx.font = "bold " + fontPx + "px 'Segoe UI', monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineWidth = 6; ctx.strokeStyle = "rgba(4,10,18,0.92)"; ctx.strokeText(text, cw / 2, ch / 2);
+    ctx.fillStyle = color || "#fff"; ctx.fillText(text, cw / 2, ch / 2);
+    const tex = new THREE.CanvasTexture(c); tex.minFilter = THREE.LinearFilter;
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-    spr.scale.set(8, 4, 1); return spr;
+    spr.scale.set(worldH * cw / ch, worldH, 1);   // aspect-preserved → readable, never clipped
+    return spr;
   }
   // Transient on-screen BANNER for stance/overwatch callouts. MUST NEVER THROW — it runs inside the
   // enemy-turn playback chain, and an UNDEFINED `banner` (added in e6d8a5e but never defined) was the
@@ -1239,19 +1379,30 @@ register3d("navalfree", async function (kernel, content) {
         sim.moveShip(id, { x: ARENA_W - a.x, y: ARENA_H - a.y });
         const s = sim.shipById(id);
         if (s) await new Promise((res) => animateMove(s, res));
+      } else if (a.k === "mp") {                                   // mirrored SWIPE path
+        const id = mirrorId(a.id);
+        const mpath = (a.path || []).map((p) => ({ x: ARENA_W - p.x, y: ARENA_H - p.y }));
+        const r = sim.moveShipPath(id, mpath);
+        const s = sim.shipById(id);
+        if (s && r.ok) await new Promise((res) => animatePath(s, r.path, res));
+        else if (s) await new Promise((res) => animateMove(s, res));
       } else if (a.k === "f") {
-        const sid = mirrorId(a.id), tid = mirrorId(a.tid);
-        const shooter = sim.shipById(sid), target = sim.shipById(tid);
+        const sid = mirrorId(a.id);
+        // Apply to the ACTUAL victim (a blocked shot hit a different hull) so both sims
+        // damage the same ship; fall back to the aimed target.
+        const vid = mirrorId((a.res && a.res.victim) || a.tid);
+        const shooter = sim.shipById(sid), victim = sim.shipById(vid);
         // Apply the shooter's RELAYED roll (no re-roll -> dice stay in sync online).
-        const r = sim.applyFireResult(sid, tid, a.res);
-        if (shooter && target) {
-          const impact = toScene(target.x, target.y); impact.y = 2.0;
+        const r = sim.applyFireResult(sid, vid, a.res);
+        if (shooter && victim) {
+          const impact = toScene(victim.x, victim.y); impact.y = 2.0;
           kernel.playSound(sfx.fire, 0.25);
           await new Promise((res) => fireShell(shooter, impact, () => {
             if (r.result === "hit" || r.result === "sink") {
               explosion(impact); kernel.playSound(sfx.hit, r.crit ? 0.7 : 0.5);
-              updateHealthBar(sim.shipById(tid) || target); resultFloat(impact, r);
-              if (r.result === "sink") { kernel.playSound(sfx.sink, 0.6); sinkVisual(target); }
+              updateHealthBar(sim.shipById(vid) || victim); resultFloat(impact, r);
+              if (r.result === "sink") { kernel.playSound(sfx.sink, 0.6); sinkVisual(victim); }
+              if (a.res && a.res.friendlyFire) banner("Enemy friendly fire — they hit their own " + prettyShip(vid) + "!", 0xffa94d, 1800);
             } else { splash(impact); kernel.playSound(sfx.miss || sfx.splash, 0.4); resultFloat(impact, r); }
             res();
           }));
@@ -1367,8 +1518,11 @@ register3d("navalfree", async function (kernel, content) {
 
   // ── DOM listeners ─────────────────────────────────────────────────────────────
   const dom = kernel.renderer.domElement;
-  dom.addEventListener("click", onClick);
-  dom.addEventListener("mousemove", onMove);
+  // Left-drag = swipe a path; quick click = fire/select/move-to-point. Pointer-up on
+  // window so releasing off-canvas still resolves the swipe.
+  dom.addEventListener("pointerdown", onPointerDown);
+  dom.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointerup", onPointerUp);
   // R = rotate selected ship in place (uses an action) — quick re-aim without driving.
   window.addEventListener("keydown", (e) => {
     if (phase !== "battle" || busy || !sim || sim.turn !== "player") return;
@@ -1393,8 +1547,8 @@ register3d("navalfree", async function (kernel, content) {
         { h: "Goal", p: "Sink the enemy fleet. No grid — your ships drive freely across open water." },
         { h: "Each turn", p: "Every ship gets 2 actions. <b>Driving</b> to a new spot and <b>Firing</b> each cost one action — so a ship can move-then-fire, fire-then-move, or double-move." },
         { h: "Select", p: "Click one of your <b>teal</b> ships. A teal disc shows how far it can drive this action; an amber wedge shows its gun range and firing arc." },
-        { h: "Drive", p: "Click open water inside the teal disc. The ship turns toward the heading and steams there (capped by its turn rate + speed)." },
-        { h: "Fire", p: "Click an enemy ship that sits inside your amber arc. Out of range / out of arc / blocked by a hull = the shot won't connect, so reposition. <b>Q/E</b> rotate the selected ship in place." },
+        { h: "Drive", p: "Click open water to steam straight there — or <b>left-drag a path</b> (swipe) to chart a route: diagonals, curves, even L-shapes. The ship follows your trail as far as its speed allows. <b>Q/E</b> rotate in place." },
+        { h: "Fire", p: "Click an enemy inside your amber arc. Out of range / out of arc = no shot. If another hull (friend OR foe) is in the line of fire, the cannonball <b>hits it instead</b> — beware <b>FRIENDLY FIRE</b> on your own ships!" },
         { h: "Camera", p: "Right-drag to orbit · scroll to zoom · WASD to pan across the sea." },
         { h: "Play Online", p: "From the title, choose <b>PLAY ONLINE</b> to face a live opponent: <b>Quick Match</b> pairs you with anyone waiting, or <b>Create Room</b> / <b>Join Room</b> with a shared 4-character code to play a friend. Each side commands its own fleet with a <b>15-second turn timer</b>." },
       ],
@@ -1446,6 +1600,7 @@ register3d("navalfree", async function (kernel, content) {
       sim: () => sim,
       selectFirstPlayer: () => { const s = sim.shipsOf("player")[0]; selectedId = s ? s.id : null; if (s) showSelectionGizmos(s); setHUD(); return s ? s.id : null; },
       driveSelected: (simX, simY) => { const s = sim.shipById(selectedId); if (s) tryMove(s, simX, simY); },
+      swipeSelected: (pathSim) => { const s = sim.shipById(selectedId); if (s) tryMovePath(s, pathSim); return s ? s.id : null; },
       fireSelectedAtNearestEnemy: () => {
         const s = sim.shipById(selectedId); if (!s) return null;
         // move close + turn first if needed, but for the smoke test just try the nearest in-arc enemy

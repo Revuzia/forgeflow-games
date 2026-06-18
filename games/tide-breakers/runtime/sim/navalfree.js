@@ -237,6 +237,26 @@
     return true;
   };
 
+  // The NEAREST ship (excluding the shooter + the aim-point's own ship) whose hull
+  // the shot path shooter->(tx,ty) crosses — i.e. the FIRST thing a cannonball hits.
+  // Used to redirect a line-of-sight-blocked shot onto the blocker (FRIENDLY FIRE if
+  // it's one of yours) instead of the shot just fizzling. Natural physics.
+  NavalFree.prototype._firstObstacle = function (shooter, tx, ty, ignoreId) {
+    var ax = shooter.x, ay = shooter.y, dx = tx - ax, dy = ty - ay;
+    var segLen2 = dx * dx + dy * dy;
+    if (segLen2 < 1e-6) return null;
+    var best = null, bestT = Infinity;
+    for (var i = 0; i < this.ships.length; i++) {
+      var o = this.ships[i];
+      if (o.sunk || o.id === shooter.id || o.id === ignoreId) continue;
+      var t = ((o.x - ax) * dx + (o.y - ay) * dy) / segLen2;
+      if (t <= 0.001 || t > 1.05) continue;           // behind the muzzle / past the aim point
+      var tc = clamp(t, 0, 1), px = ax + tc * dx, py = ay + tc * dy;
+      if (dist(px, py, o.x, o.y) < o.radius && t < bestT) { bestT = t; best = o; }
+    }
+    return best;
+  };
+
   // Is target point within shooter's gun range AND firing arc AND has LOS?
   // Returns { ok, reason, range, bearing } so callers can show WHY a shot fails.
   NavalFree.prototype.canFireAt = function (shooterId, tx, ty, ignoreLosId) {
@@ -331,6 +351,46 @@
     return { ok: true, heading: s.heading, actionsLeft: s.actionsLeft };
   };
 
+  // SWIPE MOVE: drive the ship ALONG a swiped polyline, consuming up to its speed
+  // budget (still 1 action). Lets the player trace diagonals / L-shapes / curves
+  // instead of a single straight hop. Heading turns toward the final travel
+  // direction (capped by turnRate, same as a normal move). Returns the traveled
+  // `path` (sim coords, starting at the ship) so the renderer can trace it on screen.
+  NavalFree.prototype.moveShipPath = function (id, points) {
+    var s = this.shipById(id);
+    if (!s || s.sunk) return { ok: false, reason: "no-ship" };
+    if (this.turn !== s.side) return { ok: false, reason: "not-your-turn" };
+    if (s.actionsLeft <= 0) return { ok: false, reason: "no-actions" };
+    if (!points || !points.length) return { ok: false, reason: "no-path" };
+    var budget = s.speed, path = [{ x: s.x, y: s.y }];
+    var prevX = s.x, prevY = s.y, cx = s.x, cy = s.y;
+    var lastUx = Math.cos(s.heading), lastUy = Math.sin(s.heading);
+    for (var i = 0; i < points.length && budget > 1e-3; i++) {
+      var p = points[i];
+      if (!p || !isFinite(p.x) || !isFinite(p.y)) continue;
+      var segdx = p.x - prevX, segdy = p.y - prevY, seglen = Math.sqrt(segdx * segdx + segdy * segdy);
+      if (seglen < 1e-4) continue;
+      var ux = segdx / seglen, uy = segdy / seglen, step = Math.min(seglen, budget);
+      var nx = clamp(prevX + ux * step, s.radius, this.width - s.radius);
+      var ny = clamp(prevY + uy * step, s.radius, this.height - s.radius);
+      for (var k = 0; k < this.ships.length; k++) {                 // don't overlap a hull
+        var o = this.ships[k]; if (o.sunk || o.id === s.id) continue;
+        var dd = dist(nx, ny, o.x, o.y), minD = s.radius + o.radius;
+        if (dd < minD) { nx = o.x + (nx - o.x) / (dd || 1) * minD; ny = o.y + (ny - o.y) / (dd || 1) * minD; }
+      }
+      cx = nx; cy = ny; path.push({ x: cx, y: cy });
+      lastUx = ux; lastUy = uy; budget -= step; prevX = cx; prevY = cy;
+      if (step < seglen - 1e-6) break;                              // budget exhausted mid-segment
+    }
+    var desired = Math.atan2(lastUy, lastUx);
+    s.heading = norm(s.heading + clamp(angDelta(s.heading, desired), -s.turnRate, s.turnRate));
+    var moved = dist(s.x, s.y, cx, cy);
+    s.x = cx; s.y = cy; s.actionsLeft--;
+    this.log.push(s.id + " swipe -> (" + cx.toFixed(1) + "," + cy.toFixed(1) + ") via " + path.length + " pts, moved " + moved.toFixed(1));
+    this.onEvent("move", { id: s.id, x: s.x, y: s.y, heading: s.heading, moved: moved, path: path });
+    return { ok: true, x: s.x, y: s.y, heading: s.heading, moved: moved, path: path, actionsLeft: s.actionsLeft };
+  };
+
   // ── dice resolution (D&D-style) ─────────────────────────────────────────────
   // All rolls draw from the seeded rng, so a (seed + action order) reproduces a
   // match exactly — the headless gate and online mirror both rely on this.
@@ -400,68 +460,83 @@
       tx = target; ty = maybeY;
     }
 
-    var chk = this.canFireAt(shooterId, tx, ty, namedTarget ? namedTarget.id : null);
+    var intendedId = namedTarget ? namedTarget.id : null;
+    var chk = this.canFireAt(shooterId, tx, ty, intendedId);
+    var victim = null, redirected = false, rangeToVictim;
+
     if (!chk.ok) {
-      // A blocked/out-of-arc/out-of-range shot still BURNS the action (you fired).
-      s.actionsLeft--;
-      this.log.push(s.id + " fire FAILED (" + chk.reason + ")");
-      var inv = { result: "invalid", reason: chk.reason, x: tx, y: ty, by: s.id, range: chk.range, actionsLeft: s.actionsLeft };
-      this.onEvent("fire", inv);
-      return inv;
-    }
-
-    s.actionsLeft--;
-
-    // Resolve the hit. A named target that passed canFireAt is hit. An aimed point
-    // hits the nearest enemy hull whose circle the impact lands in (splash).
-    var victim = namedTarget;
-    if (!victim) {
-      var best = null, bestD = Infinity;
-      for (var i = 0; i < this.ships.length; i++) {
-        var o = this.ships[i];
-        if (o.sunk || o.side === s.side) continue;
-        var d = dist(tx, ty, o.x, o.y);
-        if (d <= o.radius + 4 && d < bestD) { bestD = d; best = o; }   // 4u splash forgiveness
+      // LINE OF FIRE BLOCKED -> natural physics: the cannonball strikes the FIRST
+      // hull in its path (friend or foe) instead of fizzling. Out-of-range / out-of-
+      // arc still can't fire at all.
+      if (chk.reason === "los") {
+        var blocker = this._firstObstacle(s, tx, ty, intendedId);
+        if (blocker) { victim = blocker; redirected = true; rangeToVictim = dist(s.x, s.y, blocker.x, blocker.y); }
       }
-      victim = best;
+      if (!victim) {
+        s.actionsLeft--;
+        this.log.push(s.id + " fire FAILED (" + chk.reason + ")");
+        var inv = { result: "invalid", reason: chk.reason, x: tx, y: ty, by: s.id, range: chk.range, actionsLeft: s.actionsLeft };
+        this.onEvent("fire", inv);
+        return inv;
+      }
+      s.actionsLeft--;
+    } else {
+      s.actionsLeft--;
+      // Clear shot: the named target, or for an aimed point the nearest enemy hull
+      // the impact lands in (splash).
+      victim = namedTarget;
+      if (!victim) {
+        var best = null, bestD = Infinity;
+        for (var i = 0; i < this.ships.length; i++) {
+          var o = this.ships[i];
+          if (o.sunk || o.side === s.side) continue;
+          var d = dist(tx, ty, o.x, o.y);
+          if (d <= o.radius + 4 && d < bestD) { bestD = d; best = o; }   // 4u splash forgiveness
+        }
+        victim = best;
+      }
+      if (!victim) {
+        this.log.push(s.id + " miss (" + tx.toFixed(1) + "," + ty.toFixed(1) + ")");
+        var miss = { result: "miss", x: tx, y: ty, by: s.id, actionsLeft: s.actionsLeft };
+        this.onEvent("fire", miss);
+        return miss;
+      }
+      rangeToVictim = chk.range;
     }
 
-    if (!victim) {
-      this.log.push(s.id + " miss (" + tx.toFixed(1) + "," + ty.toFixed(1) + ")");
-      var miss = { result: "miss", x: tx, y: ty, by: s.id, actionsLeft: s.actionsLeft };
-      this.onEvent("fire", miss);
-      return miss;
-    }
+    var friendlyFire = victim.side === s.side;
 
     // D&D resolution: roll a d20 to hit (range + the target's evasion + DEFEND set
-    // the number), then roll dice damage. A named, in-arc, in-range target CAN now
-    // miss — speed/evasion finally matters defensively. Nat-20 crits.
-    var atk = this._attackRoll(s, victim, chk.range);
+    // the number), then roll dice damage against the ACTUAL victim (the blocker, on a
+    // redirected shot). Nat-20 crits. A clean shot can still miss on the roll.
+    var atk = this._attackRoll(s, victim, rangeToVictim);
     if (!atk.hit) {
       this.log.push(s.id + " MISSED " + victim.id + " (d20 " + atk.d20 + " vs " + atk.toHit + ")");
-      var rolledMiss = { result: "miss", x: victim.x, y: victim.y, by: s.id, target: victim.id, d20: atk.d20, toHit: atk.toHit, range: chk.range, actionsLeft: s.actionsLeft };
+      var rolledMiss = { result: "miss", x: victim.x, y: victim.y, by: s.id, target: victim.id, intendedTarget: intendedId, redirected: redirected, friendlyFire: friendlyFire, d20: atk.d20, toHit: atk.toHit, range: rangeToVictim, actionsLeft: s.actionsLeft };
       this.onEvent("fire", rolledMiss);
       return rolledMiss;
     }
     var dmg = this._damageRoll(s, atk.crit, victim.defending);
     victim.hp -= dmg;
 
-    // result stays "hit"/"sink" (so existing renderer checks keep working); `crit`
-    // is a flag the renderer reads for the flashy CRIT! float + banner.
-    var out = { result: "hit", x: victim.x, y: victim.y, by: s.id, target: victim.id, dmg: dmg, crit: atk.crit, d20: atk.d20, toHit: atk.toHit, range: chk.range, actionsLeft: s.actionsLeft };
+    // result stays "hit"/"sink" (so existing renderer checks keep working); `crit`,
+    // `friendlyFire`, `redirected`, `intendedTarget` are flags the renderer reads.
+    var out = { result: "hit", x: victim.x, y: victim.y, by: s.id, target: victim.id, intendedTarget: intendedId, redirected: redirected, friendlyFire: friendlyFire, dmg: dmg, crit: atk.crit, d20: atk.d20, toHit: atk.toHit, range: rangeToVictim, actionsLeft: s.actionsLeft };
     if (victim.hp <= 0) {
       victim.hp = 0; victim.sunk = true;
       out.result = "sink"; out.sunk = true;
-      this.log.push(s.id + " SANK " + victim.id + (atk.crit ? " (CRIT)" : ""));
+      this.log.push(s.id + (friendlyFire ? " FRIENDLY-FIRE SANK " : " SANK ") + victim.id + (atk.crit ? " (CRIT)" : ""));
     } else {
-      this.log.push(s.id + (atk.crit ? " CRIT " : " hit ") + victim.id + " for " + dmg + " (hp " + victim.hp + ")");
+      this.log.push(s.id + (friendlyFire ? " FRIENDLY-FIRE hit " : (atk.crit ? " CRIT " : " hit ")) + victim.id + " for " + dmg + " (hp " + victim.hp + ")");
     }
 
-    // Win check.
-    var foeSide = s.side === "player" ? "enemy" : "player";
-    if (this.alive(foeSide) === 0) {
-      this.ended = true; this.winner = s.side; out.win = true;
-      this.onEvent("fire", out); this.onEvent("end", { winner: s.side });
+    // End check — friendly fire can sink your OWN last ship, so whichever side hits 0
+    // loses (not just the shooter's foe).
+    if (this.alive("player") === 0 || this.alive("enemy") === 0) {
+      this.ended = true;
+      this.winner = this.alive("player") > 0 ? "player" : (this.alive("enemy") > 0 ? "enemy" : s.side);
+      out.win = (this.winner === s.side);
+      this.onEvent("fire", out); this.onEvent("end", { winner: this.winner });
       return out;
     }
     this.onEvent("fire", out);
