@@ -603,6 +603,15 @@
   // Effective gun reach used for kiting decisions (full-damage band ~ chk falloff).
   NavalFree.prototype._effRange = function (s) { return s.gun.range; };
 
+  // AI RANDOMNESS "temperature" — how much the planner varies its picks/paths so it
+  // doesn't replay the SAME game every match. Drawn from the seeded rng (single-player
+  // only; online is PvP and never plans), so a match still reproduces from its seed.
+  // HARD = focused (low temp, subtle variety); EASY = erratic (high temp).
+  NavalFree.prototype._aiTemp = function () {
+    var s = this.aiSkill || "normal";
+    return s === "hard" ? 0.35 : s === "easy" ? 1.0 : 0.6;
+  };
+
   // Threat/priority score for `s` choosing among living enemies. Higher = better
   // target. Deterministic; ties broken by id for stability.
   NavalFree.prototype._aiPickTarget = function (s) {
@@ -638,6 +647,10 @@
       score += (1 - Math.min(1, d / (this.width + this.height))) * 8;
       // Easy AI: flatten the smarts toward "nearest", so it plays softer.
       if (skill === "easy") score = (1 - Math.min(1, d / (this.width + this.height))) * 10 + (canHitNow ? 5 : 0);
+      // VARIETY: a temperature-scaled jitter so the AI doesn't always lock onto the
+      // single optimal target — it picks among the strong candidates differently each
+      // match. Bounded so it never chooses an obviously bad target (esp. on hard).
+      score += (this.rng() - 0.5) * 45 * this._aiTemp();
       // stable tiebreak
       score += (f.id < s.id ? 0.001 : 0);
       if (score > bestScore || (score === bestScore && (!best || f.id < best.id))) { bestScore = score; best = f; }
@@ -651,48 +664,53 @@
     side = side || this.turn;
     var acts = [];
     if (this.ended) return acts;
+    var skill = this.aiSkill || "normal";
+    var temp = this._aiTemp();
     var mine = this.shipsOf(side);
     for (var i = 0; i < mine.length; i++) {
       var s = mine[i];
+      // Pick the target ONCE per ship (jittered) so a ship commits to a coherent plan
+      // for its turn instead of re-jittering between its two actions; re-pick if it sinks.
+      var foe = this._aiPickTarget(s) || this._nearestEnemy(s);
       var guard = 0;
       while (s.actionsLeft > 0 && !this.ended && guard++ < 10) {
-        var foe = this._aiPickTarget(s) || this._nearestEnemy(s);
-        if (!foe) break;
+        if (!foe || foe.sunk) { foe = this._aiPickTarget(s) || this._nearestEnemy(s); if (!foe) break; }
         // 1) Clean shot available now? Take it (focus fire / finish).
         var chk = this.canFireAt(s.id, foe.x, foe.y, foe.id);
         if (chk.ok) {
           var r = this.fireAt(s.id, foe.id);
           acts.push({ kind: "fire", id: s.id, target: foe.id, result: r });
-          if (r && r.result === "sink") continue; // target down — re-pick next loop
+          if (r && r.result === "sink") foe = null; // target down — re-pick next loop
           continue;
         }
         // 2) No shot — maneuver to a firing solution that respects KITING.
         var bearing = Math.atan2(foe.y - s.y, foe.x - s.x);
         var d = dist(s.x, s.y, foe.x, foe.y);
         var myR = this._effRange(s), foeR = this._effRange(foe);
-        // Desired standoff distance from the foe:
-        //  • out-range them  -> sit near MY max range (just inside), outside their reach;
-        //  • out-ranged      -> close to a strong band of my range to start hitting;
-        //  • even            -> a touch inside my range for full-damage falloff.
-        var skill = this.aiSkill || "normal";
-        // DEFENSIVE STANCES — the enemy GUARDS + OVERWATCHES too (owner: "enemy can do the same"). DETERMINISTIC
-        // (no RNG -> online stays mirror-consistent): on a ship's LAST action with no clean shot, a wounded ship
-        // BRACES (Guard = ½ incoming next turn); a healthy ship with a foe just out of reach HOLDS on OVERWATCH.
+        // DEFENSIVE STANCES — the enemy GUARDS + OVERWATCHES too. Now PROBABILISTIC (a
+        // wounded ship usually braces, a healthy one often holds overwatch) so the enemy
+        // doesn't make the identical stance call every time. Higher skill = more reliable.
         if (skill !== "easy" && s.actionsLeft <= 1) {
-          if (s.hp <= s.maxHp * 0.35) { s.defending = true; s.overwatch = false; s.actionsLeft = 0; acts.push({ kind: "defend", id: s.id }); break; }
-          if (d > myR && d <= myR * 1.5) { s.overwatch = true; s._reacted = false; s.actionsLeft = 0; acts.push({ kind: "overwatch", id: s.id }); break; }
+          var guardProb = skill === "hard" ? 0.85 : 0.65;
+          var owProb = skill === "hard" ? 0.7 : 0.55;
+          if (s.hp <= s.maxHp * 0.35 && this.rng() < guardProb) { s.defending = true; s.overwatch = false; s.actionsLeft = 0; acts.push({ kind: "defend", id: s.id }); break; }
+          if (d > myR && d <= myR * 1.5 && this.rng() < owProb) { s.overwatch = true; s._reacted = false; s.actionsLeft = 0; acts.push({ kind: "overwatch", id: s.id }); break; }
         }
+        // Desired standoff distance from the foe (kiting logic), then JITTER it so the
+        // engagement range — and thus the path — differs each match (bounded; still kites).
         var standoff;
         if (myR > foeR + 4) standoff = Math.min(myR * 0.95, Math.max(foeR + 8, myR * 0.8));
         else if (foeR > myR + 4) standoff = myR * (skill === "hard" ? 0.6 : 0.7);
         else standoff = myR * (skill === "hard" ? 0.78 : 0.82);
         if (skill === "easy") standoff = myR * 0.7; // simpler closing behaviour
-        // Target point at `standoff` from the foe, on the bearing line toward us.
-        var destX = foe.x - Math.cos(bearing) * standoff;
-        var destY = foe.y - Math.sin(bearing) * standoff;
+        standoff *= (1 + (this.rng() - 0.5) * 0.30 * temp);
+        // Aim a point at `standoff` from the foe, on the bearing line toward us, with a
+        // lateral FLANK offset so the approach isn't a dead-straight charge every time.
+        var lat = (this.rng() - 0.5) * standoff * 0.6 * temp;
+        var destX = foe.x - Math.cos(bearing) * standoff + Math.cos(bearing + Math.PI / 2) * lat;
+        var destY = foe.y - Math.sin(bearing) * standoff + Math.sin(bearing + Math.PI / 2) * lat;
         // If we're already roughly at standoff but just need to TURN to bear, aim a
-        // point straight ahead toward the foe so moveShip rotates us onto target
-        // without overshooting (heading turns toward travel dir, capped by turnRate).
+        // point straight ahead toward the foe so moveShip rotates us onto target.
         var off = Math.abs(angDelta(s.heading, bearing));
         if (Math.abs(d - standoff) < s.speed * 0.5 && off > s.gun.arc / 2) {
           destX = s.x + Math.cos(bearing) * Math.min(s.speed, 6);

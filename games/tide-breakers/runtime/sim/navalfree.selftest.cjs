@@ -283,6 +283,19 @@ console.log("navalfree self-test\n-------------------");
   ok(!bad.ok && bad.reason === "no-path", "an empty swipe path is rejected");
 })();
 
+// ── 10. Enemy AI VARIES across matches but stays reproducible per-seed ────────
+(function testAiVariety() {
+  // Plan the enemy's opening on a fresh board (no dice consumed) and snapshot poses.
+  function openingPlan(seed) {
+    const g = new NavalFree({ seed, aiSkill: "normal" });
+    g.turn = "enemy"; g._refreshActions("enemy"); g.aiPlanSide("enemy");
+    return g.shipsOf("enemy").map((s) => s.id + ":" + Math.round(s.x) + "," + Math.round(s.y) + "," + Math.round(s.heading * 57)).join("|");
+  }
+  ok(openingPlan(111) !== openingPlan(222), "enemy AI opening varies across seeds (no longer the same game every match)");
+  ok(openingPlan(111) !== openingPlan(333), "enemy AI opening differs for a third seed too");
+  ok(openingPlan(555) === openingPlan(555), "a given seed reproduces the SAME plan (replay / determinism preserved)");
+})();
+
 // ── summary ──────────────────────────────────────────────────────────────────
 console.log("-------------------");
 console.log(`${passed} passed, ${failed} failed`);
