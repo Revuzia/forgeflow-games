@@ -67,6 +67,45 @@
   #armorbar{font-size:15px; letter-spacing:2px; text-align:center; padding:0 0 1px; filter:saturate(.9)}
   /* inventory is a centered MODAL grid (owner: image-1 inventory wasn't industry-standard) */
   #inv{position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center; background:rgba(20,14,30,.5); pointer-events:auto}
+  #inv .paperdoll{margin:10px 0 4px; padding:10px 8px; background:rgba(0,0,0,0.2); border-radius:12px}
+  #inv .pdtitle{font-size:12px; opacity:.85; text-align:center; margin-bottom:9px; font-weight:700}
+  #inv .pdgrid{display:grid; grid-template-columns:repeat(3,64px); grid-auto-rows:62px; gap:8px; justify-content:center; align-items:center; grid-template-areas:'. helmet .' 'weapon body offhand' '. legs .' '. boots .'}
+  #inv .pdslot{position:relative; border:2px solid rgba(255,255,255,.22); border-radius:11px; background:rgba(255,255,255,.07); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; height:100%; transition:transform .1s}
+  #inv .pdslot:hover{transform:scale(1.06); border-color:#ffcf77}
+  #inv .pdslot.on{background:rgba(255,255,255,.14)}
+  #inv .pdslot.dis,#inv .pdslot.dis:hover{opacity:.4; cursor:default; transform:none; border-color:rgba(255,255,255,.22)}
+  #inv .pdslot .pdl{position:absolute; top:-7px; font-size:8px; text-transform:uppercase; letter-spacing:.4px; opacity:.8; background:rgba(34,26,46,.95); color:#fff; padding:0 4px; border-radius:4px}
+  #inv .pdslot .pdi{font-size:26px; line-height:1}
+  #inv .pdslot .pdd{font-size:8px; margin-top:2px}
+  #pdpick{position:fixed; inset:0; z-index:42; display:flex; align-items:center; justify-content:center; background:rgba(20,14,30,.6); pointer-events:auto}
+  .pdpickcard{width:min(420px,92vw); max-height:78vh; overflow:auto; background:rgba(34,26,46,.98); color:#fff; border:3px solid var(--ink); border-radius:16px; padding:14px; box-shadow:6px 6px 0 rgba(0,0,0,.4)}
+  .pdpickcard h3{margin:0 0 10px; font-size:15px; display:flex; justify-content:space-between; align-items:center}
+  .pdpickcard h3 .x{cursor:pointer; background:var(--ink); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:6px; padding:1px 9px}
+  .pdpickrow{display:flex; align-items:center; gap:9px; padding:8px 10px; margin:5px 0; border:2px solid rgba(255,255,255,.14); border-radius:9px; background:rgba(255,255,255,.05); cursor:pointer}
+  .pdpickrow:hover{border-color:#ffcf77; background:rgba(255,207,119,.12)}
+  .pdpickrow.on{border-color:var(--sun); background:rgba(255,207,77,.18)}
+  .pdpickrow .pi{font-size:20px} .pdpickrow .pn{flex:1; font-weight:600; font-size:13px} .pdpickrow .ps{font-size:11px; opacity:.8}
+  #trade{position:fixed; inset:0; z-index:44; display:flex; align-items:center; justify-content:center; background:rgba(20,14,30,.55); pointer-events:auto}
+  .tradecard{width:min(560px,94vw); max-height:86vh; overflow:auto; background:rgba(34,26,46,.98); color:#fff; border:3px solid var(--ink); border-radius:18px; padding:14px 16px; box-shadow:7px 7px 0 rgba(0,0,0,.4)}
+  .tradecard h3{margin:0 0 8px; font-size:17px; display:flex; justify-content:space-between; align-items:center}
+  .tradecard h3 .x{cursor:pointer; background:var(--ink); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:7px; padding:1px 10px}
+  .tradecard .tstatus{background:rgba(255,255,255,.07); border-radius:9px; padding:6px 10px; text-align:center; font-size:12px; color:var(--sun); margin-bottom:10px}
+  .tradecard .tcols{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .tradecard .tcol{border:2px solid rgba(255,255,255,.14); border-radius:11px; padding:8px; background:rgba(255,255,255,.05); min-height:70px}
+  .tradecard .tcol.ro{background:rgba(255,255,255,.02)} .tradecard .tcol h4{margin:0 0 6px; font-size:12px; opacity:.85; text-align:center}
+  .tradecard .trow{display:flex; align-items:center; gap:6px; font-size:13px; padding:3px 4px}
+  .tradecard .trow .ti{font-size:16px} .tradecard .trow .tn{flex:1} .tradecard .trow .tc{color:var(--sun); font-weight:700}
+  .tradecard .trow button{padding:1px 8px; border:0; border-radius:6px; cursor:pointer; font-weight:800; background:#cc4444; color:#fff; margin-left:3px}
+  .tradecard .trow button[data-coinp]{background:#2ec5a8}
+  .tradecard .tempty{opacity:.5; font-size:12px; text-align:center; padding:6px}
+  .tradecard .taddlbl{font-size:11px; opacity:.8; margin:10px 0 5px}
+  .tradecard .taddgrid{display:flex; flex-wrap:wrap; gap:6px}
+  .tradecard .taddtile{width:46px; height:46px; border:2px solid rgba(255,255,255,.16); border-radius:9px; background:rgba(255,255,255,.06); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer}
+  .tradecard .taddtile:hover{border-color:#ffcf77; background:rgba(255,207,119,.14)}
+  .tradecard .taddtile .ti{font-size:18px; line-height:1} .tradecard .taddtile .tn{font-size:9px; color:var(--sun)}
+  .tradecard .tbtns{display:flex; gap:8px; margin-top:12px; justify-content:center}
+  .tradecard .tbtns button{padding:9px 18px; border:3px solid var(--ink); border-radius:11px; cursor:pointer; font-weight:bold; font-size:14px}
+  .tradecard .tcancel{background:#ff6b6b; color:#fff} .tradecard .tconfirm{background:#2ec5a8; color:#fff} .tradecard .tconfirm:disabled{opacity:.6; cursor:default}
   .invcard{width:min(560px,93vw); max-height:84vh; overflow:auto; background:rgba(34,26,46,.97); color:#fff; border:3px solid var(--ink); border-radius:18px; padding:14px 16px; box-shadow:7px 7px 0 rgba(0,0,0,.4)}
   .invcard h3{margin:0 0 10px; font-size:18px; display:flex; justify-content:space-between; align-items:center}
   .invcard h3 .x{cursor:pointer; background:var(--ink); color:#fff; border-radius:8px; padding:1px 10px; border:1px solid rgba(255,255,255,.3)}
@@ -208,6 +247,8 @@
 <div id="zone" class="hud"></div>
 <div id="invbar" class="hud"></div>
 <div id="inv" class="hidden"></div>
+<div id="pdpick" class="hidden"></div>
+<div id="trade" class="hidden"></div>
 <div id="craft" class="hidden"></div>
 <div id="shop" class="hidden"></div>
 <div id="loot" class="hidden"></div>
@@ -302,7 +343,7 @@ addEventListener('error', e=>__report('window.error', e.error||e.message));
 addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reason));
 
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
-  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
+  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, tradeSession:null, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
   hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, _blocks:0, _activeTool:'',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
@@ -1301,7 +1342,7 @@ function emote(name){ // one-shot emote then back to idle/walk
   setTimeout(()=>{ if(charAnim==='__emote'){ a.fadeOut(0.25); a.clampWhenFinished=false; charAnim=''; } }, 700); }   // MUST fade the emote action OUT here: it was LoopOnce+clampWhenFinished, so it sat at full weight on its LAST frame (e.g. the folded-leg 'sit' pose after a nap). Clearing charAnim only let setAnim fade IDLE *in* — the clamped sit kept blending the legs into a seated/sleeping pose (owner: "after he sleeps his legs stay in a sleeping position"). Fading the clamped action out lets the player stand fully upright again.
 
 /* ---------- input / camera ---------- */
-const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); } }   /* owner: no pause — ESC only closes menus */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
+const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); } }   /* owner: no pause — ESC only closes menus */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 // release ALL held keys when focus/visibility is lost — prevents the "stuck walking forward" bug
 // (a right-click context menu, alt-tab, or click-away steals focus so the W keyup never fires).
@@ -1444,7 +1485,7 @@ const ITEMS={ wood:{i:'🪵',n:'Wood'},stone:{i:'🪨',n:'Stone'},crystal:{i:'�
   dirt:{i:'🟤',n:'Dirt'}, iron_ingot:{i:'🔩',n:'Iron Ingot'}, gold_ingot:{i:'🥇',n:'Gold Ingot'}, boss_core:{i:'💠',n:'Boss Core'}, health_potion:{i:'🧪',n:'Health Potion'}, energy_tonic:{i:'🧉',n:'Energy Tonic'} };   // appended (keep first 8 keys' order for the hotbar/inv_slots invariant)   // C3 animal resources + dirt + E3 smelted ingots + E5 boss-only crafting core; first 8 keys unchanged so hotbar + inv_slots stay intact
 /* basic item DESCRIPTIONS (owner: "each item needs a basic description — industry standard, see Minecraft") — shown as a hover tooltip in the inventory */
 const ITEM_DESC={ wood:'Chopped from trees. The basic building & crafting material.', stone:'Mined from rocks. Tools, walls, paths & the furnace.', crystal:'A glittering quarry gem. Crystal gear, glass & lanterns.', apple:'Sweet fruit — eat to restore hunger.', mushroom:'Forest fungus — eat for a little hunger & energy.', carrot:'Crunchy root veg — eat to restore energy.', flower:'A pretty bloom — used in decor & a few recipes.', coin:'Currency from foes & chests. Spend at shops.', milk:'From cows — eat for a little health; bakes into cake.', wool:'Sheared from sheep — crafts rugs & banners.', egg:'From chickens — eat for a little health; bakes treats.', leather:'From animals — crafts Leather Armor.', meat:'Hearty protein — eat to restore lots of hunger & health.', dirt:'Dug with a shovel. Fills holes & crafts bricks.', iron_ingot:'Smelted from stone at a furnace. Iron tools & armor.', gold_ingot:'Smelted from crystal. Gold tools & armor.', boss_core:'Rare BOSS-only drop. Required for the ⚡ Titan tier.' };
-let invOpen=false;
+let invOpen=false, pdpickOpen=false;
 const Inv={ render(){ const el=document.getElementById('invbar'); if(!el)return;   // EQUIPMENT hotbar (Minecraft-style): the SELECTED slot is what you hold in hand — fist + owned weapons + pickaxe/shovel. Labels 1..9,0. Always 10 slots.
     const L=hotbarLayout(); const sel=state.selectedSlot||0; let h='';
     for(let i=0;i<10;i++){ const e=L[i]; const lbl=(i===9)?'0':(i+1);
@@ -1484,6 +1525,47 @@ function eatBestFood(){ for(const k in FOOD_EFFECTS){ if((state.inv[k]||0)>0){ r
 function eatSelected(){ return eatBestFood(); }
 function openInv(){ invOpen=true; document.getElementById('inv').classList.remove('hidden'); renderInv(); }
 function closeInv(){ invOpen=false; document.getElementById('inv').classList.add('hidden'); }
+function openSlotPicker(slot, type){ const el=document.getElementById('pdpick'); if(!el)return; pdpickOpen=true;
+  const titleMap={helmet:'🪖 Helmet',body:'👕 Body Armor',legs:'👖 Legguards',boots:'👢 Boots',weapon:'⚔️ Weapon'};
+  let items=[];
+  if(type==='weapon'){ items.push({id:'fist',name:'Fists',icon:'✊',dmg:(WEAPONS.fist&&WEAPONS.fist.dmg)||10}); for(const id of WTIER){ if(id!=='fist' && state.weapons&&state.weapons[id]) items.push(Object.assign({id},WEAPONS[id])); } for(const id in (state.weapons||{})){ if(WEAPONS[id]&&WEAPONS[id].rarity && !items.find(x=>x.id===id)) items.push(Object.assign({id},WEAPONS[id])); } }
+  else { for(const id in (state.armors||{})){ const a=ARMORS[id]; if(a && (a.slot||'body')===slot) items.push(Object.assign({id},a)); } }
+  let html=`<div class="pdpickcard" onclick="event.stopPropagation()"><h3>${titleMap[type==='weapon'?'weapon':slot]||'Equip'} <span class="x" id="pdpickX">✕</span></h3>`;
+  if(!items.length) html+=`<div style="opacity:.7;font-size:13px;padding:10px 4px">Nothing for this slot yet — craft or find some gear!</div>`;
+  for(const it of items){ const on=(type==='weapon')?state.weapon===it.id:(state.gear&&state.gear[slot])===it.id; const rr=RARITY[it.rarity]||RARITY.common; const dp=(it.id&&it.id!=='fist')?` · 🔧${Math.round(durFrac(it.id)*100)}%`:''; const stat=(type==='weapon')?`dmg ${it.dmg||0}`:`${armorRating(it.id,state.level).toFixed(1)}🛡️`;
+    html+=`<div class="pdpickrow${on?' on':''}" data-id="${it.id}" data-type="${type}" data-slot="${slot}"><span class="pi" style="color:${rr.color}">${it.icon}</span><span class="pn" style="color:${rr.color}">${rr.mark||''}${it.name}</span><span class="ps">${stat}${dp}</span></div>`; }
+  html+=`</div>`; el.innerHTML=html; el.classList.remove('hidden');
+  el.querySelector('#pdpickX').onclick=closeSlotPicker; el.onclick=(e)=>{ if(e.target===el)closeSlotPicker(); };
+  el.querySelectorAll('.pdpickrow[data-id]').forEach(r=> r.onclick=(e)=>{ e.stopPropagation(); const id=r.dataset.id, t=r.dataset.type, sl=r.dataset.slot;
+    if(t==='weapon'){ if(id==='fist'||state.weapon===id) unequipGear('weapon'); else equipGear(id,'weapon'); }
+    else { if((state.gear&&state.gear[sl])===id) unequipGear('armor',sl); else equipGear(id,'armor'); }
+    closeSlotPicker(); if(invOpen)renderInv(); }); }
+function closeSlotPicker(){ pdpickOpen=false; const el=document.getElementById('pdpick'); if(el)el.classList.add('hidden'); }
+// ── CO-OP TRADE: both players add items + coin, both Confirm -> atomic swap (press T near a player) ──
+let tradeOpen=false;
+function getNearestPeer(radius){ radius=radius||12; if(typeof COOP==='undefined'||!COOP.on) return null; let best=null,bd=Infinity; const pp=player.position; for(const id in COOP.peers){ const pe=COOP.peers[id]; if(!pe||!pe.group)continue; const d=Math.hypot(pe.group.position.x-pp.x, pe.group.position.z-pp.z); if(d<radius&&d<bd){ best={id,peer:pe}; bd=d; } } return best; }
+function requestTrade(){ if(typeof COOP==='undefined'||!COOP.on){ toast('👥 Trading needs co-op — open the pause menu → Play with Friends first.'); return; } const near=getNearestPeer(12); if(!near){ toast('👥 No player nearby (get within ~12 steps to trade).'); return; } openTrade(near.id); }
+function openTrade(peerId){ const pe=COOP.peers&&COOP.peers[peerId]; if(!pe){ toast('👥 That player left.'); return; } tradeOpen=true; state.tradeSession={peerId, name:pe.name||'Friend', offer:{items:{},coin:0}, confirmed:false, theirs:{items:{},coin:0}, theirConfirmed:false}; document.getElementById('trade').classList.remove('hidden'); renderTrade(); SFX.play('interact'); try{ COOP.ch.send({type:'broadcast',event:'trade-open',payload:{from:COOP.id,to:peerId,name:COOP.name}}); }catch(e){} }
+function closeTrade(silent){ if(state.tradeSession&&!silent){ try{ COOP.ch.send({type:'broadcast',event:'trade-cancel',payload:{from:COOP.id,to:state.tradeSession.peerId}}); }catch(e){} } tradeOpen=false; state.tradeSession=null; const el=document.getElementById('trade'); if(el)el.classList.add('hidden'); }
+function _tradeBroadcastOffer(){ const s=state.tradeSession; if(!s)return; try{ COOP.ch.send({type:'broadcast',event:'trade-offer',payload:{from:COOP.id,to:s.peerId,offer:s.offer,confirmed:s.confirmed}}); }catch(e){} }
+function tradeAddItem(k){ const s=state.tradeSession; if(!s||s.confirmed)return; if(!Inv.has(k,(s.offer.items[k]||0)+1)){ toast(`No more ${(ITEMS[k]||{n:k}).n} to offer.`); return; } s.offer.items[k]=(s.offer.items[k]||0)+1; renderTrade(); _tradeBroadcastOffer(); }
+function tradeRemItem(k){ const s=state.tradeSession; if(!s||s.confirmed)return; if(s.offer.items[k]>0){ s.offer.items[k]--; if(!s.offer.items[k])delete s.offer.items[k]; } renderTrade(); _tradeBroadcastOffer(); }
+function tradeCoin(d){ const s=state.tradeSession; if(!s||s.confirmed)return; const have=state.inv.coin||0; s.offer.coin=Math.max(0,Math.min(have,s.offer.coin+d)); renderTrade(); _tradeBroadcastOffer(); }
+function tradeConfirm(){ const s=state.tradeSession; if(!s||s.confirmed)return; for(const k in s.offer.items){ if(!Inv.has(k,s.offer.items[k])){ toast('You no longer hold all the offered items.'); return; } } if((state.inv.coin||0)<s.offer.coin){ toast('Not enough coin to offer.'); return; } s.confirmed=true; renderTrade(); SFX.play('success'); _tradeBroadcastOffer(); if(s.theirConfirmed) _tradeComplete(); }
+function _tradeComplete(){ const s=state.tradeSession; if(!s)return; for(const k in s.offer.items){ Inv.take(k,s.offer.items[k]); } if(s.offer.coin>0) Inv.take('coin',s.offer.coin); for(const k in (s.theirs.items||{})){ Inv.add(k,s.theirs.items[k]); } if(s.theirs.coin>0) Inv.add('coin',s.theirs.coin); toast('💱 Trade complete!'); SFX.play('success'); shake(0.3); tradeOpen=false; state.tradeSession=null; const el=document.getElementById('trade'); if(el)el.classList.add('hidden'); save(); }
+function renderTrade(){ const el=document.getElementById('trade'); const s=state.tradeSession; if(!el||!s)return; const yourCoin=state.inv.coin||0;
+  const offRows=(off,mine)=>{ let r=''; for(const k in off.items){ if(off.items[k]>0){ const it=ITEMS[k]||{i:'?',n:k}; r+=`<div class="trow"><span class="ti">${it.i}</span><span class="tn">${it.n}</span><span class="tc">×${off.items[k]}</span>${mine?`<button data-rem="${k}">−</button>`:''}</div>`; } } if(off.coin>0||mine){ r+=`<div class="trow"><span class="ti">🪙</span><span class="tn">Coin</span><span class="tc">×${off.coin}</span>${mine?`<button data-coinm>−</button><button data-coinp>+</button>`:''}</div>`; } return r||'<div class="tempty">— nothing yet —</div>'; };
+  let addGrid=''; for(const k of Object.keys(ITEMS)){ const c=state.inv[k]||0; if(c<=0)continue; const it=ITEMS[k]; addGrid+=`<div class="taddtile" data-add="${k}" title="Add ${it.n}"><span class="ti">${it.i}</span><span class="tn">${c}</span></div>`; }
+  let h=`<div class="tradecard"><h3>💱 Trade with ${s.name} <span class="x" id="tradeX">✕</span></h3>`;
+  h+=`<div class="tstatus">${s.confirmed?'✓ You confirmed':'Add items + coin, then Confirm'} · ${s.theirConfirmed?'✓ partner ready':'⏳ partner choosing…'}</div>`;
+  h+=`<div class="tcols"><div class="tcol"><h4>📦 Your Offer</h4>${offRows(s.offer,true)}</div><div class="tcol ro"><h4>🎁 ${s.name}'s Offer</h4>${offRows(s.theirs,false)}</div></div>`;
+  if(!s.confirmed){ h+=`<div class="taddlbl">Tap to add (coin: ${yourCoin} 🪙):</div><div class="taddgrid">${addGrid||'<div class="tempty">empty inventory</div>'}</div>`; }
+  h+=`<div class="tbtns"><button class="tcancel" id="tradeCancel">✕ Cancel</button><button class="tconfirm" id="tradeConfirm" ${s.confirmed?'disabled':''}>${s.confirmed?'✓ Confirmed — waiting…':'✓ Confirm Trade'}</button></div></div>`;
+  el.innerHTML=h;
+  el.querySelector('#tradeX').onclick=()=>closeTrade(); el.querySelector('#tradeCancel').onclick=()=>closeTrade(); el.querySelector('#tradeConfirm').onclick=tradeConfirm; el.onclick=(e)=>{ if(e.target===el)closeTrade(); };
+  el.querySelectorAll('[data-add]').forEach(t=>t.onclick=(e)=>{e.stopPropagation();tradeAddItem(t.dataset.add);});
+  el.querySelectorAll('[data-rem]').forEach(t=>t.onclick=(e)=>{e.stopPropagation();tradeRemItem(t.dataset.rem);});
+  const cm=el.querySelector('[data-coinm]'),cp=el.querySelector('[data-coinp]'); if(cm)cm.onclick=(e)=>{e.stopPropagation();tradeCoin(-5);}; if(cp)cp.onclick=(e)=>{e.stopPropagation();tradeCoin(5);}; }
 function toggleInv(){ invOpen?closeInv():openInv(); }
 function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
   const w=WEAPONS[state.weapon]||WEAPONS.fist, ar=ARMORS[state.armor];
@@ -1496,6 +1578,18 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
     +`<div class="invstat">✨ Giggle <b>${state.giggle}</b></div>`
     +`<div class="invstat">📖 Pages <b>${state.recipePages||0}</b>${state.hasPickaxe?' · ⛏️ Pickaxe':''}</div>`
   +`</div>`;
+  // ── PAPER-DOLL: full character body + click-to-equip slots (helmet/body/legs/boots + main-hand weapon) ──
+  { const g=state.gear||{};
+    const cell=(slot,type,lbl,ph,area)=>{ const id=(type==='weapon')?(state.weapon&&state.weapon!=='fist'?state.weapon:''):(g[slot]||''); const it=id?((type==='weapon'?WEAPONS:ARMORS)[id]):null; const rr=it?(RARITY[it.rarity]||RARITY.common):RARITY.common; const icon=it?it.icon:ph; const dp=(id&&id!=='fist')?Math.round(durFrac(id)*100):0;
+      return `<div class="pdslot${it?' on':''}" data-slot="${slot}" data-type="${type}" style="grid-area:${area};${it?`border-color:${rr.color}`:''}"><span class="pdl">${lbl}</span><span class="pdi">${icon}</span>${(id&&id!=='fist')?`<span class="pdd" style="color:${dp<=20?'#ff6b6b':dp<=50?'#ffcf3a':'#9be8c8'}">🔧${dp}%</span>`:''}</div>`; };
+    h+=`<div class="paperdoll"><div class="pdtitle">🧍 Your Character — tap a slot to gear up</div><div class="pdgrid">`
+      + cell('helmet','armor','Head','🪖','helmet')
+      + cell('weapon','weapon','Hand','✊','weapon')
+      + cell('body','armor','Body','👕','body')
+      + `<div class="pdslot dis" style="grid-area:offhand" title="Off-hand (shields & torches) — coming soon"><span class="pdl">Off</span><span class="pdi">🛡️</span></div>`
+      + cell('legs','armor','Legs','👖','legs')
+      + cell('boots','armor','Feet','👢','boots')
+      + `</div></div>`; }
   // ── EQUIPMENT: every owned weapon, armor AND tool (pickaxe/shovel) — click to equip / unequip ──
   const ownedGear=[];
   for(const id of WTIER.slice(1)){ if(state.weapons&&state.weapons[id]) ownedGear.push([id,'weapon']); }   // craftable swords in tier order
@@ -1518,7 +1612,8 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
   h+=`</div></div>`;
   el.innerHTML=h; const x=el.querySelector('#invX'); if(x)x.onclick=closeInv; el.onclick=(e)=>{ if(e.target===el) closeInv(); };
   el.querySelectorAll('.invtile[data-eat]').forEach(t=> t.onclick=(e)=>{ e.stopPropagation(); if(eatFood(t.dataset.eat)) renderInv(); });
-  el.querySelectorAll('button[data-gear]').forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); const id=b.dataset.gear, kind=b.dataset.kind, slot=b.dataset.slot; const on=(kind==='weapon') ? state.weapon===id : (state.gear&&state.gear[slot||'body'])===id; if(on) unequipGear(kind, slot); else equipGear(id,kind); }); }
+  el.querySelectorAll('button[data-gear]').forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); const id=b.dataset.gear, kind=b.dataset.kind, slot=b.dataset.slot; const on=(kind==='weapon') ? state.weapon===id : (state.gear&&state.gear[slot||'body'])===id; if(on) unequipGear(kind, slot); else equipGear(id,kind); });
+  el.querySelectorAll('.pdslot[data-slot]').forEach(s=> s.onclick=(e)=>{ e.stopPropagation(); openSlotPicker(s.dataset.slot, s.dataset.type); }); }
 
 /* ============================ GATHER NODES ============================ */
 // a thin trunk/post collider (blocks walking through; not standable) gated on an optional mesh's visibility
@@ -2816,6 +2911,9 @@ const COOP = {
     const ch=this.sb.channel('ffg:wobblesworth:'+this.room,{config:{broadcast:{self:false},presence:{key:this.id}}});
     this.ch=ch;
     ch.on('broadcast',{event:'p'},({payload})=>{ if(payload&&payload.from!==this.id) this._recv(payload); });
+    ch.on('broadcast',{event:'trade-open'},({payload})=>{ if(payload&&payload.to===this.id&&this.peers[payload.from]){ toast(`💱 ${payload.name||'A friend'} wants to trade — press T near them.`); } });
+    ch.on('broadcast',{event:'trade-offer'},({payload})=>{ if(payload&&state.tradeSession&&payload.from===state.tradeSession.peerId){ state.tradeSession.theirs=payload.offer||{items:{},coin:0}; state.tradeSession.theirConfirmed=!!payload.confirmed; if(tradeOpen)renderTrade(); if(payload.confirmed&&state.tradeSession.confirmed) _tradeComplete(); } });
+    ch.on('broadcast',{event:'trade-cancel'},({payload})=>{ if(payload&&state.tradeSession&&payload.from===state.tradeSession.peerId){ toast('💱 Trade cancelled by partner.'); tradeOpen=false; state.tradeSession=null; const el=document.getElementById('trade'); if(el)el.classList.add('hidden'); } });
     ch.on('presence',{event:'leave'},({leftPresences})=>{ for(const lp of (leftPresences||[])) this._despawn(lp.id); this._count(); });
     ch.on('presence',{event:'sync'},()=>this._count());
     await new Promise((res)=>{ ch.subscribe(async(st)=>{ if(st==='SUBSCRIBED'){ try{ let pc=1; try{ pc=Object.keys(ch.presenceState()).length; }catch(e){} if(pc>=this.MAX_PLAYERS){ this.status('Room is full ('+this.MAX_PLAYERS+' max) — try another code'); this.on=false; try{ this.sb.removeChannel(ch); }catch(e){} this.ch=null; res(); return; } await ch.track({id:this.id,name:this.name}); }catch(e){} this.on=true; this._count(); res(); } else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'){ this.status('Connection failed — try again.'); res(); } }); });
@@ -2953,7 +3051,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
   roofOp:()=>cutRoof?+cutRoof.material.opacity.toFixed(2):null,
   interactNow:()=>{ updateInteract(); if(nearest){ const l=nearest.label; nearest.action(); return l; } return null; },
-  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, pickGear:(id,kind)=>pickupGear(id,kind), equipGear:(id,kind)=>equipGear(id,kind), unequipGear:(k,s)=>unequipGear(k,s), revealFog:()=>revealFog(), openStash:()=>openStash(), stash:()=>({...state.stash}), hurt:(n)=>damagePlayer(n), armorTotal:()=>armorTotal(state.level), gear:()=>({...state.gear}), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
+  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, pickGear:(id,kind)=>pickupGear(id,kind), equipGear:(id,kind)=>equipGear(id,kind), unequipGear:(k,s)=>unequipGear(k,s), tradeDemo:()=>{ if(typeof COOP!=='undefined'){ COOP.on=true; COOP.id='me'; COOP.ch=COOP.ch||{send:()=>{}}; COOP.peers=COOP.peers||{}; COOP.peers['demo']={group:{position:{x:player.position.x,z:player.position.z}},name:'Demo Friend'}; } openTrade('demo'); if(state.tradeSession){ state.tradeSession.theirs={items:{wood:3,crystal:1},coin:12}; state.tradeSession.theirConfirmed=true; renderTrade(); } return tradeOpen; }, revealFog:()=>revealFog(), openStash:()=>openStash(), stash:()=>({...state.stash}), hurt:(n)=>damagePlayer(n), armorTotal:()=>armorTotal(state.level), gear:()=>({...state.gear}), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
   nodesByItem:()=>{ const o={}; for(const n of nodes) o[n.item]=(o[n.item]||0)+1; return o; }, waters:()=>waters.length,
   homes:()=>({count:homes.length, built:homes.filter(h=>h.built).length, active:homes.filter(h=>h.active).length}),
   respawnInfo:()=>({nodes:nodes.length, hidden:nodes.filter(n=>!n.mesh.visible).length, onCd:nodes.filter(n=>n.timer>0).length}),
@@ -3243,8 +3341,13 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       openMap(); R.map_modal=(!document.getElementById('mapmodal').classList.contains('hidden') && !!document.getElementById('bigmap')); closeMap(); R.map_modal=R.map_modal && document.getElementById('mapmodal').classList.contains('hidden');
       state.questMin=false; applyQuestMin(); toggleQuests(); const qOn=document.getElementById('quests').classList.contains('min'); toggleQuests(); const qOff=!document.getElementById('quests').classList.contains('min'); R.quest_min=(qOn&&qOff);
       state.mouseSens=1; renderSettings(); const ss=document.getElementById('sensSlider'); R.mouse_sens=!!ss; if(ss){ ss.value=200; ss.oninput({target:ss}); R.mouse_sens=Math.abs(state.mouseSens-2)<0.02; } closeSettings(); state.mouseSens=1; }
+    // TRADE: mock a co-op session -> verify the atomic both-confirmed swap (take my offer, add partner's)
+    { const a0=state.inv.apple||0, c0=state.inv.coin||0, w0=state.inv.wood||0; Inv.add('apple',2);
+      state.tradeSession={peerId:'x',name:'T',offer:{items:{apple:1},coin:0},confirmed:false,theirs:{items:{wood:3},coin:5},theirConfirmed:true};
+      _tradeComplete();
+      R.trade_swap=((state.inv.apple||0)===a0+1 && (state.inv.wood||0)===w0+3 && (state.inv.coin||0)===c0+5 && state.tradeSession===null && typeof requestTrade==='function'); }
     R.PASS = R.campaign_won&&R.side_cat&&R.side_gnome&&R.side_toilet&&R.side_socks&&R.neighbor_fulfilled===true&&R.day_advanced&&R.allItemsReachable&&R.maxNodeRadius<=FENCE&&crafted===unlockedCount&&R.shop_paint&&R.shop_sellcoins&&R.shop_unlock&&R.shop_hat&&R.shop_unlocked_craftable
-      &&R.xp_gain&&R.level_up&&R.recipe_level_lock&&R.recipe_level_unlock&&R.inv_modal&&R.map_modal&&R.quest_min&&R.mouse_sens
+      &&R.xp_gain&&R.level_up&&R.recipe_level_lock&&R.recipe_level_unlock&&R.inv_modal&&R.map_modal&&R.quest_min&&R.mouse_sens&&R.trade_swap
       &&R.needs_affect&&R.house_purpose&&R.daily_activity&&R.water_quality&&R.rocks_smooth&&R.hotbar_select&&R.eat_food&&R.pickaxe_gate&&R.night_field_spawn&&R.animals_spawn&&R.animals_harvest&&R.animals_defeat&&R.shovel_craft&&R.dig_ground&&R.debug_overlay&&R.content_spread&&R.held_tool&&R.day_no_monsters&&R.mist&&R.world_expanded&&R.voxel_place&&R.voxel_break&&R.voxel_dig_ground&&R.furnace_smelt&&R.ingot_tool&&R.recipe_count&&R.dungeon_rooms&&R.dungeon_chests&&R.mineshaft_loot
       &&R.boss_spawn&&R.boss_special&&R.boss_loot&&R.boss_milestone&&R.titan_tier&&R.underground_dark&&R.underground_restore&&R.cave_branch&&R.place_torch&&R.fun_events&&R.swim_zone&&R.real_loot&&R.item_desc&&R.use_selected&&R.settings_fs&&R.npc_shop&&R.npc_facing
       &&R.event_active&&R.event_market&&R.shop_closed_night&&R.shop_open_day&&R.onboarding_done&&R.friendship&&R.requests_list&&R.town_legend
