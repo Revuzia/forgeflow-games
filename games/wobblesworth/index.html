@@ -1314,9 +1314,9 @@ renderer.domElement.addEventListener('contextmenu',e=>{ e.preventDefault(); clea
 let dragging=false,lastX=0,lastY=0;
 // LEFT mouse = ATTACK; RIGHT mouse (or touch) drag = ROTATE camera. (Right-click menu already suppressed above.)
 renderer.domElement.addEventListener('pointerdown',e=>{ if(e.pointerType!=='touch' && e.button===0){ if(state.running){ if(BMODE.on) placeBlock(); else if(state._activeTool){ digBlock(); } else playerAttack(); } return; } dragging=true; lastX=e.clientX; lastY=e.clientY; });   // left-click: dig/mine if a tool is the held hotbar item, else attack
-addEventListener('pointerup',()=>dragging=false); addEventListener('pointercancel',()=>dragging=false); addEventListener('pointermove',e=>{ if(dragging){ const s=state.mouseSens||1; cam.yaw-=(e.clientX-lastX)*0.006*s; cam.pitch=clamp(cam.pitch+(e.clientY-lastY)*0.005*s,0.21,1.256); lastX=e.clientX; lastY=e.clientY; } });
+addEventListener('pointerup',()=>dragging=false); addEventListener('pointercancel',()=>dragging=false); addEventListener('pointermove',e=>{ if(dragging){ const s=state.mouseSens||1; cam.targetYaw-=(e.clientX-lastX)*0.006*s; cam.targetPitch=clamp(cam.targetPitch+(e.clientY-lastY)*0.005*s,0.21,1.256); lastX=e.clientX; lastY=e.clientY; } });
 addEventListener('wheel',e=>{ cam.dist=clamp(cam.dist+Math.sign(e.deltaY)*0.9,7,22); },{passive:true});
-const cam={yaw:Math.PI,dist:13,height:7,pitch:0.5};   // pitch in radians (clamped 12°–72°)
+const cam={yaw:Math.PI,targetYaw:Math.PI,dist:13,height:7,pitch:0.5,targetPitch:0.5};   // pitch in radians (clamped 12°–72°); cam.yaw/pitch LERP toward target* each frame for smooth right-click rotation
 
 /* ---------- SIMS systems (needs / quests / day / silly) ---------- */
 var Needs={ hunger:80,energy:80,fun:80, _warn:{}, add(k,v){ this[k]=clamp(this[k]+v,0,100); },
@@ -1988,6 +1988,7 @@ function updatePlayer(dt){
   if(charAnim!=='__emote'){ setAnim(!grounded?'idle':(moving?(sprint?'sprint':'walk'):'idle')); }   // armed standing now uses plain idle (arm at side) — the old 'holding-right' clip RAISED the arm to head height so the bone-mounted sword towered behind the head (owner: "weapon not in hand"); idle keeps the hand low so the sword sits in it
   if(charMixer) charMixer.update(dt);
   // camera — orbit by yaw + pitch, with collision pull-in so it doesn't clip into walls/trees
+  const _camDamp=1-Math.pow(0.05,dt); cam.yaw=lerp(cam.yaw,cam.targetYaw,_camDamp); cam.pitch=lerp(cam.pitch,cam.targetPitch,_camDamp);   // SMOOTH right-click rotation: damp toward drag/gamepad targets (dt=0 => no-op, keeps idle-spin + selftest exact)
   cam.pitch=clamp(cam.pitch,0.21,1.256);
   const horiz=Math.cos(cam.pitch)*cam.dist, vert=Math.sin(cam.pitch)*cam.dist;
   const hx=player.position.x, hy=player.position.y+1.6, hz=player.position.z;
@@ -2168,7 +2169,7 @@ let last=performance.now(), ready=false;
 let __WW_throwOnce=false, touchMove={x:0,z:0}, touchSprint=false, _gpPrev={};
 function pollGamepad(){ let pads; try{ pads=navigator.getGamepads&&navigator.getGamepads(); }catch(e){ return; } const gp=pads&&pads[0]; if(!gp)return;
   const dz=v=>Math.abs(v)<0.18?0:v; const gx=dz(gp.axes[0]||0), gz=dz(gp.axes[1]||0); if(gx||gz){ touchMove.x=gx; touchMove.z=gz; }   // only write when deflected — an idle pad must NOT clobber the touch joystick
-  if(state.running&&!state.paused){ const rx=dz(gp.axes[2]||0), ry=dz(gp.axes[3]||0); if(rx)cam.yaw-=rx*0.045; if(ry)cam.pitch=clamp(cam.pitch+ry*0.03,0.21,1.256); }
+  if(state.running&&!state.paused){ const rx=dz(gp.axes[2]||0), ry=dz(gp.axes[3]||0); if(rx)cam.targetYaw-=rx*0.045; if(ry)cam.targetPitch=clamp(cam.targetPitch+ry*0.03,0.21,1.256); }
   const edge=i=>{ const p=!!(gp.buttons[i]&&gp.buttons[i].pressed), was=_gpPrev[i]; _gpPrev[i]=p; return p&&!was; };
   if(edge(0)&&state.running)tryInteract();                                            // A = interact
   if(edge(1)){ keys['Space']=true; setTimeout(()=>{keys['Space']=false;},120); }      // B = jump
@@ -2301,20 +2302,26 @@ function enterDungeon(){ if(DUNGEON.inDungeon)return; buildDungeon(); DUNGEON.re
 function exitDungeon(){ if(!DUNGEON.inDungeon)return; DUNGEON.inDungeon=false; despawnCreatures(); exitUnderground(); const r=DUNGEON.returnPos||{x:HOUSE.cx,z:HOUSE.cz}; player.position.set(r.x,0.3,r.z); vy=0; toast('☀️ Out of the crypt.'); flashFade(); }
 function carvePit(cx,cz,floor){ const k=cx+','+cz; const old=VOX.meshes[k]; if(old) world.remove(old);   // open-top BackSide dirt box -> you SEE into the hole at the camera's angle
   const depth=-floor+0.18; const m=new THREE.Mesh(new THREE.BoxGeometry(0.99,depth,0.99), new THREE.MeshToonMaterial({color:'#5a4632',gradientMap:GRAD,side:THREE.BackSide})); m.position.set(cx, floor+depth/2-0.09, cz); m.receiveShadow=true; world.add(m); VOX.meshes[k]=m; }
-function digGround(){   // SHOVEL on the surface: CARVE a real voxel hole (dig down / tunnel) + dirt + buried loot
+// ── TREASURE-DIG: rolling hills, so digging leaves a DIRT PILE (no block grid) + a chance at buried loot (item = low, chest = very low). Shovel only. ──
+const TREASURE_ITEMS=[['coin',2,8,40],['crystal',1,2,25],['stone',1,3,20],['apple',1,1,8],['mushroom',1,1,7],['carrot',1,1,5],['iron_ingot',1,1,3],['gold_ingot',1,1,2]];   // [item,min,max,weight]
+const dirtPiles=[];
+function spawnDirtPile(cx,cz){ const gy=groundY(cx,cz); const m=new THREE.Mesh(new THREE.ConeGeometry(0.42,0.5,8), new THREE.MeshToonMaterial({color:'#8b6b3a',gradientMap:GRAD})); m.position.set(cx,gy+0.22,cz); m.rotation.y=Math.random()*TAU; m.castShadow=true; m.receiveShadow=true; world.add(m); const pile={mesh:m,x:cx,z:cz}; dirtPiles.push(pile); if(dirtPiles.length>60){ const old=dirtPiles.shift(); try{ world.remove(old.mesh); }catch(e){} } return pile; }   // cap 60 piles so they never pile up forever
+function digGround(){   // SHOVEL on the surface: leaves a DIRT PILE + chance at buried treasure (low) or a chest (very low). No voxel hole — the world is rolling hills.
   state._toolUse=0.6; state._toolKind='shovel'; state._swing=0.32;
-  const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y), cx=Math.round(player.position.x+fx*1.05), cz=Math.round(player.position.z+fz*1.05), k=cx+','+cz;
-  const cur=(VOX.dug[k]!=null)?VOX.dug[k]:0, pf=Math.round(player.position.y); let floor=Math.min(cur,pf)-1;
-  if(floor<-8){ toast('🪨 Bedrock — can\'t dig deeper here.'); SFX.play('interact',{rate:0.5}); return; }
-  if(VOX.dug[k]==null && Object.keys(VOX.dug).length>=VOX.max){ toast('⛏️ This area is fully excavated — break/fill some cells first.'); return; }
-  VOX.dug[k]=floor; carvePit(cx,cz,floor);
-  Inv.add('dirt', 1+(Math.random()<0.35?1:0)+(state.shovelTier||0)); let extra='';   // iron/gold shovel -> richer digs
-  const roll=Math.random();
-  if(roll<0.12){ const c=4+Math.floor(Math.random()*6); Inv.add('coin',c); extra=` + buried ${c} 🪙!`; }
-  else if(roll<0.18){ Inv.add('crystal',1); extra=' + a buried 💎!'; }
-  else if(roll<0.30){ Inv.add('stone',1+Math.floor(Math.random()*2)); extra=' + 🪨'; }
+  const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y), cx=Math.round(player.position.x+fx*1.05), cz=Math.round(player.position.z+fz*1.05);
+  spawnDirtPile(cx,cz);
+  Inv.add('dirt', 1+(Math.random()<0.35?1:0)+(state.shovelTier||0)); let extra='';   // iron/gold shovel -> more dirt + better odds
+  const r=Math.random()*100, lb=(state.shovelTier||0)*1.5;
+  if(r < 1+lb*0.4){   // VERY LOW: a buried treasure CHEST (big haul)
+    const chest=[['coin',10+Math.floor(Math.random()*14)],['crystal',2+Math.floor(Math.random()*3)],['iron_ingot',1+Math.floor(Math.random()*(1+(state.shovelTier||0)))]];
+    if(Math.random()<0.4) chest.push(['gold_ingot',1]); if(Math.random()<0.3) chest.push(['health_potion',1]); if(Math.random()<0.18) chest.push(['boss_core',1]);
+    dropLoot(cx,cz,chest.filter(it=>it[1]>0),'💎 Buried Treasure Chest!'); extra=' + 💎 TREASURE CHEST!'; SFX.play('success',{vol:0.6}); shake(0.3);
+  } else if(r < 6+lb){   // LOW: a single buried item
+    const tot=TREASURE_ITEMS.reduce((s,t)=>s+t[3],0); let pk=Math.random()*tot, f=TREASURE_ITEMS[0]; for(const t of TREASURE_ITEMS){ pk-=t[3]; if(pk<=0){ f=t; break; } }
+    const n=f[1]+Math.floor(Math.random()*(f[2]-f[1]+1)); dropLoot(cx,cz,[[f[0],n]],'✨ Buried Find',true); extra=` + buried ${n} ${(ITEMS[f[0]]||{i:''}).i}!`;
+  }
   for(let q=0;q<5;q++){ const d=pBall(0.12,'#9a7a4a'); d.position.set(cx+rand(-.3,.3),0.3,cz+rand(-.3,.3)); world.add(d); ephemeral.push({node:d,life:0.5,v:new THREE.Vector3(rand(-1.2,1.2),rand(2,4),rand(-1.2,1.2)),g:1,vy:0}); }
-  SFX.play('pickup',{vol:0.5,rate:0.7}); shake(0.12); emote('attack-melee-right'); markGoal('gather'); gainXP(1); toast(`🥄 Dug a hole${extra} — keep digging to tunnel down.`); save(); }   // SWING the shovel (was a gentle interact-reach)
+  SFX.play('pickup',{vol:0.5,rate:0.7}); shake(0.12); emote('attack-melee-right'); markGoal('gather'); gainXP(1); toast(`🥄 Dug${extra}${extra?'':' — keep digging, sometimes you strike buried treasure!'}`); save(); }
 function digBlock(){
   if(!MINE.inMine){   // SURFACE: shovel digs the ground; otherwise point the player at the right tool
     if(state.hasShovel){ digGround(); return; }
@@ -2784,7 +2791,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
 function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateLootBags(dt); updateProjectiles(dt); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
-function idleTick(dt){ cam.yaw+=dt*0.12; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
+function idleTick(dt){ cam.yaw+=dt*0.12; cam.targetYaw=cam.yaw; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
   pollGamepad();
@@ -3179,7 +3186,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       if(MINE.inMine) exitMine(); state.hasShovel=true;
       const _pp=player.position.clone(), _pr=player.rotation.y; player.position.set(305,0,305); player.rotation.y=0;
       const fxv=Math.sin(0), fzv=Math.cos(0), tk=Math.round(305+fxv*1.05)+','+Math.round(305+fzv*1.05); const d0=state.inv.dirt||0; digGround();
-      R.voxel_dig_ground=(VOX.dug[tk]!=null && VOX.dug[tk]<0 && !!VOX.meshes[tk] && (state.inv.dirt||0)>d0);
+      R.voxel_dig_ground=(dirtPiles.length>0 && (state.inv.dirt||0)>d0);   // dig now leaves a DIRT PILE (+ chance of buried treasure) instead of a voxel hole
       player.position.copy(_pp); player.rotation.y=_pr; }
     // E3 TECH: furnace smelting ore->ingot, ingot-tier tool crafts+equips, big recipe book
     { state.inv.stone=(state.inv.stone||0)+4; state.inv.wood=(state.inv.wood||0)+4; const i0=state.inv.iron_ingot||0; smeltAll(); R.furnace_smelt=((state.inv.iron_ingot||0)>i0);
