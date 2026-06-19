@@ -296,7 +296,7 @@ var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snack
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
   hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, _blocks:0, _activeTool:'',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
-  volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0, lore:{}, fog:{}, met:{} };
+  volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0, lore:{}, fog:{}, met:{}, badges:{} };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
 
 /* ---------- AUDIO ---------- */
@@ -1391,7 +1391,7 @@ function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
   unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
-  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, lore:state.lore, fog:state.fog, met:state.met,
+  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug })); }catch(e){} }
 // VERSIONED + SANITIZED load: bad/corrupt/legacy data can never crash boot or inject impossible state
 function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) return; let s; try{ s=JSON.parse(raw); }catch(e){ localStorage.setItem('ww2_save_corrupt',raw); return; }
@@ -1413,7 +1413,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.craftedSet=(s.craftedSet&&typeof s.craftedSet==='object')?s.craftedSet:{}; state.reqsFulfilled=num(s.reqsFulfilled,0,0,1e9); state.biomes=(s.biomes&&typeof s.biomes==='object')?s.biomes:{}; state.event=DAY_EVENTS.find(e=>e.id===s.eventId)||null;
   if(typeof s.tod==='number'&&Number.isFinite(s.tod)) state.tod=((s.tod%1)+1)%1;
   if(s.volume!=null) state.volume=clamp(+s.volume||0,0,1); state.musicOn=(s.musicOn!==false); state.sfxOn=(s.sfxOn!==false); state.reduce=!!s.reduce;
-  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{};
+  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{}; state.badges=(s.badges&&typeof s.badges==='object')?s.badges:{};
   state.homeTier=num(s.homeTier,0,0,3); for(let i=1;i<=state.homeTier;i++) applyHomeTier(i);   // rebuild purchased home upgrades
   state.homePaints=(s.homePaints&&typeof s.homePaints==='object')?s.homePaints:{}; loadBlocks(s.buildBlocks); applyHomePaints();   // restore voxel builds + house repaints (buildWorld ran first, so homes exist)
   for(const k in VOX.meshes) world.remove(VOX.meshes[k]); VOX.dug={}; VOX.meshes={};   // restore carved terrain
@@ -1550,7 +1550,7 @@ function onLevelUp(){
 }
 function gainXP(n){ if(!(n>0)) return; state.xp=(state.xp||0)+n; let leveled=false;
   while(state.level<50 && state.xp >= xpToNext(state.level)){ state.xp-=xpToNext(state.level); state.level++; leveled=true; onLevelUp(); } if(state.level>=50) state.xp=Math.min(state.xp, xpToNext(50));   // hard level cap 50
-  renderXP(); if(craftOpen) renderCraft(); if(leveled) save(); }
+  renderXP(); if(craftOpen) renderCraft(); if(leveled) save(); if(typeof checkBadges==='function')checkBadges(); }   // central badge check — fires on kills, bosses, quests, crafts, level-ups
 function renderXP(){ const lv=document.getElementById('vLevel'), xv=document.getElementById('vXP'), f=document.getElementById('fXP'); if(!lv) return;
   const need=xpToNext(state.level); lv.textContent=state.level; xv.textContent=`${Math.floor(state.xp||0)}/${need}`; f.style.width=Math.min(100,((state.xp||0)/need*100))+'%'; }
 function recipeLevel(r){ return r.lvl||1; }
@@ -2398,7 +2398,7 @@ function damagePlayer(n){ if(state._invuln>0)return;
   popDmg(player.position.x, (player.position.y||0)+2.4, player.position.z, nd, {crit:roll.crit, color:'#ff6b6b'});   // floating damage number over the player
   if(state.hp<=0) respawnPlayer(); }
 function equipBestArmor(){ for(let i=ATIER.length-1;i>=1;i--){ if(state.armors&&state.armors[ATIER[i]]){ state.armor=ATIER[i]; return; } } state.armor=''; }
-function gainArmor(id){ state.armors[id]=true; equipBestArmor(); const a=ARMORS[id]; if(typeof renderHearts==='function')renderHearts(); toast(`${a.icon} Crafted + equipped ${a.name} (${armorRating(state.armor,state.level)} 🛡️ armor)!`); if(invOpen)renderInv(); save(); }
+function gainArmor(id){ state.armors[id]=true; equipBestArmor(); const a=ARMORS[id]; if(typeof renderHearts==='function')renderHearts(); toast(`${a.icon} Crafted + equipped ${a.name} (${armorRating(state.armor,state.level)} 🛡️ armor)!`); if(invOpen)renderInv(); if(typeof checkBadges==='function')checkBadges(); save(); }
 function respawnPlayer(){ if(DUNGEON.inDungeon)DUNGEON.inDungeon=false; if(MINE.inMine)MINE.inMine=false; if(UG.active)exitUnderground();   // dying UNDERGROUND must restore the surface sky+lighting (owner: "game stays dark after dying in a dungeon")
   state.hp=state.hpMax; player.position.set(HOUSE.cx,0.3,HOUSE.cz+12); vy=0; state._invuln=2.6; despawnCreatures(); renderHearts(); toast('💀 Overwhelmed! You wake up safe at home.'); flashFade(); save(); }
 function equipBest(){ for(let i=WTIER.length-1;i>=0;i--){ if(i===0||state.weapons[WTIER[i]]){ state.weapon=WTIER[i]; return; } } }
@@ -2461,7 +2461,7 @@ function equipGear(id, kind){ const tbl=(kind==='weapon')?WEAPONS:ARMORS, it=tbl
   if(EQUIP_LVL[id] && (state.level||1)<EQUIP_LVL[id]){ toast(`🔒 Reach Level ${EQUIP_LVL[id]} to equip ${it.name}.`); SFX.play('interact',{rate:0.6,vol:0.4}); return; }   // equip-by-level gate for dropped epic gear
   if(kind==='weapon'){ if(!state.weapons[id]) return; state.weapon=id; }
   else { if(!state.armors[id]) return; state.armor=id; state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
-  SFX.play('success',{vol:0.4}); toast(`${it.icon} Equipped ${it.name}!`); syncSel(); Inv.render(); if(invOpen)renderInv(); save(); }
+  SFX.play('success',{vol:0.4}); toast(`${it.icon} Equipped ${it.name}!`); syncSel(); Inv.render(); if(invOpen)renderInv(); if(typeof checkBadges==='function')checkBadges(); save(); }
 function unequipGear(kind){ if(kind==='weapon'){ state.weapon='fist'; equipBest(); }   // unequip -> fall back to your best CRAFTABLE weapon
   else { state.armor=''; equipBestArmor(); state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
   SFX.play('interact',{vol:0.4}); toast('Unequipped.'); syncSel(); Inv.render(); if(invOpen)renderInv(); save(); }
@@ -2536,14 +2536,39 @@ function spawnBoss(typeKey,x,z){ const T=BOSS_TYPES[typeKey]||BOSS_TYPES.golem; 
 const BOSS_KILL_FIRST=20, BOSS_KILL_STEP=35;
 // ── LORE / BESTIARY (press L): each defeat records a foe; progressive reveal — 1 kill = name, 2 = HP+dmg, 3+ = traits ──
 let loreOpen=false;
+// ── BADGES / ACHIEVEMENTS: unlock on milestones (levels, kills, bosses, quests, crafting, gear). Shown in the L menu, persisted, and reported to the account (when signed in on forgeflowgames.com). ──
+const BADGES=[
+  {id:'lvl5', i:'🌱', n:'First Steps', d:'Reach level 5', c:()=>state.level>=5},
+  {id:'lvl25', i:'⭐', n:'Seasoned', d:'Reach level 25', c:()=>state.level>=25},
+  {id:'lvl50', i:'👑', n:'Apex', d:'Reach the level cap (50)', c:()=>state.level>=50},
+  {id:'kill1', i:'⚔️', n:'First Blood', d:'Defeat your first foe', c:()=>(state._kills||0)>=1},
+  {id:'kill50', i:'🗡️', n:'Hunter', d:'Defeat 50 foes', c:()=>(state._kills||0)>=50},
+  {id:'boss1', i:'💀', n:'Boss Slayer', d:'Defeat your first boss', c:()=>(state._bosses||0)>=1},
+  {id:'boss5', i:'☠️', n:'Warlord', d:'Defeat 5 bosses', c:()=>(state._bosses||0)>=5},
+  {id:'quest1', i:'📜', n:'Errand Runner', d:'Complete a request', c:()=>(state.reqsFulfilled||0)>=1},
+  {id:'quest10', i:'🤝', n:'Town Hero', d:'Complete 10 requests', c:()=>(state.reqsFulfilled||0)>=10},
+  {id:'craft1', i:'🔨', n:'Tinkerer', d:'Craft your first item', c:()=>(state.built||0)>=1},
+  {id:'craft25', i:'⚒️', n:'Smith', d:'Craft 25 items', c:()=>(state.built||0)>=25},
+  {id:'titan', i:'⚡', n:'Titan-Forged', d:'Craft Titan gear', c:()=>!!((state.weapons&&state.weapons.titan_blade)||(state.armors&&state.armors.titan))},
+  {id:'mythic', i:'🌠', n:'Mythic Smith', d:'Forge the Mythic Blade', c:()=>!!(state.weapons&&state.weapons.mythic_blade)},
+  {id:'epic', i:'🔮', n:'Legendary Loot', d:'Obtain an epic item', c:()=>Object.keys(state.weapons||{}).some(k=>WEAPONS[k]&&WEAPONS[k].rarity==='epic')||Object.keys(state.armors||{}).some(k=>ARMORS[k]&&ARMORS[k].rarity==='epic')},
+  {id:'armor6', i:'🛡️', n:'Iron Wall', d:'Reach 6 armor', c:()=>armorRating(state.armor,state.level)>=6},
+  {id:'armor10', i:'🔰', n:'Bulwark', d:'Exceed 6 armor (rare/epic)', c:()=>armorRating(state.armor,state.level)>10},
+];
+function reportToAccount(type,data){ try{ if(window.parent && window.parent!==window) window.parent.postMessage({source:'wobblesworth',type,data,level:state.level||1},'*'); }catch(e){} }   // game runs in the FFGames iframe -> report progress so a signed-in account can store it
+function checkBadges(){ if(!state.badges)state.badges={}; let any=false; for(const b of BADGES){ if(!state.badges[b.id]){ let ok=false; try{ ok=b.c(); }catch(e){} if(ok){ state.badges[b.id]=state.day||1; any=true; rarityToast('epic',`🏅 Badge unlocked: ${b.i} ${b.n}!`); if(typeof confetti==='function')confetti(player.position.clone().setY(2.2),22); SFX.play('success',{vol:0.6}); reportToAccount('badge',{id:b.id,name:b.n}); } } } if(any){ if(loreOpen&&typeof renderLore==='function')renderLore(); save(); } }
 function loreKeyOf(t){ for(const k in CREATURE_TYPES) if(CREATURE_TYPES[k]===t) return k; for(const k in BOSS_TYPES) if(BOSS_TYPES[k]===t) return 'boss_'+k; return null; }
 function loreDef(key){ return (key&&key.indexOf('boss_')===0) ? BOSS_TYPES[key.slice(5)] : CREATURE_TYPES[key]; }
 function deriveTraits(t){ const a=[]; if(t.ranged==='thorn')a.push('🌵 Fires a slow thorn dart'); else if(t.ranged==='seed')a.push('🎃 Spits seeds'); else if(t.ranged)a.push('🧪 Ranged attacker'); if(t.explode)a.push('💥 Explodes on contact'); if(t.stealth)a.push('👻 Invisible until it strikes'); if(t.attackKind==='claw')a.push('🐾 Claws in melee'); if((t.minDist||0)>=120)a.push('🌑 Deep-outskirts night beast'); else if(t.minDist)a.push('🏞️ Roams far from town'); if(t.dmg>=2)a.push('⚔️ Hits hard'); if(t.special)a.push('☄️ Boss special: '+t.special); return a; }
 function recordLore(c){ if(!c||!c.type)return; const t=c.type, k=loreKeyOf(t); if(!k)return; if(!state.lore)state.lore={}; const first=!state.lore[k]; const L=state.lore[k]||(state.lore[k]={name:t.name,kills:0,maxHp:0,dmg:t.dmg,boss:!!c.boss,firstSeen:state.day}); L.kills++; L.maxHp=Math.max(L.maxHp||0,c.max||0); if(first){ toast('📖 New creature recorded — press L for Lore'); SFX.play('success',{vol:0.4}); } }
 function openLore(){ if(!state.running)return; loreOpen=true; const el=document.getElementById('lore'); if(!el)return; el.style.cssText='position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(10,8,18,0.6)'; renderLore(); el.classList.remove('hidden'); el.onclick=(e)=>{ if(e.target===el)closeLore(); }; }
 function closeLore(){ loreOpen=false; const el=document.getElementById('lore'); if(el)el.classList.add('hidden'); }
-function renderLore(){ const el=document.getElementById('lore'); if(!el)return; const keys=Object.keys(CREATURE_TYPES).concat(Object.keys(BOSS_TYPES).map(k=>'boss_'+k)); const known=keys.filter(k=>state.lore&&state.lore[k]).length;
-  let h=`<div style="background:linear-gradient(180deg,#2a2038,#1a1426);border:3px solid #4a3a5e;border-radius:16px;padding:16px 18px;max-width:560px;max-height:80vh;overflow-y:auto;color:#fff;box-shadow:0 8px 0 rgba(0,0,0,.35)"><h3 style="margin:0 0 10px;display:flex;justify-content:space-between;align-items:center;gap:10px">📖 Bestiary <span style="font-weight:400;opacity:.7;font-size:13px">${known}/${keys.length} discovered</span> <span id="loreX" style="cursor:pointer">✕</span></h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">`;
+function renderLore(){ const el=document.getElementById('lore'); if(!el)return; if(typeof checkBadges==='function')checkBadges(); const keys=Object.keys(CREATURE_TYPES).concat(Object.keys(BOSS_TYPES).map(k=>'boss_'+k)); const known=keys.filter(k=>state.lore&&state.lore[k]).length;
+  const ub=BADGES.filter(b=>state.badges&&state.badges[b.id]).length;
+  let h=`<div style="background:linear-gradient(180deg,#2a2038,#1a1426);border:3px solid #4a3a5e;border-radius:16px;padding:16px 18px;max-width:580px;max-height:82vh;overflow-y:auto;color:#fff;box-shadow:0 8px 0 rgba(0,0,0,.35)"><h3 style="margin:0 0 10px;display:flex;justify-content:space-between;align-items:center;gap:10px">🏅 Achievements &amp; Bestiary <span id="loreX" style="cursor:pointer">✕</span></h3>`;
+  h+=`<div style="font-weight:800;margin:2px 0 6px">🏅 Badges <span style="font-weight:400;opacity:.7;font-size:12px">${ub}/${BADGES.length} earned</span></div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px">`;
+  for(const b of BADGES){ const on=state.badges&&state.badges[b.id]; h+=`<div title="${b.d}" style="padding:6px;border:2px solid ${on?'#ffd23f':'#3a3048'};border-radius:9px;background:${on?'rgba(255,210,63,0.12)':'rgba(0,0,0,0.2)'};text-align:center;${on?'':'opacity:.45'}"><div style="font-size:22px">${on?b.i:'🔒'}</div><div style="font-weight:700;font-size:11px">${b.n}</div></div>`; }
+  h+=`</div><div style="font-weight:800;margin:2px 0 6px">📖 Bestiary <span style="font-weight:400;opacity:.7;font-size:12px">${known}/${keys.length} discovered</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">`;
   for(const k of keys){ const t=loreDef(k), L=state.lore&&state.lore[k];
     if(!L){ h+=`<div style="padding:8px;border:2px solid #3a3048;border-radius:10px;background:rgba(0,0,0,0.2);opacity:.5;text-align:center"><div style="font-size:26px">❓</div><div style="font-weight:700">???</div></div>`; continue; }
     const tier=L.kills>=3?3:(L.kills>=2?2:1), icon=L.boss?'💀':'👾'; let body=`<div style="font-size:12px;opacity:.85">Defeated ×${L.kills}</div>`;
