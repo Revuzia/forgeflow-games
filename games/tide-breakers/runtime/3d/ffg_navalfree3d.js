@@ -1597,6 +1597,8 @@ register3d("navalfree", async function (kernel, content) {
     beginGame,
     __test: {
       start: (d) => beginGame(d || "normal"),
+      startOnline: () => startOnline(),   // boots the online module + __mp* hooks (2-client e2e)
+      netMode: () => netMode,
       sim: () => sim,
       selectFirstPlayer: () => { const s = sim.shipsOf("player")[0]; selectedId = s ? s.id : null; if (s) showSelectionGizmos(s); setHUD(); return s ? s.id : null; },
       driveSelected: (simX, simY) => { const s = sim.shipById(selectedId); if (s) tryMove(s, simX, simY); },
