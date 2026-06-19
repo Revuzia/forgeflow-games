@@ -123,12 +123,12 @@
   #mapmodal canvas{width:min(78vmin,440px); height:min(78vmin,440px); border:5px solid var(--ink); border-radius:50%; background:rgba(255,247,236,.85); box-shadow:0 10px 0 rgba(34,26,46,.35)}
   #mapmodal .maplegend{display:flex; gap:14px; flex-wrap:wrap; justify-content:center; background:rgba(255,247,236,.95); border:2px solid var(--ink); border-radius:12px; padding:7px 14px; font-size:13px; font-weight:bold}
   #mapmodal .maphint{color:#fff; font-size:12px; opacity:.8}
-  #menu{display:flex; flex-direction:column; gap:10px; align-items:center; margin-top:16px}
+  #menu{display:flex; flex-direction:column; gap:10px; align-items:center; margin-top:16px; position:sticky; bottom:0; background:var(--paper); padding:10px 0 2px; border-top:2px solid rgba(34,26,46,.12)}   /* sticky footer so Continue/New Game/Settings are ALWAYS visible without scrolling in the short arcade iframe */
   #menu .btn{min-width:200px}
-  #gear{position:fixed; top:12px; right:14px; z-index:20; width:38px; height:38px; border-radius:10px; background:rgba(34,26,46,.78); border:2px solid var(--ink); color:#fff; font-size:20px; display:flex; align-items:center; justify-content:center; cursor:pointer; pointer-events:auto; box-shadow:2px 2px 0 rgba(0,0,0,.3)}
+  #gear{position:fixed; top:56px; right:14px; z-index:20; width:38px; height:38px; border-radius:10px; background:rgba(34,26,46,.78); border:2px solid var(--ink); color:#fff; font-size:20px; display:flex; align-items:center; justify-content:center; cursor:pointer; pointer-events:auto; box-shadow:2px 2px 0 rgba(0,0,0,.3)}
   /* pause / settings overlay */
-  #pause{position:fixed; inset:0; z-index:45; display:flex; align-items:center; justify-content:center; background:rgba(34,26,46,.5); pointer-events:auto}
-  #pause .pcard{background:var(--paper); border:5px solid var(--ink); border-radius:24px; padding:26px 30px; min-width:300px; text-align:center; box-shadow:8px 8px 0 rgba(34,26,46,.3)}
+  #pause{position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; background:rgba(34,26,46,.5); pointer-events:auto}   /* z-index ABOVE the title screen (z-50) so Settings opens ON TOP of the title, not behind it */
+  #pause .pcard{background:var(--paper); border:5px solid var(--ink); border-radius:24px; padding:26px 30px; min-width:300px; max-height:calc(100% - 16px); overflow-y:auto; text-align:center; box-shadow:8px 8px 0 rgba(34,26,46,.3)}
   #pause h2{color:var(--grape); text-shadow:2px 2px 0 var(--sun); font-size:28px; margin-bottom:16px}
   #pause .prow{display:flex; align-items:center; justify-content:space-between; gap:14px; font-size:16px; font-weight:bold; background:#fff; border:2px solid var(--ink); border-radius:12px; padding:8px 14px; margin:8px 0}
   #pause .prow input[type=range]{width:140px} #pause .prow input[type=checkbox]{width:22px; height:22px}
@@ -1965,7 +1965,7 @@ function updatePlayer(dt){
   if(grounded){ airJumps=0; flipT=0; }   // landing resets the double-jump + ends any spin
   // JUICE: squash on landing, spring scale back to base each frame
   { const mo=player.userData.model; if(mo&&mo.userData.base!=null){ const b=mo.userData.base; if(grounded&&!wasGrounded&&vyPrev<-4&&!state.reduce&&!_wz){ mo.scale.set(b*1.22,b*0.74,b*1.22); } const t=Math.min(1,dt*9); mo.scale.x=lerp(mo.scale.x,b,t); mo.scale.y=lerp(mo.scale.y,b,t); mo.scale.z=lerp(mo.scale.z,b,t);
-      if(flipT>0 && !_wz){ flipT=Math.max(0,flipT-dt); mo.rotation.x = -(1-flipT/0.5)*TAU; }   // double-jump 360 forward flip (procedural — the rig has no flip clip)
+      if(flipT>0 && !_wz){ flipT=Math.max(0,flipT-dt); const _p=1-flipT/0.5; mo.rotation.x=(_p*TAU)%TAU; const _tuck=Math.sin(_p*Math.PI); const _s=b*(1-0.45*_tuck); mo.scale.set(_s,_s,_s); }   // double-jump: curl into a BALL (scale down via sin) + spin FORWARD (+rotation.x = face-down pitch) then UNBALL as he lands; %TAU ends upright so no reverse-lerp
       else mo.rotation.x=lerp(mo.rotation.x, _wz?1.15:0, Math.min(1,dt*6)); } }   // SWIM: FACE-DOWN prone tilt, restored on exit
   wasGrounded=grounded;
   // animation state
