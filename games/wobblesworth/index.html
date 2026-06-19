@@ -2984,6 +2984,7 @@ const COOP = {
     const o=skeletonClone(src); const s=new THREE.Vector3(); new THREE.Box3().setFromObject(o).getSize(s); o.scale.setScalar(1.7/(s.y||1));
     const b=new THREE.Box3().setFromObject(o); o.position.y=-b.min.y;
     const g=new THREE.Group(); g.add(o); g.position.copy(player.position); world.add(g);
+    g.traverse(m=>{ if(m.isMesh) m.frustumCulled=false; });   // CRITICAL: peers spawn AFTER the load-time cull-disable; the WRAP shader renders at wrapped coords so default frustum culling hid friends entirely (this was why you couldn't see other players)
     const mix=new THREE.AnimationMixer(o); const acts={}; for(const c of (ANIMS['char_player']||[])) acts[c.name]=mix.clipAction(c); if(acts.idle) acts.idle.play();
     let tag=null; try{ tag=makeLabel('👤 '+(name||'Friend')); tag.position.set(0,2.15,0); tag.scale.set(2.6,0.66,1); g.add(tag); }catch(e){}
     const pe={group:g,model:o,mixer:mix,actions:acts,anim:'idle',tx:player.position.x,tz:player.position.z,th:0,name:name,last:performance.now(),tag:tag};
@@ -3021,13 +3022,15 @@ function openCoop(){
     +'<input id="coopName" placeholder="Your name" maxlength="14" value="'+COOP.name+'" style="width:100%;box-sizing:border-box;padding:9px;margin-bottom:10px;border:2px solid #2a2438;border-radius:10px;font-size:15px">'
     +'<button id="coopCreate" style="width:100%;padding:12px;margin-bottom:10px;background:#37c06a;color:#fff;border:0;border-radius:12px;font-weight:bold;font-size:16px;cursor:pointer">Create room  ·  code <b>'+code+'</b></button>'
     +'<div style="display:flex;gap:8px;margin-bottom:10px"><input id="coopCode" placeholder="friend\'s code" maxlength="6" style="flex:1;min-width:0;padding:9px;border:2px solid #2a2438;border-radius:10px;text-transform:uppercase;font-size:15px"><button id="coopJoin" style="padding:9px 16px;background:#4d90ff;color:#fff;border:0;border-radius:10px;font-weight:bold;cursor:pointer">Join</button></div>'
-    +'<div id="coopStatus" style="font-size:13px;min-height:18px;color:#2a8a4a;margin-bottom:12px;font-weight:bold"></div>'
+    +'<div id="coopStatus" style="font-size:13px;min-height:18px;color:#2a8a4a;margin-bottom:8px;font-weight:bold"></div>'
+    +'<button id="coopInvite" style="width:100%;padding:10px;margin-bottom:10px;background:#ffcf3a;color:#2a2438;border:0;border-radius:11px;font-weight:bold;font-size:14px;cursor:pointer">📋 Copy Invite Link</button>'
     +'<div style="display:flex;gap:8px"><button id="coopLeave" style="flex:1;padding:10px;background:#f4f0f7;border:2px solid #2a2438;border-radius:10px;cursor:pointer;font-weight:bold">Leave</button><button id="coopClose" style="flex:1;padding:10px;background:#2a2438;color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:bold">Close</button></div></div>';
   el.style.display='flex';
   const setName=()=>{ const v=(el.querySelector('#coopName').value||'').trim(); if(v) COOP.name=v.slice(0,14); };
   el.querySelector('#coopCreate').onclick=async()=>{ setName(); COOP.status('Connecting…'); await COOP.join(code); };
   el.querySelector('#coopJoin').onclick=async()=>{ setName(); const c=(el.querySelector('#coopCode').value||'').trim(); if(!c){ COOP.status('Enter a code first.'); return; } COOP.status('Connecting…'); await COOP.join(c); };
   el.querySelector('#coopLeave').onclick=()=>{ COOP.leave(); };
+  el.querySelector('#coopInvite').onclick=()=>{ const r=COOP.room||code; const link=location.origin+location.pathname+'?room='+r; try{ navigator.clipboard.writeText(link); COOP.status('✅ Invite link copied — send it to a friend so they join room '+r+'!'); }catch(e){ COOP.status('Invite link: '+link); } };
   el.querySelector('#coopClose').onclick=()=>{ el.style.display='none'; };
   if(COOP.on) COOP._count();
 }
@@ -3056,10 +3059,12 @@ loadAll(()=>{ if(criticalMissing()){ showLoadFailUI(); return; }   // fast-path:
 addEventListener('visibilitychange',()=>{ if(document.hidden){ try{ if(!sessionStorage.getItem('ww_newgame')) save(); }catch(e){} Music.suspend(); }
   else if(state.running && !state.paused && state.musicOn) Music.resume(); });   // REGRESSION fix: resume music when the tab returns (was permanently dead after first hide). NEW-GAME fix: skip the auto-save when a New Game reload is in flight, or it RE-CREATES the save we just wiped (the bug: "New Game didn't reset")
 addEventListener('pagehide',()=>{ try{ if(!sessionStorage.getItem('ww_newgame')) save(); }catch(e){} });   // same guard: pagehide fires during the New Game reload too
+let _inviteRoom=null; try{ _inviteRoom=((new URLSearchParams(location.search).get('room'))||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)||null; }catch(e){}   // invite link ?room=CODE
 function startGame(){ if(!ready)return; document.getElementById('title').classList.add('hidden'); closeSettings(); state.running=true; Music.start();
   try{ state.intro=!localStorage.getItem('ww2_seen_intro'); }catch(e){ state.intro=true; }
   if(state.intro&&state.beacon){ state.beacon.visible=true; toast('✨ Follow the glowing beam to your new house!'); }
-  else toast('🏠 Back on Giggleton Lane — survive the night! Check your Journal →'); }
+  else toast('🏠 Back on Giggleton Lane — survive the night! Check your Journal →');
+  if(_inviteRoom){ const r=_inviteRoom; _inviteRoom=null; setTimeout(()=>{ if(typeof COOP!=='undefined'){ toast(`👥 Joining your friend's world (${r})…`); COOP.join(r); } }, 1200); } }   // auto-join an invite link once in-world
 function hasSave(){ try{ return !!localStorage.getItem('ww2_save'); }catch(e){ return false; } }
 let confirmOpen=false, _confirmYes=null;
 function styledConfirm(title, msg, yesLabel, onYes){   // in-game styled replacement for native confirm()
@@ -3108,7 +3113,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
   roofOp:()=>cutRoof?+cutRoof.material.opacity.toFixed(2):null,
   interactNow:()=>{ updateInteract(); if(nearest){ const l=nearest.label; nearest.action(); return l; } return null; },
-  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, pickGear:(id,kind)=>pickupGear(id,kind), equipGear:(id,kind)=>equipGear(id,kind), unequipGear:(k,s)=>unequipGear(k,s), tradeDemo:()=>{ if(typeof COOP!=='undefined'){ COOP.on=true; COOP.id='me'; COOP.ch=COOP.ch||{send:()=>{}}; COOP.peers=COOP.peers||{}; COOP.peers['demo']={group:{position:{x:player.position.x,z:player.position.z}},name:'Demo Friend'}; } openTrade('demo'); if(state.tradeSession){ state.tradeSession.theirs={items:{wood:3,crystal:1},coin:12}; state.tradeSession.theirConfirmed=true; renderTrade(); } return tradeOpen; }, revealFog:()=>revealFog(), openStash:()=>openStash(), stash:()=>({...state.stash}), hurt:(n)=>damagePlayer(n), armorTotal:()=>armorTotal(state.level), gear:()=>({...state.gear}), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
+  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, pickGear:(id,kind)=>pickupGear(id,kind), equipGear:(id,kind)=>equipGear(id,kind), unequipGear:(k,s)=>unequipGear(k,s), tradeDemo:()=>{ if(typeof COOP!=='undefined'){ COOP.on=true; COOP.id='me'; COOP.ch=COOP.ch||{send:()=>{}}; COOP.peers=COOP.peers||{}; COOP.peers['demo']={group:{position:{x:player.position.x,z:player.position.z}},name:'Demo Friend'}; } openTrade('demo'); if(state.tradeSession){ state.tradeSession.theirs={items:{wood:3,crystal:1},coin:12}; state.tradeSession.theirConfirmed=true; renderTrade(); } return tradeOpen; }, coopJoin:(c)=>{ if(typeof COOP!=='undefined') return COOP.join(c); }, coopPing:()=>{ if(typeof COOP!=='undefined'&&COOP._send)COOP._send(); }, coopInfo:()=>{ const r={count:0,on:false,visible:0}; if(typeof COOP!=='undefined'){ r.count=Object.keys(COOP.peers).length; r.on=COOP.on; r.room=COOP.room; r.visible=Object.values(COOP.peers).filter(p=>p.group&&p.group.parent&&p.group.visible!==false).length; } return r; }, revealFog:()=>revealFog(), openStash:()=>openStash(), stash:()=>({...state.stash}), hurt:(n)=>damagePlayer(n), armorTotal:()=>armorTotal(state.level), gear:()=>({...state.gear}), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
   nodesByItem:()=>{ const o={}; for(const n of nodes) o[n.item]=(o[n.item]||0)+1; return o; }, waters:()=>waters.length,
   homes:()=>({count:homes.length, built:homes.filter(h=>h.built).length, active:homes.filter(h=>h.active).length}),
   respawnInfo:()=>({nodes:nodes.length, hidden:nodes.filter(n=>!n.mesh.visible).length, onCd:nodes.filter(n=>n.timer>0).length}),
