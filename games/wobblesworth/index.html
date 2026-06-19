@@ -292,7 +292,7 @@ addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reaso
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
   discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
-  hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, _blocks:0,
+  hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, _blocks:0, _activeTool:'',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
   volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0, lore:{} };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
@@ -1188,7 +1188,7 @@ function setArmorVisual(){ const id=state.armor||''; if(id===_armorShown) return
     const trim=box(0.7,0.08,0.48, id==='gold'||id==='titan'?'#fff7d0':'#5a4632'); trim.position.y=1.25; armorGroup.add(trim);
     armorGroup.traverse(m=>{ if(m.isMesh){ m.castShadow=true; m.receiveShadow=true; } }); } }
 function updateHeld(dt){ if(!player.userData.model && heldGroup.parent!==player) return;
-  const want=(state._toolUse>0)?state._toolKind:(state.weapon!=='fist'?state.weapon:'fist'); setHeld(want); setArmorVisual();
+  const want=(state._toolUse>0)?state._toolKind:(state._activeTool?state._activeTool:(state.weapon!=='fist'?state.weapon:'fist')); setHeld(want); setArmorVisual();
   if(state._toolUse>0) state._toolUse-=dt;
   if(heldGroup.userData.onBone){ if(state._swing>0)state._swing-=dt; return; }   // bone-attached: the arm-right clip (attack-melee/interact) drives the swing, not a body-pinned rotation
   heldGroup.rotation.set(-0.5,0.25,0.1);   // resting grip angle (body-pinned fallback only)
@@ -1286,7 +1286,7 @@ function emote(name){ // one-shot emote then back to idle/walk
   setTimeout(()=>{ if(charAnim==='__emote'){ a.fadeOut(0.25); a.clampWhenFinished=false; charAnim=''; } }, 700); }   // MUST fade the emote action OUT here: it was LoopOnce+clampWhenFinished, so it sat at full weight on its LAST frame (e.g. the folded-leg 'sit' pose after a nap). Clearing charAnim only let setAnim fade IDLE *in* — the clamped sit kept blending the legs into a seated/sleeping pose (owner: "after he sleeps his legs stay in a sleeping position"). Fading the clamped action out lets the player stand fully upright again.
 
 /* ---------- input / camera ---------- */
-const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyR'&&state.running) useSelected(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[1-8]$/.test(e.code)&&state.running){ selectSlot(+e.code.slice(5)-1); } if(e.code==='Escape'){ if(confirmOpen)closeConfirm(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); } }   /* owner: no pause — ESC only closes menus */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
+const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyR'&&state.running) useSelected(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(confirmOpen)closeConfirm(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); } }   /* owner: no pause — ESC only closes menus */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 // release ALL held keys when focus/visibility is lost — prevents the "stuck walking forward" bug
 // (a right-click context menu, alt-tab, or click-away steals focus so the W keyup never fires).
@@ -1298,7 +1298,7 @@ addEventListener('blur',clearKeys); document.addEventListener('visibilitychange'
 renderer.domElement.addEventListener('contextmenu',e=>{ e.preventDefault(); clearKeys(); });
 let dragging=false,lastX=0,lastY=0;
 // LEFT mouse = ATTACK; RIGHT mouse (or touch) drag = ROTATE camera. (Right-click menu already suppressed above.)
-renderer.domElement.addEventListener('pointerdown',e=>{ if(e.pointerType!=='touch' && e.button===0){ if(state.running){ if(BMODE.on) placeBlock(); else playerAttack(); } return; } dragging=true; lastX=e.clientX; lastY=e.clientY; });
+renderer.domElement.addEventListener('pointerdown',e=>{ if(e.pointerType!=='touch' && e.button===0){ if(state.running){ if(BMODE.on) placeBlock(); else if(state._activeTool){ digBlock(); } else playerAttack(); } return; } dragging=true; lastX=e.clientX; lastY=e.clientY; });   // left-click: dig/mine if a tool is the held hotbar item, else attack
 addEventListener('pointerup',()=>dragging=false); addEventListener('pointercancel',()=>dragging=false); addEventListener('pointermove',e=>{ if(dragging){ const s=state.mouseSens||1; cam.yaw-=(e.clientX-lastX)*0.006*s; cam.pitch=clamp(cam.pitch+(e.clientY-lastY)*0.005*s,0.21,1.256); lastX=e.clientX; lastY=e.clientY; } });
 addEventListener('wheel',e=>{ cam.dist=clamp(cam.dist+Math.sign(e.deltaY)*0.9,7,22); },{passive:true});
 const cam={yaw:Math.PI,dist:13,height:7,pitch:0.5};   // pitch in radians (clamped 12°–72°)
@@ -1425,11 +1425,10 @@ const ITEMS={ wood:{i:'🪵',n:'Wood'},stone:{i:'🪨',n:'Stone'},crystal:{i:'�
 /* basic item DESCRIPTIONS (owner: "each item needs a basic description — industry standard, see Minecraft") — shown as a hover tooltip in the inventory */
 const ITEM_DESC={ wood:'Chopped from trees. The basic building & crafting material.', stone:'Mined from rocks. Tools, walls, paths & the furnace.', crystal:'A glittering quarry gem. Crystal gear, glass & lanterns.', apple:'Sweet fruit — eat to restore hunger.', mushroom:'Forest fungus — eat for a little hunger & energy.', carrot:'Crunchy root veg — eat to restore energy.', flower:'A pretty bloom — used in decor & a few recipes.', coin:'Currency from foes & chests. Spend at shops.', milk:'From cows — eat for a little health; bakes into cake.', wool:'Sheared from sheep — crafts rugs & banners.', egg:'From chickens — eat for a little health; bakes treats.', leather:'From animals — crafts Leather Armor.', meat:'Hearty protein — eat to restore lots of hunger & health.', dirt:'Dug with a shovel. Fills holes & crafts bricks.', iron_ingot:'Smelted from stone at a furnace. Iron tools & armor.', gold_ingot:'Smelted from crystal. Gold tools & armor.', boss_core:'Rare BOSS-only drop. Required for the ⚡ Titan tier.' };
 let invOpen=false;
-const Inv={ render(){ const el=document.getElementById('invbar'); if(!el)return;   // ALWAYS 10 slots: 8 item types + weapon + recipe-pages (empty slots dimmed)
-    const keys=Object.keys(ITEMS); let h=''; const sel=state.selectedSlot||0;
-    for(let i=0;i<8;i++){ const k=keys[i]; const c=state.inv[k]||0; h+=`<div class="slot${c>0?'':' empty'}${i===sel?' sel':''}${FOOD_EFFECTS[k]?' eat':''}"><span class="sk">${i+1}</span><span class="i">${ITEMS[k].i}</span><span class="n">${c}</span></div>`; }
-    const w=WEAPONS[state.weapon]||WEAPONS.fist; h+=`<div class="slot wslot${state.weapon==='fist'?' empty':''}${sel===8?' sel':''}"><span class="i">${w.icon}</span><span class="n">${state.weapon==='fist'?'—':'T'+WTIER.indexOf(state.weapon)}</span></div>`;
-    const pg=state.recipePages||0; h+=`<div class="slot pslot${pg>0?'':' empty'}${sel===9?' sel':''}"><span class="i">📖</span><span class="n">${pg}</span></div>`;
+const Inv={ render(){ const el=document.getElementById('invbar'); if(!el)return;   // EQUIPMENT hotbar (Minecraft-style): the SELECTED slot is what you hold in hand — fist + owned weapons + pickaxe/shovel. Labels 1..9,0. Always 10 slots.
+    const L=hotbarLayout(); const sel=state.selectedSlot||0; let h='';
+    for(let i=0;i<10;i++){ const e=L[i]; const lbl=(i===9)?'0':(i+1);
+      h+=`<div class="slot${e?'':' empty'}${i===sel?' sel':''}${e&&e.kind==='tool'?' pslot':''}${e&&e.kind==='weapon'?' wslot':''}" title="${e?e.name:''}"><span class="sk">${lbl}</span><span class="i">${e?e.icon:''}</span><span class="n">${e&&e.kind==='fist'?'—':''}</span></div>`; }
     el.innerHTML=h; el.querySelectorAll('.slot').forEach((s,i)=>{ s.onclick=()=>selectSlot(i); }); if(invOpen)renderInv(); },
   add(k,n=1){ state.inv[k]=(state.inv[k]||0)+n; this.render(); save(); },
   has(k,n=1){ return (state.inv[k]||0)>=n; }, take(k,n=1){ if(!this.has(k,n))return false; state.inv[k]-=n; this.render(); save(); return true; } };
@@ -1437,13 +1436,30 @@ const Inv={ render(){ const el=document.getElementById('invbar'); if(!el)return;
    Raw foods restore needs; protein (meat, from animals) heals HP. Pick a slot 1-8 (or click it), press Q to eat. */
 const FOOD_EFFECTS={ apple:{hunger:18,energy:4,hp:0,msg:'🍎 Crisp apple'}, carrot:{hunger:14,energy:10,hp:0,msg:'🥕 Crunchy carrot'}, mushroom:{hunger:10,energy:4,hp:1,msg:'🍄 Earthy mushroom'}, flower:{hunger:5,energy:8,hp:0,msg:'🌸 Nibbled a blossom'},
   meat:{hunger:14,energy:4,hp:6,msg:'🍖 Hearty meat'}, milk:{hunger:10,energy:6,hp:2,msg:'🥛 Fresh milk'}, egg:{hunger:8,energy:4,hp:2,msg:'🥚 Cooked egg'} };   // protein -> real HP (owner request)
-function selectSlot(i){ state.selectedSlot=clamp(i|0,0,9); Inv.render(); }
+// ── EQUIPMENT HOTBAR: the selected slot is what you HOLD (Minecraft-style). Layout = fist + owned weapons + pickaxe/shovel. ──
+function hotbarLayout(){ const L=[{kind:'fist',icon:'✊',name:'Fists'}];
+  if(state.hasPickaxe) L.push({kind:'tool',tool:'pickaxe',icon:'⛏️',name:'Pickaxe'});   // tools at slots 2-3 so they're always reachable
+  if(state.hasShovel)  L.push({kind:'tool',tool:'shovel',icon:'🥄',name:'Shovel'});
+  const ws=[]; for(const id of WTIER.slice(1)) if(state.weapons&&state.weapons[id]) ws.push(id); for(const id in (state.weapons||{})) if(WEAPONS[id]&&WEAPONS[id].rarity&&ws.indexOf(id)<0) ws.push(id);
+  ws.sort((a,b)=>(WEAPONS[b].dmg||0)-(WEAPONS[a].dmg||0));   // strongest first -> only the weakest weapons drop off if the 10-slot bar overflows
+  for(const id of ws) L.push({kind:'weapon',weapon:id,icon:WEAPONS[id].icon,name:WEAPONS[id].name});
+  while(L.length<10) L.push(null); return L.slice(0,10); }
+function applyEquip(){ const e=hotbarLayout()[state.selectedSlot]; if(!e){ state._activeTool=''; return; }
+  if(e.kind==='weapon'){ state.weapon=e.weapon; state._activeTool=''; }
+  else if(e.kind==='tool'){ state._activeTool=e.tool; }
+  else { state.weapon='fist'; state._activeTool=''; } }
+function syncSel(){ const L=hotbarLayout(); for(let i=0;i<L.length;i++){ const e=L[i]; if(!e)continue;
+    if(state._activeTool){ if(e.kind==='tool'&&e.tool===state._activeTool){ state.selectedSlot=i; return; } }
+    else if(e.kind==='weapon'&&e.weapon===state.weapon){ state.selectedSlot=i; return; }
+    else if(e.kind==='fist'&&state.weapon==='fist'){ state.selectedSlot=i; return; } } }
+function selectSlot(i){ state.selectedSlot=clamp(i|0,0,9); applyEquip(); Inv.render(); }
 function eatFood(k){ const f=FOOD_EFFECTS[k]; if(!f) return false; if(!Inv.has(k,1)){ toast(`No ${ITEMS[k]?ITEMS[k].n.toLowerCase():k} to eat.`); return false; }
   Inv.take(k,1); if(f.hunger)Needs.add('hunger',f.hunger); if(f.energy)Needs.add('energy',f.energy);
   if(f.hp && state.hp<state.hpMax){ state.hp=Math.min(state.hpMax,state.hp+f.hp); renderHearts(); }
   updateNeedsUI(); markGoal('eat'); SFX.play('pickup',{vol:0.6,rate:1.1}); emote('interact-right');
   toast(`${f.msg} — +${f.hunger} 🍔${f.energy?` +${f.energy} ⚡`:''}${f.hp?` +${f.hp}❤️`:''}`); return true; }
-function eatSelected(){ const k=Object.keys(ITEMS)[state.selectedSlot]; if(FOOD_EFFECTS[k]) eatFood(k); else toast('🍴 Select a food slot (keys 1-8) then press Q — 🍎🥕🍄🌸'); }
+function eatBestFood(){ for(const k in FOOD_EFFECTS){ if((state.inv[k]||0)>0){ return eatFood(k); } } toast('🍎 No food in your bag — gather apples, carrots or mushrooms (or eat from your bag, I).'); return false; }
+function eatSelected(){ return eatBestFood(); }
 function openInv(){ invOpen=true; document.getElementById('inv').classList.remove('hidden'); renderInv(); }
 function closeInv(){ invOpen=false; document.getElementById('inv').classList.add('hidden'); }
 function toggleInv(){ invOpen?closeInv():openInv(); }
@@ -1836,7 +1852,7 @@ function updateInteract(){ let best=null,bd=Infinity; const pp=player.position; 
 function tryInteract(){ if(state.running&&nearest){ SFX.play('interact'); emote('interact-right'); nearest.action(); } }
 /* ONE button (E) does it all (owner: "too many random buttons"): interact with the thing you're facing, OR — if
    nothing's in reach — USE the SELECTED hotbar item (eat the food you have selected). Replaces the old Q-eat. */
-function useSelected(){ const k=Object.keys(ITEMS)[state.selectedSlot]; if(FOOD_EFFECTS[k]&&Inv.has(k,1)){ eatFood(k); } else if(FOOD_EFFECTS[k]){ toast(`No ${ITEMS[k]?ITEMS[k].n.toLowerCase():k} left.`); } else { toast('🍎 Select a food (keys 1-8) then press R to use it. (⚔️ swords swing with F.)'); } }
+function useSelected(){ return eatBestFood(); }   // R eats the best food from your bag (the hotbar now holds equipment, not food)
 function useE(){ if(!state.running)return; if(nearest){ tryInteract(); } else { toast('🤚 Nothing here to interact with — walk up to a thing. (R uses your selected item; 🖱️ left-click to attack.)'); } }   // E = interact with the WORLD only; R = use the held hotbar item; left-click = attack
 
 /* ---------- movement / camera / cutaway ---------- */
@@ -2416,10 +2432,10 @@ function dropGear(x,z, pair){ pair=pair||pick(RARE_GEAR); const id=pair[0], kind
 function equipGear(id, kind){ const tbl=(kind==='weapon')?WEAPONS:ARMORS, it=tbl[id]; if(!it) return;
   if(kind==='weapon'){ if(!state.weapons[id]) return; state.weapon=id; }
   else { if(!state.armors[id]) return; state.armor=id; state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
-  SFX.play('success',{vol:0.4}); toast(`${it.icon} Equipped ${it.name}!`); if(invOpen)renderInv(); save(); }
+  SFX.play('success',{vol:0.4}); toast(`${it.icon} Equipped ${it.name}!`); syncSel(); Inv.render(); if(invOpen)renderInv(); save(); }
 function unequipGear(kind){ if(kind==='weapon'){ state.weapon='fist'; equipBest(); }   // unequip -> fall back to your best CRAFTABLE weapon
   else { state.armor=''; equipBestArmor(); state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
-  SFX.play('interact',{vol:0.4}); toast('Unequipped.'); if(invOpen)renderInv(); save(); }
+  SFX.play('interact',{vol:0.4}); toast('Unequipped.'); syncSel(); Inv.render(); if(invOpen)renderInv(); save(); }
 function makeDrop(x,z,item,n){ const col=DROP_COL[item]||'#ffd23f'; const m=new THREE.Mesh(new THREE.IcosahedronGeometry(0.22,0),new THREE.MeshToonMaterial({color:col,gradientMap:GRAD,emissive:new THREE.Color(col),emissiveIntensity:0.3})); m.position.set(x+rand(-0.6,0.6),0.6,z+rand(-0.6,0.6)); m.castShadow=true; world.add(m); drops.push({mesh:m,item,n,bob:rand(0,TAU),t:0}); }
 function updateDrops(dt){ for(let i=drops.length-1;i>=0;i--){ const d=drops[i],m=d.mesh; d.bob+=dt*3.2; d.t+=dt; m.rotation.y+=dt*2.2; const dx=player.position.x-m.position.x, dz=player.position.z-m.position.z, dd=Math.hypot(dx,dz)||1;
     if(dd<6){ const sp=Math.min(11,(6.5-dd)*3)*dt; m.position.x+=dx/dd*sp; m.position.z+=dz/dd*sp; } m.position.y=0.55+Math.sin(d.bob)*0.12;
@@ -3079,7 +3095,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       R.item_desc=(!!ITEM_DESC.wood && !!ITEM_DESC.boss_core && Object.keys(ITEM_DESC).length>=14);
       for(const dd of drops){ try{world.remove(dd.mesh);}catch(_){} } drops.length=0; }
     // P6 CONTROLS: E "uses" the SELECTED hotbar item (eat) — replaces Q; Settings has a Fullscreen toggle
-    { state.inv.apple=(state.inv.apple||0)+1; selectSlot(3); const a0=state.inv.apple; useSelected(); R.use_selected=((state.inv.apple||0)<a0);   // slot 3 = apple → useSelected eats it
+    { state.inv.apple=(state.inv.apple||0)+1; const _tot0=Object.keys(FOOD_EFFECTS).reduce((s,k)=>s+(state.inv[k]||0),0); useSelected(); const _tot1=Object.keys(FOOD_EFFECTS).reduce((s,k)=>s+(state.inv[k]||0),0); R.use_selected=(_tot1<_tot0);   // R now eats the best food from the bag (hotbar holds equipment)
       openSettings(); R.settings_fs=!!document.getElementById('fsChk'); closeSettings(); selectSlot(0); }
     // P6b NPC HOUSE SHOPS: a home vendor sells its own stock for coins + restocks weekly (game time)
     { const vh=homes.find(h=>h.vendor); if(vh){ const v=vh.vendor, it=v.items[0]; it.qty=it.max; state.inv.coin=(state.inv.coin||0)+it.price+5; const c0=state.inv.coin, q0=it.qty, b0=state.inv[it.item]||0;
