@@ -20,7 +20,7 @@ export default function UserMenu() {
   // recreated + re-pointed in Supabase (Auth > Providers > Google), then flip this
   // back to true. Email/password signup below works with ZERO Google dependency,
   // so anyone can still create an account. See reference_ffgames_oauth_deleted_client.
-  const SHOW_GOOGLE = false;
+  const SHOW_GOOGLE = true;   // owner: Google sign-in is faster + NOT optional — show it alongside email. NOTE: it 401s until the deleted OAuth client is recreated in Google Cloud + re-pointed in Supabase (Auth > Providers > Google). Email signup works regardless.
 
   useEffect(() => {
     // Check current session

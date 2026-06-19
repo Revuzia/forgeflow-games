@@ -64,6 +64,7 @@
   #invbar .hint{align-self:center; color:#cbb6e6; font-size:11px; margin-left:4px; max-width:120px}
   #invbar .slot.empty{opacity:.3}
   #hearts{font-size:17px; letter-spacing:2px; text-align:center; padding:1px 0}
+  #armorbar{font-size:15px; letter-spacing:2px; text-align:center; padding:0 0 1px; filter:saturate(.9)}
   /* inventory is a centered MODAL grid (owner: image-1 inventory wasn't industry-standard) */
   #inv{position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center; background:rgba(20,14,30,.5); pointer-events:auto}
   .invcard{width:min(560px,93vw); max-height:84vh; overflow:auto; background:rgba(34,26,46,.97); color:#fff; border:3px solid var(--ink); border-radius:18px; padding:14px 16px; box-shadow:7px 7px 0 rgba(0,0,0,.4)}
@@ -185,6 +186,7 @@
   <div class="bar"><div class="lbl"><span>🍔 Hunger</span><span id="vHunger">80%</span></div><div class="track"><div id="fHunger" class="fill"></div></div></div>
   <div class="bar"><div class="lbl"><span>⚡ Energy</span><span id="vEnergy">80%</span></div><div class="track"><div id="fEnergy" class="fill"></div></div></div>
   <div id="hearts" class="bar"></div>
+  <div id="armorbar" class="bar" style="display:none"></div>
   <div id="xpbar" class="bar"><div class="lbl"><span>⭐ Level <span id="vLevel">1</span></span><span id="vXP">0/40</span></div><div class="track"><div id="fXP" class="fill"></div></div></div>
 </div>
 <div id="quests" class="hud"><div id="qhead"><span class="qttl">📖 Campaign</span><button id="qmin" title="Minimize panel">–</button></div><div id="qbody"><div id="goalbox"></div><div class="jdiv"></div><div id="qlist"></div><div id="reqlist"></div></div></div>
@@ -594,11 +596,11 @@ const outerStructures=[];  // {x,z,r} footprints of mines/dungeons so wild hamle
 const hamlets=[];          // {cx,cz,homes:[...]} wild settlements out in the hills (Phase 2)
 // Stage B — night combat
 const creatures=[];   // {mesh, hp, max, cd, bob}
-const WEAPONS={ fist:{dmg:14,range:2.2,name:'Fists',icon:'✊'}, wood_sword:{dmg:24,range:2.6,name:'Wooden Sword',icon:'🗡️'}, stone_sword:{dmg:38,range:2.8,name:'Stone Sword',icon:'⚔️'}, iron_sword:{dmg:50,range:2.9,name:'Iron Sword',icon:'🗡️'}, crystal_sword:{dmg:62,range:3.0,name:'Crystal Sword',icon:'💎'}, gold_sword:{dmg:82,range:3.2,name:'Gold Sword',icon:'🌟'}, titan_blade:{dmg:120,range:3.5,name:'Titan Blade',icon:'⚡'},
+const WEAPONS={ fist:{dmg:14,range:2.2,name:'Fists',icon:'✊'}, wood_sword:{dmg:24,range:2.6,name:'Wooden Sword',icon:'🗡️'}, stone_sword:{dmg:38,range:2.8,name:'Stone Sword',icon:'⚔️'}, iron_sword:{dmg:50,range:2.9,name:'Iron Sword',icon:'🗡️'}, crystal_sword:{dmg:62,range:3.0,name:'Crystal Sword',icon:'💎'}, gold_sword:{dmg:82,range:3.2,name:'Gold Sword',icon:'🌟'}, titan_blade:{dmg:120,range:3.5,name:'Titan Blade',icon:'⚡'}, mythic_blade:{dmg:160,range:3.7,name:'Mythic Blade',icon:'🌠'},
   // ── DROPPED loot weapons (not craftable — only fall from rare/epic kills; equip/unequip from your bag) ──
   keen_saber:{dmg:74,range:3.05,name:'Keen Saber',icon:'🔹',rarity:'rare',crit:0.08,model:'crystal_sword'},                 // RARE: high dmg + extra crit
   dread_reaver:{dmg:116,range:3.35,name:'Dread Reaver',icon:'🔮',rarity:'epic',crit:0.16,life:0.14,model:'titan_blade'} };   // EPIC: huge dmg + big crit + lifesteal (heal 14% of dmg dealt)
-const WTIER=['fist','wood_sword','stone_sword','iron_sword','crystal_sword','gold_sword','titan_blade'];   // titan_blade = BOSS-ONLY top tier (needs boss_core)
+const WTIER=['fist','wood_sword','stone_sword','iron_sword','crystal_sword','gold_sword','titan_blade','mythic_blade'];   // titan/mythic = top tiers (need boss_core)
 // ARMOR — a % chance to fully BLOCK an incoming hit (clean with 1-heart hits: a hit either lands fully or is blocked)
 const ARMORS={ leather:{block:0.30,name:'Leather Armor',icon:'🛡️'}, iron:{block:0.55,name:'Iron Armor',icon:'🦺'}, gold:{block:0.72,name:'Gold Armor',icon:'🥇'}, titan:{block:0.86,name:'Titan Plate',icon:'⚡'},
   // ── DROPPED loot armor (not craftable — only from rare/epic kills; equip/unequip from your bag) ──
@@ -1171,7 +1173,7 @@ function makeToolModel(kind){ const g=new THREE.Group();
   if(kind==='pickaxe'){ const h=box(0.07,0.95,0.07,'#8a5a31'); g.add(h); const head=box(0.46,0.1,0.1,'#7a7e86'); head.position.y=0.46; g.add(head);
     const t1=box(0.12,0.18,0.1,'#9aa0a8'); t1.position.set(0.26,0.42,0); t1.rotation.z=0.6; g.add(t1); const t2=t1.clone(); t2.position.x=-0.26; t2.rotation.z=-0.6; g.add(t2); }
   else if(kind==='shovel'){ const h=box(0.07,0.95,0.07,'#8a5a31'); g.add(h); const blade=box(0.28,0.34,0.05,'#9aa0a8'); blade.position.y=0.52; g.add(blade); const lip=box(0.28,0.1,0.05,'#b6bcc4'); lip.position.y=0.69; g.add(lip); }
-  else { const col=kind==='dread_reaver'?'#c77dff':kind==='keen_saber'?'#5fa8ff':kind==='titan_blade'?'#ffe066':kind==='gold_sword'?'#ffd23f':kind==='crystal_sword'?'#7fd9ff':kind==='iron_sword'?'#cdd2da':kind==='stone_sword'?'#bcc0c8':'#d8b07a';   // tier-colored blade (epic=purple, rare=blue)
+  else { const col=kind==='mythic_blade'?'#fff6c8':kind==='dread_reaver'?'#c77dff':kind==='keen_saber'?'#5fa8ff':kind==='titan_blade'?'#ffe066':kind==='gold_sword'?'#ffd23f':kind==='crystal_sword'?'#7fd9ff':kind==='iron_sword'?'#cdd2da':kind==='stone_sword'?'#bcc0c8':'#d8b07a';   // tier-colored blade (epic=purple, rare=blue)
     const blade=box(0.09,0.82,0.04,col); blade.position.y=0.52; g.add(blade); const tip=new THREE.Mesh(new THREE.ConeGeometry(0.075,0.18,4),toon(col)); tip.position.y=0.97; g.add(tip);
     const guard=box(0.34,0.08,0.11,'#5a4632'); guard.position.y=0.08; g.add(guard); const grip=box(0.08,0.24,0.08,'#3a2a1a'); grip.position.y=-0.07; g.add(grip); const pommel=ball(0.06,'#caa46a'); pommel.position.y=-0.22; g.add(pommel); }
   g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); return g; }
@@ -1405,7 +1407,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.req=(s.req&&typeof s.req==='object'&&ITEMS[s.req.item])?{item:s.req.item, qty:num(s.req.qty,3,1,99), reward:num(s.req.reward,60,0,1e6), bonus:(ITEMS[s.req.bonus]?s.req.bonus:'coin'), done:s.req.done===true}:null;   // validated: unknown req.item can't crash renderRequests/townBoard
   state.unlocked=(s.unlocked&&typeof s.unlocked==='object')?s.unlocked:{}; for(const id in state.unlocked){ const r=RECIPES.find(x=>x.id===id); if(r) r.locked=false; } if(s.houseColor) paintHouse(s.houseColor); if(s.hat) giveHat();
   state.recipePages=num(s.recipePages,0,0,1e6);
-  state.level=num(s.level,1,1,999); state.xp=num(s.xp,0,0,1e9); state.hpMax=hpMaxForLevel(state.level);   // XP/level restore; max HP derives from level + equipped-armor bonus ❤️
+  state.level=num(s.level,1,1,50); state.xp=num(s.xp,0,0,1e9); state.hpMax=hpMaxForLevel(state.level);   // XP/level restore; max HP derives from level + equipped-armor bonus ❤️
   state.weapons=(s.weapons&&typeof s.weapons==='object')?s.weapons:{}; for(const id in state.weapons){ const r=RECIPES.find(x=>x.id===id); if(r&&r.weapon&&r.locked) r.locked=false; } state.weapon=(WEAPONS[s.weapon]?s.weapon:'fist'); if(state.weapon==='fist') equipBest();   // keep a saved dropped weapon equipped; only auto-pick when none state.hasPickaxe=!!s.hasPickaxe; state.hasShovel=!!s.hasShovel; state.pickTier=num(s.pickTier,0,0,2); state.shovelTier=num(s.shovelTier,0,0,2);
   state.armors=(s.armors&&typeof s.armors==='object')?s.armors:{}; for(const id in state.armors){ const r=RECIPES.find(x=>x.id===id+'_armor'); } state.armor=(ARMORS[s.armor]?s.armor:''); if(!state.armor) equipBestArmor();   // keep a saved dropped armor equipped
   state.craftedSet=(s.craftedSet&&typeof s.craftedSet==='object')?s.craftedSet:{}; state.reqsFulfilled=num(s.reqsFulfilled,0,0,1e9); state.biomes=(s.biomes&&typeof s.biomes==='object')?s.biomes:{}; state.event=DAY_EVENTS.find(e=>e.id===s.eventId)||null;
@@ -1421,7 +1423,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
 /* ============================ INVENTORY ============================ */
 const ITEMS={ wood:{i:'🪵',n:'Wood'},stone:{i:'🪨',n:'Stone'},crystal:{i:'💎',n:'Crystal'},apple:{i:'🍎',n:'Apple'},mushroom:{i:'🍄',n:'Mushroom'},carrot:{i:'🥕',n:'Carrot'},flower:{i:'🌸',n:'Flower'},coin:{i:'🪙',n:'Coin'},
   milk:{i:'🥛',n:'Milk'},wool:{i:'🧶',n:'Wool'},egg:{i:'🥚',n:'Egg'},leather:{i:'🟫',n:'Leather'},meat:{i:'🍖',n:'Meat'},
-  dirt:{i:'🟤',n:'Dirt'}, iron_ingot:{i:'🔩',n:'Iron Ingot'}, gold_ingot:{i:'🥇',n:'Gold Ingot'}, boss_core:{i:'💠',n:'Boss Core'} };   // C3 animal resources + dirt + E3 smelted ingots + E5 boss-only crafting core; first 8 keys unchanged so hotbar + inv_slots stay intact
+  dirt:{i:'🟤',n:'Dirt'}, iron_ingot:{i:'🔩',n:'Iron Ingot'}, gold_ingot:{i:'🥇',n:'Gold Ingot'}, boss_core:{i:'💠',n:'Boss Core'}, health_potion:{i:'🧪',n:'Health Potion'}, energy_tonic:{i:'🧉',n:'Energy Tonic'} };   // appended (keep first 8 keys' order for the hotbar/inv_slots invariant)   // C3 animal resources + dirt + E3 smelted ingots + E5 boss-only crafting core; first 8 keys unchanged so hotbar + inv_slots stay intact
 /* basic item DESCRIPTIONS (owner: "each item needs a basic description — industry standard, see Minecraft") — shown as a hover tooltip in the inventory */
 const ITEM_DESC={ wood:'Chopped from trees. The basic building & crafting material.', stone:'Mined from rocks. Tools, walls, paths & the furnace.', crystal:'A glittering quarry gem. Crystal gear, glass & lanterns.', apple:'Sweet fruit — eat to restore hunger.', mushroom:'Forest fungus — eat for a little hunger & energy.', carrot:'Crunchy root veg — eat to restore energy.', flower:'A pretty bloom — used in decor & a few recipes.', coin:'Currency from foes & chests. Spend at shops.', milk:'From cows — eat for a little health; bakes into cake.', wool:'Sheared from sheep — crafts rugs & banners.', egg:'From chickens — eat for a little health; bakes treats.', leather:'From animals — crafts Leather Armor.', meat:'Hearty protein — eat to restore lots of hunger & health.', dirt:'Dug with a shovel. Fills holes & crafts bricks.', iron_ingot:'Smelted from stone at a furnace. Iron tools & armor.', gold_ingot:'Smelted from crystal. Gold tools & armor.', boss_core:'Rare BOSS-only drop. Required for the ⚡ Titan tier.' };
 let invOpen=false;
@@ -1435,12 +1437,14 @@ const Inv={ render(){ const el=document.getElementById('invbar'); if(!el)return;
 /* HOTBAR SELECTION + EATING (owner: "select these like Minecraft, or eat apples/veggies/protein for hunger/energy/health").
    Raw foods restore needs; protein (meat, from animals) heals HP. Pick a slot 1-8 (or click it), press Q to eat. */
 const FOOD_EFFECTS={ apple:{hunger:18,energy:4,hp:0,msg:'🍎 Crisp apple'}, carrot:{hunger:14,energy:10,hp:0,msg:'🥕 Crunchy carrot'}, mushroom:{hunger:10,energy:4,hp:1,msg:'🍄 Earthy mushroom'}, flower:{hunger:5,energy:8,hp:0,msg:'🌸 Nibbled a blossom'},
-  meat:{hunger:14,energy:4,hp:6,msg:'🍖 Hearty meat'}, milk:{hunger:10,energy:6,hp:2,msg:'🥛 Fresh milk'}, egg:{hunger:8,energy:4,hp:2,msg:'🥚 Cooked egg'} };   // protein -> real HP (owner request)
+  meat:{hunger:14,energy:4,hp:6,msg:'🍖 Hearty meat'}, milk:{hunger:10,energy:6,hp:2,msg:'🥛 Fresh milk'}, egg:{hunger:8,energy:4,hp:2,msg:'🥚 Cooked egg'},
+  health_potion:{hunger:0,energy:0,hp:6,msg:'🧪 Health potion'}, energy_tonic:{hunger:0,energy:50,hp:0,msg:'🧉 Energy tonic'} };   // potions = drinkable from the bag (click the tile, or R)   // protein -> real HP (owner request)
 // ── EQUIPMENT HOTBAR: the selected slot is what you HOLD (Minecraft-style). Layout = fist + owned weapons + pickaxe/shovel. ──
+const EQUIP_LVL={ keen_saber:5, dread_reaver:8, warded_vest:5, aegis_plate:8 };   // dropped rare/epic gear needs a LEVEL to equip (craftable tiers are already gated by their recipe level)
 function hotbarLayout(){ const L=[{kind:'fist',icon:'✊',name:'Fists'}];
   if(state.hasPickaxe) L.push({kind:'tool',tool:'pickaxe',icon:'⛏️',name:'Pickaxe'});   // tools at slots 2-3 so they're always reachable
   if(state.hasShovel)  L.push({kind:'tool',tool:'shovel',icon:'🥄',name:'Shovel'});
-  const ws=[]; for(const id of WTIER.slice(1)) if(state.weapons&&state.weapons[id]) ws.push(id); for(const id in (state.weapons||{})) if(WEAPONS[id]&&WEAPONS[id].rarity&&ws.indexOf(id)<0) ws.push(id);
+  const ws=[]; for(const id of WTIER.slice(1)) if(state.weapons&&state.weapons[id]) ws.push(id); for(const id in (state.weapons||{})) if(WEAPONS[id]&&WEAPONS[id].rarity&&ws.indexOf(id)<0&&(state.level||1)>=(EQUIP_LVL[id]||0)) ws.push(id);   // hide under-level epic weapons
   ws.sort((a,b)=>(WEAPONS[b].dmg||0)-(WEAPONS[a].dmg||0));   // strongest first -> only the weakest weapons drop off if the 10-slot bar overflows
   for(const id of ws) L.push({kind:'weapon',weapon:id,icon:WEAPONS[id].icon,name:WEAPONS[id].name});
   while(L.length<10) L.push(null); return L.slice(0,10); }
@@ -1470,7 +1474,7 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
     +`<div class="invstat">❤️ Health <b>${state.hp}/${state.hpMax}</b></div>`
     +`<div class="invstat">⭐ Level <b>${state.level}</b></div>`
     +`<div class="invstat">${w.icon} ${w.name} <b>dmg ${w.dmg}</b></div>`
-    +`<div class="invstat">${ar?ar.icon:'🧥'} ${ar?ar.name:'No armor'}${ar?' <b>'+Math.round(ar.block*100)+'%</b>':''}</div>`
+    +`<div class="invstat">${ar?ar.icon:'🧥'} ${ar?ar.name:'No armor'}${ar?' <b>'+armorRating(state.armor,state.level)+' 🛡️</b>':''}</div>`
     +`<div class="invstat">✨ Giggle <b>${state.giggle}</b></div>`
     +`<div class="invstat">📖 Pages <b>${state.recipePages||0}</b>${state.hasPickaxe?' · ⛏️ Pickaxe':''}</div>`
   +`</div>`;
@@ -1489,7 +1493,7 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
       const it=(kind==='weapon'?WEAPONS:ARMORS)[id]; const rr=RARITY[it.rarity]||RARITY.common; const on=(kind==='weapon'?state.weapon:state.armor)===id;
       const stat = kind==='weapon'
         ? `dmg ${it.dmg}${it.crit?` · +${Math.round(it.crit*100)}% crit`:''}${it.life?` · ${Math.round(it.life*100)}% lifesteal`:''}`
-        : `${Math.round(it.block*100)}% block${it.bonusHp?` · +${it.bonusHp/2} ❤️`:''}${it.regen?' · regen':''}`;
+        : `${armorRating(id,state.level)} 🛡️ armor${it.bonusHp?` · +${it.bonusHp/2} ❤️`:''}${it.regen?' · regen':''}`;
       h+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 7px;margin:4px 0;border:2px solid ${rr.color};border-radius:9px;background:${on?'rgba(255,255,255,0.13)':'rgba(0,0,0,0.15)'}"><span style="font-size:20px">${it.icon}</span><span style="flex:1;line-height:1.2"><b style="color:${rr.color}">${rr.mark}${it.name}</b><br><span style="font-size:11px;opacity:.85">${stat}</span></span><button data-gear="${id}" data-kind="${kind}" style="padding:5px 11px;border:0;border-radius:7px;cursor:pointer;font-weight:700;background:${on?'#cc4444':'#2ec5a8'};color:#fff">${on?'Unequip':'Equip'}</button></div>`; }
     h+=`</div>`; }
   h+=`<div class="invgrid">`;
@@ -1530,18 +1534,22 @@ function setNodeReady(node){ if(!node||!node.mesh)return; node.mesh.userData.onC
 /* Real progression (owner: "a real full XP/leveling system like Minecraft where leveling unlocks new crafting").
    XP comes from kills, gathering, quests + crafting. Each level needs a bit more than the last (cozy, reachable
    curve — not Minecraft's punishing one). Leveling heals you, grows max HP a little, and UNLOCKS new recipes. */
-function xpToNext(lvl){ return 40 + (Math.max(1,lvl)-1)*35; }   // L1→2:40, L2→3:75, L3→4:110 … gentle ramp
-function hpMaxForLevel(lvl){ const ab=(state.armor&&ARMORS[state.armor]&&ARMORS[state.armor].bonusHp)||0; return 6 + Math.min(6, Math.floor(lvl/3)) + ab; }   // +1 heart every 3 levels (cap 12) + bonus ❤️ from EQUIPPED rare/epic armor (Warded Vest +1, Aegis Plate +2)
+function xpToNext(lvl){ return Math.floor(50*Math.pow(Math.max(1,lvl),1.5)); }   // smooth curve to the LEVEL-50 cap (~355k total): early fast (ding-ding-ding), later slower
+function hpMaxForLevel(lvl){ const ab=(state.armor&&ARMORS[state.armor]&&ARMORS[state.armor].bonusHp)||0; return 6 + ab; }   // base 6 hearts; ONLY rare/epic armor (bonusHp) expands max health — leveling rewards go to gear/armor/badges, not heart-bloat
+// ARMOR RATING (points): a separate defensive stat shown as a row below the hearts. Regular gear caps at 6 pts (=30% damage reduction); rare/epic can exceed via buffs up to 15 (=75% cap); scales by tier + rarity + level.
+function armorRating(id, lvl){ const a=ARMORS[id]; if(!a) return 0; const ti=ATIER.indexOf(id), rar=(a.rarity&&RARITY[a.rarity])?RARITY[a.rarity].mult:1; const base=ti>0?ti*2:4; const ap=(base+Math.floor((lvl||1)/12))*rar; return a.rarity?Math.min(15,ap):Math.min(6,ap); }
 function onLevelUp(){
   const fresh=RECIPES.filter(r=>!r.locked && (r.lvl||1)===state.level).map(r=>r.name);
   state.hpMax=hpMaxForLevel(state.level); state.hp=state.hpMax; if(typeof renderHearts==='function') renderHearts();
   try{ SFX.play('success'); }catch(e){} shake(0.4);   // removed the win.ogg fanfare — win.ogg is a 180s MUSIC TRACK (not an SFX) that blared at random mid-combat on every level-up (owner report); kept a short level-up ding
   confetti(player.position.clone().setY(2.4), 30);
-  let msg=`⭐ LEVEL UP! You reached Level ${state.level}.`; if(fresh.length) msg+=` New: ${fresh.join(', ')} — press C to craft.`;
+  let msg=`⭐ LEVEL UP! You reached Level ${state.level}.`;
+  if(fresh.length){ msg+=` New: ${fresh.join(', ')} — press C to craft.`; }
+  else { state.giggle=(state.giggle||0)+25; msg+=` +25 ✨`; if(state.level%5===0){ Inv.add('health_potion',1); msg+=` + a 🧪 Health Potion!`; } }   // past the recipe tree: every level still rewards (giggle, +a potion every 5) so leveling beyond 15 stays meaningful
   toast(msg);
 }
 function gainXP(n){ if(!(n>0)) return; state.xp=(state.xp||0)+n; let leveled=false;
-  while(state.xp >= xpToNext(state.level)){ state.xp-=xpToNext(state.level); state.level++; leveled=true; onLevelUp(); }
+  while(state.level<50 && state.xp >= xpToNext(state.level)){ state.xp-=xpToNext(state.level); state.level++; leveled=true; onLevelUp(); } if(state.level>=50) state.xp=Math.min(state.xp, xpToNext(50));   // hard level cap 50
   renderXP(); if(craftOpen) renderCraft(); if(leveled) save(); }
 function renderXP(){ const lv=document.getElementById('vLevel'), xv=document.getElementById('vXP'), f=document.getElementById('fXP'); if(!lv) return;
   const need=xpToNext(state.level); lv.textContent=state.level; xv.textContent=`${Math.floor(state.xp||0)}/${need}`; f.style.width=Math.min(100,((state.xp||0)/need*100))+'%'; }
@@ -1550,12 +1558,12 @@ function recipeLevel(r){ return r.lvl||1; }
 /* ============================ CRAFTING ============================ */
 const RECIPES=[
   {id:'wood_sword', name:'🗡️ Wooden Sword', cat:'tool', lvl:1, cost:{wood:3}, weapon:true, build:p=>gainWeapon('wood_sword') },
-  {id:'stone_sword', name:'⚔️ Stone Sword', cat:'tool', lvl:2, cost:{stone:3,wood:1}, weapon:true, build:p=>gainWeapon('stone_sword') },
-  {id:'crystal_sword', name:'💎 Crystal Sword', cat:'tool', lvl:5, cost:{crystal:2,stone:2}, weapon:true, build:p=>gainWeapon('crystal_sword') },
+  {id:'stone_sword', name:'⚔️ Stone Sword', cat:'tool', lvl:6, cost:{stone:3,wood:1}, weapon:true, build:p=>gainWeapon('stone_sword') },
+  {id:'crystal_sword', name:'💎 Crystal Sword', cat:'tool', lvl:21, cost:{crystal:2,stone:2}, weapon:true, build:p=>gainWeapon('crystal_sword') },
   {id:'pickaxe', name:'⛏️ Pickaxe', cat:'tool', lvl:1, cost:{wood:2,stone:2}, weapon:true, build:p=>gainPickaxe() },
   {id:'shovel', name:'🥄 Shovel', cat:'tool', lvl:1, cost:{wood:2}, weapon:true, build:p=>gainShovel() },
-  {id:'leather_armor', name:'🛡️ Leather Armor', cat:'tool', lvl:2, cost:{flower:3,wood:2}, weapon:true, build:p=>gainArmor('leather') },
-  {id:'iron_armor', name:'🦺 Iron Armor', cat:'tool', lvl:4, cost:{stone:4,crystal:1}, weapon:true, build:p=>gainArmor('iron') },
+  {id:'leather_armor', name:'🛡️ Leather Armor', cat:'tool', lvl:3, cost:{flower:3,wood:2}, weapon:true, build:p=>gainArmor('leather') },
+  {id:'iron_armor', name:'🦺 Iron Armor', cat:'tool', lvl:13, cost:{stone:4,crystal:1}, weapon:true, build:p=>gainArmor('iron') },
   {id:'door', name:'🚪 Wooden Door', cat:'build', lvl:1, cost:{wood:3}, build:p=>{ const a=box(0.2,2.6,0.2,'#8a5a31'); a.position.set(p.x-0.7,1.3,p.z); world.add(a); const b=a.clone(); b.position.x=p.x+0.7; world.add(b); const top=box(1.8,0.3,0.3,'#8a5a31'); top.position.set(p.x,2.7,p.z); world.add(top); const dr=box(1.2,2.3,0.14,'#a9743f'); dr.position.set(p.x,1.25,p.z); world.add(dr); addSolid(dr); } },
   {id:'fence', name:'🚧 Picket Fence', cat:'build', lvl:1, cost:{wood:3}, build:p=>{ const m=box(2.2,1.4,0.25,'#fff7ec'); m.position.set(p.x,0.7,p.z); world.add(m); addSolid(m); } },
   {id:'path', name:'🟫 Stone Path', cat:'build', lvl:1, cost:{stone:3}, build:p=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(2.4,2.4),toon('#b9b2a6')); m.rotation.x=-Math.PI/2; m.position.set(p.x,0.04,p.z); m.receiveShadow=true; world.add(m); } },
@@ -1568,17 +1576,18 @@ const RECIPES=[
   {id:'pie', name:'🥧 Apple Pie (eat)', cat:'food', lvl:1, cost:{apple:3}, consume:true, build:()=>{ Needs.add('hunger',45); markGoal('eat'); toast('🥧 Yum! +45 hunger.'); } },
   {id:'stew', name:'🍲 Carrot Stew (eat)', cat:'food', lvl:1, cost:{carrot:3}, consume:true, build:()=>{ Needs.add('energy',40); Needs.add('hunger',15); markGoal('eat'); toast('🍲 Hearty! +energy.'); } },
   // ── E3 TECH: furnace + ingot-tier tools/armor (smelt ore at a furnace into ingots) ──
-  {id:'furnace', name:'🔥 Furnace', cat:'tool', lvl:3, cost:{stone:8}, build:p=>{ const base=box(1.2,1.4,1.2,'#54504a'); base.position.set(p.x,0.7,p.z); world.add(base); const mouth=box(0.6,0.6,0.1,'#1a1410'); mouth.position.set(p.x,0.55,p.z+0.61); world.add(mouth); const glow=ball(0.2,'#ff8a3d'); glow.position.set(p.x,0.55,p.z+0.55); world.add(glow); addSolid(base); addInteractable(base,'🔥 Smelt ore (stone→iron, crystal→gold · 🪵 fuel)',()=>smeltAll(),2.9); } },
-  {id:'iron_sword', name:'🗡️ Iron Sword', cat:'tool', lvl:4, cost:{iron_ingot:2,wood:1}, weapon:true, build:p=>gainWeapon('iron_sword') },
-  {id:'gold_sword', name:'🌟 Gold Sword', cat:'tool', lvl:6, cost:{gold_ingot:2,wood:1}, weapon:true, build:p=>gainWeapon('gold_sword') },
-  {id:'iron_pickaxe', name:'⛏️ Iron Pickaxe', cat:'tool', lvl:4, cost:{iron_ingot:2,wood:1}, weapon:true, build:p=>gainPickaxe(1) },
-  {id:'gold_pickaxe', name:'⛏️ Gold Pickaxe', cat:'tool', lvl:6, cost:{gold_ingot:2,wood:1}, weapon:true, build:p=>gainPickaxe(2) },
-  {id:'iron_shovel', name:'🥄 Iron Shovel', cat:'tool', lvl:4, cost:{iron_ingot:1,wood:1}, weapon:true, build:p=>gainShovel(1) },
-  {id:'gold_shovel', name:'🥄 Gold Shovel', cat:'tool', lvl:6, cost:{gold_ingot:1,wood:1}, weapon:true, build:p=>gainShovel(2) },
-  {id:'gold_armor', name:'🥇 Gold Armor', cat:'tool', lvl:6, cost:{gold_ingot:3}, weapon:true, build:p=>gainArmor('gold') },
+  {id:'furnace', name:'🔥 Furnace', cat:'tool', lvl:8, cost:{stone:8}, build:p=>{ const base=box(1.2,1.4,1.2,'#54504a'); base.position.set(p.x,0.7,p.z); world.add(base); const mouth=box(0.6,0.6,0.1,'#1a1410'); mouth.position.set(p.x,0.55,p.z+0.61); world.add(mouth); const glow=ball(0.2,'#ff8a3d'); glow.position.set(p.x,0.55,p.z+0.55); world.add(glow); addSolid(base); addInteractable(base,'🔥 Smelt ore (stone→iron, crystal→gold · 🪵 fuel)',()=>smeltAll(),2.9); } },
+  {id:'iron_sword', name:'🗡️ Iron Sword', cat:'tool', lvl:13, cost:{iron_ingot:2,wood:1}, weapon:true, build:p=>gainWeapon('iron_sword') },
+  {id:'gold_sword', name:'🌟 Gold Sword', cat:'tool', lvl:29, cost:{gold_ingot:2,wood:1}, weapon:true, build:p=>gainWeapon('gold_sword') },
+  {id:'iron_pickaxe', name:'⛏️ Iron Pickaxe', cat:'tool', lvl:13, cost:{iron_ingot:2,wood:1}, weapon:true, build:p=>gainPickaxe(1) },
+  {id:'gold_pickaxe', name:'⛏️ Gold Pickaxe', cat:'tool', lvl:29, cost:{gold_ingot:2,wood:1}, weapon:true, build:p=>gainPickaxe(2) },
+  {id:'iron_shovel', name:'🥄 Iron Shovel', cat:'tool', lvl:13, cost:{iron_ingot:1,wood:1}, weapon:true, build:p=>gainShovel(1) },
+  {id:'gold_shovel', name:'🥄 Gold Shovel', cat:'tool', lvl:29, cost:{gold_ingot:1,wood:1}, weapon:true, build:p=>gainShovel(2) },
+  {id:'gold_armor', name:'🥇 Gold Armor', cat:'tool', lvl:29, cost:{gold_ingot:3}, weapon:true, build:p=>gainArmor('gold') },
   // ── E5 BOSS-ONLY top tier: needs 💠 Boss Core, which ONLY bosses drop — you can't reach these without beating a boss ──
-  {id:'titan_blade', name:'⚡ Titan Blade', cat:'tool', lvl:7, cost:{boss_core:2,gold_ingot:2}, weapon:true, build:p=>gainWeapon('titan_blade') },
-  {id:'titan_armor', name:'⚡ Titan Plate', cat:'tool', lvl:7, cost:{boss_core:2,gold_ingot:1}, weapon:true, build:p=>gainArmor('titan') },
+  {id:'titan_blade', name:'⚡ Titan Blade', cat:'tool', lvl:37, cost:{boss_core:2,gold_ingot:2}, weapon:true, build:p=>gainWeapon('titan_blade') },
+  {id:'titan_armor', name:'⚡ Titan Plate', cat:'tool', lvl:37, cost:{boss_core:2,gold_ingot:1}, weapon:true, build:p=>gainArmor('titan') },
+  {id:'mythic_blade', name:'🌠 Mythic Blade', cat:'tool', lvl:44, cost:{boss_core:4,gold_ingot:4,crystal:8}, weapon:true, build:p=>gainWeapon('mythic_blade') },   // endgame craft (Lv44): the strongest blade
   // ── E3 BUILD ──
   {id:'wood_wall', name:'🟫 Wood Wall', cat:'build', lvl:1, cost:{wood:4}, build:p=>{ const m=box(2.4,2.4,0.3,'#a9743f'); m.position.set(p.x,1.2,p.z); world.add(m); addSolid(m); } },
   {id:'stone_wall', name:'🧱 Stone Wall', cat:'build', lvl:2, cost:{stone:4}, build:p=>{ const m=box(2.4,2.4,0.3,'#9a948a'); m.position.set(p.x,1.2,p.z); world.add(m); addSolid(m); } },
@@ -1607,6 +1616,7 @@ const RECIPES=[
   {id:'bread', name:'🍞 Bread (eat)', cat:'food', lvl:1, cost:{carrot:2}, consume:true, build:()=>{ Needs.add('hunger',30); markGoal('eat'); toast('🍞 Fresh bread! +hunger'); } },
   {id:'salad', name:'🥗 Garden Salad (eat)', cat:'food', lvl:1, cost:{flower:2,carrot:1}, consume:true, build:()=>{ Needs.add('hunger',22); Needs.add('energy',14); markGoal('eat'); toast('🥗 Crisp salad! +hunger +energy'); } },
   {id:'mushroom_soup', name:'🍲 Mushroom Soup (eat)', cat:'food', lvl:1, cost:{mushroom:3}, consume:true, build:()=>{ Needs.add('hunger',34); markGoal('eat'); toast('🍲 Warming soup! +hunger'); } },
+  {id:'brew_potion', name:'🧪 Brew Health Potion', cat:'food', lvl:3, cost:{mushroom:2,flower:2,crystal:1}, build:()=>{ Inv.add('health_potion',1); markGoal('craft'); toast('🧪 Brewed a Health Potion — it\'s in your 🎒 bag.'); } },
   {id:'roast', name:'🍗 Roast Meat (eat)', cat:'food', lvl:2, cost:{meat:2}, consume:true, build:()=>{ Needs.add('hunger',40); if(state.hp<state.hpMax){state.hp=Math.min(state.hpMax,state.hp+4);renderHearts();} markGoal('eat'); toast('🍗 Hearty roast! +hunger +4❤️'); } },
   {id:'omelette', name:'🍳 Omelette (eat)', cat:'food', lvl:2, cost:{egg:2}, consume:true, build:()=>{ Needs.add('hunger',26); Needs.add('energy',10); if(state.hp<state.hpMax){state.hp=Math.min(state.hpMax,state.hp+2);renderHearts();} markGoal('eat'); toast('🍳 Fluffy omelette! +hunger +2❤️'); } },
   {id:'cheese', name:'🧀 Cheese (eat)', cat:'food', lvl:2, cost:{milk:2}, consume:true, build:()=>{ Needs.add('hunger',24); if(state.hp<state.hpMax){state.hp=Math.min(state.hpMax,state.hp+2);renderHearts();} markGoal('eat'); toast('🧀 Tangy cheese! +hunger +2❤️'); } },
@@ -1679,6 +1689,8 @@ const SHOP=[
   {id:'hat', name:'🎩 Dapper Top Hat', price:150, kind:'hat', buy(){ giveHat(); toast("🎩 Lookin' dapper!"); } },
   {id:'snackpack', name:'🍎 Snack Pack', price:25, kind:'buy', buy(){ Needs.add('hunger',50); toast('🍎 +50 hunger'); } },
   {id:'fizzypop', name:'⚡ Fizzy Pop', price:25, kind:'buy', buy(){ Needs.add('energy',50); toast('⚡ +50 energy'); } },
+  {id:'buy_potion', name:'🧪 Health Potion (+6 ❤️)', price:40, kind:'buy', buy(){ Inv.add('health_potion',1); toast('🧪 Bought a Health Potion — stock up + drink it from your 🎒 bag (I) when you need it.'); } },
+  {id:'buy_tonic', name:'🧉 Energy Tonic (+energy)', price:30, kind:'buy', buy(){ Inv.add('energy_tonic',1); toast('🧉 Bought an Energy Tonic — drink it from your bag.'); } },
 ];
 let shopOpen=false, currentVendor=null;   // currentVendor = a home's per-house shop (null = town General Store)
 function homePrice(){ return HOME_TIERS[state.homeTier||0]; }
@@ -2288,7 +2300,8 @@ function smeltAll(){ let iron=0,gold=0;
   toast(`🔥 Smelted${iron?` +${iron} 🔩`:''}${gold?` +${gold} 🥇`:''}! (burned 🪵 fuel)`); save(); }
 
 /* ---------- STAGE B: NIGHT COMBAT (lethal plant-monsters; die -> respawn at home) ---------- */
-function renderHearts(){ const el=document.getElementById('hearts'); if(!el)return; let h=''; for(let i=0;i<state.hpMax;i++) h+=(i<state.hp?'❤️':'🖤'); el.innerHTML=h; }
+function renderHearts(){ const el=document.getElementById('hearts'); if(el){ let h=''; for(let i=0;i<state.hpMax;i++) h+=(i<state.hp?'❤️':'🖤'); el.innerHTML=h; }
+  const ae=document.getElementById('armorbar'); if(ae){ const ap=armorRating(state.armor,state.level); let a=''; for(let i=0;i<Math.min(ap,12);i++) a+='🛡️'; if(ap>12)a+='＋'; ae.innerHTML=a; ae.style.display=ap>0?'':'none'; } }   // ARMOR row below hearts (only shows when wearing armor)
 function flashRed(){ const f=document.createElement('div'); f.style.cssText='position:fixed;inset:0;background:#c0203a;opacity:0;z-index:38;transition:opacity .12s;pointer-events:none'; document.body.appendChild(f); requestAnimationFrame(()=>{ f.style.opacity='.32'; setTimeout(()=>{ f.style.opacity='0'; setTimeout(()=>f.remove(),200); },90); }); }
 /* MONSTER TYPES (owner: 4-7 distinct monsters, "Minecraft VS Plants" garden-horror theme). Each has a
    build() (geometry) + combat stats: hp multiplier, move speed, contact dmg, bob speed, idle float height,
@@ -2379,13 +2392,13 @@ function spawnCreature(){ let sx,sz,pd;
 function despawnCreatures(){ for(const c of creatures) world.remove(c.mesh); creatures.length=0;
   for(const d of drops) world.remove(d.mesh); drops.length=0; for(const p of projectiles) world.remove(p.mesh); projectiles.length=0; }
 function damagePlayer(n){ if(state._invuln>0)return;
-  if(state.armor && ARMORS[state.armor] && Math.random()<ARMORS[state.armor].block){ state._blocks=(state._blocks||0)+1; state._invuln=0.5; SFX.play('interact',{vol:0.4}); toast('🛡️ Armor blocked the hit!'); return; }
-  const roll=rollDamage(n,0); const nd=roll.dmg;   // 🎲 enemy attacks roll dice too (the armor-block check above is the player's defense)
+  const roll=rollDamage(n,0); const ap=armorRating(state.armor,state.level); const red=Math.min(15,ap)*0.05; let nd=Math.max(1,Math.round(roll.dmg*(1-red)));   // 🛡️ ARMOR RATING soaks 5%/pt of every hit (cap 75%); at least 1 always lands
+  if(ap>0 && nd<roll.dmg) state._blocks=(state._blocks||0)+1;
   state.hp=Math.max(0,state.hp-nd); state._invuln=1.0; shake(0.4); SFX.play('interact'); flashRed(); renderHearts();
   popDmg(player.position.x, (player.position.y||0)+2.4, player.position.z, nd, {crit:roll.crit, color:'#ff6b6b'});   // floating damage number over the player
   if(state.hp<=0) respawnPlayer(); }
 function equipBestArmor(){ for(let i=ATIER.length-1;i>=1;i--){ if(state.armors&&state.armors[ATIER[i]]){ state.armor=ATIER[i]; return; } } state.armor=''; }
-function gainArmor(id){ state.armors[id]=true; equipBestArmor(); const a=ARMORS[id]; toast(`${a.icon} Crafted + equipped ${a.name} (${Math.round(a.block*100)}% block)!`); if(invOpen)renderInv(); save(); }
+function gainArmor(id){ state.armors[id]=true; equipBestArmor(); const a=ARMORS[id]; if(typeof renderHearts==='function')renderHearts(); toast(`${a.icon} Crafted + equipped ${a.name} (${armorRating(state.armor,state.level)} 🛡️ armor)!`); if(invOpen)renderInv(); save(); }
 function respawnPlayer(){ if(DUNGEON.inDungeon)DUNGEON.inDungeon=false; if(MINE.inMine)MINE.inMine=false; if(UG.active)exitUnderground();   // dying UNDERGROUND must restore the surface sky+lighting (owner: "game stays dark after dying in a dungeon")
   state.hp=state.hpMax; player.position.set(HOUSE.cx,0.3,HOUSE.cz+12); vy=0; state._invuln=2.6; despawnCreatures(); renderHearts(); toast('💀 Overwhelmed! You wake up safe at home.'); flashFade(); save(); }
 function equipBest(){ for(let i=WTIER.length-1;i>=0;i--){ if(i===0||state.weapons[WTIER[i]]){ state.weapon=WTIER[i]; return; } } }
@@ -2445,6 +2458,7 @@ function dropGear(x,z, pair){ pair=pair||pick(RARE_GEAR); const id=pair[0], kind
   m.position.set(x+rand(-0.5,0.5),0.85,z+rand(-0.5,0.5)); m.castShadow=true; world.add(m);
   drops.push({mesh:m, gear:id, gkind:kind, n:1, bob:rand(0,TAU), t:0}); }
 function equipGear(id, kind){ const tbl=(kind==='weapon')?WEAPONS:ARMORS, it=tbl[id]; if(!it) return;
+  if(EQUIP_LVL[id] && (state.level||1)<EQUIP_LVL[id]){ toast(`🔒 Reach Level ${EQUIP_LVL[id]} to equip ${it.name}.`); SFX.play('interact',{rate:0.6,vol:0.4}); return; }   // equip-by-level gate for dropped epic gear
   if(kind==='weapon'){ if(!state.weapons[id]) return; state.weapon=id; }
   else { if(!state.armors[id]) return; state.armor=id; state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
   SFX.play('success',{vol:0.4}); toast(`${it.icon} Equipped ${it.name}!`); syncSel(); Inv.render(); if(invOpen)renderInv(); save(); }
@@ -2992,11 +3006,11 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       if(blk){ const m=blk.mesh.position; player.position.set(m.x,0.3,m.z-1.5); player.rotation.y=Math.atan2(m.x-player.position.x, m.z-player.position.z); digBlock(); }
       R.mine_dig=(MINE.blocks.filter(b=>b.solid.off).length>0 && ((state.inv.stone||0)+(state.inv.crystal||0))>ore0);
       exitMine(); R.mine_exit=(MINE.inMine===false); }
-    // KIT: armor reduces damage (deterministic — force the block chance to 1 then 0)
+    // KIT: ARMOR RATING reduces damage (armor points = 5%/pt). Over many hits, wearing armor takes clearly less total damage than none.
     { Inv.add('stone',4); Inv.add('crystal',1); craft('iron_armor'); R.armor_craft=(state.armor==='iron');
-      const b0=ARMORS.iron.block; ARMORS.iron.block=1; state.hp=5; state._invuln=0; damagePlayer(1); const blocked=(state.hp===5);
-      ARMORS.iron.block=0; state.hp=20; state._invuln=0; damagePlayer(1); const unblocked=(state.hp<20); ARMORS.iron.block=b0;   // dice damage varies -> assert "took damage" (hp high so no respawn)
-      R.armor_reduces=(blocked && unblocked); }
+      const totalDmg=(arm)=>{ state.armor=arm; let t=0; for(let i=0;i<60;i++){ state.hp=1000; state._invuln=0; damagePlayer(20); t+=(1000-state.hp); } return t; };
+      const dIron=totalDmg('iron'), dNone=totalDmg(''); state.armor='iron';
+      R.armor_reduces=(dNone>0 && dIron<dNone); }
     // RARITY: common/rare/epic distribution (epic rarest) + loot scales by tier
     { const counts={common:0,rare:0,epic:0}; for(let i=0;i<2000;i++) counts[rollRarity()]++;
       R.rarity_tiers=(counts.common>0 && counts.rare>0 && counts.epic>0 && counts.epic<counts.rare && counts.rare<counts.common);
@@ -3027,6 +3041,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       for(const k in hi.cost) Inv.add(k,hi.cost[k]); const built0=state.built||0; delete state.weapons[hi.id]; craft(hi.id);
       R.recipe_level_lock = (recipeLevel(hi)>state.level) && (state.weapons[hi.id]!==true) && ((state.built||0)===built0);   // craft() refused while under-level
       gainXP(900); R.level_up=(state.level>1);
+      state.level=recipeLevel(hi); state.xp=0;   // tiers now span 1-50 -> jump to the recipe's gate level for the unlock check
       for(const k in hi.cost) Inv.add(k,hi.cost[k]); craft(hi.id);
       R.recipe_level_unlock = (recipeLevel(hi)<=state.level) && (state.weapons[hi.id]===true || (state.built||0)>built0);   // now it crafts
       state.level=99; state.xp=0; state.hpMax=hpMaxForLevel(99); state.hp=state.hpMax; }

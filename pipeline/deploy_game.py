@@ -282,10 +282,14 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False):
         return {"ok": False, "uploaded": 0, "total": total, "url": None, "reason": "r2 upload failed"}
 
     metadata["game_url"] = f"{CDN_BASE}/{slug}/index.html"
+    _tv = ""
+    if thumb_path.exists():
+        import hashlib as _hl
+        _tv = "?v=" + _hl.md5(thumb_path.read_bytes()).hexdigest()[:8]   # cache-bust: the URL changes ONLY when the image bytes change, so browsers fetch a new cover instantly (the CDN sends max-age=86400, which otherwise pins the old cover for 24h)
     if thumb_path.exists() and not metadata.get("thumbnail_url"):
-        metadata["thumbnail_url"] = f"{CDN_BASE}/{slug}/thumbnail.png"
+        metadata["thumbnail_url"] = f"{CDN_BASE}/{slug}/thumbnail.png{_tv}"
     if thumb_path.exists() and not metadata.get("hero_image_url"):
-        metadata["hero_image_url"] = f"{CDN_BASE}/{slug}/thumbnail.png"
+        metadata["hero_image_url"] = f"{CDN_BASE}/{slug}/thumbnail.png{_tv}"
     insert_game_metadata(slug, metadata)
     print(f"Done! Game available at: {CDN_BASE}/{slug}/index.html")
     return {"ok": uploaded == total, "uploaded": uploaded, "total": total, "url": f"{CDN_BASE}/{slug}/index.html"}
