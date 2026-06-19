@@ -303,7 +303,7 @@ addEventListener('error', e=>__report('window.error', e.error||e.message));
 addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reason));
 
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
-  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, built:0, req:null,
+  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
   hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, _blocks:0, _activeTool:'',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
@@ -1403,7 +1403,7 @@ function legendHTML(){ const recipesAll=Object.keys(state.craftedSet||{}).length
 const SAVE_V=2;
 function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V, day:state.day,giggle:state.giggle,goals:state.goals,bestDay:state.bestDay,inv:state.inv,stash:state.stash,built:state.built,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
-  unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors,
+  unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, gear:state.gear,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
   tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug })); }catch(e){} }
@@ -1425,6 +1425,9 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.level=num(s.level,1,1,50); state.xp=num(s.xp,0,0,1e9); state.hpMax=hpMaxForLevel(state.level);   // XP/level restore; max HP derives from level + equipped-armor bonus ❤️
   state.weapons=(s.weapons&&typeof s.weapons==='object')?s.weapons:{}; for(const id in state.weapons){ const r=RECIPES.find(x=>x.id===id); if(r&&r.weapon&&r.locked) r.locked=false; } state.weapon=(WEAPONS[s.weapon]?s.weapon:'fist'); if(state.weapon==='fist') equipBest();   // keep a saved dropped weapon equipped; only auto-pick when none state.hasPickaxe=!!s.hasPickaxe; state.hasShovel=!!s.hasShovel; state.pickTier=num(s.pickTier,0,0,2); state.shovelTier=num(s.shovelTier,0,0,2);
   state.armors=(s.armors&&typeof s.armors==='object')?s.armors:{}; for(const id in state.armors){ const r=RECIPES.find(x=>x.id===id+'_armor'); } state.armor=(ARMORS[s.armor]?s.armor:''); if(!state.armor) equipBestArmor();   // keep a saved dropped armor equipped
+  state.gear=(s.gear&&typeof s.gear==='object')?{helmet:ARMORS[s.gear.helmet]?s.gear.helmet:'',body:ARMORS[s.gear.body]?s.gear.body:'',legs:ARMORS[s.gear.legs]?s.gear.legs:'',boots:ARMORS[s.gear.boots]?s.gear.boots:''}:{helmet:'',body:'',legs:'',boots:''};
+  if(!state.gear.body && state.armor) state.gear.body=state.armor;   // migrate v2 saves (single armor -> body slot)
+  if(state.gear.body) state.armor=state.gear.body;   // keep state.armor mirrored to the body slot
   state.craftedSet=(s.craftedSet&&typeof s.craftedSet==='object')?s.craftedSet:{}; state.reqsFulfilled=num(s.reqsFulfilled,0,0,1e9); state.biomes=(s.biomes&&typeof s.biomes==='object')?s.biomes:{}; state.event=DAY_EVENTS.find(e=>e.id===s.eventId)||null;
   if(typeof s.tod==='number'&&Number.isFinite(s.tod)) state.tod=((s.tod%1)+1)%1;
   if(s.volume!=null) state.volume=clamp(+s.volume||0,0,1); state.musicOn=(s.musicOn!==false); state.sfxOn=(s.sfxOn!==false); state.reduce=!!s.reduce;
@@ -1489,7 +1492,7 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
     +`<div class="invstat">❤️ Health <b>${state.hp}/${state.hpMax}</b></div>`
     +`<div class="invstat">⭐ Level <b>${state.level}</b></div>`
     +`<div class="invstat">${w.icon} ${w.name} <b>dmg ${w.dmg}</b></div>`
-    +`<div class="invstat">${ar?ar.icon:'🧥'} ${ar?ar.name:'No armor'}${ar?' <b>'+armorRating(state.armor,state.level)+' 🛡️</b>':''}</div>`
+    +`<div class="invstat">🛡️ Armor <b>${armorTotal(state.level)}</b> ${(()=>{const g=state.gear||{},n=['helmet','body','legs','boots'].filter(s=>g[s]).length; const tiers=['helmet','body','legs','boots'].map(s=>g[s]?(ARMORS[g[s]]&&ARMORS[g[s]].tier):null); const set=tiers[0]&&tiers.every(t=>t===tiers[0]); return n?`(${n}/4${set?' · SET!':''})`:'(none)';})()}</div>`
     +`<div class="invstat">✨ Giggle <b>${state.giggle}</b></div>`
     +`<div class="invstat">📖 Pages <b>${state.recipePages||0}</b>${state.hasPickaxe?' · ⛏️ Pickaxe':''}</div>`
   +`</div>`;
@@ -1497,26 +1500,25 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
   const ownedGear=[];
   for(const id of WTIER.slice(1)){ if(state.weapons&&state.weapons[id]) ownedGear.push([id,'weapon']); }   // craftable swords in tier order
   for(const id in (state.weapons||{})){ if(WEAPONS[id]&&WEAPONS[id].rarity) ownedGear.push([id,'weapon']); }   // rare/epic drops
-  for(const id of ATIER.slice(1)){ if(state.armors&&state.armors[id]) ownedGear.push([id,'armor']); }
-  for(const id in (state.armors||{})){ if(ARMORS[id]&&ARMORS[id].rarity) ownedGear.push([id,'armor']); }
+  for(const id in (state.armors||{})){ if(ARMORS[id]) ownedGear.push([id,'armor']); }   // ALL owned armor pieces (body + helmet/legs/boots + rare/epic); each shows its slot
   if(state.hasPickaxe) ownedGear.push(['pickaxe','tool']);
   if(state.hasShovel) ownedGear.push(['shovel','tool']);
   const TOOLDEF={pickaxe:{icon:'⛏️',name:'Pickaxe',tier:'pickTier'},shovel:{icon:'🥄',name:'Shovel',tier:'shovelTier'}};
   if(ownedGear.length){ h+=`<div style="margin:8px 0;padding:8px;border-radius:10px;background:rgba(0,0,0,0.18)"><div style="font-weight:800;margin-bottom:6px">⚔️ Equipment <span style="font-weight:400;opacity:.7;font-size:12px">— weapons, armor &amp; tools you own (click to equip)</span></div>`;
     for(const [id,kind] of ownedGear){
       if(kind==='tool'){ const td=TOOLDEF[id], tn=['','Iron ','Gold '][state[td.tier]||0]||''; h+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 7px;margin:4px 0;border:2px solid #b9852f;border-radius:9px;background:rgba(0,0,0,0.15)"><span style="font-size:20px">${td.icon}</span><span style="flex:1;line-height:1.2"><b>${tn}${td.name}</b><br><span style="font-size:11px;opacity:.85">on your hotbar — select it, then 🖱️ / G to ${id==='pickaxe'?'mine':'dig'}</span></span></div>`; continue; }
-      const it=(kind==='weapon'?WEAPONS:ARMORS)[id]; const rr=RARITY[it.rarity]||RARITY.common; const on=(kind==='weapon'?state.weapon:state.armor)===id;
+      const it=(kind==='weapon'?WEAPONS:ARMORS)[id]; const rr=RARITY[it.rarity]||RARITY.common; const aslot=(kind==='armor')?(it.slot||'body'):''; const on=(kind==='weapon') ? state.weapon===id : (state.gear&&state.gear[aslot])===id;
       const stat = kind==='weapon'
         ? `dmg ${it.dmg}${it.crit?` · +${Math.round(it.crit*100)}% crit`:''}${it.life?` · ${Math.round(it.life*100)}% lifesteal`:''}`
-        : `${armorRating(id,state.level)} 🛡️ armor${it.bonusHp?` · +${it.bonusHp/2} ❤️`:''}${it.regen?' · regen':''}`;
-      h+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 7px;margin:4px 0;border:2px solid ${rr.color};border-radius:9px;background:${on?'rgba(255,255,255,0.13)':'rgba(0,0,0,0.15)'}"><span style="font-size:20px">${it.icon}</span><span style="flex:1;line-height:1.2"><b style="color:${rr.color}">${rr.mark}${it.name}</b><br><span style="font-size:11px;opacity:.85">${stat}</span></span><button data-gear="${id}" data-kind="${kind}" style="padding:5px 11px;border:0;border-radius:7px;cursor:pointer;font-weight:700;background:${on?'#cc4444':'#2ec5a8'};color:#fff">${on?'Unequip':'Equip'}</button></div>`; }
+        : `${aslot} · ${armorRating(id,state.level).toFixed(1)} 🛡️${it.bonusHp?` · +${it.bonusHp/2} ❤️`:''}${it.regen?' · regen':''}`;
+      h+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 7px;margin:4px 0;border:2px solid ${rr.color};border-radius:9px;background:${on?'rgba(255,255,255,0.13)':'rgba(0,0,0,0.15)'}"><span style="font-size:20px">${it.icon}</span><span style="flex:1;line-height:1.2"><b style="color:${rr.color}">${rr.mark}${it.name}</b><br><span style="font-size:11px;opacity:.85">${stat}</span></span><button data-gear="${id}" data-kind="${kind}" data-slot="${aslot}" style="padding:5px 11px;border:0;border-radius:7px;cursor:pointer;font-weight:700;background:${on?'#cc4444':'#2ec5a8'};color:#fff">${on?'Unequip':'Equip'}</button></div>`; }
     h+=`</div>`; }
   h+=`<div class="invgrid">`;
   for(const k of Object.keys(ITEMS)){ const c=state.inv[k]||0; const eat=FOOD_EFFECTS[k]&&c>0; const desc=ITEM_DESC[k]?ITEMS[k].n+' — '+ITEM_DESC[k]:ITEMS[k].n; h+=`<div class="invtile${c>0?'':' empty'}${eat?' eatable':''}" title="${desc}" ${eat?`data-eat="${k}"`:''}><span class="tc">${c}</span><div class="ti">${ITEMS[k].i}</div><div class="tn">${ITEMS[k].n}${eat?'<br><span class="eathint">click to eat</span>':''}</div></div>`; }
   h+=`</div></div>`;
   el.innerHTML=h; const x=el.querySelector('#invX'); if(x)x.onclick=closeInv; el.onclick=(e)=>{ if(e.target===el) closeInv(); };
   el.querySelectorAll('.invtile[data-eat]').forEach(t=> t.onclick=(e)=>{ e.stopPropagation(); if(eatFood(t.dataset.eat)) renderInv(); });
-  el.querySelectorAll('button[data-gear]').forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); const id=b.dataset.gear, kind=b.dataset.kind, on=(kind==='weapon'?state.weapon:state.armor)===id; if(on) unequipGear(kind); else equipGear(id,kind); }); }
+  el.querySelectorAll('button[data-gear]').forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); const id=b.dataset.gear, kind=b.dataset.kind, slot=b.dataset.slot; const on=(kind==='weapon') ? state.weapon===id : (state.gear&&state.gear[slot||'body'])===id; if(on) unequipGear(kind, slot); else equipGear(id,kind); }); }
 
 /* ============================ GATHER NODES ============================ */
 // a thin trunk/post collider (blocks walking through; not standable) gated on an optional mesh's visibility
@@ -1552,7 +1554,11 @@ function setNodeReady(node){ if(!node||!node.mesh)return; node.mesh.userData.onC
 function xpToNext(lvl){ return Math.floor(50*Math.pow(Math.max(1,lvl),1.5)); }   // smooth curve to the LEVEL-50 cap (~355k total): early fast (ding-ding-ding), later slower
 function hpMaxForLevel(lvl){ const ab=(state.armor&&ARMORS[state.armor]&&ARMORS[state.armor].bonusHp)||0; return 6 + ab; }   // base 6 hearts; ONLY rare/epic armor (bonusHp) expands max health — leveling rewards go to gear/armor/badges, not heart-bloat
 // ARMOR RATING (points): a separate defensive stat shown as a row below the hearts. Regular gear caps at 6 pts (=30% damage reduction); rare/epic can exceed via buffs up to 15 (=75% cap); scales by tier + rarity + level.
-function armorRating(id, lvl){ const a=ARMORS[id]; if(!a) return 0; const ti=ATIER.indexOf(id), rar=(a.rarity&&RARITY[a.rarity])?RARITY[a.rarity].mult:1; const base=ti>0?ti*2:4; const ap=(base+Math.floor((lvl||1)/12))*rar; return a.rarity?Math.min(15,ap):Math.min(6,ap); }
+const SLOT_MUL={helmet:0.2, body:0.4, legs:0.25, boots:0.15};   // per-slot weight so a FULL 4-piece set ≈ one old single-tier rating (not 4×)
+function armorRating(id, lvl){ const a=ARMORS[id]; if(!a) return 0; const ti=ATIER.indexOf(a.tier||id), rar=(a.rarity&&RARITY[a.rarity])?RARITY[a.rarity].mult:1; const base=ti>0?ti*2:4; const ap=(base+Math.floor((lvl||1)/12))*rar; const capped=a.rarity?Math.min(15,ap):Math.min(6,ap); return capped*(SLOT_MUL[a.slot||'body']||0.4); }   // returns the piece's WEIGHTED contribution
+function armorTotal(lvl){ const g=state.gear||{}; let t=0; const tiers=[]; for(const s of ['helmet','body','legs','boots']){ const id=g[s]; if(id){ t+=armorRating(id,lvl); tiers.push((ARMORS[id]&&ARMORS[id].tier)||id); } else tiers.push(null); }
+  if(tiers[0] && tiers.every(x=>x===tiers[0])) t+=2;   // SET BONUS: all 4 slots the same tier -> +2 armor
+  return Math.min(15, Math.round(t)); }   // total armor points (cap 15 = 75% reduction)
 function onLevelUp(){
   const fresh=RECIPES.filter(r=>!r.locked && (r.lvl||1)===state.level).map(r=>r.name);
   state.hpMax=hpMaxForLevel(state.level); state.hp=state.hpMax; if(typeof renderHearts==='function') renderHearts();
@@ -1643,6 +1649,11 @@ const RECIPES=[
   {id:'arch', name:'🌸 Flower Arch', cat:'decor', cost:{wood:4,flower:4}, locked:true, build:p=>{ const l=box(0.3,3,0.3,'#caa46a'); l.position.set(p.x-1,1.5,p.z); const rr=box(0.3,3,0.3,'#caa46a'); rr.position.set(p.x+1,1.5,p.z); const top=box(2.6,0.4,0.4,'#9be86b'); top.position.set(p.x,3,p.z); world.add(l);world.add(rr);world.add(top); for(let i=0;i<6;i++){ const f=ball(0.18,pick(['#ff6b9d','#ffd23f','#7c5cff'])); f.position.set(p.x-1.2+i*0.48,2.9,p.z); world.add(f);} } },
   {id:'fountain', name:'⛲ Stone Fountain', cat:'decor', cost:{stone:8,crystal:2}, locked:true, build:p=>{ const base=box(2.6,0.5,2.6,'#b7b1a8'); base.position.set(p.x,0.45,p.z); const col=box(0.5,1.3,0.5,'#c7c1b8'); col.position.set(p.x,1.25,p.z); world.add(base);world.add(col); addSolid(base); makeWater(1.05,p.x,p.z,0.72); } },
 ];
+// ── MULTI-SLOT ARMOR: existing tier/loot armor = the BODY slot; generate matching helmet/legs/boots pieces + recipes per tier (set bonus when all 4 match). ──
+for(const _b of ['leather','iron','gold','titan','warded_vest','aegis_plate']) if(ARMORS[_b]) ARMORS[_b].slot='body';
+(function(){ const cap=s=>s.charAt(0).toUpperCase()+s.slice(1); const TIERS=[['leather',3,{flower:2,wood:1}],['iron',13,{stone:2,crystal:1}],['gold',29,{gold_ingot:2}],['titan',37,{boss_core:1,gold_ingot:1}]]; const SL={helmet:['🪖','Helm'],legs:['👖','Legguards'],boots:['🥾','Boots']};
+  for(const t of TIERS){ const tier=t[0], lvl=t[1], mat=t[2]; for(const slot in SL){ const id=tier+'_'+slot, nm=cap(tier)+' '+SL[slot][1]; ARMORS[id]={name:nm, icon:SL[slot][0], slot:slot, tier:tier};
+    RECIPES.push({id:id, name:SL[slot][0]+' '+nm, cat:'tool', lvl:lvl, cost:mat, weapon:true, build:(p)=>gainArmorPiece(id,slot)}); } } })();
 let craftOpen=false;
 function canCraft(r){ for(const k in r.cost) if(!Inv.has(k,r.cost[k])) return false; return true; }
 const CRAFT_CATS=[['tool','⚔️ Tools & Weapons'],['build','🏗️ Build'],['decor','🌸 Decor'],['food','🍎 Food']];
@@ -2316,7 +2327,7 @@ function smeltAll(){ let iron=0,gold=0;
 
 /* ---------- STAGE B: NIGHT COMBAT (lethal plant-monsters; die -> respawn at home) ---------- */
 function renderHearts(){ const el=document.getElementById('hearts'); if(el){ let h=''; for(let i=0;i<state.hpMax;i++) h+=(i<state.hp?'❤️':'🖤'); el.innerHTML=h; }
-  const ae=document.getElementById('armorbar'); if(ae){ const ap=armorRating(state.armor,state.level); let a=''; for(let i=0;i<Math.min(ap,12);i++) a+='🛡️'; if(ap>12)a+='＋'; ae.innerHTML=a; ae.style.display=ap>0?'':'none'; } }   // ARMOR row below hearts (only shows when wearing armor)
+  const ae=document.getElementById('armorbar'); if(ae){ const ap=armorTotal(state.level); let a=''; for(let i=0;i<Math.min(ap,12);i++) a+='🛡️'; if(ap>12)a+='＋'; ae.innerHTML=a; ae.style.display=ap>0?'':'none'; } }   // ARMOR row below hearts (only shows when wearing armor)
 function flashRed(){ const f=document.createElement('div'); f.style.cssText='position:fixed;inset:0;background:#c0203a;opacity:0;z-index:38;transition:opacity .12s;pointer-events:none'; document.body.appendChild(f); requestAnimationFrame(()=>{ f.style.opacity='.32'; setTimeout(()=>{ f.style.opacity='0'; setTimeout(()=>f.remove(),200); },90); }); }
 /* MONSTER TYPES (owner: 4-7 distinct monsters, "Minecraft VS Plants" garden-horror theme). Each has a
    build() (geometry) + combat stats: hp multiplier, move speed, contact dmg, bob speed, idle float height,
@@ -2407,15 +2418,19 @@ function spawnCreature(){ let sx,sz,pd;
 function despawnCreatures(){ for(const c of creatures) world.remove(c.mesh); creatures.length=0;
   for(const d of drops) world.remove(d.mesh); drops.length=0; for(const p of projectiles) world.remove(p.mesh); projectiles.length=0; }
 function damagePlayer(n){ if(state._invuln>0)return;
-  const roll=rollDamage(n,0); const ap=armorRating(state.armor,state.level); const red=Math.min(15,ap)*0.05; let nd=Math.max(1,Math.round(roll.dmg*(1-red)));   // 🛡️ ARMOR RATING soaks 5%/pt of every hit (cap 75%); at least 1 always lands
+  const roll=rollDamage(n,0); const ap=armorTotal(state.level); const red=Math.min(15,ap)*0.05; let nd=Math.max(1,Math.round(roll.dmg*(1-red)));   // 🛡️ ARMOR RATING soaks 5%/pt of every hit (cap 75%); at least 1 always lands
   if(ap>0 && nd<roll.dmg) state._blocks=(state._blocks||0)+1;
   state.hp=Math.max(0,state.hp-nd); state._invuln=1.0; shake(0.4); SFX.play('interact'); flashRed(); renderHearts();
   popDmg(player.position.x, (player.position.y||0)+2.4, player.position.z, nd, {crit:roll.crit, color:'#ff6b6b'});   // floating damage number over the player
   if(state.hp<=0) respawnPlayer(); }
-function equipBestArmor(){ for(let i=ATIER.length-1;i>=1;i--){ if(state.armors&&state.armors[ATIER[i]]){ state.armor=ATIER[i]; return; } } state.armor=''; }
-function gainArmor(id){ state.armors[id]=true; equipBestArmor(); const a=ARMORS[id]; if(typeof renderHearts==='function')renderHearts(); toast(`${a.icon} Crafted + equipped ${a.name} (${armorRating(state.armor,state.level)} 🛡️ armor)!`); if(invOpen)renderInv(); if(typeof checkBadges==='function')checkBadges(); save(); }
+function equipBestArmor(){ for(let i=ATIER.length-1;i>=1;i--){ if(state.armors&&state.armors[ATIER[i]]){ state.armor=ATIER[i]; if(state.gear)state.gear.body=state.armor; return; } } state.armor=''; if(state.gear)state.gear.body=''; }
+function gainArmor(id){ state.armors[id]=true; equipBestArmor(); const a=ARMORS[id]; if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); toast(`${a.icon} Crafted + equipped ${a.name} (${armorTotal(state.level)} 🛡️ total armor)!`); if(invOpen)renderInv(); if(typeof checkBadges==='function')checkBadges(); save(); }
+function gainArmorPiece(id,slot){ state.armors[id]=true; if(!state.gear)state.gear={helmet:'',body:'',legs:'',boots:''}; state.gear[slot]=id; if(slot==='body')state.armor=id; const a=ARMORS[id]; if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); toast(`${a.icon} Crafted + equipped ${a.name} (${armorTotal(state.level)} 🛡️ total armor)!`); if(invOpen)renderInv(); if(typeof checkBadges==='function')checkBadges(); save(); }
 function respawnPlayer(){ if(DUNGEON.inDungeon)DUNGEON.inDungeon=false; if(MINE.inMine)MINE.inMine=false; if(UG.active)exitUnderground();   // dying UNDERGROUND must restore the surface sky+lighting (owner: "game stays dark after dying in a dungeon")
-  state.hp=state.hpMax; player.position.set(HOUSE.cx,0.3,HOUSE.cz+12); vy=0; state._invuln=2.6; despawnCreatures(); renderHearts(); toast('💀 Overwhelmed! You wake up safe at home.'); flashFade(); save(); }
+  const lost=Math.floor((state.inv.coin||0)*0.10); if(lost>0) Inv.take('coin',lost);   // DEATH PENALTY: lose 10% of CARRIED coin (coin in your home 🧰 Stash is safe); no other items are lost
+  state.hp=state.hpMax; player.position.set(HOUSE.cx,0.3,HOUSE.cz+12); vy=0; state._invuln=2.6; despawnCreatures(); renderHearts();
+  rarityToast('rare', lost>0?`💀 You fainted! Lost ${lost} 🪙 (10% of carried coin). Only coin is lost — and only what you carry. 🧰 Bank your coins in the home Stash to keep them safe!`:'💀 You fainted — woke safe at home. (You lose 10% of CARRIED coin on death — bank it in your home 🧰 Stash!)');
+  flashFade(); save(); }
 function equipBest(){ for(let i=WTIER.length-1;i>=0;i--){ if(i===0||state.weapons[WTIER[i]]){ state.weapon=WTIER[i]; return; } } }
 function gainWeapon(id){ state.weapons[id]=true; equipBest(); const w=WEAPONS[id]; toast(`${w.icon} Crafted + equipped the ${w.name}!`); if(invOpen)renderInv(); Inv.render(); }
 function playerAttack(){ if(!state.running||state.paused)return; if(state._atkCD>0) return;   // attack-speed gate (only kicks in when energy is low — full energy = no cooldown, spam freely)
@@ -2475,10 +2490,10 @@ function dropGear(x,z, pair){ pair=pair||pick(RARE_GEAR); const id=pair[0], kind
 function equipGear(id, kind){ const tbl=(kind==='weapon')?WEAPONS:ARMORS, it=tbl[id]; if(!it) return;
   if(EQUIP_LVL[id] && (state.level||1)<EQUIP_LVL[id]){ toast(`🔒 Reach Level ${EQUIP_LVL[id]} to equip ${it.name}.`); SFX.play('interact',{rate:0.6,vol:0.4}); return; }   // equip-by-level gate for dropped epic gear
   if(kind==='weapon'){ if(!state.weapons[id]) return; state.weapon=id; }
-  else { if(!state.armors[id]) return; state.armor=id; state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
+  else { if(!state.armors[id]) return; const sl=(ARMORS[id]&&ARMORS[id].slot)||'body'; state.gear[sl]=id; if(sl==='body'){ state.armor=id; state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); } if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
   SFX.play('success',{vol:0.4}); toast(`${it.icon} Equipped ${it.name}!`); syncSel(); Inv.render(); if(invOpen)renderInv(); if(typeof checkBadges==='function')checkBadges(); save(); }
-function unequipGear(kind){ if(kind==='weapon'){ state.weapon='fist'; equipBest(); }   // unequip -> fall back to your best CRAFTABLE weapon
-  else { state.armor=''; equipBestArmor(); state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
+function unequipGear(kind, slot){ if(kind==='weapon'){ state.weapon='fist'; equipBest(); }   // unequip -> fall back to your best CRAFTABLE weapon
+  else { const sl=slot||'body'; if(state.gear)state.gear[sl]=''; if(sl==='body'){ state.armor=''; equipBestArmor(); state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); } if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
   SFX.play('interact',{vol:0.4}); toast('Unequipped.'); syncSel(); Inv.render(); if(invOpen)renderInv(); save(); }
 function makeDrop(x,z,item,n){ const col=DROP_COL[item]||'#ffd23f'; const m=new THREE.Mesh(new THREE.IcosahedronGeometry(0.22,0),new THREE.MeshToonMaterial({color:col,gradientMap:GRAD,emissive:new THREE.Color(col),emissiveIntensity:0.3})); m.position.set(x+rand(-0.6,0.6),0.6,z+rand(-0.6,0.6)); m.castShadow=true; world.add(m); drops.push({mesh:m,item,n,bob:rand(0,TAU),t:0}); }
 function updateDrops(dt){ for(let i=drops.length-1;i>=0;i--){ const d=drops[i],m=d.mesh; d.bob+=dt*3.2; d.t+=dt; m.rotation.y+=dt*2.2; const dx=player.position.x-m.position.x, dz=player.position.z-m.position.z, dd=Math.hypot(dx,dz)||1;
@@ -2578,8 +2593,8 @@ const BADGES=[
   {id:'titan', i:'⚡', n:'Titan-Forged', d:'Craft Titan gear', c:()=>!!((state.weapons&&state.weapons.titan_blade)||(state.armors&&state.armors.titan))},
   {id:'mythic', i:'🌠', n:'Mythic Smith', d:'Forge the Mythic Blade', c:()=>!!(state.weapons&&state.weapons.mythic_blade)},
   {id:'epic', i:'🔮', n:'Legendary Loot', d:'Obtain an epic item', c:()=>Object.keys(state.weapons||{}).some(k=>WEAPONS[k]&&WEAPONS[k].rarity==='epic')||Object.keys(state.armors||{}).some(k=>ARMORS[k]&&ARMORS[k].rarity==='epic')},
-  {id:'armor6', i:'🛡️', n:'Iron Wall', d:'Reach 6 armor', c:()=>armorRating(state.armor,state.level)>=6},
-  {id:'armor10', i:'🔰', n:'Bulwark', d:'Exceed 6 armor (rare/epic)', c:()=>armorRating(state.armor,state.level)>10},
+  {id:'armor6', i:'🛡️', n:'Iron Wall', d:'Reach 6 total armor', c:()=>armorTotal(state.level)>=6},
+  {id:'armor10', i:'🔰', n:'Bulwark', d:'Exceed 10 armor (sets/epic)', c:()=>armorTotal(state.level)>10},
 ];
 function reportToAccount(type,data){ try{ if(!(window.parent && window.parent!==window)) return; const W=window.parent;   // game runs in the FFGames iframe -> emit the forgeflow:* bridge format so a signed-in account stores badges/score
   if(type==='badge'){ W.postMessage({type:'forgeflow:achievement', achievementSlug:'ww_'+data.id, name:data.name},'*'); }
@@ -2912,7 +2927,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
   roofOp:()=>cutRoof?+cutRoof.material.opacity.toFixed(2):null,
   interactNow:()=>{ updateInteract(); if(nearest){ const l=nearest.label; nearest.action(); return l; } return null; },
-  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, pickGear:(id,kind)=>pickupGear(id,kind), equipGear:(id,kind)=>equipGear(id,kind), unequipGear:(k)=>unequipGear(k), revealFog:()=>revealFog(), openStash:()=>openStash(), stash:()=>({...state.stash}), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
+  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, pickGear:(id,kind)=>pickupGear(id,kind), equipGear:(id,kind)=>equipGear(id,kind), unequipGear:(k,s)=>unequipGear(k,s), revealFog:()=>revealFog(), openStash:()=>openStash(), stash:()=>({...state.stash}), hurt:(n)=>damagePlayer(n), armorTotal:()=>armorTotal(state.level), gear:()=>({...state.gear}), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
   nodesByItem:()=>{ const o={}; for(const n of nodes) o[n.item]=(o[n.item]||0)+1; return o; }, waters:()=>waters.length,
   homes:()=>({count:homes.length, built:homes.filter(h=>h.built).length, active:homes.filter(h=>h.active).length}),
   respawnInfo:()=>({nodes:nodes.length, hidden:nodes.filter(n=>!n.mesh.visible).length, onCd:nodes.filter(n=>n.timer>0).length}),
@@ -3062,7 +3077,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       exitMine(); R.mine_exit=(MINE.inMine===false); }
     // KIT: ARMOR RATING reduces damage (armor points = 5%/pt). Over many hits, wearing armor takes clearly less total damage than none.
     { Inv.add('stone',4); Inv.add('crystal',1); craft('iron_armor'); R.armor_craft=(state.armor==='iron');
-      const totalDmg=(arm)=>{ state.armor=arm; let t=0; for(let i=0;i<60;i++){ state.hp=1000; state._invuln=0; damagePlayer(20); t+=(1000-state.hp); } return t; };
+      const totalDmg=(arm)=>{ state.armor=arm; state.gear.body=arm; let t=0; for(let i=0;i<60;i++){ state.hp=1000; state._invuln=0; damagePlayer(20); t+=(1000-state.hp); } return t; };
       const dIron=totalDmg('iron'), dNone=totalDmg(''); state.armor='iron';
       R.armor_reduces=(dNone>0 && dIron<dNone); }
     // RARITY: common/rare/epic distribution (epic rarest) + loot scales by tier
