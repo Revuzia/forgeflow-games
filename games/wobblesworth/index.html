@@ -1257,7 +1257,7 @@ function buildPlayerAndNeighbors(){
   player.position.set(0,0,24); world.add(player);
   const m=MODELS['char_player'];
   if(m){ const o=skeletonClone(m); const s=new THREE.Vector3(); new THREE.Box3().setFromObject(o).getSize(s); const k=1.7/(s.y||1); o.scale.setScalar(k); o.userData.base=k;
-    const b=new THREE.Box3().setFromObject(o); o.position.y=-b.min.y; player.add(o); player.userData.model=o;
+    const b=new THREE.Box3().setFromObject(o); o.position.y=-b.min.y; o.userData.y0=o.position.y; o.userData.cy=(b.max.y-b.min.y)/2; player.add(o); player.userData.model=o;   // y0/cy: rest pos + body-center height, used to spin the double-jump about the CENTER (cannonball)
     if(ANIMS['char_player']){ charMixer=new THREE.AnimationMixer(o); for(const c of ANIMS['char_player']) charActions[c.name]=charMixer.clipAction(c);
       if(charActions.idle) charActions.idle.play(); }
   } else { const o=box(0.8,1.6,0.5,'#7c5cff'); o.position.y=0.8; player.add(o); }
@@ -1965,8 +1965,8 @@ function updatePlayer(dt){
   if(grounded){ airJumps=0; flipT=0; }   // landing resets the double-jump + ends any spin
   // JUICE: squash on landing, spring scale back to base each frame
   { const mo=player.userData.model; if(mo&&mo.userData.base!=null){ const b=mo.userData.base; if(grounded&&!wasGrounded&&vyPrev<-4&&!state.reduce&&!_wz){ mo.scale.set(b*1.22,b*0.74,b*1.22); } const t=Math.min(1,dt*9); mo.scale.x=lerp(mo.scale.x,b,t); mo.scale.y=lerp(mo.scale.y,b,t); mo.scale.z=lerp(mo.scale.z,b,t);
-      if(flipT>0 && !_wz){ flipT=Math.max(0,flipT-dt); const _p=1-flipT/0.5; mo.rotation.x=(_p*TAU)%TAU; const _tuck=Math.sin(_p*Math.PI); const _s=b*(1-0.45*_tuck); mo.scale.set(_s,_s,_s); }   // double-jump: curl into a BALL (scale down via sin) + spin FORWARD (+rotation.x = face-down pitch) then UNBALL as he lands; %TAU ends upright so no reverse-lerp
-      else mo.rotation.x=lerp(mo.rotation.x, _wz?1.15:0, Math.min(1,dt*6)); } }   // SWIM: FACE-DOWN prone tilt, restored on exit
+      if(flipT>0 && !_wz){ flipT=Math.max(0,flipT-dt); const _p=1-flipT/0.5; const _ang=(_p*TAU)%TAU; const _tuck=Math.sin(_p*Math.PI); const _s=b*(1-0.55*_tuck); mo.scale.set(_s,_s,_s); const _cy=mo.userData.cy||0.85, _y0=(mo.userData.y0!=null?mo.userData.y0:mo.position.y), _q=(_cy-_y0)*(_s/b); mo.rotation.x=_ang; mo.position.y=_cy-_q*Math.cos(_ang); mo.position.z=-_q*Math.sin(_ang); }   // CANNONBALL double-jump: tuck into a tight ball (scale↓) + spin FORWARD about the body CENTER (position compensation pins the center so it rolls in place, not a feet-pivot arc) + unball as he lands
+      else { mo.rotation.x=lerp(mo.rotation.x, _wz?1.15:0, Math.min(1,dt*6)); const _yy=(mo.userData.y0!=null?mo.userData.y0:0); mo.position.y=lerp(mo.position.y,_yy,Math.min(1,dt*8)); mo.position.z=lerp(mo.position.z,0,Math.min(1,dt*8)); } } }   // SWIM: FACE-DOWN prone tilt; also restore model pos after a cannonball
   wasGrounded=grounded;
   // animation state
   if(charAnim!=='__emote'){ setAnim(!grounded?'idle':(moving?(sprint?'sprint':'walk'):'idle')); }   // armed standing now uses plain idle (arm at side) — the old 'holding-right' clip RAISED the arm to head height so the bone-mounted sword towered behind the head (owner: "weapon not in hand"); idle keeps the hand low so the sword sits in it
