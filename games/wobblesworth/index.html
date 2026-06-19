@@ -190,7 +190,7 @@
 <div id="quests" class="hud"><div id="qhead"><span class="qttl">📖 Campaign</span><button id="qmin" title="Minimize panel">–</button></div><div id="qbody"><div id="goalbox"></div><div class="jdiv"></div><div id="qlist"></div><div id="reqlist"></div></div></div>
 <div id="prompt" class="hud"><span class="key">E</span><span id="promptText">Interact</span></div>
 <div id="toasts" class="hud"></div>
-<div id="help" class="hud"><b style="color:#b06a2a">⌨ Controls</b><div class="ctrlgrid"><span class="k">WASD</span><span>move</span><span class="k">Shift</span><span>run</span><span class="k">Space</span><span>jump</span><span class="k">drag</span><span>camera</span><span class="k">F</span><span>⚔️ attack</span><span class="k">E</span><span>interact</span><span class="k">R</span><span>🍎 use item</span><span class="k">1-8</span><span>hotbar</span><span class="k">G</span><span>dig / mine</span><span class="k">V</span><span>build</span><span class="k">C</span><span>craft</span><span class="k">I</span><span>bag</span><span class="k">M</span><span>map</span><span class="k">F3</span><span>debug</span></div></div>
+<div id="help" class="hud"><b style="color:#b06a2a">⌨ Controls</b><div class="ctrlgrid"><span class="k">WASD</span><span>move</span><span class="k">Shift</span><span>run</span><span class="k">Space×2</span><span>jump + flip</span><span class="k">drag</span><span>camera</span><span class="k">🖱️</span><span>⚔️ attack</span><span class="k">E</span><span>interact</span><span class="k">R</span><span>🍎 use item</span><span class="k">1-0</span><span>hotbar</span><span class="k">G</span><span>dig / mine</span><span class="k">V</span><span>build</span><span class="k">C</span><span>craft</span><span class="k">I</span><span>bag</span><span class="k">M</span><span>map</span><span class="k">L</span><span>📖 lore</span><span class="k">F3</span><span>debug</span></div></div>
 <div id="dbg"></div>
 <div id="buildhud" class="hud" style="display:none;left:50%;transform:translateX(-50%);bottom:88px;background:rgba(20,16,28,.82);padding:7px 14px;border-radius:10px;font-size:14px;color:#fff;border:1px solid rgba(255,255,255,.25)"></div>
 <div id="zone" class="hud"></div>
@@ -202,6 +202,7 @@
 <div id="loot" class="hidden"></div>
 <canvas id="minimap" class="hud" width="150" height="150" title="Click to enlarge"></canvas>
 <div id="mapmodal" class="hidden"></div>
+<div id="lore" class="hidden"></div>
 <div id="pause" class="hidden"></div>
 <div id="title" class="screen">
   <div class="card">
@@ -291,9 +292,9 @@ addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reaso
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
   discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
-  hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, _blocks:0, bonusHp:0, bonusDmg:0, bonusDef:0,
+  hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, _blocks:0,
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
-  volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0 };
+  volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0, lore:{} };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
 
 /* ---------- AUDIO ---------- */
@@ -593,10 +594,16 @@ const outerStructures=[];  // {x,z,r} footprints of mines/dungeons so wild hamle
 const hamlets=[];          // {cx,cz,homes:[...]} wild settlements out in the hills (Phase 2)
 // Stage B — night combat
 const creatures=[];   // {mesh, hp, max, cd, bob}
-const WEAPONS={ fist:{dmg:14,range:2.2,name:'Fists',icon:'✊'}, wood_sword:{dmg:24,range:2.6,name:'Wooden Sword',icon:'🗡️'}, stone_sword:{dmg:38,range:2.8,name:'Stone Sword',icon:'⚔️'}, iron_sword:{dmg:50,range:2.9,name:'Iron Sword',icon:'🗡️'}, crystal_sword:{dmg:62,range:3.0,name:'Crystal Sword',icon:'💎'}, gold_sword:{dmg:82,range:3.2,name:'Gold Sword',icon:'🌟'}, titan_blade:{dmg:120,range:3.5,name:'Titan Blade',icon:'⚡'} };
+const WEAPONS={ fist:{dmg:14,range:2.2,name:'Fists',icon:'✊'}, wood_sword:{dmg:24,range:2.6,name:'Wooden Sword',icon:'🗡️'}, stone_sword:{dmg:38,range:2.8,name:'Stone Sword',icon:'⚔️'}, iron_sword:{dmg:50,range:2.9,name:'Iron Sword',icon:'🗡️'}, crystal_sword:{dmg:62,range:3.0,name:'Crystal Sword',icon:'💎'}, gold_sword:{dmg:82,range:3.2,name:'Gold Sword',icon:'🌟'}, titan_blade:{dmg:120,range:3.5,name:'Titan Blade',icon:'⚡'},
+  // ── DROPPED loot weapons (not craftable — only fall from rare/epic kills; equip/unequip from your bag) ──
+  keen_saber:{dmg:74,range:3.05,name:'Keen Saber',icon:'🔹',rarity:'rare',crit:0.08,model:'crystal_sword'},                 // RARE: high dmg + extra crit
+  dread_reaver:{dmg:116,range:3.35,name:'Dread Reaver',icon:'🔮',rarity:'epic',crit:0.16,life:0.14,model:'titan_blade'} };   // EPIC: huge dmg + big crit + lifesteal (heal 14% of dmg dealt)
 const WTIER=['fist','wood_sword','stone_sword','iron_sword','crystal_sword','gold_sword','titan_blade'];   // titan_blade = BOSS-ONLY top tier (needs boss_core)
 // ARMOR — a % chance to fully BLOCK an incoming hit (clean with 1-heart hits: a hit either lands fully or is blocked)
-const ARMORS={ leather:{block:0.30,name:'Leather Armor',icon:'🛡️'}, iron:{block:0.55,name:'Iron Armor',icon:'🦺'}, gold:{block:0.72,name:'Gold Armor',icon:'🥇'}, titan:{block:0.86,name:'Titan Plate',icon:'⚡'} };
+const ARMORS={ leather:{block:0.30,name:'Leather Armor',icon:'🛡️'}, iron:{block:0.55,name:'Iron Armor',icon:'🦺'}, gold:{block:0.72,name:'Gold Armor',icon:'🥇'}, titan:{block:0.86,name:'Titan Plate',icon:'⚡'},
+  // ── DROPPED loot armor (not craftable — only from rare/epic kills; equip/unequip from your bag) ──
+  warded_vest:{block:0.60,name:'Warded Vest',icon:'🔹',rarity:'rare',bonusHp:2},                  // RARE: solid block + 1 extra ❤️
+  aegis_plate:{block:0.82,name:'Aegis Plate',icon:'🔮',rarity:'epic',bonusHp:4,regen:0.35} };      // EPIC: heavy block + 2 extra ❤️ + slow regen
 const ATIER=['','leather','iron','gold','titan'];   // titan = BOSS-ONLY top tier
 // Stage C — voxel mine: a bounded pocket cavern FAR from the surface (so its solids never touch surface play + it's frustum-culled). Lazy-built on first entry.
 const MINE={x:1000,z:1000,inMine:false,built:false,group:null,blocks:[],chests:[],returnPos:null};
@@ -1164,7 +1171,7 @@ function makeToolModel(kind){ const g=new THREE.Group();
   if(kind==='pickaxe'){ const h=box(0.07,0.95,0.07,'#8a5a31'); g.add(h); const head=box(0.46,0.1,0.1,'#7a7e86'); head.position.y=0.46; g.add(head);
     const t1=box(0.12,0.18,0.1,'#9aa0a8'); t1.position.set(0.26,0.42,0); t1.rotation.z=0.6; g.add(t1); const t2=t1.clone(); t2.position.x=-0.26; t2.rotation.z=-0.6; g.add(t2); }
   else if(kind==='shovel'){ const h=box(0.07,0.95,0.07,'#8a5a31'); g.add(h); const blade=box(0.28,0.34,0.05,'#9aa0a8'); blade.position.y=0.52; g.add(blade); const lip=box(0.28,0.1,0.05,'#b6bcc4'); lip.position.y=0.69; g.add(lip); }
-  else { const col=kind==='gold_sword'?'#ffd23f':kind==='crystal_sword'?'#7fd9ff':kind==='iron_sword'?'#cdd2da':kind==='stone_sword'?'#bcc0c8':'#d8b07a';   // tier-colored blade
+  else { const col=kind==='dread_reaver'?'#c77dff':kind==='keen_saber'?'#5fa8ff':kind==='titan_blade'?'#ffe066':kind==='gold_sword'?'#ffd23f':kind==='crystal_sword'?'#7fd9ff':kind==='iron_sword'?'#cdd2da':kind==='stone_sword'?'#bcc0c8':'#d8b07a';   // tier-colored blade (epic=purple, rare=blue)
     const blade=box(0.09,0.82,0.04,col); blade.position.y=0.52; g.add(blade); const tip=new THREE.Mesh(new THREE.ConeGeometry(0.075,0.18,4),toon(col)); tip.position.y=0.97; g.add(tip);
     const guard=box(0.34,0.08,0.11,'#5a4632'); guard.position.y=0.08; g.add(guard); const grip=box(0.08,0.24,0.08,'#3a2a1a'); grip.position.y=-0.07; g.add(grip); const pommel=ball(0.06,'#caa46a'); pommel.position.y=-0.22; g.add(pommel); }
   g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); return g; }
@@ -1279,7 +1286,7 @@ function emote(name){ // one-shot emote then back to idle/walk
   setTimeout(()=>{ if(charAnim==='__emote'){ a.fadeOut(0.25); a.clampWhenFinished=false; charAnim=''; } }, 700); }   // MUST fade the emote action OUT here: it was LoopOnce+clampWhenFinished, so it sat at full weight on its LAST frame (e.g. the folded-leg 'sit' pose after a nap). Clearing charAnim only let setAnim fade IDLE *in* — the clamped sit kept blending the legs into a seated/sleeping pose (owner: "after he sleeps his legs stay in a sleeping position"). Fading the clamped action out lets the player stand fully upright again.
 
 /* ---------- input / camera ---------- */
-const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&e.code==='KeyF')return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyR'&&state.running) useSelected(); if(e.code==='KeyF'&&state.running) playerAttack(); if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[1-8]$/.test(e.code)&&state.running){ selectSlot(+e.code.slice(5)-1); } if(e.code==='Escape'){ if(confirmOpen)closeConfirm(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); } }   /* owner: no pause — ESC only closes menus */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
+const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyR'&&state.running) useSelected(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[1-8]$/.test(e.code)&&state.running){ selectSlot(+e.code.slice(5)-1); } if(e.code==='Escape'){ if(confirmOpen)closeConfirm(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); } }   /* owner: no pause — ESC only closes menus */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 // release ALL held keys when focus/visibility is lost — prevents the "stuck walking forward" bug
 // (a right-click context menu, alt-tab, or click-away steals focus so the W keyup never fires).
@@ -1380,9 +1387,9 @@ function legendHTML(){ const recipesAll=Object.keys(state.craftedSet||{}).length
 const SAVE_V=2;
 function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V, day:state.day,giggle:state.giggle,goals:state.goals,bestDay:state.bestDay,inv:state.inv,built:state.built,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
-  unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, bonusHp:state.bonusHp, bonusDmg:state.bonusDmg, bonusDef:state.bonusDef,
+  unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
-  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot,
+  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, lore:state.lore,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug })); }catch(e){} }
 // VERSIONED + SANITIZED load: bad/corrupt/legacy data can never crash boot or inject impossible state
 function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) return; let s; try{ s=JSON.parse(raw); }catch(e){ localStorage.setItem('ww2_save_corrupt',raw); return; }
@@ -1398,13 +1405,13 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.req=(s.req&&typeof s.req==='object'&&ITEMS[s.req.item])?{item:s.req.item, qty:num(s.req.qty,3,1,99), reward:num(s.req.reward,60,0,1e6), bonus:(ITEMS[s.req.bonus]?s.req.bonus:'coin'), done:s.req.done===true}:null;   // validated: unknown req.item can't crash renderRequests/townBoard
   state.unlocked=(s.unlocked&&typeof s.unlocked==='object')?s.unlocked:{}; for(const id in state.unlocked){ const r=RECIPES.find(x=>x.id===id); if(r) r.locked=false; } if(s.houseColor) paintHouse(s.houseColor); if(s.hat) giveHat();
   state.recipePages=num(s.recipePages,0,0,1e6);
-  state.level=num(s.level,1,1,999); state.xp=num(s.xp,0,0,1e9); state.bonusHp=num(s.bonusHp,0,0,10); state.bonusDmg=num(s.bonusDmg,0,0,1.5); state.bonusDef=num(s.bonusDef,0,0,0.6); state.hpMax=hpMaxForLevel(state.level);   // XP/level + permanent trophy bonuses (heart/power/aegis) restore + derive max HP
-  state.weapons=(s.weapons&&typeof s.weapons==='object')?s.weapons:{}; for(const id in state.weapons){ const r=RECIPES.find(x=>x.id===id); if(r&&r.weapon&&r.locked) r.locked=false; } state.weapon=(WEAPONS[s.weapon]?s.weapon:'fist'); equipBest(); state.hp=state.hpMax; state.hasPickaxe=!!s.hasPickaxe; state.hasShovel=!!s.hasShovel; state.pickTier=num(s.pickTier,0,0,2); state.shovelTier=num(s.shovelTier,0,0,2);
-  state.armors=(s.armors&&typeof s.armors==='object')?s.armors:{}; for(const id in state.armors){ const r=RECIPES.find(x=>x.id===id+'_armor'); } state.armor=(ARMORS[s.armor]?s.armor:''); equipBestArmor();
+  state.level=num(s.level,1,1,999); state.xp=num(s.xp,0,0,1e9); state.hpMax=hpMaxForLevel(state.level);   // XP/level restore; max HP derives from level + equipped-armor bonus ❤️
+  state.weapons=(s.weapons&&typeof s.weapons==='object')?s.weapons:{}; for(const id in state.weapons){ const r=RECIPES.find(x=>x.id===id); if(r&&r.weapon&&r.locked) r.locked=false; } state.weapon=(WEAPONS[s.weapon]?s.weapon:'fist'); if(state.weapon==='fist') equipBest();   // keep a saved dropped weapon equipped; only auto-pick when none state.hasPickaxe=!!s.hasPickaxe; state.hasShovel=!!s.hasShovel; state.pickTier=num(s.pickTier,0,0,2); state.shovelTier=num(s.shovelTier,0,0,2);
+  state.armors=(s.armors&&typeof s.armors==='object')?s.armors:{}; for(const id in state.armors){ const r=RECIPES.find(x=>x.id===id+'_armor'); } state.armor=(ARMORS[s.armor]?s.armor:''); if(!state.armor) equipBestArmor();   // keep a saved dropped armor equipped
   state.craftedSet=(s.craftedSet&&typeof s.craftedSet==='object')?s.craftedSet:{}; state.reqsFulfilled=num(s.reqsFulfilled,0,0,1e9); state.biomes=(s.biomes&&typeof s.biomes==='object')?s.biomes:{}; state.event=DAY_EVENTS.find(e=>e.id===s.eventId)||null;
   if(typeof s.tod==='number'&&Number.isFinite(s.tod)) state.tod=((s.tod%1)+1)%1;
   if(s.volume!=null) state.volume=clamp(+s.volume||0,0,1); state.musicOn=(s.musicOn!==false); state.sfxOn=(s.sfxOn!==false); state.reduce=!!s.reduce;
-  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9);
+  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{};
   state.homeTier=num(s.homeTier,0,0,3); for(let i=1;i<=state.homeTier;i++) applyHomeTier(i);   // rebuild purchased home upgrades
   state.homePaints=(s.homePaints&&typeof s.homePaints==='object')?s.homePaints:{}; loadBlocks(s.buildBlocks); applyHomePaints();   // restore voxel builds + house repaints (buildWorld ran first, so homes exist)
   for(const k in VOX.meshes) world.remove(VOX.meshes[k]); VOX.dug={}; VOX.meshes={};   // restore carved terrain
@@ -1451,11 +1458,23 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
     +`<div class="invstat">✨ Giggle <b>${state.giggle}</b></div>`
     +`<div class="invstat">📖 Pages <b>${state.recipePages||0}</b>${state.hasPickaxe?' · ⛏️ Pickaxe':''}</div>`
   +`</div>`;
+  // ── EQUIPPABLE DROPPED GEAR (rare/epic weapons + armor — click to equip / unequip) ──
+  const ownedGear=[];
+  for(const id in (state.weapons||{})){ if(WEAPONS[id]&&WEAPONS[id].rarity) ownedGear.push([id,'weapon']); }
+  for(const id in (state.armors||{})){ if(ARMORS[id]&&ARMORS[id].rarity) ownedGear.push([id,'armor']); }
+  if(ownedGear.length){ h+=`<div style="margin:8px 0;padding:8px;border-radius:10px;background:rgba(0,0,0,0.18)"><div style="font-weight:800;margin-bottom:6px">⚔️ Found Gear <span style="font-weight:400;opacity:.7;font-size:12px">— rare &amp; epic drops; equip / unequip</span></div>`;
+    for(const [id,kind] of ownedGear){ const it=(kind==='weapon'?WEAPONS:ARMORS)[id]; const rr=RARITY[it.rarity]||RARITY.rare; const on=(kind==='weapon'?state.weapon:state.armor)===id;
+      const stat = kind==='weapon'
+        ? `dmg ${it.dmg}${it.crit?` · +${Math.round(it.crit*100)}% crit`:''}${it.life?` · ${Math.round(it.life*100)}% lifesteal`:''}`
+        : `${Math.round(it.block*100)}% block${it.bonusHp?` · +${it.bonusHp/2} ❤️`:''}${it.regen?' · regen':''}`;
+      h+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 7px;margin:4px 0;border:2px solid ${rr.color};border-radius:9px;background:${on?'rgba(255,255,255,0.13)':'rgba(0,0,0,0.15)'}"><span style="font-size:20px">${it.icon}</span><span style="flex:1;line-height:1.2"><b style="color:${rr.color}">${rr.mark}${it.name}</b><br><span style="font-size:11px;opacity:.85">${stat}</span></span><button data-gear="${id}" data-kind="${kind}" style="padding:5px 11px;border:0;border-radius:7px;cursor:pointer;font-weight:700;background:${on?'#cc4444':'#2ec5a8'};color:#fff">${on?'Unequip':'Equip'}</button></div>`; }
+    h+=`</div>`; }
   h+=`<div class="invgrid">`;
   for(const k of Object.keys(ITEMS)){ const c=state.inv[k]||0; const eat=FOOD_EFFECTS[k]&&c>0; const desc=ITEM_DESC[k]?ITEMS[k].n+' — '+ITEM_DESC[k]:ITEMS[k].n; h+=`<div class="invtile${c>0?'':' empty'}${eat?' eatable':''}" title="${desc}" ${eat?`data-eat="${k}"`:''}><span class="tc">${c}</span><div class="ti">${ITEMS[k].i}</div><div class="tn">${ITEMS[k].n}${eat?'<br><span class="eathint">click to eat</span>':''}</div></div>`; }
   h+=`</div></div>`;
   el.innerHTML=h; const x=el.querySelector('#invX'); if(x)x.onclick=closeInv; el.onclick=(e)=>{ if(e.target===el) closeInv(); };
-  el.querySelectorAll('.invtile[data-eat]').forEach(t=> t.onclick=(e)=>{ e.stopPropagation(); if(eatFood(t.dataset.eat)) renderInv(); }); }
+  el.querySelectorAll('.invtile[data-eat]').forEach(t=> t.onclick=(e)=>{ e.stopPropagation(); if(eatFood(t.dataset.eat)) renderInv(); });
+  el.querySelectorAll('button[data-gear]').forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); const id=b.dataset.gear, kind=b.dataset.kind, on=(kind==='weapon'?state.weapon:state.armor)===id; if(on) unequipGear(kind); else equipGear(id,kind); }); }
 
 /* ============================ GATHER NODES ============================ */
 // a thin trunk/post collider (blocks walking through; not standable) gated on an optional mesh's visibility
@@ -1474,17 +1493,22 @@ function addNode(model,x,z,{item,amount=1,respawn=28,scale,targetH,tint,label,so
     for(let q=0;q<got;q++) makeDrop(o.position.x,o.position.z,item,1);   // REAL physical loot drops (owner: "DROP REAL LOOT, not just say this had loot") — they bob + magnetize to you to pick up
     gainXP(2); SFX.play('pickup',{vol:0.5,rate:0.8}); emote('pick-up'); markGoal('gather'); shake(0.18);   // softer, lower-pitched "mine" thunk (owner: mining sound was annoying)
     confetti(o.position.clone().setY(1),8); toast(`💥 ${got} ${ITEMS[item]?ITEMS[item].i+' '+ITEMS[item].n:item} dropped — grab it!`);
-    ephemeral.push({node:o,life:0.22,shrink:true,sbase:o.scale.clone()}); node.timer=respawn; }, 2.6);
+    node.timer=respawn; setNodeDepleted(node); }, 2.6);   // depleted node stays VISIBLE but goes translucent (you can see it's on cooldown) instead of vanishing
   return node;
 }
-function tickNodes(dt){ for(const n of nodes){ if(n.timer>0){ n.timer-=dt; if(n.timer<=0) n.mesh.visible=true; } } }
+function tickNodes(dt){ for(const n of nodes){ if(n.timer>0){ n.timer-=dt; if(n.timer<=0){ n.mesh.visible=true; setNodeReady(n); } } } }
+// Depleted resource nodes stay visible at ~32% opacity (materials cloned per-mesh so shared tree/GLB materials aren't globally faded) so you SEE it regrowing; restored on respawn.
+function setNodeDepleted(node){ if(!node||!node.mesh)return; node.mesh.userData.onCooldown=true;
+  node.mesh.traverse(o=>{ if(o.isMesh && o.material){ if(!o.userData._nodeMat){ o.material=o.material.clone(); o.userData._nodeMat=true; o.userData._op0=(o.material.opacity!=null?o.material.opacity:1); } o.material.transparent=true; o.material.opacity=0.32; o.material.depthWrite=false; } }); }
+function setNodeReady(node){ if(!node||!node.mesh)return; node.mesh.userData.onCooldown=false;
+  node.mesh.traverse(o=>{ if(o.isMesh && o.material && o.userData._nodeMat){ const op0=(o.userData._op0!=null?o.userData._op0:1); o.material.opacity=op0; if(op0>=1) o.material.transparent=false; o.material.depthWrite=true; } }); }
 
 /* ============================ XP / LEVELING ============================ */
 /* Real progression (owner: "a real full XP/leveling system like Minecraft where leveling unlocks new crafting").
    XP comes from kills, gathering, quests + crafting. Each level needs a bit more than the last (cozy, reachable
    curve — not Minecraft's punishing one). Leveling heals you, grows max HP a little, and UNLOCKS new recipes. */
 function xpToNext(lvl){ return 40 + (Math.max(1,lvl)-1)*35; }   // L1→2:40, L2→3:75, L3→4:110 … gentle ramp
-function hpMaxForLevel(lvl){ return 6 + Math.min(6, Math.floor(lvl/3)) + (state.bonusHp||0); }   // +1 heart every 3 levels (cap 12) + permanent 🫀 Heart-Crystal bonuses (rare/epic drops)
+function hpMaxForLevel(lvl){ const ab=(state.armor&&ARMORS[state.armor]&&ARMORS[state.armor].bonusHp)||0; return 6 + Math.min(6, Math.floor(lvl/3)) + ab; }   // +1 heart every 3 levels (cap 12) + bonus ❤️ from EQUIPPED rare/epic armor (Warded Vest +1, Aegis Plate +2)
 function onLevelUp(){
   const fresh=RECIPES.filter(r=>!r.locked && (r.lvl||1)===state.level).map(r=>r.name);
   state.hpMax=hpMaxForLevel(state.level); state.hp=state.hpMax; if(typeof renderHearts==='function') renderHearts();
@@ -1800,16 +1824,16 @@ function rollRarity(){ const r=Math.random(); return r<RARITY.epic.p ? 'epic' : 
 function rarityToast(tier,msg){ const rr=RARITY[tier]||RARITY.common; const box=document.getElementById('toasts'); const t=document.createElement('div'); t.className='toast'; t.innerHTML=`${tier!=='common'?`<span style="color:${rr.color};font-weight:800">${rr.mark}${rr.label}</span> · `:''}${msg}`; box.appendChild(t); while(box.children.length>3) box.firstChild.remove(); setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; setTimeout(()=>t.remove(),400); },2600); }
 function flashFade(){ const f=document.createElement('div'); f.style.cssText='position:fixed;inset:0;background:#000;opacity:0;z-index:40;transition:opacity .4s;pointer-events:none'; document.body.appendChild(f); requestAnimationFrame(()=>{ f.style.opacity='.7'; setTimeout(()=>{ f.style.opacity='0'; setTimeout(()=>f.remove(),500); },500); }); }
 let nearest=null;
-function updateInteract(){ let best=null,bd=Infinity; const pp=player.position; for(const it of interactables){ if(it.node.userData&&it.node.userData.sock&&!it.node.visible)continue; it.node.getWorldPosition(_np); const d=Math.hypot(_np.x-pp.x,_np.z-pp.z)+Math.abs(_np.y-pp.y)*0.25; if(d<it.radius&&d<bd){best=it;bd=d;} } nearest=best;
+function updateInteract(){ let best=null,bd=Infinity; const pp=player.position; for(const it of interactables){ if(it.node.userData&&it.node.userData.sock&&!it.node.visible)continue; if(it.node.userData&&it.node.userData.onCooldown)continue; it.node.getWorldPosition(_np); const d=Math.hypot(_np.x-pp.x,_np.z-pp.z)+Math.abs(_np.y-pp.y)*0.25; if(d<it.radius&&d<bd){best=it;bd=d;} } nearest=best;
   const el=document.getElementById('prompt'); if(best){ document.getElementById('promptText').textContent=best.label; el.style.opacity='1'; } else el.style.opacity='0'; }
 function tryInteract(){ if(state.running&&nearest){ SFX.play('interact'); emote('interact-right'); nearest.action(); } }
 /* ONE button (E) does it all (owner: "too many random buttons"): interact with the thing you're facing, OR — if
    nothing's in reach — USE the SELECTED hotbar item (eat the food you have selected). Replaces the old Q-eat. */
 function useSelected(){ const k=Object.keys(ITEMS)[state.selectedSlot]; if(FOOD_EFFECTS[k]&&Inv.has(k,1)){ eatFood(k); } else if(FOOD_EFFECTS[k]){ toast(`No ${ITEMS[k]?ITEMS[k].n.toLowerCase():k} left.`); } else { toast('🍎 Select a food (keys 1-8) then press R to use it. (⚔️ swords swing with F.)'); } }
-function useE(){ if(!state.running)return; if(nearest){ tryInteract(); } else { toast('🤚 Nothing here to interact with — walk up to a thing. (Press R to use your selected item, F to attack.)'); } }   // E = interact with the WORLD only (owner); R = use the held hotbar item; F = attack
+function useE(){ if(!state.running)return; if(nearest){ tryInteract(); } else { toast('🤚 Nothing here to interact with — walk up to a thing. (R uses your selected item; 🖱️ left-click to attack.)'); } }   // E = interact with the WORLD only; R = use the held hotbar item; left-click = attack
 
 /* ---------- movement / camera / cutaway ---------- */
-let vy=0,grounded=true,stepT=0,jumpHeld=false;
+let vy=0,grounded=true,stepT=0,jumpHeld=false,airJumps=0,flipT=0;
 const RC=0.5;
 const _np=new THREE.Vector3(), _camT=new THREE.Vector3();   // hot-loop scratch (avoid per-frame allocations)
 let shakeAmt=0; const shake=a=>{ if(state.reduce)return; shakeAmt=Math.max(shakeAmt,a); };   // juice: camera punch (suppressed under reduce-motion)
@@ -1864,7 +1888,10 @@ function updatePlayer(dt){
     const HW=WRAP_P*0.5;
     if(player.position.x>HW){ player.position.x-=WRAP_P; camera.position.x-=WRAP_P; } else if(player.position.x<-HW){ player.position.x+=WRAP_P; camera.position.x+=WRAP_P; }
     if(player.position.z>HW){ player.position.z-=WRAP_P; camera.position.z-=WRAP_P; } else if(player.position.z<-HW){ player.position.z+=WRAP_P; camera.position.z+=WRAP_P; } }
-  if(keys['Space']&&grounded&&!jumpHeld){ vy=8.2*Needs.jumpMul(); grounded=false; jumpHeld=true; SFX.play('jump'); } if(!keys['Space'])jumpHeld=false;   // EDGE-triggered: must release Space between jumps -> a stuck/held Space (e.g. right-click focus loss) can't infinite-jump
+  if(keys['Space']&&!jumpHeld){
+    if(grounded){ vy=8.2*Needs.jumpMul(); grounded=false; jumpHeld=true; airJumps=1; SFX.play('jump'); }
+    else if(airJumps<2){ vy=7.6*Needs.jumpMul(); airJumps=2; jumpHeld=true; flipT=0.5; SFX.play('jump',{rate:1.18}); }   // 2nd mid-air jump -> a procedural 360 spin then lands normally
+  } if(!keys['Space'])jumpHeld=false;   // EDGE-triggered: release Space between jumps (a stuck/held Space can't infinite-jump)
   vy-=22*dt; player.position.y+=vy*dt;
   const gY=groundUnder(); const vyPrev=vy;
   if(_wz){   // SWIMMING: float at the waterline (sink in, body half-submerged) instead of standing on the floor
@@ -1874,9 +1901,11 @@ function updatePlayer(dt){
   else if(player.position.y<=gY){ player.position.y=gY; vy=0; grounded=true; }
   else if(grounded && vy<=0 && player.position.y-gY<1.2){ player.position.y=gY; vy=0; grounded=true; }   // walking DOWN a gentle slope: glue to the surface (no micro-bounce). A real jump (vy>0) still lifts off.
   else grounded=false;
+  if(grounded){ airJumps=0; flipT=0; }   // landing resets the double-jump + ends any spin
   // JUICE: squash on landing, spring scale back to base each frame
   { const mo=player.userData.model; if(mo&&mo.userData.base!=null){ const b=mo.userData.base; if(grounded&&!wasGrounded&&vyPrev<-4&&!state.reduce&&!_wz){ mo.scale.set(b*1.22,b*0.74,b*1.22); } const t=Math.min(1,dt*9); mo.scale.x=lerp(mo.scale.x,b,t); mo.scale.y=lerp(mo.scale.y,b,t); mo.scale.z=lerp(mo.scale.z,b,t);
-      mo.rotation.x=lerp(mo.rotation.x, _wz?1.15:0, Math.min(1,dt*6)); } }   // SWIM: FACE-DOWN prone tilt (was -1.15 = on the back; owner wants stomach-down), restored on exit
+      if(flipT>0 && !_wz){ flipT=Math.max(0,flipT-dt); mo.rotation.x = -(1-flipT/0.5)*TAU; }   // double-jump 360 forward flip (procedural — the rig has no flip clip)
+      else mo.rotation.x=lerp(mo.rotation.x, _wz?1.15:0, Math.min(1,dt*6)); } }   // SWIM: FACE-DOWN prone tilt, restored on exit
   wasGrounded=grounded;
   // animation state
   if(charAnim!=='__emote'){ setAnim(!grounded?'idle':(moving?(sprint?'sprint':'walk'):'idle')); }   // armed standing now uses plain idle (arm at side) — the old 'holding-right' clip RAISED the arm to head height so the bone-mounted sword towered behind the head (owner: "weapon not in hand"); idle keeps the hand low so the sword sits in it
@@ -2254,11 +2283,11 @@ const CREATURE_TYPES={   // night ENEMIES — real rigged cube-animals (was proc
   spore:{ name:'Snippy Crab', hp:0.7, speed:3.6, dmg:1, bob:5.4, floatY:0, day:12, model:'animal-crab', tgtH:1.0, build(){ return buildMobGLB(this.model,this.tgtH); } },
   thornling:{ name:'Wild Hog', hp:1.7, speed:2.0, dmg:1, bob:2.6, floatY:0, day:1, model:'animal-hog', tgtH:1.25, build(){ return buildMobGLB(this.model,this.tgtH); } },
   bulb:{ name:'Sly Fox', hp:0.85, speed:3.1, dmg:1, bob:6.0, floatY:0, day:6, model:'animal-fox', tgtH:1.15, build(){ return buildMobGLB(this.model,this.tgtH); } },
-  fang:{ name:'Prowling Tiger', hp:1.5, speed:1.9, dmg:2, bob:3.0, floatY:0, day:3, model:'animal-tiger', tgtH:1.3, build(){ return buildMobGLB(this.model,this.tgtH); } },
-  mote:{ name:'Buzzing Bee', hp:0.5, speed:3.8, dmg:1, bob:2.2, floatY:0.9, day:8, model:'animal-bee', tgtH:0.75, build(){ return buildMobGLB(this.model,this.tgtH); } },
-  // SPECIAL far-out beasts: ranged + exploder behaviors, only spawn beyond minDist from town -> harder the further you explore.
-  thornback:{ name:'Roaring Lion', hp:1.3, speed:1.7, dmg:1, bob:2.2, floatY:0, day:5, ranged:'thorn', minDist:78, model:'animal-lion', tgtH:1.35, build(){ return buildMobGLB(this.model,this.tgtH); } },
-  acidcap:{ name:'Frost Bear', hp:1.0, speed:2.3, dmg:1, bob:4.2, floatY:0, day:5, ranged:'acid', minDist:108, model:'animal-polar', tgtH:1.45, build(){ return buildMobGLB(this.model,this.tgtH); } },
+  fang:{ name:'Prowling Tiger', hp:1.5, speed:1.9, dmg:2, bob:3.0, floatY:0, day:3, attackKind:'claw', model:'animal-tiger', tgtH:1.3, build(){ return buildMobGLB(this.model,this.tgtH); } },
+  mote:{ name:'Buzzing Bee', hp:0.5, speed:3.8, dmg:1, bob:2.2, floatY:0.9, day:8, ranged:'thorn', attackKind:'sting', model:'animal-bee', tgtH:0.75, build(){ return buildMobGLB(this.model,this.tgtH); } },   // ONLY the bee shoots a (slow, dodgeable) thorn dart
+  // SPECIAL far-out beasts: only spawn beyond minDist from town -> harder the further you explore. Predators CLAW (melee); the deer explodes.
+  thornback:{ name:'Roaring Lion', hp:1.3, speed:1.7, dmg:2, bob:2.2, floatY:0, day:5, attackKind:'claw', minDist:78, model:'animal-lion', tgtH:1.35, build(){ return buildMobGLB(this.model,this.tgtH); } },
+  acidcap:{ name:'Frost Bear', hp:1.0, speed:2.3, dmg:2, bob:4.2, floatY:0, day:5, attackKind:'claw', minDist:108, model:'animal-polar', tgtH:1.45, build(){ return buildMobGLB(this.model,this.tgtH); } },
   boomshroom:{ name:'Charging Deer', hp:0.9, speed:3.0, dmg:1, bob:5.0, floatY:0, day:4, explode:true, minDist:140, model:'animal-deer', tgtH:1.3, build(){ return buildMobGLB(this.model,this.tgtH); } },
   // SPOOKY OUTSKIRTS mobs (owner: "deep in the jungle... find bad guys, just at night, like skeletons or pumpkins, on the outskirts, further out"). minDist gates them WELL away from town so the far field finally has a real nighttime threat; cap=0 by day keeps them night-only. Static graveyard GLBs (no walk clip) → buildMobGLB drives them by chase-movement + the per-type bob (skeleton stalk, pumpkin hop, ghost float).
   skeleton:{ name:'Rattling Skeleton', hp:1.4, speed:2.4, dmg:2, bob:2.4, floatY:0,    day:10, minDist:120, model:'mob-skeleton', tgtH:1.5,  build(){ return buildMobGLB(this.model,this.tgtH,'#e9e3d2'); } },                                          // bone ivory
@@ -2313,8 +2342,10 @@ function despawnCreatures(){ for(const c of creatures) world.remove(c.mesh); cre
   for(const d of drops) world.remove(d.mesh); drops.length=0; for(const p of projectiles) world.remove(p.mesh); projectiles.length=0; }
 function damagePlayer(n){ if(state._invuln>0)return;
   if(state.armor && ARMORS[state.armor] && Math.random()<ARMORS[state.armor].block){ state._blocks=(state._blocks||0)+1; state._invuln=0.5; SFX.play('interact',{vol:0.4}); toast('🛡️ Armor blocked the hit!'); return; }
-  const nd=Math.max(1,Math.round(n*(1-(state.bonusDef||0))));   // 🛡️ Aegis-Shard drops give permanent damage resist (min 1 dmg always lands)
-  state.hp=Math.max(0,state.hp-nd); state._invuln=1.0; shake(0.4); SFX.play('interact'); flashRed(); renderHearts(); if(state.hp<=0) respawnPlayer(); }
+  const roll=rollDamage(n,0); const nd=roll.dmg;   // 🎲 enemy attacks roll dice too (the armor-block check above is the player's defense)
+  state.hp=Math.max(0,state.hp-nd); state._invuln=1.0; shake(0.4); SFX.play('interact'); flashRed(); renderHearts();
+  popDmg(player.position.x, (player.position.y||0)+2.4, player.position.z, nd, {crit:roll.crit, color:'#ff6b6b'});   // floating damage number over the player
+  if(state.hp<=0) respawnPlayer(); }
 function equipBestArmor(){ for(let i=ATIER.length-1;i>=1;i--){ if(state.armors&&state.armors[ATIER[i]]){ state.armor=ATIER[i]; return; } } state.armor=''; }
 function gainArmor(id){ state.armors[id]=true; equipBestArmor(); const a=ARMORS[id]; toast(`${a.icon} Crafted + equipped ${a.name} (${Math.round(a.block*100)}% block)!`); if(invOpen)renderInv(); save(); }
 function respawnPlayer(){ if(DUNGEON.inDungeon)DUNGEON.inDungeon=false; if(MINE.inMine)MINE.inMine=false; if(UG.active)exitUnderground();   // dying UNDERGROUND must restore the surface sky+lighting (owner: "game stays dark after dying in a dungeon")
@@ -2323,20 +2354,25 @@ function equipBest(){ for(let i=WTIER.length-1;i>=0;i--){ if(i===0||state.weapon
 function gainWeapon(id){ state.weapons[id]=true; equipBest(); const w=WEAPONS[id]; toast(`${w.icon} Crafted + equipped the ${w.name}!`); if(invOpen)renderInv(); Inv.render(); }
 function playerAttack(){ if(!state.running||state.paused)return; if(state._atkCD>0) return;   // attack-speed gate (only kicks in when energy is low — full energy = no cooldown, spam freely)
   const asm=Needs.atkSpeedMul(); state._atkCD = asm<1 ? 0.42/asm : 0; state._swing=0.32;
-  const w=WEAPONS[state.weapon]||WEAPONS.fist; const dmg=w.dmg*Needs.dmgMul()*(1+(state.bonusDmg||0)); SFX.play('interact'); emote('attack-melee-right'); shake(0.12);   // ALWAYS the arm SWING (owner: never the kick); ⚔️ Power-Shard drops add permanent +dmg
+  const w=WEAPONS[state.weapon]||WEAPONS.fist; const base=w.dmg*Needs.dmgMul(); SFX.play('interact'); emote('attack-melee-right'); shake(0.12);   // ALWAYS the arm SWING (owner: never the kick)
   const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y); let hit=0;
   for(let i=creatures.length-1;i>=0;i--){ const c=creatures[i], m=c.mesh; if(!m.visible)continue;   // can't strike an unrevealed ghost
     const dx=m.position.x-player.position.x, dz=m.position.z-player.position.z, d=Math.hypot(dx,dz)||1;
     if(d>w.range)continue; if((dx*fx+dz*fz)/d<0.25)continue;   // must be in the forward arc
-    c.hp-=dmg; hit++; m.position.x+=dx/d*0.7; m.position.z+=dz/d*0.7; creatureHit(c);   // knockback + hit-flash/recoil
+    const roll=rollDamage(base, w.crit||0); c.hp-=roll.dmg; hit++; m.position.x+=dx/d*0.7; m.position.z+=dz/d*0.7; creatureHit(c);   // 🎲 dice damage + knockback + hit-flash/recoil
+    popDmg(m.position.x, (m.position.y||0)+(c.boss?2.8:1.7), m.position.z, roll.dmg, {crit:roll.crit});   // floating D&D damage number over the mob
+    if(w.life){ const heal=Math.max(1,Math.round(roll.dmg*w.life)); if(state.hp<state.hpMax){ state.hp=Math.min(state.hpMax,state.hp+heal); renderHearts(); } }   // EPIC weapon lifesteal
     if(c.hp<=0){ killCreature(i); } }
   for(let i=animals.length-1;i>=0;i--){ const a=animals[i], m=a.mesh; const dx=m.position.x-player.position.x, dz=m.position.z-player.position.z, d=Math.hypot(dx,dz)||1;   // swings also hit peaceful animals -> defeat for leather/meat
     if(d>w.range)continue; if((dx*fx+dz*fz)/d<0.25)continue;
-    a.hp-=dmg; hit++; m.position.x+=dx/d*0.5; m.position.z+=dz/d*0.5; m.scale.setScalar(1.14);
+    const arl=rollDamage(base, w.crit||0); a.hp-=arl.dmg; hit++; m.position.x+=dx/d*0.5; m.position.z+=dz/d*0.5; m.scale.setScalar(1.14);
+    popDmg(m.position.x, (m.position.y||0)+1.5, m.position.z, arl.dmg, {crit:arl.crit});
     if(a.hp<=0){ killAnimal(i); } }
-  if(DUNGEON.inDungeon){ for(const sp of DUNGEON.spawners){ if(sp.dead)continue; const dx=sp.x-player.position.x, dz=sp.z-player.position.z, d=Math.hypot(dx,dz)||1; if(d<=w.range+0.6 && (dx*fx+dz*fz)/d>=0.1){ damageSpawner(sp,dmg); hit++; } } }   // F also smashes the spawner
+  if(DUNGEON.inDungeon){ for(const sp of DUNGEON.spawners){ if(sp.dead)continue; const dx=sp.x-player.position.x, dz=sp.z-player.position.z, d=Math.hypot(dx,dz)||1; if(d<=w.range+0.6 && (dx*fx+dz*fz)/d>=0.1){ damageSpawner(sp, rollDamage(base, w.crit||0).dmg); hit++; } } }   // F also smashes the spawner (dice damage)
   swingFx(); if(hit) shake(0.22); }
-function creatureHit(c){ c.flash=0.16; for(const mm of c.mats){ try{ mm.emissive.setHex(0xff4444); mm.emissiveIntensity=0.9; }catch(e){} } if(c.mesh) c.mesh.scale.setScalar(c.boss?(c.bscale||1)*1.08:1.22); if(c.boss&&c.hpbar) drawBossBar(c.hpbar, c.hp/c.max); }
+function creatureHit(c){ c.flash=0.16; for(const mm of c.mats){ try{ mm.emissive.setHex(0xff4444); mm.emissiveIntensity=0.9; }catch(e){} } if(c.mesh) c.mesh.scale.setScalar(c.boss?(c.bscale||1)*1.08:1.22);
+  if(c.boss&&c.hpbar){ drawBossBar(c.hpbar, c.hp/c.max); }
+  else if(c.mesh){ if(!c.hpbar){ c.hpbar=makeMiniBar(); c.hpbar.position.set(0,((c.type&&c.type.tgtH)||1.2)+0.9,0); c.mesh.add(c.hpbar); } drawMiniBar(c.hpbar, Math.max(0,c.hp)/c.max); c.hptimer=2.5; } }   // lazy on-hit HP bar over any mob (the user wanted to see the lion's HP as they hit it)
 function swingFx(){ const arc=new THREE.Mesh(new THREE.TorusGeometry(0.34,0.06,6,14,Math.PI*1.2), new THREE.MeshBasicMaterial({color:'#eef6ff',transparent:true,opacity:0.85}));
   const fwd=new THREE.Vector3(Math.sin(player.rotation.y),0,Math.cos(player.rotation.y)); arc.position.copy(player.position).addScaledVector(fwd,1.0); arc.position.y=player.position.y+1.0; arc.rotation.set(Math.PI/2,player.rotation.y,0); world.add(arc);   // arc rides the player's height (was hardcoded y=1.0 -> floated to the top of the screen when the player stood in a valley)
   ephemeral.push({node:arc,life:0.24,ripple:true}); }
@@ -2346,22 +2382,42 @@ const DROP_COL={coin:'#ffd23f',crystal:'#7fd9ff',flower:'#ff9ed1',stone:'#9a948a
 // ── RARE/EPIC TROPHIES — permanent power-ups (RPG-style) that DROP as a glowing
 //    item you walk over to claim, so a rare/epic kill gives a real reward, not just
 //    materials. heart=+max ❤️, power=+attack dmg, aegis=+damage resist (shield). ──
-const TROPHY_COL={heart:'#ff5a7a', power:'#ffd23f', aegis:'#5fa8ff'};
-function grantTrophy(kind){
-  if(kind==='heart'){ state.bonusHp=Math.min(10,(state.bonusHp||0)+1); state.hpMax=hpMaxForLevel(state.level); state.hp=state.hpMax; if(typeof renderHearts==='function')renderHearts(); rarityToast('epic','🫀 Heart Crystal — +1 max ❤️ forever!'); }
-  else if(kind==='power'){ state.bonusDmg=Math.min(1.5,(state.bonusDmg||0)+0.12); rarityToast('epic',`⚔️ Power Shard — +12% attack damage forever (now +${Math.round(state.bonusDmg*100)}%)!`); }
-  else if(kind==='aegis'){ state.bonusDef=Math.min(0.6,(state.bonusDef||0)+0.10); rarityToast('epic',`🛡️ Aegis Shard — +10% damage resist forever (now ${Math.round(state.bonusDef*100)}%)!`); }
-  confetti(player.position.clone().setY(2),26); SFX.play('success',{vol:0.6}); shake(0.3); if(invOpen)renderInv(); save();
-}
-function dropTrophy(x,z,kind){ const col=TROPHY_COL[kind]||'#c77dff';
-  const m=new THREE.Mesh(new THREE.OctahedronGeometry(0.3,0),new THREE.MeshToonMaterial({color:col,gradientMap:GRAD,emissive:new THREE.Color(col),emissiveIntensity:0.8}));
+/* ── D&D-STYLE DICE COMBAT: every strike rolls a d20 (damage spread + critical hits) and pops a floating number over the target ── */
+function rollDamage(base, critBonus){ const d20=1+Math.floor(Math.random()*20);
+  const crit = (d20===20) || (d20===19 && Math.random()<0.5) || (Math.random()<(critBonus||0));   // nat-20 always crits; nat-19 half; weapon crit-chance adds more
+  let v=base*(0.82+Math.random()*0.36);   // damage dice spread (~±18%)
+  if(crit) v*=1.8; return {dmg:Math.max(1,Math.round(v)), crit, d20}; }
+function popDmg(x,y,z,amount,opts){ opts=opts||{}; const crit=!!opts.crit;
+  const cv=document.createElement('canvas'); cv.width=148; cv.height=76; const g=cv.getContext('2d');
+  g.font='bold '+(crit?56:42)+'px Trebuchet MS, Verdana, sans-serif'; g.textAlign='center'; g.textBaseline='middle';
+  const txt=(crit?'✦':'')+amount+(crit?'!':''); g.lineWidth=8; g.strokeStyle='rgba(0,0,0,0.72)'; g.strokeText(txt,74,40);
+  g.fillStyle=opts.color||(crit?'#ffd23f':'#ffffff'); g.fillText(txt,74,40);
+  const tex=new THREE.CanvasTexture(cv); const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false,depthWrite:false}));
+  const s=crit?1.9:1.35; sp.scale.set(s*1.55,s*0.8,1); sp.position.set(x+rand(-0.3,0.3),y,z); sp.renderOrder=999; world.add(sp);
+  ephemeral.push({node:sp, life:crit?1.2:0.85, fade:crit?1.2:0.85, rise:crit?2.6:2.0}); }
+/* ── DROPPED EQUIPPABLE GEAR (rare/epic) — a glowing weapon/armor item you collect into your 🎒 BAG, then equip/unequip; the perks live ON the gear (NOT auto-applied) ── */
+const RARE_GEAR=[['keen_saber','weapon'],['warded_vest','armor']], EPIC_GEAR=[['dread_reaver','weapon'],['aegis_plate','armor']];
+function pickupGear(id, kind){ const tbl=(kind==='weapon')?WEAPONS:ARMORS, it=tbl[id]; if(!it)return;
+  if(kind==='weapon') state.weapons[id]=true; else state.armors[id]=true;   // owned, NOT auto-equipped — player chooses in the bag
+  rarityToast(it.rarity||'rare', `${it.icon} ${it.name} — added to your 🎒 bag! Open it (I) to equip.`);
+  confetti(player.position.clone().setY(1.6),20); SFX.play('success',{vol:0.55}); shake(0.18); if(invOpen)renderInv(); save(); }
+function dropGear(x,z, pair){ pair=pair||pick(RARE_GEAR); const id=pair[0], kind=pair[1], it=((kind==='weapon')?WEAPONS:ARMORS)[id]; const col=(it&&it.rarity==='epic')?'#c77dff':'#5fa8ff';
+  const geo=(kind==='weapon')?new THREE.OctahedronGeometry(0.32,0):new THREE.IcosahedronGeometry(0.3,0);
+  const m=new THREE.Mesh(geo,new THREE.MeshToonMaterial({color:col,gradientMap:GRAD,emissive:new THREE.Color(col),emissiveIntensity:0.85}));
   m.position.set(x+rand(-0.5,0.5),0.85,z+rand(-0.5,0.5)); m.castShadow=true; world.add(m);
-  drops.push({mesh:m,boost:kind,n:1,bob:rand(0,TAU),t:0}); }
+  drops.push({mesh:m, gear:id, gkind:kind, n:1, bob:rand(0,TAU), t:0}); }
+function equipGear(id, kind){ const tbl=(kind==='weapon')?WEAPONS:ARMORS, it=tbl[id]; if(!it) return;
+  if(kind==='weapon'){ if(!state.weapons[id]) return; state.weapon=id; }
+  else { if(!state.armors[id]) return; state.armor=id; state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
+  SFX.play('success',{vol:0.4}); toast(`${it.icon} Equipped ${it.name}!`); if(invOpen)renderInv(); save(); }
+function unequipGear(kind){ if(kind==='weapon'){ state.weapon='fist'; equipBest(); }   // unequip -> fall back to your best CRAFTABLE weapon
+  else { state.armor=''; equipBestArmor(); state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
+  SFX.play('interact',{vol:0.4}); toast('Unequipped.'); if(invOpen)renderInv(); save(); }
 function makeDrop(x,z,item,n){ const col=DROP_COL[item]||'#ffd23f'; const m=new THREE.Mesh(new THREE.IcosahedronGeometry(0.22,0),new THREE.MeshToonMaterial({color:col,gradientMap:GRAD,emissive:new THREE.Color(col),emissiveIntensity:0.3})); m.position.set(x+rand(-0.6,0.6),0.6,z+rand(-0.6,0.6)); m.castShadow=true; world.add(m); drops.push({mesh:m,item,n,bob:rand(0,TAU),t:0}); }
 function updateDrops(dt){ for(let i=drops.length-1;i>=0;i--){ const d=drops[i],m=d.mesh; d.bob+=dt*3.2; d.t+=dt; m.rotation.y+=dt*2.2; const dx=player.position.x-m.position.x, dz=player.position.z-m.position.z, dd=Math.hypot(dx,dz)||1;
     if(dd<6){ const sp=Math.min(11,(6.5-dd)*3)*dt; m.position.x+=dx/dd*sp; m.position.z+=dz/dd*sp; } m.position.y=0.55+Math.sin(d.bob)*0.12;
-    if(d.boost) m.rotation.x+=dt*2.6;   // trophies tumble + glow so you can't miss them
-    if(dd<1.0){ if(d.boost){ grantTrophy(d.boost); } else { Inv.add(d.item,d.n); SFX.play('pickup',{vol:0.55}); } world.remove(m); drops.splice(i,1); } else if(d.t>(d.boost?180:60)){ world.remove(m); drops.splice(i,1); } } }
+    if(d.gear) m.rotation.x+=dt*2.6;   // gear items tumble + glow so you can't miss them
+    if(dd<1.0){ if(d.gear){ pickupGear(d.gear,d.gkind); } else { Inv.add(d.item,d.n); SFX.play('pickup',{vol:0.55}); } world.remove(m); drops.splice(i,1); } else if(d.t>(d.gear?180:60)){ world.remove(m); drops.splice(i,1); } } }
 /* ---- LOOT BAGS (owner: a real loot system — kills & chests drop a clickable BAG; walk up + E to open a modal showing exactly what dropped, then take items into your inventory; no more "loot dropped" toast) ---- */
 const lootBags=[]; let lootOpen=null;
 function dropLoot(x,z,items,label,autoGrab){   // items = [[item,n],...] (a Minecraft loot-table-style bundle). autoGrab=true -> small kills auto-collect on walk-over (no modal spam); bosses/chests open a modal.
@@ -2394,7 +2450,7 @@ function spawnThorn(x,y,z,tx,tz,kind){ const acid=kind==='acid', seed=kind==='se
     else if(acid){ geo=new THREE.SphereGeometry(0.17,8,6); col='#9be86b'; ecol='#7ad04a'; }
     else { geo=new THREE.ConeGeometry(0.1,0.5,5); col='#5a3a22'; ecol='#3a2a1a'; }
     const m=new THREE.Mesh(geo,new THREE.MeshToonMaterial({color:col,gradientMap:GRAD,emissive:new THREE.Color(ecol),emissiveIntensity:0.4}));
-    m.position.set(x,y,z); const dx=tx-x, dz=tz-z, dd=Math.hypot(dx,dz)||1, sp=seed?8.5:10;   // seeds fly a touch slower so a watching player can sidestep — "see it coming like an arrow"
+    m.position.set(x,y,z); const dx=tx-x, dz=tz-z, dd=Math.hypot(dx,dz)||1, sp=seed?8.5:(kind==='thorn'?6.5:10);   // the bee's thorn flies SLOW so you can sidestep it like an arrow; acid (boss volley) stays fast
     if(seed)m.scale.set(1,1,1.7);   // teardrop seed shape
     if(!acid)m.lookAt(tx,y,tz); world.add(m); projectiles.push({mesh:m,vx:dx/dd*sp,vz:dz/dd*sp,life:2.6,dmg:acid?2:1}); SFX.play('interact',{rate:seed?1.1:1.5,vol:0.35}); }
 function updateProjectiles(dt){ for(let i=projectiles.length-1;i>=0;i--){ const pr=projectiles[i],m=pr.mesh; m.position.x+=pr.vx*dt; m.position.z+=pr.vz*dt; pr.life-=dt; m.rotation.z+=dt*10;
@@ -2409,6 +2465,16 @@ const BOSS_TYPES={
 };
 function drawBossBar(sp,frac){ const g=sp._g; g.clearRect(0,0,160,28); g.fillStyle='rgba(18,10,16,0.85)'; g.fillRect(3,13,154,13); g.fillStyle=frac>0.5?'#7ad04a':frac>0.25?'#ffd23f':'#e0463a'; g.fillRect(5,15,150*Math.max(0,Math.min(1,frac)),9); g.fillStyle='#fff'; g.font='bold 14px "Trebuchet MS",sans-serif'; g.textAlign='center'; g.fillText('💀 '+sp._name,80,10); sp.material.map.needsUpdate=true; }
 function makeBossBar(name){ const cv=document.createElement('canvas'); cv.width=160; cv.height=28; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthTest:false,depthWrite:false})); sp.material.map.colorSpace=THREE.SRGBColorSpace; sp.renderOrder=24; sp.scale.set(4.4,0.77,1); sp._cv=cv; sp._g=cv.getContext('2d'); sp._name=name; drawBossBar(sp,1); return sp; }
+// ── on-hit MINI health bar for ordinary mobs (industry standard: appears on damage, green->yellow->red, fades after the last hit) ──
+function drawMiniBar(sp,frac){ const g=sp._g; g.clearRect(0,0,120,14); g.fillStyle='rgba(14,8,12,0.82)'; g.fillRect(2,3,116,9); g.fillStyle=frac>0.5?'#7ad04a':frac>0.25?'#ffd23f':'#e0463a'; g.fillRect(4,5,112*Math.max(0,Math.min(1,frac)),5); sp.material.map.needsUpdate=true; }
+function makeMiniBar(){ const cv=document.createElement('canvas'); cv.width=120; cv.height=14; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthTest:false,depthWrite:false})); sp.material.map.colorSpace=THREE.SRGBColorSpace; sp.renderOrder=23; sp.scale.set(1.7,0.2,1); sp._cv=cv; sp._g=cv.getContext('2d'); drawMiniBar(sp,1); return sp; }
+// ── per-mob ATTACK FX: a claw slash-arc / bite puff / sting flash in front of the mob so the strike reads clearly ──
+function mobAttackFx(c, kind, dx, dz){ const m=c.mesh; const dd=Math.hypot(dx,dz)||1, fx=dx/dd, fz=dz/dd; const y=(m.position.y||0)+0.85;
+  const col = kind==='claw'?'#ff5a5a' : kind==='sting'?'#ffe066' : kind==='wail'?'#cfe0ff' : '#ffd2a8';
+  if(kind==='claw'||kind==='wail'){ const arc=new THREE.Mesh(new THREE.TorusGeometry(0.42,0.06,6,12,Math.PI*1.1), new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.9}));
+    arc.position.copy(m.position).addScaledVector(new THREE.Vector3(fx,0,fz),0.95); arc.position.y=y; arc.rotation.set(Math.PI/2, Math.atan2(fx,fz), 0); arc.renderOrder=20; world.add(arc); ephemeral.push({node:arc,life:0.24,fade:0.24,rise:0.3}); }
+  else { const puff=new THREE.Mesh(new THREE.SphereGeometry(0.24,8,6), new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.85})); puff.position.copy(m.position).addScaledVector(new THREE.Vector3(fx,0,fz),0.72); puff.position.y=y; world.add(puff); ephemeral.push({node:puff,life:0.2,fade:0.2,rise:0.6}); }
+  SFX.play('interact',{rate:kind==='claw'?0.55:(kind==='sting'?1.4:1.0), vol:0.4}); }
 function spawnBoss(typeKey,x,z){ const T=BOSS_TYPES[typeKey]||BOSS_TYPES.golem; const c=T.build(); c.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); c.position.set(x,0,z); world.add(c);
   const hp=Math.max(60,Math.round((30+state.day*6)*T.hp)); const mats=[]; c.traverse(m=>{ if(m.isMesh&&m.material&&m.material.emissive)mats.push(m.material); });
   const o={mesh:c,hp,max:hp,cd:rand(0,1),bcd:rand(3,5),tele:0,bob:Math.random()*TAU,mats,flash:0,type:T,aggro:true,wdir:0,wt:9,boss:true,bscale:1};
@@ -2416,7 +2482,24 @@ function spawnBoss(typeKey,x,z){ const T=BOSS_TYPES[typeKey]||BOSS_TYPES.golem; 
 /* KILL-MILESTONE bosses: like a roguelite "champion", a boss rises after every N normal kills (a 3rd path to a
    boss besides the dungeon vault + the rare night spawn). First one comes early so you SEE it; then it ramps. */
 const BOSS_KILL_FIRST=20, BOSS_KILL_STEP=35;
-function killCreature(i){ const c=creatures[i], p=c.mesh.position.clone(); confetti(p.clone().setY(1.2),16);
+// ── LORE / BESTIARY (press L): each defeat records a foe; progressive reveal — 1 kill = name, 2 = HP+dmg, 3+ = traits ──
+let loreOpen=false;
+function loreKeyOf(t){ for(const k in CREATURE_TYPES) if(CREATURE_TYPES[k]===t) return k; for(const k in BOSS_TYPES) if(BOSS_TYPES[k]===t) return 'boss_'+k; return null; }
+function loreDef(key){ return (key&&key.indexOf('boss_')===0) ? BOSS_TYPES[key.slice(5)] : CREATURE_TYPES[key]; }
+function deriveTraits(t){ const a=[]; if(t.ranged==='thorn')a.push('🌵 Fires a slow thorn dart'); else if(t.ranged==='seed')a.push('🎃 Spits seeds'); else if(t.ranged)a.push('🧪 Ranged attacker'); if(t.explode)a.push('💥 Explodes on contact'); if(t.stealth)a.push('👻 Invisible until it strikes'); if(t.attackKind==='claw')a.push('🐾 Claws in melee'); if((t.minDist||0)>=120)a.push('🌑 Deep-outskirts night beast'); else if(t.minDist)a.push('🏞️ Roams far from town'); if(t.dmg>=2)a.push('⚔️ Hits hard'); if(t.special)a.push('☄️ Boss special: '+t.special); return a; }
+function recordLore(c){ if(!c||!c.type)return; const t=c.type, k=loreKeyOf(t); if(!k)return; if(!state.lore)state.lore={}; const first=!state.lore[k]; const L=state.lore[k]||(state.lore[k]={name:t.name,kills:0,maxHp:0,dmg:t.dmg,boss:!!c.boss,firstSeen:state.day}); L.kills++; L.maxHp=Math.max(L.maxHp||0,c.max||0); if(first){ toast('📖 New creature recorded — press L for Lore'); SFX.play('success',{vol:0.4}); } }
+function openLore(){ if(!state.running)return; loreOpen=true; const el=document.getElementById('lore'); if(!el)return; el.style.cssText='position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(10,8,18,0.6)'; renderLore(); el.classList.remove('hidden'); el.onclick=(e)=>{ if(e.target===el)closeLore(); }; }
+function closeLore(){ loreOpen=false; const el=document.getElementById('lore'); if(el)el.classList.add('hidden'); }
+function renderLore(){ const el=document.getElementById('lore'); if(!el)return; const keys=Object.keys(CREATURE_TYPES).concat(Object.keys(BOSS_TYPES).map(k=>'boss_'+k)); const known=keys.filter(k=>state.lore&&state.lore[k]).length;
+  let h=`<div style="background:linear-gradient(180deg,#2a2038,#1a1426);border:3px solid #4a3a5e;border-radius:16px;padding:16px 18px;max-width:560px;max-height:80vh;overflow-y:auto;color:#fff;box-shadow:0 8px 0 rgba(0,0,0,.35)"><h3 style="margin:0 0 10px;display:flex;justify-content:space-between;align-items:center;gap:10px">📖 Bestiary <span style="font-weight:400;opacity:.7;font-size:13px">${known}/${keys.length} discovered</span> <span id="loreX" style="cursor:pointer">✕</span></h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">`;
+  for(const k of keys){ const t=loreDef(k), L=state.lore&&state.lore[k];
+    if(!L){ h+=`<div style="padding:8px;border:2px solid #3a3048;border-radius:10px;background:rgba(0,0,0,0.2);opacity:.5;text-align:center"><div style="font-size:26px">❓</div><div style="font-weight:700">???</div></div>`; continue; }
+    const tier=L.kills>=3?3:(L.kills>=2?2:1), icon=L.boss?'💀':'👾'; let body=`<div style="font-size:12px;opacity:.85">Defeated ×${L.kills}</div>`;
+    if(tier>=2) body+=`<div style="font-size:12px;margin-top:2px">❤️ ${L.maxHp} HP · ⚔️ ${L.dmg} dmg</div>`; else body+=`<div style="font-size:11px;opacity:.55;margin-top:2px">Defeat again to learn its stats…</div>`;
+    if(tier>=3){ const tr=deriveTraits(t||{}); body+=`<div style="font-size:11px;opacity:.9;margin-top:4px;line-height:1.35">${tr.length?tr.join('<br>'):'A simple creature.'}</div>`; }
+    h+=`<div style="padding:8px;border:2px solid ${L.boss?'#c77dff':'#4a7a4a'};border-radius:10px;background:rgba(0,0,0,0.22)"><div style="font-size:24px;text-align:center">${icon}</div><div style="font-weight:800;text-align:center;margin-bottom:3px">${L.name}</div>${body}</div>`; }
+  h+=`</div><div style="text-align:center;opacity:.6;font-size:11px;margin-top:10px">Press L or ✕ to close</div></div>`; el.innerHTML=h; const x=el.querySelector('#loreX'); if(x)x.onclick=closeLore; }
+function killCreature(i){ const c=creatures[i]; recordLore(c); const p=c.mesh.position.clone(); confetti(p.clone().setY(1.2),16);
   const burst=new THREE.Mesh(new THREE.SphereGeometry(0.4,8,8), new THREE.MeshBasicMaterial({color:'#9bffae',transparent:true,opacity:0.75})); burst.position.copy(p).setY(0.8); world.add(burst); ephemeral.push({node:burst,life:0.3,ripple:true});   // death pop
   if(c.hpbar){ c.mesh.remove(c.hpbar); c.hpbar=null; }
   world.remove(c.mesh); creatures.splice(i,1);
@@ -2428,14 +2511,16 @@ function killCreature(i){ const c=creatures[i], p=c.mesh.position.clone(); confe
   const tier=rollRarity(), m=RARITY[tier].mult; const coins=(2+Math.floor(Math.random()*3))*m; state._kills=(state._kills||0)+1; SFX.play('interact',{rate:0.3,vol:0.5});   // owner disliked the bright kill 'chime' — much lower pitch + quieter = a dull defeat thud, not a chime (hit sound at L~2092 stays rate 1.0)
   gainXP(6 + (c.type&&c.type.minDist?8:0) + (m>1?m*2:0));   // XP for the kill — far-out specials + rare drops grant more
   dropLoot(p.x,p.z,[['coin',coins]], '⚔️ Loot', true);   // a glowing loot BAG -> walk over to auto-collect (coins)
-  if(tier==='epic'){ dropTrophy(p.x,p.z, pick(['heart','power','aegis'])); rarityToast('epic','★ EPIC drop — a power-up trophy fell! Grab it ✨'); }   // EPIC = a permanent power-up trophy (health / damage / shield)
-  else if(tier==='rare'){ makeDrop(p.x,p.z, pick(['crystal','iron_ingot']), m); if(Math.random()<0.30) dropTrophy(p.x,p.z, pick(['heart','power','aegis'])); rarityToast('rare','✦ RARE drop — valuable loot fell! Grab it'); }   // RARE = valuable material (+30% trophy)
+  if(tier==='epic'){ dropGear(p.x,p.z, pick(EPIC_GEAR)); rarityToast('epic','★ EPIC drop — a powerful weapon/armor fell! Grab it, then equip in your bag (I) ✨'); }   // EPIC = an equippable epic weapon or armor (the perks live ON the gear)
+  else if(tier==='rare'){ makeDrop(p.x,p.z, pick(['crystal','iron_ingot']), m); if(Math.random()<0.45) dropGear(p.x,p.z, pick(RARE_GEAR)); rarityToast('rare','✦ RARE drop — valuable loot fell! Grab it'); }   // RARE = valuable material (+45% chance of equippable rare gear)
   if(!creatures.some(b=>b.boss) && state._kills>=(state._bossKillTarget||BOSS_KILL_FIRST)){   // milestone reached -> a champion rises near you
     const a=rand(0,TAU), r=rand(13,18); spawnBoss(pick(Object.keys(BOSS_TYPES)), player.position.x+Math.cos(a)*r, player.position.z+Math.sin(a)*r);
     state._bossKillTarget=(state._bossKillTarget||BOSS_KILL_FIRST)+BOSS_KILL_STEP; } }
 const AGGRO_DETECT=15, AGGRO_LOSE=26;   // monsters CHASE only within DETECT; give up past LOSE (Minecraft-style sight)
 function updateCombat(dt){
   if(state._invuln>0) state._invuln-=dt;
+  const _arm=state.armor&&ARMORS[state.armor];   // EPIC armor (Aegis Plate) slowly regenerates health
+  if(_arm&&_arm.regen&&state.hp>0&&state.hp<state.hpMax){ state._regAcc=(state._regAcc||0)+_arm.regen*dt; if(state._regAcc>=1){ const h=Math.floor(state._regAcc); state._regAcc-=h; state.hp=Math.min(state.hpMax,state.hp+h); if(typeof renderHearts==='function')renderHearts(); } }
   const night=!isDay(); const indoors=homes.some(h=>h.active);   // inside a home -> monsters can't reach you + de-aggro (the escape)
   if(!DUNGEON.inDungeon && !MINE.inMine){   // SURFACE only: continuous respawn toward a cap (mine/dungeon foes are pre-placed on entry and processed below)
     // CONTINUOUS RESPAWN toward a day/night cap: a few roam by day, a swarm at night; killed ones return over time.
@@ -2456,7 +2541,8 @@ function updateCombat(dt){
     if(m.userData.mixer)m.userData.mixer.update(dt);   // tick the GLB walk animation
     c.bob+=dt*T.bob; m.position.y=groundY(m.position.x,m.position.z)+T.floatY+Math.abs(Math.sin(c.bob))*0.13;   // bob ON the terrain, not at world 0
     if(c.flash>0){ c.flash-=dt; if(c.flash<=0){ for(const mm of c.mats){ try{ mm.emissive.setHex(0x000000); mm.emissiveIntensity=0; }catch(e){} } } }   // hit-flash decay
-    if(m.scale.x>1.001) m.scale.setScalar(lerp(m.scale.x,1,dt*9));   // recoil pop settles back
+    if(m.scale.x>1.001 && !(c.atk>0)) m.scale.setScalar(lerp(m.scale.x,1,dt*9));   // recoil pop settles back (paused mid-attack so the wind-up swell holds)
+    if(!c.boss && c.hpbar){ c.hptimer-=dt; c.hpbar.material.opacity=clamp(c.hptimer/0.6,0,1); if(c.hptimer<=0){ m.remove(c.hpbar); c.hpbar=null; } }   // on-hit mini HP bar lingers ~2.5s then fades
     // AGGRO: chase only when the player is within sight (hysteresis so it doesn't flicker); indoors -> lose it.
     if(c.aggro){ if(d>AGGRO_LOSE||indoors) c.aggro=false; } else if(d<AGGRO_DETECT && !indoors) c.aggro=true;
     if(T.stealth){ m.visible=c.aggro; if(!c.aggro){ pushMonsterOut(m); continue; } }   // GHOST: unseen while it hasn't noticed you (no attack, no chase); it materializes the instant you're in its vicinity and fades out again only when it loses you
@@ -2473,11 +2559,13 @@ function updateCombat(dt){
           }
         } else { c.bcd-=dt; if(d<3.4){ c.cd-=dt; if(c.cd<=0){ c.cd=1.2; damagePlayer(T.dmg); } } if(c.bcd<=0 && d<16){ c.bcd=rand(4.5,6.5); c.tele=0.8; } }
       } else if(T.ranged){
-        // RANGED foe (Thornback/Acid Cap): hold a stand-off band and lob projectiles — close in or strafe to dodge.
+        // RANGED foe (only the Bee's thorn-dart + the Jack-o'-Lantern's seed): hold a stand-off band and lob a SLOW, dodgeable shot after a visible wind-up.
         if(d>9){ const sp=T.speed*dt; monMove(m,dx/d,dz/d,sp); }
         else if(d<4.5){ const sp=T.speed*dt; monMove(m,-dx/d,-dz/d,sp); }   // back off if crowded
         m.rotation.y=Math.atan2(dx,dz);
-        c.cd-=dt; if(c.cd<=0){ c.cd=1.8; spawnThorn(m.position.x,0.95,m.position.z,player.position.x,player.position.z,T.ranged); }
+        if(c.atk>0){ c.atk-=dt; for(const mm of c.mats){ try{ mm.emissive.setHex(0xffd23f); mm.emissiveIntensity=0.6; }catch(e){} } m.scale.setScalar(1+(1-Math.max(0,c.atk)/0.30)*0.14);
+          if(c.atk<=0){ spawnThorn(m.position.x,(T.floatY||0)+0.95,m.position.z,player.position.x,player.position.z,T.ranged); mobAttackFx(c,(T.attackKind||'sting'),dx,dz); } }
+        else { c.cd-=dt; if(c.cd<=0){ c.cd=1.8; c.atk=0.30; } }   // wind up first -> you SEE the shot coming
       } else if(T.explode){
         // EXPLODER (Boom Shroom): rushes, then arms a fuse and detonates AoE — back away when it flashes red!
         if(c.fuse===undefined){
@@ -2489,8 +2577,14 @@ function updateCombat(dt){
           if(c.fuse<=0){ explodeFx(m.position); if(Math.hypot(player.position.x-m.position.x,player.position.z-m.position.z)<3.2) damagePlayer(3); world.remove(m); creatures.splice(i,1); continue; }
         }
       } else {
-        if(d>1.35){ const sp=T.speed*dt; monMove(m,dx/d,dz/d,sp); m.rotation.y=Math.atan2(dx,dz); }
-        else { c.cd-=dt; if(c.cd<=0){ c.cd=1.1; damagePlayer(T.dmg*(c.dmgMul||1)); } }   // outskirts mobs hit harder
+        m.rotation.y=Math.atan2(dx,dz);
+        if(c.atk>0){   // ATTACK in progress: rear-up telegraph, then a lunging claw/bite strike (every mob clearly animates its attack)
+          c.atk-=dt; const p=1-Math.max(0,c.atk)/0.30;
+          for(const mm of c.mats){ try{ mm.emissive.setHex(0xff7a3a); mm.emissiveIntensity=0.6; }catch(e){} }   // attack tint (re-applied after the flash-decay + scale-settle above)
+          m.scale.setScalar(1+Math.sin(p*Math.PI)*0.22);
+          if(c.atk<=0){ if(d<2.0){ monMove(m,dx/d,dz/d,0.5); damagePlayer(T.dmg*(c.dmgMul||1)); } mobAttackFx(c,(T.attackKind||'bite'),dx,dz); }   // lunge + strike; outskirts mobs hit harder (dmgMul)
+        } else if(d>1.5){ const sp=T.speed*dt; monMove(m,dx/d,dz/d,sp); }
+        else { c.cd-=dt; if(c.cd<=0){ c.cd=1.2; c.atk=0.30; } }   // in range -> begin an attack wind-up
       }
     } else {
       c.wt-=dt; if(c.wt<=0){ c.wdir=rand(0,TAU); c.wt=rand(1.6,3.6); }
@@ -2711,7 +2805,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
   roofOp:()=>cutRoof?+cutRoof.material.opacity.toFixed(2):null,
   interactNow:()=>{ updateInteract(); if(nearest){ const l=nearest.label; nearest.action(); return l; } return null; },
-  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, grant:(k)=>grantTrophy(k), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
+  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, pickGear:(id,kind)=>pickupGear(id,kind), equipGear:(id,kind)=>equipGear(id,kind), unequipGear:(k)=>unequipGear(k), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
   nodesByItem:()=>{ const o={}; for(const n of nodes) o[n.item]=(o[n.item]||0)+1; return o; }, waters:()=>waters.length,
   homes:()=>({count:homes.length, built:homes.filter(h=>h.built).length, active:homes.filter(h=>h.active).length}),
   respawnInfo:()=>({nodes:nodes.length, hidden:nodes.filter(n=>!n.mesh.visible).length, onCd:nodes.filter(n=>n.timer>0).length}),
@@ -2862,7 +2956,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
     // KIT: armor reduces damage (deterministic — force the block chance to 1 then 0)
     { Inv.add('stone',4); Inv.add('crystal',1); craft('iron_armor'); R.armor_craft=(state.armor==='iron');
       const b0=ARMORS.iron.block; ARMORS.iron.block=1; state.hp=5; state._invuln=0; damagePlayer(1); const blocked=(state.hp===5);
-      ARMORS.iron.block=0; state.hp=5; state._invuln=0; damagePlayer(1); const unblocked=(state.hp===4); ARMORS.iron.block=b0;
+      ARMORS.iron.block=0; state.hp=20; state._invuln=0; damagePlayer(1); const unblocked=(state.hp<20); ARMORS.iron.block=b0;   // dice damage varies -> assert "took damage" (hp high so no respawn)
       R.armor_reduces=(blocked && unblocked); }
     // RARITY: common/rare/epic distribution (epic rarest) + loot scales by tier
     { const counts={common:0,rare:0,epic:0}; for(let i=0;i<2000;i++) counts[rollRarity()]++;
@@ -2873,6 +2967,17 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       if(c){ c.hp=999; const m=c.mesh; m.position.set(player.position.x+Math.sin(player.rotation.y)*1.4,0,player.position.z+Math.cos(player.rotation.y)*1.4); playerAttack();
         R.combat_anim=(c.flash>0 && c.hp<999 && m.scale.x>1.0); } else R.combat_anim=false;
       despawnCreatures(); state.tod=0.3; }
+    // LOOT GEAR: dropped rare/epic gear is equippable + unequippable; armor bonus ❤️ lives on the equipped gear
+    { pickupGear('dread_reaver','weapon'); const owned=(state.weapons.dread_reaver===true);
+      equipGear('dread_reaver','weapon'); const wEq=(state.weapon==='dread_reaver');
+      unequipGear('weapon'); const wUn=(state.weapon!=='dread_reaver');
+      unequipGear('armor'); const hp0=state.hpMax; pickupGear('aegis_plate','armor'); equipGear('aegis_plate','armor'); const aEq=(state.armor==='aegis_plate' && state.hpMax===hp0+4);   // pin a clean baseline first so the +4 delta is deterministic
+      unequipGear('armor'); const aUn=(state.armor!=='aegis_plate' && state.hpMax===hp0);
+      R.gear_equip=(owned&&wEq&&wUn&&aEq&&aUn); }
+    // DICE: damage rolls vary + can crit; a floating damage-number sprite pops over the target
+    { let mn=1e9,mx=0,crits=0; for(let i=0;i<400;i++){ const r=rollDamage(50,0.1); mn=Math.min(mn,r.dmg); mx=Math.max(mx,r.dmg); if(r.crit)crits++; }
+      R.dice_rolls=(mx>mn && crits>0 && crits<400);
+      const e0=ephemeral.length; popDmg(0,2,0,42,{crit:true}); R.dmg_popup=(ephemeral.length>e0); while(ephemeral.length>e0){ const ee=ephemeral.pop(); try{world.remove(ee.node);}catch(_){} } }
     // MENU: Continue/New Game/Settings present + settings opens & closes
     { setupMenu(); const cont=document.getElementById('continueBtn'), ng=document.getElementById('newGameBtn'), st=document.getElementById('settingsBtn');
       openSettings(); const sOpen=(!document.getElementById('pause').classList.contains('hidden') && !!document.getElementById('volSlider')); closeSettings(); const sClosed=document.getElementById('pause').classList.contains('hidden');
@@ -2999,7 +3104,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench
       &&R.homes_present&&R.home_built&&R.home_loot&&R.home_enter_path&&R.recipe_page_unlock&&R.node_respawn&&R.chest_oneuse
       &&R.weapon_craft&&R.combat_kill&&R.combat_respawn&&R.inv_slots
-      &&R.mine_pickaxe&&R.mine_enter&&R.mine_dig&&R.mine_exit&&R.armor_craft&&R.armor_reduces&&R.rarity_tiers&&R.rarity_loot&&R.combat_anim&&R.menu;
+      &&R.mine_pickaxe&&R.mine_enter&&R.mine_dig&&R.mine_exit&&R.armor_craft&&R.armor_reduces&&R.rarity_tiers&&R.rarity_loot&&R.combat_anim&&R.gear_equip&&R.dice_rolls&&R.dmg_popup&&R.menu;
     return R; } };
 </script>
 </body>
