@@ -366,7 +366,7 @@ addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reaso
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
   discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, tradeSession:null, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
-  hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, _blocks:0, _activeTool:'',
+  hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
   volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0, lore:{}, fog:{}, met:{}, badges:{} };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
@@ -679,6 +679,9 @@ const ARMORS={ leather:{block:0.30,name:'Leather Armor',icon:'🛡️'}, iron:{b
   warded_vest:{block:0.60,name:'Warded Vest',icon:'🔹',rarity:'rare',bonusHp:2},                  // RARE: solid block + 1 extra ❤️
   aegis_plate:{block:0.82,name:'Aegis Plate',icon:'🔮',rarity:'epic',bonusHp:4,regen:0.35} };      // EPIC: heavy block + 2 extra ❤️ + slow regen
 const ATIER=['','leather','iron','gold','titan'];   // titan = BOSS-ONLY top tier
+// OFF-HAND (L-hand): SHIELDS = a % chance to fully BLOCK an incoming hit (melee AND projectiles, since both route through damagePlayer); TORCHES = a carried light that burns down. Both wear via the shared durability system.
+const SHIELDS={ wood_shield:{block:0.15,name:'Wooden Shield',icon:'🛡️',tier:'wood',rarity:'common'}, stone_shield:{block:0.28,name:'Stone Shield',icon:'🛡️',tier:'stone',rarity:'common'}, iron_shield:{block:0.45,name:'Iron Shield',icon:'🛡️',tier:'iron',rarity:'common'}, gold_shield:{block:0.60,name:'Gold Shield',icon:'🛡️',tier:'gold',rarity:'common'}, titan_shield:{block:0.75,name:'Titan Bulwark',icon:'🛡️',tier:'titan',rarity:'rare'} };
+const TORCHES={ wood_torch:{range:12,intensity:1.0,color:'#ffb84d',name:'Wood Torch',icon:'🔥',rarity:'common'}, crystal_torch:{range:16,intensity:1.3,color:'#7fd9ff',name:'Crystal Torch',icon:'🔆',rarity:'common'}, magic_torch:{range:20,intensity:1.7,color:'#ff66ff',name:'Magic Torch',icon:'✨',rarity:'rare'} };
 // Stage C — voxel mine: a bounded pocket cavern FAR from the surface (so its solids never touch surface play + it's frustum-culled). Lazy-built on first entry.
 const MINE={x:1000,z:1000,inMine:false,built:false,group:null,blocks:[],chests:[],returnPos:null};
 const DUNGEON={x:2000,z:2000,inDungeon:false,built:false,ex:0,ez:0,rooms:[],chests:[],traps:[],spawners:[],secretChest:null,returnPos:null};   // multi-room crypt pocket (far away, frustum-culled): tunnels + traps + a spawner + ONE hidden secret chest — entrances scattered in the outer ring
@@ -1262,6 +1265,28 @@ function makeToolModel(kind){ const g=new THREE.Group();
   g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); return g; }
 function setHeld(kind){ if(kind===_heldKind) return; _heldKind=kind; while(heldGroup.children.length) heldGroup.remove(heldGroup.children[0]); if(kind && kind!=='fist') heldGroup.add(makeToolModel(kind)); applyHeldOffsets(); }
 function applyHeldOffsets(){ if(!heldGroup.userData.onBone) return; const o=TOOL_OFFSETS[_heldKind]||_SWORD_OFF; heldGroup.position.set(o.pos[0],o.pos[1],o.pos[2]); heldGroup.rotation.set(o.rot[0],o.rot[1],o.rot[2]); heldGroup.scale.setScalar(o.scale); }
+/* OFF-HAND (left hand): a shield or torch model carried on the arm-left bone (mirror of the held weapon). */
+const offhandGroup=new THREE.Group(); let _offhandKind=''; let _torchLight=null;
+const OFFHAND_OFF={ shield:{pos:[0.0,-0.5,0.14],rot:[0.18,0.5,-0.12],scale:0.78}, torch:{pos:[0.0,-0.4,0.16],rot:[0.05,0,0.0],scale:0.8} };
+const SHIELD_COL={wood:'#8a5a31', stone:'#9a948a', iron:'#c2c7cf', gold:'#ffd23f', titan:'#b07cff'};
+function makeShieldModel(kind){ const g=new THREE.Group(); const sh=SHIELDS[kind]; if(!sh) return g; const col=SHIELD_COL[sh.tier]||'#cccccc';
+  const face=box(0.5,0.66,0.08,col); g.add(face); const edge=box(0.56,0.72,0.03,'#5a4632'); edge.position.z=-0.04; g.add(edge);
+  const boss=ball(0.1,(sh.tier==='gold'||sh.tier==='titan')?'#fff7d0':'#caa46a'); boss.position.z=0.06; g.add(boss);
+  const grip=box(0.1,0.34,0.08,'#3a2a1a'); grip.position.z=-0.12; g.add(grip);
+  g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); return g; }
+function makeTorchModel(kind){ const g=new THREE.Group(); const t=TORCHES[kind]; if(!t) return g;
+  const stick=box(0.06,0.7,0.06,'#8a5a31'); stick.position.y=0.1; g.add(stick); const grip=box(0.08,0.16,0.08,'#3a2a1a'); grip.position.y=-0.18; g.add(grip);
+  const flame=new THREE.Mesh(new THREE.SphereGeometry(0.16,8,6),toon(t.color)); flame.position.y=0.5; flame.scale.y=1.4; flame.material.emissive=new THREE.Color(t.color); flame.material.emissiveIntensity=0.95; g.add(flame);
+  g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); return g; }
+function applyOffhandOffsets(){ if(!offhandGroup.userData.onBone) return; const o=TORCHES[_offhandKind]?OFFHAND_OFF.torch:OFFHAND_OFF.shield; offhandGroup.position.set(o.pos[0],o.pos[1],o.pos[2]); offhandGroup.rotation.set(o.rot[0],o.rot[1],o.rot[2]); offhandGroup.scale.setScalar(o.scale); }
+function setOffhand(kind){ if(kind===_offhandKind) return; _offhandKind=kind; while(offhandGroup.children.length) offhandGroup.remove(offhandGroup.children[0]); if(kind){ if(SHIELDS[kind]) offhandGroup.add(makeShieldModel(kind)); else if(TORCHES[kind]) offhandGroup.add(makeTorchModel(kind)); } applyOffhandOffsets(); }
+function updateTorchLight(dt){ const isT = state.offhand && TORCHES[state.offhand];
+  if(!isT){ if(_torchLight){ removeDynLight(_torchLight); _torchLight=null; } return; }
+  const t=TORCHES[state.offhand]; const wp=new THREE.Vector3();
+  if(offhandGroup.children.length){ offhandGroup.getWorldPosition(wp); wp.y+=0.4; } else { wp.copy(player.position); wp.y+=1.4; }
+  if(!_torchLight){ _torchLight=addDynLight(t.color, t.intensity*1.5, t.range, wp.x, wp.y, wp.z); }
+  if(_torchLight){ _torchLight.position.copy(wp); try{ _torchLight.color.set(t.color); }catch(e){} _torchLight.intensity=t.intensity*1.5; _torchLight.distance=t.range; }
+  useDur(state.offhand, (dt||0.016)*3); }   // torch burns ~3 durability/sec -> common torch ≈ 50s, magic ≈ 120s
 /* ARMOR VISUAL (owner: "make armor visually show") — a tier-colored chestplate + shoulder pads worn over the torso */
 const armorGroup=new THREE.Group(); let _armorShown='?';
 const ARMOR_COL={leather:'#8a5a31', iron:'#c2c7cf', gold:'#ffd23f', titan:'#b07cff'};
@@ -1274,7 +1299,7 @@ function setArmorVisual(){ const id=state.armor||''; if(id===_armorShown) return
     const trim=box(0.7,0.08,0.48, id==='gold'||id==='titan'?'#fff7d0':'#5a4632'); trim.position.y=1.25; armorGroup.add(trim);
     armorGroup.traverse(m=>{ if(m.isMesh){ m.castShadow=true; m.receiveShadow=true; } }); } }
 function updateHeld(dt){ if(!player.userData.model && heldGroup.parent!==player) return;
-  const want=(state._toolUse>0)?state._toolKind:(state._activeTool?state._activeTool:(state.weapon!=='fist'?state.weapon:'fist')); setHeld(want); setArmorVisual();
+  const want=(state._toolUse>0)?state._toolKind:(state._activeTool?state._activeTool:(state.weapon!=='fist'?state.weapon:'fist')); setHeld(want); setArmorVisual(); setOffhand(state.offhand||''); updateTorchLight(dt);
   if(state._toolUse>0) state._toolUse-=dt;
   if(heldGroup.userData.onBone){ if(state._swing>0)state._swing-=dt; return; }   // bone-attached: the arm-right clip (attack-melee/interact) drives the swing, not a body-pinned rotation
   heldGroup.rotation.set(-0.5,0.25,0.1);   // resting grip angle (body-pinned fallback only)
@@ -1335,6 +1360,9 @@ function buildPlayerAndNeighbors(){
   const _pm=player.userData.model, _armR=_pm&&_pm.getObjectByName?_pm.getObjectByName('arm-right'):null;
   if(_armR){ _armR.add(heldGroup); heldGroup.userData.onBone=true; applyHeldOffsets(); }   // per-tool TOOL_OFFSETS (applyHeldOffsets) so each item sits IN the hand, not buried in the arm (owner: "pickaxe tattooed into the arm")
   else { heldGroup.position.set(0.42,1.0,0.18); player.add(heldGroup); }
+  const _armL=_pm&&_pm.getObjectByName?_pm.getObjectByName('arm-left'):null;   // mirror the held weapon onto the LEFT arm for the shield/torch
+  if(_armL){ _armL.add(offhandGroup); offhandGroup.userData.onBone=true; applyOffhandOffsets(); }
+  else { offhandGroup.position.set(-0.42,1.0,0.18); player.add(offhandGroup); }
   player.add(armorGroup); setArmorVisual(); attachWornGear();   // worn armor shows on the body — re-parented to the torso bone so it moves with the body (was pinned to the player root = a static block, owner: "doesn't flow with the animation")
   // neighbors wandering the whole town (more of them now)
   const npos=[[-12,-16],[14,8],[-4,34],[30,-28],[-40,18],[46,40],[-30,-50],[58,-8]];
@@ -1473,7 +1501,7 @@ function legendHTML(){ const recipesAll=Object.keys(state.craftedSet||{}).length
 const SAVE_V=2;
 function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V, day:state.day,giggle:state.giggle,goals:state.goals,bestDay:state.bestDay,inv:state.inv,stash:state.stash,built:state.built,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
-  unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier,
+  unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
   tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug })); }catch(e){} }
@@ -1495,6 +1523,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.level=num(s.level,1,1,50); state.xp=num(s.xp,0,0,1e9); state.hpMax=hpMaxForLevel(state.level);   // XP/level restore; max HP derives from level + equipped-armor bonus ❤️
   state.weapons=(s.weapons&&typeof s.weapons==='object')?s.weapons:{}; for(const id in state.weapons){ const r=RECIPES.find(x=>x.id===id); if(r&&r.weapon&&r.locked) r.locked=false; } state.weapon=(WEAPONS[s.weapon]?s.weapon:'fist'); if(state.weapon==='fist') equipBest();   // keep a saved dropped weapon equipped; only auto-pick when none state.hasPickaxe=!!s.hasPickaxe; state.hasShovel=!!s.hasShovel; state.pickTier=num(s.pickTier,0,0,2); state.shovelTier=num(s.shovelTier,0,0,2);
   state.armors=(s.armors&&typeof s.armors==='object')?s.armors:{}; for(const id in state.armors){ const r=RECIPES.find(x=>x.id===id+'_armor'); } state.armor=(ARMORS[s.armor]?s.armor:''); if(!state.armor) equipBestArmor();   // keep a saved dropped armor equipped
+  state.offhands=(s.offhands&&typeof s.offhands==='object')?s.offhands:{}; state.offhand=(SHIELDS[s.offhand]||TORCHES[s.offhand])?s.offhand:'';   // restore the equipped off-hand (shield/torch)
   state.gear=(s.gear&&typeof s.gear==='object')?{helmet:ARMORS[s.gear.helmet]?s.gear.helmet:'',body:ARMORS[s.gear.body]?s.gear.body:'',legs:ARMORS[s.gear.legs]?s.gear.legs:'',boots:ARMORS[s.gear.boots]?s.gear.boots:''}:{helmet:'',body:'',legs:'',boots:''};
   if(!state.gear.body && state.armor) state.gear.body=state.armor;   // migrate v2 saves (single armor -> body slot)
   if(state.gear.body) state.armor=state.gear.body;   // keep state.armor mirrored to the body slot
@@ -1532,6 +1561,7 @@ function ownedUnequippedGear(){ const out=[]; const eq=Object.values(state.gear|
   for(const id of WTIER.slice(1)){ if(state.weapons&&state.weapons[id] && state.weapon!==id) out.push([id,'weapon']); }
   for(const id in (state.weapons||{})){ if(WEAPONS[id]&&WEAPONS[id].rarity && state.weapon!==id && !out.find(o=>o[0]===id)) out.push([id,'weapon']); }
   for(const id in (state.armors||{})){ if(ARMORS[id] && !eq.includes(id)) out.push([id,'armor']); }
+  for(const id in (state.offhands||{})){ if((SHIELDS[id]||TORCHES[id]) && state.offhand!==id) out.push([id,'offhand']); }
   if(state.hasPickaxe) out.push(['pickaxe','tool']); if(state.hasShovel) out.push(['shovel','tool']);
   return out; }
 function usedSlots(){ let n=0; for(const k in state.inv){ if(state.inv[k]>0) n++; } return n + ownedUnequippedGear().length; }
@@ -1569,18 +1599,20 @@ function eatSelected(){ return eatBestFood(); }
 function openInv(){ invOpen=true; document.getElementById('inv').classList.remove('hidden'); renderInv(); }
 function closeInv(){ invOpen=false; document.getElementById('inv').classList.add('hidden'); }
 function openSlotPicker(slot, type){ const el=document.getElementById('pdpick'); if(!el)return; pdpickOpen=true;
-  const titleMap={helmet:'🪖 Helmet',body:'👕 Body Armor',legs:'👖 Legguards',boots:'👢 Boots',weapon:'⚔️ Weapon'};
+  const titleMap={helmet:'🪖 Helmet',body:'👕 Body Armor',legs:'👖 Legguards',boots:'👢 Boots',weapon:'⚔️ Weapon',offhand:'🛡️ Off-Hand'};
   let items=[];
   if(type==='weapon'){ items.push({id:'fist',name:'Fists',icon:'✊',dmg:(WEAPONS.fist&&WEAPONS.fist.dmg)||10}); for(const id of WTIER){ if(id!=='fist' && state.weapons&&state.weapons[id]) items.push(Object.assign({id},WEAPONS[id])); } for(const id in (state.weapons||{})){ if(WEAPONS[id]&&WEAPONS[id].rarity && !items.find(x=>x.id===id)) items.push(Object.assign({id},WEAPONS[id])); } }
+  else if(type==='offhand'){ for(const id in (state.offhands||{})){ const o=SHIELDS[id]||TORCHES[id]; if(o) items.push(Object.assign({id},o)); } }
   else { for(const id in (state.armors||{})){ const a=ARMORS[id]; if(a && (a.slot||'body')===slot) items.push(Object.assign({id},a)); } }
   let html=`<div class="pdpickcard" onclick="event.stopPropagation()"><h3>${titleMap[type==='weapon'?'weapon':slot]||'Equip'} <span class="x" id="pdpickX">✕</span></h3>`;
   if(!items.length) html+=`<div style="opacity:.7;font-size:13px;padding:10px 4px">Nothing for this slot yet — craft or find some gear!</div>`;
-  for(const it of items){ const on=(type==='weapon')?state.weapon===it.id:(state.gear&&state.gear[slot])===it.id; const rr=RARITY[it.rarity]||RARITY.common; const dp=(it.id&&it.id!=='fist')?` · 🔧${Math.round(durFrac(it.id)*100)}%`:''; const stat=(type==='weapon')?`dmg ${it.dmg||0}`:`${armorRating(it.id,state.level).toFixed(1)}🛡️`;
+  for(const it of items){ const on=(type==='weapon')?state.weapon===it.id:(type==='offhand')?state.offhand===it.id:(state.gear&&state.gear[slot])===it.id; const rr=RARITY[it.rarity]||RARITY.common; const dp=(it.id&&it.id!=='fist')?` · 🔧${Math.round(durFrac(it.id)*100)}%`:''; const stat=(type==='weapon')?`dmg ${it.dmg||0}`:(type==='offhand')?(SHIELDS[it.id]?`🛡️ ${Math.round(it.block*100)}%`:'🔥 light'):`${armorRating(it.id,state.level).toFixed(1)}🛡️`;
     html+=`<div class="pdpickrow${on?' on':''}" data-id="${it.id}" data-type="${type}" data-slot="${slot}"><span class="pi" style="color:${rr.color}">${it.icon}</span><span class="pn" style="color:${rr.color}">${rr.mark||''}${it.name}</span><span class="ps">${stat}${dp}</span></div>`; }
   html+=`</div>`; el.innerHTML=html; el.classList.remove('hidden');
   el.querySelector('#pdpickX').onclick=closeSlotPicker; el.onclick=(e)=>{ if(e.target===el)closeSlotPicker(); };
   el.querySelectorAll('.pdpickrow[data-id]').forEach(r=> r.onclick=(e)=>{ e.stopPropagation(); const id=r.dataset.id, t=r.dataset.type, sl=r.dataset.slot;
     if(t==='weapon'){ if(id==='fist'||state.weapon===id) unequipGear('weapon'); else equipGear(id,'weapon'); }
+    else if(t==='offhand'){ if(state.offhand===id) unequipOffhand(); else equipGear(id,'offhand'); }
     else { if((state.gear&&state.gear[sl])===id) unequipGear('armor',sl); else equipGear(id,'armor'); }
     closeSlotPicker(); if(invOpen)renderInv(); }); }
 function closeSlotPicker(){ pdpickOpen=false; const el=document.getElementById('pdpick'); if(el)el.classList.add('hidden'); }
@@ -1623,7 +1655,7 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
   +`</div>`;
   // ── PAPER-DOLL (left): 6 equip slots — drop gear here to equip, drag off to unequip ──
   { const g=state.gear||{};
-    const cell=(slot,type,lbl,ph)=>{ let id='',it=null; if(type==='weapon'){ id=(state.weapon&&state.weapon!=='fist')?state.weapon:''; it=id?WEAPONS[id]:null; } else if(type==='offhand'){ id=state.offhand||''; it=null; } else { id=g[slot]||''; it=id?ARMORS[id]:null; }
+    const cell=(slot,type,lbl,ph)=>{ let id='',it=null; if(type==='weapon'){ id=(state.weapon&&state.weapon!=='fist')?state.weapon:''; it=id?WEAPONS[id]:null; } else if(type==='offhand'){ id=state.offhand||''; it=id?(SHIELDS[id]||TORCHES[id]):null; } else { id=g[slot]||''; it=id?ARMORS[id]:null; }
       const rr=it?(RARITY[it.rarity]||RARITY.common):RARITY.common; const icon=it?it.icon:ph; const dp=id?Math.round(durFrac(id)*100):0;
       return `<div class="pdslot${it?' on':''}" data-slot="${slot}" data-type="${type}" style="grid-area:${slot};${it?`border-color:${rr.color}`:''}"><span class="pdl">${lbl}</span><span class="pdi">${icon}</span>${it?`<span class="pdd" style="color:${dp<=20?'#ff6b6b':dp<=50?'#ffcf3a':'#9be8c8'}">🔧${dp}%</span>`:''}</div>`; };
     h+=`<div class="paperdoll"><div class="pdtitle">🧍 Your Character</div><div class="pdgrid">`
@@ -1636,8 +1668,8 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
   let tiles='';
   for(const [id,kind] of ownedUnequippedGear()){
     if(kind==='tool'){ const td=TOOLDEF[id]; tiles+=`<div class="invtile" title="${td.name} — select it on your hotbar to use"><div class="ti">${td.icon}</div><div class="tn">${td.name}</div></div>`; continue; }
-    const it=(kind==='weapon'?WEAPONS:ARMORS)[id]; const rr=RARITY[it.rarity]||RARITY.common; const dp=Math.round(durFrac(id)*100); const gate=EQUIP_LVL[id]&&(state.level||1)<EQUIP_LVL[id];
-    const st=(kind==='weapon')?('dmg '+it.dmg):(armorRating(id,state.level).toFixed(1)+'🛡️');
+    const it=kind==='weapon'?WEAPONS[id]:kind==='offhand'?(SHIELDS[id]||TORCHES[id]):ARMORS[id]; const rr=RARITY[it.rarity]||RARITY.common; const dp=Math.round(durFrac(id)*100); const gate=EQUIP_LVL[id]&&(state.level||1)<EQUIP_LVL[id];
+    const st=kind==='weapon'?('dmg '+it.dmg):kind==='offhand'?(SHIELDS[id]?('🛡️ '+Math.round(it.block*100)+'%'):'🔥 light'):(armorRating(id,state.level).toFixed(1)+'🛡️');
     tiles+=`<div class="invtile gear${gate?' gated':''}" draggable="true" data-gear="${id}" data-kind="${kind}" title="${rr.mark}${it.name} · ${st} · 🔧${dp}%${gate?(' · Lv'+EQUIP_LVL[id]+' to equip'):' · drag to a slot, or double-click to equip'}" style="border-color:${rr.color}"><span class="tc" style="color:${dp<=20?'#ff6b6b':'var(--sun)'}">${dp}%</span><div class="ti">${it.icon}</div><div class="tn" style="color:${rr.color}">${it.name.split(' ')[0]}</div></div>`;
   }
   for(const k of Object.keys(ITEMS)){ const c=state.inv[k]||0; if(c<=0)continue; const eat=FOOD_EFFECTS[k]; const desc=ITEM_DESC[k]?ITEMS[k].n+' — '+ITEM_DESC[k]:ITEMS[k].n;
@@ -1730,6 +1762,15 @@ function recipeLevel(r){ return r.lvl||1; }
 /* ============================ CRAFTING ============================ */
 const RECIPES=[
   {id:'wood_sword', name:'🗡️ Wooden Sword', cat:'tool', lvl:1, cost:{wood:3}, weapon:true, build:p=>gainWeapon('wood_sword') },
+  // ── OFF-HAND: shields (block hits) + torches (carry a light) — equip to the L-hand slot in your bag ──
+  {id:'wood_shield', name:'🛡️ Wooden Shield', cat:'tool', lvl:1, cost:{wood:5}, build:p=>gainOffhand('wood_shield') },
+  {id:'stone_shield', name:'🛡️ Stone Shield', cat:'tool', lvl:6, cost:{stone:5,wood:2}, build:p=>gainOffhand('stone_shield') },
+  {id:'iron_shield', name:'🛡️ Iron Shield', cat:'tool', lvl:13, cost:{iron_ingot:2,wood:2}, build:p=>gainOffhand('iron_shield') },
+  {id:'gold_shield', name:'🛡️ Gold Shield', cat:'tool', lvl:25, cost:{gold_ingot:2,iron_ingot:1}, build:p=>gainOffhand('gold_shield') },
+  {id:'titan_shield', name:'🛡️ Titan Bulwark', cat:'tool', lvl:40, cost:{boss_core:1,gold_ingot:2}, build:p=>gainOffhand('titan_shield') },
+  {id:'wood_torch', name:'🔥 Wood Torch', cat:'tool', lvl:3, cost:{wood:3}, build:p=>gainOffhand('wood_torch') },
+  {id:'crystal_torch', name:'🔆 Crystal Torch', cat:'tool', lvl:12, cost:{crystal:3,wood:1}, build:p=>gainOffhand('crystal_torch') },
+  {id:'magic_torch', name:'✨ Magic Torch', cat:'tool', lvl:30, cost:{crystal:5,boss_core:1}, build:p=>gainOffhand('magic_torch') },
   {id:'stone_sword', name:'⚔️ Stone Sword', cat:'tool', lvl:6, cost:{stone:3,wood:1}, weapon:true, build:p=>gainWeapon('stone_sword') },
   {id:'crystal_sword', name:'💎 Crystal Sword', cat:'tool', lvl:21, cost:{crystal:2,stone:2}, weapon:true, build:p=>gainWeapon('crystal_sword') },
   {id:'pickaxe', name:'⛏️ Pickaxe', cat:'tool', lvl:1, cost:{wood:2,stone:2}, weapon:true, build:p=>gainPickaxe() },
@@ -2036,19 +2077,21 @@ function toast(msg){ const box=document.getElementById('toasts'); const t=docume
 const RARITY={ common:{p:0.70,mult:1,color:'#e8e8e8',label:'Common',mark:''}, rare:{p:0.24,mult:2,color:'#5fa8ff',label:'Rare',mark:'✦ '}, epic:{p:0.06,mult:3,color:'#c77dff',label:'Epic',mark:'★ '} };
 // ── DURABILITY — every weapon/armor (and shields/torches) wears with use; rarity = longevity (epic best) ──
 const DUR_BASE={common:150, rare:360, epic:720};   // hits/uses before it breaks
-function itemRarity(id){ const it=(typeof WEAPONS!=='undefined'&&WEAPONS[id])||(typeof ARMORS!=='undefined'&&ARMORS[id]); return (it&&it.rarity)||'common'; }
+function itemRarity(id){ const it=(typeof WEAPONS!=='undefined'&&WEAPONS[id])||(typeof ARMORS!=='undefined'&&ARMORS[id])||(typeof SHIELDS!=='undefined'&&SHIELDS[id])||(typeof TORCHES!=='undefined'&&TORCHES[id]); return (it&&it.rarity)||'common'; }
 function durMaxFor(id){ return DUR_BASE[itemRarity(id)]||DUR_BASE.common; }
 function getDur(id){ if(!id||id==='fist')return Infinity; if(!state.dur)state.dur={}; if(state.dur[id]==null)state.dur[id]=durMaxFor(id); return state.dur[id]; }
 function durFrac(id){ if(!id||id==='fist')return 1; const m=durMaxFor(id)||1; return Math.max(0,Math.min(1,getDur(id)/m)); }
 function useDur(id,amt){ if(!id||id==='fist')return; if(!state.dur)state.dur={}; const mx=durMaxFor(id),cur=getDur(id),nx=Math.max(0,cur-(amt||1)); state.dur[id]=nx;
   if(nx<=0){ breakItem(id); } else if(cur/mx>0.2 && nx/mx<=0.2){ const it=(WEAPONS[id]||ARMORS[id]||{}); toast(`${it.icon||'🛠️'} ${it.name||'Gear'} is wearing out — craft a 🔧 Repair Kit soon!`); if(invOpen&&typeof renderInv==='function')renderInv(); } }
-function breakItem(id){ const isW=(typeof WEAPONS!=='undefined')&&!!WEAPONS[id], it=(isW?WEAPONS[id]:ARMORS[id])||{};
+function breakItem(id){
+  if((typeof SHIELDS!=='undefined'&&SHIELDS[id])||(typeof TORCHES!=='undefined'&&TORCHES[id])){ const oit=SHIELDS[id]||TORCHES[id]; if(state.offhands)delete state.offhands[id]; if(state.offhand===id)state.offhand=''; if(state.dur)delete state.dur[id]; if(typeof rarityToast==='function')rarityToast(SHIELDS[id]?'rare':'common', SHIELDS[id]?`🛡️ Your ${oit.name} shattered! Craft a 🔧 Repair Kit to keep gear alive.`:`🔥 Your ${oit.name} burned out!`); if(invOpen&&typeof renderInv==='function')renderInv(); if(typeof Inv!=='undefined'&&Inv.render)Inv.render(); save(); return; }
+  const isW=(typeof WEAPONS!=='undefined')&&!!WEAPONS[id], it=(isW?WEAPONS[id]:ARMORS[id])||{};
   if(isW){ if(state.weapons)delete state.weapons[id]; if(state.weapon===id){ state.weapon='fist'; if(typeof equipBest==='function')equipBest(); } }
   else { if(state.armors)delete state.armors[id]; if(state.gear){ for(const s in state.gear){ if(state.gear[s]===id)state.gear[s]=''; } } if(typeof equipBestArmor==='function')equipBestArmor(); }
   if(state.dur)delete state.dur[id];
   if(typeof rarityToast==='function')rarityToast('rare',`💥 Your ${it.name||'item'} broke! ${it.icon||''} Craft a 🔧 Repair Kit to keep gear from breaking.`);
   if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); if(invOpen&&typeof renderInv==='function')renderInv(); if(typeof Inv!=='undefined'&&Inv.render)Inv.render(); save(); }
-function repairAll(){ if(!state.dur)state.dur={}; const ids=[]; if(state.weapon&&state.weapon!=='fist')ids.push(state.weapon); if(state.gear)for(const s in state.gear){ if(state.gear[s])ids.push(state.gear[s]); } let n=0; for(const id of ids){ state.dur[id]=durMaxFor(id); n++; } toast(`🔧 Repaired ${n} equipped item${n===1?'':'s'} to full!`); if(invOpen&&typeof renderInv==='function')renderInv(); save(); return n; }
+function repairAll(){ if(!state.dur)state.dur={}; const ids=[]; if(state.weapon&&state.weapon!=='fist')ids.push(state.weapon); if(state.gear)for(const s in state.gear){ if(state.gear[s])ids.push(state.gear[s]); } if(state.offhand)ids.push(state.offhand); let n=0; for(const id of ids){ state.dur[id]=durMaxFor(id); n++; } toast(`🔧 Repaired ${n} equipped item${n===1?'':'s'} to full!`); if(invOpen&&typeof renderInv==='function')renderInv(); save(); return n; }
 function rollRarity(){ const r=Math.random(); return r<RARITY.epic.p ? 'epic' : (r<RARITY.epic.p+RARITY.rare.p ? 'rare' : 'common'); }
 function rarityToast(tier,msg){ const rr=RARITY[tier]||RARITY.common; const box=document.getElementById('toasts'); const t=document.createElement('div'); t.className='toast'; t.innerHTML=`${tier!=='common'?`<span style="color:${rr.color};font-weight:800">${rr.mark}${rr.label}</span> · `:''}${msg}`; box.appendChild(t); while(box.children.length>3) box.firstChild.remove(); setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; setTimeout(()=>t.remove(),400); },2600); }
 function flashFade(){ const f=document.createElement('div'); f.style.cssText='position:fixed;inset:0;background:#000;opacity:0;z-index:40;transition:opacity .4s;pointer-events:none'; document.body.appendChild(f); requestAnimationFrame(()=>{ f.style.opacity='.7'; setTimeout(()=>{ f.style.opacity='0'; setTimeout(()=>f.remove(),500); },500); }); }
@@ -2594,6 +2637,9 @@ function spawnCreature(){ let sx,sz,pd;
 function despawnCreatures(){ for(const c of creatures) world.remove(c.mesh); creatures.length=0;
   for(const d of drops) world.remove(d.mesh); drops.length=0; for(const p of projectiles) world.remove(p.mesh); projectiles.length=0; }
 function damagePlayer(n){ if(state._invuln>0)return;
+  if(state.offhand && SHIELDS[state.offhand] && Math.random()<SHIELDS[state.offhand].block){   // 🛡️ SHIELD: a % chance to fully block ANY hit (melee + projectiles), wears the shield
+    state._blocks=(state._blocks||0)+1; state._shields=(state._shields||0)+1; state._invuln=0.5; useDur(state.offhand,1);
+    if(typeof SFX!=='undefined')SFX.play('interact',{vol:0.5,rate:1.5}); shake(0.16); popDmg(player.position.x,(player.position.y||0)+2.4,player.position.z,'BLOCK',{color:'#9be8ff'}); return; }
   const roll=rollDamage(n,0); const ap=armorTotal(state.level); const red=Math.min(15,ap)*0.05; let nd=Math.max(1,Math.round(roll.dmg*(1-red)));   // 🛡️ ARMOR RATING soaks 5%/pt of every hit (cap 75%); at least 1 always lands
   if(ap>0 && nd<roll.dmg) state._blocks=(state._blocks||0)+1;
   state.hp=Math.max(0,state.hp-nd); state._invuln=1.0; shake(0.4); SFX.play('interact'); flashRed(); renderHearts();
@@ -2610,6 +2656,7 @@ function respawnPlayer(){ if(DUNGEON.inDungeon)DUNGEON.inDungeon=false; if(MINE.
   flashFade(); save(); }
 function equipBest(){ for(let i=WTIER.length-1;i>=0;i--){ if(i===0||state.weapons[WTIER[i]]){ state.weapon=WTIER[i]; return; } } }
 function gainWeapon(id){ state.weapons[id]=true; equipBest(); const w=WEAPONS[id]; toast(`${w.icon} Crafted + equipped the ${w.name}!`); if(invOpen)renderInv(); Inv.render(); }
+function gainOffhand(id){ if(!state.offhands)state.offhands={}; state.offhands[id]=true; equipGear(id,'offhand'); const it=(SHIELDS[id]||TORCHES[id]); if(it)toast(`${it.icon} Crafted + equipped ${it.name}!`); if(invOpen)renderInv(); Inv.render(); save(); }   // craft a shield/torch -> owned + auto-equipped to the off-hand
 function playerAttack(){ if(!state.running||state.paused)return; if(state._atkCD>0) return;   // attack-speed gate (only kicks in when energy is low — full energy = no cooldown, spam freely)
   const asm=Needs.atkSpeedMul(); state._atkCD = asm<1 ? 0.42/asm : 0; state._swing=0.32;
   const w=WEAPONS[state.weapon]||WEAPONS.fist; const base=w.dmg*Needs.dmgMul(); SFX.play('interact'); emote('attack-melee-right'); shake(0.12);   // ALWAYS the arm SWING (owner: never the kick)
@@ -2664,14 +2711,16 @@ function dropGear(x,z, pair){ pair=pair||pick(RARE_GEAR); const id=pair[0], kind
   const m=new THREE.Mesh(geo,new THREE.MeshToonMaterial({color:col,gradientMap:GRAD,emissive:new THREE.Color(col),emissiveIntensity:0.85}));
   m.position.set(x+rand(-0.5,0.5),0.85,z+rand(-0.5,0.5)); m.castShadow=true; world.add(m);
   drops.push({mesh:m, gear:id, gkind:kind, n:1, bob:rand(0,TAU), t:0}); }
-function equipGear(id, kind){ const tbl=(kind==='weapon')?WEAPONS:ARMORS, it=tbl[id]; if(!it) return;
+function equipGear(id, kind){ const it=(kind==='weapon')?WEAPONS[id]:(kind==='offhand')?(SHIELDS[id]||TORCHES[id]):ARMORS[id]; if(!it) return;
   if(EQUIP_LVL[id] && (state.level||1)<EQUIP_LVL[id]){ toast(`🔒 Reach Level ${EQUIP_LVL[id]} to equip ${it.name}.`); SFX.play('interact',{rate:0.6,vol:0.4}); return; }   // equip-by-level gate for dropped epic gear
   if(kind==='weapon'){ if(!state.weapons[id]) return; state.weapon=id; }
+  else if(kind==='offhand'){ if(!state.offhands||!state.offhands[id]) return; state.offhand=id; }
   else { if(!state.armors[id]) return; const sl=(ARMORS[id]&&ARMORS[id].slot)||'body'; state.gear[sl]=id; if(sl==='body'){ state.armor=id; state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); } if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
   SFX.play('success',{vol:0.4}); toast(`${it.icon} Equipped ${it.name}!`); syncSel(); Inv.render(); if(invOpen)renderInv(); if(typeof checkBadges==='function')checkBadges(); save(); }
 function unequipGear(kind, slot){ if(kind==='weapon'){ state.weapon='fist'; equipBest(); }   // unequip -> fall back to your best CRAFTABLE weapon
   else { const sl=slot||'body'; if(state.gear)state.gear[sl]=''; if(sl==='body'){ state.armor=''; equipBestArmor(); state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); } if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
   SFX.play('interact',{vol:0.4}); toast('Unequipped.'); syncSel(); Inv.render(); if(invOpen)renderInv(); save(); }
+function unequipOffhand(){ state.offhand=''; if(typeof SFX!=='undefined')SFX.play('interact',{vol:0.4}); toast('Unequipped off-hand.'); if(typeof Inv!=='undefined')Inv.render(); if(invOpen)renderInv(); save(); }   // L-hand shield/torch -> empty
 function makeDrop(x,z,item,n){ const col=DROP_COL[item]||'#ffd23f'; const m=new THREE.Mesh(new THREE.IcosahedronGeometry(0.22,0),new THREE.MeshToonMaterial({color:col,gradientMap:GRAD,emissive:new THREE.Color(col),emissiveIntensity:0.3})); m.position.set(x+rand(-0.6,0.6),0.6,z+rand(-0.6,0.6)); m.castShadow=true; world.add(m); drops.push({mesh:m,item,n,bob:rand(0,TAU),t:0}); }
 function updateDrops(dt){ for(let i=drops.length-1;i>=0;i--){ const d=drops[i],m=d.mesh; d.bob+=dt*3.2; d.t+=dt; m.rotation.y+=dt*2.2; const dx=player.position.x-m.position.x, dz=player.position.z-m.position.z, dd=Math.hypot(dx,dz)||1;
     if(dd<6){ const sp=Math.min(11,(6.5-dd)*3)*dt; m.position.x+=dx/dd*sp; m.position.z+=dz/dd*sp; } m.position.y=0.55+Math.sin(d.bob)*0.12;
@@ -3282,6 +3331,14 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       unequipGear('armor'); const hp0=state.hpMax; pickupGear('aegis_plate','armor'); equipGear('aegis_plate','armor'); const aEq=(state.armor==='aegis_plate' && state.hpMax===hp0+4);   // pin a clean baseline first so the +4 delta is deterministic
       unequipGear('armor'); const aUn=(state.armor!=='aegis_plate' && state.hpMax===hp0);
       R.gear_equip=(owned&&wEq&&wUn&&aEq&&aUn); }
+    // OFF-HAND: craft+equip a shield (chance-blocks any hit) and a torch (carries a light); unequip clears the slot
+    { state.level=99; state.offhand=''; state.offhands=state.offhands||{}; state.inv.wood=(state.inv.wood||0)+90; state.inv.stone=(state.inv.stone||0)+20;
+      delete state.offhands.wood_shield; craft('wood_shield'); R.shield_craft=(state.offhands.wood_shield===true); R.shield_equip=(state.offhand==='wood_shield');
+      let sb=0; for(let i=0;i<400;i++){ state._invuln=0; state.hp=1000; const h0=state.hp; damagePlayer(6); if(state.hp===h0)sb++; } R.shield_block=(sb>0 && sb<400);   // ~15% of hits fully blocked
+      state.inv.wood=(state.inv.wood||0)+20; delete state.offhands.wood_torch; craft('wood_torch'); R.torch_craft=(state.offhands.wood_torch===true); R.torch_equip=(state.offhand==='wood_torch');
+      updateHeld(0.016); R.torch_light=(!!_torchLight || DYN_LIGHTS.length>=MAX_DYN_LIGHTS);
+      unequipOffhand(); R.offhand_unequip=(state.offhand===''); updateTorchLight(0.016); R.torch_light_off=(_torchLight===null);
+      state.hp=state.hpMax; state._invuln=0; }
     // DICE: damage rolls vary + can crit; a floating damage-number sprite pops over the target
     { let mn=1e9,mx=0,crits=0; for(let i=0;i<400;i++){ const r=rollDamage(50,0.1); mn=Math.min(mn,r.dmg); mx=Math.max(mx,r.dmg); if(r.crit)crits++; }
       R.dice_rolls=(mx>mn && crits>0 && crits<400);
