@@ -366,7 +366,7 @@ addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reaso
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
   discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, tradeSession:null, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
-  hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'',
+  hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
   volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0, lore:{}, fog:{}, met:{}, badges:{} };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
@@ -1340,6 +1340,7 @@ function setLabel(sp,text){ const g=sp._g; g.clearRect(0,0,256,64); g.fillStyle=
 function makeLabel(text){ const cv=document.createElement('canvas'); cv.width=256; cv.height=64; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthTest:false,depthWrite:false})); sp.material.map.colorSpace=THREE.SRGBColorSpace; sp.renderOrder=20; sp.scale.set(2.7,0.68,1); sp._cv=cv; sp._g=cv.getContext('2d'); setLabel(sp,text); return sp; }
 // PEOPLE pool for neighbors + wild wanderers: the 12 Kenney mini-characters (varied male/female) + the 3 originals. All share char_player's rig, so the walk clip animates them.
 const NB_MODELS=['character-male-a','character-male-b','character-male-c','character-male-d','character-male-e','character-male-f','character-female-a','character-female-b','character-female-c','character-female-d','character-female-e','character-female-f','char_n1','char_n2','char_n3'];
+const PLAYER_MODELS=['char_player','character-male-a','character-male-b','character-male-c','character-male-d','character-male-e','character-male-f','character-female-a','character-female-b','character-female-c','character-female-d','character-female-e','character-female-f'];   // selectable player looks (Settings); each Kenney look has its own skin/hair/outfit
 /* Re-parent worn hat -> head node and armor -> torso node, using Object3D.attach() so the WORLD pose is preserved
    (the head node carries an odd 0.1 local scale, so attach() — which bakes the correct local matrix — is far safer
    than hand-computed offsets). Idempotent (parent checks). Armor bakes at the fresh bind pose in buildPlayerAndNeighbors;
@@ -1348,22 +1349,28 @@ function attachWornGear(){ const o=player&&player.userData&&player.userData.mode
   player.updateMatrixWorld(true);
   const torso=o.getObjectByName('torso'); if(torso && armorGroup.parent!==torso) torso.attach(armorGroup);
   const head=o.getObjectByName('head'); if(head && state._hatMesh && state._hatMesh.parent!==head) head.attach(state._hatMesh); }
-function buildPlayerAndNeighbors(){
-  player.position.set(0,0,24); world.add(player);
-  const m=MODELS['char_player'];
+/* Build (or rebuild) JUST the player body from state.charModel + re-attach held/off-hand/armor. Extracted so Settings can HOT-SWAP the look mid-game. All Kenney looks share char_player's rig, so char_player's clips animate them all. */
+function _buildPlayerBody(){
+  if(player.userData.model){ try{ player.remove(player.userData.model); }catch(e){} player.userData.model=null; }
+  if(heldGroup.parent) heldGroup.parent.remove(heldGroup); if(offhandGroup.parent) offhandGroup.parent.remove(offhandGroup); if(armorGroup.parent) armorGroup.parent.remove(armorGroup);
+  _heldKind=''; _offhandKind=''; _armorShown='?'; for(const k in charActions) delete charActions[k];   // force held/off-hand/armor to rebuild on the fresh skeleton
+  const valid=(state.charModel&&PLAYER_MODELS.includes(state.charModel))?state.charModel:'char_player'; const m=MODELS[valid];
   if(m){ const o=skeletonClone(m); const s=new THREE.Vector3(); new THREE.Box3().setFromObject(o).getSize(s); const k=1.7/(s.y||1); o.scale.setScalar(k); o.userData.base=k;
     const b=new THREE.Box3().setFromObject(o); o.position.y=-b.min.y; o.userData.y0=o.position.y; o.userData.cy=(b.max.y-b.min.y)/2; player.add(o); player.userData.model=o;   // y0/cy: rest pos + body-center height, used to spin the double-jump about the CENTER (cannonball)
-    if(ANIMS['char_player']){ charMixer=new THREE.AnimationMixer(o); for(const c of ANIMS['char_player']) charActions[c.name]=charMixer.clipAction(c);
-      if(charActions.idle) charActions.idle.play(); }
+    const clips=ANIMS[valid]||ANIMS['char_player']||ANIMS['char_n1'];
+    if(clips){ charMixer=new THREE.AnimationMixer(o); for(const c of clips) charActions[c.name]=charMixer.clipAction(c); if(charActions.idle) charActions.idle.play(); }
   } else { const o=box(0.8,1.6,0.5,'#7c5cff'); o.position.y=0.8; player.add(o); }
-  // ATTACH the held tool/weapon to the actual arm-right BONE so it tracks the animated arm (owner: was floating in the wrong hand + the swing looked backwards because it was pinned to the body, not the hand)
+  // ATTACH held tool/weapon to the arm-right BONE so it tracks the animated arm
   const _pm=player.userData.model, _armR=_pm&&_pm.getObjectByName?_pm.getObjectByName('arm-right'):null;
-  if(_armR){ _armR.add(heldGroup); heldGroup.userData.onBone=true; applyHeldOffsets(); }   // per-tool TOOL_OFFSETS (applyHeldOffsets) so each item sits IN the hand, not buried in the arm (owner: "pickaxe tattooed into the arm")
-  else { heldGroup.position.set(0.42,1.0,0.18); player.add(heldGroup); }
-  const _armL=_pm&&_pm.getObjectByName?_pm.getObjectByName('arm-left'):null;   // mirror the held weapon onto the LEFT arm for the shield/torch
-  if(_armL){ _armL.add(offhandGroup); offhandGroup.userData.onBone=true; applyOffhandOffsets(); }
-  else { offhandGroup.position.set(-0.42,1.0,0.18); player.add(offhandGroup); }
-  player.add(armorGroup); setArmorVisual(); attachWornGear();   // worn armor shows on the body — re-parented to the torso bone so it moves with the body (was pinned to the player root = a static block, owner: "doesn't flow with the animation")
+  if(_armR){ _armR.add(heldGroup); heldGroup.userData.onBone=true; applyHeldOffsets(); } else { heldGroup.userData.onBone=false; heldGroup.position.set(0.42,1.0,0.18); player.add(heldGroup); }
+  const _armL=_pm&&_pm.getObjectByName?_pm.getObjectByName('arm-left'):null;   // shield/torch on the LEFT arm
+  if(_armL){ _armL.add(offhandGroup); offhandGroup.userData.onBone=true; applyOffhandOffsets(); } else { offhandGroup.userData.onBone=false; offhandGroup.position.set(-0.42,1.0,0.18); player.add(offhandGroup); }
+  player.add(armorGroup); setArmorVisual(); attachWornGear();
+}
+function updatePlayerCharacter(){ _buildPlayerBody(); save(); }   // Settings → Apply Look: hot-swap the player model, keep position + gear
+function buildPlayerAndNeighbors(){
+  player.position.set(0,0,24); world.add(player);
+  _buildPlayerBody();
   // neighbors wandering the whole town (more of them now)
   const npos=[[-12,-16],[14,8],[-4,34],[30,-28],[-40,18],[46,40],[-30,-50],[58,-8]];
   const _nbShuf=NB_MODELS.slice().sort(()=>Math.random()-0.5);   // 8 DISTINCT townsfolk from the people pool (real varied characters, not 3 repeated)
@@ -1501,7 +1508,7 @@ function legendHTML(){ const recipesAll=Object.keys(state.craftedSet||{}).length
 const SAVE_V=2;
 function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V, day:state.day,giggle:state.giggle,goals:state.goals,bestDay:state.bestDay,inv:state.inv,stash:state.stash,built:state.built,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
-  unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier,
+  unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier, charModel:state.charModel,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
   tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug })); }catch(e){} }
@@ -1524,6 +1531,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.weapons=(s.weapons&&typeof s.weapons==='object')?s.weapons:{}; for(const id in state.weapons){ const r=RECIPES.find(x=>x.id===id); if(r&&r.weapon&&r.locked) r.locked=false; } state.weapon=(WEAPONS[s.weapon]?s.weapon:'fist'); if(state.weapon==='fist') equipBest();   // keep a saved dropped weapon equipped; only auto-pick when none state.hasPickaxe=!!s.hasPickaxe; state.hasShovel=!!s.hasShovel; state.pickTier=num(s.pickTier,0,0,2); state.shovelTier=num(s.shovelTier,0,0,2);
   state.armors=(s.armors&&typeof s.armors==='object')?s.armors:{}; for(const id in state.armors){ const r=RECIPES.find(x=>x.id===id+'_armor'); } state.armor=(ARMORS[s.armor]?s.armor:''); if(!state.armor) equipBestArmor();   // keep a saved dropped armor equipped
   state.offhands=(s.offhands&&typeof s.offhands==='object')?s.offhands:{}; state.offhand=(SHIELDS[s.offhand]||TORCHES[s.offhand])?s.offhand:'';   // restore the equipped off-hand (shield/torch)
+  state.charModel=(s.charModel&&PLAYER_MODELS.includes(s.charModel))?s.charModel:'char_player';   // restore the chosen character look
   state.gear=(s.gear&&typeof s.gear==='object')?{helmet:ARMORS[s.gear.helmet]?s.gear.helmet:'',body:ARMORS[s.gear.body]?s.gear.body:'',legs:ARMORS[s.gear.legs]?s.gear.legs:'',boots:ARMORS[s.gear.boots]?s.gear.boots:''}:{helmet:'',body:'',legs:'',boots:''};
   if(!state.gear.body && state.armor) state.gear.body=state.armor;   // migrate v2 saves (single armor -> body slot)
   if(state.gear.body) state.armor=state.gear.body;   // keep state.armor mirrored to the body slot
@@ -3134,13 +3142,20 @@ function setupMenu(){ const cont=document.getElementById('continueBtn'), ng=docu
   st.onclick=()=>openSettings(); }
 function openSettings(){ renderSettings(); document.getElementById('pause').classList.remove('hidden'); }
 function closeSettings(){ const p=document.getElementById('pause'); if(p)p.classList.add('hidden'); }
-function renderSettings(){ const el=document.getElementById('pause'); if(!el)return; el.innerHTML=`<div class="pcard"><h2>⚙ Settings</h2>
+function renderSettings(){ const el=document.getElementById('pause'); if(!el)return;
+  const _G=['a','b','c','d','e','f']; const _isF=(state.charModel||'').startsWith('character-female'); const _isDef=(state.charModel||'char_player')==='char_player'; const _gen=_isF?'female':'male'; const _varOpts=_G.map((c,i)=>`<option value="character-${_gen}-${c}" ${state.charModel==='character-'+_gen+'-'+c?'selected':''}>Look ${i+1}</option>`).join('');
+  el.innerHTML=`<div class="pcard"><h2>⚙ Settings</h2>
     <label class="prow">🔊 Volume <input id="volSlider" type="range" min="0" max="100" value="${Math.round((state.volume==null?1:state.volume)*100)}"></label>
     <label class="prow">🎵 Music <input id="musicChk" type="checkbox" ${state.musicOn?'checked':''}></label>
     <label class="prow">🔈 Sound FX <input id="sfxChk" type="checkbox" ${state.sfxOn?'checked':''}></label>
     <label class="prow">🖱️ Mouse sensitivity <input id="sensSlider" type="range" min="20" max="250" value="${Math.round((state.mouseSens||1)*100)}"></label>
     <label class="prow">🌀 Reduce motion <input id="reduceChk" type="checkbox" ${state.reduce?'checked':''}></label>
     <label class="prow">⛶ Fullscreen <input id="fsChk" type="checkbox" ${document.fullscreenElement?'checked':''}></label>
+    <div style="font-weight:bold;margin:9px 0 2px">👤 Character</div>
+    <label class="prow">Body <select id="charGender"><option value="char_player" ${_isDef?'selected':''}>Default Adventurer</option><option value="male" ${!_isDef&&!_isF?'selected':''}>Male</option><option value="female" ${_isF?'selected':''}>Female</option></select></label>
+    <label class="prow" id="charVarRow" style="${_isDef?'display:none':''}">Look <select id="charVariant">${_varOpts}</select></label>
+    <div style="font-size:11px;opacity:.7;margin:-2px 2px 4px">Each look has its own skin tone, hair & outfit.</div>
+    <button class="btn" id="charApply" style="width:100%;margin-top:2px">✓ Apply Look</button>
     <button class="btn" id="settingsClose">✓ Done</button></div>`;
   el.querySelector('#volSlider').oninput=ev=>{ state.volume=(+ev.target.value)/100; if(Music.setVol)Music.setVol(state.volume); save(); };
   el.querySelector('#musicChk').onchange=ev=>{ state.musicOn=ev.target.checked; if(Music.setMuted)Music.setMuted(!state.musicOn); if(state.musicOn&&Music.resume)Music.resume(); save(); };
@@ -3148,6 +3163,10 @@ function renderSettings(){ const el=document.getElementById('pause'); if(!el)ret
   el.querySelector('#sensSlider').oninput=ev=>{ state.mouseSens=clamp((+ev.target.value)/100,0.2,2.5); save(); };
   el.querySelector('#reduceChk').onchange=ev=>{ state.reduce=ev.target.checked; save(); };
   el.querySelector('#fsChk').onchange=ev=>{ try{ if(ev.target.checked){ const de=document.documentElement; (de.requestFullscreen||de.webkitRequestFullscreen||de.msRequestFullscreen).call(de); } else { (document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen).call(document); } }catch(e){} };   // the settings click IS the user gesture fullscreen needs
+  { let _pend=state.charModel||'char_player'; const gsel=el.querySelector('#charGender'), vsel=el.querySelector('#charVariant'), vrow=el.querySelector('#charVarRow');
+    if(gsel) gsel.onchange=ev=>{ const v=ev.target.value; if(v==='char_player'){ _pend='char_player'; if(vrow)vrow.style.display='none'; } else { if(vrow)vrow.style.display=''; if(vsel)vsel.innerHTML=_G.map((c,i)=>`<option value="character-${v}-${c}">Look ${i+1}</option>`).join(''); _pend='character-'+v+'-a'; if(vsel)vsel.value=_pend; } };
+    if(vsel) vsel.onchange=ev=>{ _pend=ev.target.value; };
+    const ap=el.querySelector('#charApply'); if(ap) ap.onclick=()=>{ state.charModel=_pend; updatePlayerCharacter(); toast('👤 Character updated!'); }; }
   el.querySelector('#settingsClose').onclick=closeSettings; }
 document.getElementById('keepBtn').onclick=()=>document.getElementById('winScreen').classList.add('hidden');
 { const g=document.getElementById('gear'); if(g) g.onclick=()=>{ if(invOpen)closeInv(); if(craftOpen)closeCraft(); if(shopOpen)closeShop(); openSettings(); }; }
@@ -3339,6 +3358,9 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       updateHeld(0.016); R.torch_light=(!!_torchLight || DYN_LIGHTS.length>=MAX_DYN_LIGHTS);
       unequipOffhand(); R.offhand_unequip=(state.offhand===''); updateTorchLight(0.016); R.torch_light_off=(_torchLight===null);
       state.hp=state.hpMax; state._invuln=0; }
+    // CHARACTER CUSTOMIZATION: swapping the look hot-rebuilds the player, keeps it valid + re-attaches gear; default restores
+    { state.charModel='character-female-b'; updatePlayerCharacter(); R.char_swap=(!!player.userData.model && state.charModel==='character-female-b');
+      state.charModel='char_player'; updatePlayerCharacter(); R.char_default=(!!player.userData.model && PLAYER_MODELS.includes(state.charModel)); }
     // DICE: damage rolls vary + can crit; a floating damage-number sprite pops over the target
     { let mn=1e9,mx=0,crits=0; for(let i=0;i<400;i++){ const r=rollDamage(50,0.1); mn=Math.min(mn,r.dmg); mx=Math.max(mx,r.dmg); if(r.crit)crits++; }
       R.dice_rolls=(mx>mn && crits>0 && crits<400);
