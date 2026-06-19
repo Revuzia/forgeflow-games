@@ -190,7 +190,7 @@
 <div id="quests" class="hud"><div id="qhead"><span class="qttl">📖 Campaign</span><button id="qmin" title="Minimize panel">–</button></div><div id="qbody"><div id="goalbox"></div><div class="jdiv"></div><div id="qlist"></div><div id="reqlist"></div></div></div>
 <div id="prompt" class="hud"><span class="key">E</span><span id="promptText">Interact</span></div>
 <div id="toasts" class="hud"></div>
-<div id="help" class="hud"><b style="color:#b06a2a">⌨ Controls</b><div class="ctrlgrid"><span class="k">WASD</span><span>move</span><span class="k">Shift</span><span>run</span><span class="k">Space×2</span><span>jump + flip</span><span class="k">drag</span><span>camera</span><span class="k">🖱️</span><span>⚔️ attack</span><span class="k">E</span><span>interact</span><span class="k">R</span><span>🍎 use item</span><span class="k">1-0</span><span>hotbar</span><span class="k">G</span><span>dig / mine</span><span class="k">V</span><span>build</span><span class="k">C</span><span>craft</span><span class="k">I</span><span>bag</span><span class="k">M</span><span>map</span><span class="k">L</span><span>📖 lore</span><span class="k">F3</span><span>debug</span></div></div>
+<div id="help" class="hud"><b style="color:#b06a2a;cursor:pointer" id="ctrlHdr" title="Minimize / expand">⌨ Controls <span id="ctrlCaret" style="float:right;opacity:.6">▾</span></b><div class="ctrlgrid" id="ctrlGrid"><span class="k">WASD</span><span>move</span><span class="k">Shift</span><span>run</span><span class="k">Space×2</span><span>jump + flip</span><span class="k">drag</span><span>camera</span><span class="k">🖱️</span><span>⚔️ attack</span><span class="k">E</span><span>interact</span><span class="k">R</span><span>🍎 use item</span><span class="k">1-0</span><span>hotbar</span><span class="k">G</span><span>dig / mine</span><span class="k">V</span><span>build</span><span class="k">C</span><span>craft</span><span class="k">I</span><span>bag</span><span class="k">M</span><span>map</span><span class="k">L</span><span>📖 lore</span><span class="k">F3</span><span>debug</span></div></div>
 <div id="dbg"></div>
 <div id="buildhud" class="hud" style="display:none;left:50%;transform:translateX(-50%);bottom:88px;background:rgba(20,16,28,.82);padding:7px 14px;border-radius:10px;font-size:14px;color:#fff;border:1px solid rgba(255,255,255,.25)"></div>
 <div id="zone" class="hud"></div>
@@ -1458,12 +1458,19 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
     +`<div class="invstat">✨ Giggle <b>${state.giggle}</b></div>`
     +`<div class="invstat">📖 Pages <b>${state.recipePages||0}</b>${state.hasPickaxe?' · ⛏️ Pickaxe':''}</div>`
   +`</div>`;
-  // ── EQUIPPABLE DROPPED GEAR (rare/epic weapons + armor — click to equip / unequip) ──
+  // ── EQUIPMENT: every owned weapon, armor AND tool (pickaxe/shovel) — click to equip / unequip ──
   const ownedGear=[];
-  for(const id in (state.weapons||{})){ if(WEAPONS[id]&&WEAPONS[id].rarity) ownedGear.push([id,'weapon']); }
+  for(const id of WTIER.slice(1)){ if(state.weapons&&state.weapons[id]) ownedGear.push([id,'weapon']); }   // craftable swords in tier order
+  for(const id in (state.weapons||{})){ if(WEAPONS[id]&&WEAPONS[id].rarity) ownedGear.push([id,'weapon']); }   // rare/epic drops
+  for(const id of ATIER.slice(1)){ if(state.armors&&state.armors[id]) ownedGear.push([id,'armor']); }
   for(const id in (state.armors||{})){ if(ARMORS[id]&&ARMORS[id].rarity) ownedGear.push([id,'armor']); }
-  if(ownedGear.length){ h+=`<div style="margin:8px 0;padding:8px;border-radius:10px;background:rgba(0,0,0,0.18)"><div style="font-weight:800;margin-bottom:6px">⚔️ Found Gear <span style="font-weight:400;opacity:.7;font-size:12px">— rare &amp; epic drops; equip / unequip</span></div>`;
-    for(const [id,kind] of ownedGear){ const it=(kind==='weapon'?WEAPONS:ARMORS)[id]; const rr=RARITY[it.rarity]||RARITY.rare; const on=(kind==='weapon'?state.weapon:state.armor)===id;
+  if(state.hasPickaxe) ownedGear.push(['pickaxe','tool']);
+  if(state.hasShovel) ownedGear.push(['shovel','tool']);
+  const TOOLDEF={pickaxe:{icon:'⛏️',name:'Pickaxe',tier:'pickTier'},shovel:{icon:'🥄',name:'Shovel',tier:'shovelTier'}};
+  if(ownedGear.length){ h+=`<div style="margin:8px 0;padding:8px;border-radius:10px;background:rgba(0,0,0,0.18)"><div style="font-weight:800;margin-bottom:6px">⚔️ Equipment <span style="font-weight:400;opacity:.7;font-size:12px">— weapons, armor &amp; tools you own (click to equip)</span></div>`;
+    for(const [id,kind] of ownedGear){
+      if(kind==='tool'){ const td=TOOLDEF[id], tn=['','Iron ','Gold '][state[td.tier]||0]||''; h+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 7px;margin:4px 0;border:2px solid #b9852f;border-radius:9px;background:rgba(0,0,0,0.15)"><span style="font-size:20px">${td.icon}</span><span style="flex:1;line-height:1.2"><b>${tn}${td.name}</b><br><span style="font-size:11px;opacity:.85">on your hotbar — select it, then 🖱️ / G to ${id==='pickaxe'?'mine':'dig'}</span></span></div>`; continue; }
+      const it=(kind==='weapon'?WEAPONS:ARMORS)[id]; const rr=RARITY[it.rarity]||RARITY.common; const on=(kind==='weapon'?state.weapon:state.armor)===id;
       const stat = kind==='weapon'
         ? `dmg ${it.dmg}${it.crit?` · +${Math.round(it.crit*100)}% crit`:''}${it.life?` · ${Math.round(it.life*100)}% lifesteal`:''}`
         : `${Math.round(it.block*100)}% block${it.bonusHp?` · +${it.bonusHp/2} ❤️`:''}${it.regen?' · regen':''}`;
@@ -2239,8 +2246,8 @@ function digBlock(){
   b.solid.off=true; world.remove(b.mesh); SFX.play('pickup',{vol:0.5,rate:0.8}); shake(0.18); confetti(b.mesh.position.clone(),8);
   const tier=rollRarity(), m=RARITY[tier].mult; const oi=(b.kind==='stone')?'stone':'crystal'; const amt=((b.kind==='gem')?2:1)*m + (state.pickTier||0);   // iron/gold pickaxe -> more ore per block
   Inv.add(oi,amt); rarityToast(tier, `${ITEMS[oi].i} +${amt} ${ITEMS[oi].n}${b.kind==='gem'?' (gem vein!)':''}`); }
-function gainPickaxe(tier=0){ state.hasPickaxe=true; state.pickTier=Math.max(state.pickTier||0,tier); const n=['','Iron ','Gold '][tier]||''; toast(`⛏️ Crafted ${n?'an '+n:'a '}Pickaxe!${tier?` (+${tier} ore per block)`:' Find a Mine Entrance (E), then G to MINE ore.'}`); Inv.render(); save(); }
-function gainShovel(tier=0){ state.hasShovel=true; state.shovelTier=Math.max(state.shovelTier||0,tier); const n=['','Iron ','Gold '][tier]||''; toast(`🥄 Crafted ${n?'an '+n:'a '}Shovel!${tier?` (richer digs)`:' Press G in the field to DIG the ground.'}`); Inv.render(); save(); }
+function gainPickaxe(tier=0){ state.hasPickaxe=true; state.pickTier=Math.max(state.pickTier||0,tier); const n=['','Iron ','Gold '][tier]||''; toast(`⛏️ Crafted ${n?'an '+n:'a '}Pickaxe!${tier?` (+${tier} ore per block)`:' Find a Mine Entrance (E), then G to MINE ore.'}`); Inv.render(); if(invOpen)renderInv(); save(); }
+function gainShovel(tier=0){ state.hasShovel=true; state.shovelTier=Math.max(state.shovelTier||0,tier); const n=['','Iron ','Gold '][tier]||''; toast(`🥄 Crafted ${n?'an '+n:'a '}Shovel!${tier?` (richer digs)`:' Press G in the field to DIG the ground.'}`); Inv.render(); if(invOpen)renderInv(); save(); }
 /* FURNACE smelting — ore + 🪵 fuel -> ingots (tech progression). Batch up to 6 of each per visit. */
 function smeltAll(){ let iron=0,gold=0;
   while(iron<6 && (state.inv.stone||0)>0 && (state.inv.wood||0)>0){ Inv.take('stone',1); Inv.take('wood',1); Inv.add('iron_ingot',1); iron++; }
@@ -2795,6 +2802,7 @@ function renderSettings(){ const el=document.getElementById('pause'); if(!el)ret
   el.querySelector('#settingsClose').onclick=closeSettings; }
 document.getElementById('keepBtn').onclick=()=>document.getElementById('winScreen').classList.add('hidden');
 { const g=document.getElementById('gear'); if(g) g.onclick=()=>{ if(invOpen)closeInv(); if(craftOpen)closeCraft(); if(shopOpen)closeShop(); openSettings(); }; }
+{ const hdr=document.getElementById('ctrlHdr'); if(hdr) hdr.onclick=()=>{ const grid=document.getElementById('ctrlGrid'), cr=document.getElementById('ctrlCaret'); if(!grid)return; const min=grid.style.display==='none'; grid.style.display=min?'':'none'; if(cr)cr.textContent=min?'▾':'▸'; }; }   // minimize/expand the bottom-right Controls panel
 { const mm=document.getElementById('minimap'); if(mm) mm.onclick=()=>{ mapOpen?closeMap():openMap(); }; const qm=document.getElementById('qmin'); if(qm) qm.onclick=toggleQuests; }
 
 /* QA probe */
