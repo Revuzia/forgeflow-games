@@ -2555,7 +2555,10 @@ const BADGES=[
   {id:'armor6', i:'🛡️', n:'Iron Wall', d:'Reach 6 armor', c:()=>armorRating(state.armor,state.level)>=6},
   {id:'armor10', i:'🔰', n:'Bulwark', d:'Exceed 6 armor (rare/epic)', c:()=>armorRating(state.armor,state.level)>10},
 ];
-function reportToAccount(type,data){ try{ if(window.parent && window.parent!==window) window.parent.postMessage({source:'wobblesworth',type,data,level:state.level||1},'*'); }catch(e){} }   // game runs in the FFGames iframe -> report progress so a signed-in account can store it
+function reportToAccount(type,data){ try{ if(!(window.parent && window.parent!==window)) return; const W=window.parent;   // game runs in the FFGames iframe -> emit the forgeflow:* bridge format so a signed-in account stores badges/score
+  if(type==='badge'){ W.postMessage({type:'forgeflow:achievement', achievementSlug:'ww_'+data.id, name:data.name},'*'); }
+  else if(type==='level'){ W.postMessage({type:'forgeflow:score', score:(state.level||1)},'*'); }
+}catch(e){} }
 function checkBadges(){ if(!state.badges)state.badges={}; let any=false; for(const b of BADGES){ if(!state.badges[b.id]){ let ok=false; try{ ok=b.c(); }catch(e){} if(ok){ state.badges[b.id]=state.day||1; any=true; rarityToast('epic',`🏅 Badge unlocked: ${b.i} ${b.n}!`); if(typeof confetti==='function')confetti(player.position.clone().setY(2.2),22); SFX.play('success',{vol:0.6}); reportToAccount('badge',{id:b.id,name:b.n}); } } } if(any){ if(loreOpen&&typeof renderLore==='function')renderLore(); save(); } }
 function loreKeyOf(t){ for(const k in CREATURE_TYPES) if(CREATURE_TYPES[k]===t) return k; for(const k in BOSS_TYPES) if(BOSS_TYPES[k]===t) return 'boss_'+k; return null; }
 function loreDef(key){ return (key&&key.indexOf('boss_')===0) ? BOSS_TYPES[key.slice(5)] : CREATURE_TYPES[key]; }
