@@ -13,7 +13,14 @@ export default function UserMenu() {
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
+  // The Google OAuth client was DELETED in Google Cloud (Error 401 deleted_client),
+  // so "Continue with Google" always 401s. Hide it until the OAuth client is
+  // recreated + re-pointed in Supabase (Auth > Providers > Google), then flip this
+  // back to true. Email/password signup below works with ZERO Google dependency,
+  // so anyone can still create an account. See reference_ffgames_oauth_deleted_client.
+  const SHOW_GOOGLE = false;
 
   useEffect(() => {
     // Check current session
@@ -62,10 +69,16 @@ export default function UserMenu() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    setError("");
+    setError(""); setNotice("");
     try {
       if (isSignUp) {
-        await signUpWithEmail(email, password, username);
+        const res = await signUpWithEmail(email, password, username);
+        if (res?.user && !res?.session) {
+          // Email confirmation is ON in Supabase → no session yet. Tell them to confirm.
+          setNotice("Account created! Check your email to confirm, then sign in.");
+          setEmail(""); setPassword(""); setUsername(""); setLoading(false);
+          return;
+        }
       } else {
         await signInWithEmail(email, password);
       }
@@ -122,9 +135,16 @@ export default function UserMenu() {
                 </div>
               )}
 
-              {/* Google OAuth — primary auth path. Continue with Google = no
-                  password to remember, instant sign-in. Email form below is
-                  the fallback for users who don't want Google. */}
+              {notice && (
+                <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-lg px-3 py-2 text-sm text-emerald-300 mb-4">
+                  {notice}
+                </div>
+              )}
+
+              {/* Google OAuth — hidden while its OAuth client is broken (deleted_client).
+                  Flip SHOW_GOOGLE back to true once it's recreated in Google Cloud +
+                  Supabase. Email/password below is the always-available path. */}
+              {SHOW_GOOGLE && (<>
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
@@ -148,6 +168,7 @@ export default function UserMenu() {
                 <span className="text-xs text-gray-500">or with email</span>
                 <div className="flex-1 h-px bg-surface-600/50" />
               </div>
+              </>)}
 
               <form onSubmit={handleSubmit} className="space-y-3">
                 {isSignUp && (
@@ -193,7 +214,7 @@ export default function UserMenu() {
 
               <div className="mt-4 text-center">
                 <button
-                  onClick={() => { setIsSignUp(!isSignUp); setError(""); }}
+                  onClick={() => { setIsSignUp(!isSignUp); setError(""); setNotice(""); }}
                   className="text-sm text-gray-400 hover:text-brand-orange transition-colors"
                 >
                   {isSignUp ? "Already have an account? Sign In" : "New here? Create Account"}
