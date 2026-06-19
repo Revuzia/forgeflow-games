@@ -381,7 +381,7 @@ addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reaso
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
   discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
-  hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
+  hp:100, hpMax:100, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
   volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0, lore:{}, fog:{}, met:{}, badges:{} };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
@@ -1391,6 +1391,7 @@ function _buildPlayerBody(){
   const _armL=_pm&&_pm.getObjectByName?_pm.getObjectByName('arm-left'):null;   // shield/torch on the LEFT arm
   if(_armL){ _armL.add(offhandGroup); offhandGroup.userData.onBone=true; applyOffhandOffsets(); } else { offhandGroup.userData.onBone=false; offhandGroup.position.set(-0.42,1.0,0.18); player.add(offhandGroup); }
   player.add(armorGroup); setArmorVisual(); attachWornGear();
+  if(!playerBar) playerBar=makePlayerBar(); if(playerBar.parent) playerBar.parent.remove(playerBar); playerBar.position.set(0,2.65,0); player.add(playerBar); drawPlayerBar();   // HP/armor bar over your character's head, like the mobs
 }
 function updatePlayerCharacter(){ _buildPlayerBody(); save(); }   // Settings → Apply Look: hot-swap the player model, keep position + gear
 function buildPlayerAndNeighbors(){
@@ -1625,9 +1626,9 @@ function syncSel(){ const L=hotbarLayout(); for(let i=0;i<L.length;i++){ const e
 function selectSlot(i){ state.selectedSlot=clamp(i|0,0,9); applyEquip(); Inv.render(); }
 function eatFood(k){ const f=FOOD_EFFECTS[k]; if(!f) return false; if(!Inv.has(k,1)){ toast(`No ${ITEMS[k]?ITEMS[k].n.toLowerCase():k} to eat.`); return false; }
   Inv.take(k,1); if(f.hunger)Needs.add('hunger',f.hunger); if(f.energy)Needs.add('energy',f.energy);
-  if(f.hp && state.hp<state.hpMax){ state.hp=Math.min(state.hpMax,state.hp+f.hp); renderHearts(); }
+  if(f.hp && state.hp<state.hpMax){ state.hp=Math.min(state.hpMax,state.hp+f.hp*HP_SCALE); renderHearts(); }
   updateNeedsUI(); markGoal('eat'); SFX.play('pickup',{vol:0.6,rate:1.1}); emote('interact-right');
-  toast(`${f.msg} — +${f.hunger} 🍔${f.energy?` +${f.energy} ⚡`:''}${f.hp?` +${f.hp}❤️`:''}`); return true; }
+  toast(`${f.msg} — +${f.hunger} 🍔${f.energy?` +${f.energy} ⚡`:''}${f.hp?` +${f.hp*HP_SCALE}❤️`:''}`); return true; }
 function eatBestFood(){ for(const k in FOOD_EFFECTS){ if((state.inv[k]||0)>0){ return eatFood(k); } } toast('🍎 No food in your inventory — gather apples, carrots or mushrooms (or eat from your inventory, I).'); return false; }
 function eatSelected(){ return eatBestFood(); }
 function openInv(){ invOpen=true; document.getElementById('inv').classList.remove('hidden'); renderInv(); }
@@ -1768,7 +1769,8 @@ function setNodeReady(node){ if(!node||!node.mesh)return; node.mesh.userData.onC
    XP comes from kills, gathering, quests + crafting. Each level needs a bit more than the last (cozy, reachable
    curve — not Minecraft's punishing one). Leveling heals you, grows max HP a little, and UNLOCKS new recipes. */
 function xpToNext(lvl){ return Math.floor(50*Math.pow(Math.max(1,lvl),1.5)); }   // smooth curve to the LEVEL-50 cap (~355k total): early fast (ding-ding-ding), later slower
-function hpMaxForLevel(lvl){ const ab=(state.armor&&ARMORS[state.armor]&&ARMORS[state.armor].bonusHp)||0; return 6 + ab; }   // base 6 hearts; ONLY rare/epic armor (bonusHp) expands max health — leveling rewards go to gear/armor/badges, not heart-bloat
+const HP_SCALE=16;   // health rework: a real numeric HP pool (≈ old hearts × 16) so the player's HP/armor read like enemy HP and show as bars, not 6 hearts
+function hpMaxForLevel(lvl){ const ab=(state.armor&&ARMORS[state.armor]&&ARMORS[state.armor].bonusHp)||0; return Math.round(100 + (((lvl||1)-1)*6) + ab*HP_SCALE); }   // ~100 base HP, +6/level, +(rare/epic armor bonus)×16 — comparable to enemy HP = (90+day*18)·t.hp·distMul
 // ARMOR RATING (points): a separate defensive stat shown as a row below the hearts. Regular gear caps at 6 pts (=30% damage reduction); rare/epic can exceed via buffs up to 15 (=75% cap); scales by tier + rarity + level.
 const SLOT_MUL={helmet:0.2, body:0.4, legs:0.25, boots:0.15};   // per-slot weight so a FULL 4-piece set ≈ one old single-tier rating (not 4×)
 function armorRating(id, lvl){ const a=ARMORS[id]; if(!a) return 0; const ti=ATIER.indexOf(a.tier||id), rar=(a.rarity&&RARITY[a.rarity])?RARITY[a.rarity].mult:1; const base=ti>0?ti*2:4; const ap=(base+Math.floor((lvl||1)/12))*rar; const capped=a.rarity?Math.min(15,ap):Math.min(6,ap); return capped*(SLOT_MUL[a.slot||'body']||0.4); }   // returns the piece's WEIGHTED contribution
@@ -2586,8 +2588,10 @@ function smeltAll(){ let iron=0,gold=0;
   toast(`🔥 Smelted${iron?` +${iron} 🔩`:''}${gold?` +${gold} 🥇`:''}! (burned 🪵 fuel)`); save(); }
 
 /* ---------- STAGE B: NIGHT COMBAT (lethal plant-monsters; die -> respawn at home) ---------- */
-function renderHearts(){ const el=document.getElementById('hearts'); if(el){ let h=''; for(let i=0;i<state.hpMax;i++) h+=(i<state.hp?'❤️':'🖤'); el.innerHTML=h; }
-  const ae=document.getElementById('armorbar'); if(ae){ const ap=armorTotal(state.level); let a=''; for(let i=0;i<Math.min(ap,12);i++) a+='🛡️'; if(ap>12)a+='＋'; ae.innerHTML=a; ae.style.display=ap>0?'':'none'; } }   // ARMOR row below hearts (only shows when wearing armor)
+function renderHearts(){ const el=document.getElementById('hearts'); if(el){ const f=Math.max(0,Math.min(1,state.hp/(state.hpMax||1))); const col=f>0.5?'#ff6b6c':f>0.25?'#ffa83d':'#e0463a';
+    el.innerHTML=`<div class="lbl"><span>❤️ Health</span><span>${Math.ceil(Math.max(0,state.hp))}/${state.hpMax}</span></div><div class="track"><div class="fill" style="width:${(f*100).toFixed(1)}%;background:linear-gradient(90deg,#c0203a,${col})"></div></div>`; }
+  const ae=document.getElementById('armorbar'); if(ae){ const ap=armorTotal(state.level); if(ap>0){ const af=Math.max(0,Math.min(1,ap/15)); ae.style.display=''; ae.innerHTML=`<div class="lbl"><span>🛡️ Armor</span><span>${ap}</span></div><div class="track"><div class="fill" style="width:${(af*100).toFixed(1)}%;background:linear-gradient(90deg,#5a6bff,#9bc4ff)"></div></div>`; } else { ae.style.display='none'; } }
+  drawPlayerBar(); }   // numeric HP bar + armor bar (no more 6 hearts) + the overhead player bar
 function flashRed(){ const f=document.createElement('div'); f.style.cssText='position:fixed;inset:0;background:#c0203a;opacity:0;z-index:38;transition:opacity .12s;pointer-events:none'; document.body.appendChild(f); requestAnimationFrame(()=>{ f.style.opacity='.32'; setTimeout(()=>{ f.style.opacity='0'; setTimeout(()=>f.remove(),200); },90); }); }
 /* MONSTER TYPES (owner: 4-7 distinct monsters, "Minecraft VS Plants" garden-horror theme). Each has a
    build() (geometry) + combat stats: hp multiplier, move speed, contact dmg, bob speed, idle float height,
@@ -2681,8 +2685,8 @@ function damagePlayer(n){ if(state._invuln>0)return;
   if(state.offhand && SHIELDS[state.offhand] && Math.random()<SHIELDS[state.offhand].block){   // 🛡️ SHIELD: a % chance to fully block ANY hit (melee + projectiles), wears the shield
     state._blocks=(state._blocks||0)+1; state._shields=(state._shields||0)+1; state._invuln=0.5; useDur(state.offhand,1);
     if(typeof SFX!=='undefined')SFX.play('interact',{vol:0.5,rate:1.5}); shake(0.16); popDmg(player.position.x,(player.position.y||0)+2.4,player.position.z,'BLOCK',{color:'#9be8ff'}); return; }
-  const roll=rollDamage(n,0); const ap=armorTotal(state.level); const red=Math.min(15,ap)*0.05; let nd=Math.max(1,Math.round(roll.dmg*(1-red)));   // 🛡️ ARMOR RATING soaks 5%/pt of every hit (cap 75%); at least 1 always lands
-  if(ap>0 && nd<roll.dmg) state._blocks=(state._blocks||0)+1;
+  const roll=rollDamage(n,0); const ap=armorTotal(state.level); const red=Math.min(15,ap)*0.05; const full=Math.max(1,Math.round(roll.dmg*HP_SCALE)); let nd=Math.max(1,Math.round(roll.dmg*(1-red)*HP_SCALE));   // 🛡️ ARMOR soaks 5%/pt (cap 75%); damage lives in the big-HP space (×HP_SCALE) so hit-counts match the old hearts
+  if(ap>0 && nd<full) state._blocks=(state._blocks||0)+1;
   state.hp=Math.max(0,state.hp-nd); state._invuln=1.0; shake(0.4); SFX.play('interact'); flashRed(); renderHearts();
   if(ap>0 && state.gear){ for(const _gs in state.gear){ if(state.gear[_gs]) useDur(state.gear[_gs],1); } }   // taking a hit wears worn armor (each equipped piece)
   popDmg(player.position.x, (player.position.y||0)+2.4, player.position.z, nd, {crit:roll.crit, color:'#ff6b6b'});   // floating damage number over the player
@@ -2856,6 +2860,13 @@ function makeBossBar(name){ const cv=document.createElement('canvas'); cv.width=
 // ── on-hit MINI health bar for ordinary mobs (industry standard: appears on damage, green->yellow->red, fades after the last hit) ──
 function drawMiniBar(sp,frac){ const g=sp._g; g.clearRect(0,0,120,14); g.fillStyle='rgba(14,8,12,0.82)'; g.fillRect(2,3,116,9); g.fillStyle=frac>0.5?'#7ad04a':frac>0.25?'#ffd23f':'#e0463a'; g.fillRect(4,5,112*Math.max(0,Math.min(1,frac)),5); sp.material.map.needsUpdate=true; }
 function makeMiniBar(){ const cv=document.createElement('canvas'); cv.width=120; cv.height=14; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthTest:false,depthWrite:false})); sp.material.map.colorSpace=THREE.SRGBColorSpace; sp.renderOrder=23; sp.scale.set(1.7,0.2,1); sp._cv=cv; sp._g=cv.getContext('2d'); drawMiniBar(sp,1); return sp; }
+// ── OVERHEAD PLAYER BAR: HP (+armor) bar over your own character's head, like the mobs ──
+var playerBar=null;
+function makePlayerBar(){ const cv=document.createElement('canvas'); cv.width=140; cv.height=26; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthTest:false,depthWrite:false})); sp.material.map.colorSpace=THREE.SRGBColorSpace; sp.renderOrder=24; sp.scale.set(2.2,0.41,1); sp._cv=cv; sp._g=cv.getContext('2d'); return sp; }
+function drawPlayerBar(){ if(!playerBar)return; const g=playerBar._g; const hf=Math.max(0,Math.min(1,state.hp/(state.hpMax||1))); const ap=(typeof armorTotal==='function')?armorTotal(state.level):0, af=Math.max(0,Math.min(1,ap/15));
+  g.clearRect(0,0,140,26); g.fillStyle='rgba(14,8,12,0.82)'; g.fillRect(2,2,136,11); g.fillStyle=hf>0.5?'#7ad04a':hf>0.25?'#ffd23f':'#e0463a'; g.fillRect(4,4,132*hf,7);
+  if(ap>0){ g.fillStyle='rgba(14,8,12,0.82)'; g.fillRect(2,15,136,8); g.fillStyle='#7f9bff'; g.fillRect(4,16.5,132*af,4); }
+  playerBar.material.map.needsUpdate=true; }
 // ── per-mob ATTACK FX: a claw slash-arc / bite puff / sting flash in front of the mob so the strike reads clearly ──
 function mobAttackFx(c, kind, dx, dz){ const m=c.mesh; const dd=Math.hypot(dx,dz)||1, fx=dx/dd, fz=dz/dd; const y=(m.position.y||0)+0.85;
   const col = kind==='claw'?'#ff5a5a' : kind==='sting'?'#ffe066' : kind==='wail'?'#cfe0ff' : '#ffd2a8';
@@ -2937,7 +2948,7 @@ const AGGRO_DETECT=15, AGGRO_LOSE=26;   // monsters CHASE only within DETECT; gi
 function updateCombat(dt){
   if(state._invuln>0) state._invuln-=dt;
   const _arm=state.armor&&ARMORS[state.armor];   // EPIC armor (Aegis Plate) slowly regenerates health
-  if(_arm&&_arm.regen&&state.hp>0&&state.hp<state.hpMax){ state._regAcc=(state._regAcc||0)+_arm.regen*dt; if(state._regAcc>=1){ const h=Math.floor(state._regAcc); state._regAcc-=h; state.hp=Math.min(state.hpMax,state.hp+h); if(typeof renderHearts==='function')renderHearts(); } }
+  if(_arm&&_arm.regen&&state.hp>0&&state.hp<state.hpMax){ state._regAcc=(state._regAcc||0)+_arm.regen*dt*HP_SCALE; if(state._regAcc>=1){ const h=Math.floor(state._regAcc); state._regAcc-=h; state.hp=Math.min(state.hpMax,state.hp+h); if(typeof renderHearts==='function')renderHearts(); } }
   const night=!isDay(); const indoors=homes.some(h=>h.active);   // inside a home -> monsters can't reach you + de-aggro (the escape)
   if(!DUNGEON.inDungeon && !MINE.inMine){   // SURFACE only: continuous respawn toward a cap (mine/dungeon foes are pre-placed on entry and processed below)
     // CONTINUOUS RESPAWN toward a day/night cap: a few roam by day, a swarm at night; killed ones return over time.
@@ -3180,6 +3191,7 @@ addEventListener('visibilitychange',()=>{ if(document.hidden){ try{ if(!sessionS
 addEventListener('pagehide',()=>{ try{ if(!sessionStorage.getItem('ww_newgame')) save(); }catch(e){} });   // same guard: pagehide fires during the New Game reload too
 let _inviteRoom=null; try{ _inviteRoom=((new URLSearchParams(location.search).get('room'))||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)||null; }catch(e){}   // invite link ?room=CODE
 function startGame(){ if(!ready)return; document.getElementById('title').classList.add('hidden'); closeSettings(); state.running=true; Music.start();
+  state.hpMax=hpMaxForLevel(state.level); if(!state.hp||state.hp>state.hpMax||state.hp<1) state.hp=state.hpMax; renderHearts();   // ensure the real HP pool is set for fresh + loaded games
   try{ state.intro=!localStorage.getItem('ww2_seen_intro'); }catch(e){ state.intro=true; }
   if(state.intro&&state.beacon){ state.beacon.visible=true; toast('✨ Follow the glowing beam to your new house!'); }
   else toast('🏠 Back on Giggleton Lane — survive the night! Check your Journal →');
@@ -3410,7 +3422,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
     { pickupGear('dread_reaver','weapon'); const owned=(state.weapons.dread_reaver===true);
       equipGear('dread_reaver','weapon'); const wEq=(state.weapon==='dread_reaver');
       unequipGear('weapon'); const wUn=(state.weapon!=='dread_reaver');
-      unequipGear('armor'); const hp0=state.hpMax; pickupGear('aegis_plate','armor'); equipGear('aegis_plate','armor'); const aEq=(state.armor==='aegis_plate' && state.hpMax===hp0+4);   // pin a clean baseline first so the +4 delta is deterministic
+      unequipGear('armor'); const hp0=state.hpMax; pickupGear('aegis_plate','armor'); equipGear('aegis_plate','armor'); const aEq=(state.armor==='aegis_plate' && state.hpMax===hp0+4*HP_SCALE);   // pin a clean baseline first so the +4 delta is deterministic
       unequipGear('armor'); const aUn=(state.armor!=='aegis_plate' && state.hpMax===hp0);
       R.gear_equip=(owned&&wEq&&wUn&&aEq&&aUn); }
     // OFF-HAND: craft+equip a shield (chance-blocks any hit) and a torch (carries a light); unequip clears the slot
@@ -3428,6 +3440,8 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
     { const n0=drops.length; dropGear(player.position.x, player.position.z, ['dread_reaver','weapon']); const d=drops[drops.length-1]; R.loot_drop_phys=(!!d && d.gear==='dread_reaver' && !!d.mesh);
       showGearTooltip(d); const tt=document.getElementById('gearTip'); R.loot_hover_tip=(!!tt && tt.style.display==='block' && /Damage/.test(tt.innerHTML)); hideGearTooltip();
       if(d&&d.mesh){ try{world.remove(d.mesh);}catch(_){} } drops.length=n0; }
+    // HEALTH BARS: HUD shows a numeric HP bar + an overhead player bar (no more 6 hearts)
+    { state.hpMax=hpMaxForLevel(state.level); state.hp=state.hpMax; renderHearts(); const hb=document.getElementById('hearts'); R.health_bar=(!!hb && !!hb.querySelector('.fill') && /\d+\/\d+/.test(hb.textContent) && state.hpMax>=100); R.player_overhead_bar=(!!playerBar && playerBar.parent===player); }
     // DICE: damage rolls vary + can crit; a floating damage-number sprite pops over the target
     { let mn=1e9,mx=0,crits=0; for(let i=0;i<400;i++){ const r=rollDamage(50,0.1); mn=Math.min(mn,r.dmg); mx=Math.max(mx,r.dmg); if(r.crit)crits++; }
       R.dice_rolls=(mx>mn && crits>0 && crits<400);
