@@ -1,0 +1,14 @@
+{
+  "title": "Welcome Home, Wobblesworth!",
+  "slug": "wobblesworth",
+  "description": "A cozy 3D life-sim adventure. Settle into a warm little town, cook party snacks, craft gear, upgrade your home, befriend the neighbors, and throw the ultimate housewarming. Explore rolling hills and deep jungle outskirts, mine for crystals, swim the ponds — and once night falls far from town, fend off spooky mobs: rattling skeletons, seed-spitting jack-o'-lanterns, and ghosts that turn invisible until they strike. Find a hat and armor, level up, and become a Town Legend.",
+  "short_description": "Cozy 3D life-sim: build a home, befriend the town, craft, explore, and survive spooky nights.",
+  "genre": "adventure",
+  "sub_genre": "life-sim",
+  "controls_keyboard": "WASD move, Space jump, drag to look, scroll to zoom. E interact, C craft, click to attack, Esc to pause.",
+  "controls_gamepad": "",
+  "difficulty": "easy",
+  "has_mobile_support": false,
+  "tags": ["cozy", "life-sim", "adventure", "crafting", "exploration", "3d"],
+  "status": "published"
+}
