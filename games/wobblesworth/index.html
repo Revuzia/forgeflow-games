@@ -139,7 +139,8 @@
   .recipe .rt{font-weight:bold; font-size:13px} .recipe .rc{color:#7a6a55; margin-top:2px}
   .recipe .mk{float:right; background:var(--pop); color:#fff; border-radius:8px; padding:2px 9px; font-weight:bold; font-size:11px}
   .screen{position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:radial-gradient(circle at 50% 30%, #ffe9b0, #ffb3d1 60%, #b98cff)}
-  .card{background:var(--paper); border:5px solid var(--ink); border-radius:26px; padding:30px 34px; max-width:560px; text-align:center; box-shadow:8px 8px 0 rgba(34,26,46,.3)}
+  .card{background:var(--paper); border:5px solid var(--ink); border-radius:26px; padding:26px 32px; max-width:560px; max-height:calc(100% - 16px); overflow-y:auto; text-align:center; box-shadow:8px 8px 0 rgba(34,26,46,.3)}   /* max-height+scroll so the title NEVER overflows the (short) arcade iframe — Play/Settings always reachable */
+  @media (max-height:660px){ .card{padding:13px 22px; border-radius:16px; border-width:3px} .card h1{font-size:22px; margin-bottom:3px} .card .sub{font-size:12.5px; margin-bottom:7px} .card p{font-size:12px; line-height:1.35; margin:5px 0} .card .ctrls{margin:7px 0; font-size:11px; gap:5px 9px} .card .ctrls span{padding:2px 7px} .card .btn{padding:9px 18px; font-size:15px; margin-top:6px} }   /* SHORT viewports (16:9 arcade iframe): shrink the title card so it fits without cutting off Settings */
   .card h1{font-size:32px; line-height:1.05; color:var(--grape); text-shadow:2px 2px 0 var(--sun); margin-bottom:6px}
   .card .sub{font-size:15px; font-weight:bold; color:var(--pop); margin-bottom:14px; letter-spacing:.5px}
   .card p{font-size:14px; line-height:1.5; margin:10px 0; text-align:left}
@@ -2191,7 +2192,7 @@ function digGround(){   // SHOVEL on the surface: CARVE a real voxel hole (dig d
   else if(roll<0.18){ Inv.add('crystal',1); extra=' + a buried 💎!'; }
   else if(roll<0.30){ Inv.add('stone',1+Math.floor(Math.random()*2)); extra=' + 🪨'; }
   for(let q=0;q<5;q++){ const d=pBall(0.12,'#9a7a4a'); d.position.set(cx+rand(-.3,.3),0.3,cz+rand(-.3,.3)); world.add(d); ephemeral.push({node:d,life:0.5,v:new THREE.Vector3(rand(-1.2,1.2),rand(2,4),rand(-1.2,1.2)),g:1,vy:0}); }
-  SFX.play('pickup',{vol:0.5,rate:0.7}); shake(0.12); emote('interact-right'); markGoal('gather'); gainXP(1); toast(`🥄 Dug a hole${extra} — keep digging to tunnel down.`); save(); }
+  SFX.play('pickup',{vol:0.5,rate:0.7}); shake(0.12); emote('attack-melee-right'); markGoal('gather'); gainXP(1); toast(`🥄 Dug a hole${extra} — keep digging to tunnel down.`); save(); }   // SWING the shovel (was a gentle interact-reach)
 function digBlock(){
   if(!MINE.inMine){   // SURFACE: shovel digs the ground; otherwise point the player at the right tool
     if(state.hasShovel){ digGround(); return; }
@@ -2199,7 +2200,7 @@ function digBlock(){
     toast('🛠️ Craft a 🥄 Shovel to dig the ground, or a ⛏️ Pickaxe to mine ore (press C).'); SFX.play('interact',{rate:0.6}); return;
   }
   if(!state.hasPickaxe){ toast('⛏️ You need a Pickaxe to mine ore — press C to craft one (2 🪵 + 2 🪨).'); SFX.play('interact',{rate:0.6}); return; }
-  state._toolUse=0.6; state._toolKind='pickaxe'; state._swing=0.32;
+  state._toolUse=0.6; state._toolKind='pickaxe'; state._swing=0.32; emote('attack-melee-right');   // SWING the pickaxe (was no arm clip → the bone-mounted pickaxe didn't move)
   const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y); let best=-1,bd=2.4;
   for(let i=0;i<MINE.blocks.length;i++){ const b=MINE.blocks[i]; if(b.solid.off)continue; const dx=b.mesh.position.x-player.position.x, dz=b.mesh.position.z-player.position.z, d=Math.hypot(dx,dz)||1; if(d>bd)continue; if((dx*fx+dz*fz)/d<0.2)continue; bd=d; best=i; }
   if(best<0){ toast('⛏️ Face an ore block and press G.'); return; }
@@ -2320,7 +2321,7 @@ function equipBest(){ for(let i=WTIER.length-1;i>=0;i--){ if(i===0||state.weapon
 function gainWeapon(id){ state.weapons[id]=true; equipBest(); const w=WEAPONS[id]; toast(`${w.icon} Crafted + equipped the ${w.name}!`); if(invOpen)renderInv(); Inv.render(); }
 function playerAttack(){ if(!state.running||state.paused)return; if(state._atkCD>0) return;   // attack-speed gate (only kicks in when energy is low — full energy = no cooldown, spam freely)
   const asm=Needs.atkSpeedMul(); state._atkCD = asm<1 ? 0.42/asm : 0; state._swing=0.32;
-  const w=WEAPONS[state.weapon]||WEAPONS.fist; const dmg=w.dmg*Needs.dmgMul(); SFX.play('interact'); emote(state.weapon!=='fist'?'attack-melee-right':'attack-kick-right'); shake(0.12);   // real attack clip (was the interact placeholder): melee swing armed, kick bare-fisted
+  const w=WEAPONS[state.weapon]||WEAPONS.fist; const dmg=w.dmg*Needs.dmgMul(); SFX.play('interact'); emote('attack-melee-right'); shake(0.12);   // ALWAYS the arm SWING (owner: never the kick) — the bone-mounted weapon/fist swings with the arm-right clip
   const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y); let hit=0;
   for(let i=creatures.length-1;i>=0;i--){ const c=creatures[i], m=c.mesh; if(!m.visible)continue;   // can't strike an unrevealed ghost
     const dx=m.position.x-player.position.x, dz=m.position.z-player.position.z, d=Math.hypot(dx,dz)||1;
@@ -2580,7 +2581,9 @@ const COOP = {
   peerCount(){ return Object.keys(this.peers).length; },
   tick(dt){
     if(!this.on) return;
-    this._acc+=dt; if(this._acc>=0.1){ this._acc=0; this._send(); }
+    // Broadcast ~6.7x/s while MOVING, ~1x/s when idle — interpolation hides the lower
+    // rate and this cuts the free-tier message budget ~85% vs a flat 10x/s.
+    this._acc+=dt; const moving=(charAnim==='walk'||charAnim==='sprint'); if(this._acc>=(moving?0.15:1.0)){ this._acc=0; this._send(); }
     const HW=WRAP_P*0.5, now=performance.now(), k=Math.min(1,dt*9);
     for(const id in this.peers){ const pe=this.peers[id], g=pe.group;
       if(Math.abs(pe.tx-g.position.x)>HW) g.position.x=pe.tx; else g.position.x+=(pe.tx-g.position.x)*k;   // SNAP across the world seam, else glide
