@@ -246,6 +246,13 @@
   :focus-visible{outline:3px solid var(--sun); outline-offset:2px}
   /* ---- respect reduced-motion for CSS-driven anim ---- */
   @media (prefers-reduced-motion: reduce){ .toast{animation:none} #zone,#prompt,.bar .fill{transition:none} }
+  /* hover stat tooltip on dropped rare/epic gear */
+  .gearTip{position:fixed; z-index:24; pointer-events:none; transform:translate(-50%,-115%); background:rgba(28,22,40,.95); border:2px solid #5fa8ff; border-radius:11px; padding:8px 11px; color:#fff; font:600 12px 'Trebuchet MS',sans-serif; min-width:124px; box-shadow:0 4px 14px rgba(0,0,0,.45); display:none}
+  .gearTip .gtt-h{font-size:13px; font-weight:800; margin-bottom:5px; text-align:center}
+  .gearTip .gtt-r{display:flex; justify-content:space-between; gap:16px; margin:2px 0}
+  .gearTip .gtt-r span{opacity:.72}
+  .gearTip .gtt-r b{color:#ffd23f}
+  .gearTip .gtt-f{margin-top:5px; font-size:10px; opacity:.6; text-align:center; font-style:italic}
 </style>
 </head>
 <body>
@@ -1430,7 +1437,7 @@ renderer.domElement.addEventListener('contextmenu',e=>{ e.preventDefault(); clea
 let dragging=false,lastX=0,lastY=0;
 // LEFT mouse = ATTACK; RIGHT mouse (or touch) drag = ROTATE camera. (Right-click menu already suppressed above.)
 renderer.domElement.addEventListener('pointerdown',e=>{ if(e.pointerType!=='touch' && e.button===0){ if(state.running){ if(BMODE.on) placeBlock(); else if(state._activeTool){ digBlock(); } else playerAttack(); } return; } dragging=true; lastX=e.clientX; lastY=e.clientY; });   // left-click: dig/mine if a tool is the held hotbar item, else attack
-addEventListener('pointerup',()=>dragging=false); addEventListener('pointercancel',()=>dragging=false); addEventListener('pointermove',e=>{ if(dragging){ const s=state.mouseSens||1; cam.targetYaw-=(e.clientX-lastX)*0.006*s; cam.targetPitch=clamp(cam.targetPitch+(e.clientY-lastY)*0.005*s,0.21,1.256); lastX=e.clientX; lastY=e.clientY; } });
+addEventListener('pointerup',()=>dragging=false); addEventListener('pointercancel',()=>dragging=false); addEventListener('pointermove',e=>{ if(e.pointerType!=='touch'){ _mx=e.clientX; _my=e.clientY; } if(dragging){ const s=state.mouseSens||1; cam.targetYaw-=(e.clientX-lastX)*0.006*s; cam.targetPitch=clamp(cam.targetPitch+(e.clientY-lastY)*0.005*s,0.21,1.256); lastX=e.clientX; lastY=e.clientY; } });
 addEventListener('wheel',e=>{ cam.dist=clamp(cam.dist+Math.sign(e.deltaY)*0.9,7,22); },{passive:true});
 const cam={yaw:Math.PI,targetYaw:Math.PI,dist:13,height:7,pitch:0.5,targetPitch:0.5};   // pitch in radians (clamped 12°–72°); cam.yaw/pitch LERP toward target* each frame for smooth right-click rotation
 
@@ -2724,6 +2731,27 @@ function pickupGear(id, kind){ const tbl=(kind==='weapon')?WEAPONS:ARMORS, it=tb
   if(kind==='weapon') state.weapons[id]=true; else state.armors[id]=true;   // owned, NOT auto-equipped — player chooses in the bag
   rarityToast(it.rarity||'rare', `${it.icon} ${it.name} — added to your 🎒 inventory! Open it (I) to equip.`);
   confetti(player.position.clone().setY(1.6),20); SFX.play('success',{vol:0.55}); shake(0.18); if(invOpen)renderInv(); save(); }
+// ── HOVER STAT TOOLTIP: mouse over a dropped rare/epic gear gem → read its stats BEFORE you grab it (was just a toast) ──
+var _mx=innerWidth/2, _my=innerHeight/2; let _hoverGear=null; const _gRay=new THREE.Raycaster(), _gV2=new THREE.Vector2();
+function updateGearHoverTooltip(){
+  let closest=null;
+  if(!invOpen && !craftOpen && !shopOpen && drops.length){
+    _gV2.x=(_mx/innerWidth)*2-1; _gV2.y=-(_my/innerHeight)*2+1; _gRay.setFromCamera(_gV2,camera); let best=Infinity;
+    for(const d of drops){ if(!d.gear)continue; const hit=_gRay.intersectObject(d.mesh,false); if(hit.length && hit[0].distance<best){ best=hit[0].distance; closest=d; } }
+  }
+  if(closest!==_hoverGear){ _hoverGear=closest; if(closest) showGearTooltip(closest); else hideGearTooltip(); }
+  if(_hoverGear){ if(!drops.includes(_hoverGear)){ _hoverGear=null; hideGearTooltip(); } else positionGearTooltip(_hoverGear); }
+}
+function showGearTooltip(d){ const it=(d.gkind==='weapon'?WEAPONS:ARMORS)[d.gear]; if(!it){ hideGearTooltip(); return; } const rar=it.rarity||'rare', rr=RARITY[rar]||RARITY.rare;
+  const row=(l,v)=>`<div class="gtt-r"><span>${l}</span><b>${v}</b></div>`; let h=`<div class="gtt-h" style="color:${rr.color}">${rr.mark||''}${it.icon} ${it.name}</div>`;
+  if(d.gkind==='weapon'){ h+=row('Damage',it.dmg); if(it.crit)h+=row('Crit',Math.round(it.crit*100)+'%'); if(it.life)h+=row('Lifesteal',Math.round(it.life*100)+'%'); h+=row('Durability',(DUR_BASE[rar]||150)+' hits'); }
+  else { h+=row('Block',Math.round(it.block*100)+'%'); h+=row('Armor',armorRating(d.gear,state.level||1).toFixed(1)+'🛡️'); if(it.bonusHp)h+=row('Max HP','+'+it.bonusHp+'❤️'); if(it.regen)h+=row('Regen',(it.regen).toFixed(2)+'/s'); h+=row('Durability',(DUR_BASE[rar]||150)+' hits'); }
+  h+=`<div class="gtt-f">walk over to grab</div>`;
+  let tt=document.getElementById('gearTip'); if(!tt){ tt=document.createElement('div'); tt.id='gearTip'; document.body.appendChild(tt); }
+  tt.className='gearTip '+rar; tt.style.borderColor=rr.color; tt.innerHTML=h; tt.style.display='block';
+}
+function hideGearTooltip(){ const tt=document.getElementById('gearTip'); if(tt) tt.style.display='none'; }
+function positionGearTooltip(d){ const tt=document.getElementById('gearTip'); if(!tt)return; d.mesh.getWorldPosition(_np); _np.project(camera); if(_np.z>1){ tt.style.display='none'; return; } tt.style.display='block'; tt.style.left=(((_np.x*0.5+0.5)*innerWidth)|0)+'px'; tt.style.top=(((-_np.y*0.5+0.5)*innerHeight)|0)+'px'; }
 function dropGear(x,z, pair){ pair=pair||pick(RARE_GEAR); const id=pair[0], kind=pair[1], it=((kind==='weapon')?WEAPONS:ARMORS)[id]; const col=(it&&it.rarity==='epic')?'#c77dff':'#5fa8ff';
   const geo=(kind==='weapon')?new THREE.OctahedronGeometry(0.32,0):new THREE.IcosahedronGeometry(0.3,0);
   const m=new THREE.Mesh(geo,new THREE.MeshToonMaterial({color:col,gradientMap:GRAD,emissive:new THREE.Color(col),emissiveIntensity:0.85}));
@@ -3010,7 +3038,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`animals ${animals.length}  R[${span(animals,a=>Math.hypot(a.mesh.position.x,a.mesh.position.z))}]\n`
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
-function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateLootBags(dt); updateProjectiles(dt); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
+function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
 function idleTick(dt){ cam.yaw+=dt*0.12; cam.targetYaw=cam.yaw; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
@@ -3192,7 +3220,9 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
   roofOp:()=>cutRoof?+cutRoof.material.opacity.toFixed(2):null,
   interactNow:()=>{ updateInteract(); if(nearest){ const l=nearest.label; nearest.action(); return l; } return null; },
-  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, pickGear:(id,kind)=>pickupGear(id,kind), equipGear:(id,kind)=>equipGear(id,kind), unequipGear:(k,s)=>unequipGear(k,s), tradeDemo:()=>{ if(typeof COOP!=='undefined'){ COOP.on=true; COOP.id='me'; COOP.ch=COOP.ch||{send:()=>{}}; COOP.peers=COOP.peers||{}; COOP.peers['demo']={group:{position:{x:player.position.x,z:player.position.z}},name:'Demo Friend'}; } openTrade('demo'); if(state.tradeSession){ state.tradeSession.theirs={items:{wood:3,crystal:1},coin:12}; state.tradeSession.theirConfirmed=true; renderTrade(); } return tradeOpen; }, mobProbe:(dist)=>{ const t0=state.tod; state.tod=0.9; const c={}; for(let i=0;i<300;i++){ const ty=pickCreatureType(dist); if(ty)c[ty.name]=(c[ty.name]||0)+1; } state.tod=t0; return c; }, coopJoin:(c)=>{ if(typeof COOP!=='undefined') return COOP.join(c); }, coopPing:()=>{ if(typeof COOP!=='undefined'&&COOP._send)COOP._send(); }, coopInfo:()=>{ const r={count:0,on:false,visible:0}; if(typeof COOP!=='undefined'){ r.count=Object.keys(COOP.peers).length; r.on=COOP.on; r.room=COOP.room; r.visible=Object.values(COOP.peers).filter(p=>p.group&&p.group.parent&&p.group.visible!==false).length; } return r; }, revealFog:()=>revealFog(), openStash:()=>openStash(), stash:()=>({...state.stash}), hurt:(n)=>damagePlayer(n), armorTotal:()=>armorTotal(state.level), gear:()=>({...state.gear}), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
+  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, pickGear:(id,kind)=>pickupGear(id,kind), equipGear:(id,kind)=>equipGear(id,kind), unequipGear:(k,s)=>unequipGear(k,s), tradeDemo:()=>{ if(typeof COOP!=='undefined'){ COOP.on=true; COOP.id='me'; COOP.ch=COOP.ch||{send:()=>{}}; COOP.peers=COOP.peers||{}; COOP.peers['demo']={group:{position:{x:player.position.x,z:player.position.z}},name:'Demo Friend'}; } openTrade('demo'); if(state.tradeSession){ state.tradeSession.theirs={items:{wood:3,crystal:1},coin:12}; state.tradeSession.theirConfirmed=true; renderTrade(); } return tradeOpen; }, mobProbe:(dist)=>{ const t0=state.tod; state.tod=0.9; const c={}; for(let i=0;i<300;i++){ const ty=pickCreatureType(dist); if(ty)c[ty.name]=(c[ty.name]||0)+1; } state.tod=t0; return c; },
+  gearHoverTest:()=>{ const n0=drops.length; dropGear(player.position.x, player.position.z-2.5, ['keen_saber','weapon']); const d=drops[drops.length-1]; d.mesh.getWorldPosition(_np); _np.project(camera); const onscreen=_np.z<1; _mx=(_np.x*0.5+0.5)*innerWidth; _my=(-_np.y*0.5+0.5)*innerHeight; _hoverGear=null; updateGearHoverTooltip(); const tt=document.getElementById('gearTip'); const r={onscreen, tooltipShown:!!tt&&tt.style.display==='block', nameOk:!!tt&&/Keen Saber/.test(tt.innerHTML), hasStats:!!tt&&/Damage/.test(tt.innerHTML)}; if(d&&d.mesh){try{world.remove(d.mesh);}catch(_){}} drops.length=n0; _hoverGear=null; hideGearTooltip(); return r; },
+  coopJoin:(c)=>{ if(typeof COOP!=='undefined') return COOP.join(c); }, coopPing:()=>{ if(typeof COOP!=='undefined'&&COOP._send)COOP._send(); }, coopInfo:()=>{ const r={count:0,on:false,visible:0}; if(typeof COOP!=='undefined'){ r.count=Object.keys(COOP.peers).length; r.on=COOP.on; r.room=COOP.room; r.visible=Object.values(COOP.peers).filter(p=>p.group&&p.group.parent&&p.group.visible!==false).length; } return r; }, revealFog:()=>revealFog(), openStash:()=>openStash(), stash:()=>({...state.stash}), hurt:(n)=>damagePlayer(n), armorTotal:()=>armorTotal(state.level), gear:()=>({...state.gear}), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
   nodesByItem:()=>{ const o={}; for(const n of nodes) o[n.item]=(o[n.item]||0)+1; return o; }, waters:()=>waters.length,
   homes:()=>({count:homes.length, built:homes.filter(h=>h.built).length, active:homes.filter(h=>h.active).length}),
   respawnInfo:()=>({nodes:nodes.length, hidden:nodes.filter(n=>!n.mesh.visible).length, onCd:nodes.filter(n=>n.timer>0).length}),
@@ -3372,6 +3402,10 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
     // CHARACTER CUSTOMIZATION: swapping the look hot-rebuilds the player, keeps it valid + re-attaches gear; default restores
     { state.charModel='character-female-b'; updatePlayerCharacter(); R.char_swap=(!!player.userData.model && state.charModel==='character-female-b');
       state.charModel='char_player'; updatePlayerCharacter(); R.char_default=(!!player.userData.model && PLAYER_MODELS.includes(state.charModel)); }
+    // LOOT HOVER: a dropped rare/epic gem shows a stat tooltip on hover (built directly here — no real mouse in the test)
+    { const n0=drops.length; dropGear(player.position.x, player.position.z, ['dread_reaver','weapon']); const d=drops[drops.length-1]; R.loot_drop_phys=(!!d && d.gear==='dread_reaver' && !!d.mesh);
+      showGearTooltip(d); const tt=document.getElementById('gearTip'); R.loot_hover_tip=(!!tt && tt.style.display==='block' && /Damage/.test(tt.innerHTML)); hideGearTooltip();
+      if(d&&d.mesh){ try{world.remove(d.mesh);}catch(_){} } drops.length=n0; }
     // DICE: damage rolls vary + can crit; a floating damage-number sprite pops over the target
     { let mn=1e9,mx=0,crits=0; for(let i=0;i<400;i++){ const r=rollDamage(50,0.1); mn=Math.min(mn,r.dmg); mx=Math.max(mx,r.dmg); if(r.crit)crits++; }
       R.dice_rolls=(mx>mn && crits>0 && crits<400);
