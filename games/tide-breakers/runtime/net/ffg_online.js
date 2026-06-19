@@ -39,7 +39,7 @@ export const SUPABASE_URL = "https://wugoxdewcdxzfppgzohy.supabase.co";
 export const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1Z294ZGV3Y2R4emZwcGd6b2h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5OTU0MzEsImV4cCI6MjA2OTU3MTQzMX0.ljJYgVp0n9d_tJeL3ZG6liYfW0lQ7d_29svPMbUAves";
 
-const TURN_SECONDS = 15;
+const TURN_SECONDS = 30;   // tide-breakers: 30s per turn (owner request; was 15)
 
 const V = new URL(import.meta.url).search; // propagate cache-bust to sibling import
 const { NetPlay, TurnClock } = await import("./ffg_netplay.js" + V);
