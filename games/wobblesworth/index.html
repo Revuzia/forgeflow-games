@@ -294,7 +294,7 @@ var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snack
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
   hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, _blocks:0, _activeTool:'',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
-  volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0, lore:{} };
+  volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0, lore:{}, fog:{}, met:{} };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
 
 /* ---------- AUDIO ---------- */
@@ -1389,7 +1389,7 @@ function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
   unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
-  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, lore:state.lore,
+  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, lore:state.lore, fog:state.fog, met:state.met,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug })); }catch(e){} }
 // VERSIONED + SANITIZED load: bad/corrupt/legacy data can never crash boot or inject impossible state
 function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) return; let s; try{ s=JSON.parse(raw); }catch(e){ localStorage.setItem('ww2_save_corrupt',raw); return; }
@@ -1411,7 +1411,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.craftedSet=(s.craftedSet&&typeof s.craftedSet==='object')?s.craftedSet:{}; state.reqsFulfilled=num(s.reqsFulfilled,0,0,1e9); state.biomes=(s.biomes&&typeof s.biomes==='object')?s.biomes:{}; state.event=DAY_EVENTS.find(e=>e.id===s.eventId)||null;
   if(typeof s.tod==='number'&&Number.isFinite(s.tod)) state.tod=((s.tod%1)+1)%1;
   if(s.volume!=null) state.volume=clamp(+s.volume||0,0,1); state.musicOn=(s.musicOn!==false); state.sfxOn=(s.sfxOn!==false); state.reduce=!!s.reduce;
-  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{};
+  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{};
   state.homeTier=num(s.homeTier,0,0,3); for(let i=1;i<=state.homeTier;i++) applyHomeTier(i);   // rebuild purchased home upgrades
   state.homePaints=(s.homePaints&&typeof s.homePaints==='object')?s.homePaints:{}; loadBlocks(s.buildBlocks); applyHomePaints();   // restore voxel builds + house repaints (buildWorld ran first, so homes exist)
   for(const k in VOX.meshes) world.remove(VOX.meshes[k]); VOX.dug={}; VOX.meshes={};   // restore carved terrain
@@ -2075,15 +2075,30 @@ addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.upd
 function updateNeedsUI(){ document.getElementById('fHunger').style.width=Needs.hunger+'%'; document.getElementById('vHunger').textContent=Math.round(Needs.hunger)+'%'; document.getElementById('fEnergy').style.width=Needs.energy+'%'; document.getElementById('vEnergy').textContent=Math.round(Needs.energy)+'%'; }
 
 let _mmT=0;
-function paintMap(c, R){ if(!c)return; const g=c.getContext('2d'); const S=c.width, sc=(S/2-4)/R, ms=S/150;   // ms scales markers so the big map reads the same as the mini one
+// ── FOG OF WAR: the map starts dark; you reveal terrain as you explore, and named landmarks/people appear once discovered ──
+const FOG_CELL=48;
+function fogKey(x,z){ return Math.floor((x+FENCE)/FOG_CELL)+'_'+Math.floor((z+FENCE)/FOG_CELL); }
+function revealFog(){ if(!state.fog)state.fog={}; if(!state.met)state.met={}; const px=player.position.x,pz=player.position.z;
+  for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++) state.fog[fogKey(px+dx*FOG_CELL,pz+dz*FOG_CELL)]=1;   // reveal the 3x3 cells around you
+  if(Math.hypot(px-HOUSE.cx,pz-HOUSE.cz)<70) state.met.home=1;
+  if(Math.hypot(px-3,pz-8)<70) state.met.market=1;
+  for(const n of neighbors){ const nm=n.userData&&n.userData.name; if(nm && Math.hypot(px-n.position.x,pz-n.position.z)<32) state.met['npc:'+nm]=1; }   // meet a neighbor -> their name shows on the map as they wander
+}
+function paintMap(c, R){ if(!c)return; const g=c.getContext('2d'); const S=c.width, sc=(S/2-4)/R, ms=S/150, big=R>=400;   // big = the enlarged map modal -> show name labels (the mini one stays dots-only)
   g.clearRect(0,0,S,S);
-  g.fillStyle='rgba(120,200,110,0.45)'; g.beginPath(); g.arc(S/2,S/2,S/2-3,0,7); g.fill();
-  g.strokeStyle='rgba(34,26,46,0.55)'; g.lineWidth=2*ms; g.beginPath(); g.arc(S/2,S/2,S/2-3,0,7); g.stroke();
+  g.fillStyle='rgba(24,20,34,0.92)'; g.beginPath(); g.arc(S/2,S/2,S/2-3,0,7); g.fill();   // FOG base (undiscovered = dark)
   const tx=x=>S/2+x*sc, tz=z=>S/2+z*sc;
-  g.fillStyle='#ff5d8f'; g.fillRect(tx(HOUSE.cx)-3*ms,tz(HOUSE.cz)-3*ms,6*ms,6*ms);        // home
-  g.fillStyle='#ffd23f'; g.fillRect(tx(3)-2.5*ms,tz(8)-2.5*ms,5*ms,5*ms);                   // store
-  g.fillStyle='#7c5cff'; for(const n of neighbors){ g.beginPath(); g.arc(tx(n.position.x),tz(n.position.z),2*ms,0,7); g.fill(); }
-  const px=tx(player.position.x),pz=tz(player.position.z),a=player.rotation.y;  // player arrow (points where you face)
+  g.save(); g.beginPath(); g.arc(S/2,S/2,S/2-3,0,7); g.clip();   // reveal discovered terrain cells
+  g.fillStyle='rgba(120,200,110,0.5)'; const cs=FOG_CELL*sc;
+  if(state.fog) for(const key in state.fog){ const pp=key.split('_'); const wx=(+pp[0])*FOG_CELL-FENCE, wz=(+pp[1])*FOG_CELL-FENCE; g.fillRect(tx(wx),tz(wz),cs+1.5,cs+1.5); }
+  g.restore();
+  g.strokeStyle='rgba(34,26,46,0.55)'; g.lineWidth=2*ms; g.beginPath(); g.arc(S/2,S/2,S/2-3,0,7); g.stroke();
+  const met=state.met||{};
+  const lab=(t,X,Z,col)=>{ if(!big)return; g.font='bold '+(8.5*ms)+'px "Trebuchet MS",sans-serif'; g.textAlign='center'; g.lineWidth=3*ms; g.strokeStyle='rgba(0,0,0,0.72)'; g.strokeText(t,X,Z); g.fillStyle=col||'#fff'; g.fillText(t,X,Z); };
+  if(met.home){ g.fillStyle='#ff5d8f'; g.fillRect(tx(HOUSE.cx)-3*ms,tz(HOUSE.cz)-3*ms,6*ms,6*ms); lab('🏠 Home',tx(HOUSE.cx),tz(HOUSE.cz)-6*ms,'#ffd0e0'); }
+  if(met.market){ g.fillStyle='#ffd23f'; g.fillRect(tx(3)-2.5*ms,tz(8)-2.5*ms,5*ms,5*ms); lab('🛒 Market',tx(3),tz(8)-6*ms,'#ffe9a8'); }
+  g.fillStyle='#7c5cff'; for(const n of neighbors){ const nm=n.userData&&n.userData.name; if(!nm||!met['npc:'+nm])continue; g.beginPath(); g.arc(tx(n.position.x),tz(n.position.z),2*ms,0,7); g.fill(); lab(nm, tx(n.position.x), tz(n.position.z)-4.5*ms, '#cdbcff'); }
+  const px=tx(player.position.x),pz=tz(player.position.z),a=player.rotation.y;  // player arrow (always visible)
   g.fillStyle='#221a2e'; g.beginPath(); g.moveTo(px+Math.sin(a)*6*ms,pz+Math.cos(a)*6*ms); g.lineTo(px+Math.sin(a+2.5)*5*ms,pz+Math.cos(a+2.5)*5*ms); g.lineTo(px+Math.sin(a-2.5)*5*ms,pz+Math.cos(a-2.5)*5*ms); g.closePath(); g.fill(); }
 let mapOpen=false;
 function drawMinimap(){ paintMap(document.getElementById('minimap'),300); if(mapOpen) paintMap(document.getElementById('bigmap'),470); }   // scaled for the huge field; big map zooms out further
@@ -2667,7 +2682,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`animals ${animals.length}  R[${span(animals,a=>Math.hypot(a.mesh.position.x,a.mesh.position.z))}]\n`
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
-function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateLootBags(dt); updateProjectiles(dt); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
+function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateLootBags(dt); updateProjectiles(dt); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
 function idleTick(dt){ cam.yaw+=dt*0.12; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
@@ -2829,7 +2844,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
   roofOp:()=>cutRoof?+cutRoof.material.opacity.toFixed(2):null,
   interactNow:()=>{ updateInteract(); if(nearest){ const l=nearest.label; nearest.action(); return l; } return null; },
-  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, pickGear:(id,kind)=>pickupGear(id,kind), equipGear:(id,kind)=>equipGear(id,kind), unequipGear:(k)=>unequipGear(k), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
+  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, pickGear:(id,kind)=>pickupGear(id,kind), equipGear:(id,kind)=>equipGear(id,kind), unequipGear:(k)=>unequipGear(k), revealFog:()=>revealFog(), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
   nodesByItem:()=>{ const o={}; for(const n of nodes) o[n.item]=(o[n.item]||0)+1; return o; }, waters:()=>waters.length,
   homes:()=>({count:homes.length, built:homes.filter(h=>h.built).length, active:homes.filter(h=>h.active).length}),
   respawnInfo:()=>({nodes:nodes.length, hidden:nodes.filter(n=>!n.mesh.visible).length, onCd:nodes.filter(n=>n.timer>0).length}),
