@@ -1187,7 +1187,8 @@ function buildPlayerHouse(){
   // ---- cube furniture + interactables (blocky, Minecraft-themed) ----
   const F=(x,z,w,h,d,c)=>{ const m=box(w,h,d,c); m.position.set(cx+x,h/2+0.3,cz+z); world.add(m); addSolid(m); return m; };
   // fridge (eat)
-  const fridge=F(6.5,-4,1.4,2.4,1.2,'#eaf4ff'); addInteractable(fridge,'Grab a snack (fridge)',()=>{ Needs.add('hunger',26); emote('pick-up'); markGoal('eat'); toast('🍔 Nom nom. Hunger restored.'); });
+  const fridge=new THREE.Group(); { const bdy=box(1.3,2.3,0.9,'#c5e1f5'); bdy.position.y=1.15; fridge.add(bdy); const door=box(1.18,1.98,0.06,'#a9cde8'); door.position.set(0,1.15,0.47); fridge.add(door); const seam=box(1.2,0.06,0.07,'#7fa8cc'); seam.position.set(0,1.5,0.48); fridge.add(seam); const hdl=box(0.08,0.7,0.1,'#5a6f86'); hdl.position.set(0.46,1.15,0.52); fridge.add(hdl); }
+  fridge.position.set(cx+6.5,0.3,cz-4); world.add(fridge); addSolid(fridge); addInteractable(fridge,'Grab a snack (fridge)',()=>{ Needs.add('hunger',26); emote('pick-up'); markGoal('eat'); toast('🍔 Nom nom. Hunger restored.'); });
   // stove (cook)
   const stove=F(2.5,-4.2,1.6,1.1,1.1,'#8a909c');
   { const sx=cx+2.5, sz=cz-4.2;   // make it read as a real stove: 4 burners on top + an oven door + handle
@@ -1211,34 +1212,43 @@ function buildPlayerHouse(){
   const shower=F(6,4,1.6,2.6,1.6,'#bfe9ff'); shower.material=new THREE.MeshToonMaterial({color:'#bfe9ff',gradientMap:GRAD,transparent:true,opacity:0.5});
   addInteractable(shower,'Take a shower',()=>{ Needs.add('fun',8); Needs.add('energy',8); markGoal('shower'); toast('🚿 Squeaky clean!'); });
   // toilet (toilet) — blocky
-  const toilet=F(2.5,4.3,0.9,1.0,1.0,'#fff'); state.toilet=toilet;
+  const toilet=new THREE.Group(); { const tank=box(0.7,0.7,0.28,'#f3f3f3'); tank.position.set(0,0.75,-0.34); toilet.add(tank); const bowl=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.24,0.4,16),toon('#fafafa')); bowl.position.set(0,0.4,0.04); toilet.add(bowl); const lid=new THREE.Mesh(new THREE.CylinderGeometry(0.33,0.33,0.08,16),toon('#eaeaea')); lid.position.set(0,0.62,0.04); toilet.add(lid); const base=box(0.34,0.4,0.34,'#ececec'); base.position.set(0,0.2,0.04); toilet.add(base); }
+  toilet.position.set(cx+2.5,0.3,cz+4.3); world.add(toilet); addSolid(toilet); state.toilet=toilet;
   addInteractable(toilet,'Plunge the haunted toilet',()=>{ geyser(toilet.position); markGoal('toilet'); if(!Quests.isDone('side_toilet','fix')){ Quests.complete('side_toilet','fix'); toast('🪠 GLOORP! Unclogged.'); } else toast('🪠 …it gurgled.'); });
   // disco lamp (disco switch + dance) — use a KUBIKOS lantern as the switch
   const sw=F(-7,-1.5,0.5,0.7,0.3,'#ffd23f'); addInteractable(sw,'Flip the disco switch',()=>{ state.discoOn=true; markGoal('dance'); Quests.complete('main','disco'); Needs.add('fun',12); toast('🪩 DISCO ON! Boogie in the living room.'); });
-  const disco=ball(0.5,'#dfe6ff'); disco.material=new THREE.MeshStandardMaterial({color:'#cfd8ff',metalness:1,roughness:0.12,envMapIntensity:1.6,emissive:'#20243a',emissiveIntensity:0.5}); disco.position.set(cx-4,3.5,cz-3); world.add(disco); state.disco=disco;
+  const disco=ball(0.5,'#dfe6ff'); disco.material=new THREE.MeshStandardMaterial({color:'#cfd8ff',metalness:1,roughness:0.12,envMapIntensity:1.6,emissive:'#20243a',emissiveIntensity:0.5}); disco.position.set(cx,5.4,cz-1); world.add(disco); state.disco=disco;   // centered, hung high from the living-room ceiling (was off to the left)
+  { const cord=box(0.04,1.2,0.04,'#888'); cord.position.set(cx,6.0,cz-1); world.add(cord); }
   // stereo (campaign: crank music)
-  const stereo=F(-7,-4,1.1,0.8,0.5,'#3a2e4d'); addInteractable(stereo,'Crank the music',()=>{ if(!Quests.isDone('main','disco')||!Quests.isDone('main','cook')||!Quests.isDone('main','table')){ toast('🎚️ Need disco + snacks + a set table first.'); return; } Quests.complete('main','music'); winParty(); });
+  const stereo=new THREE.Group(); { const chas=box(1.1,0.7,0.45,'#1a1410'); chas.position.y=0.35; stereo.add(chas); for(const sxo of [-0.28,0.28]){ const spk=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15,0.05,14),toon('#3a3a3a')); spk.rotation.x=Math.PI/2; spk.position.set(sxo,0.35,0.24); stereo.add(spk); } const disp=box(0.5,0.12,0.02,'#1a3a4a'); disp.position.set(0,0.62,0.23); stereo.add(disp); for(let i=0;i<3;i++){ const kn=ball(0.05,i===1?'#c0392b':'#ffcc00'); kn.position.set(-0.18+i*0.18,0.62,0.24); stereo.add(kn); } }
+  stereo.position.set(cx-7,0.3,cz+2); world.add(stereo); addSolid(stereo);   // moved south, clear of the disco switch (was overlapping)
+  addInteractable(stereo,'Crank the music',()=>{ if(!Quests.isDone('main','disco')||!Quests.isDone('main','cook')||!Quests.isDone('main','table')){ toast('🎚️ Need disco + snacks + a set table first.'); return; } Quests.complete('main','music'); winParty(); });
 
   // gnome (side quest) — keep a little primitive gnome (KUBIKOS has none)
   const gn=new THREE.Group(); const gb=box(0.7,0.7,0.6,'#3ad1c7'); gb.position.y=0.35; gn.add(gb);
-  const gh=ball(0.3,'#ffd9b0'); gh.position.y=0.85; gn.add(gh); const ghat=new THREE.Mesh(new THREE.ConeGeometry(0.34,0.7,16),toon('#ff5d8f')); ghat.position.y=1.25; gn.add(ghat);
+  const gh=ball(0.3,'#ffd9b0'); gh.position.y=0.85; gn.add(gh); const ghat=new THREE.Mesh(new THREE.ConeGeometry(0.36,0.85,16),toon('#ff5d8f')); ghat.position.y=1.32; gn.add(ghat);
+  const beard=new THREE.Mesh(new THREE.ConeGeometry(0.24,0.42,10),toon('#f5f5f5')); beard.rotation.x=Math.PI; beard.position.set(0,0.66,0.22); gn.add(beard); const gnose=ball(0.06,'#e8a07a'); gnose.position.set(0,0.84,0.3); gn.add(gnose);
   gn.position.set(cx-9,0,cz+8); world.add(gn); state.gnome=gn;
   addInteractable(gn,'Water the gnome',()=>{ if(Quests.isDone('side_gnome','water')){toast('🧙 Satisfied.');return;} Quests.complete('side_gnome','water'); markGoal('gnome');
     let t=0; const grow=()=>{ t+=0.05; gn.scale.setScalar(lerp(1,2,clamp(t,0,1))); if(t<1)requestAnimationFrame(grow); }; grow(); confetti(gn.position.clone().setY(2),36); toast('💧 The gnome GROWS! Silly.'); });
 
   // cat on the roof (side quest)
-  const catG=new THREE.Group(); const cb=box(0.7,0.4,0.4,'#ff9a3d'); catG.add(cb); const cbh=ball(0.26,'#ff9a3d'); cbh.position.set(0.45,0.15,0); catG.add(cbh);
+  const catG=new THREE.Group(); const cb=box(0.6,0.34,0.34,'#ff9a3d'); cb.position.y=0.25; catG.add(cb); const cbh=ball(0.22,'#ff9a3d'); cbh.position.set(0.34,0.42,0); catG.add(cbh);
+  { const e1=new THREE.Mesh(new THREE.ConeGeometry(0.09,0.2,4),toon('#ff9a3d')); e1.position.set(0.34,0.62,-0.11); e1.rotation.z=0.2; catG.add(e1); const e2=e1.clone(); e2.position.z=0.11; catG.add(e2); const tail=box(0.07,0.07,0.42,'#ff9a3d'); tail.position.set(-0.32,0.34,0); tail.rotation.x=0.5; catG.add(tail); for(const lx of [0.18,-0.18])for(const lz of [0.1,-0.1]){ const leg=box(0.08,0.2,0.08,'#ff8a2d'); leg.position.set(lx,0.1,lz); catG.add(leg); } const ey1=ball(0.035,'#2a2a2a'); ey1.position.set(0.5,0.46,0.1); catG.add(ey1); const ey2=ey1.clone(); ey2.position.z=-0.1; catG.add(ey2); }
   catG.position.set(cx+5,H+0.9,cz-3); world.add(catG); state.cat=catG;
   addInteractable(catG,'Rescue the cat',()=>{ if(Quests.isDone('side_cat','rescue')){toast('🐱 Purrs.');return;} catG.position.set(cx+9,0,cz+10); Quests.complete('side_cat','rescue'); markGoal('cat'); confetti(catG.position.clone().setY(1),24); toast('🐱 Rescued Mr. Whiskers!'); });
 
   // 5 lost socks (respawn each day)
   socks.length=0;
-  for(let i=0;i<5;i++){ const s=box(0.45,0.2,0.25,['#ff5d8f','#3ad1c7','#ffd23f','#7c5cff','#ff8a3d'][i]); s.position.set(cx+rand(-7,7),0.4,cz+rand(-5,5)); s.userData.sock=true; world.add(s); socks.push(s);
+  const _sockCols=['#ff5d8f','#3ad1c7','#ffd23f','#7c5cff','#ff8a3d'];
+  for(let i=0;i<5;i++){ const s=new THREE.Group(); const cuff=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,0.16,8),toon(_sockCols[i])); cuff.position.y=0.18; s.add(cuff); const foot=box(0.16,0.13,0.34,_sockCols[i]); foot.position.set(0,0.07,0.12); s.add(foot); s.rotation.y=rand(0,TAU); s.rotation.z=(Math.random()-0.5)*0.5; s.position.set(cx+rand(-7,7),0.3,cz+rand(-5,5)); s.userData.sock=true; world.add(s); socks.push(s);
     addInteractable(s,'Pick up the lost sock',()=>{ if(!s.visible)return; s.visible=false; state.socks++; markGoal('socks'); emote('pick-up'); confetti(s.position,12);
       if(state.socks>=5){ Quests.complete('side_socks','find'); toast('🧦 5/5! Sock Goblin appeased.'); } else toast(`🧦 Sock ${state.socks}/5`); },1.4); }
 
   // mailbox
-  const mb=F(0,hz+3,0.6,0.5,0.8,'#ff5d8f'); mb.position.y=1.2; addInteractable(mb,'Check the mail',()=>toast(pick(['📬 GIGGLETON GNOME FESTIVAL flyer!','📬 Coupon: free haunted plunger.','📬 "Dear Resident Goofball…"'])));
+  const mb=new THREE.Group(); { const post=box(0.14,1.0,0.14,'#8a5a31'); post.position.y=0.5; mb.add(post); const bodyM=box(0.5,0.42,0.6,'#c0392b'); bodyM.position.y=1.05; mb.add(bodyM); const mbroof=box(0.54,0.1,0.62,'#a0231f'); mbroof.position.y=1.3; mb.add(mbroof); const fl=box(0.05,0.2,0.04,'#ffcc00'); fl.position.set(0.28,1.2,0.1); mb.add(fl); }
+  mb.position.set(cx+3,0.3,cz+hz+0.6); world.add(mb); addSolid(mb);   // right beside the front door (was floating out at front-center)
+  addInteractable(mb,'Check the mail',()=>toast(pick(['📬 GIGGLETON GNOME FESTIVAL flyer!','📬 Coupon: free haunted plunger.','📬 "Dear Resident Goofball…"'])));
   // ── STASH / BANK: a persistent home storage chest (deposit/withdraw resources beyond your carried bag) ──
   const stashBox=F(-2,-4.6,1.3,0.9,0.9,'#caa46a'); const stashLid=box(1.34,0.26,0.94,'#e0c089'); stashLid.position.set(cx-2,1.36,cz-4.6); world.add(stashLid);
   addInteractable(stashBox,'🧰 Open your Stash (storage)',()=>openStash(),2.6);
