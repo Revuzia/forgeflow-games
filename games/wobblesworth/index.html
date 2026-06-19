@@ -83,6 +83,16 @@
   #shop{position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center; background:rgba(20,14,30,.5); pointer-events:auto}   /* centered MODAL backdrop (was a bottom-right panel that overlapped the controls card) */
   .shopcard{width:min(360px,93vw); max-height:80vh; overflow:auto; background:rgba(255,247,236,.97); border:3px solid var(--ink); border-radius:16px; padding:12px 14px; box-shadow:5px 5px 0 rgba(34,26,46,.3)}
   #loot{position:fixed; inset:0; z-index:31; display:flex; align-items:center; justify-content:center; background:rgba(20,14,30,.5); pointer-events:auto}
+  #stash{position:fixed; inset:0; z-index:32; display:flex; align-items:center; justify-content:center; background:rgba(20,14,30,.5); pointer-events:auto}
+  .stashcard{width:min(620px,94vw); max-height:84vh; overflow:auto; background:rgba(34,26,46,.97); color:#fff; border:3px solid var(--ink); border-radius:18px; padding:14px 16px; box-shadow:7px 7px 0 rgba(0,0,0,.4)}
+  .stashcard h3{margin:0 0 10px; font-size:18px; display:flex; justify-content:space-between; align-items:center}
+  .stashcard h3 .x{cursor:pointer; background:var(--ink); color:#fff; border-radius:8px; padding:1px 10px; border:1px solid rgba(255,255,255,.3)}
+  .stashcols{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  .stashcol h4{margin:0 0 6px; font-size:13px; opacity:.85; text-align:center}
+  .strow{display:flex; align-items:center; gap:7px; padding:6px 8px; margin:4px 0; border:2px solid rgba(255,255,255,.16); border-radius:10px; background:rgba(255,255,255,.06); font-size:13px}
+  .strow .si{font-size:18px} .strow .sn{flex:1} .strow .sc{color:var(--sun); font-weight:800; margin-right:4px}
+  .strow button{padding:3px 9px; border:0; border-radius:7px; cursor:pointer; font-weight:800; background:#2ec5a8; color:#fff; margin-left:3px}
+  .strow.empty{opacity:.3}
   .lootcard{width:min(330px,92vw); max-height:80vh; overflow:auto; background:rgba(255,247,236,.98); border:3px solid var(--ink); border-radius:16px; padding:13px 15px; box-shadow:5px 5px 0 rgba(34,26,46,.3)}
   .lootcard h3{margin:0 0 9px; font-size:16px; display:flex; justify-content:space-between; align-items:center}
   .lootrow{display:flex; align-items:center; gap:9px; padding:8px 10px; margin:5px 0; border:2px solid var(--ink); border-radius:10px; background:#fff7ec; cursor:pointer; font-size:14px; transition:transform .08s}
@@ -202,6 +212,7 @@
 <div id="craft" class="hidden"></div>
 <div id="shop" class="hidden"></div>
 <div id="loot" class="hidden"></div>
+<div id="stash" class="hidden"></div>
 <canvas id="minimap" class="hud" width="150" height="150" title="Click to enlarge"></canvas>
 <div id="mapmodal" class="hidden"></div>
 <div id="lore" class="hidden"></div>
@@ -292,7 +303,7 @@ addEventListener('error', e=>__report('window.error', e.error||e.message));
 addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reason));
 
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
-  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, built:0, req:null,
+  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
   hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, _blocks:0, _activeTool:'',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
@@ -1164,6 +1175,9 @@ function buildPlayerHouse(){
 
   // mailbox
   const mb=F(0,hz+3,0.6,0.5,0.8,'#ff5d8f'); mb.position.y=1.2; addInteractable(mb,'Check the mail',()=>toast(pick(['📬 GIGGLETON GNOME FESTIVAL flyer!','📬 Coupon: free haunted plunger.','📬 "Dear Resident Goofball…"'])));
+  // ── STASH / BANK: a persistent home storage chest (deposit/withdraw resources beyond your carried bag) ──
+  const stashBox=F(-2,-4.6,1.3,0.9,0.9,'#caa46a'); const stashLid=box(1.34,0.26,0.94,'#e0c089'); stashLid.position.set(cx-2,1.36,cz-4.6); world.add(stashLid);
+  addInteractable(stashBox,'🧰 Open your Stash (storage)',()=>openStash(),2.6);
 }
 
 /* ---- CHARACTER (rigged GLB) + NEIGHBORS ---- */
@@ -1288,7 +1302,7 @@ function emote(name){ // one-shot emote then back to idle/walk
   setTimeout(()=>{ if(charAnim==='__emote'){ a.fadeOut(0.25); a.clampWhenFinished=false; charAnim=''; } }, 700); }   // MUST fade the emote action OUT here: it was LoopOnce+clampWhenFinished, so it sat at full weight on its LAST frame (e.g. the folded-leg 'sit' pose after a nap). Clearing charAnim only let setAnim fade IDLE *in* — the clamped sit kept blending the legs into a seated/sleeping pose (owner: "after he sleeps his legs stay in a sleeping position"). Fading the clamped action out lets the player stand fully upright again.
 
 /* ---------- input / camera ---------- */
-const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyR'&&state.running) useSelected(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(confirmOpen)closeConfirm(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); } }   /* owner: no pause — ESC only closes menus */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
+const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyR'&&state.running) useSelected(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); } }   /* owner: no pause — ESC only closes menus */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 // release ALL held keys when focus/visibility is lost — prevents the "stuck walking forward" bug
 // (a right-click context menu, alt-tab, or click-away steals focus so the W keyup never fires).
@@ -1387,7 +1401,7 @@ function legendHTML(){ const recipesAll=Object.keys(state.craftedSet||{}).length
   for(const it of items) h+=`<div class="obj ${it[1]?'done':''}">${it[1]?'✓':'•'} ${it[0]} <span style="opacity:.6">(${it[2]})</span></div>`;
   return h+'</div>'; }
 const SAVE_V=2;
-function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V, day:state.day,giggle:state.giggle,goals:state.goals,bestDay:state.bestDay,inv:state.inv,built:state.built,
+function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V, day:state.day,giggle:state.giggle,goals:state.goals,bestDay:state.bestDay,inv:state.inv,stash:state.stash,built:state.built,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
   unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
@@ -1400,6 +1414,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   const num=(x,d,lo,hi)=>{ const n=Math.floor(+x); return Number.isFinite(n)?clamp(n,lo,hi):d; };
   state.day=num(s.day,1,1,99999); state.giggle=num(s.giggle,0,0,1e9); state.bestDay=num(s.bestDay,state.day,1,99999); state.built=num(s.built,0,0,1e9);
   state.inv={}; if(s.inv&&typeof s.inv==='object') for(const k in ITEMS){ const n=Math.floor(+s.inv[k]); if(Number.isFinite(n)&&n>0) state.inv[k]=n; }   // only known items, finite, >0
+  state.stash={}; if(s.stash&&typeof s.stash==='object') for(const k in ITEMS){ const n=Math.floor(+s.stash[k]); if(Number.isFinite(n)&&n>0) state.stash[k]=n; }   // home storage, same sanitizer
   const types=new Set(GOAL_POOL.map(g=>g.type)); const kept=Array.isArray(s.goals)?s.goals.filter(g=>g&&types.has(g.type)):[];
   state.goals=(Array.isArray(s.goals)&&kept.length===s.goals.length)?kept:[];   // drop the set if ANY goal type is stale (boot regenerates) so completeDay can't be blocked
   Quests.done={}; if(s.questsDone&&typeof s.questsDone==='object') for(const k in s.questsDone){ if(s.questsDone[k]===true) Quests.done[k]=true; }
@@ -2496,6 +2511,17 @@ function renderLoot(bag){ const el=document.getElementById('loot'); let h=`<div 
 function takeLoot(bag,idx){ const it=bag.items[idx]; if(!it)return; Inv.add(it.item,it.n); SFX.play('pickup',{vol:0.6}); toast(`+${it.n} ${ITEMS[it.item]?ITEMS[it.item].i+' '+ITEMS[it.item].n:it.item}`); bag.items.splice(idx,1); if(!bag.items.length){ closeLoot(); despawnBag(bag); save(); } else renderLoot(bag); }
 function takeAllLoot(bag){ for(const it of bag.items) Inv.add(it.item,it.n); SFX.play('pickup',{vol:0.7}); shake(0.15); bag.items.length=0; closeLoot(); despawnBag(bag); save(); }
 function closeLoot(){ lootOpen=null; document.getElementById('loot').classList.add('hidden'); }
+/* ---- STASH / BANK: persistent home storage; move stackable resources between your bag (state.inv) and storage (state.stash). Saved in the 'stash' field. ---- */
+let stashOpen=false;
+function stashMove(k,n,fromInv){ const src=fromInv?state.inv:state.stash, dst=fromInv?state.stash:state.inv; const have=src[k]||0; if(have<=0)return; const m=Math.min(n,have); src[k]=have-m; if(src[k]<=0)delete src[k]; dst[k]=(dst[k]||0)+m; SFX.play('pickup',{vol:0.5}); Inv.render(); renderStash(); save(); }
+function openStash(){ stashOpen=true; document.getElementById('stash').classList.remove('hidden'); renderStash(); SFX.play('interact'); }
+function closeStash(){ stashOpen=false; document.getElementById('stash').classList.add('hidden'); }
+function renderStash(){ const el=document.getElementById('stash'); if(!el)return;
+  const col=(title,map,fromInv)=>{ let c=`<div class="stashcol"><h4>${title}</h4>`; for(const k of Object.keys(ITEMS)){ const cnt=map[k]||0; const info=ITEMS[k]; c+=`<div class="strow${cnt>0?'':' empty'}"><span class="si">${info.i}</span><span class="sn">${info.n}</span><span class="sc">${cnt}</span>`; if(cnt>0){ c+=`<button data-k="${k}" data-dir="${fromInv?'dep':'wd'}" data-n="1">${fromInv?'→':'←'}1</button><button data-k="${k}" data-dir="${fromInv?'dep':'wd'}" data-n="all">${fromInv?'→':'←'}All</button>`; } c+=`</div>`; } return c+`</div>`; };
+  let h=`<div class="stashcard"><h3>🧰 Stash — Home Storage <span class="x" id="stashX">✕</span></h3><div class="stashcols">`;
+  h+=col('🎒 Your Bag → deposit', state.inv, true); h+=col('🧰 In Storage ← withdraw', state.stash, false); h+=`</div></div>`;
+  el.innerHTML=h; el.querySelector('#stashX').onclick=closeStash; el.onclick=(e)=>{ if(e.target===el)closeStash(); };
+  el.querySelectorAll('button[data-k]').forEach(b=> b.onclick=()=>{ const k=b.dataset.k, fromInv=b.dataset.dir==='dep'; const src=fromInv?state.inv:state.stash; const n=b.dataset.n==='all'?(src[k]||0):1; stashMove(k,n,fromInv); }); }
 function explodeFx(p){ const e=new THREE.Mesh(new THREE.SphereGeometry(0.5,10,8),new THREE.MeshBasicMaterial({color:'#ff7a2a',transparent:true,opacity:0.85})); e.position.copy(p).setY(0.8); world.add(e); ephemeral.push({node:e,life:0.4,ripple:true}); shake(0.55); SFX.play('interact',{rate:0.4,vol:1}); }
 function spawnThorn(x,y,z,tx,tz,kind){ const acid=kind==='acid', seed=kind==='seed';
     let geo,col,ecol; if(seed){ geo=new THREE.SphereGeometry(0.14,8,6); col='#efe0b0'; ecol='#caa44a'; }   // pale cream pumpkin seed
@@ -2886,7 +2912,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
   roofOp:()=>cutRoof?+cutRoof.material.opacity.toFixed(2):null,
   interactNow:()=>{ updateInteract(); if(nearest){ const l=nearest.label; nearest.action(); return l; } return null; },
-  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, pickGear:(id,kind)=>pickupGear(id,kind), equipGear:(id,kind)=>equipGear(id,kind), unequipGear:(k)=>unequipGear(k), revealFog:()=>revealFog(), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
+  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, pickGear:(id,kind)=>pickupGear(id,kind), equipGear:(id,kind)=>equipGear(id,kind), unequipGear:(k)=>unequipGear(k), revealFog:()=>revealFog(), openStash:()=>openStash(), stash:()=>({...state.stash}), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
   nodesByItem:()=>{ const o={}; for(const n of nodes) o[n.item]=(o[n.item]||0)+1; return o; }, waters:()=>waters.length,
   homes:()=>({count:homes.length, built:homes.filter(h=>h.built).length, active:homes.filter(h=>h.active).length}),
   respawnInfo:()=>({nodes:nodes.length, hidden:nodes.filter(n=>!n.mesh.visible).length, onCd:nodes.filter(n=>n.timer>0).length}),
