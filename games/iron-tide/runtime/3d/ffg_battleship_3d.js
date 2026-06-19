@@ -979,7 +979,7 @@ register3d("battleship", async function (kernel, content) {
 
   function resolveShot(side, r, after) {
     const to = cellWorld(side === "player" ? "enemy" : "player", r.x, r.y);
-    kernel.playSound(sfx.fire, 0.4); // gun report on launch (toned down)
+    kernel.playSound(sfx.fire, 0.2); // gun report on launch (toned down)
     fireCannonball(side, to, () => {
       // Fail-safe: a VFX exception must NEVER strand the turn (the enemy-impact
       // freeze). Whatever happens, `after` always runs so `busy` is released.
@@ -1098,7 +1098,7 @@ register3d("battleship", async function (kernel, content) {
   function netRenderOutgoing(x, y, outcome, shipCells, done) {
     busy = true;
     const to = cellWorld("enemy", x, y);
-    kernel.playSound(sfx.fire, 0.4);
+    kernel.playSound(sfx.fire, 0.2);
     fireCannonball("player", to, () => {
       try {
         if (outcome === "miss") {
