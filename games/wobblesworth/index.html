@@ -1661,8 +1661,10 @@ function renderPause(){ const el=document.getElementById('pause'); el.innerHTML=
     <label class="prow">🎵 Music <input id="musicChk" type="checkbox" ${state.musicOn?'checked':''}></label>
     <label class="prow">🔈 Sound FX <input id="sfxChk" type="checkbox" ${state.sfxOn?'checked':''}></label>
     <label class="prow">🌀 Reduce motion <input id="reduceChk" type="checkbox" ${state.reduce?'checked':''}></label>
+    <button class="btn" id="coopBtn" style="background:#37c06a;border-color:#2a8a4a">👥 Play with Friends</button>
     <button class="btn" id="resumeBtn">▶ Resume</button>
     <div class="phint">Esc to resume · drag to look · scroll to zoom · <span style="cursor:pointer;text-decoration:underline" id="creditsLink">Credits</span> · v${BUILD}</div></div>`;
+  el.querySelector('#coopBtn').onclick=()=>{ togglePause(); openCoop(); };
   el.querySelector('#volSlider').oninput=ev=>{ state.volume=(+ev.target.value)/100; Music.setVol(state.volume); save(); };
   el.querySelector('#musicChk').onchange=ev=>{ state.musicOn=ev.target.checked; Music.setMuted(!state.musicOn); if(state.musicOn&&!state.paused)Music.resume(); save(); };
   el.querySelector('#sfxChk').onchange=ev=>{ state.sfxOn=ev.target.checked; if(state.sfxOn)SFX.play('pickup'); save(); };
@@ -2529,7 +2531,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`animals ${animals.length}  R[${span(animals,a=>Math.hypot(a.mesh.position.x,a.mesh.position.z))}]\n`
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
-function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateLootBags(dt); updateProjectiles(dt); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; drawMinimap(); renderRequests();} }
+function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateLootBags(dt); updateProjectiles(dt); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
 function idleTick(dt){ cam.yaw+=dt*0.12; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
@@ -2537,6 +2539,83 @@ function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(ready){ if(state.running&&!state.paused) simTick(dt); else if(state.running&&state.paused){ /* frozen — just render */ } else idleTick(dt); }
   composer.render();   // BLOOM: render through the post-process composer (RenderPass keeps shadows/water; OutputPass keeps ACES+sRGB)
 }
+// ── CO-OP SHARED WORLD (real-time multiplayer over Supabase Realtime) ─────────
+// A room is a Realtime channel ffg:wobblesworth:<CODE>. Each player broadcasts its
+// pose ~10x/s (Broadcast = a pure WebSocket relay, no DB, free quota); every peer
+// renders the others as character avatars. The world WRAPS (WRAP_P), so peers are
+// placed at raw coords (the wrap shader renders them adjacent) and the lerp SNAPS
+// when a peer crosses the seam. supabase-js is lazy-loaded only when you go online.
+const COOP = {
+  URL: 'https://wugoxdewcdxzfppgzohy.supabase.co',
+  ANON: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1Z294ZGV3Y2R4emZwcGd6b2h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5OTU0MzEsImV4cCI6MjA2OTU3MTQzMX0.ljJYgVp0n9d_tJeL3ZG6liYfW0lQ7d_29svPMbUAves',
+  sb: null, ch: null, id: null, room: null, on: false, _acc: 0, name: 'Wobbler', peers: {},
+  status(msg){ const e=document.getElementById('coopStatus'); if(e) e.textContent=msg; },
+  async _connect(){ if(this.sb) return; const m=await import('https://esm.sh/@supabase/supabase-js@2'); const cc=m.createClient||(m.default&&m.default.createClient); this.sb=cc(this.URL,this.ANON,{realtime:{params:{eventsPerSecond:12}}}); this.id=Date.now().toString(36)+'_'+Math.floor(Math.random()*1e9).toString(36); },
+  async join(code){
+    try{ await this._connect(); }catch(e){ this.status('Could not load multiplayer.'); return null; }
+    this.leave(true); this.room=String(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)||'TOWN';
+    const ch=this.sb.channel('ffg:wobblesworth:'+this.room,{config:{broadcast:{self:false},presence:{key:this.id}}});
+    this.ch=ch;
+    ch.on('broadcast',{event:'p'},({payload})=>{ if(payload&&payload.from!==this.id) this._recv(payload); });
+    ch.on('presence',{event:'leave'},({leftPresences})=>{ for(const lp of (leftPresences||[])) this._despawn(lp.id); this._count(); });
+    ch.on('presence',{event:'sync'},()=>this._count());
+    await new Promise((res)=>{ ch.subscribe(async(st)=>{ if(st==='SUBSCRIBED'){ try{ await ch.track({id:this.id,name:this.name}); }catch(e){} this.on=true; this._count(); res(); } else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'){ this.status('Connection failed — try again.'); res(); } }); });
+    return this.room;
+  },
+  _count(){ if(!this.on||!this.ch) return; let n=1; try{ n=Object.keys(this.ch.presenceState()).length; }catch(e){} this.status('● Connected · room '+this.room+' · '+n+(n===1?' (waiting for a friend…)':' here')); },
+  _recv(p){ let pe=this.peers[p.from]; if(!pe){ pe=this._spawn(p.from,p.name); if(!pe) return; } pe.tx=p.x; pe.tz=p.z; pe.th=p.h; if(p.name) pe.name=p.name; pe.last=performance.now(); if(p.a&&pe.anim!==p.a) this._anim(pe,p.a); },
+  _spawn(id,name){
+    const src=(typeof MODELS!=='undefined')&&(MODELS['char_player']||MODELS['char_n1']); if(!src||typeof world==='undefined') return null;
+    const o=skeletonClone(src); const s=new THREE.Vector3(); new THREE.Box3().setFromObject(o).getSize(s); o.scale.setScalar(1.7/(s.y||1));
+    const b=new THREE.Box3().setFromObject(o); o.position.y=-b.min.y;
+    const g=new THREE.Group(); g.add(o); g.position.copy(player.position); world.add(g);
+    const mix=new THREE.AnimationMixer(o); const acts={}; for(const c of (ANIMS['char_player']||[])) acts[c.name]=mix.clipAction(c); if(acts.idle) acts.idle.play();
+    let tag=null; try{ tag=makeLabel('👤 '+(name||'Friend')); tag.position.set(0,2.15,0); tag.scale.set(2.6,0.66,1); g.add(tag); }catch(e){}
+    const pe={group:g,model:o,mixer:mix,actions:acts,anim:'idle',tx:player.position.x,tz:player.position.z,th:0,name:name,last:performance.now(),tag:tag};
+    this.peers[id]=pe; this._count(); toast('👋 '+(name||'A friend')+' joined your world!'); return pe;
+  },
+  _anim(pe,name){ const a=pe.actions[name]||pe.actions.idle; if(!a) return; const prev=pe.actions[pe.anim]; a.reset().fadeIn(0.18).play(); if(prev&&prev!==a) prev.fadeOut(0.18); pe.anim=name; },
+  _despawn(id){ const pe=this.peers[id]; if(!pe) return; try{ world.remove(pe.group); }catch(e){} delete this.peers[id]; },
+  _send(){ if(!this.on||!this.ch) return; const a=(charAnim==='sprint')?'sprint':(charAnim==='walk')?'walk':'idle'; try{ this.ch.send({type:'broadcast',event:'p',payload:{from:this.id,name:this.name,x:+player.position.x.toFixed(2),z:+player.position.z.toFixed(2),h:+player.rotation.y.toFixed(3),a:a}}); }catch(e){} },
+  peerCount(){ return Object.keys(this.peers).length; },
+  tick(dt){
+    if(!this.on) return;
+    this._acc+=dt; if(this._acc>=0.1){ this._acc=0; this._send(); }
+    const HW=WRAP_P*0.5, now=performance.now(), k=Math.min(1,dt*9);
+    for(const id in this.peers){ const pe=this.peers[id], g=pe.group;
+      if(Math.abs(pe.tx-g.position.x)>HW) g.position.x=pe.tx; else g.position.x+=(pe.tx-g.position.x)*k;   // SNAP across the world seam, else glide
+      if(Math.abs(pe.tz-g.position.z)>HW) g.position.z=pe.tz; else g.position.z+=(pe.tz-g.position.z)*k;
+      g.position.y=(typeof groundY==='function'?groundY(g.position.x,g.position.z):0);
+      let dh=pe.th-g.rotation.y; while(dh>Math.PI)dh-=TAU; while(dh<-Math.PI)dh+=TAU; g.rotation.y+=dh*k;
+      pe.mixer.update(dt);
+      if(now-pe.last>9000) this._despawn(id);
+    }
+  },
+  leave(silent){ try{ if(this.ch) this.sb.removeChannel(this.ch); }catch(e){} this.ch=null; this.on=false; for(const id in this.peers) this._despawn(id); this.room=null; if(!silent) this.status('Left the shared world.'); },
+};
+window.COOP = COOP;   // exposed for the 2-client e2e test
+function openCoop(){
+  let el=document.getElementById('coop');
+  if(!el){ el=document.createElement('div'); el.id='coop'; el.style.cssText='position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;background:rgba(10,8,16,.55)'; document.body.appendChild(el); }
+  const code=COOP.room||(Math.random().toString(36).slice(2,6).toUpperCase());
+  el.innerHTML='<div style="background:#fff;border:3px solid #2a2438;border-radius:18px;padding:20px 22px;max-width:360px;width:90%;font-family:\'Trebuchet MS\',sans-serif;color:#2a2438;box-shadow:0 12px 40px rgba(0,0,0,.4)">'
+    +'<h2 style="margin:0 0 6px">👥 Play with Friends</h2>'
+    +'<p style="font-size:13px;margin:0 0 12px;color:#555">Share a room code and explore the same world together in real time.</p>'
+    +'<input id="coopName" placeholder="Your name" maxlength="14" value="'+COOP.name+'" style="width:100%;box-sizing:border-box;padding:9px;margin-bottom:10px;border:2px solid #2a2438;border-radius:10px;font-size:15px">'
+    +'<button id="coopCreate" style="width:100%;padding:12px;margin-bottom:10px;background:#37c06a;color:#fff;border:0;border-radius:12px;font-weight:bold;font-size:16px;cursor:pointer">Create room  ·  code <b>'+code+'</b></button>'
+    +'<div style="display:flex;gap:8px;margin-bottom:10px"><input id="coopCode" placeholder="friend\'s code" maxlength="6" style="flex:1;min-width:0;padding:9px;border:2px solid #2a2438;border-radius:10px;text-transform:uppercase;font-size:15px"><button id="coopJoin" style="padding:9px 16px;background:#4d90ff;color:#fff;border:0;border-radius:10px;font-weight:bold;cursor:pointer">Join</button></div>'
+    +'<div id="coopStatus" style="font-size:13px;min-height:18px;color:#2a8a4a;margin-bottom:12px;font-weight:bold"></div>'
+    +'<div style="display:flex;gap:8px"><button id="coopLeave" style="flex:1;padding:10px;background:#f4f0f7;border:2px solid #2a2438;border-radius:10px;cursor:pointer;font-weight:bold">Leave</button><button id="coopClose" style="flex:1;padding:10px;background:#2a2438;color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:bold">Close</button></div></div>';
+  el.style.display='flex';
+  const setName=()=>{ const v=(el.querySelector('#coopName').value||'').trim(); if(v) COOP.name=v.slice(0,14); };
+  el.querySelector('#coopCreate').onclick=async()=>{ setName(); COOP.status('Connecting…'); await COOP.join(code); };
+  el.querySelector('#coopJoin').onclick=async()=>{ setName(); const c=(el.querySelector('#coopCode').value||'').trim(); if(!c){ COOP.status('Enter a code first.'); return; } COOP.status('Connecting…'); await COOP.join(c); };
+  el.querySelector('#coopLeave').onclick=()=>{ COOP.leave(); };
+  el.querySelector('#coopClose').onclick=()=>{ el.style.display='none'; };
+  if(COOP.on) COOP._count();
+}
+window.openCoop = openCoop;
+
 function guardedFrame(now){ try{ frameWork(now); }catch(e){ __frameErrs++; if(__frameErrs<=5) console.error('frame error',e); __report('frame',e); } }   // the REAL per-frame error boundary (used by loop AND tested directly)
 function loop(now){ guardedFrame(now); requestAnimationFrame(loop); }   // re-issue ALWAYS — one bad frame can never freeze the game
 requestAnimationFrame(loop);
