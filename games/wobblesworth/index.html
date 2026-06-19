@@ -35,7 +35,7 @@
   /* built-in DEBUG instrumentation overlay (toggle: F3 or `) */
   #dbg{position:fixed; left:14px; top:214px; z-index:16; display:none; background:rgba(10,8,16,.84); color:#8fffa0; font:11px/1.45 ui-monospace,Menlo,Consolas,monospace; padding:8px 11px; border:1px solid rgba(143,255,160,.32); border-radius:8px; white-space:pre-wrap; pointer-events:none; max-width:248px; box-shadow:2px 2px 0 rgba(0,0,0,.3)}
   #dbg b{color:#fff}
-  #quests{top:14px; right:60px; width:290px; max-height:calc(100vh - 28px); overflow:auto; background:rgba(255,247,236,.92); border:3px solid var(--ink); border-radius:16px; padding:12px 14px; box-shadow:4px 4px 0 rgba(34,26,46,.25)}   /* nudged left of the ⚙ gear (right:14) so the minimize button no longer collides with it */
+  #quests{top:14px; right:14px; width:290px; max-height:calc(100vh - 28px); overflow:auto; background:rgba(255,247,236,.92); border:3px solid var(--ink); border-radius:16px; padding:12px 14px; box-shadow:4px 4px 0 rgba(34,26,46,.25)}   /* nudged left of the ⚙ gear (right:14) so the minimize button no longer collides with it */
   #qhead{display:flex; justify-content:flex-start; align-items:center; gap:8px} .qttl{font-size:14px; font-weight:bold; letter-spacing:.5px; color:var(--grape)}
   #qmin{order:-1; pointer-events:auto; cursor:pointer; background:var(--ink); color:#fff; border:2px solid rgba(255,255,255,.25); border-radius:8px; width:28px; height:24px; font-size:16px; line-height:1; font-weight:bold; padding:0}   /* TOP-LEFT of the panel (owner) */
   #quests.min{width:auto} #quests.min #qbody{display:none}
@@ -125,7 +125,7 @@
   #mapmodal .maphint{color:#fff; font-size:12px; opacity:.8}
   #menu{display:flex; flex-direction:column; gap:10px; align-items:center; margin-top:16px; position:sticky; bottom:0; background:var(--paper); padding:10px 0 2px; border-top:2px solid rgba(34,26,46,.12)}   /* sticky footer so Continue/New Game/Settings are ALWAYS visible without scrolling in the short arcade iframe */
   #menu .btn{min-width:200px}
-  #gear{position:fixed; top:56px; right:14px; z-index:20; width:38px; height:38px; border-radius:10px; background:rgba(34,26,46,.78); border:2px solid var(--ink); color:#fff; font-size:20px; display:flex; align-items:center; justify-content:center; cursor:pointer; pointer-events:auto; box-shadow:2px 2px 0 rgba(0,0,0,.3)}
+  #gear{position:relative; margin-left:auto; flex:none; width:32px; height:32px; border-radius:9px; background:rgba(34,26,46,.78); border:2px solid var(--ink); color:#fff; font-size:18px; display:flex; align-items:center; justify-content:center; cursor:pointer; pointer-events:auto; box-shadow:2px 2px 0 rgba(0,0,0,.3)}   /* lives in the Campaign card header (top-right), visible expanded + minimized */
   /* pause / settings overlay */
   #pause{position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; background:rgba(34,26,46,.5); pointer-events:auto}   /* z-index ABOVE the title screen (z-50) so Settings opens ON TOP of the title, not behind it */
   #pause .pcard{background:var(--paper); border:5px solid var(--ink); border-radius:24px; padding:26px 30px; min-width:300px; max-height:calc(100% - 16px); overflow-y:auto; text-align:center; box-shadow:8px 8px 0 rgba(34,26,46,.3)}
@@ -199,16 +199,15 @@
   <div id="armorbar" class="bar" style="display:none"></div>
   <div id="xpbar" class="bar"><div class="lbl"><span>⭐ Level <span id="vLevel">1</span></span><span id="vXP">0/40</span></div><div class="track"><div id="fXP" class="fill"></div></div></div>
 </div>
-<div id="quests" class="hud"><div id="qhead"><span class="qttl">📖 Campaign</span><button id="qmin" title="Minimize panel">–</button></div><div id="qbody"><div id="goalbox"></div><div class="jdiv"></div><div id="qlist"></div><div id="reqlist"></div></div></div>
+<div id="quests" class="hud"><div id="qhead"><span class="qttl">📖 Campaign</span><button id="qmin" title="Minimize panel">–</button><div id="gear" title="Settings">⚙</div></div><div id="qbody"><div id="goalbox"></div><div class="jdiv"></div><div id="qlist"></div><div id="reqlist"></div></div></div>
 <div id="prompt" class="hud"><span class="key">E</span><span id="promptText">Interact</span></div>
 <div id="toasts" class="hud"></div>
-<div id="help" class="hud"><b style="color:#b06a2a;cursor:pointer" id="ctrlHdr" title="Minimize / expand">⌨ Controls <span id="ctrlCaret" style="float:right;opacity:.6">▾</span></b><div class="ctrlgrid" id="ctrlGrid"><span class="k">WASD</span><span>move</span><span class="k">Shift</span><span>run</span><span class="k">Space×2</span><span>jump + flip</span><span class="k">drag</span><span>camera</span><span class="k">🖱️</span><span>⚔️ attack</span><span class="k">E</span><span>interact</span><span class="k">R</span><span>🍎 use item</span><span class="k">1-0</span><span>hotbar</span><span class="k">G</span><span>dig / mine</span><span class="k">V</span><span>build</span><span class="k">C</span><span>craft</span><span class="k">I</span><span>bag</span><span class="k">M</span><span>map</span><span class="k">L</span><span>📖 lore</span><span class="k">F3</span><span>debug</span></div></div>
+<div id="help" class="hud"><div class="ctrlgrid" id="ctrlGrid"><span class="k">WASD</span><span>move</span><span class="k">Shift</span><span>run</span><span class="k">Space×2</span><span>jump + flip</span><span class="k">drag</span><span>camera</span><span class="k">E</span><span>interact</span><span class="k">G</span><span>dig / mine</span><span class="k">V</span><span>build</span><span class="k">C</span><span>craft</span><span class="k">I</span><span>inventory</span><span class="k">M</span><span>map</span><span class="k">L</span><span>📖 lore</span></div><b style="color:#b06a2a;cursor:pointer;pointer-events:auto;display:block;text-align:right;padding-top:7px;margin-top:7px;border-top:1px solid rgba(176,106,42,.25)" id="ctrlHdr" title="Minimize / expand">⌨ Controls <span id="ctrlCaret" style="opacity:.6">▾</span></b></div>
 <div id="dbg"></div>
 <div id="buildhud" class="hud" style="display:none;left:50%;transform:translateX(-50%);bottom:88px;background:rgba(20,16,28,.82);padding:7px 14px;border-radius:10px;font-size:14px;color:#fff;border:1px solid rgba(255,255,255,.25)"></div>
 <div id="zone" class="hud"></div>
 <div id="invbar" class="hud"></div>
 <div id="inv" class="hidden"></div>
-<div id="gear" title="Settings">⚙</div>
 <div id="craft" class="hidden"></div>
 <div id="shop" class="hidden"></div>
 <div id="loot" class="hidden"></div>
@@ -1302,7 +1301,7 @@ function emote(name){ // one-shot emote then back to idle/walk
   setTimeout(()=>{ if(charAnim==='__emote'){ a.fadeOut(0.25); a.clampWhenFinished=false; charAnim=''; } }, 700); }   // MUST fade the emote action OUT here: it was LoopOnce+clampWhenFinished, so it sat at full weight on its LAST frame (e.g. the folded-leg 'sit' pose after a nap). Clearing charAnim only let setAnim fade IDLE *in* — the clamped sit kept blending the legs into a seated/sleeping pose (owner: "after he sleeps his legs stay in a sleeping position"). Fading the clamped action out lets the player stand fully upright again.
 
 /* ---------- input / camera ---------- */
-const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyR'&&state.running) useSelected(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); } }   /* owner: no pause — ESC only closes menus */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
+const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); } }   /* owner: no pause — ESC only closes menus */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 // release ALL held keys when focus/visibility is lost — prevents the "stuck walking forward" bug
 // (a right-click context menu, alt-tab, or click-away steals focus so the W keyup never fires).
@@ -1481,7 +1480,7 @@ function eatFood(k){ const f=FOOD_EFFECTS[k]; if(!f) return false; if(!Inv.has(k
   if(f.hp && state.hp<state.hpMax){ state.hp=Math.min(state.hpMax,state.hp+f.hp); renderHearts(); }
   updateNeedsUI(); markGoal('eat'); SFX.play('pickup',{vol:0.6,rate:1.1}); emote('interact-right');
   toast(`${f.msg} — +${f.hunger} 🍔${f.energy?` +${f.energy} ⚡`:''}${f.hp?` +${f.hp}❤️`:''}`); return true; }
-function eatBestFood(){ for(const k in FOOD_EFFECTS){ if((state.inv[k]||0)>0){ return eatFood(k); } } toast('🍎 No food in your bag — gather apples, carrots or mushrooms (or eat from your bag, I).'); return false; }
+function eatBestFood(){ for(const k in FOOD_EFFECTS){ if((state.inv[k]||0)>0){ return eatFood(k); } } toast('🍎 No food in your inventory — gather apples, carrots or mushrooms (or eat from your inventory, I).'); return false; }
 function eatSelected(){ return eatBestFood(); }
 function openInv(){ invOpen=true; document.getElementById('inv').classList.remove('hidden'); renderInv(); }
 function closeInv(){ invOpen=false; document.getElementById('inv').classList.add('hidden'); }
@@ -1638,7 +1637,7 @@ const RECIPES=[
   {id:'bread', name:'🍞 Bread (eat)', cat:'food', lvl:1, cost:{carrot:2}, consume:true, build:()=>{ Needs.add('hunger',30); markGoal('eat'); toast('🍞 Fresh bread! +hunger'); } },
   {id:'salad', name:'🥗 Garden Salad (eat)', cat:'food', lvl:1, cost:{flower:2,carrot:1}, consume:true, build:()=>{ Needs.add('hunger',22); Needs.add('energy',14); markGoal('eat'); toast('🥗 Crisp salad! +hunger +energy'); } },
   {id:'mushroom_soup', name:'🍲 Mushroom Soup (eat)', cat:'food', lvl:1, cost:{mushroom:3}, consume:true, build:()=>{ Needs.add('hunger',34); markGoal('eat'); toast('🍲 Warming soup! +hunger'); } },
-  {id:'brew_potion', name:'🧪 Brew Health Potion', cat:'food', lvl:3, cost:{mushroom:2,flower:2,crystal:1}, build:()=>{ Inv.add('health_potion',1); markGoal('craft'); toast('🧪 Brewed a Health Potion — it\'s in your 🎒 bag.'); } },
+  {id:'brew_potion', name:'🧪 Brew Health Potion', cat:'food', lvl:3, cost:{mushroom:2,flower:2,crystal:1}, build:()=>{ Inv.add('health_potion',1); markGoal('craft'); toast('🧪 Brewed a Health Potion — it\'s in your 🎒 inventory.'); } },
   {id:'roast', name:'🍗 Roast Meat (eat)', cat:'food', lvl:2, cost:{meat:2}, consume:true, build:()=>{ Needs.add('hunger',40); if(state.hp<state.hpMax){state.hp=Math.min(state.hpMax,state.hp+4);renderHearts();} markGoal('eat'); toast('🍗 Hearty roast! +hunger +4❤️'); } },
   {id:'omelette', name:'🍳 Omelette (eat)', cat:'food', lvl:2, cost:{egg:2}, consume:true, build:()=>{ Needs.add('hunger',26); Needs.add('energy',10); if(state.hp<state.hpMax){state.hp=Math.min(state.hpMax,state.hp+2);renderHearts();} markGoal('eat'); toast('🍳 Fluffy omelette! +hunger +2❤️'); } },
   {id:'cheese', name:'🧀 Cheese (eat)', cat:'food', lvl:2, cost:{milk:2}, consume:true, build:()=>{ Needs.add('hunger',24); if(state.hp<state.hpMax){state.hp=Math.min(state.hpMax,state.hp+2);renderHearts();} markGoal('eat'); toast('🧀 Tangy cheese! +hunger +2❤️'); } },
@@ -1717,8 +1716,8 @@ const SHOP=[
   {id:'hat', name:'🎩 Dapper Top Hat', price:150, kind:'hat', buy(){ giveHat(); toast("🎩 Lookin' dapper!"); } },
   {id:'snackpack', name:'🍎 Snack Pack', price:25, kind:'buy', buy(){ Needs.add('hunger',50); toast('🍎 +50 hunger'); } },
   {id:'fizzypop', name:'⚡ Fizzy Pop', price:25, kind:'buy', buy(){ Needs.add('energy',50); toast('⚡ +50 energy'); } },
-  {id:'buy_potion', name:'🧪 Health Potion (+6 ❤️)', price:40, kind:'buy', buy(){ Inv.add('health_potion',1); toast('🧪 Bought a Health Potion — stock up + drink it from your 🎒 bag (I) when you need it.'); } },
-  {id:'buy_tonic', name:'🧉 Energy Tonic (+energy)', price:30, kind:'buy', buy(){ Inv.add('energy_tonic',1); toast('🧉 Bought an Energy Tonic — drink it from your bag.'); } },
+  {id:'buy_potion', name:'🧪 Health Potion (+6 ❤️)', price:40, kind:'buy', buy(){ Inv.add('health_potion',1); toast('🧪 Bought a Health Potion — stock up + drink it from your 🎒 inventory (I) when you need it.'); } },
+  {id:'buy_tonic', name:'🧉 Energy Tonic (+energy)', price:30, kind:'buy', buy(){ Inv.add('energy_tonic',1); toast('🧉 Bought an Energy Tonic — drink it from your inventory.'); } },
 ];
 let shopOpen=false, currentVendor=null;   // currentVendor = a home's per-house shop (null = town General Store)
 function homePrice(){ return HOME_TIERS[state.homeTier||0]; }
@@ -2139,13 +2138,14 @@ function revealFog(){ if(!state.fog)state.fog={}; if(!state.met)state.met={}; co
   if(Math.hypot(px-3,pz-8)<70) state.met.market=1;
   for(const n of neighbors){ const nm=n.userData&&n.userData.name; if(nm && Math.hypot(px-n.position.x,pz-n.position.z)<32) state.met['npc:'+nm]=1; }   // meet a neighbor -> their name shows on the map as they wander
 }
-function paintMap(c, R){ if(!c)return; const g=c.getContext('2d'); const S=c.width, sc=(S/2-4)/R, ms=S/150, big=R>=400;   // big = the enlarged map modal -> show name labels (the mini one stays dots-only)
+function paintMap(c, R, applyFog){ if(!c)return; const g=c.getContext('2d'); const S=c.width, sc=(S/2-4)/R, ms=S/150, big=R>=400;   // big = the enlarged map modal -> show name labels; applyFog=false (minimap) = always-full reveal
   g.clearRect(0,0,S,S);
   g.fillStyle='rgba(24,20,34,0.92)'; g.beginPath(); g.arc(S/2,S/2,S/2-3,0,7); g.fill();   // FOG base (undiscovered = dark)
   const tx=x=>S/2+x*sc, tz=z=>S/2+z*sc;
   g.save(); g.beginPath(); g.arc(S/2,S/2,S/2-3,0,7); g.clip();   // reveal discovered terrain cells
   g.fillStyle='rgba(120,200,110,0.5)'; const cs=FOG_CELL*sc;
-  if(state.fog) for(const key in state.fog){ const pp=key.split('_'); const wx=(+pp[0])*FOG_CELL-FENCE, wz=(+pp[1])*FOG_CELL-FENCE; g.fillRect(tx(wx),tz(wz),cs+1.5,cs+1.5); }
+  if(applyFog){ if(state.fog) for(const key in state.fog){ const pp=key.split('_'); const wx=(+pp[0])*FOG_CELL-FENCE, wz=(+pp[1])*FOG_CELL-FENCE; g.fillRect(tx(wx),tz(wz),cs+1.5,cs+1.5); } }
+  else { g.fillRect(0,0,S,S); }   // minimap (applyFog=false): fill the WHOLE clipped circle green = always see your surroundings; big map keeps the fog-gated cells
   g.restore();
   g.strokeStyle='rgba(34,26,46,0.55)'; g.lineWidth=2*ms; g.beginPath(); g.arc(S/2,S/2,S/2-3,0,7); g.stroke();
   const met=state.met||{};
@@ -2156,7 +2156,7 @@ function paintMap(c, R){ if(!c)return; const g=c.getContext('2d'); const S=c.wid
   const px=tx(player.position.x),pz=tz(player.position.z),a=player.rotation.y;  // player arrow (always visible)
   g.fillStyle='#221a2e'; g.beginPath(); g.moveTo(px+Math.sin(a)*6*ms,pz+Math.cos(a)*6*ms); g.lineTo(px+Math.sin(a+2.5)*5*ms,pz+Math.cos(a+2.5)*5*ms); g.lineTo(px+Math.sin(a-2.5)*5*ms,pz+Math.cos(a-2.5)*5*ms); g.closePath(); g.fill(); }
 let mapOpen=false;
-function drawMinimap(){ paintMap(document.getElementById('minimap'),300); if(mapOpen) paintMap(document.getElementById('bigmap'),470); }   // scaled for the huge field; big map zooms out further
+function drawMinimap(){ paintMap(document.getElementById('minimap'),300,false); if(mapOpen) paintMap(document.getElementById('bigmap'),470,true); }   // minimap = always-full (no fog); big map = fog of war
 function openMap(){ if(!state.running)return; mapOpen=true; const el=document.getElementById('mapmodal');
   el.innerHTML=`<canvas id="bigmap" width="460" height="460"></canvas><div class="maplegend"><span style="color:#ff5d8f">■ Home</span><span style="color:#d4a017">■ Store</span><span style="color:#7c5cff">● Neighbors</span><span style="color:#221a2e">▲ You</span></div><div class="maphint">click anywhere to close</div>`;
   el.classList.remove('hidden'); el.onclick=closeMap; drawMinimap(); }
@@ -2498,7 +2498,7 @@ function popDmg(x,y,z,amount,opts){ opts=opts||{}; const crit=!!opts.crit;
 const RARE_GEAR=[['keen_saber','weapon'],['warded_vest','armor']], EPIC_GEAR=[['dread_reaver','weapon'],['aegis_plate','armor']];
 function pickupGear(id, kind){ const tbl=(kind==='weapon')?WEAPONS:ARMORS, it=tbl[id]; if(!it)return;
   if(kind==='weapon') state.weapons[id]=true; else state.armors[id]=true;   // owned, NOT auto-equipped — player chooses in the bag
-  rarityToast(it.rarity||'rare', `${it.icon} ${it.name} — added to your 🎒 bag! Open it (I) to equip.`);
+  rarityToast(it.rarity||'rare', `${it.icon} ${it.name} — added to your 🎒 inventory! Open it (I) to equip.`);
   confetti(player.position.clone().setY(1.6),20); SFX.play('success',{vol:0.55}); shake(0.18); if(invOpen)renderInv(); save(); }
 function dropGear(x,z, pair){ pair=pair||pick(RARE_GEAR); const id=pair[0], kind=pair[1], it=((kind==='weapon')?WEAPONS:ARMORS)[id]; const col=(it&&it.rarity==='epic')?'#c77dff':'#5fa8ff';
   const geo=(kind==='weapon')?new THREE.OctahedronGeometry(0.32,0):new THREE.IcosahedronGeometry(0.3,0);
@@ -2552,7 +2552,7 @@ function closeStash(){ stashOpen=false; document.getElementById('stash').classLi
 function renderStash(){ const el=document.getElementById('stash'); if(!el)return;
   const col=(title,map,fromInv)=>{ let c=`<div class="stashcol"><h4>${title}</h4>`; for(const k of Object.keys(ITEMS)){ const cnt=map[k]||0; const info=ITEMS[k]; c+=`<div class="strow${cnt>0?'':' empty'}"><span class="si">${info.i}</span><span class="sn">${info.n}</span><span class="sc">${cnt}</span>`; if(cnt>0){ c+=`<button data-k="${k}" data-dir="${fromInv?'dep':'wd'}" data-n="1">${fromInv?'→':'←'}1</button><button data-k="${k}" data-dir="${fromInv?'dep':'wd'}" data-n="all">${fromInv?'→':'←'}All</button>`; } c+=`</div>`; } return c+`</div>`; };
   let h=`<div class="stashcard"><h3>🧰 Stash — Home Storage <span class="x" id="stashX">✕</span></h3><div class="stashcols">`;
-  h+=col('🎒 Your Bag → deposit', state.inv, true); h+=col('🧰 In Storage ← withdraw', state.stash, false); h+=`</div></div>`;
+  h+=col('🎒 Your Inventory → deposit', state.inv, true); h+=col('🧰 In Storage ← withdraw', state.stash, false); h+=`</div></div>`;
   el.innerHTML=h; el.querySelector('#stashX').onclick=closeStash; el.onclick=(e)=>{ if(e.target===el)closeStash(); };
   el.querySelectorAll('button[data-k]').forEach(b=> b.onclick=()=>{ const k=b.dataset.k, fromInv=b.dataset.dir==='dep'; const src=fromInv?state.inv:state.stash; const n=b.dataset.n==='all'?(src[k]||0):1; stashMove(k,n,fromInv); }); }
 function explodeFx(p){ const e=new THREE.Mesh(new THREE.SphereGeometry(0.5,10,8),new THREE.MeshBasicMaterial({color:'#ff7a2a',transparent:true,opacity:0.85})); e.position.copy(p).setY(0.8); world.add(e); ephemeral.push({node:e,life:0.4,ripple:true}); shake(0.55); SFX.play('interact',{rate:0.4,vol:1}); }
@@ -2650,7 +2650,7 @@ function killCreature(i){ const c=creatures[i]; recordLore(c); const p=c.mesh.po
   const tier=rollRarity(), m=RARITY[tier].mult; const coins=(2+Math.floor(Math.random()*3))*m; state._kills=(state._kills||0)+1; SFX.play('interact',{rate:0.3,vol:0.5});   // owner disliked the bright kill 'chime' — much lower pitch + quieter = a dull defeat thud, not a chime (hit sound at L~2092 stays rate 1.0)
   gainXP(6 + (c.type&&c.type.minDist?8:0) + (m>1?m*2:0));   // XP for the kill — far-out specials + rare drops grant more
   dropLoot(p.x,p.z,[['coin',coins]], '⚔️ Loot', true);   // a glowing loot BAG -> walk over to auto-collect (coins)
-  if(tier==='epic'){ dropGear(p.x,p.z, pick(EPIC_GEAR)); rarityToast('epic','★ EPIC drop — a powerful weapon/armor fell! Grab it, then equip in your bag (I) ✨'); }   // EPIC = an equippable epic weapon or armor (the perks live ON the gear)
+  if(tier==='epic'){ dropGear(p.x,p.z, pick(EPIC_GEAR)); rarityToast('epic','★ EPIC drop — a powerful weapon/armor fell! Grab it, then equip in your inventory (I) ✨'); }   // EPIC = an equippable epic weapon or armor (the perks live ON the gear)
   else if(tier==='rare'){ makeDrop(p.x,p.z, pick(['crystal','iron_ingot']), m); if(Math.random()<0.45) dropGear(p.x,p.z, pick(RARE_GEAR)); rarityToast('rare','✦ RARE drop — valuable loot fell! Grab it'); }   // RARE = valuable material (+45% chance of equippable rare gear)
   if(!creatures.some(b=>b.boss) && state._kills>=(state._bossKillTarget||BOSS_KILL_FIRST)){   // milestone reached -> a champion rises near you
     const a=rand(0,TAU), r=rand(13,18); spawnBoss(pick(Object.keys(BOSS_TYPES)), player.position.x+Math.cos(a)*r, player.position.z+Math.sin(a)*r);
@@ -2800,7 +2800,7 @@ function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
 const COOP = {
   URL: 'https://wugoxdewcdxzfppgzohy.supabase.co',
   ANON: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1Z294ZGV3Y2R4emZwcGd6b2h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5OTU0MzEsImV4cCI6MjA2OTU3MTQzMX0.ljJYgVp0n9d_tJeL3ZG6liYfW0lQ7d_29svPMbUAves',
-  sb: null, ch: null, id: null, room: null, on: false, _acc: 0, name: 'Wobbler', peers: {},
+  sb: null, ch: null, id: null, room: null, on: false, _acc: 0, name: 'Wobbler', MAX_PLAYERS: 8, peers: {},
   status(msg){ const e=document.getElementById('coopStatus'); if(e) e.textContent=msg; },
   async _connect(){ if(this.sb) return; const m=await import('https://esm.sh/@supabase/supabase-js@2'); const cc=m.createClient||(m.default&&m.default.createClient); this.sb=cc(this.URL,this.ANON,{realtime:{params:{eventsPerSecond:12}}}); this.id=Date.now().toString(36)+'_'+Math.floor(Math.random()*1e9).toString(36); },
   async join(code){
@@ -2811,12 +2811,13 @@ const COOP = {
     ch.on('broadcast',{event:'p'},({payload})=>{ if(payload&&payload.from!==this.id) this._recv(payload); });
     ch.on('presence',{event:'leave'},({leftPresences})=>{ for(const lp of (leftPresences||[])) this._despawn(lp.id); this._count(); });
     ch.on('presence',{event:'sync'},()=>this._count());
-    await new Promise((res)=>{ ch.subscribe(async(st)=>{ if(st==='SUBSCRIBED'){ try{ await ch.track({id:this.id,name:this.name}); }catch(e){} this.on=true; this._count(); res(); } else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'){ this.status('Connection failed — try again.'); res(); } }); });
+    await new Promise((res)=>{ ch.subscribe(async(st)=>{ if(st==='SUBSCRIBED'){ try{ let pc=1; try{ pc=Object.keys(ch.presenceState()).length; }catch(e){} if(pc>=this.MAX_PLAYERS){ this.status('Room is full ('+this.MAX_PLAYERS+' max) — try another code'); this.on=false; try{ this.sb.removeChannel(ch); }catch(e){} this.ch=null; res(); return; } await ch.track({id:this.id,name:this.name}); }catch(e){} this.on=true; this._count(); res(); } else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'){ this.status('Connection failed — try again.'); res(); } }); });
     return this.room;
   },
-  _count(){ if(!this.on||!this.ch) return; let n=1; try{ n=Object.keys(this.ch.presenceState()).length; }catch(e){} this.status('● Connected · room '+this.room+' · '+n+(n===1?' (waiting for a friend…)':' here')); },
+  _count(){ if(!this.on||!this.ch) return; let n=1; try{ n=Object.keys(this.ch.presenceState()).length; }catch(e){} const full=(n>=this.MAX_PLAYERS)?' · FULL':''; this.status('● Connected · room '+this.room+' · '+n+'/'+this.MAX_PLAYERS+(n===1?' (waiting for a friend…)':' here')+full); },
   _recv(p){ let pe=this.peers[p.from]; if(!pe){ pe=this._spawn(p.from,p.name); if(!pe) return; } pe.tx=p.x; pe.tz=p.z; pe.th=p.h; if(p.name) pe.name=p.name; pe.last=performance.now(); if(p.a&&pe.anim!==p.a) this._anim(pe,p.a); },
   _spawn(id,name){
+    if(Object.keys(this.peers).length>=this.MAX_PLAYERS) return null;   // hard cap: never render beyond MAX_PLAYERS peers
     const src=(typeof MODELS!=='undefined')&&(MODELS['char_player']||MODELS['char_n1']); if(!src||typeof world==='undefined') return null;
     const o=skeletonClone(src); const s=new THREE.Vector3(); new THREE.Box3().setFromObject(o).getSize(s); o.scale.setScalar(1.7/(s.y||1));
     const b=new THREE.Box3().setFromObject(o); o.position.y=-b.min.y;
