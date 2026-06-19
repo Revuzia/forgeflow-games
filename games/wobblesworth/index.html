@@ -291,7 +291,7 @@ addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reaso
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
   discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
-  hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, _blocks:0,
+  hp:6, hpMax:6, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, _blocks:0, bonusHp:0, bonusDmg:0, bonusDef:0,
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
   volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0 };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
@@ -1380,7 +1380,7 @@ function legendHTML(){ const recipesAll=Object.keys(state.craftedSet||{}).length
 const SAVE_V=2;
 function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V, day:state.day,giggle:state.giggle,goals:state.goals,bestDay:state.bestDay,inv:state.inv,built:state.built,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
-  unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors,
+  unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, bonusHp:state.bonusHp, bonusDmg:state.bonusDmg, bonusDef:state.bonusDef,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
   tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug })); }catch(e){} }
@@ -1398,7 +1398,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.req=(s.req&&typeof s.req==='object'&&ITEMS[s.req.item])?{item:s.req.item, qty:num(s.req.qty,3,1,99), reward:num(s.req.reward,60,0,1e6), bonus:(ITEMS[s.req.bonus]?s.req.bonus:'coin'), done:s.req.done===true}:null;   // validated: unknown req.item can't crash renderRequests/townBoard
   state.unlocked=(s.unlocked&&typeof s.unlocked==='object')?s.unlocked:{}; for(const id in state.unlocked){ const r=RECIPES.find(x=>x.id===id); if(r) r.locked=false; } if(s.houseColor) paintHouse(s.houseColor); if(s.hat) giveHat();
   state.recipePages=num(s.recipePages,0,0,1e6);
-  state.level=num(s.level,1,1,999); state.xp=num(s.xp,0,0,1e9); state.hpMax=hpMaxForLevel(state.level);   // XP/level restore + derive max HP from level
+  state.level=num(s.level,1,1,999); state.xp=num(s.xp,0,0,1e9); state.bonusHp=num(s.bonusHp,0,0,10); state.bonusDmg=num(s.bonusDmg,0,0,1.5); state.bonusDef=num(s.bonusDef,0,0,0.6); state.hpMax=hpMaxForLevel(state.level);   // XP/level + permanent trophy bonuses (heart/power/aegis) restore + derive max HP
   state.weapons=(s.weapons&&typeof s.weapons==='object')?s.weapons:{}; for(const id in state.weapons){ const r=RECIPES.find(x=>x.id===id); if(r&&r.weapon&&r.locked) r.locked=false; } state.weapon=(WEAPONS[s.weapon]?s.weapon:'fist'); equipBest(); state.hp=state.hpMax; state.hasPickaxe=!!s.hasPickaxe; state.hasShovel=!!s.hasShovel; state.pickTier=num(s.pickTier,0,0,2); state.shovelTier=num(s.shovelTier,0,0,2);
   state.armors=(s.armors&&typeof s.armors==='object')?s.armors:{}; for(const id in state.armors){ const r=RECIPES.find(x=>x.id===id+'_armor'); } state.armor=(ARMORS[s.armor]?s.armor:''); equipBestArmor();
   state.craftedSet=(s.craftedSet&&typeof s.craftedSet==='object')?s.craftedSet:{}; state.reqsFulfilled=num(s.reqsFulfilled,0,0,1e9); state.biomes=(s.biomes&&typeof s.biomes==='object')?s.biomes:{}; state.event=DAY_EVENTS.find(e=>e.id===s.eventId)||null;
@@ -1484,7 +1484,7 @@ function tickNodes(dt){ for(const n of nodes){ if(n.timer>0){ n.timer-=dt; if(n.
    XP comes from kills, gathering, quests + crafting. Each level needs a bit more than the last (cozy, reachable
    curve — not Minecraft's punishing one). Leveling heals you, grows max HP a little, and UNLOCKS new recipes. */
 function xpToNext(lvl){ return 40 + (Math.max(1,lvl)-1)*35; }   // L1→2:40, L2→3:75, L3→4:110 … gentle ramp
-function hpMaxForLevel(lvl){ return 6 + Math.min(6, Math.floor(lvl/3)); }   // +1 heart every 3 levels, capped at 12
+function hpMaxForLevel(lvl){ return 6 + Math.min(6, Math.floor(lvl/3)) + (state.bonusHp||0); }   // +1 heart every 3 levels (cap 12) + permanent 🫀 Heart-Crystal bonuses (rare/epic drops)
 function onLevelUp(){
   const fresh=RECIPES.filter(r=>!r.locked && (r.lvl||1)===state.level).map(r=>r.name);
   state.hpMax=hpMaxForLevel(state.level); state.hp=state.hpMax; if(typeof renderHearts==='function') renderHearts();
@@ -2306,13 +2306,15 @@ function spawnCreature(){ let sx,sz,pd;
   else { const a=rand(0,TAU), r=rand(22,36); sx=player.position.x+Math.cos(a)*r; sz=player.position.z+Math.sin(a)*r; pd=Math.hypot(sx,sz); }   // DAY: near the player (rare + gentle)
   const t=pickCreatureType(pd); const c=makeCreature(t);
   c.position.set(sx,groundY(sx,sz),sz); world.add(c);
-  const hp=Math.max(36,Math.round((90+state.day*18)*t.hp)); const mats=[]; c.traverse(m=>{ if(m.isMesh&&m.material&&m.material.emissive) mats.push(m.material); });   // was (14+day*4): basic enemy ~14hp died in ONE sword hit; now ~3-4 hits with a mid sword, more for tougher types/later days
-  creatures.push({mesh:c,hp,max:hp,cd:rand(0,1),bob:Math.random()*TAU,mats,flash:0,type:t,aggro:false,wdir:rand(0,TAU),wt:rand(0.5,2.5)}); }
+  const distMul=1+Math.min(1.7, pd/190);   // OUTSKIRTS scaling (owner): the further from town you fight, the TOUGHER — +HP and +damage, up to ~2.7x deep out. Spooky mobs (skeleton/pumpkin/zombie) already have higher base t.hp/t.dmg + spawn far, so they're the hard ones.
+  const hp=Math.max(36,Math.round((90+state.day*18)*t.hp*distMul)); const mats=[]; c.traverse(m=>{ if(m.isMesh&&m.material&&m.material.emissive) mats.push(m.material); });
+  creatures.push({mesh:c,hp,max:hp,cd:rand(0,1),bob:Math.random()*TAU,mats,flash:0,type:t,aggro:false,wdir:rand(0,TAU),wt:rand(0.5,2.5),dmgMul:distMul}); }
 function despawnCreatures(){ for(const c of creatures) world.remove(c.mesh); creatures.length=0;
   for(const d of drops) world.remove(d.mesh); drops.length=0; for(const p of projectiles) world.remove(p.mesh); projectiles.length=0; }
 function damagePlayer(n){ if(state._invuln>0)return;
   if(state.armor && ARMORS[state.armor] && Math.random()<ARMORS[state.armor].block){ state._blocks=(state._blocks||0)+1; state._invuln=0.5; SFX.play('interact',{vol:0.4}); toast('🛡️ Armor blocked the hit!'); return; }
-  state.hp=Math.max(0,state.hp-n); state._invuln=1.0; shake(0.4); SFX.play('interact'); flashRed(); renderHearts(); if(state.hp<=0) respawnPlayer(); }
+  const nd=Math.max(1,Math.round(n*(1-(state.bonusDef||0))));   // 🛡️ Aegis-Shard drops give permanent damage resist (min 1 dmg always lands)
+  state.hp=Math.max(0,state.hp-nd); state._invuln=1.0; shake(0.4); SFX.play('interact'); flashRed(); renderHearts(); if(state.hp<=0) respawnPlayer(); }
 function equipBestArmor(){ for(let i=ATIER.length-1;i>=1;i--){ if(state.armors&&state.armors[ATIER[i]]){ state.armor=ATIER[i]; return; } } state.armor=''; }
 function gainArmor(id){ state.armors[id]=true; equipBestArmor(); const a=ARMORS[id]; toast(`${a.icon} Crafted + equipped ${a.name} (${Math.round(a.block*100)}% block)!`); if(invOpen)renderInv(); save(); }
 function respawnPlayer(){ if(DUNGEON.inDungeon)DUNGEON.inDungeon=false; if(MINE.inMine)MINE.inMine=false; if(UG.active)exitUnderground();   // dying UNDERGROUND must restore the surface sky+lighting (owner: "game stays dark after dying in a dungeon")
@@ -2321,7 +2323,7 @@ function equipBest(){ for(let i=WTIER.length-1;i>=0;i--){ if(i===0||state.weapon
 function gainWeapon(id){ state.weapons[id]=true; equipBest(); const w=WEAPONS[id]; toast(`${w.icon} Crafted + equipped the ${w.name}!`); if(invOpen)renderInv(); Inv.render(); }
 function playerAttack(){ if(!state.running||state.paused)return; if(state._atkCD>0) return;   // attack-speed gate (only kicks in when energy is low — full energy = no cooldown, spam freely)
   const asm=Needs.atkSpeedMul(); state._atkCD = asm<1 ? 0.42/asm : 0; state._swing=0.32;
-  const w=WEAPONS[state.weapon]||WEAPONS.fist; const dmg=w.dmg*Needs.dmgMul(); SFX.play('interact'); emote('attack-melee-right'); shake(0.12);   // ALWAYS the arm SWING (owner: never the kick) — the bone-mounted weapon/fist swings with the arm-right clip
+  const w=WEAPONS[state.weapon]||WEAPONS.fist; const dmg=w.dmg*Needs.dmgMul()*(1+(state.bonusDmg||0)); SFX.play('interact'); emote('attack-melee-right'); shake(0.12);   // ALWAYS the arm SWING (owner: never the kick); ⚔️ Power-Shard drops add permanent +dmg
   const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y); let hit=0;
   for(let i=creatures.length-1;i>=0;i--){ const c=creatures[i], m=c.mesh; if(!m.visible)continue;   // can't strike an unrevealed ghost
     const dx=m.position.x-player.position.x, dz=m.position.z-player.position.z, d=Math.hypot(dx,dz)||1;
@@ -2341,10 +2343,25 @@ function swingFx(){ const arc=new THREE.Mesh(new THREE.TorusGeometry(0.34,0.06,6
 /* ---- PHYSICAL LOOT DROPS + MONSTER PROJECTILES (B2: drops you pick up, ranged/exploder foes) ---- */
 const drops=[], projectiles=[];
 const DROP_COL={coin:'#ffd23f',crystal:'#7fd9ff',flower:'#ff9ed1',stone:'#9a948a',wood:'#a9743f',mushroom:'#d6443f',apple:'#e8463a',carrot:'#e08a2a',boss_core:'#c06bff',iron_ingot:'#cfd6dd',gold_ingot:'#ffd23f'};
+// ── RARE/EPIC TROPHIES — permanent power-ups (RPG-style) that DROP as a glowing
+//    item you walk over to claim, so a rare/epic kill gives a real reward, not just
+//    materials. heart=+max ❤️, power=+attack dmg, aegis=+damage resist (shield). ──
+const TROPHY_COL={heart:'#ff5a7a', power:'#ffd23f', aegis:'#5fa8ff'};
+function grantTrophy(kind){
+  if(kind==='heart'){ state.bonusHp=Math.min(10,(state.bonusHp||0)+1); state.hpMax=hpMaxForLevel(state.level); state.hp=state.hpMax; if(typeof renderHearts==='function')renderHearts(); rarityToast('epic','🫀 Heart Crystal — +1 max ❤️ forever!'); }
+  else if(kind==='power'){ state.bonusDmg=Math.min(1.5,(state.bonusDmg||0)+0.12); rarityToast('epic',`⚔️ Power Shard — +12% attack damage forever (now +${Math.round(state.bonusDmg*100)}%)!`); }
+  else if(kind==='aegis'){ state.bonusDef=Math.min(0.6,(state.bonusDef||0)+0.10); rarityToast('epic',`🛡️ Aegis Shard — +10% damage resist forever (now ${Math.round(state.bonusDef*100)}%)!`); }
+  confetti(player.position.clone().setY(2),26); SFX.play('success',{vol:0.6}); shake(0.3); if(invOpen)renderInv(); save();
+}
+function dropTrophy(x,z,kind){ const col=TROPHY_COL[kind]||'#c77dff';
+  const m=new THREE.Mesh(new THREE.OctahedronGeometry(0.3,0),new THREE.MeshToonMaterial({color:col,gradientMap:GRAD,emissive:new THREE.Color(col),emissiveIntensity:0.8}));
+  m.position.set(x+rand(-0.5,0.5),0.85,z+rand(-0.5,0.5)); m.castShadow=true; world.add(m);
+  drops.push({mesh:m,boost:kind,n:1,bob:rand(0,TAU),t:0}); }
 function makeDrop(x,z,item,n){ const col=DROP_COL[item]||'#ffd23f'; const m=new THREE.Mesh(new THREE.IcosahedronGeometry(0.22,0),new THREE.MeshToonMaterial({color:col,gradientMap:GRAD,emissive:new THREE.Color(col),emissiveIntensity:0.3})); m.position.set(x+rand(-0.6,0.6),0.6,z+rand(-0.6,0.6)); m.castShadow=true; world.add(m); drops.push({mesh:m,item,n,bob:rand(0,TAU),t:0}); }
 function updateDrops(dt){ for(let i=drops.length-1;i>=0;i--){ const d=drops[i],m=d.mesh; d.bob+=dt*3.2; d.t+=dt; m.rotation.y+=dt*2.2; const dx=player.position.x-m.position.x, dz=player.position.z-m.position.z, dd=Math.hypot(dx,dz)||1;
     if(dd<6){ const sp=Math.min(11,(6.5-dd)*3)*dt; m.position.x+=dx/dd*sp; m.position.z+=dz/dd*sp; } m.position.y=0.55+Math.sin(d.bob)*0.12;
-    if(dd<1.0){ Inv.add(d.item,d.n); SFX.play('pickup',{vol:0.55}); world.remove(m); drops.splice(i,1); } else if(d.t>60){ world.remove(m); drops.splice(i,1); } } }
+    if(d.boost) m.rotation.x+=dt*2.6;   // trophies tumble + glow so you can't miss them
+    if(dd<1.0){ if(d.boost){ grantTrophy(d.boost); } else { Inv.add(d.item,d.n); SFX.play('pickup',{vol:0.55}); } world.remove(m); drops.splice(i,1); } else if(d.t>(d.boost?180:60)){ world.remove(m); drops.splice(i,1); } } }
 /* ---- LOOT BAGS (owner: a real loot system — kills & chests drop a clickable BAG; walk up + E to open a modal showing exactly what dropped, then take items into your inventory; no more "loot dropped" toast) ---- */
 const lootBags=[]; let lootOpen=null;
 function dropLoot(x,z,items,label,autoGrab){   // items = [[item,n],...] (a Minecraft loot-table-style bundle). autoGrab=true -> small kills auto-collect on walk-over (no modal spam); bosses/chests open a modal.
@@ -2410,8 +2427,9 @@ function killCreature(i){ const c=creatures[i], p=c.mesh.position.clone(); confe
     toast(`💀 BOSS DEFEATED: ${(c.type&&c.type.name)||'Boss'}! A 📦 loot bag dropped — walk up & press E. (+📖 Titan pages)`); save(); return; }
   const tier=rollRarity(), m=RARITY[tier].mult; const coins=(2+Math.floor(Math.random()*3))*m; state._kills=(state._kills||0)+1; SFX.play('interact',{rate:0.3,vol:0.5});   // owner disliked the bright kill 'chime' — much lower pitch + quieter = a dull defeat thud, not a chime (hit sound at L~2092 stays rate 1.0)
   gainXP(6 + (c.type&&c.type.minDist?8:0) + (m>1?m*2:0));   // XP for the kill — far-out specials + rare drops grant more
-  dropLoot(p.x,p.z,[['coin',coins], (tier!=='common'?[tier==='epic'?'crystal':'flower',m]:null)], '⚔️ Loot', true);   // a glowing loot BAG -> walk over to auto-collect (toast shows exactly what you got); no swarm modal-spam
-  if(tier!=='common') rarityToast(tier, `⚔️ ${RARITY[tier].label} drop!`);
+  dropLoot(p.x,p.z,[['coin',coins]], '⚔️ Loot', true);   // a glowing loot BAG -> walk over to auto-collect (coins)
+  if(tier==='epic'){ dropTrophy(p.x,p.z, pick(['heart','power','aegis'])); rarityToast('epic','★ EPIC drop — a power-up trophy fell! Grab it ✨'); }   // EPIC = a permanent power-up trophy (health / damage / shield)
+  else if(tier==='rare'){ makeDrop(p.x,p.z, pick(['crystal','iron_ingot']), m); if(Math.random()<0.30) dropTrophy(p.x,p.z, pick(['heart','power','aegis'])); rarityToast('rare','✦ RARE drop — valuable loot fell! Grab it'); }   // RARE = valuable material (+30% trophy)
   if(!creatures.some(b=>b.boss) && state._kills>=(state._bossKillTarget||BOSS_KILL_FIRST)){   // milestone reached -> a champion rises near you
     const a=rand(0,TAU), r=rand(13,18); spawnBoss(pick(Object.keys(BOSS_TYPES)), player.position.x+Math.cos(a)*r, player.position.z+Math.sin(a)*r);
     state._bossKillTarget=(state._bossKillTarget||BOSS_KILL_FIRST)+BOSS_KILL_STEP; } }
@@ -2472,7 +2490,7 @@ function updateCombat(dt){
         }
       } else {
         if(d>1.35){ const sp=T.speed*dt; monMove(m,dx/d,dz/d,sp); m.rotation.y=Math.atan2(dx,dz); }
-        else { c.cd-=dt; if(c.cd<=0){ c.cd=1.1; damagePlayer(T.dmg); } }
+        else { c.cd-=dt; if(c.cd<=0){ c.cd=1.1; damagePlayer(T.dmg*(c.dmgMul||1)); } }   // outskirts mobs hit harder
       }
     } else {
       c.wt-=dt; if(c.wt<=0){ c.wdir=rand(0,TAU); c.wt=rand(1.6,3.6); }
@@ -2693,7 +2711,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
   roofOp:()=>cutRoof?+cutRoof.material.opacity.toFixed(2):null,
   interactNow:()=>{ updateInteract(); if(nearest){ const l=nearest.label; nearest.action(); return l; } return null; },
-  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
+  inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, grant:(k)=>grantTrophy(k), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
   nodesByItem:()=>{ const o={}; for(const n of nodes) o[n.item]=(o[n.item]||0)+1; return o; }, waters:()=>waters.length,
   homes:()=>({count:homes.length, built:homes.filter(h=>h.built).length, active:homes.filter(h=>h.active).length}),
   respawnInfo:()=>({nodes:nodes.length, hidden:nodes.filter(n=>!n.mesh.visible).length, onCd:nodes.filter(n=>n.timer>0).length}),
