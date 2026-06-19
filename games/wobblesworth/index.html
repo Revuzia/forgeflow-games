@@ -167,6 +167,13 @@
   #gear{position:relative; margin-left:auto; flex:none; width:32px; height:32px; border-radius:9px; background:rgba(34,26,46,.78); border:2px solid var(--ink); color:#fff; font-size:18px; display:flex; align-items:center; justify-content:center; cursor:pointer; pointer-events:auto; box-shadow:2px 2px 0 rgba(0,0,0,.3)}   /* lives in the Campaign card header (top-right), visible expanded + minimized */
   /* pause / settings overlay */
   #pause{position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; background:rgba(34,26,46,.5); pointer-events:auto}   /* z-index ABOVE the title screen (z-50) so Settings opens ON TOP of the title, not behind it */
+  #levelup{position:fixed; inset:0; z-index:62; display:flex; align-items:center; justify-content:center; background:rgba(34,26,46,.55); pointer-events:auto}
+  #levelup .card{position:relative}
+  #levelup .card .x{position:absolute; top:12px; right:12px; cursor:pointer; background:var(--ink); color:#fff; border:1px solid rgba(255,255,255,.3); border-radius:9px; padding:4px 13px; font-weight:bold}
+  #levelup .rewards{margin:12px 0; text-align:left; background:rgba(0,0,0,.06); border:2px solid rgba(34,26,46,.12); border-radius:12px; padding:10px 14px}
+  #levelup .reward-row{display:flex; align-items:center; gap:9px; font-size:15px; margin:7px 0}
+  #levelup .reward-row .icon{font-size:20px}
+  #levelup .hint{color:#8a7c95; font-size:12px; margin-top:12px}
   #pause .pcard{background:var(--paper); border:5px solid var(--ink); border-radius:24px; padding:26px 30px; min-width:300px; max-height:calc(100% - 16px); overflow-y:auto; text-align:center; box-shadow:8px 8px 0 rgba(34,26,46,.3)}
   #pause h2{color:var(--grape); text-shadow:2px 2px 0 var(--sun); font-size:28px; margin-bottom:16px}
   #pause .prow{display:flex; align-items:center; justify-content:space-between; gap:14px; font-size:16px; font-weight:bold; background:#fff; border:2px solid var(--ink); border-radius:12px; padding:8px 14px; margin:8px 0}
@@ -249,6 +256,7 @@
 <div id="inv" class="hidden"></div>
 <div id="pdpick" class="hidden"></div>
 <div id="trade" class="hidden"></div>
+<div id="levelup" class="hidden"></div>
 <div id="craft" class="hidden"></div>
 <div id="shop" class="hidden"></div>
 <div id="loot" class="hidden"></div>
@@ -411,7 +419,7 @@ const fill=new THREE.DirectionalLight('#cfe0ff',0.4); fill.position.set(-24,18,-
    ACES tonemap + sRGB so colors stay identical to before, just with a glow on the bright bits). */
 const composer=new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene,camera));
-const bloomPass=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight), 0.40, 0.5, 0.90);  // strength, radius, threshold (raised 0.85->0.90 + trimmed strength so only genuinely emissive props bloom; flat toon grass no longer crosses the threshold at night)
+const bloomPass=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight), 0.35, 0.5, 0.95);  // strength .35 + threshold .95 (was .40/.90) — tames the white-glare blowout (with the clamped water glint) while keeping emissive props glowing
 composer.addPass(bloomPass);
 composer.addPass(new OutputPass());
 /* STORYBOOK GRADE + VIGNETTE (graphics pass): one cheap fullscreen pass after the tonemap — a subtle teal-orange
@@ -598,7 +606,7 @@ const WATER_MAT=new THREE.ShaderMaterial({ transparent:true, depthWrite:false,
       float rad=length(vUv-0.5)*2.0;
       vec3 base=mix(uDeep,uShallow, clamp(rad*0.6+0.15,0.0,1.0));
       vec3 col=mix(base,uSky, clamp(fres*1.05,0.0,0.85));                                 // wider fresnel toward the LIVE sky
-      float spec=pow(max(dot(reflect(-L,N),V),0.0),90.0); col+=spec*1.3;                  // tight sun glint
+      float spec=pow(max(dot(reflect(-L,N),V),0.0),90.0); col+=vec3(min(spec*0.9,0.7));   // CLAMPED sun glint (max 0.7) — fixes the huge white glare blowout from water reflecting the sun
       float spk=smoothstep(0.55,1.0, sin(q.x*3.0+uTime*2.0)*sin(q.y*2.6-uTime*1.6)); col+=spk*0.06;
       float caustic=smoothstep(0.45,1.0, sin(q.x*5.0+uTime*1.5)*sin(q.y*4.6+uTime*1.2))*(1.0-rad)*0.5; col+=caustic*uShallow*0.4;   // shallow shimmer
       float foam=smoothstep(0.84,1.0,rad)*(0.5+0.5*sin(rad*38.0-uTime*3.0)); col=mix(col,uFoam,clamp(foam*0.75,0.0,0.7));            // brighter foam ring
@@ -1223,6 +1231,14 @@ function buildPlayerHouse(){
 /* ---- CHARACTER (rigged GLB) + NEIGHBORS ---- */
 const player=new THREE.Group(); let charMixer=null, charActions={}, charAnim='idle';
 const heldGroup=new THREE.Group(); let _heldKind='';   // a real-looking tool/weapon model in the player's hand (built, not a flat shape)
+// per-tool hand offsets so each item sits IN the hand pointing the right way (not buried in the arm). z pushed forward to clear the forearm; pickaxe/weapons ~upright, shovel angled down.
+const _SWORD_OFF={pos:[0.0,-0.5,0.18],rot:[0.22,0,0.08],scale:0.82};
+const TOOL_OFFSETS={
+  pickaxe:{pos:[0.02,-0.46,0.2],rot:[0.18,0,0.08],scale:0.78},
+  shovel:{pos:[0.02,-0.46,0.2],rot:[-0.5,0,0.08],scale:0.78},
+  wood_sword:_SWORD_OFF, stone_sword:_SWORD_OFF, iron_sword:_SWORD_OFF, gold_sword:_SWORD_OFF, crystal_sword:_SWORD_OFF,
+  keen_saber:_SWORD_OFF, titan_blade:_SWORD_OFF, dread_reaver:_SWORD_OFF, mythic_blade:_SWORD_OFF
+};
 function makeToolModel(kind){ const g=new THREE.Group();
   if(kind==='pickaxe'){ const h=box(0.07,0.95,0.07,'#8a5a31'); g.add(h); const head=box(0.46,0.1,0.1,'#7a7e86'); head.position.y=0.46; g.add(head);
     const t1=box(0.12,0.18,0.1,'#9aa0a8'); t1.position.set(0.26,0.42,0); t1.rotation.z=0.6; g.add(t1); const t2=t1.clone(); t2.position.x=-0.26; t2.rotation.z=-0.6; g.add(t2); }
@@ -1231,7 +1247,8 @@ function makeToolModel(kind){ const g=new THREE.Group();
     const blade=box(0.09,0.82,0.04,col); blade.position.y=0.52; g.add(blade); const tip=new THREE.Mesh(new THREE.ConeGeometry(0.075,0.18,4),toon(col)); tip.position.y=0.97; g.add(tip);
     const guard=box(0.34,0.08,0.11,'#5a4632'); guard.position.y=0.08; g.add(guard); const grip=box(0.08,0.24,0.08,'#3a2a1a'); grip.position.y=-0.07; g.add(grip); const pommel=ball(0.06,'#caa46a'); pommel.position.y=-0.22; g.add(pommel); }
   g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); return g; }
-function setHeld(kind){ if(kind===_heldKind) return; _heldKind=kind; while(heldGroup.children.length) heldGroup.remove(heldGroup.children[0]); if(kind && kind!=='fist') heldGroup.add(makeToolModel(kind)); }
+function setHeld(kind){ if(kind===_heldKind) return; _heldKind=kind; while(heldGroup.children.length) heldGroup.remove(heldGroup.children[0]); if(kind && kind!=='fist') heldGroup.add(makeToolModel(kind)); applyHeldOffsets(); }
+function applyHeldOffsets(){ if(!heldGroup.userData.onBone) return; const o=TOOL_OFFSETS[_heldKind]||_SWORD_OFF; heldGroup.position.set(o.pos[0],o.pos[1],o.pos[2]); heldGroup.rotation.set(o.rot[0],o.rot[1],o.rot[2]); heldGroup.scale.setScalar(o.scale); }
 /* ARMOR VISUAL (owner: "make armor visually show") — a tier-colored chestplate + shoulder pads worn over the torso */
 const armorGroup=new THREE.Group(); let _armorShown='?';
 const ARMOR_COL={leather:'#8a5a31', iron:'#c2c7cf', gold:'#ffd23f', titan:'#b07cff'};
@@ -1303,7 +1320,7 @@ function buildPlayerAndNeighbors(){
   } else { const o=box(0.8,1.6,0.5,'#7c5cff'); o.position.y=0.8; player.add(o); }
   // ATTACH the held tool/weapon to the actual arm-right BONE so it tracks the animated arm (owner: was floating in the wrong hand + the swing looked backwards because it was pinned to the body, not the hand)
   const _pm=player.userData.model, _armR=_pm&&_pm.getObjectByName?_pm.getObjectByName('arm-right'):null;
-  if(_armR){ _armR.add(heldGroup); heldGroup.userData.onBone=true; heldGroup.position.set(0.0,-0.58,0.06); heldGroup.rotation.set(0.45,0,0.1); heldGroup.scale.setScalar(0.85); }   // measured from the live rig: grip in the right hand (y~0.79), blade leans FORWARD-up (tip ~head height, in front of the body) = a wielded "ready" pose. Was scale 1.35 + blade pointing straight up so the tip towered to y~1.68 above the head (owner: "weapon not in hand")
+  if(_armR){ _armR.add(heldGroup); heldGroup.userData.onBone=true; applyHeldOffsets(); }   // per-tool TOOL_OFFSETS (applyHeldOffsets) so each item sits IN the hand, not buried in the arm (owner: "pickaxe tattooed into the arm")
   else { heldGroup.position.set(0.42,1.0,0.18); player.add(heldGroup); }
   player.add(armorGroup); setArmorVisual(); attachWornGear();   // worn armor shows on the body — re-parented to the torso bone so it moves with the body (was pinned to the player root = a static block, owner: "doesn't flow with the animation")
   // neighbors wandering the whole town (more of them now)
@@ -1339,10 +1356,10 @@ function setAnim(name){ if(name===charAnim||!charActions[name]) return; const pr
 function emote(name){ // one-shot emote then back to idle/walk
   if(!charActions[name]) return; const a=charActions[name]; a.reset(); a.setLoop(THREE.LoopOnce,1); a.clampWhenFinished=true; a.fadeIn(0.1).play();
   const prev=charActions[charAnim]; if(prev&&prev!==a) prev.fadeOut(0.1); charAnim='__emote';
-  setTimeout(()=>{ if(charAnim==='__emote'){ a.fadeOut(0.25); a.clampWhenFinished=false; charAnim=''; } }, 700); }   // MUST fade the emote action OUT here: it was LoopOnce+clampWhenFinished, so it sat at full weight on its LAST frame (e.g. the folded-leg 'sit' pose after a nap). Clearing charAnim only let setAnim fade IDLE *in* — the clamped sit kept blending the legs into a seated/sleeping pose (owner: "after he sleeps his legs stay in a sleeping position"). Fading the clamped action out lets the player stand fully upright again.
+  setTimeout(()=>{ if(charAnim==='__emote'){ a.fadeOut(0.25); a.clampWhenFinished=false; setAnim('idle'); } }, 700); }   // setAnim('idle') (was charAnim='') forces an immediate clean stand-up so legs don't stay folded after a nap/sit   // MUST fade the emote action OUT here: it was LoopOnce+clampWhenFinished, so it sat at full weight on its LAST frame (e.g. the folded-leg 'sit' pose after a nap). Clearing charAnim only let setAnim fade IDLE *in* — the clamped sit kept blending the legs into a seated/sleeping pose (owner: "after he sleeps his legs stay in a sleeping position"). Fading the clamped action out lets the player stand fully upright again.
 
 /* ---------- input / camera ---------- */
-const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); } }   /* owner: no pause — ESC only closes menus */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
+const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(levelupOpen)closeLevelUp(); else if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); } }   /* owner: no pause — ESC only closes menus */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 // release ALL held keys when focus/visibility is lost — prevents the "stuck walking forward" bug
 // (a right-click context menu, alt-tab, or click-away steals focus so the W keyup never fires).
@@ -1542,7 +1559,7 @@ function openSlotPicker(slot, type){ const el=document.getElementById('pdpick');
     closeSlotPicker(); if(invOpen)renderInv(); }); }
 function closeSlotPicker(){ pdpickOpen=false; const el=document.getElementById('pdpick'); if(el)el.classList.add('hidden'); }
 // ── CO-OP TRADE: both players add items + coin, both Confirm -> atomic swap (press T near a player) ──
-let tradeOpen=false;
+let tradeOpen=false, levelupOpen=false;
 function getNearestPeer(radius){ radius=radius||12; if(typeof COOP==='undefined'||!COOP.on) return null; let best=null,bd=Infinity; const pp=player.position; for(const id in COOP.peers){ const pe=COOP.peers[id]; if(!pe||!pe.group)continue; const d=Math.hypot(pe.group.position.x-pp.x, pe.group.position.z-pp.z); if(d<radius&&d<bd){ best={id,peer:pe}; bd=d; } } return best; }
 function requestTrade(){ if(typeof COOP==='undefined'||!COOP.on){ toast('👥 Trading needs co-op — open the pause menu → Play with Friends first.'); return; } const near=getNearestPeer(12); if(!near){ toast('👥 No player nearby (get within ~12 steps to trade).'); return; } openTrade(near.id); }
 function openTrade(peerId){ const pe=COOP.peers&&COOP.peers[peerId]; if(!pe){ toast('👥 That player left.'); return; } tradeOpen=true; state.tradeSession={peerId, name:pe.name||'Friend', offer:{items:{},coin:0}, confirmed:false, theirs:{items:{},coin:0}, theirConfirmed:false}; document.getElementById('trade').classList.remove('hidden'); renderTrade(); SFX.play('interact'); try{ COOP.ch.send({type:'broadcast',event:'trade-open',payload:{from:COOP.id,to:peerId,name:COOP.name}}); }catch(e){} }
@@ -1659,11 +1676,19 @@ function onLevelUp(){
   state.hpMax=hpMaxForLevel(state.level); state.hp=state.hpMax; if(typeof renderHearts==='function') renderHearts();
   try{ SFX.play('success'); }catch(e){} shake(0.4);   // removed the win.ogg fanfare — win.ogg is a 180s MUSIC TRACK (not an SFX) that blared at random mid-combat on every level-up (owner report); kept a short level-up ding
   confetti(player.position.clone().setY(2.4), 30);
-  let msg=`⭐ LEVEL UP! You reached Level ${state.level}.`;
-  if(fresh.length){ msg+=` New: ${fresh.join(', ')} — press C to craft.`; }
-  else { state.giggle=(state.giggle||0)+25; msg+=` +25 ✨`; if(state.level%5===0){ Inv.add('health_potion',1); msg+=` + a 🧪 Health Potion!`; } }   // past the recipe tree: every level still rewards (giggle, +a potion every 5) so leveling beyond 15 stays meaningful
-  toast(msg);
+  let giggleGain=0, potionGain=0;
+  if(!fresh.length){ giggleGain=25; state.giggle=(state.giggle||0)+25; if(state.level%5===0){ potionGain=1; Inv.add('health_potion',1); } }   // past the recipe tree: every level still rewards
+  openLevelUp({level:state.level, newRecipes:fresh, hpMax:state.hpMax, giggleGain, potionGain});
 }
+function openLevelUp(r){ if(!r)return; levelupOpen=true; const el=document.getElementById('levelup'); if(!el)return;
+  let rh='';
+  if(r.newRecipes&&r.newRecipes.length) rh+=`<div class="reward-row"><span class="icon">🔓</span><span><b>New unlocks:</b> ${r.newRecipes.join(', ')} — press C to craft</span></div>`;
+  rh+=`<div class="reward-row"><span class="icon">❤️</span><span>Max health restored to <b>${r.hpMax}</b></span></div>`;
+  if(r.giggleGain>0) rh+=`<div class="reward-row"><span class="icon">✨</span><span>+${r.giggleGain} Giggle</span></div>`;
+  if(r.potionGain>0) rh+=`<div class="reward-row"><span class="icon">🧪</span><span>+${r.potionGain} Health Potion</span></div>`;
+  el.innerHTML=`<div class="card"><button class="x" id="luX" aria-label="Close">✕</button><h1 style="color:var(--grape);text-shadow:2px 2px 0 var(--sun);margin-bottom:6px">⭐ LEVEL UP!</h1><div class="sub" style="color:var(--pop);margin-bottom:12px">You reached Level <b>${r.level}</b></div><div class="rewards">${rh}</div><div class="hint">Press X or Esc to continue</div></div>`;
+  el.classList.remove('hidden'); const x=el.querySelector('#luX'); if(x)x.onclick=closeLevelUp; el.onclick=(e)=>{ if(e.target===el)closeLevelUp(); }; }
+function closeLevelUp(){ levelupOpen=false; const el=document.getElementById('levelup'); if(el)el.classList.add('hidden'); }
 function gainXP(n){ if(!(n>0)) return; state.xp=(state.xp||0)+n; let leveled=false;
   while(state.level<50 && state.xp >= xpToNext(state.level)){ state.xp-=xpToNext(state.level); state.level++; leveled=true; onLevelUp(); } if(state.level>=50) state.xp=Math.min(state.xp, xpToNext(50));   // hard level cap 50
   renderXP(); if(craftOpen) renderCraft(); if(leveled) save(); if(typeof checkBadges==='function')checkBadges(); }   // central badge check — fires on kills, bosses, quests, crafts, level-ups
@@ -2252,7 +2277,7 @@ function paintMap(c, R, applyFog){ if(!c)return; const g=c.getContext('2d'); con
   const px=tx(player.position.x),pz=tz(player.position.z),a=player.rotation.y;  // player arrow (always visible)
   g.fillStyle='#221a2e'; g.beginPath(); g.moveTo(px+Math.sin(a)*6*ms,pz+Math.cos(a)*6*ms); g.lineTo(px+Math.sin(a+2.5)*5*ms,pz+Math.cos(a+2.5)*5*ms); g.lineTo(px+Math.sin(a-2.5)*5*ms,pz+Math.cos(a-2.5)*5*ms); g.closePath(); g.fill(); }
 let mapOpen=false;
-function drawMinimap(){ paintMap(document.getElementById('minimap'),300,false); if(mapOpen) paintMap(document.getElementById('bigmap'),470,true); }   // minimap = always-full (no fog); big map = fog of war
+function drawMinimap(){ paintMap(document.getElementById('minimap'),300,true); if(mapOpen) paintMap(document.getElementById('bigmap'),470,true); }   // fog of war on BOTH minimap + big map (owner reverted the always-full minimap)
 function openMap(){ if(!state.running)return; mapOpen=true; const el=document.getElementById('mapmodal');
   el.innerHTML=`<canvas id="bigmap" width="460" height="460"></canvas><div class="maplegend"><span style="color:#ff5d8f">■ Home</span><span style="color:#d4a017">■ Store</span><span style="color:#7c5cff">● Neighbors</span><span style="color:#221a2e">▲ You</span></div><div class="maphint">click anywhere to close</div>`;
   el.classList.remove('hidden'); el.onclick=closeMap; drawMinimap(); }
