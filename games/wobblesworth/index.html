@@ -640,8 +640,8 @@ const WATER_MAT=new THREE.ShaderMaterial({ transparent:true, depthWrite:false,
       float fres=pow(1.0-max(dot(N,V),0.0),3.0);
       float rad=length(vUv-0.5)*2.0;
       vec3 base=mix(uDeep,uShallow, clamp(rad*0.6+0.15,0.0,1.0));
-      vec3 col=mix(base,uSky, clamp(fres*1.05,0.0,0.85));                                 // wider fresnel toward the LIVE sky
-      float spec=pow(max(dot(reflect(-L,N),V),0.0),90.0); col+=vec3(min(spec*0.9,0.7));   // CLAMPED sun glint (max 0.7) — fixes the huge white glare blowout from water reflecting the sun
+      vec3 col=mix(base,uSky, clamp(fres*0.8,0.0,0.42));                                  // gentler fresnel sky-reflection (was 0.85 -> big white glare at the horizon)
+      float spec=pow(max(dot(reflect(-L,N),V),0.0),120.0); col+=vec3(min(spec*0.4,0.18)); // much dimmer + tighter sun glint -> kills the big white reflection blob on the pond
       float spk=smoothstep(0.55,1.0, sin(q.x*3.0+uTime*2.0)*sin(q.y*2.6-uTime*1.6)); col+=spk*0.06;
       float caustic=smoothstep(0.45,1.0, sin(q.x*5.0+uTime*1.5)*sin(q.y*4.6+uTime*1.2))*(1.0-rad)*0.5; col+=caustic*uShallow*0.4;   // shallow shimmer
       float foam=smoothstep(0.84,1.0,rad)*(0.5+0.5*sin(rad*38.0-uTime*3.0)); col=mix(col,uFoam,clamp(foam*0.75,0.0,0.7));            // brighter foam ring
@@ -800,6 +800,7 @@ function buildWorld(){
   // landmarks
   { const ml=place("MillBuilding1",-70,-40,{targetH:6.6,tint:'#e0b27a'}); if(ml){ texturizeHouse(ml,'wood'); const s1=addSolid(ml,0.2,false); registerHome(ml,s1,_hi++); } const bn=place("Barn",64,-30,{targetH:6.2,tint:'#d65f4a'}); if(bn){ texturizeHouse(bn,'wood'); const s2=addSolid(bn,0.2,false); registerHome(bn,s2,_hi++); } }   // owner: big wooden buildings -> normal enterable homes (was oversized non-enterable walls)
   for(const [wx,wz] of [[-10,22],[24,-30],[-40,40]]){ const w=place("Well",wx,wz,{targetH:3,tint:'#9a948a'}); if(w) addSolid(w); makeWater(0.85,wx,wz,1.7); }   // solid + standable (jump on it!) + real water in the shaft
+  for(const [rx,rz] of [[-22,8],[27,18],[-30,-12],[34,-6],[14,42],[-16,46]]){ if(isInWater(rx,rz,4))continue; const rk=makeRock(rx,rz,rand(1.4,2.2)); world.add(rk); addNode(rk,rx,rz,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); }   // owner: mineable boulders near town so stone is reachable without trekking to the east biome
   // 🏖️ real animated pond at the beach; the bridge is SOLID so you walk/jump on it (no more sinking through), boat floats
   makeWater(17,0,84);   // showcase reflective pond near town
   // WATER SPREAD across the huge map (owner) — winding rivers/streams + ponds in the new outer areas (cheap shader, no extra reflection passes)
