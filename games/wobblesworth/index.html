@@ -199,6 +199,11 @@
   #pause .prow{display:flex; align-items:center; justify-content:space-between; gap:14px; font-size:16px; font-weight:bold; background:#fff; border:2px solid var(--ink); border-radius:12px; padding:8px 14px; margin:8px 0}
   #pause .prow input[type=range]{width:140px} #pause .prow input[type=checkbox]{width:22px; height:22px}
   #pause select,#coop select{ -webkit-appearance:none; appearance:none; background:#fff7ec; border:2px solid var(--ink); border-radius:10px; padding:5px 28px 5px 11px; font:inherit; font-size:14px; color:var(--ink); cursor:pointer; background-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='12'%20height='8'%3E%3Cpath%20d='M1,1L6,6L11,1'%20fill='none'%20stroke='%232a2438'%20stroke-width='2'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 9px center }   /* rounded dropdowns */
+  #pause .charGrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(58px,1fr)); gap:6px; max-height:240px; overflow:auto; margin:2px 0; padding:2px}
+  #pause .charTile{cursor:pointer; border:2px solid rgba(34,26,46,.18); border-radius:10px; padding:3px 3px 1px; text-align:center; background:rgba(34,26,46,.05)}
+  #pause .charTile.on{border-color:var(--pop); background:rgba(255,93,143,.14)}
+  #pause .charTile img{width:100%; height:auto; display:block; border-radius:6px; background:rgba(120,160,210,.18)}
+  #pause .charTile span{font-size:10px; font-weight:700; color:var(--ink)}
   #pause .phint{color:#8a7c95; font-size:12px; margin-top:12px}
   /* styled confirm dialog (replaces the ugly native confirm()) — mirrors the .pcard look */
   #confirm{position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:rgba(34,26,46,.62); pointer-events:auto}
@@ -3236,8 +3241,18 @@ function setupMenu(){ const cont=document.getElementById('continueBtn'), ng=docu
   st.onclick=()=>openSettings(); }
 function openSettings(){ renderSettings(); document.getElementById('pause').classList.remove('hidden'); }
 function closeSettings(){ const p=document.getElementById('pause'); if(p)p.classList.add('hidden'); }
+// ── CHARACTER LOOK THUMBNAILS: render each selectable model to a small cached image so you SEE every look before picking ──
+const LOOKS=[{m:'char_player',l:'Default'},{m:'character-male-a',l:'M1'},{m:'character-male-b',l:'M2'},{m:'character-male-c',l:'M3'},{m:'character-male-d',l:'M4'},{m:'character-male-e',l:'M5'},{m:'character-male-f',l:'M6'},{m:'character-female-a',l:'F1'},{m:'character-female-b',l:'F2'},{m:'character-female-c',l:'F3'},{m:'character-female-d',l:'F4'},{m:'character-female-e',l:'F5'},{m:'character-female-f',l:'F6'}];
+let _thumbR=null; const _thumbCache={};
+function charThumb(name){ if(_thumbCache[name]!==undefined) return _thumbCache[name]; const src=(typeof MODELS!=='undefined')&&MODELS[name]; if(!src) return (_thumbCache[name]='');
+  try{ const W=72,H=92; if(!_thumbR){ _thumbR=new THREE.WebGLRenderer({alpha:true,antialias:true,preserveDrawingBuffer:true}); _thumbR.setSize(W,H); _thumbR.setPixelRatio(1); try{_thumbR.outputColorSpace=THREE.SRGBColorSpace;}catch(e){} }
+    const sc=new THREE.Scene(); sc.add(new THREE.HemisphereLight('#ffffff','#9a9aa8',1.5)); const dl=new THREE.DirectionalLight('#ffffff',1.1); dl.position.set(2,4,3); sc.add(dl);
+    const o=skeletonClone(src); const s=new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3()); o.scale.setScalar(1.7/(s.y||1)); const b2=new THREE.Box3().setFromObject(o); o.position.y=-b2.min.y; o.rotation.y=0.6; sc.add(o);
+    const cam=new THREE.PerspectiveCamera(30,W/H,0.1,50); cam.position.set(0.15,1.4,3.5); cam.lookAt(0,0.95,0);
+    _thumbR.render(sc,cam); const url=_thumbR.domElement.toDataURL('image/png'); sc.clear(); return (_thumbCache[name]=url);
+  }catch(e){ return (_thumbCache[name]=''); } }
 function renderSettings(){ const el=document.getElementById('pause'); if(!el)return;
-  const _G=['a','b','c','d','e','f']; const _isF=(state.charModel||'').startsWith('character-female'); const _isDef=(state.charModel||'char_player')==='char_player'; const _gen=_isF?'female':'male'; const _varOpts=_G.map((c,i)=>`<option value="character-${_gen}-${c}" ${state.charModel==='character-'+_gen+'-'+c?'selected':''}>Look ${i+1}</option>`).join('');
+  const _curM=state.charModel||'char_player'; const _tiles=LOOKS.map(L=>`<div class="charTile${_curM===L.m?' on':''}" data-model="${L.m}" title="${L.l}"><img src="${charThumb(L.m)}" alt="${L.l}" draggable="false"><span>${L.l}</span></div>`).join('');
   el.innerHTML=`<div class="pcard"><h2>⚙ Settings</h2>
     <label class="prow">🔊 Volume <input id="volSlider" type="range" min="0" max="100" value="${Math.round((state.volume==null?1:state.volume)*100)}"></label>
     <label class="prow">🎵 Music <input id="musicChk" type="checkbox" ${state.musicOn?'checked':''}></label>
@@ -3245,10 +3260,9 @@ function renderSettings(){ const el=document.getElementById('pause'); if(!el)ret
     <label class="prow">🖱️ Mouse sensitivity <input id="sensSlider" type="range" min="20" max="250" value="${Math.round((state.mouseSens||1)*100)}"></label>
     <label class="prow">🌀 Reduce motion <input id="reduceChk" type="checkbox" ${state.reduce?'checked':''}></label>
     <label class="prow">⛶ Fullscreen <input id="fsChk" type="checkbox" ${document.fullscreenElement?'checked':''}></label>
-    <div style="font-weight:bold;margin:9px 0 2px">👤 Character</div>
-    <label class="prow">Body <select id="charGender"><option value="char_player" ${_isDef?'selected':''}>Default Adventurer</option><option value="male" ${!_isDef&&!_isF?'selected':''}>Male</option><option value="female" ${_isF?'selected':''}>Female</option></select></label>
-    <label class="prow" id="charVarRow" style="${_isDef?'display:none':''}">Look <select id="charVariant">${_varOpts}</select></label>
-    <div style="font-size:11px;opacity:.7;margin:-2px 2px 6px">Each look has its own skin tone, hair & outfit — changes apply instantly.</div>
+    <div style="font-weight:bold;margin:9px 0 4px">👤 Character — pick a look</div>
+    <div class="charGrid">${_tiles}</div>
+    <div style="font-size:11px;opacity:.7;margin:4px 2px 6px">Each look has its own skin tone, hair & outfit — applies instantly.</div>
     <button class="btn" id="settingsClose">✓ Done</button></div>`;
   el.querySelector('#volSlider').oninput=ev=>{ state.volume=(+ev.target.value)/100; if(Music.setVol)Music.setVol(state.volume); save(); };
   el.querySelector('#musicChk').onchange=ev=>{ state.musicOn=ev.target.checked; if(Music.setMuted)Music.setMuted(!state.musicOn); if(state.musicOn&&Music.resume)Music.resume(); save(); };
@@ -3256,10 +3270,7 @@ function renderSettings(){ const el=document.getElementById('pause'); if(!el)ret
   el.querySelector('#sensSlider').oninput=ev=>{ state.mouseSens=clamp((+ev.target.value)/100,0.2,2.5); save(); };
   el.querySelector('#reduceChk').onchange=ev=>{ state.reduce=ev.target.checked; save(); };
   el.querySelector('#fsChk').onchange=ev=>{ try{ if(ev.target.checked){ const de=document.documentElement; (de.requestFullscreen||de.webkitRequestFullscreen||de.msRequestFullscreen).call(de); } else { (document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen).call(document); } }catch(e){} };   // the settings click IS the user gesture fullscreen needs
-  { const gsel=el.querySelector('#charGender'), vsel=el.querySelector('#charVariant'), vrow=el.querySelector('#charVarRow');
-    const applyLook=(m)=>{ state.charModel=m; updatePlayerCharacter(); };   // live apply — no Apply button; Done just closes
-    if(gsel) gsel.onchange=ev=>{ const v=ev.target.value; if(v==='char_player'){ if(vrow)vrow.style.display='none'; applyLook('char_player'); } else { if(vrow)vrow.style.display=''; if(vsel)vsel.innerHTML=_G.map((c,i)=>`<option value="character-${v}-${c}">Look ${i+1}</option>`).join(''); if(vsel)vsel.value='character-'+v+'-a'; applyLook('character-'+v+'-a'); } };
-    if(vsel) vsel.onchange=ev=>{ applyLook(ev.target.value); }; }
+  el.querySelectorAll('.charTile[data-model]').forEach(t=> t.onclick=()=>{ const m=t.dataset.model; if(m===state.charModel)return; state.charModel=m; updatePlayerCharacter(); el.querySelectorAll('.charTile').forEach(x=>x.classList.toggle('on', x.dataset.model===m)); });   // pick a look -> applies live
   el.querySelector('#settingsClose').onclick=closeSettings; }
 document.getElementById('keepBtn').onclick=()=>document.getElementById('winScreen').classList.add('hidden');
 { const g=document.getElementById('gear'); if(g) g.onclick=()=>{ if(invOpen)closeInv(); if(craftOpen)closeCraft(); if(shopOpen)closeShop(); openSettings(); }; }
