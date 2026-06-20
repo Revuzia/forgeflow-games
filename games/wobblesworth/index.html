@@ -3092,10 +3092,10 @@ function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
 const COOP = {
   URL: 'https://wugoxdewcdxzfppgzohy.supabase.co',
   ANON: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1Z294ZGV3Y2R4emZwcGd6b2h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5OTU0MzEsImV4cCI6MjA2OTU3MTQzMX0.ljJYgVp0n9d_tJeL3ZG6liYfW0lQ7d_29svPMbUAves',
-  sb: null, ch: null, id: null, room: null, on: false, _acc: 0, name: 'Wobbler', MAX_PLAYERS: 8, peers: {},
+  sb: null, ch: null, lobbyCh: null, public: false, id: null, room: null, on: false, _acc: 0, name: 'Wobbler', MAX_PLAYERS: 8, peers: {},
   status(msg){ const e=document.getElementById('coopStatus'); if(e) e.textContent=msg; },
   async _connect(){ if(this.sb) return; const m=await import('https://esm.sh/@supabase/supabase-js@2'); const cc=m.createClient||(m.default&&m.default.createClient); this.sb=cc(this.URL,this.ANON,{realtime:{params:{eventsPerSecond:12}}}); this.id=Date.now().toString(36)+'_'+Math.floor(Math.random()*1e9).toString(36); },
-  async join(code){
+  async join(code, isPublic){
     try{ await this._connect(); }catch(e){ this.status('Could not load multiplayer.'); return null; }
     this.leave(true); this.room=String(code||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)||'TOWN';
     const ch=this.sb.channel('ffg:wobblesworth:'+this.room,{config:{broadcast:{self:false},presence:{key:this.id}}});
@@ -3107,9 +3107,10 @@ const COOP = {
     ch.on('presence',{event:'leave'},({leftPresences})=>{ for(const lp of (leftPresences||[])) this._despawn(lp.id); this._count(); });
     ch.on('presence',{event:'sync'},()=>this._count());
     await new Promise((res)=>{ ch.subscribe(async(st)=>{ if(st==='SUBSCRIBED'){ try{ let pc=1; try{ pc=Object.keys(ch.presenceState()).length; }catch(e){} if(pc>=this.MAX_PLAYERS){ this.status('Room is full ('+this.MAX_PLAYERS+' max) — try another code'); this.on=false; try{ this.sb.removeChannel(ch); }catch(e){} this.ch=null; res(); return; } await ch.track({id:this.id,name:this.name}); }catch(e){} this.on=true; this._count(); res(); } else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'){ this.status('Connection failed — try again.'); res(); } }); });
+    if(isPublic && this.on){ this.public=true; this.announcePublic(); } else { this.public=false; }
     return this.room;
   },
-  _count(){ if(!this.on||!this.ch) return; let n=1; try{ n=Object.keys(this.ch.presenceState()).length; }catch(e){} const full=(n>=this.MAX_PLAYERS)?' · FULL':''; this.status('● Connected · room '+this.room+' · '+n+'/'+this.MAX_PLAYERS+(n===1?' (waiting for a friend…)':' here')+full); },
+  _count(){ if(!this.on||!this.ch) return; let n=1; try{ n=Object.keys(this.ch.presenceState()).length; }catch(e){} if(this.public) this.announcePublic(); const full=(n>=this.MAX_PLAYERS)?' · FULL':''; this.status('● Connected · room '+this.room+' · '+n+'/'+this.MAX_PLAYERS+(n===1?' (waiting for a friend…)':' here')+full); },
   _recv(p){ let pe=this.peers[p.from]; if(!pe){ pe=this._spawn(p.from,p.name); if(!pe) return; } pe.tx=p.x; pe.tz=p.z; pe.th=p.h; if(p.name) pe.name=p.name; pe.last=performance.now(); if(p.a&&pe.anim!==p.a) this._anim(pe,p.a); },
   _spawn(id,name){
     if(Object.keys(this.peers).length>=this.MAX_PLAYERS) return null;   // hard cap: never render beyond MAX_PLAYERS peers
@@ -3142,26 +3143,40 @@ const COOP = {
       if(now-pe.last>9000) this._despawn(id);
     }
   },
-  leave(silent){ try{ if(this.ch) this.sb.removeChannel(this.ch); }catch(e){} this.ch=null; this.on=false; for(const id in this.peers) this._despawn(id); this.room=null; if(!silent) this.status('Left the shared world.'); },
+  // ── PUBLIC LOBBY / MATCHMAKING: hosts of PUBLIC rooms announce on a shared 'ffg:lobby' presence channel; browsers list + join open games ──
+  async _lobbyConnect(){ await this._connect(); if(this.lobbyCh) return; const lc=this.sb.channel('ffg:lobby',{config:{presence:{key:this.id}}}); lc.on('presence',{event:'sync'},()=>{}); this.lobbyCh=lc; await new Promise(res=>{ let done=false; lc.subscribe(st=>{ if(!done&&(st==='SUBSCRIBED'||st==='CHANNEL_ERROR'||st==='TIMED_OUT')){ done=true; res(); } }); }); },   // the presence 'sync' handler MUST be registered pre-subscribe or presenceState() stays empty (this was the lobby-not-listing bug)
+  async announcePublic(){ try{ await this._lobbyConnect(); this.public=true; let n=1; try{ n=this.ch?Object.keys(this.ch.presenceState()).length:1; }catch(e){} await this.lobbyCh.track({game:'wobblesworth',code:this.room,host:(this.name||'Wobbler'),players:n,max:this.MAX_PLAYERS,ts:Date.now()}); }catch(e){} },
+  async unannouncePublic(){ this.public=false; try{ if(this.lobbyCh) await this.lobbyCh.untrack(); }catch(e){} },
+  async listPublic(){ try{ await this._lobbyConnect(); }catch(e){ return []; } await new Promise(r=>setTimeout(r,700)); let rooms=[]; try{ const st=this.lobbyCh.presenceState(); for(const k in st){ for(const p of (st[k]||[])){ if(p&&p.game==='wobblesworth'&&p.code) rooms.push(p); } } }catch(e){} const seen={}; rooms=rooms.filter(r=>{ if(r.code===this.room)return false; if((r.players||1)>=(r.max||8))return false; if(seen[r.code])return false; seen[r.code]=1; return true; }); rooms.sort((a,b)=>(b.ts||0)-(a.ts||0)); return rooms; },
+  leave(silent){ try{ this.unannouncePublic(); }catch(e){} try{ if(this.ch) this.sb.removeChannel(this.ch); }catch(e){} this.ch=null; this.on=false; for(const id in this.peers) this._despawn(id); this.room=null; if(!silent) this.status('Left the shared world.'); },
 };
 window.COOP = COOP;   // exposed for the 2-client e2e test
+try{ const _nk=localStorage.getItem('ww_nick'); if(_nk) COOP.name=_nk.slice(0,14); }catch(e){}   // persisted nickname (instant identity; optional FFGames login can override later)
 function openCoop(){
   let el=document.getElementById('coop');
   if(!el){ el=document.createElement('div'); el.id='coop'; el.style.cssText='position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;background:rgba(10,8,16,.55)'; document.body.appendChild(el); }
   const code=COOP.room||(Math.random().toString(36).slice(2,6).toUpperCase());
-  el.innerHTML='<div style="background:#fff;border:3px solid #2a2438;border-radius:18px;padding:20px 22px;max-width:360px;width:90%;font-family:\'Trebuchet MS\',sans-serif;color:#2a2438;box-shadow:0 12px 40px rgba(0,0,0,.4)">'
+  el.innerHTML='<div style="background:#fff;border:3px solid #2a2438;border-radius:18px;padding:18px 20px;max-width:384px;width:92%;font-family:\'Trebuchet MS\',sans-serif;color:#2a2438;box-shadow:0 12px 40px rgba(0,0,0,.4);max-height:88vh;overflow:auto">'
     +'<h2 style="margin:0 0 6px">👥 Play with Friends</h2>'
-    +'<p style="font-size:13px;margin:0 0 12px;color:#555">Share a room code and explore the same world together in real time.</p>'
+    +'<p style="font-size:12px;margin:0 0 10px;color:#555">Host a game others can find in the lobby, or play privately with a code/link. Up to 8 players.</p>'
     +'<input id="coopName" placeholder="Your name" maxlength="14" value="'+COOP.name+'" style="width:100%;box-sizing:border-box;padding:9px;margin-bottom:10px;border:2px solid #2a2438;border-radius:10px;font-size:15px">'
-    +'<button id="coopCreate" style="width:100%;padding:12px;margin-bottom:10px;background:#37c06a;color:#fff;border:0;border-radius:12px;font-weight:bold;font-size:16px;cursor:pointer">Create room  ·  code <b>'+code+'</b></button>'
-    +'<div style="display:flex;gap:8px;margin-bottom:10px"><input id="coopCode" placeholder="friend\'s code" maxlength="6" style="flex:1;min-width:0;padding:9px;border:2px solid #2a2438;border-radius:10px;text-transform:uppercase;font-size:15px"><button id="coopJoin" style="padding:9px 16px;background:#4d90ff;color:#fff;border:0;border-radius:10px;font-weight:bold;cursor:pointer">Join</button></div>'
+    +'<button id="coopPublic" style="width:100%;padding:11px;margin-bottom:8px;background:#37c06a;color:#fff;border:0;border-radius:12px;font-weight:bold;font-size:15px;cursor:pointer">🌐 Create Public Game · <b>'+code+'</b></button>'
+    +'<button id="coopPrivate" style="width:100%;padding:11px;margin-bottom:8px;background:#7c5cff;color:#fff;border:0;border-radius:12px;font-weight:bold;font-size:15px;cursor:pointer">🔒 Create Private Game</button>'
+    +'<div style="display:flex;gap:8px;margin-bottom:8px"><input id="coopCode" placeholder="friend\'s code" maxlength="6" style="flex:1;min-width:0;padding:9px;border:2px solid #2a2438;border-radius:10px;text-transform:uppercase;font-size:15px"><button id="coopJoin" style="padding:9px 16px;background:#4d90ff;color:#fff;border:0;border-radius:10px;font-weight:bold;cursor:pointer">Join</button></div>'
+    +'<button id="coopBrowse" style="width:100%;padding:10px;margin-bottom:8px;background:#fff;color:#2a2438;border:2px solid #2a2438;border-radius:11px;font-weight:bold;font-size:14px;cursor:pointer">📋 Browse Public Games</button>'
+    +'<div id="coopList" style="display:none;max-height:170px;overflow:auto;margin-bottom:8px;border:2px solid #e7dccb;border-radius:10px;padding:4px"></div>'
     +'<div id="coopStatus" style="font-size:13px;min-height:18px;color:#2a8a4a;margin-bottom:8px;font-weight:bold"></div>'
-    +'<button id="coopInvite" style="width:100%;padding:10px;margin-bottom:10px;background:#ffcf3a;color:#2a2438;border:0;border-radius:11px;font-weight:bold;font-size:14px;cursor:pointer">📋 Copy Invite Link</button>'
+    +'<button id="coopInvite" style="width:100%;padding:9px;margin-bottom:8px;background:#ffcf3a;color:#2a2438;border:0;border-radius:11px;font-weight:bold;font-size:14px;cursor:pointer">📋 Copy Invite Link</button>'
     +'<div style="display:flex;gap:8px"><button id="coopLeave" style="flex:1;padding:10px;background:#f4f0f7;border:2px solid #2a2438;border-radius:10px;cursor:pointer;font-weight:bold">Leave</button><button id="coopClose" style="flex:1;padding:10px;background:#2a2438;color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:bold">Close</button></div></div>';
   el.style.display='flex';
-  const setName=()=>{ const v=(el.querySelector('#coopName').value||'').trim(); if(v) COOP.name=v.slice(0,14); };
-  el.querySelector('#coopCreate').onclick=async()=>{ setName(); COOP.status('Connecting…'); await COOP.join(code); };
-  el.querySelector('#coopJoin').onclick=async()=>{ setName(); const c=(el.querySelector('#coopCode').value||'').trim(); if(!c){ COOP.status('Enter a code first.'); return; } COOP.status('Connecting…'); await COOP.join(c); };
+  const setName=()=>{ const v=(el.querySelector('#coopName').value||'').trim(); if(v){ COOP.name=v.slice(0,14); try{ localStorage.setItem('ww_nick',COOP.name); }catch(e){} } };
+  el.querySelector('#coopPublic').onclick=async()=>{ setName(); COOP.status('Creating public game…'); await COOP.join(code,true); if(COOP.on)COOP.status('🌐 Public game live (code '+COOP.room+') — friends can find it in Browse, or use your code/link.'); };
+  el.querySelector('#coopPrivate').onclick=async()=>{ setName(); COOP.status('Creating private game…'); await COOP.join(code,false); };
+  el.querySelector('#coopJoin').onclick=async()=>{ setName(); const c=(el.querySelector('#coopCode').value||'').trim(); if(!c){ COOP.status('Enter a code first.'); return; } COOP.status('Connecting…'); await COOP.join(c,false); };
+  el.querySelector('#coopBrowse').onclick=async()=>{ const ld=el.querySelector('#coopList'); ld.style.display='block'; ld.innerHTML='<div style="padding:8px;color:#777">Searching for open games…</div>'; setName(); const rooms=await COOP.listPublic();
+    if(!rooms.length){ ld.innerHTML='<div style="padding:8px;color:#777">No public games right now — create one!</div>'; return; }
+    ld.innerHTML=rooms.map(r=>'<div style="display:flex;align-items:center;gap:8px;padding:7px;border-bottom:1px solid #eee"><span style="flex:1;font-size:13px"><b>'+String(r.host||'Wobbler').replace(/[<>]/g,'')+"</b>'s world<br><span style=\"font-size:11px;color:#777\">code "+r.code+' · '+(r.players||1)+'/'+(r.max||8)+' players</span></span><button data-join="'+r.code+'" style="padding:6px 14px;background:#37c06a;color:#fff;border:0;border-radius:9px;font-weight:bold;cursor:pointer">Join</button></div>').join('');
+    ld.querySelectorAll('[data-join]').forEach(b=> b.onclick=async()=>{ COOP.status('Joining…'); await COOP.join(b.dataset.join,false); }); };
   el.querySelector('#coopLeave').onclick=()=>{ COOP.leave(); };
   el.querySelector('#coopInvite').onclick=()=>{ const r=COOP.room||code; const link=location.origin+location.pathname+'?room='+r; try{ navigator.clipboard.writeText(link); COOP.status('✅ Invite link copied — send it to a friend so they join room '+r+'!'); }catch(e){ COOP.status('Invite link: '+link); } };
   el.querySelector('#coopClose').onclick=()=>{ el.style.display='none'; };
@@ -3259,7 +3274,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
   interactNow:()=>{ updateInteract(); if(nearest){ const l=nearest.label; nearest.action(); return l; } return null; },
   inv:()=>({...state.inv}), nodes:()=>nodes.length, give:(k,n)=>Inv.add(k,n), craft, pickGear:(id,kind)=>pickupGear(id,kind), equipGear:(id,kind)=>equipGear(id,kind), unequipGear:(k,s)=>unequipGear(k,s), tradeDemo:()=>{ if(typeof COOP!=='undefined'){ COOP.on=true; COOP.id='me'; COOP.ch=COOP.ch||{send:()=>{}}; COOP.peers=COOP.peers||{}; COOP.peers['demo']={group:{position:{x:player.position.x,z:player.position.z}},name:'Demo Friend'}; } openTrade('demo'); if(state.tradeSession){ state.tradeSession.theirs={items:{wood:3,crystal:1},coin:12}; state.tradeSession.theirConfirmed=true; renderTrade(); } return tradeOpen; }, mobProbe:(dist)=>{ const t0=state.tod; state.tod=0.9; const c={}; for(let i=0;i<300;i++){ const ty=pickCreatureType(dist); if(ty)c[ty.name]=(c[ty.name]||0)+1; } state.tod=t0; return c; },
   gearHoverTest:()=>{ const n0=drops.length; dropGear(player.position.x, player.position.z-2.5, ['keen_saber','weapon']); const d=drops[drops.length-1]; d.mesh.getWorldPosition(_np); _np.project(camera); const onscreen=_np.z<1; _mx=(_np.x*0.5+0.5)*innerWidth; _my=(-_np.y*0.5+0.5)*innerHeight; _hoverGear=null; updateGearHoverTooltip(); const tt=document.getElementById('gearTip'); const r={onscreen, tooltipShown:!!tt&&tt.style.display==='block', nameOk:!!tt&&/Keen Saber/.test(tt.innerHTML), hasStats:!!tt&&/Damage/.test(tt.innerHTML)}; if(d&&d.mesh){try{world.remove(d.mesh);}catch(_){}} drops.length=n0; _hoverGear=null; hideGearTooltip(); return r; },
-  coopJoin:(c)=>{ if(typeof COOP!=='undefined') return COOP.join(c); }, coopPing:()=>{ if(typeof COOP!=='undefined'&&COOP._send)COOP._send(); }, coopInfo:()=>{ const r={count:0,on:false,visible:0}; if(typeof COOP!=='undefined'){ r.count=Object.keys(COOP.peers).length; r.on=COOP.on; r.room=COOP.room; r.visible=Object.values(COOP.peers).filter(p=>p.group&&p.group.parent&&p.group.visible!==false).length; } return r; }, revealFog:()=>revealFog(), openStash:()=>openStash(), stash:()=>({...state.stash}), hurt:(n)=>damagePlayer(n), armorTotal:()=>armorTotal(state.level), gear:()=>({...state.gear}), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
+  coopJoin:(c,pub)=>{ if(typeof COOP!=='undefined') return COOP.join(c,pub); }, coopListPublic:()=>{ if(typeof COOP!=='undefined') return COOP.listPublic(); }, coopPing:()=>{ if(typeof COOP!=='undefined'&&COOP._send)COOP._send(); }, coopInfo:()=>{ const r={count:0,on:false,visible:0}; if(typeof COOP!=='undefined'){ r.count=Object.keys(COOP.peers).length; r.on=COOP.on; r.room=COOP.room; r.visible=Object.values(COOP.peers).filter(p=>p.group&&p.group.parent&&p.group.visible!==false).length; } return r; }, revealFog:()=>revealFog(), openStash:()=>openStash(), stash:()=>({...state.stash}), hurt:(n)=>damagePlayer(n), armorTotal:()=>armorTotal(state.level), gear:()=>({...state.gear}), recipes:()=>RECIPES.map(r=>r.id), built:()=>state.built||0,
   nodesByItem:()=>{ const o={}; for(const n of nodes) o[n.item]=(o[n.item]||0)+1; return o; }, waters:()=>waters.length,
   homes:()=>({count:homes.length, built:homes.filter(h=>h.built).length, active:homes.filter(h=>h.active).length}),
   respawnInfo:()=>({nodes:nodes.length, hidden:nodes.filter(n=>!n.mesh.visible).length, onCd:nodes.filter(n=>n.timer>0).length}),
