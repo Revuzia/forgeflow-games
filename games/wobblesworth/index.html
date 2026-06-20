@@ -198,6 +198,7 @@
   #pause h2{color:var(--grape); text-shadow:2px 2px 0 var(--sun); font-size:28px; margin-bottom:16px}
   #pause .prow{display:flex; align-items:center; justify-content:space-between; gap:14px; font-size:16px; font-weight:bold; background:#fff; border:2px solid var(--ink); border-radius:12px; padding:8px 14px; margin:8px 0}
   #pause .prow input[type=range]{width:140px} #pause .prow input[type=checkbox]{width:22px; height:22px}
+  #pause select,#coop select{ -webkit-appearance:none; appearance:none; background:#fff7ec; border:2px solid var(--ink); border-radius:10px; padding:5px 28px 5px 11px; font:inherit; font-size:14px; color:var(--ink); cursor:pointer; background-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='12'%20height='8'%3E%3Cpath%20d='M1,1L6,6L11,1'%20fill='none'%20stroke='%232a2438'%20stroke-width='2'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 9px center }   /* rounded dropdowns */
   #pause .phint{color:#8a7c95; font-size:12px; margin-top:12px}
   /* styled confirm dialog (replaces the ugly native confirm()) — mirrors the .pcard look */
   #confirm{position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:rgba(34,26,46,.62); pointer-events:auto}
@@ -1604,9 +1605,9 @@ function usedSlots(){ let n=0; for(const k in state.inv){ if(state.inv[k]>0) n++
 function backpackFull(forNewStack){ return !_capOff && !!forNewStack && usedSlots() >= backpackCap(); }
 /* HOTBAR SELECTION + EATING (owner: "select these like Minecraft, or eat apples/veggies/protein for hunger/energy/health").
    Raw foods restore needs; protein (meat, from animals) heals HP. Pick a slot 1-8 (or click it), press Q to eat. */
-const FOOD_EFFECTS={ apple:{hunger:18,energy:4,hp:0,msg:'🍎 Crisp apple'}, carrot:{hunger:14,energy:10,hp:0,msg:'🥕 Crunchy carrot'}, mushroom:{hunger:10,energy:4,hp:1,msg:'🍄 Earthy mushroom'}, flower:{hunger:5,energy:8,hp:0,msg:'🌸 Nibbled a blossom'},
-  meat:{hunger:14,energy:4,hp:6,msg:'🍖 Hearty meat'}, milk:{hunger:10,energy:6,hp:2,msg:'🥛 Fresh milk'}, egg:{hunger:8,energy:4,hp:2,msg:'🥚 Cooked egg'},
-  health_potion:{hunger:0,energy:0,hp:6,msg:'🧪 Health potion'}, energy_tonic:{hunger:0,energy:50,hp:0,msg:'🧉 Energy tonic'} };   // potions = drinkable from the bag (click the tile, or R)   // protein -> real HP (owner request)
+const FOOD_EFFECTS={ apple:{hunger:18,energy:4,hp:0,msg:'🍎 Crisp apple'}, carrot:{hunger:14,energy:10,hp:0,msg:'🥕 Crunchy carrot'}, mushroom:{hunger:10,energy:4,hp:0,msg:'🍄 Earthy mushroom'}, flower:{hunger:5,energy:8,hp:0,msg:'🌸 Nibbled a blossom'},
+  meat:{hunger:18,energy:6,hp:0,msg:'🍖 Hearty meat'}, milk:{hunger:10,energy:6,hp:0,msg:'🥛 Fresh milk'}, egg:{hunger:8,energy:4,hp:0,msg:'🥚 Cooked egg'},
+  health_potion:{hunger:0,energy:0,heal:0.5,msg:'🧪 Health potion'}, energy_tonic:{hunger:0,energy:50,hp:0,msg:'🧉 Energy tonic'} };   // FOOD heals hunger/energy ONLY (owner); POTIONS heal HP (health_potion = 50% of max)
 // ── EQUIPMENT HOTBAR: the selected slot is what you HOLD (Minecraft-style). Layout = fist + owned weapons + pickaxe/shovel. ──
 const EQUIP_LVL={ keen_saber:5, dread_reaver:8, warded_vest:5, aegis_plate:8 };   // dropped rare/epic gear needs a LEVEL to equip (craftable tiers are already gated by their recipe level)
 function hotbarLayout(){ const L=[{kind:'fist',icon:'✊',name:'Fists'}];
@@ -1627,9 +1628,10 @@ function syncSel(){ const L=hotbarLayout(); for(let i=0;i<L.length;i++){ const e
 function selectSlot(i){ state.selectedSlot=clamp(i|0,0,9); applyEquip(); Inv.render(); }
 function eatFood(k){ const f=FOOD_EFFECTS[k]; if(!f) return false; if(!Inv.has(k,1)){ toast(`No ${ITEMS[k]?ITEMS[k].n.toLowerCase():k} to eat.`); return false; }
   Inv.take(k,1); if(f.hunger)Needs.add('hunger',f.hunger); if(f.energy)Needs.add('energy',f.energy);
-  if(f.hp && state.hp<state.hpMax){ state.hp=Math.min(state.hpMax,state.hp+f.hp*HP_SCALE); renderHearts(); }
+  const _heal=f.heal?Math.round(state.hpMax*f.heal):(f.hp?f.hp*HP_SCALE:0);   // POTIONS heal HP (heal=fraction of max); food gives no HP
+  if(_heal && state.hp<state.hpMax){ const _h0=state.hp; state.hp=Math.min(state.hpMax,state.hp+_heal); renderHearts(); const _g=Math.round(state.hp-_h0); if(_g>0&&typeof popDmg==='function') popDmg(player.position.x,(player.position.y||0)+2.4,player.position.z,'+'+_g,{color:'#5fe08a'}); }   // GREEN heal number
   updateNeedsUI(); markGoal('eat'); SFX.play('pickup',{vol:0.6,rate:1.1}); emote('interact-right');
-  toast(`${f.msg} — +${f.hunger} 🍔${f.energy?` +${f.energy} ⚡`:''}${f.hp?` +${f.hp*HP_SCALE}❤️`:''}`); return true; }
+  toast(`${f.msg} — ${f.hunger?`+${f.hunger} 🍔`:''}${f.energy?` +${f.energy} ⚡`:''}${_heal?` +${_heal}❤️`:''}`.replace(/\s+/g,' ').trim()); return true; }
 function eatBestFood(){ for(const k in FOOD_EFFECTS){ if((state.inv[k]||0)>0){ return eatFood(k); } } toast('🍎 No food in your inventory — gather apples, carrots or mushrooms (or eat from your inventory, I).'); return false; }
 function eatSelected(){ return eatBestFood(); }
 function openInv(){ invOpen=true; document.getElementById('inv').classList.remove('hidden'); renderInv(); }
@@ -2711,13 +2713,13 @@ function playerAttack(){ if(!state.running||state.paused)return; if(state._atkCD
     const dx=m.position.x-player.position.x, dz=m.position.z-player.position.z, d=Math.hypot(dx,dz)||1;
     if(d>w.range)continue; if((dx*fx+dz*fz)/d<0.25)continue;   // must be in the forward arc
     const roll=rollDamage(base, w.crit||0); c.hp-=roll.dmg; hit++; m.position.x+=dx/d*0.7; m.position.z+=dz/d*0.7; creatureHit(c);   // 🎲 dice damage + knockback + hit-flash/recoil
-    popDmg(m.position.x, (m.position.y||0)+(c.boss?2.8:1.7), m.position.z, roll.dmg, {crit:roll.crit});   // floating D&D damage number over the mob
+    popDmg(m.position.x, (m.position.y||0)+(c.boss?2.8:1.7), m.position.z, roll.dmg, {crit:roll.crit, color:(roll.crit?'#ffd23f':'#ff6b6b')});   // RED damage on the mob (crit = gold)
     if(w.life){ const heal=Math.max(1,Math.round(roll.dmg*w.life)); if(state.hp<state.hpMax){ state.hp=Math.min(state.hpMax,state.hp+heal); renderHearts(); } }   // EPIC weapon lifesteal
     if(c.hp<=0){ killCreature(i); } }
   for(let i=animals.length-1;i>=0;i--){ const a=animals[i], m=a.mesh; const dx=m.position.x-player.position.x, dz=m.position.z-player.position.z, d=Math.hypot(dx,dz)||1;   // swings also hit peaceful animals -> defeat for leather/meat
     if(d>w.range)continue; if((dx*fx+dz*fz)/d<0.25)continue;
     const arl=rollDamage(base, w.crit||0); a.hp-=arl.dmg; hit++; m.position.x+=dx/d*0.5; m.position.z+=dz/d*0.5; m.scale.setScalar(1.14);
-    popDmg(m.position.x, (m.position.y||0)+1.5, m.position.z, arl.dmg, {crit:arl.crit});
+    popDmg(m.position.x, (m.position.y||0)+1.5, m.position.z, arl.dmg, {crit:arl.crit, color:(arl.crit?'#ffd23f':'#ff6b6b')});
     if(a.hp<=0){ killAnimal(i); } }
   if(DUNGEON.inDungeon){ for(const sp of DUNGEON.spawners){ if(sp.dead)continue; const dx=sp.x-player.position.x, dz=sp.z-player.position.z, d=Math.hypot(dx,dz)||1; if(d<=w.range+0.6 && (dx*fx+dz*fz)/d>=0.1){ damageSpawner(sp, rollDamage(base, w.crit||0).dmg); hit++; } } }   // F also smashes the spawner (dice damage)
   swingFx(); if(hit){ shake(0.22); if(state.weapon&&state.weapon!=='fist')useDur(state.weapon,1); } }   // landing a hit wears the weapon
