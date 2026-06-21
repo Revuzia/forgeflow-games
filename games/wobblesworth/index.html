@@ -20,6 +20,19 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23b98cff'/%3E%3Cpath d='M12 32 32 14l20 18v18a3 3 0 0 1-3 3H15a3 3 0 0 1-3-3z' fill='%23fff7ec'/%3E%3Crect x='28' y='38' width='8' height='12' fill='%23ff5d8f'/%3E%3C/svg%3E" />
 <style>
   :root{ --ink:#221a2e; --paper:#fff7ec; --pop:#ff5d8f; --pop2:#3ad1c7; --sun:#ffcf4d; --grape:#7c5cff; }
+  #classpick{position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:linear-gradient(160deg,#2a2438,#0f0a18); pointer-events:auto}
+  #classpick.show{display:flex}
+  .cpcard{width:min(560px,94vw); background:var(--paper); color:var(--ink); border:3px solid var(--ink); border-radius:20px; padding:20px 22px; box-shadow:8px 8px 0 rgba(0,0,0,.5); text-align:center; font-family:'Trebuchet MS',sans-serif}
+  .cpcard h2{margin:0 0 4px; color:var(--grape); font-size:24px}
+  .cpsub{font-size:12px; color:#6b5b86; margin:0 0 14px}
+  .cprow{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px}
+  .cpcls{cursor:pointer; border:3px solid rgba(34,26,46,.18); border-radius:14px; padding:12px 8px; background:rgba(255,255,255,.62); transition:transform .1s}
+  .cpcls:hover{transform:translateY(-2px)} .cpcls.on{border-color:var(--pop); background:rgba(255,93,143,.13)}
+  .cpcls .cpi{font-size:34px; line-height:1} .cpcls b{display:block; margin:4px 0 3px; font-size:15px} .cpcls .cpb{font-size:11px; color:#6b5b86; line-height:1.3}
+  .cpg-row{display:flex; gap:10px; justify-content:center; margin-bottom:14px}
+  .cpg{padding:8px 22px; border:2px solid var(--ink); border-radius:11px; background:rgba(255,255,255,.62); cursor:pointer; font-weight:bold; font-size:14px}
+  .cpg.on{background:var(--grape); color:#fff}
+  .cpstart{padding:12px 30px; background:#37c06a; color:#fff; border:3px solid var(--ink); border-radius:14px; font-weight:bold; font-size:17px; cursor:pointer; box-shadow:4px 4px 0 rgba(34,26,46,.3)}
   *{box-sizing:border-box; margin:0; padding:0}
   html,body{height:100%; overflow:hidden; background:#bfe9ff; font-family:'Trebuchet MS','Segoe UI',system-ui,sans-serif; color:var(--ink); -webkit-user-select:none; -moz-user-select:none; user-select:none; -webkit-touch-callout:none; cursor:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='26'%20height='26'%20viewBox='0%200%2026%2026'%3E%3Cpath%20d='M3,2L3,20L8,15L11,23L15,21L11,13L18,13Z'%20fill='%232a2438'%20stroke='%2346e0c8'%20stroke-width='1.6'%20stroke-linejoin='round'/%3E%3C/svg%3E") 3 2, auto}
   input,textarea,select{-webkit-user-select:text; user-select:text}   /* text fields stay selectable; everything else can't highlight (highlighting was hijacking gear DRAG) */
@@ -752,14 +765,14 @@ const WEAPONS={ fist:{dmg:14,range:2.2,name:'Fists',icon:'✊'}, wood_sword:{dmg
   // ── DROPPED loot weapons (not craftable — only fall from rare/epic kills; equip/unequip from your bag) ──
   keen_saber:{dmg:74,range:3.05,name:'Keen Saber',icon:'🗡️',rarity:'rare',crit:0.08,model:'crystal_sword'},                 // RARE: high dmg + extra crit
   dread_reaver:{dmg:116,range:3.35,name:'Dread Reaver',icon:'⚔️',rarity:'epic',crit:0.16,life:0.14,model:'titan_blade'},   // EPIC: huge dmg + big crit + lifesteal (heal 14% of dmg dealt)
-  // ── MAGE staffs (fire magic BOLTS, cost MANA) ──
-  apprentice_staff:{dmg:22,range:15,name:'Apprentice Staff',icon:'🪄',cls:'mage',proj:'bolt',mana:8},
-  oak_staff:{dmg:40,range:16,name:'Oak Staff',icon:'🪄',cls:'mage',proj:'bolt',mana:10},
-  arcane_staff:{dmg:72,range:18,name:'Arcane Staff',icon:'🪄',cls:'mage',proj:'bolt',mana:14},
-  // ── RANGER bows (fire ARROWS from range) ──
-  short_bow:{dmg:24,range:17,name:'Short Bow',icon:'🏹',cls:'ranger',proj:'arrow'},
-  hunter_bow:{dmg:46,range:18,name:'Hunter Bow',icon:'🏹',cls:'ranger',proj:'arrow'},
-  longbow:{dmg:74,range:20,name:'Longbow',icon:'🏹',cls:'ranger',proj:'arrow'} };
+  // ── MAGE staffs — BASIC bolt is FREE + low dmg (less than a sword); MANA powers stronger SPELLS (cast with Q) ──
+  apprentice_staff:{dmg:16,range:15,name:'Apprentice Staff',icon:'🪄',cls:'mage',proj:'bolt'},
+  oak_staff:{dmg:28,range:16,name:'Oak Staff',icon:'🪄',cls:'mage',proj:'bolt'},
+  arcane_staff:{dmg:48,range:18,name:'Arcane Staff',icon:'🪄',cls:'mage',proj:'bolt'},
+  // ── RANGER bows — INFINITE basic arrows (a bit more than a staff bolt, still less than a sword); SPECIAL arrows (Q) are consumable ──
+  short_bow:{dmg:22,range:17,name:'Short Bow',icon:'🏹',cls:'ranger',proj:'arrow'},
+  hunter_bow:{dmg:36,range:18,name:'Hunter Bow',icon:'🏹',cls:'ranger',proj:'arrow'},
+  longbow:{dmg:58,range:20,name:'Longbow',icon:'🏹',cls:'ranger',proj:'arrow'} };
 const CLASSES={ warrior:{name:'Warrior',icon:'⚔️',blurb:'Sword & heavy armor — tough, hits hard up close.',start:'wood_sword'}, mage:{name:'Mage',icon:'🪄',blurb:'Staff & light armor — casts magic bolts that cost MANA, from afar.',start:'apprentice_staff'}, ranger:{name:'Ranger',icon:'🏹',blurb:'Bow & medium armor — fires arrows from a safe distance.',start:'short_bow'} };
 const CLASS_WTIER={ warrior:['fist','wood_sword','stone_sword','iron_sword','crystal_sword','gold_sword','titan_blade','mythic_blade'], mage:['fist','apprentice_staff','oak_staff','arcane_staff'], ranger:['fist','short_bow','hunter_bow','longbow'] };
 function playerClass(){ return state.charClass||'warrior'; }
@@ -1286,7 +1299,7 @@ function buildPlayerHouse(){
   // 📜 QUEST BOARD — the endless-quest hub; always 3 fresh bounties, refills as you complete them
   { const bp=new THREE.Group(); const post=box(0.2,2.0,0.2,'#6a4a2a'); post.position.y=1.0; bp.add(post); const bd=box(1.7,1.05,0.16,'#caa46a'); bd.position.y=2.05; bp.add(bd); const face=box(1.5,0.85,0.06,'#4a3420'); face.position.set(0,2.05,0.1); bp.add(face); const pin=ball(0.07,'#d24a4a'); pin.position.set(0,2.4,0.16); bp.add(pin); bp.position.set(cx+5.5,0,cz+hz+1.4); bp.castShadow=true; world.add(bp); addSolid(post); addInteractable(bp,'📜 Read the Quest Board',()=>openQuestBoard(),3.4); }
   // 🎨 THE DYER — recolors your outfit (needs Dye Petals from flowers); stands near the board
-  { const dy=(typeof makeSimpleNPC==='function')?makeSimpleNPC('#b06ac6','dyer'):box(0.7,1.6,0.5,'#b06ac6'); dy.position.set(cx-5.5,(typeof groundY==='function'?groundY(cx-5.5,cz+hz+1.6):0),cz+hz+1.6); world.add(dy); addInteractable(dy,'🎨 Visit the Dyer',()=>openDyer(),3.0); }
+  { const dx=cx-30, dz=cz-6; const dy=(typeof makeSimpleNPC==='function')?makeSimpleNPC('#b06ac6','dyer'):box(0.7,1.6,0.5,'#b06ac6'); dy.position.set(dx,(typeof groundY==='function'?groundY(dx,dz):0),dz); world.add(dy); addInteractable(dy,'🎨 Visit the Dyer',()=>openDyer(),3.0); }   // moved further off into the town (owner: not by the house/quest board)
   // ✨ ONBOARDING BEACON over the door — first session only, hides once you head inside
   const beacon=new THREE.Mesh(new THREE.ConeGeometry(0.7,2.6,5), new THREE.MeshBasicMaterial({color:'#ffe26a',transparent:true,opacity:0.78})); beacon.position.set(cx,6.6,cz+hz+1.2); beacon.rotation.x=Math.PI; beacon.visible=false; world.add(beacon); state.beacon=beacon;
   // roof (fades when inside)
@@ -1314,7 +1327,7 @@ function buildPlayerHouse(){
     const cake=box(0.6,0.5,0.6,'#ff9ed1'); cake.position.set(cx+3.5,1.5,cz-1); world.add(cake); Quests.complete('main','table'); emote('emote-yes'); toast('✅ Table set! Crank the music.'); });
   // bed (nap)
   const bed=F(-5.5,4,3,0.7,2.2,'#9ad0ff'); const quilt=box(2.6,0.25,2,'#ff6f91'); quilt.position.set(cx-5.3,1.1,cz+4); world.add(quilt);
-  addInteractable(bed,'Take a nap (bed)',()=>{ Needs.add('energy',40); emote('sit'); markGoal('nap'); const wasNight=!isDay(); state.tod=0.28; const _h0=state.hp; state.hp=state.hpMax; renderHearts(); const _hg=Math.round(state.hp-_h0); if(_hg>0&&typeof popDmg==='function') popDmg(player.position.x,(player.position.y||0)+2.4,player.position.z,'+'+_hg,{color:'#5fe08a'}); toast(wasNight?'😴 Slept till morning! Energy & health restored.':'😴 Zzz… energy & health restored!'); flashFade(); setTimeout(()=>{ try{ for(const k in charActions){ if(k!=='idle') charActions[k].stop(); } charAnim='idle'; if(charActions.idle) charActions.idle.reset().fadeIn(0.2).play(); }catch(e){} }, 2700); });   // nap heals to full + HARD reset to standing (stop every other clip, play idle) so legs never stay folded
+  addInteractable(bed,'Take a nap (bed)',()=>{ Needs.add('energy',40); emote('sit'); markGoal('nap'); const wasNight=!isDay(); state.tod=0.28; const _h0=state.hp; state.hp=state.hpMax; renderHearts(); if(state.manaMax>0){ state.mana=state.manaMax; updateManaUI(); } const _hg=Math.round(state.hp-_h0); if(_hg>0&&typeof popDmg==='function') popDmg(player.position.x,(player.position.y||0)+2.4,player.position.z,'+'+_hg,{color:'#5fe08a'}); toast(wasNight?'😴 Slept till morning! Energy & health restored.':'😴 Zzz… energy & health restored!'); flashFade(); setTimeout(()=>{ try{ for(const k in charActions){ if(k!=='idle') charActions[k].stop(); } charAnim='idle'; if(charActions.idle) charActions.idle.reset().fadeIn(0.2).play(); }catch(e){} }, 2700); });   // nap heals to full + HARD reset to standing (stop every other clip, play idle) so legs never stay folded
   // TV (tv)
   const tvStand=F(-6,-4,2,0.8,0.7,'#7a5a3b'); const tv=box(2.4,1.4,0.2,'#222'); tv.position.set(cx-6,2.0,cz-4.4); world.add(tv);
   const tvScreen=new THREE.Mesh(new THREE.PlaneGeometry(2,1.1),new THREE.MeshBasicMaterial({color:'#1a2a3a'})); tvScreen.position.set(cx-6,2.0,cz-4.28); world.add(tvScreen); state.tvScreen=tvScreen;
@@ -1551,7 +1564,7 @@ function emote(name){ // one-shot emote then back to idle/walk
   setTimeout(()=>{ if(charAnim==='__emote'){ a.fadeOut(0.25); a.clampWhenFinished=false; setAnim('idle'); setTimeout(()=>{ try{ a.stop(); }catch(e){} }, 300); } }, 700); }   // fully STOP the clamped emote action after the fade so the folded/sit pose can't keep blending (was only faded, which left legs folded after a nap)   // setAnim('idle') (was charAnim='') forces an immediate clean stand-up so legs don't stay folded after a nap/sit   // MUST fade the emote action OUT here: it was LoopOnce+clampWhenFinished, so it sat at full weight on its LAST frame (e.g. the folded-leg 'sit' pose after a nap). Clearing charAnim only let setAnim fade IDLE *in* — the clamped sit kept blending the legs into a seated/sleeping pose (owner: "after he sleeps his legs stay in a sleeping position"). Fading the clamped action out lets the player stand fully upright again.
 
 /* ---------- input / camera ---------- */
-const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(levelupOpen)closeLevelUp(); else if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(boardOpen)closeBoard(); else if(dyerOpen)closeDyer(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); else if(state.running)openSettings(); } }   /* ESC toggles Settings (open if nothing else is open); browsers still force ESC to exit fullscreen — unavoidable */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
+const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyQ'&&state.running) castSecondary(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(levelupOpen)closeLevelUp(); else if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(boardOpen)closeBoard(); else if(dyerOpen)closeDyer(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); else if(state.running)openSettings(); } }   /* ESC toggles Settings (open if nothing else is open); browsers still force ESC to exit fullscreen — unavoidable */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 // release ALL held keys when focus/visibility is lost — prevents the "stuck walking forward" bug
 // (a right-click context menu, alt-tab, or click-away steals focus so the W keyup never fires).
@@ -1907,6 +1920,7 @@ function syncSel(){ const L=hotbarLayout(); for(let i=0;i<L.length;i++){ const e
 function selectSlot(i){ state.selectedSlot=clamp(i|0,0,9); applyEquip(); Inv.render(); }
 function eatFood(k){ const f=FOOD_EFFECTS[k]; if(!f) return false; if(!Inv.has(k,1)){ toast(`No ${ITEMS[k]?ITEMS[k].n.toLowerCase():k} to eat.`); return false; }
   Inv.take(k,1); if(f.hunger)Needs.add('hunger',f.hunger); if(f.energy)Needs.add('energy',f.energy);
+  if(state.manaMax>0 && (f.energy||f.hunger)){ state.mana=Math.min(state.manaMax, state.mana + Math.round((f.energy||0)*0.6 + (f.hunger||0)*0.2)); updateManaUI(); }   // MAGE: snacks restore some mana (energy foods most)
   const _heal=f.heal?Math.round(state.hpMax*f.heal):(f.hp?f.hp*HP_SCALE:0);   // POTIONS heal HP (heal=fraction of max); food gives no HP
   if(_heal && state.hp<state.hpMax){ const _h0=state.hp; state.hp=Math.min(state.hpMax,state.hp+_heal); renderHearts(); const _g=Math.round(state.hp-_h0); if(_g>0&&typeof popDmg==='function') popDmg(player.position.x,(player.position.y||0)+2.4,player.position.z,'+'+_g,{color:'#5fe08a'}); }   // GREEN heal number
   updateNeedsUI(); markGoal('eat'); SFX.play('pickup',{vol:0.6,rate:1.1}); emote('interact-right');
@@ -3013,7 +3027,7 @@ function applyClass(cls,gender){ state.charClass=cls; const idx={warrior:'a',mag
   if(cls==='mage'){ state.manaMax=manaMaxForLevel(state.level); state.mana=state.manaMax; } else { state.manaMax=0; state.mana=0; }
   try{ if(typeof _buildPlayerBody==='function')_buildPlayerBody(); }catch(e){} try{ renderHearts(); }catch(e){} try{ Inv.render(); }catch(e){} try{ updateManaUI(); }catch(e){} save();
   toast(`${CLASSES[cls].icon} ${CLASSES[cls].name}! ${cls==='mage'?'Attack to cast magic bolts (costs MANA).':cls==='ranger'?'Attack to loose arrows from range.':'Attack to swing your blade up close.'}`); }
-function openClassPick(){ let el=document.getElementById('classpick'); if(!el){ el=document.createElement('div'); el.id='classpick'; document.body.appendChild(el); }
+function openClassPick(thenStart){ let el=document.getElementById('classpick'); if(!el){ el=document.createElement('div'); el.id='classpick'; document.body.appendChild(el); }
   state._pickClass=state._pickClass||'warrior'; state._pickGender=state._pickGender||'male';
   const draw=()=>{ let h='<div class="cpcard"><h2>Choose your hero</h2><p class="cpsub">Your class is set for this save — only armor changes your look afterward.</p><div class="cprow">';
     for(const k in CLASSES){ const c=CLASSES[k], on=state._pickClass===k; h+=`<div class="cpcls${on?' on':''}" data-cls="${k}"><div class="cpi">${c.icon}</div><b>${c.name}</b><div class="cpb">${c.blurb}</div></div>`; }
@@ -3021,7 +3035,7 @@ function openClassPick(){ let el=document.getElementById('classpick'); if(!el){ 
     el.innerHTML=h; el.className='show';
     el.querySelectorAll('[data-cls]').forEach(d=>d.onclick=()=>{ state._pickClass=d.dataset.cls; draw(); });
     el.querySelectorAll('[data-g]').forEach(d=>d.onclick=()=>{ state._pickGender=d.dataset.g; draw(); });
-    el.querySelector('#cpStart').onclick=()=>{ applyClass(state._pickClass,state._pickGender); el.className=''; try{SFX.play('success');}catch(e){} };
+    el.querySelector('#cpStart').onclick=()=>{ applyClass(state._pickClass,state._pickGender); el.className=''; try{SFX.play('success');}catch(e){} if(thenStart){ try{ startGame(); }catch(e){} } };
   };
   draw(); }
 function gainWeapon(id){ state.weapons[id]=true; equipBest(); const w=WEAPONS[id]; toast(`${w.icon} Crafted + equipped the ${w.name}!`); if(invOpen)renderInv(); Inv.render(); }
@@ -3039,7 +3053,14 @@ function updatePlayerShots(dt){ for(let i=playerShots.length-1;i>=0;i--){ const 
     if(!hit) for(let j=animals.length-1;j>=0;j--){ const a=animals[j],am=a.mesh; const dx=am.position.x-m.position.x, dz=am.position.z-m.position.z; if(dx*dx+dz*dz<1.7){ const roll=rollDamage(s.dmg,s.crit); a.hp-=roll.dmg; am.scale.setScalar(1.14); popDmg(am.position.x,(am.position.y||0)+1.5,am.position.z,roll.dmg,{color:'#ff6b6b'}); if(a.hp<=0)killAnimal(j); hit=true; break; } }
     if(hit||s.life<=0){ world.remove(m); playerShots.splice(i,1); } } }
 function doAttack(){ const w=WEAPONS[state.weapon]||WEAPONS.fist; if(w.proj) playerShoot(); else playerAttack(); }
-function updateMana(dt){ if((state.manaMax||0)>0 && state.mana<state.manaMax){ state.mana=Math.min(state.manaMax, state.mana+dt*9); updateManaUI(); } }
+function castSecondary(){ if(!state.running||state.paused||state._atkCD>0)return; const cls=playerClass();   // Q: mage SPELL (mana) / ranger special arrow (coming) / warrior info
+  if(cls==='mage'){ const w=WEAPONS[state.weapon]; if(!w||w.proj!=='bolt'){ toast('🪄 Equip a staff to cast a spell.'); return; } const cost=20; if((state.mana||0)<cost){ toast('💧 Not enough mana — rest or eat a mage snack to recharge.'); SFX.play('interact',{rate:0.5,vol:0.4}); return; }
+    state.mana-=cost; updateManaUI(); state._atkCD=0.6; state._swing=0.25; emote('attack-melee-right');
+    const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y), m=ball(0.34,'#c77dff'); m.material.transparent=true; m.position.set(player.position.x+fx*0.9,1.3,player.position.z+fz*0.9); world.add(m);
+    playerShots.push({mesh:m,vx:fx*22,vz:fz*22,life:1.7,dmg:(w.dmg||16)*2.6,crit:0.1,bolt:true}); SFX.play('interact',{rate:1.0,vol:0.55}); shake(0.12); toast('✨ Arcane Blast! (a stronger, mana-powered spell)'); }
+  else if(cls==='ranger'){ toast('🏹 Special arrows (fire & more) are coming soon — your basic arrows never run out.'); }
+  else { toast('⚔️ Warriors strike up close — left-click to swing.'); } }
+function updateMana(dt){ if((state.manaMax||0)>0 && state.mana<state.manaMax){ state.mana=Math.min(state.manaMax, state.mana+dt*3); updateManaUI(); } }   // mana trickles back slowly over time; rest + mage snacks restore more
 function updateManaUI(){ const el=document.getElementById('manabar'); if(!el)return; if((state.manaMax||0)<=0){ el.style.display='none'; return; } el.style.display=''; const f=Math.max(0,Math.min(1,state.mana/state.manaMax)); const fl=el.querySelector('.fill'); if(fl)fl.style.width=(f*100).toFixed(0)+'%'; const mv=el.querySelector('.mv'); if(mv)mv.textContent=Math.round(state.mana)+'/'+state.manaMax; }
 function playerAttack(){ if(!state.running||state.paused)return; if(state._atkCD>0) return;   // attack-speed gate (only kicks in when energy is low — full energy = no cooldown, spam freely)
   const asm=Needs.atkSpeedMul(); state._atkCD = asm<1 ? 0.42/asm : 0; state._swing=0.32;
@@ -3549,7 +3570,7 @@ loadAll(()=>{ if(criticalMissing()){ showLoadFailUI(); return; }   // fast-path:
   setupMenu();   // main menu: Continue / New Game / Settings
   if(ASSET_ERRORS.length) setTimeout(()=>toast(`⚠ ${ASSET_ERRORS.length} decoration(s) didn't load — the game still works.`),1200);
   buildTouchUI();   // mobile controls (no-op on desktop / non-touch)
-  try{ if(sessionStorage.getItem('ww_newgame')){ sessionStorage.removeItem('ww_newgame'); startGame(); } }catch(e){}   // New Game = wipe+reload then auto-start fresh
+  try{ if(sessionStorage.getItem('ww_newgame')){ sessionStorage.removeItem('ww_newgame'); openClassPick(true); } }catch(e){}   // New Game = wipe+reload -> CHOOSE CLASS+GENDER on a clean start menu, then Begin -> startGame()
 });
 // SAVE DURABILITY: flush continuous progress (tod / biomes / position) on tab-hide & exit, not just discrete actions
 addEventListener('visibilitychange',()=>{ if(document.hidden){ try{ if(!sessionStorage.getItem('ww_newgame')) save(); }catch(e){} Music.suspend(); }
@@ -3558,8 +3579,8 @@ addEventListener('pagehide',()=>{ try{ if(!sessionStorage.getItem('ww_newgame'))
 let _inviteRoom=null; try{ _inviteRoom=((new URLSearchParams(location.search).get('room'))||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)||null; }catch(e){}   // invite link ?room=CODE
 function startGame(){ if(!ready)return; document.getElementById('title').classList.add('hidden'); closeSettings(); state.running=true; Music.start();
   state.hpMax=hpMaxForLevel(state.level); if(!state.hp||state.hp>state.hpMax||state.hp<1) state.hp=state.hpMax; renderHearts();   // ensure the real HP pool is set for fresh + loaded games
-  if(!state.charClass){ setTimeout(()=>{ try{ openClassPick(); }catch(e){} }, 350); }   // NEW GAME -> pick class + gender
-  else { if(state.charClass==='mage'){ state.manaMax=manaMaxForLevel(state.level); if(!(state.mana>0))state.mana=state.manaMax; } updateManaUI(); }
+  if(!state.charClass) state.charClass='warrior';   // safety: class is normally chosen on the NEW GAME start menu before startGame()
+  if(state.charClass==='mage'){ state.manaMax=manaMaxForLevel(state.level); if(!(state.mana>0))state.mana=state.manaMax; } updateManaUI();
   if(questActive('rescue_one') && Quests.isDone('rescue_one','accept') && !Quests.isDone('rescue_one','free') && !state._rescueNpc){ try{ spawnRescueCaptive(); }catch(e){} }   // re-spawn the captive if a rescue was mid-flight when the game was reloaded
   for(const _id in (state.activeQuests||{})){ const _d=Quests.defs[_id]; if(!_d||!_d._gen)continue; if(_d._tid==='boss_hunt' && !Quests.isDone(_id,'slay') && !creatures.some(c=>c._questId===_id)){ try{ genSetup(_id); }catch(e){} } else if(_d._tid==='rescue' && !Quests.isDone(_id,'free') && !state._rescueNpc){ try{ spawnRescueCaptive(_id); }catch(e){} } }   // re-spawn gen boss/captive if a generated quest was mid-flight
   if(typeof refreshBoard==='function') refreshBoard();   // ensure the board has 3 fresh postings on every load
@@ -3714,6 +3735,15 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       const id=genQuestDef({tid:'craft_item',p:{count:2},title:'TQ Craft',pitch:'',tier:'small',sig:'craft_item'}); state.activeQuests[id]={accepted:true}; Quests.complete(id,'accept'); genSetup(id); qBump('craft'); qBump('craft'); const craftDone=Quests.isDone(id,'do');
       const id2=genQuestDef({tid:'collect_set',p:{set:['wood']},title:'TQ Set',pitch:'',tier:'small',sig:'collect_set'}); state.activeQuests[id2]={accepted:true}; Quests.complete(id2,'accept'); genSetup(id2); state.inv.wood=(state.inv.wood||0)+1; pollGenQuests(); const setDone=Quests.isDone(id2,'do');
       R.quest_gen2=(craftDone && setDone && state.giggle>_g); delete Quests.defs[id]; delete Quests.defs[id2]; delete state.activeQuests[id]; delete state.activeQuests[id2]; }
+    // CLASS SYSTEM: mage staff bolt (free) + Q spell (costs mana) + class weapon gating + CLASSES table
+    { const _c0=state.charClass,_w0=state.weapon,_wp0={...state.weapons},_mm0=state.manaMax,_mn0=state.mana,_cd0=state._atkCD;
+      state.charClass='mage'; state.weapons.apprentice_staff=true; state.weapon='apprentice_staff'; state.manaMax=50; state.mana=50;
+      const ps0=playerShots.length; state._atkCD=0; doAttack(); const boltOK=playerShots.length>ps0;
+      state._atkCD=0; const _mana0=state.mana; castSecondary(); const spellOK=(playerShots.length>=ps0+2 && state.mana<_mana0);
+      const gateOK=(canUseWeapon('apprentice_staff') && !canUseWeapon('wood_sword') && canUseWeapon('fist'));
+      for(let i=playerShots.length-1;i>=ps0;i--){ try{world.remove(playerShots[i].mesh);}catch(e){} } playerShots.length=ps0;
+      R.class_system=(boltOK && spellOK && gateOK && typeof applyClass==='function' && !!CLASSES.warrior && !!CLASSES.mage && !!CLASSES.ranger);
+      state.charClass=_c0; state.weapon=_w0; state.weapons=_wp0; state.manaMax=_mm0; state.mana=_mn0; state._atkCD=_cd0; }
     // PERSISTENT REQUESTS LIST renders
     state.req=null; townBoard(); renderRequests(); R.requests_list=/Board/.test(document.getElementById('reqlist').innerHTML);
     // TOWN LEGEND post-game checklist renders
@@ -3965,7 +3995,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       &&R.event_active&&R.event_market&&R.shop_closed_night&&R.shop_open_day&&R.onboarding_done&&R.friendship&&R.requests_list&&R.town_legend
       &&R.pause_works&&R.cam_pitch_clamped&&R.ambient
       &&R.head&&R.assetsClean&&R.touch&&R.touch_moves&&R.raf_boundary&&R.pause_freezes_cook&&R.cook_completes&&R.sfx_gate&&R.reduce_motion&&R.reduce_confetti&&R.light_cap&&R.save_sanitized&&R.particle_pool
-      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2&&R.class_system
+      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2&&R.class_system&&R.class_system
       &&R.homes_present&&R.home_built&&R.home_loot&&R.home_enter_path&&R.recipe_page_unlock&&R.node_respawn&&R.chest_oneuse
       &&R.weapon_craft&&R.combat_kill&&R.combat_respawn&&R.inv_slots
       &&R.mine_pickaxe&&R.mine_enter&&R.mine_dig&&R.mine_exit&&R.armor_craft&&R.armor_reduces&&R.rarity_tiers&&R.rarity_loot&&R.combat_anim&&R.gear_equip&&R.dice_rolls&&R.dmg_popup&&R.menu;
