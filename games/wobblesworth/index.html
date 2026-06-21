@@ -114,6 +114,15 @@
   .tradecard .tbtns{display:flex; gap:8px; margin-top:12px; justify-content:center}
   .tradecard .tbtns button{padding:9px 18px; border:3px solid var(--ink); border-radius:11px; cursor:pointer; font-weight:bold; font-size:14px}
   .tradecard .tcancel{background:#ff6b6b; color:#fff} .tradecard .tconfirm{background:#2ec5a8; color:#fff} .tradecard .tconfirm:disabled{opacity:.6; cursor:default}
+  #board{position:fixed; inset:0; z-index:43; display:none; align-items:center; justify-content:center; background:rgba(20,14,30,.5); pointer-events:auto}
+  #board.show{display:flex}
+  .boardcard{width:min(470px,93vw); max-height:84vh; overflow:auto; background:var(--paper); color:var(--ink); border:3px solid var(--ink); border-radius:18px; padding:16px 18px; box-shadow:7px 7px 0 rgba(34,26,46,.3); font-family:'Trebuchet MS',sans-serif}
+  .boardcard h3{margin:0 0 4px; font-size:19px; display:flex; justify-content:space-between; align-items:center; color:var(--grape)}
+  .boardcard h3 .x{cursor:pointer; background:var(--ink); color:#fff; border-radius:8px; padding:1px 10px; font-size:15px}
+  .boardrow{display:flex; align-items:center; gap:10px; padding:10px; margin:8px 0; border:2px solid rgba(34,26,46,.16); border-radius:12px; background:rgba(255,255,255,.66)}
+  .boardrow .bdot{width:13px; height:13px; border-radius:50%; flex-shrink:0; border:2px solid rgba(34,26,46,.3)}
+  .boardrow .binfo{flex:1; min-width:0} .boardrow .binfo b{font-size:14px} .boardrow .bp{font-size:11.5px; color:#6b5b86; margin-top:2px}
+  .boardrow .btake{flex-shrink:0; padding:8px 15px; background:#37c06a; color:#fff; border:2px solid var(--ink); border-radius:10px; font-weight:bold; cursor:pointer}
   .invcard{width:min(560px,93vw); max-height:84vh; overflow:auto; background:var(--paper); color:var(--ink); border:3px solid var(--ink); border-radius:18px; padding:14px 16px; box-shadow:7px 7px 0 rgba(34,26,46,.3)}
   .invcard h3{margin:0 0 10px; font-size:18px; display:flex; justify-content:space-between; align-items:center; color:var(--grape)}
   .invcard h3 .x{cursor:pointer; background:var(--ink); color:#fff; border-radius:8px; padding:1px 10px; border:1px solid rgba(255,255,255,.3)}
@@ -1228,6 +1237,8 @@ function buildPlayerHouse(){
     const knob=ball(0.09,'#caa46a'); knob.position.set(1.78,1.4,0.12); hinge.add(knob);
     state._houseDoor=hinge;   // updateWorld swings it open when the player is near the doorway
     solids.push({minX:cx-1.0,maxX:cx+1.0,minZ:cz+hz-0.25,maxZ:cz+hz+0.25,top:2.8,mesh:null,stand:false,off:true,monStop:true}); }   // off:true → PLAYER passes; monStop → MONSTERS blocked (no more lions walking in)
+  // 📜 QUEST BOARD — the endless-quest hub; always 3 fresh bounties, refills as you complete them
+  { const bp=new THREE.Group(); const post=box(0.2,2.0,0.2,'#6a4a2a'); post.position.y=1.0; bp.add(post); const bd=box(1.7,1.05,0.16,'#caa46a'); bd.position.y=2.05; bp.add(bd); const face=box(1.5,0.85,0.06,'#4a3420'); face.position.set(0,2.05,0.1); bp.add(face); const pin=ball(0.07,'#d24a4a'); pin.position.set(0,2.4,0.16); bp.add(pin); bp.position.set(cx+5.5,0,cz+hz+1.4); bp.castShadow=true; world.add(bp); addSolid(post); addInteractable(bp,'📜 Read the Quest Board',()=>openQuestBoard(),3.4); }
   // ✨ ONBOARDING BEACON over the door — first session only, hides once you head inside
   const beacon=new THREE.Mesh(new THREE.ConeGeometry(0.7,2.6,5), new THREE.MeshBasicMaterial({color:'#ffe26a',transparent:true,opacity:0.78})); beacon.position.set(cx,6.6,cz+hz+1.2); beacon.rotation.x=Math.PI; beacon.visible=false; world.add(beacon); state.beacon=beacon;
   // roof (fades when inside)
@@ -1487,7 +1498,7 @@ function emote(name){ // one-shot emote then back to idle/walk
   setTimeout(()=>{ if(charAnim==='__emote'){ a.fadeOut(0.25); a.clampWhenFinished=false; setAnim('idle'); setTimeout(()=>{ try{ a.stop(); }catch(e){} }, 300); } }, 700); }   // fully STOP the clamped emote action after the fade so the folded/sit pose can't keep blending (was only faded, which left legs folded after a nap)   // setAnim('idle') (was charAnim='') forces an immediate clean stand-up so legs don't stay folded after a nap/sit   // MUST fade the emote action OUT here: it was LoopOnce+clampWhenFinished, so it sat at full weight on its LAST frame (e.g. the folded-leg 'sit' pose after a nap). Clearing charAnim only let setAnim fade IDLE *in* — the clamped sit kept blending the legs into a seated/sleeping pose (owner: "after he sleeps his legs stay in a sleeping position"). Fading the clamped action out lets the player stand fully upright again.
 
 /* ---------- input / camera ---------- */
-const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(levelupOpen)closeLevelUp(); else if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); else if(state.running)openSettings(); } }   /* ESC toggles Settings (open if nothing else is open); browsers still force ESC to exit fullscreen — unavoidable */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
+const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(levelupOpen)closeLevelUp(); else if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(boardOpen)closeBoard(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); else if(state.running)openSettings(); } }   /* ESC toggles Settings (open if nothing else is open); browsers still force ESC to exit fullscreen — unavoidable */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 // release ALL held keys when focus/visibility is lost — prevents the "stuck walking forward" bug
 // (a right-click context menu, alt-tab, or click-away steals focus so the W keyup never fires).
@@ -1531,20 +1542,100 @@ var Quests={ defs:{
 // ── REAL-QUEST helpers: NPCs OFFER (accept/decline), finishQuest pays the custom reward, onQuestAccepted sets up the target ──
 function questAvail(id){ const d=Quests.defs[id]; if(!d)return false; const last=d.steps[d.steps.length-1].id; return !(state.activeQuests&&state.activeQuests[id]) && !Quests.isDone(id,last); }
 function questActive(id){ return !!(state.activeQuests&&state.activeQuests[id]); }
-function offerQuest(id,pitch){ const d=Quests.defs[id]; if(!d)return false; styledConfirm(d.title, pitch||'Take on this quest?', '✓ Accept', ()=>{ state.activeQuests=state.activeQuests||{}; state.activeQuests[id]={accepted:true}; Quests.complete(id,'accept'); SFX.play('interact'); toast('📜 Quest accepted: '+d.title); onQuestAccepted(id); save(); }, ()=>{}, '✕ Not now'); return true; }
-function finishQuest(id){ const d=Quests.defs[id]; if(!d||!d.reward)return; const st=(state.activeQuests&&state.activeQuests[id]); if(st&&st.rewarded)return; if(st)st.rewarded=true; const r=d.reward; if(r.gp)state.giggle=(state.giggle||0)+r.gp; if(r.xp&&typeof gainXP==='function')gainXP(r.xp); if(r.items)for(const[k,n]of r.items)Inv.add(k,n); if(r.badge){ state.badges=state.badges||{}; state.badges[r.badge]=true; } state.questTarget=null; toast(r.msg||('🏆 Quest complete: '+d.title)); try{ SFX.play('success',{vol:0.6}); shake(0.4); confetti(player.position.clone().setY(2),40); }catch(e){} if(typeof renderRequests==='function')renderRequests(); save(); }
+function offerQuest(id,pitch){ const d=Quests.defs[id]; if(!d)return false; if(d._gen && qActiveCount()>=Q_MAX_ACTIVE){ toast('📜 Journal full — finish or abandon a quest first.'); return false; } styledConfirm(d.title, pitch||'Take on this quest?', '✓ Accept', ()=>{ state.activeQuests=state.activeQuests||{}; state.activeQuests[id]={accepted:true}; Quests.complete(id,'accept'); SFX.play('interact'); toast('📜 Quest accepted: '+d.title); onQuestAccepted(id); if(typeof refreshBoard==='function')refreshBoard(); save(); }, ()=>{}, '✕ Not now'); return true; }
+function finishQuest(id){ const d=Quests.defs[id]; if(!d||!d.reward)return; const st=(state.activeQuests&&state.activeQuests[id]); if(st&&st.rewarded)return; if(st)st.rewarded=true; const r=d.reward; if(r.gp)state.giggle=(state.giggle||0)+r.gp; if(r.xp&&typeof gainXP==='function')gainXP(r.xp); if(r.items)for(const[k,n]of r.items)Inv.add(k,n); if(r.badge){ state.badges=state.badges||{}; state.badges[r.badge]=true; } state.questTarget=null; toast(r.msg||('🏆 Quest complete: '+d.title)); try{ SFX.play('success',{vol:0.6}); shake(0.4); confetti(player.position.clone().setY(2),40); }catch(e){} if(typeof renderRequests==='function')renderRequests();
+  if(d._gen){ state.questHistory=state.questHistory||[]; if(d._sig)state.questHistory.push(d._sig); if(state.questHistory.length>40)state.questHistory.shift(); const _id=id; setTimeout(()=>{ try{ delete Quests.defs[_id]; if(state.activeQuests)delete state.activeQuests[_id]; }catch(e){} if(typeof refreshBoard==='function')refreshBoard(); Quests.render(); save(); }, 60); }   // spend the one-off gen def, refill the board so there's always a fresh quest
+  save(); }
+function abandonQuest(id){ const d=Quests.defs[id]; if(!d)return; if(d._gen&&d._tid==='rescue'&&state._rescueNpc){ try{ world.remove(state._rescueNpc.node); const k=interactables.indexOf(state._rescueNpc.it); if(k>=0)interactables.splice(k,1); }catch(e){} state._rescueNpc=null; } if(d._gen&&d._tid==='boss_hunt'){ for(const c of creatures) if(c._questId===id) c._questId=null; } state.questTarget=null; if(d._sig){ state.questHistory=state.questHistory||[]; state.questHistory.push(d._sig); } if(state.activeQuests)delete state.activeQuests[id]; if(d._gen){ for(const s of d.steps) delete Quests.done[id+'.'+s.id]; delete Quests.defs[id]; } if(typeof refreshBoard==='function')refreshBoard(); Quests.render(); toast('📜 Quest abandoned.'); save(); }
 function onQuestAccepted(id){
   if(id==='smith_hunt'){ const a=rand(0,TAU), r=rand(16,22); const x=player.position.x+Math.cos(a)*r, z=player.position.z+Math.sin(a)*r; const bo=spawnBoss(pick(Object.keys(BOSS_TYPES)), x, z); if(bo)bo._questId='smith_hunt'; state.questTarget={x,z,label:'❗ Gnashtooth'}; toast('🔨 Gnashtooth has risen nearby — follow the ❗ on your map!'); }
   else if(id==='night_cull'){ if(state.activeQuests.night_cull)state.activeQuests.night_cull.kills=0; toast('🌙 Cull 5 monsters after dark — they swarm the outskirts at night.'); }
   else if(id==='rescue_one'){ spawnRescueCaptive(); }
+  else if(Quests.defs[id]&&Quests.defs[id]._gen){ genSetup(id); }   // procedurally-generated board/NPC quest
 }
-function spawnRescueCaptive(){ if(state._rescueNpc){ try{ world.remove(state._rescueNpc.node); }catch(e){} state._rescueNpc=null; }
+function spawnRescueCaptive(qid){ qid=qid||'rescue_one'; if(state._rescueNpc){ try{ world.remove(state._rescueNpc.node); }catch(e){} state._rescueNpc=null; }
   const a=rand(0,TAU); let x=Math.cos(a)*rand(120,180), z=-(60+Math.abs(Math.sin(a))*150);   // far out in the woods (negative z)
   const R=Math.hypot(x,z); if(R>FENCE-14){ const k=(FENCE-14)/R; x*=k; z*=k; }
   const npc=(typeof makeSimpleNPC==='function')?makeSimpleNPC('#e8c79a','captive'):box(0.7,1.5,0.5,'#e8c79a'); npc.position.set(x,(typeof groundY==='function'?groundY(x,z):0),z); world.add(npc);
-  const it=addInteractable(npc,'🆘 Free the captive',()=>{ if(Quests.isDone('rescue_one','free'))return; Quests.complete('rescue_one','free'); if(state.activeQuests.rescue_one)state.activeQuests.rescue_one.freed=true; const k=interactables.indexOf(it); if(k>=0)interactables.splice(k,1); try{ world.remove(npc); }catch(e){} state._rescueNpc=null; state.questTarget={x:HOUSE.cx,z:HOUSE.cz,label:'❗ Town'}; toast('🆘 Freed! Guide them home — head back to town (❗).'); SFX.play('success'); try{ confetti(npc.position.clone().setY(1.5),20); }catch(e){} save(); },2.8);
-  state._rescueNpc={node:npc,it}; state.questTarget={x,z,label:'❗ Captive'};
+  const hasReturn=!!(Quests.defs[qid]&&Quests.defs[qid].steps.some(s=>s.id==='return'));
+  const it=addInteractable(npc,'🆘 Free the captive',()=>{ if(Quests.isDone(qid,'free'))return; Quests.complete(qid,'free'); if(state.activeQuests[qid])state.activeQuests[qid].freed=true; const k=interactables.indexOf(it); if(k>=0)interactables.splice(k,1); try{ world.remove(npc); }catch(e){} state._rescueNpc=null; if(hasReturn){ state.questTarget={x:HOUSE.cx,z:HOUSE.cz,label:'❗ Town'}; toast('🆘 Freed! Guide them home — head back to town (❗).'); } else { state.questTarget=null; } SFX.play('success'); try{ confetti(npc.position.clone().setY(1.5),20); }catch(e){} save(); },2.8);
+  state._rescueNpc={node:npc,it,qid}; state.questTarget={x,z,label:'❗ Captive'};
 }
+// ════════ ENDLESS PROCEDURAL QUEST GENERATOR ════════ templates × pools × flavor, anti-repeat + day/level scaling → a town Quest Board that never runs dry
+const ENEMY_TIER={petal:1,spore:1,thornling:1,bulb:1,fang:1.3,mote:1.2,thornback:1.6,acidcap:1.7,boomshroom:1.8,skeleton:2.0,pumpkin:2.0,zombie:2.1,ghost:2.2};
+const MAT_TIER={wood:1,stone:1,crystal:2,iron_ingot:3,gold_ingot:3,dirt:1,apple:1,carrot:1,mushroom:1,flower:1,egg:1,milk:1,meat:1.4,wool:1.4,leather:1.4};
+const Q_LOC=[{name:'Whispering Woods',x:0,z:-90},{name:'Crystal Quarry',x:90,z:0},{name:'Sunny Fields',x:-90,z:0},{name:'Pebble Beach',x:0,z:90},{name:'the Mine',x:92,z:6}];
+const Q_GATHER=['wood','stone','crystal','apple','carrot','mushroom','flower','wool','leather','meat','egg','milk'];
+const Q_DELIVER=['apple','wood','crystal','meat','milk','flower','carrot'];
+function qDayMul(){ return 1+Math.min(state.day||1,20)*0.05; }
+function qLvlMul(){ return 1+((state.level||1)-1)*0.03; }
+function qEName(k){ return (CREATURE_TYPES[k]&&CREATURE_TYPES[k].name)||k; }
+function qRR(a){ return a[Math.floor(Math.random()*a.length)]; }
+function qFeasEnemy(k){ const t=CREATURE_TYPES[k]; return !!t && (!t.minDist || (state.day||1)>=2); }
+const Q_MAX_ACTIVE=4;
+function qActiveCount(){ let n=0; for(const id in (state.activeQuests||{})) if(Quests.defs[id]&&Quests.defs[id]._gen) n++; return n; }
+// roll ONE fresh quest spec — verb weighted by progress, params from the live pools, a flavor name+pitch
+function qRoll(){ const day=state.day||1;
+  const W=[['hunt',4.5],['gather',3],['reach',2],['deliver',2],['rescue',1.6],['survive',day>=2?2:0],['boss_hunt',day>=2?2:0],['dig',state.hasShovel?1.5:0],['befriend',1.5]];
+  let tot=0; for(const v of W)tot+=v[1]; let r=Math.random()*tot, tid='hunt'; for(const v of W){ r-=v[1]; if(r<=0){tid=v[0];break;} }
+  if(tid==='hunt'){ const k=qRR(Object.keys(ENEMY_TIER).filter(qFeasEnemy)); const t=CREATURE_TYPES[k]; const hard=ENEMY_TIER[k]>=1.6; const count=hard?qRR([3,4,5]):qRR([5,6,7,8]); const nm=qRR(['{n} Cull','Thin the {n}s','{n} Patrol','{n} Trouble','{n} Roundup','{n} Bounty']).replace('{n}',qEName(k)); const far=t.minDist?` (out past the ${t.minDist}-stride mark${t.minDist>=120?', after dark':''})`:''; return {tid,p:{enemyKey:k,count,nightOnly:t.minDist>=120},title:nm,pitch:`Defeat ${count} ${qEName(k)}${far}.`,tier:hard?'medium':'small',sig:'hunt:'+k}; }
+  if(tid==='boss_hunt'){ const bk=day>=8?qRR(['golem','titan','wraith']):day>=4?qRR(['golem','wraith']):'golem'; const bn=(BOSS_TYPES[bk]&&BOSS_TYPES[bk].name)||'Champion'; return {tid,p:{bossKey:bk,bossName:bn},title:bn+' Bounty',pitch:`A ${bn} stalks the outskirts — hunt it down.`,tier:'large',sig:'boss:'+bk}; }
+  if(tid==='reach'){ const L=qRR(Q_LOC); return {tid,p:{x:L.x,z:L.z,label:L.name},title:'Scout '+L.name,pitch:`Travel out to ${L.name} and have a look around.`,tier:'small',sig:'reach:'+L.name}; }
+  if(tid==='gather'){ const item=qRR(Q_GATHER); const high=MAT_TIER[item]>=2; const count=high?qRR([3,4,6]):qRR([6,8,10]); return {tid,p:{item,count},title:`Gather ${count} ${ITEMS[item].n}`,pitch:`The town needs ${count} ${ITEMS[item].i} ${ITEMS[item].n} — bring them in.`,tier:high?'medium':'small',sig:'gather:'+item}; }
+  if(tid==='deliver'){ const item=qRR(Q_DELIVER); const count=qRR([3,4,5]); const L=qRR(Q_LOC); return {tid,p:{item,count,destX:L.x,destZ:L.z,label:L.name},title:`Supply Run: ${L.name}`,pitch:`Carry ${count} ${ITEMS[item].i} ${ITEMS[item].n} out to ${L.name}.`,tier:'medium',sig:'deliver:'+L.name}; }
+  if(tid==='survive'){ const count=qRR([8,10,12]); return {tid,p:{count},title:'Hold the Night',pitch:`Survive the dark — fell ${count} monsters before dawn.`,tier:'large',sig:'survive'}; }
+  if(tid==='dig'){ const count=qRR([5,8,10]); return {tid,p:{count},title:'Buried Riches',pitch:`Dig up ${count} mounds out in the wilds (🥄 shovel).`,tier:'medium',sig:'dig'}; }
+  if(tid==='befriend'){ const count=qRR([3,5]); return {tid,p:{mode:'requests',count},title:'Good Neighbor',pitch:`Lend a hand — fulfill ${count} neighbor requests.`,tier:'small',sig:'befriend'}; }
+  /* rescue */ return {tid:'rescue',p:{},title:qRR(['The Lost Wanderer','Missing in the Woods','A Cry for Help','Gone at Dusk']),pitch:'Someone wandered into the woods and never came back — find and free them.',tier:'medium',sig:'rescue'}; }
+function qReward(spec){ const dm=qDayMul()*qLvlMul(), p=spec.p, t=spec.tid; let gp=120,xp=24,items=[];
+  if(t==='hunt'){ gp=18*p.count*(ENEMY_TIER[p.enemyKey]||1); items=[['coin',Math.round(gp*0.4)],['crystal',Math.max(1,Math.round((ENEMY_TIER[p.enemyKey]||1)))]]; }
+  else if(t==='boss_hunt'){ gp=240; xp=60; items=[['boss_core',1],['coin',120],['crystal',2]]; }
+  else if(t==='reach'){ gp=90; items=[['coin',40]]; }
+  else if(t==='gather'){ gp=14*p.count*(MAT_TIER[p.item]||1); items=[['coin',Math.round(gp*0.5)]]; }
+  else if(t==='deliver'){ gp=18*p.count*(MAT_TIER[p.item]||1)+45; items=[['coin',Math.round(gp*0.5)]]; }
+  else if(t==='survive'){ gp=210; xp=50; items=[['crystal',3],['coin',70]]; }
+  else if(t==='dig'){ gp=90+14*p.count; items=[['coin',50],['crystal',1]]; }
+  else if(t==='befriend'){ gp=60+50*p.count; items=[['coin',45]]; }
+  else if(t==='rescue'){ gp=230; xp=48; items=[['coin',100],['crystal',2]]; }
+  gp=Math.round(gp*dm); xp=Math.round((xp||gp*0.2)*dm); return {gp,xp,items,msg:'🏆 '+spec.title+' complete!'}; }
+function qSteps(spec){ if(spec.tid==='rescue') return [{id:'free',t:'Find & free the captive in the woods'}];
+  const last={hunt:'slay',boss_hunt:'slay',survive:'slay',reach:'reach',gather:'gather',deliver:'deliver',dig:'dig',befriend:'befriend'}[spec.tid]||'do';
+  const lab={slay:'Defeat the targets',reach:'Reach the marked place',gather:'Gather the goods',deliver:'Deliver the goods',dig:'Dig up the treasure',befriend:'Help the neighbors'}[last];
+  return [{id:last,t:lab}]; }
+function genQuestDef(spec){ const id='q_'+(state._qseq=(state._qseq||0)+1); Quests.defs[id]={title:spec.title,kind:'bounty',steps:[{id:'accept',t:'Accept the quest'}].concat(qSteps(spec)),reward:qReward(spec),_gen:true,_tid:spec.tid,_p:spec.p,_pitch:spec.pitch,_sig:spec.sig}; return id; }
+function genSetup(id){ const d=Quests.defs[id]; if(!d||!d._gen)return; const p=d._p, q=state.activeQuests[id]; if(!q)return;
+  if(d._tid==='hunt'||d._tid==='survive'){ q.kills=0; if(d._tid==='hunt'&&CREATURE_TYPES[p.enemyKey]&&CREATURE_TYPES[p.enemyKey].minDist){ const md=CREATURE_TYPES[p.enemyKey].minDist, a=rand(0,TAU); state.questTarget={x:Math.cos(a)*md,z:Math.sin(a)*md,label:'❗ '+qEName(p.enemyKey)}; } }
+  else if(d._tid==='boss_hunt'){ const a=rand(0,TAU), r=rand(16,24), x=player.position.x+Math.cos(a)*r, z=player.position.z+Math.sin(a)*r; const bo=spawnBoss(p.bossKey,x,z); if(bo)bo._questId=id; state.questTarget={x,z,label:'❗ '+p.bossName}; }
+  else if(d._tid==='reach'){ state.questTarget={x:p.x,z:p.z,label:'❗ '+p.label}; }
+  else if(d._tid==='gather'){ q.base=state.inv[p.item]||0; }
+  else if(d._tid==='deliver'){ state.questTarget={x:p.destX,z:p.destZ,label:'❗ '+p.label}; }
+  else if(d._tid==='dig'){ q.base=state.inv.dirt||0; }
+  else if(d._tid==='befriend'){ q.base=state.reqsFulfilled||0; }
+  else if(d._tid==='rescue'){ spawnRescueCaptive(id); }
+}
+// per-frame completion poll for the non-combat gen quests (combat handled in killCreature)
+function pollGenQuests(){ const aq=state.activeQuests; if(!aq)return; for(const id in aq){ const d=Quests.defs[id]; if(!d||!d._gen)continue; const p=d._p, q=aq[id];
+  if(d._tid==='reach' && !Quests.isDone(id,'reach')){ if(Math.hypot(player.position.x-p.x,player.position.z-p.z)<11) Quests.complete(id,'reach'); }
+  else if(d._tid==='gather' && !Quests.isDone(id,'gather')){ if(((state.inv[p.item]||0)-(q.base||0))>=p.count) Quests.complete(id,'gather'); }
+  else if(d._tid==='dig' && !Quests.isDone(id,'dig')){ if(((state.inv.dirt||0)-(q.base||0))>=p.count) Quests.complete(id,'dig'); }
+  else if(d._tid==='deliver' && !Quests.isDone(id,'deliver')){ if(Inv.has(p.item,p.count) && Math.hypot(player.position.x-p.destX,player.position.z-p.destZ)<9){ Inv.take(p.item,p.count); Quests.complete(id,'deliver'); } }
+  else if(d._tid==='befriend' && !Quests.isDone(id,'befriend')){ if(((state.reqsFulfilled||0)-(q.base||0))>=p.count) Quests.complete(id,'befriend'); }
+} }
+// ── TOWN QUEST BOARD: always shows 3 fresh quests; refills the moment one is taken/finished ──
+function refreshBoard(){ state.boardOffers=state.boardOffers||[]; const seen=state.questHistory||(state.questHistory=[]);
+  state.boardOffers=state.boardOffers.filter(o=>o&&Quests.defs[o.defId]&&!Quests.isDone(o.defId, (Quests.defs[o.defId].steps.slice(-1)[0]||{}).id) && !state.activeQuests[o.defId]);
+  let guard=0; while(state.boardOffers.length<3 && guard++<40){ const spec=qRoll(); if(seen.slice(-14).includes(spec.sig)) continue; const id=genQuestDef(spec); state.boardOffers.push({defId:id,name:spec.title,pitch:spec.pitch,tier:spec.tier,sig:spec.sig}); }
+  if(state.boardOffers.length<3){ while(state.boardOffers.length<3){ const spec=qRoll(); const id=genQuestDef(spec); state.boardOffers.push({defId:id,name:spec.title,pitch:spec.pitch,tier:spec.tier,sig:spec.sig}); } }   // fallback: ignore anti-repeat if pool exhausted
+}
+let boardOpen=false;
+function openQuestBoard(){ if(!state.running)return; refreshBoard(); boardOpen=true; let el=document.getElementById('board'); if(!el){ el=document.createElement('div'); el.id='board'; document.body.appendChild(el); }
+  const TC={small:'#7ec96b',medium:'#ffcf4d',large:'#ff7a5d'};
+  let h='<div class="boardcard"><h3>📜 Quest Board <span class="x" id="boardX">✕</span></h3><p style="font-size:12px;margin:0 0 10px;color:#6b5b86">Fresh bounties posted daily. Accept up to '+Q_MAX_ACTIVE+' at once — finish one and a new posting appears.</p>';
+  for(const o of state.boardOffers){ h+=`<div class="boardrow" data-def="${o.defId}"><span class="bdot" style="background:${TC[o.tier]||'#ccc'}"></span><div class="binfo"><b>${o.name}</b><div class="bp">${o.pitch}</div></div><button class="btake" data-take="${o.defId}">Accept</button></div>`; }
+  h+='</div>'; el.innerHTML=h; el.className='show';
+  el.querySelector('#boardX').onclick=closeBoard; el.onclick=(e)=>{ if(e.target===el)closeBoard(); };
+  el.querySelectorAll('[data-take]').forEach(btn=>btn.onclick=()=>{ const did=btn.dataset.take; closeBoard(); offerQuest(did,'📜 '+(Quests.defs[did]._pitch||'Take this bounty?')); }); }
+function closeBoard(){ boardOpen=false; const el=document.getElementById('board'); if(el)el.className=''; }
 const GOAL_POOL=[{type:'eat',label:'Grab a snack from the fridge'},{type:'nap',label:'Take a nap to recharge'},{type:'cook',label:'Cook a meal on the stove'},{type:'tv',label:'Watch some cartoons'},{type:'shower',label:'Take a refreshing shower'},{type:'gnome',label:'Water the garden gnome'},{type:'toilet',label:'Plunge the haunted toilet'},{type:'socks',label:'Find a lost sock'},{type:'neighbor',label:'Greet a neighbor'},{type:'dance',label:'Turn on the disco & dance'},{type:'gather',label:'Gather something out in the wilds'},{type:'craft',label:'Press C to craft something'}];
 function genGoals(){ const pool=[...GOAL_POOL],out=[]; while(out.length<3&&pool.length){ out.push({...pool.splice(Math.floor(Math.random()*pool.length),1)[0],done:false}); } state.goals=out; renderGoals(); }
 function markGoal(type){ let hit=false; for(const g of state.goals){ if(g.type===type&&!g.done){ g.done=true; hit=true; state.giggle+=40; } } if(hit){ gainXP(8); SFX.play('pickup'); renderGoals(); save(); if(state.goals.every(g=>g.done)) completeDay(); } }
@@ -1612,7 +1703,7 @@ function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
   unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier, bagCount:state.bagCount, charModel:state.charModel,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
-  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
+  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, questHistory:state.questHistory, _qseq:state._qseq, boardOffers:state.boardOffers, genDefs:(()=>{const o={};for(const k in Quests.defs){const d=Quests.defs[k];if(d&&d._gen)o[k]={title:d.title,tid:d._tid,p:d._p,pitch:d._pitch,sig:d._sig,reward:d.reward,steps:d.steps};}return o;})(), lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug })); }catch(e){} }
 // VERSIONED + SANITIZED load: bad/corrupt/legacy data can never crash boot or inject impossible state
 function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) return; let s; try{ s=JSON.parse(raw); }catch(e){ localStorage.setItem('ww2_save_corrupt',raw); return; }
@@ -1643,7 +1734,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.craftedSet=(s.craftedSet&&typeof s.craftedSet==='object')?s.craftedSet:{}; state.reqsFulfilled=num(s.reqsFulfilled,0,0,1e9); state.biomes=(s.biomes&&typeof s.biomes==='object')?s.biomes:{}; state.event=DAY_EVENTS.find(e=>e.id===s.eventId)||null;
   if(typeof s.tod==='number'&&Number.isFinite(s.tod)) state.tod=((s.tod%1)+1)%1;
   if(s.volume!=null) state.volume=clamp(+s.volume||0,0,1); state.musicOn=(s.musicOn!==false); state.sfxOn=(s.sfxOn!==false); state.reduce=!!s.reduce;
-  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.quickItems=(s.quickItems&&typeof s.quickItems==='object')?s.quickItems:{}; state.activeQuests=(s.activeQuests&&typeof s.activeQuests==='object')?s.activeQuests:{}; state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{}; state.badges=(s.badges&&typeof s.badges==='object')?s.badges:{};
+  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.quickItems=(s.quickItems&&typeof s.quickItems==='object')?s.quickItems:{}; state.activeQuests=(s.activeQuests&&typeof s.activeQuests==='object')?s.activeQuests:{}; state.questHistory=Array.isArray(s.questHistory)?s.questHistory:[]; state._qseq=num(s._qseq,0,0,1e9); state.boardOffers=Array.isArray(s.boardOffers)?s.boardOffers:[]; if(s.genDefs&&typeof s.genDefs==='object'){ for(const k in s.genDefs){ const g=s.genDefs[k]; if(g&&g.steps&&g.tid) Quests.defs[k]={title:g.title,kind:'bounty',steps:g.steps,reward:g.reward,_gen:true,_tid:g.tid,_p:g.p,_pitch:g.pitch,_sig:g.sig}; } } state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{}; state.badges=(s.badges&&typeof s.badges==='object')?s.badges:{};
   state.homeTier=num(s.homeTier,0,0,3); for(let i=1;i<=state.homeTier;i++) applyHomeTier(i);   // rebuild purchased home upgrades
   state.homePaints=(s.homePaints&&typeof s.homePaints==='object')?s.homePaints:{}; loadBlocks(s.buildBlocks); applyHomePaints();   // restore voxel builds + house repaints (buildWorld ran first, so homes exist)
   for(const k in VOX.meshes) world.remove(VOX.meshes[k]); VOX.dug={}; VOX.meshes={};   // restore carved terrain
@@ -2372,6 +2463,7 @@ function buildCullList(){   // one-time after buildWorld: tag every LOCALIZED st
 function updateWorld(dt){ const tn=performance.now()*0.001;
   if(state._houseDoor){ const _dx=player.position.x-HOUSE.cx, _dz=player.position.z-(HOUSE.cz+HOUSE.hz); const _near=(_dx*_dx+_dz*_dz)<16; state._houseDoor.rotation.y=angLerp(state._houseDoor.rotation.y, _near?-1.45:0, dt*8); }   // swing the front door open when the player approaches, closed otherwise
   if(questActive('rescue_one') && Quests.isDone('rescue_one','free') && !Quests.isDone('rescue_one','return') && Math.hypot(player.position.x,player.position.z)<42){ Quests.complete('rescue_one','return'); }   // rescue complete: freed captive + back in town
+  if(typeof pollGenQuests==='function') pollGenQuests();   // reach/gather/deliver/dig/befriend completion for generated quests
   state.tod=(state.tod+dt/280)%1; const ang=state.tod*TAU-Math.PI/2, sy=Math.sin(ang);
   // sun follows the player so shadows exist in ALL biomes (was a fixed ±box at origin = shadows only near town)
   sun.target.position.set(player.position.x,0,player.position.z);
@@ -3040,7 +3132,8 @@ function killCreature(i){ const c=creatures[i]; recordLore(c); const p=c.mesh.po
     toast(`💀 BOSS DEFEATED: ${(c.type&&c.type.name)||'Boss'}! A 📦 loot bag dropped — walk up & press E. (+📖 Titan pages)`); if(c._questId && questActive(c._questId)) Quests.complete(c._questId,'slay'); save(); return; }
   let tier=rollRarity(); const _kpd=Math.hypot(p.x,p.z); if(!isDay() && _kpd>150){ if(tier==='common'&&Math.random()<0.33)tier='rare'; else if(tier==='rare'&&Math.random()<0.20)tier='epic'; }   // 🌙 far-outskirts NIGHT kills upgrade rarity → dangerous nights out are worth it
   const m=RARITY[tier].mult; const coins=(2+Math.floor(Math.random()*3))*m; state._kills=(state._kills||0)+1; SFX.play('interact',{rate:0.3,vol:0.5});
-  if(questActive('night_cull')&&!Quests.isDone('night_cull','slay')&&!isDay()){ const q=state.activeQuests.night_cull; q.kills=(q.kills||0)+1; Quests.render(); if(q.kills>=5)Quests.complete('night_cull','slay'); else toast(`🌙 Night Cull: ${q.kills}/5`); }   // count night kills toward the bounty   // owner disliked the bright kill 'chime' — much lower pitch + quieter = a dull defeat thud, not a chime (hit sound at L~2092 stays rate 1.0)
+  if(questActive('night_cull')&&!Quests.isDone('night_cull','slay')&&!isDay()){ const q=state.activeQuests.night_cull; q.kills=(q.kills||0)+1; Quests.render(); if(q.kills>=5)Quests.complete('night_cull','slay'); else toast(`🌙 Night Cull: ${q.kills}/5`); }   // count night kills toward the bounty
+  for(const _id in (state.activeQuests||{})){ const _d=Quests.defs[_id]; if(!_d||!_d._gen)continue; if((_d._tid==='hunt'||_d._tid==='survive')&&!Quests.isDone(_id,'slay')){ const _q=state.activeQuests[_id]; const _ok=_d._tid==='survive'?!isDay():(loreKeyOf(c.type)===_d._p.enemyKey&&(_d._p.nightOnly?!isDay():true)); if(_ok){ _q.kills=(_q.kills||0)+1; Quests.render(); if(_q.kills>=_d._p.count)Quests.complete(_id,'slay'); else toast(_d.title+': '+_q.kills+'/'+_d._p.count); } } }   // generalized gen-quest hunt/survive counter   // owner disliked the bright kill 'chime' — much lower pitch + quieter = a dull defeat thud, not a chime (hit sound at L~2092 stays rate 1.0)
   gainXP(6 + (c.type&&c.type.minDist?8:0) + (m>1?m*2:0));   // XP for the kill — far-out specials + rare drops grant more
   dropLoot(p.x,p.z,[['coin',coins]], '⚔️ Loot', true);   // a glowing loot BAG -> walk over to auto-collect (coins)
   if(tier==='epic'){ dropGear(p.x,p.z, pick(EPIC_GEAR)); }   // EPIC = an equippable epic weapon or armor (no toast — the glowing physical drop + hover stats are enough)
@@ -3320,6 +3413,8 @@ let _inviteRoom=null; try{ _inviteRoom=((new URLSearchParams(location.search).ge
 function startGame(){ if(!ready)return; document.getElementById('title').classList.add('hidden'); closeSettings(); state.running=true; Music.start();
   state.hpMax=hpMaxForLevel(state.level); if(!state.hp||state.hp>state.hpMax||state.hp<1) state.hp=state.hpMax; renderHearts();   // ensure the real HP pool is set for fresh + loaded games
   if(questActive('rescue_one') && Quests.isDone('rescue_one','accept') && !Quests.isDone('rescue_one','free') && !state._rescueNpc){ try{ spawnRescueCaptive(); }catch(e){} }   // re-spawn the captive if a rescue was mid-flight when the game was reloaded
+  for(const _id in (state.activeQuests||{})){ const _d=Quests.defs[_id]; if(!_d||!_d._gen)continue; if(_d._tid==='boss_hunt' && !Quests.isDone(_id,'slay') && !creatures.some(c=>c._questId===_id)){ try{ genSetup(_id); }catch(e){} } else if(_d._tid==='rescue' && !Quests.isDone(_id,'free') && !state._rescueNpc){ try{ spawnRescueCaptive(_id); }catch(e){} } }   // re-spawn gen boss/captive if a generated quest was mid-flight
+  if(typeof refreshBoard==='function') refreshBoard();   // ensure the board has 3 fresh postings on every load
   try{ state.intro=!localStorage.getItem('ww2_seen_intro'); }catch(e){ state.intro=true; }
   if(state.intro&&state.beacon){ state.beacon.visible=true; toast('✨ Follow the glowing beam to your new house!'); }
   else toast('🏠 Back on Giggleton Lane — survive the night! Check your Journal →');
@@ -3468,6 +3563,8 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
     const fg=neighbors[1]; fg.userData.noQuest=true; for(let i=0;i<3;i++){ fg.userData.request=null; neighborTalk(fg); const rq=fg.userData.request; Inv.add(rq.item,rq.qty); neighborTalk(fg); } R.friendship=(fg.userData.friend>=3);
     // REAL NPC QUEST: accept -> complete final step -> custom reward (GP + boss_core) lands once
     { const _g0=state.giggle||0, _bc=state.inv.boss_core||0; state.activeQuests=state.activeQuests||{}; delete state.activeQuests.smith_hunt; delete Quests.done['smith_hunt.accept']; delete Quests.done['smith_hunt.slay']; state.activeQuests.smith_hunt={accepted:true}; Quests.complete('smith_hunt','accept'); Quests.complete('smith_hunt','slay'); R.quest_flow=(Quests.isDone('smith_hunt','slay') && state.giggle>=_g0+300 && (state.inv.boss_core||0)>=_bc+1 && state.activeQuests.smith_hunt.rewarded===true); }
+    // ENDLESS BOARD: refresh fills 3 valid gen quests + qRoll produces varied signatures
+    { state.boardOffers=[]; state.questHistory=[]; state.day=5; refreshBoard(); const ok3=state.boardOffers.length===3 && state.boardOffers.every(o=>Quests.defs[o.defId]&&Quests.defs[o.defId]._gen); const sigs={}; for(let i=0;i<40;i++){ const sp=qRoll(); sigs[sp.sig]=1; } R.quest_board=(ok3 && Object.keys(sigs).length>=6); for(const o of state.boardOffers) delete Quests.defs[o.defId]; state.boardOffers=[]; }
     // PERSISTENT REQUESTS LIST renders
     state.req=null; townBoard(); renderRequests(); R.requests_list=/Board/.test(document.getElementById('reqlist').innerHTML);
     // TOWN LEGEND post-game checklist renders
@@ -3715,7 +3812,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       &&R.event_active&&R.event_market&&R.shop_closed_night&&R.shop_open_day&&R.onboarding_done&&R.friendship&&R.requests_list&&R.town_legend
       &&R.pause_works&&R.cam_pitch_clamped&&R.ambient
       &&R.head&&R.assetsClean&&R.touch&&R.touch_moves&&R.raf_boundary&&R.pause_freezes_cook&&R.cook_completes&&R.sfx_gate&&R.reduce_motion&&R.reduce_confetti&&R.light_cap&&R.save_sanitized&&R.particle_pool
-      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow
+      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board
       &&R.homes_present&&R.home_built&&R.home_loot&&R.home_enter_path&&R.recipe_page_unlock&&R.node_respawn&&R.chest_oneuse
       &&R.weapon_craft&&R.combat_kill&&R.combat_respawn&&R.inv_slots
       &&R.mine_pickaxe&&R.mine_enter&&R.mine_dig&&R.mine_exit&&R.armor_craft&&R.armor_reduces&&R.rarity_tiers&&R.rarity_loot&&R.combat_anim&&R.gear_equip&&R.dice_rolls&&R.dmg_popup&&R.menu;
