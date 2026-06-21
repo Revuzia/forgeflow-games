@@ -114,6 +114,31 @@
   .tradecard .tbtns{display:flex; gap:8px; margin-top:12px; justify-content:center}
   .tradecard .tbtns button{padding:9px 18px; border:3px solid var(--ink); border-radius:11px; cursor:pointer; font-weight:bold; font-size:14px}
   .tradecard .tcancel{background:#ff6b6b; color:#fff} .tradecard .tconfirm{background:#2ec5a8; color:#fff} .tradecard .tconfirm:disabled{opacity:.6; cursor:default}
+  #dyer{position:fixed; inset:0; z-index:44; display:none; align-items:center; justify-content:center; background:rgba(20,14,30,.55); pointer-events:auto}
+  #dyer.show{display:flex}
+  .dyecard{width:min(440px,93vw); background:var(--paper); color:var(--ink); border:3px solid var(--ink); border-radius:18px; padding:16px 18px; box-shadow:7px 7px 0 rgba(34,26,46,.3); font-family:'Trebuchet MS',sans-serif}
+  .dyecard h3{margin:0 0 4px; font-size:19px; display:flex; justify-content:space-between; align-items:center; color:var(--grape)}
+  .dyecard h3 .x{cursor:pointer; background:var(--ink); color:#fff; border-radius:8px; padding:1px 10px; font-size:15px}
+  .dyesub{font-size:12px; color:#6b5b86; margin:0 0 12px}
+  .dyegrid{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:12px}
+  .dyeswatch{cursor:pointer; text-align:center; border:2px solid transparent; border-radius:10px; padding:4px 2px}
+  .dyeswatch.on{border-color:var(--ink)}
+  .dyeswatch span{display:block; width:100%; height:34px; border-radius:8px; border:2px solid rgba(34,26,46,.25)}
+  .dyeswatch small{font-size:9px; color:#6b5b86; display:block; margin-top:2px}
+  .dyebtns{display:flex; gap:8px}
+  .dyerm{flex:1; padding:9px; background:#f4f0f7; border:2px solid var(--ink); border-radius:10px; cursor:pointer; font-weight:bold}
+  .dyerdone{flex:1; padding:9px; background:var(--ink); color:#fff; border:0; border-radius:10px; cursor:pointer; font-weight:bold}
+  #classpick{position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:rgba(20,14,30,.72); pointer-events:auto}
+  #classpick.show{display:flex}
+  .cpcard{width:min(560px,94vw); background:var(--paper); color:var(--ink); border:3px solid var(--ink); border-radius:20px; padding:20px 22px; box-shadow:8px 8px 0 rgba(34,26,46,.4); font-family:'Trebuchet MS',sans-serif; text-align:center}
+  .cpcard h2{margin:0 0 4px; color:var(--grape); font-size:23px} .cpsub{font-size:12px; color:#6b5b86; margin:0 0 14px}
+  .cprow{display:flex; gap:10px; justify-content:center; margin-bottom:14px}
+  .cpcls{flex:1; cursor:pointer; border:3px solid rgba(34,26,46,.18); border-radius:14px; padding:14px 8px; background:rgba(255,255,255,.6); transition:transform .1s}
+  .cpcls:hover{transform:translateY(-3px); border-color:#ffcf77} .cpcls.on{border-color:var(--pop); background:rgba(255,93,143,.12)}
+  .cpcls .cpi{font-size:38px; line-height:1} .cpcls b{display:block; margin:6px 0 4px; font-size:16px} .cpcls .cpb{font-size:11px; color:#6b5b86; line-height:1.35}
+  .cpg-row{display:flex; gap:10px; justify-content:center; margin-bottom:16px}
+  .cpg{padding:9px 22px; border:2px solid var(--ink); border-radius:11px; background:rgba(255,255,255,.6); color:var(--ink); font-weight:bold; cursor:pointer; font-size:15px} .cpg.on{background:var(--grape); color:#fff}
+  .cpstart{padding:12px 30px; border:3px solid var(--ink); border-radius:14px; background:#37c06a; color:#fff; font-weight:bold; font-size:17px; cursor:pointer; box-shadow:4px 4px 0 rgba(34,26,46,.3)}
   #board{position:fixed; inset:0; z-index:43; display:none; align-items:center; justify-content:center; background:rgba(20,14,30,.5); pointer-events:auto}
   #board.show{display:flex}
   .boardcard{width:min(470px,93vw); max-height:84vh; overflow:auto; background:var(--paper); color:var(--ink); border:3px solid var(--ink); border-radius:18px; padding:16px 18px; box-shadow:7px 7px 0 rgba(34,26,46,.3); font-family:'Trebuchet MS',sans-serif}
@@ -300,6 +325,7 @@
 <div id="needs" class="hud">
   <div class="bar"><div class="lbl"><span>🍔 Hunger</span><span id="vHunger">80%</span></div><div class="track"><div id="fHunger" class="fill"></div></div></div>
   <div class="bar"><div class="lbl"><span>⚡ Energy</span><span id="vEnergy">80%</span></div><div class="track"><div id="fEnergy" class="fill"></div></div></div>
+  <div id="manabar" class="bar" style="display:none"><div class="lbl"><span>💧 Mana</span><span class="mv">0/0</span></div><div class="track"><div class="fill" style="background:linear-gradient(90deg,#3a6bd6,#7aa8ff)"></div></div></div>
   <div id="hearts" class="bar"></div>
   <div id="armorbar" class="bar" style="display:none"></div>
   <div id="xpbar" class="bar"><div class="lbl"><span>⭐ Level <span id="vLevel">1</span></span><span id="vXP">0/40</span></div><div class="track"><div id="fXP" class="fill"></div></div></div>
@@ -411,9 +437,9 @@ addEventListener('error', e=>__report('window.error', e.error||e.message));
 addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reason));
 
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
-  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, tradePending:null, quickItems:{}, activeQuests:{}, questTarget:null, npcOfferDay:{}, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
+  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, tradePending:null, quickItems:{}, activeQuests:{}, questTarget:null, npcOfferDay:{}, dyeColor:'', gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
-  hp:100, hpMax:100, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
+  hp:100, hpMax:100, xp:0, level:1, charClass:'', mana:0, manaMax:0, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
   volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0, lore:{}, fog:{}, met:{}, badges:{} };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
@@ -725,7 +751,19 @@ const creatures=[];   // {mesh, hp, max, cd, bob}
 const WEAPONS={ fist:{dmg:14,range:2.2,name:'Fists',icon:'✊'}, wood_sword:{dmg:24,range:2.6,name:'Wooden Sword',icon:'🗡️'}, stone_sword:{dmg:38,range:2.8,name:'Stone Sword',icon:'⚔️'}, iron_sword:{dmg:50,range:2.9,name:'Iron Sword',icon:'🗡️'}, crystal_sword:{dmg:62,range:3.0,name:'Crystal Sword',icon:'⚔️'}, gold_sword:{dmg:82,range:3.2,name:'Gold Sword',icon:'⚔️'}, titan_blade:{dmg:120,range:3.5,name:'Titan Blade',icon:'🗡️'}, mythic_blade:{dmg:160,range:3.7,name:'Mythic Blade',icon:'⚔️'},
   // ── DROPPED loot weapons (not craftable — only fall from rare/epic kills; equip/unequip from your bag) ──
   keen_saber:{dmg:74,range:3.05,name:'Keen Saber',icon:'🗡️',rarity:'rare',crit:0.08,model:'crystal_sword'},                 // RARE: high dmg + extra crit
-  dread_reaver:{dmg:116,range:3.35,name:'Dread Reaver',icon:'⚔️',rarity:'epic',crit:0.16,life:0.14,model:'titan_blade'} };   // EPIC: huge dmg + big crit + lifesteal (heal 14% of dmg dealt)
+  dread_reaver:{dmg:116,range:3.35,name:'Dread Reaver',icon:'⚔️',rarity:'epic',crit:0.16,life:0.14,model:'titan_blade'},   // EPIC: huge dmg + big crit + lifesteal (heal 14% of dmg dealt)
+  // ── MAGE staffs (fire magic BOLTS, cost MANA) ──
+  apprentice_staff:{dmg:22,range:15,name:'Apprentice Staff',icon:'🪄',cls:'mage',proj:'bolt',mana:8},
+  oak_staff:{dmg:40,range:16,name:'Oak Staff',icon:'🪄',cls:'mage',proj:'bolt',mana:10},
+  arcane_staff:{dmg:72,range:18,name:'Arcane Staff',icon:'🪄',cls:'mage',proj:'bolt',mana:14},
+  // ── RANGER bows (fire ARROWS from range) ──
+  short_bow:{dmg:24,range:17,name:'Short Bow',icon:'🏹',cls:'ranger',proj:'arrow'},
+  hunter_bow:{dmg:46,range:18,name:'Hunter Bow',icon:'🏹',cls:'ranger',proj:'arrow'},
+  longbow:{dmg:74,range:20,name:'Longbow',icon:'🏹',cls:'ranger',proj:'arrow'} };
+const CLASSES={ warrior:{name:'Warrior',icon:'⚔️',blurb:'Sword & heavy armor — tough, hits hard up close.',start:'wood_sword'}, mage:{name:'Mage',icon:'🪄',blurb:'Staff & light armor — casts magic bolts that cost MANA, from afar.',start:'apprentice_staff'}, ranger:{name:'Ranger',icon:'🏹',blurb:'Bow & medium armor — fires arrows from a safe distance.',start:'short_bow'} };
+const CLASS_WTIER={ warrior:['fist','wood_sword','stone_sword','iron_sword','crystal_sword','gold_sword','titan_blade','mythic_blade'], mage:['fist','apprentice_staff','oak_staff','arcane_staff'], ranger:['fist','short_bow','hunter_bow','longbow'] };
+function playerClass(){ return state.charClass||'warrior'; }
+function canUseWeapon(id){ if(id==='fist')return true; const w=WEAPONS[id]; if(!w)return false; return (w.cls||'warrior')===playerClass(); }
 const WTIER=['fist','wood_sword','stone_sword','iron_sword','crystal_sword','gold_sword','titan_blade','mythic_blade'];   // titan/mythic = top tiers (need boss_core)
 // ARMOR — a % chance to fully BLOCK an incoming hit (clean with 1-heart hits: a hit either lands fully or is blocked)
 const ARMORS={ leather:{block:0.30,name:'Leather Armor',icon:'🦺'}, iron:{block:0.55,name:'Iron Armor',icon:'🦺'}, gold:{block:0.72,name:'Gold Armor',icon:'🦺'}, titan:{block:0.86,name:'Titan Plate',icon:'🛡️'},
@@ -1247,6 +1285,8 @@ function buildPlayerHouse(){
     solids.push({minX:cx-1.0,maxX:cx+1.0,minZ:cz+hz-0.25,maxZ:cz+hz+0.25,top:2.8,mesh:null,stand:false,off:true,monStop:true}); }   // off:true → PLAYER passes; monStop → MONSTERS blocked (no more lions walking in)
   // 📜 QUEST BOARD — the endless-quest hub; always 3 fresh bounties, refills as you complete them
   { const bp=new THREE.Group(); const post=box(0.2,2.0,0.2,'#6a4a2a'); post.position.y=1.0; bp.add(post); const bd=box(1.7,1.05,0.16,'#caa46a'); bd.position.y=2.05; bp.add(bd); const face=box(1.5,0.85,0.06,'#4a3420'); face.position.set(0,2.05,0.1); bp.add(face); const pin=ball(0.07,'#d24a4a'); pin.position.set(0,2.4,0.16); bp.add(pin); bp.position.set(cx+5.5,0,cz+hz+1.4); bp.castShadow=true; world.add(bp); addSolid(post); addInteractable(bp,'📜 Read the Quest Board',()=>openQuestBoard(),3.4); }
+  // 🎨 THE DYER — recolors your outfit (needs Dye Petals from flowers); stands near the board
+  { const dy=(typeof makeSimpleNPC==='function')?makeSimpleNPC('#b06ac6','dyer'):box(0.7,1.6,0.5,'#b06ac6'); dy.position.set(cx-5.5,(typeof groundY==='function'?groundY(cx-5.5,cz+hz+1.6):0),cz+hz+1.6); world.add(dy); addInteractable(dy,'🎨 Visit the Dyer',()=>openDyer(),3.0); }
   // ✨ ONBOARDING BEACON over the door — first session only, hides once you head inside
   const beacon=new THREE.Mesh(new THREE.ConeGeometry(0.7,2.6,5), new THREE.MeshBasicMaterial({color:'#ffe26a',transparent:true,opacity:0.78})); beacon.position.set(cx,6.6,cz+hz+1.2); beacon.rotation.x=Math.PI; beacon.visible=false; world.add(beacon); state.beacon=beacon;
   // roof (fades when inside)
@@ -1462,6 +1502,8 @@ function _buildPlayerBody(){
   const _armL=_pm&&_pm.getObjectByName?_pm.getObjectByName('arm-left'):null;   // shield/torch on the LEFT arm
   if(_armL){ _armL.add(offhandGroup); offhandGroup.userData.onBone=true; applyOffhandOffsets(); } else { offhandGroup.userData.onBone=false; offhandGroup.position.set(-0.42,1.0,0.18); player.add(offhandGroup); }
   player.add(armorGroup); setArmorVisual(); attachWornGear();
+  if(player.userData._cape){ try{ player.remove(player.userData._cape); }catch(e){} player.userData._cape=null; }
+  if(state.dyeColor){ const cape=box(0.8,1.2,0.1,state.dyeColor); cape.position.set(0,1.2,-0.36); cape.rotation.x=0.1; cape.castShadow=true; player.userData._cape=cape; player.add(cape); }   // 🎨 DYED cape (set at the Dyer) — a colored cloak on the back
   if(!playerBar) playerBar=makePlayerBar(); if(playerBar.parent) playerBar.parent.remove(playerBar); playerBar.position.set(0,2.65,0); player.add(playerBar); drawPlayerBar();   // HP/armor bar over your character's head, like the mobs
 }
 function updatePlayerCharacter(){ _buildPlayerBody(); save(); }   // Settings → Apply Look: hot-swap the player model, keep position + gear
@@ -1509,7 +1551,7 @@ function emote(name){ // one-shot emote then back to idle/walk
   setTimeout(()=>{ if(charAnim==='__emote'){ a.fadeOut(0.25); a.clampWhenFinished=false; setAnim('idle'); setTimeout(()=>{ try{ a.stop(); }catch(e){} }, 300); } }, 700); }   // fully STOP the clamped emote action after the fade so the folded/sit pose can't keep blending (was only faded, which left legs folded after a nap)   // setAnim('idle') (was charAnim='') forces an immediate clean stand-up so legs don't stay folded after a nap/sit   // MUST fade the emote action OUT here: it was LoopOnce+clampWhenFinished, so it sat at full weight on its LAST frame (e.g. the folded-leg 'sit' pose after a nap). Clearing charAnim only let setAnim fade IDLE *in* — the clamped sit kept blending the legs into a seated/sleeping pose (owner: "after he sleeps his legs stay in a sleeping position"). Fading the clamped action out lets the player stand fully upright again.
 
 /* ---------- input / camera ---------- */
-const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(levelupOpen)closeLevelUp(); else if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(boardOpen)closeBoard(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); else if(state.running)openSettings(); } }   /* ESC toggles Settings (open if nothing else is open); browsers still force ESC to exit fullscreen — unavoidable */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
+const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(levelupOpen)closeLevelUp(); else if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(boardOpen)closeBoard(); else if(dyerOpen)closeDyer(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); else if(state.running)openSettings(); } }   /* ESC toggles Settings (open if nothing else is open); browsers still force ESC to exit fullscreen — unavoidable */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 // release ALL held keys when focus/visibility is lost — prevents the "stuck walking forward" bug
 // (a right-click context menu, alt-tab, or click-away steals focus so the W keyup never fires).
@@ -1521,7 +1563,7 @@ addEventListener('blur',clearKeys); document.addEventListener('visibilitychange'
 renderer.domElement.addEventListener('contextmenu',e=>{ e.preventDefault(); clearKeys(); });
 let dragging=false,lastX=0,lastY=0;
 // LEFT mouse = ATTACK; RIGHT mouse (or touch) drag = ROTATE camera. (Right-click menu already suppressed above.)
-renderer.domElement.addEventListener('pointerdown',e=>{ if(e.pointerType!=='touch' && e.button===0){ if(state.running){ if(BMODE.on) placeBlock(); else if(state._activeTool){ digBlock(); } else playerAttack(); } return; } dragging=true; lastX=e.clientX; lastY=e.clientY; });   // left-click: dig/mine if a tool is the held hotbar item, else attack
+renderer.domElement.addEventListener('pointerdown',e=>{ if(e.pointerType!=='touch' && e.button===0){ if(state.running){ if(BMODE.on) placeBlock(); else if(state._activeTool){ digBlock(); } else doAttack(); } return; } dragging=true; lastX=e.clientX; lastY=e.clientY; });   // left-click: dig/mine if a tool is the held hotbar item, else attack
 addEventListener('pointerup',()=>dragging=false); addEventListener('pointercancel',()=>dragging=false); addEventListener('pointermove',e=>{ if(e.pointerType!=='touch'){ _mx=e.clientX; _my=e.clientY; } if(dragging){ const s=state.mouseSens||1; cam.targetYaw-=(e.clientX-lastX)*0.006*s; cam.targetPitch=clamp(cam.targetPitch+(e.clientY-lastY)*0.005*s,0.21,1.256); lastX=e.clientX; lastY=e.clientY; } });
 addEventListener('wheel',e=>{ cam.dist=clamp(cam.dist+Math.sign(e.deltaY)*0.9,3.5,22); },{passive:true});
 const cam={yaw:Math.PI,targetYaw:Math.PI,dist:13,height:7,pitch:0.5,targetPitch:0.5};   // pitch in radians (clamped 12°–72°); cam.yaw/pitch LERP toward target* each frame for smooth right-click rotation
@@ -1687,6 +1729,18 @@ function openQuestBoard(){ if(!state.running)return; refreshBoard(); boardOpen=t
   el.querySelector('#boardX').onclick=closeBoard; el.onclick=(e)=>{ if(e.target===el)closeBoard(); };
   el.querySelectorAll('[data-take]').forEach(btn=>btn.onclick=()=>{ const did=btn.dataset.take; closeBoard(); offerQuest(did,'📜 '+(Quests.defs[did]._pitch||'Take this bounty?')); }); }
 function closeBoard(){ boardOpen=false; const el=document.getElementById('board'); if(el)el.className=''; }
+// 🎨 THE DYER — recolor your outfit (a dyed cape) using Dye Petals found while gathering flowers
+const DYE_COLORS=[['Crimson','#c0392b'],['Pumpkin','#e8731f'],['Gold','#e8c23a'],['Leaf','#3e9e4f'],['Teal','#2ec5a8'],['Sky','#3a8fd6'],['Royal','#7c5cff'],['Rose','#ff5d8f'],['Slate','#3a3448'],['Snow','#f0ece4']];
+const DYE_COST=2; let dyerOpen=false;
+function openDyer(){ if(!state.running)return; dyerOpen=true; let el=document.getElementById('dyer'); if(!el){ el=document.createElement('div'); el.id='dyer'; document.body.appendChild(el); }
+  const have=state.inv.dye_petal||0; let h='<div class="dyecard"><h3>🎨 The Dyer <span class="x" id="dyerX">✕</span></h3><p class="dyesub">'+DYE_COST+' 🎨 Dye Petals per colour — gather flowers to find them. You have <b>'+have+'</b>.</p><div class="dyegrid">';
+  for(const [n,c] of DYE_COLORS){ h+=`<div class="dyeswatch${state.dyeColor===c?' on':''}" data-col="${c}" title="${n}"><span style="background:${c}"></span><small>${n}</small></div>`; }
+  h+='</div><div class="dyebtns"><button class="dyerm" id="dyeRemove">Remove dye</button><button class="dyerdone" id="dyerDone">Done</button></div></div>';
+  el.innerHTML=h; el.className='show';
+  el.querySelector('#dyerX').onclick=closeDyer; el.querySelector('#dyerDone').onclick=closeDyer; el.onclick=(e)=>{ if(e.target===el)closeDyer(); };
+  el.querySelector('#dyeRemove').onclick=()=>{ state.dyeColor=''; _buildPlayerBody(); save(); toast('🎨 Dye removed.'); closeDyer(); };
+  el.querySelectorAll('[data-col]').forEach(d=>d.onclick=()=>{ const c=d.dataset.col; if(state.dyeColor===c){ toast('Already that colour.'); return; } if((state.inv.dye_petal||0)<DYE_COST){ toast('🎨 Need '+DYE_COST+' Dye Petals — gather flowers to find them.'); SFX.play('interact',{rate:0.6,vol:0.4}); return; } Inv.take('dye_petal',DYE_COST); state.dyeColor=c; _buildPlayerBody(); SFX.play('success'); shake(0.2); try{ confetti(player.position.clone().setY(2),16); }catch(e){} save(); toast('🎨 Dyed! Looking sharp.'); openDyer(); }); }
+function closeDyer(){ dyerOpen=false; const el=document.getElementById('dyer'); if(el)el.className=''; }
 const GOAL_POOL=[{type:'eat',label:'Grab a snack from the fridge'},{type:'nap',label:'Take a nap to recharge'},{type:'cook',label:'Cook a meal on the stove'},{type:'tv',label:'Watch some cartoons'},{type:'shower',label:'Take a refreshing shower'},{type:'gnome',label:'Water the garden gnome'},{type:'toilet',label:'Plunge the haunted toilet'},{type:'socks',label:'Find a lost sock'},{type:'neighbor',label:'Greet a neighbor'},{type:'dance',label:'Turn on the disco & dance'},{type:'gather',label:'Gather something out in the wilds'},{type:'craft',label:'Press C to craft something'}];
 function genGoals(){ const pool=[...GOAL_POOL],out=[]; while(out.length<3&&pool.length){ out.push({...pool.splice(Math.floor(Math.random()*pool.length),1)[0],done:false}); } state.goals=out; renderGoals(); }
 function markGoal(type){ let hit=false; for(const g of state.goals){ if(g.type===type&&!g.done){ g.done=true; hit=true; state.giggle+=40; } } if(hit){ gainXP(8); SFX.play('pickup'); renderGoals(); save(); if(state.goals.every(g=>g.done)) completeDay(); } }
@@ -1752,7 +1806,7 @@ function legendHTML(){ const recipesAll=Object.keys(state.craftedSet||{}).length
 const SAVE_V=2;
 function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V, day:state.day,giggle:state.giggle,goals:state.goals,bestDay:state.bestDay,inv:state.inv,stash:state.stash,built:state.built,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
-  unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier, bagCount:state.bagCount, charModel:state.charModel,
+  unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, charClass:state.charClass, mana:state.mana, manaMax:state.manaMax, dyeColor:state.dyeColor, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier, bagCount:state.bagCount, charModel:state.charModel,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
   tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, questHistory:state.questHistory, _qseq:state._qseq, boardOffers:state.boardOffers, _boardTaken:state._boardTaken, _boardDay:state._boardDay, npcOfferDay:state.npcOfferDay, genDefs:(()=>{const o={};for(const k in Quests.defs){const d=Quests.defs[k];if(d&&d._gen)o[k]={title:d.title,tid:d._tid,p:d._p,pitch:d._pitch,sig:d._sig,reward:d.reward,steps:d.steps};}return o;})(), lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug })); }catch(e){} }
@@ -1776,6 +1830,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.armors=(s.armors&&typeof s.armors==='object')?s.armors:{}; for(const id in state.armors){ const r=RECIPES.find(x=>x.id===id+'_armor'); } state.armor=(ARMORS[s.armor]?s.armor:''); if(!state.armor) equipBestArmor();   // keep a saved dropped armor equipped
   state.offhands=(s.offhands&&typeof s.offhands==='object')?s.offhands:{}; state.offhand=(SHIELDS[s.offhand]||TORCHES[s.offhand])?s.offhand:'';   // restore the equipped off-hand (shield/torch)
   state.charModel=(s.charModel&&PLAYER_MODELS.includes(s.charModel))?s.charModel:'char_player';   // restore the chosen character look
+  state.charClass=(s.charClass&&CLASSES[s.charClass])?s.charClass:'warrior'; state.mana=num(s.mana,0,0,99999); state.manaMax=num(s.manaMax,0,0,99999); state.dyeColor=(typeof s.dyeColor==='string')?s.dyeColor:'';   // pre-class saves default to Warrior
   state.gear=(s.gear&&typeof s.gear==='object')?{helmet:ARMORS[s.gear.helmet]?s.gear.helmet:'',body:ARMORS[s.gear.body]?s.gear.body:'',legs:ARMORS[s.gear.legs]?s.gear.legs:'',boots:ARMORS[s.gear.boots]?s.gear.boots:''}:{helmet:'',body:'',legs:'',boots:''};
   if(!state.gear.body && state.armor) state.gear.body=state.armor;   // migrate v2 saves (single armor -> body slot)
   if(state.gear.body) state.armor=state.gear.body;   // keep state.armor mirrored to the body slot
@@ -1793,7 +1848,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
 }catch(e){ __report('load',e); } }
 
 /* ============================ INVENTORY ============================ */
-const ITEMS={ wood:{i:'🪵',n:'Wood'},stone:{i:'🪨',n:'Stone'},crystal:{i:'💎',n:'Crystal'},apple:{i:'🍎',n:'Apple'},mushroom:{i:'🍄',n:'Mushroom'},carrot:{i:'🥕',n:'Carrot'},flower:{i:'🌸',n:'Flower'},coin:{i:'🪙',n:'Coin'},
+const ITEMS={ wood:{i:'🪵',n:'Wood'},stone:{i:'🪨',n:'Stone'},crystal:{i:'💎',n:'Crystal'},apple:{i:'🍎',n:'Apple'},mushroom:{i:'🍄',n:'Mushroom'},carrot:{i:'🥕',n:'Carrot'},flower:{i:'🌸',n:'Flower'},dye_petal:{i:'🎨',n:'Dye Petal'},coin:{i:'🪙',n:'Coin'},
   milk:{i:'🥛',n:'Milk'},wool:{i:'🧶',n:'Wool'},egg:{i:'🥚',n:'Egg'},leather:{i:'🟫',n:'Leather'},meat:{i:'🍖',n:'Meat'},
   dirt:{i:'🟤',n:'Dirt'}, iron_ingot:{i:'🔩',n:'Iron Ingot'}, gold_ingot:{i:'🥇',n:'Gold Ingot'}, boss_core:{i:'💠',n:'Boss Core'}, health_potion:{i:'🧪',n:'Health Potion'}, energy_tonic:{i:'🧉',n:'Energy Tonic'} };   // appended (keep first 8 keys' order for the hotbar/inv_slots invariant)   // C3 animal resources + dirt + E3 smelted ingots + E5 boss-only crafting core; first 8 keys unchanged so hotbar + inv_slots stay intact
 /* basic item DESCRIPTIONS (owner: "each item needs a basic description — industry standard, see Minecraft") — shown as a hover tooltip in the inventory */
@@ -1984,6 +2039,7 @@ function addNode(model,x,z,{item,amount=1,respawn=28,scale,targetH,tint,label,so
   addInteractable(o, label||('Gather '+(ITEMS[item]?ITEMS[item].n:item)), ()=>{ if(!o.visible||node.timer>0)return;
     const got=amount+(Math.random()<0.3?1:0)+((state.event&&state.event.gatherBonus)||0);
     for(let q=0;q<got;q++) makeDrop(o.position.x,o.position.z,item,1);   // REAL physical loot drops (owner: "DROP REAL LOOT, not just say this had loot") — they bob + magnetize to you to pick up
+    if(item==='flower'&&Math.random()<0.5) makeDrop(o.position.x,o.position.z,'dye_petal',1);   // flowers sometimes yield a 🎨 Dye Petal (take to the Dyer)
     gainXP(2); SFX.play('pickup',{vol:0.5,rate:0.8}); emote('pick-up'); markGoal('gather'); shake(0.18);   // softer, lower-pitched "mine" thunk (owner: mining sound was annoying)
     confetti(o.position.clone().setY(1),8); toast(`💥 ${got} ${ITEMS[item]?ITEMS[item].i+' '+ITEMS[item].n:item} dropped — grab it!`);
     node.timer=respawn; setNodeDepleted(node); }, 2.6);   // depleted node stays VISIBLE but goes translucent (you can see it's on cooldown) instead of vanishing
@@ -2950,9 +3006,41 @@ function respawnPlayer(){ if(DUNGEON.inDungeon)DUNGEON.inDungeon=false; if(MINE.
   state.hp=state.hpMax; player.position.set(HOUSE.cx,0.3,HOUSE.cz+12); vy=0; state._invuln=2.6; despawnCreatures(); renderHearts();
   rarityToast('rare', lost>0?`💀 You fainted! Lost ${lost} 🪙 (10% of carried coin). Only coin is lost — and only what you carry. 🧰 Bank your coins in the home Stash to keep them safe!`:'💀 You fainted — woke safe at home. (You lose 10% of CARRIED coin on death — bank it in your home 🧰 Stash!)');
   flashFade(); save(); }
-function equipBest(){ for(let i=WTIER.length-1;i>=0;i--){ if(i===0||state.weapons[WTIER[i]]){ state.weapon=WTIER[i]; return; } } }
+function equipBest(){ const T=CLASS_WTIER[playerClass()]||WTIER; for(let i=T.length-1;i>=0;i--){ if(i===0||(state.weapons&&state.weapons[T[i]])){ state.weapon=T[i]; return; } } state.weapon='fist'; }
+function manaMaxForLevel(lvl){ return 50 + (((lvl||1)-1)*10); }
+function applyClass(cls,gender){ state.charClass=cls; const idx={warrior:'a',mage:'b',ranger:'c'}[cls]||'a'; state.charModel=(gender==='female'?'character-female-':'character-male-')+idx;
+  const start=CLASSES[cls].start; state.weapons=state.weapons||{}; state.weapons[start]=true; state.weapon=start;
+  if(cls==='mage'){ state.manaMax=manaMaxForLevel(state.level); state.mana=state.manaMax; } else { state.manaMax=0; state.mana=0; }
+  try{ if(typeof _buildPlayerBody==='function')_buildPlayerBody(); }catch(e){} try{ renderHearts(); }catch(e){} try{ Inv.render(); }catch(e){} try{ updateManaUI(); }catch(e){} save();
+  toast(`${CLASSES[cls].icon} ${CLASSES[cls].name}! ${cls==='mage'?'Attack to cast magic bolts (costs MANA).':cls==='ranger'?'Attack to loose arrows from range.':'Attack to swing your blade up close.'}`); }
+function openClassPick(){ let el=document.getElementById('classpick'); if(!el){ el=document.createElement('div'); el.id='classpick'; document.body.appendChild(el); }
+  state._pickClass=state._pickClass||'warrior'; state._pickGender=state._pickGender||'male';
+  const draw=()=>{ let h='<div class="cpcard"><h2>Choose your hero</h2><p class="cpsub">Your class is set for this save — only armor changes your look afterward.</p><div class="cprow">';
+    for(const k in CLASSES){ const c=CLASSES[k], on=state._pickClass===k; h+=`<div class="cpcls${on?' on':''}" data-cls="${k}"><div class="cpi">${c.icon}</div><b>${c.name}</b><div class="cpb">${c.blurb}</div></div>`; }
+    h+='</div><div class="cpg-row"><button class="cpg'+(state._pickGender==='male'?' on':'')+'" data-g="male">♂ Male</button><button class="cpg'+(state._pickGender==='female'?' on':'')+'" data-g="female">♀ Female</button></div><button class="cpstart" id="cpStart">Begin Adventure →</button></div>';
+    el.innerHTML=h; el.className='show';
+    el.querySelectorAll('[data-cls]').forEach(d=>d.onclick=()=>{ state._pickClass=d.dataset.cls; draw(); });
+    el.querySelectorAll('[data-g]').forEach(d=>d.onclick=()=>{ state._pickGender=d.dataset.g; draw(); });
+    el.querySelector('#cpStart').onclick=()=>{ applyClass(state._pickClass,state._pickGender); el.className=''; try{SFX.play('success');}catch(e){} };
+  };
+  draw(); }
 function gainWeapon(id){ state.weapons[id]=true; equipBest(); const w=WEAPONS[id]; toast(`${w.icon} Crafted + equipped the ${w.name}!`); if(invOpen)renderInv(); Inv.render(); }
 function gainOffhand(id){ if(!state.offhands)state.offhands={}; state.offhands[id]=true; equipGear(id,'offhand'); const it=(SHIELDS[id]||TORCHES[id]); if(it)toast(`${it.icon} Crafted + equipped ${it.name}!`); if(invOpen)renderInv(); Inv.render(); save(); }   // craft a shield/torch -> owned + auto-equipped to the off-hand
+const playerShots=[];   // CLASS projectiles — mage bolts / ranger arrows that damage enemies (distinct from the enemy `projectiles`)
+function playerShoot(){ if(!state.running||state.paused)return; if(state._atkCD>0)return; const w=WEAPONS[state.weapon]||WEAPONS.fist; if(!w.proj){ playerAttack(); return; }
+  if(w.mana){ if((state.mana||0)<w.mana){ toast('💧 Out of mana — let it recharge.'); SFX.play('interact',{rate:0.5,vol:0.4}); return; } state.mana-=w.mana; updateManaUI(); }
+  const asm=Needs.atkSpeedMul(); state._atkCD = asm<1?0.5/asm:0.28; state._swing=0.25; emote('attack-melee-right');
+  const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y), sp=24, dmg=w.dmg*Needs.dmgMul(), bolt=w.proj==='bolt';
+  const m=bolt? ball(0.22,'#9b7bff') : new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.75,5), new THREE.MeshBasicMaterial({color:'#caa46a'}));
+  m.position.set(player.position.x+fx*0.8, 1.25, player.position.z+fz*0.8); if(bolt){ m.material.transparent=true; } else { m.rotation.set(Math.PI/2,Math.atan2(fx,fz),0); }
+  world.add(m); playerShots.push({mesh:m,vx:fx*sp,vz:fz*sp,life:1.5,dmg,crit:w.crit||0,bolt}); SFX.play('interact',{rate:bolt?1.3:1.6,vol:0.4}); shake(0.06); if(state.weapon&&state.weapon!=='fist')useDur(state.weapon,1); }
+function updatePlayerShots(dt){ for(let i=playerShots.length-1;i>=0;i--){ const s=playerShots[i],m=s.mesh; m.position.x+=s.vx*dt; m.position.z+=s.vz*dt; s.life-=dt; if(s.bolt)m.rotation.y+=dt*12; let hit=false;
+    for(let j=creatures.length-1;j>=0;j--){ const c=creatures[j],cm=c.mesh; if(!cm.visible)continue; const dx=cm.position.x-m.position.x, dz=cm.position.z-m.position.z; if(dx*dx+dz*dz<1.7){ const roll=rollDamage(s.dmg,s.crit); c.hp-=roll.dmg; creatureHit(c); popDmg(cm.position.x,(cm.position.y||0)+(c.boss?2.8:1.7),cm.position.z,roll.dmg,{crit:roll.crit,color:(roll.crit?'#ffd23f':'#ff6b6b')}); if(c.hp<=0)killCreature(j); hit=true; break; } }
+    if(!hit) for(let j=animals.length-1;j>=0;j--){ const a=animals[j],am=a.mesh; const dx=am.position.x-m.position.x, dz=am.position.z-m.position.z; if(dx*dx+dz*dz<1.7){ const roll=rollDamage(s.dmg,s.crit); a.hp-=roll.dmg; am.scale.setScalar(1.14); popDmg(am.position.x,(am.position.y||0)+1.5,am.position.z,roll.dmg,{color:'#ff6b6b'}); if(a.hp<=0)killAnimal(j); hit=true; break; } }
+    if(hit||s.life<=0){ world.remove(m); playerShots.splice(i,1); } } }
+function doAttack(){ const w=WEAPONS[state.weapon]||WEAPONS.fist; if(w.proj) playerShoot(); else playerAttack(); }
+function updateMana(dt){ if((state.manaMax||0)>0 && state.mana<state.manaMax){ state.mana=Math.min(state.manaMax, state.mana+dt*9); updateManaUI(); } }
+function updateManaUI(){ const el=document.getElementById('manabar'); if(!el)return; if((state.manaMax||0)<=0){ el.style.display='none'; return; } el.style.display=''; const f=Math.max(0,Math.min(1,state.mana/state.manaMax)); const fl=el.querySelector('.fill'); if(fl)fl.style.width=(f*100).toFixed(0)+'%'; const mv=el.querySelector('.mv'); if(mv)mv.textContent=Math.round(state.mana)+'/'+state.manaMax; }
 function playerAttack(){ if(!state.running||state.paused)return; if(state._atkCD>0) return;   // attack-speed gate (only kicks in when energy is low — full energy = no cooldown, spam freely)
   const asm=Needs.atkSpeedMul(); state._atkCD = asm<1 ? 0.42/asm : 0; state._swing=0.32;
   const w=WEAPONS[state.weapon]||WEAPONS.fist; const base=w.dmg*Needs.dmgMul(); SFX.play('interact'); emote('attack-melee-right'); shake(0.12);   // ALWAYS the arm SWING (owner: never the kick)
@@ -3037,7 +3125,7 @@ function dropGear(x,z, pair){ pair=pair||pick(RARE_GEAR); const id=pair[0], kind
   drops.push({mesh:m, gear:id, gkind:kind, n:1, bob:rand(0,TAU), t:0}); }
 function equipGear(id, kind){ const it=(kind==='weapon')?WEAPONS[id]:(kind==='offhand')?(SHIELDS[id]||TORCHES[id]):ARMORS[id]; if(!it) return;
   if(EQUIP_LVL[id] && (state.level||1)<EQUIP_LVL[id]){ toast(`🔒 Reach Level ${EQUIP_LVL[id]} to equip ${it.name}.`); SFX.play('interact',{rate:0.6,vol:0.4}); return; }   // equip-by-level gate for dropped epic gear
-  if(kind==='weapon'){ if(!state.weapons[id]) return; state.weapon=id; }
+  if(kind==='weapon'){ if(!state.weapons[id]) return; if(!canUseWeapon(id)){ const c=WEAPONS[id].cls; toast('🚫 Only a '+(c==='mage'?'Mage':c==='ranger'?'Ranger':'Warrior')+' can wield the '+WEAPONS[id].name+'.'); SFX.play('interact',{rate:0.6,vol:0.4}); return; } state.weapon=id; }
   else if(kind==='offhand'){ if(!state.offhands||!state.offhands[id]) return; state.offhand=id; }
   else { if(!state.armors[id]) return; const sl=(ARMORS[id]&&ARMORS[id].slot)||'body'; state.gear[sl]=id; if(sl==='body'){ state.armor=id; state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); } if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
   SFX.play('success',{vol:0.4}); toast(`${it.icon} Equipped ${it.name}!`); syncSel(); Inv.render(); if(invOpen)renderInv(); if(typeof checkBadges==='function')checkBadges(); save(); }
@@ -3329,7 +3417,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`animals ${animals.length}  R[${span(animals,a=>Math.hypot(a.mesh.position.x,a.mesh.position.z))}]\n`
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
-function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
+function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
 function idleTick(dt){ cam.yaw+=dt*0.12; cam.targetYaw=cam.yaw; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
@@ -3470,6 +3558,8 @@ addEventListener('pagehide',()=>{ try{ if(!sessionStorage.getItem('ww_newgame'))
 let _inviteRoom=null; try{ _inviteRoom=((new URLSearchParams(location.search).get('room'))||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)||null; }catch(e){}   // invite link ?room=CODE
 function startGame(){ if(!ready)return; document.getElementById('title').classList.add('hidden'); closeSettings(); state.running=true; Music.start();
   state.hpMax=hpMaxForLevel(state.level); if(!state.hp||state.hp>state.hpMax||state.hp<1) state.hp=state.hpMax; renderHearts();   // ensure the real HP pool is set for fresh + loaded games
+  if(!state.charClass){ setTimeout(()=>{ try{ openClassPick(); }catch(e){} }, 350); }   // NEW GAME -> pick class + gender
+  else { if(state.charClass==='mage'){ state.manaMax=manaMaxForLevel(state.level); if(!(state.mana>0))state.mana=state.manaMax; } updateManaUI(); }
   if(questActive('rescue_one') && Quests.isDone('rescue_one','accept') && !Quests.isDone('rescue_one','free') && !state._rescueNpc){ try{ spawnRescueCaptive(); }catch(e){} }   // re-spawn the captive if a rescue was mid-flight when the game was reloaded
   for(const _id in (state.activeQuests||{})){ const _d=Quests.defs[_id]; if(!_d||!_d._gen)continue; if(_d._tid==='boss_hunt' && !Quests.isDone(_id,'slay') && !creatures.some(c=>c._questId===_id)){ try{ genSetup(_id); }catch(e){} } else if(_d._tid==='rescue' && !Quests.isDone(_id,'free') && !state._rescueNpc){ try{ spawnRescueCaptive(_id); }catch(e){} } }   // re-spawn gen boss/captive if a generated quest was mid-flight
   if(typeof refreshBoard==='function') refreshBoard();   // ensure the board has 3 fresh postings on every load
@@ -3509,7 +3599,6 @@ function charThumb(name){ if(_thumbCache[name]!==undefined) return _thumbCache[n
     _thumbR.render(sc,cam); const url=_thumbR.domElement.toDataURL('image/png'); sc.clear(); return (_thumbCache[name]=url);
   }catch(e){ return (_thumbCache[name]=''); } }
 function renderSettings(){ const el=document.getElementById('pause'); if(!el)return;
-  const _curM=state.charModel||'char_player'; const _tiles=LOOKS.map(L=>`<div class="charTile${_curM===L.m?' on':''}" data-model="${L.m}" title="${L.l}"><img src="${charThumb(L.m)}" alt="${L.l}" draggable="false"><span>${L.l}</span></div>`).join('');
   el.innerHTML=`<div class="pcard"><h2>⚙ Settings</h2>
     <label class="prow">🔊 Volume <input id="volSlider" type="range" min="0" max="100" value="${Math.round((state.volume==null?1:state.volume)*100)}"></label>
     <label class="prow">🎵 Music <input id="musicChk" type="checkbox" ${state.musicOn?'checked':''}></label>
@@ -3517,9 +3606,7 @@ function renderSettings(){ const el=document.getElementById('pause'); if(!el)ret
     <label class="prow">🖱️ Mouse sensitivity <input id="sensSlider" type="range" min="20" max="250" value="${Math.round((state.mouseSens||1)*100)}"></label>
     <label class="prow">🌀 Reduce motion <input id="reduceChk" type="checkbox" ${state.reduce?'checked':''}></label>
     <label class="prow">⛶ Fullscreen <input id="fsChk" type="checkbox" ${document.fullscreenElement?'checked':''}></label>
-    <div style="font-weight:bold;margin:9px 0 4px">👤 Character — pick a look</div>
-    <div class="charGrid">${_tiles}</div>
-    <div style="font-size:11px;opacity:.7;margin:4px 2px 6px">Each look has its own skin tone, hair & outfit — applies instantly.</div>
+    <div style="font-size:11px;opacity:.7;margin:6px 2px">👤 Your look comes from your class & gender (chosen at New Game) and your equipped armor.</div>
     <button class="btn" id="settingsClose">✓ Done</button></div>`;
   el.querySelector('#volSlider').oninput=ev=>{ state.volume=(+ev.target.value)/100; if(Music.setVol)Music.setVol(state.volume); save(); };
   el.querySelector('#musicChk').onchange=ev=>{ state.musicOn=ev.target.checked; if(Music.setMuted)Music.setMuted(!state.musicOn); if(state.musicOn&&Music.resume)Music.resume(); save(); };
@@ -3527,7 +3614,6 @@ function renderSettings(){ const el=document.getElementById('pause'); if(!el)ret
   el.querySelector('#sensSlider').oninput=ev=>{ state.mouseSens=clamp((+ev.target.value)/100,0.2,2.5); save(); };
   el.querySelector('#reduceChk').onchange=ev=>{ state.reduce=ev.target.checked; save(); };
   el.querySelector('#fsChk').onchange=ev=>{ try{ if(ev.target.checked){ const de=document.documentElement; (de.requestFullscreen||de.webkitRequestFullscreen||de.msRequestFullscreen).call(de); } else { (document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen).call(document); } }catch(e){} };   // the settings click IS the user gesture fullscreen needs
-  el.querySelectorAll('.charTile[data-model]').forEach(t=> t.onclick=()=>{ const m=t.dataset.model; if(m===state.charModel)return; state.charModel=m; updatePlayerCharacter(); el.querySelectorAll('.charTile').forEach(x=>x.classList.toggle('on', x.dataset.model===m)); });   // pick a look -> applies live
   el.querySelector('#settingsClose').onclick=closeSettings; }
 document.getElementById('keepBtn').onclick=()=>document.getElementById('winScreen').classList.add('hidden');
 { const g=document.getElementById('gear'); if(g) g.onclick=()=>{ if(invOpen)closeInv(); if(craftOpen)closeCraft(); if(shopOpen)closeShop(); openSettings(); }; }
@@ -3537,7 +3623,7 @@ document.getElementById('keepBtn').onclick=()=>document.getElementById('winScree
 
 /* QA probe */
 window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.toFixed(2),z:+player.position.z.toFixed(2)}),
-  state, ready:()=>ready, anim:()=>charAnim, models:()=>Object.keys(MODELS).length, neighbors:()=>neighbors.length,
+  state, ready:()=>ready, anim:()=>charAnim, models:()=>Object.keys(MODELS).length, neighbors:()=>neighbors.length, classPick:()=>openClassPick(), applyClass:(c,g)=>applyClass(c,g), openDyer:()=>openDyer(),
   needs:()=>({h:Math.round(Needs.hunger),e:Math.round(Needs.energy),f:Math.round(Needs.fun)}), day:()=>({day:state.day,giggle:state.giggle,goals:state.goals.map(g=>({t:g.type,done:g.done}))}),
   tp:(x,z)=>player.position.set(x,0,z), setKey:(c,d)=>keys[c]=d, yaw:()=>cam.yaw, mark:t=>markGoal(t), genGoals,
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
@@ -3868,6 +3954,10 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       state.tradeSession={peerId:'x',name:'T',offer:{items:{apple:1},coin:0},confirmed:false,theirs:{items:{wood:3},coin:5},theirConfirmed:true};
       _tradeComplete();
       R.trade_swap=((state.inv.apple||0)===a0+1 && (state.inv.wood||0)===w0+3 && (state.inv.coin||0)===c0+5 && state.tradeSession===null && typeof requestTrade==='function'); }
+    { state._atkCD=0; applyClass('mage','female'); const mageOk=(state.charClass==='mage'&&state.manaMax>0&&state.weapon==='apprentice_staff'&&/female/.test(state.charModel||''));
+      state.mana=state.manaMax; state._atkCD=0; playerShots.length=0; doAttack(); const shotOk=playerShots.length>0; for(const s of playerShots){try{world.remove(s.mesh);}catch(e){}} playerShots.length=0;
+      const _f=state.inv.dye_petal||0; state.dyeColor='#c0392b'; _buildPlayerBody(); const dyeOk=!!player.userData._cape; state.dyeColor=''; _buildPlayerBody(); state.inv.dye_petal=_f;
+      state._atkCD=0; applyClass('warrior','male'); R.class_system=(mageOk&&shotOk&&dyeOk); }   // class pick + mana + projectile attack + dye cape
     R.PASS = R.campaign_won&&R.side_cat&&R.side_gnome&&R.side_toilet&&R.side_socks&&R.neighbor_fulfilled===true&&R.day_advanced&&R.allItemsReachable&&R.maxNodeRadius<=FENCE&&crafted===unlockedCount&&R.shop_paint&&R.shop_sellcoins&&R.shop_unlock&&R.shop_hat&&R.shop_unlocked_craftable
       &&R.xp_gain&&R.level_up&&R.recipe_level_lock&&R.recipe_level_unlock&&R.inv_modal&&R.map_modal&&R.quest_min&&R.mouse_sens&&R.trade_swap
       &&R.needs_affect&&R.house_purpose&&R.daily_activity&&R.water_quality&&R.rocks_smooth&&R.hotbar_select&&R.eat_food&&R.pickaxe_gate&&R.night_field_spawn&&R.animals_spawn&&R.animals_harvest&&R.animals_defeat&&R.shovel_craft&&R.dig_ground&&R.debug_overlay&&R.content_spread&&R.held_tool&&R.day_no_monsters&&R.mist&&R.world_expanded&&R.voxel_place&&R.voxel_break&&R.voxel_dig_ground&&R.furnace_smelt&&R.ingot_tool&&R.recipe_count&&R.dungeon_rooms&&R.dungeon_chests&&R.mineshaft_loot
@@ -3875,7 +3965,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       &&R.event_active&&R.event_market&&R.shop_closed_night&&R.shop_open_day&&R.onboarding_done&&R.friendship&&R.requests_list&&R.town_legend
       &&R.pause_works&&R.cam_pitch_clamped&&R.ambient
       &&R.head&&R.assetsClean&&R.touch&&R.touch_moves&&R.raf_boundary&&R.pause_freezes_cook&&R.cook_completes&&R.sfx_gate&&R.reduce_motion&&R.reduce_confetti&&R.light_cap&&R.save_sanitized&&R.particle_pool
-      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2
+      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2&&R.class_system
       &&R.homes_present&&R.home_built&&R.home_loot&&R.home_enter_path&&R.recipe_page_unlock&&R.node_respawn&&R.chest_oneuse
       &&R.weapon_craft&&R.combat_kill&&R.combat_respawn&&R.inv_slots
       &&R.mine_pickaxe&&R.mine_enter&&R.mine_dig&&R.mine_exit&&R.armor_craft&&R.armor_reduces&&R.rarity_tiers&&R.rarity_loot&&R.combat_anim&&R.gear_equip&&R.dice_rolls&&R.dmg_popup&&R.menu;
