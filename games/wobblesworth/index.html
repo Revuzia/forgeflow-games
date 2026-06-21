@@ -1902,7 +1902,7 @@ const EQUIP_LVL={ keen_saber:5, dread_reaver:8, warded_vest:5, aegis_plate:8 }; 
 function hotbarLayout(){ const L=[{kind:'fist',icon:'✊',name:'Fists'}];
   if(state.hasPickaxe) L.push({kind:'tool',tool:'pickaxe',icon:'⛏️',name:'Pickaxe'});   // tools at slots 2-3 so they're always reachable
   if(state.hasShovel)  L.push({kind:'tool',tool:'shovel',icon:'🥄',name:'Shovel'});
-  const ws=[]; for(const id of WTIER.slice(1)) if(state.weapons&&state.weapons[id]) ws.push(id); for(const id in (state.weapons||{})) if(WEAPONS[id]&&WEAPONS[id].rarity&&ws.indexOf(id)<0&&(state.level||1)>=(EQUIP_LVL[id]||0)) ws.push(id);   // hide under-level epic weapons
+  const ws=[]; for(const id in (state.weapons||{})){ if(!WEAPONS[id]||!canUseWeapon(id))continue; if((state.level||1)<(EQUIP_LVL[id]||0))continue; ws.push(id); }   // ALL owned weapons of the player's CLASS (staffs for mage, bows for ranger, swords for warrior); under-level epics hidden
   ws.sort((a,b)=>(WEAPONS[b].dmg||0)-(WEAPONS[a].dmg||0));   // strongest first -> only the weakest weapons drop off if the 10-slot bar overflows
   for(const id of ws) L.push({kind:'weapon',weapon:id,icon:WEAPONS[id].icon,name:WEAPONS[id].name});
   while(L.length<10) L.push(null);
