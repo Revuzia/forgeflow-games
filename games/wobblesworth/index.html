@@ -402,7 +402,7 @@ addEventListener('error', e=>__report('window.error', e.error||e.message));
 addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reason));
 
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
-  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, tradePending:null, quickItems:{}, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
+  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, tradePending:null, quickItems:{}, activeQuests:{}, questTarget:null, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
   hp:100, hpMax:100, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
@@ -1061,7 +1061,7 @@ const VENDOR_TEMPLATES=[
 function registerHome(o, solid, idx){
   // FACE the house toward the player's approach (town center) so its door lands FLUSH on a real wall, not a rotated bounding-box corner (owner: "doors must be on homes, not on the side"). Cardinal yaw doesn't change the vertical extent, so grounding stays correct; just re-bake the X/Z collider.
   let b=new THREE.Box3().setFromObject(o); const c0=b.getCenter(new THREE.Vector3());
-  o.rotation.y=Math.round(Math.atan2(-c0.x,-c0.z)/(Math.PI/2))*(Math.PI/2); o.updateMatrixWorld(true);
+  o.rotation.y=Math.round(Math.atan2(-c0.x,-c0.z)/(Math.PI/2))*(Math.PI/2)+Math.PI; o.updateMatrixWorld(true);   // +PI: turn the KUBIKOS model's OWN baked-in door to face AWAY from town so it doesn't double up with the custom swinging/press-E door registerHome builds on the town-facing wall (fixes 'two doors per home')
   b=new THREE.Box3().setFromObject(o); const c=b.getCenter(new THREE.Vector3()), sz=b.getSize(new THREE.Vector3());
   if(solid){ solid.minX=b.min.x-0.2; solid.maxX=b.max.x+0.2; solid.minZ=b.min.z-0.2; solid.maxZ=b.max.z+0.2; solid.top=b.max.y; }
   const meshes=[]; o.traverse(m=>{ if(m.isMesh) meshes.push(m); });
@@ -1130,7 +1130,9 @@ function buildInterior(home){
   for(const [lx,lz] of [[0.52,0.52],[-0.52,0.52],[0.52,-0.52],[-0.52,-0.52]]){ const leg=box(0.12,0.78,0.12,'#8a5a31'); leg.position.set(home.hx-1.6+lx,0.39,home.hz-1.6+lz); g.add(leg); }
   const lamp=ball(0.28,'#ffe26a'); lamp.position.set(home.hx-1.6,1.2,home.hz-1.6); g.add(lamp);
   const npc=makeSimpleNPC(home.color, home.purpose); npc.position.set(0,0,home.hz-2.4); npc.userData.bob=Math.random()*TAU; g.add(npc);
-  addInteractable(npc, `Talk to ${home.npcName}`, ()=>{ if(!home.active)return; npc.rotation.y=Math.atan2(player.position.x-(home.cx+npc.position.x), player.position.z-(home.cz+npc.position.z)); toast(pick([`💬 ${home.npcName}: "Welcome in!"`,`💬 ${home.npcName}: "Make yourself at home."`,`💬 ${home.npcName}: "Cozy little place, isn't it?"`,`💬 ${home.npcName}: "Help yourself to the chest, neighbor."`])); SFX.play('interact'); }, 2.6);
+  addInteractable(npc, `Talk to ${home.npcName}`, ()=>{ if(!home.active)return; npc.rotation.y=Math.atan2(player.position.x-(home.cx+npc.position.x), player.position.z-(home.cz+npc.position.z));
+    if(home.purpose==='blacksmith'){ if(questAvail('smith_hunt')){ offerQuest('smith_hunt','🔨 "A beast called Gnashtooth keeps raiding the outskirts. Hunt it down and I will reward you from the forge — boss-core and coin."'); return; } if(questActive('smith_hunt')&&!Quests.isDone('smith_hunt','slay')){ toast('🔨 '+home.npcName+': "Gnashtooth still draws breath — finish the hunt!"'); SFX.play('interact'); return; } }
+    toast(pick([`💬 ${home.npcName}: "Welcome in!"`,`💬 ${home.npcName}: "Make yourself at home."`,`💬 ${home.npcName}: "Cozy little place, isn't it?"`,`💬 ${home.npcName}: "Help yourself to the chest, neighbor."`])); SFX.play('interact'); }, 2.6);
   const chest=box(1.0,0.7,0.7,'#8a5a31'); chest.position.set(home.hx-1.4,0.55,-home.hz+1.4); g.add(chest);
   const lid=box(1.02,0.22,0.72,'#a9743f'); lid.position.set(0,0.46,-0.34); chest.add(lid); chest.userData.lid=lid; chest.userData.looted=false;
   addInteractable(chest, `Open ${home.npcName}'s chest`, ()=>lootChest(home,chest), 2.4);
@@ -1463,7 +1465,9 @@ function buildPlayerAndNeighbors(){
 }
 const REQ_ITEMS=['wood','stone','crystal','carrot','apple','flower','mushroom','coin'];
 function neighborTalk(g){ const u=g.userData; g.userData.paused=1.2;
-  if(!u.request){ const item=pick(REQ_ITEMS); u.request={item, qty:2+Math.floor(Math.random()*4), reward:40+Math.floor(Math.random()*50), bonus:pick(REQ_ITEMS.filter(x=>x!==item))};
+  if(!u.request){
+    if(!u.noQuest){ const qid = questAvail('rescue_one')?'rescue_one':(questAvail('night_cull')?'night_cull':null); if(qid){ u.noQuest=true; SFX.play('interact'); offerQuest(qid, qid==='rescue_one'?`🆘 ${u.name}: "A friend wandered into the woods chasing a glimmer and never came back. Please — find and free them!"`:`🌙 ${u.name}: "The outskirts swarm after dark. Cull five of the night-beasts and the roads will be safe by dawn."`); return; } }   // SOME neighbors offer a REAL quest before falling back to a fetch errand
+    const item=pick(REQ_ITEMS); u.request={item, qty:2+Math.floor(Math.random()*4), reward:40+Math.floor(Math.random()*50), bonus:pick(REQ_ITEMS.filter(x=>x!==item))};
     npcEmote(g,'interact-right'); SFX.play('interact'); renderRequests(); toast(`🙋 ${u.name}: "Could you bring me ${u.request.qty} ${ITEMS[item].i} ${ITEMS[item].n}?"`); return; }
   const r=u.request;
   if(Inv.has(r.item,r.qty)){ Inv.take(r.item,r.qty); state.giggle+=r.reward; Inv.add(r.bonus,2); u.request=null; markGoal('neighbor'); gainXP(18); state.reqsFulfilled=(state.reqsFulfilled||0)+1;
@@ -1514,11 +1518,33 @@ var Quests={ defs:{
   side_socks:{title:'🧦 The Sock Goblin',kind:'side',steps:[{id:'find',t:'Find all 5 lost socks'}]},
   side_cat:{title:'🐱 Cat-astrophe',kind:'side',steps:[{id:'rescue',t:'Rescue Mr. Whiskers'}]},
   side_gnome:{title:'🧙 Gnome Sweet Gnome',kind:'side',steps:[{id:'water',t:'Water the garden gnome'}]},
-  side_toilet:{title:'🚽 Throne of Terror',kind:'side',steps:[{id:'fix',t:'Plunge the haunted toilet'}]} },
+  side_toilet:{title:'🚽 Throne of Terror',kind:'side',steps:[{id:'fix',t:'Plunge the haunted toilet'}]},
+  // ── REAL NPC-given quests (bounty kind: custom reward via finishQuest, never the side auto-250) ──
+  smith_hunt:{title:'🔨 Blacksmith Bounty',kind:'bounty',steps:[{id:'accept',t:'Accept the hunt from the Blacksmith'},{id:'slay',t:'Defeat Gnashtooth, the beast he marked'}],reward:{gp:300,xp:60,items:[['boss_core',1],['coin',120]],badge:'q_smith',msg:'🔨 Bram: "You felled it! The forge owes you, friend."'}},
+  rescue_one:{title:'🆘 The Lost Wanderer',kind:'bounty',steps:[{id:'accept',t:'Accept the rescue'},{id:'free',t:'Find & free the captive out in the woods'},{id:'return',t:'Bring them safely back to town'}],reward:{gp:250,xp:50,items:[['coin',100],['crystal',2]],badge:'q_rescue',msg:'🆘 "You brought them home — bless you!"'}},
+  night_cull:{title:'🌙 Night Cull',kind:'bounty',steps:[{id:'accept',t:'Accept the bounty'},{id:'slay',t:'Defeat 5 monsters after dark'}],reward:{gp:200,xp:40,items:[['crystal',3],['coin',60]],badge:'q_cull',msg:'🌙 The roads are safe by dawn — nice work.'}} },
   done:{}, isDone(q,s){return !!this.done[q+'.'+s];},
-  complete(q,s){ if(this.done[q+'.'+s])return; this.done[q+'.'+s]=true; this.render(); const d=this.defs[q]; if(d.steps.every(st=>this.isDone(q,st.id))&&d.kind==='side'){ state.giggle+=250; toast('🏆 Side quest done: '+d.title); } if(typeof save==='function')save(); },   // SAVE on every quest step so progress never resets (e.g. disco switch stays flipped)
+  complete(q,s){ if(this.done[q+'.'+s])return; this.done[q+'.'+s]=true; this.render(); const d=this.defs[q]; const all=d.steps.every(st=>this.isDone(q,st.id)); if(all&&d.kind==='side'){ state.giggle+=250; toast('🏆 Side quest done: '+d.title); } else if(all&&d.reward){ if(typeof finishQuest==='function')finishQuest(q); } if(typeof save==='function')save(); },   // SAVE on every quest step so progress never resets; bounty quests pay out via finishQuest on the final step
   render(){ const el=document.getElementById('qlist'); let h=''; for(const k in this.defs){ const d=this.defs[k]; const all=d.steps.every(s=>this.isDone(k,s.id));
-    h+=`<div class="q"><b>${d.title}</b>${all?' <span class="tick">✔</span>':''}`; for(const s of d.steps){ let lab=s.t; if(k==='side_socks')lab=`Find all 5 lost socks (${state.socks}/5)`; h+=`<div class="obj ${this.isDone(k,s.id)?'done':''}">${this.isDone(k,s.id)?'✓':'•'} ${lab}</div>`; } h+='</div>'; } if(state.won) h+=legendHTML(); el.innerHTML=h; } };
+    if(d.kind==='bounty' && !(state.activeQuests&&state.activeQuests[k]) && !all) continue;   // bounty quests only appear once an NPC gives them
+    h+=`<div class="q"><b>${d.title}</b>${all?' <span class="tick">✔</span>':''}`; for(const s of d.steps){ let lab=s.t; if(k==='side_socks')lab=`Find all 5 lost socks (${state.socks}/5)`; if(k==='night_cull'&&s.id==='slay'&&state.activeQuests&&state.activeQuests.night_cull)lab=`Defeat 5 monsters after dark (${state.activeQuests.night_cull.kills||0}/5)`; h+=`<div class="obj ${this.isDone(k,s.id)?'done':''}">${this.isDone(k,s.id)?'✓':'•'} ${lab}</div>`; } h+='</div>'; } if(state.won) h+=legendHTML(); el.innerHTML=h; } };
+// ── REAL-QUEST helpers: NPCs OFFER (accept/decline), finishQuest pays the custom reward, onQuestAccepted sets up the target ──
+function questAvail(id){ const d=Quests.defs[id]; if(!d)return false; const last=d.steps[d.steps.length-1].id; return !(state.activeQuests&&state.activeQuests[id]) && !Quests.isDone(id,last); }
+function questActive(id){ return !!(state.activeQuests&&state.activeQuests[id]); }
+function offerQuest(id,pitch){ const d=Quests.defs[id]; if(!d)return false; styledConfirm(d.title, pitch||'Take on this quest?', '✓ Accept', ()=>{ state.activeQuests=state.activeQuests||{}; state.activeQuests[id]={accepted:true}; Quests.complete(id,'accept'); SFX.play('interact'); toast('📜 Quest accepted: '+d.title); onQuestAccepted(id); save(); }, ()=>{}, '✕ Not now'); return true; }
+function finishQuest(id){ const d=Quests.defs[id]; if(!d||!d.reward)return; const st=(state.activeQuests&&state.activeQuests[id]); if(st&&st.rewarded)return; if(st)st.rewarded=true; const r=d.reward; if(r.gp)state.giggle=(state.giggle||0)+r.gp; if(r.xp&&typeof gainXP==='function')gainXP(r.xp); if(r.items)for(const[k,n]of r.items)Inv.add(k,n); if(r.badge){ state.badges=state.badges||{}; state.badges[r.badge]=true; } state.questTarget=null; toast(r.msg||('🏆 Quest complete: '+d.title)); try{ SFX.play('success',{vol:0.6}); shake(0.4); confetti(player.position.clone().setY(2),40); }catch(e){} if(typeof renderRequests==='function')renderRequests(); save(); }
+function onQuestAccepted(id){
+  if(id==='smith_hunt'){ const a=rand(0,TAU), r=rand(16,22); const x=player.position.x+Math.cos(a)*r, z=player.position.z+Math.sin(a)*r; const bo=spawnBoss(pick(Object.keys(BOSS_TYPES)), x, z); if(bo)bo._questId='smith_hunt'; state.questTarget={x,z,label:'❗ Gnashtooth'}; toast('🔨 Gnashtooth has risen nearby — follow the ❗ on your map!'); }
+  else if(id==='night_cull'){ if(state.activeQuests.night_cull)state.activeQuests.night_cull.kills=0; toast('🌙 Cull 5 monsters after dark — they swarm the outskirts at night.'); }
+  else if(id==='rescue_one'){ spawnRescueCaptive(); }
+}
+function spawnRescueCaptive(){ if(state._rescueNpc){ try{ world.remove(state._rescueNpc.node); }catch(e){} state._rescueNpc=null; }
+  const a=rand(0,TAU); let x=Math.cos(a)*rand(120,180), z=-(60+Math.abs(Math.sin(a))*150);   // far out in the woods (negative z)
+  const R=Math.hypot(x,z); if(R>FENCE-14){ const k=(FENCE-14)/R; x*=k; z*=k; }
+  const npc=(typeof makeSimpleNPC==='function')?makeSimpleNPC('#e8c79a','captive'):box(0.7,1.5,0.5,'#e8c79a'); npc.position.set(x,(typeof groundY==='function'?groundY(x,z):0),z); world.add(npc);
+  const it=addInteractable(npc,'🆘 Free the captive',()=>{ if(Quests.isDone('rescue_one','free'))return; Quests.complete('rescue_one','free'); if(state.activeQuests.rescue_one)state.activeQuests.rescue_one.freed=true; const k=interactables.indexOf(it); if(k>=0)interactables.splice(k,1); try{ world.remove(npc); }catch(e){} state._rescueNpc=null; state.questTarget={x:HOUSE.cx,z:HOUSE.cz,label:'❗ Town'}; toast('🆘 Freed! Guide them home — head back to town (❗).'); SFX.play('success'); try{ confetti(npc.position.clone().setY(1.5),20); }catch(e){} save(); },2.8);
+  state._rescueNpc={node:npc,it}; state.questTarget={x,z,label:'❗ Captive'};
+}
 const GOAL_POOL=[{type:'eat',label:'Grab a snack from the fridge'},{type:'nap',label:'Take a nap to recharge'},{type:'cook',label:'Cook a meal on the stove'},{type:'tv',label:'Watch some cartoons'},{type:'shower',label:'Take a refreshing shower'},{type:'gnome',label:'Water the garden gnome'},{type:'toilet',label:'Plunge the haunted toilet'},{type:'socks',label:'Find a lost sock'},{type:'neighbor',label:'Greet a neighbor'},{type:'dance',label:'Turn on the disco & dance'},{type:'gather',label:'Gather something out in the wilds'},{type:'craft',label:'Press C to craft something'}];
 function genGoals(){ const pool=[...GOAL_POOL],out=[]; while(out.length<3&&pool.length){ out.push({...pool.splice(Math.floor(Math.random()*pool.length),1)[0],done:false}); } state.goals=out; renderGoals(); }
 function markGoal(type){ let hit=false; for(const g of state.goals){ if(g.type===type&&!g.done){ g.done=true; hit=true; state.giggle+=40; } } if(hit){ gainXP(8); SFX.play('pickup'); renderGoals(); save(); if(state.goals.every(g=>g.done)) completeDay(); } }
@@ -1586,7 +1612,7 @@ function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
   unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier, bagCount:state.bagCount, charModel:state.charModel,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
-  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
+  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug })); }catch(e){} }
 // VERSIONED + SANITIZED load: bad/corrupt/legacy data can never crash boot or inject impossible state
 function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) return; let s; try{ s=JSON.parse(raw); }catch(e){ localStorage.setItem('ww2_save_corrupt',raw); return; }
@@ -1617,7 +1643,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.craftedSet=(s.craftedSet&&typeof s.craftedSet==='object')?s.craftedSet:{}; state.reqsFulfilled=num(s.reqsFulfilled,0,0,1e9); state.biomes=(s.biomes&&typeof s.biomes==='object')?s.biomes:{}; state.event=DAY_EVENTS.find(e=>e.id===s.eventId)||null;
   if(typeof s.tod==='number'&&Number.isFinite(s.tod)) state.tod=((s.tod%1)+1)%1;
   if(s.volume!=null) state.volume=clamp(+s.volume||0,0,1); state.musicOn=(s.musicOn!==false); state.sfxOn=(s.sfxOn!==false); state.reduce=!!s.reduce;
-  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.quickItems=(s.quickItems&&typeof s.quickItems==='object')?s.quickItems:{}; state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{}; state.badges=(s.badges&&typeof s.badges==='object')?s.badges:{};
+  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.quickItems=(s.quickItems&&typeof s.quickItems==='object')?s.quickItems:{}; state.activeQuests=(s.activeQuests&&typeof s.activeQuests==='object')?s.activeQuests:{}; state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{}; state.badges=(s.badges&&typeof s.badges==='object')?s.badges:{};
   state.homeTier=num(s.homeTier,0,0,3); for(let i=1;i<=state.homeTier;i++) applyHomeTier(i);   // rebuild purchased home upgrades
   state.homePaints=(s.homePaints&&typeof s.homePaints==='object')?s.homePaints:{}; loadBlocks(s.buildBlocks); applyHomePaints();   // restore voxel builds + house repaints (buildWorld ran first, so homes exist)
   for(const k in VOX.meshes) world.remove(VOX.meshes[k]); VOX.dug={}; VOX.meshes={};   // restore carved terrain
@@ -2345,6 +2371,7 @@ function buildCullList(){   // one-time after buildWorld: tag every LOCALIZED st
 }
 function updateWorld(dt){ const tn=performance.now()*0.001;
   if(state._houseDoor){ const _dx=player.position.x-HOUSE.cx, _dz=player.position.z-(HOUSE.cz+HOUSE.hz); const _near=(_dx*_dx+_dz*_dz)<16; state._houseDoor.rotation.y=angLerp(state._houseDoor.rotation.y, _near?-1.45:0, dt*8); }   // swing the front door open when the player approaches, closed otherwise
+  if(questActive('rescue_one') && Quests.isDone('rescue_one','free') && !Quests.isDone('rescue_one','return') && Math.hypot(player.position.x,player.position.z)<42){ Quests.complete('rescue_one','return'); }   // rescue complete: freed captive + back in town
   state.tod=(state.tod+dt/280)%1; const ang=state.tod*TAU-Math.PI/2, sy=Math.sin(ang);
   // sun follows the player so shadows exist in ALL biomes (was a fixed ±box at origin = shadows only near town)
   sun.target.position.set(player.position.x,0,player.position.z);
@@ -2462,7 +2489,8 @@ function paintMap(c, R, applyFog, rect){ if(!c)return; const g=c.getContext('2d'
   if(met.market){ g.fillStyle='#ffd23f'; g.fillRect(tx(3)-2.5*ms,tz(8)-2.5*ms,5*ms,5*ms); lab('🛒 Market',tx(3),tz(8)-6*ms,'#ffe9a8'); }
   g.fillStyle='#7c5cff'; for(const n of neighbors){ const nm=n.userData&&n.userData.name; if(!nm||!met['npc:'+nm])continue; g.beginPath(); g.arc(tx(n.position.x),tz(n.position.z),2*ms,0,7); g.fill(); lab(nm, tx(n.position.x), tz(n.position.z)-4.5*ms, '#cdbcff'); }
   const px=tx(player.position.x),pz=tz(player.position.z),a=player.rotation.y;  // player arrow (always visible)
-  g.fillStyle='#221a2e'; g.beginPath(); g.moveTo(px+Math.sin(a)*6*ms,pz+Math.cos(a)*6*ms); g.lineTo(px+Math.sin(a+2.5)*5*ms,pz+Math.cos(a+2.5)*5*ms); g.lineTo(px+Math.sin(a-2.5)*5*ms,pz+Math.cos(a-2.5)*5*ms); g.closePath(); g.fill(); }
+  g.fillStyle='#221a2e'; g.beginPath(); g.moveTo(px+Math.sin(a)*6*ms,pz+Math.cos(a)*6*ms); g.lineTo(px+Math.sin(a+2.5)*5*ms,pz+Math.cos(a+2.5)*5*ms); g.lineTo(px+Math.sin(a-2.5)*5*ms,pz+Math.cos(a-2.5)*5*ms); g.closePath(); g.fill();
+  if(state.questTarget){ const qt=state.questTarget, qx=tx(qt.x), qz=tz(qt.z); g.fillStyle='#ff3b3b'; g.beginPath(); g.arc(qx,qz,3.6*ms,0,7); g.fill(); g.strokeStyle='#fff'; g.lineWidth=1.4*ms; g.stroke(); lab(qt.label||'❗ Quest', qx, qz-6*ms, '#ffd0d0'); } }   // active-quest target marker (smith_hunt boss / rescue captive / town return)
 let mapOpen=false;
 function drawMinimap(){ paintMap(document.getElementById('minimap'),300,true,false); if(mapOpen) paintMap(document.getElementById('bigmap'),470/(state.mapZoom||1),true,true); }   // minimap = circle; big map = rounded-rect old-school map, zoomable
 function openMap(){ if(!state.running)return; mapOpen=true; state.mapZoom=state.mapZoom||1; const el=document.getElementById('mapmodal');
@@ -3009,9 +3037,10 @@ function killCreature(i){ const c=creatures[i]; recordLore(c); const p=c.mesh.po
     state._bosses=(state._bosses||0)+1; const coin=140+Math.floor(Math.random()*120);
     dropLoot(p.x,p.z,[['coin',coin],['boss_core',2+Math.floor(Math.random()*2)],['gold_ingot',2],['iron_ingot',3],['crystal',5]], `💀 ${(c.type&&c.type.name)||'Boss'} Haul`);   // big haul -> a loot bag you OPEN (modal)
     state.recipePages=(state.recipePages||0)+3; gainXP(70); SFX.play('success',{vol:0.6}); shake(1.1); confetti(p.clone().setY(2.4),60);
-    toast(`💀 BOSS DEFEATED: ${(c.type&&c.type.name)||'Boss'}! A 📦 loot bag dropped — walk up & press E. (+📖 Titan pages)`); save(); return; }
+    toast(`💀 BOSS DEFEATED: ${(c.type&&c.type.name)||'Boss'}! A 📦 loot bag dropped — walk up & press E. (+📖 Titan pages)`); if(c._questId && questActive(c._questId)) Quests.complete(c._questId,'slay'); save(); return; }
   let tier=rollRarity(); const _kpd=Math.hypot(p.x,p.z); if(!isDay() && _kpd>150){ if(tier==='common'&&Math.random()<0.33)tier='rare'; else if(tier==='rare'&&Math.random()<0.20)tier='epic'; }   // 🌙 far-outskirts NIGHT kills upgrade rarity → dangerous nights out are worth it
-  const m=RARITY[tier].mult; const coins=(2+Math.floor(Math.random()*3))*m; state._kills=(state._kills||0)+1; SFX.play('interact',{rate:0.3,vol:0.5});   // owner disliked the bright kill 'chime' — much lower pitch + quieter = a dull defeat thud, not a chime (hit sound at L~2092 stays rate 1.0)
+  const m=RARITY[tier].mult; const coins=(2+Math.floor(Math.random()*3))*m; state._kills=(state._kills||0)+1; SFX.play('interact',{rate:0.3,vol:0.5});
+  if(questActive('night_cull')&&!Quests.isDone('night_cull','slay')&&!isDay()){ const q=state.activeQuests.night_cull; q.kills=(q.kills||0)+1; Quests.render(); if(q.kills>=5)Quests.complete('night_cull','slay'); else toast(`🌙 Night Cull: ${q.kills}/5`); }   // count night kills toward the bounty   // owner disliked the bright kill 'chime' — much lower pitch + quieter = a dull defeat thud, not a chime (hit sound at L~2092 stays rate 1.0)
   gainXP(6 + (c.type&&c.type.minDist?8:0) + (m>1?m*2:0));   // XP for the kill — far-out specials + rare drops grant more
   dropLoot(p.x,p.z,[['coin',coins]], '⚔️ Loot', true);   // a glowing loot BAG -> walk over to auto-collect (coins)
   if(tier==='epic'){ dropGear(p.x,p.z, pick(EPIC_GEAR)); }   // EPIC = an equippable epic weapon or armor (no toast — the glowing physical drop + hover stats are enough)
@@ -3290,6 +3319,7 @@ addEventListener('pagehide',()=>{ try{ if(!sessionStorage.getItem('ww_newgame'))
 let _inviteRoom=null; try{ _inviteRoom=((new URLSearchParams(location.search).get('room'))||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)||null; }catch(e){}   // invite link ?room=CODE
 function startGame(){ if(!ready)return; document.getElementById('title').classList.add('hidden'); closeSettings(); state.running=true; Music.start();
   state.hpMax=hpMaxForLevel(state.level); if(!state.hp||state.hp>state.hpMax||state.hp<1) state.hp=state.hpMax; renderHearts();   // ensure the real HP pool is set for fresh + loaded games
+  if(questActive('rescue_one') && Quests.isDone('rescue_one','accept') && !Quests.isDone('rescue_one','free') && !state._rescueNpc){ try{ spawnRescueCaptive(); }catch(e){} }   // re-spawn the captive if a rescue was mid-flight when the game was reloaded
   try{ state.intro=!localStorage.getItem('ww2_seen_intro'); }catch(e){ state.intro=true; }
   if(state.intro&&state.beacon){ state.beacon.visible=true; toast('✨ Follow the glowing beam to your new house!'); }
   else toast('🏠 Back on Giggleton Lane — survive the night! Check your Journal →');
@@ -3411,7 +3441,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
     _capOff=true; for(const k in ITEMS) Inv.add(k,300);   // _capOff bypasses the backpack cap for the mass-give; give 300 of EVERY item — total demand across all ~59 recipes exceeds 60, so over-provision
     let crafted=0; const unlockedCount=RECIPES.filter(r=>!r.locked).length; for(const r of RECIPES){ if(!r.locked&&Object.keys(r.cost).every(k=>Inv.has(k,r.cost[k]))){ craft(r.id); crafted++; } } R.recipes_crafted=crafted+'/'+unlockedCount;
     // NEIGHBOR fetch quest end-to-end
-    const g=neighbors[0]; neighborTalk(g); const req=g.userData.request; if(req){ Inv.add(req.item,req.qty); player.position.set(g.position.x,g.position.y,g.position.z+1); neighborTalk(g); R.neighbor_fulfilled=(g.userData.request===null); } else R.neighbor_fulfilled='no-req';
+    const g=neighbors[0]; g.userData.noQuest=true; neighborTalk(g); const req=g.userData.request; if(req){ Inv.add(req.item,req.qty); player.position.set(g.position.x,g.position.y,g.position.z+1); neighborTalk(g); R.neighbor_fulfilled=(g.userData.request===null); } else R.neighbor_fulfilled='no-req';
     // DAY completion
     { if(!state.goals.length) genGoals(); state.goals.forEach(g=>g.done=true); state.goals[0].done=false; const d0=state.day; markGoal(state.goals[0].type); R.day_advanced=(state.day>d0); }   // deterministic: force exactly one undone goal then complete it (was flaky if the playthrough already finished all goals)
     // SHOP / ECONOMY
@@ -3435,7 +3465,9 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
     // ONBOARDING (go inside -> tutorial completes, beacon hides, flag set)
     state.intro=true; state.tutStep=0; if(state.beacon)state.beacon.visible=true; player.position.set(HOUSE.cx,0.3,HOUSE.cz); updateWorld(0.05); R.onboarding_done=(state.intro===false && (state.beacon?!state.beacon.visible:true));
     // FRIENDSHIP (3 fulfilled requests -> friend grows, gift at 3)
-    const fg=neighbors[1]; for(let i=0;i<3;i++){ fg.userData.request=null; neighborTalk(fg); const rq=fg.userData.request; Inv.add(rq.item,rq.qty); neighborTalk(fg); } R.friendship=(fg.userData.friend>=3);
+    const fg=neighbors[1]; fg.userData.noQuest=true; for(let i=0;i<3;i++){ fg.userData.request=null; neighborTalk(fg); const rq=fg.userData.request; Inv.add(rq.item,rq.qty); neighborTalk(fg); } R.friendship=(fg.userData.friend>=3);
+    // REAL NPC QUEST: accept -> complete final step -> custom reward (GP + boss_core) lands once
+    { const _g0=state.giggle||0, _bc=state.inv.boss_core||0; state.activeQuests=state.activeQuests||{}; delete state.activeQuests.smith_hunt; delete Quests.done['smith_hunt.accept']; delete Quests.done['smith_hunt.slay']; state.activeQuests.smith_hunt={accepted:true}; Quests.complete('smith_hunt','accept'); Quests.complete('smith_hunt','slay'); R.quest_flow=(Quests.isDone('smith_hunt','slay') && state.giggle>=_g0+300 && (state.inv.boss_core||0)>=_bc+1 && state.activeQuests.smith_hunt.rewarded===true); }
     // PERSISTENT REQUESTS LIST renders
     state.req=null; townBoard(); renderRequests(); R.requests_list=/Board/.test(document.getElementById('reqlist').innerHTML);
     // TOWN LEGEND post-game checklist renders
@@ -3683,7 +3715,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       &&R.event_active&&R.event_market&&R.shop_closed_night&&R.shop_open_day&&R.onboarding_done&&R.friendship&&R.requests_list&&R.town_legend
       &&R.pause_works&&R.cam_pitch_clamped&&R.ambient
       &&R.head&&R.assetsClean&&R.touch&&R.touch_moves&&R.raf_boundary&&R.pause_freezes_cook&&R.cook_completes&&R.sfx_gate&&R.reduce_motion&&R.reduce_confetti&&R.light_cap&&R.save_sanitized&&R.particle_pool
-      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench
+      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow
       &&R.homes_present&&R.home_built&&R.home_loot&&R.home_enter_path&&R.recipe_page_unlock&&R.node_respawn&&R.chest_oneuse
       &&R.weapon_craft&&R.combat_kill&&R.combat_respawn&&R.inv_slots
       &&R.mine_pickaxe&&R.mine_enter&&R.mine_dig&&R.mine_exit&&R.armor_craft&&R.armor_reduces&&R.rarity_tiers&&R.rarity_loot&&R.combat_anim&&R.gear_equip&&R.dice_rolls&&R.dmg_popup&&R.menu;
