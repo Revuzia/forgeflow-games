@@ -31,7 +31,8 @@
   .bar{background:rgba(255,255,255,.82); border:3px solid var(--ink); border-radius:14px; padding:5px 9px; box-shadow:3px 3px 0 rgba(34,26,46,.25)}
   .bar .lbl{font-size:12px; font-weight:bold; display:flex; justify-content:space-between; letter-spacing:.5px}
   .bar .track{height:10px; background:#e7dccb; border-radius:6px; margin-top:4px; overflow:hidden}
-  .bar .fill{height:100%; width:80%; border-radius:6px; transition:width .35s ease}
+  .bar .fill{height:100%; width:80%; border-radius:6px; transition:width .35s ease; box-shadow:inset -2px 0 3px rgba(0,0,0,0.12)}
+  #hearts .fill{border-radius:8px; background-image:linear-gradient(180deg,rgba(255,255,255,0.15),rgba(0,0,0,0.08)) !important}
   #fHunger{background:linear-gradient(90deg,#ff9a3d,#ffcf4d)} #fEnergy{background:linear-gradient(90deg,#3ad1c7,#7ce0ff)} #fFun{background:linear-gradient(90deg,#ff5d8f,#ff9ed1)}
   #fXP{background:linear-gradient(90deg,#7c5cff,#c9a0ff)} #xpbar .lbl span:first-child{color:var(--grape)}
   /* built-in DEBUG instrumentation overlay (toggle: F3 or `) */
@@ -65,7 +66,9 @@
   #invbar .slot.wslot{border-color:rgba(122,92,255,.55); background:rgba(122,92,255,.12)} #invbar .slot.pslot{border-color:rgba(255,207,77,.45); background:rgba(255,207,77,.1)}
   #invbar .hint{align-self:center; color:#cbb6e6; font-size:11px; margin-left:4px; max-width:120px}
   #invbar .slot.empty{opacity:.3}
-  #hearts{font-size:17px; letter-spacing:2px; text-align:center; padding:1px 0}
+  #hearts{letter-spacing:2px; text-align:center; padding:1px 0}
+  #hearts .lbl{font-size:12px; gap:3px}
+  #hearts .lbl span:last-child{font-variant-numeric:tabular-nums; flex-shrink:0; min-width:48px; text-align:right}
   #armorbar{font-size:15px; letter-spacing:2px; text-align:center; padding:0 0 1px; filter:saturate(.9)}
   /* inventory is a centered MODAL grid (owner: image-1 inventory wasn't industry-standard) */
   #inv{position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center; background:rgba(20,14,30,.5); pointer-events:auto}
@@ -313,6 +316,7 @@
     <div id="menu">
       <div class="btn dim" id="continueBtn" style="display:none">▶ Continue</div>
       <div class="btn dim" id="newGameBtn">Loading…</div>
+      <div class="btn dim" id="coopMenuBtn" style="background:#37c06a;border-color:#2a8a4a">👥 Play with Friends</div>
       <div class="btn dim" id="settingsBtn">⚙ Settings</div>
     </div>
   </div>
@@ -820,6 +824,7 @@ function buildWorld(){
   }
   for(let i=0;i<560;i++){ const a=rand(0,TAU), rad=rand(8,606); const x=Math.cos(a)*rad, z=Math.sin(a)*rad;
     if(isInWater(x,z,3)) continue;   // no grass tufts / flowers floating on the water
+    if(x>-9&&x<9&&z>8&&z<22) continue;   // skip the player-house interior footprint (no grass growing through the floor)
     place(pick(["Grass","Grass3","GrassLeaf1","Flower1","Flower2","Flower3","MushroomRed","Cactus1"]),x,z,{targetH:rand(0.5,1.3),rotY:rand(0,TAU)});
   }
   // street lanterns along the main roads — each gets a warm GLOWING bulb (+ a real point light up to the cap)
@@ -1200,6 +1205,12 @@ function buildPlayerHouse(){
   const f1=box(0.35,3.2,0.35,trimC); f1.position.set(cx-1.1,1.9,cz+hz); world.add(f1);
   const f2=f1.clone(); f2.position.x=cx+1.1; world.add(f2);
   const ftop=box(2.6,0.4,0.4,trimC); ftop.position.set(cx,3.5,cz+hz); world.add(ftop);
+  // 🚪 a REAL front door: an invisible barrier that blocks MONSTERS but the player walks through (off:true skips player collision, monStop blocks mobs), plus a wooden door that swings open as you approach
+  { const hinge=new THREE.Group(); hinge.position.set(cx-1.0,0,cz+hz); world.add(hinge);
+    const panel=box(2.0,2.5,0.14,'#7a5530'); panel.position.set(1.0,1.4,0); panel.castShadow=true; hinge.add(panel);
+    const knob=ball(0.09,'#caa46a'); knob.position.set(1.78,1.4,0.12); hinge.add(knob);
+    state._houseDoor=hinge;   // updateWorld swings it open when the player is near the doorway
+    solids.push({minX:cx-1.0,maxX:cx+1.0,minZ:cz+hz-0.25,maxZ:cz+hz+0.25,top:2.8,mesh:null,stand:false,off:true,monStop:true}); }   // off:true → PLAYER passes; monStop → MONSTERS blocked (no more lions walking in)
   // ✨ ONBOARDING BEACON over the door — first session only, hides once you head inside
   const beacon=new THREE.Mesh(new THREE.ConeGeometry(0.7,2.6,5), new THREE.MeshBasicMaterial({color:'#ffe26a',transparent:true,opacity:0.78})); beacon.position.set(cx,6.6,cz+hz+1.2); beacon.rotation.x=Math.PI; beacon.visible=false; world.add(beacon); state.beacon=beacon;
   // roof (fades when inside)
@@ -1227,16 +1238,27 @@ function buildPlayerHouse(){
     const cake=box(0.6,0.5,0.6,'#ff9ed1'); cake.position.set(cx+3.5,1.5,cz-1); world.add(cake); Quests.complete('main','table'); emote('emote-yes'); toast('✅ Table set! Crank the music.'); });
   // bed (nap)
   const bed=F(-5.5,4,3,0.7,2.2,'#9ad0ff'); const quilt=box(2.6,0.25,2,'#ff6f91'); quilt.position.set(cx-5.3,1.1,cz+4); world.add(quilt);
-  addInteractable(bed,'Take a nap (bed)',()=>{ Needs.add('energy',40); emote('sit'); markGoal('nap'); const wasNight=!isDay(); state.tod=0.28; toast(wasNight?'😴 Slept till morning! Energy restored & the shop reopens.':'😴 Zzz… energy restored!'); flashFade(); });
+  addInteractable(bed,'Take a nap (bed)',()=>{ Needs.add('energy',40); emote('sit'); markGoal('nap'); const wasNight=!isDay(); state.tod=0.28; const _h0=state.hp; state.hp=state.hpMax; renderHearts(); const _hg=Math.round(state.hp-_h0); if(_hg>0&&typeof popDmg==='function') popDmg(player.position.x,(player.position.y||0)+2.4,player.position.z,'+'+_hg,{color:'#5fe08a'}); toast(wasNight?'😴 Slept till morning! Energy & health restored.':'😴 Zzz… energy & health restored!'); flashFade(); setTimeout(()=>{ try{ for(const k in charActions){ if(k!=='idle') charActions[k].stop(); } charAnim='idle'; if(charActions.idle) charActions.idle.reset().fadeIn(0.2).play(); }catch(e){} }, 2700); });   // nap heals to full + HARD reset to standing (stop every other clip, play idle) so legs never stay folded
   // TV (tv)
   const tvStand=F(-6,-4,2,0.8,0.7,'#7a5a3b'); const tv=box(2.4,1.4,0.2,'#222'); tv.position.set(cx-6,2.0,cz-4.4); world.add(tv);
   const tvScreen=new THREE.Mesh(new THREE.PlaneGeometry(2,1.1),new THREE.MeshBasicMaterial({color:'#1a2a3a'})); tvScreen.position.set(cx-6,2.0,cz-4.28); world.add(tvScreen); state.tvScreen=tvScreen;
   addInteractable(tv,'Watch cartoons (TV)',()=>{ state.tvOn=!state.tvOn; tvScreen.material.color.set(state.tvOn?'#7fd7ff':'#1a2a3a'); if(state.tvOn){Needs.add('fun',14); markGoal('tv');} emote('interact-left'); toast(state.tvOn?'📺 Cartoons on!':'📺 Off.'); });
-  // shower (shower)
-  const shower=F(6,4,1.6,2.6,1.6,'#bfe9ff'); shower.material=new THREE.MeshToonMaterial({color:'#bfe9ff',gradientMap:GRAD,transparent:true,opacity:0.5});
+  // shower (shower) — proper model: tiled base + pipe + head + glass panel (was a plain water block)
+  const shower=new THREE.Group(); {
+    const sbase=box(1.3,0.16,1.3,'#cdd6da'); sbase.position.y=0.08; shower.add(sbase);
+    const back=box(1.3,2.4,0.12,'#bcd0dd'); back.position.set(0,1.2,-0.6); shower.add(back);
+    const sideW=box(0.12,2.4,1.3,'#bcd0dd'); sideW.position.set(-0.6,1.2,0); shower.add(sideW);
+    const pipe=box(0.08,1.7,0.08,'#8a939a'); pipe.position.set(-0.45,1.35,-0.5); shower.add(pipe);
+    const head=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.2,0.1,12),toon('#9aa6ad')); head.position.set(-0.45,2.1,-0.35); shower.add(head);
+    const knob=ball(0.07,'#7fd9ff'); knob.position.set(-0.5,1.0,-0.5); shower.add(knob);
+    const glass=new THREE.Mesh(new THREE.PlaneGeometry(1.3,2.4),new THREE.MeshToonMaterial({color:'#bfe9ff',gradientMap:GRAD,transparent:true,opacity:0.34,side:THREE.DoubleSide})); glass.position.set(0.6,1.2,0); glass.rotation.y=Math.PI/2; shower.add(glass);
+    shower.traverse(m=>{ if(m.isMesh)m.castShadow=true; });
+  }
+  shower.position.set(cx+6,0.3,cz+4); world.add(shower); addSolid(shower);
   addInteractable(shower,'Take a shower',()=>{ Needs.add('fun',8); Needs.add('energy',8); markGoal('shower'); toast('🚿 Squeaky clean!'); });
   // toilet (toilet) — blocky
   const toilet=new THREE.Group(); { const tank=box(0.7,0.7,0.28,'#f3f3f3'); tank.position.set(0,0.75,-0.34); toilet.add(tank); const bowl=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.24,0.4,16),toon('#fafafa')); bowl.position.set(0,0.4,0.04); toilet.add(bowl); const lid=new THREE.Mesh(new THREE.CylinderGeometry(0.33,0.33,0.08,16),toon('#eaeaea')); lid.position.set(0,0.62,0.04); toilet.add(lid); const base=box(0.34,0.4,0.34,'#ececec'); base.position.set(0,0.2,0.04); toilet.add(base); }
+  toilet.rotation.y=Math.PI;   // flip 180° so the tank sits against the wall + the bowl faces into the room (was backwards)
   toilet.position.set(cx+2.5,0.3,cz+4.3); world.add(toilet); addSolid(toilet); state.toilet=toilet;
   addInteractable(toilet,'Plunge the haunted toilet',()=>{ geyser(toilet.position); markGoal('toilet'); if(!Quests.isDone('side_toilet','fix')){ Quests.complete('side_toilet','fix'); toast('🪠 GLOORP! Unclogged.'); } else toast('🪠 …it gurgled.'); });
   // disco lamp (disco switch + dance) — use a KUBIKOS lantern as the switch
@@ -1371,7 +1393,7 @@ function faceVel(vx,vz){ return Math.atan2(vx,vz)+CHAR_FWD; }   // heading that 
 /* billboarded canvas-sprite nametag above a neighbor (name + friendship hearts) */
 function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
 function setLabel(sp,text){ const g=sp._g; g.clearRect(0,0,256,64); g.fillStyle='rgba(34,26,46,0.82)'; roundRect(g,6,6,244,52,16); g.fill(); g.fillStyle='#fff7ec'; g.font='bold 24px "Trebuchet MS",sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText(text,128,33); sp.material.map.needsUpdate=true; }
-function makeLabel(text){ const cv=document.createElement('canvas'); cv.width=256; cv.height=64; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthTest:false,depthWrite:false})); sp.material.map.colorSpace=THREE.SRGBColorSpace; sp.renderOrder=20; sp.scale.set(2.7,0.68,1); sp._cv=cv; sp._g=cv.getContext('2d'); setLabel(sp,text); return sp; }
+function makeLabel(text){ const cv=document.createElement('canvas'); cv.width=256; cv.height=64; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthTest:true,depthWrite:false})); sp.material.map.colorSpace=THREE.SRGBColorSpace; sp.renderOrder=20; sp.scale.set(2.7,0.68,1); sp._cv=cv; sp._g=cv.getContext('2d'); setLabel(sp,text); return sp; }
 // PEOPLE pool for neighbors + wild wanderers: the 12 Kenney mini-characters (varied male/female) + the 3 originals. All share char_player's rig, so the walk clip animates them.
 const NB_MODELS=['character-male-a','character-male-b','character-male-c','character-male-d','character-male-e','character-male-f','character-female-a','character-female-b','character-female-c','character-female-d','character-female-e','character-female-f','char_n1','char_n2','char_n3'];
 const PLAYER_MODELS=['char_player','character-male-a','character-male-b','character-male-c','character-male-d','character-male-e','character-male-f','character-female-a','character-female-b','character-female-c','character-female-d','character-female-e','character-female-f'];   // selectable player looks (Settings); each Kenney look has its own skin/hair/outfit
@@ -1439,7 +1461,7 @@ function setAnim(name){ if(name===charAnim||!charActions[name]) return; const pr
 function emote(name){ // one-shot emote then back to idle/walk
   if(!charActions[name]) return; const a=charActions[name]; a.reset(); a.setLoop(THREE.LoopOnce,1); a.clampWhenFinished=true; a.fadeIn(0.1).play();
   const prev=charActions[charAnim]; if(prev&&prev!==a) prev.fadeOut(0.1); charAnim='__emote';
-  setTimeout(()=>{ if(charAnim==='__emote'){ a.fadeOut(0.25); a.clampWhenFinished=false; setAnim('idle'); } }, 700); }   // setAnim('idle') (was charAnim='') forces an immediate clean stand-up so legs don't stay folded after a nap/sit   // MUST fade the emote action OUT here: it was LoopOnce+clampWhenFinished, so it sat at full weight on its LAST frame (e.g. the folded-leg 'sit' pose after a nap). Clearing charAnim only let setAnim fade IDLE *in* — the clamped sit kept blending the legs into a seated/sleeping pose (owner: "after he sleeps his legs stay in a sleeping position"). Fading the clamped action out lets the player stand fully upright again.
+  setTimeout(()=>{ if(charAnim==='__emote'){ a.fadeOut(0.25); a.clampWhenFinished=false; setAnim('idle'); setTimeout(()=>{ try{ a.stop(); }catch(e){} }, 300); } }, 700); }   // fully STOP the clamped emote action after the fade so the folded/sit pose can't keep blending (was only faded, which left legs folded after a nap)   // setAnim('idle') (was charAnim='') forces an immediate clean stand-up so legs don't stay folded after a nap/sit   // MUST fade the emote action OUT here: it was LoopOnce+clampWhenFinished, so it sat at full weight on its LAST frame (e.g. the folded-leg 'sit' pose after a nap). Clearing charAnim only let setAnim fade IDLE *in* — the clamped sit kept blending the legs into a seated/sleeping pose (owner: "after he sleeps his legs stay in a sleeping position"). Fading the clamped action out lets the player stand fully upright again.
 
 /* ---------- input / camera ---------- */
 const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(levelupOpen)closeLevelUp(); else if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); else if(state.running)openSettings(); } }   /* ESC toggles Settings (open if nothing else is open); browsers still force ESC to exit fullscreen — unavoidable */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
@@ -1456,7 +1478,7 @@ let dragging=false,lastX=0,lastY=0;
 // LEFT mouse = ATTACK; RIGHT mouse (or touch) drag = ROTATE camera. (Right-click menu already suppressed above.)
 renderer.domElement.addEventListener('pointerdown',e=>{ if(e.pointerType!=='touch' && e.button===0){ if(state.running){ if(BMODE.on) placeBlock(); else if(state._activeTool){ digBlock(); } else playerAttack(); } return; } dragging=true; lastX=e.clientX; lastY=e.clientY; });   // left-click: dig/mine if a tool is the held hotbar item, else attack
 addEventListener('pointerup',()=>dragging=false); addEventListener('pointercancel',()=>dragging=false); addEventListener('pointermove',e=>{ if(e.pointerType!=='touch'){ _mx=e.clientX; _my=e.clientY; } if(dragging){ const s=state.mouseSens||1; cam.targetYaw-=(e.clientX-lastX)*0.006*s; cam.targetPitch=clamp(cam.targetPitch+(e.clientY-lastY)*0.005*s,0.21,1.256); lastX=e.clientX; lastY=e.clientY; } });
-addEventListener('wheel',e=>{ cam.dist=clamp(cam.dist+Math.sign(e.deltaY)*0.9,7,22); },{passive:true});
+addEventListener('wheel',e=>{ cam.dist=clamp(cam.dist+Math.sign(e.deltaY)*0.9,3.5,22); },{passive:true});
 const cam={yaw:Math.PI,targetYaw:Math.PI,dist:13,height:7,pitch:0.5,targetPitch:0.5};   // pitch in radians (clamped 12°–72°); cam.yaw/pitch LERP toward target* each frame for smooth right-click rotation
 
 /* ---------- SIMS systems (needs / quests / day / silly) ---------- */
@@ -1517,7 +1539,7 @@ function isDay(){ return Math.sin(state.tod*TAU-Math.PI/2)>0; }   // dawn→dusk
 function tutorialDone(){ state.intro=false; try{ localStorage.setItem('ww2_seen_intro','1'); }catch(e){} }
 function completeDay(){ const d=state.day; state.giggle+=120; state.day++; state.bestDay=Math.max(state.bestDay,state.day);
   SFX.play('success'); shake(0.5); toast(`🌅 Day ${d} complete! +120 GP. Day ${state.day}!`); confetti(player.position.clone().setY(3),36);
-  state.socks=0; socks.forEach(s=>{ s.visible=true; s.position.set(HOUSE.cx+rand(-7,7),0.4,HOUSE.cz+rand(-5,5)); }); state.snacksReady=false;
+  if(!Quests.isDone('side_socks','find')){ state.socks=0; socks.forEach(s=>{ s.visible=true; s.position.set(HOUSE.cx+rand(-7,7),0.4,HOUSE.cz+rand(-5,5)); }); } state.snacksReady=false;
   pickEvent(); if(state.event) toast(`${state.event.name} — ${state.event.desc}!`); spawnDailyActivity(true); genGoals(); save(); }
 function renderGoals(){ const el=document.getElementById('goalbox'); if(!el)return; let h=`<div class="dayhdr">🌞 Day ${state.day} · ✨ ${state.giggle} GP</div>`; if(state.event) h+=`<div class="obj" style="color:var(--pop)">${state.event.name} — ${state.event.desc}</div>`; for(const g of state.goals) h+=`<div class="obj ${g.done?'done':''}">${g.done?'✓':'•'} ${g.label}</div>`; el.innerHTML=h; }
 function renderRequests(){ const el=document.getElementById('reqlist'); if(!el)return; let h='';
@@ -2040,7 +2062,7 @@ function buildTouchUI(force){
   const pd=new Map(); let pinch0=0; const cv=renderer.domElement;
   cv.addEventListener('pointerdown',e=>{ if(e.pointerType==='touch') pd.set(e.pointerId,{x:e.clientX,y:e.clientY}); },{passive:true});
   cv.addEventListener('pointermove',e=>{ if(e.pointerType!=='touch'||!pd.has(e.pointerId))return; pd.set(e.pointerId,{x:e.clientX,y:e.clientY});
-    if(pd.size===2){ dragging=false; const p=[...pd.values()], d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y); if(pinch0) cam.dist=clamp(cam.dist-(d-pinch0)*0.03,7,22); pinch0=d; } },{passive:true});
+    if(pd.size===2){ dragging=false; const p=[...pd.values()], d=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y); if(pinch0) cam.dist=clamp(cam.dist-(d-pinch0)*0.03,3.5,22); pinch0=d; } },{passive:true});
   const endP=e=>{ pd.delete(e.pointerId); if(pd.size<2)pinch0=0; if(pd.size===1){ const p=[...pd.values()][0]; setTimeout(()=>{ if(pd.size===1){ dragging=true; lastX=p.x; lastY=p.y; } },0); } };   // pinch→1 finger: re-arm look-drag AFTER the bubbling window pointerup sets dragging=false
   cv.addEventListener('pointerup',endP); cv.addEventListener('pointercancel',endP);
   const pr=document.getElementById('prompt'); if(pr){ pr.style.pointerEvents='auto'; pr.addEventListener('pointerdown',e=>{ e.preventDefault(); if(state.running)tryInteract(); },{passive:false}); }
@@ -2206,7 +2228,7 @@ function updatePlayer(dt){
   let mvx=0,mvz=0;
   if(moving){ const l=Math.hypot(ix,iz); ix/=l; iz/=l; const cs=Math.cos(cam.yaw),sn=Math.sin(cam.yaw);
     mvx=-iz*sn-ix*cs; mvz=-iz*cs+ix*sn; const tgt=Math.atan2(mvx,mvz)+CHAR_FWD;
-    let dy=((tgt-player.rotation.y+Math.PI)%TAU)-Math.PI; player.rotation.y+=dy*Math.min(1,dt*12);
+    player.rotation.y=angLerp(player.rotation.y,tgt,dt*12);
     const sp=((sprint&&Needs.canSprint())?9:5)*Needs.moveMul()*(_wz?0.55:1); player.position.x+=mvx*sp*dt; player.position.z+=mvz*sp*dt; resolve();   // swimming = slower
     if(grounded){ stepT-=dt; if(stepT<=0){ SFX.play('step'); stepT=sprint?0.26:0.4; } } }
   if(!MINE.inMine && !DUNGEON.inDungeon){   // TRUE WRAP (surface, every frame): walk off one edge -> appear on the other. The shader renders modulo WRAP_P so wrapping the coord by exactly WRAP_P is SEAMLESS (no visible jump); shift the camera by the same delta so it doesn't lerp across the seam.
@@ -2290,6 +2312,7 @@ function buildCullList(){   // one-time after buildWorld: tag every LOCALIZED st
     cullList.push({o, ox:bs.center.x-o.position.x, oz:bs.center.z-o.position.z, cy:bs.center.y, r:bs.radius+4}); }
 }
 function updateWorld(dt){ const tn=performance.now()*0.001;
+  if(state._houseDoor){ const _dx=player.position.x-HOUSE.cx, _dz=player.position.z-(HOUSE.cz+HOUSE.hz); const _near=(_dx*_dx+_dz*_dz)<16; state._houseDoor.rotation.y=angLerp(state._houseDoor.rotation.y, _near?-1.45:0, dt*8); }   // swing the front door open when the player approaches, closed otherwise
   state.tod=(state.tod+dt/280)%1; const ang=state.tod*TAU-Math.PI/2, sy=Math.sin(ang);
   // sun follows the player so shadows exist in ALL biomes (was a fixed ±box at origin = shadows only near town)
   sun.target.position.set(player.position.x,0,player.position.z);
@@ -2851,13 +2874,13 @@ function spawnThorn(x,y,z,tx,tz,kind){ const acid=kind==='acid', seed=kind==='se
     let geo,col,ecol; if(seed){ geo=new THREE.SphereGeometry(0.14,8,6); col='#efe0b0'; ecol='#caa44a'; }   // pale cream pumpkin seed
     else if(acid){ geo=new THREE.SphereGeometry(0.17,8,6); col='#9be86b'; ecol='#7ad04a'; }
     else { geo=new THREE.ConeGeometry(0.1,0.5,5); col='#5a3a22'; ecol='#3a2a1a'; }
-    const m=new THREE.Mesh(geo,new THREE.MeshToonMaterial({color:col,gradientMap:GRAD,emissive:new THREE.Color(ecol),emissiveIntensity:0.4}));
+    const m=new THREE.Mesh(geo,new THREE.MeshToonMaterial({color:col,gradientMap:GRAD,emissive:new THREE.Color(ecol),emissiveIntensity:0.5}));
     m.position.set(x,y,z); const dx=tx-x, dz=tz-z, dd=Math.hypot(dx,dz)||1, sp=seed?8.5:(kind==='thorn'?6.5:10);   // the bee's thorn flies SLOW so you can sidestep it like an arrow; acid (boss volley) stays fast
     if(seed)m.scale.set(1,1,1.7);   // teardrop seed shape
     if(!acid)m.lookAt(tx,y,tz); world.add(m); projectiles.push({mesh:m,vx:dx/dd*sp,vz:dz/dd*sp,life:2.6,dmg:acid?2:1}); SFX.play('interact',{rate:seed?1.1:1.5,vol:0.35}); }
 function updateProjectiles(dt){ for(let i=projectiles.length-1;i>=0;i--){ const pr=projectiles[i],m=pr.mesh; m.position.x+=pr.vx*dt; m.position.z+=pr.vz*dt; pr.life-=dt; m.rotation.z+=dt*10;
     if(blockedAt(m.position.x,m.position.z)){ world.remove(m); projectiles.splice(i,1); continue; }   // thorns/acid STOP at walls (no more shooting through)
-    const dx=player.position.x-m.position.x, dz=player.position.z-m.position.z; if(Math.hypot(dx,dz)<1.0){ damagePlayer(pr.dmg); world.remove(m); projectiles.splice(i,1); continue; } if(pr.life<=0){ world.remove(m); projectiles.splice(i,1); } } }
+    const dx=player.position.x-m.position.x, dz=player.position.z-m.position.z; if(Math.hypot(dx,dz)<0.8){ damagePlayer(pr.dmg); world.remove(m); projectiles.splice(i,1); continue; } if(pr.life<=0){ world.remove(m); projectiles.splice(i,1); } } }
 /* ---- E5 BOSSES: big procedural blocky foes — high HP, a TELEGRAPHED special attack, a floating health bar, a huge loot drop ---- */
 function _bossEyes(g,y,z,sx,col){ const e1=new THREE.Mesh(new THREE.SphereGeometry(0.14,8,8),new THREE.MeshBasicMaterial({color:col})); e1.position.set(sx,y,z); g.add(e1); const e2=e1.clone(); e2.position.x=-sx; g.add(e2); }
 const BOSS_TYPES={
@@ -2949,8 +2972,8 @@ function killCreature(i){ const c=creatures[i]; recordLore(c); const p=c.mesh.po
   const m=RARITY[tier].mult; const coins=(2+Math.floor(Math.random()*3))*m; state._kills=(state._kills||0)+1; SFX.play('interact',{rate:0.3,vol:0.5});   // owner disliked the bright kill 'chime' — much lower pitch + quieter = a dull defeat thud, not a chime (hit sound at L~2092 stays rate 1.0)
   gainXP(6 + (c.type&&c.type.minDist?8:0) + (m>1?m*2:0));   // XP for the kill — far-out specials + rare drops grant more
   dropLoot(p.x,p.z,[['coin',coins]], '⚔️ Loot', true);   // a glowing loot BAG -> walk over to auto-collect (coins)
-  if(tier==='epic'){ dropGear(p.x,p.z, pick(EPIC_GEAR)); rarityToast('epic','★ EPIC drop — a powerful weapon/armor fell! Grab it, then equip in your inventory (I) ✨'); }   // EPIC = an equippable epic weapon or armor (the perks live ON the gear)
-  else if(tier==='rare'){ makeDrop(p.x,p.z, pick(['crystal','iron_ingot']), m); if(Math.random()<0.45) dropGear(p.x,p.z, pick(RARE_GEAR)); rarityToast('rare','✦ RARE drop — valuable loot fell! Grab it'); }   // RARE = valuable material (+45% chance of equippable rare gear)
+  if(tier==='epic'){ dropGear(p.x,p.z, pick(EPIC_GEAR)); }   // EPIC = an equippable epic weapon or armor (no toast — the glowing physical drop + hover stats are enough)
+  else if(tier==='rare'){ makeDrop(p.x,p.z, pick(['crystal','iron_ingot']), m); if(Math.random()<0.45) dropGear(p.x,p.z, pick(RARE_GEAR)); }   // RARE = valuable material (+45% chance of equippable rare gear; no toast — physical drop only)
   if(!creatures.some(b=>b.boss) && state._kills>=(state._bossKillTarget||BOSS_KILL_FIRST)){   // milestone reached -> a champion rises near you
     const a=rand(0,TAU), r=rand(13,18); spawnBoss(pick(Object.keys(BOSS_TYPES)), player.position.x+Math.cos(a)*r, player.position.z+Math.sin(a)*r);
     state._bossKillTarget=(state._bossKillTarget||BOSS_KILL_FIRST)+BOSS_KILL_STEP; } }
@@ -3165,7 +3188,8 @@ function openCoop(){
   let el=document.getElementById('coop');
   if(!el){ el=document.createElement('div'); el.id='coop'; el.style.cssText='position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;background:rgba(10,8,16,.55)'; document.body.appendChild(el); }
   const code=COOP.room||(Math.random().toString(36).slice(2,6).toUpperCase());
-  el.innerHTML='<div style="background:#fff;border:3px solid #2a2438;border-radius:18px;padding:18px 20px;max-width:384px;width:92%;font-family:\'Trebuchet MS\',sans-serif;color:#2a2438;box-shadow:0 12px 40px rgba(0,0,0,.4);max-height:88vh;overflow:auto">'
+  el.innerHTML='<div style="background:#fff;border:3px solid #2a2438;border-radius:18px;padding:18px 20px;max-width:384px;width:92%;font-family:\'Trebuchet MS\',sans-serif;color:#2a2438;box-shadow:0 12px 40px rgba(0,0,0,.4);max-height:88vh;overflow:hidden;display:flex;flex-direction:column">'
+    +'<div style="flex:1;overflow:auto;padding-right:4px;min-height:0">'
     +'<h2 style="margin:0 0 6px">👥 Play with Friends</h2>'
     +'<p style="font-size:12px;margin:0 0 10px;color:#555">Host a game others can find in the lobby, or play privately with a code/link. Up to 8 players.</p>'
     +'<input id="coopName" placeholder="Your name" maxlength="14" value="'+COOP.name+'" style="width:100%;box-sizing:border-box;padding:9px;margin-bottom:10px;border:2px solid #2a2438;border-radius:10px;font-size:15px">'
@@ -3175,8 +3199,10 @@ function openCoop(){
     +'<button id="coopBrowse" style="width:100%;padding:10px;margin-bottom:8px;background:#fff;color:#2a2438;border:2px solid #2a2438;border-radius:11px;font-weight:bold;font-size:14px;cursor:pointer">📋 Browse Public Games</button>'
     +'<div id="coopList" style="display:none;max-height:170px;overflow:auto;margin-bottom:8px;border:2px solid #e7dccb;border-radius:10px;padding:4px"></div>'
     +'<div id="coopStatus" style="font-size:13px;min-height:18px;color:#2a8a4a;margin-bottom:8px;font-weight:bold"></div>'
-    +'<button id="coopInvite" style="width:100%;padding:9px;margin-bottom:8px;background:#ffcf3a;color:#2a2438;border:0;border-radius:11px;font-weight:bold;font-size:14px;cursor:pointer">📋 Copy Invite Link</button>'
-    +'<div style="display:flex;gap:8px"><button id="coopLeave" style="flex:1;padding:10px;background:#f4f0f7;border:2px solid #2a2438;border-radius:10px;cursor:pointer;font-weight:bold">Leave</button><button id="coopClose" style="flex:1;padding:10px;background:#2a2438;color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:bold">Close</button></div></div>';
+    +'<button id="coopQuick" style="width:100%;padding:11px;margin-bottom:8px;background:#ff8a3d;color:#fff;border:0;border-radius:12px;font-weight:bold;font-size:15px;cursor:pointer">⚡ Quick Play (join a random public game)</button>'
+    +'<button id="coopInvite" style="width:100%;padding:9px;margin-bottom:4px;background:#ffcf3a;color:#2a2438;border:0;border-radius:11px;font-weight:bold;font-size:14px;cursor:pointer">📋 Copy Invite Link</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;flex-shrink:0;margin-top:8px"><button id="coopLeave" style="flex:1;padding:10px;background:#f4f0f7;border:2px solid #2a2438;border-radius:10px;cursor:pointer;font-weight:bold">Leave</button><button id="coopClose" style="flex:1;padding:10px;background:#2a2438;color:#fff;border:0;border-radius:10px;cursor:pointer;font-weight:bold">Close</button></div></div>';
   el.style.display='flex';
   const setName=()=>{ const v=(el.querySelector('#coopName').value||'').trim(); if(v){ COOP.name=v.slice(0,14); try{ localStorage.setItem('ww_nick',COOP.name); }catch(e){} } };
   el.querySelector('#coopPublic').onclick=async()=>{ setName(); COOP.status('Creating public game…'); await COOP.join(code,true); if(COOP.on)COOP.status('🌐 Public game live (code '+COOP.room+') — friends can find it in Browse, or use your code/link.'); };
@@ -3187,6 +3213,7 @@ function openCoop(){
     ld.innerHTML=rooms.map(r=>'<div style="display:flex;align-items:center;gap:8px;padding:7px;border-bottom:1px solid #eee"><span style="flex:1;font-size:13px"><b>'+String(r.host||'Wobbler').replace(/[<>]/g,'')+"</b>'s world<br><span style=\"font-size:11px;color:#777\">code "+r.code+' · '+(r.players||1)+'/'+(r.max||8)+' players</span></span><button data-join="'+r.code+'" style="padding:6px 14px;background:#37c06a;color:#fff;border:0;border-radius:9px;font-weight:bold;cursor:pointer">Join</button></div>').join('');
     ld.querySelectorAll('[data-join]').forEach(b=> b.onclick=async()=>{ COOP.status('Joining…'); await COOP.join(b.dataset.join,false); }); };
   el.querySelector('#coopLeave').onclick=()=>{ COOP.leave(); };
+  el.querySelector('#coopQuick').onclick=async()=>{ setName(); COOP.status('⚡ Finding an open game…'); const rooms=await COOP.listPublic(); if(rooms && rooms.length){ COOP.status('⚡ Joining '+(rooms[0].host||'a public game')+'…'); await COOP.join(rooms[0].code,false); } else { COOP.status('No open games — starting a public one for others to join…'); await COOP.join(code,true); if(COOP.on)COOP.status('🌐 Public game live (code '+COOP.room+') — others can Quick Play in!'); } };
   el.querySelector('#coopInvite').onclick=()=>{ const r=COOP.room||code; const link=location.origin+location.pathname+'?room='+r; try{ navigator.clipboard.writeText(link); COOP.status('✅ Invite link copied — send it to a friend so they join room '+r+'!'); }catch(e){ COOP.status('Invite link: '+link); } };
   el.querySelector('#coopClose').onclick=()=>{ el.style.display='none'; };
   if(COOP.on) COOP._count();
@@ -3235,11 +3262,12 @@ function styledConfirm(title, msg, yesLabel, onYes){   // in-game styled replace
 }
 function closeConfirm(){ const el=document.getElementById('confirm'); if(el)el.classList.remove('show'); confirmOpen=false; _confirmYes=null; }
 function _wipeAndRestart(){ try{ sessionStorage.setItem('ww_newgame','1'); for(const k of Object.keys(localStorage)) if(k.indexOf('ww2_')===0) localStorage.removeItem(k); }catch(e){} location.reload(); }   // flag FIRST (so the save-guards skip), then wipe EVERY ww2_ key, then reload -> startGame() fresh
-function setupMenu(){ const cont=document.getElementById('continueBtn'), ng=document.getElementById('newGameBtn'), st=document.getElementById('settingsBtn');
-  ng.textContent = hasSave()?'✦ New Game':'▶ Play'; ng.classList.remove('dim'); st.classList.remove('dim');
+function setupMenu(){ const cont=document.getElementById('continueBtn'), ng=document.getElementById('newGameBtn'), cm=document.getElementById('coopMenuBtn'), st=document.getElementById('settingsBtn');
+  ng.textContent = hasSave()?'✦ New Game':'▶ Play'; ng.classList.remove('dim'); if(cm)cm.classList.remove('dim'); st.classList.remove('dim');
   cont.style.display = hasSave()?'block':'none';
   cont.onclick=()=>startGame();
   ng.onclick=()=>{ if(hasSave()) styledConfirm('Start a new game?','This will erase your current progress — your day, inventory and quests reset to a fresh world.','✦ New Game', _wipeAndRestart); else _wipeAndRestart(); };
+  if(cm)cm.onclick=()=>{ startGame(); openCoop(); };   // Play with Friends from the title -> drop into your world + open the co-op panel
   st.onclick=()=>openSettings(); }
 function openSettings(){ renderSettings(); document.getElementById('pause').classList.remove('hidden'); }
 function closeSettings(){ const p=document.getElementById('pause'); if(p)p.classList.add('hidden'); }
