@@ -3,8 +3,6 @@ import { supabase } from "../../lib/supabase";
 import { signInWithEmail, signUpWithEmail, signInWithGoogle, signOut, getProfile, getXPProgress, type UserProfile } from "../../lib/auth";
 import type { User } from "@supabase/supabase-js";
 
-const ADMIN_EMAILS = ["forgeflowlabs1@gmail.com", "forgeflowgames1@gmail.com", "isimcha85@gmail.com"];
-
 export default function UserMenu() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -291,11 +289,7 @@ export default function UserMenu() {
               <a href="/friends" className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-surface-700 hover:text-white transition-colors">
                 <span>Friends</span>
               </a>
-              {ADMIN_EMAILS.includes((user.email || "").toLowerCase()) && (
-                <a href="/admin" className="flex items-center gap-2 px-4 py-2.5 text-sm text-brand-orange font-semibold hover:bg-surface-700 transition-colors">
-                  <span>⚙ Admin Dashboard</span>
-                </a>
-              )}
+              {/* Player admin/management lives ONLY on the forgeflowlabs.com client portal (owner: forgeflowgames1@) — no admin UI on the arcade. */}
             </div>
 
             <div className="border-t border-surface-600/30 py-1">
