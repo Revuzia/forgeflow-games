@@ -411,7 +411,7 @@ addEventListener('error', e=>__report('window.error', e.error||e.message));
 addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reason));
 
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
-  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, tradePending:null, quickItems:{}, activeQuests:{}, questTarget:null, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
+  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, tradePending:null, quickItems:{}, activeQuests:{}, questTarget:null, npcOfferDay:{}, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
   hp:100, hpMax:100, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
@@ -587,6 +587,13 @@ function exitUnderground(){ UG.active=false; skyDome.visible=true; hemi.intensit
 /* PROCEDURAL TREE: tapered bark trunk + 2-3 layered foliage blobs with green variation + optional fruit.
    Reads far more "tree" than the flat KUBIKOS blob. Returns a Group positioned at (x,0,z). */
 const barkMat=new THREE.MeshToonMaterial({map:TEX.bark,gradientMap:GRAD,color:'#8a5a32'});
+function makeDeadTree(x,z,h=6){   // bare, twisted, dark — for the spooky deep outskirts
+  const g=new THREE.Group(); g.position.set(x,groundY(x,z),z); g.rotation.y=rand(0,TAU);
+  const th=h*0.55, tr=h*0.05; const tm=new THREE.MeshToonMaterial({color:'#3a2f28',gradientMap:GRAD}), bm=new THREE.MeshToonMaterial({color:'#2e251c',gradientMap:GRAD});
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(tr*0.55,tr,th,6),tm); trunk.position.y=th/2; trunk.rotation.z=rand(-0.08,0.08); trunk.castShadow=true; g.add(trunk);
+  for(let i=0;i<6;i++){ const ba=rand(0,TAU), bl=h*rand(0.22,0.44), by=h*rand(0.32,0.62);
+    const br=new THREE.Mesh(new THREE.CylinderGeometry(tr*0.16,tr*0.4,bl,4),bm); br.position.set(Math.cos(ba)*bl*0.32,by,Math.sin(ba)*bl*0.32); br.rotation.set(Math.sin(ba)*1.15+rand(-0.3,0.3),0,-Math.cos(ba)*1.15+rand(-0.3,0.3)); br.castShadow=true; g.add(br); }
+  return g; }
 function makeTree(x,z,h=6,{fruit=null}={}){
   const g=new THREE.Group(); g.position.set(x,groundY(x,z),z); g.rotation.y=rand(0,TAU);   // sit on terrain (mergeDecorTrees bakes this world matrix; zone trees ground too)
   const th=h*0.46, tr=h*0.055;
@@ -879,6 +886,7 @@ function buildZones(){
   nodes.length=0;
   // 🌲 WHISPERING WOODS (north) — wood + mushrooms
   for(let i=0;i<74;i++){ const x=rand(-300,300),z=rand(-580,-90); if(isInWater(x,z,7))continue; const t=makeTree(x,z,rand(5,7)); world.add(t); addNode(t,x,z,{item:'wood',amount:2,respawn:24,label:'Chop for wood',solid:'trunk'}); }
+  for(let i=0;i<120;i++){ const a=rand(0,TAU), r=rand(115,FENCE-12), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,7))continue; world.add(makeDeadTree(x,z,rand(5,8.5))); }   // SPOOKY deep outskirts: bare dead trees densely ringing the far field
   for(let i=0;i<36;i++){ const x=rand(-300,300),z=rand(-580,-90); if(isInWater(x,z,2))continue; addNode('MushroomRed',x,z,{item:'mushroom',amount:1,targetH:1.1,respawn:30}); }
   // ⛏️ CRYSTAL QUARRY (east) — stone + crystals
   for(let i=0;i<52;i++){ const x=rand(120,580),z=rand(-300,300); if(isInWater(x,z,5))continue; const r=makeRock(x,z,rand(1.5,2.6)); world.add(r); addNode(r,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); }
@@ -1477,6 +1485,9 @@ function buildPlayerAndNeighbors(){
 const REQ_ITEMS=['wood','stone','crystal','carrot','apple','flower','mushroom','coin'];
 function neighborTalk(g){ const u=g.userData; g.userData.paused=1.2;
   if(!u.request){
+    const _nk=u.qkey||(u.qkey='nbr:'+(u.name||'?')+':'+Math.round(g.position.x));
+    if(!npcCanOffer(_nk)){ npcEmote(g,'emote-no'); toast(`🙋 ${u.name}: "Nothing more from me today — come by tomorrow!"`); return; }   // 1 quest/errand per NPC per day
+    npcStampOffer(_nk);
     if(!u.noQuest){ const qid = questAvail('rescue_one')?'rescue_one':(questAvail('night_cull')?'night_cull':null); if(qid){ u.noQuest=true; SFX.play('interact'); offerQuest(qid, qid==='rescue_one'?`🆘 ${u.name}: "A friend wandered into the woods chasing a glimmer and never came back. Please — find and free them!"`:`🌙 ${u.name}: "The outskirts swarm after dark. Cull five of the night-beasts and the roads will be safe by dawn."`); return; } }   // SOME neighbors offer a REAL quest before falling back to a fetch errand
     const item=pick(REQ_ITEMS); u.request={item, qty:2+Math.floor(Math.random()*4), reward:40+Math.floor(Math.random()*50), bonus:pick(REQ_ITEMS.filter(x=>x!==item))};
     npcEmote(g,'interact-right'); SFX.play('interact'); renderRequests(); toast(`🙋 ${u.name}: "Could you bring me ${u.request.qty} ${ITEMS[item].i} ${ITEMS[item].n}?"`); return; }
@@ -1542,6 +1553,8 @@ var Quests={ defs:{
 // ── REAL-QUEST helpers: NPCs OFFER (accept/decline), finishQuest pays the custom reward, onQuestAccepted sets up the target ──
 function questAvail(id){ const d=Quests.defs[id]; if(!d)return false; const last=d.steps[d.steps.length-1].id; return !(state.activeQuests&&state.activeQuests[id]) && !Quests.isDone(id,last); }
 function questActive(id){ return !!(state.activeQuests&&state.activeQuests[id]); }
+function npcCanOffer(key){ if(!state.npcOfferDay)state.npcOfferDay={}; return state.npcOfferDay[key]!==state.day; }   // 1 quest per NPC per day
+function npcStampOffer(key){ if(!state.npcOfferDay)state.npcOfferDay={}; state.npcOfferDay[key]=state.day; }
 function offerQuest(id,pitch){ const d=Quests.defs[id]; if(!d)return false;
   if(d._gen){ if(state._boardDay!==state.day){ state._boardDay=state.day; state._boardTaken=0; } if((state._boardTaken||0)>=Q_PER_DAY){ toast("📜 That's your three bounties for today — fresh postings tomorrow!"); return false; } if(qActiveCount()>=Q_MAX_ACTIVE){ toast('📜 Journal full — finish a quest first.'); return false; } }
   styledConfirm(d.title, pitch||'Take on this quest?', '✓ Accept', ()=>{ state.activeQuests=state.activeQuests||{}; state.activeQuests[id]={accepted:true}; if(d._gen)state._boardTaken=(state._boardTaken||0)+1; Quests.complete(id,'accept'); SFX.play('interact'); toast('📜 Quest accepted: '+d.title); onQuestAccepted(id); if(typeof refreshBoard==='function')refreshBoard(); save(); }, ()=>{}, '✕ Not now'); return true; }
@@ -1564,8 +1577,8 @@ function spawnRescueCaptive(qid){ qid=qid||'rescue_one'; if(state._rescueNpc){ t
   state._rescueNpc={node:npc,it,qid}; state.questTarget={x,z,label:'❗ Captive'};
 }
 // ════════ ENDLESS PROCEDURAL QUEST GENERATOR ════════ templates × pools × flavor, anti-repeat + day/level scaling → a town Quest Board that never runs dry
-const ENEMY_TIER={petal:1,spore:1,thornling:1,bulb:1,fang:1.3,mote:1.2,thornback:1.6,acidcap:1.7,boomshroom:1.8,skeleton:2.0,pumpkin:2.0,zombie:2.1,ghost:2.2,crypthound:2.3,gourdling:2.3,wraithling:2.4,plaguecorpse:2.6};
-const SPOOKY_ENEMIES=['skeleton','pumpkin','zombie','ghost','crypthound','gourdling','wraithling','plaguecorpse'];   // the graveyard/outskirts roster — for spook-purge quests
+const ENEMY_TIER={petal:1,spore:1,thornling:1,bulb:1,fang:1.3,mote:1.2,thistle:1.5,mimic:1.5,thornback:1.6,acidcap:1.7,boomshroom:1.8,sporecap:1.9,skeleton:2.0,pumpkin:2.0,zombie:2.1,ghost:2.2,wisp:2.3};
+const SPOOKY_ENEMIES=['skeleton','pumpkin','zombie','ghost','wisp'];   // the graveyard/outskirts roster — for spook-purge quests
 const MAT_TIER={wood:1,stone:1,crystal:2,iron_ingot:3,gold_ingot:3,dirt:1,apple:1,carrot:1,mushroom:1,flower:1,egg:1,milk:1,meat:1.4,wool:1.4,leather:1.4};
 const Q_LOC=[{name:'Whispering Woods',x:0,z:-90},{name:'Crystal Quarry',x:90,z:0},{name:'Sunny Fields',x:-90,z:0},{name:'Pebble Beach',x:0,z:90},{name:'the Mine',x:92,z:6}];
 const Q_GATHER=['wood','stone','crystal','apple','carrot','mushroom','flower','wool','leather','meat','egg','milk'];
@@ -1609,8 +1622,9 @@ const Q_PER_DAY=3;   // owner: 3 max bounties a day — board accepts reset each
 function qActiveCount(){ let n=0; for(const id in (state.activeQuests||{})) if(Quests.defs[id]&&Quests.defs[id]._gen) n++; return n; }
 // roll ONE fresh quest spec — verb weighted by progress, params from the live pools, a flavor name+pitch
 function qRoll(){ const day=state.day||1;
-  const W=[['hunt',4.5],['gather',2.5],['reach',1.6],['deliver',1.6],['rescue',1.4],['survive',day>=2?1.6:0],['boss_hunt',day>=2?1.6:0],['dig',state.hasShovel?1.2:0],['befriend',1.2]];
-  for(const k in QT2){ if(QT2[k].feas && !QT2[k].feas())continue; W.push([k, QT2[k].tier==='large'?1.0:QT2[k].tier==='medium'?1.3:1.6]); }   // the 21 extra data-driven templates -> 30 total quest types
+  const W=[['hunt',5],['gather',1.4],['reach',1.4],['deliver',1.0],['rescue',2.2],['survive',day>=2?2.2:0],['boss_hunt',day>=2?2.4:0],['dig',state.hasShovel?0.8:0],['befriend',0.9]];
+  const ADV=['banish','hunt','clear','conquer','endure'];   // combat/adventure verbs weigh heavier than fetch/chores so the board reads WoW-like, not errand-like
+  for(const k in QT2){ if(QT2[k].feas && !QT2[k].feas())continue; W.push([k, ADV.includes(QT2[k].verb)?1.9:0.85]); }   // 21 extra templates -> 30 total quest types, fetch down-weighted
   let tot=0; for(const v of W)tot+=v[1]; let r=Math.random()*tot, tid='hunt'; for(const v of W){ r-=v[1]; if(r<=0){tid=v[0];break;} }
   if(QT2[tid]){ const g=QT2[tid].gen(); return {tid,p:g.p,title:g.title,pitch:g.pitch,tier:QT2[tid].tier,sig:tid}; }
   if(tid==='hunt'){ const k=qRR(Object.keys(ENEMY_TIER).filter(qFeasEnemy)); const t=CREATURE_TYPES[k]; const hard=ENEMY_TIER[k]>=1.6; const count=hard?qRR([3,4,5]):qRR([5,6,7,8]); const nm=qRR(['{n} Cull','Thin the {n}s','{n} Patrol','{n} Trouble','{n} Roundup','{n} Bounty']).replace('{n}',qEName(k)); const far=t.minDist?` (out past the ${t.minDist}-stride mark${t.minDist>=120?', after dark':''})`:''; return {tid,p:{enemyKey:k,count,nightOnly:t.minDist>=120},title:nm,pitch:`Defeat ${count} ${qEName(k)}${far}.`,tier:hard?'medium':'small',sig:'hunt:'+k}; }
@@ -1740,7 +1754,7 @@ function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
   unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier, bagCount:state.bagCount, charModel:state.charModel,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
-  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, questHistory:state.questHistory, _qseq:state._qseq, boardOffers:state.boardOffers, _boardTaken:state._boardTaken, _boardDay:state._boardDay, genDefs:(()=>{const o={};for(const k in Quests.defs){const d=Quests.defs[k];if(d&&d._gen)o[k]={title:d.title,tid:d._tid,p:d._p,pitch:d._pitch,sig:d._sig,reward:d.reward,steps:d.steps};}return o;})(), lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
+  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, questHistory:state.questHistory, _qseq:state._qseq, boardOffers:state.boardOffers, _boardTaken:state._boardTaken, _boardDay:state._boardDay, npcOfferDay:state.npcOfferDay, genDefs:(()=>{const o={};for(const k in Quests.defs){const d=Quests.defs[k];if(d&&d._gen)o[k]={title:d.title,tid:d._tid,p:d._p,pitch:d._pitch,sig:d._sig,reward:d.reward,steps:d.steps};}return o;})(), lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug })); }catch(e){} }
 // VERSIONED + SANITIZED load: bad/corrupt/legacy data can never crash boot or inject impossible state
 function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) return; let s; try{ s=JSON.parse(raw); }catch(e){ localStorage.setItem('ww2_save_corrupt',raw); return; }
@@ -1771,7 +1785,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.craftedSet=(s.craftedSet&&typeof s.craftedSet==='object')?s.craftedSet:{}; state.reqsFulfilled=num(s.reqsFulfilled,0,0,1e9); state.biomes=(s.biomes&&typeof s.biomes==='object')?s.biomes:{}; state.event=DAY_EVENTS.find(e=>e.id===s.eventId)||null;
   if(typeof s.tod==='number'&&Number.isFinite(s.tod)) state.tod=((s.tod%1)+1)%1;
   if(s.volume!=null) state.volume=clamp(+s.volume||0,0,1); state.musicOn=(s.musicOn!==false); state.sfxOn=(s.sfxOn!==false); state.reduce=!!s.reduce;
-  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.quickItems=(s.quickItems&&typeof s.quickItems==='object')?s.quickItems:{}; state.activeQuests=(s.activeQuests&&typeof s.activeQuests==='object')?s.activeQuests:{}; state.questHistory=Array.isArray(s.questHistory)?s.questHistory:[]; state._qseq=num(s._qseq,0,0,1e9); state.boardOffers=Array.isArray(s.boardOffers)?s.boardOffers:[]; state._boardTaken=num(s._boardTaken,0,0,9); state._boardDay=num(s._boardDay,0,0,1e9); if(s.genDefs&&typeof s.genDefs==='object'){ for(const k in s.genDefs){ const g=s.genDefs[k]; if(g&&g.steps&&g.tid) Quests.defs[k]={title:g.title,kind:'bounty',steps:g.steps,reward:g.reward,_gen:true,_tid:g.tid,_p:g.p,_pitch:g.pitch,_sig:g.sig}; } } state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{}; state.badges=(s.badges&&typeof s.badges==='object')?s.badges:{};
+  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.quickItems=(s.quickItems&&typeof s.quickItems==='object')?s.quickItems:{}; state.activeQuests=(s.activeQuests&&typeof s.activeQuests==='object')?s.activeQuests:{}; state.questHistory=Array.isArray(s.questHistory)?s.questHistory:[]; state._qseq=num(s._qseq,0,0,1e9); state.boardOffers=Array.isArray(s.boardOffers)?s.boardOffers:[]; state._boardTaken=num(s._boardTaken,0,0,9); state._boardDay=num(s._boardDay,0,0,1e9); state.npcOfferDay=(s.npcOfferDay&&typeof s.npcOfferDay==='object')?s.npcOfferDay:{}; if(s.genDefs&&typeof s.genDefs==='object'){ for(const k in s.genDefs){ const g=s.genDefs[k]; if(g&&g.steps&&g.tid) Quests.defs[k]={title:g.title,kind:'bounty',steps:g.steps,reward:g.reward,_gen:true,_tid:g.tid,_p:g.p,_pitch:g.pitch,_sig:g.sig}; } } state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{}; state.badges=(s.badges&&typeof s.badges==='object')?s.badges:{};
   state.homeTier=num(s.homeTier,0,0,3); for(let i=1;i<=state.homeTier;i++) applyHomeTier(i);   // rebuild purchased home upgrades
   state.homePaints=(s.homePaints&&typeof s.homePaints==='object')?s.homePaints:{}; loadBlocks(s.buildBlocks); applyHomePaints();   // restore voxel builds + house repaints (buildWorld ran first, so homes exist)
   for(const k in VOX.meshes) world.remove(VOX.meshes[k]); VOX.dug={}; VOX.meshes={};   // restore carved terrain
@@ -2867,11 +2881,11 @@ const CREATURE_TYPES={   // night ENEMIES — real rigged cube-animals (was proc
   pumpkin: { name:"Jack-o'-Lantern",   hp:1.1, speed:2.2, dmg:1, bob:6.5, floatY:0.12, day:8,  minDist:120, ranged:'seed', model:'mob-pumpkin',  tgtH:0.95, build(){ return buildMobGLB(this.model,this.tgtH, n=>/stem|leaf|vine/i.test(n)?'#5a7a2a':'#e8731f'); } },   // orange carved face (creepy eyes/teeth via atlas) — SPITS dodgeable pumpkin seeds
   zombie:  { name:'Shambling Zombie',  hp:1.9, speed:1.5, dmg:2, bob:2.0, floatY:0,    day:6,  minDist:150, model:'mob-zombie',   tgtH:1.5,  build(){ return buildMobGLB(this.model,this.tgtH, n=>/head|arm|hand|face/i.test(n)?'#7faa55':(/leg|pant/i.test(n)?'#4a4258':'#6b6347')); } },  // green skin, dark trousers, drab shirt
   ghost:   { name:'Wailing Ghost',     hp:0.9, speed:2.9, dmg:1, bob:3.0, floatY:1.1,  day:6,  minDist:170, stealth:true, model:'mob-ghost', tgtH:1.35, build(){ return buildMobGLB(this.model,this.tgtH,'#cfe0ff',0.6); } },                                 // INVISIBLE until it aggros; reappears to fight, fades out again if it loses the player
-  // DEEPER-OUTSKIRTS spooky variants (tint/scale/stat reskins of the 4 graveyard models — spawn FURTHER out at night for late-game threat + hunt-quest variety)
-  crypthound:   { name:'Bonewalker',  hp:1.3, speed:2.8, dmg:2, bob:2.6, floatY:0,    day:6, minDist:185, model:'mob-skeleton', tgtH:1.4,  build(){ return buildMobGLB(this.model,this.tgtH,'#c8d6bf'); } },                                  // faster skeletal stalker, mossy bone
-  gourdling:    { name:'Sproutkin',   hp:0.9, speed:2.6, dmg:1, bob:6.2, floatY:0.12, day:6, minDist:190, ranged:'seed', model:'mob-pumpkin', tgtH:0.9, build(){ return buildMobGLB(this.model,this.tgtH, n=>/stem|leaf|vine/i.test(n)?'#3f7a26':'#d23b2e'); } },   // crimson seed-spitter
-  wraithling:   { name:'Hollow Wisp', hp:0.7, speed:3.3, dmg:1, bob:3.6, floatY:1.3,  day:5, minDist:200, stealth:true, model:'mob-ghost', tgtH:1.15, build(){ return buildMobGLB(this.model,this.tgtH,'#9fd0ff',0.5); } },                       // pale-blue darting spirit, deepest fog
-  plaguecorpse: { name:'Mire Lurcher',hp:2.2, speed:1.3, dmg:3, bob:1.8, floatY:0,    day:4, minDist:210, model:'mob-zombie', tgtH:1.62, build(){ return buildMobGLB(this.model,this.tgtH, n=>/head|arm|hand|face/i.test(n)?'#5a7a4a':(/leg|pant/i.test(n)?'#33304a':'#574f3a')); } },   // hulking slow tank, world-edge
+  // PROP-BORN enemies — DISTINCT models (a living cactus, a mimic chest, a spore mushroom, a lantern wisp), NOT reskins of the graveyard mobs (owner: don't reuse models)
+  thistle:  { name:'Prickle Brute', hp:1.8, speed:1.5, dmg:2, bob:1.6, floatY:0,   day:4, minDist:60,  attackKind:'claw', model:'Cactus1', tgtH:1.4,  build(){ return buildMobGLB(this.model,this.tgtH,'#3e8e4f'); } },                 // slow spiky melee tank, near-mid field
+  mimic:    { name:'Snapchest',     hp:1.6, speed:2.6, dmg:2, bob:4.8, floatY:0,   day:3, minDist:90,  model:'Chest', tgtH:0.85, build(){ return buildMobGLB(this.model,this.tgtH); } },                                                  // ambusher that looks like a loot chest (keeps its wood/gold texture)
+  sporecap: { name:'Sporecap',      hp:1.1, speed:2.2, dmg:1, bob:6.2, floatY:0.1, day:5, minDist:120, ranged:'seed', model:'MushroomRed', tgtH:0.95, build(){ return buildMobGLB(this.model,this.tgtH,'#d24a4a'); } },               // far-out spore-spitter
+  wisp:     { name:"Will-o'-Wisp",  hp:0.8, speed:3.2, dmg:1, bob:3.2, floatY:1.35,day:5, minDist:150, stealth:true, model:'Lantern', tgtH:0.95, build(){ return buildMobGLB(this.model,this.tgtH,'#aee0ff',0.72); } },                // floating lantern-spirit, deep outskirts
 };
 const CTYPE_KEYS=Object.keys(CREATURE_TYPES);
 function pickCreatureType(distOverride){ // `day` = SPAWN WEIGHT (basics common, hard ones rarer); minDist gates far-out specials by distance from town (spawn pos for night field-spawns, else the player).
@@ -3580,7 +3594,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
     _capOff=true; for(const k in ITEMS) Inv.add(k,300);   // _capOff bypasses the backpack cap for the mass-give; give 300 of EVERY item — total demand across all ~59 recipes exceeds 60, so over-provision
     let crafted=0; const unlockedCount=RECIPES.filter(r=>!r.locked).length; for(const r of RECIPES){ if(!r.locked&&Object.keys(r.cost).every(k=>Inv.has(k,r.cost[k]))){ craft(r.id); crafted++; } } R.recipes_crafted=crafted+'/'+unlockedCount;
     // NEIGHBOR fetch quest end-to-end
-    const g=neighbors[0]; g.userData.noQuest=true; neighborTalk(g); const req=g.userData.request; if(req){ Inv.add(req.item,req.qty); player.position.set(g.position.x,g.position.y,g.position.z+1); neighborTalk(g); R.neighbor_fulfilled=(g.userData.request===null); } else R.neighbor_fulfilled='no-req';
+    const g=neighbors[0]; g.userData.noQuest=true; state.npcOfferDay={}; neighborTalk(g); const req=g.userData.request; if(req){ Inv.add(req.item,req.qty); player.position.set(g.position.x,g.position.y,g.position.z+1); neighborTalk(g); R.neighbor_fulfilled=(g.userData.request===null); } else R.neighbor_fulfilled='no-req';
     // DAY completion
     { if(!state.goals.length) genGoals(); state.goals.forEach(g=>g.done=true); state.goals[0].done=false; const d0=state.day; markGoal(state.goals[0].type); R.day_advanced=(state.day>d0); }   // deterministic: force exactly one undone goal then complete it (was flaky if the playthrough already finished all goals)
     // SHOP / ECONOMY
@@ -3604,7 +3618,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
     // ONBOARDING (go inside -> tutorial completes, beacon hides, flag set)
     state.intro=true; state.tutStep=0; if(state.beacon)state.beacon.visible=true; player.position.set(HOUSE.cx,0.3,HOUSE.cz); updateWorld(0.05); R.onboarding_done=(state.intro===false && (state.beacon?!state.beacon.visible:true));
     // FRIENDSHIP (3 fulfilled requests -> friend grows, gift at 3)
-    const fg=neighbors[1]; fg.userData.noQuest=true; for(let i=0;i<3;i++){ fg.userData.request=null; neighborTalk(fg); const rq=fg.userData.request; Inv.add(rq.item,rq.qty); neighborTalk(fg); } R.friendship=(fg.userData.friend>=3);
+    const fg=neighbors[1]; fg.userData.noQuest=true; for(let i=0;i<3;i++){ fg.userData.request=null; state.npcOfferDay={}; neighborTalk(fg); const rq=fg.userData.request; Inv.add(rq.item,rq.qty); neighborTalk(fg); } R.friendship=(fg.userData.friend>=3);
     // REAL NPC QUEST: accept -> complete final step -> custom reward (GP + boss_core) lands once
     { const _g0=state.giggle||0, _bc=state.inv.boss_core||0; state.activeQuests=state.activeQuests||{}; delete state.activeQuests.smith_hunt; delete Quests.done['smith_hunt.accept']; delete Quests.done['smith_hunt.slay']; state.activeQuests.smith_hunt={accepted:true}; Quests.complete('smith_hunt','accept'); Quests.complete('smith_hunt','slay'); R.quest_flow=(Quests.isDone('smith_hunt','slay') && state.giggle>=_g0+300 && (state.inv.boss_core||0)>=_bc+1 && state.activeQuests.smith_hunt.rewarded===true); }
     // ENDLESS BOARD: refresh fills 3 valid gen quests + qRoll produces varied signatures
