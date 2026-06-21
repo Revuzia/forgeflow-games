@@ -57,7 +57,7 @@
   #help .ctrlgrid>span:nth-child(even){color:#6a5440; font-size:11.5px}
   #help .k{background:var(--ink); color:#fff; border-radius:6px; padding:2px 0; font-weight:bold; font-size:11px; text-align:center; display:block}
   /* inventory bar */
-  #invbar{left:50%; bottom:14px; transform:translateX(-50%); display:flex; gap:5px; background:linear-gradient(180deg,rgba(42,32,56,.9),rgba(26,20,38,.93)); border:3px solid var(--ink); border-radius:15px; padding:7px 9px; box-shadow:0 5px 0 rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.08)}
+  #invbar{left:50%; bottom:14px; transform:translateX(-50%); display:flex; gap:5px; background:linear-gradient(180deg,rgba(42,32,56,.9),rgba(26,20,38,.93)); border:3px solid var(--ink); border-radius:15px; padding:7px 9px; box-shadow:0 5px 0 rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.08); pointer-events:auto}   /* CRITICAL: .hud sets pointer-events:none — without this override the hotbar slots can't be clicked/dropped on (the "can't touch the toolbar" bug) */
   #invbar .slot{position:relative; width:48px; height:50px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:bold; background:rgba(255,255,255,.06); border:2px solid rgba(255,255,255,.13); border-radius:10px; box-shadow:inset 0 -3px 5px rgba(0,0,0,.28); cursor:pointer}
   #invbar .slot.sel{border-color:var(--sun); background:rgba(255,207,77,.22); box-shadow:inset 0 -3px 5px rgba(0,0,0,.28), 0 0 10px rgba(255,207,77,.7); transform:translateY(-3px)}
   #invbar .slot.eat::after{content:'🍴'; position:absolute; bottom:-1px; right:1px; font-size:9px; opacity:.8}
@@ -66,6 +66,9 @@
   #invbar .slot.wslot{border-color:rgba(122,92,255,.55); background:rgba(122,92,255,.12)} #invbar .slot.pslot{border-color:rgba(255,207,77,.45); background:rgba(255,207,77,.1)}
   #invbar .hint{align-self:center; color:#cbb6e6; font-size:11px; margin-left:4px; max-width:120px}
   #invbar .slot.empty{opacity:.3}
+  #invbar .slot.islot{border-color:rgba(122,224,108,.55); background:rgba(122,224,108,.12)}
+  #invbar .slot .ic{position:absolute; top:1px; right:4px; font-size:10px; font-weight:bold; color:#fff; text-shadow:0 1px 2px #000}
+  #invbar .slot.drop{border-color:#9be8c8; background:rgba(122,224,108,.32)}
   #hearts{padding:5px 9px}   /* match Hunger/Energy exactly (leftover heart-emoji padding made Health look oversized/off) */
   #hearts .lbl{font-size:12px; gap:3px}
   #hearts .lbl span:last-child{font-variant-numeric:tabular-nums; flex-shrink:0; min-width:48px; text-align:right}
@@ -114,8 +117,10 @@
   .invcard{width:min(560px,93vw); max-height:84vh; overflow:auto; background:var(--paper); color:var(--ink); border:3px solid var(--ink); border-radius:18px; padding:14px 16px; box-shadow:7px 7px 0 rgba(34,26,46,.3)}
   .invcard h3{margin:0 0 10px; font-size:18px; display:flex; justify-content:space-between; align-items:center; color:var(--grape)}
   .invcard h3 .x{cursor:pointer; background:var(--ink); color:#fff; border-radius:8px; padding:1px 10px; border:1px solid rgba(255,255,255,.3)}
-  .invstats{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:11px}
-  .invstat{background:rgba(255,255,255,.66); border:2px solid rgba(34,26,46,.14); border-radius:10px; padding:6px 10px; font-size:12.5px} .invstat b{color:var(--grape)}
+  .invstats{display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px}
+  .invstat{background:rgba(255,255,255,.66); border:2px solid rgba(34,26,46,.14); border-radius:10px; padding:6px 11px; font-size:12.5px; flex:1 1 auto; white-space:nowrap} .invstat b{color:var(--grape)}
+  .invstat.hpstat{flex:1 1 100%; white-space:normal}
+  .invstat .hpbar{height:9px; background:#e7dccb; border-radius:5px; margin-top:5px; overflow:hidden; box-shadow:inset 0 1px 2px rgba(0,0,0,.18)} .invstat .hpfill{height:100%; background:linear-gradient(90deg,#c0203a,#ff6b6c); border-radius:5px}
   .invgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(82px,1fr)); gap:8px}
   #inv .invcard.invwide{width:min(880px,96vw); max-width:96vw}
   #inv .invcols{display:flex; gap:16px; align-items:flex-start}
@@ -125,7 +130,9 @@
   #inv .bptitle{font-weight:800; font-size:13px; margin-bottom:6px}
   #inv .bpcap{font-weight:600; opacity:.8} #inv .bpcap.full{color:#ff6b6b}
   #inv .bphint{font-size:10.5px; opacity:.7; margin-top:7px}
-  #inv .bpgrid{grid-template-columns:repeat(auto-fill,minmax(62px,1fr)); gap:7px; max-height:50vh; overflow:auto; align-content:start}
+  #inv .bppanel{background:rgba(34,26,46,.05); border:2px solid rgba(34,26,46,.14); border-radius:13px; padding:8px}
+  #inv .bpgrid{grid-template-columns:repeat(auto-fill,minmax(58px,1fr)); gap:6px; max-height:46vh; overflow:auto; align-content:start}
+  #inv .pdhint{font-size:10px; opacity:.65; text-align:center; margin-top:9px}
   #inv .bptabs{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px}
   #inv .bptab{background:rgba(255,255,255,.6); border:2px solid rgba(34,26,46,.18); color:var(--ink); border-radius:9px; padding:5px 11px; font-size:12px; font-weight:700; cursor:pointer}
   #inv .bptab.on{background:var(--grape,#7c5cff); border-color:var(--ink); color:#fff}
@@ -135,7 +142,7 @@
   #inv .invtile.gated{opacity:.5}
   #inv .pdslot.drop{border-color:#9be8c8; background:rgba(122,224,108,.22); transform:scale(1.08)}
   @media (max-width:620px){ #inv .invcols{flex-direction:column} #inv .invleft{flex:none; width:100%} }
-  .invtile{position:relative; background:rgba(255,255,255,.72); border:2px solid rgba(34,26,46,.16); border-radius:12px; padding:9px 4px; text-align:center; box-shadow:0 2px 0 rgba(34,26,46,.1)}
+  .invtile{position:relative; aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(255,255,255,.72); border:2px solid rgba(34,26,46,.16); border-radius:11px; padding:3px; text-align:center; box-shadow:0 1px 0 rgba(34,26,46,.1)}
   .invtile.empty{opacity:.5; background:rgba(34,26,46,.04); border-style:dashed; box-shadow:none} .invtile .ti{font-size:26px; line-height:1.1} .invtile .tn{font-size:10.5px; color:#6b5b86; margin-top:2px; font-weight:600}
   .invtile.eatable{cursor:pointer; border-color:rgba(46,158,79,.55)} .invtile.eatable:hover{background:rgba(122,224,108,.28)} .invtile .eathint{color:#2e9e4f; font-size:9px; font-weight:700}
   .invtile .tc{position:absolute; top:3px; right:7px; font-weight:bold; color:var(--ink); font-size:12px}
@@ -182,7 +189,11 @@
   #minimap:hover{transform:scale(1.05)}
   /* compass/minimap → click to enlarge into a centered circular MODAL (owner request) */
   #mapmodal{position:fixed; inset:0; z-index:34; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; background:rgba(20,14,30,.55); pointer-events:auto}
-  #mapmodal canvas{width:min(78vmin,440px); height:min(78vmin,440px); border:5px solid var(--ink); border-radius:50%; background:rgba(255,247,236,.85); box-shadow:0 10px 0 rgba(34,26,46,.35)}
+  #mapmodal canvas{width:min(82vmin,520px); height:min(82vmin,520px); border:6px solid #6a4a2a; border-radius:22px; background:linear-gradient(160deg,#f3e3c2,#e8d2a6); box-shadow:0 10px 0 rgba(34,26,46,.35), inset 0 0 0 3px rgba(106,74,42,.35)}   /* old-school parchment map: rounded-rect, brown frame */
+  #mapmodal .mapwrap{position:relative; display:inline-block}
+  #mapmodal .mapzoom{position:absolute; right:12px; bottom:12px; display:flex; flex-direction:column; gap:6px}
+  #mapmodal .mapzoom button{width:38px; height:38px; font-size:22px; font-weight:bold; line-height:1; border:3px solid var(--ink); border-radius:10px; background:var(--paper); color:var(--ink); cursor:pointer; box-shadow:0 3px 0 rgba(34,26,46,.3)}
+  #mapmodal .mapzoom button:active{transform:translateY(2px); box-shadow:0 1px 0 rgba(34,26,46,.3)}
   #mapmodal .maplegend{display:flex; gap:14px; flex-wrap:wrap; justify-content:center; background:rgba(255,247,236,.95); border:2px solid var(--ink); border-radius:12px; padding:7px 14px; font-size:13px; font-weight:bold}
   #mapmodal .maphint{color:#fff; font-size:12px; opacity:.8}
   #menu{display:flex; flex-direction:column; gap:10px; align-items:center; margin-top:16px; position:sticky; bottom:0; background:var(--paper); padding:10px 0 2px; border-top:2px solid rgba(34,26,46,.12)}   /* sticky footer so Continue/New Game/Settings are ALWAYS visible without scrolling in the short arcade iframe */
@@ -391,7 +402,7 @@ addEventListener('error', e=>__report('window.error', e.error||e.message));
 addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reason));
 
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
-  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, tradePending:null, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
+  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, tradePending:null, quickItems:{}, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
   hp:100, hpMax:100, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
@@ -695,16 +706,16 @@ const outerStructures=[];  // {x,z,r} footprints of mines/dungeons so wild hamle
 const hamlets=[];          // {cx,cz,homes:[...]} wild settlements out in the hills (Phase 2)
 // Stage B — night combat
 const creatures=[];   // {mesh, hp, max, cd, bob}
-const WEAPONS={ fist:{dmg:14,range:2.2,name:'Fists',icon:'✊'}, wood_sword:{dmg:24,range:2.6,name:'Wooden Sword',icon:'🗡️'}, stone_sword:{dmg:38,range:2.8,name:'Stone Sword',icon:'⚔️'}, iron_sword:{dmg:50,range:2.9,name:'Iron Sword',icon:'🗡️'}, crystal_sword:{dmg:62,range:3.0,name:'Crystal Sword',icon:'💎'}, gold_sword:{dmg:82,range:3.2,name:'Gold Sword',icon:'🌟'}, titan_blade:{dmg:120,range:3.5,name:'Titan Blade',icon:'⚡'}, mythic_blade:{dmg:160,range:3.7,name:'Mythic Blade',icon:'🌠'},
+const WEAPONS={ fist:{dmg:14,range:2.2,name:'Fists',icon:'✊'}, wood_sword:{dmg:24,range:2.6,name:'Wooden Sword',icon:'🗡️'}, stone_sword:{dmg:38,range:2.8,name:'Stone Sword',icon:'⚔️'}, iron_sword:{dmg:50,range:2.9,name:'Iron Sword',icon:'🗡️'}, crystal_sword:{dmg:62,range:3.0,name:'Crystal Sword',icon:'⚔️'}, gold_sword:{dmg:82,range:3.2,name:'Gold Sword',icon:'⚔️'}, titan_blade:{dmg:120,range:3.5,name:'Titan Blade',icon:'🗡️'}, mythic_blade:{dmg:160,range:3.7,name:'Mythic Blade',icon:'⚔️'},
   // ── DROPPED loot weapons (not craftable — only fall from rare/epic kills; equip/unequip from your bag) ──
-  keen_saber:{dmg:74,range:3.05,name:'Keen Saber',icon:'🔹',rarity:'rare',crit:0.08,model:'crystal_sword'},                 // RARE: high dmg + extra crit
-  dread_reaver:{dmg:116,range:3.35,name:'Dread Reaver',icon:'🔮',rarity:'epic',crit:0.16,life:0.14,model:'titan_blade'} };   // EPIC: huge dmg + big crit + lifesteal (heal 14% of dmg dealt)
+  keen_saber:{dmg:74,range:3.05,name:'Keen Saber',icon:'🗡️',rarity:'rare',crit:0.08,model:'crystal_sword'},                 // RARE: high dmg + extra crit
+  dread_reaver:{dmg:116,range:3.35,name:'Dread Reaver',icon:'⚔️',rarity:'epic',crit:0.16,life:0.14,model:'titan_blade'} };   // EPIC: huge dmg + big crit + lifesteal (heal 14% of dmg dealt)
 const WTIER=['fist','wood_sword','stone_sword','iron_sword','crystal_sword','gold_sword','titan_blade','mythic_blade'];   // titan/mythic = top tiers (need boss_core)
 // ARMOR — a % chance to fully BLOCK an incoming hit (clean with 1-heart hits: a hit either lands fully or is blocked)
-const ARMORS={ leather:{block:0.30,name:'Leather Armor',icon:'🛡️'}, iron:{block:0.55,name:'Iron Armor',icon:'🦺'}, gold:{block:0.72,name:'Gold Armor',icon:'🥇'}, titan:{block:0.86,name:'Titan Plate',icon:'⚡'},
+const ARMORS={ leather:{block:0.30,name:'Leather Armor',icon:'🦺'}, iron:{block:0.55,name:'Iron Armor',icon:'🦺'}, gold:{block:0.72,name:'Gold Armor',icon:'🦺'}, titan:{block:0.86,name:'Titan Plate',icon:'🛡️'},
   // ── DROPPED loot armor (not craftable — only from rare/epic kills; equip/unequip from your bag) ──
-  warded_vest:{block:0.60,name:'Warded Vest',icon:'🔹',rarity:'rare',bonusHp:2},                  // RARE: solid block + 1 extra ❤️
-  aegis_plate:{block:0.82,name:'Aegis Plate',icon:'🔮',rarity:'epic',bonusHp:4,regen:0.35} };      // EPIC: heavy block + 2 extra ❤️ + slow regen
+  warded_vest:{block:0.60,name:'Warded Vest',icon:'🦺',rarity:'rare',bonusHp:2},                  // RARE: solid block + 1 extra ❤️
+  aegis_plate:{block:0.82,name:'Aegis Plate',icon:'🛡️',rarity:'epic',bonusHp:4,regen:0.35} };      // EPIC: heavy block + 2 extra ❤️ + slow regen
 const ATIER=['','leather','iron','gold','titan'];   // titan = BOSS-ONLY top tier
 // OFF-HAND (L-hand): SHIELDS = a % chance to fully BLOCK an incoming hit (melee AND projectiles, since both route through damagePlayer); TORCHES = a carried light that burns down. Both wear via the shared durability system.
 const SHIELDS={ wood_shield:{block:0.15,name:'Wooden Shield',icon:'🛡️',tier:'wood',rarity:'common'}, stone_shield:{block:0.28,name:'Stone Shield',icon:'🛡️',tier:'stone',rarity:'common'}, iron_shield:{block:0.45,name:'Iron Shield',icon:'🛡️',tier:'iron',rarity:'common'}, gold_shield:{block:0.60,name:'Gold Shield',icon:'🛡️',tier:'gold',rarity:'common'}, titan_shield:{block:0.75,name:'Titan Bulwark',icon:'🛡️',tier:'titan',rarity:'rare'} };
@@ -1308,7 +1319,7 @@ function buildPlayerHouse(){
 const player=new THREE.Group(); let charMixer=null, charActions={}, charAnim='idle';
 const heldGroup=new THREE.Group(); let _heldKind='';   // a real-looking tool/weapon model in the player's hand (built, not a flat shape)
 // per-tool hand offsets so each item sits IN the hand pointing the right way (not buried in the arm). z pushed forward to clear the forearm; pickaxe/weapons ~upright, shovel angled down.
-const _SWORD_OFF={pos:[0.0,-0.5,0.18],rot:[0.22,0,0.08],scale:0.82};
+const _SWORD_OFF={pos:[0.0,-1.18,0.24],rot:[0.32,0,0.06],scale:0.82};   // down the arm to the HAND (bone origin is the shoulder; was -0.5 = shoulder)
 const TOOL_OFFSETS={
   pickaxe:{pos:[0.02,-0.46,0.2],rot:[0.18,0,0.08],scale:0.78},
   shovel:{pos:[0.02,-0.46,0.2],rot:[-0.5,0,0.08],scale:0.78},
@@ -1575,7 +1586,7 @@ function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
   unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier, bagCount:state.bagCount, charModel:state.charModel,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
-  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
+  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug })); }catch(e){} }
 // VERSIONED + SANITIZED load: bad/corrupt/legacy data can never crash boot or inject impossible state
 function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) return; let s; try{ s=JSON.parse(raw); }catch(e){ localStorage.setItem('ww2_save_corrupt',raw); return; }
@@ -1606,7 +1617,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.craftedSet=(s.craftedSet&&typeof s.craftedSet==='object')?s.craftedSet:{}; state.reqsFulfilled=num(s.reqsFulfilled,0,0,1e9); state.biomes=(s.biomes&&typeof s.biomes==='object')?s.biomes:{}; state.event=DAY_EVENTS.find(e=>e.id===s.eventId)||null;
   if(typeof s.tod==='number'&&Number.isFinite(s.tod)) state.tod=((s.tod%1)+1)%1;
   if(s.volume!=null) state.volume=clamp(+s.volume||0,0,1); state.musicOn=(s.musicOn!==false); state.sfxOn=(s.sfxOn!==false); state.reduce=!!s.reduce;
-  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{}; state.badges=(s.badges&&typeof s.badges==='object')?s.badges:{};
+  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.quickItems=(s.quickItems&&typeof s.quickItems==='object')?s.quickItems:{}; state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{}; state.badges=(s.badges&&typeof s.badges==='object')?s.badges:{};
   state.homeTier=num(s.homeTier,0,0,3); for(let i=1;i<=state.homeTier;i++) applyHomeTier(i);   // rebuild purchased home upgrades
   state.homePaints=(s.homePaints&&typeof s.homePaints==='object')?s.homePaints:{}; loadBlocks(s.buildBlocks); applyHomePaints();   // restore voxel builds + house repaints (buildWorld ran first, so homes exist)
   for(const k in VOX.meshes) world.remove(VOX.meshes[k]); VOX.dug={}; VOX.meshes={};   // restore carved terrain
@@ -1622,9 +1633,14 @@ const ITEM_DESC={ wood:'Chopped from trees. The basic building & crafting materi
 let invOpen=false, pdpickOpen=false;
 const Inv={ render(){ const el=document.getElementById('invbar'); if(!el)return;   // EQUIPMENT hotbar (Minecraft-style): the SELECTED slot is what you hold in hand — fist + owned weapons + pickaxe/shovel. Labels 1..9,0. Always 10 slots.
     const L=hotbarLayout(); const sel=state.selectedSlot||0; let h='';
-    for(let i=0;i<10;i++){ const e=L[i]; const lbl=(i===9)?'0':(i+1);
-      h+=`<div class="slot${e?'':' empty'}${i===sel?' sel':''}${e&&e.kind==='tool'?' pslot':''}${e&&e.kind==='weapon'?' wslot':''}" title="${e?e.name:''}"><span class="sk">${lbl}</span><span class="i">${e?e.icon:''}</span><span class="n">${e&&e.kind==='fist'?'—':''}</span></div>`; }
-    el.innerHTML=h; el.querySelectorAll('.slot').forEach((s,i)=>{ s.onclick=()=>selectSlot(i); }); if(invOpen)renderInv(); },
+    for(let i=0;i<10;i++){ const e=L[i]; const lbl=(i===9)?'0':(i+1); const cnt=(e&&e.kind==='item')?(state.inv[e.item]||0):0;
+      h+=`<div class="slot${e?'':' empty'}${i===sel?' sel':''}${e&&e.kind==='tool'?' pslot':''}${e&&e.kind==='weapon'?' wslot':''}${e&&e.kind==='item'?' islot':''}" data-i="${i}" title="${e?(e.kind==='item'?e.name+' — click to use':e.name):'drag food here'}"><span class="sk">${lbl}</span><span class="i">${e?e.icon:''}</span>${cnt?`<span class="ic">${cnt}</span>`:''}<span class="n">${e&&e.kind==='fist'?'—':''}</span></div>`; }
+    el.innerHTML=h; el.querySelectorAll('.slot').forEach((s,i)=>{ const e=L[i];
+      s.onclick=()=>{ if(e&&e.kind==='item'){ if(eatFood(e.item)) Inv.render(); } else selectSlot(i); };   // food slot -> click to eat; else select to hold
+      s.addEventListener('dragover',ev=>{ if(ev.dataTransfer.types.includes('text/item')){ ev.preventDefault(); s.classList.add('drop'); } });
+      s.addEventListener('dragleave',()=>s.classList.remove('drop'));
+      s.addEventListener('drop',ev=>{ ev.preventDefault(); s.classList.remove('drop'); const k=ev.dataTransfer.getData('text/item'); if(!k||!ITEMS[k])return; const le=hotbarLayout()[i]; if(le&&(le.kind==='weapon'||le.kind==='tool'||le.kind==='fist')){ toast('That slot is taken by a tool/weapon — drop on an empty slot.'); return; } state.quickItems=state.quickItems||{}; state.quickItems[i]=k; Inv.render(); save(); toast(`📌 ${ITEMS[k].n} pinned to slot ${i===9?0:i+1} — click it to use.`); });
+    }); if(invOpen)renderInv(); },
   add(k,n=1){ const isNew=!((state.inv[k]||0)>0); if(isNew && backpackFull(true)){ if(typeof toast==='function')toast('🎒 Backpack full! Buy a bigger backpack at the General Store.'); return false; } state.inv[k]=(state.inv[k]||0)+n; this.render(); save(); return true; },
   has(k,n=1){ return (state.inv[k]||0)>=n; }, take(k,n=1){ if(!this.has(k,n))return false; state.inv[k]-=n; this.render(); save(); return true; } };
 // ── BACKPACK CAPACITY: limited slots; the General Store sells bigger backpacks (raise state.backpackTier) ──
@@ -1653,7 +1669,10 @@ function hotbarLayout(){ const L=[{kind:'fist',icon:'✊',name:'Fists'}];
   const ws=[]; for(const id of WTIER.slice(1)) if(state.weapons&&state.weapons[id]) ws.push(id); for(const id in (state.weapons||{})) if(WEAPONS[id]&&WEAPONS[id].rarity&&ws.indexOf(id)<0&&(state.level||1)>=(EQUIP_LVL[id]||0)) ws.push(id);   // hide under-level epic weapons
   ws.sort((a,b)=>(WEAPONS[b].dmg||0)-(WEAPONS[a].dmg||0));   // strongest first -> only the weakest weapons drop off if the 10-slot bar overflows
   for(const id of ws) L.push({kind:'weapon',weapon:id,icon:WEAPONS[id].icon,name:WEAPONS[id].name});
-  while(L.length<10) L.push(null); return L.slice(0,10); }
+  while(L.length<10) L.push(null);
+  const q=state.quickItems||{};   // PINNED consumables fill the empty slots (drag food from the bag onto a slot)
+  for(let i=0;i<10;i++){ if(!L[i] && q[i] && (state.inv[q[i]]||0)>0 && ITEMS[q[i]]){ L[i]={kind:'item',item:q[i],icon:ITEMS[q[i]].i,name:ITEMS[q[i]].n}; } }
+  return L.slice(0,10); }
 function applyEquip(){ const e=hotbarLayout()[state.selectedSlot]; if(!e){ state._activeTool=''; return; }
   if(e.kind==='weapon'){ state.weapon=e.weapon; state._activeTool=''; }
   else if(e.kind==='tool'){ state._activeTool=e.tool; }
@@ -1721,16 +1740,27 @@ function renderTrade(){ const el=document.getElementById('trade'); const s=state
 function toggleInv(){ invOpen?closeInv():openInv(); }
 function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
   const w=WEAPONS[state.weapon]||WEAPONS.fist, ar=ARMORS[state.armor];
-  let h=`<div class="invcard invwide"><h3>🎒 Inventory <span class="x" id="invX">✕</span></h3><div class="invcols"><div class="invleft">`;
+  let h=`<div class="invcard invwide"><h3>🎒 Inventory <span class="x" id="invX">✕</span></h3>`;
+  // ── STATS across the TOP (full width) ──
   h+=`<div class="invstats">`
-    +`<div class="invstat" style="grid-column:1/-1">❤️ Health <b>${Math.ceil(state.hp)}/${state.hpMax}</b><div style="height:9px;background:#e7dccb;border-radius:5px;margin-top:5px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,.18)"><div style="height:100%;width:${(Math.max(0,Math.min(1,state.hp/(state.hpMax||1)))*100).toFixed(1)}%;background:linear-gradient(90deg,#c0203a,#ff6b6c);border-radius:5px"></div></div></div>`
+    +`<div class="invstat hpstat">❤️ Health <b>${Math.ceil(state.hp)}/${state.hpMax}</b><div class="hpbar"><div class="hpfill" style="width:${(Math.max(0,Math.min(1,state.hp/(state.hpMax||1)))*100).toFixed(1)}%"></div></div></div>`
     +`<div class="invstat">⭐ Level <b>${state.level}</b></div>`
     +`<div class="invstat">${w.icon} ${w.name} <b>dmg ${w.dmg}</b></div>`
     +`<div class="invstat">🛡️ Armor <b>${armorTotal(state.level)}</b> ${(()=>{const g=state.gear||{},n=['helmet','body','legs','boots'].filter(s=>g[s]).length; const tiers=['helmet','body','legs','boots'].map(s=>g[s]?(ARMORS[g[s]]&&ARMORS[g[s]].tier):null); const set=tiers[0]&&tiers.every(t=>t===tiers[0]); return n?`(${n}/4${set?' · SET!':''})`:'(none)';})()}</div>`
     +`<div class="invstat">✨ Giggle <b>${state.giggle}</b></div>`
     +`<div class="invstat">📖 Pages <b>${state.recipePages||0}</b>${state.hasPickaxe?' · ⛏️ Pickaxe':''}</div>`
   +`</div>`;
-  h+=`</div><div class="invright">`;   // close LEFT (stats only), open RIGHT (backpack)
+  // ── two columns: CHARACTER (paper-doll) LEFT, BACKPACK RIGHT ──
+  h+=`<div class="invcols"><div class="invleft">`;
+  { const g=state.gear||{};
+    const cell=(slot,type,lbl,ph)=>{ let id='',it=null; if(type==='weapon'){ id=(state.weapon&&state.weapon!=='fist')?state.weapon:''; it=id?WEAPONS[id]:null; } else if(type==='offhand'){ id=state.offhand||''; it=id?(SHIELDS[id]||TORCHES[id]):null; } else { id=g[slot]||''; it=id?ARMORS[id]:null; }
+      const rr=it?(RARITY[it.rarity]||RARITY.common):RARITY.common; const icon=it?it.icon:ph; const dp=id?Math.round(durFrac(id)*100):0;
+      return `<div class="pdslot${it?' on':''}" data-slot="${slot}" data-type="${type}" style="grid-area:${slot};${it?`border-color:${rr.color}`:''}"><span class="pdl">${lbl}</span><span class="pdi">${icon}</span>${it?`<span class="pdd" style="color:${dp<=20?'#ff6b6b':dp<=50?'#ffcf3a':'#9be8c8'}">🔧${dp}%</span>`:''}</div>`; };
+    h+=`<div class="paperdoll pdwide"><div class="pdtitle">🧍 Your Character</div><div class="pdgrid">`
+      + cell('helmet','armor','Head','🪖') + cell('weapon','weapon','R-Hand','✊') + cell('body','armor','Chest','👕')
+      + cell('offhand','offhand','L-Hand','🛡️') + cell('legs','armor','Legs','👖') + cell('boots','armor','Boots','👢')
+      + `</div><div class="pdhint">Tap a slot or drag gear here to equip</div></div>`; }
+  h+=`</div><div class="invright">`;
   // ── BACKPACK with TABS (50 slots per bag; buy extra bags at the General Store) ──
   const TOOLDEF={pickaxe:{icon:'⛏️',name:'Pickaxe'},shovel:{icon:'🥄',name:'Shovel'}};
   const tileList=[];
@@ -1740,27 +1770,19 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
     tileList.push(`<div class="invtile gear${gate?' gated':''}" draggable="true" data-gear="${id}" data-kind="${kind}" style="border-color:${rr.color}">${dp<=20?'<span class="tc" style="color:#ff6b6b">⚠️</span>':''}<div class="ti">${it.icon}</div><div class="tn" style="color:${rr.color}">${it.name}</div></div>`);
   }
   for(const k of Object.keys(ITEMS)){ const c=state.inv[k]||0; if(c<=0)continue; const eat=FOOD_EFFECTS[k]; const desc=ITEM_DESC[k]?ITEMS[k].n+' — '+ITEM_DESC[k]:ITEMS[k].n;
-    tileList.push(`<div class="invtile${eat?' eatable':''}" title="${desc}" ${eat?`data-eat="${k}"`:''}><span class="tc">${c}</span><div class="ti">${ITEMS[k].i}</div><div class="tn">${ITEMS[k].n}${eat?'<br><span class="eathint">eat</span>':''}</div></div>`); }
+    tileList.push(`<div class="invtile${eat?' eatable':''}" draggable="true" data-item="${k}" title="${desc}" ${eat?`data-eat="${k}"`:''}><span class="tc">${c}</span><div class="ti">${ITEMS[k].i}</div><div class="tn">${ITEMS[k].n}${eat?'<br><span class="eathint">eat</span>':''}</div></div>`); }
   const PER=50, bags=Math.max(1,state.bagCount||1), cap=PER*bags, used=tileList.length;
   let tab=Math.min(Math.max(0,state._bagTab||0), bags-1);
   let pageTiles=''; for(let i=tab*PER;i<(tab+1)*PER;i++){ pageTiles += tileList[i] || `<div class="invtile empty"></div>`; }
   h+=`<div class="bptitle">🎒 Backpack <span class="bpcap${used>=cap?' full':''}">${used}/${cap}</span></div>`;
   if(bags>1){ let tb=''; for(let bi=0;bi<bags;bi++){ const bu=Math.max(0,Math.min(PER, used-bi*PER)); tb+=`<button class="bptab${bi===tab?' on':''}" data-bag="${bi}">🎒 Bag ${bi+1} <span class="bptn">${bu}/${PER}</span></button>`; } h+=`<div class="bptabs">${tb}</div>`; }
-  h+=`<div class="invgrid bpgrid">${pageTiles}</div><div class="bphint">Drag gear onto a body slot to equip · drag back here to unequip${bags<6?' · buy Extra Backpacks at the General Store for more tabs':''}</div>`;
+  h+=`<div class="bppanel"><div class="invgrid bpgrid">${pageTiles}</div></div><div class="bphint">Drag food to a hotbar slot (1–0) for quick-eating · drag gear onto a body slot to equip${bags<6?' · buy Extra Backpacks at the General Store':''}</div>`;
   h+=`</div>`;   // close invright
   h+=`</div>`;   // close invcols
-  // ── PAPER-DOLL (full width, UNDER the two columns) ──
-  { const g=state.gear||{};
-    const cell=(slot,type,lbl,ph)=>{ let id='',it=null; if(type==='weapon'){ id=(state.weapon&&state.weapon!=='fist')?state.weapon:''; it=id?WEAPONS[id]:null; } else if(type==='offhand'){ id=state.offhand||''; it=id?(SHIELDS[id]||TORCHES[id]):null; } else { id=g[slot]||''; it=id?ARMORS[id]:null; }
-      const rr=it?(RARITY[it.rarity]||RARITY.common):RARITY.common; const icon=it?it.icon:ph; const dp=id?Math.round(durFrac(id)*100):0;
-      return `<div class="pdslot${it?' on':''}" data-slot="${slot}" data-type="${type}" style="grid-area:${slot};${it?`border-color:${rr.color}`:''}"><span class="pdl">${lbl}</span><span class="pdi">${icon}</span>${it?`<span class="pdd" style="color:${dp<=20?'#ff6b6b':dp<=50?'#ffcf3a':'#9be8c8'}">🔧${dp}%</span>`:''}</div>`; };
-    h+=`<div class="paperdoll pdwide"><div class="pdtitle">🧍 Your Character</div><div class="pdgrid">`
-      + cell('helmet','armor','Head','🪖') + cell('weapon','weapon','R-Hand','✊') + cell('body','armor','Chest','👕')
-      + cell('offhand','offhand','L-Hand','🛡️') + cell('legs','armor','Legs','👖') + cell('boots','armor','Boots','👢')
-      + `</div></div>`; }
   h+=`</div>`;   // close invcard
   el.innerHTML=h; const x=el.querySelector('#invX'); if(x)x.onclick=closeInv; el.onclick=(e)=>{ if(e.target===el) closeInv(); };
-  el.querySelectorAll('.invtile[data-eat]').forEach(t=> t.onclick=(e)=>{ e.stopPropagation(); if(eatFood(t.dataset.eat)) renderInv(); });
+  el.querySelectorAll('.invtile[data-eat]').forEach(t=> t.onclick=(e)=>{ e.stopPropagation(); if(eatFood(t.dataset.eat)){ renderInv(); Inv.render(); } });
+  el.querySelectorAll('.invtile[data-item]').forEach(t=>{ t.addEventListener('dragstart',ev=>{ ev.dataTransfer.setData('text/item', t.dataset.item); ev.dataTransfer.effectAllowed='copy'; }); });   // drag any backpack item onto a hotbar slot to pin it
   el.querySelectorAll('.bptab[data-bag]').forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); state._bagTab=+b.dataset.bag; renderInv(); });
   el.querySelectorAll('.invtile.gear[data-gear]').forEach(t=>{
     t.ondblclick=(e)=>{ e.stopPropagation(); equipGear(t.dataset.gear, t.dataset.kind); };
@@ -2196,7 +2218,7 @@ const _np=new THREE.Vector3(), _camT=new THREE.Vector3();   // hot-loop scratch 
 let shakeAmt=0; const shake=a=>{ if(state.reduce)return; shakeAmt=Math.max(shakeAmt,a); };   // juice: camera punch (suppressed under reduce-motion)
 let wasGrounded=true;   // juice: detect the landing frame for squash-stretch
 function resolve(){ const feet=player.position.y;
-  for(const s of solids){ if(s.off||(s.mesh&&!s.mesh.visible))continue; if(s.stand&&feet>s.top-0.35)continue;   // on TOP of a standable thing -> no side block; walls always block
+  for(const s of solids){ if(s.off||(s.mesh&&!s.mesh.visible))continue; if((s.stand||s.mesh)&&feet>s.top-0.35)continue;   // on TOP of any REAL object (has a mesh) -> no side block; invisible barriers (mesh:null) always block
     const px=player.position.x,pz=player.position.z; const cx=clamp(px,s.minX,s.maxX),cz=clamp(pz,s.minZ,s.maxZ); const dx=px-cx,dz=pz-cz,d2=dx*dx+dz*dz;
     if(d2<RC*RC){ if(d2>1e-6){ const d=Math.sqrt(d2),pu=RC-d; player.position.x+=dx/d*pu; player.position.z+=dz/d*pu; }
       else { const L=px-s.minX,R=s.maxX-px,B=pz-s.minZ,T=s.maxZ-pz,mn=Math.min(L,R,B,T); if(mn===L)player.position.x=s.minX-RC; else if(mn===R)player.position.x=s.maxX+RC; else if(mn===B)player.position.z=s.minZ-RC; else player.position.z=s.maxZ+RC; } } }
@@ -2207,7 +2229,7 @@ function resolve(){ const feet=player.position.y;
 function groundUnder(){ const px=player.position.x,pz=player.position.z;
   let g=(MINE.inMine||DUNGEON.inDungeon)?0:terrainH(px,pz);   // surface = rolling terrain (flat in town); the far-off mine/dungeon pockets stay flat at 0
   const dk=Math.round(px)+','+Math.round(pz); if(VOX.dug[dk]!=null) g=VOX.dug[dk];   // carved pit/tunnel floor (negative) -> you descend in; adjacent undug cells let you step back out
-  for(const s of solids){ if(!s.stand)continue; if(s.off||(s.mesh&&!s.mesh.visible))continue; if(px>s.minX-0.3&&px<s.maxX+0.3&&pz>s.minZ-0.3&&pz<s.maxZ+0.3){ if(s.top>g&&s.top<=player.position.y+0.6) g=s.top; } }
+  for(const s of solids){ if(!s.stand && !s.mesh)continue; if(s.off||(s.mesh&&!s.mesh.visible))continue; if(px>s.minX-0.3&&px<s.maxX+0.3&&pz>s.minZ-0.3&&pz<s.maxZ+0.3){ if(s.top>g&&s.top<=player.position.y+0.6) g=s.top; } }   // stand on ANY real object (mesh), not just flagged ones — jump on stones/lamps/props/roofs
   return g; }
 // MONSTER COLLISION: push a creature out of any blocking solid (walls / homes / props) so monsters path
 // AROUND buildings instead of clipping through. Homes set s.monStop so they keep blocking monsters even while
@@ -2423,28 +2445,35 @@ function revealFog(){ if(!state.fog)state.fog={}; if(!state.met)state.met={}; co
   if(Math.hypot(px-3,pz-8)<70) state.met.market=1;
   for(const n of neighbors){ const nm=n.userData&&n.userData.name; if(nm && Math.hypot(px-n.position.x,pz-n.position.z)<32) state.met['npc:'+nm]=1; }   // meet a neighbor -> their name shows on the map as they wander
 }
-function paintMap(c, R, applyFog){ if(!c)return; const g=c.getContext('2d'); const S=c.width, sc=(S/2-4)/R, ms=S/150, big=R>=400;   // big = the enlarged map modal -> show name labels; applyFog=false (minimap) = always-full reveal
+function paintMap(c, R, applyFog, rect){ if(!c)return; const g=c.getContext('2d'); const S=c.width, sc=(S/2-4)/R, ms=S/150, big=!!rect||R>=400;   // rect = the BIG map: a rounded-rectangle old-school parchment (fills the corners too) + name labels; circle = minimap
+  const shape=()=>{ g.beginPath(); if(rect && g.roundRect){ g.roundRect(3,3,S-6,S-6,Math.min(34,22*ms)); } else { g.arc(S/2,S/2,S/2-3,0,7); } };
   g.clearRect(0,0,S,S);
-  g.fillStyle='rgba(24,20,34,0.92)'; g.beginPath(); g.arc(S/2,S/2,S/2-3,0,7); g.fill();   // FOG base (undiscovered = dark)
+  g.fillStyle='rgba(24,20,34,0.92)'; shape(); g.fill();   // FOG base (undiscovered = dark)
   const tx=x=>S/2+x*sc, tz=z=>S/2+z*sc;
-  g.save(); g.beginPath(); g.arc(S/2,S/2,S/2-3,0,7); g.clip();   // reveal discovered terrain cells
+  g.save(); shape(); g.clip();   // reveal discovered terrain cells
   g.fillStyle='rgba(120,200,110,0.5)'; const cs=FOG_CELL*sc;
   if(applyFog){ if(state.fog) for(const key in state.fog){ const pp=key.split('_'); const wx=(+pp[0])*FOG_CELL-FENCE, wz=(+pp[1])*FOG_CELL-FENCE; g.fillRect(tx(wx),tz(wz),cs+1.5,cs+1.5); } }
-  else { g.fillRect(0,0,S,S); }   // minimap (applyFog=false): fill the WHOLE clipped circle green = always see your surroundings; big map keeps the fog-gated cells
+  else { g.fillRect(0,0,S,S); }   // minimap (applyFog=false): fill the WHOLE clipped area green = always see your surroundings; big map keeps the fog-gated cells
   g.restore();
-  g.strokeStyle='rgba(34,26,46,0.55)'; g.lineWidth=2*ms; g.beginPath(); g.arc(S/2,S/2,S/2-3,0,7); g.stroke();
+  g.strokeStyle='rgba(34,26,46,0.55)'; g.lineWidth=2*ms; shape(); g.stroke();
   const met=state.met||{};
-  const lab=(t,X,Z,col)=>{ if(!big)return; g.font='bold '+(8.5*ms)+'px "Trebuchet MS",sans-serif'; g.textAlign='center'; g.lineWidth=3*ms; g.strokeStyle='rgba(0,0,0,0.72)'; g.strokeText(t,X,Z); g.fillStyle=col||'#fff'; g.fillText(t,X,Z); };
+  const lab=(t,X,Z,col)=>{ if(!big)return; g.font='bold '+(6.5*ms)+'px "Trebuchet MS",sans-serif'; g.textAlign='center'; g.lineWidth=2.4*ms; g.strokeStyle='rgba(0,0,0,0.72)'; g.strokeText(t,X,Z); g.fillStyle=col||'#fff'; g.fillText(t,X,Z); };   // smaller name labels
   if(met.home){ g.fillStyle='#ff5d8f'; g.fillRect(tx(HOUSE.cx)-3*ms,tz(HOUSE.cz)-3*ms,6*ms,6*ms); lab('🏠 Home',tx(HOUSE.cx),tz(HOUSE.cz)-6*ms,'#ffd0e0'); }
   if(met.market){ g.fillStyle='#ffd23f'; g.fillRect(tx(3)-2.5*ms,tz(8)-2.5*ms,5*ms,5*ms); lab('🛒 Market',tx(3),tz(8)-6*ms,'#ffe9a8'); }
   g.fillStyle='#7c5cff'; for(const n of neighbors){ const nm=n.userData&&n.userData.name; if(!nm||!met['npc:'+nm])continue; g.beginPath(); g.arc(tx(n.position.x),tz(n.position.z),2*ms,0,7); g.fill(); lab(nm, tx(n.position.x), tz(n.position.z)-4.5*ms, '#cdbcff'); }
   const px=tx(player.position.x),pz=tz(player.position.z),a=player.rotation.y;  // player arrow (always visible)
   g.fillStyle='#221a2e'; g.beginPath(); g.moveTo(px+Math.sin(a)*6*ms,pz+Math.cos(a)*6*ms); g.lineTo(px+Math.sin(a+2.5)*5*ms,pz+Math.cos(a+2.5)*5*ms); g.lineTo(px+Math.sin(a-2.5)*5*ms,pz+Math.cos(a-2.5)*5*ms); g.closePath(); g.fill(); }
 let mapOpen=false;
-function drawMinimap(){ paintMap(document.getElementById('minimap'),300,true); if(mapOpen) paintMap(document.getElementById('bigmap'),470,true); }   // fog of war on BOTH minimap + big map (owner reverted the always-full minimap)
-function openMap(){ if(!state.running)return; mapOpen=true; const el=document.getElementById('mapmodal');
-  el.innerHTML=`<canvas id="bigmap" width="460" height="460"></canvas><div class="maplegend"><span style="color:#ff5d8f">■ Home</span><span style="color:#d4a017">■ Store</span><span style="color:#7c5cff">● Neighbors</span><span style="color:#221a2e">▲ You</span></div><div class="maphint">click anywhere to close</div>`;
-  el.classList.remove('hidden'); el.onclick=closeMap; drawMinimap(); }
+function drawMinimap(){ paintMap(document.getElementById('minimap'),300,true,false); if(mapOpen) paintMap(document.getElementById('bigmap'),470/(state.mapZoom||1),true,true); }   // minimap = circle; big map = rounded-rect old-school map, zoomable
+function openMap(){ if(!state.running)return; mapOpen=true; state.mapZoom=state.mapZoom||1; const el=document.getElementById('mapmodal');
+  el.innerHTML=`<div class="mapwrap"><canvas id="bigmap" width="480" height="480"></canvas><div class="mapzoom"><button id="mapZin" title="Zoom in">＋</button><button id="mapZout" title="Zoom out">－</button></div></div><div class="maplegend"><span style="color:#ff5d8f">■ Home</span><span style="color:#d4a017">■ Store</span><span style="color:#7c5cff">● Neighbors</span><span style="color:#221a2e">▲ You</span></div><div class="maphint">scroll or ＋ / － to zoom · click outside the map to close</div>`;
+  el.classList.remove('hidden');
+  el.onclick=(e)=>{ if(e.target===el || (e.target.classList&&e.target.classList.contains('maphint'))) closeMap(); };
+  const _zoom=(f)=>{ state.mapZoom=clamp((state.mapZoom||1)*f,0.5,4); drawMinimap(); };
+  const zin=el.querySelector('#mapZin'), zout=el.querySelector('#mapZout'), bm=el.querySelector('#bigmap');
+  if(zin)zin.onclick=(e)=>{ e.stopPropagation(); _zoom(1.4); }; if(zout)zout.onclick=(e)=>{ e.stopPropagation(); _zoom(1/1.4); };
+  if(bm)bm.addEventListener('wheel',(e)=>{ e.preventDefault(); e.stopPropagation(); _zoom(e.deltaY<0?1.18:1/1.18); },{passive:false});
+  drawMinimap(); }
 function closeMap(){ mapOpen=false; const el=document.getElementById('mapmodal'); if(el) el.classList.add('hidden'); }
 function applyQuestMin(){ const q=document.getElementById('quests'), b=document.getElementById('qmin'); if(!q)return; q.classList.toggle('min',!!state.questMin); if(b){ b.textContent=state.questMin?'+':'–'; b.title=state.questMin?'Expand panel':'Minimize panel'; } }
 function toggleQuests(){ state.questMin=!state.questMin; applyQuestMin(); save(); }
