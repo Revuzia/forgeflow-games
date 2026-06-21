@@ -32,7 +32,7 @@
   .bar .lbl{font-size:12px; font-weight:bold; display:flex; justify-content:space-between; letter-spacing:.5px}
   .bar .track{height:10px; background:#e7dccb; border-radius:6px; margin-top:4px; overflow:hidden}
   .bar .fill{height:100%; width:80%; border-radius:6px; transition:width .35s ease; box-shadow:inset -2px 0 3px rgba(0,0,0,0.12)}
-  #hearts .fill{border-radius:8px; background-image:linear-gradient(180deg,rgba(255,255,255,0.15),rgba(0,0,0,0.08)) !important}
+  #hearts .fill{border-radius:8px}   /* gloss overlay removed — it was clobbering the inline RED gradient via !important, making the health bar look pale/green */
   #fHunger{background:linear-gradient(90deg,#ff9a3d,#ffcf4d)} #fEnergy{background:linear-gradient(90deg,#3ad1c7,#7ce0ff)} #fFun{background:linear-gradient(90deg,#ff5d8f,#ff9ed1)}
   #fXP{background:linear-gradient(90deg,#7c5cff,#c9a0ff)} #xpbar .lbl span:first-child{color:var(--grape)}
   /* built-in DEBUG instrumentation overlay (toggle: F3 or `) */
@@ -66,19 +66,19 @@
   #invbar .slot.wslot{border-color:rgba(122,92,255,.55); background:rgba(122,92,255,.12)} #invbar .slot.pslot{border-color:rgba(255,207,77,.45); background:rgba(255,207,77,.1)}
   #invbar .hint{align-self:center; color:#cbb6e6; font-size:11px; margin-left:4px; max-width:120px}
   #invbar .slot.empty{opacity:.3}
-  #hearts{letter-spacing:2px; text-align:center; padding:1px 0}
+  #hearts{padding:5px 9px}   /* match Hunger/Energy exactly (leftover heart-emoji padding made Health look oversized/off) */
   #hearts .lbl{font-size:12px; gap:3px}
   #hearts .lbl span:last-child{font-variant-numeric:tabular-nums; flex-shrink:0; min-width:48px; text-align:right}
   #armorbar{font-size:15px; letter-spacing:2px; text-align:center; padding:0 0 1px; filter:saturate(.9)}
   /* inventory is a centered MODAL grid (owner: image-1 inventory wasn't industry-standard) */
   #inv{position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center; background:rgba(20,14,30,.5); pointer-events:auto}
-  #inv .paperdoll{margin:10px 0 4px; padding:10px 8px; background:rgba(0,0,0,0.2); border-radius:12px}
+  #inv .paperdoll{margin:10px 0 4px; padding:10px 8px; background:rgba(34,26,46,.06); border:2px solid rgba(34,26,46,.12); border-radius:12px}
   #inv .pdtitle{font-size:12px; opacity:.85; text-align:center; margin-bottom:9px; font-weight:700}
   #inv .pdgrid{display:grid; grid-template-columns:repeat(3,64px); grid-auto-rows:62px; gap:8px; justify-content:center; align-items:center; grid-template-areas:'. helmet .' 'weapon body offhand' '. legs .' '. boots .'}
-  #inv .pdslot{position:relative; border:2px solid rgba(255,255,255,.22); border-radius:11px; background:rgba(255,255,255,.07); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; height:100%; transition:transform .1s}
-  #inv .pdslot:hover{transform:scale(1.06); border-color:#ffcf77}
-  #inv .pdslot.on{background:rgba(255,255,255,.14)}
-  #inv .pdslot.dis,#inv .pdslot.dis:hover{opacity:.4; cursor:default; transform:none; border-color:rgba(255,255,255,.22)}
+  #inv .pdslot{position:relative; border:2px solid rgba(34,26,46,.2); border-radius:11px; background:rgba(255,255,255,.62); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; height:100%; transition:transform .1s}
+  #inv .pdslot:hover{transform:scale(1.06); border-color:var(--grape)}
+  #inv .pdslot.on{background:rgba(124,92,255,.14)}
+  #inv .pdslot.dis,#inv .pdslot.dis:hover{opacity:.4; cursor:default; transform:none; border-color:rgba(34,26,46,.2)}
   #inv .pdslot .pdl{position:absolute; top:-7px; font-size:8px; text-transform:uppercase; letter-spacing:.4px; opacity:.8; background:rgba(34,26,46,.95); color:#fff; padding:0 4px; border-radius:4px}
   #inv .pdslot .pdi{font-size:26px; line-height:1}
   #inv .pdslot .pdd{font-size:8px; margin-top:2px}
@@ -111,11 +111,11 @@
   .tradecard .tbtns{display:flex; gap:8px; margin-top:12px; justify-content:center}
   .tradecard .tbtns button{padding:9px 18px; border:3px solid var(--ink); border-radius:11px; cursor:pointer; font-weight:bold; font-size:14px}
   .tradecard .tcancel{background:#ff6b6b; color:#fff} .tradecard .tconfirm{background:#2ec5a8; color:#fff} .tradecard .tconfirm:disabled{opacity:.6; cursor:default}
-  .invcard{width:min(560px,93vw); max-height:84vh; overflow:auto; background:rgba(34,26,46,.97); color:#fff; border:3px solid var(--ink); border-radius:18px; padding:14px 16px; box-shadow:7px 7px 0 rgba(0,0,0,.4)}
-  .invcard h3{margin:0 0 10px; font-size:18px; display:flex; justify-content:space-between; align-items:center}
+  .invcard{width:min(560px,93vw); max-height:84vh; overflow:auto; background:var(--paper); color:var(--ink); border:3px solid var(--ink); border-radius:18px; padding:14px 16px; box-shadow:7px 7px 0 rgba(34,26,46,.3)}
+  .invcard h3{margin:0 0 10px; font-size:18px; display:flex; justify-content:space-between; align-items:center; color:var(--grape)}
   .invcard h3 .x{cursor:pointer; background:var(--ink); color:#fff; border-radius:8px; padding:1px 10px; border:1px solid rgba(255,255,255,.3)}
   .invstats{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:11px}
-  .invstat{background:rgba(255,255,255,.07); border-radius:10px; padding:6px 10px; font-size:12.5px} .invstat b{color:var(--sun)}
+  .invstat{background:rgba(255,255,255,.66); border:2px solid rgba(34,26,46,.14); border-radius:10px; padding:6px 10px; font-size:12.5px} .invstat b{color:var(--grape)}
   .invgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(82px,1fr)); gap:8px}
   #inv .invcard.invwide{width:min(880px,96vw); max-width:96vw}
   #inv .invcols{display:flex; gap:16px; align-items:flex-start}
@@ -127,18 +127,18 @@
   #inv .bphint{font-size:10.5px; opacity:.7; margin-top:7px}
   #inv .bpgrid{grid-template-columns:repeat(auto-fill,minmax(62px,1fr)); gap:7px; max-height:50vh; overflow:auto; align-content:start}
   #inv .bptabs{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px}
-  #inv .bptab{background:rgba(255,255,255,.07); border:2px solid rgba(255,255,255,.18); color:#fff; border-radius:9px; padding:5px 11px; font-size:12px; font-weight:700; cursor:pointer}
-  #inv .bptab.on{background:var(--grape,#7c5cff); border-color:#fff}
+  #inv .bptab{background:rgba(255,255,255,.6); border:2px solid rgba(34,26,46,.18); color:var(--ink); border-radius:9px; padding:5px 11px; font-size:12px; font-weight:700; cursor:pointer}
+  #inv .bptab.on{background:var(--grape,#7c5cff); border-color:var(--ink); color:#fff}
   #inv .bptab .bptn{opacity:.7; font-weight:600; font-size:11px}
   #inv .paperdoll.pdwide{width:100%; margin-top:12px}
   #inv .invtile.gear{cursor:grab} #inv .invtile.gear:active{cursor:grabbing}
   #inv .invtile.gated{opacity:.5}
   #inv .pdslot.drop{border-color:#9be8c8; background:rgba(122,224,108,.22); transform:scale(1.08)}
   @media (max-width:620px){ #inv .invcols{flex-direction:column} #inv .invleft{flex:none; width:100%} }
-  .invtile{position:relative; background:rgba(255,255,255,.07); border:2px solid rgba(255,255,255,.16); border-radius:12px; padding:9px 4px; text-align:center}
-  .invtile.empty{opacity:.33} .invtile .ti{font-size:26px; line-height:1.1} .invtile .tn{font-size:10.5px; color:#cdbfe6; margin-top:2px}
-  .invtile.eatable{cursor:pointer; border-color:rgba(122,224,108,.5)} .invtile.eatable:hover{background:rgba(122,224,108,.18)} .invtile .eathint{color:#8fe07a; font-size:9px}
-  .invtile .tc{position:absolute; top:3px; right:7px; font-weight:bold; color:var(--sun); font-size:12px}
+  .invtile{position:relative; background:rgba(255,255,255,.72); border:2px solid rgba(34,26,46,.16); border-radius:12px; padding:9px 4px; text-align:center; box-shadow:0 2px 0 rgba(34,26,46,.1)}
+  .invtile.empty{opacity:.5; background:rgba(34,26,46,.04); border-style:dashed; box-shadow:none} .invtile .ti{font-size:26px; line-height:1.1} .invtile .tn{font-size:10.5px; color:#6b5b86; margin-top:2px; font-weight:600}
+  .invtile.eatable{cursor:pointer; border-color:rgba(46,158,79,.55)} .invtile.eatable:hover{background:rgba(122,224,108,.28)} .invtile .eathint{color:#2e9e4f; font-size:9px; font-weight:700}
+  .invtile .tc{position:absolute; top:3px; right:7px; font-weight:bold; color:var(--ink); font-size:12px}
   /* zone banner */
   #zone{left:50%; top:64px; transform:translateX(-50%); background:rgba(34,26,46,.8); color:#fff; padding:5px 16px; border-radius:20px; font-weight:bold; font-size:14px; letter-spacing:.5px; opacity:0; transition:opacity .4s; border:2px solid var(--sun)}
   /* crafting menu */
@@ -391,7 +391,7 @@ addEventListener('error', e=>__report('window.error', e.error||e.message));
 addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reason));
 
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
-  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
+  discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, tradePending:null, gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
   hp:100, hpMax:100, xp:0, level:1, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
@@ -1173,6 +1173,10 @@ function enterHome(home){
 function updateHomes(dt){
   for(const h of homes){
     if(h.doorIt && h.purpose!=='home'){ const d=PURPOSE_DEFS[h.purpose]; if(d.lockLevel||d.lockDay) h.doorIt.label=doorLabel(h); }   // locked facilities show a live unlock hint
+    if(!h.active && h.doorHinge && h.doorPos){   // auto-swing OPEN as a real player (or co-op friend) approaches — same feel as your own house; monsters never trigger it
+      let _near=Math.hypot(player.position.x-h.doorPos.x, player.position.z-h.doorPos.z)<4.2;
+      if(!_near && typeof COOP!=='undefined' && COOP.on){ for(const _id in COOP.peers){ const _pg=COOP.peers[_id]&&COOP.peers[_id].group; if(_pg && Math.hypot(_pg.position.x-h.doorPos.x, _pg.position.z-h.doorPos.z)<4.2){ _near=true; break; } } }
+      h.doorTarget=_near?-1.45:0; }
     if(h.doorHinge) h.doorHinge.rotation.y=lerp(h.doorHinge.rotation.y, h.doorTarget||0, dt*8);   // door swings to open/closed
     if(!h.built) continue;
     if(h.active){ const d=Math.hypot(player.position.x-h.cx, player.position.z-h.cz); if(d>Math.max(h.hx,h.hz)+5){ h.active=false; h.doorTarget=0; if(h.walls)h.walls.forEach(s=>s.off=true); if(h.warmLight){ removeDynLight(h.warmLight); h.warmLight=null; } } }   // left -> shut door + re-block walls + free the warm light slot
@@ -1390,6 +1394,10 @@ function buildCloudInstances(){
 const CHAR_FWD=0;   // model-forward correction (verified: Kenney blocky faces travel dir at 0; PI moonwalked)
 function angLerp(cur,tgt,t){ let d=tgt-cur; d=Math.atan2(Math.sin(d),Math.cos(d)); return cur+d*Math.min(1,t); }   // SHORTEST-path angle interp — plain lerp took the long way around ±π (the "walking sideways" spin, owner)
 function faceVel(vx,vz){ return Math.atan2(vx,vz)+CHAR_FWD; }   // heading that FACES a velocity (model forward = +z). NPCs/animals/creatures that set rotation.y to the raw wander angle faced 90° off = sideways
+function npcBlocked(x,z){ const M=0.6;   // keep wandering folk OUT of building footprints (player house + every town/hamlet home) — no more walking through walls
+  if(typeof HOUSE!=='undefined' && Math.abs(x-HOUSE.cx)<HOUSE.hx+M && Math.abs(z-HOUSE.cz)<HOUSE.hz+M) return true;
+  if(typeof homes!=='undefined'){ for(const h of homes){ if(Math.abs(x-h.cx)<h.hx+M && Math.abs(z-h.cz)<h.hz+M) return true; } }
+  return false; }
 /* billboarded canvas-sprite nametag above a neighbor (name + friendship hearts) */
 function roundRect(g,x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
 function setLabel(sp,text){ const g=sp._g; g.clearRect(0,0,256,64); g.fillStyle='rgba(34,26,46,0.82)'; roundRect(g,6,6,244,52,16); g.fill(); g.fillStyle='#fff7ec'; g.font='bold 24px "Trebuchet MS",sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText(text,128,33); sp.material.map.needsUpdate=true; }
@@ -1686,8 +1694,10 @@ function closeSlotPicker(){ pdpickOpen=false; const el=document.getElementById('
 // ── CO-OP TRADE: both players add items + coin, both Confirm -> atomic swap (press T near a player) ──
 let tradeOpen=false, levelupOpen=false;
 function getNearestPeer(radius){ radius=radius||12; if(typeof COOP==='undefined'||!COOP.on) return null; let best=null,bd=Infinity; const pp=player.position; for(const id in COOP.peers){ const pe=COOP.peers[id]; if(!pe||!pe.group)continue; const d=Math.hypot(pe.group.position.x-pp.x, pe.group.position.z-pp.z); if(d<radius&&d<bd){ best={id,peer:pe}; bd=d; } } return best; }
-function requestTrade(){ if(typeof COOP==='undefined'||!COOP.on){ toast('👥 Trading needs co-op — open the pause menu → Play with Friends first.'); return; } const near=getNearestPeer(12); if(!near){ toast('👥 No player nearby (get within ~12 steps to trade).'); return; } openTrade(near.id); }
-function openTrade(peerId){ const pe=COOP.peers&&COOP.peers[peerId]; if(!pe){ toast('👥 That player left.'); return; } tradeOpen=true; state.tradeSession={peerId, name:pe.name||'Friend', offer:{items:{},coin:0}, confirmed:false, theirs:{items:{},coin:0}, theirConfirmed:false}; document.getElementById('trade').classList.remove('hidden'); renderTrade(); SFX.play('interact'); try{ COOP.ch.send({type:'broadcast',event:'trade-open',payload:{from:COOP.id,to:peerId,name:COOP.name}}); }catch(e){} }
+function requestTrade(){ if(typeof COOP==='undefined'||!COOP.on){ toast('👥 Trading needs co-op — open the pause menu → Play with Friends first.'); return; } if(tradeOpen||state.tradePending){ toast('💱 Finish your current trade first.'); return; } const near=getNearestPeer(12); if(!near){ toast('👥 No player nearby (get within ~12 steps to trade).'); return; } const pe=near.peer; const nm=(pe&&pe.name)||'Friend'; state.tradePending={peerId:near.id, name:nm, dir:'out'}; toast(`💱 Asked ${nm} to trade — waiting for them to accept…`); SFX.play('interact'); try{ COOP.ch.send({type:'broadcast',event:'trade-request',payload:{from:COOP.id,to:near.id,name:COOP.name}}); }catch(e){} setTimeout(()=>{ if(state.tradePending&&state.tradePending.dir==='out'&&state.tradePending.peerId===near.id&&!tradeOpen){ state.tradePending=null; toast('💱 No response — trade request timed out.'); } }, 30000); }
+function acceptTradeRequest(){ const p=state.tradePending; if(!p||p.dir!=='in')return; const peerId=p.peerId; try{ COOP.ch.send({type:'broadcast',event:'trade-accept',payload:{from:COOP.id,to:peerId}}); }catch(e){} openTrade(peerId); }   // opens MY trade screen + tells the requester to open theirs
+function declineTradeRequest(){ const p=state.tradePending; if(!p||p.dir!=='in')return; const peerId=p.peerId; state.tradePending=null; try{ COOP.ch.send({type:'broadcast',event:'trade-decline',payload:{from:COOP.id,to:peerId}}); }catch(e){} }
+function openTrade(peerId){ const pe=COOP.peers&&COOP.peers[peerId]; if(!pe){ toast('👥 That player left.'); state.tradePending=null; return; } state.tradePending=null; tradeOpen=true; state.tradeSession={peerId, name:pe.name||'Friend', offer:{items:{},coin:0}, confirmed:false, theirs:{items:{},coin:0}, theirConfirmed:false}; document.getElementById('trade').classList.remove('hidden'); renderTrade(); SFX.play('interact'); }   // both sides call this only AFTER the request is accepted
 function closeTrade(silent){ if(state.tradeSession&&!silent){ try{ COOP.ch.send({type:'broadcast',event:'trade-cancel',payload:{from:COOP.id,to:state.tradeSession.peerId}}); }catch(e){} } tradeOpen=false; state.tradeSession=null; const el=document.getElementById('trade'); if(el)el.classList.add('hidden'); }
 function _tradeBroadcastOffer(){ const s=state.tradeSession; if(!s)return; try{ COOP.ch.send({type:'broadcast',event:'trade-offer',payload:{from:COOP.id,to:s.peerId,offer:s.offer,confirmed:s.confirmed}}); }catch(e){} }
 function tradeAddItem(k){ const s=state.tradeSession; if(!s||s.confirmed)return; if(!Inv.has(k,(s.offer.items[k]||0)+1)){ toast(`No more ${(ITEMS[k]||{n:k}).n} to offer.`); return; } s.offer.items[k]=(s.offer.items[k]||0)+1; renderTrade(); _tradeBroadcastOffer(); }
@@ -1713,7 +1723,7 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
   const w=WEAPONS[state.weapon]||WEAPONS.fist, ar=ARMORS[state.armor];
   let h=`<div class="invcard invwide"><h3>🎒 Inventory <span class="x" id="invX">✕</span></h3><div class="invcols"><div class="invleft">`;
   h+=`<div class="invstats">`
-    +`<div class="invstat">❤️ Health <b>${state.hp}/${state.hpMax}</b></div>`
+    +`<div class="invstat" style="grid-column:1/-1">❤️ Health <b>${Math.ceil(state.hp)}/${state.hpMax}</b><div style="height:9px;background:#e7dccb;border-radius:5px;margin-top:5px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,.18)"><div style="height:100%;width:${(Math.max(0,Math.min(1,state.hp/(state.hpMax||1)))*100).toFixed(1)}%;background:linear-gradient(90deg,#c0203a,#ff6b6c);border-radius:5px"></div></div></div>`
     +`<div class="invstat">⭐ Level <b>${state.level}</b></div>`
     +`<div class="invstat">${w.icon} ${w.name} <b>dmg ${w.dmg}</b></div>`
     +`<div class="invstat">🛡️ Armor <b>${armorTotal(state.level)}</b> ${(()=>{const g=state.gear||{},n=['helmet','body','legs','boots'].filter(s=>g[s]).length; const tiers=['helmet','body','legs','boots'].map(s=>g[s]?(ARMORS[g[s]]&&ARMORS[g[s]].tier):null); const set=tiers[0]&&tiers.every(t=>t===tiers[0]); return n?`(${n}/4${set?' · SET!':''})`:'(none)';})()}</div>`
@@ -2368,12 +2378,15 @@ function updateWorld(dt){ const tn=performance.now()*0.001;
       // greet the nearest neighbor or the player if close
       let near=null,nd=7; for(const o of neighbors){ if(o===g)continue; const d=g.position.distanceTo(o.position); if(d<nd){nd=d;near=o;} }
       const dp=g.position.distanceTo(player.position);
-      if(dp<7){ g.lookAt(player.position.x,g.position.y,player.position.z); g.rotation.y+=CHAR_FWD; npcEmote(g,'emote-yes'); if(state.running&&Math.random()<0.5) toast(pick(['👋 "Howdy, Wobblesworth!"','👋 "Nice day on Giggleton Lane!"','👋 "Lookin\' good, neighbor!"'])); continue; }
-      if(near){ g.lookAt(near.position.x,g.position.y,near.position.z); g.rotation.y+=CHAR_FWD; npcEmote(g,pick(['emote-yes','interact-right'])); npcEmote(near,'emote-yes'); near.userData.greet=rand(8,16); continue; }
+      if(dp<7){ g.rotation.y=faceVel(player.position.x-g.position.x, player.position.z-g.position.z); npcEmote(g,'emote-yes'); if(state.running&&Math.random()<0.5) toast(pick(['👋 "Howdy, Wobblesworth!"','👋 "Nice day on Giggleton Lane!"','👋 "Lookin\' good, neighbor!"'])); continue; }
+      if(near){ g.rotation.y=faceVel(near.position.x-g.position.x, near.position.z-g.position.z); npcEmote(g,pick(['emote-yes','interact-right'])); npcEmote(near,'emote-yes'); near.userData.greet=rand(8,16); continue; }
     }
     u.t-=dt; if(u.t<=0){ u.dir=rand(0,TAU); u.t=rand(2,5); }
     npcAnim(g,'walk');
-    g.position.x+=Math.cos(u.dir)*1.5*dt; g.position.z+=Math.sin(u.dir)*1.5*dt; g.rotation.y=angLerp(g.rotation.y,faceVel(Math.cos(u.dir),Math.sin(u.dir)),dt*5);   // shortest-path turn -> no sideways spin
+    const _ox=g.position.x, _oz=g.position.z;
+    g.position.x+=Math.cos(u.dir)*1.5*dt; g.position.z+=Math.sin(u.dir)*1.5*dt;
+    if(npcBlocked(g.position.x,g.position.z)){ g.position.x=_ox; g.position.z=_oz; u.dir+=Math.PI*0.55+Math.random()*0.5; u.t=Math.min(u.t,0.4); }   // hit a house -> step back + turn away (no more walking through walls)
+    g.rotation.y=angLerp(g.rotation.y,faceVel(Math.cos(u.dir),Math.sin(u.dir)),dt*9);   // shortest-path turn, snappier so no sideways drift
     g.position.y=groundY(g.position.x,g.position.z);   // wild wanderers follow the hills (town stays at 0)
     const r=Math.hypot(g.position.x,g.position.z); if(r>FENCE-13){ u.dir+=Math.PI; } }
   // ephemerals
@@ -2897,7 +2910,7 @@ function makeMiniBar(){ const cv=document.createElement('canvas'); cv.width=120;
 var playerBar=null;
 function makePlayerBar(){ const cv=document.createElement('canvas'); cv.width=140; cv.height=26; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthTest:false,depthWrite:false})); sp.material.map.colorSpace=THREE.SRGBColorSpace; sp.renderOrder=24; sp.scale.set(2.2,0.41,1); sp._cv=cv; sp._g=cv.getContext('2d'); return sp; }
 function drawPlayerBar(){ if(!playerBar)return; const g=playerBar._g; const hf=Math.max(0,Math.min(1,state.hp/(state.hpMax||1))); const ap=(typeof armorTotal==='function')?armorTotal(state.level):0, af=Math.max(0,Math.min(1,ap/15));
-  g.clearRect(0,0,140,26); g.fillStyle='rgba(14,8,12,0.82)'; g.fillRect(2,2,136,11); g.fillStyle=hf>0.5?'#7ad04a':hf>0.25?'#ffd23f':'#e0463a'; g.fillRect(4,4,132*hf,7);
+  g.clearRect(0,0,140,26); g.fillStyle='rgba(14,8,12,0.82)'; g.fillRect(2,2,136,11); g.fillStyle=hf>0.5?'#ff5d5d':hf>0.25?'#ffa83d':'#e0463a'; g.fillRect(4,4,132*hf,7);   // RED health (was green) to match the HUD bar
   if(ap>0){ g.fillStyle='rgba(14,8,12,0.82)'; g.fillRect(2,15,136,8); g.fillStyle='#7f9bff'; g.fillRect(4,16.5,132*af,4); }
   playerBar.material.map.needsUpdate=true; }
 // ── per-mob ATTACK FX: a claw slash-arc / bite puff / sting flash in front of the mob so the strike reads clearly ──
@@ -3133,7 +3146,9 @@ const COOP = {
     const ch=this.sb.channel('ffg:wobblesworth:'+this.room,{config:{broadcast:{self:false},presence:{key:this.id}}});
     this.ch=ch;
     ch.on('broadcast',{event:'p'},({payload})=>{ if(payload&&payload.from!==this.id) this._recv(payload); });
-    ch.on('broadcast',{event:'trade-open'},({payload})=>{ if(payload&&payload.to===this.id&&this.peers[payload.from]){ toast(`💱 ${payload.name||'A friend'} wants to trade — press T near them.`); } });
+    ch.on('broadcast',{event:'trade-request'},({payload})=>{ if(!payload||payload.to!==this.id||!this.peers[payload.from])return; if(tradeOpen||state.tradePending){ try{ this.ch.send({type:'broadcast',event:'trade-decline',payload:{from:this.id,to:payload.from,busy:true}}); }catch(e){} return; } state.tradePending={peerId:payload.from, name:payload.name||'A friend', dir:'in'}; SFX.play('interact'); styledConfirm('💱 Trade request', `${payload.name||'A friend'} wants to trade with you.`, '✓ Accept', ()=>acceptTradeRequest(), ()=>declineTradeRequest(), '✕ Decline'); });
+    ch.on('broadcast',{event:'trade-accept'},({payload})=>{ if(!payload||payload.to!==this.id)return; if(state.tradePending&&state.tradePending.dir==='out'&&state.tradePending.peerId===payload.from){ openTrade(payload.from); } });   // they accepted my request -> open my side too
+    ch.on('broadcast',{event:'trade-decline'},({payload})=>{ if(!payload||payload.to!==this.id)return; if(state.tradePending&&state.tradePending.peerId===payload.from){ state.tradePending=null; toast(payload.busy?'💱 They are in another trade right now.':'💱 Trade request declined.'); } });
     ch.on('broadcast',{event:'trade-offer'},({payload})=>{ if(payload&&state.tradeSession&&payload.from===state.tradeSession.peerId){ state.tradeSession.theirs=payload.offer||{items:{},coin:0}; state.tradeSession.theirConfirmed=!!payload.confirmed; if(tradeOpen)renderTrade(); if(payload.confirmed&&state.tradeSession.confirmed) _tradeComplete(); } });
     ch.on('broadcast',{event:'trade-cancel'},({payload})=>{ if(payload&&state.tradeSession&&payload.from===state.tradeSession.peerId){ toast('💱 Trade cancelled by partner.'); tradeOpen=false; state.tradeSession=null; const el=document.getElementById('trade'); if(el)el.classList.add('hidden'); } });
     ch.on('presence',{event:'leave'},({leftPresences})=>{ for(const lp of (leftPresences||[])) this._despawn(lp.id); this._count(); });
@@ -3251,16 +3266,16 @@ function startGame(){ if(!ready)return; document.getElementById('title').classLi
   else toast('🏠 Back on Giggleton Lane — survive the night! Check your Journal →');
   if(_inviteRoom){ const r=_inviteRoom; _inviteRoom=null; setTimeout(()=>{ if(typeof COOP!=='undefined'){ toast(`👥 Joining your friend's world (${r})…`); COOP.join(r); } }, 1200); } }   // auto-join an invite link once in-world
 function hasSave(){ try{ return !!localStorage.getItem('ww2_save'); }catch(e){ return false; } }
-let confirmOpen=false, _confirmYes=null;
-function styledConfirm(title, msg, yesLabel, onYes){   // in-game styled replacement for native confirm()
+let confirmOpen=false, _confirmYes=null, _confirmNo=null;
+function styledConfirm(title, msg, yesLabel, onYes, onNo, noLabel){   // in-game styled confirm; optional onNo fires on Cancel/backdrop/ESC (used by the trade-request prompt)
   let el=document.getElementById('confirm'); if(!el){ el=document.createElement('div'); el.id='confirm'; document.body.appendChild(el); }
-  el.innerHTML=`<div class="ccard"><h2>${title}</h2><p>${msg}</p><div class="crow"><button class="cbtn cno" id="cNo">Cancel</button><button class="cbtn cyes" id="cYes">${yesLabel||'OK'}</button></div></div>`;
-  _confirmYes=onYes; confirmOpen=true; el.classList.add('show');
-  el.querySelector('#cNo').onclick=closeConfirm;
-  el.querySelector('#cYes').onclick=()=>{ const f=_confirmYes; closeConfirm(); if(f)f(); };
-  el.onclick=(e)=>{ if(e.target===el) closeConfirm(); };   // click the dim backdrop = cancel
+  el.innerHTML=`<div class="ccard"><h2>${title}</h2><p>${msg}</p><div class="crow"><button class="cbtn cno" id="cNo">${noLabel||'Cancel'}</button><button class="cbtn cyes" id="cYes">${yesLabel||'OK'}</button></div></div>`;
+  _confirmYes=onYes; _confirmNo=onNo||null; confirmOpen=true; el.classList.add('show');
+  el.querySelector('#cNo').onclick=()=>closeConfirm();
+  el.querySelector('#cYes').onclick=()=>{ const f=_confirmYes; _confirmNo=null; closeConfirm(); if(f)f(); };
+  el.onclick=(e)=>{ if(e.target===el) closeConfirm(); };   // click the dim backdrop = decline/cancel
 }
-function closeConfirm(){ const el=document.getElementById('confirm'); if(el)el.classList.remove('show'); confirmOpen=false; _confirmYes=null; }
+function closeConfirm(){ const f=_confirmNo; const el=document.getElementById('confirm'); if(el)el.classList.remove('show'); confirmOpen=false; _confirmYes=null; _confirmNo=null; if(f)f(); }
 function _wipeAndRestart(){ try{ sessionStorage.setItem('ww_newgame','1'); for(const k of Object.keys(localStorage)) if(k.indexOf('ww2_')===0) localStorage.removeItem(k); }catch(e){} location.reload(); }   // flag FIRST (so the save-guards skip), then wipe EVERY ww2_ key, then reload -> startGame() fresh
 function setupMenu(){ const cont=document.getElementById('continueBtn'), ng=document.getElementById('newGameBtn'), cm=document.getElementById('coopMenuBtn'), st=document.getElementById('settingsBtn');
   ng.textContent = hasSave()?'✦ New Game':'▶ Play'; ng.classList.remove('dim'); if(cm)cm.classList.remove('dim'); st.classList.remove('dim');
