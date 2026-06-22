@@ -815,6 +815,8 @@ const MODEL_LIST=["char_player","char_n1","char_n2","char_n3","House_1","House_2
  "animal-cow","animal-pig","animal-chick","animal-deer","animal-bunny","animal-fox","animal-tiger","animal-lion","animal-hog","animal-crab","animal-bee","animal-caterpillar","animal-elephant","animal-polar","animal-giraffe","animal-panda",
  // SPOOKY night mobs (Kenney graveyard kit) — haunt the far OUTSKIRTS after dark only (see CREATURE_TYPES minDist):
  "mob-skeleton","mob-ghost","mob-zombie","mob-pumpkin",
+ // RIDABLE MOUNTS (PolyPizza, CC-BY): horse, white horse = unicorn, mule deer = stag — rare finds, need a saddle to ride:
+ "mount-horse","mount-unicorn","mount-stag",
  // MINI-CHARACTER people (Kenney) — varied NEIGHBORS/wanderers (same rig as char_player, so the walk anim works):
  "character-male-a","character-male-b","character-male-c","character-male-d","character-male-e","character-male-f","character-female-a","character-female-b","character-female-c","character-female-d","character-female-e","character-female-f"];
 const ASSET_ERRORS=[];                                  // names that failed to load (for the probe + a soft toast)
@@ -1088,6 +1090,7 @@ function buildHamlets(startIdx){   // 5 hamlets of 2-4 enterable homes scattered
     windingPath(0,40,hcx,hcz); hamlets.push(ham); }
   if(treeSpecs.length) mergeDecorTrees(treeSpecs);   // hamlet groves -> merged meshes (draw calls stay low)
   buildWildWanderers();
+  try{ spawnMounts(); }catch(e){}   // rare wild mounts (horse/stag/unicorn) roaming the outskirts
 }
 /* fetch-quest board: bring N of a resource -> coins + a bonus item */
 function townBoard(){
@@ -1872,7 +1875,7 @@ const ITEMS={ wood:{i:'🪵',n:'Wood'},stone:{i:'🪨',n:'Stone'},crystal:{i:'�
   dirt:{i:'🟤',n:'Dirt'}, iron_ingot:{i:'🔩',n:'Iron Ingot'}, gold_ingot:{i:'🥇',n:'Gold Ingot'}, boss_core:{i:'💠',n:'Boss Core'}, health_potion:{i:'🧪',n:'Health Potion'}, energy_tonic:{i:'🧉',n:'Energy Tonic'},
   spell_bolt:{i:'✨',n:'Arcane Bolt'}, spell_fireball:{i:'🔥',n:'Fireball'}, spell_frost:{i:'❄️',n:'Frost Shard'}, spell_mend:{i:'💚',n:'Mend'},
   fire_arrow:{i:'🔥',n:'Fire Arrow'}, ice_arrow:{i:'❄️',n:'Ice Arrow'}, bomb_arrow:{i:'💥',n:'Bomb Arrow'},
-  book_fireball:{i:'📕',n:'Tome: Fireball'}, book_frost:{i:'📘',n:'Tome: Frost Shard'}, book_mend:{i:'📗',n:'Tome: Mend'} };   // appended (keep first 8 keys' order for the hotbar/inv_slots invariant)   // C3 animal resources + dirt + E3 smelted ingots + E5 boss-only crafting core; first 8 keys unchanged so hotbar + inv_slots stay intact
+  book_fireball:{i:'📕',n:'Tome: Fireball'}, book_frost:{i:'📘',n:'Tome: Frost Shard'}, book_mend:{i:'📗',n:'Tome: Mend'}, saddle:{i:'🐴',n:'Saddle'} };   // appended (keep first 8 keys' order for the hotbar/inv_slots invariant)   // C3 animal resources + dirt + E3 smelted ingots + E5 boss-only crafting core; first 8 keys unchanged so hotbar + inv_slots stay intact
 /* basic item DESCRIPTIONS (owner: "each item needs a basic description — industry standard, see Minecraft") — shown as a hover tooltip in the inventory */
 const ITEM_DESC={ wood:'Chopped from trees. The basic building & crafting material.', stone:'Mined from rocks. Tools, walls, paths & the furnace.', crystal:'A glittering quarry gem. Crystal gear, glass & lanterns.', apple:'Sweet fruit — eat to restore hunger.', mushroom:'Forest fungus — eat for a little hunger & energy.', carrot:'Crunchy root veg — eat to restore energy.', flower:'A pretty bloom — used in decor & a few recipes.', coin:'Currency from foes & chests. Spend at shops.', milk:'From cows — eat for a little health; bakes into cake.', wool:'Sheared from sheep — crafts rugs & banners.', egg:'From chickens — eat for a little health; bakes treats.', leather:'From animals — crafts Leather Armor.', meat:'Hearty protein — eat to restore lots of hunger & health.', dirt:'Dug with a shovel. Fills holes & crafts bricks.', iron_ingot:'Smelted from stone at a furnace. Iron tools & armor.', gold_ingot:'Smelted from crystal. Gold tools & armor.', boss_core:'Rare BOSS-only drop. Required for the ⚡ Titan tier.' };
 let invOpen=false, pdpickOpen=false;
@@ -2131,6 +2134,7 @@ const RECIPES=[
   {id:'book_fireball', name:'📕 Tome: Fireball', cat:'tool', cls:'mage', lvl:4, cost:{crystal:3}, build:p=>{ Inv.add('book_fireball',1); } },
   {id:'book_frost', name:'📘 Tome: Frost Shard', cat:'tool', cls:'mage', lvl:7, cost:{crystal:2,iron_ingot:1}, build:p=>{ Inv.add('book_frost',1); } },
   {id:'book_mend', name:'📗 Tome: Mend', cat:'tool', cls:'mage', lvl:10, cost:{crystal:4,gold_ingot:1}, build:p=>{ Inv.add('book_mend',1); } },
+  {id:'saddle', name:'🐴 Saddle', cat:'tool', lvl:3, cost:{leather:3,wood:2}, build:p=>{ Inv.add('saddle',1); toast('🐴 Crafted a Saddle — tame a wild mount, then press E to ride it.'); } },
   {id:'wood_torch', name:'🔥 Wood Torch', cat:'tool', lvl:3, cost:{wood:3}, build:p=>gainOffhand('wood_torch') },
   {id:'crystal_torch', name:'🔆 Crystal Torch', cat:'tool', lvl:12, cost:{crystal:3,wood:1}, build:p=>gainOffhand('crystal_torch') },
   {id:'magic_torch', name:'✨ Magic Torch', cat:'tool', lvl:30, cost:{crystal:5,boss_core:1}, build:p=>gainOffhand('magic_torch') },
@@ -2505,6 +2509,23 @@ function monMove(m,dirx,dirz,sp){   // WALL-AWARE chase: try the direct step, el
   if(Math.abs(dirz)>0.01 && !blockedAt(m.position.x,nz)){ m.position.z=nz; return; }
   const px=-dirz, pz=dirx; if(!blockedAt(m.position.x+px*sp,m.position.z+pz*sp)){ m.position.x+=px*sp; m.position.z+=pz*sp; }
   else if(!blockedAt(m.position.x-px*sp,m.position.z-pz*sp)){ m.position.x-=px*sp; m.position.z-=pz*sp; } }
+// ════════ RIDABLE MOUNTS ════════ rare wild horses/stag/unicorn — tame by feeding, craft a Saddle, then ride (faster travel)
+const MOUNTS={ horse:{name:'Horse',model:'mount-horse',speedMul:1.85,h:2.3,seatY:1.5,rarity:1,faceOff:0}, stag:{name:'Wild Stag',model:'mount-stag',speedMul:2.05,h:2.2,seatY:1.45,rarity:2,faceOff:0}, unicorn:{name:'Unicorn',model:'mount-unicorn',speedMul:2.4,h:2.4,seatY:1.6,rarity:3,faceOff:0} };
+const mounts=[];
+function buildMount(key){ const M=MOUNTS[key]; const g=buildMobGLB(M.model, M.h, null); g.userData={mountKey:key, wander:rand(0,TAU), wt:rand(2,5), bond:0, tamed:false}; return g; }
+function spawnMounts(){ for(const [k,n] of [['horse',2],['stag',1],['unicorn',1]]){ for(let i=0;i<n;i++){ const a=rand(0,TAU), r=rand(70,FENCE-30), x=Math.cos(a)*r, z=Math.sin(a)*r; if(typeof isInWater==='function'&&isInWater(x,z,9))continue; const g=buildMount(k); g.position.set(x,groundY(x,z),z); world.add(g); mounts.push(g); addInteractable(g, '🐴 '+MOUNTS[k].name, ()=>mountInteract(g), 3.4); } } }
+function mountInteract(g){ const k=g.userData.mountKey, M=MOUNTS[k];
+  if(state.mounted && state.mounted.mesh===g){ dismount(); return; }
+  if(state.mounted){ toast('🐴 Dismount your current mount first.'); return; }
+  if(!g.userData.tamed){ const food=['carrot','apple','flower'].find(f=>(state.inv[f]||0)>0); if(!food){ toast('🐴 The '+M.name+' is skittish — bring a 🥕 carrot or 🍎 apple to win it over.'); SFX.play('interact',{rate:0.7,vol:0.4}); return; }
+    Inv.take(food,1); g.userData.bond=(g.userData.bond||0)+1; SFX.play('interact'); try{ confetti(g.position.clone().setY(1.6),12); }catch(e){}
+    if(g.userData.bond>=(M.rarity+1)){ g.userData.tamed=true; toast('💚 The '+M.name+' trusts you! Craft a 🐴 Saddle (press C), then press E to ride.'); }
+    else toast('🐴 The '+M.name+' nibbles your '+ITEMS[food].n+'… ('+g.userData.bond+'/'+(M.rarity+1)+' to tame)'); return; }
+  if((state.inv.saddle||0)<1){ toast('🐴 The '+M.name+' is tame — but you need a 🐴 Saddle to ride. Craft one (press C).'); return; }
+  state.mounted={mesh:g,key:k,speedMul:M.speedMul,seatY:M.seatY}; toast('🐴 Riding the '+M.name+'! You move faster. Press E (near it) to dismount.'); SFX.play('success'); shake(0.2); }
+function dismount(){ if(!state.mounted)return; const M=MOUNTS[state.mounted.key]; state.mounted=null; toast('🐴 Dismounted the '+(M?M.name:'mount')+'.'); }
+function updateMounts(dt){ for(const g of mounts){ if(state.mounted&&state.mounted.mesh===g)continue; const u=g.userData; u.wt-=dt; if(u.wt<=0){ u.wander=rand(0,TAU); u.wt=rand(2.5,6); } const sp=(u.tamed?0.5:1.2); g.position.x+=Math.cos(u.wander)*sp*dt; g.position.z+=Math.sin(u.wander)*sp*dt; const r=Math.hypot(g.position.x,g.position.z); if(r>FENCE-14)u.wander+=Math.PI; g.position.y=groundY(g.position.x,g.position.z); g.rotation.y=angLerp(g.rotation.y, faceVel(Math.cos(u.wander),Math.sin(u.wander))+(MOUNTS[u.mountKey].faceOff||0), dt*4); } }
+function updateRiddenMount(){ if(!state.mounted)return; const g=state.mounted.mesh, gy=groundY(player.position.x,player.position.z); g.position.set(player.position.x, gy, player.position.z); g.rotation.y=player.rotation.y+(MOUNTS[state.mounted.key].faceOff||0); if(player.position.y < gy+state.mounted.seatY) player.position.y=gy+state.mounted.seatY; }
 function updatePlayer(dt){
   if(state._atkCD>0) state._atkCD-=dt;   // attack-speed cooldown tick (energy-gated)
   // SWIM: is the player over a pond/river? (not underground)
@@ -2517,7 +2538,7 @@ function updatePlayer(dt){
   if(moving){ const l=Math.hypot(ix,iz); ix/=l; iz/=l; const cs=Math.cos(cam.yaw),sn=Math.sin(cam.yaw);
     mvx=-iz*sn-ix*cs; mvz=-iz*cs+ix*sn; const tgt=Math.atan2(mvx,mvz)+CHAR_FWD;
     player.rotation.y=angLerp(player.rotation.y,tgt,dt*12);
-    const sp=((sprint&&Needs.canSprint())?9:5)*Needs.moveMul()*(_wz?0.55:1); player.position.x+=mvx*sp*dt; player.position.z+=mvz*sp*dt; resolve();   // swimming = slower
+    const sp=((sprint&&Needs.canSprint())?9:5)*Needs.moveMul()*(_wz?0.55:1)*(state.mounted?state.mounted.speedMul:1); player.position.x+=mvx*sp*dt; player.position.z+=mvz*sp*dt; resolve();   // mounted = faster travel
     if(grounded){ stepT-=dt; if(stepT<=0){ SFX.play('step'); stepT=sprint?0.26:0.4; } } }
   if(!MINE.inMine && !DUNGEON.inDungeon){   // TRUE WRAP (surface, every frame): walk off one edge -> appear on the other. The shader renders modulo WRAP_P so wrapping the coord by exactly WRAP_P is SEAMLESS (no visible jump); shift the camera by the same delta so it doesn't lerp across the seam.
     const HW=WRAP_P*0.5;
@@ -3459,7 +3480,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`animals ${animals.length}  R[${span(animals,a=>Math.hypot(a.mesh.position.x,a.mesh.position.z))}]\n`
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
-function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
+function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
 function idleTick(dt){ cam.yaw+=dt*0.12; cam.targetYaw=cam.yaw; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
@@ -3665,7 +3686,7 @@ document.getElementById('keepBtn').onclick=()=>document.getElementById('winScree
 
 /* QA probe */
 window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.toFixed(2),z:+player.position.z.toFixed(2)}),
-  state, ready:()=>ready, anim:()=>charAnim, models:()=>Object.keys(MODELS).length, neighbors:()=>neighbors.length, classPick:()=>openClassPick(), applyClass:(c,g)=>applyClass(c,g), openDyer:()=>openDyer(),
+  state, ready:()=>ready, anim:()=>charAnim, models:()=>Object.keys(MODELS).length, neighbors:()=>neighbors.length, classPick:()=>openClassPick(), applyClass:(c,g)=>applyClass(c,g), openDyer:()=>openDyer(), mountsInfo:()=>mounts.map(g=>({x:+g.position.x.toFixed(1),z:+g.position.z.toFixed(1),k:g.userData.mountKey})),
   needs:()=>({h:Math.round(Needs.hunger),e:Math.round(Needs.energy),f:Math.round(Needs.fun)}), day:()=>({day:state.day,giggle:state.giggle,goals:state.goals.map(g=>({t:g.type,done:g.done}))}),
   tp:(x,z)=>player.position.set(x,0,z), setKey:(c,d)=>keys[c]=d, yaw:()=>cam.yaw, mark:t=>markGoal(t), genGoals,
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
@@ -3766,6 +3787,13 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       for(let i=playerShots.length-1;i>=ps0;i--){ try{world.remove(playerShots[i].mesh);}catch(e){} } playerShots.length=ps0;
       R.class_combat=(boltOK && spellOK && gateOK && !!SPELLS.fireball && !!SP_ARROWS.fire_arrow);
       state.charClass=_c0; state.weapon=_w0; state.weapons=_wp0; state.manaMax=_mm0; state.mana=_mn0; state._atkCD=_cd0; state.selectedSlot=_ss0; state.quickItems=_qi0; state.inv.spell_fireball=_sf0; }
+    // MOUNTS: tame (feed) -> need saddle -> ride (faster) -> dismount
+    { const _m0=state.mounted, _sad=state.inv.saddle||0; const g=buildMount('horse'); g.position.set(player.position.x+2,0,player.position.z); world.add(g); mounts.push(g);
+      g.userData.tamed=true; state.inv.saddle=0; mountInteract(g); const needSaddle=!state.mounted;   // tamed but NO saddle -> can't ride yet
+      state.inv.saddle=1; mountInteract(g); const rodeOK=!!(state.mounted&&state.mounted.mesh===g); const spd=state.mounted?state.mounted.speedMul:1; dismount(); const offOK=(state.mounted===null);
+      world.remove(g); const gi=mounts.indexOf(g); if(gi>=0)mounts.splice(gi,1);
+      R.mounts=(needSaddle && rodeOK && spd>1.5 && offOK && !!MOUNTS.horse && !!MOUNTS.stag && !!MOUNTS.unicorn);
+      state.mounted=_m0; state.inv.saddle=_sad; }
     // PERSISTENT REQUESTS LIST renders
     state.req=null; townBoard(); renderRequests(); R.requests_list=/Board/.test(document.getElementById('reqlist').innerHTML);
     // TOWN LEGEND post-game checklist renders
@@ -4017,7 +4045,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       &&R.event_active&&R.event_market&&R.shop_closed_night&&R.shop_open_day&&R.onboarding_done&&R.friendship&&R.requests_list&&R.town_legend
       &&R.pause_works&&R.cam_pitch_clamped&&R.ambient
       &&R.head&&R.assetsClean&&R.touch&&R.touch_moves&&R.raf_boundary&&R.pause_freezes_cook&&R.cook_completes&&R.sfx_gate&&R.reduce_motion&&R.reduce_confetti&&R.light_cap&&R.save_sanitized&&R.particle_pool
-      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2&&R.class_system&&R.class_combat
+      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2&&R.class_system&&R.class_combat&&R.mounts
       &&R.homes_present&&R.home_built&&R.home_loot&&R.home_enter_path&&R.recipe_page_unlock&&R.node_respawn&&R.chest_oneuse
       &&R.weapon_craft&&R.combat_kill&&R.combat_respawn&&R.inv_slots
       &&R.mine_pickaxe&&R.mine_enter&&R.mine_dig&&R.mine_exit&&R.armor_craft&&R.armor_reduces&&R.rarity_tiers&&R.rarity_loot&&R.combat_anim&&R.gear_equip&&R.dice_rolls&&R.dmg_popup&&R.menu;
