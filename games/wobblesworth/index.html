@@ -927,7 +927,7 @@ function addInteractable(node,label,action,radius=2.4){ const it={node,label,act
 /* ---------- GLB asset loader ---------- */
 const MODELS={}, ANIMS={};
 const MODEL_LIST=["char_player","char_n1","char_n2","char_n3","House_1","House_2","House_3","HouseWooden",
- "Hut","MillBuilding1","Well","Barn","DogHouse","Tree_1","Tree_2","Tree_3","Tree_4","Cactus1","Grass","Grass3",
+ "Hut","MillBuilding1","Well","Barn","DogHouse","Tree_1","Tree_2","Tree_3","Tree_4","Cactus1","cactus_1","cactus_2","cactus_3","Grass","Grass3",
  "GrassLeaf1","Flower1","Flower2","Flower3","MushroomRed","Barrel","Chest","Lantern","Bridge","Carriage","Boat","Coin","Cloud1","Cloud2","Cloud3",
  // RESOURCE NODES — these MUST load or stone/crystal/carrot won't exist and their quests become impossible:
  "Cube","Crystal1","Crystal2","Crystal3","Crystal4","Carrot","Cabbage","CarrotGroup",
@@ -1082,7 +1082,7 @@ function buildZones(){
   const _dt=[], _reeds=[];
   for(let i=0;i<110;i++){ const a=rand(0,TAU), r=rand(120,165), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,7))continue; _dt.push({x,z,h:rand(5,8)}); }   // spooky transition band into the swamp
   for(let i=0;i<260;i++){ const a=rand(0,TAU), r=rand(178,318), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||swampMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(4.5,7.5)}); if(Math.random()<0.5)_reeds.push({x:x+rand(-2.2,2.2),z:z+rand(-2.2,2.2),h:rand(1.0,1.9)}); }   // 🟣 SWAMP: dense dead trees + scattered cattail reeds
-  for(let i=0;i<230;i++){ const a=rand(0,TAU), r=rand(318,438), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||desertMask(x,z)<0.35)continue; if(Math.random()<0.74){ const c=place('Cactus1',x,z,{targetH:rand(1.6,3.4),rotY:rand(0,TAU)}); if(c)c.traverse(m=>{if(m.isMesh)m.castShadow=false;}); } else { const rk=makeRock(x,z,rand(1.2,2.6)); rk.traverse(m=>{if(m.isMesh)m.castShadow=false;}); world.add(rk); } }   // 🟤 DESERT: cacti + dry rocks (no trees; no shadow-cull on distant props)
+  for(let i=0;i<230;i++){ const a=rand(0,TAU), r=rand(318,438), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||desertMask(x,z)<0.35)continue; if(Math.random()<0.74){ const c=place(pick(['cactus_1','cactus_2','cactus_3']),x,z,{targetH:rand(1.6,3.4),rotY:rand(0,TAU)}); if(c)c.traverse(m=>{ if(m.isMesh){ m.castShadow=false; m.material=new THREE.MeshToonMaterial({color:'#4f7d35',gradientMap:GRAD}); } }); } else { const rk=makeRock(x,z,rand(1.2,2.6)); rk.traverse(m=>{if(m.isMesh)m.castShadow=false;}); world.add(rk); } }   // 🟤 DESERT: BRANCHED BitGem cacti (forced non-emissive) + dry rocks (no trees; no shadow-cull on distant props)
   for(let i=0;i<260;i++){ const a=rand(0,TAU), r=rand(418,FENCE-10), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||darkMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(5,9)}); }   // ⚫ DARK BURNT CORE: very dense dead/burnt trees
   mergeDeadTrees(_dt, false);   // PERF: all biome dead trees -> ONE merged mesh, no per-tree shadow-cull
   for(const p of SWAMP_POOLS){ for(let k=0;k<9;k++){ const a=rand(0,TAU), rr=p.r*rand(0.95,1.4), rx=p.x+Math.cos(a)*rr, rz=p.z+Math.sin(a)*rr; if(swampMask(rx,rz)>0.3) _reeds.push({x:rx,z:rz,h:rand(1.2,2.1)}); } }   // 🌾 cattails ring each swamp pool (bog edges)
@@ -1090,7 +1090,7 @@ function buildZones(){
   for(let i=0;i<36;i++){ const x=rand(-300,300),z=rand(-580,-90); if(isInWater(x,z,2))continue; addNode('MushroomRed',x,z,{item:'mushroom',amount:1,targetH:1.1,respawn:30}); }
   // ⛏️ CRYSTAL QUARRY (east) — stone + crystals
   for(let i=0;i<52;i++){ const x=rand(120,580),z=rand(-300,300); if(isInWater(x,z,5))continue; const r=makeRock(x,z,rand(1.5,2.6)); world.add(r); addNode(r,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); }
-  for(let i=0;i<38;i++){ const x=rand(120,580),z=rand(-300,300); if(isInWater(x,z,3))continue; addNode(pick(['Crystal1','Crystal2','Crystal3','Crystal4']),x,z,{item:'crystal',amount:1,targetH:rand(1.2,2),respawn:40,label:'Mine a crystal'}); }
+  for(let i=0;i<38;i++){ const x=rand(120,580),z=rand(-300,300); if(isInWater(x,z,3))continue; if(desertMask(x,z)>0.4){ const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); } else addNode(pick(['Crystal1','Crystal2','Crystal3','Crystal4']),x,z,{item:'crystal',amount:1,targetH:rand(1.2,2),respawn:40,label:'Mine a crystal'}); }   // quarry crystals that bleed into the desert ring -> stone (emissive crystals would BLOOM in the sand)
   // ⛏️ MINE ENTRANCE (Crystal Quarry) — craft a Pickaxe, press E here to descend into the voxel mine
   { const me=box(3.2,1.4,3.2,'#3a342e'); me.position.set(92,0.7,6); world.add(me); addSolid(me,0,false);
     const rim=box(3.6,0.4,3.6,'#5a544c'); rim.position.set(92,1.5,6); world.add(rim);
@@ -1102,12 +1102,12 @@ function buildZones(){
   for(let i=0;i<26;i++){ const a=Math.PI+rand(-1.0,1.0), r=rand(98,168), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,7))continue; const t=makeTree(x,z,rand(5,6.5),{fruit:'#e8463a'}); world.add(t); addNode(t,x,z,{item:'apple',amount:2,respawn:28,label:'Pick apples',solid:'trunk'}); }   // apple orchard in the GREEN west hills (r98-168) — reliably reachable + on-theme (no fruit trees in swamp/desert/dark)
   // 🏖️ PEBBLE BEACH (south) — coins + flowers
   // (coin GATHER nodes removed — coins now come from fighting night monsters + home chests + neighbor gifts)
-  for(let i=0;i<44;i++){ const x=rand(-300,300),z=rand(120,580); if(isInWater(x,z,2))continue; const F=pickFlower(); addNode(F.model,x,z,{item:F.item,tint:F.tint,amount:1,targetH:0.7,respawn:22}); }   // 🌸 various colored flowers -> color-keyed petals (dyes + arrows)
+  for(let i=0;i<44;i++){ const x=rand(-300,300),z=rand(120,580); if(isInWater(x,z,2))continue; if(desertMask(x,z)>0.3||darkMask(x,z)>0.3)continue; const F=pickFlower(); addNode(F.model,x,z,{item:F.item,tint:F.tint,amount:1,targetH:0.7,respawn:22}); }   // 🌸 colored flowers -> petals; GUARDED out of desert/dark (no neon flowers glowing in the sand)
   // 🗺️ DEEP OUTSKIRTS scatter (owner: "really deep into the jungle... almost no crafting"). The 4 biome strips above leave the far diagonal corners + the outer ring empty; this RADIAL scatter (all directions, r 200→fence) seeds wood/stone/crystal out there so the far field is worth the trek — and gives the new night mobs a reason to be there.
   for(let i=0;i<88;i++){ const a=rand(0,TAU), r=rand(200,FENCE-30), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6))continue; const roll=Math.random();   // DENSER outskirts (44->88): the long trek out should reward you with resources, not empty land
     if(roll<0.35){ const t=_resourceTree(x,z,rand(5,7)); if(t){ world.add(t); addNode(t,x,z,{item:'wood',amount:2,respawn:24,label:'Chop for wood',solid:'trunk'}); } else { const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); } }   // desert -> stone instead of a tree
     else if(roll<0.75){ const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); }
-    else { addNode(pick(['Crystal1','Crystal2','Crystal3','Crystal4']),x,z,{item:'crystal',amount:1,targetH:rand(1.2,2),respawn:40,label:'Mine a crystal'}); } }
+    else { if(desertMask(x,z)>0.4){ const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); } else { addNode(pick(['Crystal1','Crystal2','Crystal3','Crystal4']),x,z,{item:'crystal',amount:1,targetH:rand(1.2,2),respawn:40,label:'Mine a crystal'}); } } }   // emissive crystals would bloom in the sand -> desert ring gets stone instead
   // town scatter: a few coins + flowers + apple trees so you can gather near home too
   for(let i=0;i<6;i++){ const a=rand(0,TAU),r=rand(20,44); const F=pickFlower(); addNode(F.model,Math.cos(a)*r,Math.sin(a)*r,{item:F.item,tint:F.tint,amount:1,targetH:0.7,respawn:22}); }
 
