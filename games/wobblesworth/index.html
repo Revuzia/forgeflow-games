@@ -876,7 +876,7 @@ function buildWorld(){
   buildGrassField();   // dense 3D grass blades (owner: real-looking grass)
   // grid of textured dirt streets across the whole town
   function road(x,z,w,d){ const dt=TEX.dirt.clone(); dt.needsUpdate=true; dt.repeat.set(Math.max(1,w/8),Math.max(1,d/8)); const r=new THREE.Mesh(new THREE.PlaneGeometry(w,d), new THREE.MeshToonMaterial({map:dt,gradientMap:GRAD})); r.rotation.x=-Math.PI/2; r.position.set(x,0.02,z); r.receiveShadow=true; world.add(r); }
-  road(0,0,8,210); road(0,0,210,8);                        // main cross
+  road(0,0,8,178); road(0,0,178,8);                        // main cross — length 178 keeps both ends within TOWN_FLAT=90 (r<=89, terrain flat) so the road never clips the rising hills at its tips
   for(const z of [-56,-28,28,56]) road(0,z,150,7);          // east-west streets
   for(const x of [-56,-28,28,56]) road(x,0,7,150);          // north-south streets
 
@@ -1097,6 +1097,7 @@ function buildHamlets(startIdx){   // 5 hamlets of 2-4 enterable homes scattered
   if(treeSpecs.length) mergeDecorTrees(treeSpecs);   // hamlet groves -> merged meshes (draw calls stay low)
   buildWildWanderers();
   try{ spawnMounts(); }catch(e){}   // rare wild mounts (horse/stag/unicorn) roaming the outskirts
+  try{ spawnHermit(); }catch(e){}   // Wynn the Hermit out in the gloom — giver of the Restless Grove quest chain
 }
 /* fetch-quest board: bring N of a resource -> coins + a bonus item */
 function townBoard(){
@@ -1214,7 +1215,8 @@ function buildInterior(home){
   const lamp=ball(0.28,'#ffe26a'); lamp.position.set(home.hx-1.6,1.2,home.hz-1.6); g.add(lamp);
   const npc=makeSimpleNPC(home.color, home.purpose); npc.position.set(0,0,home.hz-2.4); npc.userData.bob=Math.random()*TAU; g.add(npc);
   addInteractable(npc, `Talk to ${home.npcName}`, ()=>{ if(!home.active)return; npc.rotation.y=Math.atan2(player.position.x-(home.cx+npc.position.x), player.position.z-(home.cz+npc.position.z));
-    if(home.purpose==='blacksmith'){ if(questAvail('smith_hunt')){ offerQuest('smith_hunt','🔨 "A beast called Gnashtooth keeps raiding the outskirts. Hunt it down and I will reward you from the forge — boss-core and coin."'); return; } if(questActive('smith_hunt')&&!Quests.isDone('smith_hunt','slay')){ toast('🔨 '+home.npcName+': "Gnashtooth still draws breath — finish the hunt!"'); SFX.play('interact'); return; } }
+    if(home.purpose==='blacksmith'){ if(!chainDone('forge')){ offerChain('forge'); return; }   // marquee storyline: Bram's Ember Blade chain takes priority over the old one-off hunt
+      if(questAvail('smith_hunt')){ offerQuest('smith_hunt','🔨 "A beast called Gnashtooth keeps raiding the outskirts. Hunt it down and I will reward you from the forge — boss-core and coin."'); return; } if(questActive('smith_hunt')&&!Quests.isDone('smith_hunt','slay')){ toast('🔨 '+home.npcName+': "Gnashtooth still draws breath — finish the hunt!"'); SFX.play('interact'); return; } }
     toast(pick([`💬 ${home.npcName}: "Welcome in!"`,`💬 ${home.npcName}: "Make yourself at home."`,`💬 ${home.npcName}: "Cozy little place, isn't it?"`,`💬 ${home.npcName}: "Help yourself to the chest, neighbor."`])); SFX.play('interact'); }, 2.6);
   const chest=box(1.0,0.7,0.7,'#8a5a31'); chest.position.set(home.hx-1.4,0.55,-home.hz+1.4); g.add(chest);
   const lid=box(1.02,0.22,0.72,'#a9743f'); lid.position.set(0,0.46,-0.34); chest.add(lid); chest.userData.lid=lid; chest.userData.looted=false;
@@ -1628,7 +1630,7 @@ function npcStampOffer(key){ if(!state.npcOfferDay)state.npcOfferDay={}; state.n
 function offerQuest(id,pitch){ const d=Quests.defs[id]; if(!d)return false;
   if(d._gen){ if(state._boardDay!==state.day){ state._boardDay=state.day; state._boardTaken=0; } if((state._boardTaken||0)>=Q_PER_DAY){ toast("📜 That's your three bounties for today — fresh postings tomorrow!"); return false; } if(qActiveCount()>=Q_MAX_ACTIVE){ toast('📜 Journal full — finish a quest first.'); return false; } }
   styledConfirm(d.title, pitch||'Take on this quest?', '✓ Accept', ()=>{ state.activeQuests=state.activeQuests||{}; state.activeQuests[id]={accepted:true}; if(d._gen)state._boardTaken=(state._boardTaken||0)+1; Quests.complete(id,'accept'); SFX.play('interact'); toast('📜 Quest accepted: '+d.title); onQuestAccepted(id); if(typeof refreshBoard==='function')refreshBoard(); save(); }, ()=>{}, '✕ Not now'); return true; }
-function finishQuest(id){ const d=Quests.defs[id]; if(!d||!d.reward)return; const st=(state.activeQuests&&state.activeQuests[id]); if(st&&st.rewarded)return; if(st)st.rewarded=true; const r=d.reward; if(r.gp)state.giggle=(state.giggle||0)+r.gp; if(r.xp&&typeof gainXP==='function')gainXP(r.xp); if(r.items)for(const[k,n]of r.items)Inv.add(k,n); if(r.badge){ state.badges=state.badges||{}; state.badges[r.badge]=true; } state.questTarget=null; toast(r.msg||('🏆 Quest complete: '+d.title)); try{ SFX.play('success',{vol:0.6}); shake(0.4); confetti(player.position.clone().setY(2),40); }catch(e){} if(typeof renderRequests==='function')renderRequests();
+function finishQuest(id){ const d=Quests.defs[id]; if(!d||!d.reward)return; const st=(state.activeQuests&&state.activeQuests[id]); if(st&&st.rewarded)return; if(st)st.rewarded=true; const r=d.reward; if(r.gp)state.giggle=(state.giggle||0)+r.gp; if(r.xp&&typeof gainXP==='function')gainXP(r.xp); if(r.items)for(const[k,n]of r.items)Inv.add(k,n); if(r.badge){ state.badges=state.badges||{}; state.badges[r.badge]=true; } state.questTarget=null; toast(r.msg||('🏆 Quest complete: '+d.title)); try{ SFX.play('success',{vol:0.6}); shake(0.4); confetti(player.position.clone().setY(2),40); }catch(e){} if(typeof renderRequests==='function')renderRequests(); if(d._chain){ try{ advanceChain(d._chain.cid); }catch(e){} }   // a CHAIN step just paid out -> advance the storyline to the next chapter (or finish it)
   if(d._gen){ state.questHistory=state.questHistory||[]; if(d._sig)state.questHistory.push(d._sig); if(state.questHistory.length>40)state.questHistory.shift(); const _id=id; setTimeout(()=>{ try{ delete Quests.defs[_id]; if(state.activeQuests)delete state.activeQuests[_id]; }catch(e){} if(typeof refreshBoard==='function')refreshBoard(); Quests.render(); save(); }, 60); }   // spend the one-off gen def, refill the board so there's always a fresh quest
   save(); }
 function abandonQuest(id){ const d=Quests.defs[id]; if(!d)return; if(d._gen&&d._tid==='rescue'&&state._rescueNpc){ try{ world.remove(state._rescueNpc.node); const k=interactables.indexOf(state._rescueNpc.it); if(k>=0)interactables.splice(k,1); }catch(e){} state._rescueNpc=null; } if(d._gen&&d._tid==='boss_hunt'){ for(const c of creatures) if(c._questId===id) c._questId=null; } state.questTarget=null; if(d._sig){ state.questHistory=state.questHistory||[]; state.questHistory.push(d._sig); } if(state.activeQuests)delete state.activeQuests[id]; if(d._gen){ for(const s of d.steps) delete Quests.done[id+'.'+s.id]; delete Quests.defs[id]; } if(typeof refreshBoard==='function')refreshBoard(); Quests.render(); toast('📜 Quest abandoned.'); save(); }
@@ -1638,6 +1640,54 @@ function onQuestAccepted(id){
   else if(id==='rescue_one'){ spawnRescueCaptive(); }
   else if(Quests.defs[id]&&Quests.defs[id]._gen){ genSetup(id); }   // procedurally-generated board/NPC quest
 }
+// ════════════ NAMED QUEST CHAINS (WoW-style multi-step storylines from named givers; each step reuses simple objectives + pays through finishQuest, advancing on the _chain hook) ════════════
+const CHAINS={
+  forge:{ giver:'blacksmith', name:'Bram', title:'⚒️ The Ember Blade',
+    steps:[
+      {obj:'gather', item:'iron_ingot', count:3, label:'Gather 3 iron ingots for Bram', pitch:'⚒️ Bram: "My forge runs cold and a great blade waits in it. Bring me 3 iron ingots and we\'ll begin the Ember Blade."', reward:{gp:130,xp:26,items:[['coin',45]]}, done:'⚒️ Bram: "Fine ore. Now the steel must be proven."'},
+      {obj:'kill', count:4, spooky:true, label:'Fell 4 of the graveyard dead', pitch:'⚒️ Bram: "A blade is only as true as the hand that wields it. Fell 4 of the graveyard dead out past the markers, then return."', reward:{gp:200,xp:40,items:[['crystal',2],['coin',70]]}, done:'⚒️ Bram: "Tempered in battle. One last thing."'},
+      {obj:'reach', x:90, z:0, label:'Quench the blade at the Crystal Quarry (east)', pitch:'⚒️ Bram: "Quench the blade in the Crystal Quarry\'s cold spring to the east — then the Ember Blade is yours."', reward:{gp:340,xp:80,items:[['boss_core',1],['coin',160]], badge:'chain_forge', msg:'⚒️ Bram: "The Ember Blade is forged — and you forged it. A hero\'s reward, friend."'}},
+    ]},
+  grove:{ giver:'__hermit__', name:'Wynn', title:'🌫️ The Restless Grove',
+    steps:[
+      {obj:'kill', count:5, spooky:true, label:'Banish 5 of the wandering dead', pitch:'🌫️ Wynn: "The grove won\'t rest — the dead wander it nightly. Banish 5 of them for me."', reward:{gp:160,xp:32,items:[['crystal',2]]}, done:'🌫️ Wynn: "The whispers fade. But the ward needs stones."'},
+      {obj:'gather', item:'crystal', count:5, label:'Bring Wynn 5 crystals', pitch:'🌫️ Wynn: "Bring me 5 crystals and I\'ll ward the grove against the dark for good."', reward:{gp:220,xp:44,items:[['coin',80]]}, done:'🌫️ Wynn: "Warded. Now — the thing at its heart."'},
+      {obj:'boss', count:1, label:'Defeat a champion — the Grove Warden', pitch:'🌫️ Wynn: "A great wraith stirs at the heart of it. Defeat any boss or champion and the grove will sleep at last."', reward:{gp:400,xp:95,items:[['boss_core',2],['coin',200]], badge:'chain_grove', msg:'🌫️ Wynn: "It is done. The grove is quiet. You have my thanks — and this."'}},
+    ]},
+};
+function chainQid(cid){ return 'chain_'+cid; }
+function chainIdx(cid){ return (state.chainStep&&state.chainStep[cid])||0; }
+function chainDone(cid){ return chainIdx(cid)>=CHAINS[cid].steps.length; }
+function chainCurStep(cid){ return CHAINS[cid].steps[chainIdx(cid)]||null; }
+function chainBuildDef(cid){ const C=CHAINS[cid], step=chainCurStep(cid), idx=chainIdx(cid); if(!step)return null; Quests.defs[chainQid(cid)]={title:C.title+' ('+(idx+1)+'/'+C.steps.length+')', kind:'bounty', steps:[{id:'accept',t:'Accept from '+C.name},{id:'do',t:step.label}], reward:step.reward, _chain:{cid}}; return step; }
+function offerChain(cid){ const C=CHAINS[cid]; if(!C)return false;
+  if(chainDone(cid)){ toast('🏅 '+C.name+': "We did great things together, hero. Rest easy."'); SFX.play('interact'); return true; }
+  const qid=chainQid(cid);
+  if(questActive(qid)){ const step=chainCurStep(cid); toast('📜 '+C.name+': "'+step.label+' — I\'m counting on you."'); SFX.play('interact'); return true; }
+  const step=chainBuildDef(cid);
+  styledConfirm(C.title, step.pitch, '✓ Accept', ()=>{ state.activeQuests=state.activeQuests||{}; const aq={accepted:true, kills:0}; if(step.obj==='gather')aq.base=(state.inv[step.item]||0); if(step.obj==='boss')aq.base=(state._bosses||0); state.activeQuests[qid]=aq; Quests.complete(qid,'accept'); SFX.play('interact'); toast('📜 Quest accepted: '+step.label); Quests.render(); save(); }, ()=>{}, '✕ Not now');
+  return true;
+}
+function chainOnKill(c){ if(!c||!c.type)return; for(const cid in CHAINS){ const qid=chainQid(cid); if(!questActive(qid)||Quests.isDone(qid,'do'))continue; const step=chainCurStep(cid); if(!step||step.obj!=='kill')continue; if(step.spooky && !SPOOKY_ENEMIES.includes(loreKeyOf(c.type)))continue; const aq=state.activeQuests[qid]; aq.kills=(aq.kills||0)+1; if(aq.kills<step.count){ toast('📜 '+CHAINS[cid].title+': '+aq.kills+'/'+step.count); Quests.render(); } } }
+function pollChains(){ for(const cid in CHAINS){ const qid=chainQid(cid); if(!questActive(qid)||Quests.isDone(qid,'do'))continue; const step=chainCurStep(cid); if(!step)continue; const aq=state.activeQuests[qid]; let met=false;
+  if(step.obj==='gather') met=((state.inv[step.item]||0)-(aq.base||0))>=step.count;
+  else if(step.obj==='reach') met=Math.hypot(player.position.x-step.x, player.position.z-step.z)<11;
+  else if(step.obj==='kill') met=(aq.kills||0)>=step.count;
+  else if(step.obj==='boss') met=((state._bosses||0)-(aq.base||0))>=step.count;
+  if(met) Quests.complete(qid,'do');   // all steps done + reward -> finishQuest -> advanceChain
+} }
+function advanceChain(cid){ const C=CHAINS[cid], step=chainCurStep(cid), qid=chainQid(cid);
+  state.chainStep=state.chainStep||{}; state.chainStep[cid]=chainIdx(cid)+1;
+  if(state.activeQuests)delete state.activeQuests[qid]; delete Quests.defs[qid]; delete Quests.done[qid+'.accept']; delete Quests.done[qid+'.do'];
+  if(chainDone(cid)){ toast('🏅 STORYLINE COMPLETE — '+C.title+'!'); try{ SFX.play('success',{vol:0.6}); shake(0.5); }catch(e){} }
+  else { toast('📜 '+(step&&step.done?step.done+' ':'')+'Return to '+C.name+' for the next chapter.'); }
+  Quests.render(); if(typeof save==='function')save();
+}
+function rebuildActiveChains(){ for(const cid in CHAINS){ if(state.activeQuests&&state.activeQuests[chainQid(cid)]&&!chainDone(cid)) chainBuildDef(cid); } }   // on load the activeQuest persists but Quests.defs is code -> rebuild the active step's def so the journal + poll keep working
+function spawnHermit(){ const x=-96, z=-132, gy=groundY(x,z); const npc=makeSimpleNPC('#8a9a7a','hermit'); npc.position.set(x,gy,z); npc.rotation.y=1.2; world.add(npc);
+  addInteractable(npc, '🌫️ Speak with Wynn the Hermit', ()=>offerChain('grove'), 3.0);
+  const post=box(0.16,2.0,0.16,'#5a4a32'); post.position.set(x+1.3,gy+1.0,z); world.add(post);   // a lantern post marks the storyline giver out in the gloom
+  const lant=ball(0.24,'#bfe9ff'); lant.position.set(x+1.3,gy+2.0,z); world.add(lant); try{ addDynLight('#bfe9ff',1.4,9,x+1.3,gy+2.0,z); }catch(e){} }
 function spawnRescueCaptive(qid){ qid=qid||'rescue_one'; if(state._rescueNpc){ try{ world.remove(state._rescueNpc.node); }catch(e){} state._rescueNpc=null; }
   const a=rand(0,TAU); let x=Math.cos(a)*rand(120,180), z=-(60+Math.abs(Math.sin(a))*150);   // far out in the woods (negative z)
   const R=Math.hypot(x,z); if(R>FENCE-14){ const k=(FENCE-14)/R; x*=k; z*=k; }
@@ -1836,7 +1886,7 @@ function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
   unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, charClass:state.charClass, mana:state.mana, manaMax:state.manaMax, dyeColor:state.dyeColor, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, hasRod:state.hasRod, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier, bagCount:state.bagCount, charModel:state.charModel,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
-  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, questHistory:state.questHistory, _qseq:state._qseq, boardOffers:state.boardOffers, _boardTaken:state._boardTaken, _boardDay:state._boardDay, npcOfferDay:state.npcOfferDay, genDefs:(()=>{const o={};for(const k in Quests.defs){const d=Quests.defs[k];if(d&&d._gen)o[k]={title:d.title,tid:d._tid,p:d._p,pitch:d._pitch,sig:d._sig,reward:d.reward,steps:d.steps};}return o;})(), lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
+  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, chainStep:state.chainStep, questHistory:state.questHistory, _qseq:state._qseq, boardOffers:state.boardOffers, _boardTaken:state._boardTaken, _boardDay:state._boardDay, npcOfferDay:state.npcOfferDay, genDefs:(()=>{const o={};for(const k in Quests.defs){const d=Quests.defs[k];if(d&&d._gen)o[k]={title:d.title,tid:d._tid,p:d._p,pitch:d._pitch,sig:d._sig,reward:d.reward,steps:d.steps};}return o;})(), lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug,
   tamedMounts:(typeof tamedMountSaveList==='function'?tamedMountSaveList():[]), stables:(state.stables||[]) })); }catch(e){} }
 // VERSIONED + SANITIZED load: bad/corrupt/legacy data can never crash boot or inject impossible state
@@ -1869,7 +1919,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.craftedSet=(s.craftedSet&&typeof s.craftedSet==='object')?s.craftedSet:{}; state.reqsFulfilled=num(s.reqsFulfilled,0,0,1e9); state.biomes=(s.biomes&&typeof s.biomes==='object')?s.biomes:{}; state.event=DAY_EVENTS.find(e=>e.id===s.eventId)||null;
   if(typeof s.tod==='number'&&Number.isFinite(s.tod)) state.tod=((s.tod%1)+1)%1;
   if(s.volume!=null) state.volume=clamp(+s.volume||0,0,1); state.musicOn=(s.musicOn!==false); state.sfxOn=(s.sfxOn!==false); state.reduce=!!s.reduce;
-  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.quickItems=(s.quickItems&&typeof s.quickItems==='object')?s.quickItems:{}; state.activeQuests=(s.activeQuests&&typeof s.activeQuests==='object')?s.activeQuests:{}; state.questHistory=Array.isArray(s.questHistory)?s.questHistory:[]; state._qseq=num(s._qseq,0,0,1e9); state.boardOffers=Array.isArray(s.boardOffers)?s.boardOffers:[]; state._boardTaken=num(s._boardTaken,0,0,9); state._boardDay=num(s._boardDay,0,0,1e9); state.npcOfferDay=(s.npcOfferDay&&typeof s.npcOfferDay==='object')?s.npcOfferDay:{}; if(s.genDefs&&typeof s.genDefs==='object'){ for(const k in s.genDefs){ const g=s.genDefs[k]; if(g&&g.steps&&g.tid) Quests.defs[k]={title:g.title,kind:'bounty',steps:g.steps,reward:g.reward,_gen:true,_tid:g.tid,_p:g.p,_pitch:g.pitch,_sig:g.sig}; } } state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{}; state.badges=(s.badges&&typeof s.badges==='object')?s.badges:{};
+  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.quickItems=(s.quickItems&&typeof s.quickItems==='object')?s.quickItems:{}; state.activeQuests=(s.activeQuests&&typeof s.activeQuests==='object')?s.activeQuests:{}; state.chainStep=(s.chainStep&&typeof s.chainStep==='object')?s.chainStep:{}; try{ rebuildActiveChains(); }catch(e){} state.questHistory=Array.isArray(s.questHistory)?s.questHistory:[]; state._qseq=num(s._qseq,0,0,1e9); state.boardOffers=Array.isArray(s.boardOffers)?s.boardOffers:[]; state._boardTaken=num(s._boardTaken,0,0,9); state._boardDay=num(s._boardDay,0,0,1e9); state.npcOfferDay=(s.npcOfferDay&&typeof s.npcOfferDay==='object')?s.npcOfferDay:{}; if(s.genDefs&&typeof s.genDefs==='object'){ for(const k in s.genDefs){ const g=s.genDefs[k]; if(g&&g.steps&&g.tid) Quests.defs[k]={title:g.title,kind:'bounty',steps:g.steps,reward:g.reward,_gen:true,_tid:g.tid,_p:g.p,_pitch:g.pitch,_sig:g.sig}; } } state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{}; state.badges=(s.badges&&typeof s.badges==='object')?s.badges:{};
   state.homeTier=num(s.homeTier,0,0,3); for(let i=1;i<=state.homeTier;i++) applyHomeTier(i);   // rebuild purchased home upgrades
   state.homePaints=(s.homePaints&&typeof s.homePaints==='object')?s.homePaints:{}; loadBlocks(s.buildBlocks); applyHomePaints();   // restore voxel builds + house repaints (buildWorld ran first, so homes exist)
   for(const k in VOX.meshes) world.remove(VOX.meshes[k]); VOX.dug={}; VOX.meshes={};   // restore carved terrain
@@ -3407,7 +3457,7 @@ function renderLore(){ const el=document.getElementById('lore'); if(!el)return; 
     if(tier>=3){ const tr=deriveTraits(t||{}); body+=`<div style="font-size:11px;opacity:.9;margin-top:4px;line-height:1.35">${tr.length?tr.join('<br>'):'A simple creature.'}</div>`; }
     h+=`<div style="padding:8px;border:2px solid ${L.boss?'#c77dff':'#4a7a4a'};border-radius:10px;background:rgba(0,0,0,0.22)"><div style="font-size:24px;text-align:center">${icon}</div><div style="font-weight:800;text-align:center;margin-bottom:3px">${L.name}</div>${body}</div>`; }
   h+=`</div><div style="text-align:center;opacity:.6;font-size:11px;margin-top:10px">Press L or ✕ to close</div></div>`; el.innerHTML=h; const x=el.querySelector('#loreX'); if(x)x.onclick=closeLore; }
-function killCreature(i){ const c=creatures[i]; recordLore(c); const p=c.mesh.position.clone(); confetti(p.clone().setY(1.2),16);
+function killCreature(i){ const c=creatures[i]; recordLore(c); try{ chainOnKill(c); }catch(e){} const p=c.mesh.position.clone(); confetti(p.clone().setY(1.2),16);
   const burst=new THREE.Mesh(new THREE.SphereGeometry(0.4,8,8), new THREE.MeshBasicMaterial({color:'#9bffae',transparent:true,opacity:0.75})); burst.position.copy(p).setY(0.8); world.add(burst); ephemeral.push({node:burst,life:0.3,ripple:true});   // death pop
   if(c.hpbar){ c.mesh.remove(c.hpbar); c.hpbar=null; }
   world.remove(c.mesh); creatures.splice(i,1);
@@ -3559,7 +3609,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`animals ${animals.length}  R[${span(animals,a=>Math.hypot(a.mesh.position.x,a.mesh.position.z))}]\n`
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
-function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updateFishing(dt); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
+function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
 function idleTick(dt){ cam.yaw+=dt*0.12; cam.targetYaw=cam.yaw; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
@@ -3765,7 +3815,7 @@ document.getElementById('keepBtn').onclick=()=>document.getElementById('winScree
 
 /* QA probe */
 window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.toFixed(2),z:+player.position.z.toFixed(2)}),
-  state, ready:()=>ready, anim:()=>charAnim, models:()=>Object.keys(MODELS).length, neighbors:()=>neighbors.length, classPick:()=>openClassPick(), applyClass:(c,g)=>applyClass(c,g), openDyer:()=>openDyer(), mountsInfo:()=>mounts.map(g=>({x:+g.position.x.toFixed(1),z:+g.position.z.toFixed(1),k:g.userData.mountKey,tamed:!!g.userData.tamed,bond:g.userData.bond||0})), stablesInfo:()=>(state.stables||[]).slice(), buildRecipe:(id,x,z)=>{ const r=RECIPES.find(x2=>x2.id===id); if(r)r.build({x,z}); }, runMountRunaway:()=>mountRunaway(), groundAt:(x,z)=>groundY(x,z), waterZonesInfo:()=>waterZones.map(w=>({x:+w.x.toFixed(0),z:+w.z.toFixed(0),r:+(w.r||0).toFixed(0),vr:+(w.vr||0).toFixed(0),sy:+w.surfaceY.toFixed(2)})), basinsInfo:()=>WATER_BASINS.map(b=>({x:b.x,z:b.z,rs:+b.rs.toFixed(0),rb:+b.rb.toFixed(0),floor:+b.floor.toFixed(2),yy:+b.yy.toFixed(2)})), cast:()=>castOrReel(), fishState:()=>({active:!!FISH.active,biting:!!FISH.biting}), faceY:(y)=>{ player.rotation.y=y; },
+  state, ready:()=>ready, anim:()=>charAnim, models:()=>Object.keys(MODELS).length, neighbors:()=>neighbors.length, classPick:()=>openClassPick(), applyClass:(c,g)=>applyClass(c,g), openDyer:()=>openDyer(), mountsInfo:()=>mounts.map(g=>({x:+g.position.x.toFixed(1),z:+g.position.z.toFixed(1),k:g.userData.mountKey,tamed:!!g.userData.tamed,bond:g.userData.bond||0})), stablesInfo:()=>(state.stables||[]).slice(), buildRecipe:(id,x,z)=>{ const r=RECIPES.find(x2=>x2.id===id); if(r)r.build({x,z}); }, runMountRunaway:()=>mountRunaway(), groundAt:(x,z)=>groundY(x,z), waterZonesInfo:()=>waterZones.map(w=>({x:+w.x.toFixed(0),z:+w.z.toFixed(0),r:+(w.r||0).toFixed(0),vr:+(w.vr||0).toFixed(0),sy:+w.surfaceY.toFixed(2)})), basinsInfo:()=>WATER_BASINS.map(b=>({x:b.x,z:b.z,rs:+b.rs.toFixed(0),rb:+b.rb.toFixed(0),floor:+b.floor.toFixed(2),yy:+b.yy.toFixed(2)})), cast:()=>castOrReel(), fishState:()=>({active:!!FISH.active,biting:!!FISH.biting}), faceY:(y)=>{ player.rotation.y=y; }, offerChain:(cid)=>offerChain(cid), chainInfo:()=>({forge:chainIdx('forge'), grove:chainIdx('grove'), defs:Object.keys(Quests.defs).filter(k=>k.indexOf('chain_')===0), journalHasChain:/chain|Ember|Grove/i.test((document.getElementById('qlist')||{}).innerHTML||'')}), hermitCount:()=>interactables.filter(i=>/Wynn/i.test(i.label||'')).length,
   needs:()=>({h:Math.round(Needs.hunger),e:Math.round(Needs.energy),f:Math.round(Needs.fun)}), day:()=>({day:state.day,giggle:state.giggle,goals:state.goals.map(g=>({t:g.type,done:g.done}))}),
   tp:(x,z)=>player.position.set(x,0,z), setKey:(c,d)=>keys[c]=d, yaw:()=>cam.yaw, mark:t=>markGoal(t), genGoals,
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
@@ -3863,6 +3913,16 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       const id=genQuestDef({tid:'craft_item',p:{count:2},title:'TQ Craft',pitch:'',tier:'small',sig:'craft_item'}); state.activeQuests[id]={accepted:true}; Quests.complete(id,'accept'); genSetup(id); qBump('craft'); qBump('craft'); const craftDone=Quests.isDone(id,'do');
       const id2=genQuestDef({tid:'collect_set',p:{set:['wood']},title:'TQ Set',pitch:'',tier:'small',sig:'collect_set'}); state.activeQuests[id2]={accepted:true}; Quests.complete(id2,'accept'); genSetup(id2); state.inv.wood=(state.inv.wood||0)+1; pollGenQuests(); const setDone=Quests.isDone(id2,'do');
       R.quest_gen2=(craftDone && setDone && state.giggle>_g); delete Quests.defs[id]; delete Quests.defs[id2]; delete state.activeQuests[id]; delete state.activeQuests[id2]; }
+    // QUEST CHAINS: accept Bram's forge chain, complete all 3 steps (gather -> kill -> reach), verify advancement + capstone badge
+    { const _ch=JSON.stringify(state.chainStep||{}), _aq=JSON.stringify(state.activeQuests||{}), _bd=JSON.stringify(state.badges||{}), _pp=player.position.clone();
+      state.chainStep={}; state.activeQuests=state.activeQuests||{};
+      const s1=chainBuildDef('forge'); const s1def=!!Quests.defs['chain_forge']; state.activeQuests['chain_forge']={accepted:true,base:(state.inv.iron_ingot||0)}; Quests.complete('chain_forge','accept');
+      Inv.add('iron_ingot',3); pollChains(); const after1=(chainIdx('forge')===1);   // gather met -> advance to step 2
+      chainBuildDef('forge'); state.activeQuests['chain_forge']={accepted:true,kills:4}; Quests.complete('chain_forge','accept'); pollChains(); const after2=(chainIdx('forge')===2);   // kill count met
+      chainBuildDef('forge'); state.activeQuests['chain_forge']={accepted:true}; Quests.complete('chain_forge','accept'); player.position.set(90,0.3,0); pollChains();   // reach the Crystal Quarry
+      const after3=(chainIdx('forge')===3 && chainDone('forge')), capstone=!!(state.badges&&state.badges.chain_forge);
+      R.quest_chain=(s1 && s1def && after1 && after2 && after3 && capstone && !!CHAINS.grove && CHAINS.forge.steps.length===3);
+      player.position.copy(_pp); state.chainStep=JSON.parse(_ch); state.activeQuests=JSON.parse(_aq); state.badges=JSON.parse(_bd); delete Quests.defs['chain_forge']; delete Quests.done['chain_forge.accept']; delete Quests.done['chain_forge.do']; }
     // CLASS COMBAT: mage staff bolt (free basic) + HOTBAR SPELL (pin spell -> select slot -> doAttack casts, costs mana) + class weapon gating
     { const _c0=state.charClass,_w0=state.weapon,_wp0={...state.weapons},_mm0=state.manaMax,_mn0=state.mana,_cd0=state._atkCD,_ss0=state.selectedSlot,_qi0={...state.quickItems},_sf0=state.inv.spell_fireball||0;
       state.charClass='mage'; state.weapons.apprentice_staff=true; state.weapon='apprentice_staff'; state.manaMax=60; state.mana=60;
@@ -4152,7 +4212,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       &&R.event_active&&R.event_market&&R.shop_closed_night&&R.shop_open_day&&R.onboarding_done&&R.friendship&&R.requests_list&&R.town_legend
       &&R.pause_works&&R.cam_pitch_clamped&&R.ambient
       &&R.head&&R.assetsClean&&R.touch&&R.touch_moves&&R.raf_boundary&&R.pause_freezes_cook&&R.cook_completes&&R.sfx_gate&&R.reduce_motion&&R.reduce_confetti&&R.light_cap&&R.save_sanitized&&R.particle_pool
-      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2&&R.class_system&&R.class_combat&&R.mounts&&R.mount_stable&&R.lake_basin&&R.build_grounded
+      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2&&R.quest_chain&&R.class_system&&R.class_combat&&R.mounts&&R.mount_stable&&R.lake_basin&&R.build_grounded
       &&R.homes_present&&R.home_built&&R.home_loot&&R.home_enter_path&&R.recipe_page_unlock&&R.node_respawn&&R.chest_oneuse
       &&R.weapon_craft&&R.combat_kill&&R.combat_respawn&&R.inv_slots
       &&R.mine_pickaxe&&R.mine_enter&&R.mine_dig&&R.mine_exit&&R.armor_craft&&R.armor_reduces&&R.rarity_tiers&&R.rarity_loot&&R.combat_anim&&R.gear_equip&&R.dice_rolls&&R.dmg_popup&&R.menu;
