@@ -235,6 +235,8 @@
   #shop h3{font-size:15px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:6px}
   #shop h3 .x{cursor:pointer; background:var(--ink); color:#fff; border-radius:6px; padding:0 8px}
   #minimap{left:14px; bottom:74px; width:138px; height:138px; border:3px solid var(--ink); border-radius:50%; background:rgba(255,247,236,.55); box-shadow:3px 3px 0 rgba(34,26,46,.25); pointer-events:auto; cursor:pointer; transition:transform .12s}
+  #compass:not(.hidden){ position:fixed; left:14px; bottom:218px; width:138px; height:27px; box-sizing:border-box; display:flex; align-items:center; justify-content:center; gap:7px; background:rgba(255,247,236,.74); border:2.5px solid var(--ink); border-radius:15px; box-shadow:2px 2px 0 rgba(34,26,46,.22); pointer-events:none; font:800 12px "Trebuchet MS",sans-serif; color:var(--ink); z-index:5 }
+  #compass .cmpneedle{ font-size:16px; line-height:1; color:#d6453f; display:inline-block; transition:transform .08s linear }
   #minimap:hover{transform:scale(1.05)}
   /* compass/minimap → click to enlarge into a centered circular MODAL (owner request) */
   #mapmodal{position:fixed; inset:0; z-index:34; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; background:rgba(20,14,30,.55); pointer-events:auto}
@@ -316,6 +318,7 @@
     .shopcard{width:96vw; max-height:80vh}
     .craftcard{width:96vw; max-height:80vh} .cgrid{grid-template-columns:repeat(auto-fill,minmax(98px,1fr))}
     #minimap{width:108px; height:108px; bottom:150px}
+    #compass:not(.hidden){width:108px; bottom:262px}
     .card{max-height:90vh; overflow:auto; padding:20px}
     .card h1{font-size:24px}
   }
@@ -362,6 +365,7 @@
 <div id="loot" class="hidden"></div>
 <div id="stash" class="hidden"></div>
 <canvas id="minimap" class="hud" width="150" height="150" title="Click to enlarge"></canvas>
+<div id="compass" class="hud hidden" title="Points home to town"><span class="cmpneedle">▲</span><span class="cmpdist"></span></div>
 <div id="mapmodal" class="hidden"></div>
 <div id="lore" class="hidden"></div>
 <div id="pause" class="hidden"></div>
@@ -466,7 +470,7 @@ addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reaso
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
   discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, tradePending:null, quickItems:{}, activeQuests:{}, questTarget:null, npcOfferDay:{}, armorDye:'', gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
-  hp:100, hpMax:100, xp:0, level:1, charClass:'', mana:0, manaMax:0, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, hasRod:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
+  hp:100, hpMax:100, xp:0, level:1, charClass:'', mana:0, manaMax:0, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, hasRod:false, hasCompass:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
   volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0, lore:{}, fog:{}, met:{}, badges:{} };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
@@ -2533,6 +2537,7 @@ const RECIPES=[
   {id:'stone_sword', name:'⚔️ Stone Sword', cat:'tool', lvl:6, cost:{stone:3,wood:1}, weapon:true, build:p=>gainWeapon('stone_sword') },
   {id:'crystal_sword', name:'💎 Crystal Sword', cat:'tool', lvl:21, cost:{crystal:2,stone:2}, weapon:true, build:p=>gainWeapon('crystal_sword') },
   {id:'pickaxe', name:'⛏️ Pickaxe', cat:'tool', lvl:1, cost:{wood:2,stone:2}, weapon:true, build:p=>gainPickaxe() },
+  {id:'compass', name:'🧭 Compass', cat:'tool', lvl:2, cost:{iron_ingot:1,crystal:1}, build:p=>gainCompass() },
   {id:'shovel', name:'🥄 Shovel', cat:'tool', lvl:1, cost:{wood:2}, weapon:true, build:p=>gainShovel() },
   {id:'leather_armor', name:'🛡️ Leather Armor', cat:'tool', lvl:3, cost:{flower:3,wood:2}, weapon:true, cls:ARMOR_CLS.leather, build:p=>gainArmor('leather') },
   {id:'wood_armor', name:'🪵 Wooden Armor', cat:'tool', lvl:7, cost:{wood:5}, weapon:true, cls:ARMOR_CLS.wood, build:p=>gainArmor('wood') },
@@ -3079,7 +3084,14 @@ function buildCullList(){   // one-time after buildWorld: tag every LOCALIZED st
     if(!isFinite(bs.radius)||bs.radius<=0||bs.radius>90) continue;   // >90 = spans the map (ground/trees/roads) -> never cull
     cullList.push({o, ox:bs.center.x-o.position.x, oz:bs.center.z-o.position.z, cy:bs.center.y, r:bs.radius+4}); }
 }
-function updateWorld(dt){ const tn=performance.now()*0.001;
+const _cmpDir=new THREE.Vector3();
+function updateCompass(){ const el=document.getElementById('compass'); if(!el)return; if(!state.hasCompass||!state.running){ if(!el.classList.contains('hidden'))el.classList.add('hidden'); return; } if(el.classList.contains('hidden'))el.classList.remove('hidden');
+  const dx=HOUSE.cx-player.position.x, dz=HOUSE.cz-player.position.z, dist=Math.hypot(dx,dz);
+  camera.getWorldDirection(_cmpDir); const cx=_cmpDir.x, cz=_cmpDir.z;
+  const ang=Math.atan2(dx*cz - dz*cx, dx*cx + dz*cz);   // (L2) bearing to town relative to camera forward (0 = straight ahead -> needle up)
+  const n=el.querySelector('.cmpneedle'); if(n) n.style.transform='rotate('+ang+'rad)';
+  const d=el.querySelector('.cmpdist'); if(d) d.textContent = dist<12?'🏡 home':(Math.round(dist)+'m'); }
+function updateWorld(dt){ const tn=performance.now()*0.001; updateCompass();
   if(state._houseDoor){ const _dx=player.position.x-HOUSE.cx, _dz=player.position.z-(HOUSE.cz+HOUSE.hz); const _near=(_dx*_dx+_dz*_dz)<16; state._houseDoor.rotation.y=angLerp(state._houseDoor.rotation.y, _near?-1.45:0, dt*8); }   // swing the front door open when the player approaches, closed otherwise
   if(questActive('rescue_one') && Quests.isDone('rescue_one','free') && !Quests.isDone('rescue_one','return') && Math.hypot(player.position.x,player.position.z)<42){ Quests.complete('rescue_one','return'); }   // rescue complete: freed captive + back in town
   if(typeof pollGenQuests==='function') pollGenQuests();   // reach/gather/deliver/dig/befriend completion for generated quests
@@ -3409,6 +3421,7 @@ function digBlock(){
   b.solid.off=true; world.remove(b.mesh); SFX.play('pickup',{vol:0.5,rate:0.8}); shake(0.18); confetti(b.mesh.position.clone(),8);
   const tier=rollRarity(), m=RARITY[tier].mult; const oi=(b.kind==='stone')?'stone':'crystal'; const amt=((b.kind==='gem')?2:1)*m + (state.pickTier||0);   // iron/gold pickaxe -> more ore per block
   Inv.add(oi,amt); if(typeof qBump==='function')qBump('mine'); rarityToast(tier, `${ITEMS[oi].i} +${amt} ${ITEMS[oi].n}${b.kind==='gem'?' (gem vein!)':''}`); }
+function gainCompass(){ state.hasCompass=true; toast('🧭 Crafted a Compass — the dial above your minimap now points home to town.'); if(typeof Inv!=='undefined'&&Inv.render)Inv.render(); if(invOpen&&typeof renderInv==='function')renderInv(); save(); }
 function gainPickaxe(tier=0){ state.hasPickaxe=true; state.pickTier=Math.max(state.pickTier||0,tier); const n=['','Iron ','Gold '][tier]||''; toast(`⛏️ Crafted ${n?'an '+n:'a '}Pickaxe!${tier?` (+${tier} ore per block)`:' Find a Mine Entrance (E), then G to MINE ore.'}`); Inv.render(); if(invOpen)renderInv(); save(); }
 function gainShovel(tier=0){ state.hasShovel=true; state.shovelTier=Math.max(state.shovelTier||0,tier); const n=['','Iron ','Gold '][tier]||''; toast(`🥄 Crafted ${n?'an '+n:'a '}Shovel!${tier?` (richer digs)`:' Press G in the field to DIG the ground.'}`); Inv.render(); if(invOpen)renderInv(); save(); }
 function gainFishingRod(){ state.hasRod=true; toast('🎣 Crafted a Fishing Rod! Select it on the hotbar and LEFT-CLICK while facing water to cast — bring a 🪱 Worm for bait (dig the ground to find some).'); Inv.render(); if(invOpen)renderInv(); save(); }
