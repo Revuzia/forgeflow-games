@@ -742,6 +742,8 @@ const LAKES=[[410,140,52],[-380,-250,44],[170,-440,40],[-260,430,36]];   // the 
 function prepLakeBasins(){ for(const [x,z,r] of LAKES){ let mn=Infinity; for(let a=0;a<6.28;a+=0.7){ mn=Math.min(mn, terrainH(x+Math.cos(a)*r*1.1, z+Math.sin(a)*r*1.1)); } WATER_BASINS.push({x,z,rs:r*0.85,rb:r*1.5,floor:mn-2.2,yy:mn-0.3}); } }   // carve bowls BEFORE the terrain mesh is displaced, so the ground mesh cups each lake   // swimmable interior (r*0.72, inside the wavy rim); vr = the rim PEAK reach (~r*1.4) so the keep-out clears the whole visible shoreline
 /* keep-out test: is (x,z) on/near ANY water body? uses the VISUAL radius (vr) so nothing spawns over a lake's wavy shore */
 function isInWater(x,z,margin=0){ for(const w of waterZones){ const dx=x-w.x, dz=z-w.z, rr=(w.vr||w.r)+margin; if(dx*dx+dz*dz<rr*rr) return true; } return false; }
+const TRAINING_ZONE={x:42,z:-42,hx:9,hz:10};   // 🎯 TRAINING GROUND: a fenced walk-in practice yard on an empty SE town plot (clears houses/roads/wells/rocks/barn/player-plot/pond) — ADDITIVE, removes nothing
+function inTrainingZone(x,z,margin=2){ return Math.abs(x-TRAINING_ZONE.x)<TRAINING_ZONE.hx+margin && Math.abs(z-TRAINING_ZONE.z)<TRAINING_ZONE.hz+margin; }   // shared keep-out: builder + creature spawner both consult this so no mob EVER spawns inside the yard, day or night
 
 /* texture a placed KUBIKOS house: wood planks (or plaster) on the body, shingles on the roof (topmost mesh) */
 function texturizeHouse(o,kind){
@@ -767,29 +769,51 @@ const outerStructures=[];  // {x,z,r} footprints of mines/dungeons so wild hamle
 const hamlets=[];          // {cx,cz,homes:[...]} wild settlements out in the hills (Phase 2)
 // Stage B — night combat
 const creatures=[];   // {mesh, hp, max, cd, bob}
-const WEAPONS={ fist:{dmg:14,range:2.2,name:'Fists',icon:'✊'}, wood_sword:{dmg:24,range:2.6,name:'Wooden Sword',icon:'🗡️'}, stone_sword:{dmg:38,range:2.8,name:'Stone Sword',icon:'⚔️'}, iron_sword:{dmg:50,range:2.9,name:'Iron Sword',icon:'🗡️'}, crystal_sword:{dmg:62,range:3.0,name:'Crystal Sword',icon:'⚔️'}, gold_sword:{dmg:82,range:3.2,name:'Gold Sword',icon:'⚔️'}, titan_blade:{dmg:120,range:3.5,name:'Titan Blade',icon:'🗡️'}, mythic_blade:{dmg:160,range:3.7,name:'Mythic Blade',icon:'⚔️'},
+const WEAPONS={ fist:{dmg:14,range:2.2,name:'Fists',icon:'✊',hands:'1h'}, wood_sword:{dmg:24,range:2.6,name:'Wooden Sword',icon:'🗡️',hands:'1h'}, stone_sword:{dmg:38,range:2.8,name:'Stone Sword',icon:'⚔️',hands:'1h'}, iron_sword:{dmg:50,range:2.9,name:'Iron Sword',icon:'🗡️',hands:'1h'}, crystal_sword:{dmg:62,range:3.0,name:'Crystal Sword',icon:'⚔️',hands:'1h'}, gold_sword:{dmg:82,range:3.2,name:'Gold Sword',icon:'⚔️',hands:'1h'}, titan_blade:{dmg:120,range:3.5,name:'Titan Blade',icon:'🗡️',hands:'1h'}, mythic_blade:{dmg:160,range:3.7,name:'Mythic Blade',icon:'⚔️',hands:'1h'},
+  // ── WARRIOR weapon variety (WoW-style): 1H = dual-wield/sword+shield eligible · 2H = forces offhand empty, ~1.6x dmg, slower swing ──
+  hand_axe:{dmg:30,range:2.7,name:'Hand Axe',icon:'🪓',cls:'warrior',hands:'1h',kind:'axe'},
+  war_dagger:{dmg:34,range:2.4,name:'War Dagger',icon:'🗡️',cls:'warrior',hands:'1h',kind:'dagger',crit:0.10},
+  battle_axe:{dmg:56,range:2.9,name:'Battle Axe',icon:'🪓',cls:'warrior',hands:'1h',kind:'axe'},
+  iron_mace:{dmg:64,range:2.7,name:'Iron Mace',icon:'🔨',cls:'warrior',hands:'1h',kind:'mace'},
+  twin_sabers:{dmg:46,range:2.8,name:'Twin Saber',icon:'🗡️',cls:'warrior',hands:'1h',kind:'sword',rarity:'uncommon',crit:0.06},   // a polished OFF-HAND 1H sword (dual-wield partner)
+  greataxe:{dmg:128,range:3.6,name:'Greataxe',icon:'🪓',cls:'warrior',hands:'2h',kind:'greataxe',cleave:true},
+  claymore:{dmg:150,range:3.7,name:'Claymore',icon:'⚔️',cls:'warrior',hands:'2h',kind:'claymore',cleave:true},
+  war_hammer:{dmg:196,range:3.5,name:'War Hammer',icon:'🔨',cls:'warrior',hands:'2h',kind:'warhammer',cleave:true},
   // ── DROPPED loot weapons (not craftable — only fall from rare/epic kills; equip/unequip from your bag) ──
-  keen_saber:{dmg:74,range:3.05,name:'Keen Saber',icon:'🗡️',rarity:'rare',crit:0.08,model:'crystal_sword'},                 // RARE: high dmg + extra crit
-  dread_reaver:{dmg:116,range:3.35,name:'Dread Reaver',icon:'⚔️',rarity:'epic',crit:0.16,life:0.14,model:'titan_blade'},   // EPIC: huge dmg + big crit + lifesteal (heal 14% of dmg dealt)
-  // ── MAGE staffs — BASIC bolt is FREE + low dmg (less than a sword); MANA powers stronger SPELLS (cast with Q) ──
-  apprentice_staff:{dmg:16,range:15,name:'Apprentice Staff',icon:'🪄',cls:'mage',proj:'bolt'},
-  oak_staff:{dmg:28,range:16,name:'Oak Staff',icon:'🪄',cls:'mage',proj:'bolt'},
-  arcane_staff:{dmg:48,range:18,name:'Arcane Staff',icon:'🪄',cls:'mage',proj:'bolt'},
-  // ── RANGER bows — INFINITE basic arrows (a bit more than a staff bolt, still less than a sword); SPECIAL arrows (Q) are consumable ──
-  short_bow:{dmg:22,range:17,name:'Short Bow',icon:'🏹',cls:'ranger',proj:'arrow'},
-  hunter_bow:{dmg:36,range:18,name:'Hunter Bow',icon:'🏹',cls:'ranger',proj:'arrow'},
-  longbow:{dmg:58,range:20,name:'Longbow',icon:'🏹',cls:'ranger',proj:'arrow'} };
+  keen_saber:{dmg:74,range:3.05,name:'Keen Saber',icon:'🗡️',rarity:'rare',hands:'1h',crit:0.08,model:'crystal_sword'},                 // RARE: high dmg + extra crit
+  dread_reaver:{dmg:116,range:3.35,name:'Dread Reaver',icon:'⚔️',rarity:'epic',hands:'1h',crit:0.16,life:0.14,model:'titan_blade'},   // EPIC: huge dmg + big crit + lifesteal (heal 14% of dmg dealt)
+  // ── MAGE staffs — BASIC bolt is FREE + low dmg (less than a sword); MANA powers stronger SPELLS (cast with Q). Staffs are 2H glass-cannons (no charm); WANDS are 1H (charm-enabled). ──
+  apprentice_staff:{dmg:16,range:15,name:'Apprentice Staff',icon:'🪄',cls:'mage',proj:'bolt',hands:'2h'},
+  oak_staff:{dmg:28,range:16,name:'Oak Staff',icon:'🪄',cls:'mage',proj:'bolt',hands:'2h'},
+  arcane_staff:{dmg:48,range:18,name:'Arcane Staff',icon:'🪄',cls:'mage',proj:'bolt',hands:'2h'},
+  great_staff:{dmg:78,range:19,name:'Elder Greatstaff',icon:'🪄',cls:'mage',proj:'bolt',hands:'2h',kind:'staff'},   // 2H high-power glass cannon (no charm)
+  // ── MAGE WANDS — 1H faster casters (lower dmg, faster swing) so wand+charm reads distinct from a big staff ──
+  oak_wand:{dmg:14,range:14,name:'Oak Wand',icon:'🪄',cls:'mage',proj:'bolt',hands:'1h',kind:'wand'},
+  crystal_wand:{dmg:26,range:15,name:'Crystal Wand',icon:'🪄',cls:'mage',proj:'bolt',hands:'1h',kind:'wand',rarity:'uncommon'},
+  runed_wand:{dmg:42,range:16,name:'Runed Wand',icon:'🪄',cls:'mage',proj:'bolt',hands:'1h',kind:'wand',rarity:'rare'},
+  // ── RANGER bows — INFINITE basic arrows (a bit more than a staff bolt, still less than a sword); SPECIAL arrows (Q) are consumable. LONGBOW=2H (slow/strong), SHORTBOW class=1H (fast). ──
+  short_bow:{dmg:22,range:17,name:'Short Bow',icon:'🏹',cls:'ranger',proj:'arrow',hands:'1h',kind:'bow'},
+  hunter_bow:{dmg:36,range:18,name:'Hunter Bow',icon:'🏹',cls:'ranger',proj:'arrow',hands:'1h',kind:'bow'},
+  recurve_bow:{dmg:48,range:18,name:'Recurve Bow',icon:'🏹',cls:'ranger',proj:'arrow',hands:'1h',kind:'bow',rarity:'uncommon'},   // fast 1H
+  longbow:{dmg:58,range:20,name:'Longbow',icon:'🏹',cls:'ranger',proj:'arrow',hands:'2h',kind:'bow'},
+  warden_longbow:{dmg:88,range:22,name:'Warden Longbow',icon:'🏹',cls:'ranger',proj:'arrow',hands:'2h',kind:'longbow',rarity:'rare'} };   // 2H slow/strong
 const CLASSES={ warrior:{name:'Warrior',icon:'⚔️',blurb:'Sword & heavy armor — tough, hits hard up close.',start:'wood_sword'}, mage:{name:'Mage',icon:'🪄',blurb:'Staff & light armor — casts magic bolts that cost MANA, from afar.',start:'apprentice_staff'}, ranger:{name:'Ranger',icon:'🏹',blurb:'Bow & medium armor — fires arrows from a safe distance.',start:'short_bow'} };
-const CLASS_WTIER={ warrior:['fist','wood_sword','stone_sword','iron_sword','crystal_sword','gold_sword','titan_blade','mythic_blade'], mage:['fist','apprentice_staff','oak_staff','arcane_staff'], ranger:['fist','short_bow','hunter_bow','longbow'] };
+const CLASS_WTIER={ warrior:['fist','wood_sword','hand_axe','stone_sword','war_dagger','iron_sword','battle_axe','crystal_sword','iron_mace','greataxe','gold_sword','claymore','war_hammer','titan_blade','mythic_blade'], mage:['fist','oak_wand','apprentice_staff','crystal_wand','oak_staff','runed_wand','arcane_staff','great_staff'], ranger:['fist','short_bow','hunter_bow','recurve_bow','longbow','warden_longbow'] };
 function playerClass(){ return state.charClass||'warrior'; }
 function canUseWeapon(id){ if(id==='fist')return true; const w=WEAPONS[id]; if(!w)return false; return (w.cls||'warrior')===playerClass(); }
+// hands of a weapon — legacy saves have no `hands` field, so DEFAULT to '1h' (never read an old sword as 2H and silently strip a shield on load).
+function handsOf(id){ const w=WEAPONS[id]; return (w&&w.hands)||'1h'; }
+function isOffhandWeaponOK(id){ return playerClass()==='warrior' && WEAPONS[id] && handsOf(id)==='1h'; }   // a warrior may slot a 1H weapon in the off-hand (dual-wield)
+// THE off-hand choke-point: resolve an off-hand id to its catalog entry across ALL kinds (shield/torch/charm/quiver/dual-wield 1H weapon).
+function offhandItem(id){ if(!id) return null; return (typeof SHIELDS!=='undefined'&&SHIELDS[id])||(typeof TORCHES!=='undefined'&&TORCHES[id])||(typeof CHARMS!=='undefined'&&CHARMS[id])||(typeof QUIVERS!=='undefined'&&QUIVERS[id])||(WEAPONS[id]&&handsOf(id)==='1h'?WEAPONS[id]:null); }
+function offhandKindOf(id){ if(SHIELDS[id])return'shield'; if(TORCHES[id])return'torch'; if(CHARMS[id])return'charm'; if(QUIVERS[id])return'quiver'; if(WEAPONS[id])return'weapon'; return''; }
 // ── SPELLS (mage, cost MANA) + SPECIAL ARROWS (ranger, consumable) — both live in the HOTBAR; the selected slot decides the attack ──
 const SPELLS={ bolt:{n:'Arcane Bolt',i:'✨',mana:8,mult:1.7,color:'#c77dff'}, fireball:{n:'Fireball',i:'🔥',mana:18,mult:2.7,color:'#ff7a3d'}, frost:{n:'Frost Shard',i:'❄️',mana:14,mult:2.1,color:'#9fd0ff'}, mend:{n:'Mend',i:'💚',mana:24,heal:0.4} };
 const SP_ARROWS={ fire_arrow:{n:'Fire Arrow',i:'🔥',mult:1.9,color:'#ff7a3d'}, ice_arrow:{n:'Ice Arrow',i:'❄️',mult:1.7,color:'#9fd0ff'}, bomb_arrow:{n:'Bomb Arrow',i:'💥',mult:2.8,color:'#ffcf3a'} };
 const SPELLBOOKS={ book_fireball:'fireball', book_frost:'frost', book_mend:'mend' };   // a FOUND/crafted book -> read it to learn its spell (adds spell_<id> to your bag)
 function SPELL_OF(k){ return (k&&k.indexOf('spell_')===0)?SPELLS[k.slice(6)]:null; }
 function ARROW_OF(k){ return (k&&SP_ARROWS[k])?SP_ARROWS[k]:null; }
-const WTIER=['fist','wood_sword','stone_sword','iron_sword','crystal_sword','gold_sword','titan_blade','mythic_blade'];   // titan/mythic = top tiers (need boss_core)
+const WTIER=['fist','wood_sword','hand_axe','stone_sword','war_dagger','iron_sword','battle_axe','crystal_sword','iron_mace','greataxe','gold_sword','claymore','war_hammer','titan_blade','mythic_blade'];   // warrior craftable ladder (titan/mythic = top tiers, need boss_core)
 // ARMOR — a % chance to fully BLOCK an incoming hit (clean with 1-heart hits: a hit either lands fully or is blocked)
 const ARMORS={ leather:{block:0.30,name:'Leather Armor',icon:'🦺'}, iron:{block:0.55,name:'Iron Armor',icon:'🦺'}, gold:{block:0.72,name:'Gold Armor',icon:'🦺'}, titan:{block:0.86,name:'Titan Plate',icon:'🛡️'},
   // ── DROPPED loot armor (not craftable — only from rare/epic kills; equip/unequip from your bag) ──
@@ -799,6 +823,10 @@ const ATIER=['','leather','iron','gold','titan'];   // titan = BOSS-ONLY top tie
 // OFF-HAND (L-hand): SHIELDS = a % chance to fully BLOCK an incoming hit (melee AND projectiles, since both route through damagePlayer); TORCHES = a carried light that burns down. Both wear via the shared durability system.
 const SHIELDS={ wood_shield:{block:0.15,name:'Wooden Shield',icon:'🛡️',tier:'wood',rarity:'common'}, stone_shield:{block:0.28,name:'Stone Shield',icon:'🛡️',tier:'stone',rarity:'common'}, iron_shield:{block:0.45,name:'Iron Shield',icon:'🛡️',tier:'iron',rarity:'common'}, gold_shield:{block:0.60,name:'Gold Shield',icon:'🛡️',tier:'gold',rarity:'common'}, titan_shield:{block:0.75,name:'Titan Bulwark',icon:'🛡️',tier:'titan',rarity:'rare'} };
 const TORCHES={ wood_torch:{range:12,intensity:1.0,color:'#ffb84d',name:'Wood Torch',icon:'🔥',rarity:'common'}, crystal_torch:{range:16,intensity:1.3,color:'#7fd9ff',name:'Crystal Torch',icon:'🔆',rarity:'common'}, magic_torch:{range:20,intensity:1.7,color:'#ff66ff',name:'Magic Torch',icon:'✨',rarity:'rare'} };
+// ── MAGE CHARM off-hand: a passive focus — spellPower MULTIPLIES spell/bolt damage + manaRegen ADDS to the mana trickle. No attack. ──
+const CHARMS={ charm_focus:{spellPower:1.15,manaRegen:1.5,color:'#9fd0ff',name:'Apprentice Charm',icon:'🔮',rarity:'uncommon'}, charm_arcane:{spellPower:1.30,manaRegen:3.0,color:'#c77dff',name:'Arcane Sigil',icon:'🔮',rarity:'rare'}, charm_eldritch:{spellPower:1.50,manaRegen:5.0,color:'#ff66ff',name:'Eldritch Idol',icon:'🔮',rarity:'epic'} };
+// ── RANGER QUIVER off-hand: supplies/buffs SPECIAL arrows — `arrow` = the SP_ARROWS key it grants (one free per shot), `dmgMul` buffs special-arrow damage, `bonus` = extra arrows refunded per craft. ──
+const QUIVERS={ quiver_hunter:{arrow:'fire_arrow',dmgMul:1.10,bonus:2,color:'#caa46a',name:"Hunter's Quiver",icon:'🎯',rarity:'uncommon'}, quiver_ember:{arrow:'fire_arrow',dmgMul:1.25,bonus:3,color:'#ff7a3d',name:'Ember Quiver',icon:'🎯',rarity:'rare'}, quiver_frost:{arrow:'ice_arrow',dmgMul:1.25,bonus:3,color:'#9fd0ff',name:'Frostward Quiver',icon:'🎯',rarity:'epic'} };
 // Stage C — voxel mine: a bounded pocket cavern FAR from the surface (so its solids never touch surface play + it's frustum-culled). Lazy-built on first entry.
 const MINE={x:1000,z:1000,inMine:false,built:false,group:null,blocks:[],chests:[],returnPos:null};
 const DUNGEON={x:2000,z:2000,inDungeon:false,built:false,ex:0,ez:0,rooms:[],chests:[],traps:[],spawners:[],secretChest:null,returnPos:null};   // multi-room crypt pocket (far away, frustum-culled): tunnels + traps + a spawner + ONE hidden secret chest — entrances scattered in the outer ring
@@ -991,8 +1019,66 @@ function buildZones(){
   function sign(x,z,txt){ const p=box(0.18,1.6,0.18,'#8a5a31'); p.position.set(x,0.8,z); world.add(p); const b=box(3,0.7,0.18,'#e0c089'); b.position.set(x,1.8,z); world.add(b); }
   sign(0,-48,'Woods'); sign(48,0,'Quarry'); sign(-48,0,'Fields'); sign(0,48,'Beach');
   buildExploration();   // outer-ring landmarks, hidden caches, extra mines, a dungeon (fills the empty outskirts)
+  try{ buildTrainingGround(); }catch(e){ console.warn('training ground',e); }   // 🎯 additive practice yard on the SE town plot (built AFTER houses/landmarks so nothing lands on top)
   { const KIND=['cow','cow','sheep','sheep','chicken','chicken','chicken','pig']; for(let i=0;i<46;i++){ const ang=rand(0,TAU), rad=rand(28,580), ax=Math.cos(ang)*rad, az=Math.sin(ang)*rad; if(isInWater(ax,az,4))continue; spawnAnimal(pick(KIND), ax, az); } }   // FARM ANIMALS scattered across the FULL (huge) field breadth (never grazing mid-lake)
   buildMist();   // drifting ground mist
+}
+/* ---- 🎯 TOWN TRAINING GROUND (owner: a walk-in fenced practice yard that EXPANDS the town, removes nothing) ----
+   A low picket fence with a walk-in gap on an empty SE plot at (42,-42). Holds a resettable straw DUMMY (melee),
+   static bullseye TARGETS, and moving TARGETS — all pushed into creatures[] tagged {training:true} so the REAL combat
+   hooks (playerAttack arc, mage bolts + ranger arrows via playerShots) register hits, pop damage, and RESET hp instead
+   of dying. The zone is a guaranteed no-spawn island day AND night (spawnCreature rejects any point inTrainingZone). */
+function _trainProp(mesh, hp, opts){ opts=opts||{};   // register a built mesh as an invulnerable training creature
+  const mats=[]; mesh.traverse(m=>{ if(m.isMesh&&m.material&&m.material.emissive)mats.push(m.material); });
+  const c={mesh, hp, max:hp, cd:0, bob:Math.random()*TAU, mats, flash:0,
+    type:{hp:1,dmg:0,bob:opts.bob||0.6,floatY:opts.floatY||0, tgtH:opts.tgtH||1.2, name:opts.name||'Training Prop', minDist:0},
+    aggro:false, wdir:0, wt:99, dmgMul:1, training:true, dummy:!!opts.dummy};
+  if(opts.trainPath) c.trainPath=opts.trainPath;
+  creatures.push(c); return c; }
+function buildTrainingGround(){
+  const Z=TRAINING_ZONE; if(isInWater(Z.x,Z.z,0)) return;   // never plant the yard in water (mirrors every other placement guard)
+  const grp=new THREE.Group(); world.add(grp);
+  const gy=(x,z)=>groundY(x,z);
+  // sandy training pad
+  const pad=box(Z.hx*2-1, 0.12, Z.hz*2-1, '#d8c79a'); pad.position.set(Z.x, gy(Z.x,Z.z)+0.06, Z.z); pad.receiveShadow=true; world.add(pad);
+  // picket fence: 4 rails of pickets, with a WALK-IN GAP on the north (toward town) — fence is COSMETIC (no addSolid) so you stroll in anywhere
+  function picket(x,z){ const post=box(0.16,1.0,0.16,'#caa46a'); post.position.set(x, gy(x,z)+0.5, z); const tip=new THREE.Mesh(new THREE.ConeGeometry(0.12,0.22,4), toon('#b8915a')); tip.position.set(x, gy(x,z)+1.05, z); world.add(post); world.add(tip); }
+  function rail(x0,z0,x1,z1,gapFrom,gapTo){ const n=14; for(let i=0;i<=n;i++){ const f=i/n; if(gapFrom!=null && f>gapFrom && f<gapTo) continue; picket(x0+(x1-x0)*f, z0+(z1-z0)*f); }
+    const mx=(x0+x1)/2, mz=(z0+z1)/2, len=Math.hypot(x1-x0,z1-z0); const r=box(len, 0.1, 0.1, '#b8915a'); r.position.set(mx, gy(mx,mz)+0.66, mz); r.rotation.y=Math.atan2(z1-z0,x1-x0); world.add(r); }
+  const x0=Z.x-Z.hx, x1=Z.x+Z.hx, z0=Z.z-Z.hz, z1=Z.z+Z.hz;
+  rail(x0,z0,x1,z0, 0.38,0.62);   // NORTH rail (toward town) — has the WALK-IN GAP
+  rail(x0,z1,x1,z1);              // SOUTH
+  rail(x0,z0,x0,z1);             // WEST
+  rail(x1,z0,x1,z1);             // EAST
+  // (1) STRAW DUMMY — resettable melee trainer (never dies, never drops)
+  { const dg=new THREE.Group(); const dx=Z.x-4, dz=Z.z+4;
+    const postm=box(0.5,1.7,0.5,'#c9a23a'); postm.position.y=0.85; dg.add(postm);
+    const cross=box(1.5,0.22,0.22,'#a8842f'); cross.position.y=1.25; dg.add(cross);
+    const head=ball(0.42,'#e0c060'); head.position.y=1.95; dg.add(head);
+    const belt=box(0.62,0.5,0.62,'#8a5a31'); belt.position.y=0.55; dg.add(belt);
+    dg.position.set(dx, gy(dx,dz), dz); dg.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); world.add(dg);
+    _trainProp(dg, 200, {dummy:true, name:'Practice Dummy', tgtH:2.1, bob:0});
+    addInteractable(dg,'🎯 Straw Dummy — wallop it to practice melee (it resets, never dies)',()=>toast('🎯 Swing at the dummy to practice — it never dies, just resets!'),2.6); }
+  // bullseye roundel builder: concentric rings on a post, faces up the +Z so shots read it
+  function roundel(x,z,name,path){ const g=new THREE.Group();
+    const post=box(0.18,1.4,0.18,'#caa46a'); post.position.y=0.7; g.add(post);
+    const back=new THREE.Mesh(new THREE.CylinderGeometry(0.62,0.62,0.12,18), toon('#efe7d2')); back.rotation.x=Math.PI/2; back.position.y=1.6; g.add(back);
+    const r1=new THREE.Mesh(new THREE.CylinderGeometry(0.46,0.46,0.13,18), toon('#e0463a')); r1.rotation.x=Math.PI/2; r1.position.y=1.6; g.add(r1);
+    const r2=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.28,0.14,18), toon('#efe7d2')); r2.rotation.x=Math.PI/2; r2.position.y=1.6; g.add(r2);
+    const bull=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,0.15,16), new THREE.MeshStandardMaterial({color:'#ffd23f',emissive:new THREE.Color('#caa400'),emissiveIntensity:0.35})); bull.rotation.x=Math.PI/2; bull.position.y=1.6; g.add(bull);
+    g.position.set(x, gy(x,z), z); g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); world.add(g);
+    return _trainProp(g, 120, {name, tgtH:1.7, bob:0, trainPath:path}); }
+  // (2) STATIC targets
+  roundel(Z.x+3, Z.z-5, 'Static Target');
+  roundel(Z.x+6.5, Z.z+2, 'Static Target');
+  roundel(Z.x-6, Z.z-6, 'Static Target');
+  // (3) MOVING targets — slide along a rail (ping-pong) so you must LEAD your bolts/arrows
+  roundel(Z.x-3, Z.z+5, 'Moving Target', {ax:Z.x-6, az:Z.z+5, bx:Z.x+6, bz:Z.z+5, t:0, spd:0.35});
+  roundel(Z.x+5, Z.z-1, 'Moving Target', {ax:Z.x+6, az:Z.z-7, bx:Z.x+6, bz:Z.z+3, t:0.5, spd:0.28});
+  // signboard interactable
+  { const sp=box(0.18,1.7,0.18,'#8a5a31'); sp.position.set(Z.x-Z.hx+0.6, gy(Z.x-Z.hx+0.6,Z.z)+0.85, Z.z); world.add(sp);
+    const bd=box(3.2,0.9,0.18,'#e0c089'); bd.position.set(Z.x-Z.hx+0.6, gy(Z.x-Z.hx+0.6,Z.z)+1.9, Z.z); world.add(bd); bd.castShadow=true;
+    addInteractable(bd,'🎯 Training Ground',()=>toast('🎯 Training Ground — melee the straw dummy, and shoot the static & moving targets with bolts or arrows. No monsters spawn here.'),3.0); }
 }
 
 /* ---- OUTER-WORLD EXPLORATION (owner: "outside is bare — want dungeons / mines / hidden passages") ----
@@ -1145,7 +1231,7 @@ const VENDOR_TEMPLATES=[
 function registerHome(o, solid, idx){
   // FACE the house toward the player's approach (town center) so its door lands FLUSH on a real wall, not a rotated bounding-box corner (owner: "doors must be on homes, not on the side"). Cardinal yaw doesn't change the vertical extent, so grounding stays correct; just re-bake the X/Z collider.
   let b=new THREE.Box3().setFromObject(o); const c0=b.getCenter(new THREE.Vector3());
-  o.rotation.y=Math.round(Math.atan2(-c0.x,-c0.z)/(Math.PI/2))*(Math.PI/2)+Math.PI; o.updateMatrixWorld(true);   // +PI: turn the KUBIKOS model's OWN baked-in door to face AWAY from town so it doesn't double up with the custom swinging/press-E door registerHome builds on the town-facing wall (fixes 'two doors per home')
+  o.rotation.y=Math.round(Math.atan2(-c0.x,-c0.z)/(Math.PI/2))*(Math.PI/2); o.updateMatrixWorld(true);   // face the KUBIKOS model's OWN baked-in door TOWARD town — it is now the SINGLE door (the old custom frame/panel that doubled it is removed below)
   b=new THREE.Box3().setFromObject(o); const c=b.getCenter(new THREE.Vector3()), sz=b.getSize(new THREE.Vector3());
   if(solid){ solid.minX=b.min.x-0.2; solid.maxX=b.max.x+0.2; solid.minZ=b.min.z-0.2; solid.maxZ=b.max.z+0.2; solid.top=b.max.y; }
   const meshes=[]; o.traverse(m=>{ if(m.isMesh) meshes.push(m); });
@@ -1160,12 +1246,7 @@ function registerHome(o, solid, idx){
   const doorX=c.x+nx*(edge-0.55), doorZ=c.z+nz*(edge-0.55), ang=Math.atan2(nx,nz);   // inset off the bounding-box face onto the actual wall (Kenney roof overhang pushed the door outside before)
   home.doorPos={x:c.x+nx*(edge+1.3), z:c.z+nz*(edge+1.3)};   // stand-point just OUTSIDE the door
   const dg=new THREE.Group(); dg.position.set(doorX,groundY(doorX,doorZ),doorZ); dg.rotation.y=ang; world.add(dg);   // door frame sits on the terrain (groundY=0 in town)
-  const postL=box(0.22,2.7,0.22,'#5a3b22'); postL.position.set(-0.8,1.35,0); dg.add(postL);
-  const postR=postL.clone(); postR.position.x=0.8; dg.add(postR);
-  const lintel=box(2.0,0.3,0.32,'#5a3b22'); lintel.position.set(0,2.7,0); dg.add(lintel);
-  const hinge=new THREE.Group(); hinge.position.set(-0.68,0,0); dg.add(hinge);   // hinge on the left post
-  const panel=box(1.32,2.4,0.1,'#7a5530'); panel.position.set(0.66,1.3,0); hinge.add(panel);   // OPAQUE door, offset so it swings on the hinge (closed = can't see inside)
-  home.doorHinge=hinge; home.doorTarget=0;
+  // NO custom door frame/panel anymore (owner: "remove the E-to-open door + that whole frame" — it doubled the model's own baked-in door). dg stays ONLY as the anchor for the doorway lamp + shop sign + the Enter interactable. home.doorHinge is intentionally absent; the auto-swing/animation code already guards on `if(h.doorHinge)`.
   const lamp=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,10), new THREE.MeshBasicMaterial({color:'#ffe26a'})); lamp.position.set(0,2.55,0.22); dg.add(lamp); home.doorLamp=lamp;
   if(home.purpose!=='home'){ const board=box(1.5,0.62,0.12,'#6a4a2a'); board.position.set(0,3.25,0.1); dg.add(board);   // hanging shop sign for facility houses
     const face=new THREE.Mesh(new THREE.PlaneGeometry(0.85,0.85),new THREE.MeshBasicMaterial({map:signTex(PURPOSE_DEFS[home.purpose].sign),transparent:true})); face.position.set(0,3.25,0.18); dg.add(face); }
@@ -1411,17 +1492,35 @@ const player=new THREE.Group(); let charMixer=null, charActions={}, charAnim='id
 const heldGroup=new THREE.Group(); let _heldKind='';   // a real-looking tool/weapon model in the player's hand (built, not a flat shape)
 // per-tool hand offsets so each item sits IN the hand pointing the right way (not buried in the arm). z pushed forward to clear the forearm; pickaxe/weapons ~upright, shovel angled down.
 const _SWORD_OFF={pos:[0.0,-1.18,0.24],rot:[0.32,0,0.06],scale:0.82};   // down the arm to the HAND (bone origin is the shoulder; was -0.5 = shoulder)
+const _2H_OFF={pos:[0.0,-1.18,0.26],rot:[0.32,0,0.06],scale:1.02};   // bigger 2H meshes sit slightly larger so they don't read as a 1H toy (still clear of the forearm)
+const _WAND_OFF={pos:[0.0,-1.05,0.24],rot:[0.28,0,0.06],scale:0.78};
+const _BOW_OFF={pos:[0.0,-1.1,0.22],rot:[0.1,0,1.3],scale:0.86};   // bow held sideways
 const TOOL_OFFSETS={
   pickaxe:{pos:[0.02,-0.46,0.2],rot:[0.18,0,0.08],scale:0.78},
   shovel:{pos:[0.02,-0.46,0.2],rot:[-0.5,0,0.08],scale:0.78},
   wood_sword:_SWORD_OFF, stone_sword:_SWORD_OFF, iron_sword:_SWORD_OFF, gold_sword:_SWORD_OFF, crystal_sword:_SWORD_OFF,
-  keen_saber:_SWORD_OFF, titan_blade:_SWORD_OFF, dread_reaver:_SWORD_OFF, mythic_blade:_SWORD_OFF
+  keen_saber:_SWORD_OFF, titan_blade:_SWORD_OFF, dread_reaver:_SWORD_OFF, mythic_blade:_SWORD_OFF,
+  // warrior 1H variety + offhand sword
+  hand_axe:_SWORD_OFF, battle_axe:_SWORD_OFF, war_dagger:{pos:[0.0,-1.18,0.24],rot:[0.32,0,0.06],scale:0.66}, iron_mace:_SWORD_OFF, twin_sabers:_SWORD_OFF,
+  // warrior 2H (bigger)
+  greataxe:_2H_OFF, claymore:_2H_OFF, war_hammer:_2H_OFF,
+  // mage staffs/wands
+  apprentice_staff:_2H_OFF, oak_staff:_2H_OFF, arcane_staff:_2H_OFF, great_staff:_2H_OFF,
+  oak_wand:_WAND_OFF, crystal_wand:_WAND_OFF, runed_wand:_WAND_OFF,
+  // ranger bows
+  short_bow:_BOW_OFF, hunter_bow:_BOW_OFF, recurve_bow:_BOW_OFF, longbow:_BOW_OFF, warden_longbow:_BOW_OFF
 };
 function makeToolModel(kind){ const g=new THREE.Group();
   if(kind==='pickaxe'){ const h=box(0.07,0.95,0.07,'#8a5a31'); g.add(h); const head=box(0.46,0.1,0.1,'#7a7e86'); head.position.y=0.46; g.add(head);
     const t1=box(0.12,0.18,0.1,'#9aa0a8'); t1.position.set(0.26,0.42,0); t1.rotation.z=0.6; g.add(t1); const t2=t1.clone(); t2.position.x=-0.26; t2.rotation.z=-0.6; g.add(t2); }
   else if(kind==='shovel'){ const h=box(0.07,0.95,0.07,'#8a5a31'); g.add(h); const blade=box(0.28,0.34,0.05,'#9aa0a8'); blade.position.y=0.52; g.add(blade); const lip=box(0.28,0.1,0.05,'#b6bcc4'); lip.position.y=0.69; g.add(lip); }
-  else { const col=kind==='mythic_blade'?'#fff6c8':kind==='dread_reaver'?'#c77dff':kind==='keen_saber'?'#5fa8ff':kind==='titan_blade'?'#ffe066':kind==='gold_sword'?'#ffd23f':kind==='crystal_sword'?'#7fd9ff':kind==='iron_sword'?'#cdd2da':kind==='stone_sword'?'#bcc0c8':'#d8b07a';   // tier-colored blade (epic=purple, rare=blue)
+  else if(WEAPONS[kind] && WEAPONS[kind].kind==='axe'){ const big=kind==='battle_axe'; const h=box(0.07,big?1.0:0.86,0.07,'#8a5a31'); h.position.y=0.4; g.add(h); const head=box(0.34,0.3,0.06,big?'#cdd2da':'#9aa0a8'); head.position.set(0.18,0.74,0); g.add(head); const edge=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.3,3),toon('#dfe4ea')); edge.position.set(0.34,0.74,0); edge.rotation.z=-Math.PI/2; g.add(edge); const pom=ball(0.06,'#caa46a'); pom.position.y=-0.06; g.add(pom); }
+  else if(WEAPONS[kind] && (WEAPONS[kind].kind==='greataxe')){ const h=box(0.1,1.3,0.1,'#6e4a28'); h.position.y=0.5; g.add(h); const head=box(0.5,0.5,0.08,'#b07cff'); head.position.set(0.26,1.0,0); g.add(head); const edge=new THREE.Mesh(new THREE.ConeGeometry(0.26,0.5,3),toon('#e6d5ff')); edge.position.set(0.55,1.0,0); edge.rotation.z=-Math.PI/2; g.add(edge); const edge2=edge.clone(); edge2.position.x=-0.03; edge2.rotation.z=Math.PI/2; head.position.x=0.0; g.add(edge2); }
+  else if(WEAPONS[kind] && (WEAPONS[kind].kind==='mace'||WEAPONS[kind].kind==='warhammer')){ const wh=WEAPONS[kind].kind==='warhammer'; const h=box(wh?0.1:0.07,wh?1.3:0.9,wh?0.1:0.07,'#6e4a28'); h.position.y=wh?0.5:0.42; g.add(h); if(wh){ const head=box(0.42,0.42,0.42,'#9aa0a8'); head.position.y=1.12; g.add(head); const cap=box(0.5,0.18,0.5,'#cdd2da'); cap.position.y=1.12; g.add(cap); } else { const head=ball(0.2,'#9aa0a8'); head.position.y=0.86; g.add(head); for(let i=0;i<4;i++){ const sp=new THREE.Mesh(new THREE.ConeGeometry(0.06,0.16,4),toon('#cdd2da')); const a=i*Math.PI/2; sp.position.set(Math.cos(a)*0.22,0.86,Math.sin(a)*0.22); sp.rotation.z=-Math.cos(a)*Math.PI/2; sp.rotation.x=Math.sin(a)*Math.PI/2; g.add(sp); } } const pom=ball(0.06,'#caa46a'); pom.position.y=wh?-0.06:-0.04; g.add(pom); }
+  else if(WEAPONS[kind] && WEAPONS[kind].kind==='claymore'){ const blade=box(0.13,1.3,0.05,'#e8edf3'); blade.position.y=0.82; g.add(blade); const tip=new THREE.Mesh(new THREE.ConeGeometry(0.1,0.26,4),toon('#e8edf3')); tip.position.y=1.55; g.add(tip); const guard=box(0.56,0.1,0.12,'#8a6a2a'); guard.position.y=0.12; g.add(guard); const grip=box(0.09,0.4,0.09,'#3a2a1a'); grip.position.y=-0.12; g.add(grip); const pom=ball(0.08,'#caa46a'); pom.position.y=-0.34; g.add(pom); }
+  else if(WEAPONS[kind] && (WEAPONS[kind].kind==='wand'||WEAPONS[kind].kind==='staff')){ const st=WEAPONS[kind].kind==='staff'; const tcol=kind==='runed_wand'?'#5fa8ff':kind==='crystal_wand'?'#7fd9ff':kind==='great_staff'?'#c77dff':kind==='arcane_staff'?'#b07cff':'#caa46a'; const shaft=box(0.06,st?1.4:0.72,0.06,'#6e4a28'); shaft.position.y=st?0.5:0.2; g.add(shaft); const tip=new THREE.Mesh(new THREE.SphereGeometry(st?0.18:0.12,8,6),toon(tcol)); tip.position.y=st?1.3:0.62; tip.material.emissive=new THREE.Color(tcol); tip.material.emissiveIntensity=0.95; g.add(tip); if(st){ const claw=new THREE.Mesh(new THREE.TorusGeometry(0.16,0.03,6,12,Math.PI*1.4),toon('#caa46a')); claw.position.y=1.3; claw.rotation.x=Math.PI/2; g.add(claw); } }
+  else if(WEAPONS[kind] && (WEAPONS[kind].kind==='bow'||WEAPONS[kind].kind==='longbow')){ const lng=WEAPONS[kind].kind==='longbow'||kind==='longbow'; const bcol=kind==='warden_longbow'?'#5fa8ff':kind==='recurve_bow'?'#9fd0ff':'#8a5a31'; const arc=new THREE.Mesh(new THREE.TorusGeometry(lng?0.62:0.46,0.04,6,18,Math.PI*1.15),toon(bcol)); arc.rotation.z=Math.PI/2; g.add(arc); const str=box(0.012,(lng?1.2:0.86),0.012,'#efe9d8'); g.add(str); const grip=box(0.06,0.18,0.06,'#3a2a1a'); g.add(grip); }
+  else { const col=kind==='mythic_blade'?'#fff6c8':kind==='dread_reaver'?'#c77dff':kind==='keen_saber'?'#5fa8ff':kind==='twin_sabers'?'#9fd0ff':kind==='titan_blade'?'#ffe066':kind==='gold_sword'?'#ffd23f':kind==='crystal_sword'?'#7fd9ff':kind==='iron_sword'?'#cdd2da':kind==='war_dagger'?'#cdd2da':kind==='stone_sword'?'#bcc0c8':'#d8b07a';   // tier-colored blade (epic=purple, rare=blue)
     const blade=box(0.09,0.82,0.04,col); blade.position.y=0.52; g.add(blade); const tip=new THREE.Mesh(new THREE.ConeGeometry(0.075,0.18,4),toon(col)); tip.position.y=0.97; g.add(tip);
     const guard=box(0.34,0.08,0.11,'#5a4632'); guard.position.y=0.08; g.add(guard); const grip=box(0.08,0.24,0.08,'#3a2a1a'); grip.position.y=-0.07; g.add(grip); const pommel=ball(0.06,'#caa46a'); pommel.position.y=-0.22; g.add(pommel); }
   g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); return g; }
@@ -1429,7 +1528,7 @@ function setHeld(kind){ if(kind===_heldKind) return; _heldKind=kind; while(heldG
 function applyHeldOffsets(){ if(!heldGroup.userData.onBone) return; const o=TOOL_OFFSETS[_heldKind]||_SWORD_OFF; heldGroup.position.set(o.pos[0],o.pos[1],o.pos[2]); heldGroup.rotation.set(o.rot[0],o.rot[1],o.rot[2]); heldGroup.scale.setScalar(o.scale); }
 /* OFF-HAND (left hand): a shield or torch model carried on the arm-left bone (mirror of the held weapon). */
 const offhandGroup=new THREE.Group(); let _offhandKind=''; let _torchLight=null;
-const OFFHAND_OFF={ shield:{pos:[0.0,-0.5,0.14],rot:[0.18,0.5,-0.12],scale:0.78}, torch:{pos:[0.0,-0.4,0.16],rot:[0.05,0,0.0],scale:0.8} };
+const OFFHAND_OFF={ shield:{pos:[0.0,-0.5,0.14],rot:[0.18,0.5,-0.12],scale:0.78}, torch:{pos:[0.0,-0.4,0.16],rot:[0.05,0,0.0],scale:0.8}, charm:{pos:[0.0,-0.32,0.2],rot:[0,0,0],scale:0.85}, quiver:{pos:[0.0,-0.46,0.12],rot:[0.1,0.4,-0.1],scale:0.82}, weapon:{pos:[0.0,-0.44,0.18],rot:[0.1,-0.4,0.06],scale:0.74} };
 const SHIELD_COL={wood:'#8a5a31', stone:'#9a948a', iron:'#c2c7cf', gold:'#ffd23f', titan:'#b07cff'};
 function makeShieldModel(kind){ const g=new THREE.Group(); const sh=SHIELDS[kind]; if(!sh) return g; const col=SHIELD_COL[sh.tier]||'#cccccc';
   const face=box(0.5,0.66,0.08,col); g.add(face); const edge=box(0.56,0.72,0.03,'#5a4632'); edge.position.z=-0.04; g.add(edge);
@@ -1440,8 +1539,19 @@ function makeTorchModel(kind){ const g=new THREE.Group(); const t=TORCHES[kind];
   const stick=box(0.06,0.7,0.06,'#8a5a31'); stick.position.y=0.1; g.add(stick); const grip=box(0.08,0.16,0.08,'#3a2a1a'); grip.position.y=-0.18; g.add(grip);
   const flame=new THREE.Mesh(new THREE.SphereGeometry(0.16,8,6),toon(t.color)); flame.position.y=0.5; flame.scale.y=1.4; flame.material.emissive=new THREE.Color(t.color); flame.material.emissiveIntensity=0.95; g.add(flame);
   g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); return g; }
-function applyOffhandOffsets(){ if(!offhandGroup.userData.onBone) return; const o=TORCHES[_offhandKind]?OFFHAND_OFF.torch:OFFHAND_OFF.shield; offhandGroup.position.set(o.pos[0],o.pos[1],o.pos[2]); offhandGroup.rotation.set(o.rot[0],o.rot[1],o.rot[2]); offhandGroup.scale.setScalar(o.scale); }
-function setOffhand(kind){ if(kind===_offhandKind) return; _offhandKind=kind; while(offhandGroup.children.length) offhandGroup.remove(offhandGroup.children[0]); if(kind){ if(SHIELDS[kind]) offhandGroup.add(makeShieldModel(kind)); else if(TORCHES[kind]) offhandGroup.add(makeTorchModel(kind)); } applyOffhandOffsets(); }
+// MAGE CHARM: a small floating glowing orb on a thin holder (procedural-3D)
+function makeCharmModel(kind){ const g=new THREE.Group(); const c=CHARMS[kind]; if(!c) return g; const col=c.color||'#9fd0ff';
+  const orb=new THREE.Mesh(new THREE.IcosahedronGeometry(0.18,0),toon(col)); orb.position.y=0.18; orb.material.emissive=new THREE.Color(col); orb.material.emissiveIntensity=0.9; g.add(orb);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(0.22,0.03,6,14),toon('#caa46a')); ring.rotation.x=Math.PI/2.4; ring.position.y=0.18; g.add(ring);
+  const grip=box(0.07,0.2,0.07,'#3a2a1a'); grip.position.y=-0.06; g.add(grip);
+  g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); return g; }
+// RANGER QUIVER: a leather body with 3 protruding arrow shafts (procedural-3D)
+function makeQuiverModel(kind){ const g=new THREE.Group(); const q=QUIVERS[kind]; if(!q) return g; const col=q.color||'#caa46a';
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.16,0.62,8),toon(col)); body.position.y=0.0; g.add(body);
+  for(let i=-1;i<=1;i++){ const shaft=box(0.025,0.5,0.025,'#8a5a31'); shaft.position.set(i*0.07,0.42,0.02); shaft.rotation.z=i*0.12; g.add(shaft); const head=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.1,4),toon('#cdd2da')); head.position.set(i*0.085,0.7,0.02); g.add(head); const fletch=box(0.07,0.07,0.01,(SP_ARROWS[q.arrow]?SP_ARROWS[q.arrow].color:'#ff7a3d')); fletch.position.set(i*0.07,0.2,0.04); g.add(fletch); }
+  g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); return g; }
+function applyOffhandOffsets(){ if(!offhandGroup.userData.onBone) return; const k=offhandKindOf(_offhandKind); const o=OFFHAND_OFF[k]||OFFHAND_OFF.shield; offhandGroup.position.set(o.pos[0],o.pos[1],o.pos[2]); offhandGroup.rotation.set(o.rot[0],o.rot[1],o.rot[2]); offhandGroup.scale.setScalar(o.scale); }
+function setOffhand(kind){ if(kind===_offhandKind) return; _offhandKind=kind; while(offhandGroup.children.length) offhandGroup.remove(offhandGroup.children[0]); if(kind){ if(SHIELDS[kind]) offhandGroup.add(makeShieldModel(kind)); else if(TORCHES[kind]) offhandGroup.add(makeTorchModel(kind)); else if(CHARMS[kind]) offhandGroup.add(makeCharmModel(kind)); else if(QUIVERS[kind]) offhandGroup.add(makeQuiverModel(kind)); else if(WEAPONS[kind]) offhandGroup.add(makeToolModel(kind)); } applyOffhandOffsets(); }
 function updateTorchLight(dt){ const isT = state.offhand && TORCHES[state.offhand];
   if(!isT){ if(_torchLight){ removeDynLight(_torchLight); _torchLight=null; } return; }
   const t=TORCHES[state.offhand]; const wp=new THREE.Vector3();
@@ -1907,7 +2017,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.level=num(s.level,1,1,50); state.xp=num(s.xp,0,0,1e9); state.hpMax=hpMaxForLevel(state.level);   // XP/level restore; max HP derives from level + equipped-armor bonus ❤️
   state.weapons=(s.weapons&&typeof s.weapons==='object')?s.weapons:{}; for(const id in state.weapons){ const r=RECIPES.find(x=>x.id===id); if(r&&r.weapon&&r.locked) r.locked=false; } state.weapon=(WEAPONS[s.weapon]?s.weapon:'fist'); if(state.weapon==='fist') equipBest();   // keep a saved dropped weapon equipped; only auto-pick when none state.hasPickaxe=!!s.hasPickaxe; state.hasShovel=!!s.hasShovel; state.hasRod=!!s.hasRod; state.pickTier=num(s.pickTier,0,0,2); state.shovelTier=num(s.shovelTier,0,0,2);
   state.armors=(s.armors&&typeof s.armors==='object')?s.armors:{}; for(const id in state.armors){ const r=RECIPES.find(x=>x.id===id+'_armor'); } state.armor=(ARMORS[s.armor]?s.armor:''); if(!state.armor) equipBestArmor();   // keep a saved dropped armor equipped
-  state.offhands=(s.offhands&&typeof s.offhands==='object')?s.offhands:{}; state.offhand=(SHIELDS[s.offhand]||TORCHES[s.offhand])?s.offhand:'';   // restore the equipped off-hand (shield/torch)
+  state.offhands=(s.offhands&&typeof s.offhands==='object')?s.offhands:{}; state.offhand=offhandItem(s.offhand)?s.offhand:'';   // restore the equipped off-hand (shield/torch/charm/quiver/dual-wield weapon) — offhandItem covers ALL kinds so a reload never drops it
   state.charModel=(s.charModel&&PLAYER_MODELS.includes(s.charModel))?s.charModel:'char_player';   // restore the chosen character look
   state.charClass=(s.charClass&&CLASSES[s.charClass])?s.charClass:'warrior'; state.mana=num(s.mana,0,0,99999); state.manaMax=num(s.manaMax,0,0,99999); state.dyeColor=(typeof s.dyeColor==='string')?s.dyeColor:'';   // pre-class saves default to Warrior
   state.gear=(s.gear&&typeof s.gear==='object')?{helmet:ARMORS[s.gear.helmet]?s.gear.helmet:'',body:ARMORS[s.gear.body]?s.gear.body:'',legs:ARMORS[s.gear.legs]?s.gear.legs:'',boots:ARMORS[s.gear.boots]?s.gear.boots:''}:{helmet:'',body:'',legs:'',boots:''};
@@ -1960,7 +2070,7 @@ function ownedUnequippedGear(){ const out=[]; const eq=Object.values(state.gear|
   for(const id of WTIER.slice(1)){ if(state.weapons&&state.weapons[id] && state.weapon!==id) out.push([id,'weapon']); }
   for(const id in (state.weapons||{})){ if(WEAPONS[id]&&WEAPONS[id].rarity && state.weapon!==id && !out.find(o=>o[0]===id)) out.push([id,'weapon']); }
   for(const id in (state.armors||{})){ if(ARMORS[id] && !eq.includes(id)) out.push([id,'armor']); }
-  for(const id in (state.offhands||{})){ if((SHIELDS[id]||TORCHES[id]) && state.offhand!==id) out.push([id,'offhand']); }
+  for(const id in (state.offhands||{})){ if((SHIELDS[id]||TORCHES[id]||CHARMS[id]||QUIVERS[id]) && state.offhand!==id) out.push([id,'offhand']); }
   if(state.hasPickaxe) out.push(['pickaxe','tool']); if(state.hasShovel) out.push(['shovel','tool']);
   return out; }
 function usedSlots(){ let n=0; for(const k in state.inv){ if(state.inv[k]>0) n++; } return n + ownedUnequippedGear().length; }
@@ -2009,11 +2119,12 @@ function openSlotPicker(slot, type){ const el=document.getElementById('pdpick');
   const titleMap={helmet:'🪖 Helmet',body:'👕 Body Armor',legs:'👖 Legguards',boots:'👢 Boots',weapon:'⚔️ Weapon',offhand:'🛡️ Off-Hand'};
   let items=[];
   if(type==='weapon'){ items.push({id:'fist',name:'Fists',icon:'✊',dmg:(WEAPONS.fist&&WEAPONS.fist.dmg)||10}); for(const id of WTIER){ if(id!=='fist' && state.weapons&&state.weapons[id]) items.push(Object.assign({id},WEAPONS[id])); } for(const id in (state.weapons||{})){ if(WEAPONS[id]&&WEAPONS[id].rarity && !items.find(x=>x.id===id)) items.push(Object.assign({id},WEAPONS[id])); } }
-  else if(type==='offhand'){ for(const id in (state.offhands||{})){ const o=SHIELDS[id]||TORCHES[id]; if(o) items.push(Object.assign({id},o)); } }
+  else if(type==='offhand'){ for(const id in (state.offhands||{})){ const o=SHIELDS[id]||TORCHES[id]||CHARMS[id]||QUIVERS[id]; if(o) items.push(Object.assign({id},o)); }
+    if(playerClass()==='warrior'){ for(const id in (state.weapons||{})){ if(WEAPONS[id]&&handsOf(id)==='1h'&&id!==state.weapon&&!items.find(x=>x.id===id)) items.push(Object.assign({id,_dual:true},WEAPONS[id])); } } }   // warrior dual-wield: a 2nd 1H weapon in the off-hand
   else { for(const id in (state.armors||{})){ const a=ARMORS[id]; if(a && (a.slot||'body')===slot) items.push(Object.assign({id},a)); } }
   let html=`<div class="pdpickcard" onclick="event.stopPropagation()"><h3>${titleMap[type==='weapon'?'weapon':slot]||'Equip'} <span class="x" id="pdpickX">✕</span></h3>`;
   if(!items.length) html+=`<div style="opacity:.7;font-size:13px;padding:10px 4px">Nothing for this slot yet — craft or find some gear!</div>`;
-  for(const it of items){ const on=(type==='weapon')?state.weapon===it.id:(type==='offhand')?state.offhand===it.id:(state.gear&&state.gear[slot])===it.id; const rr=RARITY[it.rarity]||RARITY.common; const dp=(it.id&&it.id!=='fist')?` · 🔧${Math.round(durFrac(it.id)*100)}%`:''; const stat=(type==='weapon')?`dmg ${it.dmg||0}`:(type==='offhand')?(SHIELDS[it.id]?`🛡️ ${Math.round(it.block*100)}%`:'🔥 light'):`${armorRating(it.id,state.level).toFixed(1)}🛡️`;
+  for(const it of items){ const on=(type==='weapon')?state.weapon===it.id:(type==='offhand')?state.offhand===it.id:(state.gear&&state.gear[slot])===it.id; const rr=RARITY[it.rarity]||RARITY.common; const dp=(it.id&&it.id!=='fist')?` · 🔧${Math.round(durFrac(it.id)*100)}%`:''; const stat=(type==='weapon')?`dmg ${it.dmg||0}`:(type==='offhand')?(SHIELDS[it.id]?`🛡️ ${Math.round(it.block*100)}%`:CHARMS[it.id]?`🔮 ×${it.spellPower}`:QUIVERS[it.id]?`🎯 ${SP_ARROWS[it.arrow]?SP_ARROWS[it.arrow].i:''}`:WEAPONS[it.id]?`⚔️ ${it.dmg}`:'🔥 light'):`${armorRating(it.id,state.level).toFixed(1)}🛡️`;
     html+=`<div class="pdpickrow${on?' on':''}" data-id="${it.id}" data-type="${type}" data-slot="${slot}"><span class="pi" style="color:${rr.color}">${it.icon}</span><span class="pn" style="color:${rr.color}">${rr.mark||''}${it.name}</span><span class="ps">${stat}${dp}</span></div>`; }
   html+=`</div>`; el.innerHTML=html; el.classList.remove('hidden');
   el.querySelector('#pdpickX').onclick=closeSlotPicker; el.onclick=(e)=>{ if(e.target===el)closeSlotPicker(); };
@@ -2066,7 +2177,7 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
   // ── two columns: CHARACTER (paper-doll) LEFT, BACKPACK RIGHT ──
   h+=`<div class="invcols"><div class="invleft">`;
   { const g=state.gear||{};
-    const cell=(slot,type,lbl,ph)=>{ let id='',it=null; if(type==='weapon'){ id=(state.weapon&&state.weapon!=='fist')?state.weapon:''; it=id?WEAPONS[id]:null; } else if(type==='offhand'){ id=state.offhand||''; it=id?(SHIELDS[id]||TORCHES[id]):null; } else { id=g[slot]||''; it=id?ARMORS[id]:null; }
+    const cell=(slot,type,lbl,ph)=>{ let id='',it=null; if(type==='weapon'){ id=(state.weapon&&state.weapon!=='fist')?state.weapon:''; it=id?WEAPONS[id]:null; } else if(type==='offhand'){ id=state.offhand||''; it=id?offhandItem(id):null; } else { id=g[slot]||''; it=id?ARMORS[id]:null; }
       const rr=it?(RARITY[it.rarity]||RARITY.common):RARITY.common; const icon=it?it.icon:ph; const dp=id?Math.round(durFrac(id)*100):0;
       return `<div class="pdslot${it?' on':''}" data-slot="${slot}" data-type="${type}" style="grid-area:${slot};${it?`border-color:${rr.color}`:''}"><span class="pdl">${lbl}</span><span class="pdi">${icon}</span>${it?`<span class="pdd" style="color:${dp<=20?'#ff6b6b':dp<=50?'#ffcf3a':'#9be8c8'}">🔧${dp}%</span>`:''}</div>`; };
     h+=`<div class="paperdoll pdwide"><div class="pdtitle">🧍 Your Character</div><div class="pdgrid">`
@@ -2079,7 +2190,7 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
   const tileList=[];
   for(const [id,kind] of ownedUnequippedGear()){
     if(kind==='tool'){ const td=TOOLDEF[id]; tileList.push(`<div class="invtile" title="${td.name} — select it on your hotbar to use"><div class="ti">${td.icon}</div><div class="tn">${td.name}</div></div>`); continue; }
-    const it=kind==='weapon'?WEAPONS[id]:kind==='offhand'?(SHIELDS[id]||TORCHES[id]):ARMORS[id]; const rr=RARITY[it.rarity]||RARITY.common; const dp=Math.round(durFrac(id)*100); const gate=EQUIP_LVL[id]&&(state.level||1)<EQUIP_LVL[id];
+    const it=kind==='weapon'?WEAPONS[id]:kind==='offhand'?offhandItem(id):ARMORS[id]; const rr=RARITY[it.rarity]||RARITY.common; const dp=Math.round(durFrac(id)*100); const gate=EQUIP_LVL[id]&&(state.level||1)<EQUIP_LVL[id];
     tileList.push(`<div class="invtile gear${gate?' gated':''}" draggable="true" data-gear="${id}" data-kind="${kind}" style="border-color:${rr.color}">${dp<=20?'<span class="tc" style="color:#ff6b6b">⚠️</span>':''}<div class="ti">${it.icon}</div><div class="tn" style="color:${rr.color}">${it.name}</div></div>`);
   }
   for(const k of Object.keys(ITEMS)){ const c=state.inv[k]||0; if(c<=0)continue; const eat=FOOD_EFFECTS[k]; const desc=ITEM_DESC[k]?ITEMS[k].n+' — '+ITEM_DESC[k]:ITEMS[k].n;
@@ -2183,6 +2294,29 @@ function recipeLevel(r){ return r.lvl||1; }
 /* ============================ CRAFTING ============================ */
 const RECIPES=[
   {id:'wood_sword', name:'🗡️ Wooden Sword', cat:'tool', lvl:1, cost:{wood:3}, weapon:true, build:p=>gainWeapon('wood_sword') },
+  // ── WARRIOR weapon variety — a craftable upgrade every 1-2 levels (axes/daggers/maces 1H · greataxe/claymore/warhammer 2H) ──
+  {id:'hand_axe', name:'🪓 Hand Axe', cat:'tool', cls:'warrior', lvl:4, cost:{wood:2,stone:2}, weapon:true, build:p=>gainWeapon('hand_axe') },
+  {id:'war_dagger', name:'🗡️ War Dagger', cat:'tool', cls:'warrior', lvl:7, cost:{iron_ingot:1,wood:1}, weapon:true, build:p=>gainWeapon('war_dagger') },
+  {id:'battle_axe', name:'🪓 Battle Axe', cat:'tool', cls:'warrior', lvl:11, cost:{iron_ingot:2,wood:2}, weapon:true, build:p=>gainWeapon('battle_axe') },
+  {id:'iron_mace', name:'🔨 Iron Mace', cat:'tool', cls:'warrior', lvl:15, cost:{iron_ingot:3,stone:2}, weapon:true, build:p=>gainWeapon('iron_mace') },
+  {id:'twin_sabers', name:'🗡️ Twin Saber (off-hand)', cat:'tool', cls:'warrior', lvl:9, cost:{iron_ingot:2,crystal:1}, weapon:true, build:p=>gainWeapon('twin_sabers') },
+  {id:'greataxe', name:'🪓 Greataxe (2H)', cat:'tool', cls:'warrior', lvl:18, cost:{iron_ingot:4,crystal:2}, weapon:true, build:p=>gainWeapon('greataxe') },
+  {id:'claymore', name:'⚔️ Claymore (2H)', cat:'tool', cls:'warrior', lvl:24, cost:{gold_ingot:2,crystal:3}, weapon:true, build:p=>gainWeapon('claymore') },
+  {id:'war_hammer', name:'🔨 War Hammer (2H)', cat:'tool', cls:'warrior', lvl:33, cost:{gold_ingot:3,boss_core:1}, weapon:true, build:p=>gainWeapon('war_hammer') },
+  // ── MAGE wands (1H, charm-enabled) + 2H greatstaff + CHARM off-hands ──
+  {id:'oak_wand', name:'🪄 Oak Wand', cat:'tool', cls:'mage', lvl:3, cost:{wood:3,crystal:1}, weapon:true, build:p=>gainWeapon('oak_wand') },
+  {id:'crystal_wand', name:'🪄 Crystal Wand', cat:'tool', cls:'mage', lvl:12, cost:{crystal:4,iron_ingot:1}, weapon:true, build:p=>gainWeapon('crystal_wand') },
+  {id:'runed_wand', name:'🪄 Runed Wand', cat:'tool', cls:'mage', lvl:22, cost:{crystal:6,gold_ingot:1}, weapon:true, build:p=>gainWeapon('runed_wand') },
+  {id:'great_staff', name:'🪄 Elder Greatstaff (2H)', cat:'tool', cls:'mage', lvl:30, cost:{crystal:8,gold_ingot:2}, weapon:true, build:p=>gainWeapon('great_staff') },
+  {id:'charm_focus', name:'🔮 Apprentice Charm', cat:'tool', cls:'mage', lvl:4, cost:{crystal:2,wood:1}, build:p=>gainOffhand('charm_focus') },
+  {id:'charm_arcane', name:'🔮 Arcane Sigil', cat:'tool', cls:'mage', lvl:14, cost:{crystal:4,iron_ingot:1}, build:p=>gainOffhand('charm_arcane') },
+  {id:'charm_eldritch', name:'🔮 Eldritch Idol', cat:'tool', cls:'mage', lvl:28, cost:{crystal:6,boss_core:1}, build:p=>gainOffhand('charm_eldritch') },
+  // ── RANGER bow variety (recurve 1H / warden 2H) + QUIVER off-hands (supply+buff special arrows) ──
+  {id:'recurve_bow', name:'🏹 Recurve Bow', cat:'tool', cls:'ranger', lvl:9, cost:{wood:4,crystal:2}, weapon:true, build:p=>gainWeapon('recurve_bow') },
+  {id:'warden_longbow', name:'🏹 Warden Longbow (2H)', cat:'tool', cls:'ranger', lvl:26, cost:{wood:6,gold_ingot:2}, weapon:true, build:p=>gainWeapon('warden_longbow') },
+  {id:'quiver_hunter', name:"🎯 Hunter's Quiver", cat:'tool', cls:'ranger', lvl:6, cost:{leather:2,wood:2}, build:p=>gainOffhand('quiver_hunter') },
+  {id:'quiver_ember', name:'🎯 Ember Quiver', cat:'tool', cls:'ranger', lvl:16, cost:{leather:2,crystal:3}, build:p=>gainOffhand('quiver_ember') },
+  {id:'quiver_frost', name:'🎯 Frostward Quiver', cat:'tool', cls:'ranger', lvl:24, cost:{leather:2,crystal:5,gold_ingot:1}, build:p=>gainOffhand('quiver_frost') },
   // ── OFF-HAND: shields (block hits) + torches (carry a light) — equip to the L-hand slot in your bag ──
   {id:'wood_shield', name:'🛡️ Wooden Shield', cat:'tool', lvl:1, cost:{wood:5}, build:p=>gainOffhand('wood_shield') },
   {id:'stone_shield', name:'🛡️ Stone Shield', cat:'tool', lvl:6, cost:{stone:5,wood:2}, build:p=>gainOffhand('stone_shield') },
@@ -2512,17 +2646,17 @@ function fireflies(){ const px=player.position.x,pz=player.position.z;
 function toast(msg){ const box=document.getElementById('toasts'); const t=document.createElement('div'); t.className='toast'; t.textContent=msg; box.appendChild(t); while(box.children.length>3) box.firstChild.remove();   // cap stack so burst events don't flood the screen
   setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; setTimeout(()=>t.remove(),400); },2600); }
 // ── RARITY TIERS (common/rare/epic) — drop % LOWER per tier; loot scales up by tier ──
-const RARITY={ common:{p:0.70,mult:1,color:'#e8e8e8',label:'Common',mark:''}, rare:{p:0.24,mult:2,color:'#5fa8ff',label:'Rare',mark:'✦ '}, epic:{p:0.06,mult:3,color:'#c77dff',label:'Epic',mark:'★ '} };
+const RARITY={ common:{p:0.70,mult:1,color:'#e8e8e8',label:'Common',mark:''}, uncommon:{p:0,mult:1.4,color:'#5fe08a',label:'Uncommon',mark:'◈ '}, rare:{p:0.24,mult:2,color:'#5fa8ff',label:'Rare',mark:'✦ '}, epic:{p:0.06,mult:3,color:'#c77dff',label:'Epic',mark:'★ '} };   // GREEN uncommon tier between common+rare (p:0 = not in the random loot roll; an explicit craft/gear tier)
 // ── DURABILITY — every weapon/armor (and shields/torches) wears with use; rarity = longevity (epic best) ──
-const DUR_BASE={common:150, rare:360, epic:720};   // hits/uses before it breaks
-function itemRarity(id){ const it=(typeof WEAPONS!=='undefined'&&WEAPONS[id])||(typeof ARMORS!=='undefined'&&ARMORS[id])||(typeof SHIELDS!=='undefined'&&SHIELDS[id])||(typeof TORCHES!=='undefined'&&TORCHES[id]); return (it&&it.rarity)||'common'; }
+const DUR_BASE={common:150, uncommon:240, rare:360, epic:720};   // hits/uses before it breaks
+function itemRarity(id){ const it=(typeof WEAPONS!=='undefined'&&WEAPONS[id])||(typeof ARMORS!=='undefined'&&ARMORS[id])||(typeof SHIELDS!=='undefined'&&SHIELDS[id])||(typeof TORCHES!=='undefined'&&TORCHES[id])||(typeof CHARMS!=='undefined'&&CHARMS[id])||(typeof QUIVERS!=='undefined'&&QUIVERS[id]); return (it&&it.rarity)||'common'; }
 function durMaxFor(id){ return DUR_BASE[itemRarity(id)]||DUR_BASE.common; }
 function getDur(id){ if(!id||id==='fist')return Infinity; if(!state.dur)state.dur={}; if(state.dur[id]==null)state.dur[id]=durMaxFor(id); return state.dur[id]; }
 function durFrac(id){ if(!id||id==='fist')return 1; const m=durMaxFor(id)||1; return Math.max(0,Math.min(1,getDur(id)/m)); }
 function useDur(id,amt){ if(!id||id==='fist')return; if(!state.dur)state.dur={}; const mx=durMaxFor(id),cur=getDur(id),nx=Math.max(0,cur-(amt||1)); state.dur[id]=nx;
   if(nx<=0){ breakItem(id); } else if(cur/mx>0.2 && nx/mx<=0.2){ const it=(WEAPONS[id]||ARMORS[id]||{}); toast(`${it.icon||'🛠️'} ${it.name||'Gear'} is wearing out — craft a 🔧 Repair Kit soon!`); if(invOpen&&typeof renderInv==='function')renderInv(); } }
 function breakItem(id){
-  if((typeof SHIELDS!=='undefined'&&SHIELDS[id])||(typeof TORCHES!=='undefined'&&TORCHES[id])){ const oit=SHIELDS[id]||TORCHES[id]; if(state.offhands)delete state.offhands[id]; if(state.offhand===id)state.offhand=''; if(state.dur)delete state.dur[id]; if(typeof rarityToast==='function')rarityToast(SHIELDS[id]?'rare':'common', SHIELDS[id]?`🛡️ Your ${oit.name} shattered! Craft a 🔧 Repair Kit to keep gear alive.`:`🔥 Your ${oit.name} burned out!`); if(invOpen&&typeof renderInv==='function')renderInv(); if(typeof Inv!=='undefined'&&Inv.render)Inv.render(); save(); return; }
+  if((typeof SHIELDS!=='undefined'&&SHIELDS[id])||(typeof TORCHES!=='undefined'&&TORCHES[id])||(typeof CHARMS!=='undefined'&&CHARMS[id])||(typeof QUIVERS!=='undefined'&&QUIVERS[id])){ const oit=SHIELDS[id]||TORCHES[id]||CHARMS[id]||QUIVERS[id]; if(state.offhands)delete state.offhands[id]; if(state.offhand===id)state.offhand=''; if(state.dur)delete state.dur[id]; if(typeof rarityToast==='function')rarityToast(SHIELDS[id]?'rare':'common', SHIELDS[id]?`🛡️ Your ${oit.name} shattered! Craft a 🔧 Repair Kit to keep gear alive.`:CHARMS[id]?`🔮 Your ${oit.name} crumbled!`:QUIVERS[id]?`🎯 Your ${oit.name} wore out!`:`🔥 Your ${oit.name} burned out!`); if(invOpen&&typeof renderInv==='function')renderInv(); if(typeof Inv!=='undefined'&&Inv.render)Inv.render(); save(); return; }
   const isW=(typeof WEAPONS!=='undefined')&&!!WEAPONS[id], it=(isW?WEAPONS[id]:ARMORS[id])||{};
   if(isW){ if(state.weapons)delete state.weapons[id]; if(state.weapon===id){ state.weapon='fist'; if(typeof equipBest==='function')equipBest(); } }
   else { if(state.armors)delete state.armors[id]; if(state.gear){ for(const s in state.gear){ if(state.gear[s]===id)state.gear[s]=''; } } if(typeof equipBestArmor==='function')equipBestArmor(); }
@@ -3123,13 +3257,16 @@ function updateAnimals(dt){ for(let i=animals.length-1;i>=0;i--){ const a=animal
   if(m.scale.x>1.001) m.scale.setScalar(lerp(m.scale.x,1,dt*9));
   if(Math.hypot(m.position.x,m.position.z)>FENCE){ a.wdir=Math.atan2(-m.position.z,-m.position.x); } } }
 function spawnCreature(){ let sx,sz,pd;
-  if(!isDay()){ const a=rand(0,TAU), r=rand(24,68); sx=player.position.x+Math.cos(a)*r; sz=player.position.z+Math.sin(a)*r; pd=Math.hypot(sx,sz); }   // NIGHT: spawn in a ring AROUND the player (Minecraft-style) — the OLD field-wide rand(24,FENCE) scattered ~14 foes across the 613 field so you'd never meet one (owner: "where did they all go?"); pd (dist from town) still tiers difficulty
-  else { const a=rand(0,TAU), r=rand(22,36); sx=player.position.x+Math.cos(a)*r; sz=player.position.z+Math.sin(a)*r; pd=Math.hypot(sx,sz); }   // DAY: near the player (rare + gentle)
+  for(let tries=0;tries<8;tries++){ const a=rand(0,TAU), r=isDay()?rand(22,36):rand(24,68); sx=player.position.x+Math.cos(a)*r; sz=player.position.z+Math.sin(a)*r; pd=Math.hypot(sx,sz); if(!inTrainingZone(sx,sz)) break; }   // NIGHT rings the player (Minecraft-style), DAY near the player — but re-roll up to 8× so a point never lands in the 🎯 training yard; pd (dist from town) still tiers difficulty
+  if(inTrainingZone(sx,sz)) return;   // 🎯 hard fallback: if all 8 re-rolls stayed in-zone, ABORT this spawn (the continuous-respawn tick simply tries again, like the cull cadence) — no mob EVER spawns in the practice yard, day or night
   const t=pickCreatureType(pd); const c=makeCreature(t);
   c.position.set(sx,groundY(sx,sz),sz); world.add(c);
   const distMul=1+Math.min(1.7, pd/190);   // OUTSKIRTS scaling (owner): the further from town you fight, the TOUGHER — +HP and +damage, up to ~2.7x deep out. Spooky mobs (skeleton/pumpkin/zombie) already have higher base t.hp/t.dmg + spawn far, so they're the hard ones.
   const hp=Math.max(36,Math.round((90+state.day*18)*t.hp*distMul)); const mats=[]; c.traverse(m=>{ if(m.isMesh&&m.material&&m.material.emissive) mats.push(m.material); });
   creatures.push({mesh:c,hp,max:hp,cd:rand(0,1),bob:Math.random()*TAU,mats,flash:0,type:t,aggro:false,wdir:rand(0,TAU),wt:rand(0.5,2.5),dmgMul:distMul}); }
+function updateTrainingGround(dt){ for(const c of creatures){ if(!c.training||!c.trainPath)continue; const p=c.trainPath;   // 🎯 slide moving targets ping-pong along their rail; projectile hit-test reads mesh.position live so leading works for free
+    p.t=(p.t||0)+dt*(p.spd||0.3); const f=0.5-0.5*Math.cos(p.t*TAU);   // smooth 0..1..0 sine sweep
+    const nx=p.ax+(p.bx-p.ax)*f, nz=p.az+(p.bz-p.az)*f; c.mesh.position.x=nx; c.mesh.position.z=nz; c.mesh.position.y=groundY(nx,nz); } }
 function despawnCreatures(){ for(const c of creatures) world.remove(c.mesh); creatures.length=0;
   for(const d of drops) world.remove(d.mesh); drops.length=0; for(const p of projectiles) world.remove(p.mesh); projectiles.length=0; }
 function damagePlayer(n){ if(state._invuln>0)return;
@@ -3150,7 +3287,8 @@ function respawnPlayer(){ if(DUNGEON.inDungeon)DUNGEON.inDungeon=false; if(MINE.
   state.hp=state.hpMax; player.position.set(HOUSE.cx,0.3,HOUSE.cz+12); vy=0; state._invuln=2.6; despawnCreatures(); renderHearts();
   rarityToast('rare', lost>0?`💀 You fainted! Lost ${lost} 🪙 (10% of carried coin). Only coin is lost — and only what you carry. 🧰 Bank your coins in the home Stash to keep them safe!`:'💀 You fainted — woke safe at home. (You lose 10% of CARRIED coin on death — bank it in your home 🧰 Stash!)');
   flashFade(); save(); }
-function equipBest(){ const T=CLASS_WTIER[playerClass()]||WTIER; for(let i=T.length-1;i>=0;i--){ if(i===0||(state.weapons&&state.weapons[T[i]])){ state.weapon=T[i]; return; } } state.weapon='fist'; }
+function equipBest(){ const T=CLASS_WTIER[playerClass()]||WTIER; for(let i=T.length-1;i>=0;i--){ if(i===0||(state.weapons&&state.weapons[T[i]])){ state.weapon=T[i]; if(handsOf(state.weapon)==='2h' && state.offhand){ state.offhand=''; }   // a 2H auto-pick frees the off-hand (no charm/shield with two hands)
+  return; } } state.weapon='fist'; }
 function manaMaxForLevel(lvl){ return 50 + (((lvl||1)-1)*10); }
 function applyClass(cls,gender){ state.charClass=cls; const idx={warrior:'a',mage:'b',ranger:'c'}[cls]||'a'; state.charModel=(gender==='female'?'character-female-':'character-male-')+idx;
   const start=CLASSES[cls].start; state.weapons=state.weapons||{}; state.weapons[start]=true; state.weapon=start;
@@ -3171,7 +3309,7 @@ function openClassPick(thenStart){ let el=document.getElementById('classpick'); 
   };
   draw(); }
 function gainWeapon(id){ state.weapons[id]=true; equipBest(); const w=WEAPONS[id]; toast(`${w.icon} Crafted + equipped the ${w.name}!`); if(invOpen)renderInv(); Inv.render(); }
-function gainOffhand(id){ if(!state.offhands)state.offhands={}; state.offhands[id]=true; equipGear(id,'offhand'); const it=(SHIELDS[id]||TORCHES[id]); if(it)toast(`${it.icon} Crafted + equipped ${it.name}!`); if(invOpen)renderInv(); Inv.render(); save(); }   // craft a shield/torch -> owned + auto-equipped to the off-hand
+function gainOffhand(id){ if(!state.offhands)state.offhands={}; state.offhands[id]=true; equipGear(id,'offhand'); const it=offhandItem(id); if(it)toast(`${it.icon} Crafted + equipped ${it.name}!`); if(invOpen)renderInv(); Inv.render(); save(); }   // craft a shield/torch/charm/quiver -> owned + auto-equipped to the off-hand
 const playerShots=[];   // CLASS projectiles — mage bolts / ranger arrows that damage enemies (distinct from the enemy `projectiles`)
 function _spawnShot(dmg, color, bolt, crit){ const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y), sp=24;
   const m=bolt? ball(0.24,color||'#9b7bff') : new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.75,5), new THREE.MeshBasicMaterial({color:color||'#caa46a'}));
@@ -3190,29 +3328,45 @@ function doAttack(){ const e=hotbarLayout()[state.selectedSlot]; if(e&&e.kind===
 function castSpell(itemKey){ if(playerClass()!=='mage'){ toast('🪄 Only mages cast spells.'); return; } const sp=SPELL_OF(itemKey); if(!sp)return; if(state._atkCD>0)return; if((state.mana||0)<sp.mana){ toast('💧 Not enough mana — rest or eat a snack to recharge.'); SFX.play('interact',{rate:0.5,vol:0.4}); return; }
   state.mana-=sp.mana; updateManaUI(); state._atkCD=0.55; state._swing=0.25; emote('attack-melee-right');
   if(sp.heal){ const h=Math.round(state.hpMax*sp.heal); state.hp=Math.min(state.hpMax,(state.hp||0)+h); renderHearts(); try{ popDmg(player.position.x,(player.position.y||0)+2.4,player.position.z,'+'+h,{color:'#5fe08a'}); }catch(e){} SFX.play('success',{vol:0.5}); toast('💚 '+sp.n+' — healed!'); return; }
-  _spawnShot((WEAPONS[state.weapon]&&WEAPONS[state.weapon].dmg||16)*sp.mult, sp.color, true, 0.1); toast(sp.i+' '+sp.n+'!'); }
+  const _ch=CHARMS[state.offhand]; const _spw=(_ch&&_ch.spellPower)||1;   // 🔮 mage charm off-hand multiplies spell power
+  _spawnShot((WEAPONS[state.weapon]&&WEAPONS[state.weapon].dmg||16)*sp.mult*_spw, sp.color, true, 0.1); toast(sp.i+' '+sp.n+(_spw>1?' ✦':'')+'!'); }
 function fireArrow(itemKey){ if(playerClass()!=='ranger'){ toast('🏹 Only rangers use special arrows.'); return; } const ar=ARROW_OF(itemKey); if(!ar)return; if((state.inv[itemKey]||0)<1){ toast('🏹 Out of '+(ITEMS[itemKey]?ITEMS[itemKey].n:'arrows')+' — craft more (press C).'); return; } if(state._atkCD>0)return; Inv.take(itemKey,1); state._atkCD=0.42; state._swing=0.25; emote('attack-melee-right');
-  _spawnShot((WEAPONS[state.weapon]&&WEAPONS[state.weapon].dmg||22)*ar.mult, ar.color, false, 0.05); toast((ITEMS[itemKey]?ITEMS[itemKey].i:'🏹')+' '+ar.n+'!'); }
-function updateMana(dt){ if((state.manaMax||0)>0 && state.mana<state.manaMax){ state.mana=Math.min(state.manaMax, state.mana+dt*3); updateManaUI(); } }   // mana trickles back slowly over time; rest + mage snacks restore more
+  const _q=QUIVERS[state.offhand]; const _supplies=(_q&&_q.arrow===itemKey);   // 🎯 quiver SUPPLIES + BUFFS its arrow type
+  const _mul=(_supplies?(_q.dmgMul||1):1);
+  if(_supplies){ Inv.add(itemKey,1); }   // a matching quiver refunds the consumed special arrow (free supply)
+  _spawnShot((WEAPONS[state.weapon]&&WEAPONS[state.weapon].dmg||22)*ar.mult*_mul, ar.color, false, 0.05); toast((ITEMS[itemKey]?ITEMS[itemKey].i:'🏹')+' '+ar.n+(_supplies?' 🎯':'')+'!'); }
+function updateMana(dt){ if((state.manaMax||0)>0 && state.mana<state.manaMax){ const _ch=CHARMS[state.offhand]; const regen=3+((_ch&&_ch.manaRegen)||0); state.mana=Math.min(state.manaMax, state.mana+dt*regen); updateManaUI(); } }   // mana trickles back slowly over time; rest + mage snacks restore more; 🔮 charm off-hand adds manaRegen
 function updateManaUI(){ const el=document.getElementById('manabar'); if(!el)return; if((state.manaMax||0)<=0){ el.style.display='none'; return; } el.style.display=''; const f=Math.max(0,Math.min(1,state.mana/state.manaMax)); const fl=el.querySelector('.fill'); if(fl)fl.style.width=(f*100).toFixed(0)+'%'; const mv=el.querySelector('.mv'); if(mv)mv.textContent=Math.round(state.mana)+'/'+state.manaMax; }
 function playerAttack(){ if(!state.running||state.paused)return; if(state._atkCD>0) return;   // attack-speed gate (only kicks in when energy is low — full energy = no cooldown, spam freely)
-  const asm=Needs.atkSpeedMul(); state._atkCD = asm<1 ? 0.42/asm : 0; state._swing=0.32;
-  const w=WEAPONS[state.weapon]||WEAPONS.fist; const base=w.dmg*Needs.dmgMul(); SFX.play('interact'); emote('attack-melee-right'); shake(0.12);   // ALWAYS the arm SWING (owner: never the kick)
-  const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y); let hit=0;
+  const w=WEAPONS[state.weapon]||WEAPONS.fist;
+  // ── WEAPON HANDS: 2H = slower swing (bigger base CD) + cleave; warrior DUAL-WIELD (1H offhand weapon) = faster swing + a 2nd 60%-dmg hit ──
+  const is2H = handsOf(state.weapon)==='2h';
+  const dualWeap = (playerClass()==='warrior' && state.offhand && WEAPONS[state.offhand] && handsOf(state.offhand)==='1h') ? WEAPONS[state.offhand] : null;
+  let cdBase = is2H?0.62 : 0.42; if(dualWeap) cdBase*=0.8;   // 2H slower; dual-wield ~+20% swing speed
+  const asm=Needs.atkSpeedMul(); state._atkCD = asm<1 ? cdBase/asm : (is2H?0.22:(dualWeap?0.18:0)); state._swing=0.32;   // dual-wield keeps a small swing rhythm even at full energy (the off-hand needs time to recover)
+  const base=w.dmg*Needs.dmgMul(); SFX.play('interact'); emote('attack-melee-right'); shake(is2H?0.18:0.12);   // ALWAYS the arm SWING (owner: never the kick)
+  const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y); let hit=0; let primaryC=null, primaryD=Infinity;
   for(let i=creatures.length-1;i>=0;i--){ const c=creatures[i], m=c.mesh; if(!m.visible)continue;   // can't strike an unrevealed ghost
     const dx=m.position.x-player.position.x, dz=m.position.z-player.position.z, d=Math.hypot(dx,dz)||1;
     if(d>w.range)continue; if((dx*fx+dz*fz)/d<0.25)continue;   // must be in the forward arc
+    if(d<primaryD){ primaryD=d; primaryC=c; }
     const roll=rollDamage(base, w.crit||0); c.hp-=roll.dmg; hit++; m.position.x+=dx/d*0.7; m.position.z+=dz/d*0.7; creatureHit(c);   // 🎲 dice damage + knockback + hit-flash/recoil
     popDmg(m.position.x, (m.position.y||0)+(c.boss?2.8:1.7), m.position.z, roll.dmg, {crit:roll.crit, color:(roll.crit?'#ffd23f':'#ff6b6b')});   // RED damage on the mob (crit = gold)
     if(w.life){ const heal=Math.max(1,Math.round(roll.dmg*w.life)); if(state.hp<state.hpMax){ state.hp=Math.min(state.hpMax,state.hp+heal); renderHearts(); } }   // EPIC weapon lifesteal
+    // DUAL-WIELD bonus hit: off-hand 1H weapon adds a 60%-damage strike — BASE DMG ONLY (no crit, no lifesteal) so an epic offhand can't double-dip
+    if(dualWeap && c.hp>0){ const bd=Math.max(1,Math.round(dualWeap.dmg*0.6*Needs.dmgMul()*(0.82+Math.random()*0.36))); c.hp-=bd; popDmg(m.position.x-0.3,(m.position.y||0)+(c.boss?2.4:1.4),m.position.z,bd,{color:'#ffb3c6'}); }
     if(c.hp<=0){ killCreature(i); } }
+  // 2H CLEAVE: after the primary target, also hit creatures within range*0.6 of it (skip the primary; don't double-count)
+  if(is2H && w.cleave && primaryC && primaryC.mesh){ const px=primaryC.mesh.position.x, pz=primaryC.mesh.position.z, cr=w.range*0.6;
+    for(let i=creatures.length-1;i>=0;i--){ const c=creatures[i]; if(c===primaryC)continue; const m=c.mesh; if(!m.visible)continue; const d=Math.hypot(m.position.x-px,m.position.z-pz); if(d>cr)continue;
+      const cd=Math.max(1,Math.round(base*0.5*(0.82+Math.random()*0.36))); c.hp-=cd; creatureHit(c); popDmg(m.position.x,(m.position.y||0)+(c.boss?2.6:1.6),m.position.z,cd,{color:'#ffcf3a'}); if(c.hp<=0)killCreature(i); } }
   for(let i=animals.length-1;i>=0;i--){ const a=animals[i], m=a.mesh; const dx=m.position.x-player.position.x, dz=m.position.z-player.position.z, d=Math.hypot(dx,dz)||1;   // swings also hit peaceful animals -> defeat for leather/meat
     if(d>w.range)continue; if((dx*fx+dz*fz)/d<0.25)continue;
     const arl=rollDamage(base, w.crit||0); a.hp-=arl.dmg; hit++; m.position.x+=dx/d*0.5; m.position.z+=dz/d*0.5; m.scale.setScalar(1.14);
     popDmg(m.position.x, (m.position.y||0)+1.5, m.position.z, arl.dmg, {crit:arl.crit, color:(arl.crit?'#ffd23f':'#ff6b6b')});
     if(a.hp<=0){ killAnimal(i); } }
   if(DUNGEON.inDungeon){ for(const sp of DUNGEON.spawners){ if(sp.dead)continue; const dx=sp.x-player.position.x, dz=sp.z-player.position.z, d=Math.hypot(dx,dz)||1; if(d<=w.range+0.6 && (dx*fx+dz*fz)/d>=0.1){ damageSpawner(sp, rollDamage(base, w.crit||0).dmg); hit++; } } }   // F also smashes the spawner (dice damage)
-  swingFx(); if(hit){ shake(0.22); if(state.weapon&&state.weapon!=='fist')useDur(state.weapon,1); } }   // landing a hit wears the weapon
+  swingFx(); if(hit){ shake(0.22); if(state.weapon&&state.weapon!=='fist')useDur(state.weapon,1); if(dualWeap)useDur(state.offhand,1); } }   // landing a hit wears the weapon (+ the off-hand weapon on dual-wield)
 function creatureHit(c){ c.flash=0.16; for(const mm of c.mats){ try{ mm.emissive.setHex(0xff4444); mm.emissiveIntensity=0.9; }catch(e){} } if(c.mesh) c.mesh.scale.setScalar(c.boss?(c.bscale||1)*1.08:1.22);
   if(c.boss&&c.hpbar){ drawBossBar(c.hpbar, c.hp/c.max); }
   else if(c.mesh){ if(!c.hpbar){ c.hpbar=makeMiniBar(); c.hpbar.position.set(0,((c.type&&c.type.tgtH)||1.2)+0.9,0); c.mesh.add(c.hpbar); } drawMiniBar(c.hpbar, Math.max(0,c.hp)/c.max); c.hptimer=2.5; } }   // lazy on-hit HP bar over any mob (the user wanted to see the lion's HP as they hit it)
@@ -3264,23 +3418,29 @@ function showGearTooltip(d){ const it=(d.gkind==='weapon'?WEAPONS:ARMORS)[d.gear
   tt.className='gearTip '+rar; tt.style.borderColor=rr.color; tt.innerHTML=h; tt.style.display='block';
 }
 function hideGearTooltip(){ const tt=document.getElementById('gearTip'); if(tt) tt.style.display='none'; }
-function gearTipHTML(id,kind){ const it=kind==='weapon'?WEAPONS[id]:kind==='offhand'?(SHIELDS[id]||TORCHES[id]):ARMORS[id]; if(!it)return ''; const rar=it.rarity||'common', rr=RARITY[rar]||RARITY.common; const row=(l,v)=>`<div class="gtt-r"><span>${l}</span><b>${v}</b></div>`;
+function gearTipHTML(id,kind){ const it=kind==='weapon'?WEAPONS[id]:kind==='offhand'?offhandItem(id):ARMORS[id]; if(!it)return ''; const rar=it.rarity||'common', rr=RARITY[rar]||RARITY.common; const row=(l,v)=>`<div class="gtt-r"><span>${l}</span><b>${v}</b></div>`;
   let h=`<div class="gtt-h" style="color:${rr.color}">${rr.mark||''}${it.icon} ${it.name}</div>`;
   if(kind==='weapon'){ h+=row('Damage',it.dmg); if(it.crit)h+=row('Crit',Math.round(it.crit*100)+'%'); if(it.life)h+=row('Lifesteal',Math.round(it.life*100)+'%'); }
-  else if(kind==='offhand'){ if(SHIELDS[id])h+=row('Block',Math.round(it.block*100)+'%'); else h+=row('Type','🔥 Torch'); }
+  else if(kind==='offhand'){ if(SHIELDS[id]){ h+=row('Block',Math.round(it.block*100)+'%'); } else if(CHARMS[id]){ h+=row('Spell Power','×'+it.spellPower); h+=row('Mana Regen','+'+it.manaRegen+'/s'); } else if(QUIVERS[id]){ h+=row('Arrow',(SP_ARROWS[it.arrow]?SP_ARROWS[it.arrow].i+' '+SP_ARROWS[it.arrow].n:it.arrow)); h+=row('Special Dmg','×'+it.dmgMul); } else if(WEAPONS[id]){ h+=row('Off-hand Dmg',Math.round(it.dmg*0.6)+' (60%)'); h+=row('Type','⚔️ Dual-wield'); } else h+=row('Type','🔥 Torch'); }
   else { h+=row('Block',Math.round(it.block*100)+'%'); h+=row('Armor',armorRating(id,state.level||1).toFixed(1)+'🛡️'); if(it.bonusHp)h+=row('Max HP','+'+it.bonusHp+'❤️'); if(it.regen)h+=row('Regen',it.regen.toFixed(2)+'/s'); }
   h+=row('Durability',Math.round(durFrac(id)*100)+'%'); return h; }
-function showGearTipAt(id,kind,x,y){ const it=kind==='weapon'?WEAPONS[id]:kind==='offhand'?(SHIELDS[id]||TORCHES[id]):ARMORS[id]; if(!it)return; const rar=it.rarity||'common', rr=RARITY[rar]||RARITY.common; let tt=document.getElementById('gearTip'); if(!tt){ tt=document.createElement('div'); tt.id='gearTip'; document.body.appendChild(tt); } tt.className='gearTip '+rar; tt.style.borderColor=rr.color; tt.innerHTML=gearTipHTML(id,kind); tt.style.left=(x|0)+'px'; tt.style.top=(y|0)+'px'; tt.style.display='block'; }
+function showGearTipAt(id,kind,x,y){ const it=kind==='weapon'?WEAPONS[id]:kind==='offhand'?offhandItem(id):ARMORS[id]; if(!it)return; const rar=it.rarity||'common', rr=RARITY[rar]||RARITY.common; let tt=document.getElementById('gearTip'); if(!tt){ tt=document.createElement('div'); tt.id='gearTip'; document.body.appendChild(tt); } tt.className='gearTip '+rar; tt.style.borderColor=rr.color; tt.innerHTML=gearTipHTML(id,kind); tt.style.left=(x|0)+'px'; tt.style.top=(y|0)+'px'; tt.style.display='block'; }
 function positionGearTooltip(d){ const tt=document.getElementById('gearTip'); if(!tt)return; d.mesh.getWorldPosition(_np); _np.project(camera); if(_np.z>1){ tt.style.display='none'; return; } tt.style.display='block'; tt.style.left=(((_np.x*0.5+0.5)*innerWidth)|0)+'px'; tt.style.top=(((-_np.y*0.5+0.5)*innerHeight)|0)+'px'; }
 function dropGear(x,z, pair){ pair=pair||pick(RARE_GEAR); const id=pair[0], kind=pair[1], it=((kind==='weapon')?WEAPONS:ARMORS)[id]; const col=(it&&it.rarity==='epic')?'#c77dff':'#5fa8ff';
   const geo=(kind==='weapon')?new THREE.OctahedronGeometry(0.32,0):new THREE.IcosahedronGeometry(0.3,0);
   const m=new THREE.Mesh(geo,new THREE.MeshToonMaterial({color:col,gradientMap:GRAD,emissive:new THREE.Color(col),emissiveIntensity:0.85}));
   m.position.set(x+rand(-0.5,0.5),0.85,z+rand(-0.5,0.5)); m.castShadow=true; world.add(m);
   drops.push({mesh:m, gear:id, gkind:kind, n:1, bob:rand(0,TAU), t:0}); }
-function equipGear(id, kind){ const it=(kind==='weapon')?WEAPONS[id]:(kind==='offhand')?(SHIELDS[id]||TORCHES[id]):ARMORS[id]; if(!it) return;
+function equipGear(id, kind){ const isOffWeap=(kind==='offhand')&&WEAPONS[id]; const it=(kind==='weapon')?WEAPONS[id]:(kind==='offhand')?offhandItem(id):ARMORS[id]; if(!it) return;
   if(EQUIP_LVL[id] && (state.level||1)<EQUIP_LVL[id]){ toast(`🔒 Reach Level ${EQUIP_LVL[id]} to equip ${it.name}.`); SFX.play('interact',{rate:0.6,vol:0.4}); return; }   // equip-by-level gate for dropped epic gear
-  if(kind==='weapon'){ if(!state.weapons[id]) return; if(!canUseWeapon(id)){ const c=WEAPONS[id].cls; toast('🚫 Only a '+(c==='mage'?'Mage':c==='ranger'?'Ranger':'Warrior')+' can wield the '+WEAPONS[id].name+'.'); SFX.play('interact',{rate:0.6,vol:0.4}); return; } state.weapon=id; }
-  else if(kind==='offhand'){ if(!state.offhands||!state.offhands[id]) return; state.offhand=id; }
+  if(kind==='weapon'){ if(!state.weapons[id]) return; if(!canUseWeapon(id)){ const c=WEAPONS[id].cls; toast('🚫 Only a '+(c==='mage'?'Mage':c==='ranger'?'Ranger':'Warrior')+' can wield the '+WEAPONS[id].name+'.'); SFX.play('interact',{rate:0.6,vol:0.4}); return; } state.weapon=id;
+    if(handsOf(id)==='2h' && state.offhand){ unequipOffhand(); toast('🤚 Two-handed — off-hand freed.'); }   // a 2H main-hand FORCES the off-hand empty
+  }
+  else if(kind==='offhand'){
+    if(handsOf(state.weapon)==='2h'){ toast('🚫 A two-handed weapon needs both hands.'); SFX.play('interact',{rate:0.6,vol:0.4}); return; }   // can't slot an off-hand under a 2H weapon
+    if(isOffWeap){ if(!state.weapons[id]) return; if(!isOffhandWeaponOK(id)){ toast('🚫 Only a Warrior can dual-wield a 1-handed weapon.'); SFX.play('interact',{rate:0.6,vol:0.4}); return; } state.offhand=id; }
+    else { if(!state.offhands||!state.offhands[id]) return; state.offhand=id; }
+  }
   else { if(!state.armors[id]) return; const sl=(ARMORS[id]&&ARMORS[id].slot)||'body'; state.gear[sl]=id; if(sl==='body'){ state.armor=id; state.hpMax=hpMaxForLevel(state.level); state.hp=Math.min(state.hp,state.hpMax); } if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); }
   SFX.play('success',{vol:0.4}); toast(`${it.icon} Equipped ${it.name}!`); syncSel(); Inv.render(); if(invOpen)renderInv(); if(typeof checkBadges==='function')checkBadges(); save(); }
 function unequipGear(kind, slot){ if(kind==='weapon'){ state.weapon='fist'; equipBest(); }   // unequip -> fall back to your best CRAFTABLE weapon
@@ -3457,7 +3617,9 @@ function renderLore(){ const el=document.getElementById('lore'); if(!el)return; 
     if(tier>=3){ const tr=deriveTraits(t||{}); body+=`<div style="font-size:11px;opacity:.9;margin-top:4px;line-height:1.35">${tr.length?tr.join('<br>'):'A simple creature.'}</div>`; }
     h+=`<div style="padding:8px;border:2px solid ${L.boss?'#c77dff':'#4a7a4a'};border-radius:10px;background:rgba(0,0,0,0.22)"><div style="font-size:24px;text-align:center">${icon}</div><div style="font-weight:800;text-align:center;margin-bottom:3px">${L.name}</div>${body}</div>`; }
   h+=`</div><div style="text-align:center;opacity:.6;font-size:11px;margin-top:10px">Press L or ✕ to close</div></div>`; el.innerHTML=h; const x=el.querySelector('#loreX'); if(x)x.onclick=closeLore; }
-function killCreature(i){ const c=creatures[i]; recordLore(c); try{ chainOnKill(c); }catch(e){} const p=c.mesh.position.clone(); confetti(p.clone().setY(1.2),16);
+function killCreature(i){ const c=creatures[i];
+  if(c.training){ c.hp=c.max; if(c.hpbar)drawMiniBar(c.hpbar,1); c.mesh.scale.setScalar(1); toast(c.dummy?'🎯 Dummy reset!':'🎯 Target reset!'); SFX.play('interact',{rate:1.4,vol:0.4}); return; }   // 🎯 TRAINING PROP: never dies, never drops loot — snap back to full HP. All three lethal callers (playerAttack, updatePlayerShots, dungeon) route here, so one guard covers melee + bolt + arrow.
+  recordLore(c); try{ chainOnKill(c); }catch(e){} const p=c.mesh.position.clone(); confetti(p.clone().setY(1.2),16);
   const burst=new THREE.Mesh(new THREE.SphereGeometry(0.4,8,8), new THREE.MeshBasicMaterial({color:'#9bffae',transparent:true,opacity:0.75})); burst.position.copy(p).setY(0.8); world.add(burst); ephemeral.push({node:burst,life:0.3,ripple:true});   // death pop
   if(c.hpbar){ c.mesh.remove(c.hpbar); c.hpbar=null; }
   world.remove(c.mesh); creatures.splice(i,1);
@@ -3489,17 +3651,19 @@ function updateCombat(dt){
   if(!DUNGEON.inDungeon && !MINE.inMine){   // SURFACE only: continuous respawn toward a cap (mine/dungeon foes are pre-placed on entry and processed below)
     // CONTINUOUS RESPAWN toward a day/night cap: a few roam by day, a swarm at night; killed ones return over time.
     const cap = night ? Math.min(28, 12+Math.floor(state.day*0.8)) : 0;   // owner: NO monsters by day — only a night swarm; spawns ring the PLAYER now (see spawnCreature) so you always meet them. Higher cap (28) = a real nightly outskirts threat ("so much empty land at night").
+    let _nMobs=0; for(const _c of creatures){ if(!_c.training)_nMobs++; }   // 🎯 the training props live in creatures[] but must NEVER count toward the cap or be culled — count only real mobs
     if(state.running){ state._spawnT=(state._spawnT||0)-dt;
-      if(state._spawnT<=0 && creatures.length<cap){
-        if(night && Math.random()<0.05 && !creatures.some(b=>b.boss)){ const a=rand(0,TAU), r=rand(40,150); spawnBoss(pick(Object.keys(BOSS_TYPES)), player.position.x+Math.cos(a)*r, player.position.z+Math.sin(a)*r); }   // RARELY a boss prowls the night field
+      if(state._spawnT<=0 && _nMobs<cap){
+        if(night && Math.random()<0.05 && !creatures.some(b=>b.boss)){ let bx,bz; for(let tr=0;tr<6;tr++){ const a=rand(0,TAU), r=rand(40,150); bx=player.position.x+Math.cos(a)*r; bz=player.position.z+Math.sin(a)*r; if(!inTrainingZone(bx,bz))break; } if(!inTrainingZone(bx,bz)) spawnBoss(pick(Object.keys(BOSS_TYPES)), bx, bz); }   // RARELY a boss prowls the night field — but never inside the 🎯 training yard
         else spawnCreature();
         state._spawnT=rand(night?2.0:5.0, night?3.8:9.0); } }
-    // over cap (e.g. at dawn) -> retire the FARTHEST monster gradually, not a jarring mass-vanish.
-    if(creatures.length>cap){ state._cullT=(state._cullT||0)-dt; if(state._cullT<=0){ state._cullT=2.5;
-      let fi=0,fd=-1; for(let i=0;i<creatures.length;i++){ const m=creatures[i].mesh; const dd=Math.hypot(player.position.x-m.position.x,player.position.z-m.position.z); if(dd>fd){fd=dd;fi=i;} }
-      world.remove(creatures[fi].mesh); creatures.splice(fi,1); } }
+    // over cap (e.g. at dawn) -> retire the FARTHEST monster gradually, not a jarring mass-vanish. (skip training props entirely)
+    if(_nMobs>cap){ state._cullT=(state._cullT||0)-dt; if(state._cullT<=0){ state._cullT=2.5;
+      let fi=-1,fd=-1; for(let i=0;i<creatures.length;i++){ if(creatures[i].training)continue; const m=creatures[i].mesh; const dd=Math.hypot(player.position.x-m.position.x,player.position.z-m.position.z); if(dd>fd){fd=dd;fi=i;} }
+      if(fi>=0){ world.remove(creatures[fi].mesh); creatures.splice(fi,1); } } }
   }
   for(let i=creatures.length-1;i>=0;i--){ const c=creatures[i]; if(!c) break;   // a contact hit this frame can kill the player -> respawnPlayer()->despawnCreatures() clears the array MID-LOOP; without this guard the next index reads undefined.mesh and throws (caught by guardedFrame, but it's a real crash that fires whenever you die surrounded — common now that the outskirts swarm at night)
+    if(c.training){ c.aggro=false; if(c.flash>0){ c.flash-=dt; if(c.flash<=0){ for(const mm of c.mats){ try{ mm.emissive.setHex(0x000000); mm.emissiveIntensity=0; }catch(e){} } } } if(c.mesh.scale.x>1.001) c.mesh.scale.setScalar(lerp(c.mesh.scale.x,1,dt*9)); if(!c.boss&&c.hpbar){ c.hptimer-=dt; c.hpbar.material.opacity=clamp(c.hptimer/0.6,0,1); if(c.hptimer<=0){ c.mesh.remove(c.hpbar); c.hpbar=null; } } continue; }   // 🎯 TRAINING PROP: no aggro, no movement (movers slide in updateTrainingGround), no contact damage — but still flash/recoil/HP-bar fade like a real mob
     const m=c.mesh; const dx=player.position.x-m.position.x, dz=player.position.z-m.position.z, d=Math.hypot(dx,dz)||1;
     const los=(!(MINE.inMine||DUNGEON.inDungeon))||clearLOS(m.position.x,m.position.z,player.position.x,player.position.z);   // underground: no attacking/aggroing through walls/floors
     const T=c.type||CREATURE_TYPES.petal;
@@ -3609,7 +3773,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`animals ${animals.length}  R[${span(animals,a=>Math.hypot(a.mesh.position.x,a.mesh.position.z))}]\n`
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
-function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
+function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updateTrainingGround(dt); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
 function idleTick(dt){ cam.yaw+=dt*0.12; cam.targetYaw=cam.yaw; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
@@ -3815,7 +3979,7 @@ document.getElementById('keepBtn').onclick=()=>document.getElementById('winScree
 
 /* QA probe */
 window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.toFixed(2),z:+player.position.z.toFixed(2)}),
-  state, ready:()=>ready, anim:()=>charAnim, models:()=>Object.keys(MODELS).length, neighbors:()=>neighbors.length, classPick:()=>openClassPick(), applyClass:(c,g)=>applyClass(c,g), openDyer:()=>openDyer(), mountsInfo:()=>mounts.map(g=>({x:+g.position.x.toFixed(1),z:+g.position.z.toFixed(1),k:g.userData.mountKey,tamed:!!g.userData.tamed,bond:g.userData.bond||0})), stablesInfo:()=>(state.stables||[]).slice(), buildRecipe:(id,x,z)=>{ const r=RECIPES.find(x2=>x2.id===id); if(r)r.build({x,z}); }, runMountRunaway:()=>mountRunaway(), groundAt:(x,z)=>groundY(x,z), waterZonesInfo:()=>waterZones.map(w=>({x:+w.x.toFixed(0),z:+w.z.toFixed(0),r:+(w.r||0).toFixed(0),vr:+(w.vr||0).toFixed(0),sy:+w.surfaceY.toFixed(2)})), basinsInfo:()=>WATER_BASINS.map(b=>({x:b.x,z:b.z,rs:+b.rs.toFixed(0),rb:+b.rb.toFixed(0),floor:+b.floor.toFixed(2),yy:+b.yy.toFixed(2)})), cast:()=>castOrReel(), fishState:()=>({active:!!FISH.active,biting:!!FISH.biting}), faceY:(y)=>{ player.rotation.y=y; }, offerChain:(cid)=>offerChain(cid), chainInfo:()=>({forge:chainIdx('forge'), grove:chainIdx('grove'), defs:Object.keys(Quests.defs).filter(k=>k.indexOf('chain_')===0), journalHasChain:/chain|Ember|Grove/i.test((document.getElementById('qlist')||{}).innerHTML||'')}), hermitCount:()=>interactables.filter(i=>/Wynn/i.test(i.label||'')).length, riddenTop:()=>{ if(!state.mounted)return null; const g=state.mounted.mesh, bb=new THREE.Box3().setFromObject(g); return {mtop:+bb.max.y.toFixed(2), mbot:+bb.min.y.toFixed(2), playerY:+player.position.y.toFixed(2), seatY:state.mounted.seatY, gy:+groundY(player.position.x,player.position.z).toFixed(2)}; }, setCam:(yaw,pitch,dist)=>{ if(yaw!=null){cam.yaw=cam.targetYaw=yaw;} if(pitch!=null){cam.pitch=cam.targetPitch=pitch;} if(dist!=null){cam.dist=dist;} }, mountBodyTop:()=>{ if(!state.mounted)return null; const g=state.mounted.mesh; let maxBody=-1e9, head=-1e9; g.traverse(o=>{ if(o.isMesh&&o.geometry){ o.geometry.computeBoundingBox(); const bb=o.geometry.boundingBox; const v=new THREE.Vector3(bb.max.x,bb.max.y,bb.max.z); o.localToWorld(v); head=Math.max(head,v.y); const v2=new THREE.Vector3((bb.min.x+bb.max.x)/2,bb.max.y,(bb.min.z+bb.max.z)/2); o.localToWorld(v2); } }); return {head:+head.toFixed(2)}; },
+  state, ready:()=>ready, anim:()=>charAnim, models:()=>Object.keys(MODELS).length, neighbors:()=>neighbors.length, classPick:()=>openClassPick(), applyClass:(c,g)=>applyClass(c,g), openDyer:()=>openDyer(), mountsInfo:()=>mounts.map(g=>({x:+g.position.x.toFixed(1),z:+g.position.z.toFixed(1),k:g.userData.mountKey,tamed:!!g.userData.tamed,bond:g.userData.bond||0})), stablesInfo:()=>(state.stables||[]).slice(), buildRecipe:(id,x,z)=>{ const r=RECIPES.find(x2=>x2.id===id); if(r)r.build({x,z}); }, runMountRunaway:()=>mountRunaway(), groundAt:(x,z)=>groundY(x,z), waterZonesInfo:()=>waterZones.map(w=>({x:+w.x.toFixed(0),z:+w.z.toFixed(0),r:+(w.r||0).toFixed(0),vr:+(w.vr||0).toFixed(0),sy:+w.surfaceY.toFixed(2)})), basinsInfo:()=>WATER_BASINS.map(b=>({x:b.x,z:b.z,rs:+b.rs.toFixed(0),rb:+b.rb.toFixed(0),floor:+b.floor.toFixed(2),yy:+b.yy.toFixed(2)})), cast:()=>castOrReel(), fishState:()=>({active:!!FISH.active,biting:!!FISH.biting}), faceY:(y)=>{ player.rotation.y=y; }, offerChain:(cid)=>offerChain(cid), chainInfo:()=>({forge:chainIdx('forge'), grove:chainIdx('grove'), defs:Object.keys(Quests.defs).filter(k=>k.indexOf('chain_')===0), journalHasChain:/chain|Ember|Grove/i.test((document.getElementById('qlist')||{}).innerHTML||'')}), hermitCount:()=>interactables.filter(i=>/Wynn/i.test(i.label||'')).length, riddenTop:()=>{ if(!state.mounted)return null; const g=state.mounted.mesh, bb=new THREE.Box3().setFromObject(g); return {mtop:+bb.max.y.toFixed(2), mbot:+bb.min.y.toFixed(2), playerY:+player.position.y.toFixed(2), seatY:state.mounted.seatY, gy:+groundY(player.position.x,player.position.z).toFixed(2)}; }, setCam:(yaw,pitch,dist)=>{ if(yaw!=null){cam.yaw=cam.targetYaw=yaw;} if(pitch!=null){cam.pitch=cam.targetPitch=pitch;} if(dist!=null){cam.dist=dist;} }, homesInfo:()=>homes.map(h=>({cx:+h.cx.toFixed(0),cz:+h.cz.toFixed(0),dp:h.doorPos,purpose:h.purpose})), homeMeshNames:(i)=>{ const h=homes[i||0]; const o=[]; if(h&&h.meshes)h.meshes.forEach(m=>o.push((m.name||'?')+':'+(m.visible?'v':'h'))); return o; }, mountBodyTop:()=>{ if(!state.mounted)return null; const g=state.mounted.mesh; let maxBody=-1e9, head=-1e9; g.traverse(o=>{ if(o.isMesh&&o.geometry){ o.geometry.computeBoundingBox(); const bb=o.geometry.boundingBox; const v=new THREE.Vector3(bb.max.x,bb.max.y,bb.max.z); o.localToWorld(v); head=Math.max(head,v.y); const v2=new THREE.Vector3((bb.min.x+bb.max.x)/2,bb.max.y,(bb.min.z+bb.max.z)/2); o.localToWorld(v2); } }); return {head:+head.toFixed(2)}; },
   needs:()=>({h:Math.round(Needs.hunger),e:Math.round(Needs.energy),f:Math.round(Needs.fun)}), day:()=>({day:state.day,giggle:state.giggle,goals:state.goals.map(g=>({t:g.type,done:g.done}))}),
   tp:(x,z)=>player.position.set(x,0,z), setKey:(c,d)=>keys[c]=d, yaw:()=>cam.yaw, mark:t=>markGoal(t), genGoals,
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
@@ -3847,6 +4011,41 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
   buildTouch:()=>{ buildTouchUI(); }, touchUI:()=>({stick:!!document.querySelector('#tstick'), buttons:document.querySelectorAll('.tbtn').length}),
   setTouchMove:(x,z)=>{ touchMove.x=x; touchMove.z=z; },
   loadBlob:(o)=>{ try{ localStorage.setItem('ww2_save',JSON.stringify(o)); }catch(e){} load(); },
+  // WEAPON/OFFHAND OVERHAUL probe — drives the REAL combat/equip/save systems (module-scope fns the page can't reach directly)
+  weaponsProbe:()=>{ const out={}; const S=state; S.running=true; S.level=99;
+    const _b={cls:S.charClass,w:S.weapon,o:S.offhand,ws:Object.assign({},S.weapons),of:Object.assign({},S.offhands)};
+    S.charClass='warrior'; S.weapons=Object.assign({fist:true},S.weapons); S.offhands=S.offhands||{};
+    S.weapons.iron_sword=true; S.weapons.hand_axe=true; S.weapons.greataxe=true; S.weapon='iron_sword';
+    const fwx=Math.sin(player.rotation.y),fwz=Math.cos(player.rotation.y);
+    despawnCreatures(); S.tod=0.75; spawnCreature(); const c=creatures[0];
+    const swingSum=(off)=>{ S.offhand=off; let t=0; for(let i=0;i<14;i++){ c.mesh.position.set(player.position.x+fwx*1.2,0,player.position.z+fwz*1.2); c.hp=9e9; S._atkCD=0; const b=c.hp; playerAttack(); t+=(b-c.hp);} return t; };
+    out.dualTotal=swingSum('hand_axe'); out.soloTotal=swingSum(''); out.dualBeatsSolo=out.dualTotal>out.soloTotal;
+    S.offhand='hand_axe'; S._atkCD=0; c.mesh.position.set(player.position.x+fwx*1.2,0,player.position.z+fwz*1.2); c.hp=9e9; playerAttack(); out.dualCD=+S._atkCD.toFixed(3);
+    // 2H + cleave
+    S.offhands.wood_shield=true; S.weapon='iron_sword'; S.offhand='wood_shield'; equipGear('greataxe','weapon'); out.twoHandFreedOffhand=(S.weapon==='greataxe'&&S.offhand==='');
+    equipGear('wood_shield','offhand'); out.offhandRejectedUnder2H=(S.offhand==='');
+    despawnCreatures(); spawnCreature(); spawnCreature();
+    if(creatures.length>=2){ const a=creatures[0],bb=creatures[1]; a.hp=9e9; bb.hp=9e9; const ax=player.position.x+fwx*1.6,az=player.position.z+fwz*1.6; a.mesh.position.set(ax,0,az); bb.mesh.position.set(ax+0.8,0,az+0.4); S._atkCD=0; const a0=a.hp,b0=bb.hp; playerAttack(); out.cleavePrimary=(a.hp<a0); out.cleaveNeighbor=(bb.hp<b0); }
+    despawnCreatures(); S.tod=0.3;
+    // charm
+    S.charClass='mage'; S.weapons.oak_wand=true; S.weapon='oak_wand'; S.manaMax=200; S.mana=20; S.offhand=''; let m0=S.mana; updateMana(1.0); out.regenNoCharm=+(S.mana-m0).toFixed(2); S.mana=20;
+    S.offhands.charm_eldritch=true; S.offhand='charm_eldritch'; m0=S.mana; updateMana(1.0); out.regenCharm=+(S.mana-m0).toFixed(2); S.mana=200; out.charmRegenHigher=out.regenCharm>out.regenNoCharm; out.charmSpellPower=CHARMS.charm_eldritch.spellPower;
+    // quiver
+    S.charClass='ranger'; S.weapons.short_bow=true; S.weapon='short_bow'; S.inv.fire_arrow=5; S._atkCD=0; S.offhands.quiver_ember=true; S.offhand='quiver_ember'; const fa0=S.inv.fire_arrow; fireArrow('fire_arrow'); out.quiverRefunded=(S.inv.fire_arrow===fa0); out.quiverDmgMul=QUIVERS.quiver_ember.dmgMul;
+    // persist
+    S.charClass='warrior'; S.weapon='iron_sword'; S.offhand='hand_axe'; save(); load(); out.dualPersist=(S.offhand==='hand_axe');
+    S.offhand='charm_eldritch'; save(); load(); out.charmPersist=(S.offhand==='charm_eldritch');
+    // procedural 3D meshes
+    out.mesh={greataxe:makeToolModel('greataxe').children.length, mace:makeToolModel('iron_mace').children.length, wand:makeToolModel('runed_wand').children.length, bow:makeToolModel('warden_longbow').children.length, charm:makeCharmModel('charm_arcane').children.length, quiver:makeQuiverModel('quiver_frost').children.length, dagger:makeToolModel('war_dagger').children.length, claymore:makeToolModel('claymore').children.length, warhammer:makeToolModel('war_hammer').children.length};
+    // catalog facts
+    out.uncommon={color:RARITY.uncommon.color, mult:RARITY.uncommon.mult, between:(RARITY.uncommon.mult>RARITY.common.mult&&RARITY.uncommon.mult<RARITY.rare.mult)};
+    S.charClass='mage'; out.gateMage=(canUseWeapon('greataxe')===false); S.charClass='warrior'; out.gateWarrior=(canUseWeapon('greataxe')===true);
+    out.newWeapons=['hand_axe','battle_axe','war_dagger','iron_mace','greataxe','claymore','war_hammer','twin_sabers','oak_wand','crystal_wand','runed_wand','great_staff','recurve_bow','warden_longbow'].filter(k=>!!WEAPONS[k]).length;
+    out.charms=Object.keys(CHARMS).length; out.quivers=Object.keys(QUIVERS).length;
+    out.newRecipes=RECIPES.filter(r=>['hand_axe','greataxe','oak_wand','great_staff','charm_focus','quiver_hunter','recurve_bow','warden_longbow'].includes(r.id)).length;
+    // restore
+    S.charClass=_b.cls; S.weapons=_b.ws; S.offhands=_b.of; S.weapon=_b.w; S.offhand=_b.o; S.mana=S.manaMax||0; despawnCreatures(); S.tod=0.3;
+    return out; },
   _drawMM:()=>{ try{ drawMinimap(); return 'ok'; }catch(e){ return 'ERR: '+e.message+' | '+((e.stack||'').split('\n').slice(1,3).join(' | ')); } },
   probeCollide:(x,z)=>{ player.position.set(x,0,z); resolve(); const moved=Math.hypot(player.position.x-x,player.position.z-z); return +moved.toFixed(2); },  // >0 = blocked/pushed out
   probeGround:(x,z,y)=>{ player.position.set(x,y,z); return +groundUnder().toFixed(2); },  // standable top under player
@@ -4054,6 +4253,44 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       updateHeld(0.016); R.torch_light=(!!_torchLight || DYN_LIGHTS.length>=MAX_DYN_LIGHTS);
       unequipOffhand(); R.offhand_unequip=(state.offhand===''); updateTorchLight(0.016); R.torch_light_off=(_torchLight===null);
       state.hp=state.hpMax; state._invuln=0; }
+    // ════ WEAPON/OFFHAND OVERHAUL: hands tagging, 2H enforcement, dual-wield, charm, quiver, uncommon tier ════
+    { const _cls0=state.charClass,_w0=state.weapon,_o0=state.offhand,_ws0=Object.assign({},state.weapons),_of0=Object.assign({},state.offhands); state.level=99;
+      // HANDS: legacy default is 1h; tagged 2H reads 2h; uncommon GREEN tier exists between common+rare
+      R.hands_default=(handsOf('wood_sword')==='1h' && handsOf('greataxe')==='2h' && handsOf('great_staff')==='2h' && handsOf('longbow')==='2h'
+        && !!RARITY.uncommon && RARITY.uncommon.mult>RARITY.common.mult && RARITY.uncommon.mult<RARITY.rare.mult);
+      // 2H ENFORCEMENT (warrior): equipping a 2H force-frees the off-hand; equipping an off-hand under a 2H is rejected
+      state.charClass='warrior'; state.weapons=Object.assign({fist:true},state.weapons); state.offhands=state.offhands||{};
+      state.weapons.greataxe=true; state.weapons.hand_axe=true; state.weapons.iron_sword=true; state.offhands.wood_shield=true;
+      state.weapon='iron_sword'; state.offhand='wood_shield';
+      equipGear('greataxe','weapon'); const twoHFreed=(state.weapon==='greataxe' && state.offhand==='');
+      equipGear('wood_shield','offhand'); const offhandBlocked=(state.offhand===''); // rejected under 2H
+      R.weapon_2h=(twoHFreed && offhandBlocked);
+      // DUAL-WIELD (warrior): a 1H weapon in the off-hand adds a 2nd ~60% hit + faster swing; off-hand crit/life does NOT double-dip
+      state.weapon='iron_sword'; state.offhand=''; equipGear('hand_axe','offhand'); const dualEquipped=(state.offhand==='hand_axe');
+      despawnCreatures(); state.tod=0.75; spawnCreature(); const dc=creatures[0]; let dualOK=false, fasterCD=false;
+      if(dc){ dc.hp=9e9; const dm=dc.mesh; const fwx=Math.sin(player.rotation.y),fwz=Math.cos(player.rotation.y);
+        // sum a few dual-wield swings vs a few single-weapon swings (same weapon) — the off-hand bonus hit makes the dual total clearly higher
+        const sumSwings=(off)=>{ state.offhand=off; let t=0; for(let s=0;s<40;s++){ dm.position.set(player.position.x+fwx*1.2,0,player.position.z+fwz*1.2); dc.hp=9e9; state._atkCD=0; const b=dc.hp; playerAttack(); t+=(b-dc.hp); } return t; };
+        const dualT=sumSwings('hand_axe'); const soloT=sumSwings(''); dualOK=(dualT > soloT*1.15);   // 40-swing sample: dual-wield's +60% off-hand hit is ~1.36x solo; 1.15 floor is safely below that yet above noise
+        state.offhand='hand_axe'; state._atkCD=0; dm.position.set(player.position.x+fwx*1.2,0,player.position.z+fwz*1.2); dc.hp=9e9; playerAttack(); fasterCD=(state._atkCD < 0.42 && state._atkCD>0); }   // dual-wield keeps a small swing cooldown even at full energy
+      despawnCreatures(); state.tod=0.3; R.dualwield=(dualEquipped && dualOK && fasterCD);
+      // OFFHAND PERSIST: a charm, a quiver, and a dual-wield 1H weapon all survive save();load()
+      state.offhand=''; state.offhands.charm_focus=true; state.offhand='charm_focus'; save(); load(); const charmKept=(state.offhand==='charm_focus');
+      state.offhands.quiver_hunter=true; state.offhand='quiver_hunter'; save(); load(); const quiverKept=(state.offhand==='quiver_hunter');
+      state.charClass='warrior'; state.weapon='iron_sword'; state.offhand='hand_axe'; save(); load(); const dualKept=(state.offhand==='hand_axe');
+      R.offhand_persist=(charmKept && quiverKept && dualKept);
+      // CHARM (mage): spellPower boosts bolt dmg + manaRegen lifts the mana trickle
+      state.charClass='mage'; state.weapons.oak_wand=true; state.weapon='oak_wand'; state.manaMax=100; state.mana=10;
+      const mNoCharm=(()=>{ const m0=state.mana; state.offhand=''; updateMana(1.0); const r=state.mana-m0; state.mana=10; return r; })();
+      state.offhands.charm_eldritch=true; state.offhand='charm_eldritch';
+      const mCharm=(()=>{ const m0=state.mana; updateMana(1.0); const r=state.mana-m0; state.mana=10; return r; })();
+      const charmRegenOK=(mCharm>mNoCharm);
+      // QUIVER (ranger): a matching quiver refunds + buffs its special arrow
+      state.charClass='ranger'; state.weapons.short_bow=true; state.weapon='short_bow'; state.inv.fire_arrow=5; state._atkCD=0;
+      state.offhands.quiver_ember=true; state.offhand='quiver_ember'; const fa0=state.inv.fire_arrow; fireArrow('fire_arrow'); const quiverSupplies=(state.inv.fire_arrow===fa0);  // refunded -> count unchanged
+      R.charm_quiver=(charmRegenOK && quiverSupplies && QUIVERS.quiver_ember.dmgMul>1 && CHARMS.charm_eldritch.spellPower>1);
+      // restore
+      state.charClass=_cls0; state.weapons=_ws0; state.offhands=_of0; state.weapon=_w0; state.offhand=_o0; state.mana=state.manaMax||0; despawnCreatures(); state.tod=0.3; }
     // CHARACTER CUSTOMIZATION: swapping the look hot-rebuilds the player, keeps it valid + re-attaches gear; default restores
     { state.charModel='character-female-b'; updatePlayerCharacter(); R.char_swap=(!!player.userData.model && state.charModel==='character-female-b');
       state.charModel='char_player'; updatePlayerCharacter(); R.char_default=(!!player.userData.model && PLAYER_MODELS.includes(state.charModel)); }
@@ -4205,6 +4442,37 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       state.mana=state.manaMax; state._atkCD=0; playerShots.length=0; doAttack(); const shotOk=playerShots.length>0; for(const s of playerShots){try{world.remove(s.mesh);}catch(e){}} playerShots.length=0;
       const _f=state.inv.dye_petal||0; state.dyeColor='#c0392b'; _buildPlayerBody(); const dyeOk=!!player.userData._cape; state.dyeColor=''; _buildPlayerBody(); state.inv.dye_petal=_f;
       state._atkCD=0; applyClass('warrior','male'); R.class_system=(mageOk&&shotOk&&dyeOk); }   // class pick + mana + projectile attack + dye cape
+    // 🎯 TRAINING GROUND: walk-in safe yard with a resettable melee dummy + static/moving shoot targets; guaranteed NO mob spawns inside day OR night
+    { const _tod0=state.tod, _pp=player.position.clone(), _pr=player.rotation.y, _wp=state.weapon, _cc=state.charClass, _cd0=state._atkCD;
+      // 1) ZONE EXISTS + PLACEMENT clears water + player-plot rect (x∈(-16,16),z∈(4,28))
+      const zoneOk = inTrainingZone(42,-42)===true && inTrainingZone(0,0)===false && !isInWater(42,-42,0) && !(Math.abs(42)<16 && (-42)>4 && (-42)<28);
+      // (re)build the props (earlier checks despawned all creatures); count them
+      despawnCreatures(); buildTrainingGround(); const props=creatures.filter(c=>c.training); const dummy=props.find(c=>c.dummy); const movers=props.filter(c=>c.trainPath); const statics=props.filter(c=>c.training&&!c.dummy&&!c.trainPath);
+      const propsOk = props.length>=6 && !!dummy && movers.length>=1 && statics.length>=2;
+      // 2) NO-SPAWN keep-out, NIGHT: stand IN the yard, spawn ~60×, assert ZERO land in-zone
+      state.tod=0.9; player.position.set(42,0,-42); const propCount=creatures.length; for(let k=0;k<60;k++) spawnCreature();
+      const newMobs=creatures.filter(c=>!c.training); const nightLeak=newMobs.some(c=>inTrainingZone(c.mesh.position.x,c.mesh.position.z));
+      // 3) NO-SPAWN keep-out, DAY (cap=0 so nothing spawns regardless): re-confirm none in-zone
+      for(const c of newMobs){ world.remove(c.mesh); } creatures.length=0; buildTrainingGround(); state.tod=0.3; player.position.set(42,0,-42); for(let k=0;k<30;k++) spawnCreature(); const dayLeak=creatures.filter(c=>!c.training).some(c=>inTrainingZone(c.mesh.position.x,c.mesh.position.z));
+      const noSpawnOk = nightLeak===false && dayLeak===false;
+      // 4) REGRESSION: keep-out is a no-op far from town — 12 night spawns at (120,120) still all within 75u
+      despawnCreatures(); buildTrainingGround(); state.tod=0.9; player.position.set(120,0,120); for(let k=0;k<12;k++) spawnCreature();
+      const farMobs=creatures.filter(c=>!c.training); let maxR=0; for(const c of farMobs){ const d=Math.hypot(c.mesh.position.x-120,c.mesh.position.z-120); if(d>maxR)maxR=d; }
+      const regressionOk = farMobs.length>=12 && maxR<=75;
+      // 5) DUMMY RESETS, never dies, never drops loot (melee lethal hit -> reset)
+      despawnCreatures(); buildTrainingGround(); state.tod=0.3; applyClass('warrior','male'); const dm=creatures.find(c=>c.dummy);
+      let dummyOk=false; if(dm){ const dr0=drops.length, lb0=lootBags.length, n0=creatures.length; dm.hp=1; const dmp=dm.mesh.position; player.position.set(dmp.x-Math.sin(0)*1.0, 0, dmp.z-1.0); player.rotation.y=0; state._atkCD=0; playerAttack(); dummyOk=(creatures.includes(dm) && dm.hp===dm.max && drops.length===dr0 && lootBags.length===lb0 && creatures.length===n0); }
+      // 6) STATIC TARGET takes a mage bolt -> reset (still present, hp back to max)
+      despawnCreatures(); buildTrainingGround(); applyClass('mage','male'); state.mana=state.manaMax; const tgt=creatures.find(c=>c.training&&!c.dummy&&!c.trainPath);
+      let shotOk=false; if(tgt){ const tm=tgt.mesh.position; player.position.set(tm.x, 0, tm.z-3.0); player.rotation.y=0; tgt.hp=1; playerShots.length=0; state._atkCD=0; const eph0=ephemeral.length; doAttack(); let landed=false; for(let k=0;k<30 && !landed;k++){ updatePlayerShots(0.03); if(creatures.includes(tgt) && tgt.hp===tgt.max && ephemeral.length>eph0) landed=true; } shotOk=landed && creatures.includes(tgt); for(const s of playerShots){ try{world.remove(s.mesh);}catch(e){} } playerShots.length=0; }
+      // 7) RANGER ARROW also resets a target
+      despawnCreatures(); buildTrainingGround(); applyClass('ranger','male'); state.inv.fire_arrow=(state.inv.fire_arrow||0)+3; const tgt2=creatures.find(c=>c.training&&!c.dummy&&!c.trainPath);
+      let arrowOk=false; if(tgt2){ const tm=tgt2.mesh.position; player.position.set(tm.x, 0, tm.z-3.0); player.rotation.y=0; tgt2.hp=1; playerShots.length=0; state._atkCD=0; fireArrow('fire_arrow'); let landed=false; for(let k=0;k<30 && !landed;k++){ updatePlayerShots(0.03); if(creatures.includes(tgt2) && tgt2.hp===tgt2.max) landed=true; } arrowOk=landed && creatures.includes(tgt2); for(const s of playerShots){ try{world.remove(s.mesh);}catch(e){} } playerShots.length=0; }
+      // 8) MOVING TARGET slides + stays hittable (updateTrainingGround advances its x)
+      despawnCreatures(); buildTrainingGround(); const mv=creatures.find(c=>c.trainPath); let moveOk=false; if(mv){ const x0=mv.mesh.position.x; for(let k=0;k<10;k++) updateTrainingGround(0.2); moveOk=Math.abs(mv.mesh.position.x-x0)>0.1; }
+      R.training_ground = zoneOk && propsOk && noSpawnOk && regressionOk && dummyOk && shotOk && arrowOk && moveOk;
+      // cleanup: restore class/weapon/pos/tod and rebuild the real yard so the live game keeps its props
+      despawnCreatures(); state.tod=_tod0; player.position.copy(_pp); player.rotation.y=_pr; state.weapon=_wp; if(_cc)applyClass(_cc,'male'); state._atkCD=_cd0; buildTrainingGround(); }
     R.PASS = R.campaign_won&&R.side_cat&&R.side_gnome&&R.side_toilet&&R.side_socks&&R.neighbor_fulfilled===true&&R.day_advanced&&R.allItemsReachable&&R.maxNodeRadius<=FENCE&&crafted===unlockedCount&&R.shop_paint&&R.shop_sellcoins&&R.shop_unlock&&R.shop_hat&&R.shop_unlocked_craftable
       &&R.xp_gain&&R.level_up&&R.recipe_level_lock&&R.recipe_level_unlock&&R.inv_modal&&R.map_modal&&R.quest_min&&R.mouse_sens&&R.trade_swap
       &&R.needs_affect&&R.house_purpose&&R.daily_activity&&R.water_quality&&R.rocks_smooth&&R.hotbar_select&&R.eat_food&&R.pickaxe_gate&&R.night_field_spawn&&R.animals_spawn&&R.animals_harvest&&R.animals_defeat&&R.shovel_craft&&R.dig_ground&&R.rod_recipe&&R.worm_dig&&R.no_water_guard&&R.fish_catch&&R.debug_overlay&&R.content_spread&&R.held_tool&&R.day_no_monsters&&R.mist&&R.world_expanded&&R.voxel_place&&R.voxel_break&&R.voxel_dig_ground&&R.furnace_smelt&&R.ingot_tool&&R.recipe_count&&R.dungeon_rooms&&R.dungeon_chests&&R.mineshaft_loot
@@ -4215,7 +4483,9 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2&&R.quest_chain&&R.class_system&&R.class_combat&&R.mounts&&R.mount_stable&&R.lake_basin&&R.build_grounded
       &&R.homes_present&&R.home_built&&R.home_loot&&R.home_enter_path&&R.recipe_page_unlock&&R.node_respawn&&R.chest_oneuse
       &&R.weapon_craft&&R.combat_kill&&R.combat_respawn&&R.inv_slots
-      &&R.mine_pickaxe&&R.mine_enter&&R.mine_dig&&R.mine_exit&&R.armor_craft&&R.armor_reduces&&R.rarity_tiers&&R.rarity_loot&&R.combat_anim&&R.gear_equip&&R.dice_rolls&&R.dmg_popup&&R.menu;
+      &&R.mine_pickaxe&&R.mine_enter&&R.mine_dig&&R.mine_exit&&R.armor_craft&&R.armor_reduces&&R.rarity_tiers&&R.rarity_loot&&R.combat_anim&&R.gear_equip&&R.dice_rolls&&R.dmg_popup&&R.menu
+      &&R.training_ground
+      &&R.hands_default&&R.weapon_2h&&R.dualwield&&R.offhand_persist&&R.charm_quiver;
     return R; } };
 </script>
 </body>
