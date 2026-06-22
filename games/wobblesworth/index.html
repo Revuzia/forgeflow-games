@@ -815,8 +815,6 @@ const MODEL_LIST=["char_player","char_n1","char_n2","char_n3","House_1","House_2
  "animal-cow","animal-pig","animal-chick","animal-deer","animal-bunny","animal-fox","animal-tiger","animal-lion","animal-hog","animal-crab","animal-bee","animal-caterpillar","animal-elephant","animal-polar","animal-giraffe","animal-panda",
  // SPOOKY night mobs (Kenney graveyard kit) — haunt the far OUTSKIRTS after dark only (see CREATURE_TYPES minDist):
  "mob-skeleton","mob-ghost","mob-zombie","mob-pumpkin",
- // RIDABLE MOUNTS (PolyPizza, CC-BY): horse, white horse = unicorn, mule deer = stag — rare finds, need a saddle to ride:
- "mount-horse","mount-unicorn","mount-stag",
  // MINI-CHARACTER people (Kenney) — varied NEIGHBORS/wanderers (same rig as char_player, so the walk anim works):
  "character-male-a","character-male-b","character-male-c","character-male-d","character-male-e","character-male-f","character-female-a","character-female-b","character-female-c","character-female-d","character-female-e","character-female-f"];
 const ASSET_ERRORS=[];                                  // names that failed to load (for the probe + a soft toast)
@@ -2510,9 +2508,20 @@ function monMove(m,dirx,dirz,sp){   // WALL-AWARE chase: try the direct step, el
   const px=-dirz, pz=dirx; if(!blockedAt(m.position.x+px*sp,m.position.z+pz*sp)){ m.position.x+=px*sp; m.position.z+=pz*sp; }
   else if(!blockedAt(m.position.x-px*sp,m.position.z-pz*sp)){ m.position.x-=px*sp; m.position.z-=pz*sp; } }
 // ════════ RIDABLE MOUNTS ════════ rare wild horses/stag/unicorn — tame by feeding, craft a Saddle, then ride (faster travel)
-const MOUNTS={ horse:{name:'Horse',model:'mount-horse',speedMul:1.85,h:2.3,seatY:1.5,rarity:1,faceOff:0}, stag:{name:'Wild Stag',model:'mount-stag',speedMul:2.05,h:2.2,seatY:1.45,rarity:2,faceOff:0}, unicorn:{name:'Unicorn',model:'mount-unicorn',speedMul:2.4,h:2.4,seatY:1.6,rarity:3,faceOff:0} };
+const MOUNTS={ horse:{name:'Horse',color:'#8a5a31',legCol:'#3a2a1a',speedMul:1.85,h:2.3,seatY:1.75,rarity:1,faceOff:0}, stag:{name:'Wild Stag',color:'#a4703f',legCol:'#5a3a1a',speedMul:2.05,h:2.2,seatY:1.75,rarity:2,faceOff:0}, unicorn:{name:'Unicorn',color:'#f2eee9',legCol:'#e2dad2',speedMul:2.4,h:2.4,seatY:1.85,rarity:3,faceOff:0} };
 const mounts=[];
-function buildMount(key){ const M=MOUNTS[key]; const g=buildMobGLB(M.model, M.h, null); g.userData={mountKey:key, wander:rand(0,TAU), wt:rand(2,5), bond:0, tamed:false}; return g; }
+function buildMount(key){ const M=MOUNTS[key], col=M.color, g=new THREE.Group();   // PROCEDURAL cube mount (faces +z, ~2.3 tall) — matches the game's blocky art + always renders
+  const body=box(0.95,1.0,2.4,col); body.position.set(0,1.45,0); g.add(body);
+  const chest=box(0.98,0.98,0.7,col); chest.position.set(0,1.55,1.05); g.add(chest);
+  const neck=box(0.62,1.15,0.55,col); neck.position.set(0,2.05,1.4); neck.rotation.x=0.5; g.add(neck);
+  const head=box(0.5,0.55,1.05,col); head.position.set(0,2.5,2.0); g.add(head);
+  const e1=box(0.13,0.32,0.13,col); e1.position.set(0.18,2.85,1.78); g.add(e1); const e2=e1.clone(); e2.position.x=-0.18; g.add(e2);
+  for(const [lx,lz] of [[0.34,0.85],[-0.34,0.85],[0.34,-0.85],[-0.34,-0.85]]){ const leg=box(0.28,1.55,0.28,M.legCol||col); leg.position.set(lx,0.77,lz); g.add(leg); }
+  const tail=box(0.2,1.15,0.2,M.tailCol||'#3a2a1a'); tail.position.set(0,1.5,-1.35); tail.rotation.x=-0.5; g.add(tail);
+  if(key==='unicorn'){ const horn=new THREE.Mesh(new THREE.ConeGeometry(0.13,0.72,6),toon('#ffe9a8')); horn.position.set(0,3.05,2.05); horn.rotation.x=0.35; g.add(horn); const mane=box(0.22,0.75,1.0,'#ffd9ec'); mane.position.set(0,2.45,1.35); g.add(mane); }
+  if(key==='stag'){ for(const s of [0.34,-0.34]){ const a=box(0.1,0.85,0.1,'#5a3a1a'); a.position.set(s,3.05,1.85); a.rotation.z=s>0?-0.4:0.4; g.add(a); const t=box(0.1,0.4,0.1,'#5a3a1a'); t.position.set(s*1.6,3.35,1.85); g.add(t); } }
+  g.traverse(m=>{ if(m.isMesh)m.castShadow=true; });
+  g.userData={mountKey:key, wander:rand(0,TAU), wt:rand(2,5), bond:0, tamed:false}; return g; }
 function spawnMounts(){ for(const [k,n] of [['horse',2],['stag',1],['unicorn',1]]){ for(let i=0;i<n;i++){ const a=rand(0,TAU), r=rand(70,FENCE-30), x=Math.cos(a)*r, z=Math.sin(a)*r; if(typeof isInWater==='function'&&isInWater(x,z,9))continue; const g=buildMount(k); g.position.set(x,groundY(x,z),z); world.add(g); mounts.push(g); addInteractable(g, '🐴 '+MOUNTS[k].name, ()=>mountInteract(g), 3.4); } } }
 function mountInteract(g){ const k=g.userData.mountKey, M=MOUNTS[k];
   if(state.mounted && state.mounted.mesh===g){ dismount(); return; }
