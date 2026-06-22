@@ -417,13 +417,16 @@ const pick=a=>a[Math.floor(Math.random()*a.length)];
    house, the Housewarming quests, the town pond (r=84), and the 117-check selftest; gentle hills roll in past it. */
 const WRAP_P=1300, _wf0=Math.PI*2/WRAP_P;   // the world WRAPS every 1300 units per axis -> walk 360° around the globe and return to the same place (all content lives within ±595, well inside ±650)
 const TOWN_FLAT=90, HILL_RAMP=78;   // flat for r<=90; full hills by r=168; keep TOWN_FLAT>=88 (pond + swim_zone test live at r=84)
+const WATER_BASINS=[];   // {x,z,rs,rb,floor} carved bowls under lakes so a flat water disc sits in a proper basin (rs = flat-floor swim radius below water; rb = bank outer radius; keep tiny — terrainH is on the per-frame groundUnder hot path)
 function terrainH(x,z){ const r=Math.hypot(x,z); if(r<=TOWN_FLAT) return 0;
   let t=(r-TOWN_FLAT)/HILL_RAMP; if(t>1)t=1; const g=t*t*(3-2*t);   // smoothstep gate -> no seam/cliff at the town edge
   const h=Math.sin(x*_wf0*2 - z*_wf0*2 + 2.1)*5.0      // broad rolling hills/valleys
         + Math.sin(x*_wf0*4 + z*_wf0*3)*3.4            // medium ridges
         + Math.sin(x*_wf0*9 - z*_wf0*7 + 1.7)*1.8      // smaller undulation
         + Math.sin((x+z)*_wf0*6 + 4.2)*1.1;            // cross detail (all freqs = k·2π/WRAP_P -> PERIODIC, so terrain is seamless across the wrap; sum ~±11.3)
-  return h*g; }
+  let v=h*g;
+  for(const b of WATER_BASINS){ const d=Math.hypot(x-b.x,z-b.z); if(d<b.rb){ if(d<=b.rs){ v=Math.min(v,b.floor); } else { const k=(d-b.rs)/(b.rb-b.rs), s=k*k*(3-2*k); v=Math.min(v, b.floor*(1-s)+v*s); } } }   // flat floor under the swim area, smooth bank up to the natural rim -> water never pokes through the hill
+  return v; }
 function groundY(x,z){ return terrainH(x,z); }   // single seam for "what Y does the surface sit at here"
 /* CURVED "GLOBE" WORLD (owner: abeto-style "walk around a globe"): bend ALL standard-material geometry DOWN by radial
    view-space distance² so the world curves away below the horizon in every direction. ONE global override of the shared
@@ -732,8 +735,11 @@ function makeLake(x,z,r){ const N=48, geo=new THREE.CircleGeometry(r,N), pos=geo
     const k=1 + Math.sin(a*2+ph)*0.16 + Math.sin(a*3-0.7)*0.13 + Math.sin(a*5+1.9)*0.09;   // smooth irregular shoreline (±~0.38)
     pos.setX(i,vx*k); pos.setY(i,vy*k); }
   pos.needsUpdate=true; geo.computeVertexNormals();
-  const yy=groundY(x,z)+0.12, m=new THREE.Mesh(geo,WATER_MAT); m.rotation.x=-Math.PI/2; m.position.set(x,yy,z); world.add(m); waters.push(m);
-  waterZones.push({x,z,r:r*0.72,vr:r*1.4,surfaceY:yy}); return m; }   // swimmable interior (r*0.72, inside the wavy rim); vr = the rim PEAK reach (~r*1.4) so the keep-out clears the whole visible shoreline
+  const b=WATER_BASINS.find(w=>w.x===x&&w.z===z); const yy=b?b.yy:groundY(x,z)+0.12;   // basin was carved BEFORE the terrain mesh (prepLakeBasins) so the mesh + physics agree; yy fills the bowl just under the rim
+  const m=new THREE.Mesh(geo,WATER_MAT); m.rotation.x=-Math.PI/2; m.position.set(x,yy,z); world.add(m); waters.push(m);
+  waterZones.push({x,z,r:r*0.72,vr:r*1.4,surfaceY:yy}); return m; }
+const LAKES=[[410,140,52],[-380,-250,44],[170,-440,40],[-260,430,36]];   // the 4 outer lakes (single source of truth for prep + placement)
+function prepLakeBasins(){ for(const [x,z,r] of LAKES){ let mn=Infinity; for(let a=0;a<6.28;a+=0.7){ mn=Math.min(mn, terrainH(x+Math.cos(a)*r*1.1, z+Math.sin(a)*r*1.1)); } WATER_BASINS.push({x,z,rs:r*0.85,rb:r*1.5,floor:mn-2.2,yy:mn-0.3}); } }   // carve bowls BEFORE the terrain mesh is displaced, so the ground mesh cups each lake   // swimmable interior (r*0.72, inside the wavy rim); vr = the rim PEAK reach (~r*1.4) so the keep-out clears the whole visible shoreline
 /* keep-out test: is (x,z) on/near ANY water body? uses the VISUAL radius (vr) so nothing spawns over a lake's wavy shore */
 function isInWater(x,z,margin=0){ for(const w of waterZones){ const dx=x-w.x, dz=z-w.z, rr=(w.vr||w.r)+margin; if(dx*dx+dz*dz<rr*rr) return true; } return false; }
 
@@ -861,6 +867,7 @@ function place(name,x,z,{targetH,scale,rotY=0,yLift=0,parent=world,tint=null}={}
 
 /* ============================ WORLD BUILD ============================ */
 function buildWorld(){
+  prepLakeBasins();   // carve lake basins INTO terrainH before the ground mesh below samples it, so the visual terrain cups each lake and physics/groundY agree
   // ground (BIG neighborhood) — a subdivided plane displaced by terrainH so the OUTER world rolls (town stays flat). Still ONE mesh/draw call; ~33k static verts (displaced once at build). Square corners hide behind fog (95-190) + skyDome.
   const _gR=665, _gSEG=180, groundGeo=new THREE.PlaneGeometry(_gR*2,_gR*2,_gSEG,_gSEG), _gp=groundGeo.attributes.position;
   for(let i=0;i<_gp.count;i++){ const lx=_gp.getX(i), ly=_gp.getY(i); _gp.setZ(i, terrainH(lx,-ly)); }   // after rotation.x=-PI/2: localZ->worldY, world z = -localY
@@ -895,7 +902,7 @@ function buildWorld(){
   makeWater(17,0,84);   // showcase reflective pond near town
   // WATER SPREAD across the huge map (owner) — winding rivers/streams + ponds in the new outer areas (cheap shader, no extra reflection passes)
   makeRiver(-400,-230, 200,-430, 28, 6.5); makeRiver(180,520, 540,160, 26, 6.0); makeRiver(-540,180, -200,470, 24, 5.6);   // OUTER-RING rivers (was crossing the town centre -> water under town homes): each skirts the hills near a lake, closest approach >340 from origin, so no river ever runs through town
-  for(const [px,pz,pr] of [[410,140,52],[-380,-250,44],[170,-440,40],[-260,430,36]]) makeLake(px,pz,pr);   // a few REAL irregular LAKES (was 6 tiny circle "ponds") — big blobby shorelines sitting on the terrain
+  for(const [px,pz,pr] of LAKES) makeLake(px,pz,pr);   // a few REAL irregular LAKES — now each sits in a carved basin (prepLakeBasins) so the shoreline meets the ground cleanly
   { const br=place("Bridge",0,72,{targetH:2.6,tint:'#9c6b3f'}); if(br) addSolid(br,0.1); }   // wood-brown bridge (was white)
   { const bo=place("Boat",9,86,{targetH:1.8,rotY:0.5,yLift:0.25,tint:'#8a5a3a'}); if(bo) addSolid(bo); }
   for(const [cx,cz,r] of [[-16,-10,1.2],[40,40,-0.8]]){ const c=place("Carriage",cx,cz,{targetH:2.8,rotY:r,tint:'#7a5230'}); if(c) addSolid(c); }
@@ -1789,7 +1796,7 @@ function dailyActToday(){ return DAILY_ACTS[(state.day-1)%DAILY_ACTS.length]; }
 function spawnDailyActivity(announce){ _clearDaily();
   const act=dailyActToday();
   const ang=(state.day*2.39996)%TAU, rad=72+((state.day*37)%108), x=Math.cos(ang)*rad, z=Math.sin(ang)*rad;   // day-seeded -> a different outer-ring spot each day
-  const g=new THREE.Group(); g.position.set(x,0,z);
+  const g=new THREE.Group(); g.position.set(x,groundY(x,z),z);   // ground the daily-quest beacon on the rolling outer-ring terrain (was fixed y=0 -> floated/buried)
   const post=box(0.35,1.7,0.35,'#a9743f'); post.position.y=0.85; g.add(post);
   const flag=new THREE.Mesh(new THREE.ConeGeometry(0.55,0.8,5),toon('#ffd23f')); flag.position.y=1.95; g.add(flag);
   const orb=new THREE.Mesh(new THREE.SphereGeometry(0.34,12,10),new THREE.MeshBasicMaterial({color:'#fff2a8'})); orb.position.y=2.45; g.add(orb);
@@ -1867,7 +1874,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.homePaints=(s.homePaints&&typeof s.homePaints==='object')?s.homePaints:{}; loadBlocks(s.buildBlocks); applyHomePaints();   // restore voxel builds + house repaints (buildWorld ran first, so homes exist)
   for(const k in VOX.meshes) world.remove(VOX.meshes[k]); VOX.dug={}; VOX.meshes={};   // restore carved terrain
   if(s.dugCells&&typeof s.dugCells==='object'){ for(const k in s.dugCells){ const f=Math.floor(+s.dugCells[k]); const parts=String(k).split(','); if(parts.length===2&&Number.isFinite(f)&&f<0&&f>=-8){ const cx=Math.round(+parts[0]),cz=Math.round(+parts[1]); if(Number.isFinite(cx)&&Number.isFinite(cz)){ VOX.dug[cx+','+cz]=f; carvePit(cx,cz,f); } } } }
-  state.stables=Array.isArray(s.stables)?s.stables.filter(v=>v&&Number.isFinite(+v.x)&&Number.isFinite(+v.z)).map(v=>({x:clamp(+v.x,-FENCE,FENCE),z:clamp(+v.z,-FENCE,FENCE)})):[]; for(const st of state.stables){ try{ buildStableAt(st.x,st.z); }catch(e){} }   // rebuild stable structures
+  state.stables=Array.isArray(s.stables)?s.stables.filter(v=>v&&Number.isFinite(+v.x)&&Number.isFinite(+v.z)).map(v=>({x:clamp(+v.x,-FENCE,FENCE),z:clamp(+v.z,-FENCE,FENCE)})):[]; for(const st of state.stables){ try{ buildStableAt(st.x,st.z, groundY(st.x,st.z)); }catch(e){} }   // rebuild grounded stable structures (load isn't craft, so pass groundY directly)
   try{ restoreTamedMounts(s.tamedMounts); }catch(e){}   // re-spawn your tamed mounts at their saved spots (buildWorld's wild ones already spawned)
 }catch(e){ __report('load',e); } }
 
@@ -2247,8 +2254,14 @@ function openCraft(){ craftOpen=true; document.getElementById('craft').classList
 function closeCraft(){ craftOpen=false; document.getElementById('craft').classList.add('hidden'); }
 function craft(id){ const r=RECIPES.find(x=>x.id===id); if(!r||r.locked||recipeLevel(r)>state.level||!canCraft(r))return; for(const k in r.cost) Inv.take(k,r.cost[k]);
   const front=new THREE.Vector3(Math.sin(player.rotation.y),0,Math.cos(player.rotation.y));
-  const p={x:player.position.x+front.x*3, z:player.position.z+front.z*3};
-  r.build(p); SFX.play('success'); shake(0.35); state.giggle+=30; state.built=(state.built||0)+1; state.craftedSet[id]=true; markGoal('craft'); gainXP(3); if(typeof qBump==='function'){ qBump('craft'); if(r.cat==='food')qBump('cook'); if(r.cat==='build')qBump('build'); }
+  const px=player.position.x+front.x*3, pz=player.position.z+front.z*3, gy=groundY(px,pz);
+  const p={x:px, z:pz, y:gy};
+  const _m0=world.children.length, _s0=solids.length, _w0=(typeof waterZones!=='undefined'?waterZones.length:0);
+  r.build(p);
+  if(gy){ for(let i=_m0;i<world.children.length;i++) world.children[i].position.y+=gy;   // GROUND every mesh the recipe added (build recipes hard-code a fixed Y; this drops them onto the rolling terrain). addSolid's box is Y-invariant in X/Z, only `top` shifts:
+    for(let i=_s0;i<solids.length;i++) solids[i].top+=gy;
+    if(typeof waterZones!=='undefined') for(let i=_w0;i<waterZones.length;i++) waterZones[i].surfaceY+=gy; }
+  SFX.play('success'); shake(0.35); state.giggle+=30; state.built=(state.built||0)+1; state.craftedSet[id]=true; markGoal('craft'); gainXP(3); if(typeof qBump==='function'){ qBump('craft'); if(r.cat==='food')qBump('cook'); if(r.cat==='build')qBump('build'); }
   toast(`🔨 Crafted ${r.name}!`); renderCraft(); if(state.won)Quests.render(); save(); }
 
 /* ============================ SHOP / ECONOMY ============================ */
@@ -2522,14 +2535,14 @@ function buildMount(key){ const M=MOUNTS[key]; const g=buildMobGLB(M.model, M.h,
 function spawnMounts(){ for(const [k,n] of [['horse',2],['stag',1],['unicorn',1]]){ for(let i=0;i<n;i++){ const a=rand(0,TAU), r=rand(70,FENCE-30), x=Math.cos(a)*r, z=Math.sin(a)*r; if(typeof isInWater==='function'&&isInWater(x,z,9))continue; const g=buildMount(k); g.position.set(x,groundY(x,z),z); world.add(g); mounts.push(g); g.userData.it=addInteractable(g, '🐴 '+MOUNTS[k].name, ()=>mountInteract(g), 3.4); } } }
 function despawnMount(g){ const i=mounts.indexOf(g); if(i>=0)mounts.splice(i,1); world.remove(g); if(g.userData&&g.userData.it){ const k=interactables.indexOf(g.userData.it); if(k>=0)interactables.splice(k,1); } }
 function nearestStable(x,z){ let best=null,bd=1e9; for(const s of (state.stables||[])){ const d=Math.hypot(s.x-x,s.z-z); if(d<bd){ bd=d; best=s; } } return best?{s:best,d:bd}:null; }
-function buildStableAt(x,z){ const col='#8a5a31', roofC='#7a4a2a';   // placed structure (matches build-recipe pattern: direct world.add + addSolid)
-  for(const dz of [-1.6,1.6]) for(const dx of [-2.1,2.1]){ const post=box(0.3,3,0.3,col); post.position.set(x+dx,1.5,z+dz); world.add(post); addSolid(post); }
-  const back=box(4.5,2.6,0.3,col); back.position.set(x,1.5,z-1.6); world.add(back); addSolid(back);
-  const roof=box(5.0,0.5,3.9,roofC); roof.position.set(x,3.2,z); world.add(roof);
-  const rail=box(4.5,0.25,0.2,col); rail.position.set(x,1.0,z+1.6); world.add(rail); addSolid(rail);
-  const hay=box(1.1,0.8,1.1,'#d8b24a'); hay.position.set(x+1.2,0.4,z+0.5); world.add(hay);
-  const sign=box(0.9,0.6,0.12,'#a9743f'); sign.position.set(x-2.1,2.4,z+1.62); world.add(sign);
-  const trough=box(1.4,0.4,0.6,'#9a948a'); trough.position.set(x-1.0,0.3,z+0.6); world.add(trough); }
+function buildStableAt(x,z,baseY=0){ const col='#8a5a31', roofC='#7a4a2a', gy=baseY;   // baseY=0 via the craft() recipe (craft() post-grounds every recipe mesh); load() passes groundY to rebuild a grounded stable directly
+  for(const dz of [-1.6,1.6]) for(const dx of [-2.1,2.1]){ const post=box(0.3,3,0.3,col); post.position.set(x+dx,gy+1.5,z+dz); world.add(post); addSolid(post); }
+  const back=box(4.5,2.6,0.3,col); back.position.set(x,gy+1.5,z-1.6); world.add(back); addSolid(back);
+  const roof=box(5.0,0.5,3.9,roofC); roof.position.set(x,gy+3.2,z); world.add(roof);
+  const rail=box(4.5,0.25,0.2,col); rail.position.set(x,gy+1.0,z+1.6); world.add(rail); addSolid(rail);
+  const hay=box(1.1,0.8,1.1,'#d8b24a'); hay.position.set(x+1.2,gy+0.4,z+0.5); world.add(hay);
+  const sign=box(0.9,0.6,0.12,'#a9743f'); sign.position.set(x-2.1,gy+2.4,z+1.62); world.add(sign);
+  const trough=box(1.4,0.4,0.6,'#9a948a'); trough.position.set(x-1.0,gy+0.3,z+0.6); world.add(trough); }
 function restoreTamedMounts(list){ if(!Array.isArray(list))return; for(const r of list){ if(!r||!MOUNTS[r.key])continue; const x=clamp(+r.x||0,-FENCE,FENCE), z=clamp(+r.z||0,-FENCE,FENCE); const g=buildMount(r.key); g.position.set(x,groundY(x,z),z); g.userData.tamed=true; g.userData.bond=clamp(Math.floor(+r.bond||0),0,99); const ns=nearestStable(x,z); g.userData.home=(ns&&ns.d<40)?{x:ns.s.x,z:ns.s.z}:{x,z}; world.add(g); mounts.push(g); g.userData.it=addInteractable(g,'🐴 '+MOUNTS[r.key].name,()=>mountInteract(g),3.4); } }
 function tamedMountSaveList(){ return mounts.filter(g=>g.userData&&g.userData.tamed).map(g=>({key:g.userData.mountKey,x:+g.position.x.toFixed(1),z:+g.position.z.toFixed(1),bond:g.userData.bond||0})); }
 function mountInteract(g){ const k=g.userData.mountKey, M=MOUNTS[k];
@@ -3708,7 +3721,7 @@ document.getElementById('keepBtn').onclick=()=>document.getElementById('winScree
 
 /* QA probe */
 window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.toFixed(2),z:+player.position.z.toFixed(2)}),
-  state, ready:()=>ready, anim:()=>charAnim, models:()=>Object.keys(MODELS).length, neighbors:()=>neighbors.length, classPick:()=>openClassPick(), applyClass:(c,g)=>applyClass(c,g), openDyer:()=>openDyer(), mountsInfo:()=>mounts.map(g=>({x:+g.position.x.toFixed(1),z:+g.position.z.toFixed(1),k:g.userData.mountKey,tamed:!!g.userData.tamed,bond:g.userData.bond||0})), stablesInfo:()=>(state.stables||[]).slice(), buildRecipe:(id,x,z)=>{ const r=RECIPES.find(x2=>x2.id===id); if(r)r.build({x,z}); }, runMountRunaway:()=>mountRunaway(),
+  state, ready:()=>ready, anim:()=>charAnim, models:()=>Object.keys(MODELS).length, neighbors:()=>neighbors.length, classPick:()=>openClassPick(), applyClass:(c,g)=>applyClass(c,g), openDyer:()=>openDyer(), mountsInfo:()=>mounts.map(g=>({x:+g.position.x.toFixed(1),z:+g.position.z.toFixed(1),k:g.userData.mountKey,tamed:!!g.userData.tamed,bond:g.userData.bond||0})), stablesInfo:()=>(state.stables||[]).slice(), buildRecipe:(id,x,z)=>{ const r=RECIPES.find(x2=>x2.id===id); if(r)r.build({x,z}); }, runMountRunaway:()=>mountRunaway(), groundAt:(x,z)=>groundY(x,z), waterZonesInfo:()=>waterZones.map(w=>({x:+w.x.toFixed(0),z:+w.z.toFixed(0),r:+(w.r||0).toFixed(0),vr:+(w.vr||0).toFixed(0),sy:+w.surfaceY.toFixed(2)})), basinsInfo:()=>WATER_BASINS.map(b=>({x:b.x,z:b.z,rs:+b.rs.toFixed(0),rb:+b.rb.toFixed(0),floor:+b.floor.toFixed(2),yy:+b.yy.toFixed(2)})),
   needs:()=>({h:Math.round(Needs.hunger),e:Math.round(Needs.energy),f:Math.round(Needs.fun)}), day:()=>({day:state.day,giggle:state.giggle,goals:state.goals.map(g=>({t:g.type,done:g.done}))}),
   tp:(x,z)=>player.position.set(x,0,z), setKey:(c,d)=>keys[c]=d, yaw:()=>cam.yaw, mark:t=>markGoal(t), genGoals,
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
@@ -3780,6 +3793,13 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
     state.giggle=10000; buyItem('home'); buyItem('home'); R.home_tiers=(state.homeTier===3); buyItem('home'); R.home_caps=(state.homeTier===3);   // can't exceed tier 3
     // FUNCTIONAL CRAFTS: a crafted bench restores energy on interact
     Inv.add('wood',10); player.position.set(HOUSE.cx,0.3,HOUSE.cz+12); craft('bench'); Needs.energy=40; const be=interactables.find(i=>/bench/i.test(i.label)); if(be){ be.action(); } R.functional_bench=(!!be && Needs.energy>40);
+    // BUILD GROUNDING: a recipe crafted out on a rolling hill must sit ON the terrain (groundY), not float at a fixed Y
+    { const _pp=player.position.clone(), _ry=player.rotation.y; player.rotation.y=0; let bx=0,bz=0,bgy=0;
+      for(const [sx,sz] of [[220,220],[260,-200],[-300,170],[170,310],[-220,-260],[300,60]]){ const g2=groundY(sx,sz+3); if(Math.abs(g2)>3){ bx=sx; bz=sz; bgy=g2; break; } }
+      player.position.set(bx,0,bz); Inv.add('wood',6); const fr=RECIPES.find(r=>r.id==='fence'); if(fr)fr.locked=false; const n0=world.children.length; craft('fence');
+      const placed=(world.children.length>n0)?world.children[world.children.length-1]:null;
+      R.build_grounded = !!placed && Math.abs(bgy)>3 && Math.abs(placed.position.y-(bgy+0.7))<0.6;   // fence sits at groundY+0.7 on a real hill (would be 0.7 i.e. ~bgy off if ungrounded)
+      player.position.copy(_pp); player.rotation.y=_ry; }
     // DAILY EVENT + market multiplier
     R.event_active=!!(state.event&&state.event.name);
     state.event=DAY_EVENTS.find(e=>e.id==='market'); Inv.add('coin',4); const cg=state.giggle; buyItem('sellcoins'); R.event_market=(state.giggle===cg+4*5*2);
@@ -3998,6 +4018,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       const t0=state.tod; state.tod=0.3; despawnCreatures(); for(let i=0;i<40;i++) updateCombat(0.25); R.day_no_monsters=(isDay() && creatures.length===0); state.tod=t0; despawnCreatures();
       R.mist=(mistSprites.length>=10 && !!scene.fog);
       R.world_expanded=(FENCE>=600 && R.maxNodeRadius>350 && waters.length>=40); }   // E1: huge field + rivers spread out
+    R.lake_basin = (WATER_BASINS.length>=4 && WATER_BASINS.every(b=>b.rs<b.rb && Number.isFinite(b.floor) && Number.isFinite(b.yy) && b.floor<b.yy));   // each lake carves a valid bowl (floor below the water surface) so it can't poke through the hills
     // E2 FULL VOXEL: place a block (spend material) + break it (refund) + dig the ground to CARVE a pit you descend into
     { loadBlocks([]); BMODE.on=true; BMODE.mi=0; state.inv.wood=5; const w0=state.inv.wood; placeBlock();
       R.voxel_place=(BMODE.blocks.length===1 && state.inv.wood===w0-1 && solids.includes(BMODE.blocks[0]&&BMODE.blocks[0].solid));
@@ -4078,7 +4099,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       &&R.event_active&&R.event_market&&R.shop_closed_night&&R.shop_open_day&&R.onboarding_done&&R.friendship&&R.requests_list&&R.town_legend
       &&R.pause_works&&R.cam_pitch_clamped&&R.ambient
       &&R.head&&R.assetsClean&&R.touch&&R.touch_moves&&R.raf_boundary&&R.pause_freezes_cook&&R.cook_completes&&R.sfx_gate&&R.reduce_motion&&R.reduce_confetti&&R.light_cap&&R.save_sanitized&&R.particle_pool
-      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2&&R.class_system&&R.class_combat&&R.mounts&&R.mount_stable
+      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2&&R.class_system&&R.class_combat&&R.mounts&&R.mount_stable&&R.lake_basin&&R.build_grounded
       &&R.homes_present&&R.home_built&&R.home_loot&&R.home_enter_path&&R.recipe_page_unlock&&R.node_respawn&&R.chest_oneuse
       &&R.weapon_craft&&R.combat_kill&&R.combat_respawn&&R.inv_slots
       &&R.mine_pickaxe&&R.mine_enter&&R.mine_dig&&R.mine_exit&&R.armor_craft&&R.armor_reduces&&R.rarity_tiers&&R.rarity_loot&&R.combat_anim&&R.gear_equip&&R.dice_rolls&&R.dmg_popup&&R.menu;
