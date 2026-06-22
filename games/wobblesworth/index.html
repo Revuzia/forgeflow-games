@@ -432,9 +432,9 @@ function groundY(x,z){ return terrainH(x,z); }   // single seam for "what Y does
 // 🗺️ CONCENTRIC BIOME RINGS (owner: biomes by DISTANCE, traversed out AND back via the world-wrap). Pure (x,z) radial masks so the tint wraps seamlessly across ±650. Rings: hills -> SWAMP(undead) -> DESERT(golems/marauders) -> DARK BURNT CORE(blobs+dragon, the only foggy realm).
 function _sstep(e0,e1,x){ let t=(x-e0)/(e1-e0); t=t<0?0:t>1?1:t; return t*t*(3-2*t); }
 function swampMask(x,z){ const r=Math.hypot(x,z); return _sstep(165,205,r)*(1-_sstep(300,342,r)); }   // CONTIGUOUS rings: swamp cross-fades straight into desert (no green gap between)
-function desertMask(x,z){ const r=Math.hypot(x,z); return _sstep(300,340,r)*(1-_sstep(448,470,r)); }   // desert fall 448-470 ALIGNED with the ice rise so the desert->ice crossfade sums to ~1 (no green tinge)
-function iceMask(x,z){ const r=Math.hypot(x,z); return _sstep(448,470,r)*(1-_sstep(505,525,r)); }   // ❄️ FROZEN WASTES ring (~100k sq u); rise 448-470 overlaps desert fall, fall 505-525 overlaps the dark rise -> no bare crossfade either side
-function darkMask(x,z){ const r=Math.hypot(x,z); return _sstep(503,525,r); }   // dark core = the DEEPEST; rises 503-525 to overlap the ice fall (no green gap), then owns everything beyond
+function desertMask(x,z){ const r=Math.hypot(x,z); return _sstep(300,340,r)*(1-_sstep(450,472,r)); }   // desert fall 450-472 ALIGNED with the ice rise
+function iceMask(x,z){ const r=Math.hypot(x,z); return _sstep(450,472,r)*(1-_sstep(525,547,r)); }   // ❄️ FROZEN WASTES ring ~180k sq u (full 472-525) — comparable in size to swamp/desert (owner); crossfades overlap both sides -> no bare seam
+function darkMask(x,z){ const r=Math.hypot(x,z); return _sstep(525,547,r); }   // dark core = the DEEPEST/furthest realm; rises 525-547 to overlap the ice fall, then owns everything beyond
 const _SWAMP_COL=new THREE.Color('#5c6438'), _DESERT_COL=new THREE.Color('#e3cb92'), _DARK_COL=new THREE.Color('#16121c'), _ICE_COL=new THREE.Color('#d8e6f0'), _DARKFOG=new THREE.Color('#0c0a12');   // murky OLIVE bog / warm SAND dunes / near-black ash core / snow-white ICE + the core fog tint
 const _SKY_SWAMP=new THREE.Color('#7e8a6a'), _ZEN_SWAMP=new THREE.Color('#5d6b52'), _SKY_DESERT=new THREE.Color('#f2e2b8'), _ZEN_DESERT=new THREE.Color('#cbb98a'), _SKY_ICE=new THREE.Color('#dfeef7'), _ZEN_ICE=new THREE.Color('#bcd6e8'), _overcastGrey=new THREE.Color('#7d8590');   // 🌥️ G4 per-biome sky tints + overcast cloud grey
 function biomeGroundColor(x,z,col){ col.setRGB(1,1,1); const sw=swampMask(x,z); if(sw>0)col.lerp(_SWAMP_COL,sw*0.93); const de=desertMask(x,z); if(de>0)col.lerp(_DESERT_COL,de*0.96); const ic=iceMask(x,z); if(ic>0)col.lerp(_ICE_COL,ic*0.95); const dk=darkMask(x,z); if(dk>0)col.lerp(_DARK_COL,dk*0.93); return col; }   // paint order swamp->desert->ICE->dark (deeper wins on overlap)
@@ -765,7 +765,7 @@ const SWAMP_WATER_MAT=WATER_MAT.clone(); SWAMP_WATER_MAT.uniforms.uDeep.value=ne
 const LAVA_MAT=WATER_MAT.clone(); LAVA_MAT.uniforms.uDeep.value=new THREE.Color('#5a1200'); LAVA_MAT.uniforms.uShallow.value=new THREE.Color('#ff5a14'); LAVA_MAT.uniforms.uSky.value=new THREE.Color('#1a0600'); LAVA_MAT.uniforms.uFoam.value=new THREE.Color('#ffd23a');   // molten: orange-red body, hot-yellow crust rim (shader is unlit -> reads self-lit)
 const SWAMP_POOLS=[];   // filled by genSwampPools() in buildWorld — MANY small RANDOM murky pools spread all THROUGH the swamp ring (owner: bogs have pools everywhere, not one big one)
 function genSwampPools(){ SWAMP_POOLS.length=0; let t=0; while(SWAMP_POOLS.length<18 && t<500){ t++; const a=rand(0,TAU), r=rand(188,312), x=Math.cos(a)*r, z=Math.sin(a)*r; if(swampMask(x,z)<0.55) continue; if(SWAMP_POOLS.some(p=>Math.hypot(p.x-x,p.z-z)<p.r+15)) continue; SWAMP_POOLS.push({x,z,r:rand(5,13)}); } }
-const LAVA_POOLS=[{x:540,z:100,r:16},{x:-540,z:150,r:18},{x:230,z:-535,r:15},{x:-380,z:-440,r:17}];   // ~4 lava pools in the NEW DARK CORE (r 525+, was 418+ before ice pushed it out), clear of the 4 LAKES
+const LAVA_POOLS=[{x:560,z:100,r:16},{x:-560,z:130,r:18},{x:225,z:-535,r:15},{x:-380,z:-435,r:17}];   // ~4 lava pools in the DARK CORE (r 547+, pushed deeper as ice widened); inner edges all clear of the ice ring + the 4 LAKES
 const LAVA_ZONES=[];   // lava keep-out (+ F2c contact damage) — NOT swimmable
 const SINKHOLES=[{x:360,z:40,r:15,core:2.0},{x:-340,z:-70,r:14,core:1.8},{x:120,z:380,r:16,core:2.2},{x:-90,z:-400,r:14,core:1.8}];   // 🌀 desert sand sinkholes (suck+spin the player); centers in the desert ring, clear of lakes/lava
 const SINK_MESHES=[];   // the spinning funnel cones
@@ -2974,7 +2974,7 @@ function updatePlayer(dt){
   if(grounded && !MINE.inMine && !DUNGEON.inDungeon && SINKHOLES.length){ const _spx=player.position.x, _spz=player.position.z;
     for(const s of SINKHOLES){ const dx=_spx-s.x, dz=_spz-s.z, d=Math.hypot(dx,dz);
       if(d<s.r){ const inv=1/(d||1), nx=dx*inv, nz=dz*inv;
-        if(d<s.core+1.5){ player.position.x=s.x+nx*(s.r+2.5); player.position.z=s.z+nz*(s.r+2.5); vy=6.5; grounded=false; shake(0.6); if(typeof flashRed==='function')flashRed(); state.hp=Math.max(1,state.hp-Math.min(Math.max(0,state.hp-1),5)); if(typeof renderHearts==='function')renderHearts(); if(typeof toast==='function')toast('🌀 A sand sinkhole flung you out!'); if(typeof SFX!=='undefined')SFX.play('jump',{rate:0.5,vol:0.7}); }
+        if(d<s.core+1.5){ player.position.x=s.x+nx*(s.r+2.5); player.position.z=s.z+nz*(s.r+2.5); vy=6.5; grounded=false; shake(0.5); if(typeof toast==='function')toast('🌀 Whoops — the sand spat you out!'); if(typeof SFX!=='undefined')SFX.play('jump',{rate:0.5,vol:0.7}); }   // NO damage (owner: biome effects are annoying+interactive, not harmful) — just the fling + a hop
         else { const pull=1-d/s.r; player.position.x+=(-nx*0.62 - nz*0.5)*pull*9*dt; player.position.z+=(-nz*0.62 + nx*0.5)*pull*9*dt; cam.targetYaw+=dt*1.0*pull; }
         break; } } }
   // JUICE: squash on landing, spring scale back to base each frame
