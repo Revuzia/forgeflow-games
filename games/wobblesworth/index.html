@@ -777,6 +777,12 @@ const CLASSES={ warrior:{name:'Warrior',icon:'⚔️',blurb:'Sword & heavy armor
 const CLASS_WTIER={ warrior:['fist','wood_sword','stone_sword','iron_sword','crystal_sword','gold_sword','titan_blade','mythic_blade'], mage:['fist','apprentice_staff','oak_staff','arcane_staff'], ranger:['fist','short_bow','hunter_bow','longbow'] };
 function playerClass(){ return state.charClass||'warrior'; }
 function canUseWeapon(id){ if(id==='fist')return true; const w=WEAPONS[id]; if(!w)return false; return (w.cls||'warrior')===playerClass(); }
+// ── SPELLS (mage, cost MANA) + SPECIAL ARROWS (ranger, consumable) — both live in the HOTBAR; the selected slot decides the attack ──
+const SPELLS={ bolt:{n:'Arcane Bolt',i:'✨',mana:8,mult:1.7,color:'#c77dff'}, fireball:{n:'Fireball',i:'🔥',mana:18,mult:2.7,color:'#ff7a3d'}, frost:{n:'Frost Shard',i:'❄️',mana:14,mult:2.1,color:'#9fd0ff'}, mend:{n:'Mend',i:'💚',mana:24,heal:0.4} };
+const SP_ARROWS={ fire_arrow:{n:'Fire Arrow',i:'🔥',mult:1.9,color:'#ff7a3d'}, ice_arrow:{n:'Ice Arrow',i:'❄️',mult:1.7,color:'#9fd0ff'}, bomb_arrow:{n:'Bomb Arrow',i:'💥',mult:2.8,color:'#ffcf3a'} };
+const SPELLBOOKS={ book_fireball:'fireball', book_frost:'frost', book_mend:'mend' };   // a FOUND/crafted book -> read it to learn its spell (adds spell_<id> to your bag)
+function SPELL_OF(k){ return (k&&k.indexOf('spell_')===0)?SPELLS[k.slice(6)]:null; }
+function ARROW_OF(k){ return (k&&SP_ARROWS[k])?SP_ARROWS[k]:null; }
 const WTIER=['fist','wood_sword','stone_sword','iron_sword','crystal_sword','gold_sword','titan_blade','mythic_blade'];   // titan/mythic = top tiers (need boss_core)
 // ARMOR — a % chance to fully BLOCK an incoming hit (clean with 1-heart hits: a hit either lands fully or is blocked)
 const ARMORS={ leather:{block:0.30,name:'Leather Armor',icon:'🦺'}, iron:{block:0.55,name:'Iron Armor',icon:'🦺'}, gold:{block:0.72,name:'Gold Armor',icon:'🦺'}, titan:{block:0.86,name:'Titan Plate',icon:'🛡️'},
@@ -1564,7 +1570,7 @@ function emote(name){ // one-shot emote then back to idle/walk
   setTimeout(()=>{ if(charAnim==='__emote'){ a.fadeOut(0.25); a.clampWhenFinished=false; setAnim('idle'); setTimeout(()=>{ try{ a.stop(); }catch(e){} }, 300); } }, 700); }   // fully STOP the clamped emote action after the fade so the folded/sit pose can't keep blending (was only faded, which left legs folded after a nap)   // setAnim('idle') (was charAnim='') forces an immediate clean stand-up so legs don't stay folded after a nap/sit   // MUST fade the emote action OUT here: it was LoopOnce+clampWhenFinished, so it sat at full weight on its LAST frame (e.g. the folded-leg 'sit' pose after a nap). Clearing charAnim only let setAnim fade IDLE *in* — the clamped sit kept blending the legs into a seated/sleeping pose (owner: "after he sleeps his legs stay in a sleeping position"). Fading the clamped action out lets the player stand fully upright again.
 
 /* ---------- input / camera ---------- */
-const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyQ'&&state.running) castSecondary(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(levelupOpen)closeLevelUp(); else if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(boardOpen)closeBoard(); else if(dyerOpen)closeDyer(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); else if(state.running)openSettings(); } }   /* ESC toggles Settings (open if nothing else is open); browsers still force ESC to exit fullscreen — unavoidable */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
+const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(levelupOpen)closeLevelUp(); else if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(boardOpen)closeBoard(); else if(dyerOpen)closeDyer(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); else if(state.running)openSettings(); } }   /* ESC toggles Settings (open if nothing else is open); browsers still force ESC to exit fullscreen — unavoidable */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 // release ALL held keys when focus/visibility is lost — prevents the "stuck walking forward" bug
 // (a right-click context menu, alt-tab, or click-away steals focus so the W keyup never fires).
@@ -1863,7 +1869,10 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
 /* ============================ INVENTORY ============================ */
 const ITEMS={ wood:{i:'🪵',n:'Wood'},stone:{i:'🪨',n:'Stone'},crystal:{i:'💎',n:'Crystal'},apple:{i:'🍎',n:'Apple'},mushroom:{i:'🍄',n:'Mushroom'},carrot:{i:'🥕',n:'Carrot'},flower:{i:'🌸',n:'Flower'},dye_petal:{i:'🎨',n:'Dye Petal'},coin:{i:'🪙',n:'Coin'},
   milk:{i:'🥛',n:'Milk'},wool:{i:'🧶',n:'Wool'},egg:{i:'🥚',n:'Egg'},leather:{i:'🟫',n:'Leather'},meat:{i:'🍖',n:'Meat'},
-  dirt:{i:'🟤',n:'Dirt'}, iron_ingot:{i:'🔩',n:'Iron Ingot'}, gold_ingot:{i:'🥇',n:'Gold Ingot'}, boss_core:{i:'💠',n:'Boss Core'}, health_potion:{i:'🧪',n:'Health Potion'}, energy_tonic:{i:'🧉',n:'Energy Tonic'} };   // appended (keep first 8 keys' order for the hotbar/inv_slots invariant)   // C3 animal resources + dirt + E3 smelted ingots + E5 boss-only crafting core; first 8 keys unchanged so hotbar + inv_slots stay intact
+  dirt:{i:'🟤',n:'Dirt'}, iron_ingot:{i:'🔩',n:'Iron Ingot'}, gold_ingot:{i:'🥇',n:'Gold Ingot'}, boss_core:{i:'💠',n:'Boss Core'}, health_potion:{i:'🧪',n:'Health Potion'}, energy_tonic:{i:'🧉',n:'Energy Tonic'},
+  spell_bolt:{i:'✨',n:'Arcane Bolt'}, spell_fireball:{i:'🔥',n:'Fireball'}, spell_frost:{i:'❄️',n:'Frost Shard'}, spell_mend:{i:'💚',n:'Mend'},
+  fire_arrow:{i:'🔥',n:'Fire Arrow'}, ice_arrow:{i:'❄️',n:'Ice Arrow'}, bomb_arrow:{i:'💥',n:'Bomb Arrow'},
+  book_fireball:{i:'📕',n:'Tome: Fireball'}, book_frost:{i:'📘',n:'Tome: Frost Shard'}, book_mend:{i:'📗',n:'Tome: Mend'} };   // appended (keep first 8 keys' order for the hotbar/inv_slots invariant)   // C3 animal resources + dirt + E3 smelted ingots + E5 boss-only crafting core; first 8 keys unchanged so hotbar + inv_slots stay intact
 /* basic item DESCRIPTIONS (owner: "each item needs a basic description — industry standard, see Minecraft") — shown as a hover tooltip in the inventory */
 const ITEM_DESC={ wood:'Chopped from trees. The basic building & crafting material.', stone:'Mined from rocks. Tools, walls, paths & the furnace.', crystal:'A glittering quarry gem. Crystal gear, glass & lanterns.', apple:'Sweet fruit — eat to restore hunger.', mushroom:'Forest fungus — eat for a little hunger & energy.', carrot:'Crunchy root veg — eat to restore energy.', flower:'A pretty bloom — used in decor & a few recipes.', coin:'Currency from foes & chests. Spend at shops.', milk:'From cows — eat for a little health; bakes into cake.', wool:'Sheared from sheep — crafts rugs & banners.', egg:'From chickens — eat for a little health; bakes treats.', leather:'From animals — crafts Leather Armor.', meat:'Hearty protein — eat to restore lots of hunger & health.', dirt:'Dug with a shovel. Fills holes & crafts bricks.', iron_ingot:'Smelted from stone at a furnace. Iron tools & armor.', gold_ingot:'Smelted from crystal. Gold tools & armor.', boss_core:'Rare BOSS-only drop. Required for the ⚡ Titan tier.' };
 let invOpen=false, pdpickOpen=false;
@@ -1872,12 +1881,13 @@ const Inv={ render(){ const el=document.getElementById('invbar'); if(!el)return;
     for(let i=0;i<10;i++){ const e=L[i]; const lbl=(i===9)?'0':(i+1); const cnt=(e&&e.kind==='item')?(state.inv[e.item]||0):0;
       h+=`<div class="slot${e?'':' empty'}${i===sel?' sel':''}${e&&e.kind==='tool'?' pslot':''}${e&&e.kind==='weapon'?' wslot':''}${e&&e.kind==='item'?' islot':''}" data-i="${i}" title="${e?(e.kind==='item'?e.name+' — click to use':e.name):'drag food here'}"><span class="sk">${lbl}</span><span class="i">${e?e.icon:''}</span>${cnt?`<span class="ic">${cnt}</span>`:''}<span class="n">${e&&e.kind==='fist'?'—':''}</span></div>`; }
     el.innerHTML=h; el.querySelectorAll('.slot').forEach((s,i)=>{ const e=L[i];
-      s.onclick=()=>{ if(e&&e.kind==='item'){ if(eatFood(e.item)) Inv.render(); } else selectSlot(i); };   // food slot -> click to eat; else select to hold
+      s.onclick=()=>{ if(e&&e.kind==='item'){ if(SPELL_OF(e.item)||ARROW_OF(e.item)){ selectSlot(i); } else if(eatFood(e.item)){ Inv.render(); } } else selectSlot(i); };   // spell/arrow slot -> SELECT (your attack uses it); food -> eat; else hold the weapon
       s.addEventListener('dragover',ev=>{ if(ev.dataTransfer.types.includes('text/item')){ ev.preventDefault(); s.classList.add('drop'); } });
       s.addEventListener('dragleave',()=>s.classList.remove('drop'));
       s.addEventListener('drop',ev=>{ ev.preventDefault(); s.classList.remove('drop'); const k=ev.dataTransfer.getData('text/item'); if(!k||!ITEMS[k])return; const le=hotbarLayout()[i]; if(le&&(le.kind==='weapon'||le.kind==='tool'||le.kind==='fist')){ toast('That slot is taken by a tool/weapon — drop on an empty slot.'); return; } state.quickItems=state.quickItems||{}; state.quickItems[i]=k; Inv.render(); save(); toast(`📌 ${ITEMS[k].n} pinned to slot ${i===9?0:i+1} — click it to use.`); });
     }); if(invOpen)renderInv(); },
-  add(k,n=1){ const isNew=!((state.inv[k]||0)>0); if(isNew && backpackFull(true)){ if(typeof toast==='function')toast('🎒 Backpack full! Buy a bigger backpack at the General Store.'); return false; } state.inv[k]=(state.inv[k]||0)+n; this.render(); save(); return true; },
+  add(k,n=1){ if(SPELLBOOKS[k] && playerClass()==='mage'){ const sid=SPELLBOOKS[k]; state.inv['spell_'+sid]=(state.inv['spell_'+sid]||0)+1; this.render(); save(); try{ toast('📖 Learned '+SPELLS[sid].n+'! Drag it from your bag to a hotbar slot to cast.'); SFX.play('success'); }catch(e){} return true; }   // a found/crafted tome teaches its spell on pickup
+    const isNew=!((state.inv[k]||0)>0); if(isNew && backpackFull(true)){ if(typeof toast==='function')toast('🎒 Backpack full! Buy a bigger backpack at the General Store.'); return false; } state.inv[k]=(state.inv[k]||0)+n; this.render(); save(); return true; },
   has(k,n=1){ return (state.inv[k]||0)>=n; }, take(k,n=1){ if(!this.has(k,n))return false; state.inv[k]-=n; this.render(); save(); return true; } };
 // ── BACKPACK CAPACITY: limited slots; the General Store sells bigger backpacks (raise state.backpackTier) ──
 const BACKPACK_CAPS=[50,75,100,150];   // slots by tier 0..3 (base 50; store upgrades grow it)
@@ -1912,6 +1922,7 @@ function hotbarLayout(){ const L=[{kind:'fist',icon:'✊',name:'Fists'}];
 function applyEquip(){ const e=hotbarLayout()[state.selectedSlot]; if(!e){ state._activeTool=''; return; }
   if(e.kind==='weapon'){ state.weapon=e.weapon; state._activeTool=''; }
   else if(e.kind==='tool'){ state._activeTool=e.tool; }
+  else if(e.kind==='item' && (SPELL_OF(e.item)||ARROW_OF(e.item))){ state._activeTool=''; if(state.weapon==='fist')equipBest(); }   // spell/arrow slot -> KEEP your staff/bow held (it powers the cast/shot)
   else { state.weapon='fist'; state._activeTool=''; } }
 function syncSel(){ const L=hotbarLayout(); for(let i=0;i<L.length;i++){ const e=L[i]; if(!e)continue;
     if(state._activeTool){ if(e.kind==='tool'&&e.tool===state._activeTool){ state.selectedSlot=i; return; } }
@@ -2113,6 +2124,13 @@ const RECIPES=[
   {id:'iron_shield', name:'🛡️ Iron Shield', cat:'tool', lvl:13, cost:{iron_ingot:2,wood:2}, build:p=>gainOffhand('iron_shield') },
   {id:'gold_shield', name:'🛡️ Gold Shield', cat:'tool', lvl:25, cost:{gold_ingot:2,iron_ingot:1}, build:p=>gainOffhand('gold_shield') },
   {id:'titan_shield', name:'🛡️ Titan Bulwark', cat:'tool', lvl:40, cost:{boss_core:1,gold_ingot:2}, build:p=>gainOffhand('titan_shield') },
+  // ── CLASS recipes (hidden unless your class): ranger SPECIAL ARROWS (consumable batches) + mage SPELL TOMES (learn a spell on craft) ──
+  {id:'fire_arrow', name:'🔥 Fire Arrows ×5', cat:'tool', cls:'ranger', lvl:2, cost:{wood:2,crystal:1}, build:p=>{ Inv.add('fire_arrow',5); toast('🔥 Fletched 5 Fire Arrows — pin them to a hotbar slot.'); } },
+  {id:'ice_arrow', name:'❄️ Ice Arrows ×5', cat:'tool', cls:'ranger', lvl:5, cost:{crystal:2}, build:p=>{ Inv.add('ice_arrow',5); toast('❄️ Fletched 5 Ice Arrows.'); } },
+  {id:'bomb_arrow', name:'💥 Bomb Arrows ×3', cat:'tool', cls:'ranger', lvl:9, cost:{iron_ingot:1,crystal:1}, build:p=>{ Inv.add('bomb_arrow',3); toast('💥 Fletched 3 Bomb Arrows.'); } },
+  {id:'book_fireball', name:'📕 Tome: Fireball', cat:'tool', cls:'mage', lvl:4, cost:{crystal:3}, build:p=>{ Inv.add('book_fireball',1); } },
+  {id:'book_frost', name:'📘 Tome: Frost Shard', cat:'tool', cls:'mage', lvl:7, cost:{crystal:2,iron_ingot:1}, build:p=>{ Inv.add('book_frost',1); } },
+  {id:'book_mend', name:'📗 Tome: Mend', cat:'tool', cls:'mage', lvl:10, cost:{crystal:4,gold_ingot:1}, build:p=>{ Inv.add('book_mend',1); } },
   {id:'wood_torch', name:'🔥 Wood Torch', cat:'tool', lvl:3, cost:{wood:3}, build:p=>gainOffhand('wood_torch') },
   {id:'crystal_torch', name:'🔆 Crystal Torch', cat:'tool', lvl:12, cost:{crystal:3,wood:1}, build:p=>gainOffhand('crystal_torch') },
   {id:'magic_torch', name:'✨ Magic Torch', cat:'tool', lvl:30, cost:{crystal:5,boss_core:1}, build:p=>gainOffhand('magic_torch') },
@@ -2202,7 +2220,7 @@ function craftTileState(r){   // -> {cls, badge, note, act}
 }
 function renderCraft(){ const el=document.getElementById('craft'); const pages=state.recipePages||0;
   let h=`<div class="craftcard"><h3>🔨 Crafting <span class="sub">⭐ Lv ${state.level} · 📖 ${pages}</span> <span class="x" id="craftX">✕</span></h3>`;
-  for(const [cat,label] of CRAFT_CATS){ const rs=RECIPES.filter(r=>(r.cat||'build')===cat); if(!rs.length) continue;
+  for(const [cat,label] of CRAFT_CATS){ const rs=RECIPES.filter(r=>(r.cat||'build')===cat && (!r.cls||r.cls===playerClass())); if(!rs.length) continue;
     h+=`<div class="cgroup">${label}</div><div class="cgrid">`;
     for(const r of rs){ const cost=Object.entries(r.cost).map(([k,v])=>`${ITEMS[k].i}${v}`).join(' '); const st=craftTileState(r);
       const attr=st.act==='make'?`data-id="${r.id}"`:(st.act==='unlock'?`data-unlock="${r.id}"`:'');
@@ -3024,7 +3042,9 @@ function equipBest(){ const T=CLASS_WTIER[playerClass()]||WTIER; for(let i=T.len
 function manaMaxForLevel(lvl){ return 50 + (((lvl||1)-1)*10); }
 function applyClass(cls,gender){ state.charClass=cls; const idx={warrior:'a',mage:'b',ranger:'c'}[cls]||'a'; state.charModel=(gender==='female'?'character-female-':'character-male-')+idx;
   const start=CLASSES[cls].start; state.weapons=state.weapons||{}; state.weapons[start]=true; state.weapon=start;
-  if(cls==='mage'){ state.manaMax=manaMaxForLevel(state.level); state.mana=state.manaMax; } else { state.manaMax=0; state.mana=0; }
+  if(cls==='mage'){ state.manaMax=manaMaxForLevel(state.level); state.mana=state.manaMax; state.inv.spell_bolt=(state.inv.spell_bolt||0)+1; }   // mage starts knowing Arcane Bolt -> drag it to a hotbar slot
+  else if(cls==='ranger'){ state.manaMax=0; state.mana=0; state.inv.fire_arrow=(state.inv.fire_arrow||0)+6; }   // ranger starts with a few Fire Arrows
+  else { state.manaMax=0; state.mana=0; }
   try{ if(typeof _buildPlayerBody==='function')_buildPlayerBody(); }catch(e){} try{ renderHearts(); }catch(e){} try{ Inv.render(); }catch(e){} try{ updateManaUI(); }catch(e){} save();
   toast(`${CLASSES[cls].icon} ${CLASSES[cls].name}! ${cls==='mage'?'Attack to cast magic bolts (costs MANA).':cls==='ranger'?'Attack to loose arrows from range.':'Attack to swing your blade up close.'}`); }
 function openClassPick(thenStart){ let el=document.getElementById('classpick'); if(!el){ el=document.createElement('div'); el.id='classpick'; document.body.appendChild(el); }
@@ -3041,25 +3061,26 @@ function openClassPick(thenStart){ let el=document.getElementById('classpick'); 
 function gainWeapon(id){ state.weapons[id]=true; equipBest(); const w=WEAPONS[id]; toast(`${w.icon} Crafted + equipped the ${w.name}!`); if(invOpen)renderInv(); Inv.render(); }
 function gainOffhand(id){ if(!state.offhands)state.offhands={}; state.offhands[id]=true; equipGear(id,'offhand'); const it=(SHIELDS[id]||TORCHES[id]); if(it)toast(`${it.icon} Crafted + equipped ${it.name}!`); if(invOpen)renderInv(); Inv.render(); save(); }   // craft a shield/torch -> owned + auto-equipped to the off-hand
 const playerShots=[];   // CLASS projectiles — mage bolts / ranger arrows that damage enemies (distinct from the enemy `projectiles`)
-function playerShoot(){ if(!state.running||state.paused)return; if(state._atkCD>0)return; const w=WEAPONS[state.weapon]||WEAPONS.fist; if(!w.proj){ playerAttack(); return; }
-  if(w.mana){ if((state.mana||0)<w.mana){ toast('💧 Out of mana — let it recharge.'); SFX.play('interact',{rate:0.5,vol:0.4}); return; } state.mana-=w.mana; updateManaUI(); }
-  const asm=Needs.atkSpeedMul(); state._atkCD = asm<1?0.5/asm:0.28; state._swing=0.25; emote('attack-melee-right');
-  const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y), sp=24, dmg=w.dmg*Needs.dmgMul(), bolt=w.proj==='bolt';
-  const m=bolt? ball(0.22,'#9b7bff') : new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.75,5), new THREE.MeshBasicMaterial({color:'#caa46a'}));
+function _spawnShot(dmg, color, bolt, crit){ const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y), sp=24;
+  const m=bolt? ball(0.24,color||'#9b7bff') : new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.75,5), new THREE.MeshBasicMaterial({color:color||'#caa46a'}));
   m.position.set(player.position.x+fx*0.8, 1.25, player.position.z+fz*0.8); if(bolt){ m.material.transparent=true; } else { m.rotation.set(Math.PI/2,Math.atan2(fx,fz),0); }
-  world.add(m); playerShots.push({mesh:m,vx:fx*sp,vz:fz*sp,life:1.5,dmg,crit:w.crit||0,bolt}); SFX.play('interact',{rate:bolt?1.3:1.6,vol:0.4}); shake(0.06); if(state.weapon&&state.weapon!=='fist')useDur(state.weapon,1); }
+  world.add(m); playerShots.push({mesh:m,vx:fx*sp,vz:fz*sp,life:1.5,dmg,crit:crit||0,bolt}); SFX.play('interact',{rate:bolt?1.3:1.6,vol:0.45}); shake(0.06); }
+function playerShoot(){ if(!state.running||state.paused)return; if(state._atkCD>0)return; const w=WEAPONS[state.weapon]||WEAPONS.fist; if(!w.proj){ playerAttack(); return; }
+  const asm=Needs.atkSpeedMul(); state._atkCD = asm<1?0.5/asm:0.28; state._swing=0.25; emote('attack-melee-right');
+  _spawnShot(w.dmg*Needs.dmgMul(), w.proj==='bolt'?'#9b7bff':'#caa46a', w.proj==='bolt', w.crit||0);
+  if(state.weapon&&state.weapon!=='fist')useDur(state.weapon,1); }
 function updatePlayerShots(dt){ for(let i=playerShots.length-1;i>=0;i--){ const s=playerShots[i],m=s.mesh; m.position.x+=s.vx*dt; m.position.z+=s.vz*dt; s.life-=dt; if(s.bolt)m.rotation.y+=dt*12; let hit=false;
     for(let j=creatures.length-1;j>=0;j--){ const c=creatures[j],cm=c.mesh; if(!cm.visible)continue; const dx=cm.position.x-m.position.x, dz=cm.position.z-m.position.z; if(dx*dx+dz*dz<1.7){ const roll=rollDamage(s.dmg,s.crit); c.hp-=roll.dmg; creatureHit(c); popDmg(cm.position.x,(cm.position.y||0)+(c.boss?2.8:1.7),cm.position.z,roll.dmg,{crit:roll.crit,color:(roll.crit?'#ffd23f':'#ff6b6b')}); if(c.hp<=0)killCreature(j); hit=true; break; } }
     if(!hit) for(let j=animals.length-1;j>=0;j--){ const a=animals[j],am=a.mesh; const dx=am.position.x-m.position.x, dz=am.position.z-m.position.z; if(dx*dx+dz*dz<1.7){ const roll=rollDamage(s.dmg,s.crit); a.hp-=roll.dmg; am.scale.setScalar(1.14); popDmg(am.position.x,(am.position.y||0)+1.5,am.position.z,roll.dmg,{color:'#ff6b6b'}); if(a.hp<=0)killAnimal(j); hit=true; break; } }
     if(hit||s.life<=0){ world.remove(m); playerShots.splice(i,1); } } }
-function doAttack(){ const w=WEAPONS[state.weapon]||WEAPONS.fist; if(w.proj) playerShoot(); else playerAttack(); }
-function castSecondary(){ if(!state.running||state.paused||state._atkCD>0)return; const cls=playerClass();   // Q: mage SPELL (mana) / ranger special arrow (coming) / warrior info
-  if(cls==='mage'){ const w=WEAPONS[state.weapon]; if(!w||w.proj!=='bolt'){ toast('🪄 Equip a staff to cast a spell.'); return; } const cost=20; if((state.mana||0)<cost){ toast('💧 Not enough mana — rest or eat a mage snack to recharge.'); SFX.play('interact',{rate:0.5,vol:0.4}); return; }
-    state.mana-=cost; updateManaUI(); state._atkCD=0.6; state._swing=0.25; emote('attack-melee-right');
-    const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y), m=ball(0.34,'#c77dff'); m.material.transparent=true; m.position.set(player.position.x+fx*0.9,1.3,player.position.z+fz*0.9); world.add(m);
-    playerShots.push({mesh:m,vx:fx*22,vz:fz*22,life:1.7,dmg:(w.dmg||16)*2.6,crit:0.1,bolt:true}); SFX.play('interact',{rate:1.0,vol:0.55}); shake(0.12); toast('✨ Arcane Blast! (a stronger, mana-powered spell)'); }
-  else if(cls==='ranger'){ toast('🏹 Special arrows (fire & more) are coming soon — your basic arrows never run out.'); }
-  else { toast('⚔️ Warriors strike up close — left-click to swing.'); } }
+function doAttack(){ const e=hotbarLayout()[state.selectedSlot]; if(e&&e.kind==='item'){ if(SPELL_OF(e.item)){ castSpell(e.item); return; } if(ARROW_OF(e.item)){ fireArrow(e.item); return; } }   // SELECTED hotbar slot decides the attack: spell / special-arrow / basic weapon
+  const w=WEAPONS[state.weapon]||WEAPONS.fist; if(w.proj) playerShoot(); else playerAttack(); }
+function castSpell(itemKey){ if(playerClass()!=='mage'){ toast('🪄 Only mages cast spells.'); return; } const sp=SPELL_OF(itemKey); if(!sp)return; if(state._atkCD>0)return; if((state.mana||0)<sp.mana){ toast('💧 Not enough mana — rest or eat a snack to recharge.'); SFX.play('interact',{rate:0.5,vol:0.4}); return; }
+  state.mana-=sp.mana; updateManaUI(); state._atkCD=0.55; state._swing=0.25; emote('attack-melee-right');
+  if(sp.heal){ const h=Math.round(state.hpMax*sp.heal); state.hp=Math.min(state.hpMax,(state.hp||0)+h); renderHearts(); try{ popDmg(player.position.x,(player.position.y||0)+2.4,player.position.z,'+'+h,{color:'#5fe08a'}); }catch(e){} SFX.play('success',{vol:0.5}); toast('💚 '+sp.n+' — healed!'); return; }
+  _spawnShot((WEAPONS[state.weapon]&&WEAPONS[state.weapon].dmg||16)*sp.mult, sp.color, true, 0.1); toast(sp.i+' '+sp.n+'!'); }
+function fireArrow(itemKey){ if(playerClass()!=='ranger'){ toast('🏹 Only rangers use special arrows.'); return; } const ar=ARROW_OF(itemKey); if(!ar)return; if((state.inv[itemKey]||0)<1){ toast('🏹 Out of '+(ITEMS[itemKey]?ITEMS[itemKey].n:'arrows')+' — craft more (press C).'); return; } if(state._atkCD>0)return; Inv.take(itemKey,1); state._atkCD=0.42; state._swing=0.25; emote('attack-melee-right');
+  _spawnShot((WEAPONS[state.weapon]&&WEAPONS[state.weapon].dmg||22)*ar.mult, ar.color, false, 0.05); toast((ITEMS[itemKey]?ITEMS[itemKey].i:'🏹')+' '+ar.n+'!'); }
 function updateMana(dt){ if((state.manaMax||0)>0 && state.mana<state.manaMax){ state.mana=Math.min(state.manaMax, state.mana+dt*3); updateManaUI(); } }   // mana trickles back slowly over time; rest + mage snacks restore more
 function updateManaUI(){ const el=document.getElementById('manabar'); if(!el)return; if((state.manaMax||0)<=0){ el.style.display='none'; return; } el.style.display=''; const f=Math.max(0,Math.min(1,state.mana/state.manaMax)); const fl=el.querySelector('.fill'); if(fl)fl.style.width=(f*100).toFixed(0)+'%'; const mv=el.querySelector('.mv'); if(mv)mv.textContent=Math.round(state.mana)+'/'+state.manaMax; }
 function playerAttack(){ if(!state.running||state.paused)return; if(state._atkCD>0) return;   // attack-speed gate (only kicks in when energy is low — full energy = no cooldown, spam freely)
@@ -3292,7 +3313,7 @@ function killCreature(i){ const c=creatures[i]; recordLore(c); const p=c.mesh.po
   world.remove(c.mesh); creatures.splice(i,1);
   if(c.boss){   // ── BOSS DEATH: a BIG haul incl. 💠 Boss Core (boss-ONLY material) that unlocks the Titan tier you can't craft otherwise ──
     state._bosses=(state._bosses||0)+1; const coin=140+Math.floor(Math.random()*120);
-    dropLoot(p.x,p.z,[['coin',coin],['boss_core',2+Math.floor(Math.random()*2)],['gold_ingot',2],['iron_ingot',3],['crystal',5]], `💀 ${(c.type&&c.type.name)||'Boss'} Haul`);   // big haul -> a loot bag you OPEN (modal)
+    const _bl=[['coin',coin],['boss_core',2+Math.floor(Math.random()*2)],['gold_ingot',2],['iron_ingot',3],['crystal',5]]; if(Math.random()<0.6)_bl.push(['book_'+pick(['fireball','frost','mend']),1]); dropLoot(p.x,p.z,_bl, `💀 ${(c.type&&c.type.name)||'Boss'} Haul`);   // bosses sometimes drop a SPELL TOME (mages auto-learn it)   // big haul -> a loot bag you OPEN (modal)
     state.recipePages=(state.recipePages||0)+3; gainXP(70); SFX.play('success',{vol:0.6}); shake(1.1); confetti(p.clone().setY(2.4),60);
     toast(`💀 BOSS DEFEATED: ${(c.type&&c.type.name)||'Boss'}! A 📦 loot bag dropped — walk up & press E. (+📖 Titan pages)`); if(c._questId && questActive(c._questId)) Quests.complete(c._questId,'slay'); save(); return; }
   let tier=rollRarity(); const _kpd=Math.hypot(p.x,p.z); if(!isDay() && _kpd>150){ if(tier==='common'&&Math.random()<0.33)tier='rare'; else if(tier==='rare'&&Math.random()<0.20)tier='epic'; }   // 🌙 far-outskirts NIGHT kills upgrade rarity → dangerous nights out are worth it
@@ -3735,15 +3756,16 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       const id=genQuestDef({tid:'craft_item',p:{count:2},title:'TQ Craft',pitch:'',tier:'small',sig:'craft_item'}); state.activeQuests[id]={accepted:true}; Quests.complete(id,'accept'); genSetup(id); qBump('craft'); qBump('craft'); const craftDone=Quests.isDone(id,'do');
       const id2=genQuestDef({tid:'collect_set',p:{set:['wood']},title:'TQ Set',pitch:'',tier:'small',sig:'collect_set'}); state.activeQuests[id2]={accepted:true}; Quests.complete(id2,'accept'); genSetup(id2); state.inv.wood=(state.inv.wood||0)+1; pollGenQuests(); const setDone=Quests.isDone(id2,'do');
       R.quest_gen2=(craftDone && setDone && state.giggle>_g); delete Quests.defs[id]; delete Quests.defs[id2]; delete state.activeQuests[id]; delete state.activeQuests[id2]; }
-    // CLASS SYSTEM: mage staff bolt (free) + Q spell (costs mana) + class weapon gating + CLASSES table
-    { const _c0=state.charClass,_w0=state.weapon,_wp0={...state.weapons},_mm0=state.manaMax,_mn0=state.mana,_cd0=state._atkCD;
-      state.charClass='mage'; state.weapons.apprentice_staff=true; state.weapon='apprentice_staff'; state.manaMax=50; state.mana=50;
-      const ps0=playerShots.length; state._atkCD=0; doAttack(); const boltOK=playerShots.length>ps0;
-      state._atkCD=0; const _mana0=state.mana; castSecondary(); const spellOK=(playerShots.length>=ps0+2 && state.mana<_mana0);
+    // CLASS COMBAT: mage staff bolt (free basic) + HOTBAR SPELL (pin spell -> select slot -> doAttack casts, costs mana) + class weapon gating
+    { const _c0=state.charClass,_w0=state.weapon,_wp0={...state.weapons},_mm0=state.manaMax,_mn0=state.mana,_cd0=state._atkCD,_ss0=state.selectedSlot,_qi0={...state.quickItems},_sf0=state.inv.spell_fireball||0;
+      state.charClass='mage'; state.weapons.apprentice_staff=true; state.weapon='apprentice_staff'; state.manaMax=60; state.mana=60;
+      const ps0=playerShots.length; state._atkCD=0; state.selectedSlot=0; doAttack(); const boltOK=playerShots.length>ps0;
+      state.inv.spell_fireball=1; const L=hotbarLayout(); let empty=-1; for(let i=0;i<10;i++){ if(!L[i]){ empty=i; break; } } if(empty<0)empty=9; state.quickItems[empty]='spell_fireball'; state.selectedSlot=empty;
+      state._atkCD=0; const _mana0=state.mana; doAttack(); const spellOK=(playerShots.length>=ps0+2 && state.mana<_mana0);
       const gateOK=(canUseWeapon('apprentice_staff') && !canUseWeapon('wood_sword') && canUseWeapon('fist'));
       for(let i=playerShots.length-1;i>=ps0;i--){ try{world.remove(playerShots[i].mesh);}catch(e){} } playerShots.length=ps0;
-      R.class_system=(boltOK && spellOK && gateOK && typeof applyClass==='function' && !!CLASSES.warrior && !!CLASSES.mage && !!CLASSES.ranger);
-      state.charClass=_c0; state.weapon=_w0; state.weapons=_wp0; state.manaMax=_mm0; state.mana=_mn0; state._atkCD=_cd0; }
+      R.class_combat=(boltOK && spellOK && gateOK && !!SPELLS.fireball && !!SP_ARROWS.fire_arrow);
+      state.charClass=_c0; state.weapon=_w0; state.weapons=_wp0; state.manaMax=_mm0; state.mana=_mn0; state._atkCD=_cd0; state.selectedSlot=_ss0; state.quickItems=_qi0; state.inv.spell_fireball=_sf0; }
     // PERSISTENT REQUESTS LIST renders
     state.req=null; townBoard(); renderRequests(); R.requests_list=/Board/.test(document.getElementById('reqlist').innerHTML);
     // TOWN LEGEND post-game checklist renders
@@ -3995,7 +4017,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       &&R.event_active&&R.event_market&&R.shop_closed_night&&R.shop_open_day&&R.onboarding_done&&R.friendship&&R.requests_list&&R.town_legend
       &&R.pause_works&&R.cam_pitch_clamped&&R.ambient
       &&R.head&&R.assetsClean&&R.touch&&R.touch_moves&&R.raf_boundary&&R.pause_freezes_cook&&R.cook_completes&&R.sfx_gate&&R.reduce_motion&&R.reduce_confetti&&R.light_cap&&R.save_sanitized&&R.particle_pool
-      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2&&R.class_system&&R.class_system
+      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2&&R.class_system&&R.class_combat
       &&R.homes_present&&R.home_built&&R.home_loot&&R.home_enter_path&&R.recipe_page_unlock&&R.node_respawn&&R.chest_oneuse
       &&R.weapon_craft&&R.combat_kill&&R.combat_respawn&&R.inv_slots
       &&R.mine_pickaxe&&R.mine_enter&&R.mine_dig&&R.mine_exit&&R.armor_craft&&R.armor_reduces&&R.rarity_tiers&&R.rarity_loot&&R.combat_anim&&R.gear_equip&&R.dice_rolls&&R.dmg_popup&&R.menu;
