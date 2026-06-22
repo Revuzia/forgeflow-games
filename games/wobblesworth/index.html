@@ -434,8 +434,8 @@ function _sstep(e0,e1,x){ let t=(x-e0)/(e1-e0); t=t<0?0:t>1?1:t; return t*t*(3-2
 function swampMask(x,z){ const r=Math.hypot(x,z); return _sstep(165,205,r)*(1-_sstep(285,325,r)); }
 function desertMask(x,z){ const r=Math.hypot(x,z); return _sstep(305,345,r)*(1-_sstep(405,445,r)); }
 function darkMask(x,z){ const r=Math.hypot(x,z); return _sstep(415,478,r); }
-const _SWAMP_COL=new THREE.Color('#2c3622'), _DESERT_COL=new THREE.Color('#e3cb92'), _DARK_COL=new THREE.Color('#16121c');   // murky bog / warm SAND dunes / near-black burnt core
-function biomeGroundColor(x,z,col){ col.setRGB(1,1,1); const sw=swampMask(x,z); if(sw>0)col.lerp(_SWAMP_COL,sw*0.9); const de=desertMask(x,z); if(de>0)col.lerp(_DESERT_COL,de*0.96); const dk=darkMask(x,z); if(dk>0)col.lerp(_DARK_COL,dk*0.93); return col; }
+const _SWAMP_COL=new THREE.Color('#28311a'), _DESERT_COL=new THREE.Color('#e3cb92'), _DARK_COL=new THREE.Color('#16121c');   // murky bog / warm SAND dunes / near-black burnt core
+function biomeGroundColor(x,z,col){ col.setRGB(1,1,1); const sw=swampMask(x,z); if(sw>0)col.lerp(_SWAMP_COL,sw*0.93); const de=desertMask(x,z); if(de>0)col.lerp(_DESERT_COL,de*0.96); const dk=darkMask(x,z); if(dk>0)col.lerp(_DARK_COL,dk*0.93); return col; }
 /* CURVED "GLOBE" WORLD (owner: abeto-style "walk around a globe"): bend ALL standard-material geometry DOWN by radial
    view-space distance² so the world curves away below the horizon in every direction. ONE global override of the shared
    project_vertex shader chunk -> every toon/basic/standard material (terrain, grass, trees, homes, NPCs, props, paths)
@@ -999,12 +999,14 @@ function buildWorld(){
   { const _treeSpecs=[]; for(let i=0;i<400;i++){ const a=rand(0,TAU), rad=rand(12,602); const x=Math.cos(a)*rad, z=Math.sin(a)*rad;   // spread over the huge map
       if(Math.abs(x)<6||Math.abs(z)<6) continue; if(x>-16&&x<16&&z>4&&z<28) continue;
       if(isInWater(x,z,7)) continue;   // never plant a tree on/at a lake or river (7u = trunk + a dry bank)
+      if(swampMask(x,z)>0.35||desertMask(x,z)>0.35||darkMask(x,z)>0.35) continue;   // 🗺️ no leafy green forest trees in the swamp/desert/dark rings — those biomes get dead trees / cacti instead
       const h=rand(5,8.5); _treeSpecs.push({x,z,h}); trunkSolid(x,z,0.6,h*0.42); }   // collect specs + keep the trunk colliders
     mergeDecorTrees(_treeSpecs);   // -> 2 merged meshes instead of ~4,800 individual ones
   }
   for(let i=0;i<560;i++){ const a=rand(0,TAU), rad=rand(8,606); const x=Math.cos(a)*rad, z=Math.sin(a)*rad;
     if(isInWater(x,z,3)) continue;   // no grass tufts / flowers floating on the water
     if(x>-9&&x<9&&z>8&&z<22) continue;   // skip the player-house interior footprint (no grass growing through the floor)
+    if(desertMask(x,z)>0.4||darkMask(x,z)>0.4) continue;   // 🟤⚫ no green grass tufts in the sand desert / dark burnt core — their own biome props (cacti / dead trees) cover them
     place(pick(["Grass","Grass3","GrassLeaf1","Flower1","Flower2","Flower3","MushroomRed","Cactus1"]),x,z,{targetH:rand(0.5,1.3),rotY:rand(0,TAU)});
   }
   // street lanterns along the main roads — each gets a warm GLOWING bulb (+ a real point light up to the cap)
@@ -1039,7 +1041,11 @@ function buildZones(){
   nodes.length=0;
   // 🌲 WHISPERING WOODS (north) — wood + mushrooms
   for(let i=0;i<74;i++){ const x=rand(-300,300),z=rand(-580,-90); if(isInWater(x,z,7))continue; const t=makeTree(x,z,rand(5,7)); world.add(t); addNode(t,x,z,{item:'wood',amount:2,respawn:24,label:'Chop for wood',solid:'trunk'}); }
-  for(let i=0;i<120;i++){ const a=rand(0,TAU), r=rand(115,FENCE-12), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,7))continue; world.add(makeDeadTree(x,z,rand(5,8.5))); }   // SPOOKY deep outskirts: bare dead trees densely ringing the far field
+  // 🗺️ BIOME PROPS by ring (owner: match the environment to each biome). Liquids are added via the carved-basin system elsewhere so they merge with the hills.
+  for(let i=0;i<110;i++){ const a=rand(0,TAU), r=rand(120,165), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,7))continue; world.add(makeDeadTree(x,z,rand(5,8))); }   // spooky transition band into the swamp
+  for(let i=0;i<240;i++){ const a=rand(0,TAU), r=rand(178,292), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||swampMask(x,z)<0.35)continue; world.add(makeDeadTree(x,z,rand(4.5,7.5))); if(Math.random()<0.55)place('Grass3',x+rand(-2.5,2.5),z+rand(-2.5,2.5),{targetH:rand(1.1,2.0),tint:'#3a4a2a',rotY:rand(0,TAU)}); }   // 🟣 SWAMP: dense dead trees + dark reeds
+  for(let i=0;i<210;i++){ const a=rand(0,TAU), r=rand(310,402), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||desertMask(x,z)<0.35)continue; if(Math.random()<0.74)place('Cactus1',x,z,{targetH:rand(1.6,3.4),rotY:rand(0,TAU)}); else world.add(makeRock(x,z,rand(1.2,2.6))); }   // 🟤 DESERT: cacti + dry rocks, NO trees
+  for(let i=0;i<260;i++){ const a=rand(0,TAU), r=rand(418,FENCE-10), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||darkMask(x,z)<0.35)continue; world.add(makeDeadTree(x,z,rand(5,9))); }   // ⚫ DARK BURNT CORE: very dense dead/burnt trees
   for(let i=0;i<36;i++){ const x=rand(-300,300),z=rand(-580,-90); if(isInWater(x,z,2))continue; addNode('MushroomRed',x,z,{item:'mushroom',amount:1,targetH:1.1,respawn:30}); }
   // ⛏️ CRYSTAL QUARRY (east) — stone + crystals
   for(let i=0;i<52;i++){ const x=rand(120,580),z=rand(-300,300); if(isInWater(x,z,5))continue; const r=makeRock(x,z,rand(1.5,2.6)); world.add(r); addNode(r,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); }
@@ -1232,7 +1238,7 @@ function buildHamlets(startIdx){   // 5 hamlets of 2-4 enterable homes scattered
     if(outerStructures.some(s=>Math.hypot(x-s.x,z-s.z)<s.r+12))return false;
     if(used.some(u=>Math.hypot(x-u.x,z-u.z)<16))return false; return true; };
   for(let hI=0;hI<5;hI++){ const baseA=hI/5*TAU+rand(-0.3,0.3); let hcx=0,hcz=0,found=false;
-    for(let t=0;t<14;t++){ const r=rand(180,360); hcx=Math.cos(baseA)*r; hcz=Math.sin(baseA)*r; if(ok(hcx,hcz)){found=true;break;} }
+    for(let t=0;t<16;t++){ const r=rand(96,168); hcx=Math.cos(baseA)*r; hcz=Math.sin(baseA)*r; if(ok(hcx,hcz) && swampMask(hcx,hcz)<0.2 && desertMask(hcx,hcz)<0.2 && darkMask(hcx,hcz)<0.2){found=true;break;} }   // 🗺️ wild hamlets live in the GREEN HILLS, not in the swamp/desert/dark biome rings
     if(!found)continue; const ham={cx:hcx,cz:hcz,homes:[]}; const nH=2+Math.floor(Math.random()*3);
     for(let k=0;k<nH;k++){ let hx=0,hz=0,hok=false;
       for(let t=0;t<8;t++){ hx=hcx+rand(-15,15); hz=hcz+rand(-15,15); if(ok(hx,hz)){hok=true;break;} }
