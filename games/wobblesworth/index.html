@@ -832,11 +832,11 @@ function SPELL_OF(k){ return (k&&k.indexOf('spell_')===0)?SPELLS[k.slice(6)]:nul
 function ARROW_OF(k){ return (k&&SP_ARROWS[k])?SP_ARROWS[k]:null; }
 const WTIER=['fist','wood_sword','hand_axe','stone_sword','war_dagger','iron_sword','battle_axe','crystal_sword','iron_mace','greataxe','gold_sword','claymore','war_hammer','titan_blade','mythic_blade'];   // warrior craftable ladder (titan/mythic = top tiers, need boss_core)
 // ARMOR — a % chance to fully BLOCK an incoming hit (clean with 1-heart hits: a hit either lands fully or is blocked)
-const ARMORS={ leather:{block:0.30,name:'Leather Armor',icon:'🦺'}, iron:{block:0.55,name:'Iron Armor',icon:'🦺'}, gold:{block:0.72,name:'Gold Armor',icon:'🦺'}, titan:{block:0.86,name:'Titan Plate',icon:'🛡️'},
+const ARMORS={ leather:{block:0.30,name:'Leather Armor',icon:'🦺'}, wood:{block:0.42,name:'Wooden Armor',icon:'🪵'}, iron:{block:0.55,name:'Iron Armor',icon:'🦺'}, gold:{block:0.72,name:'Gold Armor',icon:'🦺'}, titan:{block:0.86,name:'Titan Plate',icon:'🛡️'},
   // ── DROPPED loot armor (not craftable — only from rare/epic kills; equip/unequip from your bag) ──
   warded_vest:{block:0.60,name:'Warded Vest',icon:'🦺',rarity:'rare',bonusHp:2},                  // RARE: solid block + 1 extra ❤️
   aegis_plate:{block:0.82,name:'Aegis Plate',icon:'🛡️',rarity:'epic',bonusHp:4,regen:0.35} };      // EPIC: heavy block + 2 extra ❤️ + slow regen
-const ATIER=['','leather','iron','gold','titan'];   // titan = BOSS-ONLY top tier
+const ATIER=['','leather','wood','iron','gold','titan'];   // wood between leather+iron (owner: an extra set so iron isn't a long wait, esp. warrior); titan = BOSS-ONLY top tier
 // OFF-HAND (L-hand): SHIELDS = a % chance to fully BLOCK an incoming hit (melee AND projectiles, since both route through damagePlayer); TORCHES = a carried light that burns down. Both wear via the shared durability system.
 const SHIELDS={ wood_shield:{block:0.15,name:'Wooden Shield',icon:'🛡️',tier:'wood',rarity:'common'}, stone_shield:{block:0.28,name:'Stone Shield',icon:'🛡️',tier:'stone',rarity:'common'}, iron_shield:{block:0.45,name:'Iron Shield',icon:'🛡️',tier:'iron',rarity:'common'}, gold_shield:{block:0.60,name:'Gold Shield',icon:'🛡️',tier:'gold',rarity:'common'}, titan_shield:{block:0.75,name:'Titan Bulwark',icon:'🛡️',tier:'titan',rarity:'rare'} };
 const TORCHES={ wood_torch:{range:12,intensity:1.0,color:'#ffb84d',name:'Wood Torch',icon:'🔥',rarity:'common'}, crystal_torch:{range:16,intensity:1.3,color:'#7fd9ff',name:'Crystal Torch',icon:'🔆',rarity:'common'}, magic_torch:{range:20,intensity:1.7,color:'#ff66ff',name:'Magic Torch',icon:'✨',rarity:'rare'} };
@@ -1589,9 +1589,9 @@ function updateTorchLight(dt){ const isT = state.offhand && TORCHES[state.offhan
   useDur(state.offhand, (dt||0.016)*3); }   // torch burns ~3 durability/sec -> common torch ≈ 50s, magic ≈ 120s
 /* ARMOR VISUAL (owner: "make armor visually show") — a tier-colored chestplate + shoulder pads worn over the torso */
 const armorGroup=new THREE.Group(); let _armorShown='?';
-const ARMOR_COL={leather:'#8a5a31', iron:'#c2c7cf', gold:'#ffd23f', titan:'#b07cff'};                 // ⚔️ warrior metal ladder
-const ARMOR_COL_ROBE={leather:'#5b6fd6', iron:'#7a5ad6', gold:'#b07cff', titan:'#e6c8ff'};            // 🧙 wizard cloth/arcane hues
-const ARMOR_COL_LEATHER={leather:'#8a5a31', iron:'#9c7b46', gold:'#b59668', titan:'#8f9098'};         // 🏹 ranger leather -> studded grey
+const ARMOR_COL={leather:'#8a5a31', wood:'#a8824e', iron:'#c2c7cf', gold:'#ffd23f', titan:'#b07cff'};  // ⚔️ warrior ladder (wood = lacquered timber lamellar between leather+iron)
+const ARMOR_COL_ROBE={leather:'#5b6fd6', wood:'#6a64d0', iron:'#7a5ad6', gold:'#b07cff', titan:'#e6c8ff'};   // 🧙 wizard cloth/arcane hues
+const ARMOR_COL_LEATHER={leather:'#8a5a31', wood:'#977240', iron:'#9c7b46', gold:'#b59668', titan:'#8f9098'};  // 🏹 ranger leather -> studded grey
 const BODY_MESH={warrior:'Warrior_Body', ranger:'Ranger', mage:'Wizard001'};                          // the main outfit mesh per Quaternius class model (used by the armor self-test)
 let QARMOR_SZ={wPauldron:0.7, wPlackart:0.5, wTassets:0.7, rBracer:0.45, mMantle:0.34};               // overlay sizes (tunable via __WW__.qarmor)
 function _armorTier(id){ if(!id) return ''; if(ATIER.includes(id)) return id; if(ARMORS[id]&&ARMORS[id].tier) return ARMORS[id].tier; if(/aegis/.test(id)) return 'titan'; if(/warded/.test(id)) return 'gold'; return 'iron'; }
@@ -2402,6 +2402,7 @@ const RECIPES=[
   {id:'pickaxe', name:'⛏️ Pickaxe', cat:'tool', lvl:1, cost:{wood:2,stone:2}, weapon:true, build:p=>gainPickaxe() },
   {id:'shovel', name:'🥄 Shovel', cat:'tool', lvl:1, cost:{wood:2}, weapon:true, build:p=>gainShovel() },
   {id:'leather_armor', name:'🛡️ Leather Armor', cat:'tool', lvl:3, cost:{flower:3,wood:2}, weapon:true, build:p=>gainArmor('leather') },
+  {id:'wood_armor', name:'🪵 Wooden Armor', cat:'tool', lvl:7, cost:{wood:5}, weapon:true, build:p=>gainArmor('wood') },
   {id:'iron_armor', name:'🦺 Iron Armor', cat:'tool', lvl:13, cost:{stone:4,crystal:1}, weapon:true, build:p=>gainArmor('iron') },
   {id:'door', name:'🚪 Wooden Door', cat:'build', lvl:1, cost:{wood:3}, build:p=>{ const a=box(0.2,2.6,0.2,'#8a5a31'); a.position.set(p.x-0.7,1.3,p.z); world.add(a); const b=a.clone(); b.position.x=p.x+0.7; world.add(b); const top=box(1.8,0.3,0.3,'#8a5a31'); top.position.set(p.x,2.7,p.z); world.add(top); const dr=box(1.2,2.3,0.14,'#a9743f'); dr.position.set(p.x,1.25,p.z); world.add(dr); addSolid(dr); } },
   {id:'fence', name:'🚧 Picket Fence', cat:'build', lvl:1, cost:{wood:3}, build:p=>{ const m=box(2.2,1.4,0.25,'#fff7ec'); m.position.set(p.x,0.7,p.z); world.add(m); addSolid(m); } },
@@ -2470,8 +2471,8 @@ const RECIPES=[
   {id:'fountain', name:'⛲ Stone Fountain', cat:'decor', cost:{stone:8,crystal:2}, locked:true, build:p=>{ const base=box(2.6,0.5,2.6,'#b7b1a8'); base.position.set(p.x,0.45,p.z); const col=box(0.5,1.3,0.5,'#c7c1b8'); col.position.set(p.x,1.25,p.z); world.add(base);world.add(col); addSolid(base); makeWater(1.05,p.x,p.z,0.72); } },
 ];
 // ── MULTI-SLOT ARMOR: existing tier/loot armor = the BODY slot; generate matching helmet/legs/boots pieces + recipes per tier (set bonus when all 4 match). ──
-for(const _b of ['leather','iron','gold','titan','warded_vest','aegis_plate']) if(ARMORS[_b]) ARMORS[_b].slot='body';
-(function(){ const cap=s=>s.charAt(0).toUpperCase()+s.slice(1); const TIERS=[['leather',3,{flower:2,wood:1}],['iron',13,{stone:2,crystal:1}],['gold',29,{gold_ingot:2}],['titan',37,{boss_core:1,gold_ingot:1}]]; const SL={helmet:['🪖','Helm'],legs:['👖','Legguards'],boots:['🥾','Boots']};
+for(const _b of ['leather','wood','iron','gold','titan','warded_vest','aegis_plate']) if(ARMORS[_b]) ARMORS[_b].slot='body';
+(function(){ const cap=s=>s.charAt(0).toUpperCase()+s.slice(1); const TIERS=[['leather',3,{flower:2,wood:1}],['wood',7,{wood:3}],['iron',13,{stone:2,crystal:1}],['gold',29,{gold_ingot:2}],['titan',37,{boss_core:1,gold_ingot:1}]]; const SL={helmet:['🪖','Helm'],legs:['👖','Legguards'],boots:['🥾','Boots']};
   for(const t of TIERS){ const tier=t[0], lvl=t[1], mat=t[2]; for(const slot in SL){ const id=tier+'_'+slot, nm=cap(tier)+' '+SL[slot][1]; ARMORS[id]={name:nm, icon:SL[slot][0], slot:slot, tier:tier};
     RECIPES.push({id:id, name:SL[slot][0]+' '+nm, cat:'tool', lvl:lvl, cost:mat, weapon:true, build:(p)=>gainArmorPiece(id,slot)}); } } })();
 RECIPES.push({id:'repair_kit', name:'🔧 Repair Kit', cat:'tool', lvl:3, cost:{wood:3, iron_ingot:1}, build:(p)=>repairAll()});   // craft to restore ALL equipped weapon+armor durability to full
