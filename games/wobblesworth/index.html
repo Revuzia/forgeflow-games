@@ -761,7 +761,8 @@ function prepLakeBasins(){ for(const [x,z,r] of LAKES){ let mn=Infinity; for(let
 /* 🟣🌋 BIOME LIQUIDS (owner: swamp "black blobby water" + dark-core lava — both CARVED into the hills via WATER_BASINS so the shoreline merges, exactly like the lakes). The murky/lava materials are CLONES of WATER_MAT: identical shader source -> Three.js compiles ONE program (no extra bind), only the color uniforms + an independent uTime differ (ticked in updateWorld). */
 const SWAMP_WATER_MAT=WATER_MAT.clone(); SWAMP_WATER_MAT.uniforms.uDeep.value=new THREE.Color('#0a1408'); SWAMP_WATER_MAT.uniforms.uShallow.value=new THREE.Color('#243a1c'); SWAMP_WATER_MAT.uniforms.uSky.value=new THREE.Color('#1a2414'); SWAMP_WATER_MAT.uniforms.uFoam.value=new THREE.Color('#46552e');   // murky bog: near-black green body, dark-scum rim (not white foam)
 const LAVA_MAT=WATER_MAT.clone(); LAVA_MAT.uniforms.uDeep.value=new THREE.Color('#5a1200'); LAVA_MAT.uniforms.uShallow.value=new THREE.Color('#ff5a14'); LAVA_MAT.uniforms.uSky.value=new THREE.Color('#1a0600'); LAVA_MAT.uniforms.uFoam.value=new THREE.Color('#ffd23a');   // molten: orange-red body, hot-yellow crust rim (shader is unlit -> reads self-lit)
-const SWAMP_POOLS=[{x:210,z:60,r:18},{x:150,z:-210,r:16},{x:-200,z:140,r:20},{x:-150,z:-220,r:15},{x:60,z:250,r:17},{x:250,z:-90,r:16}];   // ~6 murky pools in the SWAMP ring (r 178-292)
+const SWAMP_POOLS=[];   // filled by genSwampPools() in buildWorld — MANY small RANDOM murky pools spread all THROUGH the swamp ring (owner: bogs have pools everywhere, not one big one)
+function genSwampPools(){ SWAMP_POOLS.length=0; let t=0; while(SWAMP_POOLS.length<18 && t<500){ t++; const a=rand(0,TAU), r=rand(188,312), x=Math.cos(a)*r, z=Math.sin(a)*r; if(swampMask(x,z)<0.55) continue; if(SWAMP_POOLS.some(p=>Math.hypot(p.x-x,p.z-z)<p.r+15)) continue; SWAMP_POOLS.push({x,z,r:rand(5,13)}); } }
 const LAVA_POOLS=[{x:470,z:90,r:16},{x:-430,z:160,r:18},{x:220,z:-490,r:15},{x:-300,z:-380,r:17}];   // ~4 lava pools in the DARK CORE (r 418+), placed clear of the 4 LAKES
 const LAVA_ZONES=[];   // lava keep-out (+ F2c contact damage) — NOT swimmable
 function prepPoolBasins(pools,floorDrop,yyDrop){ for(const p of pools){ let mn=Infinity; for(let a=0;a<6.28;a+=0.7){ mn=Math.min(mn, terrainH(p.x+Math.cos(a)*p.r*1.1, p.z+Math.sin(a)*p.r*1.1)); } WATER_BASINS.push({x:p.x,z:p.z,rs:p.r*0.82,rb:p.r*1.5,floor:mn-floorDrop,yy:mn-yyDrop}); } }   // carve BEFORE the ground mesh (called in buildWorld) so each pool cups into the rolling hills, like prepLakeBasins
@@ -770,9 +771,17 @@ function makeBiomePool(p,mat,opts){ const N=40, geo=new THREE.CircleGeometry(p.r
   pos.needsUpdate=true; geo.computeVertexNormals();
   const b=WATER_BASINS.find(w=>w.x===p.x&&w.z===p.z); const yy=b?b.yy:groundY(p.x,p.z)+0.1;
   const m=new THREE.Mesh(geo,mat); m.rotation.x=-Math.PI/2; m.position.set(p.x,yy,p.z); m.receiveShadow=true; world.add(m);
-  if(opts&&opts.swim) waterZones.push({x:p.x,z:p.z,r:p.r*0.7,vr:p.r*1.35,surfaceY:yy});
+  if(opts&&opts.swim) waterZones.push({x:p.x,z:p.z,r:p.r*0.7,vr:p.r*1.35,surfaceY:yy,kind:'swamp'});   // tagged 'swamp' -> SUPER-SLOW sticky-bog movement (vs normal water)
   else if(opts&&opts.lava) LAVA_ZONES.push({x:p.x,z:p.z,r:p.r*0.72,vr:p.r*1.35,surfaceY:yy});
   return m; }
+/* 🌾 SWAMP REEDS: procedural CATTAILS (thin tall stalk + a brown sausage head) -> reads as a bog bulrush, NOT lawn grass (owner: 'the grass in the swamp isnt great'). Merged into 2 meshes for perf, no shadow. */
+function buildSwampReeds(specs){ if(!specs||!specs.length) return; const stalkGeos=[], headGeos=[];
+  const _S=new THREE.CylinderGeometry(0.05,0.08,1,5), _H=new THREE.CylinderGeometry(0.17,0.14,0.66,7);
+  for(const s of specs){ const gy=groundY(s.x,s.z), h=s.h; const sg=_S.clone(); sg.scale(1,h,1); sg.translate(s.x, gy+h*0.5, s.z); stalkGeos.push(sg); const hg=_H.clone(); hg.translate(s.x, gy+h+0.12, s.z); headGeos.push(hg); }
+  _S.dispose(); _H.dispose();
+  const sm=mergeGeometries(stalkGeos,false); const stalk=new THREE.Mesh(sm, new THREE.MeshToonMaterial({color:'#6a7340',gradientMap:GRAD})); stalk.castShadow=false; stalk.receiveShadow=true; stalk.frustumCulled=false; world.add(stalk);
+  const hm=mergeGeometries(headGeos,false); const head=new THREE.Mesh(hm, new THREE.MeshToonMaterial({color:'#5a3814',gradientMap:GRAD})); head.castShadow=false; head.frustumCulled=false; world.add(head);
+  for(const g of stalkGeos)g.dispose(); for(const g of headGeos)g.dispose(); }
 /* keep-out test: is (x,z) on/near ANY water body? uses the VISUAL radius (vr) so nothing spawns over a lake's wavy shore */
 function isInWater(x,z,margin=0){ for(const w of waterZones){ const dx=x-w.x, dz=z-w.z, rr=(w.vr||w.r)+margin; if(dx*dx+dz*dz<rr*rr) return true; } for(const w of LAVA_ZONES){ const dx=x-w.x, dz=z-w.z, rr=(w.vr||w.r)+margin; if(dx*dx+dz*dz<rr*rr) return true; } return false; }   // water OR lava = keep-out for spawns/props
 const TRAINING_ZONE={x:42,z:-42,hx:9,hz:10};   // 🎯 TRAINING GROUND: a fenced walk-in practice yard on an empty SE town plot (clears houses/roads/wells/rocks/barn/player-plot/pond) — ADDITIVE, removes nothing
@@ -976,7 +985,7 @@ function place(name,x,z,{targetH,scale,rotY=0,yLift=0,parent=world,tint=null}={}
 /* ============================ WORLD BUILD ============================ */
 function buildWorld(){
   prepLakeBasins();   // carve lake basins INTO terrainH before the ground mesh below samples it, so the visual terrain cups each lake and physics/groundY agree
-  prepPoolBasins(SWAMP_POOLS,1.6,0.25); prepPoolBasins(LAVA_POOLS,1.3,0.18);   // 🟣🌋 carve the swamp + lava pool bowls too (BEFORE the ground mesh) so they merge into the hills
+  genSwampPools(); prepPoolBasins(SWAMP_POOLS,1.6,0.25); prepPoolBasins(LAVA_POOLS,1.3,0.18);   // 🟣🌋 generate the scattered swamp pools, then carve all pool bowls (BEFORE the ground mesh) so they merge into the hills
   // ground (BIG neighborhood) — a subdivided plane displaced by terrainH so the OUTER world rolls (town stays flat). Still ONE mesh/draw call; ~33k static verts (displaced once at build). Square corners hide behind fog (95-190) + skyDome.
   const _gR=665, _gSEG=180, groundGeo=new THREE.PlaneGeometry(_gR*2,_gR*2,_gSEG,_gSEG), _gp=groundGeo.attributes.position;
   const _gcol=new Float32Array(_gp.count*3), _gbl=new Float32Array(_gp.count), _gc=new THREE.Color();
@@ -1070,12 +1079,14 @@ function buildZones(){
   // 🌲 WHISPERING WOODS (north) — wood + mushrooms
   for(let i=0;i<74;i++){ const x=rand(-300,300),z=rand(-580,-90); if(isInWater(x,z,7))continue; const t=_resourceTree(x,z,rand(5,7)); if(!t)continue; world.add(t); addNode(t,x,z,{item:'wood',amount:2,respawn:24,label:'Chop for wood',solid:'trunk'}); }
   // 🗺️ BIOME PROPS by ring (owner). Dead trees are COLLECTED then MERGED into one mesh (perf). Liquids via carved basins elsewhere.
-  const _dt=[];
+  const _dt=[], _reeds=[];
   for(let i=0;i<110;i++){ const a=rand(0,TAU), r=rand(120,165), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,7))continue; _dt.push({x,z,h:rand(5,8)}); }   // spooky transition band into the swamp
-  for(let i=0;i<260;i++){ const a=rand(0,TAU), r=rand(178,318), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||swampMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(4.5,7.5)}); if(Math.random()<0.55)place('Grass3',x+rand(-2.5,2.5),z+rand(-2.5,2.5),{targetH:rand(1.1,2.0),tint:'#3a4a2a',rotY:rand(0,TAU)}); }   // 🟣 SWAMP: dense dead trees + dark reeds
+  for(let i=0;i<260;i++){ const a=rand(0,TAU), r=rand(178,318), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||swampMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(4.5,7.5)}); if(Math.random()<0.5)_reeds.push({x:x+rand(-2.2,2.2),z:z+rand(-2.2,2.2),h:rand(1.0,1.9)}); }   // 🟣 SWAMP: dense dead trees + scattered cattail reeds
   for(let i=0;i<230;i++){ const a=rand(0,TAU), r=rand(318,438), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||desertMask(x,z)<0.35)continue; if(Math.random()<0.74){ const c=place('Cactus1',x,z,{targetH:rand(1.6,3.4),rotY:rand(0,TAU)}); if(c)c.traverse(m=>{if(m.isMesh)m.castShadow=false;}); } else { const rk=makeRock(x,z,rand(1.2,2.6)); rk.traverse(m=>{if(m.isMesh)m.castShadow=false;}); world.add(rk); } }   // 🟤 DESERT: cacti + dry rocks (no trees; no shadow-cull on distant props)
   for(let i=0;i<260;i++){ const a=rand(0,TAU), r=rand(418,FENCE-10), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||darkMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(5,9)}); }   // ⚫ DARK BURNT CORE: very dense dead/burnt trees
   mergeDeadTrees(_dt, false);   // PERF: all biome dead trees -> ONE merged mesh, no per-tree shadow-cull
+  for(const p of SWAMP_POOLS){ for(let k=0;k<9;k++){ const a=rand(0,TAU), rr=p.r*rand(0.95,1.4), rx=p.x+Math.cos(a)*rr, rz=p.z+Math.sin(a)*rr; if(swampMask(rx,rz)>0.3) _reeds.push({x:rx,z:rz,h:rand(1.2,2.1)}); } }   // 🌾 cattails ring each swamp pool (bog edges)
+  buildSwampReeds(_reeds);   // procedural cattails (merged) replace the old lawn-grass reeds
   for(let i=0;i<36;i++){ const x=rand(-300,300),z=rand(-580,-90); if(isInWater(x,z,2))continue; addNode('MushroomRed',x,z,{item:'mushroom',amount:1,targetH:1.1,respawn:30}); }
   // ⛏️ CRYSTAL QUARRY (east) — stone + crystals
   for(let i=0;i<52;i++){ const x=rand(120,580),z=rand(-300,300); if(isInWater(x,z,5))continue; const r=makeRock(x,z,rand(1.5,2.6)); world.add(r); addNode(r,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); }
@@ -2926,7 +2937,7 @@ function updatePlayer(dt){
   if(moving){ const l=Math.hypot(ix,iz); ix/=l; iz/=l; const cs=Math.cos(cam.yaw),sn=Math.sin(cam.yaw);
     mvx=-iz*sn-ix*cs; mvz=-iz*cs+ix*sn; const tgt=Math.atan2(mvx,mvz)+CHAR_FWD;
     player.rotation.y=angLerp(player.rotation.y,tgt,dt*12);
-    const sp=((sprint&&Needs.canSprint())?9:5)*Needs.moveMul()*(_wz?0.55:1)*(state.mounted?state.mounted.speedMul:1); player.position.x+=mvx*sp*dt; player.position.z+=mvz*sp*dt; resolve();   // mounted = faster travel
+    const sp=((sprint&&Needs.canSprint())?9:5)*Needs.moveMul()*(_wz?(_wz.kind==='swamp'?0.28:0.55):1)*(state.mounted?state.mounted.speedMul:1); player.position.x+=mvx*sp*dt; player.position.z+=mvz*sp*dt; resolve();   // swamp bog = SUPER SLOW 0.28x (sticky), normal water 0.55x; mounted = faster travel
     if(grounded){ stepT-=dt; if(stepT<=0){ SFX.play('step'); stepT=sprint?0.26:0.4; } } }
   if(!MINE.inMine && !DUNGEON.inDungeon){   // TRUE WRAP (surface, every frame): walk off one edge -> appear on the other. The shader renders modulo WRAP_P so wrapping the coord by exactly WRAP_P is SEAMLESS (no visible jump); shift the camera by the same delta so it doesn't lerp across the seam.
     const HW=WRAP_P*0.5;
@@ -2946,6 +2957,11 @@ function updatePlayer(dt){
   else if(grounded && vy<=0 && player.position.y-gY<1.2){ player.position.y=gY; vy=0; grounded=true; }   // walking DOWN a gentle slope: glue to the surface (no micro-bounce). A real jump (vy>0) still lifts off.
   else grounded=false;
   if(grounded){ airJumps=0; flipT=0; }   // landing resets the double-jump + ends any spin
+  // 🌋 LAVA BURN (owner: "going in lava would obviously burn"): DoT that IGNORES armor + a red flash + a shove toward the rim so you can scramble out. Env cooldown (~2/s), separate from combat _invuln.
+  if(grounded && !MINE.inMine && !DUNGEON.inDungeon && LAVA_ZONES.length){ const _px=player.position.x, _pz=player.position.z; let _lz=null;
+    for(const z of LAVA_ZONES){ const dx=_px-z.x, dz=_pz-z.z; if(dx*dx+dz*dz<z.r*z.r){ _lz=z; break; } }
+    if(_lz){ state._envCD=(state._envCD||0)-dt; if(state._envCD<=0){ state._envCD=0.5; const bd=Math.max(5,Math.round(7+state.day*1.5)); state.hp=Math.max(0,state.hp-bd); if(typeof flashRed==='function')flashRed(); shake(0.3); if(typeof SFX!=='undefined')SFX.play('interact',{rate:0.55,vol:0.7}); popDmg(_px,(player.position.y||0)+2.4,_pz,bd,{color:'#ff7a1a'}); if(typeof renderHearts==='function')renderHearts(); if(state.hp<=0)respawnPlayer(); }
+      const dx=_px-_lz.x, dz=_pz-_lz.z, d=Math.hypot(dx,dz)||1; player.position.x+=dx/d*5*dt; player.position.z+=dz/d*5*dt; } }
   // JUICE: squash on landing, spring scale back to base each frame
   { const mo=player.userData.model; if(mo&&mo.userData.base!=null){ const b=mo.userData.base; if(grounded&&!wasGrounded&&vyPrev<-4&&!state.reduce&&!_wz){ mo.scale.set(b*1.22,b*0.74,b*1.22); } const t=Math.min(1,dt*9); mo.scale.x=lerp(mo.scale.x,b,t); mo.scale.y=lerp(mo.scale.y,b,t); mo.scale.z=lerp(mo.scale.z,b,t);
       if(flipT>0 && !_wz){ flipT=Math.max(0,flipT-dt); const _p=1-flipT/0.5; const _ang=(_p*TAU)%TAU; const _tuck=Math.sin(_p*Math.PI); const _s=b*(1-0.55*_tuck); mo.scale.set(_s,_s,_s); const _cy=mo.userData.cy||0.85, _y0=(mo.userData.y0!=null?mo.userData.y0:mo.position.y), _q=(_cy-_y0)*(_s/b); mo.rotation.x=_ang; mo.position.y=_cy-_q*Math.cos(_ang); mo.position.z=-_q*Math.sin(_ang); }   // CANNONBALL double-jump: tuck into a tight ball (scale↓) + spin FORWARD about the body CENTER (position compensation pins the center so it rolls in place, not a feet-pivot arc) + unball as he lands
@@ -3380,7 +3396,7 @@ const CREATURE_TYPES={   // night ENEMIES — real rigged cube-animals (was proc
   mote:{ name:'Buzzing Bee', hp:0.5, speed:3.8, dmg:1, bob:2.2, floatY:0.9, day:8, ranged:'thorn', attackKind:'sting', model:'animal-bee', tgtH:0.75, build(){ return buildMobGLB(this.model,this.tgtH); } },   // ONLY the bee shoots a (slow, dodgeable) thorn dart
   // SPECIAL far-out beasts: only spawn beyond minDist from town -> harder the further you explore. Predators CLAW (melee); the deer explodes.
   thornback:{ name:'Roaring Lion', hp:1.3, speed:1.7, dmg:2, bob:2.2, floatY:0, day:5, attackKind:'claw', minDist:78, model:'animal-lion', tgtH:1.35, build(){ return buildMobGLB(this.model,this.tgtH); } },
-  acidcap:{ name:'Frost Bear', hp:1.0, speed:2.3, dmg:2, bob:4.2, floatY:0, day:5, attackKind:'claw', minDist:108, model:'animal-polar', tgtH:1.45, build(){ return buildMobGLB(this.model,this.tgtH); } },
+  acidcap:{ name:'Frost Bear', hp:1.0, speed:2.3, dmg:2, bob:4.2, floatY:0, day:999, attackKind:'claw', minDist:9999, model:'animal-polar', tgtH:1.45, build(){ return buildMobGLB(this.model,this.tgtH); } },   // DISABLED (owner: remove the smiley polar bear from the start). Returns in the ICE biome (G6) as a menacing teeth'd bear / ambient fauna.
   boomshroom:{ name:'Charging Deer', hp:0.9, speed:3.0, dmg:1, bob:5.0, floatY:0, day:4, explode:true, minDist:140, model:'animal-deer', tgtH:1.3, build(){ return buildMobGLB(this.model,this.tgtH); } },
   // SPOOKY OUTSKIRTS mobs (owner: "deep in the jungle... find bad guys, just at night, like skeletons or pumpkins, on the outskirts, further out"). minDist gates them WELL away from town so the far field finally has a real nighttime threat; cap=0 by day keeps them night-only. Static graveyard GLBs (no walk clip) → buildMobGLB drives them by chase-movement + the per-type bob (skeleton stalk, pumpkin hop, ghost float).
   skeleton:{ name:'Rattling Skeleton', hp:1.4, speed:2.4, dmg:2, bob:2.4, floatY:0,    day:10, minDist:120, model:'mob-skeleton', tgtH:1.5,  build(){ return buildMobGLB(this.model,this.tgtH,'#e9e3d2'); } },                                          // bone ivory
