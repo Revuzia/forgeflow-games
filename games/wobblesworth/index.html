@@ -2215,7 +2215,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
 /* ============================ INVENTORY ============================ */
 const ITEMS={ wood:{i:'🪵',n:'Wood'},stone:{i:'🪨',n:'Stone'},crystal:{i:'💎',n:'Crystal'},apple:{i:'🍎',n:'Apple'},mushroom:{i:'🍄',n:'Mushroom'},carrot:{i:'🥕',n:'Carrot'},flower:{i:'🌸',n:'Flower'},dye_petal:{i:'🎨',n:'Dye Petal'},red_petal:{i:'🌹',n:'Crimson Petal'},blue_petal:{i:'🪻',n:'Frost Petal'},yellow_petal:{i:'🌻',n:'Sun Petal'},purple_petal:{i:'💜',n:'Royal Petal'},pink_petal:{i:'🌸',n:'Rose Petal'},orange_petal:{i:'🧡',n:'Ember Petal'},green_petal:{i:'🌿',n:'Leaf Petal'},white_petal:{i:'🤍',n:'Snow Petal'},black_petal:{i:'🖤',n:'Dusk Petal'},coin:{i:'🪙',n:'Coin'},
   milk:{i:'🥛',n:'Milk'},wool:{i:'🧶',n:'Wool'},egg:{i:'🥚',n:'Egg'},leather:{i:'🟫',n:'Leather'},meat:{i:'🍖',n:'Meat'},
-  dirt:{i:'🟤',n:'Dirt'}, iron_ingot:{i:'🔩',n:'Iron Ingot'}, gold_ingot:{i:'🥇',n:'Gold Ingot'}, boss_core:{i:'💠',n:'Boss Core'}, health_potion:{i:'🧪',n:'Health Potion'}, energy_tonic:{i:'🧉',n:'Energy Tonic'},
+  dirt:{i:'🟤',n:'Dirt'}, iron_ingot:{i:'🔩',n:'Iron Ingot'}, gold_ingot:{i:'🥇',n:'Gold Ingot'}, boss_core:{i:'💠',n:'Boss Core'}, health_potion:{i:'🧪',n:'Health Potion'}, energy_tonic:{i:'🧉',n:'Energy Tonic'}, repair_kit:{i:'🔧',n:'Repair Kit'},
   spell_bolt:{i:'✨',n:'Arcane Bolt'}, spell_nova:{i:'🌀',n:'Arcane Nova'}, spell_ember:{i:'🔥',n:'Ember'}, spell_fireball:{i:'🔥',n:'Fireball'}, spell_frost:{i:'❄️',n:'Frost Shard'}, spell_frostbind:{i:'🧊',n:'Frostbind'}, spell_stone:{i:'🪨',n:'Stone Spike'}, spell_chain:{i:'🌩️',n:'Chain Lightning'}, spell_gust:{i:'🌪️',n:'Gust'}, spell_mend:{i:'💚',n:'Mend'},
   wood_arrow:{i:'🏹',n:'Wood Arrow'}, fire_arrow:{i:'🔥',n:'Fire Arrow'}, inferno_arrow:{i:'🔥',n:'Inferno Arrow'}, ice_arrow:{i:'❄️',n:'Ice Arrow'}, glacier_arrow:{i:'🧊',n:'Glacier Arrow'}, bomb_arrow:{i:'💥',n:'Bomb Arrow'}, storm_arrow:{i:'⚡',n:'Storm Arrow'},
   book_nova:{i:'🌀',n:'Tome: Arcane Nova'}, book_ember:{i:'🔥',n:'Tome: Ember'}, book_fireball:{i:'📕',n:'Tome: Fireball'}, book_frost:{i:'📘',n:'Tome: Frost Shard'}, book_frostbind:{i:'🧊',n:'Tome: Frostbind'}, book_stone:{i:'🪨',n:'Tome: Stone Spike'}, book_chain:{i:'🌩️',n:'Tome: Chain Lightning'}, book_gust:{i:'🌪️',n:'Tome: Gust'}, book_mend:{i:'📗',n:'Tome: Mend'}, saddle:{i:'🐴',n:'Saddle'},
@@ -2369,8 +2369,8 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
     tileList.push(`<div class="invtile gear${gate?' gated':''}" draggable="true" data-gear="${id}" data-kind="${kind}" style="border-color:${rr.color}" title="${gate?('🔒 Requires Level '+EQUIP_LVL[id]+' to equip'):'Double-click or drag onto a body slot to equip'}">${gate?`<span class="tc" style="background:#3a2a4e;color:#c9a0ff;font-size:9px;font-weight:800;padding:1px 4px;border-radius:6px">🔒Lv${EQUIP_LVL[id]}</span>`:(dp<=20?'<span class="tc" style="color:#ff6b6b">⚠️</span>':'')}<div class="ti">${it.icon}</div><div class="tn" style="color:${rr.color}">${it.name}</div></div>`);   // gated gear shows its LEVEL requirement right in the modal; once state.level hits it, gate=false -> badge gone
   }
   const _ord=state.invOrder||[]; const _ikeys=[..._ord.filter(k=>ITEMS[k]&&(state.inv[k]||0)>0), ...Object.keys(ITEMS).filter(k=>(state.inv[k]||0)>0&&!_ord.includes(k))];   // (K) render items in the saved drag-order; new items appended
-  for(const k of _ikeys){ const c=state.inv[k]||0; const eat=FOOD_EFFECTS[k]; const desc=ITEM_DESC[k]?ITEMS[k].n+' — '+ITEM_DESC[k]:ITEMS[k].n;
-    tileList.push(`<div class="invtile${eat?' eatable':''}" draggable="true" data-item="${k}" title="${desc}" ${eat?`data-eat="${k}"`:''}><span class="tc">${c}</span><div class="ti">${ITEMS[k].i}</div><div class="tn">${ITEMS[k].n}${eat?'<br><span class="eathint">eat</span>':''}</div></div>`); }
+  for(const k of _ikeys){ const c=state.inv[k]||0; const eat=FOOD_EFFECTS[k]; const use=(k==='repair_kit'); const desc=ITEM_DESC[k]?ITEMS[k].n+' — '+ITEM_DESC[k]:ITEMS[k].n;
+    tileList.push(`<div class="invtile${(eat||use)?' eatable':''}" draggable="true" data-item="${k}" title="${use?'Click to use — fully repairs your equipped gear':desc}" ${eat?`data-eat="${k}"`:''}${use?' data-userepair="1"':''}><span class="tc">${c}</span><div class="ti">${ITEMS[k].i}</div><div class="tn">${ITEMS[k].n}${eat?'<br><span class="eathint">eat</span>':use?'<br><span class="eathint">use</span>':''}</div></div>`); }
   const PER=50, bags=Math.max(1,state.bagCount||1), cap=PER*bags, used=tileList.length;
   let tab=Math.min(Math.max(0,state._bagTab||0), bags-1);
   let pageTiles=''; for(let i=tab*PER;i<(tab+1)*PER;i++){ pageTiles += tileList[i] || `<div class="invtile empty"></div>`; }
@@ -2382,6 +2382,7 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
   h+=`</div>`;   // close invcard
   el.innerHTML=h; const x=el.querySelector('#invX'); if(x)x.onclick=closeInv; el.onclick=(e)=>{ if(e.target===el) closeInv(); };
   el.querySelectorAll('.invtile[data-eat]').forEach(t=> t.onclick=(e)=>{ e.stopPropagation(); if(eatFood(t.dataset.eat)){ renderInv(); Inv.render(); } });
+  el.querySelectorAll('.invtile[data-userepair]').forEach(t=> t.onclick=(e)=>{ e.stopPropagation(); useRepairKit(); });   // (L) click a Repair Kit to consume it + repair gear
   el.querySelectorAll('.invtile[data-item]').forEach(t=>{ t.addEventListener('dragstart',ev=>{ ev.dataTransfer.setData('text/item', t.dataset.item); ev.dataTransfer.effectAllowed='copyMove'; });   // drag onto a hotbar slot to PIN, or onto another item to REORDER
     t.addEventListener('dragover',ev=>{ ev.preventDefault(); ev.dataTransfer.dropEffect='move'; t.classList.add('dragover'); });
     t.addEventListener('dragleave',()=>t.classList.remove('dragover'));
@@ -2611,7 +2612,7 @@ for(const _b of ['leather','wood','iron','gold','titan','warded_vest','aegis_pla
 (function(){ const cap=s=>s.charAt(0).toUpperCase()+s.slice(1); const TIERS=[['leather',3,{flower:2,wood:1}],['wood',7,{wood:3}],['iron',13,{stone:2,crystal:1}],['gold',29,{gold_ingot:2}],['titan',37,{boss_core:1,gold_ingot:1}]]; const SL={helmet:['🪖','Helm'],legs:['👖','Legguards'],boots:['🥾','Boots']};
   for(const t of TIERS){ const tier=t[0], lvl=t[1], mat=t[2]; for(const slot in SL){ const id=tier+'_'+slot, nm=cap(tier)+' '+SL[slot][1]; ARMORS[id]={name:nm, icon:SL[slot][0], slot:slot, tier:tier};
     RECIPES.push({id:id, name:SL[slot][0]+' '+nm, cat:'tool', lvl:lvl, cost:mat, weapon:true, cls:ARMOR_CLS[tier], build:(p)=>gainArmorPiece(id,slot)}); } } })();
-RECIPES.push({id:'repair_kit', name:'🔧 Repair Kit', cat:'tool', lvl:3, cost:{wood:3, iron_ingot:1}, build:(p)=>repairAll()});   // craft to restore ALL equipped weapon+armor durability to full
+RECIPES.push({id:'repair_kit', name:'🔧 Repair Kit', cat:'tool', lvl:3, cost:{wood:3, iron_ingot:1}, build:(p)=>{ Inv.add('repair_kit',1); }});   // crafts a STOCKABLE Repair Kit item — use it from the inventory to restore ALL equipped weapon+armor durability
 let craftOpen=false;
 function canCraft(r){ for(const k in r.cost) if(!Inv.has(k,r.cost[k])) return false; return true; }
 const CRAFT_CATS=[['tool','⚔️ Tools & Weapons'],['build','🏗️ Build'],['decor','🌸 Decor'],['food','🍎 Food']];
@@ -2685,6 +2686,7 @@ const SHOP=[
   {id:'fizzypop', name:'⚡ Fizzy Pop', price:25, kind:'buy', buy(){ Needs.add('energy',50); toast('⚡ +50 energy'); } },
   {id:'buy_potion', name:'🧪 Health Potion (+6 ❤️)', price:40, kind:'buy', buy(){ Inv.add('health_potion',1); toast('🧪 Bought a Health Potion — stock up + drink it from your 🎒 inventory (I) when you need it.'); } },
   {id:'buy_tonic', name:'🧉 Energy Tonic (+energy)', price:30, kind:'buy', buy(){ Inv.add('energy_tonic',1); toast('🧉 Bought an Energy Tonic — drink it from your inventory.'); } },
+  {id:'buy_repairkit', name:'🔧 Repair Kit (restore gear)', price:45, kind:'buy', buy(){ Inv.add('repair_kit',1); toast('🔧 Bought a Repair Kit — use it from your 🎒 inventory (I) to fully repair your equipped gear.'); } },
   {id:'buy_backpack', name:'🎒 Extra Backpack (+50 slots / new tab)', price:80, kind:'buy', desc:'+1 backpack tab (50 more slots)', buy(){ if((state.bagCount||1)>=6){ toast('🎒 You already have the max 6 backpacks!'); return false; } state.bagCount=(state.bagCount||1)+1; toast(`🎒 Extra backpack added — ${state.bagCount} bags (${backpackCap()} slots)!`); if(invOpen)renderInv(); save(); } },
 ];
 let shopOpen=false, currentVendor=null;   // currentVendor = a home's per-house shop (null = town General Store)
@@ -2876,6 +2878,7 @@ function breakItem(id){
   if(typeof rarityToast==='function')rarityToast('rare',`💥 Your ${it.name||'item'} broke! ${it.icon||''} Craft a 🔧 Repair Kit to keep gear from breaking.`);
   if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); if(invOpen&&typeof renderInv==='function')renderInv(); if(typeof Inv!=='undefined'&&Inv.render)Inv.render(); save(); }
 function repairAll(){ if(!state.dur)state.dur={}; const ids=[]; if(state.weapon&&state.weapon!=='fist')ids.push(state.weapon); if(state.gear)for(const s in state.gear){ if(state.gear[s])ids.push(state.gear[s]); } if(state.offhand)ids.push(state.offhand); let n=0; for(const id of ids){ state.dur[id]=durMaxFor(id); n++; } toast(`🔧 Repaired ${n} equipped item${n===1?'':'s'} to full!`); if(invOpen&&typeof renderInv==='function')renderInv(); save(); return n; }
+function useRepairKit(){ if((state.inv.repair_kit||0)<=0)return; const ids=[]; if(state.weapon&&state.weapon!=='fist')ids.push(state.weapon); if(state.gear)for(const s in state.gear){ if(state.gear[s])ids.push(state.gear[s]); } if(state.offhand)ids.push(state.offhand); if(!ids.length){ toast('🔧 Equip some gear first, then use a Repair Kit.'); return; } if(!ids.some(id=>durFrac(id)<1)){ toast('🔧 Your gear is already in perfect shape — kit saved.'); return; } repairAll(); Inv.take('repair_kit',1); SFX.play('success'); if(invOpen&&typeof renderInv==='function')renderInv(); }   // (L) consume ONE kit to fully repair equipped gear (no waste if undamaged)
 function rollRarity(){ const r=Math.random(); return r<RARITY.epic.p ? 'epic' : (r<RARITY.epic.p+RARITY.rare.p ? 'rare' : 'common'); }
 function rarityToast(tier,msg){ const rr=RARITY[tier]||RARITY.common; const box=document.getElementById('toasts'); const t=document.createElement('div'); t.className='toast'; t.innerHTML=`${tier!=='common'?`<span style="color:${rr.color};font-weight:800">${rr.mark}${rr.label}</span> · `:''}${msg}`; box.appendChild(t); while(box.children.length>3) box.firstChild.remove(); setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; setTimeout(()=>t.remove(),400); },2600); }
 function flashFade(){ const f=document.createElement('div'); f.style.cssText='position:fixed;inset:0;background:#000;opacity:0;z-index:40;transition:opacity .4s;pointer-events:none'; document.body.appendChild(f); requestAnimationFrame(()=>{ f.style.opacity='.7'; setTimeout(()=>{ f.style.opacity='0'; setTimeout(()=>f.remove(),500); },500); }); }
@@ -3296,6 +3299,7 @@ function dungeonLoot(chest,tier,vault){ if(chest.userData.looted){ toast('📦 E
   const cp=chest.getWorldPosition(new THREE.Vector3()); const items=[['coin',(12+tier*12+(vault?45:0))+Math.floor(Math.random()*15)],['crystal',2+tier],['stone',4]];
   if(tier>=2||vault) items.push([vault?'gold_ingot':'iron_ingot', vault?2:1]);
   let pages=0; if(vault){ items.push(['iron_ingot',2]); pages=2; } else if(Math.random()<0.6){ pages=1; } if(pages) state.recipePages=(state.recipePages||0)+pages;
+  if(Math.random()<(vault?0.6:0.3)) items.push(['repair_kit',1]);   // (L) repair kits also found in crypt chests
   SFX.play('success'); shake(0.4); confetti(cp.clone().setY(1.4),vault?34:20); chestLoot(items, vault?'🏆 Crypt Vault':'📦 Crypt Chest');   // open the loot MODAL (owner's loot system); +pages added directly
   if(pages) toast(`📖 +${pages} recipe page${pages>1?'s':''}`); save(); }
 function buildDungeon(){ if(DUNGEON.built)return; DUNGEON.built=true; const X=DUNGEON.x,Z=DUNGEON.z; DUNGEON.rooms.length=0; DUNGEON.chests.length=0; DUNGEON.traps=[]; DUNGEON.spawners=[]; DUNGEON.secretChest=null;
