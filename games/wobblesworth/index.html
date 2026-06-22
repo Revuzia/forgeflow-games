@@ -81,6 +81,7 @@
   #invbar .hint{align-self:center; color:#cbb6e6; font-size:11px; margin-left:4px; max-width:120px}
   #invbar .slot.empty{opacity:.3}
   #invbar .slot.islot{border-color:rgba(122,224,108,.55); background:rgba(122,224,108,.12)}
+  .invtile.dragover{outline:2px dashed #7ce0ac; outline-offset:-2px; transform:scale(1.04)}   /* (K) drag-reorder drop target highlight */
   #invbar .slot .ic{position:absolute; top:1px; right:4px; font-size:10px; font-weight:bold; color:#fff; text-shadow:0 1px 2px #000}
   #invbar .slot.drop{border-color:#9be8c8; background:rgba(122,224,108,.32)}
   #hearts{padding:5px 9px}   /* match Hunger/Energy exactly (leftover heart-emoji padding made Health look oversized/off) */
@@ -2335,6 +2336,7 @@ function renderTrade(){ const el=document.getElementById('trade'); const s=state
   el.querySelectorAll('[data-rem]').forEach(t=>t.onclick=(e)=>{e.stopPropagation();tradeRemItem(t.dataset.rem);});
   const cm=el.querySelector('[data-coinm]'),cp=el.querySelector('[data-coinp]'); if(cm)cm.onclick=(e)=>{e.stopPropagation();tradeCoin(-5);}; if(cp)cp.onclick=(e)=>{e.stopPropagation();tradeCoin(5);}; }
 function toggleInv(){ invOpen?closeInv():openInv(); }
+function _reorderInv(dragKey, targetKey){ let o=(state.invOrder||[]).slice(); for(const k of Object.keys(ITEMS)) if((state.inv[k]||0)>0 && !o.includes(k)) o.push(k); o=o.filter(k=>k!==dragKey); const ti=o.indexOf(targetKey); o.splice(ti<0?o.length:ti, 0, dragKey); state.invOrder=o; }   // (K) drag-reorder: move dragKey to targetKey's slot in the persisted item order
 function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
   const w=WEAPONS[state.weapon]||WEAPONS.fist, ar=ARMORS[state.armor];
   let h=`<div class="invcard invwide"><h3>🎒 Inventory <span class="x" id="invX">✕</span></h3>`;
@@ -2366,7 +2368,8 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
     const it=kind==='weapon'?WEAPONS[id]:kind==='offhand'?offhandItem(id):ARMORS[id]; const rr=RARITY[it.rarity]||RARITY.common; const dp=Math.round(durFrac(id)*100); const gate=EQUIP_LVL[id]&&(state.level||1)<EQUIP_LVL[id];
     tileList.push(`<div class="invtile gear${gate?' gated':''}" draggable="true" data-gear="${id}" data-kind="${kind}" style="border-color:${rr.color}" title="${gate?('🔒 Requires Level '+EQUIP_LVL[id]+' to equip'):'Double-click or drag onto a body slot to equip'}">${gate?`<span class="tc" style="background:#3a2a4e;color:#c9a0ff;font-size:9px;font-weight:800;padding:1px 4px;border-radius:6px">🔒Lv${EQUIP_LVL[id]}</span>`:(dp<=20?'<span class="tc" style="color:#ff6b6b">⚠️</span>':'')}<div class="ti">${it.icon}</div><div class="tn" style="color:${rr.color}">${it.name}</div></div>`);   // gated gear shows its LEVEL requirement right in the modal; once state.level hits it, gate=false -> badge gone
   }
-  for(const k of Object.keys(ITEMS)){ const c=state.inv[k]||0; if(c<=0)continue; const eat=FOOD_EFFECTS[k]; const desc=ITEM_DESC[k]?ITEMS[k].n+' — '+ITEM_DESC[k]:ITEMS[k].n;
+  const _ord=state.invOrder||[]; const _ikeys=[..._ord.filter(k=>ITEMS[k]&&(state.inv[k]||0)>0), ...Object.keys(ITEMS).filter(k=>(state.inv[k]||0)>0&&!_ord.includes(k))];   // (K) render items in the saved drag-order; new items appended
+  for(const k of _ikeys){ const c=state.inv[k]||0; const eat=FOOD_EFFECTS[k]; const desc=ITEM_DESC[k]?ITEMS[k].n+' — '+ITEM_DESC[k]:ITEMS[k].n;
     tileList.push(`<div class="invtile${eat?' eatable':''}" draggable="true" data-item="${k}" title="${desc}" ${eat?`data-eat="${k}"`:''}><span class="tc">${c}</span><div class="ti">${ITEMS[k].i}</div><div class="tn">${ITEMS[k].n}${eat?'<br><span class="eathint">eat</span>':''}</div></div>`); }
   const PER=50, bags=Math.max(1,state.bagCount||1), cap=PER*bags, used=tileList.length;
   let tab=Math.min(Math.max(0,state._bagTab||0), bags-1);
@@ -2379,7 +2382,10 @@ function renderInv(){ const el=document.getElementById('inv'); if(!el)return;
   h+=`</div>`;   // close invcard
   el.innerHTML=h; const x=el.querySelector('#invX'); if(x)x.onclick=closeInv; el.onclick=(e)=>{ if(e.target===el) closeInv(); };
   el.querySelectorAll('.invtile[data-eat]').forEach(t=> t.onclick=(e)=>{ e.stopPropagation(); if(eatFood(t.dataset.eat)){ renderInv(); Inv.render(); } });
-  el.querySelectorAll('.invtile[data-item]').forEach(t=>{ t.addEventListener('dragstart',ev=>{ ev.dataTransfer.setData('text/item', t.dataset.item); ev.dataTransfer.effectAllowed='copy'; }); });   // drag any backpack item onto a hotbar slot to pin it
+  el.querySelectorAll('.invtile[data-item]').forEach(t=>{ t.addEventListener('dragstart',ev=>{ ev.dataTransfer.setData('text/item', t.dataset.item); ev.dataTransfer.effectAllowed='copyMove'; });   // drag onto a hotbar slot to PIN, or onto another item to REORDER
+    t.addEventListener('dragover',ev=>{ ev.preventDefault(); ev.dataTransfer.dropEffect='move'; t.classList.add('dragover'); });
+    t.addEventListener('dragleave',()=>t.classList.remove('dragover'));
+    t.addEventListener('drop',ev=>{ ev.preventDefault(); t.classList.remove('dragover'); const dk=ev.dataTransfer.getData('text/item'); if(dk && dk!==t.dataset.item){ _reorderInv(dk, t.dataset.item); renderInv(); if(typeof Inv!=='undefined'&&Inv.render)Inv.render(); if(typeof save==='function')save(); } }); });   // (K) reorder on drop + persist
   el.querySelectorAll('.bptab[data-bag]').forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); state._bagTab=+b.dataset.bag; renderInv(); });
   el.querySelectorAll('.invtile.gear[data-gear]').forEach(t=>{
     t.ondblclick=(e)=>{ e.stopPropagation(); equipGear(t.dataset.gear, t.dataset.kind); };
