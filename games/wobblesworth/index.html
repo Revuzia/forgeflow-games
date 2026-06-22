@@ -940,11 +940,11 @@ const MODEL_LIST=["char_player","char_n1","char_n2","char_n3","House_1","House_2
  // RESOURCE NODES — these MUST load or stone/crystal/carrot won't exist and their quests become impossible:
  "Cube","Crystal1","Crystal2","Crystal3","Crystal4","Carrot","Cabbage","CarrotGroup",
  // CUBE-ANIMAL creatures (Kenney) — night ENEMIES + FARM animals (real rigged models w/ a walk clip, replacing the procedural "circle" blobs):
- "animal-cow","animal-pig","animal-chick","animal-deer","animal-bunny","animal-fox","animal-tiger","animal-lion","animal-hog","animal-crab","animal-bee","animal-caterpillar","animal-elephant","animal-polar","animal-giraffe","animal-panda",
+ "animal-cow","animal-pig","animal-chick","animal-deer","animal-bunny","animal-fox","animal-tiger","animal-lion","animal-hog","animal-crab","animal-bee","animal-caterpillar","animal-elephant","animal-polar","animal-penguin","animal-giraffe","animal-panda",
  // SPOOKY night mobs (Kenney graveyard kit) — haunt the far OUTSKIRTS after dark only (see CREATURE_TYPES minDist):
  "mob-skeleton","mob-ghost","mob-zombie","mob-pumpkin",
  "mob-raider","mob-marauder","mob-drake","mob-demon","mob-golem","mob-wispskull",   // Quaternius ultimate-monsters: raiders (day outskirts) + tough far creatures + a spooky skull for the wisp
- "mob-glub","mob-spikeblob","mob-mushnub",   // L45-50 DEEPEST blobby monsters (mob-drake is now the DRAGON BOSS of that zone)
+ "mob-glub","mob-spikeblob","mob-mushnub","mob-yeti","mob-yeti-elder","mob-icegolem","mob-alpaking",   // L45-50 DEEPEST blobby monsters + ❄️ FROZEN WASTES cold mobs (frost yeti / elder yeti / ice goleling / woolly alpaking)
  "mount-horse","mount-stag","mount-unicorn",   // RIDABLE MOUNTS (real animated animal GLBs: brown horse, antlered stag, white horse=unicorn) — render via the src-bbox-fixed buildMobGLB
  "char-warrior","char-archer","char-wizard",   // PLAYER CLASS models (Quaternius RPG, CC0) — armored warrior / hooded archer / robed wizard; own rig (WeaponR bone, Idle/Walk/Run + class attacks)
  // MINI-CHARACTER people (Kenney) — varied NEIGHBORS/wanderers (same rig as char_player, so the walk anim works):
@@ -1117,12 +1117,12 @@ function buildZones(){
   for(let i=0;i<26;i++){ const a=Math.PI+rand(-1.0,1.0), r=rand(98,168), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,7))continue; const t=makeTree(x,z,rand(5,6.5),{fruit:'#e8463a'}); world.add(t); addNode(t,x,z,{item:'apple',amount:2,respawn:28,label:'Pick apples',solid:'trunk'}); }   // apple orchard in the GREEN west hills (r98-168) — reliably reachable + on-theme (no fruit trees in swamp/desert/dark)
   // 🏖️ PEBBLE BEACH (south) — coins + flowers
   // (coin GATHER nodes removed — coins now come from fighting night monsters + home chests + neighbor gifts)
-  for(let i=0;i<44;i++){ const x=rand(-300,300),z=rand(120,580); if(isInWater(x,z,2))continue; if(desertMask(x,z)>0.3||darkMask(x,z)>0.3)continue; const F=pickFlower(); addNode(F.model,x,z,{item:F.item,tint:F.tint,amount:1,targetH:0.7,respawn:22}); }   // 🌸 colored flowers -> petals; GUARDED out of desert/dark (no neon flowers glowing in the sand)
+  for(let i=0;i<44;i++){ const x=rand(-300,300),z=rand(120,580); if(isInWater(x,z,2))continue; if(desertMask(x,z)>0.3||iceMask(x,z)>0.3||darkMask(x,z)>0.3)continue; const F=pickFlower(); addNode(F.model,x,z,{item:F.item,tint:F.tint,amount:1,targetH:0.7,respawn:22}); }   // 🌸 colored flowers -> petals; GUARDED out of desert/dark (no neon flowers glowing in the sand)
   // 🗺️ DEEP OUTSKIRTS scatter (owner: "really deep into the jungle... almost no crafting"). The 4 biome strips above leave the far diagonal corners + the outer ring empty; this RADIAL scatter (all directions, r 200→fence) seeds wood/stone/crystal out there so the far field is worth the trek — and gives the new night mobs a reason to be there.
   for(let i=0;i<88;i++){ const a=rand(0,TAU), r=rand(200,FENCE-30), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6))continue; const roll=Math.random();   // DENSER outskirts (44->88): the long trek out should reward you with resources, not empty land
     if(roll<0.35){ const t=_resourceTree(x,z,rand(5,7)); if(t){ world.add(t); addNode(t,x,z,{item:'wood',amount:2,respawn:24,label:'Chop for wood',solid:'trunk'}); } else { const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); } }   // desert -> stone instead of a tree
     else if(roll<0.75){ const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); }
-    else { if(desertMask(x,z)>0.4){ const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); } else { addNode(pick(['Crystal1','Crystal2','Crystal3','Crystal4']),x,z,{item:'crystal',amount:1,targetH:rand(1.2,2),respawn:40,label:'Mine a crystal'}); } } }   // emissive crystals would bloom in the sand -> desert ring gets stone instead
+    else { if(desertMask(x,z)>0.4||iceMask(x,z)>0.4){ const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); } else { addNode(pick(['Crystal1','Crystal2','Crystal3','Crystal4']),x,z,{item:'crystal',amount:1,targetH:rand(1.2,2),respawn:40,label:'Mine a crystal'}); } } }   // emissive crystals would bloom in the sand/snow -> desert + ice rings get stone instead
   // town scatter: a few coins + flowers + apple trees so you can gather near home too
   for(let i=0;i<6;i++){ const a=rand(0,TAU),r=rand(20,44); const F=pickFlower(); addNode(F.model,Math.cos(a)*r,Math.sin(a)*r,{item:F.item,tint:F.tint,amount:1,targetH:0.7,respawn:22}); }
 
@@ -2785,6 +2785,15 @@ var Silly={ t:0, next:6, first:0,
 const ephemeral=[];
 function geyser(pos){ if(!pos)return; for(let i=0;i<34;i++){ const d=pBall(0.1,'#7fd7ff'); d.position.copy(pos).add(new THREE.Vector3(0,0.6,0)); world.add(d); ephemeral.push({node:d,life:rand(1,1.8),v:new THREE.Vector3(rand(-1.6,1.6),rand(4,7),rand(-1.6,1.6))}); } }
 function splash(x,y,z){ for(let i=0;i<14;i++){ const d=new THREE.Mesh(_pBallGeo,_rainMat); d.scale.setScalar(0.1); d.position.set(x+rand(-0.5,0.5),(y!=null?y:0.1)+0.06,z+rand(-0.5,0.5)); world.add(d); ephemeral.push({node:d,life:rand(0.45,0.85),v:new THREE.Vector3(rand(-1.8,1.8),rand(2.2,4),rand(-1.8,1.8)),g:1}); } }   // water-entry splash (bright basic droplets)
+/* 💨 ICE GUSTS/STORMS (owner: random gusts/storms that slow + push the player — NON-DAMAGING). Active only in the Frozen Wastes (iceMask>0.25). Telegraphed by a toast + shake + blowing-snow streaks. The push is applied in updatePlayer; particles reuse the ephemeral pool. */
+const _wind={active:false,t:0,next:rand(8,16),dir:rand(0,TAU),force:0,storm:false};
+function tickWind(dt){ const inIce=(typeof iceMask==='function') && iceMask(player.position.x,player.position.z)>0.25;
+  if(!inIce){ if(_wind.active){ _wind.active=false; _wind.force=0; } return; }
+  _wind.t+=dt;
+  if(!_wind.active){ if(_wind.t>=_wind.next){ _wind.active=true; _wind.t=0; _wind.storm=Math.random()<0.3; _wind.dir=rand(0,TAU); _wind.force=_wind.storm?5.0:2.6; if(typeof toast==='function')toast(_wind.storm?'🌨️ A blizzard howls across the Frozen Wastes!':'💨 A biting gust picks up…'); shake(_wind.storm?0.35:0.18); } }
+  else if(_wind.t>=(_wind.storm?7:3.5)){ _wind.active=false; _wind.t=0; _wind.next=rand(10,20); _wind.force=0; }
+  if(_wind.active && ((state._fc||0)&1)===0){ const n=_wind.storm?3:1; for(let i=0;i<n;i++){ const d=new THREE.Mesh(_pBallGeo,_rainMat); d.scale.setScalar(rand(0.05,0.13)); const a2=rand(0,TAU), rr=rand(2,16); d.position.set(player.position.x+Math.cos(a2)*rr-Math.cos(_wind.dir)*8, (player.position.y||0)+rand(0.4,3.5), player.position.z+Math.sin(a2)*rr-Math.sin(_wind.dir)*8); world.add(d); ephemeral.push({node:d,life:rand(0.5,1.0),v:new THREE.Vector3(Math.cos(_wind.dir)*15,rand(-1.5,1.0),Math.sin(_wind.dir)*15),g:0}); } }   // blowing-snow streaks ride the wind
+}
 function confetti(pos,n=28){ if(state.reduce)n=Math.min(n,6); for(let i=0;i<n;i++){ const c=pBox(['#ff5d8f','#3ad1c7','#ffd23f','#7c5cff','#ff8a3d'][i%5]); c.position.copy(pos); world.add(c); ephemeral.push({node:c,life:rand(1.4,2.4),v:new THREE.Vector3(rand(-3,3),rand(2,6),rand(-3,3)),g:1,vy:0,spin:rand(2,8)}); } }
 /* DUCKS + WEATHER — random, VISIBLE events spawned AROUND the player (the old duckRain spawned at fixed
    coords far from the player in the bigger world, so it was never seen). */
@@ -2963,6 +2972,7 @@ function updatePlayer(dt){
   else { state._ivx=0; state._ivz=0;
     if(moving){ player.position.x+=mvx*_spNow*dt; player.position.z+=mvz*_spNow*dt; resolve();
       if(grounded){ stepT-=dt; if(stepT<=0){ SFX.play('step'); stepT=sprint?0.26:0.4; } } } }
+  if(_wind.active && _wind.force>0 && !MINE.inMine && !DUNGEON.inDungeon){ player.position.x+=Math.cos(_wind.dir)*_wind.force*dt; player.position.z+=Math.sin(_wind.dir)*_wind.force*dt; }   // 💨 the gust/storm PUSHES you (non-damaging) — a drift you have to walk against
   if(!MINE.inMine && !DUNGEON.inDungeon){   // TRUE WRAP (surface, every frame): walk off one edge -> appear on the other. The shader renders modulo WRAP_P so wrapping the coord by exactly WRAP_P is SEAMLESS (no visible jump); shift the camera by the same delta so it doesn't lerp across the seam.
     const HW=WRAP_P*0.5;
     if(player.position.x>HW){ player.position.x-=WRAP_P; camera.position.x-=WRAP_P; } else if(player.position.x<-HW){ player.position.x+=WRAP_P; camera.position.x+=WRAP_P; }
@@ -3096,6 +3106,7 @@ function updateWorld(dt){ const tn=performance.now()*0.001;
   SWAMP_WATER_MAT.uniforms.uTime.value+=dt; SWAMP_WATER_MAT.uniforms.uSun.value.copy(WATER_MAT.uniforms.uSun.value); SWAMP_WATER_MAT.uniforms.uSky.value.copy(_sky).multiplyScalar(0.35); LAVA_MAT.uniforms.uTime.value+=dt*0.45;   // murky pools follow the (dimmed) sky; lava bubbles slowly + self-lit (no sky tick)
   ICE_MAT.uniforms.uTime.value+=dt*0.12; ICE_MAT.uniforms.uSun.value.copy(WATER_MAT.uniforms.uSun.value); ICE_MAT.uniforms.uSky.value.copy(_sky);   // ❄️ frozen pits barely ripple (near-static) + reflect the cold sky
   for(const c of SINK_MESHES) c.rotation.y+=dt*0.85;   // 🌀 spin the sinkhole funnels (faceted -> reads as swirling sand)
+  tickWind(dt);   // 💨 ice gusts/storms (only active in the Frozen Wastes)
   _grassTime.value=tn;   // grass wind clock
   cullWrapped();   // hide localized static objects that wrap outside the view frustum (cuts the always-on 360° draw + shadow cost)
   // (the old waterObjs per-frame loop was a dead no-op over an empty array — reflective Water was removed; deleted)
@@ -3459,12 +3470,21 @@ const CREATURE_TYPES={   // night ENEMIES — real rigged cube-animals (was proc
   mushnub:  { name:'Elder Mushnub', hp:3.8, speed:1.8, dmg:3, bob:5.2, floatY:0, day:2, minDist:270, ranged:'seed',      model:'mob-mushnub',  tgtH:1.85, build(){ return buildMobGLB(this.model,this.tgtH); } },
   demon:    { name:'Ashen Demon',   hp:2.6, speed:2.4, dmg:3, bob:2.4, floatY:0, day:2, minDist:195, attackKind:'claw',  model:'mob-demon',    tgtH:1.95, build(){ return buildMobGLB(this.model,this.tgtH); } },
   golem:    { name:'Stone Goleling',hp:3.4, speed:1.2, dmg:3, bob:1.4, floatY:0, day:2, minDist:205, attackKind:'claw', model:'mob-golem',    tgtH:1.9,  build(){ return buildMobGLB(this.model,this.tgtH); } },
+  // ── ❄️ FROZEN WASTES (ice ring; owner-approved cold mobs Yeti/Goleling/Alpaking). iceOnly -> spawn ONLY in the ice ring (pickCreatureType gates by iceMask + biases the ring toward them). NO penguin enemy (penguin = ambient fauna in G7). ──
+  yeti:     { name:'Frost Yeti',      hp:2.6, speed:1.8, dmg:3, bob:2.0, floatY:0, day:3, minDist:470, attackKind:'claw', iceOnly:true, model:'mob-yeti',       tgtH:2.0,  build(){ return buildMobGLB(this.model,this.tgtH,'#eef4fb'); } },
+  alpaking: { name:'Woolly Alpaking', hp:2.0, speed:2.2, dmg:2, bob:2.6, floatY:0, day:4, minDist:468, attackKind:'claw', iceOnly:true, model:'mob-alpaking',   tgtH:1.7,  build(){ return buildMobGLB(this.model,this.tgtH,'#dfe9f2'); } },
+  icegolem: { name:'Ice Goleling',    hp:3.4, speed:1.3, dmg:3, bob:1.4, floatY:0, day:3, minDist:474, attackKind:'claw', iceOnly:true, model:'mob-icegolem',   tgtH:1.85, build(){ return buildMobGLB(this.model,this.tgtH,'#9cd0ec'); } },
+  yetielder:{ name:'Elder Yeti',      hp:5.2, speed:1.6, dmg:4, bob:1.6, floatY:0, day:1, minDist:485, attackKind:'claw', iceOnly:true, model:'mob-yeti-elder', tgtH:2.7,  build(){ return buildMobGLB(this.model,this.tgtH,'#dfeaf6'); } },   // RARE ice mini-boss (low day weight = uncommon, deepest minDist, best loot; dmg 4 to temper the burst vs its 0.3s telegraph at distMul 2.7)
 };
 const CTYPE_KEYS=Object.keys(CREATURE_TYPES);
 for(const _k of ['skeleton','pumpkin','zombie','ghost','sporecap','wisp']) if(CREATURE_TYPES[_k]) CREATURE_TYPES[_k].nightOnly=true;   // the UNDEAD/spooky stay NIGHT-only; wild beasts (lion/bear/deer/brute/mimic) + outskirts foes roam by DAY too, so you can adventure+fight in daylight
-function pickCreatureType(distOverride){ // `day` = SPAWN WEIGHT (basics common, hard ones rarer); minDist gates far-out specials by distance from town (spawn pos for night field-spawns, else the player).
+function pickCreatureType(distOverride, sx, sz){ // `day` = SPAWN WEIGHT (basics common, hard ones rarer); minDist gates far-out specials by distance; iceOnly + iceMask gate cold mobs to the Frozen Wastes
   const pd=(distOverride!=null)?distOverride:Math.hypot(player.position.x,player.position.z); let tot=0; const elig=[];
-  const _night=!isDay(); for(const k of CTYPE_KEYS){ const t=CREATURE_TYPES[k]; if(!_night && t.nightOnly)continue; const gmd=(t.minDist&&_night)?Math.max(80,t.minDist-20):t.minDist; if(gmd&&pd<gmd)continue; elig.push([k,t.day]); tot+=t.day; }   // night: spooky mobs creep ~20 closer so the outskirts aren't empty; DAY: skip night-only undead so daylight foes are beasts/bandits, not skeletons
+  const _ice=(sx!=null && typeof iceMask==='function')?iceMask(sx,sz):0;   // ❄️ biome at the actual spawn point
+  const _night=!isDay(); for(const k of CTYPE_KEYS){ const t=CREATURE_TYPES[k]; if(!_night && t.nightOnly)continue; if(t.iceOnly && _ice<0.3)continue;   // cold mobs ONLY where the ground is icy
+    const gmd=(t.minDist&&_night)?Math.max(80,t.minDist-20):t.minDist; if(gmd&&pd<gmd)continue;
+    let w=t.day; if(_ice>0.4){ if(t.iceOnly) w=t.day*3; else { if((t.minDist||0)<150) continue; w=t.day*0.12; } }   // ice ring: cold mobs DOMINATE (~91%); trivial/near mobs (caterpillar/crab/fox) excluded, only deep-tier foes (skeleton/glub/demon) appear as a rare minority
+    elig.push([k,w]); tot+=w; }   // night: spooky mobs creep ~20 closer; DAY: skip night-only undead
   let r=Math.random()*tot; for(const [k,w] of elig){ r-=w; if(r<=0) return CREATURE_TYPES[k]; } return CREATURE_TYPES.petal; }
 function makeCreature(t){ const g=(t||CREATURE_TYPES.petal).build(); g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); if(t&&t.stealth) g.visible=false; return g; }   // stealth mobs (ghost) start hidden -> revealed only on aggro (see updateCombat)
 
@@ -3499,7 +3519,7 @@ function updateAnimals(dt){ for(let i=animals.length-1;i>=0;i--){ const a=animal
 function spawnCreature(){ let sx,sz,pd;
   for(let tries=0;tries<8;tries++){ const a=rand(0,TAU), r=isDay()?rand(22,36):rand(24,68); sx=player.position.x+Math.cos(a)*r; sz=player.position.z+Math.sin(a)*r; pd=Math.hypot(sx,sz); if(!inTrainingZone(sx,sz)) break; }   // NIGHT rings the player (Minecraft-style), DAY near the player — but re-roll up to 8× so a point never lands in the 🎯 training yard; pd (dist from town) still tiers difficulty
   if(inTrainingZone(sx,sz)) return;   // 🎯 hard fallback: if all 8 re-rolls stayed in-zone, ABORT this spawn (the continuous-respawn tick simply tries again, like the cull cadence) — no mob EVER spawns in the practice yard, day or night
-  const t=pickCreatureType(pd); const c=makeCreature(t);
+  const t=pickCreatureType(pd, sx, sz); const c=makeCreature(t);
   c.position.set(sx,groundY(sx,sz),sz); world.add(c);
   const distMul=1+Math.min(1.7, pd/190);   // OUTSKIRTS scaling (owner): the further from town you fight, the TOUGHER — +HP and +damage, up to ~2.7x deep out. Spooky mobs (skeleton/pumpkin/zombie) already have higher base t.hp/t.dmg + spawn far, so they're the hard ones.
   const hp=Math.max(36,Math.round((90+state.day*18)*t.hp*distMul)); const mats=[]; c.traverse(m=>{ if(m.isMesh&&m.material&&m.material.emissive) mats.push(m.material); });
@@ -3917,6 +3937,10 @@ function killCreature(i){ const c=creatures[i];
     if(_isDragon){ try{ dropGear(p.x,p.z, pick(EPIC_GEAR)); }catch(e){} }   // dragon also drops an EPIC weapon/armor piece
     state.recipePages=(state.recipePages||0)+(_isDragon?5:3); gainXP(_isDragon?170:80); SFX.play('success',{vol:0.6}); shake(_isDragon?1.4:1.1); confetti(p.clone().setY(2.4),_isDragon?90:60);
     toast(`💀 BOSS DEFEATED: ${(c.type&&c.type.name)||'Boss'}! A 📦 loot bag dropped — walk up & press E. (+📖 Titan pages)`); if(c._questId && questActive(c._questId)) Quests.complete(c._questId,'slay'); save(); return; }
+  if(c.type===CREATURE_TYPES.yetielder){   // ❄️ ICE MINI-BOSS: a guaranteed strong haul + bonus XP ON TOP of the normal roll (owner: best loot for the rare, tough Elder Yeti)
+    dropLoot(p.x,p.z,[['coin',60+Math.floor(Math.random()*40)],['crystal',4+Math.floor(Math.random()*3)],['iron_ingot',2]], '❄️ Elder Yeti Haul', true);
+    try{ dropGear(p.x,p.z, pick(Math.random()<0.4?EPIC_GEAR:RARE_GEAR)); }catch(e){}   // guaranteed gear: 40% epic, else rare
+    gainXP(55); toast('❄️ The Elder Yeti falls — a rich frozen haul spills out!'); }
   let tier=rollRarity(); const _kpd=Math.hypot(p.x,p.z); if(!isDay() && _kpd>150){ if(tier==='common'&&Math.random()<0.33)tier='rare'; else if(tier==='rare'&&Math.random()<0.20)tier='epic'; }   // 🌙 far-outskirts NIGHT kills upgrade rarity → dangerous nights out are worth it
   const m=RARITY[tier].mult; const coins=(2+Math.floor(Math.random()*3))*m; state._kills=(state._kills||0)+1; SFX.play('interact',{rate:0.3,vol:0.5});
   if(questActive('night_cull')&&!Quests.isDone('night_cull','slay')&&!isDay()){ const q=state.activeQuests.night_cull; q.kills=(q.kills||0)+1; Quests.render(); if(q.kills>=5)Quests.complete('night_cull','slay'); else toast(`🌙 Night Cull: ${q.kills}/5`); }   // count night kills toward the bounty
@@ -4281,6 +4305,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
   needs:()=>({h:Math.round(Needs.hunger),e:Math.round(Needs.energy),f:Math.round(Needs.fun)}), day:()=>({day:state.day,giggle:state.giggle,goals:state.goals.map(g=>({t:g.type,done:g.done}))}),
   tp:(x,z)=>player.position.set(x,0,z), setKey:(c,d)=>keys[c]=d, yaw:()=>cam.yaw, mark:t=>markGoal(t), genGoals,
   dbgSink:()=>{ const s=SINKHOLES[0]; return {px:+player.position.x.toFixed(1),pz:+player.position.z.toFixed(1),py:+player.position.y.toFixed(1),grounded:grounded,gY:+groundUnder().toFixed(1),d0:+Math.hypot(player.position.x-s.x,player.position.z-s.z).toFixed(1),n:SINKHOLES.length}; },
+  forceGust:(storm)=>{ _wind.active=true; _wind.t=0; _wind.storm=!!storm; _wind.dir=0; _wind.force=storm?5:2.6; return _wind.force; },   // ❄️ debug: trigger a gust/storm now
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
   roofOp:()=>cutRoof?+cutRoof.material.opacity.toFixed(2):null,
   interactNow:()=>{ updateInteract(); if(nearest){ const l=nearest.label; nearest.action(); return l; } return null; },
