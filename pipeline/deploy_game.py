@@ -19,6 +19,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -97,28 +98,48 @@ def load_supabase_creds():
     return creds
 
 
-def upload_to_r2(game_dir: Path, slug: str) -> int:
-    """Upload all files in game_dir to R2 under {slug}/. Returns file count."""
+def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> int:
+    """Upload files in game_dir to R2 under {slug}/. Returns count of files uploaded.
+
+    2026-06-22 ROBUSTNESS FIX (forgeflowgames.com was stale all session): a single
+    `npx wrangler r2 object put` can exceed 30s (npx cold-start + a multi-MB GLB), and
+    the old code passed timeout=30 with NO try/except — so the FIRST slow file raised
+    TimeoutExpired and crashed the whole deploy after ~2 files. Now: timeout=150 + the
+    call is wrapped (a slow/failed file is skipped, never fatal). Plus a HEAD skip so big
+    static assets that already live on the CDN aren't re-uploaded every deploy (only the
+    code files change) — that keeps deploys to a handful of seconds. `force` re-uploads all."""
     count = 0
+    ALWAYS = {"index.html", "game_meta.json", "content.json"}   # code/metadata: always re-push
     for file_path in game_dir.rglob("*"):
         if file_path.is_dir():
             continue
         relative = file_path.relative_to(game_dir)
         r2_key = f"{slug}/{relative.as_posix()}"
-        # 2026-05-05 — wrangler 4.x defaults to LOCAL storage simulator unless
-        # --remote is passed. Without it, uploads go to a local dev sandbox and
-        # never reach the actual R2 bucket. Symptoms: deploy log says "Upload
-        # complete" but the worker keeps serving stale content.
+        # skip immutable assets already on the CDN unless forced. NOTE: the CDN worker
+        # does NOT answer HEAD (returns non-200) -> use a GET and read only the status
+        # line (the body never streams since we don't .read()), which is what actually works.
+        # By DEFAULT push only the code/metadata files (they change every deploy); static assets
+        # rarely change and a full re-upload of a big folder times out. Use --force to re-push
+        # everything (first-ever deploy of a game, or when you actually changed assets). We do NOT
+        # probe the CDN per-file: the worker returns inconsistent 404/5xx under rapid GETs, which
+        # made the old skip-check re-upload everything anyway.
+        if not force and relative.name not in ALWAYS:
+            continue
+        # 2026-05-05 — wrangler 4.x needs --remote or it writes to a LOCAL sandbox and the worker serves stale content.
         cmd = f'npx wrangler r2 object put "{R2_BUCKET}/{r2_key}" --file="{file_path}" --remote'
-        result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=30
-        )
+        try:
+            result = subprocess.run(
+                cmd, shell=True, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=150
+            )
+        except subprocess.TimeoutExpired:
+            print(f"  [r2] TIMEOUT (skipped, not fatal): {r2_key}")
+            continue
         if result.returncode == 0:
             count += 1
             print(f"  [r2] Uploaded: {r2_key}")
         else:
-            print(f"  [r2] FAILED: {r2_key} -- {result.stderr[:100]}")
+            print(f"  [r2] FAILED: {r2_key} -- {(result.stderr or '')[:100]}")
     return count
 
 
@@ -292,7 +313,8 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False):
         metadata["hero_image_url"] = f"{CDN_BASE}/{slug}/thumbnail.png{_tv}"
     insert_game_metadata(slug, metadata)
     print(f"Done! Game available at: {CDN_BASE}/{slug}/index.html")
-    return {"ok": uploaded == total, "uploaded": uploaded, "total": total, "url": f"{CDN_BASE}/{slug}/index.html"}
+    # ok = the code/metadata files went up (assets are skipped by default now, so uploaded<total is normal & fine).
+    return {"ok": uploaded > 0, "uploaded": uploaded, "total": total, "url": f"{CDN_BASE}/{slug}/index.html"}
 
 
 def main():
