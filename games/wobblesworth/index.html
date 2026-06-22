@@ -824,18 +824,18 @@ const outerStructures=[];  // {x,z,r} footprints of mines/dungeons so wild hamle
 const hamlets=[];          // {cx,cz,homes:[...]} wild settlements out in the hills (Phase 2)
 // Stage B — night combat
 const creatures=[];   // {mesh, hp, max, cd, bob}
-const WEAPONS={ fist:{dmg:14,range:2.2,name:'Fists',icon:'✊',hands:'1h'}, wood_sword:{dmg:24,range:2.6,name:'Wooden Sword',icon:'🗡️',hands:'1h'}, stone_sword:{dmg:38,range:2.8,name:'Stone Sword',icon:'⚔️',hands:'1h'}, iron_sword:{dmg:50,range:2.9,name:'Iron Sword',icon:'🗡️',hands:'1h'}, crystal_sword:{dmg:62,range:3.0,name:'Crystal Sword',icon:'⚔️',hands:'1h'}, gold_sword:{dmg:82,range:3.2,name:'Gold Sword',icon:'⚔️',hands:'1h'}, titan_blade:{dmg:120,range:3.5,name:'Titan Blade',icon:'🗡️',hands:'1h'}, mythic_blade:{dmg:160,range:3.7,name:'Mythic Blade',icon:'⚔️',hands:'1h'},
+const WEAPONS={ fist:{dmg:14,range:2.2,name:'Fists',icon:'✊',hands:'1h'}, wood_sword:{dmg:24,range:2.6,name:'Wooden Sword',icon:'⚔️',hands:'1h'}, stone_sword:{dmg:38,range:2.8,name:'Stone Sword',icon:'⚔️',hands:'1h'}, iron_sword:{dmg:50,range:2.9,name:'Iron Sword',icon:'⚔️',hands:'1h'}, crystal_sword:{dmg:62,range:3.0,name:'Crystal Sword',icon:'⚔️',hands:'1h'}, gold_sword:{dmg:82,range:3.2,name:'Gold Sword',icon:'⚔️',hands:'1h'}, titan_blade:{dmg:120,range:3.5,name:'Titan Blade',icon:'⚔️',hands:'1h'}, mythic_blade:{dmg:160,range:3.7,name:'Mythic Blade',icon:'⚔️',hands:'1h'},
   // ── WARRIOR weapon variety (WoW-style): 1H = dual-wield/sword+shield eligible · 2H = forces offhand empty, ~1.6x dmg, slower swing ──
   hand_axe:{dmg:30,range:2.7,name:'Hand Axe',icon:'🪓',cls:'warrior',hands:'1h',kind:'axe'},
   war_dagger:{dmg:34,range:2.4,name:'War Dagger',icon:'🗡️',cls:'warrior',hands:'1h',kind:'dagger',crit:0.10},
   battle_axe:{dmg:56,range:2.9,name:'Battle Axe',icon:'🪓',cls:'warrior',hands:'1h',kind:'axe'},
   iron_mace:{dmg:64,range:2.7,name:'Iron Mace',icon:'🔨',cls:'warrior',hands:'1h',kind:'mace'},
-  twin_sabers:{dmg:46,range:2.8,name:'Twin Saber',icon:'🗡️',cls:'warrior',hands:'1h',kind:'sword',rarity:'uncommon',crit:0.06},   // a polished OFF-HAND 1H sword (dual-wield partner)
+  twin_sabers:{dmg:46,range:2.8,name:'Twin Saber',icon:'⚔️',cls:'warrior',hands:'1h',kind:'sword',rarity:'uncommon',crit:0.06},   // a polished OFF-HAND 1H sword (dual-wield partner)
   greataxe:{dmg:128,range:3.6,name:'Greataxe',icon:'🪓',cls:'warrior',hands:'2h',kind:'greataxe',cleave:true},
   claymore:{dmg:150,range:3.7,name:'Claymore',icon:'⚔️',cls:'warrior',hands:'2h',kind:'claymore',cleave:true},
   war_hammer:{dmg:196,range:3.5,name:'War Hammer',icon:'🔨',cls:'warrior',hands:'2h',kind:'warhammer',cleave:true},
   // ── DROPPED loot weapons (not craftable — only fall from rare/epic kills; equip/unequip from your bag) ──
-  keen_saber:{dmg:74,range:3.05,name:'Keen Saber',icon:'🗡️',rarity:'rare',hands:'1h',crit:0.08,model:'crystal_sword'},                 // RARE: high dmg + extra crit
+  keen_saber:{dmg:74,range:3.05,name:'Keen Saber',icon:'⚔️',rarity:'rare',hands:'1h',crit:0.08,model:'crystal_sword'},                 // RARE: high dmg + extra crit
   dread_reaver:{dmg:116,range:3.35,name:'Dread Reaver',icon:'⚔️',rarity:'epic',hands:'1h',crit:0.16,life:0.14,model:'titan_blade'},   // EPIC: huge dmg + big crit + lifesteal (heal 14% of dmg dealt)
   // ── MAGE staffs — BASIC bolt is FREE + low dmg (less than a sword); MANA powers stronger SPELLS (cast with Q). Staffs are 2H glass-cannons (no charm); WANDS are 1H (charm-enabled). ──
   apprentice_staff:{dmg:16,range:15,name:'Apprentice Staff',icon:'🪄',cls:'mage',proj:'bolt',hands:'2h'},
@@ -895,10 +895,10 @@ function SPELL_OF(k){ return (k&&k.indexOf('spell_')===0)?SPELLS[k.slice(6)]:nul
 function ARROW_OF(k){ return (k&&SP_ARROWS[k])?SP_ARROWS[k]:null; }
 const WTIER=['fist','wood_sword','hand_axe','stone_sword','war_dagger','iron_sword','battle_axe','crystal_sword','iron_mace','greataxe','gold_sword','claymore','war_hammer','titan_blade','mythic_blade'];   // warrior craftable ladder (titan/mythic = top tiers, need boss_core)
 // ARMOR — a % chance to fully BLOCK an incoming hit (clean with 1-heart hits: a hit either lands fully or is blocked)
-const ARMORS={ leather:{block:0.30,name:'Leather Armor',icon:'🦺'}, wood:{block:0.42,name:'Wooden Armor',icon:'🪵'}, iron:{block:0.55,name:'Iron Armor',icon:'🦺'}, gold:{block:0.72,name:'Gold Armor',icon:'🦺'}, titan:{block:0.86,name:'Titan Plate',icon:'🛡️'},
+const ARMORS={ leather:{block:0.30,name:'Leather Armor',icon:'🦺'}, wood:{block:0.42,name:'Wooden Armor',icon:'🦺'}, iron:{block:0.55,name:'Iron Armor',icon:'🦺'}, gold:{block:0.72,name:'Gold Armor',icon:'🦺'}, titan:{block:0.86,name:'Titan Plate',icon:'🦺'},
   // ── DROPPED loot armor (not craftable — only from rare/epic kills; equip/unequip from your bag) ──
   warded_vest:{block:0.60,name:'Warded Vest',icon:'🦺',rarity:'rare',bonusHp:2},                  // RARE: solid block + 1 extra ❤️
-  aegis_plate:{block:0.82,name:'Aegis Plate',icon:'🛡️',rarity:'epic',bonusHp:4,regen:0.35} };      // EPIC: heavy block + 2 extra ❤️ + slow regen
+  aegis_plate:{block:0.82,name:'Aegis Plate',icon:'🦺',rarity:'epic',bonusHp:4,regen:0.35} };      // EPIC: heavy block + 2 extra ❤️ + slow regen
 const ATIER=['','leather','wood','iron','gold','titan'];   // wood between leather+iron (owner: an extra set so iron isn't a long wait, esp. warrior); titan = BOSS-ONLY top tier
 // WHO can wear each ARMOR tier (owner): warrior = ALL (builds to heavy plate); ranger = leather + wood only (iron+ is too heavy); mage = ROBES only (never metal/leather).
 const ARMOR_CLS={ leather:['warrior','ranger'], wood:['warrior','ranger'], iron:['warrior'], gold:['warrior'], titan:['warrior'] };
