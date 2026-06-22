@@ -815,6 +815,7 @@ const MODEL_LIST=["char_player","char_n1","char_n2","char_n3","House_1","House_2
  "animal-cow","animal-pig","animal-chick","animal-deer","animal-bunny","animal-fox","animal-tiger","animal-lion","animal-hog","animal-crab","animal-bee","animal-caterpillar","animal-elephant","animal-polar","animal-giraffe","animal-panda",
  // SPOOKY night mobs (Kenney graveyard kit) — haunt the far OUTSKIRTS after dark only (see CREATURE_TYPES minDist):
  "mob-skeleton","mob-ghost","mob-zombie","mob-pumpkin",
+ "mount-horse","mount-stag","mount-unicorn",   // RIDABLE MOUNTS (real animated animal GLBs: brown horse, antlered stag, white horse=unicorn) — render via the src-bbox-fixed buildMobGLB
  // MINI-CHARACTER people (Kenney) — varied NEIGHBORS/wanderers (same rig as char_player, so the walk anim works):
  "character-male-a","character-male-b","character-male-c","character-male-d","character-male-e","character-male-f","character-female-a","character-female-b","character-female-c","character-female-d","character-female-e","character-female-f"];
 const ASSET_ERRORS=[];                                  // names that failed to load (for the probe + a soft toast)
@@ -1801,7 +1802,7 @@ function tutorialDone(){ state.intro=false; try{ localStorage.setItem('ww2_seen_
 function completeDay(){ const d=state.day; state.giggle+=120; state.day++; state.bestDay=Math.max(state.bestDay,state.day);
   SFX.play('success'); shake(0.5); toast(`🌅 Day ${d} complete! +120 GP. Day ${state.day}!`); confetti(player.position.clone().setY(3),36);
   if(!Quests.isDone('side_socks','find')){ state.socks=0; socks.forEach(s=>{ s.visible=true; s.position.set(HOUSE.cx+rand(-7,7),0.4,HOUSE.cz+rand(-5,5)); }); } state.snacksReady=false;
-  pickEvent(); if(state.event) toast(`${state.event.name} — ${state.event.desc}!`); spawnDailyActivity(true); genGoals(); save(); }
+  pickEvent(); if(state.event) toast(`${state.event.name} — ${state.event.desc}!`); spawnDailyActivity(true); genGoals(); try{ mountRunaway(); }catch(e){} save(); }
 function renderGoals(){ const el=document.getElementById('goalbox'); if(!el)return; let h=`<div class="dayhdr">🌞 Day ${state.day} · ✨ ${state.giggle} GP</div>`; if(state.event) h+=`<div class="obj" style="color:var(--pop)">${state.event.name} — ${state.event.desc}</div>`; for(const g of state.goals) h+=`<div class="obj ${g.done?'done':''}">${g.done?'✓':'•'} ${g.label}</div>`; el.innerHTML=h; }
 function renderRequests(){ const el=document.getElementById('reqlist'); if(!el)return; let h='';
   if(state.req&&ITEMS[state.req.item]){ const r=state.req; h+=`<div class="obj">📋 Board · ${ITEMS[r.item].i} ${Math.min(state.inv[r.item]||0,r.qty)}/${r.qty}</div>`; }
@@ -1829,7 +1830,8 @@ function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V,
   unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, charClass:state.charClass, mana:state.mana, manaMax:state.manaMax, dyeColor:state.dyeColor, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier, bagCount:state.bagCount, charModel:state.charModel,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
   tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, questHistory:state.questHistory, _qseq:state._qseq, boardOffers:state.boardOffers, _boardTaken:state._boardTaken, _boardDay:state._boardDay, npcOfferDay:state.npcOfferDay, genDefs:(()=>{const o={};for(const k in Quests.defs){const d=Quests.defs[k];if(d&&d._gen)o[k]={title:d.title,tid:d._tid,p:d._p,pitch:d._pitch,sig:d._sig,reward:d.reward,steps:d.steps};}return o;})(), lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
-  buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug })); }catch(e){} }
+  buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug,
+  tamedMounts:(typeof tamedMountSaveList==='function'?tamedMountSaveList():[]), stables:(state.stables||[]) })); }catch(e){} }
 // VERSIONED + SANITIZED load: bad/corrupt/legacy data can never crash boot or inject impossible state
 function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) return; let s; try{ s=JSON.parse(raw); }catch(e){ localStorage.setItem('ww2_save_corrupt',raw); return; }
   if(!s||typeof s!=='object') return;
@@ -1865,6 +1867,8 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.homePaints=(s.homePaints&&typeof s.homePaints==='object')?s.homePaints:{}; loadBlocks(s.buildBlocks); applyHomePaints();   // restore voxel builds + house repaints (buildWorld ran first, so homes exist)
   for(const k in VOX.meshes) world.remove(VOX.meshes[k]); VOX.dug={}; VOX.meshes={};   // restore carved terrain
   if(s.dugCells&&typeof s.dugCells==='object'){ for(const k in s.dugCells){ const f=Math.floor(+s.dugCells[k]); const parts=String(k).split(','); if(parts.length===2&&Number.isFinite(f)&&f<0&&f>=-8){ const cx=Math.round(+parts[0]),cz=Math.round(+parts[1]); if(Number.isFinite(cx)&&Number.isFinite(cz)){ VOX.dug[cx+','+cz]=f; carvePit(cx,cz,f); } } } }
+  state.stables=Array.isArray(s.stables)?s.stables.filter(v=>v&&Number.isFinite(+v.x)&&Number.isFinite(+v.z)).map(v=>({x:clamp(+v.x,-FENCE,FENCE),z:clamp(+v.z,-FENCE,FENCE)})):[]; for(const st of state.stables){ try{ buildStableAt(st.x,st.z); }catch(e){} }   // rebuild stable structures
+  try{ restoreTamedMounts(s.tamedMounts); }catch(e){}   // re-spawn your tamed mounts at their saved spots (buildWorld's wild ones already spawned)
 }catch(e){ __report('load',e); } }
 
 /* ============================ INVENTORY ============================ */
@@ -2174,6 +2178,8 @@ const RECIPES=[
   {id:'glass_block', name:'🔷 Glass Block', cat:'build', lvl:3, cost:{crystal:2}, build:p=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshToonMaterial({color:'#bfe9ff',gradientMap:GRAD,transparent:true,opacity:0.5})); m.position.set(p.x,0.5,p.z); world.add(m); addSolid(m,0,true); } },
   {id:'gate', name:'🚪 Garden Gate', cat:'build', lvl:2, cost:{wood:5}, build:p=>{ const l=box(0.2,1.8,0.2,'#7a5530'); l.position.set(p.x-1,0.9,p.z); const r=l.clone(); r.position.x=p.x+1; const bar=box(2,0.25,0.2,'#a9743f'); bar.position.set(p.x,1.2,p.z); world.add(l);world.add(r);world.add(bar); addSolid(bar); } },
   {id:'watchtower', name:'🗼 Watchtower', cat:'build', lvl:5, cost:{wood:12,stone:6}, build:p=>{ const o=box(2.4,6,2.4,'#8a7355'); o.position.set(p.x,3,p.z); world.add(o); const roof=new THREE.Mesh(new THREE.ConeGeometry(2,1.6,4),toon('#7a4a2a')); roof.position.set(p.x,6.8,p.z); world.add(roof); addSolid(o); } },
+  {id:'stable', name:'🐴 Stable', cat:'build', lvl:3, cost:{wood:10,stone:4}, build:p=>{ buildStableAt(p.x,p.z); if(!state.stables)state.stables=[]; state.stables.push({x:p.x,z:p.z}); for(const g of mounts){ const u=g.userData; if(u&&u.tamed && Math.hypot(g.position.x-p.x,g.position.z-p.z)<40) u.home={x:p.x,z:p.z}; }   // re-home nearby tamed mounts to the new stable
+    toast('🐴 Stable raised! Tamed mounts nearby will stay home now — no more wandering off in the night.'); try{ save(); }catch(e){} } },
   {id:'ladder', name:'🪜 Ladder', cat:'build', lvl:1, cost:{wood:3}, build:p=>{ const l=box(0.12,2.6,0.12,'#8a5a31'); l.position.set(p.x-0.3,1.3,p.z); const r=l.clone(); r.position.x=p.x+0.3; world.add(l);world.add(r); for(let i=0;i<5;i++){ const rung=box(0.7,0.1,0.1,'#a9743f'); rung.position.set(p.x,0.4+i*0.5,p.z); world.add(rung);} } },
   {id:'stone_well', name:'🪨 Stone Well', cat:'build', lvl:3, cost:{stone:6}, build:p=>{ const ring=new THREE.Mesh(new THREE.TorusGeometry(0.9,0.25,8,16),toon('#9a948a')); ring.rotation.x=Math.PI/2; ring.position.set(p.x,0.7,p.z); world.add(ring); const post=box(0.12,1.6,0.12,'#7a5530'); post.position.set(p.x,1.4,p.z); world.add(post); addSolid(ring); makeWater(0.7,p.x,p.z,0.4,true); } },
   // ── E3 DECOR ──
@@ -2508,33 +2514,40 @@ function monMove(m,dirx,dirz,sp){   // WALL-AWARE chase: try the direct step, el
   const px=-dirz, pz=dirx; if(!blockedAt(m.position.x+px*sp,m.position.z+pz*sp)){ m.position.x+=px*sp; m.position.z+=pz*sp; }
   else if(!blockedAt(m.position.x-px*sp,m.position.z-pz*sp)){ m.position.x-=px*sp; m.position.z-=pz*sp; } }
 // ════════ RIDABLE MOUNTS ════════ rare wild horses/stag/unicorn — tame by feeding, craft a Saddle, then ride (faster travel)
-const MOUNTS={ horse:{name:'Horse',color:'#8a5a31',legCol:'#3a2a1a',speedMul:1.85,h:2.3,seatY:1.75,rarity:1,faceOff:0}, stag:{name:'Wild Stag',color:'#a4703f',legCol:'#5a3a1a',speedMul:2.05,h:2.2,seatY:1.75,rarity:2,faceOff:0}, unicorn:{name:'Unicorn',color:'#f2eee9',legCol:'#e2dad2',speedMul:2.4,h:2.4,seatY:1.85,rarity:3,faceOff:0} };
+const MOUNTS={ horse:{name:'Horse',model:'mount-horse',tint:null,speedMul:1.85,h:2.2,seatY:1.55,rarity:1,faceOff:0}, stag:{name:'Wild Stag',model:'mount-stag',tint:null,speedMul:2.05,h:2.2,seatY:1.6,rarity:2,faceOff:0}, unicorn:{name:'Unicorn',model:'mount-unicorn',tint:'#f6f2ff',speedMul:2.4,h:2.3,seatY:1.6,rarity:3,faceOff:0} };
 const mounts=[];
-function buildMount(key){ const M=MOUNTS[key], col=M.color, g=new THREE.Group();   // PROCEDURAL cube mount (faces +z, ~2.3 tall) — matches the game's blocky art + always renders
-  const body=box(0.95,1.0,2.4,col); body.position.set(0,1.45,0); g.add(body);
-  const chest=box(0.98,0.98,0.7,col); chest.position.set(0,1.55,1.05); g.add(chest);
-  const neck=box(0.62,1.15,0.55,col); neck.position.set(0,2.05,1.4); neck.rotation.x=0.5; g.add(neck);
-  const head=box(0.5,0.55,1.05,col); head.position.set(0,2.5,2.0); g.add(head);
-  const e1=box(0.13,0.32,0.13,col); e1.position.set(0.18,2.85,1.78); g.add(e1); const e2=e1.clone(); e2.position.x=-0.18; g.add(e2);
-  for(const [lx,lz] of [[0.34,0.85],[-0.34,0.85],[0.34,-0.85],[-0.34,-0.85]]){ const leg=box(0.28,1.55,0.28,M.legCol||col); leg.position.set(lx,0.77,lz); g.add(leg); }
-  const tail=box(0.2,1.15,0.2,M.tailCol||'#3a2a1a'); tail.position.set(0,1.5,-1.35); tail.rotation.x=-0.5; g.add(tail);
-  if(key==='unicorn'){ const horn=new THREE.Mesh(new THREE.ConeGeometry(0.13,0.72,6),toon('#ffe9a8')); horn.position.set(0,3.05,2.05); horn.rotation.x=0.35; g.add(horn); const mane=box(0.22,0.75,1.0,'#ffd9ec'); mane.position.set(0,2.45,1.35); g.add(mane); }
-  if(key==='stag'){ for(const s of [0.34,-0.34]){ const a=box(0.1,0.85,0.1,'#5a3a1a'); a.position.set(s,3.05,1.85); a.rotation.z=s>0?-0.4:0.4; g.add(a); const t=box(0.1,0.4,0.1,'#5a3a1a'); t.position.set(s*1.6,3.35,1.85); g.add(t); } }
-  g.traverse(m=>{ if(m.isMesh)m.castShadow=true; });
-  g.userData={mountKey:key, wander:rand(0,TAU), wt:rand(2,5), bond:0, tamed:false}; return g; }
-function spawnMounts(){ for(const [k,n] of [['horse',2],['stag',1],['unicorn',1]]){ for(let i=0;i<n;i++){ const a=rand(0,TAU), r=rand(70,FENCE-30), x=Math.cos(a)*r, z=Math.sin(a)*r; if(typeof isInWater==='function'&&isInWater(x,z,9))continue; const g=buildMount(k); g.position.set(x,groundY(x,z),z); world.add(g); mounts.push(g); addInteractable(g, '🐴 '+MOUNTS[k].name, ()=>mountInteract(g), 3.4); } } }
+function buildMount(key){ const M=MOUNTS[key]; const g=buildMobGLB(M.model, M.h, M.tint||null);   // REAL animated animal GLB (brown horse / antlered stag / white horse) via the src-bbox-fixed loader; preserves wrap.userData.mixer for the walk anim
+  if(key==='unicorn'){ const horn=new THREE.Mesh(new THREE.ConeGeometry(0.13,0.72,8),toon('#ffe9a8')); horn.position.set(0, M.h*0.92, M.h*0.52); horn.rotation.x=0.5; horn.castShadow=true; g.add(horn); }   // a golden spiral horn on the white horse = unicorn
+  g.userData.mountKey=key; g.userData.wander=rand(0,TAU); g.userData.wt=rand(2,5); g.userData.bond=0; g.userData.tamed=false; return g; }
+function spawnMounts(){ for(const [k,n] of [['horse',2],['stag',1],['unicorn',1]]){ for(let i=0;i<n;i++){ const a=rand(0,TAU), r=rand(70,FENCE-30), x=Math.cos(a)*r, z=Math.sin(a)*r; if(typeof isInWater==='function'&&isInWater(x,z,9))continue; const g=buildMount(k); g.position.set(x,groundY(x,z),z); world.add(g); mounts.push(g); g.userData.it=addInteractable(g, '🐴 '+MOUNTS[k].name, ()=>mountInteract(g), 3.4); } } }
+function despawnMount(g){ const i=mounts.indexOf(g); if(i>=0)mounts.splice(i,1); world.remove(g); if(g.userData&&g.userData.it){ const k=interactables.indexOf(g.userData.it); if(k>=0)interactables.splice(k,1); } }
+function nearestStable(x,z){ let best=null,bd=1e9; for(const s of (state.stables||[])){ const d=Math.hypot(s.x-x,s.z-z); if(d<bd){ bd=d; best=s; } } return best?{s:best,d:bd}:null; }
+function buildStableAt(x,z){ const col='#8a5a31', roofC='#7a4a2a';   // placed structure (matches build-recipe pattern: direct world.add + addSolid)
+  for(const dz of [-1.6,1.6]) for(const dx of [-2.1,2.1]){ const post=box(0.3,3,0.3,col); post.position.set(x+dx,1.5,z+dz); world.add(post); addSolid(post); }
+  const back=box(4.5,2.6,0.3,col); back.position.set(x,1.5,z-1.6); world.add(back); addSolid(back);
+  const roof=box(5.0,0.5,3.9,roofC); roof.position.set(x,3.2,z); world.add(roof);
+  const rail=box(4.5,0.25,0.2,col); rail.position.set(x,1.0,z+1.6); world.add(rail); addSolid(rail);
+  const hay=box(1.1,0.8,1.1,'#d8b24a'); hay.position.set(x+1.2,0.4,z+0.5); world.add(hay);
+  const sign=box(0.9,0.6,0.12,'#a9743f'); sign.position.set(x-2.1,2.4,z+1.62); world.add(sign);
+  const trough=box(1.4,0.4,0.6,'#9a948a'); trough.position.set(x-1.0,0.3,z+0.6); world.add(trough); }
+function restoreTamedMounts(list){ if(!Array.isArray(list))return; for(const r of list){ if(!r||!MOUNTS[r.key])continue; const x=clamp(+r.x||0,-FENCE,FENCE), z=clamp(+r.z||0,-FENCE,FENCE); const g=buildMount(r.key); g.position.set(x,groundY(x,z),z); g.userData.tamed=true; g.userData.bond=clamp(Math.floor(+r.bond||0),0,99); const ns=nearestStable(x,z); g.userData.home=(ns&&ns.d<40)?{x:ns.s.x,z:ns.s.z}:{x,z}; world.add(g); mounts.push(g); g.userData.it=addInteractable(g,'🐴 '+MOUNTS[r.key].name,()=>mountInteract(g),3.4); } }
+function tamedMountSaveList(){ return mounts.filter(g=>g.userData&&g.userData.tamed).map(g=>({key:g.userData.mountKey,x:+g.position.x.toFixed(1),z:+g.position.z.toFixed(1),bond:g.userData.bond||0})); }
 function mountInteract(g){ const k=g.userData.mountKey, M=MOUNTS[k];
   if(state.mounted && state.mounted.mesh===g){ dismount(); return; }
   if(state.mounted){ toast('🐴 Dismount your current mount first.'); return; }
   if(!g.userData.tamed){ const food=['carrot','apple','flower'].find(f=>(state.inv[f]||0)>0); if(!food){ toast('🐴 The '+M.name+' is skittish — bring a 🥕 carrot or 🍎 apple to win it over.'); SFX.play('interact',{rate:0.7,vol:0.4}); return; }
     Inv.take(food,1); g.userData.bond=(g.userData.bond||0)+1; SFX.play('interact'); try{ confetti(g.position.clone().setY(1.6),12); }catch(e){}
-    if(g.userData.bond>=(M.rarity+1)){ g.userData.tamed=true; toast('💚 The '+M.name+' trusts you! Craft a 🐴 Saddle (press C), then press E to ride.'); }
+    if(g.userData.bond>=(M.rarity+1)){ g.userData.tamed=true; const ns=nearestStable(g.position.x,g.position.z); g.userData.home=(ns&&ns.d<40)?{x:ns.s.x,z:ns.s.z}:{x:g.position.x,z:g.position.z}; toast('💚 The '+M.name+' trusts you! Craft a 🐴 Saddle (press C) to ride — and a 🐴 Stable so it never wanders off.'); try{ save(); }catch(e){} }
     else toast('🐴 The '+M.name+' nibbles your '+ITEMS[food].n+'… ('+g.userData.bond+'/'+(M.rarity+1)+' to tame)'); return; }
   if((state.inv.saddle||0)<1){ toast('🐴 The '+M.name+' is tame — but you need a 🐴 Saddle to ride. Craft one (press C).'); return; }
   state.mounted={mesh:g,key:k,speedMul:M.speedMul,seatY:M.seatY}; toast('🐴 Riding the '+M.name+'! You move faster. Press E (near it) to dismount.'); SFX.play('success'); shake(0.2); }
-function dismount(){ if(!state.mounted)return; const M=MOUNTS[state.mounted.key]; state.mounted=null; toast('🐴 Dismounted the '+(M?M.name:'mount')+'.'); }
-function updateMounts(dt){ for(const g of mounts){ if(state.mounted&&state.mounted.mesh===g)continue; const u=g.userData; u.wt-=dt; if(u.wt<=0){ u.wander=rand(0,TAU); u.wt=rand(2.5,6); } const sp=(u.tamed?0.5:1.2); g.position.x+=Math.cos(u.wander)*sp*dt; g.position.z+=Math.sin(u.wander)*sp*dt; const r=Math.hypot(g.position.x,g.position.z); if(r>FENCE-14)u.wander+=Math.PI; g.position.y=groundY(g.position.x,g.position.z); g.rotation.y=angLerp(g.rotation.y, faceVel(Math.cos(u.wander),Math.sin(u.wander))+(MOUNTS[u.mountKey].faceOff||0), dt*4); } }
+function dismount(){ if(!state.mounted)return; const M=MOUNTS[state.mounted.key]; state.mounted=null; toast('🐴 Dismounted the '+(M?M.name:'mount')+'.'); try{ save(); }catch(e){} }
+function updateMounts(dt){ for(const g of mounts){ if(g.userData.mixer)g.userData.mixer.update(dt);   // tick the GLB walk animation (covers the ridden mount too, since it's still in mounts[])
+  if(state.mounted&&state.mounted.mesh===g)continue; const u=g.userData; u.wt-=dt; if(u.wt<=0){ u.wander=rand(0,TAU); u.wt=rand(2.5,6); } let sp=(u.tamed?0.5:1.2);
+  if(u.tamed&&u.home){ const dh=Math.hypot(g.position.x-u.home.x,g.position.z-u.home.z); if(dh>10){ u.wander=Math.atan2(u.home.z-g.position.z,u.home.x-g.position.x); sp=0.85; } }   // leash tamed mounts back toward their home/stable so they linger near you
+  g.position.x+=Math.cos(u.wander)*sp*dt; g.position.z+=Math.sin(u.wander)*sp*dt; const r=Math.hypot(g.position.x,g.position.z); if(r>FENCE-14)u.wander+=Math.PI; g.position.y=groundY(g.position.x,g.position.z); g.rotation.y=angLerp(g.rotation.y, faceVel(Math.cos(u.wander),Math.sin(u.wander))+(MOUNTS[u.mountKey].faceOff||0), dt*4); } }
 function updateRiddenMount(){ if(!state.mounted)return; const g=state.mounted.mesh, gy=groundY(player.position.x,player.position.z); g.position.set(player.position.x, gy, player.position.z); g.rotation.y=player.rotation.y+(MOUNTS[state.mounted.key].faceOff||0); if(player.position.y < gy+state.mounted.seatY) player.position.y=gy+state.mounted.seatY; }
+function mountRunaway(){ for(let i=mounts.length-1;i>=0;i--){ const g=mounts[i], u=g.userData; if(!u||!u.tamed)continue; if(state.mounted&&state.mounted.mesh===g)continue; const ns=nearestStable(g.position.x,g.position.z); const safe=(ns&&ns.d<14)||(u.bond||0)>=6; if(!safe && Math.random()<0.3){ toast('🐴 Your '+MOUNTS[u.mountKey].name+' wandered off in the night — a 🐴 Stable (or a strong bond) keeps them home.'); despawnMount(g); } } }
 function updatePlayer(dt){
   if(state._atkCD>0) state._atkCD-=dt;   // attack-speed cooldown tick (energy-gated)
   // SWIM: is the player over a pond/river? (not underground)
@@ -2974,8 +2987,8 @@ function buildMobGLB(model, targetH, tint, opacity){
   const wrap=new THREE.Group();   // OUTER wrapper stays scale 1 so the hit-recoil (scale 1.22 -> lerp back to 1) is correct; the model's own size lives on the inner clone
   const src=MODELS[model];
   if(!src){ const b=new THREE.Mesh(new THREE.IcosahedronGeometry(0.5,0),toon(typeof tint==='string'?tint:'#9a8a6a')); b.position.y=targetH*0.5; b.scale.y=0.8; wrap.add(b); return wrap; }
-  const g=skeletonClone(src); const sz=new THREE.Vector3(); new THREE.Box3().setFromObject(g).getSize(sz); if(sz.y>0.01) g.scale.setScalar(targetH/sz.y);
-  const bb=new THREE.Box3().setFromObject(g); g.position.y=-bb.min.y;   // drop feet to y=0 so the groundY placement sits it ON the terrain
+  const g=skeletonClone(src); const sb=new THREE.Box3().setFromObject(src); const sz=new THREE.Vector3(); sb.getSize(sz); const _ms=(sz.y>0.01)?(targetH/sz.y):1; g.scale.setScalar(_ms);   // measure the SOURCE bbox, NOT the skeletonClone: clone mangles skinned-mesh bounds on some GLBs (PolyPizza horses read ~575 tall via the clone -> scaled to invisibility); src bbox is always sane (Kenney unaffected: src==clone)
+  g.position.y=-sb.min.y*_ms;   // drop feet to y=0 using the (scaled) source bounds
   g.traverse(m=>{ if(m.isMesh){ m.castShadow=true; m.receiveShadow=true; if(m.material){ m.material=m.material.clone(); if(!m.material.emissive)m.material.emissive=new THREE.Color(0,0,0); m.material.emissiveIntensity=0;
     if(tint && !m.material.map){ const col=(typeof tint==='function')?tint(m.name||''):tint; if(col) m.material.color.set(col); }
     if(opacity!=null){ m.material.transparent=true; m.material.opacity=opacity; m.material.depthWrite=false; } } } });   // opacity = the floaty ghost
@@ -3695,7 +3708,7 @@ document.getElementById('keepBtn').onclick=()=>document.getElementById('winScree
 
 /* QA probe */
 window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.toFixed(2),z:+player.position.z.toFixed(2)}),
-  state, ready:()=>ready, anim:()=>charAnim, models:()=>Object.keys(MODELS).length, neighbors:()=>neighbors.length, classPick:()=>openClassPick(), applyClass:(c,g)=>applyClass(c,g), openDyer:()=>openDyer(), mountsInfo:()=>mounts.map(g=>({x:+g.position.x.toFixed(1),z:+g.position.z.toFixed(1),k:g.userData.mountKey})),
+  state, ready:()=>ready, anim:()=>charAnim, models:()=>Object.keys(MODELS).length, neighbors:()=>neighbors.length, classPick:()=>openClassPick(), applyClass:(c,g)=>applyClass(c,g), openDyer:()=>openDyer(), mountsInfo:()=>mounts.map(g=>({x:+g.position.x.toFixed(1),z:+g.position.z.toFixed(1),k:g.userData.mountKey,tamed:!!g.userData.tamed,bond:g.userData.bond||0})), stablesInfo:()=>(state.stables||[]).slice(), buildRecipe:(id,x,z)=>{ const r=RECIPES.find(x2=>x2.id===id); if(r)r.build({x,z}); }, runMountRunaway:()=>mountRunaway(),
   needs:()=>({h:Math.round(Needs.hunger),e:Math.round(Needs.energy),f:Math.round(Needs.fun)}), day:()=>({day:state.day,giggle:state.giggle,goals:state.goals.map(g=>({t:g.type,done:g.done}))}),
   tp:(x,z)=>player.position.set(x,0,z), setKey:(c,d)=>keys[c]=d, yaw:()=>cam.yaw, mark:t=>markGoal(t), genGoals,
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
@@ -3803,6 +3816,17 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       world.remove(g); const gi=mounts.indexOf(g); if(gi>=0)mounts.splice(gi,1);
       R.mounts=(needSaddle && rodeOK && spd>1.5 && offOK && !!MOUNTS.horse && !!MOUNTS.stag && !!MOUNTS.unicorn);
       state.mounted=_m0; state.inv.saddle=_sad; }
+    // STABLE + RUNAWAY + PERSISTENCE: tamed mount serializes -> restores; stable keeps it home
+    { const _st=state.stables, _m0=state.mounted, _ml=mounts.length;
+      state.stables=[]; const sx=player.position.x+34, sz=player.position.z+34;
+      const g=buildMount('stag'); g.position.set(sx,0,sz); g.userData.tamed=true; g.userData.bond=2; world.add(g); mounts.push(g);
+      const ser=tamedMountSaveList(); const serOK=Array.isArray(ser)&&ser.some(r=>r.key==='stag'&&Math.abs(r.x-sx)<2);   // serialized
+      despawnMount(g);
+      restoreTamedMounts(ser); const restored=mounts.find(m=>m.userData&&m.userData.tamed&&m.userData.mountKey==='stag');
+      const restoreOK=!!restored && Math.abs(restored.position.x-sx)<2;   // re-spawned at saved spot
+      state.stables=[{x:sx,z:sz}]; const ns=nearestStable(sx,sz); const stableOK=!!ns && ns.d<14;   // stable proximity = safe
+      R.mount_stable=(serOK && restoreOK && stableOK && typeof buildStableAt==='function' && !!RECIPES.find(r=>r.id==='stable'));
+      while(mounts.length>_ml)despawnMount(mounts[mounts.length-1]); state.stables=_st; state.mounted=_m0; }
     // PERSISTENT REQUESTS LIST renders
     state.req=null; townBoard(); renderRequests(); R.requests_list=/Board/.test(document.getElementById('reqlist').innerHTML);
     // TOWN LEGEND post-game checklist renders
@@ -4054,7 +4078,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       &&R.event_active&&R.event_market&&R.shop_closed_night&&R.shop_open_day&&R.onboarding_done&&R.friendship&&R.requests_list&&R.town_legend
       &&R.pause_works&&R.cam_pitch_clamped&&R.ambient
       &&R.head&&R.assetsClean&&R.touch&&R.touch_moves&&R.raf_boundary&&R.pause_freezes_cook&&R.cook_completes&&R.sfx_gate&&R.reduce_motion&&R.reduce_confetti&&R.light_cap&&R.save_sanitized&&R.particle_pool
-      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2&&R.class_system&&R.class_combat&&R.mounts
+      &&R.home_upgrade&&R.home_tiers&&R.home_caps&&R.functional_bench&&R.quest_flow&&R.quest_board&&R.quest_gen2&&R.class_system&&R.class_combat&&R.mounts&&R.mount_stable
       &&R.homes_present&&R.home_built&&R.home_loot&&R.home_enter_path&&R.recipe_page_unlock&&R.node_respawn&&R.chest_oneuse
       &&R.weapon_craft&&R.combat_kill&&R.combat_respawn&&R.inv_slots
       &&R.mine_pickaxe&&R.mine_enter&&R.mine_dig&&R.mine_exit&&R.armor_craft&&R.armor_reduces&&R.rarity_tiers&&R.rarity_loot&&R.combat_anim&&R.gear_equip&&R.dice_rolls&&R.dmg_popup&&R.menu;
