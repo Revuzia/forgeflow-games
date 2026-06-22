@@ -3188,15 +3188,17 @@ function revealFog(){ if(!state.fog)state.fog={}; if(!state.met)state.met={}; co
   if(Math.hypot(px-3,pz-8)<70) state.met.market=1;
   for(const n of neighbors){ const nm=n.userData&&n.userData.name; if(nm && Math.hypot(px-n.position.x,pz-n.position.z)<32) state.met['npc:'+nm]=1; }   // meet a neighbor -> their name shows on the map as they wander
 }
+const MAP_RINGS=[[613,'#2e2838'],[525,'#c9dcea'],[470,'#d6bd7e'],[340,'#5c6840'],[178,'#79bd5f'],[90,'#8fc56a']];   // 🗺️ concentric BIOME bands by distance (drawn outer-first): dark core / ICE / desert / swamp / hills / town
+function _mapBiomeCol(r){ if(r>=525)return'#2e2838'; if(r>=470)return'#c9dcea'; if(r>=340)return'#d6bd7e'; if(r>=178)return'#5c6840'; if(r>=90)return'#79bd5f'; return'#8fc56a'; }
 function paintMap(c, R, applyFog, rect){ if(!c)return; const g=c.getContext('2d'); const S=c.width, sc=(S/2-4)/R, ms=S/150, big=!!rect||R>=400;   // rect = the BIG map: a rounded-rectangle old-school parchment (fills the corners too) + name labels; circle = minimap
   const shape=()=>{ g.beginPath(); if(rect && g.roundRect){ g.roundRect(3,3,S-6,S-6,Math.min(34,22*ms)); } else { g.arc(S/2,S/2,S/2-3,0,7); } };
   g.clearRect(0,0,S,S);
   g.fillStyle='rgba(24,20,34,0.92)'; shape(); g.fill();   // FOG base (undiscovered = dark)
   const tx=x=>S/2+x*sc, tz=z=>S/2+z*sc;
   g.save(); shape(); g.clip();   // reveal discovered terrain cells
-  g.fillStyle='rgba(120,200,110,0.5)'; const cs=FOG_CELL*sc;
-  if(applyFog){ if(state.fog) for(const key in state.fog){ const pp=key.split('_'); const wx=(+pp[0])*FOG_CELL-FENCE, wz=(+pp[1])*FOG_CELL-FENCE; g.fillRect(tx(wx),tz(wz),cs+1.5,cs+1.5); } }
-  else { g.fillRect(0,0,S,S); }   // minimap (applyFog=false): fill the WHOLE clipped area green = always see your surroundings; big map keeps the fog-gated cells
+  const cs=FOG_CELL*sc;
+  if(applyFog){ if(state.fog) for(const key in state.fog){ const pp=key.split('_'); const wx=(+pp[0])*FOG_CELL-FENCE, wz=(+pp[1])*FOG_CELL-FENCE; g.fillStyle=_mapBiomeCol(Math.hypot(wx+FOG_CELL/2,wz+FOG_CELL/2)); g.fillRect(tx(wx),tz(wz),cs+1.5,cs+1.5); } }   // 🗺️ each DISCOVERED cell painted its BIOME color (rings by distance) instead of flat green
+  else { for(const [r,col] of MAP_RINGS){ g.fillStyle=col; g.beginPath(); g.arc(S/2,S/2,r*sc,0,7); g.fill(); } }   // minimap: full concentric biome rings (always-on local overview)
   g.restore();
   g.strokeStyle='rgba(34,26,46,0.55)'; g.lineWidth=2*ms; shape(); g.stroke();
   const met=state.met||{};
