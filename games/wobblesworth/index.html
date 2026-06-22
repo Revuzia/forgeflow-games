@@ -592,11 +592,11 @@ function buildGrassField(){
   let geo=null; const src=MODELS['Grass3']||MODELS['Grass']||MODELS['GrassLeaf1'];
   if(src){ src.traverse(m=>{ if(m.isMesh&&m.geometry&&!geo) geo=m.geometry.clone(); }); }
   if(!geo){ geo=new THREE.ConeGeometry(0.06,0.5,4); }   // fallback tuft if the asset is missing
-  geo.computeBoundingBox(); const bb=geo.boundingBox, h0=Math.max(0.01,bb.max.y-bb.min.y), norm=0.55/h0;
+  geo.computeBoundingBox(); const bb=geo.boundingBox, h0=Math.max(0.01,bb.max.y-bb.min.y), norm=0.72/h0;   // taller blades (was 0.55) -> lusher field at the SAME vertex count (cheap; owner wants higher-quality grass)
   geo.translate(-(bb.max.x+bb.min.x)/2,-bb.min.y,-(bb.max.z+bb.min.z)/2); geo.scale(norm,norm,norm);   // center XZ, base at y=0, normalize to ~0.55 tall
   const mat=new THREE.MeshToonMaterial({gradientMap:GRAD,color:'#ffffff',emissive:new THREE.Color('#244f1e'),emissiveIntensity:0.22});   // green EMISSIVE floor so toon band-0 never reads black; lowered 0.3->0.22 (darker green) — the floor is lighting-independent so it was the part of the lawn staying bright at night; daytime grass unchanged (floor swamped by daylight)
   mat.onBeforeCompile=(sh)=>{ sh.uniforms.uGrassTime=_grassTime; sh.vertexShader='uniform float uGrassTime;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n float _gp=instanceMatrix[3].x*0.25+instanceMatrix[3].z*0.18;\n transformed.x += sin(uGrassTime*1.6+_gp)*position.y*position.y*0.6;\n transformed.z += cos(uGrassTime*1.3+_gp)*position.y*position.y*0.35;'); };   // gentle breeze: blade TOPS sway (∝ y²), bases stay planted; free per-vertex sin
-  const N=3200, im=new THREE.InstancedMesh(geo,mat,N), o=new THREE.Object3D(), col=new THREE.Color();   // 3200 (was 4600): the per-vertex wind shader runs on every blade every frame (frustumCulled=false for the wrap) — sqrt distribution keeps the playable centre lush, trims the sparse rim
+  const N=4200, im=new THREE.InstancedMesh(geo,mat,N), o=new THREE.Object3D(), col=new THREE.Color();   // 4200 (lusher): denser blades; sqrt distribution keeps the playable centre thick, trims the sparse rim. Per-vertex wind shader still runs each frame (frustumCulled=false for the wrap) — kept modest for perf.
   const tones=['#4e9e3e','#5fb24a','#6cc257','#74c95a','#56a846','#69bd52','#82d873'];
   for(let i=0;i<N;i++){ const a=rand(0,TAU), rad=Math.sqrt(Math.random())*125+3; const x=Math.cos(a)*rad, z=Math.sin(a)*rad;   // sqrt = denser near the middle where you play
     const s=rand(0.7,1.5); o.position.set(x,groundY(x,z),z); o.rotation.set(0,rand(0,TAU),0); o.scale.set(s*rand(0.8,1.3),s*rand(0.85,1.4),s*rand(0.8,1.3)); o.updateMatrix(); im.setMatrixAt(i,o.matrix);   // blades sit on the hills (groundY=0 in town)
