@@ -431,10 +431,10 @@ function terrainH(x,z){ const r=Math.hypot(x,z); if(r<=TOWN_FLAT) return 0;
 function groundY(x,z){ return terrainH(x,z); }   // single seam for "what Y does the surface sit at here"
 // 🗺️ CONCENTRIC BIOME RINGS (owner: biomes by DISTANCE, traversed out AND back via the world-wrap). Pure (x,z) radial masks so the tint wraps seamlessly across ±650. Rings: hills -> SWAMP(undead) -> DESERT(golems/marauders) -> DARK BURNT CORE(blobs+dragon, the only foggy realm).
 function _sstep(e0,e1,x){ let t=(x-e0)/(e1-e0); t=t<0?0:t>1?1:t; return t*t*(3-2*t); }
-function swampMask(x,z){ const r=Math.hypot(x,z); return _sstep(165,205,r)*(1-_sstep(285,325,r)); }
-function desertMask(x,z){ const r=Math.hypot(x,z); return _sstep(305,345,r)*(1-_sstep(405,445,r)); }
-function darkMask(x,z){ const r=Math.hypot(x,z); return _sstep(415,478,r); }
-const _SWAMP_COL=new THREE.Color('#28311a'), _DESERT_COL=new THREE.Color('#e3cb92'), _DARK_COL=new THREE.Color('#16121c');   // murky bog / warm SAND dunes / near-black burnt core
+function swampMask(x,z){ const r=Math.hypot(x,z); return _sstep(165,205,r)*(1-_sstep(300,342,r)); }   // CONTIGUOUS rings: swamp cross-fades straight into desert (no green gap between)
+function desertMask(x,z){ const r=Math.hypot(x,z); return _sstep(300,340,r)*(1-_sstep(408,448,r)); }   // desert rises as swamp falls, then cross-fades into the dark core
+function darkMask(x,z){ const r=Math.hypot(x,z); return _sstep(405,470,r); }   // dark core rises as desert falls -> always at least one biome owns the ground (no green leak)
+const _SWAMP_COL=new THREE.Color('#5c6438'), _DESERT_COL=new THREE.Color('#e3cb92'), _DARK_COL=new THREE.Color('#16121c'), _DARKFOG=new THREE.Color('#0c0a12');   // murky OLIVE bog (visible, not black) / warm SAND dunes / near-black ash core + its fog tint
 function biomeGroundColor(x,z,col){ col.setRGB(1,1,1); const sw=swampMask(x,z); if(sw>0)col.lerp(_SWAMP_COL,sw*0.93); const de=desertMask(x,z); if(de>0)col.lerp(_DESERT_COL,de*0.96); const dk=darkMask(x,z); if(dk>0)col.lerp(_DARK_COL,dk*0.93); return col; }
 /* CURVED "GLOBE" WORLD (owner: abeto-style "walk around a globe"): bend ALL standard-material geometry DOWN by radial
    view-space distance² so the world curves away below the horizon in every direction. ONE global override of the shared
@@ -690,6 +690,8 @@ function mergeDeadTrees(specs, castShadow){ if(!specs||!specs.length) return; co
   const mm=mergeGeometries(geos,false); mm.computeBoundingSphere();
   const mesh=new THREE.Mesh(mm, new THREE.MeshToonMaterial({color:'#34291f',gradientMap:GRAD})); mesh.castShadow=!!castShadow; mesh.receiveShadow=true; mesh.frustumCulled=false; world.add(mesh);
   for(const gg of geos)gg.dispose(); }
+/* a CHOPPABLE resource tree that RESPECTS the biome (owner: no green leafy trees in the swamp/desert/dark rings): green leafy tree in the normal green zones, a bare DEAD tree in the swamp/dark rings, and NOTHING in the desert (returns null -> the caller drops a rock instead) so each biome stays on-theme while the wood resource is still reachable out there. */
+function _resourceTree(x,z,h,fruit){ if(desertMask(x,z)>0.3) return null; if(swampMask(x,z)>0.3||darkMask(x,z)>0.3) return makeDeadTree(x,z,h); return makeTree(x,z,h, fruit?{fruit}:{}); }
 /* PROCEDURAL ROCK: lumpy stone-textured boulder cluster (for "mine stone" nodes — beats a grey cube). */
 function makeRock(x,z,h=1.8){ const g=new THREE.Group(); g.position.set(x,groundY(x,z),z); g.rotation.y=rand(0,TAU);   // sit on terrain (zone stones + caches ground)
   const t=TEX.stone.clone(); t.needsUpdate=true;
@@ -756,8 +758,23 @@ function makeLake(x,z,r){ const N=48, geo=new THREE.CircleGeometry(r,N), pos=geo
   waterZones.push({x,z,r:r*0.72,vr:r*1.4,surfaceY:yy}); return m; }
 const LAKES=[[410,140,52],[-380,-250,44],[170,-440,40],[-260,430,36]];   // the 4 outer lakes (single source of truth for prep + placement)
 function prepLakeBasins(){ for(const [x,z,r] of LAKES){ let mn=Infinity; for(let a=0;a<6.28;a+=0.7){ mn=Math.min(mn, terrainH(x+Math.cos(a)*r*1.1, z+Math.sin(a)*r*1.1)); } WATER_BASINS.push({x,z,rs:r*0.85,rb:r*1.5,floor:mn-2.2,yy:mn-0.3}); } }   // carve bowls BEFORE the terrain mesh is displaced, so the ground mesh cups each lake   // swimmable interior (r*0.72, inside the wavy rim); vr = the rim PEAK reach (~r*1.4) so the keep-out clears the whole visible shoreline
+/* 🟣🌋 BIOME LIQUIDS (owner: swamp "black blobby water" + dark-core lava — both CARVED into the hills via WATER_BASINS so the shoreline merges, exactly like the lakes). The murky/lava materials are CLONES of WATER_MAT: identical shader source -> Three.js compiles ONE program (no extra bind), only the color uniforms + an independent uTime differ (ticked in updateWorld). */
+const SWAMP_WATER_MAT=WATER_MAT.clone(); SWAMP_WATER_MAT.uniforms.uDeep.value=new THREE.Color('#0a1408'); SWAMP_WATER_MAT.uniforms.uShallow.value=new THREE.Color('#243a1c'); SWAMP_WATER_MAT.uniforms.uSky.value=new THREE.Color('#1a2414'); SWAMP_WATER_MAT.uniforms.uFoam.value=new THREE.Color('#46552e');   // murky bog: near-black green body, dark-scum rim (not white foam)
+const LAVA_MAT=WATER_MAT.clone(); LAVA_MAT.uniforms.uDeep.value=new THREE.Color('#5a1200'); LAVA_MAT.uniforms.uShallow.value=new THREE.Color('#ff5a14'); LAVA_MAT.uniforms.uSky.value=new THREE.Color('#1a0600'); LAVA_MAT.uniforms.uFoam.value=new THREE.Color('#ffd23a');   // molten: orange-red body, hot-yellow crust rim (shader is unlit -> reads self-lit)
+const SWAMP_POOLS=[{x:210,z:60,r:18},{x:150,z:-210,r:16},{x:-200,z:140,r:20},{x:-150,z:-220,r:15},{x:60,z:250,r:17},{x:250,z:-90,r:16}];   // ~6 murky pools in the SWAMP ring (r 178-292)
+const LAVA_POOLS=[{x:470,z:90,r:16},{x:-430,z:160,r:18},{x:220,z:-490,r:15},{x:-300,z:-380,r:17}];   // ~4 lava pools in the DARK CORE (r 418+), placed clear of the 4 LAKES
+const LAVA_ZONES=[];   // lava keep-out (+ F2c contact damage) — NOT swimmable
+function prepPoolBasins(pools,floorDrop,yyDrop){ for(const p of pools){ let mn=Infinity; for(let a=0;a<6.28;a+=0.7){ mn=Math.min(mn, terrainH(p.x+Math.cos(a)*p.r*1.1, p.z+Math.sin(a)*p.r*1.1)); } WATER_BASINS.push({x:p.x,z:p.z,rs:p.r*0.82,rb:p.r*1.5,floor:mn-floorDrop,yy:mn-yyDrop}); } }   // carve BEFORE the ground mesh (called in buildWorld) so each pool cups into the rolling hills, like prepLakeBasins
+function makeBiomePool(p,mat,opts){ const N=40, geo=new THREE.CircleGeometry(p.r,N), pos=geo.attributes.position, ph=rand(0,TAU);
+  for(let i=1;i<pos.count;i++){ const vx=pos.getX(i), vy=pos.getY(i), a=Math.atan2(vy,vx); const k=1+Math.sin(a*2+ph)*0.18+Math.sin(a*3-0.7)*0.12+Math.sin(a*5+1.9)*0.08; pos.setX(i,vx*k); pos.setY(i,vy*k); }   // blobby irregular rim (not a perfect disc)
+  pos.needsUpdate=true; geo.computeVertexNormals();
+  const b=WATER_BASINS.find(w=>w.x===p.x&&w.z===p.z); const yy=b?b.yy:groundY(p.x,p.z)+0.1;
+  const m=new THREE.Mesh(geo,mat); m.rotation.x=-Math.PI/2; m.position.set(p.x,yy,p.z); m.receiveShadow=true; world.add(m);
+  if(opts&&opts.swim) waterZones.push({x:p.x,z:p.z,r:p.r*0.7,vr:p.r*1.35,surfaceY:yy});
+  else if(opts&&opts.lava) LAVA_ZONES.push({x:p.x,z:p.z,r:p.r*0.72,vr:p.r*1.35,surfaceY:yy});
+  return m; }
 /* keep-out test: is (x,z) on/near ANY water body? uses the VISUAL radius (vr) so nothing spawns over a lake's wavy shore */
-function isInWater(x,z,margin=0){ for(const w of waterZones){ const dx=x-w.x, dz=z-w.z, rr=(w.vr||w.r)+margin; if(dx*dx+dz*dz<rr*rr) return true; } return false; }
+function isInWater(x,z,margin=0){ for(const w of waterZones){ const dx=x-w.x, dz=z-w.z, rr=(w.vr||w.r)+margin; if(dx*dx+dz*dz<rr*rr) return true; } for(const w of LAVA_ZONES){ const dx=x-w.x, dz=z-w.z, rr=(w.vr||w.r)+margin; if(dx*dx+dz*dz<rr*rr) return true; } return false; }   // water OR lava = keep-out for spawns/props
 const TRAINING_ZONE={x:42,z:-42,hx:9,hz:10};   // 🎯 TRAINING GROUND: a fenced walk-in practice yard on an empty SE town plot (clears houses/roads/wells/rocks/barn/player-plot/pond) — ADDITIVE, removes nothing
 function inTrainingZone(x,z,margin=2){ return Math.abs(x-TRAINING_ZONE.x)<TRAINING_ZONE.hx+margin && Math.abs(z-TRAINING_ZONE.z)<TRAINING_ZONE.hz+margin; }   // shared keep-out: builder + creature spawner both consult this so no mob EVER spawns inside the yard, day or night
 
@@ -959,10 +976,11 @@ function place(name,x,z,{targetH,scale,rotY=0,yLift=0,parent=world,tint=null}={}
 /* ============================ WORLD BUILD ============================ */
 function buildWorld(){
   prepLakeBasins();   // carve lake basins INTO terrainH before the ground mesh below samples it, so the visual terrain cups each lake and physics/groundY agree
+  prepPoolBasins(SWAMP_POOLS,1.6,0.25); prepPoolBasins(LAVA_POOLS,1.3,0.18);   // 🟣🌋 carve the swamp + lava pool bowls too (BEFORE the ground mesh) so they merge into the hills
   // ground (BIG neighborhood) — a subdivided plane displaced by terrainH so the OUTER world rolls (town stays flat). Still ONE mesh/draw call; ~33k static verts (displaced once at build). Square corners hide behind fog (95-190) + skyDome.
   const _gR=665, _gSEG=180, groundGeo=new THREE.PlaneGeometry(_gR*2,_gR*2,_gSEG,_gSEG), _gp=groundGeo.attributes.position;
   const _gcol=new Float32Array(_gp.count*3), _gbl=new Float32Array(_gp.count), _gc=new THREE.Color();
-  for(let i=0;i<_gp.count;i++){ const lx=_gp.getX(i), ly=_gp.getY(i); _gp.setZ(i, terrainH(lx,-ly)); biomeGroundColor(lx,-ly,_gc); _gcol[i*3]=_gc.r; _gcol[i*3+1]=_gc.g; _gcol[i*3+2]=_gc.b; _gbl[i]=desertMask(lx,-ly)*0.95; }   // displace + per-biome vertex tint; biomeBlend = how much to OVERRIDE the grass texture with the sand color (desert needs it lighter than grass; multiply can only darken)
+  for(let i=0;i<_gp.count;i++){ const lx=_gp.getX(i), ly=_gp.getY(i); _gp.setZ(i, terrainH(lx,-ly)); biomeGroundColor(lx,-ly,_gc); _gcol[i*3]=_gc.r; _gcol[i*3+1]=_gc.g; _gcol[i*3+2]=_gc.b; _gbl[i]=Math.max(swampMask(lx,-ly)*0.72, desertMask(lx,-ly)*0.95, darkMask(lx,-ly)*0.95); }   // displace + per-biome vertex tint; biomeBlend = how much to OVERRIDE the grass texture with the biome color (multiply alone can't recolor green grass to murky/sand/ash — so swamp+desert+dark all blend their vColor over it)
   groundGeo.setAttribute('color', new THREE.BufferAttribute(_gcol,3));
   groundGeo.setAttribute('biomeBlend', new THREE.BufferAttribute(_gbl,1));
   _gp.needsUpdate=true; groundGeo.computeVertexNormals();
@@ -999,6 +1017,8 @@ function buildWorld(){
   // WATER SPREAD across the huge map (owner) — winding rivers/streams + ponds in the new outer areas (cheap shader, no extra reflection passes)
   makeRiver(-400,-230, 200,-430, 44, 9); makeRiver(180,520, 540,160, 40, 9); makeRiver(-540,180, -200,470, 36, 8.5);   // OUTER-RING rivers (closest approach >340 from origin, never through town): now DENSE overlapping discs -> continuous winding ribbons that follow the hills (was sparse flat patches)
   for(const [px,pz,pr] of LAKES) makeLake(px,pz,pr);   // a few REAL irregular LAKES — now each sits in a carved basin (prepLakeBasins) so the shoreline meets the ground cleanly
+  for(const p of SWAMP_POOLS) makeBiomePool(p,SWAMP_WATER_MAT,{swim:true});   // 🟣 murky swamp pools (swimmable bog water)
+  for(const p of LAVA_POOLS) makeBiomePool(p,LAVA_MAT,{lava:true});   // 🌋 dark-core lava pools (keep-out)
   { const br=place("Bridge",0,72,{targetH:2.6,tint:'#9c6b3f'}); if(br) addSolid(br,0.1); }   // wood-brown bridge (was white)
   { const bo=place("Boat",9,86,{targetH:1.8,rotY:0.5,yLift:0.25,tint:'#8a5a3a'}); if(bo) addSolid(bo); }
   for(const [cx,cz,r] of [[-16,-10,1.2],[40,40,-0.8]]){ const c=place("Carriage",cx,cz,{targetH:2.8,rotY:r,tint:'#7a5230'}); if(c) addSolid(c); }
@@ -1048,12 +1068,12 @@ function buildAmbient(){
 function buildZones(){
   nodes.length=0;
   // 🌲 WHISPERING WOODS (north) — wood + mushrooms
-  for(let i=0;i<74;i++){ const x=rand(-300,300),z=rand(-580,-90); if(isInWater(x,z,7))continue; const t=makeTree(x,z,rand(5,7)); world.add(t); addNode(t,x,z,{item:'wood',amount:2,respawn:24,label:'Chop for wood',solid:'trunk'}); }
+  for(let i=0;i<74;i++){ const x=rand(-300,300),z=rand(-580,-90); if(isInWater(x,z,7))continue; const t=_resourceTree(x,z,rand(5,7)); if(!t)continue; world.add(t); addNode(t,x,z,{item:'wood',amount:2,respawn:24,label:'Chop for wood',solid:'trunk'}); }
   // 🗺️ BIOME PROPS by ring (owner). Dead trees are COLLECTED then MERGED into one mesh (perf). Liquids via carved basins elsewhere.
   const _dt=[];
   for(let i=0;i<110;i++){ const a=rand(0,TAU), r=rand(120,165), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,7))continue; _dt.push({x,z,h:rand(5,8)}); }   // spooky transition band into the swamp
-  for(let i=0;i<240;i++){ const a=rand(0,TAU), r=rand(178,292), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||swampMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(4.5,7.5)}); if(Math.random()<0.55)place('Grass3',x+rand(-2.5,2.5),z+rand(-2.5,2.5),{targetH:rand(1.1,2.0),tint:'#3a4a2a',rotY:rand(0,TAU)}); }   // 🟣 SWAMP: dense dead trees + dark reeds
-  for(let i=0;i<210;i++){ const a=rand(0,TAU), r=rand(310,402), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||desertMask(x,z)<0.35)continue; if(Math.random()<0.74){ const c=place('Cactus1',x,z,{targetH:rand(1.6,3.4),rotY:rand(0,TAU)}); if(c)c.traverse(m=>{if(m.isMesh)m.castShadow=false;}); } else { const rk=makeRock(x,z,rand(1.2,2.6)); rk.traverse(m=>{if(m.isMesh)m.castShadow=false;}); world.add(rk); } }   // 🟤 DESERT: cacti + dry rocks (no trees; no shadow-cull on distant props)
+  for(let i=0;i<260;i++){ const a=rand(0,TAU), r=rand(178,318), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||swampMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(4.5,7.5)}); if(Math.random()<0.55)place('Grass3',x+rand(-2.5,2.5),z+rand(-2.5,2.5),{targetH:rand(1.1,2.0),tint:'#3a4a2a',rotY:rand(0,TAU)}); }   // 🟣 SWAMP: dense dead trees + dark reeds
+  for(let i=0;i<230;i++){ const a=rand(0,TAU), r=rand(318,438), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||desertMask(x,z)<0.35)continue; if(Math.random()<0.74){ const c=place('Cactus1',x,z,{targetH:rand(1.6,3.4),rotY:rand(0,TAU)}); if(c)c.traverse(m=>{if(m.isMesh)m.castShadow=false;}); } else { const rk=makeRock(x,z,rand(1.2,2.6)); rk.traverse(m=>{if(m.isMesh)m.castShadow=false;}); world.add(rk); } }   // 🟤 DESERT: cacti + dry rocks (no trees; no shadow-cull on distant props)
   for(let i=0;i<260;i++){ const a=rand(0,TAU), r=rand(418,FENCE-10), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||darkMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(5,9)}); }   // ⚫ DARK BURNT CORE: very dense dead/burnt trees
   mergeDeadTrees(_dt, false);   // PERF: all biome dead trees -> ONE merged mesh, no per-tree shadow-cull
   for(let i=0;i<36;i++){ const x=rand(-300,300),z=rand(-580,-90); if(isInWater(x,z,2))continue; addNode('MushroomRed',x,z,{item:'mushroom',amount:1,targetH:1.1,respawn:30}); }
@@ -1067,14 +1087,14 @@ function buildZones(){
     const sign=new THREE.Mesh(new THREE.SphereGeometry(0.18,10,10),new THREE.MeshBasicMaterial({color:'#ffe26a'})); sign.position.set(92,3.0,6); world.add(sign);
     addInteractable(rim,'⛏️ Enter the Mine',()=>enterMine(),3.6); }
   // 🌾 SUNNY FIELDS (west) — carrots + apple trees
-  for(let i=0;i<58;i++){ const x=rand(-580,-120),z=rand(-300,300); if(isInWater(x,z,3))continue; addNode(pick(['Carrot','Cabbage','CarrotGroup']),x,z,{item:'carrot',amount:2,targetH:rand(0.8,1.4),respawn:22,label:'Harvest crops'}); }
-  for(let i=0;i<26;i++){ const x=rand(-580,-120),z=rand(-300,300); if(isInWater(x,z,7))continue; const t=makeTree(x,z,rand(5,6.5),{fruit:'#e8463a'}); world.add(t); addNode(t,x,z,{item:'apple',amount:2,respawn:28,label:'Pick apples',solid:'trunk'}); }
+  for(let i=0;i<58;i++){ const a=Math.PI+rand(-1.15,1.15), r=rand(94,172), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,3))continue; addNode(pick(['Carrot','Cabbage','CarrotGroup']),x,z,{item:'carrot',amount:2,targetH:rand(0.8,1.4),respawn:22,label:'Harvest crops'}); }   // Sunny Fields stay in the GREEN west hills (crops don't grow in swamp/desert/dark)
+  for(let i=0;i<26;i++){ const a=Math.PI+rand(-1.0,1.0), r=rand(98,168), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,7))continue; const t=makeTree(x,z,rand(5,6.5),{fruit:'#e8463a'}); world.add(t); addNode(t,x,z,{item:'apple',amount:2,respawn:28,label:'Pick apples',solid:'trunk'}); }   // apple orchard in the GREEN west hills (r98-168) — reliably reachable + on-theme (no fruit trees in swamp/desert/dark)
   // 🏖️ PEBBLE BEACH (south) — coins + flowers
   // (coin GATHER nodes removed — coins now come from fighting night monsters + home chests + neighbor gifts)
   for(let i=0;i<44;i++){ const x=rand(-300,300),z=rand(120,580); if(isInWater(x,z,2))continue; const F=pickFlower(); addNode(F.model,x,z,{item:F.item,tint:F.tint,amount:1,targetH:0.7,respawn:22}); }   // 🌸 various colored flowers -> color-keyed petals (dyes + arrows)
   // 🗺️ DEEP OUTSKIRTS scatter (owner: "really deep into the jungle... almost no crafting"). The 4 biome strips above leave the far diagonal corners + the outer ring empty; this RADIAL scatter (all directions, r 200→fence) seeds wood/stone/crystal out there so the far field is worth the trek — and gives the new night mobs a reason to be there.
   for(let i=0;i<88;i++){ const a=rand(0,TAU), r=rand(200,FENCE-30), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6))continue; const roll=Math.random();   // DENSER outskirts (44->88): the long trek out should reward you with resources, not empty land
-    if(roll<0.35){ const t=makeTree(x,z,rand(5,7)); world.add(t); addNode(t,x,z,{item:'wood',amount:2,respawn:24,label:'Chop for wood',solid:'trunk'}); }
+    if(roll<0.35){ const t=_resourceTree(x,z,rand(5,7)); if(t){ world.add(t); addNode(t,x,z,{item:'wood',amount:2,respawn:24,label:'Chop for wood',solid:'trunk'}); } else { const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); } }   // desert -> stone instead of a tree
     else if(roll<0.75){ const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); }
     else { addNode(pick(['Crystal1','Crystal2','Crystal3','Crystal4']),x,z,{item:'crystal',amount:1,targetH:rand(1.2,2),respawn:40,label:'Mine a crystal'}); } }
   // town scatter: a few coins + flowers + apple trees so you can gather near home too
@@ -3010,12 +3030,14 @@ function updateWorld(dt){ const tn=performance.now()*0.001;
     if(UG.head){ UG.head.position.set(player.position.x,(player.position.y||0)+2.6,player.position.z); UG.head.intensity=6.0+Math.sin(tn*11)*0.8; }   // brighter living torch pool
     for(const f of ugTorches){ const s=0.9+Math.sin(tn*8+f.userData.fl)*0.13; f.scale.setScalar(s); }
   } else { hemi.intensity=clamp(0.5+0.5*clamp(sy*1.4+0.15,0,1),0.5,1.0); if(fill.intensity!==0.4)fill.intensity=0.4; }   // hemi was PINNED 1.0 day+night -> lawn stayed daylight-bright at night and bloom smeared bright blades into white specks; now dims to ~0.5 at night (genuinely dark, still navigable) and back to 1.0 by noon
+  if(!UG.active){ const _dk=darkMask(player.position.x,player.position.z); if(_dk>0.01){ const k=_dk*_dk; scene.fog.color.lerp(_DARKFOG,k*0.93); scene.background.lerp(_DARKFOG,k*0.9); skyMat.uniforms.bot.value.lerp(_DARKFOG,k*0.92); skyMat.uniforms.top.value.lerp(_DARKFOG,k*0.84); scene.fog.far=scene.fog.far*(1-k)+114*k; scene.fog.near=scene.fog.near*(1-k)+20*k; sun.intensity*=(1-k*0.66); hemi.intensity*=(1-k*0.52); } }   // ⚫ DARK CORE = the ONLY foggy realm: closes in dark (incl. the whole sky dome -> ashen, not blue) + dims as darkMask rises; recomputed each frame from _sky so it auto-restores as you leave
   skyDome.position.copy(camera.position);   // keep the dome centered on the camera so its back face never clips camera.far at the world rim
   state._clT=(state._clT||0)+dt;   // CLOUDS: update matrices only every 2nd frame (slow drift is imperceptible) — accumulate dt so the drift SPEED is unchanged, just half the per-instance matrix writes
   if(((state._fc=(state._fc||0)+1)&1)===0){ const cdt=state._clT; state._clT=0;
     for(const cd of cloudList){ cd.x+=cd.sp*cdt; if(cd.x>620)cd.x=-620; cd.ry+=cdt*0.04; _cloudObj.position.set(cd.x, cd.y0+Math.sin((tn+cd.ph)*0.4)*0.7, cd.z); _cloudObj.rotation.set(0,cd.ry,0); _cloudObj.scale.setScalar(cd.sc); _cloudObj.updateMatrix(); cd.mesh.setMatrixAt(cd.idx,_cloudObj.matrix); }
     for(const mesh of _cloudMeshes) mesh.instanceMatrix.needsUpdate=true; }
   WATER_MAT.uniforms.uTime.value+=dt; if(sun) WATER_MAT.uniforms.uSun.value.copy(sun.position).sub(player.position).normalize(); WATER_MAT.uniforms.uSky.value.copy(_sky);   // ONE tick for ALL water (was ~93 per-disc updates) + live time-of-day sky tint (richer look, fewer updates)
+  SWAMP_WATER_MAT.uniforms.uTime.value+=dt; SWAMP_WATER_MAT.uniforms.uSun.value.copy(WATER_MAT.uniforms.uSun.value); SWAMP_WATER_MAT.uniforms.uSky.value.copy(_sky).multiplyScalar(0.35); LAVA_MAT.uniforms.uTime.value+=dt*0.45;   // murky pools follow the (dimmed) sky; lava bubbles slowly + self-lit (no sky tick)
   _grassTime.value=tn;   // grass wind clock
   cullWrapped();   // hide localized static objects that wrap outside the view frustum (cuts the always-on 360° draw + shadow cost)
   // (the old waterObjs per-frame loop was a dead no-op over an empty array — reflective Water was removed; deleted)
