@@ -2609,6 +2609,10 @@ RECIPES.push({id:'repair_kit', name:'🔧 Repair Kit', cat:'tool', lvl:3, cost:{
 let craftOpen=false;
 function canCraft(r){ for(const k in r.cost) if(!Inv.has(k,r.cost[k])) return false; return true; }
 const CRAFT_CATS=[['tool','⚔️ Tools & Weapons'],['build','🏗️ Build'],['decor','🌸 Decor'],['food','🍎 Food']];
+const CRAFT_SECTIONS=[['weapon','⚔️ Weapons'],['armor','🛡️ Armor & Shields'],['tooluse','🔧 Tools'],['build','🏗️ Build'],['decor','🌸 Decor'],['food','🍎 Food & Potions']];   // (I) crafting reorg: split the old 'tool' lump into Weapons / Armor / Tools
+function _craftSection(r){ const c=r.cat||'build';   // classify a recipe into a craft-menu section
+  if(c==='tool'){ if(typeof WEAPONS!=='undefined' && WEAPONS[r.id]) return 'weapon'; if((typeof SHIELDS!=='undefined'&&SHIELDS[r.id])||(typeof ARMORS!=='undefined'&&ARMORS[r.id])||/armor|robe|raiment|vest|plate|mail|cuirass|bulwark/i.test(r.name||'')) return 'armor'; return 'tooluse'; }   // weapon ids -> Weapons; shields + body armor/robes (detected, since tools also carry weapon:true) -> Armor; pickaxe/shovel/saddle -> Tools
+  if(c==='food') return 'food'; return c; }   // build + decor unchanged
 function craftTileState(r){   // -> {cls, badge, note, act}
   if(r.locked){ const can=(state.recipePages||0)>0; return {cls:can?'learn':'no', badge:can?'LEARN':'🔒', note:can?'1 📖 page':'find a 📖 page', act:can?'unlock':null}; }
   if(recipeLevel(r)>state.level){ return {cls:'lock', badge:'Lv '+r.lvl, note:'unlocks at Lv '+r.lvl, act:null}; }
@@ -2616,7 +2620,7 @@ function craftTileState(r){   // -> {cls, badge, note, act}
 }
 function renderCraft(){ const el=document.getElementById('craft'); const pages=state.recipePages||0;
   let h=`<div class="craftcard"><h3>🔨 Crafting <span class="sub">⭐ Lv ${state.level} · 📖 ${pages}</span> <span class="x" id="craftX">✕</span></h3>`;
-  for(const [cat,label] of CRAFT_CATS){ const rs=RECIPES.filter(r=>(r.cat||'build')===cat && _canCraft(r)); if(!rs.length) continue;
+  for(const [cat,label] of CRAFT_SECTIONS){ const rs=RECIPES.filter(r=>_craftSection(r)===cat && _canCraft(r)).sort((a,b)=>recipeLevel(a)-recipeLevel(b)); if(!rs.length) continue;
     h+=`<div class="cgroup">${label}</div><div class="cgrid">`;
     for(const r of rs){ const cost=Object.entries(r.cost).map(([k,v])=>`${ITEMS[k].i}${v}`).join(' '); const st=craftTileState(r);
       const attr=st.act==='make'?`data-id="${r.id}"`:(st.act==='unlock'?`data-unlock="${r.id}"`:'');
