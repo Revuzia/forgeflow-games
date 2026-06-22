@@ -455,7 +455,7 @@ addEventListener('unhandledrejection', e=>__report('unhandledrejection', e.reaso
 var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snacksReady:false, cooking:false,
   discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, tradePending:null, quickItems:{}, activeQuests:{}, questTarget:null, npcOfferDay:{}, dyeColor:'', gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
-  hp:100, hpMax:100, xp:0, level:1, charClass:'', mana:0, manaMax:0, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
+  hp:100, hpMax:100, xp:0, level:1, charClass:'', mana:0, manaMax:0, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, hasRod:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
   volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0, lore:{}, fog:{}, met:{}, badges:{} };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
@@ -1591,7 +1591,7 @@ addEventListener('blur',clearKeys); document.addEventListener('visibilitychange'
 renderer.domElement.addEventListener('contextmenu',e=>{ e.preventDefault(); clearKeys(); });
 let dragging=false,lastX=0,lastY=0;
 // LEFT mouse = ATTACK; RIGHT mouse (or touch) drag = ROTATE camera. (Right-click menu already suppressed above.)
-renderer.domElement.addEventListener('pointerdown',e=>{ if(e.pointerType!=='touch' && e.button===0){ if(state.running){ if(BMODE.on) placeBlock(); else if(state._activeTool){ digBlock(); } else doAttack(); } return; } dragging=true; lastX=e.clientX; lastY=e.clientY; });   // left-click: dig/mine if a tool is the held hotbar item, else attack
+renderer.domElement.addEventListener('pointerdown',e=>{ if(e.pointerType!=='touch' && e.button===0){ if(state.running){ if(BMODE.on) placeBlock(); else if(state._activeTool==='fishing_rod'){ castOrReel(); } else if(state._activeTool){ digBlock(); } else doAttack(); } return; } dragging=true; lastX=e.clientX; lastY=e.clientY; });   // left-click: cast/reel if the rod is held, dig/mine for other tools, else attack
 addEventListener('pointerup',()=>dragging=false); addEventListener('pointercancel',()=>dragging=false); addEventListener('pointermove',e=>{ if(e.pointerType!=='touch'){ _mx=e.clientX; _my=e.clientY; } if(dragging){ const s=state.mouseSens||1; cam.targetYaw-=(e.clientX-lastX)*0.006*s; cam.targetPitch=clamp(cam.targetPitch+(e.clientY-lastY)*0.005*s,0.21,1.256); lastX=e.clientX; lastY=e.clientY; } });
 addEventListener('wheel',e=>{ cam.dist=clamp(cam.dist+Math.sign(e.deltaY)*0.9,3.5,22); },{passive:true});
 const cam={yaw:Math.PI,targetYaw:Math.PI,dist:13,height:7,pitch:0.5,targetPitch:0.5};   // pitch in radians (clamped 12°–72°); cam.yaw/pitch LERP toward target* each frame for smooth right-click rotation
@@ -1834,7 +1834,7 @@ function legendHTML(){ const recipesAll=Object.keys(state.craftedSet||{}).length
 const SAVE_V=2;
 function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V, day:state.day,giggle:state.giggle,goals:state.goals,bestDay:state.bestDay,inv:state.inv,stash:state.stash,built:state.built,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
-  unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, charClass:state.charClass, mana:state.mana, manaMax:state.manaMax, dyeColor:state.dyeColor, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier, bagCount:state.bagCount, charModel:state.charModel,
+  unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, charClass:state.charClass, mana:state.mana, manaMax:state.manaMax, dyeColor:state.dyeColor, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, hasRod:state.hasRod, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier, bagCount:state.bagCount, charModel:state.charModel,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
   tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, questHistory:state.questHistory, _qseq:state._qseq, boardOffers:state.boardOffers, _boardTaken:state._boardTaken, _boardDay:state._boardDay, npcOfferDay:state.npcOfferDay, genDefs:(()=>{const o={};for(const k in Quests.defs){const d=Quests.defs[k];if(d&&d._gen)o[k]={title:d.title,tid:d._tid,p:d._p,pitch:d._pitch,sig:d._sig,reward:d.reward,steps:d.steps};}return o;})(), lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug,
@@ -1855,7 +1855,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.unlocked=(s.unlocked&&typeof s.unlocked==='object')?s.unlocked:{}; for(const id in state.unlocked){ const r=RECIPES.find(x=>x.id===id); if(r) r.locked=false; } if(s.houseColor) paintHouse(s.houseColor); if(s.hat) giveHat();
   state.recipePages=num(s.recipePages,0,0,1e6);
   state.level=num(s.level,1,1,50); state.xp=num(s.xp,0,0,1e9); state.hpMax=hpMaxForLevel(state.level);   // XP/level restore; max HP derives from level + equipped-armor bonus ❤️
-  state.weapons=(s.weapons&&typeof s.weapons==='object')?s.weapons:{}; for(const id in state.weapons){ const r=RECIPES.find(x=>x.id===id); if(r&&r.weapon&&r.locked) r.locked=false; } state.weapon=(WEAPONS[s.weapon]?s.weapon:'fist'); if(state.weapon==='fist') equipBest();   // keep a saved dropped weapon equipped; only auto-pick when none state.hasPickaxe=!!s.hasPickaxe; state.hasShovel=!!s.hasShovel; state.pickTier=num(s.pickTier,0,0,2); state.shovelTier=num(s.shovelTier,0,0,2);
+  state.weapons=(s.weapons&&typeof s.weapons==='object')?s.weapons:{}; for(const id in state.weapons){ const r=RECIPES.find(x=>x.id===id); if(r&&r.weapon&&r.locked) r.locked=false; } state.weapon=(WEAPONS[s.weapon]?s.weapon:'fist'); if(state.weapon==='fist') equipBest();   // keep a saved dropped weapon equipped; only auto-pick when none state.hasPickaxe=!!s.hasPickaxe; state.hasShovel=!!s.hasShovel; state.hasRod=!!s.hasRod; state.pickTier=num(s.pickTier,0,0,2); state.shovelTier=num(s.shovelTier,0,0,2);
   state.armors=(s.armors&&typeof s.armors==='object')?s.armors:{}; for(const id in state.armors){ const r=RECIPES.find(x=>x.id===id+'_armor'); } state.armor=(ARMORS[s.armor]?s.armor:''); if(!state.armor) equipBestArmor();   // keep a saved dropped armor equipped
   state.offhands=(s.offhands&&typeof s.offhands==='object')?s.offhands:{}; state.offhand=(SHIELDS[s.offhand]||TORCHES[s.offhand])?s.offhand:'';   // restore the equipped off-hand (shield/torch)
   state.charModel=(s.charModel&&PLAYER_MODELS.includes(s.charModel))?s.charModel:'char_player';   // restore the chosen character look
@@ -1884,9 +1884,10 @@ const ITEMS={ wood:{i:'🪵',n:'Wood'},stone:{i:'🪨',n:'Stone'},crystal:{i:'�
   dirt:{i:'🟤',n:'Dirt'}, iron_ingot:{i:'🔩',n:'Iron Ingot'}, gold_ingot:{i:'🥇',n:'Gold Ingot'}, boss_core:{i:'💠',n:'Boss Core'}, health_potion:{i:'🧪',n:'Health Potion'}, energy_tonic:{i:'🧉',n:'Energy Tonic'},
   spell_bolt:{i:'✨',n:'Arcane Bolt'}, spell_fireball:{i:'🔥',n:'Fireball'}, spell_frost:{i:'❄️',n:'Frost Shard'}, spell_mend:{i:'💚',n:'Mend'},
   fire_arrow:{i:'🔥',n:'Fire Arrow'}, ice_arrow:{i:'❄️',n:'Ice Arrow'}, bomb_arrow:{i:'💥',n:'Bomb Arrow'},
-  book_fireball:{i:'📕',n:'Tome: Fireball'}, book_frost:{i:'📘',n:'Tome: Frost Shard'}, book_mend:{i:'📗',n:'Tome: Mend'}, saddle:{i:'🐴',n:'Saddle'} };   // appended (keep first 8 keys' order for the hotbar/inv_slots invariant)   // C3 animal resources + dirt + E3 smelted ingots + E5 boss-only crafting core; first 8 keys unchanged so hotbar + inv_slots stay intact
+  book_fireball:{i:'📕',n:'Tome: Fireball'}, book_frost:{i:'📘',n:'Tome: Frost Shard'}, book_mend:{i:'📗',n:'Tome: Mend'}, saddle:{i:'🐴',n:'Saddle'},
+  worm:{i:'🪱',n:'Worm'}, raw_fish:{i:'🐟',n:'Raw Fish'}, trout:{i:'🐠',n:'Trout'}, salmon:{i:'🍣',n:'Salmon'} };   // appended (keep first 8 keys' order for the hotbar/inv_slots invariant)   // C3 animal resources + dirt + E3 smelted ingots + E5 boss-only crafting core; fishing bait+catches at the END so the legacy hotbar/inv_slots mapping is untouched
 /* basic item DESCRIPTIONS (owner: "each item needs a basic description — industry standard, see Minecraft") — shown as a hover tooltip in the inventory */
-const ITEM_DESC={ wood:'Chopped from trees. The basic building & crafting material.', stone:'Mined from rocks. Tools, walls, paths & the furnace.', crystal:'A glittering quarry gem. Crystal gear, glass & lanterns.', apple:'Sweet fruit — eat to restore hunger.', mushroom:'Forest fungus — eat for a little hunger & energy.', carrot:'Crunchy root veg — eat to restore energy.', flower:'A pretty bloom — used in decor & a few recipes.', coin:'Currency from foes & chests. Spend at shops.', milk:'From cows — eat for a little health; bakes into cake.', wool:'Sheared from sheep — crafts rugs & banners.', egg:'From chickens — eat for a little health; bakes treats.', leather:'From animals — crafts Leather Armor.', meat:'Hearty protein — eat to restore lots of hunger & health.', dirt:'Dug with a shovel. Fills holes & crafts bricks.', iron_ingot:'Smelted from stone at a furnace. Iron tools & armor.', gold_ingot:'Smelted from crystal. Gold tools & armor.', boss_core:'Rare BOSS-only drop. Required for the ⚡ Titan tier.' };
+const ITEM_DESC={ wood:'Chopped from trees. The basic building & crafting material.', stone:'Mined from rocks. Tools, walls, paths & the furnace.', crystal:'A glittering quarry gem. Crystal gear, glass & lanterns.', apple:'Sweet fruit — eat to restore hunger.', mushroom:'Forest fungus — eat for a little hunger & energy.', carrot:'Crunchy root veg — eat to restore energy.', flower:'A pretty bloom — used in decor & a few recipes.', coin:'Currency from foes & chests. Spend at shops.', milk:'From cows — eat for a little health; bakes into cake.', wool:'Sheared from sheep — crafts rugs & banners.', egg:'From chickens — eat for a little health; bakes treats.', leather:'From animals — crafts Leather Armor.', meat:'Hearty protein — eat to restore lots of hunger & health.', dirt:'Dug with a shovel. Fills holes & crafts bricks.', iron_ingot:'Smelted from stone at a furnace. Iron tools & armor.', gold_ingot:'Smelted from crystal. Gold tools & armor.', boss_core:'Rare BOSS-only drop. Required for the ⚡ Titan tier.', worm:'Wriggly fishing bait — dug up with a shovel. One worm per cast.', raw_fish:'A fresh-caught fish — eat it for a hearty meal.', trout:'A speckled trout — a fine, filling catch.', salmon:'A prized salmon — the best eating the water offers.' };
 let invOpen=false, pdpickOpen=false;
 const Inv={ render(){ const el=document.getElementById('invbar'); if(!el)return;   // EQUIPMENT hotbar (Minecraft-style): the SELECTED slot is what you hold in hand — fist + owned weapons + pickaxe/shovel. Labels 1..9,0. Always 10 slots.
     const L=hotbarLayout(); const sel=state.selectedSlot||0; let h='';
@@ -1918,12 +1919,14 @@ function backpackFull(forNewStack){ return !_capOff && !!forNewStack && usedSlot
    Raw foods restore needs; protein (meat, from animals) heals HP. Pick a slot 1-8 (or click it), press Q to eat. */
 const FOOD_EFFECTS={ apple:{hunger:18,energy:4,hp:0,msg:'🍎 Crisp apple'}, carrot:{hunger:14,energy:10,hp:0,msg:'🥕 Crunchy carrot'}, mushroom:{hunger:10,energy:4,hp:0,msg:'🍄 Earthy mushroom'}, flower:{hunger:5,energy:8,hp:0,msg:'🌸 Nibbled a blossom'},
   meat:{hunger:18,energy:6,hp:0,msg:'🍖 Hearty meat'}, milk:{hunger:10,energy:6,hp:0,msg:'🥛 Fresh milk'}, egg:{hunger:8,energy:4,hp:0,msg:'🥚 Cooked egg'},
-  health_potion:{hunger:0,energy:0,heal:0.5,msg:'🧪 Health potion'}, energy_tonic:{hunger:0,energy:50,hp:0,msg:'🧉 Energy tonic'} };   // FOOD heals hunger/energy ONLY (owner); POTIONS heal HP (health_potion = 50% of max)
+  health_potion:{hunger:0,energy:0,heal:0.5,msg:'🧪 Health potion'}, energy_tonic:{hunger:0,energy:50,hp:0,msg:'🧉 Energy tonic'},
+  raw_fish:{hunger:20,energy:4,hp:2,msg:'🐟 Fresh fish'}, trout:{hunger:26,energy:5,hp:3,msg:'🐠 Tasty trout'}, salmon:{hunger:34,energy:6,hp:5,msg:'🍣 Rich salmon'} };   // FOOD heals hunger/energy ONLY (owner); POTIONS heal HP (health_potion = 50% of max); fish are a solid hunger meal with a little HP
 // ── EQUIPMENT HOTBAR: the selected slot is what you HOLD (Minecraft-style). Layout = fist + owned weapons + pickaxe/shovel. ──
 const EQUIP_LVL={ keen_saber:5, dread_reaver:8, warded_vest:5, aegis_plate:8 };   // dropped rare/epic gear needs a LEVEL to equip (craftable tiers are already gated by their recipe level)
 function hotbarLayout(){ const L=[{kind:'fist',icon:'✊',name:'Fists'}];
   if(state.hasPickaxe) L.push({kind:'tool',tool:'pickaxe',icon:'⛏️',name:'Pickaxe'});   // tools at slots 2-3 so they're always reachable
   if(state.hasShovel)  L.push({kind:'tool',tool:'shovel',icon:'🥄',name:'Shovel'});
+  if(state.hasRod)     L.push({kind:'tool',tool:'fishing_rod',icon:'🎣',name:'Fishing Rod'});   // select it + left-click facing water to cast
   const ws=[]; for(const id in (state.weapons||{})){ if(!WEAPONS[id]||!canUseWeapon(id))continue; if((state.level||1)<(EQUIP_LVL[id]||0))continue; ws.push(id); }   // ALL owned weapons of the player's CLASS (staffs for mage, bows for ranger, swords for warrior); under-level epics hidden
   ws.sort((a,b)=>(WEAPONS[b].dmg||0)-(WEAPONS[a].dmg||0));   // strongest first -> only the weakest weapons drop off if the 10-slot bar overflows
   for(const id of ws) L.push({kind:'weapon',weapon:id,icon:WEAPONS[id].icon,name:WEAPONS[id].name});
@@ -2144,6 +2147,7 @@ const RECIPES=[
   {id:'book_frost', name:'📘 Tome: Frost Shard', cat:'tool', cls:'mage', lvl:7, cost:{crystal:2,iron_ingot:1}, build:p=>{ Inv.add('book_frost',1); } },
   {id:'book_mend', name:'📗 Tome: Mend', cat:'tool', cls:'mage', lvl:10, cost:{crystal:4,gold_ingot:1}, build:p=>{ Inv.add('book_mend',1); } },
   {id:'saddle', name:'🐴 Saddle', cat:'tool', lvl:3, cost:{leather:3,wood:2}, build:p=>{ Inv.add('saddle',1); toast('🐴 Crafted a Saddle — tame a wild mount, then press E to ride it.'); } },
+  {id:'fishing_rod', name:'🎣 Fishing Rod', cat:'tool', lvl:2, cost:{wood:3,wool:1}, weapon:true, build:p=>gainFishingRod() },
   {id:'wood_torch', name:'🔥 Wood Torch', cat:'tool', lvl:3, cost:{wood:3}, build:p=>gainOffhand('wood_torch') },
   {id:'crystal_torch', name:'🔆 Crystal Torch', cat:'tool', lvl:12, cost:{crystal:3,wood:1}, build:p=>gainOffhand('crystal_torch') },
   {id:'magic_torch', name:'✨ Magic Torch', cat:'tool', lvl:30, cost:{crystal:5,boss_core:1}, build:p=>gainOffhand('magic_torch') },
@@ -2948,6 +2952,7 @@ function digGround(){   // SHOVEL on the surface: leaves a DIRT PILE + chance at
     const tot=TREASURE_ITEMS.reduce((s,t)=>s+t[3],0); let pk=Math.random()*tot, f=TREASURE_ITEMS[0]; for(const t of TREASURE_ITEMS){ pk-=t[3]; if(pk<=0){ f=t; break; } }
     const n=f[1]+Math.floor(Math.random()*(f[2]-f[1]+1)); dropLoot(cx,cz,[[f[0],n]],'✨ Buried Find',true); extra=` + buried ${n} ${(ITEMS[f[0]]||{i:''}).i}!`;
   }
+  if(Math.random() < 0.22 + (state.shovelTier||0)*0.04){ const wn=1+(Math.random()<0.25?1:0); Inv.add('worm',wn); extra+=` + 🪱 ${wn} Worm${wn>1?'s':''}`; }   // worms turn up while digging = fishing bait (the ONLY worm source, by design)
   for(let q=0;q<5;q++){ const d=pBall(0.12,'#9a7a4a'); d.position.set(cx+rand(-.3,.3),0.3,cz+rand(-.3,.3)); world.add(d); ephemeral.push({node:d,life:0.5,v:new THREE.Vector3(rand(-1.2,1.2),rand(2,4),rand(-1.2,1.2)),g:1,vy:0}); }
   SFX.play('pickup',{vol:0.5,rate:0.7}); shake(0.12); emote('attack-melee-right'); markGoal('gather'); gainXP(1); toast(`🥄 Dug${extra}${extra?'':' — keep digging, sometimes you strike buried treasure!'}`); save(); }
 function digBlock(){
@@ -2969,6 +2974,7 @@ function digBlock(){
   Inv.add(oi,amt); if(typeof qBump==='function')qBump('mine'); rarityToast(tier, `${ITEMS[oi].i} +${amt} ${ITEMS[oi].n}${b.kind==='gem'?' (gem vein!)':''}`); }
 function gainPickaxe(tier=0){ state.hasPickaxe=true; state.pickTier=Math.max(state.pickTier||0,tier); const n=['','Iron ','Gold '][tier]||''; toast(`⛏️ Crafted ${n?'an '+n:'a '}Pickaxe!${tier?` (+${tier} ore per block)`:' Find a Mine Entrance (E), then G to MINE ore.'}`); Inv.render(); if(invOpen)renderInv(); save(); }
 function gainShovel(tier=0){ state.hasShovel=true; state.shovelTier=Math.max(state.shovelTier||0,tier); const n=['','Iron ','Gold '][tier]||''; toast(`🥄 Crafted ${n?'an '+n:'a '}Shovel!${tier?` (richer digs)`:' Press G in the field to DIG the ground.'}`); Inv.render(); if(invOpen)renderInv(); save(); }
+function gainFishingRod(){ state.hasRod=true; toast('🎣 Crafted a Fishing Rod! Select it on the hotbar and LEFT-CLICK while facing water to cast — bring a 🪱 Worm for bait (dig the ground to find some).'); Inv.render(); if(invOpen)renderInv(); save(); }
 /* FURNACE smelting — ore + 🪵 fuel -> ingots (tech progression). Batch up to 6 of each per visit. */
 function smeltAll(){ let iron=0,gold=0;
   while(iron<6 && (state.inv.stone||0)>0 && (state.inv.wood||0)>0){ Inv.take('stone',1); Inv.take('wood',1); Inv.add('iron_ingot',1); iron++; }
@@ -3238,6 +3244,44 @@ function updateDrops(dt){ for(let i=drops.length-1;i>=0;i--){ const d=drops[i],m
     if(dd<1.0){ if(d.gear){ pickupGear(d.gear,d.gkind); } else { Inv.add(d.item,d.n); SFX.play('pickup',{vol:0.55}); } world.remove(m); drops.splice(i,1); } else if(d.t>(d.gear?180:60)){ world.remove(m); drops.splice(i,1); } } }
 /* ---- LOOT BAGS (owner: a real loot system — kills & chests drop a clickable BAG; walk up + E to open a modal showing exactly what dropped, then take items into your inventory; no more "loot dropped" toast) ---- */
 const lootBags=[]; let lootOpen=null;
+// ════════════════════ FISHING ════════════════════ select the 🎣 rod, LEFT-CLICK facing water to cast (needs a 🪱 worm); a bob floats, a bite dips it, reel (left-click) inside the window to land a catch (fish common, junk/nothing sometimes, a rare weapon/armor ~6%).
+let FISH={active:false};
+function _waterSurfaceY(x,z){ for(const w of waterZones){ const dx=x-w.x,dz=z-w.z,rr=(w.vr||w.r); if(dx*dx+dz*dz<rr*rr) return w.surfaceY; } return groundY(x,z)+0.1; }
+function _fishDespawn(){ if(FISH.bob){ world.remove(FISH.bob); FISH.bob=null; } if(FISH.line){ world.remove(FISH.line); FISH.line=null; } }
+function castOrReel(){
+  if(FISH.active){ reelIn(); return; }   // a line is already out -> this click is the reel
+  if(!state.hasRod){ toast('🎣 Craft a Fishing Rod first (press C).'); return; }
+  const fx=Math.sin(player.rotation.y), fz=Math.cos(player.rotation.y); let wx=0,wz=0,found=false;
+  for(const d of [2.0,2.6,3.2,3.8,4.4]){ const tx=player.position.x+fx*d, tz=player.position.z+fz*d; if(isInWater(tx,tz,0.3)){ wx=tx; wz=tz; found=true; break; } }   // sample ahead for water
+  if(!found){ toast('🎣 No water here — face a pond, lake, or river to cast.'); SFX.play('interact',{rate:0.6,vol:0.4}); return; }
+  if((state.inv.worm||0)<1){ toast('🪱 You need a Worm for bait — dig the ground (🥄) to find some.'); SFX.play('interact',{rate:0.6,vol:0.4}); return; }
+  Inv.take('worm',1); state._swing=0.32; emote('attack-melee-right'); SFX.play('interact',{vol:0.5,rate:0.85}); shake(0.08);   // consume bait on cast
+  const sy=_waterSurfaceY(wx,wz), bob=new THREE.Group();
+  const float=new THREE.Mesh(new THREE.SphereGeometry(0.17,8,6),toon('#ff5a4d')); bob.add(float);
+  const tip=new THREE.Mesh(new THREE.SphereGeometry(0.085,6,5),toon('#fff5f0')); tip.position.y=0.17; bob.add(tip);
+  bob.position.set(wx,sy+0.12,wz); bob.frustumCulled=false; world.add(bob);
+  const lg=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(player.position.x,player.position.y+1.2,player.position.z),new THREE.Vector3(wx,sy+0.12,wz)]);
+  const line=new THREE.Line(lg,new THREE.LineBasicMaterial({color:0xf2f2f2})); line.frustumCulled=false; world.add(line);
+  FISH={active:true, x:wx, z:wz, biting:false, bob, line, baseY:sy+0.12, biteAt:performance.now()+(2.4+Math.random()*4.2)*1000, biteUntil:0};
+  toast('🎣 Cast! Watch the bob — left-click to reel when it dips.');
+}
+function updateFishing(dt){ if(!FISH.active)return; const now=performance.now();
+  if(FISH.bob){ const dip=FISH.biting?-0.34:0; FISH.bob.position.y=FISH.baseY+dip+Math.sin(now*0.004)*0.05;
+    if(FISH.line){ const p=FISH.line.geometry.attributes.position; p.setXYZ(0,player.position.x,player.position.y+1.2,player.position.z); p.setXYZ(1,FISH.bob.position.x,FISH.bob.position.y,FISH.bob.position.z); p.needsUpdate=true; } }
+  if(!FISH.biting && now>=FISH.biteAt){ FISH.biting=true; FISH.biteUntil=now+1500; SFX.play('pickup',{rate:1.25,vol:0.5}); shake(0.12); try{ confetti(FISH.bob.position.clone(),8); }catch(e){} toast('🐟 A bite! LEFT-CLICK to reel!'); }
+  else if(FISH.biting && now>FISH.biteUntil){ _fishDespawn(); FISH={active:false}; toast('🎣 …it slipped off the hook. Re-bait and cast again.'); }   // missed the reel window
+}
+function reelIn(){ if(!FISH.active)return;
+  if(!FISH.biting){ SFX.play('interact',{rate:0.7,vol:0.3}); toast('🎣 Too soon — wait for the bob to dip!'); return; }   // early reel: keep waiting (forgiving, no spook)
+  _fishDespawn(); FISH={active:false}; state._swing=0.32; emote('attack-melee-right'); SFX.play('success',{vol:0.5}); shake(0.18); gainXP(2); if(typeof markGoal==='function')markGoal('gather'); if(typeof qBump==='function')qBump('gather'); rollFishingLoot(); save();
+}
+function rollFishingLoot(){ const px=player.position.x, pz=player.position.z, r=Math.random()*100;
+  if(r<6){ const epic=Math.random()<0.28; dropGear(px,pz, pick(epic?EPIC_GEAR:RARE_GEAR)); rarityToast(epic?'epic':'rare', '🎣 You reeled up '+(epic?'an EPIC':'a RARE')+' treasure from the depths!'); return; }   // ~6% weapon/armor catch
+  if(r<14){ const j=pick([['wood',1+Math.floor(Math.random()*2)],['stone',1],['crystal',1]]); dropLoot(px,pz,[j],'🎣 Snagged some junk',true); return; }   // ~8% junk materials
+  if(r<22){ toast('🎣 …nothing on the line this time.'); return; }   // ~8% empty hook
+  const fr=Math.random(), fish=fr<0.10?'salmon':(fr<0.35?'trout':'raw_fish'), fn=1+(Math.random()<0.2?1:0);   // ~78% a fish (salmon rarest, then trout, then common raw fish)
+  dropLoot(px,pz,[[fish,fn]], '🎣 Caught '+(ITEMS[fish]?ITEMS[fish].n:'a fish')+'!', true);
+}
 function dropLoot(x,z,items,label,autoGrab){   // items = [[item,n],...] (a Minecraft loot-table-style bundle). autoGrab=true -> small kills auto-collect on walk-over (no modal spam); bosses/chests open a modal.
   items=(items||[]).filter(it=>it&&it[0]&&it[1]>0); if(!items.length)return null;
   const gy=groundY(x,z), g=new THREE.Group(); g.position.set(x,gy,z);
@@ -3515,7 +3559,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`animals ${animals.length}  R[${span(animals,a=>Math.hypot(a.mesh.position.x,a.mesh.position.z))}]\n`
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
-function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
+function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updateFishing(dt); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
 function idleTick(dt){ cam.yaw+=dt*0.12; cam.targetYaw=cam.yaw; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
@@ -3721,7 +3765,7 @@ document.getElementById('keepBtn').onclick=()=>document.getElementById('winScree
 
 /* QA probe */
 window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.toFixed(2),z:+player.position.z.toFixed(2)}),
-  state, ready:()=>ready, anim:()=>charAnim, models:()=>Object.keys(MODELS).length, neighbors:()=>neighbors.length, classPick:()=>openClassPick(), applyClass:(c,g)=>applyClass(c,g), openDyer:()=>openDyer(), mountsInfo:()=>mounts.map(g=>({x:+g.position.x.toFixed(1),z:+g.position.z.toFixed(1),k:g.userData.mountKey,tamed:!!g.userData.tamed,bond:g.userData.bond||0})), stablesInfo:()=>(state.stables||[]).slice(), buildRecipe:(id,x,z)=>{ const r=RECIPES.find(x2=>x2.id===id); if(r)r.build({x,z}); }, runMountRunaway:()=>mountRunaway(), groundAt:(x,z)=>groundY(x,z), waterZonesInfo:()=>waterZones.map(w=>({x:+w.x.toFixed(0),z:+w.z.toFixed(0),r:+(w.r||0).toFixed(0),vr:+(w.vr||0).toFixed(0),sy:+w.surfaceY.toFixed(2)})), basinsInfo:()=>WATER_BASINS.map(b=>({x:b.x,z:b.z,rs:+b.rs.toFixed(0),rb:+b.rb.toFixed(0),floor:+b.floor.toFixed(2),yy:+b.yy.toFixed(2)})),
+  state, ready:()=>ready, anim:()=>charAnim, models:()=>Object.keys(MODELS).length, neighbors:()=>neighbors.length, classPick:()=>openClassPick(), applyClass:(c,g)=>applyClass(c,g), openDyer:()=>openDyer(), mountsInfo:()=>mounts.map(g=>({x:+g.position.x.toFixed(1),z:+g.position.z.toFixed(1),k:g.userData.mountKey,tamed:!!g.userData.tamed,bond:g.userData.bond||0})), stablesInfo:()=>(state.stables||[]).slice(), buildRecipe:(id,x,z)=>{ const r=RECIPES.find(x2=>x2.id===id); if(r)r.build({x,z}); }, runMountRunaway:()=>mountRunaway(), groundAt:(x,z)=>groundY(x,z), waterZonesInfo:()=>waterZones.map(w=>({x:+w.x.toFixed(0),z:+w.z.toFixed(0),r:+(w.r||0).toFixed(0),vr:+(w.vr||0).toFixed(0),sy:+w.surfaceY.toFixed(2)})), basinsInfo:()=>WATER_BASINS.map(b=>({x:b.x,z:b.z,rs:+b.rs.toFixed(0),rb:+b.rb.toFixed(0),floor:+b.floor.toFixed(2),yy:+b.yy.toFixed(2)})), cast:()=>castOrReel(), fishState:()=>({active:!!FISH.active,biting:!!FISH.biting}), faceY:(y)=>{ player.rotation.y=y; },
   needs:()=>({h:Math.round(Needs.hunger),e:Math.round(Needs.energy),f:Math.round(Needs.fun)}), day:()=>({day:state.day,giggle:state.giggle,goals:state.goals.map(g=>({t:g.type,done:g.done}))}),
   tp:(x,z)=>player.position.set(x,0,z), setKey:(c,d)=>keys[c]=d, yaw:()=>cam.yaw, mark:t=>markGoal(t), genGoals,
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
@@ -4009,6 +4053,15 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
     // D: SHOVEL digs ground, PICKAXE mines ore (everything craftable), DEBUG overlay, full-breadth content spread
     { Inv.add('wood',2); state.hasShovel=false; craft('shovel'); R.shovel_craft=(state.hasShovel===true);
       if(MINE.inMine) exitMine(); state.hasShovel=true; const d0=state.inv.dirt||0; digBlock(); R.dig_ground=((state.inv.dirt||0)>d0);
+      // FISHING: rod crafts, dig yields worms, no-water guard, and a full cast->bite->reel->catch at the town pond (0,84)
+      { const fr=RECIPES.find(r=>r.id==='fishing_rod'); if(fr)fr.locked=false; Inv.add('wood',3); Inv.add('wool',1); state.hasRod=false; state.level=Math.max(state.level,2); craft('fishing_rod'); R.rod_recipe=(!!fr && state.hasRod===true); }
+      { const _r=Math.random; Math.random=()=>0.01; state.hasShovel=true; if(MINE.inMine)exitMine(); const w0=state.inv.worm||0; digGround(); R.worm_dig=((state.inv.worm||0)>w0); Math.random=_r; }
+      { const _pp=player.position.clone(), _ry=player.rotation.y; player.position.set(HOUSE.cx,0.3,HOUSE.cz); player.rotation.y=0; state.hasRod=true; state._activeTool='fishing_rod'; state.inv.worm=(state.inv.worm||0)+1; const b0=state.inv.worm; FISH={active:false}; castOrReel(); R.no_water_guard=(FISH.active===false && state.inv.worm===b0); player.position.copy(_pp); player.rotation.y=_ry; FISH={active:false}; }
+      { const _pp=player.position.clone(), _ry=player.rotation.y, _r=Math.random; player.position.set(0,0.3,65); player.rotation.y=0; state.hasRod=true; state._activeTool='fishing_rod'; state.inv.worm=(state.inv.worm||0)+1; const b0=state.inv.worm, lb0=lootBags.length; Math.random=()=>0.5;
+        FISH={active:false}; castOrReel(); const castOK=(FISH.active===true && state.inv.worm===b0-1);
+        FISH.biteAt=performance.now()-1; updateFishing(0.05); const biteOK=(FISH.biting===true); reelIn(); for(let k=0;k<6;k++)updateLootBags(0.05);
+        const gotFish=((state.inv.raw_fish||0)+(state.inv.trout||0)+(state.inv.salmon||0))>0 || lootBags.length>lb0;
+        R.fish_catch=(castOK && biteOK && FISH.active===false && gotFish); Math.random=_r; player.position.copy(_pp); player.rotation.y=_ry; FISH={active:false}; }
       state.debug=false; toggleDebug(); const dEl=document.getElementById('dbg'); R.debug_overlay=(state.debug===true && !!dEl && dEl.style.display==='block' && /DEBUG/.test(dEl.textContent||'')); toggleDebug();
       let nMax=0; for(const n of nodes){ n.mesh.getWorldPosition(_np); nMax=Math.max(nMax,Math.hypot(_np.x,_np.z)); }
       let aMax=0; for(const a of animals) aMax=Math.max(aMax,Math.hypot(a.mesh.position.x,a.mesh.position.z));
@@ -4094,7 +4147,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       state._atkCD=0; applyClass('warrior','male'); R.class_system=(mageOk&&shotOk&&dyeOk); }   // class pick + mana + projectile attack + dye cape
     R.PASS = R.campaign_won&&R.side_cat&&R.side_gnome&&R.side_toilet&&R.side_socks&&R.neighbor_fulfilled===true&&R.day_advanced&&R.allItemsReachable&&R.maxNodeRadius<=FENCE&&crafted===unlockedCount&&R.shop_paint&&R.shop_sellcoins&&R.shop_unlock&&R.shop_hat&&R.shop_unlocked_craftable
       &&R.xp_gain&&R.level_up&&R.recipe_level_lock&&R.recipe_level_unlock&&R.inv_modal&&R.map_modal&&R.quest_min&&R.mouse_sens&&R.trade_swap
-      &&R.needs_affect&&R.house_purpose&&R.daily_activity&&R.water_quality&&R.rocks_smooth&&R.hotbar_select&&R.eat_food&&R.pickaxe_gate&&R.night_field_spawn&&R.animals_spawn&&R.animals_harvest&&R.animals_defeat&&R.shovel_craft&&R.dig_ground&&R.debug_overlay&&R.content_spread&&R.held_tool&&R.day_no_monsters&&R.mist&&R.world_expanded&&R.voxel_place&&R.voxel_break&&R.voxel_dig_ground&&R.furnace_smelt&&R.ingot_tool&&R.recipe_count&&R.dungeon_rooms&&R.dungeon_chests&&R.mineshaft_loot
+      &&R.needs_affect&&R.house_purpose&&R.daily_activity&&R.water_quality&&R.rocks_smooth&&R.hotbar_select&&R.eat_food&&R.pickaxe_gate&&R.night_field_spawn&&R.animals_spawn&&R.animals_harvest&&R.animals_defeat&&R.shovel_craft&&R.dig_ground&&R.rod_recipe&&R.worm_dig&&R.no_water_guard&&R.fish_catch&&R.debug_overlay&&R.content_spread&&R.held_tool&&R.day_no_monsters&&R.mist&&R.world_expanded&&R.voxel_place&&R.voxel_break&&R.voxel_dig_ground&&R.furnace_smelt&&R.ingot_tool&&R.recipe_count&&R.dungeon_rooms&&R.dungeon_chests&&R.mineshaft_loot
       &&R.boss_spawn&&R.boss_special&&R.boss_loot&&R.boss_milestone&&R.titan_tier&&R.underground_dark&&R.underground_restore&&R.cave_branch&&R.place_torch&&R.fun_events&&R.swim_zone&&R.real_loot&&R.item_desc&&R.use_selected&&R.settings_fs&&R.npc_shop&&R.npc_facing
       &&R.event_active&&R.event_market&&R.shop_closed_night&&R.shop_open_day&&R.onboarding_done&&R.friendship&&R.requests_list&&R.town_legend
       &&R.pause_works&&R.cam_pitch_clamped&&R.ambient
