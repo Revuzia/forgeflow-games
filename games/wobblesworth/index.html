@@ -435,6 +435,7 @@ function swampMask(x,z){ const r=Math.hypot(x,z); return _sstep(165,205,r)*(1-_s
 function desertMask(x,z){ const r=Math.hypot(x,z); return _sstep(300,340,r)*(1-_sstep(408,448,r)); }   // desert rises as swamp falls, then cross-fades into the dark core
 function darkMask(x,z){ const r=Math.hypot(x,z); return _sstep(405,470,r); }   // dark core rises as desert falls -> always at least one biome owns the ground (no green leak)
 const _SWAMP_COL=new THREE.Color('#5c6438'), _DESERT_COL=new THREE.Color('#e3cb92'), _DARK_COL=new THREE.Color('#16121c'), _DARKFOG=new THREE.Color('#0c0a12');   // murky OLIVE bog (visible, not black) / warm SAND dunes / near-black ash core + its fog tint
+const _SKY_SWAMP=new THREE.Color('#7e8a6a'), _ZEN_SWAMP=new THREE.Color('#5d6b52'), _SKY_DESERT=new THREE.Color('#f2e2b8'), _ZEN_DESERT=new THREE.Color('#cbb98a'), _SKY_ICE=new THREE.Color('#dfeef7'), _ZEN_ICE=new THREE.Color('#bcd6e8'), _overcastGrey=new THREE.Color('#7d8590');   // 🌥️ G4 per-biome sky tints + overcast cloud grey
 function biomeGroundColor(x,z,col){ col.setRGB(1,1,1); const sw=swampMask(x,z); if(sw>0)col.lerp(_SWAMP_COL,sw*0.93); const de=desertMask(x,z); if(de>0)col.lerp(_DESERT_COL,de*0.96); const dk=darkMask(x,z); if(dk>0)col.lerp(_DARK_COL,dk*0.93); return col; }
 /* CURVED "GLOBE" WORLD (owner: abeto-style "walk around a globe"): bend ALL standard-material geometry DOWN by radial
    view-space distance² so the world curves away below the horizon in every direction. ONE global override of the shared
@@ -1725,7 +1726,7 @@ const _cullFr=new THREE.Frustum(), _cullPM=new THREE.Matrix4(), _cullVI=new THRE
 /* CLOUD INSTANCING (graphics-perf polish): the 46 drifting clouds were individual GLB Groups (~100+ meshes/draw calls).
    Merge each Cloud type's GLB into one geometry, then render all clouds of a type as ONE InstancedMesh; the gentle
    drift/bob still updates per-instance matrices each frame (46 cheap matrix writes). cloudList now holds cloud DATA. */
-const _cloudObj=new THREE.Object3D(); const _cloudMeshes=[];
+const _cloudObj=new THREE.Object3D(); const _cloudMeshes=[]; const _cloudMats=[];   // G4: cloud materials -> grey out the deeper you go
 function buildCloudInstances(){
   cloudList.length=0; for(const m of _cloudMeshes){ world.remove(m); } _cloudMeshes.length=0;
   const types=["Cloud1","Cloud2","Cloud3"].filter(n=>MODELS[n]); if(!types.length) return;
@@ -1740,6 +1741,7 @@ function buildCloudInstances(){
   const counts={}; for(const n of assign) counts[n]=(counts[n]||0)+1;
   const im={}, fill={};
   for(const n in counts){ const t=TG[n]; const mesh=new THREE.InstancedMesh(t.geo,t.mat,counts[n]); mesh.castShadow=false; mesh.frustumCulled=false; world.add(mesh); im[n]=mesh; fill[n]=0; _cloudMeshes.push(mesh); }
+  _cloudMats.length=0; for(const m of _cloudMeshes){ if(m.material){ if(!m.material.userData._baseCol) m.material.userData._baseCol=m.material.color.clone(); _cloudMats.push(m.material); } }   // G4: capture cloud materials (base color cached) for the per-biome grey-out
   for(const n of assign){ const t=TG[n], mesh=im[n], idx=fill[n]++;
     const cd={mesh,idx,x:rand(-620,620),z:rand(-600,600),y0:rand(28,46),sp:rand(0.6,1.4),ph:rand(0,TAU),sc:rand(4,7)/t.h,ry:rand(0,TAU)};
     _cloudObj.position.set(cd.x,cd.y0,cd.z); _cloudObj.rotation.set(0,cd.ry,0); _cloudObj.scale.setScalar(cd.sc); _cloudObj.updateMatrix(); mesh.setMatrixAt(idx,_cloudObj.matrix); cloudList.push(cd); }
@@ -3046,7 +3048,16 @@ function updateWorld(dt){ const tn=performance.now()*0.001;
     if(UG.head){ UG.head.position.set(player.position.x,(player.position.y||0)+2.6,player.position.z); UG.head.intensity=6.0+Math.sin(tn*11)*0.8; }   // brighter living torch pool
     for(const f of ugTorches){ const s=0.9+Math.sin(tn*8+f.userData.fl)*0.13; f.scale.setScalar(s); }
   } else { hemi.intensity=clamp(0.5+0.5*clamp(sy*1.4+0.15,0,1),0.5,1.0); if(fill.intensity!==0.4)fill.intensity=0.4; }   // hemi was PINNED 1.0 day+night -> lawn stayed daylight-bright at night and bloom smeared bright blades into white specks; now dims to ~0.5 at night (genuinely dark, still navigable) and back to 1.0 by noon
-  if(!UG.active){ const _dk=darkMask(player.position.x,player.position.z); if(_dk>0.01){ const k=_dk*_dk; scene.fog.color.lerp(_DARKFOG,k*0.93); scene.background.lerp(_DARKFOG,k*0.9); skyMat.uniforms.bot.value.lerp(_DARKFOG,k*0.92); skyMat.uniforms.top.value.lerp(_DARKFOG,k*0.84); scene.fog.far=scene.fog.far*(1-k)+114*k; scene.fog.near=scene.fog.near*(1-k)+20*k; sun.intensity*=(1-k*0.66); hemi.intensity*=(1-k*0.52); } }   // ⚫ DARK CORE = the ONLY foggy realm: closes in dark (incl. the whole sky dome -> ashen, not blue) + dims as darkMask rises; recomputed each frame from _sky so it auto-restores as you leave
+  if(!UG.active){ const _dkN=darkMask(player.position.x,player.position.z); if(_dkN>0.01){ const _nf=_dkN*_dkN;
+    _sky.lerp(_night,_nf*0.85); _zen.lerp(_zenNight,_nf*0.9); sun.intensity*=(1-_nf*0.82); hemi.intensity=Math.max(hemi.intensity*(1-_nf*0.30), 0.24*_dkN);
+    scene.background.copy(_sky); scene.fog.color.copy(_sky); skyMat.uniforms.bot.value.copy(_sky); skyMat.uniforms.top.value.copy(_zen); } }   // ⚫ DARK CORE = permanent NIGHT sky (forces _sky/_zen toward night by darkMask, even at game-noon); hemi floored at 0.24 so it stays navigable; the ash block below layers over it
+  if(!UG.active){ const _dk=darkMask(player.position.x,player.position.z); if(_dk>0.01){ const k=_dk*_dk; scene.fog.color.lerp(_DARKFOG,k*0.93); scene.background.lerp(_DARKFOG,k*0.9); skyMat.uniforms.bot.value.lerp(_DARKFOG,k*0.92); skyMat.uniforms.top.value.lerp(_DARKFOG,k*0.84); scene.fog.far=scene.fog.far*(1-k)+114*k; scene.fog.near=scene.fog.near*(1-k)+20*k; sun.intensity*=(1-k*0.66); hemi.intensity=Math.max(hemi.intensity*(1-k*0.52),0.22*k); } }   // ⚫ DARK CORE = the ONLY foggy realm: closes in dark (incl. the whole sky dome -> ashen, not blue) + dims as darkMask rises; recomputed each frame from _sky so it auto-restores as you leave
+  if(!UG.active){ const _skx=player.position.x, _skz=player.position.z; const _sw=swampMask(_skx,_skz), _de=desertMask(_skx,_skz), _dk2=darkMask(_skx,_skz); const _ic=(typeof iceMask==='function')?iceMask(_skx,_skz):0;
+    const _oc=clamp(_sw*0.75 + _de*0.45 + _ic*0.55 + _dk2*0.6, 0, 0.9);
+    if(_sw>0.01){ skyMat.uniforms.bot.value.lerp(_SKY_SWAMP,_sw*0.6); skyMat.uniforms.top.value.lerp(_ZEN_SWAMP,_sw*0.6); scene.fog.color.lerp(_SKY_SWAMP,_sw*0.4); scene.background.lerp(_SKY_SWAMP,_sw*0.45); }
+    if(_de>0.01){ skyMat.uniforms.bot.value.lerp(_SKY_DESERT,_de*0.55); skyMat.uniforms.top.value.lerp(_ZEN_DESERT,_de*0.55); scene.fog.color.lerp(_SKY_DESERT,_de*0.35); scene.background.lerp(_SKY_DESERT,_de*0.5); }
+    if(_ic>0.01){ skyMat.uniforms.bot.value.lerp(_SKY_ICE,_ic*0.6); skyMat.uniforms.top.value.lerp(_ZEN_ICE,_ic*0.6); scene.fog.color.lerp(_SKY_ICE,_ic*0.4); scene.background.lerp(_SKY_ICE,_ic*0.5); }
+    if(_cloudMats.length){ for(const m of _cloudMats){ m.color.copy(m.userData._baseCol).lerp(_overcastGrey, _oc*0.7); } } }   // 🌥️ G4.4 per-biome sky tint (swamp greenish / desert pale-hot / ice cold-blue) + clouds grey out deeper
   skyDome.position.copy(camera.position);   // keep the dome centered on the camera so its back face never clips camera.far at the world rim
   state._clT=(state._clT||0)+dt;   // CLOUDS: update matrices only every 2nd frame (slow drift is imperceptible) — accumulate dt so the drift SPEED is unchanged, just half the per-instance matrix writes
   if(((state._fc=(state._fc||0)+1)&1)===0){ const cdt=state._clT; state._clT=0;
