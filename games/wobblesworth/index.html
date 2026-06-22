@@ -763,10 +763,13 @@ function prepLakeBasins(){ for(const [x,z,r] of LAKES){ let mn=Infinity; for(let
 /* 🟣🌋 BIOME LIQUIDS (owner: swamp "black blobby water" + dark-core lava — both CARVED into the hills via WATER_BASINS so the shoreline merges, exactly like the lakes). The murky/lava materials are CLONES of WATER_MAT: identical shader source -> Three.js compiles ONE program (no extra bind), only the color uniforms + an independent uTime differ (ticked in updateWorld). */
 const SWAMP_WATER_MAT=WATER_MAT.clone(); SWAMP_WATER_MAT.uniforms.uDeep.value=new THREE.Color('#0a1408'); SWAMP_WATER_MAT.uniforms.uShallow.value=new THREE.Color('#243a1c'); SWAMP_WATER_MAT.uniforms.uSky.value=new THREE.Color('#1a2414'); SWAMP_WATER_MAT.uniforms.uFoam.value=new THREE.Color('#46552e');   // murky bog: near-black green body, dark-scum rim (not white foam)
 const LAVA_MAT=WATER_MAT.clone(); LAVA_MAT.uniforms.uDeep.value=new THREE.Color('#5a1200'); LAVA_MAT.uniforms.uShallow.value=new THREE.Color('#ff5a14'); LAVA_MAT.uniforms.uSky.value=new THREE.Color('#1a0600'); LAVA_MAT.uniforms.uFoam.value=new THREE.Color('#ffd23a');   // molten: orange-red body, hot-yellow crust rim (shader is unlit -> reads self-lit)
+const ICE_MAT=WATER_MAT.clone(); ICE_MAT.uniforms.uDeep.value=new THREE.Color('#7fa8c8'); ICE_MAT.uniforms.uShallow.value=new THREE.Color('#cfe6f4'); ICE_MAT.uniforms.uSky.value=new THREE.Color('#eaf4fb'); ICE_MAT.uniforms.uFoam.value=new THREE.Color('#ffffff');   // ❄️ frozen pond: glassy pale-blue, near-static (slow uTime); the player SLIDES on it (ICE_ZONES)
 const SWAMP_POOLS=[];   // filled by genSwampPools() in buildWorld — MANY small RANDOM murky pools spread all THROUGH the swamp ring (owner: bogs have pools everywhere, not one big one)
 function genSwampPools(){ SWAMP_POOLS.length=0; let t=0; while(SWAMP_POOLS.length<18 && t<500){ t++; const a=rand(0,TAU), r=rand(188,312), x=Math.cos(a)*r, z=Math.sin(a)*r; if(swampMask(x,z)<0.55) continue; if(SWAMP_POOLS.some(p=>Math.hypot(p.x-x,p.z-z)<p.r+15)) continue; SWAMP_POOLS.push({x,z,r:rand(5,13)}); } }
 const LAVA_POOLS=[{x:560,z:100,r:16},{x:-560,z:130,r:18},{x:225,z:-535,r:15},{x:-380,z:-435,r:17}];   // ~4 lava pools in the DARK CORE (r 547+, pushed deeper as ice widened); inner edges all clear of the ice ring + the 4 LAKES
+const ICE_POOLS=[{x:495,z:30,r:17},{x:-480,z:120,r:16},{x:120,z:-490,r:18},{x:-200,z:-460,r:15},{x:350,z:350,r:16},{x:-470,z:-200,r:17}];   // ❄️ ~6 frozen pits in the ICE ring (r 480-515), clear of LAKES/LAVA
 const LAVA_ZONES=[];   // lava keep-out (+ F2c contact damage) — NOT swimmable
+const ICE_ZONES=[];   // ❄️ frozen pits -> SLIPPERY momentum movement (NOT swimmable, NOT damaging)
 const SINKHOLES=[{x:360,z:40,r:15,core:2.0},{x:-340,z:-70,r:14,core:1.8},{x:120,z:380,r:16,core:2.2},{x:-90,z:-400,r:14,core:1.8}];   // 🌀 desert sand sinkholes (suck+spin the player); centers in the desert ring, clear of lakes/lava
 const SINK_MESHES=[];   // the spinning funnel cones
 function prepPoolBasins(pools,floorDrop,yyDrop){ for(const p of pools){ let mn=Infinity; for(let a=0;a<6.28;a+=0.7){ mn=Math.min(mn, terrainH(p.x+Math.cos(a)*p.r*1.1, p.z+Math.sin(a)*p.r*1.1)); } WATER_BASINS.push({x:p.x,z:p.z,rs:p.r*0.82,rb:p.r*1.5,floor:mn-floorDrop,yy:mn-yyDrop}); } }   // carve BEFORE the ground mesh (called in buildWorld) so each pool cups into the rolling hills, like prepLakeBasins
@@ -777,6 +780,7 @@ function makeBiomePool(p,mat,opts){ const N=40, geo=new THREE.CircleGeometry(p.r
   const m=new THREE.Mesh(geo,mat); m.rotation.x=-Math.PI/2; m.position.set(p.x,yy,p.z); m.receiveShadow=true; world.add(m);
   if(opts&&opts.swim) waterZones.push({x:p.x,z:p.z,r:p.r*0.7,vr:p.r*1.35,surfaceY:yy,kind:'swamp'});   // tagged 'swamp' -> SUPER-SLOW sticky-bog movement (vs normal water)
   else if(opts&&opts.lava) LAVA_ZONES.push({x:p.x,z:p.z,r:p.r*0.72,vr:p.r*1.35,surfaceY:yy});
+  else if(opts&&opts.ice) ICE_ZONES.push({x:p.x,z:p.z,r:p.r*0.78,vr:p.r*1.3,surfaceY:yy});   // ❄️ slippery frozen pit (player slides, no swim, no damage)
   return m; }
 /* 🌾 SWAMP REEDS: procedural CATTAILS (thin tall stalk + a brown sausage head) -> reads as a bog bulrush, NOT lawn grass (owner: 'the grass in the swamp isnt great'). Merged into 2 meshes for perf, no shadow. */
 function buildSwampReeds(specs){ if(!specs||!specs.length) return; const stalkGeos=[], headGeos=[];
@@ -787,7 +791,7 @@ function buildSwampReeds(specs){ if(!specs||!specs.length) return; const stalkGe
   const hm=mergeGeometries(headGeos,false); const head=new THREE.Mesh(hm, new THREE.MeshToonMaterial({color:'#5a3814',gradientMap:GRAD})); head.castShadow=false; head.frustumCulled=false; world.add(head);
   for(const g of stalkGeos)g.dispose(); for(const g of headGeos)g.dispose(); }
 /* keep-out test: is (x,z) on/near ANY water body? uses the VISUAL radius (vr) so nothing spawns over a lake's wavy shore */
-function isInWater(x,z,margin=0){ for(const w of waterZones){ const dx=x-w.x, dz=z-w.z, rr=(w.vr||w.r)+margin; if(dx*dx+dz*dz<rr*rr) return true; } for(const w of LAVA_ZONES){ const dx=x-w.x, dz=z-w.z, rr=(w.vr||w.r)+margin; if(dx*dx+dz*dz<rr*rr) return true; } return false; }   // water OR lava = keep-out for spawns/props
+function isInWater(x,z,margin=0){ for(const w of waterZones){ const dx=x-w.x, dz=z-w.z, rr=(w.vr||w.r)+margin; if(dx*dx+dz*dz<rr*rr) return true; } for(const w of LAVA_ZONES){ const dx=x-w.x, dz=z-w.z, rr=(w.vr||w.r)+margin; if(dx*dx+dz*dz<rr*rr) return true; } for(const w of ICE_ZONES){ const dx=x-w.x, dz=z-w.z, rr=(w.vr||w.r)+margin; if(dx*dx+dz*dz<rr*rr) return true; } return false; }   // water OR lava OR ice = keep-out for spawns/props
 const TRAINING_ZONE={x:42,z:-42,hx:9,hz:10};   // 🎯 TRAINING GROUND: a fenced walk-in practice yard on an empty SE town plot (clears houses/roads/wells/rocks/barn/player-plot/pond) — ADDITIVE, removes nothing
 function inTrainingZone(x,z,margin=2){ return Math.abs(x-TRAINING_ZONE.x)<TRAINING_ZONE.hx+margin && Math.abs(z-TRAINING_ZONE.z)<TRAINING_ZONE.hz+margin; }   // shared keep-out: builder + creature spawner both consult this so no mob EVER spawns inside the yard, day or night
 
@@ -931,7 +935,7 @@ function addInteractable(node,label,action,radius=2.4){ const it={node,label,act
 /* ---------- GLB asset loader ---------- */
 const MODELS={}, ANIMS={};
 const MODEL_LIST=["char_player","char_n1","char_n2","char_n3","House_1","House_2","House_3","HouseWooden",
- "Hut","MillBuilding1","Well","Barn","DogHouse","Tree_1","Tree_2","Tree_3","Tree_4","Cactus1","cactus_1","cactus_2","cactus_3","Grass","Grass3",
+ "Hut","MillBuilding1","Well","Barn","DogHouse","Tree_1","Tree_2","Tree_3","Tree_4","Cactus1","cactus_1","cactus_2","cactus_3","ice_cube_1","ice_cube_2","ice_cube_3","snowtop_deco","snowball","snow_cube","bush_dead_deco","Grass","Grass3",
  "GrassLeaf1","Flower1","Flower2","Flower3","MushroomRed","Barrel","Chest","Lantern","Bridge","Carriage","Boat","Coin","Cloud1","Cloud2","Cloud3",
  // RESOURCE NODES — these MUST load or stone/crystal/carrot won't exist and their quests become impossible:
  "Cube","Crystal1","Crystal2","Crystal3","Crystal4","Carrot","Cabbage","CarrotGroup",
@@ -989,7 +993,7 @@ function place(name,x,z,{targetH,scale,rotY=0,yLift=0,parent=world,tint=null}={}
 /* ============================ WORLD BUILD ============================ */
 function buildWorld(){
   prepLakeBasins();   // carve lake basins INTO terrainH before the ground mesh below samples it, so the visual terrain cups each lake and physics/groundY agree
-  genSwampPools(); prepPoolBasins(SWAMP_POOLS,1.6,0.25); prepPoolBasins(LAVA_POOLS,1.3,0.18);   // 🟣🌋 generate the scattered swamp pools, then carve all pool bowls (BEFORE the ground mesh) so they merge into the hills
+  genSwampPools(); prepPoolBasins(SWAMP_POOLS,1.6,0.25); prepPoolBasins(LAVA_POOLS,1.3,0.18); prepPoolBasins(ICE_POOLS,1.0,0.10);   // 🟣🌋❄️ generate the scattered swamp pools, then carve all pool bowls (BEFORE the ground mesh) so they merge into the hills (ice = shallow, near-flush)
   for(const s of SINKHOLES){ let mn=Infinity; for(let a=0;a<6.28;a+=0.7){ mn=Math.min(mn, terrainH(s.x+Math.cos(a)*s.r*1.1, s.z+Math.sin(a)*s.r*1.1)); } s._rim=mn; WATER_BASINS.push({x:s.x,z:s.z,rs:s.core,rb:s.r*1.3,floor:mn-5.0,yy:mn}); }   // 🌀 carve steep sinkhole funnels into the dunes BEFORE the ground mesh (floor<yy keeps the lake_basin selftest green); _rim = the natural rim height for the funnel mesh
   // ground (BIG neighborhood) — a subdivided plane displaced by terrainH so the OUTER world rolls (town stays flat). Still ONE mesh/draw call; ~33k static verts (displaced once at build). Square corners hide behind fog (95-190) + skyDome.
   const _gR=665, _gSEG=180, groundGeo=new THREE.PlaneGeometry(_gR*2,_gR*2,_gSEG,_gSEG), _gp=groundGeo.attributes.position;
@@ -1033,6 +1037,7 @@ function buildWorld(){
   for(const [px,pz,pr] of LAKES) makeLake(px,pz,pr);   // a few REAL irregular LAKES — now each sits in a carved basin (prepLakeBasins) so the shoreline meets the ground cleanly
   for(const p of SWAMP_POOLS) makeBiomePool(p,SWAMP_WATER_MAT,{swim:true});   // 🟣 murky swamp pools (swimmable bog water)
   for(const p of LAVA_POOLS) makeBiomePool(p,LAVA_MAT,{lava:true});   // 🌋 dark-core lava pools (keep-out)
+  for(const p of ICE_POOLS) makeBiomePool(p,ICE_MAT,{ice:true});   // ❄️ frozen slippery pits in the ice ring
   for(const s of SINKHOLES){ const ry=(s._rim!=null?s._rim:groundY(s.x,s.z)); const cone=new THREE.Mesh(new THREE.ConeGeometry(s.r*0.92,6.4,14,1,true), new THREE.MeshToonMaterial({color:'#6e5128',side:THREE.DoubleSide,gradientMap:GRAD,flatShading:true})); cone.rotation.x=Math.PI; cone.position.set(s.x, ry-3.0, s.z); cone.castShadow=false; cone.receiveShadow=true; world.add(cone); SINK_MESHES.push(cone);
     const lip=new THREE.Mesh(new THREE.RingGeometry(s.r*0.8,s.r*1.04,22), new THREE.MeshToonMaterial({color:'#9c7c44',gradientMap:GRAD,side:THREE.DoubleSide})); lip.rotation.x=-Math.PI/2; lip.position.set(s.x, ry+0.1, s.z); lip.castShadow=false; world.add(lip); }   // 🌀 dark faceted funnel spanning rim->floor (reads as a pit) + a sandy lip ring so the sinkhole is telegraphed from above
   { const br=place("Bridge",0,72,{targetH:2.6,tint:'#9c6b3f'}); if(br) addSolid(br,0.1); }   // wood-brown bridge (was white)
@@ -1091,6 +1096,9 @@ function buildZones(){
   for(let i=0;i<260;i++){ const a=rand(0,TAU), r=rand(178,318), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||swampMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(4.5,7.5)}); if(Math.random()<0.5)_reeds.push({x:x+rand(-2.2,2.2),z:z+rand(-2.2,2.2),h:rand(1.0,1.9)}); }   // 🟣 SWAMP: dense dead trees + scattered cattail reeds
   for(let i=0;i<230;i++){ const a=rand(0,TAU), r=rand(318,438), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||desertMask(x,z)<0.35)continue; if(Math.random()<0.74){ const c=place(pick(['cactus_1','cactus_2','cactus_3']),x,z,{targetH:rand(1.6,3.4),rotY:rand(0,TAU)}); if(c)c.traverse(m=>{ if(m.isMesh){ m.castShadow=false; m.material=new THREE.MeshToonMaterial({color:'#4f7d35',gradientMap:GRAD}); } }); } else { const rk=makeRock(x,z,rand(1.2,2.6)); rk.traverse(m=>{if(m.isMesh)m.castShadow=false;}); world.add(rk); } }   // 🟤 DESERT: BRANCHED BitGem cacti (forced non-emissive) + dry rocks (no trees; no shadow-cull on distant props)
   for(let i=0;i<260;i++){ const a=rand(0,TAU), r=rand(500,FENCE-10), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||darkMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(5,9)}); }   // ⚫ DARK BURNT CORE: dead/burnt trees (inner r 418->500 to match the pushed-out dark mask; the ICE ring fills 448-500)
+  // ❄️ ICE RING props: scattered ice blocks + snow piles + frozen shrubs (snowy, no shadow-cull) in the Frozen Wastes
+  for(let i=0;i<95;i++){ const a=rand(0,TAU), r=rand(468,524), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,5)||iceMask(x,z)<0.4)continue; const c=place(pick(['ice_cube_1','ice_cube_2','ice_cube_3','snowtop_deco','snowball','snow_cube']),x,z,{targetH:rand(0.9,2.4),rotY:rand(0,TAU)}); if(c)c.traverse(m=>{ if(m.isMesh){ m.castShadow=false; m.material=new THREE.MeshToonMaterial({color:'#e6f1fa',gradientMap:GRAD}); } }); }
+  for(let i=0;i<32;i++){ const a=rand(0,TAU), r=rand(470,522), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,5)||iceMask(x,z)<0.4)continue; const c=place('bush_dead_deco',x,z,{targetH:rand(1.0,1.8),rotY:rand(0,TAU)}); if(c)c.traverse(m=>{ if(m.isMesh){ m.castShadow=false; m.material=new THREE.MeshToonMaterial({color:'#9a948a',gradientMap:GRAD}); } }); }   // ❄️ frosty dead shrubs
   mergeDeadTrees(_dt, false);   // PERF: all biome dead trees -> ONE merged mesh, no per-tree shadow-cull
   for(const p of SWAMP_POOLS){ for(let k=0;k<9;k++){ const a=rand(0,TAU), rr=p.r*rand(0.95,1.4), rx=p.x+Math.cos(a)*rr, rz=p.z+Math.sin(a)*rr; if(swampMask(rx,rz)>0.3) _reeds.push({x:rx,z:rz,h:rand(1.2,2.1)}); } }   // 🌾 cattails ring each swamp pool (bog edges)
   buildSwampReeds(_reeds);   // procedural cattails (merged) replace the old lawn-grass reeds
@@ -2941,12 +2949,20 @@ function updatePlayer(dt){
   let ix=0,iz=0; if(keys['KeyW']||keys['ArrowUp'])iz-=1; if(keys['KeyS']||keys['ArrowDown'])iz+=1; if(keys['KeyA']||keys['ArrowLeft'])ix-=1; if(keys['KeyD']||keys['ArrowRight'])ix+=1;   // arrow keys fully mirror WASD (layout parity)
   if(touchMove&&(touchMove.x||touchMove.z)){ ix+=touchMove.x; iz+=touchMove.z; }   // virtual stick / gamepad feed
   const sprint=keys['ShiftLeft']||keys['ShiftRight']||touchSprint; const moving=(Math.abs(ix)>0.05||Math.abs(iz)>0.05);
-  let mvx=0,mvz=0;
+  let mvx=0,mvz=0, _spNow=0;
+  let _iz=null; if(!MINE.inMine && !DUNGEON.inDungeon){ for(const z of ICE_ZONES){ const dx=player.position.x-z.x, dz=player.position.z-z.z; if(dx*dx+dz*dz < z.r*z.r){ _iz=z; break; } } }   // ❄️ over a frozen pit?
   if(moving){ const l=Math.hypot(ix,iz); ix/=l; iz/=l; const cs=Math.cos(cam.yaw),sn=Math.sin(cam.yaw);
     mvx=-iz*sn-ix*cs; mvz=-iz*cs+ix*sn; const tgt=Math.atan2(mvx,mvz)+CHAR_FWD;
     player.rotation.y=angLerp(player.rotation.y,tgt,dt*12);
-    const sp=((sprint&&Needs.canSprint())?9:5)*Needs.moveMul()*(_wz?(_wz.kind==='swamp'?0.28:0.55):1)*(state.mounted?state.mounted.speedMul:1); player.position.x+=mvx*sp*dt; player.position.z+=mvz*sp*dt; resolve();   // swamp bog = SUPER SLOW 0.28x (sticky), normal water 0.55x; mounted = faster travel
-    if(grounded){ stepT-=dt; if(stepT<=0){ SFX.play('step'); stepT=sprint?0.26:0.4; } } }
+    _spNow=((sprint&&Needs.canSprint())?9:5)*Needs.moveMul()*(_wz?(_wz.kind==='swamp'?0.28:0.55):1)*(state.mounted?state.mounted.speedMul:1); }   // swamp bog = SUPER SLOW 0.28x; normal water 0.55x; mounted faster
+  if(_iz){   // ❄️ ICE SLIP: momentum glide -> you slide + overshoot (annoying+fun, NON-damaging); off-ice it resets to normal
+    state._ivx=(state._ivx||0)+mvx*_spNow*4*dt; state._ivz=(state._ivz||0)+mvz*_spNow*4*dt;
+    const _fr=Math.pow(0.68,dt); state._ivx*=_fr; state._ivz*=_fr;   // weaker friction = longer slide/overshoot (owner: slippery + hard to control)
+    const _icv=Math.hypot(state._ivx,state._ivz); if(_icv>10){ state._ivx*=10/_icv; state._ivz*=10/_icv; }
+    if(Math.abs(state._ivx)>0.02||Math.abs(state._ivz)>0.02){ player.position.x+=state._ivx*dt; player.position.z+=state._ivz*dt; resolve(); if(grounded){ stepT-=dt; if(stepT<=0){ SFX.play('step',{rate:1.3,vol:0.6}); stepT=0.32; } } } }
+  else { state._ivx=0; state._ivz=0;
+    if(moving){ player.position.x+=mvx*_spNow*dt; player.position.z+=mvz*_spNow*dt; resolve();
+      if(grounded){ stepT-=dt; if(stepT<=0){ SFX.play('step'); stepT=sprint?0.26:0.4; } } } }
   if(!MINE.inMine && !DUNGEON.inDungeon){   // TRUE WRAP (surface, every frame): walk off one edge -> appear on the other. The shader renders modulo WRAP_P so wrapping the coord by exactly WRAP_P is SEAMLESS (no visible jump); shift the camera by the same delta so it doesn't lerp across the seam.
     const HW=WRAP_P*0.5;
     if(player.position.x>HW){ player.position.x-=WRAP_P; camera.position.x-=WRAP_P; } else if(player.position.x<-HW){ player.position.x+=WRAP_P; camera.position.x+=WRAP_P; }
@@ -3078,6 +3094,7 @@ function updateWorld(dt){ const tn=performance.now()*0.001;
     for(const mesh of _cloudMeshes) mesh.instanceMatrix.needsUpdate=true; }
   WATER_MAT.uniforms.uTime.value+=dt; if(sun) WATER_MAT.uniforms.uSun.value.copy(sun.position).sub(player.position).normalize(); WATER_MAT.uniforms.uSky.value.copy(_sky);   // ONE tick for ALL water (was ~93 per-disc updates) + live time-of-day sky tint (richer look, fewer updates)
   SWAMP_WATER_MAT.uniforms.uTime.value+=dt; SWAMP_WATER_MAT.uniforms.uSun.value.copy(WATER_MAT.uniforms.uSun.value); SWAMP_WATER_MAT.uniforms.uSky.value.copy(_sky).multiplyScalar(0.35); LAVA_MAT.uniforms.uTime.value+=dt*0.45;   // murky pools follow the (dimmed) sky; lava bubbles slowly + self-lit (no sky tick)
+  ICE_MAT.uniforms.uTime.value+=dt*0.12; ICE_MAT.uniforms.uSun.value.copy(WATER_MAT.uniforms.uSun.value); ICE_MAT.uniforms.uSky.value.copy(_sky);   // ❄️ frozen pits barely ripple (near-static) + reflect the cold sky
   for(const c of SINK_MESHES) c.rotation.y+=dt*0.85;   // 🌀 spin the sinkhole funnels (faceted -> reads as swirling sand)
   _grassTime.value=tn;   // grass wind clock
   cullWrapped();   // hide localized static objects that wrap outside the view frustum (cuts the always-on 360° draw + shadow cost)
