@@ -940,7 +940,7 @@ const MODEL_LIST=["char_player","char_n1","char_n2","char_n3","House_1","House_2
  // RESOURCE NODES — these MUST load or stone/crystal/carrot won't exist and their quests become impossible:
  "Cube","Crystal1","Crystal2","Crystal3","Crystal4","Carrot","Cabbage","CarrotGroup",
  // CUBE-ANIMAL creatures (Kenney) — night ENEMIES + FARM animals (real rigged models w/ a walk clip, replacing the procedural "circle" blobs):
- "animal-cow","animal-pig","animal-chick","animal-deer","animal-bunny","animal-fox","animal-tiger","animal-lion","animal-hog","animal-crab","animal-bee","animal-caterpillar","animal-elephant","animal-polar","animal-penguin","animal-giraffe","animal-panda",
+ "animal-cow","animal-pig","animal-chick","animal-deer","animal-bunny","animal-fox","animal-tiger","animal-lion","animal-hog","animal-crab","animal-bee","animal-caterpillar","animal-elephant","animal-polar","animal-penguin","animal-gecko","animal-giraffe","animal-panda",
  // SPOOKY night mobs (Kenney graveyard kit) — haunt the far OUTSKIRTS after dark only (see CREATURE_TYPES minDist):
  "mob-skeleton","mob-ghost","mob-zombie","mob-pumpkin",
  "mob-raider","mob-marauder","mob-drake","mob-demon","mob-golem","mob-wispskull",   // Quaternius ultimate-monsters: raiders (day outskirts) + tough far creatures + a spooky skull for the wisp
@@ -1070,6 +1070,7 @@ function buildWorld(){
 
   buildZones();
   buildHamlets(_hi);   // wild settlements out in the hills (after buildZones -> outerStructures populated; _hi continues past the town homes)
+  buildFauna();   // 🦊 ambient roaming animals per biome (fox/penguin/polar in ice, bunny/deer in hills, crabs in swamp, geckos in desert)
   buildPlayerHouse();
   buildPlayerAndNeighbors();
   buildAmbient();
@@ -3516,6 +3517,26 @@ function updateAnimals(dt){ for(let i=animals.length-1;i>=0;i--){ const a=animal
   m.position.y=groundY(m.position.x,m.position.z);   // graze on the hills
   if(m.scale.x>1.001) m.scale.setScalar(lerp(m.scale.x,1,dt*9));
   if(Math.hypot(m.position.x,m.position.z)>FENCE){ a.wdir=Math.atan2(-m.position.z,-m.position.x); } } }
+/* 🦊 AMBIENT BIOME FAUNA (owner: real animal models roaming each biome — NOT geometric — wander + FLEE the player, NO combat/harvest/aggro, non-solid). A few per biome, leashed near their spawn. */
+const fauna=[];
+function spawnFauna(model, x, z, sc){ const m=buildMobGLB(model, sc||0.8); if(!m)return null; m.position.set(x, groundY(x,z), z); m.rotation.y=rand(0,TAU); m.traverse(o=>{ if(o.isMesh)o.castShadow=false; }); world.add(m);
+  fauna.push({mesh:m, wdir:rand(0,TAU), wt:rand(1,4), flee:0, sx:x, sz:z, spd:(sc>1?1.0:1.5)}); return m; }
+function buildFauna(){ fauna.length=0;
+  const ICE=['animal-fox','animal-penguin','animal-polar'], HILL=['animal-bunny','animal-deer','animal-fox','animal-chick'];
+  for(let i=0;i<7;i++){ const a=rand(0,TAU), r=rand(476,520), x=Math.cos(a)*r, z=Math.sin(a)*r; if(iceMask(x,z)<0.5||isInWater(x,z,4))continue; const mdl=pick(ICE); spawnFauna(mdl, x, z, mdl==='animal-polar'?1.4:0.8); }   // ❄️ arctic fox + penguin + (neutral) polar bear
+  for(let i=0;i<9;i++){ const a=rand(0,TAU), r=rand(95,168), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,4)||inTrainingZone(x,z,4))continue; spawnFauna(pick(HILL), x, z, 0.8); }   // 🌳 hills: bunny/deer/fox/chick
+  for(let i=0;i<5;i++){ const a=rand(0,TAU), r=rand(190,300), x=Math.cos(a)*r, z=Math.sin(a)*r; if(swampMask(x,z)<0.5||isInWater(x,z,4))continue; spawnFauna('animal-crab', x, z, 0.7); }   // 🐸 swamp: crabs
+  for(let i=0;i<6;i++){ const a=rand(0,TAU), r=rand(345,435), x=Math.cos(a)*r, z=Math.sin(a)*r; if(desertMask(x,z)<0.5||isInWater(x,z,4))continue; spawnFauna('animal-gecko', x, z, 0.55); }   // 🦎 desert: geckos (static model, code-wandered)
+}
+function updateFauna(dt){ const px=player.position.x, pz=player.position.z;
+  for(const f of fauna){ const m=f.mesh; if(m.userData.mixer)m.userData.mixer.update(dt);
+    const dpx=m.position.x-px, dpz=m.position.z-pz, d=Math.hypot(dpx,dpz);
+    if(d<9){ f.flee=0.8; f.wdir=Math.atan2(dpz,dpx); }   // bolt AWAY from the player
+    else if(f.flee>0) f.flee-=dt;
+    else { f.wt-=dt; if(f.wt<=0){ const ds=Math.hypot(m.position.x-f.sx,m.position.z-f.sz); f.wdir=(ds>34)?Math.atan2(f.sz-m.position.z,f.sx-m.position.x):rand(0,TAU); f.wt=rand(1.5,4); } }   // wander; leash back toward spawn if it strays
+    const sp=(f.flee>0?2.8:0.7)*f.spd*dt; m.position.x+=Math.cos(f.wdir)*sp; m.position.z+=Math.sin(f.wdir)*sp;
+    m.position.y=groundY(m.position.x,m.position.z); m.rotation.y=angLerp(m.rotation.y, faceVel(Math.cos(f.wdir),Math.sin(f.wdir)), dt*5);
+    if(Math.hypot(m.position.x,m.position.z)>FENCE){ f.wdir=Math.atan2(-m.position.z,-m.position.x); } } }
 function spawnCreature(){ let sx,sz,pd;
   for(let tries=0;tries<8;tries++){ const a=rand(0,TAU), r=isDay()?rand(22,36):rand(24,68); sx=player.position.x+Math.cos(a)*r; sz=player.position.z+Math.sin(a)*r; pd=Math.hypot(sx,sz); if(!inTrainingZone(sx,sz)) break; }   // NIGHT rings the player (Minecraft-style), DAY near the player — but re-roll up to 8× so a point never lands in the 🎯 training yard; pd (dist from town) still tiers difficulty
   if(inTrainingZone(sx,sz)) return;   // 🎯 hard fallback: if all 8 re-rolls stayed in-zone, ABORT this spawn (the continuous-respawn tick simply tries again, like the cull cadence) — no mob EVER spawns in the practice yard, day or night
@@ -4095,7 +4116,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`animals ${animals.length}  R[${span(animals,a=>Math.hypot(a.mesh.position.x,a.mesh.position.z))}]\n`
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
-function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updateTrainingGround(dt); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
+function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateFauna(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updateTrainingGround(dt); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
 function idleTick(dt){ cam.yaw+=dt*0.12; cam.targetYaw=cam.yaw; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
@@ -4306,6 +4327,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
   tp:(x,z)=>player.position.set(x,0,z), setKey:(c,d)=>keys[c]=d, yaw:()=>cam.yaw, mark:t=>markGoal(t), genGoals,
   dbgSink:()=>{ const s=SINKHOLES[0]; return {px:+player.position.x.toFixed(1),pz:+player.position.z.toFixed(1),py:+player.position.y.toFixed(1),grounded:grounded,gY:+groundUnder().toFixed(1),d0:+Math.hypot(player.position.x-s.x,player.position.z-s.z).toFixed(1),n:SINKHOLES.length}; },
   forceGust:(storm)=>{ _wind.active=true; _wind.t=0; _wind.storm=!!storm; _wind.dir=0; _wind.force=storm?5:2.6; return _wind.force; },   // ❄️ debug: trigger a gust/storm now
+  dbgFauna:()=>({ n:fauna.length, pos:fauna.map(f=>[+f.mesh.position.x.toFixed(0),+f.mesh.position.z.toFixed(0)]) }),   // 🦊 debug: ambient fauna count + positions
   inside:()=>Math.abs(player.position.x-HOUSE.cx)<HOUSE.hx+1.2&&Math.abs(player.position.z-HOUSE.cz)<HOUSE.hz+1.2,
   roofOp:()=>cutRoof?+cutRoof.material.opacity.toFixed(2):null,
   interactNow:()=>{ updateInteract(); if(nearest){ const l=nearest.label; nearest.action(); return l; } return null; },
