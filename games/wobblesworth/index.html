@@ -3534,6 +3534,15 @@ function mimicChest(targetH){ const g=buildMobGLB('Chest', targetH); const bb=ne
   for(const s of [-1,1]){ const eye=new THREE.Mesh(new THREE.SphereGeometry(w*0.075,10,8), new THREE.MeshBasicMaterial({color:'#ffd21a'})); eye.position.set(cx+s*w*0.24, bb.min.y+h*0.76, fz-d*0.04); maw.add(eye);
     const pup=new THREE.Mesh(new THREE.SphereGeometry(w*0.032,8,6), new THREE.MeshBasicMaterial({color:'#140d04'})); pup.position.set(cx+s*w*0.24, bb.min.y+h*0.76, fz-d*0.005); maw.add(pup); }   // glowing eyes + dark pupils
   return g; }
+function _bearMaw(g){ const bb=new THREE.Box3().setFromObject(g); const w=Math.max(0.3,bb.max.x-bb.min.x), h=Math.max(0.3,bb.max.y-bb.min.y), cx=(bb.min.x+bb.max.x)/2, fz=bb.max.z, snoutY=bb.min.y+h*0.6;   // 🐻 menacing fanged maw + red eyes so the ICE-ring Frost Bear reads as an ENEMY, not the cute ambient polar fauna
+  const maw=new THREE.Group(); g.add(maw);
+  const gum=new THREE.Mesh(new THREE.BoxGeometry(w*0.3,h*0.1,0.03), new THREE.MeshBasicMaterial({color:'#a8121a'})); gum.position.set(cx,snoutY,fz-0.02); maw.add(gum);
+  const T=toon('#fffdf2');
+  for(let i=0;i<5;i++){ const tx=cx+w*0.13*(-1+2*i/4);
+    const up=new THREE.Mesh(new THREE.ConeGeometry(w*0.028,h*0.09,4),T); up.position.set(tx,snoutY+h*0.03,fz); up.rotation.x=Math.PI; maw.add(up);
+    const lo=new THREE.Mesh(new THREE.ConeGeometry(w*0.024,h*0.07,4),T); lo.position.set(tx+w*0.02,snoutY-h*0.04,fz); maw.add(lo); }
+  const E=new THREE.MeshBasicMaterial({color:'#ff2a2a'}); for(const sx of [-w*0.1,w*0.1]){ const e=new THREE.Mesh(new THREE.SphereGeometry(w*0.038,8,6),E); e.position.set(cx+sx,snoutY+h*0.18,fz-h*0.03); maw.add(e); }
+  return g; }
 /* ── LEVEL / ZONE GATING (WoW-style con + level-difference combat) bolted onto the existing biome rings + day counter ── */
 const RING_BASE={hills:1,swamp:8,desert:15,ice:25,dark:34};
 function ringAt(x,z){ if(typeof darkMask==='function'&&darkMask(x,z)>0.5)return'dark'; if(typeof iceMask==='function'&&iceMask(x,z)>0.5)return'ice'; if(typeof desertMask==='function'&&desertMask(x,z)>0.5)return'desert'; if(typeof swampMask==='function'&&swampMask(x,z)>0.5)return'swamp'; return'hills'; }
@@ -3557,7 +3566,7 @@ const CREATURE_TYPES={   // night ENEMIES — real rigged cube-animals (was proc
   mote:{ name:'Buzzing Bee', hp:0.5, speed:3.8, dmg:1, bob:2.2, floatY:0.9, day:8, ranged:'thorn', attackKind:'sting', model:'animal-bee', tgtH:0.75, build(){ return buildMobGLB(this.model,this.tgtH); } },   // ONLY the bee shoots a (slow, dodgeable) thorn dart
   // SPECIAL far-out beasts: only spawn beyond minDist from town -> harder the further you explore. Predators CLAW (melee); the deer explodes.
   thornback:{ name:'Roaring Lion', hp:1.3, speed:1.7, dmg:2, bob:2.2, floatY:0, day:5, attackKind:'claw', minDist:78, model:'animal-lion', tgtH:1.35, build(){ return buildMobGLB(this.model,this.tgtH); } },
-  acidcap:{ name:'Frost Bear', hp:1.0, speed:2.3, dmg:2, bob:4.2, floatY:0, day:999, attackKind:'claw', minDist:9999, model:'animal-polar', tgtH:1.45, build(){ return buildMobGLB(this.model,this.tgtH); } },   // DISABLED (owner: remove the smiley polar bear from the start). Returns in the ICE biome (G6) as a menacing teeth'd bear / ambient fauna.
+  acidcap:{ name:'Frost Bear', hp:2.4, speed:2.0, dmg:3, bob:2.6, floatY:0, day:4, attackKind:'claw', minDist:460, iceOnly:true, model:'animal-polar', tgtH:1.6, build(){ return _bearMaw(buildMobGLB(this.model,this.tgtH,'#c4d4e0')); } },   // ❄️ FROST BEAR: ice-ring enemy (iceOnly) — a menacing teeth'd bear (fanged maw + red eyes via _bearMaw), frost-tinted + distinct from the cute ambient polar fauna
   boomshroom:{ name:'Charging Deer', hp:0.9, speed:3.0, dmg:1, bob:5.0, floatY:0, day:4, explode:true, minDist:140, model:'animal-deer', tgtH:1.3, build(){ return buildMobGLB(this.model,this.tgtH); } },
   // SPOOKY OUTSKIRTS mobs (owner: "deep in the jungle... find bad guys, just at night, like skeletons or pumpkins, on the outskirts, further out"). minDist gates them WELL away from town so the far field finally has a real nighttime threat; cap=0 by day keeps them night-only. Static graveyard GLBs (no walk clip) → buildMobGLB drives them by chase-movement + the per-type bob (skeleton stalk, pumpkin hop, ghost float).
   skeleton:{ name:'Rattling Skeleton', hp:1.4, speed:2.4, dmg:2, bob:2.4, floatY:0,    day:10, minDist:120, model:'mob-skeleton', tgtH:1.5,  build(){ return buildMobGLB(this.model,this.tgtH,'#e9e3d2'); } },                                          // bone ivory
