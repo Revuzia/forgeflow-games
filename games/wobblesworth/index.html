@@ -90,10 +90,10 @@
   #invbar .slot .ic{position:absolute; top:1px; right:4px; font-size:10px; font-weight:bold; color:#fff; text-shadow:0 1px 2px #000}
   #invbar .slot.drop{border-color:#9be8c8; background:rgba(122,224,108,.32)}
   #hearts{padding:1px 2px}   /* match Hunger/Energy exactly — now identical to the shared .bar padding (was 5px 9px -> Health looked oversized) */
-  #xpbar{position:fixed; left:50%; bottom:96px; transform:translateX(-50%); min-width:380px; background:linear-gradient(180deg,#2a2438,#1a1626); border:3px solid var(--ink); border-radius:11px; padding:4px 12px 6px; box-shadow:0 4px 0 rgba(0,0,0,.32); pointer-events:none; z-index:30}
-  #xpbar .lbl{font-size:11px; font-weight:bold; display:flex; justify-content:space-between; color:#fff; letter-spacing:.4px; gap:10px}
-  #xpbar .lbl span:first-child{color:#c9a0ff}
-  #xpbar .track{height:7px; background:rgba(0,0,0,.35); border-radius:5px; margin-top:3px; overflow:hidden}
+  #xpbar{position:fixed; left:50%; bottom:96px; transform:translateX(-50%); min-width:340px; display:flex; align-items:center; gap:9px; background:linear-gradient(180deg,#2a2438,#1a1626); border:3px solid var(--ink); border-radius:9px; padding:2px 11px; box-shadow:0 4px 0 rgba(0,0,0,.32); pointer-events:none; z-index:30}
+  #xpbar .xplv{font-size:11px; font-weight:bold; color:#c9a0ff; letter-spacing:.4px; white-space:nowrap}
+  #xpbar .xpnum{font-size:11px; font-weight:bold; color:#fff; letter-spacing:.4px; white-space:nowrap}
+  #xpbar .track{flex:1; height:6px; background:rgba(0,0,0,.35); border-radius:4px; overflow:hidden}
   #xpbar .fill{height:100%; width:0; border-radius:5px; background:linear-gradient(90deg,#7c5cff,#c9a0ff); transition:width .35s ease}
   #hearts .lbl{font-size:12px; gap:3px}
   #hearts .lbl span:last-child{font-variant-numeric:tabular-nums; flex-shrink:0; min-width:48px; text-align:right}
@@ -376,7 +376,7 @@
 <div id="dbg"></div>
 <div id="buildhud" class="hud" style="display:none;left:50%;transform:translateX(-50%);bottom:88px;background:rgba(20,16,28,.82);padding:7px 14px;border-radius:10px;font-size:14px;color:#fff;border:1px solid rgba(255,255,255,.25)"></div>
 <div id="zone" class="hud"></div>
-<div id="xpbar" class="hud"><div class="lbl"><span>⭐ Level <span id="vLevel">1</span></span><span id="vXP">0/40</span></div><div class="track"><div id="fXP" class="fill"></div></div></div>
+<div id="xpbar" class="hud"><span class="xplv">⭐ Lv <span id="vLevel">1</span></span><div class="track"><div id="fXP" class="fill"></div></div><span id="vXP" class="xpnum">0/40</span></div>
 <div id="invbar" class="hud"></div>
 <div id="inv" class="hidden"></div>
 <div id="pdpick" class="hidden"></div>
@@ -637,24 +637,31 @@ const grassMat=()=>new THREE.MeshToonMaterial({map:TEX.grass,gradientMap:GRAD});
 /* REAL 3D GRASS (owner: "the grass is terrible"): a dense field of leaning blades as ONE InstancedMesh
    (cheap — single draw call) across the central play area, so the lawn reads as lush 3D grass, not flat green. */
 const _grassTime={value:0};   // shared wind clock (ticked once/frame in updateWorld) — onBeforeCompile sways blade tops
+const _groundTime={value:0};   // SAND/SNOW animation clock (ticked once/frame) — drives drifting dune ripples + twinkling snow in the biome ground shader
+let _grassIM=null, _grassBase=null, _grassCell={x:1e9,z:1e9}, _grassO=null;   // PLAYER-FOLLOWING grass: the InstancedMesh, per-blade local offsets, last grid cell, reusable scratch
 function buildGrassField(){
-  // OWNER (Loop 5): the old cone blades used MeshToonMaterial({vertexColors:true}) on geometry with NO color
-  // attribute -> rendered as ugly BLACK spikes. Use the real KUBIKOS grass-tuft GLB geometry ("we have assets"),
-  // instanced into ONE draw call, tinted green via instanceColor (no vertexColors -> never black).
+  // Real KUBIKOS grass-tuft GLB geometry, instanced into ONE draw call, tinted green via instanceColor.
   let geo=null; const src=MODELS['Grass3']||MODELS['Grass']||MODELS['GrassLeaf1'];
   if(src){ src.traverse(m=>{ if(m.isMesh&&m.geometry&&!geo) geo=m.geometry.clone(); }); }
   if(!geo){ geo=new THREE.ConeGeometry(0.06,0.5,4); }   // fallback tuft if the asset is missing
-  geo.computeBoundingBox(); const bb=geo.boundingBox, h0=Math.max(0.01,bb.max.y-bb.min.y), norm=0.72/h0;   // taller blades (was 0.55) -> lusher field at the SAME vertex count (cheap; owner wants higher-quality grass)
-  geo.translate(-(bb.max.x+bb.min.x)/2,-bb.min.y,-(bb.max.z+bb.min.z)/2); geo.scale(norm,norm,norm);   // center XZ, base at y=0, normalize to ~0.55 tall
-  const mat=new THREE.MeshToonMaterial({gradientMap:GRAD,color:'#ffffff',emissive:new THREE.Color('#244f1e'),emissiveIntensity:0.22});   // green EMISSIVE floor so toon band-0 never reads black; lowered 0.3->0.22 (darker green) — the floor is lighting-independent so it was the part of the lawn staying bright at night; daytime grass unchanged (floor swamped by daylight)
-  mat.onBeforeCompile=(sh)=>{ sh.uniforms.uGrassTime=_grassTime; sh.vertexShader='uniform float uGrassTime;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n float _gp=instanceMatrix[3].x*0.25+instanceMatrix[3].z*0.18;\n transformed.x += sin(uGrassTime*1.6+_gp)*position.y*position.y*0.6;\n transformed.z += cos(uGrassTime*1.3+_gp)*position.y*position.y*0.35;'); };   // gentle breeze: blade TOPS sway (∝ y²), bases stay planted; free per-vertex sin
-  const N=4200, im=new THREE.InstancedMesh(geo,mat,N), o=new THREE.Object3D(), col=new THREE.Color();   // 4200 (lusher): denser blades; sqrt distribution keeps the playable centre thick, trims the sparse rim. Per-vertex wind shader still runs each frame (frustumCulled=false for the wrap) — kept modest for perf.
+  geo.computeBoundingBox(); const bb=geo.boundingBox, h0=Math.max(0.01,bb.max.y-bb.min.y), norm=1.4/h0;   // TALL blades (was 0.72) so they catch the 3rd-person camera + the y² wind sway reads big — was the #1 reason grass looked like flat texture
+  geo.translate(-(bb.max.x+bb.min.x)/2,-bb.min.y,-(bb.max.z+bb.min.z)/2); geo.scale(norm,norm,norm);   // center XZ, base at y=0
+  const mat=new THREE.MeshToonMaterial({gradientMap:GRAD,color:'#ffffff',emissive:new THREE.Color('#244f1e'),emissiveIntensity:0.22});
+  mat.onBeforeCompile=(sh)=>{ sh.uniforms.uGrassTime=_grassTime; sh.vertexShader='uniform float uGrassTime;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n float _gp=instanceMatrix[3].x*0.25+instanceMatrix[3].z*0.18;\n transformed.x += sin(uGrassTime*1.6+_gp)*position.y*position.y*0.5;\n transformed.z += cos(uGrassTime*1.3+_gp)*position.y*position.y*0.3;'); };   // gentle breeze: blade TOPS sway (∝ y²), bases planted (amplitudes trimmed since blades are now ~2x taller)
+  const N=15000, im=new THREE.InstancedMesh(geo,mat,N), o=new THREE.Object3D(), col=new THREE.Color();   // DENSE (was 4200) + PLAYER-FOLLOWING (re-anchored per grid cell in updateWorld) so a lush lawn surrounds you EVERYWHERE in the meadow, not just near origin — still ONE draw call
   const tones=['#4e9e3e','#5fb24a','#6cc257','#74c95a','#56a846','#69bd52','#82d873'];
-  for(let i=0;i<N;i++){ const a=rand(0,TAU), rad=Math.sqrt(Math.random())*125+3; const x=Math.cos(a)*rad, z=Math.sin(a)*rad;   // sqrt = denser near the middle where you play
-    const s=rand(0.7,1.5); o.position.set(x,groundY(x,z),z); o.rotation.set(0,rand(0,TAU),0); o.scale.set(s*rand(0.8,1.3),s*rand(0.85,1.4),s*rand(0.8,1.3)); o.updateMatrix(); im.setMatrixAt(i,o.matrix);   // blades sit on the hills (groundY=0 in town)
+  _grassBase=new Array(N);   // each blade stores its LOCAL offset within a ±36u patch + its rotation/scale; updateWorld re-anchors the whole patch under the player
+  for(let i=0;i<N;i++){ const bx=rand(-36,36), bz=rand(-36,36), s=rand(0.7,1.5), ry=rand(0,TAU), sx=s*rand(0.8,1.3), sy=s*rand(0.85,1.4), sz=s*rand(0.8,1.3);
+    _grassBase[i]={bx,bz,ry,sx,sy,sz};
+    o.position.set(bx,groundY(bx,bz),bz); o.rotation.set(0,ry,0); o.scale.set(sx,sy,sz); o.updateMatrix(); im.setMatrixAt(i,o.matrix);
     col.set(pick(tones)); im.setColorAt(i,col); }
-  im.instanceMatrix.needsUpdate=true; if(im.instanceColor)im.instanceColor.needsUpdate=true; im.receiveShadow=false; im.castShadow=false; im.frustumCulled=false; world.add(im); return im;   // grass no longer self-shadowed → the shadow-box edge never paints a band across the meadow (kept emissive/toon look)
+  im.instanceMatrix.needsUpdate=true; if(im.instanceColor)im.instanceColor.needsUpdate=true; im.receiveShadow=false; im.castShadow=false; im.frustumCulled=false; world.add(im); _grassIM=im; return im;
 }
+function reanchorGrass(){ if(!_grassIM||!_grassBase)return; const cx=Math.round(player.position.x/4)*4, cz=Math.round(player.position.z/4)*4; if(cx===_grassCell.x&&cz===_grassCell.z)return; _grassCell.x=cx; _grassCell.z=cz;   // re-place the 15k blades around the player ONLY when you cross into a new 4u grid cell (≈free the rest of the time); the uniform field makes the per-cell shift imperceptible
+  const o=_grassO||(_grassO=new THREE.Object3D());
+  for(let i=0;i<_grassBase.length;i++){ const g=_grassBase[i], wx=g.bx+cx, wz=g.bz+cz; const off=(typeof desertMask==='function'&&(desertMask(wx,wz)>0.4||iceMask(wx,wz)>0.4||darkMask(wx,wz)>0.4));   // grass grows on GREEN ground only — hide blades that land on sand/ice/dark
+    o.position.set(wx, off?-60:groundY(wx,wz), wz); o.rotation.set(0,g.ry,0); const k=off?0.0001:1; o.scale.set(g.sx*k,g.sy*k,g.sz*k); o.updateMatrix(); _grassIM.setMatrixAt(i,o.matrix); }
+  _grassIM.instanceMatrix.needsUpdate=true; }
 const tmap=(t,c)=>new THREE.MeshToonMaterial({map:t,gradientMap:GRAD,color:c||'#ffffff'});
 function box(w,h,d,c){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),toon(c)); m.castShadow=true; m.receiveShadow=true; return m; }
 function ball(r,c){ const m=new THREE.Mesh(new THREE.SphereGeometry(r,16,16),toon(c)); m.castShadow=true; return m; }
@@ -1076,15 +1083,15 @@ function buildWorld(){
   groundGeo.setAttribute('sandAmt', new THREE.BufferAttribute(_gsand,1)); groundGeo.setAttribute('iceAmt', new THREE.BufferAttribute(_gice,1));   // per-vertex desert/ice factor -> shader branches sand vs snow
   _gp.needsUpdate=true; groundGeo.computeVertexNormals();
   const _gmat=grassMat(); _gmat.vertexColors=true;
-  _gmat.onBeforeCompile=(sh)=>{ _gmat.userData._biomeShader=true;
+  _gmat.onBeforeCompile=(sh)=>{ _gmat.userData._biomeShader=true; sh.uniforms.uGroundTime=_groundTime;
     sh.vertexShader='attribute float biomeBlend; attribute float sandAmt; attribute float iceAmt;\nvarying float vBiomeBlend; varying float vSand; varying float vIce; varying vec2 vGPos; varying vec3 vVPos;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n vBiomeBlend=biomeBlend; vSand=sandAmt; vIce=iceAmt; vGPos=position.xy; vVPos=(modelViewMatrix*vec4(transformed,1.0)).xyz;');
-    const _nz='varying float vBiomeBlend; varying float vSand; varying float vIce; varying vec2 vGPos; varying vec3 vVPos;\nfloat _wh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\nfloat _wn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(_wh(i),_wh(i+vec2(1.0,0.0)),f.x),mix(_wh(i+vec2(0.0,1.0)),_wh(i+vec2(1.0,1.0)),f.x),f.y);}\nfloat _fbm(vec2 p){float s=0.0,a=0.5;for(int k=0;k<3;k++){s+=a*_wn(p);p*=2.03;a*=0.5;}return s;}\n';
+    const _nz='uniform float uGroundTime;\nvarying float vBiomeBlend; varying float vSand; varying float vIce; varying vec2 vGPos; varying vec3 vVPos;\nfloat _wh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\nfloat _wn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(_wh(i),_wh(i+vec2(1.0,0.0)),f.x),mix(_wh(i+vec2(0.0,1.0)),_wh(i+vec2(1.0,1.0)),f.x),f.y);}\nfloat _fbm(vec2 p){float s=0.0,a=0.5;for(int k=0;k<3;k++){s+=a*_wn(p);p*=2.03;a*=0.5;}return s;}\n';
     const _alb='#include <map_fragment>\n diffuseColor.rgb=mix(diffuseColor.rgb, vColor.rgb, vBiomeBlend);\n'
-      +' if(vSand>0.001){ float sn=_fbm(vGPos*0.06); float rip=sin(vGPos.x*0.10+sin(vGPos.y*0.05)*2.0)*0.5+0.5; vec3 sand=mix(vec3(0.74,0.62,0.42),vec3(0.93,0.84,0.63),sn); sand=mix(sand,sand*vec3(0.85,0.81,0.73),rip*0.5); diffuseColor.rgb=mix(diffuseColor.rgb,sand,vSand*0.9); }\n'
-      +' if(vIce>0.001){ float sw=_fbm(vGPos*0.09); vec3 snow=mix(vec3(0.85,0.89,0.96),vec3(0.99,1.0,1.0),sw); diffuseColor.rgb=mix(diffuseColor.rgb,snow,vIce*0.9); }\n';
+      +' if(vSand>0.001){ float sn=_fbm(vGPos*0.06+vec2(uGroundTime*0.015,0.0)); float rip=sin(vGPos.x*0.10+sin(vGPos.y*0.05)*2.0+uGroundTime*0.6)*0.5+0.5; vec3 sand=mix(vec3(0.74,0.62,0.42),vec3(0.93,0.84,0.63),sn); sand=mix(sand,sand*vec3(0.85,0.81,0.73),rip*0.5); diffuseColor.rgb=mix(diffuseColor.rgb,sand,vSand*0.9); }\n'
+      +' if(vIce>0.001){ float sw=_fbm(vGPos*0.09+vec2(uGroundTime*0.01,uGroundTime*0.006)); vec3 snow=mix(vec3(0.85,0.89,0.96),vec3(0.99,1.0,1.0),sw); diffuseColor.rgb=mix(diffuseColor.rgb,snow,vIce*0.9); }\n';
     const _spk='#include <lights_fragment_end>\n if(vSand>0.001||vIce>0.001){ vec3 _V=normalize(-vVPos); vec3 _N=normalize(normal); float _fr=pow(1.0-clamp(dot(_N,_V),0.0,1.0),4.0);'
-      +' if(vSand>0.001){ float gs=step(0.992,_wn(vGPos*55.0))*pow(clamp(dot(_N,_V),0.0,1.0),40.0); reflectedLight.directDiffuse+=vSand*(_fr*vec3(0.10,0.09,0.07)+gs*vec3(1.0,0.92,0.7)*0.6); }'
-      +' if(vIce>0.001){ float gn=step(0.980,_wn(vGPos*46.0))*pow(clamp(dot(_N,_V),0.0,1.0),22.0); reflectedLight.directDiffuse+=vIce*(_fr*vec3(0.12,0.16,0.22)*0.7+gn*vec3(1.0,1.0,1.05)*1.3); } }\n';
+      +' if(vSand>0.001){ float _sc=_wn(vGPos*55.0); float gs=step(0.992,_sc)*pow(clamp(dot(_N,_V),0.0,1.0),40.0)*(0.6+0.4*sin(uGroundTime*1.8+_sc*60.0)); reflectedLight.directDiffuse+=vSand*(_fr*vec3(0.10,0.09,0.07)+gs*vec3(1.0,0.92,0.7)*0.6); }'
+      +' if(vIce>0.001){ float _cl=_wn(vGPos*46.0); float gn=step(0.980,_cl)*pow(clamp(dot(_N,_V),0.0,1.0),22.0)*(0.5+0.5*sin(uGroundTime*3.0+_cl*40.0)); reflectedLight.directDiffuse+=vIce*(_fr*vec3(0.12,0.16,0.22)*0.7+gn*vec3(1.0,1.0,1.05)*1.3); } }\n';
     sh.fragmentShader=_nz+sh.fragmentShader.replace('#include <map_fragment>',_alb).replace('#include <lights_fragment_end>',_spk); };   // 🏜️ desert sand (noise albedo+ripples+warm mica glint+fresnel) / ❄️ snow (bright base+blue subsurface+twinkly sparkle+sheen), each biome-masked; grass/swamp/dark unchanged   // 🏜️ desert: blend diffuse toward the pure SAND vertex color (override the green grass texture); swamp/dark stay multiply (blend 0). Degrades safely if the include doesn't match.
   const ground=new THREE.Mesh(groundGeo, _gmat); ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; world.add(ground);   // 🗺️ vertexColors -> per-biome ground tint (white = grass untouched)   // huge field (owner: fence 613). Shadows follow the player (bounded) + fog hides the far rim, so on-screen draw count stays smooth.
   buildGrassField();   // dense 3D grass blades (owner: real-looking grass)
@@ -1772,7 +1779,7 @@ const _faceLoader=new THREE.TextureLoader(); const FACE_TEX={};
 ['warrior_male','warrior_female','wizard_male','wizard_female','ranger_male','ranger_female'].forEach(k=>{ const t=_faceLoader.load('assets/faces/face_'+k+'.png'); t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=8; FACE_TEX[k]=t; });   // 🙂 xAI-generated cartoon FACE atlases (chroma-keyed to alpha), one per class×gender
 const _FACE_CLS={warrior:'warrior', mage:'wizard', ranger:'ranger'};
 const FACE_OFF_BY_CLS={ warrior:{w:0.64,h:0.75,y:0.44,z:0.38}, mage:{w:0.66,h:0.73,y:0.44,z:0.34}, ranger:{w:0.78,h:0.83,y:0.44,z:0.36} };   // PER-CLASS face-plane fit, MEASURED from each Head bone's face area (warrior/wizard/archer heads differ); tune via __WW__.faceOff(cls,{...})
-const FACE_SKIN={ warrior:'#d4f3ef', mage:'#9ea4a2', ranger:'#bcc6b6' };   // tint the plane so the face skin MATCHES each model's head/hands skin (the bright xAI peach -> the model's tan/olive)
+const FACE_SKIN={ warrior:'#ffe9d2', mage:'#9ea4a2', ranger:'#bcc6b6' };   // tint the plane so the face skin MATCHES each model's head/hands skin (warrior lightened #d4f3ef->#ffe9d2 to match the model's light-peach head; no more dark two-tone neck seam)
 function buildFacePlane(pm){ if(!pm)return; const head=pm.getObjectByName('Head'); if(!head)return; if(head.userData._face){ head.remove(head.userData._face); head.userData._face=null; } if(head.userData._eyes){ head.userData._eyes.forEach(e=>head.remove(e)); head.userData._eyes=null; } const key=(_FACE_CLS[state.charClass]||'warrior')+'_'+(state._gender==='female'?'female':'male'); const tex=FACE_TEX[key]; if(!tex)return; const m=new THREE.MeshToonMaterial({map:tex, gradientMap:GRAD, transparent:true, alphaTest:0.5, side:THREE.FrontSide, color:new THREE.Color(FACE_SKIN[state.charClass]||'#ffffff')}); m.polygonOffset=true; m.polygonOffsetFactor=-2; m.polygonOffsetUnits=-2; const F=FACE_OFF_BY_CLS[state.charClass]||FACE_OFF_BY_CLS.warrior; const face=new THREE.Mesh(new THREE.PlaneGeometry(F.w,F.h), m); face.position.set(0,F.y,F.z); face.rotation.x=-0.05; face.renderOrder=3; head.add(face); head.userData._face=face; }   // 🙂 real cartoon face FILLING the head front (recropped PNG, per-class fit, skin-tinted to match the model); FrontSide -> invisible from behind
 function _addQEyes(pm){ if(!pm)return; const head=pm.getObjectByName('Head'); if(!head)return; if(head.userData._eyes){ head.userData._eyes.forEach(e=>head.remove(e)); } const eyes=[]; const fem=(state._gender==='female');
   for(const s of [1,-1]){ const eye=new THREE.Mesh(new THREE.SphereGeometry(QEYE.r,10,8), new THREE.MeshBasicMaterial({color:'#f4f0ea'})); eye.position.set(s*QEYE.sx, QEYE.y, QEYE.z); head.add(eye); eyes.push(eye); const pup=new THREE.Mesh(new THREE.SphereGeometry(QEYE.r*0.55,8,6), new THREE.MeshBasicMaterial({color:QEYE.col})); pup.position.set(s*QEYE.sx, QEYE.y, QEYE.z+QEYE.r*0.62); head.add(pup); eyes.push(pup);   // TWO-TONE eyes (white sclera + dark pupil)
@@ -3283,7 +3290,7 @@ function updateWorld(dt){ const tn=performance.now()*0.001; updateCompass();
   ICE_MAT.uniforms.uTime.value+=dt*0.12; ICE_MAT.uniforms.uSun.value.copy(WATER_MAT.uniforms.uSun.value); ICE_MAT.uniforms.uSky.value.copy(_sky);   // ❄️ frozen pits barely ripple (near-static) + reflect the cold sky
   for(const c of SINK_MESHES) c.rotation.y+=dt*0.85;   // 🌀 spin the sinkhole funnels (faceted -> reads as swirling sand)
   tickWind(dt); tickAsh(dt);   // 💨 ice gusts/storms (Frozen Wastes) + 🌋 drifting ash (The Blight)
-  _grassTime.value=tn;   // grass wind clock
+  _grassTime.value=tn; _groundTime.value=tn; reanchorGrass();   // grass wind clock + sand/snow drift clock + re-anchor the player-following grass field
   cullWrapped();   // hide localized static objects that wrap outside the view frustum (cuts the always-on 360° draw + shadow cost)
   // (the old waterObjs per-frame loop was a dead no-op over an empty array — reflective Water was removed; deleted)
   tickWeather(dt); tickMeadowWeather(dt);
