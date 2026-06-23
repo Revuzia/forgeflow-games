@@ -3514,6 +3514,10 @@ function playerDmgMult(D){ return Math.max(0.10,Math.min(1,1-0.16*Math.max(0,D))
 function mobDmgMult(D){ let m=Math.min(3,1+0.22*Math.max(0,D)); if(D>=5)m=Math.min(3,m*1.25); return m; }
 function overLevelMobMult(D){ return Math.max(0.5,Math.min(1,1+0.10*D)); }
 function mobMult(c){ const D=lvlDelta(c); return D>=0?mobDmgMult(D):overLevelMobMult(D); }
+function grayDelta(){ const L=state.level||1; return -(L<6?99:(L<40?(5+Math.floor(L/10)):9)); }
+function conColor(D){ if(D>=10)return {hex:'#3a3448',tag:'SKULL'}; if(D>=5)return {hex:'#e0463a',tag:'RED'}; if(D>=3)return {hex:'#e8731f',tag:'ORANGE'}; if(D>=-2)return {hex:'#ffd23f',tag:'YELLOW'}; if(D>grayDelta())return {hex:'#7ad04a',tag:'GREEN'}; return {hex:'#9a948a',tag:'GRAY'}; }
+function xpDeltaMult(D){ return D>=0?Math.min(1.2,1+0.05*D):Math.max(0,1-(-D)/6); }
+function aggroDetect(c){ return Math.max(8,Math.min(34,15+1.5*lvlDelta(c))); }
 const CREATURE_TYPES={   // night ENEMIES — real rigged cube-animals (was procedural Icosahedron/Sphere blobs). Stats + specials (ranged/explode/minDist/floatY) unchanged; only the model + scale + walk anim are new.
   petal:{ name:'Crawly Caterpillar', hp:1.0, speed:2.6, dmg:1, bob:3.4, floatY:0, day:14, model:'animal-caterpillar', tgtH:1.05, build(){ return buildMobGLB(this.model,this.tgtH); } },
   spore:{ name:'Snippy Crab', hp:0.7, speed:3.6, dmg:1, bob:5.4, floatY:0, day:12, model:'animal-crab', tgtH:1.0, build(){ return buildMobGLB(this.model,this.tgtH); } },
@@ -3774,7 +3778,7 @@ function playerAttack(){ if(!state.running||state.paused)return; if(state._atkCD
 function creatureHit(c){ if(!c.training){ c.provoked=true; c.aggro=true; }   // owner: HIT a mob (even a long-range bolt/arrow) -> it notices + hunts you from ANY distance, not just within sight
   c.flash=0.16; for(const mm of c.mats){ try{ mm.emissive.setHex(0xff4444); mm.emissiveIntensity=0.9; }catch(e){} } if(c.mesh) c.mesh.scale.setScalar(c.boss?(c.bscale||1)*1.08:1.22);
   if(c.boss&&c.hpbar){ drawBossBar(c.hpbar, c.hp/c.max); }
-  else if(c.mesh){ if(!c.hpbar){ c.hpbar=makeMiniBar(); c.hpbar.position.set(0,((c.type&&c.type.tgtH)||1.2)+0.9,0); c.mesh.add(c.hpbar); } drawMiniBar(c.hpbar, Math.max(0,c.hp)/c.max); c.hptimer=2.5; } }   // lazy on-hit HP bar over any mob (the user wanted to see the lion's HP as they hit it)
+  else if(c.mesh){ if(!c.hpbar){ c.hpbar=makeMiniBar(); c.hpbar.position.set(0,((c.type&&c.type.tgtH)||1.2)+0.9,0); c.mesh.add(c.hpbar); } drawMiniBar(c.hpbar, Math.max(0,c.hp)/c.max, c); c.hptimer=2.5; } }   // lazy on-hit HP bar over any mob (the user wanted to see the lion's HP as they hit it)
 function swingFx(){ const arc=new THREE.Mesh(new THREE.TorusGeometry(0.34,0.06,6,14,Math.PI*1.2), new THREE.MeshBasicMaterial({color:'#eef6ff',transparent:true,opacity:0.85}));
   const fwd=new THREE.Vector3(Math.sin(player.rotation.y),0,Math.cos(player.rotation.y)); arc.position.copy(player.position).addScaledVector(fwd,1.0); arc.position.y=player.position.y+1.0; arc.rotation.set(Math.PI/2,player.rotation.y,0); world.add(arc);   // arc rides the player's height (was hardcoded y=1.0 -> floated to the top of the screen when the player stood in a valley)
   ephemeral.push({node:arc,life:0.24,ripple:true}); }
@@ -3961,8 +3965,14 @@ function _pickFieldBoss(x,z){ if(typeof iceMask==='function' && iceMask(x,z)>0.4
 function drawBossBar(sp,frac){ const g=sp._g; g.clearRect(0,0,160,28); g.fillStyle='rgba(18,10,16,0.85)'; g.fillRect(3,13,154,13); g.fillStyle=frac>0.5?'#7ad04a':frac>0.25?'#ffd23f':'#e0463a'; g.fillRect(5,15,150*Math.max(0,Math.min(1,frac)),9); g.fillStyle='#fff'; g.font='bold 14px "Trebuchet MS",sans-serif'; g.textAlign='center'; g.fillText('💀 '+sp._name,80,10); sp.material.map.needsUpdate=true; }
 function makeBossBar(name){ const cv=document.createElement('canvas'); cv.width=160; cv.height=28; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthTest:false,depthWrite:false})); sp.material.map.colorSpace=THREE.SRGBColorSpace; sp.renderOrder=24; sp.scale.set(4.4,0.77,1); sp._cv=cv; sp._g=cv.getContext('2d'); sp._name=name; drawBossBar(sp,1); return sp; }
 // ── on-hit MINI health bar for ordinary mobs (industry standard: appears on damage, green->yellow->red, fades after the last hit) ──
-function drawMiniBar(sp,frac){ const g=sp._g; g.clearRect(0,0,120,14); g.fillStyle='rgba(14,8,12,0.82)'; g.fillRect(2,3,116,9); g.fillStyle=frac>0.5?'#7ad04a':frac>0.25?'#ffd23f':'#e0463a'; g.fillRect(4,5,112*Math.max(0,Math.min(1,frac)),5); sp.material.map.needsUpdate=true; }
-function makeMiniBar(){ const cv=document.createElement('canvas'); cv.width=120; cv.height=14; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthTest:false,depthWrite:false})); sp.material.map.colorSpace=THREE.SRGBColorSpace; sp.renderOrder=23; sp.scale.set(1.7,0.2,1); sp._cv=cv; sp._g=cv.getContext('2d'); drawMiniBar(sp,1); return sp; }
+function drawMiniBar(sp,frac,c){ const g=sp._g; g.clearRect(0,0,128,30); let col,tag='',lvl=0;
+  if(c){ lvl=mobLvlOf(c); const cc=conColor(lvl-(state.level||1)); col=cc.hex; tag=cc.tag; } else { col=frac>0.5?'#7ad04a':frac>0.25?'#ffd23f':'#e0463a'; }   // bar FILL now reads DANGER (con color by level delta); WIDTH still = remaining HP
+  if(c){ g.font='bold 11px sans-serif'; g.textBaseline='middle'; g.textAlign='left'; g.lineWidth=3; g.strokeStyle='rgba(0,0,0,0.6)'; const _t=(tag==='SKULL')?('☠ Lv'+lvl):('Lv '+lvl); g.strokeText(_t,4,7); g.fillStyle=col; g.fillText(_t,4,7); }   // level pip (con-colored, dark outline for readability)
+  g.fillStyle='rgba(8,6,10,0.9)'; g.fillRect(2,15,124,12);   // track
+  g.fillStyle=col; g.fillRect(4,17,Math.max(0,Math.min(1,frac))*120,8);   // fill
+  g.strokeStyle='rgba(255,255,255,0.25)'; g.lineWidth=1; g.strokeRect(2.5,15.5,123,11);   // thin border
+  sp.material.map.needsUpdate=true; }
+function makeMiniBar(){ const cv=document.createElement('canvas'); cv.width=128; cv.height=30; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthTest:false,depthWrite:false})); sp.material.map.colorSpace=THREE.SRGBColorSpace; sp.renderOrder=23; sp.scale.set(2.0,0.47,1); sp._cv=cv; sp._g=cv.getContext('2d'); drawMiniBar(sp,1); return sp; }
 // ── OVERHEAD PLAYER BAR: HP (+armor) bar over your own character's head, like the mobs ──
 var playerBar=null;
 function makePlayerBar(){ const cv=document.createElement('canvas'); cv.width=140; cv.height=26; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),transparent:true,depthTest:false,depthWrite:false})); sp.material.map.colorSpace=THREE.SRGBColorSpace; sp.renderOrder=24; sp.scale.set(2.2,0.41,1); sp._cv=cv; sp._g=cv.getContext('2d'); return sp; }
@@ -4030,7 +4040,7 @@ function renderLore(){ const el=document.getElementById('lore'); if(!el)return; 
     h+=`<div style="padding:8px;border:2px solid ${L.boss?'#c77dff':'#4a7a4a'};border-radius:10px;background:rgba(0,0,0,0.22)"><div style="font-size:24px;text-align:center">${icon}</div><div style="font-weight:800;text-align:center;margin-bottom:3px">${L.name}</div>${body}</div>`; }
   h+=`</div><div style="text-align:center;opacity:.6;font-size:11px;margin-top:10px">Press L or ✕ to close</div></div>`; el.innerHTML=h; const x=el.querySelector('#loreX'); if(x)x.onclick=closeLore; }
 function killCreature(i){ const c=creatures[i];
-  if(c.training){ c.hp=c.max; if(c.hpbar)drawMiniBar(c.hpbar,1); c.mesh.scale.setScalar(1); toast(c.dummy?'🎯 Dummy reset!':'🎯 Target reset!'); SFX.play('interact',{rate:1.4,vol:0.4}); return; }   // 🎯 TRAINING PROP: never dies, never drops loot — snap back to full HP. All three lethal callers (playerAttack, updatePlayerShots, dungeon) route here, so one guard covers melee + bolt + arrow.
+  if(c.training){ c.hp=c.max; if(c.hpbar)drawMiniBar(c.hpbar,1,c); c.mesh.scale.setScalar(1); toast(c.dummy?'🎯 Dummy reset!':'🎯 Target reset!'); SFX.play('interact',{rate:1.4,vol:0.4}); return; }   // 🎯 TRAINING PROP: never dies, never drops loot — snap back to full HP. All three lethal callers (playerAttack, updatePlayerShots, dungeon) route here, so one guard covers melee + bolt + arrow.
   recordLore(c); try{ chainOnKill(c); }catch(e){} const p=c.mesh.position.clone(); confetti(p.clone().setY(1.2),16);
   const burst=new THREE.Mesh(new THREE.SphereGeometry(0.4,8,8), new THREE.MeshBasicMaterial({color:'#9bffae',transparent:true,opacity:0.75})); burst.position.copy(p).setY(0.8); world.add(burst); ephemeral.push({node:burst,life:0.3,ripple:true});   // death pop
   if(c.hpbar){ c.mesh.remove(c.hpbar); c.hpbar=null; }
@@ -4052,7 +4062,7 @@ function killCreature(i){ const c=creatures[i];
   for(const _id in (state.activeQuests||{})){ const _d=Quests.defs[_id]; if(!_d||!_d._gen)continue;
     if((_d._tid==='hunt'||_d._tid==='survive')&&!Quests.isDone(_id,'slay')){ const _q=state.activeQuests[_id]; const _ok=_d._tid==='survive'?!isDay():(loreKeyOf(c.type)===_d._p.enemyKey&&(_d._p.nightOnly?!isDay():true)); if(_ok){ _q.kills=(_q.kills||0)+1; Quests.render(); if(_q.kills>=_d._p.count)Quests.complete(_id,'slay'); else toast(_d.title+': '+_q.kills+'/'+_d._p.count); } }
     else if(QT2[_d._tid]&&QT2[_d._tid].kill&&!Quests.isDone(_id,'do')){ const _q=state.activeQuests[_id]; if(QT2[_d._tid].kill(c,_d._p)){ _q.n=(_q.n||0)+1; Quests.render(); const _cnt=QT2[_d._tid].count(_d._p); if(_q.n>=_cnt)Quests.complete(_id,'do'); else toast(_d.title+': '+_q.n+'/'+_cnt); } } }   // generalized gen-quest kill counter (hunt/survive + QT2 banish/clear/biome/dungeon/no-hit)   // owner disliked the bright kill 'chime' — much lower pitch + quieter = a dull defeat thud, not a chime (hit sound at L~2092 stays rate 1.0)
-  gainXP(6 + (c.type&&c.type.minDist?8:0) + (m>1?m*2:0));   // XP for the kill — far-out specials + rare drops grant more
+  gainXP(Math.round((6 + (c.type&&c.type.minDist?8:0) + (m>1?m*2:0))*xpDeltaMult(mobLvlOf(c)-state.level)));   // XP for the kill — far-out specials grant more, scaled by level delta (0 once a mob greys out, +20% cap over-level)
   dropLoot(p.x,p.z,[['coin',coins]], '⚔️ Loot', true);   // a glowing loot BAG -> walk over to auto-collect (coins)
   if(tier==='epic'){ dropGear(p.x,p.z, pick(EPIC_GEAR)); }   // EPIC = an equippable epic weapon or armor (no toast — the glowing physical drop + hover stats are enough)
   else if(tier==='rare'){ makeDrop(p.x,p.z, pick(['crystal','iron_ingot']), m); if(Math.random()<0.45) dropGear(p.x,p.z, pick(RARE_GEAR)); }   // RARE = valuable material (+45% chance of equippable rare gear; no toast — physical drop only)
@@ -4098,8 +4108,9 @@ function updateCombat(dt){
     // AGGRO: chase only when the player is within sight (hysteresis so it doesn't flicker); indoors -> lose it.
     if(indoors){ c.aggro=false; c.provoked=false; }                     // ducking inside a home is the escape — drops aggro + clears the provoke
     else if(c.provoked){ c.aggro=true; }                                  // you HIT it -> it hunts you from ANY distance (no leash) until you get indoors
-    else if(c.aggro){ if(d>AGGRO_LOSE) c.aggro=false; }                   // otherwise normal sight hysteresis: give up past LOSE
-    else if(d<AGGRO_DETECT && los){ c.aggro=true; }
+    else if(c.aggro){ if(d>aggroDetect(c)*1.8) c.aggro=false; }            // sight hysteresis; deep-ring mobs (high level delta) detect+chase from FURTHER (aggroDetect scales 8..34 by delta)
+    else if(d<aggroDetect(c) && los){ c.aggro=true; }
+    if(c.aggro && !c.boss && d<24 && c.mesh){ if(!c.hpbar){ c.hpbar=makeMiniBar(); c.hpbar.position.set(0,((c.type&&c.type.tgtH)||1.2)+0.9,0); c.mesh.add(c.hpbar); drawMiniBar(c.hpbar,Math.max(0,c.hp)/c.max,c); } c.hptimer=Math.max(c.hptimer||0,1.2); }   // con-color nameplate appears when a mob NOTICES you -> read the danger BEFORE you engage
     if(T.stealth){ m.visible=c.aggro; if(!c.aggro){ pushMonsterOut(m); continue; } }   // GHOST: unseen while it hasn't noticed you (no attack, no chase); it materializes the instant you're in its vicinity and fades out again only when it loses you
     if(_stunned){ m.rotation.z=Math.sin(performance.now()*0.04)*0.06; }   // 🧊 frozen: a tiny shiver, but it can't act
     if(c.aggro && !_stunned){
