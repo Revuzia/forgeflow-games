@@ -253,7 +253,7 @@ def verify_live(slug, files=("index.html", "thumbnail.png", "content.json")):
     return out
 
 
-def deploy_one(game_dir, slug, metadata_path=None, dry_run=False):
+def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False):
     """Deploy a single game: optional cover-gen, R2 upload, Supabase upsert.
     Returns {ok, uploaded, total, url}. Reused by deploy_game.main + upload_game.py."""
     game_dir = Path(game_dir)
@@ -295,7 +295,7 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False):
         except Exception as e:
             print(f"[cover] WARN: cover generation failed ({e}); proceeding without cover")
 
-    uploaded = upload_to_r2(game_dir, slug)
+    uploaded = upload_to_r2(game_dir, slug, force=force)
     print(f"  [r2] {uploaded}/{total} files uploaded to {R2_BUCKET}/{slug}/")
     if uploaded == 0:
         print("  [r2] ERROR: 0 files uploaded — R2 auth/network failed. Skipping Supabase so the")
@@ -323,9 +323,10 @@ def main():
     parser.add_argument("--slug", required=True, help="URL slug for the game")
     parser.add_argument("--metadata", help="Path to game metadata JSON file")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--force", action="store_true", help="re-upload ALL files incl. static assets (default skips assets already on the CDN) — use when you added/changed assets")
     args = parser.parse_args()
     ensure_cf_env()
-    res = deploy_one(args.game_dir, args.slug, metadata_path=args.metadata, dry_run=args.dry_run)
+    res = deploy_one(args.game_dir, args.slug, metadata_path=args.metadata, dry_run=args.dry_run, force=args.force)
     sys.exit(0 if res.get("ok") or res.get("dry") else 1)
 
 
