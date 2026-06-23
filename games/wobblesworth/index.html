@@ -755,27 +755,28 @@ const _waterNormals=new THREE.TextureLoader().load('assets/textures/waternormals
    ticked directly. (Probe cleanup splices the MESH, never this shared material.) */
 const WATER_MAT=new THREE.ShaderMaterial({ transparent:true, depthWrite:false,
   uniforms:{ uTime:{value:0}, uDeep:{value:new THREE.Color('#0c4f6e')}, uShallow:{value:new THREE.Color('#2f9fb8')}, uSky:{value:new THREE.Color('#cfeaf6')}, uFoam:{value:new THREE.Color('#eafcff')}, uSun:{value:new THREE.Vector3(0.4,0.85,0.3).normalize()}, uLava:{value:0} },
-  vertexShader:`uniform float uTime; varying vec2 vUv; varying vec3 vWorld;
-    void main(){ vUv=uv; vec3 p=position;
+  vertexShader:`uniform float uTime; attribute float aDepth; varying vec2 vUv; varying vec3 vWorld; varying float vDepth;
+    void main(){ vUv=uv; vDepth=aDepth; vec3 p=position;
       p.z += sin(p.x*2.1+uTime*1.4)*0.02 + sin(p.y*2.5-uTime*1.1)*0.02 + sin((p.x+p.y)*0.9+uTime*0.6)*0.03;   // +3rd low-freq swell
       vec4 wp=modelMatrix*vec4(p,1.0); vWorld=wp.xyz; if(length(cameraPosition.xz)<2000.0){ vec2 wr=wp.xz-cameraPosition.xz; wr=mod(wr+${(WRAP_P*0.5).toFixed(1)},${WRAP_P.toFixed(1)})-${(WRAP_P*0.5).toFixed(1)}; wp.xz=cameraPosition.xz+wr; } vec4 mvp=viewMatrix*wp; mvp.y -= (mvp.x*mvp.x+mvp.z*mvp.z)*${WORLD_CURVE.toFixed(6)}; gl_Position=projectionMatrix*mvp; }`,   // match the world WRAP + curve so water tiles & drapes with the ground
-  fragmentShader:`uniform float uTime, uLava; uniform vec3 uDeep,uShallow,uSky,uFoam,uSun; varying vec2 vUv; varying vec3 vWorld;
+  fragmentShader:`uniform float uTime, uLava; uniform vec3 uDeep,uShallow,uSky,uFoam,uSun; varying vec2 vUv; varying vec3 vWorld; varying float vDepth;
     vec3 wnormal(vec2 q,float t){ float hx=1.7*cos(q.x*1.7+t*1.3)+1.15*cos((q.x+q.y)*2.2+t*1.7)+0.7*cos(q.x*0.7-t*0.5); float hy=1.9*cos(q.y*1.9-t*1.05)+1.15*cos((q.x+q.y)*2.2+t*1.7)+0.7*cos(q.y*0.6+t*0.4); return normalize(vec3(-hx*0.09,1.0,-hy*0.09)); }
     void main(){ vec2 q=vWorld.xz*0.9;
       vec3 N=wnormal(q,uTime); vec3 V=normalize(cameraPosition-vWorld); vec3 L=normalize(uSun);
       float fres=pow(1.0-max(dot(N,V),0.0),3.0);
       float rad=length(vUv-0.5)*2.0;
-      vec3 base=mix(uDeep,uShallow, clamp(rad*0.6+0.15,0.0,1.0));
-      vec3 col=mix(base,uSky, clamp(fres*0.8,0.0,0.42));                                  // gentler fresnel sky-reflection (was 0.85 -> big white glare at the horizon)
-      float spec=pow(max(dot(reflect(-L,N),V),0.0),120.0); col+=vec3(min(spec*0.4,0.18)); // much dimmer + tighter sun glint -> kills the big white reflection blob on the pond
+      float dn=clamp(vDepth*0.6,0.0,1.0); float dr=clamp((1.0-rad)*1.05,0.0,1.0); float d=max(dn,dr*0.8);   // REAL carved depth where the basin is cut; radial fallback for un-carved discs (pond/rivers/wells)
+      vec3 base=mix(uShallow,uDeep, d);                                                   // shallow at the shore -> deep in the middle, driven by ACTUAL water depth (was UV-radius -> flat lit disc)
+      vec3 col=mix(base,uSky, clamp(fres*0.8,0.0,0.42));
+      float spec=pow(max(dot(reflect(-L,N),V),0.0),120.0); col+=vec3(min(spec*0.4,0.16));
       float spk=smoothstep(0.55,1.0, sin(q.x*3.0+uTime*2.0)*sin(q.y*2.6-uTime*1.6)); col+=spk*0.06;
-      float caustic=smoothstep(0.45,1.0, sin(q.x*5.0+uTime*1.5)*sin(q.y*4.6+uTime*1.2))*(1.0-rad)*0.5; col+=caustic*uShallow*0.4;   // shallow shimmer
-      float foam=smoothstep(0.84,1.0,rad)*(0.5+0.5*sin(rad*38.0-uTime*3.0)); col=mix(col,uFoam,clamp(foam*0.75,0.0,0.7));            // brighter foam ring
-      float edge=1.0-smoothstep(0.94,1.0,rad)*0.8;                                        // soften the very rim so overlapping river-disc seams disappear
-      if(uLava>0.5){ float flow=sin(q.x*2.0+uTime*0.5)*sin(q.y*1.8-uTime*0.4); vec3 lav=mix(uDeep,uShallow,clamp(0.45+flow*0.35+(1.0-rad)*0.3,0.0,1.0)); lav=mix(lav,vec3(0.10,0.035,0.02),smoothstep(0.62,1.0,rad)*0.8); lav+=uShallow*0.30*smoothstep(0.62,1.0,sin(q.x*4.0+uTime)*sin(q.y*3.6-uTime*0.8)); gl_FragColor=vec4(lav*1.35,1.0); return; }   // 🌋 LAVA: opaque molten rock — no sky-fresnel/specular, dark cooled-crust rim, scrolling bright cracks, boosted so it self-lights under bloom
-      gl_FragColor=vec4(col, clamp(mix(0.8,0.97,fres+rad*0.15),0.0,0.98)*edge); }` });
+      float caustic=smoothstep(0.45,1.0, sin(q.x*5.0+uTime*1.5)*sin(q.y*4.6+uTime*1.2))*d*0.5; col+=caustic*uShallow*0.4;
+      float foam=(1.0-smoothstep(0.0,0.30,d))*(0.5+0.5*sin(rad*38.0-uTime*3.0)); col=mix(col,uFoam,clamp(foam*0.6,0.0,0.55));   // FOAM at the true SHORELINE (shallow depth) on any rim shape, not a fixed UV ring
+      if(uLava>0.5){ float flow=sin(q.x*2.0+uTime*0.5)*sin(q.y*1.8-uTime*0.4); vec3 lav=mix(uDeep,uShallow,clamp(0.45+flow*0.35+(1.0-rad)*0.3,0.0,1.0)); lav=mix(lav,vec3(0.10,0.035,0.02),smoothstep(0.62,1.0,rad)*0.8); lav+=uShallow*0.30*smoothstep(0.62,1.0,sin(q.x*4.0+uTime)*sin(q.y*3.6-uTime*0.8)); gl_FragColor=vec4(lav*1.35,1.0); return; }   // 🌋 LAVA: opaque molten rock — no fresnel/specular, cooled-crust rim, scrolling cracks, self-lit
+      float alpha=clamp(0.94*smoothstep(0.02,0.4,d)+fres*0.06,0.0,0.95); gl_FragColor=vec4(col, alpha); }` });   // water DISSOLVES into the bank at the shoreline (transparent where shallow) instead of a hard floating disc edge
+function _setWaterDepth(geo, mx, mz, surfaceY){ const pos=geo.attributes.position, n=pos.count, dep=new Float32Array(n); for(let i=0;i<n;i++){ const g=(typeof terrainH==='function')?terrainH(mx+pos.getX(i), mz-pos.getY(i)):0; dep[i]=Math.max(0, surfaceY-g); } geo.setAttribute('aDepth', new THREE.BufferAttribute(dep,1)); }   // per-vertex water DEPTH (surface - carved terrain) so the shader can tint deep + foam/fade at the true shoreline
 function makeWater(r,x,z,y=0.14,cheap=false){ if(typeof desertMask==='function' && desertMask(x,z)>0.2) return null;   // owner: NO water in the desert ring (it's quicksand, not lakes) — `cheap` kept for call-site compat — ALL water now shares WATER_MAT (one program, one tick/frame)
-  const m=new THREE.Mesh(new THREE.CircleGeometry(r,48),WATER_MAT); m.rotation.x=-Math.PI/2; m.position.set(x,y,z); world.add(m); waters.push(m);   // push the MESH (count -> world_expanded gate); shared material is ticked directly in updateWorld
+  const _wg=new THREE.CircleGeometry(r,48); _setWaterDepth(_wg,x,z,y); const m=new THREE.Mesh(_wg,WATER_MAT); m.rotation.x=-Math.PI/2; m.position.set(x,y,z); world.add(m); waters.push(m);   // push the MESH (count -> world_expanded gate); shared material is ticked directly in updateWorld
   if(r>=4) waterZones.push({x,z,r:r*0.82,vr:r,surfaceY:y});   // real ponds/rivers = swimmable (tiny wells r<4 stay walk-up); 0.82 = wade at the rim, swim in the middle; vr = full VISUAL radius (for the structure/tree keep-out)
   return m;
 }
@@ -789,7 +790,7 @@ function makeLake(x,z,r){ const N=48, geo=new THREE.CircleGeometry(r,N), pos=geo
     pos.setX(i,vx*k); pos.setY(i,vy*k); }
   pos.needsUpdate=true; geo.computeVertexNormals();
   const b=WATER_BASINS.find(w=>w.x===x&&w.z===z); const yy=b?b.yy:groundY(x,z)+0.12;   // basin was carved BEFORE the terrain mesh (prepLakeBasins) so the mesh + physics agree; yy fills the bowl just under the rim
-  const m=new THREE.Mesh(geo,WATER_MAT); m.rotation.x=-Math.PI/2; m.position.set(x,yy,z); world.add(m); waters.push(m);
+  _setWaterDepth(geo,x,z,yy); const m=new THREE.Mesh(geo,WATER_MAT); m.rotation.x=-Math.PI/2; m.position.set(x,yy,z); world.add(m); waters.push(m);
   waterZones.push({x,z,r:r*0.72,vr:r*1.4,surfaceY:yy}); return m; }
 const LAKES=[[480,0,52],[-480,0,44],[-58,-480,40],[346,-346,36]];   // the 4 outer lakes — moved out to the EXPANDED swamp ring (r~480) (single source of truth for prep + placement)
 function prepLakeBasins(){ for(const [x,z,r] of LAKES){ let mn=Infinity; for(let a=0;a<6.28;a+=0.7){ mn=Math.min(mn, terrainH(x+Math.cos(a)*r*1.1, z+Math.sin(a)*r*1.1)); } WATER_BASINS.push({x,z,rs:r*0.85,rb:r*1.5,floor:mn-2.2,yy:mn-0.3}); } }   // carve bowls BEFORE the terrain mesh is displaced, so the ground mesh cups each lake   // swimmable interior (r*0.72, inside the wavy rim); vr = the rim PEAK reach (~r*1.4) so the keep-out clears the whole visible shoreline
@@ -810,7 +811,7 @@ function makeBiomePool(p,mat,opts){ const N=40, geo=new THREE.CircleGeometry(p.r
   for(let i=1;i<pos.count;i++){ const vx=pos.getX(i), vy=pos.getY(i), a=Math.atan2(vy,vx); const k=1+Math.sin(a*2+ph)*0.18+Math.sin(a*3-0.7)*0.12+Math.sin(a*5+1.9)*0.08; pos.setX(i,vx*k); pos.setY(i,vy*k); }   // blobby irregular rim (not a perfect disc)
   pos.needsUpdate=true; geo.computeVertexNormals();
   const b=WATER_BASINS.find(w=>w.x===p.x&&w.z===p.z); const yy=b?b.yy:groundY(p.x,p.z)+0.1;
-  const m=new THREE.Mesh(geo,mat); m.rotation.x=-Math.PI/2; m.position.set(p.x,yy,p.z); m.receiveShadow=true; world.add(m);
+  _setWaterDepth(geo,p.x,p.z,yy); const m=new THREE.Mesh(geo,mat); m.rotation.x=-Math.PI/2; m.position.set(p.x,yy,p.z); m.receiveShadow=true; world.add(m);
   if(opts&&opts.swim) waterZones.push({x:p.x,z:p.z,r:p.r*0.7,vr:p.r*1.35,surfaceY:yy,kind:'swamp'});   // tagged 'swamp' -> SUPER-SLOW sticky-bog movement (vs normal water)
   else if(opts&&opts.lava) LAVA_ZONES.push({x:p.x,z:p.z,r:p.r*0.72,vr:p.r*1.35,surfaceY:yy});
   else if(opts&&opts.ice) ICE_ZONES.push({x:p.x,z:p.z,r:p.r*0.78,vr:p.r*1.3,surfaceY:yy});   // ❄️ slippery frozen pit (player slides, no swim, no damage)
@@ -1748,8 +1749,12 @@ function setHeld(kind){ if(kind===_heldKind) return; _heldKind=kind; while(heldG
 let QHELD_OFF={px:0,py:0,pz:0, rx:0,ry:0,rz:0, s:1.6};   // held-item offsets on the Quaternius WeaponR bone (tuned empirically via __WW__.qheld)
 let QOFFHAND_OFF={px:0,py:0,pz:0, rx:0,ry:0,rz:0, s:1.5};
 let QEYE={r:0.07, sx:0.09, y:0.42, z:0.33, col:'#1a1622'};   // eyes on the Quaternius Head bone (models ship eyeless) — raised to the FACE MIDLINE + pushed FORWARD to the front of the head (were buried at the chin); tune via __WW__.qeye
-function _addQEyes(pm){ if(!pm)return; const head=pm.getObjectByName('Head'); if(!head)return; if(head.userData._eyes){ head.userData._eyes.forEach(e=>head.remove(e)); } const eyes=[]; for(const s of [1,-1]){ const eye=new THREE.Mesh(new THREE.SphereGeometry(QEYE.r,10,8), new THREE.MeshBasicMaterial({color:'#f4f0ea'})); eye.position.set(s*QEYE.sx, QEYE.y, QEYE.z); head.add(eye); eyes.push(eye); const pup=new THREE.Mesh(new THREE.SphereGeometry(QEYE.r*0.55,8,6), new THREE.MeshBasicMaterial({color:QEYE.col})); pup.position.set(s*QEYE.sx, QEYE.y, QEYE.z+QEYE.r*0.62); head.add(pup); eyes.push(pup); }   // TWO-TONE eyes (white sclera + dark pupil) read as real eyes, not flat dots
-  const fm=new THREE.MeshBasicMaterial({color:'#3a2a1a'}); for(const f of [[QEYE.sx,QEYE.y+QEYE.r*1.6,2.0,0.42],[-QEYE.sx,QEYE.y+QEYE.r*1.6,2.0,0.42],[0,QEYE.y-QEYE.r*2.3,2.2,0.5]]){ const fb=new THREE.Mesh(new THREE.BoxGeometry(QEYE.r*f[2],QEYE.r*f[3],QEYE.r*0.5),fm); fb.position.set(f[0],f[1],QEYE.z); head.add(fb); eyes.push(fb); }   // brows + mouth ALWAYS drawn now (the old 'skip if a Face mesh exists' guard wrongly skipped warrior/wizard, whose Face mesh is a blank skin with no painted features)
+function _addQEyes(pm){ if(!pm)return; const head=pm.getObjectByName('Head'); if(!head)return; if(head.userData._eyes){ head.userData._eyes.forEach(e=>head.remove(e)); } const eyes=[]; const fem=(state._gender==='female');
+  for(const s of [1,-1]){ const eye=new THREE.Mesh(new THREE.SphereGeometry(QEYE.r,10,8), new THREE.MeshBasicMaterial({color:'#f4f0ea'})); eye.position.set(s*QEYE.sx, QEYE.y, QEYE.z); head.add(eye); eyes.push(eye); const pup=new THREE.Mesh(new THREE.SphereGeometry(QEYE.r*0.55,8,6), new THREE.MeshBasicMaterial({color:QEYE.col})); pup.position.set(s*QEYE.sx, QEYE.y, QEYE.z+QEYE.r*0.62); head.add(pup); eyes.push(pup);   // TWO-TONE eyes (white sclera + dark pupil)
+    if(fem){ const lash=new THREE.Mesh(new THREE.BoxGeometry(QEYE.r*0.95,QEYE.r*0.3,QEYE.r*0.4), new THREE.MeshBasicMaterial({color:'#15101a'})); lash.position.set(s*(QEYE.sx+QEYE.r*0.45), QEYE.y+QEYE.r*0.62, QEYE.z+QEYE.r*0.32); lash.rotation.z=s*0.42; head.add(lash); eyes.push(lash); } }   // ♀ subtle eyelashes at the outer corners
+  const bm=new THREE.MeshBasicMaterial({color:'#3a2a1a'}); const bw=fem?1.6:2.1, bh=fem?0.30:0.48;
+  for(const s of [1,-1]){ const br=new THREE.Mesh(new THREE.BoxGeometry(QEYE.r*bw,QEYE.r*bh,QEYE.r*0.5),bm); br.position.set(s*QEYE.sx, QEYE.y+QEYE.r*1.6, QEYE.z); head.add(br); eyes.push(br); }   // ♂ thicker brows / ♀ thinner
+  const mouth=new THREE.Mesh(new THREE.BoxGeometry(QEYE.r*2.2,QEYE.r*(fem?0.55:0.45),QEYE.r*0.5), new THREE.MeshBasicMaterial({color:fem?'#c25a52':'#5a3a2a'})); mouth.position.set(0, QEYE.y-QEYE.r*2.3, QEYE.z); head.add(mouth); eyes.push(mouth);   // ♀ pink lips / ♂ neutral — gender now visibly differs on the face
   head.userData._eyes=eyes; }
 function applyHeldOffsets(){ if(!heldGroup.userData.onBone) return; if(heldGroup.userData.q){ const q=QHELD_OFF; heldGroup.position.set(q.px,q.py,q.pz); heldGroup.rotation.set(q.rx,q.ry,q.rz); heldGroup.scale.setScalar(q.s); return; } const o=TOOL_OFFSETS[_heldKind]||_SWORD_OFF; heldGroup.position.set(o.pos[0],o.pos[1],o.pos[2]); heldGroup.rotation.set(o.rot[0],o.rot[1],o.rot[2]); heldGroup.scale.setScalar(o.scale); }
 /* OFF-HAND (left hand): a shield or torch model carried on the arm-left bone (mirror of the held weapon). */
@@ -3218,9 +3223,9 @@ function updateWorld(dt){ const tn=performance.now()*0.001; updateCompass();
     for(const f of ugTorches){ const s=0.9+Math.sin(tn*8+f.userData.fl)*0.13; f.scale.setScalar(s); }
   } else { hemi.intensity=clamp(0.5+0.5*clamp(sy*1.4+0.15,0,1),0.5,1.0); if(fill.intensity!==0.4)fill.intensity=0.4; }   // hemi was PINNED 1.0 day+night -> lawn stayed daylight-bright at night and bloom smeared bright blades into white specks; now dims to ~0.5 at night (genuinely dark, still navigable) and back to 1.0 by noon
   if(!UG.active){ const _dkN=darkMask(player.position.x,player.position.z); if(_dkN>0.01){ const _nf=_dkN*_dkN;
-    _sky.lerp(_night,_nf*0.85); _zen.lerp(_zenNight,_nf*0.9); sun.intensity*=(1-_nf*0.82); hemi.intensity=Math.max(hemi.intensity*(1-_nf*0.30), 0.24*_dkN);
+    _sky.lerp(_night,_nf*0.85); _zen.lerp(_zenNight,_nf*0.9); sun.intensity*=(1-_nf*0.62); hemi.intensity=Math.max(hemi.intensity*(1-_nf*0.30), 0.42*_dkN);
     scene.background.copy(_sky); scene.fog.color.copy(_sky); skyMat.uniforms.bot.value.copy(_sky); skyMat.uniforms.top.value.copy(_zen); } }   // ⚫ DARK CORE = permanent NIGHT sky (forces _sky/_zen toward night by darkMask, even at game-noon); hemi floored at 0.24 so it stays navigable; the ash block below layers over it
-  if(!UG.active){ const _dk=darkMask(player.position.x,player.position.z); if(_dk>0.01){ const k=_dk*_dk; scene.fog.color.lerp(_DARKFOG,k*0.93); scene.background.lerp(_DARKFOG,k*0.9); skyMat.uniforms.bot.value.lerp(_DARKFOG,k*0.92); skyMat.uniforms.top.value.lerp(_DARKFOG,k*0.84); scene.fog.far=scene.fog.far*(1-k)+150*k; scene.fog.near=scene.fog.near*(1-k)+26*k; sun.intensity*=(1-k*0.66); hemi.intensity=Math.max(hemi.intensity*(1-k*0.52),0.34*k); } }
+  if(!UG.active){ const _dk=darkMask(player.position.x,player.position.z); if(_dk>0.01){ const k=_dk*_dk; scene.fog.color.lerp(_DARKFOG,k*0.93); scene.background.lerp(_DARKFOG,k*0.9); skyMat.uniforms.bot.value.lerp(_DARKFOG,k*0.92); skyMat.uniforms.top.value.lerp(_DARKFOG,k*0.84); scene.fog.far=scene.fog.far*(1-k)+240*k; scene.fog.near=scene.fog.near*(1-k)+45*k; sun.intensity*=(1-k*0.45); hemi.intensity=Math.max(hemi.intensity*(1-k*0.40),0.55*k); } }   // The Blight stays moody but is now VISIBLE/navigable (was near-black: hemi floor 0.34->0.55, fog reaches 240, sun less crushed) so you can see the terrain + glowing lava
   if(!UG.active && !state.reduce){ const _dkA=darkMask(player.position.x,player.position.z); if(_dkA>0.3 && ((state._fc||0)%4===0)){ const n=_dkA>0.8?2:1; for(let i=0;i<n;i++){ const a=pBall(rand(0.06,0.13), Math.random()<0.22?'#ed7a26':'#9a94a2'); const _aa=rand(0,TAU), _ar=rand(3,24); a.position.set(player.position.x+Math.cos(_aa)*_ar, (player.position.y||0)+rand(6,16), player.position.z+Math.sin(_aa)*_ar); world.add(a); ephemeral.push({node:a, life:rand(3.5,5.5), v:new THREE.Vector3(rand(-0.3,0.3), rand(-0.7,-0.35), rand(-0.3,0.3)), g:0}); } } }   // ⚫ drifting ASH + the odd ember mote deep in the dark core (reuses the shared particle pool + ephemeral; gated to darkMask>0.3, every 4th frame, respects reduce-motion)   // ⚫ DARK CORE = the ONLY foggy realm: closes in dark (incl. the whole sky dome -> ashen, not blue) + dims as darkMask rises; recomputed each frame from _sky so it auto-restores as you leave
   if(!UG.active){ const _skx=player.position.x, _skz=player.position.z; const _sw=swampMask(_skx,_skz), _de=desertMask(_skx,_skz), _dk2=darkMask(_skx,_skz); const _ic=(typeof iceMask==='function')?iceMask(_skx,_skz):0;
     const _oc=clamp(_sw*0.75 + _de*0.45 + _ic*0.55 + _dk2*0.6, 0, 0.9);
