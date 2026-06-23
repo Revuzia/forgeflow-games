@@ -2175,8 +2175,8 @@ function legendHTML(){ const recipesAll=Object.keys(state.craftedSet||{}).length
   const done=items.filter(i=>i[1]).length; let h=`<div class="jdiv"></div><div class="q"><b>🏆 Town Legend (${done}/${items.length})</b>`;
   for(const it of items) h+=`<div class="obj ${it[1]?'done':''}">${it[1]?'✓':'•'} ${it[0]} <span style="opacity:.6">(${it[2]})</span></div>`;
   return h+'</div>'; }
-const SAVE_V=2;
-function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V, day:state.day,giggle:state.giggle,goals:state.goals,bestDay:state.bestDay,inv:state.inv,stash:state.stash,built:state.built,
+const SAVE_V=3;
+function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V, savedAt:Date.now(), day:state.day,giggle:state.giggle,goals:state.goals,bestDay:state.bestDay,inv:state.inv,stash:state.stash,built:state.built,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
   unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, charClass:state.charClass, mana:state.mana, manaMax:state.manaMax, armorDye:state.armorDye, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, hasRod:state.hasRod, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier, bagCount:state.bagCount, charModel:state.charModel,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
@@ -2186,8 +2186,8 @@ function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V,
 // VERSIONED + SANITIZED load: bad/corrupt/legacy data can never crash boot or inject impossible state
 function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) return; let s; try{ s=JSON.parse(raw); }catch(e){ localStorage.setItem('ww2_save_corrupt',raw); return; }
   if(!s||typeof s!=='object') return;
-  if(s.v && s.v!==SAVE_V){ try{ localStorage.setItem('ww2_save_bak_v'+s.v, raw); }catch(e){} }   // back up across version bumps; fields are additive so we still load
-  const num=(x,d,lo,hi)=>{ const n=Math.floor(+x); return Number.isFinite(n)?clamp(n,lo,hi):d; };
+  if(s.v && s.v>SAVE_V){ try{ const bk='ww2_save_bak_v'+s.v; if(!localStorage.getItem(bk)) localStorage.setItem(bk, raw); const cur=localStorage.getItem('ww2_save_prevok'); if(cur){ let p=null; try{ p=JSON.parse(cur); }catch(e){} if(p&&(+p.savedAt||0)>(+s.savedAt||0)) s=p; } }catch(e){} } else if(s.v && s.v<SAVE_V){ try{ localStorage.setItem('ww2_save_bak_v'+s.v, raw); }catch(e){} }   // back up across version bumps; fields are additive so we still load
+  try{ let _pp=null; try{ _pp=JSON.parse(localStorage.getItem('ww2_save_prevok')||'null'); }catch(e){} if((+s.savedAt||0)>=(+(_pp&&_pp.savedAt)||0)) localStorage.setItem('ww2_save_prevok', JSON.stringify(s)); }catch(e){} const num=(x,d,lo,hi)=>{ const n=Math.floor(+x); return Number.isFinite(n)?clamp(n,lo,hi):d; };
   state.day=num(s.day,1,1,99999); state.giggle=num(s.giggle,0,0,1e9); state.bestDay=num(s.bestDay,state.day,1,99999); state.built=num(s.built,0,0,1e9);
   state.inv={}; if(s.inv&&typeof s.inv==='object') for(const k in ITEMS){ const n=Math.floor(+s.inv[k]); if(Number.isFinite(n)&&n>0) state.inv[k]=n; }   // only known items, finite, >0
   state.stash={}; if(s.stash&&typeof s.stash==='object') for(const k in ITEMS){ const n=Math.floor(+s.stash[k]); if(Number.isFinite(n)&&n>0) state.stash[k]=n; }   // home storage, same sanitizer
@@ -4316,7 +4316,7 @@ function openCoop(){
 window.openCoop = openCoop;
 
 function guardedFrame(now){ try{ frameWork(now); }catch(e){ __frameErrs++; if(__frameErrs<=5) console.error('frame error',e); __report('frame',e); } }   // the REAL per-frame error boundary (used by loop AND tested directly)
-function loop(now){ guardedFrame(now); requestAnimationFrame(loop); }   // re-issue ALWAYS — one bad frame can never freeze the game
+function loop(now){ guardedFrame(now); requestAnimationFrame(loop); } setInterval(()=>{ try{ if(state.running && !sessionStorage.getItem('ww_newgame')) save(); }catch(e){} }, 15000);   // re-issue ALWAYS — one bad frame can never freeze the game
 requestAnimationFrame(loop);
 
 function showLoadFailUI(){ const el=document.getElementById('loading'); if(el) el.innerHTML='😕 Couldn\'t load the neighborhood.<br><br><a href="#" style="color:#fff;font-weight:bold;text-decoration:underline" onclick="location.reload();return false">↻ Tap to reload</a>'; }
