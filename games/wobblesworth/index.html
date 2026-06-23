@@ -3204,6 +3204,14 @@ function updateWorld(dt){ const tn=performance.now()*0.001; updateCompass();
     if(state.tutStep===0&&dDoor<7){ state.tutStep=1; toast('🚪 Step inside — the walls peel away so you can see in!'); }
     if(state.tutStep<=1&&insideH){ state.tutStep=2; toast('✨ Press E at the fridge/stove/bed · 🛒 shop with B · craft with C. Have fun!'); bk.visible=false; tutorialDone(); }
   }
+  if(state.running && !state._selftesting && state.tutStep>=2 && state.tutStep<5){   // (T7) post-house onboarding: teach combat / night / the hotbar, one beat at a time (gated by tutStep so each fires once)
+    state._tutCD=(state._tutCD||0)-dt;
+    if(state._tutCD<=0){
+      if(state.tutStep===2){ const foe=creatures.some(c=>c&&!c.training&&c.mesh&&Math.hypot(c.mesh.position.x-player.position.x,c.mesh.position.z-player.position.z)<24); if(foe||!isDay()){ state.tutStep=3; state._tutCD=7; toast('⚔️ A foe nearby! LEFT-CLICK (or the ⚔ button on touch) to attack — face it and swing.'); } }
+      else if(state.tutStep===3){ if(!isDay()){ state.tutStep=4; state._tutCD=7; toast('🌙 Night brings monsters out. Fight them — or duck inside a house until dawn.'); } }
+      else if(state.tutStep===4){ state.tutStep=5; toast('🔢 Press 1–0 to switch weapons & tools on your hotbar. Good luck out there!'); }
+    }
+  }
   tickNodes(dt); updateZone();
   if(state.chimney&&Math.random()<0.05){ const p=pBall(rand(0.12,0.2),'#dfe4ea'); p.position.copy(state.chimney.position).add(new THREE.Vector3(0,1,0)); world.add(p); ephemeral.push({node:p,life:2.4,v:new THREE.Vector3(rand(-.3,.3),1,0),grow:1}); }
   if(state.disco){ if(state.discoOn||state.discoSpin>0){ state.disco.rotation.y+=dt*(state.discoSpin>0?6:2); if(state.discoSpin>0)state.discoSpin-=dt; } }
