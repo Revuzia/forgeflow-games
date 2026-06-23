@@ -3475,6 +3475,19 @@ function buildMobGLB(model, targetH, tint, opacity){
   const clips=ANIMS[model]; if(clips&&clips.length){ const mx=new THREE.AnimationMixer(g); const clip=clips.find(c=>/walk/i.test(c.name))||clips.find(c=>/idle/i.test(c.name))||clips[0]; if(clip){ const a=mx.clipAction(clip); a.time=Math.random()*clip.duration; a.play(); } wrap.userData.mixer=mx; }
   return wrap;
 }
+// (P) MIMIC 'Snapchest' — the plain Chest GLB read as furniture gliding around. Keep the chest disguise (textured wood/gold)
+// but bolt on a fanged maw + glowing eyes on the front face so it READS as a monster the moment it moves.
+function mimicChest(targetH){ const g=buildMobGLB('Chest', targetH); const bb=new THREE.Box3().setFromObject(g);
+  const w=Math.max(0.3,bb.max.x-bb.min.x), h=Math.max(0.3,bb.max.y-bb.min.y), d=Math.max(0.3,bb.max.z-bb.min.z), cx=(bb.min.x+bb.max.x)/2, mawY=bb.min.y+h*0.5, fz=bb.max.z;
+  const maw=new THREE.Group(); g.add(maw); g.userData.mimicMaw=maw;   // grouped so the lid can 'snap' later if wanted
+  const gum=new THREE.Mesh(new THREE.BoxGeometry(w*0.8,h*0.22,0.03), new THREE.MeshBasicMaterial({color:'#c41810'})); gum.position.set(cx,mawY,fz-0.03); maw.add(gum);   // glowing red mouth behind the fangs
+  const T=toon('#fffdf2');
+  for(let i=0;i<7;i++){ const tx=cx+w*(-0.35+0.7*i/6);
+    const up=new THREE.Mesh(new THREE.ConeGeometry(w*0.052,h*0.18,4),T); up.position.set(tx,mawY+h*0.05,fz-0.005); up.rotation.x=Math.PI; maw.add(up);   // upper fang (points down)
+    const lo=new THREE.Mesh(new THREE.ConeGeometry(w*0.046,h*0.14,4),T); lo.position.set(tx+w*0.05,mawY-h*0.08,fz-0.005); maw.add(lo); }   // lower fang (points up), offset = interlocking grin
+  for(const s of [-1,1]){ const eye=new THREE.Mesh(new THREE.SphereGeometry(w*0.075,10,8), new THREE.MeshBasicMaterial({color:'#ffd21a'})); eye.position.set(cx+s*w*0.24, bb.min.y+h*0.76, fz-d*0.04); maw.add(eye);
+    const pup=new THREE.Mesh(new THREE.SphereGeometry(w*0.032,8,6), new THREE.MeshBasicMaterial({color:'#140d04'})); pup.position.set(cx+s*w*0.24, bb.min.y+h*0.76, fz-d*0.005); maw.add(pup); }   // glowing eyes + dark pupils
+  return g; }
 const CREATURE_TYPES={   // night ENEMIES — real rigged cube-animals (was procedural Icosahedron/Sphere blobs). Stats + specials (ranged/explode/minDist/floatY) unchanged; only the model + scale + walk anim are new.
   petal:{ name:'Crawly Caterpillar', hp:1.0, speed:2.6, dmg:1, bob:3.4, floatY:0, day:14, model:'animal-caterpillar', tgtH:1.05, build(){ return buildMobGLB(this.model,this.tgtH); } },
   spore:{ name:'Snippy Crab', hp:0.7, speed:3.6, dmg:1, bob:5.4, floatY:0, day:12, model:'animal-crab', tgtH:1.0, build(){ return buildMobGLB(this.model,this.tgtH); } },
@@ -3493,7 +3506,7 @@ const CREATURE_TYPES={   // night ENEMIES — real rigged cube-animals (was proc
   ghost:   { name:'Wailing Ghost',     hp:0.9, speed:2.9, dmg:1, bob:3.0, floatY:1.1,  day:6,  minDist:170, stealth:true, model:'mob-ghost', tgtH:1.35, build(){ return buildMobGLB(this.model,this.tgtH,'#cfe0ff',0.6); } },                                 // INVISIBLE until it aggros; reappears to fight, fades out again if it loses the player
   // PROP-BORN enemies — DISTINCT models (a living cactus, a mimic chest, a spore mushroom, a lantern wisp), NOT reskins of the graveyard mobs (owner: don't reuse models)
   thistle:  { name:'Prickle Brute', hp:1.8, speed:1.5, dmg:2, bob:1.6, floatY:0,   day:4, minDist:60,  attackKind:'claw', model:'Cactus1', tgtH:1.4,  build(){ return buildMobGLB(this.model,this.tgtH,'#3e8e4f'); } },                 // slow spiky melee tank, near-mid field
-  mimic:    { name:'Snapchest',     hp:1.6, speed:2.6, dmg:2, bob:4.8, floatY:0,   day:3, minDist:90,  model:'Chest', tgtH:0.85, build(){ return buildMobGLB(this.model,this.tgtH); } },                                                  // ambusher that looks like a loot chest (keeps its wood/gold texture)
+  mimic:    { name:'Snapchest',     hp:1.6, speed:2.6, dmg:2, bob:4.8, floatY:0,   day:3, minDist:90,  model:'Chest', tgtH:0.85, build(){ return mimicChest(this.tgtH); } },                                                  // ambusher: a loot chest with a fanged maw + glowing eyes so it READS as a monster, not furniture
   sporecap: { name:'Sporecap',      hp:1.1, speed:2.2, dmg:1, bob:6.2, floatY:0.1, day:5, minDist:120, ranged:'seed', model:'MushroomRed', tgtH:0.95, build(){ return buildMobGLB(this.model,this.tgtH,'#d24a4a'); } },               // far-out spore-spitter
   wisp:     { name:"Will-o'-Wisp",  hp:0.8, speed:3.2, dmg:1, bob:3.2, floatY:1.45,day:5, minDist:150, stealth:true, model:'mob-wispskull', tgtH:0.85, build(){ return buildMobGLB(this.model,this.tgtH,'#9affc8',0.72); } },   // floating spectral SKULL (was the 'Lantern' pole that read as a lamppost) — ghostly green, deep outskirts
   // ── TOUGH OUTSKIRTS CREATURES (Quaternius ultimate-monsters; owner: tough creatures for the OUTSKIRTS, NOT bosses). Day+night roamers gated far out by minDist; high base hp × distMul = a real fight. ──
