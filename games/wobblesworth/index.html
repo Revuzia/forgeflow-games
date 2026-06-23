@@ -1241,6 +1241,7 @@ function warpToShrine(fromX,fromZ){   // E on a shrine orb -> warp to a RANDOM o
   if(!dest){ for(let i=0;i<14;i++){ const a=rand(0,TAU), r=rand(40,FENCE-40), cx=Math.cos(a)*r, cz=Math.sin(a)*r; if(!waterZones.some(w=>Math.hypot(cx-w.x,cz-w.z)<w.r+2)){ dest={x:cx,z:cz}; break; } } if(!dest)dest={x:0,z:30}; }
   const d=Math.hypot(dest.x,dest.z)||1, tx=dest.x-(dest.x/d)*3, tz=dest.z-(dest.z/d)*3;   // land a few units off the pedestal, not inside it
   flashFade(); player.position.set(tx,0.3,tz); vy=0; updateWorld(0.05); SFX.play('jump'); shake(0.4); confetti(new THREE.Vector3(tx,1.4,tz),28); toast('✨ The gazing orb whisks you across the realm!'); }
+const GRAVEYARDS=[];   // 🪦 headstone-cluster positions — spooky-mob night hotspots (see pickCreatureType)
 function makeLandmark(kind,x,z){ const g=new THREE.Group(); g.position.set(x,groundY(x,z),z); g.rotation.y=rand(0,TAU);   // landmarks sit on the hills
   if(kind==='ruin'){ const slab=box(3.4,0.4,3.4,'#a39c8a'); slab.position.y=0.2; g.add(slab);
     for(let i=0;i<5;i++){ const h=rand(1.6,4.0); const p=box(0.7,h,0.7,'#b9b2a0'); p.position.set(rand(-2.4,2.4),h/2,rand(-2.4,2.4)); p.rotation.y=rand(-0.3,0.3); g.add(p); } }
@@ -1256,11 +1257,20 @@ function makeLandmark(kind,x,z){ const g=new THREE.Group(); g.position.set(x,gro
     const p1=box(0.12,1.4,0.12,'#5a3b22'); p1.position.set(-1.4,0.7,2.0); g.add(p1); const p2=p1.clone(); p2.position.x=-0.4; g.add(p2);   // weapon rack posts
     for(const r of [0.5,-0.5]){ const spear=box(0.07,1.8,0.07,'#8a8a92'); spear.position.set(-0.9,1.0,2.0); spear.rotation.z=r; g.add(spear); }   // crossed spears
     const pole=box(0.14,2.4,0.14,'#3a2616'); pole.position.set(1.6,1.2,-1.8); g.add(pole); const skull=new THREE.Mesh(new THREE.SphereGeometry(0.3,8,8),toon('#e9e3d2')); skull.position.set(1.6,2.5,-1.8); g.add(skull); }   // skull totem
+  else if(kind==='graveyard'){ GRAVEYARDS.push({x,z});
+    const plot=box(8,0.12,8,'#37412c'); plot.position.y=0.06; g.add(plot);   // dark grave plot
+    for(let i=0;i<10;i++){ const hx=rand(-3.2,3.2), hz=rand(-3.2,3.2), hh=rand(0.7,1.25), tl=rand(-0.12,0.12);
+      const stone=box(0.6,hh,0.16,i%3===0?'#7e848e':'#8f96a0'); stone.position.set(hx,hh/2,hz); stone.rotation.z=tl; g.add(stone);
+      const cap=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.16,10,1,false,0,Math.PI),toon('#9aa0a8')); cap.rotation.x=Math.PI/2; cap.rotation.z=tl; cap.position.set(hx,hh,hz); g.add(cap); }   // headstones with rounded tops
+    for(let i=0;i<3;i++){ const cx2=rand(-3,3), cz2=rand(-3,3); const post=box(0.14,1.3,0.14,'#6e7480'); post.position.set(cx2,0.65,cz2); g.add(post); const arm=box(0.7,0.14,0.14,'#6e7480'); arm.position.set(cx2,0.98,cz2); g.add(arm); }   // grave crosses
+    for(let i=0;i<16;i++){ const a=i/16*TAU; const fp=box(0.1,0.7,0.1,'#3a3a44'); fp.position.set(Math.cos(a)*4.0,0.35,Math.sin(a)*4.0); g.add(fp); }   // low iron fence ring
+    g.userData.graveyard=true; }
   else { const cart=box(1.8,0.8,1.0,'#7a5230'); cart.position.set(0,0.7,0); cart.rotation.z=0.18; g.add(cart); const w1=new THREE.Mesh(new THREE.TorusGeometry(0.5,0.12,6,12),toon('#3a2a1a')); w1.position.set(0.9,0.5,0.6); w1.rotation.y=Math.PI/2; g.add(w1); const w2=w1.clone(); w2.position.z=-0.6; g.add(w2); }
   g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); world.add(g); return g; }
 function buildExploration(){
   for(let i=0;i<34;i++){ const s=_outerSpot(140,595); if(isInWater(s.x,s.z,6))continue; makeLandmark(pick(['ruin','stones','shrine','camp','cart']),s.x,s.z); }   // scattered landmarks across the big outer ring (never half-sunk in a lake)
   for(let i=0;i<3;i++){ const s=_outerSpot(100,320); if(isInWater(s.x,s.z,8))continue; makeLandmark('raidercamp',s.x,s.z); }   // RAIDER war-camps mustered in the day outskirts (near where raiders/marauders roam) — landmark + theming for the day foes
+  for(let i=0;i<3;i++){ const s=_outerSpot(290,440); if(isInWater(s.x,s.z,8))continue; makeLandmark('graveyard',s.x,s.z); }   // 🪦 GRAVEYARDS in the mid/far outskirts (swamp/desert fringe) — physical headstone clusters that draw the spooky undead at night (see pickCreatureType)
   // HIDDEN CACHES: strange mounds that reveal loot when inspected (one-time exploration reward)
   for(let i=0;i<11;i++){ const s=_outerSpot(150,595); const mound=makeRock(s.x,s.z,rand(1.4,2.2)); world.add(mound); mound.userData.found=false;
     addInteractable(mound,'🔎 Inspect the strange mound',()=>{ if(mound.userData.found){toast('Nothing left here.');return;} mound.userData.found=true; const loot=pick(['crystal','stone','wood','flower']); const n=2+Math.floor(Math.random()*3); Inv.add(loot,n); if(Math.random()<0.4)Inv.add('coin',8); SFX.play('success'); shake(0.25); confetti(mound.getWorldPosition(new THREE.Vector3()).setY(1.2),18); toast(`💎 Hidden cache! +${n} ${ITEMS[loot].i} ${ITEMS[loot].n}`); save(); },2.6); }
@@ -3602,6 +3612,7 @@ for(const _k of ['skeleton','pumpkin','zombie','ghost','sporecap','wisp']) if(CR
 function pickCreatureType(distOverride, sx, sz){ // `day` = SPAWN WEIGHT (basics common, hard ones rarer); minDist gates far-out specials by distance; iceOnly + iceMask gate cold mobs to the Frozen Wastes
   const pd=(distOverride!=null)?distOverride:Math.hypot(player.position.x,player.position.z); let tot=0; const elig=[];
   const _ice=(sx!=null && typeof iceMask==='function')?iceMask(sx,sz):0;   // ❄️ biome at the actual spawn point
+  if(sx!=null && !isDay() && GRAVEYARDS.length){ for(const gv of GRAVEYARDS){ if(Math.hypot(sx-gv.x,sz-gv.z)<70){ if(Math.random()<0.72){ const sk=SPOOKY_ENEMIES[(Math.random()*SPOOKY_ENEMIES.length)|0]; if(CREATURE_TYPES[sk])return CREATURE_TYPES[sk]; } break; } } }   // 🪦 a graveyard at night = a spooky-undead hotspot (skeletons/ghosts/etc.) within ~70u (covers the night spawn ring)
   const _night=!isDay(); for(const k of CTYPE_KEYS){ const t=CREATURE_TYPES[k]; if(!_night && t.nightOnly)continue; if(t.iceOnly && _ice<0.3)continue;   // cold mobs ONLY where the ground is icy
     const gmd=(t.minDist&&_night)?Math.max(80,t.minDist-20):t.minDist; if(gmd&&pd<gmd)continue;
     let w=t.day; if(_ice>0.4){ if(t.iceOnly) w=t.day*3; else { if((t.minDist||0)<150) continue; w=t.day*0.12; } }   // ice ring: cold mobs DOMINATE (~91%); trivial/near mobs (caterpillar/crab/fox) excluded, only deep-tier foes (skeleton/glub/demon) appear as a rare minority
