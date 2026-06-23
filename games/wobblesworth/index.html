@@ -1808,7 +1808,7 @@ function _buildPlayerBody(){
     const b=new THREE.Box3().setFromObject(o); o.position.y=-b.min.y; o.userData.y0=o.position.y; o.userData.cy=(b.max.y-b.min.y)/2; player.add(o); player.userData.model=o;   // y0/cy: rest pos + body-center height, used to spin the double-jump about the CENTER (cannonball)
     const clips=ANIMS[valid]||ANIMS['char_player']||ANIMS['char_n1'];
     if(clips){ charMixer=new THREE.AnimationMixer(o); for(const c of clips) charActions[c.name]=charMixer.clipAction(c);
-      if(QCLASS.has(valid)){ const al=(a,b)=>{ if(charActions[b]&&!charActions[a])charActions[a]=charActions[b]; }; al('idle','Idle'); al('walk','Walk'); al('run','Run'); const atk=QCLASS_ATK[valid]; if(atk&&charActions[atk])charActions['attack-melee-right']=charActions[atk]; }   // Quaternius clips are Capitalized -> alias to the game's lowercase movement names + map the class attack to the on-attack emote
+      if(QCLASS.has(valid)){ const al=(a,b)=>{ if(charActions[b]&&!charActions[a])charActions[a]=charActions[b]; }; al('idle','Idle'); al('walk','Walk'); al('run','Run'); al('sprint','Run'); const atk=QCLASS_ATK[valid]; if(atk&&charActions[atk])charActions['attack-melee-right']=charActions[atk]; }   // Quaternius clips are Capitalized -> alias to the game's lowercase movement names + map the class attack to the on-attack emote
       if(charActions.idle) charActions.idle.play(); }
   } else { const o=box(0.8,1.6,0.5,'#7c5cff'); o.position.y=0.8; player.add(o); }
   // ATTACH held tool/weapon to the arm-right BONE so it tracks the animated arm
@@ -3014,9 +3014,9 @@ function updatePlayer(dt){
     if(player.position.x>HW){ player.position.x-=WRAP_P; camera.position.x-=WRAP_P; } else if(player.position.x<-HW){ player.position.x+=WRAP_P; camera.position.x+=WRAP_P; }
     if(player.position.z>HW){ player.position.z-=WRAP_P; camera.position.z-=WRAP_P; } else if(player.position.z<-HW){ player.position.z+=WRAP_P; camera.position.z+=WRAP_P; } }
   if(keys['Space']){ _jumpCD-=dt;
-    if(grounded){ vy=8.2*Needs.jumpMul(); grounded=false; airJumps=1; _jumpCD=0.26; SFX.play('jump'); }
-    else if(_jumpCD<=0){ vy=7.6*Needs.jumpMul(); airJumps++; _jumpCD=0.26; if(airJumps%2===0)flipT=0.5; SFX.play('jump',{rate:1.18}); }   // owner: HOLD Space = infinite jumps (jump, double-jump-flip, jump, double-jump-flip…) on a 0.26s cooldown; flip every 2nd
-  }
+    if(grounded){ if(!jumpHeld){ vy=8.2*Needs.jumpMul(); grounded=false; airJumps=1; _jumpCD=0.16; jumpHeld=true; SFX.play('jump'); } }
+    else if(airJumps===1 && _jumpCD<=0){ vy=7.6*Needs.jumpMul(); airJumps=2; flipT=0.5; SFX.play('jump',{rate:1.18}); }   // owner: HOLD Space = jump, then AUTO double-jump because it's held (no re-press); capped at 2 air actions, resets on release/land — NOT an infinite climb
+  } else jumpHeld=false;
   vy-=22*dt; player.position.y+=vy*dt;
   const gY=groundUnder(); const vyPrev=vy;
   if(_wz){   // SWIMMING: float at the waterline (sink in, body half-submerged) instead of standing on the floor
@@ -3045,7 +3045,7 @@ function updatePlayer(dt){
       else { mo.rotation.x=lerp(mo.rotation.x, _wz?1.15:0, Math.min(1,dt*6)); const _yy=(mo.userData.y0!=null?mo.userData.y0:0); mo.position.y=lerp(mo.position.y,_yy,Math.min(1,dt*8)); mo.position.z=lerp(mo.position.z,0,Math.min(1,dt*8)); } } }   // SWIM: FACE-DOWN prone tilt; also restore model pos after a cannonball
   wasGrounded=grounded;
   // animation state
-  if(charAnim!=='__emote'){ setAnim(!grounded?'idle':(moving?(sprint?'sprint':'walk'):'idle')); }   // armed standing now uses plain idle (arm at side) — the old 'holding-right' clip RAISED the arm to head height so the bone-mounted sword towered behind the head (owner: "weapon not in hand"); idle keeps the hand low so the sword sits in it
+  if(charAnim!=='__emote'){ var _rc=charActions['sprint']?'sprint':(charActions['run']?'run':null); var _spr=grounded&&moving&&sprint; setAnim(!grounded?'idle':(moving?(_spr&&_rc?_rc:'walk'):'idle')); if(charActions['walk']) charActions['walk'].timeScale=(_spr&&!_rc)?1.65:1; }   // armed standing now uses plain idle (arm at side) — the old 'holding-right' clip RAISED the arm to head height so the bone-mounted sword towered behind the head (owner: "weapon not in hand"); idle keeps the hand low so the sword sits in it
   if(charMixer) charMixer.update(dt);
   // camera — orbit by yaw + pitch, with collision pull-in so it doesn't clip into walls/trees
   const _camDamp=1-Math.pow(0.05,dt); cam.yaw=lerp(cam.yaw,cam.targetYaw,_camDamp); cam.pitch=lerp(cam.pitch,cam.targetPitch,_camDamp);   // SMOOTH right-click rotation: damp toward drag/gamepad targets (dt=0 => no-op, keeps idle-spin + selftest exact)
