@@ -805,16 +805,18 @@ const TRAINING_ZONE={x:42,z:-42,hx:9,hz:10};   // 🎯 TRAINING GROUND: a fenced
 function inTrainingZone(x,z,margin=2){ return Math.abs(x-TRAINING_ZONE.x)<TRAINING_ZONE.hx+margin && Math.abs(z-TRAINING_ZONE.z)<TRAINING_ZONE.hz+margin; }   // shared keep-out: builder + creature spawner both consult this so no mob EVER spawns inside the yard, day or night
 
 /* texture a placed KUBIKOS house: wood planks (or plaster) on the body, shingles on the roof (topmost mesh) */
-function texturizeHouse(o,kind){
+function houseBiome(x,z){ if(x==null)return'forest'; if(darkMask(x,z)>0.45)return'dark'; if(iceMask(x,z)>0.45)return'ice'; if(desertMask(x,z)>0.45)return'desert'; if(swampMask(x,z)>0.45)return'swamp'; return'forest'; }
+const HBM={ forest:['wood','#a8763f',['#a86c42','#946038','#b87b4a']], desert:['plaster','#d8b27a',['#c79a5e','#b9874a','#cf6a52']], ice:['wood','#aebfca',['#7f93a0','#6f8a9c','#9fb4c0']], swamp:['wood','#6f6a48',['#5f6e44','#6f7a50','#4f5a38']], dark:['wood','#3a322c',['#2b2622','#46352a','#3a322c']] };   // per-biome [bodyTex, wall-tint, roof-tones]: forest log-cabin, desert adobe, ice frosted, swamp mossy, dark charred
+function texturizeHouse(o,kind,x,z){ const _b=HBM[houseBiome(x,z)]||HBM.forest;
   const meshes=[]; o.traverse(m=>{ if(m.isMesh) meshes.push(m); });
   if(!meshes.length) return;
   // roof = the mesh whose bbox center sits highest
   let roof=null,roofY=-1e9; for(const m of meshes){ const b=new THREE.Box3().setFromObject(m); const cy=(b.min.y+b.max.y)/2; if(cy>roofY){roofY=cy;roof=m;} }
-  const bodyTex = kind==='wood'?TEX.wood:TEX.plaster;
-  const roofCol = new THREE.Color(kind==='wood' ? pick(['#a86c42','#946038','#b87b4a','#8c5a3a']) : pick(['#c05a4a','#b14a3c','#cf6a52','#7f93a0','#a8604a','#6f8a78']));   // per-house ROOF tint (wood->browns, plaster->terracotta/slate/sage) so roofs aren't all the same red
+  const bodyTex=_b[0]==='plaster'?TEX.plaster:TEX.wood; const wallTint=new THREE.Color(_b[1]);
+  const roofCol = new THREE.Color(pick(_b[2]));   // per-house ROOF tint (wood->browns, plaster->terracotta/slate/sage) so roofs aren't all the same red
   for(const m of meshes){ const isRoof=(m===roof && meshes.length>1); const baseCol=(m.material&&m.material.color)?m.material.color.clone():new THREE.Color('#ffffff');
     const t=(isRoof?TEX.roof:bodyTex).clone(); t.needsUpdate=true; t.repeat.set(isRoof?2:1.6,isRoof?2:1.6);
-    m.material=new THREE.MeshToonMaterial({map:t,gradientMap:GRAD,color:isRoof?roofCol:baseCol.lerp(new THREE.Color('#ffffff'),0.10)});   // body keeps MORE of the per-house tint (0.18->0.10 white-wash) so cabins read DISTINCT not washed-out; roof gets its own per-house tone
+    m.material=new THREE.MeshToonMaterial({map:t,gradientMap:GRAD,color:isRoof?roofCol:baseCol.lerp(wallTint,0.6)});   // body keeps MORE of the per-house tint (0.18->0.10 white-wash) so cabins read DISTINCT not washed-out; roof gets its own per-house tone
     m.castShadow=true; m.receiveShadow=true; }
 }
 
@@ -1034,9 +1036,9 @@ function buildWorld(){
     lots.push([pick(models), x, z, rand(0,TAU), HC[(ci++)%HC.length]]);
   }
   let _hi=0;
-  for(const [m,x,z,r,t] of lots){ const o=place(m,x,z,{targetH:rand(5.2,6.8),rotY:r,tint:t}); if(o){ texturizeHouse(o, (m==='HouseWooden'||m==='Hut')?'wood':'plaster'); const sld=addSolid(o,0.2,false); registerHome(o,sld,_hi++); } }  // cozier height (owner: some homes rendered wall-like) — registerHome makes it enterable (Stage A)
+  for(const [m,x,z,r,t] of lots){ const o=place(m,x,z,{targetH:rand(5.2,6.8),rotY:r,tint:t}); if(o){ texturizeHouse(o, (m==='HouseWooden'||m==='Hut')?'wood':'plaster', x, z); const sld=addSolid(o,0.2,false); registerHome(o,sld,_hi++); } }  // cozier height (owner: some homes rendered wall-like) — registerHome makes it enterable (Stage A)
   // landmarks
-  { const ml=place("MillBuilding1",-70,-40,{targetH:6.6,tint:'#e0b27a'}); if(ml){ texturizeHouse(ml,'wood'); const s1=addSolid(ml,0.2,false); registerHome(ml,s1,_hi++); } const bn=place("Barn",64,-30,{targetH:6.2,tint:'#d65f4a'}); if(bn){ texturizeHouse(bn,'wood'); const s2=addSolid(bn,0.2,false); registerHome(bn,s2,_hi++); } }   // owner: big wooden buildings -> normal enterable homes (was oversized non-enterable walls)
+  { const ml=place("MillBuilding1",-70,-40,{targetH:6.6,tint:'#e0b27a'}); if(ml){ texturizeHouse(ml,'wood',-70,-40); const s1=addSolid(ml,0.2,false); registerHome(ml,s1,_hi++); } const bn=place("Barn",64,-30,{targetH:6.2,tint:'#d65f4a'}); if(bn){ texturizeHouse(bn,'wood',64,-30); const s2=addSolid(bn,0.2,false); registerHome(bn,s2,_hi++); } }   // owner: big wooden buildings -> normal enterable homes (was oversized non-enterable walls)
   for(const [wx,wz] of [[-10,22],[24,-30],[-40,40]]){ const w=place("Well",wx,wz,{targetH:3,tint:'#9a948a'}); if(w) addSolid(w); makeWater(0.85,wx,wz,1.7); }   // solid + standable (jump on it!) + real water in the shaft
   for(const [rx,rz] of [[-22,8],[27,18],[-30,-12],[34,-6],[14,42],[-16,46]]){ if(isInWater(rx,rz,4))continue; const rk=makeRock(rx,rz,rand(1.4,2.2)); world.add(rk); addNode(rk,rx,rz,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); }   // owner: mineable boulders near town so stone is reachable without trekking to the east biome
   // 🏖️ real animated pond at the beach; the bridge is SOLID so you walk/jump on it (no more sinking through), boat floats
@@ -1310,7 +1312,7 @@ function buildHamlets(startIdx){   // 5 hamlets of 2-4 enterable homes scattered
       for(let t=0;t<8;t++){ hx=hcx+rand(-15,15); hz=hcz+rand(-15,15); if(ok(hx,hz)){hok=true;break;} }
       if(!hok)continue; const m=pick(models);
       const o=place(m,hx,hz,{targetH:rand(5.0,6.4),rotY:rand(0,TAU),tint:HC[(ci++)%HC.length]});
-      if(o){ texturizeHouse(o,(m==='HouseWooden'||m==='Hut')?'wood':'plaster'); const sld=addSolid(o,0.2,false);
+      if(o){ texturizeHouse(o,(m==='HouseWooden'||m==='Hut')?'wood':'plaster',hx,hz); const sld=addSolid(o,0.2,false);
         const home=registerHome(o,sld,idx++); ham.homes.push(home); used.push({x:home.cx,z:home.cz}); } }
     if(!ham.homes.length)continue;
     if(hI===1)rethemeHome(ham.homes[0],'blacksmith'); if(hI===3)rethemeHome(ham.homes[0],'herbalist');   // a couple themed wild homes for flavor
