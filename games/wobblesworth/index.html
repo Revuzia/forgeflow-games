@@ -683,7 +683,7 @@ function makeTree(x,z,h=6,{fruit=null}={}){
   // layered foliage clumps — a full crown + side puffs over the branches (rounder subdivided geo, less faceted)
   for(const [by,br,jx,jz] of [[h*0.94,h*0.3,0,0],[h*0.8,h*0.24,h*0.2,h*0.04],[h*0.8,h*0.23,-h*0.16,h*0.14],[h*0.66,h*0.21,h*0.08,-h*0.2],[h*0.7,h*0.2,-h*0.1,-h*0.06]]){
     const c=base.clone().offsetHSL(rand(-0.03,0.03),rand(-0.05,0.05),rand(-0.06,0.04));
-    const m=new THREE.Mesh(new THREE.IcosahedronGeometry(br,1),new THREE.MeshToonMaterial({color:c,gradientMap:GRAD}));
+    const m=new THREE.Mesh(new THREE.IcosahedronGeometry(br,1),new THREE.MeshToonMaterial({color:c,gradientMap:GRAD,flatShading:true}));
     m.position.set(jx,by,jz); m.rotation.set(rand(0,TAU),rand(0,TAU),rand(0,TAU)); m.scale.y=rand(0.82,1.02); m.castShadow=true; m.receiveShadow=true; g.add(m);
   }
   if(fruit){ for(let i=0;i<7;i++){ const f=new THREE.Mesh(new THREE.SphereGeometry(h*0.05,8,8),toon(fruit)); f.position.set(rand(-1,1)*h*0.28, h*(0.55+Math.random()*0.32), rand(-1,1)*h*0.28); g.add(f);} }
@@ -706,7 +706,7 @@ function mergeDecorTrees(specs){
     g.traverse(m=>{ if(m.isMesh){ m.geometry.dispose(); if(m.material!==barkMat)m.material.dispose(); } });   // free the temp per-tree geos/mats (we cloned what we merge)
   }
   if(barkGeos.length){ const bm=mergeGeometries(barkGeos,false); bm.computeBoundingSphere(); const mesh=new THREE.Mesh(bm,barkMat); mesh.castShadow=true; mesh.receiveShadow=true; mesh.frustumCulled=false; world.add(mesh); for(const gg of barkGeos)gg.dispose(); }
-  if(folGeos.length){ const fm=mergeGeometries(folGeos,false); fm.computeBoundingSphere(); const fmat=new THREE.MeshToonMaterial({gradientMap:GRAD,vertexColors:true}); const mesh=new THREE.Mesh(fm,fmat); mesh.castShadow=false; mesh.receiveShadow=true; mesh.frustumCulled=false; world.add(mesh); for(const gg of folGeos)gg.dispose(); }
+  if(folGeos.length){ const fm=mergeGeometries(folGeos,false); fm.computeBoundingSphere(); const fmat=new THREE.MeshToonMaterial({gradientMap:GRAD,vertexColors:true,flatShading:true}); const mesh=new THREE.Mesh(fm,fmat); mesh.castShadow=false; mesh.receiveShadow=true; mesh.frustumCulled=false; world.add(mesh); for(const gg of folGeos)gg.dispose(); }
 }
 
 /* PERF: merge many dead trees into ONE mesh (1 draw call, 1 scene object, no per-tree shadow-cull) — like mergeDecorTrees but for the bare dead trees. The biome dead-tree fields were ~500 individual Groups (3500 meshes + shadow casters); this collapses them. castShadow off by default: distant dead trees never enter the tight ±46 shadow box anyway, so testing them every frame was pure waste. */
@@ -831,8 +831,10 @@ function texturizeHouse(o,kind,x,z){ const _b=HBM[houseBiome(x,z)]||HBM.forest;
   const bodyTex=_b[0]==='plaster'?TEX.plaster:TEX.wood; const wallTint=new THREE.Color(_b[1]);
   const roofCol = new THREE.Color(pick(_b[2]));   // per-house ROOF tint (wood->browns, plaster->terracotta/slate/sage) so roofs aren't all the same red
   for(const m of meshes){ const isRoof=(m===roof && meshes.length>1); const baseCol=(m.material&&m.material.color)?m.material.color.clone():new THREE.Color('#ffffff');
+    const _oc=m.material&&m.material.color; if((!isRoof && _oc && _oc.b>_oc.r*1.15 && _oc.b>0.42) || /glass|window|pane/i.test(m.name||'')){ m.castShadow=true; m.receiveShadow=true; continue; }   // KEEP window panes / blue glass — don't stamp wall plank over them (was erasing the cottage windows)
     const t=(isRoof?TEX.roof:bodyTex).clone(); t.needsUpdate=true; t.repeat.set(isRoof?2:1.6,isRoof?2:1.6);
-    m.material=new THREE.MeshToonMaterial({map:t,gradientMap:GRAD,color:isRoof?roofCol:baseCol.lerp(wallTint,0.6)});   // body keeps MORE of the per-house tint (0.18->0.10 white-wash) so cabins read DISTINCT not washed-out; roof gets its own per-house tone
+    m.material=new THREE.MeshToonMaterial({map:t,gradientMap:GRAD,color:isRoof?roofCol:baseCol.lerp(wallTint,0.6)});   // body keeps the per-house tint; roof gets its own per-house tone
+    if(isRoof)m.userData.isRoof=true;   // tag so REPAINT skips the textured shingle roof
     m.castShadow=true; m.receiveShadow=true; }
 }
 
@@ -1010,7 +1012,7 @@ function loadAll(onDone){
   const loader=new GLTFLoader(mgr);
   for(const name of MODEL_LIST){
     loader.load(`assets/models/${name}.glb`, g=>{ MODELS[name]=g.scene; if(g.animations&&g.animations.length) ANIMS[name]=g.animations;
-      g.scene.traverse(m=>{ if(m.isMesh){ m.castShadow=true; m.receiveShadow=true; if(m.material){ m.material.metalness=0; m.material.side=THREE.DoubleSide; for(const _t of [m.material.map,m.material.emissiveMap,m.material.normalMap]) if(_t){ _t.anisotropy=_maxAniso; _t.needsUpdate=true; }   // DoubleSide: thin/open Kenney meshes no longer vanish when seen from behind; anisotropy: sharp at grazing angles
+      g.scene.traverse(m=>{ if(m.isMesh){ m.castShadow=true; m.receiveShadow=true; if(m.material){ m.material.metalness=0; m.material.side=THREE.DoubleSide; _stripDegenMaps(m.material); for(const _t of [m.material.map,m.material.emissiveMap,m.material.normalMap]) if(_t){ _t.anisotropy=_maxAniso; _t.needsUpdate=true; }   // DoubleSide: thin/open Kenney meshes no longer vanish when seen from behind; anisotropy: sharp at grazing angles
         // EMISSIVE ACCENTS (graphics polish): hero props glow under the existing 0.85-threshold bloom — magical at dusk/night,
         // 0 extra draw calls + NO new PointLight (8-cap intact). Materials are shared by place() clones, so this lights them all.
         if(/^Crystal/.test(name)){ m.material.emissive=(m.material.color?m.material.color.clone():new THREE.Color('#7fd9ff')); m.material.emissiveIntensity=0.62; }
@@ -1025,6 +1027,8 @@ function loadAll(onDone){
     else finish();   // only cosmetic assets missing → boot anyway (place() null-guards everywhere)
   }, 20000);
 }
+/* strip DEGENERATE 1x1 placeholder maps (Kenney/FBX props bake a 1x1 yellow swatch into map AND normalMap — the surviving 1x1 normalMap tilts every fragment's normal and smears the lit surface). Real atlases (fox/cow) are larger and untouched. */
+function _stripDegenMaps(mat){ if(!mat)return; const _deg=t=>{ const im=t&&t.image; return !!(im&&typeof im.width==='number'&&im.width<=4&&im.height<=4); }; let ch=false; for(const k of ['map','normalMap','aoMap','roughnessMap','metalnessMap','bumpMap']){ if(_deg(mat[k])){ mat[k]=null; ch=true; } } if(ch)mat.needsUpdate=true; }
 /* place a static model: clone, scale to targetH (or scale factor), GROUND it (min.y->0), position, shadows */
 function place(name,x,z,{targetH,scale,rotY=0,yLift=0,parent=world,tint=null}={}){
   const src=MODELS[name]; if(!src){ return null; }
@@ -1116,7 +1120,7 @@ function buildWorld(){
     const _d=place(pick(["Grass","Grass3","GrassLeaf1","Flower1","Flower2","Flower3","MushroomRed","Cactus1"]),x,z,{targetH:rand(0.5,1.3),rotY:rand(0,TAU)}); if(_d)_d.traverse(m=>{if(m.isMesh)m.castShadow=false;});   // PERF: tiny decor tufts cast negligible shadows — drop them from the per-frame shadow cull
   }
   // street lanterns along the main roads — each gets a warm GLOWING bulb (+ a real point light up to the cap)
-  function streetLamp(x,z){ const o=place("Lantern",x,z,{targetH:2.6,tint:'#39312a'}); const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8),new THREE.MeshBasicMaterial({color:'#ffd98a'})); bulb.position.set(x,2.5,z); world.add(bulb); return o; }   // dark-iron post (was white) + glowing warm bulb (no PointLight — the 8-slot dynamic-light cap stays reserved for craftable lanterns)
+  function streetLamp(x,z){ const o=place("Lantern",x,z,{targetH:2.6,tint:'#39312a'}); const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8),new THREE.MeshStandardMaterial({color:'#ffd98a',emissive:new THREE.Color('#ffd98a'),emissiveIntensity:1.4,toneMapped:false})); bulb.position.set(x,2.5,z); world.add(bulb); return o; }   // emissive bulb crosses the bloom threshold -> actually GLOWS at night (was a dead flat dot)   // dark-iron post (was white) + glowing warm bulb (no PointLight — the 8-slot dynamic-light cap stays reserved for craftable lanterns)
   // owner: "too many lampposts" — was 62 every 14u. Now ~20, only where lamps belong: flanking the two main avenues at each cross-street + framing the town plaza.
   for(const z of [-56,-28,28,56]){ streetLamp(6,z); streetLamp(-6,z); }   // light the central N-S avenue at each junction (8)
   for(const x of [-56,-28,28,56]){ streetLamp(x,6); streetLamp(x,-6); }   // light the central E-W avenue at each junction (8)
@@ -1140,7 +1144,7 @@ function buildAmbient(){
     const wL=mkW(1), wR=mkW(-1);
     const body=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.38,5),new THREE.MeshBasicMaterial({color:'#2a221a'})); body.rotation.z=Math.PI/2; bg.add(body);
     const a=rand(0,TAU),r=rand(12,70); bg.userData={cx:Math.cos(a)*r, cz:Math.sin(a)*r, ph:rand(0,TAU), sp:rand(0.5,1.0), rad:rand(2,5), wL, wR}; bg.position.set(bg.userData.cx,1.2,bg.userData.cz); world.add(bg); butterflies.push(bg); }
-  for(let i=0;i<3;i++){ const g=new THREE.Group(); const w=new THREE.Mesh(new THREE.PlaneGeometry(1.3,0.32),new THREE.MeshBasicMaterial({color:'#33405a',side:THREE.DoubleSide})); g.add(w); g.userData={ang:rand(0,TAU), rad:rand(58,88), sp:rand(0.05,0.11), y:rand(26,34), wing:w}; world.add(g); birds.push(g); }
+  for(let i=0;i<3;i++){ const g=new THREE.Group(); const w=new THREE.Mesh(new THREE.PlaneGeometry(1.3,0.32),new THREE.MeshToonMaterial({color:'#33405a',gradientMap:GRAD,side:THREE.DoubleSide})); g.add(w); g.userData={ang:rand(0,TAU), rad:rand(58,88), sp:rand(0.05,0.11), y:rand(26,34), wing:w}; world.add(g); birds.push(g); }
 }
 
 /* gatherable resource zones — the "find things" world, far bigger than the town */
@@ -1152,7 +1156,7 @@ function buildZones(){
   const _dt=[], _reeds=[];
   for(let i=0;i<110;i++){ const a=rand(0,TAU), r=rand(290,360), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,7))continue; _dt.push({x,z,h:rand(5,8)}); }   // spooky transition band into the swamp (moved out to the new hills->swamp edge)
   for(let i=0;i<360;i++){ const a=rand(0,TAU), r=rand(360,600), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||swampMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(4.5,7.5)}); if(Math.random()<0.5)_reeds.push({x:x+rand(-2.2,2.2),z:z+rand(-2.2,2.2),h:rand(1.0,1.9)}); }   // 🟣 SWAMP: dense dead trees + scattered cattail reeds (radii moved to the EXPANDED swamp ring 360-600)
-  for(let i=0;i<280;i++){ const a=rand(0,TAU), r=rand(330,470), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||desertMask(x,z)<0.35)continue; if(Math.random()<0.74){ const c=place(pick(['cactus_1','cactus_2','cactus_3']),x,z,{targetH:rand(1.6,3.4),rotY:rand(0,TAU)}); if(c)c.traverse(m=>{ if(m.isMesh){ m.castShadow=false; m.material=new THREE.MeshToonMaterial({color:'#4f7d35',gradientMap:GRAD}); } }); } else { const rk=makeRock(x,z,rand(1.2,2.6)); rk.traverse(m=>{if(m.isMesh)m.castShadow=false;}); world.add(rk); } }   // 🟤 DESERT: BRANCHED BitGem cacti (forced non-emissive) + dry rocks (no trees; no shadow-cull on distant props)
+  for(let i=0;i<280;i++){ const a=rand(0,TAU), r=rand(330,470), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||desertMask(x,z)<0.35)continue; if(Math.random()<0.74){ const c=place(pick(['cactus_1','cactus_2','cactus_3']),x,z,{targetH:rand(1.6,3.4),rotY:rand(0,TAU)}); if(c){ const _cc=new THREE.Color('#4f7d35').offsetHSL(rand(-0.04,0.04),rand(-0.05,0.05),rand(-0.07,0.07)); c.traverse(m=>{ if(m.isMesh){ m.castShadow=false; m.material=new THREE.MeshToonMaterial({color:_cc,gradientMap:GRAD,flatShading:true}); } }); } } else { const rk=makeRock(x,z,rand(1.2,2.6)); rk.traverse(m=>{if(m.isMesh)m.castShadow=false;}); world.add(rk); } }   // 🟤 DESERT: BRANCHED BitGem cacti (forced non-emissive) + dry rocks (no trees; no shadow-cull on distant props)
   for(let i=0;i<360;i++){ const a=rand(0,TAU), r=rand(1120,FENCE-10), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||darkMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(5,9)}); }   // ⚫ DARK BURNT CORE: dead/burnt trees (inner r 418->500 to match the pushed-out dark mask; the ICE ring fills 448-500)
   // ❄️ ICE RING props: scattered ice blocks + snow piles + frozen shrubs (snowy, no shadow-cull) in the Frozen Wastes
   for(let i=0;i<120;i++){ const a=rand(0,TAU), r=rand(940,1160), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,5)||iceMask(x,z)<0.4)continue; const c=place(pick(['ice_cube_1','ice_cube_2','ice_cube_3','snowtop_deco','snowball','snow_cube']),x,z,{targetH:rand(0.9,2.4),rotY:rand(0,TAU)}); if(c)c.traverse(m=>{ if(m.isMesh){ m.castShadow=false; m.material=new THREE.MeshToonMaterial({color:'#e6f1fa',gradientMap:GRAD}); } }); }
@@ -1353,7 +1357,7 @@ function buildWildWanderers(){   // roaming folk between the hamlets — reuse t
     const lab=makeLabel(name); lab.position.y=2.35; g.add(lab); g.userData.label=lab;
     addInteractable(g,'Talk to '+name,()=>neighborTalk(g),3.2); neighbors.push(g); }
 }
-function rethemeHome(home,purpose){ home.purpose=purpose; home.noLock=true; delete home.vendor; if(home.doorIt)home.doorIt.label=doorLabel(home); }   // wild facility: always open, no coin-vendor
+function rethemeHome(home,purpose){ home.purpose=purpose; home.noLock=true; delete home.vendor; }   // wild facility: always open, no coin-vendor
 function buildHamlets(startIdx){   // 5 hamlets of 2-4 enterable homes scattered through the hills — reuse the FULL town home pipeline (door/cutaway/vendor/NPC)
   const HC=['#e0876b','#86b89a','#e8c573','#83aecf','#caa0c6','#dba36e','#9cc081','#d98f8a','#b6a7d6','#e6b97f'], models=['House_1','House_2','House_3','HouseWooden','Hut'];
   let idx=startIdx, ci=0; const used=[], treeSpecs=[];
@@ -1451,10 +1455,10 @@ function registerHome(o, solid, idx){
   const rail=box(1.2,0.12,0.14,'#553823'); rail.position.set(0.62,1.9,0.02); hinge.add(rail);  // simple plank+rail detail
   const knob=new THREE.Mesh(new THREE.SphereGeometry(0.08,8,8), new THREE.MeshStandardMaterial({color:'#2e2012',metalness:0.5,roughness:0.5})); knob.position.set(1.06,1.2,0.12); hinge.add(knob);
   home.doorHinge=hinge;   // <- the auto-swing/open animation (lines ~1357-1361) keys off this; present again => doors open automatically
-  const lamp=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,10), new THREE.MeshBasicMaterial({color:'#ffe26a'})); lamp.position.set(0,2.55,0.22); dg.add(lamp); home.doorLamp=lamp;
+  const lamp=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,10), new THREE.MeshStandardMaterial({color:'#ffe26a',emissive:new THREE.Color('#ffe26a'),emissiveIntensity:1.3,toneMapped:false})); lamp.position.set(0,2.55,0.22); dg.add(lamp); home.doorLamp=lamp;   // emissive -> the door lamp glows at night
   if(home.purpose!=='home'){ const board=box(1.5,0.62,0.12,'#6a4a2a'); board.position.set(0,3.25,0.1); dg.add(board);   // hanging shop sign for facility houses
     const face=new THREE.Mesh(new THREE.PlaneGeometry(0.85,0.85),new THREE.MeshBasicMaterial({map:signTex(PURPOSE_DEFS[home.purpose].sign),transparent:true})); face.position.set(0,3.25,0.18); dg.add(face); }
-  home.doorIt=addInteractable(dg, doorLabel(home), ()=>tryEnterHome(home), 3.8);
+  // (E-key door REMOVED per owner — every home now uses ONLY the proximity auto-open door, like the main base; locked-facility feedback is the approach toast in updateHomes)
   return home;
 }
 // INSIDE-HOUSE WALLS (owner: "I can walk out through ANY side"): solid wall AABBs (no mesh) around the
@@ -1555,12 +1559,13 @@ function enterHome(home){
 }
 function updateHomes(dt){
   for(const h of homes){
-    if(h.doorIt && h.purpose!=='home'){ const d=PURPOSE_DEFS[h.purpose]; if(d.lockLevel||d.lockDay) h.doorIt.label=doorLabel(h); }   // locked facilities show a live unlock hint
+    // (locked-facility unlock hint moved into the proximity block below — the E-door label it used was removed)
     if(!h.active && h.doorHinge && h.doorPos){   // auto-swing OPEN as a real player (or co-op friend) approaches — same feel as your own house; monsters never trigger it
       const _pdist=Math.hypot(player.position.x-h.doorPos.x, player.position.z-h.doorPos.z); let _near=_pdist<4.2;
       if(!_near && typeof COOP!=='undefined' && COOP.on){ for(const _id in COOP.peers){ const _pg=COOP.peers[_id]&&COOP.peers[_id].group; if(_pg && Math.hypot(_pg.position.x-h.doorPos.x, _pg.position.z-h.doorPos.z)<4.2){ _near=true; break; } } }
       h.doorTarget=_near?-1.45:0;
-      if(_pdist<3.0 && !homeLock(h) && !state._selftesting) enterHome(h); }   // PROXIMITY WALK-IN (owner: no E to peek): step up to an UNLOCKED door -> auto open the collider + reveal the interior; locked facilities still just show the hint; E (doorIt) still works
+      if(_near && homeLock(h)){ if(state._lockHintAt!==h){ toast(homeLock(h)); state._lockHintAt=h; } } else if(state._lockHintAt===h && !_near){ state._lockHintAt=null; }   // locked facility tells you WHY once per approach (replaces the removed E-door label)
+      if(_pdist<3.0 && !homeLock(h) && !state._selftesting) enterHome(h); }   // PROXIMITY WALK-IN: entry is now AUTO-only (the E-key door was removed) — step to an UNLOCKED door -> auto-open the collider + reveal the interior
     if(h.doorHinge) h.doorHinge.rotation.y=lerp(h.doorHinge.rotation.y, h.doorTarget||0, dt*8);   // door swings to open/closed
     if(!h.built) continue;
     if(h.active){ const d=Math.hypot(player.position.x-h.cx, player.position.z-h.cz); if(d>Math.max(h.hx,h.hz)+5){ h.active=false; h.doorTarget=0; if(h.walls)h.walls.forEach(s=>s.off=true); if(h.warmLight){ removeDynLight(h.warmLight); h.warmLight=null; } } }   // left -> shut door + re-block walls + free the warm light slot
@@ -1607,7 +1612,7 @@ function buildPlayerHouse(){
   const beacon=new THREE.Mesh(new THREE.ConeGeometry(0.7,2.6,5), new THREE.MeshBasicMaterial({color:'#ffe26a',transparent:true,opacity:0.78})); beacon.position.set(cx,6.6,cz+hz+1.2); beacon.rotation.x=Math.PI; beacon.visible=false; world.add(beacon); state.beacon=beacon;
   // roof (fades when inside)
   cutRoof=box(hx*2+1,0.5,hz*2+1,trimC); cutRoof.position.set(cx,H+0.55,cz);
-  cutRoof.material=cutRoof.material.clone(); cutRoof.material.transparent=true; world.add(cutRoof);
+  { const _rt=TEX.roof.clone(); _rt.needsUpdate=true; _rt.repeat.set(3,3); cutRoof.material=new THREE.MeshToonMaterial({map:_rt,gradientMap:GRAD,color:trimC,transparent:true}); } world.add(cutRoof);   // shingle texture on the hero house roof (was the only untextured flat-orange roof in town)
   // chimney
   const ch=box(1,1.8,1,'#b5563a'); ch.position.set(cx-5,H+1.2,cz-3.5); world.add(ch); state.chimney=ch;
 
@@ -1734,8 +1739,10 @@ function makeToolModel(kind){ const g=new THREE.Group();
 function setHeld(kind){ if(kind===_heldKind) return; _heldKind=kind; while(heldGroup.children.length) heldGroup.remove(heldGroup.children[0]); if(kind && kind!=='fist') heldGroup.add(makeToolModel(kind)); applyHeldOffsets(); }
 let QHELD_OFF={px:0,py:0,pz:0, rx:0,ry:0,rz:0, s:1.6};   // held-item offsets on the Quaternius WeaponR bone (tuned empirically via __WW__.qheld)
 let QOFFHAND_OFF={px:0,py:0,pz:0, rx:0,ry:0,rz:0, s:1.5};
-let QEYE={r:0.085, sx:0.075, y:0.02, z:0.17, col:'#14141c'};   // eyes on the Quaternius Head bone (the models ship eyeless) — tuned via __WW__.qeye; tiny 8-seg spheres = negligible FPS
-function _addQEyes(pm){ if(!pm)return; const head=pm.getObjectByName('Head'); if(!head)return; if(head.userData._eyes){ head.userData._eyes.forEach(e=>head.remove(e)); } const eyes=[]; for(const s of [1,-1]){ const eye=new THREE.Mesh(new THREE.SphereGeometry(QEYE.r,8,6), new THREE.MeshBasicMaterial({color:QEYE.col})); eye.position.set(s*QEYE.sx, QEYE.y, QEYE.z); head.add(eye); eyes.push(eye); } if(!pm.getObjectByName('Face')){ const fm=new THREE.MeshBasicMaterial({color:'#3a2a1a'}); for(const f of [[QEYE.sx,QEYE.y+QEYE.r*1.5,1.9,0.5],[-QEYE.sx,QEYE.y+QEYE.r*1.5,1.9,0.5],[0,QEYE.y-QEYE.r*2.2,2.0,0.45]]){ const fb=new THREE.Mesh(new THREE.BoxGeometry(QEYE.r*f[2],QEYE.r*f[3],QEYE.r*0.5),fm); fb.position.set(f[0],f[1],QEYE.z); head.add(fb); eyes.push(fb); } } head.userData._eyes=eyes; }
+let QEYE={r:0.07, sx:0.09, y:0.42, z:0.33, col:'#1a1622'};   // eyes on the Quaternius Head bone (models ship eyeless) — raised to the FACE MIDLINE + pushed FORWARD to the front of the head (were buried at the chin); tune via __WW__.qeye
+function _addQEyes(pm){ if(!pm)return; const head=pm.getObjectByName('Head'); if(!head)return; if(head.userData._eyes){ head.userData._eyes.forEach(e=>head.remove(e)); } const eyes=[]; for(const s of [1,-1]){ const eye=new THREE.Mesh(new THREE.SphereGeometry(QEYE.r,10,8), new THREE.MeshBasicMaterial({color:'#f4f0ea'})); eye.position.set(s*QEYE.sx, QEYE.y, QEYE.z); head.add(eye); eyes.push(eye); const pup=new THREE.Mesh(new THREE.SphereGeometry(QEYE.r*0.55,8,6), new THREE.MeshBasicMaterial({color:QEYE.col})); pup.position.set(s*QEYE.sx, QEYE.y, QEYE.z+QEYE.r*0.62); head.add(pup); eyes.push(pup); }   // TWO-TONE eyes (white sclera + dark pupil) read as real eyes, not flat dots
+  const fm=new THREE.MeshBasicMaterial({color:'#3a2a1a'}); for(const f of [[QEYE.sx,QEYE.y+QEYE.r*1.6,2.0,0.42],[-QEYE.sx,QEYE.y+QEYE.r*1.6,2.0,0.42],[0,QEYE.y-QEYE.r*2.3,2.2,0.5]]){ const fb=new THREE.Mesh(new THREE.BoxGeometry(QEYE.r*f[2],QEYE.r*f[3],QEYE.r*0.5),fm); fb.position.set(f[0],f[1],QEYE.z); head.add(fb); eyes.push(fb); }   // brows + mouth ALWAYS drawn now (the old 'skip if a Face mesh exists' guard wrongly skipped warrior/wizard, whose Face mesh is a blank skin with no painted features)
+  head.userData._eyes=eyes; }
 function applyHeldOffsets(){ if(!heldGroup.userData.onBone) return; if(heldGroup.userData.q){ const q=QHELD_OFF; heldGroup.position.set(q.px,q.py,q.pz); heldGroup.rotation.set(q.rx,q.ry,q.rz); heldGroup.scale.setScalar(q.s); return; } const o=TOOL_OFFSETS[_heldKind]||_SWORD_OFF; heldGroup.position.set(o.pos[0],o.pos[1],o.pos[2]); heldGroup.rotation.set(o.rot[0],o.rot[1],o.rot[2]); heldGroup.scale.setScalar(o.scale); }
 /* OFF-HAND (left hand): a shield or torch model carried on the arm-left bone (mirror of the held weapon). */
 const offhandGroup=new THREE.Group(); let _offhandKind=''; let _torchLight=null;
@@ -4328,9 +4335,9 @@ function loadBlocks(list){ for(const o of BMODE.blocks){ world.remove(o.mesh); c
   if(Array.isArray(list)) for(const d of list){ if(d&&Number.isFinite(+d.x)&&Number.isFinite(+d.y)&&Number.isFinite(+d.z)) _addBlock(+d.x|0,+d.y|0,+d.z|0,(typeof d.m==='string'?d.m:'wood')); } }
 function recolorHome(home){ if(!home||!home.meshes)return; state.homePaints=state.homePaints||{};
   home.paintIdx=((home.paintIdx==null?0:home.paintIdx)+1)%HOME_PAINTS.length; const col=HOME_PAINTS[home.paintIdx];
-  for(const m of home.meshes){ if(m.material&&m.material.color) m.material.color.set(col); } if(home.idx!=null)state.homePaints[home.idx]=home.paintIdx;
+  for(const m of home.meshes){ if(m.userData&&m.userData.isRoof)continue; if(m.material&&m.material.color) m.material.color.set(col); } if(home.idx!=null)state.homePaints[home.idx]=home.paintIdx;
   SFX.play('success'); toast(`🎨 Repainted ${home.npcName}'s home!`); save(); }
-function applyHomePaints(){ if(!state.homePaints)return; for(const h of homes){ const pi=state.homePaints[h.idx]; if(pi!=null&&HOME_PAINTS[pi]){ h.paintIdx=pi; for(const m of h.meshes){ if(m.material&&m.material.color) m.material.color.set(HOME_PAINTS[pi]); } } } }
+function applyHomePaints(){ if(!state.homePaints)return; for(const h of homes){ const pi=state.homePaints[h.idx]; if(pi!=null&&HOME_PAINTS[pi]){ h.paintIdx=pi; for(const m of h.meshes){ if(m.userData&&m.userData.isRoof)continue; if(m.material&&m.material.color) m.material.color.set(HOME_PAINTS[pi]); } } } }
 /* ---- BUILT-IN DEBUG INSTRUMENTATION (toggle F3 or `) — live counts + WORLD DISTRIBUTION so you can confirm
    that things/animals/monsters fill the entire breadth, plus FPS, position, needs, tools. ---- */
 let _dbgT=0, _dbgFps=0;
@@ -4779,10 +4786,10 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
       // REAL in-game path: walk up to a house's VISIBLE door + interact (proves it's reachable, not a direct call).
       // Pick a home whose door is the genuine nearest interactable from its stand-point, so the unseeded town
       // layout (a gather node/neighbor that happens to spawn beside one door) can't flake the reach check.
-      let h=homes[0]; for(const cand of homes){ player.position.set(cand.doorPos.x,0.3,cand.doorPos.z); updateInteract(); if(nearest && (nearest.label||'').includes(cand.npcName) && /Enter/.test(nearest.label||'')){ h=cand; break; } }
+      let h=homes.find(c=>!homeLock(c))||homes[0];   // pick any UNLOCKED home (entry is the proximity auto-door now, not an E-interactable)
       const c0=(state.inv.coin||0);
-      player.position.set(h.doorPos.x,0.3,h.doorPos.z); const lbl=window.__WW__.interactNow();
-      R.home_enter_path = (/Enter/.test(lbl||'') && h.active===true);
+      player.position.set(h.doorPos.x,0.3,h.doorPos.z); const _stE=state._selftesting; state._selftesting=false; updateHomes(0.1); state._selftesting=_stE;   // drive the REAL proximity auto-door (temporarily clear the selftest gate so the shipped entry path runs)
+      R.home_enter_path = (h.active===true);
       R.home_built = !!(h.built && h.interior && h.chest && h.npc);
       lootChest(h, h.chest); if(lootOpen)takeAllLoot(lootOpen); R.home_loot = ((state.inv.coin||0) > c0) && h.chest.userData.looted===true;   // chest opens the loot modal -> take all -> coins land in inventory
       h.active=false; updateHomes(0.25); }
