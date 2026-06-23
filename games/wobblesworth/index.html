@@ -2814,6 +2814,10 @@ function buildTouchUI(force){
 
 /* ============================ ZONES (bigger than a neighborhood) ============================ */
 const ZONES=[ {n:'🏘️ Giggleton Town', test:(x,z)=>Math.hypot(x,z)<46},
+  {n:'💀 The Blight', test:(x,z)=>darkMask(x,z)>0.4},          // ⚫ deepest core first (matches the deeper-wins ground paint)
+  {n:'❄️ Frozen Wastes', test:(x,z)=>iceMask(x,z)>0.35},       // ❄️ ice ring
+  {n:'🏜️ Sunscar Dunes', test:(x,z)=>desertMask(x,z)>0.35},   // 🏜️ desert ring
+  {n:'🐊 Mirewood', test:(x,z)=>swampMask(x,z)>0.35},          // 🟣 swamp ring — biome banners announce on entry, beating the near-town quadrant labels below
   {n:'🌲 Whispering Woods', test:(x,z)=>z<-46}, {n:'⛏️ Crystal Quarry', test:(x,z)=>x>46},
   {n:'🌾 Sunny Fields', test:(x,z)=>x<-46}, {n:'🏖️ Pebble Beach', test:(x,z)=>z>46}, {n:'🗺️ The Outskirts', test:()=>true} ];
 let curZone='';
