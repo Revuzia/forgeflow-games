@@ -473,7 +473,14 @@ THREE.ShaderChunk.project_vertex = THREE.ShaderChunk.project_vertex
   .replace('mvPosition = modelViewMatrix * mvPosition;',
     'vec4 _wp = modelMatrix * mvPosition; if(length(cameraPosition.xz) < 2000.0){ vec2 _rel = _wp.xz - cameraPosition.xz; _rel = mod(_rel + '+(WRAP_P*0.5).toFixed(1)+', '+WRAP_P.toFixed(1)+') - '+(WRAP_P*0.5).toFixed(1)+'; _wp.xz = cameraPosition.xz + _rel; } mvPosition = viewMatrix * _wp;')
   .replace('gl_Position = projectionMatrix * mvPosition;',
-    'mvPosition.y -= (mvPosition.x*mvPosition.x + mvPosition.z*mvPosition.z) * '+WORLD_CURVE.toFixed(6)+';\n\tgl_Position = projectionMatrix * mvPosition;');
+    'mvPosition.y -= (mvPosition.x*mvPosition.x + mvPosition.z*mvPosition.z) * '+WORLD_CURVE.toFixed(6)+';\n'+
+    '#if defined(TOON) && !defined(FLAT_SHADED)\n'+
+    '\tvec3 _cN = normalize(vNormal);\n'+
+    '\t_cN.x += 2.0 * '+WORLD_CURVE.toFixed(6)+' * mvPosition.x * _cN.y;\n'+
+    '\t_cN.z += 2.0 * '+WORLD_CURVE.toFixed(6)+' * mvPosition.z * _cN.y;\n'+
+    '\tvNormal = normalize(_cN);\n'+
+    '#endif\n'+
+    '\tgl_Position = projectionMatrix * mvPosition;');   // ALSO tilt the view-space normal by the curve gradient (Jacobian of y-=C(x²+z²)) so toon shading matches the curved silhouette at all angles/distances (was: position curved, normal stale -> wrong toon band toward the horizon)
 /* telemetry seam (overridable no-op) + global error capture so a stray throw is logged, never silent */
 const BUILD='1.0.0';
 const __report=(kind,err)=>{ try{ if(window.__telemetry) window.__telemetry(kind,err); }catch(e){} };
@@ -747,12 +754,12 @@ const _waterNormals=new THREE.TextureLoader().load('assets/textures/waternormals
    is budget-NEGATIVE vs the old per-disc setup. waters[] holds the MESHES (count = world_expanded gate); WATER_MAT is
    ticked directly. (Probe cleanup splices the MESH, never this shared material.) */
 const WATER_MAT=new THREE.ShaderMaterial({ transparent:true, depthWrite:false,
-  uniforms:{ uTime:{value:0}, uDeep:{value:new THREE.Color('#0c4f6e')}, uShallow:{value:new THREE.Color('#2f9fb8')}, uSky:{value:new THREE.Color('#cfeaf6')}, uFoam:{value:new THREE.Color('#eafcff')}, uSun:{value:new THREE.Vector3(0.4,0.85,0.3).normalize()} },
+  uniforms:{ uTime:{value:0}, uDeep:{value:new THREE.Color('#0c4f6e')}, uShallow:{value:new THREE.Color('#2f9fb8')}, uSky:{value:new THREE.Color('#cfeaf6')}, uFoam:{value:new THREE.Color('#eafcff')}, uSun:{value:new THREE.Vector3(0.4,0.85,0.3).normalize()}, uLava:{value:0} },
   vertexShader:`uniform float uTime; varying vec2 vUv; varying vec3 vWorld;
     void main(){ vUv=uv; vec3 p=position;
       p.z += sin(p.x*2.1+uTime*1.4)*0.02 + sin(p.y*2.5-uTime*1.1)*0.02 + sin((p.x+p.y)*0.9+uTime*0.6)*0.03;   // +3rd low-freq swell
       vec4 wp=modelMatrix*vec4(p,1.0); vWorld=wp.xyz; if(length(cameraPosition.xz)<2000.0){ vec2 wr=wp.xz-cameraPosition.xz; wr=mod(wr+${(WRAP_P*0.5).toFixed(1)},${WRAP_P.toFixed(1)})-${(WRAP_P*0.5).toFixed(1)}; wp.xz=cameraPosition.xz+wr; } vec4 mvp=viewMatrix*wp; mvp.y -= (mvp.x*mvp.x+mvp.z*mvp.z)*${WORLD_CURVE.toFixed(6)}; gl_Position=projectionMatrix*mvp; }`,   // match the world WRAP + curve so water tiles & drapes with the ground
-  fragmentShader:`uniform float uTime; uniform vec3 uDeep,uShallow,uSky,uFoam,uSun; varying vec2 vUv; varying vec3 vWorld;
+  fragmentShader:`uniform float uTime, uLava; uniform vec3 uDeep,uShallow,uSky,uFoam,uSun; varying vec2 vUv; varying vec3 vWorld;
     vec3 wnormal(vec2 q,float t){ float hx=1.7*cos(q.x*1.7+t*1.3)+1.15*cos((q.x+q.y)*2.2+t*1.7)+0.7*cos(q.x*0.7-t*0.5); float hy=1.9*cos(q.y*1.9-t*1.05)+1.15*cos((q.x+q.y)*2.2+t*1.7)+0.7*cos(q.y*0.6+t*0.4); return normalize(vec3(-hx*0.09,1.0,-hy*0.09)); }
     void main(){ vec2 q=vWorld.xz*0.9;
       vec3 N=wnormal(q,uTime); vec3 V=normalize(cameraPosition-vWorld); vec3 L=normalize(uSun);
@@ -765,6 +772,7 @@ const WATER_MAT=new THREE.ShaderMaterial({ transparent:true, depthWrite:false,
       float caustic=smoothstep(0.45,1.0, sin(q.x*5.0+uTime*1.5)*sin(q.y*4.6+uTime*1.2))*(1.0-rad)*0.5; col+=caustic*uShallow*0.4;   // shallow shimmer
       float foam=smoothstep(0.84,1.0,rad)*(0.5+0.5*sin(rad*38.0-uTime*3.0)); col=mix(col,uFoam,clamp(foam*0.75,0.0,0.7));            // brighter foam ring
       float edge=1.0-smoothstep(0.94,1.0,rad)*0.8;                                        // soften the very rim so overlapping river-disc seams disappear
+      if(uLava>0.5){ float flow=sin(q.x*2.0+uTime*0.5)*sin(q.y*1.8-uTime*0.4); vec3 lav=mix(uDeep,uShallow,clamp(0.45+flow*0.35+(1.0-rad)*0.3,0.0,1.0)); lav=mix(lav,vec3(0.10,0.035,0.02),smoothstep(0.62,1.0,rad)*0.8); lav+=uShallow*0.30*smoothstep(0.62,1.0,sin(q.x*4.0+uTime)*sin(q.y*3.6-uTime*0.8)); gl_FragColor=vec4(lav*1.35,1.0); return; }   // 🌋 LAVA: opaque molten rock — no sky-fresnel/specular, dark cooled-crust rim, scrolling bright cracks, boosted so it self-lights under bloom
       gl_FragColor=vec4(col, clamp(mix(0.8,0.97,fres+rad*0.15),0.0,0.98)*edge); }` });
 function makeWater(r,x,z,y=0.14,cheap=false){ if(typeof desertMask==='function' && desertMask(x,z)>0.2) return null;   // owner: NO water in the desert ring (it's quicksand, not lakes) — `cheap` kept for call-site compat — ALL water now shares WATER_MAT (one program, one tick/frame)
   const m=new THREE.Mesh(new THREE.CircleGeometry(r,48),WATER_MAT); m.rotation.x=-Math.PI/2; m.position.set(x,y,z); world.add(m); waters.push(m);   // push the MESH (count -> world_expanded gate); shared material is ticked directly in updateWorld
@@ -787,7 +795,7 @@ const LAKES=[[480,0,52],[-480,0,44],[-58,-480,40],[346,-346,36]];   // the 4 out
 function prepLakeBasins(){ for(const [x,z,r] of LAKES){ let mn=Infinity; for(let a=0;a<6.28;a+=0.7){ mn=Math.min(mn, terrainH(x+Math.cos(a)*r*1.1, z+Math.sin(a)*r*1.1)); } WATER_BASINS.push({x,z,rs:r*0.85,rb:r*1.5,floor:mn-2.2,yy:mn-0.3}); } }   // carve bowls BEFORE the terrain mesh is displaced, so the ground mesh cups each lake   // swimmable interior (r*0.72, inside the wavy rim); vr = the rim PEAK reach (~r*1.4) so the keep-out clears the whole visible shoreline
 /* 🟣🌋 BIOME LIQUIDS (owner: swamp "black blobby water" + dark-core lava — both CARVED into the hills via WATER_BASINS so the shoreline merges, exactly like the lakes). The murky/lava materials are CLONES of WATER_MAT: identical shader source -> Three.js compiles ONE program (no extra bind), only the color uniforms + an independent uTime differ (ticked in updateWorld). */
 const SWAMP_WATER_MAT=WATER_MAT.clone(); SWAMP_WATER_MAT.uniforms.uDeep.value=new THREE.Color('#0a1408'); SWAMP_WATER_MAT.uniforms.uShallow.value=new THREE.Color('#243a1c'); SWAMP_WATER_MAT.uniforms.uSky.value=new THREE.Color('#1a2414'); SWAMP_WATER_MAT.uniforms.uFoam.value=new THREE.Color('#46552e');   // murky bog: near-black green body, dark-scum rim (not white foam)
-const LAVA_MAT=WATER_MAT.clone(); LAVA_MAT.uniforms.uDeep.value=new THREE.Color('#5a1200'); LAVA_MAT.uniforms.uShallow.value=new THREE.Color('#ff5a14'); LAVA_MAT.uniforms.uSky.value=new THREE.Color('#1a0600'); LAVA_MAT.uniforms.uFoam.value=new THREE.Color('#ffd23a');   // molten: orange-red body, hot-yellow crust rim (shader is unlit -> reads self-lit)
+const LAVA_MAT=WATER_MAT.clone(); LAVA_MAT.uniforms.uDeep.value=new THREE.Color('#5a1200'); LAVA_MAT.uniforms.uShallow.value=new THREE.Color('#ff5a14'); LAVA_MAT.uniforms.uSky.value=new THREE.Color('#1a0600'); LAVA_MAT.uniforms.uFoam.value=new THREE.Color('#ffd23a'); LAVA_MAT.uniforms.uLava.value=1.0; LAVA_MAT.transparent=false; LAVA_MAT.depthWrite=true;   // molten rock branch: opaque, self-lit (no water fresnel/specular/transparency)
 const ICE_MAT=WATER_MAT.clone(); ICE_MAT.uniforms.uDeep.value=new THREE.Color('#7fa8c8'); ICE_MAT.uniforms.uShallow.value=new THREE.Color('#cfe6f4'); ICE_MAT.uniforms.uSky.value=new THREE.Color('#eaf4fb'); ICE_MAT.uniforms.uFoam.value=new THREE.Color('#ffffff');   // ❄️ frozen pond: glassy pale-blue, near-static (slow uTime); the player SLIDES on it (ICE_ZONES)
 const SWAMP_POOLS=[];   // filled by genSwampPools() in buildWorld — MANY small RANDOM murky pools spread all THROUGH the swamp ring (owner: bogs have pools everywhere, not one big one)
 function genSwampPools(){ SWAMP_POOLS.length=0; let t=0; while(SWAMP_POOLS.length<18 && t<500){ t++; const a=rand(0,TAU), r=rand(380,580), x=Math.cos(a)*r, z=Math.sin(a)*r; if(swampMask(x,z)<0.55) continue; if(SWAMP_POOLS.some(p=>Math.hypot(p.x-x,p.z-z)<p.r+15)) continue; SWAMP_POOLS.push({x,z,r:rand(5,13)}); } }
@@ -1047,7 +1055,7 @@ function buildWorld(){
   genSwampPools(); prepPoolBasins(SWAMP_POOLS,1.6,0.25); prepPoolBasins(LAVA_POOLS,1.3,0.18); prepPoolBasins(ICE_POOLS,1.0,0.10);   // 🟣🌋❄️ generate the scattered swamp pools, then carve all pool bowls (BEFORE the ground mesh) so they merge into the hills (ice = shallow, near-flush)
   for(const s of SINKHOLES){ let mn=Infinity; for(let a=0;a<6.28;a+=0.7){ mn=Math.min(mn, terrainH(s.x+Math.cos(a)*s.r*1.1, s.z+Math.sin(a)*s.r*1.1)); } s._rim=mn; WATER_BASINS.push({x:s.x,z:s.z,rs:s.core,rb:s.r*1.3,floor:mn-5.0,yy:mn}); }   // 🌀 carve steep sinkhole funnels into the dunes BEFORE the ground mesh (floor<yy keeps the lake_basin selftest green); _rim = the natural rim height for the funnel mesh
   // ground (BIG neighborhood) — a subdivided plane displaced by terrainH so the OUTER world rolls (town stays flat). Still ONE mesh/draw call; ~33k static verts (displaced once at build). Square corners hide behind fog (95-190) + skyDome.
-  const _gR=665, _gSEG=180, groundGeo=new THREE.PlaneGeometry(_gR*2,_gR*2,_gSEG,_gSEG), _gp=groundGeo.attributes.position;
+  const _gR=1460, _gSEG=400, groundGeo=new THREE.PlaneGeometry(_gR*2,_gR*2,_gSEG,_gSEG), _gp=groundGeo.attributes.position;   // plane now covers the FULL expanded world (was ±665, leaving the desert/ice/dark rings + their pools floating over the skydome with no ground); 400 segs keeps ~7.3 u/quad
   const _gcol=new Float32Array(_gp.count*3), _gbl=new Float32Array(_gp.count), _gsand=new Float32Array(_gp.count), _gice=new Float32Array(_gp.count), _gc=new THREE.Color();
   for(let i=0;i<_gp.count;i++){ const lx=_gp.getX(i), ly=_gp.getY(i); _gp.setZ(i, terrainH(lx,-ly)); biomeGroundColor(lx,-ly,_gc); _gcol[i*3]=_gc.r; _gcol[i*3+1]=_gc.g; _gcol[i*3+2]=_gc.b; _gbl[i]=Math.min(0.97, swampMask(lx,-ly)*0.72 + desertMask(lx,-ly)*0.95 + iceMask(lx,-ly)*0.96 + darkMask(lx,-ly)*0.95); _gsand[i]=desertMask(lx,-ly); _gice[i]=iceMask(lx,-ly); }   // SUM (not max) so biome crossfades stay fully overridden -> no green grass leaks through where two masks are each ~0.5   // displace + per-biome vertex tint; biomeBlend = how much to OVERRIDE the grass texture with the biome color (multiply alone can't recolor green grass to murky/sand/ash — so swamp+desert+dark all blend their vColor over it)
   groundGeo.setAttribute('color', new THREE.BufferAttribute(_gcol,3));
