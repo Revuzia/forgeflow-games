@@ -88,6 +88,9 @@
   #hearts .lbl{font-size:12px; gap:3px}
   #hearts .lbl span:last-child{font-variant-numeric:tabular-nums; flex-shrink:0; min-width:48px; text-align:right}
   #armorbar{font-size:15px; letter-spacing:2px; text-align:center; padding:0 0 1px; filter:saturate(.9)}
+  #weaponbar{font-size:13px; padding:1px 2px}
+  #weaponbar .lbl{display:flex; justify-content:space-between; gap:8px}
+  #weaponbar .lbl b,#weaponbar .lbl span:last-child{color:#ff8d6b; font-weight:800}
   /* inventory is a centered MODAL grid (owner: image-1 inventory wasn't industry-standard) */
   #inv{position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center; background:rgba(20,14,30,.5); pointer-events:auto}
   #inv .paperdoll{margin:10px 0 4px; padding:10px 8px; background:rgba(34,26,46,.06); border:2px solid rgba(34,26,46,.12); border-radius:12px}
@@ -345,6 +348,7 @@
   <div class="bar"><div class="lbl"><span>⚡ Energy</span><span id="vEnergy">80%</span></div><div class="track"><div id="fEnergy" class="fill"></div></div></div>
   <div id="manabar" class="bar" style="display:none"><div class="lbl"><span>💧 Mana</span><span class="mv">0/0</span></div><div class="track"><div class="fill" style="background:linear-gradient(90deg,#3a6bd6,#7aa8ff)"></div></div></div>
   <div id="hearts" class="bar"></div>
+  <div id="weaponbar" class="bar"></div>
   <div id="armorbar" class="bar" style="display:none"></div>
   <div id="xpbar" class="bar"><div class="lbl"><span>⭐ Level <span id="vLevel">1</span></span><span id="vXP">0/40</span></div><div class="track"><div id="fXP" class="fill"></div></div></div>
 </div>
@@ -3203,6 +3207,9 @@ function winParty(){ if(state.won)return; state.won=true; state.discoOn=true; st
 /* ---------- boot ---------- */
 addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); composer.setSize(innerWidth,innerHeight); });
 function updateNeedsUI(){ document.getElementById('fHunger').style.width=Needs.hunger+'%'; document.getElementById('vHunger').textContent=Math.round(Needs.hunger)+'%'; document.getElementById('fEnergy').style.width=Needs.energy+'%'; document.getElementById('vEnergy').textContent=Math.round(Needs.energy)+'%'; }
+let _combatHudKey='';
+function updateCombatHud(){ const el=document.getElementById('weaponbar'); if(!el)return; const w=WEAPONS[state.weapon]||WEAPONS.fist; const oh=state.offhand?(typeof offhandItem==='function'?offhandItem(state.offhand):null):null; const key=(state.weapon||'fist')+'|'+(state.offhand||''); if(key===_combatHudKey)return; _combatHudKey=key;   // (Q) HUD combat card — equipped weapon + dmg (offense) sits with the armor bar (defense) for an at-a-glance stat card; cached so it's a per-frame no-op until you swap gear
+  el.innerHTML=`<div class="lbl"><span>${w.icon} ${w.name}</span><span>⚔ ${w.dmg}${oh&&oh.icon?` <span style="opacity:.85">${oh.icon}</span>`:''}</span></div>`; }
 
 let _mmT=0;
 // ── FOG OF WAR: the map starts dark; you reveal terrain as you explore, and named landmarks/people appear once discovered ──
@@ -4163,7 +4170,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`animals ${animals.length}  R[${span(animals,a=>Math.hypot(a.mesh.position.x,a.mesh.position.z))}]\n`
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
-function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateFauna(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updateTrainingGround(dt); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
+function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateFauna(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updateTrainingGround(dt); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); updateCombatHud(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
 function idleTick(dt){ cam.yaw+=dt*0.12; cam.targetYaw=cam.yaw; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
