@@ -249,6 +249,7 @@
   #shop h3{font-size:15px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:6px}
   #shop h3 .x{cursor:pointer; background:var(--ink); color:#fff; border-radius:6px; padding:0 8px}
   #minimap{left:14px; bottom:74px; width:138px; height:138px; border:3px solid var(--ink); border-radius:50%; background:rgba(255,247,236,.55); box-shadow:3px 3px 0 rgba(34,26,46,.25); pointer-events:auto; cursor:pointer; transition:transform .12s}
+  #fps{left:14px; bottom:52px; width:138px; box-sizing:border-box; text-align:center; font:800 12px/1.3 ui-monospace,Menlo,Consolas,monospace; color:#bff7c8; background:rgba(10,8,16,.62); border:2px solid rgba(34,26,46,.5); border-radius:9px; padding:2px 0; pointer-events:none; z-index:11; text-shadow:0 1px 1px rgba(0,0,0,.5)}
   #compass:not(.hidden){ position:fixed; left:14px; bottom:218px; width:138px; height:27px; box-sizing:border-box; display:flex; align-items:center; justify-content:center; gap:7px; background:rgba(255,247,236,.74); border:2.5px solid var(--ink); border-radius:15px; box-shadow:2px 2px 0 rgba(34,26,46,.22); pointer-events:none; font:800 12px "Trebuchet MS",sans-serif; color:var(--ink); z-index:5 }
   #compass .cmpneedle{ font-size:16px; line-height:1; color:#d6453f; display:inline-block; transition:transform .08s linear }
   #minimap:hover{transform:scale(1.05)}
@@ -333,6 +334,7 @@
     .shopcard{width:96vw; max-height:80vh}
     .craftcard{width:96vw; max-height:80vh} .cgrid{grid-template-columns:repeat(auto-fill,minmax(98px,1fr))}
     #minimap{width:108px; height:108px; bottom:150px}
+    #fps{bottom:128px; width:108px}
     #compass:not(.hidden){width:108px; bottom:262px}
     .card{max-height:90vh; overflow:auto; padding:20px}
     .card h1{font-size:24px}
@@ -385,6 +387,7 @@
 <div id="loot" class="hidden"></div>
 <div id="stash" class="hidden"></div>
 <canvas id="minimap" class="hud" width="150" height="150" title="Click to enlarge"></canvas>
+<div id="fps" class="hud">-- fps</div>
 <div id="compass" class="hud hidden" title="Points home to town"><span class="cmpneedle">▲</span><span class="cmpdist"></span></div>
 <div id="mapmodal" class="hidden"></div>
 <div id="lore" class="hidden"></div>
@@ -552,9 +555,9 @@ const camera=new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 1050);
 
 const hemi=new THREE.HemisphereLight('#fff6e2','#a8e090',1.0); scene.add(hemi);
 const sun=new THREE.DirectionalLight('#fff1c4',1.25); sun.position.set(28,44,22); sun.castShadow=true;
-sun.shadow.mapSize.set(1536,1536); sun.shadow.camera.near=1; sun.shadow.camera.far=120;   // 1536 (was 2048): ~44% fewer shadow texels rendered EVERY frame; toon shadows over the tight ±46 player box stay crisp
-sun.shadow.camera.left=-46; sun.shadow.camera.right=46; sun.shadow.camera.top=46; sun.shadow.camera.bottom=-46;   // tighter box (follows the player) = higher shadow density at the same map size
-sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.03; scene.add(sun); scene.add(sun.target);
+sun.shadow.mapSize.set(2048,2048); sun.shadow.camera.near=1; sun.shadow.camera.far=240; sun.shadow.radius=4;   // gated rebake (see updateWorld) makes a LARGER, SOFTER box affordable — this is what kills the moving shadow-box edge band
+sun.shadow.camera.left=-70; sun.shadow.camera.right=70; sun.shadow.camera.top=70; sun.shadow.camera.bottom=-70;   // enlarged box so the hard edge sweeps far OUTSIDE the play area (no more "parallel lines" across the grass)
+sun.shadow.bias=-0.0005; sun.shadow.normalBias=0.03; scene.add(sun); scene.add(sun.target);
 renderer.shadowMap.autoUpdate=false;   // PERF: shadows still re-bake EVERY FRAME during play (simTick sets needsUpdate -> the owner's smooth/"not choppy" fix is fully preserved), but the title/idle screen + pause stop wasting a full 1536² shadow pass per frame on a scene that never changes
 const fill=new THREE.DirectionalLight('#cfe0ff',0.4); fill.position.set(-24,18,-18); scene.add(fill);
 
@@ -649,7 +652,7 @@ function buildGrassField(){
   for(let i=0;i<N;i++){ const a=rand(0,TAU), rad=Math.sqrt(Math.random())*125+3; const x=Math.cos(a)*rad, z=Math.sin(a)*rad;   // sqrt = denser near the middle where you play
     const s=rand(0.7,1.5); o.position.set(x,groundY(x,z),z); o.rotation.set(0,rand(0,TAU),0); o.scale.set(s*rand(0.8,1.3),s*rand(0.85,1.4),s*rand(0.8,1.3)); o.updateMatrix(); im.setMatrixAt(i,o.matrix);   // blades sit on the hills (groundY=0 in town)
     col.set(pick(tones)); im.setColorAt(i,col); }
-  im.instanceMatrix.needsUpdate=true; if(im.instanceColor)im.instanceColor.needsUpdate=true; im.receiveShadow=true; im.castShadow=false; im.frustumCulled=false; world.add(im); return im;
+  im.instanceMatrix.needsUpdate=true; if(im.instanceColor)im.instanceColor.needsUpdate=true; im.receiveShadow=false; im.castShadow=false; im.frustumCulled=false; world.add(im); return im;   // grass no longer self-shadowed → the shadow-box edge never paints a band across the meadow (kept emissive/toon look)
 }
 const tmap=(t,c)=>new THREE.MeshToonMaterial({map:t,gradientMap:GRAD,color:c||'#ffffff'});
 function box(w,h,d,c){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),toon(c)); m.castShadow=true; m.receiveShadow=true; return m; }
@@ -1062,7 +1065,7 @@ function buildWorld(){
   genSwampPools(); prepPoolBasins(SWAMP_POOLS,1.6,0.25); prepPoolBasins(LAVA_POOLS,1.3,0.18); prepPoolBasins(ICE_POOLS,1.0,0.10);   // 🟣🌋❄️ generate the scattered swamp pools, then carve all pool bowls (BEFORE the ground mesh) so they merge into the hills (ice = shallow, near-flush)
   for(const s of SINKHOLES){ let mn=Infinity; for(let a=0;a<6.28;a+=0.7){ mn=Math.min(mn, terrainH(s.x+Math.cos(a)*s.r*1.1, s.z+Math.sin(a)*s.r*1.1)); } s._rim=mn; WATER_BASINS.push({x:s.x,z:s.z,rs:s.core,rb:s.r*1.3,floor:mn-5.0,yy:mn}); }   // 🌀 carve steep sinkhole funnels into the dunes BEFORE the ground mesh (floor<yy keeps the lake_basin selftest green); _rim = the natural rim height for the funnel mesh
   // ground (BIG neighborhood) — a subdivided plane displaced by terrainH so the OUTER world rolls (town stays flat). Still ONE mesh/draw call; ~33k static verts (displaced once at build). Square corners hide behind fog (95-190) + skyDome.
-  const _gR=1460, _gSEG=400, groundGeo=new THREE.PlaneGeometry(_gR*2,_gR*2,_gSEG,_gSEG), _gp=groundGeo.attributes.position;   // plane now covers the FULL expanded world (was ±665, leaving the desert/ice/dark rings + their pools floating over the skydome with no ground); 400 segs keeps ~7.3 u/quad
+  const _gR=1460, _gSEG=256, groundGeo=new THREE.PlaneGeometry(_gR*2,_gR*2,_gSEG,_gSEG), _gp=groundGeo.attributes.position;   // plane now covers the FULL expanded world (was ±665, leaving the desert/ice/dark rings + their pools floating over the skydome with no ground); 400 segs keeps ~7.3 u/quad
   const _gcol=new Float32Array(_gp.count*3), _gbl=new Float32Array(_gp.count), _gsand=new Float32Array(_gp.count), _gice=new Float32Array(_gp.count), _gc=new THREE.Color();
   for(let i=0;i<_gp.count;i++){ const lx=_gp.getX(i), ly=_gp.getY(i); _gp.setZ(i, terrainH(lx,-ly)); biomeGroundColor(lx,-ly,_gc); _gcol[i*3]=_gc.r; _gcol[i*3+1]=_gc.g; _gcol[i*3+2]=_gc.b; _gbl[i]=Math.min(0.97, swampMask(lx,-ly)*0.72 + desertMask(lx,-ly)*0.95 + iceMask(lx,-ly)*0.96 + darkMask(lx,-ly)*0.95); _gsand[i]=desertMask(lx,-ly); _gice[i]=iceMask(lx,-ly); }   // SUM (not max) so biome crossfades stay fully overridden -> no green grass leaks through where two masks are each ~0.5   // displace + per-biome vertex tint; biomeBlend = how much to OVERRIDE the grass texture with the biome color (multiply alone can't recolor green grass to murky/sand/ash — so swamp+desert+dark all blend their vColor over it)
   groundGeo.setAttribute('color', new THREE.BufferAttribute(_gcol,3));
@@ -3220,9 +3223,10 @@ function updateWorld(dt){ const tn=performance.now()*0.001; updateCompass();
   state.tod=(state.tod+dt/280)%1; const ang=state.tod*TAU-Math.PI/2, sy=Math.sin(ang);
   // sun follows the player so shadows exist in ALL biomes (was a fixed ±box at origin = shadows only near town)
   sun.target.position.set(player.position.x,0,player.position.z);
-  sun.position.set(player.position.x+Math.cos(ang)*40, Math.max(6,sy*48), player.position.z+22); sun.intensity=clamp(0.3+sy*1.1,0.2,1.3);
+  sun.position.set(player.position.x+Math.cos(ang)*40, Math.max(14,sy*48), player.position.z+22); sun.intensity=clamp(0.3+sy*1.1,0.2,1.3);
   state._shAcc=(state._shAcc||0)+dt;
-  if(state._shAcc>0.4 || Math.hypot(player.position.x-(state._shX||0), player.position.z-(state._shZ||0))>5){ renderer.shadowMap.needsUpdate=true; state._shAcc=0; state._shX=player.position.x; state._shZ=player.position.z; }
+  const _shMoved=Math.hypot(player.position.x-(state._shX||0), player.position.z-(state._shZ||0))>5, _shSun=Math.abs((state.tod||0)-(state._shTod||0))>0.0025;
+  if(_shMoved || _shSun || state._shAcc>1.5){ renderer.shadowMap.needsUpdate=true; state._shAcc=0; state._shX=player.position.x; state._shZ=player.position.z; state._shTod=state.tod; }   // rebake ONLY on real change (moved >5u OR sun angle moved) + a 1.5s safety — simTick used to set this EVERY frame (the #1 FPS cost)
   if(sy<0.18) _sky.copy(_night).lerp(_dusk,clamp((sy+0.15)/0.33,0,1)); else _sky.copy(_dusk).lerp(_day,clamp(sy,0,1));
   _zen.copy(_zenNight).lerp(_zenDay,clamp(sy+0.2,0,1));
   scene.background.copy(_sky); scene.fog.color.copy(_sky); skyMat.uniforms.bot.value.copy(_sky); skyMat.uniforms.top.value.copy(_zen);
@@ -3333,7 +3337,7 @@ let _combatHudKey='';
 function updateCombatHud(){ const el=document.getElementById('weaponbar'); if(!el)return; const w=WEAPONS[state.weapon]||WEAPONS.fist; const oh=state.offhand?(typeof offhandItem==='function'?offhandItem(state.offhand):null):null; const key=(state.weapon||'fist')+'|'+(state.offhand||''); if(key===_combatHudKey)return; _combatHudKey=key;   // (Q) HUD combat card — equipped weapon + dmg (offense) sits with the armor bar (defense) for an at-a-glance stat card; cached so it's a per-frame no-op until you swap gear
   el.innerHTML=`<div class="lbl"><span>${w.icon} ${w.name}</span><span>⚔ ${w.dmg}${oh&&oh.icon?` <span style="opacity:.85">${oh.icon}</span>`:''}</span></div>`; }
 
-let _mmT=0;
+let _mmT=0; let _fpsAcc, _fpsT=0;
 // ── FOG OF WAR: the map starts dark; you reveal terrain as you explore, and named landmarks/people appear once discovered ──
 const FOG_CELL=48;
 function fogKey(x,z){ return Math.floor((x+FENCE)/FOG_CELL)+'_'+Math.floor((z+FENCE)/FOG_CELL); }
@@ -4438,7 +4442,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`animals ${animals.length}  R[${span(animals,a=>Math.hypot(a.mesh.position.x,a.mesh.position.z))}]\n`
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
-function simTick(dt){ renderer.shadowMap.needsUpdate=true; updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateFauna(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updateTrainingGround(dt); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); updateCombatHud(); Silly.tick(dt); renderDebug(dt); _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
+function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateFauna(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updateTrainingGround(dt); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); updateCombatHud(); Silly.tick(dt); renderDebug(dt); _fpsAcc=(_fpsAcc===undefined?1/Math.max(dt,1e-3):_fpsAcc*0.9+(1/Math.max(dt,1e-3))*0.1); _fpsT+=dt; if(_fpsT>=0.25){_fpsT=0; const _fe=document.getElementById('fps'); if(_fe)_fe.textContent=Math.round(_fpsAcc)+' fps';} _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
 function idleTick(dt){ cam.yaw+=dt*0.12; cam.targetYaw=cam.yaw; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
