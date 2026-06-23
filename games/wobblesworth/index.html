@@ -41,8 +41,13 @@
   canvas{display:block; touch-action:none}
   .hud{position:fixed; pointer-events:none; z-index:10}
   body.inv-open .hud{z-index:35}   /* raise the HUD (incl. the hotbar) ABOVE the inventory modal (z-30) so you can DROP backpack items onto hotbar slots to pin them — the modal was covering the z-10 hotbar */
-  #needs{top:14px; left:14px; width:210px; display:flex; flex-direction:column; gap:8px}
-  .bar{background:rgba(255,255,255,.82); border:3px solid var(--ink); border-radius:14px; padding:5px 9px; box-shadow:3px 3px 0 rgba(34,26,46,.25)}
+  #needs{top:14px; left:14px; width:188px; background:rgba(247,241,231,.92); border:3px solid var(--ink); border-radius:14px; box-shadow:4px 4px 0 rgba(34,26,46,.28); padding:7px 8px 8px}
+  #nhead{display:flex; align-items:center; justify-content:space-between; margin:0 0 6px; pointer-events:auto}
+  #nhead .nttl{font-size:12px; font-weight:bold; letter-spacing:.5px; color:var(--ink); opacity:.92}
+  #nmin{pointer-events:auto; cursor:pointer; background:var(--ink); color:#fff; border:2px solid rgba(255,255,255,.25); border-radius:8px; width:26px; height:22px; font-size:15px; line-height:1; font-weight:bold; padding:0}
+  #needsBody{display:flex; flex-direction:column; gap:5px}
+  #needs.min #needsBody{display:none} #needs.min{padding-bottom:6px}
+  .bar{background:transparent; border:none; border-radius:0; padding:1px 2px; box-shadow:none}
   .bar .lbl{font-size:12px; font-weight:bold; display:flex; justify-content:space-between; letter-spacing:.5px}
   .bar .track{height:10px; background:#e7dccb; border-radius:6px; margin-top:4px; overflow:hidden}
   .bar .fill{height:100%; width:80%; border-radius:6px; transition:width .35s ease; box-shadow:inset -2px 0 3px rgba(0,0,0,0.12)}
@@ -344,6 +349,8 @@
 <div id="app"></div>
 <div id="loading">Building the neighborhood…<div id="lbar"><div id="lfill"></div></div></div>
 <div id="needs" class="hud">
+  <div id="nhead"><span class="nttl">❤️ Vitals</span><button id="nmin" title="Minimize panel">–</button></div>
+  <div id="needsBody">
   <div class="bar"><div class="lbl"><span>🍔 Hunger</span><span id="vHunger">80%</span></div><div class="track"><div id="fHunger" class="fill"></div></div></div>
   <div class="bar"><div class="lbl"><span>⚡ Energy</span><span id="vEnergy">80%</span></div><div class="track"><div id="fEnergy" class="fill"></div></div></div>
   <div id="manabar" class="bar" style="display:none"><div class="lbl"><span>💧 Mana</span><span class="mv">0/0</span></div><div class="track"><div class="fill" style="background:linear-gradient(90deg,#3a6bd6,#7aa8ff)"></div></div></div>
@@ -351,6 +358,7 @@
   <div id="weaponbar" class="bar"></div>
   <div id="armorbar" class="bar" style="display:none"></div>
   <div id="xpbar" class="bar"><div class="lbl"><span>⭐ Level <span id="vLevel">1</span></span><span id="vXP">0/40</span></div><div class="track"><div id="fXP" class="fill"></div></div></div>
+  </div>
 </div>
 <div id="quests" class="hud"><div id="qhead"><span class="qttl">📖 Campaign</span><button id="qmin" title="Minimize panel">–</button><div id="coopHud" title="Play with Friends">👥</div><div id="gear" title="Settings">⚙</div></div><div id="qbody"><div id="goalbox"></div><div class="jdiv"></div><div id="qlist"></div><div id="reqlist"></div></div></div>
 <div id="prompt" class="hud"><span class="key">E</span><span id="promptText">Interact</span></div>
@@ -476,7 +484,7 @@ var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snack
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
   hp:100, hpMax:100, xp:0, level:1, charClass:'', mana:0, manaMax:0, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, hasRod:false, hasCompass:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
   intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
-  volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, selectedSlot:0, lore:{}, fog:{}, met:{}, badges:{}, autoCam:true };
+  volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, needsMin:false, selectedSlot:0, lore:{}, fog:{}, met:{}, badges:{}, autoCam:true };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
 
 /* ---------- AUDIO ---------- */
@@ -2187,7 +2195,7 @@ function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
   unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, charClass:state.charClass, mana:state.mana, manaMax:state.manaMax, armorDye:state.armorDye, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, hasRod:state.hasRod, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier, bagCount:state.bagCount, charModel:state.charModel,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
-  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, chainStep:state.chainStep, questHistory:state.questHistory, _qseq:state._qseq, boardOffers:state.boardOffers, _boardTaken:state._boardTaken, _boardDay:state._boardDay, npcOfferDay:state.npcOfferDay, genDefs:(()=>{const o={};for(const k in Quests.defs){const d=Quests.defs[k];if(d&&d._gen)o[k]={title:d.title,tid:d._tid,p:d._p,pitch:d._pitch,sig:d._sig,reward:d.reward,steps:d.steps};}return o;})(), lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
+  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, needsMin:state.needsMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, chainStep:state.chainStep, questHistory:state.questHistory, _qseq:state._qseq, boardOffers:state.boardOffers, _boardTaken:state._boardTaken, _boardDay:state._boardDay, npcOfferDay:state.npcOfferDay, genDefs:(()=>{const o={};for(const k in Quests.defs){const d=Quests.defs[k];if(d&&d._gen)o[k]={title:d.title,tid:d._tid,p:d._p,pitch:d._pitch,sig:d._sig,reward:d.reward,steps:d.steps};}return o;})(), lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug,
   tamedMounts:(typeof tamedMountSaveList==='function'?tamedMountSaveList():[]), stables:(state.stables||[]) })); }catch(e){} }
 // VERSIONED + SANITIZED load: bad/corrupt/legacy data can never crash boot or inject impossible state
@@ -2220,7 +2228,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.craftedSet=(s.craftedSet&&typeof s.craftedSet==='object')?s.craftedSet:{}; state.reqsFulfilled=num(s.reqsFulfilled,0,0,1e9); state.biomes=(s.biomes&&typeof s.biomes==='object')?s.biomes:{}; state.event=DAY_EVENTS.find(e=>e.id===s.eventId)||null;
   if(typeof s.tod==='number'&&Number.isFinite(s.tod)) state.tod=((s.tod%1)+1)%1;
   if(s.volume!=null) state.volume=clamp(+s.volume||0,0,1); state.musicOn=(s.musicOn!==false); state.sfxOn=(s.sfxOn!==false); state.reduce=!!s.reduce;
-  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.quickItems=(s.quickItems&&typeof s.quickItems==='object')?s.quickItems:{}; state.activeQuests=(s.activeQuests&&typeof s.activeQuests==='object')?s.activeQuests:{}; state.chainStep=(s.chainStep&&typeof s.chainStep==='object')?s.chainStep:{}; try{ rebuildActiveChains(); }catch(e){} state.questHistory=Array.isArray(s.questHistory)?s.questHistory:[]; state._qseq=num(s._qseq,0,0,1e9); state.boardOffers=Array.isArray(s.boardOffers)?s.boardOffers:[]; state._boardTaken=num(s._boardTaken,0,0,9); state._boardDay=num(s._boardDay,0,0,1e9); state.npcOfferDay=(s.npcOfferDay&&typeof s.npcOfferDay==='object')?s.npcOfferDay:{}; if(s.genDefs&&typeof s.genDefs==='object'){ for(const k in s.genDefs){ const g=s.genDefs[k]; if(g&&g.steps&&g.tid) Quests.defs[k]={title:g.title,kind:'bounty',steps:g.steps,reward:g.reward,_gen:true,_tid:g.tid,_p:g.p,_pitch:g.pitch,_sig:g.sig}; } } state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{}; state.badges=(s.badges&&typeof s.badges==='object')?s.badges:{};
+  if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.needsMin=!!s.needsMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.quickItems=(s.quickItems&&typeof s.quickItems==='object')?s.quickItems:{}; state.activeQuests=(s.activeQuests&&typeof s.activeQuests==='object')?s.activeQuests:{}; state.chainStep=(s.chainStep&&typeof s.chainStep==='object')?s.chainStep:{}; try{ rebuildActiveChains(); }catch(e){} state.questHistory=Array.isArray(s.questHistory)?s.questHistory:[]; state._qseq=num(s._qseq,0,0,1e9); state.boardOffers=Array.isArray(s.boardOffers)?s.boardOffers:[]; state._boardTaken=num(s._boardTaken,0,0,9); state._boardDay=num(s._boardDay,0,0,1e9); state.npcOfferDay=(s.npcOfferDay&&typeof s.npcOfferDay==='object')?s.npcOfferDay:{}; if(s.genDefs&&typeof s.genDefs==='object'){ for(const k in s.genDefs){ const g=s.genDefs[k]; if(g&&g.steps&&g.tid) Quests.defs[k]={title:g.title,kind:'bounty',steps:g.steps,reward:g.reward,_gen:true,_tid:g.tid,_p:g.p,_pitch:g.pitch,_sig:g.sig}; } } state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{}; state.badges=(s.badges&&typeof s.badges==='object')?s.badges:{};
   state.homeTier=num(s.homeTier,0,0,3); for(let i=1;i<=state.homeTier;i++) applyHomeTier(i);   // rebuild purchased home upgrades
   state.homePaints=(s.homePaints&&typeof s.homePaints==='object')?s.homePaints:{}; loadBlocks(s.buildBlocks); applyHomePaints();   // restore voxel builds + house repaints (buildWorld ran first, so homes exist)
   for(const k in VOX.meshes) world.remove(VOX.meshes[k]); VOX.dug={}; VOX.meshes={};   // restore carved terrain
@@ -3274,6 +3282,8 @@ function openMap(){ if(!state.running)return; _closeMenus('map'); mapOpen=true; 
 function closeMap(){ mapOpen=false; const el=document.getElementById('mapmodal'); if(el) el.classList.add('hidden'); }
 function applyQuestMin(){ const q=document.getElementById('quests'), b=document.getElementById('qmin'); if(!q)return; q.classList.toggle('min',!!state.questMin); if(b){ b.textContent=state.questMin?'+':'–'; b.title=state.questMin?'Expand panel':'Minimize panel'; } }
 function toggleQuests(){ state.questMin=!state.questMin; applyQuestMin(); save(); }
+function applyNeedsMin(){ const n=document.getElementById('needs'), b=document.getElementById('nmin'); if(!n)return; n.classList.toggle('min',!!state.needsMin); if(b){ b.textContent=state.needsMin?'+':'–'; b.title=state.needsMin?'Expand panel':'Minimize panel'; } }
+function toggleNeeds(){ state.needsMin=!state.needsMin; applyNeedsMin(); save(); }
 
 let last=performance.now(), ready=false;
 let __WW_throwOnce=false, touchMove={x:0,z:0}, touchSprint=false, _gpPrev={};
@@ -4426,7 +4436,7 @@ document.getElementById('keepBtn').onclick=()=>document.getElementById('winScree
 { const g=document.getElementById('gear'); if(g) g.onclick=()=>{ if(invOpen)closeInv(); if(craftOpen)closeCraft(); if(shopOpen)closeShop(); openSettings(); }; }
 { const ch=document.getElementById('coopHud'); if(ch) ch.onclick=()=>{ if(invOpen)closeInv(); if(craftOpen)closeCraft(); if(shopOpen)closeShop(); if(typeof openCoop==='function')openCoop(); }; }   // HUD Play-with-Friends opener
 { const hdr=document.getElementById('ctrlHdr'); if(hdr) hdr.onclick=()=>{ const grid=document.getElementById('ctrlGrid'), cr=document.getElementById('ctrlCaret'); if(!grid)return; const min=grid.style.display==='none'; grid.style.display=min?'':'none'; if(cr)cr.textContent=min?'▾':'▸'; }; }   // minimize/expand the bottom-right Controls panel
-{ const mm=document.getElementById('minimap'); if(mm) mm.onclick=()=>{ mapOpen?closeMap():openMap(); }; const qm=document.getElementById('qmin'); if(qm) qm.onclick=toggleQuests; }
+{ const mm=document.getElementById('minimap'); if(mm) mm.onclick=()=>{ mapOpen?closeMap():openMap(); }; const qm=document.getElementById('qmin'); if(qm) qm.onclick=toggleQuests; const nm=document.getElementById('nmin'); if(nm) nm.onclick=toggleNeeds; applyNeedsMin(); }
 
 /* QA probe */
 window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.toFixed(2),z:+player.position.z.toFixed(2)}),
