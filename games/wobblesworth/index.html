@@ -849,7 +849,9 @@ function texturizeHouse(o,kind,x,z){ const _b=HBM[houseBiome(x,z)]||HBM.forest;
   const bodyTex=_b[0]==='plaster'?TEX.plaster:TEX.wood; const wallTint=new THREE.Color(_b[1]);
   const roofCol = new THREE.Color(pick(_b[2]));   // per-house ROOF tint (wood->browns, plaster->terracotta/slate/sage) so roofs aren't all the same red
   for(const m of meshes){ const isRoof=(m===roof && meshes.length>1); const baseCol=(m.material&&m.material.color)?m.material.color.clone():new THREE.Color('#ffffff');
-    const _oc=m.material&&m.material.color; if((!isRoof && _oc && _oc.b>_oc.r*1.15 && _oc.b>0.42) || /glass|window|pane/i.test(m.name||'')){ m.castShadow=true; m.receiveShadow=true; continue; }   // KEEP window panes / blue glass — don't stamp wall plank over them (was erasing the cottage windows)
+    const _oc=m.material&&m.material.color; let _isGlass=/glass|window|pane/i.test(m.name||'');
+    if(!isRoof && !_isGlass && meshes.length>1 && _oc && _oc.b>_oc.r*1.15 && _oc.b>0.42){ const _mb=new THREE.Box3().setFromObject(m), _ms=_mb.getSize(new THREE.Vector3()), _ob=new THREE.Box3().setFromObject(o), _os=_ob.getSize(new THREE.Vector3()); if(_ms.x*_ms.y*_ms.z < _os.x*_os.y*_os.z*0.18) _isGlass=true; }   // only a SMALL pale-blue submesh (<18% of the house) is a real WINDOW; a single-mesh or body-sized mesh IS the house -> always texture it (was skipping the whole pale house = the regression)
+    if(_isGlass){ m.castShadow=true; m.receiveShadow=true; continue; }   // KEEP real window panes / blue glass — never stamp wall plank over them
     const t=(isRoof?TEX.roof:bodyTex).clone(); t.needsUpdate=true; t.repeat.set(isRoof?2:1.6,isRoof?2:1.6);
     m.material=new THREE.MeshToonMaterial({map:t,gradientMap:GRAD,color:isRoof?roofCol:baseCol.lerp(wallTint,0.6)});   // body keeps the per-house tint; roof gets its own per-house tone
     if(isRoof)m.userData.isRoof=true;   // tag so REPAINT skips the textured shingle roof
@@ -982,7 +984,7 @@ const DUNGEON={x:2000,z:2000,inDungeon:false,built:false,ex:0,ez:0,rooms:[],ches
 const BUILD_MATS=[['wood','#a9743f'],['stone','#9a948a'],['crystal','#7fd9ff'],['dirt','#9a7a4a']];
 // 🌸 VARIOUS COLORED FLOWERS (owner): tinted clones of the 3 existing Flower GLBs (no new models) that drop COLOR-KEYED petals feeding dyes + arrows. warm = south/beach, cool = far/cold outskirts; white/black are rare.
 const FLOWERS=[
-  {model:'Flower2',tint:null,     item:'flower',      w:5,biome:'any'},    // 🌸 common generic flower (keeps 'flower' gatherable for recipes + the dye_petal)
+  {model:'Flower2',tint:'#ffd23f', item:'flower',      w:5,biome:'any'},    // 🌸 common generic flower — sunny-yellow tint so the no-map Flower2 GLB isn't WHITE (keeps 'flower' + the dye_petal)
   {model:'Flower1',tint:'#c0392b',item:'red_petal',   w:3,biome:'warm'},   // 🌹 Crimson  -> fire arrows + Crimson dye
   {model:'Flower2',tint:'#3a8fd6',item:'blue_petal',  w:3,biome:'cool'},   // 🪻 Frost    -> frost arrows + Sky dye
   {model:'Flower3',tint:'#e8c23a',item:'yellow_petal',w:3,biome:'warm'},   // 🌻 Sun      -> Gold dye
@@ -1033,9 +1035,9 @@ function loadAll(onDone){
       g.scene.traverse(m=>{ if(m.isMesh){ m.castShadow=true; m.receiveShadow=true; if(m.material){ m.material.metalness=0; m.material.side=THREE.DoubleSide; _stripDegenMaps(m.material); for(const _t of [m.material.map,m.material.emissiveMap,m.material.normalMap]) if(_t){ _t.anisotropy=_maxAniso; _t.needsUpdate=true; }   // DoubleSide: thin/open Kenney meshes no longer vanish when seen from behind; anisotropy: sharp at grazing angles
         // EMISSIVE ACCENTS (graphics polish): hero props glow under the existing 0.85-threshold bloom — magical at dusk/night,
         // 0 extra draw calls + NO new PointLight (8-cap intact). Materials are shared by place() clones, so this lights them all.
-        if(/^Crystal/.test(name)){ m.material.emissive=(m.material.color?m.material.color.clone():new THREE.Color('#7fd9ff')); m.material.emissiveIntensity=0.62; }
+        if(/^Crystal/.test(name)){ m.material.emissive=new THREE.Color('#7fd9ff'); m.material.emissiveIntensity=0.62; }   // hard-code the CYAN glow — cloning the [0.4,0.4,0.4] no-tex base gave a grey glow
         else if(name==='Coin'){ m.material.emissive=new THREE.Color('#ffcf3a'); m.material.emissiveIntensity=0.5; }
-        else if(name==='MushroomRed'){ m.material.emissive=(m.material.color?m.material.color.clone():new THREE.Color('#e85d5d')); m.material.emissiveIntensity=0.38; }
+        else if(name==='MushroomRed'){ m.material.emissive=new THREE.Color('#e85d5d'); m.material.emissiveIntensity=0.38; }   // hard-code the RED glow — cloning the stripped near-white base gave a white glow
       } } });
     }, undefined, e=>{ if(!ASSET_ERRORS.includes(name))ASSET_ERRORS.push(name); __report('asset',name); });
   }
@@ -1135,7 +1137,7 @@ function buildWorld(){
     if(isInWater(x,z,3)) continue;   // no grass tufts / flowers floating on the water
     if(x>-9&&x<9&&z>8&&z<22) continue;   // skip the player-house interior footprint (no grass growing through the floor)
     if(desertMask(x,z)>0.4||iceMask(x,z)>0.4||darkMask(x,z)>0.4) continue;   // 🟤❄️⚫ no green grass tufts in the desert / ICE / dark core — their own biome props cover them
-    const _d=place(pick(["Grass","Grass3","GrassLeaf1","Flower1","Flower2","Flower3","MushroomRed","Cactus1"]),x,z,{targetH:rand(0.5,1.3),rotY:rand(0,TAU)}); if(_d)_d.traverse(m=>{if(m.isMesh)m.castShadow=false;});   // PERF: tiny decor tufts cast negligible shadows — drop them from the per-frame shadow cull
+    const _DT={Grass:'#5fae3e',Grass3:'#6bbf4a',GrassLeaf1:'#74c95a',Flower1:'#d65a7a',Flower2:'#ffd23f',Flower3:'#ff8a4c',MushroomRed:'#d24a4a',Cactus1:'#4f8e45'}, _nm=pick(Object.keys(_DT)); const _d=place(_nm,x,z,{targetH:rand(0.5,1.3),rotY:rand(0,TAU),tint:_DT[_nm]}); if(_d)_d.traverse(m=>{if(m.isMesh)m.castShadow=false;});   // tinted: the textured-prop GLBs ship a 1x1 placeholder (stripped) so without a tint they render WHITE — give each its real color   // PERF: tiny tufts drop out of the shadow cull
   }
   // street lanterns along the main roads — each gets a warm GLOWING bulb (+ a real point light up to the cap)
   function streetLamp(x,z){ const o=place("Lantern",x,z,{targetH:2.6,tint:'#39312a'}); const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8),new THREE.MeshStandardMaterial({color:'#ffd98a',emissive:new THREE.Color('#ffd98a'),emissiveIntensity:1.4,toneMapped:false})); bulb.position.set(x,2.5,z); world.add(bulb); return o; }   // emissive bulb crosses the bloom threshold -> actually GLOWS at night (was a dead flat dot)   // dark-iron post (was white) + glowing warm bulb (no PointLight — the 8-slot dynamic-light cap stays reserved for craftable lanterns)
@@ -1182,10 +1184,10 @@ function buildZones(){
   mergeDeadTrees(_dt, false);   // PERF: all biome dead trees -> ONE merged mesh, no per-tree shadow-cull
   for(const p of SWAMP_POOLS){ for(let k=0;k<9;k++){ const a=rand(0,TAU), rr=p.r*rand(0.95,1.4), rx=p.x+Math.cos(a)*rr, rz=p.z+Math.sin(a)*rr; if(swampMask(rx,rz)>0.3) _reeds.push({x:rx,z:rz,h:rand(1.2,2.1)}); } }   // 🌾 cattails ring each swamp pool (bog edges)
   buildSwampReeds(_reeds);   // procedural cattails (merged) replace the old lawn-grass reeds
-  for(let i=0;i<36;i++){ const x=rand(-300,300),z=rand(-580,-90); if(isInWater(x,z,2))continue; addNode('MushroomRed',x,z,{item:'mushroom',amount:1,targetH:1.1,respawn:30}); }
+  for(let i=0;i<36;i++){ const x=rand(-300,300),z=rand(-580,-90); if(isInWater(x,z,2))continue; addNode('MushroomRed',x,z,{item:'mushroom',amount:1,targetH:1.1,respawn:30,tint:'#d24a4a'}); }
   // ⛏️ CRYSTAL QUARRY (east) — stone + crystals
   for(let i=0;i<52;i++){ const x=rand(120,580),z=rand(-300,300); if(isInWater(x,z,5))continue; const r=makeRock(x,z,rand(1.5,2.6)); world.add(r); addNode(r,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); }
-  for(let i=0;i<38;i++){ const x=rand(120,580),z=rand(-300,300); if(isInWater(x,z,3))continue; if(desertMask(x,z)>0.4){ const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); } else addNode(pick(['Crystal1','Crystal2','Crystal3','Crystal4']),x,z,{item:'crystal',amount:1,targetH:rand(1.2,2),respawn:40,label:'Mine a crystal'}); }   // quarry crystals that bleed into the desert ring -> stone (emissive crystals would BLOOM in the sand)
+  for(let i=0;i<38;i++){ const x=rand(120,580),z=rand(-300,300); if(isInWater(x,z,3))continue; if(desertMask(x,z)>0.4){ const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); } else addNode(pick(['Crystal1','Crystal2','Crystal3','Crystal4']),x,z,{item:'crystal',amount:1,targetH:rand(1.2,2),respawn:40,label:'Mine a crystal',tint:'#5fd0ff'}); }   // quarry crystals that bleed into the desert ring -> stone (emissive crystals would BLOOM in the sand)
   // ⛏️ MINE ENTRANCE (Crystal Quarry) — craft a Pickaxe, press E here to descend into the voxel mine
   { const me=box(3.2,1.4,3.2,'#3a342e'); me.position.set(92,0.7,6); world.add(me); addSolid(me,0,false);
     const rim=box(3.6,0.4,3.6,'#5a544c'); rim.position.set(92,1.5,6); world.add(rim);
@@ -1193,7 +1195,7 @@ function buildZones(){
     const sign=new THREE.Mesh(new THREE.SphereGeometry(0.18,10,10),new THREE.MeshBasicMaterial({color:'#ffe26a'})); sign.position.set(92,3.0,6); world.add(sign);
     addInteractable(rim,'⛏️ Enter the Mine',()=>enterMine(),3.6); }
   // 🌾 SUNNY FIELDS (west) — carrots + apple trees
-  for(let i=0;i<58;i++){ const a=Math.PI+rand(-1.15,1.15), r=rand(94,172), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,3))continue; addNode(pick(['Carrot','Cabbage','CarrotGroup']),x,z,{item:'carrot',amount:2,targetH:rand(0.8,1.4),respawn:22,label:'Harvest crops'}); }   // Sunny Fields stay in the GREEN west hills (crops don't grow in swamp/desert/dark)
+  for(let i=0;i<58;i++){ const a=Math.PI+rand(-1.15,1.15), r=rand(94,172), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,3))continue; const _crop=pick(['Carrot','Cabbage','CarrotGroup']); addNode(_crop,x,z,{item:'carrot',amount:2,targetH:rand(0.8,1.4),respawn:22,label:'Harvest crops',tint:(_crop==='Cabbage'?'#7bbf4a':'#e8731f')}); }   // Sunny Fields stay in the GREEN west hills (crops don't grow in swamp/desert/dark)
   for(let i=0;i<26;i++){ const a=Math.PI+rand(-1.0,1.0), r=rand(98,168), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,7))continue; const t=makeTree(x,z,rand(5,6.5),{fruit:'#e8463a'}); world.add(t); addNode(t,x,z,{item:'apple',amount:2,respawn:28,label:'Pick apples',solid:'trunk'}); }   // apple orchard in the GREEN west hills (r98-168) — reliably reachable + on-theme (no fruit trees in swamp/desert/dark)
   // 🏖️ PEBBLE BEACH (south) — coins + flowers
   // (coin GATHER nodes removed — coins now come from fighting night monsters + home chests + neighbor gifts)
@@ -1202,7 +1204,7 @@ function buildZones(){
   for(let i=0;i<88;i++){ const a=rand(0,TAU), r=rand(200,FENCE-30), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6))continue; const roll=Math.random();   // DENSER outskirts (44->88): the long trek out should reward you with resources, not empty land
     if(roll<0.35){ const t=_resourceTree(x,z,rand(5,7)); if(t){ world.add(t); addNode(t,x,z,{item:'wood',amount:2,respawn:24,label:'Chop for wood',solid:'trunk'}); } else { const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); } }   // desert -> stone instead of a tree
     else if(roll<0.75){ const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); }
-    else { if(desertMask(x,z)>0.4||iceMask(x,z)>0.4){ const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); } else { addNode(pick(['Crystal1','Crystal2','Crystal3','Crystal4']),x,z,{item:'crystal',amount:1,targetH:rand(1.2,2),respawn:40,label:'Mine a crystal'}); } } }   // emissive crystals would bloom in the sand/snow -> desert + ice rings get stone instead
+    else { if(desertMask(x,z)>0.4||iceMask(x,z)>0.4){ const rk=makeRock(x,z,rand(1.5,2.6)); world.add(rk); addNode(rk,x,z,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); } else { addNode(pick(['Crystal1','Crystal2','Crystal3','Crystal4']),x,z,{item:'crystal',amount:1,targetH:rand(1.2,2),respawn:40,label:'Mine a crystal',tint:'#5fd0ff'}); } } }   // emissive crystals would bloom in the sand/snow -> desert + ice rings get stone instead
   // town scatter: a few coins + flowers + apple trees so you can gather near home too
   for(let i=0;i<6;i++){ const a=rand(0,TAU),r=rand(20,44); const F=pickFlower(); addNode(F.model,Math.cos(a)*r,Math.sin(a)*r,{item:F.item,tint:F.tint,amount:1,targetH:0.7,respawn:22}); }
 
@@ -1317,7 +1319,7 @@ function makeLandmark(kind,x,z){ const g=new THREE.Group(); g.position.set(x,gro
     for(let i=0;i<3;i++){ const cx2=rand(-3,3), cz2=rand(-3,3); const post=box(0.14,1.3,0.14,'#6e7480'); post.position.set(cx2,0.65,cz2); g.add(post); const arm=box(0.7,0.14,0.14,'#6e7480'); arm.position.set(cx2,0.98,cz2); g.add(arm); }   // grave crosses
     for(let i=0;i<16;i++){ const a=i/16*TAU; const fp=box(0.1,0.7,0.1,'#3a3a44'); fp.position.set(Math.cos(a)*4.0,0.35,Math.sin(a)*4.0); g.add(fp); }   // low iron fence ring
     g.userData.graveyard=true; }
-  else { const cart=box(1.8,0.8,1.0,'#7a5230'); cart.position.set(0,0.7,0); cart.rotation.z=0.18; g.add(cart); const w1=new THREE.Mesh(new THREE.TorusGeometry(0.5,0.12,6,12),toon('#3a2a1a')); w1.position.set(0.9,0.5,0.6); w1.rotation.y=Math.PI/2; g.add(w1); const w2=w1.clone(); w2.position.z=-0.6; g.add(w2); }
+  else { const _ct=TEX.wood.clone(); _ct.needsUpdate=true; _ct.repeat.set(2,1); const cart=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.8,1.0), new THREE.MeshToonMaterial({map:_ct,gradientMap:GRAD,color:'#b98a52'})); cart.castShadow=cart.receiveShadow=true; cart.position.set(0,0.7,0); cart.rotation.z=0.18; g.add(cart); const w1=new THREE.Mesh(new THREE.TorusGeometry(0.5,0.12,6,12),toon('#3a2a1a')); w1.position.set(0.9,0.5,0.6); w1.rotation.y=Math.PI/2; g.add(w1); const w2=w1.clone(); w2.position.z=-0.6; g.add(w2); }
   g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); world.add(g); return g; }
 function buildExploration(){
   for(let i=0;i<34;i++){ const s=_outerSpot(300,1400); if(isInWater(s.x,s.z,6))continue; makeLandmark(pick(['ruin','stones','shrine','camp','cart']),s.x,s.z); }   // scattered landmarks across the big outer ring (never half-sunk in a lake)
@@ -1397,7 +1399,7 @@ function buildHamlets(startIdx){   // 5 hamlets of 2-4 enterable homes scattered
     const nt=18+Math.floor(Math.random()*7);   // densify: a grove around the hamlet
     for(let i=0;i<nt;i++){ const a=rand(0,TAU), rr=rand(10,32), tx=hcx+Math.cos(a)*rr, tz=hcz+Math.sin(a)*rr;
       if(used.some(u=>Math.hypot(tx-u.x,tz-u.z)<5)||isInWater(tx,tz,6))continue; const th=rand(5,7.5); treeSpecs.push({x:tx,z:tz,h:th}); trunkSolid(tx,tz,0.6,th*0.42); }
-    for(let i=0;i<14;i++){ const a=rand(0,TAU), rr=rand(6,30), gx=hcx+Math.cos(a)*rr, gz=hcz+Math.sin(a)*rr; if(isInWater(gx,gz,3))continue; place(pick(['Grass','Grass3','Flower1','Flower2','Flower3','MushroomRed']),gx,gz,{targetH:rand(0.5,1.2),rotY:rand(0,TAU)}); }
+    for(let i=0;i<14;i++){ const a=rand(0,TAU), rr=rand(6,30), gx=hcx+Math.cos(a)*rr, gz=hcz+Math.sin(a)*rr; if(isInWater(gx,gz,3))continue; const _ht={Grass:'#5fae3e',Grass3:'#6bbf4a',Flower1:'#d65a7a',Flower2:'#ffd23f',Flower3:'#ff8a4c',MushroomRed:'#d24a4a'}, _hn=pick(Object.keys(_ht)); place(_hn,gx,gz,{targetH:rand(0.5,1.2),rotY:rand(0,TAU),tint:_ht[_hn]}); }
     const na=3+Math.floor(Math.random()*2); for(let i=0;i<na;i++){ const ax=hcx+rand(-16,16), az=hcz+rand(-16,16); if(isInWater(ax,az,4))continue; spawnAnimal(pick(['cow','sheep','sheep','chicken','chicken','pig']),ax,az); }   // peaceful daytime life (NOT creatures -> day_no_monsters stays green)
     windingPath(0,40,hcx,hcz); hamlets.push(ham); }
   if(treeSpecs.length) mergeDecorTrees(treeSpecs);   // hamlet groves -> merged meshes (draw calls stay low)
