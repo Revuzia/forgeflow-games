@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-<title>Wobblesworth: Wilds & Wonders — a cozy survival adventure</title>
+<title>Wanderwild — a cozy survival-adventure RPG</title>
 <meta name="description" content="A cozy low-poly life-sim: move into Giggleton Lane, keep your needs up, gather & craft across five biomes, befriend nosy neighbors, throw a housewarming, and become a Town Legend." />
 <meta name="theme-color" content="#b98cff" />
 <link rel="canonical" href="https://wobblesworth-house.pages.dev/" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="ForgeFlow Games" />
-<meta property="og:title" content="Wobblesworth: Wilds & Wonders" />
+<meta property="og:title" content="Wanderwild" />
 <meta property="og:description" content="A cozy survival adventure — three heroes, four wilds. Gather, craft, befriend, and survive the night across five biomes in your browser." />
 <meta property="og:url" content="https://wobblesworth-house.pages.dev/" />
 <meta property="og:image" content="https://wobblesworth-house.pages.dev/assets/og-cover.png" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Wobblesworth: Wilds & Wonders" />
+<meta name="twitter:title" content="Wanderwild" />
 <meta name="twitter:description" content="A cozy low-poly life-sim you can play right in your browser." />
 <meta name="twitter:image" content="https://wobblesworth-house.pages.dev/assets/og-cover.png" />
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23b98cff'/%3E%3Cpath d='M12 32 32 14l20 18v18a3 3 0 0 1-3 3H15a3 3 0 0 1-3-3z' fill='%23fff7ec'/%3E%3Crect x='28' y='38' width='8' height='12' fill='%23ff5d8f'/%3E%3C/svg%3E" />
@@ -385,10 +385,10 @@
 <div id="pause" class="hidden"></div>
 <div id="title" class="screen">
   <div class="card">
-    <h1>Wobblesworth:<br>Wilds &amp; Wonders</h1>
-    <div class="sub">a cozy survival adventure — three heroes, four wilds 🌱⚔️</div>
-    <p>Mortimer Wobblesworth just moved onto <b>Giggleton Lane</b> — a huge blocky world of cube cottages, woods, a quarry, and a mine. By day it's peaceful… by night, <b>plant-monsters</b> come for you.</p>
-    <p>Explore homes, <b>gather & craft</b> weapons, armor and a pickaxe, <b>mine for ore</b>, and <b>fight to survive the night</b> — die and you wake back home. Common, rare & epic loot drops along the way.</p>
+    <h1>Wanderwild</h1>
+    <div class="sub">a cozy survival-adventure RPG — three classes, five wilds 🌱⚔️</div>
+    <p>Pick your class — <b>warrior, mage, or ranger</b> — then wander out from your cozy neighborhood into <b>five living biomes</b>, from sunny meadows to the molten Blight.</p>
+    <p><b>Gather & craft</b> weapons, armor and tools, <b>befriend your neighbors</b>, tame mounts and chase quests. By day you explore; by night, <b>monsters come</b> — die and you wake back home. Solo or co-op.</p>
     <div class="ctrls">
       <span><b>W A S D</b>walk</span><span><b>Shift</b>run</span><span><b>Space</b>jump</span><span><b>🖱️Left</b>attack</span><span><b>E</b>interact</span><span><b>C</b>craft</span><span><b>G</b>dig</span><span><b>🖱️Right-drag</b>camera</span>
     </div>
@@ -3282,7 +3282,7 @@ function updateWorld(dt){ const tn=performance.now()*0.001; updateCompass();
       // greet the nearest neighbor or the player if close
       let near=null,nd=7; for(const o of neighbors){ if(o===g)continue; const d=g.position.distanceTo(o.position); if(d<nd){nd=d;near=o;} }
       const dp=g.position.distanceTo(player.position);
-      if(dp<7){ g.rotation.y=faceVel(player.position.x-g.position.x, player.position.z-g.position.z); npcEmote(g,'emote-yes'); if(state.running&&Math.random()<0.5) toast(pick(['👋 "Howdy, Wobblesworth!"','👋 "Nice day on Giggleton Lane!"','👋 "Lookin\' good, neighbor!"'])); continue; }
+      if(dp<7){ g.rotation.y=faceVel(player.position.x-g.position.x, player.position.z-g.position.z); npcEmote(g,'emote-yes'); if(state.running&&Math.random()<0.5) toast(pick(['👋 "Howdy, traveler!"','👋 "Nice day on Giggleton Lane!"','👋 "Lookin\' good, neighbor!"'])); continue; }
       if(near){ g.rotation.y=faceVel(near.position.x-g.position.x, near.position.z-g.position.z); npcEmote(g,pick(['emote-yes','interact-right'])); npcEmote(near,'emote-yes'); near.userData.greet=rand(8,16); continue; }
     }
     u.t-=dt; if(u.t<=0){ u.dir=rand(0,TAU); u.t=rand(2,5); }
