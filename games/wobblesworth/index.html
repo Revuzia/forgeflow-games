@@ -435,7 +435,7 @@ const pick=a=>a[Math.floor(Math.random()*a.length)];
 /* ROLLING-HILL TERRAIN: a PURE deterministic height f(x,z) — placement is unseeded (Math.random), so the ground mesh
    and every object must agree on height from (x,z) alone. Town (r<TOWN_FLAT) stays dead flat to protect the player
    house, the Housewarming quests, the town pond (r=84), and the 117-check selftest; gentle hills roll in past it. */
-const WRAP_P=1300, _wf0=Math.PI*2/WRAP_P;   // the world WRAPS every 1300 units per axis -> walk 360° around the globe and return to the same place (all content lives within ±595, well inside ±650)
+const WRAP_P=3000, _wf0=Math.PI*2/WRAP_P;   // the world WRAPS every 3000 units per axis (HW=1500) -> walk 360° around the globe and return to the same place. EXPANDED 2026-06-22 from 1300: the half-period (1500) MUST exceed FENCE (1420) or the player wraps back BEFORE reaching the outer biomes (desert/ice/dark were unreachable at HW=650).
 const TOWN_FLAT=90, HILL_RAMP=78;   // flat for r<=90; full hills by r=168; keep TOWN_FLAT>=88 (pond + swim_zone test live at r=84)
 const WATER_BASINS=[];   // {x,z,rs,rb,floor} carved bowls under lakes so a flat water disc sits in a proper basin (rs = flat-floor swim radius below water; rb = bank outer radius; keep tiny — terrainH is on the per-frame groundUnder hot path)
 function terrainH(x,z){ const r=Math.hypot(x,z); if(r<=TOWN_FLAT) return 0;
@@ -471,7 +471,7 @@ const WORLD_CURVE=0.00034;
    continuous mesh is the ground, whose seam sits at WRAP_P/2 = 650 — far beyond the curved horizon. */
 THREE.ShaderChunk.project_vertex = THREE.ShaderChunk.project_vertex
   .replace('mvPosition = modelViewMatrix * mvPosition;',
-    'vec4 _wp = modelMatrix * mvPosition; if(length(cameraPosition.xz) < 1100.0){ vec2 _rel = _wp.xz - cameraPosition.xz; _rel = mod(_rel + '+(WRAP_P*0.5).toFixed(1)+', '+WRAP_P.toFixed(1)+') - '+(WRAP_P*0.5).toFixed(1)+'; _wp.xz = cameraPosition.xz + _rel; } mvPosition = viewMatrix * _wp;')
+    'vec4 _wp = modelMatrix * mvPosition; if(length(cameraPosition.xz) < 2000.0){ vec2 _rel = _wp.xz - cameraPosition.xz; _rel = mod(_rel + '+(WRAP_P*0.5).toFixed(1)+', '+WRAP_P.toFixed(1)+') - '+(WRAP_P*0.5).toFixed(1)+'; _wp.xz = cameraPosition.xz + _rel; } mvPosition = viewMatrix * _wp;')
   .replace('gl_Position = projectionMatrix * mvPosition;',
     'mvPosition.y -= (mvPosition.x*mvPosition.x + mvPosition.z*mvPosition.z) * '+WORLD_CURVE.toFixed(6)+';\n\tgl_Position = projectionMatrix * mvPosition;');
 /* telemetry seam (overridable no-op) + global error capture so a stray throw is logged, never silent */
@@ -749,7 +749,7 @@ const WATER_MAT=new THREE.ShaderMaterial({ transparent:true, depthWrite:false,
   vertexShader:`uniform float uTime; varying vec2 vUv; varying vec3 vWorld;
     void main(){ vUv=uv; vec3 p=position;
       p.z += sin(p.x*2.1+uTime*1.4)*0.02 + sin(p.y*2.5-uTime*1.1)*0.02 + sin((p.x+p.y)*0.9+uTime*0.6)*0.03;   // +3rd low-freq swell
-      vec4 wp=modelMatrix*vec4(p,1.0); vWorld=wp.xyz; if(length(cameraPosition.xz)<1100.0){ vec2 wr=wp.xz-cameraPosition.xz; wr=mod(wr+${(WRAP_P*0.5).toFixed(1)},${WRAP_P.toFixed(1)})-${(WRAP_P*0.5).toFixed(1)}; wp.xz=cameraPosition.xz+wr; } vec4 mvp=viewMatrix*wp; mvp.y -= (mvp.x*mvp.x+mvp.z*mvp.z)*${WORLD_CURVE.toFixed(6)}; gl_Position=projectionMatrix*mvp; }`,   // match the world WRAP + curve so water tiles & drapes with the ground
+      vec4 wp=modelMatrix*vec4(p,1.0); vWorld=wp.xyz; if(length(cameraPosition.xz)<2000.0){ vec2 wr=wp.xz-cameraPosition.xz; wr=mod(wr+${(WRAP_P*0.5).toFixed(1)},${WRAP_P.toFixed(1)})-${(WRAP_P*0.5).toFixed(1)}; wp.xz=cameraPosition.xz+wr; } vec4 mvp=viewMatrix*wp; mvp.y -= (mvp.x*mvp.x+mvp.z*mvp.z)*${WORLD_CURVE.toFixed(6)}; gl_Position=projectionMatrix*mvp; }`,   // match the world WRAP + curve so water tiles & drapes with the ground
   fragmentShader:`uniform float uTime; uniform vec3 uDeep,uShallow,uSky,uFoam,uSun; varying vec2 vUv; varying vec3 vWorld;
     vec3 wnormal(vec2 q,float t){ float hx=1.7*cos(q.x*1.7+t*1.3)+1.15*cos((q.x+q.y)*2.2+t*1.7)+0.7*cos(q.x*0.7-t*0.5); float hy=1.9*cos(q.y*1.9-t*1.05)+1.15*cos((q.x+q.y)*2.2+t*1.7)+0.7*cos(q.y*0.6+t*0.4); return normalize(vec3(-hx*0.09,1.0,-hy*0.09)); }
     void main(){ vec2 q=vWorld.xz*0.9;
@@ -789,11 +789,11 @@ const LAVA_MAT=WATER_MAT.clone(); LAVA_MAT.uniforms.uDeep.value=new THREE.Color(
 const ICE_MAT=WATER_MAT.clone(); ICE_MAT.uniforms.uDeep.value=new THREE.Color('#7fa8c8'); ICE_MAT.uniforms.uShallow.value=new THREE.Color('#cfe6f4'); ICE_MAT.uniforms.uSky.value=new THREE.Color('#eaf4fb'); ICE_MAT.uniforms.uFoam.value=new THREE.Color('#ffffff');   // ❄️ frozen pond: glassy pale-blue, near-static (slow uTime); the player SLIDES on it (ICE_ZONES)
 const SWAMP_POOLS=[];   // filled by genSwampPools() in buildWorld — MANY small RANDOM murky pools spread all THROUGH the swamp ring (owner: bogs have pools everywhere, not one big one)
 function genSwampPools(){ SWAMP_POOLS.length=0; let t=0; while(SWAMP_POOLS.length<18 && t<500){ t++; const a=rand(0,TAU), r=rand(380,580), x=Math.cos(a)*r, z=Math.sin(a)*r; if(swampMask(x,z)<0.55) continue; if(SWAMP_POOLS.some(p=>Math.hypot(p.x-x,p.z-z)<p.r+15)) continue; SWAMP_POOLS.push({x,z,r:rand(5,13)}); } }
-const LAVA_POOLS=[{x:560,z:100,r:16},{x:-560,z:130,r:18},{x:225,z:-535,r:15},{x:-380,z:-435,r:17}];   // ~4 lava pools in the DARK CORE (r 547+, pushed deeper as ice widened); inner edges all clear of the ice ring + the 4 LAKES
+const LAVA_POOLS=[{x:1288,z:230,r:16},{x:-1288,z:299,r:18},{x:518,z:-1231,r:15},{x:-874,z:-1001,r:17}];   // ~4 lava pools in the EXPANDED DARK CORE (r~1300, moved out with the widened world); clear of the ice ring + the 4 LAKES
 const ICE_POOLS=[{x:1113,z:67,r:17},{x:-1077,z:270,r:16},{x:270,z:-1100,r:18},{x:-449,z:-1034,r:15},{x:786,z:786,r:16},{x:-1057,z:-449,r:17}];   // ❄️ ~6 frozen pits in the EXPANDED ICE ring (r~900-1180), clear of LAKES/LAVA
 const LAVA_ZONES=[];   // lava keep-out (+ F2c contact damage) — NOT swimmable
 const ICE_ZONES=[];   // ❄️ frozen pits -> SLIPPERY momentum movement (NOT swimmable, NOT damaging)
-const SINKHOLES=[{x:360,z:40,r:15,core:2.0},{x:-340,z:-70,r:14,core:1.8},{x:120,z:380,r:16,core:2.2},{x:-90,z:-400,r:14,core:1.8}];   // 🌀 desert sand sinkholes (suck+spin the player); centers in the desert ring, clear of lakes/lava
+const SINKHOLES=[{x:720,z:80,r:15,core:2.0},{x:-680,z:-140,r:14,core:1.8},{x:240,z:760,r:16,core:2.2},{x:-180,z:-800,r:14,core:1.8}];   // 🌀 desert sand sinkholes (suck+spin the player); centers in the EXPANDED desert ring (r~620-900), clear of lakes/lava
 const SINK_MESHES=[];   // the spinning funnel cones
 function prepPoolBasins(pools,floorDrop,yyDrop){ for(const p of pools){ let mn=Infinity; for(let a=0;a<6.28;a+=0.7){ mn=Math.min(mn, terrainH(p.x+Math.cos(a)*p.r*1.1, p.z+Math.sin(a)*p.r*1.1)); } WATER_BASINS.push({x:p.x,z:p.z,rs:p.r*0.82,rb:p.r*1.5,floor:mn-floorDrop,yy:mn-yyDrop}); } }   // carve BEFORE the ground mesh (called in buildWorld) so each pool cups into the rolling hills, like prepLakeBasins
 function makeBiomePool(p,mat,opts){ const N=40, geo=new THREE.CircleGeometry(p.r,N), pos=geo.attributes.position, ph=rand(0,TAU);
@@ -1138,10 +1138,10 @@ function buildZones(){
   for(let i=0;i<74;i++){ const x=rand(-300,300),z=rand(-580,-90); if(isInWater(x,z,7))continue; const t=_resourceTree(x,z,rand(5,7)); if(!t)continue; world.add(t); addNode(t,x,z,{item:'wood',amount:2,respawn:24,label:'Chop for wood',solid:'trunk'}); }
   // 🗺️ BIOME PROPS by ring (owner). Dead trees are COLLECTED then MERGED into one mesh (perf). Liquids via carved basins elsewhere.
   const _dt=[], _reeds=[];
-  for(let i=0;i<110;i++){ const a=rand(0,TAU), r=rand(130,178), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,7))continue; _dt.push({x,z,h:rand(5,8)}); }   // spooky transition band into the swamp
-  for(let i=0;i<300;i++){ const a=rand(0,TAU), r=rand(200,330), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||swampMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(4.5,7.5)}); if(Math.random()<0.5)_reeds.push({x:x+rand(-2.2,2.2),z:z+rand(-2.2,2.2),h:rand(1.0,1.9)}); }   // 🟣 SWAMP: dense dead trees + scattered cattail reeds
+  for(let i=0;i<110;i++){ const a=rand(0,TAU), r=rand(290,360), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,7))continue; _dt.push({x,z,h:rand(5,8)}); }   // spooky transition band into the swamp (moved out to the new hills->swamp edge)
+  for(let i=0;i<360;i++){ const a=rand(0,TAU), r=rand(360,600), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||swampMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(4.5,7.5)}); if(Math.random()<0.5)_reeds.push({x:x+rand(-2.2,2.2),z:z+rand(-2.2,2.2),h:rand(1.0,1.9)}); }   // 🟣 SWAMP: dense dead trees + scattered cattail reeds (radii moved to the EXPANDED swamp ring 360-600)
   for(let i=0;i<280;i++){ const a=rand(0,TAU), r=rand(330,470), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||desertMask(x,z)<0.35)continue; if(Math.random()<0.74){ const c=place(pick(['cactus_1','cactus_2','cactus_3']),x,z,{targetH:rand(1.6,3.4),rotY:rand(0,TAU)}); if(c)c.traverse(m=>{ if(m.isMesh){ m.castShadow=false; m.material=new THREE.MeshToonMaterial({color:'#4f7d35',gradientMap:GRAD}); } }); } else { const rk=makeRock(x,z,rand(1.2,2.6)); rk.traverse(m=>{if(m.isMesh)m.castShadow=false;}); world.add(rk); } }   // 🟤 DESERT: BRANCHED BitGem cacti (forced non-emissive) + dry rocks (no trees; no shadow-cull on distant props)
-  for(let i=0;i<200;i++){ const a=rand(0,TAU), r=rand(1120,FENCE-10), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||darkMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(5,9)}); }   // ⚫ DARK BURNT CORE: dead/burnt trees (inner r 418->500 to match the pushed-out dark mask; the ICE ring fills 448-500)
+  for(let i=0;i<360;i++){ const a=rand(0,TAU), r=rand(1120,FENCE-10), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,6)||darkMask(x,z)<0.35)continue; _dt.push({x,z,h:rand(5,9)}); }   // ⚫ DARK BURNT CORE: dead/burnt trees (inner r 418->500 to match the pushed-out dark mask; the ICE ring fills 448-500)
   // ❄️ ICE RING props: scattered ice blocks + snow piles + frozen shrubs (snowy, no shadow-cull) in the Frozen Wastes
   for(let i=0;i<120;i++){ const a=rand(0,TAU), r=rand(940,1160), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,5)||iceMask(x,z)<0.4)continue; const c=place(pick(['ice_cube_1','ice_cube_2','ice_cube_3','snowtop_deco','snowball','snow_cube']),x,z,{targetH:rand(0.9,2.4),rotY:rand(0,TAU)}); if(c)c.traverse(m=>{ if(m.isMesh){ m.castShadow=false; m.material=new THREE.MeshToonMaterial({color:'#e6f1fa',gradientMap:GRAD}); } }); }
   for(let i=0;i<40;i++){ const a=rand(0,TAU), r=rand(940,1158), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,5)||iceMask(x,z)<0.4)continue; const c=place('bush_dead_deco',x,z,{targetH:rand(1.0,1.8),rotY:rand(0,TAU)}); if(c)c.traverse(m=>{ if(m.isMesh){ m.castShadow=false; m.material=new THREE.MeshToonMaterial({color:'#9a948a',gradientMap:GRAD}); } }); }   // ❄️ frosty dead shrubs
@@ -3684,10 +3684,10 @@ function spawnFauna(model, x, z, sc){ const m=buildMobGLB(model, sc||0.8); if(!m
   fauna.push({mesh:m, wdir:rand(0,TAU), wt:rand(1,4), flee:0, sx:x, sz:z, spd:(sc>1?1.0:1.5)}); return m; }
 function buildFauna(){ fauna.length=0;
   const ICE=['animal-fox','animal-penguin','animal-polar'], HILL=['animal-bunny','animal-deer','animal-fox','animal-chick'];
-  for(let i=0;i<7;i++){ const a=rand(0,TAU), r=rand(476,520), x=Math.cos(a)*r, z=Math.sin(a)*r; if(iceMask(x,z)<0.5||isInWater(x,z,4))continue; const mdl=pick(ICE); spawnFauna(mdl, x, z, mdl==='animal-polar'?1.4:0.8); }   // ❄️ arctic fox + penguin + (neutral) polar bear
+  for(let i=0;i<7;i++){ const a=rand(0,TAU), r=rand(950,1150), x=Math.cos(a)*r, z=Math.sin(a)*r; if(iceMask(x,z)<0.5||isInWater(x,z,4))continue; const mdl=pick(ICE); spawnFauna(mdl, x, z, mdl==='animal-polar'?1.4:0.8); }   // ❄️ arctic fox + penguin + (neutral) polar bear
   for(let i=0;i<9;i++){ const a=rand(0,TAU), r=rand(95,168), x=Math.cos(a)*r, z=Math.sin(a)*r; if(isInWater(x,z,4)||inTrainingZone(x,z,4))continue; spawnFauna(pick(HILL), x, z, 0.8); }   // 🌳 hills: bunny/deer/fox/chick
-  for(let i=0;i<5;i++){ const a=rand(0,TAU), r=rand(190,300), x=Math.cos(a)*r, z=Math.sin(a)*r; if(swampMask(x,z)<0.5||isInWater(x,z,4))continue; spawnFauna('animal-crab', x, z, 0.7); }   // 🐸 swamp: crabs
-  for(let i=0;i<6;i++){ const a=rand(0,TAU), r=rand(345,435), x=Math.cos(a)*r, z=Math.sin(a)*r; if(desertMask(x,z)<0.5||isInWater(x,z,4))continue; spawnFauna('animal-gecko', x, z, 0.55); }   // 🦎 desert: geckos (static model, code-wandered)
+  for(let i=0;i<5;i++){ const a=rand(0,TAU), r=rand(380,580), x=Math.cos(a)*r, z=Math.sin(a)*r; if(swampMask(x,z)<0.5||isInWater(x,z,4))continue; spawnFauna('animal-crab', x, z, 0.7); }   // 🐸 swamp: crabs
+  for(let i=0;i<6;i++){ const a=rand(0,TAU), r=rand(660,860), x=Math.cos(a)*r, z=Math.sin(a)*r; if(desertMask(x,z)<0.5||isInWater(x,z,4))continue; spawnFauna('animal-gecko', x, z, 0.55); }   // 🦎 desert: geckos (static model, code-wandered)
 }
 function updateFauna(dt){ const px=player.position.x, pz=player.position.z;
   for(const f of fauna){ const m=f.mesh; if(m.userData.mixer)m.userData.mixer.update(dt);
