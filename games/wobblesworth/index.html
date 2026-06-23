@@ -1896,7 +1896,7 @@ function _buildPlayerBody(){
   _heldKind=''; _offhandKind=''; _armorShown='?'; for(const k in charActions) delete charActions[k];   // force held/off-hand/armor to rebuild on the fresh skeleton
   const valid=(state.charModel&&PLAYER_MODELS.includes(state.charModel))?state.charModel:'char_player'; const m=MODELS[valid];
   if(m){ const o=skeletonClone(m); const s=new THREE.Vector3(); new THREE.Box3().setFromObject(o).getSize(s); const k=1.7/(s.y||1); o.scale.setScalar(k); o.userData.base=k;
-    const b=new THREE.Box3().setFromObject(o); o.position.y=-b.min.y; o.userData.y0=o.position.y; o.userData.cy=(b.max.y-b.min.y)/2; player.add(o); player.userData.model=o;   // y0/cy: rest pos + body-center height, used to spin the double-jump about the CENTER (cannonball)
+    const b=new THREE.Box3().setFromObject(o); o.position.y=-b.min.y+0.02; o.userData.y0=o.position.y; o.userData.cy=(b.max.y-b.min.y)/2; player.add(o); player.userData.model=o;   // +0.02 = 2cm foot clearance so feet never poke through; y0/cy: rest pos + body-center height, used to spin the double-jump about the CENTER (cannonball)
     const clips=ANIMS[valid]||ANIMS['char_player']||ANIMS['char_n1'];
     if(clips){ charMixer=new THREE.AnimationMixer(o); for(const c of clips) charActions[c.name]=charMixer.clipAction(c);
       if(QCLASS.has(valid)){ const al=(a,b)=>{ if(charActions[b]&&!charActions[a])charActions[a]=charActions[b]; }; al('idle','Idle'); al('walk','Walk'); al('run','Run'); al('sprint','Run'); const atk=QCLASS_ATK[valid]; if(atk&&charActions[atk])charActions['attack-melee-right']=charActions[atk]; }   // Quaternius clips are Capitalized -> alias to the game's lowercase movement names + map the class attack to the on-attack emote
@@ -3029,8 +3029,9 @@ function resolve(){ const feet=player.position.y;
   for(const g of neighbors){ const dx=player.position.x-g.position.x, dz=player.position.z-g.position.z; const d=Math.hypot(dx,dz); if(d<1.1&&d>1e-4){ const pu=1.1-d; player.position.x+=dx/d*pu; player.position.z+=dz/d*pu; } }
 }
 // highest standable surface beneath the player (0 = ground); lets you jump ON the well / crafted things
+const _FW=0.32; function groundFoot(px,pz){ if(MINE.inMine||DUNGEON.inDungeon) return 0; return Math.max(terrainH(px,pz), terrainH(px+_FW,pz), terrainH(px-_FW,pz), terrainH(px,pz+_FW), terrainH(px,pz-_FW)); }   // sample the whole FOOTPRINT + snap to the HIGHEST so no foot sinks into a slope (cheap: 5x4 sin calls)
 function groundUnder(){ const px=player.position.x,pz=player.position.z;
-  let g=(MINE.inMine||DUNGEON.inDungeon)?0:terrainH(px,pz);   // surface = rolling terrain (flat in town); the far-off mine/dungeon pockets stay flat at 0
+  let g=groundFoot(px,pz);   // surface = rolling terrain (HIGHEST foot-sample so the uphill leg never buries; flat in town); mine/dungeon pockets stay flat at 0
   const dk=Math.round(px)+','+Math.round(pz); if(VOX.dug[dk]!=null) g=VOX.dug[dk];   // carved pit/tunnel floor (negative) -> you descend in; adjacent undug cells let you step back out
   for(const s of solids){ if(!s.stand && !s.mesh)continue; if(s.off||(s.mesh&&!s.mesh.visible))continue; if(px>s.minX-0.3&&px<s.maxX+0.3&&pz>s.minZ-0.3&&pz<s.maxZ+0.3){ if(s.top>g&&s.top<=player.position.y+0.6) g=s.top; } }   // stand on ANY real object (mesh), not just flagged ones — jump on stones/lamps/props/roofs
   return g; }
