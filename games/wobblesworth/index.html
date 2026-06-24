@@ -2565,7 +2565,7 @@ function addNode(model,x,z,{item,amount=1,respawn=28,scale,targetH,tint,label,so
     node.timer=respawn; setNodeDepleted(node); }, 2.6);   // depleted node stays VISIBLE but goes translucent (you can see it's on cooldown) instead of vanishing
   return node;
 }
-function tickNodes(dt){ for(const n of nodes){ if(n.timer>0){ n.timer-=dt; if(n.timer<=0){ n.mesh.visible=true; setNodeReady(n); } } } }
+function tickNodes(dt){ const rs=1+_wx().rain*1.2; for(const n of nodes){ if(n.timer>0){ n.timer-=dt*rs; if(n.timer<=0){ n.mesh.visible=true; setNodeReady(n); } } } }   // 🌧️ rain speeds forage/crop/flower regrowth (storm ×2.2, light rain ×1.72)
 // Depleted resource nodes stay visible at ~32% opacity (materials cloned per-mesh so shared tree/GLB materials aren't globally faded) so you SEE it regrowing; restored on respawn.
 function setNodeDepleted(node){ if(!node||!node.mesh)return; node.mesh.userData.onCooldown=true;
   node.mesh.traverse(o=>{ if(o.isMesh && o.material){ if(!o.userData._nodeMat){ o.material=o.material.clone(); o.userData._nodeMat=true; o.userData._op0=(o.material.opacity!=null?o.material.opacity:1); } o.material.transparent=true; o.material.opacity=0.32; o.material.depthWrite=false; } }); }
@@ -2984,6 +2984,8 @@ function duckRain(){ const n=state.reduce?12:40; const px=player.position.x,pz=p
 // WEATHER: a timed storm that keeps spawning rain streaks / snow flakes around the player while active.
 const _mw={t:0,next:rand(45,90)};   // meadow-weather scheduler clock
 function startWeather(type,opts){ opts=opts||{}; state.weather={type,t:opts.t!=null?opts.t:(type==='snow'?10:7),_a:0,storm:!!opts.storm,rate:opts.rate||0}; }
+// 🌦️ WEATHER GAMEPLAY ACCESSOR — one place every system reads. rain>0 while precipitating (0.6 light / 1 storm); storm=true only in the ⛈️ heavy variant.
+function _wx(){ const w=state.weather; if(!w)return {rain:0,storm:false,snow:false}; const wet=(w.type==='rain'); return {rain:wet?(w.storm?1:0.6):0, storm:wet&&!!w.storm, snow:w.type==='snow'}; }
 function tickWeather(dt){ const w=state.weather; if(!w)return; w.t-=dt;
   if(w.t<=0){ const was=w.type; state.weather=null; toast(was==='snow'?'🌤️ The snow let up.':'🌤️ The rain cleared up.'); return; }
   const px=player.position.x,pz=player.position.z, rate=state.reduce?1:(w.rate||(w.type==='snow'?2:3));
@@ -3147,7 +3149,7 @@ function updatePlayer(dt){
   if(moving){ const l=Math.hypot(ix,iz); ix/=l; iz/=l; const cs=Math.cos(cam.yaw),sn=Math.sin(cam.yaw);
     mvx=-iz*sn-ix*cs; mvz=-iz*cs+ix*sn; const tgt=Math.atan2(mvx,mvz)+CHAR_FWD; cam.moveYaw=Math.atan2(mvx,mvz);
     player.rotation.y=angLerp(player.rotation.y,tgt,dt*12);
-    _spNow=((sprint&&Needs.canSprint())?9:5)*Needs.moveMul()*(_wz?(_wz.kind==='swamp'?0.5:0.55):1)*(state.mounted?state.mounted.speedMul:1)*(state._inQuicksand?0.45:1)*(state._blocking?0.5:1); }   // swamp bog = 0.5x — sticky but walkable (owner: NOT super-slow); normal water 0.55x; mounted faster; 🛡️ blocking slows you to a defensive shuffle
+    _spNow=((sprint&&Needs.canSprint())?9:5)*Needs.moveMul()*(_wz?(_wz.kind==='swamp'?0.5:0.55):1)*(state.mounted?state.mounted.speedMul:1)*(state._inQuicksand?0.45:1)*(state._blocking?0.5:1)*(1-_wx().rain*0.15); }   // 🌧️ rain = gentle mud-slow (storm ×0.85, light rain ×0.91)   // swamp bog = 0.5x — sticky but walkable (owner: NOT super-slow); normal water 0.55x; mounted faster; 🛡️ blocking slows you to a defensive shuffle
   if(_iz){   // ❄️ ICE SLIP: momentum glide -> you slide + overshoot (annoying+fun, NON-damaging); off-ice it resets to normal
     state._ivx=(state._ivx||0)+mvx*_spNow*4*dt; state._ivz=(state._ivz||0)+mvz*_spNow*4*dt;
     const _fr=Math.pow(0.68,dt); state._ivx*=_fr; state._ivz*=_fr;   // weaker friction = longer slide/overshoot (owner: slippery + hard to control)
@@ -3274,7 +3276,7 @@ function updateWorld(dt){ const tn=performance.now()*0.001; updateCompass();
   scene.background.copy(_sky); scene.fog.color.copy(_sky); skyMat.uniforms.bot.value.copy(_sky); skyMat.uniforms.top.value.copy(_zen);
   if(state.weather&&state.weather.storm){ scene.fog.color.lerp(_stormGrey,0.55); scene.background.lerp(_stormGrey,0.5); skyMat.uniforms.bot.value.lerp(_stormGrey,0.55); skyMat.uniforms.top.value.lerp(_stormGrey,0.7); scene.fog.far=Math.min(scene.fog.far,150); sun.intensity*=0.45; hemi.intensity=Math.max(hemi.intensity*0.7,0.5); if(_cloudMats.length) for(const m of _cloudMats) m.color.lerp(_overcastGrey,0.6);   // ⛈️ STORM: darken sky/fog/clouds (meadow-only, so the dark-core block below never double-runs)
     if(state._lightT>0){ state._lightT-=dt; const lf=Math.min(1,state._lightT/0.12); skyMat.uniforms.top.value.lerp(_lightFlash,lf*0.8); skyMat.uniforms.bot.value.lerp(_lightFlash,lf*0.5); hemi.intensity=Math.max(hemi.intensity,2.6*lf); sun.intensity=Math.max(sun.intensity,1.4*lf); }   // distant LIGHTNING flash decays over ~0.12s
-    else if(!state.reduce && !MINE.inMine && !DUNGEON.inDungeon && Math.random()<0.011){ state._lightT=0.12; shake(0.1); try{ SFX.play('interact',{rate:0.4,vol:0.3}); }catch(e){} } }
+    else if(!state.reduce && !MINE.inMine && !DUNGEON.inDungeon && Math.random()<0.011){ state._lightT=0.12; shake(0.1); try{ SFX.play('interact',{rate:0.4,vol:0.3}); }catch(e){} lightningStrike(); } }   // ⛈️ each storm flash now fires a real ground strike that can blast a mob
   // REAL MIST: thick near dawn/dusk/night, clear by midday — drives both the distance fog AND the drifting ground-mist layer
   const mist=clamp(1-(sy+0.1)/0.6,0,1); scene.fog.near=170-mist*90; scene.fog.far=560-mist*240;   // see far across the big field by day; mist closes in at night/dawn
   for(const sp of mistSprites){ sp.position.x+=sp.userData.drift*dt; if(sp.position.x>FENCE)sp.position.x=-FENCE; else if(sp.position.x<-FENCE)sp.position.x=FENCE; sp.material.opacity=sp.userData.base*(0.3+1.0*mist); }
@@ -3754,7 +3756,10 @@ function pickCreatureType(distOverride, sx, sz){ // `day` = SPAWN WEIGHT (basics
   const pd=(distOverride!=null)?distOverride:Math.hypot(player.position.x,player.position.z); let tot=0; const elig=[];
   const _ice=(sx!=null && typeof iceMask==='function')?iceMask(sx,sz):0;   // ❄️ biome at the actual spawn point
   if(sx!=null && !isDay() && GRAVEYARDS.length){ for(const gv of GRAVEYARDS){ if(Math.hypot(sx-gv.x,sz-gv.z)<70){ if(Math.random()<0.72){ const sk=SPOOKY_ENEMIES[(Math.random()*SPOOKY_ENEMIES.length)|0]; if(CREATURE_TYPES[sk])return CREATURE_TYPES[sk]; } break; } } }   // 🪦 a graveyard at night = a spooky-undead hotspot (skeletons/ghosts/etc.) within ~70u (covers the night spawn ring)
-  const _night=!isDay(); for(const k of CTYPE_KEYS){ const t=CREATURE_TYPES[k]; if(!_night && t.nightOnly)continue; if(t.iceOnly && _ice<0.3)continue;   // cold mobs ONLY where the ground is icy
+  const _night=!isDay();
+  // 🐺 BOG-OUTWARD DANGER: from the swamp ring (r>~340) outward it's dangerous DAY too -> undead/all foes spawn by daylight there; the green meadow/hills (r<340) stay gentle in daylight (the safe starting zone).
+  const _dangerBiome=(sx!=null) && ((typeof swampMask==='function'&&swampMask(sx,sz)>0.3) || (typeof desertMask==='function'&&desertMask(sx,sz)>0.3) || _ice>0.3 || (typeof darkMask==='function'&&darkMask(sx,sz)>0.3));
+  for(const k of CTYPE_KEYS){ const t=CREATURE_TYPES[k]; if(!_night && t.nightOnly && !_dangerBiome)continue; if(t.iceOnly && _ice<0.3)continue;   // cold mobs ONLY where the ground is icy
     const gmd=(t.minDist&&_night)?Math.max(160,t.minDist*2.3-46):t.minDist*2.3; if(gmd&&pd<gmd)continue;   // minDist scaled by the ~2.3x world expansion so each mob still gates to its (now further-out) biome band
     let w=t.day; if(_ice>0.4){ if(t.iceOnly) w=t.day*3; else { if((t.minDist||0)<150) continue; w=t.day*0.12; } }   // ice ring: cold mobs DOMINATE (~91%); trivial/near mobs (caterpillar/crab/fox) excluded, only deep-tier foes (skeleton/glub/demon) appear as a rare minority
     elig.push([k,w]); tot+=w; }   // night: spooky mobs creep ~20 closer; DAY: skip night-only undead
@@ -3930,6 +3935,13 @@ function castSpell(itemKey){ if(playerClass()!=='mage'){ toast('🪄 Only mages 
   _spawnShot(_dmg, sp.color, true, 0.1, sp.fast?40:24, {aoe:sp.aoe||0, kind:sp.kind||'', knock:sp.knock||0, slow:sp.slow||0, stun:sp.stun||0, shape:sp.shape||''}); toast(sp.i+' '+sp.n+(_spw>1?' ✦':'')+'!'); }   // ⚡ fast=quicker; 🔥 aoe=splash; 🪨 knock=shove; 💧 slow/stun
 // 🌩️ CHAIN LIGHTNING — instant: strike the nearest foe, then arc to the nearest un-hit foe, up to sp.chain jumps, each jump weaker.
 function lightningArc(a,b,color){ const dir=b.clone().sub(a); const len=dir.length(); if(len<0.02)return; const m=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,len,4), new THREE.MeshBasicMaterial({color:color||'#bfe8ff',transparent:true,opacity:0.92})); m.position.copy(a).add(b).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.normalize()); world.add(m); ephemeral.push({node:m,life:0.22,fade:0.22}); }
+// ⛈️ a real lightning STRIKE: a bolt from the clouds to a ground point near the player, blasting the closest mob in range + scorching the spot.
+function lightningStrike(){ const a=rand(0,TAU), r=rand(8,26); const gx=player.position.x+Math.cos(a)*r, gz=player.position.z+Math.sin(a)*r; const gy=groundY(gx,gz);
+  lightningArc(new THREE.Vector3(gx,gy+22,gz), new THREE.Vector3(gx,gy+0.2,gz), '#dff0ff');
+  const sc=new THREE.Mesh(new THREE.RingGeometry(0.4,1.5,20), new THREE.MeshBasicMaterial({color:'#2a2622',transparent:true,opacity:0.7,side:THREE.DoubleSide,depthWrite:false})); sc.rotation.x=-Math.PI/2; sc.position.set(gx,gy+0.05,gz); world.add(sc); ephemeral.push({node:sc,life:4,fade:4});
+  try{ explodeFx(new THREE.Vector3(gx,gy+0.6,gz)); }catch(e){}
+  let best=-1,bd=36; for(let i=0;i<creatures.length;i++){ const c=creatures[i]; if(!c||c.training||!c.mesh.visible)continue; const p=c.mesh.position; const dd=(p.x-gx)*(p.x-gx)+(p.z-gz)*(p.z-gz); if(dd<bd){ bd=dd; best=i; } }
+  if(best>=0){ const c=creatures[best]; const dmg=Math.round((40+state.day*8)*playerDmgMult(lvlDelta(c))); const roll=rollDamage(dmg,0.1); c.hp-=roll.dmg; creatureHit(c); popDmg(c.mesh.position.x,(c.mesh.position.y||0)+1.6,c.mesh.position.z,roll.dmg,{crit:roll.crit,color:'#dff0ff'}); if(c.hp<=0)killCreature(best); } }
 function castChain(dmg, sp){ const chain=[]; const seen=new Set(); let cur=player.position.clone(); cur.y=1.3; const N=sp.chain||3;
   for(let n=0;n<N;n++){ let best=null,bd=1e9; const maxR=(n===0?17:8);
     for(const c of creatures){ if(seen.has(c)||!c.mesh.visible)continue; const p=c.mesh.position; const d=Math.hypot(p.x-cur.x,p.z-cur.z); if(d<maxR&&d<bd){ bd=d; best=c; } }
@@ -4108,7 +4120,9 @@ function castOrReel(){
   bob.position.set(wx,sy+0.12,wz); bob.frustumCulled=false; world.add(bob);
   const lg=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(player.position.x,player.position.y+1.2,player.position.z),new THREE.Vector3(wx,sy+0.12,wz)]);
   const line=new THREE.Line(lg,new THREE.LineBasicMaterial({color:0xf2f2f2})); line.frustumCulled=false; world.add(line);
-  FISH={active:true, x:wx, z:wz, biting:false, bob, line, baseY:sy+0.12, biteAt:performance.now()+(2.4+Math.random()*4.2)*1000, biteUntil:0};
+  const _wmul=1-0.55*_wx().rain;   // 🌧️ storm bites ~2.2x faster, light rain ~1.5x — a reason to fish in the rain
+  FISH={active:true, x:wx, z:wz, biting:false, bob, line, baseY:sy+0.12, biteAt:performance.now()+(2.4+Math.random()*4.2)*1000*_wmul, biteUntil:0};
+  if(_wx().rain) toast('🌧️ The fish are biting in the rain!');
   toast('🎣 Cast! Watch the bob — left-click to reel when it dips.');
 }
 function updateFishing(dt){ if(!FISH.active)return; const now=performance.now();
@@ -4357,7 +4371,7 @@ function updateCombat(dt){
     // CONTINUOUS RESPAWN toward a day/night cap: a few roam by day, a swarm at night; killed ones return over time.
     const _pdc=Math.hypot(player.position.x,player.position.z);   // distance from town
     const cap = night ? Math.min(28, 12+Math.floor(state.day*0.8))
-                      : (_pdc>70 ? Math.min(10, 2+Math.floor((_pdc-70)/45)+Math.floor(state.day*0.25)) : 0);   // DAY: town + near-town safe (cap 0); the OUTSKIRTS get roaming day foes (more the further out) so you can adventure+fight by daylight. NIGHT: the full swarm everywhere.
+                      : (_pdc>340 ? Math.min(10, 2+Math.floor((_pdc-340)/55)+Math.floor(state.day*0.25)) : 0);   // DAY: meadow/hills (town-dist <=340) stay a gentle safe zone (cap 0); from the BOG out (r>340) day foes roam. NIGHT: full swarm everywhere.   // DAY: town + near-town safe (cap 0); the OUTSKIRTS get roaming day foes (more the further out) so you can adventure+fight by daylight. NIGHT: the full swarm everywhere.
     let _nMobs=0; for(const _c of creatures){ if(!_c.training)_nMobs++; }   // 🎯 the training props live in creatures[] but must NEVER count toward the cap or be culled — count only real mobs
     if(state.running){ state._spawnT=(state._spawnT||0)-dt;
       if(state._spawnT<=0 && _nMobs<cap){
@@ -4754,6 +4768,21 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
     player.position.set(h.cx+200, 0.3, h.cz+200); updateHomes(0.25); const n2=DYN_LIGHTS.length, li2=_homeLight?_homeLight.intensity:null, active2=h.active;
     player.position.set(h.doorPos.x,0.3,h.doorPos.z); if(h.doorHinge)h.doorHinge.rotation.y=-1.45; updateHomes(0.1); const n3=DYN_LIGHTS.length, li3=_homeLight?_homeLight.intensity:null;
     state._selftesting=_st; return {entered, built, lights:[n0,n1,n2,n3], countConstantAfterFirst:(n1===n2&&n2===n3), active2, li2, thresh:Math.max(h.hx,h.hz)+5, reenterReLit:(li3===1.7)}; }, forceRain:(storm)=>{ startWeather('rain',storm?{storm:true,t:24,rate:6}:{t:14,rate:3}); return state.weather; },   // 🌧️ debug: trigger rain/storm now
+ wxEnemyTest:()=>{ const out={}; try{
+   startWeather('rain',{storm:true}); out.stormRain=_wx().rain; out.stormStorm=_wx().storm;
+   startWeather('rain'); out.lightRain=_wx().rain; startWeather('clear'); out.dryRain=_wx().rain;
+   startWeather('rain',{storm:true}); try{ for(let i=0;i<8;i++) lightningStrike(); out.strikeOK=true; }catch(e){ out.strikeErr=String(e); } startWeather('clear');
+   const tod0=state.tod, pp=player.position.clone(), run0=state.running, st0=state._selftesting;
+   state.tod=0.3; out.isDay=isDay(); state._selftesting=false; state.running=true;
+   const NIGHT={skeleton:1,pumpkin:1,zombie:1,ghost:1,sporecap:1,wisp:1};
+   const keyOf=(t)=>t&&(t.key||CTYPE_KEYS.find(k=>CREATURE_TYPES[k]===t));
+   const nightHits=(pd,sx,sz,n)=>{ let c=0; for(let i=0;i<n;i++){ const t=pickCreatureType(pd,sx,sz); if(t&&NIGHT[keyOf(t)])c++; } return c; };
+   out.meadowDayNightOnly=nightHits(24,0,24,90); out.bogDayNightOnly=nightHits(420,0,420,90);
+   despawnCreatures(); player.position.set(0,0,24); for(let i=0;i<60;i++)updateCombat(0.1); out.meadowDaySpawns=creatures.filter(c=>!c.training).length;
+   despawnCreatures(); player.position.set(0,0,420); for(let i=0;i<60;i++)updateCombat(0.1); out.bogDaySpawns=creatures.filter(c=>!c.training).length;
+   despawnCreatures(); player.position.copy(pp); state.tod=tod0; state.running=run0; state._selftesting=st0; startWeather('clear');
+   return out;
+ }catch(e){ return {err:String(e)}; } },   // 🌦️🐺 verifies weather gameplay + bog-outward day danger
  replayTutorial:()=>{ try{localStorage.removeItem('ww2_seen_tutorial');}catch(e){} startTutorial(); return {tutorial:'started', step:state.tut.step}; },   // re-run the onboarding tutorial
  tutDbg:()=>({on:!!state._tutorial, step:state.tut?state.tut.step:null, hits:state.tut?state.tut.hits:null, steps:TUT_STEPS.length, dummy:!!(state.tut&&state.tut.dummy)}),
  tutorialTest:()=>{ const R={}, ph=state.hp; startTutorial(); R.started=!!state._tutorial; R.dummySpawned=!!(state.tut&&state.tut.dummy); R.cardShown=(document.getElementById('tutcard')&&document.getElementById('tutcard').style.display!=='none');
