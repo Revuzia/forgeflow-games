@@ -3177,8 +3177,8 @@ function _dropCubePet(){ const owned=state.cubePets||[]; const avail=PET_KEYS.fi
 function openPetsMenu(){ if(!state.running) return; closePetsMenu();
   const mode=['aggressive','defensive','passive'].includes(state.petMode)?state.petMode:'aggressive';
   const el=document.createElement('div'); el.id='petsmenu';
-  const mk=(m,icon,title)=>`<button data-m="${m}" title="${title}" style="background:${m===mode?'#5fe08a':'#f4f1f7'};border:2px solid #221a2e;border-radius:8px;width:36px;height:36px;margin:0 2px;cursor:pointer;font-size:18px;line-height:1;padding:0;box-shadow:1px 1px 0 rgba(34,26,46,.25)">${icon}</button>`;
-  el.innerHTML=`<div style="display:flex;align-items:center;background:rgba(20,16,28,.82);border:2px solid #221a2e;border-radius:11px;padding:4px 5px">${mk('aggressive','⚔️','Aggressive — attack any nearby foe')}${mk('defensive','🛡️','Defensive — only fight close threats')}${mk('passive','✕','Passive — never attack, just follow')}</div>`;
+  const mk=(m,icon,title)=>`<button data-m="${m}" title="${title}" style="background:${m===mode?'#37c06a':'#fff'};border:2px solid #2a2438;border-radius:8px;width:36px;height:36px;margin:0 2px;cursor:pointer;font-size:18px;line-height:1;padding:0;box-shadow:1px 1px 0 rgba(42,36,56,.25)">${icon}</button>`;
+  el.innerHTML=`<div style="display:flex;align-items:center;background:#f4f0f7;border:2px solid #2a2438;border-radius:11px;padding:4px 5px;box-shadow:2px 2px 0 rgba(42,36,56,.3)">${mk('aggressive','⚔️','Aggressive — attack any nearby foe')}${mk('defensive','🛡️','Defensive — only fight close threats')}${mk('passive','🕊️','Passive — never attack, just follow')}</div>`;
   let left='50%', top='42%', tx='translate(-50%,-50%)';
   if(_petMesh){ _petMesh.getWorldPosition(_np); _np.y+=1.6; _np.project(camera); if(_np.z<=1){ left=(((_np.x*0.5+0.5)*innerWidth)|0)+'px'; top=(((-_np.y*0.5+0.5)*innerHeight)|0)+'px'; tx='translate(-50%,-115%)'; } }
   el.style.cssText=`position:fixed;left:${left};top:${top};transform:${tx};z-index:62`;
