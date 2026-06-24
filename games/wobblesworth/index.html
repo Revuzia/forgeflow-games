@@ -2037,7 +2037,9 @@ addEventListener('blur',clearKeys); document.addEventListener('visibilitychange'
 renderer.domElement.addEventListener('contextmenu',e=>{ e.preventDefault(); clearKeys(); });
 let dragging=false,lastX=0,lastY=0;
 // LEFT mouse = ATTACK; RIGHT mouse (or touch) drag = ROTATE camera. (Right-click menu already suppressed above.)
-renderer.domElement.addEventListener('pointerdown',e=>{ if(e.pointerType!=='touch' && e.button===0){ if(state.running){ if(BMODE.on) placeBlock(); else if(state._activeTool==='fishing_rod'){ castOrReel(); } else if(state._activeTool){ digBlock(); } else doAttack(); } return; } dragging=true; lastX=e.clientX; lastY=e.clientY; if(e.button===2 && state.running && state.offhand && SHIELDS[state.offhand]) state._blocking=true; });   // left-click: cast/reel if the rod is held, dig/mine for other tools, else attack · RIGHT-click also raises the shield (block) while still dragging the camera
+const _petRay=new THREE.Raycaster(), _petV2=new THREE.Vector2();
+function _clickedPet(e){ if(!_petMesh||!state.companion) return false; _petV2.x=(e.clientX/innerWidth)*2-1; _petV2.y=-(e.clientY/innerHeight)*2+1; _petRay.setFromCamera(_petV2,camera); return _petRay.intersectObject(_petMesh,true).length>0; }   // 🟢 raycast: clicking the slime opens its stance menu (not a weapon swing)
+renderer.domElement.addEventListener('pointerdown',e=>{ if(e.pointerType!=='touch' && e.button===0){ if(state.running){ if(_clickedPet(e)){ if(document.getElementById('petsmenu')) closePetsMenu(); else openPetsMenu(); return; } if(BMODE.on) placeBlock(); else if(state._activeTool==='fishing_rod'){ castOrReel(); } else if(state._activeTool){ digBlock(); } else doAttack(); } return; } dragging=true; lastX=e.clientX; lastY=e.clientY; if(e.button===2 && state.running && state.offhand && SHIELDS[state.offhand]) state._blocking=true; });   // left-click: cast/reel if the rod is held, dig/mine for other tools, else attack · RIGHT-click also raises the shield (block) while still dragging the camera
 addEventListener('pointerup',()=>{dragging=false; state._blocking=false;}); addEventListener('pointercancel',()=>{dragging=false; state._blocking=false;}); addEventListener('pointermove',e=>{ if(e.pointerType!=='touch'){ _mx=e.clientX; _my=e.clientY; } if(dragging){ const s=state.mouseSens||1; cam.targetYaw-=(e.clientX-lastX)*0.0085*s; cam.targetPitch=clamp(cam.targetPitch+(e.clientY-lastY)*0.007*s,0.21,1.256); lastX=e.clientX; lastY=e.clientY; cam.manualT=1.6; } });
 function _anyMenuOpen(){ return invOpen||craftOpen||shopOpen||boardOpen||dyerOpen||tradeOpen||stashOpen||levelupOpen||pdpickOpen||mapOpen||(typeof loreOpen!=='undefined'&&loreOpen); }
 function _closeMenus(except){ const m={inv:closeInv,craft:closeCraft,map:closeMap,lore:(typeof closeLore==='function'?closeLore:null),shop:closeShop,board:closeBoard,dyer:closeDyer,stash:(typeof closeStash==='function'?closeStash:null)}; for(const k in m){ if(k!==except && m[k]){ try{ m[k](); }catch(e){} } } }   // owner: one screen at a time — opening any menu closes the others
@@ -3170,26 +3172,20 @@ function setActivePet(key){ if(!PETS[key]||!(state.cubePets||[]).includes(key)){
   toast('🧪 '+P.name+' is at your side — it spits poison at aggro\'d foes.'); try{ SFX.play('success'); }catch(e){} save(); }
 function summonCompanion(key){ collectCubePet(key||DEFAULT_PET); }   // legacy shim — old callers now just grant a cube pet
 function _dropCubePet(){ const owned=state.cubePets||[]; const avail=PET_KEYS.filter(k=>!owned.includes(k)); if(!avail.length){ chestLoot([['boss_core',1]],'🧪 (All cube pets collected — bonus loot)'); return false; } collectCubePet(avail[Math.floor(Math.random()*avail.length)]); return true; }
-function openPetsMenu(){ if(!state.running)return; const owned=state.cubePets||[], mode=state.petMode||'aggressive';
-  let el=document.getElementById('petsmenu'); if(!el){ el=document.createElement('div'); el.id='petsmenu'; document.body.appendChild(el); }
-  let grid='';
-  for(const k of PET_KEYS){ const P=PETS[k], have=owned.includes(k), active=state.companion&&state.companion.key===k;
-    grid+=`<div data-k="${k}" style="width:90px;cursor:${have?'pointer':'default'};text-align:center;opacity:${have?1:0.45}">`+
-      `<div style="width:56px;height:56px;margin:0 auto;border-radius:50%;background:${have?P.col:'#3a3640'};box-shadow:${have?'0 0 20px '+P.col+',inset 0 0 11px rgba(255,255,255,0.45)':'none'};border:${active?'3px solid #fff':'2px solid rgba(0,0,0,0.3)'}"></div>`+
-      `<div style="font-size:11px;margin-top:5px;color:#e8e2f0">${have?P.name:'??? Slime'}</div></div>`; }
-  const modeBtns=['aggressive','defensive','passive'].map(m=>`<button data-m="${m}" style="background:${m===mode?'#5fe08a':'#332f3a'};color:${m===mode?'#063':'#cfc8d8'};border:0;border-radius:7px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:600;margin:0 3px">${m[0].toUpperCase()+m.slice(1)}</button>`).join('');
-  el.innerHTML=`<div style="background:#1a1622;border:2px solid #6a5a8a;border-radius:16px;padding:20px 22px;max-width:min(560px,94vw);color:#e8e2f0;box-shadow:0 14px 44px rgba(0,0,0,0.6)">`+
-    `<div style="font-size:19px;font-weight:700;margin-bottom:4px">🟢 Glowing Slimes — ${owned.length}/${PET_KEYS.length} collected</div>`+
-    `<div style="font-size:12px;opacity:0.65;margin-bottom:14px">They glow to light up dark caves &amp; spit goo at foes. Found in dungeon hoards &amp; very-rare dig chests.</div>`+
-    `<div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center">${grid}</div>`+
-    `<div style="margin:18px 0 4px;text-align:center;font-size:13px">Behaviour: ${modeBtns}</div>`+
-    `<div style="text-align:center;margin-top:16px"><button data-close="1" style="background:#6a5a8a;color:#fff;border:0;border-radius:8px;padding:8px 22px;cursor:pointer;font-weight:600">Close (P)</button></div></div>`;
-  el.style.cssText='position:fixed;inset:0;z-index:62;display:flex;align-items:center;justify-content:center;background:rgba(8,6,16,0.62)';
-  el.onclick=(e)=>{ const t=e.target; const cell=t.closest&&t.closest('[data-k]');
-    if(cell&&owned.includes(cell.dataset.k)){ setActivePet(cell.dataset.k); openPetsMenu(); return; }
-    if(t.dataset&&t.dataset.m){ state.petMode=t.dataset.m; try{toast('🟢 Slime stance: '+t.dataset.m);}catch(e){} try{save();}catch(e){} openPetsMenu(); return; }
-    if(t===el||(t.dataset&&t.dataset.close)){ closePetsMenu(); } }; }
-function closePetsMenu(){ const el=document.getElementById('petsmenu'); if(el)el.remove(); }
+// 🟢 TINY stance menu — click the slime (or press P) to set Aggressive/Defensive/Passive. No collection (that lives in Lore), no title, no Close button. Floats over the pet.
+function openPetsMenu(){ if(!state.running) return; closePetsMenu();
+  const mode=['aggressive','defensive','passive'].includes(state.petMode)?state.petMode:'aggressive';
+  const el=document.createElement('div'); el.id='petsmenu';
+  const mk=(m,lbl)=>`<button data-m="${m}" style="display:block;width:100%;background:${m===mode?'#5fe08a':'#fff'};color:${m===mode?'#063':'#221a2e'};border:3px solid #221a2e;border-radius:11px;padding:7px 18px;margin:5px 0;cursor:pointer;font-weight:bold;font-size:14px;box-shadow:2px 2px 0 rgba(34,26,46,.22);font-family:inherit">${lbl}</button>`;
+  el.innerHTML=mk('aggressive','Aggressive')+mk('defensive','Defensive')+mk('passive','Passive');
+  let left='50%', top='42%', tx='translate(-50%,-50%)';
+  if(_petMesh){ _petMesh.getWorldPosition(_np); _np.y+=1.6; _np.project(camera); if(_np.z<=1){ left=(((_np.x*0.5+0.5)*innerWidth)|0)+'px'; top=(((-_np.y*0.5+0.5)*innerHeight)|0)+'px'; tx='translate(-50%,-115%)'; } }
+  el.style.cssText=`position:fixed;left:${left};top:${top};transform:${tx};z-index:62;min-width:128px`;
+  el.onclick=(e)=>{ const b=e.target.closest&&e.target.closest('[data-m]'); if(b){ state.petMode=b.dataset.m; try{toast('🟢 Slime stance: '+b.dataset.m);}catch(_e){} try{save();}catch(_e){} closePetsMenu(); } };
+  document.body.appendChild(el);
+  setTimeout(()=>{ document.addEventListener('pointerdown', _petMenuOutside, true); },0); }
+function _petMenuOutside(ev){ const el=document.getElementById('petsmenu'); if(el && !el.contains(ev.target)) closePetsMenu(); }
+function closePetsMenu(){ document.removeEventListener('pointerdown', _petMenuOutside, true); const el=document.getElementById('petsmenu'); if(el)el.remove(); }
 function updatePet(dt){ if(!_petMesh||!state.companion) return; const P=PETS[state.companion.key]; const g=_petMesh;
   if(g.userData.mixer) g.userData.mixer.update(dt);
   if(_petDownT>0){ _petDownT-=dt; g.visible=(((_petDownT*6)|0)&1)===0; if(_petDownT<=0){ g.visible=true; state.companion.hp=Math.max(1,Math.round(P.hp*0.5)); if(_petBar)drawMiniBar(_petBar,state.companion.hp/P.hp,{lvl:0}); } return; }
@@ -3212,14 +3208,17 @@ function updatePet(dt){ if(!_petMesh||!state.companion) return; const P=PETS[sta
   if(g.userData.body){ const w=Math.sin(_petBob*1.2)*0.09; g.userData.body.scale.set(1+w,0.74-w,1+w); }   // 🟢 squash/stretch slime jiggle
   if(_petLight){ _petLight.position.set(g.position.x, g.position.y+1.0, g.position.z); }   // 🔦 the glow follows the slime so dark areas stay lit around it
 }
-// 🧪 CUBE-PET POISON BOLT — a colored projectile that hits for atk + applies a poison DoT (poisT/poisDmg ticked here each frame)
+// 🟢 PET DAMAGE is LEVEL-SPECIFIC: scale the slime's goo by the PLAYER's level so a Lv1 player who SOMEHOW gets a high-tier slime is weak (×0.25), growing to stay useful late (×3.2 at Lv50) — mirrors how enemy HP + the player's own bolt scale up over a run.
+function petLvlMult(){ const lv=Math.max(1,Math.min(50,state.level||1)); return Math.max(0.25, Math.min(3.2, 0.25 + 0.06*(lv-1))); }
+// 🟢 GLOWING-SLIME GOO BOLT — a colored projectile that hits for atk + applies a goo DoT (poisT/poisDmg ticked here each frame)
 function spawnPetShot(sx,sy,sz,target,P){ const col=P.col||'#9be86b';
   const m=new THREE.Mesh(new THREE.SphereGeometry(0.16,8,8), new THREE.MeshBasicMaterial({color:col}));
   const halo=new THREE.Mesh(new THREE.SphereGeometry(0.32,8,8), new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.4,blending:THREE.AdditiveBlending,depthWrite:false})); m.add(halo);
   m.position.set(sx,sy,sz); world.add(m);
   const tx=target.mesh.position.x, ty=(target.mesh.position.y||0)+(((target.type&&target.type.tgtH)||1.2)*0.5), tz=target.mesh.position.z;
   const dx=tx-sx, dy=ty-sy, dz=tz-sz, d=Math.hypot(dx,dy,dz)||1, sp=18;
-  petShots.push({mesh:m,vx:dx/d*sp,vy:dy/d*sp,vz:dz/d*sp,life:1.6,atk:P.atk,dot:P.dot,dotT:P.dotT,col});
+  const _pm=petLvlMult();   // 🟢 level-scale the goo: weak at Lv1, useful by Lv20-50
+  petShots.push({mesh:m,vx:dx/d*sp,vy:dy/d*sp,vz:dz/d*sp,life:1.6,atk:P.atk*_pm,dot:P.dot*_pm,dotT:P.dotT,col});
   try{ SFX.play('interact',{rate:1.5,vol:0.32}); }catch(e){} }
 function updatePetShots(dt){
   for(let i=petShots.length-1;i>=0;i--){ const s=petShots[i],m=s.mesh;
@@ -4519,6 +4518,13 @@ function checkBadges(){ if(!state.badges)state.badges={}; let any=false; for(con
 function loreKeyOf(t){ for(const k in CREATURE_TYPES) if(CREATURE_TYPES[k]===t) return k; for(const k in BOSS_TYPES) if(BOSS_TYPES[k]===t) return 'boss_'+k; return null; }
 function loreDef(key){ return (key&&key.indexOf('boss_')===0) ? BOSS_TYPES[key.slice(5)] : CREATURE_TYPES[key]; }
 function deriveTraits(t){ const a=[]; if(t.ranged==='thorn')a.push('🌵 Fires a slow thorn dart'); else if(t.ranged==='seed')a.push('🎃 Spits seeds'); else if(t.ranged)a.push('🧪 Ranged attacker'); if(t.explode)a.push('💥 Explodes on contact'); if(t.stealth)a.push('👻 Invisible until it strikes'); if(t.attackKind==='claw')a.push('🐾 Claws in melee'); if((t.minDist||0)>=120)a.push('🌑 Deep-outskirts night beast'); else if(t.minDist)a.push('🏞️ Roams far from town'); if(t.dmg>=2)a.push('⚔️ Hits hard'); if(t.special)a.push('☄️ Boss special: '+t.special); return a; }
+// 📖 BESTIARY-BY-BIOME + progressive reveal helpers
+const BIOME_ORDER=['meadow','swamp','desert','ice','dark','boss'];
+const BIOME_META={meadow:{i:'🌾',n:'Meadow & Hills'},swamp:{i:'🐊',n:'Swamp Outskirts'},desert:{i:'🏜️',n:'Deep Wilds'},ice:{i:'❄️',n:'Frozen Wastes'},dark:{i:'🌑',n:'Spooky Outskirts'},boss:{i:'💀',n:'Bosses'}};
+function biomeOf(key){ if(key&&key.indexOf('boss_')===0)return 'boss'; const t=CREATURE_TYPES[key]; if(!t)return 'meadow'; if(t.iceOnly)return 'ice'; if(t.nightOnly)return 'dark'; const md=t.minDist||0; if(md>=195)return 'desert'; if(md>=60)return 'swamp'; return 'meadow'; }
+function loreReveal(t,kills){ const need=killsToDiscover(t); return { name:kills>=1, hp:kills>=Math.max(1,Math.round(need*0.25)), attack:kills>=Math.max(2,Math.round(need*0.5)), special:kills>=Math.max(3,Math.round(need*0.85)), full:kills>=need }; }   // reveal more the more you kill it
+function attackLabel(t){ if(!t)return '⚔️ Melee'; if(t.ranged==='thorn')return '🌵 Thorn-dart spitter'; if(t.ranged==='seed')return '🎃 Seed spitter'; if(t.ranged)return '🎯 Ranged attacker'; if(t.explode)return '💥 Explodes on contact'; if(t.stealth)return '👻 Stealth ambush'; if(t.attackKind==='claw')return '🐾 Claw striker'; return '⚔️ Melee bruiser'; }
+function weaknessOf(t){ if(!t)return 'Unknown'; if(t.weak)return t.weak; if(t.iceOnly)return '🔥 Fire / 🪓 Heavy blows'; if(t.stealth)return '✨ Light reveals it'; if(t.explode)return '🏹 Ranged — kill from afar'; if(t.ranged)return '🛡️ Close the gap & block'; if(t.attackKind==='claw')return '🛡️ Shield slam staggers it'; const md=t.minDist||0; if(md>=195)return '⚔️ Sustained DPS — high HP'; return '⚔️ Any weapon'; }
 function recordLore(c){ if(!c||!c.type)return; const t=c.type, k=loreKeyOf(t); if(!k)return; if(!state.lore)state.lore={}; const first=!state.lore[k]; const L=state.lore[k]||(state.lore[k]={name:t.name,kills:0,maxHp:0,dmg:t.dmg,boss:!!c.boss,firstSeen:state.day,discovered:false}); L.kills++; L.maxHp=Math.max(L.maxHp||0,c.max||0); const need=killsToDiscover(t); if(!L.discovered && L.kills>=need){ L.discovered=true; toast('📖 '+t.name+' fully studied — its level is revealed!'); SFX.play('success',{vol:0.5}); if(loreOpen)renderLore(); } else if(first){ toast('📖 New creature spotted ('+L.kills+'/'+need+' to study) — press L for Lore'); SFX.play('success',{vol:0.4}); } }
 function openLore(){ if(!state.running)return; _closeMenus('lore'); loreOpen=true; const el=document.getElementById('lore'); if(!el)return; el.style.cssText='position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(10,8,18,0.6)'; renderLore(); el.classList.remove('hidden'); el.onclick=(e)=>{ if(e.target===el)closeLore(); }; }
 function closeLore(){ loreOpen=false; const el=document.getElementById('lore'); if(el)el.classList.add('hidden'); }
@@ -4527,14 +4533,27 @@ function renderLore(){ const el=document.getElementById('lore'); if(!el)return; 
   let h=`<div style="background:linear-gradient(180deg,#2a2038,#1a1426);border:3px solid #4a3a5e;border-radius:16px;padding:16px 18px;max-width:580px;max-height:82vh;overflow-y:auto;color:#fff;box-shadow:0 8px 0 rgba(0,0,0,.35)"><h3 style="margin:0 0 10px;display:flex;justify-content:space-between;align-items:center;gap:10px">🏅 Achievements &amp; Bestiary <span id="loreX" style="cursor:pointer">✕</span></h3>`;
   h+=`<div style="font-weight:800;margin:2px 0 6px">🏅 Badges <span style="font-weight:400;opacity:.7;font-size:12px">${ub}/${BADGES.length} earned</span></div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px">`;
   for(const b of BADGES){ const on=state.badges&&state.badges[b.id]; const tc=b.t==='gold'?'#ffd23f':b.t==='silver'?'#ccd4dc':'#cd7f32'; const tm=b.t==='gold'?'🥇':b.t==='silver'?'🥈':'🥉'; h+=`<div title="${b.d}" style="position:relative;padding:6px;border:2px solid ${on?tc:'#3a3048'};border-radius:9px;background:${on?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.2)'};text-align:center;${on?'':'opacity:.42'}"><div style="position:absolute;top:1px;right:4px;font-size:11px">${on?tm:''}</div><div style="font-size:22px">${on?b.i:'🔒'}</div><div style="font-weight:700;font-size:11px">${b.n}</div></div>`; }
-  h+=`</div><div style="font-weight:800;margin:2px 0 6px">📖 Bestiary <span style="font-weight:400;opacity:.7;font-size:12px">${known}/${keys.length} discovered</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">`;
-  for(const k of keys){ const t=loreDef(k), L=state.lore&&state.lore[k];
-    if(!L){ h+=`<div style="padding:8px;border:2px solid #3a3048;border-radius:10px;background:rgba(0,0,0,0.2);opacity:.5;text-align:center"><div style="font-size:26px">❓</div><div style="font-weight:700">???</div></div>`; continue; }
-    const need=killsToDiscover(t); const tier=(L.discovered||L.kills>=need)?3:(L.kills>=Math.ceil(need/2)?2:1), icon=L.boss?'💀':'👾'; let body=`<div style="font-size:12px;opacity:.85">Defeated ×${L.kills}${(L.discovered||L.kills>=need)?'':' ('+L.kills+'/'+need+' to fully study)'}</div>`;
-    if(tier>=2) body+=`<div style="font-size:12px;margin-top:2px">❤️ ${L.maxHp} HP · ⚔️ ${L.dmg} dmg</div>`; else body+=`<div style="font-size:11px;opacity:.55;margin-top:2px">Defeat again to learn its stats…</div>`;
-    if(tier>=3){ const tr=deriveTraits(t||{}); body+=`<div style="font-size:11px;opacity:.9;margin-top:4px;line-height:1.35">${tr.length?tr.join('<br>'):'A simple creature.'}</div>`; }
-    h+=`<div style="padding:8px;border:2px solid ${L.boss?'#c77dff':'#4a7a4a'};border-radius:10px;background:rgba(0,0,0,0.22)"><div style="font-size:24px;text-align:center">${icon}</div><div style="font-weight:800;text-align:center;margin-bottom:3px">${L.name}</div>${body}</div>`; }
-  h+=`</div><div style="text-align:center;opacity:.6;font-size:11px;margin-top:10px">Press L or ✕ to close</div></div>`; el.innerHTML=h; const x=el.querySelector('#loreX'); if(x)x.onclick=closeLore; }
+  h+=`</div><div style="font-weight:800;margin:2px 0 4px">📖 Bestiary <span style="font-weight:400;opacity:.7;font-size:12px">${known}/${keys.length} discovered</span></div><div style="font-size:11px;opacity:.6;margin:0 0 6px">Slay creatures to study them — HP, attack &amp; weakness unlock the more you fight each one.</div>`;
+  const byBiome={}; for(const k of keys){ const b=biomeOf(k); (byBiome[b]=byBiome[b]||[]).push(k); }
+  for(const biome of BIOME_ORDER){ const grp=byBiome[biome]; if(!grp||!grp.length)continue; const bm=BIOME_META[biome]; const seen=grp.filter(k=>state.lore&&state.lore[k]).length;
+    h+=`<div style="font-weight:700;margin:11px 0 5px;font-size:13px">${bm.i} ${bm.n} <span style="font-weight:400;opacity:.6;font-size:11px">${seen}/${grp.length}</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">`;
+    for(const k of grp){ const t=loreDef(k), L=state.lore&&state.lore[k];
+      if(!L){ h+=`<div style="padding:8px;border:2px solid #3a3048;border-radius:10px;background:rgba(0,0,0,0.2);opacity:.5;text-align:center"><div style="font-size:26px">❓</div><div style="font-weight:700">???</div></div>`; continue; }
+      const need=killsToDiscover(t), rv=loreReveal(t,L.kills), icon=L.boss?'💀':'👾';
+      let body=`<div style="font-size:12px;opacity:.85">Defeated ×${L.kills}${(L.kills>=need)?' · fully studied':' ('+L.kills+'/'+need+')'}</div>`;
+      body+=`<div style="font-size:12px;margin-top:2px">❤️ ${rv.hp?L.maxHp+' HP':'??? HP'} · ⚔️ ${rv.attack?L.dmg+' dmg':'??? dmg'}</div>`;
+      body+=`<div style="font-size:11px;opacity:.9;margin-top:3px">🗡️ ${rv.attack?attackLabel(t):'???'}</div>`;
+      body+=`<div style="font-size:11px;opacity:.9;margin-top:2px">⚠️ ${rv.special?weaknessOf(t):'???'}</div>`;
+      h+=`<div style="padding:8px;border:2px solid ${L.boss?'#c77dff':'#4a7a4a'};border-radius:10px;background:rgba(0,0,0,0.22)"><div style="font-size:24px;text-align:center">${icon}</div><div style="font-weight:800;text-align:center;margin-bottom:3px">${L.name}</div>${body}</div>`; }
+    h+=`</div>`; }
+  const _own=state.cubePets||[], _pmode=state.petMode||'aggressive';   // 🟢 the slime collection lives HERE now (was its own menu)
+  h+=`<div style="font-weight:800;margin:14px 0 6px">🟢 Glowing Slimes <span style="font-weight:400;opacity:.7;font-size:12px">${_own.length}/${PET_KEYS.length} collected</span></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">`;
+  for(const k of PET_KEYS){ const P=PETS[k], have=_own.includes(k), active=state.companion&&state.companion.key===k;
+    h+=`<div data-pet="${have?k:''}" style="text-align:center;cursor:${have?'pointer':'default'};opacity:${have?1:.45}"><div style="width:46px;height:46px;margin:0 auto;border-radius:50%;background:${have?P.col:'#3a3640'};box-shadow:${have?'0 0 16px '+P.col:'none'};border:${active?'3px solid #fff':'2px solid rgba(0,0,0,.3)'}"></div><div style="font-size:11px;margin-top:4px">${have?P.name:'??? Slime'}</div></div>`; }
+  h+=`</div><div style="text-align:center;margin-top:8px;font-size:12px;opacity:.85">Active stance: <b>${_pmode}</b> — click your slime in the world to change it</div>`;
+  h+=`<div style="text-align:center;opacity:.6;font-size:11px;margin-top:10px">Press L or ✕ to close</div></div>`;
+  el.innerHTML=h; const x=el.querySelector('#loreX'); if(x)x.onclick=closeLore;
+  el.querySelectorAll('[data-pet]').forEach(d=>{ if(d.dataset.pet){ d.onclick=(ev)=>{ ev.stopPropagation(); setActivePet(d.dataset.pet); renderLore(); }; } }); }
 function killCreature(i){ const c=creatures[i];
   if(c.training){ c.hp=c.max; if(c.hpbar)drawMiniBar(c.hpbar,1,c); c.mesh.scale.setScalar(1); toast(c.dummy?'🎯 Dummy reset!':'🎯 Target reset!'); SFX.play('interact',{rate:1.4,vol:0.4}); return; }   // 🎯 TRAINING PROP: never dies, never drops loot — snap back to full HP. All three lethal callers (playerAttack, updatePlayerShots, dungeon) route here, so one guard covers melee + bolt + arrow.
   recordLore(c); try{ chainOnKill(c); }catch(e){} const p=c.mesh.position.clone(); confetti(p.clone().setY(1.2),16);
