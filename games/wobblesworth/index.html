@@ -997,6 +997,15 @@ const QUIVERS={ quiver_hunter:{arrow:'fire_arrow',dmgMul:1.10,bonus:2,color:'#ca
 const MINE={x:1000,z:1000,inMine:false,built:false,group:null,blocks:[],chests:[],returnPos:null};
 const DUNGEON={x:2000,z:2000,inDungeon:false,built:false,ex:0,ez:0,rooms:[],chests:[],traps:[],spawners:[],secretChest:null,returnPos:null};   // multi-room crypt pocket (far away, frustum-culled): tunnels + traps + a spawner + ONE hidden secret chest — entrances scattered in the outer ring
 const CASTLE={x:2000,z:-2000,inCastle:false,built:false,ex:0,ez:1320,rooms:[],chests:[],boss:null,cleared:false,returnPos:null};   // 🏰 the Blight Keep: enterable mini-dungeon in the DARK biome. ex/ez=(0,1320) = the world entrance in The Blight (r>1180); x/z=(2000,-2000) = the off-map interior pocket (mirrors MINE 1000,1000 / DUNGEON 2000,2000 but at -z so it never overlaps them, and stays well inside WRAP_P=3000)
+// ── MINI-DUNGEONS: small enterable slime+loot instances in biomes 2-4 (swamp/desert/ice; NEVER the final dark Blight). LEVEL-GATED so you can't reach a high-biome one at lvl 1. ──
+const MINI_DUNGEONS=[
+  {id:'swampden',   biome:'swamp', name:'Sunken Bog Den',    minR:380, maxR:560,  pocket:{x:-2000,z:2000},  foe:280, minLvl:5,  flavor:'#3a4a38'},
+  {id:'desertvault',biome:'desert',name:'Buried Sand Vault', minR:640, maxR:840,  pocket:{x:-2000,z:-2000}, foe:620, minLvl:12, flavor:'#6a5a3a'},
+  {id:'icehollow',  biome:'ice',   name:'Frostbound Hollow', minR:900, maxR:1120, pocket:{x:0,   z:2400},   foe:960, minLvl:20, flavor:'#3a4654'},
+];   // pockets (-2000,2000)/(-2000,-2000)/(0,2400) avoid MINE(1000,1000)/DUNGEON(2000,2000)/CASTLE(2000,-2000) and stay inside WRAP_P=3000
+let _MD=null;   // the active mini-dungeon (or null on the surface)
+for(const md of MINI_DUNGEONS){ md.inMD=false; md.built=false; md.ex=0; md.ez=0; md.rooms=[]; md.chests=[]; md.traps=[]; md.returnPos=null; md.cleared=false; }
+function anyUG(){ return MINE.inMine || DUNGEON.inDungeon || CASTLE.inCastle || (_MD&&_MD.inMD); }   // SINGLE underground predicate (spaced so the no-space guard replace-all won't recurse on this def)
 // VOXEL BUILD MODE (owner: "editable buildings") — place/break 1×1 blocks like Minecraft; blocks persist via save.
 const BUILD_MATS=[['wood','#a9743f'],['stone','#9a948a'],['crystal','#7fd9ff'],['dirt','#9a7a4a']];
 // 🌸 VARIOUS COLORED FLOWERS (owner): tinted clones of the 3 existing Flower GLBs (no new models) that drop COLOR-KEYED petals feeding dyes + arrows. warm = south/beach, cool = far/cold outskirts; white/black are rare.
@@ -1377,6 +1386,21 @@ function buildExploration(){
     addInteractable(trig,'🪦 Descend into the Forgotten Crypt',()=>enterDungeon(),3.8);
   }
   buildCastleExterior();   // 🏰 the Blight Keep entrance, far out in the dark biome
+  // 🏚️ MINI-DUNGEON SURFACE ENTRANCES — one per biome 2-4 (swamp/desert/ice), LEVEL-GATED, never in the dark core
+  MINI_DUNGEONS.forEach((md,mi)=>{
+    const ang=Math.PI*0.5 + mi*2.1, r=(md.minR+md.maxR)/2, ex=Math.cos(ang)*r, ez=Math.sin(ang)*r;
+    let gx=ex, gz=ez, tries=0; const mask={swamp:swampMask,desert:desertMask,ice:iceMask}[md.biome];
+    while(tries++<6 && (mask(gx,gz)<0.4 || isInWater(gx,gz,6) || darkMask(gx,gz)>0.1)){ const f=(md.minR+(md.maxR-md.minR)*(tries/7))/r; gx=ex*f; gz=ez*f; }
+    md.ex=gx; md.ez=gz; const gy=groundY(gx,gz); outerStructures.push({x:gx,z:gz,r:8});
+    const ent=new THREE.Group(); ent.position.set(gx,gy,gz);
+    const add=(w,h,d,c,x,y,z)=>{ const m=box(w,h,d,c); m.position.set(x,y,z); ent.add(m); return m; };
+    add(1.0,3.0,1.0,'#5e564d',-2.2,1.5,0); add(1.0,3.0,1.0,'#5e564d',2.2,1.5,0); add(5.0,1.0,1.0,'#6a6256',0,3.2,0);   // two jambs + a lintel
+    const door=new THREE.Mesh(new THREE.PlaneGeometry(3.0,2.8),new THREE.MeshBasicMaterial({color:'#040406'})); door.position.set(0,1.4,0.05); ent.add(door);
+    const rune=new THREE.Mesh(new THREE.PlaneGeometry(0.7,0.7),new THREE.MeshBasicMaterial({color:'#7fe0ff',transparent:true,opacity:0.85})); rune.position.set(0,3.7,0.1); ent.add(rune);
+    ent.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); world.add(ent);
+    const trig=box(3.0,3.0,3.0,'#000'); trig.visible=false; trig.position.set(gx,gy+1.2,gz-1.4); world.add(trig);
+    addInteractable(trig,'🏚️ Enter the '+md.name+' (Lv '+md.minLvl+'+)',()=>{ if((state.level||1)<md.minLvl){ toast('🔒 '+md.name+' — too dangerous at Lv '+(state.level||1)+'; come back at Lv '+md.minLvl+'.'); try{SFX.play('interact',{rate:0.5,vol:0.4});}catch(e){} return; } enterMiniDungeon(md); },3.8);
+  });
 }
 
 /* ---- WILD SETTLEMENTS: hamlets of explorable homes out in the hills + winding paths + wandering folk ---- */
@@ -3003,7 +3027,7 @@ function tickWeather(dt){ const w=state.weather; if(!w)return; w.t-=dt;
       ephemeral.push({node:r,life:0.95,v:new THREE.Vector3(0, w.storm?-42:-30, 0),const:true}); }
     else { const s=pBall(0.13,'#ffffff'); s.position.set(px+rand(-28,28),rand(15,23),pz+rand(-28,28)); world.add(s);
       ephemeral.push({node:s,life:3.4,v:new THREE.Vector3(rand(-.5,.5),-2.0,rand(-.5,.5)),const:true,spin:rand(-1,1)}); } } }
-function tickMeadowWeather(dt){ const px=player.position.x,pz=player.position.z; if(MINE.inMine||DUNGEON.inDungeon||CASTLE.inCastle)return; const inMeadow=(typeof iceMask!=='function'||iceMask(px,pz)<0.2)&&(typeof desertMask!=='function'||desertMask(px,pz)<0.2)&&(typeof swampMask!=='function'||swampMask(px,pz)<0.2)&&(typeof darkMask!=='function'||darkMask(px,pz)<0.2); if(!inMeadow||state.weather)return;   // green meadow only, never underground, never stacking
+function tickMeadowWeather(dt){ const px=player.position.x,pz=player.position.z; if(anyUG())return; const inMeadow=(typeof iceMask!=='function'||iceMask(px,pz)<0.2)&&(typeof desertMask!=='function'||desertMask(px,pz)<0.2)&&(typeof swampMask!=='function'||swampMask(px,pz)<0.2)&&(typeof darkMask!=='function'||darkMask(px,pz)<0.2); if(!inMeadow||state.weather)return;   // green meadow only, never underground, never stacking
   _mw.t+=dt; if(_mw.t>=_mw.next){ _mw.t=0; _mw.next=rand(70,140); const roll=Math.random();   // a new weather roll every 70-140s
     if(roll<0.18){ startWeather('rain',{storm:true,t:24,rate:6}); toast('⛈️ Storm clouds gather…'); shake(0.12); }   // ~18% STORM (darker sky + heavy rain + lightning)
     else if(roll<0.78){ startWeather('rain',{t:14,rate:3}); toast('🌧️ Light rain drifts in.'); } } }   // ~60% light rain / ~22% calm
@@ -3053,7 +3077,7 @@ function breakItem(id){
   if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); if(invOpen&&typeof renderInv==='function')renderInv(); if(typeof Inv!=='undefined'&&Inv.render)Inv.render(); save(); }
 function repairAll(){ if(!state.dur)state.dur={}; const ids=[]; if(state.weapon&&state.weapon!=='fist')ids.push(state.weapon); if(state.gear)for(const s in state.gear){ if(state.gear[s])ids.push(state.gear[s]); } if(state.offhand)ids.push(state.offhand); let n=0; for(const id of ids){ state.dur[id]=durMaxFor(id); n++; } toast(`🔧 Repaired ${n} equipped item${n===1?'':'s'} to full!`); if(invOpen&&typeof renderInv==='function')renderInv(); save(); return n; }
 function useRepairKit(){ if((state.inv.repair_kit||0)<=0)return; const ids=[]; if(state.weapon&&state.weapon!=='fist')ids.push(state.weapon); if(state.gear)for(const s in state.gear){ if(state.gear[s])ids.push(state.gear[s]); } if(state.offhand)ids.push(state.offhand); if(!ids.length){ toast('🔧 Equip some gear first, then use a Repair Kit.'); return; } if(!ids.some(id=>durFrac(id)<1)){ toast('🔧 Your gear is already in perfect shape — kit saved.'); return; } repairAll(); Inv.take('repair_kit',1); SFX.play('success'); if(invOpen&&typeof renderInv==='function')renderInv(); }   // (L) consume ONE kit to fully repair equipped gear (no waste if undamaged)
-function useTownPortal(){ if((state.inv.town_portal||0)<=0)return; if((state.level||1)<8){ toast('🌀 The Town Portal needs Level 8 to attune — keep adventuring!'); return; } if(MINE.inMine||DUNGEON.inDungeon||CASTLE.inCastle){ toast("🌀 The portal won't anchor underground — reach the surface first."); return; } player.position.set(HOUSE.cx, 0.3, HOUSE.cz+9); vy=0; flashFade(); Inv.take('town_portal',1); SFX.play('success'); toast('🌀 Whisked home to town!'); if(invOpen&&typeof renderInv==='function')renderInv(); }   // (L3) consume ONE portal to teleport home (Lv8+, surface only)
+function useTownPortal(){ if((state.inv.town_portal||0)<=0)return; if((state.level||1)<8){ toast('🌀 The Town Portal needs Level 8 to attune — keep adventuring!'); return; } if(anyUG()){ toast("🌀 The portal won't anchor underground — reach the surface first."); return; } player.position.set(HOUSE.cx, 0.3, HOUSE.cz+9); vy=0; flashFade(); Inv.take('town_portal',1); SFX.play('success'); toast('🌀 Whisked home to town!'); if(invOpen&&typeof renderInv==='function')renderInv(); }   // (L3) consume ONE portal to teleport home (Lv8+, surface only)
 function rollRarity(){ const r=Math.random(); return r<RARITY.epic.p ? 'epic' : (r<RARITY.epic.p+RARITY.rare.p ? 'rare' : 'common'); }
 function rarityToast(tier,msg){ const rr=RARITY[tier]||RARITY.common; const box=document.getElementById('toasts'); const t=document.createElement('div'); t.className='toast'; t.innerHTML=`${tier!=='common'?`<span style="color:${rr.color};font-weight:800">${rr.mark}${rr.label}</span> · `:''}${msg}`; box.appendChild(t); while(box.children.length>3) box.firstChild.remove(); setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; setTimeout(()=>t.remove(),400); },2600); }
 function flashFade(){ const f=document.createElement('div'); f.style.cssText='position:fixed;inset:0;background:#000;opacity:0;z-index:40;transition:opacity .4s;pointer-events:none'; document.body.appendChild(f); requestAnimationFrame(()=>{ f.style.opacity='.7'; setTimeout(()=>{ f.style.opacity='0'; setTimeout(()=>f.remove(),500); },500); }); }
@@ -3084,7 +3108,7 @@ function resolve(){ const feet=player.position.y;
   for(const g of neighbors){ const dx=player.position.x-g.position.x, dz=player.position.z-g.position.z; const d=Math.hypot(dx,dz); if(d<1.1&&d>1e-4){ const pu=1.1-d; player.position.x+=dx/d*pu; player.position.z+=dz/d*pu; } }
 }
 // highest standable surface beneath the player (0 = ground); lets you jump ON the well / crafted things
-const _FW=0.32; function groundFoot(px,pz){ if(MINE.inMine||DUNGEON.inDungeon||CASTLE.inCastle) return 0; return Math.max(terrainH(px,pz), terrainH(px+_FW,pz), terrainH(px-_FW,pz), terrainH(px,pz+_FW), terrainH(px,pz-_FW)); }   // sample the whole FOOTPRINT + snap to the HIGHEST so no foot sinks into a slope (cheap: 5x4 sin calls)
+const _FW=0.32; function groundFoot(px,pz){ if(anyUG()) return 0; return Math.max(terrainH(px,pz), terrainH(px+_FW,pz), terrainH(px-_FW,pz), terrainH(px,pz+_FW), terrainH(px,pz-_FW)); }   // sample the whole FOOTPRINT + snap to the HIGHEST so no foot sinks into a slope (cheap: 5x4 sin calls)
 function groundUnder(){ const px=player.position.x,pz=player.position.z;
   let g=groundFoot(px,pz);   // surface = rolling terrain (HIGHEST foot-sample so the uphill leg never buries; flat in town); mine/dungeon pockets stay flat at 0
   const dk=Math.round(px)+','+Math.round(pz); if(VOX.dug[dk]!=null) g=VOX.dug[dk];   // carved pit/tunnel floor (negative) -> you descend in; adjacent undug cells let you step back out
@@ -3314,7 +3338,7 @@ function updatePlayer(dt){
   const hx=player.position.x, hy=player.position.y+1.6, hz=player.position.z;
   let cx=hx-Math.sin(cam.yaw)*horiz, cy=hy+vert, cz=hz-Math.cos(cam.yaw)*horiz;
   const clear=camCollide(hx,hy,hz,cx,cy,cz); cx=clear[0]; cy=clear[1]; cz=clear[2];
-  const camFloor=((MINE.inMine||DUNGEON.inDungeon||CASTLE.inCastle)?-50:terrainH(cx,cz))+0.7; if(cy<camFloor) cy=camFloor;   // never let the 3rd-person camera sink BELOW the hill behind the player (owner: "im in the ground") — the terrain isn't a solid so camCollide can't catch it
+  const camFloor=((anyUG())?-50:terrainH(cx,cz))+0.7; if(cy<camFloor) cy=camFloor;   // never let the 3rd-person camera sink BELOW the hill behind the player (owner: "im in the ground") — the terrain isn't a solid so camCollide can't catch it
   camera.position.lerp(_camT.set(cx,cy,cz),1-Math.pow(0.0015,dt));
   if(shakeAmt>0.001){ shakeAmt*=Math.pow(0.0008,dt); camera.position.x+=(Math.random()-0.5)*shakeAmt; camera.position.y+=(Math.random()-0.5)*shakeAmt; camera.position.z+=(Math.random()-0.5)*shakeAmt; }
   camera.lookAt(player.position.x,player.position.y+1.6,player.position.z);
@@ -3322,7 +3346,7 @@ function updatePlayer(dt){
 /* march from the player's head toward the desired camera point; stop just before entering a solid box */
 function camCollide(hx,hy,hz,tx,ty,tz){ const steps=8;
   for(let i=steps;i>=1;i--){ const f=i/steps, x=hx+(tx-hx)*f, y=hy+(ty-hy)*f, z=hz+(tz-hz)*f; let blocked=false;
-    const floorY=((MINE.inMine||DUNGEON.inDungeon||CASTLE.inCastle)?0:terrainH(x,z))-0.5;   // floor guard relative to the local terrain (valleys go below 0)
+    const floorY=((anyUG())?0:terrainH(x,z))-0.5;   // floor guard relative to the local terrain (valleys go below 0)
     for(const s of solids){ if(s.off||(s.mesh&&!s.mesh.visible))continue; if(x>s.minX-0.3&&x<s.maxX+0.3&&z>s.minZ-0.3&&z<s.maxZ+0.3&&y>floorY&&y<s.top+0.3){ blocked=true; break; } }
     if(!blocked) return [x,y,z]; }
   return [hx,hy+0.4,hz]; }
@@ -3343,7 +3367,7 @@ const _day=new THREE.Color('#d6f0ff'),_night=new THREE.Color('#2b3f72'),_dusk=ne
 const _zenDay=new THREE.Color('#4f9be8'),_zenNight=new THREE.Color('#1b2c57'),_zen=new THREE.Color();
 function cullWrapped(){
   if(!cullList.length) return;
-  if(DUNGEON.inDungeon||MINE.inMine||CASTLE.inCastle){ if(!_culledOff){ for(const c of cullList) c.o.visible=true; _culledOff=true; } return; }   // underground the wrap is OFF (cameraPosition far) -> show everything once (the close cave fog hides the distant surface); the next surface frame re-culls
+  if(anyUG()){ if(!_culledOff){ for(const c of cullList) c.o.visible=true; _culledOff=true; } return; }   // underground the wrap is OFF (cameraPosition far) -> show everything once (the close cave fog hides the distant surface); the next surface frame re-culls
   _culledOff=false;
   camera.updateMatrixWorld(); _cullVI.copy(camera.matrixWorld).invert(); _cullPM.multiplyMatrices(camera.projectionMatrix,_cullVI); _cullFr.setFromProjectionMatrix(_cullPM);
   const cx=camera.position.x, cz=camera.position.z, px=player.position.x, pz=player.position.z;
@@ -3716,6 +3740,39 @@ function enterCastle(){ if(CASTLE.inCastle)return; buildCastle(); CASTLE.returnP
   const throne=CASTLE.rooms[CASTLE.rooms.length-1]; if(throne){ try{ CASTLE.boss=spawnBoss(pick(_regBossKeys()), throne.x, throne.z-3); }catch(e){} }   // a warlord mini-boss on the throne
   toast('🏰 The Blight Keep — fight through the halls, slay the warlord, loot the throne. 🚪 leave at the gate.'); flashFade(); }
 function exitCastle(){ if(!CASTLE.inCastle)return; CASTLE.inCastle=false; despawnCreatures(); exitUnderground(); const r=CASTLE.returnPos||{x:HOUSE.cx,z:HOUSE.cz}; player.position.set(r.x,0.3,r.z); vy=0; toast('🏰 Out of the Keep.'); flashFade(); }
+// ════════ 🏚️ MINI-DUNGEONS (small level-gated slime+loot instances in biomes 2-4) ════════
+function buildMiniDungeon(md){ if(md.built)return; md.built=true; const X=md.pocket.x, Z=md.pocket.z; md.rooms.length=0; md.chests.length=0; md.traps=[]; md.cleared=false;
+  const ft=TEX.stone.clone(); ft.needsUpdate=true; ft.repeat.set(4,4);
+  const wseg=(minX,maxX,minZ,maxZ)=>{ const w=box(Math.max(0.6,maxX-minX),8.0,Math.max(0.6,maxZ-minZ),'#3a3640'); w.position.set((minX+maxX)/2,4.0,(minZ+maxZ)/2); world.add(w); addSolid(w,0,false); };
+  const tile=(cx,cz,w,d,col)=>{ const f=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshToonMaterial({map:ft,gradientMap:GRAD,color:col||md.flavor})); f.rotation.x=-Math.PI/2; f.position.set(cx,0,cz); f.receiveShadow=true; world.add(f); };
+  const addTrap=(cx,cz)=>{ const plate=box(2.2,0.1,2.2,'#262230'); plate.position.set(cx,0.05,cz); world.add(plate);
+    const spikes=new THREE.Group(); for(const [ox,oz] of [[0,0],[0.5,0.5],[-0.5,0.5],[0.5,-0.5],[-0.5,-0.5]]){ const sp=new THREE.Mesh(new THREE.ConeGeometry(0.16,1.0,4),toon('#cfd2da')); sp.position.set(ox,0.5,oz); spikes.add(sp); }
+    spikes.position.set(cx,-1.4,cz); spikes.visible=false; world.add(spikes); md.traps.push({x:cx,z:cz,spikes,armed:true,cd:0}); };
+  const H=10, N=3, TL=10, PITCH=H*2+TL;   // 3 compact chambers + 2 short tunnels (smaller than the crypt)
+  for(let i=0;i<N;i++){ const cz=Z+i*PITCH;
+    tile(X,cz,H*2,H*2, i===N-1?'#2e2a34':null); _ugCeil(X,cz,H*2,H*2,7.0);
+    wseg(X-H,X-H+0.6,cz-H,cz+H); wseg(X+H-0.6,X+H,cz-H,cz+H);
+    if(i>0){ wseg(X-H,X-3,cz-H,cz-H+0.6); wseg(X+3,X+H,cz-H,cz-H+0.6); } else wseg(X-H,X+H,cz-H,cz-H+0.6);
+    if(i<N-1){ wseg(X-H,X-3,cz+H-0.6,cz+H); wseg(X+3,X+H,cz+H-0.6,cz+H); } else wseg(X-H,X+H,cz+H-0.6,cz+H);
+    for(const [px,pz] of [[-H+2.5,-H+2.5],[H-2.5,H-2.5]]){ const pil=box(0.9,7.0,0.9,'#33303a'); pil.position.set(X+px,3.5,cz+pz); world.add(pil); addSolid(pil,0,false); const torch=new THREE.Mesh(new THREE.SphereGeometry(0.26,10,8),new THREE.MeshBasicMaterial({color:'#ff9a3a'})); torch.position.set(X+px,6.0,cz+pz); torch.userData.fl=Math.random()*TAU; ugTorches.push(torch); world.add(torch); }
+    md.rooms.push({x:X,z:cz}); if(i!==N-1)addTrap(X+rand(-3,3),cz+rand(-3,3)); }
+  for(let i=0;i<N-1;i++){ const z0=Z+i*PITCH+H, z1=Z+(i+1)*PITCH-H, mz=(z0+z1)/2, len=(z1-z0)+0.6; tile(X,mz,6,len,'#2a2730'); _ugCeil(X,mz,6,len,5.5); wseg(X-3-0.3,X-3+0.3,z0,z1); wseg(X+3-0.3,X+3+0.3,z0,z1); addTrap(X,mz); }
+  const throne=md.rooms[N-1]; const chest=box(1.1,0.75,0.8,'#caa46a'); chest.position.set(throne.x, 0.6, throne.z+4); const lid=box(1.12,0.24,0.82,'#e0c089'); lid.position.set(0,0.5,-0.38); chest.add(lid); chest.userData={lid,looted:false}; world.add(chest); addSolid(chest); md.chests.push(chest); addInteractable(chest,'📦 Crack the '+md.name+' hoard',()=>miniDungeonLoot(md,chest),2.4);
+  const lad=box(0.9,3.6,0.4,'#8a5a31'); lad.position.set(X,1.8,Z-H-0.5); world.add(lad); addInteractable(lad,'🪜 Climb out',()=>exitMiniDungeon(),3.2); }
+function enterMiniDungeon(md){ if(anyUG())return; buildMiniDungeon(md); md.returnPos={x:player.position.x,z:player.position.z}; md.inMD=true; _MD=md; despawnCreatures(); enterUnderground();
+  const X=md.pocket.x, Z=md.pocket.z, H=10; player.position.set(X,0.3,Z-H+2.5); vy=0;
+  md.rooms.forEach((rm,i)=>{ const n=(i<md.rooms.length-1)?2:1; for(let k=0;k<n;k++){ const t=pickCreatureType(md.foe + i*60); if(!t)return; const c=makeCreature(t); c.position.set(rm.x+rand(-5,5),0,rm.z+rand(-5,5)); world.add(c); const hp=Math.max(36,Math.round((80+state.day*16)*((t.hp)||1)*(1+i*0.35))); const mats=[]; c.traverse(m=>{ if(m.isMesh&&m.material&&m.material.emissive)mats.push(m.material); }); creatures.push({mesh:c,hp,max:hp,cd:rand(0,1),bob:Math.random()*TAU,mats,flash:0,type:t,aggro:false,wdir:0,wt:9,dmgMul:1}); } });
+  toast('🏚️ '+md.name+' — clear the foes, crack the hoard. A rare glowing slime may be caged inside. 🪜 climb out at the entrance.'); flashFade(); }
+function exitMiniDungeon(){ if(!(_MD&&_MD.inMD))return; const md=_MD; md.inMD=false; _MD=null; despawnCreatures(); exitUnderground(); const r=md.returnPos||{x:HOUSE.cx,z:HOUSE.cz}; player.position.set(r.x,0.3,r.z); vy=0; toast('☀️ Back on the surface.'); flashFade(); }
+function updateMiniDungeonHazards(dt){ if(!(_MD&&_MD.inMD))return;
+  for(const tr of _MD.traps){ const dx=player.position.x-tr.x, dz=player.position.z-tr.z, near=(dx*dx+dz*dz)<2.8;
+    if(tr.armed && near){ tr.armed=false; tr.cd=2.4; tr.spikes.visible=true; tr.spikes.position.y=0.0; SFX.play('interact',{rate:0.7,vol:0.8}); shake(0.4); damagePlayer(4); }
+    else if(!tr.armed){ tr.cd-=dt; if(tr.cd<=0){ tr.armed=true; tr.spikes.visible=false; tr.spikes.position.y=-1.4; } } } }
+function miniDungeonLoot(md,chest){ if(chest.userData.looted){ toast('📦 Empty — already looted.'); return; } chest.userData.looted=true; if(typeof qBump==='function')qBump('chest'); if(chest.userData.lid)chest.userData.lid.rotation.x=-1.1;
+  try{ SFX.play('success'); shake(0.4); confetti(chest.getWorldPosition(new THREE.Vector3()).setY(1.4),26); }catch(e){}
+  chestLoot([['coin',60+Math.floor(Math.random()*40)],['crystal',3],['stone',6],['iron_ingot',1]], '📦 '+md.name+' Hoard');
+  if(Math.random()<0.30) _dropCubePet();   // 🟢 EPIC ~30%: a caged glowing slime in the hoard
+  md.cleared=true; save(); }
 function carvePit(cx,cz,floor){ const k=cx+','+cz; const old=VOX.meshes[k]; if(old) world.remove(old);   // open-top BackSide dirt box -> you SEE into the hole at the camera's angle
   const depth=-floor+0.18; const m=new THREE.Mesh(new THREE.BoxGeometry(0.99,depth,0.99), new THREE.MeshToonMaterial({color:'#5a4632',gradientMap:GRAD,side:THREE.BackSide})); m.position.set(cx, floor+depth/2-0.09, cz); m.receiveShadow=true; world.add(m); VOX.meshes[k]=m; }
 // ── TREASURE-DIG: rolling hills, so digging leaves a DIRT PILE (no block grid) + a chance at buried loot (item = low, chest = very low). Shovel only. ──
@@ -3986,7 +4043,7 @@ function equipBestArmor(){ if((typeof playerClass==='function'?playerClass():sta
   for(let i=ATIER.length-1;i>=1;i--){ if(state.armors&&state.armors[ATIER[i]]){ state.armor=ATIER[i]; if(state.gear)state.gear.body=state.armor; return; } } state.armor=''; if(state.gear)state.gear.body=''; }
 function gainArmor(id){ state.armors[id]=true; equipBestArmor(); state.manaMax=manaMaxForLevel(state.level); if(state.mana>state.manaMax)state.mana=state.manaMax; const a=ARMORS[id]; if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); toast(`${a.icon} Crafted + equipped ${a.name} (${armorTotal(state.level)} 🛡️ total armor)!`); if(invOpen)renderInv(); if(typeof checkBadges==='function')checkBadges(); save(); }
 function gainArmorPiece(id,slot){ state.armors[id]=true; if(!state.gear)state.gear={helmet:'',body:'',legs:'',boots:''}; state.gear[slot]=id; if(slot==='body')state.armor=id; state.manaMax=manaMaxForLevel(state.level); if(state.mana>state.manaMax)state.mana=state.manaMax; const a=ARMORS[id]; if(typeof renderHearts==='function')renderHearts(); if(typeof setArmorVisual==='function')setArmorVisual(); toast(`${a.icon} Crafted + equipped ${a.name} (${armorTotal(state.level)} 🛡️ total armor)!`); if(invOpen)renderInv(); if(typeof checkBadges==='function')checkBadges(); save(); }
-function respawnPlayer(){ if(DUNGEON.inDungeon)DUNGEON.inDungeon=false; if(MINE.inMine)MINE.inMine=false; if(CASTLE.inCastle)CASTLE.inCastle=false; if(UG.active)exitUnderground();   // dying UNDERGROUND must restore the surface sky+lighting (owner: "game stays dark after dying in a dungeon")
+function respawnPlayer(){ if(DUNGEON.inDungeon)DUNGEON.inDungeon=false; if(MINE.inMine)MINE.inMine=false; if(CASTLE.inCastle)CASTLE.inCastle=false; if(_MD&&_MD.inMD){_MD.inMD=false;_MD=null;} if(UG.active)exitUnderground();   // dying UNDERGROUND must restore the surface sky+lighting (owner: "game stays dark after dying in a dungeon")
   const lost=Math.floor((state.inv.coin||0)*0.10); if(lost>0) Inv.take('coin',lost);   // DEATH PENALTY: lose 10% of CARRIED coin (coin in your home 🧰 Stash is safe); no other items are lost
   state.hp=state.hpMax; player.position.set(HOUSE.cx,0.3,HOUSE.cz+12); vy=0; state._invuln=2.6; despawnCreatures(); renderHearts();
   rarityToast('rare', lost>0?`💀 You fainted! Lost ${lost} 🪙 (10% of carried coin). Only coin is lost — and only what you carry. 🧰 Bank your coins in the home Stash to keep them safe!`:'💀 You fainted — woke safe at home. (You lose 10% of CARRIED coin on death — bank it in your home 🧰 Stash!)');
@@ -4530,7 +4587,7 @@ function updateCombat(dt){
   for(let i=creatures.length-1;i>=0;i--){ const c=creatures[i]; if(!c) break;   // a contact hit this frame can kill the player -> respawnPlayer()->despawnCreatures() clears the array MID-LOOP; without this guard the next index reads undefined.mesh and throws (caught by guardedFrame, but it's a real crash that fires whenever you die surrounded — common now that the outskirts swarm at night)
     if(c.training){ c.aggro=false; if(c.flash>0){ c.flash-=dt; if(c.flash<=0){ for(const mm of c.mats){ try{ mm.emissive.setHex(0x000000); mm.emissiveIntensity=0; }catch(e){} } } } if(c.mesh.scale.x>1.001) c.mesh.scale.setScalar(lerp(c.mesh.scale.x,1,dt*9)); if(!c.boss&&c.hpbar){ c.hptimer-=dt; c.hpbar.material.opacity=clamp(c.hptimer/0.6,0,1); if(c.hptimer<=0){ c.mesh.remove(c.hpbar); c.hpbar=null; } } continue; }   // 🎯 TRAINING PROP: no aggro, no movement (movers slide in updateTrainingGround), no contact damage — but still flash/recoil/HP-bar fade like a real mob
     const m=c.mesh; const dx=player.position.x-m.position.x, dz=player.position.z-m.position.z, d=Math.hypot(dx,dz)||1;
-    const los=(!(MINE.inMine||DUNGEON.inDungeon||CASTLE.inCastle))||clearLOS(m.position.x,m.position.z,player.position.x,player.position.z);   // underground: no attacking/aggroing through walls/floors
+    const los=(!(anyUG()))||clearLOS(m.position.x,m.position.z,player.position.x,player.position.z);   // underground: no attacking/aggroing through walls/floors
     const T=c.type||CREATURE_TYPES.petal;
     const _spd=T.speed*((c.slowT>0)?(c.slowT-=dt,(c.slowMul||0.5)):1);   // 💧 Frost slow: scale chase speed while chilled (timer counts down here)
     const _stunned=(c.stunT>0); if(_stunned){ c.stunT-=dt; }   // 🧊 Frostbind: frozen solid this frame (no chase/attack — gated below)
@@ -4646,7 +4703,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`animals ${animals.length}  R[${span(animals,a=>Math.hypot(a.mesh.position.x,a.mesh.position.z))}]\n`
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
-function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateFauna(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updatePet(dt); updatePetShots(dt); updateTrainingGround(dt); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); updateCombatHud(); Silly.tick(dt); renderDebug(dt); _fpsAcc=(_fpsAcc===undefined?1/Math.max(dt,1e-3):_fpsAcc*0.9+(1/Math.max(dt,1e-3))*0.1); _fpsT+=dt; if(_fpsT>=0.25){_fpsT=0; const _fe=document.getElementById('fps'); if(_fe)_fe.textContent=Math.round(_fpsAcc)+' fps';} _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
+function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateMiniDungeonHazards(dt); updateAnimals(dt); updateFauna(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updatePet(dt); updatePetShots(dt); updateTrainingGround(dt); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); updateCombatHud(); Silly.tick(dt); renderDebug(dt); _fpsAcc=(_fpsAcc===undefined?1/Math.max(dt,1e-3):_fpsAcc*0.9+(1/Math.max(dt,1e-3))*0.1); _fpsT+=dt; if(_fpsT>=0.25){_fpsT=0; const _fe=document.getElementById('fps'); if(_fe)_fe.textContent=Math.round(_fpsAcc)+' fps';} _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
 function idleTick(dt){ cam.yaw+=dt*0.12; cam.targetYaw=cam.yaw; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
@@ -4952,6 +5009,13 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
  enterCastle:()=>{ try{ enterCastle(); }catch(e){ return String(e); } return CASTLE.inCastle; },
  exitCastle:()=>{ try{ exitCastle(); }catch(e){} return !CASTLE.inCastle; },
  tpCastleGate:()=>{ player.position.set(CASTLE.ex,0.3,CASTLE.ez-14); vy=0; return {x:CASTLE.ex,z:CASTLE.ez}; },   // 🏰 jump to the keep's exterior gate (debug)
+ mdTest:()=>{ const out={}; try{ const md=MINI_DUNGEONS[0]; const lv0=state.level, pp=player.position.clone();
+   buildMiniDungeon(md); out.rooms=md.rooms.length; out.chests=md.chests.length; out.minLvls=MINI_DUNGEONS.map(m=>m.minLvl);
+   state.level=md.minLvl+1; enterMiniDungeon(md); out.entered=!!(md.inMD&&_MD===md); out.ugActive=UG.active; out.foes=creatures.filter(c=>!c.training).length; out.guardGroundFoot=(groundFoot(player.position.x,player.position.z)===0); out.anyUG=anyUG(); out.interiorY=+player.position.y.toFixed(2);
+   exitMiniDungeon(); out.exited=(!md.inMD && !_MD && !UG.active && !anyUG()); out.entrancesBiome2to4=MINI_DUNGEONS.every(m=>m.biome!=='dark');
+   despawnCreatures(); state.level=lv0; player.position.copy(pp);
+   return out;
+ }catch(e){ return {err:String(e)}; } },   // 🏚️ verifies a mini-dungeon builds + enters (level-gated) + guards + clean exit
  replayTutorial:()=>{ try{localStorage.removeItem('ww2_seen_tutorial');}catch(e){} startTutorial(); return {tutorial:'started', step:state.tut.step}; },   // re-run the onboarding tutorial
  tutDbg:()=>({on:!!state._tutorial, step:state.tut?state.tut.step:null, hits:state.tut?state.tut.hits:null, steps:TUT_STEPS.length, dummy:!!(state.tut&&state.tut.dummy)}),
  tutorialTest:()=>{ const R={}, ph=state.hp; startTutorial(); R.started=!!state._tutorial; R.dummySpawned=!!(state.tut&&state.tut.dummy); R.cardShown=(document.getElementById('tutcard')&&document.getElementById('tutcard').style.display!=='none');
