@@ -686,11 +686,12 @@ const UG={active:false, head:null, runLights:[], _surf:null};   // runLights = p
 function enterUnderground(){ UG.active=true; skyDome.visible=false; for(const sp of mistSprites) sp.material.opacity=0;
   renderer.toneMappingExposure=1.68;   // lift the ACES toe so the cave is clearly visible (surface's 1.06 crushes it); restored on exit
   UG._surf=DYN_LIGHTS.splice(0); for(const l of UG._surf) scene.remove(l);   // PARK the surface lights (far away + useless underground) so the head-torch + placed torches own the full 8-light budget
-  if(!UG.head){ UG.head=addDynLight('#ffd6a6',6.0,42,player.position.x,3,player.position.z); if(UG.head)UG.head.decay=1.2; } }   // decay<2 -> a broad usable torch pool, not a pinpoint
+  if(!UG.head){ UG.head=addDynLight('#ffd6a6',6.0,42,player.position.x,3,player.position.z); if(UG.head)UG.head.decay=1.2; }
+  for(const c of ugCeilings) c.visible=false; cam.targetPitch=cam.pitch=1.06; cam.dist=Math.max(cam.dist,16); }   // 🏰 DIABLO dungeon view: hide every ceiling (look INTO the open-top rooms) + snap to a steep top-down angle, pulled back to see the room
 function exitUnderground(){ UG.active=false; skyDome.visible=true; hemi.intensity=1.0; fill.intensity=0.4; renderer.toneMappingExposure=1.06;
   if(UG.head){ removeDynLight(UG.head); UG.head=null; }
   for(const l of UG.runLights) removeDynLight(l); UG.runLights.length=0;
-  if(UG._surf){ for(const l of UG._surf){ scene.add(l); DYN_LIGHTS.push(l); } UG._surf=null; } }   // restore surface lights
+  if(UG._surf){ for(const l of UG._surf){ scene.add(l); DYN_LIGHTS.push(l); } UG._surf=null; } for(const c of ugCeilings) c.visible=true; }   // restore surface lights + un-hide the ceilings (off-map, culled on the surface)
 
 /* PROCEDURAL TREE: tapered bark trunk + 2-3 layered foliage blobs with green variation + optional fruit.
    Reads far more "tree" than the flat KUBIKOS blob. Returns a Group positioned at (x,0,z). */
@@ -3240,6 +3241,7 @@ function updatePlayer(dt){
   if(charMixer) charMixer.update(dt); updateLeftSwing(dt);
   // camera — orbit by yaw + pitch, with collision pull-in so it doesn't clip into walls/trees
   if(dt>0&&state.autoCam!==false){ cam.manualT=Math.max(0,cam.manualT-dt); if(cam.manualT<=0){ let want=null; if(_lockFoe&&_lockFoe.mesh) want=Math.atan2(_lockFoe.mesh.position.x-player.position.x,_lockFoe.mesh.position.z-player.position.z); else if(keys['KeyW']||keys['KeyA']||keys['KeyS']||keys['KeyD']||keys['ArrowUp']||keys['ArrowDown']||keys['ArrowLeft']||keys['ArrowRight']||(touchMove&&(touchMove.x||touchMove.z))) want=cam.moveYaw; if(want!=null){ const rate=1-Math.pow(_lockFoe?0.02:0.12,dt); cam.targetYaw=angLerp(cam.targetYaw,want,rate); } } }
+  if(UG.active) cam.targetPitch=clamp(cam.targetPitch,0.92,1.25);   // 🏰 underground = ALWAYS a steep Diablo angle (~53-72°); yaw + zoom stay free so you still run around & explore, but the view can't flatten
   const _camDamp=1-Math.pow(0.0006,dt); cam.yaw=lerp(cam.yaw,cam.targetYaw,_camDamp); cam.pitch=lerp(cam.pitch,cam.targetPitch,_camDamp);   // SNAPPIER rotation (was 0.05 -> trailed the hand by ~0.33s; 0.0006 = tau ~0.135s); keep the 1-Math.pow(base,dt) form so dt=0 stays a no-op (idle-spin + selftest exact)
   cam.pitch=clamp(cam.pitch,0.21,1.256);
   const horiz=Math.cos(cam.pitch)*cam.dist, vert=Math.sin(cam.pitch)*cam.dist;
@@ -3492,7 +3494,8 @@ function pollGamepad(){ let pads; try{ pads=navigator.getGamepads&&navigator.get
 /* ---------- STAGE C: VOXEL MINE (dig ore in a bounded pocket cavern; G to dig, ladder to leave) ---------- */
 /* CAVE GEOMETRY helpers (E5): branch tunnels + low ceilings + standing torches so the mine/crypt read as a real
    enclosed underground you explore — not a single lit box. All AXIS-ALIGNED so AABB collision stays correct. */
-function _ugCeil(cx,cz,w,d,y){ const c=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshToonMaterial({color:'#2a221a',gradientMap:GRAD,side:THREE.DoubleSide})); c.rotation.x=Math.PI/2; c.position.set(cx,y,cz); c.receiveShadow=true; world.add(c); return c; }
+const ugCeilings=[];   // 🏰 every underground ceiling — hidden while UG.active so the DIABLO cam looks straight INTO the open-top room
+function _ugCeil(cx,cz,w,d,y){ const c=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshToonMaterial({color:'#2a221a',gradientMap:GRAD,side:THREE.DoubleSide})); c.rotation.x=Math.PI/2; c.position.set(cx,y,cz); c.receiveShadow=true; world.add(c); ugCeilings.push(c); if(UG.active)c.visible=false; return c; }
 function _ugSconce(x,z){   // standing cave torch — EMISSIVE only (glows via bloom + caught by the head-torch); flickers underground
   const post=box(0.14,1.6,0.14,'#5a3b22'); post.position.set(x,0.8,z); world.add(post);
   const fl=new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8),new THREE.MeshBasicMaterial({color:'#ffb04a'})); fl.position.set(x,1.75,z); fl.userData.fl=Math.random()*TAU; world.add(fl); ugTorches.push(fl); return fl; }
