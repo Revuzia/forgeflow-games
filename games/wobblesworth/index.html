@@ -509,7 +509,7 @@ var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snack
   discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, tradePending:null, quickItems:{}, activeQuests:{}, questTarget:null, npcOfferDay:{}, armorDye:'', gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
   hp:100, hpMax:100, xp:0, level:1, charClass:'', mana:0, manaMax:0, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, hasRod:false, hasCompass:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
-  intro:false, tutStep:0, tut:{on:false,step:0,hits:0}, companion:null, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
+  intro:false, tutStep:0, tut:{on:false,step:0,hits:0}, companion:null, cubePets:[], event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
   volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, needsMin:false, selectedSlot:0, lore:{}, fog:{}, met:{}, badges:{}, autoCam:true };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
 
@@ -1025,6 +1025,7 @@ const MODEL_LIST=["char_player","char_n1","char_n2","char_n3","House_1","House_2
  "GrassLeaf1","Flower1","Flower2","Flower3","MushroomRed","Barrel","Chest","Lantern","Bridge","Carriage","Boat","Coin","Cloud1","Cloud2","Cloud3",
  "nat_tree","nat_pine","nat_tree_fat","nat_bush","nat_bush2","nat_grass","nat_flower_red","nat_flower_yellow","nat_flower_purple","nat_rock","nat_mushroom","surv_tent","surv_campfire",   // 🌳 Kenney Nature Kit foliage + ⛺ Survival Kit tent/campfire (CC0, embedded atlas)
  "castle-wall","castle-wall-corner","castle-gate","castle-tower-square","castle-tower-square-roof","castle-floor","castle-stairs",   // 🏰 Kenney Castle Kit (CC0) — the Blight Keep exterior
+ "cubepet-cat","cubepet-dog","cubepet-koala","cubepet-monkey","cubepet-parrot","cubepet-penguin","cubepet-beaver","cubepet-panda",   // 🧪 collectible CUBE PETS (Kenney cube-pets, CC0) — poison-shooting followers
  // RESOURCE NODES — these MUST load or stone/crystal/carrot won't exist and their quests become impossible:
  "Cube","Crystal1","Crystal2","Crystal3","Crystal4","Carrot","Cabbage","CarrotGroup",
  // CUBE-ANIMAL creatures (Kenney) — night ENEMIES + FARM animals (real rigged models w/ a walk clip, replacing the procedural "circle" blobs):
@@ -2001,7 +2002,7 @@ function emote(name){ // one-shot emote then back to idle/walk
 const _LSW_AXIS=new THREE.Vector3(1,0,0);
 function updateLeftSwing(dt){ if((state._lswingT||0)<=0)return; state._lswingT-=dt; const pm=player.userData&&player.userData.model; const arm=pm&&pm.getObjectByName?(pm.getObjectByName('arm-left')||pm.getObjectByName('FistL')||pm.getObjectByName('UpperArmL')||pm.getObjectByName('LowerArmL')):null; if(arm){ const p=1-Math.max(0,state._lswingT)/0.32; arm.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(_LSW_AXIS, -Math.sin(p*Math.PI)*1.3)); } }   // 🗡️ procedural LEFT-arm dual-wield swing — multiply a swing rotation onto the mixer pose each frame (preserves the base pose, no euler/quaternion desync)
 /* ---------- input / camera ---------- */
-const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='Tab'){ e.preventDefault(); if(state.running)cycleLock(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyQ'&&state.running){ shieldSlam(); } if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(levelupOpen)closeLevelUp(); else if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(boardOpen)closeBoard(); else if(dyerOpen)closeDyer(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); else if(state.running)openSettings(); } }   /* ESC toggles Settings (open if nothing else is open); browsers still force ESC to exit fullscreen — unavoidable */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
+const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='Tab'){ e.preventDefault(); if(state.running)cycleLock(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyQ'&&state.running){ shieldSlam(); } if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(e.code==='KeyP'&&state.running){ openPetsMenu(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(levelupOpen)closeLevelUp(); else if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(boardOpen)closeBoard(); else if(dyerOpen)closeDyer(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); else if(state.running)openSettings(); } }   /* ESC toggles Settings (open if nothing else is open); browsers still force ESC to exit fullscreen — unavoidable */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 // release ALL held keys when focus/visibility is lost — prevents the "stuck walking forward" bug
 // (a right-click context menu, alt-tab, or click-away steals focus so the W keyup never fires).
@@ -2315,7 +2316,7 @@ function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
   tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, needsMin:state.needsMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, chainStep:state.chainStep, questHistory:state.questHistory, _qseq:state._qseq, boardOffers:state.boardOffers, _boardTaken:state._boardTaken, _boardDay:state._boardDay, npcOfferDay:state.npcOfferDay, genDefs:(()=>{const o={};for(const k in Quests.defs){const d=Quests.defs[k];if(d&&d._gen)o[k]={title:d.title,tid:d._tid,p:d._p,pitch:d._pitch,sig:d._sig,reward:d.reward,steps:d.steps};}return o;})(), lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug,
-  tamedMounts:(typeof tamedMountSaveList==='function'?tamedMountSaveList():[]), stables:(state.stables||[]), companion:(state.companion&&PETS[state.companion.key]?{key:state.companion.key,hp:Math.max(0,Math.round(state.companion.hp)),name:state.companion.name}:null) })); }catch(e){} }
+  tamedMounts:(typeof tamedMountSaveList==='function'?tamedMountSaveList():[]), stables:(state.stables||[]), cubePets:(Array.isArray(state.cubePets)?state.cubePets.filter(k=>PETS[k]):[]), companion:(state.companion&&PETS[state.companion.key]?{key:state.companion.key,hp:Math.max(0,Math.round(state.companion.hp)),name:state.companion.name}:null) })); }catch(e){} }
 // VERSIONED + SANITIZED load: bad/corrupt/legacy data can never crash boot or inject impossible state
 function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) return; let s; try{ s=JSON.parse(raw); }catch(e){ localStorage.setItem('ww2_save_corrupt',raw); return; }
   if(!s||typeof s!=='object') return;
@@ -2353,7 +2354,8 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   if(s.dugCells&&typeof s.dugCells==='object'){ for(const k in s.dugCells){ const f=Math.floor(+s.dugCells[k]); const parts=String(k).split(','); if(parts.length===2&&Number.isFinite(f)&&f<0&&f>=-8){ const cx=Math.round(+parts[0]),cz=Math.round(+parts[1]); if(Number.isFinite(cx)&&Number.isFinite(cz)){ VOX.dug[cx+','+cz]=f; carvePit(cx,cz,f); } } } }
   state.stables=Array.isArray(s.stables)?s.stables.filter(v=>v&&Number.isFinite(+v.x)&&Number.isFinite(+v.z)).map(v=>({x:clamp(+v.x,-FENCE,FENCE),z:clamp(+v.z,-FENCE,FENCE)})):[]; for(const st of state.stables){ try{ buildStableAt(st.x,st.z, groundY(st.x,st.z)); }catch(e){} }   // rebuild grounded stable structures (load isn't craft, so pass groundY directly)
   try{ restoreTamedMounts(s.tamedMounts); }catch(e){}   // re-spawn your tamed mounts at their saved spots (buildWorld's wild ones already spawned)
-  state.companion=null; if(s.companion && PETS[s.companion.key]){ const P=PETS[s.companion.key]; state.companion={ key:s.companion.key, hp:clamp(Math.floor(+s.companion.hp||P.hp),1,P.hp), name:(typeof s.companion.name==='string'?s.companion.name:P.name) }; try{ spawnCompanion(); }catch(e){} }   // 🐾 restore your companion pet
+  state.cubePets=Array.isArray(s.cubePets)?s.cubePets.filter(k=>PETS[k]):[];   // 🧪 restore the cube-pet collection
+  state.companion=null; if(s.companion && PETS[s.companion.key]){ const P=PETS[s.companion.key]; state.companion={ key:s.companion.key, hp:clamp(Math.floor(+s.companion.hp||P.hp),1,P.hp), name:(typeof s.companion.name==='string'?s.companion.name:P.name) }; try{ spawnCompanion(); }catch(e){} }   // 🧪 restore the active cube pet
 }catch(e){ __report('load',e); } }
 
 /* ============================ INVENTORY ============================ */
@@ -2670,7 +2672,7 @@ const RECIPES=[
   {id:'book_frostbind', name:'🧊 Tome: Frostbind', cat:'tool', cls:'mage', lvl:13, cost:{crystal:6,gold_ingot:1}, build:p=>{ Inv.add('book_frostbind',1); } },
   {id:'book_chain', name:'🌩️ Tome: Chain Lightning', cat:'tool', cls:'mage', lvl:15, cost:{crystal:7,gold_ingot:2}, build:p=>{ Inv.add('book_chain',1); } },
   {id:'saddle', name:'🐴 Saddle', cat:'tool', lvl:3, cost:{leather:3,wood:2}, build:p=>{ Inv.add('saddle',1); toast('🐴 Crafted a Saddle — tame a wild mount, then press E to ride it.'); } },
-  {id:'pet_whistle', name:'🐾 Pet Whistle', cat:'tool', lvl:2, cost:{wood:2,flower:3}, build:p=>{ summonCompanion(DEFAULT_PET); } },   // 🐾 class-agnostic: summons a Fox Pal that follows you + auto-fights aggro'd foes
+  {id:'pet_whistle', name:'🧪 Pet Caller', cat:'tool', lvl:2, cost:{wood:2,flower:3}, build:p=>{ if(typeof openPetsMenu==='function')openPetsMenu(); } },   // 🧪 cube pets are COLLECTED from dungeon hoards & rare dig chests — craft (or press P) to cycle the active one
   {id:'fishing_rod', name:'🎣 Fishing Rod', cat:'tool', lvl:2, cost:{wood:3,wool:1}, weapon:true, build:p=>gainFishingRod() },
   {id:'wood_torch', name:'🔥 Wood Torch', cat:'tool', lvl:3, cost:{wood:3}, build:p=>gainOffhand('wood_torch') },
   {id:'crystal_torch', name:'🔆 Crystal Torch', cat:'tool', lvl:12, cost:{crystal:3,wood:1}, build:p=>gainOffhand('crystal_torch') },
@@ -3110,12 +3112,17 @@ function monMove(m,dirx,dirz,sp){   // WALL-AWARE chase: try the direct step, el
 const MOUNTS={ horse:{name:'Horse',model:'mount-horse',tint:null,speedMul:1.85,h:5.0,seatY:1.15,rarity:1,faceOff:0}, stag:{name:'Wild Stag',model:'mount-stag',tint:null,speedMul:2.05,h:5.0,seatY:1.2,rarity:2,faceOff:0}, unicorn:{name:'Unicorn',model:'mount-unicorn',tint:'#f6f2ff',speedMul:2.4,h:5.2,seatY:1.25,rarity:3,faceOff:0} };   // h is the model's BBOX height target — these GLBs have a stray element inflating the bbox ~2.6x over the visible mesh, so h~5 renders the visible horse ~1.9 tall (player-scaled). seatY = rider feet sit on the back.
 const mounts=[];
 // ════════ COMPANION PET ════════ a befriended critter that follows you and auto-fights aggro'd foes (class-agnostic — works for warrior/mage/ranger alike)
-const PETS={
-  fox:   {name:'Fox Pal',   model:'animal-fox',   h:0.85, atk:9,  cd:1.1, range:12, hp:60},
-  bunny: {name:'Bun Buddy', model:'animal-bunny', h:0.55, atk:7,  cd:1.0, range:11, hp:50},
-  tiger: {name:'Tiger Cub', model:'animal-tiger', h:1.0,  atk:14, cd:1.3, range:13, hp:90},
+const PETS={   // 🧪 COLLECTIBLE CUBE PETS — blocky critters that follow you and spit a POISON bolt in their own color (atk=impact, dot=poison/sec, dotT=duration, col=tint)
+  cat:    {name:'Mauve Cat',     model:'cubepet-cat',     h:0.7, atk:6,  dot:3, dotT:3.0, cd:1.3, range:14, hp:55, col:'#b06bff'},
+  dog:    {name:'Emerald Pup',   model:'cubepet-dog',     h:0.7, atk:7,  dot:3, dotT:3.0, cd:1.2, range:14, hp:60, col:'#5fe08a'},
+  koala:  {name:'Cobalt Koala',  model:'cubepet-koala',   h:0.7, atk:6,  dot:4, dotT:3.5, cd:1.4, range:14, hp:65, col:'#5fa8ff'},
+  monkey: {name:'Tangerine Ape', model:'cubepet-monkey',  h:0.7, atk:8,  dot:2, dotT:2.5, cd:1.1, range:13, hp:50, col:'#ff9a3a'},
+  parrot: {name:'Rosy Parrot',   model:'cubepet-parrot',  h:0.6, atk:6,  dot:3, dotT:3.0, cd:1.0, range:15, hp:45, col:'#ff6bd0'},
+  penguin:{name:'Frost Penguin', model:'cubepet-penguin', h:0.7, atk:7,  dot:4, dotT:3.5, cd:1.3, range:14, hp:60, col:'#7fe0ff'},
+  beaver: {name:'Amber Beaver',  model:'cubepet-beaver',  h:0.7, atk:9,  dot:3, dotT:3.0, cd:1.4, range:14, hp:70, col:'#ffd23f'},
+  panda:  {name:'Onyx Panda',    model:'cubepet-panda',   h:0.8, atk:10, dot:4, dotT:4.0, cd:1.5, range:14, hp:80, col:'#caa46a'},
 };
-const DEFAULT_PET='fox';
+const PET_KEYS=Object.keys(PETS); const DEFAULT_PET='cat'; const petShots=[];
 let _petMesh=null, _petAtkCD=0, _petBob=0, _petDownT=0, _petBar=null, _petFoe=null;
 function buildPet(key){ const P=PETS[key]||PETS[DEFAULT_PET]; const g=buildMobGLB(P.model, P.h); g.userData.petKey=key; g.userData.bob=Math.random()*TAU; return g; }
 function spawnCompanion(){ if(_petMesh){ world.remove(_petMesh); _petMesh=null; }
@@ -3124,9 +3131,17 @@ function spawnCompanion(){ if(_petMesh){ world.remove(_petMesh); _petMesh=null; 
   g.position.set(bx, groundY(bx,bz), bz); world.add(g); _petMesh=g;
   _petBar=makeMiniBar(); _petBar.position.set(0,(PETS[state.companion.key].h)+0.7,0); g.add(_petBar);
   drawMiniBar(_petBar, Math.max(0,state.companion.hp)/PETS[state.companion.key].hp, {lvl:0}); }
-function summonCompanion(key){ if(state.companion){ toast('🐾 You already have '+state.companion.name+' at your side.'); return; }
-  const P=PETS[key]||PETS[DEFAULT_PET]; state.companion={ key:(PETS[key]?key:DEFAULT_PET), hp:P.hp, name:P.name };
-  spawnCompanion(); try{ confetti(player.position.clone().setY(1.4),20); }catch(e){} try{ SFX.play('success'); }catch(e){} rarityToast('rare', P.name+' joined you! It follows you and fights aggro\'d foes. (Whistle again later to swap.)'); save(); }
+function collectCubePet(key){ if(!PETS[key])return false; state.cubePets=state.cubePets||[]; if(state.cubePets.includes(key)) return false; state.cubePets.push(key);
+  rarityToast('epic','🧪 You found a CUBE PET — '+PETS[key].name+'! Press P to manage your pets.'); try{ confetti(player.position.clone().setY(1.4),26); SFX.play('success'); }catch(e){}
+  if(!state.companion) setActivePet(key); save(); return true; }
+function setActivePet(key){ if(!PETS[key]||!(state.cubePets||[]).includes(key)){ toast('🧪 You haven\'t collected that cube pet yet.'); return; }
+  const P=PETS[key]; state.companion={ key, hp:P.hp, name:P.name }; spawnCompanion();
+  toast('🧪 '+P.name+' is at your side — it spits poison at aggro\'d foes.'); try{ SFX.play('success'); }catch(e){} save(); }
+function summonCompanion(key){ collectCubePet(key||DEFAULT_PET); }   // legacy shim — old callers now just grant a cube pet
+function _dropCubePet(){ const owned=state.cubePets||[]; const avail=PET_KEYS.filter(k=>!owned.includes(k)); if(!avail.length){ chestLoot([['boss_core',1]],'🧪 (All cube pets collected — bonus loot)'); return false; } collectCubePet(avail[Math.floor(Math.random()*avail.length)]); return true; }
+function openPetsMenu(){ const owned=state.cubePets||[]; if(!owned.length){ toast('🧪 No cube pets yet — find them in dungeon hoards & rare dig chests! (0/'+PET_KEYS.length+')'); return; }
+  const cur=state.companion?owned.indexOf(state.companion.key):-1; const next=owned[(cur+1)%owned.length]; setActivePet(next);
+  toast('🧪 Cube Pets '+owned.length+'/'+PET_KEYS.length+' collected — active: '+PETS[next].name+' (P to cycle)'); }
 function updatePet(dt){ if(!_petMesh||!state.companion) return; const P=PETS[state.companion.key]; const g=_petMesh;
   if(g.userData.mixer) g.userData.mixer.update(dt);
   if(_petDownT>0){ _petDownT-=dt; g.visible=(((_petDownT*6)|0)&1)===0; if(_petDownT<=0){ g.visible=true; state.companion.hp=Math.max(1,Math.round(P.hp*0.5)); if(_petBar)drawMiniBar(_petBar,state.companion.hp/P.hp,{lvl:0}); } return; }
@@ -3135,14 +3150,38 @@ function updatePet(dt){ if(!_petMesh||!state.companion) return; const P=PETS[sta
   if(_petAtkCD>0) _petAtkCD-=dt;
   if(!_petFoe || creatures.indexOf(_petFoe)<0 || _petFoe.hp<=0 || !_petFoe.mesh || !_petFoe.mesh.visible || (_petFoe.aggro!==true && _petFoe.provoked!==true)) _petFoe=null;
   if(!_petFoe){ let bd=P.range*P.range; for(const c of creatures){ if(!c||!c.mesh||!c.mesh.visible||c.training||c.hp<=0) continue; if(c.aggro!==true && c.provoked!==true) continue; const dx=c.mesh.position.x-player.position.x, dz=c.mesh.position.z-player.position.z, d2=dx*dx+dz*dz; if(d2<bd){ bd=d2; _petFoe=c; } } }
-  if(_petFoe && _petFoe.mesh){ const m=_petFoe.mesh; tx=m.position.x; tz=m.position.z; const dx=m.position.x-g.position.x, dz=m.position.z-g.position.z, d=Math.hypot(dx,dz)||1;
-    if(d<1.8 && _petAtkCD<=0){ _petAtkCD=P.cd; const c=_petFoe; const roll=rollDamage(P.atk, 0.05); c.hp-=roll.dmg; creatureHit(c); popDmg(m.position.x,(m.position.y||0)+(c.boss?2.4:1.5),m.position.z,roll.dmg,{color:'#ffd27a'}); m.scale.setScalar(1.12); g.userData.lunge=0.18; const ix=creatures.indexOf(c); if(c.hp<=0&&ix>=0){ killCreature(ix); _petFoe=null; } }
-    if(_petFoe && d<2.0 && Math.random()<0.5*dt*4){ const dmg=Math.max(1,Math.round(((_petFoe.type&&_petFoe.type.dmg)||1)*2)); state.companion.hp-=dmg; if(_petBar)drawMiniBar(_petBar,Math.max(0,state.companion.hp)/P.hp,{lvl:0}); if(state.companion.hp<=0){ _petDownT=8; _petFoe=null; toast('🐾 '+state.companion.name+' was knocked out! It will shake it off shortly.'); } }
+  if(_petFoe && _petFoe.mesh){ const m=_petFoe.mesh; const dx=m.position.x-g.position.x, dz=m.position.z-g.position.z, d=Math.hypot(dx,dz)||1;
+    tx=g.position.x - dx/d*6; tz=g.position.z - dz/d*6;   // 🧪 keep a ~6u standoff — kite & spit poison, don't charge in
+    g.rotation.y=angLerp(g.rotation.y, faceVel(dx,dz), dt*8);
+    if(_petAtkCD<=0){ _petAtkCD=P.cd; spawnPetShot(g.position.x, g.position.y+(P.h)*0.6+0.4, g.position.z, _petFoe, P); }
   }
   const mdx=tx-g.position.x, mdz=tz-g.position.z, md=Math.hypot(mdx,mdz);
-  if(md>(_petFoe?1.4:1.1)){ const sp=_petFoe?5.2:4.0; g.position.x+=mdx/md*sp*dt; g.position.z+=mdz/md*sp*dt; g.rotation.y=angLerp(g.rotation.y, faceVel(mdx,mdz), dt*8); }
+  if(md>1.1){ const sp=4.0; g.position.x+=mdx/md*sp*dt; g.position.z+=mdz/md*sp*dt; if(!_petFoe) g.rotation.y=angLerp(g.rotation.y, faceVel(mdx,mdz), dt*8); }
   if(md>26){ g.position.set(bx,groundY(bx,bz),bz); }
-  _petBob+=dt*5; g.position.y=groundY(g.position.x,g.position.z)+(g.userData.lunge>0?(g.userData.lunge-=dt,0.25):0) + Math.abs(Math.sin(_petBob))*0.06;
+  _petBob+=dt*5; g.position.y=groundY(g.position.x,g.position.z)+Math.abs(Math.sin(_petBob))*0.06;
+}
+// 🧪 CUBE-PET POISON BOLT — a colored projectile that hits for atk + applies a poison DoT (poisT/poisDmg ticked here each frame)
+function spawnPetShot(sx,sy,sz,target,P){ const col=P.col||'#9be86b';
+  const m=new THREE.Mesh(new THREE.SphereGeometry(0.16,8,8), new THREE.MeshBasicMaterial({color:col}));
+  const halo=new THREE.Mesh(new THREE.SphereGeometry(0.32,8,8), new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.4,blending:THREE.AdditiveBlending,depthWrite:false})); m.add(halo);
+  m.position.set(sx,sy,sz); world.add(m);
+  const tx=target.mesh.position.x, ty=(target.mesh.position.y||0)+(((target.type&&target.type.tgtH)||1.2)*0.5), tz=target.mesh.position.z;
+  const dx=tx-sx, dy=ty-sy, dz=tz-sz, d=Math.hypot(dx,dy,dz)||1, sp=18;
+  petShots.push({mesh:m,vx:dx/d*sp,vy:dy/d*sp,vz:dz/d*sp,life:1.6,atk:P.atk,dot:P.dot,dotT:P.dotT,col});
+  try{ SFX.play('interact',{rate:1.5,vol:0.32}); }catch(e){} }
+function updatePetShots(dt){
+  for(let i=petShots.length-1;i>=0;i--){ const s=petShots[i],m=s.mesh;
+    m.position.x+=s.vx*dt; m.position.y+=s.vy*dt; m.position.z+=s.vz*dt; s.life-=dt; let hit=false;
+    for(let j=creatures.length-1;j>=0;j--){ const c=creatures[j],cm=c.mesh; if(!cm||!cm.visible||c.training)continue;
+      const dx=cm.position.x-m.position.x, dz=cm.position.z-m.position.z, dy=(cm.position.y||0)+(((c.type&&c.type.tgtH)||1.2)*0.5)-m.position.y;
+      if(dx*dx+dz*dz<1.7 && Math.abs(dy)<2.1){ const roll=rollDamage(s.atk,0.05); c.hp-=roll.dmg; creatureHit(c); popDmg(cm.position.x,(cm.position.y||0)+1.5,cm.position.z,roll.dmg,{color:s.col});
+        c.poisT=Math.max(c.poisT||0,s.dotT); c.poisDmg=s.dot; c.poisCol=s.col;   // 🧪 apply/refresh the poison DoT
+        if(c.hp<=0)killCreature(j); hit=true; break; } }
+    if(hit||s.life<=0){ try{ world.remove(m); }catch(e){} petShots.splice(i,1); } }
+  // poison DoT tick on every poisoned creature
+  for(let j=creatures.length-1;j>=0;j--){ const c=creatures[j]; if(!c||!(c.poisT>0))continue; c.poisT-=dt; c.hp-=(c.poisDmg||0)*dt;
+    if(((state._fc||0)%7===0)&&c.mesh){ try{ const p=new THREE.Mesh(new THREE.SphereGeometry(0.08,6,6),new THREE.MeshBasicMaterial({color:c.poisCol||'#9be86b',transparent:true,opacity:0.75})); p.position.set(c.mesh.position.x+rand(-0.4,0.4),(c.mesh.position.y||0)+1.2,c.mesh.position.z+rand(-0.4,0.4)); world.add(p); ephemeral.push({node:p,life:0.5,fade:0.5}); }catch(e){} }
+    if(c.hp<=0){ killCreature(j); } }
 }
 function buildMount(key){ const M=MOUNTS[key]; const g=buildMobGLB(M.model, M.h, M.tint||null);   // REAL animated animal GLB (brown horse / antlered stag / white horse) via the src-bbox-fixed loader; preserves wrap.userData.mixer for the walk anim
   if(key==='unicorn'){ const H=M.h, RB=['#ff5d8f','#ff9f3d','#ffe23f','#4fd17a','#3ad1c7','#6f8cff','#b96bff']; g.traverse(m=>{ if(m.isMesh&&m.material){ m.material=m.material.clone(); m.material.map=null; if(m.material.color)m.material.color.set('#f4f0ff'); if(m.material.emissive){ m.material.emissive.set('#d6c8ff'); m.material.emissiveIntensity=0.12; } m.material.needsUpdate=true; } }); const horn=new THREE.Mesh(new THREE.ConeGeometry(0.16,1.05,7),toon('#ffe27a')); horn.position.set(0,H*0.96,H*0.55); horn.rotation.x=0.62; horn.castShadow=true; g.add(horn); for(let i=0;i<7;i++){ const seg=box(0.16-i*0.006,0.20,0.07,RB[i]); seg.position.set(0,H*(0.92-i*0.055),H*(0.40-i*0.052)); seg.rotation.x=0.5; g.add(seg); const t=box(0.07,0.22,0.12,RB[i]); t.position.set(0,H*(0.62-i*0.06),-H*(0.46+i*0.022)); g.add(t); } g.userData.unicorn=true; g.userData.sparkT=0; }   // a golden spiral horn on the white horse = unicorn
@@ -3543,6 +3582,7 @@ function exitMine(){ if(!MINE.inMine)return; MINE.inMine=false; despawnCreatures
 /* DUNGEON: a bounded crypt pocket (loot chests + pillars/torches + guardian foes). Same lazy-build + teleport
    pattern as the mine; entrance is the ruined archway scattered in the outer ring (buildExploration). */
 function dungeonLoot(chest,tier,vault){ if(chest.userData.looted){ toast('📦 Empty — already looted.'); return; } chest.userData.looted=true; if(typeof qBump==='function')qBump('chest'); chest.userData.lid.rotation.x=-1.1;
+  if((vault||tier>=2) && Math.random()<0.25) _dropCubePet();   // 🧪 EPIC: ~25% the vault/throne chest cages a cube pet
   const cp=chest.getWorldPosition(new THREE.Vector3()); const items=[['coin',(12+tier*12+(vault?45:0))+Math.floor(Math.random()*15)],['crystal',2+tier],['stone',4]];
   if(tier>=2||vault) items.push([vault?'gold_ingot':'iron_ingot', vault?2:1]);
   let pages=0; if(vault){ items.push(['iron_ingot',2]); pages=2; } else if(Math.random()<0.6){ pages=1; } if(pages) state.recipePages=(state.recipePages||0)+pages;
@@ -3598,6 +3638,7 @@ function buildDungeon(){ if(DUNGEON.built)return; DUNGEON.built=true; const X=DU
   const lad=box(0.9,3.8,0.4,'#8a5a31'); lad.position.set(X,1.9,Z-H-0.5); world.add(lad); addInteractable(lad,'🪜 Climb out of the crypt',()=>exitDungeon(),3.2);
 }
 function secretLoot(chest){ if(chest.userData.looted){ toast('✨ The secret chest is empty.'); return; } chest.userData.looted=true; if(typeof qBump==='function')qBump('chest'); if(chest.userData.lid)chest.userData.lid.rotation.x=-1.1;
+  if(Math.random()<0.5) _dropCubePet();   // 🧪 the hidden hoard has a strong cube-pet chance
   SFX.play('success'); shake(0.5); confetti(chest.getWorldPosition(new THREE.Vector3()).setY(1.6),44); state.recipePages=(state.recipePages||0)+3; toast('📖 +3 recipe pages from the hidden hoard!');
   chestLoot([['coin',180+Math.floor(Math.random()*120)],['boss_core',1],['gold_ingot',3],['crystal',8],['iron_ingot',4]], '✨ SECRET HOARD'); save(); }
 function damageSpawner(sp,n){ if(sp.dead)return; sp.hp-=n; try{ sp.mob.material.emissive.setHex(0xff4444); }catch(e){} sp.mob.scale.setScalar(1.25); setTimeout(()=>{ if(!sp.dead){ try{ sp.mob.material.emissive.setHex(0x6a1aa0); }catch(e){} sp.mob.scale.setScalar(1); } },120); SFX.play('interact',{rate:1.2,vol:0.5});
@@ -3663,7 +3704,7 @@ function digGround(){   // SHOVEL on the surface: leaves a DIRT PILE + chance at
   if(r < 1+lb*0.4){   // VERY LOW: a buried treasure CHEST (big haul)
     const chest=[['coin',10+Math.floor(Math.random()*14)],['crystal',2+Math.floor(Math.random()*3)],['iron_ingot',1+Math.floor(Math.random()*(1+(state.shovelTier||0)))]];
     if(Math.random()<0.4) chest.push(['gold_ingot',1]); if(Math.random()<0.3) chest.push(['health_potion',1]); if(Math.random()<0.18) chest.push(['boss_core',1]);
-    dropLoot(cx,cz,chest.filter(it=>it[1]>0),'💎 Buried Treasure Chest!'); extra=' + 💎 TREASURE CHEST!'; SFX.play('success',{vol:0.6}); shake(0.3);
+    dropLoot(cx,cz,chest.filter(it=>it[1]>0),'💎 Buried Treasure Chest!'); extra=' + 💎 TREASURE CHEST!'; if(Math.hypot(cx,cz)<900 && Math.random()<0.06 && _dropCubePet()){ extra+=' + 🧪 a CUBE PET!'; }   /* 🧪 near-legendary: ~6% of an already-very-rare chest, biomes 1-3 only */ SFX.play('success',{vol:0.6}); shake(0.3);
   } else if(r < 6+lb){   // LOW: a single buried item
     const tot=TREASURE_ITEMS.reduce((s,t)=>s+t[3],0); let pk=Math.random()*tot, f=TREASURE_ITEMS[0]; for(const t of TREASURE_ITEMS){ pk-=t[3]; if(pk<=0){ f=t; break; } }
     const n=f[1]+Math.floor(Math.random()*(f[2]-f[1]+1)); dropLoot(cx,cz,[[f[0],n]],'✨ Buried Find',true); extra=` + buried ${n} ${(ITEMS[f[0]]||{i:''}).i}!`;
@@ -4578,7 +4619,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`animals ${animals.length}  R[${span(animals,a=>Math.hypot(a.mesh.position.x,a.mesh.position.z))}]\n`
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
-function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateFauna(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updatePet(dt); updateTrainingGround(dt); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); updateCombatHud(); Silly.tick(dt); renderDebug(dt); _fpsAcc=(_fpsAcc===undefined?1/Math.max(dt,1e-3):_fpsAcc*0.9+(1/Math.max(dt,1e-3))*0.1); _fpsT+=dt; if(_fpsT>=0.25){_fpsT=0; const _fe=document.getElementById('fps'); if(_fe)_fe.textContent=Math.round(_fpsAcc)+' fps';} _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
+function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateDungeonHazards(dt); updateAnimals(dt); updateFauna(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateRiddenMount(); updatePet(dt); updatePetShots(dt); updateTrainingGround(dt); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); updateCombatHud(); Silly.tick(dt); renderDebug(dt); _fpsAcc=(_fpsAcc===undefined?1/Math.max(dt,1e-3):_fpsAcc*0.9+(1/Math.max(dt,1e-3))*0.1); _fpsT+=dt; if(_fpsT>=0.25){_fpsT=0; const _fe=document.getElementById('fps'); if(_fe)_fe.textContent=Math.round(_fpsAcc)+' fps';} _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
 function idleTick(dt){ cam.yaw+=dt*0.12; cam.targetYaw=cam.yaw; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
@@ -4861,15 +4902,15 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
  petTest:()=>{ const out={}; try{
    state.companion=null; if(_petMesh){world.remove(_petMesh);_petMesh=null;}
    const px=player.position.x, py=player.position.y, pz=player.position.z;
-   summonCompanion('fox'); out.summoned=!!state.companion; out.petName=state.companion&&state.companion.name; out.meshSpawned=!!_petMesh;
+   state.cubePets=['cat']; setActivePet('cat'); out.summoned=!!state.companion; out.petName=state.companion&&state.companion.name; out.meshSpawned=!!_petMesh;
    player.position.x=px+10; for(let i=0;i<30;i++)updatePet(0.05); out.followsDx=+(_petMesh.position.x-px).toFixed(1);
    despawnCreatures(); const t=Object.values(CREATURE_TYPES).find(x=>!x.stealth&&!x.ranged)||Object.values(CREATURE_TYPES)[0];
    const c=makeCreature(t); c.position.set(player.position.x+3,0,player.position.z); world.add(c);
    const o={mesh:c,hp:300,max:300,cd:1,bob:0,mats:[],flash:0,type:t,aggro:true,provoked:true,wdir:0,wt:9,dmgMul:1}; creatures.push(o);
-   const hp0=o.hp; for(let i=0;i<80;i++)updatePet(0.05); out.foeDamaged=(o.hp<hp0); out.foeDmg=Math.round(hp0-o.hp);
+   const hp0=o.hp; for(let i=0;i<170;i++){ updatePet(0.05); updatePetShots(0.05); } out.foeDamaged=(o.hp<hp0); out.foeDmg=Math.round(hp0-o.hp); out.shotsFired=(petShots.length>0||out.foeDamaged); out.poisoned=(o.poisT>0||out.foeDamaged);
    { const ix=creatures.indexOf(o); if(ix>=0){world.remove(c);creatures.splice(ix,1);} }
-   out.recipeExists=(typeof RECIPES!=='undefined')&&RECIPES.some(r=>r.id==='pet_whistle');
-   state.companion=null; if(_petMesh){world.remove(_petMesh);_petMesh=null;} despawnCreatures(); player.position.set(px,py,pz);
+   out.recipeExists=(typeof RECIPES!=='undefined')&&RECIPES.some(r=>r.id==='pet_whistle'); out.collected=(state.cubePets||[]).length;
+   state.companion=null; if(_petMesh){world.remove(_petMesh);_petMesh=null;} despawnCreatures(); petShots.length=0; state.cubePets=[]; player.position.set(px,py,pz);
    return out;
  }catch(e){ return {err:String(e)}; } },   // 🐾 verifies companion summon + follow + auto-fight
  castleTest:()=>{ const out={}; try{
