@@ -590,6 +590,9 @@ const gradePass=new ShaderPass({ uniforms:{ tDiffuse:{value:null}, uVig:{value:0
       c = mix(vec3(l), c, 1.07);                                              // +7% saturation
       c += vec3(0.012,0.008,0.004)*(1.0-smoothstep(0.0,0.35,l));             // warm shadow lift
       float d=distance(vUv,vec2(0.5)); c *= 1.0 - smoothstep(0.52,0.95,d)*uVig;   // vignette
+      float _bx=mod(gl_FragCoord.x,4.0), _by=mod(gl_FragCoord.y,4.0); float _bm[16];
+      _bm[0]=0.0;_bm[1]=8.0;_bm[2]=2.0;_bm[3]=10.0;_bm[4]=12.0;_bm[5]=4.0;_bm[6]=14.0;_bm[7]=6.0;_bm[8]=3.0;_bm[9]=11.0;_bm[10]=1.0;_bm[11]=9.0;_bm[12]=15.0;_bm[13]=7.0;_bm[14]=13.0;_bm[15]=5.0;
+      c += (_bm[int(_by)*4+int(_bx)]/16.0 - 0.5)/255.0;                          // 4×4 Bayer ordered dither — kills 8-bit banding on the sky/water/fog gradients
       gl_FragColor=vec4(clamp(c,0.0,1.0),1.0); }` });
 composer.addPass(gradePass);
 composer.setPixelRatio(Math.min(devicePixelRatio,1.5));
@@ -602,7 +605,18 @@ const skyMat=new THREE.ShaderMaterial({ side:THREE.BackSide, depthWrite:false, f
 const skyDome=new THREE.Mesh(new THREE.SphereGeometry(780,32,16),skyMat); scene.add(skyDome);
 
 const GRAD=(()=>{ const d=new Uint8Array([60,150,220,255]); const t=new THREE.DataTexture(d,4,1,THREE.RedFormat); t.minFilter=t.magFilter=THREE.NearestFilter; t.needsUpdate=true; return t; })();
-const toon=c=>new THREE.MeshToonMaterial({color:c,gradientMap:GRAD});
+/* TOON RIM / FRESNEL edge-light — attached ONLY to toon() materials (world geometry). NOT particles (pMat builds MeshToon directly) and NOT GLB mats (MeshStandard). Uses only `normal` + `vViewPosition` (both always present in r160 MeshToon frag), injected after <lights_fragment_end> exactly like the proven GROUND fresnel — can't reach MeshBasic sprites/particles. One shared compiled program via customProgramCacheKey (toon() runs hundreds of times). */
+const _RIM_STR=0.32, _RIM_POW=3.2, _rc=new THREE.Color('#bfe9ff'), _RIM_RGB='vec3('+_rc.r.toFixed(3)+','+_rc.g.toFixed(3)+','+_rc.b.toFixed(3)+')';
+function _attachToonRim(mat){ if(mat.userData._rim) return mat; mat.userData._rim=true;
+  mat.onBeforeCompile=(sh)=>{ sh.fragmentShader=sh.fragmentShader.replace('#include <lights_fragment_end>',
+    '#include <lights_fragment_end>\n\tfloat _rimF=pow(1.0-clamp(dot(normalize(normal),normalize(vViewPosition)),0.0,1.0),'+_RIM_POW.toFixed(1)+');\n\treflectedLight.directDiffuse += _rimF * '+_RIM_RGB+' * '+_RIM_STR.toFixed(2)+';\n'); };
+  mat.customProgramCacheKey=()=>'toonRim'; return mat; }
+const toon=c=>_attachToonRim(new THREE.MeshToonMaterial({color:c,gradientMap:GRAD}));
+/* POOLED BLOB CONTACT-SHADOWS — one geo+mat+tex shared by player + mobs so they stop floating on the single gated sun shadow; ~free, never casts/receives a real shadow. */
+const _blobTex=(()=>{ const cv=document.createElement('canvas'); cv.width=cv.height=128; const g=cv.getContext('2d'); const gr=g.createRadialGradient(64,64,2,64,64,64); gr.addColorStop(0,'rgba(0,0,0,0.42)'); gr.addColorStop(0.55,'rgba(0,0,0,0.20)'); gr.addColorStop(1,'rgba(0,0,0,0)'); g.fillStyle=gr; g.fillRect(0,0,128,128); const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; return t; })();
+const _blobMat=new THREE.MeshBasicMaterial({map:_blobTex,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,fog:false,toneMapped:false});
+const _blobGeo=new THREE.PlaneGeometry(1,1);
+function addBlob(parent,radius){ const b=new THREE.Mesh(_blobGeo,_blobMat); b.rotation.x=-Math.PI/2; b.scale.set(radius*2,radius*2,1); b.position.y=0.03; b.castShadow=false; b.receiveShadow=false; b.renderOrder=-1; b.userData._blob=true; parent.add(b); return b; }
 /* POOLED particle resources — confetti/motes/smoke/ducks reuse ONE geometry + cached materials,
    so spawning thousands allocates nothing and removal needs no GPU disposal (no unbounded memory growth). */
 const _pBoxGeo=new THREE.BoxGeometry(0.12,0.12,0.02), _pBallGeo=new THREE.SphereGeometry(1,8,8);
@@ -1970,7 +1984,7 @@ function _buildPlayerBody(){
   _heldKind=''; _offhandKind=''; _armorShown='?'; for(const k in charActions) delete charActions[k];   // force held/off-hand/armor to rebuild on the fresh skeleton
   const valid=(state.charModel&&PLAYER_MODELS.includes(state.charModel))?state.charModel:'char_player'; const m=MODELS[valid];
   if(m){ const o=skeletonClone(m); const s=new THREE.Vector3(); new THREE.Box3().setFromObject(o).getSize(s); const k=1.7/(s.y||1); o.scale.setScalar(k); o.userData.base=k;
-    const b=new THREE.Box3().setFromObject(o); o.position.y=-b.min.y+0.02; o.userData.y0=o.position.y; o.userData.cy=(b.max.y-b.min.y)/2; player.add(o); player.userData.model=o;   // +0.02 = 2cm foot clearance so feet never poke through; y0/cy: rest pos + body-center height, used to spin the double-jump about the CENTER (cannonball)
+    const b=new THREE.Box3().setFromObject(o); o.position.y=-b.min.y+0.02; o.userData.y0=o.position.y; o.userData.cy=(b.max.y-b.min.y)/2; player.add(o); player.userData.model=o; if(!player.userData._blob) player.userData._blob=addBlob(player,0.62);   // +0.02 = 2cm foot clearance so feet never poke through; y0/cy: rest pos + body-center height, used to spin the double-jump about the CENTER (cannonball)
     const clips=ANIMS[valid]||ANIMS['char_player']||ANIMS['char_n1'];
     if(clips){ charMixer=new THREE.AnimationMixer(o); for(const c of clips) charActions[c.name]=charMixer.clipAction(c);
       if(QCLASS.has(valid)){ const al=(a,b)=>{ if(charActions[b]&&!charActions[a])charActions[a]=charActions[b]; }; al('idle','Idle'); al('walk','Walk'); al('run','Run'); al('sprint','Run'); const atk=QCLASS_ATK[valid]; if(atk&&charActions[atk])charActions['attack-melee-right']=charActions[atk]; }   // Quaternius clips are Capitalized -> alias to the game's lowercase movement names + map the class attack to the on-attack emote
@@ -3989,7 +4003,7 @@ function pickCreatureType(distOverride, sx, sz){ // `day` = SPAWN WEIGHT (basics
     let w=t.day; if(_ice>0.4){ if(t.iceOnly) w=t.day*3; else { if((t.minDist||0)<150) continue; w=t.day*0.12; } }   // ice ring: cold mobs DOMINATE (~91%); trivial/near mobs (caterpillar/crab/fox) excluded, only deep-tier foes (skeleton/glub/demon) appear as a rare minority
     elig.push([k,w]); tot+=w; }   // night: spooky mobs creep ~20 closer; DAY: skip night-only undead
   let r=Math.random()*tot; for(const [k,w] of elig){ r-=w; if(r<=0) return CREATURE_TYPES[k]; } return CREATURE_TYPES.petal; }
-function makeCreature(t){ const g=(t||CREATURE_TYPES.petal).build(); g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); if(t&&t.stealth) g.visible=false; return g; }   // stealth mobs (ghost) start hidden -> revealed only on aggro (see updateCombat)
+function makeCreature(t){ t=t||CREATURE_TYPES.petal; const g=t.build(); g.traverse(m=>{ if(m.isMesh)m.castShadow=true; }); addBlob(g, Math.max(0.35,(t.tgtH||1.2)*0.42)); if(t&&t.stealth) g.visible=false; return g; }   // stealth mobs (ghost) start hidden -> revealed only on aggro (see updateCombat)
 
 /* ---- FARM ANIMALS (owner: real cows/sheep/chickens/pigs that drop real things) ----
    BLOCKY (Minecraft-style) procedural builders; a SEPARATE peaceful animals[] (never aggro, non-solid).
