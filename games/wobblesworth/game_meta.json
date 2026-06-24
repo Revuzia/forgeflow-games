@@ -1,6 +1,9 @@
 {
   "title": "Wanderwild",
-  "slug": "wobblesworth",
+  "slug": "wanderwild",
+  "thumbnail_url": "https://forgeflow-games-cdn.isimcha85.workers.dev/wanderwild/thumbnail.png",
+  "hero_image_url": "https://forgeflow-games-cdn.isimcha85.workers.dev/wanderwild/thumbnail.png",
+  "game_url": "https://forgeflow-games-cdn.isimcha85.workers.dev/wanderwild/index.html",
   "description": "A cozy low-poly survival-adventure RPG. Pick your class — warrior, mage, or ranger — then gather, craft, and befriend your neighbors before you wander wild through five living biomes, from sunny meadows and misty swamps to golden dunes, frozen wastes, and the molten Blight. Tame mounts, chase quests, and level up your hero. By day you explore; when night falls far from town, monsters come — fight them off with melee, spells, or arrows. Common, rare and epic loot drops along the way. Play solo or in co-op.",
   "short_description": "Cozy low-poly survival RPG: pick a class, craft and explore five wild biomes, and fight to survive the night. Solo or co-op.",
   "genre": "adventure",
