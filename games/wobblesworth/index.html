@@ -509,7 +509,7 @@ var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snack
   discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, tradePending:null, quickItems:{}, activeQuests:{}, questTarget:null, npcOfferDay:{}, armorDye:'', gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
   hp:100, hpMax:100, xp:0, level:1, charClass:'', mana:0, manaMax:0, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, hasRod:false, hasCompass:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
-  intro:false, tutStep:0, tut:{on:false,step:0,hits:0}, companion:null, cubePets:[], event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
+  intro:false, tutStep:0, tut:{on:false,step:0,hits:0}, companion:null, cubePets:[], petMode:'aggressive', event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
   volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, needsMin:false, selectedSlot:0, lore:{}, fog:{}, met:{}, badges:{}, autoCam:true };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
 
@@ -1025,7 +1025,6 @@ const MODEL_LIST=["char_player","char_n1","char_n2","char_n3","House_1","House_2
  "GrassLeaf1","Flower1","Flower2","Flower3","MushroomRed","Barrel","Chest","Lantern","Bridge","Carriage","Boat","Coin","Cloud1","Cloud2","Cloud3",
  "nat_tree","nat_pine","nat_tree_fat","nat_bush","nat_bush2","nat_grass","nat_flower_red","nat_flower_yellow","nat_flower_purple","nat_rock","nat_mushroom","surv_tent","surv_campfire",   // 🌳 Kenney Nature Kit foliage + ⛺ Survival Kit tent/campfire (CC0, embedded atlas)
  "castle-wall","castle-wall-corner","castle-gate","castle-tower-square","castle-tower-square-roof","castle-floor","castle-stairs",   // 🏰 Kenney Castle Kit (CC0) — the Blight Keep exterior
- "cubepet-cat","cubepet-dog","cubepet-koala","cubepet-monkey","cubepet-parrot","cubepet-penguin","cubepet-beaver","cubepet-panda",   // 🧪 collectible CUBE PETS (Kenney cube-pets, CC0) — poison-shooting followers
  // RESOURCE NODES — these MUST load or stone/crystal/carrot won't exist and their quests become impossible:
  "Cube","Crystal1","Crystal2","Crystal3","Crystal4","Carrot","Cabbage","CarrotGroup",
  // CUBE-ANIMAL creatures (Kenney) — night ENEMIES + FARM animals (real rigged models w/ a walk clip, replacing the procedural "circle" blobs):
@@ -2002,7 +2001,7 @@ function emote(name){ // one-shot emote then back to idle/walk
 const _LSW_AXIS=new THREE.Vector3(1,0,0);
 function updateLeftSwing(dt){ if((state._lswingT||0)<=0)return; state._lswingT-=dt; const pm=player.userData&&player.userData.model; const arm=pm&&pm.getObjectByName?(pm.getObjectByName('arm-left')||pm.getObjectByName('FistL')||pm.getObjectByName('UpperArmL')||pm.getObjectByName('LowerArmL')):null; if(arm){ const p=1-Math.max(0,state._lswingT)/0.32; arm.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(_LSW_AXIS, -Math.sin(p*Math.PI)*1.3)); } }   // 🗡️ procedural LEFT-arm dual-wield swing — multiply a swing rotation onto the mixer pose each frame (preserves the base pose, no euler/quaternion desync)
 /* ---------- input / camera ---------- */
-const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='Tab'){ e.preventDefault(); if(state.running)cycleLock(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyQ'&&state.running){ shieldSlam(); } if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(e.code==='KeyP'&&state.running){ openPetsMenu(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(levelupOpen)closeLevelUp(); else if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(boardOpen)closeBoard(); else if(dyerOpen)closeDyer(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); else if(state.running)openSettings(); } }   /* ESC toggles Settings (open if nothing else is open); browsers still force ESC to exit fullscreen — unavoidable */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
+const keys={}; addEventListener('keydown',e=>{ if(e.repeat&&!/^(Arrow|Key[WASD])/.test(e.code))return; keys[e.code]=true; if(e.code==='F3'||e.code==='Backquote'){ e.preventDefault(); toggleDebug(); return; } if(e.code==='Tab'){ e.preventDefault(); if(state.running)cycleLock(); return; } if(e.code==='KeyE') useE(); if(e.code==='KeyQ'&&state.running){ shieldSlam(); } if(e.code==='KeyL'&&state.running){ loreOpen?closeLore():openLore(); } if(e.code==='KeyG'&&state.running){ if(BMODE.on) breakBlock(); else digBlock(); } if(e.code==='KeyV'&&state.running) toggleBuild(); if(e.code==='KeyT'&&state.running&&BMODE.on) cycleBuildMat(); else if(e.code==='KeyT'&&state.running&&typeof COOP!=='undefined'&&COOP.on) requestTrade(); if(e.code==='KeyI'&&state.running){ toggleInv(); } if(e.code==='KeyC'&&state.running){ craftOpen?closeCraft():openCraft(); } if(e.code==='KeyM'&&state.running){ mapOpen?closeMap():openMap(); } if(e.code==='KeyP'&&state.running){ if(document.getElementById('petsmenu'))closePetsMenu(); else openPetsMenu(); } if(/^Digit[0-9]$/.test(e.code)&&state.running){ const _d=+e.code.slice(5); selectSlot(_d===0?9:_d-1); } if(e.code==='Escape'){ if(levelupOpen)closeLevelUp(); else if(pdpickOpen)closeSlotPicker(); else if(tradeOpen)closeTrade(); else if(boardOpen)closeBoard(); else if(dyerOpen)closeDyer(); else if(confirmOpen)closeConfirm(); else if(stashOpen)closeStash(); else if(loreOpen)closeLore(); else if(lootOpen)closeLoot(); else if(mapOpen)closeMap(); else if(shopOpen)closeShop(); else if(craftOpen)closeCraft(); else if(invOpen)closeInv(); else { const p=document.getElementById('pause'); if(p&&!p.classList.contains('hidden'))closeSettings(); else if(state.running)openSettings(); } }   /* ESC toggles Settings (open if nothing else is open); browsers still force ESC to exit fullscreen — unavoidable */ if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault(); });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 // release ALL held keys when focus/visibility is lost — prevents the "stuck walking forward" bug
 // (a right-click context menu, alt-tab, or click-away steals focus so the W keyup never fires).
@@ -2316,7 +2315,7 @@ function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
   tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, needsMin:state.needsMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, chainStep:state.chainStep, questHistory:state.questHistory, _qseq:state._qseq, boardOffers:state.boardOffers, _boardTaken:state._boardTaken, _boardDay:state._boardDay, npcOfferDay:state.npcOfferDay, genDefs:(()=>{const o={};for(const k in Quests.defs){const d=Quests.defs[k];if(d&&d._gen)o[k]={title:d.title,tid:d._tid,p:d._p,pitch:d._pitch,sig:d._sig,reward:d.reward,steps:d.steps};}return o;})(), lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug,
-  tamedMounts:(typeof tamedMountSaveList==='function'?tamedMountSaveList():[]), stables:(state.stables||[]), cubePets:(Array.isArray(state.cubePets)?state.cubePets.filter(k=>PETS[k]):[]), companion:(state.companion&&PETS[state.companion.key]?{key:state.companion.key,hp:Math.max(0,Math.round(state.companion.hp)),name:state.companion.name}:null) })); }catch(e){} }
+  tamedMounts:(typeof tamedMountSaveList==='function'?tamedMountSaveList():[]), stables:(state.stables||[]), cubePets:(Array.isArray(state.cubePets)?state.cubePets.filter(k=>PETS[k]):[]), petMode:(['aggressive','defensive','passive'].includes(state.petMode)?state.petMode:'aggressive'), companion:(state.companion&&PETS[state.companion.key]?{key:state.companion.key,hp:Math.max(0,Math.round(state.companion.hp)),name:state.companion.name}:null) })); }catch(e){} }
 // VERSIONED + SANITIZED load: bad/corrupt/legacy data can never crash boot or inject impossible state
 function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) return; let s; try{ s=JSON.parse(raw); }catch(e){ localStorage.setItem('ww2_save_corrupt',raw); return; }
   if(!s||typeof s!=='object') return;
@@ -2355,6 +2354,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.stables=Array.isArray(s.stables)?s.stables.filter(v=>v&&Number.isFinite(+v.x)&&Number.isFinite(+v.z)).map(v=>({x:clamp(+v.x,-FENCE,FENCE),z:clamp(+v.z,-FENCE,FENCE)})):[]; for(const st of state.stables){ try{ buildStableAt(st.x,st.z, groundY(st.x,st.z)); }catch(e){} }   // rebuild grounded stable structures (load isn't craft, so pass groundY directly)
   try{ restoreTamedMounts(s.tamedMounts); }catch(e){}   // re-spawn your tamed mounts at their saved spots (buildWorld's wild ones already spawned)
   state.cubePets=Array.isArray(s.cubePets)?s.cubePets.filter(k=>PETS[k]):[];   // 🧪 restore the cube-pet collection
+  state.petMode=['aggressive','defensive','passive'].includes(s.petMode)?s.petMode:'aggressive';
   state.companion=null; if(s.companion && PETS[s.companion.key]){ const P=PETS[s.companion.key]; state.companion={ key:s.companion.key, hp:clamp(Math.floor(+s.companion.hp||P.hp),1,P.hp), name:(typeof s.companion.name==='string'?s.companion.name:P.name) }; try{ spawnCompanion(); }catch(e){} }   // 🧪 restore the active cube pet
 }catch(e){ __report('load',e); } }
 
@@ -3112,25 +3112,31 @@ function monMove(m,dirx,dirz,sp){   // WALL-AWARE chase: try the direct step, el
 const MOUNTS={ horse:{name:'Horse',model:'mount-horse',tint:null,speedMul:1.85,h:5.0,seatY:1.15,rarity:1,faceOff:0}, stag:{name:'Wild Stag',model:'mount-stag',tint:null,speedMul:2.05,h:5.0,seatY:1.2,rarity:2,faceOff:0}, unicorn:{name:'Unicorn',model:'mount-unicorn',tint:'#f6f2ff',speedMul:2.4,h:5.2,seatY:1.25,rarity:3,faceOff:0} };   // h is the model's BBOX height target — these GLBs have a stray element inflating the bbox ~2.6x over the visible mesh, so h~5 renders the visible horse ~1.9 tall (player-scaled). seatY = rider feet sit on the back.
 const mounts=[];
 // ════════ COMPANION PET ════════ a befriended critter that follows you and auto-fights aggro'd foes (class-agnostic — works for warrior/mage/ranger alike)
-const PETS={   // 🧪 COLLECTIBLE CUBE PETS — blocky critters that follow you and spit a POISON bolt in their own color (atk=impact, dot=poison/sec, dotT=duration, col=tint)
-  cat:    {name:'Mauve Cat',     model:'cubepet-cat',     h:0.7, atk:6,  dot:3, dotT:3.0, cd:1.3, range:14, hp:55, col:'#b06bff'},
-  dog:    {name:'Emerald Pup',   model:'cubepet-dog',     h:0.7, atk:7,  dot:3, dotT:3.0, cd:1.2, range:14, hp:60, col:'#5fe08a'},
-  koala:  {name:'Cobalt Koala',  model:'cubepet-koala',   h:0.7, atk:6,  dot:4, dotT:3.5, cd:1.4, range:14, hp:65, col:'#5fa8ff'},
-  monkey: {name:'Tangerine Ape', model:'cubepet-monkey',  h:0.7, atk:8,  dot:2, dotT:2.5, cd:1.1, range:13, hp:50, col:'#ff9a3a'},
-  parrot: {name:'Rosy Parrot',   model:'cubepet-parrot',  h:0.6, atk:6,  dot:3, dotT:3.0, cd:1.0, range:15, hp:45, col:'#ff6bd0'},
-  penguin:{name:'Frost Penguin', model:'cubepet-penguin', h:0.7, atk:7,  dot:4, dotT:3.5, cd:1.3, range:14, hp:60, col:'#7fe0ff'},
-  beaver: {name:'Amber Beaver',  model:'cubepet-beaver',  h:0.7, atk:9,  dot:3, dotT:3.0, cd:1.4, range:14, hp:70, col:'#ffd23f'},
-  panda:  {name:'Onyx Panda',    model:'cubepet-panda',   h:0.8, atk:10, dot:4, dotT:4.0, cd:1.5, range:14, hp:80, col:'#caa46a'},
+const PETS={   // 🟢 COLLECTIBLE GLOWING SLIMES — translucent critters that GLOW (a real light source for dark caves/biomes) + follow you + spit GOO in their colour (atk=impact, dot=goo/sec, dotT=duration, col=glow)
+  cat:    {name:'Amethyst Slime',  h:0.7, atk:6,  dot:3, dotT:3.0, cd:1.3, range:14, hp:55, col:'#b06bff'},
+  dog:    {name:'Emerald Slime',   h:0.7, atk:7,  dot:3, dotT:3.0, cd:1.2, range:14, hp:60, col:'#5fe08a'},
+  koala:  {name:'Azure Slime',     h:0.7, atk:6,  dot:4, dotT:3.5, cd:1.4, range:14, hp:65, col:'#5fa8ff'},
+  monkey: {name:'Tangerine Slime', h:0.7, atk:8,  dot:2, dotT:2.5, cd:1.1, range:13, hp:50, col:'#ff9a3a'},
+  parrot: {name:'Rose Slime',      h:0.6, atk:6,  dot:3, dotT:3.0, cd:1.0, range:15, hp:45, col:'#ff6bd0'},
+  penguin:{name:'Frost Slime',     h:0.7, atk:7,  dot:4, dotT:3.5, cd:1.3, range:14, hp:60, col:'#7fe0ff'},
+  beaver: {name:'Amber Slime',     h:0.7, atk:9,  dot:3, dotT:3.0, cd:1.4, range:14, hp:70, col:'#ffd23f'},
+  panda:  {name:'Honey Slime',     h:0.8, atk:10, dot:4, dotT:4.0, cd:1.5, range:14, hp:80, col:'#caa46a'},
 };
-const PET_KEYS=Object.keys(PETS); const DEFAULT_PET='cat'; const petShots=[];
-let _petMesh=null, _petAtkCD=0, _petBob=0, _petDownT=0, _petBar=null, _petFoe=null;
-function buildPet(key){ const P=PETS[key]||PETS[DEFAULT_PET]; const g=buildMobGLB(P.model, P.h); g.userData.petKey=key; g.userData.bob=Math.random()*TAU; return g; }
-function spawnCompanion(){ if(_petMesh){ world.remove(_petMesh); _petMesh=null; }
+const PET_KEYS=Object.keys(PETS); const DEFAULT_PET='dog'; const petShots=[];
+let _petMesh=null, _petAtkCD=0, _petBob=0, _petDownT=0, _petBar=null, _petFoe=null, _petLight=null;
+function buildPet(key){ const P=PETS[key]||PETS[DEFAULT_PET]; const col=P.col||'#9be86b'; const g=new THREE.Group();   // 🟢 procedural GLOWING SLIME: translucent emissive blob + a bright additive core + two dark eyes
+  const body=new THREE.Mesh(new THREE.SphereGeometry(0.46,16,12), new THREE.MeshStandardMaterial({color:col, emissive:new THREE.Color(col), emissiveIntensity:0.95, transparent:true, opacity:0.82, roughness:0.25, metalness:0})); body.scale.set(1,0.74,1); body.position.y=0.36; g.add(body);
+  const core=new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8), new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:0.55, blending:THREE.AdditiveBlending, depthWrite:false})); core.position.y=0.34; g.add(core);
+  for(const ex of [-0.14,0.14]){ const eye=new THREE.Mesh(new THREE.SphereGeometry(0.055,8,8), new THREE.MeshBasicMaterial({color:'#10131a'})); eye.position.set(ex,0.42,0.36); g.add(eye); }
+  g.userData.body=body; g.userData.petKey=key; g.userData.bob=Math.random()*TAU; return g; }
+function spawnCompanion(){ if(_petMesh){ world.remove(_petMesh); _petMesh=null; } if(_petLight){ try{ removeDynLight(_petLight); }catch(e){} _petLight=null; }
   if(!state.companion || !PETS[state.companion.key]) return;
-  const g=buildPet(state.companion.key); const bx=player.position.x-1.6, bz=player.position.z-1.6;
+  const P=PETS[state.companion.key]; const g=buildPet(state.companion.key); const bx=player.position.x-1.6, bz=player.position.z-1.6;
   g.position.set(bx, groundY(bx,bz), bz); world.add(g); _petMesh=g;
-  _petBar=makeMiniBar(); _petBar.position.set(0,(PETS[state.companion.key].h)+0.7,0); g.add(_petBar);
-  drawMiniBar(_petBar, Math.max(0,state.companion.hp)/PETS[state.companion.key].hp, {lvl:0}); }
+  _petBar=makeMiniBar(); _petBar.position.set(0,1.05,0); g.add(_petBar);
+  drawMiniBar(_petBar, Math.max(0,state.companion.hp)/P.hp, {lvl:0});
+  _petLight=addDynLight(P.col||'#9be86b', 1.5, 15, bx, 1.0, bz);   // 🔦 the slime's glow is a REAL light — lights up dark caves & the Blight (null-safe past the 8-light cap)
+  if(_petLight && UG.active && UG.runLights) UG.runLights.push(_petLight); }
 function collectCubePet(key){ if(!PETS[key])return false; state.cubePets=state.cubePets||[]; if(state.cubePets.includes(key)) return false; state.cubePets.push(key);
   rarityToast('epic','🧪 You found a CUBE PET — '+PETS[key].name+'! Press P to manage your pets.'); try{ confetti(player.position.clone().setY(1.4),26); SFX.play('success'); }catch(e){}
   if(!state.companion) setActivePet(key); save(); return true; }
@@ -3139,9 +3145,26 @@ function setActivePet(key){ if(!PETS[key]||!(state.cubePets||[]).includes(key)){
   toast('🧪 '+P.name+' is at your side — it spits poison at aggro\'d foes.'); try{ SFX.play('success'); }catch(e){} save(); }
 function summonCompanion(key){ collectCubePet(key||DEFAULT_PET); }   // legacy shim — old callers now just grant a cube pet
 function _dropCubePet(){ const owned=state.cubePets||[]; const avail=PET_KEYS.filter(k=>!owned.includes(k)); if(!avail.length){ chestLoot([['boss_core',1]],'🧪 (All cube pets collected — bonus loot)'); return false; } collectCubePet(avail[Math.floor(Math.random()*avail.length)]); return true; }
-function openPetsMenu(){ const owned=state.cubePets||[]; if(!owned.length){ toast('🧪 No cube pets yet — find them in dungeon hoards & rare dig chests! (0/'+PET_KEYS.length+')'); return; }
-  const cur=state.companion?owned.indexOf(state.companion.key):-1; const next=owned[(cur+1)%owned.length]; setActivePet(next);
-  toast('🧪 Cube Pets '+owned.length+'/'+PET_KEYS.length+' collected — active: '+PETS[next].name+' (P to cycle)'); }
+function openPetsMenu(){ if(!state.running)return; const owned=state.cubePets||[], mode=state.petMode||'aggressive';
+  let el=document.getElementById('petsmenu'); if(!el){ el=document.createElement('div'); el.id='petsmenu'; document.body.appendChild(el); }
+  let grid='';
+  for(const k of PET_KEYS){ const P=PETS[k], have=owned.includes(k), active=state.companion&&state.companion.key===k;
+    grid+=`<div data-k="${k}" style="width:90px;cursor:${have?'pointer':'default'};text-align:center;opacity:${have?1:0.45}">`+
+      `<div style="width:56px;height:56px;margin:0 auto;border-radius:50%;background:${have?P.col:'#3a3640'};box-shadow:${have?'0 0 20px '+P.col+',inset 0 0 11px rgba(255,255,255,0.45)':'none'};border:${active?'3px solid #fff':'2px solid rgba(0,0,0,0.3)'}"></div>`+
+      `<div style="font-size:11px;margin-top:5px;color:#e8e2f0">${have?P.name:'??? Slime'}</div></div>`; }
+  const modeBtns=['aggressive','defensive','passive'].map(m=>`<button data-m="${m}" style="background:${m===mode?'#5fe08a':'#332f3a'};color:${m===mode?'#063':'#cfc8d8'};border:0;border-radius:7px;padding:6px 14px;cursor:pointer;font-size:13px;font-weight:600;margin:0 3px">${m[0].toUpperCase()+m.slice(1)}</button>`).join('');
+  el.innerHTML=`<div style="background:#1a1622;border:2px solid #6a5a8a;border-radius:16px;padding:20px 22px;max-width:min(560px,94vw);color:#e8e2f0;box-shadow:0 14px 44px rgba(0,0,0,0.6)">`+
+    `<div style="font-size:19px;font-weight:700;margin-bottom:4px">🟢 Glowing Slimes — ${owned.length}/${PET_KEYS.length} collected</div>`+
+    `<div style="font-size:12px;opacity:0.65;margin-bottom:14px">They glow to light up dark caves &amp; spit goo at foes. Found in dungeon hoards &amp; very-rare dig chests.</div>`+
+    `<div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center">${grid}</div>`+
+    `<div style="margin:18px 0 4px;text-align:center;font-size:13px">Behaviour: ${modeBtns}</div>`+
+    `<div style="text-align:center;margin-top:16px"><button data-close="1" style="background:#6a5a8a;color:#fff;border:0;border-radius:8px;padding:8px 22px;cursor:pointer;font-weight:600">Close (P)</button></div></div>`;
+  el.style.cssText='position:fixed;inset:0;z-index:62;display:flex;align-items:center;justify-content:center;background:rgba(8,6,16,0.62)';
+  el.onclick=(e)=>{ const t=e.target; const cell=t.closest&&t.closest('[data-k]');
+    if(cell&&owned.includes(cell.dataset.k)){ setActivePet(cell.dataset.k); openPetsMenu(); return; }
+    if(t.dataset&&t.dataset.m){ state.petMode=t.dataset.m; try{toast('🟢 Slime stance: '+t.dataset.m);}catch(e){} try{save();}catch(e){} openPetsMenu(); return; }
+    if(t===el||(t.dataset&&t.dataset.close)){ closePetsMenu(); } }; }
+function closePetsMenu(){ const el=document.getElementById('petsmenu'); if(el)el.remove(); }
 function updatePet(dt){ if(!_petMesh||!state.companion) return; const P=PETS[state.companion.key]; const g=_petMesh;
   if(g.userData.mixer) g.userData.mixer.update(dt);
   if(_petDownT>0){ _petDownT-=dt; g.visible=(((_petDownT*6)|0)&1)===0; if(_petDownT<=0){ g.visible=true; state.companion.hp=Math.max(1,Math.round(P.hp*0.5)); if(_petBar)drawMiniBar(_petBar,state.companion.hp/P.hp,{lvl:0}); } return; }
@@ -3149,9 +3172,11 @@ function updatePet(dt){ if(!_petMesh||!state.companion) return; const P=PETS[sta
   let tx=bx, tz=bz;
   if(_petAtkCD>0) _petAtkCD-=dt;
   if(!_petFoe || creatures.indexOf(_petFoe)<0 || _petFoe.hp<=0 || !_petFoe.mesh || !_petFoe.mesh.visible || (_petFoe.aggro!==true && _petFoe.provoked!==true)) _petFoe=null;
-  if(!_petFoe){ let bd=P.range*P.range; for(const c of creatures){ if(!c||!c.mesh||!c.mesh.visible||c.training||c.hp<=0) continue; if(c.aggro!==true && c.provoked!==true) continue; const dx=c.mesh.position.x-player.position.x, dz=c.mesh.position.z-player.position.z, d2=dx*dx+dz*dz; if(d2<bd){ bd=d2; _petFoe=c; } } }
+  const _pmode=state.petMode||'aggressive';   // 🟢 STANCE: aggressive=hunt any aggro'd foe in range / defensive=only close threats (<7u of you) / passive=never attack (just glow & follow)
+  if(_pmode==='passive'){ _petFoe=null; }
+  else if(!_petFoe){ const _rng=(_pmode==='defensive')?7:P.range; let bd=_rng*_rng; for(const c of creatures){ if(!c||!c.mesh||!c.mesh.visible||c.training||c.hp<=0) continue; if(c.aggro!==true && c.provoked!==true) continue; const dx=c.mesh.position.x-player.position.x, dz=c.mesh.position.z-player.position.z, d2=dx*dx+dz*dz; if(d2<bd){ bd=d2; _petFoe=c; } } }
   if(_petFoe && _petFoe.mesh){ const m=_petFoe.mesh; const dx=m.position.x-g.position.x, dz=m.position.z-g.position.z, d=Math.hypot(dx,dz)||1;
-    tx=g.position.x - dx/d*6; tz=g.position.z - dz/d*6;   // 🧪 keep a ~6u standoff — kite & spit poison, don't charge in
+    tx=g.position.x - dx/d*6; tz=g.position.z - dz/d*6;   // 🟢 keep a ~6u standoff — kite & spit goo, don't charge in
     g.rotation.y=angLerp(g.rotation.y, faceVel(dx,dz), dt*8);
     if(_petAtkCD<=0){ _petAtkCD=P.cd; spawnPetShot(g.position.x, g.position.y+(P.h)*0.6+0.4, g.position.z, _petFoe, P); }
   }
@@ -3159,6 +3184,8 @@ function updatePet(dt){ if(!_petMesh||!state.companion) return; const P=PETS[sta
   if(md>1.1){ const sp=4.0; g.position.x+=mdx/md*sp*dt; g.position.z+=mdz/md*sp*dt; if(!_petFoe) g.rotation.y=angLerp(g.rotation.y, faceVel(mdx,mdz), dt*8); }
   if(md>26){ g.position.set(bx,groundY(bx,bz),bz); }
   _petBob+=dt*5; g.position.y=groundY(g.position.x,g.position.z)+Math.abs(Math.sin(_petBob))*0.06;
+  if(g.userData.body){ const w=Math.sin(_petBob*1.2)*0.09; g.userData.body.scale.set(1+w,0.74-w,1+w); }   // 🟢 squash/stretch slime jiggle
+  if(_petLight){ _petLight.position.set(g.position.x, g.position.y+1.0, g.position.z); }   // 🔦 the glow follows the slime so dark areas stay lit around it
 }
 // 🧪 CUBE-PET POISON BOLT — a colored projectile that hits for atk + applies a poison DoT (poisT/poisDmg ticked here each frame)
 function spawnPetShot(sx,sy,sz,target,P){ const col=P.col||'#9be86b';
@@ -4902,7 +4929,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
  petTest:()=>{ const out={}; try{
    state.companion=null; if(_petMesh){world.remove(_petMesh);_petMesh=null;}
    const px=player.position.x, py=player.position.y, pz=player.position.z;
-   state.cubePets=['cat']; setActivePet('cat'); out.summoned=!!state.companion; out.petName=state.companion&&state.companion.name; out.meshSpawned=!!_petMesh;
+   state.cubePets=['cat']; setActivePet('cat'); out.summoned=!!state.companion; out.petName=state.companion&&state.companion.name; out.meshSpawned=!!_petMesh; out.isSlime=!!(_petMesh&&_petMesh.userData&&_petMesh.userData.body); out.hasGlowLight=!!_petLight;
    player.position.x=px+10; for(let i=0;i<30;i++)updatePet(0.05); out.followsDx=+(_petMesh.position.x-px).toFixed(1);
    despawnCreatures(); const t=Object.values(CREATURE_TYPES).find(x=>!x.stealth&&!x.ranged)||Object.values(CREATURE_TYPES)[0];
    const c=makeCreature(t); c.position.set(player.position.x+3,0,player.position.z); world.add(c);
@@ -4910,7 +4937,7 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
    const hp0=o.hp; for(let i=0;i<170;i++){ updatePet(0.05); updatePetShots(0.05); } out.foeDamaged=(o.hp<hp0); out.foeDmg=Math.round(hp0-o.hp); out.shotsFired=(petShots.length>0||out.foeDamaged); out.poisoned=(o.poisT>0||out.foeDamaged);
    { const ix=creatures.indexOf(o); if(ix>=0){world.remove(c);creatures.splice(ix,1);} }
    out.recipeExists=(typeof RECIPES!=='undefined')&&RECIPES.some(r=>r.id==='pet_whistle'); out.collected=(state.cubePets||[]).length;
-   state.companion=null; if(_petMesh){world.remove(_petMesh);_petMesh=null;} despawnCreatures(); petShots.length=0; state.cubePets=[]; player.position.set(px,py,pz);
+   state.companion=null; if(_petMesh){world.remove(_petMesh);_petMesh=null;} if(_petLight){try{removeDynLight(_petLight);}catch(e){}_petLight=null;} despawnCreatures(); petShots.length=0; state.cubePets=[]; player.position.set(px,py,pz);
    return out;
  }catch(e){ return {err:String(e)}; } },   // 🐾 verifies companion summon + follow + auto-fight
  castleTest:()=>{ const out={}; try{
