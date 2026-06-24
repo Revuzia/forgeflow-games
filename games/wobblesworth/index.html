@@ -95,6 +95,13 @@
   #xpbar .xpnum{font-size:11px; font-weight:bold; color:#fff; letter-spacing:.4px; white-space:nowrap}
   #xpbar .track{flex:1; height:6px; background:rgba(0,0,0,.35); border-radius:4px; overflow:hidden}
   #xpbar .fill{height:100%; width:0; border-radius:5px; background:linear-gradient(90deg,#7c5cff,#c9a0ff); transition:width .35s ease}
+  #tutcard{position:fixed; top:52px; left:50%; transform:translateX(-50%); width:min(540px,92vw); box-sizing:border-box; background:linear-gradient(180deg,rgba(42,36,56,.97),rgba(24,20,36,.97)); border:3px solid var(--ink); border-radius:14px; padding:12px 18px 13px; box-shadow:0 6px 0 rgba(0,0,0,.34); pointer-events:auto; z-index:56; text-align:center; color:#fff}
+  #tutcard .tutprog{font-size:11px; font-weight:bold; color:#c9a0ff; letter-spacing:.5px; margin-bottom:3px}
+  #tutcard .tutbig{font-size:19px; font-weight:800; margin-bottom:5px}
+  #tutcard .tuttxt{font-size:13.5px; line-height:1.4; opacity:.95; margin-bottom:10px}
+  #tutcard .tutbtns{display:flex; gap:8px; justify-content:center; flex-wrap:wrap}
+  #tutcard .tutbtn{font:inherit; font-size:13px; font-weight:bold; padding:6px 15px; border:2px solid var(--ink); border-radius:9px; background:#ff5d8f; color:#fff; cursor:pointer; box-shadow:0 3px 0 rgba(0,0,0,.3)}
+  #tutcard .tutbtn.tutskip{background:#5a5466}
   #hearts .lbl{font-size:12px; gap:3px}
   #hearts .lbl span:last-child{font-variant-numeric:tabular-nums; flex-shrink:0; min-width:48px; text-align:right}
   #armorbar{font-size:15px; letter-spacing:2px; text-align:center; padding:0 0 1px; filter:saturate(.9)}
@@ -502,7 +509,7 @@ var state={ running:false, day:1, giggle:0, goals:[], tod:0.34, won:false, snack
   discoOn:false, socks:0, neighborHere:false, bestDay:1, score:0, inv:{}, stash:{}, dur:{}, backpackTier:0, bagCount:1, tradeSession:null, tradePending:null, quickItems:{}, activeQuests:{}, questTarget:null, npcOfferDay:{}, armorDye:'', gear:{helmet:'',body:'',legs:'',boots:''}, built:0, req:null,
   unlocked:{}, houseColor:null, hat:false, recipePages:0,
   hp:100, hpMax:100, xp:0, level:1, charClass:'', mana:0, manaMax:0, weapon:'fist', weapons:{}, _invuln:0, hasPickaxe:false, hasShovel:false, hasRod:false, hasCompass:false, pickTier:0, shovelTier:0, debug:false, armor:'', armors:{}, offhand:'', offhands:{}, _blocks:0, _shields:0, _activeTool:'', charModel:'char_player',
-  intro:false, tutStep:0, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
+  intro:false, tutStep:0, tut:{on:false,step:0,hits:0}, event:null, craftedSet:{}, reqsFulfilled:0, biomes:{},
   volume:1, musicOn:true, sfxOn:true, reduce:false, paused:false, homeTier:0, mouseSens:1, questMin:false, needsMin:false, selectedSlot:0, lore:{}, fog:{}, met:{}, badges:{}, autoCam:true };
 try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=true; }catch(e){}   // honor OS pref (save can override)
 
@@ -3313,6 +3320,7 @@ function updateWorld(dt){ const tn=performance.now()*0.001; updateCompass();
       else if(state.tutStep===4){ state.tutStep=5; toast('🔢 Press 1–0 to switch weapons & tools on your hotbar. Good luck out there!'); }
     }
   }
+  if(state._tutorial && !state._selftesting) tickTutorial(dt);
   tickNodes(dt); updateZone(); updateLockRet(); updateConRings();
   if(state.chimney&&Math.random()<0.05){ const p=pBall(rand(0.12,0.2),'#dfe4ea'); p.position.copy(state.chimney.position).add(new THREE.Vector3(0,1,0)); world.add(p); ephemeral.push({node:p,life:2.4,v:new THREE.Vector3(rand(-.3,.3),1,0),grow:1}); }
   if(state.disco){ if(state.discoOn||state.discoSpin>0){ state.disco.rotation.y+=dt*(state.discoSpin>0?6:2); if(state.discoSpin>0)state.discoSpin-=dt; } }
@@ -3793,7 +3801,7 @@ function updateFauna(dt){ const px=player.position.x, pz=player.position.z;
     const sp=(f.flee>0?2.8:0.7)*f.spd*dt; m.position.x+=Math.cos(f.wdir)*sp; m.position.z+=Math.sin(f.wdir)*sp;
     m.position.y=groundY(m.position.x,m.position.z); m.rotation.y=angLerp(m.rotation.y, faceVel(Math.cos(f.wdir),Math.sin(f.wdir)), dt*5);
     if(Math.hypot(m.position.x,m.position.z)>FENCE){ f.wdir=Math.atan2(-m.position.z,-m.position.x); } } }
-function spawnCreature(){ let sx,sz,pd;
+function spawnCreature(){ if(state._tutorial)return; let sx,sz,pd;
   for(let tries=0;tries<8;tries++){ const a=rand(0,TAU), r=isDay()?rand(22,36):rand(24,68); sx=player.position.x+Math.cos(a)*r; sz=player.position.z+Math.sin(a)*r; pd=Math.hypot(sx,sz); if(!inTrainingZone(sx,sz)) break; }   // NIGHT rings the player (Minecraft-style), DAY near the player — but re-roll up to 8× so a point never lands in the 🎯 training yard; pd (dist from town) still tiers difficulty
   if(inTrainingZone(sx,sz)) return;   // 🎯 hard fallback: if all 8 re-rolls stayed in-zone, ABORT this spawn (the continuous-respawn tick simply tries again, like the cull cadence) — no mob EVER spawns in the practice yard, day or night
   const t=pickCreatureType(pd, sx, sz); const c=makeCreature(t);
@@ -3807,7 +3815,7 @@ function updateTrainingGround(dt){ for(const c of creatures){ if(!c.training||!c
     const nx=p.ax+(p.bx-p.ax)*f, nz=p.az+(p.bz-p.az)*f; c.mesh.position.x=nx; c.mesh.position.z=nz; c.mesh.position.y=groundY(nx,nz); } }
 function despawnCreatures(){ for(const c of creatures) world.remove(c.mesh); creatures.length=0;
   for(const d of drops) world.remove(d.mesh); drops.length=0; for(const p of projectiles) world.remove(p.mesh); projectiles.length=0; }
-function damagePlayer(n){ if(state._invuln>0)return;
+function damagePlayer(n){ if(state._tutorial)return; if(state._invuln>0)return;
   if(state._blocking && state.offhand && SHIELDS[state.offhand]){ const _br=Math.min(0.9,(SHIELDS[state.offhand].block||0)+0.35); n=Math.max(1,n*(1-_br)); state._blocks=(state._blocks||0)+1; useDur(state.offhand,1); if(typeof SFX!=='undefined')SFX.play('interact',{vol:0.4,rate:1.25}); shake(0.1); popDmg(player.position.x,(player.position.y||0)+2.4,player.position.z,'🛡 BLOCK',{color:'#9be8ff'}); }   // 🛡️ ACTIVE block (hold RMB): guaranteed strong mitigation (50%→90% by shield tier) on top of the random full-block below
   if(state.offhand && SHIELDS[state.offhand] && Math.random()<SHIELDS[state.offhand].block){   // 🛡️ SHIELD: a % chance to fully block ANY hit (melee + projectiles), wears the shield
     state._blocks=(state._blocks||0)+1; state._shields=(state._shields||0)+1; state._invuln=0.5; useDur(state.offhand,1);
@@ -3845,7 +3853,7 @@ function openClassPick(thenStart){ let el=document.getElementById('classpick'); 
     el.innerHTML=h; el.className='show';
     el.querySelectorAll('[data-cls]').forEach(d=>d.onclick=()=>{ state._pickClass=d.dataset.cls; draw(); });
     el.querySelectorAll('[data-g]').forEach(d=>d.onclick=()=>{ state._pickGender=d.dataset.g; draw(); });
-    el.querySelector('#cpStart').onclick=()=>{ applyClass(state._pickClass,state._pickGender); el.className=''; try{SFX.play('success');}catch(e){} if(thenStart){ try{ startGame(); }catch(e){} } };
+    el.querySelector('#cpStart').onclick=()=>{ applyClass(state._pickClass,state._pickGender); el.className=''; try{SFX.play('success');}catch(e){} if(thenStart){ try{ startGame(); maybeOfferTutorial(); }catch(e){} } };
   };
   draw(); }
 function gainWeapon(id){ state.weapons[id]=true; equipBest(); const w=WEAPONS[id]; toast(`${w.icon} Crafted + equipped the ${w.name}!`); if(invOpen)renderInv(); Inv.render(); }
@@ -3963,7 +3971,7 @@ function playerAttack(){ if(!state.running||state.paused)return; if(state._atkCD
     if(a.hp<=0){ killAnimal(i); } }
   if(DUNGEON.inDungeon){ for(const sp of DUNGEON.spawners){ if(sp.dead)continue; const dx=sp.x-player.position.x, dz=sp.z-player.position.z, d=Math.hypot(dx,dz)||1; if(d<=w.range+0.6 && (dx*fx+dz*fz)/d>=0.1){ damageSpawner(sp, rollDamage(base, w.crit||0).dmg); hit++; } } }   // F also smashes the spawner (dice damage)
   swingFx(); if(hit){ shake(0.22); if(state.weapon&&state.weapon!=='fist')useDur(state.weapon,1); if(dualWeap)useDur(state.offhand,1); } }   // landing a hit wears the weapon (+ the off-hand weapon on dual-wield)
-function creatureHit(c){ if(!c.training){ c.provoked=true; c.aggro=true; }   // owner: HIT a mob (even a long-range bolt/arrow) -> it notices + hunts you from ANY distance, not just within sight
+function creatureHit(c){ if(state._tutorial&&state.tut&&c===state.tut.dummy){ state.tut.hits=(state.tut.hits||0)+1; } if(!c.training){ c.provoked=true; c.aggro=true; }   // owner: HIT a mob (even a long-range bolt/arrow) -> it notices + hunts you from ANY distance, not just within sight
   c.flash=0.16; for(const mm of c.mats){ try{ mm.emissive.setHex(0xff4444); mm.emissiveIntensity=0.9; }catch(e){} } if(c.mesh) c.mesh.scale.setScalar(c.boss?(c.bscale||1)*1.08:1.22);
   if(c.boss&&c.hpbar){ drawBossBar(c.hpbar, c.hp/c.max); }
   else if(c.mesh){ if(!c.hpbar){ c.hpbar=makeMiniBar(); c.hpbar.position.set(0,((c.type&&c.type.tgtH)||1.2)+0.9,0); c.mesh.add(c.hpbar); } drawMiniBar(c.hpbar, Math.max(0,c.hp)/c.max, c); c.hptimer=2.5; } }   // lazy on-hit HP bar over any mob (the user wanted to see the lion's HP as they hit it)
@@ -4612,6 +4620,49 @@ addEventListener('visibilitychange',()=>{ if(document.hidden){ try{ if(!sessionS
   else if(state.running && !state.paused && state.musicOn) Music.resume(); });   // REGRESSION fix: resume music when the tab returns (was permanently dead after first hide). NEW-GAME fix: skip the auto-save when a New Game reload is in flight, or it RE-CREATES the save we just wiped (the bug: "New Game didn't reset")
 addEventListener('pagehide',()=>{ try{ if(!sessionStorage.getItem('ww_newgame')) save(); }catch(e){} });   // same guard: pagehide fires during the New Game reload too
 let _inviteRoom=null; try{ _inviteRoom=((new URLSearchParams(location.search).get('room'))||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)||null; }catch(e){}   // invite link ?room=CODE
+// ===== OPTIONAL NEW-PLAYER TUTORIAL — offered at new game; a guided, DANGER-FREE sandbox =====
+const TUT_STEPS=[
+  {k:'story', big:'🌿 Welcome to Giggleton Lane!', txt:'You just moved into a cozy new home on the edge of five wild biomes. By day: gather, craft, fix up your house and befriend your nosy neighbors. By night, monsters roam — fight them or duck inside until dawn. Help the town and become a Town Legend!', btn:'Let’s learn the ropes →'},
+  {k:'move',  big:'🚶 Move',          txt:'Use the W A S D keys to walk around.'},
+  {k:'look',  big:'🖱️ Look around',   txt:'Click and DRAG the mouse to turn the camera.'},
+  {k:'zoom',  big:'🔎 Zoom',          txt:'Scroll the mouse wheel to zoom the camera in and out.'},
+  {k:'goto',  big:'🎯 Practice dummy', txt:'Walk over to the straw practice dummy just ahead of you.'},
+  {k:'attack',big:'⚔️ Attack',        txt:'LEFT-CLICK to swing your weapon — give the dummy 3 good hits!'},
+  {k:'lock',  big:'🎯 Target-lock',   txt:'Press TAB to lock onto a target (very handy in a real fight). Try it now.'},
+  {k:'craft', big:'🔨 Crafting',      txt:'Press C to open the crafting menu — build tools, food, gear and decor.'},
+  {k:'inv',   big:'🎒 Inventory',     txt:'Press I to open your inventory and equipment.'},
+  {k:'map',   big:'🗺️ The Map',       txt:'Press M for the map — your home, the town, the shops and the quest board are all marked on it.'},
+  {k:'done',  big:'🎉 You’re ready!', txt:'That’s the basics! Town and shops are to the north, the quest board is in the square, and your home is marked on the map. Now go wander wild — have fun!', btn:'Start playing →'},
+];
+let _tutRef={x:0,z:0,yaw:0,dist:13};
+function _tutCard(){ let el=document.getElementById('tutcard'); if(!el){ el=document.createElement('div'); el.id='tutcard'; document.body.appendChild(el); } return el; }
+function showTutStep(){ if(!state.tut)return; const s=TUT_STEPS[state.tut.step]; if(!s){ endTutorial(); return; } state.tut._t=0; _tutRef={x:player.position.x,z:player.position.z,yaw:cam.targetYaw,dist:cam.dist};
+  const el=_tutCard(); el.style.display='block';
+  let btns=s.btn?('<button id="tutNext" class="tutbtn">'+s.btn+'</button>'):''; btns+='<button id="tutSkip" class="tutbtn tutskip">Skip tutorial</button>';
+  el.innerHTML='<div class="tutprog">Tutorial · step '+(state.tut.step+1)+' of '+TUT_STEPS.length+'</div><div class="tutbig">'+s.big+'</div><div class="tuttxt">'+s.txt+'</div><div class="tutbtns">'+btns+'</div>';
+  const nx=el.querySelector('#tutNext'); if(nx)nx.onclick=()=>tutAdvance(); el.querySelector('#tutSkip').onclick=()=>skipTutorial(); }
+function hideTutCard(){ const el=document.getElementById('tutcard'); if(el)el.style.display='none'; }
+function tutAdvance(){ if(!state.tut)return; state.tut.step++; try{SFX.play('success',{vol:0.4});}catch(e){} if(state.tut.step>=TUT_STEPS.length) endTutorial(); else showTutStep(); }
+function spawnTutorialDummy(){ const x=player.position.x, z=player.position.z-9; const g=new THREE.Group(); const post=box(0.28,1.9,0.28,'#8a5a31'); post.position.y=0.95; g.add(post); const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.5,0.9,4,8),toon('#dcc593')); body.position.y=1.55; g.add(body); const head=ball(0.34,'#caa46a'); head.position.y=2.25; g.add(head); for(const ax of [-0.46,0.46]){ const arm=box(0.15,0.66,0.15,'#c4ad7a'); arm.position.set(ax,1.5,0); arm.rotation.z=ax>0?-0.5:0.5; g.add(arm); } g.position.set(x,groundY(x,z),z); world.add(g); state.tut.dummy=_trainProp(g,99999,{dummy:true,name:'Practice Dummy',tgtH:2.4,bob:0}); }
+function maybeOfferTutorial(){ try{ if(localStorage.getItem('ww2_seen_tutorial'))return; }catch(e){} styledConfirm('🎓 New here?','Want a quick hands-on tutorial? In about a minute it teaches moving, fighting, crafting and the map — in a safe practice yard with no danger.','✦ Yes, show me!', startTutorial, skipTutorial, 'Skip'); }
+function startTutorial(){ try{ localStorage.setItem('ww2_seen_tutorial','1'); }catch(e){} state._tutorial=true; state.tut={on:true,step:0,hits:0,_t:0,dummy:null}; despawnCreatures(); state.tod=0.34; state.intro=false; if(state.beacon)state.beacon.visible=false; player.position.set(HOUSE.cx,0.3,HOUSE.cz+12); player.rotation.y=Math.PI; cam.targetYaw=0; spawnTutorialDummy(); showTutStep(); }
+function skipTutorial(){ try{ localStorage.setItem('ww2_seen_tutorial','1'); }catch(e){} hideTutCard(); state._tutorial=false; if(state.tut)state.tut.on=false; }
+function endTutorial(){ hideTutCard(); state._tutorial=false; if(state.tut){ state.tut.on=false; if(state.tut.dummy){ const ix=creatures.indexOf(state.tut.dummy); if(ix>=0){ try{world.remove(state.tut.dummy.mesh);}catch(e){} creatures.splice(ix,1); } state.tut.dummy=null; } } try{flashFade();}catch(e){} player.position.set(HOUSE.cx,0.3,HOUSE.cz+12); toast('🎉 You’re ready — welcome to Giggleton Lane!'); try{save();}catch(e){} }
+function tickTutorial(dt){ if(!state.tut||!state.tut.on)return; const s=TUT_STEPS[state.tut.step]; if(!s||s.btn)return; state.tut._t=(state.tut._t||0)+dt; if(state.tut._t<0.4)return;
+  let done=false; const R=_tutRef;
+  switch(s.k){
+    case 'move':   done=Math.hypot(player.position.x-R.x,player.position.z-R.z)>3 || (typeof keys!=='undefined'&&(keys['KeyW']||keys['KeyA']||keys['KeyS']||keys['KeyD'])); break;
+    case 'look':   done=Math.abs(cam.targetYaw-R.yaw)>0.5; break;
+    case 'zoom':   done=Math.abs(cam.dist-R.dist)>1.5; break;
+    case 'goto':   done=!!(state.tut.dummy&&state.tut.dummy.mesh&&Math.hypot(player.position.x-state.tut.dummy.mesh.position.x,player.position.z-state.tut.dummy.mesh.position.z)<5); break;
+    case 'attack': done=(state.tut.hits||0)>=3; break;
+    case 'lock':   done=(typeof _lockFoe!=='undefined'&&_lockFoe!=null) || (typeof keys!=='undefined'&&keys['Tab']); break;
+    case 'craft':  done=(typeof craftOpen!=='undefined'&&craftOpen); break;
+    case 'inv':    done=(typeof invOpen!=='undefined'&&invOpen); break;
+    case 'map':    done=(typeof mapOpen!=='undefined'&&mapOpen); break;
+  }
+  if(done || state.tut._t>32) tutAdvance();   // 32s per-step safety so a stuck player never blocks
+}
 function startGame(){ if(!ready)return; document.getElementById('title').classList.add('hidden'); closeSettings(); state.running=true; Music.start();
   state.hpMax=hpMaxForLevel(state.level); if(!state.hp||state.hp>state.hpMax||state.hp<1) state.hp=state.hpMax; renderHearts();   // ensure the real HP pool is set for fresh + loaded games
   if(!state.charClass) state.charClass='warrior';   // safety: class is normally chosen on the NEW GAME start menu before startGame()
@@ -4695,6 +4746,13 @@ window.__WW__={ pos:()=>({x:+player.position.x.toFixed(2),y:+player.position.y.t
     player.position.set(h.cx+200, 0.3, h.cz+200); updateHomes(0.25); const n2=DYN_LIGHTS.length, li2=_homeLight?_homeLight.intensity:null, active2=h.active;
     player.position.set(h.doorPos.x,0.3,h.doorPos.z); if(h.doorHinge)h.doorHinge.rotation.y=-1.45; updateHomes(0.1); const n3=DYN_LIGHTS.length, li3=_homeLight?_homeLight.intensity:null;
     state._selftesting=_st; return {entered, built, lights:[n0,n1,n2,n3], countConstantAfterFirst:(n1===n2&&n2===n3), active2, li2, thresh:Math.max(h.hx,h.hz)+5, reenterReLit:(li3===1.7)}; }, forceRain:(storm)=>{ startWeather('rain',storm?{storm:true,t:24,rate:6}:{t:14,rate:3}); return state.weather; },   // 🌧️ debug: trigger rain/storm now
+ replayTutorial:()=>{ try{localStorage.removeItem('ww2_seen_tutorial');}catch(e){} startTutorial(); return {tutorial:'started', step:state.tut.step}; },   // re-run the onboarding tutorial
+ tutDbg:()=>({on:!!state._tutorial, step:state.tut?state.tut.step:null, hits:state.tut?state.tut.hits:null, steps:TUT_STEPS.length, dummy:!!(state.tut&&state.tut.dummy)}),
+ tutorialTest:()=>{ const R={}, ph=state.hp; startTutorial(); R.started=!!state._tutorial; R.dummySpawned=!!(state.tut&&state.tut.dummy); R.cardShown=(document.getElementById('tutcard')&&document.getElementById('tutcard').style.display!=='none');
+   const n0=creatures.filter(c=>!c.training).length; for(let i=0;i<6;i++)spawnCreature(); R.spawnBlocked=(creatures.filter(c=>!c.training).length===n0);   // sandbox: no enemies spawn
+   state.hp=state.hpMax; damagePlayer(50); R.damageBlocked=(state.hp===state.hpMax);   // sandbox: player invulnerable
+   state.tut.hits=0; creatureHit(state.tut.dummy); creatureHit(state.tut.dummy); creatureHit(state.tut.dummy); R.dummyHitsCounted=state.tut.hits;   // attack step counter
+   let g=0; while(state._tutorial&&g++<40)tutAdvance(); R.endsCleanly=(!state._tutorial && !(state.tut&&state.tut.dummy)); state.hp=ph; return R; },
  survivalTest:()=>{ const R={}; const _e=Needs.energy,_h=Needs.hunger,_w=Needs._warn;
    Needs.energy=29; Needs.hunger=80; Needs._warn={}; const _st=state._selftesting; state._selftesting=true; Needs.tick(0.01); state._selftesting=_st;
    R.energyWarnsBeforePenalty=(Needs._warn.energy===1 && Needs.moveMul()===1 && Needs.atkSpeedMul()===1);   // warns at 29 (below 30) while NO penalty yet (move@22/atk@25)
