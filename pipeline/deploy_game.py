@@ -24,6 +24,31 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+# Windows consoles default to cp1252 and choke on wrangler's box-drawing / progress
+# glyphs (e.g. ▲ U+25B2). Without this, printing a captured wrangler stderr raised
+# UnicodeEncodeError and ABORTED the whole deploy mid-upload (~5 of ~890 files pushed).
+# Reconfigure stdio to utf-8 with replacement so no log line is ever fatal. Setting
+# PYTHONIOENCODING=utf-8 also works, but only when set BEFORE the interpreter starts;
+# this fixes an already-running process too — incl. a bare `python pipeline/deploy_game.py`,
+# which is exactly the path that used to crash. (Same idiom as upload_game.py.)
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
+def _safe_print(msg):
+    """print() that never dies on un-encodable console output — belt-and-suspenders for
+    the utf-8 reconfigure above (a caller may have swapped in a raw cp1252 stream after
+    import). Used for any line that embeds captured subprocess stderr."""
+    try:
+        print(msg)
+    except UnicodeEncodeError:
+        enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+        print(msg.encode(enc, "replace").decode(enc, "replace"))
+
+
 ROOT = Path(__file__).resolve().parent.parent
 PIPELINE_DIR = ROOT / "pipeline"
 NOMI = Path(os.path.expandvars("%APPDATA%")) / "Nomi"
@@ -98,8 +123,15 @@ def load_supabase_creds():
     return creds
 
 
-def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> int:
-    """Upload files in game_dir to R2 under {slug}/. Returns count of files uploaded.
+# If any of these fail to upload the game is broken — the deploy must exit non-zero and
+# NOT touch Supabase (else the portal points at a half-uploaded/broken game).
+CRITICAL_FILES = {"index.html", "game_meta.json"}
+
+
+def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> dict:
+    """Upload files in game_dir to R2 under {slug}/.
+
+    Returns {"uploaded": int, "failed": [{"key", "err"}], "critical_failed": [key, ...]}.
 
     2026-06-22 ROBUSTNESS FIX (forgeflowgames.com was stale all session): a single
     `npx wrangler r2 object put` can exceed 30s (npx cold-start + a multi-MB GLB), and
@@ -107,8 +139,15 @@ def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> int:
     TimeoutExpired and crashed the whole deploy after ~2 files. Now: timeout=150 + the
     call is wrapped (a slow/failed file is skipped, never fatal). Plus a HEAD skip so big
     static assets that already live on the CDN aren't re-uploaded every deploy (only the
-    code files change) — that keeps deploys to a handful of seconds. `force` re-uploads all."""
+    code files change) — that keeps deploys to a handful of seconds. `force` re-uploads all.
+
+    2026-06-30 ROBUSTNESS FIX: a failed upload's captured wrangler stderr can contain a
+    non-cp1252 glyph (e.g. ▲), and printing it on a Windows cp1252 console raised
+    UnicodeEncodeError — which used to ABORT the whole deploy mid-loop (~5 of ~890 files up).
+    The module-level utf-8 reconfigure + _safe_print now make that print un-crashable, and
+    failures are collected and summarised at the end instead of aborting on the first one."""
     count = 0
+    failures = []              # [{"key": r2_key, "err": "..."}]
     ALWAYS = {"index.html", "game_meta.json", "content.json"}   # code/metadata: always re-push
     for file_path in game_dir.rglob("*"):
         if file_path.is_dir():
@@ -134,13 +173,24 @@ def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> int:
             )
         except subprocess.TimeoutExpired:
             print(f"  [r2] TIMEOUT (skipped, not fatal): {r2_key}")
+            failures.append({"key": r2_key, "err": "timeout after 150s"})
             continue
         if result.returncode == 0:
             count += 1
             print(f"  [r2] Uploaded: {r2_key}")
         else:
-            print(f"  [r2] FAILED: {r2_key} -- {(result.stderr or '')[:100]}")
-    return count
+            err = (result.stderr or "").strip()
+            _safe_print(f"  [r2] FAILED: {r2_key} -- {err[:100]}")
+            failures.append({"key": r2_key, "err": err})
+
+    # A single failed file is never fatal here — collect + summarise, and let the caller
+    # decide (0 uploaded, or a CRITICAL file failed -> skip Supabase and exit non-zero).
+    critical_failed = [f["key"] for f in failures if Path(f["key"]).name in CRITICAL_FILES]
+    if failures:
+        _safe_print(f"  [r2] {len(failures)} file(s) failed to upload:")
+        for f in failures:
+            _safe_print(f"        - {f['key']}: {(f['err'] or '')[:120]}")
+    return {"uploaded": count, "failed": failures, "critical_failed": critical_failed}
 
 
 def insert_game_metadata(slug: str, metadata: dict):
@@ -295,12 +345,22 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False):
         except Exception as e:
             print(f"[cover] WARN: cover generation failed ({e}); proceeding without cover")
 
-    uploaded = upload_to_r2(game_dir, slug, force=force)
+    up = upload_to_r2(game_dir, slug, force=force)
+    uploaded = up["uploaded"]
+    critical_failed = up["critical_failed"]
     print(f"  [r2] {uploaded}/{total} files uploaded to {R2_BUCKET}/{slug}/")
     if uploaded == 0:
         print("  [r2] ERROR: 0 files uploaded — R2 auth/network failed. Skipping Supabase so the")
         print("       portal isn't left pointing at missing files. Fix the R2 token, then re-run.")
         return {"ok": False, "uploaded": 0, "total": total, "url": None, "reason": "r2 upload failed"}
+    if critical_failed:
+        # index.html / game_meta.json didn't make it — the game would be broken. Don't upsert
+        # Supabase; surface a non-zero result so the caller (and Task Scheduler) sees the failure.
+        joined = ", ".join(critical_failed)
+        print(f"  [r2] ERROR: critical file(s) failed to upload: {joined}. Skipping Supabase so the")
+        print("       portal isn't left pointing at a broken game. Re-run (add --force) to retry.")
+        return {"ok": False, "uploaded": uploaded, "total": total, "url": None,
+                "reason": f"critical file upload failed: {joined}"}
 
     metadata["game_url"] = f"{CDN_BASE}/{slug}/index.html"
     _tv = ""

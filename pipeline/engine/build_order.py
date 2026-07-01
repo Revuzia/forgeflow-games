@@ -27,6 +27,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Windows consoles default to cp1252 and choke on subprocess/tool box-drawing glyphs
+# (e.g. ▲ U+25B2). Printing captured stderr (see the tactics-map regen WARN below) on
+# such a console raises UnicodeEncodeError; reconfigure stdio to utf-8 with replacement
+# so no log line is ever fatal.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 ENGINE = Path(__file__).resolve().parent
 RUNTIME = ENGINE / "runtime"
 GAMES = ENGINE.parent.parent / "games"

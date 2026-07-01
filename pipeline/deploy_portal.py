@@ -29,6 +29,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Windows consoles default to cp1252 and choke on wrangler / vite box-drawing glyphs
+# (e.g. ▲ U+25B2). Printing a captured stderr on such a console raises UnicodeEncodeError,
+# which would crash the deploy report (e.g. the BUILD FAILED dump below) instead of exiting
+# cleanly. Reconfigure stdio to utf-8 with replacement so no log line is ever fatal.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 ROOT = Path("C:/Users/TestRun/Claude Claw/forgeflow-games")
 TOKEN_PATH = Path("C:/Users/TestRun/Claude Claw/.claude/settings.local.json")
 
