@@ -149,6 +149,28 @@ def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> dict:
     count = 0
     failures = []              # [{"key": r2_key, "err": "..."}]
     ALWAYS = {"index.html", "game_meta.json", "content.json"}   # code/metadata: always re-push
+    # 2026-07-02 INCREMENTAL MODE: a local manifest (state/r2_manifest_{slug}.json) records what we
+    # have successfully uploaded (md5 per key). New/changed assets upload WITHOUT --force (the CDN
+    # worker returns 200 "not found" bodies for missing keys, so remote probing is unreliable, and
+    # --force re-uploads everything via one npx cold-start per file = 1-2h). --seed-manifest records
+    # the current local tree as already-uploaded (baseline after a verified-synced state).
+    import hashlib as _hl2, json as _json2
+    _man_path = Path('C:\\Users\\TestRun\\Claude Claw\\state') / f"r2_manifest_{slug}.json"
+    try:
+        _manifest = _json2.loads(_man_path.read_text(encoding="utf-8")) if _man_path.exists() else {}
+    except Exception:
+        _manifest = {}
+    def _md5(fp):
+        h = _hl2.md5()
+        with open(fp, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    def _save_manifest():
+        try:
+            _man_path.write_text(_json2.dumps(_manifest, indent=0), encoding="utf-8")
+        except Exception as e:
+            print(f"  [r2] manifest save failed (non-fatal): {e}")
     for file_path in game_dir.rglob("*"):
         if file_path.is_dir():
             continue
@@ -162,8 +184,12 @@ def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> dict:
         # everything (first-ever deploy of a game, or when you actually changed assets). We do NOT
         # probe the CDN per-file: the worker returns inconsistent 404/5xx under rapid GETs, which
         # made the old skip-check re-upload everything anyway.
-        if not force and relative.name not in ALWAYS:
-            continue
+        _h = None
+        if relative.name not in ALWAYS and not force:
+            _h = _md5(file_path)
+            if _manifest.get(r2_key) == _h:
+                continue                      # unchanged + already uploaded -> skip
+            # new or changed asset -> fall through and upload (manifest updated on success)
         # 2026-05-05 — wrangler 4.x needs --remote or it writes to a LOCAL sandbox and the worker serves stale content.
         cmd = f'npx wrangler r2 object put "{R2_BUCKET}/{r2_key}" --file="{file_path}" --remote'
         try:
@@ -177,12 +203,14 @@ def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> dict:
             continue
         if result.returncode == 0:
             count += 1
+            _manifest[r2_key] = _h if _h is not None else _md5(file_path)
             print(f"  [r2] Uploaded: {r2_key}")
         else:
             err = (result.stderr or "").strip()
             _safe_print(f"  [r2] FAILED: {r2_key} -- {err[:100]}")
             failures.append({"key": r2_key, "err": err})
 
+    _save_manifest()
     # A single failed file is never fatal here — collect + summarise, and let the caller
     # decide (0 uploaded, or a CRITICAL file failed -> skip Supabase and exit non-zero).
     critical_failed = [f["key"] for f in failures if Path(f["key"]).name in CRITICAL_FILES]
@@ -383,8 +411,25 @@ def main():
     parser.add_argument("--slug", required=True, help="URL slug for the game")
     parser.add_argument("--metadata", help="Path to game metadata JSON file")
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--force", action="store_true", help="re-upload ALL files incl. static assets (default skips assets already on the CDN) — use when you added/changed assets")
+    parser.add_argument("--force", action="store_true", help="re-upload ALL files incl. static assets — rarely needed now: default incremental mode uploads new/changed assets via the local manifest")
+    parser.add_argument("--seed-manifest", action="store_true", help="record the current local tree as already-uploaded (no uploads) — run once after a verified-synced state")
     args = parser.parse_args()
+    if getattr(args, "seed_manifest", False):
+        import hashlib as _shl, json as _sjson
+        gd = Path(args.game_dir).resolve()
+        man_path = Path('C:\\Users\\TestRun\\Claude Claw\\state') / f"r2_manifest_{args.slug}.json"
+        man = {}
+        for fp in gd.rglob("*"):
+            if fp.is_dir():
+                continue
+            h = _shl.md5()
+            with open(fp, "rb") as f:
+                for chunk in iter(lambda: f.read(1 << 20), b""):
+                    h.update(chunk)
+            man[f"{args.slug}/{fp.relative_to(gd).as_posix()}"] = h.hexdigest()
+        man_path.write_text(_sjson.dumps(man, indent=0), encoding="utf-8")
+        print(f"[seed] recorded {len(man)} files into {man_path}")
+        raise SystemExit(0)
     ensure_cf_env()
     res = deploy_one(args.game_dir, args.slug, metadata_path=args.metadata, dry_run=args.dry_run, force=args.force)
     sys.exit(0 if res.get("ok") or res.get("dry") else 1)
