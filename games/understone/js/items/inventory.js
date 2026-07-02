@@ -35,6 +35,21 @@ export class Inventory {
     return d;
   }
 
+  // Terraria-style soft classes: full armor sets buff a damage type
+  classBonus() {
+    const b = { meleeDmg: 1, rangedDmg: 1, magicDmg: 1, manaCost: 1, meleeSpeed: 1 };
+    const { head, chest, legs } = this.armor;
+    if (!head || !chest || !legs) return b;
+    const prefixOf = (id) => id.replace(/(Helmet|Breastplate|Greaves|Chainmail|Scalemail|Hat|Shirt|Pants|Hood|Jerkin|Leggings).*/, '');
+    const p = prefixOf(head.id);
+    if (p !== prefixOf(chest.id) || p !== prefixOf(legs.id)) return b;
+    if (p === 'molten') b.meleeDmg = 1.1;        // warrior
+    else if (p === 'shadow') b.meleeSpeed = 0.85; // rogue-ish: +15% swing speed
+    else if (p === 'jungle') { b.manaCost = 0.84; b.magicDmg = 1.08; } // mage
+    else if (p === 'ranger') b.rangedDmg = 1.15; // archer
+    return b;
+  }
+
   count(id) {
     let n = 0;
     for (const s of this.slots) if (s && s.id === id) n += s.count;

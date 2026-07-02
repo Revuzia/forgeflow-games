@@ -7,8 +7,9 @@ import { moveEntity, entityLiquid } from './physics.js';
 import { character } from '../core/assets.js';
 
 // enemy types with full PixelLab animated characters (walk/attack frames)
-const ANIMATED = new Set(['zombie', 'skeleton', 'mummy', 'ghost', 'goblinScout', 'demon', 'iceWolf', 'vulture', 'undeadViking', 'bloodZombie']);
-const CHAR_NAME = { goblinScout: 'goblin', undeadViking: 'skeleton', bloodZombie: 'zombie' };
+const ANIMATED = new Set(['zombie', 'skeleton', 'mummy', 'ghost', 'goblinScout', 'demon', 'iceWolf', 'vulture', 'undeadViking', 'bloodZombie',
+  'skeletonArcher', 'spider', 'graniteElemental', 'snatcher', 'wraith']);
+const CHAR_NAME = { goblinScout: 'goblin', undeadViking: 'skeleton', bloodZombie: 'zombie', wraith: 'ghost' };
 
 // registry ---------------------------------------------------------------------
 export const ENEMIES = {

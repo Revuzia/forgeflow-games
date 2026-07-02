@@ -198,17 +198,22 @@ async function boot() {
   const syncHeld = () => {
     const def = inventory.heldDef();
     if (!def) { player.heldItem = null; return; }
+    const cb = inventory.classBonus();
+    const isMelee = ['sword', 'shortsword', 'spear', 'flail', 'boomerang'].includes(def.weapon);
+    const dmgMult = isMelee ? cb.meleeDmg : def.weapon === 'bow' ? cb.rangedDmg : def.weapon === 'magic' ? cb.magicDmg : 1;
     player.heldItem = {
       name: def.name,
       type: def.tool ?? def.type,
       pickPower: def.pickPower, axePower: def.axePower, hammerPower: def.hammerPower,
-      useTime: def.useTime ?? 20,
-      damage: def.damage, knockback: def.knockback,
+      useTime: Math.max(6, Math.round((def.useTime ?? 20) * (isMelee ? cb.meleeSpeed : 1))),
+      damage: def.damage != null ? Math.round(def.damage * dmgMult) : def.damage,
+      knockback: def.knockback,
       placeTile: def.placeTile != null ? T[def.placeTile] : null,
       placeWall: def.placeWall != null ? W_[def.placeWall] : null,
       use: def.use, boss: def.boss, weapon: def.weapon, ammo: def.ammo,
       element: def.element ?? null, proc: def.proc ?? null,
-      mana: def.mana, heal: def.heal, bolt: def.bolt,
+      mana: def.mana != null && def.type !== 'consumable' ? Math.max(1, Math.round(def.mana * cb.manaCost)) : def.mana,
+      heal: def.heal, bolt: def.bolt,
       consume: (def.type === 'block' || def.type === 'wall' || def.type === 'consumable' || def.type === 'summon')
         ? () => inventory.consumeHeld(1) : null,
     };

@@ -194,6 +194,13 @@ armor('shadowGreaves', 'Shadow Greaves', 'legs', 6, 16000);
 armor('moltenHelmet', 'Molten Helmet', 'head', 8, 18000);
 armor('moltenBreastplate', 'Molten Breastplate', 'chest', 9, 30000);
 armor('moltenGreaves', 'Molten Greaves', 'legs', 8, 24000);
+// class-flavored sets (Terraria's "soft classes" are armor set bonuses per damage type)
+armor('jungleHat', 'Jungle Hat', 'head', 4, 6000);        // MAGE set: -16% mana cost
+armor('jungleShirt', 'Jungle Shirt', 'chest', 5, 10000);
+armor('junglePants', 'Jungle Pants', 'legs', 4, 8000);
+armor('rangerHood', 'Ranger Hood', 'head', 3, 6000);      // RANGER set: +15% ranged damage
+armor('rangerJerkin', 'Ranger Jerkin', 'chest', 5, 10000);
+armor('rangerLeggings', 'Ranger Leggings', 'legs', 4, 8000);
 
 // --- consumables / specials ---------------------------------------------------------------------
 item('lifeCrystal', { name: 'Life Crystal', type: 'consumable', use: 'lifeCrystal', stack: 99, value: 7500 });

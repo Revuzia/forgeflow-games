@@ -105,6 +105,13 @@ export const RECIPES = [
   { out: 'bladeOfGrass', n: 1, station: 'anvil', ing: { stinger: 12, vine: 3 } },
   { out: 'enchantedBoomerang', n: 1, station: 'anvil', ing: { wood: 10, goldBar: 5, fallenStar: 2 } },
   { out: 'lesserManaPotion', n: 2, station: 'bottle', ing: { bottle: 2, fallenStar: 1 } },
+  // class armor: mage (jungle) + ranger (hide/silk)
+  { out: 'jungleHat', n: 1, station: 'anvil', ing: { stinger: 8, vine: 2 } },
+  { out: 'jungleShirt', n: 1, station: 'anvil', ing: { stinger: 12, vine: 4 } },
+  { out: 'junglePants', n: 1, station: 'anvil', ing: { stinger: 10, vine: 3 } },
+  { out: 'rangerHood', n: 1, station: 'loom', ing: { silk: 6, ironBar: 2 } },
+  { out: 'rangerJerkin', n: 1, station: 'loom', ing: { silk: 10, ironBar: 4 } },
+  { out: 'rangerLeggings', n: 1, station: 'loom', ing: { silk: 8, ironBar: 3 } },
 
   // --- anvil: armor -----------------------------------------------------------------
   { out: 'copperHelmet', n: 1, station: 'anvil', ing: { copperBar: 12 } },
