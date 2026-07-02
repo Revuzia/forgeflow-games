@@ -273,6 +273,33 @@ async function boot() {
     wasDead = player.dead;
   });
 
+  // sapling growth: every ~5s one random sapling tries to become a tree
+  const saplings = new Set();
+  world.onTileChanged.push((tx, ty) => {
+    const k = ty * world.w + tx;
+    if (world.tiles[k] === T.sapling) saplings.add(k); else saplings.delete(k);
+  });
+  game.updaters.push(() => {
+    if (game.tick % 300 !== 0 || saplings.size === 0) return;
+    const arr = [...saplings];
+    const k = arr[(Math.random() * arr.length) | 0];
+    const tx = k % world.w, ty = (k / world.w) | 0;
+    if (world.tiles[k] !== T.sapling) { saplings.delete(k); return; }
+    if (Math.random() > 0.3) return;
+    const height = 6 + (Math.random() * 7 | 0);
+    for (let t = 0; t <= height + 2; t++) {
+      if (ty - t < 0 || (t > 0 && world.tileAt(tx, ty - t) !== T.air)) return; // no room
+    }
+    const ground = world.tileAt(tx, ty + 1);
+    if (ground !== T.grass && ground !== T.dirt && ground !== T.snow && ground !== T.jungleGrass) return;
+    saplings.delete(k);
+    for (let t = 0; t <= height; t++) world.setTile(tx, ty - t, T.treeTrunk);
+    for (let ly = -2; ly <= 1; ly++) for (let lx = -2; lx <= 2; lx++) {
+      const yy = ty - height - 1 + ly, xx = tx + lx;
+      if (Math.abs(lx) + Math.abs(ly) <= 3 && world.tileAt(xx, yy) === T.air) world.setTile(xx, yy, T.treeLeaves);
+    }
+  });
+
   // ---- pause menu (Esc) + autosave ------------------------------------------------
   const pauseEl = document.createElement('div');
   pauseEl.style.cssText = `position:fixed;inset:0;display:none;align-items:center;justify-content:center;

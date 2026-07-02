@@ -216,6 +216,9 @@ export function summonBossFactory(game) {
     }
     if (bossId === 'eaterOfWorlds') {
       if (game.enemies.some(e => e.boss)) return false;
+      const ptx = p.x / 16;
+      const inCorruption = (game.world.corruption ?? []).some(([a, b]) => ptx >= a && ptx <= b);
+      if (!inCorruption) { game.announce?.('The worm only stirs beneath corrupted ground…'); return false; }
       spawnEaterOfWorlds(game, p.x + 20 * TILE, p.py + 30 * TILE);
       game.announce?.('Eater of Worlds has awoken!');
       return true;

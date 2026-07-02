@@ -87,6 +87,7 @@ export function saveGame(game) {
     liquidType: b64(rleEncode8(world.liquidType)),
     surface: Array.from(world.surface),
     spawn: [world.spawnX, world.spawnY],
+    corruption: world.corruption ?? [],
     player: {
       x: player.px, y: player.py, hp: player.hp, hpMax: player.hpMax,
       mana: player.mana, manaMax: player.manaMax,
@@ -120,6 +121,7 @@ export function loadGame(game) {
   world.liquidType.set(rleDecode8(unb64(data.liquidType), world.w * world.h));
   world.surface.set(Int16Array.from(data.surface));
   world.spawnX = data.spawn[0]; world.spawnY = data.spawn[1];
+  world.corruption = data.corruption ?? [];
   game.tick = data.tick;
   player.px = data.player.x; player.py = data.player.y;
   player.ppx = player.px; player.ppy = player.py;

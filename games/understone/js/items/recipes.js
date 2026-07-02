@@ -90,5 +90,5 @@ export const RECIPES = [
   // --- demon altar: boss summons ------------------------------------------------------
   { out: 'suspiciousEye', n: 1, station: 'altar', ing: { lens: 6 } },
   { out: 'slimeCrown', n: 1, station: 'altar', ing: { gel: 20, goldCrown: 1 } },
-  { out: 'wormFood', n: 1, station: 'altar', ing: { rottenChunk: 15, shadowScale: 30 } }, // vile powder→shadowScale simplification, flagged
+  { out: 'wormFood', n: 1, station: 'altar', ing: { rottenChunk: 20 } }, // vile powder omitted in v1 (Eaters of Souls drop the chunks)
 ];

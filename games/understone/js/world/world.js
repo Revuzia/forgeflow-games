@@ -77,6 +77,8 @@ tile('rubyOre',    { mult: 1, drops: 'ruby', color: '#e03a4e', merge: 'rock' });
 tile('diamondOre', { mult: 1, drops: 'diamond', color: '#bfe8f0', merge: 'rock' });
 tile('hellforge',  { solid: false, mult: 1.5, station: 'hellforge', drops: 'hellforgeItem', lightEmit: [0.95, 0.45, 0.1], color: '#d2622a', frameStyle: 'cross' });
 tile('sapling',    { solid: false, mult: 100, drops: 'acorn', lightBlock: false, color: '#5a8a3a', frameStyle: 'cross' });
+tile('ebonstone',  { mult: 0.5, pick: 65, drops: 'stone', color: '#4a4258', merge: 'rock' });
+tile('corruptGrass', { mult: 2, grassTo: 'dirt', drops: 'dirt', color: '#7a68a8' });
 
 // --- walls ---
 export const W_ = {}; // name → wall id

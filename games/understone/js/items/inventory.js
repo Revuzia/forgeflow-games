@@ -23,7 +23,15 @@ export class Inventory {
   defense() {
     let d = 0;
     for (const k of ['head', 'chest', 'legs']) if (this.armor[k]) d += ITEMS[this.armor[k].id].defense ?? 0;
-    // set bonus: all three pieces share a tier prefix → +bonus (research 04 §6, simplified to +2/-ish handled in player)
+    // set bonus (research 04 §6): matching tier prefix on all three pieces
+    const SET_BONUS = { wood: 1, copper: 2, iron: 2, silver: 3, gold: 3, molten: 0, shadow: 0 };
+    const prefixOf = (id) => id.replace(/(Helmet|Breastplate|Greaves|Chainmail|Scalemail).*/, '');
+    if (this.armor.head && this.armor.chest && this.armor.legs) {
+      const p = prefixOf(this.armor.head.id);
+      if (p === prefixOf(this.armor.chest.id) && p === prefixOf(this.armor.legs.id)) {
+        d += SET_BONUS[p] ?? 0;   // molten/shadow bonuses are non-defense (dmg/speed) — v1 skips those effects
+      }
+    }
     return d;
   }
 

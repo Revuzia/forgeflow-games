@@ -11,7 +11,7 @@ import { T, TILES, WALLS } from '../world/world.js';
 const TILE_TEXTURES = [
   'dirt', 'stone', 'grass', 'wood', 'sand', 'snow', 'ice', 'mud', 'clay', 'ash',
   'obsidian', 'hellstone', 'copperOre', 'ironOre', 'silverOre', 'goldOre',
-  'demonite', 'rubyOre', 'diamondOre', 'jungleGrass',
+  'demonite', 'rubyOre', 'diamondOre', 'jungleGrass', 'ebonstone', 'corruptGrass',
 ];
 const WALL_TEXTURES = ['dirtNatural', 'stoneNatural', 'woodWall'];
 const SPRITES = ['player', 'slime', 'zombie', 'skeleton', 'demonEye', 'bat', 'fireImp', 'wormSegment', 'eyeOfCthulhu', 'kingSlime'];

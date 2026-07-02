@@ -38,10 +38,15 @@ export class Spawner {
     return [240, 10]; // underworld
   }
 
-  pickType(band, tick, bloodMoon, biome) {
+  inCorruption(tx) {
+    return (this.world.corruption ?? []).some(([a, b]) => tx >= a && tx <= b);
+  }
+
+  pickType(band, tick, bloodMoon, tx = 0) {
     const day = isDay(tick);
     const roll = Math.random();
     if (band === 'surface') {
+      if (this.inCorruption(tx)) return roll < 0.8 ? 'eaterOfSouls' : 'zombie';
       if (day && !bloodMoon) return roll < 0.75 ? 'greenSlime' : 'blueSlime';
       // night: zombies + demon eyes (+ extra zombies on blood moon)
       if (roll < (bloodMoon ? 0.65 : 0.5)) return 'zombie';
@@ -96,7 +101,7 @@ export class Spawner {
       // player-placed walls block spawns (natural walls don't)
       const wallId = world.wallAt(tx, ty);
       if (wallId !== 0 && !WALLS[wallId].natural) continue;
-      const type = this.pickType(band, game.tick, game.bloodMoon);
+      const type = this.pickType(band, game.tick, game.bloodMoon, tx);
       const def = ENEMY_SIZE[type] ?? { w: 20, h: 40 };
       // need standing room: air for body, solid floor for grounded types
       const needsFloor = !['demonEye', 'caveBat', 'giantWorm', 'eaterOfSouls'].includes(type);

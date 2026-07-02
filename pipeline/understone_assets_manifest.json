@@ -22,6 +22,8 @@
     "tile_ruby":      { "prompt": "gray stone texture with embedded faceted deep red gemstones,", "target": "tiles/rubyOre.png", "size": 64 },
     "tile_diamond":   { "prompt": "gray stone texture with embedded faceted brilliant white-blue gemstones,", "target": "tiles/diamondOre.png", "size": 64 },
     "tile_jungleGrass": { "prompt": "vivid deep green jungle moss turf texture with tiny leaves,", "target": "tiles/jungleGrass.png", "size": 64 },
+    "tile_ebonstone": { "prompt": "eerie dark purple-gray corrupted stone rock texture with faint violet cracks,", "target": "tiles/ebonstone.png", "size": 64 },
+    "tile_corruptGrass": { "prompt": "sickly purple-violet corrupted grass turf texture with dark tendrils,", "target": "tiles/corruptGrass.png", "size": 64 },
     "wall_dirt":      { "prompt": "very dark shadowed packed earth cave wall texture, muted low contrast,", "target": "walls/dirtNatural.png", "size": 64 },
     "wall_stone":     { "prompt": "very dark shadowed rough rock cave wall texture, muted low contrast,", "target": "walls/stoneNatural.png", "size": 64 },
     "wall_wood":      { "prompt": "dark dim wooden board wall texture with vertical planks, muted,", "target": "walls/woodWall.png", "size": 64 },

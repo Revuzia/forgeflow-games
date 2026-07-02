@@ -187,6 +187,37 @@ export function generateWorld(world, onProgress = () => {}) {
     }
   }
 
+  // corruption: 1-2 strips (research 02: 200-600 wide, never near center), evil purple
+  const strips = 1 + (rand() < 0.5 ? 1 : 0);
+  world.corruption = [];
+  for (let s = 0; s < strips; s++) {
+    let cx0;
+    for (let tries = 0; tries < 50; tries++) {
+      cx0 = (w * 0.08 + rand() * w * 0.8) | 0;
+      const farFromCenter = Math.abs(cx0 + 60 - mid) > 200;
+      const farFromOthers = world.corruption.every(([a]) => Math.abs(a - cx0) > 300);
+      if (farFromCenter && farFromOthers) break;
+    }
+    const cw2 = 90 + (rand() * 60) | 0;
+    world.corruption.push([cx0, cx0 + cw2]);
+    const depthTo = stoneLine + h * 0.1;
+    for (let x = cx0; x < cx0 + cw2 && x < w; x++) {
+      for (let y = surface[x]; y < depthTo; y++) {
+        const cur = get(x, y);
+        if (cur === T.grass) set(x, y, T.corruptGrass);
+        else if (cur === T.stone) set(x, y, T.ebonstone);
+        else if (cur === T.sand) set(x, y, T.ebonstone);
+      }
+    }
+    // chasms: 2-3 narrow vertical clefts
+    for (let c2 = 0; c2 < 2 + (rand() * 2 | 0); c2++) {
+      const chx = cx0 + 10 + rand() * (cw2 - 20);
+      tileRunner(world, rand, chx, surface[chx | 0] + 4, 3 + rand() * 2, 60 + rand() * 50, (tx2, ty2) => {
+        if (ty2 > surface[tx2] + 2) set(tx2, ty2, T.air);
+      });
+    }
+  }
+
   // underworld: ash + hellstone + lava pools
   const hellY = (h * LAYERS.underworld) | 0;
   for (let x = 0; x < w; x++) {
