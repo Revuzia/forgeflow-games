@@ -65,7 +65,66 @@
     },
     "heroIron": {
       "id": "33732250-4678-4079-8302-5f5a10e11ce5",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true,
+        "cross-punch": true
+      }
+    },
+    "heroSilver": {
+      "id": "af99726b-afc7-494f-b055-54f6cc2fc940",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true,
+        "cross-punch": true
+      }
+    },
+    "heroGold": {
+      "id": "bb8de0db-3e74-45bd-a71b-80c41cafffa6",
+      "anims": {
+        "breathing-idle": true
+      }
+    },
+    "heroShadow": {
+      "id": "e1efd345-a81f-4f7d-a9f3-6a95cc200b2b",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true,
+        "cross-punch": true
+      }
+    },
+    "heroMolten": {
+      "id": "fd02f94f-a81e-4019-844a-420bbe3ab7bb",
       "anims": {}
+    },
+    "skeletonArcher": {
+      "id": "a71521a1-c499-407a-a05a-bae2f91dc909",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true,
+        "cross-punch": true
+      }
+    },
+    "spider": {
+      "id": "4b37cc72-021f-4ea9-82ad-007f48625903",
+      "anims": {
+        "angry": true
+      }
+    },
+    "graniteElemental": {
+      "id": "22ede99e-1fe6-46df-abbe-f452bd6c43a9",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true,
+        "cross-punch": true
+      }
+    },
+    "snatcher": {
+      "id": "a889b977-6a7b-4317-a570-86d589073f37",
+      "anims": {
+        "idle": true,
+        "angry": true
+      }
     }
   }
 }
