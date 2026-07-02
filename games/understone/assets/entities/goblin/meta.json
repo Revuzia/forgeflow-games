@@ -1,4 +1,14 @@
 {
-  "size": 48,
-  "animations": {}
+  "size": 64,
+  "animations": {
+    "breathing-idle": {
+      "frames": 4
+    },
+    "cross-punch": {
+      "frames": 6
+    },
+    "walk": {
+      "frames": 6
+    }
+  }
 }

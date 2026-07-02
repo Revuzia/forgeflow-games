@@ -88,17 +88,10 @@ export class TileRenderer {
     c.rendered = true;
   }
 
-  // main per-frame draw
+  // main per-frame draw. Dirty chunks are re-rendered LAZILY — only when visible —
+  // so a fresh world (every chunk dirty) doesn't hitch for seconds on frame one.
   draw(ctx, camera, alpha) {
     const { world } = this;
-    // flush dirty chunks (budget: all — chunk renders are cheap at 512px)
-    if (world.dirty.size) {
-      for (const key of world.dirty) {
-        const cx = key % 4096, cy = (key / 4096) | 0;
-        if (cx < this.cw && cy < this.ch) this.renderChunk(cx, cy);
-      }
-      world.dirty.clear();
-    }
     const [ox, oy] = camera.frameOrigin(alpha);
     const zoom = camera.zoom;
     const c0x = Math.max(0, (ox / (CHUNK * TILE)) | 0);
@@ -108,8 +101,12 @@ export class TileRenderer {
     ctx.imageSmoothingEnabled = false;
     for (let cy = c0y; cy <= c1y; cy++) {
       for (let cx = c0x; cx <= c1x; cx++) {
+        const key = cy * 4096 + cx;
         const c = this.getChunk(cx, cy);
-        if (!c.rendered) this.renderChunk(cx, cy);
+        if (!c.rendered || world.dirty.has(key)) {
+          this.renderChunk(cx, cy);
+          world.dirty.delete(key);
+        }
         const sx = Math.round((cx * CHUNK * TILE - ox) * zoom);
         const sy = Math.round((cy * CHUNK * TILE - oy) * zoom);
         ctx.drawImage(c.canvas, sx, sy, Math.ceil(CHUNK * TILE * zoom), Math.ceil(CHUNK * TILE * zoom));

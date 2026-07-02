@@ -91,6 +91,23 @@ export class Projectiles {
         ctx.beginPath(); ctx.arc(sx, sy, 4 * z, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = 'rgba(255,200,80,0.5)';
         ctx.beginPath(); ctx.arc(sx - pr.vx * 1.5, sy - pr.vy * 1.5, 3 * z, 0, Math.PI * 2); ctx.fill();
+      } else if (pr.kind === 'sand') {
+        ctx.fillStyle = '#d9c07a';
+        ctx.fillRect(sx - 2 * z, sy - 2 * z, 4 * z, 4 * z);
+        ctx.fillStyle = 'rgba(217,192,122,0.4)';
+        ctx.fillRect(sx - pr.vx * 1.2 - z, sy - pr.vy * 1.2 - z, 2 * z, 2 * z);
+      } else if (pr.kind === 'scythe') {
+        // spinning purple crescent
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(pr.life * 0.3);
+        ctx.strokeStyle = '#b968ff';
+        ctx.lineWidth = 2.5 * z;
+        ctx.beginPath(); ctx.arc(0, 0, 5 * z, 0.4, Math.PI * 1.4); ctx.stroke();
+        ctx.strokeStyle = '#efe0ff';
+        ctx.lineWidth = 1 * z;
+        ctx.beginPath(); ctx.arc(0, 0, 5 * z, 0.6, Math.PI * 1.2); ctx.stroke();
+        ctx.restore();
       } else {
         // arrow: short line along velocity
         const d = Math.hypot(pr.vx, pr.vy) || 1;

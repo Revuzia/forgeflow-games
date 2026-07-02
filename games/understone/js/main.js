@@ -418,11 +418,21 @@ async function boot() {
     if (spr) {
       const bob = !frameImg && walking ? Math.sin(g.tick * 0.35) * 1.2 * z : 0;
       const lean = !frameImg && walking ? Math.sin(g.tick * 0.35) * 0.05 : 0;
-      // PixelLab frames pad the canvas ~40% around the figure — scale up to compensate
-      const padComp = frameImg ? 1.5 : 1;
-      const dh = player.h * padComp * z;
-      const dw = spr.width * (dh / spr.height);
-      const cx = sx + (player.w * z) / 2, cy = sy + (player.h * z) / 2 + bob - (frameImg ? 2 * z : 0);
+      // scale so the OPAQUE figure (content box) matches the hitbox height + anchor feet
+      let dh, dw, cy;
+      const cx = sx + (player.w * z) / 2;
+      if (frameImg && heroChar?.content) {
+        const scale = (player.h * 1.06) / heroChar.content.h;    // figure ≈ hitbox height
+        dh = frameImg.height * scale * z;
+        dw = frameImg.width * scale * z;
+        // content bottom sits at hitbox bottom
+        const contentBottomFrac = (heroChar.content.y + heroChar.content.h) / frameImg.height;
+        cy = sy + player.h * z - dh * contentBottomFrac + dh / 2;
+      } else {
+        dh = player.h * z;
+        dw = spr.width * (dh / spr.height);
+        cy = sy + (player.h * z) / 2 + bob;
+      }
       c.save();
       c.translate(cx, cy);
       c.scale(player.facing > 0 ? 1 : -1, 1);
@@ -434,9 +444,10 @@ async function boot() {
       // ---- held item: visibly swung around the hand anchor (research 07 P0-4) ----
       const held = player.heldItem;
       const heldDef = game.inventory.heldDef();
-      if (held && heldDef && player.swinging > 0 && !held.use && !held.boss) {
+      if (held && heldDef && !held.use && !held.boss) {
         const useT = held.useTime || 20;
-        const prog = Math.min(1, Math.max(0, 1 - player.swinging / useT));
+        const swinging = player.swinging > 0;
+        const prog = swinging ? Math.min(1, Math.max(0, 1 - player.swinging / useT)) : 1;
         const handX = sx + (player.w / 2 + player.facing * 3) * z;
         const handY = sy + 16 * z;
         const sprIt = itemIcon(heldDef.id)
@@ -444,9 +455,11 @@ async function boot() {
             : held.weapon === 'bow' ? 'bow' : held.weapon === 'sword' ? 'sword'
             : held.placeTile != null ? 'block' : 'sword');
         const isz = 18 * z;
+        // swing: 160° overhead → forward arc; rest: relaxed forward-low grip
+        const angle = swinging ? (-2.1 + prog * 2.8) * player.facing : 0.55 * player.facing;
         c.save();
         c.translate(handX, handY);
-        c.rotate((-2.1 + prog * 2.8) * player.facing);   // 160° overhead → forward arc
+        c.rotate(angle);
         c.scale(player.facing > 0 ? 1 : -1, 1);
         c.imageSmoothingEnabled = false;
         c.drawImage(sprIt, -isz * 0.2, -isz, isz, isz);

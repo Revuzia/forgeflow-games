@@ -131,7 +131,9 @@ export class Spawner {
       // player-placed walls block spawns (natural walls don't)
       const wallId = world.wallAt(tx, ty);
       if (wallId !== 0 && !WALLS[wallId].natural) continue;
-      const type = this.pickType(band, game.tick, game.bloodMoon, tx);
+      let type = this.pickType(band, game.tick, game.bloodMoon, tx);
+      // sky layer: harpies rule the heights
+      if (ty < this.world.h * 0.08 && Math.random() < 0.7) type = 'harpy';
       const def = ENEMY_SIZE[type] ?? { w: 20, h: 40 };
       // swimmers spawn only in water
       if (type === 'piranha') {

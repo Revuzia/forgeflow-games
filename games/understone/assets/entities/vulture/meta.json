@@ -1,4 +1,11 @@
 {
-  "size": 48,
-  "animations": {}
+  "size": 64,
+  "animations": {
+    "angry": {
+      "frames": 7
+    },
+    "idle": {
+      "frames": 8
+    }
+  }
 }

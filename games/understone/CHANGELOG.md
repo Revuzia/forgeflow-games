@@ -1,5 +1,38 @@
 # Understone — Changelog
 
+## v2.0 (2026-07-02) — "Elements & Animation" (owner feedback round)
+- **PixelLab asset pipeline** (`pipeline/understone_pixellab.mjs`): 106 real item icons
+  (auto-derived prompts from the item registry, 32×32 RGBA) now render in hotbar,
+  inventory, crafting, chests, and in the player's HAND; 10 animated characters
+  (hero + 9 enemies) with walk/idle/attack/jump/dying frame sets, east-generated + mirrored.
+- **Held item & swing**: selected item visibly held at rest and swung through a 160°
+  overhead arc; element-tinted arc flash (Terraria-style); precise content-box scaling.
+- **Elements**: fire/ice/lightning/water/shadow weapon tiers (Frostbrand, Stormblade,
+  Tide Edge, Glacier/Tempest Bows + tagged vanilla molten/demonite gear), affinity cycle
+  (fire>ice>lightning>water>fire, ×1.35/×0.7/×0.5-self), On Fire!/Chill debuffs,
+  chain lightning proc (3 jumps, ×0.7 falloff, midpoint-displacement bolts with branches).
+- **D&D roll layer**: nimble enemies dodge (≤10%, pity reroll, never bosses/hitstun) with
+  gray MISS floaters; crits show golden "N!" + hit-stop + screenshake; weak/resist hits
+  color-coded green/blue.
+- **Particle/juice engine**: pooled SoA particles (fire/smoke/frost/mist/wisp/ember/spark/
+  droplet/bubble/dust), two-pass blend batching, torch/furnace ambient flames, dig dust,
+  trauma screenshake, hit-stop.
+- **18 new enemies** with biome spawn tables: ghost (phases through walls), mummy, vulture,
+  antlion, ice slime, ice wolf, undead viking, harpy, crab, piranha (swims), goblin scout,
+  blood zombie + drippler (blood moon), cursed skull, hellbat, lava slime, demon, bone serpent.
+- **Worldgen**: 1-tile "pinhole" fall-through shafts widened + near-surface cave interiors
+  get dirt wall backdrops (the invisible-hole bug); biome ranges persisted to saves.
+- **Visuals**: 2-layer parallax hills with atmospheric haze, grass tufts + flowers,
+  stalactites, pickup name floaters, corruption grass lips.
+- **UI**: SVG hearts w/ partial fill + mana stars, coin denominations with coin dots,
+  selected-item name under hotbar, real icons everywhere.
+- **Music**: all 8 tracks replaced with original ForgeFlow catalog instrumentals
+  (day/night/underground/corruption/boss/hell/title/victory) — no overlap with other
+  ForgeFlow games; lazy per-track loading; pause menu plays the title theme.
+- **Perf**: lazy visible-only chunk flushing (first frame 2423ms → 69ms); boot no longer
+  hangs in hidden tabs.
+
+
 ## v1.0 (2026-07-01 → 2026-07-02) — initial release
 Built research-first: 5 parallel research agents produced decompile/wiki-verified specs
 (`research/terraria/01-05` in the Claude Claw repo) before engine work began.

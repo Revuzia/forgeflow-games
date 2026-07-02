@@ -243,12 +243,42 @@ export function makeTileDrawer(world, assets) {
     if (diffRight) ctx.fillRect(px + TILE - 1, py, 1, TILE);
 
     // grass lip: green overhang onto open sides
-    if (info.name === 'grass' || info.name === 'jungleGrass') {
-      ctx.fillStyle = info.name === 'grass' ? '#4caf50' : '#2e9e3e';
+    if (info.name === 'grass' || info.name === 'jungleGrass' || info.name === 'corruptGrass') {
+      const gc = info.name === 'grass' ? '#4caf50' : info.name === 'corruptGrass' ? '#7a68a8' : '#2e9e3e';
+      ctx.fillStyle = gc;
       if (openLeft) ctx.fillRect(px, py, 3, TILE);
       if (openRight) ctx.fillRect(px + TILE - 3, py, 3, TILE);
       ctx.fillStyle = 'rgba(255,255,255,0.15)';
       if (openUp) ctx.fillRect(px, py, TILE, 2);
+      // ambient grass tufts above (research 07 P1: living surface), hash-seeded
+      if (openUp) {
+        const hsh = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
+        if (hsh % 3 !== 0) {
+          ctx.fillStyle = gc;
+          const n = 2 + (hsh % 3);
+          for (let b = 0; b < n; b++) {
+            const bx = px + 2 + ((hsh >> (b * 3)) % 12);
+            const bh = 2 + ((hsh >> (b * 2 + 1)) % 4);
+            ctx.fillRect(bx, py - bh, 1, bh);
+          }
+          if (hsh % 7 === 0) { // occasional flower
+            ctx.fillStyle = ['#e8d05a', '#e87a9a', '#8ab4e8'][hsh % 3];
+            ctx.fillRect(px + 4 + (hsh % 8), py - 5, 2, 2);
+          }
+        }
+      }
+    }
+    // stalactites under stone ceilings, hash-seeded
+    if (info.merge === 'rock' && openDown) {
+      const hsh = ((tx * 83492791) ^ (ty * 2654435761)) >>> 0;
+      if (hsh % 4 === 0) {
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        const sxp = px + 4 + (hsh % 8);
+        const sh = 3 + (hsh % 5);
+        ctx.fillStyle = info.color;
+        ctx.fillRect(sxp, py + TILE, 2, sh);
+        ctx.fillRect(sxp, py + TILE + sh, 1, 2);
+      }
     }
   };
 }
@@ -271,6 +301,26 @@ export function character(name) {
       const meta = await res.json();
       const rec = { meta, anims: {} };
       rec.base = await loadImage(`assets/entities/${name}/base.png`);
+      // measure the opaque content box of the base frame (PixelLab pads canvases ~40%)
+      if (rec.base) {
+        const mc = document.createElement('canvas');
+        mc.width = rec.base.width; mc.height = rec.base.height;
+        const mg = mc.getContext('2d', { willReadFrequently: true });
+        mg.drawImage(rec.base, 0, 0);
+        const d = mg.getImageData(0, 0, mc.width, mc.height).data;
+        let minX = mc.width, minY = mc.height, maxX = 0, maxY = 0;
+        for (let y = 0; y < mc.height; y++) {
+          for (let x = 0; x < mc.width; x++) {
+            if (d[(y * mc.width + x) * 4 + 3] > 40) {
+              if (x < minX) minX = x; if (x > maxX) maxX = x;
+              if (y < minY) minY = y; if (y > maxY) maxY = y;
+            }
+          }
+        }
+        rec.content = maxX >= minX
+          ? { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 }
+          : { x: 0, y: 0, w: mc.width, h: mc.height };
+      }
       await Promise.all(Object.entries(meta.animations ?? {}).map(async ([anim, info]) => {
         const frames = [];
         for (let f = 0; f < info.frames; f++) {

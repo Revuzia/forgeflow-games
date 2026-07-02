@@ -137,6 +137,8 @@ export class Enemy {
   tick(game) {
     this._tick = game.tick;
     this.px = this.x; this.py = this.y;
+    const pl = game.player;
+    this.nearPlayer = pl && !pl.dead && Math.abs(pl.x - this.cx) < 30 && Math.abs(pl.y - this.cy) < 40;
     const ai = this.def.ai;
     if (ai === 'slime') this.aiSlime(game);
     else if (ai === 'fighter') this.aiFighter(game);
@@ -325,8 +327,8 @@ export class Enemy {
     this.aiTimer++;
     this.facing = Math.sign(p.x - this.cx) || 1;
     if (this.aiTimer % 90 === 60 && !p.dead && Math.abs(p.x - this.cx) < 600) {
-      // cast fireball
-      game.projectiles?.spawnEnemy('fireball', this.cx, this.cy - 6, p.x, p.y - 10, 4.5, this.def.dmg);
+      const kind = this.type === 'antlion' ? 'sand' : this.type === 'demon' ? 'scythe' : 'fireball';
+      game.projectiles?.spawnEnemy(kind, this.cx, this.cy - 6, p.x, p.y - 10, kind === 'sand' ? 5.5 : 4.5, this.def.dmg);
       this.aiPhase++;
     }
     if (this.def.stationary) { this.applyGravityAndMove(game); return; }   // antlion: turret, never teleports
@@ -413,12 +415,26 @@ export class Enemy {
       const rec = character(CHAR_NAME[this.type] ?? this.type);
       if (rec) {
         const moving = Math.abs(this.vx) > 0.15 || Math.abs(this.vy) > 0.15;
-        const frames = (moving ? rec.anims.walk : null) ?? rec.anims['breathing-idle'] ?? rec.anims.walk;
+        const walkF = rec.anims.walk ?? rec.anims['fast-walk'] ?? rec.anims.running;
+        const idleF = rec.anims['breathing-idle'] ?? rec.anims.idle;
+        const atkF = rec.anims.attack ?? rec.anims['attack-right'] ?? rec.anims['cross-punch'] ?? rec.anims.angry ?? rec.anims.bark;
+        const frames = (this.nearPlayer ? atkF : null) ?? (moving ? walkF : null) ?? idleF ?? walkF;
         const img = frames?.length ? frames[Math.floor(t * 0.18) % frames.length] : rec.base;
         if (img) {
-          const dh = this.h * 1.5 * z;
-          const dw = img.width * (dh / img.height);
-          this.drawSprite(ctx, img, (ix + this.w / 2 - ox) * z, (iy + this.h / 2 - oy) * z - 2 * z, dw, dh, this.facing < 0, 0, this.tintFor());
+          // content-box scaling: opaque figure matches hitbox height, feet on the ground
+          let dw, dh, cy;
+          if (rec.content) {
+            const scale = (this.h * 1.08) / rec.content.h;
+            dh = img.height * scale * z;
+            dw = img.width * scale * z;
+            const bottomFrac = (rec.content.y + rec.content.h) / img.height;
+            cy = (iy + this.h - oy) * z - dh * bottomFrac + dh / 2;
+          } else {
+            dh = this.h * 1.5 * z;
+            dw = img.width * (dh / img.height);
+            cy = (iy + this.h / 2 - oy) * z - 2 * z;
+          }
+          this.drawSprite(ctx, img, (ix + this.w / 2 - ox) * z, cy, dw, dh, this.facing < 0, 0, this.tintFor());
           ctx.globalAlpha = 1;
           this.drawHpBar(ctx, ix, iy, ox, oy, z);
           return;
