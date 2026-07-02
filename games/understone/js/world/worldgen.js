@@ -240,6 +240,18 @@ export function generateWorld(world, onProgress = () => {}) {
       }
     });
   }
+  // guaranteed lava sea band (research 02: lava sea near the bottom in every world)
+  const seaTop = (hellY + (h - hellY) * 0.62) | 0;
+  const seaBottom = (hellY + (h - hellY) * 0.82) | 0;
+  for (let x = 4; x < w - 4; x++) {
+    const wobble = Math.round(Math.sin(x * 0.05) * 2 + (rand() - 0.5) * 2);
+    for (let y = seaTop + wobble; y < seaBottom; y++) {
+      if (!world.inBounds(x, y)) continue;
+      set(x, y, T.air);
+      world.liquid[y * w + x] = 255;
+      world.liquidType[y * w + x] = 1;
+    }
+  }
 
   // ocean water fill
   for (let x = 0; x < oceanW + 8; x++) {
