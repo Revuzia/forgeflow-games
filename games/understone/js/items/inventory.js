@@ -6,10 +6,14 @@ import { ITEMS } from './items.js';
 
 export const HOTBAR = 10, MAIN = 40, SLOTS = HOTBAR + MAIN;
 
+export const ARMOR_SLOTS = ['head', 'chest', 'legs', 'feet'];
+export const ACCESSORY_SLOTS = 5;
+
 export class Inventory {
   constructor() {
     this.slots = new Array(SLOTS).fill(null);   // {id, count} | null
-    this.armor = { head: null, chest: null, legs: null };
+    this.armor = { head: null, chest: null, legs: null, feet: null };
+    this.accessories = new Array(ACCESSORY_SLOTS).fill(null); // rings/charms/boots-effects
     this.selected = 0;                           // hotbar index
     this.money = 0;                              // copper coins
     this.onChange = [];
@@ -20,9 +24,35 @@ export class Inventory {
   held() { return this.slots[this.selected]; }
   heldDef() { const s = this.held(); return s ? ITEMS[s.id] : null; }
 
+  // does an equip slot accept this item?
+  slotAccepts(slotKind, itemId) {
+    const def = ITEMS[itemId];
+    if (!def) return false;
+    if (ARMOR_SLOTS.includes(slotKind)) return def.type === 'armor' && def.bodySlot === slotKind;
+    if (slotKind === 'accessory') return def.type === 'accessory';
+    return false;
+  }
+
+  // aggregate accessory effects (industry-standard paper-doll bonuses)
+  accessoryEffects() {
+    const e = { moveSpeed: 1, regen: 0, extraJumps: 0, noFallDamage: false, defense: 0, critBonus: 0 };
+    for (const a of this.accessories) {
+      if (!a) continue;
+      const d = ITEMS[a.id];
+      if (!d?.accessory) continue;
+      e.moveSpeed *= d.accessory.moveSpeed ?? 1;
+      e.regen += d.accessory.regen ?? 0;
+      e.extraJumps += d.accessory.extraJumps ?? 0;
+      e.defense += d.accessory.defense ?? 0;
+      e.critBonus += d.accessory.critBonus ?? 0;
+      if (d.accessory.noFallDamage) e.noFallDamage = true;
+    }
+    return e;
+  }
+
   defense() {
-    let d = 0;
-    for (const k of ['head', 'chest', 'legs']) if (this.armor[k]) d += ITEMS[this.armor[k].id].defense ?? 0;
+    let d = this.accessoryEffects().defense;
+    for (const k of ARMOR_SLOTS) if (this.armor[k]) d += ITEMS[this.armor[k].id].defense ?? 0;
     // set bonus (research 04 §6): matching tier prefix on all three pieces
     const SET_BONUS = { wood: 1, copper: 2, iron: 2, silver: 3, gold: 3, molten: 0, shadow: 0 };
     const prefixOf = (id) => id.replace(/(Helmet|Breastplate|Greaves|Chainmail|Scalemail).*/, '');

@@ -96,7 +96,7 @@ export function saveGame(game) {
       mana: player.mana, manaMax: player.manaMax,
     },
     inv: {
-      slots: inventory.slots, armor: inventory.armor,
+      slots: inventory.slots, armor: inventory.armor, accessories: inventory.accessories,
       selected: inventory.selected, money: inventory.money,
     },
     chests,
@@ -135,7 +135,8 @@ export function loadGame(game) {
   player.mana = data.player.mana; player.manaMax = data.player.manaMax;
   player.fallStartTy = (player.py / 16) | 0;
   inventory.slots = data.inv.slots;
-  inventory.armor = data.inv.armor;
+  inventory.armor = { head: null, chest: null, legs: null, feet: null, ...data.inv.armor };
+  inventory.accessories = data.inv.accessories ?? new Array(5).fill(null);
   inventory.selected = data.inv.selected;
   inventory.money = data.inv.money;
   if (world.chests) {

@@ -1,5 +1,23 @@
 # Understone — Changelog
 
+## v4.0 (2026-07-02) — UI overhaul, fall-through fix, equipment depth
+- **Fall-through bug fixed** (owner-reported): worldgen surface-safety pass now BRIDGES
+  narrow (≤2-wide) deep shafts with real floor (still mineable) — verified **0 traps across
+  12 seeds** (was ~1 invisible trap/world). Wide cave mouths stay open.
+- **HUD/UI overhaul**:
+  - Hotbar moved to **bottom-center** (was top-left)
+  - Keybinds: **I = inventory, C = crafting** (E kept as alias); typing in search no longer moves the player
+  - **Paper-doll equipment**: head/chest/legs/**feet** armor + **5 accessory slots** around a
+    live character preview that shows the equipped armor set; stats panel (defense, speed, regen, crit)
+  - **Pointer drag-and-drop** to move/equip/stash items (+ right-click split, shift-click quick-equip/sell/stash, drag-out to drop in world)
+  - **Searchable recipe book**: category filters, have/need ingredient counts per recipe, station requirements shown; lists ALL recipes (dimmed when uncraftable)
+  - Rarity glow tiers incl. Legendary; richer tooltips (modifiers, accessory effects)
+- **Accessories** (real effects): Hermes Boots (+speed), Cloud in a Bottle (double-jump),
+  Band of Regeneration, Lucky Horseshoe / Obsidian Shield (no fall damage), Shackle/Amulet (+def/crit), Feral Ring
+- **Feet armor**: Leather/Iron/Gold/Molten Boots
+- **Genre → RPG** (classes, gear, reforge, builds) so it appears under the RPG browse tab
+
+
 ## v2.1 (2026-07-02) — "Town & Trail" (progression completeness)
 - **Fallen stars** rain at night and evaporate at dawn — Mana Crystals are now craftable
   (the mana progression dead-end is fixed). Stars twinkle with an additive glow.

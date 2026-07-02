@@ -114,6 +114,18 @@ export const RECIPES = [
   { out: 'rangerHood', n: 1, station: 'loom', ing: { silk: 6, ironBar: 2 } },
   { out: 'rangerJerkin', n: 1, station: 'loom', ing: { silk: 10, ironBar: 4 } },
   { out: 'rangerLeggings', n: 1, station: 'loom', ing: { silk: 8, ironBar: 3 } },
+  // feet armor
+  { out: 'leatherBoots', n: 1, station: 'workbench', ing: { silk: 4 } },
+  { out: 'ironBoots', n: 1, station: 'anvil', ing: { ironBar: 6 } },
+  { out: 'goldBoots', n: 1, station: 'anvil', ing: { goldBar: 6 } },
+  { out: 'moltenBoots', n: 1, station: 'anvil', ing: { hellstoneBar: 8 } },
+  // accessories
+  { out: 'hermesBoots', n: 1, station: 'anvil', ing: { silverBar: 10, gel: 5 } },
+  { out: 'cloudInABottle', n: 1, station: 'anvil', ing: { bottle: 1, gel: 20, fallenStar: 1 } },
+  { out: 'bandOfRegen', n: 1, station: 'anvil', ing: { goldBar: 6, lifeCrystal: 1 } },
+  { out: 'obsidianShield', n: 1, station: 'anvil', ing: { obsidian: 20, ironBar: 6 } },
+  { out: 'amuletOfMight', n: 1, station: 'anvil', ing: { goldBar: 8, ruby: 3, diamond: 1 } },
+  { out: 'feralRing', n: 1, station: 'anvil', ing: { silverBar: 8, stinger: 6 } },
   { out: 'fishingRod', n: 1, station: 'workbench', ing: { wood: 8 } },
   { out: 'abeemination', n: 1, station: 'altar', ing: { stinger: 10, vine: 5, gel: 10 } },
 

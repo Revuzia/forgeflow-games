@@ -99,11 +99,16 @@ export class Player {
     if (this.manaRegenDelay > 0) this.manaRegenDelay--;
     // mana regen: pauses briefly after casting
     if (this.manaRegenDelay <= 0 && this.mana < this.manaMax && game.tick % 6 === 0) this.mana++;
-    // natural life regen (slow; paused 7 s after damage; doubled near a campfire)
-    if (this.recentHurt <= 0 && this.hp < this.hpMax && !this.dead) {
-      if (game.tick % 60 === 0) this.campfire = this.nearCampfire(game);
-      const interval = this.campfire ? 60 : 120;
-      if (game.tick % interval === 0) this.hp = Math.min(this.hpMax, this.hp + 1);
+    // natural life regen (slow; paused 7 s after damage; doubled near a campfire;
+    // Band of Regeneration accessory adds +1/s and works even while hurt-paused)
+    const accRegen = game.inventory?.accessoryEffects?.().regen ?? 0;
+    if (this.hp < this.hpMax && !this.dead) {
+      if (accRegen > 0 && game.tick % 60 === 0) this.hp = Math.min(this.hpMax, this.hp + accRegen);
+      if (this.recentHurt <= 0) {
+        if (game.tick % 60 === 0) this.campfire = this.nearCampfire(game);
+        const interval = this.campfire ? 60 : 120;
+        if (game.tick % interval === 0) this.hp = Math.min(this.hpMax, this.hp + 1);
+      }
     }
     if (this.poisonTicks > 0) {
       this.poisonTicks--;
@@ -130,6 +135,10 @@ export class Player {
     const tyNow = this.py / TILE;
     if (tyNow < WORLD_H * LAYERS.surfaceTop * 0.5) gravity *= 0.5;
 
+    // ---- accessory effects (paper-doll bonuses) ------------------------------
+    const acc = game.inventory?.accessoryEffects?.() ?? { moveSpeed: 1, regen: 0, extraJumps: 0, noFallDamage: false };
+    const maxRun = PHYS.maxRun * acc.moveSpeed;
+
     // ---- horizontal movement (§2) --------------------------------------------
     const left = isDown('left'), right = isDown('right');
     const input = (right ? 1 : 0) - (left ? 1 : 0);
@@ -138,9 +147,9 @@ export class Player {
       if (Math.sign(this.vx) === -input) {
         // turning skid: friction AND accel the same tick (0.28 total)
         this.vx += input * (PHYS.runSlow + PHYS.runAccel);
-      } else if (Math.abs(this.vx) < PHYS.maxRun) {
+      } else if (Math.abs(this.vx) < maxRun) {
         this.vx += input * PHYS.runAccel;
-        if (Math.abs(this.vx) > PHYS.maxRun) this.vx = input * PHYS.maxRun;
+        if (Math.abs(this.vx) > maxRun) this.vx = input * maxRun;
       }
       if (this.swinging <= 0) this.facing = input;
     } else {
@@ -148,7 +157,7 @@ export class Player {
       else this.vx -= Math.sign(this.vx) * friction;
     }
 
-    // ---- jump: velocity-pin model (§3) ----------------------------------------
+    // ---- jump: velocity-pin model (§3) + accessory double-jumps ----------------
     const jumpHeld = isDown('jump');
     if (!jumpHeld) { this.releaseJump = true; this.jump = 0; }
     if (jumpHeld && this.jump > 0) {
@@ -158,7 +167,16 @@ export class Player {
       this.vy = -jumpSpeed;
       this.jump = jumpHold;
       this.releaseJump = false;
+      this.airJumpsLeft = acc.extraJumps;   // reset midair jumps on ground jump
+    } else if (jumpHeld && this.releaseJump && !this.grounded() && (this.airJumpsLeft ?? 0) > 0) {
+      // Cloud in a Bottle-style extra jump
+      this.vy = -jumpSpeed;
+      this.jump = Math.floor(jumpHold * 0.75);
+      this.releaseJump = false;
+      this.airJumpsLeft--;
+      game.fx?.sparks(this.x, this.py + this.h, '#cfe0ff', 4);
     }
+    if (this.grounded()) this.airJumpsLeft = acc.extraJumps;
 
     // ---- gravity ----------------------------------------------------------------
     this.vy += gravity;
@@ -208,7 +226,7 @@ export class Player {
     if (this.jump > 0 || wet || !wasFalling) this.fallStartTy = tileY;
     if (flags.down && this.vy === 0) {
       const fallen = tileY - this.fallStartTy;
-      if (fallen > PHYS.safeFallTiles) {
+      if (fallen > PHYS.safeFallTiles && !acc.noFallDamage) {
         this.hurtNoKb((fallen - PHYS.safeFallTiles) * PHYS.fallDmgPerTile);
       }
       this.fallStartTy = tileY;

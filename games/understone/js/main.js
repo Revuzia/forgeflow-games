@@ -217,7 +217,7 @@ async function boot() {
     }
     player.heldItem = {
       name: mod ? `${mod.name} ${def.name}` : def.name,
-      critBonus: mod?.crit ?? 0,
+      critBonus: (mod?.crit ?? 0) + inventory.accessoryEffects().critBonus,
       type: def.tool ?? def.type,
       pickPower: def.pickPower, axePower: def.axePower, hammerPower: def.hammerPower,
       useTime: Math.max(6, Math.round((def.useTime ?? 20) * speedMult)),
@@ -242,7 +242,12 @@ async function boot() {
       inventory.selected = (inventory.selected + inputMod.mouse.wheel + 10) % 10;
       inventory.changed();
     }
-    if (inputMod.wasPressed('inventory')) hud.toggle();
+    // don't trigger panel keys while typing in the recipe search box
+    const typing = document.activeElement && document.activeElement.id === 'us-search';
+    if (!typing) {
+      if (inputMod.wasPressed('inventory')) hud.toggle();
+      else if (inputMod.wasPressed('crafting')) hud.toggle(!hud.open, 'craft');
+    }
     syncHeld();
   });
   // ---- combat: enemies, spawner, projectiles, bosses ----------------------------

@@ -19,7 +19,8 @@ export const binds = {
   up: ['KeyW', 'ArrowUp'],
   down: ['KeyS', 'ArrowDown'],
   jump: ['Space'],
-  inventory: ['KeyE'],
+  inventory: ['KeyI', 'KeyE'],     // I = inventory (industry standard); E kept as alias
+  crafting: ['KeyC'],              // C = crafting / recipe book focus
   interact: ['KeyF'],
   pause: ['Escape'],
   hotbar: ['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0'],
@@ -50,6 +51,9 @@ export function consumeTick() {
 export function initInput(canvas) {
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
+    // when typing in a text field (recipe search), let the field own the keys
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
     down.add(e.code);
     pressed.add(e.code);
     // stop the browser stealing game keys (space scroll, etc.)

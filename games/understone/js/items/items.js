@@ -216,6 +216,23 @@ armor('junglePants', 'Jungle Pants', 'legs', 4, 8000);
 armor('rangerHood', 'Ranger Hood', 'head', 3, 6000);      // RANGER set: +15% ranged damage
 armor('rangerJerkin', 'Ranger Jerkin', 'chest', 5, 10000);
 armor('rangerLeggings', 'Ranger Leggings', 'legs', 4, 8000);
+// feet armor (boots) — the 4th armor slot on the paper-doll
+armor('leatherBoots', 'Leather Boots', 'feet', 1, 400);
+armor('ironBoots', 'Iron Boots', 'feet', 2, 1200);
+armor('goldBoots', 'Gold Boots', 'feet', 3, 4000);
+armor('moltenBoots', 'Molten Boots', 'feet', 4, 18000);
+
+// --- accessories (equip in the 5 accessory slots; effects via .accessory) ---------------
+const accessory = (id, name, value, acc) =>
+  item(id, { name, type: 'accessory', accessory: acc, stack: 1, value });
+accessory('hermesBoots', 'Hermes Boots', 8000, { moveSpeed: 1.6 });          // sprint
+accessory('cloudInABottle', 'Cloud in a Bottle', 8000, { extraJumps: 1 });    // double jump
+accessory('bandOfRegen', 'Band of Regeneration', 6000, { regen: 1 });         // +1 hp/s
+accessory('luckyHorseshoe', 'Lucky Horseshoe', 5000, { noFallDamage: true });
+accessory('shackle', 'Shackle', 800, { defense: 1 });
+accessory('obsidianShield', 'Obsidian Shield', 12000, { defense: 2, noFallDamage: true });
+accessory('amuletOfMight', 'Amulet of Might', 15000, { defense: 2, critBonus: 0.05 });
+accessory('feralRing', 'Feral Ring', 10000, { moveSpeed: 1.15, critBonus: 0.03 });
 
 // --- consumables / specials ---------------------------------------------------------------------
 item('lifeCrystal', { name: 'Life Crystal', type: 'consumable', use: 'lifeCrystal', stack: 99, value: 7500 });

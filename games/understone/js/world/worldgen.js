@@ -449,29 +449,48 @@ export function generateWorld(world, onProgress = () => {}) {
     world.miningTown = [mx, my];
   }
 
-  // --- 9.5 surface readability pass: no invisible pinhole shafts -------------------------
-  // 1-tile-wide vertical shafts on the walk surface are fall-through traps the player
-  // can't see. Widen them to 2 tiles so cave mouths read clearly.
+  // --- 9.5 surface SAFETY pass: bridge invisible fall-through traps ----------------------
+  // Narrow (<=2 wide), deep drops on the walkable surface are traps you can't see (dark,
+  // look like solid ground). BRIDGE them with a solid dirt/grass floor at the neighbouring
+  // surface height so the walk path is continuous — you can still mine down through it.
+  // Wide gaps (>=3) are legible cave mouths and are left open.
   {
     const groundOf = (x) => {
       let y = 0;
       while (y < h && !world.isSolid(x, y)) y++;
       return y;
     };
-    const ground = new Int16Array(w);
-    for (let x = 0; x < w; x++) ground[x] = groundOf(x);
-    for (let x = 2; x < w - 2; x++) {
-      const l = ground[x - 1], c = ground[x], r = ground[x + 1];
-      if (c - l > 5 && c - r > 5) {
-        // pinhole: carve the shallower neighbor down a few tiles to widen the mouth
-        const side = l <= r ? x - 1 : x + 1;
-        const from = Math.min(l, r);
-        for (let y = from; y < from + 6 && y < h; y++) {
-          const id = get(side, y);
-          if (id !== T.air) set(side, y, T.air);
+    const surfaceBand = h * (LAYERS.underground + 0.05); // only bridge near the surface
+    for (let pass = 0; pass < 4; pass++) {
+      const ground = new Int16Array(w);
+      for (let x = 0; x < w; x++) ground[x] = groundOf(x);
+      let bridged = 0;
+      for (let x = 1; x < w - 3; x++) {
+        const l = ground[x - 1];
+        // start of a drop relative to the solid ground on the left
+        if (ground[x] - l <= 4 || l > surfaceBand) continue;
+        // measure gap width until the ground climbs back near `l`
+        let x1 = x;
+        while (x1 < w - 2 && ground[x1] - l > 4 && x1 - x < 4) x1++;
+        const width = x1 - x;
+        const r = ground[x1];
+        // only bridge NARROW gaps that close back up on the right (a slot, not open terrain)
+        if (width >= 1 && width <= 2 && r - l <= 4) {
+          const level = Math.max(l, r);       // flush with the higher solid neighbour
+          for (let gx = x; gx < x1; gx++) {
+            for (let y = level; y < level + 3 && y < h; y++) set(gx, y, y === level ? T.grass : T.dirt);
+            // dirt wall backdrop below the bridge so the cave reads as a cave
+            for (let y = level + 3; y < ground[gx] && y < h - 1; y++) {
+              if (world.walls[y * w + gx] === W_.none) world.walls[y * w + gx] = W_.dirtNatural;
+            }
+          }
+          bridged++;
+          x = x1;
+        } else {
+          x = x1; // skip past a legitimate wide cave mouth
         }
-        ground[side] = groundOf(side);
       }
+      if (bridged === 0) break;
     }
   }
 
