@@ -114,6 +114,78 @@ export class Combat {
       }
     }
 
+    // ---- spear: extend-and-retract thrust, hits through its arc (research 08) ----------
+    if (held?.weapon === 'spear' && mouse.left && !p.dead && p.swingTimer <= 0) {
+      p.swingTimer = held.useTime;
+      p.swinging = held.useTime;
+      const [wx, wy] = g.camera.screenToWorld(
+        mouse.x * (g.canvas.width / g.canvas.clientWidth),
+        mouse.y * (g.canvas.height / g.canvas.clientHeight));
+      const dx = wx - p.x, dy = wy - p.y;
+      const d = Math.hypot(dx, dy) || 1;
+      this.spear = { dirX: dx / d, dirY: dy / d, total: held.useTime, id: ++this.lastSwingId, held };
+      g.audio?.play('swing', { volume: 0.5 });
+    }
+    if (this.spear) {
+      const s = this.spear;
+      const prog = 1 - p.swinging / s.total;
+      if (p.swinging <= 0) this.spear = null;
+      else {
+        const ext = Math.sin(prog * Math.PI) * 78;          // ~5 tiles out and back
+        const tipX = p.x + s.dirX * ext, tipY = p.y + s.dirY * ext;
+        s.tipX = tipX; s.tipY = tipY; s.ext = ext;
+        for (const e of g.enemies) {
+          for (const hb of e.hitboxes()) {
+            if (tipX > hb.x - 6 && tipX < hb.x + hb.w + 6 && tipY > hb.y - 6 && tipY < hb.y + hb.h + 6) {
+              const crit = Math.random() < 0.04;
+              const r = e.strike(s.held.damage, s.held.knockback ?? 6, p.x, `spear${s.id}`, crit, s.held.element);
+              this.hitFeedback(g, e, r, crit, s.held.element, s.held.proc);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // ---- flail: thrown ball on a chain, out then back, infinite pierce -------------------
+    if (held?.weapon === 'flail' && mouse.left && !p.dead && !this.flail && p.swingTimer <= 0) {
+      p.swingTimer = held.useTime;
+      const [wx, wy] = g.camera.screenToWorld(
+        mouse.x * (g.canvas.width / g.canvas.clientWidth),
+        mouse.y * (g.canvas.height / g.canvas.clientHeight));
+      const dx = wx - p.x, dy = wy - p.y;
+      const d = Math.hypot(dx, dy) || 1;
+      this.flail = { x: p.x, y: p.y, vx: (dx / d) * 9, vy: (dy / d) * 9, out: true, id: ++this.lastSwingId, held };
+      g.audio?.play('swing', { volume: 0.6 });
+    }
+    if (this.flail) {
+      const f = this.flail;
+      if (f.out) {
+        f.x += f.vx; f.y += f.vy;
+        const tx = Math.floor(f.x / 16), ty = Math.floor(f.y / 16);
+        const hitTile = g.world.isSolid(tx, ty);
+        if (hitTile || Math.hypot(f.x - p.x, f.y - p.y) > 110) f.out = false;
+      } else {
+        const dx = p.x - f.x, dy = p.y - f.y;
+        const d = Math.hypot(dx, dy) || 1;
+        f.x += (dx / d) * 11; f.y += (dy / d) * 11;
+        if (d < 14) this.flail = null;
+      }
+      if (this.flail) {
+        for (const e of g.enemies) {
+          for (const hb of e.hitboxes()) {
+            if (f.x > hb.x - 8 && f.x < hb.x + hb.w + 8 && f.y > hb.y - 8 && f.y < hb.y + hb.h + 8) {
+              const crit = Math.random() < 0.04;
+              const r = e.strike(f.held.damage, f.held.knockback ?? 7, f.x, `flail${f.id}-${Math.floor(g.tick / 10)}`, crit, f.held.element);
+              this.hitFeedback(g, e, r, crit, f.held.element, f.held.proc);
+              break;
+            }
+          }
+        }
+        if (f.held.element === 'shadow' && (g.tick & 1)) g.fx?.shadowWisp(f.x, f.y);
+      }
+    }
+
     // ---- bow firing ------------------------------------------------------------------
     if (held?.weapon === 'bow' && mouse.left && !p.dead && p.swingTimer <= 0) {
       const ammo = g.inventory.firstAmmo('arrow');
@@ -197,6 +269,42 @@ export class Combat {
   draw(ctx, camera, alpha) {
     const [ox, oy] = camera.frameOrigin(alpha);
     const z = camera.zoom;
+    const p = this.game.player;
+    // spear shaft
+    if (this.spear?.ext > 2) {
+      const s = this.spear;
+      ctx.strokeStyle = '#8a6238';
+      ctx.lineWidth = 3 * z;
+      ctx.beginPath();
+      ctx.moveTo((p.x - ox) * z, (p.y - oy) * z);
+      ctx.lineTo((s.tipX - ox) * z, (s.tipY - oy) * z);
+      ctx.stroke();
+      ctx.fillStyle = s.held.element === 'water' ? '#7db7e8' : '#c9ccd8';
+      ctx.beginPath();
+      ctx.arc((s.tipX - ox) * z, (s.tipY - oy) * z, 3.5 * z, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // flail chain + ball
+    if (this.flail) {
+      const f = this.flail;
+      ctx.strokeStyle = '#9a9aa8';
+      ctx.lineWidth = 1.5 * z;
+      ctx.setLineDash([3 * z, 2 * z]);
+      ctx.beginPath();
+      ctx.moveTo((p.x - ox) * z, (p.y - oy) * z);
+      ctx.lineTo((f.x - ox) * z, (f.y - oy) * z);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = f.held.element === 'shadow' ? '#5a3a7a' : '#6a6a74';
+      ctx.beginPath();
+      ctx.arc((f.x - ox) * z, (f.y - oy) * z, 6 * z, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#b968ff';
+      for (let a = 0; a < 6; a++) {
+        const ang = a * Math.PI / 3 + this.game.tick * 0.2;
+        ctx.fillRect((f.x - ox) * z + Math.cos(ang) * 7 * z - z, (f.y - oy) * z + Math.sin(ang) * 7 * z - z, 2 * z, 2 * z);
+      }
+    }
     ctx.font = `bold ${11 * z}px 'Segoe UI', sans-serif`;
     for (const t of this.texts) {
       ctx.globalAlpha = Math.min(1, t.life / 20);

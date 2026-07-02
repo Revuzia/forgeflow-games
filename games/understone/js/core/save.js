@@ -89,6 +89,7 @@ export function saveGame(game) {
     spawn: [world.spawnX, world.spawnY],
     corruption: world.corruption ?? [],
     biomes: world.biomes ?? null,
+    npcs: (game.npcs?.npcs ?? []).map(n => ({ type: n.type, x: n.x, y: n.y, homeX: n.homeX })),
     player: {
       x: player.px, y: player.py, hp: player.hp, hpMax: player.hpMax,
       mana: player.mana, manaMax: player.manaMax,
@@ -124,6 +125,7 @@ export function loadGame(game) {
   world.spawnX = data.spawn[0]; world.spawnY = data.spawn[1];
   world.corruption = data.corruption ?? [];
   world.biomes = data.biomes ?? null;
+  game._savedNpcs = data.npcs ?? [];
   game.tick = data.tick;
   player.px = data.player.x; player.py = data.player.y;
   player.ppx = player.px; player.ppy = player.py;

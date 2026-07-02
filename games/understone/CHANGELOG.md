@@ -1,5 +1,28 @@
 # Understone — Changelog
 
+## v2.1 (2026-07-02) — "Town & Trail" (progression completeness)
+- **Fallen stars** rain at night and evaporate at dawn — Mana Crystals are now craftable
+  (the mana progression dead-end is fixed). Stars twinkle with an additive glow.
+- **Grappling Hook**: skeleton Hook drop (4%) + 3 chains @ anvil; kinematic pull at
+  11 px/tick per the decompile (research 01 §8), latch resets fall damage, jump releases
+  with a half-jump. Chain rendered dashed.
+- **Lesser Healing Potions** (2 bottles + 2 gel @ placed bottle): +50 HP, 60 s potion
+  sickness. **Poisoned** debuff (hornet stingers, 10 s, never kills).
+- **Town NPCs**: Rowan the Guide spawns at world spawn with 10 rotating gameplay tips;
+  **Sela the Merchant** moves in when you hold 50 silver AND build a valid house —
+  flood-fill housing check (enclosed ≤750 tiles, 40% walls, light, chair, work surface,
+  door). Merchant shop: torches, arrows, healing potions, bottles. NPCs persist in saves.
+- **Jungle biome** (mud + jungle grass band) with **Hornets** (standoff AI + poison
+  stingers, Stinger drops) and Jungle Slimes.
+- **Spears** (Spear, water-element Trident): extend-retract thrust, multi-hit through
+  enemy i-frames. **Flail** (Ball O' Hurt, shadow): thrown ball on chain, out-and-return
+  with infinite pierce, spiked-ball render.
+- **Bedroll** (10 wood + 5 cobwebs): place and right-click to set your spawn point.
+  Wooden Chair craftable (housing comfort item).
+- Item drops in the world now render their real PixelLab icons.
+- Fix: housing flood-fill treated doorways as passable (rooms never validated).
+
+
 ## v2.0 (2026-07-02) — "Elements & Animation" (owner feedback round)
 - **PixelLab asset pipeline** (`pipeline/understone_pixellab.mjs`): 106 real item icons
   (auto-derived prompts from the item registry, 32×32 RGBA) now render in hotbar,

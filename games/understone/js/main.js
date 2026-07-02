@@ -152,13 +152,25 @@ async function boot() {
   const liquids = new Liquids(world);
   game.liquids = liquids;
 
+  const { NPCManager, NPC } = await import('./entities/npc.js');
+  const npcs = new NPCManager(game);
+  game.npcs = npcs;
+  game.npcInteract = (tx, ty) => npcs.interactAt(tx, ty);
+
   if (choice === 'continue' && saveMod.loadGame(game)) {
-    // world restored from save
+    // world restored from save; restore town NPCs
+    for (const rec of game._savedNpcs ?? []) {
+      const n = new NPC(rec.type, rec.x, rec.y + 40);
+      n.homeX = rec.homeX ?? rec.x;
+      npcs.npcs.push(n);
+    }
+    if (!npcs.npcs.some(n => n.type === 'guide')) npcs.spawnGuide();
   } else {
     generateWorld(world, () => {});
     chests.seedWorldLoot();
     player.respawn();
     for (const [id, n] of STARTER_ITEMS) inventory.add(id, n);
+    npcs.spawnGuide();
   }
   liquids.settleAll();
   camera.x = player.x; camera.y = player.y; camera.px = camera.x; camera.py = camera.y;
@@ -300,6 +312,7 @@ async function boot() {
 
   game.updaters.push(() => player.tick(game));
   game.updaters.push(() => combat.tick());
+  game.updaters.push(() => npcs.tick());
   game.updaters.push(() => spawner.tick(game));
   game.updaters.push(() => projectiles.tick(game));
   game.updaters.push(() => drops.tick(player, inventory));
@@ -315,6 +328,30 @@ async function boot() {
     if (player.dead && !wasDead) audio.play('death', { volume: 0.9 });
     wasDead = player.dead;
   });
+
+  // fallen stars: rain at night near the player, vanish at dawn (mana progression!)
+  {
+    const { isDay } = await import('./render/background.js');
+    game.updaters.push(() => {
+      if (game.tick % 60 !== 0) return;
+      const night = !isDay(game.tick);
+      if (night && Math.random() < 0.045 && !player.dead) {
+        const tx = Math.floor(player.x / 16) + ((Math.random() * 160) | 0) - 80;
+        if (tx > 5 && tx < world.w - 5) {
+          const skyY = Math.max(2, (world.surface[tx] ?? 100) - 40);
+          game.drops.spawn('fallenStar', 1, tx * 16 + 8, skyY * 16, false);
+          const d = game.drops.items[game.drops.items.length - 1];
+          if (d?.id === 'fallenStar') { d.star = true; d.vy = 2; d.vx = (Math.random() - 0.5) * 0.6; }
+        }
+      }
+      if (!night) {
+        // stars evaporate in daylight (Terraria rule)
+        for (let i = game.drops.items.length - 1; i >= 0; i--) {
+          if (game.drops.items[i].star) game.drops.items.splice(i, 1);
+        }
+      }
+    });
+  }
 
   // sapling growth: every ~5s one random sapling tries to become a tree
   const saplings = new Set();
@@ -391,6 +428,20 @@ async function boot() {
     if (player.dead) return;
     const sx = (px - ox) * z, sy = (py - oy) * z;
     if (player.iFrames > 0 && (g.tick & 4)) c.globalAlpha = 0.4;
+    // grapple chain + hook (drawn under the player)
+    if (player.grapple) {
+      const gp = player.grapple;
+      c.strokeStyle = '#8a8a96';
+      c.lineWidth = Math.max(1, 1.5 * z);
+      c.setLineDash([3 * z, 2 * z]);
+      c.beginPath();
+      c.moveTo((player.x - ox) * z, (player.py + 20 - oy) * z);
+      c.lineTo((gp.x - ox) * z, (gp.y - oy) * z);
+      c.stroke();
+      c.setLineDash([]);
+      c.fillStyle = '#c9ccd8';
+      c.fillRect((gp.x - ox) * z - 2 * z, (gp.y - oy) * z - 2 * z, 4 * z, 4 * z);
+    }
     // PixelLab animated hero (walk/attack/jump/idle) with Grok static fallback
     const heroChar = character('hero');
     const walking = Math.abs(player.vx) > 0.3 && player.vy === 0;
@@ -492,7 +543,8 @@ async function boot() {
     c.globalAlpha = 1;
   });
 
-  // enemies + projectiles + falling tiles + world item drops
+  // NPCs + enemies + projectiles + falling tiles + world item drops
+  game.renderers.push((g, alpha) => npcs.draw(g.ctx, camera, alpha, g.assets));
   game.renderers.push((g, alpha) => { for (const e of g.enemies) e.draw(g.ctx, camera, alpha, g.assets); });
   game.renderers.push((g, alpha) => projectiles.draw(g.ctx, camera, alpha));
   game.renderers.push((g, alpha) => falling.draw(g.ctx, camera, alpha, g.assets));

@@ -101,6 +101,7 @@ export class HUD {
         <div id="us-armor-wrap"><h3>Armor</h3><div id="us-armor"></div></div>
         <div><h3>Crafting</h3><div id="us-craft"></div></div>
         <div id="us-chest-wrap" style="display:none"><h3>Chest</h3><div class="grid" id="us-chest" style="grid-template-columns: repeat(5, 44px)"></div></div>
+        <div id="us-shop-wrap" style="display:none; min-width:200px"><h3 id="us-shop-title">Shop</h3><div id="us-shop"></div></div>
       </div>
       <div id="us-tip"></div>`;
     this.els = {
@@ -153,6 +154,32 @@ export class HUD {
   closeChest() {
     this.openChestSlots = null;
     this.els.chestWrap.style.display = 'none';
+    const shopWrap = document.getElementById('us-shop-wrap');
+    if (shopWrap) shopWrap.style.display = 'none';
+  }
+
+  async openShop(npc) {
+    const { SHOP } = await import('../entities/npc.js');
+    const wrap = document.getElementById('us-shop-wrap');
+    const list = document.getElementById('us-shop');
+    document.getElementById('us-shop-title').textContent = npc.name;
+    list.innerHTML = '';
+    for (const [id, price] of SHOP) {
+      const el = document.createElement('div');
+      el.className = 'us-recipe';
+      const gold = Math.floor(price / 10000), silver = Math.floor((price % 10000) / 100), c = price % 100;
+      const priceTxt = [gold && `${gold}g`, silver && `${silver}s`, c && `${c}c`].filter(Boolean).join(' ');
+      el.innerHTML = `${iconFor(id)}<div>${ITEMS[id].name}<div class="ing">${priceTxt}</div></div>`;
+      el.addEventListener('mousedown', () => {
+        if (this.inv.money < price) { this.game.audio?.play('uiClick', { volume: 0.3, rate: 0.7 }); return; }
+        this.inv.money -= price;
+        this.inv.add(id, 1);
+        this.game.audio?.play('coins', { volume: 0.6 });
+      });
+      list.appendChild(el);
+    }
+    wrap.style.display = '';
+    if (!this.open) this.toggle(true);
   }
 
   buildChestSlots() {

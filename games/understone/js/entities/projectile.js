@@ -75,7 +75,10 @@ export class Projectiles {
       } else if (!p.dead) {
         if (pr.x > p.px && pr.x < p.px + p.w && pr.y > p.py && pr.y < p.py + p.h) {
           const def = p.getDefense ? p.getDefense() : 0;
-          if (p.hurt(Math.max(1, pr.damage - Math.ceil(def / 2)), pr.x)) this.list.splice(i, 1);
+          if (p.hurt(Math.max(1, pr.damage - Math.ceil(def / 2)), pr.x)) {
+            if (pr.kind === 'stinger') p.poisonTicks = Math.max(p.poisonTicks ?? 0, 600); // Poisoned 10s
+            this.list.splice(i, 1);
+          }
         }
       }
     }
@@ -91,6 +94,14 @@ export class Projectiles {
         ctx.beginPath(); ctx.arc(sx, sy, 4 * z, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = 'rgba(255,200,80,0.5)';
         ctx.beginPath(); ctx.arc(sx - pr.vx * 1.5, sy - pr.vy * 1.5, 3 * z, 0, Math.PI * 2); ctx.fill();
+      } else if (pr.kind === 'stinger') {
+        const d = Math.hypot(pr.vx, pr.vy) || 1;
+        ctx.strokeStyle = '#a8d43a';
+        ctx.lineWidth = 2 * z;
+        ctx.beginPath();
+        ctx.moveTo(sx - (pr.vx / d) * 4 * z, sy - (pr.vy / d) * 4 * z);
+        ctx.lineTo(sx + (pr.vx / d) * 3 * z, sy + (pr.vy / d) * 3 * z);
+        ctx.stroke();
       } else if (pr.kind === 'sand') {
         ctx.fillStyle = '#d9c07a';
         ctx.fillRect(sx - 2 * z, sy - 2 * z, 4 * z, 4 * z);

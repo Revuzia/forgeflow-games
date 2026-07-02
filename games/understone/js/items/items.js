@@ -39,6 +39,7 @@ block('bottlePlaced', 'Placed Bottle', 'bottle');
 block('chest', 'Chest', 'chest', { value: 100 });
 block('door', 'Wooden Door', 'door', { value: 40 });
 block('hellforgeItem', 'Hellforge', 'hellforge', { value: 5000 });
+block('chair', 'Wooden Chair', 'chair', { value: 60 });
 
 // --- walls ---------------------------------------------------------------------
 item('woodWall', { name: 'Wood Wall', type: 'wall', useTime: 10, placeWall: 'woodWall' });
@@ -160,6 +161,17 @@ armor('moltenGreaves', 'Molten Greaves', 'legs', 8, 24000);
 item('lifeCrystal', { name: 'Life Crystal', type: 'consumable', use: 'lifeCrystal', stack: 99, value: 7500 });
 item('manaCrystal', { name: 'Mana Crystal', type: 'consumable', use: 'manaCrystal', stack: 99, value: 2500 });
 item('magicMirror', { name: 'Magic Mirror', type: 'consumable', use: 'magicMirror', useTime: 90, stack: 1, value: 10000 });
+item('lesserHealingPotion', { name: 'Lesser Healing Potion', type: 'consumable', use: 'heal', heal: 50, useTime: 30, stack: 30, value: 300 });
+item('grapplingHook', { name: 'Grappling Hook', type: 'tool', tool: 'grapple', use: 'grapple', useTime: 8, stack: 1, value: 6000 });
+item('hook', { name: 'Hook', type: 'material', value: 1000 });
+item('bedroll', { name: 'Bedroll', type: 'block', placeTile: 'spawnPoint', useTime: 15, stack: 5, value: 800 });
+item('stinger', { name: 'Stinger', type: 'material', value: 200 });
+// spears (thrust) + flail (thrown ball on chain) — research 08 weapon classes
+item('spear', { name: 'Spear', type: 'weapon', weapon: 'spear', damage: 10, useTime: 30, knockback: 6.5, stack: 1, value: 1500 });
+item('trident', { name: 'Trident', type: 'weapon', weapon: 'spear', damage: 16, useTime: 28, knockback: 6.5, stack: 1, value: 5000 });
+ITEMS.trident.element = 'water';
+item('ballOHurt', { name: "Ball O' Hurt", type: 'weapon', weapon: 'flail', damage: 22, useTime: 40, knockback: 7, stack: 1, value: 10000 });
+ITEMS.ballOHurt.element = 'shadow';
 item('acorn', { name: 'Acorn', type: 'block', placeTile: 'sapling', useTime: 15 }); // sapling handled as treeTrunk seed
 item('suspiciousEye', { name: 'Suspicious Looking Eye', type: 'summon', boss: 'eyeOfCthulhu', stack: 20, value: 2500 });
 item('slimeCrown', { name: 'Slime Crown', type: 'summon', boss: 'kingSlime', stack: 20, value: 2500 });

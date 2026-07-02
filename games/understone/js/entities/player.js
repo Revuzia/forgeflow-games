@@ -24,6 +24,10 @@ export class Player {
     this.respawnTimer = 0;
     this.respawn();              // sets position, fallStartTy, breath, hp — keep LAST
 
+    this.poisonTicks = 0;        // Poisoned debuff (can't drop below 1 HP)
+    this.potionCd = 0;           // potion sickness (60 s)
+    this.grapple = null;         // {x,y, latched} — kinematic hook (research 01 §8)
+
     // mining state
     this.swingTimer = 0;         // ticks until next tool hit
     this.miningTile = -1;        // packed tx,ty currently being damaged
@@ -79,6 +83,15 @@ export class Player {
       return;
     }
     if (this.iFrames > 0) this.iFrames--;
+    if (this.potionCd > 0) this.potionCd--;
+    if (this.poisonTicks > 0) {
+      this.poisonTicks--;
+      if (this.poisonTicks % 30 === 0 && this.hp > 1) {
+        this.hp = Math.max(1, this.hp - 1);            // poison never kills
+        game.floatText?.(this.x, this.py - 10, 1, '#7ab43a');
+      }
+      if (game.tick % 5 === 0) game.fx?.spawn(4, this.px + Math.random() * this.w, this.py + Math.random() * this.h, 0, -0.3, 12, 1, '#7ab43a');
+    }
 
     // ---- reset per-tick stats, then liquid overrides -------------------------
     const liquid = entityLiquid(this.world, { x: this.px, y: this.py, w: this.w, h: this.h });
@@ -130,6 +143,38 @@ export class Player {
     this.vy += gravity;
     if (this.vy > maxFall) this.vy = maxFall;
 
+    // ---- grapple override (research 01 §8: velocity fully replaced by clamped pull) ----
+    if (this.grapple) {
+      const gp = this.grapple;
+      if (!gp.latched) {
+        // hook in flight
+        gp.x += gp.vx; gp.y += gp.vy;
+        gp.range -= Math.hypot(gp.vx, gp.vy);
+        const tx = Math.floor(gp.x / TILE), ty = Math.floor(gp.y / TILE);
+        if (this.world.isSolid(tx, ty)) { gp.latched = true; this.fallStartTy = (this.py / TILE) | 0; }
+        else if (gp.range <= 0) this.grapple = null;
+      }
+      if (this.grapple?.latched) {
+        // pull: velocity = clampLength(anchor - center, 11)
+        const dx = gp.x - this.x, dy = gp.y - (this.py + this.h / 2);
+        const d = Math.hypot(dx, dy);
+        if (d < 6) { this.vx = 0; this.vy = 0; }
+        else {
+          const sp = Math.min(11, d);
+          this.vx = (dx / d) * sp;
+          this.vy = (dy / d) * sp;
+        }
+        this.fallStartTy = (this.py / TILE) | 0;      // grapple negates fall damage
+        // jump releases with a half-jump (7 ticks)
+        if (isDown('jump') && this.releaseJump) {
+          this.grapple = null;
+          this.vy = -PHYS.jumpSpeed;
+          this.jump = Math.floor(PHYS.jumpHold / 2);
+          this.releaseJump = false;
+        }
+      }
+    }
+
     // ---- integrate + collide ------------------------------------------------------
     const e = { x: this.px, y: this.py, vx: this.vx, vy: this.vy, w: this.w, h: this.h };
     const wasFalling = this.vy > 0;
@@ -180,6 +225,12 @@ export class Player {
       // don't close a door on top of yourself
       if (!this.overlapsBox(tx * TILE, ty * TILE, TILE, TILE)) { world.setTile(tx, ty, T.door); game.audio?.play('doorClose'); }
     } else if (id === T.chest && game.openChest) game.openChest(tx, ty);
+    else if (id === T.spawnPoint) {
+      this.world.spawnX = tx;
+      this.world.spawnY = ty - 1;
+      game.announce?.('Spawn point set!');
+      game.audio?.play('powerup', { volume: 0.6 });
+    } else if (game.npcInteract && game.npcInteract(tx, ty)) { /* talked to an NPC */ }
   }
 
   hurtNoKb(dmg) {
@@ -228,8 +279,27 @@ export class Player {
         this.px = this.world.spawnX * TILE - this.w / 2;
         this.py = this.world.spawnY * TILE - this.h;
         this.vx = 0; this.vy = 0;
+        this.grapple = null;
         this.fallStartTy = (this.py / TILE) | 0;
         game.audio?.play('powerup');
+      } else if (held.use === 'heal') {
+        if (this.potionCd > 0 || this.hp >= this.hpMax) return;
+        const amount = held.heal ?? 50;
+        this.hp = Math.min(this.hpMax, this.hp + amount);
+        this.potionCd = 3600;                          // potion sickness: 60 s
+        game.floatText?.(this.x, this.py - 12, `+${amount}`, '#6de86d');
+        game.audio?.play('powerup');
+        held.consume?.();
+      } else if (held.use === 'grapple') {
+        // fire hook toward cursor (or release if latched)
+        if (this.grapple?.latched) { this.grapple = null; return; }
+        const [wx, wy] = game.camera.screenToWorld(
+          mouse.x * (game.canvas.width / game.canvas.clientWidth),
+          mouse.y * (game.canvas.height / game.canvas.clientHeight));
+        const dx = wx - this.x, dy = wy - (this.py + this.h / 2);
+        const d = Math.hypot(dx, dy) || 1;
+        this.grapple = { x: this.x, y: this.py + this.h / 2, vx: (dx / d) * 12, vy: (dy / d) * 12, latched: false, range: 25 * TILE };
+        game.audio?.play('swing', { volume: 0.4 });
       } else if (held.boss && game.summonBoss) {
         if (game.summonBoss(held.boss)) held.consume?.();
       }

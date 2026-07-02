@@ -21,7 +21,7 @@ export const ENEMIES = {
   demonEye: { name: 'Demon Eye', ai: 'flyer', hp: 60, dmg: 18, def: 2, kbResist: 0.2, coins: 75,
     dodge: 0.08, w: 20, h: 20, color: '#c05a5a', drops: [['lens', 1, 1, 0.33]] },
   skeleton: { name: 'Skeleton', ai: 'fighter', hp: 60, dmg: 20, def: 8, kbResist: 0.5, coins: 100,
-    w: 18, h: 40, color: '#d8d8c8', drops: [] },
+    w: 18, h: 40, color: '#d8d8c8', drops: [['hook', 1, 1, 0.04]] },
   caveBat: { name: 'Cave Bat', ai: 'bat', hp: 16, dmg: 13, def: 2, kbResist: 0.2, coins: 90,
     dodge: 0.10, w: 18, h: 14, color: '#8a7aa0', drops: [] },
   giantWorm: { name: 'Giant Worm', ai: 'worm', hp: 30, dmg: 8, def: 0, kbResist: 1.0, coins: 40,
@@ -68,6 +68,10 @@ export const ENEMIES = {
     element: 'shadow', w: 28, h: 44, color: '#8a4a6a', drops: [['demonite', 1, 3, 0.4]] },
   boneSerpent: { name: 'Bone Serpent', ai: 'worm', hp: 180, dmg: 30, def: 10, kbResist: 1, coins: 900,
     w: 18, h: 18, color: '#d8d0c0', segments: 12, drops: [['demonite', 2, 4, 0.5]] },
+  hornet: { name: 'Hornet', ai: 'hornet', hp: 48, dmg: 26, def: 8, kbResist: 0.3, coins: 200,
+    dodge: 0.08, w: 22, h: 22, color: '#c8a02a', drops: [['stinger', 1, 2, 0.66]] },
+  jungleSlime: { name: 'Jungle Slime', ai: 'slime', hp: 40, dmg: 12, def: 6, kbResist: 0, coins: 60,
+    w: 24, h: 18, color: '#5ac83a', drops: [['gel', 1, 2, 1.0]] },
 };
 
 let nextId = 1;
@@ -148,6 +152,31 @@ export class Enemy {
     else if (ai === 'caster') this.aiCaster(game);
     else if (ai === 'ghost') this.aiGhost(game);
     else if (ai === 'swim') this.aiSwim(game);
+    else if (ai === 'hornet') this.aiHornet(game);
+  }
+
+  // ---- Hornet: hovers at range, spits poison stingers ---------------------------
+  aiHornet(game) {
+    const p = game.player;
+    this.aiTimer++;
+    if (!p.dead) {
+      const dx = p.x - this.cx, dy = (p.y - 30) - this.cy;
+      const d = Math.hypot(dx, dy) || 1;
+      const want = d > 140 ? 1 : d < 90 ? -1 : 0;   // keep ~6-9 tile standoff
+      this.vx += (dx / d) * 0.07 * want;
+      this.vy += (dy / d) * 0.05 * want + Math.sin(this.aiTimer * 0.1) * 0.03;
+      if (Math.abs(this.vx) > 2.2) this.vx = Math.sign(this.vx) * 2.2;
+      if (Math.abs(this.vy) > 1.6) this.vy = Math.sign(this.vy) * 1.6;
+      if (this.aiTimer % 110 === 0 && d < 400) {
+        game.projectiles?.spawnEnemy('stinger', this.cx, this.cy, p.x, p.y, 5, this.def.dmg * 0.6);
+      }
+    }
+    const e = { x: this.x, y: this.y, vx: this.vx, vy: this.vy, w: this.w, h: this.h };
+    moveEntity(game.world, e, {});
+    if (e.vx === 0 && this.vx !== 0) e.vx = -this.vx * 0.5;
+    if (e.vy === 0 && this.vy !== 0) e.vy = -this.vy * 0.5;
+    this.x = e.x; this.y = e.y; this.vx = e.vx; this.vy = e.vy;
+    this.facing = Math.sign(p.x - this.cx) || 1;
   }
 
   // ---- Ghost: drifts straight through terrain toward the player, wispy ----------

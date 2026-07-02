@@ -79,6 +79,7 @@ tile('hellforge',  { solid: false, mult: 1.5, station: 'hellforge', drops: 'hell
 tile('sapling',    { solid: false, mult: 100, drops: 'acorn', lightBlock: false, color: '#5a8a3a', frameStyle: 'cross' });
 tile('ebonstone',  { mult: 0.5, pick: 65, drops: 'stone', color: '#4a4258', merge: 'rock' });
 tile('corruptGrass', { mult: 2, grassTo: 'dirt', drops: 'dirt', color: '#7a68a8' });
+tile('chair',      { solid: false, mult: 1.5, color: '#96703f', frameStyle: 'cross' }); // housing comfort item
 
 // --- walls ---
 export const W_ = {}; // name → wall id

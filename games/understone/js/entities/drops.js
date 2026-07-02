@@ -5,6 +5,7 @@
 import { TILE, PHYS } from '../config.js';
 import { moveEntity } from './physics.js';
 import { ITEMS } from '../items/items.js';
+import { itemIcon } from '../core/assets.js';
 
 const GRAB_RANGE = 2.5 * TILE;
 const MAGNET_SPEED = 5;
@@ -72,13 +73,26 @@ export class Drops {
     const z = camera.zoom;
     for (const d of this.items) {
       const sx = (d.x - ox) * z, sy = (d.y - oy) * z;
-      const def = ITEMS[d.id];
-      // placeholder icon: block items use tile swatch, others a small badge (art pass M7)
-      ctx.fillStyle = def.iconColor ?? '#d8c878';
-      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
       const bob = Math.sin((d.age + d.x) * 0.05) * 1.5 * z;
-      ctx.fillRect(sx, sy + bob, d.w * z, d.h * z);
-      ctx.strokeRect(sx + 0.5, sy + bob + 0.5, d.w * z, d.h * z);
+      const icon = itemIcon(d.id);
+      if (icon) {
+        ctx.imageSmoothingEnabled = false;
+        const s = 14 * z;
+        ctx.drawImage(icon, sx - (s - d.w * z) / 2, sy + bob - (s - d.h * z) / 2, s, s);
+        // fallen stars twinkle
+        if (d.id === 'fallenStar' && (d.age & 8)) {
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.5;
+          ctx.drawImage(icon, sx - (s * 1.4 - d.w * z) / 2, sy + bob - (s * 1.4 - d.h * z) / 2, s * 1.4, s * 1.4);
+          ctx.globalAlpha = 1;
+          ctx.globalCompositeOperation = 'source-over';
+        }
+      } else {
+        ctx.fillStyle = '#d8c878';
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(sx, sy + bob, d.w * z, d.h * z);
+        ctx.strokeRect(sx + 0.5, sy + bob + 0.5, d.w * z, d.h * z);
+      }
       if (d.count > 1) {
         ctx.fillStyle = '#fff';
         ctx.font = `${9 * z}px monospace`;

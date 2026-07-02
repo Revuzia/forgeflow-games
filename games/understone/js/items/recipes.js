@@ -74,6 +74,15 @@ export const RECIPES = [
   { out: 'tempestBow', n: 1, station: 'anvil', ing: { goldBar: 7, diamond: 1 } },
   { out: 'tideEdge', n: 1, station: 'anvil', ing: { goldBar: 6, sand: 20 } }, // forged by the sea
 
+  // --- v2.1: survival & mobility ---------------------------------------------------
+  { out: 'lesserHealingPotion', n: 2, station: 'bottle', ing: { bottle: 2, gel: 2 } },
+  { out: 'grapplingHook', n: 1, station: 'anvil', ing: { hook: 1, chain: 3 } },
+  { out: 'bedroll', n: 1, station: 'workbench', ing: { wood: 10, cobweb: 5 } },
+  { out: 'spear', n: 1, station: 'anvil', ing: { wood: 8, ironBar: 2 } },
+  { out: 'trident', n: 1, station: 'anvil', ing: { silverBar: 8 } },
+  { out: 'ballOHurt', n: 1, station: 'anvil', ing: { demoniteBar: 8, shadowScale: 5 } },
+  { out: 'chair', n: 1, station: 'workbench', ing: { wood: 4 } },
+
   // --- anvil: armor -----------------------------------------------------------------
   { out: 'copperHelmet', n: 1, station: 'anvil', ing: { copperBar: 12 } },
   { out: 'copperChainmail', n: 1, station: 'anvil', ing: { copperBar: 20 } },

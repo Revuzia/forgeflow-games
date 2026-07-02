@@ -49,6 +49,7 @@ export class Spawner {
     if (tx <= b.oceanW + 10 || tx >= this.world.w - b.oceanW - 10) return 'ocean';
     if (tx >= b.desert[0] && tx <= b.desert[1]) return 'desert';
     if (tx >= b.snow[0] && tx <= b.snow[1]) return 'snow';
+    if (b.jungle && tx >= b.jungle[0] && tx <= b.jungle[1]) return 'jungle';
     return 'forest';
   }
 
@@ -69,6 +70,10 @@ export class Spawner {
       if (biome === 'snow') {
         if (day) return roll < 0.55 ? 'iceSlime' : 'iceWolf';
         return roll < 0.4 ? 'undeadViking' : roll < 0.7 ? 'iceWolf' : 'zombie';
+      }
+      if (biome === 'jungle') {
+        if (day) return roll < 0.55 ? 'hornet' : 'jungleSlime';
+        return roll < 0.45 ? 'hornet' : roll < 0.8 ? 'zombie' : 'jungleSlime';
       }
       // forest
       if (day) return roll < 0.75 ? 'greenSlime' : 'blueSlime';
@@ -143,7 +148,7 @@ export class Spawner {
       }
       // need standing room: air for body, solid floor for grounded types
       const needsFloor = !['demonEye', 'caveBat', 'giantWorm', 'eaterOfSouls', 'ghost',
-        'harpy', 'cursedSkull', 'drippler', 'hellbat', 'vulture', 'boneSerpent'].includes(type);
+        'harpy', 'cursedSkull', 'drippler', 'hellbat', 'vulture', 'boneSerpent', 'hornet'].includes(type);
       const bodyTiles = Math.ceil(def.h / TILE);
       let ok = true;
       for (let i = 0; i < bodyTiles; i++) if (world.isSolid(tx, ty - i)) ok = false;
@@ -186,4 +191,5 @@ const ENEMY_SIZE = {
   piranha: { w: 22, h: 14 }, goblinScout: { w: 16, h: 34 }, bloodZombie: { w: 18, h: 40 },
   drippler: { w: 20, h: 20 }, cursedSkull: { w: 20, h: 22 }, hellbat: { w: 18, h: 14 },
   lavaSlime: { w: 24, h: 18 }, demon: { w: 28, h: 44 }, boneSerpent: { w: 18, h: 18 },
+  hornet: { w: 22, h: 22 }, jungleSlime: { w: 24, h: 18 },
 };

@@ -171,12 +171,14 @@ export function generateWorld(world, onProgress = () => {}) {
   const desertX1 = desertX0 + w * 0.14;
   const snowX0 = desertLeft ? w * 0.62 : w * 0.12;
   const snowX1 = snowX0 + w * 0.16;
-  world.biomes = { desert: [desertX0 | 0, desertX1 | 0], snow: [snowX0 | 0, snowX1 | 0], oceanW };
+  const jungleX0 = w * 0.32, jungleX1 = w * 0.44;   // band clear of desert/snow/spawn
+  world.biomes = { desert: [desertX0 | 0, desertX1 | 0], snow: [snowX0 | 0, snowX1 | 0], jungle: [jungleX0 | 0, jungleX1 | 0], oceanW };
   for (let x = 0; x < w; x++) {
     const inDesert = x >= desertX0 && x < desertX1;
     const inSnow = x >= snowX0 && x < snowX1;
-    if (!inDesert && !inSnow) continue;
-    const depthLimit = stoneLine + h * 0.06 + noise[x] * 0.3;
+    const inJungle = x >= jungleX0 && x < jungleX1;
+    if (!inDesert && !inSnow && !inJungle) continue;
+    const depthLimit = stoneLine + h * (inJungle ? 0.1 : 0.06) + noise[x] * 0.3;
     for (let y = surface[x]; y < depthLimit; y++) {
       const cur = get(x, y);
       if (inDesert) {
@@ -185,8 +187,12 @@ export function generateWorld(world, onProgress = () => {}) {
       } else if (inSnow) {
         if (cur === T.dirt) set(x, y, T.snow);
         else if (cur === T.stone) set(x, y, T.ice);
+      } else if (inJungle) {
+        if (cur === T.dirt) set(x, y, T.mud);
+        else if (cur === T.stone && rand() < 0.4) set(x, y, T.mud);
       }
     }
+    if (inJungle && get(x, surface[x]) === T.mud) set(x, surface[x], T.jungleGrass);
   }
 
   // corruption: 1-2 strips (research 02: 200-600 wide, never near center), evil purple
