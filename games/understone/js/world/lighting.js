@@ -94,6 +94,14 @@ export class Lighting {
         // seed
         let r = 0, g = 0, b = 0;
         if (y < this.skyTopAt(x) && world.walls[wi] === 0) { r = skyR; g = skyG; b = skyB; }
+        // surface ambient floor: the near-surface band is never pure black, so a HOLE
+        // reads as a distinct dark gap against lit terrain (you can't mistake it for dirt).
+        // Fades to 0 by ~34 tiles below the surface so deep caves stay dark (torches matter).
+        const surfDepth = y - this.skyTopAt(x);
+        if (surfDepth >= 0 && surfDepth < 34) {
+          const amb = 0.11 * (1 - surfDepth / 34) * Math.max(0.35, sun);
+          if (amb > r) r = amb; if (amb > g) g = amb; if (amb * 1.05 > b) b = amb * 1.05;
+        }
         const e = info.lightEmit;
         if (e) { r = Math.max(r, e[0]); g = Math.max(g, e[1]); b = Math.max(b, e[2]); }
         if (isLava) { r = Math.max(r, LAVA_EMIT[0]); g = Math.max(g, LAVA_EMIT[1]); b = Math.max(b, LAVA_EMIT[2]); }
