@@ -193,7 +193,7 @@ export class Combat {
         if (this.swingHit.has(e.id)) continue;
         for (const hb of e.hitboxes()) {
           if (box.x < hb.x + hb.w && box.x + box.w > hb.x && box.y < hb.y + hb.h && box.y + box.h > hb.y) {
-            const crit = Math.random() < 0.04;
+            const crit = Math.random() < 0.04 + (held.critBonus ?? 0);
             const result = e.strike(held.damage, held.knockback ?? 4, p.x, `swing${this.lastSwingId}`, crit, held.element);
             this.hitFeedback(g, e, result, crit, held.element, held.proc);
             if (result !== 0) this.swingHit.add(e.id);
@@ -446,6 +446,8 @@ export class Combat {
           }
         }
         if (e.boss) {
+          g.progress = g.progress ?? {};
+          g.progress.bossKills = (g.progress.bossKills ?? 0) + 1;
           g.announce?.(`${def.name} has been defeated!`);
           if (def.name === 'Eater of Worlds' && e.segs) {
             // every segment drops materials (research 05: 2-5 demonite + 1-2 scales @50% each)

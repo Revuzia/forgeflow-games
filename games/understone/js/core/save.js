@@ -90,6 +90,7 @@ export function saveGame(game) {
     corruption: world.corruption ?? [],
     biomes: world.biomes ?? null,
     npcs: (game.npcs?.npcs ?? []).map(n => ({ type: n.type, x: n.x, y: n.y, homeX: n.homeX })),
+    progress: game.progress ?? {},
     player: {
       x: player.px, y: player.py, hp: player.hp, hpMax: player.hpMax,
       mana: player.mana, manaMax: player.manaMax,
@@ -126,6 +127,7 @@ export function loadGame(game) {
   world.corruption = data.corruption ?? [];
   world.biomes = data.biomes ?? null;
   game._savedNpcs = data.npcs ?? [];
+  game.progress = data.progress ?? {};
   game.tick = data.tick;
   player.px = data.player.x; player.py = data.player.y;
   player.ppx = player.px; player.ppy = player.py;

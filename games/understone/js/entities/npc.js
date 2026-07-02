@@ -23,16 +23,45 @@ const GUIDE_TIPS = [
 export const SHOPS = {
   merchant: [['torch', 50], ['woodenArrow', 5], ['lesserHealingPotion', 300], ['lesserManaPotion', 100], ['bottle', 20], ['bedroll', 800]],
   demolitionist: [['bomb', 750], ['dynamite', 2500], ['torch', 50]],
+  armsDealer: [['woodenArrow', 5], ['flamingArrow', 15], ['woodenBow', 200], ['silverBow', 4800], ['rangerHood', 12000], ['rangerJerkin', 20000], ['rangerLeggings', 16000]],
+  wizard: [['lesserManaPotion', 100], ['manaCrystal', 5000], ['vilethorn', 18000], ['jungleHat', 12000], ['jungleShirt', 20000], ['junglePants', 16000]],
+  dryad: [['acorn', 100], ['vine', 800], ['stinger', 400], ['grass_placeholder', 0]].filter(([id]) => id !== 'grass_placeholder'),
+  oldMiner: [['torch', 40], ['bomb', 600], ['lanternItemPlaceholder', 0]].filter(([id]) => id !== 'lanternItemPlaceholder').concat([['lantern', 250]]),
+  deepTrader: [['demonite', 1600], ['diamond', 8000], ['ruby', 6000], ['silk', 400], ['obsidian', 40], ['hellstoneBarPlaceholder', 0]].filter(([id]) => id !== 'hellstoneBarPlaceholder'),
 };
 export const SHOP = SHOPS.merchant; // legacy alias
+
+// weapon reforge modifiers (Blacksmith service, Terraria's Goblin Tinkerer analogue)
+export const MODIFIERS = [
+  { name: 'Sharp', dmg: 1.10, weight: 3 },
+  { name: 'Swift', speed: 0.88, weight: 3 },
+  { name: 'Deadly', dmg: 1.08, crit: 0.04, weight: 2 },
+  { name: 'Heavy', dmg: 1.12, kb: 1.3, speed: 1.1, weight: 2 },
+  { name: 'Keen', crit: 0.08, weight: 2 },
+  { name: 'Bulky', dmg: 1.05, weight: 3 },
+  { name: 'Dull', dmg: 0.92, weight: 1 },              // reforging gambles!
+  { name: 'Legendary', dmg: 1.15, speed: 0.9, crit: 0.05, weight: 1 },
+];
+export function rollModifier() {
+  const total = MODIFIERS.reduce((a, m) => a + m.weight, 0);
+  let r = Math.random() * total;
+  for (const m of MODIFIERS) { r -= m.weight; if (r <= 0) return m; }
+  return MODIFIERS[0];
+}
 
 const NPC_NAMES = {
   guide: 'Rowan the Guide', merchant: 'Sela the Merchant',
   nurse: 'Mira the Nurse', demolitionist: 'Boris the Demolitionist',
+  blacksmith: 'Hilda the Blacksmith', armsDealer: 'Dex the Arms Dealer',
+  wizard: 'Alaric the Wizard', dryad: 'Fenna the Dryad',
+  oldMiner: 'Grim the Old Miner', deepTrader: 'Vex the Deep Trader',
 };
 const NPC_TINTS = {
   guide: 'rgba(90,180,90,0.35)', merchant: 'rgba(220,180,60,0.35)',
   nurse: 'rgba(230,90,120,0.35)', demolitionist: 'rgba(200,90,40,0.4)',
+  blacksmith: 'rgba(90,90,110,0.45)', armsDealer: 'rgba(150,110,60,0.4)',
+  wizard: 'rgba(110,90,220,0.4)', dryad: 'rgba(60,160,80,0.45)',
+  oldMiner: 'rgba(200,160,70,0.45)', deepTrader: 'rgba(60,160,160,0.45)',
 };
 
 export class NPC {
@@ -81,6 +110,60 @@ export class NPC {
     if (this.type === 'guide') {
       game.announce?.(`${this.name}: “${GUIDE_TIPS[this.tipIndex++ % GUIDE_TIPS.length]}”`);
       game.audio?.play('uiClick', { volume: 0.5 });
+      return true;
+    }
+    if (this.type === 'blacksmith') {
+      // reforge the held weapon: pay value/3, reroll its modifier
+      const inv = game.inventory;
+      const slot = inv.held();
+      const def = slot ? game.ITEMS[slot.id] : null;
+      if (!def || !def.weapon) {
+        game.announce?.(`${this.name}: “Hold the weapon you want reforged, then talk to me.”`);
+        return true;
+      }
+      const cost = Math.max(100, Math.floor((def.value ?? 500) / 3));
+      if (inv.money < cost) {
+        game.announce?.(`${this.name}: “Reforging that costs ${Math.floor(cost / 100)}s ${cost % 100}c.”`);
+        return true;
+      }
+      inv.money -= cost;
+      slot.mod = rollModifier();
+      inv.changed();
+      game.announce?.(`${this.name}: “Behold — the ${slot.mod.name} ${def.name}!”`);
+      game.audio?.play('craft');
+      game.fx?.sparks(this.cx, this.y + 10, '#ffd75a', 8);
+      return true;
+    }
+    if (this.type === 'dryad') {
+      const evil = (game.world.corruption ?? []).length;
+      game.announce?.(`${this.name}: “The world bears ${evil} corruption scar${evil === 1 ? '' : 's'}. Tend the grass, plant acorns, and it will heal.”`);
+      game.hud?.openShop(this);
+      return true;
+    }
+    if (this.type === 'oldMiner') {
+      // ore tip: direction of the nearest gold/demonite from the player
+      const w = game.world, p = game.player;
+      const ptx = Math.floor(p.x / 16), pty = Math.floor(p.y / 16);
+      let best = null, bestD = Infinity;
+      for (let r = 4; r < 120 && !best; r += 8) {
+        for (let ty = Math.max(1, pty - r); ty < Math.min(w.h, pty + r); ty += 2) {
+          for (let tx = Math.max(1, ptx - r); tx < Math.min(w.w, ptx + r); tx += 2) {
+            const id = w.tileAt(tx, ty);
+            if (id === game.T.goldOre || id === game.T.demonite || id === game.T.diamondOre) {
+              const d = Math.hypot(tx - ptx, ty - pty);
+              if (d < bestD) { bestD = d; best = [tx, ty, id]; }
+            }
+          }
+        }
+      }
+      if (best) {
+        const dir = `${best[1] > pty ? 'below' : 'above'} you, to the ${best[0] > ptx ? 'east' : 'west'}`;
+        const what = best[2] === game.T.goldOre ? 'gold' : best[2] === game.T.demonite ? 'demonite' : 'gems';
+        game.announce?.(`${this.name}: “These old bones smell ${what} about ${Math.round(bestD)} tiles ${dir}.”`);
+      } else {
+        game.announce?.(`${this.name}: “Picked this stretch clean already, have ye?”`);
+      }
+      game.hud?.openShop(this);
       return true;
     }
     if (this.type === 'nurse') {
@@ -224,6 +307,10 @@ export class NPCManager {
       ['merchant', () => g.inventory.money >= 5000, 'Sela the Merchant has moved in!'],
       ['nurse', () => g.player.hpMax > 100, 'Mira the Nurse has moved in!'],
       ['demolitionist', () => g.inventory.count('bomb') > 0 || g.inventory.count('dynamite') > 0, 'Boris the Demolitionist has moved in!'],
+      ['blacksmith', () => g.inventory.money >= 20000, 'Hilda the Blacksmith has moved in! She reforges weapons.'],
+      ['armsDealer', () => ['woodenBow', 'copperBow', 'ironBow', 'silverBow', 'goldBow'].some(b => g.inventory.count(b) > 0) && g.inventory.money >= 2500, 'Dex the Arms Dealer has moved in!'],
+      ['wizard', () => g.player.manaMax >= 60, 'Alaric the Wizard has moved in!'],
+      ['dryad', () => (g.progress?.bossKills ?? 0) > 0, 'Fenna the Dryad has moved in!'],
     ];
     for (const [type, cond, msg] of arrivals) {
       if (this.npcs.some(n => n.type === type) || !cond()) continue;

@@ -366,6 +366,74 @@ export function generateWorld(world, onProgress = () => {}) {
     }
   }
 
+  // --- 9.4 settlements: discoverable towns (explore far → find people) --------------------
+  // A reusable house builder; registers the chest for loot seeding and returns the door tile.
+  world.townNpcs = [];
+  const buildHouse = (hx, groundY, hw = 12, hh = 7, furnish = true) => {
+    const top = groundY - hh;
+    for (let x = hx; x < hx + hw; x++) {
+      // level the ground under the house
+      for (let y = groundY + 1; y <= groundY + 3; y++) if (get(x, y) === T.air) set(x, y, T.dirt);
+      for (let y = top; y <= groundY; y++) {
+        const shell = (x === hx || x === hx + hw - 1 || y === top || y === groundY);
+        set(x, y, shell ? T.wood : T.air);
+        world.walls[y * w + x] = W_.woodWall;
+      }
+    }
+    set(hx, groundY - 1, T.door);
+    if (furnish) {
+      set(hx + 2, groundY - 1, T.torch);
+      set(hx + 4, groundY - 1, T.chair);
+      set(hx + 6, groundY - 1, T.table);
+      if (rand() < 0.6) {
+        set(hx + hw - 3, groundY - 1, T.chest);
+        world.genChests = world.genChests ?? [];
+        world.genChests.push([hx + hw - 3, groundY - 1]);
+      } else {
+        set(hx + hw - 3, groundY - 1, T.workbench);
+      }
+    }
+    return [hx, groundY - 1];
+  };
+
+  // surface outposts at the far ends (abandoned hamlets — ready housing + loot)
+  const outposts = [];
+  for (const fx of [0.16, 0.84]) {
+    const ox2 = (w * fx) | 0;
+    if (ox2 < oceanW + 30 || ox2 > w - oceanW - 60) continue;
+    const gy = surface[ox2] - 1;
+    buildHouse(ox2, gy);
+    buildHouse(ox2 + 15, surface[ox2 + 15] - 1, 10, 6);
+    outposts.push(ox2);
+  }
+  // the far-east outpost hosts a resident Wizard (reward for traveling)
+  if (outposts.length > 1) {
+    world.townNpcs.push({ type: 'wizard', x: (outposts[1] + 5) * 16, y: (surface[outposts[1]] - 2) * 16 });
+  }
+
+  // underground mining town: carved chamber in the cavern with resident traders
+  {
+    const mx = (w * (0.3 + rand() * 0.4)) | 0;
+    const my = ((LAYERS.cavern + 0.05 + rand() * 0.15) * h) | 0;
+    const roomW = 46, roomH = 13;
+    for (let x = mx; x < mx + roomW; x++) {
+      for (let y = my - roomH; y <= my; y++) {
+        if (!world.inBounds(x, y)) continue;
+        const shell = (y === my || y === my - roomH || x === mx || x === mx + roomW - 1);
+        set(x, y, shell ? T.stone : T.air);
+        world.walls[y * w + x] = W_.stoneNatural;
+      }
+    }
+    // two cabins inside + lanterns + a walkway
+    buildHouse(mx + 4, my - 1, 12, 7);
+    buildHouse(mx + 22, my - 1, 12, 7);
+    for (let x = mx + 2; x < mx + roomW - 2; x += 6) set(x, my - roomH + 1, T.lantern);
+    set(mx + 38, my - 1, T.campfire);
+    world.townNpcs.push({ type: 'oldMiner', x: (mx + 9) * 16, y: (my - 1) * 16 });
+    world.townNpcs.push({ type: 'deepTrader', x: (mx + 27) * 16, y: (my - 1) * 16 });
+    world.miningTown = [mx, my];
+  }
+
   // --- 9.5 surface readability pass: no invisible pinhole shafts -------------------------
   // 1-tile-wide vertical shafts on the walk surface are fall-through traps the player
   // can't see. Widen them to 2 tiles so cave mouths read clearly.

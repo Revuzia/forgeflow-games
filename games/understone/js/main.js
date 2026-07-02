@@ -171,6 +171,12 @@ async function boot() {
     player.respawn();
     for (const [id, n] of STARTER_ITEMS) inventory.add(id, n);
     npcs.spawnGuide();
+    // settlement residents (underground miners, far-outpost wizard)
+    for (const rec of world.townNpcs ?? []) {
+      const n = new NPC(rec.type, rec.x, rec.y + 40);
+      n.homeX = rec.x;
+      npcs.npcs.push(n);
+    }
   }
   liquids.settleAll();
   camera.x = player.x; camera.y = player.y; camera.px = camera.x; camera.py = camera.y;
@@ -201,14 +207,22 @@ async function boot() {
     if (!def) { player.heldItem = null; return; }
     const cb = inventory.classBonus();
     const isMelee = ['sword', 'shortsword', 'spear', 'flail', 'boomerang'].includes(def.weapon);
-    const dmgMult = isMelee ? cb.meleeDmg : def.weapon === 'bow' ? cb.rangedDmg : def.weapon === 'magic' ? cb.magicDmg : 1;
+    let dmgMult = isMelee ? cb.meleeDmg : def.weapon === 'bow' ? cb.rangedDmg : def.weapon === 'magic' ? cb.magicDmg : 1;
+    // reforge modifier (Blacksmith): stored on the STACK, persists in saves
+    const mod = inventory.held()?.mod;
+    let speedMult = isMelee ? cb.meleeSpeed : 1;
+    if (mod) {
+      dmgMult *= mod.dmg ?? 1;
+      speedMult *= mod.speed ?? 1;
+    }
     player.heldItem = {
-      name: def.name,
+      name: mod ? `${mod.name} ${def.name}` : def.name,
+      critBonus: mod?.crit ?? 0,
       type: def.tool ?? def.type,
       pickPower: def.pickPower, axePower: def.axePower, hammerPower: def.hammerPower,
-      useTime: Math.max(6, Math.round((def.useTime ?? 20) * (isMelee ? cb.meleeSpeed : 1))),
+      useTime: Math.max(6, Math.round((def.useTime ?? 20) * speedMult)),
       damage: def.damage != null ? Math.round(def.damage * dmgMult) : def.damage,
-      knockback: def.knockback,
+      knockback: def.knockback != null ? def.knockback * (mod?.kb ?? 1) : def.knockback,
       placeTile: def.placeTile != null ? T[def.placeTile] : null,
       placeWall: def.placeWall != null ? W_[def.placeWall] : null,
       use: def.use, boss: def.boss, weapon: def.weapon, ammo: def.ammo,
