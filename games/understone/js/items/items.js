@@ -142,6 +142,7 @@ armor('moltenGreaves', 'Molten Greaves', 'legs', 8, 24000);
 // --- consumables / specials ---------------------------------------------------------------------
 item('lifeCrystal', { name: 'Life Crystal', type: 'consumable', use: 'lifeCrystal', stack: 99, value: 7500 });
 item('manaCrystal', { name: 'Mana Crystal', type: 'consumable', use: 'manaCrystal', stack: 99, value: 2500 });
+item('magicMirror', { name: 'Magic Mirror', type: 'consumable', use: 'magicMirror', useTime: 90, stack: 1, value: 10000 });
 item('acorn', { name: 'Acorn', type: 'block', placeTile: 'sapling', useTime: 15 }); // sapling handled as treeTrunk seed
 item('suspiciousEye', { name: 'Suspicious Looking Eye', type: 'summon', boss: 'eyeOfCthulhu', stack: 20, value: 2500 });
 item('slimeCrown', { name: 'Slime Crown', type: 'summon', boss: 'kingSlime', stack: 20, value: 2500 });

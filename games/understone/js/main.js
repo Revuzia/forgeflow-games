@@ -87,13 +87,18 @@ async function boot() {
     import('./core/assets.js'),
   ]);
 
+  const [{ Chests }, { FallingTiles }, saveMod] = await Promise.all([
+    import('./items/chests.js'),
+    import('./world/falling.js'),
+    import('./core/save.js'),
+  ]);
+  game.save = saveMod;
+
   initInput(canvas);
   const world = new World();
   game.world = world;
-  await new Promise(requestAnimationFrame); // let boot UI paint
-  generateWorld(world, (f, msg) => bootProgress(0.05 + f * 0.85, msg));
 
-  bootProgress(0.9, 'Painting the world…');
+  bootProgress(0.5, 'Painting the world…');
   const assets = await loadAssets();
   game.assets = assets;
 
@@ -111,20 +116,46 @@ async function boot() {
   camera.follow(player);
   window.__US__ = game; // debug/verification handle (same convention as __FFG_GAME__)
 
-  bootProgress(0.92, 'Settling the waters…');
-  const liquids = new Liquids(world);
-  game.liquids = liquids;
-  await new Promise(requestAnimationFrame);
-  liquids.settleAll();
+  const chests = new Chests(world);
+  world.chests = chests;
+  const falling = new FallingTiles(world);
+  game.falling = falling;
 
-  // ---- inventory / drops / HUD ------------------------------------------------
+  // inventory / drops / HUD must exist before loadGame can restore into them
   const inventory = new Inventory();
   game.inventory = inventory;
-  for (const [id, n] of STARTER_ITEMS) inventory.add(id, n);
   const drops = new Drops(world);
   game.drops = drops;
   const hud = new HUD(game, player, inventory);
   game.hud = hud;
+  game.openChest = (tx, ty) => hud.openChest(tx, ty);
+
+  // ---- title menu: New World / Continue -------------------------------------------
+  bootProgress(1, 'Ready');
+  bootDone();
+  const choice = await showTitle(saveMod.hasSave());
+  const bootEl2 = document.createElement('div');   // re-show a mini progress line
+  bootEl2.id = 'genmsg';
+  bootEl2.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,18,0.85);color:#cfd6e6;font:16px Segoe UI;z-index:90;';
+  bootEl2.textContent = 'Shaping the world…';
+  document.body.appendChild(bootEl2);
+  await new Promise(requestAnimationFrame);
+  await new Promise(requestAnimationFrame);
+
+  const liquids = new Liquids(world);
+  game.liquids = liquids;
+
+  if (choice === 'continue' && saveMod.loadGame(game)) {
+    // world restored from save
+  } else {
+    generateWorld(world, () => {});
+    chests.seedWorldLoot();
+    player.respawn();
+    for (const [id, n] of STARTER_ITEMS) inventory.add(id, n);
+  }
+  liquids.settleAll();
+  camera.x = player.x; camera.y = player.y; camera.px = camera.x; camera.py = camera.y;
+  bootEl2.remove();
 
   // dug tiles → world drops
   player.onDig.push((tx, ty, info, extra) => {
@@ -185,6 +216,31 @@ async function boot() {
   game.summonBoss = summonBossFactory(game);
   player.getDefense = () => inventory.defense();
 
+  // ---- audio ---------------------------------------------------------------------
+  const { AudioEngine } = await import('./core/audio.js');
+  const audio = new AudioEngine();
+  game.audio = audio;
+  player.onDig.push((tx, ty, info, extra) => {
+    if (extra?.wood) audio.play('chop', { volume: 0.9 });
+    else audio.play(`dig${(Math.random() * 3) | 0}`, { volume: 0.8 });
+  });
+  player.onHurt.push(() => audio.play('hurt'));
+  drops.onPickup.push(() => audio.play('pickup', { volume: 0.55, throttleMs: 90 }));
+  inventory.onChange.push(() => { /* craft sound handled in HUD */ });
+  {
+    // music selection by context (checked every 2s of ticks)
+    const { LAYERS, WORLD_H } = await import('./config.js');
+    const { isDay } = await import('./render/background.js');
+    game.updaters.push(() => {
+      if (game.tick % 120 !== 0 || !audio.ctx) return;
+      let track;
+      if (game.enemies.some(e => e.boss)) track = 'boss';
+      else if ((player.py / 16) > WORLD_H * LAYERS.underground) track = 'underground';
+      else track = isDay(game.tick) ? 'day' : 'night';
+      audio.music(track);
+    });
+  }
+
   // announcement banner (top center, fades)
   const announceEl = document.createElement('div');
   announceEl.style.cssText = `position:fixed;top:70px;left:50%;transform:translateX(-50%);
@@ -205,9 +261,52 @@ async function boot() {
   game.updaters.push(() => projectiles.tick(game));
   game.updaters.push(() => drops.tick(player, inventory));
   game.updaters.push(() => liquids.tick());
+  game.updaters.push(() => falling.tick());
   game.updaters.push(() => camera.tick());
   game.updaters.push(() => hud.tick());
   game.updaters.push(() => consumeTick()); // must stay LAST updater
+
+  // death jingle on the tick the player dies
+  let wasDead = false;
+  game.updaters.push(() => {
+    if (player.dead && !wasDead) audio.play('death', { volume: 0.9 });
+    wasDead = player.dead;
+  });
+
+  // ---- pause menu (Esc) + autosave ------------------------------------------------
+  const pauseEl = document.createElement('div');
+  pauseEl.style.cssText = `position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(8,10,18,0.72);z-index:80;font-family:'Segoe UI',sans-serif;`;
+  pauseEl.innerHTML = `<div style="text-align:center">
+    <h2 style="color:#e8d9a0;letter-spacing:6px;margin-bottom:24px">PAUSED</h2>
+    <div id="us-resume" class="us-menu-btn">Resume</div>
+    <div id="us-save" class="us-menu-btn">Save World</div>
+    <div id="us-savequit" class="us-menu-btn">Save &amp; Quit to Title</div>
+    <div id="us-savemsg" style="color:#8ac88a;font-size:13px;margin-top:10px;height:16px"></div>
+  </div>`;
+  document.body.appendChild(pauseEl);
+  const setPaused = (on) => {
+    game.paused = on;
+    pauseEl.style.display = on ? 'flex' : 'none';
+  };
+  window.addEventListener('keydown', (e) => {
+    if (e.code !== 'Escape') return;
+    if (hud.open) { hud.toggle(false); return; }
+    setPaused(!game.paused);
+  });
+  pauseEl.querySelector('#us-resume').onclick = () => setPaused(false);
+  pauseEl.querySelector('#us-save').onclick = () => {
+    const ok = saveMod.saveGame(game);
+    pauseEl.querySelector('#us-savemsg').textContent = ok ? 'World saved.' : 'Save failed (storage full?)';
+  };
+  pauseEl.querySelector('#us-savequit').onclick = () => {
+    saveMod.saveGame(game);
+    location.reload();
+  };
+  setInterval(() => {
+    if (!game.paused && !player.dead && game.tick > 600) saveMod.saveGame(game);
+  }, 120000); // autosave every 2 min
+  window.addEventListener('beforeunload', () => { if (game.tick > 600) saveMod.saveGame(game); });
 
   game.renderers.push((g, alpha) => background.draw(g.ctx, g, alpha));
   game.renderers.push((g, alpha) => tileRenderer.draw(g.ctx, camera, alpha));
@@ -246,9 +345,10 @@ async function boot() {
     c.globalAlpha = 1;
   });
 
-  // enemies + projectiles + world item drops
+  // enemies + projectiles + falling tiles + world item drops
   game.renderers.push((g, alpha) => { for (const e of g.enemies) e.draw(g.ctx, camera, alpha, g.assets); });
   game.renderers.push((g, alpha) => projectiles.draw(g.ctx, camera, alpha));
+  game.renderers.push((g, alpha) => falling.draw(g.ctx, camera, alpha, g.assets));
   game.renderers.push((g, alpha) => drops.draw(g.ctx, camera, alpha));
 
   // lighting (multiply overlay) — after entities, before cursor/HUD
@@ -294,9 +394,37 @@ async function boot() {
     }
   });
 
-  bootProgress(1, 'Ready');
-  bootDone();
   requestAnimationFrame((t) => { last = t; requestAnimationFrame(frame); });
+}
+
+// ---------------------------------------------------------------------------
+// Title screen: New World / Continue. Resolves with the choice.
+// ---------------------------------------------------------------------------
+function showTitle(canContinue) {
+  return new Promise((resolve) => {
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+      justify-content:center;background:linear-gradient(#0e1526,#1c2c22);z-index:95;font-family:'Segoe UI',sans-serif;`;
+    el.innerHTML = `
+      <style>
+        .us-menu-btn { padding:10px 34px;margin:7px;border:2px solid #3a415c;border-radius:8px;color:#e8e8f0;
+          font-size:17px;cursor:pointer;background:rgba(20,24,40,0.75);min-width:220px;text-align:center;
+          transition: all .15s; user-select:none; }
+        .us-menu-btn:hover { border-color:#e8d9a0;color:#e8d9a0;box-shadow:0 0 12px rgba(232,217,160,.3); }
+        .us-menu-btn.disabled { opacity:.35;cursor:default;pointer-events:none; }
+      </style>
+      <h1 style="font-size:52px;letter-spacing:12px;color:#e8d9a0;margin:0 0 6px;text-shadow:0 0 28px rgba(232,217,160,.4)">UNDERSTONE</h1>
+      <div style="color:#8a93b0;margin-bottom:34px;font-size:14px">dig · build · craft · survive</div>
+      <div class="us-menu-btn" id="us-new">New World</div>
+      <div class="us-menu-btn ${canContinue ? '' : 'disabled'}" id="us-continue">Continue</div>
+      <div style="color:#5a6280;font-size:12px;margin-top:30px;max-width:420px;text-align:center;line-height:1.7">
+        A/D move · Space jump (hold for height) · Mouse aim + Left-click use · Right-click interact<br>
+        E inventory · 1-0 hotbar · Esc pause · Craft near stations · Beware the night.
+      </div>`;
+    document.body.appendChild(el);
+    el.querySelector('#us-new').onclick = () => { el.remove(); resolve('new'); };
+    el.querySelector('#us-continue').onclick = () => { el.remove(); resolve('continue'); };
+  });
 }
 
 boot();

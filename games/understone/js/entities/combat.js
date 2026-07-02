@@ -37,6 +37,7 @@ export class Combat {
         p.swinging = held.useTime;
         this.lastSwingId++;
         this.swingHit.clear();
+        g.audio?.play('swing', { volume: 0.5 });
       }
     }
     if (held?.weapon === 'sword' && p.swinging > held.useTime * 0.3) {
@@ -53,6 +54,7 @@ export class Combat {
             if (dealt > 0) {
               this.swingHit.add(e.id);
               g.floatText(e.cx, e.y - 8, dealt, crit ? '#ffd75a' : '#e8a86d');
+              g.audio?.play(e.def.ai === 'slime' ? 'slimeHit' : 'hit', { volume: 0.7 });
             }
             break;
           }
@@ -100,6 +102,7 @@ export class Combat {
         if (e.hp === -1) continue;        // silent despawn (EoC at dawn)
         const def = e.def;
         g.inventory.money += def.coins;
+        if (def.coins > 0) g.audio?.play('coins', { volume: 0.5 });
         for (const [itemId, lo, hi, chance] of def.drops ?? []) {
           if (Math.random() < chance) {
             const n = lo + Math.floor(Math.random() * (hi - lo + 1));

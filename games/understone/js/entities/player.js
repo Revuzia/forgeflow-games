@@ -175,10 +175,10 @@ export class Player {
     if (!inReach) return;
     const world = this.world;
     const id = world.tileAt(tx, ty);
-    if (id === T.door) world.setTile(tx, ty, T.doorOpen);
+    if (id === T.door) { world.setTile(tx, ty, T.doorOpen); game.audio?.play('doorOpen'); }
     else if (id === T.doorOpen) {
       // don't close a door on top of yourself
-      if (!this.overlapsBox(tx * TILE, ty * TILE, TILE, TILE)) world.setTile(tx, ty, T.door);
+      if (!this.overlapsBox(tx * TILE, ty * TILE, TILE, TILE)) { world.setTile(tx, ty, T.door); game.audio?.play('doorClose'); }
     } else if (id === T.chest && game.openChest) game.openChest(tx, ty);
   }
 
@@ -217,10 +217,19 @@ export class Player {
       this.swinging = held.useTime ?? 30;
       if (held.use === 'lifeCrystal' && this.hpMax < 400) {
         this.hpMax += 20; this.hp = Math.min(this.hpMax, this.hp + 20);
+        game.audio?.play('powerup');
         held.consume?.();
       } else if (held.use === 'manaCrystal' && this.manaMax < 200) {
         this.manaMax += 20; this.mana = Math.min(this.manaMax, this.mana + 20);
+        game.audio?.play('powerup');
         held.consume?.();
+      } else if (held.use === 'magicMirror') {
+        // teleport home; resets fall damage; not consumed
+        this.px = this.world.spawnX * TILE - this.w / 2;
+        this.py = this.world.spawnY * TILE - this.h;
+        this.vx = 0; this.vy = 0;
+        this.fallStartTy = (this.py / TILE) | 0;
+        game.audio?.play('powerup');
       } else if (held.boss && game.summonBoss) {
         if (game.summonBoss(held.boss)) held.consume?.();
       }
@@ -241,6 +250,7 @@ export class Player {
       this.swingTimer = held.useTime;
       this.swinging = held.useTime;
       world.setTile(tx, ty, held.placeTile);
+      game.audio?.play('place', { volume: 0.6 });
       if (held.consume) held.consume();
       return;
     }
@@ -250,6 +260,7 @@ export class Player {
       if (!this.hasWallAnchor(tx, ty)) return;
       this.swingTimer = held.useTime;
       world.setWall(tx, ty, held.placeWall);
+      game.audio?.play('place', { volume: 0.6 });
       if (held.consume) held.consume();
       return;
     }
@@ -332,6 +343,14 @@ export class Player {
 
   digTile(tx, ty, info) {
     const world = this.world;
+    // chests must be emptied before they break (Terraria rule)
+    if (info.name === 'chest') {
+      if (world.chests && !world.chests.isEmpty(tx, ty)) return;
+      world.chests?.remove(tx, ty);
+      world.setTile(tx, ty, T.air);
+      for (const fn of this.onDig) fn(tx, ty, { ...info, drops: 'chest' }, null);
+      return;
+    }
     // trees fall as a unit: chop trunk → collect trunk column + leaves
     if (info.name === 'treeTrunk') {
       let top = ty;

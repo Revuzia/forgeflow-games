@@ -76,6 +76,7 @@ export class HUD {
         <div><h3>Inventory</h3><div class="grid" id="us-main"></div></div>
         <div id="us-armor-wrap"><h3>Armor</h3><div id="us-armor"></div></div>
         <div><h3>Crafting</h3><div id="us-craft"></div></div>
+        <div id="us-chest-wrap" style="display:none"><h3>Chest</h3><div class="grid" id="us-chest" style="grid-template-columns: repeat(5, 44px)"></div></div>
       </div>
       <div id="us-tip"></div>`;
     this.els = {
@@ -87,8 +88,11 @@ export class HUD {
       main: hud.querySelector('#us-main'),
       armor: hud.querySelector('#us-armor'),
       craft: hud.querySelector('#us-craft'),
+      chestWrap: hud.querySelector('#us-chest-wrap'),
+      chest: hud.querySelector('#us-chest'),
       tip: hud.querySelector('#us-tip'),
     };
+    this.openChestSlots = null;   // array ref into Chests map while a chest is open
     this.buildSlots();
     inventory.onChange.push(() => this.refreshSlots());
     hud.addEventListener('mousemove', (e) => this.moveTip(e));
@@ -96,13 +100,71 @@ export class HUD {
 
   toggle(open = !this.open) {
     this.open = open;
+    this.game.audio?.play(open ? 'uiOpen' : 'uiClose', { volume: 0.5 });
     this.els.inv.classList.toggle('open', open);
-    if (!open && this.cursorStack) {
-      // drop cursor stack back into inventory
-      const left = this.inv.add(this.cursorStack.id, this.cursorStack.count);
-      if (left > 0) this.game.drops.spawn(this.cursorStack.id, left, this.player.x, this.player.y);
-      this.cursorStack = null;
+    if (!open) {
+      this.closeChest();
+      if (this.cursorStack) {
+        // drop cursor stack back into inventory
+        const left = this.inv.add(this.cursorStack.id, this.cursorStack.count);
+        if (left > 0) this.game.drops.spawn(this.cursorStack.id, left, this.player.x, this.player.y);
+        this.cursorStack = null;
+      }
     }
+  }
+
+  openChest(tx, ty) {
+    const chests = this.game.world.chests;
+    if (!chests) return;
+    this.openChestSlots = chests.ensure(tx, ty);
+    this.openChestAt = [tx, ty];
+    this.els.chestWrap.style.display = '';
+    this.buildChestSlots();
+    if (!this.open) this.toggle(true);
+    else this.refreshSlots();
+  }
+
+  closeChest() {
+    this.openChestSlots = null;
+    this.els.chestWrap.style.display = 'none';
+  }
+
+  buildChestSlots() {
+    this.els.chest.innerHTML = '';
+    for (let i = 0; i < this.openChestSlots.length; i++) {
+      const el = document.createElement('div');
+      el.className = 'us-slot';
+      el.dataset.chestSlot = i;
+      el.addEventListener('mousedown', (e) => this.chestSlotClick(i, e));
+      this.els.chest.appendChild(el);
+    }
+    this.refreshSlots();
+  }
+
+  chestSlotClick(i, e) {
+    e.preventDefault();
+    if (!this.openChestSlots) return;
+    const slots = this.openChestSlots;
+    const s = slots[i];
+    if (this.cursorStack) {
+      if (!s) { slots[i] = this.cursorStack; this.cursorStack = null; }
+      else if (s.id === this.cursorStack.id) {
+        const max = ITEMS[s.id].stack ?? 9999;
+        const take = Math.min(max - s.count, this.cursorStack.count);
+        s.count += take; this.cursorStack.count -= take;
+        if (this.cursorStack.count <= 0) this.cursorStack = null;
+      } else { slots[i] = this.cursorStack; this.cursorStack = s; }
+    } else if (s) {
+      if (e.shiftKey) {
+        // quick-move to inventory
+        const left = this.inv.add(s.id, s.count);
+        slots[i] = left > 0 ? { id: s.id, count: left } : null;
+      } else {
+        this.cursorStack = s; slots[i] = null;
+      }
+    }
+    this.game.audio?.play('uiClick', { volume: 0.4 });
+    this.inv.changed();
   }
 
   buildSlots() {
@@ -198,6 +260,12 @@ export class HUD {
       const s = inv.armor[el.dataset.armor];
       el.innerHTML = s ? iconFor(s.id) : `<span style="font-size:9px;color:#586080">${el.dataset.armor}</span>`;
     });
+    if (this.openChestSlots) {
+      [...this.els.chest.children].forEach((el) => {
+        const s = this.openChestSlots[+el.dataset.chestSlot];
+        el.innerHTML = s ? `${iconFor(s.id)}${s.count > 1 ? `<span class="cnt">${s.count}</span>` : ''}` : '';
+      });
+    }
     this.els.money.textContent = coinText(inv.money);
   }
 
@@ -238,6 +306,7 @@ export class HUD {
         el.addEventListener('mousedown', () => {
           const res = craft(this.inv, recipe);
           if (res && res.leftover) this.game.drops.spawn(recipe.out, res.leftover, this.player.x, this.player.y);
+          this.game.audio?.play('craft', { volume: 0.6 });
           this.lastCraftListKey = '';
           this.refreshCrafting();
         });
