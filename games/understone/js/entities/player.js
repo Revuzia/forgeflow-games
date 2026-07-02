@@ -57,10 +57,21 @@ export class Player {
 
   grounded() { return this.vy === 0; }
 
+  nearCampfire(game) {
+    const ptx = Math.floor(this.x / TILE), pty = Math.floor(this.y / TILE);
+    for (let ty = pty - 12; ty <= pty + 12; ty++) {
+      for (let tx = ptx - 12; tx <= ptx + 12; tx++) {
+        if (this.world.tileAt(tx, ty) === T.campfire) return true;
+      }
+    }
+    return false;
+  }
+
   hurt(dmg, fromX = null) {
     if (this.iFrames > 0 || this.dead) return false;
     this.hp -= Math.max(1, Math.round(dmg));
     this.iFrames = PHYS.hurtIFrames;
+    this.recentHurt = 420;                     // pauses natural regen 7 s
     // knockback REPLACES velocity
     const dir = fromX === null ? -this.facing : (this.x < fromX ? -1 : 1);
     this.vx = PHYS.hurtKnockX * dir;
@@ -84,6 +95,16 @@ export class Player {
     }
     if (this.iFrames > 0) this.iFrames--;
     if (this.potionCd > 0) this.potionCd--;
+    if (this.recentHurt > 0) this.recentHurt--;
+    if (this.manaRegenDelay > 0) this.manaRegenDelay--;
+    // mana regen: pauses briefly after casting
+    if (this.manaRegenDelay <= 0 && this.mana < this.manaMax && game.tick % 6 === 0) this.mana++;
+    // natural life regen (slow; paused 7 s after damage; doubled near a campfire)
+    if (this.recentHurt <= 0 && this.hp < this.hpMax && !this.dead) {
+      if (game.tick % 60 === 0) this.campfire = this.nearCampfire(game);
+      const interval = this.campfire ? 60 : 120;
+      if (game.tick % interval === 0) this.hp = Math.min(this.hpMax, this.hp + 1);
+    }
     if (this.poisonTicks > 0) {
       this.poisonTicks--;
       if (this.poisonTicks % 30 === 0 && this.hp > 1) {
@@ -225,7 +246,7 @@ export class Player {
       // don't close a door on top of yourself
       if (!this.overlapsBox(tx * TILE, ty * TILE, TILE, TILE)) { world.setTile(tx, ty, T.door); game.audio?.play('doorClose'); }
     } else if (id === T.chest && game.openChest) game.openChest(tx, ty);
-    else if (id === T.spawnPoint) {
+    else if (id === T.spawnPoint || id === T.bed) {
       this.world.spawnX = tx;
       this.world.spawnY = ty - 1;
       game.announce?.('Spawn point set!');
@@ -289,6 +310,12 @@ export class Player {
         this.potionCd = 3600;                          // potion sickness: 60 s
         game.floatText?.(this.x, this.py - 12, `+${amount}`, '#6de86d');
         game.audio?.play('powerup');
+        held.consume?.();
+      } else if (held.use === 'mana') {
+        if (this.mana >= this.manaMax) return;
+        this.mana = Math.min(this.manaMax, this.mana + (held.mana ?? 50));
+        game.floatText?.(this.x, this.py - 12, `+mana`, '#6a9ae8');
+        game.audio?.play('powerup', { rate: 1.2 });
         held.consume?.();
       } else if (held.use === 'grapple') {
         // fire hook toward cursor (or release if latched)

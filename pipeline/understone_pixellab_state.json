@@ -56,6 +56,16 @@
     "vulture": {
       "id": "dd9f1222-93fe-479f-986b-338163c80730",
       "anims": {}
+    },
+    "heroCopper": {
+      "id": "b655c187-9662-4483-a799-ec1254330561",
+      "anims": {
+        "breathing-idle": true
+      }
+    },
+    "heroIron": {
+      "id": "33732250-4678-4079-8302-5f5a10e11ce5",
+      "anims": {}
     }
   }
 }

@@ -75,8 +75,21 @@ export class Background {
 
     if (depth > 0.95) return; // fully underground: no celestial bodies or hills
 
-    // parallax hills (research 07 P0-1): two layers, far 0.07x / near 0.18x scroll
-    const hills = this.assets?.bg?.hills;
+    // parallax layers (research 07 P0-1), biome-specific backdrop
+    let bgName = 'hills';
+    {
+      const b = this.world.biomes;
+      const camTx = this.camera.x / TILE;
+      if (b) {
+        const inC = (this.world.corruption ?? []).some(([a, bb]) => camTx >= a && camTx <= bb);
+        if (inC) bgName = 'corruption';
+        else if (camTx <= (b.oceanW ?? 0) + 10 || camTx >= this.world.w - (b.oceanW ?? 0) - 10) bgName = 'ocean';
+        else if (camTx >= b.desert[0] && camTx <= b.desert[1]) bgName = 'desert';
+        else if (camTx >= b.snow[0] && camTx <= b.snow[1]) bgName = 'snow';
+        else if (b.jungle && camTx >= b.jungle[0] && camTx <= b.jungle[1]) bgName = 'jungle';
+      }
+    }
+    const hills = this.assets?.bg?.[bgName] ?? this.assets?.bg?.hills;
     if (hills && depth < 0.6) {
       const [ox] = this.camera.frameOrigin(1);
       const horizonY = h * (0.62 - depth * 0.5);

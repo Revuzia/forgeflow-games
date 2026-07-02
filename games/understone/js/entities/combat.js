@@ -131,7 +131,7 @@ export class Combat {
       const prog = 1 - p.swinging / s.total;
       if (p.swinging <= 0) this.spear = null;
       else {
-        const ext = Math.sin(prog * Math.PI) * 78;          // ~5 tiles out and back
+        const ext = Math.sin(prog * Math.PI) * (s.short ? 42 : 78);  // shortsword stab vs 5-tile spear
         const tipX = p.x + s.dirX * ext, tipY = p.y + s.dirY * ext;
         s.tipX = tipX; s.tipY = tipY; s.ext = ext;
         for (const e of g.enemies) {
@@ -186,6 +186,106 @@ export class Combat {
       }
     }
 
+    // ---- magic weapons: mana-gated bolts (gem staves, Vilethorn, Water Bolt…) -----------
+    if (held?.weapon === 'magic' && mouse.left && !p.dead && p.swingTimer <= 0) {
+      if (p.mana < (held.mana ?? 5)) {
+        if (g.tick % 30 === 0) g.floatText(p.x, p.py - 12, 'no mana', '#6a8ac8');
+      } else {
+        p.mana -= held.mana ?? 5;
+        p.manaRegenDelay = 45;                       // casting pauses regen
+        p.swingTimer = held.useTime;
+        p.swinging = held.useTime;
+        const [wx, wy] = g.camera.screenToWorld(
+          mouse.x * (g.canvas.width / g.canvas.clientWidth),
+          mouse.y * (g.canvas.height / g.canvas.clientHeight));
+        if (held.bolt === 'thorn') {
+          // Vilethorn: through-wall thorn spike along the aim line
+          const dx = wx - p.x, dy = wy - p.y;
+          const d = Math.hypot(dx, dy) || 1;
+          this.thorn = { dirX: dx / d, dirY: dy / d, total: held.useTime, id: ++this.lastSwingId, held };
+        } else {
+          g.projectiles.spawnMagic(held, p.x, p.py + 10, wx, wy);
+        }
+        g.audio?.play('swing', { volume: 0.4, rate: 1.3 });
+      }
+    }
+    if (this.thorn) {
+      const th = this.thorn;
+      const prog = 1 - p.swinging / th.total;
+      if (p.swinging <= 0) this.thorn = null;
+      else {
+        const ext = Math.sin(prog * Math.PI) * 150;   // ~9 tiles, pierces terrain
+        th.ext = ext;
+        for (let seg = 0.3; seg <= 1; seg += 0.35) {
+          const tx2 = p.x + th.dirX * ext * seg, ty2 = p.y + th.dirY * ext * seg;
+          for (const e of g.enemies) {
+            for (const hb of e.hitboxes()) {
+              if (tx2 > hb.x - 6 && tx2 < hb.x + hb.w + 6 && ty2 > hb.y - 6 && ty2 < hb.y + hb.h + 6) {
+                const crit = Math.random() < 0.04;
+                const r = e.strike(th.held.damage, 2, p.x, `thorn${th.id}`, crit, th.held.element);
+                this.hitFeedback(g, e, r, crit, th.held.element);
+                break;
+              }
+            }
+          }
+          if ((g.tick & 1)) g.fx?.shadowWisp(tx2, ty2);
+        }
+      }
+    }
+
+    // ---- boomerang: out, spin, return, catch ---------------------------------------------
+    if (held?.weapon === 'boomerang' && mouse.left && !p.dead && !this.boomerang && p.swingTimer <= 0) {
+      p.swingTimer = held.useTime;
+      const [wx, wy] = g.camera.screenToWorld(
+        mouse.x * (g.canvas.width / g.canvas.clientWidth),
+        mouse.y * (g.canvas.height / g.canvas.clientHeight));
+      const dx = wx - p.x, dy = wy - p.y;
+      const d = Math.hypot(dx, dy) || 1;
+      this.boomerang = { x: p.x, y: p.py + 10, vx: (dx / d) * 10, vy: (dy / d) * 10, out: true, id: ++this.lastSwingId, held, spin: 0 };
+      g.audio?.play('swing', { volume: 0.6 });
+    }
+    if (this.boomerang) {
+      const bm = this.boomerang;
+      bm.spin += 0.5;
+      if (bm.out) {
+        bm.x += bm.vx; bm.y += bm.vy;
+        bm.vx *= 0.96; bm.vy *= 0.96;
+        const tx2 = Math.floor(bm.x / 16), ty2 = Math.floor(bm.y / 16);
+        if (g.world.isSolid(tx2, ty2) || Math.hypot(bm.vx, bm.vy) < 3) bm.out = false;
+      } else {
+        const dx = p.x - bm.x, dy = p.y - bm.y;
+        const d = Math.hypot(dx, dy) || 1;
+        bm.x += (dx / d) * 11; bm.y += (dy / d) * 11;
+        if (d < 16) this.boomerang = null;    // caught
+      }
+      if (this.boomerang) {
+        for (const e of g.enemies) {
+          for (const hb of e.hitboxes()) {
+            if (bm.x > hb.x - 8 && bm.x < hb.x + hb.w + 8 && bm.y > hb.y - 8 && bm.y < hb.y + hb.h + 8) {
+              const crit = Math.random() < 0.04;
+              const r = e.strike(bm.held.damage, bm.held.knockback ?? 8, bm.x, `bmr${bm.id}-${Math.floor(g.tick / 10)}`, crit, bm.held.element);
+              this.hitFeedback(g, e, r, crit, bm.held.element);
+              if (bm.out) bm.out = false;      // bounce back on hit
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // ---- shortsword: quick stab (short spear mechanic, research 08 useStyle 13) -----------
+    if (held?.weapon === 'shortsword' && mouse.left && !p.dead && p.swingTimer <= 0) {
+      p.swingTimer = held.useTime;
+      p.swinging = held.useTime;
+      const [wx, wy] = g.camera.screenToWorld(
+        mouse.x * (g.canvas.width / g.canvas.clientWidth),
+        mouse.y * (g.canvas.height / g.canvas.clientHeight));
+      const dx = wx - p.x, dy = wy - p.y;
+      const d = Math.hypot(dx, dy) || 1;
+      this.spear = { dirX: dx / d, dirY: dy / d, total: held.useTime, id: ++this.lastSwingId, held, short: true };
+      g.audio?.play('swing', { volume: 0.45, rate: 1.3 });
+    }
+
     // ---- bow firing ------------------------------------------------------------------
     if (held?.weapon === 'bow' && mouse.left && !p.dead && p.swingTimer <= 0) {
       const ammo = g.inventory.firstAmmo('arrow');
@@ -226,8 +326,10 @@ export class Combat {
             const raw = e.contactDamage ? e.contactDamage() : e.def.dmg;
             const variance = 0.85 + Math.random() * 0.3;
             const dmg = Math.max(1, Math.floor(raw * variance - Math.ceil(defStat / 2)));
-            p.hurt(dmg, hb.x + hb.w / 2);
-            g.floatText(p.x, p.py - 10, dmg, '#e86d6d');
+            if (p.hurt(dmg, hb.x + hb.w / 2)) {
+              g.floatText(p.x, p.py - 10, dmg, '#e86d6d');
+              if (e.def.poison) p.poisonTicks = Math.max(p.poisonTicks ?? 0, 480);
+            }
             break;
           }
         }
@@ -236,6 +338,15 @@ export class Combat {
       if (e.hp <= 0) {
         g.enemies.splice(i, 1);
         if (e.hp === -1) continue;        // silent despawn (EoC at dawn)
+        // mother slime splits into babies
+        if (e.def.splitsInto) {
+          const EnemyC = e.constructor;
+          for (let k = 0; k < 2 + (Math.random() < 0.5 ? 1 : 0); k++) {
+            const b = new EnemyC(e.def.splitsInto, e.cx + (Math.random() - 0.5) * 20, e.y + e.h);
+            b.vy = -4; b.vx = (Math.random() - 0.5) * 3;
+            g.enemies.push(b);
+          }
+        }
         const def = e.def;
         g.inventory.money += def.coins;
         if (def.coins > 0) g.audio?.play('coins', { volume: 0.5 });
@@ -283,6 +394,32 @@ export class Combat {
       ctx.beginPath();
       ctx.arc((s.tipX - ox) * z, (s.tipY - oy) * z, 3.5 * z, 0, Math.PI * 2);
       ctx.fill();
+    }
+    // vilethorn spike
+    if (this.thorn?.ext > 4) {
+      const th = this.thorn;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = '#7a2bd9';
+      ctx.lineWidth = 3 * z;
+      ctx.beginPath();
+      ctx.moveTo((p.x - ox) * z, (p.y - oy) * z);
+      ctx.lineTo((p.x + th.dirX * th.ext - ox) * z, (p.y + th.dirY * th.ext - oy) * z);
+      ctx.stroke();
+      ctx.strokeStyle = '#efe0ff';
+      ctx.lineWidth = 1 * z;
+      ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    // boomerang
+    if (this.boomerang) {
+      const bm = this.boomerang;
+      ctx.save();
+      ctx.translate((bm.x - ox) * z, (bm.y - oy) * z);
+      ctx.rotate(bm.spin);
+      ctx.fillStyle = '#8ab4e8';
+      ctx.fillRect(-6 * z, -1.5 * z, 12 * z, 3 * z);
+      ctx.fillRect(-1.5 * z, -6 * z, 3 * z, 12 * z);
+      ctx.restore();
     }
     // flail chain + ball
     if (this.flail) {

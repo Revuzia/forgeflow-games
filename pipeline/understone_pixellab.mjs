@@ -105,6 +105,34 @@ const ICON_OVERRIDES = {
   demonBow: 'dark purple demonic bow with spikes',
   volcano: 'greatsword with molten lava blade',
   lightsBane: 'jagged dark purple demon sword',
+  bladeOfGrass: 'sword with jagged green leaf blade dripping sap',
+  sunfury: 'spiked flaming morningstar ball on chain handle',
+  darkLance: 'ornate dark purple lance spear with cruel point',
+  waterBolt: 'blue spellbook with water swirl on cover',
+  demonScythe: 'purple demonic scythe spell tome with skull',
+  vilethorn: 'twisted purple thorn wand',
+  rubyStaff: 'gold staff topped with glowing red ruby gem',
+  diamondStaff: 'gold staff topped with brilliant diamond crystal',
+  enchantedBoomerang: 'glowing blue enchanted wooden boomerang',
+  lesserManaPotion: 'small potion bottle of glowing blue liquid',
+  lesserHealingPotion: 'small potion bottle of glowing red liquid',
+  vine: 'coiled green jungle vine with leaves',
+  silk: 'folded bolt of white silk fabric',
+  campfire: 'small campfire with logs and orange flames',
+  lantern: 'hanging brass lantern with warm glow',
+  candle: 'lit wax candle on holder',
+  sawmill: 'wooden sawmill machine with circular saw blade',
+  loom: 'wooden weaving loom with thread',
+  bed: 'wooden bed with red blanket and pillow',
+  table: 'simple wooden table',
+  chair: 'simple wooden chair',
+  bedroll: 'rolled up camping bedroll',
+  grapplingHook: 'iron grappling hook with chain',
+  hook: 'curved iron hook',
+  stinger: 'sharp green venomous stinger',
+  spear: 'simple iron-tipped wooden spear',
+  trident: 'gleaming silver three-pronged trident',
+  ballOHurt: 'spiked purple ball on chain',
 };
 
 async function runIcons() {
@@ -187,6 +215,48 @@ const CHARACTERS = {
   vulture: {
     description: 'desert vulture bird, dark feathers, bald pink head, hunched',
     size: 48, template: 'cat', animations: ['breathing-idle', 'attack', 'dying'],
+  },
+  // ---- v3: armored hero variants (equipped armor VISIBLE on the player) --------
+  heroCopper: {
+    description: 'brave adventurer hero, brown messy hair, wearing full polished copper-orange plate armor with helmet',
+    size: 64, proportions: 'heroic', animations: ['walk', 'breathing-idle', 'cross-punch', 'jump'],
+  },
+  heroIron: {
+    description: 'brave adventurer hero wearing full dull-gray iron plate armor with visored helmet',
+    size: 64, proportions: 'heroic', animations: ['walk', 'breathing-idle', 'cross-punch', 'jump'],
+  },
+  heroSilver: {
+    description: 'brave adventurer hero wearing gleaming silver plate armor with plumed helmet',
+    size: 64, proportions: 'heroic', animations: ['walk', 'breathing-idle', 'cross-punch', 'jump'],
+  },
+  heroGold: {
+    description: 'brave adventurer hero wearing ornate shining golden plate armor with crowned helmet',
+    size: 64, proportions: 'heroic', animations: ['walk', 'breathing-idle', 'cross-punch', 'jump'],
+  },
+  heroShadow: {
+    description: 'brave adventurer hero wearing dark purple demonic scale armor with horned helmet, glowing purple accents',
+    size: 64, proportions: 'heroic', animations: ['walk', 'breathing-idle', 'cross-punch', 'jump'],
+  },
+  heroMolten: {
+    description: 'brave adventurer hero wearing volcanic molten rock armor with glowing orange lava cracks and fiery helmet',
+    size: 64, proportions: 'heroic', animations: ['walk', 'breathing-idle', 'cross-punch', 'jump'],
+  },
+  // ---- v3: new enemy characters --------------------------------------------------
+  skeletonArcher: {
+    description: 'skeleton archer warrior holding a wooden bow, bone white with quiver of arrows',
+    size: 64, animations: ['walk', 'breathing-idle', 'cross-punch'],
+  },
+  spider: {
+    description: 'large hairy brown cave spider with eight legs and glowing eyes, side view',
+    size: 48, template: 'cat', animations: ['fast-walk', 'idle', 'angry'],
+  },
+  graniteElemental: {
+    description: 'living granite stone golem with glowing blue energy veins between dark rock plates',
+    size: 64, animations: ['walk', 'breathing-idle', 'cross-punch'],
+  },
+  snatcher: {
+    description: 'carnivorous green plant monster head on a stem, open toothy maw like a venus flytrap',
+    size: 48, template: 'cat', animations: ['idle', 'angry'],
   },
 };
 

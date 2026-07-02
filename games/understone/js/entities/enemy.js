@@ -72,6 +72,34 @@ export const ENEMIES = {
     dodge: 0.08, w: 22, h: 22, color: '#c8a02a', drops: [['stinger', 1, 2, 0.66]] },
   jungleSlime: { name: 'Jungle Slime', ai: 'slime', hp: 40, dmg: 12, def: 6, kbResist: 0, coins: 60,
     w: 24, h: 18, color: '#5ac83a', drops: [['gel', 1, 2, 1.0]] },
+
+  // ---- v3 roster expansion (→46 types) ----------------------------------------
+  motherSlime: { name: 'Mother Slime', ai: 'slime', hp: 90, dmg: 20, def: 7, kbResist: 0.2, coins: 250,
+    w: 36, h: 26, color: '#4a5aa8', splitsInto: 'babySlime', drops: [['gel', 3, 6, 1.0]] },
+  babySlime: { name: 'Baby Slime', ai: 'slime', hp: 12, dmg: 12, def: 2, kbResist: -0.2, coins: 10,
+    w: 14, h: 10, color: '#6a7ac8', drops: [['gel', 1, 1, 0.66]] },
+  sandSlime: { name: 'Sand Slime', ai: 'slime', hp: 32, dmg: 12, def: 4, kbResist: 0, coins: 45,
+    w: 24, h: 18, color: '#d8bc7a', drops: [['gel', 1, 2, 1.0], ['sand', 2, 5, 0.5]] },
+  blackSlime: { name: 'Black Slime', ai: 'slime', hp: 45, dmg: 15, def: 4, kbResist: 0, coins: 70,
+    element: 'shadow', w: 24, h: 18, color: '#3a3a44', drops: [['gel', 1, 2, 1.0]] },
+  pinky: { name: 'Pinky', ai: 'slime', hp: 150, dmg: 5, def: 5, kbResist: -0.4, coins: 5000,
+    dodge: 0.10, w: 12, h: 9, color: '#f0a0c8', drops: [['gel', 1, 1, 1.0]] },
+  giantBat: { name: 'Giant Bat', ai: 'bat', hp: 90, dmg: 30, def: 10, kbResist: 0.35, coins: 400,
+    dodge: 0.10, w: 26, h: 20, color: '#6a5a88', drops: [] },
+  wanderingEye: { name: 'Wandering Eye', ai: 'flyer', hp: 110, dmg: 23, def: 6, kbResist: 0.3, coins: 350,
+    dodge: 0.08, w: 28, h: 28, color: '#b06a5a', drops: [['lens', 1, 2, 0.5]] },
+  wraith: { name: 'Wraith', ai: 'ghost', hp: 90, dmg: 30, def: 12, kbResist: 0.5, coins: 700,
+    dodge: 0.08, element: 'shadow', speed: 1.9, w: 22, h: 34, color: '#2a2a3a', drops: [['shadowScale', 1, 2, 0.4]] },
+  devourer: { name: 'Devourer', ai: 'worm', hp: 60, dmg: 20, def: 4, kbResist: 1, coins: 300,
+    w: 16, h: 16, color: '#7a5a78', segments: 9, drops: [['rottenChunk', 1, 2, 0.6], ['demonite', 1, 2, 0.3]] },
+  skeletonArcher: { name: 'Skeleton Archer', ai: 'archer', hp: 70, dmg: 22, def: 8, kbResist: 0.5, coins: 350,
+    w: 18, h: 40, color: '#c8c8b8', drops: [['woodenArrow', 5, 15, 0.8], ['hook', 1, 1, 0.03]] },
+  spider: { name: 'Cave Spider', ai: 'fighter', hp: 55, dmg: 22, def: 6, kbResist: 0.35, coins: 300,
+    dodge: 0.08, speed: 1.8, poison: true, w: 28, h: 18, color: '#4a3a2a', drops: [['cobweb', 2, 5, 0.8]] },
+  graniteElemental: { name: 'Granite Elemental', ai: 'fighter', hp: 130, dmg: 28, def: 14, kbResist: 0.7, coins: 600,
+    dodge: 0.10, element: 'lightning', w: 22, h: 42, color: '#3a4a6a', drops: [['diamond', 1, 1, 0.08]] },
+  snatcher: { name: 'Snatcher', ai: 'snatcher', hp: 60, dmg: 24, def: 6, kbResist: 1, coins: 150,
+    element: 'water', w: 22, h: 22, color: '#3a8a3a', drops: [['vine', 1, 2, 0.7]] },
 };
 
 let nextId = 1;
@@ -153,6 +181,44 @@ export class Enemy {
     else if (ai === 'ghost') this.aiGhost(game);
     else if (ai === 'swim') this.aiSwim(game);
     else if (ai === 'hornet') this.aiHornet(game);
+    else if (ai === 'archer') this.aiArcher(game);
+    else if (ai === 'snatcher') this.aiSnatcher(game);
+  }
+
+  // ---- Skeleton Archer: keeps distance, fires arrows -----------------------------
+  aiArcher(game) {
+    const p = game.player;
+    this.aiTimer++;
+    const dist = Math.abs(p.x - this.cx);
+    const dir = p.dead ? 0 : dist < 120 ? -Math.sign(p.x - this.cx) : dist > 260 ? Math.sign(p.x - this.cx) : 0;
+    if (dir) {
+      this.vx += dir * 0.06;
+      if (Math.abs(this.vx) > 0.9) this.vx = dir * 0.9;
+    } else this.vx *= 0.85;
+    this.facing = Math.sign(p.x - this.cx) || 1;
+    if (!p.dead && this.aiTimer % 130 === 0 && dist < 450) {
+      game.projectiles?.spawnEnemy('arrow', this.cx, this.y + 10, p.x, p.y - 20, 7, this.def.dmg);
+      const pr = game.projectiles.list[game.projectiles.list.length - 1];
+      if (pr) pr.gravity = 0.07;
+    }
+    this.applyGravityAndMove(game);
+  }
+
+  // ---- Snatcher: anchored plant, lunges on a vine at close range -------------------
+  aiSnatcher(game) {
+    const p = game.player;
+    if (this.anchorX === undefined) { this.anchorX = this.x; this.anchorY = this.y; }
+    const dx = p.x - (this.anchorX + this.w / 2), dy = p.y - (this.anchorY + this.h / 2);
+    const d = Math.hypot(dx, dy);
+    if (!p.dead && d < 90) {
+      // spring toward the player
+      this.x += (dx / d) * 2.2;
+      this.y += (dy / d) * 2.2;
+    }
+    // vine pulls it back toward the anchor
+    this.x += (this.anchorX - this.x) * 0.06;
+    this.y += (this.anchorY - this.y) * 0.06;
+    this.facing = Math.sign(dx) || 1;
   }
 
   // ---- Hornet: hovers at range, spits poison stingers ---------------------------
@@ -405,6 +471,11 @@ export class Enemy {
       iceSlime: 'slime', lavaSlime: 'slime', hellbat: 'bat',
       bloodZombie: 'zombie', drippler: 'demonEye', cursedSkull: 'skeleton',
       boneSerpent: 'wormSegment',
+      motherSlime: 'slime', babySlime: 'slime', sandSlime: 'slime', blackSlime: 'slime',
+      pinky: 'slime', jungleSlime: 'slime', giantBat: 'bat', wanderingEye: 'demonEye',
+      wraith: 'ghost', devourer: 'wormSegment', skeletonArcher: 'skeletonArcher',
+      spider: 'spider', graniteElemental: 'graniteElemental', snatcher: 'snatcher',
+      hornet: 'hornet',
     }[this.type];
   }
 
@@ -415,6 +486,11 @@ export class Enemy {
       bloodZombie: 'rgba(200,30,30,0.45)', drippler: 'rgba(220,30,30,0.5)',
       undeadViking: 'rgba(90,140,200,0.35)', cursedSkull: 'rgba(140,110,220,0.4)',
       boneSerpent: 'rgba(230,225,200,0.45)',
+      motherSlime: 'rgba(60,80,200,0.5)', babySlime: 'rgba(110,130,230,0.5)',
+      sandSlime: 'rgba(216,188,122,0.55)', blackSlime: 'rgba(30,30,40,0.6)',
+      pinky: 'rgba(240,150,200,0.6)', jungleSlime: 'rgba(70,200,60,0.5)',
+      giantBat: 'rgba(90,70,140,0.45)', wanderingEye: 'rgba(180,90,70,0.4)',
+      wraith: 'rgba(15,15,30,0.55)', devourer: 'rgba(122,90,120,0.5)',
     }[this.type] ?? null;
   }
 

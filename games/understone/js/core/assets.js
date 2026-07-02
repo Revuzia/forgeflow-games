@@ -31,7 +31,7 @@ export async function loadAssets(onProgress = () => {}) {
   for (const name of TILE_TEXTURES) jobs.push(['tiles', name, `assets/tiles/${name}.png`]);
   for (const name of WALL_TEXTURES) jobs.push(['walls', name, `assets/walls/${name}.png`]);
   for (const name of SPRITES) jobs.push(['sprites', name, `assets/entities/${name}.png`]);
-  jobs.push(['bg', 'hills', 'assets/bg/hills.png']);
+  for (const name of ['hills', 'desert', 'snow', 'jungle', 'corruption', 'ocean']) jobs.push(['bg', name, `assets/bg/${name}.png`]);
   let doneCount = 0;
   await Promise.all(jobs.map(async ([cat, name, src]) => {
     assets[cat][name] = await loadImage(src);
@@ -162,6 +162,58 @@ function buildFurnitureSprites() {
       px(c, 2, 2, 5, 4, '#54a85e');
       px(c, 9, 8, 5, 4, '#2e6e38');
     }),
+    chair: make((c) => {
+      px(c, 4, 3, 2, 12, '#8a6238');
+      px(c, 4, 8, 8, 2, '#a87c4c');
+      px(c, 10, 10, 2, 5, '#8a6238');
+      px(c, 4, 3, 2, 5, '#a87c4c');
+    }),
+    table: make((c) => {
+      px(c, 1, 7, 14, 2, '#a87c4c');
+      px(c, 1, 7, 14, 1, '#c09a6e');
+      px(c, 2, 9, 2, 6, '#8a6238');
+      px(c, 12, 9, 2, 6, '#8a6238');
+    }),
+    campfire: make((c) => {
+      px(c, 2, 12, 12, 3, '#6b4a2a');
+      px(c, 4, 13, 8, 2, '#8a6238');
+      px(c, 5, 6, 6, 6, '#ff8a2a');
+      px(c, 6, 4, 4, 4, '#ffcf5a');
+      px(c, 7, 2, 2, 3, '#ffe08a');
+    }),
+    lantern: make((c) => {
+      px(c, 7, 0, 2, 3, '#8a8a96');
+      px(c, 5, 3, 6, 9, '#b8935a');
+      px(c, 6, 4, 4, 7, '#ffe08a');
+      px(c, 5, 12, 6, 2, '#8a6a3a');
+    }),
+    candle: make((c) => {
+      px(c, 5, 12, 6, 3, '#b8935a');
+      px(c, 7, 6, 2, 6, '#f0e6d0');
+      px(c, 7, 3, 2, 3, '#ffcf5a');
+      px(c, 7, 2, 2, 2, '#ffe08a');
+    }),
+    sawmill: make((c) => {
+      px(c, 1, 8, 14, 7, '#7a5c36');
+      px(c, 2, 9, 12, 5, '#8a6a42');
+      c.strokeStyle = '#c9ccd8'; c.lineWidth = 1;
+      c.beginPath(); c.arc(8, 7, 4, 0, Math.PI * 2); c.stroke();
+      px(c, 7, 3, 2, 2, '#c9ccd8');
+    }),
+    loom: make((c) => {
+      px(c, 2, 3, 2, 12, '#8a6238');
+      px(c, 12, 3, 2, 12, '#8a6238');
+      px(c, 2, 3, 12, 2, '#a87c4c');
+      for (let i = 0; i < 5; i++) px(c, 4 + i * 2, 5, 1, 9, '#e8e0d0');
+      px(c, 3, 9, 10, 1, '#c05a5a');
+    }),
+    bed: make((c) => {
+      px(c, 1, 9, 14, 4, '#b04a5a');
+      px(c, 1, 8, 5, 3, '#f0e6d0');
+      px(c, 1, 13, 2, 2, '#8a6238');
+      px(c, 13, 13, 2, 2, '#8a6238');
+      px(c, 1, 9, 14, 1, '#d06a7a');
+    }),
   };
 }
 
@@ -176,6 +228,8 @@ export function makeTileDrawer(world, assets) {
     lifeCrystal: 'lifeCrystal', cobweb: 'cobweb', pot: 'pot', sapling: 'sapling',
     demonAltar: 'demonAltar', hellforge: 'hellforge', spawnPoint: 'spawnPoint',
     treeLeaves: 'treeLeaves',
+    chair: 'chair', table: 'table', campfire: 'campfire', lantern: 'lantern',
+    candle: 'candle', sawmill: 'sawmill', loom: 'loom', bed: 'bed',
   };
 
   return function drawTile(ctx, tx, ty, info, px, py) {

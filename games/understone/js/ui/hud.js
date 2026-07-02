@@ -15,18 +15,25 @@ const CSS = `
 .us-star { font-size: 14px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)); }
 #us-hotbar { top: 10px; left: 12px; display: flex; gap: 4px; flex-wrap: wrap; max-width: calc(100vw - 300px); }
 .us-slot {
-  width: 44px; height: 44px; background: rgba(20,24,40,0.75); border: 2px solid #3a415c;
-  border-radius: 6px; position: relative; display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px;
+  background: url('assets/ui/slot.png'); background-size: 100% 100%; image-rendering: pixelated;
+  border: none; border-radius: 6px; position: relative; display: flex; align-items: center; justify-content: center;
   font-family: 'Segoe UI', system-ui, sans-serif;
 }
-.us-slot.sel { border-color: #e8d9a0; box-shadow: 0 0 8px rgba(232,217,160,.5); }
+.us-slot.sel { background-image: url('assets/ui/slotSel.png'); box-shadow: 0 0 10px rgba(232,217,160,.6); }
+.us-slot .icon.r-uncommon { filter: drop-shadow(0 0 3px rgba(109,232,109,.8)); }
+.us-slot .icon.r-rare { filter: drop-shadow(0 0 3px rgba(90,180,255,.85)); }
+.us-slot .icon.r-epic { filter: drop-shadow(0 0 4px rgba(185,104,255,.9)); }
 .us-slot .icon { width: 30px; height: 30px; border-radius: 4px; display: flex; align-items: center;
   justify-content: center; font-size: 10px; font-weight: 700; color: #101018; text-shadow: 0 0 2px rgba(255,255,255,.35); }
 .us-slot .cnt { position: absolute; bottom: 2px; right: 4px; font-size: 11px; color: #fff; text-shadow: 0 1px 2px #000; }
 .us-slot .key { position: absolute; top: 1px; left: 4px; font-size: 9px; color: #9aa3c0; }
-#us-inv { top: 64px; left: 12px; display: none; background: rgba(12,15,28,0.92);
-  border: 2px solid #3a415c; border-radius: 10px; padding: 12px; max-width: calc(100vw - 32px);
+#us-inv { top: 64px; left: 12px; display: none;
+  background: rgba(12,15,28,0.92) url('assets/ui/panel.png'); background-size: 100% 100%;
+  image-rendering: pixelated; background-blend-mode: multiply;
+  border: 2px solid #3a2f22; border-radius: 10px; padding: 12px; max-width: calc(100vw - 32px);
   max-height: calc(100vh - 90px); overflow: auto; }
+#us-inv h3 { color: #f0e6d0 !important; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
 #us-inv.open { display: flex; gap: 14px; flex-wrap: wrap; }
 #us-inv .grid { display: grid; grid-template-columns: repeat(10, 44px); gap: 4px; }
 #us-inv h3 { margin: 0 0 6px; font: 600 12px 'Segoe UI'; color: #9aa3c0; letter-spacing: 1px; text-transform: uppercase; }
@@ -67,22 +74,54 @@ function probeIcon(id) {
   img.src = `assets/items/${id}.png`;
 }
 
+// raw terrain blocks render THE ACTUAL TILE TEXTURE as their icon (hotbar dirt == placed dirt)
+const tileIconCache = new Map();
+let gameAssetsRef = null;
+export function setIconAssets(assets) { gameAssetsRef = assets; tileIconCache.clear(); }
+function tileIconUrl(tileName) {
+  if (tileIconCache.has(tileName)) return tileIconCache.get(tileName);
+  const tex = gameAssetsRef?.tiles?.[tileName];
+  if (!tex) { tileIconCache.set(tileName, null); return null; }
+  const c = document.createElement('canvas');
+  c.width = 20; c.height = 20;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.drawImage(tex, 0, 0, 16, 16, 2, 2, 16, 16);
+  g.fillStyle = 'rgba(255,255,255,0.22)'; g.fillRect(2, 2, 16, 2);
+  g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(2, 16, 16, 2); g.fillRect(16, 2, 2, 16);
+  const url = c.toDataURL();
+  tileIconCache.set(tileName, url);
+  return url;
+}
+
+function rarityClass(def) {
+  const v = def.value ?? 0;
+  return v >= 15000 ? 'r-epic' : v >= 6000 ? 'r-rare' : v >= 2000 ? 'r-uncommon' : '';
+}
+
 function iconFor(id) {
   const def = ITEMS[id];
+  const rc = rarityClass(def);
+  // terrain blocks: real tile texture beats a generated approximation
+  if (def.type === 'block' && def.placeTile && T[def.placeTile] != null && TILES[T[def.placeTile]].frameStyle === 'blob') {
+    const url = tileIconUrl(def.placeTile);
+    if (url) return `<div class="icon ${rc}" style="background:transparent"><img src="${url}" style="width:100%;height:100%;image-rendering:pixelated" alt=""></div>`;
+  }
   probeIcon(id);
   if (iconAvailable.get(id)) {
-    return `<div class="icon" style="background:transparent"><img src="assets/items/${id}.png" style="width:100%;height:100%;image-rendering:pixelated;object-fit:contain" alt=""></div>`;
+    return `<div class="icon ${rc}" style="background:transparent"><img src="assets/items/${id}.png" style="width:100%;height:100%;image-rendering:pixelated;object-fit:contain" alt=""></div>`;
   }
   // fallback: tile-color swatch for blocks, class color + abbreviation otherwise
   let bg = ICON_COLORS[def.type] ?? '#d8c878';
   if (def.type === 'block' && def.placeTile && T[def.placeTile] != null) bg = TILES[T[def.placeTile]].color;
   const abbr = def.name.split(' ').map(w => w[0]).join('').slice(0, 3);
-  return `<div class="icon" style="background:${bg}">${abbr}</div>`;
+  return `<div class="icon ${rc}" style="background:${bg}">${abbr}</div>`;
 }
 
 export class HUD {
   constructor(game, player, inventory) {
     this.game = game; this.player = player; this.inv = inventory;
+    if (game.assets) setIconAssets(game.assets);
     this.open = false;
     this.cursorStack = null;          // stack picked up by mouse in the panel
     this.lastCraftListKey = '';

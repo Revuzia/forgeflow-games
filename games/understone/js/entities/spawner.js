@@ -64,7 +64,7 @@ export class Spawner {
       if (biome === 'corruption') return roll < 0.75 ? 'eaterOfSouls' : 'zombie';
       if (biome === 'ocean') return roll < 0.6 ? 'crab' : 'piranha';
       if (biome === 'desert') {
-        if (day) return roll < 0.5 ? 'vulture' : roll < 0.85 ? 'antlion' : 'greenSlime';
+        if (day) return roll < 0.4 ? 'vulture' : roll < 0.7 ? 'antlion' : 'sandSlime';
         return roll < 0.55 ? 'mummy' : roll < 0.85 ? 'zombie' : 'demonEye';
       }
       if (biome === 'snow') {
@@ -76,22 +76,33 @@ export class Spawner {
         return roll < 0.45 ? 'hornet' : roll < 0.8 ? 'zombie' : 'jungleSlime';
       }
       // forest
-      if (day) return roll < 0.75 ? 'greenSlime' : 'blueSlime';
-      if (roll < 0.5) return 'zombie';
-      if (roll < 0.78) return 'demonEye';
-      return roll < 0.9 ? 'ghost' : 'goblinScout';
+      if (day) return roll < 0.68 ? 'greenSlime' : roll < 0.95 ? 'blueSlime' : 'pinky';
+      if (roll < 0.45) return 'zombie';
+      if (roll < 0.68) return 'demonEye';
+      if (roll < 0.8) return 'wanderingEye';
+      return roll < 0.88 ? 'ghost' : roll < 0.96 ? 'goblinScout' : 'wraith';
     }
     if (band === 'underground') {
       if (biome === 'snow') return roll < 0.5 ? 'iceSlime' : roll < 0.8 ? 'caveBat' : 'undeadViking';
-      if (roll < 0.38) return 'blueSlime';
+      if (biome === 'jungle') return roll < 0.45 ? 'giantBat' : roll < 0.8 ? 'hornet' : 'snatcher';
+      if (biome === 'corruption') return roll < 0.55 ? 'devourer' : 'eaterOfSouls';
+      if (roll < 0.3) return 'blueSlime';
+      if (roll < 0.45) return 'motherSlime';
       if (roll < 0.68) return 'caveBat';
-      return roll < 0.92 ? 'giantWorm' : 'ghost';
+      if (roll < 0.82) return 'spider';
+      return roll < 0.94 ? 'giantWorm' : 'ghost';
     }
     if (band === 'cavern') {
-      if (roll < 0.35) return 'skeleton';
-      if (roll < 0.6) return 'caveBat';
-      if (roll < 0.78) return 'giantWorm';
-      return roll < 0.88 ? 'ghost' : roll < 0.96 ? 'cursedSkull' : 'blueSlime';
+      if (biome === 'jungle') return roll < 0.4 ? 'giantBat' : roll < 0.75 ? 'snatcher' : 'hornet';
+      if (biome === 'corruption') return roll < 0.55 ? 'devourer' : 'eaterOfSouls';
+      if (roll < 0.28) return 'skeleton';
+      if (roll < 0.42) return 'skeletonArcher';
+      if (roll < 0.58) return 'caveBat';
+      if (roll < 0.68) return 'spider';
+      if (roll < 0.76) return 'blackSlime';
+      if (roll < 0.84) return 'graniteElemental';
+      if (roll < 0.9) return 'giantWorm';
+      return roll < 0.95 ? 'ghost' : roll < 0.99 ? 'cursedSkull' : 'pinky';
     }
     // underworld
     if (roll < 0.3) return 'fireImp';
@@ -192,4 +203,9 @@ const ENEMY_SIZE = {
   drippler: { w: 20, h: 20 }, cursedSkull: { w: 20, h: 22 }, hellbat: { w: 18, h: 14 },
   lavaSlime: { w: 24, h: 18 }, demon: { w: 28, h: 44 }, boneSerpent: { w: 18, h: 18 },
   hornet: { w: 22, h: 22 }, jungleSlime: { w: 24, h: 18 },
+  motherSlime: { w: 36, h: 26 }, babySlime: { w: 14, h: 10 }, sandSlime: { w: 24, h: 18 },
+  blackSlime: { w: 24, h: 18 }, pinky: { w: 12, h: 9 }, giantBat: { w: 26, h: 20 },
+  wanderingEye: { w: 28, h: 28 }, wraith: { w: 22, h: 34 }, devourer: { w: 16, h: 16 },
+  skeletonArcher: { w: 18, h: 40 }, spider: { w: 28, h: 18 }, graniteElemental: { w: 22, h: 42 },
+  snatcher: { w: 22, h: 22 },
 };

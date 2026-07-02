@@ -40,6 +40,14 @@ block('chest', 'Chest', 'chest', { value: 100 });
 block('door', 'Wooden Door', 'door', { value: 40 });
 block('hellforgeItem', 'Hellforge', 'hellforge', { value: 5000 });
 block('chair', 'Wooden Chair', 'chair', { value: 60 });
+block('table', 'Wooden Table', 'table', { value: 120 });
+block('campfire', 'Campfire', 'campfire', { value: 150 });
+block('lantern', 'Lantern', 'lantern', { value: 300 });
+block('candle', 'Candle', 'candle', { value: 100 });
+block('sawmill', 'Sawmill', 'sawmill', { value: 500 });
+block('loom', 'Loom', 'loom', { value: 400 });
+block('bed', 'Bed', 'bed', { value: 2000 });
+item('silk', { name: 'Silk', type: 'material', value: 200 });
 
 // --- walls ---------------------------------------------------------------------
 item('woodWall', { name: 'Wood Wall', type: 'wall', useTime: 10, placeWall: 'woodWall' });
@@ -92,6 +100,14 @@ hammer('woodenHammer', 'Wooden Hammer', 25, 2, 25, 50);
 hammer('copperHammer', 'Copper Hammer', 35, 4, 23, 450);
 hammer('ironHammer', 'Iron Hammer', 45, 7, 22, 900);
 
+// --- shortswords: fast cursor-aimed stab (research 08 useStyle 13) ------------------------
+const shortsword = (id, name, dmg, useTime, value) =>
+  item(id, { name, type: 'weapon', weapon: 'shortsword', damage: dmg, useTime, knockback: 4, stack: 1, value });
+shortsword('copperShortsword', 'Copper Shortsword', 8, 12, 400);
+shortsword('ironShortsword', 'Iron Shortsword', 10, 11, 900);
+shortsword('silverShortsword', 'Silver Shortsword', 11, 11, 1800);
+shortsword('goldShortsword', 'Gold Shortsword', 13, 10, 3600);
+
 // --- swords (broadsword arc; damage/useTime/kb — research 04 §5) -------------------------
 const sword = (id, name, dmg, useTime, kb, value) =>
   item(id, { name, type: 'weapon', weapon: 'sword', damage: dmg, useTime, knockback: kb, stack: 1, value });
@@ -129,6 +145,28 @@ ITEMS.glacierBow.element = 'ice';
 bow('tempestBow', 'Tempest Bow', 14, 25, 14000);
 ITEMS.tempestBow.element = 'lightning';
 ITEMS.tempestBow.proc = 'chainLightning';
+bow('silverBow', 'Silver Bow', 9, 27, 2400);
+
+// --- magic weapons (mana-powered; research 08 verified behaviors) -------------------------
+const magic = (id, name, dmg, mana, useTime, value, extra = {}) =>
+  item(id, { name, type: 'weapon', weapon: 'magic', damage: dmg, mana, useTime, knockback: 3, stack: 1, value, ...extra });
+magic('rubyStaff', 'Ruby Staff', 21, 7, 28, 8000, { element: 'fire', bolt: 'bolt' });
+magic('diamondStaff', 'Diamond Staff', 23, 8, 26, 12000, { element: 'lightning', bolt: 'bolt', proc: 'chainLightning' });
+magic('vilethorn', 'Vilethorn', 10, 9, 28, 9000, { element: 'shadow', bolt: 'thorn' });
+magic('waterBolt', 'Water Bolt', 17, 10, 40, 15000, { element: 'water', bolt: 'bounce' });
+magic('flowerOfFire', 'Flower of Fire', 36, 12, 30, 20000, { element: 'fire', bolt: 'lob' });
+magic('demonScythe', 'Demon Scythe', 35, 14, 41, 25000, { element: 'shadow', bolt: 'scythe' });
+item('lesserManaPotion', { name: 'Lesser Mana Potion', type: 'consumable', use: 'mana', mana: 50, useTime: 20, stack: 30, value: 100 });
+
+// --- boomerang + tier-completing melee (research 08) ---------------------------------------
+item('enchantedBoomerang', { name: 'Enchanted Boomerang', type: 'weapon', weapon: 'boomerang', damage: 13, useTime: 14, knockback: 8, stack: 1, value: 8000 });
+item('sunfury', { name: 'Sunfury', type: 'weapon', weapon: 'flail', damage: 33, useTime: 45, knockback: 7, stack: 1, value: 27000 });
+ITEMS.sunfury.element = 'fire';
+item('darkLance', { name: 'Dark Lance', type: 'weapon', weapon: 'spear', damage: 27, useTime: 24, knockback: 6.5, stack: 1, value: 24000 });
+ITEMS.darkLance.element = 'shadow';
+item('bladeOfGrass', { name: 'Blade of Grass', type: 'weapon', weapon: 'sword', damage: 18, useTime: 20, knockback: 4.5, stack: 1, value: 13000 });
+ITEMS.bladeOfGrass.element = 'water';
+item('vine', { name: 'Vine', type: 'material', value: 400 });
 item('woodenArrow', { name: 'Wooden Arrow', type: 'ammo', ammoType: 'arrow', damage: 5, value: 1 });
 item('flamingArrow', { name: 'Flaming Arrow', type: 'ammo', ammoType: 'arrow', damage: 7, value: 2, fire: true });
 

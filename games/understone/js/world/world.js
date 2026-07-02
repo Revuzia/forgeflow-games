@@ -80,6 +80,13 @@ tile('sapling',    { solid: false, mult: 100, drops: 'acorn', lightBlock: false,
 tile('ebonstone',  { mult: 0.5, pick: 65, drops: 'stone', color: '#4a4258', merge: 'rock' });
 tile('corruptGrass', { mult: 2, grassTo: 'dirt', drops: 'dirt', color: '#7a68a8' });
 tile('chair',      { solid: false, mult: 1.5, color: '#96703f', frameStyle: 'cross' }); // housing comfort item
+tile('table',      { solid: false, platform: true, mult: 1.5, color: '#8a6a42', frameStyle: 'cross' });
+tile('campfire',   { solid: false, mult: 1.5, lightEmit: [1.0, 0.75, 0.4], lightBlock: false, color: '#e08a3a', frameStyle: 'cross' }); // regen aura
+tile('lantern',    { solid: false, mult: 100, lightEmit: [0.95, 0.9, 0.7], lightBlock: false, color: '#e8d08a', frameStyle: 'cross' });
+tile('candle',     { solid: false, mult: 100, lightEmit: [0.85, 0.75, 0.5], lightBlock: false, color: '#e8e0b0', frameStyle: 'cross' });
+tile('sawmill',    { solid: false, mult: 1.5, station: 'sawmill', color: '#7a5c36', frameStyle: 'cross' });
+tile('loom',       { solid: false, mult: 1.5, station: 'loom', color: '#a08a68', frameStyle: 'cross' });
+tile('bed',        { solid: false, mult: 1.5, color: '#b04a5a', frameStyle: 'cross' }); // spawn set on interact
 
 // --- walls ---
 export const W_ = {}; // name → wall id

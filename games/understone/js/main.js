@@ -208,6 +208,7 @@ async function boot() {
       placeWall: def.placeWall != null ? W_[def.placeWall] : null,
       use: def.use, boss: def.boss, weapon: def.weapon, ammo: def.ammo,
       element: def.element ?? null, proc: def.proc ?? null,
+      mana: def.mana, heal: def.heal, bolt: def.bolt,
       consume: (def.type === 'block' || def.type === 'wall' || def.type === 'consumable' || def.type === 'summon')
         ? () => inventory.consumeHeld(1) : null,
     };
@@ -250,6 +251,8 @@ async function boot() {
         for (let tx = x0; tx <= x1 && emitted < 14; tx++) {
           const id = world.tiles[ty * world.w + tx];
           if (id === T.torch) { fx.fire(tx * 16 + 8, ty * 16 + 4, 1, 22); emitted++; }
+          else if (id === T.campfire) { fx.fire(tx * 16 + 8, ty * 16 + 6, 2, 26); emitted++; }
+          else if (id === T.candle && (game.tick & 2)) { fx.fire(tx * 16 + 8, ty * 16 + 3, 1, 12); emitted++; }
           else if (id === T.furnace || id === T.hellforge) { if (Math.random() < 0.5) { fx.fire(tx * 16 + 8, ty * 16 + 11, 1, 16); emitted++; } }
         }
       }
@@ -442,15 +445,25 @@ async function boot() {
       c.fillStyle = '#c9ccd8';
       c.fillRect((gp.x - ox) * z - 2 * z, (gp.y - oy) * z - 2 * z, 4 * z, 4 * z);
     }
-    // PixelLab animated hero (walk/attack/jump/idle) with Grok static fallback
-    const heroChar = character('hero');
+    // PixelLab animated hero (walk/attack/jump/idle) with Grok static fallback.
+    // Equipped armor is VISIBLE: full matching set swaps in the armored variant.
+    const ARMOR_VARIANT = { copper: 'heroCopper', iron: 'heroIron', silver: 'heroSilver', gold: 'heroGold', shadow: 'heroShadow', molten: 'heroMolten' };
+    let heroName = 'hero';
+    {
+      const a = inventory.armor;
+      if (a.chest) {
+        const prefix = a.chest.id.replace(/(Chainmail|Breastplate|Scalemail).*/, '');
+        if (ARMOR_VARIANT[prefix]) heroName = ARMOR_VARIANT[prefix];
+      }
+    }
+    const heroChar = character(heroName) ?? character('hero');
     const walking = Math.abs(player.vx) > 0.3 && player.vy === 0;
     let frameImg = null;
     if (heroChar) {
       const pick = (name) => heroChar.anims[name]?.length ? heroChar.anims[name] : null;
       let frames, idx;
       if (player.swinging > 0) {
-        frames = pick('attack');
+        frames = pick('attack') ?? pick('cross-punch');
         const useT = player.heldItem?.useTime || 20;
         idx = frames ? Math.min(frames.length - 1, Math.floor((1 - player.swinging / useT) * frames.length)) : 0;
       } else if (player.vy !== 0) {

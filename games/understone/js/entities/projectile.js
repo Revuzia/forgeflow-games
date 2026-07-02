@@ -23,6 +23,29 @@ export class Projectiles {
     });
   }
 
+  // magic bolt with per-weapon behavior (research 08): bounce (Water Bolt),
+  // lob (Flower of Fire), scythe (accelerating disc), bolt (gem staves)
+  spawnMagic(held, x, y, tx, ty) {
+    const dx = tx - x, dy = ty - y;
+    const d = Math.hypot(dx, dy) || 1;
+    const b = held.bolt;
+    const spec = {
+      bolt: { speed: 8, gravity: 0, pierce: 1, life: 300, bounce: 0 },
+      bounce: { speed: 5, gravity: 0, pierce: 9, life: 1800, bounce: 5 },
+      lob: { speed: 6.5, gravity: 0.12, pierce: 1, life: 900, bounce: 5 },
+      scythe: { speed: 1.2, gravity: 0, pierce: 5, life: 200, bounce: 0, accel: 1.06, accelFor: 70 },
+    }[b] ?? { speed: 8, gravity: 0, pierce: 1, life: 300, bounce: 0 };
+    this.list.push({
+      kind: b === 'scythe' ? 'demonScythe' : b === 'lob' ? 'fireball' : `magic-${held.element ?? 'arcane'}`,
+      owner: 'player', element: held.element, proc: held.proc,
+      x, y, vx: (dx / d) * spec.speed, vy: (dy / d) * spec.speed,
+      gravity: spec.gravity, damage: held.damage, kb: held.knockback ?? 3,
+      pierce: spec.pierce, life: spec.life, bounce: spec.bounce,
+      accel: spec.accel, accelFor: spec.accelFor,
+      w: 8, h: 8, key: `magic${Math.random()}`,
+    });
+  }
+
   spawnEnemy(kind, x, y, tx, ty, speed, damage) {
     const dx = tx - x, dy = ty - y;
     const d = Math.hypot(dx, dy) || 1;
@@ -46,8 +69,23 @@ export class Projectiles {
       const pr = this.list[i];
       pr.life--;
       pr.vy += pr.gravity;
-      pr.x += pr.vx; pr.y += pr.vy;
-      if (pr.life <= 0 || this.solidAt(pr.x, pr.y)) { this.list.splice(i, 1); continue; }
+      if (pr.accel && pr.accelFor > 0) { pr.vx *= pr.accel; pr.vy *= pr.accel; pr.accelFor--; }
+      const nx = pr.x + pr.vx, ny = pr.y + pr.vy;
+      if (this.solidAt(nx, ny)) {
+        if (pr.bounce > 0) {
+          pr.bounce--;
+          // reflect on the blocking axis
+          if (this.solidAt(nx, pr.y)) pr.vx = -pr.vx * 0.9;
+          if (this.solidAt(pr.x, ny)) pr.vy = -pr.vy * (pr.gravity ? 0.75 : 0.9);
+          if (pr.gravity && Math.abs(pr.vy) < 1.2) pr.vy = -1.2; // keep lobs lively
+          game.fx?.sparks(pr.x, pr.y, pr.element === 'water' ? '#7db7e8' : '#ffd75a', 2);
+        } else {
+          this.list.splice(i, 1); continue;
+        }
+      } else {
+        pr.x = nx; pr.y = ny;
+      }
+      if (pr.life <= 0) { this.list.splice(i, 1); continue; }
       // elemental flight trails
       if (pr.element && game.fx) {
         if (pr.element === 'fire') game.fx.fireTrail(pr.x, pr.y, Math.sign(pr.vx));
@@ -102,6 +140,27 @@ export class Projectiles {
         ctx.moveTo(sx - (pr.vx / d) * 4 * z, sy - (pr.vy / d) * 4 * z);
         ctx.lineTo(sx + (pr.vx / d) * 3 * z, sy + (pr.vy / d) * 3 * z);
         ctx.stroke();
+      } else if (pr.kind?.startsWith('magic-')) {
+        const col = { fire: '#ff9a3c', ice: '#a8e6ff', lightning: '#dfe4ff', water: '#7db7e8', shadow: '#b968ff', arcane: '#e8c8ff' }[pr.element ?? 'arcane'] ?? '#e8c8ff';
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(sx, sy, 3.5 * z, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(sx, sy, 1.5 * z, 0, Math.PI * 2); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+      } else if (pr.kind === 'demonScythe') {
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(pr.life * 0.35);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = '#b968ff';
+        ctx.lineWidth = 3 * z;
+        ctx.beginPath(); ctx.arc(0, 0, 7 * z, 0.3, Math.PI * 1.5); ctx.stroke();
+        ctx.strokeStyle = '#efe0ff';
+        ctx.lineWidth = 1.2 * z;
+        ctx.beginPath(); ctx.arc(0, 0, 7 * z, 0.5, Math.PI * 1.3); ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.restore();
       } else if (pr.kind === 'sand') {
         ctx.fillStyle = '#d9c07a';
         ctx.fillRect(sx - 2 * z, sy - 2 * z, 4 * z, 4 * z);
