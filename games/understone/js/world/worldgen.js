@@ -449,48 +449,31 @@ export function generateWorld(world, onProgress = () => {}) {
     world.miningTown = [mx, my];
   }
 
-  // --- 9.5 surface SAFETY pass: bridge invisible fall-through traps ----------------------
-  // Narrow (<=2 wide), deep drops on the walkable surface are traps you can't see (dark,
-  // look like solid ground). BRIDGE them with a solid dirt/grass floor at the neighbouring
-  // surface height so the walk path is continuous — you can still mine down through it.
-  // Wide gaps (>=3) are legible cave mouths and are left open.
+  // --- 9.5 surface SAFETY pass: seal EVERY natural fall-through on the walkable surface ---
+  // Owner rule: you may fall only through gaps YOU dig — never through natural ground.
+  //
+  // The traps are steep DOWNWARD drops — sheer cliffs and one-sided bowls where you walk off a
+  // ledge and free-fall. We eliminate them by SLOPE-LIMITING the surface heightmap: no column's
+  // surface may sit more than STEP tiles below its neighbour on either side. Any steeper drop is
+  // ramped up into a walkable staircase (grass crust + dirt beneath) so the player always steps
+  // down, never free-falls. Two sweeps (left→right then right→left) each only ever RAISE a
+  // column (min y wins), so the result is stable and preserves upward walls you jump UP (those
+  // aren't falls) and all gentle terrain — only sheer down-drops are ramped. Surface heights are
+  // read from a SNAPSHOT (`orig`) so a raised column never re-anchors the sweep.
   {
-    const groundOf = (x) => {
-      let y = 0;
-      while (y < h && !world.isSolid(x, y)) y++;
-      return y;
-    };
-    const surfaceBand = h * (LAYERS.underground + 0.05); // only bridge near the surface
-    for (let pass = 0; pass < 4; pass++) {
-      const ground = new Int16Array(w);
-      for (let x = 0; x < w; x++) ground[x] = groundOf(x);
-      let bridged = 0;
-      for (let x = 1; x < w - 3; x++) {
-        const l = ground[x - 1];
-        // start of a drop relative to the solid ground on the left
-        if (ground[x] - l <= 4 || l > surfaceBand) continue;
-        // measure gap width until the ground climbs back near `l`
-        let x1 = x;
-        while (x1 < w - 2 && ground[x1] - l > 4 && x1 - x < 4) x1++;
-        const width = x1 - x;
-        const r = ground[x1];
-        // only bridge NARROW gaps that close back up on the right (a slot, not open terrain)
-        if (width >= 1 && width <= 2 && r - l <= 4) {
-          const level = Math.max(l, r);       // flush with the higher solid neighbour
-          for (let gx = x; gx < x1; gx++) {
-            for (let y = level; y < level + 3 && y < h; y++) set(gx, y, y === level ? T.grass : T.dirt);
-            // dirt wall backdrop below the bridge so the cave reads as a cave
-            for (let y = level + 3; y < ground[gx] && y < h - 1; y++) {
-              if (world.walls[y * w + gx] === W_.none) world.walls[y * w + gx] = W_.dirtNatural;
-            }
-          }
-          bridged++;
-          x = x1;
-        } else {
-          x = x1; // skip past a legitimate wide cave mouth
-        }
-      }
-      if (bridged === 0) break;
+    const STEP = 2;        // max tiles the surface may drop per column before we ramp it
+    const orig = new Int16Array(w);
+    for (let x = 0; x < w; x++) { let y = 0; while (y < h && !world.isSolid(x, y)) y++; orig[x] = y; }
+    const surfaceBand = h * (LAYERS.underground + 0.08); // only ramp the near-surface crust
+    const safe = new Int16Array(w);
+    for (let x = 0; x < w; x++) safe[x] = orig[x];
+    // left→right, then right→left: a column can be at most STEP below the higher of its safe
+    // neighbours; being far ABOVE a neighbour (an upward wall) is fine and left alone.
+    for (let x = 1; x < w; x++) if (orig[x] <= surfaceBand && safe[x] > safe[x - 1] + STEP) safe[x] = safe[x - 1] + STEP;
+    for (let x = w - 2; x >= 0; x--) if (orig[x] <= surfaceBand && safe[x] > safe[x + 1] + STEP) safe[x] = safe[x + 1] + STEP;
+    for (let x = 0; x < w; x++) {
+      if (safe[x] >= orig[x]) continue;
+      for (let y = safe[x]; y < orig[x] && y < h - 1; y++) set(x, y, y === safe[x] ? T.grass : T.dirt);
     }
   }
 

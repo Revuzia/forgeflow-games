@@ -268,6 +268,47 @@ const CHARACTERS = {
     description: 'carnivorous green plant monster head on a stem, open toothy maw like a venus flytrap',
     size: 48, template: 'cat', animations: ['idle', 'angry'],
   },
+  // ---- town NPCs: each visually DISTINCT from the player hero and each other --------
+  npcGuide: {
+    description: 'friendly older village guide man, brown hooded travelers cloak, green tunic, holding a book, kind bearded face',
+    size: 64, proportions: 'cartoon', animations: ['walk', 'breathing-idle'],
+  },
+  npcMerchant: {
+    description: 'plump cheerful merchant man with a wide brown feathered hat, tan apron over a red vest, coin pouch on belt',
+    size: 64, proportions: 'cartoon', animations: ['walk', 'breathing-idle'],
+  },
+  npcNurse: {
+    description: 'nurse woman in a white and pink dress with a white nurse cap bearing a red cross, blonde hair',
+    size: 64, proportions: 'realistic_female', animations: ['walk', 'breathing-idle'],
+  },
+  npcDemolitionist: {
+    description: 'gruff stocky dwarf demolitionist with a bushy beard, orange hard hat, soot-stained overalls, sticks of dynamite on belt',
+    size: 64, proportions: 'cartoon', animations: ['walk', 'breathing-idle'],
+  },
+  npcBlacksmith: {
+    description: 'muscular blacksmith woman with a dark iron helmet, leather smithing apron, holding a hammer, soot-smudged',
+    size: 64, proportions: 'cartoon', animations: ['walk', 'breathing-idle'],
+  },
+  npcArmsDealer: {
+    description: 'rugged arms dealer man with a wide brimmed cowboy hat, brown duster coat, bandolier of arrows',
+    size: 64, proportions: 'cartoon', animations: ['walk', 'breathing-idle'],
+  },
+  npcWizard: {
+    description: 'old wizard with a long white beard, tall pointed purple wizard hat with stars, flowing violet robe, wooden staff',
+    size: 64, proportions: 'cartoon', animations: ['walk', 'breathing-idle'],
+  },
+  npcDryad: {
+    description: 'ethereal forest dryad woman with green leafy hair, flowing green vine dress, glowing green skin, nature spirit',
+    size: 64, proportions: 'realistic_female', animations: ['walk', 'breathing-idle'],
+  },
+  npcOldMiner: {
+    description: 'grizzled old miner with a yellow mining helmet with a glowing lamp, gray beard, dirty coveralls, pickaxe',
+    size: 64, proportions: 'cartoon', animations: ['walk', 'breathing-idle'],
+  },
+  npcDeepTrader: {
+    description: 'mysterious hooded deep-cave trader in a teal cloak, glowing cyan eyes under the hood, satchel of rare gems',
+    size: 64, proportions: 'cartoon', animations: ['walk', 'breathing-idle'],
+  },
 };
 
 const poll = async (jobId, label) => {

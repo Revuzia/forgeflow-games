@@ -220,11 +220,14 @@ export class NPC {
     const [ox, oy] = camera.frameOrigin(alpha);
     const z = camera.zoom;
     const ix = this.px + (this.x - this.px) * alpha, iy = this.py + (this.y - this.py) * alpha;
-    const rec = character('hero');
-    const tint = NPC_TINTS[this.type] ?? 'rgba(150,150,150,0.3)';
+    // Prefer a distinct PixelLab NPC character; fall back to a properly RECOLORED hero
+    // (offscreen tint so ONLY the character is colored — never a box over the terrain).
+    const rec = character(NPC_CHAR[this.type]) ?? character('hero');
+    const usingOwnSprite = !!character(NPC_CHAR[this.type]);
     if (rec?.base) {
-      const frames = Math.abs(this.vx) > 0.1 ? rec.anims.walk : rec.anims['breathing-idle'];
+      const frames = Math.abs(this.vx) > 0.1 ? (rec.anims.walk ?? rec.anims['fast-walk']) : (rec.anims['breathing-idle'] ?? rec.anims.idle);
       const img = frames?.length ? frames[Math.floor((this._t = (this._t ?? 0) + 1) * 0.15) % frames.length] : rec.base;
+      const src = usingOwnSprite ? img : tintedFrame(img, this.type);   // recolor only for shared hero
       const scale = rec.content ? (this.h * 1.06) / rec.content.h : this.h / img.height;
       const dh = img.height * scale * z, dw = img.width * scale * z;
       const bottomFrac = rec.content ? (rec.content.y + rec.content.h) / img.height : 1;
@@ -233,13 +236,12 @@ export class NPC {
       ctx.translate((ix + this.w / 2 - ox) * z, cy);
       ctx.scale(this.facing < 0 ? -1 : 1, 1);
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
-      ctx.globalCompositeOperation = 'source-atop';
-      ctx.fillStyle = tint;
-      ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+      ctx.drawImage(src, -dw / 2, -dh / 2, dw, dh);
       ctx.restore();
+      // distinct silhouette accessory (hat/hair) so each NPC reads differently even on the shared body
+      if (!usingOwnSprite) this.drawAccessory(ctx, (ix + this.w / 2 - ox) * z, cy - dh * bottomFrac + dh * 0.06, dw, z);
     } else {
-      ctx.fillStyle = this.type === 'guide' ? '#5ab45a' : '#dcb43c';
+      ctx.fillStyle = NPC_BODY[this.type] ?? '#8a8a9a';
       ctx.fillRect((ix - ox) * z, (iy - oy) * z, this.w * z, this.h * z);
     }
     // name label
@@ -247,10 +249,73 @@ export class NPC {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillText(this.name, (ix + this.w / 2 - ox) * z + 1, (iy - 10 - oy) * z + 1);
-    ctx.fillStyle = '#cfe8cf';
+    ctx.fillStyle = '#e8e8f0';
     ctx.fillText(this.name, (ix + this.w / 2 - ox) * z, (iy - 10 - oy) * z);
     ctx.textAlign = 'left';
   }
+
+  // simple per-NPC headgear drawn over the recolored hero so they don't all look alike
+  drawAccessory(ctx, cx, topY, dw, z) {
+    const a = NPC_ACCESSORY[this.type];
+    if (!a) return;
+    ctx.save();
+    ctx.fillStyle = a.color;
+    const hw = dw * 0.42, hx = cx - hw / 2, hy = topY;
+    if (a.kind === 'wideHat') { ctx.fillRect(hx - dw * 0.12, hy + 4 * z, hw + dw * 0.24, 3 * z); ctx.fillRect(hx + hw * 0.2, hy - 4 * z, hw * 0.6, 8 * z); }
+    else if (a.kind === 'pointyHat') { ctx.beginPath(); ctx.moveTo(cx, hy - 10 * z); ctx.lineTo(hx, hy + 5 * z); ctx.lineTo(hx + hw, hy + 5 * z); ctx.closePath(); ctx.fill(); }
+    else if (a.kind === 'cap') { ctx.fillRect(hx, hy, hw, 5 * z); ctx.fillStyle = '#fff'; ctx.fillRect(cx - 1.5 * z, hy + 1 * z, 3 * z, 3 * z); } // nurse: white cap + red cross accent below
+    else if (a.kind === 'hood') { ctx.beginPath(); ctx.arc(cx, hy + 3 * z, hw * 0.55, Math.PI, 0); ctx.fill(); }
+    else if (a.kind === 'helmet') { ctx.fillRect(hx, hy, hw, 6 * z); }
+    else if (a.kind === 'crown') { ctx.fillRect(hx, hy + 2 * z, hw, 3 * z); for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(hx + hw * (i * 0.4), hy + 2 * z); ctx.lineTo(hx + hw * (i * 0.4 + 0.2), hy - 3 * z); ctx.lineTo(hx + hw * (i * 0.4 + 0.4), hy + 2 * z); ctx.fill(); } }
+    ctx.restore();
+  }
+}
+
+// --- NPC appearance tables --------------------------------------------------
+// Each NPC gets a distinct PixelLab character when available; until then a recolored
+// hero body + distinct headgear so no two NPCs (or the player) look identical.
+const NPC_CHAR = {
+  guide: 'npcGuide', merchant: 'npcMerchant', nurse: 'npcNurse', demolitionist: 'npcDemolitionist',
+  blacksmith: 'npcBlacksmith', armsDealer: 'npcArmsDealer', wizard: 'npcWizard', dryad: 'npcDryad',
+  oldMiner: 'npcOldMiner', deepTrader: 'npcDeepTrader',
+};
+const NPC_BODY = {
+  guide: '#5a8a4a', merchant: '#b8933c', nurse: '#e8c0c8', demolitionist: '#b85a3a',
+  blacksmith: '#6a6a78', armsDealer: '#8a7048', wizard: '#6a4ab0', dryad: '#4a9a5a',
+  oldMiner: '#c8a050', deepTrader: '#3aa0a0', angler: '#4a80b0',
+};
+const NPC_ACCESSORY = {
+  guide: { kind: 'hood', color: '#4a7a3a' },
+  merchant: { kind: 'wideHat', color: '#8a6a2a' },
+  nurse: { kind: 'cap', color: '#ffffff' },
+  demolitionist: { kind: 'helmet', color: '#c85a2a' },
+  blacksmith: { kind: 'helmet', color: '#4a4a56' },
+  armsDealer: { kind: 'wideHat', color: '#6a5030' },
+  wizard: { kind: 'pointyHat', color: '#5a3aa0' },
+  dryad: { kind: 'hood', color: '#3a8a4a' },
+  oldMiner: { kind: 'helmet', color: '#d8a840' },
+  deepTrader: { kind: 'hood', color: '#2a8a8a' },
+  angler: { kind: 'wideHat', color: '#365a80' },
+};
+
+// offscreen recolor cache: multiply-tint a hero frame so ONLY the sprite pixels are
+// colored (source-atop on an offscreen canvas that contains just the sprite → no box).
+const _tintCache = new Map();
+function tintedFrame(img, type) {
+  if (!img) return img;
+  const key = `${type}:${img.src ?? img.__id ?? (img.__id = Math.random())}`;
+  if (_tintCache.has(key)) return _tintCache.get(key);
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.drawImage(img, 0, 0);
+  g.globalCompositeOperation = 'source-atop';   // affects only the sprite already drawn here
+  g.fillStyle = (NPC_BODY[type] ?? '#8a8a9a');
+  g.globalAlpha = 0.5;
+  g.fillRect(0, 0, c.width, c.height);
+  _tintCache.set(key, c);
+  return c;
 }
 
 // ---------------------------------------------------------------------------
