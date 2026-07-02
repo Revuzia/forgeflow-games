@@ -47,3 +47,5 @@ pipeline/engine/_wip/
 pipeline/engine/_captest.py
 pipeline/engine/_capfix_test.png
 pipeline/engine/*.png.lit
+
+asset_gen/

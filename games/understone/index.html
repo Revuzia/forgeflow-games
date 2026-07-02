@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Understone</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0a0a12; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+  #hud { position: fixed; inset: 0; pointer-events: none; font-family: 'Segoe UI', system-ui, sans-serif; user-select: none; }
+  #hud * { pointer-events: none; }
+  #hud .interactive { pointer-events: auto; }
+  #boot {
+    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: #0a0a12; color: #cfd6e6; font-family: 'Segoe UI', system-ui, sans-serif; z-index: 100;
+    transition: opacity .4s ease;
+  }
+  #boot h1 { font-size: 42px; letter-spacing: 8px; margin: 0 0 24px; color: #e8d9a0; text-shadow: 0 0 24px rgba(232,217,160,.35); }
+  #boot .bar { width: 320px; height: 10px; background: #1c2030; border: 1px solid #3a415c; border-radius: 5px; overflow: hidden; }
+  #boot .bar > div { height: 100%; width: 0%; background: linear-gradient(90deg, #7a5c2e, #e8d9a0); transition: width .15s ease; }
+  #boot .msg { margin-top: 12px; font-size: 13px; opacity: .7; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud"></div>
+<div id="boot">
+  <h1>UNDERSTONE</h1>
+  <div class="bar"><div id="boot-fill"></div></div>
+  <div class="msg" id="boot-msg">Waking the world…</div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

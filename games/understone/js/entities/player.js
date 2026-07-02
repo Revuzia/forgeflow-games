@@ -1,0 +1,356 @@
+// Player — per-tick pipeline mirrors Terraria's UpdatePlayer order
+// (research/terraria/01-physics-collision.md §5.3):
+// reset stats → liquid overrides → horizontal → jump → gravity → integrate+collide
+// → head bonk → fall damage. Mining/placing live here too (uses held item).
+
+import { TILE, PHYS, REACH, COMBAT, WORLD_H, LAYERS } from '../config.js';
+import { T, TILES, WALLS } from '../world/world.js';
+import { isDown, wasPressed, mouse } from '../core/input.js';
+import { moveEntity, entityLiquid, colFlags } from './physics.js';
+
+export class Player {
+  constructor(world) {
+    this.world = world;
+    this.w = PHYS.playerW; this.h = PHYS.playerH;
+
+    this.hpMax = COMBAT.playerBaseHP; this.hp = this.hpMax;
+    this.manaMax = COMBAT.playerBaseMana; this.mana = this.manaMax;
+
+    this.facing = 1;
+    this.jump = 0;               // remaining sustain ticks
+    this.releaseJump = true;     // jump button seen up since last jump
+    this.iFrames = 0;
+    this.breathTimer = 0;
+    this.respawnTimer = 0;
+    this.respawn();              // sets position, fallStartTy, breath, hp — keep LAST
+
+    // mining state
+    this.swingTimer = 0;         // ticks until next tool hit
+    this.miningTile = -1;        // packed tx,ty currently being damaged
+    this.miningDamage = 0;       // accumulated 0..100
+    this.swinging = 0;           // >0 while tool-swing animation plays
+
+    this.heldItem = null;        // adapter object set each tick from the inventory
+
+    this.onDig = [];             // (tx, ty, tileInfo) subscribers — drops, particles, sfx
+    this.onHurt = [];
+  }
+
+  // center-x/y in px (camera target interface)
+  get x() { return this.px + this.w / 2; }
+  get y() { return this.py + this.h / 2; }
+
+  respawn() {
+    this.px = this.world.spawnX * TILE - PHYS.playerW / 2;
+    this.py = this.world.spawnY * TILE - PHYS.playerH;
+    this.ppx = this.px; this.ppy = this.py;
+    this.vx = 0; this.vy = 0;
+    this.hp = this.hpMax;
+    this.dead = false;
+    this.fallStartTy = (this.py / TILE) | 0;
+    this.breath = PHYS.breathMax;
+  }
+
+  grounded() { return this.vy === 0; }
+
+  hurt(dmg, fromX = null) {
+    if (this.iFrames > 0 || this.dead) return false;
+    this.hp -= Math.max(1, Math.round(dmg));
+    this.iFrames = PHYS.hurtIFrames;
+    // knockback REPLACES velocity
+    const dir = fromX === null ? -this.facing : (this.x < fromX ? -1 : 1);
+    this.vx = PHYS.hurtKnockX * dir;
+    this.vy = PHYS.hurtKnockY;
+    for (const fn of this.onHurt) fn(dmg);
+    if (this.hp <= 0) this.die();
+    return true;
+  }
+
+  die() {
+    this.dead = true;
+    this.hp = 0;
+    this.respawnTimer = COMBAT.respawnTicks;
+  }
+
+  tick(game) {
+    this.ppx = this.px; this.ppy = this.py;
+    if (this.dead) {
+      if (--this.respawnTimer <= 0) this.respawn();
+      return;
+    }
+    if (this.iFrames > 0) this.iFrames--;
+
+    // ---- reset per-tick stats, then liquid overrides -------------------------
+    const liquid = entityLiquid(this.world, { x: this.px, y: this.py, w: this.w, h: this.h });
+    const wet = liquid >= 1, inLava = liquid === 2;
+    let gravity = PHYS.gravity, maxFall = PHYS.maxFall;
+    let jumpSpeed = PHYS.jumpSpeed, jumpHold = PHYS.jumpHold;
+    let moveFactor = 1;
+    if (wet) {
+      gravity = PHYS.waterGravity; maxFall = PHYS.waterMaxFall;
+      jumpSpeed = PHYS.waterJumpSpeed; jumpHold = PHYS.waterJumpHold;
+      moveFactor = PHYS.waterMoveFactor;
+      this.fallStartTy = (this.py / TILE) | 0;   // liquids negate fall damage
+    }
+    // space layer: reduced gravity near world top
+    const tyNow = this.py / TILE;
+    if (tyNow < WORLD_H * LAYERS.surfaceTop * 0.5) gravity *= 0.5;
+
+    // ---- horizontal movement (§2) --------------------------------------------
+    const left = isDown('left'), right = isDown('right');
+    const input = (right ? 1 : 0) - (left ? 1 : 0);
+    const friction = this.grounded() ? PHYS.runSlow : PHYS.runSlow * 0.5;
+    if (input !== 0) {
+      if (Math.sign(this.vx) === -input) {
+        // turning skid: friction AND accel the same tick (0.28 total)
+        this.vx += input * (PHYS.runSlow + PHYS.runAccel);
+      } else if (Math.abs(this.vx) < PHYS.maxRun) {
+        this.vx += input * PHYS.runAccel;
+        if (Math.abs(this.vx) > PHYS.maxRun) this.vx = input * PHYS.maxRun;
+      }
+      if (this.swinging <= 0) this.facing = input;
+    } else {
+      if (Math.abs(this.vx) <= friction) this.vx = 0;
+      else this.vx -= Math.sign(this.vx) * friction;
+    }
+
+    // ---- jump: velocity-pin model (§3) ----------------------------------------
+    const jumpHeld = isDown('jump');
+    if (!jumpHeld) { this.releaseJump = true; this.jump = 0; }
+    if (jumpHeld && this.jump > 0) {
+      this.vy = -jumpSpeed;       // re-pinned every tick while sustained
+      this.jump--;
+    } else if (jumpHeld && this.releaseJump && this.grounded()) {
+      this.vy = -jumpSpeed;
+      this.jump = jumpHold;
+      this.releaseJump = false;
+    }
+
+    // ---- gravity ----------------------------------------------------------------
+    this.vy += gravity;
+    if (this.vy > maxFall) this.vy = maxFall;
+
+    // ---- integrate + collide ------------------------------------------------------
+    const e = { x: this.px, y: this.py, vx: this.vx, vy: this.vy, w: this.w, h: this.h };
+    const wasFalling = this.vy > 0;
+    const flags = moveEntity(this.world, e, { fallThrough: isDown('down'), moveFactor });
+    this.px = e.x; this.py = e.y; this.vx = e.vx; this.vy = e.vy;
+    if (flags.up) { this.vy = 0.01; this.jump = 0; }        // head bonk
+
+    // ---- fall damage (§4) -----------------------------------------------------------
+    const tileY = (this.py / TILE) | 0;
+    if (this.jump > 0 || wet || !wasFalling) this.fallStartTy = tileY;
+    if (flags.down && this.vy === 0) {
+      const fallen = tileY - this.fallStartTy;
+      if (fallen > PHYS.safeFallTiles) {
+        this.hurtNoKb((fallen - PHYS.safeFallTiles) * PHYS.fallDmgPerTile);
+      }
+      this.fallStartTy = tileY;
+    }
+
+    // ---- breath & lava ---------------------------------------------------------------
+    const headLiquid = entityLiquid(this.world, { x: this.px, y: this.py, w: this.w, h: 8 });
+    if (headLiquid >= 1) {
+      if (++this.breathTimer >= PHYS.breathLossEvery) {
+        this.breathTimer = 0;
+        if (this.breath > 0) this.breath--;
+        else this.hurtNoKb(PHYS.drownDmg);
+      }
+    } else {
+      this.breath = Math.min(PHYS.breathMax, this.breath + PHYS.breathRegenPerTick);
+      this.breathTimer = 0;
+    }
+    if (inLava) this.hurt(PHYS.lavaDamage);
+
+    // ---- mining / placing / interacting --------------------------------------------------
+    this.updateTool(game);
+    this.updateInteract(game);
+    if (this.swinging > 0) this.swinging--;
+  }
+
+  // right-click: doors, chests, altar hint
+  updateInteract(game) {
+    if (!mouse.rightPressed) return;
+    const { tx, ty, inReach } = this.targetTile(game);
+    if (!inReach) return;
+    const world = this.world;
+    const id = world.tileAt(tx, ty);
+    if (id === T.door) world.setTile(tx, ty, T.doorOpen);
+    else if (id === T.doorOpen) {
+      // don't close a door on top of yourself
+      if (!this.overlapsBox(tx * TILE, ty * TILE, TILE, TILE)) world.setTile(tx, ty, T.door);
+    } else if (id === T.chest && game.openChest) game.openChest(tx, ty);
+  }
+
+  hurtNoKb(dmg) {
+    if (this.iFrames > 0 || this.dead) return;
+    this.hp -= Math.max(1, Math.round(dmg));
+    this.iFrames = PHYS.hurtIFrames;
+    for (const fn of this.onHurt) fn(dmg);
+    if (this.hp <= 0) this.die();
+  }
+
+  // cursor target tile + Terraria reach test (measured from hitbox EDGES, research 03 §3)
+  targetTile(game) {
+    const [wx, wy] = game.camera.screenToWorld(
+      mouse.x * (game.canvas.width / game.canvas.clientWidth),
+      mouse.y * (game.canvas.height / game.canvas.clientHeight),
+    );
+    const tx = Math.floor(wx / TILE), ty = Math.floor(wy / TILE);
+    const inReach =
+      (this.px / TILE) - REACH.tilesX <= tx &&
+      (this.px + this.w) / TILE + REACH.tilesX - 1 >= tx &&
+      (this.py / TILE) - REACH.tilesY <= ty &&
+      (this.py + this.h) / TILE + REACH.tilesY - 2 >= ty;
+    return { tx, ty, inReach };
+  }
+
+  updateTool(game) {
+    if (this.swingTimer > 0) this.swingTimer--;
+    const held = this.heldItem;
+    if (!held || !mouse.left) { this.miningTile = -1; this.miningDamage = 0; return; }
+
+    // ---- consumables & boss summons (no tile target needed) --------------------
+    if (held.use || held.boss) {
+      if (this.swingTimer > 0) return;
+      this.swingTimer = held.useTime ?? 30;
+      this.swinging = held.useTime ?? 30;
+      if (held.use === 'lifeCrystal' && this.hpMax < 400) {
+        this.hpMax += 20; this.hp = Math.min(this.hpMax, this.hp + 20);
+        held.consume?.();
+      } else if (held.use === 'manaCrystal' && this.manaMax < 200) {
+        this.manaMax += 20; this.mana = Math.min(this.manaMax, this.mana + 20);
+        held.consume?.();
+      } else if (held.boss && game.summonBoss) {
+        if (game.summonBoss(held.boss)) held.consume?.();
+      }
+      return;
+    }
+
+    const { tx, ty, inReach } = this.targetTile(game);
+    if (!inReach || this.swingTimer > 0) return;
+    const world = this.world;
+    const id = world.tileAt(tx, ty);
+
+    // ---- placeable item (block/wall/torch) -----------------------------------
+    if (held.placeTile != null) {
+      if (id !== T.air) return;
+      if (!this.canPlaceAt(tx, ty, held.placeTile)) return;
+      // never place a solid block inside any entity (incl. self)
+      if (TILES[held.placeTile].solid && this.overlapsBox(tx * TILE, ty * TILE, TILE, TILE)) return;
+      this.swingTimer = held.useTime;
+      this.swinging = held.useTime;
+      world.setTile(tx, ty, held.placeTile);
+      if (held.consume) held.consume();
+      return;
+    }
+    if (held.placeWall != null) {
+      if (world.wallAt(tx, ty) !== 0) return;
+      // wall anchoring: adjacent wall or block
+      if (!this.hasWallAnchor(tx, ty)) return;
+      this.swingTimer = held.useTime;
+      world.setWall(tx, ty, held.placeWall);
+      if (held.consume) held.consume();
+      return;
+    }
+
+    // ---- tools -----------------------------------------------------------------
+    if (held.type !== 'pickaxe' && held.type !== 'axe' && held.type !== 'hammer') return;
+    if (id === T.air) {
+      // hammer removes player-placed walls (100 HP, power ×1.5, half useTime)
+      if (held.type === 'hammer' && world.wallAt(tx, ty) !== 0) {
+        const wallInfo = WALLS[world.wallAt(tx, ty)];
+        if (wallInfo.natural) return;               // natural walls are permanent
+        this.swingTimer = Math.floor(held.useTime / 2);
+        this.swinging = held.useTime;
+        const packed = -(ty * world.w + tx) - 1;    // negative-space key for walls
+        if (this.miningTile !== packed) { this.miningTile = packed; this.miningDamage = 0; }
+        this.miningDamage += Math.floor((held.hammerPower ?? 0) * 1.5);
+        if (this.miningDamage >= 100) {
+          this.miningTile = -1; this.miningDamage = 0;
+          world.setWall(tx, ty, 0);
+          for (const fn of this.onDig) fn(tx, ty, wallInfo, { wall: true });
+        }
+      }
+      return;
+    }
+
+    const info = TILES[id];
+    // tool-class gating
+    if (info.axe ? held.type !== 'axe' : info.hammer ? held.type !== 'hammer' : held.type !== 'pickaxe') return;
+
+    this.swingTimer = held.useTime;
+    this.swinging = held.useTime;
+
+    // damage per swing (research 03): pick = floor(power × mult), axe = floor(power% × 24)
+    let dmg = 0;
+    if (info.axe) dmg = Math.floor((held.axePower ?? 0) / 100 * 24);
+    else if ((held.pickPower ?? 0) >= (info.pick ?? 0)) dmg = Math.floor((held.pickPower ?? 0) * info.mult);
+    if (dmg <= 0) return;
+
+    const packed = ty * world.w + tx;
+    if (this.miningTile !== packed) { this.miningTile = packed; this.miningDamage = 0; }
+    this.miningDamage += dmg;
+    if (this.miningDamage >= 100) {
+      this.miningDamage = 0;
+      if (info.grassTo) {
+        // stripping the grass coat costs one full cycle; block underneath starts fresh
+        world.setTile(tx, ty, T[info.grassTo]);
+      } else {
+        this.miningTile = -1;
+        this.digTile(tx, ty, info);
+      }
+    }
+  }
+
+  overlapsBox(bx, by, bw, bh) {
+    return this.px < bx + bw && this.px + this.w > bx && this.py < by + bh && this.py + this.h > by;
+  }
+
+  // block anchoring (research 03 §5): cardinal adjacent block/platform OR background wall
+  canPlaceAt(tx, ty, placeId) {
+    const world = this.world;
+    if (world.wallAt(tx, ty) !== 0) return true;
+    const sides = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+    for (const [dx, dy] of sides) {
+      const n = world.tileAt(tx + dx, ty + dy);
+      if (n !== T.air && (TILES[n].solid || TILES[n].platform)) return true;
+    }
+    return false;
+  }
+
+  hasWallAnchor(tx, ty) {
+    const world = this.world;
+    const sides = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+    for (const [dx, dy] of sides) {
+      if (world.wallAt(tx + dx, ty + dy) !== 0) return true;
+      const n = world.tileAt(tx + dx, ty + dy);
+      if (n !== T.air && TILES[n].solid) return true;
+    }
+    return false;
+  }
+
+  digTile(tx, ty, info) {
+    const world = this.world;
+    // trees fall as a unit: chop trunk → collect trunk column + leaves
+    if (info.name === 'treeTrunk') {
+      let top = ty;
+      while (world.tileAt(tx, top - 1) === T.treeTrunk) top--;
+      let count = 0;
+      for (let y = ty; y >= top; y--) { world.setTile(tx, y, T.air); count++; }
+      // clear leaf crown around the top
+      for (let ly = -3; ly <= 1; ly++) for (let lx = -3; lx <= 3; lx++) {
+        if (world.tileAt(tx + lx, top + ly) === T.treeLeaves) world.setTile(tx + lx, top + ly, T.air);
+      }
+      for (const fn of this.onDig) fn(tx, ty, info, { wood: count * 2 });
+      return;
+    }
+    world.setTile(tx, ty, T.air);
+    for (const fn of this.onDig) fn(tx, ty, info, null);
+  }
+
+  // render interpolated position (px, top-left)
+  renderPos(alpha) {
+    return [this.ppx + (this.px - this.ppx) * alpha, this.ppy + (this.py - this.ppy) * alpha];
+  }
+}
