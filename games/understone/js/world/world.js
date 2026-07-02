@@ -25,7 +25,7 @@ function tile(name, props = {}) {
     grassTo: props.grassTo ?? null,      // grass coat: strips to this tile first
     axe: props.axe ?? false,             // chopped, not mined
     hammer: props.hammer ?? false,       // hammered (background objects)
-    drops: props.drops ?? name,          // item key granted on dig (null = nothing)
+    drops: 'drops' in props ? props.drops : name, // item key granted on dig (explicit null = nothing)
     lightEmit: props.lightEmit ?? null,  // [r,g,b] 0-1 emission
     lightBlock: props.lightBlock ?? (props.solid ?? true), // attenuates light strongly
     color: props.color ?? '#f0f',        // placeholder/minimap swatch
@@ -70,7 +70,7 @@ tile('door',       { solid: true, mult: 1.5, color: '#87643c', frameStyle: 'cros
 tile('doorOpen',   { solid: false, mult: 1.5, drops: 'door', color: '#87643c', frameStyle: 'cross' });
 tile('lifeCrystal',{ solid: false, mult: 1.5, lightEmit: [0.9, 0.2, 0.3], color: '#e83a5a', frameStyle: 'cross' });
 tile('cobweb',     { solid: false, mult: 100, drops: 'cobweb', lightBlock: false, color: '#dedede', frameStyle: 'cross' });
-tile('pot',        { solid: false, mult: 100, drops: null, color: '#a8825a', frameStyle: 'cross' });
+tile('pot',        { solid: false, mult: 100, drops: null, color: '#a8825a', frameStyle: 'cross' }); // loot handled by onDig special-case
 tile('spawnPoint', { solid: false, mult: 1.5, drops: null, color: '#e8e0c0', frameStyle: 'cross' }); // bed-lite
 tile('demonAltar', { solid: false, mult: 0, drops: null, lightEmit: [0.35, 0.1, 0.4], color: '#8a3fa0', frameStyle: 'cross', station: 'altar' }); // unbreakable pre-HM
 tile('rubyOre',    { mult: 1, drops: 'ruby', color: '#e03a4e', merge: 'rock' });
