@@ -112,6 +112,8 @@ export const RECIPES = [
   { out: 'rangerHood', n: 1, station: 'loom', ing: { silk: 6, ironBar: 2 } },
   { out: 'rangerJerkin', n: 1, station: 'loom', ing: { silk: 10, ironBar: 4 } },
   { out: 'rangerLeggings', n: 1, station: 'loom', ing: { silk: 8, ironBar: 3 } },
+  { out: 'fishingRod', n: 1, station: 'workbench', ing: { wood: 8 } },
+  { out: 'abeemination', n: 1, station: 'altar', ing: { stinger: 10, vine: 5, gel: 10 } },
 
   // --- anvil: armor -----------------------------------------------------------------
   { out: 'copperHelmet', n: 1, station: 'anvil', ing: { copperBar: 12 } },

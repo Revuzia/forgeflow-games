@@ -406,7 +406,10 @@ export function generateWorld(world, onProgress = () => {}) {
     buildHouse(ox2 + 15, surface[ox2 + 15] - 1, 10, 6);
     outposts.push(ox2);
   }
-  // the far-east outpost hosts a resident Wizard (reward for traveling)
+  // far outposts host residents (reward for traveling): Angler west, Wizard east
+  if (outposts.length > 0) {
+    world.townNpcs.push({ type: 'angler', x: (outposts[0] + 5) * 16, y: (surface[outposts[0]] - 2) * 16 });
+  }
   if (outposts.length > 1) {
     world.townNpcs.push({ type: 'wizard', x: (outposts[1] + 5) * 16, y: (surface[outposts[1]] - 2) * 16 });
   }

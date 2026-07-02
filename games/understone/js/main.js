@@ -451,6 +451,20 @@ async function boot() {
     if (player.dead) return;
     const sx = (px - ox) * z, sy = (py - oy) * z;
     if (player.iFrames > 0 && (g.tick & 4)) c.globalAlpha = 0.4;
+    // fishing line + bobber
+    if (player.bobber) {
+      const b = player.bobber;
+      c.strokeStyle = 'rgba(220,220,230,0.6)';
+      c.lineWidth = Math.max(1, z * 0.7);
+      c.beginPath();
+      c.moveTo((player.x + player.facing * 8 - ox) * z, (player.py + 8 - oy) * z);
+      c.lineTo((b.x - ox) * z, (b.y - oy) * z);
+      c.stroke();
+      c.fillStyle = b.biting > 0 ? '#ff4a4a' : '#e04a4a';
+      c.beginPath(); c.arc((b.x - ox) * z, (b.y - oy) * z, (b.biting > 0 ? 4 : 3) * z, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#f0f0f0';
+      c.beginPath(); c.arc((b.x - ox) * z, (b.y - 2 - oy) * z, 1.5 * z, 0, Math.PI * 2); c.fill();
+    }
     // grapple chain + hook (drawn under the player)
     if (player.grapple) {
       const gp = player.grapple;

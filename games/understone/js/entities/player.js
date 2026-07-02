@@ -228,6 +228,38 @@ export class Player {
     }
     if (inLava) this.hurt(PHYS.lavaDamage);
 
+    // ---- fishing bobber -------------------------------------------------------------------
+    if (this.bobber) {
+      const b = this.bobber;
+      if (!b.inWater) {
+        b.vy += 0.25;
+        b.x += b.vx; b.y += b.vy;
+        const btx = Math.floor(b.x / TILE), bty = Math.floor(b.y / TILE);
+        if (this.world.inBounds(btx, bty) && this.world.liquid[bty * this.world.w + btx] >= 100 && this.world.liquidType[bty * this.world.w + btx] === 0) {
+          b.inWater = true;
+          b.biteIn = 180 + (Math.random() * 420) | 0;
+          game.fx?.splash(b.x, b.y, 0, -1, 0.8);
+        } else if (this.world.isSolid(btx, bty) || Math.hypot(b.x - this.x, b.y - this.y) > 340) {
+          this.bobber = null;   // hit land / line too long
+        }
+      } else {
+        b.y += Math.sin(game.tick * 0.08) * 0.15;      // gentle float
+        if (b.biting > 0) {
+          b.biting--;
+          if ((game.tick & 3) === 0) game.fx?.bubble(b.x, b.y);
+          if (b.biting === 0) b.biteIn = 240 + (Math.random() * 400) | 0;  // missed it
+        } else if (b.biteIn > 0) {
+          b.biteIn--;
+          if (b.biteIn === 0) {
+            b.biting = 45;                               // strike window!
+            b.y += 4;
+            game.fx?.splash(b.x, b.y, 0, -1, 1);
+            game.audio?.play('pickup', { volume: 0.9, rate: 0.6 });
+          }
+        }
+      }
+    }
+
     // ---- mining / placing / interacting --------------------------------------------------
     this.updateTool(game);
     this.updateInteract(game);
@@ -316,6 +348,39 @@ export class Player {
         this.mana = Math.min(this.manaMax, this.mana + (held.mana ?? 50));
         game.floatText?.(this.x, this.py - 12, `+mana`, '#6a9ae8');
         game.audio?.play('powerup', { rate: 1.2 });
+        held.consume?.();
+      } else if (held.use === 'fish') {
+        if (this.bobber) {
+          // reel in
+          if (this.bobber.biting > 0) {
+            const roll = Math.random();
+            const caught = roll < 0.55 ? ['fish', 1] : roll < 0.73 ? ['crate', 1] : roll < 0.85 ? ['goldenCarp', 1] : ['cobweb', 2];
+            game.inventory.add(caught[0], caught[1]);
+            game.floatText?.(this.x, this.py - 12, `${game.ITEMS[caught[0]].name}!`, '#9ecbff');
+            game.audio?.play('pickup', { volume: 0.8 });
+            game.fx?.splash(this.bobber.x, this.bobber.y, 0, -1, 1.5);
+            game.progress = game.progress ?? {};
+            game.progress.fishCaught = (game.progress.fishCaught ?? 0) + 1;
+          }
+          this.bobber = null;
+        } else {
+          const [wx, wy] = game.camera.screenToWorld(
+            mouse.x * (game.canvas.width / game.canvas.clientWidth),
+            mouse.y * (game.canvas.height / game.canvas.clientHeight));
+          const dx = wx - this.x, dy = wy - this.py;
+          const d = Math.hypot(dx, dy) || 1;
+          this.bobber = { x: this.x, y: this.py + 4, vx: (dx / d) * 6, vy: (dy / d) * 6 - 1.5, inWater: false, biteIn: -1, biting: 0 };
+          game.audio?.play('swing', { volume: 0.35 });
+        }
+      } else if (held.use === 'crate') {
+        // crack open a fishing crate
+        const LOOT = [['ironBar', 3, 6], ['silverBar', 2, 4], ['goldBar', 1, 3], ['bomb', 2, 4], ['lesserHealingPotion', 2, 3], ['torch', 5, 12]];
+        const [id, lo, hi] = LOOT[(Math.random() * LOOT.length) | 0];
+        const n = lo + (Math.random() * (hi - lo + 1) | 0);
+        game.inventory.add(id, n);
+        if (Math.random() < 0.08) game.inventory.add('lifeCrystal', 1);
+        game.floatText?.(this.x, this.py - 12, `${game.ITEMS[id].name} (${n})`, '#e8c86d');
+        game.audio?.play('craft');
         held.consume?.();
       } else if (held.use === 'throw') {
         // bombs & dynamite: lobbed with a lit fuse

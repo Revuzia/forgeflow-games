@@ -449,6 +449,12 @@ export class Combat {
           g.progress = g.progress ?? {};
           g.progress.bossKills = (g.progress.bossKills ?? 0) + 1;
           g.announce?.(`${def.name} has been defeated!`);
+          if (def.name === 'Wall of Flesh' && !g.progress.hardmode) {
+            g.progress.hardmode = true;
+            setTimeout(() => g.announce?.('⚔ The ancient spirits of light and dark have been released. You have conquered the underworld! ⚔'), 4000);
+            g.audio?.music('victory');
+            g.fx?.addTrauma(0.6);
+          }
           if (def.name === 'Eater of Worlds' && e.segs) {
             // every segment drops materials (research 05: 2-5 demonite + 1-2 scales @50% each)
             for (const s of e.segs) {

@@ -15,6 +15,12 @@ ENEMIES.servant = { name: 'Servant of Cthulhu', ai: 'flyer', hp: 8, dmg: 12, def
   w: 16, h: 16, color: '#a83a48', drops: [] };
 ENEMIES.eaterHead = { name: 'Eater of Worlds', ai: 'worm', hp: 150, dmg: 22, def: 2, kbResist: 1, coins: 500,
   w: 22, h: 22, color: '#6a5a8a', segments: 0, drops: [['demonite', 2, 5, 0.5], ['shadowScale', 1, 2, 0.5]] };
+ENEMIES.queenBee = { name: 'Queen Bee', ai: 'boss', hp: 3400, dmg: 30, def: 8, kbResist: 1, coins: 50000,
+  w: 66, h: 44, color: '#d8a02a', element: 'water', drops: [['stinger', 6, 12, 1.0], ['gel', 5, 10, 1.0], ['abeemination', 1, 1, 0.1]] };
+ENEMIES.bee = { name: 'Bee', ai: 'bat', hp: 13, dmg: 13, def: 0, kbResist: 0, coins: 0,
+  dodge: 0.1, w: 12, h: 10, color: '#e8c02a', drops: [] };
+ENEMIES.wallOfFlesh = { name: 'Wall of Flesh', ai: 'boss', hp: 8000, dmg: 50, def: 12, kbResist: 1, coins: 80000,
+  w: 60, h: 320, color: '#a03a4a', element: 'fire', drops: [['pwnhammer', 1, 1, 1.0], ['lesserHealingPotion', 5, 10, 1.0], ['hellstoneBar', 5, 12, 1.0]] };
 
 export class KingSlime extends Enemy {
   constructor(x, y) {
@@ -185,6 +191,127 @@ export class EyeOfCthulhu extends Enemy {
   }
 }
 
+// Queen Bee — jungle boss: hover → horizontal dash ×3 → summon bees → repeat
+export class QueenBee extends Enemy {
+  constructor(x, y) {
+    super('queenBee', x, y);
+    this.boss = true;
+    this.state = 'hover';
+    this.stateTimer = 0;
+    this.dashes = 0;
+  }
+
+  tick(game) {
+    this._tick = game.tick;
+    this.px = this.x; this.py = this.y;
+    const p = game.player;
+    if (p.dead) { this.y -= 4; if (this.y < -300) this.hp = -1; return; }
+    this.stateTimer++;
+    if (this.state === 'hover') {
+      const tx = p.x, ty = p.py - 9 * TILE;
+      this.vx += Math.sign(tx - this.cx) * 0.12;
+      this.vy += Math.sign(ty - this.cy) * 0.1;
+      this.vx = Math.max(-4, Math.min(4, this.vx));
+      this.vy = Math.max(-2.5, Math.min(2.5, this.vy));
+      if (this.stateTimer > 110) {
+        this.state = this.dashes < 3 ? 'dash' : 'spawn';
+        this.stateTimer = 0;
+      }
+    } else if (this.state === 'dash') {
+      if (this.stateTimer === 1) {
+        // align horizontally, then charge across
+        this.vy = (p.y - this.cy) * 0.02;
+        this.vx = Math.sign(p.x - this.cx) * 9;
+        game.audio?.play('swing', { volume: 0.7, rate: 0.7 });
+      }
+      if (this.stateTimer > 35) { this.dashes++; this.state = 'hover'; this.stateTimer = 0; }
+    } else if (this.state === 'spawn') {
+      if (this.stateTimer === 1) {
+        for (let i = 0; i < 4; i++) {
+          game.enemies.push(new Enemy('bee', this.cx + (Math.random() - 0.5) * 40, this.cy + 20));
+        }
+        game.audio?.play('swing', { volume: 0.5, rate: 1.4 });
+      }
+      this.vx *= 0.9; this.vy *= 0.9;
+      if (this.stateTimer > 50) { this.dashes = 0; this.state = 'hover'; this.stateTimer = 0; }
+    }
+    this.x += this.vx; this.y += this.vy;      // flies through terrain
+    this.facing = Math.sign(this.vx) || 1;
+  }
+}
+
+// Wall of Flesh — END-GAME: a living wall that sweeps across the underworld.
+// Beat it to unlock hardmode (the pre-hardmode victory condition, per research 04 §10).
+export class WallOfFlesh extends Enemy {
+  constructor(x, y, dir) {
+    super('wallOfFlesh', x, y);
+    this.boss = true;
+    this.dir = dir;               // sweep direction
+    this.laserTimer = 0;
+    this.h = 320;
+    this.y = y - 160;
+  }
+
+  contactDamage() { return 50; }
+
+  tick(game) {
+    this._tick = game.tick;
+    this.px = this.x; this.py = this.y;
+    const p = game.player;
+    // relentless horizontal sweep, slightly faster as it weakens
+    const speed = 0.8 + (1 - this.hp / this.def.hp) * 1.2;
+    this.x += this.dir * speed;
+    // pin vertical span to the underworld band around the player
+    const hellTop = game.world.h * 0.86 * 16;
+    this.y = Math.max(hellTop, p.y - 160);
+    // eye lasers
+    if (++this.laserTimer >= 80 && !p.dead) {
+      this.laserTimer = 0;
+      for (const eyeFrac of [0.25, 0.7]) {
+        game.projectiles?.spawnEnemy('laser', this.cx + this.dir * 20, this.y + this.h * eyeFrac, p.x, p.y, 7, 28);
+      }
+    }
+    // if it sweeps past the world edge, it escapes (fight lost)
+    if (this.x < 16 || this.x > (game.world.w - 2) * 16) {
+      this.hp = -1;
+      game.announce?.('The Wall of Flesh escaped beyond the world…');
+    }
+  }
+
+  draw(ctx, camera, alpha) {
+    const [ox, oy] = camera.frameOrigin(alpha);
+    const z = camera.zoom;
+    const sx = (this.x - ox) * z, sy = (this.y - oy) * z;
+    const w2 = this.w * z, h2 = this.h * z;
+    // flesh column with sinew bands
+    const grad = ctx.createLinearGradient(sx, 0, sx + w2, 0);
+    grad.addColorStop(0, '#6a1f2c');
+    grad.addColorStop(0.5, '#a03a4a');
+    grad.addColorStop(1, '#7a2836');
+    ctx.fillStyle = grad;
+    ctx.fillRect(sx, sy, w2, h2);
+    ctx.fillStyle = 'rgba(60,10,20,0.5)';
+    for (let i = 0; i < 10; i++) {
+      const yy = sy + (i / 10) * h2 + Math.sin((this._tick ?? 0) * 0.05 + i) * 4 * z;
+      ctx.fillRect(sx, yy, w2, 3 * z);
+    }
+    // eyes + mouth
+    for (const f of [0.25, 0.7]) {
+      const ey = sy + h2 * f;
+      ctx.fillStyle = '#e8e0d0';
+      ctx.beginPath(); ctx.ellipse(sx + w2 * (this.dir > 0 ? 0.8 : 0.2), ey, 9 * z, 6 * z, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#c03a2a';
+      ctx.beginPath(); ctx.arc(sx + w2 * (this.dir > 0 ? 0.85 : 0.15), ey, 3.5 * z, 0, Math.PI * 2); ctx.fill();
+    }
+    const my = sy + h2 * 0.47;
+    ctx.fillStyle = '#3a0a12';
+    ctx.beginPath(); ctx.ellipse(sx + w2 * (this.dir > 0 ? 0.82 : 0.18), my, 8 * z, 14 * z, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#e8e0d0';
+    for (let t = 0; t < 4; t++) ctx.fillRect(sx + w2 * (this.dir > 0 ? 0.78 : 0.14) + t * 3 * z, my - 12 * z, 2 * z, 5 * z);
+    this.drawHpBar(ctx, this.x, this.y, ox, oy, z);
+  }
+}
+
 // Eater of Worlds — v1 simplification: one long worm with a shared HP pool
 // (~40 segments × 150 HP ⇒ 6000; true splitting mechanic deferred, flagged deviation).
 export function spawnEaterOfWorlds(game, x, y) {
@@ -212,6 +339,24 @@ export function summonBossFactory(game) {
       if (game.enemies.some(e => e.boss)) return false;
       game.enemies.push(new EyeOfCthulhu(p.x - 30 * TILE, p.py - 20 * TILE));
       game.announce?.('Eye of Cthulhu has awoken!');
+      return true;
+    }
+    if (bossId === 'queenBee') {
+      if (game.enemies.some(e => e.boss)) return false;
+      const ptx = p.x / 16;
+      const j = game.world.biomes?.jungle;
+      if (!j || ptx < j[0] || ptx > j[1]) { game.announce?.('The abeemination hums only within the jungle…'); return false; }
+      game.enemies.push(new QueenBee(p.x + 15 * TILE, p.py - 12 * TILE));
+      game.announce?.('Queen Bee has awoken!');
+      return true;
+    }
+    if (bossId === 'wallOfFlesh') {
+      if (game.enemies.some(e => e.boss)) return false;
+      if (p.py / 16 < game.world.h * 0.86) { game.announce?.('The doll thirsts for the fires of the underworld…'); return false; }
+      const dir = p.x / 16 < game.world.w / 2 ? 1 : -1;
+      game.enemies.push(new WallOfFlesh(p.x - dir * 30 * TILE, p.y, dir));
+      game.announce?.('The Wall of Flesh has awoken! RUN!');
+      game.fx?.addTrauma(0.8);
       return true;
     }
     if (bossId === 'eaterOfWorlds') {

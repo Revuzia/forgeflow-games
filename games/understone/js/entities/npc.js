@@ -55,6 +55,7 @@ const NPC_NAMES = {
   blacksmith: 'Hilda the Blacksmith', armsDealer: 'Dex the Arms Dealer',
   wizard: 'Alaric the Wizard', dryad: 'Fenna the Dryad',
   oldMiner: 'Grim the Old Miner', deepTrader: 'Vex the Deep Trader',
+  angler: 'Finn the Angler',
 };
 const NPC_TINTS = {
   guide: 'rgba(90,180,90,0.35)', merchant: 'rgba(220,180,60,0.35)',
@@ -62,6 +63,7 @@ const NPC_TINTS = {
   blacksmith: 'rgba(90,90,110,0.45)', armsDealer: 'rgba(150,110,60,0.4)',
   wizard: 'rgba(110,90,220,0.4)', dryad: 'rgba(60,160,80,0.45)',
   oldMiner: 'rgba(200,160,70,0.45)', deepTrader: 'rgba(60,160,160,0.45)',
+  angler: 'rgba(70,140,200,0.45)',
 };
 
 export class NPC {
@@ -164,6 +166,29 @@ export class NPC {
         game.announce?.(`${this.name}: “Picked this stretch clean already, have ye?”`);
       }
       game.hud?.openShop(this);
+      return true;
+    }
+    if (this.type === 'angler') {
+      // repeatable fishing quest: 3 Bass per in-game day (Terraria's Angler, simplified)
+      const g2 = game;
+      g2.progress = g2.progress ?? {};
+      const day = Math.floor(g2.tick / 86400);
+      if (g2.progress.anglerDay === day) {
+        game.announce?.(`${this.name}: “Come back tomorrow — the fish need time to forget my tricks.”`);
+        return true;
+      }
+      const have = g2.inventory.count('fish');
+      if (have >= 3) {
+        g2.inventory.remove('fish', 3);
+        g2.inventory.money += 5000;
+        g2.inventory.add('bomb', 2);
+        g2.progress.anglerDay = day;
+        g2.inventory.changed();
+        game.announce?.(`${this.name}: “Three bass! Here's 50 silver and a little something that goes boom.”`);
+        game.audio?.play('coins');
+      } else {
+        game.announce?.(`${this.name}: “Bring me 3 Bass and I'll make it worth your while. (${have}/3 — craft a Fishing Rod: 8 wood)”`);
+      }
       return true;
     }
     if (this.type === 'nurse') {

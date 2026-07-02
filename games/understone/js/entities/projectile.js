@@ -53,6 +53,7 @@ export class Projectiles {
       kind, owner: 'enemy',
       x, y, vx: (dx / d) * speed, vy: (dy / d) * speed,
       gravity: 0, damage, kb: 4, pierce: 1, life: 420,
+      solidProof: kind === 'laser',      // demonic lasers burn through terrain
       w: 8, h: 8, key: `e${Math.random()}`,
     });
   }
@@ -71,7 +72,7 @@ export class Projectiles {
       pr.vy += pr.gravity;
       if (pr.accel && pr.accelFor > 0) { pr.vx *= pr.accel; pr.vy *= pr.accel; pr.accelFor--; }
       const nx = pr.x + pr.vx, ny = pr.y + pr.vy;
-      if (this.solidAt(nx, ny)) {
+      if (!pr.solidProof && this.solidAt(nx, ny)) {
         if (pr.bounce > 0) {
           pr.bounce--;
           // reflect on the blocking axis
@@ -132,6 +133,19 @@ export class Projectiles {
         ctx.beginPath(); ctx.arc(sx, sy, 4 * z, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = 'rgba(255,200,80,0.5)';
         ctx.beginPath(); ctx.arc(sx - pr.vx * 1.5, sy - pr.vy * 1.5, 3 * z, 0, Math.PI * 2); ctx.fill();
+      } else if (pr.kind === 'laser') {
+        const d = Math.hypot(pr.vx, pr.vy) || 1;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = '#ff3a4a';
+        ctx.lineWidth = 2.5 * z;
+        ctx.beginPath();
+        ctx.moveTo(sx - (pr.vx / d) * 10 * z, sy - (pr.vy / d) * 10 * z);
+        ctx.lineTo(sx + (pr.vx / d) * 6 * z, sy + (pr.vy / d) * 6 * z);
+        ctx.stroke();
+        ctx.strokeStyle = '#ffd0d0';
+        ctx.lineWidth = z;
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
       } else if (pr.kind === 'stinger') {
         const d = Math.hypot(pr.vx, pr.vy) || 1;
         ctx.strokeStyle = '#a8d43a';

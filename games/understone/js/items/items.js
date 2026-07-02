@@ -168,6 +168,17 @@ item('bladeOfGrass', { name: 'Blade of Grass', type: 'weapon', weapon: 'sword', 
 ITEMS.bladeOfGrass.element = 'water';
 item('vine', { name: 'Vine', type: 'material', value: 400 });
 
+// --- fishing (Angler's trade) --------------------------------------------------------
+item('fishingRod', { name: 'Fishing Rod', type: 'tool', tool: 'rod', use: 'fish', useTime: 15, stack: 1, value: 500 });
+item('fish', { name: 'Bass', type: 'consumable', use: 'heal', heal: 15, useTime: 20, stack: 30, value: 100 });
+item('goldenCarp', { name: 'Golden Carp', type: 'material', value: 3000 });
+item('crate', { name: 'Wooden Crate', type: 'consumable', use: 'crate', useTime: 20, stack: 30, value: 500 });
+
+// --- boss summons & end-game ----------------------------------------------------------
+item('abeemination', { name: 'Abeemination', type: 'summon', boss: 'queenBee', stack: 20, value: 2500 });
+item('guideVoodooDoll', { name: 'Guide Voodoo Doll', type: 'summon', boss: 'wallOfFlesh', stack: 1, value: 10000 });
+item('pwnhammer', { name: 'Pwnhammer', type: 'tool', tool: 'hammer', hammerPower: 80, damage: 26, useTime: 22, knockback: 7.5, stack: 1, value: 39000 });
+
 // --- explosives (Demolitionist's trade): thrown, fused, destroy terrain -------------
 item('bomb', { name: 'Bomb', type: 'consumable', use: 'throw', damage: 60, blastTiles: 4, fuse: 180, useTime: 25, stack: 99, value: 750 });
 item('dynamite', { name: 'Dynamite', type: 'consumable', use: 'throw', damage: 175, blastTiles: 7, fuse: 240, useTime: 25, stack: 99, value: 2500 });
