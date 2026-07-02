@@ -1,0 +1,47 @@
+{
+  "characters": {
+    "hero": {
+      "id": "e1f55409-84dd-4cd9-8688-4675684214c9",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true
+      }
+    },
+    "zombie": {
+      "id": "e0044630-cfa7-4e99-8fbb-a8b177f5578b",
+      "anims": {}
+    },
+    "skeleton": {
+      "id": "aa9df9b7-6d71-4b8d-8347-322770ee4f9e",
+      "anims": {}
+    },
+    "mummy": {
+      "id": "6fbfd7a2-c5ef-4baa-a856-3ee23dcb84d2",
+      "anims": {}
+    },
+    "ghost": {
+      "id": "232aae8a-c2e5-4708-ab5f-2d8e242fa923",
+      "anims": {}
+    },
+    "undeadMiner": {
+      "id": "83ad0c27-f88f-46ef-ab84-c9beda6cbfbc",
+      "anims": {}
+    },
+    "goblin": {
+      "id": "ea1537e9-f672-4e2d-8bfc-51b1a4074da0",
+      "anims": {}
+    },
+    "demon": {
+      "id": "5f55e5d5-fdf1-4989-abf9-42884ac420b6",
+      "anims": {}
+    },
+    "iceWolf": {
+      "id": "2a7a634c-dae0-45b9-91ae-599f7e445c32",
+      "anims": {}
+    },
+    "vulture": {
+      "id": "dd9f1222-93fe-479f-986b-338163c80730",
+      "anims": {}
+    }
+  }
+}

@@ -31,9 +31,10 @@ const SKY_NIGHT_TOP = [8, 10, 26], SKY_NIGHT_BOT = [24, 30, 56];
 const SKY_DUSK = [226, 130, 74];
 
 export class Background {
-  constructor(world, camera) {
+  constructor(world, camera, assets = null) {
     this.world = world;
     this.camera = camera;
+    this.assets = assets;
     // deterministic star field
     this.stars = [];
     let s = 12345;
@@ -72,7 +73,30 @@ export class Background {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
-    if (depth > 0.95) return; // fully underground: no celestial bodies
+    if (depth > 0.95) return; // fully underground: no celestial bodies or hills
+
+    // parallax hills (research 07 P0-1): two layers, far 0.07x / near 0.18x scroll
+    const hills = this.assets?.bg?.hills;
+    if (hills && depth < 0.6) {
+      const [ox] = this.camera.frameOrigin(1);
+      const horizonY = h * (0.62 - depth * 0.5);
+      ctx.globalAlpha = (1 - depth) * 0.9;
+      for (const [ratio, scale, tint] of [[0.07, 0.55, 0.35], [0.18, 0.8, 0]]) {
+        const dw = w * 1.3 * scale + w * 0.7;
+        const dh = dw * (hills.height / hills.width) * 0.5;
+        let sx = -((ox * ratio) % dw);
+        if (sx > 0) sx -= dw;
+        for (let x = sx; x < w; x += dw) {
+          ctx.drawImage(hills, x, horizonY - dh * (0.9 - ratio), dw, dh);
+        }
+        if (tint > 0) {
+          // atmospheric haze on the far layer: repaint with sky color at low alpha
+          ctx.fillStyle = `rgba(${bot.map(Math.round)},${tint})`;
+          ctx.fillRect(0, horizonY - dh, w, dh * 1.2);
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
 
     // stars at night
     if (!day) {

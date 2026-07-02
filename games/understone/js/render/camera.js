@@ -36,11 +36,11 @@ export class Camera {
   viewW() { return this.canvas.width / this.zoom; }
   viewH() { return this.canvas.height / this.zoom; }
 
-  // interpolated top-left of view in world px for this frame
+  // interpolated top-left of view in world px for this frame (+screenshake)
   frameOrigin(alpha) {
     const cx = this.px + (this.x - this.px) * alpha;
     const cy = this.py + (this.y - this.py) * alpha;
-    return [cx - this.viewW() / 2, cy - this.viewH() / 2];
+    return [cx - this.viewW() / 2 + (this.shakeX ?? 0), cy - this.viewH() / 2 + (this.shakeY ?? 0)];
   }
 
   // screen(device px) → world px

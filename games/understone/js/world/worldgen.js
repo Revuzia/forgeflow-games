@@ -105,8 +105,9 @@ export function generateWorld(world, onProgress = () => {}) {
       if (Math.abs(y - localStone) < 5 && rand() < 0.35) id = id === T.dirt ? T.stone : T.dirt;
       set(x, y, id);
     }
-    // natural walls behind everything below surface+3
-    for (let y = s + 3; y < h - 1; y++) {
+    // natural walls behind everything just below the surface (cave mouths read as
+    // dirt-backed caves, not black holes — matches Terraria's surface readability)
+    for (let y = s + 1; y < h - 1; y++) {
       world.walls[y * w + x] = y < localStone + 4 ? W_.dirtNatural : W_.stoneNatural;
     }
   }
@@ -170,6 +171,7 @@ export function generateWorld(world, onProgress = () => {}) {
   const desertX1 = desertX0 + w * 0.14;
   const snowX0 = desertLeft ? w * 0.62 : w * 0.12;
   const snowX1 = snowX0 + w * 0.16;
+  world.biomes = { desert: [desertX0 | 0, desertX1 | 0], snow: [snowX0 | 0, snowX1 | 0], oceanW };
   for (let x = 0; x < w; x++) {
     const inDesert = x >= desertX0 && x < desertX1;
     const inSnow = x >= snowX0 && x < snowX1;
@@ -355,6 +357,32 @@ export function generateWorld(world, onProgress = () => {}) {
       const x = (10 + rand() * (w - 20)) | 0;
       const y = ((LAYERS.cavern + rand() * (LAYERS.underworld - LAYERS.cavern)) * h) | 0;
       if (get(x, y) === T.air && world.isSolid(x, y + 1)) { set(x, y, T.lifeCrystal); break; }
+    }
+  }
+
+  // --- 9.5 surface readability pass: no invisible pinhole shafts -------------------------
+  // 1-tile-wide vertical shafts on the walk surface are fall-through traps the player
+  // can't see. Widen them to 2 tiles so cave mouths read clearly.
+  {
+    const groundOf = (x) => {
+      let y = 0;
+      while (y < h && !world.isSolid(x, y)) y++;
+      return y;
+    };
+    const ground = new Int16Array(w);
+    for (let x = 0; x < w; x++) ground[x] = groundOf(x);
+    for (let x = 2; x < w - 2; x++) {
+      const l = ground[x - 1], c = ground[x], r = ground[x + 1];
+      if (c - l > 5 && c - r > 5) {
+        // pinhole: carve the shallower neighbor down a few tiles to widen the mouth
+        const side = l <= r ? x - 1 : x + 1;
+        const from = Math.min(l, r);
+        for (let y = from; y < from + 6 && y < h; y++) {
+          const id = get(side, y);
+          if (id !== T.air) set(side, y, T.air);
+        }
+        ground[side] = groundOf(side);
+      }
     }
   }
 

@@ -3,6 +3,7 @@
 
 import { TILE } from '../config.js';
 import { TILES } from '../world/world.js';
+import { K } from '../render/fx.js';
 
 export class Projectiles {
   constructor(world) {
@@ -11,11 +12,11 @@ export class Projectiles {
   }
 
   // player arrow toward a point
-  spawnArrow(x, y, tx, ty, speed, damage, kb, fire = false) {
+  spawnArrow(x, y, tx, ty, speed, damage, kb, element = null, proc = null) {
     const dx = tx - x, dy = ty - y;
     const d = Math.hypot(dx, dy) || 1;
     this.list.push({
-      kind: fire ? 'flamingArrow' : 'arrow', owner: 'player',
+      kind: element === 'fire' ? 'flamingArrow' : 'arrow', owner: 'player', element, proc,
       x, y, vx: (dx / d) * speed, vy: (dy / d) * speed,
       gravity: 0.07, damage, kb, pierce: 1, life: 600,
       w: 4, h: 4, key: `arrow${Math.random()}`,
@@ -47,6 +48,13 @@ export class Projectiles {
       pr.vy += pr.gravity;
       pr.x += pr.vx; pr.y += pr.vy;
       if (pr.life <= 0 || this.solidAt(pr.x, pr.y)) { this.list.splice(i, 1); continue; }
+      // elemental flight trails
+      if (pr.element && game.fx) {
+        if (pr.element === 'fire') game.fx.fireTrail(pr.x, pr.y, Math.sign(pr.vx));
+        else if (pr.element === 'ice' && (pr.life & 1)) game.fx.spawn(K.FROST, pr.x, pr.y, 0, 0, 10, 1);
+        else if (pr.element === 'lightning' && Math.random() < 0.3) game.fx.sparks(pr.x, pr.y, '#cfd8ff', 1);
+        else if (pr.element === 'shadow') game.fx.shadowWisp(pr.x, pr.y);
+      }
 
       if (pr.owner === 'player') {
         for (const e of game.enemies) {
@@ -55,9 +63,10 @@ export class Projectiles {
             if (pr.x > hb.x && pr.x < hb.x + hb.w && pr.y > hb.y && pr.y < hb.y + hb.h) { hit = true; break; }
           }
           if (hit) {
-            const dealt = e.strike(pr.damage, pr.kb, pr.x - pr.vx * 3, pr.key, Math.random() < 0.04);
-            if (dealt > 0) {
-              game.floatText?.(e.cx, e.y - 8, dealt, '#e8a86d');
+            const crit = Math.random() < 0.04;
+            const result = e.strike(pr.damage, pr.kb, pr.x - pr.vx * 3, pr.key, crit, pr.element);
+            game.combat?.hitFeedback(game, e, result, crit, pr.element, pr.proc);
+            if (result !== 0 && result !== 'dodge') {
               if (--pr.pierce <= 0) { this.list.splice(i, 1); }
             }
             break;
@@ -66,7 +75,7 @@ export class Projectiles {
       } else if (!p.dead) {
         if (pr.x > p.px && pr.x < p.px + p.w && pr.y > p.py && pr.y < p.py + p.h) {
           const def = p.getDefense ? p.getDefense() : 0;
-          if (p.hurt(Math.max(1, pr.damage - def / 2), pr.x)) this.list.splice(i, 1);
+          if (p.hurt(Math.max(1, pr.damage - Math.ceil(def / 2)), pr.x)) this.list.splice(i, 1);
         }
       }
     }

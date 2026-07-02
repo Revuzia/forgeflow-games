@@ -88,6 +88,7 @@ export function saveGame(game) {
     surface: Array.from(world.surface),
     spawn: [world.spawnX, world.spawnY],
     corruption: world.corruption ?? [],
+    biomes: world.biomes ?? null,
     player: {
       x: player.px, y: player.py, hp: player.hp, hpMax: player.hpMax,
       mana: player.mana, manaMax: player.manaMax,
@@ -122,6 +123,7 @@ export function loadGame(game) {
   world.surface.set(Int16Array.from(data.surface));
   world.spawnX = data.spawn[0]; world.spawnY = data.spawn[1];
   world.corruption = data.corruption ?? [];
+  world.biomes = data.biomes ?? null;
   game.tick = data.tick;
   player.px = data.player.x; player.py = data.player.y;
   player.ppx = player.px; player.ppy = player.py;

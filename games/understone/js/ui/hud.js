@@ -38,7 +38,14 @@ const CSS = `
 .us-recipe .icon { width: 24px; height: 24px; border-radius: 4px; flex: none; display: flex; align-items: center;
   justify-content: center; font-size: 8px; font-weight: 700; color: #101018; }
 .us-recipe .ing { color: #9aa3c0; font-size: 10px; }
-#us-money { top: 62px; right: 14px; font: 12px monospace; text-shadow: 0 1px 2px #000; text-align: right; }
+#us-money { top: 64px; right: 14px; font: 600 13px 'Segoe UI'; text-shadow: 0 1px 2px #000; text-align: right;
+  display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
+#us-money .coin { display: inline-flex; align-items: center; gap: 3px; }
+#us-money .coin i { width: 12px; height: 12px; border-radius: 50%; display: inline-block;
+  box-shadow: inset -1px -2px 2px rgba(0,0,0,.4), inset 1px 1px 1px rgba(255,255,255,.55), 0 1px 2px rgba(0,0,0,.5); }
+#us-held-name { top: 104px; left: 12px; font: 600 14px 'Segoe UI'; color: #e8e8f0;
+  text-shadow: 0 1px 3px #000, 0 0 8px rgba(0,0,0,.6); min-height: 18px; }
+.us-heart svg { filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)); }
 #us-tip { position: absolute; display: none; background: rgba(8,10,20,0.95); border: 1px solid #4a5478;
   padding: 6px 9px; border-radius: 6px; font: 12px 'Segoe UI'; pointer-events: none; z-index: 50; max-width: 240px; }
 #us-armor { display: flex; flex-direction: column; gap: 4px; }
@@ -49,8 +56,24 @@ const ICON_COLORS = {
   material: '#d8c878', armor: '#8ac8e8', consumable: '#e88ac8', ammo: '#c8e8d8', summon: '#c88ae8',
 };
 
+// item icon images live at assets/items/<id>.png (PixelLab-generated).
+// We track which exist so missing ones fall back to a color swatch + abbreviation.
+const iconAvailable = new Map(); // id → true|false (probed lazily)
+function probeIcon(id) {
+  if (iconAvailable.has(id)) return;
+  iconAvailable.set(id, false);
+  const img = new Image();
+  img.onload = () => { iconAvailable.set(id, true); document.dispatchEvent(new CustomEvent('us-icons-changed')); };
+  img.src = `assets/items/${id}.png`;
+}
+
 function iconFor(id) {
   const def = ITEMS[id];
+  probeIcon(id);
+  if (iconAvailable.get(id)) {
+    return `<div class="icon" style="background:transparent"><img src="assets/items/${id}.png" style="width:100%;height:100%;image-rendering:pixelated;object-fit:contain" alt=""></div>`;
+  }
+  // fallback: tile-color swatch for blocks, class color + abbreviation otherwise
   let bg = ICON_COLORS[def.type] ?? '#d8c878';
   if (def.type === 'block' && def.placeTile && T[def.placeTile] != null) bg = TILES[T[def.placeTile]].color;
   const abbr = def.name.split(' ').map(w => w[0]).join('').slice(0, 3);
@@ -72,6 +95,7 @@ export class HUD {
       <div id="us-mana" class="us-panel"></div>
       <div id="us-money" class="us-panel"></div>
       <div id="us-hotbar" class="us-panel"></div>
+      <div id="us-held-name" class="us-panel"></div>
       <div id="us-inv" class="us-panel">
         <div><h3>Inventory</h3><div class="grid" id="us-main"></div></div>
         <div id="us-armor-wrap"><h3>Armor</h3><div id="us-armor"></div></div>
@@ -83,6 +107,7 @@ export class HUD {
       hearts: hud.querySelector('#us-hearts'),
       mana: hud.querySelector('#us-mana'),
       money: hud.querySelector('#us-money'),
+      heldName: hud.querySelector('#us-held-name'),
       hotbar: hud.querySelector('#us-hotbar'),
       inv: hud.querySelector('#us-inv'),
       main: hud.querySelector('#us-main'),
@@ -96,6 +121,7 @@ export class HUD {
     this.buildSlots();
     inventory.onChange.push(() => this.refreshSlots());
     hud.addEventListener('mousemove', (e) => this.moveTip(e));
+    document.addEventListener('us-icons-changed', () => { this.refreshSlots(); this.lastCraftListKey = ''; });
   }
 
   toggle(open = !this.open) {
@@ -266,7 +292,17 @@ export class HUD {
         el.innerHTML = s ? `${iconFor(s.id)}${s.count > 1 ? `<span class="cnt">${s.count}</span>` : ''}` : '';
       });
     }
-    this.els.money.textContent = coinText(inv.money);
+    // coins: Terraria-style denominations with coin dots (zero denominations hidden)
+    const gold = Math.floor(inv.money / 10000), silver = Math.floor((inv.money % 10000) / 100), copper = inv.money % 100;
+    const coin = (n, color, label) => n > 0 || label === 'copper'
+      ? `<span class="coin" title="${label} coins"><i style="background:${color}"></i>${n}</span>` : '';
+    this.els.money.innerHTML =
+      coin(gold, 'linear-gradient(135deg,#ffe08a,#c8952a)', 'gold') +
+      coin(silver, 'linear-gradient(135deg,#f0f0f5,#8a8a9a)', 'silver') +
+      coin(copper, 'linear-gradient(135deg,#e8a06a,#8a5028)', 'copper');
+    // hotbar selected-item name (Terraria shows it under the hotbar)
+    const held = inv.held();
+    this.els.heldName.textContent = held ? ITEMS[held.id].name : '';
   }
 
   showTipForSlot(i) {
@@ -315,22 +351,41 @@ export class HUD {
     }
   }
 
+  heartSvg(frac, i) {
+    // Terraria-style heart: red fill, gold rim; empty hearts show dark socket
+    const gid = `us-hg-${i}`;
+    const fill = frac >= 1 ? '#d5223a' : frac > 0 ? `url(#${gid})` : '#3a2030';
+    const grad = frac > 0 && frac < 1
+      ? `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="${frac}" stop-color="#d5223a"/><stop offset="${frac}" stop-color="#3a2030"/>
+        </linearGradient></defs>` : '';
+    return `<span class="us-heart"><svg width="20" height="20" viewBox="0 0 16 16">${grad}
+      <path d="M8 14 L2.5 8.5 Q0.5 6.5 1.5 4 Q2.5 1.5 5 2 Q7 2.5 8 4.5 Q9 2.5 11 2 Q13.5 1.5 14.5 4 Q15.5 6.5 13.5 8.5 Z"
+        fill="${fill}" stroke="#e8b84a" stroke-width="1.1"/></svg></span>`;
+  }
+
   tick() {
     const p = this.player;
-    // hearts: 1 per 20 max HP
+    // hearts: 1 per 20 max HP, partial fill on the current heart
     const hearts = Math.ceil(p.hpMax / 20);
     const full = p.hp / 20;
     let html = '';
     for (let i = 0; i < hearts; i++) {
       const frac = Math.max(0, Math.min(1, full - i));
-      html += `<span class="us-heart" style="opacity:${0.25 + 0.75 * frac}">❤️</span>`;
+      html += this.heartSvg(frac, i);
     }
-    if (this.els.hearts.innerHTML !== html) this.els.hearts.innerHTML = html;
-    // mana
+    if (this._lastHearts !== html) { this.els.hearts.innerHTML = html; this._lastHearts = html; }
+    // mana stars
     const stars = Math.ceil(p.manaMax / 20);
+    const manaFrac = p.mana / p.manaMax;
     let mhtml = '';
-    for (let i = 0; i < stars; i++) mhtml += `<span class="us-star">⭐</span>`;
-    if (this.els.mana.innerHTML !== mhtml) this.els.mana.innerHTML = mhtml;
+    for (let i = 0; i < stars; i++) {
+      const on = (i + 1) / stars <= manaFrac + 0.001;
+      mhtml += `<span class="us-star" style="opacity:${on ? 1 : 0.3}"><svg width="15" height="15" viewBox="0 0 16 16">
+        <path d="M8 1 L10 6 L15 6.2 L11 9.6 L12.4 15 L8 11.8 L3.6 15 L5 9.6 L1 6.2 L6 6 Z"
+          fill="#5ac8f0" stroke="#2a6a9a" stroke-width="1"/></svg></span>`;
+    }
+    if (this._lastMana !== mhtml) { this.els.mana.innerHTML = mhtml; this._lastMana = mhtml; }
     if (this.open) this.refreshCrafting();
   }
 }

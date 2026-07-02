@@ -47,8 +47,12 @@ function frame(now) {
   let ticks = 0;
   while (acc >= TICK_MS && ticks < MAX_CATCHUP_TICKS) {
     if (!game.paused) {
-      for (const u of game.updaters) u(game);
-      game.tick++;
+      if (game.fx && game.fx.freezeTimer > 0) {
+        game.fx.freezeTimer--;            // hit-stop: sim frozen, render continues
+      } else {
+        for (const u of game.updaters) u(game);
+        game.tick++;
+      }
     }
     acc -= TICK_MS;
     ticks++;
@@ -57,6 +61,9 @@ function frame(now) {
   const alpha = acc / TICK_MS; // interpolation factor for renderers
   for (const r of game.renderers) r(game, alpha);
 }
+
+// paint hint that cannot hang: RAF when visible, timeout fallback when the tab is hidden
+const paintBreak = () => new Promise((r) => { const t = setTimeout(r, 60); requestAnimationFrame(() => { clearTimeout(t); r(); }); });
 
 async function boot() {
   bootProgress(0.05, 'Waking the world…');
@@ -79,7 +86,7 @@ async function boot() {
     import('./ui/hud.js'),
     import('./core/input.js'),
   ]);
-  const [{ Spawner }, { Projectiles }, { Combat }, { summonBossFactory }, { loadAssets, makeTileDrawer, makeWallDrawer }] = await Promise.all([
+  const [{ Spawner }, { Projectiles }, { Combat }, { summonBossFactory }, { loadAssets, makeTileDrawer, makeWallDrawer, itemIcon, toolFallbackSprite, arcSprite, character }] = await Promise.all([
     import('./entities/spawner.js'),
     import('./entities/projectile.js'),
     import('./entities/combat.js'),
@@ -104,7 +111,7 @@ async function boot() {
 
   const camera = new Camera(world, canvas);
   game.camera = camera;
-  const background = new Background(world, camera);
+  const background = new Background(world, camera, assets);
   const tileRenderer = new TileRenderer(world);
   tileRenderer.drawTileHook = makeTileDrawer(world, assets);
   tileRenderer.drawWallHook = makeWallDrawer(assets);
@@ -139,8 +146,8 @@ async function boot() {
   bootEl2.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,18,0.85);color:#cfd6e6;font:16px Segoe UI;z-index:90;';
   bootEl2.textContent = 'Shaping the world…';
   document.body.appendChild(bootEl2);
-  await new Promise(requestAnimationFrame);
-  await new Promise(requestAnimationFrame);
+  await paintBreak();
+  await paintBreak();
 
   const liquids = new Liquids(world);
   game.liquids = liquids;
@@ -188,6 +195,7 @@ async function boot() {
       placeTile: def.placeTile != null ? T[def.placeTile] : null,
       placeWall: def.placeWall != null ? W_[def.placeWall] : null,
       use: def.use, boss: def.boss, weapon: def.weapon, ammo: def.ammo,
+      element: def.element ?? null, proc: def.proc ?? null,
       consume: (def.type === 'block' || def.type === 'wall' || def.type === 'consumable' || def.type === 'summon')
         ? () => inventory.consumeHeld(1) : null,
     };
@@ -216,6 +224,30 @@ async function boot() {
   game.summonBoss = summonBossFactory(game);
   player.getDefense = () => inventory.defense();
 
+  // ---- fx: particles, hit-stop, screenshake ---------------------------------------
+  const { FX } = await import('./render/fx.js');
+  const fx = new FX();
+  game.fx = fx;
+  game.updaters.push(() => {
+    fx.update();
+    // ambient flames on visible torches / furnaces / hellforges
+    if (!fx.throttled() && game.tick % 2 === 0) {
+      const [x0, y0, x1, y1] = camera.visibleTileRange(1, 0);
+      let emitted = 0;
+      for (let ty = y0; ty <= y1 && emitted < 14; ty++) {
+        for (let tx = x0; tx <= x1 && emitted < 14; tx++) {
+          const id = world.tiles[ty * world.w + tx];
+          if (id === T.torch) { fx.fire(tx * 16 + 8, ty * 16 + 4, 1, 22); emitted++; }
+          else if (id === T.furnace || id === T.hellforge) { if (Math.random() < 0.5) { fx.fire(tx * 16 + 8, ty * 16 + 11, 1, 16); emitted++; } }
+        }
+      }
+    }
+  });
+  game.renderers.push((g, alpha) => {
+    const [sx, sy] = fx.shakeOffset();
+    camera.shakeX = sx; camera.shakeY = sy;
+  });
+
   // ---- audio ---------------------------------------------------------------------
   const { AudioEngine } = await import('./core/audio.js');
   const audio = new AudioEngine();
@@ -223,9 +255,16 @@ async function boot() {
   player.onDig.push((tx, ty, info, extra) => {
     if (extra?.wood) audio.play('chop', { volume: 0.9 });
     else audio.play(`dig${(Math.random() * 3) | 0}`, { volume: 0.8 });
+    fx.digDust(tx * 16 + 8, ty * 16 + 8, info.color && info.color !== 'transparent' ? info.color : '#9a7a5a');
   });
+  player.onHurt.push(() => fx.addTrauma(0.4));
   player.onHurt.push(() => audio.play('hurt'));
-  drops.onPickup.push(() => audio.play('pickup', { volume: 0.55, throttleMs: 90 }));
+  drops.onPickup.push((itemId, count) => {
+    audio.play('pickup', { volume: 0.55, throttleMs: 90 });
+    // Terraria-style rising pickup text: "Wood (3)"
+    const def = ITEMS[itemId];
+    if (def) game.floatText?.(player.x, player.py - 6, count > 1 ? `${def.name} (${count})` : def.name, '#9ecbff');
+  });
   inventory.onChange.push(() => { /* craft sound handled in HUD */ });
   {
     // music selection by context (checked every 2s of ticks)
@@ -233,9 +272,13 @@ async function boot() {
     const { isDay } = await import('./render/background.js');
     game.updaters.push(() => {
       if (game.tick % 120 !== 0 || !audio.ctx) return;
+      const pty = player.py / 16, ptx = player.px / 16;
+      const inCorruption = (world.corruption ?? []).some(([a, b]) => ptx >= a && ptx <= b);
       let track;
       if (game.enemies.some(e => e.boss)) track = 'boss';
-      else if ((player.py / 16) > WORLD_H * LAYERS.underground) track = 'underground';
+      else if (pty > WORLD_H * LAYERS.underworld) track = 'hell';
+      else if (inCorruption && pty < WORLD_H * LAYERS.underground) track = 'corruption';
+      else if (pty > WORLD_H * LAYERS.underground) track = 'underground';
       else track = isDay(game.tick) ? 'day' : 'night';
       audio.music(track);
     });
@@ -315,6 +358,7 @@ async function boot() {
   const setPaused = (on) => {
     game.paused = on;
     pauseEl.style.display = on ? 'flex' : 'none';
+    if (on) audio.music('title'); // gentle menu theme; auto-selector restores on resume
   };
   window.addEventListener('keydown', (e) => {
     if (e.code !== 'Escape') return;
@@ -347,21 +391,84 @@ async function boot() {
     if (player.dead) return;
     const sx = (px - ox) * z, sy = (py - oy) * z;
     if (player.iFrames > 0 && (g.tick & 4)) c.globalAlpha = 0.4;
-    const spr = game.assets?.sprites?.player;
+    // PixelLab animated hero (walk/attack/jump/idle) with Grok static fallback
+    const heroChar = character('hero');
+    const walking = Math.abs(player.vx) > 0.3 && player.vy === 0;
+    let frameImg = null;
+    if (heroChar) {
+      const pick = (name) => heroChar.anims[name]?.length ? heroChar.anims[name] : null;
+      let frames, idx;
+      if (player.swinging > 0) {
+        frames = pick('attack');
+        const useT = player.heldItem?.useTime || 20;
+        idx = frames ? Math.min(frames.length - 1, Math.floor((1 - player.swinging / useT) * frames.length)) : 0;
+      } else if (player.vy !== 0) {
+        frames = pick('jump');
+        idx = frames ? (player.vy < 0 ? 1 : Math.max(0, frames.length - 2)) : 0;
+      } else if (walking) {
+        frames = pick('walk') ?? pick('walking-8-frames');
+        idx = frames ? Math.floor(g.tick * 0.22 * (Math.abs(player.vx) / 3 + 0.4)) % frames.length : 0;
+      } else {
+        frames = pick('breathing-idle') ?? pick('idle');
+        idx = frames ? Math.floor(g.tick * 0.05) % frames.length : 0;
+      }
+      frameImg = frames ? frames[idx] : heroChar.base;
+    }
+    const spr = frameImg ?? game.assets?.sprites?.player;
     if (spr) {
-      const walking = Math.abs(player.vx) > 0.3 && player.vy === 0;
-      const bob = walking ? Math.sin(g.tick * 0.35) * 1.2 * z : 0;
-      const lean = walking ? Math.sin(g.tick * 0.35) * 0.05 : 0;
-      const dw = spr.width * (player.h / spr.height) * z, dh = player.h * z;
-      const cx = sx + (player.w * z) / 2, cy = sy + dh / 2 + bob;
+      const bob = !frameImg && walking ? Math.sin(g.tick * 0.35) * 1.2 * z : 0;
+      const lean = !frameImg && walking ? Math.sin(g.tick * 0.35) * 0.05 : 0;
+      // PixelLab frames pad the canvas ~40% around the figure — scale up to compensate
+      const padComp = frameImg ? 1.5 : 1;
+      const dh = player.h * padComp * z;
+      const dw = spr.width * (dh / spr.height);
+      const cx = sx + (player.w * z) / 2, cy = sy + (player.h * z) / 2 + bob - (frameImg ? 2 * z : 0);
       c.save();
       c.translate(cx, cy);
       c.scale(player.facing > 0 ? 1 : -1, 1);
       c.rotate(lean * (player.facing > 0 ? 1 : -1));
-      // swing: tilt forward while using an item
-      if (player.swinging > 0) c.rotate(0.18);
+      if (!frameImg && player.swinging > 0) c.rotate(0.18);
+      c.imageSmoothingEnabled = false;
       c.drawImage(spr, -dw / 2, -dh / 2, dw, dh);
       c.restore();
+      // ---- held item: visibly swung around the hand anchor (research 07 P0-4) ----
+      const held = player.heldItem;
+      const heldDef = game.inventory.heldDef();
+      if (held && heldDef && player.swinging > 0 && !held.use && !held.boss) {
+        const useT = held.useTime || 20;
+        const prog = Math.min(1, Math.max(0, 1 - player.swinging / useT));
+        const handX = sx + (player.w / 2 + player.facing * 3) * z;
+        const handY = sy + 16 * z;
+        const sprIt = itemIcon(heldDef.id)
+          ?? toolFallbackSprite(held.type === 'pickaxe' || held.type === 'axe' || held.type === 'hammer' ? held.type
+            : held.weapon === 'bow' ? 'bow' : held.weapon === 'sword' ? 'sword'
+            : held.placeTile != null ? 'block' : 'sword');
+        const isz = 18 * z;
+        c.save();
+        c.translate(handX, handY);
+        c.rotate((-2.1 + prog * 2.8) * player.facing);   // 160° overhead → forward arc
+        c.scale(player.facing > 0 ? 1 : -1, 1);
+        c.imageSmoothingEnabled = false;
+        c.drawImage(sprIt, -isz * 0.2, -isz, isz, isz);
+        c.restore();
+        // white/element arc flash, alpha peaks mid-swing (research 10 §5a)
+        if (held.weapon === 'sword') {
+          const tint = held.element === 'fire' ? '#ffca7a' : held.element === 'ice' ? '#bfe9ff'
+            : held.element === 'lightning' ? '#dfe4ff' : held.element === 'shadow' ? '#c78aff'
+            : held.element === 'water' ? '#9fd0ff' : '#ffffff';
+          const arc = arcSprite(Math.round(30 * z), tint);
+          c.save();
+          c.globalCompositeOperation = 'lighter';
+          c.globalAlpha = Math.sin(prog * Math.PI) * 0.7;
+          c.translate(handX, handY);
+          c.scale(player.facing > 0 ? 1 : -1, 1);
+          c.rotate(-1.2 + prog * 2.2);
+          c.drawImage(arc, -arc.width / 2, -arc.height / 2);
+          c.restore();
+          c.globalAlpha = 1;
+          c.globalCompositeOperation = 'source-over';
+        }
+      }
     } else {
       c.fillStyle = '#c8956c'; c.fillRect(sx + 4 * z, sy, 12 * z, 10 * z);
       c.fillStyle = '#3a6ea5'; c.fillRect(sx + 2 * z, sy + 10 * z, 16 * z, 20 * z);
@@ -385,6 +492,9 @@ async function boot() {
     lighting.compute(camera, g.tick, alpha);
     lighting.draw(g.ctx, camera, alpha);
   });
+
+  // particles + bolts render above lighting (flames/zaps are self-lit)
+  game.renderers.push((g, alpha) => fx.draw(g.ctx, camera, alpha));
 
   // floating damage numbers (above lighting so they stay readable)
   game.renderers.push((g, alpha) => combat.draw(g.ctx, camera, alpha));

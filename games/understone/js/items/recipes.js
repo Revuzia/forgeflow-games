@@ -67,6 +67,13 @@ export const RECIPES = [
   { out: 'moltenFury', n: 1, station: 'anvil', ing: { hellstoneBar: 15 } },
   { out: 'goldCrown', n: 1, station: 'anvil', ing: { goldBar: 5, ruby: 1 } },
 
+  // --- elemental weapons (Understone originals) ----------------------------------
+  { out: 'frostbrand', n: 1, station: 'anvil', ing: { silverBar: 8, ice: 12 } },
+  { out: 'glacierBow', n: 1, station: 'anvil', ing: { silverBar: 7, ice: 10 } },
+  { out: 'stormblade', n: 1, station: 'anvil', ing: { goldBar: 8, diamond: 1 } },
+  { out: 'tempestBow', n: 1, station: 'anvil', ing: { goldBar: 7, diamond: 1 } },
+  { out: 'tideEdge', n: 1, station: 'anvil', ing: { goldBar: 6, sand: 20 } }, // forged by the sea
+
   // --- anvil: armor -----------------------------------------------------------------
   { out: 'copperHelmet', n: 1, station: 'anvil', ing: { copperBar: 12 } },
   { out: 'copperChainmail', n: 1, station: 'anvil', ing: { copperBar: 20 } },

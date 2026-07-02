@@ -2,8 +2,13 @@
 // (decompiled NPC.cs values). Damage formula: floor(atk±15% − def/2), min 1.
 // AI archetypes: slime, fighter, flyer, bat, worm, caster.
 
-import { TILE, PHYS } from '../config.js';
+import { TILE, PHYS, elementMult, ROLLS } from '../config.js';
 import { moveEntity, entityLiquid } from './physics.js';
+import { character } from '../core/assets.js';
+
+// enemy types with full PixelLab animated characters (walk/attack frames)
+const ANIMATED = new Set(['zombie', 'skeleton', 'mummy', 'ghost', 'goblinScout', 'demon', 'iceWolf', 'vulture', 'undeadViking', 'bloodZombie']);
+const CHAR_NAME = { goblinScout: 'goblin', undeadViking: 'skeleton', bloodZombie: 'zombie' };
 
 // registry ---------------------------------------------------------------------
 export const ENEMIES = {
@@ -14,17 +19,55 @@ export const ENEMIES = {
   zombie: { name: 'Zombie', ai: 'fighter', hp: 45, dmg: 14, def: 6, kbResist: 0.5, coins: 60,
     w: 18, h: 40, color: '#6a8a5a', drops: [] },
   demonEye: { name: 'Demon Eye', ai: 'flyer', hp: 60, dmg: 18, def: 2, kbResist: 0.2, coins: 75,
-    w: 20, h: 20, color: '#c05a5a', drops: [['lens', 1, 1, 0.33]] },
+    dodge: 0.08, w: 20, h: 20, color: '#c05a5a', drops: [['lens', 1, 1, 0.33]] },
   skeleton: { name: 'Skeleton', ai: 'fighter', hp: 60, dmg: 20, def: 8, kbResist: 0.5, coins: 100,
     w: 18, h: 40, color: '#d8d8c8', drops: [] },
   caveBat: { name: 'Cave Bat', ai: 'bat', hp: 16, dmg: 13, def: 2, kbResist: 0.2, coins: 90,
-    w: 18, h: 14, color: '#8a7aa0', drops: [] },
+    dodge: 0.10, w: 18, h: 14, color: '#8a7aa0', drops: [] },
   giantWorm: { name: 'Giant Worm', ai: 'worm', hp: 30, dmg: 8, def: 0, kbResist: 1.0, coins: 40,
     w: 14, h: 14, color: '#b08a6a', segments: 7, drops: [] },
   eaterOfSouls: { name: 'Eater of Souls', ai: 'flyer', hp: 40, dmg: 22, def: 8, kbResist: 0.5, coins: 90,
     w: 24, h: 24, color: '#9a8ab8', drops: [['rottenChunk', 1, 1, 0.33]] },
   fireImp: { name: 'Fire Imp', ai: 'caster', hp: 70, dmg: 30, def: 16, kbResist: 0.5, coins: 350,
-    w: 18, h: 36, color: '#e07a3a', drops: [] },
+    w: 18, h: 36, color: '#e07a3a', element: 'fire', drops: [] },
+
+  // ---- biome roster (stats per research/terraria/08-combat-catalog.md) --------
+  ghost: { name: 'Ghost', ai: 'ghost', hp: 60, dmg: 20, def: 10, kbResist: 0.35, coins: 500,
+    dodge: 0.08, element: 'shadow', w: 22, h: 32, color: '#cfd8e8', drops: [] },
+  mummy: { name: 'Mummy', ai: 'fighter', hp: 90, dmg: 25, def: 8, kbResist: 0.5, coins: 300,
+    w: 18, h: 40, color: '#c8b88a', drops: [] },
+  vulture: { name: 'Vulture', ai: 'flyer', hp: 40, dmg: 18, def: 4, kbResist: 0.3, coins: 150,
+    dodge: 0.08, w: 22, h: 22, color: '#5a4a3a', drops: [] },
+  antlion: { name: 'Antlion', ai: 'caster', hp: 45, dmg: 20, def: 8, kbResist: 0.9, coins: 120,
+    w: 26, h: 20, color: '#c8a05a', stationary: true, drops: [] },
+  iceSlime: { name: 'Ice Slime', ai: 'slime', hp: 30, dmg: 8, def: 4, kbResist: 0, coins: 40,
+    element: 'ice', w: 24, h: 18, color: '#a8d5e8', drops: [['gel', 1, 2, 1.0], ['ice', 1, 3, 0.5]] },
+  iceWolf: { name: 'Ice Wolf', ai: 'fighter', hp: 55, dmg: 22, def: 6, kbResist: 0.4, coins: 250,
+    dodge: 0.08, element: 'ice', speed: 2.2, w: 34, h: 24, color: '#d8e8f0', drops: [] },
+  undeadViking: { name: 'Undead Viking', ai: 'fighter', hp: 100, dmg: 26, def: 12, kbResist: 0.6, coins: 400,
+    element: 'ice', w: 20, h: 40, color: '#8aa0b8', drops: [] },
+  harpy: { name: 'Harpy', ai: 'flyer', hp: 100, dmg: 25, def: 8, kbResist: 0.4, coins: 300,
+    dodge: 0.10, w: 24, h: 30, color: '#d8c8e8', drops: [] },
+  crab: { name: 'Crab', ai: 'fighter', hp: 50, dmg: 20, def: 6, kbResist: 0.6, coins: 130,
+    element: 'water', speed: 0.8, w: 26, h: 18, color: '#e08a6a', drops: [] },
+  piranha: { name: 'Piranha', ai: 'swim', hp: 30, dmg: 25, def: 2, kbResist: 0.2, coins: 150,
+    element: 'water', w: 22, h: 14, color: '#9ab8a0', drops: [] },
+  goblinScout: { name: 'Goblin Scout', ai: 'fighter', hp: 40, dmg: 15, def: 4, kbResist: 0.4, coins: 200,
+    w: 16, h: 34, color: '#7aa05a', drops: [['cobweb', 1, 3, 0.3]] },
+  bloodZombie: { name: 'Blood Zombie', ai: 'fighter', hp: 60, dmg: 18, def: 8, kbResist: 0.5, coins: 90,
+    speed: 1.4, w: 18, h: 40, color: '#a04a4a', drops: [] },
+  drippler: { name: 'Drippler', ai: 'flyer', hp: 50, dmg: 20, def: 6, kbResist: 0.2, coins: 90,
+    w: 20, h: 20, color: '#c03a3a', drops: [] },
+  cursedSkull: { name: 'Cursed Skull', ai: 'flyer', hp: 60, dmg: 32, def: 10, kbResist: 0.3, coins: 450,
+    dodge: 0.08, element: 'shadow', w: 20, h: 22, color: '#d8d8e8', drops: [] },
+  hellbat: { name: 'Hellbat', ai: 'bat', hp: 28, dmg: 26, def: 6, kbResist: 0.2, coins: 200,
+    dodge: 0.10, element: 'fire', w: 18, h: 14, color: '#e05a3a', drops: [] },
+  lavaSlime: { name: 'Lava Slime', ai: 'slime', hp: 40, dmg: 22, def: 8, kbResist: 0, coins: 150,
+    element: 'fire', w: 24, h: 18, color: '#e06a2a', drops: [['gel', 1, 2, 1.0]] },
+  demon: { name: 'Demon', ai: 'caster', hp: 140, dmg: 32, def: 12, kbResist: 0.5, coins: 800,
+    element: 'shadow', w: 28, h: 44, color: '#8a4a6a', drops: [['demonite', 1, 3, 0.4]] },
+  boneSerpent: { name: 'Bone Serpent', ai: 'worm', hp: 180, dmg: 30, def: 10, kbResist: 1, coins: 900,
+    w: 18, h: 18, color: '#d8d0c0', segments: 12, drops: [['demonite', 2, 4, 0.5]] },
 };
 
 let nextId = 1;
@@ -55,16 +98,32 @@ export class Enemy {
   get cx() { return this.x + this.w / 2; }
   get cy() { return this.y + this.h / 2; }
 
-  // player attack → damage. Returns actual damage or 0 if immune this tick.
-  strike(rawDmg, kb, fromX, sourceKey = 'melee', crit = false) {
+  // player attack → damage. Returns:
+  //   number > 0 — damage dealt
+  //   0          — immune this tick (per-source i-frames), no feedback
+  //   'dodge'    — the to-hit roll failed → show a MISS floater
+  strike(rawDmg, kb, fromX, sourceKey = 'melee', crit = false, element = null) {
     const now = this._tick ?? 0;
     const until = this.hitCooldown.get(sourceKey) ?? -1;
     if (now < until) return 0;
     this.hitCooldown.set(sourceKey, now + 10);
+    // to-hit roll (D&D layer, research 08): only nimble enemies dodge; bosses never;
+    // no dodging mid-knockback; pity reroll prevents consecutive dodges.
+    const inHitstun = Math.abs(this.vx) > 2 || this.vy < -1;
+    const dodge = this.boss || inHitstun || this.justDodged ? 0 : (this.def.dodge ?? ROLLS.defaultDodge);
+    if (Math.random() < dodge) {
+      this.justDodged = true;
+      // afterimage micro-dash away from the attacker
+      this.vx += Math.sign(this.cx - fromX) * 1.5;
+      return 'dodge';
+    }
+    this.justDodged = false;
     const variance = 0.85 + Math.random() * 0.3;
-    let dmg = Math.max(1, Math.floor(rawDmg * variance - this.def.def / 2));
-    if (crit) dmg *= 2;
+    const eMult = elementMult(element, this.def.element);
+    let dmg = Math.max(1, Math.floor(rawDmg * variance * eMult - Math.ceil(this.def.def / 2)));
+    if (crit) dmg *= ROLLS.critMult;
     this.hp -= dmg;
+    this.lastElementMult = eMult;    // combat reads this for "weak/resist" feedback color
     // knockback scaled by resistance (1.0 = immune)
     const resist = Math.max(0, Math.min(1, this.def.kbResist));
     const k = kb * (1 - resist) * (crit ? 1.4 : 1);
@@ -85,6 +144,54 @@ export class Enemy {
     else if (ai === 'bat') this.aiBat(game);
     else if (ai === 'worm') this.aiWorm(game);
     else if (ai === 'caster') this.aiCaster(game);
+    else if (ai === 'ghost') this.aiGhost(game);
+    else if (ai === 'swim') this.aiSwim(game);
+  }
+
+  // ---- Ghost: drifts straight through terrain toward the player, wispy ----------
+  aiGhost(game) {
+    const p = game.player;
+    if (!p.dead) {
+      const dx = p.x - this.cx, dy = (p.y - 10) - this.cy;
+      const d = Math.hypot(dx, dy) || 1;
+      this.vx += (dx / d) * 0.045;
+      this.vy += (dy / d) * 0.045;
+    }
+    // gentle bob + speed cap
+    this.vy += Math.sin((this._tick ?? 0) * 0.06 + this.id) * 0.02;
+    const cap = 1.4;
+    const sp = Math.hypot(this.vx, this.vy);
+    if (sp > cap) { this.vx *= cap / sp; this.vy *= cap / sp; }
+    // no tile collision — ghosts phase through everything
+    this.x += this.vx;
+    this.y += this.vy;
+    this.facing = Math.sign(this.vx) || 1;
+    this.ethereal = true;   // renderer draws at ~55% alpha
+  }
+
+  // ---- Swimmer (piranha): fast in liquid, flops helplessly out of it -------------
+  aiSwim(game) {
+    const p = game.player;
+    const wet = entityLiquid(game.world, this) >= 1;
+    if (wet) {
+      if (!p.dead) {
+        const dx = p.x - this.cx, dy = p.y - this.cy;
+        const d = Math.hypot(dx, dy) || 1;
+        this.vx += (dx / d) * 0.12;
+        this.vy += (dy / d) * 0.08;
+      }
+      const cap = 3;
+      const sp = Math.hypot(this.vx, this.vy);
+      if (sp > cap) { this.vx *= cap / sp; this.vy *= cap / sp; }
+      const e = { x: this.x, y: this.y, vx: this.vx, vy: this.vy, w: this.w, h: this.h };
+      moveEntity(game.world, e, { moveFactor: 1 });   // full speed in water — it's a fish
+      this.x = e.x; this.y = e.y; this.vx = e.vx; this.vy = e.vy;
+      this.facing = Math.sign(this.vx) || 1;
+    } else {
+      // out of water: flop
+      if (this.grounded && Math.random() < 0.06) { this.vy = -3; this.vx = (Math.random() - 0.5) * 2; }
+      this.applyGravityAndMove(game);
+    }
   }
 
   // ---- Slime: rest ~120t, hop-hop-BIGhop cycle (vy −6/−6/−8, vx 2/2/3) -----------
@@ -112,7 +219,7 @@ export class Enemy {
     const p = game.player;
     const dir = p.dead ? this.facing : (Math.sign(p.x - this.cx) || 1);
     this.facing = dir;
-    const max = 1.0;
+    const max = this.def.speed ?? 1.0;
     this.vx += dir * 0.07;
     if (Math.abs(this.vx) > max) this.vx = dir * max;
     if (this.grounded) {
@@ -222,6 +329,7 @@ export class Enemy {
       game.projectiles?.spawnEnemy('fireball', this.cx, this.cy - 6, p.x, p.y - 10, 4.5, this.def.dmg);
       this.aiPhase++;
     }
+    if (this.def.stationary) { this.applyGravityAndMove(game); return; }   // antlion: turret, never teleports
     if (this.aiPhase >= 3 || (this.hpDropped && this.aiTimer > 30)) {
       // teleport near player onto solid ground
       for (let tries = 0; tries < 30; tries++) {
@@ -260,7 +368,23 @@ export class Enemy {
       demonEye: 'demonEye', caveBat: 'bat', fireImp: 'fireImp',
       giantWorm: 'wormSegment', eaterHead: 'wormSegment', eaterOfSouls: 'demonEye',
       kingSlime: 'kingSlime', eyeOfCthulhu: 'eyeOfCthulhu', servant: 'demonEye',
+      // biome roster: PixelLab characters where they exist, tinted archetypes otherwise
+      ghost: 'ghost', mummy: 'mummy', vulture: 'vulture', iceWolf: 'iceWolf',
+      goblinScout: 'goblin', demon: 'demon', undeadViking: 'skeleton',
+      iceSlime: 'slime', lavaSlime: 'slime', hellbat: 'bat',
+      bloodZombie: 'zombie', drippler: 'demonEye', cursedSkull: 'skeleton',
+      boneSerpent: 'wormSegment',
     }[this.type];
+  }
+
+  tintFor() {
+    return {
+      blueSlime: 'rgba(70,120,255,0.45)', iceSlime: 'rgba(160,220,255,0.55)',
+      lavaSlime: 'rgba(255,110,30,0.55)', hellbat: 'rgba(255,80,30,0.5)',
+      bloodZombie: 'rgba(200,30,30,0.45)', drippler: 'rgba(220,30,30,0.5)',
+      undeadViking: 'rgba(90,140,200,0.35)', cursedSkull: 'rgba(140,110,220,0.4)',
+      boneSerpent: 'rgba(230,225,200,0.45)',
+    }[this.type] ?? null;
   }
 
   drawSprite(ctx, spr, cx, cy, dw, dh, flip, rot = 0, tint = null) {
@@ -281,21 +405,39 @@ export class Enemy {
     const [ox, oy] = camera.frameOrigin(alpha);
     const z = camera.zoom;
     const ix = this.px + (this.x - this.px) * alpha, iy = this.py + (this.y - this.py) * alpha;
-    const spr = assets?.sprites?.[this.spriteName()];
     const t = this._tick ?? 0;
+    if (this.ethereal) ctx.globalAlpha = 0.55;
 
+    // PixelLab animated character takes priority when its frames are loaded
+    if (ANIMATED.has(this.type)) {
+      const rec = character(CHAR_NAME[this.type] ?? this.type);
+      if (rec) {
+        const moving = Math.abs(this.vx) > 0.15 || Math.abs(this.vy) > 0.15;
+        const frames = (moving ? rec.anims.walk : null) ?? rec.anims['breathing-idle'] ?? rec.anims.walk;
+        const img = frames?.length ? frames[Math.floor(t * 0.18) % frames.length] : rec.base;
+        if (img) {
+          const dh = this.h * 1.5 * z;
+          const dw = img.width * (dh / img.height);
+          this.drawSprite(ctx, img, (ix + this.w / 2 - ox) * z, (iy + this.h / 2 - oy) * z - 2 * z, dw, dh, this.facing < 0, 0, this.tintFor());
+          ctx.globalAlpha = 1;
+          this.drawHpBar(ctx, ix, iy, ox, oy, z);
+          return;
+        }
+      }
+    }
+
+    const spr = assets?.sprites?.[this.spriteName()];
     if (spr) {
       const flip = this.facing < 0;
-      // blue/green slime tint over the shared slime sprite
-      const tint = this.type === 'blueSlime' ? 'rgba(70,120,255,0.45)' : null;
+      const tint = this.tintFor();
       if (this.segs) {
         const dw = this.w * 1.3 * z, dh = this.h * 1.3 * z;
         for (let i = this.segs.length - 1; i >= 0; i--) {
           const s = this.segs[i];
-          this.drawSprite(ctx, spr, (s.x + this.w / 2 - ox) * z, (s.y + this.h / 2 - oy) * z, dw * 0.92, dh * 0.92, false);
+          this.drawSprite(ctx, spr, (s.x + this.w / 2 - ox) * z, (s.y + this.h / 2 - oy) * z, dw * 0.92, dh * 0.92, false, 0, tint);
         }
         const ang = Math.atan2(this.vy, this.vx);
-        this.drawSprite(ctx, spr, (ix + this.w / 2 - ox) * z, (iy + this.h / 2 - oy) * z, dw, dh, false, ang);
+        this.drawSprite(ctx, spr, (ix + this.w / 2 - ox) * z, (iy + this.h / 2 - oy) * z, dw, dh, false, ang, tint);
       } else if (this.def.ai === 'slime' || this.type === 'kingSlime') {
         // squash & stretch by vertical velocity
         const squash = Math.max(0.7, Math.min(1.3, 1 - this.vy * 0.04));
@@ -303,15 +445,15 @@ export class Enemy {
         this.drawSprite(ctx, spr, (ix + this.w / 2 - ox) * z, (iy + this.h - oy) * z - dh / 2, dw, dh, flip, 0, tint);
       } else if (this.def.ai === 'bat') {
         const flap = 1 + Math.sin(t * 0.5) * 0.25;
-        this.drawSprite(ctx, spr, (ix + this.w / 2 - ox) * z, (iy + this.h / 2 - oy) * z, this.w * 1.5 * z, this.h * 1.5 * z * flap, flip);
-      } else if (this.def.ai === 'flyer' || this.type === 'eyeOfCthulhu') {
+        this.drawSprite(ctx, spr, (ix + this.w / 2 - ox) * z, (iy + this.h / 2 - oy) * z, this.w * 1.5 * z, this.h * 1.5 * z * flap, flip, 0, tint);
+      } else if (this.def.ai === 'flyer' || this.def.ai === 'ghost' || this.def.ai === 'swim' || this.type === 'eyeOfCthulhu') {
         const rot = Math.atan2(this.vy, Math.abs(this.vx)) * 0.4 * (this.facing < 0 ? -1 : 1);
-        this.drawSprite(ctx, spr, (ix + this.w / 2 - ox) * z, (iy + this.h / 2 - oy) * z, this.w * 1.25 * z, this.h * 1.25 * z, flip, rot);
+        this.drawSprite(ctx, spr, (ix + this.w / 2 - ox) * z, (iy + this.h / 2 - oy) * z, this.w * 1.25 * z, this.h * 1.25 * z, flip, rot, tint);
       } else {
         // walkers: slight rock while moving
         const rock = Math.abs(this.vx) > 0.1 && this.grounded ? Math.sin(t * 0.3) * 0.06 : 0;
         const dw = spr.width * (this.h / spr.height) * z, dh = this.h * z;
-        this.drawSprite(ctx, spr, (ix + this.w / 2 - ox) * z, (iy + this.h / 2 - oy) * z, dw, dh, flip, rock);
+        this.drawSprite(ctx, spr, (ix + this.w / 2 - ox) * z, (iy + this.h / 2 - oy) * z, dw, dh, flip, rock, tint);
       }
     } else {
       // fallback swatch bodies
@@ -322,13 +464,16 @@ export class Enemy {
       ctx.fillRect((ix - ox) * z, (iy - oy) * z, this.w * z, this.h * z);
     }
 
-    // hp bar when damaged
-    if (this.hp < this.def.hp && this.hp > 0) {
-      const frac = Math.max(0, this.hp / this.def.hp);
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillRect((ix - ox) * z, (iy - 7 - oy) * z, this.w * z, 3 * z);
-      ctx.fillStyle = frac > 0.5 ? '#6de86d' : frac > 0.25 ? '#e8c86d' : '#e86d6d';
-      ctx.fillRect((ix - ox) * z, (iy - 7 - oy) * z, this.w * frac * z, 3 * z);
-    }
+    ctx.globalAlpha = 1;
+    this.drawHpBar(ctx, ix, iy, ox, oy, z);
+  }
+
+  drawHpBar(ctx, ix, iy, ox, oy, z) {
+    if (this.hp >= this.def.hp || this.hp <= 0) return;
+    const frac = Math.max(0, this.hp / this.def.hp);
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect((ix - ox) * z, (iy - 7 - oy) * z, this.w * z, 3 * z);
+    ctx.fillStyle = frac > 0.5 ? '#6de86d' : frac > 0.25 ? '#e8c86d' : '#e86d6d';
+    ctx.fillRect((ix - ox) * z, (iy - 7 - oy) * z, this.w * frac * z, 3 * z);
   }
 }

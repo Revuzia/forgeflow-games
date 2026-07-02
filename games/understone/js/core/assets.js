@@ -253,6 +253,114 @@ export function makeTileDrawer(world, assets) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Animated characters (PixelLab): assets/entities/<name>/meta.json +
+// <anim>/frame_XXX.png (east-facing; west is mirrored at draw time).
+// Loaded lazily; callers get null until ready and fall back to static sprites.
+// ---------------------------------------------------------------------------
+const charCache = new Map();  // name → {base, anims:{name:[Image]}} | 'loading' | 'missing'
+export function character(name) {
+  const c = charCache.get(name);
+  if (c === 'loading' || c === 'missing') return null;
+  if (c) return c;
+  charCache.set(name, 'loading');
+  (async () => {
+    try {
+      const res = await fetch(`assets/entities/${name}/meta.json`);
+      if (!res.ok) { charCache.set(name, 'missing'); return; }
+      const meta = await res.json();
+      const rec = { meta, anims: {} };
+      rec.base = await loadImage(`assets/entities/${name}/base.png`);
+      await Promise.all(Object.entries(meta.animations ?? {}).map(async ([anim, info]) => {
+        const frames = [];
+        for (let f = 0; f < info.frames; f++) {
+          frames.push(loadImage(`assets/entities/${name}/${anim}/frame_${String(f).padStart(3, '0')}.png`));
+        }
+        rec.anims[anim] = (await Promise.all(frames)).filter(Boolean);
+      }));
+      charCache.set(name, rec);
+    } catch { charCache.set(name, 'missing'); }
+  })();
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Item sprites (held-in-hand + inventory). PixelLab icons at assets/items/<id>.png;
+// procedural tool silhouettes as fallback so the hand is never empty.
+// ---------------------------------------------------------------------------
+const itemIconCache = new Map();   // id → Image | 'missing' | 'loading'
+export function itemIcon(id) {
+  const c = itemIconCache.get(id);
+  if (c === 'loading' || c === 'missing') return null;
+  if (c) return c;
+  itemIconCache.set(id, 'loading');
+  const img = new Image();
+  img.onload = () => itemIconCache.set(id, img);
+  img.onerror = () => itemIconCache.set(id, 'missing');
+  img.src = `assets/items/${id}.png`;
+  return null;
+}
+
+const toolFallbackCache = new Map();
+export function toolFallbackSprite(kind, tint = '#c9ccd8') {
+  const key = `${kind}:${tint}`;
+  if (toolFallbackCache.has(key)) return toolFallbackCache.get(key);
+  const c = document.createElement('canvas');
+  c.width = 16; c.height = 16;
+  const g = c.getContext('2d');
+  const wood = '#8a6238';
+  if (kind === 'pickaxe') {
+    px(g, 3, 12, 10, 2, wood);                     // handle (diagonal-ish)
+    g.save(); g.translate(8, 8); g.rotate(-0.7);
+    px(g, -7, -2, 14, 3, tint);                    // pick head
+    g.restore();
+  } else if (kind === 'axe') {
+    px(g, 7, 4, 2, 11, wood);
+    px(g, 4, 2, 8, 5, tint);
+    px(g, 3, 3, 3, 3, tint);
+  } else if (kind === 'hammer') {
+    px(g, 7, 5, 2, 10, wood);
+    px(g, 3, 1, 10, 5, tint);
+  } else if (kind === 'sword') {
+    g.save(); g.translate(8, 8); g.rotate(0.78);
+    px(g, -1, -8, 2, 12, tint);                    // blade
+    px(g, -3, 3, 6, 2, '#a8862a');                 // guard
+    px(g, -1, 5, 2, 3, wood);                      // grip
+    g.restore();
+  } else if (kind === 'bow') {
+    g.strokeStyle = wood; g.lineWidth = 2;
+    g.beginPath(); g.arc(6, 8, 6, -1.2, 1.2); g.stroke();
+    g.strokeStyle = '#d8d8e0'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(8, 2.5); g.lineTo(8, 13.5); g.stroke();
+  } else {
+    px(g, 5, 5, 6, 6, tint);
+  }
+  toolFallbackCache.set(key, c);
+  return c;
+}
+
+// pre-rendered swing arc flash (research 10 §5a): quarter annulus, per element tint
+const arcCache = new Map();
+export function arcSprite(radius, tint = '#ffffff') {
+  const key = `${radius}:${tint}`;
+  if (arcCache.has(key)) return arcCache.get(key);
+  const size = radius * 2 + 4;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const g = c.getContext('2d');
+  g.translate(size / 2, size / 2);
+  for (const [rOut, alpha] of [[radius, 0.9], [radius - 3, 0.45]]) {
+    g.globalAlpha = alpha;
+    g.strokeStyle = tint;
+    g.lineWidth = 3;
+    g.beginPath();
+    g.arc(0, 0, rOut - 2, -Math.PI * 0.55, Math.PI * 0.15);
+    g.stroke();
+  }
+  arcCache.set(key, c);
+  return c;
+}
+
 // wall drawer used by renderer (behind tiles)
 export function makeWallDrawer(assets) {
   return function drawWall(ctx, tx, ty, wallInfo, px, py) {

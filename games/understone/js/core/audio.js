@@ -3,7 +3,8 @@
 
 const SFX = ['dig0', 'dig1', 'dig2', 'chop', 'place', 'doorOpen', 'doorClose', 'hurt', 'hit',
   'slimeHit', 'death', 'pickup', 'coins', 'craft', 'swing', 'jump', 'uiClick', 'uiOpen', 'uiClose', 'powerup'];
-const MUSIC = ['title', 'day', 'night', 'underground', 'boss', 'victory'];
+// music tracks are full songs (own Suno catalog) — loaded LAZILY per track, never all at once
+const MUSIC = ['title', 'day', 'night', 'underground', 'corruption', 'boss', 'hell', 'victory'];
 
 export class AudioEngine {
   constructor() {
@@ -30,19 +31,19 @@ export class AudioEngine {
     this.sfxGain = this.ctx.createGain();
     this.sfxGain.gain.value = this.sfxVolume;
     this.sfxGain.connect(this.ctx.destination);
-    // load lazily in the background
-    const load = async (path, key) => {
-      try {
-        const res = await fetch(path);
-        if (!res.ok) return;
-        const buf = await this.ctx.decodeAudioData(await res.arrayBuffer());
-        this.buffers.set(key, buf);
-      } catch { /* missing audio is non-fatal */ }
-    };
-    await Promise.all([
-      ...SFX.map(n => load(`assets/audio/sfx/${n}.ogg`, `sfx:${n}`)),
-      ...MUSIC.map(n => load(`assets/audio/music/${n}.ogg`, `music:${n}`)),
-    ]);
+    // SFX are tiny — load them all now. Music streams in on demand (see music()).
+    await Promise.all(SFX.map(n => this.load(`assets/audio/sfx/${n}.ogg`, `sfx:${n}`)));
+  }
+
+  async load(path, key) {
+    if (this.buffers.has(key)) return this.buffers.get(key);
+    try {
+      const res = await fetch(path);
+      if (!res.ok) return null;
+      const buf = await this.ctx.decodeAudioData(await res.arrayBuffer());
+      this.buffers.set(key, buf);
+      return buf;
+    } catch { return null; /* missing audio is non-fatal */ }
   }
 
   play(name, { volume = 1, rate = 1, throttleMs = 60 } = {}) {
@@ -61,10 +62,13 @@ export class AudioEngine {
     src.start();
   }
 
-  music(name) {
+  async music(name) {
     if (!this.ctx || !this.enabled) return;
-    if (this.currentMusic?.name === name) return;
-    const buf = this.buffers.get(`music:${name}`);
+    if (this.currentMusic?.name === name || this.pendingMusic === name) return;
+    this.pendingMusic = name;
+    const buf = await this.load(`assets/audio/music/${name}.ogg`, `music:${name}`);
+    if (this.pendingMusic !== name) return;      // superseded while loading
+    this.pendingMusic = null;
     // fade out old
     if (this.currentMusic) {
       const old = this.currentMusic;

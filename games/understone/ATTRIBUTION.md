@@ -1,8 +1,10 @@
 # Understone — Asset Attribution
 
-- **Audio (SFX + music):** Kenney.nl asset packs — "RPG Audio", "Impact Sounds",
-  "Interface Sounds", plus ForgeFlow stock music tracks. Kenney packs are CC0.
+- **SFX:** Kenney.nl asset packs — "RPG Audio", "Impact Sounds", "Interface Sounds" (CC0).
   https://kenney.nl
+- **Music:** original instrumental tracks from the ForgeFlow Labs catalog
+  (Solstice Reverie, Fjord Echo, Halcyon Plateau, Greycrown Gauntlet, Sunspear Bulwark).
+  © ForgeFlow Labs — unique to this game, not shared with other ForgeFlow titles.
 - **Tile textures, character & enemy sprites, parallax background:** generated for this
   game with xAI grok-imagine-image, post-processed (downscale/quantize) by the
   ForgeFlow asset pipeline. © ForgeFlow Labs.

@@ -57,6 +57,28 @@ export const COMBAT = {
   respawnTicks: 600,       // [R] 10 s
 };
 
+// --- elements: cycle fire > ice > lightning > water > fire; shadow half-off-cycle ---
+// attacker element vs defender element → damage multiplier ([T] tuned, research 08)
+const BEATS = { fire: 'ice', ice: 'lightning', lightning: 'water', water: 'fire', shadow: 'none' };
+export function elementMult(atk, def) {
+  if (!atk || atk === 'none' || !def || def === 'none') {
+    return atk && atk !== 'none' && (!def || def === 'none') ? (atk === 'shadow' ? 1.15 : 1) : 1;
+  }
+  if (atk === def) return 0.5;             // resist own element
+  if (BEATS[atk] === def) return 1.35;     // advantage
+  if (BEATS[def] === atk) return 0.7;      // disadvantage
+  return 1;
+}
+
+// --- to-hit layer (D&D flavor over Terraria collision combat) ---
+// research 08 design: only NIMBLE enemies dodge (capped 10%), pity-reroll blocks
+// consecutive dodges, bosses never dodge, no dodging during hitstun.
+export const ROLLS = {
+  baseCrit: 0.04,          // [R] Terraria base crit
+  critMult: 2,             // [R]
+  defaultDodge: 0,         // most enemies never dodge
+};
+
 // --- rendering ---
 export const CHUNK = 32;                // [T] tiles per chunk edge
 export const ZOOM_DEFAULT = 2;          // [T] screen px per world px

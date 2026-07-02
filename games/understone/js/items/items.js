@@ -101,6 +101,16 @@ sword('silverSword', 'Silver Broadsword', 14, 20, 6, 2400);
 sword('goldSword', 'Gold Broadsword', 15, 18, 6.5, 4800);
 sword('lightsBane', "Light's Bane", 16, 20, 5, 9000);
 sword('volcano', 'Volcano', 40, 40, 6.5, 27000);
+ITEMS.lightsBane.element = 'shadow';
+ITEMS.volcano.element = 'fire';
+// elemental blades (Understone originals — the elements the owner asked for)
+sword('frostbrand', 'Frostbrand', 17, 20, 5.5, 12000);
+ITEMS.frostbrand.element = 'ice';
+sword('stormblade', 'Stormblade', 19, 19, 5.5, 16000);
+ITEMS.stormblade.element = 'lightning';
+ITEMS.stormblade.proc = 'chainLightning';
+sword('tideEdge', 'Tide Edge', 15, 18, 5, 10000);
+ITEMS.tideEdge.element = 'water';
 
 // --- bows + ammo ----------------------------------------------------------------------------
 const bow = (id, name, dmg, useTime, value) =>
@@ -111,6 +121,13 @@ bow('ironBow', 'Iron Bow', 8, 28, 1000);
 bow('goldBow', 'Gold Bow', 11, 26, 4000);
 bow('demonBow', 'Demon Bow', 14, 25, 8000);
 bow('moltenFury', 'Molten Fury', 31, 22, 20000);
+ITEMS.demonBow.element = 'shadow';
+ITEMS.moltenFury.element = 'fire';
+bow('glacierBow', 'Glacier Bow', 12, 26, 9000);
+ITEMS.glacierBow.element = 'ice';
+bow('tempestBow', 'Tempest Bow', 14, 25, 14000);
+ITEMS.tempestBow.element = 'lightning';
+ITEMS.tempestBow.proc = 'chainLightning';
 item('woodenArrow', { name: 'Wooden Arrow', type: 'ammo', ammoType: 'arrow', damage: 5, value: 1 });
 item('flamingArrow', { name: 'Flaming Arrow', type: 'ammo', ammoType: 'arrow', damage: 7, value: 2, fire: true });
 
