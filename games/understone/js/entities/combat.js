@@ -5,6 +5,7 @@
 import { TILE } from '../config.js';
 import { mouse } from '../core/input.js';
 import { isDay, segFrac } from '../render/background.js';
+import { moveEntity } from './physics.js';
 
 export class Combat {
   constructor(game) {
@@ -14,6 +15,93 @@ export class Combat {
     this.lastSwingId = 0;
     this.lastNightCheck = -1;
     game.floatText = (x, y, txt, color) => this.texts.push({ x, y, txt: String(txt), color, life: 45, vy: -1.2 });
+  }
+
+  // ---- explosives: fused, bouncing, terrain-destroying (Terraria bombs) ------------
+  throwBomb(x, y, vx, vy, held) {
+    this.bombs = this.bombs ?? [];
+    this.bombs.push({ x: x - 5, y: y - 5, w: 10, h: 10, vx, vy, fuse: held.fuse ?? 180, dmg: held.damage ?? 60, blastTiles: held.blastTiles ?? 4, dynamite: held.name === 'Dynamite' });
+  }
+
+  tickBombs(g) {
+    if (!this.bombs?.length) return;
+    for (let i = this.bombs.length - 1; i >= 0; i--) {
+      const b = this.bombs[i];
+      b.fuse--;
+      b.vy = Math.min(b.vy + 0.3, 9);
+      b.vx *= 0.995;
+      const preVx = b.vx, preVy = b.vy;
+      moveEntity(g.world, b, {});
+      if (b.vx === 0 && Math.abs(preVx) > 0.5) b.vx = -preVx * 0.4;   // bounce
+      if (b.vy === 0 && Math.abs(preVy) > 1) b.vy = -preVy * 0.45;
+      // fuse sparks
+      if (b.fuse % 4 === 0) g.fx?.sparks(b.x + 5, b.y - 2, '#ffd75a', 1);
+      if (b.fuse <= 0) {
+        this.bombs.splice(i, 1);
+        this.explode(g, b.x + 5, b.y + 5, b.blastTiles, b.dmg);
+      }
+    }
+  }
+
+  explode(g, x, y, blastTiles, dmg) {
+    const w = g.world;
+    const ctx2 = Math.floor(x / 16), cty = Math.floor(y / 16);
+    const r = blastTiles;
+    const loot = new Map();
+    for (let ty = cty - r; ty <= cty + r; ty++) {
+      for (let tx = ctx2 - r; tx <= ctx2 + r; tx++) {
+        if (!w.inBounds(tx, ty)) continue;
+        if ((tx - ctx2) ** 2 + (ty - cty) ** 2 > r * r) continue;
+        const id = w.tileAt(tx, ty);
+        if (id === 0) continue;
+        const info = g.TILES[id];
+        if ((info.pick ?? 0) >= 65 || info.name === 'chest' || info.name === 'demonAltar') continue; // blast-proof
+        w.setTile(tx, ty, 0);
+        if (info.drops && g.ITEMS[info.drops]) loot.set(info.drops, (loot.get(info.drops) ?? 0) + 1);
+      }
+    }
+    // drop the rubble as consolidated stacks
+    for (const [itemId, n] of loot) g.drops.spawn(itemId, n, x, y);
+    // damage entities by proximity
+    const blastPx = r * 16;
+    for (const e of g.enemies) {
+      const d = Math.hypot(e.cx - x, e.cy - y);
+      if (d < blastPx + 20) {
+        e._tick = g.tick;
+        const dealt = e.strike(dmg * (1 - d / (blastPx + 40)), 8, x, `boom${g.tick}`, false, 'fire');
+        if (typeof dealt === 'number' && dealt > 0) g.floatText(e.cx, e.y - 8, dealt, '#ffb45a');
+      }
+    }
+    const p = g.player;
+    const pd = Math.hypot(p.x - x, p.y - y);
+    if (pd < blastPx + 10 && !p.dead) {
+      p.hurt(Math.max(10, Math.round(dmg * 0.6 * (1 - pd / (blastPx + 30)))), x);
+    }
+    // spectacle
+    for (let k = 0; k < 20; k++) g.fx?.fire(x + (Math.random() - 0.5) * blastPx, y + (Math.random() - 0.5) * blastPx, 1, 20);
+    for (let k = 0; k < 8; k++) g.fx?.smoke(x + (Math.random() - 0.5) * blastPx, y + (Math.random() - 0.5) * blastPx);
+    g.fx?.sparks(x, y, '#ffd75a', 12);
+    g.fx?.hitStop(4);
+    g.fx?.addTrauma(0.55);
+    g.audio?.play('boom', { volume: 1 });
+  }
+
+  drawBombs(ctx, camera, alpha) {
+    if (!this.bombs?.length) return;
+    const [ox, oy] = camera.frameOrigin(alpha);
+    const z = camera.zoom;
+    for (const b of this.bombs) {
+      ctx.fillStyle = b.dynamite ? '#c03a3a' : '#3a3a44';
+      if (b.dynamite) ctx.fillRect((b.x - ox) * z, (b.y - oy) * z, 6 * z, 12 * z);
+      else { ctx.beginPath(); ctx.arc((b.x + 5 - ox) * z, (b.y + 5 - oy) * z, 5 * z, 0, Math.PI * 2); ctx.fill(); }
+      // fuse
+      ctx.strokeStyle = '#c8a05a';
+      ctx.lineWidth = z;
+      ctx.beginPath();
+      ctx.moveTo((b.x + 5 - ox) * z, (b.y - 2 - oy) * z);
+      ctx.lineTo((b.x + 7 - ox) * z, (b.y - 5 - oy) * z);
+      ctx.stroke();
+    }
   }
 
   // chain lightning (research 10 §2e): nearest-enemy jumps, 30% falloff, 6-tile range
@@ -61,6 +149,7 @@ export class Combat {
 
   tick() {
     const g = this.game, p = g.player;
+    this.tickBombs(g);
 
     // ---- blood moon roll at nightfall (1/9 if player > 120 max HP) --------------
     const night = !isDay(g.tick);
@@ -381,6 +470,7 @@ export class Combat {
     const [ox, oy] = camera.frameOrigin(alpha);
     const z = camera.zoom;
     const p = this.game.player;
+    this.drawBombs(ctx, camera, alpha);
     // spear shaft
     if (this.spear?.ext > 2) {
       const s = this.spear;

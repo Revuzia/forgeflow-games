@@ -317,6 +317,17 @@ export class Player {
         game.floatText?.(this.x, this.py - 12, `+mana`, '#6a9ae8');
         game.audio?.play('powerup', { rate: 1.2 });
         held.consume?.();
+      } else if (held.use === 'throw') {
+        // bombs & dynamite: lobbed with a lit fuse
+        const [wx, wy] = game.camera.screenToWorld(
+          mouse.x * (game.canvas.width / game.canvas.clientWidth),
+          mouse.y * (game.canvas.height / game.canvas.clientHeight));
+        const dx = wx - this.x, dy = wy - (this.py + 8);
+        const d = Math.hypot(dx, dy) || 1;
+        const sp = Math.min(9, 4 + d / 60);
+        game.combat?.throwBomb(this.x, this.py + 8, (dx / d) * sp, (dy / d) * sp - 1.5, held);
+        game.audio?.play('swing', { volume: 0.5 });
+        held.consume?.();
       } else if (held.use === 'grapple') {
         // fire hook toward cursor (or release if latched)
         if (this.grapple?.latched) { this.grapple = null; return; }

@@ -52,6 +52,7 @@ export class Chests {
       if (rand() < 0.8) put('woodenArrow', 15 + (rand() * 20 | 0));
       if (rand() < 0.6) put(deep ? 'goldBar' : 'silverBar', 2 + (rand() * 4 | 0));
       if (rand() < 0.5) put('gel', 3 + (rand() * 6 | 0));
+      if (rand() < 0.35) put('bomb', 2 + (rand() * 4 | 0));
       if (rand() < 0.4) put('wood', 10 + (rand() * 15 | 0));
       if (deep && rand() < 0.3) put('flamingArrow', 10 + (rand() * 15 | 0));
       if (deep && rand() < 0.2) put('demonite', 3 + (rand() * 6 | 0));

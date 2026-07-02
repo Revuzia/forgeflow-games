@@ -20,15 +20,25 @@ const GUIDE_TIPS = [
   'Water beats fire, fire beats ice, lightning beats water. Choose your blade wisely.',
 ];
 
-export const SHOP = [
-  ['torch', 50], ['woodenArrow', 5], ['lesserHealingPotion', 300],
-  ['bottle', 20], ['rope_placeholder', 0], // rope slot reserved
-].filter(([id]) => id !== 'rope_placeholder');
+export const SHOPS = {
+  merchant: [['torch', 50], ['woodenArrow', 5], ['lesserHealingPotion', 300], ['lesserManaPotion', 100], ['bottle', 20], ['bedroll', 800]],
+  demolitionist: [['bomb', 750], ['dynamite', 2500], ['torch', 50]],
+};
+export const SHOP = SHOPS.merchant; // legacy alias
+
+const NPC_NAMES = {
+  guide: 'Rowan the Guide', merchant: 'Sela the Merchant',
+  nurse: 'Mira the Nurse', demolitionist: 'Boris the Demolitionist',
+};
+const NPC_TINTS = {
+  guide: 'rgba(90,180,90,0.35)', merchant: 'rgba(220,180,60,0.35)',
+  nurse: 'rgba(230,90,120,0.35)', demolitionist: 'rgba(200,90,40,0.4)',
+};
 
 export class NPC {
   constructor(type, x, y) {
-    this.type = type;                       // 'guide' | 'merchant'
-    this.name = type === 'guide' ? 'Rowan the Guide' : 'Sela the Merchant';
+    this.type = type;                       // guide | merchant | nurse | demolitionist
+    this.name = NPC_NAMES[type] ?? type;
     this.w = 18; this.h = 40;
     this.x = x - 9; this.y = y - 40;
     this.px = this.x; this.py = this.y;
@@ -73,6 +83,27 @@ export class NPC {
       game.audio?.play('uiClick', { volume: 0.5 });
       return true;
     }
+    if (this.type === 'nurse') {
+      const p = game.player;
+      const missing = p.hpMax - p.hp;
+      if (missing <= 0 && p.poisonTicks <= 0) {
+        game.announce?.(`${this.name}: “You look perfectly healthy to me.”`);
+        return true;
+      }
+      const cost = missing * 2 + (p.poisonTicks > 0 ? 100 : 0);
+      if (game.inventory.money < cost) {
+        game.announce?.(`${this.name}: “Healing costs ${Math.floor(cost / 100)}s ${cost % 100}c. Come back with coin.”`);
+        return true;
+      }
+      game.inventory.money -= cost;
+      p.hp = p.hpMax;
+      p.poisonTicks = 0;
+      game.inventory.changed();
+      game.floatText?.(p.x, p.py - 12, `+${missing}`, '#6de86d');
+      game.announce?.(`${this.name}: “Good as new!”`);
+      game.audio?.play('powerup');
+      return true;
+    }
     game.hud?.openShop(this);
     return true;
   }
@@ -82,7 +113,7 @@ export class NPC {
     const z = camera.zoom;
     const ix = this.px + (this.x - this.px) * alpha, iy = this.py + (this.y - this.py) * alpha;
     const rec = character('hero');
-    const tint = this.type === 'guide' ? 'rgba(90,180,90,0.35)' : 'rgba(220,180,60,0.35)';
+    const tint = NPC_TINTS[this.type] ?? 'rgba(150,150,150,0.3)';
     if (rec?.base) {
       const frames = Math.abs(this.vx) > 0.1 ? rec.anims.walk : rec.anims['breathing-idle'];
       const img = frames?.length ? frames[Math.floor((this._t = (this._t ?? 0) + 1) * 0.15) % frames.length] : rec.base;
@@ -173,23 +204,38 @@ export class NPCManager {
     this.npcs.push(new NPC('guide', (w.spawnX + 4) * TILE, w.spawnY * TILE + 48));
   }
 
+  // find a valid house whose door isn't already claimed by another NPC
+  findFreeHouse(g) {
+    for (const key of this.doors) {
+      if (this.npcs.some(n => n.doorKey === key)) continue;
+      const tx = key % g.world.w, ty = (key / g.world.w) | 0;
+      const res = checkHousing(g.world, tx, ty);
+      if (res.valid) return { ...res, key };
+    }
+    return null;
+  }
+
   tick() {
     const g = this.game;
     for (const n of this.npcs) n.tick(g);
-    // merchant arrival check every ~10 s
-    if (g.tick % 600 === 0 && !this.npcs.some(n => n.type === 'merchant') && g.inventory.money >= 5000) {
-      for (const key of this.doors) {
-        const tx = key % g.world.w, ty = (key / g.world.w) | 0;
-        const res = checkHousing(g.world, tx, ty);
-        if (res.valid) {
-          const m = new NPC('merchant', res.x * TILE + 8, (res.y + 1) * TILE);
-          m.homeX = res.x * TILE;
-          this.npcs.push(m);
-          g.announce?.('Sela the Merchant has moved in!');
-          g.audio?.play('powerup');
-          break;
-        }
-      }
+    if (g.tick % 600 !== 0) return;
+    // arrivals (Terraria-style conditions), one per check
+    const arrivals = [
+      ['merchant', () => g.inventory.money >= 5000, 'Sela the Merchant has moved in!'],
+      ['nurse', () => g.player.hpMax > 100, 'Mira the Nurse has moved in!'],
+      ['demolitionist', () => g.inventory.count('bomb') > 0 || g.inventory.count('dynamite') > 0, 'Boris the Demolitionist has moved in!'],
+    ];
+    for (const [type, cond, msg] of arrivals) {
+      if (this.npcs.some(n => n.type === type) || !cond()) continue;
+      const house = this.findFreeHouse(g);
+      if (!house) return;
+      const m = new NPC(type, house.x * TILE + 8, (house.y + 1) * TILE);
+      m.homeX = house.x * TILE;
+      m.doorKey = house.key;
+      this.npcs.push(m);
+      g.announce?.(msg);
+      g.audio?.play('powerup');
+      return;
     }
   }
 

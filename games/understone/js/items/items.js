@@ -167,6 +167,10 @@ ITEMS.darkLance.element = 'shadow';
 item('bladeOfGrass', { name: 'Blade of Grass', type: 'weapon', weapon: 'sword', damage: 18, useTime: 20, knockback: 4.5, stack: 1, value: 13000 });
 ITEMS.bladeOfGrass.element = 'water';
 item('vine', { name: 'Vine', type: 'material', value: 400 });
+
+// --- explosives (Demolitionist's trade): thrown, fused, destroy terrain -------------
+item('bomb', { name: 'Bomb', type: 'consumable', use: 'throw', damage: 60, blastTiles: 4, fuse: 180, useTime: 25, stack: 99, value: 750 });
+item('dynamite', { name: 'Dynamite', type: 'consumable', use: 'throw', damage: 175, blastTiles: 7, fuse: 240, useTime: 25, stack: 99, value: 2500 });
 item('woodenArrow', { name: 'Wooden Arrow', type: 'ammo', ammoType: 'arrow', damage: 5, value: 1 });
 item('flamingArrow', { name: 'Flaming Arrow', type: 'ammo', ammoType: 'arrow', damage: 7, value: 2, fire: true });
 

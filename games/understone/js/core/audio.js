@@ -2,7 +2,7 @@
 // Audio unlocks on first user gesture (browser autoplay policy).
 
 const SFX = ['dig0', 'dig1', 'dig2', 'chop', 'place', 'doorOpen', 'doorClose', 'hurt', 'hit',
-  'slimeHit', 'death', 'pickup', 'coins', 'craft', 'swing', 'jump', 'uiClick', 'uiOpen', 'uiClose', 'powerup'];
+  'slimeHit', 'death', 'pickup', 'coins', 'craft', 'swing', 'jump', 'uiClick', 'uiOpen', 'uiClose', 'powerup', 'boom'];
 // music tracks are full songs (own Suno catalog) — loaded LAZILY per track, never all at once
 const MUSIC = ['title', 'day', 'night', 'underground', 'corruption', 'boss', 'hell', 'victory'];
 

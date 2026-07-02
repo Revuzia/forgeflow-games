@@ -186,9 +186,10 @@ async function boot() {
     }
     if (info.name === 'pot') {
       const roll = Math.random();
-      if (roll < 0.45) inventory.money += 30 + (Math.random() * 120) | 0;
-      else if (roll < 0.75) drops.spawnFromTile(tx, ty, 'torch', 3 + (Math.random() * 5) | 0);
-      else drops.spawnFromTile(tx, ty, 'woodenArrow', 8 + (Math.random() * 12) | 0);
+      if (roll < 0.4) inventory.money += 30 + (Math.random() * 120) | 0;
+      else if (roll < 0.65) drops.spawnFromTile(tx, ty, 'torch', 3 + (Math.random() * 5) | 0);
+      else if (roll < 0.85) drops.spawnFromTile(tx, ty, 'woodenArrow', 8 + (Math.random() * 12) | 0);
+      else drops.spawnFromTile(tx, ty, 'bomb', 1 + (Math.random() * 3) | 0);
       return;
     }
     if (info.drops && ITEMS[info.drops]) drops.spawnFromTile(tx, ty, info.drops, 1);
@@ -213,7 +214,7 @@ async function boot() {
       use: def.use, boss: def.boss, weapon: def.weapon, ammo: def.ammo,
       element: def.element ?? null, proc: def.proc ?? null,
       mana: def.mana != null && def.type !== 'consumable' ? Math.max(1, Math.round(def.mana * cb.manaCost)) : def.mana,
-      heal: def.heal, bolt: def.bolt,
+      heal: def.heal, bolt: def.bolt, blastTiles: def.blastTiles, fuse: def.fuse,
       consume: (def.type === 'block' || def.type === 'wall' || def.type === 'consumable' || def.type === 'summon')
         ? () => inventory.consumeHeld(1) : null,
     };

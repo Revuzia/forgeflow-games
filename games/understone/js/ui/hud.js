@@ -193,17 +193,20 @@ export class HUD {
   closeChest() {
     this.openChestSlots = null;
     this.els.chestWrap.style.display = 'none';
+    this.shopOpen = false;
     const shopWrap = document.getElementById('us-shop-wrap');
     if (shopWrap) shopWrap.style.display = 'none';
   }
 
   async openShop(npc) {
-    const { SHOP } = await import('../entities/npc.js');
+    const { SHOPS } = await import('../entities/npc.js');
+    const stock = SHOPS[npc.type] ?? SHOPS.merchant;
     const wrap = document.getElementById('us-shop-wrap');
     const list = document.getElementById('us-shop');
     document.getElementById('us-shop-title').textContent = npc.name;
-    list.innerHTML = '';
-    for (const [id, price] of SHOP) {
+    this.shopOpen = true;
+    list.innerHTML = '<div class="ing" style="padding:2px 6px 6px">Shift-click your items to sell them</div>';
+    for (const [id, price] of stock) {
       const el = document.createElement('div');
       el.className = 'us-recipe';
       const gold = Math.floor(price / 10000), silver = Math.floor((price % 10000) / 100), c = price % 100;
@@ -307,6 +310,15 @@ export class HUD {
         if (this.cursorStack.count <= 0) this.cursorStack = null;
       } else { inv.slots[i] = this.cursorStack; this.cursorStack = s; }
     } else if (s) {
+      // shift-click with a shop open: SELL the stack (Terraria rate: value/5)
+      if (e.shiftKey && this.shopOpen) {
+        const unit = Math.max(1, Math.floor((ITEMS[s.id].value ?? 0) / 5));
+        inv.money += unit * s.count;
+        inv.slots[i] = null;
+        this.game.audio?.play('coins', { volume: 0.7 });
+        inv.changed();
+        return;
+      }
       // shift-click: equip armor / quick actions
       if (e.shiftKey && ITEMS[s.id].type === 'armor') { this.equipFrom(i); return; }
       this.cursorStack = s; inv.slots[i] = null;
