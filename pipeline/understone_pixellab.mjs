@@ -133,6 +133,16 @@ const ICON_OVERRIDES = {
   spear: 'simple iron-tipped wooden spear',
   trident: 'gleaming silver three-pronged trident',
   ballOHurt: 'spiked purple ball on chain',
+  fishingRod: 'wooden fishing rod with line and red bobber',
+  fish: 'plump silver-blue bass fish',
+  goldenCarp: 'shimmering golden carp fish',
+  crate: 'wooden crate with rope straps, dripping water',
+  abeemination: 'grotesque honeycomb ball with bee wings and eyes',
+  guideVoodooDoll: 'small burlap voodoo doll with green shirt and pins',
+  pwnhammer: 'massive glowing blue and gold war hammer',
+  bomb: 'round black bomb with lit fuse',
+  dynamite: 'red dynamite stick bundle with lit fuse',
+  goldShortsword: 'short gold sword with straight blade',
 };
 
 async function runIcons() {

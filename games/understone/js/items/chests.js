@@ -56,6 +56,7 @@ export class Chests {
       if (rand() < 0.4) put('wood', 10 + (rand() * 15 | 0));
       if (deep && rand() < 0.3) put('flamingArrow', 10 + (rand() * 15 | 0));
       if (deep && rand() < 0.2) put('demonite', 3 + (rand() * 6 | 0));
+      if (deep && rand() < 0.12) put('waterBolt', 1);   // the deep tome (Terraria: dungeon book)
     }
   }
 }

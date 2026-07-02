@@ -135,6 +135,18 @@ export function generateWorld(world, onProgress = () => {}) {
     const y = (LAYERS.underground + rand() * (LAYERS.underworld - LAYERS.underground)) * h;
     tileRunner(world, rand, x, y, 2 + rand() * 3, 80 + rand() * 120, carve);
   }
+  // underground water pools (fishable caves — Terraria's waterLine band)
+  for (let i = 0; i < w / 160; i++) {
+    const x = 20 + rand() * (w - 40);
+    const y = (LAYERS.underground + 0.02 + rand() * (LAYERS.underworld - LAYERS.underground - 0.2)) * h;
+    tileRunner(world, rand, x, y, 5 + rand() * 8, 30 + rand() * 50, (tx, ty) => {
+      set(tx, ty, T.air);
+      if (ty > y) {  // fill the lower half of the pocket
+        world.liquid[ty * w + tx] = 255;
+        world.liquidType[ty * w + tx] = 0;
+      }
+    });
+  }
 
   // --- 4. ore veins ------------------------------------------------------------
   onProgress(0.45, 'Seeding ores…');

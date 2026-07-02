@@ -15,6 +15,8 @@ export const RECIPES = [
   { out: 'woodenBow', n: 1, station: 'workbench', ing: { wood: 10 } },
   { out: 'platform', n: 2, station: 'workbench', ing: { wood: 1 } },
   { out: 'woodWall', n: 4, station: 'workbench', ing: { wood: 1 } },
+  { out: 'dirtWall', n: 4, station: 'workbench', ing: { dirt: 1 } },
+  { out: 'stoneWall', n: 4, station: 'workbench', ing: { stone: 1 } },
   { out: 'door', n: 1, station: 'workbench', ing: { wood: 6 } },
   { out: 'chest', n: 1, station: 'workbench', ing: { wood: 8, ironBar: 2 } },
   { out: 'furnace', n: 1, station: 'workbench', ing: { stone: 20, wood: 4, torch: 3 } },

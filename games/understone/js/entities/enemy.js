@@ -66,7 +66,7 @@ export const ENEMIES = {
   lavaSlime: { name: 'Lava Slime', ai: 'slime', hp: 40, dmg: 22, def: 8, kbResist: 0, coins: 150,
     element: 'fire', w: 24, h: 18, color: '#e06a2a', drops: [['gel', 1, 2, 1.0]] },
   demon: { name: 'Demon', ai: 'caster', hp: 140, dmg: 32, def: 12, kbResist: 0.5, coins: 800,
-    element: 'shadow', w: 28, h: 44, color: '#8a4a6a', drops: [['demonite', 1, 3, 0.4], ['guideVoodooDoll', 1, 1, 0.05]] },
+    element: 'shadow', w: 28, h: 44, color: '#8a4a6a', drops: [['demonite', 1, 3, 0.4], ['guideVoodooDoll', 1, 1, 0.05], ['demonScythe', 1, 1, 0.04]] },
   boneSerpent: { name: 'Bone Serpent', ai: 'worm', hp: 180, dmg: 30, def: 10, kbResist: 1, coins: 900,
     w: 18, h: 18, color: '#d8d0c0', segments: 12, drops: [['demonite', 2, 4, 0.5]] },
   hornet: { name: 'Hornet', ai: 'hornet', hp: 48, dmg: 26, def: 8, kbResist: 0.3, coins: 200,
