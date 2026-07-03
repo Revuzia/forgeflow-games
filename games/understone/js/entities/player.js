@@ -319,12 +319,34 @@ export class Player {
       mouse.y * (game.canvas.height / game.canvas.clientHeight),
     );
     const tx = Math.floor(wx / TILE), ty = Math.floor(wy / TILE);
-    const inReach =
-      (this.px / TILE) - REACH.tilesX <= tx &&
+    return { tx, ty, inReach: this.tileInReach(tx, ty) };
+  }
+
+  // Terraria reach test (measured from hitbox EDGES, research 03 §3)
+  tileInReach(tx, ty) {
+    return (this.px / TILE) - REACH.tilesX <= tx &&
       (this.px + this.w) / TILE + REACH.tilesX - 1 >= tx &&
       (this.py / TILE) - REACH.tilesY <= ty &&
       (this.py + this.h) / TILE + REACH.tilesY - 2 >= ty;
-    return { tx, ty, inReach };
+  }
+
+  // locate a tree's trunk from a click on/near its leafy crown; returns the trunk BASE
+  // (nearest the ground, so it's reachable and felling it drops the whole tree).
+  findTrunk(tx, ty) {
+    const world = this.world;
+    for (let dx = 0; dx <= 2; dx++) {
+      for (const sx of (dx === 0 ? [0] : [-dx, dx])) {
+        const cx = tx + sx;
+        for (let dy = -2; dy <= 10; dy++) {
+          if (world.tileAt(cx, ty + dy) === T.treeTrunk) {
+            let by = ty + dy;
+            while (world.tileAt(cx, by + 1) === T.treeTrunk) by++;   // walk to the base
+            return { tx: cx, ty: by };
+          }
+        }
+      }
+    }
+    return null;
   }
 
   updateTool(game) {
@@ -429,10 +451,18 @@ export class Player {
       return;
     }
 
-    const { tx, ty, inReach } = this.targetTile(game);
-    if (!inReach || this.swingTimer > 0) return;
+    let { tx, ty, inReach } = this.targetTile(game);
+    if (this.swingTimer > 0) return;
     const world = this.world;
-    const id = world.tileAt(tx, ty);
+    let id = world.tileAt(tx, ty);
+    // Chopping trees: the trunk is a thin column but you naturally click the big leafy crown.
+    // With an axe, redirect a leaves-click (or a near-miss beside the trunk) onto the trunk so
+    // clicking anywhere on a tree fells it. Reach is measured to the retargeted trunk tile.
+    if (held.type === 'axe' && (id === T.treeLeaves || id === T.air)) {
+      const tr = this.findTrunk(tx, ty);
+      if (tr) { tx = tr.tx; ty = tr.ty; id = T.treeTrunk; inReach = this.tileInReach(tx, ty); }
+    }
+    if (!inReach) return;
 
     // ---- placeable item (block/wall/torch) -----------------------------------
     if (held.placeTile != null) {

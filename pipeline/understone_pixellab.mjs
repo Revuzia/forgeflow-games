@@ -258,7 +258,7 @@ const CHARACTERS = {
   },
   spider: {
     description: 'large hairy brown cave spider with eight legs and glowing eyes, side view',
-    size: 48, template: 'cat', animations: ['fast-walk', 'idle', 'angry'],
+    size: 48, template: 'cat', animations: ['idle', 'angry'],
   },
   graniteElemental: {
     description: 'living granite stone golem with glowing blue energy veins between dark rock plates',
@@ -266,6 +266,27 @@ const CHARACTERS = {
   },
   snatcher: {
     description: 'carnivorous green plant monster head on a stem, open toothy maw like a venus flytrap',
+    size: 48, template: 'cat', animations: ['idle', 'angry'],
+  },
+  // ---- biome enemies that were rendering as coloured squares (no sprite) ----------
+  hornet: {
+    description: 'giant angry jungle hornet wasp, yellow and black striped body, translucent wings, sharp stinger, side view',
+    size: 48, template: 'cat', animations: ['idle', 'angry'],
+  },
+  harpy: {
+    description: 'winged harpy woman, pale feathered wings, fierce face, talons, light purple plumage, flying',
+    size: 64, animations: ['walk', 'breathing-idle', 'cross-punch'],
+  },
+  antlion: {
+    description: 'desert antlion insect, tan armored segmented body, large pincer mandibles, side view',
+    size: 48, template: 'cat', animations: ['idle', 'angry'],
+  },
+  crab: {
+    description: 'orange beach crab with two big claws and beady eyes on stalks, side view',
+    size: 48, template: 'cat', animations: ['idle', 'angry'],
+  },
+  piranha: {
+    description: 'green razor-toothed piranha fish with angry eyes and sharp fangs, side view',
     size: 48, template: 'cat', animations: ['idle', 'angry'],
   },
   // ---- town NPCs: each visually DISTINCT from the player hero and each other --------

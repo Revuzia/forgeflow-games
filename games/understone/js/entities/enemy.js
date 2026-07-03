@@ -8,7 +8,33 @@ import { character } from '../core/assets.js';
 
 // enemy types with full PixelLab animated characters (walk/attack frames)
 const ANIMATED = new Set(['zombie', 'skeleton', 'mummy', 'ghost', 'goblinScout', 'demon', 'iceWolf', 'vulture', 'undeadViking', 'bloodZombie',
-  'skeletonArcher', 'spider', 'graniteElemental', 'snatcher', 'wraith']);
+  'skeletonArcher', 'spider', 'graniteElemental', 'snatcher', 'wraith',
+  'hornet', 'harpy', 'antlion', 'crab', 'piranha']);
+
+// Offscreen recolor cache: tint ONLY the sprite's own pixels (source-atop on a canvas that
+// holds just the sprite) so the recolor never bleeds onto the terrain behind the enemy.
+// Doing source-atop directly on the main canvas paints a coloured box over everything already
+// drawn there (the glow bug). Keyed by sprite + tint so it's computed once per pair.
+let _tintId = 0;
+const _enemyTintCache = new Map();
+function tintedSprite(spr, tint) {
+  if (!tint || !spr) return spr;
+  const w = spr.width || spr.naturalWidth, h = spr.height || spr.naturalHeight;
+  if (!w || !h) return spr;
+  const key = (spr.src || spr.__tid || (spr.__tid = ++_tintId)) + '|' + tint;
+  let c = _enemyTintCache.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.drawImage(spr, 0, 0);
+  g.globalCompositeOperation = 'source-atop';
+  g.fillStyle = tint;
+  g.fillRect(0, 0, w, h);
+  _enemyTintCache.set(key, c);
+  return c;
+}
 const CHAR_NAME = { goblinScout: 'goblin', undeadViking: 'skeleton', bloodZombie: 'zombie', wraith: 'ghost' };
 
 // registry ---------------------------------------------------------------------
@@ -305,7 +331,7 @@ export class Enemy {
         const big = this.aiPhase === 2;
         const dir = p.dead ? (Math.random() < 0.5 ? -1 : 1) : Math.sign(p.x - this.cx) || 1;
         this.vy = big ? -8 : -6;
-        this.vx = dir * (big ? 3 : 2);
+        this.vx = dir * (big ? 2.5 : 1.8);   // hop speed below player run (3) so you can outrun slimes
         this.facing = dir;
       }
     }
@@ -335,7 +361,7 @@ export class Enemy {
         // gap ahead → hop across if player is beyond
         const gapTy = footTy + 1;
         if (!game.world.isSolid(tx, gapTy) && !game.world.isSolid(tx, gapTy + 1) && Math.abs(p.x - this.cx) > 60) {
-          this.vy = -8; this.vx = dir * Math.min(3, Math.abs(this.vx) * 1.5 + 1);
+          this.vy = -8; this.vx = dir * Math.min(2.5, Math.abs(this.vx) * 1.5 + 1);
         }
       }
     }
@@ -501,16 +527,13 @@ export class Enemy {
   }
 
   drawSprite(ctx, spr, cx, cy, dw, dh, flip, rot = 0, tint = null) {
+    const img = tint ? tintedSprite(spr, tint) : spr;   // pre-tinted offscreen — no glow box
     ctx.save();
     ctx.translate(cx, cy);
     if (rot) ctx.rotate(rot);
     ctx.scale(flip ? -1 : 1, 1);
-    ctx.drawImage(spr, -dw / 2, -dh / 2, dw, dh);
-    if (tint) {
-      ctx.globalCompositeOperation = 'source-atop';
-      ctx.fillStyle = tint;
-      ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
-    }
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
     ctx.restore();
   }
 

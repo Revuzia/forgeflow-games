@@ -40,8 +40,12 @@ export const game = {
 
 let acc = 0;
 let last = performance.now();
+let fpsFrames = 0, fpsLast = last;
+game.fps = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  fpsFrames++;
+  if (now - fpsLast >= 500) { game.fps = Math.round((fpsFrames * 1000) / (now - fpsLast)); fpsFrames = 0; fpsLast = now; }
   acc += now - last;
   last = now;
   let ticks = 0;
@@ -412,14 +416,32 @@ async function boot() {
   const pauseEl = document.createElement('div');
   pauseEl.style.cssText = `position:fixed;inset:0;display:none;align-items:center;justify-content:center;
     background:rgba(8,10,18,0.72);z-index:80;font-family:'Segoe UI',sans-serif;`;
-  pauseEl.innerHTML = `<div style="text-align:center">
-    <h2 style="color:#e8d9a0;letter-spacing:6px;margin-bottom:24px">PAUSED</h2>
+  // load persisted settings
+  const SETTINGS = (() => { try { return JSON.parse(localStorage.getItem('understone.settings.v1')) || {}; } catch (_) { return {}; } })();
+  const saveSettings = () => { try { localStorage.setItem('understone.settings.v1', JSON.stringify(SETTINGS)); } catch (_) { /* ignore */ } };
+  const applyAudio = () => {
+    if (SETTINGS.music != null) { audio.musicVolume = SETTINGS.music; if (audio.musicGain) audio.musicGain.gain.value = SETTINGS.music; }
+    if (SETTINGS.sfx != null) { audio.sfxVolume = SETTINGS.sfx; if (audio.sfxGain) audio.sfxGain.gain.value = SETTINGS.sfx; }
+  };
+  applyAudio();
+  pauseEl.innerHTML = `<div style="text-align:center;min-width:340px">
+    <h2 style="color:#e8d9a0;letter-spacing:6px;margin-bottom:20px">PAUSED</h2>
     <div id="us-resume" class="us-menu-btn">Resume</div>
+    <div style="margin:18px auto 6px;padding:14px 18px;background:rgba(20,24,40,.6);border:1px solid #3a415c;border-radius:10px;width:300px;text-align:left">
+      <div style="color:#d9b98a;font:700 11px 'Segoe UI';letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">Settings</div>
+      <label style="display:flex;align-items:center;gap:10px;color:#c8d0e8;font-size:13px;margin-bottom:9px">Music <input id="us-vol-music" type="range" min="0" max="100" style="flex:1"><span id="us-vol-music-v" style="width:32px;text-align:right;color:#9aa3c0"></span></label>
+      <label style="display:flex;align-items:center;gap:10px;color:#c8d0e8;font-size:13px;margin-bottom:9px">Sound <input id="us-vol-sfx" type="range" min="0" max="100" style="flex:1"><span id="us-vol-sfx-v" style="width:32px;text-align:right;color:#9aa3c0"></span></label>
+      <div id="us-fullscreen" class="us-menu-btn" style="margin:8px auto 4px;font-size:13px;padding:6px 10px">Toggle Fullscreen</div>
+      <div style="color:#7480a0;font-size:11px;margin-top:8px;line-height:1.6">F3 debug info · I inventory · C crafting · 1-0 hotbar · Esc pause</div>
+    </div>
     <div id="us-save" class="us-menu-btn">Save World</div>
     <div id="us-savequit" class="us-menu-btn">Save &amp; Quit to Title</div>
     <div id="us-savemsg" style="color:#8ac88a;font-size:13px;margin-top:10px;height:16px"></div>
   </div>`;
   document.body.appendChild(pauseEl);
+  // make the pause panel actually clickable (the global "#hud * {pointer-events:none}" doesn't
+  // apply here since pauseEl is outside #hud, but be explicit anyway).
+  pauseEl.style.pointerEvents = 'auto';
   const setPaused = (on) => {
     game.paused = on;
     pauseEl.style.display = on ? 'flex' : 'none';
@@ -430,6 +452,19 @@ async function boot() {
     if (hud.open) { hud.toggle(false); return; }
     setPaused(!game.paused);
   });
+  // ---- settings controls ----
+  const volMusic = pauseEl.querySelector('#us-vol-music'), volSfx = pauseEl.querySelector('#us-vol-sfx');
+  const volMusicV = pauseEl.querySelector('#us-vol-music-v'), volSfxV = pauseEl.querySelector('#us-vol-sfx-v');
+  volMusic.value = Math.round((SETTINGS.music ?? audio.musicVolume ?? 0.35) * 100);
+  volSfx.value = Math.round((SETTINGS.sfx ?? audio.sfxVolume ?? 0.7) * 100);
+  const syncVolLabels = () => { volMusicV.textContent = `${volMusic.value}%`; volSfxV.textContent = `${volSfx.value}%`; };
+  syncVolLabels();
+  volMusic.addEventListener('input', () => { SETTINGS.music = volMusic.value / 100; applyAudio(); saveSettings(); syncVolLabels(); });
+  volSfx.addEventListener('input', () => { SETTINGS.sfx = volSfx.value / 100; applyAudio(); saveSettings(); syncVolLabels(); audio.play('pickup', { volume: 0.5 }); });
+  pauseEl.querySelector('#us-fullscreen').onclick = () => {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else document.documentElement.requestFullscreen?.();
+  };
   pauseEl.querySelector('#us-resume').onclick = () => setPaused(false);
   pauseEl.querySelector('#us-save').onclick = () => {
     const ok = saveMod.saveGame(game);
@@ -615,6 +650,43 @@ async function boot() {
 
   // floating damage numbers (above lighting so they stay readable)
   game.renderers.push((g, alpha) => combat.draw(g.ctx, camera, alpha));
+
+  // ---- F3 debug overlay: X/Y, FPS, velocity, biome, entity counts, cursor tile -------
+  game.debug = false;
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'F3') { e.preventDefault(); game.debug = !game.debug; }
+  });
+  game.renderers.push((g) => {
+    if (!g.debug) return;
+    const c = g.ctx, p = player;
+    const ptx = Math.floor(p.x / 16), pty = Math.floor(p.y / 16);
+    let biome = 'forest', band = 'surface';
+    try { biome = spawner.biomeAt(ptx); band = spawner.depthBand(pty); } catch (_) { /* ignore */ }
+    const m = inputMod.mouse;
+    const [cwx, cwy] = camera.screenToWorld(m.x * (g.canvas.width / g.canvas.clientWidth), m.y * (g.canvas.height / g.canvas.clientHeight));
+    const ctx_tx = Math.floor(cwx / 16), ctx_ty = Math.floor(cwy / 16);
+    const underCursor = world.inBounds(ctx_tx, ctx_ty) ? (TILES[world.tileAt(ctx_tx, ctx_ty)]?.name ?? 'air') : 'oob';
+    const lines = [
+      'UNDERSTONE — F3 debug',
+      `FPS ${g.fps}   tick ${g.tick}`,
+      `X ${ptx}   Y ${pty}   layer:${band}`,
+      `px ${p.px.toFixed(1)}, ${p.py.toFixed(1)}   vel ${p.vx.toFixed(2)}, ${p.vy.toFixed(2)}`,
+      `grounded ${p.grounded()}   facing ${p.facing > 0 ? 'R' : 'L'}`,
+      `biome ${biome}`,
+      `HP ${p.hp}/${p.hpMax}   MP ${Math.floor(p.mana)}/${p.manaMax}`,
+      `enemies ${g.enemies.length}   npcs ${npcs.npcs.length}`,
+      `cursor ${ctx_tx},${ctx_ty} = ${underCursor}`,
+      `held ${p.heldItem?.name ?? '-'}   seed ${world.seed ?? '?'}`,
+    ];
+    c.save();
+    c.font = '12px monospace';
+    const bw = 264, bh = lines.length * 15 + 12;
+    c.fillStyle = 'rgba(0,0,0,0.62)';
+    c.fillRect(8, 8, bw, bh);
+    c.textAlign = 'left'; c.textBaseline = 'top';
+    lines.forEach((ln, i) => { c.fillStyle = i === 0 ? '#8fd0ff' : '#c8f0c0'; c.fillText(ln, 16, 14 + i * 15); });
+    c.restore();
+  });
 
   // death overlay
   game.renderers.push((g) => {
