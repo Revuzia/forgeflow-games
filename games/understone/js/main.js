@@ -607,9 +607,12 @@ async function boot() {
         // mirror FIRST so "forward" == facing, then rotate: rest = held forward/down out of the
         // hand; swing = overhead → forward-down chop.
         const angle = swinging ? (-2.2 + prog * 3.0) : 0.85;
+        // the axe icon is drawn blade-on-the-LEFT (opposite the pickaxe), so it needs the reverse
+        // horizontal flip to point its blade FORWARD instead of behind the character.
+        const iconFlip = held.type === 'axe' ? -1 : 1;
         c.save();
         c.translate(handX, handY);
-        c.scale(player.facing > 0 ? 1 : -1, 1);
+        c.scale((player.facing > 0 ? 1 : -1) * iconFlip, 1);
         c.rotate(angle);
         c.imageSmoothingEnabled = false;
         // grip the icon near its handle so the head reaches OUT (forward) from the fist

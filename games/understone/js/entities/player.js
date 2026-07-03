@@ -470,7 +470,10 @@ export class Player {
     // Chopping trees: the trunk is a thin column but you naturally click the big leafy crown.
     // With an axe, redirect a leaves-click (or a near-miss beside the trunk) onto the trunk so
     // clicking anywhere on a tree fells it. Reach is measured to the retargeted trunk tile.
-    if (held.type === 'axe' && (id === T.treeLeaves || id === T.air)) {
+    // ANY axe-click on/near a tree (trunk, leaves, or air beside it) resolves to the same trunk
+    // BASE tile — so every swing accumulates on ONE mining key. Clicking different trunk tiles as
+    // the cursor/camera drifts was resetting chop progress to 0 every hit (the tree never fell).
+    if (held.type === 'axe' && (id === T.treeLeaves || id === T.treeTrunk || id === T.air)) {
       const tr = this.findTrunk(tx, ty);
       if (tr) { tx = tr.tx; ty = tr.ty; id = T.treeTrunk; inReach = this.tileInReach(tx, ty); }
     }
@@ -528,9 +531,9 @@ export class Player {
     this.swingTimer = held.useTime;
     this.swinging = held.useTime;
 
-    // damage per swing (research 03): pick = floor(power × mult), axe = floor(power% × 24)
+    // damage per swing: pick = floor(power × mult); axe fells a tree in ~5-6 hits with copper
     let dmg = 0;
-    if (info.axe) dmg = Math.floor((held.axePower ?? 0) / 100 * 24);
+    if (info.axe) dmg = Math.floor((held.axePower ?? 0) / 100 * 55);   // copper(35)→19/hit → ~6 hits
     else if ((held.pickPower ?? 0) >= (info.pick ?? 0)) dmg = Math.floor((held.pickPower ?? 0) * info.mult);
     if (dmg <= 0) return;
 

@@ -143,6 +143,12 @@ const ICON_OVERRIDES = {
   bomb: 'round black bomb with lit fuse',
   dynamite: 'red dynamite stick bundle with lit fuse',
   goldShortsword: 'short gold sword with straight blade',
+  // axes drawn upright (head at TOP, handle straight down) so they point forward when held,
+  // matching the pickaxe — the old blade-on-the-left art made the held axe look backwards
+  copperAxe: 'a copper hatchet axe held UPRIGHT and vertical: orange copper axe-head at the very TOP, straight brown wooden handle going down below it',
+  ironAxe: 'an iron hatchet axe held UPRIGHT and vertical: gray iron axe-head at the very TOP, straight brown wooden handle going down below it',
+  goldAxe: 'a golden hatchet axe held UPRIGHT and vertical: shiny gold axe-head at the very TOP, straight brown wooden handle going down below it',
+  moltenHamaxe: 'a molten lava hammer-axe held UPRIGHT and vertical: glowing orange volcanic head at the very TOP, dark handle going down below it',
 };
 
 async function runIcons() {
