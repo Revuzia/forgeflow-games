@@ -147,7 +147,10 @@ export class Spawner {
       // player-placed walls block spawns (natural walls don't)
       const wallId = world.wallAt(tx, ty);
       if (wallId !== 0 && !WALLS[wallId].natural) continue;
-      let type = this.pickType(band, game.tick, game.bloodMoon, tx);
+      // Biome roster keys off the PLAYER's biome, not the spawn tile's — this is how Terraria
+      // works, and it keeps jungle hornets etc. from leaking into the forest when the player is
+      // just outside a biome edge (spawn zone is 84 tiles wide, wider than the buffer between them).
+      let type = this.pickType(band, game.tick, game.bloodMoon, ptx);
       // sky layer: harpies rule the heights
       if (ty < this.world.h * 0.08 && Math.random() < 0.7) type = 'harpy';
       const def = ENEMY_SIZE[type] ?? { w: 20, h: 40 };

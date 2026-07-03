@@ -177,13 +177,19 @@ export function generateWorld(world, onProgress = () => {}) {
 
   // --- 5. biomes ----------------------------------------------------------------
   onProgress(0.6, 'Painting biomes…');
-  // desert strip on one side, snow on the other (random which)
+  // Biome layout is spawn-safe: the player spawns at world center (0.5) and we keep a WIDE forest
+  // buffer around it — the nearest biome edge is ≥0.12·w (~250 tiles ≈ 6 screens) away, so a fresh
+  // character explores forest for several screens before stumbling into anything dangerous (the
+  // jungle/hornets especially). Each biome is ≥0.14·w (~294 tiles ≈ 7 screens) wide.
+  // desert strip on one far side, snow on the other; jungle sits between the near forest buffer and
+  // the desert on the same side (still ≥6 screens from spawn).
   const desertLeft = rand() < 0.5;
-  const desertX0 = desertLeft ? w * 0.12 : w * 0.62;
+  const desertX0 = desertLeft ? w * 0.06 : w * 0.80;
   const desertX1 = desertX0 + w * 0.14;
-  const snowX0 = desertLeft ? w * 0.62 : w * 0.12;
+  const snowX0 = desertLeft ? w * 0.80 : w * 0.06;
   const snowX1 = snowX0 + w * 0.16;
-  const jungleX0 = w * 0.32, jungleX1 = w * 0.44;   // band clear of desert/snow/spawn
+  const jungleX0 = desertLeft ? w * 0.24 : w * 0.62;   // inner edge ≥0.12·w from spawn(0.5); away from desert/snow
+  const jungleX1 = jungleX0 + w * 0.14;
   world.biomes = { desert: [desertX0 | 0, desertX1 | 0], snow: [snowX0 | 0, snowX1 | 0], jungle: [jungleX0 | 0, jungleX1 | 0], oceanW };
   for (let x = 0; x < w; x++) {
     const inDesert = x >= desertX0 && x < desertX1;
