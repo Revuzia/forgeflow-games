@@ -224,14 +224,16 @@ export function generateWorld(world, onProgress = () => {}) {
   const strips = 1 + (rand() < 0.5 ? 1 : 0);
   world.corruption = [];
   for (let s = 0; s < strips; s++) {
-    let cx0;
-    for (let tries = 0; tries < 50; tries++) {
-      cx0 = (w * 0.08 + rand() * w * 0.8) | 0;
-      const farFromCenter = Math.abs(cx0 + 60 - mid) > 200;
-      const farFromOthers = world.corruption.every(([a]) => Math.abs(a - cx0) > 300);
-      if (farFromCenter && farFromOthers) break;
-    }
     const cw2 = 90 + (rand() * 60) | 0;
+    let cx0 = 0;
+    for (let tries = 0; tries < 60; tries++) {
+      cx0 = (oceanW + 20 + rand() * (w - 2 * oceanW - cw2 - 40)) | 0;
+      // keep corruption ENTIRELY outside the safe spawn forest — its stronger mobs (eaterOfSouls)
+      // must never bleed into the beginner area (graveyard-tier distance from spawn or deeper)
+      const clearOfForest = cx0 + cw2 < mid - bw || cx0 > mid + bw;
+      const farFromOthers = world.corruption.every(([a, bb]) => cx0 + cw2 < a - 30 || cx0 > bb + 30);
+      if (clearOfForest && farFromOthers) break;
+    }
     world.corruption.push([cx0, cx0 + cw2]);
     const depthTo = stoneLine + h * 0.1;
     for (let x = cx0; x < cx0 + cw2 && x < w; x++) {

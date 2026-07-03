@@ -73,9 +73,9 @@ export class Spawner {
       if (biome === 'corruption') return roll < 0.75 ? 'eaterOfSouls' : 'zombie';
       if (biome === 'ocean') return roll < 0.6 ? 'crab' : 'piranha';
       // ---- difficulty ring: forest (easy) → graveyard → desert → snow (hardest) ----
-      if (biome === 'graveyard') {           // tier 2 — the undead: ghosts, zombies, skeletons
+      if (biome === 'graveyard') {           // tier 2 — the undead: ghosts, zombies, skeletons (no wraith; that's tier 4)
         if (day) return roll < 0.4 ? 'zombie' : roll < 0.72 ? 'skeleton' : roll < 0.9 ? 'demonEye' : 'ghost';
-        return roll < 0.34 ? 'ghost' : roll < 0.6 ? 'skeleton' : roll < 0.85 ? 'zombie' : 'wraith';
+        return roll < 0.36 ? 'ghost' : roll < 0.64 ? 'skeleton' : 'zombie';
       }
       if (biome === 'desert') {              // tier 3 — wasps (hornets) + tougher desert mobs
         if (day) return roll < 0.35 ? 'hornet' : roll < 0.6 ? 'antlion' : roll < 0.8 ? 'vulture' : 'sandSlime';
