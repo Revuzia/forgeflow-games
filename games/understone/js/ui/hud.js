@@ -280,7 +280,7 @@ export class HUD {
     }
     for (let i = 0; i < ACCESSORY_SLOTS; i++) this.els.acc.appendChild(this.makeSlot({ acc: i }));
     // main-hand (weapon/tool) + off-hand (torch = light in your tunnels / shield)
-    for (const [hand, label] of [['mainhand', 'Main Hand'], ['offhand', 'Off Hand (light)']]) {
+    for (const [hand, label] of [['mainhand', 'Main Hand'], ['offhand', 'Off Hand']]) {
       const wrap = document.createElement('div');
       wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px';
       wrap.appendChild(this.makeSlot({ hand }));
@@ -322,6 +322,8 @@ export class HUD {
     if (kind.inv != null) return this.inv.slots[kind.inv];
     if (kind.armor != null) return this.inv.armor[kind.armor];
     if (kind.acc != null) return this.inv.accessories[kind.acc];
+    // main hand MIRRORS the selected hotbar item (what you're wielding); off hand is real storage
+    if (kind.hand === 'mainhand') return this.inv.held();
     if (kind.hand != null) return this.inv.hands[kind.hand];
     if (kind.chest != null) return this.openChestSlots?.[kind.chest];
     return null;
@@ -331,6 +333,7 @@ export class HUD {
     else if (kind.inv != null) this.inv.slots[kind.inv] = val;
     else if (kind.armor != null) this.inv.armor[kind.armor] = val;
     else if (kind.acc != null) this.inv.accessories[kind.acc] = val;
+    else if (kind.hand === 'mainhand') this.inv.slots[this.inv.selected] = val;  // mirror → write the held slot
     else if (kind.hand != null) this.inv.hands[kind.hand] = val;
     else if (kind.chest != null && this.openChestSlots) this.openChestSlots[kind.chest] = val;
   }
@@ -351,6 +354,8 @@ export class HUD {
       if (kind.hotbar != null) { this.inv.selected = kind.hotbar; this.inv.changed(); }
       return;
     }
+    // main hand is a read-only mirror of the selected hotbar slot — press 1-0 to change it
+    if (kind.hand === 'mainhand') { e.preventDefault(); return; }
     const stack = this.getSlot(kind);
     // shift-click: quick actions (equip / sell / stash)
     if (e.shiftKey && stack) { this.quickMove(kind, stack); return; }

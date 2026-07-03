@@ -151,15 +151,14 @@ export class Player {
         this.vx += input * PHYS.runAccel;
         if (Math.abs(this.vx) > maxRun) this.vx = input * maxRun;
       }
-      if (this.swinging <= 0) this.facing = input;
+      this.facing = input;   // turn freely even mid-swing (movement always wins)
     } else {
       if (Math.abs(this.vx) <= friction) this.vx = 0;
       else this.vx -= Math.sign(this.vx) * friction;
     }
-    // When aiming a tool/weapon (mouse held), FACE THE CURSOR — so the swing animation and the
-    // tool point at what you're mining/attacking, not at your last walk direction. This is why
-    // chopping "hit backwards": you'd face-left from walking but aim-right at the tree.
-    if ((mouse.left || mouse.rightPressed) && this.heldItem && !game.hud?.open && game.camera) {
+    // When STANDING STILL and aiming a tool/weapon, face the cursor so the swing points at what
+    // you're mining/attacking. Movement (above) takes priority, so you can still turn mid-swing.
+    if (input === 0 && (mouse.left || mouse.rightPressed) && this.heldItem && !game.hud?.open && game.camera) {
       const [mwx] = game.camera.screenToWorld(
         mouse.x * (game.canvas.width / game.canvas.clientWidth),
         mouse.y * (game.canvas.height / game.canvas.clientHeight));

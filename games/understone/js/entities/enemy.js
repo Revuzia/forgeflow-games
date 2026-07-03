@@ -182,6 +182,7 @@ export class Enemy {
     let dmg = Math.max(1, Math.floor(rawDmg * variance * eMult - Math.ceil(this.def.def / 2)));
     if (crit) dmg *= ROLLS.critMult;
     this.hp -= dmg;
+    this.aggro = true; this.aggroTimer = 300;   // getting hit makes a wandering enemy chase
     this.lastElementMult = eMult;    // combat reads this for "weak/resist" feedback color
     // knockback scaled by resistance (1.0 = immune)
     const resist = Math.max(0, Math.min(1, this.def.kbResist));
@@ -198,6 +199,7 @@ export class Enemy {
     this.px = this.x; this.py = this.y;
     const pl = game.player;
     this.nearPlayer = pl && !pl.dead && Math.abs(pl.x - this.cx) < 30 && Math.abs(pl.y - this.cy) < 40;
+    this.updateAggro(game);   // enemies wander/patrol until they SEE you (LOS), then chase
     const ai = this.def.ai;
     if (ai === 'slime') this.aiSlime(game);
     else if (ai === 'fighter') this.aiFighter(game);
@@ -212,10 +214,49 @@ export class Enemy {
     else if (ai === 'snatcher') this.aiSnatcher(game);
   }
 
+  // ---- aggro: wander/patrol until the player is within sight AND line-of-sight ----------
+  // (so enemies don't home in from off-screen across the whole world). Once seen — or hit —
+  // they chase for a few seconds after losing sight. `this.aggro` gates the chase in each AI.
+  updateAggro(game) {
+    const p = game.player;
+    if (!p || p.dead) { this.aggroTimer = Math.max(0, (this.aggroTimer ?? 0) - 1); this.aggro = this.aggroTimer > 0; return; }
+    const dist = Math.hypot(p.x - this.cx, p.y - this.cy);
+    const sight = (this.def.sight ?? 18) * TILE;                    // ~18 tiles of vision
+    if (dist < sight && this.hasLOS(game, p)) { this.aggro = true; this.aggroTimer = 240; }  // remember 4 s
+    else { this.aggroTimer = Math.max(0, (this.aggroTimer ?? 0) - 1); this.aggro = this.aggroTimer > 0; }
+  }
+
+  hasLOS(game, p) {
+    const dx = p.x - this.cx, dy = p.y - this.cy, d = Math.hypot(dx, dy) || 1;
+    const steps = Math.min(48, Math.ceil(d / (TILE * 0.5)));
+    for (let i = 1; i < steps; i++) {
+      const x = this.cx + dx * (i / steps), y = this.cy + dy * (i / steps);
+      if (game.world.isSolid(Math.floor(x / TILE), Math.floor(y / TILE))) return false;
+    }
+    return true;
+  }
+
+  // stroll direction when not aggro'd: often idle, occasionally amble left/right; turn at walls/ledges
+  wanderDir(game) {
+    if (this._wDir === undefined || (this._tick - (this._wSet ?? -999)) > 130) {
+      const r = Math.random();
+      this._wDir = r < 0.45 ? 0 : r < 0.72 ? -1 : 1;
+      this._wSet = this._tick;
+    }
+    return this._wDir;
+  }
+
   // ---- Skeleton Archer: keeps distance, fires arrows -----------------------------
   aiArcher(game) {
     const p = game.player;
     this.aiTimer++;
+    if (!this.aggro) {   // patrol until it spots you — no off-screen sniping
+      const wd = this.wanderDir(game);
+      this.vx += wd * 0.06; if (Math.abs(this.vx) > 0.7) this.vx = Math.sign(this.vx) * 0.7; if (!wd) this.vx *= 0.85;
+      this.facing = Math.sign(this.vx) || this.facing;
+      this.applyGravityAndMove(game);
+      return;
+    }
     const dist = Math.abs(p.x - this.cx);
     const dir = p.dead ? 0 : dist < 120 ? -Math.sign(p.x - this.cx) : dist > 260 ? Math.sign(p.x - this.cx) : 0;
     if (dir) {
@@ -223,7 +264,7 @@ export class Enemy {
       if (Math.abs(this.vx) > 0.9) this.vx = dir * 0.9;
     } else this.vx *= 0.85;
     this.facing = Math.sign(p.x - this.cx) || 1;
-    if (!p.dead && this.aiTimer % 130 === 0 && dist < 450) {
+    if (!p.dead && this.aiTimer % 130 === 0 && dist < 450 && this.hasLOS(game, p)) {
       game.projectiles?.spawnEnemy('arrow', this.cx, this.y + 10, p.x, p.y - 20, 7, this.def.dmg);
       const pr = game.projectiles.list[game.projectiles.list.length - 1];
       if (pr) pr.gravity = 0.07;
@@ -331,9 +372,11 @@ export class Enemy {
         this.aiTimer = 0;
         this.aiPhase = (this.aiPhase + 1) % 3;
         const big = this.aiPhase === 2;
-        const dir = p.dead ? (Math.random() < 0.5 ? -1 : 1) : Math.sign(p.x - this.cx) || 1;
+        // hop toward the player only when aggro'd; otherwise hop around at random (wander)
+        const dir = this.aggro && !p.dead ? (Math.sign(p.x - this.cx) || 1)
+          : (this.wanderDir(game) || (Math.random() < 0.5 ? -1 : 1));
         this.vy = big ? -8 : -6;
-        this.vx = dir * (big ? 2.5 : 1.8);   // hop speed below player run (3) so you can outrun slimes
+        this.vx = dir * (big ? 2.5 : 1.8) * (this.aggro ? 1 : 0.7);   // hop below player run so you can outrun slimes
         this.facing = dir;
       }
     }
@@ -343,11 +386,12 @@ export class Enemy {
   // ---- Fighter: walk at player (accel 0.07, max 1.0), jump ladder at obstacles ----
   aiFighter(game) {
     const p = game.player;
-    const dir = p.dead ? this.facing : (Math.sign(p.x - this.cx) || 1);
-    this.facing = dir;
-    const max = this.def.speed ?? 1.0;
+    const dir = this.aggro && !p.dead ? (Math.sign(p.x - this.cx) || 1) : this.wanderDir(game);
+    if (dir) this.facing = dir;
+    const max = (this.def.speed ?? 1.0) * (this.aggro ? 1 : 0.45);   // amble slowly while patrolling
     this.vx += dir * 0.07;
     if (Math.abs(this.vx) > max) this.vx = dir * max;
+    if (!dir) this.vx *= 0.8;
     if (this.grounded) {
       // obstacle ahead? jump ladder −5/−6/−7/−8 by height
       const aheadX = dir > 0 ? this.x + this.w + 2 : this.x - 2;
@@ -373,17 +417,19 @@ export class Enemy {
   // ---- Flyer (Demon Eye): asymmetric accel → swooping (0.1/0.04, max 4.0/1.5) -----
   aiFlyer(game) {
     const p = game.player;
-    if (!p.dead) {
+    // horizontal cap stays BELOW the player's run speed (3) so you can break away.
+    const capX = this.def.speed ?? 2.4, capY = capX * 0.6;
+    if (this.aggro && !p.dead) {
       const dx = p.x - this.cx, dy = (p.y - 20) - this.cy;
-      // horizontal cap must stay BELOW the player's run speed (PHYS.maxRun = 3) so the player can
-      // actually break away — was hardcoded 4 (faster than the player, impossible to outrun).
-      // Respect each enemy's `speed` field; default a touch under the player.
-      const capX = this.def.speed ?? 2.4;
-      const capY = capX * 0.6;
       this.vx += Math.sign(dx) * 0.08;
       this.vy += Math.sign(dy) * 0.04;
       if (Math.abs(this.vx) > capX) this.vx = Math.sign(this.vx) * capX;
       if (Math.abs(this.vy) > capY) this.vy = Math.sign(this.vy) * capY;
+    } else {
+      // lazy hover in place until it spots you: gentle drift, half speed
+      const wd = this.wanderDir(game);
+      this.vx += (wd * capX * 0.4 - this.vx) * 0.03;
+      this.vy += (Math.sin(this._tick * 0.03 + this.id) * capY * 0.4 - this.vy) * 0.03;
     }
     this.facing = Math.sign(this.vx) || 1;
     const e = { x: this.x, y: this.y, vx: this.vx, vy: this.vy, w: this.w, h: this.h };
@@ -401,11 +447,11 @@ export class Enemy {
       this.vx += (Math.random() - 0.5) * 1.6;
       this.vy += (Math.random() - 0.5) * 1.2;
     }
-    if (!p.dead) {
+    if (this.aggro && !p.dead) {          // only swoop at you once it senses you
       this.vx += Math.sign(p.x - this.cx) * 0.06;
       this.vy += Math.sign(p.y - this.cy) * 0.04;
     }
-    const cap = 2.4;
+    const cap = this.aggro ? 2.4 : 1.3;
     if (Math.abs(this.vx) > cap) this.vx = Math.sign(this.vx) * cap;
     if (Math.abs(this.vy) > cap) this.vy = Math.sign(this.vy) * cap;
     const e = { x: this.x, y: this.y, vx: this.vx, vy: this.vy, w: this.w, h: this.h };

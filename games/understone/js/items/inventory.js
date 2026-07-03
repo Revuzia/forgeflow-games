@@ -56,7 +56,8 @@ export class Inventory {
   // aggregate accessory effects (industry-standard paper-doll bonuses)
   accessoryEffects() {
     const e = { moveSpeed: 1, regen: 0, extraJumps: 0, noFallDamage: false, defense: 0, critBonus: 0 };
-    for (const a of this.accessories) {
+    // the 5 accessory slots PLUS an accessory/shield worn in the off-hand all contribute
+    for (const a of [...this.accessories, this.hands.offhand]) {
       if (!a) continue;
       const d = ITEMS[a.id];
       if (!d?.accessory) continue;
