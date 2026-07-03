@@ -31,7 +31,7 @@ export async function loadAssets(onProgress = () => {}) {
   for (const name of TILE_TEXTURES) jobs.push(['tiles', name, `assets/tiles/${name}.png`]);
   for (const name of WALL_TEXTURES) jobs.push(['walls', name, `assets/walls/${name}.png`]);
   for (const name of SPRITES) jobs.push(['sprites', name, `assets/entities/${name}.png`]);
-  for (const name of ['hills', 'desert', 'snow', 'jungle', 'corruption', 'ocean']) jobs.push(['bg', name, `assets/bg/${name}.png`]);
+  for (const name of ['hills', 'desert', 'snow', 'jungle', 'corruption', 'ocean', 'graveyard']) jobs.push(['bg', name, `assets/bg/${name}.png`]);
   let doneCount = 0;
   await Promise.all(jobs.map(async ([cat, name, src]) => {
     assets[cat][name] = await loadImage(src);

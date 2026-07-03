@@ -479,7 +479,13 @@ export function generateWorld(world, onProgress = () => {}) {
   {
     const STEP = 2;        // max tiles the surface may drop per column before we ramp it
     const orig = new Int16Array(w);
-    for (let x = 0; x < w; x++) { let y = 0; while (y < h && !world.isSolid(x, y)) y++; orig[x] = y; }
+    // Treat BUILT structures (house shells/roofs — uniquely backed by woodWall) as transparent to the
+    // surface heightmap, so the ramp is computed from NATURAL ground only and never buries an outpost.
+    for (let x = 0; x < w; x++) {
+      let y = 0;
+      while (y < h && (!world.isSolid(x, y) || world.walls[y * w + x] === W_.woodWall)) y++;
+      orig[x] = y;
+    }
     const surfaceBand = h * (LAYERS.underground + 0.08); // only ramp the near-surface crust
     const safe = new Int16Array(w);
     for (let x = 0; x < w; x++) safe[x] = orig[x];
@@ -489,7 +495,10 @@ export function generateWorld(world, onProgress = () => {}) {
     for (let x = w - 2; x >= 0; x--) if (orig[x] <= surfaceBand && safe[x] > safe[x + 1] + STEP) safe[x] = safe[x + 1] + STEP;
     for (let x = 0; x < w; x++) {
       if (safe[x] >= orig[x]) continue;
-      for (let y = safe[x]; y < orig[x] && y < h - 1; y++) set(x, y, y === safe[x] ? T.grass : T.dirt);
+      for (let y = safe[x]; y < orig[x] && y < h - 1; y++) {
+        if (world.walls[y * w + x] === W_.woodWall) continue;   // never bury a built structure
+        set(x, y, y === safe[x] ? T.grass : T.dirt);
+      }
     }
   }
 

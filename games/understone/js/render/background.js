@@ -89,7 +89,7 @@ export class Background {
         else if (camTx <= (b.oceanW ?? 0) + 10 || camTx >= this.world.w - (b.oceanW ?? 0) - 10) bgName = 'ocean';
         else if (inR(b.snow)) bgName = 'snow';
         else if (inR(b.desert)) bgName = 'desert';
-        else if (inR(b.graveyard)) bgName = 'corruption';   // spooky backdrop (no dedicated graveyard art yet)
+        else if (inR(b.graveyard)) bgName = 'graveyard';   // dedicated moonlit-graveyard backdrop
         else if (inR(b.jungle)) bgName = 'jungle';           // legacy saves only
       }
     }
