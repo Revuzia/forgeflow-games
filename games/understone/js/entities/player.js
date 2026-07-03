@@ -156,6 +156,15 @@ export class Player {
       if (Math.abs(this.vx) <= friction) this.vx = 0;
       else this.vx -= Math.sign(this.vx) * friction;
     }
+    // When aiming a tool/weapon (mouse held), FACE THE CURSOR — so the swing animation and the
+    // tool point at what you're mining/attacking, not at your last walk direction. This is why
+    // chopping "hit backwards": you'd face-left from walking but aim-right at the tree.
+    if ((mouse.left || mouse.rightPressed) && this.heldItem && !game.hud?.open && game.camera) {
+      const [mwx] = game.camera.screenToWorld(
+        mouse.x * (game.canvas.width / game.canvas.clientWidth),
+        mouse.y * (game.canvas.height / game.canvas.clientHeight));
+      this.facing = mwx >= this.x ? 1 : -1;
+    }
 
     // ---- jump: velocity-pin model (§3) + accessory double-jumps ----------------
     const jumpHeld = isDown('jump');

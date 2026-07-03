@@ -586,24 +586,26 @@ async function boot() {
         const useT = held.useTime || 20;
         const swinging = player.swinging > 0;
         const prog = swinging ? Math.min(1, Math.max(0, 1 - player.swinging / useT)) : 1;
-        // hand anchor at the FRONT of the character (in the facing direction), waist height —
-        // so the tool sits IN the hand, not centred on the body.
-        const handX = sx + (player.w / 2 + player.facing * 9) * z;
-        const handY = sy + 22 * z;
+        // Anchor the hand relative to the VISIBLE character (centred on cx, ~player.h tall), NOT
+        // the narrow 14px hitbox — otherwise the tool floats by the feet. Hand = a few px toward
+        // the facing side, at chest height.
+        const handX = cx + player.facing * 5 * z;
+        const handY = sy + player.h * z * 0.44;
         const sprIt = itemIcon(heldDef.id)
           ?? toolFallbackSprite(held.type === 'pickaxe' || held.type === 'axe' || held.type === 'hammer' ? held.type
             : held.weapon === 'bow' ? 'bow' : held.weapon === 'sword' ? 'sword'
             : held.placeTile != null ? 'block' : 'sword');
-        const isz = 20 * z;
-        // swing: overhead → forward arc. rest: tool pointing forward-and-down out of the hand.
-        const angle = swinging ? (-2.1 + prog * 2.8) * player.facing : 0.7 * player.facing;
+        const isz = 22 * z;
+        // mirror FIRST so "forward" == facing, then rotate: rest = held forward/down out of the
+        // hand; swing = overhead → forward-down chop.
+        const angle = swinging ? (-2.2 + prog * 3.0) : 0.85;
         c.save();
         c.translate(handX, handY);
+        c.scale(player.facing > 0 ? 1 : -1, 1);
         c.rotate(angle);
-        c.scale(player.facing > 0 ? 1 : -1, 1);   // mirror so the icon head points the way we face
         c.imageSmoothingEnabled = false;
-        // draw the icon gripped near its handle (bottom-left), blade/head reaching forward-up
-        c.drawImage(sprIt, -isz * 0.15, -isz * 0.8, isz, isz);
+        // grip the icon near its handle so the head reaches OUT (forward) from the fist
+        c.drawImage(sprIt, -isz * 0.1, -isz * 0.72, isz, isz);
         c.restore();
         // white/element arc flash, alpha peaks mid-swing (research 10 §5a)
         if (held.weapon === 'sword') {
