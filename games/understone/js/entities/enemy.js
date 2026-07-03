@@ -347,10 +347,15 @@ export class Enemy {
     const p = game.player;
     if (!p.dead) {
       const dx = p.x - this.cx, dy = (p.y - 20) - this.cy;
-      this.vx += Math.sign(dx) * 0.1;
+      // horizontal cap must stay BELOW the player's run speed (PHYS.maxRun = 3) so the player can
+      // actually break away — was hardcoded 4 (faster than the player, impossible to outrun).
+      // Respect each enemy's `speed` field; default a touch under the player.
+      const capX = this.def.speed ?? 2.4;
+      const capY = capX * 0.6;
+      this.vx += Math.sign(dx) * 0.08;
       this.vy += Math.sign(dy) * 0.04;
-      if (Math.abs(this.vx) > 4) this.vx = Math.sign(this.vx) * 4;
-      if (Math.abs(this.vy) > 1.5) this.vy = Math.sign(this.vy) * 1.5;
+      if (Math.abs(this.vx) > capX) this.vx = Math.sign(this.vx) * capX;
+      if (Math.abs(this.vy) > capY) this.vy = Math.sign(this.vy) * capY;
     }
     this.facing = Math.sign(this.vx) || 1;
     const e = { x: this.x, y: this.y, vx: this.vx, vy: this.vy, w: this.w, h: this.h };

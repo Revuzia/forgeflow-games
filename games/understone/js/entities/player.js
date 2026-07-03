@@ -286,7 +286,7 @@ export class Player {
 
   // right-click: doors, chests, altar hint
   updateInteract(game) {
-    if (!mouse.rightPressed) return;
+    if (!mouse.rightPressed || game.hud?.open) return;
     const { tx, ty, inReach } = this.targetTile(game);
     if (!inReach) return;
     const world = this.world;
@@ -329,6 +329,8 @@ export class Player {
 
   updateTool(game) {
     if (this.swingTimer > 0) this.swingTimer--;
+    // while the inventory/crafting panel is open, clicks belong to the UI — never swing/mine/place
+    if (game.hud?.open) { this.miningTile = -1; this.miningDamage = 0; return; }
     const held = this.heldItem;
     if (!held || !mouse.left) { this.miningTile = -1; this.miningDamage = 0; return; }
 

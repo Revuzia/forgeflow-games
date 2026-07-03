@@ -27,12 +27,12 @@ const CSS = `
   color: #e8e8f0; text-shadow: 0 1px 3px #000, 0 0 8px rgba(0,0,0,.7); min-height: 18px; text-align: center; }
 /* --- slots --- */
 .us-slot {
-  width: 46px; height: 46px; background: url('assets/ui/slot.png'); background-size: 100% 100%;
+  width: 54px; height: 54px; background: url('assets/ui/slot.png'); background-size: 100% 100%;
   image-rendering: pixelated; position: relative; display: flex; align-items: center; justify-content: center;
 }
 .us-slot.sel { background-image: url('assets/ui/slotSel.png'); box-shadow: 0 0 12px rgba(232,217,160,.7); transform: translateY(-3px); }
 .us-slot.drop-hi { outline: 2px solid #8fd0ff; outline-offset: -2px; }
-.us-slot .icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+.us-slot .icon { width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
   font-size: 10px; font-weight: 700; color: #101018; text-shadow: 0 0 2px rgba(255,255,255,.35); pointer-events: none; }
 .us-slot .icon img { width: 100%; height: 100%; image-rendering: pixelated; object-fit: contain; pointer-events: none; }
 .us-slot .icon.r-uncommon { filter: drop-shadow(0 0 3px rgba(109,232,109,.85)); }
@@ -49,8 +49,14 @@ const CSS = `
   max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); overflow: auto;
   box-shadow: 0 12px 48px rgba(0,0,0,.6); }
 #us-inv.open { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+/* index.html sets "#hud * { pointer-events:none }" — override it with higher specificity so the
+   open inventory (and every control inside it) actually receives clicks/drags/scroll instead of
+   letting them fall through to the game canvas (which would swing the tool). */
+#hud .us-panel { pointer-events: auto; }
+#hud #us-inv.open, #hud #us-inv.open * { pointer-events: auto; }
+#hud #us-cursor, #hud #us-tip { pointer-events: none !important; }
 #us-inv h3 { margin: 0 0 8px; font: 700 12px 'Segoe UI'; color: #d9b98a; letter-spacing: 1.5px; text-transform: uppercase; }
-#us-inv .grid { display: grid; grid-template-columns: repeat(10, 46px); gap: 5px; }
+#us-inv .grid { display: grid; grid-template-columns: repeat(10, 54px); gap: 5px; }
 /* --- equipment paper-doll --- */
 #us-equip-wrap { width: 210px; }
 .us-doll { display: flex; gap: 12px; }
@@ -189,7 +195,7 @@ export class HUD {
         <div>
           <h3>Inventory</h3>
           <div class="grid" id="us-main"></div>
-          <div id="us-chest-wrap"><h3 style="margin-top:14px">Chest</h3><div class="grid" id="us-chest" style="grid-template-columns:repeat(10,46px)"></div></div>
+          <div id="us-chest-wrap"><h3 style="margin-top:14px">Chest</h3><div class="grid" id="us-chest" style="grid-template-columns:repeat(10,54px)"></div></div>
         </div>
         <div id="us-equip-wrap">
           <h3>Equipment</h3>

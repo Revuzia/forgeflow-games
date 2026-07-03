@@ -37,8 +37,8 @@ export const PHYS = {
   waterGravity: 0.2, waterMaxFall: 5, waterJumpSpeed: 6.01, waterJumpHold: 30,
   breathMax: 200, breathLossEvery: 7, drownDmgEvery: 7, drownDmg: 2, breathRegenPerTick: 3,
   lavaDamage: 80,
-  maxSubStep: 6,           // anti-tunnel: any move faster than this is sub-stepped into <=6px
-                           // increments (grapple pulls at 11px/t, terminal fall 10 — all covered)
+  maxSubStep: 4,           // anti-tunnel: any move faster than this is sub-stepped into <=4px
+                           // increments — well under a 16px tile even at knockback / grapple (11px/t) speed
 };
 
 // --- interaction (research 03; placement range marked pending final confirm) ---

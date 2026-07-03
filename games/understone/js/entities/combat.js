@@ -7,6 +7,20 @@ import { mouse } from '../core/input.js';
 import { isDay, segFrac } from '../render/background.js';
 import { moveEntity } from './physics.js';
 
+// true if a solid tile sits on the segment a→b (so a melee strike can't reach through a wall).
+// One-tile grace at each end so hits that graze a wall corner still land.
+function wallBetween(world, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const dist = Math.hypot(dx, dy);
+  const steps = Math.ceil(dist / 6);
+  if (steps <= 2) return false;
+  for (let i = 1; i < steps; i++) {
+    const x = ax + dx * (i / steps), y = ay + dy * (i / steps);
+    if (world.isSolid(Math.floor(x / TILE), Math.floor(y / TILE))) return true;
+  }
+  return false;
+}
+
 export class Combat {
   constructor(game) {
     this.game = game;
@@ -191,6 +205,7 @@ export class Combat {
       }
       for (const e of g.enemies) {
         if (this.swingHit.has(e.id)) continue;
+        if (wallBetween(g.world, p.x, p.py + p.h * 0.4, e.cx, e.cy)) continue;  // no hitting through walls
         for (const hb of e.hitboxes()) {
           if (box.x < hb.x + hb.w && box.x + box.w > hb.x && box.y < hb.y + hb.h && box.y + box.h > hb.y) {
             const crit = Math.random() < 0.04 + (held.critBonus ?? 0);
@@ -224,6 +239,7 @@ export class Combat {
         const tipX = p.x + s.dirX * ext, tipY = p.y + s.dirY * ext;
         s.tipX = tipX; s.tipY = tipY; s.ext = ext;
         for (const e of g.enemies) {
+          if (wallBetween(g.world, p.x, p.py + p.h * 0.4, e.cx, e.cy)) continue;  // no thrusting through walls
           for (const hb of e.hitboxes()) {
             if (tipX > hb.x - 6 && tipX < hb.x + hb.w + 6 && tipY > hb.y - 6 && tipY < hb.y + hb.h + 6) {
               const crit = Math.random() < 0.04;
