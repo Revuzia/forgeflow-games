@@ -183,7 +183,7 @@ async function boot() {
   if (choice === 'continue' && saveMod.loadGame(game)) {
     // world restored from save; restore town NPCs
     for (const rec of game._savedNpcs ?? []) {
-      const n = new NPC(rec.type, rec.x, rec.y + 40);
+      const n = new NPC(rec.type, rec.x + 9, rec.y + 40);   // +9/+40 undo the NPC ctor offset so x/y round-trip exactly (no per-save drift)
       n.homeX = rec.homeX ?? rec.x;
       npcs.npcs.push(n);
     }
@@ -198,7 +198,7 @@ async function boot() {
     npcs.spawnGuide();
     // settlement residents (underground miners, far-outpost wizard)
     for (const rec of world.townNpcs ?? []) {
-      const n = new NPC(rec.type, rec.x, rec.y + 40);
+      const n = new NPC(rec.type, rec.x + 9, rec.y + 40);   // +9/+40 undo the NPC ctor offset so x/y round-trip exactly (no per-save drift)
       n.homeX = rec.x;
       npcs.npcs.push(n);
     }
@@ -260,13 +260,9 @@ async function boot() {
   };
 
   game.updaters.push(() => {
-    // hotbar selection: number keys + wheel
+    // hotbar selection: number keys (mouse wheel is dedicated to camera zoom — see wheel handler)
     const hb = inputMod.hotbarPressed();
     if (hb >= 0) { inventory.selected = hb; inventory.changed(); }
-    if (inputMod.mouse.wheel !== 0 && !hud.open) {
-      inventory.selected = (inventory.selected + inputMod.mouse.wheel + 10) % 10;
-      inventory.changed();
-    }
     // don't trigger panel keys while typing in the recipe search box
     const typing = document.activeElement && document.activeElement.id === 'us-search';
     if (!typing) {

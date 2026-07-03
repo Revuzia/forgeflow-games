@@ -173,7 +173,8 @@ export class Spawner {
       }
       // need standing room: air for body, solid floor for grounded types
       const needsFloor = !['demonEye', 'caveBat', 'giantWorm', 'eaterOfSouls', 'ghost',
-        'harpy', 'cursedSkull', 'drippler', 'hellbat', 'vulture', 'boneSerpent', 'hornet'].includes(type);
+        'harpy', 'cursedSkull', 'drippler', 'hellbat', 'vulture', 'boneSerpent', 'hornet',
+        'devourer', 'giantBat', 'wanderingEye'].includes(type);   // flyers + all worms skip floor-clearance
       const bodyTiles = Math.ceil(def.h / TILE);
       let ok = true;
       for (let i = 0; i < bodyTiles; i++) if (world.isSolid(tx, ty - i)) ok = false;
@@ -187,7 +188,7 @@ export class Spawner {
         }
         if (!found) continue;
         this.spawnAt(type, tx * TILE + TILE / 2, (floorY + 1) * TILE);
-      } else if (type === 'giantWorm' || type === 'boneSerpent') {
+      } else if (type === 'giantWorm' || type === 'boneSerpent' || type === 'devourer') {
         // worms spawn inside ground
         let gy = ty;
         for (let i = 0; i < 10 && !world.isSolid(tx, gy); i++) gy++;

@@ -98,7 +98,7 @@ export class Player {
     if (this.recentHurt > 0) this.recentHurt--;
     if (this.manaRegenDelay > 0) this.manaRegenDelay--;
     // mana regen: pauses briefly after casting
-    if (this.manaRegenDelay <= 0 && this.mana < this.manaMax && game.tick % 6 === 0) this.mana++;
+    if ((this.manaRegenDelay ?? 0) <= 0 && this.mana < this.manaMax && game.tick % 6 === 0) this.mana++;
     // natural life regen (slow; paused 7 s after damage; doubled near a campfire;
     // Band of Regeneration accessory adds +1/s and works even while hurt-paused)
     const accRegen = game.inventory?.accessoryEffects?.().regen ?? 0;
@@ -252,7 +252,7 @@ export class Player {
       this.breath = Math.min(PHYS.breathMax, this.breath + PHYS.breathRegenPerTick);
       this.breathTimer = 0;
     }
-    if (inLava) this.hurt(PHYS.lavaDamage);
+    if (inLava) this.hurtNoKb(PHYS.lavaDamage);   // env hazard: no knockback / no i-frames (matches drowning), so lava can't grant enemy-invuln
 
     // ---- fishing bobber -------------------------------------------------------------------
     if (this.bobber) {

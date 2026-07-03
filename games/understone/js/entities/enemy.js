@@ -293,18 +293,23 @@ export class Enemy {
   aiHornet(game) {
     const p = game.player;
     this.aiTimer++;
-    if (!p.dead) {
+    if (this.aggro && !p.dead) {
       const dx = p.x - this.cx, dy = (p.y - 30) - this.cy;
       const d = Math.hypot(dx, dy) || 1;
       const want = d > 140 ? 1 : d < 90 ? -1 : 0;   // keep ~6-9 tile standoff
       this.vx += (dx / d) * 0.07 * want;
       this.vy += (dy / d) * 0.05 * want + Math.sin(this.aiTimer * 0.1) * 0.03;
-      if (Math.abs(this.vx) > 2.2) this.vx = Math.sign(this.vx) * 2.2;
-      if (Math.abs(this.vy) > 1.6) this.vy = Math.sign(this.vy) * 1.6;
       if (this.aiTimer % 110 === 0 && d < 400) {
         game.projectiles?.spawnEnemy('stinger', this.cx, this.cy, p.x, p.y, 5, this.def.dmg * 0.6);
       }
+    } else {
+      // idle hover/patrol until it spots you — no homing from across the biome
+      const wd = this.wanderDir(game);
+      this.vx += (wd * 0.9 - this.vx) * 0.03;
+      this.vy += (Math.sin(this.aiTimer * 0.08) * 0.5 - this.vy) * 0.03;
     }
+    if (Math.abs(this.vx) > 2.2) this.vx = Math.sign(this.vx) * 2.2;
+    if (Math.abs(this.vy) > 1.6) this.vy = Math.sign(this.vy) * 1.6;
     const e = { x: this.x, y: this.y, vx: this.vx, vy: this.vy, w: this.w, h: this.h };
     moveEntity(game.world, e, {});
     if (e.vx === 0 && this.vx !== 0) e.vx = -this.vx * 0.5;
@@ -316,11 +321,15 @@ export class Enemy {
   // ---- Ghost: drifts straight through terrain toward the player, wispy ----------
   aiGhost(game) {
     const p = game.player;
-    if (!p.dead) {
+    if (this.aggro && !p.dead) {
       const dx = p.x - this.cx, dy = (p.y - 10) - this.cy;
       const d = Math.hypot(dx, dy) || 1;
       this.vx += (dx / d) * 0.045;
       this.vy += (dy / d) * 0.045;
+    } else {
+      // aimless wisp-drift until it senses you
+      const wd = this.wanderDir(game);
+      this.vx += (wd * 0.5 - this.vx) * 0.02;
     }
     // gentle bob + speed cap
     this.vy += Math.sin((this._tick ?? 0) * 0.06 + this.id) * 0.02;
@@ -341,11 +350,15 @@ export class Enemy {
     const p = game.player;
     const wet = entityLiquid(game.world, this) >= 1;
     if (wet) {
-      if (!p.dead) {
+      if (this.aggro && !p.dead) {
         const dx = p.x - this.cx, dy = p.y - this.cy;
         const d = Math.hypot(dx, dy) || 1;
         this.vx += (dx / d) * 0.12;
         this.vy += (dy / d) * 0.08;
+      } else {
+        // patrol the water lazily until it spots you
+        const wd = this.wanderDir(game);
+        this.vx += (wd * 1.2 - this.vx) * 0.04;
       }
       const cap = 3;
       const sp = Math.hypot(this.vx, this.vy);
@@ -501,7 +514,7 @@ export class Enemy {
     const p = game.player;
     this.aiTimer++;
     this.facing = Math.sign(p.x - this.cx) || 1;
-    if (this.aiTimer % 90 === 60 && !p.dead && Math.abs(p.x - this.cx) < 600) {
+    if (this.aggro && this.aiTimer % 90 === 60 && !p.dead && Math.abs(p.x - this.cx) < 600 && this.hasLOS(game, p)) {
       const kind = this.type === 'antlion' ? 'sand' : this.type === 'demon' ? 'scythe' : 'fireball';
       game.projectiles?.spawnEnemy(kind, this.cx, this.cy - 6, p.x, p.y - 10, kind === 'sand' ? 5.5 : 4.5, this.def.dmg);
       this.aiPhase++;

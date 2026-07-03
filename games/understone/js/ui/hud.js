@@ -392,7 +392,7 @@ export class HUD {
       if ((kind.armor != null || kind.acc != null || kind.hand != null) && !this.accepts(kind, cur)) return;
       this.setSlot(kind, cur); this.cursorStack = target;
     }
-    this.dragging = false;
+    this.dragging = !!this.cursorStack;   // a swap leaves the old item on the cursor — keep dragging it
     if (!this.cursorStack) this.els.cursor.style.display = 'none';
     this.game.audio?.play('uiClick', { volume: 0.35 });
   }
@@ -400,6 +400,7 @@ export class HUD {
   rightClick(kind) {
     const stack = this.getSlot(kind);
     if (this.cursorStack && (!stack || stack.id === this.cursorStack.id)) {
+      if (!this.accepts(kind, this.cursorStack)) return;   // don't deposit into an equip slot that rejects this item
       // drop one from cursor
       if (stack) stack.count++; else this.setSlot(kind, { id: this.cursorStack.id, count: 1 });
       if (--this.cursorStack.count <= 0) { this.cursorStack = null; this.els.cursor.style.display = 'none'; }
@@ -445,8 +446,8 @@ export class HUD {
     this.game.audio?.play('powerup', { volume: 0.4 }); this.inv.changed(); this.drawDoll();
   }
   autoEquipAcc(fromKind, stack) {
-    let idx = this.inv.accessories.findIndex(a => !a);
-    if (idx < 0) idx = 0;
+    const idx = this.inv.accessories.findIndex(a => !a);
+    if (idx < 0) { this.game.audio?.play('uiClick', { volume: 0.3 }); return; }   // all 5 slots full — leave it in the bag
     const prev = this.inv.accessories[idx];
     this.inv.accessories[idx] = stack; this.setSlot(fromKind, prev ?? null);
     this.game.audio?.play('powerup', { volume: 0.4 }); this.inv.changed();
@@ -466,17 +467,19 @@ export class HUD {
   onPointerUp(e) {
     [...document.querySelectorAll('.us-slot.drop-hi')].forEach(s => s.classList.remove('drop-hi'));
     if (!this.dragging || !this.cursorStack) return;
-    const under = document.elementFromPoint(e.clientX, e.clientY)?.closest('.us-slot');
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const under = el?.closest('.us-slot');
     if (under) {
       const kind = JSON.parse(under.dataset.kind);
       this.placeCursorInto(kind);
       this.inv.changed();
-    } else if (!e.target.closest('#us-inv')) {
-      // released outside the panel → drop item into the world
+    } else if (el?.closest('#game')) {
+      // released over the GAME canvas (not over any HUD panel/vitals) → drop item into the world
       this.game.drops.spawn(this.cursorStack.id, this.cursorStack.count, this.player.x, this.player.y);
       this.cursorStack = null; this.els.cursor.style.display = 'none';
       this.inv.changed();
     }
+    // released over other HUD chrome (vitals, etc.) → keep the item on the cursor, don't lose it
     this.dragging = false;
     if (!this.cursorStack) this.els.cursor.style.display = 'none';
   }
