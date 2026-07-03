@@ -8,6 +8,25 @@ const MAX_CATCHUP_TICKS = 5; // spiral-of-death guard when tab was backgrounded
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
 
+// Horizontal-mirror a sprite once and cache it. Used for the axe, whose icon art is drawn
+// blade-on-the-left: mirroring the SPRITE (rather than flipping the canvas X during the swing)
+// points the blade forward WITHOUT reversing the swing rotation the way a scale(-1) would.
+const _hflipCache = new WeakMap();
+function hflipSprite(img) {
+  if (!img) return img;
+  let f = _hflipCache.get(img);
+  if (!f) {
+    f = document.createElement('canvas');
+    f.width = img.width; f.height = img.height;
+    const fc = f.getContext('2d');
+    fc.imageSmoothingEnabled = false;
+    fc.translate(img.width, 0); fc.scale(-1, 1);
+    fc.drawImage(img, 0, 0);
+    _hflipCache.set(img, f);
+  }
+  return f;
+}
+
 function fitCanvas() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.floor(window.innerWidth * dpr);
@@ -651,20 +670,21 @@ async function boot() {
         // the facing side, at chest height.
         const handX = cx + player.facing * 5 * z;
         const handY = sy + player.h * z * 0.44;
-        const sprIt = itemIcon(heldDef.id)
+        const rawSpr = itemIcon(heldDef.id)
           ?? toolFallbackSprite(held.type === 'pickaxe' || held.type === 'axe' || held.type === 'hammer' ? held.type
             : held.weapon === 'bow' ? 'bow' : held.weapon === 'sword' ? 'sword'
             : held.placeTile != null ? 'block' : 'sword');
+        // the axe icon is drawn blade-on-the-LEFT (opposite the pickaxe); pre-mirror the SPRITE so its
+        // blade points forward. Doing it on the sprite (not via scale(-1)) keeps the swing rotating the
+        // SAME way as the sword/pickaxe instead of spinning backwards.
+        const sprIt = held.type === 'axe' ? hflipSprite(rawSpr) : rawSpr;
         const isz = 22 * z;
         // mirror FIRST so "forward" == facing, then rotate: rest = held forward/down out of the
         // hand; swing = overhead → forward-down chop.
         const angle = swinging ? (-2.2 + prog * 3.0) : 0.85;
-        // the axe icon is drawn blade-on-the-LEFT (opposite the pickaxe), so it needs the reverse
-        // horizontal flip to point its blade FORWARD instead of behind the character.
-        const iconFlip = held.type === 'axe' ? -1 : 1;
         c.save();
         c.translate(handX, handY);
-        c.scale((player.facing > 0 ? 1 : -1) * iconFlip, 1);
+        c.scale(player.facing > 0 ? 1 : -1, 1);
         c.rotate(angle);
         c.imageSmoothingEnabled = false;
         // grip the icon near its handle so the head reaches OUT (forward) from the fist
