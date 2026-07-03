@@ -187,7 +187,7 @@ export function generateWorld(world, onProgress = () => {}) {
   const forestBand = mkRange(mid - bw, mid + bw);
   const gyL = mkRange(mid - 2 * bw, mid - bw), gyR = mkRange(mid + bw, mid + 2 * bw);
   const deL = mkRange(mid - 3 * bw, mid - 2 * bw), deR = mkRange(mid + 2 * bw, mid + 3 * bw);
-  const snL = mkRange(oceanW, mid - 3 * bw), snR = mkRange(mid + 3 * bw, w - oceanW);
+  const snL = mkRange(oceanW + 11, mid - 3 * bw), snR = mkRange(mid + 3 * bw, w - oceanW - 11);  // clear the ocean margin (spawner classifies ±(oceanW+10) as ocean)
   // each biome is a list of x-intervals (mirrored pairs); forest is the default gap between them
   world.biomes = { forest: [forestBand], graveyard: [gyL, gyR], desert: [deL, deR], snow: [snL, snR], oceanW };
   const inSeg = (x, s) => x >= s[0] && x < s[1];

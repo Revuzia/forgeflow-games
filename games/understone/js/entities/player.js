@@ -371,6 +371,11 @@ export class Player {
     // ---- consumables & boss summons (no tile target needed) --------------------
     if (held.use || held.boss) {
       if (this.swingTimer > 0) return;
+      // don't animate/consume a swing when the consumable would be a no-op (at cap / on cooldown)
+      if (held.use === 'heal' && (this.potionCd > 0 || this.hp >= this.hpMax)) return;
+      if (held.use === 'mana' && this.mana >= this.manaMax) return;
+      if (held.use === 'lifeCrystal' && this.hpMax >= 400) return;
+      if (held.use === 'manaCrystal' && this.manaMax >= 200) return;
       this.swingTimer = held.useTime ?? 30;
       this.swinging = held.useTime ?? 30;
       if (held.use === 'lifeCrystal' && this.hpMax < 400) {
@@ -483,8 +488,12 @@ export class Player {
     if (held.placeTile != null) {
       if (id !== T.air) return;
       if (!this.canPlaceAt(tx, ty, held.placeTile)) return;
-      // never place a solid block inside any entity (incl. self)
-      if (TILES[held.placeTile].solid && this.overlapsBox(tx * TILE, ty * TILE, TILE, TILE)) return;
+      // never place a solid block inside any entity (self, enemies, or NPCs)
+      if (TILES[held.placeTile].solid) {
+        const rx = tx * TILE, ry = ty * TILE;
+        const hits = (o) => o && !(o.x + o.w <= rx || o.x >= rx + TILE || o.y + o.h <= ry || o.y >= ry + TILE);
+        if (this.overlapsBox(rx, ry, TILE, TILE) || game.enemies?.some(hits) || game.npcs?.npcs?.some(hits)) return;
+      }
       this.swingTimer = held.useTime;
       this.swinging = held.useTime;
       world.setTile(tx, ty, held.placeTile);
@@ -497,6 +506,7 @@ export class Player {
       // wall anchoring: adjacent wall or block
       if (!this.hasWallAnchor(tx, ty)) return;
       this.swingTimer = held.useTime;
+      this.swinging = held.useTime;   // wall placement plays the same swing anim as block/torch
       world.setWall(tx, ty, held.placeWall);
       game.audio?.play('place', { volume: 0.6 });
       if (held.consume) held.consume();

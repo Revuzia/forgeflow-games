@@ -6,7 +6,7 @@
 
 import { TILE, LAYERS, WORLD_H } from '../config.js';
 import { isDay } from '../render/background.js';
-import { Enemy } from './enemy.js';
+import { Enemy, ENEMIES } from './enemy.js';
 import { T, WALLS } from '../world/world.js';
 
 const SPAWN_HALF_W = 84, SPAWN_HALF_H = 47;      // spawn rectangle around player (tiles)
@@ -164,7 +164,7 @@ export class Spawner {
       let type = this.pickType(band, game.tick, game.bloodMoon, ptx);
       // sky layer: harpies rule the heights
       if (ty < this.world.h * 0.08 && Math.random() < 0.7) type = 'harpy';
-      const def = ENEMY_SIZE[type] ?? { w: 20, h: 40 };
+      const def = ENEMIES[type] ?? { w: 20, h: 40 };   // single source of truth for hitbox size
       // swimmers spawn only in water
       if (type === 'piranha') {
         if (world.liquid[ty * world.w + tx] < 128 || world.liquidType[ty * world.w + tx] !== 0) continue;
@@ -207,20 +207,4 @@ export class Spawner {
   }
 }
 
-const ENEMY_SIZE = {
-  greenSlime: { w: 24, h: 18 }, blueSlime: { w: 24, h: 18 }, zombie: { w: 18, h: 40 },
-  demonEye: { w: 20, h: 20 }, skeleton: { w: 18, h: 40 }, caveBat: { w: 18, h: 14 },
-  giantWorm: { w: 14, h: 14 }, eaterOfSouls: { w: 24, h: 24 }, fireImp: { w: 18, h: 36 },
-  ghost: { w: 22, h: 32 }, mummy: { w: 18, h: 40 }, vulture: { w: 22, h: 22 },
-  antlion: { w: 26, h: 20 }, iceSlime: { w: 24, h: 18 }, iceWolf: { w: 34, h: 24 },
-  undeadViking: { w: 20, h: 40 }, harpy: { w: 24, h: 30 }, crab: { w: 26, h: 18 },
-  piranha: { w: 22, h: 14 }, goblinScout: { w: 16, h: 34 }, bloodZombie: { w: 18, h: 40 },
-  drippler: { w: 20, h: 20 }, cursedSkull: { w: 20, h: 22 }, hellbat: { w: 18, h: 14 },
-  lavaSlime: { w: 24, h: 18 }, demon: { w: 28, h: 44 }, boneSerpent: { w: 18, h: 18 },
-  hornet: { w: 22, h: 22 }, jungleSlime: { w: 24, h: 18 },
-  motherSlime: { w: 36, h: 26 }, babySlime: { w: 14, h: 10 }, sandSlime: { w: 24, h: 18 },
-  blackSlime: { w: 24, h: 18 }, pinky: { w: 12, h: 9 }, giantBat: { w: 26, h: 20 },
-  wanderingEye: { w: 28, h: 28 }, wraith: { w: 22, h: 34 }, devourer: { w: 16, h: 16 },
-  skeletonArcher: { w: 18, h: 40 }, spider: { w: 28, h: 18 }, graniteElemental: { w: 22, h: 42 },
-  snatcher: { w: 22, h: 22 },
-};
+// (enemy hitbox sizes now come straight from ENEMIES in enemy.js — one source of truth)

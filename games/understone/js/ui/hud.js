@@ -357,8 +357,8 @@ export class HUD {
     // main hand is a read-only mirror of the selected hotbar slot — press 1-0 to change it
     if (kind.hand === 'mainhand') { e.preventDefault(); return; }
     const stack = this.getSlot(kind);
-    // shift-click: quick actions (equip / sell / stash)
-    if (e.shiftKey && stack) { this.quickMove(kind, stack); return; }
+    // shift-click: quick actions (equip / sell / stash) — but not while carrying a cursor stack
+    if (e.shiftKey && stack && !this.cursorStack) { this.quickMove(kind, stack); return; }
     // right-click: pick up half (or place one from cursor)
     if (e.button === 2) { this.rightClick(kind); return; }
 
@@ -658,7 +658,7 @@ export class HUD {
     const rcColor = { 'r-uncommon': '#6de86d', 'r-rare': '#5ab4ff', 'r-epic': '#b968ff', 'r-legendary': '#ffb43c' }[rc] ?? '#e8e8f0';
     const lines = [];
     if (def.damage) lines.push(`${def.damage} damage${def.element ? ` · ${def.element}` : ''}`);
-    if (def.mana) lines.push(`${def.mana} mana`);
+    if (def.mana) lines.push(def.use === 'mana' ? `restores ${def.mana} mana` : `${def.mana} mana`);
     if (def.pickPower) lines.push(`${def.pickPower}% pickaxe power`);
     if (def.axePower) lines.push(`${def.axePower}% axe power`);
     if (def.hammerPower) lines.push(`${def.hammerPower}% hammer power`);

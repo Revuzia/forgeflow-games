@@ -182,6 +182,7 @@ export class Enemy {
     let dmg = Math.max(1, Math.floor(rawDmg * variance * eMult - Math.ceil(this.def.def / 2)));
     if (crit) dmg *= ROLLS.critMult;
     this.hp -= dmg;
+    if (this.def.ai === 'caster' && !this.def.stationary) this.hpDropped = true;   // casters blink away when hurt
     this.aggro = true; this.aggroTimer = 300;   // getting hit makes a wandering enemy chase
     this.lastElementMult = eMult;    // combat reads this for "weak/resist" feedback color
     // knockback scaled by resistance (1.0 = immune)

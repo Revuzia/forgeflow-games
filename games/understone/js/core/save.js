@@ -94,6 +94,7 @@ export function saveGame(game) {
     player: {
       x: player.px, y: player.py, hp: player.hp, hpMax: player.hpMax,
       mana: player.mana, manaMax: player.manaMax,
+      potionCd: player.potionCd, poisonTicks: player.poisonTicks,   // persist status timers (no reload-cheese of potion sickness)
     },
     inv: {
       slots: inventory.slots, armor: inventory.armor, accessories: inventory.accessories,
@@ -134,6 +135,7 @@ export function loadGame(game) {
   player.ppx = player.px; player.ppy = player.py;
   player.hp = data.player.hp; player.hpMax = data.player.hpMax;
   player.mana = data.player.mana; player.manaMax = data.player.manaMax;
+  player.potionCd = data.player.potionCd ?? 0; player.poisonTicks = data.player.poisonTicks ?? 0;
   player.fallStartTy = (player.py / 16) | 0;
   inventory.slots = data.inv.slots;
   inventory.armor = { head: null, chest: null, legs: null, feet: null, ...data.inv.armor };

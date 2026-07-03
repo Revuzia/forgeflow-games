@@ -779,10 +779,10 @@ async function boot() {
     c.fillStyle = 'rgba(60,0,0,0.35)';
     c.fillRect(0, 0, g.canvas.width, g.canvas.height);
     c.fillStyle = '#f0d0d0';
-    c.font = `bold ${28 * (window.devicePixelRatio || 1)}px 'Segoe UI', sans-serif`;
+    c.font = `bold ${28 * Math.min(window.devicePixelRatio || 1, 2)}px 'Segoe UI', sans-serif`;   // cap matches the canvas backing store
     c.textAlign = 'center';
     c.fillText('You were slain…', g.canvas.width / 2, g.canvas.height / 2 - 20);
-    c.font = `${16 * (window.devicePixelRatio || 1)}px 'Segoe UI', sans-serif`;
+    c.font = `${16 * Math.min(window.devicePixelRatio || 1, 2)}px 'Segoe UI', sans-serif`;   // cap matches the canvas backing store
     c.fillText(`Respawning in ${Math.ceil(player.respawnTimer / 60)}…`, g.canvas.width / 2, g.canvas.height / 2 + 16);
     c.textAlign = 'left';
   });

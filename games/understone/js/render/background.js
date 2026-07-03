@@ -79,7 +79,8 @@ export class Background {
     let bgName = 'hills';
     {
       const b = this.world.biomes;
-      const camTx = this.camera.x / TILE;
+      const camX = this.camera.px + (this.camera.x - this.camera.px) * alpha;   // interpolated, matches the scrolling world
+      const camTx = camX / TILE;
       if (b) {
         // tolerant of interval-pairs (current) and legacy single ranges
         const inR = (r) => r && (typeof r[0] === 'number' ? (camTx >= r[0] && camTx <= r[1]) : r.some((s) => camTx >= s[0] && camTx <= s[1]));
@@ -94,7 +95,7 @@ export class Background {
     }
     const hills = this.assets?.bg?.[bgName] ?? this.assets?.bg?.hills;
     if (hills && depth < 0.6) {
-      const [ox] = this.camera.frameOrigin(1);
+      const [ox] = this.camera.frameOrigin(alpha);
       const horizonY = h * (0.62 - depth * 0.5);
       ctx.globalAlpha = (1 - depth) * 0.9;
       for (const [ratio, scale, tint] of [[0.07, 0.55, 0.35], [0.18, 0.8, 0]]) {

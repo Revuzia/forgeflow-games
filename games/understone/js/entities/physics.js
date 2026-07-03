@@ -35,7 +35,7 @@ export function tileCollision(world, px, py, vx, vy, w, h, fallThrough = false, 
 
       if (py + h <= tileY) {
         // ---- came from above: landing
-        if (platform && fallThrough && (vy <= 1 || ignorePlats)) continue;
+        if (platform && (fallThrough || ignorePlats)) continue;   // holding Down drops through at ANY fall speed
         if (tileY < bestFloorY) {
           bestFloorY = tileY;
           vCol = tx; vRow = ty;
