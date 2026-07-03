@@ -344,8 +344,9 @@ export function summonBossFactory(game) {
     if (bossId === 'queenBee') {
       if (game.enemies.some(e => e.boss)) return false;
       const ptx = p.x / 16;
-      const j = game.world.biomes?.jungle;
-      if (!j || ptx < j[0] || ptx > j[1]) { game.announce?.('The abeemination hums only within the jungle…'); return false; }
+      const d = game.world.biomes?.desert ?? game.world.biomes?.jungle;   // wasps live in the desert now (legacy: jungle)
+      const inHive = d && (typeof d[0] === 'number' ? (ptx >= d[0] && ptx <= d[1]) : d.some((s) => ptx >= s[0] && ptx <= s[1]));
+      if (!inHive) { game.announce?.('The abeemination hums only in the desert wastes…'); return false; }
       game.enemies.push(new QueenBee(p.x + 15 * TILE, p.py - 12 * TILE));
       game.announce?.('Queen Bee has awoken!');
       return true;

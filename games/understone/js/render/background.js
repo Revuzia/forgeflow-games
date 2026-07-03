@@ -81,12 +81,15 @@ export class Background {
       const b = this.world.biomes;
       const camTx = this.camera.x / TILE;
       if (b) {
+        // tolerant of interval-pairs (current) and legacy single ranges
+        const inR = (r) => r && (typeof r[0] === 'number' ? (camTx >= r[0] && camTx <= r[1]) : r.some((s) => camTx >= s[0] && camTx <= s[1]));
         const inC = (this.world.corruption ?? []).some(([a, bb]) => camTx >= a && camTx <= bb);
         if (inC) bgName = 'corruption';
         else if (camTx <= (b.oceanW ?? 0) + 10 || camTx >= this.world.w - (b.oceanW ?? 0) - 10) bgName = 'ocean';
-        else if (camTx >= b.desert[0] && camTx <= b.desert[1]) bgName = 'desert';
-        else if (camTx >= b.snow[0] && camTx <= b.snow[1]) bgName = 'snow';
-        else if (b.jungle && camTx >= b.jungle[0] && camTx <= b.jungle[1]) bgName = 'jungle';
+        else if (inR(b.snow)) bgName = 'snow';
+        else if (inR(b.desert)) bgName = 'desert';
+        else if (inR(b.graveyard)) bgName = 'corruption';   // spooky backdrop (no dedicated graveyard art yet)
+        else if (inR(b.jungle)) bgName = 'jungle';           // legacy saves only
       }
     }
     const hills = this.assets?.bg?.[bgName] ?? this.assets?.bg?.hills;

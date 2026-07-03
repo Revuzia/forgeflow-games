@@ -177,40 +177,47 @@ export function generateWorld(world, onProgress = () => {}) {
 
   // --- 5. biomes ----------------------------------------------------------------
   onProgress(0.6, 'Painting biomes…');
-  // Biome layout is spawn-safe: the player spawns at world center (0.5) and we keep a WIDE forest
-  // buffer around it — the nearest biome edge is ≥0.12·w (~250 tiles ≈ 6 screens) away, so a fresh
-  // character explores forest for several screens before stumbling into anything dangerous (the
-  // jungle/hornets especially). Each biome is ≥0.14·w (~294 tiles ≈ 7 screens) wide.
-  // desert strip on one far side, snow on the other; jungle sits between the near forest buffer and
-  // the desert on the same side (still ≥6 screens from spawn).
-  const desertLeft = rand() < 0.5;
-  const desertX0 = desertLeft ? w * 0.06 : w * 0.80;
-  const desertX1 = desertX0 + w * 0.14;
-  const snowX0 = desertLeft ? w * 0.80 : w * 0.06;
-  const snowX1 = snowX0 + w * 0.16;
-  const jungleX0 = desertLeft ? w * 0.24 : w * 0.62;   // inner edge ≥0.12·w from spawn(0.5); away from desert/snow
-  const jungleX1 = jungleX0 + w * 0.14;
-  world.biomes = { desert: [desertX0 | 0, desertX1 | 0], snow: [snowX0 | 0, snowX1 | 0], jungle: [jungleX0 | 0, jungleX1 | 0], oceanW };
+  // Difficulty RING around the central spawn (spawnX = mid). Forest (easy) hugs the spawn; going out
+  // in EITHER direction you cross graveyard → desert → snow (hardest), MIRRORED on both sides so
+  // exploring either way ramps up the same. Each band is ~1/4 of the half-world (~6 screens), and the
+  // spawn keeps a full forest band of buffer before anything dangerous. Enemies are biome-gated in the
+  // spawner (see pickType): forest = slimes only, graveyard = undead, desert = wasps, snow = worst.
+  const bw = Math.floor((mid - oceanW) / 4);           // band width in tiles (~233)
+  const mkRange = (a, b) => [Math.max(0, a) | 0, b | 0];
+  const forestBand = mkRange(mid - bw, mid + bw);
+  const gyL = mkRange(mid - 2 * bw, mid - bw), gyR = mkRange(mid + bw, mid + 2 * bw);
+  const deL = mkRange(mid - 3 * bw, mid - 2 * bw), deR = mkRange(mid + 2 * bw, mid + 3 * bw);
+  const snL = mkRange(oceanW, mid - 3 * bw), snR = mkRange(mid + 3 * bw, w - oceanW);
+  // each biome is a list of x-intervals (mirrored pairs); forest is the default gap between them
+  world.biomes = { forest: [forestBand], graveyard: [gyL, gyR], desert: [deL, deR], snow: [snL, snR], oceanW };
+  const inSeg = (x, s) => x >= s[0] && x < s[1];
   for (let x = 0; x < w; x++) {
-    const inDesert = x >= desertX0 && x < desertX1;
-    const inSnow = x >= snowX0 && x < snowX1;
-    const inJungle = x >= jungleX0 && x < jungleX1;
-    if (!inDesert && !inSnow && !inJungle) continue;
-    const depthLimit = stoneLine + h * (inJungle ? 0.1 : 0.06) + noise[x] * 0.3;
+    const inDesert = inSeg(x, deL) || inSeg(x, deR);
+    const inSnow = inSeg(x, snL) || inSeg(x, snR);
+    const inGrave = inSeg(x, gyL) || inSeg(x, gyR);
+    if (!inDesert && !inSnow && !inGrave) continue;
+    const depthLimit = stoneLine + h * 0.06 + noise[x] * 0.3;
     for (let y = surface[x]; y < depthLimit; y++) {
       const cur = get(x, y);
       if (inDesert) {
-        if (cur === T.dirt) set(x, y, T.sand);
+        if (cur === T.dirt || cur === T.grass) set(x, y, T.sand);
         else if (cur === T.stone && rand() < 0.7) set(x, y, T.sand);
       } else if (inSnow) {
-        if (cur === T.dirt) set(x, y, T.snow);
+        if (cur === T.dirt || cur === T.grass) set(x, y, T.snow);
         else if (cur === T.stone) set(x, y, T.ice);
-      } else if (inJungle) {
-        if (cur === T.dirt) set(x, y, T.mud);
-        else if (cur === T.stone && rand() < 0.4) set(x, y, T.mud);
+      } else if (inGrave) {                              // graveyard: barren gray ash ground
+        if (cur === T.dirt || cur === T.grass) set(x, y, T.ash);
+        else if (cur === T.stone && rand() < 0.4) set(x, y, T.ash);
       }
     }
-    if (inJungle && get(x, surface[x]) === T.mud) set(x, surface[x], T.jungleGrass);
+  }
+  // graveyard atmosphere: sparse cobwebs strung through the shallow ground
+  for (const s of [gyL, gyR]) {
+    for (let x = s[0]; x < s[1]; x++) {
+      for (let y = surface[x]; y < surface[x] + 22 && y < h; y++) {
+        if (get(x, y) === T.air && rand() < 0.02) set(x, y, T.cobweb);
+      }
+    }
   }
 
   // corruption: 1-2 strips (research 02: 200-600 wide, never near center), evil purple

@@ -42,14 +42,23 @@ export class Spawner {
     return (this.world.corruption ?? []).some(([a, b]) => tx >= a && tx <= b);
   }
 
+  // membership test tolerant of both the current shape (list of [x0,x1] intervals, possibly
+  // mirrored pairs) and legacy saves (a single [x0,x1] range).
+  inRanges(r, tx) {
+    if (!r) return false;
+    if (typeof r[0] === 'number') return tx >= r[0] && tx <= r[1];
+    return r.some((s) => tx >= s[0] && tx <= s[1]);
+  }
+
   biomeAt(tx) {
     const b = this.world.biomes;
     if (!b) return 'forest';
     if (this.inCorruption(tx)) return 'corruption';
     if (tx <= b.oceanW + 10 || tx >= this.world.w - b.oceanW - 10) return 'ocean';
-    if (tx >= b.desert[0] && tx <= b.desert[1]) return 'desert';
-    if (tx >= b.snow[0] && tx <= b.snow[1]) return 'snow';
-    if (b.jungle && tx >= b.jungle[0] && tx <= b.jungle[1]) return 'jungle';
+    if (this.inRanges(b.snow, tx)) return 'snow';
+    if (this.inRanges(b.desert, tx)) return 'desert';
+    if (this.inRanges(b.graveyard, tx)) return 'graveyard';
+    if (this.inRanges(b.jungle, tx)) return 'jungle';   // legacy saves only
     return 'forest';
   }
 
@@ -63,24 +72,26 @@ export class Spawner {
       if (bloodMoon) return roll < 0.45 ? 'bloodZombie' : roll < 0.7 ? 'drippler' : roll < 0.9 ? 'zombie' : 'demonEye';
       if (biome === 'corruption') return roll < 0.75 ? 'eaterOfSouls' : 'zombie';
       if (biome === 'ocean') return roll < 0.6 ? 'crab' : 'piranha';
-      if (biome === 'desert') {
-        if (day) return roll < 0.4 ? 'vulture' : roll < 0.7 ? 'antlion' : 'sandSlime';
-        return roll < 0.55 ? 'mummy' : roll < 0.85 ? 'zombie' : 'demonEye';
+      // ---- difficulty ring: forest (easy) → graveyard → desert → snow (hardest) ----
+      if (biome === 'graveyard') {           // tier 2 — the undead: ghosts, zombies, skeletons
+        if (day) return roll < 0.4 ? 'zombie' : roll < 0.72 ? 'skeleton' : roll < 0.9 ? 'demonEye' : 'ghost';
+        return roll < 0.34 ? 'ghost' : roll < 0.6 ? 'skeleton' : roll < 0.85 ? 'zombie' : 'wraith';
       }
-      if (biome === 'snow') {
-        if (day) return roll < 0.55 ? 'iceSlime' : 'iceWolf';
-        return roll < 0.4 ? 'undeadViking' : roll < 0.7 ? 'iceWolf' : 'zombie';
+      if (biome === 'desert') {              // tier 3 — wasps (hornets) + tougher desert mobs
+        if (day) return roll < 0.35 ? 'hornet' : roll < 0.6 ? 'antlion' : roll < 0.8 ? 'vulture' : 'sandSlime';
+        return roll < 0.3 ? 'hornet' : roll < 0.55 ? 'mummy' : roll < 0.8 ? 'vulture' : 'demonEye';
       }
-      if (biome === 'jungle') {
-        if (day) return roll < 0.55 ? 'hornet' : 'jungleSlime';
-        return roll < 0.45 ? 'hornet' : roll < 0.8 ? 'zombie' : 'jungleSlime';
+      if (biome === 'snow') {                // tier 4 — the hardest: vikings, ice wolves, archers, wraiths
+        if (day) return roll < 0.35 ? 'iceWolf' : roll < 0.6 ? 'undeadViking' : roll < 0.82 ? 'skeletonArcher' : 'iceSlime';
+        return roll < 0.3 ? 'undeadViking' : roll < 0.55 ? 'iceWolf' : roll < 0.8 ? 'wraith' : 'skeletonArcher';
       }
-      // forest
-      if (day) return roll < 0.68 ? 'greenSlime' : roll < 0.95 ? 'blueSlime' : 'pinky';
-      if (roll < 0.45) return 'zombie';
-      if (roll < 0.68) return 'demonEye';
-      if (roll < 0.8) return 'wanderingEye';
-      return roll < 0.88 ? 'ghost' : roll < 0.96 ? 'goblinScout' : 'wraith';
+      // tier 1 — forest (spawn): EASY. Slimes by day; nights stay gentle (slimes + a few weak eyes /
+      // a lone zombie). No ghosts, wraiths, or hornets anywhere near spawn.
+      if (day) return roll < 0.5 ? 'greenSlime' : roll < 0.8 ? 'blueSlime' : roll < 0.94 ? 'jungleSlime' : 'pinky';
+      if (roll < 0.42) return 'greenSlime';
+      if (roll < 0.68) return 'blueSlime';
+      if (roll < 0.85) return 'demonEye';
+      return 'zombie';
     }
     if (band === 'underground') {
       if (biome === 'snow') return roll < 0.5 ? 'iceSlime' : roll < 0.8 ? 'caveBat' : 'undeadViking';
