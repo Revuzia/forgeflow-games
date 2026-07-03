@@ -170,6 +170,8 @@ async function boot() {
     }
     if (!npcs.npcs.some(n => n.type === 'guide')) npcs.spawnGuide();
   } else {
+    // fresh world: clear any prior save so autosave/Continue reflect THIS world, not a stale one
+    saveMod.deleteSave();
     generateWorld(world, () => {});
     chests.seedWorldLoot();
     player.respawn();
@@ -435,11 +437,21 @@ async function boot() {
     game.settings.screenShake = SETTINGS.screenShake !== false;
     game.settings.smoothLighting = SETTINGS.smoothLighting !== false;
     if (game.lighting) game.lighting.smooth = game.settings.smoothLighting;
-    if (camera._baseZoom == null) camera._baseZoom = camera.zoom;
-    camera.zoom = camera._baseZoom * (SETTINGS.zoom ?? 1);
     fpsEl.style.display = SETTINGS.showFps ? 'block' : 'none';
   };
   applyAudio(); applyVideo();
+  // ---- mouse-wheel zoom (replaces the old Video › Zoom slider) --------------------
+  // Scroll over the canvas to zoom in/out; the player stays centered (follow-camera),
+  // and the chosen level is remembered across reloads.
+  const ZOOM_KEY = 'understone.zoom.v1';
+  const MIN_ZOOM = 1.2, MAX_ZOOM = 6.0;
+  const clampZoom = (z) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
+  { const saved = parseFloat(localStorage.getItem(ZOOM_KEY)); if (saved > 0) camera.zoom = clampZoom(saved); }
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    camera.zoom = clampZoom(camera.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12));
+    try { localStorage.setItem(ZOOM_KEY, camera.zoom.toFixed(3)); } catch (_) { /* ignore */ }
+  }, { passive: false });
   const sliderRow = (id, label, min = 0, max = 100) => `<label style="display:flex;align-items:center;gap:10px;color:#c8d0e8;font-size:13px;margin-bottom:8px">${label}<input id="us-s-${id}" type="range" min="${min}" max="${max}" style="flex:1"><span id="us-s-${id}-v" style="width:38px;text-align:right;color:#9aa3c0"></span></label>`;
   const cat = (t) => `<div style="color:#d9b98a;font:700 10px 'Segoe UI';letter-spacing:1.5px;text-transform:uppercase;margin:12px 0 8px">${t}</div>`;
   pauseEl.innerHTML = `<div style="text-align:center;min-width:360px;max-height:94vh;overflow:auto;padding:4px">
@@ -447,7 +459,7 @@ async function boot() {
     <div id="us-resume" class="us-menu-btn">Resume</div>
     <div style="margin:14px auto 6px;padding:14px 16px;background:rgba(20,24,40,.6);border:1px solid #3a415c;border-radius:10px;width:334px;text-align:left">
       ${cat('Audio')}${sliderRow('master', 'Master')}${sliderRow('music', 'Music')}${sliderRow('sfx', 'Sound')}
-      ${cat('Video')}${sliderRow('zoom', 'Zoom', 60, 160)}
+      ${cat('Video')}
       <div id="us-toggles"></div>
       <div id="us-fullscreen" class="us-menu-btn" style="margin:6px 0 2px;font-size:12px;padding:5px 10px">Toggle Fullscreen</div>
       ${cat('Controls')}
@@ -455,7 +467,7 @@ async function boot() {
         Move — <b>A</b> / <b>D</b> &nbsp;·&nbsp; Jump — <b>Space</b> (hold = higher)<br>
         Mine / Use — <b>Left-click</b> &nbsp;·&nbsp; Interact — <b>Right-click</b><br>
         Inventory — <b>I</b> / <b>E</b> &nbsp;·&nbsp; Crafting — <b>C</b> &nbsp;·&nbsp; Hotbar — <b>1–0</b><br>
-        Debug (X/Y/FPS) — <b>F3</b> &nbsp;·&nbsp; Pause / Menu — <b>Esc</b>
+        Zoom — <b>Mouse wheel</b> &nbsp;·&nbsp; Debug (X/Y/FPS) — <b>F3</b> &nbsp;·&nbsp; Pause / Menu — <b>Esc</b>
       </div>
       <div id="us-reset" class="us-menu-btn" style="margin-top:10px;font-size:12px;padding:5px 10px;color:#e0a0a0">Reset to Defaults</div>
     </div>
@@ -475,7 +487,7 @@ async function boot() {
     if (hud.open) { hud.toggle(false); return; }
     setPaused(!game.paused);
   });
-  // ---- wire sliders (value 0-100 -> 0..1, zoom 60-160 -> 0.6..1.6) ----
+  // ---- wire sliders (value 0-100 -> 0..1, zoom 60-260 -> 0.6..2.6× base) ----
   const wireSlider = (id, key, def, apply, sound) => {
     const el = pauseEl.querySelector(`#us-s-${id}`), vEl = pauseEl.querySelector(`#us-s-${id}-v`);
     el.value = Math.round((SETTINGS[key] ?? def) * 100);
@@ -486,7 +498,6 @@ async function boot() {
   wireSlider('master', 'master', 1, applyAudio);
   wireSlider('music', 'music', 0.35, applyAudio);
   wireSlider('sfx', 'sfx', 0.7, applyAudio, true);
-  wireSlider('zoom', 'zoom', 1, applyVideo);
   // ---- wire on/off toggles ----
   const tc = pauseEl.querySelector('#us-toggles');
   for (const [key, label, def] of [['screenShake', 'Screen Shake', true], ['smoothLighting', 'Smooth Lighting', true], ['showFps', 'Show FPS', false]]) {
@@ -800,14 +811,86 @@ function showTitle(canContinue) {
       <div style="color:#8a93b0;margin-bottom:34px;font-size:14px">dig · build · craft · survive</div>
       <div class="us-menu-btn" id="us-new">New World</div>
       <div class="us-menu-btn ${canContinue ? '' : 'disabled'}" id="us-continue">Continue</div>
-      <div style="color:#5a6280;font-size:12px;margin-top:30px;max-width:420px;text-align:center;line-height:1.7">
-        A/D move · Space jump (hold for height) · Mouse aim + Left-click use · Right-click interact<br>
-        E inventory · 1-0 hotbar · Esc pause · Craft near stations · Beware the night.
-      </div>`;
+      <div class="us-menu-btn" id="us-title-settings" style="font-size:15px;min-width:220px">Settings</div>
+      <div class="us-menu-btn" id="us-title-credits" style="font-size:15px;min-width:220px">Credits</div>`;
     document.body.appendChild(el);
-    el.querySelector('#us-new').onclick = () => { el.remove(); resolve('new'); };
+    el.querySelector('#us-new').onclick = () => {
+      // no save → just start; save exists → confirm before replacing it (single world slot)
+      if (!canContinue) { el.remove(); resolve('new'); return; }
+      const box = document.createElement('div');
+      box.style.cssText = `position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+        justify-content:center;background:rgba(6,9,16,.92);z-index:120;font-family:'Segoe UI',sans-serif`;
+      box.innerHTML = `<div style="color:#e8d9a0;font-size:20px;margin-bottom:8px">Start a new world?</div>
+        <div style="color:#9aa3c0;font-size:13px;max-width:360px;text-align:center;margin-bottom:22px;line-height:1.6">
+          This replaces your current saved world. Choose <b>Continue</b> instead to keep playing the existing one.</div>`;
+      const yes = document.createElement('div'); yes.className = 'us-menu-btn';
+      yes.textContent = 'Replace & Start New'; yes.style.borderColor = '#e0a0a0'; yes.style.color = '#e0a0a0';
+      const no = document.createElement('div'); no.className = 'us-menu-btn'; no.textContent = 'Cancel';
+      box.append(yes, no); el.appendChild(box);
+      no.onclick = () => box.remove();
+      yes.onclick = () => { el.remove(); resolve('new'); };
+    };
     el.querySelector('#us-continue').onclick = () => { el.remove(); resolve('continue'); };
+    el.querySelector('#us-title-settings').onclick = () => openTitleOverlay('settings');
+    el.querySelector('#us-title-credits').onclick = () => openTitleOverlay('credits');
   });
+}
+
+// Standalone Settings / Credits overlay usable BEFORE the game boots (edits the same persisted
+// settings; audio/video prefs apply when you start playing). Keeps the title screen "complete".
+function openTitleOverlay(kind) {
+  const KEY = 'understone.settings.v1';
+  const S = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (_) { return {}; } })();
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (_) { /* ignore */ } };
+  const ov = document.createElement('div');
+  ov.style.cssText = `position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(6,9,16,.82);z-index:110;font-family:'Segoe UI',sans-serif;`;
+  const slider = (id, label, min, max) => `<label style="display:flex;align-items:center;gap:10px;color:#c8d0e8;font-size:13px;margin-bottom:8px">${label}<input id="s-${id}" type="range" min="${min}" max="${max}" style="flex:1"><span id="s-${id}-v" style="width:38px;text-align:right;color:#9aa3c0"></span></label>`;
+  const cat = (t) => `<div style="color:#d9b98a;font:700 10px 'Segoe UI';letter-spacing:1.5px;text-transform:uppercase;margin:12px 0 8px">${t}</div>`;
+  if (kind === 'credits') {
+    ov.innerHTML = `<div style="width:400px;max-width:92vw;padding:24px;background:rgba(18,22,38,.96);border:1px solid #3a415c;border-radius:12px;text-align:center;color:#c8d0e8">
+      <h2 style="color:#e8d9a0;letter-spacing:6px;margin:0 0 16px">UNDERSTONE</h2>
+      <div style="font-size:13px;line-height:1.9">A 2D dig-build-craft-survive sandbox in the Terraria tradition.<br>
+      Built by Forge Flow Labs.<br>Pixel art via PixelLab · Engine: vanilla JS.<br>
+      <span style="color:#7480a0">Mine deep, build tall, beware the night.</span></div>
+      <div class="us-menu-btn" id="ov-close" style="margin:18px auto 0;min-width:120px;font-size:14px">Back</div></div>`;
+  } else {
+    ov.innerHTML = `<div style="width:380px;max-width:94vw;max-height:92vh;overflow:auto;padding:20px;background:rgba(18,22,38,.96);border:1px solid #3a415c;border-radius:12px;text-align:left">
+      <h2 style="color:#e8d9a0;letter-spacing:5px;margin:0 0 4px;text-align:center">SETTINGS</h2>
+      <div style="color:#7480a0;font-size:11px;text-align:center;margin-bottom:12px">applied when you start playing</div>
+      ${cat('Audio')}${slider('master', 'Master', 0, 100)}${slider('music', 'Music', 0, 100)}${slider('sfx', 'Sound', 0, 100)}
+      ${cat('Video')}<div id="ov-toggles"></div>
+      ${cat('Controls')}<div style="color:#9aa3c0;font-size:11.5px;line-height:1.85">
+        Move — <b>A</b>/<b>D</b> · Jump — <b>Space</b> (hold = higher)<br>
+        Mine/Use — <b>Left-click</b> · Interact — <b>Right-click</b><br>
+        Inventory — <b>I</b>/<b>E</b> · Crafting — <b>C</b> · Hotbar — <b>1–0</b><br>
+        Zoom — <b>Mouse wheel</b> · Debug — <b>F3</b> · Pause/Menu — <b>Esc</b></div>
+      <div class="us-menu-btn" id="ov-close" style="margin:16px auto 0;min-width:120px;font-size:14px">Back</div></div>`;
+  }
+  document.body.appendChild(ov);
+  ov.querySelector('#ov-close').onclick = () => ov.remove();
+  if (kind === 'settings') {
+    const wire = (id, key, def) => {
+      const el = ov.querySelector(`#s-${id}`), v = ov.querySelector(`#s-${id}-v`);
+      el.value = Math.round((S[key] ?? def) * 100);
+      const sync = () => { v.textContent = `${el.value}%`; };
+      sync();
+      el.addEventListener('input', () => { S[key] = +el.value / 100; save(); sync(); });
+    };
+    wire('master', 'master', 1); wire('music', 'music', 0.35); wire('sfx', 'sfx', 0.7);
+    const tc = ov.querySelector('#ov-toggles');
+    for (const [key, label, def] of [['screenShake', 'Screen Shake', true], ['smoothLighting', 'Smooth Lighting', true], ['showFps', 'Show FPS', false]]) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;color:#c8d0e8;font-size:13px;margin-bottom:8px';
+      const sp = document.createElement('span'); sp.textContent = label;
+      const b = document.createElement('div'); b.className = 'us-menu-btn';
+      b.style.cssText = 'font-size:12px;padding:3px 14px;margin:0;min-width:46px;text-align:center';
+      const val = () => S[key] ?? def;
+      const r = () => { b.textContent = val() ? 'On' : 'Off'; b.style.color = val() ? '#8ad48a' : '#9aa3c0'; };
+      r(); b.onclick = () => { S[key] = !val(); save(); r(); };
+      row.append(sp, b); tc.appendChild(row);
+    }
+  }
 }
 
 boot();
