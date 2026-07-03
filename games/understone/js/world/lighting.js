@@ -184,7 +184,7 @@ export class Lighting {
     const z = camera.zoom;
     ctx.save();
     ctx.globalCompositeOperation = 'multiply';
-    ctx.imageSmoothingEnabled = true; // bilinear upscale = smooth lighting
+    ctx.imageSmoothingEnabled = this.smooth !== false; // bilinear = smooth; off = crisp/retro (Settings › Video)
     ctx.drawImage(
       this.canvas,
       (this.rx * TILE - ox) * z, (this.ry * TILE - oy) * z,

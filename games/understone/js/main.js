@@ -288,7 +288,7 @@ async function boot() {
     }
   });
   game.renderers.push((g, alpha) => {
-    const [sx, sy] = fx.shakeOffset();
+    const [sx, sy] = game.settings?.screenShake === false ? [0, 0] : fx.shakeOffset();
     camera.shakeX = sx; camera.shakeY = sy;
   });
 
@@ -419,29 +419,52 @@ async function boot() {
   // load persisted settings
   const SETTINGS = (() => { try { return JSON.parse(localStorage.getItem('understone.settings.v1')) || {}; } catch (_) { return {}; } })();
   const saveSettings = () => { try { localStorage.setItem('understone.settings.v1', JSON.stringify(SETTINGS)); } catch (_) { /* ignore */ } };
+  game.settings = game.settings || {};
+  // toggleable on-screen FPS counter (separate from the F3 debug panel)
+  const fpsEl = document.createElement('div');
+  fpsEl.style.cssText = `position:fixed;top:40px;left:12px;z-index:69;pointer-events:none;font:600 12px monospace;color:#8fd0ff;text-shadow:0 1px 2px #000;display:none;`;
+  document.body.appendChild(fpsEl);
+  game.renderers.push((g) => { if (fpsEl.style.display !== 'none') fpsEl.textContent = 'FPS ' + g.fps; });
   const applyAudio = () => {
-    if (SETTINGS.music != null) { audio.musicVolume = SETTINGS.music; if (audio.musicGain) audio.musicGain.gain.value = SETTINGS.music; }
-    if (SETTINGS.sfx != null) { audio.sfxVolume = SETTINGS.sfx; if (audio.sfxGain) audio.sfxGain.gain.value = SETTINGS.sfx; }
+    const m = SETTINGS.master ?? 1;
+    const music = (SETTINGS.music ?? 0.35) * m, sfx = (SETTINGS.sfx ?? 0.7) * m;
+    audio.musicVolume = music; if (audio.musicGain) audio.musicGain.gain.value = music;
+    audio.sfxVolume = sfx; if (audio.sfxGain) audio.sfxGain.gain.value = sfx;
   };
-  applyAudio();
-  pauseEl.innerHTML = `<div style="text-align:center;min-width:340px">
-    <h2 style="color:#e8d9a0;letter-spacing:6px;margin-bottom:20px">PAUSED</h2>
+  const applyVideo = () => {
+    game.settings.screenShake = SETTINGS.screenShake !== false;
+    game.settings.smoothLighting = SETTINGS.smoothLighting !== false;
+    if (game.lighting) game.lighting.smooth = game.settings.smoothLighting;
+    if (camera._baseZoom == null) camera._baseZoom = camera.zoom;
+    camera.zoom = camera._baseZoom * (SETTINGS.zoom ?? 1);
+    fpsEl.style.display = SETTINGS.showFps ? 'block' : 'none';
+  };
+  applyAudio(); applyVideo();
+  const sliderRow = (id, label, min = 0, max = 100) => `<label style="display:flex;align-items:center;gap:10px;color:#c8d0e8;font-size:13px;margin-bottom:8px">${label}<input id="us-s-${id}" type="range" min="${min}" max="${max}" style="flex:1"><span id="us-s-${id}-v" style="width:38px;text-align:right;color:#9aa3c0"></span></label>`;
+  const cat = (t) => `<div style="color:#d9b98a;font:700 10px 'Segoe UI';letter-spacing:1.5px;text-transform:uppercase;margin:12px 0 8px">${t}</div>`;
+  pauseEl.innerHTML = `<div style="text-align:center;min-width:360px;max-height:94vh;overflow:auto;padding:4px">
+    <h2 style="color:#e8d9a0;letter-spacing:6px;margin:6px 0 14px">PAUSED</h2>
     <div id="us-resume" class="us-menu-btn">Resume</div>
-    <div style="margin:18px auto 6px;padding:14px 18px;background:rgba(20,24,40,.6);border:1px solid #3a415c;border-radius:10px;width:300px;text-align:left">
-      <div style="color:#d9b98a;font:700 11px 'Segoe UI';letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">Settings</div>
-      <label style="display:flex;align-items:center;gap:10px;color:#c8d0e8;font-size:13px;margin-bottom:9px">Music <input id="us-vol-music" type="range" min="0" max="100" style="flex:1"><span id="us-vol-music-v" style="width:32px;text-align:right;color:#9aa3c0"></span></label>
-      <label style="display:flex;align-items:center;gap:10px;color:#c8d0e8;font-size:13px;margin-bottom:9px">Sound <input id="us-vol-sfx" type="range" min="0" max="100" style="flex:1"><span id="us-vol-sfx-v" style="width:32px;text-align:right;color:#9aa3c0"></span></label>
-      <div id="us-fullscreen" class="us-menu-btn" style="margin:8px auto 4px;font-size:13px;padding:6px 10px">Toggle Fullscreen</div>
-      <div style="color:#7480a0;font-size:11px;margin-top:8px;line-height:1.6">F3 debug info · I inventory · C crafting · 1-0 hotbar · Esc pause</div>
+    <div style="margin:14px auto 6px;padding:14px 16px;background:rgba(20,24,40,.6);border:1px solid #3a415c;border-radius:10px;width:334px;text-align:left">
+      ${cat('Audio')}${sliderRow('master', 'Master')}${sliderRow('music', 'Music')}${sliderRow('sfx', 'Sound')}
+      ${cat('Video')}${sliderRow('zoom', 'Zoom', 60, 160)}
+      <div id="us-toggles"></div>
+      <div id="us-fullscreen" class="us-menu-btn" style="margin:6px 0 2px;font-size:12px;padding:5px 10px">Toggle Fullscreen</div>
+      ${cat('Controls')}
+      <div style="color:#9aa3c0;font-size:11.5px;line-height:1.85">
+        Move — <b>A</b> / <b>D</b> &nbsp;·&nbsp; Jump — <b>Space</b> (hold = higher)<br>
+        Mine / Use — <b>Left-click</b> &nbsp;·&nbsp; Interact — <b>Right-click</b><br>
+        Inventory — <b>I</b> / <b>E</b> &nbsp;·&nbsp; Crafting — <b>C</b> &nbsp;·&nbsp; Hotbar — <b>1–0</b><br>
+        Debug (X/Y/FPS) — <b>F3</b> &nbsp;·&nbsp; Pause / Menu — <b>Esc</b>
+      </div>
+      <div id="us-reset" class="us-menu-btn" style="margin-top:10px;font-size:12px;padding:5px 10px;color:#e0a0a0">Reset to Defaults</div>
     </div>
     <div id="us-save" class="us-menu-btn">Save World</div>
     <div id="us-savequit" class="us-menu-btn">Save &amp; Quit to Title</div>
     <div id="us-savemsg" style="color:#8ac88a;font-size:13px;margin-top:10px;height:16px"></div>
   </div>`;
   document.body.appendChild(pauseEl);
-  // make the pause panel actually clickable (the global "#hud * {pointer-events:none}" doesn't
-  // apply here since pauseEl is outside #hud, but be explicit anyway).
-  pauseEl.style.pointerEvents = 'auto';
+  pauseEl.style.pointerEvents = 'auto';   // panel is outside #hud, keep it clickable
   const setPaused = (on) => {
     game.paused = on;
     pauseEl.style.display = on ? 'flex' : 'none';
@@ -452,19 +475,37 @@ async function boot() {
     if (hud.open) { hud.toggle(false); return; }
     setPaused(!game.paused);
   });
-  // ---- settings controls ----
-  const volMusic = pauseEl.querySelector('#us-vol-music'), volSfx = pauseEl.querySelector('#us-vol-sfx');
-  const volMusicV = pauseEl.querySelector('#us-vol-music-v'), volSfxV = pauseEl.querySelector('#us-vol-sfx-v');
-  volMusic.value = Math.round((SETTINGS.music ?? audio.musicVolume ?? 0.35) * 100);
-  volSfx.value = Math.round((SETTINGS.sfx ?? audio.sfxVolume ?? 0.7) * 100);
-  const syncVolLabels = () => { volMusicV.textContent = `${volMusic.value}%`; volSfxV.textContent = `${volSfx.value}%`; };
-  syncVolLabels();
-  volMusic.addEventListener('input', () => { SETTINGS.music = volMusic.value / 100; applyAudio(); saveSettings(); syncVolLabels(); });
-  volSfx.addEventListener('input', () => { SETTINGS.sfx = volSfx.value / 100; applyAudio(); saveSettings(); syncVolLabels(); audio.play('pickup', { volume: 0.5 }); });
+  // ---- wire sliders (value 0-100 -> 0..1, zoom 60-160 -> 0.6..1.6) ----
+  const wireSlider = (id, key, def, apply, sound) => {
+    const el = pauseEl.querySelector(`#us-s-${id}`), vEl = pauseEl.querySelector(`#us-s-${id}-v`);
+    el.value = Math.round((SETTINGS[key] ?? def) * 100);
+    const sync = () => { vEl.textContent = `${el.value}%`; };
+    sync();
+    el.addEventListener('input', () => { SETTINGS[key] = +el.value / 100; apply(); saveSettings(); sync(); if (sound) audio.play('pickup', { volume: 0.4 }); });
+  };
+  wireSlider('master', 'master', 1, applyAudio);
+  wireSlider('music', 'music', 0.35, applyAudio);
+  wireSlider('sfx', 'sfx', 0.7, applyAudio, true);
+  wireSlider('zoom', 'zoom', 1, applyVideo);
+  // ---- wire on/off toggles ----
+  const tc = pauseEl.querySelector('#us-toggles');
+  for (const [key, label, def] of [['screenShake', 'Screen Shake', true], ['smoothLighting', 'Smooth Lighting', true], ['showFps', 'Show FPS', false]]) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;color:#c8d0e8;font-size:13px;margin-bottom:8px';
+    const span = document.createElement('span'); span.textContent = label;
+    const btn = document.createElement('div'); btn.className = 'us-menu-btn';
+    btn.style.cssText = 'font-size:12px;padding:3px 14px;margin:0;min-width:46px;text-align:center';
+    const val = () => SETTINGS[key] ?? def;
+    const render = () => { btn.textContent = val() ? 'On' : 'Off'; btn.style.color = val() ? '#8ad48a' : '#9aa3c0'; };
+    render();
+    btn.onclick = () => { SETTINGS[key] = !val(); applyVideo(); saveSettings(); render(); };
+    row.append(span, btn); tc.appendChild(row);
+  }
   pauseEl.querySelector('#us-fullscreen').onclick = () => {
     if (document.fullscreenElement) document.exitFullscreen?.();
     else document.documentElement.requestFullscreen?.();
   };
+  pauseEl.querySelector('#us-reset').onclick = () => { for (const k of Object.keys(SETTINGS)) delete SETTINGS[k]; saveSettings(); location.reload(); };
   pauseEl.querySelector('#us-resume').onclick = () => setPaused(false);
   pauseEl.querySelector('#us-save').onclick = () => {
     const ok = saveMod.saveGame(game);
