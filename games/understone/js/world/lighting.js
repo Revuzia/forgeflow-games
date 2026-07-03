@@ -109,6 +109,16 @@ export class Lighting {
       }
     }
 
+    // ---- held light: a torch/lantern carried by the player lights the tunnels ---
+    const hl = world.heldLight;
+    if (hl) {
+      const ltx = Math.floor(hl.x / TILE), lty = Math.floor(hl.y / TILE);
+      if (ltx >= x0 && ltx <= x1 && lty >= y0 && lty <= y1) {
+        const i = ((lty - y0) * w + (ltx - x0)) * 3;
+        L[i] = Math.max(L[i], hl.rgb[0]); L[i + 1] = Math.max(L[i + 1], hl.rgb[1]); L[i + 2] = Math.max(L[i + 2], hl.rgb[2]);
+      }
+    }
+
     // ---- 4 directional sweeps × 2 iterations -----------------------------------
     for (let iter = 0; iter < 2; iter++) {
       // vertical sweeps per column

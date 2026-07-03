@@ -54,6 +54,7 @@ const CSS = `
    letting them fall through to the game canvas (which would swing the tool). */
 #hud .us-panel { pointer-events: auto; }
 #hud #us-inv.open, #hud #us-inv.open * { pointer-events: auto; }
+#hud .us-slot { pointer-events: auto; }   /* every slot clickable — incl. the bottom hotbar (was left as pointer-events:none, so items couldn't be dragged out of the toolbar) */
 #hud #us-cursor, #hud #us-tip { pointer-events: none !important; }
 #us-inv h3 { margin: 0 0 8px; font: 700 12px 'Segoe UI'; color: #d9b98a; letter-spacing: 1.5px; text-transform: uppercase; }
 #us-inv .grid { display: grid; grid-template-columns: repeat(10, 54px); gap: 5px; }
@@ -65,6 +66,7 @@ const CSS = `
   position: relative; align-self: center; overflow: hidden; }
 .us-preview canvas { position: absolute; inset: 0; margin: auto; image-rendering: pixelated; }
 .us-eqslot-label { font-size: 8px; color: #7480a0; text-transform: uppercase; letter-spacing: .5px; text-align: center; margin-top: -2px; }
+#us-hands { display: flex; gap: 14px; justify-content: center; margin-top: 10px; }
 /* --- recipe book --- */
 #us-craft-wrap { width: 268px; }
 #us-search { width: 100%; box-sizing: border-box; padding: 6px 9px; margin-bottom: 8px; border-radius: 6px;
@@ -204,6 +206,7 @@ export class HUD {
             <div class="us-preview"><canvas id="us-doll-canvas" width="84" height="128"></canvas></div>
             <div class="col" id="us-acc"></div>
           </div>
+          <div id="us-hands"></div>
           <div id="us-stats" style="margin-top:10px;font:11px 'Segoe UI';color:#b8c0d8;line-height:1.6"></div>
         </div>
         <div id="us-craft-wrap">
@@ -227,6 +230,7 @@ export class HUD {
       stats: hud.querySelector('#us-stats'), chestWrap: hud.querySelector('#us-chest-wrap'),
       chest: hud.querySelector('#us-chest'), cursor: hud.querySelector('#us-cursor'),
       tip: hud.querySelector('#us-tip'), dollCanvas: hud.querySelector('#us-doll-canvas'),
+      hands: hud.querySelector('#us-hands'),
     };
     this.buildSlots();
     this.buildCategories();
@@ -275,6 +279,15 @@ export class HUD {
       this.els.armor.appendChild(lbl);
     }
     for (let i = 0; i < ACCESSORY_SLOTS; i++) this.els.acc.appendChild(this.makeSlot({ acc: i }));
+    // main-hand (weapon/tool) + off-hand (torch = light in your tunnels / shield)
+    for (const [hand, label] of [['mainhand', 'Main Hand'], ['offhand', 'Off Hand (light)']]) {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px';
+      wrap.appendChild(this.makeSlot({ hand }));
+      const lbl = document.createElement('div'); lbl.className = 'us-eqslot-label'; lbl.textContent = label;
+      wrap.appendChild(lbl);
+      this.els.hands.appendChild(wrap);
+    }
     this.refreshSlots();
   }
 
@@ -309,6 +322,7 @@ export class HUD {
     if (kind.inv != null) return this.inv.slots[kind.inv];
     if (kind.armor != null) return this.inv.armor[kind.armor];
     if (kind.acc != null) return this.inv.accessories[kind.acc];
+    if (kind.hand != null) return this.inv.hands[kind.hand];
     if (kind.chest != null) return this.openChestSlots?.[kind.chest];
     return null;
   }
@@ -317,6 +331,7 @@ export class HUD {
     else if (kind.inv != null) this.inv.slots[kind.inv] = val;
     else if (kind.armor != null) this.inv.armor[kind.armor] = val;
     else if (kind.acc != null) this.inv.accessories[kind.acc] = val;
+    else if (kind.hand != null) this.inv.hands[kind.hand] = val;
     else if (kind.chest != null && this.openChestSlots) this.openChestSlots[kind.chest] = val;
   }
   // can this stack go into this slot kind?
@@ -324,6 +339,7 @@ export class HUD {
     if (!stack) return true;
     if (kind.armor != null) return this.inv.slotAccepts(kind.armor, stack.id);
     if (kind.acc != null) return this.inv.slotAccepts('accessory', stack.id);
+    if (kind.hand != null) return this.inv.slotAccepts(kind.hand, stack.id);
     return true;
   }
 
@@ -360,7 +376,7 @@ export class HUD {
     const target = this.getSlot(kind);
     if (!target) {
       this.setSlot(kind, cur); this.cursorStack = null;
-    } else if (target.id === cur.id && (kind.armor == null && kind.acc == null)) {
+    } else if (target.id === cur.id && kind.armor == null && kind.acc == null && kind.hand == null) {
       const max = ITEMS[target.id].stack ?? 9999;
       const take = Math.min(max - target.count, cur.count);
       target.count += take; cur.count -= take;
@@ -368,7 +384,7 @@ export class HUD {
     } else {
       // swap (only if target fits where cursor came from — for equip slots target is armor/acc,
       // and cursor must be that type, which accepts() already checked)
-      if ((kind.armor != null || kind.acc != null) && !this.accepts(kind, cur)) return;
+      if ((kind.armor != null || kind.acc != null || kind.hand != null) && !this.accepts(kind, cur)) return;
       this.setSlot(kind, cur); this.cursorStack = target;
     }
     this.dragging = false;
@@ -516,8 +532,10 @@ export class HUD {
       const s = this.getSlot(kind);
       const key = el.querySelector('.key')?.outerHTML ?? '';
       if (kind.hotbar != null) el.classList.toggle('sel', kind.hotbar === this.inv.selected);
-      if ((kind.armor != null || kind.acc != null) && !s) {
-        el.innerHTML = `<span class="icon" style="background:transparent;color:#4a5478;font-size:14px">${kind.armor != null ? ({ head: '🪖', chest: '🛡️', legs: '👖', feet: '🥾' }[kind.armor]) : '💍'}</span>`;
+      if ((kind.armor != null || kind.acc != null || kind.hand != null) && !s) {
+        const ph = kind.armor != null ? ({ head: '🪖', chest: '🛡️', legs: '👖', feet: '🥾' }[kind.armor])
+          : kind.hand === 'mainhand' ? '⚔️' : kind.hand === 'offhand' ? '🔦' : '💍';
+        el.innerHTML = `<span class="icon" style="background:transparent;color:#4a5478;font-size:14px">${ph}</span>`;
         return;
       }
       el.innerHTML = key + (s ? `${iconFor(s.id)}${s.count > 1 ? `<span class="cnt">${s.count}</span>` : ''}` : '');
@@ -526,6 +544,7 @@ export class HUD {
     [...this.els.main.children].forEach(fill);
     [...this.els.armor.children].filter(c => c.classList.contains('us-slot')).forEach(fill);
     [...this.els.acc.children].forEach(fill);
+    [...this.els.hands.querySelectorAll('.us-slot')].forEach(fill);
     if (this.openChestSlots) [...this.els.chest.children].forEach(fill);
 
     // coins

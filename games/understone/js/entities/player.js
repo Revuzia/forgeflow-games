@@ -291,6 +291,10 @@ export class Player {
     this.updateTool(game);
     this.updateInteract(game);
     if (this.swinging > 0) this.swinging--;
+
+    // held light: a torch/lantern in the off-hand (or selected) lights the tunnels you dig
+    const hl = game.inventory?.heldLight?.();
+    this.world.heldLight = hl ? { x: this.x, y: this.py + this.h * 0.4, rgb: hl } : null;
   }
 
   // right-click: doors, chests, altar hint

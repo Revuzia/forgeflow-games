@@ -97,6 +97,7 @@ export function saveGame(game) {
     },
     inv: {
       slots: inventory.slots, armor: inventory.armor, accessories: inventory.accessories,
+      hands: inventory.hands,
       selected: inventory.selected, money: inventory.money,
     },
     chests,
@@ -137,6 +138,7 @@ export function loadGame(game) {
   inventory.slots = data.inv.slots;
   inventory.armor = { head: null, chest: null, legs: null, feet: null, ...data.inv.armor };
   inventory.accessories = data.inv.accessories ?? new Array(5).fill(null);
+  inventory.hands = { mainhand: null, offhand: null, ...data.inv.hands };
   inventory.selected = data.inv.selected;
   inventory.money = data.inv.money;
   if (world.chests) {

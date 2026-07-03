@@ -478,6 +478,14 @@ async function boot() {
     if (!game.paused && !player.dead && game.tick > 600) saveMod.saveGame(game);
   }, 120000); // autosave every 2 min
   window.addEventListener('beforeunload', () => { if (game.tick > 600) saveMod.saveGame(game); });
+  // always-visible settings/menu button (top-left) so the menu is discoverable, not just Esc
+  const gear = document.createElement('div');
+  gear.textContent = '☰ Menu';
+  gear.style.cssText = `position:fixed;top:10px;left:12px;z-index:70;pointer-events:auto;cursor:pointer;
+    font:600 13px 'Segoe UI',sans-serif;color:#e8d9a0;background:rgba(12,16,28,.6);border:1px solid #3a415c;
+    border-radius:8px;padding:5px 11px;user-select:none;`;
+  gear.onclick = () => setPaused(!game.paused);
+  document.body.appendChild(gear);
 
   game.renderers.push((g, alpha) => background.draw(g.ctx, g, alpha));
   game.renderers.push((g, alpha) => tileRenderer.draw(g.ctx, camera, alpha));

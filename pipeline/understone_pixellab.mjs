@@ -89,7 +89,7 @@ const ICON_OVERRIDES = {
   slimeCrown: 'golden crown covered in blue slime',
   wormFood: 'pulsating ball of rotten meat and worms',
   acorn: 'brown acorn seed',
-  torch: 'wooden torch with orange flame',
+  torch: 'a wooden torch: long brown wooden stick handle with a small orange flame burning only at the very top, held upright, clearly a torch not a fire',
   platform: 'wooden plank platform section',
   woodWall: 'wooden plank wall panel',
   dirtWall: 'packed dirt wall panel',

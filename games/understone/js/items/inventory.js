@@ -8,15 +8,33 @@ export const HOTBAR = 10, MAIN = 40, SLOTS = HOTBAR + MAIN;
 
 export const ARMOR_SLOTS = ['head', 'chest', 'legs', 'feet'];
 export const ACCESSORY_SLOTS = 5;
+export const HAND_SLOTS = ['mainhand', 'offhand'];
+
+// items that emit light when HELD (selected) or worn in the off-hand — [r,g,b] 0..1
+export const HELD_LIGHTS = {
+  torch: [1.0, 0.78, 0.46], lantern: [1.0, 0.86, 0.62], candle: [0.85, 0.62, 0.36],
+};
+const MELEE_OR_RANGED = new Set(['sword', 'shortsword', 'spear', 'flail', 'bow', 'magic', 'boomerang']);
 
 export class Inventory {
   constructor() {
     this.slots = new Array(SLOTS).fill(null);   // {id, count} | null
     this.armor = { head: null, chest: null, legs: null, feet: null };
     this.accessories = new Array(ACCESSORY_SLOTS).fill(null); // rings/charms/boots-effects
+    this.hands = { mainhand: null, offhand: null }; // wielded weapon/tool + off-hand light/shield
     this.selected = 0;                           // hotbar index
     this.money = 0;                              // copper coins
     this.onChange = [];
+  }
+
+  // light emitted by a HELD torch/lantern (off-hand slot, or the selected hotbar item — Terraria
+  // lights the area around you when you hold a torch). Returns [r,g,b] or null.
+  heldLight() {
+    const off = this.hands.offhand;
+    if (off && HELD_LIGHTS[off.id]) return HELD_LIGHTS[off.id];
+    const sel = this.held();
+    if (sel && HELD_LIGHTS[sel.id]) return HELD_LIGHTS[sel.id];
+    return null;
   }
 
   changed() { for (const fn of this.onChange) fn(this); }
@@ -30,6 +48,8 @@ export class Inventory {
     if (!def) return false;
     if (ARMOR_SLOTS.includes(slotKind)) return def.type === 'armor' && def.bodySlot === slotKind;
     if (slotKind === 'accessory') return def.type === 'accessory';
+    if (slotKind === 'mainhand') return def.type === 'tool' || MELEE_OR_RANGED.has(def.weapon);
+    if (slotKind === 'offhand') return def.type === 'accessory' || HELD_LIGHTS[itemId] != null;
     return false;
   }
 
