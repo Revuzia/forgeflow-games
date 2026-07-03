@@ -26,7 +26,8 @@ export const PHYS = {
   maxRun: 3,               // px/t (= 15 mph)
   jumpSpeed: 5.01,         // px/t — velocity PINNED at -5.01 while jump held (not impulse)
   jumpHold: 15,            // t of sustain
-  playerW: 20, playerH: 42,// px hitbox (sprite 40x56, drawn centered)
+  playerW: 14, playerH: 42,// px hitbox — fits a 1-tile (16px) dug shaft so you never wedge in
+                           // narrow tunnels (was 20 = 1.25 tiles, too wide to fit; sprite still 40px, drawn centered)
   safeFallTiles: 25,       // fall damage = (tilesFallen - 25) * 10
   fallDmgPerTile: 10,
   hurtIFrames: 40,         // t of immunity after taking damage

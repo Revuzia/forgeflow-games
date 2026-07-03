@@ -63,6 +63,35 @@ export function tileCollision(world, px, py, vx, vy, w, h, fallThrough = false, 
   return [outX, outY];
 }
 
+// Depenetration: velocity-clamping alone can leave an entity OVERLAPPING a solid tile (e.g.
+// a tile placed on it, a tight corner, a narrow shaft). If we never push it back out it gets
+// STUCK — no axis of movement is free. This ejects the entity along the minimum-translation
+// axis of the tile it overlaps most, a few iterations, so it can never be trapped inside solid.
+function depenetrate(world, e) {
+  for (let iter = 0; iter < 4; iter++) {
+    const tx0 = Math.floor((e.x + 0.5) / TILE), tx1 = Math.floor((e.x + e.w - 0.5) / TILE);
+    const ty0 = Math.floor((e.y + 0.5) / TILE), ty1 = Math.floor((e.y + e.h - 0.5) / TILE);
+    let best = null;
+    for (let ty = ty0; ty <= ty1; ty++) {
+      for (let tx = tx0; tx <= tx1; tx++) {
+        if (world.inBounds(tx, ty) && !TILES[world.tiles[ty * world.w + tx]].solid) continue;
+        const ox = Math.min(e.x + e.w, tx * TILE + TILE) - Math.max(e.x, tx * TILE);
+        const oy = Math.min(e.y + e.h, ty * TILE + TILE) - Math.max(e.y, ty * TILE);
+        if (ox <= 0.5 || oy <= 0.5) continue;
+        const pen = Math.min(ox, oy);
+        if (!best || pen > best.pen) best = { tx, ty, pen };
+      }
+    }
+    if (!best) return;
+    const { tx, ty } = best;
+    const leftPen = (e.x + e.w) - tx * TILE, rightPen = (tx * TILE + TILE) - e.x;      // out the left / right
+    const upPen = (e.y + e.h) - ty * TILE, downPen = (ty * TILE + TILE) - e.y;          // out the top / bottom
+    const hx = Math.min(leftPen, rightPen), hy = Math.min(upPen, downPen);
+    if (hx <= hy) { e.x += leftPen < rightPen ? -leftPen : rightPen; e.vx = 0; }
+    else { e.y += upPen < downPen ? -upPen : downPen; e.vy = 0; }
+  }
+}
+
 // Integrate an entity { x, y (top-left px), vx, vy, w, h } against the tile grid,
 // with anti-tunnel sub-stepping and liquid position-factor.
 // Returns { up, down } collision flags aggregated across sub-steps.
@@ -85,6 +114,7 @@ export function moveEntity(world, e, { fallThrough = false, ignorePlats = false,
       e.vy = 0; vy = 0;
     }
   }
+  depenetrate(world, e);  // never leave the entity stuck inside solid tiles
   return { up, down };
 }
 

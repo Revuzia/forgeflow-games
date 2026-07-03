@@ -286,9 +286,11 @@ export class Enemy {
     const cap = 1.4;
     const sp = Math.hypot(this.vx, this.vy);
     if (sp > cap) { this.vx *= cap / sp; this.vy *= cap / sp; }
-    // no tile collision — ghosts phase through everything
-    this.x += this.vx;
-    this.y += this.vy;
+    // ghosts collide with terrain like everything else — only the burrowing worm is allowed
+    // inside solid tiles (owner rule). They still float (no gravity), just can't enter walls.
+    const e = { x: this.x, y: this.y, vx: this.vx, vy: this.vy, w: this.w, h: this.h };
+    moveEntity(game.world, e, {});
+    this.x = e.x; this.y = e.y; this.vx = e.vx; this.vy = e.vy;
     this.facing = Math.sign(this.vx) || 1;
     this.ethereal = true;   // renderer draws at ~55% alpha
   }
