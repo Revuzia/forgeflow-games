@@ -1,0 +1,19 @@
+{
+  "title": "Last Circle",
+  "slug": "last-circle",
+  "genre": "royale",
+  "renderer": "three",
+  "tagline": "50 drop. One stands.",
+  "seed": 90210,
+  "view": { "width": 1280, "height": 720, "background": "#08131f", "fog": 0.0016 },
+  "setup": {
+    "players": 50,
+    "defaultMap": "isla_viva",
+    "defaultMode": "standard"
+  },
+  "credits": {
+    "characters": ["Quaternius RPG Characters (CC0), via Poly Pizza"],
+    "props": ["Poly Pizza CC0/CC-BY packs — see CREDITS in repo"],
+    "audio": ["Kenney interface/impact/rpg audio packs (CC0)"]
+  }
+}

@@ -1,0 +1,201 @@
+/**
+ * royale/fx.js — particles, tracers, damage numbers, camera shake.
+ *
+ * One InstancedMesh pool of chunky low-poly cubes (single draw call) drives
+ * every burst: muzzle flash, impacts, explosions, build debris, harvest chips,
+ * storm sparkles. Tracers are elongated instances of the same pool. Damage
+ * numbers are DOM elements projected from world space (crisp text, no canvas
+ * blur — the shroud-font lesson).
+ */
+import * as THREE from "three";
+
+const N = 1024;
+const parts = [];         // {alive, pos, vel, life, life0, size, gravity, drag, stretch(dir)}
+let inst = null;
+const dummy = new THREE.Object3D();
+const noRot = new THREE.Quaternion();
+let dmgLayer = null;
+
+export function init(W) {
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const mat = new THREE.MeshBasicMaterial({ toneMapped: false });
+  inst = new THREE.InstancedMesh(geo, mat, N);
+  inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  inst.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3);
+  inst.count = N;
+  inst.frustumCulled = false;
+  for (let i = 0; i < N; i++) {
+    parts.push({ alive: false, pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 0, life0: 1, size: 0.1, gravity: 0, drag: 0, dir: null });
+    dummy.position.set(0, -9999, 0); dummy.scale.setScalar(0.0001); dummy.updateMatrix();
+    inst.setMatrixAt(i, dummy.matrix);
+  }
+  W.group("fx").add(inst);
+  W.camShake = 0;
+
+  // DOM damage-number layer
+  dmgLayer = document.createElement("div");
+  Object.assign(dmgLayer.style, { position: "absolute", inset: "0", pointerEvents: "none", overflow: "hidden", zIndex: 30 });
+  W.kernel.parent.appendChild(dmgLayer);
+
+  wireEvents(W);
+}
+
+let cursor = 0;
+function spawn(o) {
+  const p = parts[cursor];
+  cursor = (cursor + 1) % N;
+  p.alive = true;
+  p.pos.set(o.x, o.y, o.z);
+  p.vel.set(o.vx || 0, o.vy || 0, o.vz || 0);
+  p.life = p.life0 = o.life || 0.6;
+  p.size = o.size || 0.12;
+  p.gravity = o.gravity != null ? o.gravity : -9;
+  p.drag = o.drag != null ? o.drag : 0.5;
+  p.dir = o.dir || null;      // stretch along dir (tracers)
+  p.stretch = o.stretch || 0;
+  p.idx = parts.indexOf(p);
+  const i = p.idx;
+  const c = new THREE.Color(o.color != null ? o.color : 0xffcc66);
+  inst.instanceColor.setXYZ(i, c.r, c.g, c.b);
+  inst.instanceColor.needsUpdate = true;
+}
+
+function burst(o) {
+  const n = o.n || 8;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, e = (Math.random() - 0.3) * Math.PI;
+    const s = (o.speed || 5) * (0.4 + Math.random() * 0.8);
+    spawn({
+      x: o.x, y: o.y, z: o.z,
+      vx: Math.cos(a) * Math.cos(e) * s, vy: Math.sin(e) * s + (o.up || 2), vz: Math.sin(a) * Math.cos(e) * s,
+      color: Array.isArray(o.color) ? o.color[i % o.color.length] : o.color,
+      size: (o.size || 0.12) * (0.6 + Math.random() * 0.9),
+      life: (o.life || 0.7) * (0.6 + Math.random() * 0.8),
+      gravity: o.gravity, drag: o.drag,
+    });
+  }
+}
+
+// ── event wiring ─────────────────────────────────────────────────────────────
+function wireEvents(W) {
+  const MATC = { wood: 0xb08850, brick: 0xb06a55, metal: 0x9fb2c4 };
+
+  W.events.on("shotFired", (a, weaponId, eye, dir) => {
+    if (weaponId === "grenade") return;
+    // muzzle flash
+    const mx = eye.x + dir.x * 0.9, my = eye.y + dir.y * 0.9 - 0.05, mz = eye.z + dir.z * 0.9;
+    burst({ x: mx, y: my, z: mz, n: 3, color: [0xfff2b0, 0xffb84d], speed: 2, up: 0.5, size: 0.09, life: 0.12, gravity: 0, drag: 4 });
+    // tracer (not for shotgun spread — one central tracer is enough)
+    const len = weaponId === "sniper" ? 26 : 14;
+    spawn({ x: mx + dir.x * len * 0.5, y: my + dir.y * len * 0.5, z: mz + dir.z * len * 0.5, color: 0xffe9a0, size: 0.05, life: 0.09, gravity: 0, drag: 0, dir: dir.clone(), stretch: len });
+  });
+
+  W.events.on("impact", (pos, surface) => {
+    const c = surface === "flesh" ? 0xc23b3b : surface === "build" ? 0xd7c08a : surface === "stone" ? 0xa9a9a9 : 0x9a7f4f;
+    burst({ x: pos.x, y: pos.y, z: pos.z, n: 5, color: c, speed: 3.5, size: 0.08, life: 0.4 });
+  });
+
+  W.events.on("explosion", (pos, R) => {
+    burst({ x: pos.x, y: pos.y, z: pos.z, n: 26, color: [0xffd28a, 0xff8a3c, 0xff5522], speed: 11, up: 5, size: 0.28, life: 0.8, drag: 1.5 });
+    burst({ x: pos.x, y: pos.y + 0.5, z: pos.z, n: 14, color: [0x555555, 0x333333], speed: 4, up: 4, size: 0.4, life: 1.4, gravity: -1.5, drag: 1.2 });
+    const d = W.player ? Math.hypot(W.player.pos.x - pos.x, W.player.pos.z - pos.z) : 999;
+    if (d < 40) W.camShake = Math.max(W.camShake, (1 - d / 40) * 0.5);
+  });
+
+  W.events.on("buildDestroyed", (pieces) => {
+    for (const p of pieces.slice(0, 6)) {
+      const G = 4;
+      burst({ x: (p.ix + 0.5) * G, y: p.iy * G + 2, z: (p.iz + 0.5) * G, n: 9, color: MATC[p.mat] || 0xb08850, speed: 5, up: 3, size: 0.22, life: 0.9 });
+    }
+  });
+  W.events.on("buildPlaced", (a, p) => {
+    if (a === W.player) return; // own builds are obvious
+  });
+
+  W.events.on("harvested", (a, h, mats) => {
+    const c = h.mat === "wood" ? 0xb08850 : h.mat === "brick" ? 0xa9a9a9 : 0x9fb2c4;
+    burst({ x: h.pos.x, y: h.pos.y + 1.4, z: h.pos.z, n: 5, color: c, speed: 3, size: 0.1, life: 0.5 });
+    if (a === W.player) dmgNumber(W, h.pos.x, h.pos.y + 2.2, h.pos.z, "+" + mats, "#d9c07f", 0.8);
+  });
+
+  W.events.on("actorHurt", (victim, info) => {
+    burst({ x: victim.pos.x, y: victim.pos.y + 1.2, z: victim.pos.z, n: 4, color: info.toShield > 0 ? 0x4aa8ff : 0xc23b3b, speed: 2.4, size: 0.08, life: 0.35 });
+    if (info.attackerId === (W.player && W.player.id)) {
+      dmgNumber(W, victim.pos.x, victim.pos.y + 2.1, victim.pos.z, String(info.dmg), info.isHead ? "#ffd54a" : info.toShield > 0 ? "#6db9ff" : "#ffffff", 1);
+    }
+    if (victim === W.player) W.camShake = Math.max(W.camShake, 0.12);
+  });
+
+  W.events.on("actorDied", (victim) => {
+    burst({ x: victim.pos.x, y: victim.pos.y + 1, z: victim.pos.z, n: 12, color: [0xffffff, 0x9fd7ff], speed: 5, up: 4, size: 0.14, life: 0.8 });
+  });
+
+  W.events.on("chestOpened", (a, c) => {
+    burst({ x: c.pos.x, y: c.pos.y + 0.8, z: c.pos.z, n: 12, color: [0xffd700, 0xfff2b0], speed: 3.5, up: 4, size: 0.1, life: 0.9, gravity: -3 });
+  });
+}
+
+/** floating damage number (world → screen projection each frame until dead) */
+const dmgNums = [];
+function dmgNumber(W, x, y, z, text, color, scale) {
+  const el = document.createElement("div");
+  el.textContent = text;
+  Object.assign(el.style, {
+    position: "absolute", left: "0", top: "0", color, fontWeight: "800",
+    fontFamily: "system-ui, sans-serif", fontSize: Math.round(18 * (scale || 1)) + "px",
+    textShadow: "0 1px 3px rgba(0,0,0,0.8)", willChange: "transform, opacity",
+  });
+  dmgLayer.appendChild(el);
+  dmgNums.push({ el, pos: new THREE.Vector3(x, y, z), t: 0, life: 0.9 });
+}
+
+// ── frame update ─────────────────────────────────────────────────────────────
+const proj = new THREE.Vector3();
+export function update(W, dt) {
+  // particles
+  for (let i = 0; i < N; i++) {
+    const p = parts[i];
+    if (!p.alive) continue;
+    p.life -= dt;
+    if (p.life <= 0) {
+      p.alive = false;
+      dummy.position.set(0, -9999, 0); dummy.scale.setScalar(0.0001); dummy.updateMatrix();
+      inst.setMatrixAt(i, dummy.matrix);
+      continue;
+    }
+    p.vel.y += p.gravity * dt;
+    p.vel.multiplyScalar(Math.max(0, 1 - p.drag * dt));
+    p.pos.addScaledVector(p.vel, dt);
+    const k = p.life / p.life0;
+    dummy.position.copy(p.pos);
+    if (p.dir) {
+      dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), p.dir);
+      dummy.scale.set(p.size, p.size, p.stretch);
+    } else {
+      dummy.quaternion.copy(noRot);
+      dummy.rotation.set(p.pos.x * 3 + p.life * 5, p.pos.y * 2, p.life * 7);
+      dummy.scale.setScalar(p.size * (0.3 + 0.7 * k));
+    }
+    dummy.updateMatrix();
+    inst.setMatrixAt(i, dummy.matrix);
+  }
+  inst.instanceMatrix.needsUpdate = true;
+
+  // damage numbers
+  const cam = W.camera, rect = W.kernel.renderer.domElement;
+  const w2 = rect.clientWidth, h2 = rect.clientHeight;
+  for (let i = dmgNums.length - 1; i >= 0; i--) {
+    const d = dmgNums[i];
+    d.t += dt;
+    if (d.t > d.life) { d.el.remove(); dmgNums.splice(i, 1); continue; }
+    proj.copy(d.pos); proj.y += d.t * 0.9;
+    proj.project(cam);
+    if (proj.z > 1) { d.el.style.opacity = "0"; continue; }
+    const sx = (proj.x * 0.5 + 0.5) * w2, sy = (-proj.y * 0.5 + 0.5) * h2;
+    d.el.style.transform = `translate(${sx.toFixed(0)}px, ${sy.toFixed(0)}px)`;
+    d.el.style.opacity = String(1 - (d.t / d.life) * 0.9);
+  }
+
+  // camera shake decay is consumed by player.js camera; just decay here
+  if (W.camShake > 0) W.camShake = Math.max(0, W.camShake - dt * 1.8);
+}
