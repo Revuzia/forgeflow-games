@@ -3,6 +3,44 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-05 — v2.1 drop/feel/AI polish (owner screenshot feedback)
+
+- **Skydive + parachute drop** (was: rigid straight-down fall): freefall is
+  belly-down (~70° tilt, banks into turns, run-clip limbs read as spread),
+  fast fall −20 (dive −34 on SHIFT) with forward air inertia; a composed
+  parachute (gored dome + suspension lines, per-actor color) auto-deploys at
+  60 m AGL → upright pendulum sway, −5.5 fall; camera tracks the dive
+  (pitch bias −0.62 freefall / −0.18 canopy, dist 9-10). Chute removed on
+  landing. Bots get the identical sequence.
+- **Gun actually in hand**: weapon holder is now parented to the rigs'
+  `FistR` bone (scale-compensated) instead of a fixed chest offset that
+  floated at head height — guns ride the skeleton through every animation.
+  Armed actors use the rigs' `Idle_Weapon`/`Run_Holding` holding poses.
+- **Character variety**: 5th rig (wizard) + per-actor procedural hue/light
+  shifts on cloned materials — 50 visually distinct opponents (verified:
+  red vs blue wizards etc. in a lineup shot).
+- **Input fixed for lock-less contexts**: LMB ALWAYS fires (previously the
+  first click was swallowed requesting pointer lock — if lock was denied the
+  game was unplayable); unlocked = hold-RMB-drag rotates the camera (and
+  ADSes); locked = mouse-look + RMB ADS.
+- **Storm slowed to real BR pacing**: standard ~10.75 min of storm
+  (12-13 min matches), quick ~4 min. Selftest asserts the envelope.
+- **Bots fight like players now** (the "ran right past me" fix):
+  engage-on-sight outranks everything when the target is LIVE and close;
+  ~160° vision cone + unconditional awareness within 15 m; reload = sprint
+  for lateral cover; FLEE blends escape vectors toward the circle (never
+  flees INTO storm); phase≥4 rotates early; wider skill spread (tier1 7.5°
+  err/700 ms → tier5 0.9°/210 ms). Balance loop discovered in soak tests:
+  pure aggression gridlocked the lobby into eternal starter-pistol duels
+  (0% looting) — fixed with FIGHT FATIGUE (14 s stalemate → break off,
+  6 s re-target cooldown) and "distant enemies don't stop an un-geared bot
+  from looting" (>35 m). Result: 46/49 gun kills, 3 storm deaths, 75%
+  upgraded by late-game, winner with kills.
+- Playtested via screenshots: freefall pose, canopy descent (player + bot
+  chutes), armed lineup (variety + guns in hands), swimming (player + bot),
+  chest beam visible at range; live-fire input verified with real
+  MouseEvents (fire w/o pointer lock, RMB-drag rotate 0.53 rad).
+
 ## 2026-07-05 — v2.0 pure BR shooter rework (owner direction)
 
 Owner feedback: drop the Fortnite building identity entirely; make it a clean

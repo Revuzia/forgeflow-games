@@ -79,24 +79,25 @@
   var PLAYERK = { hp: 100, shield: 100, radius: 0.45, height: 1.8, eyeY: 1.62, swimDepth: 1.1 };
 
   // Storm phase tables per mode. radiusFrac × (map halfsize) = target radius.
+  // Real-BR pacing: generous loot phase, ~11 min of storm on standard.
   var STORM_PHASES = {
     standard: [
-      { wait: 50, shrink: 60, radiusFrac: 0.62,  dps: 1 },
-      { wait: 40, shrink: 50, radiusFrac: 0.44,  dps: 2 },
-      { wait: 35, shrink: 45, radiusFrac: 0.30,  dps: 3 },
-      { wait: 30, shrink: 40, radiusFrac: 0.18,  dps: 5 },
-      { wait: 25, shrink: 35, radiusFrac: 0.10,  dps: 8 },
-      { wait: 20, shrink: 30, radiusFrac: 0.045, dps: 10 },
+      { wait: 75, shrink: 70, radiusFrac: 0.62,  dps: 1 },
+      { wait: 55, shrink: 60, radiusFrac: 0.44,  dps: 2 },
+      { wait: 45, shrink: 55, radiusFrac: 0.30,  dps: 3 },
+      { wait: 40, shrink: 45, radiusFrac: 0.18,  dps: 5 },
+      { wait: 35, shrink: 40, radiusFrac: 0.10,  dps: 8 },
+      { wait: 25, shrink: 35, radiusFrac: 0.045, dps: 10 },
       // final circle HOLDS at ~10m — closing to zero storm-killed every
       // survivor simultaneously and crowned a corpse; someone must WIN the fight
-      { wait: 15, shrink: 40, radiusFrac: 0.012, dps: 12 },
+      { wait: 20, shrink: 45, radiusFrac: 0.012, dps: 12 },
     ],
     quick: [
-      { wait: 25, shrink: 30, radiusFrac: 0.28, dps: 2 },
-      { wait: 20, shrink: 25, radiusFrac: 0.17, dps: 4 },
-      { wait: 15, shrink: 22, radiusFrac: 0.09, dps: 6 },
-      { wait: 12, shrink: 20, radiusFrac: 0.04, dps: 10 },
-      { wait: 10, shrink: 25, radiusFrac: 0.02, dps: 14 },
+      { wait: 30, shrink: 35, radiusFrac: 0.28, dps: 2 },
+      { wait: 24, shrink: 30, radiusFrac: 0.17, dps: 4 },
+      { wait: 18, shrink: 26, radiusFrac: 0.09, dps: 6 },
+      { wait: 14, shrink: 22, radiusFrac: 0.04, dps: 10 },
+      { wait: 12, shrink: 28, radiusFrac: 0.02, dps: 14 },
     ],
     practice: [],
   };
@@ -113,13 +114,14 @@
     supply: [0, 0, 10, 35, 55],
   };
 
-  // AI skill tiers (1-indexed by tier-1)
+  // AI skill tiers (1-indexed by tier-1) — wide spread so the lobby reads as
+  // real players: beginners whiff constantly, experts are genuinely scary
   var BOT_TIERS = [
-    { reactionMs: 600, aimErrDeg: 6.0 },
-    { reactionMs: 450, aimErrDeg: 4.0 },
-    { reactionMs: 350, aimErrDeg: 2.6 },
-    { reactionMs: 280, aimErrDeg: 1.7 },
-    { reactionMs: 220, aimErrDeg: 1.0 },
+    { reactionMs: 700, aimErrDeg: 7.5 },
+    { reactionMs: 500, aimErrDeg: 4.5 },
+    { reactionMs: 380, aimErrDeg: 2.8 },
+    { reactionMs: 300, aimErrDeg: 1.8 },
+    { reactionMs: 210, aimErrDeg: 0.9 },
   ];
   var BOT_TIER_MIX = { standard: [8, 12, 14, 10, 5], quick: [6, 10, 14, 12, 7] };
   var BOT_PERSONALITIES = ["rusher", "flanker", "camper", "loot_goblin", "rotator", "sniper"];

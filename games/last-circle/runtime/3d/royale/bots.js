@@ -129,15 +129,29 @@ function think(W, b) {
   if (inStorm) { b.state = "ROTATE"; bb.moveTo = { x: st.center.x, z: st.center.z }; return; }
   if (a.healing) { b.state = "HEAL"; return; }
 
-  // utility scores
+  // utility scores — a VISIBLE enemy is the headline event: fighting beats
+  // looting/rotating for every personality (the "runs right past you" tell)
   const s = {};
   const lastFew = alive <= 4;
   const outnumbered = a.hp + a.shield < 50;
-  s.ENGAGE = bb.target ? 60 + (a.personality === "rusher" ? 20 : 0) + (endgame ? 25 : 0) + (lastFew ? 25 : 0) : 0;
-  s.FLEE = bb.target && outnumbered && !lastFew && heals ? 72 : 0;   // disengage to heal, not to hide forever
+  const liveTarget = bb.target && W.t - bb.targetSeenT < 1.2;
+  // live sighting = fight — but an un-geared bot ignores DISTANT enemies and
+  // keeps looting (a starter-pistol duel at 60m is how the whole lobby
+  // gridlocks); anyone close is always fought
+  const tRef = bb.targetPos;
+  const tDist = tRef ? Math.hypot(tRef.x - a.pos.x, tRef.z - a.pos.z) : 999;
+  const engageBase = liveTarget ? ((!upgraded && tDist > 35) ? 55 : 80) : 42;
+  s.ENGAGE = bb.target
+    ? engageBase + (a.personality === "rusher" ? 15 : 0) + (endgame ? 20 : 0) + (lastFew ? 25 : 0)
+    : 0;
+  s.FLEE = bb.target && outnumbered && !lastFew && heals ? 86 : 0;   // disengage to heal, not to hide forever
   s.HEAL = (a.hp < 45 || (a.shield < 30 && a.hp < 80)) && heals && !bb.target ? 75 : (a.hp < 60 && heals && W.t - a.lastDamageT > 6 ? 45 : 0);
   s.LOOT = !upgraded ? 64 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
-  s.ROTATE = outsideNext ? (st.phaseState === "closing" ? 88 : a.personality === "rotator" ? 66 : st.tToNext < 25 ? 62 : 30) : 0;
+  // late-game storm is lethal (5-12 dps) — being outside the next circle when
+  // it starts closing is how bots "die dumb"; rotate EARLY once phases hurt
+  s.ROTATE = outsideNext
+    ? (st.phaseState === "closing" ? 92 : (st.phase >= 4 ? 75 : a.personality === "rotator" ? 66 : st.tToNext < 25 ? 62 : 30))
+    : 0;
   s.CAMP = (a.personality === "camper" || a.personality === "sniper") && !outsideNext && !bb.target && !endgame ? 34 : 0;
   s.PUSH = bb.heard && W.t - bb.heard.t < 6 && (a.personality === "rusher" || a.personality === "rotator" || a.personality === "flanker") && !endgame ? 48 : 0;
   s.WANDER = 12;
@@ -160,15 +174,16 @@ function perceive(W, b) {
   let best = null, bestD = 1e9;
   for (const t of W.actors) {
     if (t === a || !t.alive) continue;
+    if (bb.avoidId === t.id && W.t < (bb.avoidUntil || 0)) continue;   // fatigue cooldown
     const dx = t.pos.x - a.pos.x, dz = t.pos.z - a.pos.z;
     const d = Math.hypot(dx, dz);
     if (d > 200) continue;
-    // vision cone 110° around facing (heard targets get 360°)
-    const facing = Math.atan2(-Math.sin(a.yaw), -Math.cos(a.yaw));
+    // vision: wide ~160° cone; anyone within 15m registers regardless of
+    // facing (you notice someone sprinting past you); heard shooters = 360°
     const angTo = Math.atan2(dx, dz);
     let dd = Math.abs(((angTo - Math.atan2(-Math.sin(a.yaw), -Math.cos(a.yaw))) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
     const heardHim = bb.heard && bb.heard.shooterId === t.id && W.t - bb.heard.t < 4;
-    if (dd > 1.0 && !heardHim && bb.target !== t.id) continue;
+    if (dd > 1.4 && d > 15 && !heardHim && bb.target !== t.id) continue;
     if (W.map.losBlocked(eye.x, eye.y, eye.z, t.pos.x, t.pos.y + 1.2, t.pos.z)) continue;
     const bias = bb.target === t.id ? 0.6 : 1;   // stickiness
     if (d * bias < bestD) { bestD = d * bias; best = t; }
@@ -223,12 +238,20 @@ function onEnter(W, b, state) {
   } else if (state === "HEAL") {
     startHeal(W, a);
   } else if (state === "FLEE") {
-    // run from target
+    // run from target — but NEVER flee into the storm: blend the escape vector
+    // toward the circle center
     const t = bb.target && W.actorById.get(bb.target);
     if (t) {
       const dx = a.pos.x - t.pos.x, dz = a.pos.z - t.pos.z;
       const d = Math.hypot(dx, dz) || 1;
-      bb.moveTo = { x: a.pos.x + (dx / d) * 60, z: a.pos.z + (dz / d) * 60 };
+      let fx = a.pos.x + (dx / d) * 60, fz = a.pos.z + (dz / d) * 60;
+      if (W.stormCtl) {
+        const st = W.stormCtl.storm.stateAt(W.t);
+        const c = st.nextCenter || st.center;
+        fx = fx * 0.55 + c.x * 0.45;
+        fz = fz * 0.55 + c.z * 0.45;
+      }
+      bb.moveTo = { x: fx, z: fz };
     } else bb.moveTo = randNear(W, a, 50);
   }
 }
@@ -404,7 +427,16 @@ function actCamp(W, b, dt) {
 function actEngage(W, b, dt) {
   const a = b.actor, bb = b.bb, inp = a.input;
   const t = bb.target && W.actorById.get(bb.target);
-  if (!t || !t.alive) { bb.target = null; b.nextThink = 0; return; }
+  if (!t || !t.alive) { bb.target = null; bb.fightT = 0; b.nextThink = 0; return; }
+  // fight fatigue: humans don't trade pistol whiffs forever — after ~14s of
+  // stalemate, break off to reposition/loot (prevents map-wide pistol gridlock)
+  if (bb.fightTarget !== bb.target) { bb.fightTarget = bb.target; bb.fightT = 0; }
+  bb.fightT = (bb.fightT || 0) + dt;
+  if (bb.fightT > 14 && W.t - a.lastDamageT > 6 && W.match.aliveCount() > 6) {
+    bb.avoidId = bb.target; bb.avoidUntil = W.t + 6;   // don't instantly re-lock the same stalemate
+    bb.target = null; bb.fightT = 0; b.nextThink = 0;
+    return;
+  }
   const seen = W.t - bb.targetSeenT < 0.4;
   const tp = seen ? t.pos : bb.targetPos;
   if (!tp) { bb.target = null; return; }
@@ -426,6 +458,14 @@ function actEngage(W, b, dt) {
     bb.strafeT = 0.5 + Math.random() * 0.9;
     bb.strafeDir = a.personality === "flanker" ? (bb.strafeDir || 1) : (Math.random() < 0.5 ? -1 : 1);
   }
+  // RELOADING = break for lateral cover, don't stand in the open trading nothing
+  if (a.weapon && a.weapon.state === "reloading") {
+    inp.mx = bb.strafeDir;
+    inp.mz = -0.5;
+    inp.sprint = true;
+    steerYaw(a, Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), dt, 10);
+    return;
+  }
   if (dist > prefer * 1.5) { inp.mz = 1; inp.sprint = dist > prefer * 3; }
   else if (dist < prefer * 0.5) inp.mz = -0.7;
   inp.mx = bb.strafeDir * (dist < 50 ? 1 : a.personality === "flanker" ? 0.8 : 0.4);
@@ -446,7 +486,7 @@ function actEngage(W, b, dt) {
   const sinceAcq = W.t - bb.acquireT;
   const acquireMul = sinceAcq < 0.6 ? 3 - (sinceAcq / 0.6) * 2 : 1;
   const tgtSpeed = seen && t.vel ? Math.hypot(t.vel.x, t.vel.z) : 0;
-  const motionMul = 1 + Math.min(1.2, tgtSpeed / 6) * 0.9 + (t.onGround === false ? 0.5 : 0);
+  const motionMul = 1 + Math.min(1.2, tgtSpeed / 6) * 0.55 + (t.onGround === false ? 0.35 : 0);
   const errDeg = b.tierK.aimErrDeg * acquireMul * motionMul * (duel ? 0.55 : 1);
   const err = (errDeg * Math.PI) / 180;
   // wander the error smoothly (not white noise): per-brain sine wobble

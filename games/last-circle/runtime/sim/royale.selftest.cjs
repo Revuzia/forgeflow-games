@@ -63,9 +63,10 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(s1.damageAt(tShrunk, outX, st3.center.z) > 0, "storm: damages outside the circle");
   ok(s1.damageAt(tShrunk, st3.center.x, st3.center.z) === 0, "storm: safe inside the circle");
 
-  // quick mode is shorter
+  // quick mode is much shorter; standard is real-BR length (10-12 min of storm)
   const q = new R.Storm({ seed: 42, mode: "quick", half: 800 });
-  ok(q.totalS < s1.totalS && q.totalS <= 210, "storm: quick mode timeline ≤ 3.5 min of storm");
+  ok(q.totalS < s1.totalS && q.totalS <= 260, "storm: quick mode timeline ≤ ~4 min of storm");
+  ok(s1.totalS >= 540 && s1.totalS <= 780, "storm: standard timeline 9-13 min (" + s1.totalS + "s)");
 
   // practice = no storm
   const pr = new R.Storm({ seed: 42, mode: "practice", half: 800 });
