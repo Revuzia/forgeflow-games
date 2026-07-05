@@ -6,7 +6,6 @@
  * Exposes on the returned map object:
  *   half, waterY, heightAt(x,z), groundAt(x,z) [terrain only],
  *   colliders (static AABBs + ramps), queryColliders(x,z,r),
- *   harvestables [{id,type,mat,pos,hp,yields}], hitHarvestable(id,dmg) -> {destroyed,mats},
  *   lootPoints [{x,y,z,kind,poi}], pois [{id,name,x,z,r}],
  *   randomGroundPos(rng), losBlocked(ax,ay,az,bx,by,bz),
  *   minimap (canvas), themeColor
@@ -269,15 +268,10 @@ export async function buildMap(W, mapId) {
     if (rng() < 0.6) chest(x, y + 0.6, z + len * 0.35, poi);
   }
 
-  // ── per-map POIs + props plan ─────────────────────────────────────────────
+  // ── per-map POIs + props plan (props = pure scenery + cover collision) ────
   const pois = [];
   const props = { palm: [], tree: [], pine: [], birch: [], bush: [], rocks: [], car: [], container: [], barrel: [] };
-  const harvestables = [];
-  let hid = 0;
-  function harv(type, mat, x, y, z, s, yields) {
-    harvestables.push({ id: "h" + (hid++), type, mat, pos: { x, y, z }, hp: 60, yields: yields || 60, scale: s, alive: true });
-  }
-  function scatterTrees(kind, n, minH, maxH, mat) {
+  function scatterTrees(kind, n, minH, maxH) {
     for (let i = 0; i < n; i++) {
       const x = (rng() * 2 - 1) * (HALF - 40), z = (rng() * 2 - 1) * (HALF - 40);
       const h = heightAt0(x, z);
@@ -285,7 +279,6 @@ export async function buildMap(W, mapId) {
       if (nearPoi(x, z, 26)) continue;
       const s = 0.8 + rng() * 0.9;
       props[kind].push({ x, y: h, z, s, ry: rng() * Math.PI * 2 });
-      harv(kind, mat, x, h, z, s, 55 + Math.floor(rng() * 40));
     }
   }
   function nearPoi(x, z, pad) {
@@ -388,7 +381,6 @@ export async function buildMap(W, mapId) {
         const x = p.x + (rng() - 0.5) * p.r * 1.6, z = p.z + (rng() - 0.5) * p.r * 1.6;
         const y = heightAt0(x, z);
         props.container.push({ x, y, z, s: 1.6 + rng() * 0.6, ry: Math.floor(rng() * 4) * Math.PI / 2 });
-        harv("container", "metal", x, y, z, 1.8, 70);
       }
       for (let i = 0; i < 3; i++) chest(p.x + (rng() - 0.5) * p.r, heightAt0(p.x, p.z) + 0.6, p.z + (rng() - 0.5) * p.r, p.id);
     }
@@ -421,7 +413,6 @@ export async function buildMap(W, mapId) {
         const x = p.x + (rng() - 0.5) * p.r * 1.6, z = p.z + (rng() - 0.5) * p.r * 1.6;
         const y = heightAt0(x, z);
         props.car.push({ x, y, z, s: 2.2, ry: rng() * Math.PI * 2 });
-        harv("car", "metal", x, y, z, 2.2, 55);
       }
       hut(p.x, p.z - 40, 10, 8, 0, C_METAL, p.id);
     }
@@ -431,7 +422,6 @@ export async function buildMap(W, mapId) {
       if (nearPoi(x, z, 10)) continue;
       const y = heightAt0(x, z);
       props.car.push({ x, y, z, s: 2.2, ry: rng() * Math.PI * 2 });
-      harv("car", "metal", x, y, z, 2.2, 45);
     }
     for (let i = 0; i < 40; i++) {
       const x = (rng() * 2 - 1) * (HALF - 60), z = (rng() * 2 - 1) * (HALF - 60);
@@ -492,7 +482,6 @@ export async function buildMap(W, mapId) {
         const x = p.x + (rng() - 0.5) * p.r * 1.5, z = p.z + (rng() - 0.5) * p.r * 1.5;
         const y = heightAt0(x, z);
         props.rocks.push({ x, y, z, s: 1.6 + rng() * 1.8, ry: rng() * Math.PI * 2 });
-        harv("rocks", "brick", x, y, z, 2, 80);
       }
       chest(p.x, heightAt0(p.x, p.z) + 0.6, p.z, p.id);
       hut(p.x + 40, p.z - 30, 6, 5, 0, C_STONE, p.id);
@@ -517,7 +506,7 @@ export async function buildMap(W, mapId) {
   } else {
     // practice range
     poi("range", "Shooting Range", 0, -80, 80);
-    poi("buildlot", "Build Lot", -120, 60, 60);
+    poi("longlane", "Long Lane", -120, 60, 60);
     poi("course", "Movement Course", 120, 60, 70);
     // target stands
     for (let i = 0; i < 8; i++) {
@@ -599,14 +588,6 @@ export async function buildMap(W, mapId) {
       }
     }
   }
-  // link harvestables to instances (by kind + index order)
-  const kindCounters = {};
-  for (const h of harvestables) {
-    const k = h.type;
-    kindCounters[k] = kindCounters[k] || 0;
-    h.instIndex = kindCounters[k]++;
-  }
-
   // ── static collider spatial hash ──────────────────────────────────────────
   const CELL = 16;
   const chash = new Map();
@@ -630,31 +611,6 @@ export async function buildMap(W, mapId) {
       if (l) for (const c of l) { if (!seen.has(c)) { seen.add(c); out.push(c); } }
     }
     return out;
-  }
-
-  // ── harvest interaction ───────────────────────────────────────────────────
-  const harvById = new Map(harvestables.map((h) => [h.id, h]));
-  function hitHarvestable(id, dmg) {
-    const h = harvById.get(id);
-    if (!h || !h.alive) return { destroyed: false, mats: 0 };
-    h.hp -= dmg;
-    const mats = W.SIM.BUILD.harvestPerHit + (Math.random() < 0.35 ? W.SIM.BUILD.harvestCritBonus : 0);
-    if (h.hp <= 0) {
-      h.alive = false;
-      const insts = instRefs[h.type];
-      if (insts) {
-        const Z = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001);
-        for (const inst of insts) { inst.setMatrixAt(h.instIndex, Z); inst.instanceMatrix.needsUpdate = true; }
-      }
-      // drop its collider (mark degenerate; movement treats prop colliders lazily)
-      for (const c of colliders) {
-        if (c.prop === h.type && Math.abs((c.minX + c.maxX) / 2 - h.pos.x) < 2 && Math.abs((c.minZ + c.maxZ) / 2 - h.pos.z) < 2) {
-          c.minX = c.maxX = 99999; c.minZ = c.maxZ = 99999;
-        }
-      }
-      return { destroyed: true, mats };
-    }
-    return { destroyed: false, mats };
   }
 
   // ── LOS (coarse march vs terrain + static boxes) ──────────────────────────
@@ -708,7 +664,6 @@ export async function buildMap(W, mapId) {
     id: mapId, K, half: HALF * 0.98, size: SIZE, waterY,
     heightAt: heightAt0, groundAt: heightAt0,
     colliders, queryColliders,
-    harvestables, hitHarvestable,
     lootPoints: lootAll, pois,
     randomGroundPos, losBlocked,
     minimap: mm, themeColor: K.themeColor,

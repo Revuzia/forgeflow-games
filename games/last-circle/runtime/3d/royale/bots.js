@@ -1,16 +1,15 @@
 /**
  * royale/bots.js — the 49 opponents. THE quality bar for this game: bots must
- * loot coherently, farm mats, rotate EARLY, use cover, wall-up when shot,
- * box at low HP, ramp-push with an advantage, and fight with human-feeling
- * aim (reaction delay, acquire overshoot, tracking warm-up, whiffs under
- * strafing) — everything Fortnite's own bots infamously don't do.
+ * loot coherently, rotate EARLY, use cover, flank, disengage to heal, and
+ * fight with human-feeling aim (reaction delay, acquire overshoot, tracking
+ * warm-up, whiffs under strafing) — everything cheap BR bots don't do.
  *
  * Architecture: per-bot BRAIN = utility-scored state machine over a
  * blackboard, ticked on a stagger (near-player bots think more often). The
  * brain only WRITES the actor's input struct — movement/weapons/building run
  * through the exact same code as the human player.
  *
- * States: DROP → LOOT / FARM / ROTATE / ENGAGE / FLEE / HEAL / CAMP / WANDER
+ * States: DROP → LOOT / ROTATE / ENGAGE / FLEE / HEAL / CAMP / PUSH / WANDER
  */
 import * as THREE from "three";
 // Import siblings WITH this module's own ?v= so we share the initialized
@@ -53,10 +52,9 @@ export function attachBrain(W, actor) {
     nextThink: 0,
     bb: {          // blackboard
       target: null, targetSeenT: -99, targetPos: null, acquireT: 0,
-      heard: null, lootId: null, harvestId: null,
+      heard: null, lootId: null,
       moveTo: null, strafeDir: 1, strafeT: 0,
-      matsGoal: actor.personality === "builder" ? 320 : actor.personality === "camper" ? 90 : 170,
-      boxed: false, campSpot: null, dropTarget: null,
+      campSpot: null, dropTarget: null, chestT: 0, chestId: null,
       stuckT: 0, lastPos: new THREE.Vector3(), burstLeft: 0, burstPause: 0,
     },
   };
@@ -121,12 +119,11 @@ function think(W, b) {
   const inStorm = st && st.dps > 0 && Math.hypot(a.pos.x - st.center.x, a.pos.z - st.center.z) > st.radius;
   const outsideNext = st && st.nextRadius != null &&
     Math.hypot(a.pos.x - (st.nextCenter ? st.nextCenter.x : st.center.x), a.pos.z - (st.nextCenter ? st.nextCenter.z : st.center.z)) > st.nextRadius * 0.9;
-  const hurtRecently = W.t - a.lastDamageT < 2.5;
   const alive = W.match.aliveCount();
   const endgame = alive <= 10;
-  const hasGun = a.inventory.slots.some((s, i) => i > 0 && s && s.kind === "weapon" && s.id !== "grenade");
-  const heals = a.inventory.slots.some((s) => s && s.kind === "consumable" && s.count > 0);
-  const mats = a.inventory.mats.wood + a.inventory.mats.brick + a.inventory.mats.metal;
+  // everyone spawns with a pistol; "upgraded" = anything beyond it
+  const upgraded = a.inventory.slots.some((s2, i) => s2 && s2.kind === "weapon" && !(i === 0 && s2.id === "pistol" && s2.rarity === 0));
+  const heals = a.inventory.slots.some((s2) => s2 && s2.kind === "consumable" && s2.count > 0);
 
   // hard overrides
   if (inStorm) { b.state = "ROTATE"; bb.moveTo = { x: st.center.x, z: st.center.z }; return; }
@@ -135,28 +132,19 @@ function think(W, b) {
   // utility scores
   const s = {};
   const lastFew = alive <= 4;
-  s.ENGAGE = bb.target && (hasGun || lastFew) ? 60 + (a.personality === "rusher" ? 20 : 0) + (endgame ? 25 : 0) + (lastFew ? 25 : 0) : 0;
-  if (bb.target && !hasGun && !lastFew) s.FLEE = 70;
+  const outnumbered = a.hp + a.shield < 50;
+  s.ENGAGE = bb.target ? 60 + (a.personality === "rusher" ? 20 : 0) + (endgame ? 25 : 0) + (lastFew ? 25 : 0) : 0;
+  s.FLEE = bb.target && outnumbered && !lastFew && heals ? 72 : 0;   // disengage to heal, not to hide forever
   s.HEAL = (a.hp < 45 || (a.shield < 30 && a.hp < 80)) && heals && !bb.target ? 75 : (a.hp < 60 && heals && W.t - a.lastDamageT > 6 ? 45 : 0);
-  s.BOXHEAL = a.hp < 40 && heals && bb.target && mats >= 40 && b.tierK.builds >= 2 ? 85 : 0;
-  s.LOOT = !hasGun ? 80 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
-  // farming matters most right after arming up — a bot with a gun and no mats
-  // can't wall-up or ramp-push, which is the #1 "feels like a bot" tell.
-  // Gate on "no LIVE threat" (seen <3s ago), not on the sticky 8s target memory.
-  const liveThreat = bb.target && W.t - bb.targetSeenT < 3;
-  s.FARM = mats < bb.matsGoal && !liveThreat
-    ? (mats < 40 ? 52 : a.personality === "builder" ? 56 : (hasGun && mats < 60 ? 44 : 26))
-    : 0;
+  s.LOOT = !upgraded ? 64 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
   s.ROTATE = outsideNext ? (st.phaseState === "closing" ? 88 : a.personality === "rotator" ? 66 : st.tToNext < 25 ? 62 : 30) : 0;
-  s.CAMP = (a.personality === "camper" || a.personality === "sniper") && hasGun && !outsideNext && !bb.target && !endgame ? 34 : 0;
-  s.PUSH = bb.heard && W.t - bb.heard.t < 6 && hasGun && (a.personality === "rusher" || a.personality === "rotator") && !endgame ? 48 : 0;
+  s.CAMP = (a.personality === "camper" || a.personality === "sniper") && !outsideNext && !bb.target && !endgame ? 34 : 0;
+  s.PUSH = bb.heard && W.t - bb.heard.t < 6 && (a.personality === "rusher" || a.personality === "rotator" || a.personality === "flanker") && !endgame ? 48 : 0;
   s.WANDER = 12;
 
   // pick best
   let best = "WANDER", bs = -1;
   for (const k in s) if (s[k] > bs) { bs = s[k]; best = k; }
-  if (best === "BOXHEAL") best = "HEAL"; // handled with boxing flag
-  bb.wantBox = s.BOXHEAL > 0;
   if (b.state !== best) { b.state = best; onEnter(W, b, best); }
 }
 
@@ -214,16 +202,6 @@ function onEnter(W, b, state) {
       const bp = ranked.length ? ranked[Math.floor(Math.random() * ranked.length)].p : null;
       bb.moveTo = bp ? { x: bp.x + (Math.random() - 0.5) * bp.r, z: bp.z + (Math.random() - 0.5) * bp.r } : randNear(W, a, 60);
     }
-  } else if (state === "FARM") {
-    let best = null, bd = 1e9;
-    for (const h of W.map.harvestables) {
-      if (!h.alive) continue;
-      const d = Math.hypot(h.pos.x - a.pos.x, h.pos.z - a.pos.z);
-      if (d < bd) { bd = d; best = h; }
-      if (bd < 20) break;
-    }
-    bb.harvestId = best ? best.id : null;
-    bb.moveTo = best ? { x: best.pos.x, z: best.pos.z } : randNear(W, a, 30);
   } else if (state === "ROTATE") {
     const st = W.stormCtl.storm.stateAt(W.t);
     const cx = st.nextCenter ? st.nextCenter.x : st.center.x;
@@ -243,7 +221,6 @@ function onEnter(W, b, state) {
   } else if (state === "WANDER") {
     bb.moveTo = randNear(W, a, 50);
   } else if (state === "HEAL") {
-    if (bb.wantBox && b.tierK.builds >= 2) boxUp(W, b);
     startHeal(W, a);
   } else if (state === "FLEE") {
     // run from target
@@ -257,16 +234,14 @@ function onEnter(W, b, state) {
 }
 
 function pickLoot(a, near) {
-  const hasGun = a.inventory.slots.some((s, i) => i > 0 && s && s.kind === "weapon" && s.id !== "grenade");
+  const upgraded = a.inventory.slots.some((s, i) => s && s.kind === "weapon" && !(i === 0 && s.id === "pistol" && s.rarity === 0));
   let best = null, bs = -1;
   for (const n of near) {
     let score = 0;
-    if (n.type === "chest") score = hasGun ? 55 : 70;
-    else if (n.data.kind === "weapon" && n.data.id !== "grenade") score = hasGun ? 30 + n.data.rarity * 8 : 90;
+    if (n.type === "chest") score = upgraded ? 55 : 72;
+    else if (n.data.kind === "weapon") score = upgraded ? 30 + n.data.rarity * 8 : 66 + n.data.rarity * 6;
     else if (n.data.kind === "consumable") score = n.data.id.includes("shield") ? 45 : 34;
-    else if (n.data.kind === "ammo") score = hasGun ? 40 : 10;
-    else if (n.data.kind === "mats") score = 22;
-    else if (n.data.kind === "weapon") score = 20; // grenades
+    else if (n.data.kind === "ammo") score = 38;
     score -= n.d * 0.4;
     if (score > bs) { bs = score; best = n; }
   }
@@ -288,34 +263,19 @@ function startHeal(W, a) {
   return false;
 }
 
-function boxUp(W, b) {
-  const a = b.actor;
-  // 4 walls around own cell (facing each cardinal), floor above for tier 4+
-  const saveYaw = a.yaw;
-  for (let d = 0; d < 4; d++) {
-    a.lastBuildT = -1; // bots box in one burst
-    W.tryBuild(a, "wall", d);
-  }
-  if (b.tierK.builds >= 3) { a.lastBuildT = -1; W.tryBuild(a, "ramp"); } // roof-ish ramp inside
-  a.yaw = saveYaw;
-  b.bb.boxed = true;
-}
-
 // ── action layer (every frame) ───────────────────────────────────────────────
 const _v = new THREE.Vector3();
 function act(W, b, dt) {
   const a = b.actor, bb = b.bb, inp = a.input;
   inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.fire = false; inp.ads = false;
-  inp.buildPiece = null;
-  inp.crouch = false; // sticky-crouch bug: glide-dive set it and nothing cleared it → bots crawled all match
 
   if (a.gliding) {
-    // steer toward drop target, dive when above it
+    // steer toward drop target, dive (sprint) when above it
     const t = bb.dropTarget || { x: 0, z: 0 };
     steerYaw(a, Math.atan2(-(t.x - a.pos.x), -(t.z - a.pos.z)), dt, 3);
     inp.mz = 1;
     const d = Math.hypot(t.x - a.pos.x, t.z - a.pos.z);
-    inp.crouch = d < 60; // dive
+    inp.sprint = d < 60; // dive
     return;
   }
 
@@ -328,22 +288,19 @@ function act(W, b, dt) {
     case "FLEE": actMove(W, b, dt, true); break;
     case "HEAL": actHeal(W, b, dt); break;
     case "LOOT": actLoot(W, b, dt); break;
-    case "FARM": actFarm(W, b, dt); break;
     case "ROTATE": case "PUSH": case "WANDER": actMove(W, b, dt, b.state === "ROTATE"); break;
     case "CAMP": actCamp(W, b, dt); break;
   }
 
-  // wall-up reflex: shot recently, can't see attacker, have mats (tier 2+)
-  if (W.t - a.lastDamageT < 0.9 && b.tierK.builds >= 1 && !bb.reflexWalled) {
+  // suppression reflex: shot recently by someone unseen → sprint to lateral
+  // cover instead of standing there soaking damage
+  if (W.t - a.lastDamageT < 0.9 && !bb.coverReflex && b.state !== "ENGAGE") {
     const att = a.lastAttacker && W.actorById.get(a.lastAttacker);
     if (att) {
-      // face attacker, drop a wall
-      const want = Math.atan2(-(att.pos.x - a.pos.x), -(att.pos.z - a.pos.z));
-      a.yaw = want;
-      inp.yaw = want;
-      W.tryBuild(a, "wall");
-      bb.reflexWalled = true;
-      setTimeout(() => { bb.reflexWalled = false; }, 1200 - b.tierK.buildMs);
+      const ang = Math.atan2(a.pos.x - att.pos.x, a.pos.z - att.pos.z) + (Math.random() < 0.5 ? 1 : -1) * 1.2;
+      bb.moveTo = { x: a.pos.x + Math.sin(ang) * 18, z: a.pos.z + Math.cos(ang) * 18 };
+      bb.coverReflex = true;
+      setTimeout(() => { bb.coverReflex = false; }, 1500);
     }
   }
 }
@@ -369,7 +326,7 @@ function moveToward(W, b, tx, tz, dt, sprint) {
   if (b.bb.stuckT > 0.7) {
     inp.jump = true;
     inp.mx = Math.random() < 0.5 ? -1 : 1;
-    if (b.bb.stuckT > 2 && b.tierK.builds >= 1) { W.tryBuild(a, "ramp"); b.bb.stuckT = 0; }
+    if (b.bb.stuckT > 2.2) { b.bb.moveTo = randNear(W, a, 25); b.bb.stuckT = 0; } // reroute
   }
   return Math.hypot(tx - a.pos.x, tz - a.pos.z);
 }
@@ -386,9 +343,17 @@ function actLoot(W, b, dt) {
   // grab everything in arm's reach (chests included)
   const near = W.nearbyLoot(a.pos, 2.4);
   for (const n of near) {
-    if (n.type === "chest") { W.openChest(a, n.id); if (bb.lootId === n.id) { bb.lootId = null; b.nextThink = 0; } }
-    else W.pickupItem(a, n.id);
+    if (n.type === "chest") {
+      // chests take a 2s channel — bots obey the same rule as the player
+      if (bb.chestId !== n.id) { bb.chestId = n.id; bb.chestT = 0; }
+      bb.chestT += dt;
+      a.input.mz = 0; a.input.mx = 0;
+      if (bb.chestT >= 2) { W.openChest(a, n.id); bb.chestId = null; bb.chestT = 0; if (bb.lootId === n.id) { bb.lootId = null; b.nextThink = 0; } }
+      return; // stand and channel
+    }
+    W.pickupItem(a, n.id);
   }
+  bb.chestId = null; bb.chestT = 0;
   if (bb.moveTo) {
     const far = Math.hypot(bb.moveTo.x - a.pos.x, bb.moveTo.z - a.pos.z) > 12;
     const d = moveToward(W, b, bb.moveTo.x, bb.moveTo.z, dt, far); // sprint the long hauls
@@ -403,29 +368,17 @@ function actLoot(W, b, dt) {
 }
 
 function ensureGunOut(W, a) {
-  if (a.weapon && a.weapon.id !== "pickaxe" && !a.weapon.id.startsWith("consumable")) return;
+  // holding a consumable (or an empty hand) mid-world → switch to the best gun
+  if (a.weapon && !a.weapon.id.startsWith("consumable")) return;
   let bestIdx = -1, bs = -1;
-  for (let i = 1; i < a.inventory.slots.length; i++) {
+  for (let i = 0; i < a.inventory.slots.length; i++) {
     const s = a.inventory.slots[i];
-    if (s && s.kind === "weapon" && s.id !== "grenade") {
+    if (s && s.kind === "weapon") {
       const score = (K.WEAPONS[s.id].damage * K.WEAPONS[s.id].rpm / 60) + s.rarity * 20;
       if (score > bs) { bs = score; bestIdx = i; }
     }
   }
-  if (bestIdx > 0) W.equipSlot(a, bestIdx);
-}
-
-function actFarm(W, b, dt) {
-  const a = b.actor, bb = b.bb;
-  const h = bb.harvestId && W.map.harvestables.find((x) => x.id === bb.harvestId);
-  if (!h || !h.alive) { onEnter(W, b, "FARM"); return; }
-  const d = moveToward(W, b, h.pos.x, h.pos.z, dt, false);
-  if (d < 2.4) {
-    // face it + swing pickaxe
-    if (a.inventory.active !== 0) W.equipSlot(a, 0);
-    a.input.mz = 0;
-    a.input.fire = true;
-  }
+  if (bestIdx >= 0) W.equipSlot(a, bestIdx);
 }
 
 function actHeal(W, b, dt) {
@@ -442,8 +395,8 @@ function actCamp(W, b, dt) {
     const d = Math.hypot(bb.campSpot.x - a.pos.x, bb.campSpot.z - a.pos.z);
     if (d > 4) { moveToward(W, b, bb.campSpot.x, bb.campSpot.z, dt, false); return; }
   }
-  // crouch + slow scan
-  a.input.crouch = true;
+  // hold position + slow scan (ADS for the tighter cone read)
+  a.input.ads = true;
   a.input.yaw += dt * 0.25;
 }
 
@@ -463,30 +416,20 @@ function actEngage(W, b, dt) {
   const def = K.WEAPONS[wid] || K.WEAPONS.pistol;
 
   // preferred range by class
-  const prefer = { pickaxe: 1.8, shotgun: 7, smg: 14, pistol: 16, ar: 30, sniper: 90, rocket: 40 }[wid] || 25;
+  const prefer = { shotgun: 7, smg: 14, pistol: 16, ar: 30, sniper: 90, glauncher: 26 }[wid] || 25;
   // final-circle duels: tighter aim (adrenaline > wobble) so fights resolve
   const duel = W.match.aliveCount() <= 4;
 
-  // movement: close/retreat + strafe
+  // movement: close/retreat + strafe; flankers arc around instead of straight-lining
   bb.strafeT -= dt;
-  if (bb.strafeT <= 0) { bb.strafeT = 0.5 + Math.random() * 0.9; bb.strafeDir = Math.random() < 0.5 ? -1 : 1; }
+  if (bb.strafeT <= 0) {
+    bb.strafeT = 0.5 + Math.random() * 0.9;
+    bb.strafeDir = a.personality === "flanker" ? (bb.strafeDir || 1) : (Math.random() < 0.5 ? -1 : 1);
+  }
   if (dist > prefer * 1.5) { inp.mz = 1; inp.sprint = dist > prefer * 3; }
   else if (dist < prefer * 0.5) inp.mz = -0.7;
-  inp.mx = bb.strafeDir * (dist < 50 ? 1 : 0.4);
+  inp.mx = bb.strafeDir * (dist < 50 ? 1 : a.personality === "flanker" ? 0.8 : 0.4);
   if (a.onGround && b.actor.tier >= 3 && Math.random() < dt * 0.35) inp.jump = true;
-
-  // ramp-push: advantage + mats + mid range (tier 3+)
-  const advantage = (a.hp + a.shield) - (t.hp + t.shield) > 20;
-  const mats = a.inventory.mats.wood + a.inventory.mats.brick + a.inventory.mats.metal;
-  if (b.tierK.builds >= 2 && advantage && mats > 60 && dist < 40 && dist > 10 && seen && Math.random() < dt * 0.5) {
-    W.tryBuild(a, "ramp");
-    if (b.tierK.builds >= 3) W.tryBuild(a, "wall");
-    inp.jump = a.onGround && supportAt(W, a.pos.x, a.pos.z, a.pos.y + 0.6) > a.pos.y + 0.4;
-  }
-  // high-ground denial: target above → build up (tier 4+)
-  if (b.tierK.builds >= 3 && seen && (tp.y - a.pos.y) > 5 && mats > 40 && Math.random() < dt * 0.4) {
-    W.tryBuild(a, "ramp");
-  }
 
   // aiming with human error model
   const eye = eyePos(a);
@@ -530,14 +473,10 @@ function actEngage(W, b, dt) {
       bb.burstPause -= dt;
     } else if (def.cls === "sniper") {
       // only when still-ish
-      if (Math.hypot(a.vel.x, a.vel.z) < 1.5) { inp.fire = true; inp.mx = 0; inp.mz = 0; inp.crouch = true; }
+      if (Math.hypot(a.vel.x, a.vel.z) < 1.5) { inp.fire = true; inp.mx = 0; inp.mz = 0; }
     } else {
       inp.fire = true;
     }
-  }
-  // grenade toss at boxed/far targets occasionally (tier 3+)
-  if (b.actor.tier >= 3 && a.inventory.grenades > 0 && dist > 12 && dist < 30 && Math.random() < dt * 0.06) {
-    W.throwGrenade(a);
   }
   // reload when safe
   if (a.weapon && a.weapon.magAmmo === 0) inp.reload = true;

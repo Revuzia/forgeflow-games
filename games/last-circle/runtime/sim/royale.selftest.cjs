@@ -94,63 +94,29 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(R.splashScale(0, 4) === 1 && R.splashScale(4, 4) === 0 && approx(R.splashScale(2, 4), 0.625), "splash: linear scale to edge");
 }
 
-// ── Build grid ───────────────────────────────────────────────────────────────
+// ── Weapon roster (BR shooter, no melee/building) ────────────────────────────
 {
-  // grounded = any piece at iy===0
-  const g = new R.BuildGrid({ groundedFn: (p) => p.iy === 0 });
-  const w1 = g.place("wall", 0, 0, 0, 0, "wood", 0);
-  ok(!!w1 && g.pieces.size === 1, "build: place wall");
-  ok(g.place("wall", 0, 0, 0, 0, "wood", 0) === null, "build: same slot refuses double place");
-  ok(g.place("wall", 0, 0, 0, 1, "wood", 0) !== null, "build: different face same cell ok");
-
-  // hp ramp: at t=0 hp cap = hpStart; after buildS = hpFull
-  ok(g.currentMaxHp(w1, 0) === 90, "build: wood starts at 90hp");
-  ok(g.currentMaxHp(w1, 4) === 150, "build: wood ramps to 150hp after 4s");
-
-  // ramp/stair share slot
-  const g2 = new R.BuildGrid({ groundedFn: (p) => p.iy === 0 });
-  ok(g2.place("ramp", 1, 0, 1, 2, "brick", 0) !== null, "build: place ramp");
-  ok(g2.place("stair", 1, 0, 1, 0, "wood", 0) === null, "build: stair blocked by ramp in same cell");
-
-  // support cascade: tower of walls; break the base → all above collapse
-  const g3 = new R.BuildGrid({ groundedFn: (p) => p.iy === 0 });
-  g3.place("wall", 0, 0, 0, 0, "wood", 0);
-  g3.place("wall", 0, 1, 0, 0, "wood", 0);
-  g3.place("wall", 0, 2, 0, 0, "wood", 0);
-  const gone = g3.removePiece(g3.slotKey("wall", 0, 0, 0, 0));
-  ok(gone.length === 3 && g3.pieces.size === 0, "build: destroying base cascades the tower (" + gone.length + " pieces)");
-
-  // cascade spares grounded neighbors
-  const g4 = new R.BuildGrid({ groundedFn: (p) => p.iy === 0 });
-  g4.place("wall", 0, 0, 0, 0, "wood", 0);
-  g4.place("wall", 1, 0, 0, 0, "wood", 0); // separate grounded wall
-  g4.place("wall", 0, 1, 0, 0, "wood", 0);
-  const gone2 = g4.removePiece(g4.slotKey("wall", 0, 0, 0, 0));
-  ok(gone2.length === 2 && g4.pieces.size === 1, "build: cascade only kills unsupported chain");
-
-  // damagePiece kills + cascades
-  const g5 = new R.BuildGrid({ groundedFn: (p) => p.iy === 0 });
-  g5.place("wall", 0, 0, 0, 0, "wood", 0);
-  g5.place("wall", 0, 1, 0, 0, "wood", 0);
-  const res = g5.damagePiece(g5.slotKey("wall", 0, 0, 0, 0), 999, 0);
-  ok(res.destroyed.length === 2, "build: overkill damage destroys + cascades");
-  const g6 = new R.BuildGrid({ groundedFn: (p) => p.iy === 0 });
-  const p6 = g6.place("wall", 0, 0, 0, 0, "wood", 0);
-  g6.damagePiece(p6.slotKey, 30, 0);
-  ok(g6.get(p6.slotKey).hp === 60, "build: partial damage reduces hp (90-30=60)");
+  ok(R.WEAPON_IDS.length === 6, "weapons: exactly 6 lootable guns");
+  ok(["pistol", "smg", "ar", "shotgun", "sniper", "glauncher"].every((w) => R.WEAPON_IDS.includes(w)), "weapons: pistol/SMG/AR/shotgun/sniper/grenade-launcher");
+  ok(!R.WEAPONS.pickaxe && !R.WEAPONS.rocket && !R.WEAPONS.grenade, "weapons: pickaxe/rocket/hand-grenade removed");
+  ok(R.WEAPONS.glauncher.arc && R.WEAPONS.glauncher.splashR > 0 && R.WEAPONS.glauncher.fuseS > 0, "weapons: grenade launcher lobs fused splash rounds");
+  ok(!R.BuildGrid && !R.BUILD && !R.MATERIALS, "building: fully removed from the sim");
+  ok(R.START_LOADOUT.weapon === "pistol" && R.START_LOADOUT.ammo.light > 0, "loadout: everyone starts with a pistol + ammo");
+  ok(R.MOVE.swim > 0 && R.MOVE.swim < R.MOVE.walk, "movement: swim speed exists, slower than walking");
 }
 
 // ── Loot rolls ───────────────────────────────────────────────────────────────
 {
   const rng = R.mulberry32(777);
-  let weapons = 0, N = 2000;
+  let weapons = 0, mats = 0, N = 2000;
   const rarCount = [0, 0, 0, 0, 0];
   for (let i = 0; i < N; i++) {
     const it = R.rollFloorItem(rng);
-    ok2 = true;
-    if (it.kind === "weapon" && it.id !== "grenade") { weapons++; rarCount[it.rarity]++; }
+    if (it.kind === "weapon") { weapons++; rarCount[it.rarity]++; }
+    if (it.kind === "mats") mats++;
   }
-  ok(weapons > N * 0.3 && weapons < N * 0.55, "loot: ~42% of floor spawns are guns (" + weapons + "/" + N + ")");
+  ok(weapons > N * 0.35 && weapons < N * 0.55, "loot: ~45% of floor spawns are guns (" + weapons + "/" + N + ")");
+  ok(mats === 0, "loot: no building materials in loot tables");
   ok(rarCount[0] > rarCount[4], "loot: commons more frequent than legendaries (" + rarCount.join(",") + ")");
 
   const rng2 = R.mulberry32(778);
@@ -164,8 +130,6 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   const s2 = JSON.stringify(R.rollChest(R.mulberry32(555)));
   ok(s1 === s2, "loot: seeded rolls deterministic");
 }
-var ok2;
-
 // ── Match bookkeeping ────────────────────────────────────────────────────────
 {
   const m = new R.Match({ players: 4 });

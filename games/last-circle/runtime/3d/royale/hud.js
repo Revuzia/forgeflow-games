@@ -49,7 +49,7 @@ const MAP_CARDS = [
 const MODE_CARDS = [
   { id: "standard", name: "BATTLE ROYALE", sub: "50 players · last one standing · 10–15 min" },
   { id: "quick", name: "QUICK MATCH", sub: "5-minute storm · double loot · hot start" },
-  { id: "practice", name: "PRACTICE", sub: "No storm · range, free build, movement course" },
+  { id: "practice", name: "PRACTICE", sub: "No storm · shooting range + movement course" },
 ];
 
 export function showMenu(W, startMatch) {
@@ -97,7 +97,7 @@ export function showMenu(W, startMatch) {
   settings.onclick = () => { W.events.emit("uiClick"); showSettings(W); };
 
   h("div", { fontSize: "12px", opacity: "0.55", maxWidth: "760px", textAlign: "center", lineHeight: "1.6" },
-    "WASD move · Mouse aim/fire · RMB aim · SPACE jump · CTRL crouch · SHIFT sprint · E interact · R reload · Z/X/C/V build wall/floor/ramp/stair · B material · G edit · T quick heal · 1–5 slots · M map", wrap);
+    "WASD move · Mouse aim/fire · RMB aim down sights · SPACE jump · SHIFT sprint · R reload · E loot (hold E to open chests) · 1–5 / scroll weapons · M map", wrap);
   import("./audio.js" + (new URL(import.meta.url).search || "")).then((m) => m.startMenuMusic(W));
 }
 
@@ -131,7 +131,7 @@ export function showLobby(W, onDone) {
     return c;
   });
   const cd = h("div", { fontSize: "42px", fontWeight: "900", color: "#57b0ff", minHeight: "52px" }, "", wrap);
-  if (W.mode === "practice") h("div", { fontSize: "13px", opacity: "0.7" }, "Sandbox — no storm. Range targets south, build lot west, movement course east.", wrap);
+  if (W.mode === "practice") h("div", { fontSize: "13px", opacity: "0.7" }, "Sandbox — no storm. Range targets south, movement course east.", wrap);
 
   // fill animation then countdown
   let filled = 1;
@@ -173,12 +173,10 @@ export function showHUD(W) {
   R.healBar = h("div", { position: "absolute", left: "50%", top: "58%", transform: "translateX(-50%)", width: "220px", height: "10px", background: "rgba(0,0,0,0.5)", borderRadius: "5px", display: "none", overflow: "hidden" }, null, L);
   R.healFill = h("div", { width: "0%", height: "100%", background: "#4ade80" }, null, R.healBar);
 
-  // slots + mats bottom right
+  // slots bottom right
   const br = h("div", { position: "absolute", right: "18px", bottom: "16px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }, null, L);
-  R.matsRow = h("div", { display: "flex", gap: "10px", fontSize: "13px", fontWeight: "800", textShadow: "0 1px 3px #000" }, null, br);
   R.slotsRow = h("div", { display: "flex", gap: "6px" }, null, br);
   R.ammoText = h("div", { fontSize: "22px", fontWeight: "900", textShadow: "0 2px 4px #000" }, "", br);
-  R.buildHint = h("div", { fontSize: "12px", opacity: "0.9", background: "rgba(0,0,0,0.4)", padding: "4px 10px", borderRadius: "6px", display: "none" }, "", br);
 
   // top center: storm timer + alive
   const tc = h("div", { position: "absolute", top: "12px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "18px", alignItems: "center", background: "rgba(0,0,0,0.4)", padding: "6px 18px", borderRadius: "10px" }, null, L);
@@ -200,8 +198,12 @@ export function showHUD(W) {
   R.cross = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", fontSize: "18px", fontWeight: "400", color: "rgba(255,255,255,0.9)", textShadow: "0 1px 2px #000" }, "+", L);
   R.hitmark = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%) rotate(45deg)", fontSize: "26px", color: "#fff", opacity: "0", transition: "opacity .18s" }, "✕", L);
 
-  // interact hint
+  // interact hint + chest-open progress ring
   R.interact = h("div", { position: "absolute", left: "50%", top: "60%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.55)", padding: "6px 14px", borderRadius: "8px", fontSize: "14px", display: "none" }, "", L);
+  R.chestRing = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "58px", height: "58px", borderRadius: "50%", display: "none", background: "conic-gradient(#ffd254 0deg, rgba(255,255,255,0.15) 0deg)", WebkitMask: "radial-gradient(circle, transparent 22px, #000 23px)", mask: "radial-gradient(circle, transparent 22px, #000 23px)" }, null, L);
+
+  // directional indicators (footsteps / gunfire / damage) on a screen-edge ring
+  R.indicators = h("div", { position: "absolute", inset: "0", pointerEvents: "none" }, null, L);
 
   // storm messages center
   R.stormMsg = h("div", { position: "absolute", left: "50%", top: "22%", transform: "translateX(-50%)", fontSize: "22px", fontWeight: "900", letterSpacing: "1px", textShadow: "0 2px 8px #000", opacity: "0", transition: "opacity .4s", color: "#d9b3ff" }, "", L);
@@ -252,28 +254,13 @@ export function update(W, dt) {
   let ammoT = "";
   if (wpn && !wpn.id.startsWith("consumable")) {
     const def = K.WEAPONS[wpn.id];
-    if (wpn.id === "pickaxe") ammoT = "⛏";
-    else if (wpn.id === "grenade") ammoT = "🧨 " + p.inventory.grenades;
-    else if (def) ammoT = wpn.state === "reloading" ? "RELOADING…" : wpn.magAmmo + " / " + (p.inventory.ammo[def.ammo] || 0);
+    if (def) ammoT = wpn.state === "reloading" ? "RELOADING…" : wpn.magAmmo + " / " + (p.inventory.ammo[def.ammo] || 0);
   }
+  if (p.swimming) ammoT = "SWIMMING";
   if (C.ammo !== ammoT) { R.ammoText.textContent = ammoT; C.ammo = ammoT; }
-
-  const matsT = "🪵 " + p.inventory.mats.wood + "   🧱 " + p.inventory.mats.brick + "   🔩 " + p.inventory.mats.metal;
-  if (C.mats !== matsT) {
-    R.matsRow.innerHTML = "";
-    const parts2 = [["#d9a05f", "WOOD " + p.inventory.mats.wood], ["#d97b5f", "BRICK " + p.inventory.mats.brick], ["#9fb2c4", "METAL " + p.inventory.mats.metal]];
-    for (const [c2, t2] of parts2) h("div", { color: c2 }, t2, R.matsRow);
-    C.mats = matsT;
-  }
 
   const slotSig = p.inventory.slots.map((s, i) => (s ? s.id + (s.count || "") + (s.rarity || 0) : "-") + (i === p.inventory.active ? "*" : "")).join("|");
   if (C.slots !== slotSig) { paintSlots(W, p); C.slots = slotSig; }
-
-  // build hint
-  if (p.input.buildPiece) {
-    R.buildHint.style.display = "block";
-    R.buildHint.textContent = "BUILD: " + p.input.buildPiece.toUpperCase() + " · " + p.buildMat.toUpperCase() + " (B) · scroll to cycle";
-  } else R.buildHint.style.display = "none";
 
   // storm timer + alive
   srT += dt;
@@ -298,15 +285,75 @@ export function update(W, dt) {
   mmT += dt;
   if (mmT > 0.1) { mmT = 0; drawMinimap(W, R.mmCanvas.getContext("2d"), 180, false); }
 
-  // interact hint
+  // interact hint + chest channel ring
   const hint = W.interactHint;
   if (hint) {
     R.interact.style.display = "block";
-    R.interact.textContent = hint.type === "chest" ? "[E] Open chest" : "[E] " + labelFor(hint.data);
+    R.interact.textContent = hint.type === "chest"
+      ? (hint.progress > 0 ? "Opening…" : "[HOLD E] Open chest")
+      : "[E] " + labelFor(hint.data);
   } else R.interact.style.display = "none";
+  if (hint && hint.type === "chest" && hint.progress > 0) {
+    R.chestRing.style.display = "block";
+    const deg = Math.min(360, Math.round(hint.progress * 360));
+    R.chestRing.style.background = `conic-gradient(#ffd254 ${deg}deg, rgba(255,255,255,0.15) ${deg}deg)`;
+  } else R.chestRing.style.display = "none";
+
+  // directional indicators: fade + footstep scan
+  stepIndicators(W, dt);
 
   // crosshair spread feel
   R.cross.style.display = (p.input.ads && p.weapon && K.WEAPONS[p.weapon.id] && K.WEAPONS[p.weapon.id].scope) ? "none" : "block";
+}
+
+// ═══ directional indicators ══════════════════════════════════════════════════
+// Screen-edge cues (industry standard): white footsteps for nearby movement,
+// white/gold chevrons for gunfire direction (≤250m), red arcs for damage taken.
+const inds = [];      // {el, ang, t, life}
+const stepMarks = new Map(); // actorId -> last footstep indicator time
+function addIndicator(W, worldX, worldZ, kind) {
+  if (!R.indicators || !W.player) return;
+  const p = W.player;
+  const ang = Math.atan2(worldX - p.pos.x, worldZ - p.pos.z);   // world bearing
+  const el = h("div", { position: "absolute", left: "50%", top: "50%", willChange: "transform, opacity", fontSize: kind === "damage" ? "34px" : "20px", fontWeight: "900", textShadow: "0 1px 4px #000" }, null, R.indicators);
+  if (kind === "footstep") { el.textContent = "👣"; el.style.filter = "grayscale(1) brightness(2)"; el.style.fontSize = "17px"; }
+  else if (kind === "shot") { el.textContent = "︿"; el.style.color = "#ffe9a0"; }
+  else { el.textContent = "❮❯"; el.style.color = "#ff5544"; el.style.letterSpacing = "-4px"; }
+  inds.push({ el, ang, t: 0, life: kind === "damage" ? 1.6 : kind === "shot" ? 1.2 : 0.9 });
+  if (inds.length > 14) { const d = inds.shift(); d.el.remove(); }
+}
+function stepIndicators(W, dt) {
+  if (!R.indicators) return;
+  const p = W.player;
+  if (!p) return;
+  // footstep scan at 3Hz: moving actors within 30m (visualized sound)
+  stepIndicators._acc = (stepIndicators._acc || 0) + dt;
+  if (stepIndicators._acc > 0.33) {
+    stepIndicators._acc = 0;
+    for (const a of W.actors) {
+      if (a === p || !a.alive) continue;
+      const d = Math.hypot(a.pos.x - p.pos.x, a.pos.z - p.pos.z);
+      if (d > 30) continue;
+      if (Math.hypot(a.vel.x, a.vel.z) < 2) continue;
+      const last = stepMarks.get(a.id) || -9;
+      if (W.t - last < 1.4) continue;
+      stepMarks.set(a.id, W.t);
+      addIndicator(W, a.pos.x, a.pos.z, "footstep");
+    }
+  }
+  // position + fade all live indicators around a screen-centered ring
+  const wpx = W.kernel.renderer.domElement.clientWidth, hpx = W.kernel.renderer.domElement.clientHeight;
+  const RAD = Math.min(wpx, hpx) * 0.36;
+  for (let i = inds.length - 1; i >= 0; i--) {
+    const d = inds[i];
+    d.t += dt;
+    if (d.t > d.life) { d.el.remove(); inds.splice(i, 1); continue; }
+    // screen angle relative to the camera facing (0 = up/forward)
+    const rel = d.ang - p.yaw + Math.PI;
+    const sx = Math.sin(rel) * RAD, sy = -Math.cos(rel) * RAD;
+    d.el.style.transform = `translate(calc(${sx.toFixed(0)}px - 50%), calc(${sy.toFixed(0)}px - 50%)) rotate(${(rel * 180 / Math.PI).toFixed(0)}deg)`;
+    d.el.style.opacity = String(Math.max(0, 1 - d.t / d.life));
+  }
 }
 
 function paintSlots(W, p) {
@@ -329,7 +376,7 @@ function paintSlots(W, p) {
   });
 }
 function shortName(s) {
-  const M = { pickaxe: "PICK", pistol: "PSTL", smg: "SMG", ar: "AR", shotgun: "SHTG", sniper: "SNPR", rocket: "RPG", grenade: "NADE", bandage: "BAND", medkit: "MED", mini_shield: "MINI", big_shield: "SHLD" };
+  const M = { pistol: "PSTL", smg: "SMG", ar: "AR", shotgun: "SHTG", sniper: "SNPR", glauncher: "GL", bandage: "BAND", medkit: "MED", mini_shield: "MINI", big_shield: "SHLD" };
   return M[s.id] || s.id.slice(0, 4).toUpperCase();
 }
 function labelFor(d) {
@@ -400,6 +447,19 @@ function wireEvents(W) {
     if (owner !== W.player || !R.hitmark) return;
     R.hitmark.style.opacity = "1";
     setTimeout(() => { if (R.hitmark) R.hitmark.style.opacity = "0"; }, 120);
+  });
+  // gunfire direction (industry-standard ~250m audible range)
+  W.events.on("shotFired", (shooter, weaponId, eye) => {
+    if (!W.player || shooter === W.player || !W.player.alive) return;
+    const d = Math.hypot(eye.x - W.player.pos.x, eye.z - W.player.pos.z);
+    if (d < 12 || d > 250) return;   // too close = obvious; too far = inaudible
+    addIndicator(W, eye.x, eye.z, "shot");
+  });
+  // damage direction (red arc toward the attacker)
+  W.events.on("actorHurt", (victim, info) => {
+    if (victim !== W.player || !info.attackerId) return;
+    const att = W.actorById.get(info.attackerId);
+    if (att) addIndicator(W, att.pos.x, att.pos.z, "damage");
   });
   W.events.on("actorDied", (victim, killerId, weaponId) => {
     if (!R.feed) return;
@@ -514,9 +574,8 @@ function confetti(L) {
 
 // ═══ settings ════════════════════════════════════════════════════════════════
 const ACTIONS = [
-  ["Jump", "Space"], ["Crouch", "ControlLeft"], ["Sprint", "ShiftLeft"], ["Interact", "KeyE"],
-  ["Reload", "KeyR"], ["Wall", "KeyZ"], ["Floor", "KeyX"], ["Ramp", "KeyC"], ["Stair", "KeyV"],
-  ["Edit", "KeyG"], ["Material", "KeyB"], ["Quick heal", "KeyT"], ["Map", "KeyM"],
+  ["Jump", "Space"], ["Sprint", "ShiftLeft"], ["Loot / Interact", "KeyE"],
+  ["Reload", "KeyR"], ["Map", "KeyM"],
 ];
 function showSettings(W) {
   if (R.settings) { R.settings.remove(); R.settings = null; }

@@ -72,35 +72,26 @@ function rarityRing(rarity) {
 }
 const kindGeos = {
   ammo: new THREE.BoxGeometry(0.34, 0.24, 0.24),
-  mats: new THREE.BoxGeometry(0.4, 0.4, 0.4),
   consumable: new THREE.CylinderGeometry(0.14, 0.14, 0.4, 8),
 };
 const kindMats = {
   ammo: new THREE.MeshStandardMaterial({ color: 0x8a7d3a, metalness: 0.4, roughness: 0.5 }),
-  wood: new THREE.MeshStandardMaterial({ color: 0xb08850 }),
-  brick: new THREE.MeshStandardMaterial({ color: 0xb06a55 }),
-  metal: new THREE.MeshStandardMaterial({ color: 0x8b98a5, metalness: 0.5 }),
   heal: new THREE.MeshStandardMaterial({ color: 0x59d68a, emissive: 0x1a4, emissiveIntensity: 0.4 }),
   shieldC: new THREE.MeshStandardMaterial({ color: 0x4aa8ff, emissive: 0x123a66, emissiveIntensity: 0.5 }),
-  grenade: new THREE.MeshStandardMaterial({ color: 0x3d5a3a }),
 };
 
 function itemMesh(W, data) {
   const grp = new THREE.Group();
   grp.add(rarityRing(data.kind === "weapon" ? data.rarity : 0));
-  if (data.kind === "weapon" && data.id !== "grenade") {
+  if (data.kind === "weapon") {
     // weapon proto (async — attach when protos ready)
     if (W.weaponProto) {
       W.weaponProto(data.id).then((proto) => {
         if (proto && grp.parent) { const m = proto.clone(); m.position.y = 0.45; m.rotation.z = 0.5; grp.add(m); }
       });
     }
-  } else if (data.kind === "weapon" && data.id === "grenade") {
-    const m = new THREE.Mesh(kindGeos.consumable, kindMats.grenade); m.position.y = 0.4; grp.add(m);
   } else if (data.kind === "ammo") {
     const m = new THREE.Mesh(kindGeos.ammo, kindMats.ammo); m.position.y = 0.35; grp.add(m);
-  } else if (data.kind === "mats") {
-    const m = new THREE.Mesh(kindGeos.mats, kindMats[data.id] || kindMats.wood); m.position.y = 0.4; grp.add(m);
   } else if (data.kind === "consumable") {
     const isShield = data.id.includes("shield");
     const m = new THREE.Mesh(kindGeos.consumable, isShield ? kindMats.shieldC : kindMats.heal); m.position.y = 0.4; grp.add(m);
@@ -128,14 +119,44 @@ async function ensureChestProto(W) {
     const m = await W.kernel.loadGLTF(W.assetBase + "assets/props/chest.glb");
     const bbox = new THREE.Box3().setFromObject(m);
     const size = bbox.getSize(new THREE.Vector3());
-    const s = 1.1 / Math.max(size.x, size.z, 0.01);
+    const s = 1.6 / Math.max(size.x, size.z, 0.01);   // BIG — a chest must read as a chest
     m.scale.setScalar(s);
     m.position.y = -bbox.min.y * s;
     chestProto = m;
   } catch (e) {
-    chestProto = new THREE.Mesh(new THREE.BoxGeometry(1, 0.7, 0.7), new THREE.MeshStandardMaterial({ color: 0x8a6420 }));
+    // composed fallback (never a bare cube): body + lid + gold trim
+    const g = new THREE.Group();
+    const wood = new THREE.MeshStandardMaterial({ color: 0x7a5233 });
+    const gold = new THREE.MeshStandardMaterial({ color: 0xd4a017, metalness: 0.7, roughness: 0.3, emissive: 0x6b4e00, emissiveIntensity: 0.3 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.7, 0.95), wood); body.position.y = 0.35; g.add(body);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.5, 10, 1, false, 0, Math.PI), wood);
+    lid.rotation.z = Math.PI / 2; lid.position.y = 0.7; g.add(lid);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.15, 1.0), gold); band.position.y = 0.5; g.add(band);
+    const latch = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.24, 0.1), gold); latch.position.set(0, 0.55, 0.52); g.add(latch);
+    chestProto = g;
   }
   return chestProto;
+}
+
+// golden glow sprite (radial canvas) + light beam so chests read from far away
+let glowTex = null;
+function chestGlow() {
+  if (!glowTex) {
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = 128;
+    const ctx = cv.getContext("2d");
+    const gr = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
+    gr.addColorStop(0, "rgba(255,214,84,0.9)");
+    gr.addColorStop(0.4, "rgba(255,190,50,0.35)");
+    gr.addColorStop(1, "rgba(255,180,40,0)");
+    ctx.fillStyle = gr;
+    ctx.fillRect(0, 0, 128, 128);
+    glowTex = new THREE.CanvasTexture(cv);
+  }
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  sp.scale.set(3.2, 3.2, 1);
+  sp.position.y = 0.9;
+  return sp;
 }
 
 function spawnChest(W, x, y, z) {
@@ -143,13 +164,23 @@ function spawnChest(W, x, y, z) {
   const group = new THREE.Group();
   const gy = Math.max(y - 0.4, W.map.heightAt(x, z));
   group.position.set(x, gy, z);
+  group.rotation.y = (x * 13.7 + z * 7.3) % (Math.PI * 2); // varied facing
   const ring = rarityRing(4);
-  ring.scale.setScalar(1.3);
-  ring.position.y = 0.1;
+  ring.scale.setScalar(1.6);
+  ring.position.y = 0.06;
   group.add(ring);
+  const glow = chestGlow();
+  group.add(glow);
+  // vertical light beam (additive open-ended cylinder)
+  const beam = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.28, 0.5, 7, 8, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xffd254, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })
+  );
+  beam.position.y = 3.6;
+  group.add(beam);
   ensureChestProto(W).then((proto) => { if (group.parent) group.add(proto.clone()); });
   W.group("loot").add(group);
-  chests.set(id, { id, pos: { x, y: gy, z }, group, opened: false });
+  chests.set(id, { id, pos: { x, y: gy, z }, group, opened: false, glow, beam, ring });
   return id;
 }
 
@@ -218,6 +249,9 @@ function openChest(W, a, id) {
   const c = chests.get(id);
   if (!c || c.opened) return false;
   c.opened = true;
+  if (c.glow) c.group.remove(c.glow);
+  if (c.beam) c.group.remove(c.beam);
+  if (c.ring) c.group.remove(c.ring);
   c.group.traverse((o) => { if (o.isMesh && o.material && o.material.color) { o.material = o.material.clone(); o.material.color.multiplyScalar(0.45); } });
   const rng = K.mulberry32((W.seed ^ 0xc4e57) + parseInt(id.slice(1), 10));
   const drops = K.rollChest(rng);
@@ -231,10 +265,13 @@ function openChest(W, a, id) {
   return true;
 }
 
-function pickup(W, a, id) {
+function pickup(W, a, id, opts) {
   const it = items.get(id);
   if (!it || it.taken) return false;
-  if (!give(W, a, it.data)) return false;
+  if (opts && opts.swap) it.data.swap = true;
+  const ok = give(W, a, it.data);
+  delete it.data.swap;
+  if (!ok) return false;
   it.taken = true;
   if (it.group.parent) it.group.parent.remove(it.group);
   items.delete(id);
@@ -251,27 +288,20 @@ function give(W, a, data) {
     inv.ammo[data.id] = Math.min(cap, (inv.ammo[data.id] || 0) + (data.count || K.AMMO[data.id].box));
     return true;
   }
-  if (data.kind === "mats") {
-    inv.mats[data.id] = Math.min(K.BUILD.matCap, (inv.mats[data.id] || 0) + (data.count || 30));
-    return true;
-  }
-  if (data.kind === "weapon" && data.id === "grenade") {
-    inv.grenades = Math.min(K.WEAPONS.grenade.stack, (inv.grenades || 0) + (data.count || 1));
-    // grenades also occupy a pseudo-slot for selection if there's room
-    if (!inv.slots.some((s) => s && s.id === "grenade")) {
-      const empty = inv.slots.findIndex((s, i) => i > 0 && !s);
-      if (empty > 0) inv.slots[empty] = { kind: "weapon", id: "grenade", rarity: 0, mag: 0 };
-    }
-    return true;
-  }
   if (data.kind === "weapon") {
-    const empty = inv.slots.findIndex((s, i) => i > 0 && !s);
+    const empty = inv.slots.findIndex((s) => !s);
     const slot = { kind: "weapon", id: data.id, rarity: data.rarity || 0, mag: K.WEAPONS[data.id].mag };
-    if (empty > 0) { inv.slots[empty] = slot; if (inv.active === 0) { W.equipSlot(a, empty); } return true; }
-    // no room: swap with active (drop current) if active isn't pickaxe
-    if (inv.active > 0) {
+    if (empty >= 0) {
+      inv.slots[empty] = slot;
+      // auto-upgrade: if still on the starter common pistol, switch to the pickup
+      const cur = inv.slots[inv.active];
+      if (cur && cur.id === "pistol" && cur.rarity === 0 && data.id !== "pistol") W.equipSlot(a, empty);
+      return true;
+    }
+    if (data.swap) {
+      // explicit E-swap: drop the ACTIVE weapon, take the new one
       const old = inv.slots[inv.active];
-      dropItem(W, a, { kind: "weapon", id: old.id, rarity: old.rarity });
+      if (old && old.kind === "weapon") dropItem(W, a, { kind: "weapon", id: old.id, rarity: old.rarity });
       inv.slots[inv.active] = slot;
       W.equipSlot(a, inv.active);
       return true;
@@ -282,8 +312,8 @@ function give(W, a, data) {
     const st = inv.slots.find((s) => s && s.kind === "consumable" && s.id === data.id);
     const cs = K.CONSUMABLES[data.id];
     if (st) { st.count = Math.min(cs.stack, st.count + (data.count || 1)); return true; }
-    const empty = inv.slots.findIndex((s, i) => i > 0 && !s);
-    if (empty > 0) { inv.slots[empty] = { kind: "consumable", id: data.id, count: Math.min(cs.stack, data.count || 1) }; return true; }
+    const empty = inv.slots.findIndex((s) => !s);
+    if (empty >= 0) { inv.slots[empty] = { kind: "consumable", id: data.id, count: Math.min(cs.stack, data.count || 1) }; return true; }
     return false;
   }
   return false;
@@ -310,16 +340,15 @@ function deathDrop(W, victim) {
     const ang = rng() * Math.PI * 2, r = 0.5 + rng() * 1.1;
     spawnItem(W, data, victim.pos.x + Math.cos(ang) * r, victim.pos.y + 0.2, victim.pos.z + Math.sin(ang) * r, "dd:" + victim.id + ":" + (k++));
   };
-  for (let i = 1; i < inv.slots.length; i++) {
+  // EVERY carried weapon (including the equipped one) + consumables + ammo
+  for (let i = 0; i < inv.slots.length; i++) {
     const s = inv.slots[i];
     if (!s) continue;
-    if (s.kind === "weapon" && s.id !== "grenade") drop({ kind: "weapon", id: s.id, rarity: s.rarity });
+    if (s.kind === "weapon") drop({ kind: "weapon", id: s.id, rarity: s.rarity });
     if (s.kind === "consumable" && s.count > 0) drop({ kind: "consumable", id: s.id, count: s.count });
     inv.slots[i] = null;
   }
   for (const am in inv.ammo) if (inv.ammo[am] > 8) drop({ kind: "ammo", id: am, count: Math.min(inv.ammo[am], K.AMMO[am].box * 2) });
-  for (const mt of K.MAT_IDS) if (inv.mats[mt] >= 20) drop({ kind: "mats", id: mt, count: Math.min(inv.mats[mt], 120) });
-  if (inv.grenades > 0) drop({ kind: "weapon", id: "grenade", count: inv.grenades });
 }
 
 // ── frame update ─────────────────────────────────────────────────────────────
@@ -337,19 +366,42 @@ export function update(W, dt) {
   }
   maybeSupplyDrop(W, dt);
 
-  // human interact: E on nearest item/chest; ammo+mats auto-pickup on walkover
+  // chest glow pulse (only near camera)
+  for (const [, c] of chests) {
+    if (c.opened || !c.glow) continue;
+    const d2 = (c.pos.x - cp.x) ** 2 + (c.pos.z - cp.z) ** 2;
+    if (d2 > 160 * 160) continue;
+    const k = 0.85 + Math.sin(bobT * 2.4 + c.pos.x) * 0.15;
+    c.glow.scale.set(3.2 * k, 3.2 * k, 1);
+  }
+
+  // human interact:
+  //  - walk over items → auto-pickup whenever there's room
+  //  - tap E on an item with a full inventory → SWAP with the active slot
+  //  - HOLD E for 2 s on a chest → open (progress surfaces on the HUD)
   const a = W.player;
   if (a && a.alive) {
     const near = nearby(a.pos, 2.4);
-    W.interactHint = near.length ? near[0] : null;
-    // auto-pickup ammo/mats within 1.3m
+    // walkover auto-pickup (anything, if it fits)
     for (const n of near) {
-      if (n.type === "item" && n.d < 1.3 && (n.data.kind === "ammo" || n.data.kind === "mats")) pickup(W, a, n.id);
+      if (n.type === "item" && n.d < 1.5) pickup(W, a, n.id);
     }
+    const target = nearby(a.pos, 2.4)[0] || null;
+    // chest channel
+    if (target && target.type === "chest" && a.input.interactDown) {
+      if (chestChannel.id !== target.id) { chestChannel.id = target.id; chestChannel.t = 0; }
+      chestChannel.t += dt;
+      if (chestChannel.t >= CHEST_OPEN_S) { openChest(W, a, target.id); chestChannel.id = null; chestChannel.t = 0; }
+    } else if (chestChannel.id) {
+      chestChannel.id = null; chestChannel.t = 0;
+    }
+    // tap E on an item = swap into active slot
     if (a.input.interact) {
       a.input.interact = false;
-      const t = near[0];
-      if (t) { if (t.type === "chest") openChest(W, a, t.id); else pickup(W, a, t.id); }
+      if (target && target.type === "item") pickup(W, a, target.id, { swap: true });
     }
+    W.interactHint = target ? Object.assign({}, target, { progress: target.type === "chest" ? chestChannel.t / CHEST_OPEN_S : 0 }) : null;
   }
 }
+const CHEST_OPEN_S = 2.0;
+const chestChannel = { id: null, t: 0 };

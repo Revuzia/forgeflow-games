@@ -1,15 +1,18 @@
 /**
- * royale/weapons.js — firing, projectiles, recoil, reload, melee/harvest,
- * grenades + rockets with splash, and weapon view models.
+ * royale/weapons.js — the 6-gun BR arsenal: pistol, SMG, AR, shotgun, sniper,
+ * grenade launcher. Firing, projectiles, recoil, reload, splash.
  *
  * Projectiles are REAL (position + velocity + optional gravity), stepped in
- * segments each frame and tested against: build pieces → static world boxes →
- * terrain → actor capsules — nearest hit wins. "Hitscan-fast" weapons are just
- * very fast projectiles, so travel time and bullet drop come free for sniper
- * and rockets.
+ * segments each frame and tested against static world boxes → terrain → actor
+ * capsules — nearest hit wins. "Hitscan-fast" weapons are just very fast
+ * projectiles, so travel time and drop come free for sniper; the grenade
+ * launcher lobs arcing shells that burst on a body hit or after a short fuse.
  *
- * View models: pistol/shotgun/pickaxe are real GLBs; AR/SMG/sniper/rocket are
- * multi-part composed low-poly builds (distinct silhouettes per class).
+ * No firing while swimming (industry standard). No melee, no throwables, no
+ * building — this is a pure BR shooter.
+ *
+ * View models: pistol/shotgun are real GLBs; AR/SMG/sniper/grenade launcher
+ * are multi-part composed low-poly builds (distinct silhouettes per class).
  */
 import * as THREE from "three";
 
@@ -21,7 +24,6 @@ let protosPromise = null;
 export function init(W) {
   K = W.SIM;
   W.equipSlot = (a, idx) => equipSlot(W, a, idx);
-  W.throwGrenade = (a) => throwGrenade(W, a);
   W.explode = (x, y, z, weaponId, rarity, ownerId) => explode(W, x, y, z, weaponId, rarity, ownerId);
   protosPromise = null;
   W.weaponProto = (id) => protos(W).then((p) => p[id]);
@@ -70,19 +72,16 @@ async function buildProtos(W) {
     { s: [0.06, 0.14, 0.26], p: [0, -0.05, -0.36], c: WOOD },
     { s: [0.04, 0.05, 0.1], p: [0, -0.14, 0.3], c: DARK },
   ]);
-  protos.rocket = mk([
-    { cyl: [0.09, 0.9], p: [0, 0, 0.1], c: 0x4d5a3a },          // tube
-    { cyl: [0.1, 0.16], p: [0, 0, 0.62], c: ACC },
-    { s: [0.06, 0.16, 0.12], p: [0, -0.16, -0.1], c: DARK },
-    { s: [0.05, 0.1, 0.06], p: [0, 0.14, -0.05], c: ACC },      // sight
-  ]);
-  protos.grenade = mk([
-    { cyl: [0.07, 0.16], p: [0, 0, 0], c: 0x3d5a3a },
-    { s: [0.04, 0.06, 0.04], p: [0, 0.11, 0], c: MID },
+  protos.glauncher = mk([
+    { cyl: [0.075, 0.55], p: [0, 0, 0.2], c: 0x4d5a3a },        // barrel tube
+    { cyl: [0.11, 0.22], p: [0, -0.02, -0.08], c: ACC },        // revolver drum
+    { s: [0.06, 0.16, 0.12], p: [0, -0.16, -0.18], c: DARK },   // grip
+    { s: [0.07, 0.1, 0.24], p: [0, -0.04, -0.34], c: 0x3d4a30 },// stock
+    { s: [0.05, 0.08, 0.06], p: [0, 0.12, 0.05], c: ACC },      // sight
   ]);
   // GLB models
   const base = W.assetBase + "assets/props/";
-  for (const [id, file, len] of [["pistol", "wpn-pistol.glb", 0.34], ["shotgun", "wpn-shotgun.glb", 0.8], ["pickaxe", "wpn-pickaxe.glb", 0.9]]) {
+  for (const [id, file, len] of [["pistol", "wpn-pistol.glb", 0.34], ["shotgun", "wpn-shotgun.glb", 0.8]]) {
     try {
       const m = await W.kernel.loadGLTF(base + file);
       const bbox = new THREE.Box3().setFromObject(m);
@@ -92,7 +91,7 @@ async function buildProtos(W) {
       const c = bbox.getCenter(new THREE.Vector3()).multiplyScalar(s);
       m.position.sub(c);
       const g = new THREE.Group(); g.add(m);
-      if (id !== "pickaxe") m.rotation.y = Math.PI / 2; // barrels forward
+      m.rotation.y = Math.PI / 2; // barrels forward
       protos[id] = g;
     } catch (e) { console.warn("[weapons] GLB fail", id, e); protos[id] = protos.smg.clone(); }
   }
@@ -126,7 +125,7 @@ async function refreshWeaponMesh(W, a) {
 // ── aim helpers ──────────────────────────────────────────────────────────────
 const _dir = new THREE.Vector3();
 export function eyePos(a) {
-  return { x: a.pos.x, y: a.pos.y + (a.crouching ? 1.15 : K.PLAYERK.eyeY), z: a.pos.z };
+  return { x: a.pos.x, y: a.pos.y + (a.swimming ? 0.7 : K.PLAYERK.eyeY), z: a.pos.z };
 }
 export function aimDir(a, out) {
   const sy = Math.sin(a.yaw), cy = Math.cos(a.yaw);
@@ -167,9 +166,6 @@ function stepWeapon(W, a, dt) {
   if (!def) return;
   wpn.cd -= dt;
 
-  // quick heal hotkey
-  if (inp.useHeal) { autoHeal(W, a); inp.useHeal = null; }
-
   // reload
   if (inp.reload && wpn.state === "ready" && def.mag > 0 && wpn.magAmmo < def.mag && a.inventory.ammo[def.ammo] > 0) {
     wpn.state = "reloading"; wpn.reloadT = def.reloadS;
@@ -190,10 +186,8 @@ function stepWeapon(W, a, dt) {
     return;
   }
 
-  // firing (build mode swallows fire clicks — building.js places instead)
-  if (inp.fire && wpn.cd <= 0 && !a.gliding && !a.healing && !inp.buildPiece) {
-    if (def.harvest) { swingMelee(W, a, def); wpn.cd = 60 / def.rpm; return; }
-    if (wpn.id === "grenade") { throwGrenade(W, a); wpn.cd = 60 / def.rpm; return; }
+  // firing — no shooting while gliding, healing, or swimming (weapon's wet)
+  if (inp.fire && wpn.cd <= 0 && !a.gliding && !a.healing && !a.swimming) {
     if (def.mag > 0 && wpn.magAmmo <= 0) {
       // auto reload attempt
       if (a.inventory.ammo[def.ammo] > 0) { inp.reload = true; }
@@ -214,15 +208,6 @@ function stepWeapon(W, a, dt) {
   }
 }
 
-function autoHeal(W, a) {
-  // priority: shield if low, else hp
-  const order = a.shield < 50 ? ["big_shield", "mini_shield", "medkit", "bandage"] : ["medkit", "bandage", "big_shield", "mini_shield"];
-  for (const id of order) {
-    const has = a.inventory.slots.find((s) => s && s.kind === "consumable" && s.id === id && s.count > 0);
-    if (has) { W.events.emit("useConsumable", a, id); return; }
-  }
-}
-
 // ── firing ───────────────────────────────────────────────────────────────────
 const _d = new THREE.Vector3(), _right = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
 function fire(W, a, def) {
@@ -232,7 +217,6 @@ function fire(W, a, def) {
   // spread: base × rarity × stance modifiers
   let spread = (def.spreadDeg || 1) * (K.RARITY_SPREAD_MULT[a.weapon.rarity] || 1);
   if (a.input.ads) spread *= 0.5;
-  if (a.crouching) spread *= 0.75;
   const movePen = Math.hypot(a.vel.x, a.vel.z) > 1 ? 1.4 : 1;
   const airPen = a.onGround ? 1 : 2;
   spread *= movePen * airPen;
@@ -244,17 +228,18 @@ function fire(W, a, def) {
     const dir = _d.clone().addScaledVector(_right, ox).addScaledVector(_up, oy).normalize();
     spawnProjectile(W, {
       x: eye.x + dir.x * 0.6, y: eye.y + dir.y * 0.6 - 0.05, z: eye.z + dir.z * 0.6,
-      vx: dir.x * def.speed, vy: dir.y * def.speed, vz: dir.z * def.speed,
-      weaponId: a.weapon.id === "grenade" ? "grenade" : Object.keys(K.WEAPONS).find((k) => K.WEAPONS[k] === def),
+      vx: dir.x * def.speed, vy: dir.y * def.speed + (def.arc ? 3 : 0), vz: dir.z * def.speed,
+      weaponId: a.weapon.id,
       rarity: a.weapon.rarity, ownerId: a.id,
-      gravity: def.gravity ? -9.8 : 0, tLeft: 3.5,
-      splash: def.splashR || 0, breaksAll: !!def.breaksAll,
+      gravity: def.arc ? -18 : def.gravity ? -9.8 : 0,
+      tLeft: def.arc ? def.fuseS : 3.5,
+      splash: def.splashR || 0, bounce: !!def.arc, mesh: !!def.arc,
       origin: { x: eye.x, y: eye.y, z: eye.z },
     });
   }
   // recoil kick (human only — bots model error separately)
   if (!a.isBot) {
-    const kick = { pistol: 0.008, smg: 0.006, ar: 0.011, shotgun: 0.03, sniper: 0.05, rocket: 0.04 }[a.weapon.id] || 0.01;
+    const kick = { pistol: 0.008, smg: 0.006, ar: 0.011, shotgun: 0.03, sniper: 0.05, glauncher: 0.035 }[a.weapon.id] || 0.01;
     a.input.pitch = K.clamp(a.input.pitch + kick, -1.35, 1.35);
     a.input.yaw += (Math.random() - 0.5) * kick * 0.6;
     W.stats.shotsFired += pellets;
@@ -263,67 +248,14 @@ function fire(W, a, def) {
   W.events.emit("shotFired", a, a.weapon.id, eye, _d.clone());
 }
 
-function throwGrenade(W, a) {
-  if (a.inventory.grenades <= 0) return;
-  a.inventory.grenades--;
-  const eye = eyePos(a);
-  aimDir(a, _d);
-  const def = K.WEAPONS.grenade;
-  spawnProjectile(W, {
-    x: eye.x + _d.x, y: eye.y + _d.y + 0.1, z: eye.z + _d.z,
-    vx: _d.x * def.speed, vy: _d.y * def.speed + 5, vz: _d.z * def.speed,
-    weaponId: "grenade", rarity: 0, ownerId: a.id,
-    gravity: -18, tLeft: def.fuseS, splash: def.splashR, bounce: true, mesh: true,
-    origin: eye,
-  });
-  W.events.emit("shotFired", a, "grenade", eye, _d.clone());
-}
-
-function swingMelee(W, a, def) {
-  const eye = eyePos(a);
-  aimDir(a, _d);
-  W.events.emit("melee", a);
-  // actors first
-  for (const t of W.actors) {
-    if (t === a || !t.alive) continue;
-    const dx = t.pos.x - a.pos.x, dz = t.pos.z - a.pos.z;
-    const d = Math.hypot(dx, dz);
-    if (d < def.rangeM + 0.4 && Math.abs(t.pos.y - a.pos.y) < 2.2) {
-      const dot = (dx / (d || 1)) * -Math.sin(a.yaw) + (dz / (d || 1)) * -Math.cos(a.yaw);
-      if (dot > 0.5) { W.hurtActor(t, def.damage, a.id, "pickaxe", false); W.events.emit("hitMarker", a, t, def.damage, false); return; }
-    }
-  }
-  // build pieces
-  const bHit = W.buildRayHit && W.buildRayHit(eye, _d, def.rangeM + 1.2);
-  if (bHit) { W.damageBuild(bHit.slotKey, def.damage * 2, a.id); W.events.emit("impact", bHit.point, "build"); return; }
-  // harvestables
-  const hx = eye.x + _d.x * 1.8, hz = eye.z + _d.z * 1.8;
-  let best = null, bd = 9;
-  for (const h of W.map.harvestables) {
-    if (!h.alive) continue;
-    const d = Math.hypot(h.pos.x - hx, h.pos.z - hz);
-    if (d < 2.6 && d < bd) { best = h; bd = d; }
-  }
-  if (best) {
-    const res = W.map.hitHarvestable(best.id, def.damage);
-    if (best.mat && res.mats) {
-      const inv = a.inventory;
-      inv.mats[best.mat] = Math.min(K.BUILD.matCap, (inv.mats[best.mat] || 0) + res.mats);
-      W.events.emit("harvested", a, best, res.mats, res.destroyed);
-    }
-  }
-}
-
 // ── projectiles ──────────────────────────────────────────────────────────────
 function spawnProjectile(W, o) {
   const p = POOL.pop() || {};
   Object.assign(p, o);
   p.dead = false;
   if (o.mesh && !p.m) {
-    p.m = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), new THREE.MeshStandardMaterial({ color: 0x3d5a3a }));
-  }
-  if (o.weaponId === "rocket" && !p.m) {
-    p.m = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.4, 6), new THREE.MeshStandardMaterial({ color: 0x666666, emissive: 0xff4400, emissiveIntensity: 0.6 }));
+    // grenade-launcher shell: visible arcing round with a hot tracer tint
+    p.m = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 6), new THREE.MeshStandardMaterial({ color: 0x3d5a3a, emissive: 0xff6622, emissiveIntensity: 0.4 }));
   }
   if (p.m) { p.m.visible = true; W.group("projectiles").add(p.m); }
   projectiles.push(p);
@@ -335,7 +267,7 @@ function stepProjectiles(W, dt) {
     const p = projectiles[i];
     p.tLeft -= dt;
     if (p.tLeft <= 0) {
-      if (p.weaponId === "grenade") explode(W, p.x, p.y, p.z, "grenade", p.rarity, p.ownerId);
+      if (p.splash) explode(W, p.x, p.y, p.z, p.weaponId, p.rarity, p.ownerId); // fused shells burst
       kill(W, i, p);
       continue;
     }
@@ -362,23 +294,10 @@ function kill(W, i, p) {
 }
 
 function testSegment(W, p, ax, ay, az, bx, by, bz) {
-  // 1) build pieces
-  if (W.buildSegmentHit) {
-    const bh = W.buildSegmentHit(ax, ay, az, bx, by, bz);
-    if (bh) {
-      if (p.splash) { explode(W, bh.x, bh.y, bh.z, p.weaponId, p.rarity, p.ownerId); p.dead = true; return true; }
-      if (p.bounce) { bounceOff(p, bh.nx || 0, bh.ny || 1, bh.nz || 0); return false; }
-      const def = K.WEAPONS[p.weaponId];
-      const dmg = K.hitDamage(p.weaponId, p.rarity, 0, false) * (def && def.structMult || 1);
-      W.damageBuild(bh.slotKey, dmg, p.ownerId);
-      W.events.emit("impact", { x: bh.x, y: bh.y, z: bh.z }, "build");
-      p.dead = true; return true;
-    }
-  }
-  // 2) actors (capsule vs segment, coarse: sample closest point)
+  // 1) actors (capsule vs segment, coarse: sample closest point)
   for (const t of W.actors) {
     if (!t.alive || t.id === p.ownerId) continue;
-    const feetY = t.pos.y, headY = t.pos.y + (t.crouching ? K.PLAYERK.crouchHeight : K.PLAYERK.height);
+    const feetY = t.pos.y, headY = t.pos.y + (t.swimming ? 0.9 : K.PLAYERK.height);
     // closest point of segment to vertical axis of capsule
     const cx = t.pos.x, cz = t.pos.z;
     const dx = bx - ax, dz = bz - az;
@@ -405,7 +324,7 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
       p.dead = true; return true;
     }
   }
-  // 3) static world boxes
+  // 2) static world boxes
   const cols = W.map.queryColliders(bx, bz, 0.4);
   for (const c of cols) {
     if (c.kind !== "box") continue;
@@ -416,7 +335,7 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
       p.dead = true; return true;
     }
   }
-  // 4) terrain
+  // 3) terrain
   const th = W.map.heightAt(bx, bz);
   if (by <= th) {
     if (p.splash && !p.bounce) { explode(W, bx, th + 0.1, bz, p.weaponId, p.rarity, p.ownerId); p.dead = true; return true; }
@@ -445,8 +364,8 @@ function bounceOff(p, nx, ny, nz) {
 
 // ── explosions ───────────────────────────────────────────────────────────────
 function explode(W, x, y, z, weaponId, rarity, ownerId) {
-  const def = K.WEAPONS[weaponId] || K.WEAPONS.grenade;
-  const R = def.splashR || 4;
+  const def = K.WEAPONS[weaponId] || K.WEAPONS.glauncher;
+  const R = def.splashR || 3.5;
   for (const t of W.actors) {
     if (!t.alive) continue;
     const d = Math.hypot(t.pos.x - x, (t.pos.y + 0.9) - y, t.pos.z - z);
@@ -461,13 +380,6 @@ function explode(W, x, y, z, weaponId, rarity, ownerId) {
       t.vel.y += 4 * k;
       t.vel.z += ((t.pos.z - z) / dl) * kb;
       t.onGround = false;
-    }
-  }
-  // structures in radius
-  if (W.buildInRadius) {
-    for (const sk of W.buildInRadius(x, y, z, R)) {
-      if (def.breaksAll) W.destroyBuild(sk);
-      else W.damageBuild(sk, K.hitDamage(weaponId, rarity, 0, false), ownerId);
     }
   }
   W.events.emit("explosion", { x, y, z }, R);

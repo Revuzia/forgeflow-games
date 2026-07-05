@@ -44,24 +44,24 @@
 
   // damage = body damage at full effect; falloff -> linear to 40% floor
   var WEAPONS = {
-    pickaxe: { cls: "melee", damage: 20, headMult: 1.0, rpm: 67, mag: 0, reloadS: 0, ammo: null, rangeM: 2.6, harvest: true },
-    pistol:  { cls: "pistol", damage: 24, headMult: 1.5, rpm: 400, mag: 16, reloadS: 1.3, ammo: "light", speed: 999, falloff: [25, 50], spreadDeg: 1.3 },
-    smg:     { cls: "smg", damage: 17, headMult: 1.5, rpm: 720, mag: 30, reloadS: 2.0, ammo: "light", speed: 999, falloff: [18, 40], spreadDeg: 2.2, structMult: 1.6 },
-    ar:      { cls: "ar", damage: 30, headMult: 1.5, rpm: 330, mag: 30, reloadS: 2.4, ammo: "medium", speed: 300, falloff: [60, 120], spreadDeg: 1.5 },
-    shotgun: { cls: "shotgun", damage: 10, headMult: 1.75, rpm: 70, mag: 5, reloadS: 4.0, ammo: "shells", speed: 999, falloff: [8, 20], pellets: 9, spreadDeg: 4.0 },
-    sniper:  { cls: "sniper", damage: 105, headMult: 2.5, rpm: 35, mag: 1, reloadS: 3.0, ammo: "heavy", speed: 500, gravity: true, falloff: [200, 400], spreadDeg: 0.15, scope: true },
-    rocket:  { cls: "launcher", damage: 110, headMult: 1.0, rpm: 45, mag: 1, reloadS: 3.6, ammo: "rockets", speed: 40, splashR: 4, spreadDeg: 0.6, breaksAll: true },
-    grenade: { cls: "throwable", damage: 100, headMult: 1.0, rpm: 60, mag: 0, reloadS: 0, ammo: null, fuseS: 2.5, splashR: 3.5, stack: 6, speed: 18 },
+    pistol:   { cls: "pistol", damage: 24, headMult: 1.5, rpm: 400, mag: 16, reloadS: 1.3, ammo: "light", speed: 999, falloff: [25, 50], spreadDeg: 1.3 },
+    smg:      { cls: "smg", damage: 17, headMult: 1.5, rpm: 720, mag: 30, reloadS: 2.0, ammo: "light", speed: 999, falloff: [18, 40], spreadDeg: 2.2 },
+    ar:       { cls: "ar", damage: 30, headMult: 1.5, rpm: 330, mag: 30, reloadS: 2.4, ammo: "medium", speed: 300, falloff: [60, 120], spreadDeg: 1.5 },
+    shotgun:  { cls: "shotgun", damage: 10, headMult: 1.75, rpm: 70, mag: 5, reloadS: 4.0, ammo: "shells", speed: 999, falloff: [8, 20], pellets: 9, spreadDeg: 4.0 },
+    sniper:   { cls: "sniper", damage: 105, headMult: 2.5, rpm: 35, mag: 1, reloadS: 3.0, ammo: "heavy", speed: 500, gravity: true, falloff: [200, 400], spreadDeg: 0.15, scope: true },
+    glauncher:{ cls: "launcher", damage: 95, headMult: 1.0, rpm: 55, mag: 4, reloadS: 3.2, ammo: "grenades", speed: 26, arc: true, fuseS: 2.0, splashR: 3.5, spreadDeg: 0.8 },
   };
-  var WEAPON_IDS = ["pistol", "smg", "ar", "shotgun", "sniper", "rocket"]; // lootable guns
+  var WEAPON_IDS = ["pistol", "smg", "ar", "shotgun", "sniper", "glauncher"]; // lootable guns
 
   var AMMO = {
-    light:   { box: 24, max: 300 },
-    medium:  { box: 20, max: 240 },
-    shells:  { box: 8,  max: 60 },
-    heavy:   { box: 6,  max: 36 },
-    rockets: { box: 2,  max: 12 },
+    light:    { box: 24, max: 300 },
+    medium:   { box: 20, max: 240 },
+    shells:   { box: 8,  max: 60 },
+    heavy:    { box: 6,  max: 36 },
+    grenades: { box: 4,  max: 20 },
   };
+  // every actor spawns armed — a BR shooter, not a scavenger sim
+  var START_LOADOUT = { weapon: "pistol", rarity: 0, ammo: { light: 36 } };
 
   var CONSUMABLES = {
     bandage:     { heals: "hp", amount: 15, cap: 75, useS: 3, stack: 15 },
@@ -70,28 +70,13 @@
     big_shield:  { heals: "shield", amount: 50, cap: 100, useS: 4, stack: 3 },
   };
 
-  var MATERIALS = {
-    wood:  { hpStart: 90,  hpFull: 150, buildS: 4 },
-    brick: { hpStart: 100, hpFull: 300, buildS: 11 },
-    metal: { hpStart: 110, hpFull: 500, buildS: 22 },
-  };
-  var MAT_IDS = ["wood", "brick", "metal"];
-  var BUILD = {
-    gridM: 4,           // cell size in meters (walls 4m wide × 4m tall)
-    cost: 10,           // mats per piece
-    editCost: 0,
-    matCap: 500,
-    turboMs: 150,
-    harvestPerHit: 14,  // ~Fortnite scale: a tree (3-4 swings) ≈ 50 mats
-    harvestCritBonus: 8,
-  };
-
   var MOVE = {
-    walk: 4.2, sprint: 6.5, crouch: 2.2, ads: 2.8,
+    walk: 4.2, sprint: 6.5, ads: 2.8,
+    swim: 3.0, swimSprint: 4.4,
     jumpV: 7.2, gravity: -22, accelT: 0.18, airControl: 0.35,
   };
 
-  var PLAYERK = { hp: 100, shield: 100, radius: 0.45, height: 1.8, eyeY: 1.62, crouchHeight: 1.2 };
+  var PLAYERK = { hp: 100, shield: 100, radius: 0.45, height: 1.8, eyeY: 1.62, swimDepth: 1.1 };
 
   // Storm phase tables per mode. radiusFrac × (map halfsize) = target radius.
   var STORM_PHASES = {
@@ -117,12 +102,9 @@
   };
   // quick mode starts pre-shrunk:
   var MODE = {
-    // 50 starting wood (everyone, humans included) primes the build economy —
-    // playtests showed a mats starvation loop: nobody could afford the first
-    // wall, so kills never dropped mats, so nobody EVER built.
-    standard: { players: 50, startRadiusFrac: 1.35, lootMult: 1.0, startMats: { wood: 50, brick: 0, metal: 0 }, drop: "glider" },
-    quick:    { players: 50, startRadiusFrac: 0.75, lootMult: 1.8, startMats: { wood: 100, brick: 0, metal: 0 }, drop: "ground" },
-    practice: { players: 1,  startRadiusFrac: 1.35, lootMult: 1.0, startMats: { wood: 9999, brick: 9999, metal: 9999 }, drop: "ground" },
+    standard: { players: 50, startRadiusFrac: 1.35, lootMult: 1.0, drop: "glider" },
+    quick:    { players: 50, startRadiusFrac: 0.75, lootMult: 1.8, drop: "ground" },
+    practice: { players: 1,  startRadiusFrac: 1.35, lootMult: 1.0, drop: "ground" },
   };
 
   var LOOT_WEIGHTS = {
@@ -133,14 +115,14 @@
 
   // AI skill tiers (1-indexed by tier-1)
   var BOT_TIERS = [
-    { reactionMs: 600, aimErrDeg: 6.0, builds: 0, edits: false, buildMs: 900 },
-    { reactionMs: 450, aimErrDeg: 4.0, builds: 1, edits: false, buildMs: 700 },
-    { reactionMs: 350, aimErrDeg: 2.6, builds: 2, edits: true,  buildMs: 480 },
-    { reactionMs: 280, aimErrDeg: 1.7, builds: 3, edits: true,  buildMs: 330 },
-    { reactionMs: 220, aimErrDeg: 1.0, builds: 4, edits: true,  buildMs: 240 },
+    { reactionMs: 600, aimErrDeg: 6.0 },
+    { reactionMs: 450, aimErrDeg: 4.0 },
+    { reactionMs: 350, aimErrDeg: 2.6 },
+    { reactionMs: 280, aimErrDeg: 1.7 },
+    { reactionMs: 220, aimErrDeg: 1.0 },
   ];
   var BOT_TIER_MIX = { standard: [8, 12, 14, 10, 5], quick: [6, 10, 14, 12, 7] };
-  var BOT_PERSONALITIES = ["rusher", "builder", "camper", "loot_goblin", "rotator", "sniper"];
+  var BOT_PERSONALITIES = ["rusher", "flanker", "camper", "loot_goblin", "rotator", "sniper"];
 
   var BOT_NAMES = [
     "Zephyx", "NoScopeNate", "CrackedTina", "BushWookie7", "DriftKing", "PixelPete", "QuietStorm",
@@ -258,120 +240,6 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // BUILDING GRID
-  // ═══════════════════════════════════════════════════════════════════════════
-  /**
-   * Fortnite-style cell grid. Cell (ix,iy,iz) spans [ix*G,(ix+1)*G) etc.
-   * Piece slots per cell: floor (bottom plane), wall × 4 faces (0=+X,1=-X,2=+Z,3=-Z),
-   * ramp (1 per cell, dir 0..3), stair (1 per cell, dir 0..3; ramp+stair share slot).
-   * Key: `${type}:${ix},${iy},${iz}:${dir}` (floor/ramp dir slot 0 unless ramp dir).
-   *
-   * Support: a piece is GROUNDED if groundedFn(piece) says its cell touches
-   * terrain, else it must chain через face-adjacent pieces to a grounded one.
-   * removePiece() cascades: pieces left without a chain die (returned list).
-   */
-  function BuildGrid(opts) {
-    this.G = (opts && opts.gridM) || BUILD.gridM;
-    this.pieces = new Map();
-    this.groundedFn = (opts && opts.groundedFn) || function () { return true; };
-  }
-
-  BuildGrid.prototype.cellOf = function (x, y, z) {
-    var G = this.G;
-    return { ix: Math.floor(x / G), iy: Math.floor(y / G), iz: Math.floor(z / G) };
-  };
-
-  BuildGrid.prototype.key = function (type, ix, iy, iz, dir) {
-    return type + ":" + ix + "," + iy + "," + iz + ":" + (dir || 0);
-  };
-
-  /** slotKey ignores dir for slot-exclusive types (ramp/stair share the cell slot). */
-  BuildGrid.prototype.slotKey = function (type, ix, iy, iz, dir) {
-    if (type === "ramp" || type === "stair") return "R:" + ix + "," + iy + "," + iz;
-    if (type === "floor") return "F:" + ix + "," + iy + "," + iz;
-    return "W:" + ix + "," + iy + "," + iz + ":" + dir;
-  };
-
-  BuildGrid.prototype.get = function (slotKey) { return this.pieces.get(slotKey) || null; };
-
-  /** Place. Returns piece or null (occupied). Caller checks mats. */
-  BuildGrid.prototype.place = function (type, ix, iy, iz, dir, mat, now) {
-    var sk = this.slotKey(type, ix, iy, iz, dir);
-    if (this.pieces.has(sk)) return null;
-    var m = MATERIALS[mat] || MATERIALS.wood;
-    var p = { type: type, ix: ix, iy: iy, iz: iz, dir: dir || 0, mat: mat, slotKey: sk,
-              hp: m.hpStart, hpMax: m.hpFull, placedAt: now || 0, edit: null };
-    this.pieces.set(sk, p);
-    return p;
-  };
-
-  /** HP ramps from hpStart→hpFull over buildS. Call before damaging/showing. */
-  BuildGrid.prototype.currentMaxHp = function (p, now) {
-    var m = MATERIALS[p.mat];
-    var k = clamp(((now || 0) - p.placedAt) / m.buildS, 0, 1);
-    return Math.round(lerp(m.hpStart, m.hpFull, k));
-  };
-
-  BuildGrid.prototype.damagePiece = function (slotKey, dmg, now) {
-    var p = this.pieces.get(slotKey);
-    if (!p) return { destroyed: [], hit: null };
-    var maxNow = this.currentMaxHp(p, now);
-    p.hp = Math.min(p.hp, maxNow) - dmg;
-    if (p.hp <= 0) return { destroyed: this.removePiece(slotKey), hit: p };
-    return { destroyed: [], hit: p };
-  };
-
-  /** Neighbor slot keys that structurally connect to piece p. */
-  BuildGrid.prototype._neighbors = function (p) {
-    var out = [], ix = p.ix, iy = p.iy, iz = p.iz;
-    var push = out.push.bind(out);
-    // pieces in same cell always connect
-    push("F:" + ix + "," + iy + "," + iz);
-    push("R:" + ix + "," + iy + "," + iz);
-    for (var d = 0; d < 4; d++) push("W:" + ix + "," + iy + "," + iz + ":" + d);
-    // walls of adjacent cells that face into this cell + floors/ramps of face-adjacent cells
-    var adj = [[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0], [0, -1, 0]];
-    for (var i = 0; i < adj.length; i++) {
-      var ax = ix + adj[i][0], ay = iy + adj[i][1], az = iz + adj[i][2];
-      push("F:" + ax + "," + ay + "," + az);
-      push("R:" + ax + "," + ay + "," + az);
-      for (var d2 = 0; d2 < 4; d2++) push("W:" + ax + "," + ay + "," + az + ":" + d2);
-    }
-    var self = p.slotKey, res = [];
-    for (var j = 0; j < out.length; j++) if (out[j] !== self && this.pieces.has(out[j])) res.push(out[j]);
-    return res;
-  };
-
-  /** Remove a piece; flood from all grounded pieces; anything unreached dies too. */
-  BuildGrid.prototype.removePiece = function (slotKey) {
-    var gone = [];
-    var p = this.pieces.get(slotKey);
-    if (!p) return gone;
-    this.pieces.delete(slotKey);
-    gone.push(p);
-    // flood-fill support from grounded pieces
-    var reached = new Set();
-    var queue = [];
-    var self = this;
-    this.pieces.forEach(function (q, k) { if (self.groundedFn(q)) { reached.add(k); queue.push(q); } });
-    while (queue.length) {
-      var cur = queue.pop();
-      var nb = this._neighbors(cur);
-      for (var i = 0; i < nb.length; i++) {
-        if (!reached.has(nb[i])) { reached.add(nb[i]); queue.push(this.pieces.get(nb[i])); }
-      }
-    }
-    var dead = [];
-    this.pieces.forEach(function (q, k) { if (!reached.has(k)) dead.push(k); });
-    for (var j = 0; j < dead.length; j++) {
-      var dp = this.pieces.get(dead[j]);
-      this.pieces.delete(dead[j]);
-      gone.push(dp);
-    }
-    return gone;
-  };
-
-  // ═══════════════════════════════════════════════════════════════════════════
   // LOOT
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -385,38 +253,31 @@
 
   function rollRarity(rng, table) { return weightedIndex(rng, LOOT_WEIGHTS[table] || LOOT_WEIGHTS.floor); }
 
-  /** One floor-spawn item. kind: weapon|ammo|consumable|mats */
+  /** One floor-spawn item. kind: weapon|ammo|consumable */
   function rollFloorItem(rng) {
     var r = rng();
-    if (r < 0.42) {
-      var wid = WEAPON_IDS[weightedIndex(rng, [18, 20, 24, 20, 10, 4, 4].slice(0, WEAPON_IDS.length))];
+    if (r < 0.45) {
+      var wid = WEAPON_IDS[weightedIndex(rng, [16, 22, 24, 20, 10, 8])];
       return { kind: "weapon", id: wid, rarity: rollRarity(rng, "floor") };
     }
-    if (r < 0.62) {
-      var aid = ["light", "medium", "shells", "heavy", "rockets"][weightedIndex(rng, [30, 28, 22, 12, 8])];
+    if (r < 0.7) {
+      var aid = ["light", "medium", "shells", "heavy", "grenades"][weightedIndex(rng, [30, 28, 22, 12, 8])];
       return { kind: "ammo", id: aid, count: AMMO[aid].box };
     }
-    if (r < 0.72) return { kind: "weapon", id: "grenade", rarity: 0, count: 3 };
-    if (r < 0.9) {
-      var cid = ["bandage", "mini_shield", "medkit", "big_shield"][weightedIndex(rng, [32, 34, 18, 16])];
-      return { kind: "consumable", id: cid, count: cid === "bandage" ? 5 : cid === "mini_shield" ? 3 : 1 };
-    }
-    var mid = MAT_IDS[weightedIndex(rng, [50, 30, 20])];
-    return { kind: "mats", id: mid, count: 50 };
+    var cid = ["bandage", "mini_shield", "medkit", "big_shield"][weightedIndex(rng, [32, 34, 18, 16])];
+    return { kind: "consumable", id: cid, count: cid === "bandage" ? 5 : cid === "mini_shield" ? 3 : 1 };
   }
 
   /** Chest burst: weapon + ammo for it + one extra. */
   function rollChest(rng) {
-    var wid = WEAPON_IDS[weightedIndex(rng, [10, 18, 26, 20, 14, 6])];
+    var wid = WEAPON_IDS[weightedIndex(rng, [8, 20, 26, 20, 14, 12])];
     var w = WEAPONS[wid];
     var items = [{ kind: "weapon", id: wid, rarity: rollRarity(rng, "chest") }];
     if (w.ammo) items.push({ kind: "ammo", id: w.ammo, count: AMMO[w.ammo].box * 2 });
     var r = rng();
-    if (r < 0.4) {
+    if (r < 0.55) {
       var cid = ["mini_shield", "big_shield", "medkit", "bandage"][weightedIndex(rng, [34, 26, 20, 20])];
       items.push({ kind: "consumable", id: cid, count: cid === "bandage" ? 5 : cid === "mini_shield" ? 3 : 1 });
-    } else if (r < 0.7) {
-      items.push({ kind: "mats", id: MAT_IDS[weightedIndex(rng, [45, 33, 22])], count: 40 });
     } else {
       items.push({ kind: "ammo", id: ["light", "medium", "shells"][weightedIndex(rng, [34, 34, 32])], count: 20 });
     }
@@ -428,7 +289,7 @@
     return [
       { kind: "weapon", id: wid, rarity: rollRarity(rng, "supply") },
       { kind: "consumable", id: "big_shield", count: 2 },
-      { kind: "mats", id: "metal", count: 100 },
+      { kind: "consumable", id: "medkit", count: 1 },
       { kind: "ammo", id: WEAPONS[wid].ammo || "medium", count: (AMMO[WEAPONS[wid].ammo || "medium"] || AMMO.medium).box * 3 },
     ];
   }
@@ -477,11 +338,11 @@
   var api = {
     mulberry32: mulberry32, clamp: clamp, dist2d: dist2d, lerp: lerp,
     RARITY: RARITY, RARITY_COLOR: RARITY_COLOR, RARITY_DMG_MULT: RARITY_DMG_MULT, RARITY_SPREAD_MULT: RARITY_SPREAD_MULT,
-    WEAPONS: WEAPONS, WEAPON_IDS: WEAPON_IDS, AMMO: AMMO, CONSUMABLES: CONSUMABLES,
-    MATERIALS: MATERIALS, MAT_IDS: MAT_IDS, BUILD: BUILD, MOVE: MOVE, PLAYERK: PLAYERK,
+    WEAPONS: WEAPONS, WEAPON_IDS: WEAPON_IDS, AMMO: AMMO, CONSUMABLES: CONSUMABLES, START_LOADOUT: START_LOADOUT,
+    MOVE: MOVE, PLAYERK: PLAYERK,
     STORM_PHASES: STORM_PHASES, MODE: MODE, LOOT_WEIGHTS: LOOT_WEIGHTS,
     BOT_TIERS: BOT_TIERS, BOT_TIER_MIX: BOT_TIER_MIX, BOT_PERSONALITIES: BOT_PERSONALITIES, BOT_NAMES: BOT_NAMES,
-    Storm: Storm, BuildGrid: BuildGrid, Match: Match,
+    Storm: Storm, Match: Match,
     hitDamage: hitDamage, applyDamage: applyDamage, splashScale: splashScale,
     weightedIndex: weightedIndex, rollRarity: rollRarity, rollFloorItem: rollFloorItem, rollChest: rollChest, rollSupplyDrop: rollSupplyDrop,
   };

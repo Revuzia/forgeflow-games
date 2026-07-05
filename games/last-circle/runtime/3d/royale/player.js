@@ -33,17 +33,15 @@ export function createActor(W, opts) {
     pos: new THREE.Vector3(), vel: new THREE.Vector3(),
     yaw: 0, pitch: 0,
     hp: K.PLAYERK.hp, shield: 0, alive: true, downedAt: 0,
-    onGround: false, crouching: false, sprinting: false, gliding: false, inWater: false,
+    onGround: false, sprinting: false, gliding: false, inWater: false, swimming: false,
     input: mkInput(),
     inventory: {
-      slots: [{ kind: "weapon", id: "pickaxe", rarity: 0, mag: 0 }, null, null, null, null],
+      // everyone spawns with a pistol — this is a shooter, not a scavenger sim
+      slots: [{ kind: "weapon", id: K.START_LOADOUT.weapon, rarity: K.START_LOADOUT.rarity, mag: K.WEAPONS[K.START_LOADOUT.weapon].mag }, null, null, null, null],
       active: 0,
-      ammo: { light: 0, medium: 0, shells: 0, heavy: 0, rockets: 0 },
-      mats: Object.assign({}, (K.MODE[W.mode] || K.MODE.standard).startMats),
-      grenades: 0,
+      ammo: Object.assign({ light: 0, medium: 0, shells: 0, heavy: 0, grenades: 0 }, K.START_LOADOUT.ammo),
     },
-    weapon: { id: "pickaxe", rarity: 0, magAmmo: 0, state: "ready", cd: 0, reloadT: 0 },
-    buildMat: "wood", buildPiece: null, lastBuildT: 0,
+    weapon: { id: K.START_LOADOUT.weapon, rarity: 0, magAmmo: K.WEAPONS[K.START_LOADOUT.weapon].mag, state: "ready", cd: 0, reloadT: 0 },
     aimErr: 0, lastShotT: -9, lastDamageT: -9, lastAttacker: null,
     healing: null,           // {id, tLeft}
     obj: new THREE.Group(), rig: null, nameTag: null, weaponMesh: null,
@@ -61,10 +59,9 @@ export function createActor(W, opts) {
 
 function mkInput() {
   return {
-    mx: 0, mz: 0, jump: false, sprint: false, crouch: false,
+    mx: 0, mz: 0, jump: false, sprint: false,
     yaw: 0, pitch: 0, fire: false, ads: false, reload: false,
-    interact: false, slot: -1, buildPiece: null, place: false, rotate: false,
-    useHeal: null, drop: false,
+    interact: false, interactDown: false, slot: -1,
   };
 }
 
@@ -78,6 +75,12 @@ export async function loadActorModels(W) {
     const a = W.actors[i];
     const rig = await W.kernel.loadCharacter(base + SKINS[i % SKINS.length]);
     a.rig = rig;
+    // NEUTRAL characters: strip the RPG weapon meshes baked into the rigs
+    // (Ranger_Bow, Rogue_Dagger, Warrior_Sword, Cleric_Staff) — nobody holds
+    // a weapon model except the gun in the hand group.
+    const strip = [];
+    rig.scene.traverse((o) => { if ((o.isMesh || o.isSkinnedMesh) && /_?(bow|dagger|sword|staff|axe|shield|quiver)$/i.test(o.name)) strip.push(o); });
+    strip.forEach((o) => { o.visible = false; });
     // normalize height to ~1.8m
     const bbox = new THREE.Box3().setFromObject(rig.scene);
     const h = bbox.max.y - bbox.min.y;
@@ -93,6 +96,8 @@ export async function loadActorModels(W) {
     a.hand = new THREE.Group();
     a.hand.position.set(0.32, 1.15, 0.28);
     a.obj.add(a.hand);
+    // show the starting pistol in hand (re-equip wires slotRef + mesh)
+    if (W.equipSlot) W.equipSlot(a, a.inventory.active);
   }
 }
 
@@ -106,7 +111,6 @@ function classifyClips(rig) {
     idle: find([/idle/i]) || names[0],
     run: find([/^run/i, /run/i, /walk/i]) || names[0],
     jump: find([/jump/i, /fall/i]),
-    crouch: find([/crouch|sneak/i]),
     death: find([/death|die|defeat/i]),
     shoot: find([/shoot|attack|punch|slash|hit/i]),
   };
@@ -167,9 +171,8 @@ export function spawnAll(W) {
     inv.slots[1] = { kind: "weapon", id: "ar", rarity: 2, mag: K.WEAPONS.ar.mag };
     inv.slots[2] = { kind: "weapon", id: "shotgun", rarity: 2, mag: K.WEAPONS.shotgun.mag };
     inv.slots[3] = { kind: "weapon", id: "sniper", rarity: 3, mag: K.WEAPONS.sniper.mag };
-    inv.slots[4] = { kind: "consumable", id: "big_shield", count: 99 };
-    inv.ammo = { light: 999, medium: 999, shells: 999, heavy: 999, rockets: 999 };
-    inv.grenades = 99;
+    inv.slots[4] = { kind: "weapon", id: "glauncher", rarity: 3, mag: K.WEAPONS.glauncher.mag };
+    inv.ammo = { light: 999, medium: 999, shells: 999, heavy: 999, grenades: 999 };
   }
 }
 
@@ -190,25 +193,21 @@ function installHumanInput(W) {
     if (!W.player || W.phase === "menu") return;
     const inp = W.player.input;
     if (e.code === "KeyR") inp.reload = true;
-    if (e.code === "KeyE") inp.interact = true;
+    if (e.code === "KeyE") { inp.interact = true; inp.interactDown = true; }
     if (e.code === "Space") { inp.jump = true; e.preventDefault(); }
     if (e.code === "Digit1") inp.slot = 0;
     if (e.code === "Digit2") inp.slot = 1;
     if (e.code === "Digit3") inp.slot = 2;
     if (e.code === "Digit4") inp.slot = 3;
     if (e.code === "Digit5") inp.slot = 4;
-    if (e.code === "KeyZ") inp.buildPiece = "wall";
-    if (e.code === "KeyX") inp.buildPiece = "floor";
-    if (e.code === "KeyC") inp.buildPiece = "ramp";
-    if (e.code === "KeyV") inp.buildPiece = "stair";
-    if (e.code === "KeyQ") inp.buildPiece = inp.buildPiece ? null : "wall"; // toggle build mode
-    if (e.code === "KeyG") W.events.emit("editBuild");
-    if (e.code === "KeyB") W.events.emit("cycleBuildMat");
-    if (e.code === "KeyT") inp.useHeal = "auto";
     if (e.code === "KeyM") W.events.emit("toggleBigMap");
     if (e.code === "Escape") W.events.emit("escPressed");
   });
-  window.addEventListener("keyup", (ev) => { keys[canon(ev.code)] = false; });
+  window.addEventListener("keyup", (ev) => {
+    const code = canon(ev.code);
+    keys[code] = false;
+    if (code === "KeyE" && W.player) W.player.input.interactDown = false;
+  });
 
   dom.addEventListener("mousedown", (e) => {
     if (!W.player || W.phase === "menu" || W.paused) return;
@@ -229,12 +228,13 @@ function installHumanInput(W) {
     W.player.input.pitch = K.clamp(W.player.input.pitch - e.movementY * sens, -1.35, 1.35);
   });
   window.addEventListener("wheel", (e) => {
-    if (!W.player || W.phase === "menu") return;
-    const inp = W.player.input;
-    if (inp.buildPiece) {
-      const order = ["wall", "floor", "ramp", "stair"];
-      const i = order.indexOf(inp.buildPiece);
-      inp.buildPiece = order[(i + (e.deltaY > 0 ? 1 : 3)) % 4];
+    // scroll cycles weapon slots (standard shooter convention)
+    if (!W.player || !W.player.alive || W.phase === "menu" || W.paused) return;
+    const inv = W.player.inventory;
+    const dir2 = e.deltaY > 0 ? 1 : -1;
+    for (let step = 1; step <= 5; step++) {
+      const idx = (inv.active + dir2 * step + 10) % 5;
+      if (inv.slots[idx]) { W.player.input.slot = idx; break; }
     }
   });
 
@@ -245,7 +245,6 @@ function installHumanInput(W) {
     inp.mx = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
     inp.mz = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
     inp.sprint = !!keys.ShiftLeft || !!keys.ShiftRight;
-    inp.crouch = !!keys.ControlLeft || !!keys.ControlRight;
   });
   W.pointerLocked = () => document.pointerLockElement === dom;
 }
@@ -257,7 +256,7 @@ const tmpV = new THREE.Vector3();
 /** highest walkable support under (x,z) at or below y+STEP_UP */
 export function supportAt(W, x, z, y) {
   let s = W.map.heightAt(x, z);
-  const cols = W.map.queryColliders(x, z, 0.6).concat(W.queryBuildColliders ? W.queryBuildColliders(x, z, 0.6) : []);
+  const cols = W.map.queryColliders(x, z, 0.6);
   for (const c of cols) {
     if (x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
     let top;
@@ -279,7 +278,7 @@ export function supportAt(W, x, z, y) {
 function blockedHoriz(W, x, z, y, h) {
   // capsule side blocking vs boxes whose vertical span overlaps (feet+step, head)
   const r = K.PLAYERK.radius;
-  const cols = W.map.queryColliders(x, z, r + 0.4).concat(W.queryBuildColliders ? W.queryBuildColliders(x, z, r + 0.4) : []);
+  const cols = W.map.queryColliders(x, z, r + 0.4);
   for (const c of cols) {
     if (c.kind === "ramp") continue;
     if (c.maxY <= y + STEP_UP || c.minY >= y + h) continue;
@@ -330,7 +329,7 @@ function stepActor(W, a, dt, far) {
     const fwd = K.clamp(inp.mz, -0.3, 1);
     a.vel.x = dirX * speed * fwd + Math.cos(a.yaw) * speed * 0.5 * inp.mx;
     a.vel.z = dirZ * speed * fwd + Math.sin(a.yaw) * speed * 0.5 * inp.mx;
-    a.vel.y = Math.max(a.vel.y - 14 * dt, inp.crouch ? -26 : -9);   // dive with crouch
+    a.vel.y = Math.max(a.vel.y - 14 * dt, inp.sprint ? -26 : -9);   // dive with sprint
     a.pos.addScaledVector(a.vel, dt);
     const g = W.map.heightAt(a.pos.x, a.pos.z);
     const landY = Math.max(g, W.map.waterY);
@@ -343,58 +342,72 @@ function stepActor(W, a, dt, far) {
     return;
   }
 
+  // water/swim state: deep water = terrain far enough below the surface
+  const wy = W.map.waterY;
+  const terrH = W.map.heightAt(a.pos.x, a.pos.z);
+  const deepWater = terrH < wy - K.PLAYERK.swimDepth;
+  const wasSwimming = a.swimming;
+  a.swimming = deepWater && a.pos.y <= wy + 0.3;
+  a.inWater = a.pos.y < wy + 0.25 && terrH < wy;
+  if (a.swimming !== wasSwimming) W.events.emit("swimState", a, a.swimming);
+
   // desired horizontal velocity (local axes → world by yaw)
-  const spd = a.crouching ? K.MOVE.crouch : inp.ads ? K.MOVE.ads : (inp.sprint && inp.mz > 0.5 && !a.inWater) ? K.MOVE.sprint : K.MOVE.walk;
-  const wspd = a.inWater ? spd * 0.5 : spd;
+  const spd = a.swimming
+    ? (inp.sprint && inp.mz > 0.5 ? K.MOVE.swimSprint : K.MOVE.swim)
+    : inp.ads ? K.MOVE.ads : (inp.sprint && inp.mz > 0.5 && !a.inWater) ? K.MOVE.sprint : K.MOVE.walk;
+  const wspd = (a.inWater && !a.swimming) ? spd * 0.55 : spd;   // wading is slow
   const sin = Math.sin(a.yaw), cos = Math.cos(a.yaw);
   const dx = (inp.mx * cos - inp.mz * sin), dz = (-inp.mx * sin - inp.mz * cos);
   const dl = Math.hypot(dx, dz) || 1;
   const tx = (dx / dl) * wspd * (Math.abs(inp.mx) + Math.abs(inp.mz) > 0 ? 1 : 0);
   const tz = (dz / dl) * wspd * (Math.abs(inp.mx) + Math.abs(inp.mz) > 0 ? 1 : 0);
-  const k = a.onGround ? Math.min(1, dt / K.MOVE.accelT) : K.MOVE.airControl * Math.min(1, dt / K.MOVE.accelT);
+  const k = (a.onGround || a.swimming) ? Math.min(1, dt / K.MOVE.accelT) : K.MOVE.airControl * Math.min(1, dt / K.MOVE.accelT);
   a.vel.x += (tx - a.vel.x) * k;
   a.vel.z += (tz - a.vel.z) * k;
 
-  a.crouching = inp.crouch && a.onGround;
-  a.sprinting = inp.sprint && inp.mz > 0.5 && !a.crouching;
+  a.sprinting = inp.sprint && inp.mz > 0.5;
 
-  // jump
-  if (inp.jump && a.onGround) { a.vel.y = K.MOVE.jumpV; a.onGround = false; W.events.emit("jump", a); }
-  inp.jump = false;
-
-  // gravity
-  a.vel.y += K.MOVE.gravity * dt;
-
-  // integrate — X then Z with wall blocking, then Y with support
-  const h = a.crouching ? K.PLAYERK.crouchHeight : K.PLAYERK.height;
-  if (!far) {
-    let nx = a.pos.x + a.vel.x * dt;
-    if (!blockedHoriz(W, nx, a.pos.z, a.pos.y, h)) a.pos.x = nx; else a.vel.x = 0;
-    let nz = a.pos.z + a.vel.z * dt;
-    if (!blockedHoriz(W, a.pos.x, nz, a.pos.y, h)) a.pos.z = nz; else a.vel.z = 0;
-  } else {
-    // far bots: cheap move, terrain only
-    a.pos.x += a.vel.x * dt; a.pos.z += a.vel.z * dt;
-  }
-  a.pos.y += a.vel.y * dt;
-
-  const sup = far ? W.map.heightAt(a.pos.x, a.pos.z) : supportAt(W, a.pos.x, a.pos.z, a.pos.y);
-  if (a.pos.y <= sup + 0.02) {
-    if (a.vel.y < -16) W.events.emit("hardLand", a, -a.vel.y);
-    a.pos.y = sup; a.vel.y = 0; a.onGround = true;
-  } else if (a.pos.y - sup > 0.1) {
+  if (a.swimming) {
+    // buoyancy: settle chest-deep at the surface with a gentle bob; jump = stroke hop
+    const targetY = wy - 0.55 + Math.sin(W.t * 2.2 + a.pos.x) * 0.06;
+    a.vel.y = 0;
+    a.pos.y += (targetY - a.pos.y) * Math.min(1, dt * 6);
+    if (inp.jump) { a.vel.x *= 1.6; a.vel.z *= 1.6; W.events.emit("swimStroke", a); }
+    inp.jump = false;
     a.onGround = false;
-  }
+    a.pos.x += a.vel.x * dt;
+    a.pos.z += a.vel.z * dt;
+  } else {
+    // jump
+    if (inp.jump && a.onGround) { a.vel.y = K.MOVE.jumpV; a.onGround = false; W.events.emit("jump", a); }
+    inp.jump = false;
 
-  // water state
-  const wy = W.map.waterY;
-  a.inWater = a.pos.y < wy + 0.25 && W.map.heightAt(a.pos.x, a.pos.z) < wy;
-  if (a.inWater && W.map.heightAt(a.pos.x, a.pos.z) < wy - 1.6) {
-    // too deep — push back toward shore (no swimming)
-    const g = 8;
-    const gx = W.map.heightAt(a.pos.x + g, a.pos.z) - W.map.heightAt(a.pos.x - g, a.pos.z);
-    const gz = W.map.heightAt(a.pos.x, a.pos.z + g) - W.map.heightAt(a.pos.x, a.pos.z - g);
-    a.pos.x += gx * 0.08; a.pos.z += gz * 0.08;
+    // gravity
+    a.vel.y += K.MOVE.gravity * dt;
+
+    // integrate — X then Z with wall blocking, then Y with support
+    const h = K.PLAYERK.height;
+    if (!far) {
+      let nx = a.pos.x + a.vel.x * dt;
+      if (!blockedHoriz(W, nx, a.pos.z, a.pos.y, h)) a.pos.x = nx; else a.vel.x = 0;
+      let nz = a.pos.z + a.vel.z * dt;
+      if (!blockedHoriz(W, a.pos.x, nz, a.pos.y, h)) a.pos.z = nz; else a.vel.z = 0;
+    } else {
+      // far bots: cheap move, terrain only
+      a.pos.x += a.vel.x * dt; a.pos.z += a.vel.z * dt;
+    }
+    a.pos.y += a.vel.y * dt;
+
+    const sup = far ? W.map.heightAt(a.pos.x, a.pos.z) : supportAt(W, a.pos.x, a.pos.z, a.pos.y);
+    // in deep water the "support" is the swim surface, not the seabed
+    if (deepWater && a.pos.y <= wy + 0.05) {
+      a.pos.y = wy - 0.55;   // enter swim next frame
+    } else if (a.pos.y <= sup + 0.02) {
+      if (a.vel.y < -16) W.events.emit("hardLand", a, -a.vel.y);
+      a.pos.y = sup; a.vel.y = 0; a.onGround = true;
+    } else if (a.pos.y - sup > 0.1) {
+      a.onGround = false;
+    }
   }
 
   clampToMap(W, a);
@@ -416,9 +429,10 @@ function syncObj(W, a, dt, far) {
     if (!far) {
       const moving = Math.hypot(a.vel.x, a.vel.z) > 0.7;
       if (a.gliding) playAnim(a, "jump");
+      else if (a.swimming) playAnim(a, "run", { timeScale: 0.6 });
       else if (!a.onGround) playAnim(a, "jump");
       else if (moving) playAnim(a, "run");
-      else playAnim(a, a.crouching && a.clips.crouch ? "crouch" : "idle");
+      else playAnim(a, "idle");
     }
   }
   // hide own model in first-person-ish ADS? third person always visible.
@@ -453,7 +467,7 @@ function updateCamera(W, dt) {
   const scope = ads && K.WEAPONS[focus.weapon.id] && K.WEAPONS[focus.weapon.id].scope;
   const dist = focus.gliding ? 7 : ads ? 2.0 : 4.2;
   const sh = ads ? 0.45 : 0.7;
-  const eye = focus.pos.y + (focus.crouching ? 1.15 : K.PLAYERK.eyeY);
+  const eye = focus.pos.y + (focus.swimming ? 0.7 : K.PLAYERK.eyeY);
   camTarget.set(focus.pos.x, eye, focus.pos.z);
   const sy = Math.sin(focus.yaw), cy = Math.cos(focus.yaw);
   const sp = Math.sin(focus.pitch), cp = Math.cos(focus.pitch);

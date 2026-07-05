@@ -1,11 +1,11 @@
 {
   "title": "Last Circle",
-  "short_description": "A 50-player battle royale with Fortnite-style building — drop onto one of three maps, loot, farm, build, and outlive 49 fiercely competitive opponents as the storm closes in.",
-  "description": "Last Circle is a full third-person battle royale in the browser. Every match is a 50-player lobby — you plus 49 AI opponents that loot, farm materials, rotate with the storm, take cover, box up, ramp-push, and fight like real players (friends can join over the network and instantly replace a bot). Three distinct maps — the vibrant tropical Isla Viva, the shattered downtown of Ashgrid, and the deep conifer wilds of Deepwood — each with unique POIs, loot, and high ground. Full building system: walls, floors, ramps, and stairs in wood, brick, and metal, with edits and harvesting. Assault rifles, shotguns, snipers, SMGs, pistols, rockets, and grenades, with shields, chests, supply drops, and a shrinking storm. Standard, 5-minute Quick, and Practice modes.",
+  "short_description": "A 50-player battle royale shooter — drop onto one of three maps, loot chests, and outlive 49 fiercely competitive opponents as the storm closes in.",
+  "description": "Last Circle is a full third-person battle royale shooter in the browser. Every match is a 50-player lobby — you plus 49 AI opponents that loot, rotate with the storm, take cover, flank, and fight like real players (friends can join over the network and instantly replace a bot). Three distinct maps — the vibrant tropical Isla Viva, the shattered downtown of Ashgrid, and the deep conifer wilds of Deepwood — each with unique POIs, glowing loot chests, and high ground. Everyone drops with a pistol; fight for assault rifles, shotguns, snipers, SMGs, and grenade launchers, with shields, supply drops, real swimming, and a shrinking storm. Standard, 5-minute Quick, and Practice modes.",
   "genre": "shooter",
   "sub_genre": "battle-royale",
   "difficulty": "medium",
   "status": "draft",
-  "controls_keyboard": "WASD move · Mouse aim/fire · RMB ADS · SPACE jump · CTRL crouch · SHIFT sprint · E interact · R reload · Z/X/C/V build wall/floor/ramp/stair · G edit · 1-5 slots · TAB inventory · M map",
-  "tags": ["shooter", "battle-royale", "3d", "building", "multiplayer", "third-person", "action"]
+  "controls_keyboard": "WASD move · Mouse aim/fire · RMB aim down sights · SPACE jump · SHIFT sprint · R reload · E loot (hold to open chests) · 1-5/scroll weapons · M map",
+  "tags": ["shooter", "battle-royale", "3d", "multiplayer", "third-person", "action"]
 }

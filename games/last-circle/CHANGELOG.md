@@ -3,6 +3,52 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-05 — v2.0 pure BR shooter rework (owner direction)
+
+Owner feedback: drop the Fortnite building identity entirely; make it a clean
+battle-royale SHOOTER. Full rework in one session:
+
+- **Building/harvesting/materials REMOVED everywhere** — sim (BuildGrid,
+  BUILD, MATERIALS gone; selftest now asserts their absence), building.js
+  deleted, all build keys/UI/HUD mats, bot wall-up/box/ramp-push behaviors,
+  net build mirroring. Map structures remain as static cover.
+- **Arsenal = 6 guns**: pistol / SMG / AR / shotgun / sniper / **grenade
+  launcher** (new: arcing fused shells, bounce, burst on body hit; replaces
+  rocket launcher). Pickaxe melee + hand grenades removed. **Everyone spawns
+  with a common pistol** (16 mag + 36 light) — verified all 6 weapons score
+  kills in soak tests; storm kills fell from ~30% to 8% of eliminations on
+  standard (fights actually resolve).
+- **Swimming**: deep water = real swim (surface buoyancy + bob, swim/sprint-swim
+  speeds, no shooting while swimming, SPACE = stroke hop, splash FX/audio).
+  Replaces the old push-back-to-shore hack.
+- **Controls simplified** to WASD / SPACE / SHIFT / LMB / RMB(ADS) / R / E
+  (+ 1-5/scroll slots, M map, ESC). Crouch, quick-heal (T), and every build
+  key removed; settings keybind list trimmed to match. Scroll now cycles
+  weapon slots.
+- **Loot rework**: chests are UNMISSABLE (large chest model + gold rarity
+  ring + pulsing glow sprite + vertical light beam, all removed on open) and
+  take a **2-second HOLD-E channel** (progress ring on the HUD crosshair;
+  bots obey the same 2s rule). Items: walk-over auto-pickup whenever there's
+  room; **tap E swaps the ground item with your active slot** when full.
+  Death drops now include the EQUIPPED weapon (all slots + ammo).
+- **Directional indicators** (industry standard): white footstep icons on the
+  screen-edge ring for moving players within 30 m (1.4 s per-actor throttle),
+  gunfire chevrons for shots 12-250 m away, red arcs toward whoever damaged
+  you. All fade ~1 s, positioned by world bearing relative to camera yaw.
+- **Neutral characters**: the Quaternius rigs' baked weapon meshes
+  (Ranger_Bow / Rogue_Dagger / Warrior_Sword / Cleric_Staff) are stripped at
+  load — nobody holds anything except their actual gun (starting pistol is
+  now visible in hand from spawn via equip-on-load).
+- Bots: FARM state + build behaviors removed; new **flanker** personality
+  (arcing strafe pushes) replaces "builder"; suppression reflex = sprint to
+  lateral cover when shot by an unseen attacker; chest opens channel 2 s;
+  loot brain rewritten around "upgrade off the starter pistol" (14/26 alive
+  bots upgraded by t=150 in soak).
+- Verified in preview: full matches on isla standard (t≈7:40, 45/49 gun
+  kills, winner 6 kills) + deepwood quick; swim/hold-E/indicators/walkover
+  all exercised through the real input paths; sim selftest 44/44; zero
+  console errors.
+
 ## 2026-07-03 — v1.0 initial build (full game, one session)
 
 **What it is:** 50-player third-person battle royale with Fortnite-style building.

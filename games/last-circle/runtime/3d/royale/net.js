@@ -33,13 +33,6 @@ export function init(W) {
     if (S && W.player) send("hitYou", { target: target.id, dmg, attacker: W.player.id, weapon: weaponId, isHead });
   };
   // mirror local events out
-  W.events.on("buildPlaced", (a, p) => {
-    if (S && a && !a.netRemote) send("build", { type: p.type, ix: p.ix, iy: p.iy, iz: p.iz, dir: p.dir, mat: p.mat });
-  });
-  W.events.on("buildEdited", (a, p) => { if (S && a && !a.netRemote) send("edit", { sk: p.slotKey, edit: p.edit }); });
-  W.events.on("buildDestroyed", (pieces, byId) => {
-    if (S && isAuthority(W)) for (const p of pieces) send("bdestroy", { sk: p.slotKey });
-  });
   W.events.on("chestOpened", (a, c) => { if (S && a && a === W.player) send("chest", { id: c.id }); });
   // pickups by anything simulated locally (own player + host's bots) despawn everywhere
   W.events.on("pickedUp", (a, data, id) => { if (S && a && !a.netRemote) send("take", { id }); });
@@ -183,9 +176,6 @@ function onMsg(W, { from, t, d }) {
     return;
   }
   if (t === "drop") { W.netSpawnItem && W.netSpawnItem(d); return; }
-  if (t === "build") { W.netApplyBuild(d); return; }
-  if (t === "edit") { W.netApplyEdit(d.sk, d.edit); return; }
-  if (t === "bdestroy") { W.netApplyDestroy(d.sk); return; }
   if (t === "chest") { W.netOpenChest(d.id); return; }
   if (t === "take") { W.netTakeItem(d.id); return; }
   if (t === "died") {
@@ -211,7 +201,6 @@ function onMsg(W, { from, t, d }) {
   if (t === "sync" && !S.net.isHost()) {
     // late-join / drift correction from host
     W.t = d.t;
-    for (const spec of d.builds || []) W.netApplyBuild(spec);
     for (const id of (d.loot && d.loot.taken) || []) W.netTakeItem(id);
     for (const id of (d.loot && d.loot.opened) || []) W.netOpenChest(id);
     return;
@@ -234,7 +223,7 @@ function applyRemoteState(W, a, d) {
 export function onMatchStart(W) {
   // host sends world sync for any guest that joined at the boundary
   if (S && S.net.isHost()) {
-    send("sync", { t: W.t, builds: W.buildSyncState(), loot: W.lootSyncState() });
+    send("sync", { t: W.t, loot: W.lootSyncState() });
   }
 }
 

@@ -1,6 +1,6 @@
 /**
  * FFG runtime — 3d/ffg_royale3d.js  (Last Circle)
- * Genre "royale": 50-player third-person battle royale with building.
+ * Genre "royale": 50-player third-person battle royale shooter.
  *
  * This is the ORCHESTRATOR. All rules live in ../sim/royale.js (deterministic,
  * node-tested); rendering + input + AI live in ./royale/* submodules. This file
@@ -9,7 +9,7 @@
  *   menu → lobby → drop → match loop → victory/defeat → stats → menu
  *
  * Frame order (update): input/brains → movement+physics → weapons/projectiles
- * → building → loot → storm → fx → hud. Bots emit the SAME input struct the
+ * → loot → storm → fx → hud. Bots emit the SAME input struct the
  * human's keyboard/mouse produces and run through the same movement/weapon
  * code — "bots are players" is structural, not simulated.
  *
@@ -22,12 +22,11 @@ const V = new URL(import.meta.url).search;
 // a bare "./ffg_kernel_3d.js" would be a SECOND module instance with its own
 // (empty) genre registry, and boot3d would never see "royale" registered.
 const { register3d } = await import("./ffg_kernel_3d.js" + V);
-const [{ MAPS, buildMap }, playerMod, weaponsMod, buildingMod, lootMod, stormMod, botsMod, hudMod, audioMod, fxMod, netMod] =
+const [{ MAPS, buildMap }, playerMod, weaponsMod, lootMod, stormMod, botsMod, hudMod, audioMod, fxMod, netMod] =
   await Promise.all([
     import("./royale/maps.js" + V),
     import("./royale/player.js" + V),
     import("./royale/weapons.js" + V),
-    import("./royale/building.js" + V),
     import("./royale/loot.js" + V),
     import("./royale/storm.js" + V),
     import("./royale/bots.js" + V),
@@ -65,8 +64,6 @@ register3d("royale", async function (kernel, content) {
     actors: [], actorById: new Map(),
     player: null,
     map: null,               // built map: heightAt, pois, colliders, harvestables...
-    grid: null,              // SIM.BuildGrid
-    buildMeshes: new Map(),
     loot: null, stormCtl: null, match: null,
     rng: SIM.mulberry32((content.seed || 1) >>> 0),
     events: mkEmitter(),
@@ -87,7 +84,6 @@ register3d("royale", async function (kernel, content) {
   hudMod.init(W);
   playerMod.init(W);
   weaponsMod.init(W);
-  buildingMod.init(W);
   lootMod.init(W);
   stormMod.init(W);
   botsMod.init(W);
@@ -108,20 +104,11 @@ register3d("royale", async function (kernel, content) {
     // clear previous world
     for (const name in W._groups) { const g = W._groups[name]; g.clear(); }
     W.actors.length = 0; W.actorById.clear();
-    W.buildMeshes.clear();
 
     // build the world
     hudMod.showLoading(W, "Building " + (MAPS[W.mapId] ? MAPS[W.mapId].name : W.mapId) + "…");
     await nextFrame(); // let the loading screen paint
     W.map = await buildMap(W, W.mapId);
-    W.grid = new SIM.BuildGrid({
-      groundedFn: (p) => {
-        const G = SIM.BUILD.gridM;
-        const cx = (p.ix + 0.5) * G, cz = (p.iz + 0.5) * G;
-        return p.iy * G <= W.map.heightAt(cx, cz) + 0.6;
-      },
-    });
-    buildingMod.onWorldReady(W);
 
     const modeK = SIM.MODE[W.mode] || SIM.MODE.standard;
     W.match = new SIM.Match({ players: modeK.players, mode: W.mode });
@@ -187,8 +174,7 @@ register3d("royale", async function (kernel, content) {
     botsMod.update(W, step);        // brains → bot input structs (staggered)
     playerMod.update(W, step);      // all actors: movement + physics + camera
     weaponsMod.update(W, step);     // fire/reload/projectiles/damage
-    buildingMod.update(W, step);    // ghost, placement, structure sync
-    lootMod.update(W, step);        // pickups, chest prompts
+    lootMod.update(W, step);        // pickups, chest channels
     stormMod.update(W, step);       // circle, damage ticks, warnings
     fxMod.update(W, step);          // particles, tracers, damage numbers
     hudMod.update(W, step);         // bars, minimap, feed, timers
@@ -218,7 +204,8 @@ register3d("royale", async function (kernel, content) {
       for (let t = 0; t < seconds; t += h) {
         W.t += h;
         botsMod.update(W, h); playerMod.update(W, h); weaponsMod.update(W, h);
-        buildingMod.update(W, h); lootMod.update(W, h); stormMod.update(W, h);
+        lootMod.update(W, h); stormMod.update(W, h);
+        if (W.match && W.match.over) break;
       }
       return controller.state();
     },

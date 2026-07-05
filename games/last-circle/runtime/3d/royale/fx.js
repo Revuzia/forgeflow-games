@@ -78,8 +78,6 @@ function burst(o) {
 
 // ── event wiring ─────────────────────────────────────────────────────────────
 function wireEvents(W) {
-  const MATC = { wood: 0xb08850, brick: 0xb06a55, metal: 0x9fb2c4 };
-
   W.events.on("shotFired", (a, weaponId, eye, dir) => {
     if (weaponId === "grenade") return;
     // muzzle flash
@@ -102,20 +100,12 @@ function wireEvents(W) {
     if (d < 40) W.camShake = Math.max(W.camShake, (1 - d / 40) * 0.5);
   });
 
-  W.events.on("buildDestroyed", (pieces) => {
-    for (const p of pieces.slice(0, 6)) {
-      const G = 4;
-      burst({ x: (p.ix + 0.5) * G, y: p.iy * G + 2, z: (p.iz + 0.5) * G, n: 9, color: MATC[p.mat] || 0xb08850, speed: 5, up: 3, size: 0.22, life: 0.9 });
-    }
+  W.events.on("swimState", (a, swimming) => {
+    if (!swimming) return;
+    burst({ x: a.pos.x, y: W.map.waterY + 0.1, z: a.pos.z, n: 8, color: [0xbfe8f5, 0x7fc9e0], speed: 3, up: 2.5, size: 0.1, life: 0.6, gravity: -6 });
   });
-  W.events.on("buildPlaced", (a, p) => {
-    if (a === W.player) return; // own builds are obvious
-  });
-
-  W.events.on("harvested", (a, h, mats) => {
-    const c = h.mat === "wood" ? 0xb08850 : h.mat === "brick" ? 0xa9a9a9 : 0x9fb2c4;
-    burst({ x: h.pos.x, y: h.pos.y + 1.4, z: h.pos.z, n: 5, color: c, speed: 3, size: 0.1, life: 0.5 });
-    if (a === W.player) dmgNumber(W, h.pos.x, h.pos.y + 2.2, h.pos.z, "+" + mats, "#d9c07f", 0.8);
+  W.events.on("swimStroke", (a) => {
+    burst({ x: a.pos.x, y: W.map.waterY + 0.05, z: a.pos.z, n: 4, color: 0xbfe8f5, speed: 2, up: 1.5, size: 0.08, life: 0.4, gravity: -5 });
   });
 
   W.events.on("actorHurt", (victim, info) => {

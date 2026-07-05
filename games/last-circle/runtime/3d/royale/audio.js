@@ -102,7 +102,7 @@ function shot(cls, pos) {
   n.connect(f); f.connect(g); g.connect(out);
   const P = {
     pistol: [1400, 0.09, 0.5], smg: [1800, 0.06, 0.42], ar: [1100, 0.12, 0.6],
-    shotgun: [700, 0.2, 0.9], sniper: [500, 0.32, 1.0], launcher: [400, 0.3, 0.9], melee: [900, 0.05, 0.25],
+    shotgun: [700, 0.2, 0.9], sniper: [500, 0.32, 1.0], launcher: [420, 0.24, 0.85],
   }[cls] || [1200, 0.1, 0.5];
   f.frequency.setValueAtTime(P[0], t);
   f.frequency.exponentialRampToValueAtTime(Math.max(80, P[0] * 0.2), t + P[1]);
@@ -170,7 +170,6 @@ function wire(W) {
     const def = W.SIM.WEAPONS[weaponId];
     shot(def ? def.cls : "ar", a === W.player ? null : eye);
   });
-  on("melee", (a) => blip(220, 0.08, 0.15, "triangle", a === W.player ? null : a.pos, 30));
   on("reloadStart", (a) => { if (a === W.player) { blip(500, 0.06, 0.12, "square"); setTimeout(() => blip(400, 0.06, 0.1, "square"), 130); } });
   on("reloadDone", (a) => { if (a === W.player) blip(760, 0.07, 0.14, "square"); });
   on("dryFire", (a) => { if (a === W.player) blip(300, 0.05, 0.12, "square"); });
@@ -180,10 +179,8 @@ function wire(W) {
     if (info.broke) blip(1800, 0.25, 0.2, "sawtooth", victim === W.player ? null : victim.pos, 50);
   });
   on("actorDied", (victim) => thump(300, 0.3, 0.3, victim === W.player ? null : victim.pos, 90));
-  on("buildPlaced", (a, p) => thump(p.mat === "metal" ? 900 : p.mat === "brick" ? 600 : 400, 0.09, 0.22, a === W.player ? null : { x: (p.ix + 0.5) * 4, y: p.iy * 4, z: (p.iz + 0.5) * 4 }, 60));
-  on("buildEdited", () => blip(880, 0.06, 0.14, "square"));
-  on("buildDestroyed", (pieces) => { const p = pieces[0]; thump(250, 0.35, 0.3, { x: (p.ix + 0.5) * 4, y: p.iy * 4, z: (p.iz + 0.5) * 4 }, 80); });
-  on("harvested", (a, h) => thump(h.mat === "metal" ? 1100 : 700, 0.07, 0.2, a === W.player ? null : h.pos, 40));
+  on("swimState", (a, swimming) => { if (swimming) thump(900, 0.25, 0.25, a === W.player ? null : a.pos, 40); });
+  on("swimStroke", (a) => thump(1100, 0.12, 0.15, a === W.player ? null : a.pos, 25));
   on("chestOpened", (a, c) => { blip(660, 0.3, 0.14, "triangle", a === W.player ? null : c.pos, 40); setTimeout(() => blip(990, 0.4, 0.12, "triangle", a === W.player ? null : c.pos, 40), 120); });
   on("pickedUp", (a) => { if (a === W.player) blip(840, 0.07, 0.12, "sine"); });
   on("healStart", (a) => { if (a === W.player) blip(520, 0.3, 0.1, "sine"); });
