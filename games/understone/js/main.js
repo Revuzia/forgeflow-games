@@ -8,6 +8,20 @@ const MAX_CATCHUP_TICKS = 5; // spiral-of-death guard when tab was backgrounded
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
 
+// Menu-button styling lives in the document head (NOT inside the title-screen div): the in-game
+// pause menu reuses .us-menu-btn but outlives the title DOM, so scoping this to the title left the
+// pause buttons (Resume, Save…) unstyled — black text on the dark overlay, effectively invisible.
+{
+  const s = document.createElement('style');
+  s.textContent = `
+    .us-menu-btn { padding:10px 34px;margin:7px;border:2px solid #3a415c;border-radius:8px;color:#e8e8f0;
+      font-size:17px;cursor:pointer;background:rgba(20,24,40,0.85);min-width:220px;text-align:center;
+      transition: all .15s; user-select:none; }
+    .us-menu-btn:hover { border-color:#e8d9a0;color:#e8d9a0;box-shadow:0 0 12px rgba(232,217,160,.3); }
+    .us-menu-btn.disabled { opacity:.35;cursor:default;pointer-events:none; }`;
+  document.head.appendChild(s);
+}
+
 // Horizontal-mirror a sprite once and cache it. Used for the axe, whose icon art is drawn
 // blade-on-the-left: mirroring the SPRITE (rather than flipping the canvas X during the swing)
 // points the blade forward WITHOUT reversing the swing rotation the way a scale(-1) would.
@@ -521,8 +535,8 @@ async function boot() {
       ${cat('Controls')}
       <div style="color:#9aa3c0;font-size:11.5px;line-height:1.85">
         Move — <b>A</b> / <b>D</b> &nbsp;·&nbsp; Jump — <b>Space</b> (hold = higher)<br>
-        Mine / Use — <b>Left-click</b> &nbsp;·&nbsp; Interact — <b>Right-click</b><br>
-        Inventory — <b>I</b> / <b>E</b> &nbsp;·&nbsp; Crafting — <b>C</b> &nbsp;·&nbsp; Hotbar — <b>1–0</b><br>
+        Mine / Use — <b>Left-click</b> &nbsp;·&nbsp; Interact — <b>E</b> / <b>Right-click</b><br>
+        Craft / Inventory — <b>C</b> &nbsp;·&nbsp; Crouch — <b>Shift</b> &nbsp;·&nbsp; Hotbar — <b>1–0</b><br>
         Zoom — <b>Mouse wheel</b> &nbsp;·&nbsp; Debug (X/Y/FPS) — <b>F3</b> &nbsp;·&nbsp; Pause / Menu — <b>Esc</b>
       </div>
       <div id="us-reset" class="us-menu-btn" style="margin-top:10px;font-size:12px;padding:5px 10px;color:#e0a0a0">Reset to Defaults</div>
@@ -881,13 +895,6 @@ function showTitle(canContinue) {
     el.style.cssText = `position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
       justify-content:center;background:linear-gradient(#0e1526,#1c2c22);z-index:95;font-family:'Segoe UI',sans-serif;`;
     el.innerHTML = `
-      <style>
-        .us-menu-btn { padding:10px 34px;margin:7px;border:2px solid #3a415c;border-radius:8px;color:#e8e8f0;
-          font-size:17px;cursor:pointer;background:rgba(20,24,40,0.75);min-width:220px;text-align:center;
-          transition: all .15s; user-select:none; }
-        .us-menu-btn:hover { border-color:#e8d9a0;color:#e8d9a0;box-shadow:0 0 12px rgba(232,217,160,.3); }
-        .us-menu-btn.disabled { opacity:.35;cursor:default;pointer-events:none; }
-      </style>
       <h1 style="font-size:52px;letter-spacing:12px;color:#e8d9a0;margin:0 0 6px;text-shadow:0 0 28px rgba(232,217,160,.4)">UNDERSTONE</h1>
       <div style="color:#8a93b0;margin-bottom:34px;font-size:14px">dig · build · craft · survive</div>
       <div class="us-menu-btn" id="us-new">New World</div>
@@ -943,8 +950,8 @@ function openTitleOverlay(kind) {
       ${cat('Video')}<div id="ov-toggles"></div>
       ${cat('Controls')}<div style="color:#9aa3c0;font-size:11.5px;line-height:1.85">
         Move — <b>A</b>/<b>D</b> · Jump — <b>Space</b> (hold = higher)<br>
-        Mine/Use — <b>Left-click</b> · Interact — <b>Right-click</b><br>
-        Inventory — <b>I</b>/<b>E</b> · Crafting — <b>C</b> · Hotbar — <b>1–0</b><br>
+        Mine/Use — <b>Left-click</b> · Interact — <b>E</b>/<b>Right-click</b><br>
+        Craft / Inventory — <b>C</b> · Crouch — <b>Shift</b> · Hotbar — <b>1–0</b><br>
         Zoom — <b>Mouse wheel</b> · Debug — <b>F3</b> · Pause/Menu — <b>Esc</b></div>
       <div class="us-menu-btn" id="ov-close" style="margin:16px auto 0;min-width:120px;font-size:14px">Back</div></div>`;
   }

@@ -19,8 +19,9 @@ export const binds = {
   up: ['KeyW', 'ArrowUp'],
   down: ['KeyS', 'ArrowDown'],
   jump: ['Space'],
-  inventory: ['KeyI'],             // I = inventory (crafting/recipe book lives inside it)
-  crouch: ['KeyC'],                // C = crouch
+  crafting: ['KeyC'],              // C = open the inventory/crafting panel with the recipe SEARCH focused
+  inventory: [],                   // (no dedicated inventory key — C opens the combined panel)
+  crouch: ['ShiftLeft'],           // crouch moved off C (now crafting) → Shift (safe w/ movement; Ctrl+W would close the tab)
   interact: ['KeyE'],              // E = interact (doors/chests/NPCs), alongside right-click
   pause: ['Escape'],
   hotbar: ['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0'],
