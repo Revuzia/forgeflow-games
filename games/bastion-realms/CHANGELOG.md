@@ -1,5 +1,17 @@
 # Bastion Realms — Changelog
 
+## v1.1 — 2026-07-06 (owner playtest feedback)
+- **Start/finish clarity**: enemy spawn is now a crimson rift with dark spikes + floating "☠ ENEMIES" label;
+  the exit is a proper stone keep gate (twin gold-capped towers, shimmering barrier) + "🛡 DEFEND" label.
+  Animated chevrons march along the path showing enemy direction.
+- **Camera**: right-drag now ORBITS (middle-drag pans, wheel zooms), R resets the view, and the camera
+  resets to standard framing on every level load (no more inheriting the menu's tilted auto-rotate angle).
+- **Corpses**: death animation is snappier (sink+fade fully gone in ~1.25s) and an orphan-view sweep
+  guarantees no body can ever linger even if a death event is missed under heavy load.
+- **Victory/defeat music**: replaced the arcade jingles with ForgeFlow catalog tracks — "Cedar Breeze"
+  (warm, victory) and "Ember Midnight" (somber, defeat).
+- Cache version bumped to ?v=2.
+
 ## v1.0 — 2026-07-06 (initial release)
 - Full 3D tower-defense campaign: 5 biomes × 9 levels (45 unique seeded winding paths, all verified structurally distinct).
 - 8 towers with 3 upgrade levels each, procedural composed models, distinct FX and roles:

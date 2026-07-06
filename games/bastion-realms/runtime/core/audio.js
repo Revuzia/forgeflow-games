@@ -173,9 +173,7 @@ export function createAudio(settings) {
   music.el.volume = settings.music;
 
   function playMusic(track) { // 'menu' | biome ids | 'victory' | 'defeat'
-    const url = track === 'victory' ? 'assets/audio/music/victory.ogg'
-      : track === 'defeat' ? 'assets/audio/music/defeat.ogg'
-      : `assets/audio/music/${track}.mp3`;
+    const url = `assets/audio/music/${track}.mp3`;
     if (music.current === url) return;
     music.current = url;
     clearInterval(music.fadeTimer);

@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { createSim, DT } from './sim/sim.js';
 import { levelDef } from './data/levels.js';
-import { GRID_W, GRID_H, CELL, cellToWorld, worldToCell } from './sim/path.js';
+import { GRID_W, GRID_H, CELL, cellToWorld, worldToCell, posAlong } from './sim/path.js';
 import { TOWERS, TOWER_ORDER, isTowerUnlocked } from './data/towers.js';
 import { buildWorld } from './view/world.js';
 import { createEnemyLayer } from './view/enemies3d.js';
@@ -66,6 +66,7 @@ export function createGame(env) {
     g.speed = 1; g.paused = false; g.resultShown = false;
     g.timeAcc = 0; g.usedSpeeds = new Set([1]);
 
+    engine.resetView();
     g.lights = lightRig(scene, g.level.biome);
     g.world = buildWorld(scene, g.level);
     g.enemyLayer = createEnemyLayer(scene);
@@ -644,6 +645,7 @@ export function createGame(env) {
     }
     if (ev.key === 'u' && g.selection.towerId) handlers.upgrade(g.selection.towerId);
     if (ev.key === 'x' && g.selection.towerId) handlers.sell(g.selection.towerId);
+    if (ev.key === 'r' || ev.key === 'R') engine.resetView();
   });
 
   // ---------- UI handlers ----------
@@ -722,10 +724,22 @@ export function createGame(env) {
       for (const v of g.ventMarkers) {
         v.mesh.material.opacity = v.warn ? 0.45 + Math.sin(g.viewT * 10) * 0.3 : 0.3;
       }
-      // portal spin
+      // portal spin + gate shimmer + marching path chevrons
       if (g.world) {
         g.world.portal.userData.spin.rotation.z = g.viewT * 1.2;
-        g.world.gate.userData.spin.rotation.z = -g.viewT * 0.8;
+        const barrier = g.world.gate.userData.spin;
+        if (barrier?.material) barrier.material.opacity = 0.22 + Math.sin(g.viewT * 2.4) * 0.09;
+        if (g.world.arrows) {
+          const total = g.world.routeTotal;
+          for (const a of g.world.arrows) {
+            a.offset = (a.offset + rdt * 2.2) % total;
+            const p = posAlong(g.level.route, a.offset);
+            a.mesh.position.set(p.x, 0.08, p.z);
+            a.mesh.rotation.z = -Math.atan2(p.dz, p.dx);
+            const k = (a.offset % 9) / 9;
+            a.mesh.material.opacity = 0.28 + 0.3 * Math.sin(k * Math.PI);
+          }
+        }
       }
       g.fx?.update(rdt * Math.min(g.speed, 2), g.viewT);
       ui.updateHud(g.sim, g.selection);

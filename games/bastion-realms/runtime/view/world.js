@@ -216,6 +216,28 @@ export function buildWorld(scene, level) {
   const gate = makePortal(biome, true); gate.position.set(endP[0], 0, endP[1]);
   group.add(portal, gate);
 
+  // ---------- path direction chevrons (march from spawn -> gate) ----------
+  const arrowTex = canvasTexture(64, 64, (ctx) => {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 10; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(16, 12); ctx.lineTo(46, 32); ctx.lineTo(16, 52);
+    ctx.stroke();
+  });
+  const arrows = [];
+  const N_ARROWS = Math.max(6, Math.floor(level.route.total / 9));
+  for (let i = 0; i < N_ARROWS; i++) {
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.9, 0.9),
+      new THREE.MeshBasicMaterial({ map: arrowTex, transparent: true, opacity: 0.5, depthWrite: false, fog: false })
+    );
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = 0.08;
+    m.renderOrder = 10;
+    group.add(m);
+    arrows.push({ mesh: m, offset: (i / N_ARROWS) * level.route.total });
+  }
+
   // ---------- hazard markers ----------
   const hazardGroup = new THREE.Group();
   hazardGroup.name = 'hazards';
@@ -226,29 +248,99 @@ export function buildWorld(scene, level) {
   group.add(hazardGroup);
 
   scene.add(group);
-  return { group, hazardGroup, ground, portal, gate };
+  return { group, hazardGroup, ground, portal, gate, arrows, routeTotal: level.route.total };
+}
+
+// Floating icon label (skull / shield) that always faces the camera.
+function labelSprite(text, color, sub) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = '64px "Segoe UI Emoji", sans-serif';
+  ctx.fillText(text, 128, 40);
+  if (sub) {
+    ctx.font = 'bold 26px "Segoe UI", sans-serif';
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 6;
+    ctx.strokeText(sub, 128, 96);
+    ctx.fillStyle = color;
+    ctx.fillText(sub, 128, 96);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  spr.scale.set(3.4, 1.7, 1);
+  spr.renderOrder = 40;
+  return spr;
 }
 
 function makePortal(biome, isGate) {
   const g = new THREE.Group();
   g.name = isGate ? 'gate' : 'portal';
-  const c1 = isGate ? 0xd8c27a : 0x9b59d0;
-  const ringMat = new THREE.MeshStandardMaterial({
-    color: c1, emissive: c1, emissiveIntensity: 0.7, roughness: 0.4, metalness: 0.3,
-  });
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.16, 10, 28), ringMat);
-  ring.position.y = 1.5;
-  g.add(ring);
-  const baseMat = new THREE.MeshStandardMaterial({ color: 0x3a3a44, roughness: 0.9 });
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.25, 0.5, 8), baseMat);
-  base.position.y = 0.25;
-  g.add(base);
-  const disc = new THREE.Mesh(
-    new THREE.CircleGeometry(1.16, 24),
-    new THREE.MeshBasicMaterial({ color: c1, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
-  );
-  disc.position.y = 1.5;
-  g.add(disc);
-  g.userData.spin = ring;
+
+  if (isGate) {
+    // ---- the KEEP GATE you defend: stone gatehouse + golden shield ----
+    const stone = new THREE.MeshStandardMaterial({ color: 0x8b8f98, roughness: 0.9 });
+    const stoneD = new THREE.MeshStandardMaterial({ color: 0x6b6f78, roughness: 0.95 });
+    const gold = new THREE.MeshStandardMaterial({ color: 0xd8b04a, roughness: 0.35, metalness: 0.8, emissive: 0xd8b04a, emissiveIntensity: 0.25 });
+    for (const sx of [-1.35, 1.35]) {
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 3.2, 8), stone);
+      t.position.set(sx, 1.6, 0); t.castShadow = true;
+      g.add(t);
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.35, 8), stoneD);
+      cap.position.set(sx, 3.35, 0); cap.castShadow = true;
+      g.add(cap);
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.8, 8), gold);
+      cone.position.set(sx, 3.9, 0); cone.castShadow = true;
+      g.add(cone);
+    }
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.55, 0.9), stone);
+    lintel.position.y = 2.9; lintel.castShadow = true;
+    g.add(lintel);
+    // glowing golden barrier the enemies try to breach
+    const barrier = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.2, 2.4),
+      new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false })
+    );
+    barrier.position.y = 1.4;
+    g.add(barrier);
+    const label = labelSprite('🛡️', '#ffd76a', 'DEFEND');
+    label.position.y = 5.2;
+    g.add(label);
+    g.userData.spin = barrier; // gentle shimmer target
+    g.userData.isGate = true;
+  } else {
+    // ---- the ENEMY SPAWN: menacing crimson rift ----
+    const c1 = 0xd03030;
+    const ringMat = new THREE.MeshStandardMaterial({
+      color: c1, emissive: c1, emissiveIntensity: 1.1, roughness: 0.4, metalness: 0.3,
+    });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.18, 10, 28), ringMat);
+    ring.position.y = 1.5;
+    g.add(ring);
+    const spikes = new THREE.MeshStandardMaterial({ color: 0x2a1414, roughness: 0.9 });
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const s = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 5), spikes);
+      s.position.set(Math.cos(a) * 1.5, 0.4, Math.sin(a) * 1.5);
+      s.rotation.z = Math.cos(a) * 0.4; s.rotation.x = -Math.sin(a) * 0.4;
+      s.castShadow = true;
+      g.add(s);
+    }
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.25, 0.5, 8),
+      new THREE.MeshStandardMaterial({ color: 0x2a2026, roughness: 0.9 }));
+    base.position.y = 0.25;
+    g.add(base);
+    const disc = new THREE.Mesh(
+      new THREE.CircleGeometry(1.16, 24),
+      new THREE.MeshBasicMaterial({ color: 0x801818, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false })
+    );
+    disc.position.y = 1.5;
+    g.add(disc);
+    const label = labelSprite('☠️', '#ff8a7a', 'ENEMIES');
+    label.position.y = 4.4;
+    g.add(label);
+    g.userData.spin = ring;
+  }
   return g;
 }

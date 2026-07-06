@@ -111,6 +111,38 @@ export function createEnemyLayer(scene) {
     }
   }
 
+  // Move a view into the corpse pipeline (death anim -> sink -> fade -> remove).
+  function killView(id, leaked = false) {
+    const v = views.get(id);
+    if (!v) return;
+    views.delete(id);
+    v.bar.spr.visible = false;
+    ensureIce(v, false); ensureBubble(v, false);
+    if (leaked) {
+      corpses.push({ root: v.root, mixer: null, t: 0.8 });
+      return;
+    }
+    const deathClip = resolveClip(v.inst.animations, v.def.anim?.death, 'death');
+    if (deathClip && v.mixer) {
+      v.mixer.stopAllAction();
+      const a = v.mixer.clipAction(deathClip);
+      a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true;
+      a.play();
+      v.mixer.timeScale = 1.4;
+      corpses.push({ root: v.root, mixer: v.mixer, t: 0 });
+    } else {
+      corpses.push({ root: v.root, mixer: null, t: 0.7 });
+    }
+  }
+
+  function fadeRoot(root, opacity) {
+    root.traverse((n) => {
+      if (!n.isMesh || !n.material) return;
+      const mats = Array.isArray(n.material) ? n.material : [n.material];
+      for (const m of mats) { m.transparent = true; m.opacity = opacity; }
+    });
+  }
+
   return {
     group, views,
 
@@ -119,6 +151,13 @@ export function createEnemyLayer(scene) {
       for (const e of sim.enemies) {
         if (!views.has(e.id)) spawn(e);
       }
+      // orphan sweep: a view whose enemy left the sim without us seeing the
+      // death/leak event (e.g. dropped under load) must never linger — bury it.
+      const orphans = [];
+      for (const id of views.keys()) {
+        if (!sim.enemies.some((x) => x.id === id)) orphans.push(id);
+      }
+      for (const id of orphans) killView(id);
       for (const [id, v] of views) {
         const e = sim.enemies.find((x) => x.id === id);
         if (!e) continue; // death handled by events
@@ -166,52 +205,24 @@ export function createEnemyLayer(scene) {
         }
         v.mixer.update(dt);
       }
-      // corpses
+      // corpses: brief death pose, then sink + fade out and remove
       for (let i = corpses.length - 1; i >= 0; i--) {
         const c = corpses[i];
         c.t += dt;
         c.mixer?.update(dt);
-        if (c.t > 0.9) {
-          c.root.position.y -= dt * 1.4;
-          c.root.traverse((n) => {
-            if (n.isMesh && n.material) {
-              n.material.transparent = true;
-              n.material.opacity = Math.max(0, 1 - (c.t - 0.9) / 0.7);
-            }
-          });
+        if (c.t > 0.7) {
+          c.root.position.y -= dt * 1.8;
+          fadeRoot(c.root, Math.max(0, 1 - (c.t - 0.7) / 0.5));
         }
-        if (c.t > 1.7) {
+        if (c.t > 1.25) {
           group.remove(c.root);
           corpses.splice(i, 1);
         }
       }
     },
 
-    // Called from death/leak events.
-    kill(id, leaked = false) {
-      const v = views.get(id);
-      if (!v) return;
-      views.delete(id);
-      v.bar.spr.visible = false;
-      ensureIce(v, false); ensureBubble(v, false);
-      if (leaked) {
-        // quick fade at the gate
-        corpses.push({ root: v.root, mixer: null, t: 1.0 });
-        return;
-      }
-      // play death clip if available
-      const deathClip = resolveClip(v.inst.animations, v.def.anim?.death, 'death');
-      if (deathClip && v.mixer) {
-        v.mixer.stopAllAction();
-        const a = v.mixer.clipAction(deathClip);
-        a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true;
-        a.play();
-        v.mixer.timeScale = 1.2;
-        corpses.push({ root: v.root, mixer: v.mixer, t: 0 });
-      } else {
-        corpses.push({ root: v.root, mixer: null, t: 0.9 });
-      }
-    },
+    // Called from death/leak events (and internally by the orphan sweep).
+    kill: killView,
 
     clear() {
       views.clear();

@@ -27,7 +27,8 @@ export function createEngine(container, { quality = 'high' } = {}) {
   controls.minPolarAngle = 0.32;
   controls.maxPolarAngle = 1.15;
   controls.target.set(0, 0, 0);
-  controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+  // RIGHT-drag orbits the camera, MIDDLE-drag pans, wheel zooms. LEFT stays free for building.
+  controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
   controls.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
   controls.update();
 
@@ -49,6 +50,13 @@ export function createEngine(container, { quality = 'high' } = {}) {
 
   const eng = {
     renderer, scene, camera, controls,
+    // standard level framing — called on level load and via the R key
+    resetView() {
+      controls.target.set(0, 0, 0);
+      camera.position.set(0, 30, 24);
+      camera.lookAt(0, 0, 0);
+      controls.update();
+    },
     setQuality(q) {
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q === 'low' ? 1 : 1.5));
       renderer.shadowMap.enabled = q !== 'low';
