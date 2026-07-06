@@ -1,0 +1,11 @@
+{
+  "title": "Bastion Realms",
+  "short_description": "A full 3D tower defense campaign — 45 levels across five realms, 8 towers, elemental counters, and boss fights that summon, shield, and phase.",
+  "description": "Bastion Realms is a complete 3D tower defense campaign in the browser. Hold the line across five distinct realms — the wild Verdant Hollow, the erupting Cinder Wastes, the frozen Frostmaw Expanse, the haunted Sunken Ruins, and the reality-bending Astral Isles — each with its own enemies, music, environmental hazards, and boss. Build and upgrade 8 distinct towers (bolts, snipers, chain lightning, fire, frost, poison, cannons, and war banners), read each wave's composition, and counter armored, warded, flying, regenerating, and shielded enemies. 45 handcrafted-feel levels with unique winding paths, elite waves, and five multi-phase bosses that summon reinforcements, raise shields, and phase out of harm. Earn stars, unlock achievements, and push your record in per-realm Endless mode.",
+  "genre": "strategy",
+  "sub_genre": "tower-defense",
+  "difficulty": "medium",
+  "status": "draft",
+  "controls_keyboard": "Mouse build/select · 1-8 pick tower · Click place · Shift+Click multi-place · RMB/Esc cancel · SPACE start wave · U upgrade · X sell · Drag/wheel camera",
+  "tags": ["strategy", "tower-defense", "3d", "campaign", "bosses", "singleplayer"]
+}

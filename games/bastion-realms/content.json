@@ -1,0 +1,20 @@
+{
+  "title": "Bastion Realms",
+  "slug": "bastion-realms",
+  "genre": "tower-defense",
+  "renderer": "three",
+  "tagline": "Hold the line across five realms.",
+  "seed": 1000003,
+  "view": { "width": 1280, "height": 720, "background": "#0a1220" },
+  "setup": {
+    "biomes": 5,
+    "levels": 45,
+    "towers": 8,
+    "endless": true
+  },
+  "credits": {
+    "enemies": ["Quaternius Ultimate Monsters (CC0)", "Poly Pizza CC0 creatures"],
+    "props": ["Quaternius nature packs (CC0)", "Kenney Graveyard Kit (CC0)", "CC-BY items listed in CREDITS.md"],
+    "audio": ["ForgeFlow Labs original music", "Kenney audio packs (CC0)", "WebAudio-synthesized elemental SFX"]
+  }
+}
