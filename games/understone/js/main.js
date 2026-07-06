@@ -699,8 +699,11 @@ async function boot() {
         // Anchor the hand relative to the VISIBLE character (centred on cx, ~player.h tall), NOT
         // the narrow 14px hitbox — otherwise the tool floats by the feet. Hand = a few px toward
         // the facing side, at chest height.
-        const handX = cx + player.facing * 4 * z;
-        const handY = sy + player.h * z * 0.63;   // hand at the hip (where a relaxed arm hangs), on the facing side
+        // Anchor ON the sprite's actual hand: the near arm's fist sits at the belt line, a couple px
+        // toward the facing side (measured against the sprite, not the narrow hitbox). The item is
+        // drawn on top of that hand so it reads as held.
+        const handX = cx + player.facing * 2 * z;
+        const handY = sy + player.h * z * 0.52;
         const rawSpr = itemIcon(heldDef.id)
           ?? toolFallbackSprite(held.type === 'pickaxe' || held.type === 'axe' || held.type === 'hammer' ? held.type
             : held.weapon === 'bow' ? 'bow' : held.weapon === 'sword' ? 'sword'
@@ -716,7 +719,9 @@ async function boot() {
         // rest angle 1.05 rad = up-forward "ready" hold for tools AND weapons: the grip sits AT the hand
         // (handY = hip) with the head/blade reaching up-forward — how you'd actually hold a pickaxe/axe/
         // sword at your side. (An earlier head-DOWN variant read as pointing at the ground — reverted.)
-        const angle = heldDef.weapon === 'bow' ? -0.15 : swinging ? (-2.2 + prog * 3.0) : 1.05;
+        // rest angle 1.2 rad = up-forward "ready" hold; the head/blade reaches up and forward out of
+        // the hand (a touch flatter than a raised-overhead pose). Swing sweeps windup→forward chop.
+        const angle = heldDef.weapon === 'bow' ? -0.15 : swinging ? (-2.2 + prog * 3.0) : 1.2;
         c.save();
         c.translate(handX, handY);
         c.scale(player.facing > 0 ? 1 : -1, 1);
