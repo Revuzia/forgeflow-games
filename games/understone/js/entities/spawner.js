@@ -30,12 +30,12 @@ export class Spawner {
 
   rateAndMax(band, tick, bloodMoon) {
     if (band === 'surface') {
-      if (bloodMoon) return [108, 10];
-      return isDay(tick) ? [600, 5] : [360, 6];
+      if (bloodMoon) return [90, 12];
+      return isDay(tick) ? [340, 7] : [200, 9];   // was [600,5]/[360,6] — enemies were too sparse while exploring
     }
-    if (band === 'underground') return [300, 8];
-    if (band === 'cavern') return [240, 9];
-    return [240, 10]; // underworld
+    if (band === 'underground') return [190, 11];
+    if (band === 'cavern') return [150, 13];
+    return [160, 13]; // underworld
   }
 
   inCorruption(tx) {

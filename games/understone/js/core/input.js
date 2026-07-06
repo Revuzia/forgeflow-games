@@ -19,9 +19,9 @@ export const binds = {
   up: ['KeyW', 'ArrowUp'],
   down: ['KeyS', 'ArrowDown'],
   jump: ['Space'],
-  inventory: ['KeyI', 'KeyE'],     // I = inventory (industry standard); E kept as alias
-  crafting: ['KeyC'],              // C = crafting / recipe book focus
-  interact: ['KeyF'],
+  inventory: ['KeyI'],             // I = inventory (crafting/recipe book lives inside it)
+  crafting: [],                    // no separate crafting key — the recipe book is in the inventory panel
+  interact: ['KeyF'],              // F = interact (doors/chests/NPCs), alongside right-click
   pause: ['Escape'],
   hotbar: ['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0'],
 };

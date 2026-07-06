@@ -298,7 +298,8 @@ export class Player {
 
   // right-click: doors, chests, altar hint
   updateInteract(game) {
-    if (!mouse.rightPressed || game.hud?.open) return;
+    // interact via right-click OR the F key (doors / chests / NPCs / spawn point)
+    if ((!mouse.rightPressed && !wasPressed('interact')) || game.hud?.open) return;
     const { tx, ty, inReach } = this.targetTile(game);
     if (!inReach) return;
     const world = this.world;
