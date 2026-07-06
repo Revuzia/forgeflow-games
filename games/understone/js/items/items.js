@@ -78,6 +78,7 @@ bar('hellstoneBar', 'Hellstone Bar', 4000);
 // --- pickaxes (power%, damage, useTime — research 04 §5) ---------------------------
 const pick = (id, name, power, dmg, useTime, value) =>
   item(id, { name, type: 'tool', tool: 'pickaxe', pickPower: power, damage: dmg, useTime, knockback: 2, stack: 1, value });
+pick('woodPickaxe', 'Wood Pickaxe', 30, 3, 26, 50);
 pick('copperPickaxe', 'Copper Pickaxe', 35, 4, 23, 500);
 pick('ironPickaxe', 'Iron Pickaxe', 40, 5, 20, 1000);
 pick('silverPickaxe', 'Silver Pickaxe', 45, 6, 19, 2000);
@@ -88,6 +89,7 @@ pick('moltenPickaxe', 'Molten Pickaxe', 100, 12, 23, 16000);
 // --- axes ---------------------------------------------------------------------------
 const axe = (id, name, power, dmg, useTime, value) =>
   item(id, { name, type: 'tool', tool: 'axe', axePower: power, damage: dmg, useTime, knockback: 3, stack: 1, value });
+axe('woodAxe', 'Wood Axe', 30, 2, 33, 50);
 axe('copperAxe', 'Copper Axe', 35, 3, 30, 400);
 axe('ironAxe', 'Iron Axe', 45, 5, 27, 800);
 axe('goldAxe', 'Gold Axe', 55, 7, 26, 3200);
@@ -256,7 +258,7 @@ item('wormFood', { name: 'Worm Food', type: 'summon', boss: 'eaterOfWorlds', sta
 
 // dev/starter kit per progression gate 1: copper pick + axe + shortsword
 export const STARTER_ITEMS = [
-  ['copperPickaxe', 1],
-  ['copperAxe', 1],
-  ['copperSword', 1],
+  ['woodPickaxe', 1],
+  ['woodAxe', 1],
+  ['woodenSword', 1],
 ];

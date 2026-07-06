@@ -6,7 +6,7 @@ import { HOTBAR, SLOTS, ARMOR_SLOTS, ACCESSORY_SLOTS } from '../items/inventory.
 import { RECIPES } from '../items/recipes.js';
 import { nearbyStations, craft } from '../items/crafting.js';
 import { TILES, T } from '../world/world.js';
-import { character } from '../core/assets.js';
+import { character, toolFallbackSprite } from '../core/assets.js';
 
 const CSS = `
 #hud { color: #e8e8f0; font-family: 'Segoe UI', system-ui, sans-serif; }
@@ -137,6 +137,19 @@ function rarityClass(def) {
   return v >= 20000 ? 'r-legendary' : v >= 12000 ? 'r-epic' : v >= 5000 ? 'r-rare' : v >= 1500 ? 'r-uncommon' : '';
 }
 
+const toolIconCache = new Map();
+const MAT_TINT = { molten: '#ff7a3c', nightmare: '#b06adf', gold: '#ffd75a', silver: '#dfe4ec', iron: '#c9ccd8', copper: '#d08a4a', wood: '#a9793f' };
+// tools/weapons without a bespoke PNG fall back to a drawn sprite (never a bare initials box)
+function toolFallbackUrl(id, def) {
+  if (toolIconCache.has(id)) return toolIconCache.get(id);
+  const kind = def.tool ?? (def.weapon === 'bow' ? 'bow' : (def.weapon === 'sword' || def.weapon === 'shortsword') ? 'sword' : null);
+  if (!kind) { toolIconCache.set(id, null); return null; }
+  const mat = Object.keys(MAT_TINT).find(m => id.toLowerCase().startsWith(m));
+  const url = toolFallbackSprite(kind, MAT_TINT[mat] ?? '#c9ccd8').toDataURL();
+  toolIconCache.set(id, url);
+  return url;
+}
+
 function iconInner(id) {
   const def = ITEMS[id];
   const rc = rarityClass(def);
@@ -146,6 +159,8 @@ function iconInner(id) {
   }
   probeIcon(id);
   if (iconAvailable.get(id)) return `<div class="icon ${rc}"><img src="assets/items/${id}.png" alt=""></div>`;
+  const tfu = toolFallbackUrl(id, def);
+  if (tfu) return `<div class="icon ${rc}"><img src="${tfu}" alt=""></div>`;
   let bg = ICON_COLORS[def.type] ?? '#d8c878';
   if (def.type === 'block' && def.placeTile && T[def.placeTile] != null) bg = TILES[T[def.placeTile]].color;
   const abbr = def.name.split(' ').map(w => w[0]).join('').slice(0, 3);

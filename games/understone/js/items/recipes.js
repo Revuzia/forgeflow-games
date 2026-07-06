@@ -10,6 +10,8 @@ export const RECIPES = [
   { out: 'manaCrystal', n: 1, station: null, ing: { fallenStar: 5 } },
 
   // --- work bench -------------------------------------------------------------
+  { out: 'woodPickaxe', n: 1, station: 'workbench', ing: { wood: 12 } },
+  { out: 'woodAxe', n: 1, station: 'workbench', ing: { wood: 10 } },
   { out: 'woodenSword', n: 1, station: 'workbench', ing: { wood: 7 } },
   { out: 'woodenHammer', n: 1, station: 'workbench', ing: { wood: 8 } },
   { out: 'woodenBow', n: 1, station: 'workbench', ing: { wood: 10 } },
