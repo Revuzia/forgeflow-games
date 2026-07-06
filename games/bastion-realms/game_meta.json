@@ -5,7 +5,13 @@
   "genre": "strategy",
   "sub_genre": "tower-defense",
   "difficulty": "medium",
-  "status": "draft",
   "controls_keyboard": "Mouse build/select · 1-8 pick tower · Click place · Shift+Click multi-place · RMB/Esc cancel · SPACE start wave · U upgrade · X sell · Drag/wheel camera",
-  "tags": ["strategy", "tower-defense", "3d", "campaign", "bosses", "singleplayer"]
+  "tags": [
+    "strategy",
+    "tower-defense",
+    "3d",
+    "campaign",
+    "bosses",
+    "singleplayer"
+  ]
 }
