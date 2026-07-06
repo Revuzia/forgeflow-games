@@ -743,8 +743,10 @@ export function createGame(env) {
       }
       g.fx?.update(rdt * Math.min(g.speed, 2), g.viewT);
       ui.updateHud(g.sim, g.selection);
-    } else if (g.fx) {
-      g.fx.update(rdt, g.viewT);
+    } else {
+      // results screen: keep burying corpses + finishing FX (paused stays frozen)
+      if (g.resultShown && g.sim && g.enemyLayer) g.enemyLayer.sync(g.sim, rdt, g.viewT);
+      if (!g.paused) g.fx?.update(rdt, g.viewT);
     }
   };
 
