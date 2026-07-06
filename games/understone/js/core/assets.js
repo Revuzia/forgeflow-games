@@ -218,6 +218,41 @@ function buildFurnitureSprites() {
 }
 
 // ---------------------------------------------------------------------------
+// A door occupies a 3-tall vertical run of individual door tiles. Draw each tile as a SEGMENT
+// of one continuous door (top / middle / bottom) instead of stamping a whole door sprite into
+// every tile — that latter read as three stacked mini-doors (playtest bug 2026-07-06).
+function drawDoorSegment(ctx, px, py, open, topEnd, botEnd) {
+  const W = TILE;
+  const mid = !topEnd && !botEnd;
+  if (open) {
+    // ajar — the leaf has swung flat against the (left) jamb, leaving a walkable gap.
+    const dw = Math.max(3, Math.round(W * 0.3));
+    ctx.fillStyle = '#7a5a34'; ctx.fillRect(px, py, dw, TILE);
+    ctx.fillStyle = 'rgba(0,0,0,0.40)'; ctx.fillRect(px + dw - 1, py, 1, TILE);
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(px, py, 1, TILE);
+    ctx.fillStyle = '#5c4326';
+    if (topEnd) ctx.fillRect(px, py, dw, 2);
+    if (botEnd) ctx.fillRect(px, py + TILE - 2, dw, 2);
+    return;
+  }
+  // closed — full-width wooden leaf, framed as ONE piece down the whole run.
+  ctx.fillStyle = '#87643c'; ctx.fillRect(px, py, W, TILE);
+  ctx.fillStyle = 'rgba(0,0,0,0.20)'; ctx.fillRect(px + Math.round(W * 0.5), py, 1, TILE); // centre groove
+  ctx.fillStyle = '#5c4326';                                     // side stiles on every segment
+  ctx.fillRect(px, py, 2, TILE);
+  ctx.fillRect(px + W - 2, py, 2, TILE);
+  ctx.fillStyle = 'rgba(255,255,255,0.10)'; ctx.fillRect(px + 2, py, 1, TILE);
+  ctx.fillStyle = '#5c4326';                                     // rails: cap top & bottom, lock rail on the middle
+  if (topEnd) ctx.fillRect(px, py + 1, W, 2);
+  if (botEnd) ctx.fillRect(px, py + TILE - 3, W, 2);
+  if (mid)    ctx.fillRect(px, py + Math.round(TILE * 0.5) - 1, W, 2);
+  if (topEnd) { ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.fillRect(px + 2, py + 3, W - 4, 1); }
+  if (mid) {                                                     // brass handle at lock height, latch side
+    ctx.fillStyle = '#e8d27a';
+    ctx.fillRect(px + W - 6, py + Math.round(TILE * 0.5) + 2, 3, 2);
+  }
+}
+
 // Textured tile drawer — plugs into TileRenderer.drawTileHook
 // ---------------------------------------------------------------------------
 export function makeTileDrawer(world, assets) {
@@ -232,7 +267,15 @@ export function makeTileDrawer(world, assets) {
     candle: 'candle', sawmill: 'sawmill', loom: 'loom', bed: 'bed',
   };
 
+  const isDoorId = (id) => id === T.door || id === T.doorOpen;
+
   return function drawTile(ctx, tx, ty, info, px, py) {
+    // doors: render this tile as a segment of one tall door (see drawDoorSegment)
+    if (info.name === 'door' || info.name === 'doorOpen') {
+      drawDoorSegment(ctx, px, py, info.name === 'doorOpen',
+        !isDoorId(world.tileAt(tx, ty - 1)), !isDoorId(world.tileAt(tx, ty + 1)));
+      return;
+    }
     // furniture / cross-style sprites
     const furn = FURN_BY_NAME[info.name];
     if (furn && assets.furniture[furn]) {
