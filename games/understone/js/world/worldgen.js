@@ -457,6 +457,23 @@ export function generateWorld(world, onProgress = () => {}) {
     world.townNpcs.push({ type: 'wizard', x: (outposts[1] + 5) * 16, y: (surface[outposts[1]] - 2) * 16 });
   }
 
+  // spawn-side village — a real town a short walk from spawn so you actually MEET merchants/
+  // traders early (Merchant, Nurse, Demolitionist east; a Dryad keeps a grove to the west).
+  {
+    const east = ['merchant', 'nurse', 'demolitionist'];
+    for (let i = 0; i < east.length; i++) {
+      const hxp = mid + 34 + i * 16;
+      if (hxp + 14 > w - oceanW - 20) break;
+      buildHouse(hxp, surface[hxp] - 1, 12, 7);
+      world.townNpcs.push({ type: east[i], x: (hxp + 5) * 16, y: (surface[hxp] - 2) * 16 });
+    }
+    const dx2 = mid - 42;
+    if (dx2 > oceanW + 20) {
+      buildHouse(dx2, surface[dx2] - 1, 10, 6);
+      world.townNpcs.push({ type: 'dryad', x: (dx2 + 4) * 16, y: (surface[dx2] - 2) * 16 });
+    }
+  }
+
   // underground mining town: carved chamber in the cavern with resident traders
   {
     const mx = (w * (0.3 + rand() * 0.4)) | 0;
