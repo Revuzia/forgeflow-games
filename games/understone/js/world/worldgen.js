@@ -90,6 +90,20 @@ export function generateWorld(world, onProgress = () => {}) {
     surface[x] += Math.round(t * t * h * 0.045);
     surface[w - 1 - x] += Math.round(t * t * h * 0.045);
   }
+  // biome-distinct surface CHARACTER so you're not climbing the same plateau everywhere.
+  // Keyed to the same ring bands as step 5 (forest center → graveyard → desert → snow); the
+  // safety pass (9.5) later smooths any seam between bands, so exact blending isn't needed.
+  const bandW = Math.floor((mid - oceanW) / 4);   // same band width as the step-5 biome ring
+  const duneN = valueNoise1D(rand, w, { octaves: 2, amp: h * 0.030, freq: 1 / 210 });  // desert: smooth flowing dunes
+  const rollN = valueNoise1D(rand, w, { octaves: 3, amp: h * 0.045, freq: 1 / 70 });   // snow: tall rolling hills
+  const jagN = valueNoise1D(rand, w, { octaves: 5, amp: h * 0.030, freq: 1 / 34 });    // graveyard: restless, uneven
+  for (let x = oceanW; x < w - oceanW; x++) {
+    const d = Math.abs(x - mid);
+    if (d <= bandW) continue;                                  // forest: keep the gentle base terrain
+    else if (d <= 2 * bandW) surface[x] += Math.round(jagN[x] * 0.7);   // graveyard
+    else if (d <= 3 * bandW) surface[x] += Math.round(duneN[x]);        // desert
+    else surface[x] += Math.round(rollN[x]);                           // snow
+  }
 
   // --- 2. strata: dirt above stone, with dithered transition ------------------
   onProgress(0.15, 'Laying strata…');
