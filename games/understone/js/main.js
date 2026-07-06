@@ -713,12 +713,10 @@ async function boot() {
         // mirror FIRST so "forward" == facing, then rotate: rest = held forward/down out of the
         // hand; swing = overhead → forward-down chop.
         // bows are aimed forward (roughly horizontal), not swung overhead like melee/tools
-        const _isTool = held.type === 'pickaxe' || held.type === 'axe' || held.type === 'hammer';
-        // tools carry head-down-forward (2.05 rad); sword/other rest at a ready up-forward angle (1.05).
-        // both grip at the hand (handY = hip): the low angle keeps the tool sitting AT the hand, not raised
-        // up over the arm/chest — matches how a person actually holds a pickaxe/axe/sword at their side.
-        const _restAng = _isTool ? 2.05 : 1.05;
-        const angle = heldDef.weapon === 'bow' ? -0.15 : swinging ? (-2.2 + prog * 3.0) : _restAng;
+        // rest angle 1.05 rad = up-forward "ready" hold for tools AND weapons: the grip sits AT the hand
+        // (handY = hip) with the head/blade reaching up-forward — how you'd actually hold a pickaxe/axe/
+        // sword at your side. (An earlier head-DOWN variant read as pointing at the ground — reverted.)
+        const angle = heldDef.weapon === 'bow' ? -0.15 : swinging ? (-2.2 + prog * 3.0) : 1.05;
         c.save();
         c.translate(handX, handY);
         c.scale(player.facing > 0 ? 1 : -1, 1);
