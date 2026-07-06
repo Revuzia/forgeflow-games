@@ -74,6 +74,9 @@ const TYPE_HINTS = {
   summon: 'ominous ritual item',
 };
 // per-item prompt overrides where the registry name alone under-describes
+// force a specific seed for ids whose hash-seed produced a poor composition (re-roll)
+const SEED_OVERRIDES = { woodPickaxe: 88231 };
+
 const ICON_OVERRIDES = {
   gel: 'wobbly blue slime gel blob, translucent',
   lens: 'single monster eye lens, red iris',
@@ -149,7 +152,7 @@ const ICON_OVERRIDES = {
   ironAxe: 'an iron hatchet axe held UPRIGHT and vertical: gray iron axe-head at the very TOP, straight brown wooden handle going down below it',
   goldAxe: 'a golden hatchet axe held UPRIGHT and vertical: shiny gold axe-head at the very TOP, straight brown wooden handle going down below it',
   moltenHamaxe: 'a molten lava hammer-axe held UPRIGHT and vertical: glowing orange volcanic head at the very TOP, dark handle going down below it',
-  woodPickaxe: 'a WOODEN miners pickaxe: a horizontal curved pick-head at the TOP with a SHARP POINT on the LEFT end and a SHARP POINT on the RIGHT end (crescent/T shape), a straight vertical brown wooden handle hanging down from the middle; the whole head is carved pale-brown wood, NOT a hammer, NO flat hammer face, entirely wood no metal',
+  woodPickaxe: 'a simple wooden pickaxe, brown wood, curved pointed pick-head at top on a straight handle, mining tool',
   woodAxe: 'a crude WOODEN hatchet axe held UPRIGHT and vertical: a single carved pale-brown wooden axe BLADE on one side at the very TOP, straight brown wooden handle going down below it, a chopping axe NOT a hammer, entirely wood, NO metal',
   woodenSword: 'a WOODEN practice sword carved entirely from brown wood, blade pointing UP: flat tan wooden blade, small wooden crossguard, wrapped wooden grip, absolutely NO metal, clearly all wood',
 };
@@ -175,7 +178,7 @@ async function runIcons() {
           no_background: true,
           outline: 'single color black outline',
           detail: 'medium detail',
-          seed: 1000 + Math.abs([...id].reduce((a, c) => a * 31 + c.charCodeAt(0), 7)) % 100000,
+          seed: SEED_OVERRIDES[id] ?? (1000 + Math.abs([...id].reduce((a, c) => a * 31 + c.charCodeAt(0), 7)) % 100000),
         });
         saveB64(r.image.base64, out);
         made++;

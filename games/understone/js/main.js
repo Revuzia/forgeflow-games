@@ -699,8 +699,8 @@ async function boot() {
         // Anchor the hand relative to the VISIBLE character (centred on cx, ~player.h tall), NOT
         // the narrow 14px hitbox — otherwise the tool floats by the feet. Hand = a few px toward
         // the facing side, at chest height.
-        const handX = cx + player.facing * 5 * z;
-        const handY = sy + player.h * z * 0.44;
+        const handX = cx + player.facing * 3 * z;
+        const handY = sy + player.h * z * 0.52;   // hand at the hip, on the facing side
         const rawSpr = itemIcon(heldDef.id)
           ?? toolFallbackSprite(held.type === 'pickaxe' || held.type === 'axe' || held.type === 'hammer' ? held.type
             : held.weapon === 'bow' ? 'bow' : held.weapon === 'sword' ? 'sword'
@@ -709,18 +709,18 @@ async function boot() {
         // blade points forward. Doing it on the sprite (not via scale(-1)) keeps the swing rotating the
         // SAME way as the sword/pickaxe instead of spinning backwards.
         const sprIt = held.type === 'axe' ? hflipSprite(rawSpr) : rawSpr;
-        const isz = 22 * z;
+        const isz = 17 * z;
         // mirror FIRST so "forward" == facing, then rotate: rest = held forward/down out of the
         // hand; swing = overhead → forward-down chop.
         // bows are aimed forward (roughly horizontal), not swung overhead like melee/tools
-        const angle = heldDef.weapon === 'bow' ? -0.15 : swinging ? (-2.2 + prog * 3.0) : 0.85;
+        const angle = heldDef.weapon === 'bow' ? -0.15 : swinging ? (-2.2 + prog * 3.0) : 0.7;
         c.save();
         c.translate(handX, handY);
         c.scale(player.facing > 0 ? 1 : -1, 1);
         c.rotate(angle);
         c.imageSmoothingEnabled = false;
-        // grip the icon near its handle so the head reaches OUT (forward) from the fist
-        c.drawImage(sprIt, -isz * 0.1, -isz * 0.72, isz, isz);
+        // grip the icon at its handle end (bottom-centre) so it sits IN the fist, head reaching out
+        c.drawImage(sprIt, -isz * 0.5, -isz * 0.86, isz, isz);
         c.restore();
         // white/element arc flash, alpha peaks mid-swing (research 10 §5a)
         if (held.weapon === 'sword') {
