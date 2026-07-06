@@ -458,7 +458,7 @@ export function createUI(container, handlers) {
           `<span class="br-chip${p.flying ? ' fly' : ''}${p.boss ? ' boss' : ''}" title="${enemyTip(p.type)}">${p.count}× ${p.name}</span>`).join('');
         if (h.chips.innerHTML !== chips) h.chips.innerHTML = chips;
         h.startBtn.textContent = sim.phase === 'prep'
-          ? `⚔ SEND EARLY +🪙${Math.floor(Math.max(0, sim.prepT) * 2)} (${Math.ceil(sim.prepT)}s)`
+          ? `⚔ SEND NOW (${Math.ceil(sim.prepT)}s)`
           : '⚔ START WAVE';
       }
       // selection panel
@@ -700,5 +700,6 @@ function enemyTip(type) {
   if (d.regen) bits.push('Regenerates (fire stops it)');
   if (d.shield) bits.push('Shielded (lightning shreds shields)');
   if (d.boss) bits.push('BOSS');
+  bits.push(`💔 Costs ${d.leak} ${d.leak === 1 ? 'life' : 'lives'} if it breaches the gate`);
   return bits.join('\n');
 }

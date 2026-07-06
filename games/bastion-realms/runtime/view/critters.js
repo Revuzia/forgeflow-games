@@ -5,15 +5,14 @@ import { instantiate, getModel, resolveClip } from '../core/assets.js';
 import { GRID_W, GRID_H, CELL, cellToWorld } from '../sim/path.js';
 import { makeRng } from '../sim/rng.js';
 
-export const CRITTER_FILES = ['deer', 'sheep', 'rabbit', 'fox', 'snake', 'stag', 'crab', 'bfish', 'cat', 'frog'];
+export const CRITTER_FILES = ['deer', 'sheep', 'fox', 'snake', 'stag', 'crab', 'bfish', 'cat', 'frog'];
 
 // Per-biome roster: model, tint, target height, count, float (hovers) flag.
 const ROSTERS = [
   [ // forest — a living wood
     { model: 'deer', h: 1.7, count: 2 },
     { model: 'sheep', h: 1.0, count: 2 },
-    { model: 'rabbit', h: 0.65, count: 2 },
-    { model: 'fox', h: 0.85, count: 1 },
+    { model: 'fox', h: 0.85, count: 2 },
   ],
   [ // volcanic — things that survive the heat
     { model: 'snake', h: 0.45, count: 3, tint: 0xa04828 },
@@ -22,7 +21,7 @@ const ROSTERS = [
   ],
   [ // tundra — white-coated cousins
     { model: 'stag', h: 1.8, count: 2, tint: 0xe8f0f8 },
-    { model: 'rabbit', h: 0.65, count: 2, tint: 0xffffff },
+    { model: 'fox', h: 0.85, count: 2, tint: 0xeef4fa },
     { model: 'sheep', h: 1.0, count: 2, tint: 0xf0f4f8 },
   ],
   [ // ruins — scavengers among the graves
@@ -32,8 +31,7 @@ const ROSTERS = [
   ],
   [ // astral — strange drifting fauna
     { model: 'bfish', h: 0.8, count: 3, tint: 0xb89aff, float: true },
-    { model: 'frog', h: 0.7, count: 2, tint: 0x8a6ee0 },
-    { model: 'rabbit', h: 0.65, count: 1, tint: 0xb0a0ff },
+    { model: 'frog', h: 0.7, count: 3, tint: 0x8a6ee0 },
   ],
 ];
 
@@ -69,20 +67,45 @@ export function createCritters(scene, level) {
     routePts.push([points[lo][0] + (points[hi][0] - points[lo][0]) * t, points[lo][1] + (points[hi][1] - points[lo][1]) * t]);
   }
   const blocked = level.blocked.map(([cx, cy]) => cellToWorld(cx, cy));
-  function validPoint() {
+
+  function roadDist(x, z) {
+    let best = Infinity;
+    for (const [px, pz] of routePts) {
+      const d2 = (px - x) ** 2 + (pz - z) ** 2;
+      if (d2 < best) best = d2;
+    }
+    return Math.sqrt(best);
+  }
+  function nearestRoadPoint(x, z) {
+    let best = Infinity, out = null;
+    for (const [px, pz] of routePts) {
+      const d2 = (px - x) ** 2 + (pz - z) ** 2;
+      if (d2 < best) { best = d2; out = [px, pz]; }
+    }
+    return out;
+  }
+  function validPoint(clear = 1.9) {
     for (let tries = 0; tries < 40; tries++) {
       const x = (rng.next() - 0.5) * (GRID_W - 2) * CELL;
       const z = (rng.next() - 0.5) * (GRID_H - 2) * CELL;
+      if (roadDist(x, z) < clear) continue;
       let ok = true;
-      for (const [px, pz] of routePts) {
-        if ((px - x) ** 2 + (pz - z) ** 2 < 1.6 * 1.6) { ok = false; break; }
-      }
-      if (ok) for (const b of blocked) {
+      for (const b of blocked) {
         if ((b.x - x) ** 2 + (b.z - z) ** 2 < 1.5 * 1.5) { ok = false; break; }
       }
       if (ok) return { x, z };
     }
     return null;
+  }
+  // The straight walk between two valid points must ALSO stay off the road.
+  function segmentClear(x1, z1, x2, z2, clear) {
+    const d = Math.hypot(x2 - x1, z2 - z1);
+    const steps = Math.max(2, Math.ceil(d / 0.7));
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      if (roadDist(x1 + (x2 - x1) * t, z1 + (z2 - z1) * t) < clear) return false;
+    }
+    return true;
   }
 
   const critters = [];
@@ -95,7 +118,8 @@ export function createCritters(scene, level) {
       inst.obj.scale.setScalar(norm.scale * spec.h);
       inst.obj.position.y = norm.yOff * spec.h;
       root.add(inst.obj);
-      const start = validPoint();
+      const clear = spec.h >= 1.5 ? 2.5 : 2.0; // big animals need more road clearance
+      const start = validPoint(clear);
       if (!start) continue;
       root.position.set(start.x, spec.float ? 1.2 : 0, start.z);
       group.add(root);
@@ -107,7 +131,7 @@ export function createCritters(scene, level) {
       const idle = idleClip && idleClip !== walkClip ? mixer.clipAction(idleClip) : null;
 
       critters.push({
-        root, mixer, walk, idle, spec,
+        root, mixer, walk, idle, spec, clear,
         state: 'idle', stateT: rng.range(0.5, 3),
         target: null, speed: rng.range(0.7, 1.3),
         phase: rng.next() * Math.PI * 2,
@@ -135,8 +159,11 @@ export function createCritters(scene, level) {
         if (c.state === 'idle') {
           setAnim(c, 'idle');
           if (c.stateT <= 0) {
-            const p = validPoint();
-            if (p) { c.target = p; c.state = 'walk'; }
+            // target AND the straight walk to it must stay off the road
+            const p = validPoint(c.clear);
+            if (p && segmentClear(c.root.position.x, c.root.position.z, p.x, p.z, c.clear)) {
+              c.target = p; c.state = 'walk';
+            }
             c.stateT = rng.range(2, 5);
           }
         } else if (c.state === 'walk' && c.target) {
@@ -154,6 +181,21 @@ export function createCritters(scene, level) {
             c.root.rotation.y = cur + diff * Math.min(1, dt * 4);
             c.root.position.x += (dx / d) * c.speed * dt;
             c.root.position.z += (dz / d) * c.speed * dt;
+          }
+        }
+        // hard guarantee: if anything still drifts toward the road, shove it back and rethink
+        const near = nearestRoadPoint(c.root.position.x, c.root.position.z);
+        if (near) {
+          const rdx = c.root.position.x - near[0];
+          const rdz = c.root.position.z - near[1];
+          const rd = Math.hypot(rdx, rdz);
+          if (rd < c.clear * 0.85 && rd > 0.001) {
+            const push = (c.clear * 0.85 - rd) + 0.05;
+            c.root.position.x += (rdx / rd) * push;
+            c.root.position.z += (rdz / rd) * push;
+            c.state = 'idle';
+            c.stateT = rng.range(0.5, 1.5);
+            c.target = null;
           }
         }
         if (c.spec.float) {

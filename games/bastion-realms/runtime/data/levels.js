@@ -23,9 +23,12 @@ export function levelDef(bi, li) {
   if (cache.has(key)) return cache.get(key);
 
   const biome = biomeDef(bi);
-  const seed = (1000003 * (bi + 1) + 7919 * (li + 1)) >>> 0;
+  // per-level seed salt: re-rolls a specific level's map when a layout proves
+  // unwinnable in balance testing, without touching any other level
+  const SEED_SALT = { '4:3': 17 };
+  const seed = (1000003 * (bi + 1) + 7919 * (li + 1) + (SEED_SALT[bi + ':' + li] || 0)) >>> 0;
   const mode = EDGE_MODES[(bi * 3 + li * 5 + bi * li) % EDGE_MODES.length];
-  const minLen = 32 + bi + Math.min(8, li);   // later biomes/levels wind longer
+  const minLen = 32 + bi * 2 + li;            // later biomes/levels wind meaningfully longer
   const gen = generatePath(seed, mode, minLen, 6 + Math.min(4, Math.floor(li / 2)));
   const route = buildRoute(gen.cells);
   const blocked = pickBlockedCells(seed, gen.cells, 4 + (li % 3) + (bi === 4 ? 2 : 0));

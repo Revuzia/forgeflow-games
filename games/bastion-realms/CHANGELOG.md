@@ -1,5 +1,19 @@
 # Bastion Realms — Changelog
 
+## v1.3 — 2026-07-06 (third playtest feedback round)
+- **Removed the toon rabbit** (it was a cartoon lumberjack character, not a real rabbit). Forest now has
+  deer/sheep/foxes, tundra white stags/arctic foxes/snowy sheep, astral void-fish/void toads.
+- **Early wave send no longer pays gold** — sending early is a pacing choice, not an income exploit.
+  Economy re-verified: the balance bot still clears all 45 levels, now with visibly tighter margins.
+- **Animals can never touch the road**: wander targets AND the straight line walked to them are both
+  checked against the road (with bigger clearance for large animals like deer/stags), plus a hard runtime
+  repulsion as a final guarantee. Verified over simulated minutes: nothing comes within a body-length of the dirt.
+- **Breach damage was already tiered** (regular −1 life, heavies/elites −2, bosses −5); enemy tooltips in
+  the wave preview now state exactly how many lives each type costs.
+- b4l7 "The Last Bridge" and b4l3 "Voidlight Span" got re-rolled longer/fairer paths (late-biome minimum
+  path length raised; per-level seed salt for targeted map fixes).
+- Cache version bumped to ?v=4.
+
 ## v1.2 — 2026-07-06 (second playtest feedback round)
 - **Tower bar reordered to match unlock progression**: Bolt → Frost → Cannon → Sniper → Ember → Banner → Storm → Venom (hotkeys 1-8 follow).
 - **Upgrade button fixed**: the selection panel was rebuilding its DOM every frame, destroying the button

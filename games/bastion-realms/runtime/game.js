@@ -354,7 +354,6 @@ export function createGame(env) {
         }
         case 'wave': {
           ui.banner(`WAVE ${ev.idx + 1}`, ev.label || '', 1.6);
-          if (ev.bonus > 0) ui.toast(`Early call bonus <b>+🪙${ev.bonus}</b>`);
           audio.synth.horn(0.4);
           break;
         }

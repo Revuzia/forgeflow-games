@@ -224,22 +224,17 @@ export function createSim(bi, li, { endless = false } = {}) {
     return wavePreview(level.waves[nextIdx]);
   };
 
+  // Sending early gives NO gold — it's a pacing choice, not an economy exploit.
   sim.startWave = () => {
     if (sim.phase !== 'idle' && sim.phase !== 'prep') return { ok: false };
-    let bonus = 0;
-    if (sim.phase === 'prep' && sim.prepT > 0.5) {
-      bonus = Math.floor(sim.prepT * 2);
-      sim.gold += bonus;
-      sim.stats.goldEarned += bonus;
-    }
     sim.waveIdx++;
     const w = endless ? (sim._endlessWave = endlessWave(bi, sim.waveIdx)) : level.waves[sim.waveIdx];
     if (!w) return { ok: false };
     sim.phase = 'wave';
     sim.prepT = 0;
     enqueueWave(w);
-    emit('wave', { idx: sim.waveIdx, label: w.label, isBoss: w.isBoss, bonus });
-    return { ok: true, bonus };
+    emit('wave', { idx: sim.waveIdx, label: w.label, isBoss: w.isBoss });
+    return { ok: true };
   };
 
   // ---------- enemies ----------
