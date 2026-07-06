@@ -6,6 +6,8 @@ import { GRID_W, GRID_H, CELL, cellToWorld, worldToCell, posAlong } from './sim/
 import { TOWERS, TOWER_ORDER, isTowerUnlocked } from './data/towers.js';
 import { buildWorld } from './view/world.js';
 import { createEnemyLayer } from './view/enemies3d.js';
+import { createCritters } from './view/critters.js';
+import { enemyDef } from './data/enemies.js';
 import { buildTowerMesh, animateTower, aimTower } from './view/towers3d.js';
 import { createFx } from './view/fx.js';
 import { lightRig } from './core/engine3d.js';
@@ -41,6 +43,8 @@ export function createGame(env) {
     g.projMeshes.clear();
     g.enemyLayer?.clear();
     if (g.enemyLayer) scene.remove(g.enemyLayer.group);
+    g.critters?.dispose();
+    g.critters = null;
     if (g.world) scene.remove(g.world.group);
     if (g.lights) scene.remove(g.lights);
     for (const v of g.ventMarkers) scene.remove(v.mesh);
@@ -70,6 +74,7 @@ export function createGame(env) {
     g.lights = lightRig(scene, g.level.biome);
     g.world = buildWorld(scene, g.level);
     g.enemyLayer = createEnemyLayer(scene);
+    g.critters = createCritters(scene, g.level);
     g.fx = createFx(scene, g.level.biome);
 
     // hazard visuals
@@ -210,7 +215,13 @@ export function createGame(env) {
           pv.mesh.lookAt(p.x, 1.0, p.z);
         }
       }
-      if (pr.kind === 'ember') g.fx.burst('ember', pv.mesh.position.x, pv.mesh.position.y, pv.mesh.position.z, 1, { vel: 0.3, up: 0.4, life: 0.3, spread: 0.1 });
+      // elemental trails — every projectile leaves its signature behind
+      const mp = pv.mesh.position;
+      if (pr.kind === 'ember') g.fx.burst('ember', mp.x, mp.y, mp.z, 1, { vel: 0.3, up: 0.4, life: 0.3, spread: 0.1 });
+      else if (pr.kind === 'shard') g.fx.burst('ice', mp.x, mp.y, mp.z, 1, { vel: 0.25, up: 0.2, life: 0.35, spread: 0.12 });
+      else if (pr.kind === 'vial') g.fx.burst('poison', mp.x, mp.y, mp.z, 1, { vel: 0.2, up: -0.3, life: 0.4, spread: 0.1 });
+      else if (pr.kind === 'shell') g.fx.burst('smoke', mp.x, mp.y, mp.z, 1, { vel: 0.15, up: 0.5, life: 0.55, spread: 0.12 });
+      else if (pr.kind === 'bolt' && Math.random() < 0.5) g.fx.burst('gold', mp.x, mp.y, mp.z, 1, { vel: 0.1, up: 0, life: 0.18, spread: 0.06 });
     }
     for (const [id, pv] of g.projMeshes) {
       if (!seen.has(id)) { scene.remove(pv.mesh); g.projMeshes.delete(id); }
@@ -295,6 +306,8 @@ export function createGame(env) {
             const p = g.sim.enemyPos(e);
             const col = ev.crit ? '#ffd76a' : ev.dmgType === 'magic' ? '#9adcff' : ev.dmgType === 'true' ? '#9ade3a' : '#ffe9b0';
             g.fx.number(p.x, 2.1, p.z, String(Math.round(ev.amount)), col, !!ev.crit);
+            const impact = ev.dmgType === 'true' ? 'poison' : ev.dmgType === 'magic' ? 'spark' : 'gold';
+            g.fx.burst(impact, p.x, 1.1, p.z, 2, { vel: 1.2, up: 1, life: 0.3, spread: 0.25 });
           }
           if (ev.dmgType === 'phys') audio.play('hit_soft', { vol: 0.3, throttle: 120 });
           break;
@@ -317,7 +330,10 @@ export function createGame(env) {
           g.fx.burst(style, ev.x, 0.9, ev.z, ev.boss ? 30 : 8, { vel: ev.boss ? 3.4 : 1.8, life: 0.6 });
           g.fx.burst('gold', ev.x, 1.2, ev.z, 3, { vel: 1, up: 2, life: 0.5 });
           g.fx.number(ev.x, 1.6, ev.z, '+' + ev.bounty, '#ffd76a');
-          audio.play('death_soft', { vol: 0.35, throttle: 150 });
+          // proper creature death: pitch drops with size
+          const dhp = enemyDef(ev.type).hp;
+          const pitch = dhp >= 500 ? 0.6 : dhp >= 150 ? 0.85 : 1.2;
+          audio.synth.deathGrunt(pitch * (0.94 + Math.random() * 0.12), 0.45);
           audio.play('coins', { vol: 0.2, throttle: 300 });
           if (ev.boss) { audio.synth.roar(0.5); g.fx.ring(ev.x, ev.z, 4, 0xffd76a, 0.8); }
           break;
@@ -741,6 +757,7 @@ export function createGame(env) {
           }
         }
       }
+      g.critters?.update(rdt, g.viewT);
       g.fx?.update(rdt * Math.min(g.speed, 2), g.viewT);
       ui.updateHud(g.sim, g.selection);
     } else {

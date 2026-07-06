@@ -131,6 +131,73 @@ export function buildWorld(scene, level) {
   // sky + fog
   scene.background = new THREE.Color(biome.sky);
   scene.fog = new THREE.FogExp2(biome.fogColor, biome.fogDensity);
+
+  // ---------- surroundings: the world beyond the battlefield ----------
+  // A vast lower plane ("sea") + a ring of distant peaks so the island doesn't
+  // float in blank sky. Astral instead gets nebulas + drifting rock shards.
+  const SURROUND = {
+    forest:   { sea: 0x6f9a83, peaks: 0x4a6b52, snowcaps: false },
+    volcanic: { sea: 0x571b0c, seaGlow: true, peaks: 0x38201c, snowcaps: false },
+    tundra:   { sea: 0xbfd4e0, peaks: 0x9db4c4, snowcaps: true },
+    ruins:    { sea: 0x2b3530, peaks: 0x39443c, snowcaps: false },
+    astral:   null,
+  }[biome.id];
+  if (SURROUND) {
+    const sea = new THREE.Mesh(
+      new THREE.CircleGeometry(420, 48),
+      new THREE.MeshStandardMaterial({
+        color: SURROUND.sea, roughness: 1,
+        emissive: SURROUND.seaGlow ? 0xff4a10 : 0x000000,
+        emissiveIntensity: SURROUND.seaGlow ? 0.35 : 0,
+      })
+    );
+    sea.rotation.x = -Math.PI / 2;
+    sea.position.y = -13;
+    group.add(sea);
+    const peakMat = new THREE.MeshStandardMaterial({ color: SURROUND.peaks, roughness: 1, flatShading: true });
+    const capMat = new THREE.MeshStandardMaterial({ color: 0xf4f8fc, roughness: 0.9, flatShading: true });
+    for (let i = 0; i < 22; i++) {
+      const a = (i / 22) * Math.PI * 2 + rng.next() * 0.2;
+      const dist = 65 + rng.next() * 45;
+      const h = 10 + rng.next() * 22;
+      const peak = new THREE.Mesh(new THREE.ConeGeometry(6 + rng.next() * 9, h, 5 + rng.int(0, 2)), peakMat);
+      peak.position.set(Math.cos(a) * dist, -13 + h / 2, Math.sin(a) * dist);
+      peak.rotation.y = rng.next() * Math.PI;
+      group.add(peak);
+      if (SURROUND.snowcaps || (biome.id === 'forest' && rng.chance(0.4))) {
+        const cap = new THREE.Mesh(new THREE.ConeGeometry(2.2 + rng.next() * 2.6, h * 0.28, 5), capMat);
+        cap.position.copy(peak.position);
+        cap.position.y = -13 + h - h * 0.14;
+        group.add(cap);
+      }
+    }
+  } else {
+    // astral: soft nebula billboards + slow-drifting rock shards below the isle
+    for (let i = 0; i < 7; i++) {
+      const cnv = document.createElement('canvas');
+      cnv.width = 128; cnv.height = 128;
+      const cx = cnv.getContext('2d');
+      const grad = cx.createRadialGradient(64, 64, 4, 64, 64, 62);
+      const hue = [265, 290, 220, 320][i % 4];
+      grad.addColorStop(0, `hsla(${hue},80%,70%,0.55)`);
+      grad.addColorStop(1, 'hsla(0,0%,0%,0)');
+      cx.fillStyle = grad; cx.fillRect(0, 0, 128, 128);
+      const tex = new THREE.CanvasTexture(cnv);
+      const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
+      const a = rng.next() * Math.PI * 2, d = 90 + rng.next() * 80;
+      spr.position.set(Math.cos(a) * d, -10 + rng.next() * 45, Math.sin(a) * d);
+      spr.scale.setScalar(45 + rng.next() * 55);
+      group.add(spr);
+    }
+    const shardMat = new THREE.MeshStandardMaterial({ color: 0x4d4470, roughness: 1, flatShading: true });
+    for (let i = 0; i < 10; i++) {
+      const s = new THREE.Mesh(new THREE.DodecahedronGeometry(1.4 + rng.next() * 2.6, 0), shardMat);
+      const a = rng.next() * Math.PI * 2, d = 34 + rng.next() * 38;
+      s.position.set(Math.cos(a) * d, -9 - rng.next() * 14, Math.sin(a) * d);
+      s.rotation.set(rng.next() * 3, rng.next() * 3, rng.next() * 3);
+      group.add(s);
+    }
+  }
   if (biome.id === 'astral') {
     // starfield dome
     const starGeo = new THREE.BufferGeometry();
@@ -172,7 +239,9 @@ export function buildWorld(scene, level) {
     const inst = instantiate(d.model, { castShadow: true });
     if (!inst) return;
     const targetH = (d.scale[0] + rng.next() * (d.scale[1] - d.scale[0])) * (big ? 1.25 : 1);
-    inst.obj.scale.setScalar(normScale(d.model, targetH));
+    const ns = normScale(d.model, targetH);
+    // slight non-uniform scale so no two props read identical
+    inst.obj.scale.set(ns * (0.9 + rng.next() * 0.2), ns, ns * (0.9 + rng.next() * 0.2));
     inst.obj.position.set(wx, 0, wz);
     inst.obj.rotation.y = rng.next() * Math.PI * 2;
     if (d.glow) {

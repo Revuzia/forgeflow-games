@@ -8,6 +8,7 @@ import { loadModel } from './core/assets.js';
 import { loadProfile, saveProfile, resetProfile } from './core/save.js';
 import { ENEMIES } from './data/enemies.js';
 import { BIOMES } from './data/biomes.js';
+import { CRITTER_FILES } from './view/critters.js';
 import { levelDef } from './data/levels.js';
 import { buildWorld } from './view/world.js';
 import { DT } from './sim/sim.js';
@@ -35,6 +36,7 @@ async function preloadModels() {
   const jobs = [
     ...enemyModels.map((m) => ({ url: `assets/models/enemies/${m}.glb`, name: m })),
     ...propModels.map((m) => ({ url: `assets/models/props/${m}.glb`, name: m })),
+    ...CRITTER_FILES.map((m) => ({ url: `assets/models/critters/${m}.glb`, name: m })),
   ];
   let done = 0;
   const results = await Promise.allSettled(jobs.map((j) =>

@@ -9,8 +9,11 @@ export const BIOMES = [
     sky: 0x87b5d6, fogColor: 0x9cc4dd, fogDensity: 0.006, sun: 0xfff2d8, sunIntensity: 1.15,
     ambient: 0x88a08c,
     decor: [
-      { model: 'f_pine', scale: [3.0, 4.4], weight: 4 },
-      { model: 'f_birch', scale: [2.6, 3.8], weight: 3 },
+      { model: 'f_pine', scale: [3.0, 4.4], weight: 3 },
+      { model: 'f_pine_autumn', scale: [2.8, 4.0], weight: 2 },
+      { model: 'f_birch', scale: [2.6, 3.8], weight: 2 },
+      { model: 'f_birches', scale: [3.0, 4.2], weight: 2 },
+      { model: 'f_bush_large', scale: [1.0, 1.6], weight: 2 },
       { model: 'f_bush', scale: [0.8, 1.3], weight: 2 },
       { model: 'f_mushroom', scale: [0.7, 1.1], weight: 1 },
       { model: 'f_stump', scale: [0.5, 0.8], weight: 1 },

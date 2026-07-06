@@ -95,7 +95,8 @@ export const TOWERS = {
   },
 };
 
-export const TOWER_ORDER = ['bolt', 'sniper', 'storm', 'ember', 'frost', 'venom', 'cannon', 'banner'];
+// Build-bar order follows the unlock progression (see TOWER_UNLOCKS below).
+export const TOWER_ORDER = ['bolt', 'frost', 'cannon', 'sniper', 'ember', 'banner', 'storm', 'venom'];
 
 export function towerDef(id) {
   const d = TOWERS[id];

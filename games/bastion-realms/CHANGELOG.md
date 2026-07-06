@@ -1,5 +1,27 @@
 # Bastion Realms — Changelog
 
+## v1.2 — 2026-07-06 (second playtest feedback round)
+- **Tower bar reordered to match unlock progression**: Bolt → Frost → Cannon → Sniper → Ember → Banner → Storm → Venom (hotkeys 1-8 follow).
+- **Upgrade button fixed**: the selection panel was rebuilding its DOM every frame, destroying the button
+  between mouse-down and mouse-up so clicks never registered. It now only rebuilds on real state changes.
+  All three panel buttons (Target/Upgrade/Sell) are now uniform full-width, and max-level towers show ★ MAX LEVEL.
+- **Upgrades are visually obvious**: towers grow ~13% per level, L2 gains two orbiting silver gems,
+  L3 gains three orbiting gold gems + a pulsing accent-colored ground ring (plus the existing
+  iron→silver→gold trim and per-type structural growth).
+- **Attack FX upgraded**: frost shards trail ice mist, venom globs drip poison, cannon shells leave smoke
+  trails, bolts leave tracer sparkles; every hit now lands with an elemental impact burst.
+- **Death audio**: replaced the generic blip with a synthesized creature death (pitch-dropping growl +
+  body thump + breath tail, pitched by enemy size). Bosses still roar.
+- **Horizon backgrounds for every biome**: a vast lower plain (forest valley, glowing lava sea, ice sheet,
+  swamp murk) ringed by 22 distant peaks (snow-capped in tundra); Astral gets drifting nebulas + rock shards.
+- **Ambient wildlife on every map**: per-biome critters that wander the meadows and stay off the road —
+  deer/sheep/rabbits/fox (forest), snakes/ember toads/cinder crabs (volcanic), white stags/snow rabbits/
+  snowy sheep (tundra), cats/snakes/toads (ruins), drifting void-fish/void toads (astral).
+- **Forest variety**: autumn pines, birch clusters, large bushes; all decor now scales slightly
+  non-uniformly so no two props read identical.
+- **Mouse controls**: left-drag pans (click still selects/builds), right-drag orbits, middle/wheel zooms.
+- Cache version bumped to ?v=3.
+
 ## v1.1 — 2026-07-06 (owner playtest feedback)
 - **Start/finish clarity**: enemy spawn is now a crimson rift with dark spikes + floating "☠ ENEMIES" label;
   the exit is a proper stone keep gate (twin gold-capped towers, shimmering barrier) + "🛡 DEFEND" label.

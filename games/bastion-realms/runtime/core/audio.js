@@ -146,6 +146,35 @@ export function createAudio(settings) {
         o.start(); o.stop(t + 1);
       }
     },
+    // Creature death: pitch-dropping growl + thump. pitch <1 = big beast, >1 = small critter.
+    deathGrunt(pitch = 1, vol = 0.5) {
+      if (!unlocked) return;
+      const t = actx.currentTime;
+      // vocal component: descending saw through a falling lowpass
+      const o = actx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(260 * pitch, t);
+      o.frequency.exponentialRampToValueAtTime(70 * pitch, t + 0.28);
+      const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 3;
+      f.frequency.setValueAtTime(900 * pitch, t);
+      f.frequency.exponentialRampToValueAtTime(180 * pitch, t + 0.3);
+      const g = actx.createGain(); env(g, 0.008, 0.3, vol * 0.5);
+      o.connect(f); f.connect(g); g.connect(sfxGain);
+      o.start(); o.stop(t + 0.34);
+      // body thump
+      const o2 = actx.createOscillator(); o2.type = 'sine';
+      o2.frequency.setValueAtTime(120 * Math.min(pitch, 1), t + 0.02);
+      o2.frequency.exponentialRampToValueAtTime(45, t + 0.18);
+      const g2 = actx.createGain(); env(g2, 0.005, 0.2, vol * 0.55);
+      o2.connect(g2); g2.connect(sfxGain);
+      o2.start(t + 0.02); o2.stop(t + 0.24);
+      // breathy noise tail
+      const src = actx.createBufferSource(); src.buffer = noiseBuf(0.22);
+      const nf = actx.createBiquadFilter(); nf.type = 'bandpass';
+      nf.frequency.value = 500 * pitch; nf.Q.value = 1.2;
+      const g3 = actx.createGain(); env(g3, 0.01, 0.2, vol * 0.22);
+      src.connect(nf); nf.connect(g3); g3.connect(sfxGain);
+      src.start(t + 0.03);
+    },
     roar(vol = 0.55) {
       if (!unlocked) return;
       const src = actx.createBufferSource(); src.buffer = noiseBuf(0.9);

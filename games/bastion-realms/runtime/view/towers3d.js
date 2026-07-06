@@ -1,6 +1,7 @@
 // Procedural tower models — composed multi-part builds per type + upgrade level.
 // No naked primitives: every tower is a layered assembly with materials, trim and emissives.
 import * as THREE from 'three';
+import { TOWERS } from '../data/towers.js';
 
 const M = {
   stoneD: new THREE.MeshStandardMaterial({ color: 0x6b6f78, roughness: 0.95 }),
@@ -259,6 +260,35 @@ const builders = {
 export function buildTowerMesh(type, level) {
   const g = builders[type](level);
   g.traverse((n) => { if (n.isMesh) n.castShadow = true; });
+
+  // ---- upgrade dressing: unmistakable level identity ----
+  const accent = TOWERS[type]?.color ?? 0xd8b04a;
+  g.scale.setScalar(1 + level * 0.13);           // L2/L3 visibly larger
+  if (level >= 1) {
+    // orbiting gems: 2 silver at L2, 3 gold at L3
+    const gemMat = emissiveMat(level === 2 ? 0xffd76a : 0xc8d4e0, 1.5);
+    const gems = new THREE.Group();
+    const n = level + 1;
+    for (let i = 0; i < n; i++) {
+      const gem = mesh(new THREE.OctahedronGeometry(0.1), gemMat, 0, 0, 0, false);
+      gem.userData.orbitA = (i / n) * Math.PI * 2;
+      gems.add(gem);
+    }
+    gems.position.y = 1.15;
+    g.userData.gems = gems;
+    g.add(gems);
+  }
+  if (level === 2) {
+    // max level: glowing accent ring at the base
+    const ring = mesh(
+      new THREE.RingGeometry(0.95, 1.18, 28),
+      new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false, fog: false }),
+      0, 0.06, 0, false
+    );
+    ring.rotation.x = -Math.PI / 2;
+    g.userData.maxRing = ring;
+    g.add(ring);
+  }
   return g;
 }
 
@@ -266,6 +296,15 @@ export function buildTowerMesh(type, level) {
 export function animateTower(g, t, dt) {
   const u = g.userData;
   if (!u) return;
+  if (u.gems) {
+    u.gems.rotation.y = t * 1.6;
+    u.gems.children.forEach((gem, i) => {
+      const a = gem.userData.orbitA;
+      gem.position.set(Math.cos(a) * 0.85, Math.sin(t * 2.2 + a) * 0.12, Math.sin(a) * 0.85);
+      gem.rotation.y = t * 3;
+    });
+  }
+  if (u.maxRing) u.maxRing.material.opacity = 0.3 + 0.15 * Math.sin(t * 2.8);
   if (u.kind === 'storm' && u.orb) {
     u.orb.scale.setScalar(1 + Math.sin(t * 5.2) * 0.07);
   } else if (u.kind === 'ember' && u.flame) {

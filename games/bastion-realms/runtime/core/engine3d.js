@@ -27,8 +27,9 @@ export function createEngine(container, { quality = 'high' } = {}) {
   controls.minPolarAngle = 0.32;
   controls.maxPolarAngle = 1.15;
   controls.target.set(0, 0, 0);
-  // RIGHT-drag orbits the camera, MIDDLE-drag pans, wheel zooms. LEFT stays free for building.
-  controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
+  // LEFT-drag pans (click still selects/builds via the drag threshold),
+  // RIGHT-drag orbits, MIDDLE + wheel zoom.
+  controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
   controls.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
   controls.update();
 

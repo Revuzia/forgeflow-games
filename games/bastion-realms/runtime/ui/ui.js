@@ -76,8 +76,14 @@ h2.br-h2{font-size:34px;letter-spacing:0.2em;color:#f0e6c8;margin-bottom:6px;tex
 .br-selpanel .lvl{color:var(--gold);font-size:12px;margin-bottom:8px;letter-spacing:0.15em}
 .br-selpanel .strow{display:flex;justify-content:space-between;font-size:12.5px;color:#aeb8cc;padding:2.5px 0}
 .br-selpanel .strow b{color:#e8e4d8}
-.br-selpanel button{width:100%;margin-top:7px}
-.br-selpanel .modebtn{background:#1a2438;font-size:12px;padding:7px}
+.br-selpanel .pbtn{display:block;width:100%;margin-top:8px;padding:10px 8px;border-radius:8px;cursor:pointer;
+  font-weight:700;font-size:13.5px;letter-spacing:0.08em;border:1px solid var(--edge);
+  background:#1a2438;color:#cfd8e8;text-transform:uppercase;transition:all .12s}
+.br-selpanel .pbtn:hover:not(:disabled){border-color:var(--gold)}
+.br-selpanel .pbtn.gold{background:linear-gradient(180deg,#7a5f1e,#4a3810);border-color:var(--gold);color:#ffe9b0}
+.br-selpanel .pbtn.gold:hover:not(:disabled){box-shadow:0 0 14px rgba(216,176,74,0.4)}
+.br-selpanel .pbtn.red{background:#3a2020;border-color:#7a4040;color:#e8b8b0}
+.br-selpanel .pbtn:disabled{opacity:0.4;cursor:default;box-shadow:none}
 .br-wavebox{position:absolute;left:14px;top:70px;background:var(--panel);border:1px solid var(--edge);border-radius:12px;
   padding:12px 14px;pointer-events:auto;max-width:230px;z-index:6}
 .br-wavebox .wtitle{font-size:12px;letter-spacing:0.18em;color:#9aa4b8;text-transform:uppercase;margin-bottom:7px}
@@ -470,47 +476,62 @@ export function createUI(container, handlers) {
       const h = ui.hud;
       if (!h) return;
       const tw = selection.towerId ? sim.towers.find((t) => t.id === selection.towerId) : null;
-      if (!tw) { h.sel.style.display = 'none'; return; }
+      if (!tw) { h.sel.style.display = 'none'; h.selSig = null; return; }
       h.sel.style.display = 'block';
       const d = tw.def;
       const lvl = tw.level;
       const canUp = lvl < 2;
       const upCost = canUp ? upgradeCost(tw.type, lvl) : 0;
+      const afford = sim.gold >= upCost;
       const refund = Math.floor(tw.invested * SELL_REFUND);
-      const rows = [];
-      if (d.kind !== 'support') {
-        rows.push(['Damage', fmt(sim.effDmg(tw)) + (canUp ? ` <span style="color:#7dc86a">→ ${fmt(d.dmg[lvl + 1] * (1 + (tw.buffs?.dmg || 0)))}</span>` : '')]);
-        rows.push(['Fire rate', fmt(sim.effRate(tw)) + '/s' + (canUp ? ` <span style="color:#7dc86a">→ ${fmt(d.rate[lvl + 1])}</span>` : '')]);
+
+      // Only rebuild the DOM when something structural changes — rebuilding every
+      // frame destroys buttons mid-click and they never register.
+      const sig = [tw.id, lvl, tw.mode, canUp, afford, refund, tw.buffs?.from || 0].join('|');
+      if (h.selSig !== sig) {
+        h.selSig = sig;
+        const rows = [];
+        if (d.kind !== 'support') {
+          rows.push(['Damage', fmt(sim.effDmg(tw)) + (canUp ? ` <span style="color:#7dc86a">→ ${fmt(d.dmg[lvl + 1] * (1 + (tw.buffs?.dmg || 0)))}</span>` : '')]);
+          rows.push(['Fire rate', fmt(sim.effRate(tw)) + '/s' + (canUp ? ` <span style="color:#7dc86a">→ ${fmt(d.rate[lvl + 1])}</span>` : '')]);
+        } else {
+          rows.push(['Rate buff', '+' + Math.round(d.buffRate[lvl] * 100) + '%' + (canUp ? ` <span style="color:#7dc86a">→ +${Math.round(d.buffRate[lvl + 1] * 100)}%</span>` : '')]);
+          rows.push(['Damage buff', '+' + Math.round(d.buffDmg[lvl] * 100) + '%' + (canUp ? ` <span style="color:#7dc86a">→ +${Math.round(d.buffDmg[lvl + 1] * 100)}%</span>` : '')]);
+        }
+        rows.push(['Range', fmt(sim.effRange(tw)) + (canUp ? ` <span style="color:#7dc86a">→ ${fmt(d.range[lvl + 1])}</span>` : '')]);
+        rows.push(['Kills', `<b id="br-selkills">${tw.kills}</b>`, true]);
+        rows.push(['Damage dealt', `<b id="br-seldmg">${Math.round(tw.dmgDealt)}</b>`, true]);
+        if (tw.buffs) rows.push(['Banner buff', '⚑ active']);
+        h.sel.innerHTML = `
+          <h3>${d.name}</h3>
+          <div class="lvl">${'●'.repeat(lvl + 1)}${'○'.repeat(2 - lvl)} LEVEL ${lvl + 1}</div>
+          ${rows.map(([k, v, raw]) => `<div class="strow">${k} ${raw ? v : `<b>${v}</b>`}</div>`).join('')}`;
+        if (d.kind !== 'support') {
+          const mode = el('button', 'pbtn', `🎯 Target: ${tw.mode.toUpperCase()}`);
+          mode.onclick = () => {
+            const next = TARGET_MODES[(TARGET_MODES.indexOf(tw.mode) + 1) % TARGET_MODES.length];
+            handlers.setTargetMode(tw.id, next);
+          };
+          h.sel.appendChild(mode);
+        }
+        if (canUp) {
+          const up = el('button', 'pbtn gold', `⬆ Upgrade 🪙${upCost}`);
+          up.disabled = !afford;
+          up.onclick = () => handlers.upgrade(tw.id);
+          h.sel.appendChild(up);
+        } else {
+          h.sel.appendChild(el('div', 'lvl', '★ MAX LEVEL'));
+        }
+        const sell = el('button', 'pbtn red', `💰 Sell +🪙${refund}`);
+        sell.onclick = () => handlers.sell(tw.id);
+        h.sel.appendChild(sell);
+        h.selKills = h.sel.querySelector('#br-selkills');
+        h.selDmg = h.sel.querySelector('#br-seldmg');
       } else {
-        rows.push(['Rate buff', '+' + Math.round(d.buffRate[lvl] * 100) + '%' + (canUp ? ` <span style="color:#7dc86a">→ +${Math.round(d.buffRate[lvl + 1] * 100)}%</span>` : '')]);
-        rows.push(['Damage buff', '+' + Math.round(d.buffDmg[lvl] * 100) + '%' + (canUp ? ` <span style="color:#7dc86a">→ +${Math.round(d.buffDmg[lvl + 1] * 100)}%</span>` : '')]);
+        // volatile stats only — no DOM churn
+        if (h.selKills) h.selKills.textContent = tw.kills;
+        if (h.selDmg) h.selDmg.textContent = Math.round(tw.dmgDealt);
       }
-      rows.push(['Range', fmt(sim.effRange(tw)) + (canUp ? ` <span style="color:#7dc86a">→ ${fmt(d.range[lvl + 1])}</span>` : '')]);
-      rows.push(['Kills', tw.kills], ['Damage dealt', Math.round(tw.dmgDealt)]);
-      if (tw.buffs) rows.push(['Banner buff', '⚑ active']);
-      h.sel.innerHTML = `
-        <h3>${d.name}</h3>
-        <div class="lvl">${'●'.repeat(lvl + 1)}${'○'.repeat(2 - lvl)} LEVEL ${lvl + 1}</div>
-        ${rows.map(([k, v]) => `<div class="strow">${k} <b>${v}</b></div>`).join('')}`;
-      if (d.kind !== 'support') {
-        const mode = el('button', 'br-btn small modebtn', `🎯 Target: ${tw.mode.toUpperCase()}`);
-        mode.style.width = '100%';
-        mode.onclick = () => {
-          const next = TARGET_MODES[(TARGET_MODES.indexOf(tw.mode) + 1) % TARGET_MODES.length];
-          handlers.setTargetMode(tw.id, next);
-        };
-        h.sel.appendChild(mode);
-      }
-      if (canUp) {
-        const up = el('button', 'br-startbtn', `⬆ UPGRADE 🪙${upCost}`);
-        up.disabled = sim.gold < upCost;
-        up.onclick = () => handlers.upgrade(tw.id);
-        h.sel.appendChild(up);
-      }
-      const sell = el('button', 'br-btn small', `💰 SELL +🪙${refund}`);
-      sell.style.cssText = 'width:100%;background:#3a2020;border-color:#7a4040';
-      sell.onclick = () => handlers.sell(tw.id);
-      h.sel.appendChild(sell);
     },
 
     banner(text, sub = '', dur = 2.2) {
