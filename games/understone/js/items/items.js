@@ -50,9 +50,11 @@ block('bed', 'Bed', 'bed', { value: 2000 });
 item('silk', { name: 'Silk', type: 'material', value: 200 });
 
 // --- walls ---------------------------------------------------------------------
-item('woodWall', { name: 'Wood Wall', type: 'wall', useTime: 10, placeWall: 'woodWall' });
-item('dirtWall', { name: 'Dirt Wall', type: 'wall', useTime: 10, placeWall: 'dirtWall' });
-item('stoneWall', { name: 'Stone Wall', type: 'wall', useTime: 10, placeWall: 'stoneWall' });
+// Wall items place SOLID plank/brick tiles that block movement (players expect a "wall" to be
+// solid). Worldgen house backing still uses the background wall layer directly.
+item('woodWall', { name: 'Wood Wall', type: 'block', useTime: 10, placeTile: 'plankWall' });
+item('dirtWall', { name: 'Dirt Wall', type: 'block', useTime: 10, placeTile: 'packedDirt' });
+item('stoneWall', { name: 'Stone Wall', type: 'block', useTime: 10, placeTile: 'stoneBrick' });
 
 // --- materials -------------------------------------------------------------------
 item('gel', { name: 'Gel', type: 'material', value: 5 });

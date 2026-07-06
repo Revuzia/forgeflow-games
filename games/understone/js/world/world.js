@@ -87,6 +87,12 @@ tile('candle',     { solid: false, mult: 100, lightEmit: [0.85, 0.75, 0.5], ligh
 tile('sawmill',    { solid: false, mult: 1.5, station: 'sawmill', color: '#7a5c36', frameStyle: 'cross' });
 tile('loom',       { solid: false, mult: 1.5, station: 'loom', color: '#a08a68', frameStyle: 'cross' });
 tile('bed',        { solid: false, mult: 1.5, color: '#b04a5a', frameStyle: 'cross' }); // spawn set on interact
+// solid, buildable "wall" tiles placed by the Wood/Dirt/Stone Wall items — these BLOCK movement
+// (unlike the background wall layer, which worldgen still uses for house backing). Distinct
+// plank/brick colours so they read as walls, not raw blocks. (appended — keeps tile IDs stable)
+tile('plankWall',  { mult: 1, color: '#7c5632', merge: 'wood', drops: 'woodWall' });
+tile('packedDirt', { mult: 2, color: '#6e4a28', drops: 'dirtWall' });
+tile('stoneBrick', { mult: 1, color: '#61616a', merge: 'rock', drops: 'stoneWall' });
 
 // --- walls ---
 export const W_ = {}; // name → wall id
