@@ -42,8 +42,11 @@ const CSS = `
 .us-slot .cnt { position: absolute; bottom: 2px; right: 4px; font-size: 11px; color: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; }
 .us-slot .key { position: absolute; top: 1px; left: 4px; font-size: 9px; color: #cdd5ef; text-shadow: 0 1px 1px #000; pointer-events: none; }
 .us-slot .eqlabel { font-size: 8px; color: #7480a0; text-transform: uppercase; letter-spacing: .5px; }
-/* --- inventory panel --- */
-#us-inv { top: 50%; left: 50%; transform: translate(-50%, -50%); display: none;
+/* --- inventory / chest / shop modal --- */
+#us-backdrop { position: fixed; inset: 0; background: rgba(4,6,12,0.6); display: none; z-index: 90; }
+#us-backdrop.open { display: block; }
+#hud #us-backdrop { pointer-events: auto; }
+#us-inv { z-index: 100; top: 50%; left: 50%; transform: translate(-50%, -50%); display: none;
   background: rgba(10,12,24,0.96) url('assets/ui/panel.png'); background-size: 100% 100%; background-blend-mode: multiply;
   image-rendering: pixelated; border: 2px solid #3a2f22; border-radius: 12px; padding: 16px;
   max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); overflow: auto;
@@ -210,6 +213,7 @@ export class HUD {
       <div id="us-money" class="us-panel"></div>
       <div id="us-held-name" class="us-panel"></div>
       <div id="us-hotbar" class="us-panel"></div>
+      <div id="us-backdrop"></div>
       <div id="us-inv" class="us-panel">
         <div id="us-inv-top">
           <div id="us-equip-wrap">
@@ -252,6 +256,9 @@ export class HUD {
       chest: hud.querySelector('#us-chest'), cursor: hud.querySelector('#us-cursor'),
       tip: hud.querySelector('#us-tip'), dollCanvas: hud.querySelector('#us-doll-canvas'),
       hands: hud.querySelector('#us-hands'),
+      invTop: hud.querySelector('#us-inv-top'), equipWrap: hud.querySelector('#us-equip-wrap'),
+      craftWrap: hud.querySelector('#us-craft-wrap'), shopWrap: hud.querySelector('#us-shop-wrap'),
+      backdrop: hud.querySelector('#us-backdrop'),
     };
     this.buildSlots();
     this.buildCategories();
@@ -265,14 +272,29 @@ export class HUD {
   }
 
   // ---- open/close --------------------------------------------------------------
-  toggle(open = !this.open, focus = null) {
+  // Which sections show: 'inventory' = equipment + recipe book (the C screen); 'chest' = a focused
+  // container modal (your inventory + the chest); 'shop' = a merchant modal (their wares + your
+  // inventory). Chest/shop are NOT mixed with the equipment/crafting panel (industry standard).
+  setMode(mode) {
+    this.mode = mode;
+    const show = (el, on) => { if (el) el.style.display = on ? 'block' : 'none'; };   // 'block' not '' (which reverts chest/shop to stylesheet display:none)
+    show(this.els.equipWrap, mode === 'inventory');
+    show(this.els.craftWrap, mode === 'inventory');
+    show(this.els.chestWrap, mode === 'chest');
+    show(this.els.shopWrap, mode === 'shop');
+  }
+
+  toggle(open = !this.open, focus = null, mode = 'inventory') {
     this.open = open;
     this.game.audio?.play(open ? 'uiOpen' : 'uiClose', { volume: 0.5 });
     this.els.inv.classList.toggle('open', open);
+    this.els.backdrop?.classList.toggle('open', open);
     if (open) {
+      this.setMode(mode);
       this.refreshSlots(); this.lastCraftKey = ''; this.refreshCrafting(); this.drawDoll();
       if (focus === 'craft') this.els.search.focus();
     } else {
+      this.setMode('inventory');   // reset for next open
       this.closeChest();
       this.returnCursorStack();
     }
@@ -517,10 +539,9 @@ export class HUD {
   openChest(tx, ty) {
     const chests = this.game.world.chests; if (!chests) return;
     this.openChestSlots = chests.ensure(tx, ty);
-    this.els.chestWrap.style.display = 'block';   // NOT '' — that reverts to the stylesheet's display:none, hiding the chest
     this.els.chest.innerHTML = '';
     for (let i = 0; i < this.openChestSlots.length; i++) this.els.chest.appendChild(this.makeSlot({ chest: i }));
-    if (!this.open) this.toggle(true); else this.refreshSlots();
+    if (!this.open) this.toggle(true, null, 'chest'); else { this.setMode('chest'); this.refreshSlots(); }   // focused chest modal (inventory + chest)
   }
 
   closeChest() {
@@ -550,8 +571,7 @@ export class HUD {
       });
       list.appendChild(el);
     }
-    wrap.style.display = 'block';   // NOT '' — that reverts to the stylesheet's display:none, hiding the shop
-    if (!this.open) this.toggle(true);
+    if (!this.open) this.toggle(true, null, 'shop'); else this.setMode('shop');   // focused merchant modal (wares + your inventory)
   }
 
   // ---- rendering ---------------------------------------------------------------
