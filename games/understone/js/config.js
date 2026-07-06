@@ -4,8 +4,10 @@
 
 export const TILE = 16;                 // [R]
 
-// --- world dimensions (v1: ~half of Terraria small 4200x1200) ---
-export const WORLD_W = 2100;            // [T] tiles
+// --- world dimensions (Terraria "small" is 4200x1200; we run wide + shallow) ---
+// Width drives biome band size: each ring band = (mid - oceanW)/4, so 3400 gives
+// ~375-tile bands (~12 screens each) — much slower forest→graveyard→desert→snow ramp.
+export const WORLD_W = 3400;            // [T] tiles
 export const WORLD_H = 600;             // [T] tiles
 
 // --- layer boundaries as fraction of world height ---

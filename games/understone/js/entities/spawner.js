@@ -9,9 +9,13 @@ import { isDay } from '../render/background.js';
 import { Enemy, ENEMIES } from './enemy.js';
 import { T, WALLS } from '../world/world.js';
 
-const SPAWN_HALF_W = 84, SPAWN_HALF_H = 47;      // spawn rectangle around player (tiles)
-const SAFE_HALF_W = 62, SAFE_HALF_H = 35;        // no-spawn zone (roughly one screen)
-const DESPAWN_SOFT = 750;                         // ticks off-screen before removal
+// Tuned for our 2× render zoom: Terraria's tile-space spawn ring assumes a ~1× view, so its 62-tile
+// safe zone sat WAY outside our ~30-tile half-screen — enemies spawned 62-84 tiles away and despawned
+// before they could reach the player. Pulled the ring in so they spawn just off-screen and actually
+// arrive, and lengthened the despawn grace so they persist.
+const SPAWN_HALF_W = 70, SPAWN_HALF_H = 40;      // spawn rectangle around player (tiles)
+const SAFE_HALF_W = 44, SAFE_HALF_H = 26;        // no-spawn zone (just past the visible screen edge)
+const DESPAWN_SOFT = 1050;                        // ticks off-screen before removal
 const DESPAWN_DIST_X = 252 * TILE, DESPAWN_DIST_Y = 142 * TILE; // instant despawn
 
 export class Spawner {
@@ -30,12 +34,12 @@ export class Spawner {
 
   rateAndMax(band, tick, bloodMoon) {
     if (band === 'surface') {
-      if (bloodMoon) return [90, 12];
-      return isDay(tick) ? [340, 7] : [200, 9];   // was [600,5]/[360,6] — enemies were too sparse while exploring
+      if (bloodMoon) return [70, 14];
+      return isDay(tick) ? [150, 10] : [105, 12];  // day/night — was [340,7]/[200,9], still too sparse while exploring
     }
-    if (band === 'underground') return [190, 11];
-    if (band === 'cavern') return [150, 13];
-    return [160, 13]; // underworld
+    if (band === 'underground') return [150, 13];
+    if (band === 'cavern') return [120, 15];
+    return [130, 15]; // underworld
   }
 
   inCorruption(tx) {
@@ -132,9 +136,15 @@ export class Spawner {
     const ptx = Math.floor(p.x / TILE), pty = Math.floor(p.y / TILE);
     const band = this.depthBand(pty);
     const [rate, maxSpawns] = this.rateAndMax(band, game.tick, game.bloodMoon);
-    if (this.activeCount() < maxSpawns && Math.random() < 1 / rate * 60 / 60 * 1) {
-      // (1/rate per tick)
-      this.trySpawn(game, ptx, pty, band);
+    // Spawn ring adapts to the ACTUAL visible screen (varies with monitor size + zoom): keep the
+    // no-spawn zone just past the screen edge so enemies appear right off-screen and can reach you,
+    // instead of a fixed ring that (at 2× zoom, small screens) spawned them too far to ever arrive.
+    const cam = game.camera;
+    const safeW = cam ? Math.ceil(cam.viewW() / TILE / 2) + 5 : SAFE_HALF_W;
+    const safeH = cam ? Math.ceil(cam.viewH() / TILE / 2) + 4 : SAFE_HALF_H;
+    const spawnW = safeW + 30, spawnH = safeH + 20;
+    if (this.activeCount() < maxSpawns && Math.random() < 1 / rate) {
+      this.trySpawn(game, ptx, pty, band, safeW, safeH, spawnW, spawnH);
     }
     // despawn far enemies
     for (let i = this.enemies.length - 1; i >= 0; i--) {
@@ -142,18 +152,18 @@ export class Spawner {
       if (e.boss) continue;
       const dx = Math.abs(e.cx - p.x), dy = Math.abs(e.cy - p.y);
       if (dx > DESPAWN_DIST_X || dy > DESPAWN_DIST_Y) { this.enemies.splice(i, 1); continue; }
-      const offscreen = dx > SAFE_HALF_W * TILE || dy > SAFE_HALF_H * TILE;
+      const offscreen = dx > safeW * TILE || dy > safeH * TILE;
       e.despawnTimer = offscreen ? e.despawnTimer + 1 : 0;
       if (e.despawnTimer > DESPAWN_SOFT) this.enemies.splice(i, 1);
     }
   }
 
-  trySpawn(game, ptx, pty, band) {
+  trySpawn(game, ptx, pty, band, safeW = SAFE_HALF_W, safeH = SAFE_HALF_H, spawnW = SPAWN_HALF_W, spawnH = SPAWN_HALF_H) {
     const { world } = this;
-    for (let attempt = 0; attempt < 50; attempt++) {
-      const tx = ptx + ((Math.random() * SPAWN_HALF_W * 2) | 0) - SPAWN_HALF_W;
-      const ty = pty + ((Math.random() * SPAWN_HALF_H * 2) | 0) - SPAWN_HALF_H;
-      if (Math.abs(tx - ptx) < SAFE_HALF_W && Math.abs(ty - pty) < SAFE_HALF_H) continue; // no-spawn zone
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const tx = ptx + ((Math.random() * spawnW * 2) | 0) - spawnW;
+      const ty = pty + ((Math.random() * spawnH * 2) | 0) - spawnH;
+      if (Math.abs(tx - ptx) < safeW && Math.abs(ty - pty) < safeH) continue; // no-spawn zone (just past screen edge)
       if (!world.inBounds(tx, ty) || world.tileAt(tx, ty) !== T.air) continue;
       // player-placed walls block spawns (natural walls don't)
       const wallId = world.wallAt(tx, ty);
