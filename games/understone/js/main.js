@@ -652,7 +652,8 @@ async function boot() {
       c.rotate(lean * (player.facing > 0 ? 1 : -1));
       if (!frameImg && player.swinging > 0) c.rotate(0.18);
       c.imageSmoothingEnabled = false;
-      c.drawImage(spr, -dw / 2, -dh / 2, dw, dh);
+      const sq = player.crouching ? 0.68 : 1;   // crouch: squash the figure, feet stay planted
+      c.drawImage(spr, -dw / 2, dh / 2 - dh * sq, dw, dh * sq);
       c.restore();
       // ---- held item: visibly swung around the hand anchor (research 07 P0-4) ----
       const held = player.heldItem;

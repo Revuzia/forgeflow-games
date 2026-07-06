@@ -137,7 +137,8 @@ export class Player {
 
     // ---- accessory effects (paper-doll bonuses) ------------------------------
     const acc = game.inventory?.accessoryEffects?.() ?? { moveSpeed: 1, regen: 0, extraJumps: 0, noFallDamage: false };
-    const maxRun = PHYS.maxRun * acc.moveSpeed;
+    this.crouching = isDown('crouch') && this.grounded();   // C = crouch (slower, deliberate; blocks jump)
+    const maxRun = PHYS.maxRun * acc.moveSpeed * (this.crouching ? 0.4 : 1);
 
     // ---- horizontal movement (§2) --------------------------------------------
     const left = isDown('left'), right = isDown('right');
@@ -171,7 +172,7 @@ export class Player {
     if (jumpHeld && this.jump > 0) {
       this.vy = -jumpSpeed;       // re-pinned every tick while sustained
       this.jump--;
-    } else if (jumpHeld && this.releaseJump && this.grounded()) {
+    } else if (jumpHeld && this.releaseJump && this.grounded() && !this.crouching) {
       this.vy = -jumpSpeed;
       this.jump = jumpHold;
       this.releaseJump = false;

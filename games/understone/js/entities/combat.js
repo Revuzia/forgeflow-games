@@ -28,7 +28,7 @@ export class Combat {
     this.swingHit = new Set();    // enemies hit by the current swing
     this.lastSwingId = 0;
     this.lastNightCheck = -1;
-    game.floatText = (x, y, txt, color) => this.texts.push({ x, y, txt: String(txt), color, life: 45, vy: -1.2 });
+    game.floatText = (x, y, txt, color, big) => this.texts.push({ x, y, txt: String(txt), color, big: !!big, life: 45, vy: -1.2 });
   }
 
   // ---- explosives: fused, bouncing, terrain-destroying (Terraria bombs) ------------
@@ -149,8 +149,9 @@ export class Combat {
     }
     if (result <= 0) return;
     const eMult = e.lastElementMult ?? 1;
-    const color = crit ? '#ffd24a' : eMult > 1 ? '#8ae8a0' : eMult < 1 ? '#8a9ab8' : '#e8a86d';
-    g.floatText(e.cx, e.y - 8, crit ? `${result}!` : result, color);
+    const color = crit ? '#ffe24a' : eMult > 1 ? '#8ae8a0' : eMult < 1 ? '#8a9ab8' : '#e8a86d';
+    g.floatText(e.cx, e.y - 8, result, color, crit);   // crit → bigger + brighter number, no '!' suffix
+    if (crit) g.fx?.addTrauma(0.18);                     // crit screen-shake punch (respects the Screen Shake setting)
     g.audio?.play(e.def.ai === 'slime' ? 'slimeHit' : 'hit', { volume: 0.7 });
     g.fx?.sparks(e.cx, e.cy, element === 'fire' ? '#ff9a3c' : element === 'ice' ? '#a8e6ff'
       : element === 'lightning' ? '#cfd8ff' : element === 'shadow' ? '#b968ff' : '#ffd75a', crit ? 7 : 4);
@@ -556,8 +557,8 @@ export class Combat {
         ctx.fillRect((f.x - ox) * z + Math.cos(ang) * 7 * z - z, (f.y - oy) * z + Math.sin(ang) * 7 * z - z, 2 * z, 2 * z);
       }
     }
-    ctx.font = `bold ${11 * z}px 'Segoe UI', sans-serif`;
     for (const t of this.texts) {
+      ctx.font = `bold ${(t.big ? 16 : 11) * z}px 'Segoe UI', sans-serif`;   // crits render larger
       ctx.globalAlpha = Math.min(1, t.life / 20);
       ctx.fillStyle = '#000';
       ctx.fillText(t.txt, (t.x - ox) * z + 1, (t.y - oy) * z + 1);
