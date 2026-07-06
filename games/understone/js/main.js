@@ -310,7 +310,7 @@ async function boot() {
     const typing = document.activeElement && document.activeElement.id === 'us-search';
     if (!typing) {
       if (inputMod.wasPressed('inventory')) hud.toggle();
-      else if (inputMod.wasPressed('crafting')) hud.toggle(!hud.open, 'craft');
+      else if (inputMod.wasPressed('crafting')) hud.toggle();   // just open the panel — don't auto-focus the recipe search
     }
     syncHeld();
   });
