@@ -422,7 +422,8 @@ export function generateWorld(world, onProgress = () => {}) {
         world.walls[y * w + x] = W_.woodWall;
       }
     }
-    set(hx, groundY - 1, T.door);
+    // 3-tall doorway carved into the left wall
+    set(hx, groundY - 1, T.door); set(hx, groundY - 2, T.door); set(hx, groundY - 3, T.door);
     if (furnish) {
       set(hx + 2, groundY - 1, T.torch);
       set(hx + 4, groundY - 1, T.chair);

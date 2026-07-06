@@ -305,10 +305,16 @@ export class Player {
     if (!inReach) return;
     const world = this.world;
     const id = world.tileAt(tx, ty);
-    if (id === T.door) { world.setTile(tx, ty, T.doorOpen); game.audio?.play('doorOpen'); }
-    else if (id === T.doorOpen) {
-      // don't close a door on top of yourself
-      if (!this.overlapsBox(tx * TILE, ty * TILE, TILE, TILE)) { world.setTile(tx, ty, T.door); game.audio?.play('doorClose'); }
+    if (id === T.door || id === T.doorOpen) {
+      const opening = id === T.door;
+      // a door is a vertical run (houses use 3-tall doors) — open/close the whole run as one
+      let y0 = ty; while (world.tileAt(tx, y0 - 1) === T.door || world.tileAt(tx, y0 - 1) === T.doorOpen) y0--;
+      let y1 = ty; while (world.tileAt(tx, y1 + 1) === T.door || world.tileAt(tx, y1 + 1) === T.doorOpen) y1++;
+      if (!opening) { // don't close a door onto yourself
+        for (let y = y0; y <= y1; y++) if (this.overlapsBox(tx * TILE, y * TILE, TILE, TILE)) return;
+      }
+      for (let y = y0; y <= y1; y++) world.setTile(tx, y, opening ? T.doorOpen : T.door);
+      game.audio?.play(opening ? 'doorOpen' : 'doorClose');
     } else if (id === T.chest && game.openChest) game.openChest(tx, ty);
     else if (id === T.spawnPoint || id === T.bed) {
       this.world.spawnX = tx;
