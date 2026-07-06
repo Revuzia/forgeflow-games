@@ -534,6 +534,31 @@ export function generateWorld(world, onProgress = () => {}) {
     }
   }
 
+  // --- 9.6 surface ponds: fishable water INLAND so you see water without reaching the ocean -----
+  {
+    const firstSolidY = (x) => { let y = 0; while (y < h && !world.isSolid(x, y)) y++; return y; };
+    const hasHouse = (x) => { for (let y = 0; y < h * 0.3; y++) if (world.walls[y * w + x] === W_.woodWall) return true; return false; };
+    const pondCount = 4 + (rand() * 3 | 0);
+    for (let p = 0; p < pondCount; p++) {
+      const pw2 = 9 + (rand() * 12 | 0);
+      let px2 = p === 0 ? mid - 90 : (oceanW + 50 + rand() * (w - 2 * oceanW - 100 - pw2)) | 0;
+      if (Math.abs(px2 - mid) < 22) px2 += 46;         // keep the spawn column clear
+      let blocked = false;                              // never carve through a house
+      for (let x = px2 - 1; x <= px2 + pw2 && !blocked; x++) if (hasHouse(x)) blocked = true;
+      if (blocked) continue;
+      for (let x = px2; x < px2 + pw2; x++) {
+        const t = (x - px2) / (pw2 - 1);
+        const bowl = Math.max(2, Math.round((3 + (rand() * 4 | 0)) * Math.sin(t * Math.PI)) + 1);
+        const wl = firstSolidY(x);
+        for (let d = 0; d < bowl; d++) {
+          const y = wl + d;
+          set(x, y, T.air);
+          world.liquid[y * w + x] = 255; world.liquidType[y * w + x] = 0;   // fill with water
+        }
+      }
+    }
+  }
+
   // --- 10. spawn ------------------------------------------------------------------------
   world.spawnX = mid;
   world.spawnY = surface[mid] - 3;
