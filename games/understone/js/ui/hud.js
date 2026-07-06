@@ -138,7 +138,7 @@ function rarityClass(def) {
 }
 
 const toolIconCache = new Map();
-const MAT_TINT = { molten: '#ff7a3c', nightmare: '#b06adf', gold: '#ffd75a', silver: '#dfe4ec', iron: '#c9ccd8', copper: '#d08a4a', wood: '#a9793f' };
+const MAT_TINT = { wood: '#8a5e34', copper: '#d47a30', iron: '#c2c6cf', silver: '#e2e7ef', gold: '#ffd24a', shadow: '#8a6ab0', molten: '#ff7a3c', nightmare: '#b06adf', jungle: '#7aa83a', ranger: '#5a8a4a' };
 // tools/weapons without a bespoke PNG fall back to a drawn sprite (never a bare initials box)
 function toolFallbackUrl(id, def) {
   if (toolIconCache.has(id)) return toolIconCache.get(id);

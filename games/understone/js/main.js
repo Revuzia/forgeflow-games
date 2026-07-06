@@ -27,6 +27,11 @@ function hflipSprite(img) {
   return f;
 }
 
+// Material tint for procedurally-drawn tool sprites (wood tools have no bespoke PNG). Kept
+// distinct so wood reads as WOOD (brown), not copper (orange). Mirrors hud.js's inventory map.
+const MAT_TINT = { wood: '#8a5e34', copper: '#d47a30', iron: '#c2c6cf', silver: '#e2e7ef', gold: '#ffd24a', shadow: '#8a6ab0', molten: '#ff7a3c', nightmare: '#b06adf', jungle: '#7aa83a', ranger: '#5a8a4a' };
+function matTint(id) { const m = Object.keys(MAT_TINT).find((k) => (id || '').startsWith(k)); return MAT_TINT[m] ?? '#c9ccd8'; }
+
 function fitCanvas() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.floor(window.innerWidth * dpr);
@@ -699,7 +704,7 @@ async function boot() {
         const rawSpr = itemIcon(heldDef.id)
           ?? toolFallbackSprite(held.type === 'pickaxe' || held.type === 'axe' || held.type === 'hammer' ? held.type
             : held.weapon === 'bow' ? 'bow' : held.weapon === 'sword' ? 'sword'
-            : held.placeTile != null ? 'block' : 'sword');
+            : held.placeTile != null ? 'block' : 'sword', matTint(heldDef.id));
         // the axe icon is drawn blade-on-the-LEFT (opposite the pickaxe); pre-mirror the SPRITE so its
         // blade points forward. Doing it on the sprite (not via scale(-1)) keeps the swing rotating the
         // SAME way as the sword/pickaxe instead of spinning backwards.
