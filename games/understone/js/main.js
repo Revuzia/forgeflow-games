@@ -723,8 +723,8 @@ async function boot() {
         // Anchor ON the sprite's actual hand: the near arm's fist sits at the belt line, a couple px
         // toward the facing side (measured against the sprite, not the narrow hitbox). The item draws
         // on top of that hand so it reads as held.
-        const handX = cx + player.facing * 1.6 * z;
-        const handY = sy + player.h * z * 0.52;
+        const handX = cx + player.facing * 1.0 * z;
+        const handY = sy + player.h * z * 0.565;
         const rawSpr = itemIcon(heldDef.id)
           ?? toolFallbackSprite(held.type === 'pickaxe' || held.type === 'axe' || held.type === 'hammer' ? held.type
             : held.weapon === 'bow' ? 'bow' : held.weapon === 'sword' ? 'sword'
