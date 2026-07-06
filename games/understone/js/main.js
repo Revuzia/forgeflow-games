@@ -658,7 +658,10 @@ async function boot() {
       // ---- held item: visibly swung around the hand anchor (research 07 P0-4) ----
       const held = player.heldItem;
       const heldDef = game.inventory.heldDef();
-      if (held && heldDef && !held.use && !held.boss) {
+      // only WIELDABLES render in-hand — tools, weapons, placeables. Raw materials (gel, ore, bars)
+      // and ammo are carried, not brandished, so they don't render as a big swung item.
+      const wieldable = heldDef && (heldDef.tool || heldDef.weapon || heldDef.placeTile != null || heldDef.placeWall != null);
+      if (held && wieldable && !held.use && !held.boss) {
         const useT = held.useTime || 20;
         const swinging = player.swinging > 0;
         const prog = swinging ? Math.min(1, Math.max(0, 1 - player.swinging / useT)) : 1;
@@ -678,7 +681,8 @@ async function boot() {
         const isz = 22 * z;
         // mirror FIRST so "forward" == facing, then rotate: rest = held forward/down out of the
         // hand; swing = overhead → forward-down chop.
-        const angle = swinging ? (-2.2 + prog * 3.0) : 0.85;
+        // bows are aimed forward (roughly horizontal), not swung overhead like melee/tools
+        const angle = heldDef.weapon === 'bow' ? -0.15 : swinging ? (-2.2 + prog * 3.0) : 0.85;
         c.save();
         c.translate(handX, handY);
         c.scale(player.facing > 0 ? 1 : -1, 1);
