@@ -667,6 +667,20 @@ async function boot() {
       const sq = player.crouching ? 0.68 : 1;   // crouch: squash the figure, feet stay planted
       c.drawImage(spr, -dw / 2, dh / 2 - dh * sq, dw, dh * sq);
       c.restore();
+      // ---- equipped armor overlays: show each worn piece (helmet/chest/greaves) on the body,
+      // tinted by material. Drawn only over the plain hero (heroName==='hero'); a supported chest
+      // already swaps in a full armored-variant sprite above, so we don't double it. ----
+      if (heroName === 'hero' && (inventory.armor.head || inventory.armor.chest || inventory.armor.legs)) {
+        const A = inventory.armor;
+        const MAT = { wood: '#8a6038', copper: '#c8814a', iron: '#b6bbc6', silver: '#dfe4ec', gold: '#ffd24a', shadow: '#7a5aa8', molten: '#ff7a3c', jungle: '#7aa83a', ranger: '#5a8a4a' };
+        const tint = (it) => it ? (MAT[Object.keys(MAT).find((m) => it.id.startsWith(m))] ?? '#b6bbc6') : null;
+        const bh = player.h * z, top = sy, bw = dw * 0.46, bx = cx;
+        c.save(); c.imageSmoothingEnabled = false;
+        if (A.legs) { c.fillStyle = tint(A.legs); const ly = top + bh * 0.58, lh = bh * 0.28, lw = bw * 0.24; c.fillRect(bx - bw * 0.28, ly, lw, lh); c.fillRect(bx + bw * 0.04, ly, lw, lh); }
+        if (A.chest) { c.fillStyle = tint(A.chest); const cyt = top + bh * 0.27, chh = bh * 0.30, cw = bw * 0.72; c.fillRect(bx - cw * 0.5, cyt, cw, chh); c.fillStyle = 'rgba(255,255,255,0.20)'; c.fillRect(bx - cw * 0.5, cyt, cw, Math.max(1, bh * 0.035)); }
+        if (A.head) { c.fillStyle = tint(A.head); const hy = top + bh * 0.04, hw = bw * 0.62, hh = bh * 0.18; c.fillRect(bx - hw * 0.5, hy + hh * 0.45, hw, hh * 0.55); c.fillRect(bx - hw * 0.36, hy, hw * 0.72, hh * 0.5); c.fillStyle = 'rgba(255,255,255,0.18)'; c.fillRect(bx - hw * 0.36, hy, hw * 0.72, Math.max(1, bh * 0.03)); }
+        c.restore();
+      }
       // ---- held item: visibly swung around the hand anchor (research 07 P0-4) ----
       const held = player.heldItem;
       const heldDef = game.inventory.heldDef();
