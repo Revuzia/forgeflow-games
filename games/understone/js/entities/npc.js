@@ -6,6 +6,7 @@ import { TILE, PHYS } from '../config.js';
 import { T, TILES, WALLS } from '../world/world.js';
 import { moveEntity } from './physics.js';
 import { character } from '../core/assets.js';
+import { isDay } from '../render/background.js';
 
 const GUIDE_TIPS = [
   'Chop trees for wood, then craft a Work Bench — it unlocks most early recipes.',
@@ -85,20 +86,55 @@ export class NPC {
 
   tick(game) {
     this.px = this.x; this.py = this.y;
-    // gentle wander around home
-    if (--this.wanderTimer <= 0) {
-      this.wanderTimer = 120 + Math.random() * 240;
-      const drift = this.cx - this.homeX;
-      this.dir = Math.abs(drift) > 90 ? -Math.sign(drift) : (Math.random() < 0.4 ? 0 : Math.random() < 0.5 ? -1 : 1);
+    const onGround = this.vy === 0;                 // moveEntity zeroed vy last tick if we're on a floor
+    const day = isDay(game.tick);
+    const HOME_RANGE = 240;                          // how far a townsperson roams from home by day (px)
+    const stuck = this.stuck || 0;
+
+    if (!day) {
+      // NIGHT: head home and sleep. If wedged against something on the way, give up and sleep there
+      // (better than shoving into a wall forever).
+      const dh = this.homeX - this.cx;
+      this.dir = (Math.abs(dh) > 24 && stuck < 45) ? Math.sign(dh) : 0;
+      this.sleeping = this.dir === 0;
+    } else {
+      this.sleeping = false;
+      // DAY: roam a wide patch around home. Re-pick on a timer, turn back at the range edge, and —
+      // crucially — turn AROUND when we bump a wall, so an NPC never shoves into it (or jumps out over
+      // it into a one-way trap) forever.
+      if (--this.wanderTimer <= 0 || (this.dir && stuck > 16)) {
+        this.wanderTimer = 120 + Math.random() * 260;
+        const drift = this.cx - this.homeX;
+        if (this.dir && stuck > 30) { this.dir = 0; this.wanderTimer = 90 + Math.random() * 120; } // wedged → stand & rest, retry soon
+        else if (Math.abs(drift) > HOME_RANGE) this.dir = -Math.sign(drift);  // wandered too far → head back
+        else if (this.dir && stuck > 16) this.dir = -this.dir;                // bumped a wall → reverse once
+        else this.dir = Math.random() < 0.3 ? 0 : Math.random() < 0.5 ? -1 : 1;
+      }
     }
+
     if (this.dir) {
       this.vx += this.dir * 0.05;
       if (Math.abs(this.vx) > 0.7) this.vx = this.dir * 0.7;
       this.facing = this.dir;
-      // hop 1-tile ledges
+      // Open a door directly ahead so a townsperson can walk out of / back into their own house and
+      // actually roam the area (Terraria NPCs open doors) instead of being trapped behind a solid door.
+      const dxTile = Math.floor((this.dir > 0 ? this.x + this.w + 1 : this.x - 1) / TILE);
+      const dyTile = Math.floor(this.cy / TILE);
+      if (game.world.tileAt(dxTile, dyTile) === T.door) {
+        let y0 = dyTile; while (game.world.tileAt(dxTile, y0 - 1) === T.door) y0--;
+        let y1 = dyTile; while (game.world.tileAt(dxTile, y1 + 1) === T.door) y1++;
+        for (let y = y0; y <= y1; y++) game.world.setTile(dxTile, y, T.doorOpen);
+      }
+      // Obstacle handling: always hop a 1-tile ledge; for a taller wall try ONE high jump to unstick,
+      // but stop after a bit (the day turn-around / night sleep takes over) so it isn't a jump loop.
       const aheadX = this.dir > 0 ? this.x + this.w + 2 : this.x - 2;
-      const ftx = Math.floor(aheadX / TILE), fty = Math.floor((this.y + this.h - 1) / TILE);
-      if (this.vy === 0 && game.world.isSolid(ftx, fty) && !game.world.isSolid(ftx, fty - 1)) this.vy = -5;
+      const ftx = Math.floor(aheadX / TILE), footY = Math.floor((this.y + this.h - 1) / TILE);
+      const blockLow = game.world.isSolid(ftx, footY);
+      const blockMid = game.world.isSolid(ftx, footY - 1);   // wall taller than one tile
+      if (onGround) {
+        if (blockLow && !blockMid) this.vy = -5;                       // gentle 1-tile ledge hop
+        else if ((blockMid || stuck > 6) && stuck < 26) this.vy = -8;  // high "unstick" jump (bounded)
+      }
     } else {
       this.vx *= 0.8;
     }
@@ -106,6 +142,8 @@ export class NPC {
     const e = { x: this.x, y: this.y, vx: this.vx, vy: this.vy, w: this.w, h: this.h };
     moveEntity(game.world, e, {});
     this.x = e.x; this.y = e.y; this.vx = e.vx; this.vy = e.vy;
+    // "stuck" = wanted to move but the collision barely let us (pressed against a wall)
+    this.stuck = (this.dir && Math.abs(this.x - this.px) < 0.25) ? stuck + 1 : 0;
   }
 
   interact(game) {

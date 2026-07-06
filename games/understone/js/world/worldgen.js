@@ -460,17 +460,16 @@ export function generateWorld(world, onProgress = () => {}) {
   // spawn-side village — a real town a short walk from spawn so you actually MEET merchants/
   // traders early (Merchant, Nurse, Demolitionist east; a Dryad keeps a grove to the west).
   {
-    const east = ['merchant', 'nurse', 'demolitionist'];
-    for (let i = 0; i < east.length; i++) {
-      const hxp = mid + 34 + i * 16;
-      if (hxp + 14 > w - oceanW - 20) break;
+    // Homesteads SPREAD across the forest on both sides of spawn (not one 16-tile-apart cluster) —
+    // each is its own house with woods between, so the town feels lived-in and you discover residents
+    // as you explore. Offsets are in tiles from spawn centre; the forest band is ~380 tiles each way.
+    const homesteads = [
+      ['merchant', mid + 58], ['nurse', mid - 74], ['demolitionist', mid + 152], ['dryad', mid - 168],
+    ];
+    for (const [type, hxp] of homesteads) {
+      if (hxp < oceanW + 24 || hxp + 14 > w - oceanW - 24) continue;
       buildHouse(hxp, surface[hxp] - 1, 12, 7);
-      world.townNpcs.push({ type: east[i], x: (hxp + 5) * 16, y: (surface[hxp] - 2) * 16 });
-    }
-    const dx2 = mid - 42;
-    if (dx2 > oceanW + 20) {
-      buildHouse(dx2, surface[dx2] - 1, 10, 6);
-      world.townNpcs.push({ type: 'dryad', x: (dx2 + 4) * 16, y: (surface[dx2] - 2) * 16 });
+      world.townNpcs.push({ type, x: (hxp + 5) * 16, y: (surface[hxp] - 2) * 16 });
     }
   }
 
