@@ -48,7 +48,9 @@ const CSS = `
   image-rendering: pixelated; border: 2px solid #3a2f22; border-radius: 12px; padding: 16px;
   max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); overflow: auto;
   box-shadow: 0 12px 48px rgba(0,0,0,.6); }
-#us-inv.open { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+#us-inv.open { display: flex; flex-direction: column; gap: 16px; align-items: stretch; }   /* inventory grid sits UNDER the top row */
+#us-inv-top { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }         /* equipment · recipe book · shop */
+#us-inv-bottom { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }       /* inventory grid · chest */
 /* index.html sets "#hud * { pointer-events:none }" — override it with higher specificity so the
    open inventory (and every control inside it) actually receives clicks/drags/scroll instead of
    letting them fall through to the game canvas (which would swing the tool). */
@@ -68,7 +70,7 @@ const CSS = `
 .us-eqslot-label { font-size: 8px; color: #7480a0; text-transform: uppercase; letter-spacing: .5px; text-align: center; margin-top: -2px; }
 #us-hands { display: flex; gap: 14px; justify-content: center; margin-top: 10px; }
 /* --- recipe book --- */
-#us-craft-wrap { width: 268px; }
+#us-craft-wrap { flex: 1 1 340px; min-width: 300px; }   /* recipe book grows to fill the top row width */
 #us-search { width: 100%; box-sizing: border-box; padding: 6px 9px; margin-bottom: 8px; border-radius: 6px;
   border: 1px solid #3a415c; background: rgba(0,0,0,0.4); color: #e8e8f0; font: 12px 'Segoe UI'; }
 #us-cats { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
@@ -209,28 +211,32 @@ export class HUD {
       <div id="us-held-name" class="us-panel"></div>
       <div id="us-hotbar" class="us-panel"></div>
       <div id="us-inv" class="us-panel">
-        <div>
-          <h3>Inventory</h3>
-          <div class="grid" id="us-main"></div>
-          <div id="us-chest-wrap"><h3 style="margin-top:14px">Chest</h3><div class="grid" id="us-chest" style="grid-template-columns:repeat(10,54px)"></div></div>
-        </div>
-        <div id="us-equip-wrap">
-          <h3>Equipment</h3>
-          <div class="us-doll">
-            <div class="col" id="us-armor"></div>
-            <div class="us-preview"><canvas id="us-doll-canvas" width="84" height="128"></canvas></div>
-            <div class="col" id="us-acc"></div>
+        <div id="us-inv-top">
+          <div id="us-equip-wrap">
+            <h3>Equipment</h3>
+            <div class="us-doll">
+              <div class="col" id="us-armor"></div>
+              <div class="us-preview"><canvas id="us-doll-canvas" width="84" height="128"></canvas></div>
+              <div class="col" id="us-acc"></div>
+            </div>
+            <div id="us-hands"></div>
+            <div id="us-stats" style="margin-top:10px;font:11px 'Segoe UI';color:#b8c0d8;line-height:1.6"></div>
           </div>
-          <div id="us-hands"></div>
-          <div id="us-stats" style="margin-top:10px;font:11px 'Segoe UI';color:#b8c0d8;line-height:1.6"></div>
+          <div id="us-craft-wrap">
+            <h3>Recipe Book</h3>
+            <input id="us-search" placeholder="Search recipes…" autocomplete="off">
+            <div id="us-cats"></div>
+            <div id="us-craft"></div>
+          </div>
+          <div id="us-shop-wrap"><h3 id="us-shop-title">Shop</h3><div id="us-shop"></div></div>
         </div>
-        <div id="us-craft-wrap">
-          <h3>Recipe Book</h3>
-          <input id="us-search" placeholder="Search recipes…" autocomplete="off">
-          <div id="us-cats"></div>
-          <div id="us-craft"></div>
+        <div id="us-inv-bottom">
+          <div>
+            <h3>Inventory</h3>
+            <div class="grid" id="us-main"></div>
+          </div>
+          <div id="us-chest-wrap"><h3>Chest</h3><div class="grid" id="us-chest" style="grid-template-columns:repeat(10,54px)"></div></div>
         </div>
-        <div id="us-shop-wrap" style="min-width:210px"><h3 id="us-shop-title">Shop</h3><div id="us-shop"></div></div>
       </div>
       <div id="us-cursor"></div>
       <div id="us-tip"></div>`;
@@ -511,7 +517,7 @@ export class HUD {
   openChest(tx, ty) {
     const chests = this.game.world.chests; if (!chests) return;
     this.openChestSlots = chests.ensure(tx, ty);
-    this.els.chestWrap.style.display = '';
+    this.els.chestWrap.style.display = 'block';   // NOT '' — that reverts to the stylesheet's display:none, hiding the chest
     this.els.chest.innerHTML = '';
     for (let i = 0; i < this.openChestSlots.length; i++) this.els.chest.appendChild(this.makeSlot({ chest: i }));
     if (!this.open) this.toggle(true); else this.refreshSlots();
@@ -544,7 +550,7 @@ export class HUD {
       });
       list.appendChild(el);
     }
-    wrap.style.display = '';
+    wrap.style.display = 'block';   // NOT '' — that reverts to the stylesheet's display:none, hiding the shop
     if (!this.open) this.toggle(true);
   }
 
