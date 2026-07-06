@@ -699,8 +699,8 @@ async function boot() {
         // Anchor the hand relative to the VISIBLE character (centred on cx, ~player.h tall), NOT
         // the narrow 14px hitbox — otherwise the tool floats by the feet. Hand = a few px toward
         // the facing side, at chest height.
-        const handX = cx + player.facing * 3 * z;
-        const handY = sy + player.h * z * 0.52;   // hand at the hip, on the facing side
+        const handX = cx + player.facing * 4 * z;
+        const handY = sy + player.h * z * 0.63;   // hand at the hip (where a relaxed arm hangs), on the facing side
         const rawSpr = itemIcon(heldDef.id)
           ?? toolFallbackSprite(held.type === 'pickaxe' || held.type === 'axe' || held.type === 'hammer' ? held.type
             : held.weapon === 'bow' ? 'bow' : held.weapon === 'sword' ? 'sword'
