@@ -21,7 +21,7 @@ const GUIDE_TIPS = [
 ];
 
 export const SHOPS = {
-  merchant: [['torch', 50], ['woodenArrow', 5], ['lesserHealingPotion', 300], ['lesserManaPotion', 100], ['bottle', 20], ['bedroll', 800]],
+  merchant: [['torch', 50], ['woodenArrow', 5], ['lesserHealingPotion', 300], ['lesserManaPotion', 100], ['bottle', 20], ['fishingRod', 500], ['bedroll', 800]],
   demolitionist: [['bomb', 750], ['dynamite', 2500], ['torch', 50]],
   armsDealer: [['woodenArrow', 5], ['flamingArrow', 15], ['woodenBow', 200], ['silverBow', 4800], ['rangerHood', 12000], ['rangerJerkin', 20000], ['rangerLeggings', 16000]],
   wizard: [['lesserManaPotion', 100], ['manaCrystal', 5000], ['vilethorn', 18000], ['jungleHat', 12000], ['jungleShirt', 20000], ['junglePants', 16000]],
