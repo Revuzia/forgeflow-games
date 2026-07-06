@@ -486,7 +486,7 @@ function actEngage(W, b, dt) {
   const sinceAcq = W.t - bb.acquireT;
   const acquireMul = sinceAcq < 0.6 ? 3 - (sinceAcq / 0.6) * 2 : 1;
   const tgtSpeed = seen && t.vel ? Math.hypot(t.vel.x, t.vel.z) : 0;
-  const motionMul = 1 + Math.min(1.2, tgtSpeed / 6) * 0.55 + (t.onGround === false ? 0.35 : 0);
+  const motionMul = 1 + Math.min(1.2, tgtSpeed / 8) * 0.55 + (t.onGround === false ? 0.35 : 0);
   const errDeg = b.tierK.aimErrDeg * acquireMul * motionMul * (duel ? 0.55 : 1);
   const err = (errDeg * Math.PI) / 180;
   // wander the error smoothly (not white noise): per-brain sine wobble

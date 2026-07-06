@@ -267,6 +267,11 @@ function installHumanInput(W) {
     if (e.button === 0) W.player.input.fire = false;
     if (e.button === 2) { W.player.input.ads = false; rmbDrag = false; }
   });
+  // safety: a mouseup outside the window would otherwise leave fire/ADS stuck
+  // (stuck ADS = permanent 3.4 m/s — feels like the game is broken-slow)
+  const clearButtons = () => { if (W.player) { W.player.input.fire = false; W.player.input.ads = false; } rmbDrag = false; };
+  window.addEventListener("blur", clearButtons);
+  document.addEventListener("mouseleave", clearButtons);
   dom.addEventListener("contextmenu", (e) => e.preventDefault());
   window.addEventListener("mousemove", (e) => {
     if (!W.player || W.paused || W.phase === "menu") return;
@@ -609,7 +614,7 @@ function updateCamera(W, dt) {
     cam.position.y += (Math.random() - 0.5) * W.camShake * 0.6;
   }
   cam.lookAt(camTarget.x + camDir.x * 8, camTarget.y + camDir.y * 8, camTarget.z + camDir.z * 8);
-  const wantFov = scope ? 22 : ads ? 42 : focus.sprinting ? 56 : 50;
+  const wantFov = scope ? 22 : ads ? 42 : focus.sprinting ? 61 : 52;
   cam.fov += (wantFov - cam.fov) * Math.min(1, dt * 10);
   cam.updateProjectionMatrix();
   W.events.emit("scopeState", !!scope);

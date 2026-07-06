@@ -70,10 +70,11 @@
     big_shield:  { heals: "shield", amount: 50, cap: 100, useS: 4, stack: 3 },
   };
 
+  // arcade-BR speeds — 6.5 sprint felt like wading on a 1600m map
   var MOVE = {
-    walk: 4.2, sprint: 6.5, ads: 2.8,
-    swim: 3.0, swimSprint: 4.4,
-    jumpV: 7.2, gravity: -22, accelT: 0.18, airControl: 0.35,
+    walk: 5.4, sprint: 8.4, ads: 3.4,
+    swim: 3.6, swimSprint: 5.2,
+    jumpV: 7.6, gravity: -22, accelT: 0.16, airControl: 0.35,
   };
 
   var PLAYERK = { hp: 100, shield: 100, radius: 0.45, height: 1.8, eyeY: 1.62, swimDepth: 1.1 };
