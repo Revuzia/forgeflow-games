@@ -341,7 +341,19 @@ async function boot() {
       else if (inCorruption && pty < WORLD_H * LAYERS.underground) track = 'corruption';
       else if (pty > WORLD_H * LAYERS.underground) track = 'underground';
       else track = isDay(game.tick) ? 'day' : 'night';
-      audio.music(track);
+      // Don't twitch between tracks: a track holds for ≥45 s, and a new context must persist ≥8 s
+      // before we switch (so bobbing across the underground line or a corruption edge doesn't flip
+      // the music). Combat (boss) overrides instantly; leaving combat returns promptly.
+      const cur = audio.currentMusic?.name;
+      if (track === cur) { game._musicWant = null; return; }
+      if (track === 'boss') { audio.music('boss'); game._musicStartTick = game.tick; game._musicWant = null; return; }
+      if (game._musicWant !== track) { game._musicWant = track; game._musicWantSince = game.tick; return; }
+      const wantedFor = game.tick - (game._musicWantSince ?? game.tick);
+      const playedFor = game.tick - (game._musicStartTick ?? -1e9);
+      const minPlay = cur === 'boss' ? 0 : 60 * 45;   // seconds → ticks
+      if (wantedFor >= 60 * 8 && playedFor >= minPlay) {
+        audio.music(track); game._musicStartTick = game.tick; game._musicWant = null;
+      }
     });
   }
 
