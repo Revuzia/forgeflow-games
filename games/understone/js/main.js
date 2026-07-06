@@ -27,6 +27,30 @@ function hflipSprite(img) {
   return f;
 }
 
+// Rotate a sprite's PIXELS once (cached), expanding the canvas so nothing clips. Used to normalise
+// a DIAGONAL weapon icon (e.g. the sword, drawn blade-↗) to point straight UP, so the held-render's
+// rotate()+facing-mirror behaves the same as it does for the vertical pickaxe/axe (otherwise the
+// diagonal flips under scale(-1) and the sword renders upside-down when facing left).
+const _rotCache = new WeakMap();
+function rotateSprite(img, rad) {
+  if (!img || !rad) return img;
+  let byRad = _rotCache.get(img);
+  if (!byRad) { byRad = new Map(); _rotCache.set(img, byRad); }
+  let f = byRad.get(rad);
+  if (!f) {
+    const w = img.width, h = img.height, d = Math.ceil(Math.hypot(w, h));
+    f = document.createElement('canvas');
+    f.width = d; f.height = d;
+    const fc = f.getContext('2d');
+    fc.imageSmoothingEnabled = false;
+    fc.translate(d / 2, d / 2);
+    fc.rotate(rad);
+    fc.drawImage(img, -w / 2, -h / 2);
+    byRad.set(rad, f);
+  }
+  return f;
+}
+
 // Material tint for procedurally-drawn tool sprites (wood tools have no bespoke PNG). Kept
 // distinct so wood reads as WOOD (brown), not copper (orange). Mirrors hud.js's inventory map.
 const MAT_TINT = { wood: '#8a5e34', copper: '#d47a30', iron: '#c2c6cf', silver: '#e2e7ef', gold: '#ffd24a', shadow: '#8a6ab0', molten: '#ff7a3c', nightmare: '#b06adf', jungle: '#7aa83a', ranger: '#5a8a4a' };
@@ -696,13 +720,10 @@ async function boot() {
         const useT = held.useTime || 20;
         const swinging = player.swinging > 0;
         const prog = swinging ? Math.min(1, Math.max(0, 1 - player.swinging / useT)) : 1;
-        // Anchor the hand relative to the VISIBLE character (centred on cx, ~player.h tall), NOT
-        // the narrow 14px hitbox — otherwise the tool floats by the feet. Hand = a few px toward
-        // the facing side, at chest height.
         // Anchor ON the sprite's actual hand: the near arm's fist sits at the belt line, a couple px
-        // toward the facing side (measured against the sprite, not the narrow hitbox). The item is
-        // drawn on top of that hand so it reads as held.
-        const handX = cx + player.facing * 2 * z;
+        // toward the facing side (measured against the sprite, not the narrow hitbox). The item draws
+        // on top of that hand so it reads as held.
+        const handX = cx + player.facing * 1.6 * z;
         const handY = sy + player.h * z * 0.52;
         const rawSpr = itemIcon(heldDef.id)
           ?? toolFallbackSprite(held.type === 'pickaxe' || held.type === 'axe' || held.type === 'hammer' ? held.type
@@ -711,16 +732,16 @@ async function boot() {
         // the axe icon is drawn blade-on-the-LEFT (opposite the pickaxe); pre-mirror the SPRITE so its
         // blade points forward. Doing it on the sprite (not via scale(-1)) keeps the swing rotating the
         // SAME way as the sword/pickaxe instead of spinning backwards.
-        const sprIt = held.type === 'axe' ? hflipSprite(rawSpr) : rawSpr;
-        const isz = 17 * z;
-        // mirror FIRST so "forward" == facing, then rotate: rest = held forward/down out of the
-        // hand; swing = overhead → forward-down chop.
-        // bows are aimed forward (roughly horizontal), not swung overhead like melee/tools
-        // rest angle 1.05 rad = up-forward "ready" hold for tools AND weapons: the grip sits AT the hand
-        // (handY = hip) with the head/blade reaching up-forward — how you'd actually hold a pickaxe/axe/
-        // sword at your side. (An earlier head-DOWN variant read as pointing at the ground — reverted.)
-        // rest angle 1.2 rad = up-forward "ready" hold; the head/blade reaches up and forward out of
-        // the hand (a touch flatter than a raised-overhead pose). Swing sweeps windup→forward chop.
+        // sword icon is drawn diagonally (blade ↗); rotate it upright so it mirrors cleanly like the
+        // vertical pickaxe/axe instead of flipping upside-down when facing left.
+        const isSword = heldDef.weapon === 'sword';
+        const sprIt = held.type === 'axe' ? hflipSprite(rawSpr)
+          : isSword ? rotateSprite(rawSpr, -0.79)   // upright the diagonal blade so it mirrors cleanly (no upside-down on facing-left)
+          : rawSpr;
+        const isz = (isSword ? 23 : 17) * z;         // sword canvas grew ~√2 when rotated upright — scale up to keep its visible size
+        // mirror FIRST so "forward" == facing, then rotate. Rest angle 1.2 rad = up-forward "ready"
+        // hold: the head/blade reaches up and forward out of the hand. Swing sweeps windup→forward chop.
+        // Bows aim forward (roughly horizontal), not swung overhead like melee/tools.
         const angle = heldDef.weapon === 'bow' ? -0.15 : swinging ? (-2.2 + prog * 3.0) : 1.2;
         c.save();
         c.translate(handX, handY);
