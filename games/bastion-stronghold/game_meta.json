@@ -1,0 +1,10 @@
+{
+  "title": "Bastion Realms: Stronghold",
+  "short_description": "Inward-defense tower defense — construct armies converge on your keep along multiple roads across 5 worlds. Hold the Bastion or watch it crumble.",
+  "description": "Bastion Realms: Stronghold turns tower defense inside out: your majestic keep stands at the center of the battlefield, and enemy construct armies pour in from every edge of the map along multiple winding roads. Garrison the ground with Ballistae that skewer whole columns, homing Arcane Spires, Oil Cauldrons that set the roads themselves ablaze, Siege Crossbows, radiant Holy Beacons that repair your walls mid-battle, and Storm Callers — then mine the roads with Rune Traps and Thorn Barricades. The Bastion visibly cracks, burns and crumbles as it takes damage, and heals when repaired. Fight through five fronts — the Ancient Colosseum, a rain-lashed Gothic Castle, the Floating Sky Citadel, the Crystal Fortress and the Dwarven Mountain Hold — each with unique construct armies, hazards, generated soundtrack and a multi-phase boss, from the rally-crying Colossus to the phase-shifting Prime Prism and the keg-spitting Magma Forge Engine. 45 levels, endless sieges, achievements. Every model, texture and note of music was generated fresh for this game.",
+  "genre": "strategy",
+  "sub_genre": "tower-defense",
+  "difficulty": "medium",
+  "controls_keyboard": "Mouse build/select · 1-8 pick tower · Click place · Shift+Click multi-place · Esc cancel · SPACE start wave · U upgrade · X sell · Left-drag pan · Right-drag orbit · R reset view",
+  "tags": ["strategy", "tower-defense", "3d", "campaign", "bosses", "castle-defense", "singleplayer"]
+}

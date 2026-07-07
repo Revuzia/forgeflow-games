@@ -1,0 +1,15 @@
+{
+  "title": "Bastion Realms: Stronghold",
+  "slug": "bastion-stronghold",
+  "genre": "tower-defense",
+  "renderer": "three",
+  "tagline": "Every road leads to your gates.",
+  "seed": 2000003,
+  "view": { "width": 1280, "height": 720, "background": "#0c0906" },
+  "setup": { "worlds": 5, "levels": 45, "towers": 8, "endless": true, "centralDefense": true },
+  "credits": {
+    "models": ["100% procedural Three.js constructs — no model files (original, © ForgeFlow Labs)"],
+    "textures": ["xAI grok-imagine-image generated ground tiles + key art (original commissions)"],
+    "audio": ["Procedural WebAudio soundtrack + synthesized SFX (original, © ForgeFlow Labs)"]
+  }
+}
