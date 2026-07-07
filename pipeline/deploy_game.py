@@ -230,11 +230,19 @@ def insert_game_metadata(slug: str, metadata: dict):
     and a brand-new game lands as 'unpublished' for the owner to publish
     manually. Pass metadata['status'] to force a specific status."""
     creds = load_supabase_creds()
-    supa_url = creds.get("VITE_SUPABASE_URL", "")
-    supa_key = creds.get("VITE_SUPABASE_PUBLISHABLE_KEY", "")
+    # 2026-07-07 RLS lockdown (supabase/migrations/0005_registry_service_writes.sql):
+    # public.games only accepts writes from service_role — the anon write
+    # policies were a public defacement hole. The service key is a SECRET:
+    # never a VITE_ var (Vite bakes those into the public bundle). Resolution:
+    # FFG_SERVICE_ROLE_KEY env -> api_config.json providers.supabase_forgeflow.
+    ffg = ((_read_api_config().get("providers", {}) or {}).get("supabase_forgeflow", {}) or {})
+    supa_url = creds.get("VITE_SUPABASE_URL", "") or ffg.get("url", "")
+    supa_key = os.environ.get("FFG_SERVICE_ROLE_KEY") or ffg.get("service_role_key", "")
 
     if not supa_url or not supa_key:
-        print("[supabase] No credentials found in .env")
+        print("[supabase] Missing FFG service credentials — set providers.supabase_forgeflow"
+              ".service_role_key in api_config.json (games-table writes are service_role-only"
+              " since the 2026-07-07 RLS lockdown)")
         return False
 
     # Check if game already exists
