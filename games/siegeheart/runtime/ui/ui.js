@@ -329,6 +329,16 @@ export function createUI(container, handlers) {
       ui.closeOverlay();
       const h = {};
       ui.hud = h;
+      // per-world assault flavor (icon + prep call-to-action) — no repeats across the campaign
+      const WAVE_THEME = {
+        colosseum: { icon: '📯', verb: 'SOUND THE HORN' },
+        gothic:    { icon: '🦇', verb: 'TOLL THE BELL' },
+        sky:       { icon: '🌪️', verb: 'CALL THE GALE' },
+        crystal:   { icon: '💠', verb: 'STRIKE THE CHIME' },
+        dwarven:   { icon: '⚒️', verb: 'STOKE THE FORGE' },
+      };
+      const wt = WAVE_THEME[ctx.level?.world?.id] || { icon: '⚔️', verb: 'SEND THE WAVE' };
+      h.waveIcon = wt.icon; h.waveVerb = wt.verb;
       h.wrap = el('div');
       h.wrap.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
       root.appendChild(h.wrap);
@@ -344,7 +354,7 @@ export function createUI(container, handlers) {
           <div class="lbl"><span>🏰 KEEP</span><span id="bs-hpnum">100/100</span></div>
           <div class="track"><div class="fill" id="bs-hpfill" style="width:100%"></div></div>
         </div>
-        <div class="bs-stat wave" title="Assaults">📯 <span id="bs-wave">–</span><span id="bs-next" style="color:#c08a6a;font-size:11px;margin-left:6px"></span></div>`;
+        <div class="bs-stat wave" title="Assaults">${wt.icon} <span id="bs-wave">–</span><span id="bs-next" style="color:#c08a6a;font-size:11px;margin-left:6px"></span></div>`;
       const speed = el('div', 'bs-speed');
       for (const sp of [1, 2, 3]) {
         const btn = el('button', sp === 1 ? 'on' : '', sp + '×');
@@ -420,8 +430,8 @@ export function createUI(container, handlers) {
         const chips = preview.map((p) =>
           `<span class="bs-chip${p.flying ? ' fly' : ''}${p.boss ? ' boss' : ''}" title="${enemyTip(p.type)}">${p.count}× ${p.name}</span>`).join('');
         if (h.chips.innerHTML !== chips) h.chips.innerHTML = chips;
-        h.startBtn.textContent = sim.phase === 'prep' ? `⚔ SOUND THE HORN (${Math.ceil(sim.prepT)}s)`
-          : sim.phase === 'wave' ? '📯 CALL THE NEXT ASSAULT' : '⚔ SOUND THE HORN';
+        h.startBtn.textContent = sim.phase === 'prep' ? `⚔ ${h.waveVerb} (${Math.ceil(sim.prepT)}s)`
+          : sim.phase === 'wave' ? `${h.waveIcon} CALL THE NEXT WAVE` : `⚔ ${h.waveVerb}`;
       }
       const nextEl = document.getElementById('bs-next');
       if (nextEl) {

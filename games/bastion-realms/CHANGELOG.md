@@ -1,5 +1,10 @@
 # Bastion Realms — Changelog
 
+## v1.5 — 2026-07-07 (per-biome assault flavor)
+- Each biome now has its own HUD assault icon + call-to-action, distinct from Siegeheart's set:
+  Verdant Hollow 🐺 Raise the Hunt, Cinder Wastes 🌋 Wake the Mountain, Frostmaw Expanse ❄️ Loose
+  the Blizzard, Sunken Ruins 💀 Rouse the Dead, Astral Isles 🌀 Pierce the Veil.
+
 ## v1.4 — 2026-07-07 (continuous waves)
 - **The wave clock never stops**: the next wave arrives 18s after the current wave's last spawn,
   cleared or not (early clears keep a short prep, capped by the clock). HUD icon is now a war

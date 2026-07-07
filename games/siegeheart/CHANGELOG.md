@@ -1,5 +1,11 @@
 # Siegeheart — Changelog
 
+## v1.4.2 — 2026-07-07
+- **Per-world assault icon + call-to-action** (the war horn only fit the Colosseum): each front now
+  has its own HUD marker and "start wave" verb — Colosseum 📯 Sound the Horn, Gothic Castle 🦇 Toll
+  the Bell, Sky Citadel 🌪️ Call the Gale, Crystal Fortress 💠 Strike the Chime, Dwarven Hold ⚒️
+  Stoke the Forge. No icon repeats within the game or with Bastion Realms.
+
 ## v1.4.1 — 2026-07-07
 - **Crossbow bolts now read as bolts, not beams**: short comet tail (0.11s, was a full-length
   0.3s streak), dim steel trail, slower visible flight. Ballista javelins likewise (0.16s tail).

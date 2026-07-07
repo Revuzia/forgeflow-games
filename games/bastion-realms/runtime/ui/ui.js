@@ -353,6 +353,16 @@ export function createUI(container, handlers) {
       ui.closeOverlay();
       const h = {};
       ui.hud = h;
+      // per-biome assault flavor (icon + call-to-action) — distinct from Siegeheart's set
+      const WAVE_THEME = {
+        forest:   { icon: '🐺', verb: 'RAISE THE HUNT' },
+        volcanic: { icon: '🌋', verb: 'WAKE THE MOUNTAIN' },
+        tundra:   { icon: '❄️', verb: 'LOOSE THE BLIZZARD' },
+        ruins:    { icon: '💀', verb: 'ROUSE THE DEAD' },
+        astral:   { icon: '🌀', verb: 'PIERCE THE VEIL' },
+      };
+      const wt = WAVE_THEME[ctx.level?.biome?.id] || { icon: '⚔️', verb: 'SEND THE WAVE' };
+      h.waveIcon = wt.icon; h.waveVerb = wt.verb;
       h.wrap = el('div');
       h.wrap.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
       root.appendChild(h.wrap);
@@ -367,7 +377,7 @@ export function createUI(container, handlers) {
       bar.innerHTML = `
         <div class="br-stat gold"><span class="ico">🪙</span><span id="br-gold">0</span></div>
         <div class="br-stat lives"><span class="ico">❤️</span><span id="br-lives">20</span></div>
-        <div class="br-stat wave" title="Assaults"><span class="ico">📯</span><span id="br-wave">–</span><span id="br-next" style="color:#9ab;font-size:11px;margin-left:6px"></span></div>`;
+        <div class="br-stat wave" title="Assaults"><span class="ico">${wt.icon}</span><span id="br-wave">–</span><span id="br-next" style="color:#9ab;font-size:11px;margin-left:6px"></span></div>`;
       const speed = el('div', 'br-speed');
       for (const sp of [1, 2, 3]) {
         const btn = el('button', sp === 1 ? 'on' : '', sp + '×');
@@ -457,8 +467,8 @@ export function createUI(container, handlers) {
           `<span class="br-chip${p.flying ? ' fly' : ''}${p.boss ? ' boss' : ''}" title="${enemyTip(p.type)}">${p.count}× ${p.name}</span>`).join('');
         if (h.chips.innerHTML !== chips) h.chips.innerHTML = chips;
         h.startBtn.textContent = sim.phase === 'prep'
-          ? `⚔ SEND NOW (${Math.ceil(sim.prepT)}s)`
-          : sim.phase === 'wave' ? '📯 CALL THE NEXT WAVE' : '⚔ START WAVE';
+          ? `⚔ ${h.waveVerb} (${Math.ceil(sim.prepT)}s)`
+          : sim.phase === 'wave' ? `${h.waveIcon} CALL THE NEXT WAVE` : `⚔ ${h.waveVerb}`;
       }
       const nextEl = document.getElementById('br-next');
       if (nextEl) {
