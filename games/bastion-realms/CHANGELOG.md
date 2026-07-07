@@ -1,5 +1,13 @@
 # Bastion Realms — Changelog
 
+## v1.4 — 2026-07-07 (continuous waves)
+- **The wave clock never stops**: the next wave arrives 18s after the current wave's last spawn,
+  cleared or not (early clears keep a short prep, capped by the clock). HUD icon is now a war
+  horn 📯 with a live "next Xs" countdown.
+- **Call waves early, mid-combat**: 📯 CALL THE NEXT WAVE is available during a wave — stack
+  freely. Still no gold for early calls; each wave's bonus pays when its spawns finish.
+- Balance gate unchanged at **45/45** (no retune needed — the 20-lives model absorbed the pacing).
+
 ## v1.3 — 2026-07-06 (third playtest feedback round)
 - **Removed the toon rabbit** (it was a cartoon lumberjack character, not a real rabbit). Forest now has
   deer/sheep/foxes, tundra white stags/arctic foxes/snowy sheep, astral void-fish/void toads.

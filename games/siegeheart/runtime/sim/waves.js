@@ -55,14 +55,14 @@ export function buildWaves(wi, li, nRoads) {
 
     if (finaleBossWave) {
       const empowered = li === 8;
-      const bossMul = Math.sqrt(hMul) * (empowered ? 1.22 : 1);
+      const bossMul = Math.sqrt(hMul) * (empowered ? 1.18 : 1);
       groups.push({
         type: world.boss, count: 1, gap: 0, delay: 2, roadIdx: 0,
         hpMul: bossMul, bountyMul: bMul * (empowered ? 1.5 : 1), empowered,
       });
       const escort = rng.pick(grounders.length ? grounders : pool);
       for (let r = 0; r < nRoads; r++) {
-        groups.push({ type: escort, count: 3 + Math.floor(li / 2), gap: 3.2, delay: 8 + r * 2, roadIdx: r, hpMul: hMul, bountyMul: bMul });
+        groups.push({ type: escort, count: 2 + Math.floor(li / 3), gap: 3.6, delay: 8 + r * 2, roadIdx: r, hpMul: hMul, bountyMul: bMul });
       }
       label = (empowered ? 'EMPOWERED ' : '') + 'BOSS';
       waves.push({ groups, label, isBoss: true });

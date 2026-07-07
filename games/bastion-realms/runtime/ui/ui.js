@@ -367,7 +367,7 @@ export function createUI(container, handlers) {
       bar.innerHTML = `
         <div class="br-stat gold"><span class="ico">🪙</span><span id="br-gold">0</span></div>
         <div class="br-stat lives"><span class="ico">❤️</span><span id="br-lives">20</span></div>
-        <div class="br-stat wave"><span class="ico">🌊</span><span id="br-wave">–</span></div>`;
+        <div class="br-stat wave" title="Assaults"><span class="ico">📯</span><span id="br-wave">–</span><span id="br-next" style="color:#9ab;font-size:11px;margin-left:6px"></span></div>`;
       const speed = el('div', 'br-speed');
       for (const sp of [1, 2, 3]) {
         const btn = el('button', sp === 1 ? 'on' : '', sp + '×');
@@ -447,10 +447,9 @@ export function createUI(container, handlers) {
         c.card.classList.toggle('na', sim.gold < TOWERS[tid].cost);
         c.card.classList.toggle('sel', selection.buildType === tid);
       }
-      // wave box — only meaningful before a wave starts
+      // wave box — shown whenever another assault exists (mid-wave = early call)
       const preview = sim.nextWavePreview();
-      const waitingPhase = sim.phase === 'idle' || sim.phase === 'prep';
-      if (!waitingPhase || !preview.length) {
+      if (!preview.length) {
         h.wavebox.style.display = 'none';
       } else {
         h.wavebox.style.display = 'block';
@@ -459,7 +458,14 @@ export function createUI(container, handlers) {
         if (h.chips.innerHTML !== chips) h.chips.innerHTML = chips;
         h.startBtn.textContent = sim.phase === 'prep'
           ? `⚔ SEND NOW (${Math.ceil(sim.prepT)}s)`
-          : '⚔ START WAVE';
+          : sim.phase === 'wave' ? '📯 CALL THE NEXT WAVE' : '⚔ START WAVE';
+      }
+      const nextEl = document.getElementById('br-next');
+      if (nextEl) {
+        const t = sim.phase === 'wave' && isFinite(sim.autoNextAt) && preview.length
+          ? Math.max(0, Math.ceil(sim.autoNextAt - sim.time)) : null;
+        const txt = t !== null ? `next ${t}s` : '';
+        if (nextEl.textContent !== txt) nextEl.textContent = txt;
       }
       // selection panel
       ui.updateSelPanel(sim, selection);

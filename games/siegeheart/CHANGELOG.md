@@ -1,5 +1,19 @@
 # Siegeheart — Changelog
 
+## v1.4 — 2026-07-07 (continuous assaults)
+- **The assault clock never stops**: the next wave marches 18s after the current wave's last
+  spawn, whether the field is clear or not (clearing early still grants a short prep, capped by
+  the clock). The final level musters +8s slower. HUD chip is now a **war horn 📯** with a live
+  "next Xs" countdown — no more ocean-wave icon.
+- **Call assaults early, mid-combat**: the 📯 CALL THE NEXT ASSAULT button is available during a
+  wave — stack as many as you dare. No gold for calling early; each wave's clear bonus pays when
+  its own spawns finish, so stacking can't farm bonuses.
+- **Elites breach at ×2** (an elite grunt costs 4, an elite siege beast 8) — elite waves are now
+  genuinely dangerous to leak.
+- Retune for the relentless pacing (gate back to **45/45**): keg runners 5.0→4.6 speed, finale
+  escorts trimmed (2+li/3 per road), empowered bosses 1.22→1.18, Engine of Ruin deploys kegs
+  every 20s, wider per-level gold bonuses across the Dwarven Hold, six fresh map salts.
+
 ## v1.3 — 2026-07-07 (breach damage rework, owner-specified)
 - **Keep damage per breach is now 2 / 4 / 8 / 12** (grunts & fliers / siege units / powder kegs /
   bosses) — was 1/2/8/5. Effective leak budget halves to ~50 grunt-equivalents; a boss breach now

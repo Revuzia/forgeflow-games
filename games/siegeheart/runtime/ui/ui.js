@@ -344,7 +344,7 @@ export function createUI(container, handlers) {
           <div class="lbl"><span>🏰 KEEP</span><span id="bs-hpnum">100/100</span></div>
           <div class="track"><div class="fill" id="bs-hpfill" style="width:100%"></div></div>
         </div>
-        <div class="bs-stat wave">🌊 <span id="bs-wave">–</span></div>`;
+        <div class="bs-stat wave" title="Assaults">📯 <span id="bs-wave">–</span><span id="bs-next" style="color:#c08a6a;font-size:11px;margin-left:6px"></span></div>`;
       const speed = el('div', 'bs-speed');
       for (const sp of [1, 2, 3]) {
         const btn = el('button', sp === 1 ? 'on' : '', sp + '×');
@@ -413,15 +413,22 @@ export function createUI(container, handlers) {
         c.card.classList.toggle('sel', selection.buildType === tid);
       }
       const preview = sim.nextWavePreview();
-      const waiting = sim.phase === 'idle' || sim.phase === 'prep';
-      if (!waiting || !preview.length) {
+      if (!preview.length) {
         h.wavebox.style.display = 'none';
       } else {
         h.wavebox.style.display = 'block';
         const chips = preview.map((p) =>
           `<span class="bs-chip${p.flying ? ' fly' : ''}${p.boss ? ' boss' : ''}" title="${enemyTip(p.type)}">${p.count}× ${p.name}</span>`).join('');
         if (h.chips.innerHTML !== chips) h.chips.innerHTML = chips;
-        h.startBtn.textContent = sim.phase === 'prep' ? `⚔ SOUND THE HORN (${Math.ceil(sim.prepT)}s)` : '⚔ SOUND THE HORN';
+        h.startBtn.textContent = sim.phase === 'prep' ? `⚔ SOUND THE HORN (${Math.ceil(sim.prepT)}s)`
+          : sim.phase === 'wave' ? '📯 CALL THE NEXT ASSAULT' : '⚔ SOUND THE HORN';
+      }
+      const nextEl = document.getElementById('bs-next');
+      if (nextEl) {
+        const t = sim.phase === 'wave' && isFinite(sim.autoNextAt) && preview.length
+          ? Math.max(0, Math.ceil(sim.autoNextAt - sim.time)) : null;
+        const txt = t !== null ? `next ${t}s` : '';
+        if (nextEl.textContent !== txt) nextEl.textContent = txt;
       }
       ui.updateSelPanel(sim, selection);
     },

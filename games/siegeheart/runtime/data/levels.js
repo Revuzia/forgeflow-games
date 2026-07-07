@@ -18,9 +18,11 @@ const LEVEL_NAMES = [
 
 // per-level tuning: seed salt re-rolls maps; gold bonus shores up levels the 2/4/8/12
 // breach-damage model made unwinnable at base economy (2026-07-07 retune)
-const SEED_SALT = { '3:8': 3, '4:8': 3, '1:5': 1, '2:6': 0, '2:8': 1, '4:5': 19 };
+const SEED_SALT = { '3:8': 3, '4:8': 2, '1:5': 1, '2:6': 0, '2:8': 1, '4:5': 2, '4:6': 2, '4:7': 3 };
 
-const GOLD_BONUS = { '2:6': 180, '3:8': 300, '4:8': 420 };
+const GOLD_BONUS = { '2:6': 260, '3:8': 300, '4:5': 220, '4:6': 220, '4:7': 220, '4:8': 760 };
+// extra seconds between assaults on levels whose pacing needs mercy
+const GAP_BONUS = { '4:8': 8 };
 
 const cache = new Map();
 
@@ -49,6 +51,7 @@ export function levelDef(wi, li) {
     startGold: 520 + wi * 225 + li * 62 + (GOLD_BONUS[wi + ':' + li] || 0),
     bastionHp: 100,
     prepTime: 20,
+    assaultGapBonus: GAP_BONUS[wi + ':' + li] || 0,
     hazard: world.hazard,
   };
   cache.set(key, def);

@@ -35,7 +35,7 @@ export function createSim(wi, li, { endless = false } = {}) {
     phase: 'idle',          // idle | prep | wave | won | lost
     waveIdx: -1,
     waveTotal: endless ? Infinity : level.waves.length,
-    prepT: 0,
+    prepT: 0, autoNextAt: Infinity, waveSpawnEnd: 0, bonusPaidUpTo: -1,
     gold: level.startGold,
     bastionHp: level.bastionHp, bastionMax: level.bastionHp,
     enemies: [], towers: [], projectiles: [], zones: [], carts: [], spawnQueue: [],
@@ -176,6 +176,9 @@ export function createSim(wi, li, { endless = false } = {}) {
       }
     }
     sim.spawnQueue.sort((a, b) => a.at - b.at);
+    let end = sim.time;
+    for (const g of w.groups) end = Math.max(end, sim.time + g.delay + (g.count - 1) * g.gap);
+    return end;
   }
 
   sim.nextWavePreview = () => {
@@ -186,15 +189,19 @@ export function createSim(wi, li, { endless = false } = {}) {
     return wavePreview(level.waves[nextIdx]);
   };
 
+  const AUTO_GAP = 18; // s after a wave's last spawn before the next assault marches anyway
+
   sim.startWave = () => {
-    if (sim.phase !== 'idle' && sim.phase !== 'prep') return { ok: false };
+    if (sim.phase !== 'idle' && sim.phase !== 'prep' && sim.phase !== 'wave') return { ok: false };
+    if (!endless && sim.waveIdx + 1 >= level.waves.length) return { ok: false };
     sim.waveIdx++;
     const w = endless ? endlessWave(wi, sim.waveIdx, map.routes.length) : level.waves[sim.waveIdx];
-    if (!w) return { ok: false };
+    if (!w) { sim.waveIdx--; return { ok: false }; }
     sim.phase = 'wave';
     sim.prepT = 0;
     sim.waveRepairUsed = 0;
-    enqueueWave(w);
+    sim.waveSpawnEnd = enqueueWave(w);
+    sim.autoNextAt = sim.waveSpawnEnd + AUTO_GAP + (level.assaultGapBonus || 0);
     emit('wave', { idx: sim.waveIdx, label: w.label, isBoss: w.isBoss });
     return { ok: true };
   };
@@ -208,7 +215,7 @@ export function createSim(wi, li, { endless = false } = {}) {
       hp: def.hp * (opts.hpMul || 1), maxHp: def.hp * (opts.hpMul || 1),
       dist: opts.dist ?? 0,
       bounty: Math.max(1, Math.round(def.bounty * (opts.bountyMul || 1))),
-      siegeDmg: def.siegeDmg, flying: !!def.flying,
+      siegeDmg: def.siegeDmg * (opts.eliteFlag ? 2 : 1), flying: !!def.flying,
       armor: def.armor || 0, warding: def.warding || 0,
       shieldHits: def.shield || 0,
       slowPct: 0, slowUntil: 0, stunUntil: 0,
@@ -229,7 +236,7 @@ export function createSim(wi, li, { endless = false } = {}) {
     return {
       rallyCry: 11, shieldWall: 14, summonRams: 12, ironPlates: 15,
       summonRays: 11, windShield: 13, prismPhase: 8, summonSkitterers: 10,
-      overdrive: 12, deployKegs: 16, platingShield: 15,
+      overdrive: 12, deployKegs: 20, platingShield: 15,
     }[a] || 10;
   }
 
@@ -697,20 +704,29 @@ export function createSim(wi, li, { endless = false } = {}) {
     stepProjectiles(dt);
     stepHazards();
 
-    if (sim.phase === 'wave' && !sim.spawnQueue.length && sim.enemies.length === 0) {
+    // each wave pays its bonus once its own spawns have all marched (stacked
+    // assaults never eat a bonus; early-calling never pays early)
+    if (sim.phase === 'wave' && sim.bonusPaidUpTo < sim.waveIdx && sim.time >= sim.waveSpawnEnd) {
+      sim.bonusPaidUpTo = sim.waveIdx;
       const wv = sim.waveIdx;
       const bonus = Math.round((42 + wv * 6) * (1 + wi * 0.5 + li * 0.07));
       sim.gold += bonus;
       sim.stats.goldEarned += bonus;
       sim.stats.wavesCleared++;
       emit('waveEnd', { idx: wv, bonus });
-      if (!endless && wv >= level.waves.length - 1) {
+    }
+
+    if (sim.phase === 'wave' && !sim.spawnQueue.length && sim.enemies.length === 0) {
+      if (!endless && sim.waveIdx >= level.waves.length - 1) {
         sim.phase = 'won';
         emit('win', { stars: sim.stars() });
       } else {
+        // board cleared early: short prep, but never later than the assault clock
         sim.phase = 'prep';
-        sim.prepT = level.prepTime;
+        sim.prepT = Math.max(1, Math.min(level.prepTime, sim.autoNextAt - sim.time));
       }
+    } else if (sim.phase === 'wave' && sim.time >= sim.autoNextAt) {
+      sim.startWave(); // the horns sound whether the field is clear or not
     } else if (sim.phase === 'prep') {
       sim.prepT -= dt;
       if (sim.prepT <= 0) sim.startWave();

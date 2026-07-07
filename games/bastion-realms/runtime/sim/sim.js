@@ -52,7 +52,7 @@ export function createSim(bi, li, { endless = false } = {}) {
     phase: 'idle',            // idle | prep | wave | won | lost
     waveIdx: -1,
     waveTotal: endless ? Infinity : level.waves.length,
-    prepT: 0,
+    prepT: 0, autoNextAt: Infinity, waveSpawnEnd: 0, bonusPaidUpTo: -1,
     gold: level.startGold,
     lives: level.lives,
     enemies: [], towers: [], projectiles: [], spawnQueue: [],
@@ -214,6 +214,9 @@ export function createSim(bi, li, { endless = false } = {}) {
       }
     }
     sim.spawnQueue.sort((a, b) => a.at - b.at);
+    let end = sim.time;
+    for (const g of w.groups) end = Math.max(end, sim.time + g.delay + (g.count - 1) * g.gap);
+    return end;
   }
 
   sim.nextWavePreview = () => {
@@ -225,14 +228,19 @@ export function createSim(bi, li, { endless = false } = {}) {
   };
 
   // Sending early gives NO gold — it's a pacing choice, not an economy exploit.
+  // Callable mid-wave: assaults stack. The clock also launches them on its own.
+  const AUTO_GAP = 18; // s after a wave's last spawn before the next marches anyway
+
   sim.startWave = () => {
-    if (sim.phase !== 'idle' && sim.phase !== 'prep') return { ok: false };
+    if (sim.phase !== 'idle' && sim.phase !== 'prep' && sim.phase !== 'wave') return { ok: false };
+    if (!endless && sim.waveIdx + 1 >= level.waves.length) return { ok: false };
     sim.waveIdx++;
     const w = endless ? (sim._endlessWave = endlessWave(bi, sim.waveIdx)) : level.waves[sim.waveIdx];
-    if (!w) return { ok: false };
+    if (!w) { sim.waveIdx--; return { ok: false }; }
     sim.phase = 'wave';
     sim.prepT = 0;
-    enqueueWave(w);
+    sim.waveSpawnEnd = enqueueWave(w);
+    sim.autoNextAt = sim.waveSpawnEnd + AUTO_GAP;
     emit('wave', { idx: sim.waveIdx, label: w.label, isBoss: w.isBoss });
     return { ok: true };
   };
@@ -785,21 +793,29 @@ export function createSim(bi, li, { endless = false } = {}) {
     stepProjectiles(dt);
     stepHazards();
 
-    // wave end
-    if (sim.phase === 'wave' && !sim.spawnQueue.length && sim.enemies.length === 0) {
+    // each wave pays its bonus once its own spawns finish (stacked waves never
+    // eat a bonus; calling early never pays early)
+    if (sim.phase === 'wave' && sim.bonusPaidUpTo < sim.waveIdx && sim.time >= sim.waveSpawnEnd) {
+      sim.bonusPaidUpTo = sim.waveIdx;
       const wi = sim.waveIdx;
       const bonus = Math.round((40 + wi * 6) * (1 + bi * 0.5 + li * 0.07));
       sim.gold += bonus;
       sim.stats.goldEarned += bonus;
       sim.stats.wavesCleared++;
       emit('waveEnd', { idx: wi, bonus });
-      if (!endless && wi >= level.waves.length - 1) {
+    }
+
+    if (sim.phase === 'wave' && !sim.spawnQueue.length && sim.enemies.length === 0) {
+      if (!endless && sim.waveIdx >= level.waves.length - 1) {
         sim.phase = 'won';
         emit('win', { stars: sim.stars() });
       } else {
+        // cleared early: short prep, but never later than the assault clock
         sim.phase = 'prep';
-        sim.prepT = level.prepTime;
+        sim.prepT = Math.max(1, Math.min(level.prepTime, sim.autoNextAt - sim.time));
       }
+    } else if (sim.phase === 'wave' && sim.time >= sim.autoNextAt) {
+      sim.startWave(); // the horns sound whether the field is clear or not
     } else if (sim.phase === 'prep') {
       sim.prepT -= dt;
       if (sim.prepT <= 0) sim.startWave();

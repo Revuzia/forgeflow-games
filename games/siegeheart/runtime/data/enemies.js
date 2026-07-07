@@ -130,7 +130,7 @@ export const ENEMIES = {
   },
   keg_runner: {
     name: 'Powder Imp', model: 'powderimp', scale: 0.85, tint: 0xff9040, float: true, anim: { move: 'Fast_Flying', death: 'Death' }, radius: 0.5,
-    hp: 90, speed: 5.0, bounty: 14, siegeDmg: 8, armor: 0, warding: 0.15,
+    hp: 90, speed: 4.6, bounty: 14, siegeDmg: 8, armor: 0, warding: 0.15,
     traits: ['fast', 'detonator'],
   },
   ore_golem: {
