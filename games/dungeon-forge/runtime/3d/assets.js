@@ -110,13 +110,25 @@ export class Assets {
     return promiseMap(m);
   }
 
-  chars() {
-    return promiseMap({
-      hero: this.load("chars/char-hero.glb"),
-      wizard: this.load("chars/char-wizard.glb"),
-      marauder: this.load("chars/char-marauder.glb"),
-      crew: this.load("chars/char-crew.glb"),
-    });
+  async chars() {
+    // Meshy-generated dungeon party, auto-rigged (24-joint humanoid). Each
+    // character = textured base + armature-only Walk/Run clips retargeted by
+    // bone name. Attack/death are procedural bone overlays (escape.js).
+    const names = ["knight", "barbarian", "sorceress", "rogue"];
+    const out = {};
+    await Promise.all(names.map(async (n) => {
+      try {
+        const base = await this.load(`chars/meshy/${n}/base.glb`);
+        const wa = await this.load(`chars/meshy/${n}/walk_arm.glb`).catch(() => null);
+        const ra = await this.load(`chars/meshy/${n}/run_arm.glb`).catch(() => null);
+        const anims = [];
+        if (base.animations && base.animations[0]) { const c = base.animations[0].clone(); c.name = "Idle"; anims.push(c); }
+        if (wa && wa.animations[0]) { const c = wa.animations[0].clone(); c.name = "Walk"; anims.push(c); }
+        if (ra && ra.animations[0]) { const c = ra.animations[0].clone(); c.name = "Run"; anims.push(c); }
+        out[n] = { scene: base.scene, animations: anims };
+      } catch (e) { console.warn("[assets] char failed:", n, e); }
+    }));
+    return out;
   }
 
   items() {
@@ -232,18 +244,151 @@ export function creatureClips(animations) {
   };
 }
 
-/** Character (player) clip set — Quaternius adventurer rigs. */
+/** Character (player) clip set — covers the Adventurer (Sword_Slash/Roll),
+ *  RPG Monk (Attack/Attack2) and Ultimate-Monsters humanoids (Bite_Front,
+ *  Walk-only rigs fall back to a sped-up walk for run). */
 export function charClips(animations) {
+  const walk = findClip(animations, "walk", "walking");
   return {
-    idle: findClip(animations, "idle"),
-    walk: findClip(animations, "walk"),
-    run: findClip(animations, "run"),
-    attack: findClip(animations, "sword_attack", "staff_attack", "punch"),
-    spell: findClip(animations, "spell1", "bow_shoot", "staff_attack", "punch"),
+    idle: findClip(animations, "idle_neutral", "idle"),
+    walk,
+    run: findClip(animations, "run", "running") || walk,
+    attack: findClip(animations, "sword_slash", "sword_attack", "attack2", "attack", "staff_attack", "punch_right", "punch", "bite_front", "headbutt"),
+    spell: findClip(animations, "spell1", "attack2", "punch_left", "staff_attack", "punch", "bite_front"),
     death: findClip(animations, "death"),
-    hit: findClip(animations, "recievehit"),
-    pickup: findClip(animations, "pickup"),
+    hit: findClip(animations, "recievehit", "hitrecieve", "hitreact"),
+    pickup: findClip(animations, "pickup", "interact"),
+    roll: findClip(animations, "roll"),
   };
+}
+
+/**
+ * Cell SURFACES for one dungeon floor: kit-tile instancing for stone +
+ * raised platforms (with skirts and auto step wedges at their edges), an
+ * animated emissive LAVA sheet and a translucent WATER sheet. Shared by the
+ * builder and escape renderers so the two modes can never disagree.
+ * Returns a group; caller adds it to the floor group. `lavaMat`/`waterMat`
+ * are exposed for per-frame animation.
+ */
+export function makeCellSurfaces(D, d, f, kit) {
+  const group = new THREE.Group();
+  const fl = d.floors[f];
+  const cells = Object.keys(fl.cells);
+  const CELL = D.CELL, RH = D.RAISED_H;
+  const byType = { 1: [], 2: [], 3: [], 4: [] };
+  for (const k of cells) {
+    const [x, z] = k.split(",").map(Number);
+    (byType[fl.cells[k] | 0] || byType[1]).push([x, z]);
+  }
+
+  // stone floor tiles: type 1 at y0, type 4 at +RH (same kit tile)
+  const m4 = new THREE.Matrix4();
+  const stone = byType[1].map(([x, z]) => [x, z, 0]).concat(byType[4].map(([x, z]) => [x, z, RH]));
+  if (stone.length) {
+    const inst = makeInstanced(kit.floor.scene, stone.length);
+    stone.forEach(([x, z, y], i) => { m4.makeTranslation(x * CELL + CELL / 2, y, z * CELL + CELL / 2); inst.setMatrixAt(i, m4); });
+    inst.setCount(stone.length); inst.commit();
+    group.add(inst.group);
+  }
+
+  // raised skirts + step wedges toward every lower walkable neighbor
+  if (byType[4].length) {
+    const skirtGeo = new THREE.BoxGeometry(CELL, RH, CELL);
+    const skirtMat = new THREE.MeshStandardMaterial({ color: 0x4a4a58, roughness: 0.9 });
+    const skirts = new THREE.InstancedMesh(skirtGeo, skirtMat, byType[4].length);
+    byType[4].forEach(([x, z], i) => {
+      m4.makeTranslation(x * CELL + CELL / 2, RH / 2 - 0.02, z * CELL + CELL / 2);
+      skirts.setMatrixAt(i, m4);
+    });
+    skirts.instanceMatrix.needsUpdate = true;
+    group.add(skirts);
+    // steps: 3-step wedge, instanced, rotated toward the lower neighbor
+    const stepGeo = mergeSteps(CELL);
+    const stepMat = new THREE.MeshStandardMaterial({ color: 0x5a5a6a, roughness: 0.85 });
+    const spots = [];
+    for (const [x, z] of byType[4]) {
+      for (let s = 0; s < 4; s++) {
+        const nx = x + D.DIRS[s].dx, nz = z + D.DIRS[s].dz;
+        const nt = fl.cells[D.ck(nx, nz)] | 0;
+        if (nt && nt !== 4) spots.push([x, z, s]);
+      }
+    }
+    if (spots.length) {
+      const steps = new THREE.InstancedMesh(stepGeo, stepMat, spots.length);
+      const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), pos = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+      spots.forEach(([x, z, s], i) => {
+        const yaw = s === 0 ? 0 : s === 1 ? Math.PI / 2 : s === 2 ? Math.PI : -Math.PI / 2;
+        pos.set(x * CELL + CELL / 2, 0, z * CELL + CELL / 2);
+        q.setFromAxisAngle(up, yaw);
+        m4.compose(pos, q, one);
+        steps.setMatrixAt(i, m4);
+      });
+      steps.instanceMatrix.needsUpdate = true;
+      group.add(steps);
+    }
+  }
+
+  // lava sheet — one merged plane set, emissive, animated in update
+  let lavaMat = null;
+  if (byType[2].length) {
+    lavaMat = new THREE.MeshStandardMaterial({
+      color: 0x35100a, emissive: 0xff5a1f, emissiveIntensity: 1.6, roughness: 0.7,
+    });
+    const inst = new THREE.InstancedMesh(new THREE.BoxGeometry(CELL, 0.22, CELL), lavaMat, byType[2].length);
+    byType[2].forEach(([x, z], i) => { m4.makeTranslation(x * CELL + CELL / 2, 0.02, z * CELL + CELL / 2); inst.setMatrixAt(i, m4); });
+    inst.instanceMatrix.needsUpdate = true;
+    group.add(inst);
+  }
+
+  // water sheet — translucent, animated
+  let waterMat = null;
+  if (byType[3].length) {
+    waterMat = new THREE.MeshStandardMaterial({
+      color: 0x1a4a66, emissive: 0x0c2a44, emissiveIntensity: 0.5,
+      transparent: true, opacity: 0.82, roughness: 0.25, metalness: 0.1,
+    });
+    const inst = new THREE.InstancedMesh(new THREE.BoxGeometry(CELL, 0.16, CELL), waterMat, byType[3].length);
+    byType[3].forEach(([x, z], i) => { m4.makeTranslation(x * CELL + CELL / 2, 0.0, z * CELL + CELL / 2); inst.setMatrixAt(i, m4); });
+    inst.instanceMatrix.needsUpdate = true;
+    group.add(inst);
+    // stone base under the water so the pool has a floor
+    const base = new THREE.InstancedMesh(new THREE.BoxGeometry(CELL, 0.06, CELL),
+      new THREE.MeshStandardMaterial({ color: 0x22222c, roughness: 1 }), byType[3].length);
+    byType[3].forEach(([x, z], i) => { m4.makeTranslation(x * CELL + CELL / 2, -0.1, z * CELL + CELL / 2); base.setMatrixAt(i, m4); });
+    base.instanceMatrix.needsUpdate = true;
+    group.add(base);
+  }
+
+  return { group, lavaMat, waterMat, lavaCells: byType[2], waterCells: byType[3] };
+}
+
+function mergeSteps(CELL) {
+  // 3 shallow steps hugging one cell edge (local -Z edge before rotation)
+  const geo = new THREE.BufferGeometry();
+  const boxes = [];
+  const RH = 1.1, n = 3;
+  for (let i = 0; i < n; i++) {
+    const h = (RH / n) * (i + 1);
+    const depth = 0.42;
+    const b = new THREE.BoxGeometry(CELL * 0.98, h, depth);
+    b.translate(0, h / 2, -CELL / 2 + depth / 2 + i * depth);
+    boxes.push(b);
+  }
+  // manual merge (BufferGeometryUtils not imported): concat positions/normals/uv/index
+  let pos = [], norm = [], uv = [], idx = [], off = 0;
+  for (const b of boxes) {
+    pos.push(...b.attributes.position.array);
+    norm.push(...b.attributes.normal.array);
+    uv.push(...b.attributes.uv.array);
+    const bi = b.index.array;
+    for (let i = 0; i < bi.length; i++) idx.push(bi[i] + off);
+    off += b.attributes.position.count;
+  }
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("normal", new THREE.Float32BufferAttribute(norm, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  return geo;
 }
 
 /**

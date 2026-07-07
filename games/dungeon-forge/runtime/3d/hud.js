@@ -44,6 +44,7 @@ export class Hud {
       </select>
       <span class="df-grow"></span>
       <span class="df-chip df-room" data-a="room" style="display:none"></span>
+      <button data-a="gear" class="df-btn ghost" title="Settings">⚙</button>
       <button data-a="validate" class="df-btn">✔ VALIDATE</button>
       <button data-a="save" class="df-btn">💾 SAVE</button>
       <button data-a="share" class="df-btn">🔗 SHARE</button>
@@ -55,6 +56,7 @@ export class Hud {
     const diffSel = this.bTop.querySelector('[data-a="diff"]');
     diffSel.value = String(b.d.difficulty || 1);
     diffSel.onchange = (e) => b.applyLocal({ t: "meta", p: { difficulty: +e.target.value } });
+    this.bTop.querySelector('[data-a="gear"]').onclick = () => { this.g.audio.sfx("ui"); this.g.showSettings(); };
     this.bTop.querySelector('[data-a="validate"]').onclick = () => { this.g.audio.sfx("ui"); this.showValidate(b.validateNow()); };
     this.bTop.querySelector('[data-a="save"]').onclick = () => { this.g.audio.sfx("confirm"); this.g.menu.saveDungeon(b.d); this.toast("Saved to My Dungeons 💾", "info"); };
     this.bTop.querySelector('[data-a="share"]').onclick = () => { this.g.audio.sfx("ui"); this.g.menu.shareDialog(b.d); };
@@ -213,12 +215,19 @@ export class Hud {
           <span class="df-slot" data-a="gold" title="Gold">💰 0</span>
           <span class="df-slot" data-a="potions" title="Q to drink">🧪 1</span>
           <span class="df-slot" data-a="charms" title="Damage charms" style="display:none">✨ 0</span>
+          <span class="df-slot tier" data-a="wt" title="Weapon tier" style="display:none">⚔ I</span>
+          <span class="df-slot tier" data-a="at" title="Armor tier" style="display:none">🛡 I</span>
         </div>
       </div>
       <div class="df-topright">
         <span class="df-chip" data-a="timer">0.0s</span>
         <span class="df-chip" data-a="floorN">Floor 1</span>
+        <button class="df-btn ghost" data-a="settings" title="Settings">⚙</button>
         <button class="df-btn ghost" data-a="quit">✕</button>
+      </div>
+      <div class="df-targetplate" data-a="tplate" style="display:none">
+        <div class="df-tname" data-a="tname"></div>
+        <div class="df-bar thp"><div class="fill" data-a="thp"></div><span data-a="thptxt"></span></div>
       </div>
       <canvas class="df-minimap" data-a="map" width="180" height="180"></canvas>
       <div class="df-prompt" data-a="prompt" style="display:none"></div>
@@ -228,6 +237,7 @@ export class Hud {
     </div>`);
     this.root.appendChild(this.eWrap);
     this.eWrap.querySelector('[data-a="quit"]').onclick = () => { this.g.audio.sfx("ui"); this.g.menu.confirmQuitRun(); };
+    this.eWrap.querySelector('[data-a="settings"]').onclick = () => { this.g.audio.sfx("ui"); this.g.showSettings(); };
     this.mapCtx = this.eWrap.querySelector('[data-a="map"]').getContext("2d");
     this.explored = new Set();
     const obj = this.eWrap.querySelector('[data-a="obj"]');
@@ -241,6 +251,24 @@ export class Hud {
     if (!this.eWrap) return;
     this.eWrap.querySelector('[data-a="floorN"]').textContent = "Floor " + n + (total > 1 ? "/" + total : "");
     this.explored = new Set(); // new floor, new fog
+  }
+
+  /** D&D-style target plate: the soft-locked enemy's name + health. */
+  setTarget(e, d) {
+    if (!this.eWrap) return;
+    const plate = this.eWrap.querySelector('[data-a="tplate"]');
+    if (!e) { if (plate.style.display !== "none") plate.style.display = "none"; this._tId = null; return; }
+    plate.style.display = "";
+    const K = e.K || {};
+    if (this._tId !== e.id) {
+      this._tId = e.id;
+      this.eWrap.querySelector('[data-a="tname"]').innerHTML =
+        `${K.boss ? "👑 " : ""}${esc(K.label || e.etype)}${K.boss ? " 👑" : ""}`;
+    }
+    const maxHp = K.hp * (0.85 + 0.15 * ((d && d.difficulty) || 1));
+    const frac = Math.max(0, e.hp / maxHp);
+    this.eWrap.querySelector('[data-a="thp"]').style.width = (frac * 100) + "%";
+    this.eWrap.querySelector('[data-a="thptxt"]').textContent = Math.max(0, Math.round(e.hp)) + " / " + Math.round(maxHp);
   }
 
   damageFlash() {
@@ -260,6 +288,9 @@ export class Hud {
     q('[data-a="potions"]').textContent = "🧪 " + p.potions;
     const ch = q('[data-a="charms"]');
     ch.style.display = p.charms ? "" : "none"; ch.textContent = "✨ " + p.charms;
+    const ROM = ["", "I", "II", "III"];
+    const wt = q('[data-a="wt"]'); wt.style.display = p.weaponTier ? "" : "none"; wt.textContent = "⚔ " + ROM[p.weaponTier || 0];
+    const at = q('[data-a="at"]'); at.style.display = p.armorTier ? "" : "none"; at.textContent = "🛡 " + ROM[p.armorTier || 0];
     q('[data-a="timer"]').textContent = fmtTime(esc_.run.time);
     // interact prompt
     const hint = p.alive && !p.escaped ? E.interactHint(esc_.run, p) : null;
@@ -295,7 +326,8 @@ export class Hud {
     for (const k of Object.keys(fl.cells)) {
       if (!this.explored.has(k)) continue;
       const [x, z] = k.split(",").map(Number);
-      draw(x, z, "rgba(120,130,170,.5)");
+      const ct = fl.cells[k] | 0;
+      draw(x, z, ct === 2 ? "rgba(255,90,30,.75)" : ct === 3 ? "rgba(60,140,220,.6)" : ct === 4 ? "rgba(170,180,215,.65)" : "rgba(120,130,170,.5)");
     }
     for (const o of fl.objects) {
       if (!this.explored.has(D.ck(o.x, o.z))) continue;
@@ -421,6 +453,19 @@ function injectStyle() {
   .df-vignette{box-shadow:inset 0 0 140px 40px rgba(255,30,40,.55)}
   .df-objective{position:absolute;top:14%;left:50%;transform:translateX(-50%);font-size:17px;font-weight:800;letter-spacing:.4px;background:rgba(10,13,22,.85);border:1px solid rgba(150,170,255,.3);border-radius:12px;padding:10px 20px;transition:opacity .8s}
   .df-objective.out{opacity:0}
+  .df-targetplate{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:300px;background:rgba(10,13,22,.88);border:1px solid rgba(255,90,110,.5);border-radius:12px;padding:8px 12px}
+  .df-tname{font-size:14px;font-weight:800;letter-spacing:.6px;text-align:center;margin-bottom:5px;color:#ffb8c0}
+  .df-bar.thp{height:14px;border-radius:7px;border-color:rgba(255,90,110,.4)}
+  .df-bar.thp .fill{background:linear-gradient(90deg,#c22,#f55)}
+  .df-bar.thp span{font-size:10.5px}
+  .df-slot.tier{border-color:rgba(255,215,105,.5);color:#ffe9b0}
+  .df-setrow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;font-size:14px;font-weight:600}
+  .df-setrow input[type=range]{flex:1;max-width:200px;accent-color:var(--acc)}
+  .df-setrow .df-toggle{width:46px;height:24px;border-radius:12px;background:rgba(90,100,140,.4);border:1px solid rgba(150,170,255,.3);position:relative;cursor:pointer;pointer-events:auto}
+  .df-setrow .df-toggle.on{background:var(--acc)}
+  .df-setrow .df-toggle::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s}
+  .df-setrow .df-toggle.on::after{left:24px}
+  .df-fps{position:absolute;bottom:8px;right:10px;font:700 13px monospace;color:#7dffb0;background:rgba(8,10,16,.7);padding:4px 9px;border-radius:8px;z-index:50;pointer-events:none}
   @media (max-width:820px){ .df-tool .lbl{display:none} .df-tool{min-width:44px} .df-name{width:130px} .df-minimap{width:120px;height:120px} }
   `;
   const st = document.createElement("style");

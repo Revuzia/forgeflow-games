@@ -11,14 +11,15 @@ import * as THREE from "three";
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
 const E = await import("../sim/escape_sim.js" + V);
-const { makeInstanced, Assets, charClips, makeTorch } = await import("./assets.js" + V);
+const { makeInstanced, Assets, charClips, makeTorch, makeCellSurfaces } = await import("./assets.js" + V);
 const { EnemyPool } = await import("./enemies.js" + V);
 
 const FLOOR_H = 4.4;
 const CELL = D.CELL;
 const c2w = E.c2w;
 
-const SKINS = ["hero", "marauder", "wizard", "crew"];
+const SKINS = ["knight", "barbarian", "sorceress", "rogue"];
+const TIER_COLORS = [0x8a6a4a, 0xcfd6e4, 0xffd769]; // bronze / steel / gold
 
 export class Escape {
   constructor(game) {
@@ -52,7 +53,16 @@ export class Escape {
     this.doorLeafs = new Map();   // door id → {leaf, bars, mixer, openClip, closeClip, open}
     this.itemMeshes = new Map();  // key id → mesh (floor keys + dropped)
     this.lightPool = [];
+    this.lavaMats = []; this.waterMats = []; this.lavaSpots = [];
+    this.target = null;           // soft-locked enemy
     for (let f = 0; f < dungeon.floors.length; f++) this.floorGroups.push(this._buildFloor(f));
+
+    // target highlight ring (one shared mesh, repositioned under the lock)
+    this.targetRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.85, 1.05, 28).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xff5566, transparent: true, opacity: 0.85, depthWrite: false }));
+    this.targetRing.visible = false;
+    this.root.add(this.targetRing);
 
     // players
     this.actors = new Map();
@@ -91,17 +101,14 @@ export class Escape {
     const group = new THREE.Group();
     group.position.y = f * FLOOR_H;
     this.root.add(group);
-    const cells = Object.keys(fl.cells);
     const m4 = new THREE.Matrix4();
 
-    const fInst = makeInstanced(this.kit.floor.scene, Math.max(1, cells.length));
-    cells.forEach((k, i) => {
-      const [x, z] = k.split(",").map(Number);
-      m4.makeTranslation(x * CELL + CELL / 2, 0, z * CELL + CELL / 2);
-      fInst.setMatrixAt(i, m4);
-    });
-    fInst.setCount(cells.length); fInst.commit();
-    group.add(fInst.group);
+    // cell surfaces: stone / lava / water / raised+steps
+    const surf = makeCellSurfaces(D, this.d, f, this.kit);
+    group.add(surf.group);
+    if (surf.lavaMat) this.lavaMats.push(surf.lavaMat);
+    if (surf.waterMat) this.waterMats.push(surf.waterMat);
+    for (const [x, z] of surf.lavaCells) this.lavaSpots.push({ x: x * CELL + CELL / 2, z: z * CELL + CELL / 2, f });
 
     const segs = D.wallSegments(this.d, f);
     const wInst = makeInstanced(this.kit.wall.scene, Math.max(1, segs.length));
@@ -121,9 +128,14 @@ export class Escape {
 
     for (const o of fl.objects) {
       const mesh = this._objMesh(o, f);
-      if (mesh) { mesh.userData = { id: o.id, f, kind: o.kind }; group.add(mesh); this.objMeshes.set(o.id, mesh); }
+      if (mesh) {
+        mesh.position.y += D.cellHeight(this.d, f, o.x, o.z); // raised platforms lift objects
+        mesh.userData = { id: o.id, f, kind: o.kind };
+        group.add(mesh);
+        this.objMeshes.set(o.id, mesh);
+      }
     }
-    return { group, count: cells.length };
+    return { group, count: Object.keys(fl.cells).length };
   }
 
   _objMesh(o, f) {
@@ -255,29 +267,85 @@ export class Escape {
     const skin = SKINS[(p.skin || 0) % SKINS.length];
     const tpl = this.charTpls[skin] || Object.values(this.charTpls)[0];
     const obj = this.g.assets.clone(tpl);
-    Assets.normalizeH(obj, 1.72);
+    // pose before measuring — several of these rigs bind lying flat (see poseRig)
+    const { poseRig } = await import("./assets.js" + V);
+    const posed = poseRig(obj, tpl.animations, THREE);
+    obj.scale.multiplyScalar(1.72 / posed.height);
+    obj.updateMatrixWorld(true);
+    const bb = new THREE.Box3().setFromObject(obj);
+    if (isFinite(bb.min.y)) obj.position.y -= Math.max(-2, Math.min(2, bb.min.y));
     const grp = new THREE.Group();
     grp.add(obj);
-    // weapon in hand (fantasy sword / scifi blaster) — attach to wrist bone if present
-    const wpnTpl = this.d.theme === "scifi" ? this.props.blaster : this.props.sword;
-    if (wpnTpl) {
-      const w = this.g.assets.clone(wpnTpl);
-      Assets.normalizeFoot(w, 0.9);
-      let hand = null;
-      obj.traverse((b) => { if (!hand && b.isBone && /hand.*r|r.*hand|wrist.*r/i.test(b.name)) hand = b; });
-      if (hand) { hand.add(w); w.position.set(0, 0.06, 0.02); w.rotation.set(Math.PI / 2, 0, 0); }
-    }
-    const mixer = new THREE.AnimationMixer(obj);
+
+    // find rig attachment bones once (hand for weapons, spine/head for armor)
+    const bones = { hand: null, spine: null, head: null, shoulderL: null, shoulderR: null };
+    obj.traverse((b) => {
+      if (!b.isBone) return;
+      const n = b.name.toLowerCase();
+      if (!bones.hand && /(hand|wrist|fist).*(r|right)|(r|right).*(hand|wrist|fist)/.test(n)) bones.hand = b;
+      if (!bones.spine && /spine|chest|torso/.test(n)) bones.spine = b;
+      if (!bones.head && /head/.test(n)) bones.head = b;
+      if (!bones.shoulderL && /(shoulder|upper_?arm|clavicle).*(l|left)|(l|left).*(shoulder|upper_?arm|clavicle)/.test(n)) bones.shoulderL = b;
+      if (!bones.shoulderR && /(shoulder|upper_?arm|clavicle).*(r|right)|(r|right).*(shoulder|upper_?arm|clavicle)/.test(n)) bones.shoulderR = b;
+    });
+
+    const mixer = posed.mixer || new THREE.AnimationMixer(obj);
     const clips = charClips(tpl.animations);
     const actions = {};
     for (const k of Object.keys(clips)) if (clips[k]) { actions[k] = mixer.clipAction(clips[k]); }
+    // Walk-only rigs: run = walk at higher speed
+    if (actions.run && clips.run === clips.walk) actions.run.timeScale = 1.5;
     const tag = p.id === this.myId ? null : this._nameTag(p.name);
     if (tag) { tag.position.y = 2.3; grp.add(tag); }
     this.root.add(grp);
-    const a = { p, grp, obj, mixer, actions, cur: null, oneshotT: 0 };
+    const a = { p, grp, obj, mixer, actions, cur: null, oneshotT: 0, bones, rigScale: obj.scale.x, equip: {} };
+    this._refreshEquip(a);
     this._playAnim(a, "idle");
     this.actors.set(p.id, a);
     return a;
+  }
+
+  /** (Re)build visible equipment on the rig — weapon in hand, armor on body.
+   *  Everything parents to BONES so it rides every animation. */
+  _refreshEquip(a) {
+    const p = a.p;
+    // clear old
+    for (const k of Object.keys(a.equip)) { const m = a.equip[k]; if (m && m.parent) m.parent.remove(m); delete a.equip[k]; }
+    const inv = 1 / Math.max(0.01, a.rigScale);
+    // weapon — always carried; found tiers recolor + grow it
+    const wpnTpl = this.d.theme === "scifi" ? this.props.blaster : this.props.sword;
+    if (wpnTpl && a.bones.hand) {
+      const w = this.g.assets.clone(wpnTpl);
+      Assets.normalizeFoot(w, 0.9 + 0.12 * (p.weaponTier || 0));
+      const holder = new THREE.Group();
+      holder.scale.setScalar(inv);
+      holder.add(w);
+      w.position.set(0, 0.05, 0.02);
+      w.rotation.set(Math.PI / 2, 0, 0);
+      if (p.weaponTier > 0) {
+        const col = TIER_COLORS[Math.min(2, p.weaponTier - 1)];
+        w.traverse((m) => { if (m.isMesh && m.material) { m.material = m.material.clone(); m.material.emissive = new THREE.Color(col); m.material.emissiveIntensity = 0.55; } });
+      }
+      a.bones.hand.add(holder);
+      a.equip.weapon = holder;
+    }
+    // armor — chest plate + shoulder pads once found
+    if (p.armorTier > 0 && a.bones.spine) {
+      const col = TIER_COLORS[Math.min(2, p.armorTier - 1)];
+      const mat = new THREE.MeshStandardMaterial({ color: col, metalness: 0.85, roughness: 0.35, emissive: col, emissiveIntensity: 0.12 });
+      const holder = new THREE.Group();
+      holder.scale.setScalar(inv);
+      const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.3, 0.5, 10, 1, true, -Math.PI * 0.7, Math.PI * 1.4), mat);
+      plate.position.set(0, 0.12, 0.1);
+      holder.add(plate);
+      for (const side of [-1, 1]) {
+        const pad = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+        pad.position.set(0.3 * side, 0.36, 0.02);
+        holder.add(pad);
+      }
+      a.bones.spine.add(holder);
+      a.equip.armor = holder;
+    }
   }
 
   _nameTag(name) {
@@ -293,19 +361,67 @@ export class Escape {
   }
 
   _playAnim(a, name, oneshot) {
-    const act = a.actions[name] || a.actions.idle;
-    if (!act || a.cur === act && !oneshot) return;
+    const act = a.actions[name];
+    if (!act) {
+      // Meshy rigs ship Walk/Run/Idle only — attack/hit/death run as
+      // procedural bone overlays on top of whatever loop is playing
+      if (oneshot && ["attack", "spell", "hit", "death"].includes(name)) this._procStart(a, name);
+      if (oneshot) return;
+    }
+    const fallback = a.actions.idle || Object.values(a.actions)[0];
+    const use = act || fallback;
+    if (!use || (a.cur === use && !oneshot)) return;
     if (oneshot) {
-      act.reset(); act.setLoop(THREE.LoopOnce); act.clampWhenFinished = true; act.play();
-      if (a.cur && a.cur !== act) a.cur.crossFadeTo(act, 0.08, false);
-      a.oneshotT = (act.getClip().duration || 0.5) * 0.9;
-      a.osAct = act;
+      use.reset(); use.setLoop(THREE.LoopOnce); use.clampWhenFinished = true; use.play();
+      if (a.cur && a.cur !== use) a.cur.crossFadeTo(use, 0.08, false);
+      a.oneshotT = (use.getClip().duration || 0.5) * 0.9;
+      a.osAct = use;
       return;
     }
-    act.reset(); act.setLoop(THREE.LoopRepeat); act.play();
-    if (a.cur && a.cur !== act) { a.cur.crossFadeTo(act, 0.18, false); }
-    else if (!a.cur) act.fadeIn(0.1);
-    a.cur = act;
+    use.reset(); use.setLoop(THREE.LoopRepeat); use.play();
+    if (a.cur && a.cur !== use) { a.cur.crossFadeTo(use, 0.18, false); }
+    else if (!a.cur) use.fadeIn(0.1);
+    a.cur = use;
+  }
+
+  /** Procedural one-shots on the rig: weapon swing, flinch, death fall. */
+  _procStart(a, name) {
+    if (name === "attack" || name === "spell") {
+      a.proc = { type: "swing", t: 0, dur: 0.32 };
+      if (name === "spell") a.proc.dur = 0.26;
+    } else if (name === "hit") {
+      a.proc = { type: "flinch", t: 0, dur: 0.3 };
+    } else if (name === "death") {
+      a.proc = { type: "death", t: 0, dur: 0.85 };
+    }
+  }
+
+  _procUpdate(a, dt) {
+    // recover from death pose on respawn
+    if (a.p.alive && a._deadPose) { a._deadPose = false; a.obj.rotation.x = 0; a.obj.position.z = 0; }
+    if (!a.proc) return;
+    const pr = a.proc;
+    pr.t += dt;
+    const k = Math.min(1, pr.t / pr.dur);
+    if (pr.type === "swing") {
+      // arc the weapon holder through a chop
+      const w = a.equip.weapon;
+      if (w) {
+        const swing = Math.sin(k * Math.PI);
+        w.rotation.x = -swing * 1.7;
+        w.rotation.z = swing * 0.5;
+      }
+      const arm = a.bones.shoulderR;
+      if (arm) arm.rotation.x = -Math.sin(k * Math.PI) * 1.1;
+      if (k >= 1) { if (w) { w.rotation.x = 0; w.rotation.z = 0; } if (arm) arm.rotation.x = 0; a.proc = null; }
+    } else if (pr.type === "flinch") {
+      const s = a.bones.spine;
+      if (s) s.rotation.x = Math.sin(k * Math.PI) * 0.35;
+      if (k >= 1) { if (s) s.rotation.x = 0; a.proc = null; }
+    } else if (pr.type === "death") {
+      a.obj.rotation.x = -k * Math.PI / 2;
+      if (k >= 1) { a.proc = null; a._deadPose = true; }
+    }
   }
 
   // ── input ──────────────────────────────────────────────────────────────────
@@ -322,9 +438,17 @@ export class Escape {
     on("pointerup", (e) => { if (e.button === 0) this._melee = false; if (e.button === 2) this._bolt = false; });
     on("pointermove", (e) => {
       if (document.pointerLockElement !== el) return;
-      this.camYaw -= e.movementX * 0.0024;
-      this.camPitch = Math.max(-0.25, Math.min(1.15, this.camPitch + e.movementY * 0.0022));
+      const s = this.g.settings || { sens: 1, invertY: false };
+      this.camYaw -= e.movementX * 0.0024 * s.sens;
+      const dy = e.movementY * 0.0022 * s.sens * (s.invertY ? -1 : 1);
+      this.camPitch = Math.max(-0.25, Math.min(1.15, this.camPitch + dy));
     });
+    // industry-standard pause: releasing pointer lock (Esc) opens the pause overlay
+    on("pointerlockchange", () => {
+      if (document.pointerLockElement !== el && !this.g.hud.modalOpen && !this.run.over && !this._finished) {
+        this.g.menu.pauseOverlay(this);
+      }
+    }, document);
     on("wheel", (e) => { if (!this.fp) this.camDist = Math.max(3.5, Math.min(13, this.camDist * (e.deltaY > 0 ? 1.1 : 0.92))); }, el);
     on("contextmenu", (e) => e.preventDefault(), el);
     on("keydown", (e) => {
@@ -358,6 +482,14 @@ export class Escape {
     p.input.mz = Math.cos(yaw) * fz - Math.sin(yaw) * fx;
     p.input.sprint = !!(this.keys["ShiftLeft"] || this.keys["ShiftRight"]);
     p.input.yaw = yaw;                    // face where the camera looks
+    // soft aim assist: attacking with a lock pulls your facing onto the target
+    if (this.target && (this._melee || this._bolt)) {
+      const ty = Math.atan2(this.target.x - p.x, this.target.z - p.z);
+      let d = ty - yaw;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      if (Math.abs(d) < 0.55) p.input.yaw = ty;
+    }
     p.input.melee = !!this._melee;
     p.input.bolt = !!this._bolt;
   }
@@ -421,6 +553,8 @@ export class Escape {
         case "ehit": {
           this.enemies.onHit(ev);
           if (ev.by === this.myId) g.audio.sfx("hit");
+          const en = this.run.enemies.find((x) => x.id === ev.id);
+          if (en && ev.dmg) g.fx.damageNumber(new THREE.Vector3(en.x, en.f * FLOOR_H + 2.1, en.z), Math.round(ev.dmg), 0xffd769);
           break;
         }
         case "edied": {
@@ -433,7 +567,10 @@ export class Escape {
         case "phit": {
           if (ev.id === this.myId) { g.hud.damageFlash(); g.audio.sfx("hurt"); }
           const a = this.actors.get(ev.id);
-          if (a) this._playAnim(a, "hit", true);
+          if (a) {
+            this._playAnim(a, "hit", true);
+            if (ev.dmg) g.fx.damageNumber(a.grp.position.clone().add(new THREE.Vector3(0, 2.1, 0)), Math.round(ev.dmg), 0xff5566);
+          }
           break;
         }
         case "pdied": {
@@ -446,6 +583,15 @@ export class Escape {
           const a = this.actors.get(ev.id);
           if (a) this._playAnim(a, "idle");
           if (ev.id === this.myId) this.camYaw = this.me().yaw + Math.PI;
+          break;
+        }
+        case "equip": {
+          const a = this.actors.get(ev.id);
+          if (a) this._refreshEquip(a);
+          if (ev.id === this.myId) {
+            g.audio.sfx("confirm");
+            g.hud.toast(ev.slot === "weapon" ? `⚔ Weapon upgraded to tier ${ev.tier}!` : `🛡 Armor equipped — tier ${ev.tier}!`, "loot");
+          }
           break;
         }
         case "potion": if (ev.id === this.myId) { g.audio.sfx("potion"); g.hud.toast("🧪 +35 HP", "loot"); } break;
@@ -526,14 +672,18 @@ export class Escape {
     E.tick(this.run, dt, { simEnemies: this.simEnemies, localIds: this.localIds });
     this._handleEvents(E.drainEvents(this.run));
 
-    // actors follow sim
+    // actors follow sim (smooth step up/down onto raised platforms; wade dip in water)
     for (const [id, a] of this.actors) {
       const p = a.p;
-      const y = p.f * FLOOR_H + (p.climb ? climbY(p) : 0);
+      const ct = D.cellType(this.d, p.f, E.w2c(p.x), E.w2c(p.z));
+      const surfY = (ct === D.CT.RAISED ? D.RAISED_H : 0) + (ct === D.CT.WATER ? -0.25 : 0);
+      a.surfY = a.surfY == null ? surfY : a.surfY + (surfY - a.surfY) * Math.min(1, dt * 10);
+      const y = p.f * FLOOR_H + (p.climb ? climbY(p) : 0) + a.surfY;
       a.grp.position.set(p.x, y, p.z);
       a.grp.rotation.y = p.yaw + Math.PI; // rigs face +Z opposite
-      a.grp.visible = p.alive && !p.escaped && (this.me() ? Math.abs(p.f - this.me().f) <= 1 : true);
+      a.grp.visible = (p.alive || a.proc || a._deadPose) && !p.escaped && (this.me() ? Math.abs(p.f - this.me().f) <= 1 : true);
       a.mixer.update(dt);
+      this._procUpdate(a, dt);
       if (a.oneshotT > 0) { a.oneshotT -= dt; if (a.oneshotT <= 0 && a.cur) { a.cur.reset().play(); if (a.osAct) a.osAct.crossFadeTo(a.cur, 0.15, false); } }
       else {
         const moving = Math.hypot(p.input.mx, p.input.mz) > 0.01 || (p.remote && p.netMoving);
@@ -566,11 +716,49 @@ export class Escape {
     // door mixers
     for (const [, dl] of this.doorLeafs) if (dl.mixer) dl.mixer.update(dt);
 
-    // spinning keys, portal spin, torch flicker
+    // lava/water sheet animation + lava embers
     const t = performance.now() / 1000;
+    for (const m of this.lavaMats) m.emissiveIntensity = 1.5 + Math.sin(t * 2.4) * 0.5;
+    for (const m of this.waterMats) m.opacity = 0.78 + Math.sin(t * 1.7) * 0.06;
+    if (this.lavaSpots.length && Math.random() < 0.3) {
+      const s = this.lavaSpots[(Math.random() * this.lavaSpots.length) | 0];
+      const me0 = this.me();
+      if (me0 && s.f === me0.f && Math.abs(s.x - me0.x) < 30 && Math.abs(s.z - me0.z) < 30)
+        this.g.fx.spawn(new THREE.Vector3(s.x + (Math.random() - .5) * 2.6, s.f * FLOOR_H + 0.3, s.z + (Math.random() - .5) * 2.6),
+          new THREE.Vector3((Math.random() - .5) * .4, 1.4 + Math.random(), (Math.random() - .5) * .4), 0.7, 2.0, 0xff7a22);
+    }
+
+    // soft target lock: ring under the target + HUD plate
+    const meT = this.me();
+    if (meT && meT.alive && !meT.escaped) {
+      this.target = E.pickTarget(this.run, meT);
+      if (this.target) {
+        const e = this.target;
+        const ect = D.cellType(this.d, e.f, E.w2c(e.x), E.w2c(e.z));
+        this.targetRing.visible = true;
+        this.targetRing.position.set(e.x, e.f * FLOOR_H + (ect === D.CT.RAISED ? D.RAISED_H : 0) + 0.06, e.z);
+        this.targetRing.material.opacity = 0.6 + Math.sin(t * 6) * 0.25;
+        this.g.hud.setTarget(e, this.d);
+      } else {
+        this.targetRing.visible = false;
+        this.g.hud.setTarget(null);
+      }
+    } else { this.targetRing.visible = false; this.g.hud.setTarget(null); }
     for (const [, m] of this.itemMeshes) if (m.userData.spinKey && m.visible) m.children.forEach((c) => { if (!c.isPointLight) c.rotation.y = t * 1.8; });
     for (const [, m] of this.objMeshes) if (m.userData.portal) m.userData.portal.rotation.z = t;
-    for (const L of this.lightPool) L.light.intensity = L.base * (1 + Math.sin(t * 8.5 + L.grp.position.x * 2.1) * 0.14);
+    // big-map perf: only the ~10 nearest lights burn fragments; the rest sleep
+    this._lightT = (this._lightT || 0) - dt;
+    const meL = this.me();
+    if (meL && this._lightT <= 0) {
+      this._lightT = 0.25;
+      const wp = new THREE.Vector3();
+      const scored = this.lightPool.map((L) => {
+        L.grp.getWorldPosition(wp);
+        return { L, d2: (wp.x - meL.x) ** 2 + (wp.z - meL.z) ** 2 + (L.f !== meL.f ? 1e6 : 0) };
+      }).sort((a, b) => a.d2 - b.d2);
+      scored.forEach((s, i) => { s.L.light.visible = i < 10 && s.d2 < 3600; });
+    }
+    for (const L of this.lightPool) if (L.light.visible) L.light.intensity = L.base * (1 + Math.sin(t * 8.5 + L.grp.position.x * 2.1) * 0.14);
 
     // camera
     const p = this.me();
@@ -610,6 +798,12 @@ export class Escape {
     p.hp = s.hp; p.alive = s.a !== 0; p.escaped = !!s.esc;
     p.netMoving = !!s.mv;
     p.input.sprint = !!s.sp;
+    // visible gear follows the wearer across the wire
+    if ((s.wt || 0) !== (p.weaponTier || 0) || (s.at || 0) !== (p.armorTier || 0)) {
+      p.weaponTier = s.wt || 0; p.armorTier = s.at || 0;
+      const a = this.actors.get(id);
+      if (a) this._refreshEquip(a);
+    }
   }
   netEvent(ev) {
     // phit aimed at ME: the host's enemy sim hit my player — apply the damage

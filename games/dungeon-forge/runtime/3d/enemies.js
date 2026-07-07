@@ -122,16 +122,22 @@ export class EnemyPool {
     for (const e of run.enemies) {
       const v = this.views.get(e.id);
       if (!v) continue;
-      if (v.mixer) v.mixer.update(dt);
+      // distant enemies: skip skinning/anim cost (they still move via sim)
+      const far = me && !v.dead && ((e.x - me.x) ** 2 + (e.z - me.z) ** 2) > 2025;
+      if (v.mixer && !far) v.mixer.update(dt);
       if (v.dead) {
         v.fade -= dt * 0.5;
         if (v.fade <= 0) { v.grp.visible = false; continue; }
         if (v.fade < 0.5) v.grp.position.y = e.f * FLOOR_H - (0.5 - v.fade) * 1.6;
         continue;
       }
-      v.grp.position.set(e.x, e.f * FLOOR_H, e.z);
+      const ct = D.cellType(this.d, e.f, Math.floor(e.x / 4), Math.floor(e.z / 4));
+      const surfY = (ct === D.CT.RAISED ? D.RAISED_H : 0) + (ct === D.CT.WATER ? -0.25 : 0);
+      v.surfY = v.surfY == null ? surfY : v.surfY + (surfY - v.surfY) * Math.min(1, dt * 10);
+      v.grp.position.set(e.x, e.f * FLOOR_H + v.surfY, e.z);
       v.grp.rotation.y = e.yaw + Math.PI;
       v.grp.visible = me ? Math.abs(e.f - me.f) <= 1 : true;
+      if (far) { v.bar.grp.visible = false; continue; }
       if (v.hover) v.obj.position.y = 0.9 + Math.sin(t * 3 + e.x) * 0.18;
       if (e.etype === "slime" && !v.mixer) v.obj.scale.y = 1 + Math.sin(t * 6) * 0.06;
       // anim state

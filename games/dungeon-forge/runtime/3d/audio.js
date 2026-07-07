@@ -50,11 +50,18 @@ export class GameAudio {
     if (!this.ctx) {
       try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.5;
+      this.master.gain.value = 0.5 * (this._sfxVol != null ? this._sfxVol : 1);
       this.master.connect(this.ctx.destination);
     }
     if (this.ctx.state === "suspended") this.ctx.resume();
     if (this._wantMusic) { const w = this._wantMusic; this._wantMusic = null; this.music(w); }
+  }
+
+  /** Settings hook: 0..1 for each channel. */
+  setVolumes(music, sfx) {
+    this._musicVol = music; this._sfxVol = sfx;
+    if (this.master) this.master.gain.value = 0.5 * sfx;
+    if (this.cur && this.cur.el) this.cur.el.volume = (this.cur.base || 0.3) * music;
   }
 
   music(name) {
@@ -66,9 +73,10 @@ export class GameAudio {
     if (!this.musicOn) return;
     const el = new Audio(REL + "assets/audio/" + MUSIC[name]);
     el.loop = name !== "victory" && name !== "gameover";
-    el.volume = name === "build" || name === "menu" ? 0.32 : 0.28;
+    const base = name === "build" || name === "menu" ? 0.32 : 0.28;
+    el.volume = base * (this._musicVol != null ? this._musicVol : 1);
     el.play().catch(() => {});
-    this.cur = { el };
+    this.cur = { el, base };
   }
 
   toggleMusic() {

@@ -261,6 +261,144 @@ const ok = (cond, name, extra) => {
   const sv = validate(sd);
   ok(sv.ok, "starter dungeon validates", JSON.stringify(sv.problems));
 
+  // ── 14. terrain: lava burns, water slows, raised walks ──────────
+  console.log("[terrain]");
+  const tD = newDungeon({ name: "TER", theme: "fantasy", seed: 11 });
+  stampRoom(tD, 0, 5, 5, 6, 3);
+  applyOp(tD, { t: "cell+", f: 0, x: 7, z: 6, ct: D.CT.LAVA });
+  applyOp(tD, { t: "cell+", f: 0, x: 8, z: 6, ct: D.CT.WATER });
+  applyOp(tD, { t: "cell+", f: 0, x: 9, z: 6, ct: D.CT.RAISED });
+  ok(D.cellType(tD, 0, 7, 6) === D.CT.LAVA && D.cellType(tD, 0, 8, 6) === D.CT.WATER, "cell types stored");
+  ok(D.cellHeight(tD, 0, 9, 6) === D.RAISED_H, "raised height");
+  const tBack = sanitize(serialize(tD));
+  ok(D.cellType(tBack, 0, 7, 6) === D.CT.LAVA && D.cellType(tBack, 0, 9, 6) === D.CT.RAISED, "cell types survive roundtrip");
+  applyOp(tD, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+  applyOp(tD, { t: "obj+", f: 0, o: { kind: "exit", x: 10, z: 7 } });
+  ok(validate(tD).ok, "terrain dungeon solvable (lava/water/raised all passable)");
+  const tRun = newRun(tD, 42, [{ id: "P1" }]);
+  const tp = tRun.players[0];
+  tp.x = E.c2w(7); tp.z = E.c2w(6); // stand in lava
+  for (let i = 0; i < 60; i++) tick(tRun, 1 / 60);
+  ok(tp.hp < 100, "lava burns (" + tp.hp + " hp)");
+  // water slows: time to cross a water cell vs floor cell
+  const cross = (ct) => {
+    const dd = newDungeon({ name: "W", theme: "fantasy", seed: 1 });
+    stampRoom(dd, 0, 5, 5, 6, 1);
+    if (ct) for (let x = 5; x < 11; x++) applyOp(dd, { t: "cell+", f: 0, x, z: 5, ct });
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "exit", x: 10, z: 5 } });
+    const r = newRun(dd, 7, [{ id: "P1" }]);
+    const p = r.players[0];
+    p.input.mx = 1; p.input.yaw = Math.PI / 2;
+    let ticks = 0;
+    while (!p.escaped && ticks++ < 2000) tick(r, 1 / 60);
+    return ticks;
+  };
+  const tFloor = cross(0), tWater = cross(D.CT.WATER);
+  ok(tWater > tFloor * 1.4, `water slows crossing (${tFloor} vs ${tWater} ticks)`);
+
+  // ── 15. targeting + equipment ───────────────────────────────────
+  console.log("[targeting+equip]");
+  const s3b = newDungeon({ name: "TGT", theme: "scifi", seed: 3 });
+  stampRoom(s3b, 0, 5, 5, 7, 7);
+  applyOp(s3b, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+  applyOp(s3b, { t: "obj+", f: 0, o: { kind: "exit", x: 11, z: 11 } });
+  applyOp(s3b, { t: "obj+", f: 0, o: { kind: "enemy", x: 8, z: 8, etype: "robot" } });
+  applyOp(s3b, { t: "obj+", f: 0, o: { kind: "enemy", x: 5, z: 11, etype: "drone" } });
+  const rT = newRun(s3b, 5, [{ id: "P1" }]);
+  const pT = rT.players[0];
+  pT.x = E.c2w(8); pT.z = E.c2w(5);
+  pT.yaw = E.yawTo(pT.x, pT.z, E.c2w(8), E.c2w(8)); // face the robot
+  const tgt = E.pickTarget(rT, pT);
+  ok(tgt && tgt.etype === "robot", "pickTarget picks the faced enemy", tgt && tgt.etype);
+  pT.yaw += Math.PI; // face away
+  ok(E.pickTarget(rT, pT) === null || E.pickTarget(rT, pT).etype !== "robot", "no lock behind the back");
+  // equipment: grant + effects
+  E.grantLoot(rT, pT, { kind: "weapon", tier: 2 });
+  E.grantLoot(rT, pT, { kind: "armor", tier: 1 });
+  ok(pT.weaponTier === 2 && pT.armorTier === 1, "equip tiers stored");
+  const hpBefore = pT.hp;
+  pT.hurtT = 0;
+  E.damagePlayer(rT, pT, 20, "test");
+  ok(hpBefore - pT.hp === 18, "armor soaks 10% (took " + (hpBefore - pT.hp) + ")");
+
+  // ── 16. scale: 1 / 10 / 20 / 30-room dungeons ──────────────────
+  console.log("[scale]");
+  const genRooms = (n) => {
+    // grid-band layout: rooms flow east, wrap to a new south band before the
+    // 64-cell edge — connected via 1-wide corridors, safe at any n
+    const dd = newDungeon({ name: "R" + n, theme: "fantasy", seed: n });
+    const rng = D.mulberry(n * 7 + 1);
+    let px = 4, pz = 4, bandH = 0, first = null, last = null;
+    for (let i = 0; i < n; i++) {
+      const w = 3 + ((rng() * 4) | 0), h = 3 + ((rng() * 4) | 0);
+      if (px + w > 60) {
+        // corridor south from the previous room, then wrap the band
+        const nz = pz + bandH + 3;
+        for (let z = pz; z < nz + 1 && last; z++) applyOp(dd, { t: "cell+", f: 0, x: last.x, z });
+        px = 4; pz = Math.min(56, nz); bandH = 0;
+        // west corridor along the new band to the wrap column
+        if (last) for (let x = px; x <= last.x; x++) applyOp(dd, { t: "cell+", f: 0, x, z: pz });
+      }
+      const ops = stampRoom(dd, 0, px, pz, w, h);
+      if (!ops.length) break;
+      const c0 = ops[(ops.length / 2) | 0];
+      last = { x: c0.x, z: c0.z };
+      if (!first) first = { x: ops[0].x, z: ops[0].z };
+      bandH = Math.max(bandH, h);
+      // east corridor to the next room slot
+      if (i < n - 1 && px + w + 3 <= 60) {
+        for (let x = px + w; x < px + w + 3; x++) applyOp(dd, { t: "cell+", f: 0, x, z: pz + 1 });
+      }
+      px = px + w + 3;
+      if (i % 3 === 1 && i !== n - 1) applyOp(dd, { t: "obj+", f: 0, o: { kind: "enemy", x: last.x, z: last.z, etype: ["spider", "skeleton", "zombie"][i % 3] } });
+      if (i % 4 === 2) applyOp(dd, { t: "obj+", f: 0, o: { kind: "torch", x: c0.x, z: c0.z + 1 } });
+      if (i === n - 1) last = { x: ops[ops.length - 1].x, z: ops[ops.length - 1].z }; // exit at the far corner
+    }
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "spawn", x: first.x, z: first.z } });
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "exit", x: last.x, z: last.z } });
+    return dd;
+  };
+  for (const n of [1, 10, 20, 30]) {
+    const dd = genRooms(n);
+    const t0 = Date.now();
+    const v = validate(dd);
+    const vMs = Date.now() - t0;
+    ok(v.ok, `${n}-room dungeon solvable (${Object.keys(dd.floors[0].cells).length} cells, validate ${vMs}ms)`, JSON.stringify(v.problems));
+    ok(vMs < 500, `${n}-room validate fast enough (${vMs}ms)`);
+    // sim tick performance
+    const rr = newRun(dd, n, [{ id: "P1" }]);
+    const t1 = Date.now();
+    for (let i = 0; i < 300; i++) tick(rr, 1 / 60);
+    const simMs = Date.now() - t1;
+    ok(simMs < 1500, `${n}-room 300 ticks in ${simMs}ms`);
+  }
+
+  // ── 17. full enemy roster (both themes) — aggro + melee kill ────
+  console.log("[roster]");
+  for (const theme of ["fantasy", "scifi"]) {
+    for (const etype of Object.keys(D.ENEMIES[theme])) {
+      const dd = newDungeon({ name: "E", theme, seed: 9 });
+      stampRoom(dd, 0, 5, 5, 5, 5);
+      applyOp(dd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+      applyOp(dd, { t: "obj+", f: 0, o: { kind: "exit", x: 9, z: 9 } });
+      applyOp(dd, { t: "obj+", f: 0, o: { kind: "enemy", x: 7, z: 7, etype } });
+      const rr = newRun(dd, 3, [{ id: "P1" }]);
+      const pp = rr.players[0], ee = rr.enemies[0];
+      pp.x = E.c2w(6); pp.z = E.c2w(7);
+      let guard = 0;
+      while (ee.alive && guard++ < 4000) {
+        pp.input.yaw = E.yawTo(pp.x, pp.z, ee.x, ee.z);
+        pp.input.melee = true;
+        if (Math.hypot(ee.x - pp.x, ee.z - pp.z) > 1.6) {
+          pp.input.mx = Math.sign(ee.x - pp.x) * 0.6; pp.input.mz = Math.sign(ee.z - pp.z) * 0.6;
+        } else { pp.input.mx = 0; pp.input.mz = 0; }
+        tick(rr, 1 / 60);
+      }
+      ok(!ee.alive, `${theme}/${etype} killable by melee (${guard} ticks, hp left ${Math.round(pp.hp)})`);
+    }
+  }
+
   console.log(`\n${PASS} passed, ${FAIL} failed`);
   process.exit(FAIL ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

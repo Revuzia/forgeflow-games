@@ -43,12 +43,18 @@ export class Game {
   audit(msg) { this._audit.push(msg); if (this._audit.length > 200) this._audit.shift(); }
 
   async init() {
+    // industry-standard settings, persisted per browser
+    this.settings = Object.assign({
+      music: 0.7, sfx: 0.8, sens: 1.0, invertY: false, quality: "high", fps: false,
+    }, safeParse(localStorage.getItem("df_settings")));
+
     this.hud = new Hud(this);
     this.audio = new GameAudio(this);
     this.fx = new Fx(this);
     this.menu = new Menu(this);
     this.builder = new Builder(this);
     this.escape = new Escape(this);
+    this.applySettings();
 
     // lights rig (theme-tinted in applyTheme)
     this.ambient = new THREE.AmbientLight(0xffffff, 0.6);
@@ -85,6 +91,47 @@ export class Game {
     document.documentElement.style.setProperty("--df-accent2", L.accent2);
   }
 
+  applySettings() {
+    const s = this.settings;
+    localStorage.setItem("df_settings", JSON.stringify(s));
+    this.audio.setVolumes(s.music, s.sfx);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, s.quality === "high" ? 1.5 : 1.0));
+    if (this.bloom) this.bloom.enabled = s.quality !== "low";
+    // fps counter
+    if (s.fps && !this._fpsEl) {
+      this._fpsEl = document.createElement("div");
+      this._fpsEl.className = "df-fps";
+      this._fpsEl.textContent = "-- fps";
+      this.container.appendChild(this._fpsEl);
+    } else if (!s.fps && this._fpsEl) { this._fpsEl.remove(); this._fpsEl = null; }
+  }
+
+  /** Shared settings modal — reachable from menu, builder and the pause overlay. */
+  showSettings(onClose) {
+    const s = this.settings;
+    const row = (label, inner) => `<div class="df-setrow"><span>${label}</span>${inner}</div>`;
+    this.hud.modal(`<h3>⚙ Settings</h3>
+      ${row("Music volume", `<input type="range" min="0" max="100" value="${Math.round(s.music * 100)}" data-a="music">`)}
+      ${row("SFX volume", `<input type="range" min="0" max="100" value="${Math.round(s.sfx * 100)}" data-a="sfx">`)}
+      ${row("Mouse sensitivity", `<input type="range" min="30" max="220" value="${Math.round(s.sens * 100)}" data-a="sens">`)}
+      ${row("Invert Y", `<div class="df-toggle ${s.invertY ? "on" : ""}" data-a="invy"></div>`)}
+      ${row("Quality", `<select class="df-diff" data-a="qual">
+        <option value="high" ${s.quality === "high" ? "selected" : ""}>High (bloom)</option>
+        <option value="med" ${s.quality === "med" ? "selected" : ""}>Medium</option>
+        <option value="low" ${s.quality === "low" ? "selected" : ""}>Low (no bloom)</option></select>`)}
+      ${row("FPS counter", `<div class="df-toggle ${s.fps ? "on" : ""}" data-a="fpsc"></div>`)}
+      <div class="df-selrow" style="margin-top:14px"><button data-a="done" class="df-btn accent" style="flex:1">Done</button></div>`,
+      (m) => {
+        m.querySelector('[data-a="music"]').oninput = (e) => { s.music = e.target.value / 100; this.applySettings(); };
+        m.querySelector('[data-a="sfx"]').oninput = (e) => { s.sfx = e.target.value / 100; this.applySettings(); this.audio.sfx("ui"); };
+        m.querySelector('[data-a="sens"]').oninput = (e) => { s.sens = e.target.value / 100; this.applySettings(); };
+        m.querySelector('[data-a="invy"]').onclick = (e) => { s.invertY = !s.invertY; e.target.classList.toggle("on", s.invertY); this.applySettings(); };
+        m.querySelector('[data-a="qual"]').onchange = (e) => { s.quality = e.target.value; this.applySettings(); };
+        m.querySelector('[data-a="fpsc"]').onclick = (e) => { s.fps = !s.fps; e.target.classList.toggle("on", s.fps); this.applySettings(); };
+        m.querySelector('[data-a="done"]').onclick = () => { this.hud.closeModal(); if (onClose) onClose(); };
+      });
+  }
+
   clearWorld() {
     while (this.world.children.length) this.world.remove(this.world.children[0]);
     this.fx.reset();
@@ -115,9 +162,14 @@ export class Game {
   }
 
   start() {
+    let fpsAcc = 0, fpsN = 0, fpsT = 0;
     const loop = () => {
       requestAnimationFrame(loop);
       const dt = Math.min(0.1, this.clock.getDelta());
+      if (this._fpsEl) {
+        fpsAcc += dt; fpsN++;
+        if ((fpsT += dt) > 0.5) { this._fpsEl.textContent = Math.round(fpsN / fpsAcc) + " fps"; fpsAcc = 0; fpsN = 0; fpsT = 0; }
+      }
       try {
         if (this.mode === "build") this.builder.update(dt);
         else if (this.mode === "escape") this.escape.update(dt);
@@ -131,3 +183,5 @@ export class Game {
     this.setMode("menu");
   }
 }
+
+function safeParse(s) { try { return JSON.parse(s) || {}; } catch (e) { return {}; } }

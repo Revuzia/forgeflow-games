@@ -42,3 +42,7 @@ A ForgeFlow Games original. Code © ForgeFlow Labs.
 Full license classes were verified against the library's CREATURES_INDEX.json
 at build time; CC-BY attributions listed above are also shown in the in-game
 Credits screen.
+
+## v1.1 Player characters
+- Knight, Barbarian, Sorceress, Rogue — original characters generated with
+  Meshy AI (text-to-3D + auto-rigging) exclusively for Dungeon Forge.

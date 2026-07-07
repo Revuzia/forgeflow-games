@@ -13,7 +13,7 @@
 
 import {
   CELL, DIRS, ENEMIES, ck, hasCell, objsAt, findAll, stairLinks,
-  mulberry, hashStr, rollLoot,
+  mulberry, hashStr, rollLoot, cellType, cellHeight, CT, LAVA_DPS, WATER_SLOW, RAISED_H,
 } from "./dungeon.js";
 
 export const PLAYER = {
@@ -73,6 +73,7 @@ export function newRun(d, runSeed, players) {
       f: spawn.f, x: c2w(spawn.obj.x) + (i % 2) * 0.9 - 0.45, z: c2w(spawn.obj.z) + Math.floor(i / 2) * 0.9 - 0.45,
       yaw: (spawn.obj.rot || 0) * Math.PI / 2, hp: PLAYER.hp, mana: PLAYER.mana,
       alive: true, escaped: false, deaths: 0, gold: 0, keys: 0, potions: 1, charms: 0,
+      weaponTier: 0, armorTier: 0,
       meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null, // climb: {t, from, to}
       input: { mx: 0, mz: 0, sprint: false, melee: false, bolt: false, interact: false, potion: false, yaw: 0 },
       remote: !!p.remote, stepAcc: 0,
@@ -114,6 +115,7 @@ export function addPlayer(st, p) {
     f: st.spawn.f, x: c2w(st.spawn.x) + (i % 2) * 0.9 - 0.45, z: c2w(st.spawn.z) + Math.floor(i / 2) * 0.9 - 0.45,
     yaw: 0, hp: PLAYER.hp, mana: PLAYER.mana,
     alive: true, escaped: false, deaths: 0, gold: 0, keys: 0, potions: 1, charms: 0,
+    weaponTier: 0, armorTier: 0,
     meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null,
     input: { mx: 0, mz: 0, sprint: false, melee: false, bolt: false, interact: false, potion: false, yaw: 0 },
     remote: !!p.remote, stepAcc: 0,
@@ -323,6 +325,8 @@ export function grantLoot(st, p, it) {
   else if (it.kind === "mana") p.mana = PLAYER.mana;
   else if (it.kind === "charm") p.charms++;
   else if (it.kind === "key") p.keys++;
+  else if (it.kind === "weapon") { const t = Math.min(3, Math.max(p.weaponTier || 0, it.tier | 0)); if (t !== p.weaponTier) { p.weaponTier = t; emit(st, "equip", { id: p.id, slot: "weapon", tier: t }); } }
+  else if (it.kind === "armor") { const t = Math.min(3, Math.max(p.armorTier || 0, it.tier | 0)); if (t !== p.armorTier) { p.armorTier = t; emit(st, "equip", { id: p.id, slot: "armor", tier: t }); } }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -345,6 +349,7 @@ export function damageEnemy(st, e, dmg, byId) {
 export function damagePlayer(st, p, dmg, src) {
   if (!p.alive || p.escaped || st.over) return;
   if (p.hurtT > 0) return;                 // brief i-frames
+  dmg = Math.round(dmg * (1 - 0.1 * (p.armorTier || 0))); // found armor soaks 10%/tier
   p.hp -= dmg; p.hurtT = 0.45;
   emit(st, "phit", { id: p.id, hp: p.hp, dmg, src });
   if (p.hp <= 0) {
@@ -357,7 +362,7 @@ function playerMelee(st, p) {
   if (p.meleeT > 0) return;
   p.meleeT = PLAYER.meleeCd;
   emit(st, "swing", { id: p.id });
-  const dmg = PLAYER.meleeDmg * (1 + 0.2 * p.charms);
+  const dmg = PLAYER.meleeDmg * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0));
   for (const e of st.enemies) {
     if (!e.alive || e.f !== p.f) continue;
     const dx = e.x - p.x, dz = e.z - p.z;
@@ -379,7 +384,7 @@ function playerBolt(st, p) {
   st.bolts.push({
     id: "b" + st.nextBolt++, owner: p.id, f: p.f,
     x: p.x + vx * 0.6, z: p.z + vz * 0.6, vx: vx * PLAYER.boltSpeed, vz: vz * PLAYER.boltSpeed,
-    ttl: 1.4, dmg: PLAYER.boltDmg * (1 + 0.2 * p.charms),
+    ttl: 1.4, dmg: PLAYER.boltDmg * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)),
   });
   emit(st, "bolt", { id: p.id });
 }
@@ -461,6 +466,7 @@ function walkToward(st, e, tx, tz, speed, dt) {
   const dx = tx - e.x, dz = tz - e.z;
   const dist = Math.hypot(dx, dz);
   if (dist < 0.05) return;
+  if (cellType(st.d, e.f, w2c(e.x), w2c(e.z)) === CT.WATER && !e.K.fly) speed *= WATER_SLOW;
   const mx = (dx / dist) * speed * dt, mz = (dz / dist) * speed * dt;
   const r = moveCircle(st, e.f, e.x, e.z, mx, mz, 0.42, true);
   e.x = r.x; e.z = r.z;
@@ -514,7 +520,9 @@ export function tick(st, dt, opts = {}) {
     }
 
     p.yaw = p.input.yaw;
-    const sp = p.input.sprint ? PLAYER.sprint : PLAYER.speed;
+    const ctHere = cellType(st.d, p.f, w2c(p.x), w2c(p.z));
+    let sp = p.input.sprint ? PLAYER.sprint : PLAYER.speed;
+    if (ctHere === CT.WATER) sp *= WATER_SLOW;         // wading is slow
     let mx = p.input.mx, mz = p.input.mz;
     const ml = Math.hypot(mx, mz);
     if (ml > 1e-4) {
@@ -522,8 +530,10 @@ export function tick(st, dt, opts = {}) {
       const r = moveCircle(st, p.f, p.x, p.z, mx, mz, PLAYER.radius, false);
       p.x = r.x; p.z = r.z;
       p.stepAcc += Math.hypot(mx, mz);
-      if (p.stepAcc > 2.2) { p.stepAcc = 0; emit(st, "step", { id: p.id }); }
+      if (p.stepAcc > 2.2) { p.stepAcc = 0; emit(st, "step", { id: p.id, wet: ctHere === CT.WATER }); }
     }
+    // LAVA burns anyone standing in it (the 0.45s i-frame gate paces the DoT)
+    if (ctHere === CT.LAVA) damagePlayer(st, p, LAVA_DPS.dmg, "lava");
 
     // stairs: stepping onto a stairs cell starts a climb to the landing
     const cx = w2c(p.x), cz = w2c(p.z);
@@ -618,3 +628,26 @@ export function drainEvents(st) {
 
 // convenience for tests + bots: aim yaw from a toward b
 export function yawTo(ax, az, bx, bz) { return Math.atan2(bx - ax, bz - az); }
+
+/** Walk-surface height under an actor (raised platforms). */
+export function surfaceH(st, f, x, z) { return cellHeight(st.d, f, w2c(x), w2c(z)); }
+
+/**
+ * Soft target lock: the best enemy in the player's facing cone.
+ * Nearest-angle wins, distance breaks ties — feels like a D&D "engaged" target.
+ */
+export function pickTarget(st, p, maxDist = 13) {
+  let best = null, bestScore = Infinity;
+  const fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
+  for (const e of st.enemies) {
+    if (!e.alive || e.f !== p.f) continue;
+    const dx = e.x - p.x, dz = e.z - p.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist > maxDist || dist < 0.01) continue;
+    const dot = (dx * fx + dz * fz) / dist;
+    if (dot < 0.35) continue;                     // ~70° half-cone
+    const score = (1 - dot) * 8 + dist * 0.25;    // angle-dominant scoring
+    if (score < bestScore) { bestScore = score; best = e; }
+  }
+  return best;
+}

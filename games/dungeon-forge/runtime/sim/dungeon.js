@@ -20,6 +20,22 @@ export const FLOOR_H = 5;        // vertical world units between floors
 
 export const THEMES = ["fantasy", "scifi"];
 
+// Cell types — every truthy cell is walkable floor; the type flavors it.
+// 1 stone floor · 2 LAVA (burns players) · 3 WATER (slows) · 4 RAISED platform
+export const CT = { FLOOR: 1, LAVA: 2, WATER: 3, RAISED: 4 };
+export const RAISED_H = 1.1;           // world-units height of a raised platform
+export const LAVA_DPS = { dmg: 10 };   // per hit through the 0.45s i-frame gate
+export const WATER_SLOW = 0.55;        // speed multiplier in water
+
+export function cellType(d, f, x, z) {
+  const fl = d.floors[f];
+  return fl ? (fl.cells[ck(x, z)] | 0) : 0;
+}
+/** Walk-surface height of a cell (0 or RAISED_H). */
+export function cellHeight(d, f, x, z) {
+  return cellType(d, f, x, z) === CT.RAISED ? RAISED_H : 0;
+}
+
 // Object kinds and their per-kind default props. `solid` objects block walking.
 export const KINDS = {
   door:   { rotatable: true,  solid: true  }, // props: locked
@@ -125,7 +141,8 @@ export function applyOp(d, op) {
       if (!inBounds(op.x, op.z)) return { ok: false, err: "oob" };
       const fl = d.floors[op.f];
       if (!fl) return { ok: false, err: "nofloor" };
-      fl.cells[ck(op.x, op.z)] = 1;
+      const ct = op.ct && op.ct >= 1 && op.ct <= 4 ? op.ct | 0 : CT.FLOOR;
+      fl.cells[ck(op.x, op.z)] = ct;
       return { ok: true };
     }
     case "cell-": {
@@ -209,11 +226,11 @@ export function applyOp(d, op) {
 }
 
 // Room stamp helper (builder "room brush"): floors a w×h rect. Returns ops (already applied).
-export function stampRoom(d, f, x0, z0, w, h) {
+export function stampRoom(d, f, x0, z0, w, h, ct) {
   const ops = [];
   for (let x = x0; x < x0 + w; x++)
     for (let z = z0; z < z0 + h; z++)
-      if (inBounds(x, z)) { const op = { t: "cell+", f, x, z }; if (applyOp(d, op).ok) ops.push(op); }
+      if (inBounds(x, z)) { const op = { t: "cell+", f, x, z, ct: ct || CT.FLOOR }; if (applyOp(d, op).ok) ops.push(op); }
   return ops;
 }
 
@@ -418,7 +435,9 @@ export function rollLoot(d, chestId, runSeed, boundKey) {
   items.push({ kind: "gold", n: Math.round((10 + rnd() * 22) * diff) });
   if (rnd() < 0.55) items.push({ kind: "potion" });
   if (rnd() < 0.45) items.push({ kind: "mana" });
-  if (rnd() < 0.10 + 0.06 * diff) items.push({ kind: "charm" }); // +20% damage, run-long
+  if (rnd() < 0.10 + 0.06 * diff) items.push({ kind: "charm" });                    // +20% damage, run-long
+  if (rnd() < 0.14 + 0.05 * diff) items.push({ kind: "weapon", tier: 1 + (rnd() < 0.3 * diff ? 1 : 0) }); // visible weapon upgrade
+  if (rnd() < 0.14 + 0.05 * diff) items.push({ kind: "armor", tier: 1 + (rnd() < 0.3 * diff ? 1 : 0) });  // visible armor
   return items;
 }
 
@@ -441,7 +460,8 @@ export function sanitize(raw) {
       const nf = emptyFloor();
       if (fl && fl.cells) for (const k of Object.keys(fl.cells)) {
         const [x, z] = k.split(",").map(Number);
-        if (inBounds(x, z)) nf.cells[ck(x, z)] = 1;
+        const ct = fl.cells[k] | 0;
+        if (inBounds(x, z)) nf.cells[ck(x, z)] = ct >= 1 && ct <= 4 ? ct : 1;
       }
       if (fl && Array.isArray(fl.objects)) for (const o of fl.objects.slice(0, 4000)) {
         if (!o || !KINDS[o.kind] || !inBounds(o.x | 0, o.z | 0)) continue;

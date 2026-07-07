@@ -64,6 +64,23 @@ export class Fx {
     }
   }
 
+  /** Floating combat number — D&D-style damage feedback. */
+  damageNumber(pos, n, color = 0xffd769) {
+    const c = document.createElement("canvas"); c.width = 128; c.height = 64;
+    const g = c.getContext("2d");
+    g.font = "900 44px system-ui"; g.textAlign = "center"; g.textBaseline = "middle";
+    g.strokeStyle = "rgba(0,0,0,.9)"; g.lineWidth = 7; g.strokeText(String(n), 64, 32);
+    g.fillStyle = "#" + new THREE.Color(color).getHexString(); g.fillText(String(n), 64, 32);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+    spr.scale.set(1.5, 0.75, 1);
+    spr.position.copy(pos);
+    spr.position.x += (Math.random() - 0.5) * 0.5;
+    this.g.world.add(spr);
+    this.numbers = this.numbers || [];
+    this.numbers.push({ spr, life: 0.9 });
+  }
+
   attachFlame(grp, theme, y) { this.flames.push({ grp, y, theme }); }
   attachPortal(grp, color) { this.portals.push({ grp, color: new THREE.Color(color), ang: Math.random() * 6 }); }
 
@@ -117,6 +134,17 @@ export class Fx {
     this.points.geometry.attributes.position.needsUpdate = true;
     this.points.geometry.attributes.color.needsUpdate = true;
     this.points.geometry.attributes.psize.needsUpdate = true;
+
+    // floating damage numbers drift up + fade
+    if (this.numbers) {
+      for (let k = this.numbers.length - 1; k >= 0; k--) {
+        const nm = this.numbers[k];
+        nm.life -= dt;
+        nm.spr.position.y += dt * 1.6;
+        nm.spr.material.opacity = Math.max(0, nm.life / 0.9);
+        if (nm.life <= 0) { this.g.world.remove(nm.spr); nm.spr.material.map.dispose(); this.numbers.splice(k, 1); }
+      }
+    }
 
     // torch flames: puff embers
     const t = performance.now() / 1000;

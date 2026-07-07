@@ -53,6 +53,7 @@ export class Menu {
     const prof = this.profile();
     this.root = el(`<div class="dfm">
       <div class="dfm-bg"></div>
+      <div class="dfm-bgshade"></div>
       <div class="dfm-card">
         <div class="dfm-title">DUNGEON<span> FORGE</span></div>
         <div class="dfm-tag">Build dungeons with friends. Then try to escape them.</div>
@@ -63,7 +64,8 @@ export class Menu {
         </div>
         <div class="dfm-profile">
           <input data-a="name" maxlength="14" value="${esc(prof.name)}" title="Your name">
-          <div class="dfm-skins">${[0, 1, 2, 3].map((i) => `<button class="dfm-skin ${i === prof.skin ? "on" : ""}" data-skin="${i}">${["🗡️", "🪓", "🧙", "👨‍🚀"][i]}</button>`).join("")}</div>
+          <div class="dfm-skins">${[0, 1, 2, 3].map((i) => `<button class="dfm-skin ${i === prof.skin ? "on" : ""}" data-skin="${i}" title="${["Knight", "Barbarian", "Sorceress", "Rogue"][i]}">${["🛡️", "🪓", "🔮", "🗡️"][i]}</button>`).join("")}</div>
+          <button class="dfm-skin" data-a="gear" title="Settings">⚙️</button>
         </div>
         <div class="dfm-foot">
           <button data-a="how" class="dfm-link">How to play</button> ·
@@ -84,6 +86,7 @@ export class Menu {
     q('[data-a="online"]').onclick = () => { this.g.audio.sfx("confirm"); this.onlineFlow(); };
     q('[data-a="how"]').onclick = () => this.howTo();
     q('[data-a="credits"]').onclick = () => this.credits();
+    q('[data-a="gear"]').onclick = () => { this.g.audio.sfx("ui"); this.g.showSettings(); };
 
     if (payload && payload.toast) this.g.hud.toast(payload.toast, "info");
     // share links: #d=DF1....
@@ -222,6 +225,24 @@ export class Menu {
       <button data-a="y" class="df-btn danger">Leave</button><button data-a="n" class="df-btn accent">Keep playing</button></div>`, (m) => {
       m.querySelector('[data-a="y"]').onclick = () => { this.g.hud.closeModal(); this.afterRun(this.g.escape); };
       m.querySelector('[data-a="n"]').onclick = () => this.g.hud.closeModal();
+    });
+  }
+
+  /** Esc during a run → standard pause menu (resume / settings / quit). */
+  pauseOverlay(escMode) {
+    this.g.hud.modal(`<h3>⏸ Paused</h3>
+      <div class="df-lb">The dungeon waits for no one — enemies keep prowling${this.g.session ? " (multiplayer keeps running)" : ""}.</div>
+      <div class="df-selrow" style="flex-direction:column;gap:8px">
+        <button data-a="resume" class="df-btn accent">▶ Resume</button>
+        <button data-a="set" class="df-btn">⚙ Settings</button>
+        <button data-a="quit" class="df-btn danger">Leave run</button>
+      </div>`, (m) => {
+      m.querySelector('[data-a="resume"]').onclick = () => {
+        this.g.hud.closeModal();
+        this.g.renderer.domElement.requestPointerLock();
+      };
+      m.querySelector('[data-a="set"]').onclick = () => this.g.showSettings(() => this.pauseOverlay(escMode));
+      m.querySelector('[data-a="quit"]').onclick = () => { this.g.hud.closeModal(); this.afterRun(escMode); };
     });
   }
   confirmLeaveBuilder() {
@@ -393,6 +414,8 @@ export function sampleDungeon(theme) {
   const O = (f, kind, x, z, props) => D.applyOp(d, { t: "obj+", f, o: Object.assign({ kind, x, z }, props) });
   const E1 = theme === "scifi" ? { grunt: "robot", fast: "drone", heavy: "mech", rng: "turret", boss: "alien" } : { grunt: "skeleton", fast: "spider", heavy: "orc", rng: "zombie", boss: "demon" };
 
+  const L = (f, x, z, ct) => D.applyOp(d, { t: "cell+", f, x, z, ct }); // terrain paint
+
   // floor 0: entry hall → corridor with door → guard room (key on enemy) → locked door → stairs room
   F(0, 20, 20, 6, 5);                    // entry 20..25 × 20..24
   O(0, "spawn", 22, 21, { rot: 0 });
@@ -402,6 +425,7 @@ export function sampleDungeon(theme) {
   O(0, "door", 22, 26, { rot: 0 });      // unlocked door mid-corridor (breaks LOS)
   O(0, "trap", 23, 26, { ttype: "spikes" });
   F(0, 19, 28, 8, 6);                    // guard room 19..26 × 28..33
+  L(0, 19, 29, 3); L(0, 19, 30, 3); L(0, 20, 29, 3); L(0, 20, 30, 3); // WATER pool (wading slows)
   O(0, "torch", 19, 28); O(0, "torch", 26, 28); O(0, "torch", 19, 33); O(0, "torch", 26, 33);
   O(0, "enemy", 21, 30, { etype: E1.grunt });
   O(0, "enemy", 24, 31, { etype: E1.fast });
@@ -412,6 +436,8 @@ export function sampleDungeon(theme) {
   O(0, "door", 28, 30, { rot: 1, locked: true }); // LOCKED — needs key #1
   O(0, "trap", 30, 31, { ttype: "vent" });
   F(0, 31, 28, 6, 6);                    // stairs room 31..36 × 28..33
+  L(0, 35, 29, 2); L(0, 35, 30, 2); L(0, 35, 31, 2); // LAVA strip — burn or go around
+  L(0, 36, 30, 4); L(0, 36, 31, 4);       // RAISED ledge beside it (auto steps)
   O(0, "torch", 31, 28); O(0, "torch", 36, 33);
   O(0, "enemy", 34, 30, { etype: E1.rng });
   O(0, "chest", 36, 28, { rot: 2 });
@@ -422,6 +448,8 @@ export function sampleDungeon(theme) {
   // floor 1: landing hall → boss lair behind locked door → exit
   D.applyOp(d, { t: "floor+" });
   F(1, 31, 28, 6, 8);                    // hall 31..36 × 28..35 (landing 33,33 inside)
+  L(1, 35, 29, 4); L(1, 36, 29, 4); L(1, 35, 30, 4); L(1, 36, 30, 4); // raised treasure ledge
+  O(1, "chest", 36, 29, { rot: 3 });     // bonus chest up the little steps
   O(1, "torch", 31, 28); O(1, "torch", 36, 28); O(1, "torch", 31, 35); O(1, "torch", 36, 35);
   O(1, "enemy", 32, 34, { etype: E1.grunt });
   O(1, "decor", 36, 34, { dtype: theme === "scifi" ? "barrier" : "pillar" });
@@ -455,7 +483,9 @@ function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
 // menu styles
 const css = `
 .dfm{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',system-ui,sans-serif;color:#e8ecff}
-.dfm-bg{position:absolute;inset:0;background:radial-gradient(1200px 700px at 50% 20%,rgba(90,70,140,.25),transparent),radial-gradient(900px 500px at 80% 90%,rgba(40,120,140,.18),transparent)}
+.dfm-bg{position:absolute;inset:0;background:url('${new URL("../../thumbnail.png", import.meta.url).href}') center/cover no-repeat;animation:dfmZoom 36s ease-in-out infinite alternate}
+.dfm-bgshade{position:absolute;inset:0;background:radial-gradient(1100px 640px at 50% 42%,rgba(8,6,14,.30),rgba(8,6,14,.86)),linear-gradient(rgba(8,6,14,.25),rgba(8,6,14,.6))}
+@keyframes dfmZoom{from{transform:scale(1)}to{transform:scale(1.07)}}
 .dfm-card{position:relative;text-align:center;background:rgba(8,10,18,.82);border:1px solid rgba(150,170,255,.25);border-radius:26px;padding:38px 46px;backdrop-filter:blur(6px);max-width:92vw}
 .dfm-title{font-size:52px;font-weight:900;letter-spacing:4px;text-shadow:0 0 34px var(--df-accent,#ffb347)}
 .dfm-title span{color:var(--df-accent,#ffb347)}

@@ -186,6 +186,7 @@ export class Session {
       x: +p.x.toFixed(2), z: +p.z.toFixed(2), yaw: +p.yaw.toFixed(2), f: p.f,
       hp: Math.round(p.hp), a: p.alive ? 1 : 0, esc: p.escaped ? 1 : 0,
       mv: Math.hypot(p.input.mx, p.input.mz) > 0.01 ? 1 : 0, sp: p.input.sprint ? 1 : 0,
+      wt: p.weaponTier || 0, at: p.armorTier || 0,
     });
   }
 

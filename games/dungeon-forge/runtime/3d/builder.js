@@ -9,7 +9,7 @@ import * as THREE from "three";
 
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
-const { makeInstanced, Assets, creatureClips, makeTorch, makeCreature } = await import("./assets.js" + V);
+const { makeInstanced, Assets, creatureClips, makeTorch, makeCreature, makeCellSurfaces } = await import("./assets.js" + V);
 
 const FLOOR_H = 4.4;
 const CELL = D.CELL;
@@ -18,6 +18,9 @@ export const TOOLS = [
   { id: "select", icon: "🖱️", label: "Select" },
   { id: "floor", icon: "⬜", label: "Floor" },
   { id: "room", icon: "▦", label: "Room" },
+  { id: "raise", icon: "🔼", label: "Raised" },
+  { id: "lava", icon: "🌋", label: "Lava" },
+  { id: "water", icon: "💧", label: "Water" },
   { id: "erase", icon: "🧹", label: "Erase" },
   { id: "door", icon: "🚪", label: "Door" },
   { id: "stairs", icon: "🪜", label: "Stairs" },
@@ -30,6 +33,8 @@ export const TOOLS = [
   { id: "spawn", icon: "🚩", label: "Spawn" },
   { id: "exit", icon: "🌀", label: "Exit" },
 ];
+
+const PAINT_CT = { floor: 1, lava: 2, water: 3, raise: 4 };
 
 export class Builder {
   constructor(game) {
@@ -139,17 +144,11 @@ export class Builder {
     group.position.y = f * FLOOR_H;
     this.root.add(group);
     const cells = Object.keys(fl.cells);
-
-    // floors
-    const fInst = makeInstanced(this.kit.floor.scene, Math.max(1, cells.length));
     const m4 = new THREE.Matrix4();
-    cells.forEach((k, i) => {
-      const [x, z] = k.split(",").map(Number);
-      m4.makeTranslation(x * CELL + CELL / 2, 0, z * CELL + CELL / 2);
-      fInst.setMatrixAt(i, m4);
-    });
-    fInst.setCount(cells.length); fInst.commit();
-    group.add(fInst.group);
+
+    // cell surfaces: stone / lava / water / raised+steps
+    const surf = makeCellSurfaces(D, this.d, f, this.kit);
+    group.add(surf.group);
 
     // walls — every floor↔void edge gets one; the gate module carries its own
     // wall plane inside the door cell, so no edge filtering is needed
@@ -170,12 +169,17 @@ export class Builder {
     wInst.setCount(segs.length); wInst.commit();
     group.add(wInst.group);
 
-    // objects
+    // objects (sit on the cell's walk surface — raised platforms lift them)
     for (const o of fl.objects) {
       const mesh = this._objMesh(o, f);
-      if (mesh) { mesh.userData = { id: o.id, f, kind: o.kind }; group.add(mesh); this.objMeshes.set(o.id, mesh); }
+      if (mesh) {
+        mesh.position.y += D.cellHeight(this.d, f, o.x, o.z);
+        mesh.userData = { id: o.id, f, kind: o.kind };
+        group.add(mesh);
+        this.objMeshes.set(o.id, mesh);
+      }
     }
-    return { group, fInst, wInst };
+    return { group, surf, wInst };
   }
 
   _objMesh(o, f) {
@@ -376,7 +380,7 @@ export class Builder {
       this.select(id);
       return;
     }
-    if (this.tool === "floor" || this.tool === "erase") {
+    if (PAINT_CT[this.tool] || this.tool === "erase") {
       this.drag = { paint: true };
       this._paint(cell);
       return;
@@ -421,18 +425,17 @@ export class Builder {
   }
 
   _paint(cell) {
-    const op = this.tool === "floor"
-      ? { t: "cell+", f: this.floor, x: cell.x, z: cell.z }
-      : { t: "cell-", f: this.floor, x: cell.x, z: cell.z };
     if (this.tool === "erase") {
-      // erase object first if present
+      // erase object first if present, then the cell itself
       const objs = D.objsAt(this.d, this.floor, cell.x, cell.z);
       if (objs.length) { this.applyLocal({ t: "obj-", id: objs[objs.length - 1].id }); return; }
+      if (!D.hasCell(this.d, this.floor, cell.x, cell.z)) return;
+      this.applyLocal({ t: "cell-", f: this.floor, x: cell.x, z: cell.z });
+      return;
     }
-    const had = D.hasCell(this.d, this.floor, cell.x, cell.z);
-    if (this.tool === "floor" && had) return;
-    if (this.tool === "erase" && !had) return;
-    this.applyLocal(op);
+    const ct = PAINT_CT[this.tool] || 1;
+    if (D.cellType(this.d, this.floor, cell.x, cell.z) === ct) return; // already painted
+    this.applyLocal({ t: "cell+", f: this.floor, x: cell.x, z: cell.z, ct });
   }
 
   _placeAt(cell) {
@@ -573,7 +576,7 @@ export class Builder {
       this.hoverQuad.visible = true;
       this.hoverQuad.position.x = this.hover.x * CELL + CELL / 2;
       this.hoverQuad.position.z = this.hover.z * CELL + CELL / 2;
-      const valid = this.tool === "floor" || this.tool === "room" || this.tool === "erase"
+      const valid = PAINT_CT[this.tool] || this.tool === "room" || this.tool === "erase"
         ? true : D.hasCell(this.d, this.floor, this.hover.x, this.hover.z);
       this.hoverQuad.material.color.set(valid ? 0x66ffcc : 0xff5566);
     } else this.hoverQuad.visible = false;
