@@ -90,7 +90,7 @@ export class FX {
     this.flash = 0;
     this._nextBolt = 0;
     this.onThunder = null; // set by game (audio hook)
-    this.lowQ = false;     // quality LOW halves weather/cloud particle budgets
+    this.qMul = 1;         // particle budget multiplier: HIGH 1 / MEDIUM 0.75 / LOW 0.5
 
     // clouds: soft high-altitude puffs, biome-tinted, always on
     this.cp = makePoints(64, tex, THREE.NormalBlending);
@@ -322,7 +322,7 @@ export class FX {
       const siz = this.wp.geometry.attributes.aSize.array;
       const alp = this.wp.geometry.attributes.aAlpha.array;
       const active = kind !== "calm" && kind !== "fireflies" && kind !== "aurora" && kind !== "heatwave" && I > 0.02;
-      const budget = this.lowQ ? WX_CAP / 2 : WX_CAP;
+      const budget = WX_CAP * this.qMul;
       const n = active ? Math.floor(budget * Math.min(1, I * 1.2)) : 0;
       if (active && !this._wxInit) {
         this._wxInit = true;
@@ -363,9 +363,9 @@ export class FX {
       this.wp.geometry.attributes.aSize.needsUpdate = true;
       this.wp.geometry.attributes.aAlpha.needsUpdate = true;
 
-      // lightning in the heavy storms
+      // lightning in the heavy storms (NOT blizzards — snow doesn't thunder)
       this.flash = Math.max(0, this.flash - dt * 3.2);
-      const stormy = (kind === "voidstorm" || kind === "rain" || kind === "blizzard") && I > 0.5;
+      const stormy = (kind === "voidstorm" || kind === "rain") && I > 0.5;
       if (stormy && this.t > this._nextBolt) {
         this._nextBolt = this.t + 4 + Math.random() * 9;
         this.flash = 0.55 + Math.random() * 0.4;
@@ -376,7 +376,7 @@ export class FX {
     // ── clouds (always on, drifting high above the surface) ──
     {
       const def = this.def.clouds || { color: 0xffffff, n: 24, alpha: 0.15 };
-      const n = Math.min(64, this.lowQ ? Math.ceil(def.n / 2) : def.n);
+      const n = Math.min(64, Math.ceil(def.n * this.qMul));
       const pos = this.cp.geometry.attributes.position.array;
       const col = this.cp.geometry.attributes.aColor.array;
       const siz = this.cp.geometry.attributes.aSize.array;

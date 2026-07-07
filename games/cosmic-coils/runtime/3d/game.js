@@ -19,6 +19,13 @@ const { Menu, saveRecord } = await import("./menu.js" + V);
 
 const { CONST, SKINS, BIOMES, ranking, segRadius } = S;
 
+// graphics tiers: pixel ratio cap, bloom multiplier, particle budget multiplier
+const QUALITY_TIERS = {
+  high: { dpr: 1.5, bloom: 1, particles: 1 },
+  medium: { dpr: 1.2, bloom: 0.85, particles: 0.75 },
+  low: { dpr: 1.0, bloom: 0.62, particles: 0.5 },
+};
+
 export class Game {
   constructor(env) {
     Object.assign(this, env); // THREE(unused, module import used), renderer, scene, camera, composer, bloom, container, content, V
@@ -78,15 +85,16 @@ export class Game {
       localStorage.setItem("cc_invert", this.settings.invert ? "1" : "0");
       localStorage.setItem("cc_quality", this.settings.quality);
     } catch (e) {}
-    const low = this.settings.quality === "low";
-    this.renderer.setPixelRatio(low ? 1.0 : Math.min(window.devicePixelRatio || 1, 1.5));
-    if (this.fx) this.fx.lowQ = low;
+    const t = QUALITY_TIERS[this.settings.quality] || QUALITY_TIERS.high;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, t.dpr));
+    if (this.fx) this.fx.qMul = t.particles;
     this._applyBloom();
   }
 
   _applyBloom() {
     const base = this.W && (this.W.biome === "abyss" || this.W.biome === "ember") ? 1.0 : 0.85;
-    this.bloom.strength = base * (this.settings.quality === "low" ? 0.62 : 1);
+    const t = QUALITY_TIERS[this.settings.quality] || QUALITY_TIERS.high;
+    this.bloom.strength = base * t.bloom;
   }
 
   // ── worlds ────────────────────────────────────────────────────────────────
@@ -107,7 +115,7 @@ export class Game {
     this.snakeField = new SnakeField(this.scene, W);
     this.fx = new FX(this.scene, W, BIOME_DEFS[W.biome]);
     this.fx.onThunder = () => { this.audio.thunder(); this._shake = Math.max(this._shake, 0.35); };
-    this.fx.lowQ = this.settings.quality === "low";
+    this.fx.qMul = (QUALITY_TIERS[this.settings.quality] || QUALITY_TIERS.high).particles;
     this._applyBloom();
     return W;
   }

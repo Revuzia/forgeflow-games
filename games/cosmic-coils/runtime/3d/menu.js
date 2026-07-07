@@ -148,8 +148,9 @@ export class Menu {
           </label>
           <div style="display:flex;align-items:center;gap:12px;font-size:13px;letter-spacing:1px">
             GRAPHICS
-            <button class="cc-mode ghost" style="flex:1;padding:8px;${st.quality !== "low" ? "border-color:#3af2ff;color:#3af2ff" : ""}" data-a="qhigh">HIGH</button>
-            <button class="cc-mode ghost" style="flex:1;padding:8px;${st.quality === "low" ? "border-color:#3af2ff;color:#3af2ff" : ""}" data-a="qlow">LOW (faster)</button>
+            <button class="cc-mode ghost" style="flex:1;padding:8px;${st.quality === "low" ? "border-color:#3af2ff;color:#3af2ff" : ""}" data-a="qlow">LOW</button>
+            <button class="cc-mode ghost" style="flex:1;padding:8px;${st.quality === "medium" ? "border-color:#3af2ff;color:#3af2ff" : ""}" data-a="qmed">MEDIUM</button>
+            <button class="cc-mode ghost" style="flex:1;padding:8px;${st.quality !== "low" && st.quality !== "medium" ? "border-color:#3af2ff;color:#3af2ff" : ""}" data-a="qhigh">HIGH</button>
           </div>
           <label style="display:flex;align-items:center;gap:12px;font-size:13px;letter-spacing:1px">
             MUSIC
@@ -171,6 +172,7 @@ export class Menu {
     };
     this.root.querySelector('[data-a="invert"]').onchange = (e) => { if (this.h.onSettings) this.h.onSettings({ invert: e.target.checked }); };
     this.root.querySelector('[data-a="qhigh"]').onclick = () => { this.audio.ui(); if (this.h.onSettings) this.h.onSettings({ quality: "high" }); this.render(); };
+    this.root.querySelector('[data-a="qmed"]').onclick = () => { this.audio.ui(); if (this.h.onSettings) this.h.onSettings({ quality: "medium" }); this.render(); };
     this.root.querySelector('[data-a="qlow"]').onclick = () => { this.audio.ui(); if (this.h.onSettings) this.h.onSettings({ quality: "low" }); this.render(); };
     this.root.querySelector('[data-a="mv"]').oninput = (e) => this.audio.setMusicVol(parseFloat(e.target.value));
     this.root.querySelector('[data-a="sv"]').oninput = (e) => this.audio.setSfxVol(parseFloat(e.target.value));

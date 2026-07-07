@@ -1,5 +1,12 @@
 # Cosmic Coils — CHANGELOG
 
+## 5 — 2026-07-07 · Owner round 4 (blizzard realism, 3 graphics tiers)
+- Blizzards no longer produce lightning/thunder (snow doesn't storm that way);
+  Verdant rain and Abyss voidstorms keep theirs.
+- Graphics setting is now LOW / MEDIUM / HIGH: pixel-ratio caps 1.0/1.2/1.5,
+  bloom ×0.62/×0.85/×1.0, weather+cloud particle budgets ×0.5/×0.75/×1.0.
+- `?v=` → 5.
+
 ## 4 — 2026-07-07 · Owner playtest round 3 (self-collision fix, F3, skies)
 - **Self-collision actually works now.** The v3 neck window was sized off the
   boost-circle CIRCUMFERENCE (~29u) — longer than a small/medium snake's whole
