@@ -18,9 +18,9 @@ const LEVEL_NAMES = [
 
 // per-level tuning: seed salt re-rolls maps; gold bonus shores up levels the 2/4/8/12
 // breach-damage model made unwinnable at base economy (2026-07-07 retune)
-const SEED_SALT = { '3:8': 3, '4:8': 2, '1:5': 1, '2:6': 0, '2:8': 1, '4:5': 2, '4:6': 2, '4:7': 3 };
+const SEED_SALT = { '3:8': 10, '4:8': 10, '1:5': 1, '2:6': 0, '2:8': 0, '4:5': 2, '4:6': 0, '4:7': 3 };
 
-const GOLD_BONUS = { '2:6': 260, '3:8': 300, '4:5': 220, '4:6': 220, '4:7': 220, '4:8': 760 };
+const GOLD_BONUS = { '2:6': 260, '3:8': 300, '4:5': 220, '4:6': 320, '4:7': 220, '4:8': 900 };
 // extra seconds between assaults on levels whose pacing needs mercy
 const GAP_BONUS = { '4:8': 8 };
 

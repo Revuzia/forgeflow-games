@@ -183,7 +183,7 @@ class TrailPool {
     }
     this.byOwner = new Map();
   }
-  point(owner, x, y, z, color = 0xc89aff, width = 0.22) {
+  point(owner, x, y, z, color = 0xc89aff, width = 0.22, ttl = 0.3) {
     let slot = this.byOwner.get(owner);
     if (!slot) {
       slot = this.slots.find((s) => !s.owner && s.fading <= 0);
@@ -193,6 +193,7 @@ class TrailPool {
       slot.mesh.material.color.setHex(color);
       slot.mesh.material.opacity = 0.85;
       slot.width = width;
+      slot.ttl = ttl;
       this.byOwner.set(owner, slot);
     }
     slot.pts.push({ x, y, z, t: performance.now() / 1000 });
@@ -211,7 +212,7 @@ class TrailPool {
     for (const slot of this.slots) {
       if (slot.owner) {
         // age out old points so stationary trails shrink
-        while (slot.pts.length && now - slot.pts[0].t > 0.3) slot.pts.shift();
+        while (slot.pts.length && now - slot.pts[0].t > (slot.ttl || 0.3)) slot.pts.shift();
         if (slot.pts.length >= 2) writeStrip(slot.mesh.geometry, slot.pts, slot.width);
         else slot.mesh.geometry.setDrawRange(0, 0);
       } else if (slot.fading > 0) {
@@ -401,6 +402,7 @@ class DartPool {
     d.key = 'dart' + (this.seq++);
     d.trailColor = opts.trail ?? 0xe8c890;
     d.trailW = 0.09 * scale;
+    d.trailTtl = opts.ttl ?? 0.14;
     d.grp.scale.setScalar(scale);
     d.shaft.material.color.setHex(color);
     d.grp.position.set(sx, sy, sz);
@@ -414,7 +416,7 @@ class DartPool {
       d.t += dt;
       const k = Math.min(1, d.t / d.dur);
       d.grp.position.set(d.sx + (d.ex - d.sx) * k, d.sy + (d.ey - d.sy) * k, d.sz + (d.ez - d.sz) * k);
-      trails.point(d.key, d.grp.position.x, d.grp.position.y, d.grp.position.z, d.trailColor, d.trailW);
+      trails.point(d.key, d.grp.position.x, d.grp.position.y, d.grp.position.z, d.trailColor, d.trailW, d.trailTtl);
       if (k >= 1) {
         d.active = false;
         d.grp.visible = false;

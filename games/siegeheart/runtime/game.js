@@ -249,7 +249,7 @@ export function createGame(env) {
           const mesh = g.towerMeshes.get(ev.towerId);
           if (mesh) aimTower(mesh, ev.x + ev.nx * 4, ev.z + ev.nz * 4);
           g.fx.dart(ev.x, 1.7, ev.z, ev.x + ev.nx * ev.dist, 0.9, ev.z + ev.nz * ev.dist,
-            { color: 0xb8895a, trail: 0xe8c890, speed: 42, scale: 1.3 });
+            { color: 0xb8895a, trail: 0xd8b878, speed: 38, scale: 1.3, ttl: 0.16 });
           g.fx.burst('scrap', ev.x + ev.nx * ev.dist * 0.6, 1, ev.z + ev.nz * ev.dist * 0.6, 3, { vel: 1.4, life: 0.3 });
           audio.play('ballista', { throttle: 90 });
           break;
@@ -265,7 +265,7 @@ export function createGame(env) {
         case 'snipe': {
           const m = towerMuzzle(ev.towerId);
           if (m) g.fx.dart(m.x, m.y, m.z, ev.tx, 1.1, ev.tz,
-            { color: ev.crit ? 0xffd76a : 0xccd2dc, trail: ev.crit ? 0xffe9a0 : 0xdfe6ee, speed: 60, scale: 0.85 });
+            { color: ev.crit ? 0xffd76a : 0xccd2dc, trail: ev.crit ? 0xd8c080 : 0x9aa8b4, speed: 46, scale: 0.85, ttl: 0.11 });
           g.fx.burst('spark', ev.tx, 1.2, ev.tz, ev.crit ? 9 : 5, { vel: 2, life: 0.3 });
           audio.play('crossbow');
           break;

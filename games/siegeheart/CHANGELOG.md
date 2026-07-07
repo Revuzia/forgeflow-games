@@ -1,5 +1,13 @@
 # Siegeheart — Changelog
 
+## v1.4.1 — 2026-07-07
+- **Crossbow bolts now read as bolts, not beams**: short comet tail (0.11s, was a full-length
+  0.3s streak), dim steel trail, slower visible flight. Ballista javelins likewise (0.16s tail).
+  The full-length bright streak was why crossbow shots still looked like lightning.
+- **Siege Crossbow trimmed a tad** (owner): damage 48/82/140 → 45/76/128, armor bonus
+  1.5/1.75/2.0 → 1.4/1.6/1.8 (~-8%% vs normal, ~-15%% vs armored).
+- Gate re-tuned to **45/45** (more gold on Sentinel Watch + Engine of Ruin, two map re-rolls).
+
 ## v1.4 — 2026-07-07 (continuous assaults)
 - **The assault clock never stops**: the next wave marches 18s after the current wave's last
   spawn, whether the field is clear or not (clearing early still grants a short prep, capped by

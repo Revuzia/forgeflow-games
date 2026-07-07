@@ -51,8 +51,8 @@ export const TOWERS = {
     cost: 170, upCost: [140, 200], placement: 'ground',
     range: [11.5, 13.5, 15.5],
     rate: [0.42, 0.48, 0.55],
-    dmg: [48, 82, 140],
-    armorBonus: [1.5, 1.75, 2.0], // multiplier vs armor > 0
+    dmg: [45, 76, 128],
+    armorBonus: [1.4, 1.6, 1.8], // multiplier vs armor > 0
     canFlying: true,
   },
   beacon: {
