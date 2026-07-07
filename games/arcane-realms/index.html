@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arcane Realms TCG — ForgeFlow Games</title>
+<meta name="description" content="Arcane Realms TCG — a polished fantasy collectible card game. Five realms, 110 cards, deck builder, and a strategic AI opponent.">
+<meta name="theme-color" content="#120d1e">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0b0714;font-family:'Segoe UI',system-ui,sans-serif}
+#game-container{width:100%;height:100%;position:relative}
+canvas{display:block}
+#boot-splash{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#1c1230 0%,#0b0714 70%);color:#d9c9f2;z-index:200;transition:opacity .6s}
+#boot-splash h1{font-size:clamp(28px,5vw,54px);letter-spacing:.14em;font-weight:800;background:linear-gradient(180deg,#ffe9a8,#d4952b);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 24px rgba(212,149,43,.25)}
+#boot-splash .sub{margin-top:8px;font-size:14px;letter-spacing:.3em;color:#8d78b8;text-transform:uppercase}
+#boot-bar{margin-top:36px;width:min(420px,70vw);height:6px;border-radius:3px;background:#241a3a;overflow:hidden;border:1px solid #3a2a5c}
+#boot-bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#7a3fd4,#e8b93a);transition:width .25s}
+#boot-msg{margin-top:12px;font-size:12px;color:#6f5f96;letter-spacing:.08em}
+</style>
+</head><body>
+<div id="game-container">
+  <div id="boot-splash">
+    <h1>ARCANE REALMS</h1>
+    <div class="sub">Trading Card Game</div>
+    <div id="boot-bar"><i id="boot-bar-fill"></i></div>
+    <div id="boot-msg">Summoning…</div>
+  </div>
+</div>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module" src="runtime/boot.js?v=2"></script>
+</body></html>
