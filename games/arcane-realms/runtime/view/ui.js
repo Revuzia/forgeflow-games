@@ -1,11 +1,11 @@
 // Arcane Realms TCG — DOM UI layer: menu, deck builder, collection, settings,
 // match HUD (hero plates, phase bar, banners, floaters, arrow, tooltips).
 
-import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=8';
-import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=8';
-import { DIFFICULTIES } from '../sim/ai.js?v=8';
-import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=8';
-import { Audio2 } from './audio.js?v=8';
+import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=9';
+import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=9';
+import { DIFFICULTIES } from '../sim/ai.js?v=9';
+import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=9';
+import { Audio2 } from './audio.js?v=9';
 
 // ── persistence ─────────────────────────────────────────────────
 const LS_KEY = 'arcane_realms_save_v1';
@@ -162,7 +162,20 @@ const CSS = `
 .mana.spent{background:#241d3d;box-shadow:none;border-color:#3a2a5c}
 .manatext{font-size:12.5px;color:#9fc4ff;margin-left:4px}
 .zinfo{font-size:12px;color:var(--dim);display:flex;gap:10px}
-/* phase bar + buttons */
+/* stat nameplate overlay — HTML orbs + badges below each 3D creature */
+#np-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden;font-family:Georgia,serif}
+.np-orb{position:absolute;transform:translate(-50%,-50%);width:32px;height:32px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:#fff;
+  border:2px solid rgba(0,0,0,.6);box-shadow:0 2px 6px rgba(0,0,0,.65), inset 0 2px 3px rgba(255,255,255,.35);
+  text-shadow:0 1px 2px rgba(0,0,0,.9);line-height:1}
+.np-orb.atk[data-s=atk]{background:radial-gradient(circle at 38% 32%,#ff6a5a,#c8392e 60%,#5a140d)}
+.np-orb.atk[data-s=atkBuff]{background:radial-gradient(circle at 38% 32%,#ffb37a,#ff7a3d 60%,#8a3a10);border-color:#ffd7a8}
+.np-orb.hp[data-s=hp]{background:radial-gradient(circle at 38% 32%,#5fd07a,#2e8f3f 60%,#123f18)}
+.np-orb.hp[data-s=hpBuff]{background:radial-gradient(circle at 38% 32%,#8fe6a0,#54d06a 60%,#1d6b2c);border-color:#bff0c9}
+.np-orb.hp[data-s=hpHurt]{background:radial-gradient(circle at 38% 32%,#ff7a7a,#d43f3f 60%,#5a1010);border-color:#ffc2c2}
+.np-badge{position:absolute;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:12px;
+  background:rgba(10,8,18,.9);border:2px solid #888;box-shadow:0 1px 4px rgba(0,0,0,.6)}
 /* coach tips — dismissible one-time hints for new players */
 #coachtip{position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:40;pointer-events:auto;
   display:flex;align-items:center;gap:12px;max-width:min(560px,86vw);padding:11px 16px;

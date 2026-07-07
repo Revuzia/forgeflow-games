@@ -2,9 +2,9 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=8';
-import { REALMS, cardById } from '../sim/cards.js?v=8';
-import { FX } from './fx.js?v=8';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=9';
+import { REALMS, cardById } from '../sim/cards.js?v=9';
+import { FX } from './fx.js?v=9';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 export const LAYOUT = {
@@ -190,6 +190,12 @@ export class BoardScene {
     this.renderer.toneMappingExposure = 1.06;
     container.appendChild(this.renderer.domElement);
     this.renderer.domElement.id = 'arc-canvas';
+    // HTML overlay for stat orbs + badges — positioned a fixed number of
+    // pixels BELOW each creature on screen, so numbers are always readable and
+    // never cover the 3D model's body (world-space orbs fought perspective).
+    this.npLayer = document.createElement('div');
+    this.npLayer.id = 'np-layer';
+    container.appendChild(this.npLayer);
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color('#0b0714');
@@ -389,66 +395,66 @@ export class BoardScene {
     this.tweens.killOf(e.group.rotation);
     this.fx.clearEmitter('aura' + iid);
     this.despawnMini(iid);
+    // scene-space nameplate (orbs + badges) lives outside e.group — remove it
+    if (e.chips) { e.chips.atk.remove(); e.chips.hp.remove(); }
+    for (const b of e.badges) b.remove();
     this.scene.remove(e.group);
     this.cards.delete(iid);
   }
 
   ensureChips(e, atk, hp, maxHp, baseAtk, baseHp) {
     if (!e.chips) {
-      const mk = () => {
-        const m = new THREE.Mesh(
-          new THREE.PlaneGeometry(0.42, 0.42),
-          // depthTest OFF → atk/hp orbs ALWAYS draw over the 3D minis and over
-          // neighbouring models, so health & damage are never hidden
-          new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, depthTest: false }),
-        );
-        m.renderOrder = 62;
-        e.inner.add(m);
-        return m;
-      };
-      e.chips = { atk: mk(), hp: mk() };
-      e.chips.atk.scale.setScalar(1.28);
-      e.chips.hp.scale.setScalar(1.28);
-      e.chips.atk.position.set(-CW / 2 + 0.2, -CH / 2 + 0.2, 0.02);
-      e.chips.hp.position.set(CW / 2 - 0.2, -CH / 2 + 0.2, 0.02);
+      const mk = (cls) => { const d = document.createElement('div'); d.className = 'np-orb ' + cls; this.npLayer.appendChild(d); return d; };
+      e.chips = { atk: mk('atk'), hp: mk('hp') };
     }
     const atkStyle = atk > baseAtk ? 'atkBuff' : 'atk';
     const hpStyle = hp < maxHp ? 'hpHurt' : (maxHp > baseHp ? 'hpBuff' : 'hp');
-    e.chips.atk.material.map = chipTexture(atk, atkStyle);
-    e.chips.hp.material.map = chipTexture(hp, hpStyle);
-    e.chips.atk.material.needsUpdate = true;
-    e.chips.hp.material.needsUpdate = true;
+    e.chips.atk.textContent = atk; e.chips.atk.dataset.s = atkStyle;
+    e.chips.hp.textContent = hp;  e.chips.hp.dataset.s = hpStyle;
   }
 
   setBadges(e, unit) {
-    for (const b of e.badges) e.inner.remove(b);
+    // HTML badges in the same nameplate cluster — never cover the model
+    for (const b of e.badges) b.remove();
     e.badges = [];
     if (!unit) return;
     const kws = unit.silenced ? [] : unit.kw;
     const shown = kws.slice(0, 4);
     if (unit.silenced) shown.push('_silenced');
+    const mkBadge = (glyph, color, bx) => {
+      const d = document.createElement('div');
+      d.className = 'np-badge';
+      d.textContent = glyph; d.style.color = color; d.style.borderColor = color;
+      d._bx = bx; // px x-offset from the creature centre; placed each frame
+      this.npLayer.appendChild(d);
+      e.badges.push(d);
+    };
     shown.forEach((k, i) => {
       const [glyph, color] = k === '_silenced' ? ['✕', '#8d8d9e'] : (KW_BADGE[k] || ['•', '#ccc']);
-      const m = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.3, 0.3),
-        new THREE.MeshBasicMaterial({ map: badgeTexture(glyph, color), transparent: true, depthWrite: false, depthTest: false }),
-      );
-      m.renderOrder = 60;
-      m.position.set(-CW / 2 + 0.2 + i * 0.34, CH / 2 - 0.17, 0.02);
-      e.inner.add(m);
-      e.badges.push(m);
+      mkBadge(glyph, color, -34 + i * 24);
     });
-    // exhausted marker — top-right, replaces the old 90° tap rotation
-    if (unit.tapped) {
-      const m = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.42, 0.42),
-        new THREE.MeshBasicMaterial({ map: badgeTexture('💤', '#cdbcf2'), transparent: true, depthWrite: false, depthTest: false }),
-      );
-      m.renderOrder = 61;
-      m.position.set(CW / 2 - 0.22, CH / 2 - 0.2, 0.025);
-      e.inner.add(m);
-      e.badges.push(m);
-    }
+    if (unit.tapped) mkBadge('💤', '#cdbcf2', 40);
+  }
+
+  // place a creature's HTML orbs + badges a fixed number of pixels BELOW its
+  // on-screen base — always clear of the model body, for near AND far models
+  placeNameplate(e) {
+    if (e.boardHover) { this.hideNameplate(e); return; } // hidden while enlarged
+    const m = this.minis.get(e.iid);
+    const base = (m && m.group) ? m.group.position : e.group.position;
+    const s = this.worldToScreen(new THREE.Vector3(base.x, 0.02, base.z));
+    const cr = this.container.getBoundingClientRect();
+    const x = s.x - cr.left, y = s.y - cr.top;
+    const put = (el, dx, dy) => { el.style.left = (x + dx) + 'px'; el.style.top = (y + dy) + 'px'; el.style.display = ''; };
+    // far (enemy, side 1) models project higher on screen, so drop their plate
+    // further down to keep it below the body; near (my) side needs less
+    const oy = e.side === 0 ? 34 : 60;
+    if (e.chips) { put(e.chips.atk, -20, oy); put(e.chips.hp, 20, oy); }
+    for (const b of e.badges) put(b, b._bx, oy - 30);
+  }
+  hideNameplate(e) {
+    if (e.chips) { e.chips.atk.style.display = 'none'; e.chips.hp.style.display = 'none'; }
+    for (const b of e.badges) b.style.display = 'none';
   }
 
   // ── layout ────────────────────────────────────────────────────
@@ -483,8 +489,8 @@ export class BoardScene {
     this.setHoverFront(iid, on);
     const face = on ? getCard(e.cardId).tex : getBoardCard(e.cardId).tex;
     if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
-    if (e.chips) { e.chips.atk.visible = !on; e.chips.hp.visible = !on; }
-    for (const b of e.badges) b.visible = !on;
+    // hide the nameplate while this card is hover-enlarged (rules-text view)
+    if (on) this.hideNameplate(e);
     const base = this.boardTransform(e.side, e.slot, (e.side === 0 ? this._lastMyBoardN : this._lastFoeBoardN) || 6);
     if (on) {
       this.applyTransform(e, {
@@ -556,7 +562,8 @@ export class BoardScene {
         const face = rel === 0 ? getCard(h.card).tex : this.backs[1].tex;
         if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
         this.applyTransform(e, this.handTransform(rel, i, pl.hand.length, e.hover && rel === 0), dur);
-        if (e.chips) { e.inner.remove(e.chips.atk, e.chips.hp); e.chips = null; }
+        if (e.chips) { e.chips.atk.remove(); e.chips.hp.remove(); e.chips = null; }
+        for (const b of e.badges) b.remove(); e.badges = [];
         this.setBadges(e, null);
         e.ice.material.opacity = 0;
         e.group.rotation.y = 0; e.tapSpin = 0;
@@ -571,7 +578,6 @@ export class BoardScene {
         e.boardHover = false;
         const face = getBoardCard(u.card).tex;
         if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
-        if (e.chips) { e.chips.atk.visible = true; e.chips.hp.visible = true; }
         this.applyTransform(e, this.boardTransform(rel, i, pl.board.length, u.tapped), dur);
         const def = cardById(u.card);
         this.ensureChips(e, /* live */ this.liveAtk(state, p, u), u.hp, u.maxHp, def.atk ?? 0, def.hp ?? 0);
@@ -664,12 +670,26 @@ export class BoardScene {
   async animAttack(iid, targetPos) {
     const e = this.cards.get(iid);
     if (!e) return;
-    const start = e.group.position.clone();
-    const dir = targetPos.clone().sub(start);
-    const hit = start.clone().add(dir.multiplyScalar(0.72));
-    await this.tweens.add(e.group.position, { x: hit.x, y: 0.7, z: hit.z }, 0.16, 'sineIn');
-    this.shake(0.16);
-    await this.tweens.add(e.group.position, { x: e.home.pos.x, y: e.home.pos.y, z: e.home.pos.z }, 0.3, 'cubicOut');
+    const mini = this.minis.get(iid);
+    if (mini && mini.group) {
+      // the 3D MODEL lunges — the card never moves (owner: no tap/tip/shake).
+      // Suspend the follow-lerp so the tween owns x/z during the lunge.
+      mini.lunging = true;
+      const start = mini.group.position.clone();
+      const dir = targetPos.clone().sub(start); dir.y = 0;
+      const hit = start.clone().add(dir.multiplyScalar(0.5));
+      await this.tweens.add(mini.group.position, { x: hit.x, z: hit.z }, 0.14, 'sineIn');
+      await this.tweens.add(mini.group.position, { x: start.x, z: start.z }, 0.26, 'cubicOut');
+      mini.lunging = false;
+    } else {
+      // commons (no mini): a FLAT forward slide — no y-lift, no shake, so the
+      // card never reads as tapping/tipping.
+      const start = e.group.position.clone();
+      const dir = targetPos.clone().sub(start); dir.y = 0;
+      const hit = start.clone().add(dir.multiplyScalar(0.42));
+      await this.tweens.add(e.group.position, { x: hit.x, z: hit.z }, 0.14, 'sineIn');
+      await this.tweens.add(e.group.position, { x: e.home.pos.x, z: e.home.pos.z }, 0.26, 'cubicOut');
+    }
   }
 
   async animDeath(iid) {
@@ -681,8 +701,7 @@ export class BoardScene {
     this.fx.burst(e.group.position, col, { n: def.rarity === 'legendary' ? 60 : 26, speed: 2.6, life: 0.8 });
     if (def.rarity === 'legendary' || def.rarity === 'epic') this.fx.ring(e.group.position, col, { maxR: 2.6 });
     this.tweens.add(e.mesh.material, { opacity: 0 }, 0.42, 'cubicOut');
-    if (e.chips) { this.tweens.add(e.chips.atk.material, { opacity: 0 }, 0.3); this.tweens.add(e.chips.hp.material, { opacity: 0 }, 0.3); }
-    for (const b of e.badges) this.tweens.add(b.material, { opacity: 0 }, 0.3);
+    this.hideNameplate(e); // HTML orbs/badges vanish with the dying creature
     await this.tweens.add(e.group.scale, { x: 0.6, y: 0.6, z: 0.6 }, 0.42, 'cubicOut');
     this.removeEntry(iid);
   }
@@ -734,7 +753,7 @@ export class BoardScene {
   // ── 3D legendary minis ─────────────────────────────────────────
   async _gltfLoader() {
     if (!this._gltfLoaderP) {
-      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=8').then((m) => new m.GLTFLoader());
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=9').then((m) => new m.GLTFLoader());
     }
     return this._gltfLoaderP;
   }
@@ -798,7 +817,10 @@ export class BoardScene {
       // stand just in front of the card in the mid-board gap (diorama look);
       // the footprint clamp above keeps even long models inside their half
       const offset = new THREE.Vector3(0, 0, side === 0 ? -0.8 : 0.8);
-      group.rotation.y = (spec.yaw || 0) + (side === 0 ? 0 : Math.PI);
+      // BOTH sides face the local player (camera) so you always see the front
+      // of every model — mine and the enemy's. In PvP each client sees both
+      // sides facing themselves (scene always renders my side at the bottom).
+      group.rotation.y = (spec.yaw || 0);
       group.position.copy(entry.group.position).add(offset);
       group.scale.setScalar(0.01);
       this.scene.add(group);
@@ -927,15 +949,20 @@ export class BoardScene {
     const pulse = 0.62 + Math.sin(this.time * 4) * 0.2;
     for (const e of this.cards.values()) {
       if (e.glowOn) e.glow.material.opacity = pulse;
-      // keep legendary aura tracking
-      if (e.zone === 'board') this.fx.moveEmitter('aura' + e.iid, e.group.position);
+      if (e.zone === 'board') {
+        // keep legendary aura + the scene-space nameplate tracking the card
+        this.fx.moveEmitter('aura' + e.iid, e.group.position);
+        if (!e.dead) this.placeNameplate(e);
+      } else if (e.chips) {
+        this.hideNameplate(e); // off-board (bounced to hand etc.)
+      }
     }
     // minis follow their card (lunges carry them) + idle animation
     for (const [iid, m] of this.minis) {
       if (!m.group) continue;
       if (m.mixer) m.mixer.update(dt);
       const e = this.cards.get(iid);
-      if (e) {
+      if (e && !m.lunging) {
         const tx = e.group.position.x + m.offset.x;
         const tz = e.group.position.z + m.offset.z;
         m.group.position.x += (tx - m.group.position.x) * Math.min(1, dt * 10);

@@ -1,5 +1,25 @@
 # Arcane Realms TCG — Changelog
 
+## v1.3.4 — 2026-07-07 (Mini polish: nameplates, facing, no card-shake, Guard hint)
+
+- **Stat orbs never cover the models.** Moved atk/hp orbs + keyword/exhaust
+  badges to an **HTML overlay** (`#np-layer`) positioned a fixed number of
+  pixels *below* each creature on screen — always readable, always clear of
+  the animated body, for near and far models alike (world-space orbs fought
+  perspective). Crisp CSS gems; hidden while a card is hover-enlarged.
+- **All models face the viewing player.** Dropped the 180° flip on enemy
+  minis — mine and the enemy's both face the camera so you see every model's
+  front (in PvP each client sees both sides facing themselves).
+- **Cards no longer tap/tip/shake on attack.** The attack lunge now moves the
+  **3D model**, not the card — the card holds perfectly still (verified: card
+  position unchanged through a lunge). Commons (no mini) do a flat forward
+  slide with no lift/shake.
+- **Guard reminder.** When an enemy Guard blocks your attack, a toast explains
+  it ("🛡 Blocked by Guard — destroy the enemy Guard first"), plus a one-time
+  coach tip the first time a Guard constrains your targets.
+
+Selftest 208/208. Cache-bust `?v=8` → `?v=9`.
+
 ## v1.3.3 — 2026-07-07 (Meshy 3D minis: full legendary+epic coverage, board polish)
 
 ### 3D minis — every legendary & epic creature now has one

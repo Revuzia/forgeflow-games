@@ -6,10 +6,10 @@
 // always shows my side at the bottom via syncFromState(state, mySide).
 
 import * as THREE from 'three';
-import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=8';
-import { cardById, REALMS } from '../sim/cards.js?v=8';
-import { chooseAction } from '../sim/ai.js?v=8';
-import { Audio2 } from './audio.js?v=8';
+import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=9';
+import { cardById, REALMS } from '../sim/cards.js?v=9';
+import { chooseAction } from '../sim/ai.js?v=9';
+import { Audio2 } from './audio.js?v=9';
 
 const REALM_COLOR = (id) => REALMS[cardById(id).realm]?.color ?? 0x8d99ae;
 
@@ -72,6 +72,8 @@ export class Match {
 
   relOf(absSide) { return absSide === this.mySide ? 0 : 1; }
   myTurn() { return this.state.active === this.mySide; }
+  isGuard(u) { return !!u && !u.silenced && Array.isArray(u.kw) && u.kw.includes('guard'); }
+  enemyHasGuard() { return this.state.players[this.foeSide].board.some((u) => this.isGuard(u)); }
 
   async playOpening() {
     await this.ui.banner(this.myTurn() ? 'YOUR TURN' : 'ENEMY TURN', this.myTurn());
@@ -687,6 +689,13 @@ export class Match {
         else if (hit && hit.kind === 'board' && hit.side === 0 && hit.iid !== this.select.iid) {
           this.trySelectAttacker(hit);
         } else {
+          // clicked an illegal target — if a Guard is why, say so
+          if (tgt && this.enemyHasGuard() &&
+              (tgt.kind === 'hero' ? tgt.p === this.foeSide
+                                   : !this.isGuard(this.findUnit(tgt.iid)))) {
+            Audio2.sfx('error');
+            this.ui.toast('🛡 Blocked by Guard — destroy the enemy Guard creature(s) first.');
+          }
           this.clearSelect();
           this.refreshLegal();
         }
@@ -738,6 +747,10 @@ export class Match {
       return;
     }
     this.scene.clearGlows();
+    // teach Guard the first time it actually constrains the player's targets
+    if (this.enemyHasGuard() && !attacks.some((a) => a.target.kind === 'hero')) {
+      this.ui.coach('guard', '🛡 The enemy has a <b>Guard</b>. You must destroy Guard creatures before you can attack the hero or anything behind them.');
+    }
     this.beginSelect(hit.iid, attacks, viaCombat);
   }
 
