@@ -74,7 +74,9 @@ export const ENEMIES = {
     orc:      { hp: 150, dmg: 22, speed: 2.3, aggro: 10, atkR: 1.8, cd: 1.4, gold: 30, label: "Orc Brute" },
     imp:      { hp: 55,  dmg: 14, speed: 3.4, aggro: 11, atkR: 1.5, cd: 1.0, gold: 14, label: "Imp" },
     myconid:  { hp: 110, dmg: 12, speed: 1.6, aggro: 7,  atkR: 1.5, cd: 1.4, gold: 16, label: "Myconid" },
+    cultist:  { hp: 65,  dmg: 15, speed: 2.8, aggro: 10, atkR: 1.6, cd: 1.2, gold: 16, label: "Dark Cultist" },
     cyclops:  { hp: 175, dmg: 25, speed: 2.1, aggro: 10, atkR: 1.9, cd: 1.5, gold: 34, label: "Cyclops" },
+    ogre:     { hp: 190, dmg: 27, speed: 2.0, aggro: 10, atkR: 2.0, cd: 1.5, gold: 40, label: "Ogre" },
     demon:    { hp: 280, dmg: 30, speed: 2.1, aggro: 12, atkR: 2.0, cd: 1.6, gold: 80, label: "Demon Lord", boss: true },
   },
   scifi: {
@@ -84,8 +86,10 @@ export const ENEMIES = {
     turret:   { hp: 70,  dmg: 11, speed: 0,   aggro: 11, atkR: 10,  cd: 1.6, gold: 12, label: "Plasma Turret", ranged: true, static: true },
     mech:     { hp: 160, dmg: 24, speed: 2.2, aggro: 10, atkR: 2.0, cd: 1.4, gold: 32, label: "War Mech" },
     blob:     { hp: 100, dmg: 13, speed: 1.7, aggro: 8,  atkR: 1.5, cd: 1.3, gold: 12, label: "Ooze Alien" },
+    cyborg:   { hp: 95,  dmg: 18, speed: 2.7, aggro: 10, atkR: 1.7, cd: 1.2, gold: 18, label: "Combat Cyborg" },
     warbot:   { hp: 150, dmg: 22, speed: 2.0, aggro: 10, atkR: 2.0, cd: 1.4, gold: 30, label: "War Bot" },
     xeno:     { hp: 175, dmg: 26, speed: 2.4, aggro: 11, atkR: 1.9, cd: 1.4, gold: 35, label: "Xeno Brute" },
+    sentinel: { hp: 200, dmg: 26, speed: 1.9, aggro: 10, atkR: 2.0, cd: 1.5, gold: 42, label: "Sentinel Mech" },
     alien:    { hp: 300, dmg: 32, speed: 2.2, aggro: 12, atkR: 2.0, cd: 1.6, gold: 85, label: "Hive Alien", boss: true },
   },
 };

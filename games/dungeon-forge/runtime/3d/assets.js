@@ -98,7 +98,7 @@ export class Assets {
     return promiseMap(m);
   }
 
-  enemies(theme) {
+  async enemies(theme) {
     const t = theme === "scifi" ? "scifi" : "fantasy";
     const names = t === "fantasy"
       ? ["spider", "skeleton", "zombie", "ghost", "slime", "orc", "imp", "myconid", "cyclops", "demon"]
@@ -107,7 +107,22 @@ export class Assets {
     for (const n of names) m[n] = n === "turret"
       ? this.load("props/scifi/turret.glb")
       : this.load(`enemies/${t}/${n}.glb`);
-    return promiseMap(m);
+    const out = await promiseMap(m);
+    // original Meshy-generated enemies (rigged humanoids: textured base + walk/run
+    // clips; no idle clip, so the renderer relaxes their arms while standing).
+    const meshy = t === "fantasy" ? ["cultist", "ogre"] : ["cyborg", "sentinel"];
+    await Promise.all(meshy.map(async (nm) => {
+      try {
+        const base = await this.load(`enemies/meshy/${nm}/base.glb`);
+        const anims = [];
+        for (const [rel, cn] of [["walk", "Walk"], ["run", "Run"]]) {
+          const g = await this.load(`enemies/meshy/${nm}/${rel}.glb`).catch(() => null);
+          if (g && g.animations && g.animations[0]) { const c = g.animations[0].clone(); c.name = cn; anims.push(c); }
+        }
+        out[nm] = { scene: base.scene, animations: anims, meshy: true };
+      } catch (e) { console.warn("[assets] meshy enemy failed:", nm, e); }
+    }));
+    return out;
   }
 
   async chars() {

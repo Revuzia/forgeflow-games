@@ -53,6 +53,14 @@ export class Builder {
     this._raycaster = new THREE.Raycaster();
     this._plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this._listeners = [];
+    // camera/input state must exist before the first update() — the game loop can
+    // tick the builder mid-load, before async enter() runs _bindInput(). Without
+    // this, update() throws on this.keys/this.camDist every frame and the builder
+    // never comes up (the "can't enter builder" bug).
+    this.keys = {};
+    this.camYaw = 0; this.camPitch = 1.05; this.camDist = 42;
+    this.camT = { x: 0, z: 0 };
+    this.ready = false;
   }
 
   // ── lifecycle ───────────────────────────────────────────────────────────────
@@ -87,10 +95,12 @@ export class Builder {
     this._bindInput();
     this.g.hud.showBuilder(this);
     if (this.session) this.session.bindBuilder(this);
+    this.ready = true;   // now safe for update() to run
     this.g.audit("builder.enter");
   }
 
   exit() {
+    this.ready = false;
     this._unbindInput();
     this.g.hud.hideBuilder();
     if (this.session) this.session.bindBuilder(null);
@@ -571,6 +581,7 @@ export class Builder {
 
   // ── per-frame ───────────────────────────────────────────────────────────────
   update(dt) {
+    if (!this.ready) return;   // don't tick until async enter() has finished loading
     // camera
     const sp = this.camDist * 0.9 * dt;
     const cos = Math.cos(this.camYaw), sin = Math.sin(this.camYaw);

@@ -414,6 +414,14 @@ export function damageEnemy(st, e, dmg, byId, elem) {
     const p = st.players.find((pl) => pl.id === byId);
     if (p) p.gold += e.K.gold;
     emit(st, "edied", { id: e.id, by: byId, key: e.droppedKey, gold: e.K.gold, x: e.x, z: e.z, f: e.f });
+    return;
+  }
+  // Retaliate: any hit aggros the enemy onto its attacker — even a projectile
+  // from across the room or a sneak strike with no line of sight. This is what
+  // makes ranged pokes and stealth openers actually provoke the enemy.
+  if (byId && st.players.some((pl) => pl.id === byId && pl.alive)) {
+    if (e.state !== "chase") emit(st, "aggro", { id: e.id });
+    e.state = "chase"; e.target = byId; e.repathT = 0;
   }
 }
 
@@ -581,7 +589,7 @@ function stepEnemy(st, e, dt, rnd, simEnemies) {
     const dist = Math.hypot(p.x - e.x, p.z - e.z);
     if (dist < tDist) { tDist = dist; target = p; }
   }
-  const seesTarget = target && (tDist < 3.2 || (tDist < K.aggro && hasLOS(st, e.f, e.x, e.z, target.x, target.z)));
+  const seesTarget = target && (tDist < 4.6 || (tDist < K.aggro && hasLOS(st, e.f, e.x, e.z, target.x, target.z)));
 
   if (e.state === "patrol") {
     e.patrolT -= dt;

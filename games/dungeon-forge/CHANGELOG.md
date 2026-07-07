@@ -142,3 +142,20 @@ Initial release.
 - Selftest → 117 (roster kill-tests auto-cover the new enemies).
 - (Original Meshy-generated enemies — cultist/ogre/cyborg/sentinel — generated,
   integration in progress.)
+
+## v1.4.1 — 2026-07-07 (critical: entry crashes + can't-enter-builder + retaliation)
+- **FIXED the "can't enter builder" blocker**: menu-triggered modals (the Build
+  and Play pickers) opened *inside* the HUD stacking context (z=20), which the
+  menu overlay (z=30) painted over — so the picker was invisible and unclickable.
+  Raised the HUD layer above the menu (still pointer-events:none, menu stays
+  clickable). Build/Play/host pickers now appear. Verified live.
+- **FIXED the KeyW TypeError flood** (image 4): escape AND builder read
+  this.keys/this.camDist in update() before the async enter() ran _bindInput().
+  Now input/camera state is initialized in the constructor and update() is gated
+  behind a `ready` flag set at the end of enter(). No more per-frame crash.
+- **Enemy retaliation**: any hit now aggros the enemy onto its attacker — a
+  projectile from across the room or a no-line-of-sight sneak strike provokes it
+  (previously only proximity/LOS aggro'd). Close-range aggro widened to ~1 cell.
+- **+4 original Meshy enemies** (cultist/ogre · cyborg/sentinel) — rigged
+  humanoids with walk/run + relaxed idle; roster now 12 fantasy / 11 sci-fi.
+  Selftest 121.

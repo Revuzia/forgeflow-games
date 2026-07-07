@@ -462,7 +462,7 @@ let _styled = false;
 function injectStyle() {
   if (_styled) return; _styled = true;
   const css = `
-  .df-hud{position:absolute;inset:0;pointer-events:none;font-family:'Segoe UI',system-ui,sans-serif;color:#e8ecff;--acc:var(--df-accent,#ffb347);--acc2:var(--df-accent2,#7d5fff);z-index:20}
+  .df-hud{position:absolute;inset:0;pointer-events:none;font-family:'Segoe UI',system-ui,sans-serif;color:#e8ecff;--acc:var(--df-accent,#ffb347);--acc2:var(--df-accent2,#7d5fff);z-index:40}
   .df-hud *{box-sizing:border-box}
   .df-hud button{cursor:pointer;pointer-events:auto}
   .df-btn{background:rgba(16,20,34,.85);border:1px solid rgba(150,170,255,.28);color:#e8ecff;border-radius:10px;padding:8px 14px;font-weight:700;font-size:13px;letter-spacing:.4px;transition:all .15s}

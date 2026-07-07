@@ -25,6 +25,12 @@ export class Escape {
   constructor(game) {
     this.g = game;
     this._listeners = [];
+    // input/camera state must exist before the first update() — the game loop
+    // can tick us mid-load, before the async enter() finishes _bindInput().
+    this.keys = {};
+    this.camYaw = 0;
+    this.camPitch = 0.32;
+    this.ready = false;
   }
 
   // ── lifecycle ──────────────────────────────────────────────────────────────
@@ -81,10 +87,12 @@ export class Escape {
     this.g.hud.showEscape(this);
     if (this.session) this.session.bindEscape(this);
     this._syncFloorVis(true);
+    this.ready = true;   // now safe for update() to run the sim + read input
     this.g.audit("escape.enter seed=" + this.run.runSeed);
   }
 
   exit() {
+    this.ready = false;
     this._unbindInput();
     document.exitPointerLock && document.exitPointerLock();
     this.g.hud.hideEscape();
@@ -808,7 +816,7 @@ export class Escape {
 
   // ── frame ──────────────────────────────────────────────────────────────────
   update(dt) {
-    if (!this.run) return;
+    if (!this.run || !this.ready) return;
     this._gatherInput();
     E.tick(this.run, dt, { simEnemies: this.simEnemies, localIds: this.localIds });
     this._handleEvents(E.drainEvents(this.run));

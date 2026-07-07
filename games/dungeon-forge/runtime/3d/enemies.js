@@ -8,7 +8,7 @@ import * as THREE from "three";
 
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
-const { Assets, creatureClips, makeCreature } = await import("./assets.js" + V);
+const { Assets, creatureClips, makeCreature, findArmBones, relaxArms } = await import("./assets.js" + V);
 
 const FLOOR_H = 4.4;
 
@@ -30,7 +30,8 @@ export class EnemyPool {
     if (!tpl) return;
     const grp = new THREE.Group();
     const K = e.K || {};
-    const H = { spider: 1.15, drone: 0.95, slime: 1.2, turret: 1.6, imp: 1.35, myconid: 1.45, cyclops: 2.3, blob: 1.5, warbot: 2.1, xeno: 2.3 };
+    const H = { spider: 1.15, drone: 0.95, slime: 1.2, turret: 1.6, imp: 1.35, myconid: 1.45, cyclops: 2.3, blob: 1.5, warbot: 2.1, xeno: 2.3,
+                cultist: 1.85, ogre: 2.3, cyborg: 1.9, sentinel: 2.2 };
     const h = K.boss ? 2.7 : (H[e.etype] || 1.75);
     const made = makeCreature(this.g.assets, tpl, h, THREE);
     const obj = made.obj;
@@ -59,6 +60,8 @@ export class EnemyPool {
 
     this.root.add(grp);
     const view = { e, grp, obj, mixer, actions, cur: null, oneshotT: 0, hover, bar, dead: false, fade: 1 };
+    // Meshy enemies ship walk/run but no idle clip → relax arms to the sides while standing
+    if (tpl.meshy) { view.armBones = findArmBones(obj); view.relaxW = 0; }
     if (actions.idle) this._play(view, "idle");
     this.views.set(e.id, view);
     grp.position.set(e.x, e.f * FLOOR_H, e.z);
@@ -162,6 +165,11 @@ export class EnemyPool {
         const moving = e.state === "chase" || e.moving;
         this._play(v, moving ? (e.state === "chase" && v.actions.run ? "run" : "walk") : "idle");
         e.moving = false;
+        // Meshy enemies have no idle clip — relax the arms to the sides while standing
+        if (v.armBones && v.oneshotT <= 0) {
+          v.relaxW += ((moving ? 0 : 1) - v.relaxW) * Math.min(1, dt * 10);
+          if (v.relaxW > 0.02) { v.obj.updateMatrixWorld(true); relaxArms(v.armBones, v.relaxW); }
+        }
       }
       // status auras: fire embers / poison bubbles / frost drips / stun stars
       if (v.status) {
