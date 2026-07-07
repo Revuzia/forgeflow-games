@@ -1,3 +1,4 @@
+import * as THREE from "three";
 /**
  * royale/hud.js — every screen and overlay: main menu (map/mode select),
  * lobby fill, in-game HUD (bars, slots, mats, minimap w/ storm rings, kill
@@ -27,6 +28,7 @@ const BTN = { padding: "12px 26px", borderRadius: "10px", border: "none", cursor
 
 export function init(W) {
   K = W.SIM;
+  W.randomMap = randomMap;   // net.js uses this for online match starts
   const root = h("div", { position: "absolute", inset: "0", pointerEvents: "none", fontFamily: FONT, zIndex: 40, color: "#eaf2ff", userSelect: "none" });
   W.kernel.parent.appendChild(root);
   R = { root };
@@ -41,15 +43,14 @@ function layer(name, styles) {
 }
 
 // ═══ MENU ════════════════════════════════════════════════════════════════════
-const MAP_CARDS = [
-  { id: "isla_viva", name: "Isla Viva", sub: "Vibrant tropical island", c1: "#0ea877", c2: "#1a4a66" },
-  { id: "ashgrid", name: "Ashgrid", sub: "Urban city ruins", c1: "#7d8489", c2: "#3a2f2c" },
-  { id: "deepwood", name: "Deepwood", sub: "Dense forest wilderness", c1: "#2f6b3a", c2: "#14331c" },
-];
+// Maps rotate RANDOMLY every match — no picker (owner direction: "anytime you
+// play, it randomly chooses").
+export const BATTLE_MAPS = ["isla_viva", "ashgrid", "deepwood"];
+export const randomMap = () => BATTLE_MAPS[Math.floor(Math.random() * BATTLE_MAPS.length)];
 const MODE_CARDS = [
-  { id: "standard", name: "BATTLE ROYALE", sub: "50 players · last one standing · 10–15 min" },
+  { id: "standard", name: "BATTLE ROYALE", sub: "50 players · random map · last one standing" },
   { id: "quick", name: "QUICK MATCH", sub: "5-minute storm · double loot · hot start" },
-  { id: "practice", name: "PRACTICE", sub: "No storm · shooting range + movement course" },
+  { id: "practice", name: "PRACTICE", sub: "No storm · random map · full loadout" },
 ];
 
 export function showMenu(W, startMatch) {
@@ -62,10 +63,9 @@ export function showMenu(W, startMatch) {
   h("div", { fontSize: "62px", fontWeight: "900", letterSpacing: "6px", textShadow: "0 0 30px rgba(80,160,255,0.7), 0 4px 0 rgba(0,0,0,0.5)" }, "LAST CIRCLE", wrap);
   h("div", { fontSize: "15px", opacity: "0.75", marginTop: "-16px", letterSpacing: "3px" }, "50 DROP · ONE STANDS", wrap);
 
-  // mode select
+  // mode select (maps are random every match)
   const modeRow = h("div", { display: "flex", gap: "14px" }, null, wrap);
   let selMode = W.mode === "practice" ? "practice" : W.mode;
-  let selMap = W.mapId;
   const modeEls = MODE_CARDS.map((m) => {
     const c = h("div", Object.assign({ padding: "14px 20px", cursor: "pointer", textAlign: "center", minWidth: "200px", transition: "transform .12s" }, PANEL), null, modeRow);
     h("div", { fontWeight: "900", fontSize: "17px", letterSpacing: "1px" }, m.name, c);
@@ -73,26 +73,16 @@ export function showMenu(W, startMatch) {
     c.onclick = () => { selMode = m.id; W.events.emit("uiClick"); paint(); };
     return { m, c };
   });
-  // map select
-  const mapRow = h("div", { display: "flex", gap: "14px" }, null, wrap);
-  const mapEls = MAP_CARDS.map((m) => {
-    const c = h("div", Object.assign({ width: "190px", height: "110px", cursor: "pointer", overflow: "hidden", position: "relative", transition: "transform .12s" }, PANEL, { background: `linear-gradient(145deg, ${m.c1}, ${m.c2})` }), null, mapRow);
-    h("div", { position: "absolute", left: "12px", bottom: "26px", fontWeight: "900", fontSize: "19px", textShadow: "0 2px 6px rgba(0,0,0,0.7)" }, m.name, c);
-    h("div", { position: "absolute", left: "12px", bottom: "9px", fontSize: "11px", opacity: "0.85" }, m.sub, c);
-    c.onclick = () => { selMap = m.id; W.events.emit("uiClick"); paint(); };
-    return { m, c };
-  });
   function paint() {
     modeEls.forEach(({ m, c }) => { c.style.outline = m.id === selMode ? "2px solid #57b0ff" : "none"; c.style.transform = m.id === selMode ? "scale(1.04)" : "scale(1)"; });
-    mapEls.forEach(({ m, c }) => { c.style.outline = m.id === selMap ? "2px solid #57b0ff" : "none"; c.style.transform = m.id === selMap ? "scale(1.04)" : "scale(1)"; });
   }
   paint();
 
   const btnRow = h("div", { display: "flex", gap: "14px", alignItems: "center" }, null, wrap);
   const play = h("button", Object.assign({}, BTN, { fontSize: "22px", padding: "16px 60px", background: "linear-gradient(180deg,#57b0ff,#2f7fd6)", color: "#fff", boxShadow: "0 6px 24px rgba(60,140,255,0.45)" }), "PLAY", btnRow);
-  play.onclick = () => { W.events.emit("uiClick"); startMatch({ mapId: selMap, mode: selMode }); };
+  play.onclick = () => { W.events.emit("uiClick"); startMatch({ mapId: randomMap(), mode: selMode }); };
   const online = h("button", Object.assign({}, BTN, { background: "rgba(255,255,255,0.1)", color: "#cfe4ff" }), "🌐 PLAY WITH FRIENDS", btnRow);
-  online.onclick = () => { W.events.emit("uiClick"); W.events.emit("openOnline", { mapId: selMap, mode: selMode }); };
+  online.onclick = () => { W.events.emit("uiClick"); W.events.emit("openOnline", { mode: selMode }); };
   const settings = h("button", Object.assign({}, BTN, { background: "rgba(255,255,255,0.1)", color: "#cfe4ff" }), "⚙ SETTINGS", btnRow);
   settings.onclick = () => { W.events.emit("uiClick"); showSettings(W); };
 
@@ -194,8 +184,9 @@ export function showHUD(W) {
   // kill feed right
   R.feed = h("div", { position: "absolute", right: "16px", top: "70px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-end", fontSize: "12px" }, null, L);
 
-  // crosshair
-  R.cross = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", fontSize: "18px", fontWeight: "400", color: "rgba(255,255,255,0.9)", textShadow: "0 1px 2px #000" }, "+", L);
+  // crosshair — PER-WEAPON reticles (painted by paintCrosshair)
+  R.cross = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "56px", height: "56px", transition: "transform .12s" }, null, L);
+  R._crossFor = null;
   R.hitmark = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%) rotate(45deg)", fontSize: "26px", color: "#fff", opacity: "0", transition: "opacity .18s" }, "✕", L);
 
   // interact hint + chest-open progress ring
@@ -302,8 +293,12 @@ export function update(W, dt) {
   // directional indicators: fade + footstep scan
   stepIndicators(W, dt);
 
-  // crosshair spread feel
-  R.cross.style.display = (p.input.ads && p.weapon && K.WEAPONS[p.weapon.id] && K.WEAPONS[p.weapon.id].scope) ? "none" : "block";
+  // crosshair: per-weapon reticle, hidden behind the sniper scope, blooms while moving
+  const wid = p.weapon ? p.weapon.id : null;
+  if (R._crossFor !== wid) paintCrosshair(W, wid);
+  R.cross.style.display = (p.input.ads && wid && K.WEAPONS[wid] && K.WEAPONS[wid].scope) ? "none" : "block";
+  const bloom = (Math.hypot(p.vel.x, p.vel.z) > 1 ? 1.3 : 1) * (p.input.ads ? 0.8 : 1);
+  if (C.bloom !== bloom) { R.cross.style.transform = `translate(-50%,-50%) scale(${bloom})`; C.bloom = bloom; }
 }
 
 // ═══ directional indicators ══════════════════════════════════════════════════
@@ -356,21 +351,107 @@ function stepIndicators(W, dt) {
   }
 }
 
+// ── slot icons: weapons are RENDERED 3D thumbnails of the actual view models;
+// consumables use big legible glyphs ─────────────────────────────────────────
+let iconR = null, iconScene = null, iconCam = null;
+const iconCache = {};
+function ensureIconRig() {
+  if (iconR) return;
+  iconR = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+  iconR.setSize(96, 72);
+  iconScene = new THREE.Scene();
+  iconScene.add(new THREE.HemisphereLight(0xffffff, 0x334455, 1.5));
+  const d = new THREE.DirectionalLight(0xffffff, 1.8);
+  d.position.set(2, 3, 4);
+  iconScene.add(d);
+  iconCam = new THREE.PerspectiveCamera(28, 96 / 72, 0.01, 20);
+}
+function weaponIcon(W, id) {
+  if (iconCache[id]) return Promise.resolve(iconCache[id]);
+  if (!W.weaponProto) return Promise.resolve(null);
+  return W.weaponProto(id).then((proto) => {
+    if (!proto) return null;
+    if (iconCache[id]) return iconCache[id];
+    ensureIconRig();
+    const m = proto.clone();
+    iconScene.add(m);
+    const bbox = new THREE.Box3().setFromObject(m);
+    const c = bbox.getCenter(new THREE.Vector3());
+    const span = bbox.getSize(new THREE.Vector3()).length();
+    m.position.sub(c);
+    m.rotation.set(0.2, -Math.PI / 2 + 0.45, 0);   // 3/4 side profile, barrel right
+    iconCam.position.set(0, span * 0.12, span * 1.35);
+    iconCam.lookAt(0, 0, 0);
+    iconR.render(iconScene, iconCam);
+    const url = iconR.domElement.toDataURL();
+    iconScene.remove(m);
+    iconCache[id] = url;
+    return url;
+  }).catch(() => null);
+}
+const CONSUMABLE_ICONS = { bandage: "🩹", medkit: "⛑️", mini_shield: "🧪", big_shield: "🛡️" };
+
+// ── per-weapon crosshairs ────────────────────────────────────────────────────
+// Each weapon class gets its own reticle shape sized to its real spread/range:
+//   pistol/smg = tight 4-line cross · AR = wider cross + dot ·
+//   shotgun = pellet-spread ring · sniper = fine dot (scope on ADS) ·
+//   grenade launcher = chevron arc pip · consumables = open hands (dot)
+function paintCrosshair(W, weaponId) {
+  if (!R.cross) return;
+  clear(R.cross);
+  const CENTER = 28;
+  const mk = (styles) => h("div", Object.assign({ position: "absolute", background: "rgba(255,255,255,0.95)", boxShadow: "0 0 2px rgba(0,0,0,0.9)" }, styles), null, R.cross);
+  const dot = (r) => mk({ left: (CENTER - r) + "px", top: (CENTER - r) + "px", width: r * 2 + "px", height: r * 2 + "px", borderRadius: "50%" });
+  const line = (x, y, w, hh) => mk({ left: (CENTER + x) + "px", top: (CENTER + y) + "px", width: w + "px", height: hh + "px", borderRadius: "1px" });
+  const cross4 = (gap, len, th) => {
+    line(-th / 2, -gap - len, th, len);   // up
+    line(-th / 2, gap, th, len);          // down
+    line(-gap - len, -th / 2, len, th);   // left
+    line(gap, -th / 2, len, th);          // right
+  };
+  const def = K.WEAPONS[weaponId];
+  const cls = def ? def.cls : null;
+  if (cls === "pistol" || cls === "smg") { cross4(5, 8, 2); dot(1.5); }
+  else if (cls === "ar") { cross4(8, 11, 2); dot(1.5); }
+  else if (cls === "shotgun") {
+    // ring ≈ the real pellet cone at mid-range
+    h("div", { position: "absolute", left: (CENTER - 16) + "px", top: (CENTER - 16) + "px", width: "32px", height: "32px", borderRadius: "50%", border: "2px solid rgba(255,255,255,0.9)", boxShadow: "0 0 2px rgba(0,0,0,0.9), inset 0 0 2px rgba(0,0,0,0.9)" }, null, R.cross);
+    dot(1.5);
+  }
+  else if (cls === "sniper") { dot(2); line(-1, 10, 2, 8); }  // fine dot + drop hint (scope overlay on ADS)
+  else if (cls === "launcher") {
+    dot(2);
+    // arc chevron hinting the lobbed trajectory
+    const ch = h("div", { position: "absolute", left: (CENTER - 7) + "px", top: (CENTER + 8) + "px", width: "14px", height: "14px", border: "2px solid rgba(255,200,120,0.95)", borderTop: "none", borderLeft: "none", transform: "rotate(45deg)", boxShadow: "0 0 2px rgba(0,0,0,0.8)" }, null, R.cross);
+  }
+  else { dot(2); } // consumable / fallback
+  R._crossFor = weaponId;
+}
+
 function paintSlots(W, p) {
   clear(R.slotsRow);
   p.inventory.slots.forEach((s, i) => {
     const active = i === p.inventory.active;
     const cell = h("div", {
-      width: "52px", height: "44px", borderRadius: "8px", position: "relative",
+      width: "56px", height: "46px", borderRadius: "8px", position: "relative",
       background: active ? "rgba(87,176,255,0.25)" : "rgba(0,0,0,0.45)",
       border: active ? "2px solid #57b0ff" : "1px solid rgba(255,255,255,0.18)",
       display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: "800",
+      overflow: "hidden",
     }, null, R.slotsRow);
     if (s) {
       const rc = s.kind === "weapon" ? (K.RARITY_COLOR[K.RARITY[s.rarity || 0]] || "#9da5b4") : "#8fd3a0";
       h("div", { position: "absolute", left: "0", right: "0", bottom: "0", height: "3px", background: rc }, null, cell);
-      cell.appendChild(document.createTextNode(shortName(s)));
-      if (s.count) h("div", { position: "absolute", right: "3px", top: "1px", fontSize: "10px", opacity: "0.9" }, String(s.count), cell);
+      if (s.kind === "weapon") {
+        const img = h("img", { width: "52px", height: "38px", objectFit: "contain", display: "none" }, null, cell);
+        const txt = h("div", {}, shortName(s), cell);
+        weaponIcon(W, s.id).then((url) => {
+          if (url && img.isConnected) { img.src = url; img.style.display = "block"; txt.remove(); }
+        });
+      } else {
+        h("div", { fontSize: "22px", lineHeight: "1" }, CONSUMABLE_ICONS[s.id] || "▣", cell);
+      }
+      if (s.count) h("div", { position: "absolute", right: "3px", top: "1px", fontSize: "10px", opacity: "0.95", textShadow: "0 1px 2px #000" }, String(s.count), cell);
     }
     h("div", { position: "absolute", left: "3px", top: "1px", fontSize: "9px", opacity: "0.6" }, String(i + 1), cell);
   });
@@ -549,10 +630,9 @@ export function showPostMatch(W, res) {
   stat(grid, "Damage dealt", res.damage);
   stat(grid, "Accuracy", res.accuracy + "%");
   stat(grid, "Survived", fmtT(res.timeS));
+  // one life per match — no instant requeue; back to the menu
   const row = h("div", { display: "flex", gap: "12px", justifyContent: "center", marginTop: "22px" }, null, box);
-  const again = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff" }), "PLAY AGAIN", row);
-  again.onclick = res.onAgain;
-  const menu = h("button", Object.assign({}, BTN, { background: "rgba(255,255,255,0.1)", color: "#cfe4ff" }), "MAIN MENU", row);
+  const menu = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff", fontSize: "18px", padding: "14px 44px" }), "MAIN MENU", row);
   menu.onclick = () => { L.remove(); R.post = null; res.onMenu(); };
 }
 function stat(grid, label, val) {

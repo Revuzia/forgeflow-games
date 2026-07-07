@@ -119,7 +119,7 @@ function openLobby(W, sel) {
     const ids = Object.keys(S.peers).sort();
     const roster = [{ peerId: S.net.id, slot: 0, name: S.myName }];
     ids.forEach((pid, i) => roster.push({ peerId: pid, slot: i + 1, name: S.peers[pid] || "Friend" }));
-    const cfg = { seed: (Math.random() * 0xffffffff) >>> 0, mapId: sel.mapId, mode: sel.mode === "practice" ? "standard" : sel.mode, roster };
+    const cfg = { seed: (Math.random() * 0xffffffff) >>> 0, mapId: W.randomMap(), mode: sel.mode === "practice" ? "standard" : sel.mode, roster };
     send("start", cfg);
     root.remove();
     beginOnlineMatch(W, cfg);

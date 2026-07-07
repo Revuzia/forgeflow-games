@@ -181,6 +181,15 @@ function wire(W) {
   on("actorDied", (victim) => thump(300, 0.3, 0.3, victim === W.player ? null : victim.pos, 90));
   on("swimState", (a, swimming) => { if (swimming) thump(900, 0.25, 0.25, a === W.player ? null : a.pos, 40); });
   on("swimStroke", (a) => thump(1100, 0.12, 0.15, a === W.player ? null : a.pos, 25));
+  // footsteps: soft surface thud, own steps quieter than nearby enemies'
+  on("footstep", (a) => thump(300 + Math.random() * 90, 0.055, a === W.player ? 0.09 : 0.16, a === W.player ? null : a.pos, 24));
+  on("weaponEquipped", (a) => { if (a === W.player) blip(640, 0.05, 0.12, "square"); });
+  on("chuteDeployed", (a) => thump(1300, 0.35, a === W.player ? 0.3 : 0.2, a === W.player ? null : a.pos, 60));
+  on("chuteCut", (a) => { if (a === W.player) blip(420, 0.12, 0.16, "sawtooth"); });
+  // kill confirm: rising two-tone when YOUR target drops
+  on("actorDied", (victim, killerId) => {
+    if (W.player && killerId === W.player.id) { blip(700, 0.09, 0.2, "triangle"); setTimeout(() => blip(1050, 0.14, 0.22, "triangle"), 90); }
+  });
   on("chestOpened", (a, c) => { blip(660, 0.3, 0.14, "triangle", a === W.player ? null : c.pos, 40); setTimeout(() => blip(990, 0.4, 0.12, "triangle", a === W.player ? null : c.pos, 40), 120); });
   on("pickedUp", (a) => { if (a === W.player) blip(840, 0.07, 0.12, "sine"); });
   on("healStart", (a) => { if (a === W.player) blip(520, 0.3, 0.1, "sine"); });

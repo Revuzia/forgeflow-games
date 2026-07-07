@@ -13,11 +13,11 @@
 import * as THREE from "three";
 import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js";
 
+// Practice uses a random battle map (no dedicated range — owner direction).
 export const MAPS = {
   isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#7fd4f0", fog: 0.0011, themeColor: "#22d3a0", water: true },
   ashgrid:   { name: "Ashgrid", theme: "urban", sky: "#aab6c4", fog: 0.0013, themeColor: "#e0685a", water: false },
   deepwood:  { name: "Deepwood", theme: "forest", sky: "#9fc7e8", fog: 0.0016, themeColor: "#7fb069", water: true },
-  practice_range: { name: "Proving Grounds", theme: "range", sky: "#8fd0f5", fog: 0.0008, themeColor: "#f2c14e", water: false },
 };
 
 const SIZE = 1600;               // meters, square
@@ -87,7 +87,7 @@ function mkHeightFn(mapId, seed) {
       return h;
     };
   }
-  // practice range: flat with a couple of berms
+  // fallback: gentle plains
   return (x, z) => 1 + fbm(x / 200, z / 200, seed, 2, 2, 0.5) * 2;
 }
 
@@ -503,27 +503,10 @@ export async function buildMap(W, mapId) {
     scatterTrees("birch", 260, 1.2, 40, "wood");
     scatterTrees("bush", 220, 0.8, 40, null);
     scatterTrees("rocks", 80, 2, 60, "brick");
-  } else {
-    // practice range
-    poi("range", "Shooting Range", 0, -80, 80);
-    poi("longlane", "Long Lane", -120, 60, 60);
-    poi("course", "Movement Course", 120, 60, 70);
-    // target stands
-    for (let i = 0; i < 8; i++) {
-      const x = -70 + i * 20, z = -140;
-      addBox(x, heightAt0(x, z) + 1.2, z, 1.6, 2.4, 0.3, "#d9553f");
-      loot(x, heightAt0(x, z) + 0.5, z - 40, "range");
-    }
-    for (let d = 1; d <= 4; d++) addBox(0, heightAt0(0, -80 - d * 50) + 0.4, -80 - d * 50, 12, 0.8, 0.6, "#f2c14e"); // distance markers
-    // movement course: hop platforms
-    for (let i = 0; i < 8; i++) addBox(120 + Math.sin(i * 1.2) * 26, heightAt0(120, 60) + 1 + i * 1.1, 30 + i * 14, 3.4, 0.5, 3.4, "#7fb069");
-    for (let i = 0; i < 10; i++) loot((rng() - 0.5) * 200, heightAt0(0, 0) + 0.5, (rng() - 0.5) * 200, "range");
-    for (let i = 0; i < 4; i++) chest((rng() - 0.5) * 220, heightAt0(0, 0) + 0.6, (rng() - 0.5) * 220, "range");
-    scatterTrees("tree", 60, 0.5, 30, "wood");
   }
 
   // scattered wilderness loot (all maps)
-  const wildN = mapId === "practice_range" ? 0 : 130;
+  const wildN = 130;
   for (let i = 0; i < wildN; i++) {
     const x = (rng() * 2 - 1) * (HALF - 60), z = (rng() * 2 - 1) * (HALF - 60);
     const y = heightAt0(x, z);

@@ -79,13 +79,24 @@ function burst(o) {
 // ── event wiring ─────────────────────────────────────────────────────────────
 function wireEvents(W) {
   W.events.on("shotFired", (a, weaponId, eye, dir) => {
-    if (weaponId === "grenade") return;
     // muzzle flash
     const mx = eye.x + dir.x * 0.9, my = eye.y + dir.y * 0.9 - 0.05, mz = eye.z + dir.z * 0.9;
-    burst({ x: mx, y: my, z: mz, n: 3, color: [0xfff2b0, 0xffb84d], speed: 2, up: 0.5, size: 0.09, life: 0.12, gravity: 0, drag: 4 });
-    // tracer (not for shotgun spread — one central tracer is enough)
-    const len = weaponId === "sniper" ? 26 : 14;
-    spawn({ x: mx + dir.x * len * 0.5, y: my + dir.y * len * 0.5, z: mz + dir.z * len * 0.5, color: 0xffe9a0, size: 0.05, life: 0.09, gravity: 0, drag: 0, dir: dir.clone(), stretch: len });
+    burst({ x: mx, y: my, z: mz, n: 4, color: [0xfff2b0, 0xffb84d], speed: 2.4, up: 0.5, size: 0.1, life: 0.12, gravity: 0, drag: 4 });
+  });
+
+  // one bright streak PER PROJECTILE (so every weapon — including each
+  // shotgun pellet — shows its bullet leaving the barrel)
+  const TRACER_COLOR = { sniper: 0x9fe0ff, glauncher: 0xffb060 };
+  W.events.on("tracer", (pr) => {
+    const speed = Math.hypot(pr.vx, pr.vy, pr.vz) || 1;
+    const dx = pr.vx / speed, dy = pr.vy / speed, dz = pr.vz / speed;
+    const len = pr.weaponId === "sniper" ? 34 : pr.weaponId === "glauncher" ? 4 : 22;
+    spawn({
+      x: pr.x + dx * len * 0.5, y: pr.y + dy * len * 0.5, z: pr.z + dz * len * 0.5,
+      color: TRACER_COLOR[pr.weaponId] || 0xffe9a0,
+      size: 0.07, life: 0.14, gravity: 0, drag: 0,
+      dir: new THREE.Vector3(dx, dy, dz), stretch: len,
+    });
   });
 
   W.events.on("impact", (pos, surface) => {
@@ -131,12 +142,13 @@ function dmgNumber(W, x, y, z, text, color, scale) {
   const el = document.createElement("div");
   el.textContent = text;
   Object.assign(el.style, {
-    position: "absolute", left: "0", top: "0", color, fontWeight: "800",
-    fontFamily: "system-ui, sans-serif", fontSize: Math.round(18 * (scale || 1)) + "px",
-    textShadow: "0 1px 3px rgba(0,0,0,0.8)", willChange: "transform, opacity",
+    position: "absolute", left: "0", top: "0", color, fontWeight: "900",
+    fontFamily: "system-ui, sans-serif", fontSize: Math.round(26 * (scale || 1)) + "px",
+    textShadow: "0 2px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.5)", willChange: "transform, opacity",
+    WebkitTextStroke: "1px rgba(0,0,0,0.55)",
   });
   dmgLayer.appendChild(el);
-  dmgNums.push({ el, pos: new THREE.Vector3(x, y, z), t: 0, life: 0.9 });
+  dmgNums.push({ el, pos: new THREE.Vector3(x, y, z), t: 0, life: 1.05 });
 }
 
 // ── frame update ─────────────────────────────────────────────────────────────

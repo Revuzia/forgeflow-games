@@ -6,6 +6,6 @@
   "sub_genre": "battle-royale",
   "difficulty": "medium",
   "status": "draft",
-  "controls_keyboard": "WASD move · Mouse aim/fire · RMB aim down sights · SPACE jump · SHIFT sprint · R reload · E loot (hold to open chests) · 1-5/scroll weapons · M map",
+  "controls_keyboard": "WASD move · Mouse aim/fire · RMB aim down sights · SPACE jump / toggle parachute · SHIFT sprint · R reload · E loot (hold to open chests) · 1-5/scroll weapons · M map",
   "tags": ["shooter", "battle-royale", "3d", "multiplayer", "third-person", "action"]
 }

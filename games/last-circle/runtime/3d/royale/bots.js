@@ -140,18 +140,27 @@ function think(W, b) {
   // gridlocks); anyone close is always fought
   const tRef = bb.targetPos;
   const tDist = tRef ? Math.hypot(tRef.x - a.pos.x, tRef.z - a.pos.z) : 999;
-  const engageBase = liveTarget ? ((!upgraded && tDist > 35) ? 55 : 80) : 42;
+  const engageBase = liveTarget ? ((!upgraded && tDist > 35) ? 55 : (tDist < 40 ? 88 : 80)) : 42;
   s.ENGAGE = bb.target
     ? engageBase + (a.personality === "rusher" ? 15 : 0) + (endgame ? 20 : 0) + (lastFew ? 25 : 0)
     : 0;
   s.FLEE = bb.target && outnumbered && !lastFew && heals ? 86 : 0;   // disengage to heal, not to hide forever
   s.HEAL = (a.hp < 45 || (a.shield < 30 && a.hp < 80)) && heals && !bb.target ? 75 : (a.hp < 60 && heals && W.t - a.lastDamageT > 6 ? 45 : 0);
   s.LOOT = !upgraded ? 64 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
-  // late-game storm is lethal (5-12 dps) — being outside the next circle when
-  // it starts closing is how bots "die dumb"; rotate EARLY once phases hurt
-  s.ROTATE = outsideNext
-    ? (st.phaseState === "closing" ? 92 : (st.phase >= 4 ? 75 : a.personality === "rotator" ? 66 : st.tToNext < 25 ? 62 : 30))
-    : 0;
+  // BATTLE-ROYALE PRIORITY MODEL (owner: "run from storms but FIGHT once
+  // safe"): rotation urgency = how far past safety you are vs time left.
+  // Only a genuinely pressing storm outranks a live fight — otherwise bots
+  // were sprinting straight past enemies all mid-game.
+  let rotScore = 0;
+  if (outsideNext) {
+    const scx = st.nextCenter ? st.nextCenter.x : st.center.x;
+    const scz = st.nextCenter ? st.nextCenter.z : st.center.z;
+    const overM = Math.hypot(a.pos.x - scx, a.pos.z - scz) - (st.nextRadius || 0);
+    const needS = overM / 8 + 6;                                   // sprint ≈8m/s effective + margin
+    const timeLeft = st.phaseState === "closing" ? st.tToNext * 0.5 : st.tToNext;
+    rotScore = timeLeft < needS ? 95 : timeLeft < needS * 2 ? 70 : 40;
+  }
+  s.ROTATE = rotScore;
   s.CAMP = (a.personality === "camper" || a.personality === "sniper") && !outsideNext && !bb.target && !endgame ? 34 : 0;
   s.PUSH = bb.heard && W.t - bb.heard.t < 6 && (a.personality === "rusher" || a.personality === "rotator" || a.personality === "flanker") && !endgame ? 48 : 0;
   s.WANDER = 12;
@@ -486,7 +495,7 @@ function actEngage(W, b, dt) {
   const sinceAcq = W.t - bb.acquireT;
   const acquireMul = sinceAcq < 0.6 ? 3 - (sinceAcq / 0.6) * 2 : 1;
   const tgtSpeed = seen && t.vel ? Math.hypot(t.vel.x, t.vel.z) : 0;
-  const motionMul = 1 + Math.min(1.2, tgtSpeed / 8) * 0.55 + (t.onGround === false ? 0.35 : 0);
+  const motionMul = 1 + Math.min(1.2, tgtSpeed / 9.6) * 0.55 + (t.onGround === false ? 0.35 : 0);
   const errDeg = b.tierK.aimErrDeg * acquireMul * motionMul * (duel ? 0.55 : 1);
   const err = (errDeg * Math.PI) / 180;
   // wander the error smoothly (not white noise): per-brain sine wobble

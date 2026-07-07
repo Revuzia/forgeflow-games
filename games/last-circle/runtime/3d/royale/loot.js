@@ -382,11 +382,16 @@ export function update(W, dt) {
   const a = W.player;
   if (a && a.alive) {
     const near = nearby(a.pos, 2.4);
-    // walkover auto-pickup (anything, if it fits)
+    // walkover auto-pickup: ammo/heals always (if they fit); weapons only up
+    // to 3 carried — hoarding 5 guns left NO room for shield potions, which
+    // read as "shields don't work". Tap E to take/swap anything explicitly.
+    const gunCount = () => a.inventory.slots.filter((s) => s && s.kind === "weapon").length;
     for (const n of near) {
-      if (n.type === "item" && n.d < 1.5) pickup(W, a, n.id);
+      if (n.type !== "item" || n.d >= 1.5) continue;
+      if (n.data.kind === "weapon" && gunCount() >= 3) continue;
+      pickup(W, a, n.id);
     }
-    const target = nearby(a.pos, 2.4)[0] || null;
+    const target = near.find((n) => !n.taken && (n.type === "chest" || items.has(n.id))) || null;
     // chest channel
     if (target && target.type === "chest" && a.input.interactDown) {
       if (chestChannel.id !== target.id) { chestChannel.id = target.id; chestChannel.t = 0; }

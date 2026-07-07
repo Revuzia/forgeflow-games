@@ -3,6 +3,60 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-07 — v3.0 Meshy cast + the "did you actually play it" patch
+
+Owner playtest feedback round 2 + new requirement: original AI-generated
+characters. Everything below verified live via real MouseEvents/KeyboardEvents
++ screenshots (not just sim runs).
+
+- **MESHY AI CHARACTER CAST** (owner requirement: no reused fantasy rigs):
+  4 original battle-royale characters generated on the owner's Meshy account —
+  commando / runner / raider / specter — text-to-3d→refine(PBR)→rig(1.8m)→
+  animate (idle 0 / walk 30 / run 16 / death 8). 188 credits total (2286→2098).
+  Optimized 8MB→~0.7MB base + 25-68KB clip-only GLBs (gltf-transform+sharp,
+  512px webp). Clips merged into the cached gltf at load (renamed idle/walk/
+  run/death); per-actor hue tints for 50 distinct looks. Old Quaternius chars
+  DELETED. **Gotchas:** do NOT bbox-normalize Meshy rigs (bind-pose bbox reads
+  ~0.1m from tiny armature scales → 26m giants; rigs are authored at real
+  meters). Hand bone = `RightHand`, world scale ~0.065 → scale-compensate the
+  weapon holder; grip tuned live to (0, -90°, +90°). Raw GLBs in
+  state/meshy_raw (not repo); pipeline scripts in session scratchpad.
+- **AIM FIXED — the real bugs found by tracing actual projectiles:**
+  (1) fixed-120m camera-convergence missed uphill targets → replaced with a
+  true CROSSHAIR RAYCAST (camera ray vs actor capsules + terrain + colliders;
+  projectile flies muzzle→that point). (2) **recoil never recovered** — every
+  shot permanently kicked pitch up; after a few clicks the reticle sat ~2m
+  above the target ("my pistol doesn't work"). Recoil now tracks in
+  accumulators and re-centers over ~0.3s. (3) FIRST-SHOT ACCURACY: deliberate
+  standing shots get 0.15× spread. Verified: crosshair-on-chest real clicks
+  land (4/6 even 0.5m off-center), damage events fire.
+- **Drop v2**: SPACE now TOGGLES the parachute open/cut/open repeatedly
+  (verified open→cut→open); failsafe auto-deploy 60m first-time / 22m hard
+  floor after manual toggles. Freefall pose fixed — belly-DOWN (sign flip;
+  was falling face-up "on my back") and near-frozen mid-stride limbs
+  (timeScale 0.05; 0.35 looked like jogging in the sky). No forced forward
+  drift (AFK players used to slide ~100m into the ocean).
+- **Body facing**: characters now turn toward their RUN direction outside
+  combat (pure camera-facing read as "running sideways"); they square up to
+  the camera while aiming/shooting (1.5s combat window).
+- **Movement**: walk 6.0 / sprint 9.6 (9.2 effective, verified via real
+  keys), ads 3.8, accel 0.13, sprint FOV 64. Stuck-ADS clears on blur.
+- **Combat feedback**: per-PROJECTILE tracers (every weapon, every shotgun
+  pellet — bright 22-34m streaks, colored for sniper/GL); damage numbers
+  26px w/ stroke; PER-WEAPON CROSSHAIRS (pistol/smg tight cross · AR wide
+  cross · shotgun spread ring · sniper fine dot + scope on ADS · GL arc
+  chevron) with movement bloom.
+- **Audio coverage**: footsteps (stride-distance emitter, self quiet/enemies
+  loud), weapon-switch click, parachute deploy whoosh + cut, kill-confirm
+  two-tone; chest open/pickup/reload/shield-break already covered. Chests
+  verified opening (hold-E 2s channel).
+- **NPC battle model** (owner: "run from storms but FIGHT once safe"):
+  rotation urgency = meters-past-safety vs time-left (95 only when genuinely
+  pressed, 40 when there's time); live enemy ≤40m scores 88+ and dominates.
+  Soak: 8/9 living bots in ENGAGE mid-game, 43 gun kills vs 6 storm.
+- Shield potions verified end-to-end (pickup room preserved by the ≤3-gun
+  auto-pickup cap; slot-select + click → bar rises 0→25).
+
 ## 2026-07-05 — v2.1 drop/feel/AI polish (owner screenshot feedback)
 
 - **Skydive + parachute drop** (was: rigid straight-down fall): freefall is

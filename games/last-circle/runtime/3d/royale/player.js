@@ -66,56 +66,80 @@ function mkInput() {
 }
 
 // ── models ───────────────────────────────────────────────────────────────────
-const SKINS = ["char-hero.glb", "char-pirate.glb", "char-marauder.glb", "char-crew.glb", "char-wizard.glb"];
+// MESHY AI-GENERATED battle-royale cast (owner direction: no reused fantasy
+// characters). Each skin = <key>.glb (mesh+skeleton+idle) + tiny clip-only
+// GLBs (<key>_walk/_run/_death.glb) sharing the same skeleton — clips get
+// merged into the cached gltf so every clone has the full action set.
+const SKINS = ["commando", "runner", "raider", "specter"];
+const MESHY_CLIPS = ["walk", "run", "death"];
+const _v3 = new THREE.Vector3();
+
+async function preloadMeshySkin(W, key) {
+  const url = W.assetBase + "assets/chars/meshy/" + key + ".glb";
+  const rig = await W.kernel.loadCharacter(url);   // caches gltf; registers this throwaway clone's mixer
+  rig.scene.visible = false;
+  const cached = W.kernel._charCache[url];
+  if (cached && !cached.__lcMerged) {
+    cached.__lcMerged = true;
+    if (cached.animations && cached.animations[0]) cached.animations[0].name = "idle";
+    for (const clip of MESHY_CLIPS) {
+      try {
+        const g = await W.kernel.loader.loadAsync(W.assetBase + "assets/chars/meshy/" + key + "_" + clip + ".glb");
+        if (g.animations && g.animations[0]) { g.animations[0].name = clip; cached.animations.push(g.animations[0]); }
+      } catch (e) { console.warn("[chars] clip load failed", key, clip, e); }
+    }
+  }
+  return url;
+}
+
 export async function loadActorModels(W) {
-  const base = W.assetBase + "assets/chars/";
-  // preload the skins once (kernel caches)
-  await Promise.all(SKINS.map((s) => W.kernel.loadCharacter(base + s).then((r) => { r.scene.visible = false; })));
+  const urls = await Promise.all(SKINS.map((k) => preloadMeshySkin(W, k)));
   const vr = K.mulberry32(W.seed ^ 0xfaceb);
   for (let i = 0; i < W.actors.length; i++) {
     const a = W.actors[i];
-    const rig = await W.kernel.loadCharacter(base + SKINS[i % SKINS.length]);
+    const rig = await W.kernel.loadCharacter(urls[i % urls.length]);
     a.rig = rig;
-    // NEUTRAL characters: strip the RPG weapon meshes baked into the rigs.
-    const strip = [];
-    rig.scene.traverse((o) => { if ((o.isMesh || o.isSkinnedMesh) && /_?(bow|dagger|sword|staff|axe|shield|quiver)$/i.test(o.name)) strip.push(o); });
-    strip.forEach((o) => { o.visible = false; });
-    // PROCEDURAL VARIETY: 5 base rigs × per-actor hue/lightness shifts on cloned
-    // materials — 50 visually distinct opponents from a small asset set.
-    const hueShift = (vr() - 0.5) * 0.24, lightShift = (vr() - 0.5) * 0.16;
+    // PROCEDURAL VARIETY: 4 base rigs × per-actor hue/lightness tints on
+    // cloned materials — 50 visually distinct opponents.
+    const hueShift = (vr() - 0.5) * 0.2, lightShift = (vr() - 0.5) * 0.14;
     const seen = new Map();
     rig.scene.traverse((o) => {
-      if (!(o.isMesh || o.isSkinnedMesh) || !o.material || !o.visible) return;
+      if (!(o.isMesh || o.isSkinnedMesh) || !o.material) return;
       if (!seen.has(o.material)) {
         const m = o.material.clone();
-        if (m.color) m.color.offsetHSL(hueShift, 0, lightShift);
+        if (m.color) m.color.offsetHSL(hueShift, 0.02, lightShift);
         seen.set(o.material, m);
       }
       o.material = seen.get(o.material);
     });
-    // normalize height to ~1.8m
-    const bbox = new THREE.Box3().setFromObject(rig.scene);
-    const h = bbox.max.y - bbox.min.y;
-    const s = K.PLAYERK.height / Math.max(0.1, h);
-    rig.scene.scale.setScalar(s);
-    rig.scene.position.y = -bbox.min.y * s;
+    // Meshy rigs are authored at REAL METERS (rigging height_meters: 1.8,
+    // feet at y=0) — do NOT bbox-normalize: the bind-pose bbox of a Meshy
+    // SkinnedMesh reads ~0.1m (tiny armature node scales) and "normalizing"
+    // it spawned 26m giants once the animation restored true proportions.
+    rig.scene.scale.setScalar(1);
+    rig.scene.position.y = 0;
     a.obj.add(rig.scene);
     a.clips = classifyClips(rig);
     playAnim(a, "idle");
     // name tag sprite (not for self)
     if (a.id !== (W.player && W.player.id)) a.nameTag = mkNameTag(W, a);
-    // weapon holder — parented to the RIGHT HAND BONE so the gun rides the
-    // skeleton through every animation (the fixed chest offset floated at head
-    // height). Scale-compensate so guns keep world size under the rig scale.
+    // weapon holder on the RIGHT HAND bone (Meshy = "RightHand"; Quaternius
+    // fallback "FistR"). Bone world scale varies wildly between rig families
+    // (Meshy ~0.065 vs Quaternius ~5.5) — compensate so guns keep world size.
     let fist = null;
-    rig.scene.traverse((o) => { if (o.isBone && o.name === "FistR" && !fist) fist = o; });
+    rig.scene.traverse((o) => { if (o.isBone && /^RightHand$|^FistR$/i.test(o.name) && !fist) fist = o; });
     a.hand = new THREE.Group();
     if (fist) {
       fist.add(a.hand);
-      a.hand.scale.setScalar(1 / Math.max(0.01, s));
-      a.hand.position.set(0, 0.02 / s, 0);
-      // barrel forward when the arm points ahead (tuned visually)
-      a.hand.rotation.set(-Math.PI / 2, 0, 0);
+      a.obj.updateMatrixWorld(true);
+      fist.getWorldScale(_v3);
+      const ws = Math.max(1e-4, _v3.x);
+      a.hand.scale.setScalar(1 / ws);
+      // grip: hilt pulled back to the palm base (Meshy rigs have no finger
+      // bones — best-effort open-hand grip). Orientation tuned live:
+      // (0, -90°, +90°) = gun upright, muzzle pointing forward out of the fist.
+      a.hand.position.set(0, 0.02 / ws, 0);
+      a.hand.rotation.set(0, -Math.PI / 2, Math.PI / 2);
     } else {
       a.hand.position.set(0.32, 1.15, 0.28);
       a.obj.add(a.hand);
@@ -385,16 +409,26 @@ function stepActor(W, a, dt, far) {
     const landY = Math.max(g, W.map.waterY);
     const agl = a.pos.y - landY;
 
-    // deploy the canopy on the way down
-    if (!a.chute && agl < 60) deployChute(W, a);
+    // SPACE TOGGLES the parachute — open it, cut it away, open it again, as
+    // often as you like (Final Drop style). Failsafe: auto-deploy at 60m the
+    // first time; once the player has toggled manually only the 22m hard
+    // floor forces it (so cutting away below 60m actually works).
+    if (inp.jump) {
+      if (a.chute) { removeChute(a); a.chuteToggled = true; W.events.emit("chuteCut", a); }
+      else if (agl > 14) { deployChute(W, a); a.chuteToggled = true; }
+      inp.jump = false;
+    }
+    if (!a.chute && agl < (a.chuteToggled ? 22 : 60)) deployChute(W, a);
 
     const chuted = !!a.chute;
     const speed = chuted ? 7.5 : 15;                        // canopy drifts, freefall carries
     const fallTarget = chuted ? -5.5 : (inp.sprint ? -34 : -20);
     const dirX = Math.sin(a.yaw) * -1, dirZ = Math.cos(a.yaw) * -1;
     const fwd = K.clamp(inp.mz, -0.3, 1);
-    const txv = dirX * speed * Math.max(0.35, fwd) + Math.cos(a.yaw) * speed * 0.5 * inp.mx;
-    const tzv = dirZ * speed * Math.max(0.35, fwd) + Math.sin(a.yaw) * speed * 0.5 * inp.mx;
+    // no forced drift: an untouched player must land where they spawned
+    // (forced 0.35 forward pushed AFK players ~100m off the island into the sea)
+    const txv = dirX * speed * Math.max(0, fwd) + Math.cos(a.yaw) * speed * 0.5 * inp.mx;
+    const tzv = dirZ * speed * Math.max(0, fwd) + Math.sin(a.yaw) * speed * 0.5 * inp.mx;
     a.vel.x += (txv - a.vel.x) * Math.min(1, dt * 2.2);      // air has inertia
     a.vel.z += (tzv - a.vel.z) * Math.min(1, dt * 2.2);
     a.vel.y += (fallTarget - a.vel.y) * Math.min(1, dt * (chuted ? 3 : 1.4));
@@ -403,6 +437,7 @@ function stepActor(W, a, dt, far) {
     if (a.pos.y <= landY + 1.0) {
       a.pos.y = landY + 0.05; a.gliding = false; a.vel.set(0, 0, 0); a.onGround = true;
       removeChute(a);
+      a.chuteToggled = false;
       W.events.emit("landed", a);
     }
     clampToMap(W, a);
@@ -478,6 +513,17 @@ function stepActor(W, a, dt, far) {
     }
   }
 
+  // footsteps: stride-distance accumulator → audible steps (walk ~2.4m,
+  // sprint ~3.2m stride) — audio + the sound-visualization indicators
+  if (!far && a.onGround && !a.swimming) {
+    const sp2 = Math.hypot(a.vel.x, a.vel.z);
+    if (sp2 > 1.5) {
+      a._stepAcc = (a._stepAcc || 0) + sp2 * dt;
+      const stride = a.sprinting ? 3.2 : 2.4;
+      if (a._stepAcc >= stride) { a._stepAcc = 0; W.events.emit("footstep", a); }
+    } else a._stepAcc = 0;
+  }
+
   clampToMap(W, a);
   syncObj(W, a, dt, far);
 }
@@ -532,13 +578,29 @@ function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31
 
 function syncObj(W, a, dt, far) {
   a.obj.position.copy(a.pos);
-  a.obj.rotation.y = a.yaw + Math.PI;
+  // BODY FACING: outside combat the body turns toward where it's RUNNING
+  // (pure camera-facing made strafing look like "running sideways"); while
+  // aiming/shooting it squares up to the camera aim.
+  let wantYaw = a.yaw + Math.PI;
+  const spd2 = Math.hypot(a.vel.x, a.vel.z);
+  const combat = a.input.ads || (W.t - a.lastShotT < 1.5);
+  if (!a.gliding && !a.swimming && !combat && spd2 > 1.2) {
+    wantYaw = Math.atan2(-a.vel.x, -a.vel.z) + Math.PI;
+  }
+  if (a._bodyYaw == null) a._bodyYaw = wantYaw;
+  let dy = wantYaw - a._bodyYaw;
+  while (dy > Math.PI) dy -= Math.PI * 2;
+  while (dy < -Math.PI) dy += Math.PI * 2;
+  a._bodyYaw += dy * Math.min(1, dt * 10);
+  a.obj.rotation.y = a._bodyYaw;
   // body pose: freefall = belly-down skydive with banking; canopy = upright
   // with a gentle pendulum sway; everything else level
   let wantTiltX = 0, wantTiltZ = 0;
   if (a.gliding && !a.chute) {
-    wantTiltX = a.input.sprint ? 1.15 : 1.35;               // ~65-77° face-down
-    wantTiltZ = -a.input.mx * 0.45;                          // bank into turns
+    // NEGATIVE X pitches the model face-down (positive tipped it onto its
+    // back — playtest report: "falling backwards")
+    wantTiltX = a.input.sprint ? -1.15 : -1.35;
+    wantTiltZ = a.input.mx * 0.45;                           // bank into turns
   } else if (a.gliding && a.chute) {
     wantTiltX = 0.12 + Math.sin(W.t * 1.7) * 0.06;           // sway under canopy
     wantTiltZ = -a.input.mx * 0.18 + Math.cos(W.t * 1.3) * 0.04;
@@ -553,7 +615,9 @@ function syncObj(W, a, dt, far) {
     a.rig.mixer.timeScale = far ? 0 : 1;
     if (!far) {
       const moving = Math.hypot(a.vel.x, a.vel.z) > 0.7;
-      if (a.gliding && !a.chute) playAnim(a, "run", { timeScale: 0.35 }); // limbs spread mid-stride ≈ skydive
+      // freefall: NEARLY-FROZEN mid-stride = limbs spread like a skydive
+      // (0.35 looked like the character was jogging through the sky)
+      if (a.gliding && !a.chute) playAnim(a, "run", { timeScale: 0.05 });
       else if (a.gliding) playAnim(a, "idle");
       else if (a.swimming) playAnim(a, "run", { timeScale: 0.6 });
       else if (!a.onGround) playAnim(a, "jump");
@@ -614,7 +678,7 @@ function updateCamera(W, dt) {
     cam.position.y += (Math.random() - 0.5) * W.camShake * 0.6;
   }
   cam.lookAt(camTarget.x + camDir.x * 8, camTarget.y + camDir.y * 8, camTarget.z + camDir.z * 8);
-  const wantFov = scope ? 22 : ads ? 42 : focus.sprinting ? 61 : 52;
+  const wantFov = scope ? 22 : ads ? 42 : focus.sprinting ? 64 : 53;
   cam.fov += (wantFov - cam.fov) * Math.min(1, dt * 10);
   cam.updateProjectionMatrix();
   W.events.emit("scopeState", !!scope);

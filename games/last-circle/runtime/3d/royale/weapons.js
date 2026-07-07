@@ -140,6 +140,18 @@ export function update(W, dt) {
   for (const a of W.actors) {
     if (!a.alive || a.netRemote) continue;
     stepWeapon(W, a, dt);
+    // recoil recovery: re-center what the kicks added (~0.3s), leaving the
+    // player's own mouse aim untouched
+    if (a.recoilPitch > 0.0001) {
+      const r = Math.min(a.recoilPitch, dt * 0.12);
+      a.input.pitch = K.clamp(a.input.pitch - r, -1.35, 1.35);
+      a.recoilPitch -= r;
+    }
+    if (a.recoilYaw && Math.abs(a.recoilYaw) > 0.0001) {
+      const r = Math.sign(a.recoilYaw) * Math.min(Math.abs(a.recoilYaw), dt * 0.08);
+      a.input.yaw -= r;
+      a.recoilYaw -= r;
+    }
   }
   stepProjectiles(W, dt);
 }
@@ -210,9 +222,54 @@ function stepWeapon(W, a, dt) {
 
 // ── firing ───────────────────────────────────────────────────────────────────
 const _d = new THREE.Vector3(), _right = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+const _camDir = new THREE.Vector3(), _camPt = new THREE.Vector3();
+
+/** What is the crosshair actually ON? March the camera-forward ray against
+ * actor capsules, terrain, and static colliders; return the first hit point
+ * (or the 300m far point). The projectile then flies muzzle→this point, so
+ * shots land EXACTLY where the reticle points — slopes, shoulders, parallax
+ * all accounted for. (The old fixed-120m convergence missed uphill targets.) */
+function crosshairPoint(W, shooter, out) {
+  W.camera.getWorldDirection(_camDir);
+  const o = W.camera.position;
+  const FAR = 300;
+  let bestT = FAR;
+  // actor capsules (closest approach of ray to vertical axis)
+  for (const t of W.actors) {
+    if (!t.alive || t === shooter) continue;
+    const dx = t.pos.x - o.x, dz = t.pos.z - o.z;
+    const denom = _camDir.x * _camDir.x + _camDir.z * _camDir.z;
+    if (denom < 1e-6) continue;
+    const u = (dx * _camDir.x + dz * _camDir.z) / denom;   // ray param of closest XZ approach
+    if (u < 1 || u > bestT) continue;
+    const px = o.x + _camDir.x * u, pz = o.z + _camDir.z * u, py = o.y + _camDir.y * u;
+    const r = W.SIM.PLAYERK.radius + 0.15;
+    if ((px - t.pos.x) ** 2 + (pz - t.pos.z) ** 2 > r * r) continue;
+    if (py < t.pos.y - 0.1 || py > t.pos.y + W.SIM.PLAYERK.height + 0.15) continue;
+    bestT = u;
+  }
+  // terrain + static boxes: coarse march (0.75m steps up to bestT)
+  const step = 0.75;
+  for (let d = 3; d < bestT; d += step) {
+    const x = o.x + _camDir.x * d, y = o.y + _camDir.y * d, z = o.z + _camDir.z * d;
+    if (W.map.heightAt(x, z) > y) { bestT = d; break; }
+    let solid = false;
+    for (const c of W.map.queryColliders(x, z, 0.3)) {
+      if (c.kind === "box" && x > c.minX && x < c.maxX && y > c.minY && y < c.maxY && z > c.minZ && z < c.maxZ) { solid = true; break; }
+    }
+    if (solid) { bestT = d; break; }
+  }
+  return out.copy(o).addScaledVector(_camDir, bestT);
+}
+
 function fire(W, a, def) {
   const eye = eyePos(a);
   aimDir(a, _d);
+  // HUMAN aim = wherever the crosshair visually points
+  if (a === W.player) {
+    crosshairPoint(W, a, _camPt);
+    _d.set(_camPt.x - eye.x, _camPt.y - eye.y, _camPt.z - eye.z).normalize();
+  }
   const pellets = def.pellets || 1;
   // spread: base × rarity × stance modifiers
   let spread = (def.spreadDeg || 1) * (K.RARITY_SPREAD_MULT[a.weapon.rarity] || 1);
@@ -220,6 +277,9 @@ function fire(W, a, def) {
   const movePen = Math.hypot(a.vel.x, a.vel.z) > 1 ? 1.4 : 1;
   const airPen = a.onGround ? 1 : 2;
   spread *= movePen * airPen;
+  // FIRST-SHOT ACCURACY (industry standard): a deliberate single shot while
+  // standing goes exactly where the crosshair points — no bloom lottery
+  if (def.cls !== "shotgun" && a.onGround && movePen === 1 && W.t - a.lastShotT > 0.5) spread *= 0.15;
 
   for (let p = 0; p < pellets; p++) {
     const sr = (spread * Math.PI / 180);
@@ -237,11 +297,17 @@ function fire(W, a, def) {
       origin: { x: eye.x, y: eye.y, z: eye.z },
     });
   }
-  // recoil kick (human only — bots model error separately)
+  // recoil kick (human only — bots model error separately). The kick is
+  // tracked in recover-accumulators and re-centers over ~0.3s — permanent
+  // kick made the crosshair CLIMB forever (aim drifted ~2m high after a few
+  // shots: "my pistol doesn't work").
   if (!a.isBot) {
     const kick = { pistol: 0.008, smg: 0.006, ar: 0.011, shotgun: 0.03, sniper: 0.05, glauncher: 0.035 }[a.weapon.id] || 0.01;
+    const yawKick = (Math.random() - 0.5) * kick * 0.6;
     a.input.pitch = K.clamp(a.input.pitch + kick, -1.35, 1.35);
-    a.input.yaw += (Math.random() - 0.5) * kick * 0.6;
+    a.input.yaw += yawKick;
+    a.recoilPitch = (a.recoilPitch || 0) + kick;
+    a.recoilYaw = (a.recoilYaw || 0) + yawKick;
     W.stats.shotsFired += pellets;
   }
   a.lastShotT = W.t;
