@@ -6,10 +6,10 @@
 // always shows my side at the bottom via syncFromState(state, mySide).
 
 import * as THREE from 'three';
-import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=3';
-import { cardById, REALMS } from '../sim/cards.js?v=3';
-import { chooseAction } from '../sim/ai.js?v=3';
-import { Audio2 } from './audio.js?v=3';
+import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=4';
+import { cardById, REALMS } from '../sim/cards.js?v=4';
+import { chooseAction } from '../sim/ai.js?v=4';
+import { Audio2 } from './audio.js?v=4';
 
 const REALM_COLOR = (id) => REALMS[cardById(id).realm]?.color ?? 0x8d99ae;
 
@@ -197,10 +197,7 @@ export class Match {
         case 'play-creature': Audio2.sfx('summon'); break;
         case 'play-spell': {
           Audio2.sfx('spell');
-          const tgt = ev.target ? this.posOfTarget(ev.target) : new THREE.Vector3(0, 0.3, 0);
-          scene.fx.beam(scene.heroPos(this.relOf(ev.p)), tgt, REALM_COLOR(ev.card));
-          scene.playFxAt(tgt, 'spell', REALM_COLOR(ev.card));
-          await this.wait(240);
+          await this.spellChoreography(ev);
           break;
         }
         case 'play-trap': Audio2.sfx('trap'); break;
@@ -322,6 +319,69 @@ export class Match {
     return e ? e.cardId : null;
   }
 
+  // realm-aware spell FX: comets, detonations, novas, pillars, sweeps.
+  // Awaited BEFORE the damage events animate, so numbers land on impact.
+  async spellChoreography(ev) {
+    const scene = this.scene;
+    const def = cardById(ev.card);
+    const ops = def.fx || [];
+    const has = (o) => ops.some((x) => x.op === o);
+    const COLORS = { ember: 0xff7a3d, tide: 0x7fd0ff, grove: 0x54d06a, dawn: 0xffd45f, grave: 0xb44fe8, neutral: 0xc9b8ec };
+    const col = COLORS[def.realm] ?? 0xc9b8ec;
+    const big = def.cost >= 4;
+    const caster = scene.heroPos(this.relOf(ev.p)).clone().setY(0.85);
+    const tgt = ev.target ? this.posOfTarget(ev.target).clone().setY(0.45) : null;
+    const offensive = has('damage') || has('destroy') || has('debuff') || has('freeze');
+    const isAoe = has('aoe') || has('freeze-all') || has('multi-hit') || has('bounce-all')
+      || ops.some((x) => x.target === 'all-enemy-creatures');
+
+    const detonate = (pos) => {
+      switch (def.realm) {
+        case 'ember': scene.fx.explosion(pos, col, { big }); scene.shake(big ? 0.3 : 0.16); Audio2.sfx('impact'); break;
+        case 'tide': scene.fx.frostNova(pos, { big }); Audio2.sfx('freeze'); break;
+        case 'grave': scene.fx.shadowRend(pos, { big }); Audio2.sfx('venom'); break;
+        case 'dawn': scene.fx.holyPillar(pos); Audio2.sfx('heal'); break;
+        case 'grove': scene.fx.natureBurst(pos, { big }); Audio2.sfx('buff'); break;
+        default: scene.fx.explosion(pos, col, { big: false }); Audio2.sfx('impact');
+      }
+    };
+
+    if (tgt && offensive) {
+      // the Fireball moment: comet arcs from your hero and DETONATES on the target
+      await scene.fx.projectile(caster, tgt, {
+        color: col, coreColor: 0xffffff,
+        size: def.realm === 'ember' ? 0.62 : 0.5,
+        dur: 0.42, arc: 1.9,
+      });
+      detonate(tgt);
+      await this.wait(170);
+    } else if (isAoe) {
+      // wave crashes across the enemy board
+      const foeUnits = this.state.players[this.foeSide].board
+        .map((u) => scene.posOf(u.iid)).filter(Boolean);
+      const mid = new THREE.Vector3(0, 0.5, scene.heroPos(1).z + 1.9);
+      await scene.fx.projectile(caster, foeUnits[0] || mid, { color: col, size: 0.55, dur: 0.34, arc: 2.1 });
+      if (def.realm === 'ember') scene.shake(0.22);
+      await scene.fx.aoeSweep(foeUnits.length ? foeUnits : [mid], col, { stepMs: 85 });
+      await this.wait(90);
+    } else if (has('heal') && tgt) {
+      if (def.realm === 'dawn') scene.fx.holyPillar(tgt);
+      else { scene.fx.fountain(tgt, 0x54d06a, { n: 22 }); scene.fx.ring(tgt, 0x54d06a, { maxR: 1.6 }); }
+      Audio2.sfx('heal');
+      await this.wait(200);
+    } else if (has('buff') && tgt) {
+      scene.fx.fountain(tgt, 0xffd45f, { n: 20 });
+      scene.fx.ring(tgt, col, { maxR: 1.5 });
+      Audio2.sfx('buff');
+      await this.wait(180);
+    } else {
+      // utility flourish at the caster (draw / ramp / summon spells)
+      scene.fx.burst(caster, col, { n: 20, speed: 1.7, life: 0.6, up: 1.1 });
+      scene.fx.ring(caster.clone().setY(0.06), col, { maxR: 1.4, dur: 0.4 });
+      await this.wait(160);
+    }
+  }
+
   async finish() {
     this.over = true;
     this.busy = true;
@@ -348,6 +408,9 @@ export class Match {
     let guard = 0;
     while (!this.over && !this._suspendAi && this.state.winner === null && this.state.active === this.foeSide && guard++ < 60) {
       await this.wait(520);
+      // the state can change during the wait (debug fast-forward, concede) —
+      // recheck the guard so a stale loop never acts on the wrong turn
+      if (this.over || this._suspendAi || this.state.winner !== null || this.state.active !== this.foeSide) break;
       const act = chooseAction(this.state, this.foeSide, this.difficulty);
       const revealCard =
         act.type === 'play' ? this.state.players[this.foeSide].hand.find((h) => h.iid === act.iid)?.card : null;

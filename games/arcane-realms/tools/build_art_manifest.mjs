@@ -2,7 +2,7 @@
 // Builds art_manifest.json — one prompt per card/token/UI asset, derived from
 // the live card database so art always matches the set. Consumed by
 // asset_gen/arcane_realms_gen.py.
-import { COLLECTIBLE, TOKENS, REALMS } from '../runtime/sim/cards.js?v=3';
+import { COLLECTIBLE, TOKENS, REALMS } from '../runtime/sim/cards.js?v=4';
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -154,6 +154,20 @@ for (const [key, desc] of Object.entries(COMMANDERS)) {
     prompt: STYLE + `Bust portrait for a game dialogue NPC: ${desc}. Looking at viewer. Dramatic rim light.`,
   });
 }
+
+// campaign world map — the Trials of the Realms overworld
+entries.push({
+  key: 'worldmap', file: 'assets/ui/worldmap.jpg', model: 'quality', resize: 1920,
+  prompt:
+    'Painted fantasy world map for a game campaign screen, wide landscape composition, viewed from high above at a slight angle. ' +
+    'FIVE distinct connected regions flowing left to right: (1) far left — lush emerald ancient forest kingdom with giant trees; ' +
+    '(2) left-center — sunken violet crypt marshland with half-drowned gothic ruins and ghostly mist; ' +
+    '(3) center — black volcanic peaks with glowing lava rivers and a great forge; ' +
+    '(4) right-center — a dark glowing ocean trench abyss with a whirlpool and bioluminescent reefs; ' +
+    '(5) far right — radiant celestial spires, a golden citadel on a floating mountain in dawn light. ' +
+    'A faint winding road connects all five regions. Rich painterly detail, dramatic lighting per region, ' +
+    'muted enough for UI overlays. NO text, NO labels, no compass, no border, no watermark.',
+});
 
 // hero portraits
 const HEROES = {

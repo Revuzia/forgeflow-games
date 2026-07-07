@@ -2,9 +2,9 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=3';
-import { REALMS, cardById } from '../sim/cards.js?v=3';
-import { FX } from './fx.js?v=3';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=4';
+import { REALMS, cardById } from '../sim/cards.js?v=4';
+import { FX } from './fx.js?v=4';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 export const LAYOUT = {
@@ -105,6 +105,43 @@ const KW_BADGE = {
   cleave: ['⚔', '#ff8a3d'], piercing: ['➹', '#d4b03f'], regenerate: ['✚', '#54d06a'],
   frenzy: ['🔥', '#ff5f3d'], swift: ['»', '#ffd45f'],
 };
+
+// 3D minis for legendary creatures — lazy-loaded from assets/minis/ only when
+// the card actually hits the board. Curated BY EYE from the unused F:
+// sketchfab haul (two lineup passes; props/junk rejected). Quality > coverage:
+// legendaries without a worthy model simply get no mini. Extend by dropping a
+// GLB in assets/minis/ and adding a row here.
+// s = height target, cap = max ground footprint (long/winged models trade
+// height for span), hover = base lift + idle bob for flyers,
+// glow = realm-colored ground disc so dark models read on the dark board
+export const MINI_MAP = {
+  ef19:  { file: 'mini_ef19.glb',  s: 2.0,  cap: 3.0, hover: 0.35, yaw: -0.6, glow: 0xff7a2e }, // Pyraxis — black-red spiked dragon (animated, wingspan-dominant)
+  efc10: { file: 'mini_efc10.glb', s: 1.6,  glow: 0xff7a2e }, // Vulkarrion — winged obsidian gargoyle
+  gm18:  { file: 'mini_gm18.glb',  s: 1.5,  glow: 0xb45cff }, // Morthul — spindly black shade (animated)
+  gmc10: { file: 'mini_gmc10.glb', s: 1.55, glow: 0xb45cff }, // Nyxathra — horned crimson demon
+  tc18:  { file: 'mini_tc18.glb',  s: 1.8,  glow: 0x3fb6ff }, // Nerivia — great leviathan reptile (long body)
+  tcc10: { file: 'mini_tcc10.glb', s: 1.55, glow: 0x3fb6ff }, // Maelstra — pale siren (animated)
+  wgc10: { file: 'mini_wgc10.glb', s: 1.6,  glow: 0x59d97a }, // Sylvaris — mossy green troll
+  dwc10: { file: 'mini_dwc10.glb', s: 1.45, glow: 0xffd76a }, // Solmara — winged light spirit
+  nt21:  { file: 'mini_nt21.glb',  s: 1.15, hover: 0.3, glow: 0x9a7bff }, // Chronarch Vex — floating arcane eye (animated)
+};
+
+let _miniGlowTex = null;
+function miniGlowTex() {
+  if (_miniGlowTex) return _miniGlowTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 8, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(255,255,255,.95)');
+  grad.addColorStop(0.45, 'rgba(255,255,255,.4)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  _miniGlowTex = new THREE.CanvasTexture(c);
+  _miniGlowTex.colorSpace = THREE.SRGBColorSpace;
+  return _miniGlowTex;
+}
 
 function roundRectShape(w, h, r) {
   const s = new THREE.Shape();
@@ -213,6 +250,38 @@ export class BoardScene {
       this.deckMeshes.push(grp);
     }
 
+    // battlefield diorama: corner braziers with ember light + realm crystals
+    this.dioramaSpin = [];
+    const brazierMat = new THREE.MeshStandardMaterial({ color: 0x2a2130, roughness: 0.85, metalness: 0.4 });
+    this.brazierPts = [];
+    for (const [bx, bz] of [[-10.4, -5.9], [10.4, -5.9], [-10.4, 5.9], [10.4, 5.9]]) {
+      const grp = new THREE.Group();
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.3, 1.15, 8), brazierMat);
+      stem.position.y = 0.57;
+      const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.2, 0.3, 10), brazierMat);
+      bowl.position.y = 1.25;
+      const glow = new THREE.PointLight(0xff8a3d, 5, 6);
+      glow.position.y = 1.65;
+      grp.add(stem, bowl, glow);
+      grp.position.set(bx, 0, bz);
+      this.scene.add(grp);
+      this.brazierPts.push(new THREE.Vector3(bx, 1.45, bz));
+    }
+    for (const [cx, cz, ccol] of [[-9.9, 0, 0x7a5cd4], [9.9, 0, 0x4fd0e8]]) {
+      const crystal = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.5, 0),
+        new THREE.MeshStandardMaterial({ color: ccol, emissive: ccol, emissiveIntensity: 0.9, roughness: 0.2 }),
+      );
+      crystal.position.set(cx, 1.5, cz);
+      this.scene.add(crystal);
+      this.dioramaSpin.push(crystal);
+    }
+
+    // 3D minis for legendaries (lazy-loaded GLBs — zero upfront payload)
+    this.minis = new Map();       // unit iid -> {group, mixer, offset}
+    this._miniBuf = new Map();    // file -> Promise<ArrayBuffer>
+    this._gltfLoaderP = null;
+
     this.tweens = new Tweens();
     this.fx = new FX(this.scene);
     this.raycaster = new THREE.Raycaster();
@@ -280,6 +349,7 @@ export class BoardScene {
     this.tweens.killOf(e.group.position);
     this.tweens.killOf(e.group.rotation);
     this.fx.clearEmitter('aura' + iid);
+    this.despawnMini(iid);
     this.scene.remove(e.group);
     this.cards.delete(iid);
   }
@@ -459,9 +529,11 @@ export class BoardScene {
           this.tweens.add(e.group.rotation, { y: spin }, 0.32, 'cubicInOut');
         }
         e.ice.material.opacity = u.frozen ? 0.4 : 0;
-        // legendary idle aura
+        // legendary idle aura + lazy 3D mini
         if (def.rarity === 'legendary') {
           this.fx.setEmitter('aura' + u.iid, e.group.position, 0xf0b93a, 5);
+          const mspec = MINI_MAP[u.card];
+          if (mspec && !this.minis.has(u.iid)) this.spawnMini(u.iid, mspec, rel);
         }
         // summon-sick sheen
         e.mesh.material.color.setScalar(u.sick && !u.tapped ? 0.82 : 1);
@@ -604,6 +676,126 @@ export class BoardScene {
     }
   }
 
+  // ── 3D legendary minis ─────────────────────────────────────────
+  async _gltfLoader() {
+    if (!this._gltfLoaderP) {
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=4').then((m) => new m.GLTFLoader());
+    }
+    return this._gltfLoaderP;
+  }
+
+  async spawnMini(iid, spec, side) {
+    if (this.minis.has(iid)) return;
+    this.minis.set(iid, { pending: true }); // reserve against double-spawn
+    try {
+      const loader = await this._gltfLoader();
+      if (!this._miniBuf.has(spec.file)) {
+        this._miniBuf.set(spec.file, fetch('assets/minis/' + spec.file).then((r) => {
+          if (!r.ok) throw new Error('mini fetch ' + r.status);
+          return r.arrayBuffer();
+        }));
+      }
+      const buf = await this._miniBuf.get(spec.file);
+      const gltf = await new Promise((res, rej) => loader.parse(buf.slice(0), '', res, rej));
+      const entry = this.cards.get(iid);
+      if (!entry || entry.zone !== 'board') { this.minis.delete(iid); return; } // died while loading
+      const model = gltf.scene;
+      // normalize: feet on the table, height ≈ target — then CLAMP the ground
+      // footprint so long/serpentine models can't sprawl across the board
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const h = Math.max(size.y, 0.001);
+      model.scale.setScalar((spec.s || 1.35) / h);
+      let b2 = new THREE.Box3().setFromObject(model);
+      let s2 = b2.getSize(new THREE.Vector3());
+      const ext = Math.max(s2.x, s2.z);
+      const cap = spec.cap || 2.6;
+      if (ext > cap) {
+        model.scale.multiplyScalar(cap / ext);
+        b2 = new THREE.Box3().setFromObject(model);
+      }
+      const center = b2.getCenter(new THREE.Vector3());
+      model.position.x -= center.x;
+      model.position.z -= center.z;
+      model.position.y -= b2.min.y;
+      // strip lights baked into the GLB (fps rule); tame mirror-metal mats
+      // that go black under our dim mood lighting
+      const strip = [];
+      model.traverse((o) => {
+        if (o.isLight) strip.push(o);
+        if (o.isMesh) {
+          const mats = Array.isArray(o.material) ? o.material : [o.material];
+          for (const mt of mats) {
+            if (mt.metalness !== undefined && mt.metalness > 0.45) mt.metalness = 0.45;
+            if (mt.roughness !== undefined && mt.roughness < 0.35) mt.roughness = 0.35;
+          }
+        }
+      });
+      for (const l of strip) l.parent?.remove(l);
+      // one shared key light over the mid-board gap so minis read clearly
+      if (!this.miniLight) {
+        this.miniLight = new THREE.PointLight(0xfff1d8, 110, 16, 2);
+        this.miniLight.position.set(0, 5.5, 0);
+        this.scene.add(this.miniLight);
+      }
+      const group = new THREE.Group();
+      group.add(model);
+      // stand just in front of the card in the mid-board gap (diorama look);
+      // the footprint clamp above keeps even long models inside their half
+      const offset = new THREE.Vector3(0, 0, side === 0 ? -0.8 : 0.8);
+      group.rotation.y = (spec.yaw || 0) + (side === 0 ? 0 : Math.PI);
+      group.position.copy(entry.group.position).add(offset);
+      group.scale.setScalar(0.01);
+      this.scene.add(group);
+      let mixer = null;
+      if (gltf.animations?.length) {
+        mixer = new THREE.AnimationMixer(model);
+        const idle = gltf.animations.find((a) => /idle|breath|stand/i.test(a.name)) || gltf.animations[0];
+        mixer.clipAction(idle).play();
+      }
+      if (spec.hover) group.position.y = spec.hover;
+      // realm-colored ground glow anchors the silhouette on the dark board
+      const fin = b2.getSize(new THREE.Vector3());
+      const disc = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({
+          map: miniGlowTex(), color: spec.glow || 0xf0b93a, transparent: true,
+          opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
+        })
+      );
+      disc.rotation.x = -Math.PI / 2;
+      disc.scale.setScalar(Math.max(fin.x, fin.z) * 0.85 + 0.35);
+      disc.position.set(group.position.x, 0.025, group.position.z);
+      this.scene.add(disc);
+      // personal rim light — the "legendary glow" that makes the model pop
+      const plight = new THREE.PointLight(spec.glow || 0xffe6b8, 9, 5, 2);
+      plight.position.set(0, 1.6, 0.6);
+      group.add(plight);
+      this.minis.set(iid, { group, mixer, offset, hover: spec.hover || 0, disc, discT: 0 });
+      this.tweens.add(group.scale, { x: 1, y: 1, z: 1 }, 0.4, 'backOut');
+      this.fx.ring(group.position, 0xf0b93a, { maxR: 1.8, dur: 0.5 });
+    } catch (err) {
+      console.warn('mini spawn failed', spec.file, err.message);
+      this.minis.delete(iid);
+    }
+  }
+
+  despawnMini(iid) {
+    const m = this.minis.get(iid);
+    this.minis.delete(iid);
+    if (!m || !m.group) return;
+    this.fx.burst(m.group.position.clone().add(new THREE.Vector3(0, 0.6, 0)), 0xf0b93a, { n: 30, speed: 2.4, life: 0.8 });
+    if (m.disc) {
+      this.scene.remove(m.disc);
+      m.disc.geometry.dispose();
+      m.disc.material.dispose();
+    }
+    this.tweens.add(m.group.scale, { x: 0.01, y: 0.01, z: 0.01 }, 0.35, 'sineIn').then(() => {
+      this.scene.remove(m.group);
+      m.group.traverse((o) => { o.geometry?.dispose?.(); });
+    });
+  }
+
   // cosmetic card backs: [my back file, opponent's back file]
   setCardBacks(myFile, foeFile) {
     this.backs = [getCardBack(myFile || 'cardback.jpg'), getCardBack(foeFile || 'cardback.jpg')];
@@ -675,6 +867,37 @@ export class BoardScene {
       if (e.glowOn) e.glow.material.opacity = pulse;
       // keep legendary aura tracking
       if (e.zone === 'board') this.fx.moveEmitter('aura' + e.iid, e.group.position);
+    }
+    // minis follow their card (lunges carry them) + idle animation
+    for (const [iid, m] of this.minis) {
+      if (!m.group) continue;
+      if (m.mixer) m.mixer.update(dt);
+      const e = this.cards.get(iid);
+      if (e) {
+        const tx = e.group.position.x + m.offset.x;
+        const tz = e.group.position.z + m.offset.z;
+        m.group.position.x += (tx - m.group.position.x) * Math.min(1, dt * 10);
+        m.group.position.z += (tz - m.group.position.z) * Math.min(1, dt * 10);
+        if (m.hover) m.group.position.y = m.hover + Math.sin(this.time * 1.6 + iid) * 0.08;
+        if (m.disc) {
+          m.discT = Math.min(1, m.discT + dt * 3);
+          m.disc.position.x = m.group.position.x;
+          m.disc.position.z = m.group.position.z;
+          m.disc.material.opacity = m.discT * (0.52 + Math.sin(this.time * 2 + iid) * 0.12);
+        }
+      }
+    }
+    // diorama: crystals spin, braziers flicker embers
+    for (const c of this.dioramaSpin) { c.rotation.y += dt * 0.5; c.position.y = 1.5 + Math.sin(this.time * 1.2 + c.position.x) * 0.1; }
+    this._brazierAcc = (this._brazierAcc || 0) + dt;
+    if (this._brazierAcc > 0.09) {
+      this._brazierAcc = 0;
+      for (const p of this.brazierPts) {
+        this.fx.spawn(
+          new THREE.Vector3(p.x + (Math.random() - 0.5) * 0.25, p.y, p.z + (Math.random() - 0.5) * 0.25),
+          new THREE.Vector3((Math.random() - 0.5) * 0.2, 1.1 + Math.random() * 0.7, (Math.random() - 0.5) * 0.2),
+          Math.random() < 0.7 ? 0xff8a3d : 0xffd45f, 0.34, 0.7, 0, 0.985);
+      }
     }
     // hero ring pulse when targeted
     for (const h of this.heroMeshes) {

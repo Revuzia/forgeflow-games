@@ -4,7 +4,7 @@
 // board and as plain canvases in the DOM (deck builder / collection / inspect).
 
 import * as THREE from 'three';
-import { CARDS, REALMS, cardById } from '../sim/cards.js?v=3';
+import { CARDS, REALMS, cardById } from '../sim/cards.js?v=4';
 
 export const CARD_W = 512, CARD_H = 768;
 
@@ -290,6 +290,12 @@ export function drawCard(canvas, cardId, { forceArt = null } = {}) {
   }
   g.restore();
 
+  // art not in yet → kick the load and redraw THIS canvas when it lands
+  // (fixes placeholder cards in reward reveals / inspect modals)
+  const artState = artCache.get(cardId);
+  if (!forceArt && (!artState || (!artState.loaded && !artState.error))) {
+    loadArt(cardId, () => drawCard(canvas, cardId));
+  }
   return canvas;
 }
 

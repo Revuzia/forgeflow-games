@@ -1,5 +1,58 @@
 # Arcane Realms TCG — Changelog
 
+## v1.3.0 — 2026-07-07 (Spell FX, world map, 3D legendary minis)
+
+Owner-directed pass #3 (2 reference screenshots + hybrid-3D green light).
+
+### Three.js spell FX — every spell now has a choreography
+- New FX kernel: `projectile()` comet (quadratic-bezier arc, white-hot core in
+  a colored halo, ember trail, **traveling PointLight** that sweeps the board,
+  resolves at impact so damage lands with the hit), `explosion`, `frostNova`,
+  `holyPillar`, `shadowRend` (implosion→burst), `natureBurst`, `aoeSweep`.
+- `match.spellChoreography()` routes every `play-spell` event by realm+intent:
+  offensive single-target = comet from caster hero → detonation (the Fireball
+  moment); AoE = comet → staggered sweep across targets; heals/buffs/utility
+  get pillar/burst variants. Camera shake on big hits.
+- Verified in-engine: Fireball cast → mana 10→6, card to grave, target 7hp→2,
+  comet + explosion FX fire (screenshot-verified with a slowed test comet).
+
+### Campaign world map (replaces the vertical chapter list)
+- New generated 5-region fantasy map (`worldmap.jpg`): Verdant Marches forest,
+  Sunken Crypts marsh, Ashen Peaks volcanoes, Drowned Depths maelstrom,
+  Celestial Spires — one region per chapter, labeled with commander names.
+- Battles are medallion nodes placed on the art; the route is drawn as an SVG
+  trail — solid gold behind cleared battles, dotted toward locked ones; nodes
+  show cleared ✓ / next / locked / boss-crown states.
+
+### Hybrid 3D — battlefield diorama + legendary minis
+- Board diorama: 4 corner braziers (flickering PointLights + ember emitters)
+  and 2 slow-spinning realm crystals frame the table.
+- **3D minis for legendaries**: when a mapped legendary hits the board, its
+  GLB spawns scale-in on the card and idles (AnimationMixer where the model
+  has clips), follows lunges, hovers+bobs for flyers, and despawns in a gold
+  burst on death. Lazy-loaded (zero payload until a legendary is played),
+  parse-cached per file.
+- 9 curated models (~21 MB in `assets/minis/`, picked by eye from the unused
+  sketchfab haul over two lineup passes): Pyraxis dragon, Vulkarrion,
+  Morthul, Nyxathra, Nerivia leviathan, Maelstra, Sylvaris, Solmara,
+  Chronarch Vex.
+- Normalization pipeline: height-target scale → ground-footprint clamp
+  (per-model cap; wingspan-dominant dragon gets 3.0), feet-on-table, GLB
+  light stripping (fps rule), metalness/roughness clamps for our mood
+  lighting, realm-colored ground glow disc + per-mini rim light, shared key
+  light over the mid-board gap.
+- vendored `GLTFLoader.js` + `BufferGeometryUtils.js` (three 0.172).
+
+### Fixes
+- **Blank card art** (reward reveals, first-draw races): the compositor now
+  re-queues a draw when art finishes loading instead of caching the
+  placeholder frame (`cardtex.js` redraw-on-load).
+- AI-turn zombie loop: the async foe-turn driver re-checks its guards after
+  each wait, so a suspended/finished match can never act on the wrong turn.
+- Selftest: +20 checks (worldmap asset, MINI_MAP↔GLB↔legendary integrity) —
+  **160/160 green** (`--assets`).
+- Cache-bust bumped `?v=3` → `?v=4` across every import.
+
 ## v1.2.0 — 2026-07-07 (Campaign, 60 new cards, premium targeting)
 
 Owner-directed pass #2 (reference screenshots + notes).

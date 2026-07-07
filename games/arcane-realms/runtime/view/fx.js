@@ -145,6 +145,79 @@ export class FX {
     }
   }
 
+  // ── spell choreography ─────────────────────────────────────────
+  // A comet-style projectile that arcs from → to, trailing particles, then
+  // detonates. Resolves AT IMPACT so damage numbers land with the hit.
+  projectile(from, to, { color = 0xff7a3d, coreColor = 0xffe9a8, size = 0.55, dur = 0.42, trail = 150, arc = 1.6 } = {}) {
+    return new Promise((resolve) => {
+      this._projectiles = this._projectiles || [];
+      const ctrl = from.clone().lerp(to, 0.5).add(new THREE.Vector3(0, arc, 0));
+      // traveling light sells the comet — the board glows under its path
+      const light = new THREE.PointLight(color, 16, 8, 2);
+      light.position.copy(from);
+      this.scene.add(light);
+      this._projectiles.push({ t: 0, dur, from: from.clone(), ctrl, to: to.clone(), color, coreColor, size, trail, light, resolve });
+    });
+  }
+
+  explosion(pos, color, { big = false } = {}) {
+    const s = big ? 1.6 : 1;
+    this.burst(pos, 0xffffff, { n: 10 * s, speed: 1.2, size: 0.8 * s, life: 0.18, up: 0.2, grav: 0 });
+    this.burst(pos, color, { n: 42 * s, speed: 3.2 * s, size: 0.5, life: 0.75, up: 0.9, grav: -2.6 });
+    this.burst(pos, 0x2a2a2a, { n: 14 * s, speed: 1.1, size: 0.65, life: 1.1, up: 1.4, grav: -0.4 }); // smoke
+    this.ring(pos, color, { maxR: big ? 3.2 : 2.1, dur: big ? 0.6 : 0.45 });
+  }
+
+  frostNova(pos, { big = false } = {}) {
+    const s = big ? 1.5 : 1;
+    this.burst(pos, 0x9fdcff, { n: 34 * s, speed: 2.4 * s, size: 0.4, life: 0.7, up: 0.4, grav: -1.2 });
+    this.burst(pos, 0xe8f8ff, { n: 12 * s, speed: 0.8, size: 0.6, life: 0.5, up: 0.6, grav: 0 });
+    this.ring(pos, 0x7fd0ff, { maxR: 2.4 * s, dur: 0.55 });
+    this.snow(pos, { n: 18 * s });
+  }
+
+  holyPillar(pos) {
+    // column of light: stacked rising motes + double ring
+    for (let i = 0; i < 26 * this.density; i++) {
+      this.spawn(
+        new THREE.Vector3(pos.x + (Math.random() - 0.5) * 0.7, pos.y + Math.random() * 0.3, pos.z + (Math.random() - 0.5) * 0.7),
+        new THREE.Vector3((Math.random() - 0.5) * 0.1, 2.4 + Math.random() * 1.6, (Math.random() - 0.5) * 0.1),
+        0xffe9a8, 0.42, 0.9, 0, 0.985);
+    }
+    this.ring(pos, 0xffd45f, { maxR: 1.8, dur: 0.5 });
+    this.ring(pos, 0xfff3c9, { maxR: 1.1, dur: 0.7 });
+  }
+
+  shadowRend(pos, { big = false } = {}) {
+    const s = big ? 1.5 : 1;
+    // implosion: particles rush INWARD then burst up
+    for (let i = 0; i < 30 * s * this.density; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 1.4 + Math.random() * 0.8;
+      const p = new THREE.Vector3(pos.x + Math.cos(a) * r, pos.y + 0.2 + Math.random() * 0.6, pos.z + Math.sin(a) * r);
+      const v = pos.clone().sub(p).multiplyScalar(2.6);
+      this.spawn(p, v, 0x8a3fd4, 0.4, 0.45, 0, 0.97);
+    }
+    setTimeout(() => this.burst(pos, 0xb44fe8, { n: 26 * s, speed: 2.2, size: 0.42, life: 0.6, up: 1.4 }), 240);
+    this.ring(pos, 0x8a3fd4, { maxR: 2.2 * s, dur: 0.5 });
+  }
+
+  natureBurst(pos, { big = false } = {}) {
+    const s = big ? 1.5 : 1;
+    this.burst(pos, 0x54d06a, { n: 30 * s, speed: 2.2, size: 0.45, life: 0.7, up: 1.2, grav: -1.8 });
+    this.burst(pos, 0xa8e06a, { n: 14 * s, speed: 1.2, size: 0.32, life: 0.9, up: 1.8, grav: -1.2 });
+    this.ring(pos, 0x3fae52, { maxR: 2.2 * s, dur: 0.5 });
+  }
+
+  // traveling wave for AoE spells: a wall of light sweeping across positions
+  async aoeSweep(positions, color, { stepMs = 90 } = {}) {
+    for (const p of positions) {
+      this.burst(p, color, { n: 20, speed: 2.2, size: 0.45, life: 0.6, up: 0.9 });
+      this.ring(p, color, { maxR: 1.5, dur: 0.4 });
+      await new Promise((r) => setTimeout(r, stepMs));
+    }
+  }
+
   setEmitter(key, pos, color, rate = 6) {
     this.emitters.set(key, { pos: pos.clone(), color, rate, acc: 0 });
   }
@@ -155,6 +228,35 @@ export class FX {
   clearEmitter(key) { this.emitters.delete(key); }
 
   update(dt) {
+    // projectiles (spell comets)
+    if (this._projectiles?.length) {
+      for (let i = this._projectiles.length - 1; i >= 0; i--) {
+        const pr = this._projectiles[i];
+        pr.t += dt;
+        const f = Math.min(1, pr.t / pr.dur);
+        // quadratic bezier position
+        const a = pr.from.clone().lerp(pr.ctrl, f);
+        const b = pr.ctrl.clone().lerp(pr.to, f);
+        const p = a.lerp(b, f);
+        // white-hot core inside a big colored halo + trail
+        pr.light.position.copy(p);
+        this.spawn(p, new THREE.Vector3(0, 0, 0), 0xffffff, pr.size * 1.1, 0.1, 0);
+        this.spawn(p, new THREE.Vector3(0, 0, 0), pr.coreColor, pr.size * 2.2, 0.16, 0);
+        const n = Math.round((pr.trail * dt) * this.density);
+        for (let k = 0; k < n; k++) {
+          this.spawn(
+            p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2)),
+            new THREE.Vector3((Math.random() - 0.5) * 0.6, -0.2 - Math.random() * 0.5, (Math.random() - 0.5) * 0.6),
+            pr.color, pr.size * (0.55 + Math.random() * 0.55), 0.4 + Math.random() * 0.3, -0.6);
+        }
+        if (f >= 1) {
+          this._projectiles.splice(i, 1);
+          this.scene.remove(pr.light);
+          pr.light.dispose?.();
+          pr.resolve();
+        }
+      }
+    }
     // particles
     for (let i = 0; i < MAX_P; i++) {
       if (this.life[i] <= 0) { this.size[i] = 0; continue; }

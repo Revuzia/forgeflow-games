@@ -1,15 +1,50 @@
 // Arcane Realms TCG — Campaign screens: chapter map, NPC dialogue bubbles,
 // rewards reveal, achievements panel, card-back gallery.
 
-import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=3';
-import { battleState, campaignSummary, achievementList, buyPack } from '../campaign/progression.js?v=3';
-import { REALMS, cardById } from '../sim/cards.js?v=3';
-import { drawCard } from './cardtex.js?v=3';
-import { Audio2 } from './audio.js?v=3';
+import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=4';
+import { battleState, campaignSummary, achievementList, buyPack } from '../campaign/progression.js?v=4';
+import { REALMS, cardById } from '../sim/cards.js?v=4';
+import { drawCard } from './cardtex.js?v=4';
+import { Audio2 } from './audio.js?v=4';
+
+// battle-node positions on the world map (percent of the 16:9 artwork)
+const MAP_POS = {
+  ch1b1: [7, 55], ch1b2: [13, 37], ch1b3: [22, 24], ch1b4: [30, 33],
+  ch2b1: [12, 72], ch2b2: [20, 84], ch2b3: [30, 89], ch2b4: [38, 72],
+  ch3b1: [41, 55], ch3b2: [46, 39], ch3b3: [52, 23], ch3b4: [55, 40],
+  ch4b1: [57, 62], ch4b2: [63, 81], ch4b3: [74, 89], ch4b4: [69, 65],
+  ch5b1: [77, 50], ch5b2: [83, 38], ch5b3: [88, 27], ch5b4: [93, 15],
+};
+const MAP_LABEL = {
+  ch1: [15, 10], ch2: [17, 62], ch3: [47, 9], ch4: [63, 51], ch5: [82, 60],
+};
 
 const CSS = `
-/* campaign map */
+/* campaign world map */
 #scr-campaign .cwrap{flex:1;overflow-y:auto;padding:18px 22px 30px}
+.mapstage{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:10px;background:radial-gradient(ellipse at center,#17102a 0%,#0b0714 80%)}
+.mapwrap{position:relative;aspect-ratio:16/9;max-height:100%;max-width:100%;width:auto;height:100%;border-radius:16px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.75), 0 0 0 1px #3a2a5c}
+.mapimg{position:absolute;inset:0;background-size:cover;background-position:center}
+.mapveil{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 45%,transparent 55%,rgba(8,5,16,.5) 100%)}
+.mappath{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.mnode{position:absolute;transform:translate(-50%,-50%);width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:800;cursor:pointer;pointer-events:auto;user-select:none;transition:all .15s;z-index:3;
+  background:radial-gradient(circle at 35% 30%,#4a3a78,#241a3a);border:2.5px solid #6b5a9c;color:#cbbce8;box-shadow:0 4px 14px rgba(0,0,0,.7)}
+.mnode:hover{transform:translate(-50%,-50%) scale(1.22)}
+.mnode.open{border-color:#ffe9a8;color:#ffe9a8;box-shadow:0 0 18px rgba(255,212,95,.65),0 4px 14px rgba(0,0,0,.7);animation:nodepulse 1.6s ease-in-out infinite}
+@keyframes nodepulse{50%{box-shadow:0 0 30px rgba(255,212,95,.95),0 4px 14px rgba(0,0,0,.7)}}
+.mnode.won{background:radial-gradient(circle at 35% 30%,#2f5c3a,#14231a);border-color:#4fc06a;color:#8ae0a0}
+.mnode.locked{opacity:.55;cursor:default;filter:grayscale(.7)}
+.mnode.locked:hover{transform:translate(-50%,-50%)}
+.mnode.boss{width:52px;height:52px;font-size:22px}
+.mnode.boss.open{border-color:#ff9d5f;box-shadow:0 0 22px rgba(255,120,60,.8)}
+.mnode .ntip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);white-space:nowrap;background:rgba(14,9,26,.96);
+  border:1px solid #4a3a78;border-radius:8px;padding:5px 12px;font-size:12.5px;font-weight:600;color:#e8e0f5;opacity:0;pointer-events:none;transition:opacity .12s}
+.mnode:hover .ntip{opacity:1}
+.mlabel{position:absolute;transform:translate(-50%,-50%);pointer-events:none;z-index:2;text-align:center;
+  font-size:clamp(11px,1.3vw,16px);font-weight:800;letter-spacing:.22em;color:#ffe9a8;text-transform:uppercase;
+  text-shadow:0 2px 6px #000,0 0 18px rgba(0,0,0,.9)}
+.mlabel small{display:block;font-size:.68em;letter-spacing:.14em;color:#c9b8ec;text-transform:none;font-weight:600}
 .chapter{border:1px solid #3a2a5c;border-radius:14px;margin-bottom:16px;overflow:hidden;background:#150f26}
 .chapter .chead{display:flex;align-items:center;gap:14px;padding:12px 16px;background:linear-gradient(90deg,rgba(0,0,0,.35),transparent)}
 .chapter .cportrait{width:64px;height:64px;border-radius:50%;background-size:cover;background-position:center;border:2px solid var(--gold);flex:none}
@@ -97,39 +132,66 @@ export class CampaignUI {
     const backs = ui.el('button', 'btn small', '🂠 Card Backs');
     backs.onclick = () => { Audio2.sfx('click'); this.openCardbacks(); };
     top.append(ui.el('h2', null, '🏰 CAMPAIGN — TRIALS OF THE REALMS'), gold, prog, ach, backs, back);
-    const wrap = ui.el('div', 'cwrap');
+
+    // ── world map ──
+    const stage = ui.el('div', 'mapstage');
+    const wrap = ui.el('div', 'mapwrap');
+    const img = ui.el('div', 'mapimg');
+    img.style.backgroundImage = 'url(assets/ui/worldmap.jpg)';
+    wrap.append(img, ui.el('div', 'mapveil'));
+
+    // the winding trail (SVG in map-percent space)
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'mappath');
+    svg.setAttribute('viewBox', '0 0 100 56.25');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    const allB = CHAPTERS.flatMap((ch, ci) => ch.battles.map((b, bi) => ({ ch, ci, b, bi })));
+    let solid = '';
+    let dotted = '';
+    for (let i = 0; i < allB.length - 1; i++) {
+      const a = MAP_POS[allB[i].b.id];
+      const c = MAP_POS[allB[i + 1].b.id];
+      if (!a || !c) continue;
+      const seg = `M ${a[0]} ${a[1] * 0.5625} Q ${(a[0] + c[0]) / 2} ${((a[1] + c[1]) / 2) * 0.5625 - 2} ${c[0]} ${c[1] * 0.5625} `;
+      const done = this.store.data.battlesWon[allB[i].b.id];
+      if (done) solid += seg; else dotted += seg;
+    }
+    svg.innerHTML =
+      `<path d="${solid}" fill="none" stroke="#ffd45f" stroke-width="0.42" stroke-linecap="round" opacity="0.85"/>` +
+      `<path d="${solid}" fill="none" stroke="#fff3c9" stroke-width="0.14" stroke-linecap="round" opacity="0.9"/>` +
+      `<path d="${dotted}" fill="none" stroke="#cbbce8" stroke-width="0.3" stroke-dasharray="0.9 1.1" stroke-linecap="round" opacity="0.55"/>`;
+    wrap.append(svg);
+
+    // chapter region labels
     CHAPTERS.forEach((ch, ci) => {
-      const box = ui.el('div', 'chapter');
-      box.style.borderColor = REALMS[ch.realm].css + '55';
-      const head = ui.el('div', 'chead');
-      const port = ui.el('div', 'cportrait');
-      port.style.backgroundImage = `url(assets/ui/${ch.commander.portrait}.jpg)`;
-      const col = ui.el('div');
-      col.append(
-        ui.el('div', 'cname', `Chapter ${ci + 1} — ${ch.name}`),
-        ui.el('div', 'ccommander', `Commander: ${ch.commander.name}`),
-        ui.el('div', 'cblurb', ch.blurb),
-      );
-      head.append(port, col);
-      const row = ui.el('div', 'cbattles');
-      ch.battles.forEach((b, bi) => {
-        const st = battleState(this.store, ci, bi);
-        const node = ui.el('div', 'bnode ' + st + (b.boss ? ' boss' : ''));
-        node.append(ui.el('div', 'bname', b.name));
-        node.append(ui.el('div', 'bstate', st === 'won' ? '✓ Conquered' : st === 'locked' ? '🔒 Locked' : b.boss ? '☠ Boss Battle' : 'Available'));
-        if (b.boss) node.append(ui.el('div', 'bboss', '👑'));
-        if (st !== 'locked') {
-          node.onclick = () => {
-            Audio2.sfx('click');
-            this.startBattle(ch, b);
-          };
-        }
-        row.append(node);
-      });
-      box.append(head, row);
-      wrap.append(box);
+      const lp = MAP_LABEL[ch.id];
+      if (!lp) return;
+      const lab = ui.el('div', 'mlabel', `${ch.name}<small>${ch.commander.name}</small>`);
+      lab.style.left = lp[0] + '%';
+      lab.style.top = lp[1] + '%';
+      wrap.append(lab);
     });
-    s.append(top, wrap);
+
+    // battle nodes
+    CHAPTERS.forEach((ch, ci) => {
+      ch.battles.forEach((b, bi) => {
+        const pos = MAP_POS[b.id];
+        if (!pos) return;
+        const st = battleState(this.store, ci, bi);
+        const node = ui.el('div', `mnode ${st}${b.boss ? ' boss' : ''}`);
+        node.style.left = pos[0] + '%';
+        node.style.top = pos[1] + '%';
+        node.innerHTML = (st === 'won' ? '✓' : b.boss ? '👑' : String(bi + 1)) +
+          `<span class="ntip">${b.name} — ${st === 'won' ? 'Conquered (replay)' : st === 'locked' ? 'Locked' : b.boss ? 'Boss Battle' : 'Available'}</span>`;
+        if (st !== 'locked') {
+          node.onclick = () => { Audio2.sfx('click'); this.startBattle(ch, b); };
+        }
+        wrap.append(node);
+      });
+    });
+
+    stage.append(wrap);
+    s.append(top, stage);
     ui.show('campaign');
   }
 
