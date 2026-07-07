@@ -229,7 +229,7 @@ export function createSim(wi, li, { endless = false } = {}) {
     return {
       rallyCry: 11, shieldWall: 14, summonRams: 12, ironPlates: 15,
       summonRays: 11, windShield: 13, prismPhase: 8, summonSkitterers: 10,
-      overdrive: 12, deployKegs: 13, platingShield: 15,
+      overdrive: 12, deployKegs: 16, platingShield: 15,
     }[a] || 10;
   }
 

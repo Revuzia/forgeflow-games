@@ -23,7 +23,7 @@ export function waveCount(wi, li) {
 export function isFinale(li) { return li === 2 || li === 5 || li === 8; }
 
 function hpScale(wi, li, wv) {
-  return (1 + li * 0.1 + wi * 0.06) * (1 + wv * 0.028);
+  return (1 + li * 0.1 + wi * 0.06) * (1 + wv * 0.0265);
 }
 function bountyScale(wi, li, wv) {
   return Math.sqrt(hpScale(wi, li, wv));
@@ -55,7 +55,7 @@ export function buildWaves(wi, li, nRoads) {
 
     if (finaleBossWave) {
       const empowered = li === 8;
-      const bossMul = Math.sqrt(hMul) * (empowered ? 1.3 : 1);
+      const bossMul = Math.sqrt(hMul) * (empowered ? 1.22 : 1);
       groups.push({
         type: world.boss, count: 1, gap: 0, delay: 2, roadIdx: 0,
         hpMul: bossMul, bountyMul: bMul * (empowered ? 1.5 : 1), empowered,
@@ -69,7 +69,7 @@ export function buildWaves(wi, li, nRoads) {
       continue;
     }
 
-    let budget = 66 * (1 + wi * 0.38) * (1 + li * 0.12) * Math.pow(1.115, wv);
+    let budget = 66 * (1 + wi * 0.38) * (1 + li * 0.115) * Math.pow(1.115, wv);
     if (wv === 0) budget *= 0.55;
     else if (wv === 1) budget *= 0.72;
     else if (wv === 2) budget *= 0.88;
@@ -108,7 +108,7 @@ export function buildWaves(wi, li, nRoads) {
       const isFast = d.speed > 4;
       const isDet = (d.traits || []).includes('detonator');
       const isSplit = (d.traits || []).includes('splitter');
-      count = Math.min(count, isDet ? 6 : isSplit ? 8 : isSwarm ? 20 : d.flying ? 10 : isFast ? 10 : 14);
+      count = Math.min(count, isDet ? 5 : isSplit ? 7 : isSwarm ? 20 : d.flying ? 10 : isFast ? 10 : 14);
       // split large groups across two roads for surround pressure
       const roads = count >= 6 && nRoads > 1 ? 2 : 1;
       for (let r = 0; r < roads; r++) {

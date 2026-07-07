@@ -16,8 +16,11 @@ const LEVEL_NAMES = [
    'The Deep Forges', 'Sentinel Watch', 'Magma Channels', 'Engine of Ruin'],
 ];
 
-// per-level seed salt for targeted map re-rolls if balance testing demands it
-const SEED_SALT = { '3:8': 2, '4:8': 7 };
+// per-level tuning: seed salt re-rolls maps; gold bonus shores up levels the 2/4/8/12
+// breach-damage model made unwinnable at base economy (2026-07-07 retune)
+const SEED_SALT = { '3:8': 3, '4:8': 3, '1:5': 1, '2:6': 0, '2:8': 1, '4:5': 19 };
+
+const GOLD_BONUS = { '2:6': 180, '3:8': 300, '4:8': 420 };
 
 const cache = new Map();
 
@@ -43,7 +46,7 @@ export function levelDef(wi, li) {
     name: LEVEL_NAMES[wi][li],
     seed, map, nRoads,
     waves, waveTotal: waves.length,
-    startGold: 520 + wi * 215 + li * 48,
+    startGold: 520 + wi * 225 + li * 62 + (GOLD_BONUS[wi + ':' + li] || 0),
     bastionHp: 100,
     prepTime: 20,
     hazard: world.hazard,

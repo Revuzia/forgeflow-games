@@ -1,5 +1,18 @@
 # Siegeheart — Changelog
 
+## v1.3 — 2026-07-07 (breach damage rework, owner-specified)
+- **Keep damage per breach is now 2 / 4 / 8 / 12** (grunts & fliers / siege units / powder kegs /
+  bosses) — was 1/2/8/5. Effective leak budget halves to ~50 grunt-equivalents; a boss breach now
+  costs 12% of the Keep.
+- Full 45-level re-tune to keep the campaign winnable under the new model, without touching the
+  repair economy: start gold reweighted toward later levels (wi*225 + li*62) with targeted bonuses
+  for the three hardest maps (w3l7 +180, w4l9 +300, w5l9 +420); wave HP growth trimmed ~5%
+  (0.028→0.0265) and late-level budget ~4% (0.12→0.115); keg cap 6→5 and splitter cap 8→7 per
+  wave group; empowered finale bosses 1.30→1.22 HP; the Engine of Ruin deploys kegs every 16s
+  (was 13s); six maps re-rolled via seed salt.
+- Balance gate: greedy bot clears **45/45**. New difficulty profile: median final Keep HP 79
+  (was 91), 10 of 45 levels now finish at ≤50 HP (was 4), closest finales end at 12–27 HP.
+
 ## v1.2.1 — 2026-07-07
 - Ballista and Siege Crossbow now fire **physical bolt projectiles** (wooden shaft, iron tip,
   red fletching, motion streak) flying along the shot line — lightning ribbons are reserved for
