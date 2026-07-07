@@ -305,6 +305,13 @@ export class Escape {
     for (const k of Object.keys(clips)) if (clips[k]) { actions[k] = mixer.clipAction(clips[k]); }
     // Walk-only rigs: run = walk at higher speed
     if (actions.run && clips.run === clips.walk) actions.run.timeScale = 1.5;
+    // Register the Meshy COMBAT clips (C_slash1/C_slash2/C_finisher/C_parry/
+    // C_melee/C_cast1/C_cast2/C_hit/C_death) by their raw names — charClips only
+    // maps the idle/walk/run/death locomotion set, so without this every attack
+    // fell back to the crude procedural swing instead of the real animation.
+    for (const clip of (tpl.animations || [])) {
+      if (/^C_/.test(clip.name) && !actions[clip.name]) actions[clip.name] = mixer.clipAction(clip);
+    }
     const tag = p.id === this.myId ? null : this._nameTag(p.name);
     if (tag) { tag.position.y = 2.3; grp.add(tag); }
     this.root.add(grp);

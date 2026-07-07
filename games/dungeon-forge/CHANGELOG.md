@@ -122,3 +122,12 @@ Initial release.
   clips read normally). Weapons/shields ride the corrected hand bones, so they
   now rest naturally at the character's side instead of sticking out.
 - Verified live across all four classes in the menu preview.
+
+## v1.3.3 — 2026-07-07 (real combat animations actually play)
+- **Fixed: attacks were using the crude procedural swing, not the Meshy combat
+  clips.** `_makeActor` only registered idle/walk/run/death in `a.actions`, so
+  `_playCombat`'s lookup of C_slash1/C_slash2/C_finisher/C_parry/C_melee/
+  C_cast1/C_cast2/C_hit always missed and fell back to `_procStart`. The v1.2
+  clips were loaded on the template but never bound. Now every `C_*` clip is
+  registered — verified live: knight LMB plays C_slash1→C_slash2→C_finisher
+  (real sword swings), confirmed on screen mid-slash.
