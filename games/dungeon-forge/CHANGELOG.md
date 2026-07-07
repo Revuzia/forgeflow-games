@@ -52,3 +52,29 @@ Initial release.
   Management API) — publish codes + global leaderboards fully working.
 - Selftest grown to 91 assertions: terrain, targeting, equipment, 1/10/20/30-room
   scale + solvability, full 13-enemy roster kill tests (both themes).
+
+## v1.2 — 2026-07-07 (classes + real combat FX)
+- **Four playable classes** picked on the main menu, each a distinct kit:
+  - Knight — sword + round shield (blocks 45% frontal), RMB shield bash (stun)
+  - Barbarian — two-handed war axe, heavy combos, RMB Crush (2.2× finisher)
+  - Sorceress — fire bolt (burn DoT) + frost bolt on R (slow), staff w/ glow orb
+  - Rogue — dual daggers, fastest attacks, stacking poison (to 3 stacks)
+- **3-hit combo system**: LMB chains stage 1 → 2 → finisher within the combo
+  window; each stage its own damage + its own Meshy animation clip; combo
+  counter in the HUD.
+- **Real Meshy combat animations** (library action ids → clip-only GLBs,
+  ~50KB each, retargeted by the shared 24-joint skeleton): slash1/slash2/
+  finisher/parry/cast1/cast2/hit/death per class — no more weak procedural
+  swings. 21 clips generated via pipeline/meshy_anims.py.
+- **Class weapons on bones**: procedural 2H axe / arcane staff+orb / daggers,
+  knight shield on the left hand — all tier-tinted, synced to co-op peers.
+- **High-quality elemental FX** (layered particles + flash lights + auras):
+  fire (embers + smoke + orange flash + burning aura), frost (ice shards +
+  blue flash + material freeze-tint + drips), poison (green splash + bubbling
+  aura), shield-bash/crush shockwave rings + camera shake; colored floating
+  damage numbers per element (orange burn / green poison / cyan frost / gold).
+- **Enemy status effects**: burn & poison DoT (poison stacks), frost slows
+  movement + tints the enemy icy, bash/crush stun freezes their AI.
+- Selftest → 101 assertions (adds class combos, bash stun, shield block,
+  burn/frost/poison, barbarian crush). Event-path harness confirms every
+  class emits the render events the FX layer consumes.

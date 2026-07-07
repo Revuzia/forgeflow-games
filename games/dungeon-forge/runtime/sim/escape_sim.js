@@ -23,6 +23,39 @@ export const PLAYER = {
   mana: 100, manaRegen: 9, potionHeal: 35, respawnS: 5,
 };
 
+/**
+ * CLASSES — four industry-standard kits. LMB always drives the 3-hit melee
+ * combo (per-stage damage, finisher bonus); RMB is the class special; the
+ * Sorceress additionally casts FROST on R. Shield/2H/spells/poison per class.
+ * dmg arrays are [stage1, stage2, finisher].
+ */
+export const CLASSES = {
+  knight: {
+    label: "Knight", hp: 120, speed: 4.4,
+    melee: { dmg: [24, 26, 40], range: 2.0, arc: 1.75, cd: 0.5 },
+    shield: { reduce: 0.45, frontArc: 1.05 },          // blocks 45% from the front
+    special: { kind: "bash", dmg: 18, stun: 1.2, range: 2.3, cd: 5 },
+  },
+  barbarian: {
+    label: "Barbarian", hp: 110, speed: 4.5,
+    melee: { dmg: [34, 36, 55], range: 2.35, arc: 2.3, cd: 0.72, twoHanded: true },
+    special: { kind: "crush", dmgMul: 2.2, range: 2.5, cd: 3 },
+  },
+  sorceress: {
+    label: "Sorceress", hp: 85, speed: 4.6,
+    melee: { dmg: [14, 14, 22], range: 1.9, arc: 1.6, cd: 0.5 },
+    special: { kind: "fire", dmg: 20, burn: { dps: 5, dur: 3 }, cd: 0.55, mana: 16, speed: 15 },
+    frost: { dmg: 12, slow: { mul: 0.45, dur: 2.5 }, cd: 0.7, mana: 14, speed: 13 },
+  },
+  rogue: {
+    label: "Rogue", hp: 90, speed: 5.2,
+    melee: { dmg: [13, 13, 24], range: 1.8, arc: 1.5, cd: 0.34, poison: { dps: 6, dur: 4, maxStacks: 3 } },
+    special: { kind: "knife", dmg: 10, poison: { dps: 6, dur: 4, maxStacks: 3 }, cd: 1.4, speed: 17 },
+  },
+};
+export const CLASS_ORDER = ["knight", "barbarian", "sorceress", "rogue"];
+const COMBO_WINDOW = 0.9; // seconds after cooldown to continue the chain
+
 export const TRAPK = {
   spikes: { period: 2.9, warn: 0.5, active: 1.0, dmg: 25 },
   vent:   { period: 4.2, warn: 0.6, active: 1.5, dmg: 12, tick: 0.4 },
@@ -68,10 +101,13 @@ export function newRun(d, runSeed, players) {
   };
 
   players.forEach((p, i) => {
+    const cls = CLASSES[CLASS_ORDER[(p.skin || 0) % CLASS_ORDER.length]];
     st.players.push({
       id: p.id, name: p.name || "Player", skin: p.skin || 0, slot: i,
+      cls: CLASS_ORDER[(p.skin || 0) % CLASS_ORDER.length],
+      maxHp: cls.hp, combo: 0, comboT: 0, specialT: 0, frostT: 0, stunT: 0,
       f: spawn.f, x: c2w(spawn.obj.x) + (i % 2) * 0.9 - 0.45, z: c2w(spawn.obj.z) + Math.floor(i / 2) * 0.9 - 0.45,
-      yaw: (spawn.obj.rot || 0) * Math.PI / 2, hp: PLAYER.hp, mana: PLAYER.mana,
+      yaw: (spawn.obj.rot || 0) * Math.PI / 2, hp: cls.hp, mana: PLAYER.mana,
       alive: true, escaped: false, deaths: 0, gold: 0, keys: 0, potions: 1, charms: 0,
       weaponTier: 0, armorTier: 0,
       meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null, // climb: {t, from, to}
@@ -110,10 +146,13 @@ export function newRun(d, runSeed, players) {
 /** Drop-in join: add a player to a running escape (multiplayer). */
 export function addPlayer(st, p) {
   const i = st.players.length;
+  const cls = CLASSES[CLASS_ORDER[(p.skin || 0) % CLASS_ORDER.length]];
   const np = {
     id: p.id, name: p.name || "Player", skin: p.skin || 0, slot: i,
+    cls: CLASS_ORDER[(p.skin || 0) % CLASS_ORDER.length],
+    maxHp: cls.hp, combo: 0, comboT: 0, specialT: 0, frostT: 0, stunT: 0,
     f: st.spawn.f, x: c2w(st.spawn.x) + (i % 2) * 0.9 - 0.45, z: c2w(st.spawn.z) + Math.floor(i / 2) * 0.9 - 0.45,
-    yaw: 0, hp: PLAYER.hp, mana: PLAYER.mana,
+    yaw: 0, hp: cls.hp, mana: PLAYER.mana,
     alive: true, escaped: false, deaths: 0, gold: 0, keys: 0, potions: 1, charms: 0,
     weaponTier: 0, armorTier: 0,
     meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null,
@@ -333,10 +372,10 @@ export function grantLoot(st, p, it) {
 // combat
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function damageEnemy(st, e, dmg, byId) {
+export function damageEnemy(st, e, dmg, byId, elem) {
   if (!e.alive) return;
   e.hp -= dmg; e.hurtT = 0.25;
-  emit(st, "ehit", { id: e.id, hp: e.hp, by: byId, dmg });
+  emit(st, "ehit", { id: e.id, hp: e.hp, by: byId, dmg, elem });
   if (e.hp <= 0) {
     e.alive = false;
     if (e.key) { e.droppedKey = e.key; e.key = null; }
@@ -346,10 +385,20 @@ export function damageEnemy(st, e, dmg, byId) {
   }
 }
 
-export function damagePlayer(st, p, dmg, src) {
+export function damagePlayer(st, p, dmg, src, srcPos) {
   if (!p.alive || p.escaped || st.over) return;
   if (p.hurtT > 0) return;                 // brief i-frames
-  dmg = Math.round(dmg * (1 - 0.1 * (p.armorTier || 0))); // found armor soaks 10%/tier
+  dmg = dmg * (1 - 0.1 * (p.armorTier || 0)); // found armor soaks 10%/tier
+  // Knight shield: blocks a chunk of damage arriving inside the frontal arc
+  const cls = CLASSES[p.cls];
+  if (cls && cls.shield && srcPos) {
+    const ang = Math.atan2(srcPos.x - p.x, srcPos.z - p.z);
+    let dd = ang - p.yaw;
+    while (dd > Math.PI) dd -= Math.PI * 2;
+    while (dd < -Math.PI) dd += Math.PI * 2;
+    if (Math.abs(dd) <= cls.shield.frontArc) { dmg *= (1 - cls.shield.reduce); emit(st, "blocked", { id: p.id }); }
+  }
+  dmg = Math.round(dmg);
   p.hp -= dmg; p.hurtT = 0.45;
   emit(st, "phit", { id: p.id, hp: p.hp, dmg, src });
   if (p.hp <= 0) {
@@ -358,36 +407,111 @@ export function damagePlayer(st, p, dmg, src) {
   }
 }
 
-function playerMelee(st, p) {
-  if (p.meleeT > 0) return;
-  p.meleeT = PLAYER.meleeCd;
-  emit(st, "swing", { id: p.id });
-  const dmg = PLAYER.meleeDmg * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0));
+function meleeHits(st, p, range, arc) {
+  const out = [];
   for (const e of st.enemies) {
     if (!e.alive || e.f !== p.f) continue;
     const dx = e.x - p.x, dz = e.z - p.z;
     const dist = Math.hypot(dx, dz);
-    if (dist > PLAYER.meleeRange + 0.4) continue;
+    if (dist > range + 0.4) continue;
     const ang = Math.atan2(dx, dz);
     let dd = ang - p.yaw;
     while (dd > Math.PI) dd -= Math.PI * 2;
     while (dd < -Math.PI) dd += Math.PI * 2;
-    if (Math.abs(dd) <= PLAYER.meleeArc / 2 + 0.25) damageEnemy(st, e, dmg, p.id);
+    if (Math.abs(dd) <= arc / 2 + 0.25) out.push(e);
   }
-  // barrels/crates could break here (decor stays solid for simplicity)
+  return out;
 }
 
-function playerBolt(st, p) {
-  if (p.boltT > 0 || p.mana < PLAYER.boltMana) return;
-  p.boltT = PLAYER.boltCd; p.mana -= PLAYER.boltMana;
+/** Apply/refresh an elemental status on an enemy (host/solo authority applies
+ *  the DoT; everyone plays the FX via the estatus event). */
+export function applyStatus(st, e, kind, cfg, byId) {
+  e.status = e.status || {};
+  if (kind === "poison") {
+    const cur = e.status.poison;
+    e.status.poison = { t: cfg.dur, dps: cfg.dps, by: byId, stacks: Math.min(cfg.maxStacks || 3, (cur ? cur.stacks : 0) + 1), acc: cur ? cur.acc : 0 };
+  } else if (kind === "burn") {
+    e.status.burn = { t: cfg.dur, dps: cfg.dps, by: byId, acc: (e.status.burn && e.status.burn.acc) || 0 };
+  } else if (kind === "frost") {
+    e.status.frost = { t: cfg.dur, mul: cfg.mul };
+  }
+  emit(st, "estatus", { id: e.id, kind, dur: cfg.dur });
+}
+
+/** 3-hit combo melee: hold LMB to chain 1 → 2 → finisher. */
+function playerMelee(st, p) {
+  if (p.meleeT > 0 || p.stunT > 0) return;
+  const cls = CLASSES[p.cls] || CLASSES.knight;
+  const M = cls.melee;
+  // chain bookkeeping: continue if the last swing was recent, else restart
+  p.combo = (st.time - p.comboT) < (M.cd + COMBO_WINDOW) ? (p.combo % 3) + 1 : 1;
+  p.comboT = st.time;
+  p.meleeT = M.cd * (p.combo === 3 ? 1.25 : 1); // finisher recovers a touch slower
+  emit(st, "swing", { id: p.id, stage: p.combo });
+  const dmg = M.dmg[p.combo - 1] * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0));
+  for (const e of meleeHits(st, p, M.range, M.arc)) {
+    damageEnemy(st, e, dmg, p.id);
+    if (M.poison && e.alive) applyStatus(st, e, "poison", M.poison, p.id);
+  }
+}
+
+/** RMB class special: bash (stun), crush (heavy), fire bolt, poison knife. */
+function playerSpecial(st, p) {
+  if (p.specialT > 0 || p.stunT > 0) return;
+  const cls = CLASSES[p.cls] || CLASSES.knight;
+  const S = cls.special;
+  if (!S) return;
+  if (S.kind === "bash") {
+    p.specialT = S.cd;
+    emit(st, "bash", { id: p.id });
+    for (const e of meleeHits(st, p, S.range, 1.9)) {
+      damageEnemy(st, e, S.dmg, p.id);
+      if (e.alive) { e.stunT = S.stun; emit(st, "estatus", { id: e.id, kind: "stun", dur: S.stun }); }
+    }
+    return;
+  }
+  if (S.kind === "crush") {
+    p.specialT = S.cd;
+    emit(st, "crush", { id: p.id });
+    const dmg = cls.melee.dmg[2] * S.dmgMul * 0.6 * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0));
+    for (const e of meleeHits(st, p, S.range, 2.6)) damageEnemy(st, e, dmg, p.id);
+    return;
+  }
+  if (S.kind === "fire" || S.kind === "knife") {
+    if (S.mana && p.mana < S.mana) return;
+    p.specialT = S.cd;
+    if (S.mana) p.mana -= S.mana;
+    const vx = Math.sin(p.yaw), vz = Math.cos(p.yaw);
+    st.bolts.push({
+      id: "b" + st.nextBolt++, owner: p.id, f: p.f, elem: S.kind === "fire" ? "fire" : "knife",
+      x: p.x + vx * 0.6, z: p.z + vz * 0.6, vx: vx * S.speed, vz: vz * S.speed,
+      ttl: 1.5, dmg: S.dmg * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)),
+      status: S.kind === "fire" ? { kind: "burn", cfg: S.burn } : { kind: "poison", cfg: S.poison },
+    });
+    emit(st, "cast", { id: p.id, kind: S.kind });
+    return;
+  }
+}
+
+/** R: the Sorceress frost bolt. */
+function playerFrost(st, p) {
+  const cls = CLASSES[p.cls] || CLASSES.knight;
+  if (!cls.frost || p.frostT > 0 || p.stunT > 0) return;
+  const F = cls.frost;
+  if (p.mana < F.mana) return;
+  p.frostT = F.cd;
+  p.mana -= F.mana;
   const vx = Math.sin(p.yaw), vz = Math.cos(p.yaw);
   st.bolts.push({
-    id: "b" + st.nextBolt++, owner: p.id, f: p.f,
-    x: p.x + vx * 0.6, z: p.z + vz * 0.6, vx: vx * PLAYER.boltSpeed, vz: vz * PLAYER.boltSpeed,
-    ttl: 1.4, dmg: PLAYER.boltDmg * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)),
+    id: "b" + st.nextBolt++, owner: p.id, f: p.f, elem: "frost",
+    x: p.x + vx * 0.6, z: p.z + vz * 0.6, vx: vx * F.speed, vz: vz * F.speed,
+    ttl: 1.5, dmg: F.dmg * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)),
+    status: { kind: "frost", cfg: F.slow },
   });
-  emit(st, "bolt", { id: p.id });
+  emit(st, "cast", { id: p.id, kind: "frost" });
 }
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // enemy AI
@@ -399,6 +523,24 @@ function stepEnemy(st, e, dt, rnd, simEnemies) {
   const K = e.K;
   e.atkT = Math.max(0, e.atkT - dt);
   e.hurtT = Math.max(0, e.hurtT - dt);
+  // elemental statuses: burn/poison DoT (half-second ticks), frost timer, stun
+  if (e.status) {
+    for (const kind of ["burn", "poison"]) {
+      const s = e.status[kind];
+      if (!s) continue;
+      s.t -= dt;
+      s.acc = (s.acc || 0) + dt;
+      if (s.acc >= 0.5) {
+        s.acc -= 0.5;
+        const mult = kind === "poison" ? (s.stacks || 1) : 1;
+        damageEnemy(st, e, s.dps * 0.5 * mult, s.by, kind);
+        if (!e.alive) return;
+      }
+      if (s.t <= 0) delete e.status[kind];
+    }
+    if (e.status.frost) { e.status.frost.t -= dt; if (e.status.frost.t <= 0) delete e.status.frost; }
+  }
+  if (e.stunT > 0) { e.stunT -= dt; return; } // stunned: no thinking, no moving
 
   // pick target: nearest alive player on my floor with LOS or close
   let target = null, tDist = Infinity;
@@ -445,7 +587,7 @@ function stepEnemy(st, e, dt, rnd, simEnemies) {
 
     if (tDist <= K.atkR) {
       e.yaw = Math.atan2(target.x - e.x, target.z - e.z);
-      if (e.atkT <= 0) { e.atkT = K.cd; emit(st, "eattack", { id: e.id }); damagePlayer(st, target, K.dmg * (0.9 + 0.1 * (st.d.difficulty || 1)), e.etype); }
+      if (e.atkT <= 0) { e.atkT = K.cd; emit(st, "eattack", { id: e.id }); damagePlayer(st, target, K.dmg * (0.9 + 0.1 * (st.d.difficulty || 1)), e.etype, { x: e.x, z: e.z }); }
       return;
     }
     // path toward target (repath at 3Hz or on arrival)
@@ -467,6 +609,7 @@ function walkToward(st, e, tx, tz, speed, dt) {
   const dist = Math.hypot(dx, dz);
   if (dist < 0.05) return;
   if (cellType(st.d, e.f, w2c(e.x), w2c(e.z)) === CT.WATER && !e.K.fly) speed *= WATER_SLOW;
+  if (e.status && e.status.frost) speed *= e.status.frost.mul;
   const mx = (dx / dist) * speed * dt, mz = (dz / dist) * speed * dt;
   const r = moveCircle(st, e.f, e.x, e.z, mx, mz, 0.42, true);
   e.x = r.x; e.z = r.z;
@@ -493,13 +636,16 @@ export function tick(st, dt, opts = {}) {
   for (const p of st.players) {
     p.meleeT = Math.max(0, p.meleeT - dt);
     p.boltT = Math.max(0, p.boltT - dt);
+    p.specialT = Math.max(0, p.specialT - dt);
+    p.frostT = Math.max(0, p.frostT - dt);
+    p.stunT = Math.max(0, (p.stunT || 0) - dt);
     p.hurtT = Math.max(0, p.hurtT - dt);
     p.mana = Math.min(PLAYER.mana, p.mana + PLAYER.manaRegen * dt);
 
     if (!p.alive) {
       p.respawnT -= dt;
       if (p.respawnT <= 0) {
-        p.alive = true; p.hp = Math.round(PLAYER.hp * 0.6);
+        p.alive = true; p.hp = Math.round((p.maxHp || PLAYER.hp) * 0.6);
         p.f = st.spawn.f; p.x = c2w(st.spawn.x); p.z = c2w(st.spawn.z); p.climb = null;
         emit(st, "respawn", { id: p.id });
       }
@@ -552,7 +698,8 @@ export function tick(st, dt, opts = {}) {
     }
 
     if (p.input.melee) playerMelee(st, p);
-    if (p.input.bolt) playerBolt(st, p);
+    if (p.input.special || p.input.bolt) playerSpecial(st, p);   // RMB (bolt kept as alias)
+    if (p.input.frost) playerFrost(st, p);                        // R — sorceress only
     if (p.input.interactDown) { doInteract(st, p); }
     if (p.input.potionDown && p.potions > 0 && p.hp < PLAYER.hp) {
       p.potions--; p.hp = Math.min(PLAYER.hp, p.hp + PLAYER.potionHeal);
@@ -581,12 +728,16 @@ export function tick(st, dt, opts = {}) {
       // victims receive the relayed phit and apply it to themselves)
       if (simEnemies) for (const p of st.players) {
         if (!p.alive || p.escaped || p.f !== b.f) continue;
-        if (Math.hypot(p.x - b.x, p.z - b.z) < 0.55) { damagePlayer(st, p, b.dmg, "bolt"); b.ttl = 0; break; }
+        if (Math.hypot(p.x - b.x, p.z - b.z) < 0.55) { damagePlayer(st, p, b.dmg, "bolt", { x: b.x - b.vx * 0.1, z: b.z - b.vz * 0.1 }); b.ttl = 0; break; }
       }
     } else if (simEnemies) {
       for (const e of st.enemies) {
         if (!e.alive || e.f !== b.f) continue;
-        if (Math.hypot(e.x - b.x, e.z - b.z) < 0.7) { damageEnemy(st, e, b.dmg, b.owner); b.ttl = 0; emit(st, "boltHit", { x: b.x, z: b.z, f: b.f }); break; }
+        if (Math.hypot(e.x - b.x, e.z - b.z) < 0.7) {
+          damageEnemy(st, e, b.dmg, b.owner);
+          if (b.status && e.alive) applyStatus(st, e, b.status.kind, b.status.cfg, b.owner);
+          b.ttl = 0; emit(st, "boltHit", { x: b.x, z: b.z, f: b.f, elem: b.elem }); break;
+        }
       }
     }
   }

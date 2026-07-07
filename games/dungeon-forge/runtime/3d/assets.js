@@ -112,23 +112,87 @@ export class Assets {
 
   async chars() {
     // Meshy-generated dungeon party, auto-rigged (24-joint humanoid). Each
-    // character = textured base + armature-only Walk/Run clips retargeted by
-    // bone name. Attack/death are procedural bone overlays (escape.js).
+    // character = textured base + armature-only clips (walk/run from rigging,
+    // combat set from the Meshy animation library) retargeted by bone name.
     const names = ["knight", "barbarian", "sorceress", "rogue"];
+    const CLIPS = {
+      knight: ["slash1", "slash2", "finisher", "parry", "hit", "death"],
+      barbarian: ["slash1", "slash2", "finisher", "hit", "death"],
+      sorceress: ["melee", "cast1", "cast2", "hit", "death"],
+      rogue: ["slash1", "slash2", "finisher", "hit", "death"],
+    };
     const out = {};
     await Promise.all(names.map(async (n) => {
       try {
         const base = await this.load(`chars/meshy/${n}/base.glb`);
-        const wa = await this.load(`chars/meshy/${n}/walk_arm.glb`).catch(() => null);
-        const ra = await this.load(`chars/meshy/${n}/run_arm.glb`).catch(() => null);
         const anims = [];
         if (base.animations && base.animations[0]) { const c = base.animations[0].clone(); c.name = "Idle"; anims.push(c); }
-        if (wa && wa.animations[0]) { const c = wa.animations[0].clone(); c.name = "Walk"; anims.push(c); }
-        if (ra && ra.animations[0]) { const c = ra.animations[0].clone(); c.name = "Run"; anims.push(c); }
+        const addClip = async (rel, name) => {
+          const g = await this.load(rel).catch(() => null);
+          if (g && g.animations && g.animations[0]) { const c = g.animations[0].clone(); c.name = name; anims.push(c); }
+        };
+        await addClip(`chars/meshy/${n}/walk_arm.glb`, "Walk");
+        await addClip(`chars/meshy/${n}/run_arm.glb`, "Run");
+        await Promise.all((CLIPS[n] || []).map((cn) => addClip(`chars/meshy/${n}/anim_${cn}.glb`, "C_" + cn)));
         out[n] = { scene: base.scene, animations: anims };
       } catch (e) { console.warn("[assets] char failed:", n, e); }
     }));
     return out;
+  }
+
+/** Procedural class weapons — built once, cloned per actor. */
+  static makeClassWeapon(cls) {
+    const g = new THREE.Group();
+    const metal = new THREE.MeshStandardMaterial({ color: 0xc8ccd8, metalness: 0.85, roughness: 0.3 });
+    const wood = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.85 });
+    if (cls === "barbarian") {
+      // two-handed war axe
+      const haft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.5, 8), wood);
+      haft.position.y = 0.45;
+      const head = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.07, 20, 1, false, -Math.PI * 0.42, Math.PI * 0.84), metal);
+      head.rotation.z = Math.PI / 2;
+      head.position.set(0, 1.05, 0.13);
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.22, 8), metal);
+      spike.position.y = 1.3;
+      g.add(haft, head, spike);
+    } else if (cls === "sorceress") {
+      // arcane staff with a glowing orb
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 1.55, 8), wood);
+      pole.position.y = 0.5;
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 12),
+        new THREE.MeshStandardMaterial({ color: 0x9a6bff, emissive: 0x8f5aff, emissiveIntensity: 2.4 }));
+      orb.position.y = 1.34;
+      const cage = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.018, 8, 20), metal);
+      cage.position.y = 1.34;
+      g.add(pole, orb, cage);
+      g.userData.orb = orb;
+    } else if (cls === "rogue") {
+      // curved dagger
+      const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.032, 0.22, 8), wood);
+      grip.position.y = 0.1;
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.05), metal);
+      guard.position.y = 0.23;
+      const blade = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.5, 4), metal);
+      blade.scale.z = 0.4;
+      blade.position.y = 0.5;
+      g.add(grip, guard, blade);
+    }
+    return g;
+  }
+
+  /** Knight round shield (left arm). */
+  static makeShield() {
+    const g = new THREE.Group();
+    const face = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.05, 22),
+      new THREE.MeshStandardMaterial({ color: 0x3a4a6a, metalness: 0.6, roughness: 0.4 }));
+    face.rotation.x = Math.PI / 2;
+    const boss = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 10),
+      new THREE.MeshStandardMaterial({ color: 0xd8c46a, metalness: 0.9, roughness: 0.25 }));
+    boss.position.z = 0.05;
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.025, 8, 26),
+      new THREE.MeshStandardMaterial({ color: 0xd8c46a, metalness: 0.9, roughness: 0.3 }));
+    g.add(face, boss, rim);
+    return g;
   }
 
   items() {

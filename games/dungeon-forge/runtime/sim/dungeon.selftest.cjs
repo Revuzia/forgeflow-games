@@ -192,18 +192,96 @@ const ok = (cond, name, extra) => {
   for (let i = 0; i < 400 && !p3.alive; i++) tick(run3, 1 / 60);
   ok(p3.alive, "player respawned");
 
-  // bolt combat kills at range
-  const run4 = newRun(s3, 4000, [{ id: "P1" }]);
+  // bolt combat kills at range — sorceress (skin 2) fire bolts
+  const run4 = newRun(s3, 4000, [{ id: "P1", skin: 2 }]);
   const p4 = run4.players[0], e4 = run4.enemies[0];
+  ok(p4.cls === "sorceress", "skin 2 → sorceress class");
   p4.x = c2w(5); p4.z = c2w(5);
   let guard = 0;
   while (e4.alive && guard++ < 3000) {
     p4.input.yaw = E.yawTo(p4.x, p4.z, e4.x, e4.z);
-    p4.input.bolt = true;
+    p4.input.special = true; // fire bolt
     p4.input.mx = -(Math.sign(e4.x - p4.x)) * 0.4; p4.input.mz = -(Math.sign(e4.z - p4.z)) * 0.4; // kite
     tick(run4, 1 / 60);
   }
-  ok(!e4.alive, "bolts killed the robot while kiting");
+  ok(!e4.alive, "fire bolts killed the robot while kiting");
+
+  // ── 8b. class kits: combos, bash stun, burn/frost/poison, shield ─
+  console.log("[classes]");
+  const mkArena = (skin) => {
+    const dd = newDungeon({ name: "CL", theme: "fantasy", seed: 12 });
+    stampRoom(dd, 0, 5, 5, 7, 7);
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "exit", x: 11, z: 11 } });
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "enemy", x: 8, z: 8, etype: "orc" } });
+    const r = newRun(dd, 77, [{ id: "P1", skin }]);
+    return { r, p: r.players[0], e: r.enemies[0] };
+  };
+  // combo stages escalate: swing events carry stage 1,2,3
+  {
+    const { r, p, e } = mkArena(0); // knight
+    p.x = e.x - 1.5; p.z = e.z; p.input.yaw = E.yawTo(p.x, p.z, e.x, e.z);
+    p.input.melee = true;
+    const stages = [];
+    for (let i = 0; i < 140 && stages.length < 3; i++) {
+      tick(r, 1 / 60);
+      for (const ev of E.drainEvents(r)) if (ev.type === "swing") stages.push(ev.stage);
+    }
+    ok(stages.join(",") === "1,2,3", "combo chains 1→2→3 (" + stages.join(",") + ")");
+  }
+  // knight bash stuns
+  {
+    const { r, p, e } = mkArena(0);
+    p.x = e.x - 1.6; p.z = e.z; p.input.yaw = E.yawTo(p.x, p.z, e.x, e.z);
+    p.input.special = true;
+    for (let i = 0; i < 10; i++) tick(r, 1 / 60);
+    ok(e.stunT > 0.8, "shield bash stuns (" + e.stunT.toFixed(2) + "s)");
+    ok(p.specialT > 3, "bash on cooldown");
+  }
+  // shield blocks frontal damage
+  {
+    const { r, p, e } = mkArena(0); // knight, orc dmg 22
+    p.x = e.x - 1.5; p.z = e.z;
+    p.input.yaw = E.yawTo(p.x, p.z, e.x, e.z); // face the orc
+    const hp0 = p.hp;
+    let guard2 = 0;
+    while (p.hp === hp0 && guard2++ < 800) tick(r, 1 / 60);
+    const taken = hp0 - p.hp;
+    ok(taken > 0 && taken <= 14, "shield soaked a frontal orc hit (took " + taken + ", raw ~22)");
+  }
+  // sorceress burn DoT + frost slow
+  {
+    const { r, p, e } = mkArena(2);
+    p.x = e.x - 6; p.z = e.z; p.input.yaw = E.yawTo(p.x, p.z, e.x, e.z);
+    p.input.special = true; // fire
+    for (let i = 0; i < 40 && !(e.status && e.status.burn); i++) tick(r, 1 / 60);
+    ok(!!(e.status && e.status.burn), "fire bolt applied burn");
+    const hpAfterHit = e.hp;
+    p.input.special = false;
+    for (let i = 0; i < 90; i++) tick(r, 1 / 60);
+    ok(e.hp < hpAfterHit - 3, "burn ticked damage (" + (hpAfterHit - e.hp).toFixed(1) + ")");
+    p.input.frost = true;
+    for (let i = 0; i < 40 && !(e.status && e.status.frost); i++) tick(r, 1 / 60);
+    ok(!!(e.status && e.status.frost), "frost bolt applied slow");
+  }
+  // rogue poison stacks
+  {
+    const { r, p, e } = mkArena(3);
+    p.x = e.x - 1.4; p.z = e.z; p.input.yaw = E.yawTo(p.x, p.z, e.x, e.z);
+    p.input.melee = true;
+    for (let i = 0; i < 90; i++) tick(r, 1 / 60);
+    ok(!!(e.status && e.status.poison && e.status.poison.stacks >= 2), "poison stacked (" + (e.status && e.status.poison ? e.status.poison.stacks : 0) + ")");
+  }
+  // barbarian crush hits harder than a stage-1 swing
+  {
+    const { r, p, e } = mkArena(1);
+    p.x = e.x - 1.8; p.z = e.z; p.input.yaw = E.yawTo(p.x, p.z, e.x, e.z);
+    const hp0 = e.hp;
+    p.input.special = true;
+    for (let i = 0; i < 6; i++) tick(r, 1 / 60);
+    const crushDmg = hp0 - e.hp;
+    ok(crushDmg > 55, "barbarian crush is heavy (" + crushDmg.toFixed(0) + ")");
+  }
 
   // ── 9. traps hurt ───────────────────────────────────────────────
   console.log("[traps]");

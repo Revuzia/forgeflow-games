@@ -30,6 +30,8 @@ const HorizonRunner = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [levelData, setLevelData] = useState(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [muted, setMuted] = useState(() => localStorage.getItem('hrMuted') === '1');
   const [checkpoint, setCheckpoint] = useState(null);
   const [levelProgress, setLevelProgress] = useState(0);
   const [powerUp, setPowerUp] = useState(null);
@@ -2133,13 +2135,15 @@ const HorizonRunner = () => {
     levelup: useRef(null),
   };
   const playSfx = useCallback((key) => {
+    if (localStorage.getItem('hrMuted') === '1') return;
     const a = sfxRefs[key]?.current;
     if (!a) return;
     try { a.currentTime = 0; a.volume = 0.45; a.play().catch(() => {}); } catch {}
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 text-white p-4 relative overflow-hidden">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 text-white p-4 relative overflow-hidden"
+      style={gameState === 'menu' ? { backgroundImage: "linear-gradient(rgba(10,10,25,.45), rgba(10,10,25,.82)), url('menu_bg.png')", backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
       <audio ref={bgmRef} src="music.ogg" loop preload="auto" />
       <audio ref={sfxRefs.jump} src="sfx_jump.ogg" preload="auto" />
       <audio ref={sfxRefs.coin} src="sfx_coin.ogg" preload="auto" />
@@ -2184,17 +2188,39 @@ const HorizonRunner = () => {
             </button>
 
             <button
-              onClick={() => {
-                if (confirm('Are you sure you want to reset all progress? This cannot be undone.')) {
-                  localStorage.removeItem('horizonRunnerProgress');
-                  setProgress({ 'Mystic Plains': 0 });
-                }
-              }}
-              className="px-5 py-1.5 bg-red-600 hover:bg-red-500 rounded-lg font-bold text-xs transition-all mx-auto"
+              onClick={() => setShowSettings(true)}
+              className="px-5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/25 rounded-lg font-bold text-xs transition-all mx-auto flex items-center gap-1.5"
             >
-              Reset All Progress
+              ⚙ Settings
             </button>
           </div>
+
+          {showSettings && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowSettings(false)}>
+              <div className="bg-slate-800 border-2 border-cyan-500/50 rounded-2xl p-6 w-80 max-w-[90vw] text-center" onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-xl font-bold text-cyan-300 mb-4">⚙ Settings</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="font-semibold">Sound</span>
+                  <button onClick={() => { const m = !muted; setMuted(m); localStorage.setItem('hrMuted', m ? '1' : '0'); if (bgmRef.current) bgmRef.current.muted = m; }}
+                    className={`px-4 py-1.5 rounded-lg font-bold text-sm ${muted ? 'bg-gray-600' : 'bg-green-600'}`}>
+                    {muted ? '🔇 Muted' : '🔊 On'}
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    if (confirm('Reset all progress? This cannot be undone.')) {
+                      localStorage.removeItem('horizonRunnerProgress');
+                      setProgress({ 'Mystic Plains': 0 });
+                      setShowSettings(false);
+                    }
+                  }}
+                  className="w-full px-4 py-2 bg-red-700/80 hover:bg-red-600 rounded-lg font-bold text-sm mb-2">
+                  Reset All Progress
+                </button>
+                <button onClick={() => setShowSettings(false)} className="w-full px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-bold">Done</button>
+              </div>
+            </div>
+          )}
 
           <div className="text-xs text-gray-400 space-y-0.5 bg-black/30 p-3 rounded-lg backdrop-blur max-w-md mx-auto">
             <p className="font-semibold text-cyan-400 text-sm mb-1">How to Play:</p>

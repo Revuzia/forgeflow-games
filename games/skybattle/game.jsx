@@ -57,6 +57,8 @@ const ClimberGame = () => {
   const [levelData, setLevelData] = useState(null);
   const [height, setHeight] = useState(0);
   const [showMenu, setShowMenu] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [muted, setMuted] = useState(() => localStorage.getItem('sbMuted') === '1');
   const [progress, setProgress] = useState(() => {
     const saved = localStorage.getItem('skyBattleProgress');
     return saved ? JSON.parse(saved) : { 'Sky Temple': 0 };
@@ -1338,13 +1340,14 @@ const ClimberGame = () => {
     levelup: useRef(null),
   };
   const playSfx = useCallback((key) => {
+    if (localStorage.getItem('sbMuted') === '1') return;
     const a = sfxRefs[key]?.current;
     if (!a) return;
     try { a.currentTime = 0; a.volume = 0.45; a.play().catch(() => {}); } catch {}
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-4 relative overflow-hidden" style={{ fontFamily: 'Lexend, sans-serif' }}>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-4 relative overflow-hidden" style={{ fontFamily: 'Lexend, sans-serif', ...(gameState === 'menu' ? { backgroundImage: "linear-gradient(rgba(8,6,20,.5), rgba(8,6,20,.84)), url('menu_bg.png')", backgroundSize: 'cover', backgroundPosition: 'center' } : {}) }}>
       <audio ref={bgmRef} src="music.ogg" loop preload="auto" />
       <audio ref={sfxRefs.jump} src="sfx_jump.ogg" preload="auto" />
       <audio ref={sfxRefs.coin} src="sfx_coin.ogg" preload="auto" />
@@ -1541,11 +1544,31 @@ const ClimberGame = () => {
             <p>{t('controlsDefeat')}</p>
           </div>
           <button
-            onClick={resetProgress}
-            className="px-4 py-1 bg-red-900/50 hover:bg-red-800/70 rounded-lg text-xs text-red-300 hover:text-red-100 transition-all"
+            onClick={() => setShowSettings(true)}
+            className="px-4 py-1.5 bg-white/10 hover:bg-white/20 border border-white/25 rounded-lg text-xs font-bold transition-all"
           >
-            Reset All Progress
+            ⚙ Settings
           </button>
+        </div>
+      )}
+
+      {showSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowSettings(false)}>
+          <div className="bg-slate-800 border-2 border-cyan-500/50 rounded-2xl p-6 w-80 max-w-[90vw] text-center" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-xl font-bold text-cyan-300 mb-4">⚙ Settings</h3>
+            <div className="flex items-center justify-between mb-4">
+              <span className="font-semibold">Sound</span>
+              <button onClick={() => { const m = !muted; setMuted(m); localStorage.setItem('sbMuted', m ? '1' : '0'); if (bgmRef.current) bgmRef.current.muted = m; }}
+                className={`px-4 py-1.5 rounded-lg font-bold text-sm ${muted ? 'bg-gray-600' : 'bg-green-600'}`}>
+                {muted ? '🔇 Muted' : '🔊 On'}
+              </button>
+            </div>
+            <button onClick={() => { setShowSettings(false); resetProgress(); }}
+              className="w-full px-4 py-2 bg-red-700/80 hover:bg-red-600 rounded-lg font-bold text-sm mb-2">
+              Reset All Progress
+            </button>
+            <button onClick={() => setShowSettings(false)} className="w-full px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-bold">Done</button>
+          </div>
         </div>
       )}
 

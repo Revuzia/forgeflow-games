@@ -108,6 +108,19 @@ export class EnemyPool {
     if (v) this._play(v, "attack", true);
   }
 
+  /** Show a status aura on an enemy (burn/frost/poison/stun). */
+  setStatus(id, kind, dur) {
+    const v = this.views.get(id);
+    if (!v) return;
+    v.status = v.status || {};
+    v.status[kind] = performance.now() / 1000 + (dur || 2);
+    if (kind === "frost" && !v.frostTint) {
+      // freeze the material to icy blue
+      v.frostTint = [];
+      v.obj.traverse((m) => { if (m.isMesh && m.material) { const orig = m.material; m.material = m.material.clone(); m.material.color.lerp(new THREE.Color(0x8fd0ff), 0.55); v.frostTint.push([m, orig]); } });
+    }
+  }
+
   onDeath(ev) {
     const v = this.views.get(ev.id);
     if (!v || v.dead) return;
@@ -148,6 +161,22 @@ export class EnemyPool {
         const moving = e.state === "chase" || e.moving;
         this._play(v, moving ? (e.state === "chase" && v.actions.run ? "run" : "walk") : "idle");
         e.moving = false;
+      }
+      // status auras: fire embers / poison bubbles / frost drips / stun stars
+      if (v.status) {
+        const now = t;
+        for (const kind of ["burn", "poison", "frost", "stun"]) {
+          if (v.status[kind] && v.status[kind] < now) {
+            delete v.status[kind];
+            if (kind === "frost" && v.frostTint) { for (const [m, orig] of v.frostTint) m.material = orig; v.frostTint = null; }
+            continue;
+          }
+          if (!v.status[kind]) continue;
+          const wp = v.grp.position.clone(); wp.y += 1.0;
+          if (kind === "burn" && Math.random() < 0.4) this.g.fx.spawn(wp.add(new THREE.Vector3((Math.random() - .5) * .7, Math.random() * .8, (Math.random() - .5) * .7)), new THREE.Vector3((Math.random() - .5) * .3, 1.4 + Math.random(), (Math.random() - .5) * .3), 0.45, 1.8, Math.random() < .6 ? 0xff6a1f : 0xffc23a);
+          if (kind === "poison" && Math.random() < 0.3) this.g.fx.spawn(wp.add(new THREE.Vector3((Math.random() - .5) * .7, Math.random() * .9, (Math.random() - .5) * .7)), new THREE.Vector3((Math.random() - .5) * .2, .6 + Math.random() * .5, (Math.random() - .5) * .2), 0.7, 1.6, 0x8fe04a);
+          if (kind === "frost" && Math.random() < 0.2) this.g.fx.spawn(wp.add(new THREE.Vector3((Math.random() - .5) * .6, Math.random() * .8, (Math.random() - .5) * .6)), new THREE.Vector3(0, -0.6, 0), 0.6, 1.4, 0xbfeeff);
+        }
       }
       // hp bar faces camera + fills
       const frac = Math.max(0, e.hp / (e.K.hp * (0.85 + 0.15 * (this.d.difficulty || 1))));

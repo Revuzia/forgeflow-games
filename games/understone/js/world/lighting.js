@@ -61,8 +61,12 @@ export class Lighting {
     this.tilesChanged = false;
     const { world } = this;
     const [vx0, vy0, vx1, vy1] = camera.visibleTileRange(alpha, 0);
-    const x0 = Math.max(0, vx0 - MARGIN), y0 = Math.max(0, vy0 - MARGIN);
-    const x1 = Math.min(world.w - 1, vx1 + MARGIN), y1 = Math.min(world.h - 1, vy1 + MARGIN);
+    const x0 = Math.max(0, vx0 - MARGIN), x1 = Math.min(world.w - 1, vx1 + MARGIN);
+    // Vertical span is NOT clamped to the world: the overlay region must always
+    // extend MARGIN tiles beyond the view so its edge never lands on-screen (a
+    // clamped edge upscaled bilinearly bleeds toward black — the "dark band on
+    // top/bottom when you jump" bug). Out-of-world rows are seeded below.
+    const y0 = vy0 - MARGIN, y1 = vy1 + MARGIN;
     const w = x1 - x0 + 1, h = y1 - y0 + 1;
     this.ensureRegion(w, h);
     this.rx = x0; this.ry = y0;
@@ -73,6 +77,19 @@ export class Lighting {
 
     // ---- seed + decay classification ------------------------------------------
     for (let y = y0; y <= y1; y++) {
+      // rows outside the world: above = open sky (bright, air decay so the sky
+      // stays lit); below = solid bedrock dark. Keeps the region off-screen edges valid.
+      if (y < 0 || y >= world.h) {
+        const above = y < 0;
+        for (let x = x0; x <= x1; x++) {
+          const i = ((y - y0) * w + (x - x0)) * 3;
+          const d = above ? DECAY_AIR : DECAY_SOLID;
+          const v = above ? skyR : 0;
+          D[i] = d; D[i + 1] = d; D[i + 2] = d;
+          L[i] = v; L[i + 1] = above ? skyG : 0; L[i + 2] = above ? skyB : 0;
+        }
+        continue;
+      }
       for (let x = x0; x <= x1; x++) {
         const i = ((y - y0) * w + (x - x0)) * 3;
         const wi = y * world.w + x;
@@ -162,11 +179,19 @@ export class Lighting {
         const i = (y * w + x) * 3;
         const o = (y * w + x) * 4;
         const wx = this.rx + x, wy = this.ry + y;
-        const wi = wy * world.w + wx;
-        // open sky (no tile, no wall, above first solid): keep the drawn sky visible
-        if (world.tiles[wi] === T.air && world.walls[wi] === 0 && wy < this.skyTopAt(wx)) {
+        // out-of-world rows: above the world = open sky (white, no darkening);
+        // below = keep computed (dark) value
+        if (wy < 0) {
           data[o] = 255; data[o + 1] = 255; data[o + 2] = 255; data[o + 3] = 255;
           continue;
+        }
+        if (wy < world.h) {
+          const wi = wy * world.w + wx;
+          // open sky (no tile, no wall, above first solid): keep the drawn sky visible
+          if (world.tiles[wi] === T.air && world.walls[wi] === 0 && wy < this.skyTopAt(wx)) {
+            data[o] = 255; data[o + 1] = 255; data[o + 2] = 255; data[o + 3] = 255;
+            continue;
+          }
         }
         data[o] = Math.min(255, L[i] * 255) | 0;
         data[o + 1] = Math.min(255, L[i + 1] * 255) | 0;

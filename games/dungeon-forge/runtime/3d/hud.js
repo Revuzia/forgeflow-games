@@ -231,6 +231,7 @@ export class Hud {
       </div>
       <canvas class="df-minimap" data-a="map" width="180" height="180"></canvas>
       <div class="df-prompt" data-a="prompt" style="display:none"></div>
+      <div class="df-abilities" data-a="abilities"></div>
       <div class="df-crosshair">·</div>
       <div class="df-vignette" data-a="vig"></div>
       <div class="df-objective" data-a="obj"></div>
@@ -277,6 +278,23 @@ export class Hud {
     v.classList.remove("hurt"); void v.offsetWidth; v.classList.add("hurt");
   }
 
+  /** Brief camera-punch feel via a canvas transform (impact hits). */
+  shake(amount) {
+    const cv = this.g.renderer.domElement;
+    this._shakeAmt = Math.min(1, (this._shakeAmt || 0) + (amount || 0.3));
+    if (this._shaking) return;
+    this._shaking = true;
+    const t0 = performance.now();
+    const step = () => {
+      const e = (performance.now() - t0) / 260;
+      if (e >= 1 || !this.g.renderer) { cv.style.transform = ""; this._shaking = false; this._shakeAmt = 0; return; }
+      const m = this._shakeAmt * (1 - e) * 10;
+      cv.style.transform = `translate(${(Math.random() - .5) * m}px, ${(Math.random() - .5) * m}px)`;
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
   updateEscape(esc_, p) {
     if (!this.eWrap) return;
     const q = (s) => this.eWrap.querySelector(s);
@@ -292,6 +310,19 @@ export class Hud {
     const wt = q('[data-a="wt"]'); wt.style.display = p.weaponTier ? "" : "none"; wt.textContent = "⚔ " + ROM[p.weaponTier || 0];
     const at = q('[data-a="at"]'); at.style.display = p.armorTier ? "" : "none"; at.textContent = "🛡 " + ROM[p.armorTier || 0];
     q('[data-a="timer"]').textContent = fmtTime(esc_.run.time);
+    // class ability bar (special + combo pips)
+    const ab = q('[data-a="abilities"]');
+    if (ab) {
+      const cls = E.CLASSES[p.cls] || E.CLASSES.knight;
+      const sName = { bash: "Shield Bash", crush: "Crush", fire: "Fire Bolt", knife: "Poison Knife" }[cls.special && cls.special.kind] || "Special";
+      const sCd = cls.special ? cls.special.cd : 1;
+      const sReady = (p.specialT || 0) <= 0;
+      const comboOn = (esc_.run.time - (p.comboT || 0)) < 1.4 && p.combo > 0;
+      let html = `<span class="df-ab ${sReady ? "" : "cd"}"><b>RMB</b> ${sName}${sReady ? "" : " " + (p.specialT).toFixed(1) + "s"}</span>`;
+      if (cls.frost) { const fReady = (p.frostT || 0) <= 0; html += `<span class="df-ab ${fReady ? "" : "cd"}"><b>R</b> Frost${fReady ? "" : " " + (p.frostT).toFixed(1) + "s"}</span>`; }
+      html += `<span class="df-combo ${comboOn ? "on" : ""}">${comboOn ? "COMBO ×" + p.combo : ""}</span>`;
+      ab.innerHTML = html;
+    }
     // interact prompt
     const hint = p.alive && !p.escaped ? E.interactHint(esc_.run, p) : null;
     const pr = q('[data-a="prompt"]');
@@ -446,6 +477,13 @@ function injectStyle() {
   .df-prompt{position:absolute;left:50%;top:58%;transform:translateX(-50%);background:rgba(10,13,22,.92);border:1px solid var(--acc);border-radius:12px;padding:9px 18px;font-size:15px;font-weight:700}
   .df-prompt b{color:var(--acc);border:1px solid var(--acc);border-radius:6px;padding:1px 7px;margin-right:6px}
   .df-prompt.need{border-color:#ff5566;color:#ffb0b8}
+  .df-abilities{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center}
+  .df-ab{background:rgba(8,10,18,.82);border:1px solid rgba(150,170,255,.3);border-radius:9px;padding:5px 11px;font-size:12px;font-weight:700}
+  .df-ab b{color:var(--acc);border:1px solid var(--acc);border-radius:5px;padding:0 5px;margin-right:5px;font-size:11px}
+  .df-ab.cd{opacity:.5;border-color:rgba(120,130,160,.3)}
+  .df-ab.cd b{color:#8894b8;border-color:#8894b8}
+  .df-combo{font-size:15px;font-weight:900;letter-spacing:1px;color:#ffcf5a;text-shadow:0 0 8px rgba(255,180,70,.6);min-width:70px;opacity:0;transition:opacity .1s}
+  .df-combo.on{opacity:1}
   .df-crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:22px;opacity:.65;text-shadow:0 0 4px #000}
   .df-vignette{position:absolute;inset:0;pointer-events:none;opacity:0}
   .df-vignette.hurt{animation:dfHurt .5s ease}

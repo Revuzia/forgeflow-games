@@ -64,9 +64,16 @@ export class Menu {
         </div>
         <div class="dfm-profile">
           <input data-a="name" maxlength="14" value="${esc(prof.name)}" title="Your name">
-          <div class="dfm-skins">${[0, 1, 2, 3].map((i) => `<button class="dfm-skin ${i === prof.skin ? "on" : ""}" data-skin="${i}" title="${["Knight", "Barbarian", "Sorceress", "Rogue"][i]}">${["🛡️", "🪓", "🔮", "🗡️"][i]}</button>`).join("")}</div>
           <button class="dfm-skin" data-a="gear" title="Settings">⚙️</button>
         </div>
+        <div class="dfm-classhead">CHOOSE YOUR CLASS</div>
+        <div class="dfm-classes">${[
+          { i: 0, ic: "🛡️", n: "Knight", d: "Sword & shield · block + shield bash" },
+          { i: 1, ic: "🪓", n: "Barbarian", d: "Two-handed axe · heavy crushing combos" },
+          { i: 2, ic: "🔮", n: "Sorceress", d: "Fire & frost bolts · burn / slow" },
+          { i: 3, ic: "🗡️", n: "Rogue", d: "Dual daggers · fast, stacking poison" },
+        ].map((c) => `<button class="dfm-class ${c.i === prof.skin ? "on" : ""}" data-skin="${c.i}">
+          <span class="ci">${c.ic}</span><span class="cn">${c.n}</span><span class="cd">${c.d}</span></button>`).join("")}</div>
         <div class="dfm-foot">
           <button data-a="how" class="dfm-link">How to play</button> ·
           <button data-a="credits" class="dfm-link">Credits</button>
@@ -76,9 +83,9 @@ export class Menu {
     this.g.container.appendChild(this.root);
     const q = (s) => this.root.querySelector(s);
     q('[data-a="name"]').onchange = (e) => { const p = this.profile(); p.name = e.target.value.slice(0, 14) || p.name; this.saveProfile(p); };
-    this.root.querySelectorAll(".dfm-skin").forEach((b) => b.onclick = () => {
+    this.root.querySelectorAll(".dfm-class").forEach((b) => b.onclick = () => {
       const p = this.profile(); p.skin = +b.dataset.skin; this.saveProfile(p);
-      this.root.querySelectorAll(".dfm-skin").forEach((x) => x.classList.toggle("on", x === b));
+      this.root.querySelectorAll(".dfm-class").forEach((x) => x.classList.toggle("on", x === b));
       this.g.audio.sfx("ui");
     });
     q('[data-a="build"]').onclick = () => { this.g.audio.sfx("confirm"); this.buildFlow(); };
@@ -387,7 +394,8 @@ export class Menu {
   howTo() {
     this.g.hud.modal(`<h3>How to play</h3><div class="df-lb" style="max-width:440px">
       <b>⚒ Builder:</b> paint floor tiles (drag), stamp rooms, then drop doors, chests, keys, enemies, traps, lights and decorations. Click a door to toggle its <b>🔒 lock</b> — locked doors need a 🗝️ key, so place one on the floor, in a chest, or on an enemy. Stairs auto-cut a landing on the floor above (5 floors max). The ✔ chip tells you live whether your dungeon is solvable.<br><br>
-      <b>▶ Escape:</b> WASD + mouse. <b>LMB</b> melee · <b>RMB/F</b> magic bolt (mana) · <b>E</b> interact · <b>Q</b> potion · <b>Shift</b> sprint · <b>V</b> first/third person. Find keys, open the way, survive the guardians, reach the 🌀 portal. Fastest time wins the leaderboard.<br><br>
+      <b>▶ Escape:</b> WASD + mouse. <b>LMB</b> combo attack (chain 1→2→3!) · <b>RMB/F</b> class ability · <b>R</b> frost (Sorceress) · <b>E</b> interact · <b>Q</b> potion · <b>Shift</b> sprint · <b>V</b> first/third person. Find keys, open the way, survive the guardians, reach the 🌀 portal. Fastest time wins the leaderboard.<br><br>
+      <b>⚔ Classes:</b> Knight (sword + shield block + bash) · Barbarian (2-handed axe, crushing blows) · Sorceress (fire burns + frost slows) · Rogue (dual daggers, stacking poison). Pick on the main menu.<br><br>
       <b>🌐 Friends:</b> host shares a 4-letter code. Everyone builds the same dungeon live, and PLAYTEST launches a co-op escape for the whole room.</div>
       <div class="df-selrow"><button data-a="ok" class="df-btn accent">Got it</button></div>`,
       (m) => m.querySelector('[data-a="ok"]').onclick = () => this.g.hud.closeModal());
@@ -497,9 +505,16 @@ const css = `
 .dfm-big.online{background:linear-gradient(180deg,rgba(25,60,55,.9),rgba(14,34,32,.9))}
 .dfm-profile{display:flex;gap:10px;justify-content:center;align-items:center;margin-bottom:14px}
 .dfm-profile input{background:rgba(16,20,34,.9);border:1px solid rgba(150,170,255,.3);color:#fff;border-radius:10px;padding:9px 13px;font-weight:800;text-align:center;width:150px}
-.dfm-skins{display:flex;gap:6px}
 .dfm-skin{width:42px;height:42px;font-size:21px;background:rgba(16,20,34,.9);border:1px solid rgba(150,170,255,.3);border-radius:10px;cursor:pointer}
 .dfm-skin.on{border-color:var(--df-accent,#ffb347);box-shadow:0 0 12px rgba(255,180,70,.35)}
+.dfm-classhead{font-size:10px;font-weight:800;letter-spacing:2px;opacity:.55;margin:8px 0 6px}
+.dfm-classes{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px}
+.dfm-class{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:1px;background:rgba(16,20,34,.85);border:1px solid rgba(150,170,255,.25);border-radius:12px;padding:9px 11px;cursor:pointer;transition:all .13s}
+.dfm-class:hover{border-color:rgba(150,170,255,.5);transform:translateY(-1px)}
+.dfm-class.on{border-color:var(--df-accent,#ffb347);box-shadow:0 0 14px rgba(255,180,70,.3);background:rgba(40,44,70,.9)}
+.dfm-class .ci{font-size:22px}
+.dfm-class .cn{font-size:14px;font-weight:800;letter-spacing:.4px}
+.dfm-class .cd{font-size:10.5px;opacity:.72;line-height:1.3}
 .dfm-foot{font-size:12.5px;opacity:.7}
 .dfm-link{background:none;border:none;color:#aab6e8;cursor:pointer;font-size:12.5px;text-decoration:underline}
 .dfm-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(150,170,255,.12);font-size:14px;text-align:left}

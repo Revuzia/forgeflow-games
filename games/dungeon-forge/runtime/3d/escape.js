@@ -278,11 +278,12 @@ export class Escape {
     grp.add(obj);
 
     // find rig attachment bones once (hand for weapons, spine/head for armor)
-    const bones = { hand: null, spine: null, head: null, shoulderL: null, shoulderR: null };
+    const bones = { hand: null, handL: null, spine: null, head: null, shoulderL: null, shoulderR: null };
     obj.traverse((b) => {
       if (!b.isBone) return;
       const n = b.name.toLowerCase();
       if (!bones.hand && /(hand|wrist|fist).*(r|right)|(r|right).*(hand|wrist|fist)/.test(n)) bones.hand = b;
+      if (!bones.handL && /(hand|wrist|fist).*(l|left)|(l|left).*(hand|wrist|fist)/.test(n) && !/right/.test(n)) bones.handL = b;
       if (!bones.spine && /spine|chest|torso/.test(n)) bones.spine = b;
       if (!bones.head && /head/.test(n)) bones.head = b;
       if (!bones.shoulderL && /(shoulder|upper_?arm|clavicle).*(l|left)|(l|left).*(shoulder|upper_?arm|clavicle)/.test(n)) bones.shoulderL = b;
@@ -312,22 +313,51 @@ export class Escape {
     // clear old
     for (const k of Object.keys(a.equip)) { const m = a.equip[k]; if (m && m.parent) m.parent.remove(m); delete a.equip[k]; }
     const inv = 1 / Math.max(0.01, a.rigScale);
-    // weapon — always carried; found tiers recolor + grow it
-    const wpnTpl = this.d.theme === "scifi" ? this.props.blaster : this.props.sword;
-    if (wpnTpl && a.bones.hand) {
-      const w = this.g.assets.clone(wpnTpl);
-      Assets.normalizeFoot(w, 0.9 + 0.12 * (p.weaponTier || 0));
-      const holder = new THREE.Group();
-      holder.scale.setScalar(inv);
-      holder.add(w);
-      w.position.set(0, 0.05, 0.02);
-      w.rotation.set(Math.PI / 2, 0, 0);
+    const cls = p.cls || "knight";
+    const tierTint = (root) => {
       if (p.weaponTier > 0) {
         const col = TIER_COLORS[Math.min(2, p.weaponTier - 1)];
-        w.traverse((m) => { if (m.isMesh && m.material) { m.material = m.material.clone(); m.material.emissive = new THREE.Color(col); m.material.emissiveIntensity = 0.55; } });
+        root.traverse((m) => { if (m.isMesh && m.material) { m.material = m.material.clone(); m.material.emissive = new THREE.Color(col); m.material.emissiveIntensity = 0.55; } });
       }
-      a.bones.hand.add(holder);
-      a.equip.weapon = holder;
+    };
+    const mount = (mesh, bone, scale) => {
+      const holder = new THREE.Group();
+      holder.scale.setScalar(inv * (scale || 1));
+      holder.add(mesh);
+      bone.add(holder);
+      return holder;
+    };
+    // class weapons: knight sword+shield · barbarian 2H axe · sorceress staff · rogue dual daggers
+    if (a.bones.hand) {
+      let main;
+      if (cls === "knight") {
+        main = this.g.assets.clone(this.props.sword || this.props.blaster);
+        Assets.normalizeFoot(main, 0.95 + 0.12 * (p.weaponTier || 0));
+        main.position.set(0, 0.05, 0.02);
+        main.rotation.set(Math.PI / 2, 0, 0);
+      } else {
+        main = Assets.makeClassWeapon(cls);
+        const s = (cls === "barbarian" ? 1.0 : cls === "sorceress" ? 1.0 : 0.9) + 0.1 * (p.weaponTier || 0);
+        main.scale.setScalar(s);
+        main.rotation.set(Math.PI / 2, 0, 0);
+        main.position.set(0, 0.04, 0.02);
+      }
+      tierTint(main);
+      a.equip.weapon = mount(main, a.bones.hand);
+      if (cls === "rogue" && a.bones.handL) {
+        const off = Assets.makeClassWeapon("rogue");
+        off.scale.setScalar(0.9 + 0.1 * (p.weaponTier || 0));
+        off.rotation.set(Math.PI / 2, 0, 0);
+        off.position.set(0, 0.04, 0.02);
+        tierTint(off);
+        a.equip.offhand = mount(off, a.bones.handL);
+      }
+      if (cls === "knight" && a.bones.handL) {
+        const sh = Assets.makeShield();
+        sh.rotation.set(0, Math.PI / 2, 0);
+        sh.position.set(0, 0.12, 0.03);
+        a.equip.shield = mount(sh, a.bones.handL);
+      }
     }
     // armor — chest plate + shoulder pads once found
     if (p.armorTier > 0 && a.bones.spine) {
@@ -358,6 +388,45 @@ export class Escape {
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
     spr.scale.set(2.8, 0.7, 1);
     return spr;
+  }
+
+  /** Resolve a combat event to this class's Meshy clip name. */
+  _clipFor(a, ev, stage) {
+    const cls = a.p.cls || "knight";
+    if (ev === "swing") {
+      if (cls === "sorceress") return "C_melee";
+      return stage === 3 ? "C_finisher" : stage === 2 ? "C_slash2" : "C_slash1";
+    }
+    if (ev === "bash") return "C_parry";
+    if (ev === "crush") return "C_finisher";
+    if (ev === "fire") return "C_cast1";
+    if (ev === "frost") return "C_cast2";
+    if (ev === "knife") return "C_slash1";
+    if (ev === "hit") return "C_hit";
+    if (ev === "death") return "C_death";
+    return null;
+  }
+
+  /** Combo swing — plays the class's stage-1/2/finisher clip, fit to its cd. */
+  _playCombo(a, stage) {
+    const M = (E.CLASSES[a.p.cls] || E.CLASSES.knight).melee;
+    this._playCombat(a, "swing", stage, (M.cd || 0.5) * 0.95);
+  }
+
+  /** Play a combat clip fitted into `fitS` seconds (or procedural fallback). */
+  _playCombat(a, ev, stage, fitS) {
+    const name = this._clipFor(a, ev, stage);
+    const act = name && a.actions[name];
+    if (!act) {
+      this._procStart(a, ev === "swing" || ev === "crush" ? "attack" : ev === "bash" ? "attack" : ev);
+      return;
+    }
+    const dur = act.getClip().duration || 1;
+    act.timeScale = fitS ? Math.max(1, dur / fitS) : 1;
+    act.reset(); act.setLoop(THREE.LoopOnce); act.clampWhenFinished = ev === "death"; act.play();
+    if (a.cur && a.cur !== act) a.cur.crossFadeTo(act, 0.07, false);
+    a.oneshotT = (dur / act.timeScale) * 0.92;
+    a.osAct = act;
   }
 
   _playAnim(a, name, oneshot) {
@@ -433,9 +502,9 @@ export class Escape {
       if (this.g.hud.modalOpen) return;
       if (document.pointerLockElement !== el) { el.requestPointerLock(); return; }
       if (e.button === 0) this._melee = true;
-      if (e.button === 2) this._bolt = true;
+      if (e.button === 2) this._special = true;
     });
-    on("pointerup", (e) => { if (e.button === 0) this._melee = false; if (e.button === 2) this._bolt = false; });
+    on("pointerup", (e) => { if (e.button === 0) this._melee = false; if (e.button === 2) this._special = false; });
     on("pointermove", (e) => {
       if (document.pointerLockElement !== el) return;
       const s = this.g.settings || { sens: 1, invertY: false };
@@ -458,10 +527,11 @@ export class Escape {
       if (e.code === "KeyE" && p) p.input.interactDown = true;
       if (e.code === "KeyQ" && p) p.input.potionDown = true;
       if (e.code === "KeyV") this.fp = !this.fp;
-      if (e.code === "KeyF" && p) this._bolt = true;
+      if (e.code === "KeyF" && p) this._special = true;
+      if (e.code === "KeyR" && p) this._frost = true;
       if (e.code === "Escape") { /* pointer lock exits natively */ }
     }, window);
-    on("keyup", (e) => { this.keys[e.code] = false; if (e.code === "KeyF") this._bolt = false; }, window);
+    on("keyup", (e) => { this.keys[e.code] = false; if (e.code === "KeyF") this._special = false; if (e.code === "KeyR") this._frost = false; }, window);
   }
   _unbindInput() {
     for (const [t, fn, tgt] of this._listeners) tgt.removeEventListener(t, fn);
@@ -483,7 +553,7 @@ export class Escape {
     p.input.sprint = !!(this.keys["ShiftLeft"] || this.keys["ShiftRight"]);
     p.input.yaw = yaw;                    // face where the camera looks
     // soft aim assist: attacking with a lock pulls your facing onto the target
-    if (this.target && (this._melee || this._bolt)) {
+    if (this.target && (this._melee || this._special || this._frost)) {
       const ty = Math.atan2(this.target.x - p.x, this.target.z - p.z);
       let d = ty - yaw;
       while (d > Math.PI) d -= Math.PI * 2;
@@ -491,7 +561,8 @@ export class Escape {
       if (Math.abs(d) < 0.55) p.input.yaw = ty;
     }
     p.input.melee = !!this._melee;
-    p.input.bolt = !!this._bolt;
+    p.input.special = !!this._special;
+    p.input.frost = !!this._frost;
   }
 
   // ── event fan-out: sim events → visuals/audio/net ──────────────────────────
@@ -536,25 +607,50 @@ export class Escape {
         }
         case "swing": {
           const a = this.actors.get(ev.id);
-          if (a) this._playAnim(a, "attack", true);
+          if (a) this._playCombo(a, ev.stage);
           if (ev.id === this.myId) g.audio.sfx("swing");
           break;
         }
-        case "bolt": {
+        case "bash": {
           const a = this.actors.get(ev.id);
-          if (a) this._playAnim(a, "spell", true);
-          g.audio.sfx("bolt");
+          if (a) { this._playCombat(a, "bash", 0, 0.4); const wp = a.grp.position.clone().add(new THREE.Vector3(Math.sin(a.p.yaw) * 1.4, 0.5, Math.cos(a.p.yaw) * 1.4)); g.fx.shockwave(wp, 0xffe08a); }
+          g.audio.sfx("bash"); if (ev.id === this.myId) g.hud.shake(0.35);
+          break;
+        }
+        case "crush": {
+          const a = this.actors.get(ev.id);
+          if (a) { this._playCombat(a, "crush", 0, 0.5); const wp = a.grp.position.clone().add(new THREE.Vector3(Math.sin(a.p.yaw) * 1.5, 0.2, Math.cos(a.p.yaw) * 1.5)); g.fx.shockwave(wp, 0xffaa55); g.fx.burst(wp, 0xffaa55, 16); }
+          g.audio.sfx("crush"); if (ev.id === this.myId) g.hud.shake(0.5);
+          break;
+        }
+        case "cast": {
+          const a = this.actors.get(ev.id);
+          if (a) this._playCombat(a, ev.kind, 0, 0.4);
+          g.audio.sfx(ev.kind === "knife" ? "swing" : "bolt");
           break;
         }
         case "boltHit": {
-          g.fx.burst(new THREE.Vector3(ev.x, ev.f * FLOOR_H + 1.1, ev.z), this.d.theme === "scifi" ? 0x37e0ff : 0x8f6bff, 8);
+          const col = ev.elem === "fire" ? 0xff6a1f : ev.elem === "frost" ? 0x5ad6ff : ev.elem === "knife" ? 0x7dff8f : 0x8f6bff;
+          g.fx.elementBurst(new THREE.Vector3(ev.x, ev.f * FLOOR_H + 1.1, ev.z), ev.elem || "arcane");
+          if (ev.wall) g.fx.burst(new THREE.Vector3(ev.x, ev.f * FLOOR_H + 1.1, ev.z), col, 6);
+          break;
+        }
+        case "estatus": {
+          this.enemies.setStatus(ev.id, ev.kind, ev.dur);
+          break;
+        }
+        case "blocked": {
+          const a = this.actors.get(ev.id);
+          if (a) { g.audio.sfx("hit"); g.fx.burst(a.grp.position.clone().add(new THREE.Vector3(Math.sin(a.p.yaw)*0.6, 1.1, Math.cos(a.p.yaw)*0.6)), 0xcfd6e4, 8); }
+          if (ev.id === this.myId) g.hud.toast("🛡 Blocked!", "info");
           break;
         }
         case "ehit": {
           this.enemies.onHit(ev);
           if (ev.by === this.myId) g.audio.sfx("hit");
           const en = this.run.enemies.find((x) => x.id === ev.id);
-          if (en && ev.dmg) g.fx.damageNumber(new THREE.Vector3(en.x, en.f * FLOOR_H + 2.1, en.z), Math.round(ev.dmg), 0xffd769);
+          const ecol = ev.elem === "burn" ? 0xff7a1f : ev.elem === "poison" ? 0x8fe04a : ev.elem === "frost" ? 0x5ad6ff : 0xffd769;
+          if (en && ev.dmg) g.fx.damageNumber(new THREE.Vector3(en.x, en.f * FLOOR_H + 2.1, en.z), Math.round(ev.dmg), ecol);
           break;
         }
         case "edied": {
@@ -568,7 +664,7 @@ export class Escape {
           if (ev.id === this.myId) { g.hud.damageFlash(); g.audio.sfx("hurt"); }
           const a = this.actors.get(ev.id);
           if (a) {
-            this._playAnim(a, "hit", true);
+            this._playCombat(a, "hit", 0, 0.3);
             if (ev.dmg) g.fx.damageNumber(a.grp.position.clone().add(new THREE.Vector3(0, 2.1, 0)), Math.round(ev.dmg), 0xff5566);
           }
           break;
@@ -576,7 +672,7 @@ export class Escape {
         case "pdied": {
           if (ev.id === this.myId) { g.hud.toast("You died — respawning…", "warn"); g.audio.sfx("die"); }
           const a = this.actors.get(ev.id);
-          if (a) this._playAnim(a, "death", true);
+          if (a) this._playCombat(a, "death", 0, 0);
           break;
         }
         case "respawn": {

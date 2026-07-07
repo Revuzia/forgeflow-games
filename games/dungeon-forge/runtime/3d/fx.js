@@ -81,6 +81,51 @@ export class Fx {
     this.numbers.push({ spr, life: 0.9 });
   }
 
+  /** Layered elemental impact burst — fire/frost/poison/arcane each read distinct. */
+  elementBurst(pos, elem) {
+    if (elem === "fire") {
+      for (let i = 0; i < 20; i++) {
+        const v = new THREE.Vector3((Math.random() - .5), Math.random() * 1.1 + .3, (Math.random() - .5)).normalize().multiplyScalar(2 + Math.random() * 3);
+        this.spawn(pos, v, 0.4 + Math.random() * 0.4, 2.4 + Math.random() * 1.6, Math.random() < 0.6 ? 0xff6a1f : 0xffc23a);
+      }
+      for (let i = 0; i < 8; i++) this.spawn(pos.clone().add(new THREE.Vector3((Math.random() - .5), Math.random() * .6, (Math.random() - .5))), new THREE.Vector3(0, 1.6 + Math.random(), 0), 0.7, 1.6, 0x552200);
+      this._flash(pos, 0xff7a1f, 6, 4);
+    } else if (elem === "frost") {
+      for (let i = 0; i < 18; i++) {
+        const v = new THREE.Vector3((Math.random() - .5), Math.random() * 0.9, (Math.random() - .5)).normalize().multiplyScalar(2.4 + Math.random() * 2.4);
+        this.spawn(pos, v, 0.5 + Math.random() * 0.35, 2.0 + Math.random() * 1.4, Math.random() < 0.5 ? 0x8fe6ff : 0xd8f6ff);
+      }
+      this._flash(pos, 0x5ad6ff, 6, 3.5);
+    } else if (elem === "poison" || elem === "knife") {
+      for (let i = 0; i < 16; i++) {
+        const v = new THREE.Vector3((Math.random() - .5), Math.random() * 0.8 + .2, (Math.random() - .5)).normalize().multiplyScalar(1.6 + Math.random() * 2.2);
+        this.spawn(pos, v, 0.6 + Math.random() * 0.5, 2.2 + Math.random() * 1.4, Math.random() < 0.5 ? 0x8fe04a : 0x4faa2a);
+      }
+      this._flash(pos, 0x8fe04a, 5, 3);
+    } else {
+      this.burst(pos, 0x9a6bff, 12, 3.2);
+    }
+  }
+
+  /** Expanding ring shockwave for shield bash / crush. */
+  shockwave(pos, color) {
+    const geo = new THREE.RingGeometry(0.2, 0.5, 28).rotateX(-Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+    const ring = new THREE.Mesh(geo, mat);
+    ring.position.copy(pos); ring.position.y = pos.y - 0.4;
+    this.g.world.add(ring);
+    this.rings = this.rings || [];
+    this.rings.push({ ring, life: 0.45, max: 0.45 });
+  }
+
+  _flash(pos, color, intensity, dist) {
+    const l = new THREE.PointLight(color, intensity, dist, 2);
+    l.position.copy(pos);
+    this.g.world.add(l);
+    this.flashes = this.flashes || [];
+    this.flashes.push({ l, life: 0.28 });
+  }
+
   attachFlame(grp, theme, y) { this.flames.push({ grp, y, theme }); }
   attachPortal(grp, color) { this.portals.push({ grp, color: new THREE.Color(color), ang: Math.random() * 6 }); }
 
@@ -134,6 +179,27 @@ export class Fx {
     this.points.geometry.attributes.position.needsUpdate = true;
     this.points.geometry.attributes.color.needsUpdate = true;
     this.points.geometry.attributes.psize.needsUpdate = true;
+
+    // shockwave rings expand + fade
+    if (this.rings) {
+      for (let k = this.rings.length - 1; k >= 0; k--) {
+        const r = this.rings[k];
+        r.life -= dt;
+        const g0 = 1 - r.life / r.max;
+        r.ring.scale.setScalar(0.4 + g0 * 6);
+        r.ring.material.opacity = Math.max(0, r.life / r.max) * 0.85;
+        if (r.life <= 0) { this.g.world.remove(r.ring); r.ring.geometry.dispose(); this.rings.splice(k, 1); }
+      }
+    }
+    // element flash lights decay
+    if (this.flashes) {
+      for (let k = this.flashes.length - 1; k >= 0; k--) {
+        const f = this.flashes[k];
+        f.life -= dt;
+        f.l.intensity = Math.max(0, f.l.intensity - dt * 22);
+        if (f.life <= 0) { this.g.world.remove(f.l); this.flashes.splice(k, 1); }
+      }
+    }
 
     // floating damage numbers drift up + fade
     if (this.numbers) {
