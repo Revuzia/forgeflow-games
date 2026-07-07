@@ -72,7 +72,7 @@ export function buildWorld(scene, level) {
   // plaza
   ctx.fillStyle = hexCss(pal.plaza);
   ctx.beginPath();
-  ctx.arc(px(0), pz(0), (CELL * 3.6) / TER_W * TW, 0, Math.PI * 2);
+  ctx.arc(px(0), pz(0), (CELL * 2.15) / TER_W * TW, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = hexCss(pal.roadEdge);
   ctx.lineWidth = 5;
