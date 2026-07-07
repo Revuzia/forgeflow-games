@@ -1,5 +1,27 @@
 # Bastion Realms: Stronghold — Changelog
 
+## v1.1 — 2026-07-07 (owner feedback round)
+- **Real creature models**: all 30 procedural construct enemies replaced with **31 animated GLB/GLTF
+  library models** (orcs, bulls, war horses, demons, skeletons, cyclops, sky sharks, wizards, robots,
+  the Forge Mech STAN…), every one verified unused by prior ForgeFlow games (`tools/copy_enemies.py`).
+  Skinned animation mixers with move/death clips, fuzzy clip resolution, slow/stun scaling of walk
+  speed, death-clip wrecks that sink and fade. The Prime Prism stays procedural by design.
+- **FX overhaul** ("real FX"): lightning is now **thick two-layer ribbon bolts** (colored glow +
+  white-hot core, jagged subdivision) used by Storm Caller chains and Ballista pierce tracers;
+  Arcane Spire missiles and Oil Cauldron pots pull **glowing ribbon trails** (pooled, owner-keyed);
+  an animated **arcane rune circle** (double ring, tick marks, 7-point star, glyph band) rotates
+  and pulses around every Bastion with 5 orbiting rune glyphs.
+- **Themed spawn gates** (no more shared ring-portals, distinct per world): Colosseum stone arch
+  with portcullis bars, Gothic leaning-slab crypt arch, Sky Citadel spinning wind vortex with
+  orbiting rocks, Crystal Fortress flanking crystals, Dwarven timber mine portal with lamp.
+  All get pulsing accent glow + crimson pennant and face down-road.
+- **No road ever crosses the center**: map generator rewritten with a ring-distance termination
+  rule — roads stop the moment they touch the plaza ring; pass-through/overlap is impossible
+  (re-validated across all 45 maps; w3l8 seed re-salted, balance gate back to **45/45**).
+- **Upgrade discoverability**: first tower build shows a "click a tower to inspect/UPGRADE" tip;
+  level-select nodes now display **how many roads attack** (2 → 3 → 4 as the campaign advances).
+- Credits updated with model licenses (all CC0 except "Animated Wizard" by Quaternius, CC-BY 3.0).
+
 ## v1.0 — 2026-07-06 (initial release)
 - **Inward defense**: the Bastion stands at the map center; 2–4 winding roads converge on it from the
   perimeter (45 verified-unique maps). Bastion has 100 HP, takes tiered breach damage (1/2/5, kegs 8),

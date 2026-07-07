@@ -154,11 +154,14 @@ export function createGame(env) {
         ? 1.5 + Math.sin(Math.PI * t) * Math.min(4, Math.hypot(tx - pv.sx, tz - pv.sz) * 0.3)
         : 2.0 + Math.sin(Math.PI * t) * 0.6;
       pv.mesh.position.set(x + (dx / dl) * perp, y, z + (dz / dl) * perp);
-      if (pr.kind === 'missile') g.fx.burst('arcane', pv.mesh.position.x, pv.mesh.position.y, pv.mesh.position.z, 1, { vel: 0.2, up: 0, life: 0.3, spread: 0.08 });
-      else g.fx.burst('smoke', pv.mesh.position.x, pv.mesh.position.y, pv.mesh.position.z, 1, { vel: 0.1, up: 0.3, life: 0.4, spread: 0.08 });
+      if (pr.kind === 'missile') g.fx.trailPoint('proj' + pr.id, pv.mesh.position.x, pv.mesh.position.y, pv.mesh.position.z, 0xc89aff, 0.2);
+      else {
+        g.fx.trailPoint('proj' + pr.id, pv.mesh.position.x, pv.mesh.position.y, pv.mesh.position.z, 0xd08040, 0.14);
+        g.fx.burst('smoke', pv.mesh.position.x, pv.mesh.position.y, pv.mesh.position.z, 1, { vel: 0.1, up: 0.3, life: 0.4, spread: 0.08 });
+      }
     }
     for (const [id, pv] of g.projMeshes) {
-      if (!seen.has(id)) { scene.remove(pv.mesh); g.projMeshes.delete(id); }
+      if (!seen.has(id)) { scene.remove(pv.mesh); g.projMeshes.delete(id); g.fx.trailRelease('proj' + id); }
     }
   }
 
@@ -346,6 +349,10 @@ export function createGame(env) {
           audio.play('coin');
           break;
         case 'build': {
+          if (!g._taughtUpgrade) {
+            g._taughtUpgrade = true;
+            setTimeout(() => ui.toast('Tip: <b>click a tower</b> to inspect, UPGRADE and sell it.'), 1200);
+          }
           const w = cellToWorld(ev.cx, ev.cy);
           g.fx.burst('smoke', w.x, 0.4, w.z, 8, { vel: 1.4, up: 1, life: 0.5, spread: 0.6 });
           g.fx.ring(w.x, w.z, 1.2, 0xd8a850, 0.4);
@@ -674,9 +681,28 @@ export function createGame(env) {
           g.rangeRing.material.color.setHex(0x8fd4ff);
         } else { g.selection.towerId = null; g.rangeRing.visible = false; }
       } else if (!g.selection.buildType) g.rangeRing.visible = false;
-      // gates + arrows
+      // gates + arrows + rune circle + glyphs
       if (g.world) {
-        for (const gate of g.world.gates) gate.userData.ring.rotation.z = g.viewT * 1.3;
+        for (const gate of g.world.gates) {
+          if (gate.userData.spin) gate.userData.spin.rotation.z = g.viewT * 2.2;
+          if (gate.userData.rocks) {
+            for (const rock of gate.userData.rocks) {
+              const a = rock.userData.orbA + g.viewT * 1.1;
+              rock.position.set(Math.cos(a) * 1.35, 1.5 + Math.sin(g.viewT * 2 + a) * 0.3, Math.sin(a) * 0.5);
+            }
+          }
+          if (gate.userData.glow) gate.userData.glow.material.opacity = 0.28 + 0.14 * Math.sin(g.viewT * 3 + gate.position.x);
+        }
+        if (g.world.runeCircle) {
+          g.world.runeCircle.rotation.z = g.viewT * 0.12;
+          g.world.runeCircle.material.opacity = 0.48 + 0.12 * Math.sin(g.viewT * 1.6);
+        }
+        if (g.world.glyphGroup) {
+          for (const spr of g.world.glyphGroup.children) {
+            const a = spr.userData.orbA + g.viewT * 0.7;
+            spr.position.set(Math.cos(a) * spr.userData.orbR, Math.sin(g.viewT * 1.8 + a * 2) * 0.35, Math.sin(a) * spr.userData.orbR);
+          }
+        }
         for (const a of g.world.arrows) {
           const route = g.level.map.routes[a.routeIdx];
           a.offset = (a.offset + rdt * 2.2) % route.total;

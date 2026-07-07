@@ -119,23 +119,118 @@ export function buildWorld(scene, level) {
   scene.background = new THREE.Color(pal.sky);
   scene.fog = new THREE.FogExp2(pal.fog, pal.fogDensity);
 
-  // ---------- spawn gates (crimson construct rifts at each road entry) ----------
+  // ---------- themed spawn gates (distinct per world, no rings) ----------
+  function makeGate(kind) {
+    const g = new THREE.Group();
+    const dark = new THREE.MeshBasicMaterial({ color: 0x0c0a10 });
+    const glow = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.5, 1.9),
+      new THREE.MeshBasicMaterial({ color: pal.accent, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false, fog: false })
+    );
+    glow.position.y = 1.0;
+    if (kind === 'colosseum') {
+      for (const sx of [-1, 1]) {
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 2.4, 8), M(0xcfc0a0));
+        col.position.set(sx * 1.05, 1.2, 0);
+        g.add(col);
+      }
+      const lintel = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.45, 0.7), M(0xbfb098));
+      lintel.position.y = 2.55;
+      g.add(lintel);
+      const door = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 2.2), dark);
+      door.position.y = 1.15;
+      g.add(door, glow);
+      for (let i = -2; i <= 2; i++) {
+        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.1, 5), M(0x3c3630, { metal: 0.6 }));
+        bar.position.set(i * 0.3, 1.15, 0.06);
+        g.add(bar);
+      }
+    } else if (kind === 'crags') {
+      for (const sx of [-1, 1]) {
+        const slab = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2.8, 0.6), M(0x565e6a));
+        slab.position.set(sx * 0.95, 1.3, 0);
+        slab.rotation.z = -sx * 0.16;
+        g.add(slab);
+      }
+      const apex = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.0, 4), M(0x474f5a));
+      apex.position.y = 2.9;
+      apex.rotation.y = Math.PI / 4;
+      g.add(apex);
+      const door = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2.3), dark);
+      door.position.y = 1.15;
+      g.add(door, glow);
+    } else if (kind === 'skyisles') {
+      const c = document.createElement('canvas');
+      c.width = 128; c.height = 128;
+      const cx2 = c.getContext('2d');
+      cx2.strokeStyle = 'rgba(255,255,255,0.9)';
+      cx2.lineWidth = 5;
+      for (let arm = 0; arm < 3; arm++) {
+        cx2.beginPath();
+        for (let a = 0; a < Math.PI * 1.6; a += 0.1) {
+          const r = 6 + a * 17;
+          const x = 64 + Math.cos(a + arm * 2.1) * r, y = 64 + Math.sin(a + arm * 2.1) * r;
+          if (a === 0) cx2.moveTo(x, y); else cx2.lineTo(x, y);
+        }
+        cx2.stroke();
+      }
+      const tex = new THREE.CanvasTexture(c);
+      const swirl = new THREE.Mesh(new THREE.CircleGeometry(1.5, 24),
+        new THREE.MeshBasicMaterial({ map: tex, color: pal.accent, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+      swirl.position.y = 1.5;
+      g.add(swirl);
+      g.userData.spin = swirl;
+      g.userData.rocks = [];
+      for (let i = 0; i < 4; i++) {
+        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.16 + (i % 2) * 0.1, 0), M(0xaebecc));
+        rock.userData.orbA = (i / 4) * Math.PI * 2;
+        g.add(rock);
+        g.userData.rocks.push(rock);
+      }
+    } else if (kind === 'cavern') {
+      for (const sx of [-1, 1]) {
+        const cr = new THREE.Mesh(new THREE.OctahedronGeometry(0.8), M(0x9a7ad8, { emissive: 0xb08aff, ei: 0.6, rough: 0.25 }));
+        cr.scale.y = 2.3;
+        cr.position.set(sx * 0.85, 1.2, 0);
+        cr.rotation.z = -sx * 0.35;
+        g.add(cr);
+      }
+      glow.scale.set(0.9, 1.1, 1);
+      g.add(glow);
+    } else {
+      for (const sx of [-1, 1]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.35, 2.3, 0.35), M(0x6a4a2c));
+        post.position.set(sx * 0.95, 1.15, 0);
+        g.add(post);
+      }
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.35, 0.5), M(0x5a3e24));
+      beam.position.y = 2.4;
+      g.add(beam);
+      const door = new THREE.Mesh(new THREE.PlaneGeometry(1.55, 2.2), dark);
+      door.position.y = 1.1;
+      g.add(door, glow);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), M(0xffc060, { emissive: 0xff9020, ei: 2 }));
+      lamp.position.set(0, 2.05, 0.3);
+      g.add(lamp);
+    }
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 1.4, 6), M(0x3c3028));
+    pole.position.set(1.35, 0.7, 0.3);
+    g.add(pole);
+    const pennant = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.3), M(0xc03040, { rough: 0.8 }));
+    pennant.position.set(1.66, 1.2, 0.3);
+    pennant.material.side = THREE.DoubleSide;
+    g.add(pennant);
+    g.userData.glow = glow;
+    g.traverse((n) => { if (n.isMesh) n.castShadow = true; });
+    return g;
+  }
   const gates = [];
   for (const route of level.map.routes) {
     const p0 = route.points[0];
-    const gate = new THREE.Group();
+    const p1 = route.points[3] || route.points[1];
+    const gate = makeGate(world.surroundings);
     gate.position.set(p0[0], 0, p0[1]);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.15, 8, 24),
-      M(0xd03030, { emissive: 0xd03030, ei: 1.2, rough: 0.4 }));
-    ring.position.y = 1.4;
-    gate.add(ring);
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(1.02, 22),
-      new THREE.MeshBasicMaterial({ color: 0x701818, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
-    disc.position.y = 1.4;
-    gate.add(disc);
-    gate.add(new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 0.4, 8), M(0x2a2026)));
-    gate.children[gate.children.length - 1].position.y = 0.2;
-    gate.userData.ring = ring;
+    gate.lookAt(p1[0], 0, p1[1]);
     group.add(gate);
     gates.push(gate);
   }
@@ -165,6 +260,77 @@ export function buildWorld(scene, level) {
       arrows.push({ mesh: m, offset: (i / n) * route.total, routeIdx: ri });
     }
   }
+
+  // ---------- arcane rune circle + orbiting glyphs around the Bastion ----------
+  const runeC = document.createElement('canvas');
+  runeC.width = runeC.height = 512;
+  {
+    const c2 = runeC.getContext('2d');
+    c2.strokeStyle = '#ffffff';
+    c2.translate(256, 256);
+    c2.lineWidth = 5;
+    c2.beginPath(); c2.arc(0, 0, 244, 0, Math.PI * 2); c2.stroke();
+    c2.lineWidth = 2.5;
+    c2.beginPath(); c2.arc(0, 0, 226, 0, Math.PI * 2); c2.stroke();
+    for (let i = 0; i < 48; i++) {
+      const a = (i / 48) * Math.PI * 2;
+      const r1 = 226, r2 = i % 4 === 0 ? 206 : 216;
+      c2.beginPath();
+      c2.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+      c2.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
+      c2.stroke();
+    }
+    c2.lineWidth = 3.5;
+    c2.beginPath();
+    for (let i = 0; i <= 7; i++) {
+      const a = (i * 3 / 7) * Math.PI * 2 - Math.PI / 2;
+      const x = Math.cos(a) * 190, y = Math.sin(a) * 190;
+      if (i === 0) c2.moveTo(x, y); else c2.lineTo(x, y);
+    }
+    c2.stroke();
+    c2.beginPath(); c2.arc(0, 0, 100, 0, Math.PI * 2); c2.stroke();
+    for (let i = 0; i < 21; i++) {
+      const a = (i / 21) * Math.PI * 2 + 0.1;
+      c2.save();
+      c2.translate(Math.cos(a) * 150, Math.sin(a) * 150);
+      c2.rotate(a + Math.PI / 2);
+      c2.lineWidth = 2.5;
+      c2.strokeRect(-5, -8, 10, 16);
+      if (i % 3 === 0) { c2.beginPath(); c2.moveTo(-5, 0); c2.lineTo(5, 0); c2.stroke(); }
+      c2.restore();
+    }
+  }
+  const runeTex = new THREE.CanvasTexture(runeC);
+  const runeCircle = new THREE.Mesh(
+    new THREE.CircleGeometry(6.4, 48),
+    new THREE.MeshBasicMaterial({ map: runeTex, color: pal.accent, transparent: true, opacity: 0.55, depthWrite: false, fog: false, blending: THREE.AdditiveBlending })
+  );
+  runeCircle.rotation.x = -Math.PI / 2;
+  runeCircle.position.y = 0.09;
+  runeCircle.renderOrder = 9;
+  group.add(runeCircle);
+
+  const glyphGroup = new THREE.Group();
+  for (let i = 0; i < 5; i++) {
+    const gc = document.createElement('canvas');
+    gc.width = gc.height = 48;
+    const g2 = gc.getContext('2d');
+    g2.strokeStyle = '#ffffff'; g2.lineWidth = 4; g2.lineCap = 'round';
+    g2.beginPath();
+    let px2 = 10 + rng.next() * 8, py2 = 8;
+    g2.moveTo(px2, py2);
+    for (let k = 0; k < 4; k++) { px2 = 8 + rng.next() * 32; py2 = 8 + k * 10; g2.lineTo(px2, py2); }
+    g2.stroke();
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: new THREE.CanvasTexture(gc), color: pal.accent, transparent: true, opacity: 0.9, depthWrite: false, fog: false,
+    }));
+    spr.scale.setScalar(0.55);
+    spr.userData.orbA = (i / 5) * Math.PI * 2;
+    spr.userData.orbR = 2.0 + (i % 2) * 0.5;
+    glyphGroup.add(spr);
+  }
+  glyphGroup.position.y = 3.4;
+  group.add(glyphGroup);
 
   // ---------- decor on blocked cells + fringe, per world ----------
   const decor = new THREE.Group();
@@ -243,7 +409,7 @@ export function buildWorld(scene, level) {
   buildSurroundings(group, world, rng);
 
   scene.add(group);
-  return { group, gates, arrows, routeTotals: level.map.routes.map((r) => r.total) };
+  return { group, gates, arrows, runeCircle, glyphGroup, routeTotals: level.map.routes.map((r) => r.total) };
 }
 
 function buildSurroundings(group, world, rng) {

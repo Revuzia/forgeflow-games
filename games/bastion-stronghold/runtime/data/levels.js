@@ -17,7 +17,7 @@ const LEVEL_NAMES = [
 ];
 
 // per-level seed salt for targeted map re-rolls if balance testing demands it
-const SEED_SALT = { '3:8': 7, '4:8': 7 };
+const SEED_SALT = { '3:8': 2, '4:8': 7 };
 
 const cache = new Map();
 

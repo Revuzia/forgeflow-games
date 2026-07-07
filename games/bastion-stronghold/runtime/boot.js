@@ -6,6 +6,8 @@ import { createAudio } from './core/audio.js';
 import { createGame } from './game.js';
 import { loadProfile, saveProfile, resetProfile } from './core/save.js';
 import { WORLDS } from './data/worlds.js';
+import { ENEMIES } from './data/enemies.js';
+import { loadModel } from './core/assets.js';
 import { levelDef } from './data/levels.js';
 import { buildWorld } from './view/world3d.js';
 import { buildBastion } from './view/models.js';
@@ -27,15 +29,24 @@ container.appendChild(loader);
 const loadBar = loader.querySelector('#bs-loadbar');
 const loadTxt = loader.querySelector('#bs-loadtxt');
 
-async function preloadTextures() {
+const GLTF_MODELS = new Set(['cyclops', 'forgemech']); // shipped as .gltf + sibling files
+async function preloadAssets() {
   const texLoader = new THREE.TextureLoader();
-  const jobs = WORLDS.map((w) => w.groundTex);
+  const texJobs = WORLDS.map((w) => w.groundTex);
+  const modelJobs = [...new Set(Object.values(ENEMIES).map((d) => d.model))]
+    .filter((m) => m !== 'primeprism'); // procedural boss
+  const totalJobs = texJobs.length + modelJobs.length;
   let done = 0;
-  await Promise.allSettled(jobs.map((name) => new Promise((res) => {
-    texLoader.load(`assets/textures/${name}.jpg`,
-      () => { done++; loadBar.style.width = Math.round(done / jobs.length * 100) + '%'; loadTxt.textContent = `provisions ${done}/${jobs.length}`; res(); },
-      undefined, () => { done++; res(); });
-  })));
+  const tick = () => { done++; loadBar.style.width = Math.round(done / totalJobs * 100) + '%'; loadTxt.textContent = `provisions ${done}/${totalJobs}`; };
+  await Promise.allSettled([
+    ...texJobs.map((name) => new Promise((res) => {
+      texLoader.load(`assets/textures/${name}.jpg`, () => { tick(); res(); }, undefined, () => { tick(); res(); });
+    })),
+    ...modelJobs.map((m) => {
+      const url = GLTF_MODELS.has(m) ? `assets/models/enemies/${m}/${m}.gltf` : `assets/models/enemies/${m}.glb`;
+      return loadModel(url, m).then(tick, (e) => { console.warn('[BS] model failed', m, e); tick(); });
+    }),
+  ]);
 }
 
 let backdrop = null;
@@ -82,7 +93,7 @@ function destroyBackdrop(engine) {
   const game = createGame(env);
   gameRef.current = game;
 
-  await preloadTextures();
+  await preloadAssets();
 
   window.addEventListener('pointerdown', () => audio.unlock(), { once: true });
   window.addEventListener('keydown', () => audio.unlock(), { once: true });

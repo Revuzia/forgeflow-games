@@ -60,6 +60,11 @@ function cleanAdjacency(occupied, nx, ny, prev) {
   return true;
 }
 
+// Chebyshev distance to the map center — plaza is <=1, the "ring" is ==2.
+function ringDist(cx, cy) {
+  return Math.max(Math.abs(cx - CX), Math.abs(cy - CY));
+}
+
 function walkRoad(rng, entry, occupied, minLen) {
   const path = [entry.slice()];
   const mine = new Set([entry[0] + ',' + entry[1]]);
@@ -69,11 +74,11 @@ function walkRoad(rng, entry, occupied, minLen) {
   let guard = 900;
 
   while (guard-- > 0) {
-    // terminate when adjacent to the plaza (and long enough)
-    for (const [dx, dy] of DIRS) {
-      if (isPlaza(cur[0] + dx, cur[1] + dy) && path.length >= minLen) {
-        return { cells: path, mine };
-      }
+    // HARD RULE: the moment a road reaches the plaza ring it TERMINATES there.
+    // Roads lead INTO the center — they can never pass beside or across it.
+    if (ringDist(cur[0], cur[1]) === 2) {
+      if (path.length >= minLen) return { cells: path, mine };
+      return null; // arrived too early — reject, retry with next seed
     }
     const toC = [Math.sign(CX - cur[0]), Math.sign(CY - cur[1])];
     const cands = [];
@@ -81,17 +86,18 @@ function walkRoad(rng, entry, occupied, minLen) {
       if (d[0] === -curDir[0] && d[1] === -curDir[1]) continue;
       const nx = cur[0] + d[0], ny = cur[1] + d[1];
       if (nx < 0 || ny < 0 || nx >= GRID_W || ny >= GRID_H) continue;
-      if (isPlaza(nx, ny)) continue;                     // never step ONTO plaza
+      const rd = ringDist(nx, ny);
+      if (rd <= 1) continue;                              // never step ONTO the plaza
+      if (rd === 2 && path.length < minLen - 1) continue; // no early arrivals at the ring
       if (mine.has(nx + ',' + ny) || occupied.has(nx + ',' + ny)) continue;
       if (!cleanAdjacency(new Set([...mine, ...occupied]), nx, ny, cur)) continue;
-      // don't let the road hug the plaza before it's allowed to end
-      const nearPlaza = Math.abs(nx - CX) <= 2 && Math.abs(ny - CY) <= 2;
-      if (nearPlaza && path.length < minLen - 1) continue;
       let w = 1;
       if (d[0] === curDir[0] && d[1] === curDir[1]) w += 1.6;
       if (d[0] === toC[0] && d[0] !== 0) w += 1.1 * Math.min(1.4, path.length / minLen);
       if (d[1] === toC[1] && d[1] !== 0) w += 1.1 * Math.min(1.4, path.length / minLen);
       if (path.length < minLen * 0.6) w += rng.next() * 2.4;   // wander early
+      // strongly prefer finishing the approach once long enough
+      if (rd === 2 && path.length >= minLen) w += 6;
       cands.push({ d, w });
     }
     if (!cands.length) return null;

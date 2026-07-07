@@ -74,52 +74,151 @@ class ParticlePool {
   }
 }
 
-// ---------- lightning ----------
+// ---------- thick lightning bolts (two-layer ribbon: glow + white core) ----------
+function stripGeometry(maxPts) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(maxPts * 2 * 3), 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(maxPts * 2 * 2), 2));
+  const idx = [];
+  for (let i = 0; i < maxPts - 1; i++) {
+    const a = i * 2, b = i * 2 + 1, c = i * 2 + 2, d = i * 2 + 3;
+    idx.push(a, b, c, b, d, c);
+  }
+  geo.setIndex(idx);
+  geo.setDrawRange(0, 0);
+  return geo;
+}
+function writeStrip(geo, pts, width) {
+  // pts: [{x,y,z}] — ribbon lies mostly flat (camera looks down), widened in XZ
+  const pos = geo.attributes.position, uv = geo.attributes.uv;
+  const n = Math.min(pts.length, pos.count / 2);
+  for (let i = 0; i < n; i++) {
+    const p = pts[i];
+    const q = pts[Math.min(i + 1, n - 1)], r = pts[Math.max(i - 1, 0)];
+    let dx = q.x - r.x, dz = q.z - r.z;
+    const dl = Math.hypot(dx, dz) || 1;
+    const px = -dz / dl, pz = dx / dl;                 // perpendicular in XZ
+    const w = width * (i / Math.max(1, n - 1) < 0.5 ? 1 : 1 - ((i / (n - 1)) - 0.5) * 0.9);
+    pos.setXYZ(i * 2, p.x + px * w, p.y, p.z + pz * w);
+    pos.setXYZ(i * 2 + 1, p.x - px * w, p.y, p.z - pz * w);
+    uv.setXY(i * 2, i / (n - 1), 0);
+    uv.setXY(i * 2 + 1, i / (n - 1), 1);
+  }
+  pos.needsUpdate = true; uv.needsUpdate = true;
+  geo.setDrawRange(0, Math.max(0, (n - 1) * 6));
+}
 class BeamPool {
-  constructor(scene, n = 14) {
-    this.beams = [];
+  constructor(scene, n = 10) {
+    this.bolts = [];
     for (let i = 0; i < n; i++) {
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * 40), 3));
-      const mat = new THREE.LineBasicMaterial({ color: 0x9adcff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
-      const line = new THREE.Line(geo, mat);
-      line.frustumCulled = false;
-      line.renderOrder = 25;
-      scene.add(line);
-      this.beams.push({ line, t: 0, active: false });
+      const glow = new THREE.Mesh(stripGeometry(40), new THREE.MeshBasicMaterial({
+        color: 0x9adcff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+        depthWrite: false, fog: false, side: THREE.DoubleSide,
+      }));
+      const core = new THREE.Mesh(stripGeometry(40), new THREE.MeshBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+        depthWrite: false, fog: false, side: THREE.DoubleSide,
+      }));
+      glow.frustumCulled = core.frustumCulled = false;
+      glow.renderOrder = 25; core.renderOrder = 26;
+      scene.add(glow, core);
+      this.bolts.push({ glow, core, t: 0, active: false });
     }
     this.cursor = 0;
   }
   spawn(points, color = 0x9adcff) {
-    const b = this.beams[this.cursor];
-    this.cursor = (this.cursor + 1) % this.beams.length;
-    const pos = b.line.geometry.attributes.position;
-    let vi = 0;
-    for (let i = 0; i < points.length - 1 && vi < 39; i++) {
+    const b = this.bolts[this.cursor];
+    this.cursor = (this.cursor + 1) % this.bolts.length;
+    // jagged subdivision
+    const jag = [];
+    for (let i = 0; i < points.length - 1; i++) {
       const a = points[i], c = points[i + 1];
-      const segs = 4;
-      for (let s = 0; s <= segs && vi < 40; s++) {
-        const t = s / segs;
-        const jx = (s > 0 && s < segs) ? (Math.random() - 0.5) * 0.55 : 0;
-        const jz = (s > 0 && s < segs) ? (Math.random() - 0.5) * 0.55 : 0;
-        pos.setXYZ(vi++,
-          a.x + (c.x - a.x) * t + jx,
-          (a.y ?? 1.4) + ((c.y ?? 1.0) - (a.y ?? 1.4)) * t + Math.random() * 0.3,
-          a.z + (c.z - a.z) * t + jz);
+      const segs = 5;
+      for (let s2 = 0; s2 <= segs; s2++) {
+        const t = s2 / segs;
+        const mid = s2 > 0 && s2 < segs;
+        jag.push({
+          x: a.x + (c.x - a.x) * t + (mid ? (Math.random() - 0.5) * 0.5 : 0),
+          y: (a.y ?? 1.4) + ((c.y ?? 1.0) - (a.y ?? 1.4)) * t + (mid ? Math.random() * 0.3 : 0),
+          z: a.z + (c.z - a.z) * t + (mid ? (Math.random() - 0.5) * 0.5 : 0),
+        });
       }
     }
-    b.line.geometry.setDrawRange(0, vi);
-    pos.needsUpdate = true;
-    b.line.material.color.setHex(color);
-    b.line.material.opacity = 0.95;
-    b.t = 0.22; b.active = true;
+    writeStrip(b.glow.geometry, jag, 0.30);
+    writeStrip(b.core.geometry, jag, 0.09);
+    b.glow.material.color.setHex(color);
+    b.glow.material.opacity = 0.85;
+    b.core.material.opacity = 1.0;
+    b.t = 0.24; b.active = true;
   }
   update(dt) {
-    for (const b of this.beams) {
+    for (const b of this.bolts) {
       if (!b.active) continue;
       b.t -= dt;
-      b.line.material.opacity = Math.max(0, b.t / 0.22) * 0.95;
-      if (b.t <= 0) { b.active = false; b.line.geometry.setDrawRange(0, 0); }
+      const k = Math.max(0, b.t / 0.24);
+      b.glow.material.opacity = k * 0.85;
+      b.core.material.opacity = k;
+      if (b.t <= 0) {
+        b.active = false;
+        b.glow.geometry.setDrawRange(0, 0);
+        b.core.geometry.setDrawRange(0, 0);
+      }
+    }
+  }
+}
+
+// ---------- ribbon trails (silky projectile streaks) ----------
+class TrailPool {
+  constructor(scene, n = 26) {
+    this.slots = [];
+    for (let i = 0; i < n; i++) {
+      const mesh = new THREE.Mesh(stripGeometry(26), new THREE.MeshBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending,
+        depthWrite: false, fog: false, side: THREE.DoubleSide,
+      }));
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 24;
+      scene.add(mesh);
+      this.slots.push({ mesh, pts: [], owner: null, fading: 0 });
+    }
+    this.byOwner = new Map();
+  }
+  point(owner, x, y, z, color = 0xc89aff, width = 0.22) {
+    let slot = this.byOwner.get(owner);
+    if (!slot) {
+      slot = this.slots.find((s) => !s.owner && s.fading <= 0);
+      if (!slot) return;
+      slot.owner = owner;
+      slot.pts = [];
+      slot.mesh.material.color.setHex(color);
+      slot.mesh.material.opacity = 0.85;
+      slot.width = width;
+      this.byOwner.set(owner, slot);
+    }
+    slot.pts.push({ x, y, z, t: performance.now() / 1000 });
+    if (slot.pts.length > 24) slot.pts.shift();
+    writeStrip(slot.mesh.geometry, slot.pts, slot.width);
+  }
+  release(owner) {
+    const slot = this.byOwner.get(owner);
+    if (!slot) return;
+    this.byOwner.delete(owner);
+    slot.owner = null;
+    slot.fading = 0.3;
+  }
+  update(dt) {
+    const now = performance.now() / 1000;
+    for (const slot of this.slots) {
+      if (slot.owner) {
+        // age out old points so stationary trails shrink
+        while (slot.pts.length && now - slot.pts[0].t > 0.3) slot.pts.shift();
+        if (slot.pts.length >= 2) writeStrip(slot.mesh.geometry, slot.pts, slot.width);
+        else slot.mesh.geometry.setDrawRange(0, 0);
+      } else if (slot.fading > 0) {
+        slot.fading -= dt;
+        slot.mesh.material.opacity = Math.max(0, slot.fading / 0.3) * 0.85;
+        if (slot.fading <= 0) { slot.pts = []; slot.mesh.geometry.setDrawRange(0, 0); }
+      }
     }
   }
 }
@@ -265,19 +364,22 @@ export function createFx(scene, biome) {
   const pools = {};
   for (const s of Object.keys(STYLES)) pools[s] = new ParticlePool(scene, s, s === 'smoke' ? 220 : 320);
   const beams = new BeamPool(scene);
+  const trails = new TrailPool(scene);
   const rings = new RingPool(scene);
   const numbers = new NumberPool(scene);
   const ambient = biome.particles ? new Ambient(scene, biome.particles) : null;
 
   return {
-    pools, beams, rings, numbers,
+    pools, beams, trails, rings, numbers,
     burst(style, x, y, z, count, opts) { pools[style]?.burst(x, y, z, count, opts); },
     lightning(points, color) { beams.spawn(points, color); },
+    trailPoint(owner, x, y, z, color, width) { trails.point(owner, x, y, z, color, width); },
+    trailRelease(owner) { trails.release(owner); },
     ring(x, z, r, color, dur) { rings.spawn(x, z, r, color, dur); },
     number(x, y, z, text, color, big) { numbers.spawn(x, y, z, text, color, big); },
     update(dt, t) {
       for (const p of Object.values(pools)) p.update(dt);
-      beams.update(dt); rings.update(dt); numbers.update(dt);
+      beams.update(dt); trails.update(dt); rings.update(dt); numbers.update(dt);
       ambient?.update(dt, t);
     },
   };

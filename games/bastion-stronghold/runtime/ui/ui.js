@@ -6,7 +6,7 @@ import { WORLDS } from '../data/worlds.js';
 import { ENEMIES } from '../data/enemies.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { loadProfile, starsFor, isBiomeUnlocked, isLevelUnlocked, isEndlessUnlocked, biomeStars, totalStars } from '../core/save.js';
-import { levelDef } from '../data/levels.js';
+import { levelDef, roadsFor } from '../data/levels.js';
 import { TARGET_MODES } from '../sim/sim.js';
 
 const CSS = `
@@ -306,6 +306,7 @@ export function createUI(container, handlers) {
           ${isBossLvl ? '<div class="boss-tag">BOSS</div>' : ''}
           <div class="num">${li + 1}</div>
           <div class="nm">${lv.name}</div>
+          <div class="nm" style="color:#c08a6a">${roadsFor(wi, li)} roads in</div>
           <div class="st">${unlocked ? '★'.repeat(st) + '<span style="color:#3c332a">' + '★'.repeat(3 - st) + '</span>' : '🔒'}</div>`;
         if (unlocked) node.onclick = () => { handlers.sfx('uiTap'); handlers.startLevel(wi, li, false); };
         grid.appendChild(node);

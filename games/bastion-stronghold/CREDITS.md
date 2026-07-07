@@ -1,12 +1,21 @@
 # Bastion Realms: Stronghold — Asset Credits
 
-**Everything in this game was generated specifically for it. Nothing is loaded from
-the F:\ libraries or reused from any previous ForgeFlow game.**
+**No asset in this game is reused from any previous ForgeFlow game.** Textures and audio
+are generated specifically for it; enemy creatures use library models that were verified
+unused by every prior title.
 
 ## 3D Models
-- All towers, enemy constructs, bosses, Bastions, props and surroundings are original
+- All towers, Bastions, the Prime Prism boss, props and surroundings are original
   **procedural Three.js builds** defined in `runtime/view/models.js` and `runtime/view/world3d.js`.
-  No model files exist in this game. © ForgeFlow Labs.
+  © ForgeFlow Labs.
+- **31 enemy creatures** (`assets/models/enemies/`) are animated GLB/GLTF models from the
+  local asset library, each verified unused by any other ForgeFlow game (`tools/copy_enemies.py`
+  holds the exact pick list):
+  - **Quaternius packs** (Ultimate Monsters, Cute Monsters, Animated Mech) — CC0.
+  - **Poly Pizza models** (Bull, Horse, Giant, Rat, Zombie, Skeleton, Shark, Bee Enemy,
+    Enemy Small/Large, Robot Enemy ×4) — CC0 1.0.
+  - **"Animated Wizard" by Quaternius — CC-BY 3.0** — via Poly Pizza
+    (https://poly.pizza/m/kttbFvCl2C). Used as the Sky Herald.
 
 ## Textures
 - Five seamless ground tiles + key art generated via **xAI `grok-imagine-image`**
