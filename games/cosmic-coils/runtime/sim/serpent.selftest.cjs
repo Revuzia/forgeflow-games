@@ -110,13 +110,27 @@ const close = (a, b, eps, name) => ok(Math.abs(a - b) <= eps, name, `${a} vs ${b
   const bm0 = pb.mass;
   const bu0 = { ...pb.u };
   setInput(Wb2, 0, { steer: 0, boost: true });
-  for (let i = 0; i < 60; i++) step(Wb2, 1 / 60);
+  // ramp: distance in the FIRST 0.3s must be less than in a later 0.3s window
+  let dEarly = 0, dLate = 0;
+  {
+    const p0 = { ...pb.u };
+    for (let i = 0; i < 18; i++) step(Wb2, 1 / 60);
+    dEarly = angDist(p0, pb.u) * Wb2.R;
+    for (let i = 0; i < 72; i++) step(Wb2, 1 / 60); // to t=1.5s (ramp full)
+    const p1 = { ...pb.u };
+    for (let i = 0; i < 18; i++) step(Wb2, 1 / 60);
+    dLate = angDist(p1, pb.u) * Wb2.R;
+    for (let i = 0; i < 42; i++) step(Wb2, 1 / 60); // total 2.5s held
+  }
+  ok(dLate > dEarly * 1.25, "boost ramps up the longer it's held", `${dEarly.toFixed(2)} -> ${dLate.toFixed(2)}`);
   const bMoved = angDist(bu0, pb.u) * Wb2.R;
-  ok(bMoved > speedOf(60) * 1.5, "boost significantly faster", bMoved.toFixed(1));
-  ok(pb.mass < bm0 - CONST.BOOST_DRAIN * 0.8, "boost drains mass", (bm0 - pb.mass).toFixed(1));
+  ok(bMoved > speedOf(60) * 2.5 * 1.35, "boost significantly faster over a sustained hold", bMoved.toFixed(1));
+  ok(pb.mass < bm0 - CONST.BOOST_DRAIN * 1.2, "boost drains mass (scaled by ramp)", (bm0 - pb.mass).toFixed(1));
   ok(Array.from(Wb2.food.values()).some((f) => f.tier === 0), "boosting drops pellets behind");
-  // floor: can't boost below min
+  // floor: can't boost below min (let the residual ramp decay first — the
+  // ~0.45s glide-down after losing boost is intended feel, not a bonus)
   pb.mass = CONST.BOOST_MIN_MASS - 1;
+  for (let i = 0; i < 60; i++) step(Wb2, 1 / 60);
   const fm0 = pb.mass, fu0 = { ...pb.u };
   for (let i = 0; i < 30; i++) step(Wb2, 1 / 60);
   close(pb.mass, fm0, 0.01, "no drain below boost floor");
@@ -255,12 +269,12 @@ const close = (a, b, eps, name) => ok(Math.abs(a - b) <= eps, name, `${a} vs ${b
     const slow = S.angDist(b2, pt.u) * Wt.R;
     ok(slow < speedOf(40) * 0.85, "throttle −1 is markedly slower", slow.toFixed(1));
     close(pt.mass, 40, 0.01, "throttle costs no mass");
-    // boost overrides throttle
+    // boost overrides throttle (once the ramp is meaningfully engaged)
     const b3 = { ...pt.u };
     setInput(Wt, 0, { throttle: -1, boost: true });
-    for (let i = 0; i < 60; i++) step(Wt, 1 / 60);
+    for (let i = 0; i < 120; i++) step(Wt, 1 / 60);
     const boosted = S.angDist(b3, pt.u) * Wt.R;
-    ok(boosted > speedOf(pt.mass) * 1.5, "boost overrides a slow throttle", boosted.toFixed(1));
+    ok(boosted > speedOf(pt.mass) * 2 * 1.35, "boost overrides a slow throttle", boosted.toFixed(1));
   }
 
   // ── 10c. self-collision ────────────────────────────────────────

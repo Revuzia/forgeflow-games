@@ -44,8 +44,15 @@ export class Game {
     this._camUp = new THREE.Vector3(0, 1, 0);
     this._menuOrbit = 0;
     this.texLoader = new THREE.TextureLoader();
-    this.input = { steerMouse: 0, kb: 0, boost: false, touchSteer: null, thUp: false, thDown: false, throttle: 0, zoomTarget: 1 };
+    // boost has three independent sources (W key, SPACE, LMB) so releasing one
+    // never cancels another that's still held; same for the slow lever (S, RMB)
+    this.input = { steerMouse: 0, kb: 0, bW: false, bSpace: false, bMouse: false, sKey: false, sMouse: false, touchBoost: false, touchSteer: null, throttle: 0, zoomTarget: 1 };
     this._zoom = 1;
+    this.settings = {
+      sens: parseFloat(localStorage.getItem("cc_sens") ?? "1.3"),
+      invert: localStorage.getItem("cc_invert") === "1",
+      quality: localStorage.getItem("cc_quality") || "high",
+    };
   }
 
   async init() {
@@ -54,10 +61,31 @@ export class Game {
     this.menu = new Menu(this.container, this.audio, {
       onPractice: () => this.startPractice(),
       onOnline: () => this.openOnline(),
+      getSettings: () => ({ ...this.settings }),
+      onSettings: (patch) => this.applySettings(patch),
     });
     this._bindInput();
+    this.applySettings({});
     this._buildAttract();
     this._exposeHooks();
+  }
+
+  /** persist + apply user settings (mouse sens, invert, graphics quality) */
+  applySettings(patch) {
+    Object.assign(this.settings, patch || {});
+    try {
+      localStorage.setItem("cc_sens", String(this.settings.sens));
+      localStorage.setItem("cc_invert", this.settings.invert ? "1" : "0");
+      localStorage.setItem("cc_quality", this.settings.quality);
+    } catch (e) {}
+    const low = this.settings.quality === "low";
+    this.renderer.setPixelRatio(low ? 1.0 : Math.min(window.devicePixelRatio || 1, 1.5));
+    this._applyBloom();
+  }
+
+  _applyBloom() {
+    const base = this.W && (this.W.biome === "abyss" || this.W.biome === "ember") ? 1.0 : 0.85;
+    this.bloom.strength = base * (this.settings.quality === "low" ? 0.62 : 1);
   }
 
   // ── worlds ────────────────────────────────────────────────────────────────
@@ -78,7 +106,7 @@ export class Game {
     this.snakeField = new SnakeField(this.scene, W);
     this.fx = new FX(this.scene, W, BIOME_DEFS[W.biome]);
     this.fx.onThunder = () => { this.audio.thunder(); this._shake = Math.max(this._shake, 0.35); };
-    this.bloom.strength = W.biome === "abyss" || W.biome === "ember" ? 1.0 : 0.85;
+    this._applyBloom();
     return W;
   }
 
@@ -189,35 +217,36 @@ export class Game {
     const cv = this.renderer.domElement;
     window.addEventListener("mousemove", (e) => {
       const w = this.container.clientWidth;
-      const dx = (e.clientX - w / 2) / (w * 0.3);
-      this.input.steerMouse = Math.abs(dx) < 0.05 ? 0 : Math.max(-1, Math.min(1, -dx));
+      const dx = (e.clientX - w / 2) / (w * 0.3) * this.settings.sens;
+      const signed = this.settings.invert ? dx : -dx;
+      this.input.steerMouse = Math.abs(dx) < 0.04 ? 0 : Math.max(-1, Math.min(1, signed));
     });
     cv.addEventListener("pointerdown", (e) => {
-      if (e.button === 0) this.input.boost = true;
-      else if (e.button === 2) this.input.thDown = true; // RMB = ease off, like S
+      if (e.button === 0) this.input.bMouse = true;        // LMB = boost
+      else if (e.button === 2) this.input.sMouse = true;   // RMB = slow, like S
     });
     window.addEventListener("pointerup", (e) => {
-      if (e.button === 2) this.input.thDown = false;
-      else this.input.boost = false;
+      if (e.button === 2) this.input.sMouse = false;
+      else this.input.bMouse = false;
     });
     // RMB is a control, not a context menu
     this.container.addEventListener("contextmenu", (e) => e.preventDefault());
-    window.addEventListener("blur", () => { this.input.boost = false; this.input.kb = 0; this.input.thUp = false; this.input.thDown = false; });
+    window.addEventListener("blur", () => { this.input.bW = this.input.bSpace = this.input.bMouse = false; this.input.sKey = this.input.sMouse = false; this.input.kb = 0; });
     window.addEventListener("keydown", (e) => {
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
       if (e.code === "KeyA" || e.code === "ArrowLeft") this.input.kb = 1;
       else if (e.code === "KeyD" || e.code === "ArrowRight") this.input.kb = -1;
-      else if (e.code === "KeyW" || e.code === "ArrowUp") this.input.thUp = true;
-      else if (e.code === "KeyS" || e.code === "ArrowDown") this.input.thDown = true;
-      else if (e.code === "Space") { this.input.boost = true; e.preventDefault(); }
+      else if (e.code === "KeyW" || e.code === "ArrowUp") this.input.bW = true;   // W = BOOST (same as LMB/SPACE)
+      else if (e.code === "KeyS" || e.code === "ArrowDown") this.input.sKey = true;
+      else if (e.code === "Space") { this.input.bSpace = true; e.preventDefault(); }
       else if (e.code === "Escape") this._togglePause();
     });
     window.addEventListener("keyup", (e) => {
       if ((e.code === "KeyA" || e.code === "ArrowLeft") && this.input.kb === 1) this.input.kb = 0;
       if ((e.code === "KeyD" || e.code === "ArrowRight") && this.input.kb === -1) this.input.kb = 0;
-      if (e.code === "KeyW" || e.code === "ArrowUp") this.input.thUp = false;
-      if (e.code === "KeyS" || e.code === "ArrowDown") this.input.thDown = false;
-      if (e.code === "Space") this.input.boost = false;
+      if (e.code === "KeyW" || e.code === "ArrowUp") this.input.bW = false;
+      if (e.code === "KeyS" || e.code === "ArrowDown") this.input.sKey = false;
+      if (e.code === "Space") this.input.bSpace = false;
     });
     // mouse wheel: zoom the chase camera out/in (persists until changed)
     cv.addEventListener("wheel", (e) => {
@@ -229,7 +258,7 @@ export class Game {
     cv.addEventListener("touchstart", (e) => {
       for (const t of e.changedTouches) {
         if (t.clientX < this.container.clientWidth * 0.55) this.input.touchSteer = { id: t.identifier, x0: t.clientX };
-        else this.input.boost = true;
+        else this.input.touchBoost = true;
       }
       e.preventDefault();
     }, { passive: false });
@@ -246,7 +275,7 @@ export class Game {
     cv.addEventListener("touchend", (e) => {
       for (const t of e.changedTouches) {
         if (this.input.touchSteer && t.identifier === this.input.touchSteer.id) { this.input.touchSteer = null; this.input.steerMouse = 0; }
-        else this.input.boost = false;
+        else this.input.touchBoost = false;
       }
       e.preventDefault();
     }, { passive: false });
@@ -271,7 +300,9 @@ export class Game {
       this.hud.showPause(
         { music: this.audio.musicVol, sfx: this.audio.sfxVol },
         () => this._togglePause(),
-        () => { this.paused = false; this.endToMenu(); });
+        () => { this.paused = false; this.endToMenu(); },
+        this.settings.sens,
+        (v) => this.applySettings({ sens: v }));
       if (this.mode === "online") this.hud.toast("online match keeps running!", "warn");
       else this.audio.suspend();
     } else {
@@ -351,11 +382,14 @@ export class Game {
         const steer = this.input.kb !== 0 ? this.input.kb : this.input.steerMouse;
         // throttle ramps while held ("longer you hold, faster it goes"), eases
         // back to neutral on release; boost overrides it in the sim
-        const tgt = this.input.thUp ? 1 : this.input.thDown ? -1 : 0;
-        const rate = tgt !== 0 ? 1.0 : 1.7;
+        // slow lever (S / RMB) ramps to -1 and back; boost sources are OR-ed
+        const slow = this.input.sKey || this.input.sMouse;
+        const tgt = slow ? -1 : 0;
+        const rate = slow ? 1.4 : 1.7;
         this.input.throttle += (tgt - this.input.throttle) * Math.min(1, dt * rate);
         if (tgt === 0 && Math.abs(this.input.throttle) < 0.02) this.input.throttle = 0;
-        S.setInput(W, this.mySlot, { steer, boost: this.input.boost, throttle: this.input.throttle });
+        const boost = this.input.bW || this.input.bSpace || this.input.bMouse || this.input.touchBoost;
+        S.setInput(W, this.mySlot, { steer, boost, throttle: this.input.throttle });
       }
     }
     S.step(W, dt);
@@ -513,7 +547,7 @@ export class Game {
       toMenu() { self.endToMenu(); return this.state(); },
       respawn() { self.respawn(); return this.state(); },
       setSteer(v) { self.input.steerMouse = v; },
-      setBoost(b) { self.input.boost = !!b; },
+      setBoost(b) { self.input.bSpace = !!b; },
       killPlayer() {
         const me = S.snakeBySlot(self.W, self.mySlot);
         if (me && me.alive) S.killSnake(self.W, me, null);

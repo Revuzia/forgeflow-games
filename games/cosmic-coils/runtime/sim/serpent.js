@@ -366,7 +366,7 @@ export function spawnSnake(W, slot, o = {}) {
     mass: o.mass != null ? o.mass : CONST.START_MASS,
     kills: sn.kills || 0,
     best: sn.best || 0,
-    steer: 0, boost: false, throttle: 0,
+    steer: 0, boost: false, throttle: 0, boostRamp: 0,
     shield: CONST.SHIELD_TIME,
     pelletT: 0,
     deathT: 0, respawnAt: null,
@@ -678,10 +678,14 @@ export function step(W, dt) {
     if (sn.netRemote) { computeSegs(W, sn); continue; }
     if (sn.isBot && W.simulateBots && sn.ai && W.time >= sn.ai.thinkAt) aiThink(W, sn);
 
-    // boost gating + drain + pellets
-    let boosting = sn.boost && sn.mass > CONST.BOOST_MIN_MASS;
-    if (boosting) {
-      sn.mass = Math.max(CONST.BOOST_MIN_MASS - 0.01, sn.mass - CONST.BOOST_DRAIN * dt);
+    // BOOST (owner round 2: W/LMB/SPACE are ONE control): while held — and only
+    // above the mass floor — speed RAMPS UP over ~0.9s ("longer you hold,
+    // faster it goes") toward BOOST_MULT; mass drain scales with the ramp.
+    const canBoost = sn.boost && sn.mass > CONST.BOOST_MIN_MASS;
+    sn.boostRamp = Math.max(0, Math.min(1, (sn.boostRamp || 0) + (canBoost ? dt / 0.9 : -dt / 0.45)));
+    const boosting = canBoost && sn.boostRamp > 0.12;
+    if (canBoost && sn.boostRamp > 0.1) {
+      sn.mass = Math.max(CONST.BOOST_MIN_MASS - 0.01, sn.mass - CONST.BOOST_DRAIN * sn.boostRamp * dt);
       sn.pelletT += dt;
       if (sn.pelletT >= CONST.PELLET_EVERY) {
         sn.pelletT = 0;
@@ -707,11 +711,14 @@ export function step(W, dt) {
         sn.t.y * c + _tmpB.y * s,
         sn.t.z * c + _tmpB.z * s);
     }
-    // advance along great circle (throttle: W-held speed-up / S-held slow-down;
-    // boost overrides throttle entirely)
+    // advance along great circle. Speed = base × ramped boost × slow-throttle
+    // (S/RMB, negative only from inputs) × weather. The ramp IS the boost:
+    // 1.0 → BOOST_MULT as boostRamp builds; the slow lever is ignored while
+    // meaningfully boosting so W+S don't fight.
+    const boostMul = 1 + (CONST.BOOST_MULT - 1) * sn.boostRamp;
     const th01 = sn.throttle || 0;
-    const throttleMul = boosting ? 1 : (1 + (th01 > 0 ? CONST.THROTTLE_UP * th01 : CONST.THROTTLE_DOWN * th01));
-    const spd = speedOf(sn.mass) * (boosting ? CONST.BOOST_MULT : throttleMul) * wm.speed;
+    const throttleMul = sn.boostRamp > 0.3 ? 1 : (1 + (th01 > 0 ? CONST.THROTTLE_UP * th01 : CONST.THROTTLE_DOWN * th01));
+    const spd = speedOf(sn.mass) * boostMul * throttleMul * wm.speed;
     const th = (spd * dt) / W.R;
     {
       const c = Math.cos(th), s = Math.sin(th);

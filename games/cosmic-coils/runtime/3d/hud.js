@@ -71,7 +71,7 @@ export class HUD {
       <div class="cc-feed"></div>
       <div class="cc-toasts"></div>
       <div class="cc-panel cc-boost"><div class="bar"><div class="fill" style="width:100%"></div></div><div class="lbl">BOOST</div></div>
-      <div class="cc-hint">steer: mouse or <b>A</b>/<b>D</b> · boost: <b>SPACE</b>/<b>LMB</b> · speed: <b>W</b>/<b>S</b> or <b>RMB</b> · zoom: wheel · <b>don't cross your own body!</b></div>
+      <div class="cc-hint">steer: mouse or <b>A</b>/<b>D</b> · boost (builds up, burns mass): hold <b>W</b>/<b>LMB</b>/<b>SPACE</b> · slow: <b>S</b>/<b>RMB</b> · zoom: wheel · <b>don't cross your own body!</b></div>
       <div class="cc-map cc-panel"><canvas width="316" height="316"></canvas></div>
     `;
     this.$ = (q) => this.root.querySelector(q);
@@ -237,7 +237,7 @@ export class HUD {
   }
   hideDeath() { if (this.deathEl) { this.deathEl.remove(); this.deathEl = null; } }
 
-  showPause(vols, onResume, onMenu) {
+  showPause(vols, onResume, onMenu, sens, onSens) {
     this.hidePause();
     const d = document.createElement("div");
     d.className = "cc-big";
@@ -245,11 +245,17 @@ export class HUD {
       <h1 style="color:#7de0ff;text-shadow:0 0 30px rgba(90,220,255,.8)">PAUSED</h1>
       <div class="cc-pause-row">MUSIC <input type="range" min="0" max="1" step="0.05" value="${vols.music}" data-a="mv"></div>
       <div class="cc-pause-row">SFX <input type="range" min="0" max="1" step="0.05" value="${vols.sfx}" data-a="sv"></div>
+      ${onSens ? `<div class="cc-pause-row">MOUSE SENS <input type="range" min="0.5" max="2.5" step="0.05" value="${sens}" data-a="sens"> <b data-a="sensval" style="width:36px">${Number(sens).toFixed(2)}</b></div>` : ""}
       <div style="display:flex;gap:12px;margin-top:8px"><button class="cc-btn" data-a="resume">RESUME</button><button class="cc-btn ghost" data-a="menu">QUIT TO MENU</button></div>`;
     d.querySelector('[data-a="resume"]').onclick = () => { this.audio.ui(); onResume(); };
     d.querySelector('[data-a="menu"]').onclick = () => { this.audio.ui(); onMenu(); };
     d.querySelector('[data-a="mv"]').oninput = (e) => this.audio.setMusicVol(parseFloat(e.target.value));
     d.querySelector('[data-a="sv"]').oninput = (e) => this.audio.setSfxVol(parseFloat(e.target.value));
+    if (onSens) d.querySelector('[data-a="sens"]').oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      d.querySelector('[data-a="sensval"]').textContent = v.toFixed(2);
+      onSens(v);
+    };
     this.root.appendChild(d);
     this.pauseEl = d;
   }

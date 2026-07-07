@@ -1,5 +1,21 @@
 # Cosmic Coils — CHANGELOG
 
+## 3 — 2026-07-07 · Owner playtest round 2 (unified boost + settings)
+- **W, LMB and SPACE are now ONE control: BOOST** (round-1's separate free
+  W-throttle read as "W doesn't boost"). Boost now RAMPS 1.0×→1.78× over ~0.9s
+  of holding ("longer you hold, faster it goes"), mass drain scales with the
+  ramp, and it stays floor-gated — too small to burn means no boost at all,
+  by design. Releasing glides back down over ~0.45s. Boost sources are
+  tracked independently so releasing one key never cancels another.
+- **S and RMB remain the slow lever** (ramped to −28%), ignored while boosting.
+- **⚙️ SETTINGS menu** (main menu + mouse-sens in pause): mouse sensitivity
+  0.5–2.5 (default 1.3 — addresses "keyboard responds faster than mouse"),
+  invert steering, graphics quality HIGH/LOW (LOW = DPR 1.0 + reduced bloom),
+  music/SFX volumes. All persisted per device.
+- Selftest 56 → 57 (ramp-up assertion; drain/floor tests updated for ramp
+  physics, incl. the intended ~0.45s glide-down after losing boost).
+- `?v=` → 3.
+
 ## 2 — 2026-07-07 · Owner playtest round 1 (controls + self-collision)
 - **Steering un-inverted** (A/D and mouse were mirrored): in the sim frame
   positive steer turns LEFT, so screen-right inputs now map to −1

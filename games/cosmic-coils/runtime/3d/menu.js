@@ -125,7 +125,55 @@ export class Menu {
     const p = this._page;
     if (p === "main") this._renderMain();
     else if (p === "records") this._renderRecords();
+    else if (p === "settings") this._renderSettings();
     else if (p === "how") this._renderHow();
+  }
+
+  _renderSettings() {
+    const st = this.h.getSettings ? this.h.getSettings() : { sens: 1.3, invert: false, quality: "high" };
+    this.root.innerHTML = `
+      <div class="cc-card cc-sub">
+        <button class="cc-back" data-a="back">‹ BACK</button>
+        <div class="cc-title" style="font-size:30px">SETTINGS</div>
+        <div class="cc-tag">SAVED ON THIS DEVICE</div>
+        <div style="text-align:left;display:flex;flex-direction:column;gap:16px;margin:14px 4px">
+          <label style="display:flex;align-items:center;gap:12px;font-size:13px;letter-spacing:1px">
+            MOUSE SENSITIVITY
+            <input type="range" min="0.5" max="2.5" step="0.05" value="${st.sens}" data-a="sens" style="flex:1;accent-color:#3af2ff">
+            <b data-a="sensval" style="width:38px;text-align:right">${Number(st.sens).toFixed(2)}</b>
+          </label>
+          <label style="display:flex;align-items:center;gap:12px;font-size:13px;letter-spacing:1px;cursor:pointer">
+            <input type="checkbox" ${st.invert ? "checked" : ""} data-a="invert" style="accent-color:#3af2ff;width:17px;height:17px">
+            INVERT STEERING (mouse + touch)
+          </label>
+          <div style="display:flex;align-items:center;gap:12px;font-size:13px;letter-spacing:1px">
+            GRAPHICS
+            <button class="cc-mode ghost" style="flex:1;padding:8px;${st.quality !== "low" ? "border-color:#3af2ff;color:#3af2ff" : ""}" data-a="qhigh">HIGH</button>
+            <button class="cc-mode ghost" style="flex:1;padding:8px;${st.quality === "low" ? "border-color:#3af2ff;color:#3af2ff" : ""}" data-a="qlow">LOW (faster)</button>
+          </div>
+          <label style="display:flex;align-items:center;gap:12px;font-size:13px;letter-spacing:1px">
+            MUSIC
+            <input type="range" min="0" max="1" step="0.05" value="${this.audio.musicVol}" data-a="mv" style="flex:1;accent-color:#3af2ff">
+          </label>
+          <label style="display:flex;align-items:center;gap:12px;font-size:13px;letter-spacing:1px">
+            SFX
+            <input type="range" min="0" max="1" step="0.05" value="${this.audio.sfxVol}" data-a="sv" style="flex:1;accent-color:#3af2ff">
+          </label>
+        </div>
+        <div style="font-size:11px;opacity:.55;line-height:1.7;text-align:left">Higher sensitivity = the snake turns at full rate with the cursor closer to the center of the screen. Keyboard A/D always steers at full rate.</div>
+      </div>`;
+    this.root.querySelector('[data-a="back"]').onclick = () => { this.audio.ui(); this.show("main"); };
+    const sensEl = this.root.querySelector('[data-a="sens"]');
+    sensEl.oninput = (e) => {
+      const v = parseFloat(e.target.value);
+      this.root.querySelector('[data-a="sensval"]').textContent = v.toFixed(2);
+      if (this.h.onSettings) this.h.onSettings({ sens: v });
+    };
+    this.root.querySelector('[data-a="invert"]').onchange = (e) => { if (this.h.onSettings) this.h.onSettings({ invert: e.target.checked }); };
+    this.root.querySelector('[data-a="qhigh"]').onclick = () => { this.audio.ui(); if (this.h.onSettings) this.h.onSettings({ quality: "high" }); this.render(); };
+    this.root.querySelector('[data-a="qlow"]').onclick = () => { this.audio.ui(); if (this.h.onSettings) this.h.onSettings({ quality: "low" }); this.render(); };
+    this.root.querySelector('[data-a="mv"]').oninput = (e) => this.audio.setMusicVol(parseFloat(e.target.value));
+    this.root.querySelector('[data-a="sv"]').oninput = (e) => this.audio.setSfxVol(parseFloat(e.target.value));
   }
 
   _renderMain() {
@@ -146,7 +194,8 @@ export class Menu {
           <button class="cc-mode alt" data-a="online">🌐 &nbsp;PLAY ONLINE</button>
           <div style="display:flex;gap:10px">
             <button class="cc-mode ghost" style="flex:1" data-a="records">🏆 RECORDS</button>
-            <button class="cc-mode ghost" style="flex:1" data-a="how">❓ HOW TO PLAY</button>
+            <button class="cc-mode ghost" style="flex:1" data-a="settings">⚙️ SETTINGS</button>
+            <button class="cc-mode ghost" style="flex:1" data-a="how">❓ HOW TO</button>
           </div>
         </div>
         <div class="cc-biomes">${BIOMES.map((b) => `<span class="cc-biome">${{ verdant: "🌿 Verdant", ember: "🌋 Ember", glacier: "❄️ Glacier", dune: "🏜️ Dune", abyss: "🔮 Abyss" }[b]}</span>`).join("")}</div>
@@ -163,6 +212,7 @@ export class Menu {
     this.root.querySelector('[data-a="practice"]').onclick = () => { this.audio.start(); this.audio.ui(); this.h.onPractice(); };
     this.root.querySelector('[data-a="online"]').onclick = () => { this.audio.start(); this.audio.ui(); this.h.onOnline(); };
     this.root.querySelector('[data-a="records"]').onclick = () => { this.audio.ui(); this.show("records"); };
+    this.root.querySelector('[data-a="settings"]').onclick = () => { this.audio.ui(); this.show("settings"); };
     this.root.querySelector('[data-a="how"]').onclick = () => { this.audio.ui(); this.show("how"); };
   }
 
@@ -193,8 +243,8 @@ export class Menu {
         <div class="cc-howto">
           🐍 <b>Steer with the mouse</b> — your serpent always slithers forward, curving around a tiny planet. <b>A/D</b> also steer.<br>
           💎 <b>Eat glowing gems</b> to grow longer and thicker. Gold and pink gems are worth more.<br>
-          🏃 <b>Hold W to build speed</b> (up to +42%, free) · <b>S or RMB eases you down</b> for tight maneuvers · <b>mouse wheel zooms</b> the camera.<br>
-          ⚡ <b>Hold SPACE or LMB to boost</b> — much faster still, but it burns your mass and leaks pellets behind you.<br>
+          ⚡ <b>Hold W, LMB or SPACE to boost</b> — speed builds up the longer you hold, burning mass and leaking pellets. Too small to burn? No boost — grow first.<br>
+          🐌 <b>S or RMB eases you down</b> for tight maneuvers · <b>mouse wheel zooms</b> the camera · tune mouse feel in ⚙️ SETTINGS.<br>
           ☠️ <b>Head-first into ANY body = death — including your own coils.</b> Cut rivals off so THEY hit YOU. Fallen serpents burst into glowing essence — feast on it.<br>
           🌦 <b>Weather is real</b>: storms shrink visibility, change handling, and shower the planet with bonus gems.<br>
           🛡 You spawn with a 3s shield. New planet, new weather, every match.<br>
