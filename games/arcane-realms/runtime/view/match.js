@@ -6,10 +6,10 @@
 // always shows my side at the bottom via syncFromState(state, mySide).
 
 import * as THREE from 'three';
-import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=5';
-import { cardById, REALMS } from '../sim/cards.js?v=5';
-import { chooseAction } from '../sim/ai.js?v=5';
-import { Audio2 } from './audio.js?v=5';
+import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=7';
+import { cardById, REALMS } from '../sim/cards.js?v=7';
+import { chooseAction } from '../sim/ai.js?v=7';
+import { Audio2 } from './audio.js?v=7';
 
 const REALM_COLOR = (id) => REALMS[cardById(id).realm]?.color ?? 0x8d99ae;
 
@@ -78,6 +78,7 @@ export class Match {
     Audio2.playMusic(Math.random() < 0.5 ? 'battle' : 'battle2');
     this.busy = false;
     this.refreshLegal();
+    this.ui.coach('welcome', 'Play a card: <b>click or drag a creature</b> onto the table, or click a spell and pick its target. Mana 💎 refills every turn — spend it all!');
     if (!this.myTurn()) this.startFoeTurn();
   }
 
@@ -189,6 +190,10 @@ export class Match {
         case 'turn-start': {
           Audio2.sfx('turn');
           await this.ui.banner(ev.p === this.mySide ? 'YOUR TURN' : 'ENEMY TURN', ev.p === this.mySide);
+          if (ev.p === this.mySide &&
+              this.state.players[this.mySide].board.some((u) => !u.sick && !u.tapped && !u.frozen)) {
+            this.ui.coach('attack-how', 'Your creatures are ready! <b>Click one, then click an enemy</b> creature or their hero to attack.');
+          }
           break;
         }
         case 'draw': if (ev.p === this.mySide) Audio2.sfx('draw'); break;
@@ -543,6 +548,14 @@ export class Match {
   // ── unified selection (click-to-target for attacks AND spells) ──
   beginSelect(iid, attacks, viaCombat) {
     this.clearSelect();
+    if (viaCombat) {
+      const creatureInHand = this.legal.some((a) => {
+        if (a.type !== 'play') return false;
+        const h = this.state.players[this.mySide].hand.find((x) => x.iid === a.iid);
+        return h && cardById(h.card).type === 'creature';
+      });
+      if (creatureInHand) this.ui.coach('combat-locks', 'Heads up: once you attack, you <b>can\'t summon new creatures</b> this turn (spells are still fine). Play creatures first, then attack.');
+    }
     this.select = { kind: 'attack', iid, attacks, viaCombat, moved: false };
     this.scene.setGlow(iid, 0xffd45f, true);
     this.scene.setHoverFront(iid, true);
@@ -588,6 +601,7 @@ export class Match {
     this.clearSelect();
     if (sel && sel.viaCombat) await this.doAction({ type: 'combat' });
     if (!this.over) await this.doAction(match);
+    this.ui.coach('exhausted', 'After attacking, a creature is <b>exhausted 💤</b> — it dims and rests until your next turn.');
   }
 
   async commitSpell(tgt) {
@@ -716,7 +730,7 @@ export class Match {
     }
     if (!attacks.length) {
       const u = this.findUnit(hit.iid);
-      if (u) this.ui.toast(u.tapped ? 'Already attacked (tapped).' : u.frozen ? 'Frozen solid.' : u.sick ? 'Summoning sickness — ready next turn.' : 'No attack available.');
+      if (u) this.ui.toast(u.tapped ? 'Exhausted — already attacked this turn.' : u.frozen ? 'Frozen solid.' : u.sick ? 'Summoning sickness — ready next turn.' : 'No attack available.');
       Audio2.sfx('error');
       this.clearSelect();
       this.refreshLegal();
@@ -731,7 +745,7 @@ export class Match {
     if (!h) return 'Not your card.';
     const def = cardById(h.card);
     if (def.cost > this.state.players[this.mySide].mana) return `Needs ${def.cost} mana.`;
-    if (def.type === 'creature' && this.state.phase !== 'main') return 'Creatures can only be summoned in the Main phase.';
+    if (def.type === 'creature' && this.state.phase !== 'main') return 'You\'ve already attacked — creatures can\'t be summoned after combat starts.';
     if (def.type === 'creature' && this.state.players[this.mySide].board.length >= 6) return 'Your board is full.';
     if (def.type === 'trap' && this.state.players[this.mySide].traps.length >= 3) return 'Trap limit reached (3).';
     if (def.target && !def.target.optional) return 'No valid target.';

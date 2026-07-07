@@ -32,7 +32,7 @@ export const RARITIES = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 export const KEYWORD_INFO = {
   guard:      'Guard — enemies must attack this creature first.',
   swift:      'Swift — can attack the turn it is summoned.',
-  flying:     'Flying — can only be attacked by Flying creatures. Guarding or tapped Flyers lose this evasion.',
+  flying:     'Flying — can only be attacked by Flying creatures. Guarding or exhausted Flyers lose this evasion.',
   stealth:    'Stealth — cannot be attacked or targeted until it attacks.',
   ward:       'Ward — negates the first enemy spell or effect that targets this.',
   lifesteal:  'Lifesteal — combat damage this deals also heals your hero.',

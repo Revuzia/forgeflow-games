@@ -1,11 +1,11 @@
 // Arcane Realms TCG — DOM UI layer: menu, deck builder, collection, settings,
 // match HUD (hero plates, phase bar, banners, floaters, arrow, tooltips).
 
-import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=5';
-import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=5';
-import { DIFFICULTIES } from '../sim/ai.js?v=5';
-import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=5';
-import { Audio2 } from './audio.js?v=5';
+import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=7';
+import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=7';
+import { DIFFICULTIES } from '../sim/ai.js?v=7';
+import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=7';
+import { Audio2 } from './audio.js?v=7';
 
 // ── persistence ─────────────────────────────────────────────────
 const LS_KEY = 'arcane_realms_save_v1';
@@ -15,7 +15,7 @@ export const Store = {
     try { this.data = JSON.parse(localStorage.getItem(LS_KEY)) || {}; }
     catch { this.data = {}; }
     this.data.settings = Object.assign(
-      { music: 0.6, sfx: 0.8, particles: true, shake: true, fastAnim: false },
+      { music: 0.6, sfx: 0.8, particles: true, shake: true, fastAnim: false, tips: true },
       this.data.settings || {});
     this.data.decks = this.data.decks || [];
     this.data.record = this.data.record || { wins: 0, losses: 0 };
@@ -37,7 +37,8 @@ const CSS = `
 #arc-ui .screen.on{display:flex}
 .menu-bg{position:absolute;inset:0;background-size:cover;background-position:center;filter:saturate(1.05)}
 .menu-veil{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 42%,rgba(11,7,20,.08) 0%,rgba(11,7,20,.78) 78%),linear-gradient(180deg,rgba(11,7,20,.42),rgba(11,7,20,.16) 30%,rgba(11,7,20,.88))}
-.menu-inner{position:relative;margin:auto;text-align:center;display:flex;flex-direction:column;align-items:center;gap:14px;padding:24px}
+.menu-inner{position:relative;margin:auto;text-align:center;display:flex;flex-direction:column;align-items:center;gap:14px;padding:24px 24px 42px;max-height:100%;overflow-y:auto;scrollbar-width:none}
+.menu-inner::-webkit-scrollbar{display:none}
 .game-title{font-size:clamp(40px,7vw,84px);font-weight:800;letter-spacing:.12em;line-height:.95;
   background:linear-gradient(180deg,#fff3c9 8%,#f0b93a 45%,#8a5a13 92%);-webkit-background-clip:text;background-clip:text;color:transparent;
   text-shadow:0 2px 0 rgba(0,0,0,.0);filter:drop-shadow(0 4px 18px rgba(212,149,43,.45))}
@@ -162,9 +163,28 @@ const CSS = `
 .manatext{font-size:12.5px;color:#9fc4ff;margin-left:4px}
 .zinfo{font-size:12px;color:var(--dim);display:flex;gap:10px}
 /* phase bar + buttons */
-#phasebar{position:absolute;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:6px;pointer-events:none}
-#phasebar .ph{padding:5px 16px;border-radius:16px;font-size:12.5px;letter-spacing:.18em;color:#6f5f96;border:1px solid #2c2148;background:rgba(20,14,36,.8)}
-#phasebar .ph.on{color:#1a1005;background:linear-gradient(180deg,#ffe9a8,#d4952b);border-color:#ffe9a8;font-weight:700}
+/* coach tips — dismissible one-time hints for new players */
+#coachtip{position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:40;pointer-events:auto;
+  display:flex;align-items:center;gap:12px;max-width:min(560px,86vw);padding:11px 16px;
+  background:linear-gradient(180deg,rgba(34,25,58,.96),rgba(20,14,38,.96));
+  border:1px solid rgba(212,149,43,.65);border-radius:12px;box-shadow:0 10px 34px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,233,168,.12);
+  font-size:15px;line-height:1.45;color:#efe6ff;animation:mIn .4s cubic-bezier(.2,.7,.3,1)}
+#coachtip .ci{flex:0 0 auto;font-size:19px}
+#coachtip button{pointer-events:auto;cursor:pointer;flex:0 0 auto;font-family:inherit;font-size:13px;letter-spacing:.08em;
+  color:#1a1005;background:linear-gradient(180deg,#ffe9a8,#d4952b);border:none;border-radius:8px;padding:7px 14px;font-weight:700}
+#coachtip button:hover{filter:brightness(1.1)}
+/* how-to-play tutorial */
+.tut{width:min(92vw,690px)}
+.tut .tut-body{min-height:300px;text-align:left;font-size:15.5px;line-height:1.62;color:#e2d9f5;padding:8px 4px 2px}
+.tut .tut-body b{color:#ffe9a8}
+.tut .tut-body p{margin:0 0 10px}
+.tut .kwrow{display:flex;gap:11px;align-items:baseline;margin:4px 0}
+.tut .kwg{flex:0 0 24px;text-align:center;color:#ffd45f}
+.tut .tut-tip{margin-top:12px;padding:9px 13px;border-left:3px solid var(--gold);background:rgba(212,149,43,.09);border-radius:0 8px 8px 0;font-size:14px;color:#cbbfe8;font-style:italic}
+.tut .tut-nav{display:flex;align-items:center;justify-content:space-between;margin-top:16px;gap:12px}
+.tut .dots{display:flex;gap:7px}
+.tut .dots i{width:9px;height:9px;border-radius:50%;background:#2c2150;border:1px solid #4a3a78}
+.tut .dots i.on{background:linear-gradient(180deg,#ffe9a8,#d4952b);border-color:#ffe9a8}
 #turnbtns{position:absolute;right:18px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:10px;pointer-events:auto}
 #matchtools{position:absolute;top:14px;right:16px;display:flex;gap:8px;pointer-events:auto}
 .tool{cursor:pointer;width:38px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid #3a2a5c;background:rgba(23,18,38,.9);font-size:17px;color:var(--dim)}
@@ -221,6 +241,19 @@ const CSS = `
 .switch.on i{left:28px;background:var(--gold-hi)}
 .hint{color:#6f5f96;font-size:13px;text-align:center;letter-spacing:.05em}
 @media (max-width:900px){ .deck-side{width:260px} .game-title{letter-spacing:.06em} #inspect{display:none!important} }
+/* short viewports (hub iframe, laptops): compact menu, no footer overlap */
+@media (max-height:760px){
+  .game-title{font-size:clamp(24px,7vh,50px)}
+  .game-sub{font-size:10px;letter-spacing:.4em;margin-top:-8px}
+  .mdiv{display:none}
+  .menu-inner{gap:7px;padding:10px 12px 6px}
+  .menu-panel{padding:10px 20px 9px;gap:6px;border-radius:14px}
+  .mbtn{height:clamp(34px,5.6vh,46px);font-size:clamp(13px,2.2vh,16px);width:min(360px,80vw);border-radius:10px}
+  .mbtn .mi{flex-basis:28px;height:28px;font-size:14px}
+  .mbtn .ml{padding-right:42px}
+  .mbtn.primary{height:clamp(38px,6.2vh,52px);font-size:clamp(14px,2.4vh,18px)}
+  .menu-foot{display:none}
+}
 `;
 
 export class UI {
@@ -308,6 +341,7 @@ export class UI {
     mk('🌐', 'Play vs Other Players', () => this.openOnline());
     mk('🛠', 'Deck Builder', () => this.openBuilder());
     mk('📖', 'Collection', () => this.openCollection());
+    mk('📜', 'How to Play', () => this.openTutorial());
     mk('⚙', 'Settings', () => this.show('settings'));
     inner.append(panel);
     const rec = this.store.record;
@@ -323,6 +357,105 @@ export class UI {
     this.root.append(s);
   }
 
+  // ═══════════════ new-player coach tips ═══════════════
+  // one-time contextual hints; toggle lives in Settings ("Gameplay tips")
+  coach(key, text) {
+    if (!this.store.settings.tips) return;
+    this.store.tipsSeen = this.store.tipsSeen || [];
+    if (this.store.tipsSeen.includes(key)) return;
+    this.store.tipsSeen.push(key);
+    Store.save();
+    this._coachQ = this._coachQ || [];
+    this._coachQ.push(text);
+    if (!this._coachOn) this._nextCoach();
+  }
+
+  _nextCoach() {
+    const q = this._coachQ;
+    if (!q || !q.length) { this._coachOn = false; return; }
+    this._coachOn = true;
+    const text = q.shift();
+    const tip = this.el('div');
+    tip.id = 'coachtip';
+    tip.innerHTML = `<span class="ci">💡</span><span>${text}</span>`;
+    const ok = this.el('button', null, 'Got it');
+    let t = null;
+    const done = () => { tip.remove(); clearTimeout(t); setTimeout(() => this._nextCoach(), 400); };
+    ok.onclick = () => { Audio2.sfx('click'); done(); };
+    tip.append(ok);
+    (this.root.querySelector('#hud') || this.root).append(tip);
+    t = setTimeout(done, 15000);
+  }
+
+  // ═══════════════ how-to-play tutorial ═══════════════
+  openTutorial() {
+    const s = this.root.querySelector('#scr-setup');
+    s.innerHTML = '';
+    const bg = this.el('div', 'menu-bg');
+    bg.style.backgroundImage = 'url(assets/ui/menu_bg.jpg)';
+    s.append(bg, this.el('div', 'menu-veil'));
+    const wrap = this.el('div', 'modal-wrap');
+    wrap.style.background = 'transparent';
+    const m = this.el('div', 'modal tut');
+    const KWG = { guard: '🛡', swift: '»', flying: '≋', stealth: '◍', ward: '◇', lifesteal: '❤', venomous: '☠', cleave: '⚔', piercing: '➹', regenerate: '✚', frenzy: '🔥' };
+    const kwRows = Object.entries(KEYWORD_INFO).map(([k, txt]) => {
+      const [name, rest] = txt.split(' — ');
+      return `<div class="kwrow"><span class="kwg">${KWG[k] || '•'}</span><span><b>${name}</b> — ${rest}</span></div>`;
+    }).join('');
+    const PAGES = [
+      { t: 'THE GOAL', h: `
+        <p>Both heroes start at <b>30 Health</b>. Bring the enemy hero to <b>0</b> before they do it to you.</p>
+        <p>Every turn you <b>draw a card</b> and gain a <b>Mana crystal 💎</b>. Mana refills at the start of each of your turns and grows by one every turn (up to 10) — spend it freely on creatures and spells.</p>
+        <p>When you're done, press <b>End Turn</b> (or SPACE).</p>
+        <div class="tut-tip">Hover any card to read it — right-click for a closer look.</div>` },
+      { t: 'PLAYING CARDS', h: `
+        <p>Cards cost the mana shown in their top-left gem. Cards you can't afford are <b>dimmed</b>.</p>
+        <p><b>🐉 Creatures</b> — click or drag one onto the table (up to 6). They fight for you every turn after.</p>
+        <p><b>✨ Spells</b> — click the card; a golden arrow appears — click your target to cast. Spells with no target resolve instantly.</p>
+        <p><b>⧗ Traps</b> — set face-down (up to 3). They spring automatically on your opponent's turn when their trigger is met.</p>` },
+      { t: 'ATTACKING', h: `
+        <p><b>Click one of your creatures</b>, then click an enemy creature — or their hero — to strike. Attackers and defenders deal their damage to each other at the same time.</p>
+        <p>Fresh summons are drowsy for one turn (<b>summoning sickness</b>) unless they have <b>Swift »</b>.</p>
+        <p>After attacking, a creature is <b>exhausted 💤</b> — it dims and rests until your next turn, and it can no longer protect Flying allies.</p>
+        <p>If an enemy has <b>Guard 🛡</b>, you must break through it first.</p>` },
+      { t: 'ORDER MATTERS', h: `
+        <p>Your turn has two halves: <b>summoning, then combat</b>.</p>
+        <p>The moment one of your creatures attacks, your turn moves into combat — you can still cast <b>spells</b>, but you can't summon <b>new creatures</b> until next turn.</p>
+        <p>So the golden rule: <b>play your cards first, attack second.</b></p>
+        <div class="tut-tip">The game handles this for you — just know that attacking closes the door on summoning.</div>` },
+      { t: 'KEYWORDS', h: kwRows },
+      { t: 'GROW YOUR LEGEND', h: `
+        <p><b>🏰 Campaign</b> — battle across five realms. Every victory earns <b>gold</b> and unlocks new cards for your collection; bosses grant card backs.</p>
+        <p><b>🃏 Arcane Packs</b> — spend gold in the Collection on packs weighted toward cards you don't own yet.</p>
+        <p><b>🛠 Deck Builder</b> — craft 30-card decks from up to <b>two realms</b> (plus Neutral). Smart Fill finishes a deck for you.</p>
+        <p><b>🌐 Play vs Other Players</b> — duel a friend live with a room code.</p>` },
+    ];
+    let page = 0;
+    const title = this.el('h3', null, '');
+    const body = this.el('div', 'tut-body');
+    const nav = this.el('div', 'tut-nav');
+    const prev = this.el('button', 'btn small', '← Back');
+    const dots = this.el('div', 'dots');
+    PAGES.forEach(() => dots.append(this.el('i')));
+    const next = this.el('button', 'btn small primary', 'Next →');
+    nav.append(prev, dots, next);
+    const render = () => {
+      const p = PAGES[page];
+      title.innerHTML = `📜 ${p.t} <span style="color:#6f5f96;font-size:13px;letter-spacing:.1em">&nbsp;${page + 1} / ${PAGES.length}</span>`;
+      body.innerHTML = p.h;
+      [...dots.children].forEach((d, i) => d.classList.toggle('on', i === page));
+      prev.textContent = page === 0 ? '← Menu' : '← Back';
+      next.textContent = page === PAGES.length - 1 ? '⚔ To Battle' : 'Next →';
+    };
+    prev.onclick = () => { Audio2.sfx('click'); if (page === 0) this.show('menu'); else { page--; render(); } };
+    next.onclick = () => { Audio2.sfx('click'); if (page === PAGES.length - 1) this.openSetup(); else { page++; render(); } };
+    render();
+    m.append(title, body, nav);
+    wrap.append(m);
+    s.append(wrap);
+    this.show('setup');
+  }
+
   openSetup() {
     const s = this.root.querySelector('#scr-setup');
     s.innerHTML = '';
@@ -330,7 +463,6 @@ export class UI {
     bg.style.backgroundImage = 'url(assets/ui/menu_bg.jpg)';
     s.append(bg, this.el('div', 'menu-veil'));
     const wrap = this.el('div', 'modal-wrap');
-    wrap.style.position = 'relative';
     wrap.style.background = 'transparent';
     const m = this.el('div', 'modal');
     m.append(this.el('h3', null, 'CHOOSE YOUR DECK'));
@@ -390,7 +522,6 @@ export class UI {
     bg.style.backgroundImage = 'url(assets/ui/menu_bg.jpg)';
     s.append(bg, this.el('div', 'menu-veil'));
     const wrap = this.el('div', 'modal-wrap');
-    wrap.style.position = 'relative';
     wrap.style.background = 'transparent';
     const m = this.el('div', 'modal');
     m.append(this.el('h3', null, '🌐 PLAY VS OTHER PLAYERS'));
@@ -784,6 +915,9 @@ export class UI {
     toggle('✨ Rich particles', 'particles', () => this.onSpeedChange && this.onSpeedChange());
     toggle('📳 Screen shake', 'shake', () => this.onSpeedChange && this.onSpeedChange());
     toggle('⚡ Fast animations', 'fastAnim', () => this.onSpeedChange && this.onSpeedChange());
+    toggle('💡 Gameplay tips for new players', 'tips', (on) => {
+      if (on) { this.store.tipsSeen = []; Store.save(); this.toast('Tips reset — they\'ll show again in your next match.'); }
+    });
     const reset = this.el('button', 'btn small danger', 'Reset all data (decks + record)');
     reset.style.marginTop = '22px';
     reset.onclick = () => {
@@ -799,7 +933,7 @@ export class UI {
         setTimeout(() => { this._resetArmed = false; reset.textContent = 'Reset all data (decks + record)'; }, 3200);
       }
     };
-    wrap.append(reset, this.el('div', 'hint', 'Right-click any card for a closer look. SPACE advances the phase.'));
+    wrap.append(reset, this.el('div', 'hint', 'Right-click any card for a closer look. SPACE ends your turn.'));
     s.append(top, wrap);
     this.root.append(s);
   }
@@ -826,22 +960,13 @@ export class UI {
     };
     this.plateMe = mkPlate('me');
     this.plateFoe = mkPlate('foe');
-    // phase bar
-    const pb = this.el('div');
-    pb.id = 'phasebar';
-    for (const ph of ['DRAW', 'MAIN', 'COMBAT', 'END']) {
-      const d = this.el('div', 'ph', ph);
-      d.dataset.ph = ph.toLowerCase();
-      pb.append(d);
-    }
-    // buttons
+    // buttons — no phase strip: attacking auto-enters combat, coach tips
+    // teach the ordering rule instead
     const btns = this.el('div');
     btns.id = 'turnbtns';
-    this.combatBtn = this.el('button', 'btn small', '⚔ To Combat');
-    this.combatBtn.onclick = () => this.match?.toCombat();
     this.endBtn = this.el('button', 'btn small primary', 'End Turn');
     this.endBtn.onclick = () => this.match?.endTurn();
-    btns.append(this.combatBtn, this.endBtn);
+    btns.append(this.endBtn);
     // tools
     const tools = this.el('div');
     tools.id = 'matchtools';
@@ -889,7 +1014,7 @@ export class UI {
     this.inspectCanvas = insCanvas;
     this.inspectKws = this.el('div', 'kws');
     this.inspectEl.append(insCanvas, this.inspectKws);
-    hud.append(this.plateMe, this.plateFoe, pb, btns, tools, this.bannerEl, this.cardBannerEl, this.toastEl, this.arrowSvg, this.inspectEl, this.floatLayer);
+    hud.append(this.plateMe, this.plateFoe, btns, tools, this.bannerEl, this.cardBannerEl, this.toastEl, this.arrowSvg, this.inspectEl, this.floatLayer);
     s.append(hud);
     this.root.append(s);
   }
@@ -924,14 +1049,8 @@ export class UI {
     };
     upd(this.plateMe, mySide);
     upd(this.plateFoe, 1 - mySide);
-    // phase
-    const phase = state.winner !== null ? 'end' : (state.phase === 'main' ? 'main' : 'combat');
-    for (const d of this.root.querySelectorAll('#phasebar .ph')) {
-      d.classList.toggle('on', d.dataset.ph === phase && state.active === mySide);
-    }
     // buttons
     const myTurn = state.active === mySide && state.winner === null && !match.busy;
-    this.combatBtn.style.display = myTurn && state.phase === 'main' ? '' : 'none';
     this.endBtn.disabled = !myTurn;
     this.endBtn.textContent = state.active === mySide ? 'End Turn' : (match.mode === 'online' ? 'Opponent…' : 'Enemy Turn…');
   }

@@ -3,14 +3,14 @@
 //   node selftest.mjs            → structural + rules + every-card + AI + quick matches
 //   node selftest.mjs --matches  → adds full 36-game AI-vs-AI round-robin with balance report
 //   node selftest.mjs --assets   → also require every card artwork file to exist
-import { CARDS, COLLECTIBLE, TOKENS, SET_STATS, cardById, REALMS } from './runtime/sim/cards.js?v=5';
+import { CARDS, COLLECTIBLE, TOKENS, SET_STATS, cardById, REALMS } from './runtime/sim/cards.js?v=7';
 import {
   createGame, legalActions, applyAction, cloneState, aiView,
   effAtk, hasKw, makeUnit, unitByIid, opponentOf, validTargets,
   MAX_BOARD, MAX_HAND, HERO_HP,
-} from './runtime/sim/engine.js?v=5';
-import { validateDeck, STARTER_DECKS, starterDeckErrors, DECK_SIZE } from './runtime/sim/decks.js?v=5';
-import { chooseAction, runAiTurn, findLethal, evaluate, DIFFICULTIES } from './runtime/sim/ai.js?v=5';
+} from './runtime/sim/engine.js?v=7';
+import { validateDeck, STARTER_DECKS, starterDeckErrors, DECK_SIZE } from './runtime/sim/decks.js?v=7';
+import { chooseAction, runAiTurn, findLethal, evaluate, DIFFICULTIES } from './runtime/sim/ai.js?v=7';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -708,9 +708,9 @@ section(args.has('--matches') ? 'full round-robin (36 games)' : 'quick matches (
 // ───────────────────── 10. campaign & progression ─────────────────────
 section('campaign & progression');
 {
-  const { CHAPTERS, ACHIEVEMENTS, CARDBACK_INFO, allBattles } = await import('./runtime/campaign/campaign_data.js?v=5');
-  const prog = await import('./runtime/campaign/progression.js?v=5');
-  const { EXPANSION_IDS } = await import('./runtime/sim/cards.js?v=5');
+  const { CHAPTERS, ACHIEVEMENTS, CARDBACK_INFO, allBattles } = await import('./runtime/campaign/campaign_data.js?v=7');
+  const prog = await import('./runtime/campaign/progression.js?v=7');
+  const { EXPANSION_IDS } = await import('./runtime/sim/cards.js?v=7');
 
   const battles = allBattles();
   ok(CHAPTERS.length === 5, '5 chapters');
@@ -784,7 +784,7 @@ if (args.has('--assets')) {
     if (!existsSync(p)) { missing++; if (missing <= 10) console.error('  missing art: ' + c.id); }
   }
   ok(missing === 0, `all card art present (${missing} missing)`);
-  const { CARDBACK_INFO } = await import('./runtime/campaign/campaign_data.js?v=5');
+  const { CARDBACK_INFO } = await import('./runtime/campaign/campaign_data.js?v=7');
   const uiFiles = ['board.jpg', 'menu_bg.jpg', 'cardback.jpg', 'worldmap.jpg',
     ...Object.values(CARDBACK_INFO).map((c) => c.file),
     'cm_thornqueen.jpg', 'cm_lichlord.jpg', 'cm_flamekhan.jpg', 'cm_tidecaller.jpg', 'cm_lightwarden.jpg'];

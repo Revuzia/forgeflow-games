@@ -1,18 +1,18 @@
 // Arcane Realms TCG — boot: asset warmup, screen flow, main loop, debug hooks.
 import * as THREE from 'three';
-import { BoardScene } from './view/scene.js?v=5';
-import { UI, Store } from './view/ui.js?v=5';
-import { Match } from './view/match.js?v=5';
-import { Audio2 } from './view/audio.js?v=5';
-import { OnlineSession } from './view/online.js?v=5';
-import { preload, getCardBack } from './view/cardtex.js?v=5';
-import { STARTER_DECKS, validateDeck } from './sim/decks.js?v=5';
-import { COLLECTIBLE, cardById } from './sim/cards.js?v=5';
-import { createGame, legalActions, applyAction, makeUnit } from './sim/engine.js?v=5';
-import { chooseAction, runAiTurn } from './sim/ai.js?v=5';
-import { CampaignUI } from './view/campaign_ui.js?v=5';
-import { CARDBACK_INFO } from './campaign/campaign_data.js?v=5';
-import { initProgress, isOwned, ownedCount, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=5';
+import { BoardScene } from './view/scene.js?v=7';
+import { UI, Store } from './view/ui.js?v=7';
+import { Match } from './view/match.js?v=7';
+import { Audio2 } from './view/audio.js?v=7';
+import { OnlineSession } from './view/online.js?v=7';
+import { preload, getCardBack } from './view/cardtex.js?v=7';
+import { STARTER_DECKS, validateDeck } from './sim/decks.js?v=7';
+import { COLLECTIBLE, cardById } from './sim/cards.js?v=7';
+import { createGame, legalActions, applyAction, makeUnit } from './sim/engine.js?v=7';
+import { chooseAction, runAiTurn } from './sim/ai.js?v=7';
+import { CampaignUI } from './view/campaign_ui.js?v=7';
+import { CARDBACK_INFO } from './campaign/campaign_data.js?v=7';
+import { initProgress, isOwned, ownedCount, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=7';
 
 const container = document.getElementById('game-container');
 const splash = document.getElementById('boot-splash');
@@ -240,20 +240,11 @@ function tick(now) {
   requestAnimationFrame(tick);
 }
 
-// SPACE advances phase / ends turn
+// SPACE ends the turn (phases are invisible now — attacking auto-enters combat)
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'Space' || !match || match.busy || match.over || !match.myTurn()) return;
   e.preventDefault();
-  if (match.state.phase === 'main') {
-    const hasAttack = (() => {
-      try {
-        const sim = JSON.parse(JSON.stringify(match.state));
-        applyAction(sim, { type: 'combat' });
-        return legalActions(sim).some((a) => a.type === 'attack');
-      } catch { return false; }
-    })();
-    if (hasAttack) match.toCombat(); else match.endTurn();
-  } else match.endTurn();
+  match.endTurn();
 });
 
 // ── debug/test hook (Claude Preview + selftest-in-browser) ─────────────

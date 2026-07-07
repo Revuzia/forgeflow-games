@@ -1,5 +1,44 @@
 # Arcane Realms TCG — Changelog
 
+## v1.3.2 — 2026-07-07 (New-player experience: tutorial, coach tips, no phases, exhaust rework)
+
+Owner feedback pass (3 screenshots).
+
+### Exhaust replaces tapping
+- Creatures **no longer rotate 90°** after attacking. A spent creature now
+  **dims (52% darker), shrinks slightly, and shows a 💤 badge** top-right —
+  clearly "used" at a glance without turning the card. All user-facing copy
+  says "exhausted" instead of "tapped".
+
+### Phase UI removed — the game just flows
+- The DRAW/MAIN/COMBAT/END strip and the "To Combat" button are **gone**.
+  Attacking a creature auto-enters combat behind the scenes (this already
+  worked — the button was redundant). SPACE now simply ends your turn.
+- The "creatures after combat" rule is taught contextually (see tips) and
+  the blocked-action toast explains it plainly.
+
+### Coach tips for new players (Settings ▸ "Gameplay tips")
+- One-time dismissible hints that appear top-center at the right moment:
+  how to play cards (first match), how to attack (first ready creature),
+  "attacking locks out summoning this turn" (first main-phase attack with
+  creatures still in hand), and what exhaustion means (first attack).
+- Each shows once ever (persisted); the Settings toggle disables them, and
+  re-enabling resets the seen-list so they play again.
+
+### How to Play — 6-page illustrated tutorial from the main menu
+- 📜 menu entry between Collection and Settings: The Goal → Playing Cards →
+  Attacking → Order Matters → all 11 Keywords → Grow Your Legend
+  (campaign/packs/deck builder/PvP). Last page flows straight into
+  deck-select ("To Battle").
+
+### Layout fixes
+- **Deck-select + online-lobby modals are now dead-centered** (a stray
+  `position:relative` was overriding the centering wrapper).
+- **Short viewports** (hub iframe, small laptops): compact menu — vh-scaled
+  title/buttons, tighter panel, footer hidden, panel scrolls as a backstop.
+  No more footer overlapping the Collection button.
+- Cache-bust `?v=5` → `?v=6`; selftest 160/160.
+
 ## v1.3.1 — 2026-07-07 (Main-menu polish + published on forgeflowgames.com)
 
 - **Main menu redesigned** (owner feedback: uneven button sizes): uniform

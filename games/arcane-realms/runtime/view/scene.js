@@ -2,9 +2,9 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=5';
-import { REALMS, cardById } from '../sim/cards.js?v=5';
-import { FX } from './fx.js?v=5';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=7';
+import { REALMS, cardById } from '../sim/cards.js?v=7';
+import { FX } from './fx.js?v=7';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 export const LAYOUT = {
@@ -397,6 +397,17 @@ export class BoardScene {
       e.inner.add(m);
       e.badges.push(m);
     });
+    // exhausted marker — top-right, replaces the old 90° tap rotation
+    if (unit.tapped) {
+      const m = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.42, 0.42),
+        new THREE.MeshBasicMaterial({ map: badgeTexture('💤', '#cdbcf2'), transparent: true, depthWrite: false }),
+      );
+      m.renderOrder = 31;
+      m.position.set(CW / 2 - 0.22, CH / 2 - 0.2, 0.025);
+      e.inner.add(m);
+      e.badges.push(m);
+    }
   }
 
   // ── layout ────────────────────────────────────────────────────
@@ -454,11 +465,11 @@ export class BoardScene {
     e.mesh.material.needsUpdate = true;
   }
 
-  boardTransform(side, i, n) {
+  boardTransform(side, i, n, exhausted) {
     const x = (i - (n - 1) / 2) * LAYOUT.slotDX;
     const z = side === 0 ? LAYOUT.playerBoardZ : LAYOUT.enemyBoardZ;
-    // perfectly flat on the table — tilt made tapped cards' edges sink through it
-    return { pos: new THREE.Vector3(x, 0.06, z), rotX: -Math.PI / 2, rotZ: 0, scale: 1 };
+    // perfectly flat on the table; exhausted creatures shrink a touch
+    return { pos: new THREE.Vector3(x, 0.06, z), rotX: -Math.PI / 2, rotZ: 0, scale: exhausted ? 0.93 : 1 };
   }
 
   trapTransform(side, i) {
@@ -515,19 +526,14 @@ export class BoardScene {
         const face = getBoardCard(u.card).tex;
         if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
         if (e.chips) { e.chips.atk.visible = true; e.chips.hp.visible = true; }
-        this.applyTransform(e, this.boardTransform(rel, i, pl.board.length), dur);
+        this.applyTransform(e, this.boardTransform(rel, i, pl.board.length, u.tapped), dur);
         const def = cardById(u.card);
         this.ensureChips(e, /* live */ this.liveAtk(state, p, u), u.hp, u.maxHp, def.atk ?? 0, def.hp ?? 0);
         this.setBadges(e, u);
-        // tap spin (kill any in-flight spin tween first — double-tweens fight)
-        const spin = (u.tapped ? 1 : 0) * (rel === 0 ? -1 : 1) * (Math.PI / 2);
-        if (instant) {
-          this.tweens.killOf(e.group.rotation);
-          e.group.rotation.y = spin;
-        } else if (Math.abs(e.group.rotation.y - spin) > 0.01) {
-          this.tweens.killOf(e.group.rotation);
-          this.tweens.add(e.group.rotation, { y: spin }, 0.32, 'cubicInOut');
-        }
+        // exhausted look — NO rotation (owner: cards must never turn sideways);
+        // instead: dim + shrink (boardTransform) + 💤 badge (setBadges)
+        this.tweens.killOf(e.group.rotation);
+        e.group.rotation.y = 0;
         e.ice.material.opacity = u.frozen ? 0.4 : 0;
         // legendary idle aura + lazy 3D mini
         if (def.rarity === 'legendary') {
@@ -535,8 +541,8 @@ export class BoardScene {
           const mspec = MINI_MAP[u.card];
           if (mspec && !this.minis.has(u.iid)) this.spawnMini(u.iid, mspec, rel);
         }
-        // summon-sick sheen
-        e.mesh.material.color.setScalar(u.sick && !u.tapped ? 0.82 : 1);
+        // exhausted creatures rest dimmed; summon-sick get a lighter sheen
+        e.mesh.material.color.setScalar(u.tapped ? 0.48 : u.sick ? 0.82 : 1);
       });
       // traps (face-down)
       pl.traps.forEach((t, i) => {
@@ -679,7 +685,7 @@ export class BoardScene {
   // ── 3D legendary minis ─────────────────────────────────────────
   async _gltfLoader() {
     if (!this._gltfLoaderP) {
-      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=5').then((m) => new m.GLTFLoader());
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=7').then((m) => new m.GLTFLoader());
     }
     return this._gltfLoaderP;
   }
