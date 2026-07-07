@@ -2,18 +2,18 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=7';
-import { REALMS, cardById } from '../sim/cards.js?v=7';
-import { FX } from './fx.js?v=7';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=8';
+import { REALMS, cardById } from '../sim/cards.js?v=8';
+import { FX } from './fx.js?v=8';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 export const LAYOUT = {
-  playerBoardZ: 1.22, enemyBoardZ: -1.5, slotDX: 1.62,
+  playerBoardZ: 1.22, enemyBoardZ: -1.72, slotDX: 1.62,
   handZ: 4.52, handY: 1.16, enemyHandZ: -3.98,
   deckX: 7.5, playerDeckZ: 3.1, enemyDeckZ: -3.1,
   trapX: -7.35, playerTrapZ: 2.35, enemyTrapZ: -2.35,
   heroPlayer: new THREE.Vector3(0, 0.02, 3.28),
-  heroEnemy: new THREE.Vector3(0, 0.02, -3.34),
+  heroEnemy: new THREE.Vector3(0, 0.02, -4.05), // pushed back — clears the enemy card row + minis
 };
 
 // ── tiny tween engine ────────────────────────────────────────────
@@ -124,6 +124,33 @@ export const MINI_MAP = {
   wgc10: { file: 'mini_wgc10.glb', s: 1.6,  glow: 0x59d97a }, // Sylvaris — mossy green troll
   dwc10: { file: 'mini_dwc10.glb', s: 1.45, glow: 0xffd76a }, // Solmara — winged light spirit
   nt21:  { file: 'mini_nt21.glb',  s: 1.15, hover: 0.3, glow: 0x9a7bff }, // Chronarch Vex — floating arcane eye (animated)
+  // ── Meshy image-to-3d LEGENDARIES (from card art, gltf-transform optimized) ──
+  wg18:  { file: 'mini_wg18.glb',  s: 1.7,  cap: 1.5, glow: 0x59d97a }, // Verdance, Heart of the Grove
+  dw16:  { file: 'mini_dw16.glb',  s: 1.6,  glow: 0xffd76a }, // Seraphine, High Justicar
+  nt20:  { file: 'mini_nt20.glb',  s: 1.5,  glow: 0x9a7bff }, // Zanzibar, Planar Merchant
+  ntc10: { file: 'mini_ntc10.glb', s: 1.55, glow: 0x9a7bff }, // Aurelion the Collector
+
+  // ── EPICS — deliberately a tier SMALLER & less grand than legendaries ──
+  ef15:  { file: 'mini_ef15.glb',  s: 1.35, glow: 0xff7a2e }, // Phoenix of the Second Dawn
+  gm14:  { file: 'mini_gm14.glb',  s: 1.25, glow: 0xb45cff }, // Plaguebringer Lich
+  tcc8:  { file: 'mini_tcc8.glb',  s: 1.4,  glow: 0x3fb6ff }, // Abyssal Kraken
+  ef20:  { file: 'mini_ef20.glb',  s: 1.25, glow: 0xff7a2e }, // Hellforged Berserker
+  tc16:  { file: 'mini_tc16.glb',  s: 1.35, glow: 0x3fb6ff }, // Tempest Serpent
+  tc19:  { file: 'mini_tc19.glb',  s: 1.25, hover: 0.25, glow: 0x3fb6ff }, // Mirrorplane Archon
+  wg17:  { file: 'mini_wg17.glb',  s: 1.4,  cap: 1.5, glow: 0x59d97a }, // Primal Colossus
+  dw13:  { file: 'mini_dw13.glb',  s: 1.3,  hover: 0.25, glow: 0xffd76a }, // Seraph of Mercy
+  wgc8:  { file: 'mini_wgc8.glb',  s: 1.4,  glow: 0x59d97a }, // Emerald Wyrm
+};
+
+// element-styled FX auras — LEGENDARIES ONLY (epics get the bare model).
+// Meshy makes 3D meshes, not particle FX; these are procedural Three.js.
+const ELEMENT_FX = {
+  ember:   { color: 0xff7a2e, rate: 10, style: 'ember' },  // rising hot embers
+  tide:    { color: 0x6fd8ff, rate: 8,  style: 'frost' },  // drifting frost mist
+  grove:   { color: 0x6fe08a, rate: 8,  style: 'spore' },  // floating spores
+  dawn:    { color: 0xffe6a0, rate: 9,  style: 'light' },  // rising light motes
+  grave:   { color: 0xb47bff, rate: 8,  style: 'shadow' }, // slow shadow wisps
+  neutral: { color: 0xb49bff, rate: 7,  style: 'arcane' }, // arcane sparkles
 };
 
 let _miniGlowTex = null;
@@ -173,6 +200,15 @@ export class BoardScene {
     this.camera.lookAt(0, 0, 0.62);
     this.camShakeT = 0; this.camShakeAmp = 0;
     this.camBase = this.camera.position.clone();
+    // scroll-wheel zoom: dolly toward the board centre to inspect cards & the
+    // animated legendaries, scroll back out to the default framing (zoom 0)
+    this.camPivot = new THREE.Vector3(0, 0, 0.62);
+    this.camZoomPos = this.camBase.clone().lerp(this.camPivot, 0.6);
+    this.zoom = 0; this.zoomTarget = 0;
+    this.renderer.domElement.addEventListener('wheel', (ev) => {
+      ev.preventDefault();
+      this.zoomTarget = Math.max(0, Math.min(1, this.zoomTarget - ev.deltaY * 0.0012));
+    }, { passive: false });
 
     // lights (table only — cards are unlit for color fidelity)
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.85));
@@ -318,10 +354,13 @@ export class BoardScene {
     );
     mesh.userData = { kind: 'card', iid };
     inner.add(mesh);
-    // under-glow (hover/selectable/target highlight)
-    const glowGeo = new THREE.ShapeGeometry(roundRectShape(CW * 1.14, CH * 1.11, 0.12));
+    // selection highlight — a CRISP THIN rounded frame hugging the card edge
+    // (was a thick additive under-glow; owner wanted something cleaner)
+    const glowOuter = roundRectShape(CW * 1.05, CH * 1.045, 0.12);
+    glowOuter.holes.push(roundRectShape(CW * 0.985, CH * 0.99, 0.10));
+    const glowGeo = new THREE.ShapeGeometry(glowOuter);
     const glow = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({
-      color: 0x3fae52, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending,
+      color: 0x4fd0e8, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending,
     }));
     glow.position.z = -0.012;
     inner.add(glow);
@@ -359,9 +398,11 @@ export class BoardScene {
       const mk = () => {
         const m = new THREE.Mesh(
           new THREE.PlaneGeometry(0.42, 0.42),
-          new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }),
+          // depthTest OFF → atk/hp orbs ALWAYS draw over the 3D minis and over
+          // neighbouring models, so health & damage are never hidden
+          new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, depthTest: false }),
         );
-        m.renderOrder = 30;
+        m.renderOrder = 62;
         e.inner.add(m);
         return m;
       };
@@ -390,9 +431,9 @@ export class BoardScene {
       const [glyph, color] = k === '_silenced' ? ['✕', '#8d8d9e'] : (KW_BADGE[k] || ['•', '#ccc']);
       const m = new THREE.Mesh(
         new THREE.PlaneGeometry(0.3, 0.3),
-        new THREE.MeshBasicMaterial({ map: badgeTexture(glyph, color), transparent: true, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ map: badgeTexture(glyph, color), transparent: true, depthWrite: false, depthTest: false }),
       );
-      m.renderOrder = 30;
+      m.renderOrder = 60;
       m.position.set(-CW / 2 + 0.2 + i * 0.34, CH / 2 - 0.17, 0.02);
       e.inner.add(m);
       e.badges.push(m);
@@ -401,9 +442,9 @@ export class BoardScene {
     if (unit.tapped) {
       const m = new THREE.Mesh(
         new THREE.PlaneGeometry(0.42, 0.42),
-        new THREE.MeshBasicMaterial({ map: badgeTexture('💤', '#cdbcf2'), transparent: true, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ map: badgeTexture('💤', '#cdbcf2'), transparent: true, depthWrite: false, depthTest: false }),
       );
-      m.renderOrder = 31;
+      m.renderOrder = 61;
       m.position.set(CW / 2 - 0.22, CH / 2 - 0.2, 0.025);
       e.inner.add(m);
       e.badges.push(m);
@@ -468,8 +509,13 @@ export class BoardScene {
   boardTransform(side, i, n, exhausted) {
     const x = (i - (n - 1) / 2) * LAYOUT.slotDX;
     const z = side === 0 ? LAYOUT.playerBoardZ : LAYOUT.enemyBoardZ;
-    // perfectly flat on the table; exhausted creatures shrink a touch
-    return { pos: new THREE.Vector3(x, 0.06, z), rotX: -Math.PI / 2, rotZ: 0, scale: exhausted ? 0.93 : 1 };
+    // smaller board cards → less overlap with the 3D minis. Enemy cards tilt
+    // up toward the camera so they read as rectangles, not foreshortened
+    // squares; a small lift keeps the tilted bottom edge off the table.
+    const base = exhausted ? 0.72 : 0.78;
+    const rotX = side === 0 ? -Math.PI / 2 : -Math.PI / 2 + 0.62;
+    const y = side === 0 ? 0.06 : 0.42;
+    return { pos: new THREE.Vector3(x, y, z), rotX, rotZ: 0, scale: base };
   }
 
   trapTransform(side, i) {
@@ -535,12 +581,15 @@ export class BoardScene {
         this.tweens.killOf(e.group.rotation);
         e.group.rotation.y = 0;
         e.ice.material.opacity = u.frozen ? 0.4 : 0;
-        // legendary idle aura + lazy 3D mini
+        // legendary element FX aura — legendary-only (epics: bare model)
         if (def.rarity === 'legendary') {
-          this.fx.setEmitter('aura' + u.iid, e.group.position, 0xf0b93a, 5);
-          const mspec = MINI_MAP[u.card];
-          if (mspec && !this.minis.has(u.iid)) this.spawnMini(u.iid, mspec, rel);
+          const el = ELEMENT_FX[def.realm] || ELEMENT_FX.neutral;
+          this.fx.setEmitter('aura' + u.iid, e.group.position, el.color, el.rate, el.style);
         }
+        // lazy 3D mini — any mapped card (legendaries + curated epics).
+        // Legendaries idle-animate (grander); epics stay static (tier).
+        const mspec = MINI_MAP[u.card];
+        if (mspec && !this.minis.has(u.iid)) this.spawnMini(u.iid, mspec, rel, def.rarity === 'legendary');
         // exhausted creatures rest dimmed; summon-sick get a lighter sheen
         e.mesh.material.color.setScalar(u.tapped ? 0.48 : u.sick ? 0.82 : 1);
       });
@@ -685,12 +734,12 @@ export class BoardScene {
   // ── 3D legendary minis ─────────────────────────────────────────
   async _gltfLoader() {
     if (!this._gltfLoaderP) {
-      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=7').then((m) => new m.GLTFLoader());
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=8').then((m) => new m.GLTFLoader());
     }
     return this._gltfLoaderP;
   }
 
-  async spawnMini(iid, spec, side) {
+  async spawnMini(iid, spec, side, legendary = false) {
     if (this.minis.has(iid)) return;
     this.minis.set(iid, { pending: true }); // reserve against double-spawn
     try {
@@ -715,7 +764,7 @@ export class BoardScene {
       let b2 = new THREE.Box3().setFromObject(model);
       let s2 = b2.getSize(new THREE.Vector3());
       const ext = Math.max(s2.x, s2.z);
-      const cap = spec.cap || 2.6;
+      const cap = spec.cap || 1.85; // keep footprints within ~a card width
       if (ext > cap) {
         model.scale.multiplyScalar(cap / ext);
         b2 = new THREE.Box3().setFromObject(model);
@@ -760,24 +809,30 @@ export class BoardScene {
         mixer.clipAction(idle).play();
       }
       if (spec.hover) group.position.y = spec.hover;
-      // realm-colored ground glow anchors the silhouette on the dark board
+      // LEGENDARY-ONLY dressing: realm ground glow + personal rim light.
+      // Epics get the bare model (owner: "epics have no effects, just the model").
       const fin = b2.getSize(new THREE.Vector3());
-      const disc = new THREE.Mesh(
-        new THREE.PlaneGeometry(1, 1),
-        new THREE.MeshBasicMaterial({
-          map: miniGlowTex(), color: spec.glow || 0xf0b93a, transparent: true,
-          opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
-        })
-      );
-      disc.rotation.x = -Math.PI / 2;
-      disc.scale.setScalar(Math.max(fin.x, fin.z) * 0.85 + 0.35);
-      disc.position.set(group.position.x, 0.025, group.position.z);
-      this.scene.add(disc);
-      // personal rim light — the "legendary glow" that makes the model pop
-      const plight = new THREE.PointLight(spec.glow || 0xffe6b8, 9, 5, 2);
-      plight.position.set(0, 1.6, 0.6);
-      group.add(plight);
-      this.minis.set(iid, { group, mixer, offset, hover: spec.hover || 0, disc, discT: 0 });
+      let disc = null;
+      if (legendary) {
+        disc = new THREE.Mesh(
+          new THREE.PlaneGeometry(1, 1),
+          new THREE.MeshBasicMaterial({
+            map: miniGlowTex(), color: spec.glow || 0xf0b93a, transparent: true,
+            opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
+          })
+        );
+        disc.rotation.x = -Math.PI / 2;
+        disc.scale.setScalar(Math.max(fin.x, fin.z) * 0.85 + 0.35);
+        disc.position.set(group.position.x, 0.025, group.position.z);
+        this.scene.add(disc);
+        const plight = new THREE.PointLight(spec.glow || 0xffe6b8, 9, 5, 2);
+        plight.position.set(0, 1.6, 0.6);
+        group.add(plight);
+      }
+      this.minis.set(iid, { group, mixer, offset, hover: spec.hover || 0, disc, discT: 0,
+        // legendaries idle-animate; epics hold still (tier). baseYaw so the
+        // sway oscillates around the model's facing instead of drifting.
+        idle: legendary && !mixer, baseYaw: group.rotation.y, seed: (iid * 1.7) % 6.28 });
       this.tweens.add(group.scale, { x: 1, y: 1, z: 1 }, 0.4, 'backOut');
       this.fx.ring(group.position, 0xf0b93a, { maxR: 1.8, dur: 0.5 });
     } catch (err) {
@@ -867,8 +922,9 @@ export class BoardScene {
     // background-tab throttling starves rAF
     this.tweens.update(Math.min(dtWall, 0.4) * this.animSpeed);
     this.fx.update(dt);
-    // glow pulse (no idle motion — cards hold perfectly still unless hovered)
-    const pulse = 0.32 + Math.sin(this.time * 5) * 0.14;
+    // glow pulse (no idle motion — cards hold perfectly still unless hovered).
+    // Thin frame reads crisp, so it can sit brighter than the old fuzzy fill.
+    const pulse = 0.62 + Math.sin(this.time * 4) * 0.2;
     for (const e of this.cards.values()) {
       if (e.glowOn) e.glow.material.opacity = pulse;
       // keep legendary aura tracking
@@ -885,6 +941,11 @@ export class BoardScene {
         m.group.position.x += (tx - m.group.position.x) * Math.min(1, dt * 10);
         m.group.position.z += (tz - m.group.position.z) * Math.min(1, dt * 10);
         if (m.hover) m.group.position.y = m.hover + Math.sin(this.time * 1.6 + iid) * 0.08;
+        // legendary idle: gentle breathing bob + slow yaw sway (epics: none)
+        if (m.idle) {
+          m.group.position.y = (m.hover || 0) + 0.02 + (Math.sin(this.time * 1.7 + m.seed) + 1) * 0.035;
+          m.group.rotation.y = m.baseYaw + Math.sin(this.time * 0.9 + m.seed) * 0.11;
+        }
         if (m.disc) {
           m.discT = Math.min(1, m.discT + dt * 3);
           m.disc.position.x = m.group.position.x;
@@ -910,17 +971,18 @@ export class BoardScene {
       if (h.userData.glow) h.children[0].material.opacity = 0.55 + Math.sin(this.time * 6) * 0.35;
       else h.children[0].material.opacity = 0.9;
     }
-    // camera shake
+    // camera: zoom (dolly toward pivot) + shake, then re-aim at the pivot
+    this.zoom += (this.zoomTarget - this.zoom) * Math.min(1, dt * 9);
+    const rest = this.camBase.clone().lerp(this.camZoomPos, this.zoom);
     if (this.camShakeT > 0) {
       this.camShakeT -= dt;
       const a = this.camShakeAmp * Math.max(0, this.camShakeT / 0.32);
-      this.camera.position.set(
-        this.camBase.x + (Math.random() - 0.5) * a,
-        this.camBase.y + (Math.random() - 0.5) * a * 0.6,
-        this.camBase.z + (Math.random() - 0.5) * a,
-      );
-      if (this.camShakeT <= 0) this.camera.position.copy(this.camBase);
+      rest.x += (Math.random() - 0.5) * a;
+      rest.y += (Math.random() - 0.5) * a * 0.6;
+      rest.z += (Math.random() - 0.5) * a;
     }
+    this.camera.position.copy(rest);
+    this.camera.lookAt(this.camPivot);
     this.renderer.render(this.scene, this.camera);
   }
 }

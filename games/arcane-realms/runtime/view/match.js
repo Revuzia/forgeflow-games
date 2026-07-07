@@ -6,10 +6,10 @@
 // always shows my side at the bottom via syncFromState(state, mySide).
 
 import * as THREE from 'three';
-import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=7';
-import { cardById, REALMS } from '../sim/cards.js?v=7';
-import { chooseAction } from '../sim/ai.js?v=7';
-import { Audio2 } from './audio.js?v=7';
+import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=8';
+import { cardById, REALMS } from '../sim/cards.js?v=8';
+import { chooseAction } from '../sim/ai.js?v=8';
+import { Audio2 } from './audio.js?v=8';
 
 const REALM_COLOR = (id) => REALMS[cardById(id).realm]?.color ?? 0x8d99ae;
 
@@ -103,7 +103,8 @@ export class Match {
       e.mesh.material.color.setScalar(playable.has(h.iid) || !this.myTurn() || this.busy ? 1 : 0.45);
     }
     if (this.busy || !this.myTurn()) { this.ui.hudUpdate(this.state, this); return; }
-    for (const iid of playable) this.scene.setGlow(iid, 0x4fc06a, true);
+    const glowCol = this.settings.glowColor || '#4fd0e8';
+    for (const iid of playable) this.scene.setGlow(iid, glowCol, true);
     // attacker glow ONLY during combat — the main phase stays clean
     if (this.state.phase === 'combat') {
       const attackers = new Set(this.legal.filter((a) => a.type === 'attack').map((a) => a.attacker));

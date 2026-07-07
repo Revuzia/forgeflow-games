@@ -1,5 +1,43 @@
 # Arcane Realms TCG — Changelog
 
+## v1.3.3 — 2026-07-07 (Meshy 3D minis: full legendary+epic coverage, board polish)
+
+### 3D minis — every legendary & epic creature now has one
+- Generated the 13 remaining creatures (4 legendaries + 9 epics) via **Meshy
+  Image-to-3D from each card's art**, so the model IS the card's character.
+  All 13 legendaries + all 9 epics (22/22 marquee creatures) now spawn a mini.
+- Raw Meshy output is 20–57 MB each (4K textures, 340k tris); a
+  `gltf-transform` pass (512px webp + ~6% decimate + vertex quantization)
+  brings each to **0.7–2.5 MB** with no visible quality loss. Tool +
+  `tools/gen_meshy_minis.py` committed; raw GLBs gitignored.
+- Cost: 476 credits for 13 models (clean rate **30/model**).
+
+### Tier hierarchy: legendaries grand, epics plain
+- **Legendaries**: idle animation (breathing bob + yaw sway), a realm ground
+  glow disc + rim light, and **element-based FX auras** — ember embers, tide
+  frost mist, grove spores, dawn light motes, grave shadow wisps, neutral
+  arcane sparkles.
+- **Epics**: the bare model — smaller scale (1.25–1.4 vs 1.5–1.7), no FX, no
+  disc, no idle. Clear visual step-down from legendaries.
+
+### Board readability & camera
+- **Stat orbs (atk/hp) and keyword/exhaust badges now always render on top**
+  of the 3D minis (`depthTest:false`) — health & damage are never hidden,
+  even under a big model or a neighbour's overhang.
+- **Scroll-wheel zoom**: dolly in to inspect cards & animated legendaries,
+  scroll back out to the default framing.
+- Board cards shrunk (less overlap); **enemy cards tilt toward the camera** so
+  they read as rectangles, not foreshortened squares; enemy hero portrait
+  moved back to clear the card row.
+- Mini footprints clamped tighter (~a card width) so wide models (treant,
+  colossus) don't sprawl over neighbours.
+
+### Selection highlight
+- Replaced the thick green under-glow with a **crisp thin frame**, and added a
+  **Settings → Highlight color** swatch picker (cyan/green/gold/violet/pink/white).
+
+Selftest 208/208. Cache-bust `?v=7` → `?v=8`.
+
 ## v1.3.2 — 2026-07-07 (New-player experience: tutorial, coach tips, no phases, exhaust rework)
 
 Owner feedback pass (3 screenshots).

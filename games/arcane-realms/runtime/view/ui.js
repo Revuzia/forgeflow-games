@@ -1,11 +1,11 @@
 // Arcane Realms TCG — DOM UI layer: menu, deck builder, collection, settings,
 // match HUD (hero plates, phase bar, banners, floaters, arrow, tooltips).
 
-import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=7';
-import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=7';
-import { DIFFICULTIES } from '../sim/ai.js?v=7';
-import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=7';
-import { Audio2 } from './audio.js?v=7';
+import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=8';
+import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=8';
+import { DIFFICULTIES } from '../sim/ai.js?v=8';
+import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=8';
+import { Audio2 } from './audio.js?v=8';
 
 // ── persistence ─────────────────────────────────────────────────
 const LS_KEY = 'arcane_realms_save_v1';
@@ -15,7 +15,7 @@ export const Store = {
     try { this.data = JSON.parse(localStorage.getItem(LS_KEY)) || {}; }
     catch { this.data = {}; }
     this.data.settings = Object.assign(
-      { music: 0.6, sfx: 0.8, particles: true, shake: true, fastAnim: false, tips: true },
+      { music: 0.6, sfx: 0.8, particles: true, shake: true, fastAnim: false, tips: true, glowColor: '#4fd0e8' },
       this.data.settings || {});
     this.data.decks = this.data.decks || [];
     this.data.record = this.data.record || { wins: 0, losses: 0 };
@@ -918,6 +918,26 @@ export class UI {
     toggle('💡 Gameplay tips for new players', 'tips', (on) => {
       if (on) { this.store.tipsSeen = []; Store.save(); this.toast('Tips reset — they\'ll show again in your next match.'); }
     });
+    // playable-card highlight color
+    {
+      const row = this.el('div', 'set-row');
+      const sw = this.el('div');
+      sw.style.cssText = 'display:flex;gap:9px';
+      const COLORS = ['#4fd0e8', '#4fc06a', '#f0b93a', '#b47bff', '#ff6f8f', '#e8e0f5'];
+      const dots = {};
+      for (const c of COLORS) {
+        const d = this.el('div');
+        d.style.cssText = `width:24px;height:24px;border-radius:50%;cursor:pointer;background:${c};` +
+          `border:2px solid ${st.glowColor === c ? '#fff' : 'transparent'};box-shadow:0 0 8px ${c}88`;
+        d.onclick = () => {
+          st.glowColor = c; Store.save(); Audio2.sfx('click');
+          for (const [k, el] of Object.entries(dots)) el.style.borderColor = k === c ? '#fff' : 'transparent';
+        };
+        dots[c] = d; sw.append(d);
+      }
+      row.append(this.el('label', null, '🎨 Highlight color'), sw);
+      wrap.append(row);
+    }
     const reset = this.el('button', 'btn small danger', 'Reset all data (decks + record)');
     reset.style.marginTop = '22px';
     reset.onclick = () => {

@@ -218,8 +218,8 @@ export class FX {
     }
   }
 
-  setEmitter(key, pos, color, rate = 6) {
-    this.emitters.set(key, { pos: pos.clone(), color, rate, acc: 0 });
+  setEmitter(key, pos, color, rate = 6, style = 'rise') {
+    this.emitters.set(key, { pos: pos.clone(), color, rate, acc: 0, style });
   }
   moveEmitter(key, pos) {
     const e = this.emitters.get(key);
@@ -282,15 +282,24 @@ export class FX {
       r.m.scale.set(s, s, s);
       r.m.material.opacity = 0.9 * (1 - f);
     }
-    // emitters (legendary idle auras)
+    // emitters (legendary element auras) — style drives the particle motion
     for (const e of this.emitters.values()) {
       e.acc += dt * e.rate * this.density;
+      const R = Math.random;
       while (e.acc >= 1) {
         e.acc -= 1;
+        const S = e.style || 'rise';
+        let vx = (R() - 0.5) * 0.15, vy = 0.5 + R() * 0.5, vz = (R() - 0.5) * 0.15;
+        let size = 0.22, life = 1.3, y0 = 0.05, sx = 1.05, sz = 1.15, grav = 0, drag = 0.99;
+        if (S === 'ember')       { vy = 0.75 + R() * 0.7;  size = 0.24; life = 1.05; grav = 0.35; }
+        else if (S === 'frost')  { vy = -0.12 - R() * 0.22; y0 = 1.7; size = 0.26; life = 1.7; sx = 1.2; sz = 1.2; }
+        else if (S === 'spore')  { vx = (R() - 0.5) * 0.45; vy = 0.12 + R() * 0.22; vz = (R() - 0.5) * 0.45; size = 0.2; life = 1.9; drag = 0.985; }
+        else if (S === 'light')  { vy = 0.6 + R() * 0.6; size = 0.19; life = 1.25; }
+        else if (S === 'shadow') { vy = 0.32 + R() * 0.4; size = 0.3; life = 1.5; drag = 0.968; }
+        else if (S === 'arcane') { vx = (R() - 0.5) * 0.4; vy = 0.28 + R() * 0.4; vz = (R() - 0.5) * 0.4; size = 0.17; life = 1.6; }
         this.spawn(
-          new THREE.Vector3(e.pos.x + (Math.random() - 0.5) * 1.15, e.pos.y + 0.05, e.pos.z + (Math.random() - 0.5) * 1.6),
-          new THREE.Vector3((Math.random() - 0.5) * 0.15, 0.5 + Math.random() * 0.5, (Math.random() - 0.5) * 0.15),
-          e.color, 0.22, 1.3, 0, 0.99);
+          new THREE.Vector3(e.pos.x + (R() - 0.5) * sx, e.pos.y + y0, e.pos.z + (R() - 0.5) * sz),
+          new THREE.Vector3(vx, vy, vz), e.color, size, life, grav, drag);
       }
     }
   }
