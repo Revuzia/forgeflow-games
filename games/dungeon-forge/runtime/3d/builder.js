@@ -17,7 +17,6 @@ const CELL = D.CELL;
 export const TOOLS = [
   { id: "select", icon: "🖱️", label: "Select" },
   { id: "floor", icon: "⬜", label: "Floor" },
-  { id: "room", icon: "▦", label: "Room" },
   { id: "raise", icon: "🔼", label: "Raised" },
   { id: "lava", icon: "🌋", label: "Lava" },
   { id: "water", icon: "💧", label: "Water" },
@@ -450,14 +449,16 @@ export class Builder {
       }
       return;
     }
-    if (PAINT_CT[this.tool] || this.tool === "erase") {
+    // Floor: drag a rectangle to fill a whole area (single click = one cell);
+    // walls auto-derive at the edges. (Replaces the old separate Room tool.)
+    if (this.tool === "floor" || this.tool === "room") { this._pushUndo(); this.drag = { room: cell }; return; }
+    if (PAINT_CT[this.tool] || this.tool === "erase") {   // lava / water / raise / erase paint free-form
       this._pushUndo();
       this._noUndo = true;                          // whole paint-drag = one undo step
       this.drag = { paint: true };
       this._paint(cell);
       return;
     }
-    if (this.tool === "room") { this._pushUndo(); this.drag = { room: cell }; return; }
     this._pushUndo();
     this._placeAt(cell);
   }
@@ -502,14 +503,13 @@ export class Builder {
       this._moveDrag = null; this._noUndo = false;
       if (this.g.hud.refreshBuilderUndo) this.g.hud.refreshBuilderUndo(this);
     }
-    if (this.drag && this.drag.room && this.hover) {
-      const a = this.drag.room, b = this.hover;
+    if (this.drag && this.drag.room) {
+      const a = this.drag.room, b = this.hover || a;   // click with no drag = single cell
       const x0 = Math.min(a.x, b.x), z0 = Math.min(a.z, b.z);
       const w = Math.abs(a.x - b.x) + 1, h = Math.abs(a.z - b.z) + 1;
       const ops = D.stampRoom(this.d, this.floor, x0, z0, w, h);
-      ops.forEach((op) => this._broadcast(op));
-      this.rebuildFloor(this.floor);
-      this.g.audio.sfx("place");
+      if (ops.length) { ops.forEach((op) => this._broadcast(op)); this.rebuildFloor(this.floor); this.g.audio.sfx("place"); }
+      else if (this._undo.length) this._undo.pop();   // nothing changed → drop the snapshot
     }
     this._clearRoomPreview();
     if (this.drag && this.drag.paint) { this._noUndo = false; if (this.g.hud.refreshBuilderUndo) this.g.hud.refreshBuilderUndo(this); }

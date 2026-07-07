@@ -170,3 +170,11 @@ Initial release.
   of the exact area before you release, so you see what you're stamping.
 - Hint bar updated; Room vs Floor now clearly distinct (Room = drag a whole
   rectangle, Floor = paint individual cells/corridors).
+
+## v1.4.3 — 2026-07-07 (builder /loop batch 1: favicon, Floor=drag-rect, starter)
+- Favicon added (emoji SVG data-URI) — clears the two favicon.ico 404s.
+- **Merged Floor + Room**: the Floor tool now drags a rectangle (single click =
+  one cell) with a live preview; the separate Room tool is removed. Verified:
+  a 3-cell drag fills a 3×3 area.
+- Starter dungeon spawn + exit now sit at OPPOSITE corners (7 cells apart), not
+  lined up — and both are draggable.

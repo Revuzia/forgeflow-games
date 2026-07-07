@@ -548,9 +548,10 @@ export async function decodeShare(code) {
 export function starterDungeon(theme) {
   const d = newDungeon({ name: "New Dungeon", theme: theme || "fantasy" });
   stampRoom(d, 0, 28, 28, 8, 8);
-  applyOp(d, { t: "obj+", f: 0, o: { kind: "spawn", x: 31, z: 30 } });
-  applyOp(d, { t: "obj+", f: 0, o: { kind: "exit", x: 32, z: 34 } });
-  applyOp(d, { t: "obj+", f: 0, o: { kind: "torch", x: 29, z: 29 } });
+  // spawn + exit at OPPOSITE corners (not lined up) — drag them anywhere you like.
+  applyOp(d, { t: "obj+", f: 0, o: { kind: "spawn", x: 29, z: 29 } });
+  applyOp(d, { t: "obj+", f: 0, o: { kind: "exit", x: 34, z: 34 } });
   applyOp(d, { t: "obj+", f: 0, o: { kind: "torch", x: 34, z: 29 } });
+  applyOp(d, { t: "obj+", f: 0, o: { kind: "torch", x: 29, z: 34 } });
   return d;
 }
