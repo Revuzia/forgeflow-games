@@ -5,13 +5,94 @@
  * leaderboard reporting, and the multiplayer lobby (create/join room for
  * co-building and co-op escapes).
  */
+import * as THREE from "three";
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
 const { Cloud } = await import("../net/cloud.js" + V);
 const { Session } = await import("../net/forgenet.js" + V);
 const { fmtTime } = await import("./escape.js" + V);
+const { Assets, poseRig } = await import("./assets.js" + V);
 
 const LS = "df_";
+
+/**
+ * CharPreview — a tiny standalone three.js viewport that shows the selected
+ * class's rigged character rotating in the menu (idle clip). Its own renderer
+ * so it's fully isolated from the game scene; drag to spin, auto-rotates.
+ */
+class CharPreview {
+  constructor(game, canvas) {
+    this.g = game;
+    this.canvas = canvas;
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "low-power" });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+    this.camera.position.set(0, 1.0, 3.5);
+    this.camera.lookAt(0, 0.9, 0);
+    this.scene.add(new THREE.AmbientLight(0xb8c4ff, 1.1));
+    const key = new THREE.DirectionalLight(0xfff0d8, 1.5); key.position.set(2, 4, 3); this.scene.add(key);
+    const rim = new THREE.DirectionalLight(0x8f6bff, 1.0); rim.position.set(-3, 2, -2); this.scene.add(rim);
+    // soft pedestal glow
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.9, 32).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0x2a2450, transparent: true, opacity: 0.5 }));
+    disc.position.y = 0.01; this.scene.add(disc);
+    this.holder = new THREE.Group(); this.scene.add(this.holder);
+    this.yaw = 0.4; this.drag = null; this.mixer = null; this.clock = new THREE.Clock();
+    this._token = 0; this._alive = true;
+    this._bind();
+    this._resize();
+    this._loop();
+  }
+  _bind() {
+    const c = this.canvas;
+    c.addEventListener("pointerdown", (e) => { this.drag = { x: e.clientX, y: this.yaw }; c.setPointerCapture(e.pointerId); });
+    c.addEventListener("pointermove", (e) => { if (this.drag) this.yaw = this.drag.y + (e.clientX - this.drag.x) * 0.01; });
+    c.addEventListener("pointerup", (e) => { this.drag = null; });
+    this._onResize = () => this._resize();
+    window.addEventListener("resize", this._onResize);
+  }
+  _resize() {
+    const r = this.canvas.getBoundingClientRect();
+    const w = Math.max(1, r.width), h = Math.max(1, r.height);
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+  }
+  async setClass(name) {
+    const token = ++this._token;
+    try {
+      const tpl = await this.g.assets.load(`chars/meshy/${name}/base.glb`);
+      if (token !== this._token || !this._alive) return;
+      // clear previous
+      while (this.holder.children.length) this.holder.remove(this.holder.children[0]);
+      this.mixer = null;
+      const obj = this.g.assets.clone(tpl);
+      const posed = poseRig(obj, tpl.animations, THREE);
+      obj.scale.multiplyScalar(1.7 / posed.height);
+      obj.updateMatrixWorld(true);
+      const bb = new THREE.Box3().setFromObject(obj);
+      if (isFinite(bb.min.y)) obj.position.y -= bb.min.y;
+      this.holder.add(obj);
+      this.mixer = posed.mixer;
+    } catch (e) { /* leave empty pedestal on failure */ }
+  }
+  _loop() {
+    if (!this._alive) return;
+    this._raf = requestAnimationFrame(() => this._loop());
+    const dt = Math.min(0.05, this.clock.getDelta());
+    if (!this.drag) this.yaw += dt * 0.5;
+    this.holder.rotation.y = this.yaw;
+    if (this.mixer) this.mixer.update(dt);
+    try { this.renderer.render(this.scene, this.camera); } catch (e) {}
+  }
+  dispose() {
+    this._alive = false;
+    if (this._raf) cancelAnimationFrame(this._raf);
+    window.removeEventListener("resize", this._onResize);
+    try { this.renderer.dispose(); } catch (e) {}
+  }
+}
 
 export class Menu {
   constructor(game) {
@@ -51,41 +132,52 @@ export class Menu {
   show(payload) {
     this.hide();
     const prof = this.profile();
+    this.classes = [
+      { i: 0, ic: "🛡️", n: "Knight", d: "Sword & shield · block + shield bash" },
+      { i: 1, ic: "🪓", n: "Barbarian", d: "Two-handed axe · heavy crushing combos" },
+      { i: 2, ic: "🔮", n: "Sorceress", d: "Fire & frost bolts · burn / slow" },
+      { i: 3, ic: "🗡️", n: "Rogue", d: "Dual daggers · fast, stacking poison" },
+    ];
     this.root = el(`<div class="dfm">
       <div class="dfm-bg"></div>
       <div class="dfm-bgshade"></div>
       <div class="dfm-card">
-        <div class="dfm-title">DUNGEON<span> FORGE</span></div>
-        <div class="dfm-tag">Build dungeons with friends. Then try to escape them.</div>
-        <div class="dfm-btns">
-          <button class="dfm-big" data-a="build">⚒️ &nbsp;BUILD A DUNGEON</button>
-          <button class="dfm-big alt" data-a="play">▶ &nbsp;PLAY &amp; ESCAPE</button>
-          <button class="dfm-big online" data-a="online">🌐 &nbsp;PLAY WITH FRIENDS</button>
+        <div class="dfm-left">
+          <div class="dfm-title">DUNGEON<span> FORGE</span></div>
+          <div class="dfm-tag">Build dungeons with friends. Then try to escape them.</div>
+          <div class="dfm-btns">
+            <button class="dfm-big" data-a="build">⚒️ &nbsp;BUILD A DUNGEON</button>
+            <button class="dfm-big alt" data-a="play">▶ &nbsp;PLAY A DUNGEON</button>
+            <button class="dfm-big online" data-a="online">🌐 &nbsp;PLAY WITH FRIENDS</button>
+          </div>
+          <div class="dfm-profile">
+            <input data-a="name" name="playerName" maxlength="14" value="${esc(prof.name)}" title="Your name" placeholder="Your name">
+            <button class="dfm-skin" data-a="gear" title="Settings">⚙️</button>
+          </div>
+          <div class="dfm-foot">
+            <button data-a="how" class="dfm-help">📖 How to play</button>
+            <button data-a="credits" class="dfm-link">Credits</button>
+          </div>
         </div>
-        <div class="dfm-profile">
-          <input data-a="name" maxlength="14" value="${esc(prof.name)}" title="Your name">
-          <button class="dfm-skin" data-a="gear" title="Settings">⚙️</button>
-        </div>
-        <div class="dfm-classhead">CHOOSE YOUR CLASS</div>
-        <div class="dfm-classes">${[
-          { i: 0, ic: "🛡️", n: "Knight", d: "Sword & shield · block + shield bash" },
-          { i: 1, ic: "🪓", n: "Barbarian", d: "Two-handed axe · heavy crushing combos" },
-          { i: 2, ic: "🔮", n: "Sorceress", d: "Fire & frost bolts · burn / slow" },
-          { i: 3, ic: "🗡️", n: "Rogue", d: "Dual daggers · fast, stacking poison" },
-        ].map((c) => `<button class="dfm-class ${c.i === prof.skin ? "on" : ""}" data-skin="${c.i}">
-          <span class="ci">${c.ic}</span><span class="cn">${c.n}</span><span class="cd">${c.d}</span></button>`).join("")}</div>
-        <div class="dfm-foot">
-          <button data-a="how" class="dfm-link">How to play</button> ·
-          <button data-a="credits" class="dfm-link">Credits</button>
+        <div class="dfm-right">
+          <div class="dfm-classhead">CHOOSE YOUR CLASS <span class="dfm-cname" data-a="cname"></span></div>
+          <div class="dfm-hero"><canvas data-a="preview"></canvas><div class="dfm-herohint" data-a="herohint">drag to rotate</div></div>
+          <div class="dfm-classes">${this.classes.map((c) => `<button class="dfm-class ${c.i === prof.skin ? "on" : ""}" data-skin="${c.i}">
+            <span class="ci">${c.ic}</span><span class="ctx"><span class="cn">${c.n}</span><span class="cd">${c.d}</span></span></button>`).join("")}</div>
         </div>
       </div>
     </div>`);
     this.g.container.appendChild(this.root);
     const q = (s) => this.root.querySelector(s);
     q('[data-a="name"]').onchange = (e) => { const p = this.profile(); p.name = e.target.value.slice(0, 14) || p.name; this.saveProfile(p); };
+    // live 3D character preview of the selected class
+    try { this.preview = new CharPreview(this.g, q('[data-a="preview"]')); this.preview.setClass(this.classes[prof.skin % 4].n.toLowerCase()); q('[data-a="cname"]').textContent = "· " + this.classes[prof.skin % 4].n; } catch (e) { console.warn("[menu] preview:", e); const h = q('[data-a="hero"]'); }
     this.root.querySelectorAll(".dfm-class").forEach((b) => b.onclick = () => {
       const p = this.profile(); p.skin = +b.dataset.skin; this.saveProfile(p);
       this.root.querySelectorAll(".dfm-class").forEach((x) => x.classList.toggle("on", x === b));
+      const cl = this.classes[p.skin % 4];
+      if (this.preview) this.preview.setClass(cl.n.toLowerCase());
+      const cn = q('[data-a="cname"]'); if (cn) cn.textContent = "· " + cl.n;
       this.g.audio.sfx("ui");
     });
     q('[data-a="build"]').onclick = () => { this.g.audio.sfx("confirm"); this.buildFlow(); };
@@ -99,7 +191,7 @@ export class Menu {
     // share links: #d=DF1....
     if (!this._checkedHash) { this._checkedHash = true; this._checkHash(); }
   }
-  hide() { if (this.root) { this.root.remove(); this.root = null; } this.g.hud.closeModal(); }
+  hide() { if (this.preview) { this.preview.dispose(); this.preview = null; } if (this.root) { this.root.remove(); this.root = null; } this.g.hud.closeModal(); }
   update() {}
 
   async _checkHash() {
@@ -137,7 +229,7 @@ export class Menu {
         <button data-a="news" class="df-btn accent" style="flex:1">＋ New 🤖 Sci-Fi</button>
       </div>
       ${mine.length ? `<div class="dfm-listhead">MY DUNGEONS</div>${rows}` : `<div class="df-lb">No saved dungeons yet — forge your first!</div>`}
-      <div class="df-selrow"><input data-a="code" placeholder="paste a share code (DF1.…)" style="flex:1" class="df-name"><button data-a="imp" class="df-btn">Import</button></div>`,
+      <div class="df-selrow"><input data-a="code" name="shareCode" placeholder="paste a share code (DF1.…)" style="flex:1" class="df-name"><button data-a="imp" class="df-btn">Import</button></div>`,
       (m) => {
         m.querySelector('[data-a="newf"]').onclick = () => { this.g.hud.closeModal(); this.g.setMode("build", { dungeon: D.starterDungeon("fantasy") }); };
         m.querySelector('[data-a="news"]').onclick = () => { this.g.hud.closeModal(); this.g.setMode("build", { dungeon: D.starterDungeon("scifi") }); };
@@ -175,7 +267,7 @@ export class Menu {
       ${row("🏰 <b>The Forge Trials</b>", "fantasy · 2 floors · locked doors", best["sample:fantasy"], 'data-s="fantasy"')}
       ${row("🤖 <b>Meltdown Facility</b>", "sci-fi · 2 floors · turrets", best["sample:scifi"], 'data-s="scifi"')}
       ${mine.length ? `<div class="dfm-listhead">MY DUNGEONS</div>${rows}` : ""}
-      <div class="df-selrow" style="margin-top:8px"><input data-a="code" placeholder="dungeon code (from a friend)" style="flex:1" class="df-name"><button data-a="go" class="df-btn">Load</button></div>`,
+      <div class="df-selrow" style="margin-top:8px"><input data-a="code" name="dungeonCode" placeholder="dungeon code (from a friend)" style="flex:1" class="df-name"><button data-a="go" class="df-btn">Load</button></div>`,
       (m) => {
         m.querySelectorAll("[data-s]").forEach((b) => b.onclick = () => { this.g.hud.closeModal(); this.startEscape(sampleDungeon(b.dataset.s), "menu", "sample:" + b.dataset.s); });
         m.querySelectorAll("[data-play]").forEach((b) => b.onclick = () => {
@@ -298,7 +390,7 @@ export class Menu {
     this.g.hud.modal(`<h3>🔗 Share “${esc(d.name)}”</h3>
       ${v.ok ? "" : `<div class="df-vbad">⚠ Not solvable yet — friends can open it in the builder but not beat it.</div>`}
       <div class="dfm-listhead">LINK (works anywhere)</div>
-      <div class="df-selrow"><input class="df-name" style="flex:1" readonly value="${esc(url)}"><button data-a="cp" class="df-btn">Copy</button></div>
+      <div class="df-selrow"><input class="df-name" name="shareUrl" style="flex:1" readonly value="${esc(url)}"><button data-a="cp" class="df-btn">Copy</button></div>
       <div class="dfm-listhead" style="margin-top:10px">CLOUD CODE + LEADERBOARD</div>
       <div class="df-lb" data-a="cloud">Publish to get a short code friends can type in, plus a global fastest-escape leaderboard.</div>
       <div class="df-selrow"><button data-a="pub" class="df-btn accent" ${v.ok ? "" : "disabled"}>☁ Publish</button></div>`,
@@ -343,7 +435,7 @@ export class Menu {
         <button data-a="hsample" class="df-btn" style="flex:1">▶ Co-op the Forge Trials (sample)</button>
       </div>
       <div class="dfm-listhead">JOIN</div>
-      <div class="df-selrow"><input data-a="code" class="df-name" maxlength="4" placeholder="CODE" style="flex:1;text-align:center;letter-spacing:6px;text-transform:uppercase"><button data-a="join" class="df-btn accent">JOIN</button></div>`,
+      <div class="df-selrow"><input data-a="code" name="roomCode" class="df-name" maxlength="4" placeholder="CODE" style="flex:1;text-align:center;letter-spacing:6px;text-transform:uppercase"><button data-a="join" class="df-btn accent">JOIN</button></div>`,
       (m) => {
         const start = (mode, dungeon) => { this.g.hud.closeModal(); this.hostRoom(mode, dungeon); };
         m.querySelector('[data-a="hbuildf"]').onclick = () => start("build", D.starterDungeon("fantasy"));
@@ -494,33 +586,45 @@ const css = `
 .dfm-bg{position:absolute;inset:0;background:url('${new URL("../../thumbnail.png", import.meta.url).href}') center/cover no-repeat;animation:dfmZoom 36s ease-in-out infinite alternate}
 .dfm-bgshade{position:absolute;inset:0;background:radial-gradient(1100px 640px at 50% 42%,rgba(8,6,14,.30),rgba(8,6,14,.86)),linear-gradient(rgba(8,6,14,.25),rgba(8,6,14,.6))}
 @keyframes dfmZoom{from{transform:scale(1)}to{transform:scale(1.07)}}
-.dfm-card{position:relative;text-align:center;background:rgba(8,10,18,.82);border:1px solid rgba(150,170,255,.25);border-radius:26px;padding:38px 46px;backdrop-filter:blur(6px);max-width:92vw}
-.dfm-title{font-size:52px;font-weight:900;letter-spacing:4px;text-shadow:0 0 34px var(--df-accent,#ffb347)}
+/* two-column card: left = title/buttons/profile · right = 3D hero + class picker */
+.dfm-card{position:relative;display:flex;gap:26px;align-items:stretch;background:rgba(8,10,18,.84);border:1px solid rgba(150,170,255,.25);border-radius:24px;padding:26px 30px;backdrop-filter:blur(6px);max-width:94vw;max-height:94vh;overflow:auto}
+.dfm-left{display:flex;flex-direction:column;justify-content:center;text-align:center;min-width:300px}
+.dfm-right{display:flex;flex-direction:column;width:290px;border-left:1px solid rgba(150,170,255,.14);padding-left:24px}
+.dfm-title{font-size:46px;font-weight:900;letter-spacing:3px;text-shadow:0 0 34px var(--df-accent,#ffb347)}
 .dfm-title span{color:var(--df-accent,#ffb347)}
-.dfm-tag{opacity:.75;font-size:14.5px;margin:6px 0 26px;letter-spacing:.4px}
-.dfm-btns{display:flex;flex-direction:column;gap:12px;margin-bottom:22px}
-.dfm-big{font-size:18px;font-weight:800;letter-spacing:1px;padding:15px 30px;border-radius:16px;border:1px solid rgba(150,170,255,.3);background:linear-gradient(180deg,rgba(40,48,80,.9),rgba(24,28,48,.9));color:#fff;cursor:pointer;transition:all .15s}
+.dfm-tag{opacity:.78;font-size:13.5px;margin:5px 0 20px;letter-spacing:.4px}
+.dfm-btns{display:flex;flex-direction:column;gap:11px;margin-bottom:16px}
+.dfm-big{font-size:17px;font-weight:800;letter-spacing:1px;padding:14px 26px;border-radius:14px;border:1px solid rgba(150,170,255,.3);background:linear-gradient(180deg,rgba(40,48,80,.9),rgba(24,28,48,.9));color:#fff;cursor:pointer;transition:all .15s}
 .dfm-big:hover{transform:translateY(-2px);border-color:var(--df-accent,#ffb347);box-shadow:0 6px 24px rgba(0,0,0,.4)}
 .dfm-big.alt{background:linear-gradient(180deg,rgba(70,45,25,.9),rgba(40,26,16,.9))}
 .dfm-big.online{background:linear-gradient(180deg,rgba(25,60,55,.9),rgba(14,34,32,.9))}
 .dfm-profile{display:flex;gap:10px;justify-content:center;align-items:center;margin-bottom:14px}
 .dfm-profile input{background:rgba(16,20,34,.9);border:1px solid rgba(150,170,255,.3);color:#fff;border-radius:10px;padding:9px 13px;font-weight:800;text-align:center;width:150px}
-.dfm-skin{width:42px;height:42px;font-size:21px;background:rgba(16,20,34,.9);border:1px solid rgba(150,170,255,.3);border-radius:10px;cursor:pointer}
+.dfm-skin{width:42px;height:42px;font-size:21px;background:rgba(16,20,34,.9);border:1px solid rgba(150,170,255,.3);border-radius:10px;cursor:pointer;color:#fff}
 .dfm-skin.on{border-color:var(--df-accent,#ffb347);box-shadow:0 0 12px rgba(255,180,70,.35)}
-.dfm-classhead{font-size:10px;font-weight:800;letter-spacing:2px;opacity:.55;margin:8px 0 6px}
-.dfm-classes{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px}
-.dfm-class{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:1px;background:rgba(16,20,34,.85);border:1px solid rgba(150,170,255,.25);border-radius:12px;padding:9px 11px;cursor:pointer;transition:all .13s}
-.dfm-class:hover{border-color:rgba(150,170,255,.5);transform:translateY(-1px)}
-.dfm-class.on{border-color:var(--df-accent,#ffb347);box-shadow:0 0 14px rgba(255,180,70,.3);background:rgba(40,44,70,.9)}
-.dfm-class .ci{font-size:22px}
-.dfm-class .cn{font-size:14px;font-weight:800;letter-spacing:.4px}
-.dfm-class .cd{font-size:10.5px;opacity:.72;line-height:1.3}
-.dfm-foot{font-size:12.5px;opacity:.7}
+.dfm-classhead{font-size:11px;font-weight:800;letter-spacing:2px;color:#c3ccf0;margin:0 0 8px;text-align:left}
+.dfm-cname{color:var(--df-accent,#ffb347)}
+.dfm-hero{position:relative;height:210px;border-radius:14px;background:radial-gradient(circle at 50% 35%,rgba(90,80,160,.28),rgba(10,10,22,.5));border:1px solid rgba(150,170,255,.18);margin-bottom:10px;overflow:hidden}
+.dfm-hero canvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.dfm-herohint{position:absolute;bottom:6px;left:0;right:0;text-align:center;font-size:10px;letter-spacing:1px;opacity:.45}
+.dfm-classes{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.dfm-class{display:flex;align-items:center;text-align:left;gap:8px;background:rgba(20,24,40,.92);border:1px solid rgba(150,170,255,.25);border-radius:12px;padding:8px 9px;cursor:pointer;transition:all .13s}
+.dfm-class:hover{border-color:rgba(150,170,255,.55);transform:translateY(-1px);background:rgba(30,36,60,.95)}
+.dfm-class.on{border-color:var(--df-accent,#ffb347);box-shadow:0 0 14px rgba(255,180,70,.3);background:rgba(46,42,78,.95)}
+.dfm-class .ci{font-size:22px;flex:0 0 auto}
+.dfm-class .ctx{display:flex;flex-direction:column;gap:1px;min-width:0}
+.dfm-class .cn{font-size:13.5px;font-weight:800;letter-spacing:.3px;color:#f3f6ff}
+.dfm-class .cd{font-size:10px;line-height:1.25;color:#aeb7dd}
+.dfm-class.on .cn{color:#fff} .dfm-class.on .cd{color:#d7ddf5}
+.dfm-foot{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:16px}
+.dfm-help{background:rgba(255,180,70,.14);border:1px solid var(--df-accent,#ffb347);color:#ffd9a0;cursor:pointer;font-size:13px;font-weight:800;padding:8px 16px;border-radius:11px;transition:all .13s}
+.dfm-help:hover{background:rgba(255,180,70,.26);color:#fff}
 .dfm-link{background:none;border:none;color:#aab6e8;cursor:pointer;font-size:12.5px;text-decoration:underline}
 .dfm-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(150,170,255,.12);font-size:14px;text-align:left}
 .dfm-rowbtns{display:flex;gap:6px}
 .dfm-listhead{font-size:11px;font-weight:800;letter-spacing:2px;opacity:.6;margin:10px 0 4px;text-align:left}
-@media (max-width:640px){ .dfm-title{font-size:34px} .dfm-card{padding:26px 20px} }
+@media (max-width:820px){ .dfm-card{flex-direction:column;gap:14px;padding:20px 20px} .dfm-right{width:auto;border-left:none;border-top:1px solid rgba(150,170,255,.14);padding-left:0;padding-top:14px} .dfm-left{min-width:0} .dfm-title{font-size:34px} .dfm-hero{height:150px} }
+@media (max-height:560px){ .dfm-hero{height:120px} .dfm-title{font-size:34px} .dfm-tag{margin-bottom:12px} .dfm-big{padding:11px 22px;font-size:15px} }
 `;
 const st = document.createElement("style");
 st.textContent = css;

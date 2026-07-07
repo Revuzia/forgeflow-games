@@ -37,7 +37,7 @@ export class Hud {
     // top bar
     this.bTop = el(`<div class="df-topbar">
       <button data-a="back" class="df-btn ghost">‹ MENU</button>
-      <input data-a="name" class="df-name" maxlength="40" value="${esc(b.d.name)}" title="Dungeon name">
+      <input data-a="name" name="dungeonName" class="df-name" maxlength="40" value="${esc(b.d.name)}" title="Dungeon name">
       <span class="df-chip" data-a="theme">${b.d.theme === "scifi" ? "🤖 SCI-FI" : "🏰 FANTASY"}</span>
       <select data-a="diff" class="df-diff" title="Difficulty">
         <option value="1">Easy</option><option value="2">Normal</option><option value="3">Deadly</option>
