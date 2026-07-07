@@ -30,7 +30,8 @@ export class EnemyPool {
     if (!tpl) return;
     const grp = new THREE.Group();
     const K = e.K || {};
-    const h = K.boss ? 2.7 : e.etype === "spider" ? 1.15 : e.etype === "drone" ? 0.95 : e.etype === "slime" ? 1.2 : e.etype === "turret" ? 1.6 : 1.75;
+    const H = { spider: 1.15, drone: 0.95, slime: 1.2, turret: 1.6, imp: 1.35, myconid: 1.45, cyclops: 2.3, blob: 1.5, warbot: 2.1, xeno: 2.3 };
+    const h = K.boss ? 2.7 : (H[e.etype] || 1.75);
     const made = makeCreature(this.g.assets, tpl, h, THREE);
     const obj = made.obj;
     grp.add(obj);

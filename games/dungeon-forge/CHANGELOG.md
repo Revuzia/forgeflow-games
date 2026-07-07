@@ -131,3 +131,14 @@ Initial release.
   clips were loaded on the template but never bound. Now every `C_*` clip is
   registered — verified live: knight LMB plays C_slash1→C_slash2→C_finisher
   (real sword swings), confirmed on screen mid-slash.
+
+## v1.4 — 2026-07-07 (roster expansion — library enemies)
+- **+6 enemies from the CC0 creature library** (Quaternius, gltf→glb→texture-shrunk):
+  - Fantasy: Imp (fast harasser), Myconid (tanky mushroom), Cyclops (brute).
+  - Sci-Fi: Ooze Alien (blob), War Bot (mech), Xeno Brute.
+  Each has idle/walk/run/attack/death/hit clips mapped via creatureClips; per-type
+  render heights tuned. Verified live: all 6 load, animate, chase, and deal damage.
+  Roster now 10 fantasy / 9 sci-fi. Builder enemy picker auto-lists them.
+- Selftest → 117 (roster kill-tests auto-cover the new enemies).
+- (Original Meshy-generated enemies — cultist/ogre/cyborg/sentinel — generated,
+  integration in progress.)

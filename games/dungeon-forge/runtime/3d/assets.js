@@ -101,8 +101,8 @@ export class Assets {
   enemies(theme) {
     const t = theme === "scifi" ? "scifi" : "fantasy";
     const names = t === "fantasy"
-      ? ["spider", "skeleton", "zombie", "ghost", "slime", "orc", "demon"]
-      : ["drone", "robot", "android", "turret", "mech", "alien"];
+      ? ["spider", "skeleton", "zombie", "ghost", "slime", "orc", "imp", "myconid", "cyclops", "demon"]
+      : ["drone", "robot", "android", "turret", "mech", "blob", "warbot", "xeno", "alien"];
     const m = {};
     for (const n of names) m[n] = n === "turret"
       ? this.load("props/scifi/turret.glb")
