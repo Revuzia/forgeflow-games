@@ -11,7 +11,7 @@ import * as THREE from "three";
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
 const E = await import("../sim/escape_sim.js" + V);
-const { makeInstanced, Assets, charClips, makeTorch, makeCellSurfaces, makeMerchant } = await import("./assets.js" + V);
+const { makeInstanced, Assets, charClips, makeTorch, makeCellSurfaces, makeMerchant, findArmBones, relaxArms } = await import("./assets.js" + V);
 const { EnemyPool } = await import("./enemies.js" + V);
 
 const FLOOR_H = 4.4;
@@ -308,7 +308,7 @@ export class Escape {
     const tag = p.id === this.myId ? null : this._nameTag(p.name);
     if (tag) { tag.position.y = 2.3; grp.add(tag); }
     this.root.add(grp);
-    const a = { p, grp, obj, mixer, actions, cur: null, oneshotT: 0, bones, rigScale: obj.scale.x, equip: {} };
+    const a = { p, grp, obj, mixer, actions, cur: null, oneshotT: 0, bones, armBones: findArmBones(obj), relaxW: 0, rigScale: obj.scale.x, equip: {} };
     this._refreshEquip(a);
     this._playAnim(a, "idle");
     this.actors.set(p.id, a);
@@ -818,10 +818,19 @@ export class Escape {
       a.grp.visible = (p.alive || a.proc || a._deadPose) && !p.escaped && (this.me() ? Math.abs(p.f - this.me().f) <= 1 : true);
       a.mixer.update(dt);
       this._procUpdate(a, dt);
+      let idlePose = false;
       if (a.oneshotT > 0) { a.oneshotT -= dt; if (a.oneshotT <= 0 && a.cur) { a.cur.reset().play(); if (a.osAct) a.osAct.crossFadeTo(a.cur, 0.15, false); } }
       else {
         const moving = Math.hypot(p.input.mx, p.input.mz) > 0.01 || (p.remote && p.netMoving);
         this._playAnim(a, moving ? (p.input.sprint ? "run" : "walk") : "idle");
+        idlePose = !moving;
+      }
+      // Meshy idle flings the arms out — relax them to the sides while standing
+      // (fades out during walk/attack so those clips read normally). Not for
+      // procedural fallback rigs, which animate the bones themselves.
+      if (a.armBones && !a.proc) {
+        a.relaxW += ((idlePose ? 1 : 0) - a.relaxW) * Math.min(1, dt * 12);
+        if (a.relaxW > 0.02) { a.obj.updateMatrixWorld(true); relaxArms(a.armBones, a.relaxW); }
       }
       if (id === this.myId) a.obj.visible = !this.fp;
     }

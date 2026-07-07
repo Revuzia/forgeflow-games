@@ -11,7 +11,7 @@ const D = await import("../sim/dungeon.js" + V);
 const { Cloud } = await import("../net/cloud.js" + V);
 const { Session } = await import("../net/forgenet.js" + V);
 const { fmtTime } = await import("./escape.js" + V);
-const { Assets, poseRig } = await import("./assets.js" + V);
+const { Assets, poseRig, findArmBones, relaxArms } = await import("./assets.js" + V);
 
 const LS = "df_";
 
@@ -67,7 +67,7 @@ class CharPreview {
       if (token !== this._token || !this._alive) return;
       // clear previous
       while (this.holder.children.length) this.holder.remove(this.holder.children[0]);
-      this.mixer = null;
+      this.mixer = null; this._armBones = null;
       const obj = this.g.assets.clone(tpl);
       this.holder.add(obj);
       // Meshy rigs bind-pose flat/degenerate → Box3.setFromObject reads the geometry
@@ -83,6 +83,7 @@ class CharPreview {
       let minY = Infinity; const v = new THREE.Vector3();
       obj.traverse((o) => { if (o.isBone) { o.getWorldPosition(v); minY = Math.min(minY, v.y); } });
       if (isFinite(minY)) obj.position.y -= minY;
+      this._armBones = findArmBones(obj);   // Meshy idle keeps arms out → relax them each frame
     } catch (e) { /* leave empty pedestal on failure */ }
   }
   _loop() {
@@ -92,6 +93,7 @@ class CharPreview {
     if (!this.drag) this.yaw += dt * 0.5;
     this.holder.rotation.y = this.yaw;
     if (this.mixer) this.mixer.update(dt);
+    if (this._armBones) { this.holder.updateMatrixWorld(true); relaxArms(this._armBones, 1); }
     try { this.renderer.render(this.scene, this.camera); } catch (e) {}
   }
   dispose() {

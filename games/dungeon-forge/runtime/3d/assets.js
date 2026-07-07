@@ -244,6 +244,59 @@ export function poseRig(obj, animations, THREE_) {
   return { mixer, height, groundY: bones ? Math.min(0, minY) : 0 };
 }
 
+/** Cache the six arm-chain bones (by Meshy rig name) for relaxArms(). */
+export function findArmBones(root) {
+  const b = {};
+  root.traverse((o) => {
+    if (!o.isBone) return;
+    switch (o.name) {
+      case "RightArm": b.rArm = o; break;
+      case "RightForeArm": b.rFore = o; break;
+      case "RightHand": b.rHand = o; break;
+      case "LeftArm": b.lArm = o; break;
+      case "LeftForeArm": b.lFore = o; break;
+      case "LeftHand": b.lHand = o; break;
+    }
+  });
+  return (b.rArm && b.lArm) ? b : null;
+}
+
+// scratch objects (module-local, reused every frame — no per-call allocation)
+const _rp1 = new THREE.Vector3(), _rp2 = new THREE.Vector3(), _rt = new THREE.Vector3();
+const _rq1 = new THREE.Quaternion(), _rq2 = new THREE.Quaternion(), _rq3 = new THREE.Quaternion();
+function _relaxOne(arm, fore, tx, ty, tz, blend) {
+  if (!arm || !fore) return;
+  arm.getWorldPosition(_rp1); fore.getWorldPosition(_rp2);
+  _rp2.sub(_rp1); if (_rp2.lengthSq() < 1e-8) return;
+  _rp2.normalize(); _rt.set(tx, ty, tz).normalize();
+  _rq1.setFromUnitVectors(_rp2, _rt);        // world-space correction (current → target dir)
+  arm.getWorldQuaternion(_rq2);
+  _rq1.multiply(_rq2);                        // new desired world quat
+  arm.parent.getWorldQuaternion(_rq3);
+  _rq3.invert().multiply(_rq1);              // → local space of the arm bone
+  arm.quaternion.slerp(_rq3, blend);
+  arm.updateMatrixWorld(true);               // so the forearm reads the corrected parent
+}
+
+/**
+ * Force the arms to hang relaxed at the sides. The Meshy auto-rig bound every
+ * character in an A-pose, and its ENTIRE idle-animation library keeps the arms
+ * flung outward (verified: all presets land at radial ≥0.9 torso-heights). So
+ * we correct the pose after the mixer runs: rotate each upper arm to point down
+ * (+ slightly out to clear the torso) and each forearm nearly straight down.
+ * `amount` (0..1) scales the blend for smooth fade-in/out. Call every frame
+ * AFTER mixer.update() and after the skeleton's world matrices are current.
+ */
+export function relaxArms(b, amount) {
+  if (!b) return;
+  const a = amount == null ? 1 : Math.max(0, Math.min(1, amount));
+  if (a <= 0) return;
+  _relaxOne(b.rArm, b.rFore, -0.28, -1, 0.02, 0.92 * a);
+  _relaxOne(b.lArm, b.lFore,  0.28, -1, 0.02, 0.92 * a);
+  _relaxOne(b.rFore, b.rHand, -0.08, -1, 0.05, 0.85 * a);
+  _relaxOne(b.lFore, b.lHand,  0.08, -1, 0.05, 0.85 * a);
+}
+
 /** Clone + pose + scale a creature template to a target height. */
 export function makeCreature(assets, tpl, targetH, THREE_) {
   const obj = assets.clone(tpl);

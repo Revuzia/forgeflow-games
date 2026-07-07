@@ -108,3 +108,17 @@ Initial release.
   stall renders, E opens the shop, buy deducts gold with live affordability
   gating + max-tier reject; builder places merchants and the per-vendor stock
   toggle panel works.
+
+## v1.3.2 — 2026-07-07 (arms-down idle — real fix)
+- **The A-pose "arms flung out" is finally fixed.** Investigation (live bone
+  measurement + FK on the whole Meshy idle library) proved the problem was NOT
+  a missing clip: the auto-rig bound every character in an A-pose and ALL of
+  Meshy's idle presets (0, 11, 12, 243, 336, 338, …) keep the arms out (hands
+  land ≥0.9 torso-heights from the body). Swapping the action can't fix it.
+- New `relaxArms()` in assets.js rotates the upper-arm/forearm bones so the arms
+  hang at the sides (hands drop from +0.2 above the hips to −0.25 below, radial
+  1.14→0.6). Applied every frame after the mixer runs — in the menu 3D preview
+  (always) and in escape (fades in only while standing idle, so walk/attack
+  clips read normally). Weapons/shields ride the corrected hand bones, so they
+  now rest naturally at the character's side instead of sticking out.
+- Verified live across all four classes in the menu preview.
