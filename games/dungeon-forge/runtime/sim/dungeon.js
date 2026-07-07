@@ -211,7 +211,7 @@ export function applyOp(d, op) {
     case "objEdit": {
       const hit = objById(d, op.id);
       if (!hit) return { ok: false, err: "noobj" };
-      const ALLOW = ["rot", "locked", "etype", "ttype", "dtype", "color", "stock"];
+      const ALLOW = ["x", "z", "rot", "locked", "etype", "ttype", "dtype", "color", "stock"];
       for (const k of ALLOW) if (op.p && op.p[k] !== undefined) hit.obj[k] = op.p[k];
       return { ok: true };
     }

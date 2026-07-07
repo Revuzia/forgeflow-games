@@ -159,3 +159,14 @@ Initial release.
 - **+4 original Meshy enemies** (cultist/ogre · cyborg/sentinel) — rigged
   humanoids with walk/run + relaxed idle; roster now 12 fantasy / 11 sci-fi.
   Selftest 121.
+
+## v1.4.2 — 2026-07-07 (builder UX: undo, drag-move, room preview)
+- **Undo / Redo**: ↶/↷ buttons in the top bar + Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z).
+  Snapshot-based, one step per gesture (a whole paint-drag or room = one undo).
+  Verified: place→undo→redo round-trips exactly.
+- **Select → drag to move**: pick an object with Select, then drag it to any
+  floor cell (objEdit now allows x/z). Verified: chest relocates live.
+- **Room live preview**: dragging the Room tool now shows a translucent rectangle
+  of the exact area before you release, so you see what you're stamping.
+- Hint bar updated; Room vs Floor now clearly distinct (Room = drag a whole
+  rectangle, Floor = paint individual cells/corridors).

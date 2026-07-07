@@ -61,6 +61,45 @@ export class Builder {
     this.camYaw = 0; this.camPitch = 1.05; this.camDist = 42;
     this.camT = { x: 0, z: 0 };
     this.ready = false;
+    this._undo = []; this._redo = []; this._noUndo = false; this._moveDrag = null;
+  }
+
+  // ── undo / redo (snapshot based — simple + always correct) ───────────────────
+  _pushUndo() {
+    if (this._noUndo) return;
+    try {
+      this._undo.push(JSON.stringify(D.serialize(this.d)));
+      if (this._undo.length > 50) this._undo.shift();
+      this._redo.length = 0;
+      if (this.g.hud.refreshBuilderUndo) this.g.hud.refreshBuilderUndo(this);
+    } catch (e) {}
+  }
+  canUndo() { return this._undo.length > 0; }
+  canRedo() { return this._redo.length > 0; }
+  undo() {
+    if (!this._undo.length) return;
+    this._redo.push(JSON.stringify(D.serialize(this.d)));
+    this._restoreSnap(this._undo.pop());
+  }
+  redo() {
+    if (!this._redo.length) return;
+    this._undo.push(JSON.stringify(D.serialize(this.d)));
+    this._restoreSnap(this._redo.pop());
+  }
+  _restoreSnap(json) {
+    const d = D.sanitize(JSON.parse(json));
+    // mutate in place so external references (game/session) stay valid
+    this.d.floors = d.floors;
+    if (d.difficulty != null) this.d.difficulty = d.difficulty;
+    this.sel = null;
+    this.floor = Math.min(this.floor, this.d.floors.length - 1);
+    this.rebuildAll();
+    this.g.hud.hideSelection && this.g.hud.hideSelection();
+    this.g.hud.refreshValidate(this);
+    this.g.hud.refreshBuilder(this);
+    if (this.g.hud.refreshBuilderUndo) this.g.hud.refreshBuilderUndo(this);
+    // co-build note: undo is local; peers reconcile on the next relayed op.
+    if (this.session && this.session.sendFullState) this.session.sendFullState(this.d);
   }
 
   // ── lifecycle ───────────────────────────────────────────────────────────────
@@ -353,6 +392,8 @@ export class Builder {
     on("keydown", (e) => {
       if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;
       this.keys[e.code] = true;
+      if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ") { e.preventDefault(); if (e.shiftKey) this.redo(); else this.undo(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.code === "KeyY") { e.preventDefault(); this.redo(); return; }
       if (e.code === "KeyR") { this.rot = (this.rot + 1) % 4; if (this.sel) this._editSel({ rot: (D.objById(this.d, this.sel)?.obj.rot + 1) % 4 }); }
       if (e.code === "Delete" || e.code === "Backspace") { if (this.sel) this.deleteSelected(); }
       if (e.code === "Tab") { e.preventDefault(); this.setFloor((this.floor + 1) % this.d.floors.length); }
@@ -401,14 +442,23 @@ export class Builder {
     if (this.tool === "select") {
       const id = this._pickObject(e);
       this.select(id);
+      // start a move-drag on the picked object (drag it to a new cell)
+      if (id) {
+        this._pushUndo();
+        this._noUndo = true;                       // suppress per-frame snapshots while dragging
+        this._moveDrag = { id, moved: false, startCell: cell };
+      }
       return;
     }
     if (PAINT_CT[this.tool] || this.tool === "erase") {
+      this._pushUndo();
+      this._noUndo = true;                          // whole paint-drag = one undo step
       this.drag = { paint: true };
       this._paint(cell);
       return;
     }
-    if (this.tool === "room") { this.drag = { room: cell }; return; }
+    if (this.tool === "room") { this._pushUndo(); this.drag = { room: cell }; return; }
+    this._pushUndo();
     this._placeAt(cell);
   }
 
@@ -430,11 +480,28 @@ export class Builder {
     const cell = this._pointerCell(e);
     this.hover = cell;
     if (cell && this.drag && this.drag.paint) this._paint(cell);
+    // drag a selected object onto a new cell (must land on existing floor)
+    if (cell && this._moveDrag) {
+      const o = D.objById(this.d, this._moveDrag.id);
+      if (o && (o.obj.x !== cell.x || o.obj.z !== cell.z) && D.hasCell(this.d, this.floor, cell.x, cell.z)) {
+        this.applyLocal({ t: "objEdit", id: this._moveDrag.id, p: { x: cell.x, z: cell.z } });
+        this._moveDrag.moved = true;
+        this.g.hud.showSelection(this, D.objById(this.d, this._moveDrag.id));
+      }
+    }
+    // live room-rectangle preview while dragging the Room tool
+    if (cell && this.drag && this.drag.room) this._updateRoomPreview(this.drag.room, cell);
     if (this.session && cell) this.session.sendCursor(this.floor, cell.x, cell.z);
   }
 
   _onUp(e) {
     if (this._orbit) { this._orbit = null; return; }
+    if (this._moveDrag) {
+      // if the object never actually moved, drop the snapshot we pushed on down
+      if (!this._moveDrag.moved && this._undo.length) this._undo.pop();
+      this._moveDrag = null; this._noUndo = false;
+      if (this.g.hud.refreshBuilderUndo) this.g.hud.refreshBuilderUndo(this);
+    }
     if (this.drag && this.drag.room && this.hover) {
       const a = this.drag.room, b = this.hover;
       const x0 = Math.min(a.x, b.x), z0 = Math.min(a.z, b.z);
@@ -444,8 +511,26 @@ export class Builder {
       this.rebuildFloor(this.floor);
       this.g.audio.sfx("place");
     }
+    this._clearRoomPreview();
+    if (this.drag && this.drag.paint) { this._noUndo = false; if (this.g.hud.refreshBuilderUndo) this.g.hud.refreshBuilderUndo(this); }
     this.drag = null;
   }
+
+  // translucent rectangle covering the Room drag so you see the area before release
+  _updateRoomPreview(a, b) {
+    const x0 = Math.min(a.x, b.x), z0 = Math.min(a.z, b.z);
+    const w = Math.abs(a.x - b.x) + 1, h = Math.abs(a.z - b.z) + 1;
+    if (!this.roomPreview) {
+      this.roomPreview = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ color: 0x66ffcc, transparent: true, opacity: 0.28, depthWrite: false }));
+      this.root.add(this.roomPreview);
+    }
+    this.roomPreview.visible = true;
+    this.roomPreview.scale.set(w * CELL, 1, h * CELL);
+    this.roomPreview.position.set((x0 + w / 2) * CELL, this.floor * FLOOR_H + 0.06, (z0 + h / 2) * CELL);
+  }
+  _clearRoomPreview() { if (this.roomPreview) this.roomPreview.visible = false; }
 
   _paint(cell) {
     if (this.tool === "erase") {
@@ -521,6 +606,7 @@ export class Builder {
   }
   _editSel(p) {
     if (!this.sel) return;
+    this._pushUndo();
     this.applyLocal({ t: "objEdit", id: this.sel, p });
     this.g.hud.showSelection(this, D.objById(this.d, this.sel));
   }
@@ -538,6 +624,7 @@ export class Builder {
   }
   deleteSelected() {
     if (!this.sel) return;
+    this._pushUndo();
     this.applyLocal({ t: "obj-", id: this.sel });
     this.select(null);
     this.g.audio.sfx("erase");
@@ -549,6 +636,7 @@ export class Builder {
     this.g.hud.refreshBuilder(this);
   }
   addFloor() {
+    this._pushUndo();
     const res = this.applyLocal({ t: "floor+" });
     if (res.ok) this.setFloor(this.d.floors.length - 1);
   }

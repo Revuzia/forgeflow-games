@@ -44,6 +44,8 @@ export class Hud {
       </select>
       <span class="df-grow"></span>
       <span class="df-chip df-room" data-a="room" style="display:none"></span>
+      <button data-a="undo" class="df-btn ghost" title="Undo (Ctrl+Z)">↶</button>
+      <button data-a="redo" class="df-btn ghost" title="Redo (Ctrl+Y)">↷</button>
       <button data-a="gear" class="df-btn ghost" title="Settings">⚙</button>
       <button data-a="validate" class="df-btn">✔ VALIDATE</button>
       <button data-a="save" class="df-btn">💾 SAVE</button>
@@ -56,6 +58,8 @@ export class Hud {
     const diffSel = this.bTop.querySelector('[data-a="diff"]');
     diffSel.value = String(b.d.difficulty || 1);
     diffSel.onchange = (e) => b.applyLocal({ t: "meta", p: { difficulty: +e.target.value } });
+    this.bTop.querySelector('[data-a="undo"]').onclick = () => { this.g.audio.sfx("ui"); b.undo(); };
+    this.bTop.querySelector('[data-a="redo"]').onclick = () => { this.g.audio.sfx("ui"); b.redo(); };
     this.bTop.querySelector('[data-a="gear"]').onclick = () => { this.g.audio.sfx("ui"); this.g.showSettings(); };
     this.bTop.querySelector('[data-a="validate"]').onclick = () => { this.g.audio.sfx("ui"); this.showValidate(b.validateNow()); };
     this.bTop.querySelector('[data-a="save"]').onclick = () => { this.g.audio.sfx("confirm"); this.g.menu.saveDungeon(b.d); this.toast("Saved to My Dungeons 💾", "info"); };
@@ -77,7 +81,7 @@ export class Hud {
     // floor switcher + hints
     this.bSide = el(`<div class="df-floors"></div>`);
     this.bWrap.appendChild(this.bSide);
-    this.bHint = el(`<div class="df-hint">LMB place · drag paint · RMB orbit · MMB/Shift pan · wheel zoom · R rotate · Tab floor · Del delete</div>`);
+    this.bHint = el(`<div class="df-hint">LMB place · drag paint · Select → drag to move · Del delete · Ctrl+Z undo · RMB orbit · MMB/Shift pan · wheel zoom · R rotate · Tab floor</div>`);
     this.bWrap.appendChild(this.bHint);
     this.bValid = el(`<div class="df-validchip" data-a="vchip"></div>`);
     this.bWrap.appendChild(this.bValid);
@@ -85,6 +89,14 @@ export class Hud {
 
     this.refreshBuilder(b);
     this.refreshValidate(b);
+    this.refreshBuilderUndo(b);
+  }
+
+  refreshBuilderUndo(b) {
+    if (!this.bTop) return;
+    const u = this.bTop.querySelector('[data-a="undo"]'), r = this.bTop.querySelector('[data-a="redo"]');
+    if (u) { u.disabled = !b.canUndo(); u.style.opacity = b.canUndo() ? "1" : "0.35"; }
+    if (r) { r.disabled = !b.canRedo(); r.style.opacity = b.canRedo() ? "1" : "0.35"; }
   }
 
   hideBuilder() { if (this.bWrap) { this.bWrap.remove(); this.bWrap = null; } this.hideSelection(); }
