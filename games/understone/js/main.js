@@ -893,11 +893,10 @@ function showTitle(canContinue) {
   return new Promise((resolve) => {
     const el = document.createElement('div');
     el.style.cssText = `position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
-      justify-content:center;z-index:95;font-family:'Segoe UI',sans-serif;
-      background:linear-gradient(rgba(6,8,16,.55),rgba(6,8,16,.82)),url('menu_bg.png') center/cover no-repeat;`;
+      justify-content:center;background:linear-gradient(#0e1526,#1c2c22);z-index:95;font-family:'Segoe UI',sans-serif;`;
     el.innerHTML = `
-      <h1 style="font-size:56px;letter-spacing:12px;color:#ffe6a8;margin:0 0 6px;text-shadow:0 3px 30px rgba(0,0,0,.9),0 0 28px rgba(232,217,160,.4)">UNDERSTONE</h1>
-      <div style="color:#cbd2e6;margin-bottom:34px;font-size:14px;text-shadow:0 2px 8px #000">dig · build · craft · survive</div>
+      <h1 style="font-size:52px;letter-spacing:12px;color:#e8d9a0;margin:0 0 6px;text-shadow:0 0 28px rgba(232,217,160,.4)">UNDERSTONE</h1>
+      <div style="color:#8a93b0;margin-bottom:34px;font-size:14px">dig · build · craft · survive</div>
       <div class="us-menu-btn" id="us-new">New World</div>
       <div class="us-menu-btn ${canContinue ? '' : 'disabled'}" id="us-continue">Continue</div>
       <div class="us-menu-btn" id="us-title-settings" style="font-size:15px;min-width:220px">Settings</div>
