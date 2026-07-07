@@ -2,7 +2,7 @@
 // Builds art_manifest.json — one prompt per card/token/UI asset, derived from
 // the live card database so art always matches the set. Consumed by
 // asset_gen/arcane_realms_gen.py.
-import { COLLECTIBLE, TOKENS, REALMS } from '../runtime/sim/cards.js?v=10';
+import { COLLECTIBLE, TOKENS, REALMS } from '../runtime/sim/cards.js?v=11';
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

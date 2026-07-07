@@ -2,9 +2,9 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=10';
-import { REALMS, cardById } from '../sim/cards.js?v=10';
-import { FX } from './fx.js?v=10';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=11';
+import { REALMS, cardById } from '../sim/cards.js?v=11';
+import { FX } from './fx.js?v=11';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 export const LAYOUT = {
@@ -480,9 +480,12 @@ export class BoardScene {
         scale: hovered ? 1.62 : 0.94,
       };
     }
+    // enemy hand (face-down backs) — tilt toward the camera like the player's
+    // hand so the cards read as proper PORTRAIT rectangles, not foreshortened
+    // squares. Brought slightly forward + bigger; gentle mirrored fan.
     return {
-      pos: new THREE.Vector3(x * 0.76, LAYOUT.handY + 0.2, LAYOUT.enemyHandZ),
-      rotX: 0.5, rotZ: (i - (n - 1) / 2) * 0.05, scale: 0.8,
+      pos: new THREE.Vector3(x * 0.94, LAYOUT.handY + 0.32, LAYOUT.enemyHandZ + 0.35),
+      rotX: -0.42, rotZ: (i - (n - 1) / 2) * 0.04, scale: 0.9,
     };
   }
 
@@ -762,7 +765,7 @@ export class BoardScene {
   // ── 3D legendary minis ─────────────────────────────────────────
   async _gltfLoader() {
     if (!this._gltfLoaderP) {
-      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=10').then((m) => new m.GLTFLoader());
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=11').then((m) => new m.GLTFLoader());
     }
     return this._gltfLoaderP;
   }

@@ -1,5 +1,17 @@
 # Arcane Realms TCG — Changelog
 
+## v1.3.6 — 2026-07-07 (Enemy hand backs read as proper cards)
+
+- **Enemy hand no longer foreshortens into squares.** The opponent's face-down
+  hand row was tilted *away* from the camera (`rotX +0.5`) at the far table
+  edge, so from the high viewing angle the backs compressed into small squares.
+  Now they tilt *toward* the camera (`rotX -0.42`) like the player's own hand,
+  brought slightly forward and up-scaled — the backs read as proper portrait
+  cards. (This is why clearing cache didn't help: the hand row was the same in
+  every build; only the board cards had ever been tilted.)
+
+Selftest 208/208. Cache-bust `?v=10` → `?v=11`.
+
 ## v1.3.5 — 2026-07-07 (Nameplate corners, board card cleanup, clean hover)
 
 Owner feedback on the on-board card readout.
