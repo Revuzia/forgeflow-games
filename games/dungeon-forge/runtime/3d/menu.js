@@ -69,21 +69,20 @@ class CharPreview {
       while (this.holder.children.length) this.holder.remove(this.holder.children[0]);
       this.mixer = null;
       const obj = this.g.assets.clone(tpl);
-      // scale to a consistent height using the (arms-out) bind box, then reground
-      const box0 = new THREE.Box3().setFromObject(obj);
-      const h0 = Math.max(0.1, box0.max.y - box0.min.y);
-      obj.scale.multiplyScalar(1.7 / h0);
       this.holder.add(obj);
-      // play the real generated idle clip (arms at sides), not the bind pose
-      const idleClip = (idleG && idleG.animations && idleG.animations[0]) || (tpl.animations && tpl.animations[0]);
-      if (idleClip) {
-        this.mixer = new THREE.AnimationMixer(obj);
-        this.mixer.clipAction(idleClip.clone()).play();
-        this.mixer.update(0.1);
-      }
+      // Meshy rigs bind-pose flat/degenerate → Box3.setFromObject reads the geometry
+      // bind bounds and lies (tiny height → giant model). poseRig plays the real idle
+      // clip and measures BONE world positions, which is accurate. Prefer the generated
+      // idle clip (arms at sides); fall back to the base bind clip only if it's missing.
+      const anims = (idleG && idleG.animations && idleG.animations.length) ? idleG.animations : (tpl.animations || []);
+      const { mixer, height } = poseRig(obj, anims, THREE);
+      this.mixer = mixer;
+      obj.scale.multiplyScalar(1.7 / Math.max(0.25, height));
       obj.updateMatrixWorld(true);
-      const bb = new THREE.Box3().setFromObject(obj);
-      if (isFinite(bb.min.y)) obj.position.y -= bb.min.y;
+      // reground the lowest bone onto the pedestal (Box3 on skin bind is unreliable)
+      let minY = Infinity; const v = new THREE.Vector3();
+      obj.traverse((o) => { if (o.isBone) { o.getWorldPosition(v); minY = Math.min(minY, v.y); } });
+      if (isFinite(minY)) obj.position.y -= minY;
     } catch (e) { /* leave empty pedestal on failure */ }
   }
   _loop() {

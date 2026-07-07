@@ -95,3 +95,16 @@ Initial release.
   - Merchants are solid; stock persists through save/share; MP-safe.
 - Selftest → 111 assertions (adds merchant placement, solidity, stock
   roundtrip/edit, buy flow, gold/tier caps).
+
+## v1.3.1 — 2026-07-07 (menu preview scale fix)
+- **Fixed the menu 3D class preview rendering a giant head-only close-up.**
+  CharPreview scaled off `Box3.setFromObject`, which reads a Meshy skinned
+  rig's degenerate bind bounds → tiny measured height → model blown up ~15×.
+  Now poses the idle clip and measures BONE world positions (the same path the
+  in-game actors use), so all four classes show the full figure on the pedestal.
+  Verified live in-browser: Knight/Barbarian/Sorceress/Rogue all frame correctly.
+- Full in-browser verification pass (Chrome MCP): weapon parents to RightHand
+  (Δ0), shield to left hand, armor (plate + 2 pauldrons) to Spine02; merchant
+  stall renders, E opens the shop, buy deducts gold with live affordability
+  gating + max-tier reject; builder places merchants and the per-vendor stock
+  toggle panel works.
