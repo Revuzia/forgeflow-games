@@ -9,7 +9,7 @@ import * as THREE from "three";
 
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
-const { makeInstanced, Assets, creatureClips, makeTorch, makeCreature, makeCellSurfaces } = await import("./assets.js" + V);
+const { makeInstanced, Assets, creatureClips, makeTorch, makeCreature, makeCellSurfaces, makeMerchant } = await import("./assets.js" + V);
 
 const FLOOR_H = 4.4;
 const CELL = D.CELL;
@@ -30,6 +30,7 @@ export const TOOLS = [
   { id: "trap", icon: "🕸️", label: "Trap" },
   { id: "torch", icon: "🔥", label: "Light" },
   { id: "decor", icon: "🏺", label: "Decor" },
+  { id: "npc", icon: "🛒", label: "Merchant" },
   { id: "spawn", icon: "🚩", label: "Spawn" },
   { id: "exit", icon: "🌀", label: "Exit" },
 ];
@@ -263,6 +264,12 @@ export class Builder {
         add(tpl, null, o.dtype === "pillar" ? 1.4 : o.dtype === "bookshelf" || o.dtype === "terminal" ? 2.2 : 1.8);
         break;
       }
+      case "npc": {
+        grp.add(makeMerchant(this.d.theme));
+        grp.add(this._merchBadge());
+        const l = new THREE.PointLight(this.d.theme === "scifi" ? 0x37e0ff : 0xffd769, 6, 8); l.position.y = 2.7; grp.add(l);
+        break;
+      }
       case "spawn": {
         const ring = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.5, 28).rotateX(-Math.PI / 2),
           new THREE.MeshBasicMaterial({ color: 0x59ff9c, transparent: true, opacity: 0.85 }));
@@ -299,6 +306,12 @@ export class Builder {
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: keyTexture(), transparent: true, depthTest: false }));
     spr.scale.set(1.1, 1.1, 1);
     spr.position.y = 2.6;
+    return spr;
+  }
+  _merchBadge() {
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTexture("🛒"), transparent: true, depthTest: false }));
+    spr.scale.set(1.4, 1.4, 1);
+    spr.position.y = 3.1;
     return spr;
   }
 
@@ -443,6 +456,7 @@ export class Builder {
     if (this.tool === "enemy") o.etype = this.toolOpt.etype || Object.keys(D.ENEMIES[this.d.theme])[0];
     if (this.tool === "trap") o.ttype = this.toolOpt.ttype || "spikes";
     if (this.tool === "decor") o.dtype = this.toolOpt.dtype || D.DECOR[this.d.theme][0];
+    if (this.tool === "npc") o.stock = D.SHOP_IDS.slice();
     if (this.tool === "light") o.color = this.toolOpt.color;
     if (this.tool === "torch") o.kind = "torch";
     const op = { t: "obj+", f: this.floor, o };

@@ -47,9 +47,21 @@ export const KINDS = {
   torch:  { rotatable: true,  solid: false },
   light:  { rotatable: false, solid: false }, // props: color
   decor:  { rotatable: true,  solid: true  }, // props: dtype
+  npc:    { rotatable: true,  solid: true  }, // props: stock (merchant) — buy with gold
   spawn:  { rotatable: true,  solid: false },
   exit:   { rotatable: false, solid: false },
 };
+
+// Merchant catalog — what an NPC vendor can sell (id → {label, price gold, icon}).
+// The builder toggles which of these a given merchant offers (default: all).
+export const SHOP = {
+  potion: { label: "Health Potion", price: 25, icon: "🧪", desc: "+35 HP on use (Q)" },
+  mana:   { label: "Energy Refill",  price: 18, icon: "🔷", desc: "Restore full mana" },
+  weapon: { label: "Weapon Upgrade", price: 70, icon: "⚔", desc: "+1 weapon tier (more damage)" },
+  armor:  { label: "Armor Upgrade",  price: 70, icon: "🛡", desc: "+1 armor tier (soak damage)" },
+  charm:  { label: "Damage Charm",   price: 90, icon: "✨", desc: "+20% damage, whole run" },
+};
+export const SHOP_IDS = Object.keys(SHOP);
 
 // Enemy roster per theme: [id, hp, dmg, speed, aggroR, attackR, attackCd, xp]
 export const ENEMIES = {
@@ -189,7 +201,7 @@ export function applyOp(d, op) {
     case "objEdit": {
       const hit = objById(d, op.id);
       if (!hit) return { ok: false, err: "noobj" };
-      const ALLOW = ["rot", "locked", "etype", "ttype", "dtype", "color"];
+      const ALLOW = ["rot", "locked", "etype", "ttype", "dtype", "color", "stock"];
       for (const k of ALLOW) if (op.p && op.p[k] !== undefined) hit.obj[k] = op.p[k];
       return { ok: true };
     }
@@ -470,6 +482,7 @@ export function sanitize(raw) {
         if (o.kind === "enemy") c.etype = String(o.etype || "").slice(0, 16);
         if (o.kind === "trap") c.ttype = TRAPS.includes(o.ttype) ? o.ttype : "spikes";
         if (o.kind === "decor") c.dtype = String(o.dtype || "").slice(0, 16);
+        if (o.kind === "npc") c.stock = Array.isArray(o.stock) ? o.stock.filter((s) => SHOP[s]).slice(0, 8) : SHOP_IDS.slice();
         if (o.kind === "light" && o.color) c.color = String(o.color).slice(0, 9);
         const n = parseInt(c.id.slice(1), 10); if (!isNaN(n) && n >= out.nid) out.nid = n + 1;
         nf.objects.push(c);

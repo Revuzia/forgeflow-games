@@ -11,7 +11,7 @@ import * as THREE from "three";
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
 const E = await import("../sim/escape_sim.js" + V);
-const { makeInstanced, Assets, charClips, makeTorch, makeCellSurfaces } = await import("./assets.js" + V);
+const { makeInstanced, Assets, charClips, makeTorch, makeCellSurfaces, makeMerchant } = await import("./assets.js" + V);
 const { EnemyPool } = await import("./enemies.js" + V);
 
 const FLOOR_H = 4.4;
@@ -228,6 +228,15 @@ export class Escape {
       case "decor": {
         const tpl = this.props[o.dtype] || this.props.crate;
         add(tpl, null, o.dtype === "pillar" ? 1.4 : o.dtype === "bookshelf" || o.dtype === "terminal" ? 2.2 : 1.8);
+        break;
+      }
+      case "npc": {
+        grp.add(makeMerchant(this.d.theme));
+        grp.add(this._sprite("🛒", 1.4, 3.1));
+        const l = new THREE.PointLight(this.d.theme === "scifi" ? 0x37e0ff : 0xffd769, this.g.look.torchI * 0.3, 9, 1.6);
+        l.position.y = 2.7; grp.add(l);
+        this.lightPool.push({ light: l, base: this.g.look.torchI * 0.3, grp, f });
+        grp.userData.merchant = true;
         break;
       }
       case "spawn": {
@@ -524,7 +533,11 @@ export class Escape {
       if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;
       this.keys[e.code] = true;
       const p = this.me();
-      if (e.code === "KeyE" && p) p.input.interactDown = true;
+      if (e.code === "KeyE" && p) {
+        const merch = E.nearestMerchant(this.run, p);
+        if (merch && !this.g.hud.modalOpen) { this._openShop(merch); }
+        else p.input.interactDown = true;
+      }
       if (e.code === "KeyQ" && p) p.input.potionDown = true;
       if (e.code === "KeyV") this.fp = !this.fp;
       if (e.code === "KeyF" && p) this._special = true;
@@ -563,6 +576,27 @@ export class Escape {
     p.input.melee = !!this._melee;
     p.input.special = !!this._special;
     p.input.frost = !!this._frost;
+  }
+
+  /** Open the merchant shop UI; releases pointer lock so the player can click. */
+  _openShop(merch) {
+    if (this._shopOpen) return;
+    this._shopOpen = true;
+    document.exitPointerLock && document.exitPointerLock();
+    this.g.audio.sfx("confirm");
+    this.g.hud.showShop(this, merch, this.me());
+  }
+  buy(itemId) {
+    const p = this.me();
+    const res = E.buyItem(this.run, p, itemId);
+    if (res.ok) { this._handleEvents(E.drainEvents(this.run)); this.g.audio.sfx("key"); }
+    else { this.g.audio.sfx("error"); this.g.hud.toast(res.err === "poor" ? "Not enough gold 💰" : res.err === "maxed" ? "Already at max tier" : "Can't buy that", "warn"); }
+    return res;
+  }
+  closeShop() {
+    this._shopOpen = false;
+    const el = this.g.renderer.domElement;
+    if (!this.run.over && !this._finished) el.requestPointerLock && el.requestPointerLock();
   }
 
   // ── event fan-out: sim events → visuals/audio/net ──────────────────────────
@@ -688,6 +722,10 @@ export class Escape {
             g.audio.sfx("confirm");
             g.hud.toast(ev.slot === "weapon" ? `⚔ Weapon upgraded to tier ${ev.tier}!` : `🛡 Armor equipped — tier ${ev.tier}!`, "loot");
           }
+          break;
+        }
+        case "bought": {
+          if (ev.id === this.myId) { const s = D.SHOP[ev.item]; g.hud.toast(`Bought ${s ? s.icon + " " + s.label : ev.item} (−${ev.price}💰)`, "loot"); }
           break;
         }
         case "potion": if (ev.id === this.myId) { g.audio.sfx("potion"); g.hud.toast("🧪 +35 HP", "loot"); } break;

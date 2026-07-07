@@ -14,6 +14,7 @@
 import {
   CELL, DIRS, ENEMIES, ck, hasCell, objsAt, findAll, stairLinks,
   mulberry, hashStr, rollLoot, cellType, cellHeight, CT, LAVA_DPS, WATER_SLOW, RAISED_H,
+  SHOP, SHOP_IDS,
 } from "./dungeon.js";
 
 export const PLAYER = {
@@ -108,7 +109,7 @@ export function newRun(d, runSeed, players) {
       maxHp: cls.hp, combo: 0, comboT: 0, specialT: 0, frostT: 0, stunT: 0,
       f: spawn.f, x: c2w(spawn.obj.x) + (i % 2) * 0.9 - 0.45, z: c2w(spawn.obj.z) + Math.floor(i / 2) * 0.9 - 0.45,
       yaw: (spawn.obj.rot || 0) * Math.PI / 2, hp: cls.hp, mana: PLAYER.mana,
-      alive: true, escaped: false, deaths: 0, gold: 0, keys: 0, potions: 1, charms: 0,
+      alive: true, escaped: false, deaths: 0, gold: 40, keys: 0, potions: 1, charms: 0,
       weaponTier: 0, armorTier: 0,
       meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null, // climb: {t, from, to}
       input: { mx: 0, mz: 0, sprint: false, melee: false, bolt: false, interact: false, potion: false, yaw: 0 },
@@ -153,7 +154,7 @@ export function addPlayer(st, p) {
     maxHp: cls.hp, combo: 0, comboT: 0, specialT: 0, frostT: 0, stunT: 0,
     f: st.spawn.f, x: c2w(st.spawn.x) + (i % 2) * 0.9 - 0.45, z: c2w(st.spawn.z) + Math.floor(i / 2) * 0.9 - 0.45,
     yaw: 0, hp: cls.hp, mana: PLAYER.mana,
-    alive: true, escaped: false, deaths: 0, gold: 0, keys: 0, potions: 1, charms: 0,
+    alive: true, escaped: false, deaths: 0, gold: 40, keys: 0, potions: 1, charms: 0,
     weaponTier: 0, armorTier: 0,
     meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null,
     input: { mx: 0, mz: 0, sprint: false, melee: false, bolt: false, interact: false, potion: false, yaw: 0 },
@@ -172,7 +173,7 @@ function cellBlocked(st, f, cx, cz, forEnemy) {
   if (!hasCell(d, f, cx, cz)) return true;
   for (const o of objsAt(d, f, cx, cz)) {
     if (o.kind === "door" && !st.openDoors.has(o.id)) return true;
-    if (o.kind === "decor" || o.kind === "chest") return true;
+    if (o.kind === "decor" || o.kind === "chest" || o.kind === "npc") return true;
     if (forEnemy && o.kind === "door") return true; // enemies never path through doors (even open? open ok)
   }
   return false;
@@ -356,6 +357,37 @@ export function doInteract(st, p) {
     return true;
   }
   return false;
+}
+
+/** The merchant NPC nearest to a player (adjacent cell), or null. */
+export function nearestMerchant(st, p) {
+  const cx = w2c(p.x), cz = w2c(p.z);
+  for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+    for (const o of objsAt(st.d, p.f, cx + dx, cz + dz)) {
+      if (o.kind === "npc") {
+        const dist = Math.hypot(c2w(o.x) - p.x, c2w(o.z) - p.z);
+        if (dist < 4.6) return o;
+      }
+    }
+  }
+  return null;
+}
+
+/** Buy an item from a merchant: checks gold, deducts, grants. Returns result. */
+export function buyItem(st, p, itemId) {
+  const S = SHOP[itemId];
+  if (!S) return { ok: false, err: "noitem" };
+  // tier caps: can't buy past III
+  if (itemId === "weapon" && (p.weaponTier || 0) >= 3) return { ok: false, err: "maxed" };
+  if (itemId === "armor" && (p.armorTier || 0) >= 3) return { ok: false, err: "maxed" };
+  if (p.gold < S.price) return { ok: false, err: "poor" };
+  p.gold -= S.price;
+  // weapon/armor are tier UPGRADES (+1 from current); others are a plain grant
+  if (itemId === "weapon") grantLoot(st, p, { kind: "weapon", tier: (p.weaponTier || 0) + 1 });
+  else if (itemId === "armor") grantLoot(st, p, { kind: "armor", tier: (p.armorTier || 0) + 1 });
+  else grantLoot(st, p, { kind: itemId, n: 1 });
+  emit(st, "bought", { id: p.id, item: itemId, price: S.price });
+  return { ok: true, gold: p.gold };
 }
 
 export function grantLoot(st, p, it) {

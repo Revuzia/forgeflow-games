@@ -21,12 +21,13 @@ OUT = ROOT / "games" / "dungeon-forge" / "assets" / "chars" / "meshy"
 API = "https://api.meshy.ai"
 KEY = "msy_st8XcruSB8SvhIAJHFPvUXWZ8TjbJ5Y2cLpT"
 
-# per-class clip plan: (clip_name, action_id)
+# per-class clip plan: (clip_name, action_id).  idle 0 = calm neutral standing
+# (fixes the A-pose "arms out" bind pose in the menu preview + escape idle).
 PLAN = {
-    "knight": [("slash1", 219), ("slash2", 97), ("finisher", 242), ("parry", 147), ("hit", 172), ("death", 8)],
-    "barbarian": [("slash1", 237), ("slash2", 238), ("finisher", 128), ("hit", 172), ("death", 8)],
-    "sorceress": [("melee", 4), ("cast1", 125), ("cast2", 129), ("hit", 172), ("death", 8)],
-    "rogue": [("slash1", 240), ("slash2", 97), ("finisher", 91), ("hit", 172), ("death", 8)],
+    "knight": [("idle", 0), ("slash1", 219), ("slash2", 97), ("finisher", 242), ("parry", 147), ("hit", 172), ("death", 8)],
+    "barbarian": [("idle", 0), ("slash1", 237), ("slash2", 238), ("finisher", 128), ("hit", 172), ("death", 8)],
+    "sorceress": [("idle", 0), ("melee", 4), ("cast1", 125), ("cast2", 129), ("hit", 172), ("death", 8)],
+    "rogue": [("idle", 0), ("slash1", 240), ("slash2", 97), ("finisher", 91), ("hit", 172), ("death", 8)],
 }
 
 

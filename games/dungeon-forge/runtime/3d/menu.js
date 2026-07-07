@@ -63,18 +63,27 @@ class CharPreview {
     const token = ++this._token;
     try {
       const tpl = await this.g.assets.load(`chars/meshy/${name}/base.glb`);
+      const idleG = await this.g.assets.load(`chars/meshy/${name}/anim_idle.glb`).catch(() => null);
       if (token !== this._token || !this._alive) return;
       // clear previous
       while (this.holder.children.length) this.holder.remove(this.holder.children[0]);
       this.mixer = null;
       const obj = this.g.assets.clone(tpl);
-      const posed = poseRig(obj, tpl.animations, THREE);
-      obj.scale.multiplyScalar(1.7 / posed.height);
+      // scale to a consistent height using the (arms-out) bind box, then reground
+      const box0 = new THREE.Box3().setFromObject(obj);
+      const h0 = Math.max(0.1, box0.max.y - box0.min.y);
+      obj.scale.multiplyScalar(1.7 / h0);
+      this.holder.add(obj);
+      // play the real generated idle clip (arms at sides), not the bind pose
+      const idleClip = (idleG && idleG.animations && idleG.animations[0]) || (tpl.animations && tpl.animations[0]);
+      if (idleClip) {
+        this.mixer = new THREE.AnimationMixer(obj);
+        this.mixer.clipAction(idleClip.clone()).play();
+        this.mixer.update(0.1);
+      }
       obj.updateMatrixWorld(true);
       const bb = new THREE.Box3().setFromObject(obj);
       if (isFinite(bb.min.y)) obj.position.y -= bb.min.y;
-      this.holder.add(obj);
-      this.mixer = posed.mixer;
     } catch (e) { /* leave empty pedestal on failure */ }
   }
   _loop() {
@@ -520,6 +529,7 @@ export function sampleDungeon(theme) {
   F(0, 20, 20, 6, 5);                    // entry 20..25 × 20..24
   O(0, "spawn", 22, 21, { rot: 0 });
   O(0, "torch", 20, 20); O(0, "torch", 25, 20); O(0, "torch", 20, 24); O(0, "torch", 25, 24);
+  O(0, "npc", 24, 23, { rot: 3, stock: D.SHOP_IDS.slice() }); // starter merchant by the entrance
   O(0, "decor", 21, 24, { dtype: theme === "scifi" ? "crate" : "barrel" });
   F(0, 22, 25, 2, 3);                    // corridor north 25..27
   O(0, "door", 22, 26, { rot: 0 });      // unlocked door mid-corridor (breaks LOS)

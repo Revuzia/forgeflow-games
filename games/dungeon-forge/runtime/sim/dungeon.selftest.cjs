@@ -400,6 +400,42 @@ const ok = (cond, name, extra) => {
   E.damagePlayer(rT, pT, 20, "test");
   ok(hpBefore - pT.hp === 18, "armor soaks 10% (took " + (hpBefore - pT.hp) + ")");
 
+  // ── 15b. merchant / shop ────────────────────────────────────────
+  console.log("[merchant]");
+  {
+    const dd = newDungeon({ name: "SHOP", theme: "fantasy", seed: 4 });
+    stampRoom(dd, 0, 5, 5, 5, 5);
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "exit", x: 9, z: 9 } });
+    const npc = applyOp(dd, { t: "obj+", f: 0, o: { kind: "npc", x: 7, z: 6, stock: D.SHOP_IDS.slice() } });
+    ok(npc.ok, "merchant placed");
+    ok(D.KINDS.npc.solid, "merchant is solid (blocks walking)");
+    // stock survives roundtrip
+    const back = sanitize(serialize(dd));
+    const bn = findAll(back, "npc")[0];
+    ok(bn && Array.isArray(bn.obj.stock) && bn.obj.stock.length === D.SHOP_IDS.length, "merchant stock survives roundtrip");
+    // edit stock (sell only potions)
+    applyOp(dd, { t: "objEdit", id: npc.id, p: { stock: ["potion"] } });
+    ok(findAll(dd, "npc")[0].obj.stock.join() === "potion", "merchant stock editable");
+    applyOp(dd, { t: "objEdit", id: npc.id, p: { stock: D.SHOP_IDS.slice() } });
+    // buying
+    const r = newRun(dd, 1, [{ id: "P1" }]);
+    const p = r.players[0];
+    ok(p.gold === 40, "player starts with 40 gold");
+    p.x = E.c2w(7) - 1.2; p.z = E.c2w(6);
+    const m = E.nearestMerchant(r, p);
+    ok(m && m.kind === "npc", "nearestMerchant finds the vendor beside the player");
+    const buyP = E.buyItem(r, p, "potion");
+    ok(buyP.ok && p.gold === 15 && p.potions === 2, "bought potion (−25g, +1 potion)", p.gold + "/" + p.potions);
+    const buyW = E.buyItem(r, p, "weapon");
+    ok(!buyW.ok && buyW.err === "poor", "can't buy weapon when broke");
+    p.gold = 200;
+    const buyW2 = E.buyItem(r, p, "weapon");
+    ok(buyW2.ok && p.weaponTier === 1, "bought weapon upgrade → tier 1");
+    p.weaponTier = 3;
+    ok(!E.buyItem(r, p, "weapon").ok, "can't buy past max weapon tier");
+  }
+
   // ── 16. scale: 1 / 10 / 20 / 30-room dungeons ──────────────────
   console.log("[scale]");
   const genRooms = (n) => {

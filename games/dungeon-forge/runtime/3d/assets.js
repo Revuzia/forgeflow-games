@@ -126,11 +126,14 @@ export class Assets {
       try {
         const base = await this.load(`chars/meshy/${n}/base.glb`);
         const anims = [];
-        if (base.animations && base.animations[0]) { const c = base.animations[0].clone(); c.name = "Idle"; anims.push(c); }
-        const addClip = async (rel, name) => {
+        const addClip = async (rel, name, fallbackFirst) => {
           const g = await this.load(rel).catch(() => null);
-          if (g && g.animations && g.animations[0]) { const c = g.animations[0].clone(); c.name = name; anims.push(c); }
+          if (g && g.animations && g.animations[0]) { const c = g.animations[0].clone(); c.name = name; anims.push(c); return true; }
+          return false;
         };
+        // real generated idle (arms down) — falls back to the base bind clip only if missing
+        const gotIdle = await addClip(`chars/meshy/${n}/anim_idle.glb`, "Idle");
+        if (!gotIdle && base.animations && base.animations[0]) { const c = base.animations[0].clone(); c.name = "Idle"; anims.push(c); }
         await addClip(`chars/meshy/${n}/walk_arm.glb`, "Walk");
         await addClip(`chars/meshy/${n}/run_arm.glb`, "Run");
         await Promise.all((CLIPS[n] || []).map((cn) => addClip(`chars/meshy/${n}/anim_${cn}.glb`, "C_" + cn)));
@@ -252,6 +255,39 @@ export function makeCreature(assets, tpl, targetH, THREE_) {
   const box = new (THREE_ || THREE).Box3().setFromObject(obj);
   if (isFinite(box.min.y)) obj.position.y -= Math.max(-2, Math.min(2, box.min.y));
   return { obj, mixer };
+}
+
+/** Procedural merchant stall + shopkeeper — reads clearly as a vendor in both
+ *  the builder and escape, no character rig required. Returns a group ~2 cells. */
+export function makeMerchant(theme) {
+  const g = new THREE.Group();
+  const scifi = theme === "scifi";
+  const woodC = scifi ? 0x2a3340 : 0x6a4326, clothC = scifi ? 0x1f6f8f : 0x8a2b2b;
+  const wood = new THREE.MeshStandardMaterial({ color: woodC, roughness: 0.85, metalness: scifi ? 0.6 : 0 });
+  const cloth = new THREE.MeshStandardMaterial({ color: clothC, roughness: 0.9, emissive: scifi ? 0x0a3a4a : 0x1a0505, emissiveIntensity: scifi ? 0.4 : 0.1 });
+  // counter
+  const top = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.16, 0.9), wood); top.position.set(0, 1.0, 0.5); g.add(top);
+  for (const sx of [-1, 1]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.0, 0.14), wood); leg.position.set(sx * 1.05, 0.5, 0.5); g.add(leg); }
+  // awning
+  const awn = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.1, 1.2), cloth); awn.position.set(0, 2.5, 0.2); awn.rotation.x = -0.18; g.add(awn);
+  for (const sx of [-1, 1]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.5, 8), wood); post.position.set(sx * 1.2, 1.25, 0.6); g.add(post); }
+  // striped awning trim
+  for (let i = -5; i <= 5; i++) { if (i % 2) continue; const s = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.28, 0.02), new THREE.MeshStandardMaterial({ color: 0xf0e4c8 })); s.position.set(i * 0.24, 2.34, 0.82); g.add(s); }
+  // gold coins on the counter
+  const coinMat = new THREE.MeshStandardMaterial({ color: 0xffd769, metalness: 0.9, roughness: 0.25, emissive: 0xffb000, emissiveIntensity: 0.35 });
+  for (let i = 0; i < 5; i++) { const cn = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.03, 14), coinMat); cn.position.set(-0.7 + i * 0.12, 1.1, 0.4 + (i % 2) * 0.12); g.add(cn); }
+  // shopkeeper figure (simple, behind the counter)
+  const skin = new THREE.MeshStandardMaterial({ color: 0xd8a97e, roughness: 0.7 });
+  const robe = new THREE.MeshStandardMaterial({ color: scifi ? 0x35506a : 0x3a5a3a, roughness: 0.85 });
+  const fig = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, 0.95, 12), robe); body.position.y = 0.62; fig.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 14, 12), skin); head.position.y = 1.28; fig.add(head);
+  const hat = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.34, 12), new THREE.MeshStandardMaterial({ color: scifi ? 0x223a4a : 0x5a3a22, roughness: 0.9 })); hat.position.y = 1.5; fig.add(hat);
+  for (const sx of [-1, 1]) { const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.6, 8), robe); arm.position.set(sx * 0.3, 0.75, 0.05); arm.rotation.z = sx * 0.5; fig.add(arm); }
+  fig.position.set(0, 0.14, -0.15);
+  g.add(fig);
+  g.userData.figure = fig;
+  return g;
 }
 
 /** Procedural torch: wooden pole/metal rod + glowing head. Cleaner than any

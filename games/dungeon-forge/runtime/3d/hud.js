@@ -124,6 +124,8 @@ export class Hud {
       sub.appendChild(el(`<span class="df-subnote">Drop on the floor, on a 🧰 chest (hides inside) or on a 👹 enemy (they carry it)</span>`));
     } else if (b.tool === "door") {
       sub.appendChild(el(`<span class="df-subnote">Place in a corridor · click the door afterwards to toggle its 🔒 lock</span>`));
+    } else if (b.tool === "npc") {
+      sub.appendChild(el(`<span class="df-subnote">🛒 A merchant stall — players walk up and press E to buy gear with gold · click it to choose what it sells</span>`));
     }
 
     // floors
@@ -154,8 +156,13 @@ export class Hud {
     this.hideSelection();
     if (!hit) return;
     const o = hit.obj;
-    const kindLabel = { door: "Door", chest: "Chest", key: "Key", enemy: "Enemy", trap: "Trap", torch: "Light", light: "Light orb", decor: "Decoration", spawn: "Spawn", exit: "Exit portal", stairs: "Stairs" }[o.kind] || o.kind;
+    const kindLabel = { door: "Door", chest: "Chest", key: "Key", enemy: "Enemy", trap: "Trap", torch: "Light", light: "Light orb", decor: "Decoration", npc: "Merchant", spawn: "Spawn", exit: "Exit portal", stairs: "Stairs" }[o.kind] || o.kind;
     let extra = "";
+    if (o.kind === "npc") {
+      const stock = o.stock && o.stock.length ? o.stock : D.SHOP_IDS.slice();
+      extra = `<div class="df-selnote">Players buy from this vendor with gold. Toggle what it sells:</div>
+        <div class="df-shopcfg">${D.SHOP_IDS.map((id) => `<button class="df-shoptog ${stock.includes(id) ? "on" : ""}" data-shop="${id}" title="${esc(D.SHOP[id].label)} · ${D.SHOP[id].price}g">${D.SHOP[id].icon} ${D.SHOP[id].price}</button>`).join("")}</div>`;
+    }
     if (o.kind === "door") {
       extra = `<button data-a="lock" class="df-btn ${o.locked ? "danger" : ""}" title="Locked doors need a key">${o.locked ? "🔒 LOCKED — needs key" : "🔓 Unlocked"}</button>
         <div class="df-selnote">${o.locked ? "Remember to place at least one 🗝️ key the players can reach!" : "Click to require a key"}</div>`;
@@ -180,6 +187,13 @@ export class Hud {
     if (q('[data-a="lock"]')) q('[data-a="lock"]').onclick = () => { b.toggleLock(); };
     if (q('[data-a="etype"]')) q('[data-a="etype"]').onchange = (e) => b._editSel({ etype: e.target.value });
     if (q('[data-a="ttype"]')) q('[data-a="ttype"]').onchange = (e) => b._editSel({ ttype: e.target.value });
+    this.selPanel.querySelectorAll("[data-shop]").forEach((btn) => btn.onclick = () => {
+      const cur = new Set((o.stock && o.stock.length ? o.stock : D.SHOP_IDS).slice());
+      const id = btn.dataset.shop;
+      if (cur.has(id)) cur.delete(id); else cur.add(id);
+      if (cur.size === 0) cur.add(id); // keep at least one
+      b._editSel({ stock: D.SHOP_IDS.filter((s) => cur.has(s)) });
+    });
     q('[data-a="rot"]').onclick = () => b.rotateSelected();
     q('[data-a="del"]').onclick = () => b.deleteSelected();
   }
@@ -323,10 +337,15 @@ export class Hud {
       html += `<span class="df-combo ${comboOn ? "on" : ""}">${comboOn ? "COMBO ×" + p.combo : ""}</span>`;
       ab.innerHTML = html;
     }
-    // interact prompt
-    const hint = p.alive && !p.escaped ? E.interactHint(esc_.run, p) : null;
+    // interact prompt — merchant takes priority
+    const merch = p.alive && !p.escaped ? E.nearestMerchant(esc_.run, p) : null;
+    const hint = !merch && p.alive && !p.escaped ? E.interactHint(esc_.run, p) : null;
     const pr = q('[data-a="prompt"]');
-    if (hint) {
+    if (merch) {
+      pr.style.display = "";
+      pr.innerHTML = `<b>E</b> 🛒 Shop`;
+      pr.classList.remove("need");
+    } else if (hint) {
       pr.style.display = "";
       pr.innerHTML = hint.need ? `🔒 ${esc(hint.verb)}` : `<b>E</b> ${esc(hint.verb)}`;
       pr.classList.toggle("need", !!hint.need);
@@ -379,6 +398,40 @@ export class Hud {
     ctx.fillStyle = "#fff";
     ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(4.4, 5); ctx.lineTo(-4.4, 5); ctx.closePath(); ctx.fill();
     ctx.restore();
+  }
+
+  /** Merchant shop modal — buy items with gold; live-refreshes on purchase. */
+  showShop(esc_, merch, p) {
+    const ids = (merch.stock && merch.stock.length ? merch.stock : D.SHOP_IDS).filter((s) => D.SHOP[s]);
+    const render = () => {
+      const rows = ids.map((id) => {
+        const s = D.SHOP[id];
+        const owned = id === "weapon" ? (p.weaponTier || 0) : id === "armor" ? (p.armorTier || 0) : null;
+        const maxed = (id === "weapon" || id === "armor") && owned >= 3;
+        const afford = p.gold >= s.price && !maxed;
+        return `<div class="df-shoprow">
+          <span class="df-shopicon">${s.icon}</span>
+          <span class="df-shopinfo"><b>${esc(s.label)}${owned != null ? ` <span class="dim">(tier ${["–", "I", "II", "III"][owned]})</span>` : ""}</b><span class="df-shopdesc">${esc(s.desc)}</span></span>
+          <button class="df-btn ${afford ? "accent" : ""}" data-buy="${id}" ${afford ? "" : "disabled"}>${maxed ? "MAX" : "💰 " + s.price}</button>
+        </div>`;
+      }).join("");
+      return `<h3>🛒 Merchant <span class="dim" style="float:right">💰 ${p.gold} gold</span></h3>
+        <div class="df-shop">${rows}</div>
+        <div class="df-selrow"><button data-a="leave" class="df-btn accent" style="flex:1">Leave shop (E)</button></div>`;
+    };
+    this.modal(render(), (m) => {
+      const wire = () => {
+        m.querySelectorAll("[data-buy]").forEach((b) => b.onclick = () => {
+          const r = esc_.buy(b.dataset.buy);
+          if (r.ok) { m.innerHTML = render(); wire(); }
+        });
+        m.querySelector('[data-a="leave"]').onclick = () => leave();
+      };
+      const leave = () => { window.removeEventListener("keydown", this._shopEsc); this.closeModal(); esc_.closeShop(); };
+      wire();
+      this._shopEsc = (e) => { if (e.code === "KeyE" || e.code === "Escape") leave(); };
+      window.addEventListener("keydown", this._shopEsc);
+    });
   }
 
   showResults(esc_, res) {
@@ -451,6 +504,9 @@ function injectStyle() {
   .df-selhead{font-weight:800;font-size:15px} .dim{opacity:.55;font-weight:600;font-size:12px}
   .df-selrow{display:flex;gap:8px} .df-selrow .df-btn{flex:1}
   .df-selnote{font-size:11.5px;opacity:.75;line-height:1.45}
+  .df-shopcfg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .df-shoptog{background:rgba(16,20,34,.85);border:1px solid rgba(150,170,255,.25);color:#cfd6f4;border-radius:9px;padding:6px 8px;font-size:12px;font-weight:700;cursor:pointer}
+  .df-shoptog.on{border-color:var(--acc);color:var(--acc);background:rgba(90,110,220,.2)}
   /* modal */
   .df-modalback{position:absolute;inset:0;background:rgba(3,5,10,.6);display:flex;align-items:center;justify-content:center;pointer-events:auto;z-index:70}
   .df-modal{background:rgba(12,15,26,.97);border:1px solid rgba(150,170,255,.35);border-radius:18px;padding:22px 26px;min-width:330px;max-width:520px;max-height:80vh;overflow:auto}
@@ -504,6 +560,13 @@ function injectStyle() {
   .df-setrow .df-toggle::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s}
   .df-setrow .df-toggle.on::after{left:24px}
   .df-fps{position:absolute;bottom:8px;right:10px;font:700 13px monospace;color:#7dffb0;background:rgba(8,10,16,.7);padding:4px 9px;border-radius:8px;z-index:50;pointer-events:none}
+  .df-shop{display:flex;flex-direction:column;gap:8px;margin:6px 0 14px;max-height:52vh;overflow:auto}
+  .df-shoprow{display:flex;align-items:center;gap:12px;background:rgba(16,20,34,.7);border:1px solid rgba(150,170,255,.18);border-radius:12px;padding:9px 12px}
+  .df-shopicon{font-size:26px;flex:0 0 auto}
+  .df-shopinfo{display:flex;flex-direction:column;gap:1px;flex:1;text-align:left}
+  .df-shopinfo b{font-size:14px}
+  .df-shopdesc{font-size:11.5px;opacity:.7}
+  .df-shoprow .df-btn{min-width:78px;font-weight:800}
   @media (max-width:820px){ .df-tool .lbl{display:none} .df-tool{min-width:44px} .df-name{width:130px} .df-minimap{width:120px;height:120px} }
   `;
   const st = document.createElement("style");

@@ -78,3 +78,20 @@ Initial release.
 - Selftest → 101 assertions (adds class combos, bash stun, shield block,
   burn/frost/poison, barbarian crush). Event-path harness confirms every
   class emits the render events the FX layer consumes.
+
+## v1.3 — 2026-07-07 (idle fix + merchants)
+- **Fixed the "arms-out" A-pose**: generated a real neutral IDLE animation
+  (Meshy action 0) for all four classes — they now stand naturally with arms
+  at their sides in the menu 3D preview AND in escape mode (was the base bind
+  pose). Clip-only GLBs (~70KB each) retargeted on the shared skeleton.
+- **Merchant / NPC system** — the dungeon builder can now place vendors:
+  - New 🛒 Merchant tool; procedural market stall + shopkeeper + coins + awning.
+  - Click a placed merchant to toggle what it sells (potions, energy, weapon
+    upgrade, armor upgrade, damage charm — each priced in gold).
+  - In escape, walk up and press **E** to open the shop; buy with gold you find
+    in chests (players now start with 40 gold so the opening vendor is usable).
+    Purchases grant/equip immediately and show on the character.
+  - Featured sample dungeons place a starter merchant by the entrance.
+  - Merchants are solid; stock persists through save/share; MP-safe.
+- Selftest → 111 assertions (adds merchant placement, solidity, stock
+  roundtrip/edit, buy flow, gold/tier caps).
