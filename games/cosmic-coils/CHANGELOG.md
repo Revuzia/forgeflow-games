@@ -1,5 +1,24 @@
 # Cosmic Coils — CHANGELOG
 
+## 4 — 2026-07-07 · Owner playtest round 3 (self-collision fix, F3, skies)
+- **Self-collision actually works now.** The v3 neck window was sized off the
+  boost-circle CIRCUMFERENCE (~29u) — longer than a small/medium snake's whole
+  body, so "I hit my tail and lived". The geometry only needs ~3.2u of neck
+  (scaled for girth): tail hits kill, hard curls and S-curves stay safe,
+  sustained full loops still die. New selftest case reproduces the owner's
+  exact tail-hit at mass 60 (58 asserts total).
+- **F3 debug overlay**: FPS + frame/worst ms, draw calls, triangles, programs,
+  geometries, textures, quality/DPR/zoom/bloom, biome/weather + live modifiers,
+  snakes/segments/food counts, player mass/segs/boost-ramp, net room state,
+  sensitivity.
+- **Richer skies, per biome**: drifting cloud layers on all five worlds
+  (biome-tinted: white cumulus, ember smoke, glacier wisps, dune haze, abyss
+  nebular puffs) · 🌈 **rainbow arcs over Verdant after rain showers** ·
+  **animated aurora curtains during Glacier's aurora events**. All three are
+  a single cheap mesh/points layer each; LOW quality halves weather + cloud
+  particle budgets so storms stay smooth on weak machines.
+- `?v=` → 4.
+
 ## 3 — 2026-07-07 · Owner playtest round 2 (unified boost + settings)
 - **W, LMB and SPACE are now ONE control: BOOST** (round-1's separate free
   W-throttle read as "W doesn't boost"). Boost now RAMPS 1.0×→1.78× over ~0.9s

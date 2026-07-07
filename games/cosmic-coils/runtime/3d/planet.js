@@ -27,6 +27,7 @@ export const BIOME_DEFS = {
     hemi: { sky: 0x9fd8ff, ground: 0x2c5a30, int: 0.75 },
     fog: 0x0a2321, fogDensity: 0.0035,
     ambientMotes: { color: 0xaaffcc, n: 140, mode: "firefly" },
+    clouds: { color: 0xffffff, n: 40, alpha: 0.20, alt: [10, 16] },
     accent: 0x53ffb4,
   },
   ember: {
@@ -41,6 +42,7 @@ export const BIOME_DEFS = {
     hemi: { sky: 0xff9a66, ground: 0x4a2418, int: 0.8 },
     fog: 0x1d0c08, fogDensity: 0.004,
     ambientMotes: { color: 0xffa040, n: 170, mode: "ember" },
+    clouds: { color: 0x4a3a3c, n: 30, alpha: 0.22, alt: [11, 17] },
     accent: 0xff7b3a,
   },
   glacier: {
@@ -55,6 +57,7 @@ export const BIOME_DEFS = {
     hemi: { sky: 0xbfe8ff, ground: 0x27435f, int: 0.8 },
     fog: 0x10222e, fogDensity: 0.0032,
     ambientMotes: { color: 0xd8f6ff, n: 120, mode: "sparkle" },
+    clouds: { color: 0xeaf6ff, n: 22, alpha: 0.15, alt: [12, 18] },
     accent: 0x6fe3ff,
   },
   dune: {
@@ -69,6 +72,7 @@ export const BIOME_DEFS = {
     hemi: { sky: 0xffd9a0, ground: 0x6a4526, int: 0.7 },
     fog: 0x2e1d10, fogDensity: 0.0034,
     ambientMotes: { color: 0xffe0a0, n: 90, mode: "dust" },
+    clouds: { color: 0xe8cf9a, n: 16, alpha: 0.13, alt: [10, 15] },
     accent: 0xffc858,
   },
   abyss: {
@@ -83,6 +87,7 @@ export const BIOME_DEFS = {
     hemi: { sky: 0x9a7aff, ground: 0x2a1a4a, int: 0.85 },
     fog: 0x150a2e, fogDensity: 0.0038,
     ambientMotes: { color: 0xe27aff, n: 160, mode: "spore" },
+    clouds: { color: 0xb88aff, n: 34, alpha: 0.16, alt: [12, 18] },
     accent: 0xe05aff,
   },
 };

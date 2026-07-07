@@ -302,6 +302,23 @@ const close = (a, b, eps, name) => ok(Math.abs(a - b) <= eps, name, `${a} vs ${b
     let loopSteps = 0;
     while (ps.alive && loopSteps++ < 60 * 10) step(Ws2, 1 / 60);
     ok(!ps.alive, "sustained full loop crosses own body → death", (loopSteps / 60).toFixed(1) + "s");
+
+    // MID-SIZE snake steering back into its own TAIL must die (owner v3 repro:
+    // the old boost-circle neck window exempted the whole body at this size)
+    const Wt2 = createWorld({ seed: 89, biome: "dune", foodTarget: 0 });
+    for (const id of Array.from(Wt2.food.keys())) removeFood(Wt2, id);
+    const pm = spawnSnake(Wt2, 0, { isBot: false, mass: 60 });
+    pm.shield = 0;
+    setInput(Wt2, 0, { steer: 0 });
+    for (let i = 0; i < 60 * 4; i++) step(Wt2, 1 / 60); // extend the body
+    let tailSteps = 0;
+    while (pm.alive && tailSteps++ < 60 * 20) {
+      computeSegs(Wt2, pm);
+      const k = (pm.segN - 4) * 3; // near the tail tip
+      setInput(Wt2, 0, { steer: steerToward(Wt2, pm, { x: pm.segs[k], y: pm.segs[k + 1], z: pm.segs[k + 2] }) });
+      step(Wt2, 1 / 60);
+    }
+    ok(!pm.alive, "mid-size snake hitting its own TAIL dies", (tailSteps / 60).toFixed(1) + "s");
     const dEv2 = drainEvents(Ws2).find((e) => e.type === "death" && e.slot === 0);
     ok(dEv2 && dEv2.killer === 0, "self-death credited to the snake itself", dEv2 && dEv2.killer);
     ok(ps.kills === 0, "self-death adds no kill count");

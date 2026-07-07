@@ -90,10 +90,85 @@ export class FX {
     this.flash = 0;
     this._nextBolt = 0;
     this.onThunder = null; // set by game (audio hook)
+    this.lowQ = false;     // quality LOW halves weather/cloud particle budgets
+
+    // clouds: soft high-altitude puffs, biome-tinted, always on
+    this.cp = makePoints(64, tex, THREE.NormalBlending);
+    this.cloudPuffs = [];
+    this._initClouds();
+    scene.add(this.cp);
+
+    // rainbow (verdant, after rain) + aurora (glacier) — one cheap mesh each,
+    // created on demand and only drawn while fading in/out
+    this._rainbow = null; this._rainbowT = 0; this._rainbowMax = 20;
+    this._aurora = null; this._auroraA = 0;
+    this._lastWxKind = "calm";
 
     this._tmp = new THREE.Vector3();
     this._tmp2 = new THREE.Vector3();
     this._anchor = new THREE.Vector3(0, 0, CONST.R + 6);
+  }
+
+  _initClouds() {
+    const def = this.def.clouds || { color: 0xffffff, n: 24, alpha: 0.15, alt: [10, 16] };
+    this.cloudPuffs.length = 0;
+    for (let i = 0; i < 64; i++) {
+      const u = new THREE.Vector3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize();
+      this.cloudPuffs.push({
+        u, alt: def.alt[0] + Math.random() * (def.alt[1] - def.alt[0]),
+        size: 8 + Math.random() * 9, ph: Math.random() * 6.28,
+        axis: new THREE.Vector3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize(),
+        sp: 0.004 + Math.random() * 0.008,
+      });
+    }
+  }
+
+  _makeRainbow() {
+    const geo = new THREE.TorusGeometry(20, 2.6, 8, 48, Math.PI);
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false,
+      uniforms: { uA: { value: 0 } },
+      vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+      fragmentShader: `
+        varying vec2 vUv; uniform float uA;
+        vec3 hue(float h){ vec3 p = abs(fract(vec3(h) + vec3(0.0, 2.0/3.0, 1.0/3.0)) * 6.0 - 3.0); return clamp(p - 1.0, 0.0, 1.0); }
+        void main(){
+          // vUv.y wraps around the tube: map the OUTER half to rainbow bands
+          float band = clamp(vUv.y * 2.0 - 0.5, 0.0, 1.0);
+          vec3 col = hue(0.83 * (1.0 - band));
+          float edge = smoothstep(0.0, 0.15, band) * smoothstep(1.0, 0.85, band);
+          gl_FragColor = vec4(col, uA * edge * 0.5);
+        }`,
+    });
+    const m = new THREE.Mesh(geo, mat);
+    m.visible = false;
+    this.scene.add(m);
+    return m;
+  }
+
+  _makeAurora() {
+    const geo = new THREE.PlaneGeometry(90, 16, 48, 1);
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false,
+      uniforms: { uA: { value: 0 }, uT: { value: 0 } },
+      vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+      fragmentShader: `
+        varying vec2 vUv; uniform float uA, uT;
+        float n1(float x){ return fract(sin(x * 127.1) * 43758.5453); }
+        void main(){
+          float x = vUv.x * 9.0 + uT * 0.22;
+          float band = 0.5 + 0.5 * sin(x + sin(x * 0.53 + uT * 0.4) * 1.8);
+          float rays = 0.6 + 0.4 * sin(vUv.x * 60.0 + uT * 1.1 + n1(floor(vUv.x * 60.0)) * 6.0);
+          float vfade = smoothstep(0.0, 0.25, vUv.y) * smoothstep(1.0, 0.55, vUv.y);
+          vec3 col = mix(vec3(0.2, 1.0, 0.55), vec3(0.55, 0.35, 1.0), band);
+          col = mix(col, vec3(0.25, 0.9, 0.9), 0.3 + 0.3 * sin(uT * 0.3));
+          gl_FragColor = vec4(col, uA * vfade * rays * 0.4);
+        }`,
+    });
+    const m = new THREE.Mesh(geo, mat);
+    m.visible = false;
+    this.scene.add(m);
+    return m;
   }
 
   _initMotes() {
@@ -149,7 +224,14 @@ export class FX {
   }
 
   setWeather(kind, intensity) {
-    if (kind !== this.weatherKind) this._wxInit = false;
+    if (kind !== this.weatherKind) {
+      this._wxInit = false;
+      // 🌈 a rain shower ending on the forest world leaves a rainbow behind
+      if (this.weatherKind === "rain" && kind === "calm") {
+        this._rainbowT = this._rainbowMax;
+        this._rainbowPlaced = false;
+      }
+    }
     this.weatherKind = kind;
     this.weatherI = intensity;
   }
@@ -240,7 +322,8 @@ export class FX {
       const siz = this.wp.geometry.attributes.aSize.array;
       const alp = this.wp.geometry.attributes.aAlpha.array;
       const active = kind !== "calm" && kind !== "fireflies" && kind !== "aurora" && kind !== "heatwave" && I > 0.02;
-      const n = active ? Math.floor(WX_CAP * Math.min(1, I * 1.2)) : 0;
+      const budget = this.lowQ ? WX_CAP / 2 : WX_CAP;
+      const n = active ? Math.floor(budget * Math.min(1, I * 1.2)) : 0;
       if (active && !this._wxInit) {
         this._wxInit = true;
         for (const w of this.wx) this._wxRespawn(w, anchor, normal);
@@ -289,6 +372,74 @@ export class FX {
         if (this.onThunder) this.onThunder();
       }
     }
+
+    // ── clouds (always on, drifting high above the surface) ──
+    {
+      const def = this.def.clouds || { color: 0xffffff, n: 24, alpha: 0.15 };
+      const n = Math.min(64, this.lowQ ? Math.ceil(def.n / 2) : def.n);
+      const pos = this.cp.geometry.attributes.position.array;
+      const col = this.cp.geometry.attributes.aColor.array;
+      const siz = this.cp.geometry.attributes.aSize.array;
+      const alp = this.cp.geometry.attributes.aAlpha.array;
+      const c = new THREE.Color(def.color);
+      for (let i = 0; i < 64; i++) {
+        if (i >= n) { alp[i] = 0; continue; }
+        const p = this.cloudPuffs[i];
+        p.u.applyAxisAngle(p.axis, p.sp * dt);
+        this._tmp2.copy(p.u).multiplyScalar(this.W.R + p.alt + Math.sin(this.t * 0.15 + p.ph) * 0.6);
+        pos[i * 3] = this._tmp2.x; pos[i * 3 + 1] = this._tmp2.y; pos[i * 3 + 2] = this._tmp2.z;
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+        siz[i] = p.size;
+        alp[i] = def.alpha * (0.75 + 0.25 * Math.sin(this.t * 0.1 + p.ph * 3));
+      }
+      this.cp.geometry.attributes.position.needsUpdate = true;
+      this.cp.geometry.attributes.aColor.needsUpdate = true;
+      this.cp.geometry.attributes.aSize.needsUpdate = true;
+      this.cp.geometry.attributes.aAlpha.needsUpdate = true;
+    }
+
+    // ── rainbow (verdant, ~20s after a rain shower ends) ──
+    if (this._rainbowT > 0) {
+      if (!this._rainbow) this._rainbow = this._makeRainbow();
+      const rb = this._rainbow;
+      if (!this._rainbowPlaced) {
+        this._rainbowPlaced = true;
+        // plant it on the surface ~40u ahead of the player, arch upright
+        const up = this._tmp.copy(anchor).normalize();
+        const fwd = this._tmp2.set(0.3, 1, 0.2).cross(up).normalize();
+        const base = up.clone().multiplyScalar(this.W.R - 2).addScaledVector(fwd, 40);
+        base.normalize();
+        const bu = base.clone();
+        rb.position.copy(bu).multiplyScalar(this.W.R - 1);
+        // orient: torus arc opens downward → local Y = surface normal
+        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), bu);
+        rb.quaternion.copy(q);
+        rb.visible = true;
+      }
+      this._rainbowT -= dt;
+      const k = this._rainbowT / this._rainbowMax;
+      rb.material.uniforms.uA.value = Math.min(1, Math.min((1 - k) * 6, k * 4));
+      if (this._rainbowT <= 0) rb.visible = false;
+    }
+
+    // ── aurora curtain (glacier's calm-variant event) ──
+    {
+      const want = this.weatherKind === "aurora" ? this.weatherI : 0;
+      this._auroraA += (want - this._auroraA) * Math.min(1, dt * 0.7);
+      if (this._auroraA > 0.02) {
+        if (!this._aurora) this._aurora = this._makeAurora();
+        const au = this._aurora;
+        au.visible = true;
+        const up = this._tmp.copy(anchor).normalize();
+        const east = this._tmp2.set(0.2, 1, 0.35).cross(up).normalize();
+        au.position.copy(up).multiplyScalar(this.W.R + 20).addScaledVector(east, 30);
+        // stand the curtain up: local +Y along the planet normal, facing the player
+        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), up);
+        au.quaternion.copy(q);
+        au.material.uniforms.uA.value = this._auroraA;
+        au.material.uniforms.uT.value = this.t;
+      } else if (this._aurora) this._aurora.visible = false;
+    }
   }
 
   setWorld(W, biomeDef) {
@@ -300,9 +451,14 @@ export class FX {
   }
 
   dispose() {
-    for (const p of [this.bp, this.mp, this.wp]) {
+    for (const p of [this.bp, this.mp, this.wp, this.cp]) {
       this.scene.remove(p);
       p.geometry.dispose(); p.material.uniforms.uTex.value.dispose(); p.material.dispose();
+    }
+    for (const m of [this._rainbow, this._aurora]) {
+      if (!m) continue;
+      this.scene.remove(m);
+      m.geometry.dispose(); m.material.dispose();
     }
   }
 }

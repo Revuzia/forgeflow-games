@@ -833,11 +833,17 @@ export function step(W, dt) {
   return W;
 }
 
-/** segments to ignore for self-collision: the tightest turn circle (worst case
- * at boost speed) measured in own segments, plus a small pad. */
+/** segments to ignore for self-collision — the NECK only.
+ * v3 bug (owner: "I hit my tail and lived"): this window used the whole
+ * boost-circle CIRCUMFERENCE (~29u), which exceeds a small/medium snake's
+ * entire body, silently disabling self-collision. The geometry only requires
+ * a few units: on the tightest legal circle (slow-throttle 0.72× speed,
+ * +6% weather turn) the head-to-segment chord at arc s is 2R·sin(s/2R),
+ * which already exceeds the kill distance at s ≈ 1.5u for every mass; skip
+ * ~3.2u (scaled up for girth) and everything past the bend is collidable. */
 export function selfSkipSegs(sn) {
-  const circ = 2 * Math.PI * (speedOf(sn.mass) * CONST.BOOST_MULT / turnRate(sn.mass));
-  return 4 + Math.ceil((circ * 1.08) / segSpacing(sn.mass));
+  const arc = Math.max(3.2, segRadius(sn.mass) * 4.5);
+  return 3 + Math.ceil(arc / segSpacing(sn.mass));
 }
 
 /** compute + cache world segment sample points (UNIT sphere) for a snake. */

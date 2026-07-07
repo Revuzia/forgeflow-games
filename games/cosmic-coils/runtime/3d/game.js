@@ -80,6 +80,7 @@ export class Game {
     } catch (e) {}
     const low = this.settings.quality === "low";
     this.renderer.setPixelRatio(low ? 1.0 : Math.min(window.devicePixelRatio || 1, 1.5));
+    if (this.fx) this.fx.lowQ = low;
     this._applyBloom();
   }
 
@@ -106,6 +107,7 @@ export class Game {
     this.snakeField = new SnakeField(this.scene, W);
     this.fx = new FX(this.scene, W, BIOME_DEFS[W.biome]);
     this.fx.onThunder = () => { this.audio.thunder(); this._shake = Math.max(this._shake, 0.35); };
+    this.fx.lowQ = this.settings.quality === "low";
     this._applyBloom();
     return W;
   }
@@ -240,6 +242,11 @@ export class Game {
       else if (e.code === "KeyS" || e.code === "ArrowDown") this.input.sKey = true;
       else if (e.code === "Space") { this.input.bSpace = true; e.preventDefault(); }
       else if (e.code === "Escape") this._togglePause();
+      else if (e.code === "F3") {
+        e.preventDefault();
+        this.debugOn = !this.debugOn;
+        this.hud.setDebug(this.debugOn);
+      }
     });
     window.addEventListener("keyup", (e) => {
       if ((e.code === "KeyA" || e.code === "ArrowLeft") && this.input.kb === 1) this.input.kb = 0;
@@ -326,6 +333,7 @@ export class Game {
   }
 
   _frame(dt) {
+    this._frameT0 = performance.now();
     const W = this.W;
     if (!W) return;
     const simFrozen = this.paused && this.mode !== "online";
@@ -370,7 +378,31 @@ export class Game {
       this.hud.update(dt, W, this.mySlot, w, this.net ? this.net.humanSlots() : null, this.sessionBest);
     }
 
+    const frameMs = performance.now() - (this._frameT0 || performance.now());
     this.composer.render();
+
+    // F3 debug overlay (data gathered AFTER render so renderer.info is current)
+    if (this.debugOn) {
+      this._dbgWorst = Math.max(this._dbgWorst || 0, frameMs);
+      this._dbgT = (this._dbgT || 0) + dt;
+      if (this._dbgT > 0.25) {
+        this._dbgT = 0;
+        const info = this.renderer.info;
+        const meD = me ? `mass ${me.mass.toFixed(1)} segs ${me.segN} ramp ${(me.boostRamp || 0).toFixed(2)} shield ${Math.max(0, me.shield).toFixed(1)}` : "—";
+        const netD = this.net ? `room ${this.net.net.room} ${this.net.isHost() ? "HOST" : "guest"} peers ${this.net.peers.size} slot ${this.mySlot}` : "offline";
+        this.hud.updateDebug(
+          `FPS ${Math.round(this._fps)}  frame ${frameMs.toFixed(1)}ms  worst ${this._dbgWorst.toFixed(1)}ms\n` +
+          `draws ${info.render.calls}  tris ${(info.render.triangles / 1000).toFixed(0)}k  progs ${info.programs.length}  geo ${info.memory.geometries}  tex ${info.memory.textures}\n` +
+          `quality ${this.settings.quality.toUpperCase()}  dpr ${this.renderer.getPixelRatio().toFixed(2)}  zoom ${this._zoom.toFixed(2)}  bloom ${this.bloom.strength.toFixed(2)}\n` +
+          `mode ${this.mode}  biome ${W.biome}  t ${W.time.toFixed(1)}s\n` +
+          `weather ${w.kind} ${(w.intensity || 0).toFixed(2)}  vis ${w.mods.vis.toFixed(2)}  spd× ${w.mods.speed.toFixed(2)}\n` +
+          `snakes ${W.snakes.filter((s) => s.alive).length}/12  segsDrawn ${this.snakeField.segMesh.count}  food ${W.food.size}\n` +
+          `me: ${meD}\n` +
+          `net: ${netD}  sens ${this.settings.sens.toFixed(2)}${this.settings.invert ? " INV" : ""}`
+        );
+        this._dbgWorst = 0;
+      }
+    }
   }
 
   _simTick(dt) {

@@ -36,6 +36,7 @@ const css = `
 .cc-toast.warn{border-color:rgba(255,200,90,.45);text-shadow:0 0 10px rgba(255,200,90,.8)}
 .cc-toast.bad{border-color:rgba(255,90,90,.45);text-shadow:0 0 12px rgba(255,90,90,.9)}
 @keyframes cctoast{0%{opacity:0;transform:scale(.85)}10%{opacity:1;transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:translateY(-14px)}}
+.cc-debug{position:absolute;top:88px;left:12px;padding:8px 12px;font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.55;white-space:pre;color:#9fe8c8;background:rgba(3,8,18,0.78);border:1px solid rgba(120,255,190,0.25);border-radius:8px;display:none;z-index:25}
 .cc-map{position:absolute;left:12px;bottom:12px;width:158px;height:158px}
 .cc-map canvas{width:100%;height:100%}
 .cc-hint{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);font-size:12px;letter-spacing:1px;opacity:.65;text-align:center;transition:opacity 1s}
@@ -71,8 +72,9 @@ export class HUD {
       <div class="cc-feed"></div>
       <div class="cc-toasts"></div>
       <div class="cc-panel cc-boost"><div class="bar"><div class="fill" style="width:100%"></div></div><div class="lbl">BOOST</div></div>
-      <div class="cc-hint">steer: mouse or <b>A</b>/<b>D</b> · boost (builds up, burns mass): hold <b>W</b>/<b>LMB</b>/<b>SPACE</b> · slow: <b>S</b>/<b>RMB</b> · zoom: wheel · <b>don't cross your own body!</b></div>
+      <div class="cc-hint">steer: mouse or <b>A</b>/<b>D</b> · boost (builds up, burns mass): hold <b>W</b>/<b>LMB</b>/<b>SPACE</b> · slow: <b>S</b>/<b>RMB</b> · zoom: wheel · <b>F3</b> debug · <b>don't cross your own body!</b></div>
       <div class="cc-map cc-panel"><canvas width="316" height="316"></canvas></div>
+      <div class="cc-debug"></div>
     `;
     this.$ = (q) => this.root.querySelector(q);
     this.lenEl = this.$(".len"); this.killsEl = this.$(".kills"); this.bestEl = this.$(".best"); this.rankEl = this.$(".rank");
@@ -84,6 +86,7 @@ export class HUD {
     this.hintEl = this.$(".cc-hint");
     this.mapCv = this.$(".cc-map canvas");
     this.mapCtx = this.mapCv.getContext("2d");
+    this.debugEl = this.$(".cc-debug");
     this._lbT = 0;
     this._hintT = 0;
     this._lastWeather = "calm";
@@ -94,6 +97,9 @@ export class HUD {
 
   show() { this.root.style.display = "block"; this._hintT = 0; }
   hide() { this.root.style.display = "none"; }
+
+  setDebug(on) { this.debugEl.style.display = on ? "block" : "none"; }
+  updateDebug(text) { this.debugEl.textContent = text; }
 
   toast(text, cls = "") {
     const d = document.createElement("div");
