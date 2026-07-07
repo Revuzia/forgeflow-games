@@ -121,7 +121,9 @@ export const CONST = {
 
 // mass → visual/gameplay scale
 export function segRadius(mass) { return 0.42 * (1 + Math.min(1.7, (mass - CONST.START_MASS) / 240)); }
-export function segCount(mass) { return Math.min(460, Math.round(16 + mass * 0.78)); }
+// slither.io-style stubby start: mass 10 → ~6 segments (was 24 — a `16` base
+// floored every hatchling at 16+). Grows ~0.62/mass, capped at 460.
+export function segCount(mass) { return Math.min(460, Math.max(5, Math.round(1 + mass * 0.5))); }
 export function segSpacing(mass) { return segRadius(mass) * 1.18; }
 export function turnRate(mass) { return CONST.TURN_RATE / (0.72 + segRadius(mass) * 0.75); }
 export function speedOf(mass) { return CONST.BASE_SPEED * (1 - Math.min(0.18, (mass - CONST.START_MASS) / 2600)); }

@@ -1,5 +1,11 @@
 # Cosmic Coils — CHANGELOG
 
+## 6 — 2026-07-07 · Owner round 5 (stubby start)
+- Hatchlings now start at ~6 segments (was 24). The old segCount had a `16`
+  base that floored every snake at 16+ segments; new formula `max(5, round(1 +
+  mass×0.5))` gives a slither.io-style short worm at spawn and keeps growth
+  visible (mass 50→26, 100→51, capped 460). `?v=` → 6.
+
 ## 5 — 2026-07-07 · Owner round 4 (blizzard realism, 3 graphics tiers)
 - Blizzards no longer produce lightning/thunder (snow doesn't storm that way);
   Verdant rain and Abyss voidstorms keep theirs.
