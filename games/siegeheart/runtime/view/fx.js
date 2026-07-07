@@ -360,11 +360,77 @@ class Ambient {
   dispose(scene) { scene.remove(this.points); this.geo.dispose(); this.points.material.dispose(); }
 }
 
+
+// ---------- physical bolt projectiles (ballista javelins / crossbow bolts) ----------
+class DartPool {
+  constructor(scene, n = 18) {
+    this.darts = [];
+    for (let i = 0; i < n; i++) {
+      const grp = new THREE.Group();
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.034, 0.034, 0.92, 5),
+        new THREE.MeshBasicMaterial({ color: 0xc8a060, fog: false })
+      );
+      shaft.rotation.x = Math.PI / 2;
+      const tip = new THREE.Mesh(
+        new THREE.ConeGeometry(0.075, 0.24, 6),
+        new THREE.MeshBasicMaterial({ color: 0xe8e0d0, fog: false })
+      );
+      tip.rotation.x = Math.PI / 2;
+      tip.position.z = 0.56;
+      const fins = new THREE.Mesh(
+        new THREE.BoxGeometry(0.17, 0.02, 0.22),
+        new THREE.MeshBasicMaterial({ color: 0xa02828, fog: false })
+      );
+      fins.position.z = -0.44;
+      grp.add(shaft, tip, fins);
+      grp.visible = false;
+      scene.add(grp);
+      this.darts.push({ grp, shaft, active: false, t: 0, dur: 1, sx: 0, sy: 0, sz: 0, ex: 0, ey: 0, ez: 0, key: null });
+    }
+    this.cursor = 0;
+    this.seq = 0;
+  }
+  spawn(sx, sy, sz, ex, ey, ez, opts = {}) {
+    const { color = 0xc8a060, scale = 1, speed = 40 } = opts;
+    const d = this.darts[this.cursor];
+    this.cursor = (this.cursor + 1) % this.darts.length;
+    if (d.active && d.key) this.trails?.release(d.key);
+    Object.assign(d, { active: true, t: 0, sx, sy, sz, ex, ey, ez });
+    d.dur = Math.max(0.06, Math.hypot(ex - sx, ey - sy, ez - sz) / speed);
+    d.key = 'dart' + (this.seq++);
+    d.trailColor = opts.trail ?? 0xe8c890;
+    d.trailW = 0.09 * scale;
+    d.grp.scale.setScalar(scale);
+    d.shaft.material.color.setHex(color);
+    d.grp.position.set(sx, sy, sz);
+    d.grp.lookAt(ex, ey, ez);
+    d.grp.visible = true;
+  }
+  update(dt, trails) {
+    this.trails = trails;
+    for (const d of this.darts) {
+      if (!d.active) continue;
+      d.t += dt;
+      const k = Math.min(1, d.t / d.dur);
+      d.grp.position.set(d.sx + (d.ex - d.sx) * k, d.sy + (d.ey - d.sy) * k, d.sz + (d.ez - d.sz) * k);
+      trails.point(d.key, d.grp.position.x, d.grp.position.y, d.grp.position.z, d.trailColor, d.trailW);
+      if (k >= 1) {
+        d.active = false;
+        d.grp.visible = false;
+        trails.release(d.key);
+        d.key = null;
+      }
+    }
+  }
+}
+
 export function createFx(scene, biome) {
   const pools = {};
   for (const s of Object.keys(STYLES)) pools[s] = new ParticlePool(scene, s, s === 'smoke' ? 220 : 320);
   const beams = new BeamPool(scene);
   const trails = new TrailPool(scene);
+  const darts = new DartPool(scene);
   const rings = new RingPool(scene);
   const numbers = new NumberPool(scene);
   const ambient = biome.particles ? new Ambient(scene, biome.particles) : null;
@@ -373,13 +439,14 @@ export function createFx(scene, biome) {
     pools, beams, trails, rings, numbers,
     burst(style, x, y, z, count, opts) { pools[style]?.burst(x, y, z, count, opts); },
     lightning(points, color) { beams.spawn(points, color); },
+    dart(sx, sy, sz, ex, ey, ez, opts) { darts.spawn(sx, sy, sz, ex, ey, ez, opts); },
     trailPoint(owner, x, y, z, color, width) { trails.point(owner, x, y, z, color, width); },
     trailRelease(owner) { trails.release(owner); },
     ring(x, z, r, color, dur) { rings.spawn(x, z, r, color, dur); },
     number(x, y, z, text, color, big) { numbers.spawn(x, y, z, text, color, big); },
     update(dt, t) {
       for (const p of Object.values(pools)) p.update(dt);
-      beams.update(dt); trails.update(dt); rings.update(dt); numbers.update(dt);
+      beams.update(dt); darts.update(dt, trails); trails.update(dt); rings.update(dt); numbers.update(dt);
       ambient?.update(dt, t);
     },
   };

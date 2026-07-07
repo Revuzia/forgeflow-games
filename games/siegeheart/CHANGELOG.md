@@ -1,5 +1,10 @@
 # Siegeheart — Changelog
 
+## v1.2.1 — 2026-07-07
+- Ballista and Siege Crossbow now fire **physical bolt projectiles** (wooden shaft, iron tip,
+  red fletching, motion streak) flying along the shot line — lightning ribbons are reserved for
+  the Storm Caller and the gothic sky. Pooled `DartPool` in fx.js; crits fire a gold bolt.
+
 ## v1.2 — 2026-07-07 (rename + publish)
 - Renamed **Bastion Realms: Stronghold → Siegeheart** (owner request: too close to Bastion Realms).
   Slug `bastion-stronghold` → `siegeheart`; the central structure is now called **the Keep** in all

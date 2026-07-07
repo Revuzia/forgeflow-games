@@ -248,10 +248,8 @@ export function createGame(env) {
         case 'pierce': {
           const mesh = g.towerMeshes.get(ev.towerId);
           if (mesh) aimTower(mesh, ev.x + ev.nx * 4, ev.z + ev.nz * 4);
-          g.fx.lightning([
-            { x: ev.x, y: 1.6, z: ev.z },
-            { x: ev.x + ev.nx * ev.dist, y: 1.0, z: ev.z + ev.nz * ev.dist },
-          ], 0xe0b070);
+          g.fx.dart(ev.x, 1.7, ev.z, ev.x + ev.nx * ev.dist, 0.9, ev.z + ev.nz * ev.dist,
+            { color: 0xb8895a, trail: 0xe8c890, speed: 42, scale: 1.3 });
           g.fx.burst('scrap', ev.x + ev.nx * ev.dist * 0.6, 1, ev.z + ev.nz * ev.dist * 0.6, 3, { vel: 1.4, life: 0.3 });
           audio.play('ballista', { throttle: 90 });
           break;
@@ -266,7 +264,8 @@ export function createGame(env) {
         }
         case 'snipe': {
           const m = towerMuzzle(ev.towerId);
-          if (m) g.fx.lightning([{ x: m.x, y: m.y, z: m.z }, { x: ev.tx, y: 1.1, z: ev.tz }], ev.crit ? 0xffd76a : 0xffffff);
+          if (m) g.fx.dart(m.x, m.y, m.z, ev.tx, 1.1, ev.tz,
+            { color: ev.crit ? 0xffd76a : 0xccd2dc, trail: ev.crit ? 0xffe9a0 : 0xdfe6ee, speed: 60, scale: 0.85 });
           g.fx.burst('spark', ev.tx, 1.2, ev.tz, ev.crit ? 9 : 5, { vel: 2, life: 0.3 });
           audio.play('crossbow');
           break;
