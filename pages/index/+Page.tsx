@@ -1,9 +1,27 @@
+import { useEffect } from "react";
+import { navigate } from "vike/client/router";
 import { useGames, useFeaturedGames } from "../../src/hooks/useGames";
 import GameCarousel from "../../src/components/game/GameCarousel";
 import GameGrid from "../../src/components/game/GameGrid";
 import { CATEGORIES } from "../../src/lib/supabase";
 
 export default function HomePage() {
+  // 2026-07-07 — SPA-fallback recovery. Cloudflare Pages's catch-all
+  // (`/* /index.html 200`) serves this prerendered HOMEPAGE for any URL that
+  // has no static HTML of its own — e.g. a game published after the last
+  // portal build. Vike hydrates the pageContext embedded in the served HTML
+  // (the homepage) regardless of the address bar, so a hard load of
+  // /games/<new-slug> rendered the homepage. When this component finds itself
+  // mounted at a foreign dynamic-route URL, client-route to the real page.
+  // Restricted to /games/<slug> and /category/<name> so a genuinely bogus URL
+  // can't trigger a navigation loop.
+  useEffect(() => {
+    const { pathname, search, hash } = window.location;
+    if (/^\/(games|category)\/[^/]+\/?$/.test(pathname)) {
+      navigate(pathname.replace(/\/+$/, "") + search + hash).catch(() => {});
+    }
+  }, []);
+
   const featured = useFeaturedGames();
   const popular = useGames({ sort: "popular", limit: 12 });
   const newest = useGames({ sort: "new", limit: 12 });

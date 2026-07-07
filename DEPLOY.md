@@ -45,10 +45,23 @@ to R2, upserts Supabase metadata. ~1-3 min depending on file count.
 ### Daily 1am pipeline run
 `scripts/run_game_pipeline.py` runs end-to-end: research → design →
 build → QA → deploy. Its `phase_deploy` function uploads to R2 and
-Supabase automatically. **It does NOT redeploy the Pages portal** — the
-portal queries Supabase client-side, so new games appear without a
-portal rebuild. The portal only needs redeployment when the FRONTEND
-CODE changes.
+Supabase automatically.
+
+**⚠ 2026-07-07 correction — new games DO need a portal redeploy.** Game
+LISTINGS (homepage/category carousels) query Supabase client-side and
+pick up new games instantly, but the per-game DETAIL page
+`/games/<slug>` is **prerendered at portal build time**
+(`pages/games/@slug/+onBeforePrerenderStart.ts`, added 2026-05-11).
+Any game published after the last portal build has no static HTML, so a
+hard load of its URL fell through the `_redirects` catch-all to the
+homepage. Two mitigations now exist:
+1. `deploy_game.py` auto-runs `deploy_portal.py` after every successful
+   publish (skip with `--no-portal` for batch runs — then run
+   `deploy_portal.py` once at the end).
+2. The homepage has an SPA-fallback redirect (`pages/index/+Page.tsx`)
+   that client-routes /games/* and /category/* hard loads to the right
+   page even when the prerender is stale — so direct links WORK either
+   way; the portal rebuild is what gives the URL real static HTML (SEO).
 
 ## Common confusions
 
@@ -58,6 +71,11 @@ auto-deploy. Run `deploy_portal.py`.
 **"The new game doesn't show on the homepage"** — check Supabase. If the
 row is in `games` with `status='published'`, it should appear. If not,
 phase_deploy didn't reach the Supabase step (probably a previous failure).
+
+**"Hard-loading /games/&lt;slug&gt; shows the homepage"** — the portal
+prerender is stale (game published after the last portal build) AND the
+deployed bundle predates the 2026-07-07 homepage SPA-fallback redirect.
+Run `pipeline/deploy_portal.py`.
 
 **"The thumbnail isn't updating"** — CDN cache. Append `?v=<timestamp>`
 query param to the thumbnail_url in Supabase to bust browser/CDN caches.

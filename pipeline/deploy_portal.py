@@ -13,9 +13,13 @@ Use after every commit that touches:
   - forgeflow-games/public/**    (static assets, _redirects, robots.txt)
   - forgeflow-games/vite.config.ts, tailwind.config.ts, etc.
 
-Does NOT need to run when only games/ R2 content changes (those go straight
-to R2 via deploy_game.py / phase_deploy + the games-cdn worker — the portal
-queries Supabase client-side and picks up new games instantly).
+ALSO required after publishing a game (2026-07-07): game-detail pages
+/games/<slug> are prerendered at build time from the Supabase slug list, so a
+new publish makes the deployed prerender stale — a hard load of the new URL
+would only recover via the homepage SPA-fallback redirect until this runs.
+deploy_game.py now invokes this script automatically after each publish
+(opt out with --no-portal). Listings (homepage/category carousels) still pick
+up new games instantly via client-side Supabase queries.
 
 Usage:
     python pipeline/deploy_portal.py

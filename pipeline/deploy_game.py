@@ -339,8 +339,43 @@ def verify_live(slug, files=("index.html", "thumbnail.png", "content.json")):
     return out
 
 
-def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False):
-    """Deploy a single game: optional cover-gen, R2 upload, Supabase upsert.
+def refresh_portal_prerender():
+    """Rebuild + redeploy the Pages portal so the just-published slug gets its
+    prerendered /games/<slug>/index.html.
+
+    2026-07-07 — Without this, a hard load of a new game's URL fell through the
+    Pages catch-all (`/* /index.html 200`) to the HOMEPAGE until someone manually
+    ran deploy_portal.py: the portal prerenders game-detail pages at BUILD time
+    (pages/games/@slug/+onBeforePrerenderStart.ts), so every publish makes the
+    deployed prerender stale. Best-effort: a failure here must NOT fail the game
+    deploy — the homepage SPA-fallback redirect still recovers direct links
+    client-side; only the static HTML (SEO) is missing until the next portal run.
+    """
+    portal_script = Path(__file__).resolve().parent / "deploy_portal.py"
+    print("[portal] Refreshing portal prerender (deploy_portal.py)...")
+    try:
+        r = subprocess.run(
+            [sys.executable, str(portal_script)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=900,
+        )
+        if r.returncode == 0:
+            print("[portal] Portal redeployed — prerendered game pages are current.")
+            return True
+        tail = ((r.stdout or "") + (r.stderr or ""))[-800:]
+        print(f"[portal] WARN: portal redeploy failed (rc={r.returncode}). Direct links to this")
+        print("         game recover client-side via the homepage redirect, but run")
+        print("         pipeline/deploy_portal.py manually to get the prerendered page. Tail:")
+        print(tail)
+    except Exception as e:
+        print(f"[portal] WARN: portal redeploy errored: {e}")
+    return False
+
+
+def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, refresh_portal=True):
+    """Deploy a single game: optional cover-gen, R2 upload, Supabase upsert,
+    then a portal prerender refresh (pass refresh_portal=False to skip, e.g.
+    when batch-deploying — run deploy_portal.py once at the end instead).
     Returns {ok, uploaded, total, url}. Reused by deploy_game.main + upload_game.py."""
     game_dir = Path(game_dir)
     if not game_dir.exists():
@@ -409,6 +444,8 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False):
         metadata["hero_image_url"] = f"{CDN_BASE}/{slug}/thumbnail.png{_tv}"
     insert_game_metadata(slug, metadata)
     print(f"Done! Game available at: {CDN_BASE}/{slug}/index.html")
+    if refresh_portal:
+        refresh_portal_prerender()
     # ok = the code/metadata files went up (assets are skipped by default now, so uploaded<total is normal & fine).
     return {"ok": uploaded > 0, "uploaded": uploaded, "total": total, "url": f"{CDN_BASE}/{slug}/index.html"}
 
@@ -421,6 +458,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force", action="store_true", help="re-upload ALL files incl. static assets — rarely needed now: default incremental mode uploads new/changed assets via the local manifest")
     parser.add_argument("--seed-manifest", action="store_true", help="record the current local tree as already-uploaded (no uploads) — run once after a verified-synced state")
+    parser.add_argument("--no-portal", action="store_true", help="skip the portal prerender refresh after publish (batch deploys: run pipeline/deploy_portal.py once at the end instead)")
     args = parser.parse_args()
     if getattr(args, "seed_manifest", False):
         import hashlib as _shl, json as _sjson
@@ -439,7 +477,8 @@ def main():
         print(f"[seed] recorded {len(man)} files into {man_path}")
         raise SystemExit(0)
     ensure_cf_env()
-    res = deploy_one(args.game_dir, args.slug, metadata_path=args.metadata, dry_run=args.dry_run, force=args.force)
+    res = deploy_one(args.game_dir, args.slug, metadata_path=args.metadata, dry_run=args.dry_run,
+                     force=args.force, refresh_portal=not args.no_portal)
     sys.exit(0 if res.get("ok") or res.get("dry") else 1)
 
 
