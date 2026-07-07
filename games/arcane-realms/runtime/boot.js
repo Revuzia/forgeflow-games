@@ -1,15 +1,18 @@
 // Arcane Realms TCG — boot: asset warmup, screen flow, main loop, debug hooks.
 import * as THREE from 'three';
-import { BoardScene } from './view/scene.js?v=2';
-import { UI, Store } from './view/ui.js?v=2';
-import { Match } from './view/match.js?v=2';
-import { Audio2 } from './view/audio.js?v=2';
-import { OnlineSession } from './view/online.js?v=2';
-import { preload, getCardBack } from './view/cardtex.js?v=2';
-import { STARTER_DECKS, validateDeck } from './sim/decks.js?v=2';
-import { COLLECTIBLE, cardById } from './sim/cards.js?v=2';
-import { createGame, legalActions, applyAction } from './sim/engine.js?v=2';
-import { chooseAction, runAiTurn } from './sim/ai.js?v=2';
+import { BoardScene } from './view/scene.js?v=3';
+import { UI, Store } from './view/ui.js?v=3';
+import { Match } from './view/match.js?v=3';
+import { Audio2 } from './view/audio.js?v=3';
+import { OnlineSession } from './view/online.js?v=3';
+import { preload, getCardBack } from './view/cardtex.js?v=3';
+import { STARTER_DECKS, validateDeck } from './sim/decks.js?v=3';
+import { COLLECTIBLE, cardById } from './sim/cards.js?v=3';
+import { createGame, legalActions, applyAction, makeUnit } from './sim/engine.js?v=3';
+import { chooseAction, runAiTurn } from './sim/ai.js?v=3';
+import { CampaignUI } from './view/campaign_ui.js?v=3';
+import { CARDBACK_INFO } from './campaign/campaign_data.js?v=3';
+import { initProgress, isOwned, ownedCount, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=3';
 
 const container = document.getElementById('game-container');
 const splash = document.getElementById('boot-splash');
@@ -19,8 +22,14 @@ const splashMsg = document.getElementById('boot-msg');
 let scene = null;
 let ui = null;
 let match = null;
+let campaignUI = null;
 let lastT = performance.now();
 let inMatch = false;
+
+function myBackFile() {
+  const id = Store.data?.cardback || 'default';
+  return (CARDBACK_INFO[id] || CARDBACK_INFO.default).file;
+}
 
 function setProgress(f, msg) {
   if (splashBar) splashBar.style.width = Math.round(f * 100) + '%';
@@ -52,6 +61,17 @@ async function boot() {
     onSpeedChange: () => applySettings(),
   });
   ui.onOnline = (deck, mode, code, onStatus, onError) => startOnlineMatch(deck, mode, code, onStatus, onError);
+  // ── campaign wiring ──
+  initProgress(Store);
+  campaignUI = new CampaignUI(ui, Store, { onBattle: startCampaignBattle });
+  ui.onCampaign = () => campaignUI.open();
+  ui.isOwnedFn = (id) => isOwned(Store, id);
+  ui.campaignStrip = () => campaignUI.collectionStrip();
+  ui.collectionTitle = () => `COLLECTION — ${ownedCount(Store)}/${COLLECTIBLE.length} OWNED`;
+  ui.afterMatch = () => {
+    const unlocked = checkAchievements(Store);
+    if (unlocked.length) campaignUI.announceAchievements(unlocked);
+  };
   setProgress(0.7, 'Waking the Archfoe…');
   // pre-render a handful of starter cards so first hover is instant
   preload(STARTER_DECKS[0].cards.slice(0, 10));
@@ -83,6 +103,7 @@ function startMatch(deckDef, difficulty, rematch) {
   const heroes = [deckDef.hero || v.realms[0] || 'neutral', aiDeck.hero];
   preload(deck);
   preload(aiDeck.cards);
+  Store.data.lastHero = heroes[0];
   match = new Match({
     scene, ui,
     playerDeck: deck,
@@ -90,6 +111,62 @@ function startMatch(deckDef, difficulty, rematch) {
     difficulty,
     heroes,
     settings: Store.data.settings,
+    cardbacks: [myBackFile(), 'cardback.jpg'],
+  });
+  ui.attachMatch(match, heroes);
+  inMatch = true;
+  window.__ARC__.match = match;
+}
+
+// ── campaign battles ──
+function startCampaignBattle(chapter, battle, deckDef) {
+  if (match) { match.destroy(); match = null; }
+  const deck = deckDef.cards.slice();
+  const v = validateDeck(deck);
+  if (!v.ok) { ui.toast('That deck is not battle-legal: ' + v.errors[0]); campaignUI.open(); return; }
+  const hero = deckDef.hero || v.realms[0] || 'neutral';
+  Store.data.lastHero = hero;
+  Store.save();
+  const heroes = [hero, chapter.commander.hero];
+  preload(deck);
+  preload(chapter.deck);
+  // build the state, then apply the battle's campaign twists (boss hp, ambush
+  // boards, commander head-starts) before the first render
+  const state = createGame({
+    seed: Date.now() % 2147483647,
+    decks: [deck, chapter.deck.slice()],
+    names: ['You', chapter.commander.name],
+    heroes,
+    first: null,
+  });
+  applyBattleMods(state, battle, 1, makeUnit);
+  match = new Match({
+    scene, ui,
+    mode: 'ai',
+    sharedState: state,
+    difficulty: battle.difficulty,
+    heroes,
+    settings: Store.data.settings,
+    cardbacks: [myBackFile(), 'cardback.jpg'],
+    onGameOver: (won, stats) => {
+      Store.data.record[won ? 'wins' : 'losses']++;
+      Store.save();
+      if (won) {
+        const result = grantBattleRewards(Store, battle);
+        campaignUI.showRewards(chapter, battle, result, () => {
+          const unlocked = checkAchievements(Store);
+          if (unlocked.length) campaignUI.announceAchievements(unlocked);
+          leaveMatch();
+          campaignUI.open();
+        });
+      } else {
+        ui._campaignRetry = () => {
+          if (match) { match.destroy(); match = null; }
+          startCampaignBattle(chapter, battle, deckDef);
+        };
+        ui.showGameOver(false, { ...stats, campaign: true });
+      }
+    },
   });
   ui.attachMatch(match, heroes);
   inMatch = true;
@@ -102,7 +179,8 @@ function startOnlineMatch(deckDef, mode, code, onStatus, onError) {
   if (!v.ok) { onError('That deck is not battle-legal: ' + v.errors[0]); return null; }
   const session = new OnlineSession({ onStatus });
   const hero = deckDef.hero || v.realms[0] || 'neutral';
-  session.start(mode, code, { deck, hero, name: mode === 'join' ? 'Challenger' : 'Duelist' })
+  Store.data.lastHero = hero;
+  session.start(mode, code, { deck, hero, name: mode === 'join' ? 'Challenger' : 'Duelist', cardback: Store.data.cardback || 'default' })
     .then(({ net, mySide, params }) => {
       if (match) { match.destroy(); match = null; }
       preload(params.decks[0]);
@@ -115,6 +193,8 @@ function startOnlineMatch(deckDef, mode, code, onStatus, onError) {
         heroes: params.heroes,
         first: null, // seeded → same on both clients
       });
+      const backOf = (id) => (CARDBACK_INFO[id] || CARDBACK_INFO.default).file;
+      const backs = params.backs || ['default', 'default'];
       match = new Match({
         scene, ui,
         mode: 'online', net, mySide,
@@ -122,6 +202,7 @@ function startOnlineMatch(deckDef, mode, code, onStatus, onError) {
         heroes: params.heroes,
         difficulty: 'knight',
         settings: Store.data.settings,
+        cardbacks: [backOf(backs[mySide]), backOf(backs[1 - mySide])],
       });
       ui._lastDeck = deckDef;
       ui.attachMatch(match, [params.heroes[mySide], params.heroes[1 - mySide]]);

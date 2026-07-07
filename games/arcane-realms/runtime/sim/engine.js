@@ -2,8 +2,8 @@
 // The view layer replays the `events` returned by applyAction as animations.
 // AI and selftest drive the exact same action API the player uses.
 
-import { CARDS, COLLECTIBLE, cardById } from './cards.js?v=2';
-import { rngInt, rngPick, rngShuffle, seedFrom } from './rng.js?v=2';
+import { CARDS, COLLECTIBLE, cardById } from './cards.js?v=3';
+import { rngInt, rngPick, rngShuffle, seedFrom } from './rng.js?v=3';
 
 export const MAX_BOARD = 6;
 export const MAX_HAND = 10;
@@ -336,6 +336,10 @@ function resolveTargets(state, sel, ctx) {
       const u = rngPick(state, state.players[foe].board.filter((x) => x.hp > 0));
       return u ? [{ kind: 'unit', iid: u.iid }] : [];
     }
+    case 'random-friendly-creature': {
+      const u = rngPick(state, state.players[side].board.filter((x) => x.hp > 0 && x !== ctx.selfUnit));
+      return u ? [{ kind: 'unit', iid: u.iid }] : [];
+    }
     case 'adjacent-to-chosen': {
       if (!ctx.chosen || ctx.chosen.kind !== 'unit') return [];
       const f = unitByIid(state, ctx.chosen.iid);
@@ -374,12 +378,13 @@ export function resolveOps(state, ops, ctx, ev) {
     const sel = op.target || null;
     switch (op.op) {
       case 'damage': {
+        const amount = op.amountFromCapturedAtk ? (ctx._capturedAtk ?? 0) : op.amount;
         for (const tgt of resolveTargets(state, sel, ctx)) {
           if (wardBlocks(state, ctx, tgt, sel, ev)) continue;
-          if (tgt.kind === 'hero') damageHero(state, tgt.p, op.amount, ev, { source: 'effect', sourceIid: ctx.selfUnit?.iid });
+          if (tgt.kind === 'hero') damageHero(state, tgt.p, amount, ev, { source: 'effect', sourceIid: ctx.selfUnit?.iid });
           else {
             const f = unitByIid(state, tgt.iid);
-            if (f) damageUnit(state, f.side, f.unit, op.amount, ev, { source: 'effect' });
+            if (f) damageUnit(state, f.side, f.unit, amount, ev, { source: 'effect' });
           }
         }
         break;
@@ -553,9 +558,69 @@ export function resolveOps(state, ops, ctx, ev) {
         break;
       }
       case 'add-random': {
+        const pool = op.rarity ? COLLECTIBLE.filter((c) => c.rarity === op.rarity) : COLLECTIBLE;
         for (let i = 0; i < op.count; i++) {
-          const pick = rngPick(state, COLLECTIBLE);
-          addCardToHand(state, ctx.side, pick.id, ev);
+          const pick = rngPick(state, pool);
+          if (pick) addCardToHand(state, ctx.side, pick.id, ev);
+        }
+        break;
+      }
+      case 'add-card-id': {
+        for (let i = 0; i < (op.count || 1); i++) addCardToHand(state, ctx.side, op.card, ev);
+        break;
+      }
+      case 'multi-hit': {
+        // each hit strikes a random enemy character (creature or hero)
+        const mhFoe = opponentOf(ctx.side);
+        for (let i = 0; i < op.count; i++) {
+          if (state.winner !== null) break;
+          const pool = state.players[mhFoe].board.filter((u) => u.hp > 0 && !u._venomed && !u._destroyed);
+          const roll = rngInt(state, pool.length + 1);
+          if (roll >= pool.length) {
+            damageHero(state, mhFoe, op.amount, ev, { source: 'multi-hit' });
+          } else {
+            damageUnit(state, mhFoe, pool[roll], op.amount, ev, { source: 'multi-hit' });
+          }
+        }
+        break;
+      }
+      case 'discard-random': {
+        const who = op.who === 'enemy' ? opponentOf(ctx.side) : ctx.side;
+        const pl = state.players[who];
+        for (let i = 0; i < op.count; i++) {
+          if (!pl.hand.length) break;
+          const idx = rngInt(state, pl.hand.length);
+          const [h] = pl.hand.splice(idx, 1);
+          pl.grave.push(h.card);
+          ev.push({ t: 'discard', p: who, card: h.card, iid: h.iid });
+        }
+        break;
+      }
+      case 'bounce-all': {
+        const bSide = op.side === 'enemy' ? opponentOf(ctx.side) : ctx.side;
+        const pl = state.players[bSide];
+        for (const u of pl.board.slice()) {
+          if (op.maxCost != null && cardById(u.card).cost > op.maxCost) continue;
+          const idx = pl.board.indexOf(u);
+          if (idx >= 0) pl.board.splice(idx, 1);
+          const def = cardById(u.card);
+          if (def.rarity !== 'token') addCardToHand(state, bSide, u.card, ev);
+          ev.push({ t: 'bounce', iid: u.iid, card: u.card, p: bSide });
+        }
+        break;
+      }
+      case 'grave-to-hand': {
+        const pl = state.players[ctx.side];
+        const gf = op.filter || {};
+        for (let i = 0; i < op.count; i++) {
+          const pool = pl.grave.filter((id) => {
+            const d = cardById(id);
+            return d.type === 'creature' && d.rarity !== 'token' && (!gf.maxCost || d.cost <= gf.maxCost);
+          });
+          if (!pool.length) break;
+          const pick = rngPick(state, pool);
+          pl.grave.splice(pl.grave.indexOf(pick), 1);
+          addCardToHand(state, ctx.side, pick, ev);
         }
         break;
       }
@@ -598,11 +663,15 @@ function applyLifesteal(state, side, unit, amount, ev) {
   }
 }
 
-// gm13 Soul Harvest needs target HP captured before destroy
+// gm13 Soul Harvest / gmc6 Soul Transfer need target stats captured before destroy
 function precaptureHp(state, ops, ctx) {
   if (ops.some((o) => o.amountFromTargetHp) && ctx.chosen && ctx.chosen.kind === 'unit') {
     const f = unitByIid(state, ctx.chosen.iid);
     if (f) ctx._capturedHp = Math.max(0, f.unit.hp);
+  }
+  if (ops.some((o) => o.amountFromCapturedAtk) && ctx.chosen && ctx.chosen.kind === 'unit') {
+    const f = unitByIid(state, ctx.chosen.iid);
+    if (f) ctx._capturedAtk = effAtk(state, f.side, f.unit);
   }
 }
 
@@ -618,6 +687,7 @@ export function validTargets(state, side, spec) {
     if (uSide !== side && u.stealth && !u.silenced) return false; // enemy stealth untargetable
     if (f.maxCost != null && cardById(u.card).cost > f.maxCost) return false;
     if (f.minAtk != null && effAtk(state, uSide, u) < f.minAtk) return false;
+    if (f.minHp != null && u.hp < f.minHp) return false;
     if (f.damaged && u.hp >= u.maxHp) return false;
     return true;
   };

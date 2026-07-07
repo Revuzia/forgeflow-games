@@ -1,6 +1,6 @@
 {
-  "generated": "2026-07-07T02:32:05.098Z",
-  "count": 137,
+  "generated": "2026-07-07T04:15:13.529Z",
+  "count": 211,
   "entries": [
     {
       "key": "ef01",
@@ -822,6 +822,426 @@
       "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. An ageless wizard suspended among floating clock faces and streams of frozen sand, time visibly bending around him Palette: weathered stone and steel greys warmed by torchlight."
     },
     {
+      "key": "efc1",
+      "file": "assets/art/efc1.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy elemental creature portrait: Ember Sprite of Emberforge. Small, angry, and airborne. Palette: molten oranges, deep reds, volcanic forge glow, drifting embers."
+    },
+    {
+      "key": "efc2",
+      "file": "assets/art/efc2.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy dragon creature portrait: Ashwing Vanguard of Emberforge. First through the smoke, always. Palette: molten oranges, deep reds, volcanic forge glow, drifting embers."
+    },
+    {
+      "key": "efc3",
+      "file": "assets/art/efc3.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Dynamic magical spell illustration: \"Cinder Storm\" — Deal 1 damage to random enemies, 3 times. The forge sneezes. Palette: molten oranges, deep reds, volcanic forge glow, drifting embers."
+    },
+    {
+      "key": "efc4",
+      "file": "assets/art/efc4.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy mercenary creature portrait: Forgemaster Golan of Emberforge. Every blade he touches remembers him. Palette: molten oranges, deep reds, volcanic forge glow, drifting embers."
+    },
+    {
+      "key": "efc5",
+      "file": "assets/art/efc5.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Dynamic magical spell illustration: \"Molten Carapace\" — Give a friendly creature +2/+2 and Piercing. Armor that bites back. Palette: molten oranges, deep reds, volcanic forge glow, drifting embers."
+    },
+    {
+      "key": "efc6",
+      "file": "assets/art/efc6.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Two mirrored spirits of living flame bursting from a cracked forge-anvil in opposite directions Palette: molten oranges, deep reds, volcanic forge glow, drifting embers."
+    },
+    {
+      "key": "efc7",
+      "file": "assets/art/efc7.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy elemental creature portrait: Slag Colossus of Emberforge. It cools down. Eventually. Somewhere else. Palette: molten oranges, deep reds, volcanic forge glow, drifting embers."
+    },
+    {
+      "key": "efc8",
+      "file": "assets/art/efc8.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Dynamic magical spell illustration: \"Emberstorm Ritual\" — Deal 2 damage to all enemy creatures and 1 to the enemy hero. The sky signs its work in cinders. Palette: molten oranges, deep reds, volcanic forge glow, drifting embers."
+    },
+    {
+      "key": "efc9",
+      "file": "assets/art/efc9.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy demon creature portrait: Bloodforge Champion of Emberforge. The arena crowned him. The forge armed him. Palette: molten oranges, deep reds, volcanic forge glow, drifting embers."
+    },
+    {
+      "key": "efc10",
+      "file": "assets/art/efc10.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. A titanic magma elemental crowned with a burning anvil, meteor-sparks orbiting its shoulders, world aflame below Palette: molten oranges, deep reds, volcanic forge glow, drifting embers."
+    },
+    {
+      "key": "tcc1",
+      "file": "assets/art/tcc1.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy elemental creature portrait: Mist Wisp of Tidecall. Half fog, half whim. Palette: deep ocean blues and teals, bioluminescent glow, sea mist and currents."
+    },
+    {
+      "key": "tcc2",
+      "file": "assets/art/tcc2.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Dynamic magical spell illustration: \"Scrying Orb\" — Draw a card. Gain 1 mana crystal this turn only. It shows you exactly what you need. Terms apply. Palette: deep ocean blues and teals, bioluminescent glow, sea mist and currents."
+    },
+    {
+      "key": "tcc3",
+      "file": "assets/art/tcc3.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy construct creature portrait: Wavecrash Golem of Tidecall. The sea builds its own soldiers. Palette: deep ocean blues and teals, bioluminescent glow, sea mist and currents."
+    },
+    {
+      "key": "tcc4",
+      "file": "assets/art/tcc4.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Dynamic magical spell illustration: \"Mindtheft\" — Your opponent discards a random card. Draw a card. She keeps what she finds in other minds. Palette: deep ocean blues and teals, bioluminescent glow, sea mist and currents."
+    },
+    {
+      "key": "tcc5",
+      "file": "assets/art/tcc5.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy mercenary creature portrait: Frostveil Assassin of Tidecall. The last thing you feel is the temperature drop. Palette: deep ocean blues and teals, bioluminescent glow, sea mist and currents."
+    },
+    {
+      "key": "tcc6",
+      "file": "assets/art/tcc6.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Dynamic magical spell illustration: \"Tidal Rebuke\" — Return an enemy creature to its owner’s hand. The sea does not argue. It removes. Palette: deep ocean blues and teals, bioluminescent glow, sea mist and currents."
+    },
+    {
+      "key": "tcc7",
+      "file": "assets/art/tcc7.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy wizard creature portrait: Sirenspeaker of Tidecall. Her songs cost exactly one mistake. Palette: deep ocean blues and teals, bioluminescent glow, sea mist and currents."
+    },
+    {
+      "key": "tcc8",
+      "file": "assets/art/tcc8.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. A colossal abyssal kraken dragging ships and soldiers beneath a glowing whirlpool, tentacles ringed with runes Palette: deep ocean blues and teals, bioluminescent glow, sea mist and currents."
+    },
+    {
+      "key": "tcc9",
+      "file": "assets/art/tcc9.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy wizard creature portrait: Currentshaper of Tidecall. He bends the water; the water bends the spell. Palette: deep ocean blues and teals, bioluminescent glow, sea mist and currents."
+    },
+    {
+      "key": "tcc10",
+      "file": "assets/art/tcc10.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. An eldritch empress of the trench — half woman, half current — commanding a wall of frozen tsunami Palette: deep ocean blues and teals, bioluminescent glow, sea mist and currents."
+    },
+    {
+      "key": "wgc1",
+      "file": "assets/art/wgc1.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy elf creature portrait: Seedling Sprite of Wildgrove. Nothing in the grove is wasted. Palette: lush emerald greens, amber sunlight shafts, ancient forest depths."
+    },
+    {
+      "key": "wgc2",
+      "file": "assets/art/wgc2.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Dynamic magical spell illustration: \"Barkskin\" — Give a friendly creature +0/+4. Beauty is bark deep. Palette: lush emerald greens, amber sunlight shafts, ancient forest depths."
+    },
+    {
+      "key": "wgc3",
+      "file": "assets/art/wgc3.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy beast creature portrait: Timber Behemoth of Wildgrove. Where it walks, paths happen. Palette: lush emerald greens, amber sunlight shafts, ancient forest depths."
+    },
+    {
+      "key": "wgc4",
+      "file": "assets/art/wgc4.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy elf creature portrait: Wildheart Ritualist of Wildgrove. She plants tomorrow. Palette: lush emerald greens, amber sunlight shafts, ancient forest depths."
+    },
+    {
+      "key": "wgc5",
+      "file": "assets/art/wgc5.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy beast creature portrait: Razorleaf Stalker of Wildgrove. The underbrush is on its side. Palette: lush emerald greens, amber sunlight shafts, ancient forest depths."
+    },
+    {
+      "key": "wgc6",
+      "file": "assets/art/wgc6.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. A stag-antlered forest spirit erupting with new growth as it slams into an armored invader Palette: lush emerald greens, amber sunlight shafts, ancient forest depths."
+    },
+    {
+      "key": "wgc7",
+      "file": "assets/art/wgc7.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Dynamic magical spell illustration: \"Grovetender Twins\" — Summon two 2/2 Saplings with Guard. They finish each other’s roots. Palette: lush emerald greens, amber sunlight shafts, ancient forest depths."
+    },
+    {
+      "key": "wgc8",
+      "file": "assets/art/wgc8.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. A serpentine emerald dragon coiled through ancient canopy, scales of living leaves, healing light falling Palette: lush emerald greens, amber sunlight shafts, ancient forest depths."
+    },
+    {
+      "key": "wgc9",
+      "file": "assets/art/wgc9.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy treant creature portrait: Thornlash Vine of Wildgrove. One scratch settles every argument. Palette: lush emerald greens, amber sunlight shafts, ancient forest depths."
+    },
+    {
+      "key": "wgc10",
+      "file": "assets/art/wgc10.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. A world-tree titan whose roots cradle a glowing seed-heart, wolves emerging from its bark Palette: lush emerald greens, amber sunlight shafts, ancient forest depths."
+    },
+    {
+      "key": "dwc1",
+      "file": "assets/art/dwc1.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy paladin creature portrait: Lightbearer Page of Dawnward. Small hands, steady light. Palette: radiant gold and warm ivory light, holy glow, marble and sunbeams."
+    },
+    {
+      "key": "dwc2",
+      "file": "assets/art/dwc2.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Dynamic magical spell illustration: \"Blessed Shield\" — Give a friendly creature +0/+3 and Guard. Faith, forged and polished. Palette: radiant gold and warm ivory light, holy glow, marble and sunbeams."
+    },
+    {
+      "key": "dwc3",
+      "file": "assets/art/dwc3.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy cleric creature portrait: Chapel Warden of Dawnward. Sanctuary is a promise with a keeper. Palette: radiant gold and warm ivory light, holy glow, marble and sunbeams."
+    },
+    {
+      "key": "dwc4",
+      "file": "assets/art/dwc4.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Dynamic magical spell illustration: \"Radiant Chorus\" — Restore 3 health to your hero and all friendly creatures. One voice mends. A choir rebuilds. Palette: radiant gold and warm ivory light, holy glow, marble and sunbeams."
+    },
+    {
+      "key": "dwc5",
+      "file": "assets/art/dwc5.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy paladin creature portrait: Oathkeeper Captain of Dawnward. Oaths hold the line long after walls fall. Palette: radiant gold and warm ivory light, holy glow, marble and sunbeams."
+    },
+    {
+      "key": "dwc6",
+      "file": "assets/art/dwc6.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Dynamic magical spell illustration: \"Judicator's Verdict\" — Destroy an enemy creature with 5 or more health. The larger the shadow, the brighter the verdict. Palette: radiant gold and warm ivory light, holy glow, marble and sunbeams."
+    },
+    {
+      "key": "dwc7",
+      "file": "assets/art/dwc7.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy celestial creature portrait: Dawnwing Herald of Dawnward. Good news travels on six wings. Palette: radiant gold and warm ivory light, holy glow, marble and sunbeams."
+    },
+    {
+      "key": "dwc8",
+      "file": "assets/art/dwc8.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy construct creature portrait: Sanctified Bulwark of Dawnward. A wall that believes in you. Palette: radiant gold and warm ivory light, holy glow, marble and sunbeams."
+    },
+    {
+      "key": "dwc9",
+      "file": "assets/art/dwc9.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Three radiant guardians descending inside a curtain of aurora light over a battlefield at dawn Palette: radiant gold and warm ivory light, holy glow, marble and sunbeams."
+    },
+    {
+      "key": "dwc10",
+      "file": "assets/art/dwc10.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. A goddess of dawn with wings of sunrise light, healing radiance pouring from her open hands Palette: radiant gold and warm ivory light, holy glow, marble and sunbeams."
+    },
+    {
+      "key": "gmc1",
+      "file": "assets/art/gmc1.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy beast creature portrait: Crypt Rat of Gravemire. Waste not, want not, rot not. Palette: violet necrotic glow, sickly green accents, gothic gloom and mist."
+    },
+    {
+      "key": "gmc2",
+      "file": "assets/art/gmc2.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Dynamic magical spell illustration: \"Grave Chill\" — Give an enemy creature -2/-2. The mire borrows warmth. Permanently. Palette: violet necrotic glow, sickly green accents, gothic gloom and mist."
+    },
+    {
+      "key": "gmc3",
+      "file": "assets/art/gmc3.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Dynamic magical spell illustration: \"Carrion Swarm\" — Deal 1 damage to all enemy creatures and summon a 1/1 Risen Skeleton. The swarm always leaves one volunteer behind. Palette: violet necrotic glow, sickly green accents, gothic gloom and mist."
+    },
+    {
+      "key": "gmc4",
+      "file": "assets/art/gmc4.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy wizard creature portrait: Boneweaver of Gravemire. She darns the dead like old socks. Palette: violet necrotic glow, sickly green accents, gothic gloom and mist."
+    },
+    {
+      "key": "gmc5",
+      "file": "assets/art/gmc5.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy undead creature portrait: Pale Rider of Gravemire. You hear the hoofbeats exactly once. Palette: violet necrotic glow, sickly green accents, gothic gloom and mist."
+    },
+    {
+      "key": "gmc6",
+      "file": "assets/art/gmc6.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. A soul torn from a kneeling warrior as violet lightning, arcing toward a screaming enemy knight Palette: violet necrotic glow, sickly green accents, gothic gloom and mist."
+    },
+    {
+      "key": "gmc7",
+      "file": "assets/art/gmc7.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy undead creature portrait: Tombshade Stalker of Gravemire. Buried shallow, on purpose. Palette: violet necrotic glow, sickly green accents, gothic gloom and mist."
+    },
+    {
+      "key": "gmc8",
+      "file": "assets/art/gmc8.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. A tide of grasping shadow-hands rolling across a battlefield, knights withering where it touches Palette: violet necrotic glow, sickly green accents, gothic gloom and mist."
+    },
+    {
+      "key": "gmc9",
+      "file": "assets/art/gmc9.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy undead creature portrait: Ossuary Colossus of Gravemire. Some assembly required. Repeatedly. Palette: violet necrotic glow, sickly green accents, gothic gloom and mist."
+    },
+    {
+      "key": "gmc10",
+      "file": "assets/art/gmc10.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. A many-armed demon queen weaving glowing soul-threads between her fingers above a dying army Palette: violet necrotic glow, sickly green accents, gothic gloom and mist."
+    },
+    {
+      "key": "ntc1",
+      "file": "assets/art/ntc1.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy goblin creature portrait: Torch Kobold of Neutral. The torch is a family heirloom. Palette: weathered stone and steel greys warmed by torchlight."
+    },
+    {
+      "key": "ntc2",
+      "file": "assets/art/ntc2.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy mercenary creature portrait: Tavern Brawler of Neutral. The first round is on him. So is the table. Palette: weathered stone and steel greys warmed by torchlight."
+    },
+    {
+      "key": "ntc3",
+      "file": "assets/art/ntc3.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy mercenary creature portrait: Wandering Bard of Neutral. Three chords and the truth, mostly the chords. Palette: weathered stone and steel greys warmed by torchlight."
+    },
+    {
+      "key": "ntc4",
+      "file": "assets/art/ntc4.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy construct creature portrait: Treasure Golem of Neutral. Its heart is literally gold. Palette: weathered stone and steel greys warmed by torchlight."
+    },
+    {
+      "key": "ntc5",
+      "file": "assets/art/ntc5.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy beast creature portrait: Dungeon Chimera of Neutral. Three heads, one appetite. Palette: weathered stone and steel greys warmed by torchlight."
+    },
+    {
+      "key": "ntc6",
+      "file": "assets/art/ntc6.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy mercenary creature portrait: Sellsword Captain of Neutral. Loyalty rates are competitive. Palette: weathered stone and steel greys warmed by torchlight."
+    },
+    {
+      "key": "ntc7",
+      "file": "assets/art/ntc7.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Ominous magical trap illustration: \"Net Trap\" — Trap: when an enemy creature attacks, Freeze it and deal 1 damage to it. Palette: weathered stone and steel greys warmed by torchlight."
+    },
+    {
+      "key": "ntc8",
+      "file": "assets/art/ntc8.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Full-body fantasy beast creature portrait: Colossal Roc of Neutral. Its shadow has its own weather. Palette: weathered stone and steel greys warmed by torchlight."
+    },
+    {
+      "key": "ntc9",
+      "file": "assets/art/ntc9.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Dynamic magical spell illustration: \"Mercenary Standard\" — Give your creatures +1/+1. The flag costs extra. Worth it. Palette: weathered stone and steel greys warmed by torchlight."
+    },
+    {
+      "key": "ntc10",
+      "file": "assets/art/ntc10.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. A resplendent merchant-prince in gilded armor opening a vault of levitating legendary relics, smug smile Palette: weathered stone and steel greys warmed by torchlight."
+    },
+    {
       "key": "tk_phoenix",
       "file": "assets/art/tk_phoenix.jpg",
       "model": "standard",
@@ -899,6 +1319,20 @@
       "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. A single brilliant arcane ember-spark held between two fingertips, tiny glowing runes orbiting it Palette: weathered stone and steel greys warmed by torchlight."
     },
     {
+      "key": "tk_fury",
+      "file": "assets/art/tk_fury.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. A raging spirit of pure flame mid-charge, trailing embers, fists ignited Palette: molten oranges, deep reds, volcanic forge glow, drifting embers."
+    },
+    {
+      "key": "tk_sapling",
+      "file": "assets/art/tk_sapling.jpg",
+      "model": "standard",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. A stout young treant sapling with a shield-like bark chest, planted defiantly Palette: lush emerald greens, amber sunlight shafts, ancient forest depths."
+    },
+    {
       "key": "board",
       "file": "assets/ui/board.jpg",
       "model": "quality",
@@ -918,6 +1352,90 @@
       "model": "quality",
       "resize": 1024,
       "prompt": "Ornate trading-card back design: symmetrical arcane mandala with a five-pointed crystal star at center, each point glowing a different color (red, blue, green, gold, violet), deep midnight-blue field, gold filigree corners, elegant and balanced. Perfectly symmetrical, no text, no letters, no watermark."
+    },
+    {
+      "key": "cb_verdant",
+      "file": "assets/ui/cb_verdant.jpg",
+      "model": "quality",
+      "resize": 1024,
+      "prompt": "Ornate trading-card back design: a living emerald tree-of-life mandala, bark filigree frame, glowing leaf veins, deep forest-green field. Perfectly symmetrical, elegant, premium fantasy TCG card back. No text, no letters, no watermark."
+    },
+    {
+      "key": "cb_crypts",
+      "file": "assets/ui/cb_crypts.jpg",
+      "model": "quality",
+      "resize": 1024,
+      "prompt": "Ornate trading-card back design: a violet skull-and-thorns mandala wreathed in soulfire, obsidian filigree frame, deep midnight-purple field. Perfectly symmetrical, elegant, premium fantasy TCG card back. No text, no letters, no watermark."
+    },
+    {
+      "key": "cb_volcanic",
+      "file": "assets/ui/cb_volcanic.jpg",
+      "model": "quality",
+      "resize": 1024,
+      "prompt": "Ornate trading-card back design: a blazing forge-hammer sigil inside a ring of magma runes, blackened-iron filigree frame, ember-red field. Perfectly symmetrical, elegant, premium fantasy TCG card back. No text, no letters, no watermark."
+    },
+    {
+      "key": "cb_depths",
+      "file": "assets/ui/cb_depths.jpg",
+      "model": "quality",
+      "resize": 1024,
+      "prompt": "Ornate trading-card back design: a spiral leviathan-eye mandala of ice and current, pearl filigree frame, abyssal teal field. Perfectly symmetrical, elegant, premium fantasy TCG card back. No text, no letters, no watermark."
+    },
+    {
+      "key": "cb_celestial",
+      "file": "assets/ui/cb_celestial.jpg",
+      "model": "quality",
+      "resize": 1024,
+      "prompt": "Ornate trading-card back design: a radiant sunburst-and-wings mandala, white-gold filigree frame, dawn-gold field. Perfectly symmetrical, elegant, premium fantasy TCG card back. No text, no letters, no watermark."
+    },
+    {
+      "key": "cb_champion",
+      "file": "assets/ui/cb_champion.jpg",
+      "model": "quality",
+      "resize": 1024,
+      "prompt": "Ornate trading-card back design: a crowned five-pointed crystal star over crossed blades, tournament-gold filigree frame, royal crimson field. Perfectly symmetrical, elegant, premium fantasy TCG card back. No text, no letters, no watermark."
+    },
+    {
+      "key": "cb_collector",
+      "file": "assets/ui/cb_collector.jpg",
+      "model": "quality",
+      "resize": 1024,
+      "prompt": "Ornate trading-card back design: an overflowing treasure-vault mandala of gems in five colors, gilded filigree frame, deep amethyst field. Perfectly symmetrical, elegant, premium fantasy TCG card back. No text, no letters, no watermark."
+    },
+    {
+      "key": "cm_thornqueen",
+      "file": "assets/ui/cm_thornqueen.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Bust portrait for a game dialogue NPC: A regal elven queen of thorns with a living-wood crown and vine-woven armor, cold green eyes, forest throne. Looking at viewer. Dramatic rim light."
+    },
+    {
+      "key": "cm_lichlord",
+      "file": "assets/ui/cm_lichlord.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Bust portrait for a game dialogue NPC: A gaunt lich lord in ceremonial burial robes with a cracked golden death-mask, violet soulfire seeping through. Looking at viewer. Dramatic rim light."
+    },
+    {
+      "key": "cm_flamekhan",
+      "file": "assets/ui/cm_flamekhan.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Bust portrait for a game dialogue NPC: A hulking dragonkin war-khan in obsidian plate, magma veins across his scales, twin flame axes on his back. Looking at viewer. Dramatic rim light."
+    },
+    {
+      "key": "cm_tidecaller",
+      "file": "assets/ui/cm_tidecaller.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Bust portrait for a game dialogue NPC: A masked deep-sea oracle with coral antlers and pearl-string veil, bioluminescent tattoos, storm behind her. Looking at viewer. Dramatic rim light."
+    },
+    {
+      "key": "cm_lightwarden",
+      "file": "assets/ui/cm_lightwarden.jpg",
+      "model": "quality",
+      "resize": 512,
+      "prompt": "Premium collectible card game illustration, painterly high-fantasy digital art, dramatic cinematic lighting, rich saturated colors, crisp detail, centered subject, no text, no letters, no borders, no frames, no watermark. Bust portrait for a game dialogue NPC: A stern celestial warden in white-gold armor with a burning halo blade, judgmental gaze, marble spires behind. Looking at viewer. Dramatic rim light."
     },
     {
       "key": "hero_ember",

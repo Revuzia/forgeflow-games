@@ -2,18 +2,18 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=2';
-import { REALMS, cardById } from '../sim/cards.js?v=2';
-import { FX } from './fx.js?v=2';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=3';
+import { REALMS, cardById } from '../sim/cards.js?v=3';
+import { FX } from './fx.js?v=3';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 export const LAYOUT = {
-  playerBoardZ: 1.28, enemyBoardZ: -1.42, slotDX: 1.62,
-  handZ: 4.26, handY: 1.5, enemyHandZ: -3.66,
+  playerBoardZ: 1.22, enemyBoardZ: -1.5, slotDX: 1.62,
+  handZ: 4.52, handY: 1.16, enemyHandZ: -3.98,
   deckX: 7.5, playerDeckZ: 3.1, enemyDeckZ: -3.1,
   trapX: -7.35, playerTrapZ: 2.35, enemyTrapZ: -2.35,
-  heroPlayer: new THREE.Vector3(0, 0.02, 3.06),
-  heroEnemy: new THREE.Vector3(0, 0.02, -3.26),
+  heroPlayer: new THREE.Vector3(0, 0.02, 3.28),
+  heroEnemy: new THREE.Vector3(0, 0.02, -3.34),
 };
 
 // ── tiny tween engine ────────────────────────────────────────────
@@ -132,8 +132,8 @@ export class BoardScene {
     this.scene.fog = new THREE.Fog('#0b0714', 18, 30);
 
     this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 60);
-    this.camera.position.set(0, 9.7, 8.35);
-    this.camera.lookAt(0, 0, 0.8);
+    this.camera.position.set(0, 10.6, 9.15);
+    this.camera.lookAt(0, 0, 0.62);
     this.camShakeT = 0; this.camShakeAmp = 0;
     this.camBase = this.camera.position.clone();
 
@@ -169,19 +169,19 @@ export class BoardScene {
     mid.position.set(0, 0.01, -0.08);
     this.scene.add(mid);
 
-    // hero plates
+    // hero plates — compact discs that stay clear of the card rows
     this.heroMeshes = [];
     for (const [i, pos] of [[0, LAYOUT.heroPlayer], [1, LAYOUT.heroEnemy]]) {
       const gtex = new THREE.TextureLoader().load(`assets/ui/hero_${i === 0 ? 'dawn' : 'grave'}.jpg`);
       gtex.colorSpace = THREE.SRGBColorSpace;
       const grp = new THREE.Group();
       const ring = new THREE.Mesh(
-        new THREE.RingGeometry(0.78, 0.92, 48),
+        new THREE.RingGeometry(0.56, 0.67, 48),
         new THREE.MeshBasicMaterial({ color: 0xd4952b, transparent: true, opacity: 0.9 }),
       );
       ring.rotation.x = -Math.PI / 2;
       const disc = new THREE.Mesh(
-        new THREE.CircleGeometry(0.78, 48),
+        new THREE.CircleGeometry(0.56, 48),
         new THREE.MeshBasicMaterial({ map: gtex }),
       );
       disc.rotation.x = -Math.PI / 2;
@@ -195,14 +195,14 @@ export class BoardScene {
     }
 
     // deck stacks + trap zone markers (visual only; counts in DOM)
-    const back = getCardBack();
+    this.backs = [getCardBack(), getCardBack()]; // [my back, foe back]
     this.deckMeshes = [];
     for (const [i, z] of [[0, LAYOUT.playerDeckZ], [1, LAYOUT.enemyDeckZ]]) {
       const grp = new THREE.Group();
       for (let s = 0; s < 3; s++) {
         const m = new THREE.Mesh(
           new THREE.PlaneGeometry(CW * 0.92, CH * 0.92),
-          new THREE.MeshBasicMaterial({ map: back.tex }),
+          new THREE.MeshBasicMaterial({ map: this.backs[i].tex }),
         );
         m.rotation.x = -Math.PI / 2;
         m.position.y = 0.02 + s * 0.022;
@@ -331,23 +331,47 @@ export class BoardScene {
 
   // ── layout ────────────────────────────────────────────────────
   handTransform(side, i, n, hovered) {
-    const spread = Math.min(1.24, 7.6 / Math.max(n, 1));
+    const spread = Math.min(1.18, 7.4 / Math.max(n, 1));
     const x = (i - (n - 1) / 2) * spread;
     if (side === 0) {
       const arc = Math.abs(i - (n - 1) / 2) / Math.max(1, (n - 1) / 2 || 1);
-      const y = LAYOUT.handY + 0.35 - arc * 0.14 + (hovered ? 0.9 : 0);
-      const z = LAYOUT.handZ - (hovered ? 0.72 : 0) + arc * 0.06;
+      // hovered: rise well above the fan, fully readable, in front of everything
+      const y = LAYOUT.handY + 0.3 - arc * 0.12 + (hovered ? 1.15 : 0);
+      const z = LAYOUT.handZ - (hovered ? 0.55 : 0) + arc * 0.05;
       return {
         pos: new THREE.Vector3(x, y, z),
-        rotX: -0.5 + (hovered ? 0.06 : 0),
-        rotZ: hovered ? 0 : -(i - (n - 1) / 2) * 0.05,
-        scale: hovered ? 1.5 : 1,
+        rotX: -0.56 + (hovered ? 0.1 : 0),
+        rotZ: hovered ? 0 : -(i - (n - 1) / 2) * 0.045,
+        scale: hovered ? 1.62 : 0.94,
       };
     }
     return {
-      pos: new THREE.Vector3(x * 0.8, LAYOUT.handY + 0.22, LAYOUT.enemyHandZ),
-      rotX: 0.5, rotZ: (i - (n - 1) / 2) * 0.05, scale: 0.84,
+      pos: new THREE.Vector3(x * 0.76, LAYOUT.handY + 0.2, LAYOUT.enemyHandZ),
+      rotX: 0.5, rotZ: (i - (n - 1) / 2) * 0.05, scale: 0.8,
     };
+  }
+
+  // board hover: enlarge the REAL card in place and swap to the full-detail
+  // texture so rules text is readable — no duplicate preview card
+  setBoardHover(iid, on) {
+    const e = this.cards.get(iid);
+    if (!e || e.zone !== 'board') return;
+    if (on === !!e.boardHover) return;
+    e.boardHover = on;
+    this.setHoverFront(iid, on);
+    const face = on ? getCard(e.cardId).tex : getBoardCard(e.cardId).tex;
+    if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
+    if (e.chips) { e.chips.atk.visible = !on; e.chips.hp.visible = !on; }
+    for (const b of e.badges) b.visible = !on;
+    const base = this.boardTransform(e.side, e.slot, (e.side === 0 ? this._lastMyBoardN : this._lastFoeBoardN) || 6);
+    if (on) {
+      this.applyTransform(e, {
+        pos: base.pos.clone().add(new THREE.Vector3(0, 1.5, e.side === 0 ? 0.4 : 0.85)),
+        rotX: -0.62, rotZ: 0, scale: 1.72,
+      }, 0.16);
+    } else {
+      this.applyTransform(e, base, 0.16);
+    }
   }
 
   // hovered/selected cards must render in FRONT of neighbors and never z-fight
@@ -363,7 +387,8 @@ export class BoardScene {
   boardTransform(side, i, n) {
     const x = (i - (n - 1) / 2) * LAYOUT.slotDX;
     const z = side === 0 ? LAYOUT.playerBoardZ : LAYOUT.enemyBoardZ;
-    return { pos: new THREE.Vector3(x, 0.055, z), rotX: -Math.PI / 2 + 0.14, rotZ: 0, scale: 1 };
+    // perfectly flat on the table — tilt made tapped cards' edges sink through it
+    return { pos: new THREE.Vector3(x, 0.06, z), rotX: -Math.PI / 2, rotZ: 0, scale: 1 };
   }
 
   trapTransform(side, i) {
@@ -401,7 +426,7 @@ export class BoardScene {
         }
         e.zone = 'hand'; e.side = rel; e.cardId = h.card;
         // enemy hand shows card BACKS
-        const face = rel === 0 ? getCard(h.card).tex : getCardBack().tex;
+        const face = rel === 0 ? getCard(h.card).tex : this.backs[1].tex;
         if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
         this.applyTransform(e, this.handTransform(rel, i, pl.hand.length, e.hover && rel === 0), dur);
         if (e.chips) { e.inner.remove(e.chips.atk, e.chips.hp); e.chips = null; }
@@ -410,13 +435,16 @@ export class BoardScene {
         e.group.rotation.y = 0; e.tapSpin = 0;
       });
       // boards
+      if (rel === 0) this._lastMyBoardN = pl.board.length; else this._lastFoeBoardN = pl.board.length;
       pl.board.forEach((u, i) => {
         seen.add(u.iid);
         let e = this.cards.get(u.iid);
         if (!e) e = this.makeCardEntry(u.iid, u.card, rel);
         e.zone = 'board'; e.side = rel; e.slot = i; e.cardId = u.card;
+        e.boardHover = false;
         const face = getBoardCard(u.card).tex;
         if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
+        if (e.chips) { e.chips.atk.visible = true; e.chips.hp.visible = true; }
         this.applyTransform(e, this.boardTransform(rel, i, pl.board.length), dur);
         const def = cardById(u.card);
         this.ensureChips(e, /* live */ this.liveAtk(state, p, u), u.hp, u.maxHp, def.atk ?? 0, def.hp ?? 0);
@@ -444,7 +472,7 @@ export class BoardScene {
         let e = this.cards.get(t.iid);
         if (!e) e = this.makeCardEntry(t.iid, t.card, rel);
         e.zone = 'trap'; e.side = rel;
-        const face = rel === 0 ? getCard(t.card).tex : getCardBack().tex; // you can see your own traps
+        const face = rel === 0 ? getCard(t.card).tex : this.backs[1].tex; // you can see your own traps
         if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
         this.applyTransform(e, this.trapTransform(rel, i), dur);
       });
@@ -576,6 +604,14 @@ export class BoardScene {
     }
   }
 
+  // cosmetic card backs: [my back file, opponent's back file]
+  setCardBacks(myFile, foeFile) {
+    this.backs = [getCardBack(myFile || 'cardback.jpg'), getCardBack(foeFile || 'cardback.jpg')];
+    this.deckMeshes.forEach((grp, i) => {
+      for (const m of grp.children) { m.material.map = this.backs[i].tex; m.material.needsUpdate = true; }
+    });
+  }
+
   setHeroPortrait(rel, realm) {
     const grp = this.heroMeshes[rel];
     if (!grp) return;
@@ -633,14 +669,10 @@ export class BoardScene {
     // background-tab throttling starves rAF
     this.tweens.update(Math.min(dtWall, 0.4) * this.animSpeed);
     this.fx.update(dt);
-    // glow pulse
+    // glow pulse (no idle motion — cards hold perfectly still unless hovered)
     const pulse = 0.32 + Math.sin(this.time * 5) * 0.14;
     for (const e of this.cards.values()) {
       if (e.glowOn) e.glow.material.opacity = pulse;
-      // gentle hand idle bob
-      if (e.zone === 'hand' && e.side === 0 && !e.hover) {
-        e.group.position.y = e.home.pos.y + Math.sin(this.time * 1.4 + e.iid) * 0.02;
-      }
       // keep legendary aura tracking
       if (e.zone === 'board') this.fx.moveEmitter('aura' + e.iid, e.group.position);
     }

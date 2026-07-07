@@ -5,9 +5,9 @@
 // stripped via aiView() before any reasoning happens. It plays through the
 // exact same action API as the player.
 
-import { cardById } from './cards.js?v=2';
-import { legalActions, applyAction, cloneState, aiView, effAtk, hasKw, opponentOf } from './engine.js?v=2';
-import { rngNext } from './rng.js?v=2';
+import { cardById } from './cards.js?v=3';
+import { legalActions, applyAction, cloneState, aiView, effAtk, hasKw, opponentOf } from './engine.js?v=3';
+import { rngNext } from './rng.js?v=3';
 
 export const DIFFICULTIES = {
   squire:   { label: 'Squire',   noise: 5.0, lethal: false, lookahead: false, blunder: 0.25 },

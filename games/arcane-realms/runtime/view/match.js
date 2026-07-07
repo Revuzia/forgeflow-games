@@ -6,10 +6,10 @@
 // always shows my side at the bottom via syncFromState(state, mySide).
 
 import * as THREE from 'three';
-import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=2';
-import { cardById, REALMS } from '../sim/cards.js?v=2';
-import { chooseAction } from '../sim/ai.js?v=2';
-import { Audio2 } from './audio.js?v=2';
+import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=3';
+import { cardById, REALMS } from '../sim/cards.js?v=3';
+import { chooseAction } from '../sim/ai.js?v=3';
+import { Audio2 } from './audio.js?v=3';
 
 const REALM_COLOR = (id) => REALMS[cardById(id).realm]?.color ?? 0x8d99ae;
 
@@ -25,7 +25,9 @@ function hashState(state) {
 
 export class Match {
   constructor({ scene, ui, playerDeck, aiDeck, difficulty, heroes, seed, settings,
-                mode = 'ai', net = null, mySide = 0, sharedState = null, names }) {
+                mode = 'ai', net = null, mySide = 0, sharedState = null, names,
+                cardbacks = null, onGameOver = null }) {
+    this.onGameOver = onGameOver;
     this.scene = scene;
     this.ui = ui;
     this.mode = mode;
@@ -58,6 +60,7 @@ export class Match {
     // heroes[] is by ABSOLUTE engine side; scene wants rel (0 = bottom = me)
     scene.setHeroPortrait(0, heroes[this.mySide]);
     scene.setHeroPortrait(1, heroes[this.foeSide]);
+    scene.setCardBacks(cardbacks?.[0], cardbacks?.[1]);
     this.heroesAbs = heroes;
     this.bindInput();
     if (this.net) this.bindNet();
@@ -89,17 +92,21 @@ export class Match {
     this.scene.clearGlows();
     this.scene.setHeroGlow(0, false);
     this.scene.setHeroGlow(1, false);
+    // hand affordability is ALWAYS reflected: unaffordable cards are dimmed,
+    // playable ones glow — instantly readable "what can I use at this mana"
+    const playable = new Set(
+      (!this.over && this.myTurn() ? this.legal : []).filter((a) => a.type === 'play').map((a) => a.iid));
+    for (const h of this.state.players[this.mySide].hand) {
+      const e = this.scene.cards.get(h.iid);
+      if (!e || e.zone !== 'hand') continue;
+      e.mesh.material.color.setScalar(playable.has(h.iid) || !this.myTurn() || this.busy ? 1 : 0.45);
+    }
     if (this.busy || !this.myTurn()) { this.ui.hudUpdate(this.state, this); return; }
-    const playable = new Set(this.legal.filter((a) => a.type === 'play').map((a) => a.iid));
     for (const iid of playable) this.scene.setGlow(iid, 0x4fc06a, true);
-    const attackers = new Set(this.legal.filter((a) => a.type === 'attack').map((a) => a.attacker));
-    for (const iid of attackers) this.scene.setGlow(iid, 0xffd45f, true);
-    if (this.state.phase === 'main') {
-      const sim = cloneState(this.state);
-      try {
-        applyAction(sim, { type: 'combat' });
-        for (const a of legalActions(sim)) if (a.type === 'attack') this.scene.setGlow(a.attacker, 0xffd45f, true);
-      } catch { /* ignore */ }
+    // attacker glow ONLY during combat — the main phase stays clean
+    if (this.state.phase === 'combat') {
+      const attackers = new Set(this.legal.filter((a) => a.type === 'attack').map((a) => a.attacker));
+      for (const iid of attackers) this.scene.setGlow(iid, 0xffd45f, true);
     }
     this.ui.hudUpdate(this.state, this);
   }
@@ -122,6 +129,7 @@ export class Match {
   async doAction(action, { enemyReveal = null, fromRemote = false } = {}) {
     if (this.over) return;
     this.busy = true;
+    if (this.boardHoverIid != null) { this.scene.setBoardHover(this.boardHoverIid, false); this.boardHoverIid = null; }
     this.clearSelect();
     this.scene.clearGlows();
     this.scene.setHeroGlow(0, false);
@@ -322,13 +330,15 @@ export class Match {
     if (won) this.scene.fx.fountain(new THREE.Vector3(0, 0.4, 0.5), 0xf0b93a, { n: 90, life: 1.6 });
     if (this.net) { try { this.net.leave(); } catch { /* gone */ } }
     await this.wait(900);
-    this.ui.showGameOver(won, {
+    const stats = {
       turns: this.state.turn,
       dmg: this.stats.dmgDealt,
       played: this.stats.cardsPlayed,
       difficulty: this.mode === 'online' ? 'online' : this.difficulty,
       online: this.mode === 'online',
-    });
+    };
+    if (this.onGameOver) { this.onGameOver(won, stats); return; }
+    this.ui.showGameOver(won, stats);
   }
 
   // ── AI turn (ai mode) ────────────────────────────────────────
@@ -467,11 +477,10 @@ export class Match {
     return null;
   }
 
-  // attack selection helpers
+  // ── unified selection (click-to-target for attacks AND spells) ──
   beginSelect(iid, attacks, viaCombat) {
     this.clearSelect();
-    this.ui.hoverPreview(null);
-    this.select = { iid, attacks, viaCombat, moved: false, sticky: false };
+    this.select = { kind: 'attack', iid, attacks, viaCombat, moved: false };
     this.scene.setGlow(iid, 0xffd45f, true);
     this.scene.setHoverFront(iid, true);
     for (const a of attacks) {
@@ -479,11 +488,34 @@ export class Match {
       else this.scene.setHeroGlow(this.relOf(a.target.p), true);
     }
     const from = this.scene.worldToScreen(this.scene.posOf(iid) || new THREE.Vector3());
-    this.ui.showArrow(from.x, from.y, from.x, from.y - 30, '#d43f3f');
+    this.ui.showArrow(from.x, from.y, from.x, from.y - 30, 'attack');
     Audio2.sfx('click');
   }
+
+  // targeted spell: the card rises to a "casting position" and stays there
+  // while the arcane arrow follows the cursor — no dragging required
+  beginSpellSelect(hit, plays) {
+    this.clearSelect();
+    const entry = hit.entry;
+    this.select = { kind: 'spell', iid: hit.iid, cardId: entry.cardId, plays, moved: false };
+    this.scene.setHoverFront(hit.iid, true);
+    this.scene.tweens.killOf(entry.group.position);
+    this.scene.applyTransform(entry, {
+      pos: new THREE.Vector3(entry.group.position.x * 0.55, 2.35, 3.55),
+      rotX: -0.5, rotZ: 0, scale: 1.28,
+    }, 0.18, 'backOut');
+    this.scene.setGlow(hit.iid, 0x6fd8ff, true);
+    this.highlightPlays(plays);
+    const from = this.scene.worldToScreen(new THREE.Vector3(entry.group.position.x * 0.55, 2.35, 3.55));
+    this.ui.showArrow(from.x, from.y, from.x, from.y - 30, 'spell');
+    Audio2.sfx('click');
+  }
+
   clearSelect() {
-    if (this.select) this.scene.setHoverFront(this.select.iid, false);
+    if (this.select) {
+      this.scene.setHoverFront(this.select.iid, false);
+      if (this.select.kind === 'spell') this.scene.syncFromState(this.state, this.mySide);
+    }
     this.select = null;
     this.ui.hideArrow();
   }
@@ -495,19 +527,44 @@ export class Match {
     if (!this.over) await this.doAction(match);
   }
 
+  async commitSpell(tgt) {
+    const sel = this.select;
+    const def = cardById(sel.cardId);
+    if (def.target2) {
+      const candidates = sel.plays.filter((a) => this.sameTarget(a.target, tgt));
+      if (!candidates.length) { this.clearSelect(); this.refreshLegal(); return; }
+      this.clearSelect();
+      const action = await this.pickSecond(candidates);
+      if (action) { Audio2.sfx('play'); await this.doAction(action); }
+      else { this.scene.syncFromState(this.state, this.mySide); this.refreshLegal(); }
+      return;
+    }
+    const match = sel.plays.find((a) => this.sameTarget(a.target, tgt));
+    this.clearSelect();
+    if (match) {
+      Audio2.sfx('play');
+      await this.doAction(match);
+    } else {
+      this.refreshLegal();
+    }
+  }
+
   pointerMove(e) {
     if (this.over) return;
     const hit = this.scene.pick(e.clientX, e.clientY);
     if (this.drag) { this.dragMove(e, hit); return; }
     // selection arrow follows the cursor (sticky click-to-target mode)
     if (this.select) {
-      const from = this.scene.worldToScreen(this.scene.posOf(this.select.iid) || new THREE.Vector3());
-      this.ui.showArrow(from.x, from.y, e.clientX, e.clientY, '#d43f3f');
+      const fromPos = this.select.kind === 'spell'
+        ? (this.scene.cards.get(this.select.iid)?.group.position || new THREE.Vector3())
+        : (this.scene.posOf(this.select.iid) || new THREE.Vector3());
+      const from = this.scene.worldToScreen(fromPos);
+      this.ui.showArrow(from.x, from.y, e.clientX, e.clientY, this.select.kind);
       if (e.buttons & 1) this.select.moved = true;
       el_cursor(this.scene.renderer.domElement, hit, this);
       return;
     }
-    // hand hover lift + front-render
+    // hand hover lift + front-render (the card itself enlarges — no duplicates)
     const newHover = hit && hit.kind === 'hand' && hit.side === 0 ? hit.iid : null;
     if (newHover !== this.hoverIid) {
       const prev = this.scene.cards.get(this.hoverIid);
@@ -529,11 +586,12 @@ export class Match {
         if (idx >= 0) this.scene.applyTransform(cur, this.scene.handTransform(0, idx, handArr.length, true), 0.16);
       }
     }
-    // floating hover preview (hand + board + own traps)
-    if (hit && (hit.kind === 'board' || (hit.kind === 'hand' && hit.side === 0) || (hit.kind === 'trap' && hit.side === 0))) {
-      this.ui.hoverPreview(hit.entry.cardId, hit.kind === 'board' ? this.findUnit(hit.iid) : null, e.clientX, e.clientY, hit.kind);
-    } else {
-      this.ui.hoverPreview(null);
+    // board hover: the REAL card enlarges in place with full rules text
+    const newBoardHover = hit && hit.kind === 'board' && !this.busy ? hit.iid : null;
+    if (newBoardHover !== this.boardHoverIid) {
+      if (this.boardHoverIid != null) this.scene.setBoardHover(this.boardHoverIid, false);
+      this.boardHoverIid = newBoardHover;
+      if (newBoardHover != null) this.scene.setBoardHover(newBoardHover, true);
     }
     el_cursor(this.scene.renderer.domElement, hit, this);
   }
@@ -545,14 +603,19 @@ export class Match {
     // click-to-target: a selection is armed → this click picks the target (or cancels)
     if (this.select) {
       const tgt = this.hitToTarget(hit);
-      const match = tgt && this.select.attacks.find((a) => this.sameTarget(a.target, tgt));
-      if (match) { this.commitAttack(match); }
-      else if (hit && hit.kind === 'board' && hit.side === 0 && hit.iid !== this.select.iid) {
-        // clicking another of my ready creatures switches selection
-        this.trySelectAttacker(hit);
+      if (this.select.kind === 'attack') {
+        const match = tgt && this.select.attacks.find((a) => this.sameTarget(a.target, tgt));
+        if (match) { this.commitAttack(match); }
+        else if (hit && hit.kind === 'board' && hit.side === 0 && hit.iid !== this.select.iid) {
+          this.trySelectAttacker(hit);
+        } else {
+          this.clearSelect();
+          this.refreshLegal();
+        }
       } else {
-        this.clearSelect();
-        this.refreshLegal();
+        // spell targeting
+        if (tgt && this.select.plays.some((a) => this.sameTarget(a.target, tgt))) this.commitSpell(tgt);
+        else { this.clearSelect(); this.refreshLegal(); }
       }
       return;
     }
@@ -562,11 +625,17 @@ export class Match {
       const plays = this.legal.filter((a) => a.type === 'play' && a.iid === hit.iid);
       if (!plays.length) { Audio2.sfx('error'); this.ui.toast(this.whyUnplayable(hit.iid)); return; }
       const card = cardById(hit.entry.cardId);
-      this.ui.hoverPreview(null);
+      if (card.type === 'spell' && card.target) {
+        // targeted spells use click-to-target — the card locks into a casting
+        // pose and the arcane arrow follows the cursor
+        this.beginSpellSelect(hit, plays);
+        return;
+      }
       this.drag = { mode: 'card', iid: hit.iid, cardId: hit.entry.cardId, def: card, plays, sx: e.clientX, sy: e.clientY };
       this.scene.tweens.killOf(hit.entry.group.position);
       this.highlightPlays(plays);
     } else if (hit.kind === 'board' && hit.side === 0) {
+      if (this.boardHoverIid != null) { this.scene.setBoardHover(this.boardHoverIid, false); this.boardHoverIid = null; }
       this.trySelectAttacker(hit);
     }
   }
@@ -636,7 +705,7 @@ export class Match {
         } else { d.slot = null; this.scene.hideGhost(); }
       } else if (d.def.target) {
         const from = this.scene.worldToScreen(entry.group.position);
-        this.ui.showArrow(from.x, from.y, e.clientX, e.clientY, '#4f8fe8');
+        this.ui.showArrow(from.x, from.y, e.clientX, e.clientY, 'spell');
       }
     }
   }
@@ -644,13 +713,18 @@ export class Match {
   async pointerUp(e) {
     const d = this.drag;
     if (!d) {
-      // click-release completing a select-drag: if released over a target, attack
+      // drag-release while a selection is armed also confirms (both styles work)
       if (this.select && this.select.moved) {
         const hit = this.scene.pick(e.clientX, e.clientY);
         const tgt = this.hitToTarget(hit);
-        const match = tgt && this.select.attacks.find((a) => this.sameTarget(a.target, tgt));
-        if (match) { this.commitAttack(match); return; }
-        // released over nothing after dragging → stay in sticky mode
+        if (this.select.kind === 'attack') {
+          const match = tgt && this.select.attacks.find((a) => this.sameTarget(a.target, tgt));
+          if (match) { this.commitAttack(match); return; }
+        } else if (tgt && this.select.plays.some((a) => this.sameTarget(a.target, tgt))) {
+          this.commitSpell(tgt);
+          return;
+        }
+        // released over nothing → stay in sticky mode
         this.select.moved = false;
       }
       return;

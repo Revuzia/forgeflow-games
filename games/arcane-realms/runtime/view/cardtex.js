@@ -4,7 +4,7 @@
 // board and as plain canvases in the DOM (deck builder / collection / inspect).
 
 import * as THREE from 'three';
-import { CARDS, REALMS, cardById } from '../sim/cards.js?v=2';
+import { CARDS, REALMS, cardById } from '../sim/cards.js?v=3';
 
 export const CARD_W = 512, CARD_H = 768;
 
@@ -397,9 +397,11 @@ export function preload(cardIds) {
   for (const id of new Set(cardIds)) getCard(id);
 }
 
-// card back (enemy hand, decks, face-down traps)
-export function getCardBack() {
-  if (backCache) return backCache;
+// card backs (enemy hand, decks, face-down traps) — selectable cosmetics,
+// keyed by asset file name. Earned through the Campaign.
+const backCaches = new Map();
+export function getCardBack(file = 'cardback.jpg') {
+  if (backCaches.has(file)) return backCaches.get(file);
   const canvas = document.createElement('canvas');
   canvas.width = CARD_W; canvas.height = CARD_H;
   const g = canvas.getContext('2d');
@@ -428,9 +430,10 @@ export function getCardBack() {
   tex.colorSpace = THREE.SRGBColorSpace;
   const img = new Image();
   img.onload = () => { draw(img); tex.needsUpdate = true; };
-  img.src = 'assets/ui/cardback.jpg';
-  backCache = { canvas, tex };
-  return backCache;
+  img.src = 'assets/ui/' + file;
+  const entry = { canvas, tex };
+  backCaches.set(file, entry);
+  return entry;
 }
 
 // small canvas for DOM grids (deck builder / collection)

@@ -1,11 +1,11 @@
 // Arcane Realms TCG — DOM UI layer: menu, deck builder, collection, settings,
 // match HUD (hero plates, phase bar, banners, floaters, arrow, tooltips).
 
-import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=2';
-import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=2';
-import { DIFFICULTIES } from '../sim/ai.js?v=2';
-import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=2';
-import { Audio2 } from './audio.js?v=2';
+import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=3';
+import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=3';
+import { DIFFICULTIES } from '../sim/ai.js?v=3';
+import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=3';
+import { Audio2 } from './audio.js?v=3';
 
 // ── persistence ─────────────────────────────────────────────────
 const LS_KEY = 'arcane_realms_save_v1';
@@ -83,11 +83,14 @@ const CSS = `
 .chip:hover{border-color:var(--gold)}
 .chip.on{color:#fff;border-color:currentColor}
 .grid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:14px;padding:16px;align-content:start}
-.cardcell{position:relative;cursor:pointer;transition:transform .12s;border-radius:10px}
-.cardcell:hover{transform:translateY(-4px) scale(1.03);z-index:2}
+.cardcell{position:relative;cursor:pointer;transition:transform .14s;border-radius:10px}
+.cardcell:hover{transform:translateY(-16px) scale(1.52);z-index:20}
 .cardcell canvas{width:100%;height:auto;display:block;border-radius:10px;box-shadow:0 6px 16px rgba(0,0,0,.55)}
 .cardcell .cnt{position:absolute;top:6px;right:6px;background:var(--gold);color:#1a1005;font-weight:700;font-size:14px;border-radius:12px;padding:2px 9px;box-shadow:0 2px 6px rgba(0,0,0,.6)}
 .cardcell.dim canvas{filter:grayscale(.7) brightness(.55)}
+.cardcell.locked canvas{filter:grayscale(1) brightness(.38)}
+.cardcell.locked:hover{transform:translateY(-6px) scale(1.2)}
+.cardcell .lockico{position:absolute;top:42%;left:50%;transform:translate(-50%,-50%);font-size:34px;filter:drop-shadow(0 3px 6px #000)}
 .deck-side{width:320px;display:flex;flex-direction:column;background:#140e24;border-left:1px solid #2c2148}
 .deck-side .dhead{padding:12px 14px;border-bottom:1px solid #251b40}
 .deck-side input{width:100%;background:#1e1535;border:1px solid #3a2a5c;color:var(--text);padding:8px 12px;border-radius:8px;font-family:inherit;font-size:15px}
@@ -153,6 +156,8 @@ const CSS = `
 @keyframes toastin{0%{opacity:0;transform:translateY(8px)}10%{opacity:1;transform:none}78%{opacity:1}100%{opacity:0}}
 /* arrow svg */
 #arrow-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:35}
+@keyframes arcflow{to{stroke-dashoffset:-54}}
+.arc-flow{animation:arcflow .9s linear infinite}
 /* floating hover-preview card — always on top */
 #hovercard{position:fixed;width:292px;pointer-events:none;z-index:90;display:none;filter:drop-shadow(0 18px 44px rgba(0,0,0,.85))}
 #hovercard canvas{width:100%;border-radius:14px;display:block}
@@ -207,6 +212,13 @@ export class UI {
     return d;
   }
 
+  availableDecks() {
+    return [...STARTER_DECKS, ...this.store.decks.filter((d) => validateDeck(d.cards).ok)];
+  }
+  isOwned(cardId) {
+    return this.isOwnedFn ? this.isOwnedFn(cardId) : true;
+  }
+
   show(name) {
     for (const s of this.root.querySelectorAll('.screen')) s.classList.remove('on');
     this.root.querySelector('#scr-' + name)?.classList.add('on');
@@ -252,6 +264,7 @@ export class UI {
       return b;
     };
     mk('⚔ &nbsp;Play vs AI', () => this.openSetup(), true);
+    mk('🏰 &nbsp;Campaign', () => this.onCampaign && this.onCampaign());
     mk('🌐 &nbsp;Play vs Other Players', () => this.openOnline());
     mk('🛠 &nbsp;Deck Builder', () => this.openBuilder());
     mk('📖 &nbsp;Collection', () => this.openCollection());
@@ -559,9 +572,15 @@ export class UI {
     for (const c of this.filteredCards()) {
       const cell = this.el('div', 'cardcell');
       cell.append(cardThumb(c.id, 210));
-      cell.onmouseenter = (e) => this.hoverPreview(c.id, null, e.clientX, e.clientY, 'grid');
-      cell.onmousemove = (e) => this.hoverPreview(c.id, null, e.clientX, e.clientY, 'grid');
-      cell.onmouseleave = () => this.hoverPreview(null);
+      const owned = this.isOwned(c.id);
+      if (!owned) {
+        cell.classList.add('locked');
+        cell.append(this.el('div', 'lockico', '🔒'));
+        cell.onclick = () => { Audio2.sfx('error'); this.toast(`${c.name} — unlock it in the Campaign or an Arcane Pack!`); };
+        cell.oncontextmenu = (e) => { e.preventDefault(); this.showInspect(c.id); };
+        grid.append(cell);
+        continue;
+      }
       const n = counts[c.id] || 0;
       if (n) cell.append(this.el('div', 'cnt', '×' + n));
       if (this.working) {
@@ -625,7 +644,8 @@ export class UI {
     const d = this.working;
     const realms = new Set(d.cards.map((id) => CARDS[id].realm).filter((r) => r !== 'neutral'));
     if (realms.size === 0) { realms.add(['ember', 'tide', 'grove', 'dawn', 'grave'][Math.floor(Math.random() * 5)]); }
-    const pool = COLLECTIBLE.filter((c) => c.realm === 'neutral' || realms.has(c.realm) || (realms.size < 2 && c.realm !== 'neutral'))
+    const pool = COLLECTIBLE.filter((c) => this.isOwned(c.id))
+      .filter((c) => c.realm === 'neutral' || realms.has(c.realm) || (realms.size < 2 && c.realm !== 'neutral'))
       .sort((a, b) => a.cost - b.cost);
     const counts = {};
     for (const id of d.cards) counts[id] = (counts[id] || 0) + 1;
@@ -670,7 +690,10 @@ export class UI {
     const top = this.el('div', 'topbar');
     const back = this.el('button', 'btn small', '← Menu');
     back.onclick = () => { Audio2.sfx('click'); this.show('menu'); };
-    top.append(this.el('h2', null, `COLLECTION — ${COLLECTIBLE.length} CARDS`), back);
+    const title = this.collectionTitle ? this.collectionTitle() : `COLLECTION — ${COLLECTIBLE.length} CARDS`;
+    top.append(this.el('h2', null, title));
+    if (this.campaignStrip) top.append(this.campaignStrip());
+    top.append(back);
     const col = this.el('div', 'col-side');
     this.working = null;
     this.filterState = { search: '', realm: null, cost: null, type: null, rarity: null };
@@ -792,10 +815,34 @@ export class UI {
     this.bannerEl = this.el('div'); this.bannerEl.id = 'banner';
     this.cardBannerEl = this.el('div'); this.cardBannerEl.id = 'cardbanner';
     this.toastEl = this.el('div'); this.toastEl.id = 'toasts';
+    // premium targeting arrow — solid glowing arc with an ornate head
     this.arrowSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     this.arrowSvg.id = 'arrow-svg';
-    this.arrowSvg.innerHTML = `<defs><marker id="ah" markerWidth="9" markerHeight="7" refX="7" refY="3.5" orient="auto"><polygon points="0 0, 9 3.5, 0 7" fill="context-stroke"/></marker></defs><line x1="0" y1="0" x2="0" y2="0" stroke-width="5" stroke-dasharray="10 6" marker-end="url(#ah)" visibility="hidden"/>`;
-    this.arrowLine = this.arrowSvg.querySelector('line');
+    this.arrowSvg.innerHTML = `
+      <defs>
+        <linearGradient id="arcGrad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="100" y2="0">
+          <stop offset="0" stop-color="#ffe9a8"/>
+          <stop offset="1" stop-color="#ffb43d"/>
+        </linearGradient>
+        <filter id="arcGlow" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="7"/>
+        </filter>
+      </defs>
+      <g id="arcGroup" visibility="hidden">
+        <path id="arcGlowPath" fill="none" stroke="#ffb43d" stroke-width="16" stroke-linecap="round" opacity="0.4" filter="url(#arcGlow)"/>
+        <path id="arcCore" fill="none" stroke="url(#arcGrad)" stroke-width="5.5" stroke-linecap="round"/>
+        <path id="arcFlow" class="arc-flow" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.75" stroke-dasharray="3 24"/>
+        <g id="arcHead">
+          <polygon class="ah-main" points="0,-13 22,0 0,13 6,0" fill="#ffe9a8" stroke="#8a5a13" stroke-width="1.5"/>
+          <polygon points="-6,-5 0,0 -6,5 -3,0" fill="#ffd45f" opacity="0.9"/>
+        </g>
+      </g>`;
+    this.arcGroup = this.arrowSvg.querySelector('#arcGroup');
+    this.arcGlowPath = this.arrowSvg.querySelector('#arcGlowPath');
+    this.arcCore = this.arrowSvg.querySelector('#arcCore');
+    this.arcFlow = this.arrowSvg.querySelector('#arcFlow');
+    this.arcHead = this.arrowSvg.querySelector('#arcHead');
+    this.arcGrad = this.arrowSvg.querySelector('#arcGrad');
     this.inspectEl = this.el('div'); this.inspectEl.id = 'inspect';
     const insCanvas = document.createElement('canvas');
     this.inspectCanvas = insCanvas;
@@ -885,13 +932,35 @@ export class UI {
     while (this.toastEl.children.length > 3) this.toastEl.firstChild.remove();
   }
 
-  showArrow(x1, y1, x2, y2, color) {
-    this.arrowLine.setAttribute('visibility', 'visible');
-    this.arrowLine.setAttribute('x1', x1); this.arrowLine.setAttribute('y1', y1);
-    this.arrowLine.setAttribute('x2', x2); this.arrowLine.setAttribute('y2', y2);
-    this.arrowLine.setAttribute('stroke', color);
+  // mode: 'attack' (ember gold) | 'spell' (arcane gold→cyan). Solid glowing arc.
+  showArrow(x1, y1, x2, y2, mode = 'attack') {
+    const dx = x2 - x1, dy = y2 - y1;
+    const dist = Math.hypot(dx, dy) || 1;
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - Math.min(150, dist * 0.24) - 26;
+    const d = `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`;
+    this.arcGlowPath.setAttribute('d', d);
+    this.arcCore.setAttribute('d', d);
+    this.arcFlow.setAttribute('d', d);
+    this.arcGrad.setAttribute('x1', x1); this.arcGrad.setAttribute('y1', y1);
+    this.arcGrad.setAttribute('x2', x2); this.arcGrad.setAttribute('y2', y2);
+    const stops = this.arcGrad.querySelectorAll('stop');
+    const head = this.arcHead.querySelector('.ah-main');
+    if (mode === 'spell') {
+      stops[0].setAttribute('stop-color', '#ffe9a8');
+      stops[1].setAttribute('stop-color', '#6fd8ff');
+      this.arcGlowPath.setAttribute('stroke', '#5fc0f0');
+      head.setAttribute('fill', '#bfeaff');
+    } else {
+      stops[0].setAttribute('stop-color', '#ffe9a8');
+      stops[1].setAttribute('stop-color', '#ffb43d');
+      this.arcGlowPath.setAttribute('stroke', '#ffb43d');
+      head.setAttribute('fill', '#ffe9a8');
+    }
+    const ang = Math.atan2(y2 - my, x2 - mx) * 180 / Math.PI;
+    this.arcHead.setAttribute('transform', `translate(${x2} ${y2}) rotate(${ang})`);
+    this.arcGroup.setAttribute('visibility', 'visible');
   }
-  hideArrow() { this.arrowLine.setAttribute('visibility', 'hidden'); }
+  hideArrow() { this.arcGroup.setAttribute('visibility', 'hidden'); }
 
   hoverUnit(cardId, unit, x, y) {
     clearTimeout(this.hoverTimer);
@@ -1045,13 +1114,21 @@ export class UI {
     s.innerHTML = '<div id="gameover" style="display:flex;width:100%"><div class="gwrap"></div></div>';
     const w = s.querySelector('.gwrap');
     w.append(this.el('div', 'gtitle ' + (won ? 'win' : 'lose'), won ? 'VICTORY' : 'DEFEAT'));
+    const diffLabel = stats.online ? 'Online Duel' : (DIFFICULTIES[stats.difficulty]?.label || stats.difficulty);
     w.append(this.el('div', 'gstats',
       `${won ? 'The realms sing your name.' : 'The realms will remember your stand.'}<br>` +
-      `Turns: ${stats.turns} · Damage dealt: ${stats.dmg} · Cards played: ${stats.played} · Difficulty: ${DIFFICULTIES[stats.difficulty].label}<br>` +
+      `Turns: ${stats.turns} · Damage dealt: ${stats.dmg} · Cards played: ${stats.played} · Mode: ${diffLabel}<br>` +
       `Record: ${rec.wins}W – ${rec.losses}L`));
     const row = this.el('div');
     row.style.cssText = 'display:flex;gap:12px';
-    if (!stats.online) {
+    if (this.afterMatch) { try { this.afterMatch(won); } catch { /* achievements sweep */ } }
+    if (stats.campaign) {
+      const retry = this.el('button', 'btn primary', '↺ Retry Battle');
+      retry.onclick = () => { Audio2.sfx('click'); s.classList.remove('on'); this._campaignRetry && this._campaignRetry(); };
+      const camp = this.el('button', 'btn', '🏰 Campaign Map');
+      camp.onclick = () => { Audio2.sfx('click'); s.classList.remove('on'); this.match?.destroy(); this.match = null; window.__ARC__.leaveMatch(); this.onCampaign(); };
+      row.append(retry, camp);
+    } else if (!stats.online) {
       const again = this.el('button', 'btn primary', '⚔ Play Again');
       again.onclick = () => { Audio2.sfx('click'); s.classList.remove('on'); this.onPlay(this._lastDeck, this._lastDiff, true); };
       row.append(again);

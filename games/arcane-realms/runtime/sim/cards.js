@@ -684,6 +684,341 @@ const NEUTRAL = [
   }),
 ];
 
+// ══════════════ CAMPAIGN EXPANSION — "Trials of the Realms" (60) ══════════════
+// Unlocked through Campaign chapters, achievements, and Arcane Packs.
+
+const EMBER_X = [
+  C('efc1', 'Ember Sprite', 'ember', 1, 1, 1, 'common', 'Elemental', {
+    rally: [{ op: 'damage', amount: 1, target: 'enemy-hero' }],
+    text: 'Rally: deal 1 damage to the enemy hero.',
+    flavor: 'Small, angry, and airborne.',
+  }),
+  C('efc2', 'Ashwing Vanguard', 'ember', 3, 2, 3, 'uncommon', 'Dragon', {
+    kw: ['swift'],
+    text: 'Swift.',
+    flavor: 'First through the smoke, always.',
+  }),
+  S('efc3', 'Cinder Storm', 'ember', 2, 'common', {
+    fx: [{ op: 'multi-hit', count: 3, amount: 1 }],
+    text: 'Deal 1 damage to random enemies, 3 times.',
+    flavor: 'The forge sneezes.',
+  }),
+  C('efc4', 'Forgemaster Golan', 'ember', 5, 4, 4, 'rare', 'Mercenary', {
+    rally: [{ op: 'buff', atk: 1, hp: 0, target: 'all-other-friendly-creatures' }],
+    text: 'Rally: give your other creatures +1 Attack.',
+    flavor: 'Every blade he touches remembers him.',
+  }),
+  S('efc5', 'Molten Carapace', 'ember', 3, 'uncommon', {
+    target: { kind: 'friendly-creature' },
+    fx: [{ op: 'buff', atk: 2, hp: 2, kw: ['piercing'], target: 'chosen' }],
+    text: 'Give a friendly creature +2/+2 and Piercing.',
+    flavor: 'Armor that bites back.',
+  }),
+  S('efc6', 'Twin Furies', 'ember', 6, 'epic', {
+    fx: [{ op: 'summon', token: 'tk_fury', count: 2, who: 'owner' }],
+    text: 'Summon two 3/2 Fury Spirits with Swift.',
+    flavor: 'Rage, apparently, is a renewable resource.',
+  }),
+  C('efc7', 'Slag Colossus', 'ember', 7, 7, 7, 'uncommon', 'Elemental', {
+    text: 'A mountain that lost its temper.',
+    flavor: 'It cools down. Eventually. Somewhere else.',
+  }),
+  S('efc8', 'Emberstorm Ritual', 'ember', 4, 'rare', {
+    fx: [{ op: 'aoe', amount: 2, side: 'enemy' }, { op: 'damage', amount: 1, target: 'enemy-hero' }],
+    text: 'Deal 2 damage to all enemy creatures and 1 to the enemy hero.',
+    flavor: 'The sky signs its work in cinders.',
+  }),
+  C('efc9', 'Bloodforge Champion', 'ember', 4, 5, 3, 'rare', 'Demon', {
+    kw: ['frenzy'], frenzy: 2,
+    text: 'Frenzy +2.',
+    flavor: 'The arena crowned him. The forge armed him.',
+  }),
+  C('efc10', 'Vulkarrion, Forge Eternal', 'ember', 10, 9, 9, 'legendary', 'Elemental', {
+    kw: ['piercing'],
+    rally: [{ op: 'multi-hit', count: 5, amount: 1 }],
+    text: 'Piercing. Rally: deal 1 damage to random enemies, 5 times.',
+    flavor: 'The first fire never went out. It waited.',
+  }),
+];
+
+const TIDE_X = [
+  C('tcc1', 'Mist Wisp', 'tide', 1, 1, 1, 'common', 'Elemental', {
+    kw: ['flying'],
+    text: 'Flying.',
+    flavor: 'Half fog, half whim.',
+  }),
+  S('tcc2', 'Scrying Orb', 'tide', 2, 'common', {
+    fx: [{ op: 'draw', count: 1, who: 'self' }, { op: 'temp-mana', amount: 1 }],
+    text: 'Draw a card. Gain 1 mana crystal this turn only.',
+    flavor: 'It shows you exactly what you need. Terms apply.',
+  }),
+  C('tcc3', 'Wavecrash Golem', 'tide', 4, 4, 4, 'common', 'Construct', {
+    text: 'Assembled from riptide and grudge.',
+    flavor: 'The sea builds its own soldiers.',
+  }),
+  S('tcc4', 'Mindtheft', 'tide', 5, 'rare', {
+    fx: [{ op: 'discard-random', count: 1, who: 'enemy' }, { op: 'draw', count: 1, who: 'self' }],
+    text: 'Your opponent discards a random card. Draw a card.',
+    flavor: 'She keeps what she finds in other minds.',
+  }),
+  C('tcc5', 'Frostveil Assassin', 'tide', 3, 3, 2, 'uncommon', 'Mercenary', {
+    kw: ['stealth'],
+    text: 'Stealth.',
+    flavor: 'The last thing you feel is the temperature drop.',
+  }),
+  S('tcc6', 'Tidal Rebuke', 'tide', 3, 'uncommon', {
+    target: { kind: 'enemy-creature' },
+    fx: [{ op: 'bounce', target: 'chosen' }],
+    text: 'Return an enemy creature to its owner’s hand.',
+    flavor: 'The sea does not argue. It removes.',
+  }),
+  C('tcc7', 'Sirenspeaker', 'tide', 4, 3, 4, 'rare', 'Wizard', {
+    target: { kind: 'enemy-creature', optional: true },
+    rally: [{ op: 'freeze', target: 'chosen' }, { op: 'draw', count: 1, who: 'self' }],
+    text: 'Rally: Freeze an enemy creature and draw a card.',
+    flavor: 'Her songs cost exactly one mistake.',
+  }),
+  C('tcc8', 'Abyssal Kraken', 'tide', 8, 7, 8, 'epic', 'Leviathan', {
+    rally: [{ op: 'bounce-all', side: 'enemy', maxCost: 3 }],
+    text: 'Rally: return all enemy creatures costing 3 or less to their owner’s hand.',
+    flavor: 'The deep reclaims its toys.',
+  }),
+  C('tcc9', 'Currentshaper', 'tide', 2, 2, 2, 'uncommon', 'Wizard', {
+    target: { kind: 'friendly-creature', optional: true },
+    rally: [{ op: 'buff', atk: 0, hp: 0, kw: ['ward'], target: 'chosen' }],
+    text: 'Rally: give a friendly creature Ward.',
+    flavor: 'He bends the water; the water bends the spell.',
+  }),
+  C('tcc10', 'Maelstra, Voice of the Deep', 'tide', 9, 7, 7, 'legendary', 'Leviathan', {
+    rally: [{ op: 'freeze-all', side: 'enemy' }, { op: 'aoe', amount: 2, side: 'enemy' }],
+    text: 'Rally: Freeze all enemy creatures, then deal 2 damage to them.',
+    flavor: 'When she speaks, harbors empty.',
+  }),
+];
+
+const GROVE_X = [
+  C('wgc1', 'Seedling Sprite', 'grove', 1, 1, 1, 'common', 'Elf', {
+    rites: [{ op: 'buff', atk: 1, hp: 1, target: 'random-friendly-creature' }],
+    text: 'Last Rites: give a random friendly creature +1/+1.',
+    flavor: 'Nothing in the grove is wasted.',
+  }),
+  S('wgc2', 'Barkskin', 'grove', 2, 'common', {
+    target: { kind: 'friendly-creature' },
+    fx: [{ op: 'buff', atk: 0, hp: 4, target: 'chosen' }],
+    text: 'Give a friendly creature +0/+4.',
+    flavor: 'Beauty is bark deep.',
+  }),
+  C('wgc3', 'Timber Behemoth', 'grove', 6, 7, 6, 'common', 'Beast', {
+    text: 'It mistakes siege walls for scratching posts.',
+    flavor: 'Where it walks, paths happen.',
+  }),
+  C('wgc4', 'Wildheart Ritualist', 'grove', 3, 2, 3, 'uncommon', 'Elf', {
+    rally: [{ op: 'ramp', amount: 1 }],
+    text: 'Rally: gain an empty mana crystal.',
+    flavor: 'She plants tomorrow.',
+  }),
+  C('wgc5', 'Razorleaf Stalker', 'grove', 4, 4, 3, 'uncommon', 'Beast', {
+    kw: ['stealth'],
+    text: 'Stealth.',
+    flavor: 'The underbrush is on its side.',
+  }),
+  S('wgc6', "Nature's Reclamation", 'grove', 5, 'rare', {
+    target: { kind: 'friendly-creature' },
+    target2: { kind: 'enemy-creature' },
+    fx: [{ op: 'buff', atk: 2, hp: 2, target: 'chosen' }, { op: 'fight' }],
+    text: 'Give a friendly creature +2/+2, then it fights an enemy creature.',
+    flavor: 'The grove grows its own answers.',
+  }),
+  S('wgc7', 'Grovetender Twins', 'grove', 4, 'uncommon', {
+    fx: [{ op: 'summon', token: 'tk_sapling', count: 2, who: 'owner' }],
+    text: 'Summon two 2/2 Saplings with Guard.',
+    flavor: 'They finish each other’s roots.',
+  }),
+  C('wgc8', 'Emerald Wyrm', 'grove', 7, 6, 7, 'epic', 'Dragon', {
+    kw: ['piercing', 'regenerate'], regenerate: 2,
+    rally: [{ op: 'heal', amount: 4, target: 'self-hero' }],
+    text: 'Piercing, Regenerate 2. Rally: restore 4 health to your hero.',
+    flavor: 'Old as the canopy, patient as the moss.',
+  }),
+  C('wgc9', 'Thornlash Vine', 'grove', 2, 1, 3, 'uncommon', 'Treant', {
+    kw: ['venomous'],
+    text: 'Venomous.',
+    flavor: 'One scratch settles every argument.',
+  }),
+  C('wgc10', 'Sylvaris, the First Seed', 'grove', 10, 10, 10, 'legendary', 'Treant', {
+    kw: ['guard', 'regenerate'], regenerate: 4,
+    rally: [{ op: 'summon', token: 'tk_wolf', count: 2, who: 'owner' }],
+    text: 'Guard, Regenerate 4. Rally: summon two 2/2 Wolves.',
+    flavor: 'Every forest is one of its children.',
+  }),
+];
+
+const DAWN_X = [
+  C('dwc1', 'Lightbearer Page', 'dawn', 1, 1, 1, 'common', 'Paladin', {
+    target: { kind: 'friendly-creature', optional: true },
+    rally: [{ op: 'buff', atk: 1, hp: 1, target: 'chosen' }],
+    text: 'Rally: give a friendly creature +1/+1.',
+    flavor: 'Small hands, steady light.',
+  }),
+  S('dwc2', 'Blessed Shield', 'dawn', 2, 'common', {
+    target: { kind: 'friendly-creature' },
+    fx: [{ op: 'buff', atk: 0, hp: 3, kw: ['guard'], target: 'chosen' }],
+    text: 'Give a friendly creature +0/+3 and Guard.',
+    flavor: 'Faith, forged and polished.',
+  }),
+  C('dwc3', 'Chapel Warden', 'dawn', 3, 3, 4, 'common', 'Cleric', {
+    text: 'The doors stay open. She stays ready.',
+    flavor: 'Sanctuary is a promise with a keeper.',
+  }),
+  S('dwc4', 'Radiant Chorus', 'dawn', 4, 'uncommon', {
+    fx: [{ op: 'heal', amount: 3, target: 'self-hero' }, { op: 'heal', amount: 3, target: 'all-friendly-creatures' }],
+    text: 'Restore 3 health to your hero and all friendly creatures.',
+    flavor: 'One voice mends. A choir rebuilds.',
+  }),
+  C('dwc5', 'Oathkeeper Captain', 'dawn', 5, 4, 5, 'rare', 'Paladin', {
+    aura: { atk: 1, filter: { tribe: 'Paladin' } },
+    rally: [{ op: 'summon', token: 'tk_squire', count: 1, who: 'owner' }],
+    text: 'Rally: summon a 1/1 Squire. Your other Paladins have +1 Attack.',
+    flavor: 'Oaths hold the line long after walls fall.',
+  }),
+  S('dwc6', "Judicator's Verdict", 'dawn', 6, 'rare', {
+    target: { kind: 'enemy-creature', filter: { minHp: 5 } },
+    fx: [{ op: 'destroy', target: 'chosen' }],
+    text: 'Destroy an enemy creature with 5 or more health.',
+    flavor: 'The larger the shadow, the brighter the verdict.',
+  }),
+  C('dwc7', 'Dawnwing Herald', 'dawn', 4, 3, 3, 'uncommon', 'Celestial', {
+    kw: ['flying'],
+    rally: [{ op: 'heal', amount: 3, target: 'self-hero' }],
+    text: 'Flying. Rally: restore 3 health to your hero.',
+    flavor: 'Good news travels on six wings.',
+  }),
+  C('dwc8', 'Sanctified Bulwark', 'dawn', 5, 3, 7, 'uncommon', 'Construct', {
+    kw: ['guard'],
+    text: 'Guard.',
+    flavor: 'A wall that believes in you.',
+  }),
+  S('dwc9', 'Aurora Invocation', 'dawn', 8, 'epic', {
+    fx: [{ op: 'summon', token: 'tk_defender', count: 3, who: 'owner' }, { op: 'heal', amount: 5, target: 'self-hero' }],
+    text: 'Summon three 2/3 Squire Defenders with Guard and restore 5 health to your hero.',
+    flavor: 'Dawn does not knock. It arrives.',
+  }),
+  C('dwc10', 'Solmara, Dawn Incarnate', 'dawn', 9, 6, 8, 'legendary', 'Celestial', {
+    kw: ['flying', 'lifesteal'],
+    rally: [{ op: 'heal', amount: 10, target: 'self-hero' }, { op: 'buff', atk: 1, hp: 1, target: 'all-other-friendly-creatures' }],
+    text: 'Flying, Lifesteal. Rally: restore 10 health to your hero and give your other creatures +1/+1.',
+    flavor: 'The horizon is her hem.',
+  }),
+];
+
+const GRAVE_X = [
+  C('gmc1', 'Crypt Rat', 'grave', 1, 2, 1, 'common', 'Beast', {
+    rites: [{ op: 'heal', amount: 2, target: 'self-hero' }],
+    text: 'Last Rites: restore 2 health to your hero.',
+    flavor: 'Waste not, want not, rot not.',
+  }),
+  S('gmc2', 'Grave Chill', 'grave', 2, 'common', {
+    target: { kind: 'enemy-creature' },
+    fx: [{ op: 'debuff', atk: -2, hp: -2, target: 'chosen' }],
+    text: 'Give an enemy creature -2/-2.',
+    flavor: 'The mire borrows warmth. Permanently.',
+  }),
+  S('gmc3', 'Carrion Swarm', 'grave', 3, 'uncommon', {
+    fx: [{ op: 'aoe', amount: 1, side: 'enemy' }, { op: 'summon', token: 'tk_skeleton', count: 1, who: 'owner' }],
+    text: 'Deal 1 damage to all enemy creatures and summon a 1/1 Risen Skeleton.',
+    flavor: 'The swarm always leaves one volunteer behind.',
+  }),
+  C('gmc4', 'Boneweaver', 'grave', 3, 2, 3, 'uncommon', 'Wizard', {
+    rally: [{ op: 'grave-to-hand', count: 1, filter: { maxCost: 4 } }],
+    text: 'Rally: add a random creature costing 4 or less from your graveyard to your hand.',
+    flavor: 'She darns the dead like old socks.',
+  }),
+  C('gmc5', 'Pale Rider', 'grave', 5, 4, 4, 'rare', 'Undead', {
+    kw: ['stealth', 'lifesteal'],
+    text: 'Stealth, Lifesteal.',
+    flavor: 'You hear the hoofbeats exactly once.',
+  }),
+  S('gmc6', 'Soul Transfer', 'grave', 4, 'rare', {
+    target: { kind: 'friendly-creature' },
+    target2: { kind: 'enemy-creature' },
+    fx: [{ op: 'destroy', target: 'chosen', friendly: true, captureAtk: true }, { op: 'damage', amountFromCapturedAtk: true, target: 'chosen2' }],
+    text: 'Destroy a friendly creature. Deal damage equal to its Attack to an enemy creature.',
+    flavor: 'Grief, weaponized.',
+  }),
+  C('gmc7', 'Tombshade Stalker', 'grave', 2, 3, 1, 'uncommon', 'Undead', {
+    kw: ['stealth'],
+    text: 'Stealth.',
+    flavor: 'Buried shallow, on purpose.',
+  }),
+  S('gmc8', 'Plague of Shadows', 'grave', 6, 'epic', {
+    fx: [{ op: 'debuff', atk: -2, hp: -2, target: 'all-enemy-creatures' }],
+    text: 'Give all enemy creatures -2/-2.',
+    flavor: 'Night falls. On them, specifically.',
+  }),
+  C('gmc9', 'Ossuary Colossus', 'grave', 7, 6, 6, 'uncommon', 'Undead', {
+    rites: [{ op: 'summon', token: 'tk_skeleton', count: 2, who: 'owner' }],
+    text: 'Last Rites: summon two 1/1 Risen Skeletons.',
+    flavor: 'Some assembly required. Repeatedly.',
+  }),
+  C('gmc10', 'Nyxathra, Weaver of Ends', 'grave', 10, 8, 8, 'legendary', 'Demon', {
+    kw: ['lifesteal'],
+    rally: [{ op: 'aoe', amount: 3, side: 'enemy' }, { op: 'heal', amount: 6, target: 'self-hero' }],
+    text: 'Lifesteal. Rally: deal 3 damage to all enemy creatures and restore 6 health to your hero.',
+    flavor: 'Every thread ends in her hands.',
+  }),
+];
+
+const NEUTRAL_X = [
+  C('ntc1', 'Torch Kobold', 'neutral', 1, 1, 2, 'common', 'Goblin', {
+    text: 'Employee of the dungeon, month after month.',
+    flavor: 'The torch is a family heirloom.',
+  }),
+  C('ntc2', 'Tavern Brawler', 'neutral', 2, 3, 2, 'common', 'Mercenary', {
+    text: 'Negotiates exclusively in chairs.',
+    flavor: 'The first round is on him. So is the table.',
+  }),
+  C('ntc3', 'Wandering Bard', 'neutral', 3, 2, 4, 'uncommon', 'Mercenary', {
+    rally: [{ op: 'heal', amount: 2, target: 'all-friendly-creatures' }],
+    text: 'Rally: restore 2 health to all friendly creatures.',
+    flavor: 'Three chords and the truth, mostly the chords.',
+  }),
+  C('ntc4', 'Treasure Golem', 'neutral', 4, 3, 5, 'uncommon', 'Construct', {
+    rites: [{ op: 'add-card-id', card: 'nt16', count: 1 }],
+    text: 'Last Rites: add a Healing Potion to your hand.',
+    flavor: 'Its heart is literally gold.',
+  }),
+  C('ntc5', 'Dungeon Chimera', 'neutral', 5, 4, 5, 'rare', 'Beast', {
+    kw: ['cleave'],
+    text: 'Cleave.',
+    flavor: 'Three heads, one appetite.',
+  }),
+  C('ntc6', 'Sellsword Captain', 'neutral', 4, 3, 4, 'rare', 'Mercenary', {
+    aura: { atk: 1, filter: { tribe: 'Mercenary' } },
+    text: 'Your other Mercenaries have +1 Attack.',
+    flavor: 'Loyalty rates are competitive.',
+  }),
+  T('ntc7', 'Net Trap', 'neutral', 3, 'uncommon', {
+    trap: { on: 'creature-attacked', fx: [{ op: 'freeze', target: 'trigger-attacker' }, { op: 'damage', amount: 1, target: 'trigger-attacker' }] },
+    text: 'Trap: when an enemy creature attacks, Freeze it and deal 1 damage to it.',
+    flavor: 'Classic problems, rope-based solutions.',
+  }),
+  C('ntc8', 'Colossal Roc', 'neutral', 8, 8, 7, 'uncommon', 'Beast', {
+    kw: ['flying'],
+    text: 'Flying.',
+    flavor: 'Its shadow has its own weather.',
+  }),
+  S('ntc9', 'Mercenary Standard', 'neutral', 5, 'uncommon', {
+    fx: [{ op: 'buff', atk: 1, hp: 1, target: 'all-friendly-creatures' }],
+    text: 'Give your creatures +1/+1.',
+    flavor: 'The flag costs extra. Worth it.',
+  }),
+  C('ntc10', 'Aurelion the Collector', 'neutral', 6, 5, 5, 'legendary', 'Mercenary', {
+    rally: [{ op: 'add-random', count: 2, rarity: 'epic', who: 'self' }],
+    text: 'Rally: add 2 random Epic cards to your hand.',
+    flavor: 'He does not haggle. He acquires.',
+  }),
+];
+
 // ───────────────────────────── TOKENS ─────────────────────────────
 export const TOKENS = {
   tk_phoenix:    C('tk_phoenix', 'Reborn Phoenix', 'ember', 2, 2, 2, 'token', 'Elemental', { kw: ['flying'], text: 'Flying.', flavor: 'Ash is just an intermission.' }),
@@ -701,10 +1036,17 @@ export const TOKENS = {
     text: 'Gain 1 mana crystal this turn only.',
     flavor: 'A spark borrowed from tomorrow.',
   }),
+  tk_fury:       C('tk_fury', 'Fury Spirit', 'ember', 3, 3, 2, 'token', 'Elemental', { kw: ['swift'], text: 'Swift.', flavor: 'Rage with a schedule.' }),
+  tk_sapling:    C('tk_sapling', 'Sapling', 'grove', 2, 2, 2, 'token', 'Treant', { kw: ['guard'], text: 'Guard.', flavor: 'Someday, a wall of oak.' }),
 };
 
+// the campaign expansion — unlockable set (base set is owned from the start)
+export const EXPANSION_IDS = new Set(
+  [...EMBER_X, ...TIDE_X, ...GROVE_X, ...DAWN_X, ...GRAVE_X, ...NEUTRAL_X].map((c) => c.id));
+
 export const CARDS = {};
-for (const c of [...EMBER, ...TIDE, ...GROVE, ...DAWN, ...GRAVE, ...NEUTRAL]) CARDS[c.id] = c;
+for (const c of [...EMBER, ...TIDE, ...GROVE, ...DAWN, ...GRAVE, ...NEUTRAL,
+                 ...EMBER_X, ...TIDE_X, ...GROVE_X, ...DAWN_X, ...GRAVE_X, ...NEUTRAL_X]) CARDS[c.id] = c;
 for (const [k, v] of Object.entries(TOKENS)) CARDS[k] = v;
 
 export const COLLECTIBLE = Object.values(CARDS).filter((c) => c.rarity !== 'token');

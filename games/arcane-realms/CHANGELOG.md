@@ -1,5 +1,60 @@
 # Arcane Realms TCG — Changelog
 
+## v1.2.0 — 2026-07-07 (Campaign, 60 new cards, premium targeting)
+
+Owner-directed pass #2 (reference screenshots + notes).
+
+### Campaign Mode — "Trials of the Realms" (NEW)
+- 5 chapters × 4 battles across the realms (Verdant Marches, Sunken Crypts,
+  Ashen Peaks, Drowned Depths, Celestial Spires), each with a commander NPC
+  (5 new generated portraits), pre-battle dialogue in speech bubbles
+  (advance/skip), story win-lines, and boss battles with campaign twists
+  (boss HP up to 40, ambush boards, commander head-starts, extra cards).
+- Difficulty ramps squire → knight → archmage across the arc.
+- **Rewards & progression**: gold + 2–3 guaranteed card unlocks per battle
+  (bosses grant rares/epics + a chapter card back), weighted random pack
+  pulls, replay rewards. Progress persists (localStorage), losses offer
+  instant Retry with a different deck.
+- **Collection is now progression-based**: the full 117-card base set is
+  owned from the start (all starter decks + PvP untouched); the 60-card
+  expansion unlocks via campaign, achievements, and Arcane Packs (100 g,
+  weighted toward unowned rarity). Locked cards show 🔒 + unlock hints in
+  the deck builder/collection; Smart Fill respects ownership.
+- **8 achievements** (win counts, rarity collection, full clear) granting
+  gold, specific cards, and 2 exclusive card backs, with unlock toasts.
+- **Card backs**: 8 total (7 newly generated) — equip in the gallery; shows
+  on your deck, hand, and face-down traps in every mode, including online
+  (choice is exchanged in the multiplayer handshake).
+- Selftest proves 100% obtainability: all 20 battles + achievements + packs
+  = complete 177-card collection.
+
+### 60 new cards — "Trials of the Realms" expansion
+- 10 per realm + 10 neutral (16 C / 21 U / 12 R / 5 E / 6 L), all with fresh
+  generated art. New engine ops: multi-hit (Cinder Storm), enemy discard
+  (Mindtheft), conditional mass-bounce (Abyssal Kraken), graveyard-to-hand
+  (Boneweaver), Soul Transfer (captured-ATK damage), rarity-filtered random
+  adds (Aurelion), minHp removal filter (Judicator's Verdict), random-friendly
+  buffs, specific-card adds. Every card covered by the per-card selftest.
+
+### Targeting & readability (per feedback)
+- **Premium targeting arrow**: solid glowing curved arc (SVG gradient +
+  blur glow + flowing energy shine + ornate head) — no more dotted line.
+  Attacks = ember gold; spells = arcane gold→cyan.
+- **Spells are click-to-cast**: click a targeted spell → the card rises to a
+  casting pose and stays there; the arrow follows your cursor; click the
+  target to cast. Esc/right-click cancels. Drag still works everywhere.
+- **Hover = the real card, in front** (no duplicate previews anywhere):
+  hand cards lift + enlarge 1.62×; board cards enlarge in place 1.72× and
+  swap to the full rules-text face; collection/deck-builder cells scale
+  1.5× in place. Idle hand bob removed — cards hold still until hovered.
+- **Affordability at a glance**: unaffordable hand cards are dimmed to 45%,
+  playable ones glow green; board attacker glow only appears in Combat.
+- Layout: camera pulled back — the hand no longer covers the board and
+  nothing clips at any tested aspect; board cards sit perfectly flat (the
+  tilt made tapped cards sink into the table); hero discs 28% smaller and
+  repositioned clear of the rows.
+- Fixed: online game-over screen crashed on the difficulty label.
+
 ## v1.1.0 — 2026-07-06 (polish + PvP multiplayer)
 
 Owner-directed improvement pass (reference screenshot + notes).

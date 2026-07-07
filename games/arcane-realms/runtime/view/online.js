@@ -5,7 +5,7 @@
 // the other side (see Match.pumpRemote). A post-action state hash catches
 // desyncs and triggers a host-authoritative resync.
 
-import { NetPlay } from '../net/netplay.js?v=2';
+import { NetPlay } from '../net/netplay.js?v=3';
 
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export function friendlyCode(n = 4) {
@@ -75,7 +75,7 @@ export class OnlineSession {
     let remoteHello = null;
     let startParams = null;
     let gotAck = false;
-    const helloMsg = { nid: net.id, deck: profile.deck, hero: profile.hero, name: profile.name || 'Duelist' };
+    const helloMsg = { nid: net.id, deck: profile.deck, hero: profile.hero, name: profile.name || 'Duelist', cardback: profile.cardback || 'default' };
 
     const done = new Promise((res, rej) => {
       const t = setTimeout(() => rej(new Error('Handshake timed out.')), 45000);
@@ -104,6 +104,7 @@ export class OnlineSession {
                   decks: [helloMsg.deck, remoteHello.deck],
                   heroes: [helloMsg.hero, remoteHello.hero],
                   names: [helloMsg.name, remoteHello.name],
+                  backs: [helloMsg.cardback, remoteHello.cardback || 'default'],
                 };
                 LOG.push('built-start');
                 sendStartLoop();

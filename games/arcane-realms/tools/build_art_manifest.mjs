@@ -2,7 +2,7 @@
 // Builds art_manifest.json — one prompt per card/token/UI asset, derived from
 // the live card database so art always matches the set. Consumed by
 // asset_gen/arcane_realms_gen.py.
-import { COLLECTIBLE, TOKENS, REALMS } from '../runtime/sim/cards.js?v=2';
+import { COLLECTIBLE, TOKENS, REALMS } from '../runtime/sim/cards.js?v=3';
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -55,6 +55,22 @@ const OVERRIDES = {
   nt21: 'An ageless wizard suspended among floating clock faces and streams of frozen sand, time visibly bending around him',
   tk_ember: 'A single brilliant arcane ember-spark held between two fingertips, tiny glowing runes orbiting it',
   tk_morthul: 'A diminished undead king reforming from swirling violet soulfire, cracked crown reigniting',
+  // campaign expansion signatures
+  efc6: 'Two mirrored spirits of living flame bursting from a cracked forge-anvil in opposite directions',
+  efc10: 'A titanic magma elemental crowned with a burning anvil, meteor-sparks orbiting its shoulders, world aflame below',
+  tcc8: 'A colossal abyssal kraken dragging ships and soldiers beneath a glowing whirlpool, tentacles ringed with runes',
+  tcc10: 'An eldritch empress of the trench — half woman, half current — commanding a wall of frozen tsunami',
+  wgc6: 'A stag-antlered forest spirit erupting with new growth as it slams into an armored invader',
+  wgc8: 'A serpentine emerald dragon coiled through ancient canopy, scales of living leaves, healing light falling',
+  wgc10: 'A world-tree titan whose roots cradle a glowing seed-heart, wolves emerging from its bark',
+  dwc9: 'Three radiant guardians descending inside a curtain of aurora light over a battlefield at dawn',
+  dwc10: 'A goddess of dawn with wings of sunrise light, healing radiance pouring from her open hands',
+  gmc6: 'A soul torn from a kneeling warrior as violet lightning, arcing toward a screaming enemy knight',
+  gmc8: 'A tide of grasping shadow-hands rolling across a battlefield, knights withering where it touches',
+  gmc10: 'A many-armed demon queen weaving glowing soul-threads between her fingers above a dying army',
+  ntc10: 'A resplendent merchant-prince in gilded armor opening a vault of levitating legendary relics, smug smile',
+  tk_fury: 'A raging spirit of pure flame mid-charge, trailing embers, fists ignited',
+  tk_sapling: 'A stout young treant sapling with a shield-like bark chest, planted defiantly',
 };
 
 function subjectFor(c) {
@@ -106,6 +122,38 @@ entries.push(
       'gold filigree corners, elegant and balanced. Perfectly symmetrical, no text, no letters, no watermark.',
   },
 );
+
+// card backs — default + 5 chapter rewards + 2 achievement rewards
+const CARDBACKS = {
+  cb_verdant: 'a living emerald tree-of-life mandala, bark filigree frame, glowing leaf veins, deep forest-green field',
+  cb_crypts: 'a violet skull-and-thorns mandala wreathed in soulfire, obsidian filigree frame, deep midnight-purple field',
+  cb_volcanic: 'a blazing forge-hammer sigil inside a ring of magma runes, blackened-iron filigree frame, ember-red field',
+  cb_depths: 'a spiral leviathan-eye mandala of ice and current, pearl filigree frame, abyssal teal field',
+  cb_celestial: 'a radiant sunburst-and-wings mandala, white-gold filigree frame, dawn-gold field',
+  cb_champion: 'a crowned five-pointed crystal star over crossed blades, tournament-gold filigree frame, royal crimson field',
+  cb_collector: 'an overflowing treasure-vault mandala of gems in five colors, gilded filigree frame, deep amethyst field',
+};
+for (const [key, desc] of Object.entries(CARDBACKS)) {
+  entries.push({
+    key, file: `assets/ui/${key}.jpg`, model: 'quality', resize: 1024,
+    prompt: `Ornate trading-card back design: ${desc}. Perfectly symmetrical, elegant, premium fantasy TCG card back. No text, no letters, no watermark.`,
+  });
+}
+
+// campaign commander portraits (enemy NPCs for dialogue)
+const COMMANDERS = {
+  cm_thornqueen: 'A regal elven queen of thorns with a living-wood crown and vine-woven armor, cold green eyes, forest throne',
+  cm_lichlord: 'A gaunt lich lord in ceremonial burial robes with a cracked golden death-mask, violet soulfire seeping through',
+  cm_flamekhan: 'A hulking dragonkin war-khan in obsidian plate, magma veins across his scales, twin flame axes on his back',
+  cm_tidecaller: 'A masked deep-sea oracle with coral antlers and pearl-string veil, bioluminescent tattoos, storm behind her',
+  cm_lightwarden: 'A stern celestial warden in white-gold armor with a burning halo blade, judgmental gaze, marble spires behind',
+};
+for (const [key, desc] of Object.entries(COMMANDERS)) {
+  entries.push({
+    key, file: `assets/ui/${key}.jpg`, model: 'quality', resize: 512,
+    prompt: STYLE + `Bust portrait for a game dialogue NPC: ${desc}. Looking at viewer. Dramatic rim light.`,
+  });
+}
 
 // hero portraits
 const HEROES = {

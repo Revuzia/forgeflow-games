@@ -3,14 +3,14 @@
 //   node selftest.mjs            → structural + rules + every-card + AI + quick matches
 //   node selftest.mjs --matches  → adds full 36-game AI-vs-AI round-robin with balance report
 //   node selftest.mjs --assets   → also require every card artwork file to exist
-import { CARDS, COLLECTIBLE, TOKENS, SET_STATS, cardById, REALMS } from './runtime/sim/cards.js?v=2';
+import { CARDS, COLLECTIBLE, TOKENS, SET_STATS, cardById, REALMS } from './runtime/sim/cards.js?v=3';
 import {
   createGame, legalActions, applyAction, cloneState, aiView,
   effAtk, hasKw, makeUnit, unitByIid, opponentOf, validTargets,
   MAX_BOARD, MAX_HAND, HERO_HP,
-} from './runtime/sim/engine.js?v=2';
-import { validateDeck, STARTER_DECKS, starterDeckErrors, DECK_SIZE } from './runtime/sim/decks.js?v=2';
-import { chooseAction, runAiTurn, findLethal, evaluate, DIFFICULTIES } from './runtime/sim/ai.js?v=2';
+} from './runtime/sim/engine.js?v=3';
+import { validateDeck, STARTER_DECKS, starterDeckErrors, DECK_SIZE } from './runtime/sim/decks.js?v=3';
+import { chooseAction, runAiTurn, findLethal, evaluate, DIFFICULTIES } from './runtime/sim/ai.js?v=3';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -705,7 +705,77 @@ section(args.has('--matches') ? 'full round-robin (36 games)' : 'quick matches (
   }
 }
 
-// ───────────────────── 10. assets (optional gate) ─────────────────────
+// ───────────────────── 10. campaign & progression ─────────────────────
+section('campaign & progression');
+{
+  const { CHAPTERS, ACHIEVEMENTS, CARDBACK_INFO, allBattles } = await import('./runtime/campaign/campaign_data.js?v=3');
+  const prog = await import('./runtime/campaign/progression.js?v=3');
+  const { EXPANSION_IDS } = await import('./runtime/sim/cards.js?v=3');
+
+  const battles = allBattles();
+  ok(CHAPTERS.length === 5, '5 chapters');
+  ok(battles.length === 20, '20 battles');
+  let dataOk = true;
+  for (const ch of CHAPTERS) {
+    if (ch.deck.length !== 30) { dataOk = false; ok(false, `${ch.id} enemy deck must be 30 (${ch.deck.length})`); }
+    for (const id of ch.deck) cardById(id);
+    if (!ch.commander?.portrait || !ch.commander?.hero) { dataOk = false; ok(false, `${ch.id} commander incomplete`); }
+  }
+  for (const b of battles) {
+    if (!b.dialogue?.length) { dataOk = false; ok(false, `${b.id} has no dialogue`); }
+    if (!b.winLine) { dataOk = false; ok(false, `${b.id} has no win line`); }
+    for (const id of b.rewards.cards || []) cardById(id);
+    if (b.rewards.cardback && !CARDBACK_INFO[b.rewards.cardback]) { dataOk = false; ok(false, `${b.id} bad cardback`); }
+  }
+  ok(dataOk, 'campaign data audit (decks, dialogue, rewards all valid)');
+
+  // every expansion card must be obtainable; packs cover only a small tail
+  const cov = prog.unlockCoverage();
+  const covered = new Set([...cov.granted, ...cov.packOnly]);
+  ok([...EXPANSION_IDS].every((id) => covered.has(id)), 'every expansion card is obtainable');
+  ok(cov.granted.every((id) => EXPANSION_IDS.has(id)), 'guaranteed rewards only grant expansion cards');
+  ok(cov.packOnly.length <= 8, `pack-only tail is small (${cov.packOnly.length})`);
+
+  // simulate a full run: base owned → all battles → achievements → packs
+  const fakeStore = { data: { record: { wins: 60, losses: 0 } }, save() { /* noop */ } };
+  prog.initProgress(fakeStore);
+  const baseOwned = Object.keys(fakeStore.data.owned).length;
+  ok(baseOwned === COLLECTIBLE.length - EXPANSION_IDS.size, `base set owned at start (${baseOwned})`);
+  for (const b of battles) prog.grantBattleRewards(fakeStore, b);
+  ok(Object.keys(fakeStore.data.battlesWon).length === 20, 'all battles recorded');
+  ok(fakeStore.data.gold > 500, `campaign gold flows (${fakeStore.data.gold})`);
+  const unlocked = prog.checkAchievements(fakeStore);
+  ok(unlocked.length >= 6, `achievements fire on a full clear (${unlocked.length})`);
+  // buy packs until the collection completes (gold faucet for the test)
+  fakeStore.data.gold = 100000;
+  let guard = 0;
+  while (guard++ < 50) {
+    const r = prog.buyPack(fakeStore);
+    if (!r.ok) break;
+  }
+  ok(Object.keys(fakeStore.data.owned).length === COLLECTIBLE.length,
+    `full clear + achievements + packs = 100% collection (${Object.keys(fakeStore.data.owned).length}/${COLLECTIBLE.length})`);
+  ok(Object.keys(fakeStore.data.cardbacks).length >= 7, `card backs earned (${Object.keys(fakeStore.data.cardbacks).length})`);
+
+  // battle mods apply
+  const s2 = createGame({ seed: 3, decks: [STARTER_DECKS[0].cards.slice(), CHAPTERS[4].deck.slice()], first: 0 });
+  prog.applyBattleMods(s2, CHAPTERS[4].battles[3], 1, makeUnit);
+  ok(s2.players[1].hp === 40, 'boss hp mod applied');
+  ok(s2.players[1].board.length === 1, 'boss ambush board applied');
+
+  // a campaign boss battle actually completes vs the AI
+  let guard2 = 0;
+  while (s2.winner === null && guard2++ < 200) runAiTurn(s2, s2.active, 'knight');
+  ok(s2.winner !== null, 'campaign boss battle runs to completion');
+
+  // starter decks remain fully owned (never lock the base experience)
+  const freshStore = { data: {}, save() { /* noop */ } };
+  prog.initProgress(freshStore);
+  const allStarterOwned = STARTER_DECKS.every((d) => d.cards.every((id) => freshStore.data.owned[id]));
+  ok(allStarterOwned, 'all starter deck cards owned from the start');
+}
+
+// ───────────────────── 11. assets (optional gate) ─────────────────────
 if (args.has('--assets')) {
   section('asset coverage');
   let missing = 0;
@@ -714,7 +784,11 @@ if (args.has('--assets')) {
     if (!existsSync(p)) { missing++; if (missing <= 10) console.error('  missing art: ' + c.id); }
   }
   ok(missing === 0, `all card art present (${missing} missing)`);
-  for (const f of ['board.jpg', 'menu_bg.jpg', 'cardback.jpg']) {
+  const { CARDBACK_INFO } = await import('./runtime/campaign/campaign_data.js?v=3');
+  const uiFiles = ['board.jpg', 'menu_bg.jpg', 'cardback.jpg',
+    ...Object.values(CARDBACK_INFO).map((c) => c.file),
+    'cm_thornqueen.jpg', 'cm_lichlord.jpg', 'cm_flamekhan.jpg', 'cm_tidecaller.jpg', 'cm_lightwarden.jpg'];
+  for (const f of new Set(uiFiles)) {
     ok(existsSync(join(HERE, 'assets', 'ui', f)), `ui asset ${f}`);
   }
 }
