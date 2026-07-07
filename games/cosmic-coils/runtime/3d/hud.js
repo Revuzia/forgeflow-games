@@ -71,7 +71,7 @@ export class HUD {
       <div class="cc-feed"></div>
       <div class="cc-toasts"></div>
       <div class="cc-panel cc-boost"><div class="bar"><div class="fill" style="width:100%"></div></div><div class="lbl">BOOST</div></div>
-      <div class="cc-hint">steer with the mouse · hold <b>SPACE</b>/<b>LMB</b> to boost</div>
+      <div class="cc-hint">steer: mouse or <b>A</b>/<b>D</b> · boost: <b>SPACE</b>/<b>LMB</b> · speed: <b>W</b>/<b>S</b> or <b>RMB</b> · zoom: wheel · <b>don't cross your own body!</b></div>
       <div class="cc-map cc-panel"><canvas width="316" height="316"></canvas></div>
     `;
     this.$ = (q) => this.root.querySelector(q);

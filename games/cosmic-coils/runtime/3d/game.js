@@ -44,7 +44,8 @@ export class Game {
     this._camUp = new THREE.Vector3(0, 1, 0);
     this._menuOrbit = 0;
     this.texLoader = new THREE.TextureLoader();
-    this.input = { steerMouse: 0, kb: 0, boost: false, touchSteer: null };
+    this.input = { steerMouse: 0, kb: 0, boost: false, touchSteer: null, thUp: false, thDown: false, throttle: 0, zoomTarget: 1 };
+    this._zoom = 1;
   }
 
   async init() {
@@ -180,28 +181,50 @@ export class Game {
   }
 
   // ── input ─────────────────────────────────────────────────────────────────
+  // SIGN NOTE: in the sim frame, POSITIVE steer turns LEFT (t' = t·cosφ +
+  // (u×t)·sinφ with camera-up = u). Screen-intuitive controls therefore map
+  // "right" to NEGATIVE steer: mouse right of center / D / drag-right = −1.
+  // (Owner playtest 2026-07-07: A/D and mouse were inverted — this fixes it.)
   _bindInput() {
     const cv = this.renderer.domElement;
     window.addEventListener("mousemove", (e) => {
       const w = this.container.clientWidth;
       const dx = (e.clientX - w / 2) / (w * 0.3);
-      this.input.steerMouse = Math.abs(dx) < 0.05 ? 0 : Math.max(-1, Math.min(1, dx));
+      this.input.steerMouse = Math.abs(dx) < 0.05 ? 0 : Math.max(-1, Math.min(1, -dx));
     });
-    cv.addEventListener("pointerdown", (e) => { if (e.button === 0) this.input.boost = true; });
-    window.addEventListener("pointerup", () => { this.input.boost = false; });
-    window.addEventListener("blur", () => { this.input.boost = false; this.input.kb = 0; });
+    cv.addEventListener("pointerdown", (e) => {
+      if (e.button === 0) this.input.boost = true;
+      else if (e.button === 2) this.input.thDown = true; // RMB = ease off, like S
+    });
+    window.addEventListener("pointerup", (e) => {
+      if (e.button === 2) this.input.thDown = false;
+      else this.input.boost = false;
+    });
+    // RMB is a control, not a context menu
+    this.container.addEventListener("contextmenu", (e) => e.preventDefault());
+    window.addEventListener("blur", () => { this.input.boost = false; this.input.kb = 0; this.input.thUp = false; this.input.thDown = false; });
     window.addEventListener("keydown", (e) => {
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
-      if (e.code === "KeyA" || e.code === "ArrowLeft") this.input.kb = -1;
-      else if (e.code === "KeyD" || e.code === "ArrowRight") this.input.kb = 1;
+      if (e.code === "KeyA" || e.code === "ArrowLeft") this.input.kb = 1;
+      else if (e.code === "KeyD" || e.code === "ArrowRight") this.input.kb = -1;
+      else if (e.code === "KeyW" || e.code === "ArrowUp") this.input.thUp = true;
+      else if (e.code === "KeyS" || e.code === "ArrowDown") this.input.thDown = true;
       else if (e.code === "Space") { this.input.boost = true; e.preventDefault(); }
       else if (e.code === "Escape") this._togglePause();
     });
     window.addEventListener("keyup", (e) => {
-      if ((e.code === "KeyA" || e.code === "ArrowLeft") && this.input.kb === -1) this.input.kb = 0;
-      if ((e.code === "KeyD" || e.code === "ArrowRight") && this.input.kb === 1) this.input.kb = 0;
+      if ((e.code === "KeyA" || e.code === "ArrowLeft") && this.input.kb === 1) this.input.kb = 0;
+      if ((e.code === "KeyD" || e.code === "ArrowRight") && this.input.kb === -1) this.input.kb = 0;
+      if (e.code === "KeyW" || e.code === "ArrowUp") this.input.thUp = false;
+      if (e.code === "KeyS" || e.code === "ArrowDown") this.input.thDown = false;
       if (e.code === "Space") this.input.boost = false;
     });
+    // mouse wheel: zoom the chase camera out/in (persists until changed)
+    cv.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const z = this.input.zoomTarget * (1 + e.deltaY * 0.0011);
+      this.input.zoomTarget = Math.max(0.75, Math.min(2.3, z));
+    }, { passive: false });
     // touch: left zone steer (drag), right zone boost
     cv.addEventListener("touchstart", (e) => {
       for (const t of e.changedTouches) {
@@ -215,7 +238,7 @@ export class Game {
       for (const t of e.changedTouches) {
         if (t.identifier === this.input.touchSteer.id) {
           const dx = (t.clientX - this.input.touchSteer.x0) / 70;
-          this.input.steerMouse = Math.max(-1, Math.min(1, dx));
+          this.input.steerMouse = Math.max(-1, Math.min(1, -dx));
         }
       }
       e.preventDefault();
@@ -326,7 +349,13 @@ export class Game {
       const me = S.snakeBySlot(W, this.mySlot);
       if (me && me.alive) {
         const steer = this.input.kb !== 0 ? this.input.kb : this.input.steerMouse;
-        S.setInput(W, this.mySlot, { steer, boost: this.input.boost });
+        // throttle ramps while held ("longer you hold, faster it goes"), eases
+        // back to neutral on release; boost overrides it in the sim
+        const tgt = this.input.thUp ? 1 : this.input.thDown ? -1 : 0;
+        const rate = tgt !== 0 ? 1.0 : 1.7;
+        this.input.throttle += (tgt - this.input.throttle) * Math.min(1, dt * rate);
+        if (tgt === 0 && Math.abs(this.input.throttle) < 0.02) this.input.throttle = 0;
+        S.setInput(W, this.mySlot, { steer, boost: this.input.boost, throttle: this.input.throttle });
       }
     }
     S.step(W, dt);
@@ -423,7 +452,8 @@ export class Game {
     const fwd = new THREE.Vector3(me.t.x, me.t.y, me.t.z);
     const r = segRadius(me.mass);
     const head = this._headWorld(me);
-    const dist = 8.5 + r * 8.2, height = 5 + r * 5.4;
+    this._zoom += (this.input.zoomTarget - this._zoom) * Math.min(1, dt * 6);
+    const dist = (8.5 + r * 8.2) * this._zoom, height = (5 + r * 5.4) * this._zoom;
     const want = head.clone().addScaledVector(fwd, -dist).addScaledVector(up, height);
     if (!me.alive) want.addScaledVector(up, 10); // death: rise above the scene
     this._camPos.lerp(want, k);

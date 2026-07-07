@@ -1,5 +1,24 @@
 # Cosmic Coils — CHANGELOG
 
+## 2 — 2026-07-07 · Owner playtest round 1 (controls + self-collision)
+- **Steering un-inverted** (A/D and mouse were mirrored): in the sim frame
+  positive steer turns LEFT, so screen-right inputs now map to −1
+  (A=+1, D=−1, mouse/touch negated). Proven by a headless camera-basis check
+  (dot(newHeading, screenRight) = 0.996 for steer −1).
+- **Throttle**: hold **W** to build speed up to +42% (free, ~1s ramp), **S or
+  RIGHT-CLICK** eases down to −28%; releases decay back to neutral; BOOST
+  (Space/LMB) overrides throttle. Context menu suppressed on the canvas.
+- **Mouse-wheel camera zoom** (0.75×–2.3×, smoothed).
+- **Self-collision is ON**: crossing your own body is death (classic snake
+  rule; credited to yourself, no kill awarded, essence still drops). A
+  boost-aware "neck window" exempts the tightest legal bend, so hard curls
+  and S-slaloms are always safe — only a sustained full loop kills. Bot AI
+  scans its own body past the same window so bots avoid self-crossings too.
+- HUD hint / how-to / meta control text updated. Sim selftest 46 → 56 asserts
+  (throttle speeds + mass-free, boost override, curl/slalom safety, full-loop
+  death, self-credit, essence-on-self-death).
+- `?v=` bumped to 2 (module cache rule).
+
 ## 1 — 2026-07-06 · Initial release
 Complete multiplayer snake-battle arena on miniature living planets. Built from
 scratch for this game (no assets, models, textures, music or effects reused from

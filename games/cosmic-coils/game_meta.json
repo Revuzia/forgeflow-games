@@ -6,6 +6,6 @@
   "sub_genre": "snake-battle",
   "difficulty": "easy",
   "status": "published",
-  "controls_keyboard": "Mouse steer · Hold LMB or SPACE to boost · A/D steer override · TAB leaderboard · ESC pause",
+  "controls_keyboard": "Mouse or A/D steer · W build speed, S/RMB slow down · LMB/SPACE boost · Mouse wheel zoom · ESC pause",
   "tags": ["snake", "arcade", "3d", "multiplayer", "battle", "planets", "casual"]
 }

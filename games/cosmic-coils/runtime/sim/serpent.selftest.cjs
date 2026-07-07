@@ -238,6 +238,62 @@ const close = (a, b, eps, name) => ok(Math.abs(a - b) <= eps, name, `${a} vs ${b
   }
   ok(bounded, "terrain height bounded by amplitude");
 
+  // ── 10b. throttle ──────────────────────────────────────────────
+  console.log("[throttle]");
+  {
+    const Wt = createWorld({ seed: 71, biome: "verdant", foodTarget: 0 });
+    for (const id of Array.from(Wt.food.keys())) removeFood(Wt, id);
+    const pt = spawnSnake(Wt, 0, { isBot: false, mass: 40 });
+    const base = { ...pt.u };
+    setInput(Wt, 0, { steer: 0, boost: false, throttle: 1 });
+    for (let i = 0; i < 60; i++) step(Wt, 1 / 60);
+    const fast = S.angDist(base, pt.u) * Wt.R;
+    ok(fast > speedOf(40) * 1.3, "throttle +1 is markedly faster", fast.toFixed(1));
+    const b2 = { ...pt.u };
+    setInput(Wt, 0, { throttle: -1 });
+    for (let i = 0; i < 60; i++) step(Wt, 1 / 60);
+    const slow = S.angDist(b2, pt.u) * Wt.R;
+    ok(slow < speedOf(40) * 0.85, "throttle −1 is markedly slower", slow.toFixed(1));
+    close(pt.mass, 40, 0.01, "throttle costs no mass");
+    // boost overrides throttle
+    const b3 = { ...pt.u };
+    setInput(Wt, 0, { throttle: -1, boost: true });
+    for (let i = 0; i < 60; i++) step(Wt, 1 / 60);
+    const boosted = S.angDist(b3, pt.u) * Wt.R;
+    ok(boosted > speedOf(pt.mass) * 1.5, "boost overrides a slow throttle", boosted.toFixed(1));
+  }
+
+  // ── 10c. self-collision ────────────────────────────────────────
+  console.log("[self-collision]");
+  {
+    const Ws2 = createWorld({ seed: 88, biome: "abyss", foodTarget: 0 });
+    for (const id of Array.from(Ws2.food.keys())) removeFood(Ws2, id);
+    const ps = spawnSnake(Ws2, 0, { isBot: false, mass: 260 });
+    ps.shield = 0;
+    // normal play must be safe: a hard 0.9s curl (well under a full loop)…
+    drainEvents(Ws2);
+    setInput(Ws2, 0, { steer: 1, boost: false });
+    for (let i = 0; i < 54 && ps.alive; i++) step(Ws2, 1 / 60);
+    ok(ps.alive, "hard curl (no full loop) is safe");
+    // …and S-curve slaloming, indefinitely
+    for (let i = 0; i < 60 * 8 && ps.alive; i++) {
+      setInput(Ws2, 0, { steer: Math.floor(i / 30) % 2 === 0 ? 1 : -1 });
+      step(Ws2, 1 / 60);
+    }
+    ok(ps.alive, "S-curve slalom never self-kills");
+    // a SUSTAINED max-rate loop re-traces the snake's own path → death
+    // (classic snake rule — the neck window only protects the bend itself)
+    drainEvents(Ws2);
+    setInput(Ws2, 0, { steer: 1 });
+    let loopSteps = 0;
+    while (ps.alive && loopSteps++ < 60 * 10) step(Ws2, 1 / 60);
+    ok(!ps.alive, "sustained full loop crosses own body → death", (loopSteps / 60).toFixed(1) + "s");
+    const dEv2 = drainEvents(Ws2).find((e) => e.type === "death" && e.slot === 0);
+    ok(dEv2 && dEv2.killer === 0, "self-death credited to the snake itself", dEv2 && dEv2.killer);
+    ok(ps.kills === 0, "self-death adds no kill count");
+    ok(Array.from(Ws2.food.values()).some((f) => f.tier === 9), "self-death still drops essence");
+  }
+
   // ── 11. head-on: both die ──────────────────────────────────────
   console.log("[head-on]");
   const Wh = createWorld({ seed: 21, biome: "dune", foodTarget: 0 });

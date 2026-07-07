@@ -112,6 +112,11 @@ export const CONST = {
   MAGNET_R: 2.3,         // food gets pulled to head inside this
   TERRAIN_AMP: 1.6,
   PATH_CAP: 4096,        // ring buffer points per snake
+  THROTTLE_UP: 0.42,     // W / hold-forward: up to +42% speed (free, ramped)
+  THROTTLE_DOWN: 0.28,   // S / RMB: down to −28% speed
+  SELF_SKIP_ARC: 8,      // arc units of "neck" exempt from self-collision —
+                         // the tightest legal turn keeps the head ~4.5u clear
+                         // of its own path, so this only excludes the bend
 };
 
 // mass → visual/gameplay scale
@@ -361,7 +366,7 @@ export function spawnSnake(W, slot, o = {}) {
     mass: o.mass != null ? o.mass : CONST.START_MASS,
     kills: sn.kills || 0,
     best: sn.best || 0,
-    steer: 0, boost: false,
+    steer: 0, boost: false, throttle: 0,
     shield: CONST.SHIELD_TIME,
     pelletT: 0,
     deathT: 0, respawnAt: null,
@@ -413,6 +418,9 @@ export function setInput(W, slot, inp) {
   if (!sn || !sn.alive) return;
   if (inp.steer != null) sn.steer = Math.max(-1, Math.min(1, inp.steer));
   if (inp.boost != null) sn.boost = !!inp.boost;
+  // throttle ∈ [-1,1]: W ramps up (free, capped +42%), S/RMB slows (floor -28%).
+  // Distinct from BOOST (space/LMB), which is faster still but burns mass.
+  if (inp.throttle != null) sn.throttle = Math.max(-1, Math.min(1, inp.throttle));
 }
 
 /** helper: steer value that turns snake toward world-dir `d` (projected). */
@@ -572,14 +580,18 @@ function aiThink(W, sn) {
       const d2 = V.dot(stan, su);
       V.set(stan, stan.x - su.x * d2, stan.y - su.y * d2, stan.z - su.z * d2);
       V.norm(stan, stan);
-      // danger: proximity to any snake body sample
+      // danger: proximity to any snake body sample (own body included, past
+      // the same neck window used for the real self-collision rule)
       for (const s2 of W.snakes) {
-        if (s2 === sn || !s2.alive || s2.shield > 0) continue;
-        const gap = angDist(su, s2.u) * W.R;
-        const reach = segCount(s2.mass) * segSpacing(s2.mass);
-        if (gap > reach + 4) continue;
-        // sample their body coarsely (every 6th cached seg)
-        for (let i = 0; i < s2.segN; i += 6) {
+        const isSelf = s2 === sn;
+        if (!s2.alive || (!isSelf && s2.shield > 0)) continue;
+        if (!isSelf) {
+          const gap = angDist(su, s2.u) * W.R;
+          const reach = segCount(s2.mass) * segSpacing(s2.mass);
+          if (gap > reach + 4) continue;
+        }
+        // sample the body coarsely (every 6th cached seg)
+        for (let i = isSelf ? selfSkipSegs(sn) : 0; i < s2.segN; i += 6) {
           const dx = su.x - s2.segs[i * 3], dy = su.y - s2.segs[i * 3 + 1], dz = su.z - s2.segs[i * 3 + 2];
           const d = Math.sqrt(dx * dx + dy * dy + dz * dz) * W.R; // segs are unit-sphere pts
           const kill = (myR + segRadius(s2.mass)) / W.R * W.R * 1.15 + 0.55;
@@ -695,8 +707,11 @@ export function step(W, dt) {
         sn.t.y * c + _tmpB.y * s,
         sn.t.z * c + _tmpB.z * s);
     }
-    // advance along great circle
-    const spd = speedOf(sn.mass) * (boosting ? CONST.BOOST_MULT : 1) * wm.speed;
+    // advance along great circle (throttle: W-held speed-up / S-held slow-down;
+    // boost overrides throttle entirely)
+    const th01 = sn.throttle || 0;
+    const throttleMul = boosting ? 1 : (1 + (th01 > 0 ? CONST.THROTTLE_UP * th01 : CONST.THROTTLE_DOWN * th01));
+    const spd = speedOf(sn.mass) * (boosting ? CONST.BOOST_MULT : throttleMul) * wm.speed;
     const th = (spd * dt) / W.R;
     {
       const c = Math.cos(th), s = Math.sin(th);
@@ -771,6 +786,17 @@ export function step(W, dt) {
     if (!sn.alive || sn.netRemote || sn.shield > 0) continue;
     if (sn.isBot && !W.simulateBots) continue;
     const myR = segRadius(sn.mass);
+    // SELF-collision: crossing your own body is death. The neck window skips
+    // as much body as the tightest possible turn circle (at full boost speed)
+    // can bring back to the head, so ordinary curling never false-kills.
+    const skipN = selfSkipSegs(sn);
+    let selfHit = false;
+    for (let i = skipN; i < sn.segN; i++) {
+      const dx = sn.u.x - sn.segs[i * 3], dy = sn.u.y - sn.segs[i * 3 + 1], dz = sn.u.z - sn.segs[i * 3 + 2];
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz) * W.R;
+      if (d < myR * 0.72 + myR * 0.9) { selfHit = true; break; }
+    }
+    if (selfHit) { dead.push([sn, sn.slot]); continue; }
     for (const s2 of W.snakes) {
       if (s2 === sn || !s2.alive || s2.shield > 0) continue;
       // broadphase: my head vs their whole body reach
@@ -798,6 +824,13 @@ export function step(W, dt) {
   for (const [sn, killer] of dead) killSnake(W, sn, killer);
 
   return W;
+}
+
+/** segments to ignore for self-collision: the tightest turn circle (worst case
+ * at boost speed) measured in own segments, plus a small pad. */
+export function selfSkipSegs(sn) {
+  const circ = 2 * Math.PI * (speedOf(sn.mass) * CONST.BOOST_MULT / turnRate(sn.mass));
+  return 4 + Math.ceil((circ * 1.08) / segSpacing(sn.mass));
 }
 
 /** compute + cache world segment sample points (UNIT sphere) for a snake. */

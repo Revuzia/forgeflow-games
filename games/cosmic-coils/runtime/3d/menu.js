@@ -193,8 +193,9 @@ export class Menu {
         <div class="cc-howto">
           🐍 <b>Steer with the mouse</b> — your serpent always slithers forward, curving around a tiny planet. <b>A/D</b> also steer.<br>
           💎 <b>Eat glowing gems</b> to grow longer and thicker. Gold and pink gems are worth more.<br>
-          ⚡ <b>Hold SPACE or LMB to boost</b> — much faster, but it burns your mass and leaks pellets behind you.<br>
-          ☠️ <b>Head-first into a body = death.</b> Cut rivals off so THEY hit YOU. Fallen serpents burst into glowing essence — feast on it.<br>
+          🏃 <b>Hold W to build speed</b> (up to +42%, free) · <b>S or RMB eases you down</b> for tight maneuvers · <b>mouse wheel zooms</b> the camera.<br>
+          ⚡ <b>Hold SPACE or LMB to boost</b> — much faster still, but it burns your mass and leaks pellets behind you.<br>
+          ☠️ <b>Head-first into ANY body = death — including your own coils.</b> Cut rivals off so THEY hit YOU. Fallen serpents burst into glowing essence — feast on it.<br>
           🌦 <b>Weather is real</b>: storms shrink visibility, change handling, and shower the planet with bonus gems.<br>
           🛡 You spawn with a 3s shield. New planet, new weather, every match.<br>
           🌐 <b>Online</b>: share a room code or join the public arena — joining players take over AI serpents live.
