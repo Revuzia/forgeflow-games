@@ -19,8 +19,8 @@ const loader = document.createElement('div');
 loader.style.cssText = `position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
   background:radial-gradient(ellipse at 50% 40%,#2a2018,#0c0906);z-index:100;font-family:Georgia,serif;color:#e8dcc0;transition:opacity .5s`;
 loader.innerHTML = `
-  <div style="font-size:42px;font-weight:700;letter-spacing:0.12em;color:#f0e2c0;text-shadow:0 0 30px rgba(192,48,64,0.55)">BASTION REALMS</div>
-  <div style="font-size:15px;letter-spacing:0.55em;color:#c03040;margin:4px 0 30px">STRONGHOLD</div>
+  <div style="font-size:42px;font-weight:700;letter-spacing:0.12em;color:#f0e2c0;text-shadow:0 0 30px rgba(192,48,64,0.55)">SIEGEHEART</div>
+  <div style="font-size:15px;letter-spacing:0.55em;color:#c03040;margin:4px 0 30px">DEFEND THE HEART</div>
   <div style="width:min(420px,70vw);height:10px;background:#14100c;border:1px solid rgba(192,120,64,0.4);border-radius:4px;overflow:hidden">
     <div id="bs-loadbar" style="height:100%;width:0%;background:linear-gradient(90deg,#6a2830,#c03040);transition:width .2s"></div>
   </div>

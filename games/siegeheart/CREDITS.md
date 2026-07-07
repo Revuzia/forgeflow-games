@@ -1,4 +1,4 @@
-# Bastion Realms: Stronghold — Asset Credits
+# Siegeheart — Asset Credits
 
 **No asset in this game is reused from any previous ForgeFlow game.** Textures and audio
 are generated specifically for it; enemy creatures use library models that were verified

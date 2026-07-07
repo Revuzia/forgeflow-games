@@ -1,9 +1,9 @@
-# Bastion Realms: Stronghold — Design Document
+# Siegeheart — Design Document
 
 **Inward-defense tower defense.** The player protects a central Bastion; enemies spawn at the map
 perimeter and converge along multiple winding roads. Slug `bastion-stronghold`.
 (Title note: the flat title "Bastion Realms" is already taken by the outward-lane TD published
-earlier today; this game ships as "Bastion Realms: Stronghold" — rename is a one-line change.)
+earlier today; this game ships as "Siegeheart" — rename is a one-line change.)
 
 ## Zero-duplication guarantee (goal requirement)
 Checked all prior games (incl. bastion-realms v1) + F:\ libraries. This game **loads no model files

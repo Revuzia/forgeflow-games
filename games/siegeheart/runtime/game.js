@@ -338,7 +338,7 @@ export function createGame(env) {
         }
         case 'bastionTier':
           audio.play('bastionCrack');
-          ui.hazardNotice(['', '🏰 The Bastion is scorched!', '🏰 The Bastion is battered — fires spread!', '🏰 THE BASTION IS CRUMBLING!'][ev.tier] || '', false, 3.5);
+          ui.hazardNotice(['', '🏰 The Keep is scorched!', '🏰 The Keep is battered — fires spread!', '🏰 THE KEEP IS CRUMBLING!'][ev.tier] || '', false, 3.5);
           break;
         case 'wave':
           ui.banner(`WAVE ${ev.idx + 1}`, ev.label || '', 1.6);

@@ -253,7 +253,7 @@ export function createUI(container, handlers) {
       clearScreens();
       ui.hideHud();
       const s = screen('menu');
-      s.append(el('div', 'bs-title', 'BASTION REALMS<small>STRONGHOLD</small>'));
+      s.append(el('div', 'bs-title', 'SIEGEHEART<small>DEFEND THE HEART</small>'));
       s.append(el('div', 'bs-sub', 'The enemy comes from every road. The keep must stand.'));
       const play = el('button', 'bs-btn primary', totalStars() > 0 ? 'CONTINUE THE DEFENSE' : 'BEGIN THE DEFENSE');
       play.onclick = () => { handlers.sfx('uiTap'); ui.showWorlds(); };
@@ -341,7 +341,7 @@ export function createUI(container, handlers) {
       bar.innerHTML = `
         <div class="bs-stat gold">🪙 <span id="bs-gold">0</span></div>
         <div class="bs-bastion">
-          <div class="lbl"><span>🏰 BASTION</span><span id="bs-hpnum">100/100</span></div>
+          <div class="lbl"><span>🏰 KEEP</span><span id="bs-hpnum">100/100</span></div>
           <div class="track"><div class="fill" id="bs-hpfill" style="width:100%"></div></div>
         </div>
         <div class="bs-stat wave">🌊 <span id="bs-wave">–</span></div>`;
@@ -444,7 +444,7 @@ export function createUI(container, handlers) {
         const rows = [];
         if (d.kind === 'aura') {
           rows.push(['Aura damage/s', d.auraDps[lvl] + (canUp ? ` <span style="color:#9c6">→ ${d.auraDps[lvl + 1]}</span>` : '')]);
-          rows.push(['Bastion repair/s', d.repair[lvl] + (canUp ? ` <span style="color:#9c6">→ ${d.repair[lvl + 1]}</span>` : '')]);
+          rows.push(['Keep repair/s', d.repair[lvl] + (canUp ? ` <span style="color:#9c6">→ ${d.repair[lvl + 1]}</span>` : '')]);
         } else if (d.kind === 'roadThorn') {
           rows.push(['Slow', Math.round(d.slowPct[lvl] * 100) + '%' + (canUp ? ` <span style="color:#9c6">→ ${Math.round(d.slowPct[lvl + 1] * 100)}%</span>` : '')]);
           rows.push(['Thorn damage/s', d.thornDps[lvl] + (canUp ? ` <span style="color:#9c6">→ ${d.thornDps[lvl + 1]}</span>` : '')]);
@@ -613,7 +613,7 @@ export function createUI(container, handlers) {
         box.appendChild(el('h2', '', '♾ The Keep Has Fallen'));
         box.appendChild(el('div', '', `<div style="font-size:19px;color:#ffd76a;margin-bottom:8px">Held for <b>${sim.waveIdx + 1}</b> waves${bestWave ? ` · best ${bestWave}` : ''}</div>`));
       } else {
-        box.appendChild(el('h2', '', won ? '🏰 The Bastion Stands!' : '💥 The Bastion Falls'));
+        box.appendChild(el('h2', '', won ? '🏰 The Keep Stands!' : '💥 The Keep Falls'));
         if (won) {
           const st = el('div', 'bs-results-stars');
           st.innerHTML = [1, 2, 3].map((i) => `<span class="${i <= stars ? 'lit' : ''}">★</span>`).join('');
@@ -653,9 +653,9 @@ function enemyTip(type) {
   if (d.warding) bits.push(`Warded ${Math.round(d.warding * 100)}% vs magic`);
   if (d.shield) bits.push('Shielded — absorbs hits');
   if ((d.traits || []).includes('splitter')) bits.push('SPLITS when destroyed');
-  if ((d.traits || []).includes('detonator')) bits.push('💣 DETONATOR — massive Bastion damage');
-  if ((d.traits || []).includes('siege')) bits.push('Siege engine — double Bastion damage');
+  if ((d.traits || []).includes('detonator')) bits.push('💣 DETONATOR — massive Keep damage');
+  if ((d.traits || []).includes('siege')) bits.push('Siege engine — double Keep damage');
   if (d.boss) bits.push('BOSS');
-  bits.push(`💔 ${d.siegeDmg} Bastion damage on breach`);
+  bits.push(`💔 ${d.siegeDmg} Keep damage on breach`);
   return bits.join('\n');
 }

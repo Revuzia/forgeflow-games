@@ -57,7 +57,7 @@ export const TOWERS = {
   },
   beacon: {
     name: 'Holy Beacon', icon: 'beacon', color: 0xf0d060, dmgType: 'holy', kind: 'aura',
-    desc: 'Radiant aura sears nearby enemies (half-ignores wards) and REPAIRS the Bastion.',
+    desc: 'Radiant aura sears nearby enemies (half-ignores wards) and REPAIRS the Keep.',
     cost: 220, upCost: [170, 240], placement: 'ground',
     range: [4.2, 4.8, 5.4],
     rate: [0, 0, 0],

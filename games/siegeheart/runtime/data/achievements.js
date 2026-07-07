@@ -4,7 +4,7 @@ import { loadProfile } from '../core/save.js';
 export const ACHIEVEMENTS = [
   { id: 'first_scrap', name: 'First Scrap', desc: 'Destroy your first construct.', check: (p) => p.counters.kills >= 1 },
   { id: 'first_hold', name: 'The Keep Holds', desc: 'Win any level.', check: (p) => p.counters.wins >= 1 },
-  { id: 'untouched', name: 'Not One Stone', desc: 'Win with the Bastion above 90% HP.', check: (p) => Object.values(p.stars).some((s) => s >= 3) },
+  { id: 'untouched', name: 'Not One Stone', desc: 'Win with the Keep above 90% HP.', check: (p) => Object.values(p.stars).some((s) => s >= 3) },
   { id: 'clear_colosseum', name: 'Champion of the Sands', desc: 'Clear the Ancient Colosseum.', check: (p) => !!p.wins['0:8'] },
   { id: 'clear_gothic', name: 'Dawn After the Siege', desc: 'Clear the Gothic Castle.', check: (p) => !!p.wins['1:8'] },
   { id: 'clear_sky', name: 'Lord of the High Air', desc: 'Clear the Floating Sky Citadel.', check: (p) => !!p.wins['2:8'] },
@@ -20,7 +20,7 @@ export const ACHIEVEMENTS = [
   { id: 'skewer', name: 'Skewer Sergeant', desc: 'Hit 400 enemies with piercing bolts.', check: (p) => p.counters.pierces >= 400 },
   { id: 'demolition', name: 'Demolitionist', desc: 'Detonate 150 rune traps.', check: (p) => p.counters.runeBlasts >= 150 },
   { id: 'stormlord', name: 'Stormlord', desc: 'Strike 300 enemies with chain lightning.', check: (p) => p.counters.chains >= 300 },
-  { id: 'mason', name: 'Miracle Mason', desc: 'Repair 200 Bastion HP with Holy Beacons.', check: (p) => p.counters.repairs >= 200 },
+  { id: 'mason', name: 'Miracle Mason', desc: 'Repair 200 Keep HP with Holy Beacons.', check: (p) => p.counters.repairs >= 200 },
   { id: 'merchant', name: 'Scrap Merchant', desc: 'Sell 15 towers.', check: (p) => p.counters.sold >= 15 },
   { id: 'endless_25', name: 'The Eternal Watch', desc: 'Reach wave 25 in Endless mode.', check: (p) => Object.values(p.endlessBest).some((w) => w >= 25) },
   { id: 'ten_perfect', name: 'Unbreakable', desc: 'Win 10 levels with 3 stars.', check: (p) => Object.values(p.stars).filter((s) => s >= 3).length >= 10 },

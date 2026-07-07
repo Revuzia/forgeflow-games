@@ -1,4 +1,10 @@
-# Bastion Realms: Stronghold — Changelog
+# Siegeheart — Changelog
+
+## v1.2 — 2026-07-07 (rename + publish)
+- Renamed **Bastion Realms: Stronghold → Siegeheart** (owner request: too close to Bastion Realms).
+  Slug `bastion-stronghold` → `siegeheart`; the central structure is now called **the Keep** in all
+  player-facing text (code identifiers unchanged). Fresh cover art generated for the new title.
+- First published release on forgeflowgames.com.
 
 ## v1.1 — 2026-07-07 (owner feedback round)
 - **Real creature models**: all 30 procedural construct enemies replaced with **31 animated GLB/GLTF

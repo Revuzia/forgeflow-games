@@ -104,7 +104,7 @@ export function createSim(wi, li, { endless = false } = {}) {
       if (owned.length >= cap) return { ok: false, reason: `limit ${cap} active — upgrade one to raise it` };
     } else {
       if (onRoad) return { ok: false, reason: 'cannot build on the road' };
-      if (isPlaza(cx, cy)) return { ok: false, reason: 'the Bastion stands here' };
+      if (isPlaza(cx, cy)) return { ok: false, reason: 'the Keep stands here' };
       if (blockedSet.has(cellKey(cx, cy))) return { ok: false, reason: 'blocked terrain' };
     }
     return { ok: true };
