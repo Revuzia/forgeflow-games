@@ -1,5 +1,17 @@
 # Arcane Realms TCG — Changelog
 
+## v1.3.1 — 2026-07-07 (Main-menu polish + published on forgeflowgames.com)
+
+- **Main menu redesigned** (owner feedback: uneven button sizes): uniform
+  400px plaque buttons in an ornate blurred panel with gold corner accents,
+  circular icon medallions, centered smallcaps labels, hover lift + gold rim
+  + sheen sweep, staggered entrance animation, flourish divider under the
+  title. "Play vs AI" is now a solid-gold hero button. Footer reads v1.3.
+- **Published to forgeflowgames.com**: registry row flipped
+  `unpublished → published` at owner request (was deployed dark per the
+  publish-toggle rule). Verified live on the hub.
+- Cache-bust `?v=4` → `?v=5`; selftest 160/160.
+
 ## v1.3.0 — 2026-07-07 (Spell FX, world map, 3D legendary minis)
 
 Owner-directed pass #3 (2 reference screenshots + hybrid-3D green light).

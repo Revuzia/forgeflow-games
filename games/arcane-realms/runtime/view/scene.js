@@ -2,9 +2,9 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=4';
-import { REALMS, cardById } from '../sim/cards.js?v=4';
-import { FX } from './fx.js?v=4';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=5';
+import { REALMS, cardById } from '../sim/cards.js?v=5';
+import { FX } from './fx.js?v=5';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 export const LAYOUT = {
@@ -679,7 +679,7 @@ export class BoardScene {
   // ── 3D legendary minis ─────────────────────────────────────────
   async _gltfLoader() {
     if (!this._gltfLoaderP) {
-      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=4').then((m) => new m.GLTFLoader());
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=5').then((m) => new m.GLTFLoader());
     }
     return this._gltfLoaderP;
   }

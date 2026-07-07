@@ -1,11 +1,11 @@
 // Arcane Realms TCG — DOM UI layer: menu, deck builder, collection, settings,
 // match HUD (hero plates, phase bar, banners, floaters, arrow, tooltips).
 
-import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=4';
-import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=4';
-import { DIFFICULTIES } from '../sim/ai.js?v=4';
-import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=4';
-import { Audio2 } from './audio.js?v=4';
+import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=5';
+import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=5';
+import { DIFFICULTIES } from '../sim/ai.js?v=5';
+import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=5';
+import { Audio2 } from './audio.js?v=5';
 
 // ── persistence ─────────────────────────────────────────────────
 const LS_KEY = 'arcane_realms_save_v1';
@@ -42,6 +42,43 @@ const CSS = `
   background:linear-gradient(180deg,#fff3c9 8%,#f0b93a 45%,#8a5a13 92%);-webkit-background-clip:text;background-clip:text;color:transparent;
   text-shadow:0 2px 0 rgba(0,0,0,.0);filter:drop-shadow(0 4px 18px rgba(212,149,43,.45))}
 .game-sub{letter-spacing:.55em;color:#c9b8ec;text-transform:uppercase;font-size:clamp(11px,1.6vw,16px);margin-top:-6px;text-shadow:0 2px 8px #000}
+/* ── main-menu plaque buttons ─────────────────────────────── */
+.mdiv{display:flex;align-items:center;gap:14px;color:var(--gold);opacity:.9;margin:4px 0 2px;font-size:13px}
+.mdiv::before,.mdiv::after{content:'';height:1px;width:118px}
+.mdiv::before{background:linear-gradient(90deg,transparent,rgba(212,149,43,.8))}
+.mdiv::after{background:linear-gradient(270deg,transparent,rgba(212,149,43,.8))}
+.menu-panel{position:relative;display:flex;flex-direction:column;align-items:center;gap:11px;padding:26px 30px 24px;
+  background:linear-gradient(180deg,rgba(21,14,40,.68),rgba(12,8,24,.78));
+  border:1px solid rgba(212,149,43,.30);border-radius:18px;backdrop-filter:blur(7px);
+  box-shadow:0 20px 55px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,233,168,.07)}
+.menu-panel .mcorn{position:absolute;width:20px;height:20px;pointer-events:none;border:solid var(--gold);opacity:.85}
+.menu-panel .mcorn.tl{top:-1px;left:-1px;border-width:2px 0 0 2px;border-radius:18px 0 0 0}
+.menu-panel .mcorn.tr{top:-1px;right:-1px;border-width:2px 2px 0 0;border-radius:0 18px 0 0}
+.menu-panel .mcorn.bl{bottom:-1px;left:-1px;border-width:0 0 2px 2px;border-radius:0 0 0 18px}
+.menu-panel .mcorn.br{bottom:-1px;right:-1px;border-width:0 2px 2px 0;border-radius:0 0 18px 0}
+@keyframes mIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.mbtn{pointer-events:auto;cursor:pointer;user-select:none;position:relative;display:flex;align-items:center;gap:14px;
+  width:min(400px,78vw);height:58px;padding:0 20px;font-family:inherit;font-size:19px;letter-spacing:.1em;color:var(--text);
+  background:linear-gradient(180deg,#2c2150,#191231);border:1px solid rgba(212,149,43,.5);border-radius:12px;overflow:hidden;
+  box-shadow:0 6px 18px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.09), inset 0 -9px 18px rgba(0,0,0,.28);
+  transition:transform .16s, box-shadow .16s, border-color .16s;
+  animation:mIn .5s cubic-bezier(.2,.7,.3,1) backwards}
+.mbtn .mi{flex:0 0 40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:19px;border-radius:50%;
+  background:radial-gradient(circle at 50% 36%,#3f2e70,#241840 74%);border:1px solid rgba(212,149,43,.55);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.16), 0 2px 6px rgba(0,0,0,.4)}
+.mbtn .ml{flex:1;text-align:center;padding-right:54px;white-space:nowrap}
+.mbtn::after{content:'';position:absolute;top:0;left:-65%;width:45%;height:100%;transform:skewX(-18deg);
+  background:linear-gradient(105deg,transparent,rgba(255,233,168,.16),transparent);transition:left .5s ease}
+.mbtn:hover{transform:translateY(-2px);border-color:var(--gold-hi);
+  box-shadow:0 10px 28px rgba(212,149,43,.32), inset 0 1px 0 rgba(255,255,255,.13)}
+.mbtn:hover::after{left:118%}
+.mbtn:active{transform:translateY(1px)}
+.mbtn.primary{height:64px;font-size:21px;font-weight:700;color:#241503;border-color:#ffe9a8;
+  background:linear-gradient(180deg,#ffd86e,#cf8f2c 55%,#9d6517);text-shadow:0 1px 0 rgba(255,240,190,.55);
+  box-shadow:0 8px 26px rgba(240,185,58,.35), inset 0 1px 0 rgba(255,255,255,.5), inset 0 -10px 20px rgba(122,74,10,.4)}
+.mbtn.primary .mi{background:radial-gradient(circle at 50% 36%,#fff3cd,#e3ab3e 76%);border-color:#8a5a13;text-shadow:none}
+.mbtn.primary:hover{box-shadow:0 12px 34px rgba(240,185,58,.5);border-color:#fff3cd}
+.mbtn.primary::after{background:linear-gradient(105deg,transparent,rgba(255,255,255,.35),transparent)}
 .btn{pointer-events:auto;cursor:pointer;user-select:none;border:1px solid rgba(212,149,43,.55);color:var(--text);
   background:linear-gradient(180deg,#2a1f47,#1a1230);padding:13px 34px;font-size:19px;font-family:inherit;letter-spacing:.08em;
   border-radius:10px;min-width:280px;text-align:center;transition:all .15s;box-shadow:0 4px 16px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08)}
@@ -227,7 +264,7 @@ export class UI {
       const foot = this.root.querySelector('#scr-menu .menu-foot');
       if (foot) {
         const rec = this.store.record;
-        foot.textContent = `${COLLECTIBLE.length} cards · 5 realms · Record ${rec.wins}W–${rec.losses}L · ForgeFlow Games · v1.0`;
+        foot.textContent = `${COLLECTIBLE.length} cards · 5 realms · Record ${rec.wins}W–${rec.losses}L · ForgeFlow Games · v1.3`;
       }
     }
   }
@@ -255,23 +292,27 @@ export class UI {
       this.el('div', 'game-title', 'ARCANE REALMS'),
       this.el('div', 'game-sub', 'Trading Card Game'),
     );
-    const spacer = this.el('div'); spacer.style.height = '22px';
-    inner.append(spacer);
-    const mk = (label, fn, primary) => {
-      const b = this.el('button', 'btn' + (primary ? ' primary' : ''), label);
+    inner.append(this.el('div', 'mdiv', '❖'));
+    const panel = this.el('div', 'menu-panel');
+    for (const c of ['tl', 'tr', 'bl', 'br']) panel.append(this.el('span', 'mcorn ' + c));
+    const mk = (icon, label, fn, primary) => {
+      const b = this.el('button', 'mbtn' + (primary ? ' primary' : ''));
+      b.innerHTML = `<span class="mi">${icon}</span><span class="ml">${label}</span>`;
+      b.style.animationDelay = (panel.querySelectorAll('.mbtn').length * 60) + 'ms';
       b.onclick = () => { Audio2.ensure(); Audio2.resume(); Audio2.sfx('click'); fn(); };
-      inner.append(b);
+      panel.append(b);
       return b;
     };
-    mk('⚔ &nbsp;Play vs AI', () => this.openSetup(), true);
-    mk('🏰 &nbsp;Campaign', () => this.onCampaign && this.onCampaign());
-    mk('🌐 &nbsp;Play vs Other Players', () => this.openOnline());
-    mk('🛠 &nbsp;Deck Builder', () => this.openBuilder());
-    mk('📖 &nbsp;Collection', () => this.openCollection());
-    mk('⚙ &nbsp;Settings', () => this.show('settings'));
+    mk('⚔', 'Play vs AI', () => this.openSetup(), true);
+    mk('🏰', 'Campaign', () => this.onCampaign && this.onCampaign());
+    mk('🌐', 'Play vs Other Players', () => this.openOnline());
+    mk('🛠', 'Deck Builder', () => this.openBuilder());
+    mk('📖', 'Collection', () => this.openCollection());
+    mk('⚙', 'Settings', () => this.show('settings'));
+    inner.append(panel);
     const rec = this.store.record;
     const foot = this.el('div', 'menu-foot',
-      `${COLLECTIBLE.length} cards · 5 realms · Record ${rec.wins}W–${rec.losses}L · ForgeFlow Games · v1.0`);
+      `${COLLECTIBLE.length} cards · 5 realms · Record ${rec.wins}W–${rec.losses}L · ForgeFlow Games · v1.3`);
     s.append(bg, veil, inner, foot);
     this.root.append(s);
   }
