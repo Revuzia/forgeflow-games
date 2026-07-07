@@ -1,0 +1,11 @@
+{
+  "title": "Cosmic Coils",
+  "short_description": "A dazzling snake battle on tiny living planets — eat glowing gems, outcoil rival serpents, and rule five wild biome worlds solo or in real online multiplayer.",
+  "description": "Cosmic Coils is a full 3D snake-battle arena wrapped around miniature planets. Every match spawns you on a random world — lush Verdant meadows, lava-veined Ember wastes, frozen Glacier fields, golden Dune seas, or the bioluminescent Abyss — each with its own terrain, skies, weather and music. Slither across the curved surface, magnet up glowing gems, and grow from a hatchling into a planet-wrapping titan. Cut off rival serpents so they slam into your body, then feast on the glowing essence they leave behind — but one head-first mistake and you burst too. Hold to boost for clutch escapes and kills at the cost of mass, ride out blizzards, sandstorms and ember rain, and climb the live leaderboard. Practice against cunning AI serpents or play real-time online — share a room code with friends or dive into the public arena, where every joining player takes over an AI snake mid-match.",
+  "genre": "arcade",
+  "sub_genre": "snake-battle",
+  "difficulty": "easy",
+  "status": "published",
+  "controls_keyboard": "Mouse steer · Hold LMB or SPACE to boost · A/D steer override · TAB leaderboard · ESC pause",
+  "tags": ["snake", "arcade", "3d", "multiplayer", "battle", "planets", "casual"]
+}

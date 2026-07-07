@@ -1,0 +1,19 @@
+{
+  "title": "Cosmic Coils",
+  "slug": "cosmic-coils",
+  "genre": "serpent",
+  "renderer": "three",
+  "tagline": "Eat. Grow. Rule the planet.",
+  "seed": 20260706,
+  "view": { "background": "#050510" },
+  "setup": {
+    "slots": 12,
+    "biomes": ["verdant", "ember", "glacier", "dune", "abyss"],
+    "foodTarget": 330
+  },
+  "credits": {
+    "art": ["Original biome textures + key art generated with xAI grok-imagine for this game only"],
+    "audio": ["100% procedural Web Audio score + SFX, unique to Cosmic Coils"],
+    "models": ["All geometry procedural (no external model packs)"]
+  }
+}

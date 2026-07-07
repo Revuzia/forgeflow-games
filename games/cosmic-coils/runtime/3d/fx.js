@@ -1,0 +1,308 @@
+/**
+ * Cosmic Coils — runtime/3d/fx.js
+ * GPU-light particle work, all pooled:
+ *   bursts  — eat sparkles, death explosions, kill confetti, boost embers
+ *   motes   — permanent biome ambience (fireflies / embers / sparkle / dust / spores)
+ *   weather — rain, snow, ash, sandstorm, spore storm sheets in a bubble around
+ *             the player, plus lightning flash scheduling for storm events
+ * Three THREE.Points total, custom shader (per-particle size/alpha/color).
+ */
+import * as THREE from "three";
+
+const V = new URL(import.meta.url).search;
+const S = await import("../sim/serpent.js" + V);
+const { terrainH, CONST } = S;
+
+function dotTexture() {
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = 64;
+  const c = cv.getContext("2d");
+  const g = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.35, "rgba(255,255,255,0.9)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  c.fillStyle = g; c.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(cv);
+  return t;
+}
+
+function makePoints(cap, tex, blending = THREE.AdditiveBlending) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(cap * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute("aColor", new THREE.BufferAttribute(new Float32Array(cap * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute("aSize", new THREE.BufferAttribute(new Float32Array(cap), 1).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute("aAlpha", new THREE.BufferAttribute(new Float32Array(cap), 1).setUsage(THREE.DynamicDrawUsage));
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending, fog: false,
+    uniforms: { uTex: { value: tex } },
+    vertexShader: `
+      attribute vec3 aColor; attribute float aSize; attribute float aAlpha;
+      varying vec3 vC; varying float vA;
+      void main(){
+        vC = aColor; vA = aAlpha;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = aSize * (240.0 / max(1.0, -mv.z));
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform sampler2D uTex; varying vec3 vC; varying float vA;
+      void main(){
+        vec4 t = texture2D(uTex, gl_PointCoord);
+        gl_FragColor = vec4(vC, t.a * vA);
+        if (gl_FragColor.a < 0.01) discard;
+      }`,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  return pts;
+}
+
+const BURST_CAP = 2600, MOTE_CAP = 260, WX_CAP = 1300;
+
+export class FX {
+  constructor(scene, W, biomeDef) {
+    this.scene = scene;
+    this.W = W;
+    this.def = biomeDef;
+    this.t = 0;
+    const tex = dotTexture();
+
+    // bursts pool
+    this.bp = makePoints(BURST_CAP, tex);
+    this.bursts = new Array(BURST_CAP).fill(null).map(() => ({ live: false, p: new THREE.Vector3(), v: new THREE.Vector3(), life: 0, max: 1, s0: 1, s1: 0, c: new THREE.Color(), grav: 0, damp: 0.99 }));
+    this.bN = 0;
+    scene.add(this.bp);
+
+    // ambient motes
+    this.mp = makePoints(MOTE_CAP, tex);
+    this.motes = new Array(MOTE_CAP).fill(null).map(() => ({ u: new THREE.Vector3(), h: 0, ph: Math.random() * 6.28, sp: 0.4 + Math.random() * 0.8 }));
+    scene.add(this.mp);
+    this._initMotes();
+
+    // weather sheet
+    this.wp = makePoints(WX_CAP, tex, THREE.NormalBlending);
+    this.wx = new Array(WX_CAP).fill(null).map(() => ({ p: new THREE.Vector3(), v: new THREE.Vector3(), ph: Math.random() * 6.28 }));
+    this.weatherKind = "calm";
+    this.weatherI = 0;
+    scene.add(this.wp);
+    this._wxInit = false;
+
+    this.flash = 0;
+    this._nextBolt = 0;
+    this.onThunder = null; // set by game (audio hook)
+
+    this._tmp = new THREE.Vector3();
+    this._tmp2 = new THREE.Vector3();
+    this._anchor = new THREE.Vector3(0, 0, CONST.R + 6);
+  }
+
+  _initMotes() {
+    const rng = Math.random;
+    for (const m of this.motes) {
+      m.u.set(rng() * 2 - 1, rng() * 2 - 1, rng() * 2 - 1).normalize();
+      m.h = 0.6 + rng() * 3.2;
+    }
+  }
+
+  // ── bursts ────────────────────────────────────────────────────────────────
+  spawn(p, v, life, s0, s1, colorHex, grav = 0, damp = 0.985) {
+    const b = this.bursts[this.bN];
+    this.bN = (this.bN + 1) % BURST_CAP;
+    b.live = true; b.p.copy(p); b.v.copy(v);
+    b.life = 0; b.max = life; b.s0 = s0; b.s1 = s1;
+    b.c.setHex(colorHex); b.grav = grav; b.damp = damp;
+  }
+  burstAt(worldP, colorHex, n = 14, speed = 5, size = 0.8, life = 0.6) {
+    for (let i = 0; i < n; i++) {
+      this._tmp2.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize().multiplyScalar(speed * (0.4 + Math.random() * 0.8));
+      this.spawn(worldP, this._tmp2, life * (0.6 + Math.random() * 0.7), size * (0.7 + Math.random() * 0.7), 0.05, colorHex, 2.2);
+    }
+  }
+  surfPoint(u, lift = 0.6) {
+    this._tmp.set(u.x, u.y, u.z);
+    const h = terrainH(this._tmp, this.W.seed, CONST.TERRAIN_AMP);
+    return this._tmp.multiplyScalar(this.W.R + h + lift);
+  }
+  eatBurst(u, tier) {
+    const col = tier === 9 ? 0xaefc6a : tier === 2 ? 0xffd94a : tier === 3 ? 0xff54d8 : tier === 0 ? 0xffc46a : 0x54f0ff;
+    this.burstAt(this.surfPoint(u, 0.8), col, tier >= 2 ? 20 : 10, 4.5, 0.75, 0.55);
+  }
+  deathBurst(segs, segN, colorHex, R) {
+    const n = Math.min(segN, 60);
+    const stride = Math.max(1, Math.floor(segN / n));
+    for (let i = 0; i < segN; i += stride) {
+      this._tmp.set(segs[i * 3], segs[i * 3 + 1], segs[i * 3 + 2]);
+      const h = terrainH(this._tmp, this.W.seed, CONST.TERRAIN_AMP);
+      this._tmp.multiplyScalar(R + h + 1);
+      for (let k = 0; k < 3; k++) {
+        this._tmp2.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize().multiplyScalar(3 + Math.random() * 6);
+        this.spawn(this._tmp, this._tmp2, 0.9 + Math.random() * 0.6, 1.1, 0.04, colorHex, 1.4, 0.97);
+      }
+    }
+  }
+  boostTrail(headWorld, backDir, colorHex) {
+    if (Math.random() < 0.65) {
+      this._tmp2.copy(backDir).multiplyScalar(3 + Math.random() * 2);
+      this._tmp2.x += (Math.random() - 0.5) * 2; this._tmp2.y += (Math.random() - 0.5) * 2; this._tmp2.z += (Math.random() - 0.5) * 2;
+      this.spawn(headWorld, this._tmp2, 0.4 + Math.random() * 0.25, 0.9, 0.05, colorHex, 0, 0.94);
+    }
+  }
+
+  setWeather(kind, intensity) {
+    if (kind !== this.weatherKind) this._wxInit = false;
+    this.weatherKind = kind;
+    this.weatherI = intensity;
+  }
+
+  _wxRespawn(w, anchor, normal) {
+    // scatter in a bubble around the anchor, biased "up" along the normal
+    w.p.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).multiplyScalar(34);
+    w.p.add(this._tmp2.copy(normal).multiplyScalar(8 + Math.random() * 18));
+    w.p.add(anchor);
+  }
+
+  update(dt, playerHead, playerNormal) {
+    this.t += dt;
+    const anchor = playerHead || this._anchor;
+    const normal = playerNormal || this._tmp.copy(anchor).normalize();
+
+    // ── bursts ──
+    {
+      const pos = this.bp.geometry.attributes.position.array;
+      const col = this.bp.geometry.attributes.aColor.array;
+      const siz = this.bp.geometry.attributes.aSize.array;
+      const alp = this.bp.geometry.attributes.aAlpha.array;
+      let i = 0;
+      for (const b of this.bursts) {
+        if (!b.live) { alp[i] = 0; i++; continue; }
+        b.life += dt;
+        if (b.life >= b.max) { b.live = false; alp[i] = 0; i++; continue; }
+        const k = b.life / b.max;
+        // gravity pulls toward planet center
+        if (b.grav) {
+          this._tmp2.copy(b.p).normalize().multiplyScalar(-b.grav * dt * 9);
+          b.v.add(this._tmp2);
+        }
+        b.v.multiplyScalar(Math.pow(b.damp, dt * 60));
+        b.p.addScaledVector(b.v, dt);
+        pos[i * 3] = b.p.x; pos[i * 3 + 1] = b.p.y; pos[i * 3 + 2] = b.p.z;
+        col[i * 3] = b.c.r; col[i * 3 + 1] = b.c.g; col[i * 3 + 2] = b.c.b;
+        siz[i] = b.s0 + (b.s1 - b.s0) * k;
+        alp[i] = 1 - k * k;
+        i++;
+      }
+      this.bp.geometry.attributes.position.needsUpdate = true;
+      this.bp.geometry.attributes.aColor.needsUpdate = true;
+      this.bp.geometry.attributes.aSize.needsUpdate = true;
+      this.bp.geometry.attributes.aAlpha.needsUpdate = true;
+      this.bp.geometry.setDrawRange(0, BURST_CAP);
+    }
+
+    // ── motes (biome ambience around the whole planet, drawn near player) ──
+    {
+      const def = this.def.ambientMotes;
+      const pos = this.mp.geometry.attributes.position.array;
+      const col = this.mp.geometry.attributes.aColor.array;
+      const siz = this.mp.geometry.attributes.aSize.array;
+      const alp = this.mp.geometry.attributes.aAlpha.array;
+      const c = new THREE.Color(def.color);
+      const n = Math.min(def.n, MOTE_CAP);
+      for (let i = 0; i < MOTE_CAP; i++) {
+        if (i >= n) { alp[i] = 0; continue; }
+        const m = this.motes[i];
+        // slow orbit drift
+        const w = 0.02 * m.sp;
+        m.u.applyAxisAngle(this._tmp2.set(Math.sin(m.ph), Math.cos(m.ph * 1.3), Math.sin(m.ph * 0.7)).normalize(), w * dt);
+        const h = terrainH(m.u, this.W.seed, CONST.TERRAIN_AMP);
+        let bobH = m.h;
+        if (def.mode === "firefly") bobH += Math.sin(this.t * m.sp * 2 + m.ph) * 0.8;
+        if (def.mode === "ember") bobH += (this.t * m.sp) % 4;
+        if (def.mode === "spore") bobH += Math.sin(this.t * m.sp + m.ph) * 1.6;
+        this._tmp2.copy(m.u).multiplyScalar(this.W.R + h + 0.5 + bobH);
+        const d = this._tmp2.distanceTo(anchor);
+        pos[i * 3] = this._tmp2.x; pos[i * 3 + 1] = this._tmp2.y; pos[i * 3 + 2] = this._tmp2.z;
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+        const tw = def.mode === "sparkle" ? (0.3 + 0.7 * Math.max(0, Math.sin(this.t * 6 + m.ph * 9))) : (0.55 + 0.45 * Math.sin(this.t * 2.2 + m.ph));
+        siz[i] = def.mode === "dust" ? 0.55 : 0.8;
+        alp[i] = Math.max(0, 1 - d / 70) * tw * 0.85;
+      }
+      this.mp.geometry.attributes.position.needsUpdate = true;
+      this.mp.geometry.attributes.aColor.needsUpdate = true;
+      this.mp.geometry.attributes.aSize.needsUpdate = true;
+      this.mp.geometry.attributes.aAlpha.needsUpdate = true;
+    }
+
+    // ── weather ──
+    {
+      const kind = this.weatherKind, I = this.weatherI;
+      const pos = this.wp.geometry.attributes.position.array;
+      const col = this.wp.geometry.attributes.aColor.array;
+      const siz = this.wp.geometry.attributes.aSize.array;
+      const alp = this.wp.geometry.attributes.aAlpha.array;
+      const active = kind !== "calm" && kind !== "fireflies" && kind !== "aurora" && kind !== "heatwave" && I > 0.02;
+      const n = active ? Math.floor(WX_CAP * Math.min(1, I * 1.2)) : 0;
+      if (active && !this._wxInit) {
+        this._wxInit = true;
+        for (const w of this.wx) this._wxRespawn(w, anchor, normal);
+      }
+      const c = new THREE.Color(
+        kind === "rain" ? 0x9fd4ff : kind === "blizzard" ? 0xf0faff :
+        kind === "ashstorm" ? 0x6a5a58 : kind === "emberrain" ? 0xff9a3c :
+        kind === "sandstorm" ? 0xe8c47a : kind === "sporestorm" ? 0xe27aff :
+        kind === "voidstorm" ? 0x8a9aff : 0xffffff);
+      // wind tangent (consistent-ish direction in local frame)
+      const wind = this._tmp2.crossVectors(normal, new THREE.Vector3(0.3, 1, 0.2)).normalize();
+      for (let i = 0; i < WX_CAP; i++) {
+        if (i >= n) { alp[i] = 0; continue; }
+        const w = this.wx[i];
+        // velocity per kind
+        if (kind === "rain") w.v.copy(normal).multiplyScalar(-26).addScaledVector(wind, 4);
+        else if (kind === "blizzard") w.v.copy(normal).multiplyScalar(-7).addScaledVector(wind, 12 + Math.sin(this.t * 2 + w.ph) * 4);
+        else if (kind === "ashstorm") w.v.copy(normal).multiplyScalar(1.5).addScaledVector(wind, 9 + Math.sin(this.t + w.ph) * 3);
+        else if (kind === "emberrain") w.v.copy(normal).multiplyScalar(3.5 + Math.sin(this.t * 3 + w.ph)).addScaledVector(wind, 2);
+        else if (kind === "sandstorm") w.v.copy(wind).multiplyScalar(24 + Math.sin(this.t * 2.5 + w.ph) * 6).addScaledVector(normal, -1);
+        else if (kind === "sporestorm") w.v.copy(normal).multiplyScalar(Math.sin(this.t * 1.5 + w.ph) * 2).addScaledVector(wind, 3.5);
+        else w.v.copy(wind).multiplyScalar(6); // voidstorm drift
+        w.p.addScaledVector(w.v, dt);
+        // re-wrap into bubble
+        if (w.p.distanceToSquared(anchor) > 42 * 42) this._wxRespawn(w, anchor, normal);
+        // ground cull: below surface → respawn
+        const rl = w.p.length();
+        if (rl < this.W.R - 1.5) this._wxRespawn(w, anchor, normal);
+        pos[i * 3] = w.p.x; pos[i * 3 + 1] = w.p.y; pos[i * 3 + 2] = w.p.z;
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+        siz[i] = kind === "rain" ? 0.6 : kind === "sandstorm" ? 1.15 : kind === "blizzard" ? 0.95 : kind === "sporestorm" ? 0.9 : 0.7;
+        const glow = kind === "emberrain" || kind === "sporestorm" || kind === "voidstorm" ? 0.95 : 0.8;
+        alp[i] = glow * Math.min(1, I * 1.3) * (0.62 + 0.38 * Math.sin(this.t * 3 + w.ph * 7));
+      }
+      this.wp.geometry.attributes.position.needsUpdate = true;
+      this.wp.geometry.attributes.aColor.needsUpdate = true;
+      this.wp.geometry.attributes.aSize.needsUpdate = true;
+      this.wp.geometry.attributes.aAlpha.needsUpdate = true;
+
+      // lightning in the heavy storms
+      this.flash = Math.max(0, this.flash - dt * 3.2);
+      const stormy = (kind === "voidstorm" || kind === "rain" || kind === "blizzard") && I > 0.5;
+      if (stormy && this.t > this._nextBolt) {
+        this._nextBolt = this.t + 4 + Math.random() * 9;
+        this.flash = 0.55 + Math.random() * 0.4;
+        if (this.onThunder) this.onThunder();
+      }
+    }
+  }
+
+  setWorld(W, biomeDef) {
+    this.W = W;
+    this.def = biomeDef;
+    this._initMotes();
+    this._wxInit = false;
+    for (const b of this.bursts) b.live = false;
+  }
+
+  dispose() {
+    for (const p of [this.bp, this.mp, this.wp]) {
+      this.scene.remove(p);
+      p.geometry.dispose(); p.material.uniforms.uTex.value.dispose(); p.material.dispose();
+    }
+  }
+}
