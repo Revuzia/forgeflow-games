@@ -4,7 +4,7 @@
 // board and as plain canvases in the DOM (deck builder / collection / inspect).
 
 import * as THREE from 'three';
-import { CARDS, REALMS, cardById } from '../sim/cards.js?v=9';
+import { CARDS, REALMS, cardById } from '../sim/cards.js?v=10';
 
 export const CARD_W = 512, CARD_H = 768;
 
@@ -355,8 +355,8 @@ export function drawBoardCard(canvas, cardId) {
   g.fillStyle = shade(RARITY_COLOR[card.rarity] || '#b8c0cc', 0.25);
   g.fillText((card.tribe || (card.type === 'trap' ? 'Trap' : 'Spell')), CARD_W / 2, CARD_H - 34);
 
-  // cost gem (kept — useful for bounce/inspect reads); larger for readability
-  drawGem(g, 64, 64, 48, realm.css, card.cost, { hot: true });
+  // NO cost gem on board creatures — mana cost is irrelevant once in play and
+  // players mistook the top-left cost for attack. Cost still shows in hand/hover.
   return canvas;
 }
 

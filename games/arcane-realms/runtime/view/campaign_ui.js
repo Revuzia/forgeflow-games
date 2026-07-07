@@ -1,11 +1,11 @@
 // Arcane Realms TCG — Campaign screens: chapter map, NPC dialogue bubbles,
 // rewards reveal, achievements panel, card-back gallery.
 
-import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=9';
-import { battleState, campaignSummary, achievementList, buyPack } from '../campaign/progression.js?v=9';
-import { REALMS, cardById } from '../sim/cards.js?v=9';
-import { drawCard } from './cardtex.js?v=9';
-import { Audio2 } from './audio.js?v=9';
+import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=10';
+import { battleState, campaignSummary, achievementList, buyPack } from '../campaign/progression.js?v=10';
+import { REALMS, cardById } from '../sim/cards.js?v=10';
+import { drawCard } from './cardtex.js?v=10';
+import { Audio2 } from './audio.js?v=10';
 
 // battle-node positions on the world map (percent of the 16:9 artwork)
 const MAP_POS = {

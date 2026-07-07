@@ -2,9 +2,9 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=9';
-import { REALMS, cardById } from '../sim/cards.js?v=9';
-import { FX } from './fx.js?v=9';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=10';
+import { REALMS, cardById } from '../sim/cards.js?v=10';
+import { FX } from './fx.js?v=10';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 export const LAYOUT = {
@@ -418,39 +418,46 @@ export class BoardScene {
     for (const b of e.badges) b.remove();
     e.badges = [];
     if (!unit) return;
-    const kws = unit.silenced ? [] : unit.kw;
-    const shown = kws.slice(0, 4);
+    // 'swift' badge dropped (owner) — it only matters the turn of summon; the
+    // keyword still shows in the full card on hover. corner = which card corner.
+    const kws = (unit.silenced ? [] : unit.kw).filter((k) => k !== 'swift');
+    const shown = kws.slice(0, 3);
     if (unit.silenced) shown.push('_silenced');
-    const mkBadge = (glyph, color, bx) => {
+    const mkBadge = (glyph, color, corner, i) => {
       const d = document.createElement('div');
       d.className = 'np-badge';
       d.textContent = glyph; d.style.color = color; d.style.borderColor = color;
-      d._bx = bx; // px x-offset from the creature centre; placed each frame
+      d._corner = corner; d._i = i; // placed each frame at that card corner
       this.npLayer.appendChild(d);
       e.badges.push(d);
     };
+    // keyword badges stack down the TOP-LEFT corner
     shown.forEach((k, i) => {
       const [glyph, color] = k === '_silenced' ? ['✕', '#8d8d9e'] : (KW_BADGE[k] || ['•', '#ccc']);
-      mkBadge(glyph, color, -34 + i * 24);
+      mkBadge(glyph, color, 'tl', i);
     });
-    if (unit.tapped) mkBadge('💤', '#cdbcf2', 40);
+    // exhausted marker → TOP-RIGHT corner (as before)
+    if (unit.tapped) mkBadge('💤', '#cdbcf2', 'tr', 0);
   }
 
-  // place a creature's HTML orbs + badges a fixed number of pixels BELOW its
-  // on-screen base — always clear of the model body, for near AND far models
+  // place HTML orbs + badges at the CARD's actual corners (owner: bottom
+  // corners, not centered). localToWorld handles per-side tilt/scale exactly.
   placeNameplate(e) {
-    if (e.boardHover) { this.hideNameplate(e); return; } // hidden while enlarged
-    const m = this.minis.get(e.iid);
-    const base = (m && m.group) ? m.group.position : e.group.position;
-    const s = this.worldToScreen(new THREE.Vector3(base.x, 0.02, base.z));
+    if (this._hoverActive || e.boardHover) { this.hideNameplate(e); return; }
+    e.mesh.updateWorldMatrix(true, false);
     const cr = this.container.getBoundingClientRect();
-    const x = s.x - cr.left, y = s.y - cr.top;
-    const put = (el, dx, dy) => { el.style.left = (x + dx) + 'px'; el.style.top = (y + dy) + 'px'; el.style.display = ''; };
-    // far (enemy, side 1) models project higher on screen, so drop their plate
-    // further down to keep it below the body; near (my) side needs less
-    const oy = e.side === 0 ? 34 : 60;
-    if (e.chips) { put(e.chips.atk, -20, oy); put(e.chips.hp, 20, oy); }
-    for (const b of e.badges) put(b, b._bx, oy - 30);
+    const corner = (lx, ly) => {
+      const w = e.mesh.localToWorld(new THREE.Vector3(lx, ly, 0.06));
+      const s = this.worldToScreen(w);
+      return { x: s.x - cr.left, y: s.y - cr.top };
+    };
+    const put = (el, xy) => { el.style.left = xy.x + 'px'; el.style.top = xy.y + 'px'; el.style.display = ''; };
+    const KX = CW / 2 * 0.86, KY = CH / 2 * 0.9;
+    if (e.chips) { put(e.chips.atk, corner(-KX, -KY)); put(e.chips.hp, corner(KX, -KY)); } // bottom L/R
+    for (const b of e.badges) {
+      const c = b._corner === 'tr' ? corner(KX, KY) : corner(-KX, KY - b._i * 0.5); // top R / top L stack
+      put(b, c);
+    }
   }
   hideNameplate(e) {
     if (e.chips) { e.chips.atk.style.display = 'none'; e.chips.hp.style.display = 'none'; }
@@ -486,11 +493,13 @@ export class BoardScene {
     if (!e || e.zone !== 'board') return;
     if (on === !!e.boardHover) return;
     e.boardHover = on;
+    // while ANY card is enlarged, hide EVERY nameplate so the full rules-text
+    // card overlaps cleanly (orbs were bleeding over the enlarged card)
+    this._hoverActive = on;
     this.setHoverFront(iid, on);
     const face = on ? getCard(e.cardId).tex : getBoardCard(e.cardId).tex;
     if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
-    // hide the nameplate while this card is hover-enlarged (rules-text view)
-    if (on) this.hideNameplate(e);
+    if (on) for (const c of this.cards.values()) this.hideNameplate(c);
     const base = this.boardTransform(e.side, e.slot, (e.side === 0 ? this._lastMyBoardN : this._lastFoeBoardN) || 6);
     if (on) {
       this.applyTransform(e, {
@@ -753,7 +762,7 @@ export class BoardScene {
   // ── 3D legendary minis ─────────────────────────────────────────
   async _gltfLoader() {
     if (!this._gltfLoaderP) {
-      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=9').then((m) => new m.GLTFLoader());
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=10').then((m) => new m.GLTFLoader());
     }
     return this._gltfLoaderP;
   }

@@ -1,5 +1,24 @@
 # Arcane Realms TCG — Changelog
 
+## v1.3.5 — 2026-07-07 (Nameplate corners, board card cleanup, clean hover)
+
+Owner feedback on the on-board card readout.
+
+- **Stat orbs back to the card's bottom corners** (attack bottom-left, health
+  bottom-right) via exact `mesh.localToWorld` corner projection — no longer
+  clustered centered below.
+- **Exhaust 💤 → top-right corner**; keyword badges → top-left corner.
+- **Swift badge removed** (owner) — it only matters the turn of summon and the
+  keyword still shows in the full card on hover. Guard/Flying/etc. still shown.
+- **Cost gem removed from board creatures** — the top-left number was mana cost
+  (irrelevant in play, mistaken for attack). Cost still shows in hand and on
+  the hover card. Board creatures now read cleanly: attack + health only.
+- **Hover shows the full card, overlapping everything.** Viewing a board
+  creature enlarges to the complete rules-text card and now hides ALL orbs/
+  badges so nothing bleeds over it.
+
+Selftest 208/208. Cache-bust `?v=9` → `?v=10`.
+
 ## v1.3.4 — 2026-07-07 (Mini polish: nameplates, facing, no card-shake, Guard hint)
 
 - **Stat orbs never cover the models.** Moved atk/hp orbs + keyword/exhaust

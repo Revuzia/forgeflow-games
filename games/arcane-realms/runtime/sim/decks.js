@@ -1,5 +1,5 @@
 // Arcane Realms TCG — deck rules + the six prebuilt starter decks.
-import { CARDS, cardById } from './cards.js?v=9';
+import { CARDS, cardById } from './cards.js?v=10';
 
 export const DECK_SIZE = 30;
 export const MAX_COPIES = 2;
