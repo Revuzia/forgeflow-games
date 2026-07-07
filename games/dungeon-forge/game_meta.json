@@ -1,0 +1,11 @@
+{
+  "title": "Dungeon Forge",
+  "short_description": "Build fantasy dungeons or sci-fi facilities room by room — with friends live in the same session — lock doors, hide keys, plant traps and monsters, then race to escape your creations co-op.",
+  "description": "Dungeon Forge is a full dungeon construction kit and escape game in one. Paint rooms and corridors across up to five floors, drop doors and flip a lock on any of them — then make sure a key exists somewhere: on the floor, buried in a chest, or carried by a monster. Garrison your halls with skeletons, spiders, ghosts and demon lords (or security bots, drones, plasma turrets and hive aliens in the sci-fi facility theme), rig spike traps and flame vents, light everything with torches and neon, and let the live solvability checker prove your dungeon can actually be beaten. Then play it: third- or first-person, sword swings and magic bolts, chest loot that scales with difficulty, potions, and a glowing exit portal with a race clock. Everything is multiplayer — share a 4-letter room code and friends build the same dungeon with you in real time, cursors and all, then the whole room playtests it co-op with drop-in joins. Share finished dungeons as links or publish them under a short code with a global fastest-escape leaderboard.",
+  "genre": "builder",
+  "sub_genre": "dungeon-escape",
+  "difficulty": "medium",
+  "status": "published",
+  "controls_keyboard": "BUILD: LMB place/drag · RMB orbit · MMB pan · wheel zoom · R rotate · Tab floor · Del delete — PLAY: WASD move · mouse look · LMB melee · RMB/F bolt · E interact · Q potion · Shift sprint · V first/third person",
+  "tags": ["builder", "dungeon", "escape", "multiplayer", "co-op", "3d", "fantasy", "sci-fi", "sandbox"]
+}
