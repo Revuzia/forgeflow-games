@@ -79,22 +79,28 @@ function burst(o) {
 // ── event wiring ─────────────────────────────────────────────────────────────
 function wireEvents(W) {
   W.events.on("shotFired", (a, weaponId, eye, dir) => {
-    // muzzle flash
+    // muzzle flash — bright and chunky enough to register at gameplay FOV
     const mx = eye.x + dir.x * 0.9, my = eye.y + dir.y * 0.9 - 0.05, mz = eye.z + dir.z * 0.9;
-    burst({ x: mx, y: my, z: mz, n: 4, color: [0xfff2b0, 0xffb84d], speed: 2.4, up: 0.5, size: 0.1, life: 0.12, gravity: 0, drag: 4 });
+    burst({ x: mx, y: my, z: mz, n: 6, color: [0xffffff, 0xfff2b0, 0xffb84d], speed: 3, up: 0.5, size: 0.17, life: 0.1, gravity: 0, drag: 5 });
   });
 
-  // one bright streak PER PROJECTILE (so every weapon — including each
-  // shotgun pellet — shows its bullet leaving the barrel)
-  const TRACER_COLOR = { sniper: 0x9fe0ff, glauncher: 0xffb060 };
+  // one bright bolt PER PROJECTILE that FLIES with the round (owner: "when
+  // shooting i dont see bullets") — a hot stretched streak sweeping downrange
+  // beats the old static muzzle blink; bots' shots use the same global event
+  const TRACER_COLOR = { sniper: 0x9fe0ff, glauncher: 0xffb060, shotgun: 0xffc46a };
   W.events.on("tracer", (pr) => {
     const speed = Math.hypot(pr.vx, pr.vy, pr.vz) || 1;
     const dx = pr.vx / speed, dy = pr.vy / speed, dz = pr.vz / speed;
-    const len = pr.weaponId === "sniper" ? 34 : pr.weaponId === "glauncher" ? 4 : 22;
+    const len = pr.weaponId === "sniper" ? 16 : pr.weaponId === "glauncher" ? 4 : 9;
+    // COSMETIC speed cap: hitscan rounds (999 m/s) cross the screen in one
+    // frame — the eye never sees them. The damage ray is already resolved;
+    // the bolt flies at a readable pace instead.
+    const vs = Math.min(speed, 200);
     spawn({
-      x: pr.x + dx * len * 0.5, y: pr.y + dy * len * 0.5, z: pr.z + dz * len * 0.5,
-      color: TRACER_COLOR[pr.weaponId] || 0xffe9a0,
-      size: 0.07, life: 0.14, gravity: 0, drag: 0,
+      x: pr.x + dx * 1.4, y: pr.y + dy * 1.4, z: pr.z + dz * 1.4,
+      vx: dx * vs, vy: dy * vs, vz: dz * vs,
+      color: TRACER_COLOR[pr.weaponId] || 0xffd24a,
+      size: 0.15, life: 0.4, gravity: 0, drag: 0,
       dir: new THREE.Vector3(dx, dy, dz), stretch: len,
     });
   });
@@ -154,6 +160,10 @@ function dmgNumber(W, x, y, z, text, color, scale) {
 // ── frame update ─────────────────────────────────────────────────────────────
 const proj = new THREE.Vector3();
 export function update(W, dt) {
+  // startMatch clears every scene group — re-adopt the particle mesh or NO
+  // particle (muzzle flash / tracer / impact / explosion) ever renders
+  // in a match (root cause of "when shooting i dont see bullets")
+  if (inst && !inst.parent) W.group("fx").add(inst);
   // particles
   for (let i = 0; i < N; i++) {
     const p = parts[i];

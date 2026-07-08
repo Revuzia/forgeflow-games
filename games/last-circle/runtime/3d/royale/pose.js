@@ -11,7 +11,7 @@ import * as THREE from "three";
  * Legs/torso keep the authored animation; arms always read correctly.
  */
 
-/** Cache the six arm-chain bones by Meshy rig name. */
+/** Cache the arm + leg chain bones by Meshy rig name (Mixamo-style). */
 export function findArmBones(root) {
   const b = {};
   root.traverse((o) => {
@@ -23,6 +23,12 @@ export function findArmBones(root) {
       case "LeftArm": b.lArm = o; break;
       case "LeftForeArm": b.lFore = o; break;
       case "LeftHand": b.lHand = o; break;
+      case "RightUpLeg": b.rUpLeg = o; break;
+      case "RightLeg": b.rLeg = o; break;
+      case "RightFoot": b.rFoot = o; break;
+      case "LeftUpLeg": b.lUpLeg = o; break;
+      case "LeftLeg": b.lLeg = o; break;
+      case "LeftFoot": b.lFoot = o; break;
     }
   });
   return (b.rArm && b.lArm) ? b : null;
@@ -49,17 +55,20 @@ function aim(arm, child, oq, tx, ty, tz, blend) {
 }
 
 // Per-mode target dirs, actor-local (+Z = facing, +X = model left, tuned live):
-//   [rArmDir, rForeDir, lArmDir, lForeDir]
+//   [rArmDir, rForeDir, lArmDir, lForeDir] + optional legs
+//   [rUpLegDir, rLegDir, lUpLegDir, lLegDir]
 export const POSES = {
   // arms hang at the sides (menu, unarmed)
   relax: [[-0.28, -1, 0.02], [-0.1, -1, 0.06], [0.28, -1, 0.02], [0.1, -1, 0.06]],
   // two-handed gun at chest: right forearm forward (gun points +Z), left hand
   // reaches to the weapon's fore-end
   gunReady: [[-0.22, -0.85, 0.42], [-0.06, 0.1, 0.99], [0.3, -0.8, 0.42], [-0.42, 0.16, 0.88]],
-  // belly-down skydive: arms swept out and back
-  skydive: [[-0.9, -0.1, -0.3], [-0.95, 0.05, -0.25], [0.9, -0.1, -0.3], [0.95, 0.05, -0.25]],
-  // under canopy: both hands up on the risers
-  hang: [[-0.3, 0.95, 0.05], [-0.12, 0.99, 0.04], [0.3, 0.95, 0.05], [0.12, 0.99, 0.04]],
+  // belly-down skydive: arms swept out and back, legs arched back in a spread
+  skydive: [[-0.9, -0.1, -0.3], [-0.95, 0.05, -0.25], [0.9, -0.1, -0.3], [0.95, 0.05, -0.25],
+            [-0.3, -0.85, -0.35], [-0.32, -0.7, -0.6], [0.3, -0.85, -0.35], [0.32, -0.7, -0.6]],
+  // under canopy: both hands up on the risers, legs together hanging straight
+  hang: [[-0.3, 0.95, 0.05], [-0.12, 0.99, 0.04], [0.3, 0.95, 0.05], [0.12, 0.99, 0.04],
+         [-0.1, -0.99, 0.03], [-0.08, -0.96, -0.15], [0.1, -0.99, 0.03], [0.08, -0.96, -0.15]],
   // reload: muzzle dips, left hand works at the receiver
   reload: [[-0.2, -0.7, 0.6], [-0.05, -0.25, 0.95], [0.28, -0.75, 0.5], [-0.3, -0.15, 0.9]],
 };
@@ -80,4 +89,10 @@ export function applyArmPose(obj, bones, mode, weight) {
   const bf = 0.88 * Math.min(1, weight);
   aim(bones.rFore, bones.rHand, _oq, P[1][0], P[1][1], P[1][2], bf);
   aim(bones.lFore, bones.lHand, _oq, P[3][0], P[3][1], P[3][2], bf);
+  if (P.length > 4) {   // legs too (skydive / canopy — clip legs read wrong mid-air)
+    aim(bones.rUpLeg, bones.rLeg, _oq, P[4][0], P[4][1], P[4][2], bl);
+    aim(bones.rLeg, bones.rFoot, _oq, P[5][0], P[5][1], P[5][2], bf);
+    aim(bones.lUpLeg, bones.lLeg, _oq, P[6][0], P[6][1], P[6][2], bl);
+    aim(bones.lLeg, bones.lFoot, _oq, P[7][0], P[7][1], P[7][2], bf);
+  }
 }

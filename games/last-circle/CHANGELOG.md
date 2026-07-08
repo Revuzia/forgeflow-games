@@ -3,6 +3,36 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-08 — v4.2 particles were NEVER rendering, emote locker, leg posing, storm feel
+
+Owner round 5. The headline find: **no particle had ever rendered in a match**
+— fx.js adds its InstancedMesh to the "fx" scene group once at page init, and
+startMatch `g.clear()`s every group before the first match begins. Muzzle
+flashes, tracers, impact bursts, explosions: all silently orphaned since the
+groups-clear was introduced. That was the real "when shooting i dont see
+bullets". Fixed with a self-healing re-adopt in fx.update.
+
+- **TRACERS you can see**: bolts now FLY with the round instead of a static
+  140ms muzzle blink; cosmetic speed cap 200 m/s (hitscan 999 m/s crosses the
+  screen in one frame — the eye never sees it; the damage ray is already
+  resolved). Thicker (0.15), brighter gold, 0.4s life, bigger 3-color muzzle
+  flash. Bots' fire uses the same global event → incoming fire reads too.
+- **EMOTE LOCKER**: the menu turntable now plays cheer (greeting) → dance
+  loop per skin instead of Meshy's arms-out idle ("show his character off").
+  Clip files load on demand into the preview mixer; raw-idle + relax layer
+  stays as fallback while a skin is still baking.
+- **LEG POSING** for skydive (arched back-spread) and canopy hang (legs
+  together, slight knee bend) — pose.js now steers UpLeg/Leg/Foot chains too;
+  clip legs read wrong mid-air (frozen run stride).
+- **STORM FEEL** (owner: "shrinks too much too quickly" + "damage should
+  increase the longer you're in it"): standard table rebuilt — 8 phases,
+  ~13.5 min, gentler early cuts (~58-64% radius kept vs ~46%); per-actor
+  RAMPING storm damage +50% per 6s soaked (cap 3×), decays when back inside
+  — verified live: ticks 1,1,1,1,1,1.5×6,2. Final phase still dps 12
+  (selftest pins it).
+- **RELOAD SFX**: mechanical sequence timed to the weapon's reloadS — mag
+  release click → mag drop → seat clunk → slide rack (was two beeps).
+
 ## 2026-07-08 — v4.1 runtime arm-pose layer, ramp render fix, per-weapon ADS
 
 Owner round 4 with screenshots: the Meshy ARMED clips retarget broken on these

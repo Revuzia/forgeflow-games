@@ -170,8 +170,18 @@ function wire(W) {
     const def = W.SIM.WEAPONS[weaponId];
     shot(def ? def.cls : "ar", a === W.player ? null : eye);
   });
-  on("reloadStart", (a) => { if (a === W.player) { blip(500, 0.06, 0.12, "square"); setTimeout(() => blip(400, 0.06, 0.1, "square"), 130); } });
-  on("reloadDone", (a) => { if (a === W.player) blip(760, 0.07, 0.14, "square"); });
+  // reload = mechanical sequence, not beeps: mag release click → mag drop →
+  // mag seat clunk (timed to the weapon's reloadS) → slide rack near the end
+  on("reloadStart", (a, wpn) => {
+    if (a !== W.player) return;
+    const def = (W.SIM.WEAPONS[wpn.id] || {});
+    const total = Math.max(0.8, (def.reloadS || 1.5)) * 1000;
+    thump(2600, 0.03, 0.22);                                        // mag release click
+    setTimeout(() => thump(700, 0.06, 0.16), 110);                  // mag out / drop
+    setTimeout(() => { thump(950, 0.05, 0.26); thump(420, 0.09, 0.2); }, total * 0.55); // mag seated
+    setTimeout(() => { thump(3000, 0.025, 0.24); setTimeout(() => thump(1400, 0.05, 0.26), 70); }, total * 0.86); // slide rack
+  });
+  on("reloadDone", (a) => { if (a === W.player) thump(1800, 0.03, 0.14); });
   on("dryFire", (a) => { if (a === W.player) blip(300, 0.05, 0.12, "square"); });
   on("hitMarker", (owner, t2, dmg, isHead) => { if (owner === W.player) blip(isHead ? 1300 : 1000, 0.05, 0.16, "sine"); });
   on("actorHurt", (victim, info) => {

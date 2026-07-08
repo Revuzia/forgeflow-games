@@ -147,7 +147,7 @@ export function showMenu(W, startMatch) {
   const next = mkArrow("›");
 
   let skinIdx = Math.max(0, MENU_SKINS.findIndex((s) => s.key === getChosenSkin()));
-  let pvRig = null, pvRunning = true, pvBones = null, poseMod = null;
+  let pvRig = null, pvRunning = true, pvBones = null, poseMod = null, pvIdleRelax = false;
   import("./pose.js" + (new URL(import.meta.url).search || "")).then((m) => { poseMod = m; });
   const pvScene = new THREE.Scene();
   const pvCam = new THREE.PerspectiveCamera(34, 520 / 500, 0.1, 30);
@@ -173,8 +173,32 @@ export function showMenu(W, startMatch) {
       rig.scene.position.set(0, 0, 0);
       pvScene.add(rig.scene);
       pvBones = poseMod ? poseMod.findArmBones(rig.scene) : null;
-      const first = rig.animations[0];
-      if (first) rig.play(first.name);
+      // EMOTE SHOWCASE (owner: the locker should show the character off, not
+      // the Meshy library idle): cheer greeting once → dance loop
+      let cheerClip = null, danceClip = null;
+      for (const c of ["cheer", "dance"]) {
+        try {
+          const g = await W.kernel.loader.loadAsync(W.assetBase + "assets/chars/meshy/" + meta.key + "_" + c + ".glb");
+          if (g.animations && g.animations[0]) {
+            g.animations[0].name = c + "_menu";
+            rig.actions[c + "_menu"] = rig.mixer.clipAction(g.animations[0]);
+            if (c === "cheer") cheerClip = g.animations[0]; else danceClip = g.animations[0];
+          }
+        } catch (e) {}
+      }
+      if (pvRig !== rig) return;   // user already clicked past this skin
+      if (cheerClip) {
+        rig.play("cheer_menu", { once: true });
+        pvIdleRelax = false;
+        setTimeout(() => { if (pvRig === rig && danceClip) rig.play("dance_menu"); }, Math.max(400, cheerClip.duration * 1000 - 250));
+      } else if (danceClip) {
+        rig.play("dance_menu");
+        pvIdleRelax = false;
+      } else {
+        const first = rig.animations[0];
+        if (first) rig.play(first.name);
+        pvIdleRelax = true;        // raw idle needs the relax layer
+      }
     } catch (e) { /* still baking — text only */ }
   }
   prev.onclick = () => { W.events.emit("uiClick"); setSkin(skinIdx - 1); };
@@ -184,9 +208,11 @@ export function showMenu(W, startMatch) {
     if (!pvRunning || !R.menu || !R.menu.isConnected) { pvR.dispose(); if (pvRig) W.kernel.disposeMixer(pvRig.mixer); return; }
     if (pvRig) {
       pvRig.scene.rotation.y += 0.008;
-      if (!pvBones && poseMod) pvBones = poseMod.findArmBones(pvRig.scene);
-      // natural stance over the raw Meshy idle (library idles hold arms out)
-      if (pvBones && poseMod) poseMod.applyArmPose(pvRig.scene, pvBones, "relax", 1);
+      // emotes own the body; relax only over a raw-idle fallback
+      if (pvIdleRelax && poseMod) {
+        if (!pvBones) pvBones = poseMod.findArmBones(pvRig.scene);
+        if (pvBones) poseMod.applyArmPose(pvRig.scene, pvBones, "relax", 1);
+      }
     }
     pvR.render(pvScene, pvCam);
     requestAnimationFrame(pvLoop);

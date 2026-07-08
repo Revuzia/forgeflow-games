@@ -103,16 +103,24 @@ export function update(W, dt) {
         if (!a.alive || a.netRemote) continue;
         const d = Math.hypot(a.pos.x - st.center.x, a.pos.z - st.center.z);
         if (d > st.radius) {
+          // RAMPING damage: the longer you soak, the harder each tick hits
+          // (owner: "it shouldn't stay 1/tick") — +50% per 6s in the storm,
+          // capped at 3×; resets after 3s back inside the circle
+          a._stormT = (a._stormT || 0) + 1;
+          const dmg = st.dps * Math.min(3, 1 + Math.floor(a._stormT / 6) * 0.5);
           // storm ignores shield (classic BR): hp only
-          a.hp -= st.dps;
+          a.hp -= dmg;
           a.lastDamageT = W.t;
-          if (a === W.player) W.events.emit("stormTick", st.dps);
+          if (a === W.player) W.events.emit("stormTick", dmg);
           if (a.hp <= 0) {
             W.events.emit("stormKill", a);
             // credit a recent attacker (within 8s) if any, else the storm
             const credit = a.lastAttacker && W.t - (a.lastHurtByActorT || -99) < 8 ? a.lastAttacker : null;
             W.killActor(a, credit, "storm");
           }
+        } else if (a._stormT) {
+          // safe inside: soak decays instead of vanishing (dip-outs still sting)
+          a._stormT = Math.max(0, a._stormT - 2);
         }
       }
     }

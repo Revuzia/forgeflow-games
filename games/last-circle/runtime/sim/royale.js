@@ -81,15 +81,18 @@
   var PLAYERK = { hp: 100, shield: 100, radius: 0.45, height: 1.8, eyeY: 1.62, swimDepth: 1.1 };
 
   // Storm phase tables per mode. radiusFrac × (map halfsize) = target radius.
-  // Real-BR pacing: generous loot phase, ~11 min of storm on standard.
+  // Final Drop pacing (owner: circle "shrinks too much too quickly") —
+  // gentler early cuts (~58-64% radius kept per phase vs ~46% before), longer
+  // waits, one extra phase: ~13.5 min total on standard.
   var STORM_PHASES = {
     standard: [
-      { wait: 75, shrink: 70, radiusFrac: 0.62,  dps: 1 },
-      { wait: 55, shrink: 60, radiusFrac: 0.44,  dps: 2 },
-      { wait: 45, shrink: 55, radiusFrac: 0.30,  dps: 3 },
-      { wait: 40, shrink: 45, radiusFrac: 0.18,  dps: 5 },
-      { wait: 35, shrink: 40, radiusFrac: 0.10,  dps: 8 },
-      { wait: 25, shrink: 35, radiusFrac: 0.045, dps: 10 },
+      { wait: 80, shrink: 80, radiusFrac: 0.78,  dps: 1 },
+      { wait: 60, shrink: 70, radiusFrac: 0.58,  dps: 1 },
+      { wait: 50, shrink: 60, radiusFrac: 0.42,  dps: 2 },
+      { wait: 45, shrink: 50, radiusFrac: 0.28,  dps: 3 },
+      { wait: 40, shrink: 45, radiusFrac: 0.17,  dps: 5 },
+      { wait: 30, shrink: 40, radiusFrac: 0.09,  dps: 7 },
+      { wait: 25, shrink: 35, radiusFrac: 0.04,  dps: 9 },
       // final circle HOLDS at ~10m — closing to zero storm-killed every
       // survivor simultaneously and crowned a corpse; someone must WIN the fight
       { wait: 20, shrink: 45, radiusFrac: 0.012, dps: 12 },
