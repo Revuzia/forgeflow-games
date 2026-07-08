@@ -430,6 +430,70 @@ export function charClips(animations) {
   };
 }
 
+// Shared GLSL: cheap value-noise + fbm, and per-instance world position so
+// adjacent painted cells tile as one continuous surface.
+const _NOISE_GLSL = `
+  float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+  float vnoise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+    return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y); }
+  float fbm(vec2 p){ float v=0.0, a=0.5; for(int i=0;i<4;i++){ v+=a*vnoise(p); p*=2.02; a*=0.5; } return v; }`;
+const _SURF_VERT = `
+  varying vec3 vWorld; varying vec3 vNrm; varying vec3 vView; uniform float uTime; uniform float uWave;
+  void main(){
+    vec4 wp = modelMatrix * instanceMatrix * vec4(position,1.0);
+    vec3 t = position;
+    if (uWave > 0.5 && normal.y > 0.5) t.y += (sin(wp.x*1.4+uTime*2.0)+cos(wp.z*1.6+uTime*1.7))*0.035;
+    vec4 wp2 = modelMatrix * instanceMatrix * vec4(t,1.0);
+    vWorld = wp2.xyz; vNrm = normalize(mat3(instanceMatrix)*normal); vView = normalize(cameraPosition - wp2.xyz);
+    gl_Position = projectionMatrix * viewMatrix * wp2;
+  }`;
+
+/** Glowing, flowing lava — hot veins over a dark crust, gentle pulse. */
+export function makeLavaMaterial(THREE_) {
+  const T = THREE_ || THREE;
+  return new T.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uWave: { value: 0 } },
+    vertexShader: _SURF_VERT,
+    fragmentShader: _NOISE_GLSL + `
+      varying vec3 vWorld; varying vec3 vNrm; varying vec3 vView; uniform float uTime;
+      void main(){
+        vec2 uv = vWorld.xz*0.28;
+        float flow = fbm(uv + vec2(uTime*0.06, uTime*0.045));
+        float veins = fbm(uv*1.8 - vec2(uTime*0.05, uTime*0.03));
+        float hot = smoothstep(0.42,0.72,flow) + 0.45*smoothstep(0.58,0.9,veins);
+        vec3 crust = vec3(0.13,0.03,0.012);
+        vec3 lava = mix(vec3(0.95,0.28,0.04), vec3(1.0,0.86,0.25), clamp(hot,0.0,1.0));
+        vec3 col = mix(crust, lava, clamp(hot,0.0,1.0));
+        col *= 0.85 + 0.22*sin(uTime*2.0 + flow*6.0);
+        col = mix(col*0.28, col, smoothstep(0.3,0.8,vNrm.y));   // sides dark
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  });
+}
+
+/** Rippling translucent water — moving highlights + view-angle fresnel. */
+export function makeWaterMaterial(THREE_) {
+  const T = THREE_ || THREE;
+  return new T.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    uniforms: { uTime: { value: 0 }, uWave: { value: 1 } },
+    vertexShader: _SURF_VERT,
+    fragmentShader: _NOISE_GLSL + `
+      varying vec3 vWorld; varying vec3 vNrm; varying vec3 vView; uniform float uTime;
+      void main(){
+        vec2 uv = vWorld.xz*0.5;
+        float r = (vnoise(uv + vec2(uTime*0.14, uTime*0.1)) + vnoise(uv*1.9 - vec2(uTime*0.11, -uTime*0.08)))*0.5;
+        vec3 deep = vec3(0.03,0.16,0.29), shallow = vec3(0.11,0.42,0.58);
+        vec3 col = mix(deep, shallow, r);
+        col += pow(smoothstep(0.62,0.95,r),3.0)*0.55;            // glints
+        float fres = pow(1.0 - clamp(vView.y,0.0,1.0), 2.5);
+        float top = smoothstep(0.3,0.8,vNrm.y);
+        col = mix(col*0.5, col + fres*0.25, top);
+        gl_FragColor = vec4(col, mix(0.82, mix(0.72,0.95,fres), top));
+      }`,
+  });
+}
+
 /**
  * Cell SURFACES for one dungeon floor: kit-tile instancing for stone +
  * raised platforms (with skirts and auto step wedges at their edges), an
@@ -496,25 +560,20 @@ export function makeCellSurfaces(D, d, f, kit) {
     }
   }
 
-  // lava sheet — one merged plane set, emissive, animated in update
+  // lava sheet — flowing procedural shader, animated via uTime in update
   let lavaMat = null;
   if (byType[2].length) {
-    lavaMat = new THREE.MeshStandardMaterial({
-      color: 0x35100a, emissive: 0xff5a1f, emissiveIntensity: 1.6, roughness: 0.7,
-    });
+    lavaMat = makeLavaMaterial(THREE);
     const inst = new THREE.InstancedMesh(new THREE.BoxGeometry(CELL, 0.22, CELL), lavaMat, byType[2].length);
     byType[2].forEach(([x, z], i) => { m4.makeTranslation(x * CELL + CELL / 2, 0.02, z * CELL + CELL / 2); inst.setMatrixAt(i, m4); });
     inst.instanceMatrix.needsUpdate = true;
     group.add(inst);
   }
 
-  // water sheet — translucent, animated
+  // water sheet — rippling procedural shader, animated via uTime in update
   let waterMat = null;
   if (byType[3].length) {
-    waterMat = new THREE.MeshStandardMaterial({
-      color: 0x1a4a66, emissive: 0x0c2a44, emissiveIntensity: 0.5,
-      transparent: true, opacity: 0.82, roughness: 0.25, metalness: 0.1,
-    });
+    waterMat = makeWaterMaterial(THREE);
     const inst = new THREE.InstancedMesh(new THREE.BoxGeometry(CELL, 0.16, CELL), waterMat, byType[3].length);
     byType[3].forEach(([x, z], i) => { m4.makeTranslation(x * CELL + CELL / 2, 0.0, z * CELL + CELL / 2); inst.setMatrixAt(i, m4); });
     inst.instanceMatrix.needsUpdate = true;

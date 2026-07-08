@@ -886,8 +886,8 @@ export class Escape {
 
     // lava/water sheet animation + lava embers
     const t = performance.now() / 1000;
-    for (const m of this.lavaMats) m.emissiveIntensity = 1.5 + Math.sin(t * 2.4) * 0.5;
-    for (const m of this.waterMats) m.opacity = 0.78 + Math.sin(t * 1.7) * 0.06;
+    for (const m of this.lavaMats) if (m.uniforms) m.uniforms.uTime.value = t;
+    for (const m of this.waterMats) if (m.uniforms) m.uniforms.uTime.value = t;
     if (this.lavaSpots.length && Math.random() < 0.3) {
       const s = this.lavaSpots[(Math.random() * this.lavaSpots.length) | 0];
       const me0 = this.me();

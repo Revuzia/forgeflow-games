@@ -216,3 +216,12 @@ Initial release.
   (Chest · Key · Trap · Light · Decor); each still has its own deeper options
   (trap type, decor prop). Verified: toolbar has no standalone chest/key/trap/
   light/decor, Props picker shows all five, placing works.
+
+## v1.4.8 — 2026-07-07 (/loop batch 6: real lava/water shaders)
+- **Real Three.js lava & water shaders (part of 2)**: replaced the flat emissive/
+  translucent boxes with custom ShaderMaterials. Lava flows — hot orange/yellow
+  veins over a dark crust with a gentle pulse; water ripples with moving glints
+  and view-angle fresnel transparency (world-space UVs so pools tile seamlessly).
+  Animated via uTime in both escape and builder. Verified live: both compile and
+  render beautifully. (The lava/water→Floor-subtype toolbar move ships with the
+  raise/rolling-terrain work in the next slice.)

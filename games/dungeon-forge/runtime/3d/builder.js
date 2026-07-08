@@ -204,6 +204,8 @@ export class Builder {
     // cell surfaces: stone / lava / water / raised+steps
     const surf = makeCellSurfaces(D, this.d, f, this.kit);
     group.add(surf.group);
+    this._surfMats = this._surfMats || [];
+    this._surfMats[f] = [surf.lavaMat, surf.waterMat].filter(Boolean);
 
     // walls — every floor↔void edge gets one; the gate module carries its own
     // wall plane inside the door cell, so no edge filtering is needed
@@ -697,6 +699,9 @@ export class Builder {
   // ── per-frame ───────────────────────────────────────────────────────────────
   update(dt) {
     if (!this.ready) return;   // don't tick until async enter() has finished loading
+    // animate lava/water shaders
+    const st = performance.now() / 1000;
+    for (const arr of (this._surfMats || [])) if (arr) for (const m of arr) if (m && m.uniforms) m.uniforms.uTime.value = st;
     // camera
     const sp = this.camDist * 0.9 * dt;
     const cos = Math.cos(this.camYaw), sin = Math.sin(this.camYaw);
