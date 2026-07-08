@@ -15,16 +15,16 @@ const [{ Assets }, { Builder }, { Escape }, { Hud }, { Menu }, { Fx }, { GameAud
 
 export const THEME_LOOK = {
   fantasy: {
-    bg: 0x0b0910, fog: 0x0b0910, fogDensity: 0.030,
-    ambient: 0x3a3450, ambientI: 0.62, hemi: 0x5a4a66, ground: 0x181018, hemiI: 0.35,
-    torch: 0xff9a3c, torchI: 26, accent: "#ffb347", accent2: "#7d5fff",
-    portal: 0x8f6bff, buildAmbient: 0.95,
+    bg: 0x0b0910, fog: 0x120e18, fogDensity: 0.016,
+    ambient: 0x4a4462, ambientI: 1.0, hemi: 0x6a5878, ground: 0x2c2436, hemiI: 0.62,
+    torch: 0xff9a3c, torchI: 38, accent: "#ffb347", accent2: "#7d5fff",
+    portal: 0x8f6bff, buildAmbient: 1.05,
   },
   scifi: {
-    bg: 0x040a12, fog: 0x040a12, fogDensity: 0.028,
-    ambient: 0x2a4458, ambientI: 0.66, hemi: 0x3d6a80, ground: 0x081018, hemiI: 0.38,
-    torch: 0x37e0ff, torchI: 22, accent: "#37e0ff", accent2: "#ff3d81",
-    portal: 0x22ffcc, buildAmbient: 0.95,
+    bg: 0x040a12, fog: 0x0a1420, fogDensity: 0.015,
+    ambient: 0x3a5570, ambientI: 1.02, hemi: 0x4d7a92, ground: 0x1a2632, hemiI: 0.62,
+    torch: 0x37e0ff, torchI: 34, accent: "#37e0ff", accent2: "#ff3d81",
+    portal: 0x22ffcc, buildAmbient: 1.05,
   },
 };
 

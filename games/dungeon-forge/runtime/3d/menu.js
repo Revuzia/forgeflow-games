@@ -233,16 +233,21 @@ export class Menu {
           <button data-del="${i}" class="df-btn danger">🗑</button>
         </span>
       </div>`).join("");
-    this.g.hud.modal(`<h3>⚒️ Build</h3>
-      <div class="df-selrow" style="margin-bottom:14px">
-        <button data-a="newf" class="df-btn accent" style="flex:1">＋ New 🏰 Fantasy</button>
-        <button data-a="news" class="df-btn accent" style="flex:1">＋ New 🤖 Sci-Fi</button>
-      </div>
-      ${mine.length ? `<div class="dfm-listhead">MY DUNGEONS</div>${rows}` : `<div class="df-lb">No saved dungeons yet — forge your first!</div>`}
-      <div class="df-selrow"><input data-a="code" name="shareCode" placeholder="paste a share code (DF1.…)" style="flex:1" class="df-name"><button data-a="imp" class="df-btn">Import</button></div>`,
+    const tmplBtns = (theme) => D.STARTER_TEMPLATES.map((t) =>
+      `<button data-tmpl="${theme}:${t.kind}" class="df-tmpl" title="${t.desc}"><span class="ti">${t.icon}</span><span class="tl">${t.label}</span><span class="td">${t.desc}</span></button>`).join("");
+    this.g.hud.modal(`<h3>⚒️ New Build</h3>
+      <div class="dfm-tmplhead">🏰 Fantasy</div>
+      <div class="dfm-tmplrow">${tmplBtns("fantasy")}</div>
+      <div class="dfm-tmplhead">🤖 Sci-Fi</div>
+      <div class="dfm-tmplrow">${tmplBtns("scifi")}</div>
+      ${mine.length ? `<div class="dfm-listhead">MY DUNGEONS</div>${rows}` : `<div class="df-lb">No saved dungeons yet — pick a template above.</div>`}
+      <div class="dfm-listhead" style="margin-top:6px">HAVE A SHARE CODE FROM A FRIEND?</div>
+      <div class="df-selrow"><input data-a="code" name="shareCode" placeholder="paste a share code to edit their dungeon (DF1.…)" style="flex:1" class="df-name"><button data-a="imp" class="df-btn">Import</button></div>`,
       (m) => {
-        m.querySelector('[data-a="newf"]').onclick = () => { this.g.hud.closeModal(); this.g.setMode("build", { dungeon: D.starterDungeon("fantasy") }); };
-        m.querySelector('[data-a="news"]').onclick = () => { this.g.hud.closeModal(); this.g.setMode("build", { dungeon: D.starterDungeon("scifi") }); };
+        m.querySelectorAll("[data-tmpl]").forEach((b) => b.onclick = () => {
+          const [theme, kind] = b.dataset.tmpl.split(":");
+          this.g.hud.closeModal(); this.g.setMode("build", { dungeon: D.starterTemplate(theme, kind) });
+        });
         m.querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => {
           const d = D.sanitize(mine[+b.dataset.edit].json);
           if (d) { this.g.hud.closeModal(); this.g.setMode("build", { dungeon: d }); }
@@ -634,6 +639,13 @@ const css = `
 .dfm-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(150,170,255,.12);font-size:14px;text-align:left}
 .dfm-rowbtns{display:flex;gap:6px}
 .dfm-listhead{font-size:11px;font-weight:800;letter-spacing:2px;opacity:.6;margin:10px 0 4px;text-align:left}
+.dfm-tmplhead{font-size:12px;font-weight:800;letter-spacing:1px;opacity:.85;margin:8px 0 5px;text-align:left}
+.dfm-tmplrow{display:flex;gap:7px;margin-bottom:4px}
+.df-tmpl{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:9px 6px;border-radius:11px;border:1px solid rgba(150,170,255,.28);background:linear-gradient(180deg,rgba(40,48,80,.85),rgba(24,28,48,.85));color:#eef;cursor:pointer;transition:all .13s}
+.df-tmpl:hover{border-color:var(--df-accent,#ffb347);transform:translateY(-2px);box-shadow:0 5px 16px rgba(0,0,0,.35)}
+.df-tmpl .ti{font-size:20px;line-height:1}
+.df-tmpl .tl{font-size:12.5px;font-weight:800}
+.df-tmpl .td{font-size:9.5px;opacity:.6}
 @media (max-width:820px){ .dfm-card{flex-direction:column;gap:14px;padding:20px 20px} .dfm-right{width:auto;border-left:none;border-top:1px solid rgba(150,170,255,.14);padding-left:0;padding-top:14px} .dfm-left{min-width:0} .dfm-title{font-size:34px} .dfm-hero{height:150px} }
 @media (max-height:560px){ .dfm-hero{height:120px} .dfm-title{font-size:34px} .dfm-tag{margin-bottom:12px} .dfm-big{padding:11px 22px;font-size:15px} }
 `;

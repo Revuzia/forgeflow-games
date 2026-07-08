@@ -555,3 +555,42 @@ export function starterDungeon(theme) {
   applyOp(d, { t: "obj+", f: 0, o: { kind: "torch", x: 29, z: 34 } });
   return d;
 }
+
+/**
+ * A handful of starter LAYOUTS to open a new build from — a blank room, two
+ * halls joined by a corridor, or a two-floor tower with stairs. Each is a valid,
+ * solvable jumping-off point; drag/edit freely from there.
+ */
+export const STARTER_TEMPLATES = [
+  { kind: "room",  label: "Blank Room",  icon: "▦",  desc: "one room · spawn + exit" },
+  { kind: "halls", label: "Twin Halls",  icon: "🏛", desc: "two rooms + corridor" },
+  { kind: "tower", label: "Two Floors",  icon: "🪜",  desc: "stairs up to floor 2" },
+];
+
+export function starterTemplate(theme, kind) {
+  theme = theme || "fantasy";
+  if (kind === "halls") {
+    const d = newDungeon({ name: "New Dungeon", theme });
+    stampRoom(d, 0, 22, 28, 7, 8);
+    stampRoom(d, 0, 35, 28, 7, 8);
+    for (let x = 29; x < 35; x++) applyOp(d, { t: "cell+", f: 0, x, z: 31, ct: CT.FLOOR });
+    applyOp(d, { t: "obj+", f: 0, o: { kind: "spawn", x: 23, z: 29 } });
+    applyOp(d, { t: "obj+", f: 0, o: { kind: "exit", x: 40, z: 34 } });
+    applyOp(d, { t: "obj+", f: 0, o: { kind: "torch", x: 23, z: 34 } });
+    applyOp(d, { t: "obj+", f: 0, o: { kind: "torch", x: 40, z: 29 } });
+    return d;
+  }
+  if (kind === "tower") {
+    const d = newDungeon({ name: "New Dungeon", theme });
+    stampRoom(d, 0, 28, 28, 8, 8);
+    applyOp(d, { t: "obj+", f: 0, o: { kind: "spawn", x: 29, z: 29 } });
+    applyOp(d, { t: "obj+", f: 0, o: { kind: "stairs", x: 34, z: 34 } });
+    applyOp(d, { t: "obj+", f: 0, o: { kind: "torch", x: 29, z: 34 } });
+    applyOp(d, { t: "floor+" });
+    stampRoom(d, 1, 28, 28, 8, 8);
+    applyOp(d, { t: "obj+", f: 1, o: { kind: "exit", x: 30, z: 30 } });
+    applyOp(d, { t: "obj+", f: 1, o: { kind: "torch", x: 33, z: 29 } });
+    return d;
+  }
+  return starterDungeon(theme);   // "room"
+}

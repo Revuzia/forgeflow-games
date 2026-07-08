@@ -219,7 +219,7 @@ export class Escape {
       }
       case "torch": {
         grp.add(makeTorch(this.d.theme));
-        const l = new THREE.PointLight(this.g.look.torch, this.g.look.torchI * 0.35, 13, 1.7);
+        const l = new THREE.PointLight(this.g.look.torch, this.g.look.torchI * 0.35, 18, 1.35);
         l.position.y = 2.7; grp.add(l);
         this.lightPool.push({ light: l, base: this.g.look.torchI * 0.35, grp, f });
         this.g.fx.attachFlame(grp, this.d.theme, 2.45);
@@ -229,8 +229,8 @@ export class Escape {
         const col = new THREE.Color(o.color || (this.d.theme === "scifi" ? "#37e0ff" : "#ff9a3c"));
         const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 2.6 }));
         orb.position.y = 3.1; grp.add(orb);
-        const l = new THREE.PointLight(col, 9, 14, 1.6); l.position.y = 3.0; grp.add(l);
-        this.lightPool.push({ light: l, base: 9, grp, f });
+        const l = new THREE.PointLight(col, 11, 18, 1.35); l.position.y = 3.0; grp.add(l);
+        this.lightPool.push({ light: l, base: 11, grp, f });
         break;
       }
       case "decor": {

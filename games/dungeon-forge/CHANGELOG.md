@@ -189,3 +189,14 @@ Initial release.
   the kit's colormap into props/{theme}/Textures/. Verified: chest hasMap → true.
 - **Stairs verified (F)**: walking onto a stairs cell climbs to the next floor —
   confirmed live (player floor 0 → Floor 2/2 at the landing by the exit).
+
+## v1.4.5 — 2026-07-07 (/loop batch 3: lighting, templates, share-code)
+- **Proper dungeon lighting (4)**: raised ambient (0.62→1.0) with a warmer color,
+  hemi (0.35→0.62), torch reach (range 13→18, decay 1.7→1.35, intensity 26→38),
+  and thinned the fog (0.030→0.016). Dungeons are readable now while staying
+  moody — verified live (floor/walls/torch glow all visible vs near-black before).
+- **More starter templates (B)**: the New Build modal now offers 3 layouts ×
+  2 themes — Blank Room, Twin Halls (2 rooms + corridor), Two Floors (stairs).
+  All 6 verified solvable.
+- **Share-code clarity (C)**: relabeled the import field ("Have a share code from
+  a friend? … edit their dungeon") so its purpose is obvious.
