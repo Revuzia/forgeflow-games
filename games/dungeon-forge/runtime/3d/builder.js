@@ -23,16 +23,22 @@ export const TOOLS = [
   { id: "erase", icon: "🧹", label: "Erase" },
   { id: "door", icon: "🚪", label: "Door" },
   { id: "stairs", icon: "🪜", label: "Stairs" },
-  { id: "chest", icon: "🧰", label: "Chest" },
-  { id: "key", icon: "🗝️", label: "Key" },
+  { id: "props", icon: "🎁", label: "Props" },   // → chest / key / trap / light / decor
   { id: "enemy", icon: "👹", label: "Enemy" },
-  { id: "trap", icon: "🕸️", label: "Trap" },
-  { id: "torch", icon: "🔥", label: "Light" },
-  { id: "decor", icon: "🏺", label: "Decor" },
   { id: "npc", icon: "🧙", label: "NPC" },
   { id: "spawn", icon: "🚩", label: "Spawn" },
   { id: "exit", icon: "🌀", label: "Exit" },
 ];
+
+// The Props category expands to these placement tools in the sub-palette.
+export const PROP_TOOLS = [
+  { id: "chest", icon: "🧰", label: "Chest" },
+  { id: "key", icon: "🗝️", label: "Key" },
+  { id: "trap", icon: "🕸️", label: "Trap" },
+  { id: "torch", icon: "🔥", label: "Light" },
+  { id: "decor", icon: "🏺", label: "Decor" },
+];
+export const PROP_TOOL_IDS = PROP_TOOLS.map((t) => t.id);
 
 const PAINT_CT = { floor: 1, lava: 2, water: 3, raise: 4 };
 
@@ -659,6 +665,9 @@ export class Builder {
     if (res.ok) this.setFloor(this.d.floors.length - 1);
   }
   setTool(t, opt) {
+    // "props" is a category — activate the last-used prop tool (default chest)
+    if (t === "props") t = PROP_TOOL_IDS.includes(this._lastProp) ? this._lastProp : "chest";
+    if (PROP_TOOL_IDS.includes(t)) this._lastProp = t;
     this.tool = t;
     if (opt) Object.assign(this.toolOpt, opt);
     this.select(null);

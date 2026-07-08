@@ -7,7 +7,7 @@
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
 const E = await import("../sim/escape_sim.js" + V);
-const { TOOLS } = await import("./builder.js" + V);
+const { TOOLS, PROP_TOOLS, PROP_TOOL_IDS } = await import("./builder.js" + V);
 const { fmtTime } = await import("./escape.js" + V);
 
 export class Hud {
@@ -108,7 +108,8 @@ export class Hud {
     if (nameInput && document.activeElement !== nameInput && nameInput.value !== b.d.name) nameInput.value = b.d.name;
     const diffSel2 = this.bTop.querySelector('[data-a="diff"]');
     if (diffSel2 && diffSel2.value !== String(b.d.difficulty || 1)) diffSel2.value = String(b.d.difficulty || 1);
-    this.bPal.querySelectorAll(".df-tool").forEach((btn) => btn.classList.toggle("on", btn.dataset.tool === b.tool));
+    this.bPal.querySelectorAll(".df-tool").forEach((btn) => btn.classList.toggle("on",
+      btn.dataset.tool === b.tool || (btn.dataset.tool === "props" && PROP_TOOL_IDS.includes(b.tool))));
     // sub options
     const sub = this.bSub;
     sub.innerHTML = "";
@@ -119,6 +120,15 @@ export class Hud {
         sub.appendChild(o);
       }
     };
+    // Props category: a picker row for chest/key/trap/light/decor, then that tool's own options
+    if (PROP_TOOL_IDS.includes(b.tool)) {
+      for (const pt of PROP_TOOLS) {
+        const o = el(`<button class="df-sub ${pt.id === b.tool ? "on" : ""}">${pt.icon} ${pt.label}</button>`);
+        o.onclick = () => { this.g.audio.sfx("ui"); b.setTool(pt.id); };
+        sub.appendChild(o);
+      }
+      sub.appendChild(el(`<span class="df-subsep">·</span>`));
+    }
     if (b.tool === "enemy") {
       const roster = D.ENEMIES[b.d.theme];
       mkOpts(Object.keys(roster), b.toolOpt.etype || Object.keys(roster)[0],
@@ -518,6 +528,7 @@ function injectStyle() {
   .df-sub.on{border-color:var(--acc);color:var(--acc)}
   .df-sub .swatch{display:inline-block;width:22px;height:14px;border-radius:4px}
   .df-subnote{background:rgba(10,13,22,.8);border-radius:10px;padding:6px 12px;font-size:12px;opacity:.85}
+  .df-subsep{opacity:.35;align-self:center;padding:0 2px;font-weight:800}
   .df-floors{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;pointer-events:auto}
   .df-floor{width:44px;height:40px;background:rgba(10,13,22,.88);border:1px solid rgba(150,170,255,.3);border-radius:10px;color:#cfd6f4;font-weight:800;font-size:15px}
   .df-floor.on{border-color:var(--acc);color:var(--acc)} .df-floor.add{opacity:.7}

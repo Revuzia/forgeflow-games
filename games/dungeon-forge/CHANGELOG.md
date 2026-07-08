@@ -209,3 +209,10 @@ Initial release.
   - 📜 Sage — one-time +25 max-HP blessing per run (no modal). Verified: HP 85→110.
   Distinct badge + light tint per type in builder and escape; selection panel has
   a type dropdown (stock toggle only for merchants). Selftest → 129.
+
+## v1.4.7 — 2026-07-07 (/loop batch 5: Props toolbar consolidation)
+- **Consolidated Key/Chest/Trap/Light/Decor under one "🎁 Props" category (I)**:
+  the top toolbar drops from 17 tools to 13. Clicking Props opens a sub-palette
+  (Chest · Key · Trap · Light · Decor); each still has its own deeper options
+  (trap type, decor prop). Verified: toolbar has no standalone chest/key/trap/
+  light/decor, Props picker shows all five, placing works.
