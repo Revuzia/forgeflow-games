@@ -29,7 +29,7 @@ export const TOOLS = [
   { id: "trap", icon: "🕸️", label: "Trap" },
   { id: "torch", icon: "🔥", label: "Light" },
   { id: "decor", icon: "🏺", label: "Decor" },
-  { id: "npc", icon: "🛒", label: "Merchant" },
+  { id: "npc", icon: "🧙", label: "NPC" },
   { id: "spawn", icon: "🚩", label: "Spawn" },
   { id: "exit", icon: "🌀", label: "Exit" },
 ];
@@ -313,9 +313,10 @@ export class Builder {
         break;
       }
       case "npc": {
+        const T = D.NPC_TYPES[o.ntype] || D.NPC_TYPES.merchant;
         grp.add(makeMerchant(this.d.theme));
-        grp.add(this._merchBadge());
-        const l = new THREE.PointLight(this.d.theme === "scifi" ? 0x37e0ff : 0xffd769, 6, 8); l.position.y = 2.7; grp.add(l);
+        grp.add(this._merchBadge(T.icon));
+        const l = new THREE.PointLight(T.tint || 0xffd769, 6, 8); l.position.y = 2.7; grp.add(l);
         break;
       }
       case "spawn": {
@@ -356,8 +357,8 @@ export class Builder {
     spr.position.y = 2.6;
     return spr;
   }
-  _merchBadge() {
-    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTexture("🛒"), transparent: true, depthTest: false }));
+  _merchBadge(icon) {
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTexture(icon || "🛒"), transparent: true, depthTest: false }));
     spr.scale.set(1.4, 1.4, 1);
     spr.position.y = 3.1;
     return spr;
@@ -568,7 +569,7 @@ export class Builder {
     if (this.tool === "enemy") o.etype = this.toolOpt.etype || Object.keys(D.ENEMIES[this.d.theme])[0];
     if (this.tool === "trap") o.ttype = this.toolOpt.ttype || "spikes";
     if (this.tool === "decor") o.dtype = this.toolOpt.dtype || D.DECOR[this.d.theme][0];
-    if (this.tool === "npc") o.stock = D.SHOP_IDS.slice();
+    if (this.tool === "npc") { o.ntype = this.toolOpt.ntype || "merchant"; o.stock = D.SHOP_IDS.slice(); }
     if (this.tool === "light") o.color = this.toolOpt.color;
     if (this.tool === "torch") o.kind = "torch";
     const op = { t: "obj+", f: this.floor, o };

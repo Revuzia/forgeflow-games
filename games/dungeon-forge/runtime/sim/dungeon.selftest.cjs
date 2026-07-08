@@ -436,6 +436,37 @@ const ok = (cond, name, extra) => {
     ok(!E.buyItem(r, p, "weapon").ok, "can't buy past max weapon tier");
   }
 
+  // ── 15c. NPC types: merchant / blacksmith / sage ────────────────
+  console.log("[npc types]");
+  {
+    ok(D.NPC_TYPE_IDS.length >= 3, "3+ NPC types defined", D.NPC_TYPE_IDS.join());
+    // sanitize normalizes ntype + defaults to merchant
+    const dd = newDungeon({ name: "N", theme: "fantasy", seed: 1 });
+    stampRoom(dd, 0, 5, 5, 4, 4);
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "exit", x: 8, z: 8 } });
+    const smith = applyOp(dd, { t: "obj+", f: 0, o: { kind: "npc", x: 6, z: 5, ntype: "blacksmith" } });
+    const sage = applyOp(dd, { t: "obj+", f: 0, o: { kind: "npc", x: 7, z: 5, ntype: "sage" } });
+    const bogus = applyOp(dd, { t: "obj+", f: 0, o: { kind: "npc", x: 6, z: 6, ntype: "nonsense" } });
+    const s = sanitize(serialize(dd));
+    const byId = (id) => findAll(s, "npc").find((n) => n.obj.id === id);
+    ok(byId(bogus.id) && byId(bogus.id).obj.ntype === "merchant", "bogus ntype → merchant default");
+    // blacksmith 15% discount on weapon
+    ok(E.npcPrice({ ntype: "blacksmith" }, "weapon") === Math.round(D.SHOP.weapon.price * 0.85), "blacksmith weapon 15% off");
+    ok(E.npcPrice({ ntype: "merchant" }, "weapon") === D.SHOP.weapon.price, "merchant no discount");
+    ok(E.npcSells({ ntype: "blacksmith" }).join() === "weapon,armor", "blacksmith sells only gear");
+    // buying from blacksmith deducts the discounted price
+    const r2 = newRun(dd, 1, [{ id: "P" }]); const pl = r2.players[0]; pl.gold = 200;
+    const disc = E.buyItem(r2, pl, "weapon", { ntype: "blacksmith" });
+    ok(disc.ok && pl.gold === 200 - Math.round(D.SHOP.weapon.price * 0.85), "blacksmith buy uses discounted price", pl.gold);
+    // sage: one-time blessing (+max HP), second time refused
+    const beforeHp = pl.maxHp;
+    const bl1 = E.blessPlayer(r2, pl, { id: "sage1", ntype: "sage" });
+    ok(bl1.ok && pl.maxHp === beforeHp + 25, "sage blessing +25 maxHp", pl.maxHp);
+    const bl2 = E.blessPlayer(r2, pl, { id: "sage1", ntype: "sage" });
+    ok(!bl2.ok && bl2.err === "used", "sage blesses only once per run");
+  }
+
   // ── 16. scale: 1 / 10 / 20 / 30-room dungeons ──────────────────
   console.log("[scale]");
   const genRooms = (n) => {

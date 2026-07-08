@@ -63,6 +63,19 @@ export const SHOP = {
 };
 export const SHOP_IDS = Object.keys(SHOP);
 
+/**
+ * NPC roles a dungeon builder can drop in. Each has a distinct interaction:
+ *  - merchant: a general store (editable stock of consumables/upgrades)
+ *  - blacksmith: weapons & armor only, 15% cheaper
+ *  - sage: a one-time blessing (grants +25 max HP and a full heal per run)
+ */
+export const NPC_TYPES = {
+  merchant:   { label: "Merchant",   icon: "🛒", tint: 0xffd769, sells: ["potion", "mana", "charm"] },
+  blacksmith: { label: "Blacksmith", icon: "⚒",  tint: 0xff8a3c, sells: ["weapon", "armor"], discount: 0.85 },
+  sage:       { label: "Sage",       icon: "📜", tint: 0x8f6bff, blessing: { maxHp: 25 } },
+};
+export const NPC_TYPE_IDS = Object.keys(NPC_TYPES);
+
 // Enemy roster per theme: [id, hp, dmg, speed, aggroR, attackR, attackCd, xp]
 export const ENEMIES = {
   fantasy: {
@@ -211,7 +224,7 @@ export function applyOp(d, op) {
     case "objEdit": {
       const hit = objById(d, op.id);
       if (!hit) return { ok: false, err: "noobj" };
-      const ALLOW = ["x", "z", "rot", "locked", "etype", "ttype", "dtype", "color", "stock"];
+      const ALLOW = ["x", "z", "rot", "locked", "etype", "ttype", "dtype", "color", "stock", "ntype"];
       for (const k of ALLOW) if (op.p && op.p[k] !== undefined) hit.obj[k] = op.p[k];
       return { ok: true };
     }
@@ -492,7 +505,10 @@ export function sanitize(raw) {
         if (o.kind === "enemy") c.etype = String(o.etype || "").slice(0, 16);
         if (o.kind === "trap") c.ttype = TRAPS.includes(o.ttype) ? o.ttype : "spikes";
         if (o.kind === "decor") c.dtype = String(o.dtype || "").slice(0, 16);
-        if (o.kind === "npc") c.stock = Array.isArray(o.stock) ? o.stock.filter((s) => SHOP[s]).slice(0, 8) : SHOP_IDS.slice();
+        if (o.kind === "npc") {
+          c.ntype = NPC_TYPES[o.ntype] ? o.ntype : "merchant";
+          c.stock = Array.isArray(o.stock) ? o.stock.filter((s) => SHOP[s]).slice(0, 8) : SHOP_IDS.slice();
+        }
         if (o.kind === "light" && o.color) c.color = String(o.color).slice(0, 9);
         const n = parseInt(c.id.slice(1), 10); if (!isNaN(n) && n >= out.nid) out.nid = n + 1;
         nf.objects.push(c);

@@ -200,3 +200,12 @@ Initial release.
   All 6 verified solvable.
 - **Share-code clarity (C)**: relabeled the import field ("Have a share code from
   a friend? … edit their dungeon") so its purpose is obvious.
+
+## v1.4.6 — 2026-07-07 (/loop batch 4: NPC types)
+- **Merchant → NPC with variety (J)**: the builder tool is now "NPC" with a type
+  picker. Three roles, each a distinct interaction on E:
+  - 🛒 Merchant — general store (editable stock of consumables/upgrades).
+  - ⚒ Blacksmith — weapon & armor upgrades only, 15% off (70→60g). Verified.
+  - 📜 Sage — one-time +25 max-HP blessing per run (no modal). Verified: HP 85→110.
+  Distinct badge + light tint per type in builder and escape; selection panel has
+  a type dropdown (stock toggle only for merchants). Selftest → 129.

@@ -14,7 +14,7 @@
 import {
   CELL, DIRS, ENEMIES, ck, hasCell, objsAt, findAll, stairLinks,
   mulberry, hashStr, rollLoot, cellType, cellHeight, CT, LAVA_DPS, WATER_SLOW, RAISED_H,
-  SHOP, SHOP_IDS,
+  SHOP, SHOP_IDS, NPC_TYPES,
 } from "./dungeon.js";
 
 export const PLAYER = {
@@ -373,21 +373,47 @@ export function nearestMerchant(st, p) {
   return null;
 }
 
-/** Buy an item from a merchant: checks gold, deducts, grants. Returns result. */
-export function buyItem(st, p, itemId) {
+/** What a given NPC sells (merchant honours its editable stock; others fixed). */
+export function npcSells(o) {
+  const T = NPC_TYPES[(o && o.ntype) || "merchant"] || NPC_TYPES.merchant;
+  if (T.sells) return T.sells.filter((s) => SHOP[s]);
+  return (o && o.stock && o.stock.length) ? o.stock.filter((s) => SHOP[s]) : SHOP_IDS.slice();
+}
+export function npcPrice(o, itemId) {
+  const T = NPC_TYPES[(o && o.ntype) || "merchant"] || NPC_TYPES.merchant;
+  return Math.round(((SHOP[itemId] || {}).price || 0) * (T.discount || 1));
+}
+
+/** Buy from a merchant/blacksmith: checks gold, deducts (with the NPC's
+ *  discount), grants. Returns result. */
+export function buyItem(st, p, itemId, npc) {
   const S = SHOP[itemId];
   if (!S) return { ok: false, err: "noitem" };
   // tier caps: can't buy past III
   if (itemId === "weapon" && (p.weaponTier || 0) >= 3) return { ok: false, err: "maxed" };
   if (itemId === "armor" && (p.armorTier || 0) >= 3) return { ok: false, err: "maxed" };
-  if (p.gold < S.price) return { ok: false, err: "poor" };
-  p.gold -= S.price;
+  const price = npcPrice(npc, itemId);
+  if (p.gold < price) return { ok: false, err: "poor" };
+  p.gold -= price;
   // weapon/armor are tier UPGRADES (+1 from current); others are a plain grant
   if (itemId === "weapon") grantLoot(st, p, { kind: "weapon", tier: (p.weaponTier || 0) + 1 });
   else if (itemId === "armor") grantLoot(st, p, { kind: "armor", tier: (p.armorTier || 0) + 1 });
   else grantLoot(st, p, { kind: itemId, n: 1 });
-  emit(st, "bought", { id: p.id, item: itemId, price: S.price });
+  emit(st, "bought", { id: p.id, item: itemId, price });
   return { ok: true, gold: p.gold };
+}
+
+/** Sage NPC: one-time blessing per run (grants +max HP and a full heal). */
+export function blessPlayer(st, p, npc) {
+  const T = NPC_TYPES[npc && npc.ntype];
+  if (!T || !T.blessing) return { ok: false, err: "notype" };
+  st.usedNpcs = st.usedNpcs || {};
+  if (st.usedNpcs[npc.id]) return { ok: false, err: "used" };
+  st.usedNpcs[npc.id] = true;
+  const b = T.blessing;
+  if (b.maxHp) { p.maxHp = (p.maxHp || 100) + b.maxHp; p.hp = p.maxHp; }
+  emit(st, "blessed", { id: p.id, npc: npc.id, maxHp: b.maxHp || 0 });
+  return { ok: true };
 }
 
 export function grantLoot(st, p, it) {

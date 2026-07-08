@@ -137,7 +137,9 @@ export class Hud {
     } else if (b.tool === "door") {
       sub.appendChild(el(`<span class="df-subnote">Place in a corridor · click the door afterwards to toggle its 🔒 lock</span>`));
     } else if (b.tool === "npc") {
-      sub.appendChild(el(`<span class="df-subnote">🛒 A merchant stall — players walk up and press E to buy gear with gold · click it to choose what it sells</span>`));
+      mkOpts(D.NPC_TYPE_IDS, b.toolOpt.ntype || "merchant",
+        (k) => `${D.NPC_TYPES[k].icon} ${D.NPC_TYPES[k].label}`, (k) => b.setTool("npc", { ntype: k }));
+      sub.appendChild(el(`<span class="df-subnote">Players press E at an NPC — merchant sells goods, blacksmith upgrades gear (15% off), sage grants a blessing</span>`));
     }
 
     // floors
@@ -168,12 +170,17 @@ export class Hud {
     this.hideSelection();
     if (!hit) return;
     const o = hit.obj;
-    const kindLabel = { door: "Door", chest: "Chest", key: "Key", enemy: "Enemy", trap: "Trap", torch: "Light", light: "Light orb", decor: "Decoration", npc: "Merchant", spawn: "Spawn", exit: "Exit portal", stairs: "Stairs" }[o.kind] || o.kind;
+    const kindLabel = { door: "Door", chest: "Chest", key: "Key", enemy: "Enemy", trap: "Trap", torch: "Light", light: "Light orb", decor: "Decoration", npc: "NPC", spawn: "Spawn", exit: "Exit portal", stairs: "Stairs" }[o.kind] || o.kind;
     let extra = "";
     if (o.kind === "npc") {
+      const ntype = D.NPC_TYPES[o.ntype] ? o.ntype : "merchant";
+      const sel = `<select data-a="ntype" class="df-diff">${D.NPC_TYPE_IDS.map((k) => `<option value="${k}" ${k === ntype ? "selected" : ""}>${D.NPC_TYPES[k].icon} ${D.NPC_TYPES[k].label}</option>`).join("")}</select>`;
+      // only merchants have an editable stock; blacksmith/sage are fixed-role
       const stock = o.stock && o.stock.length ? o.stock : D.SHOP_IDS.slice();
-      extra = `<div class="df-selnote">Players buy from this vendor with gold. Toggle what it sells:</div>
-        <div class="df-shopcfg">${D.SHOP_IDS.map((id) => `<button class="df-shoptog ${stock.includes(id) ? "on" : ""}" data-shop="${id}" title="${esc(D.SHOP[id].label)} · ${D.SHOP[id].price}g">${D.SHOP[id].icon} ${D.SHOP[id].price}</button>`).join("")}</div>`;
+      const cfg = ntype === "merchant"
+        ? `<div class="df-selnote">Toggle what this merchant sells:</div><div class="df-shopcfg">${D.SHOP_IDS.map((id) => `<button class="df-shoptog ${stock.includes(id) ? "on" : ""}" data-shop="${id}" title="${esc(D.SHOP[id].label)} · ${D.SHOP[id].price}g">${D.SHOP[id].icon} ${D.SHOP[id].price}</button>`).join("")}</div>`
+        : `<div class="df-selnote">${ntype === "blacksmith" ? "Sells weapon & armor upgrades at 15% off." : "Grants a one-time +25 max-HP blessing per run."}</div>`;
+      extra = sel + cfg;
     }
     if (o.kind === "door") {
       extra = `<button data-a="lock" class="df-btn ${o.locked ? "danger" : ""}" title="Locked doors need a key">${o.locked ? "🔒 LOCKED — needs key" : "🔓 Unlocked"}</button>
@@ -199,6 +206,7 @@ export class Hud {
     if (q('[data-a="lock"]')) q('[data-a="lock"]').onclick = () => { b.toggleLock(); };
     if (q('[data-a="etype"]')) q('[data-a="etype"]').onchange = (e) => b._editSel({ etype: e.target.value });
     if (q('[data-a="ttype"]')) q('[data-a="ttype"]').onchange = (e) => b._editSel({ ttype: e.target.value });
+    if (q('[data-a="ntype"]')) q('[data-a="ntype"]').onchange = (e) => { b._editSel({ ntype: e.target.value }); b.g.hud.showSelection(b, D.objById(b.d, b.sel)); };
     this.selPanel.querySelectorAll("[data-shop]").forEach((btn) => btn.onclick = () => {
       const cur = new Set((o.stock && o.stock.length ? o.stock : D.SHOP_IDS).slice());
       const id = btn.dataset.shop;
@@ -354,8 +362,9 @@ export class Hud {
     const hint = !merch && p.alive && !p.escaped ? E.interactHint(esc_.run, p) : null;
     const pr = q('[data-a="prompt"]');
     if (merch) {
+      const T = D.NPC_TYPES[merch.ntype] || D.NPC_TYPES.merchant;
       pr.style.display = "";
-      pr.innerHTML = `<b>E</b> 🛒 Shop`;
+      pr.innerHTML = `<b>E</b> ${T.icon} ${T.blessing ? "Receive blessing" : T.label}`;
       pr.classList.remove("need");
     } else if (hint) {
       pr.style.display = "";
@@ -414,22 +423,26 @@ export class Hud {
 
   /** Merchant shop modal — buy items with gold; live-refreshes on purchase. */
   showShop(esc_, merch, p) {
-    const ids = (merch.stock && merch.stock.length ? merch.stock : D.SHOP_IDS).filter((s) => D.SHOP[s]);
+    const T = D.NPC_TYPES[merch.ntype] || D.NPC_TYPES.merchant;
+    const disc = T.discount || 1;
+    const ids = (T.sells || (merch.stock && merch.stock.length ? merch.stock : D.SHOP_IDS)).filter((s) => D.SHOP[s]);
+    const priceOf = (id) => Math.round(D.SHOP[id].price * disc);
     const render = () => {
       const rows = ids.map((id) => {
         const s = D.SHOP[id];
+        const pr = priceOf(id);
         const owned = id === "weapon" ? (p.weaponTier || 0) : id === "armor" ? (p.armorTier || 0) : null;
         const maxed = (id === "weapon" || id === "armor") && owned >= 3;
-        const afford = p.gold >= s.price && !maxed;
+        const afford = p.gold >= pr && !maxed;
         return `<div class="df-shoprow">
           <span class="df-shopicon">${s.icon}</span>
           <span class="df-shopinfo"><b>${esc(s.label)}${owned != null ? ` <span class="dim">(tier ${["–", "I", "II", "III"][owned]})</span>` : ""}</b><span class="df-shopdesc">${esc(s.desc)}</span></span>
-          <button class="df-btn ${afford ? "accent" : ""}" data-buy="${id}" ${afford ? "" : "disabled"}>${maxed ? "MAX" : "💰 " + s.price}</button>
+          <button class="df-btn ${afford ? "accent" : ""}" data-buy="${id}" ${afford ? "" : "disabled"}>${maxed ? "MAX" : "💰 " + pr}</button>
         </div>`;
       }).join("");
-      return `<h3>🛒 Merchant <span class="dim" style="float:right">💰 ${p.gold} gold</span></h3>
+      return `<h3>${T.icon} ${esc(T.label)}${disc < 1 ? ` <span class="dim">· ${Math.round((1 - disc) * 100)}% off</span>` : ""} <span class="dim" style="float:right">💰 ${p.gold} gold</span></h3>
         <div class="df-shop">${rows}</div>
-        <div class="df-selrow"><button data-a="leave" class="df-btn accent" style="flex:1">Leave shop (E)</button></div>`;
+        <div class="df-selrow"><button data-a="leave" class="df-btn accent" style="flex:1">Leave (E)</button></div>`;
     };
     this.modal(render(), (m) => {
       const wire = () => {

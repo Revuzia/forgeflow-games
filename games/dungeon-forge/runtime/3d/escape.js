@@ -239,9 +239,10 @@ export class Escape {
         break;
       }
       case "npc": {
+        const T = D.NPC_TYPES[o.ntype] || D.NPC_TYPES.merchant;
         grp.add(makeMerchant(this.d.theme));
-        grp.add(this._sprite("🛒", 1.4, 3.1));
-        const l = new THREE.PointLight(this.d.theme === "scifi" ? 0x37e0ff : 0xffd769, this.g.look.torchI * 0.3, 9, 1.6);
+        grp.add(this._sprite(T.icon, 1.4, 3.1));
+        const l = new THREE.PointLight(T.tint || 0xffd769, this.g.look.torchI * 0.3, 12, 1.4);
         l.position.y = 2.7; grp.add(l);
         this.lightPool.push({ light: l, base: this.g.look.torchI * 0.3, grp, f });
         grp.userData.merchant = true;
@@ -593,17 +594,26 @@ export class Escape {
     p.input.frost = !!this._frost;
   }
 
-  /** Open the merchant shop UI; releases pointer lock so the player can click. */
+  /** Interact with an NPC — sage grants a one-time blessing, merchant/blacksmith
+   *  open a shop (pointer lock released so the player can click). */
   _openShop(merch) {
     if (this._shopOpen) return;
+    const T = D.NPC_TYPES[merch.ntype] || D.NPC_TYPES.merchant;
+    if (T.blessing) {
+      const res = E.blessPlayer(this.run, this.me(), merch);
+      if (res.ok) { this._handleEvents(E.drainEvents(this.run)); this.g.audio.sfx("confirm"); this.g.hud.toast(`📜 The sage blesses you — +${T.blessing.maxHp} max HP!`, "info"); }
+      else this.g.hud.toast(res.err === "used" ? "The sage has already blessed you" : "Nothing happens", "warn");
+      return;
+    }
     this._shopOpen = true;
+    this._shopNpc = merch;
     document.exitPointerLock && document.exitPointerLock();
     this.g.audio.sfx("confirm");
     this.g.hud.showShop(this, merch, this.me());
   }
   buy(itemId) {
     const p = this.me();
-    const res = E.buyItem(this.run, p, itemId);
+    const res = E.buyItem(this.run, p, itemId, this._shopNpc);
     if (res.ok) { this._handleEvents(E.drainEvents(this.run)); this.g.audio.sfx("key"); }
     else { this.g.audio.sfx("error"); this.g.hud.toast(res.err === "poor" ? "Not enough gold 💰" : res.err === "maxed" ? "Already at max tier" : "Can't buy that", "warn"); }
     return res;
