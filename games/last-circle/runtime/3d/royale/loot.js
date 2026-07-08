@@ -15,8 +15,30 @@ const chests = new Map();     // id -> {id, pos, group, opened}
 let nextId = 1;
 let supplyState = null;
 
+const ITEM_FILES = { medkit: "item_medkit", bandage: "item_bandage", mini_shield: "item_shield_s", big_shield: "item_shield_l" };
+const itemProtoCache = {};
+
 export function init(W) {
   K = W.SIM;
+  // Meshy 3D pickup models (medkit / bandage / shield potions) with a cached
+  // normalized proto per id; consumers: ground items + HUD slot icons.
+  W.itemProto = async (id) => {
+    if (itemProtoCache[id] !== undefined) return itemProtoCache[id];
+    const file = ITEM_FILES[id];
+    if (!file) return (itemProtoCache[id] = null);
+    try {
+      const m = await W.kernel.loadGLTF(W.assetBase + "assets/props/meshy_items/" + file + ".glb");
+      const bb = new THREE.Box3().setFromObject(m);
+      const size = bb.getSize(new THREE.Vector3());
+      const s = 0.45 / Math.max(size.x, size.y, size.z, 0.001);
+      m.scale.setScalar(s);
+      const c = bb.getCenter(new THREE.Vector3()).multiplyScalar(s);
+      m.position.sub(c);
+      const g = new THREE.Group(); g.add(m);
+      itemProtoCache[id] = g;
+    } catch (e) { itemProtoCache[id] = null; }   // not generated yet — fallback shapes
+    return itemProtoCache[id];
+  };
   W.nearbyLoot = (pos, r) => nearby(pos, r);
   W.pickupItem = (a, id) => pickup(W, a, id);
   W.openChest = (a, id) => openChest(W, a, id);
@@ -31,6 +53,7 @@ export function init(W) {
   W.netOpenChest = (id) => openChest(W, null, id);
   W.netSpawnItem = (d) => spawnItem(W, d.data, d.x, d.y, d.z, d.id);
   W.lootSyncState = () => ({ taken: takenIds.slice(), opened: [...chests.values()].filter((c) => c.opened).map((c) => c.id) });
+  W.debugChests = () => [...chests.values()]; // test hook (preview verification)
 }
 const takenIds = [];
 
@@ -93,8 +116,17 @@ function itemMesh(W, data) {
   } else if (data.kind === "ammo") {
     const m = new THREE.Mesh(kindGeos.ammo, kindMats.ammo); m.position.y = 0.35; grp.add(m);
   } else if (data.kind === "consumable") {
-    const isShield = data.id.includes("shield");
-    const m = new THREE.Mesh(kindGeos.consumable, isShield ? kindMats.shieldC : kindMats.heal); m.position.y = 0.4; grp.add(m);
+    // Meshy 3D model when available; glowing capsule fallback until then
+    const fallback = () => {
+      const isShield = data.id.includes("shield");
+      const m = new THREE.Mesh(kindGeos.consumable, isShield ? kindMats.shieldC : kindMats.heal); m.position.y = 0.4; grp.add(m);
+    };
+    if (W.itemProto) {
+      W.itemProto(data.id).then((proto) => {
+        if (proto && grp.parent) { const m = proto.clone(); m.position.y = 0.42; grp.add(m); }
+        else if (grp.parent) fallback();
+      });
+    } else fallback();
   }
   return grp;
 }

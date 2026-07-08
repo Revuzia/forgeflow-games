@@ -24,6 +24,14 @@ const brains = [];
 export function init(W) {
   K = W.SIM;
   brains.length = 0;
+  // kill taunts: a bot that just won a fight (and sees no new threat)
+  // sometimes dances on the body — reads VERY human
+  W.events.on("actorDied", (victim, killerId) => {
+    const k2 = killerId && W.actorById.get(killerId);
+    if (!k2 || !k2.isBot || !k2.alive || !k2.brain) return;
+    if (k2.brain.bb.target && W.t - k2.brain.bb.targetSeenT < 2) return;   // still in danger
+    if (Math.random() < 0.3) k2.input.emote = Math.random() < 0.5 ? "dance" : "cheer";
+  });
   // hearing: every shot is broadcast to nearby brains
   W.events.on("shotFired", (shooter, weaponId, pos) => {
     for (const b of brains) {
@@ -33,6 +41,10 @@ export function init(W) {
     }
   });
 }
+
+// startMatch must clear the previous match's brains — they hold references to
+// the old actor objects and keep thinking/acting into them forever otherwise
+export function resetBrains() { brains.length = 0; }
 
 export function attachBrain(W, actor) {
   // tier/personality assignment from the seeded mix
@@ -299,6 +311,7 @@ function startHeal(W, a) {
 const _v = new THREE.Vector3();
 function act(W, b, dt) {
   const a = b.actor, bb = b.bb, inp = a.input;
+  if (a.emoting) { inp.mx = 0; inp.mz = 0; inp.fire = false; return; }   // let the taunt play
   inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.fire = false; inp.ads = false;
 
   if (a.gliding) {

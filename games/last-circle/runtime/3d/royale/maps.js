@@ -246,6 +246,10 @@ export async function buildMap(W, mapId) {
     addBox(x, y + floors * FH + 0.7, z - fw / 2 + 0.2, fw, 1.1, 0.35, shade(color, 0.6));
     chest(x, y + floors * FH + 0.6, z, poi);                                  // roof chest
     loot(x, y + 0.5, z, poi);
+    // exterior ramp along the +X wall up to the roof — rooftop chests must be
+    // reachable on foot (playtest: "are there ramps to get up there?"); ends
+    // short of the parapet so you can step sideways onto the slab
+    addRamp(x + W2 + 1.15, y, z - 0.8, 2.2, floors * FH + 0.45, fw - 1.6, 2, shade(color, 0.72));
   }
 
   function rangerTower(x, z, color, poi) {
@@ -331,6 +335,7 @@ export async function buildMap(W, mapId) {
       const p = pois[3]; const y = waterY + 0.2;
       addBox(p.x, y + 1.6, p.z, 6, 3.2, 18, "#7a5233", { rotY: 0.6 });
       addBox(p.x + 3, y + 4.2, p.z + 2, 0.5, 6, 0.5, "#6b4326", { rotY: 0.6 });
+      addRamp(p.x - 4.2, y, p.z - 8.6, 2.4, 3.5, 7.5, 2, "#6b4326"); // boarding plank to the deck chest
       chest(p.x, y + 3.4, p.z, p.id); chest(p.x + 4, y + 0.8, p.z - 6, p.id);
       loot(p.x - 4, y + 0.8, p.z + 6, p.id);
     }
@@ -497,12 +502,97 @@ export async function buildMap(W, mapId) {
       const p = pois[7];
       hut(p.x, p.z, 9, 7, 0, C_PLANK, p.id);
       addBox(p.x - 30, heightAt0(p.x - 30, p.z) + 2.4, p.z, 8, 4.8, 12, "#b0623c"); // barn
+      addRamp(p.x - 30, heightAt0(p.x - 30, p.z), p.z + 11, 3, 5.1, 10, 3, "#8a4d2f"); // hay ramp to the roof chest
       chest(p.x - 30, heightAt0(p.x - 30, p.z) + 5.4, p.z, p.id);
     }
     scatterTrees("pine", 720, 1.2, 46, "wood");
     scatterTrees("birch", 260, 1.2, 40, "wood");
     scatterTrees("bush", 220, 0.8, 40, null);
     scatterTrees("rocks", 80, 2, 60, "brick");
+  }
+
+  // ── FLOATING SKY-ISLANDS (Final Drop's signature look) ────────────────────
+  // Hovering rock islands with grassy tops, trees, and premium loot. Each one
+  // carries a LAUNCH PORTAL ring: step through → flung back into the
+  // atmosphere with the parachute (falling off is survivable, the portal is
+  // the stylish exit).
+  const islandTrees = [];   // {kind, x, y, z, s, ry} — cloned GLBs, placed later
+  const portals = [];       // {x, y, z} — walk-in launch rings
+  function addPortal(px, py, pz, faceYaw) {
+    const grp = new THREE.Group();
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(1.5, 0.16, 10, 28),
+      new THREE.MeshStandardMaterial({ color: 0x37e0ff, emissive: 0x1ec8f0, emissiveIntensity: 1.6, roughness: 0.4 })
+    );
+    grp.add(ring);
+    const ring2 = new THREE.Mesh(
+      new THREE.TorusGeometry(1.22, 0.06, 8, 26),
+      new THREE.MeshStandardMaterial({ color: 0xb26bff, emissive: 0x9b4dff, emissiveIntensity: 1.4, roughness: 0.4 })
+    );
+    grp.add(ring2);
+    const swirl = new THREE.Mesh(
+      new THREE.CircleGeometry(1.35, 24),
+      new THREE.MeshBasicMaterial({ color: 0x9fefff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false })
+    );
+    grp.add(swirl);
+    grp.position.set(px, py + 1.8, pz);
+    grp.rotation.y = faceYaw;
+    g.add(grp);
+    portals.push({ x: px, y: py, z: pz, obj: grp });
+  }
+  {
+    const nIsl = 5 + Math.floor(rng() * 3);
+    const grassC = mapId === "ashgrid" ? "#8a9484" : mapId === "deepwood" ? "#3f7a3f" : "#3fae62";
+    const rockC = "#7a6a58";
+    for (let i = 0; i < nIsl; i++) {
+      const ang = rng() * Math.PI * 2;
+      const rr = 180 + rng() * (HALF - 320);
+      const ix = Math.cos(ang) * rr, iz = Math.sin(ang) * rr;
+      const groundH = heightAt0(ix, iz);
+      if (groundH < waterY - 2) continue;                      // not over deep ocean
+      const topY = Math.max(groundH, waterY) + 26 + rng() * 26; // 26-52m up
+      const rad = 9 + rng() * 8;
+      // grassy top disc
+      const top = new THREE.Mesh(
+        new THREE.CylinderGeometry(rad, rad * 0.92, 1.6, 9),
+        new THREE.MeshStandardMaterial({ color: grassC, roughness: 0.95 })
+      );
+      top.position.set(ix, topY - 0.8, iz);
+      top.castShadow = true; top.receiveShadow = true;
+      g.add(top);
+      // hanging rock cone underneath
+      const rock = new THREE.Mesh(
+        new THREE.ConeGeometry(rad * 0.9, rad * 1.5, 8),
+        new THREE.MeshStandardMaterial({ color: rockC, roughness: 1 })
+      );
+      rock.rotation.x = Math.PI;
+      rock.position.set(ix, topY - 1.4 - rad * 0.75, iz);
+      rock.castShadow = true;
+      g.add(rock);
+      // walkable top collider (octagon ≈ box), plus a small rim lip
+      colliders.push({ kind: "box", minX: ix - rad * 0.86, maxX: ix + rad * 0.86, minY: topY - 2.2, maxY: topY, minZ: iz - rad * 0.86, maxZ: iz + rad * 0.86 });
+      // premium loot: every island gets a chest + a couple of floor items
+      chest(ix + (rng() - 0.5) * rad * 0.6, topY + 0.4, iz + (rng() - 0.5) * rad * 0.6, "sky_island");
+      loot(ix + (rng() - 0.5) * rad, topY + 0.3, iz + (rng() - 0.5) * rad, "sky_island");
+      loot(ix + (rng() - 0.5) * rad, topY + 0.3, iz + (rng() - 0.5) * rad, "sky_island");
+      // a tree or two on top (cloned, not instanced — few of them)
+      const kind = mapId === "isla_viva" ? "palm" : mapId === "deepwood" ? "pine" : "tree";
+      islandTrees.push({ kind, x: ix + (rng() - 0.5) * rad * 0.7, y: topY, z: iz + (rng() - 0.5) * rad * 0.7, s: 0.9 + rng() * 0.5, ry: rng() * Math.PI * 2 });
+      if (rng() < 0.5) islandTrees.push({ kind, x: ix + (rng() - 0.5) * rad * 0.7, y: topY, z: iz + (rng() - 0.5) * rad * 0.7, s: 0.7 + rng() * 0.4, ry: rng() * Math.PI * 2 });
+      // orange crystal landmark (Meshy deco — tolerant if absent)
+      if (i % 2 === 0) islandTrees.push({ kind: "crystal", x: ix, y: topY, z: iz - rad * 0.4, s: 1, ry: rng() * Math.PI * 2 });
+      // launch portal at the island rim, facing the center
+      const pAng = rng() * Math.PI * 2;
+      addPortal(ix + Math.cos(pAng) * rad * 0.55, topY, iz + Math.sin(pAng) * rad * 0.55, -pAng + Math.PI / 2);
+    }
+    // ground launch portals at POIs: quick rotation + the way UP to islands
+    for (let i = 0; i < Math.min(4, pois.length); i++) {
+      const p = pois[Math.floor(rng() * pois.length)];
+      const px = p.x + 14 + (rng() - 0.5) * 24, pz = p.z + 14 + (rng() - 0.5) * 24;
+      const py = heightAt0(px, pz);
+      if (py < waterY + 0.5) continue;
+      addPortal(px, py, pz, rng() * Math.PI * 2);
+    }
   }
 
   // scattered wilderness loot (all maps)
@@ -571,6 +661,24 @@ export async function buildMap(W, mapId) {
       }
     }
   }
+  // ── sky-island decor: few enough to clone directly ───────────────────────
+  for (const t of islandTrees) {
+    try {
+      const url = t.kind === "crystal"
+        ? W.assetBase + "assets/props/meshy/deco_crystal.glb"
+        : W.assetBase + "assets/props/" + t.kind + ".glb";
+      const m = await W.kernel.loadGLTF(url);
+      const bb2 = new THREE.Box3().setFromObject(m);
+      const sz2 = bb2.getSize(new THREE.Vector3());
+      const baseH2 = t.kind === "crystal" ? 3.2 : t.kind === "palm" ? 7 : t.kind === "pine" ? 8 : 6.5;
+      const s2 = (baseH2 / Math.max(0.001, sz2.y)) * t.s;
+      m.scale.setScalar(s2);
+      m.position.set(t.x, t.y - bb2.min.y * s2, t.z);
+      m.rotation.y = t.ry;
+      g.add(m);
+    } catch (e) { /* crystal GLB may not exist yet — islands still work */ }
+  }
+
   // ── static collider spatial hash ──────────────────────────────────────────
   const CELL = 16;
   const chash = new Map();
@@ -647,7 +755,7 @@ export async function buildMap(W, mapId) {
     id: mapId, K, half: HALF * 0.98, size: SIZE, waterY,
     heightAt: heightAt0, groundAt: heightAt0,
     colliders, queryColliders,
-    lootPoints: lootAll, pois,
+    lootPoints: lootAll, pois, portals,
     randomGroundPos, losBlocked,
     minimap: mm, themeColor: K.themeColor,
     terrain,

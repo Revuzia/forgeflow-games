@@ -186,6 +186,13 @@ function wire(W) {
   on("weaponEquipped", (a) => { if (a === W.player) blip(640, 0.05, 0.12, "square"); });
   on("chuteDeployed", (a) => thump(1300, 0.35, a === W.player ? 0.3 : 0.2, a === W.player ? null : a.pos, 60));
   on("chuteCut", (a) => { if (a === W.player) blip(420, 0.12, 0.16, "sawtooth"); });
+  // launch portal: rising whoosh
+  on("portalLaunch", (a) => {
+    const own = a === W.player;
+    blip(300, 0.5, own ? 0.28 : 0.16, "sawtooth", own ? null : a.pos, 70);
+    setTimeout(() => blip(620, 0.35, own ? 0.22 : 0.12, "sine", own ? null : a.pos, 70), 120);
+    setTimeout(() => blip(980, 0.3, own ? 0.18 : 0.1, "sine", own ? null : a.pos, 70), 260);
+  });
   // kill confirm: rising two-tone when YOUR target drops
   on("actorDied", (victim, killerId) => {
     if (W.player && killerId === W.player.id) { blip(700, 0.09, 0.2, "triangle"); setTimeout(() => blip(1050, 0.14, 0.22, "triangle"), 90); }

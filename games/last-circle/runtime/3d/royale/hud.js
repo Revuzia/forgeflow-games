@@ -53,41 +53,141 @@ const MODE_CARDS = [
   { id: "practice", name: "PRACTICE", sub: "No storm · random map · full loadout" },
 ];
 
+export const MENU_SKINS = [
+  { key: "soldier", name: "SGT. BRICK", sub: "Commando" },
+  { key: "athlete", name: "DASH", sub: "Track star" },
+  { key: "drifter", name: "SCRAP", sub: "Street raider" },
+  { key: "wraith", name: "NIGHTFALL", sub: "Spec-ops · all black" },
+  { key: "juggernaut", name: "BULWARK", sub: "Heavy armor" },
+  { key: "viper", name: "STINGER", sub: "Venom suit" },
+];
+export function getChosenSkin() { try { return localStorage.getItem("lc_skin"); } catch (e) { return null; } }
+
 export function showMenu(W, startMatch) {
   W.phase = "menu";
   document.exitPointerLock && document.exitPointerLock();
+  W.kernel.renderer.domElement.style.cursor = "";
   hideHUD();
-  const L = layer("menu", { pointerEvents: "auto", background: "radial-gradient(1200px 700px at 50% 20%, rgba(30,60,110,0.55), rgba(6,12,22,0.95))" });
-  const wrap = h("div", { position: "absolute", inset: "0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "22px" }, null, L);
+  const L = layer("menu", { pointerEvents: "auto", overflow: "hidden", background: "linear-gradient(180deg, #050d1c 0%, #0a2038 42%, #14405c 78%, #1d5e70 100%)" });
 
-  h("div", { fontSize: "62px", fontWeight: "900", letterSpacing: "6px", textShadow: "0 0 30px rgba(80,160,255,0.7), 0 4px 0 rgba(0,0,0,0.5)" }, "LAST CIRCLE", wrap);
-  h("div", { fontSize: "15px", opacity: "0.75", marginTop: "-16px", letterSpacing: "3px" }, "50 DROP · ONE STANDS", wrap);
+  // — animated backdrop: drifting sky-islands, clouds, storm ring, vignette —
+  if (!document.getElementById("lc-menu-css")) {
+    const st = document.createElement("style");
+    st.id = "lc-menu-css";
+    st.textContent = `
+      @keyframes lcBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-16px) } }
+      @keyframes lcBob2 { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-9px) } }
+      @keyframes lcDrift { 0% { transform: translateX(-6%) } 100% { transform: translateX(105vw) } }
+      @keyframes lcSpin { 0% { transform: translate(-50%,0) rotate(0deg) } 100% { transform: translate(-50%,0) rotate(360deg) } }
+      @keyframes lcPulse { 0%,100% { opacity: .55 } 50% { opacity: .95 } }`;
+    document.head.appendChild(st);
+  }
+  const isle = (w, hh) => "data:image/svg+xml," + encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${hh}' viewBox='0 0 200 150'>` +
+    `<polygon points='30,52 170,52 148,64 130,120 100,146 78,110 55,66' fill='#132a3d'/>` +
+    `<ellipse cx='100' cy='46' rx='86' ry='16' fill='#225a46'/>` +
+    `<ellipse cx='100' cy='42' rx='86' ry='14' fill='#2e7d57'/>` +
+    `<rect x='88' y='12' width='7' height='26' fill='#274054'/><ellipse cx='92' cy='12' rx='24' ry='12' fill='#357a50'/>` +
+    `<rect x='128' y='20' width='5' height='20' fill='#274054'/><ellipse cx='131' cy='19' rx='16' ry='9' fill='#357a50'/></svg>`);
+  const bgDeco = h("div", { position: "absolute", inset: "0", pointerEvents: "none" }, null, L);
+  [[0.07, 0.16, 210, "lcBob 9s ease-in-out infinite", 0.9], [0.78, 0.10, 150, "lcBob2 12s ease-in-out infinite", 0.75], [0.62, 0.30, 90, "lcBob 14s ease-in-out infinite", 0.5], [0.16, 0.52, 70, "lcBob2 11s ease-in-out infinite", 0.4]]
+    .forEach(([fx, fy, wpx, anim, op]) => {
+      const d = h("div", { position: "absolute", left: fx * 100 + "%", top: fy * 100 + "%", width: wpx + "px", height: wpx * 0.75 + "px", animation: anim, opacity: String(op) }, null, bgDeco);
+      d.style.backgroundImage = `url("${isle(200, 150)}")`;
+      d.style.backgroundSize = "contain"; d.style.backgroundRepeat = "no-repeat";
+    });
+  for (let i = 0; i < 3; i++) {
+    h("div", { position: "absolute", top: 12 + i * 21 + "%", left: "-10%", width: 260 + i * 90 + "px", height: "34px", borderRadius: "50%", background: "rgba(190,220,255,0.05)", filter: "blur(10px)", animation: `lcDrift ${75 + i * 30}s linear infinite`, animationDelay: -i * 26 + "s" }, null, bgDeco);
+  }
+  // the closing circle, projected on the horizon
+  h("div", { position: "absolute", left: "50%", bottom: "-42vh", width: "78vh", height: "78vh", borderRadius: "50%", border: "3px solid rgba(150,80,255,0.5)", boxShadow: "0 0 60px rgba(150,80,255,0.5), inset 0 0 80px rgba(150,80,255,0.35)", animation: "lcSpin 40s linear infinite, lcPulse 5s ease-in-out infinite" }, null, bgDeco);
+  h("div", { position: "absolute", inset: "0", background: "radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 46%, rgba(2,6,12,0.75) 100%)" }, null, bgDeco);
 
-  // mode select (maps are random every match)
-  const modeRow = h("div", { display: "flex", gap: "14px" }, null, wrap);
-  let selMode = W.mode === "practice" ? "practice" : W.mode;
+  // — layout: title / [modes+play | skin bay] / controls —
+  const wrap = h("div", { position: "absolute", inset: "0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "18px" }, null, L);
+  h("div", { fontSize: "64px", fontWeight: "900", letterSpacing: "8px", background: "linear-gradient(180deg,#ffffff,#8ec8ff 60%,#57b0ff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 0 26px rgba(80,160,255,0.55)) drop-shadow(0 4px 2px rgba(0,0,0,0.6))" }, "LAST CIRCLE", wrap);
+  h("div", { fontSize: "14px", opacity: "0.8", marginTop: "-18px", letterSpacing: "5px", color: "#bfe0ff" }, "50 DROP · ONE STANDS", wrap);
+
+  const cols = h("div", { display: "flex", gap: "26px", alignItems: "stretch" }, null, wrap);
+  const leftCol = h("div", { display: "flex", flexDirection: "column", gap: "12px", justifyContent: "center" }, null, cols);
+
+  let selMode = W.mode === "practice" ? "practice" : (W.mode || "standard");
   const modeEls = MODE_CARDS.map((m) => {
-    const c = h("div", Object.assign({ padding: "14px 20px", cursor: "pointer", textAlign: "center", minWidth: "200px", transition: "transform .12s" }, PANEL), null, modeRow);
+    const c = h("div", Object.assign({ padding: "13px 20px", cursor: "pointer", minWidth: "290px", transition: "transform .12s, outline-color .12s" }, PANEL), null, leftCol);
     h("div", { fontWeight: "900", fontSize: "17px", letterSpacing: "1px" }, m.name, c);
     h("div", { fontSize: "12px", opacity: "0.7", marginTop: "4px" }, m.sub, c);
     c.onclick = () => { selMode = m.id; W.events.emit("uiClick"); paint(); };
     return { m, c };
   });
   function paint() {
-    modeEls.forEach(({ m, c }) => { c.style.outline = m.id === selMode ? "2px solid #57b0ff" : "none"; c.style.transform = m.id === selMode ? "scale(1.04)" : "scale(1)"; });
+    modeEls.forEach(({ m, c }) => { c.style.outline = m.id === selMode ? "2px solid #57b0ff" : "1px solid rgba(120,180,255,0.0)"; c.style.transform = m.id === selMode ? "translateX(6px)" : "none"; });
   }
   paint();
-
-  const btnRow = h("div", { display: "flex", gap: "14px", alignItems: "center" }, null, wrap);
-  const play = h("button", Object.assign({}, BTN, { fontSize: "22px", padding: "16px 60px", background: "linear-gradient(180deg,#57b0ff,#2f7fd6)", color: "#fff", boxShadow: "0 6px 24px rgba(60,140,255,0.45)" }), "PLAY", btnRow);
+  const play = h("button", Object.assign({}, BTN, { fontSize: "22px", padding: "16px 0", width: "100%", background: "linear-gradient(180deg,#57b0ff,#2f7fd6)", color: "#fff", boxShadow: "0 6px 24px rgba(60,140,255,0.45)", marginTop: "6px" }), "PLAY", leftCol);
   play.onclick = () => { W.events.emit("uiClick"); startMatch({ mapId: randomMap(), mode: selMode }); };
-  const online = h("button", Object.assign({}, BTN, { background: "rgba(255,255,255,0.1)", color: "#cfe4ff" }), "🌐 PLAY WITH FRIENDS", btnRow);
+  const subRow = h("div", { display: "flex", gap: "10px" }, null, leftCol);
+  const online = h("button", Object.assign({}, BTN, { flex: "1", fontSize: "13px", padding: "11px 8px", background: "rgba(255,255,255,0.1)", color: "#cfe4ff" }), "🌐 PLAY WITH FRIENDS", subRow);
   online.onclick = () => { W.events.emit("uiClick"); W.events.emit("openOnline", { mode: selMode }); };
-  const settings = h("button", Object.assign({}, BTN, { background: "rgba(255,255,255,0.1)", color: "#cfe4ff" }), "⚙ SETTINGS", btnRow);
+  const settings = h("button", Object.assign({}, BTN, { flex: "1", fontSize: "13px", padding: "11px 8px", background: "rgba(255,255,255,0.1)", color: "#cfe4ff" }), "⚙ SETTINGS", subRow);
   settings.onclick = () => { W.events.emit("uiClick"); showSettings(W); };
 
+  // — SKIN BAY: live 3D turntable preview + prev/next (choice persists) —
+  const bay = h("div", Object.assign({ width: "300px", padding: "14px 16px 12px", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }, PANEL), null, cols);
+  h("div", { fontSize: "12px", letterSpacing: "2px", opacity: "0.65", fontWeight: "800" }, "YOUR FIGHTER", bay);
+  const stage = h("div", { position: "relative", width: "260px", height: "250px", borderRadius: "10px", overflow: "hidden", background: "radial-gradient(ellipse at 50% 82%, rgba(87,176,255,0.22), rgba(6,14,26,0.9) 70%)" }, null, bay);
+  const pvCv = h("canvas", { width: "260px", height: "250px" }, null, stage);
+  pvCv.width = 520; pvCv.height = 500;
+  const nameEl = h("div", { fontSize: "19px", fontWeight: "900", letterSpacing: "1.5px", color: "#dff0ff" }, "", bay);
+  const subEl = h("div", { fontSize: "11.5px", opacity: "0.65", marginTop: "-4px" }, "", bay);
+  const nav = h("div", { display: "flex", gap: "10px", alignItems: "center", marginTop: "2px" }, null, bay);
+  const mkArrow = (txt) => h("button", Object.assign({}, BTN, { padding: "7px 18px", fontSize: "18px", background: "rgba(255,255,255,0.12)", color: "#cfe4ff" }), txt, nav);
+  const prev = mkArrow("‹");
+  const dots = h("div", { display: "flex", gap: "6px" }, null, nav);
+  const dotEls = MENU_SKINS.map(() => h("div", { width: "8px", height: "8px", borderRadius: "50%", background: "rgba(255,255,255,0.25)", transition: "background .15s" }, null, dots));
+  const next = mkArrow("›");
+
+  let skinIdx = Math.max(0, MENU_SKINS.findIndex((s) => s.key === getChosenSkin()));
+  let pvRig = null, pvRunning = true;
+  const pvScene = new THREE.Scene();
+  const pvCam = new THREE.PerspectiveCamera(34, 520 / 500, 0.1, 30);
+  pvCam.position.set(0, 1.25, 3.55); pvCam.lookAt(0, 0.92, 0);
+  pvScene.add(new THREE.HemisphereLight(0xcfe8ff, 0x2a3444, 1.25));
+  const pvKey = new THREE.DirectionalLight(0xffffff, 2.1); pvKey.position.set(2.2, 3.2, 2.6); pvScene.add(pvKey);
+  const pvRim = new THREE.DirectionalLight(0x57b0ff, 1.4); pvRim.position.set(-2.4, 2.2, -2.4); pvScene.add(pvRim);
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.95, 0.09, 40), new THREE.MeshStandardMaterial({ color: 0x1c3852, roughness: 0.6 }));
+  disc.position.y = -0.045;
+  pvScene.add(disc);
+  const pvR = new THREE.WebGLRenderer({ canvas: pvCv, antialias: true, alpha: true });
+  pvR.setSize(520, 500, false);
+  async function setSkin(i) {
+    skinIdx = (i + MENU_SKINS.length) % MENU_SKINS.length;
+    const meta = MENU_SKINS[skinIdx];
+    nameEl.textContent = meta.name; subEl.textContent = meta.sub;
+    dotEls.forEach((d, j) => { d.style.background = j === skinIdx ? "#57b0ff" : "rgba(255,255,255,0.25)"; });
+    try { localStorage.setItem("lc_skin", meta.key); } catch (e) {}
+    try {
+      const rig = await W.kernel.loadCharacter(W.assetBase + "assets/chars/meshy/" + meta.key + ".glb");
+      if (pvRig) { pvScene.remove(pvRig.scene); W.kernel.disposeMixer(pvRig.mixer); }
+      pvRig = rig;
+      rig.scene.position.set(0, 0, 0);
+      pvScene.add(rig.scene);
+      const first = rig.animations[0];
+      if (first) rig.play(first.name);
+    } catch (e) { /* still baking — text only */ }
+  }
+  prev.onclick = () => { W.events.emit("uiClick"); setSkin(skinIdx - 1); };
+  next.onclick = () => { W.events.emit("uiClick"); setSkin(skinIdx + 1); };
+  setSkin(skinIdx);
+  (function pvLoop() {
+    if (!pvRunning || !R.menu || !R.menu.isConnected) { pvR.dispose(); if (pvRig) W.kernel.disposeMixer(pvRig.mixer); return; }
+    if (pvRig) pvRig.scene.rotation.y += 0.008;
+    pvR.render(pvScene, pvCam);
+    requestAnimationFrame(pvLoop);
+  })();
+  R._menuStopPv = () => { pvRunning = false; };
+
   h("div", { fontSize: "12px", opacity: "0.55", maxWidth: "760px", textAlign: "center", lineHeight: "1.6" },
-    "WASD move · Mouse aim/fire · RMB aim down sights · SPACE jump · SHIFT sprint · R reload · E loot (hold E to open chests) · 1–5 / scroll weapons · M map", wrap);
+    "WASD move · Mouse aim/fire · RMB aim down sights · SPACE jump / toggle parachute · SHIFT sprint · R reload · E loot (hold E for chests) · 1–5 / scroll weapons · B dance · N cheer · M map", wrap);
   import("./audio.js" + (new URL(import.meta.url).search || "")).then((m) => m.startMenuMusic(W));
 }
 
@@ -155,10 +255,20 @@ export function showLobby(W, onDone) {
 export function showHUD(W) {
   const L = layer("hud");
   const bottomLeft = h("div", { position: "absolute", left: "18px", bottom: "16px", width: "300px" }, null, L);
-  // hp/shield
-  R.shieldBar = bar(bottomLeft, "#57b0ff");
-  R.hpBar = bar(bottomLeft, "#4ade80");
-  R.hpText = h("div", { fontSize: "13px", fontWeight: "700", marginTop: "3px", textShadow: "0 1px 3px #000" }, "", bottomLeft);
+  // hp/shield — Final Drop style: icon + bar with % inside
+  const mkBar = (icon, color) => {
+    const row = h("div", { display: "flex", alignItems: "center", gap: "6px", marginTop: "5px" }, null, bottomLeft);
+    h("div", { fontSize: "15px", width: "20px", textAlign: "center", filter: "drop-shadow(0 1px 2px #000)" }, icon, row);
+    const wrap = h("div", { flex: "1", height: "16px", background: "rgba(0,0,0,0.55)", borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)", position: "relative" }, null, row);
+    const fill = h("div", { width: "0%", height: "100%", background: color, transition: "width .15s" }, null, wrap);
+    const pct = h("div", { position: "absolute", inset: "0", textAlign: "center", fontSize: "11px", fontWeight: "900", lineHeight: "16px", textShadow: "0 1px 2px #000" }, "", wrap);
+    return { fill, pct };
+  };
+  const sb = mkBar("🛡", "#57b0ff");
+  R.shieldBar = sb.fill; R.shieldPct = sb.pct;
+  const hb = mkBar("❤", "#4ade80");
+  R.hpBar = hb.fill; R.hpPct = hb.pct;
+  R.hpText = h("div", { fontSize: "0px", display: "none" }, "", bottomLeft);
   // heal channel
   R.healBar = h("div", { position: "absolute", left: "50%", top: "58%", transform: "translateX(-50%)", width: "220px", height: "10px", background: "rgba(0,0,0,0.5)", borderRadius: "5px", display: "none", overflow: "hidden" }, null, L);
   R.healFill = h("div", { width: "0%", height: "100%", background: "#4ade80" }, null, R.healBar);
@@ -196,6 +306,11 @@ export function showHUD(W) {
   // directional indicators (footsteps / gunfire / damage) on a screen-edge ring
   R.indicators = h("div", { position: "absolute", inset: "0", pointerEvents: "none" }, null, L);
 
+  // parachute button indicator during the drop (Final Drop style)
+  R.chuteBtn = h("div", { position: "absolute", right: "40px", bottom: "120px", width: "84px", height: "84px", borderRadius: "50%", background: "rgba(10,19,31,0.75)", border: "2px solid rgba(140,190,255,0.6)", display: "none", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", boxShadow: "0 4px 18px rgba(0,0,0,0.5)" }, null, L);
+  R.chuteGlyph = h("div", { fontSize: "26px", lineHeight: "1.1" }, "🪂", R.chuteBtn);
+  R.chuteLabel = h("div", { fontSize: "10px", fontWeight: "900", letterSpacing: "0.5px", marginTop: "2px" }, "[SPACE]", R.chuteBtn);
+
   // storm messages center
   R.stormMsg = h("div", { position: "absolute", left: "50%", top: "22%", transform: "translateX(-50%)", fontSize: "22px", fontWeight: "900", letterSpacing: "1px", textShadow: "0 2px 8px #000", opacity: "0", transition: "opacity .4s", color: "#d9b3ff" }, "", L);
 
@@ -226,12 +341,10 @@ export function update(W, dt) {
   const p = W.player;
   const C = R._hudCache;
 
-  const hpPct = Math.max(0, p.hp) + "%";
-  if (C.hp !== hpPct) { R.hpBar.style.width = hpPct; C.hp = hpPct; }
-  const shPct = Math.max(0, p.shield) + "%";
-  if (C.sh !== shPct) { R.shieldBar.style.width = shPct; C.sh = shPct; }
-  const hpT = Math.ceil(Math.max(0, p.hp)) + " HP  ·  " + Math.ceil(p.shield) + " SHIELD";
-  if (C.hpT !== hpT) { R.hpText.textContent = hpT; C.hpT = hpT; }
+  const hpPct = Math.max(0, Math.min(100, p.hp)) + "%";
+  if (C.hp !== hpPct) { R.hpBar.style.width = hpPct; R.hpPct.textContent = Math.ceil(Math.max(0, Math.min(100, p.hp))) + "%"; C.hp = hpPct; }
+  const shPct = Math.max(0, Math.min(100, p.shield)) + "%";
+  if (C.sh !== shPct) { R.shieldBar.style.width = shPct; R.shieldPct.textContent = Math.ceil(Math.max(0, Math.min(100, p.shield))) + "%"; C.sh = shPct; }
 
   // heal channel
   if (p.healing) {
@@ -250,7 +363,8 @@ export function update(W, dt) {
   if (p.swimming) ammoT = "SWIMMING";
   if (C.ammo !== ammoT) { R.ammoText.textContent = ammoT; C.ammo = ammoT; }
 
-  const slotSig = p.inventory.slots.map((s, i) => (s ? s.id + (s.count || "") + (s.rarity || 0) : "-") + (i === p.inventory.active ? "*" : "")).join("|");
+  const ammoSig = Object.values(p.inventory.ammo).join(",");
+  const slotSig = p.inventory.slots.map((s, i) => (s ? s.id + (s.count || "") + (s.rarity || 0) : "-") + (i === p.inventory.active ? "*" : "")).join("|") + "#" + ammoSig;
   if (C.slots !== slotSig) { paintSlots(W, p); C.slots = slotSig; }
 
   // storm timer + alive
@@ -290,15 +404,41 @@ export function update(W, dt) {
     R.chestRing.style.background = `conic-gradient(#ffd254 ${deg}deg, rgba(255,255,255,0.15) ${deg}deg)`;
   } else R.chestRing.style.display = "none";
 
+  // parachute button state during the drop
+  if (p.gliding) {
+    R.chuteBtn.style.display = "flex";
+    const open = !!p.chute;
+    R.chuteLabel.textContent = (open ? "CUT" : "OPEN") + " [SPACE]";
+    R.chuteBtn.style.borderColor = open ? "rgba(255,190,90,0.8)" : "rgba(140,190,255,0.8)";
+  } else if (R.chuteBtn.style.display !== "none") R.chuteBtn.style.display = "none";
+
   // directional indicators: fade + footstep scan
   stepIndicators(W, dt);
 
-  // crosshair: per-weapon reticle, hidden behind the sniper scope, blooms while moving
+  // crosshair: per-weapon reticle, hidden behind the sniper scope, blooms while
+  // moving. Without pointer lock it RIDES THE CURSOR (the reticle IS the mouse
+  // — the OS arrow is hidden over the canvas during play).
   const wid = p.weapon ? p.weapon.id : null;
   if (R._crossFor !== wid) paintCrosshair(W, wid);
   R.cross.style.display = (p.input.ads && wid && K.WEAPONS[wid] && K.WEAPONS[wid].scope) ? "none" : "block";
+  const locked = W.pointerLocked && W.pointerLocked();
+  const dom = W.kernel.renderer.domElement;
+  const wantCursor = p.alive && !W.paused ? "none" : "";
+  if (dom.style.cursor !== wantCursor) dom.style.cursor = wantCursor;
+  if (!locked && W.mousePx) {
+    if (R.cross.style.left !== "0px") { R.cross.style.left = "0px"; R.cross.style.top = "0px"; }
+    R.cross.style.transform = `translate(${W.mousePx.x - 28}px, ${W.mousePx.y - 28}px) scale(${C.bloom || 1})`;
+    R._crossAtCursor = true;
+  } else if (R._crossAtCursor) {
+    R._crossAtCursor = false;
+    R.cross.style.left = "50%"; R.cross.style.top = "50%";
+    R.cross.style.transform = `translate(-50%,-50%) scale(${C.bloom || 1})`;
+  }
   const bloom = (Math.hypot(p.vel.x, p.vel.z) > 1 ? 1.3 : 1) * (p.input.ads ? 0.8 : 1);
-  if (C.bloom !== bloom) { R.cross.style.transform = `translate(-50%,-50%) scale(${bloom})`; C.bloom = bloom; }
+  if (C.bloom !== bloom) {
+    C.bloom = bloom;
+    if (!R._crossAtCursor) R.cross.style.transform = `translate(-50%,-50%) scale(${bloom})`;
+  }
 }
 
 // ═══ directional indicators ══════════════════════════════════════════════════
@@ -366,28 +506,35 @@ function ensureIconRig() {
   iconScene.add(d);
   iconCam = new THREE.PerspectiveCamera(28, 96 / 72, 0.01, 20);
 }
+function renderThumb(proto, cacheKey, tilt) {
+  if (!proto) return null;
+  if (iconCache[cacheKey]) return iconCache[cacheKey];
+  ensureIconRig();
+  const m = proto.clone();
+  iconScene.add(m);
+  const bbox = new THREE.Box3().setFromObject(m);
+  const c = bbox.getCenter(new THREE.Vector3());
+  const span = bbox.getSize(new THREE.Vector3()).length();
+  m.position.sub(c);
+  m.rotation.set(tilt != null ? tilt : 0.2, -Math.PI / 2 + 0.45, 0);   // 3/4 profile
+  iconCam.position.set(0, span * 0.12, span * 1.35);
+  iconCam.lookAt(0, 0, 0);
+  iconR.render(iconScene, iconCam);
+  const url = iconR.domElement.toDataURL();
+  iconScene.remove(m);
+  iconCache[cacheKey] = url;
+  return url;
+}
 function weaponIcon(W, id) {
   if (iconCache[id]) return Promise.resolve(iconCache[id]);
   if (!W.weaponProto) return Promise.resolve(null);
-  return W.weaponProto(id).then((proto) => {
-    if (!proto) return null;
-    if (iconCache[id]) return iconCache[id];
-    ensureIconRig();
-    const m = proto.clone();
-    iconScene.add(m);
-    const bbox = new THREE.Box3().setFromObject(m);
-    const c = bbox.getCenter(new THREE.Vector3());
-    const span = bbox.getSize(new THREE.Vector3()).length();
-    m.position.sub(c);
-    m.rotation.set(0.2, -Math.PI / 2 + 0.45, 0);   // 3/4 side profile, barrel right
-    iconCam.position.set(0, span * 0.12, span * 1.35);
-    iconCam.lookAt(0, 0, 0);
-    iconR.render(iconScene, iconCam);
-    const url = iconR.domElement.toDataURL();
-    iconScene.remove(m);
-    iconCache[id] = url;
-    return url;
-  }).catch(() => null);
+  return W.weaponProto(id).then((proto) => renderThumb(proto, id)).catch(() => null);
+}
+function itemIcon(W, id) {
+  const key = "item:" + id;
+  if (iconCache[key]) return Promise.resolve(iconCache[key]);
+  if (!W.itemProto) return Promise.resolve(null);
+  return W.itemProto(id).then((proto) => renderThumb(proto, key, 0.35)).catch(() => null);
 }
 const CONSUMABLE_ICONS = { bandage: "🩹", medkit: "⛑️", mini_shield: "🧪", big_shield: "🛡️" };
 
@@ -448,8 +595,15 @@ function paintSlots(W, p) {
         weaponIcon(W, s.id).then((url) => {
           if (url && img.isConnected) { img.src = url; img.style.display = "block"; txt.remove(); }
         });
+        // reserve ammo on the slot (Final Drop style)
+        const def = K.WEAPONS[s.id];
+        if (def && def.ammo) h("div", { position: "absolute", right: "3px", bottom: "5px", fontSize: "10px", fontWeight: "900", textShadow: "0 1px 2px #000" }, String(p.inventory.ammo[def.ammo] || 0), cell);
       } else {
-        h("div", { fontSize: "22px", lineHeight: "1" }, CONSUMABLE_ICONS[s.id] || "▣", cell);
+        const img = h("img", { width: "40px", height: "36px", objectFit: "contain", display: "none" }, null, cell);
+        const glyph = h("div", { fontSize: "22px", lineHeight: "1" }, CONSUMABLE_ICONS[s.id] || "▣", cell);
+        itemIcon(W, s.id).then((url) => {
+          if (url && img.isConnected) { img.src = url; img.style.display = "block"; glyph.remove(); }
+        });
       }
       if (s.count) h("div", { position: "absolute", right: "3px", top: "1px", fontSize: "10px", opacity: "0.95", textShadow: "0 1px 2px #000" }, String(s.count), cell);
     }

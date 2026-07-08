@@ -95,6 +95,56 @@ async function buildProtos(W) {
       protos[id] = g;
     } catch (e) { console.warn("[weapons] GLB fail", id, e); protos[id] = protos.smg.clone(); }
   }
+
+  // MESHY AI weapons override everything above when present (owner direction:
+  // all assets generated). Prompted as "horizontal side view" → longest axis
+  // = barrel axis; rotate barrel to +Z, sights up.
+  const WPN_LEN = { pistol: 0.34, smg: 0.5, ar: 0.62, shotgun: 0.8, sniper: 0.95, glauncher: 0.7 };
+  for (const id of Object.keys(WPN_LEN)) {
+    try {
+      const m = await W.kernel.loadGLTF(base + "meshy_wpn/wpn_" + id + ".glb");
+      // Meshy sometimes renders the "side view" at a 3/4 angle → barrel sits
+      // diagonal in XZ. Search the yaw that minimizes cross-width so the
+      // barrel lands exactly on +Z (sights stay up: rotate around Y only).
+      const bb = new THREE.Box3(), sz = new THREE.Vector3();
+      let bestYaw = 0, bestW = 1e9;
+      for (let deg = 0; deg < 180; deg += 3) {
+        m.rotation.y = (deg * Math.PI) / 180;
+        m.updateMatrixWorld(true);
+        bb.setFromObject(m).getSize(sz);
+        if (sz.x < bestW) { bestW = sz.x; bestYaw = m.rotation.y; }
+      }
+      m.rotation.y = bestYaw;
+      m.updateMatrixWorld(true);
+      bb.setFromObject(m);
+      // 180° ambiguity: muzzle end is thin (few verts), grip/stock end dense.
+      // If the front (+Z) third holds more verts than the back, flip.
+      {
+        const zMin = bb.min.z, zMax = bb.max.z, third = (zMax - zMin) / 3;
+        let front = 0, back = 0;
+        const wp = new THREE.Vector3();
+        m.traverse((o) => {
+          if (!o.isMesh) return;
+          const posA = o.geometry.attributes.position;
+          const step = Math.max(1, Math.floor(posA.count / 2000));
+          for (let i = 0; i < posA.count; i += step) {
+            wp.fromBufferAttribute(posA, i).applyMatrix4(o.matrixWorld);
+            if (wp.z > zMax - third) front++;
+            else if (wp.z < zMin + third) back++;
+          }
+        });
+        if (front > back) { m.rotation.y += Math.PI; m.updateMatrixWorld(true); }
+      }
+      const size = bb.setFromObject(m).getSize(new THREE.Vector3());
+      const s = WPN_LEN[id] / Math.max(size.x, size.y, size.z, 0.001);
+      m.scale.setScalar(s);
+      const c = bb.getCenter(new THREE.Vector3()).multiplyScalar(s);
+      m.position.sub(c);
+      const g = new THREE.Group();
+      g.add(m);
+      protos[id] = g;
+    } catch (e) { /* not generated yet — composed/GLB fallback stays */ }
+  }
   return protos;
 }
 
@@ -230,7 +280,13 @@ const _camDir = new THREE.Vector3(), _camPt = new THREE.Vector3();
  * shots land EXACTLY where the reticle points — slopes, shoulders, parallax
  * all accounted for. (The old fixed-120m convergence missed uphill targets.) */
 function crosshairPoint(W, shooter, out) {
-  W.camera.getWorldDirection(_camDir);
+  // aim ray: through the OS cursor when pointer lock is off (the reticle IS
+  // the cursor), through screen center when locked
+  if (W.mouseNDC && !(W.pointerLocked && W.pointerLocked())) {
+    _camDir.set(W.mouseNDC.x, W.mouseNDC.y, 0.5).unproject(W.camera).sub(W.camera.position).normalize();
+  } else {
+    W.camera.getWorldDirection(_camDir);
+  }
   const o = W.camera.position;
   const FAR = 300;
   let bestT = FAR;

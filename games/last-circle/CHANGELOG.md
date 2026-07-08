@@ -3,6 +3,62 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-08 — v4.0 fist cast, armed locomotion, portals, cursor-aim, skin locker
+
+Owner playtest round 3 ("characters hold hands out / run odd / don't hold
+weapons, shots don't go where the mouse points, no weapon cursors, chests on
+roofs unreachable, falling off islands is death — need portals, menu needs
+polish"). All fixes verified live with real key/mouse events + screenshots.
+
+- **SIX-FIGHTER FIST CAST**: full regenerated Meshy roster — soldier (SGT.
+  BRICK) / athlete (DASH) / drifter (SCRAP, regenerated once: first roll came
+  out open-palmed) / wraith (NIGHTFALL, the all-black-with-helmet one) /
+  juggernaut (BULWARK) / viper (STINGER) — all prompted "hands clenched into
+  tight fists" (Meshy rigs have NO finger bones; open hands can only be fixed
+  at generation). Meshy also hallucinated base pedestals under some models
+  (athlete stood on a red disc everywhere) — stripped by connected-component
+  analysis + a radius/up-normal triangle cut in the GLB optimizer.
+- **ARMED LOCOMOTION** (the "hands out / odd run" fix): 18 new Meshy library
+  clips — idlearmed=Alert(2), walkarmed=Walk_Forward_While_Shooting(234),
+  runarmed=Run_and_Shoot(98) — for all six rigs; armed actors now hold the
+  gun up in idle, walk, and run. Anim pace now TRACKS ground speed
+  (setEffectiveTimeScale retune, never restart — restart-per-frame stutters).
+- **CURSOR AIM**: without pointer lock the shot ray now goes through the OS
+  cursor (unproject → capsule/terrain march), the per-weapon reticle RIDES the
+  cursor, and the OS arrow is hidden over the canvas during play. Verified:
+  bot at NDC(-0.31,0.05), one click, exactly one pistol hit.
+- **LAUNCH PORTALS + CHUTE REDEPLOY**: every sky island carries a glowing
+  ring portal (+ up to 4 ground portals at POIs) — walk in → ballistic boost
+  (~80m, half-gravity) → skydive handover → canopy failsafe at 60m. SPACE in
+  any mid-air fall ≥12m AGL re-opens the parachute, so stepping off an island
+  is an escape, not a death. Portal whoosh in audio.js.
+- **ROOF ACCESS**: every tower() gets an exterior ramp along the +X wall
+  (ends short of the parapet; step sideways onto the slab — verified climb to
+  y=12.9 on ashgrid), shipwreck gets a boarding plank, deepwood barn a hay
+  ramp. Rooftop chests are all reachable on foot now.
+- **MENU 2.0**: layered animated backdrop (bobbing sky-island SVGs, drifting
+  clouds, rotating storm ring, vignette), gradient title, stacked mode cards,
+  and a SKIN LOCKER — live 3D turntable preview (extra WebGLRenderer, real
+  meters so no Box3 scaling), ‹/› + dots, choice persists in localStorage
+  `lc_skin` and the player spawns as it (bots keep rotating the cast).
+- **SPEED AUDIT**: walk 6.0 / sprint 9.6 m/s already exceeds Fortnite
+  (~5.7/6.5-7), Apex (~7.4), Warzone (~6.7) — the "feels slow" was fixed-rate
+  anims + narrow FOV, not m/s. Base FOV 53→57, sprint 64→70.
+- **WEAPON MOUNT AUTO-ALIGN**: Meshy renders some "side view" props at a 3/4
+  angle (sniper sat diagonal in its bbox and looked like a scrunched blob in
+  hand). The mount now searches yaw for minimum cross-width and flips 180° by
+  vertex-density (muzzle end is thin, stock end dense).
+- **HARDENING**: brains[] now clears between matches (stale brains from the
+  previous match kept thinking into detached actors forever); the human input
+  struct is rebuilt every frame from live key/button state (a phantom
+  input episode drained the whole pistol reserve mid-test — mx/mz/fire/ads
+  can no longer stick); emotes holster the gun (hidden during dance/cheer,
+  restored after).
+- Meshy spend this round: drifter regen + 18 armed clips ≈ 300cr (2286 start
+  → 1079 after). Raw GLBs re-downloadable by task id (state/meshy_raw got
+  wiped mid-session by an outside process — task ids in scratchpad state
+  JSONs saved the day; download URLs live ~3 days).
+
 ## 2026-07-07 — v3.0 Meshy cast + the "did you actually play it" patch
 
 Owner playtest feedback round 2 + new requirement: original AI-generated

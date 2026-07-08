@@ -104,6 +104,8 @@ register3d("royale", async function (kernel, content) {
     // clear previous world
     for (const name in W._groups) { const g = W._groups[name]; g.clear(); }
     W.actors.length = 0; W.actorById.clear();
+    botsMod.resetBrains();
+    if (W.resetInputState) W.resetInputState();
 
     // build the world
     hudMod.showLoading(W, "Building " + (MAPS[W.mapId] ? MAPS[W.mapId].name : W.mapId) + "…");

@@ -70,8 +70,10 @@ function mkInput() {
 // characters). Each skin = <key>.glb (mesh+skeleton+idle) + tiny clip-only
 // GLBs (<key>_walk/_run/_death.glb) sharing the same skeleton — clips get
 // merged into the cached gltf so every clone has the full action set.
-const SKINS = ["commando", "runner", "raider", "specter"];
-const MESHY_CLIPS = ["walk", "run", "death"];
+// Round-2 fist cast (hands modeled CLOSED — Meshy rigs have no finger bones,
+// so open-hand models can never grip; these were generated fists-first).
+const SKINS = ["soldier", "athlete", "drifter", "wraith", "juggernaut", "viper"];
+const MESHY_CLIPS = ["walk", "run", "death", "dance", "cheer", "idlearmed", "walkarmed", "runarmed"];
 const _v3 = new THREE.Vector3();
 
 async function preloadMeshySkin(W, key) {
@@ -93,12 +95,21 @@ async function preloadMeshySkin(W, key) {
 }
 
 export async function loadActorModels(W) {
-  const urls = await Promise.all(SKINS.map((k) => preloadMeshySkin(W, k)));
+  // tolerant preload: a still-baking skin just drops out of rotation
+  const settled = await Promise.allSettled(SKINS.map((k) => preloadMeshySkin(W, k)));
+  const urls = settled.filter((r) => r.status === "fulfilled").map((r) => r.value);
+  if (!urls.length) throw new Error("no character skins available");
   const vr = K.mulberry32(W.seed ^ 0xfaceb);
+  // the human's locker choice (menu skin bay) — bots keep rotating the cast
+  let chosen = null;
+  try { chosen = localStorage.getItem("lc_skin"); } catch (e) {}
+  const chosenUrl = chosen && urls.find((u) => u.includes("/" + chosen + ".glb"));
   for (let i = 0; i < W.actors.length; i++) {
     const a = W.actors[i];
-    const rig = await W.kernel.loadCharacter(urls[i % urls.length]);
+    const url = (!a.isBot && chosenUrl) ? chosenUrl : urls[i % urls.length];
+    const rig = await W.kernel.loadCharacter(url);
     a.rig = rig;
+    a.skin = url.split("/").pop().replace(/\.glb.*/, "");
     // PROCEDURAL VARIETY: 4 base rigs × per-actor hue/lightness tints on
     // cloned materials — 50 visually distinct opponents.
     const hueShift = (vr() - 0.5) * 0.2, lightShift = (vr() - 0.5) * 0.14;
@@ -155,35 +166,50 @@ function classifyClips(rig) {
     for (const p of pats) { const n = names.find((x) => p.test(x)); if (n) return n; }
     return null;
   };
-  const idle = find([/^idle$/i, /idle/i]) || names[0];
-  const run = find([/^run$/i, /run/i, /walk/i]) || names[0];
+  const idle = find([/^idle$/i, /^idle\b/i]) || names[0];
+  const run = find([/^run$/i, /^run\b/i]) || names[0];
+  const walk = find([/^walk$/i, /^walk\b/i]) || run;
   return {
     idle,
     run,
-    // armed variants: arms raised in a holding pose (rigs ship these)
-    idleArmed: find([/idle_weapon/i, /idle_attacking/i, /attacking_idle/i]) || idle,
-    runArmed: find([/run_holding/i, /run_weapon/i]) || run,
+    walk,
+    // armed variants: weapon-ready poses (Meshy lib: Alert /
+    // Walk_Forward_While_Shooting / Run_and_Shoot) — both hands up on the gun
+    idleArmed: find([/^idlearmed$/i, /idle_weapon/i, /attacking_idle/i]) || idle,
+    walkArmed: find([/^walkarmed$/i, /walk_holding/i]) || walk,
+    runArmed: find([/^runarmed$/i, /run_holding/i, /run_weapon/i]) || run,
     jump: find([/jump/i, /fall/i]),
     death: find([/death|die|defeat/i]),
     shoot: find([/shoot|attack|punch|slash|hit/i]),
+    dance: find([/^dance$/i, /dance/i]),
+    cheer: find([/^cheer$/i, /cheer|wave|victory/i]),
   };
 }
 
 function playAnim(a, key, opts) {
   if (!a.rig || !a.clips) return;
-  // armed actors use the weapon-holding variants of idle/run
+  // armed actors use the weapon-ready variants (both hands up on the gun)
   const armed = a.weapon && !a.weapon.id.startsWith("consumable");
   let realKey = key;
   if (armed && key === "idle" && a.clips.idleArmed) realKey = "idleArmed";
+  if (armed && key === "walk" && a.clips.walkArmed) realKey = "walkArmed";
   if (armed && key === "run" && a.clips.runArmed) realKey = "runArmed";
   const clip = a.clips[realKey] || a.clips.idle;
   if (!clip) return;
   const ts = (opts && opts.timeScale) || 1;
-  if (a.anim === realKey && a._animTS === ts && !(opts && opts.force)) return;
-  const tsChanged = a.anim === realKey && a._animTS !== ts;
+  if (a.anim === realKey && !(opts && opts.force)) {
+    // same clip, new pace → retune the live action, never restart (restart
+    // every frame while speed varies = visible stutter)
+    if (a._animTS !== ts) {
+      const act = a.rig.actions[clip];
+      if (act) act.setEffectiveTimeScale(ts);
+      a._animTS = ts;
+    }
+    return;
+  }
   a.anim = realKey;
   a._animTS = ts;
-  a.rig.play(clip, Object.assign({}, opts, tsChanged ? { force: true, timeScale: ts } : null));
+  a.rig.play(clip, Object.assign({ timeScale: ts }, opts));
 }
 
 function mkNameTag(W, a) {
@@ -262,6 +288,8 @@ function installHumanInput(W) {
     if (e.code === "Digit4") inp.slot = 3;
     if (e.code === "Digit5") inp.slot = 4;
     if (e.code === "KeyM") W.events.emit("toggleBigMap");
+    if (e.code === "KeyB") inp.emote = "dance";
+    if (e.code === "KeyN") inp.emote = "cheer";
     if (e.code === "Escape") W.events.emit("escPressed");
   });
   window.addEventListener("keyup", (ev) => {
@@ -279,25 +307,37 @@ function installHumanInput(W) {
   dom.addEventListener("mousedown", (e) => {
     if (!W.player || W.phase === "menu" || W.paused) return;
     if (e.button === 0) {
+      W._lmbDown = true;
       W.player.input.fire = true;   // never swallow the shot
       if (document.pointerLockElement !== dom) {
         try { const p = dom.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (err) {}
       }
     }
-    if (e.button === 2) { W.player.input.ads = true; rmbDrag = document.pointerLockElement !== dom; }
+    if (e.button === 2) { W._rmbDown = true; W.player.input.ads = true; rmbDrag = document.pointerLockElement !== dom; }
   });
   window.addEventListener("mouseup", (e) => {
+    if (e.button === 0) W._lmbDown = false;
+    if (e.button === 2) { W._rmbDown = false; rmbDrag = false; }
     if (!W.player) return;
     if (e.button === 0) W.player.input.fire = false;
-    if (e.button === 2) { W.player.input.ads = false; rmbDrag = false; }
+    if (e.button === 2) W.player.input.ads = false;
   });
   // safety: a mouseup outside the window would otherwise leave fire/ADS stuck
   // (stuck ADS = permanent 3.4 m/s — feels like the game is broken-slow)
-  const clearButtons = () => { if (W.player) { W.player.input.fire = false; W.player.input.ads = false; } rmbDrag = false; };
+  const clearButtons = () => { W._lmbDown = false; W._rmbDown = false; if (W.player) { W.player.input.fire = false; W.player.input.ads = false; } rmbDrag = false; };
   window.addEventListener("blur", clearButtons);
   document.addEventListener("mouseleave", clearButtons);
   dom.addEventListener("contextmenu", (e) => e.preventDefault());
   window.addEventListener("mousemove", (e) => {
+    // ALWAYS track the cursor: without pointer lock the shot must land where
+    // the visible mouse points, not at screen center (playtest: "I aim and my
+    // pistol doesn't work")
+    const rect = dom.getBoundingClientRect();
+    W.mousePx = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    W.mouseNDC = {
+      x: ((e.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1,
+      y: -(((e.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1),
+    };
     if (!W.player || W.paused || W.phase === "menu") return;
     const locked = document.pointerLockElement === dom;
     if (!locked && !rmbDrag) return;
@@ -317,15 +357,20 @@ function installHumanInput(W) {
     }
   });
 
-  // continuous axes each frame
+  // continuous axes each frame — the human input struct is rebuilt EVERY
+  // frame exclusively from live key/button state, so nothing (stale brain,
+  // missed keyup, replayed event) can hold a phantom move or trigger
   W.kernel.onUpdate(() => {
     if (!W.player || !W.player.alive || W.phase === "menu" || W.paused) return;
     const inp = W.player.input;
     inp.mx = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
     inp.mz = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
     inp.sprint = !!keys.ShiftLeft || !!keys.ShiftRight;
+    inp.fire = !!W._lmbDown;
+    inp.ads = !!W._rmbDown;
   });
   W.pointerLocked = () => document.pointerLockElement === dom;
+  W.resetInputState = () => { for (const k in keys) keys[k] = false; W._lmbDown = false; W._rmbDown = false; };
 }
 
 // ── movement + physics ──────────────────────────────────────────────────────
@@ -405,7 +450,9 @@ function stepActor(W, a, dt, far) {
   // momentum + steering, then an auto-deployed parachute for the final
   // stretch (Final Drop / Fortnite structure)
   if (a.gliding) {
-    const g = W.map.heightAt(a.pos.x, a.pos.z);
+    // landing surface = terrain OR any collider top (floating sky-islands,
+    // roofs) — heightAt alone made parachuters fall straight through them
+    const g = far ? W.map.heightAt(a.pos.x, a.pos.z) : supportAt(W, a.pos.x, a.pos.z, a.pos.y);
     const landY = Math.max(g, W.map.waterY);
     const agl = a.pos.y - landY;
 
@@ -439,6 +486,68 @@ function stepActor(W, a, dt, far) {
       removeChute(a);
       a.chuteToggled = false;
       W.events.emit("landed", a);
+    }
+    clampToMap(W, a);
+    syncObj(W, a, dt, far);
+    return;
+  }
+
+  // EMOTES: dance/cheer on the spot (B / N). Starts only grounded + safe;
+  // any human input cancels; bots ride the timer (or cancel when shot).
+  if (inp.emote) {
+    if (a.onGround && !a.swimming && !a.emoting && (a.clips.dance || a.clips.cheer)) {
+      a.emoting = { t: 4.2 };
+      if (a.hand) a.hand.visible = false; // holster while emoting
+      playAnim(a, a.clips[inp.emote] ? inp.emote : "cheer", { once: true, force: true });
+      W.events.emit("emote", a, inp.emote);
+    }
+    inp.emote = null;
+  }
+  if (a.emoting) {
+    a.emoting.t -= dt;
+    const humanCancel = !a.isBot && (Math.abs(inp.mx) + Math.abs(inp.mz) > 0 || inp.fire || inp.jump);
+    const shotCancel = W.t - a.lastDamageT < 0.3;
+    if (a.emoting.t <= 0 || humanCancel || shotCancel) {
+      a.emoting = null; a.anim = null;
+      if (a.hand) a.hand.visible = true;
+      playAnim(a, "idle", { force: true });
+    } else {
+      a.vel.x *= 0.75; a.vel.z *= 0.75;
+      a.vel.y += K.MOVE.gravity * dt;
+      a.pos.y += a.vel.y * dt;
+      const supE = far ? W.map.heightAt(a.pos.x, a.pos.z) : supportAt(W, a.pos.x, a.pos.z, a.pos.y);
+      if (a.pos.y <= supE + 0.02) { a.pos.y = supE; a.vel.y = 0; }
+      a.obj.position.copy(a.pos);
+      return;
+    }
+  }
+
+  // LAUNCH PORTALS: walk into a ring → flung back into the atmosphere, canopy
+  // auto-opens on the way down (Final Drop-style island escape / rotation)
+  if (!far && W.map.portals && !a._portalBoost && W.t - (a._portalT || 0) > 2.5) {
+    for (const pt of W.map.portals) {
+      const pdx = a.pos.x - pt.x, pdz = a.pos.z - pt.z, pdy = a.pos.y - pt.y;
+      if (pdx * pdx + pdz * pdz < 1.7 * 1.7 && pdy > -1 && pdy < 3.4) {
+        a._portalT = W.t;
+        a._portalBoost = true;
+        a.onGround = false;
+        removeChute(a);
+        a.vel.set(a.vel.x * 0.4, 42, a.vel.z * 0.4);
+        a.pos.y += 0.6;
+        W.events.emit("portalLaunch", a, pt);
+        break;
+      }
+    }
+  }
+  // portal ascent: ballistic climb at half gravity (~80m), then hand over to
+  // the skydive — canopy failsafe auto-opens at 60m on the way down
+  if (a._portalBoost) {
+    a.vel.y += K.MOVE.gravity * 0.55 * dt;
+    a.pos.addScaledVector(a.vel, dt);
+    if (a.vel.y <= 2) {
+      a._portalBoost = false;
+      a.gliding = true;
+      a.chuteToggled = false;
     }
     clampToMap(W, a);
     syncObj(W, a, dt, far);
@@ -481,8 +590,13 @@ function stepActor(W, a, dt, far) {
     a.pos.x += a.vel.x * dt;
     a.pos.z += a.vel.z * dt;
   } else {
-    // jump
+    // jump — and SPACE in mid-air with enough height re-opens the parachute
+    // (stepping off a sky island must be an escape, not a death sentence)
     if (inp.jump && a.onGround) { a.vel.y = K.MOVE.jumpV; a.onGround = false; W.events.emit("jump", a); }
+    else if (inp.jump && !a.onGround) {
+      const aglJ = a.pos.y - Math.max(supportAt(W, a.pos.x, a.pos.z, a.pos.y), W.map.waterY);
+      if (aglJ > 12) { a.gliding = true; a.chuteToggled = true; deployChute(W, a); }
+    }
     inp.jump = false;
 
     // gravity
@@ -614,14 +728,19 @@ function syncObj(W, a, dt, far) {
   if (a.rig) {
     a.rig.mixer.timeScale = far ? 0 : 1;
     if (!far) {
-      const moving = Math.hypot(a.vel.x, a.vel.z) > 0.7;
+      const gs = Math.hypot(a.vel.x, a.vel.z);
       // freefall: NEARLY-FROZEN mid-stride = limbs spread like a skydive
       // (0.35 looked like the character was jogging through the sky)
       if (a.gliding && !a.chute) playAnim(a, "run", { timeScale: 0.05 });
       else if (a.gliding) playAnim(a, "idle");
       else if (a.swimming) playAnim(a, "run", { timeScale: 0.6 });
       else if (!a.onGround) playAnim(a, "jump");
-      else if (moving) playAnim(a, "run");
+      else if (gs > 0.7) {
+        // stride pace tracks true ground speed (clip authored ≈ jog pace) —
+        // fixed-rate playback read as "slow-motion sliding" at sprint speed
+        if (gs < 4.2) playAnim(a, "walk", { timeScale: K.clamp(gs / 2.6, 0.7, 1.6) });
+        else playAnim(a, "run", { timeScale: K.clamp(gs / 7.2, 0.8, 1.45) });
+      }
       else playAnim(a, "idle");
     }
   }
@@ -678,7 +797,9 @@ function updateCamera(W, dt) {
     cam.position.y += (Math.random() - 0.5) * W.camShake * 0.6;
   }
   cam.lookAt(camTarget.x + camDir.x * 8, camTarget.y + camDir.y * 8, camTarget.z + camDir.z * 8);
-  const wantFov = scope ? 22 : ads ? 42 : focus.sprinting ? 64 : 53;
+  // vertical FOV ≈ industry BR (Fortnite ~55-60v): wider view + stronger
+  // sprint kick = the speed reads on screen (raw m/s already beats Apex)
+  const wantFov = scope ? 22 : ads ? 42 : focus.sprinting ? 70 : 57;
   cam.fov += (wantFov - cam.fov) * Math.min(1, dt * 10);
   cam.updateProjectionMatrix();
   W.events.emit("scopeState", !!scope);
