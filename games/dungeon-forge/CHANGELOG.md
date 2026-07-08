@@ -178,3 +178,14 @@ Initial release.
   a 3-cell drag fills a 3×3 area.
 - Starter dungeon spawn + exit now sit at OPPOSITE corners (7 cells apart), not
   lined up — and both are draggable.
+
+## v1.4.4 — 2026-07-07 (/loop batch 2: floors, chest texture, stairs)
+- **Multi-floor clarity (D)**: when editing a floor, the floor below now renders
+  as a faint 14%-opacity ghost (its lights off) instead of a full-opacity layer
+  stacked right under the current one. Verified: floor-below opacity 0.14 vs 1.0.
+- **Untextured chest fixed (G)**: chest + crate/candles/coffin/debris/lantern/
+  pillar (and sci-fi cables) referenced an external Textures/colormap.png that
+  wasn't bundled in the props folder — so they rendered white/untextured. Copied
+  the kit's colormap into props/{theme}/Textures/. Verified: chest hasMap → true.
+- **Stairs verified (F)**: walking onto a stairs cell climbs to the next floor —
+  confirmed live (player floor 0 → Floor 2/2 at the landing by the exit).

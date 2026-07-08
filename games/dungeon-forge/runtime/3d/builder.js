@@ -365,14 +365,31 @@ export class Builder {
 
   _applyFloorVisibility() {
     this.groups.forEach((gr, f) => {
-      gr.group.visible = f === this.floor || f === this.floor - 1;
+      const isCur = f === this.floor;
+      const isBelow = f === this.floor - 1;   // one faint ghost floor beneath for alignment
+      gr.group.visible = isCur || isBelow;
       gr.group.traverse((o) => {
-        if (o.isMesh || o.isSprite || o.isLight) {
-          if (f === this.floor - 1) { o.userData._ghost = true; }
+        if (o.isMesh) {
+          if (isBelow) {
+            // swap to a dimmed clone so the lower floor reads as a faint reference,
+            // not a second floor stacked on the current one (materials are shared
+            // across floors, so we must clone rather than mutate in place)
+            if (!o.userData._origMat) o.userData._origMat = o.material;
+            if (!o.userData._ghostMat) {
+              const mk = (m) => { const c = m.clone(); c.transparent = true; c.opacity = 0.14; c.depthWrite = false; return c; };
+              const src = o.userData._origMat;
+              o.userData._ghostMat = Array.isArray(src) ? src.map(mk) : mk(src);
+            }
+            o.material = o.userData._ghostMat;
+          } else if (o.userData._origMat) {
+            o.material = o.userData._origMat;   // full strength on the active floor
+          }
+        } else if (o.isSprite) {
+          o.material.opacity = isBelow ? 0.2 : 1;
+        } else if (o.isLight) {
+          o.visible = isCur;                    // only the active floor's lights illuminate
         }
       });
-      // ghost the floor below via a group-level trick: scale lights down + fog handles depth
-      if (f === this.floor - 1) gr.group.position.y = f * FLOOR_H; // keep position; dim via overlay
     });
     this.gridHelper.position.y = this.floor * FLOOR_H + 0.02;
     this.hoverQuad.position.y = this.floor * FLOOR_H + 0.05;
