@@ -147,7 +147,8 @@ export function showMenu(W, startMatch) {
   const next = mkArrow("›");
 
   let skinIdx = Math.max(0, MENU_SKINS.findIndex((s) => s.key === getChosenSkin()));
-  let pvRig = null, pvRunning = true;
+  let pvRig = null, pvRunning = true, pvBones = null, poseMod = null;
+  import("./pose.js" + (new URL(import.meta.url).search || "")).then((m) => { poseMod = m; });
   const pvScene = new THREE.Scene();
   const pvCam = new THREE.PerspectiveCamera(34, 520 / 500, 0.1, 30);
   pvCam.position.set(0, 1.25, 3.55); pvCam.lookAt(0, 0.92, 0);
@@ -171,6 +172,7 @@ export function showMenu(W, startMatch) {
       pvRig = rig;
       rig.scene.position.set(0, 0, 0);
       pvScene.add(rig.scene);
+      pvBones = poseMod ? poseMod.findArmBones(rig.scene) : null;
       const first = rig.animations[0];
       if (first) rig.play(first.name);
     } catch (e) { /* still baking — text only */ }
@@ -180,7 +182,12 @@ export function showMenu(W, startMatch) {
   setSkin(skinIdx);
   (function pvLoop() {
     if (!pvRunning || !R.menu || !R.menu.isConnected) { pvR.dispose(); if (pvRig) W.kernel.disposeMixer(pvRig.mixer); return; }
-    if (pvRig) pvRig.scene.rotation.y += 0.008;
+    if (pvRig) {
+      pvRig.scene.rotation.y += 0.008;
+      if (!pvBones && poseMod) pvBones = poseMod.findArmBones(pvRig.scene);
+      // natural stance over the raw Meshy idle (library idles hold arms out)
+      if (pvBones && poseMod) poseMod.applyArmPose(pvRig.scene, pvBones, "relax", 1);
+    }
     pvR.render(pvScene, pvCam);
     requestAnimationFrame(pvLoop);
   })();

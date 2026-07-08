@@ -3,6 +3,37 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-08 — v4.1 runtime arm-pose layer, ramp render fix, per-weapon ADS
+
+Owner round 4 with screenshots: the Meshy ARMED clips retarget broken on these
+rigs (Alert folded both arms across the face — "broken bone animation"), menu
+idle stood arms-out, the tower ramp rendered backwards ("im in the wall"), and
+ADS needed per-weapon zoom. No model regeneration needed — the rigs are fine;
+the ARMS are now owned by code.
+
+- **ARM-POSE LAYER (`pose.js`)** — the Dungeon Forge relaxArms technique,
+  generalized: every frame AFTER the mixer (kernel updates mixers before game
+  updaters) each arm chain is slerped toward actor-local target directions.
+  Modes: `relax` (menu/unarmed — arms hang naturally), `gunReady` (two-handed
+  gun at chest — replaces ALL armed clips), `skydive` (arms swept back),
+  `hang` (hands up on the risers — the canopy shot finally looks real),
+  `reload` (muzzle dips, left hand works the receiver, driven by
+  weapon.state==="reloading"). Clips own legs/torso; arms always read right on
+  every rig. Armed clips (idlearmed/walkarmed/runarmed) NO LONGER LOAD; files
+  stay on the CDN. POSES exported for live tuning. **Verify pose work
+  UNPAUSED** — W.paused stops the layer but kernel mixers keep running, so
+  paused screenshots show the raw clip drifting back (cost 20 min).
+- **RAMP RENDER FIX**: addRamp's slab was inverted for dir 2/3 (visual rose
+  −Z while the collider rose +Z — players walked "inside the wall" on the
+  correct collider) and completely FLAT for dir 0/1 (rotateZ on the slab's
+  long axis is a no-op). All four dirs now match supportAt exactly; dir 0/1
+  collider footprints also had width/run swapped — fixed (highway ramp is now
+  a real 26m run, not a 9m cliff).
+- **PER-WEAPON ADS** (`adsFov` in sim): sniper 20 + scope overlay (verified
+  via real RMB), AR 42, launcher 45, SMG 47, pistol 48, shotgun 49.
+- Menu turntable applies `relax` — the locker pose looks natural, not the
+  Meshy library arms-out idle.
+
 ## 2026-07-08 — v4.0 fist cast, armed locomotion, portals, cursor-aim, skin locker
 
 Owner playtest round 3 ("characters hold hands out / run odd / don't hold

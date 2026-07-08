@@ -44,12 +44,12 @@
 
   // damage = body damage at full effect; falloff -> linear to 40% floor
   var WEAPONS = {
-    pistol:   { cls: "pistol", damage: 24, headMult: 1.5, rpm: 400, mag: 16, reloadS: 1.3, ammo: "light", speed: 999, falloff: [25, 50], spreadDeg: 1.3 },
-    smg:      { cls: "smg", damage: 17, headMult: 1.5, rpm: 720, mag: 30, reloadS: 2.0, ammo: "light", speed: 999, falloff: [18, 40], spreadDeg: 2.2 },
-    ar:       { cls: "ar", damage: 30, headMult: 1.5, rpm: 330, mag: 30, reloadS: 2.4, ammo: "medium", speed: 300, falloff: [60, 120], spreadDeg: 1.5 },
-    shotgun:  { cls: "shotgun", damage: 10, headMult: 1.75, rpm: 70, mag: 5, reloadS: 4.0, ammo: "shells", speed: 999, falloff: [8, 20], pellets: 9, spreadDeg: 4.0 },
-    sniper:   { cls: "sniper", damage: 105, headMult: 2.5, rpm: 35, mag: 1, reloadS: 3.0, ammo: "heavy", speed: 500, gravity: true, falloff: [200, 400], spreadDeg: 0.15, scope: true },
-    glauncher:{ cls: "launcher", damage: 95, headMult: 1.0, rpm: 55, mag: 4, reloadS: 3.2, ammo: "grenades", speed: 26, arc: true, fuseS: 2.0, splashR: 3.5, spreadDeg: 0.8 },
+    pistol:   { cls: "pistol", damage: 24, headMult: 1.5, rpm: 400, mag: 16, reloadS: 1.3, ammo: "light", speed: 999, falloff: [25, 50], spreadDeg: 1.3, adsFov: 48 },
+    smg:      { cls: "smg", damage: 17, headMult: 1.5, rpm: 720, mag: 30, reloadS: 2.0, ammo: "light", speed: 999, falloff: [18, 40], spreadDeg: 2.2, adsFov: 47 },
+    ar:       { cls: "ar", damage: 30, headMult: 1.5, rpm: 330, mag: 30, reloadS: 2.4, ammo: "medium", speed: 300, falloff: [60, 120], spreadDeg: 1.5, adsFov: 42 },
+    shotgun:  { cls: "shotgun", damage: 10, headMult: 1.75, rpm: 70, mag: 5, reloadS: 4.0, ammo: "shells", speed: 999, falloff: [8, 20], pellets: 9, spreadDeg: 4.0, adsFov: 49 },
+    sniper:   { cls: "sniper", damage: 105, headMult: 2.5, rpm: 35, mag: 1, reloadS: 3.0, ammo: "heavy", speed: 500, gravity: true, falloff: [200, 400], spreadDeg: 0.15, scope: true, adsFov: 20 },
+    glauncher:{ cls: "launcher", damage: 95, headMult: 1.0, rpm: 55, mag: 4, reloadS: 3.2, ammo: "grenades", speed: 26, arc: true, fuseS: 2.0, splashR: 3.5, spreadDeg: 0.8, adsFov: 45 },
   };
   var WEAPON_IDS = ["pistol", "smg", "ar", "shotgun", "sniper", "glauncher"]; // lootable guns
 

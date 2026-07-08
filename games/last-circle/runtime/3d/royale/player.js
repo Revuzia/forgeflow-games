@@ -13,6 +13,8 @@
  * spectate, and death/despawn.
  */
 import * as THREE from "three";
+// ?v= must propagate to intra-runtime imports (FFG gotcha) → top-level await
+const { findArmBones, applyArmPose } = await import("./pose.js" + (new URL(import.meta.url).search || ""));
 
 let K = null; // SIM shortcut set in init
 
@@ -73,7 +75,10 @@ function mkInput() {
 // Round-2 fist cast (hands modeled CLOSED — Meshy rigs have no finger bones,
 // so open-hand models can never grip; these were generated fists-first).
 const SKINS = ["soldier", "athlete", "drifter", "wraith", "juggernaut", "viper"];
-const MESHY_CLIPS = ["walk", "run", "death", "dance", "cheer", "idlearmed", "walkarmed", "runarmed"];
+// armed clips (Alert / Walk_Forward_While_Shooting / Run_and_Shoot) retarget
+// badly on these rigs — arms folded over the face ("broken bone" screenshots).
+// Arms are now posed at runtime (pose.js); only base locomotion clips load.
+const MESHY_CLIPS = ["walk", "run", "death", "dance", "cheer"];
 const _v3 = new THREE.Vector3();
 
 async function preloadMeshySkin(W, key) {
@@ -131,6 +136,7 @@ export async function loadActorModels(W) {
     rig.scene.position.y = 0;
     a.obj.add(rig.scene);
     a.clips = classifyClips(rig);
+    a.armBones = findArmBones(rig.scene);   // runtime arm-pose layer (pose.js)
     playAnim(a, "idle");
     // name tag sprite (not for self)
     if (a.id !== (W.player && W.player.id)) a.nameTag = mkNameTag(W, a);
@@ -173,11 +179,6 @@ function classifyClips(rig) {
     idle,
     run,
     walk,
-    // armed variants: weapon-ready poses (Meshy lib: Alert /
-    // Walk_Forward_While_Shooting / Run_and_Shoot) — both hands up on the gun
-    idleArmed: find([/^idlearmed$/i, /idle_weapon/i, /attacking_idle/i]) || idle,
-    walkArmed: find([/^walkarmed$/i, /walk_holding/i]) || walk,
-    runArmed: find([/^runarmed$/i, /run_holding/i, /run_weapon/i]) || run,
     jump: find([/jump/i, /fall/i]),
     death: find([/death|die|defeat/i]),
     shoot: find([/shoot|attack|punch|slash|hit/i]),
@@ -188,12 +189,7 @@ function classifyClips(rig) {
 
 function playAnim(a, key, opts) {
   if (!a.rig || !a.clips) return;
-  // armed actors use the weapon-ready variants (both hands up on the gun)
-  const armed = a.weapon && !a.weapon.id.startsWith("consumable");
-  let realKey = key;
-  if (armed && key === "idle" && a.clips.idleArmed) realKey = "idleArmed";
-  if (armed && key === "walk" && a.clips.walkArmed) realKey = "walkArmed";
-  if (armed && key === "run" && a.clips.runArmed) realKey = "runArmed";
+  const realKey = key;
   const clip = a.clips[realKey] || a.clips.idle;
   if (!clip) return;
   const ts = (opts && opts.timeScale) || 1;
@@ -742,6 +738,23 @@ function syncObj(W, a, dt, far) {
         else playAnim(a, "run", { timeScale: K.clamp(gs / 7.2, 0.8, 1.45) });
       }
       else playAnim(a, "idle");
+
+      // ── ARM-POSE LAYER (pose.js) — after the mixer, before render ────────
+      // clips own legs/torso; arms are steered per state so they always read
+      // right (Meshy retargets folded arms over the face — owner screenshots)
+      let mode = null;
+      const armed = a.weapon && !a.weapon.id.startsWith("consumable");
+      if (!a.alive || a.emoting) mode = null;
+      else if (a.gliding && !a.chute) mode = "skydive";
+      else if (a.gliding) mode = "hang";
+      else if (a.swimming) mode = null;
+      else if (armed && a.weapon.state === "reloading") mode = "reload";
+      else if (armed) mode = "gunReady";
+      else mode = "relax";
+      const wantW = mode ? 1 : 0;
+      a._armW = (a._armW == null ? wantW : a._armW + (wantW - a._armW) * Math.min(1, dt * 8));
+      if (mode) a._armMode = mode;
+      if (a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, a._armMode, a._armW);
     }
   }
 }
@@ -798,8 +811,11 @@ function updateCamera(W, dt) {
   }
   cam.lookAt(camTarget.x + camDir.x * 8, camTarget.y + camDir.y * 8, camTarget.z + camDir.z * 8);
   // vertical FOV ≈ industry BR (Fortnite ~55-60v): wider view + stronger
-  // sprint kick = the speed reads on screen (raw m/s already beats Apex)
-  const wantFov = scope ? 22 : ads ? 42 : focus.sprinting ? 70 : 57;
+  // sprint kick = the speed reads on screen (raw m/s already beats Apex).
+  // ADS zoom is PER WEAPON (sim adsFov): sniper 20 + scope overlay, AR 42,
+  // launcher 45, SMG 47, pistol 48, shotgun 49.
+  const adsDef = ads && K.WEAPONS[focus.weapon.id];
+  const wantFov = scope ? (adsDef.adsFov || 22) : ads ? (adsDef.adsFov || 42) : focus.sprinting ? 70 : 57;
   cam.fov += (wantFov - cam.fov) * Math.min(1, dt * 10);
   cam.updateProjectionMatrix();
   W.events.emit("scopeState", !!scope);

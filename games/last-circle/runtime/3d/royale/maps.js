@@ -179,16 +179,22 @@ export async function buildMap(W, mapId) {
     }
   }
   function addRamp(cx, cy, cz, w, h, d, dir, color) {
-    // rendered as a rotated slab; collider is kind:'ramp' (walkable slope)
+    // w = width across, d = run length along the travel axis, h = climb.
+    // The rendered slab MUST rise the same way supportAt's math does
+    // (dir 0=+X, 1=−X, 2=+Z, 3=−Z) — the old version rendered dir 2/3
+    // inverted and dir 0/1 flat, so players "walked inside walls" while the
+    // (correct) collider carried them.
     const geo = new THREE.BoxGeometry(w, 0.3, Math.sqrt(d * d + h * h));
-    const ang = Math.atan2(h, d);
-    if (dir === 0) { geo.rotateZ(-ang); geo.rotateY(Math.PI / 2); }
-    else if (dir === 1) { geo.rotateZ(ang); geo.rotateY(Math.PI / 2); }
-    else if (dir === 2) geo.rotateX(ang);
-    else geo.rotateX(-ang);
+    geo.rotateX(-Math.atan2(h, d));              // +Z end rises
+    if (dir === 0) geo.rotateY(Math.PI / 2);     // up-end → +X
+    else if (dir === 1) geo.rotateY(-Math.PI / 2); // up-end → −X
+    else if (dir === 3) geo.rotateY(Math.PI);    // up-end → −Z
     geo.translate(cx, cy + h / 2, cz);
     (batches[color] = batches[color] || []).push(geo);
-    colliders.push({ kind: "ramp", minX: cx - w / 2, maxX: cx + w / 2, minY: cy, maxY: cy + h, minZ: cz - d / 2, maxZ: cz + d / 2, dir });
+    // collider footprint: run axis is X for dir 0/1, Z for dir 2/3
+    const hx = (dir === 0 || dir === 1) ? d / 2 : w / 2;
+    const hz = (dir === 0 || dir === 1) ? w / 2 : d / 2;
+    colliders.push({ kind: "ramp", minX: cx - hx, maxX: cx + hx, minY: cy, maxY: cy + h, minZ: cz - hz, maxZ: cz + hz, dir });
   }
 
   const lootPoints = [];
