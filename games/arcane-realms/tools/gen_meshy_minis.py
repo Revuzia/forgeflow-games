@@ -29,9 +29,16 @@ def req(method, url, body=None):
     h = dict(HDR)
     if data:
         h['Content-Type'] = 'application/json'
-    r = urllib.request.Request(url, data=data, headers=h, method=method)
-    with urllib.request.urlopen(r, timeout=60) as resp:
-        return json.load(resp)
+    last = None
+    for attempt in range(6):  # retry transient network drops (WinError 10054 etc.)
+        try:
+            r = urllib.request.Request(url, data=data, headers=h, method=method)
+            with urllib.request.urlopen(r, timeout=90) as resp:
+                return json.load(resp)
+        except Exception as e:
+            last = e
+            time.sleep(2 * (attempt + 1))
+    raise last
 
 
 def balance():
@@ -64,10 +71,17 @@ def poll(task_id):
 
 
 def download(url, dest):
-    r = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(r, timeout=120) as resp, open(dest, 'wb') as f:
-        f.write(resp.read())
-    return os.path.getsize(dest)
+    last = None
+    for attempt in range(6):
+        try:
+            r = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(r, timeout=180) as resp, open(dest, 'wb') as f:
+                f.write(resp.read())
+            return os.path.getsize(dest)
+        except Exception as e:
+            last = e
+            time.sleep(2 * (attempt + 1))
+    raise last
 
 
 def ledger(row):

@@ -1,5 +1,46 @@
 # Arcane Realms TCG — Changelog
 
+## v1.3.8 — 2026-07-09 (Fixed minis, multi-attack, 3D hero characters)
+
+### All 9 broken sketchfab minis replaced with Meshy models
+- The original curated sketchfab minis had broken rigs/degenerate bounds — the
+  dragon sprawled flat "in the ground", the reaper sank under the board, and
+  one even loaded as a wireframe bed. `Box3` couldn't measure them, so the
+  feet-on-table normalization failed. **Regenerated all 9 via Meshy from card
+  art** (the proven pipeline); they now stand correctly — the dragon has wings,
+  every model reads on-model. `MINI_MAP` reset to standard Meshy params.
+  (270 credits, 30/model; gltf-transform optimized to 1.2–6.6 MB.)
+
+### Multi-attack queue
+- Line up several attacks before resolving: click a creature → click its target
+  and it **queues** (a committed orange arrow persists); repeat for more, then
+  press **⚔ Attack (N)** — or End Turn — and they all resolve in order. Attacks
+  made illegal by earlier ones (e.g. a target that died) are skipped.
+
+### 3D hero characters (replaces the flat portrait disc)
+- Each realm's hero is now a **3D Meshy character** (from the portrait art)
+  standing behind its side, facing you, with a gentle idle sway — instead of a
+  flat circular image. 6 heroes generated + optimized (1.6–5.2 MB). The hero is
+  still clickable/targetable (the disc ring remains as the glow/target base).
+
+Selftest 208→214 (hero-asset gates). Cache-bust `?v=12` → `?v=13`.
+
+## v1.3.7 — 2026-07-07 (Pause menu, no card-pop, frozen icon, lower hand)
+
+- **In-match pause menu is now full-featured.** The gear opens Music, Effects,
+  Rich particles, Screen shake, Fast animations, Gameplay tips, plus **Resume /
+  Concede / 🏠 Main Menu** — the standard pause-menu set, not just music/effects.
+- **Cards no longer pop/tap when attacking or dying.** Removed the exhaust
+  scale-shrink (cards held a constant size; the dim + 💤 badge and the mini
+  lunge convey "used"). Death now sinks + fades instead of scaling down.
+- **Frozen shows a ❄ badge** top-right (priority over the 💤 exhaust marker).
+- **Hand lowered** so more of the board — and the hero area — is visible.
+
+Selftest 208/208. Cache-bust `?v=11` → `?v=12`.
+
+_Next: replacing the 9 broken curated sketchfab minis with Meshy versions
+(regenerating), 3D hero characters, and a multi-attack queue._
+
 ## v1.3.6 — 2026-07-07 (Enemy hand backs read as proper cards)
 
 - **Enemy hand no longer foreshortens into squares.** The opponent's face-down

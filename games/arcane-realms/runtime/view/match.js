@@ -6,10 +6,10 @@
 // always shows my side at the bottom via syncFromState(state, mySide).
 
 import * as THREE from 'three';
-import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=11';
-import { cardById, REALMS } from '../sim/cards.js?v=11';
-import { chooseAction } from '../sim/ai.js?v=11';
-import { Audio2 } from './audio.js?v=11';
+import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=13';
+import { cardById, REALMS } from '../sim/cards.js?v=13';
+import { chooseAction } from '../sim/ai.js?v=13';
+import { Audio2 } from './audio.js?v=13';
 
 const REALM_COLOR = (id) => REALMS[cardById(id).realm]?.color ?? 0x8d99ae;
 
@@ -47,6 +47,7 @@ export class Match {
     this.over = false;
     this.drag = null;        // hand-card drag
     this.select = null;      // attack selection {iid, attacks, viaCombat, moved}
+    this.attackQueue = [];   // multi-attack: {attacker, action, viaCombat} queued, resolved together
     this.hoverIid = null;
     this.legal = [];
     this.stats = { dmgDealt: 0, cardsPlayed: 0 };
@@ -112,6 +113,8 @@ export class Match {
       const attackers = new Set(this.legal.filter((a) => a.type === 'attack').map((a) => a.attacker));
       for (const iid of attackers) this.scene.setGlow(iid, 0xffd45f, true);
     }
+    // queued attackers keep their "committed" orange ring
+    for (const item of this.attackQueue) this.scene.setGlow(item.attacker, 0xff7a3d, true);
     this.ui.hudUpdate(this.state, this);
   }
 
@@ -599,12 +602,49 @@ export class Match {
     this.ui.hideArrow();
   }
 
-  async commitAttack(match) {
+  // QUEUE an attack instead of resolving immediately — the player can line up
+  // several (each shows a committed arrow) then resolve them together.
+  commitAttack(match) {
     const sel = this.select;
+    const fromPos = this.scene.posOf(sel.iid) || new THREE.Vector3();
+    const toPos = this.posOfTarget(match.target);
+    this.attackQueue.push({ attacker: sel.iid, action: match, viaCombat: sel.viaCombat });
+    // committed look + persistent arrow
+    this.scene.setGlow(sel.iid, 0xff7a3d, true);
+    const f = this.scene.worldToScreen(fromPos);
+    const t = this.scene.worldToScreen(toPos);
+    this.ui.addQueuedArrow(sel.iid, f.x, f.y, t.x, t.y);
     this.clearSelect();
-    if (sel && sel.viaCombat) await this.doAction({ type: 'combat' });
-    if (!this.over) await this.doAction(match);
+    this.refreshLegal();
+    this.ui.showAttackButton(this.attackQueue.length);
+    this.ui.coach('multi-attack', 'You can line up <b>several attacks</b> — pick another creature and target. Press <b>⚔ Attack</b> (or End Turn) to resolve them all.');
+  }
+
+  // resolve every queued attack in order (skipping any made illegal by earlier
+  // ones, e.g. a target that already died)
+  async resolveAttacks() {
+    if (this.busy || !this.attackQueue.length) return;
+    const q = this.attackQueue; this.attackQueue = [];
+    this.ui.clearQueuedArrows();
+    this.ui.showAttackButton(0);
+    this.scene.clearGlows();
+    if (q.some((x) => x.viaCombat) && this.state.phase === 'main') await this.doAction({ type: 'combat' });
+    for (const item of q) {
+      if (this.over) break;
+      const stillLegal = legalActions(this.state).some(
+        (a) => a.type === 'attack' && a.attacker === item.action.attacker && this.sameTarget(a.target, item.action.target));
+      if (stillLegal) await this.doAction(item.action);
+    }
     this.ui.coach('exhausted', 'After attacking, a creature is <b>exhausted 💤</b> — it dims and rests until your next turn.');
+  }
+
+  // discard any queued attacks (turn change / concede) without resolving
+  clearAttackQueue() {
+    if (!this.attackQueue.length) return;
+    for (const item of this.attackQueue) this.scene.setGlow(item.attacker, 0, false);
+    this.attackQueue = [];
+    this.ui.clearQueuedArrows();
+    this.ui.showAttackButton(0);
   }
 
   async commitSpell(tgt) {
@@ -728,6 +768,11 @@ export class Match {
   }
 
   trySelectAttacker(hit) {
+    if (this.attackQueue.some((x) => x.attacker === hit.iid)) {
+      this.ui.toast('Already queued to attack — press ⚔ Attack to resolve.');
+      Audio2.sfx('error');
+      return;
+    }
     let attacks = this.legal.filter((a) => a.type === 'attack' && a.attacker === hit.iid);
     let viaCombat = false;
     if (!attacks.length && this.state.phase === 'main') {
@@ -907,6 +952,8 @@ export class Match {
   }
   async endTurn() {
     if (this.busy || !this.myTurn()) return;
+    // resolve any queued attacks first so nothing is silently dropped
+    if (this.attackQueue.length) { await this.resolveAttacks(); if (this.over) return; }
     Audio2.sfx('click');
     await this.doAction({ type: 'end' });
   }

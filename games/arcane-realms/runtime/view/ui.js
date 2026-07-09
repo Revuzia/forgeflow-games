@@ -1,11 +1,11 @@
 // Arcane Realms TCG — DOM UI layer: menu, deck builder, collection, settings,
 // match HUD (hero plates, phase bar, banners, floaters, arrow, tooltips).
 
-import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=11';
-import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=11';
-import { DIFFICULTIES } from '../sim/ai.js?v=11';
-import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=11';
-import { Audio2 } from './audio.js?v=11';
+import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=13';
+import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=13';
+import { DIFFICULTIES } from '../sim/ai.js?v=13';
+import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=13';
+import { Audio2 } from './audio.js?v=13';
 
 // ── persistence ─────────────────────────────────────────────────
 const LS_KEY = 'arcane_realms_save_v1';
@@ -997,9 +997,13 @@ export class UI {
     // teach the ordering rule instead
     const btns = this.el('div');
     btns.id = 'turnbtns';
+    // multi-attack: appears when ≥1 attack is queued; resolves them together
+    this.attackBtn = this.el('button', 'btn small', '⚔ Attack');
+    this.attackBtn.style.display = 'none';
+    this.attackBtn.onclick = () => this.match?.resolveAttacks();
     this.endBtn = this.el('button', 'btn small primary', 'End Turn');
     this.endBtn.onclick = () => this.match?.endTurn();
-    btns.append(this.endBtn);
+    btns.append(this.attackBtn, this.endBtn);
     // tools
     const tools = this.el('div');
     tools.id = 'matchtools';
@@ -1155,6 +1159,41 @@ export class UI {
   }
   hideArrow() { this.arcGroup.setAttribute('visibility', 'hidden'); }
 
+  // ── multi-attack: persistent "committed" arrows for queued attacks ──
+  addQueuedArrow(qid, x1, y1, x2, y2) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const dx = x2 - x1, dy = y2 - y1;
+    const dist = Math.hypot(dx, dy) || 1;
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - Math.min(150, dist * 0.24) - 26;
+    const d = `M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}`;
+    const g = document.createElementNS(NS, 'g');
+    g.dataset.qid = qid;
+    const glow = document.createElementNS(NS, 'path');
+    glow.setAttribute('d', d); glow.setAttribute('fill', 'none');
+    glow.setAttribute('stroke', '#ff5f3d'); glow.setAttribute('stroke-width', '11');
+    glow.setAttribute('stroke-linecap', 'round'); glow.setAttribute('opacity', '0.35');
+    glow.setAttribute('filter', 'url(#arcGlow)');
+    const core = document.createElementNS(NS, 'path');
+    core.setAttribute('d', d); core.setAttribute('fill', 'none');
+    core.setAttribute('stroke', '#ff8a3d'); core.setAttribute('stroke-width', '4');
+    core.setAttribute('stroke-linecap', 'round');
+    const ang = Math.atan2(y2 - my, x2 - mx) * 180 / Math.PI;
+    const head = document.createElementNS(NS, 'polygon');
+    head.setAttribute('points', '0,-11 20,0 0,11 5,0');
+    head.setAttribute('fill', '#ffcf6a'); head.setAttribute('stroke', '#8a3a10'); head.setAttribute('stroke-width', '1.5');
+    head.setAttribute('transform', `translate(${x2} ${y2}) rotate(${ang})`);
+    g.append(glow, core, head);
+    this.arrowSvg.append(g);
+  }
+  clearQueuedArrows() {
+    for (const g of this.arrowSvg.querySelectorAll('g[data-qid]')) g.remove();
+  }
+  showAttackButton(n) {
+    if (!this.attackBtn) return;
+    this.attackBtn.style.display = n > 0 ? '' : 'none';
+    this.attackBtn.textContent = `⚔ Attack (${n})`;
+  }
+
   hoverUnit(cardId, unit, x, y) {
     clearTimeout(this.hoverTimer);
     if (!cardId) { this.inspectEl.style.display = 'none'; return; }
@@ -1271,7 +1310,7 @@ export class UI {
   matchSettings() {
     const wrap = this.el('div', 'modal-wrap');
     const m = this.el('div', 'modal');
-    m.append(this.el('h3', null, 'SETTINGS'));
+    m.append(this.el('h3', null, '⏸ PAUSED'));
     const st = this.store.settings;
     const mkSlide = (label, key, apply) => {
       const row = this.el('div', 'set-row');
@@ -1281,12 +1320,38 @@ export class UI {
       row.append(this.el('label', null, label), inp);
       m.append(row);
     };
+    const mkToggle = (label, key, apply) => {
+      const row = this.el('div', 'set-row');
+      const sw = this.el('div', 'switch' + (st[key] ? ' on' : ''), '<i></i>');
+      sw.onclick = () => { st[key] = !st[key]; sw.classList.toggle('on', st[key]); apply && apply(st[key]); Store.save(); Audio2.sfx('click'); };
+      row.append(this.el('label', null, label), sw);
+      m.append(row);
+    };
     mkSlide('🎵 Music', 'music', (v) => Audio2.setMusicVolume(v));
-    mkSlide('🔊 Effects', 'sfx', (v) => Audio2.setSfxVolume(v));
-    const close = this.el('button', 'btn small primary', 'Resume');
-    close.style.marginTop = '16px';
-    close.onclick = () => wrap.remove();
-    m.append(close);
+    mkSlide('🔊 Effects', 'sfx', (v) => { Audio2.setSfxVolume(v); Audio2.sfx('impact'); });
+    const speed = () => this.onSpeedChange && this.onSpeedChange();
+    mkToggle('✨ Rich particles', 'particles', speed);
+    mkToggle('📳 Screen shake', 'shake', speed);
+    mkToggle('⚡ Fast animations', 'fastAnim', speed);
+    mkToggle('💡 Gameplay tips', 'tips', () => {});
+    // ── action row: Resume / Concede / Main Menu ──
+    const row = this.el('div');
+    row.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:20px';
+    const resume = this.el('button', 'btn small primary', '▶ Resume');
+    resume.onclick = () => { Audio2.sfx('click'); wrap.remove(); };
+    const concede = this.el('button', 'btn small danger', '🏳 Concede');
+    concede.onclick = () => { if (confirm('Concede this match?')) { wrap.remove(); this.match?.concede(); } };
+    const menu = this.el('button', 'btn small', '🏠 Main Menu');
+    menu.onclick = () => {
+      if (!confirm('Quit to the main menu? This forfeits the current match.')) return;
+      Audio2.sfx('click'); wrap.remove();
+      this.match?.destroy(); this.match = null;
+      window.__ARC__.leaveMatch();
+      this.show('menu');
+    };
+    row.append(resume, concede, menu);
+    m.append(row);
+    m.append(this.el('div', 'hint', 'Right-click any card for a closer look · SPACE ends your turn'));
     wrap.append(m);
     this.root.append(wrap);
   }

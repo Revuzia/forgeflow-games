@@ -2,14 +2,14 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=11';
-import { REALMS, cardById } from '../sim/cards.js?v=11';
-import { FX } from './fx.js?v=11';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=13';
+import { REALMS, cardById } from '../sim/cards.js?v=13';
+import { FX } from './fx.js?v=13';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 export const LAYOUT = {
   playerBoardZ: 1.22, enemyBoardZ: -1.72, slotDX: 1.62,
-  handZ: 4.52, handY: 1.16, enemyHandZ: -3.98,
+  handZ: 4.52, handY: 1.0, enemyHandZ: -3.98,
   deckX: 7.5, playerDeckZ: 3.1, enemyDeckZ: -3.1,
   trapX: -7.35, playerTrapZ: 2.35, enemyTrapZ: -2.35,
   heroPlayer: new THREE.Vector3(0, 0.02, 3.28),
@@ -115,16 +115,18 @@ const KW_BADGE = {
 // height for span), hover = base lift + idle bob for flyers,
 // glow = realm-colored ground disc so dark models read on the dark board
 export const MINI_MAP = {
-  ef19:  { file: 'mini_ef19.glb',  s: 2.0,  cap: 3.0, hover: 0.35, yaw: -0.6, glow: 0xff7a2e }, // Pyraxis — black-red spiked dragon (animated, wingspan-dominant)
-  efc10: { file: 'mini_efc10.glb', s: 1.6,  glow: 0xff7a2e }, // Vulkarrion — winged obsidian gargoyle
-  gm18:  { file: 'mini_gm18.glb',  s: 1.5,  glow: 0xb45cff }, // Morthul — spindly black shade (animated)
-  gmc10: { file: 'mini_gmc10.glb', s: 1.55, glow: 0xb45cff }, // Nyxathra — horned crimson demon
-  tc18:  { file: 'mini_tc18.glb',  s: 1.8,  glow: 0x3fb6ff }, // Nerivia — great leviathan reptile (long body)
-  tcc10: { file: 'mini_tcc10.glb', s: 1.55, glow: 0x3fb6ff }, // Maelstra — pale siren (animated)
-  wgc10: { file: 'mini_wgc10.glb', s: 1.6,  glow: 0x59d97a }, // Sylvaris — mossy green troll
-  dwc10: { file: 'mini_dwc10.glb', s: 1.45, glow: 0xffd76a }, // Solmara — winged light spirit
-  nt21:  { file: 'mini_nt21.glb',  s: 1.15, hover: 0.3, glow: 0x9a7bff }, // Chronarch Vex — floating arcane eye (animated)
-  // ── Meshy image-to-3d LEGENDARIES (from card art, gltf-transform optimized) ──
+  // all Meshy image-to-3d from card art (the sketchfab originals had broken
+  // rigs/bounds — sprawled/sunk models — and were regenerated 2026-07-09)
+  ef19:  { file: 'mini_ef19.glb',  s: 1.75, cap: 2.4, glow: 0xff7a2e }, // Pyraxis — dragon
+  efc10: { file: 'mini_efc10.glb', s: 1.6,  glow: 0xff7a2e }, // Vulkarrion — gargoyle
+  gm18:  { file: 'mini_gm18.glb',  s: 1.55, glow: 0xb45cff }, // Morthul — shade
+  gmc10: { file: 'mini_gmc10.glb', s: 1.55, glow: 0xb45cff }, // Nyxathra — demon
+  tc18:  { file: 'mini_tc18.glb',  s: 1.7,  cap: 2.2, glow: 0x3fb6ff }, // Nerivia — leviathan
+  tcc10: { file: 'mini_tcc10.glb', s: 1.55, glow: 0x3fb6ff }, // Maelstra — siren
+  wgc10: { file: 'mini_wgc10.glb', s: 1.6,  glow: 0x59d97a }, // Sylvaris — troll
+  dwc10: { file: 'mini_dwc10.glb', s: 1.5,  glow: 0xffd76a }, // Solmara — light spirit
+  nt21:  { file: 'mini_nt21.glb',  s: 1.3,  glow: 0x9a7bff }, // Chronarch Vex
+  // ── more Meshy image-to-3d LEGENDARIES ──
   wg18:  { file: 'mini_wg18.glb',  s: 1.7,  cap: 1.5, glow: 0x59d97a }, // Verdance, Heart of the Grove
   dw16:  { file: 'mini_dw16.glb',  s: 1.6,  glow: 0xffd76a }, // Seraphine, High Justicar
   nt20:  { file: 'mini_nt20.glb',  s: 1.5,  glow: 0x9a7bff }, // Zanzibar, Planar Merchant
@@ -436,8 +438,9 @@ export class BoardScene {
       const [glyph, color] = k === '_silenced' ? ['✕', '#8d8d9e'] : (KW_BADGE[k] || ['•', '#ccc']);
       mkBadge(glyph, color, 'tl', i);
     });
-    // exhausted marker → TOP-RIGHT corner (as before)
-    if (unit.tapped) mkBadge('💤', '#cdbcf2', 'tr', 0);
+    // status marker → TOP-RIGHT corner: FROZEN takes priority over exhausted
+    if (unit.frozen) mkBadge('❄', '#9fdcff', 'tr', 0);
+    else if (unit.tapped) mkBadge('💤', '#cdbcf2', 'tr', 0);
   }
 
   // place HTML orbs + badges at the CARD's actual corners (owner: bottom
@@ -530,10 +533,11 @@ export class BoardScene {
     // smaller board cards → less overlap with the 3D minis. Enemy cards tilt
     // up toward the camera so they read as rectangles, not foreshortened
     // squares; a small lift keeps the tilted bottom edge off the table.
-    const base = exhausted ? 0.72 : 0.78;
+    // constant scale — NO exhaust shrink (owner: cards must not tap/pop). The
+    // "used" state reads from the dim + 💤 badge; the 3D mini lunge is the motion.
     const rotX = side === 0 ? -Math.PI / 2 : -Math.PI / 2 + 0.62;
     const y = side === 0 ? 0.06 : 0.42;
-    return { pos: new THREE.Vector3(x, y, z), rotX, rotZ: 0, scale: base };
+    return { pos: new THREE.Vector3(x, y, z), rotX, rotZ: 0, scale: 0.78 };
   }
 
   trapTransform(side, i) {
@@ -714,7 +718,8 @@ export class BoardScene {
     if (def.rarity === 'legendary' || def.rarity === 'epic') this.fx.ring(e.group.position, col, { maxR: 2.6 });
     this.tweens.add(e.mesh.material, { opacity: 0 }, 0.42, 'cubicOut');
     this.hideNameplate(e); // HTML orbs/badges vanish with the dying creature
-    await this.tweens.add(e.group.scale, { x: 0.6, y: 0.6, z: 0.6 }, 0.42, 'cubicOut');
+    // sink + fade (NOT a scale-tap): the card settles into the board as it dies
+    await this.tweens.add(e.group.position, { y: e.group.position.y - 0.5 }, 0.42, 'cubicOut');
     this.removeEntry(iid);
   }
 
@@ -765,7 +770,7 @@ export class BoardScene {
   // ── 3D legendary minis ─────────────────────────────────────────
   async _gltfLoader() {
     if (!this._gltfLoaderP) {
-      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=11').then((m) => new m.GLTFLoader());
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=13').then((m) => new m.GLTFLoader());
     }
     return this._gltfLoaderP;
   }
@@ -906,6 +911,61 @@ export class BoardScene {
     tex.colorSpace = THREE.SRGBColorSpace;
     grp.children[1].material.map = tex;
     grp.children[1].material.needsUpdate = true;
+    this.setHeroModel(rel, realm); // 3D character (replaces the flat disc)
+  }
+
+  // load a standing 3D hero character (Meshy, from the portrait art) behind
+  // each side, facing the camera. Falls back to the disc if the GLB is missing.
+  async setHeroModel(rel, realm) {
+    try {
+      const loader = await this._gltfLoader();
+      const key = 'hero_' + realm;
+      if (!this._miniBuf.has(key)) {
+        this._miniBuf.set(key, fetch('assets/heroes/hero_' + realm + '.glb').then((r) => {
+          if (!r.ok) throw new Error('hero ' + r.status);
+          return r.arrayBuffer();
+        }));
+      }
+      const buf = await this._miniBuf.get(key);
+      const gltf = await new Promise((res, rej) => loader.parse(buf.slice(0), '', res, rej));
+      const model = gltf.scene;
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      model.scale.setScalar(2.4 / Math.max(size.y, 0.001)); // portrait bust, stands behind the row
+      let b2 = new THREE.Box3().setFromObject(model);
+      const s2 = b2.getSize(new THREE.Vector3());
+      const ext = Math.max(s2.x, s2.z);
+      if (ext > 2.2) { model.scale.multiplyScalar(2.2 / ext); b2 = new THREE.Box3().setFromObject(model); }
+      const c = b2.getCenter(new THREE.Vector3());
+      model.position.x -= c.x; model.position.z -= c.z; model.position.y -= b2.min.y;
+      model.traverse((o) => {
+        if (o.isLight) o.parent?.remove(o);
+        if (o.isMesh) {
+          const mats = Array.isArray(o.material) ? o.material : [o.material];
+          for (const mt of mats) { if (mt.metalness > 0.45) mt.metalness = 0.45; if (mt.roughness < 0.35) mt.roughness = 0.35; }
+          o.userData = { kind: 'hero', p: rel };
+        }
+      });
+      const grp = new THREE.Group(); grp.add(model);
+      const pos = rel === 0 ? LAYOUT.heroPlayer : LAYOUT.heroEnemy;
+      grp.position.set(pos.x, 0.02, pos.z);
+      this.scene.add(grp);
+      // shared key light for heroes (dim mood board)
+      if (!this.heroLight) {
+        this.heroLight = new THREE.PointLight(0xfff1d8, 60, 22, 2);
+        this.heroLight.position.set(0, 6, 0);
+        this.scene.add(this.heroLight);
+      }
+      // hide the flat disc face; keep the ring as a targeting/glow base
+      const disc = this.heroMeshes[rel];
+      if (disc && disc.children[1]) disc.children[1].visible = false;
+      this.heroModels = this.heroModels || [null, null];
+      if (this.heroModels[rel]) { // clean up a previous match's hero
+        this.scene.remove(this.heroModels[rel].grp);
+        this.heroModels[rel].grp.traverse((o) => o.geometry?.dispose?.());
+      }
+      this.heroModels[rel] = { grp, seed: rel * 3.14 };
+    } catch (e) { /* GLB missing → keep the disc portrait */ }
   }
 
   posOf(iid) {
@@ -936,6 +996,8 @@ export class BoardScene {
     const targets = [];
     for (const e of this.cards.values()) if (!e.dead) targets.push(e.mesh);
     for (const h of this.heroMeshes) targets.push(...h.children);
+    // 3D hero characters are clickable as their hero too
+    if (this.heroModels) for (const hm of this.heroModels) if (hm) hm.grp.traverse((o) => { if (o.isMesh) targets.push(o); });
     targets.push(this.table);
     const hits = this.raycaster.intersectObjects(targets, false);
     for (const h of hits) {
@@ -992,6 +1054,11 @@ export class BoardScene {
           m.disc.material.opacity = m.discT * (0.52 + Math.sin(this.time * 2 + iid) * 0.12);
         }
       }
+    }
+    // hero characters: gentle idle breathing sway
+    if (this.heroModels) for (const hm of this.heroModels) if (hm) {
+      hm.grp.rotation.y = Math.sin(this.time * 0.6 + hm.seed) * 0.06;
+      hm.grp.position.y = 0.02 + (Math.sin(this.time * 1.1 + hm.seed) + 1) * 0.02;
     }
     // diorama: crystals spin, braziers flicker embers
     for (const c of this.dioramaSpin) { c.rotation.y += dt * 0.5; c.position.y = 1.5 + Math.sin(this.time * 1.2 + c.position.x) * 0.1; }
