@@ -29,6 +29,8 @@ export function findArmBones(root) {
       case "LeftUpLeg": b.lUpLeg = o; break;
       case "LeftLeg": b.lLeg = o; break;
       case "LeftFoot": b.lFoot = o; break;
+      case "Spine01": b.spine1 = o; break;
+      case "Spine02": b.spine2 = o; break;
     }
   });
   return (b.rArm && b.lArm) ? b : null;
@@ -78,17 +80,29 @@ export const POSES = {
  * obj = the actor root (its world quaternion defines "local"), bones from
  * findArmBones, mode = key of POSES, weight 0..1.
  */
-export function applyArmPose(obj, bones, mode, weight) {
+/** Tilt an actor-local dir up/down by `pitch` (rotate the y/z components). */
+function tiltDir(d, pitch) {
+  const c = Math.cos(pitch), s = Math.sin(pitch);
+  return [d[0], d[1] * c + d[2] * s, d[2] * c - d[1] * s];
+}
+
+export function applyArmPose(obj, bones, mode, weight, pitch) {
   if (!bones || weight <= 0) return;
   const P = POSES[mode];
   if (!P) return;
   obj.getWorldQuaternion(_oq);
+  // AIM PITCH (AAA upper-body layer): the gun and torso track the camera's
+  // vertical aim — only for weapon poses, capped so the spine stays sane
+  const pk = (mode === "gunReady" || mode === "reload") ? Math.max(-0.9, Math.min(0.9, pitch || 0)) : 0;
+  const T = pk ? P.map((d) => tiltDir(d, pk * 0.85)) : P;
+  if (pk && bones.spine2) bones.spine2.rotation.x += pk * 0.3;
+  if (pk && bones.spine1) bones.spine1.rotation.x += pk * 0.18;
   const bl = 0.92 * Math.min(1, weight);
-  aim(bones.rArm, bones.rFore, _oq, P[0][0], P[0][1], P[0][2], bl);
-  aim(bones.lArm, bones.lFore, _oq, P[2][0], P[2][1], P[2][2], bl);
+  aim(bones.rArm, bones.rFore, _oq, T[0][0], T[0][1], T[0][2], bl);
+  aim(bones.lArm, bones.lFore, _oq, T[2][0], T[2][1], T[2][2], bl);
   const bf = 0.88 * Math.min(1, weight);
-  aim(bones.rFore, bones.rHand, _oq, P[1][0], P[1][1], P[1][2], bf);
-  aim(bones.lFore, bones.lHand, _oq, P[3][0], P[3][1], P[3][2], bf);
+  aim(bones.rFore, bones.rHand, _oq, T[1][0], T[1][1], T[1][2], bf);
+  aim(bones.lFore, bones.lHand, _oq, T[3][0], T[3][1], T[3][2], bf);
   if (P.length > 4) {   // legs too (skydive / canopy — clip legs read wrong mid-air)
     aim(bones.rUpLeg, bones.rLeg, _oq, P[4][0], P[4][1], P[4][2], bl);
     aim(bones.rLeg, bones.rFoot, _oq, P[5][0], P[5][1], P[5][2], bf);

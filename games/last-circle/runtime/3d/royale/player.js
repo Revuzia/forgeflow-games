@@ -77,8 +77,8 @@ function mkInput() {
 const SKINS = ["soldier", "athlete", "drifter", "wraith", "juggernaut", "viper"];
 // armed clips (Alert / Walk_Forward_While_Shooting / Run_and_Shoot) retarget
 // badly on these rigs — arms folded over the face ("broken bone" screenshots).
-// Arms are now posed at runtime (pose.js); only base locomotion clips load.
-const MESHY_CLIPS = ["walk", "run", "death", "dance", "cheer"];
+// Arms are posed at runtime (pose.js); locomotion + jump/swim clips load.
+const MESHY_CLIPS = ["walk", "run", "death", "dance", "cheer", "jump", "swim"];
 const _v3 = new THREE.Vector3();
 
 async function preloadMeshySkin(W, key) {
@@ -179,6 +179,7 @@ function classifyClips(rig) {
     idle,
     run,
     walk,
+    swim: find([/^swim$/i]) || run,
     jump: find([/jump/i, /fall/i]),
     death: find([/death|die|defeat/i]),
     shoot: find([/shoot|attack|punch|slash|hit/i]),
@@ -729,13 +730,17 @@ function syncObj(W, a, dt, far) {
       // (0.35 looked like the character was jogging through the sky)
       if (a.gliding && !a.chute) playAnim(a, "run", { timeScale: 0.05 });
       else if (a.gliding) playAnim(a, "idle");
-      else if (a.swimming) playAnim(a, "run", { timeScale: 0.6 });
-      else if (!a.onGround) playAnim(a, "jump");
+      else if (a.swimming) playAnim(a, "swim", { timeScale: gs > 4.5 ? 1.25 : 1 });
+      else if (!a.onGround) playAnim(a, "jump", { once: true });
       else if (gs > 0.7) {
         // stride pace tracks true ground speed (clip authored ≈ jog pace) —
-        // fixed-rate playback read as "slow-motion sliding" at sprint speed
-        if (gs < 4.2) playAnim(a, "walk", { timeScale: K.clamp(gs / 2.6, 0.7, 1.6) });
-        else playAnim(a, "run", { timeScale: K.clamp(gs / 7.2, 0.8, 1.45) });
+        // fixed-rate playback read as "slow-motion sliding" at sprint speed.
+        // BACKPEDALING plays the clip in REVERSE (standard trick — forward
+        // stride while moving backward reads as moonwalking)
+        const back = (a.vel.x * -Math.sin(a._bodyYaw - Math.PI) + a.vel.z * -Math.cos(a._bodyYaw - Math.PI)) < -0.5;
+        const dirK = back ? -0.9 : 1;
+        if (gs < 4.2) playAnim(a, "walk", { timeScale: dirK * K.clamp(gs / 2.6, 0.7, 1.6) });
+        else playAnim(a, "run", { timeScale: dirK * K.clamp(gs / 7.2, 0.8, 1.45) });
       }
       else playAnim(a, "idle");
 
@@ -754,7 +759,8 @@ function syncObj(W, a, dt, far) {
       const wantW = mode ? 1 : 0;
       a._armW = (a._armW == null ? wantW : a._armW + (wantW - a._armW) * Math.min(1, dt * 8));
       if (mode) a._armMode = mode;
-      if (a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, a._armMode, a._armW);
+      // camera pitch > 0 = looking down; the pose layer wants aim-up positive
+      if (a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, a._armMode, a._armW, -a.pitch);
     }
   }
 }

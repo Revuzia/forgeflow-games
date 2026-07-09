@@ -3,6 +3,40 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-08 — v4.3 FIST SURGERY + full animation-state pass (AAA sweep)
+
+Owner round 6: "hands look mangled… why can't closed be a fist?" + "check ALL
+models, ALL animations, ALL bones." The definitive hand finding: a close-up
+contact sheet (all 12 hands rendered tile-by-tile) proved **every one of the
+six models shipped with OPEN modeled hands** — the "fists" prompt never truly
+worked, gloves just hid it at distance. Meshy rigs have NO finger bones and
+the rigging API can't add them, so hands can only be closed in the MESH.
+
+- **FIST SURGERY (`tools/curl_fists.mjs`)**: closes hands in the bind
+  geometry — verts past the knuckle line get a progressive curl around the
+  knuckle axis PLUS quadratic compaction into a fist-center ball, with
+  sphere-blended normals (pure rotation looked like mangled hooked fingers —
+  owner called it). Finger axis = principal axis of the hand vert cloud via
+  covariance power iteration (forearm→hand direction fails on rigs with
+  bent-back bind wrists — the athlete's palms-up shrug). Meshy IBMs carry
+  non-rigid armature scales → NEVER trust bone matrices for positions; use
+  vertex clouds. Backups: *.openhands.bak beside each GLB (gitignored).
+  Verified per-hand on a 6-tile close-up sheet (render ALL tiles in ONE
+  frame with preserveDrawingBuffer — the buffer wipes between browser frames).
+- **JUMP + SWIM clips** (Basic_Jump 86 / Swim_Forward 569, all six rigs,
+  ~25cr): airborne actors used to play IDLE (no clip matched "jump");
+  swimming was run@0.6. Both verified live (SPACE → jump clip; river → real
+  freestyle stroke).
+- **AIM PITCH** (AAA upper-body layer): gunReady/reload target dirs tilt with
+  the camera's vertical aim + Spine01/Spine02 bend — the gun visibly tracks
+  where you aim up/down (verified at steep up-aim).
+- **BACKPEDAL** plays the stride in REVERSE (negative setEffectiveTimeScale)
+  when moving against facing in combat — no more moonwalking (verified
+  ts=-1.31 under ADS+S).
+- Meshy balance after: 989cr. gen-scripts live in session scratchpad; the
+  temp dir gets purged by the OS — `meshy_lc5.py` silently became 0 BYTES and
+  "ran" successfully (empty file exits 0). Check file sizes before batches.
+
 ## 2026-07-08 — v4.2 particles were NEVER rendering, emote locker, leg posing, storm feel
 
 Owner round 5. The headline find: **no particle had ever rendered in a match**
