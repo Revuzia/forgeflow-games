@@ -16,7 +16,6 @@ const { FX } = await import("./fx.js" + V);
 const { AudioSys } = await import("./audio.js" + V);
 const { HUD } = await import("./hud.js" + V);
 const { Menu, saveRecord, loadRecords } = await import("./menu.js" + V);
-const LB = await import("../net/leaderboard.js" + V);
 
 const { CONST, SKINS, BIOMES, ranking, segRadius } = S;
 
@@ -71,7 +70,6 @@ export class Game {
       onOnline: () => this.openOnline(),
       getSettings: () => ({ ...this.settings }),
       onSettings: (patch) => this.applySettings(patch),
-      getLeaderboard: () => LB.fetchTop(20),
     });
     this._bindInput();
     this.applySettings({});
@@ -231,11 +229,18 @@ export class Game {
     const prev = loadRecords();
     const prevTop = prev.length ? prev[0].len : 0;
     saveRecord({ name: this.menu.getProfile().name, len, biome: this.W.biome, mode: this.mode, ts: Date.now() });
-    // submit to the GLOBAL board once per run (fire-and-forget; degrades to
-    // local silently if the table isn't migrated / offline)
+    // Report to the ForgeFlow account system via the standard portal bridge:
+    // when the game is embedded in the forgeflowgames.com player (an iframe),
+    // the portal submits this to leaderboard_scores — but ONLY for a signed-in
+    // account. Guests play but aren't tracked. The game holds no auth/DB code.
+    // Harmless no-op when played standalone (window.parent === window).
     if (!this._runSubmitted) {
       this._runSubmitted = true;
-      LB.submit({ name: this.menu.getProfile().name, len, biome: this.W.biome, mode: this.mode });
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: "forgeflow:game_over", score: len }, "*");
+        }
+      } catch (e) {}
     }
     // a genuine new best = beat an existing record (not just the first-ever run)
     return { newBest: prev.length > 0 && len > prevTop };

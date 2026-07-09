@@ -1,5 +1,21 @@
 # Cosmic Coils — CHANGELOG
 
+## 9 — 2026-07-09 · Leaderboard uses the canonical ForgeFlow account system
+- **Corrected the leaderboard architecture.** v8 shipped a *standalone anonymous*
+  board (its own table + anon RPC) — wrong: forgeflowgames.com already has a
+  central player system where **only signed-in accounts are tracked** (guests
+  play but aren't ranked/saved). Replaced it with the standard portal bridge:
+  on run end the game posts `{type:"forgeflow:game_over", score}` to the parent
+  frame; the forgeflowgames.com player (`gameBridge`/`GamePlayer`) submits it to
+  `leaderboard_scores` **only for a logged-in account**. The game now holds zero
+  auth/DB code (harmless no-op when played standalone). Verified end-to-end via
+  an iframe harness (parent receives the score message).
+- Removed `runtime/net/leaderboard.js`, the GLOBAL/LOCAL Records tabs, and the
+  anonymous `cc_leaderboard` table + `cc_submit_score` RPC (dropped from the DB;
+  migration 0007 withdrawn). In-game Records is now local device bests only, with
+  a note that the global board lives on forgeflowgames.com (sign in to rank).
+- `?v=` → 9.
+
 ## 8 — 2026-07-09 · Arcade polish batch (leaderboard, countdown, combo, touch, auto-quality)
 - **Global leaderboard** (`runtime/net/leaderboard.js`, Records → 🌍 GLOBAL tab):
   reads the public top-20 and submits each run (once) via the anon-safe

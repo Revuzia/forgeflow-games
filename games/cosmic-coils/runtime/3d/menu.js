@@ -226,51 +226,17 @@ export class Menu {
   }
 
   _renderRecords() {
-    const tab = this._recTab || "global";
+    const recs = loadRecords();
     const biomeIcon = { verdant: "🌿", ember: "🌋", glacier: "❄️", dune: "🏜️", abyss: "🔮" };
-    const rowsHTML = (list, local) => list && list.length
-      ? list.map((r, i) => `<div class="r"><span>${i + 1}.</span><b>${esc(r.name)}</b><span>${r.length != null ? r.length : r.len}</span><span style="opacity:.55">${biomeIcon[r.biome] || ""} ${r.mode === "online" ? "🌐" : "🤖"}</span></div>`).join("")
-      : `<div style="opacity:.6;text-align:center;padding:14px">${local ? "no records yet — go grow a legend" : "loading global board…"}</div>`;
-    const active = (t) => t === tab ? "border-color:#3af2ff;color:#3af2ff" : "";
     this.root.innerHTML = `
       <div class="cc-card cc-sub">
         <button class="cc-back" data-a="back">‹ BACK</button>
         <div class="cc-title" style="font-size:30px">RECORDS</div>
-        <div style="display:flex;gap:8px;justify-content:center;margin:6px 0 12px">
-          <button class="cc-mode ghost" style="flex:1;padding:8px;${active("global")}" data-a="tglobal">🌍 GLOBAL</button>
-          <button class="cc-mode ghost" style="flex:1;padding:8px;${active("local")}" data-a="tlocal">📱 THIS DEVICE</button>
-        </div>
-        <div class="cc-records" data-a="rows">${tab === "local" ? rowsHTML(loadRecords(), true) : rowsHTML(this._globalCache, false)}</div>
+        <div class="cc-tag">YOUR LONGEST COILS (THIS DEVICE)</div>
+        <div class="cc-records">${recs.length ? recs.map((r, i) => `<div class="r"><span>${i + 1}.</span><b>${esc(r.name)}</b><span>${r.len}</span><span style="opacity:.55">${biomeIcon[r.biome] || ""} ${r.mode === "online" ? "🌐" : "🤖"}</span></div>`).join("") : `<div style="opacity:.6;text-align:center">no records yet — go grow a legend</div>`}</div>
+        <div style="font-size:11px;opacity:.55;line-height:1.6;margin-top:12px;text-align:center">🌍 The global leaderboard lives on <b>forgeflowgames.com</b> — sign in there and your runs post automatically. Guests can play; only signed-in accounts are ranked.</div>
       </div>`;
     this.root.querySelector('[data-a="back"]').onclick = () => { this.audio.ui(); this.show("main"); };
-    this.root.querySelector('[data-a="tglobal"]').onclick = () => { this.audio.ui(); this._recTab = "global"; this.render(); this._loadGlobal(); };
-    this.root.querySelector('[data-a="tlocal"]').onclick = () => { this.audio.ui(); this._recTab = "local"; this.render(); };
-    if (tab === "global") this._loadGlobal();
-  }
-
-  async _loadGlobal() {
-    if (this._globalLoading) return;
-    this._globalLoading = true;
-    try {
-      const lb = this.h.getLeaderboard ? await this.h.getLeaderboard() : null;
-      this._globalCache = lb; // array or null
-    } catch (e) { this._globalCache = null; }
-    this._globalLoading = false;
-    // re-render only if still on the global records tab
-    if (this._page === "records" && (this._recTab || "global") === "global") {
-      const rows = this.root.querySelector('[data-a="rows"]');
-      if (rows) {
-        const biomeIcon = { verdant: "🌿", ember: "🌋", glacier: "❄️", dune: "🏜️", abyss: "🔮" };
-        rows.innerHTML = (this._globalCache && this._globalCache.length)
-          ? this._globalCache.map((r, i) => `<div class="r"><span>${i + 1}.</span><b>${esc(r.name)}</b><span>${r.length}</span><span style="opacity:.55">${biomeIcon[r.biome] || ""} ${r.mode === "online" ? "🌐" : "🤖"}</span></div>`).join("")
-          : `<div style="opacity:.6;text-align:center;padding:14px">${this._globalCache === null ? "global board offline — showing device records instead" : "no global scores yet — be the first!"}</div>`;
-        if (this._globalCache === null) {
-          // graceful fallback: show local under the offline note
-          const local = loadRecords();
-          if (local.length) rows.innerHTML += local.map((r, i) => `<div class="r"><span>${i + 1}.</span><b>${esc(r.name)}</b><span>${r.len}</span><span style="opacity:.55">${biomeIcon[r.biome] || ""} ${r.mode === "online" ? "🌐" : "🤖"}</span></div>`).join("");
-        }
-      }
-    }
   }
 
   _renderHow() {
