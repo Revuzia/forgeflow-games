@@ -262,6 +262,7 @@ export class Builder {
     };
     switch (o.kind) {
       case "door": {
+        grp.rotation.y = D.doorAxis(this.d, this.floor, o.x, o.z) === 0 ? -Math.PI / 2 : 0; // face the doorway
         add(this.kit.gate);
         if (o.locked) { const bars = add(this.kit.gateLocked); bars.name = "bars"; bars.position.z += 0.02; }
         else { const leaf = add(this.kit.gateDoor); leaf.name = "leaf"; }

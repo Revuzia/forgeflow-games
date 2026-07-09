@@ -159,6 +159,7 @@ export class Escape {
     };
     switch (o.kind) {
       case "door": {
+        grp.rotation.y = D.doorAxis(this.d, f, o.x, o.z) === 0 ? -Math.PI / 2 : 0; // face the doorway
         add(this.kit.gate);
         const leafTpl = this.kit.gateDoor;
         const leaf = A.clone(leafTpl); grp.add(leaf);

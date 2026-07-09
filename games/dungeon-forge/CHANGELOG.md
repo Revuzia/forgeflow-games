@@ -238,3 +238,17 @@ Initial release.
   (smoothed by the existing step lerp). Legacy raised platforms auto-upgrade to
   the rolling mesh. Verified live: a raised region reads as a smooth mound.
   Selftest → 137 (raise/lower levels, clamp, serialize roundtrip, cell- clears).
+
+## v1.5.0 — 2026-07-07 (/loop batch 8 — final: doors-on-walls + solvability fix)
+- **Doors auto-orient to their doorway (1)**: a new neighbour-derived `doorAxis()`
+  replaces the stored-rotation logic everywhere (solvability flood-fill, escape
+  collision, and rendering). A door now always lets you through ALONG its corridor
+  and blocks only across its wall — regardless of the rot it was placed with.
+- **Fixed the solvability + collision bug**: an UNLOCKED door dropped mid-corridor
+  used to break the flood-fill ("exit not connected") because its rot didn't match
+  the corridor. Now unlocked doors are passable along the doorway; locked doors are
+  a keyed frontier as before. Verified live: rot-0 door in an E-W corridor →
+  solvable, and the gate renders as an archway spanning the passage (in the wall,
+  not floating at a tile centre). Selftest → 142.
+
+—— With this, every item from the builder-feedback pass is done (v1.4.1 → v1.5.0). ——

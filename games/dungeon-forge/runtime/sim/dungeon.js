@@ -314,18 +314,34 @@ export function wallSegments(d, f) {
 }
 
 /** Can an actor pass from cell a to adjacent cell b on floor f (doors count)? */
+/**
+ * A door's pass-through axis, derived from its floor NEIGHBOURS (the doorway it
+ * sits in) rather than a stored rotation — so a door always lets you through
+ * along its corridor regardless of how it was placed. Returns 0 = passes E-W
+ * (along X), 1 = passes N-S (along Z). Falls back to the door's rot if the
+ * neighbourhood is ambiguous.
+ */
+export function doorAxis(d, f, x, z) {
+  const ew = hasCell(d, f, x - 1, z) && hasCell(d, f, x + 1, z);
+  const ns = hasCell(d, f, x, z - 1) && hasCell(d, f, x, z + 1);
+  if (ew && !ns) return 0;
+  if (ns && !ew) return 1;
+  const door = objsAt(d, f, x, z).find((o) => o.kind === "door");
+  return door && door.rot % 2 === 1 ? 0 : 1;
+}
+
 export function passable(d, f, ax, az, bx, bz, openDoors) {
   if (!hasCell(d, f, bx, bz)) return false;
   const dx = bx - ax, dz = bz - az;
   if (Math.abs(dx) + Math.abs(dz) !== 1) return false;
-  // door on either endpoint: axis must match passage and it must be open
+  const moveX = dx !== 0;
+  // door on either endpoint: you cross it only along its doorway axis, and only
+  // when it's open (unlocked doors are pre-opened by the solvability checker).
   for (const [x, z] of [[ax, az], [bx, bz]]) {
     for (const o of objsAt(d, f, x, z)) {
       if (o.kind === "door") {
-        const alongZ = o.rot % 2 === 0;
-        if (alongZ && dz === 0) return false;         // crossing the door wall sideways
-        if (!alongZ && dx === 0) return false;
-        if (!(openDoors && openDoors.has(o.id))) return false; // closed blocks its cell
+        if ((doorAxis(d, f, x, z) === 0) !== moveX) return false; // crossing the door's solid wall
+        if (!(openDoors && openDoors.has(o.id))) return false;    // closed blocks its cell
       }
       if (o.kind === "decor" && KINDS.decor.solid && (x === bx && z === bz)) return false;
       if (o.kind === "chest" && (x === bx && z === bz)) return false;
@@ -407,12 +423,12 @@ export function solvability(d) {
         if (seen.has(k) || !hasCell(d, f, nx, nz)) continue;
         // doors: use passable() but track locked frontier separately
         if (passable(d, f, x, z, nx, nz, opened)) { seen.add(k); q.push([f, nx, nz]); continue; }
-        // was it a locked door that blocked us (and axis was fine)?
+        // was it a locked door that blocked us along its (neighbour-derived) axis?
+        const dCell = objsAt(d, f, nx, nz).find((o) => o.kind === "door") ? [nx, nz] : [x, z];
         const doorHere = objsAt(d, f, nx, nz).find((o) => o.kind === "door") || objsAt(d, f, x, z).find((o) => o.kind === "door");
         if (doorHere && doorHere.locked && !opened.has(doorHere.id)) {
-          const alongZ = doorHere.rot % 2 === 0;
-          const dx = nx - x, dz = nz - z;
-          if ((alongZ && dx === 0) || (!alongZ && dz === 0)) frontierDoors.add(doorHere.id);
+          const moveX = (nx - x) !== 0;
+          if ((doorAxis(d, f, dCell[0], dCell[1]) === 0) === moveX) frontierDoors.add(doorHere.id);
         }
       }
       // stairs from this cell (both directions)

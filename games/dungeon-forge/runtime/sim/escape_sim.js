@@ -14,7 +14,7 @@
 import {
   CELL, DIRS, ENEMIES, ck, hasCell, objsAt, findAll, stairLinks,
   mulberry, hashStr, rollLoot, cellType, cellHeight, CT, LAVA_DPS, WATER_SLOW, RAISED_H,
-  SHOP, SHOP_IDS, NPC_TYPES,
+  SHOP, SHOP_IDS, NPC_TYPES, doorAxis,
 } from "./dungeon.js";
 
 export const PLAYER = {
@@ -181,13 +181,11 @@ function cellBlocked(st, f, cx, cz, forEnemy) {
 
 // door cells restrict crossing to their axis even when open
 function doorAxisBlocks(st, f, fromX, fromZ, toX, toZ) {
-  const dx = Math.sign(toX - fromX), dz = Math.sign(toZ - fromZ);
+  const moveX = Math.sign(toX - fromX) !== 0;
   for (const [x, z] of [[fromX, fromZ], [toX, toZ]]) {
     for (const o of objsAt(st.d, f, x, z)) {
       if (o.kind !== "door") continue;
-      const alongZ = o.rot % 2 === 0;
-      if (alongZ && dx !== 0) return true;
-      if (!alongZ && dz !== 0) return true;
+      if ((doorAxis(st.d, f, x, z) === 0) !== moveX) return true; // crossing the door's solid wall
     }
   }
   return false;

@@ -493,6 +493,31 @@ const ok = (cond, name, extra) => {
     ok(D.cellLevel(dd, 0, 7, 7) === 0, "cell- clears the cell's height");
   }
 
+  // ── 15e. doors: unlocked passable in a corridor (any orientation) ───
+  console.log("[doors on walls]");
+  {
+    // two rooms joined by a 1-wide E-W corridor; door dropped mid-corridor
+    const dd = newDungeon({ name: "D", theme: "fantasy", seed: 1 });
+    stampRoom(dd, 0, 4, 4, 3, 3);
+    stampRoom(dd, 0, 11, 4, 3, 3);
+    for (let x = 7; x < 11; x++) applyOp(dd, { t: "cell+", f: 0, x, z: 5, ct: 1 });
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "exit", x: 12, z: 5 } });
+    // doorAxis reads the corridor (E-W floor neighbours) → passes along X
+    ok(D.doorAxis(dd, 0, 8, 5) === 0, "door in an E-W corridor passes E-W");
+    // UNLOCKED door mid-corridor (rot 0, which used to wrongly block) → still solvable
+    const door = applyOp(dd, { t: "obj+", f: 0, o: { kind: "door", x: 8, z: 5, rot: 0 } });
+    ok(validate(dd).ok, "UNLOCKED mid-corridor door → solvable (any rot)");
+    // passable honours it when opened
+    ok(D.passable(dd, 0, 7, 5, 8, 5, new Set([door.id])), "open door passable along the corridor");
+    ok(!D.passable(dd, 0, 8, 4, 8, 5, new Set([door.id])), "can't cross the door's wall sideways");
+    // LOCK it, remove any key → unsolvable; add a reachable key → solvable
+    applyOp(dd, { t: "objEdit", id: door.id, p: { locked: true } });
+    ok(!validate(dd).ok, "locked door, no key → unsolvable");
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "key", x: 5, z: 6 } });
+    ok(validate(dd).ok, "locked door + reachable key → solvable");
+  }
+
   // ── 16. scale: 1 / 10 / 20 / 30-room dungeons ──────────────────
   console.log("[scale]");
   const genRooms = (n) => {
