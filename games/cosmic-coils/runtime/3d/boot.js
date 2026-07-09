@@ -24,7 +24,7 @@ function makeRenderer(container) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 0.92;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = false; // glow aesthetic — bloom carries the look, big perf win
   container.appendChild(renderer.domElement);
@@ -41,8 +41,9 @@ try {
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
+  // lower strength/threshold so world limb + essence don't blow out
   const bloom = new UnrealBloomPass(
-    new THREE.Vector2(container.clientWidth, container.clientHeight), 0.85, 0.55, 0.6);
+    new THREE.Vector2(container.clientWidth, container.clientHeight), 0.48, 0.45, 0.72);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 

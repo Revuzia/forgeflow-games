@@ -20,14 +20,14 @@ export const BIOME_DEFS = {
     tex: "assets/textures/verdant.jpg", texScale: 0.115,
     glowVec: [-0.7, 0.35, 0.75], glowBias: -0.02,   // teal glow-flowers
     tintLow: 0x2a5c2e, tintHigh: 0x9adf7a,
-    emissive: 0x1a3f14, emissiveInt: 0.32,
-    liquid: { color: 0x1c8fff, glow: 0.55, depth: 1.05 },
+    emissive: 0x1a3f14, emissiveInt: 0.22,
+    liquid: { color: 0x1c8fff, glow: 0.32, depth: 1.05 },
     sky: { horizon: 0x14343c, zenith: 0x03040d, nebula: 0x1f7a5c, nebula2: 0x145544, stars: 1.0 },
-    sun: { color: 0xfff2d8, int: 2.3, dir: [0.6, 0.7, 0.35] },
-    hemi: { sky: 0x9fd8ff, ground: 0x2c5a30, int: 0.75 },
-    fog: 0x0a2321, fogDensity: 0.0035,
+    sun: { color: 0xfff2d8, int: 2.0, dir: [0.6, 0.7, 0.35] },
+    hemi: { sky: 0x9fd8ff, ground: 0x2c5a30, int: 0.65 },
+    fog: 0x0a2321, fogDensity: 0.0018,
     ambientMotes: { color: 0xaaffcc, n: 140, mode: "firefly" },
-    clouds: { color: 0xffffff, n: 40, alpha: 0.20, alt: [10, 16] },
+    clouds: { color: 0xffffff, n: 40, alpha: 0.18, alt: [20, 32] },
     accent: 0x53ffb4,
   },
   ember: {
@@ -35,14 +35,14 @@ export const BIOME_DEFS = {
     tex: "assets/textures/ember.jpg", texScale: 0.105,
     glowVec: [1.0, -0.75, -0.75], glowBias: 0.0,    // orange lava veins
     tintLow: 0x6a5a62, tintHigh: 0xcfc0bc,
-    emissive: 0xff4a00, emissiveInt: 1.15,
-    liquid: { color: 0xff5a00, glow: 2.0, depth: 1.0 },
+    emissive: 0xff4a00, emissiveInt: 0.72,
+    liquid: { color: 0xff5a00, glow: 1.05, depth: 1.0 },
     sky: { horizon: 0x3a120a, zenith: 0x070308, nebula: 0x8a2c10, nebula2: 0x571c3a, stars: 0.7 },
-    sun: { color: 0xffd9b8, int: 2.4, dir: [-0.5, 0.62, 0.5] },
-    hemi: { sky: 0xff9a66, ground: 0x4a2418, int: 0.8 },
-    fog: 0x1d0c08, fogDensity: 0.004,
+    sun: { color: 0xffd9b8, int: 2.1, dir: [-0.5, 0.62, 0.5] },
+    hemi: { sky: 0xff9a66, ground: 0x4a2418, int: 0.7 },
+    fog: 0x1d0c08, fogDensity: 0.002,
     ambientMotes: { color: 0xffa040, n: 170, mode: "ember" },
-    clouds: { color: 0x4a3a3c, n: 30, alpha: 0.22, alt: [11, 17] },
+    clouds: { color: 0x4a3a3c, n: 30, alpha: 0.20, alt: [22, 34] },
     accent: 0xff7b3a,
   },
   glacier: {
@@ -51,13 +51,13 @@ export const BIOME_DEFS = {
     glowVec: [-0.9, 0.3, 0.85], glowBias: -0.06,    // cyan ice veins
     tintLow: 0x5b86b8, tintHigh: 0xeafaff,
     emissive: 0x2bd8ff, emissiveInt: 0.28,
-    liquid: { color: 0x37e0ff, glow: 0.8, depth: 1.1 },
+    liquid: { color: 0x37e0ff, glow: 0.45, depth: 1.1 },
     sky: { horizon: 0x0e2c46, zenith: 0x020310, nebula: 0x1c5f8a, nebula2: 0x3a2c7a, stars: 1.25 },
-    sun: { color: 0xdff2ff, int: 2.5, dir: [0.35, 0.75, -0.55] },
-    hemi: { sky: 0xbfe8ff, ground: 0x27435f, int: 0.8 },
-    fog: 0x10222e, fogDensity: 0.0032,
+    sun: { color: 0xdff2ff, int: 2.2, dir: [0.35, 0.75, -0.55] },
+    hemi: { sky: 0xbfe8ff, ground: 0x27435f, int: 0.7 },
+    fog: 0x10222e, fogDensity: 0.0016,
     ambientMotes: { color: 0xd8f6ff, n: 120, mode: "sparkle" },
-    clouds: { color: 0xeaf6ff, n: 22, alpha: 0.15, alt: [12, 18] },
+    clouds: { color: 0xeaf6ff, n: 22, alpha: 0.13, alt: [24, 36] },
     accent: 0x6fe3ff,
   },
   dune: {
@@ -70,9 +70,9 @@ export const BIOME_DEFS = {
     sky: { horizon: 0x54301c, zenith: 0x0a0512, nebula: 0x8a5c24, nebula2: 0x6a2c50, stars: 0.9 },
     sun: { color: 0xffe9c4, int: 2.7, dir: [0.72, 0.6, 0.1] },
     hemi: { sky: 0xffd9a0, ground: 0x6a4526, int: 0.7 },
-    fog: 0x2e1d10, fogDensity: 0.0034,
+    fog: 0x2e1d10, fogDensity: 0.0017,
     ambientMotes: { color: 0xffe0a0, n: 90, mode: "dust" },
-    clouds: { color: 0xe8cf9a, n: 16, alpha: 0.13, alt: [10, 15] },
+    clouds: { color: 0xe8cf9a, n: 16, alpha: 0.12, alt: [20, 30] },
     accent: 0xffc858,
   },
   abyss: {
@@ -80,14 +80,14 @@ export const BIOME_DEFS = {
     tex: "assets/textures/abyss.jpg", texScale: 0.115,
     glowVec: [0.55, -0.95, 0.65], glowBias: 0.0,    // magenta/cyan spores
     tintLow: 0x271b4a, tintHigh: 0x7a5fd0,
-    emissive: 0xb43cff, emissiveInt: 0.6,
-    liquid: { color: 0xff2ba6, glow: 1.4, depth: 1.05 },
+    emissive: 0xb43cff, emissiveInt: 0.38,
+    liquid: { color: 0xff2ba6, glow: 0.75, depth: 1.05 },
     sky: { horizon: 0x1c0f3a, zenith: 0x040112, nebula: 0x6a1c8a, nebula2: 0x1c4a8a, stars: 1.4 },
-    sun: { color: 0xd0b8ff, int: 1.8, dir: [-0.3, 0.7, -0.62] },
-    hemi: { sky: 0x9a7aff, ground: 0x2a1a4a, int: 0.85 },
-    fog: 0x150a2e, fogDensity: 0.0038,
+    sun: { color: 0xd0b8ff, int: 1.55, dir: [-0.3, 0.7, -0.62] },
+    hemi: { sky: 0x9a7aff, ground: 0x2a1a4a, int: 0.72 },
+    fog: 0x150a2e, fogDensity: 0.0019,
     ambientMotes: { color: 0xe27aff, n: 160, mode: "spore" },
-    clouds: { color: 0xb88aff, n: 34, alpha: 0.16, alt: [12, 18] },
+    clouds: { color: 0xb88aff, n: 34, alpha: 0.14, alt: [24, 36] },
     accent: 0xe05aff,
   },
 };
@@ -191,17 +191,18 @@ function makeSky(def, seed) {
 
 // ── atmosphere fresnel shell ─────────────────────────────────────────────────
 function makeAtmosphere(R, colorHex) {
-  const geo = new THREE.SphereGeometry(R * 1.06, 64, 48);
+  // thinner, dimmer limb glow — previous rim (α·0.42 + bloom) read as a harsh halo
+  const geo = new THREE.SphereGeometry(R * 1.035, 64, 48);
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
-    uniforms: { uColor: { value: new THREE.Color(colorHex) } },
+    uniforms: { uColor: { value: new THREE.Color(colorHex).multiplyScalar(0.55) } },
     vertexShader: `
       varying vec3 vN; varying vec3 vE;
       void main(){ vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position,1.0); vE = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }
     `,
     fragmentShader: `
       varying vec3 vN; varying vec3 vE; uniform vec3 uColor;
-      void main(){ float f = pow(1.0 - abs(dot(vN, vE)), 3.1); gl_FragColor = vec4(uColor, f * 0.42); }
+      void main(){ float f = pow(1.0 - abs(dot(vN, vE)), 3.8); gl_FragColor = vec4(uColor, f * 0.16); }
     `,
   });
   return new THREE.Mesh(geo, mat);
@@ -488,7 +489,7 @@ export class Planet {
     // lights (created ONCE — never add lights later)
     const sd = def.sun.dir;
     this.sun = new THREE.DirectionalLight(def.sun.color, def.sun.int);
-    this.sun.position.set(sd[0] * 300, sd[1] * 300, sd[2] * 300);
+    this.sun.position.set(sd[0] * 600, sd[1] * 600, sd[2] * 600);
     this.group.add(this.sun);
     this.hemi = new THREE.HemisphereLight(def.hemi.sky, def.hemi.ground, def.hemi.int);
     this.group.add(this.hemi);

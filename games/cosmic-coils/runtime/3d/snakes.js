@@ -13,8 +13,8 @@ const V = new URL(import.meta.url).search;
 const S = await import("../sim/serpent.js" + V);
 const { CONST, SKINS, terrainH, segRadius, segSpacing } = S;
 
-const MAX_SEGS = 12 * 462;
-const MAX_FOOD = 900;
+const MAX_SEGS = 12 * (CONST.SEG_MAX + 2);
+const MAX_FOOD = 2400;
 
 /** inject per-instance color into the emissive term (the glow trick) */
 function glowify(mat, factor) {
@@ -56,7 +56,7 @@ export class SnakeField {
     // segment instancing
     const segGeo = new THREE.SphereGeometry(1, 18, 13);
     const segMat = new THREE.MeshStandardMaterial({ roughness: 0.32, metalness: 0.18 });
-    glowify(segMat, 0.5);
+    glowify(segMat, 0.42);
     this.segMesh = new THREE.InstancedMesh(segGeo, segMat, MAX_SEGS);
     this.segMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.segMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_SEGS * 3), 3);
@@ -67,8 +67,8 @@ export class SnakeField {
 
     // food instancing
     const foodGeo = new THREE.IcosahedronGeometry(1, 1);
-    const foodMat = new THREE.MeshStandardMaterial({ roughness: 0.25, metalness: 0.1 });
-    glowify(foodMat, 0.85);
+    const foodMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.08 });
+    glowify(foodMat, 0.38);
     this.foodMesh = new THREE.InstancedMesh(foodGeo, foodMat, MAX_FOOD);
     this.foodMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.foodMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_FOOD * 3), 3);
@@ -148,7 +148,7 @@ export class SnakeField {
       const shieldBlink = sn.shield > 0 ? (Math.sin(this.t * 16) * 0.5 + 0.5) * 0.7 + 0.5 : 1;
       const boostGlow = sn.boosting ? 1.45 : 1;
       const pulseSpeed = sn.boosting ? 9 : 4.2;
-      const n = Math.min(sn.segN, 462);
+      const n = Math.min(sn.segN, CONST.SEG_MAX);
       const patternType = sn.skinId % 3; // 0 gradient, 1 stripes, 2 pulse-bands
 
       for (let i = 0; i < n && idx < MAX_SEGS; i++) {
@@ -225,21 +225,23 @@ export class SnakeField {
       const wob = f.seed % 6.28;
       p.set(f.u.x, f.u.y, f.u.z);
       const h = terrainH(p, W.seed, CONST.TERRAIN_AMP);
-      const bob = f.tier === 9 ? Math.sin(this.t * 2.4 + wob) * 0.25 : Math.sin(this.t * 1.8 + wob) * 0.12;
+      const bob = f.tier === 9 ? Math.sin(this.t * 2.0 + wob) * 0.14 : Math.sin(this.t * 1.8 + wob) * 0.10;
       p.multiplyScalar(R + h + f.r + 0.35 + bob);
-      const pulse = 1 + Math.sin(this.t * (f.tier === 9 ? 5 : 3) + wob) * 0.16;
-      const s = f.r * pulse * grow * (f.tier === 9 ? 1.25 : 1);
+      const pulse = 1 + Math.sin(this.t * (f.tier === 9 ? 3.2 : 2.6) + wob) * (f.tier === 9 ? 0.08 : 0.10);
+      const s = f.r * pulse * grow * (f.tier === 9 ? 1.05 : 1);
       m4.makeRotationY(this.t * 0.9 + wob);
       m4.scale(sc.setScalar(s));
       m4.setPosition(p);
       this.foodMesh.setMatrixAt(fi, m4);
-      // tier colors
-      if (f.tier === 0) c.setHex(0xffc46a);
-      else if (f.tier === 1) c.setHex(0x54f0ff);
-      else if (f.tier === 2) c.setHex(0xffd94a);
-      else if (f.tier === 3) c.setHex(0xff54d8);
-      else c.setHex(0xaefc6a); // essence
-      const tw = 0.8 + 0.5 * Math.sin(this.t * 4.4 + wob * 2);
+      // tier colors (essence deliberately muted — bloom was blowing them out)
+      if (f.tier === 0) c.setHex(0xe0a858);
+      else if (f.tier === 1) c.setHex(0x3cc8d8);
+      else if (f.tier === 2) c.setHex(0xd8b840);
+      else if (f.tier === 3) c.setHex(0xd848b0);
+      else c.setHex(0x78c850); // essence
+      const tw = f.tier === 9
+        ? 0.52 + 0.14 * Math.sin(this.t * 2.8 + wob * 2)
+        : 0.62 + 0.22 * Math.sin(this.t * 3.4 + wob * 2);
       c.multiplyScalar(tw);
       this.foodMesh.setColorAt(fi, c);
       fi++;

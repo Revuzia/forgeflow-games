@@ -93,6 +93,17 @@ const close = (a, b, eps, name) => ok(Math.abs(a - b) <= eps, name, `${a} vs ${b
   ok(evs.some((e) => e.type === "eat" && e.slot === 0), "eat event emitted");
   ok(segCount(p.mass) >= sc0, "segment count grows with mass");
   ok(segRadius(300) > segRadius(10), "girth grows with mass");
+  ok(CONST.R === 96, "planet radius is doubled (R=96)", CONST.R);
+  ok(!Number.isFinite(CONST.MASS_CAP) || CONST.MASS_CAP > 1e9, "no hard mass cap (MASS_CAP infinite)", CONST.MASS_CAP);
+  // mass past the old 620 / display-1488 ceiling still grows
+  {
+    const big = spawnSnake(Wm, 1, { isBot: false, mass: 700 });
+    const before = big.mass;
+    spawnFood(Wm, big.u, 2);
+    step(Wm, 1 / 60);
+    ok(big.mass > before && big.mass > 620, "mass grows past old 620/1488 ceiling", big.mass);
+    killSnake(Wm, big, null);
+  }
 
   // magnet: food near (not touching) gets pulled in and eventually eaten
   const mAte0 = p.mass;
@@ -138,25 +149,23 @@ const close = (a, b, eps, name) => ok(Math.abs(a - b) <= eps, name, `${a} vs ${b
 
   // ── 7. collision kills + essence ───────────────────────────────
   console.log("[collision]");
+  // R-independent: lay B's trail straight, then place A on a mid-body segment
+  // so the next step is a guaranteed head-into-body kill (no race with self-loops).
   const Wc = createWorld({ seed: 5, biome: "glacier", foodTarget: 0 });
   for (const id of Array.from(Wc.food.keys())) removeFood(Wc, id);
   const A = spawnSnake(Wc, 0, { isBot: false, mass: 30 });
   const B = spawnSnake(Wc, 1, { isBot: false, mass: 260 });
   A.shield = 0; B.shield = 0;
-  // B circles (steer held) so its body forms a loop; A homes onto a live point
-  // ~mid-body — guaranteed crossing. (Shielded bodies are pass-through by
-  // design, so the earlier version of this test could never kill A.)
-  let steps = 0;
+  V.set(B.u, 0, 1, 0); V.set(B.t, 1, 0, 0);
+  setInput(Wc, 1, { steer: 0 });
+  for (let i = 0; i < 90; i++) step(Wc, 1 / 60);
+  computeSegs(Wc, B);
+  const bi = Math.min(40, Math.max(8, B.segN - 5));
+  V.set(A.u, B.segs[bi * 3], B.segs[bi * 3 + 1], B.segs[bi * 3 + 2]);
+  V.set(A.t, B.t.x, B.t.y, B.t.z);
+  A.shield = 0; B.shield = 0;
   drainEvents(Wc);
-  const midT = V.make();
-  while (A.alive && B.alive && steps++ < 60 * 30) {
-    setInput(Wc, 1, { steer: 0.5 });
-    computeSegs(Wc, B);
-    const i3 = Math.min(30, B.segN - 1) * 3;
-    V.set(midT, B.segs[i3], B.segs[i3 + 1], B.segs[i3 + 2]);
-    setInput(Wc, 0, { steer: steerToward(Wc, A, midT) });
-    step(Wc, 1 / 60);
-  }
+  step(Wc, 1 / 60);
   ok(!A.alive, "head into body kills the runner");
   const evc = drainEvents(Wc);
   const dEv = evc.find((e) => e.type === "death" && e.slot === 0);

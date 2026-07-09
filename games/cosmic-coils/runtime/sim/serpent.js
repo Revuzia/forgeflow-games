@@ -93,15 +93,16 @@ export function terrainH(u, seed, amp = 1.6) {
 
 // ── constants ────────────────────────────────────────────────────────────────
 export const CONST = {
-  R: 48,                 // planet radius (world units)
+  R: 96,                 // planet radius (world units) — doubled from 48
   SLOTS: 12,             // total snakes in a match
-  FOOD_TARGET: 330,      // gems kept in the world
+  FOOD_TARGET: 1200,     // gems kept in the world (~same density on 4× surface)
   PATH_STEP: 0.30,       // arc distance between recorded path samples
   BASE_SPEED: 7.0,       // u/s
   BOOST_MULT: 1.78,
   TURN_RATE: 3.1,        // rad/s at base size
   START_MASS: 10,
-  MASS_CAP: 620,
+  MASS_CAP: Infinity,    // no gameplay mass limit (was 620 → display length 1488)
+  SEG_MAX: 2048,         // body sample budget per snake (GPU/collision ceiling; mass still uncapped)
   BOOST_DRAIN: 6.0,      // mass/s while boosting
   BOOST_MIN_MASS: 16,    // can't boost below this
   PELLET_EVERY: 0.55,    // s between dropped boost pellets
@@ -111,7 +112,7 @@ export const CONST = {
   PELLET_TTL: 30,
   MAGNET_R: 2.3,         // food gets pulled to head inside this
   TERRAIN_AMP: 1.6,
-  PATH_CAP: 4096,        // ring buffer points per snake
+  PATH_CAP: 16384,       // ring buffer points per snake (long titans)
   THROTTLE_UP: 0.42,     // W / hold-forward: up to +42% speed (free, ramped)
   THROTTLE_DOWN: 0.28,   // S / RMB: down to −28% speed
   SELF_SKIP_ARC: 8,      // arc units of "neck" exempt from self-collision —
@@ -121,9 +122,9 @@ export const CONST = {
 
 // mass → visual/gameplay scale
 export function segRadius(mass) { return 0.42 * (1 + Math.min(1.7, (mass - CONST.START_MASS) / 240)); }
-// slither.io-style stubby start: mass 10 → ~6 segments (was 24 — a `16` base
-// floored every hatchling at 16+). Grows ~0.62/mass, capped at 460.
-export function segCount(mass) { return Math.min(460, Math.max(5, Math.round(1 + mass * 0.5))); }
+// slither.io-style stubby start: mass 10 → ~6 segments. Grows with mass; body
+// samples soft-capped only by SEG_MAX (mass itself is uncapped).
+export function segCount(mass) { return Math.min(CONST.SEG_MAX, Math.max(5, Math.round(1 + mass * 0.5))); }
 export function segSpacing(mass) { return segRadius(mass) * 1.18; }
 export function turnRate(mass) { return CONST.TURN_RATE / (0.72 + segRadius(mass) * 0.75); }
 export function speedOf(mass) { return CONST.BASE_SPEED * (1 - Math.min(0.18, (mass - CONST.START_MASS) / 2600)); }
@@ -282,7 +283,7 @@ export function createWorld(opts = {}) {
     foodTarget: Math.round((opts.foodTarget || CONST.FOOD_TARGET)),
     simulateBots: opts.simulateBots !== false, // host/practice = true
     deathCounts: {},      // slot → n (deterministic essence ids)
-    _segScratch: new Float32Array(464 * 3),
+    _segScratch: new Float32Array((CONST.SEG_MAX + 4) * 3),
   };
   // initial food field
   while (W.food.size < W.foodTarget) spawnFood(W, null, 1 + (rng() < 0.15 ? 1 : 0) + (rng() < 0.03 ? 1 : 0));
@@ -373,7 +374,7 @@ export function spawnSnake(W, slot, o = {}) {
     pelletT: 0,
     deathT: 0, respawnAt: null,
     _sinceSample: 0,
-    segs: sn.segs || new Float32Array(464 * 3),
+    segs: (sn.segs && sn.segs.length >= (CONST.SEG_MAX + 4) * 3) ? sn.segs : new Float32Array((CONST.SEG_MAX + 4) * 3),
     segN: 0,
     ai: sn.isBot || o.isBot !== false ? {
       thinkAt: W.time + rng() * 0.12,
@@ -451,7 +452,7 @@ export function killSnake(W, sn, killerSlot = null, opts = {}) {
   const per = (sn.mass * 0.58) / n;
   const spacing = segSpacing(sn.mass) * 3;
   const pts = W._segScratch;
-  const wrote = bodyPoints(W, sn, pts, Math.min(n, 460), spacing);
+  const wrote = bodyPoints(W, sn, pts, Math.min(n, CONST.SEG_MAX), spacing);
   const essence = [];
   for (let i = 0; i < wrote; i++) {
     const id = `e${sn.slot}_${dc}_${i}`;
@@ -693,7 +694,7 @@ export function step(W, dt) {
         sn.pelletT = 0;
         // drop a pellet at the tail
         const nseg = segCount(sn.mass);
-        const wrote = bodyPoints(W, sn, W._segScratch, Math.min(nseg, 460), segSpacing(sn.mass));
+        const wrote = bodyPoints(W, sn, W._segScratch, Math.min(nseg, CONST.SEG_MAX), segSpacing(sn.mass));
         if (wrote > 2) {
           const i3 = (wrote - 1) * 3;
           spawnFood(W, V.set(_tmpA, W._segScratch[i3], W._segScratch[i3 + 1], W._segScratch[i3 + 2]), 0, 1.0, CONST.PELLET_TTL);
@@ -767,7 +768,7 @@ export function step(W, dt) {
   for (const [sn, f] of eatList) {
     if (!W.food.has(f.id)) continue; // already eaten this tick
     removeFood(W, f.id, sn.slot);
-    sn.mass = Math.min(CONST.MASS_CAP, sn.mass + f.value);
+    sn.mass = sn.mass + f.value; // no mass ceiling
     emit(W, { type: "eat", slot: sn.slot, tier: f.tier, value: f.value, u: f.u });
   }
 
@@ -850,7 +851,8 @@ export function selfSkipSegs(sn) {
 
 /** compute + cache world segment sample points (UNIT sphere) for a snake. */
 export function computeSegs(W, sn) {
-  const n = Math.min(segCount(sn.mass), 460);
+  const n = Math.min(segCount(sn.mass), CONST.SEG_MAX);
+  if (!sn.segs || sn.segs.length < n * 3) sn.segs = new Float32Array((CONST.SEG_MAX + 4) * 3);
   sn.segN = bodyPoints(W, sn, sn.segs, n, segSpacing(sn.mass));
   return sn.segN;
 }

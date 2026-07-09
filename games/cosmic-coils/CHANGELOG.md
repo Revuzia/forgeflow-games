@@ -1,5 +1,40 @@
 # Cosmic Coils — CHANGELOG
 
+## 8 — 2026-07-09 · Arcade polish batch (leaderboard, countdown, combo, touch, auto-quality)
+- **Global leaderboard** (`runtime/net/leaderboard.js`, Records → 🌍 GLOBAL tab):
+  reads the public top-20 and submits each run (once) to the registry Supabase
+  project via the anon-safe `cc_submit_score` RPC. Fully degrades to device-local
+  records when offline / not yet migrated. **Activation is one manual step**:
+  apply `supabase/migrations/0007_cosmic_coils_leaderboard.sql` in the Dashboard
+  SQL editor (the project has no programmatic DDL path here) — until then the
+  board silently shows local records. Client verified against live PostgREST
+  (correct read/submit shapes; 404-on-missing-table handled).
+- **Match-start countdown**: 3·2·1·GO! flourish on every match start (visual only —
+  the snake moves under its spawn shield; no input gating).
+- **Combo HUD**: the existing eat-combo (previously audio-only) now shows a
+  "COMBO ×N" chip with a draining timer bar when you chain gems.
+- **On-screen touch controls**: a real left joystick + right BOOST button appear on
+  touch devices (or `?touch=1`); the invisible-drag fallback is disabled when they're up.
+- **FPS-adaptive quality**: if the framerate stays below 45 for ~4s the game drops one
+  graphics tier (HIGH→MEDIUM→LOW) with a toast; never auto-raises; a manual pick in
+  Settings takes precedence.
+- `?v=` → 8.
+
+## 7 — 2026-07-09 · Local polish + production-like preview
+- **Local bundle/minify**: `npm run build` / `npm run preview` (esbuild → `dist/`,
+  three.js still CDN via importmap). Source debug: `npm run dev`.
+- **World size**: planet radius **48 → 96** (4× surface); food target **330 → 1200**.
+- **Snake size cap removed**: `MASS_CAP = Infinity` (was 620 ≈ display length 1488).
+  Body samples soft-capped at `SEG_MAX=2048` for GPU/collision only; path ring 16k.
+- **World glow/ring**: thinner/dimmer atmosphere rim, lower liquid/emissive/sun/hemi,
+  bloom base ~0.48 (was 0.85), exposure 0.92.
+- **Essence brightness**: muted tier-9 color + pulse; quieter eat burst; lower food glow.
+- **Essence pickup UI**: no more “+N essence!” toast (mass still awarded; rare gems keep callout).
+- **Arcade polish**: 🏆 "NEW PERSONAL BEST!" celebration toast + extra shake when a
+  run beats your device record; single-player auto-pauses when the tab loses focus
+  (online matches keep running — you can't freeze a shared game).
+- `?v=` → 7 (source); dist bundle has no cache-bust query.
+
 ## 6 — 2026-07-07 · Owner round 5 (stubby start)
 - Hatchlings now start at ~6 segments (was 24). The old segCount had a `16`
   base that floored every snake at 16+ segments; new formula `max(5, round(1 +

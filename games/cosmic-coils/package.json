@@ -1,0 +1,16 @@
+{
+  "name": "cosmic-coils",
+  "version": "7.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cosmic Coils — local build + preview (no deploy)",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "preview": "node tools/build.mjs && node tools/serve.mjs dist 4173",
+    "dev": "node tools/serve.mjs . 4173",
+    "test": "node runtime/sim/serpent.selftest.cjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.5"
+  }
+}

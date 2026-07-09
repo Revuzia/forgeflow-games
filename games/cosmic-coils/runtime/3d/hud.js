@@ -49,7 +49,19 @@ const css = `
 .cc-btn:disabled{opacity:.4;cursor:default;transform:none}
 .cc-pause-row{display:flex;gap:10px;align-items:center;font-size:13px;letter-spacing:1px}
 .cc-pause-row input[type=range]{width:160px;accent-color:#3af2ff}
-@media (max-width:700px){.cc-lb{display:none}.cc-map{width:110px;height:110px}.cc-score .len{font-size:20px}}
+.cc-count{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);font-size:96px;font-weight:900;letter-spacing:2px;color:#eaf6ff;text-shadow:0 0 40px rgba(90,220,255,0.9);pointer-events:none;opacity:0}
+.cc-count.go{color:#7dffce;text-shadow:0 0 44px rgba(120,255,190,1)}
+.cc-count.tick{animation:cccount 1s ease-out}
+@keyframes cccount{0%{opacity:0;transform:translate(-50%,-50%) scale(1.8)}18%{opacity:1;transform:translate(-50%,-50%) scale(1)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(0.7)}}
+.cc-combo{position:absolute;left:12px;top:74px;padding:6px 13px;font-weight:900;letter-spacing:1px;font-size:16px;color:#ffe07a;text-shadow:0 0 12px rgba(255,200,60,.85);opacity:0;transition:opacity .18s}
+.cc-combo .cbar{height:4px;margin-top:4px;border-radius:3px;background:linear-gradient(90deg,#ffd94a,#ff8a3c);box-shadow:0 0 8px rgba(255,190,70,.7)}
+.cc-touch{position:absolute;inset:0;pointer-events:none;display:none;z-index:22}
+.cc-touch.on{display:block}
+.cc-stick{position:absolute;left:26px;bottom:96px;width:132px;height:132px;border-radius:50%;background:rgba(10,20,40,0.35);border:2px solid rgba(120,200,255,0.3);pointer-events:auto}
+.cc-knob{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#7fdcff,#3a6cff);box-shadow:0 0 16px rgba(90,180,255,.7)}
+.cc-boostbtn{position:absolute;right:30px;bottom:104px;width:104px;height:104px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#ff8ad0,#c033ff);box-shadow:0 0 22px rgba(220,90,255,.55);border:2px solid rgba(255,180,255,0.4);pointer-events:auto;display:flex;align-items:center;justify-content:center;font-weight:900;letter-spacing:1px;color:#fff;font-size:15px;text-shadow:0 1px 4px rgba(0,0,0,.5);user-select:none}
+.cc-boostbtn:active{transform:scale(0.93)}
+@media (max-width:700px){.cc-lb{display:none}.cc-map{width:110px;height:110px}.cc-score .len{font-size:20px}.cc-count{font-size:70px}}
 `;
 
 const WICON = { calm: "☾", rain: "🌧", fireflies: "✨", ashstorm: "🌪", emberrain: "☄", blizzard: "🌨", aurora: "🌌", sandstorm: "🌵", heatwave: "🔥", sporestorm: "🍄", voidstorm: "⚡" };
@@ -75,6 +87,9 @@ export class HUD {
       <div class="cc-hint">steer: mouse or <b>A</b>/<b>D</b> · boost (builds up, burns mass): hold <b>W</b>/<b>LMB</b>/<b>SPACE</b> · slow: <b>S</b>/<b>RMB</b> · zoom: wheel · <b>F3</b> debug · <b>don't cross your own body!</b></div>
       <div class="cc-map cc-panel"><canvas width="316" height="316"></canvas></div>
       <div class="cc-debug"></div>
+      <div class="cc-panel cc-combo"><span class="ctxt"></span><div class="cbar"></div></div>
+      <div class="cc-count"></div>
+      <div class="cc-touch"><div class="cc-stick"><div class="cc-knob"></div></div><div class="cc-boostbtn">BOOST</div></div>
     `;
     this.$ = (q) => this.root.querySelector(q);
     this.lenEl = this.$(".len"); this.killsEl = this.$(".kills"); this.bestEl = this.$(".best"); this.rankEl = this.$(".rank");
@@ -87,6 +102,14 @@ export class HUD {
     this.mapCv = this.$(".cc-map canvas");
     this.mapCtx = this.mapCv.getContext("2d");
     this.debugEl = this.$(".cc-debug");
+    this.comboEl = this.$(".cc-combo");
+    this.comboTxt = this.$(".cc-combo .ctxt");
+    this.comboBar = this.$(".cc-combo .cbar");
+    this.countEl = this.$(".cc-count");
+    this.touchEl = this.$(".cc-touch");
+    this.stickEl = this.$(".cc-stick");
+    this.knobEl = this.$(".cc-knob");
+    this.boostBtn = this.$(".cc-boostbtn");
     this._lbT = 0;
     this._hintT = 0;
     this._lastWeather = "calm";
@@ -100,6 +123,75 @@ export class HUD {
 
   setDebug(on) { this.debugEl.style.display = on ? "block" : "none"; }
   updateDebug(text) { this.debugEl.textContent = text; }
+
+  /** 3·2·1·GO spawn flourish (visual only — the snake moves normally under its
+   * spawn shield). onGo fires when "GO!" shows. */
+  countdown(onGo) {
+    const seq = ["3", "2", "1", "GO!"];
+    let i = 0;
+    const step = () => {
+      if (!this.countEl) return;
+      const label = seq[i];
+      this.countEl.textContent = label;
+      this.countEl.classList.toggle("go", label === "GO!");
+      // retrigger the CSS animation
+      this.countEl.classList.remove("tick"); void this.countEl.offsetWidth; this.countEl.classList.add("tick");
+      if (this.audio) (label === "GO!" ? this.audio.respawn : this.audio.ui).call(this.audio);
+      if (label === "GO!" && onGo) onGo();
+      i++;
+      if (i < seq.length) this._countTimer = setTimeout(step, label === "1" ? 640 : 620);
+    };
+    if (this._countTimer) clearTimeout(this._countTimer);
+    step();
+  }
+  clearCountdown() { if (this._countTimer) { clearTimeout(this._countTimer); this._countTimer = null; } if (this.countEl) this.countEl.className = "cc-count"; }
+
+  /** combo streak chip. n = combo count, frac = time remaining 0..1 */
+  setCombo(n, frac) {
+    if (n >= 2) {
+      this.comboEl.style.opacity = "1";
+      this.comboTxt.textContent = "COMBO ×" + n;
+      this.comboBar.style.width = Math.max(0, Math.min(1, frac)) * 100 + "%";
+    } else {
+      this.comboEl.style.opacity = "0";
+    }
+  }
+
+  /** build the on-screen touch controls (joystick + boost). steerCb(x∈-1..1),
+   * boostCb(bool). Returns true if enabled (touch device or ?touch=1). */
+  enableTouch(steerCb, boostCb) {
+    const coarse = window.matchMedia && window.matchMedia("(pointer:coarse)").matches;
+    const forced = /[?&]touch=1/.test(location.search);
+    if (!coarse && !forced && !("ontouchstart" in window)) return false;
+    this.touchEl.classList.add("on");
+    const stick = this.stickEl, knob = this.knobEl;
+    let sid = null, cx = 0, cy = 0, rad = 52;
+    const setKnob = (dx, dy) => { knob.style.transform = `translate(${dx}px,${dy}px)`; };
+    stick.addEventListener("pointerdown", (e) => {
+      sid = e.pointerId; const r = stick.getBoundingClientRect();
+      cx = r.left + r.width / 2; cy = r.top + r.height / 2; rad = r.width * 0.4;
+      stick.setPointerCapture(e.pointerId); e.preventDefault();
+    });
+    stick.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== sid) return;
+      let dx = e.clientX - cx, dy = e.clientY - cy;
+      const d = Math.hypot(dx, dy) || 1; const cl = Math.min(d, rad);
+      dx = dx / d * cl; dy = dy / d * cl;
+      setKnob(dx, dy);
+      steerCb(Math.max(-1, Math.min(1, dx / rad)));
+      e.preventDefault();
+    });
+    const release = (e) => { if (e.pointerId === sid) { sid = null; setKnob(0, 0); steerCb(0); } };
+    stick.addEventListener("pointerup", release);
+    stick.addEventListener("pointercancel", release);
+    const bd = (e) => { boostCb(true); e.preventDefault(); };
+    const bu = (e) => { boostCb(false); e.preventDefault(); };
+    this.boostBtn.addEventListener("pointerdown", bd);
+    this.boostBtn.addEventListener("pointerup", bu);
+    this.boostBtn.addEventListener("pointercancel", bu);
+    this.boostBtn.addEventListener("pointerleave", bu);
+    return true;
+  }
 
   toast(text, cls = "") {
     const d = document.createElement("div");
@@ -206,7 +298,7 @@ export class HUD {
       for (const f of W.food.values()) {
         if (f.tier !== 9 && f.tier !== 3) continue;
         const [x, y] = proj(f.u);
-        c.fillStyle = f.tier === 9 ? "rgba(170,255,110,0.8)" : "rgba(255,90,220,0.8)";
+        c.fillStyle = f.tier === 9 ? "rgba(120,200,80,0.55)" : "rgba(220,80,190,0.55)";
         c.beginPath(); c.arc(x, y, 2.2, 0, 6.2832); c.fill();
       }
       // snakes

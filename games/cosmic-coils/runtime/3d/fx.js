@@ -199,8 +199,9 @@ export class FX {
     return this._tmp.multiplyScalar(this.W.R + h + lift);
   }
   eatBurst(u, tier) {
-    const col = tier === 9 ? 0xaefc6a : tier === 2 ? 0xffd94a : tier === 3 ? 0xff54d8 : tier === 0 ? 0xffc46a : 0x54f0ff;
-    this.burstAt(this.surfPoint(u, 0.8), col, tier >= 2 ? 20 : 10, 4.5, 0.75, 0.55);
+    const col = tier === 9 ? 0x78c850 : tier === 2 ? 0xd8b840 : tier === 3 ? 0xd848b0 : tier === 0 ? 0xe0a858 : 0x3cc8d8;
+    const n = tier === 9 ? 8 : tier >= 2 ? 16 : 10;
+    this.burstAt(this.surfPoint(u, 0.8), col, n, tier === 9 ? 3.2 : 4.5, tier === 9 ? 0.5 : 0.75, 0.5);
   }
   deathBurst(segs, segN, colorHex, R) {
     const n = Math.min(segN, 60);

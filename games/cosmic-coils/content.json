@@ -9,7 +9,7 @@
   "setup": {
     "slots": 12,
     "biomes": ["verdant", "ember", "glacier", "dune", "abyss"],
-    "foodTarget": 330
+    "foodTarget": 1200
   },
   "credits": {
     "art": ["Original biome textures + key art generated with xAI grok-imagine for this game only"],

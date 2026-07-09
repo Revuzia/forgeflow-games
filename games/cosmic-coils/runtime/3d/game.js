@@ -15,7 +15,8 @@ const { SnakeField } = await import("./snakes.js" + V);
 const { FX } = await import("./fx.js" + V);
 const { AudioSys } = await import("./audio.js" + V);
 const { HUD } = await import("./hud.js" + V);
-const { Menu, saveRecord } = await import("./menu.js" + V);
+const { Menu, saveRecord, loadRecords } = await import("./menu.js" + V);
+const LB = await import("../net/leaderboard.js" + V);
 
 const { CONST, SKINS, BIOMES, ranking, segRadius } = S;
 
@@ -53,7 +54,7 @@ export class Game {
     this.texLoader = new THREE.TextureLoader();
     // boost has three independent sources (W key, SPACE, LMB) so releasing one
     // never cancels another that's still held; same for the slow lever (S, RMB)
-    this.input = { steerMouse: 0, kb: 0, bW: false, bSpace: false, bMouse: false, sKey: false, sMouse: false, touchBoost: false, touchSteer: null, throttle: 0, zoomTarget: 1 };
+    this.input = { steerMouse: 0, kb: 0, bW: false, bSpace: false, bMouse: false, sKey: false, sMouse: false, touchBoost: false, touchStick: 0, touchSteer: null, throttle: 0, zoomTarget: 1 };
     this._zoom = 1;
     this.settings = {
       sens: parseFloat(localStorage.getItem("cc_sens") ?? "1.3"),
@@ -70,6 +71,7 @@ export class Game {
       onOnline: () => this.openOnline(),
       getSettings: () => ({ ...this.settings }),
       onSettings: (patch) => this.applySettings(patch),
+      getLeaderboard: () => LB.fetchTop(20),
     });
     this._bindInput();
     this.applySettings({});
@@ -79,6 +81,10 @@ export class Game {
 
   /** persist + apply user settings (mouse sens, invert, graphics quality) */
   applySettings(patch) {
+    // a manual quality change (not the auto-tuner) clears the low-fps state so
+    // the player's explicit choice sticks until it's genuinely too slow again
+    if (patch && patch.quality && !patch._auto) { this._lowFpsT = 0; this._autoQCool = 8; }
+    if (patch) delete patch._auto;
     Object.assign(this.settings, patch || {});
     try {
       localStorage.setItem("cc_sens", String(this.settings.sens));
@@ -92,9 +98,27 @@ export class Game {
   }
 
   _applyBloom() {
-    const base = this.W && (this.W.biome === "abyss" || this.W.biome === "ember") ? 1.0 : 0.85;
+    // dimmer global bloom so atmosphere ring + essence stay readable
+    const base = this.W && (this.W.biome === "abyss" || this.W.biome === "ember") ? 0.58 : 0.48;
     const t = QUALITY_TIERS[this.settings.quality] || QUALITY_TIERS.high;
     this.bloom.strength = base * t.bloom;
+  }
+
+  /** FPS-adaptive quality: if the framerate stays low for a few seconds, drop
+   * one graphics tier and tell the player (never auto-raises — avoids
+   * oscillation). Resets when the user picks a tier manually. */
+  _autoQuality(dt) {
+    if (this.paused || this.settings.quality === "low") { this._lowFpsT = 0; return; }
+    if (this._autoQCool > 0) { this._autoQCool -= dt; this._lowFpsT = 0; return; }
+    if (this._fps < 45) this._lowFpsT = (this._lowFpsT || 0) + dt;
+    else this._lowFpsT = Math.max(0, (this._lowFpsT || 0) - dt * 2);
+    if (this._lowFpsT > 4) {
+      const next = this.settings.quality === "high" ? "medium" : "low";
+      this.applySettings({ quality: next, _auto: true });
+      this.hud.toast(`⚙️ graphics → ${next.toUpperCase()} for smoother play`, "warn");
+      this._lowFpsT = 0;
+      this._autoQCool = 12; // don't re-trigger for 12s
+    }
   }
 
   // ── worlds ────────────────────────────────────────────────────────────────
@@ -109,7 +133,7 @@ export class Game {
     if (this._deathTimer) { clearTimeout(this._deathTimer); this._deathTimer = null; }
     this._deathGen++;
     this._disposeWorld();
-    const W = S.createWorld({ seed, biome, simulateBots, idPrefix, slots: 12, foodTarget: this.content.setup?.foodTarget || 330 });
+    const W = S.createWorld({ seed, biome, simulateBots, idPrefix, slots: 12, foodTarget: this.content.setup?.foodTarget || S.CONST.FOOD_TARGET });
     this.W = W;
     this.planet = new Planet(this.scene, W.biome, W.seed, this.texLoader);
     this.snakeField = new SnakeField(this.scene, W);
@@ -142,14 +166,14 @@ export class Game {
     S.spawnSnake(W, 0, { isBot: false, name: prof.name, skinId: prof.skinId });
     for (let i = 1; i < 12; i++) S.spawnSnake(W, i, { isBot: true });
     S.drainEvents(W);
-    this.mode = "practice";
+    this.mode = "practice"; this._runSubmitted = false;
     this.mySlot = 0;
     this.sessionBest = 0;
     this.menu.hide();
     this.hud.show();
     this.hud.hideDeath();
     this.audio.setBiome(biome, seed);
-    this.audio.respawn();
+    this.hud.countdown();
     this.hud.toast(`${BIOME_DEFS[biome].icon} welcome to ${BIOME_DEFS[biome].label}`, "");
   }
 
@@ -165,7 +189,7 @@ export class Game {
     // with host-spawned gem ids (a "take" would then delete the wrong gem)
     const W = this._makeWorld({ seed: cfg.seed, biome: cfg.biome, simulateBots: net.isHost(), idPrefix: net.isHost() ? "h" : "g" + cfg.mySlot + "_" });
     this.net = net;
-    this.mode = "online";
+    this.mode = "online"; this._runSubmitted = false;
     this.mySlot = cfg.mySlot;
     this.sessionBest = 0;
     const humanSlots = new Set(cfg.roster.map((r) => r.slot));
@@ -183,7 +207,7 @@ export class Game {
     this.hud.show();
     this.hud.hideDeath();
     this.audio.setBiome(cfg.biome, cfg.seed);
-    this.audio.respawn();
+    this.hud.countdown();
     this.hud.toast(`${BIOME_DEFS[cfg.biome].icon} online — ${cfg.roster.length} serpent(s) connected`, "");
   }
 
@@ -196,13 +220,25 @@ export class Game {
     this._buildAttract();
   }
 
+  /** returns {newBest} — true when this run set a new device #1 (beating a
+   * prior record), so the death screen can celebrate it. */
   _saveMyRecord() {
-    if (!this.W || this.mode === "attract") return;
+    if (!this.W || this.mode === "attract") return { newBest: false };
     const me = S.snakeBySlot(this.W, this.mySlot);
     const best = Math.max(this.sessionBest, me ? me.mass : 0);
-    if (best > CONST.START_MASS + 4) {
-      saveRecord({ name: this.menu.getProfile().name, len: Math.round(best * 2.4), biome: this.W.biome, mode: this.mode, ts: Date.now() });
+    if (best <= CONST.START_MASS + 4) return { newBest: false };
+    const len = Math.round(best * 2.4);
+    const prev = loadRecords();
+    const prevTop = prev.length ? prev[0].len : 0;
+    saveRecord({ name: this.menu.getProfile().name, len, biome: this.W.biome, mode: this.mode, ts: Date.now() });
+    // submit to the GLOBAL board once per run (fire-and-forget; degrades to
+    // local silently if the table isn't migrated / offline)
+    if (!this._runSubmitted) {
+      this._runSubmitted = true;
+      LB.submit({ name: this.menu.getProfile().name, len, biome: this.W.biome, mode: this.mode });
     }
+    // a genuine new best = beat an existing record (not just the first-ever run)
+    return { newBest: prev.length > 0 && len > prevTop };
   }
 
   respawn() {
@@ -242,6 +278,11 @@ export class Game {
     // RMB is a control, not a context menu
     this.container.addEventListener("contextmenu", (e) => e.preventDefault());
     window.addEventListener("blur", () => { this.input.bW = this.input.bSpace = this.input.bMouse = false; this.input.sKey = this.input.sMouse = false; this.input.kb = 0; });
+    // auto-pause single-player when the tab goes to the background (online keeps
+    // running — you can't freeze a shared match). Standard arcade courtesy.
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && this.mode === "practice" && !this.paused) this._togglePause();
+    });
     window.addEventListener("keydown", (e) => {
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
       if (e.code === "KeyA" || e.code === "ArrowLeft") this.input.kb = 1;
@@ -269,8 +310,16 @@ export class Game {
       const z = this.input.zoomTarget * (1 + e.deltaY * 0.0011);
       this.input.zoomTarget = Math.max(0.75, Math.min(2.3, z));
     }, { passive: false });
-    // touch: left zone steer (drag), right zone boost
+    // visible on-screen controls for touch devices (joystick + BOOST button).
+    // When present, the raw-canvas fallback below is disabled to avoid double input.
+    this._touchUI = this.hud.enableTouch(
+      (x) => { this.input.touchStick = x; },
+      (b) => { this.input.touchBoost = b; }
+    );
+    // fallback (no visible UI): left-zone drag steer, right-zone tap boost —
+    // only when the on-screen joystick isn't active
     cv.addEventListener("touchstart", (e) => {
+      if (this._touchUI) return;
       for (const t of e.changedTouches) {
         if (t.clientX < this.container.clientWidth * 0.55) this.input.touchSteer = { id: t.identifier, x0: t.clientX };
         else this.input.touchBoost = true;
@@ -278,7 +327,7 @@ export class Game {
       e.preventDefault();
     }, { passive: false });
     cv.addEventListener("touchmove", (e) => {
-      if (!this.input.touchSteer) return;
+      if (this._touchUI || !this.input.touchSteer) return;
       for (const t of e.changedTouches) {
         if (t.identifier === this.input.touchSteer.id) {
           const dx = (t.clientX - this.input.touchSteer.x0) / 70;
@@ -288,6 +337,7 @@ export class Game {
       e.preventDefault();
     }, { passive: false });
     cv.addEventListener("touchend", (e) => {
+      if (this._touchUI) return;
       for (const t of e.changedTouches) {
         if (this.input.touchSteer && t.identifier === this.input.touchSteer.id) { this.input.touchSteer = null; this.input.steerMouse = 0; }
         else this.input.touchBoost = false;
@@ -384,6 +434,8 @@ export class Game {
     if (this.mode !== "attract") {
       if (me && me.alive) this.sessionBest = Math.max(this.sessionBest, me.mass);
       this.hud.update(dt, W, this.mySlot, w, this.net ? this.net.humanSlots() : null, this.sessionBest);
+      this.hud.setCombo(this._eatCombo, this._eatComboT / 2);
+      this._autoQuality(dt);
     }
 
     const frameMs = performance.now() - (this._frameT0 || performance.now());
@@ -419,7 +471,7 @@ export class Game {
     if (this.mode !== "attract") {
       const me = S.snakeBySlot(W, this.mySlot);
       if (me && me.alive) {
-        const steer = this.input.kb !== 0 ? this.input.kb : this.input.steerMouse;
+        const steer = this.input.kb !== 0 ? this.input.kb : (this.input.touchStick || this.input.steerMouse);
         // throttle ramps while held ("longer you hold, faster it goes"), eases
         // back to neutral on release; boost overrides it in the sim
         // slow lever (S / RMB) ramps to -1 and back; boost sources are OR-ed
@@ -446,8 +498,8 @@ export class Game {
       if (ev.slot === this.mySlot) {
         this._eatComboT = 2;
         this.audio.eat(ev.tier, this._eatCombo++);
-        if (ev.tier === 9 && ev.value > 2) this.hud.toast(`+${Math.round(ev.value * 2.4)} essence!`);
-        else if (ev.tier === 3) this.hud.toast("rare gem +" + Math.round(ev.value * 2.4));
+        // no essence popup (owner: too noisy) — rare gems still call out
+        if (ev.tier === 3) this.hud.toast("rare gem +" + Math.round(ev.value * 2.4));
       }
       if (this.net) this.net.onSimEvent(ev);
       return;
@@ -462,7 +514,8 @@ export class Game {
         if (ev.slot === this.mySlot) {
           this.audio.death(true);
           this._shake = 1;
-          this._saveMyRecord();
+          const rec = this._saveMyRecord();
+          if (rec.newBest) { this.hud.toast("🏆 NEW PERSONAL BEST!", ""); this._shake = 1.4; }
           const len = Math.round(ev.mass * 2.4);
           // generation-guarded death screen: a stale timer from an earlier death
           // or an earlier world must never pop UI (or trigger actions) later
