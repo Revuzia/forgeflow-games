@@ -83,6 +83,10 @@ const SKINS = ["soldier", "athlete", "wraith", "juggernaut", "viper"];
 // Arms are posed at runtime (pose.js); locomotion + jump/swim clips load.
 const MESHY_CLIPS = ["walk", "run", "death", "dance", "cheer", "jump", "swim"];
 const _v3 = new THREE.Vector3();
+// scratch for skin-independent weapon aiming (barrel → aim dir each frame)
+const _aimDir = new THREE.Vector3(), _aimUp = new THREE.Vector3(0, 1, 0);
+const _aimX = new THREE.Vector3(), _aimY = new THREE.Vector3();
+const _aimM = new THREE.Matrix4(), _aimQW = new THREE.Quaternion(), _aimQP = new THREE.Quaternion();
 
 async function preloadMeshySkin(W, key) {
   const url = W.assetBase + "assets/chars/meshy/" + key + ".glb";
@@ -153,17 +157,20 @@ export async function loadActorModels(W) {
     let fist = null;
     rig.scene.traverse((o) => { if (o.isBone && /^RightHand$|^FistR$/i.test(o.name) && !fist) fist = o; });
     a.hand = new THREE.Group();
+    a.handBone = fist;   // for per-frame barrel aiming (rig hand orientations differ)
     if (fist) {
       fist.add(a.hand);
       a.obj.updateMatrixWorld(true);
       fist.getWorldScale(_v3);
       const ws = Math.max(1e-4, _v3.x);
       a.hand.scale.setScalar(1 / ws);
-      // grip: hilt pulled back to the palm base (Meshy rigs have no finger
-      // bones — best-effort open-hand grip). Orientation tuned live:
-      // (0, -90°, +90°) = gun upright, muzzle pointing forward out of the fist.
+      // grip orientation — grid-searched live against the gunReady arm pose so
+      // the barrel points FORWARD and level out of the fist (was 37° down and
+      // off to the right; owner: "gun is STILL pointing the wrong way").
+      // dotForward 0.99 at (-90°, 0, -45°). Weapon grip anchor (weapons.js)
+      // sits the handle at this origin.
       a.hand.position.set(0, 0.02 / ws, 0);
-      a.hand.rotation.set(0, -Math.PI / 2, Math.PI / 2);
+      a.hand.rotation.set(-Math.PI / 2, 0, -Math.PI / 4);
     } else {
       a.hand.position.set(0.32, 1.15, 0.28);
       a.obj.add(a.hand);
@@ -744,14 +751,15 @@ function syncObj(W, a, dt, far) {
       else if (a.swimming) playAnim(a, "swim", { timeScale: gs > 4.5 ? 1.25 : 1 });
       else if (!a.onGround) playAnim(a, "jump", { once: true });
       else if (gs > 0.7) {
-        // stride pace tracks true ground speed (clip authored ≈ jog pace) —
-        // fixed-rate playback read as "slow-motion sliding" at sprint speed.
-        // BACKPEDALING plays the clip in REVERSE (standard trick — forward
-        // stride while moving backward reads as moonwalking)
+        // ALWAYS the UPRIGHT walk clip, sped up to a jog/sprint by ground
+        // speed. The Meshy "run" clip (RunFast, action 16) leans ~30° forward
+        // — the "running bent over" the owner kept flagging — so we don't use
+        // it for the player-facing locomotion. Movement speed is unchanged
+        // (9.6 m/s sprint); only the animation posture is upright now.
+        // BACKPEDALING plays the stride in REVERSE (no moonwalking).
         const back = (a.vel.x * -Math.sin(a._bodyYaw - Math.PI) + a.vel.z * -Math.cos(a._bodyYaw - Math.PI)) < -0.5;
         const dirK = back ? -0.9 : 1;
-        if (gs < 4.2) playAnim(a, "walk", { timeScale: dirK * K.clamp(gs / 2.6, 0.7, 1.6) });
-        else playAnim(a, "run", { timeScale: dirK * K.clamp(gs / 7.2, 0.8, 1.45) });
+        playAnim(a, "walk", { timeScale: dirK * K.clamp(gs / 3.0, 0.85, 2.0) });
       }
       else playAnim(a, "idle");
 
@@ -776,6 +784,31 @@ function syncObj(W, a, dt, far) {
       if (mode) a._armMode = mode;
       // camera pitch > 0 = looking down; the pose layer wants aim-up positive
       if (a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, a._armMode, a._armW, -a.pitch);
+
+      // ── SKIN-INDEPENDENT BARREL AIM ─────────────────────────────────────
+      // Meshy rigs DON'T share a common hand-bone orientation (a fixed hand
+      // rotation aimed soldier's gun forward but juggernaut's BACKWARD), so
+      // orient the weapon holder every frame so the barrel (+Z) points where
+      // the actor aims — grip stays at the fist, direction is rig-agnostic.
+      if (mode === "gunReady" || mode === "reload") {
+        const yaw = a.yaw, pit = -a.pitch * 0.9;
+        const cy = Math.cos(yaw), sywv = Math.sin(yaw), cpv = Math.cos(pit), spv = Math.sin(pit);
+        _aimDir.set(-sywv * cpv, spv, -cy * cpv).normalize();      // world barrel dir
+        _aimX.crossVectors(_aimUp, _aimDir).normalize();           // right
+        if (_aimX.lengthSq() < 1e-6) _aimX.set(1, 0, 0);
+        _aimY.crossVectors(_aimDir, _aimX).normalize();            // up
+        _aimM.makeBasis(_aimX, _aimY, _aimDir);
+        _aimQW.setFromRotationMatrix(_aimM);                       // desired WORLD quat
+        if (a.handBone) {
+          // flush the hand bone's world matrix AFTER the arm pose moved it, or
+          // the compensation uses a stale orientation (broke some skins)
+          a.handBone.updateWorldMatrix(true, false);
+          a.handBone.getWorldQuaternion(_aimQP);
+          a.hand.quaternion.copy(_aimQP.invert().multiply(_aimQW)); // → hand-bone local
+        } else {
+          a.hand.quaternion.copy(_aimQW);
+        }
+      }
     }
   }
 }

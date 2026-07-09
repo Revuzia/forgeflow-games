@@ -3,6 +3,35 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-09 — v4.6 BLACK-SCREEN fix, upright run, skin-independent gun aim
+
+Owner round 8 (screenshots): matches loaded pitch black, characters ran bent
+over with the gun pointing the wrong way. All three root-caused + verified in
+real gameplay renders (not just measurements — a lesson below).
+
+- **BLACK MATCHES FIXED**: the concurrent v4.4 menu overhaul's
+  `teardownMenuWorld` slammed `scene.background`/fog to dark navy 0x0a1622 at
+  **10× fog density (0.012)** as a "placeholder for maps.js" — but teardown
+  runs AFTER buildMap, so dense dark fog swallowed every match. Removed the
+  override; the map owns the sky (each map's daytime `sky`/`fog` now shows).
+- **UPRIGHT RUN**: player locomotion no longer uses the Meshy RunFast clip
+  (leans ~30° forward — the "running bent over" the owner kept flagging). All
+  ground movement plays the UPRIGHT walk clip, sped up by ground speed to a
+  jog/sprint. Movement speed unchanged (9.6 m/s); only posture is upright.
+- **SKIN-INDEPENDENT GUN AIM**: the Meshy rigs do NOT share a hand-bone
+  orientation — soldier's points forward, **juggernaut's points straight
+  DOWN** — so no single hand rotation can aim every gun forward (soldier was
+  fine, juggernaut fired backward). The weapon holder is now re-oriented EVERY
+  FRAME so the barrel (+Z) points along the actor's aim vector, compensated
+  through the (fresh) hand-bone world quaternion. Verified in-render for
+  soldier/juggernaut/viper — all point forward. (Lesson: a separate-eval
+  measurement read a stale matrix mid-animation and looked broken; the actual
+  per-frame render was correct — always confirm with a screenshot.)
+- Tracers already shortened in v4.5 (len 4, life .22 — a dash); the long gold
+  columns in-scene are LOOT BEAMS (chest markers), not tracers. The pistol/AR
+  molded on the soldier's vest is baked into the Meshy model (one skinned
+  mesh), not a code-added weapon.
+
 ## 2026-07-09 — v4.5 weapon GRIP anchoring, first-person scope, Scrap cut
 
 Owner round 7 (screenshots): guns weren't held IN the hand, Scrap's arms/run

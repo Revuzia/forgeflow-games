@@ -126,11 +126,10 @@ export function teardownMenuWorld(W) {
     });
     g.clear();
   }
-  // restore match-time fog/background defaults (maps.js will set real ones)
-  if (W.scene) {
-    W.scene.background = new THREE.Color(0x0a1622);
-    if (W.scene.fog) { W.scene.fog.color = new THREE.Color(0x0a1622); W.scene.fog.density = 0.012; }
-  }
+  // DO NOT touch scene.background / fog here — teardown runs AFTER buildMap in
+  // the match-start flow, so the old dark-navy "placeholder" (0x0a1622 + 10x
+  // fog) was overwriting the map's daytime sky and turning matches pitch black.
+  // The map (maps.js) owns the sky; the menu (buildMenuWorld) owns its own.
 }
 
 function buildMenuWorld(W) {
