@@ -31,9 +31,32 @@ export function findArmBones(root) {
       case "LeftFoot": b.lFoot = o; break;
       case "Spine01": b.spine1 = o; break;
       case "Spine02": b.spine2 = o; break;
+      case "Spine": b.spine = o; break;
+      case "Hips": b.hips = o; break;
+      case "neck": case "Neck": b.neck = o; break;
+      case "Head": b.head = o; break;
     }
   });
   return (b.rArm && b.lArm) ? b : null;
+}
+
+// Measure a rig's forward torso lean (radians from vertical) in its current
+// pose — used at load to detect defective slouching rigs (Meshy shipped the
+// drifter at ~27° while the rest sit at 1-5°).
+export function measureLean(bones) {
+  if (!bones || !bones.hips || !bones.head) return 0;
+  bones.head.getWorldPosition(_p1); bones.hips.getWorldPosition(_p2);
+  const dx = _p1.x - _p2.x, dy = _p1.y - _p2.y, dz = _p1.z - _p2.z;
+  return Math.atan2(Math.hypot(dx, dz), Math.max(0.01, dy));
+}
+
+// Rotate the base Spine so the head sits back over the hips — straightens a
+// slouched rig to a natural ~4° stance. Runs after the mixer, before render.
+const _upTarget = [0, 1, 0.07];   // actor-local: mostly up, hair of forward lean
+export function uprightTorso(obj, bones, weight) {
+  if (!bones || !bones.spine || !bones.neck || weight <= 0) return;
+  obj.getWorldQuaternion(_oq);
+  aim(bones.spine, bones.neck, _oq, _upTarget[0], _upTarget[1], _upTarget[2], Math.min(1, weight) * 0.9);
 }
 
 // scratch (module-local, reused every frame — no per-call allocation)

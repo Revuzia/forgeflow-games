@@ -14,7 +14,7 @@
  */
 import * as THREE from "three";
 // ?v= must propagate to intra-runtime imports (FFG gotcha) → top-level await
-const { findArmBones, applyArmPose } = await import("./pose.js" + (new URL(import.meta.url).search || ""));
+const { findArmBones, applyArmPose, measureLean, uprightTorso } = await import("./pose.js" + (new URL(import.meta.url).search || ""));
 
 let K = null; // SIM shortcut set in init
 
@@ -74,7 +74,10 @@ function mkInput() {
 // merged into the cached gltf so every clone has the full action set.
 // Round-2 fist cast (hands modeled CLOSED — Meshy rigs have no finger bones,
 // so open-hand models can never grip; these were generated fists-first).
-const SKINS = ["soldier", "athlete", "drifter", "wraith", "juggernaut", "viper"];
+// drifter/SCRAP REMOVED — Meshy shipped his rig with a 27° baked-in forward
+// slouch (every other fighter sits at 1-5°); un-slouchable without regen and
+// the regen risked the same. Owner call: cut him.
+const SKINS = ["soldier", "athlete", "wraith", "juggernaut", "viper"];
 // armed clips (Alert / Walk_Forward_While_Shooting / Run_and_Shoot) retarget
 // badly on these rigs — arms folded over the face ("broken bone" screenshots).
 // Arms are posed at runtime (pose.js); locomotion + jump/swim clips load.
@@ -137,6 +140,10 @@ export async function loadActorModels(W) {
     a.obj.add(rig.scene);
     a.clips = classifyClips(rig);
     a.armBones = findArmBones(rig.scene);   // runtime arm-pose layer (pose.js)
+    // detect a defective slouching rig (Meshy shipped drifter at ~27°; the
+    // rest sit at 1-5°) → straighten its torso every frame
+    a.obj.updateMatrixWorld(true);
+    a.torsoFix = measureLean(a.armBones) > 0.20;   // >~11° = slouched
     playAnim(a, "idle");
     // name tag sprite (not for self)
     if (a.id !== (W.player && W.player.id)) a.nameTag = mkNameTag(W, a);
@@ -295,20 +302,24 @@ function installHumanInput(W) {
     if (code === "KeyE" && W.player) W.player.input.interactDown = false;
   });
 
-  // Mouse model (works with OR without pointer lock — lock can be denied in
-  // embedded/preview contexts and the game must stay fully playable):
-  //   LMB          = shoot, ALWAYS (also tries to engage pointer lock)
-  //   locked       = mouse-look, RMB = ADS
-  //   unlocked     = HOLD RMB and drag to rotate the camera (RMB also ADSes)
+  // Mouse model — mouse-look is the PRIMARY control (owner: "moving the mouse
+  // should let me look around, instead of right click and hold"):
+  //   any click     = engage pointer lock → then moving the mouse looks around
+  //   locked        = mouse-look; LMB shoot; RMB ADS
+  //   unlocked      = cursor-follow aim fallback; RMB-drag to look (preview /
+  //                   lock-denied only — real play locks on the first click)
+  const tryLock = () => {
+    if (document.pointerLockElement !== dom) {
+      try { const p = dom.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (err) {}
+    }
+  };
   let rmbDrag = false;
   dom.addEventListener("mousedown", (e) => {
     if (!W.player || W.phase === "menu" || W.paused) return;
+    tryLock();                     // ANY click grabs the mouse for looking
     if (e.button === 0) {
       W._lmbDown = true;
       W.player.input.fire = true;   // never swallow the shot
-      if (document.pointerLockElement !== dom) {
-        try { const p = dom.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (err) {}
-      }
     }
     if (e.button === 2) { W._rmbDown = true; W.player.input.ads = true; rmbDrag = document.pointerLockElement !== dom; }
   });
@@ -756,6 +767,10 @@ function syncObj(W, a, dt, far) {
       else if (armed && a.weapon.state === "reloading") mode = "reload";
       else if (armed) mode = "gunReady";
       else mode = "relax";
+      // straighten a slouched rig BEFORE the arm layer (arms hang off the
+      // spine, so upright must happen first) — skip mid-air/emote where the
+      // clip owns the whole body
+      if (a.torsoFix && !a.gliding && !a.emoting) uprightTorso(a.obj, a.armBones, 1);
       const wantW = mode ? 1 : 0;
       a._armW = (a._armW == null ? wantW : a._armW + (wantW - a._armW) * Math.min(1, dt * 8));
       if (mode) a._armMode = mode;
@@ -792,8 +807,13 @@ function updateCamera(W, dt) {
   W._camFocus = focus;
   const ads = focus.input.ads && focus.weapon && K.WEAPONS[focus.weapon.id] && !K.WEAPONS[focus.weapon.id].harvest;
   const scope = ads && K.WEAPONS[focus.weapon.id] && K.WEAPONS[focus.weapon.id].scope;
-  const dist = focus.gliding ? (focus.chute ? 10 : 9) : ads ? 2.0 : 4.2;
-  const sh = ads ? 0.45 : 0.7;
+  // FIRST-PERSON down the scope: your own body must not block the shot
+  // (owner: "when sniping im in the way of the cursor and can see myself")
+  const firstPerson = scope;
+  // AR/non-scope ADS pulls in tight over the RIGHT shoulder so the body sits
+  // left of the reticle instead of covering it
+  const dist = focus.gliding ? (focus.chute ? 10 : 9) : firstPerson ? 0.02 : ads ? 1.7 : 4.2;
+  const sh = firstPerson ? 0 : ads ? 0.95 : 0.7;
   const eye = focus.pos.y + (focus.swimming ? 0.7 : K.PLAYERK.eyeY);
   camTarget.set(focus.pos.x, eye, focus.pos.z);
   const sy = Math.sin(focus.yaw), cy = Math.cos(focus.yaw);
@@ -802,15 +822,19 @@ function updateCamera(W, dt) {
   const effPitch = K.clamp(focus.pitch + pitchBias, -1.35, 1.35);
   const sp = Math.sin(effPitch), cp = Math.cos(effPitch);
   camDir.set(sy * cp, -sp, cy * cp).multiplyScalar(-1); // forward
-  // camera sits behind + slightly right
+  // hide the player's own model in first-person so it never blocks the view
+  if (focus.rig && focus.rig.scene) focus.rig.scene.visible = !firstPerson;
+  // camera sits behind + slightly right (or AT the eye for first-person)
   camPos.copy(camTarget)
     .addScaledVector(camDir, -dist)
     .add(tmpV.set(cy, 0, -sy).multiplyScalar(sh));
-  camPos.y += 0.25;
-  // keep camera out of terrain/structures
-  const minY = W.map.heightAt(camPos.x, camPos.z) + 0.35;
-  if (camPos.y < minY) camPos.y = minY;
-  cam.position.lerp(camPos, Math.min(1, dt * 18));
+  camPos.y += firstPerson ? 0.05 : 0.25;
+  // keep camera out of terrain/structures (skip in first-person — at the eye)
+  if (!firstPerson) {
+    const minY = W.map.heightAt(camPos.x, camPos.z) + 0.35;
+    if (camPos.y < minY) camPos.y = minY;
+  }
+  cam.position.lerp(camPos, Math.min(1, firstPerson ? 1 : dt * 18));
   if (W.camShake > 0.01) {
     cam.position.x += (Math.random() - 0.5) * W.camShake;
     cam.position.y += (Math.random() - 0.5) * W.camShake * 0.6;

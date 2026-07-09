@@ -100,10 +100,11 @@ function shot(cls, pos) {
   const f = ctx.createBiquadFilter(); f.type = "lowpass";
   const g = ctx.createGain();
   n.connect(f); f.connect(g); g.connect(out);
+  // gains trimmed ~35% (owner: shooting audio slightly lower)
   const P = {
-    pistol: [1400, 0.09, 0.5], smg: [1800, 0.06, 0.42], ar: [1100, 0.12, 0.6],
-    shotgun: [700, 0.2, 0.9], sniper: [500, 0.32, 1.0], launcher: [420, 0.24, 0.85],
-  }[cls] || [1200, 0.1, 0.5];
+    pistol: [1400, 0.09, 0.32], smg: [1800, 0.06, 0.28], ar: [1100, 0.12, 0.4],
+    shotgun: [700, 0.2, 0.6], sniper: [500, 0.32, 0.66], launcher: [420, 0.24, 0.56],
+  }[cls] || [1200, 0.1, 0.34];
   f.frequency.setValueAtTime(P[0], t);
   f.frequency.exponentialRampToValueAtTime(Math.max(80, P[0] * 0.2), t + P[1]);
   g.gain.setValueAtTime(P[2], t);

@@ -167,6 +167,11 @@ register3d("royale", async function (kernel, content) {
 
   // ── frame pipeline ──────────────────────────────────────────────────────────
   kernel.onUpdate((dt) => {
+    // cinematic menu world (orbit cam, water, storm ring, particles)
+    if (W.phase === "menu") {
+      hudMod.updateMenuWorld(W, Math.min(dt, 0.05));
+      return;
+    }
     if (W.paused) return;
     if (W.phase !== "match" && W.phase !== "drop" && W.phase !== "over") return;
     const step = Math.min(dt, 0.05);

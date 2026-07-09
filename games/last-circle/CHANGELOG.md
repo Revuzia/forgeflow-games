@@ -3,6 +3,58 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-09 — v4.5 weapon GRIP anchoring, first-person scope, Scrap cut
+
+Owner round 7 (screenshots): guns weren't held IN the hand, Scrap's arms/run
+looked broken, you saw your own body when sniping, tracers too long, wanted
+mouse-look. Diagnosed each in real gameplay this time (not isolated poses).
+
+- **WEAPON GRIP ANCHORING** (the "hold it in the hand" fix): guns were
+  normalized then CENTERED, so the fist held the barrel's midpoint and the
+  weapon floated across the chest. Now a data-driven grip anchor (centroid of
+  the bottom-third vertex cluster = the handle, à la the Claudecraft "grip y"
+  metadata) is placed AT the hand; long guns nudge +Z so the stock clears the
+  arm. Verified: pistol / AR / sniper all sit in the fist, barrel forward.
+- **SCRAP (drifter) CUT**: measured every rig's idle torso lean — Scrap's
+  Meshy rig shipped a **27° baked-in forward slouch** (all 5 others sit at
+  1-5°), so his every clip hunched and his arms read broken. Unfixable without
+  regen (which risked the same slouch on a "street raider"); owner cut him.
+  Roster is now soldier / athlete / wraith / juggernaut / viper (5).
+- **FIRST-PERSON SCOPE**: aiming a scoped weapon (sniper) drops to first-person
+  at the eye and HIDES your own body, so it no longer blocks the shot (owner:
+  "when sniping im in the way of the cursor and can see myself"). Non-scope ADS
+  (AR etc.) pulls tight over the right shoulder so the body sits left of a
+  clear reticle. Body re-shows the instant ADS releases.
+- **MOUSE-LOOK PRIMARY**: any click now grabs pointer lock → moving the mouse
+  looks around; RMB is ADS only (was: must hold RMB to drag-look). Cursor-
+  follow aim stays as the lock-denied fallback.
+- **SHORTER TRACERS** (len 9→4, life 0.4→0.22 — a punchy dash, not a beam) and
+  **quieter gunshots** (gains −35%).
+- NOTE: this rides on top of the concurrent v4.4 menu overhaul (another
+  session) — committed together per owner direction.
+
+## 2026-07-08 — v4.4 AAA menu / UI polish (live Three.js cinematic)
+
+Owner: "I expected this UI to be significantly more polished, more 3js, highly
+professional and AAA standard." The menu was CSS gradient + SVG islands with a
+tiny character canvas — mid-tier indie, not Fortnite/Apex lobby energy.
+
+- **LIVE 3D MENU BACKDROP** on the main kernel WebGL canvas: procedural tropical
+  island (vertex-colored terrain), ocean, purple storm ring (brand), floating
+  sky islands, atmospheric dust points, god-ray planes, golden-hour sky shader
+  dome, optional real prop GLBs (palm/tree/rocks/pine). Cinematic orbit camera
+  + elev bob runs every frame while `phase==="menu"` (`updateMenuWorld`).
+- **GLASS UI OVER THE WORLD**: translucent panels with backdrop-blur so the 3D
+  scene reads through; Orbitron/Rajdhani type; animated title reveal; mode
+  cards with icon tiles + hot selection chrome; glowing DROP IN CTA; top
+  season chrome bar. Character bay gets metallic stage floor, blue emissive
+  ring, rim/kick lights, ACES tonemap on the preview renderer, corner
+  brackets, pulse dots.
+- **Loading / lobby / post-match** restyled to the same glass + display-type
+  system; shimmer load bar; lobby slot highlight for self.
+- Bloom enabled on the menu path for storm-ring glow. Teardown clears menu3d
+  group + restores fog when match starts.
+
 ## 2026-07-08 — v4.3 FIST SURGERY + full animation-state pass (AAA sweep)
 
 Owner round 6: "hands look mangled… why can't closed be a fist?" + "check ALL

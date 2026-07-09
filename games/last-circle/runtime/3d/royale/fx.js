@@ -91,7 +91,9 @@ function wireEvents(W) {
   W.events.on("tracer", (pr) => {
     const speed = Math.hypot(pr.vx, pr.vy, pr.vz) || 1;
     const dx = pr.vx / speed, dy = pr.vy / speed, dz = pr.vz / speed;
-    const len = pr.weaponId === "sniper" ? 16 : pr.weaponId === "glauncher" ? 4 : 9;
+    // short punchy bolt (owner: streaks were "too long") — a compact dash,
+    // not a laser beam
+    const len = pr.weaponId === "sniper" ? 7 : pr.weaponId === "glauncher" ? 3 : 4;
     // COSMETIC speed cap: hitscan rounds (999 m/s) cross the screen in one
     // frame — the eye never sees them. The damage ray is already resolved;
     // the bolt flies at a readable pace instead.
@@ -100,7 +102,7 @@ function wireEvents(W) {
       x: pr.x + dx * 1.4, y: pr.y + dy * 1.4, z: pr.z + dz * 1.4,
       vx: dx * vs, vy: dy * vs, vz: dz * vs,
       color: TRACER_COLOR[pr.weaponId] || 0xffd24a,
-      size: 0.15, life: 0.4, gravity: 0, drag: 0,
+      size: 0.13, life: 0.22, gravity: 0, drag: 0,
       dir: new THREE.Vector3(dx, dy, dz), stretch: len,
     });
   });

@@ -138,8 +138,28 @@ async function buildProtos(W) {
       const size = bb.setFromObject(m).getSize(new THREE.Vector3());
       const s = WPN_LEN[id] / Math.max(size.x, size.y, size.z, 0.001);
       m.scale.setScalar(s);
-      const c = bb.getCenter(new THREE.Vector3()).multiplyScalar(s);
-      m.position.sub(c);
+      m.updateMatrixWorld(true);
+      // GRIP ANCHOR (data-driven, like the Claudecraft "grip y" metadata):
+      // the handle is the dense cluster in the bottom third — attach THAT to
+      // the hand, not the geometric center, so the fist wraps the grip and the
+      // barrel sticks out forward (centering made guns float mid-body).
+      bb.setFromObject(m);
+      const yLo = bb.min.y, yHi = bb.max.y, yBand = yLo + (yHi - yLo) * 0.34;
+      const grip = new THREE.Vector3(); let gN = 0; const wp = new THREE.Vector3();
+      m.traverse((o) => {
+        if (!o.isMesh) return;
+        const posA = o.geometry.attributes.position;
+        const step = Math.max(1, Math.floor(posA.count / 3000));
+        for (let i = 0; i < posA.count; i += step) {
+          wp.fromBufferAttribute(posA, i).applyMatrix4(o.matrixWorld);
+          if (wp.y <= yBand) { grip.add(wp); gN++; }
+        }
+      });
+      if (gN) grip.multiplyScalar(1 / gN); else grip.copy(bb.getCenter(new THREE.Vector3()));
+      // pistols/SMG: hand wraps at the grip cluster. Long guns: trigger hand
+      // sits a touch forward of the rearmost grip so the stock clears the arm.
+      grip.z += (WPN_LEN[id] > 0.55 ? 0.06 : 0.0);
+      m.position.sub(grip);                 // grip → hand origin
       const g = new THREE.Group();
       g.add(m);
       protos[id] = g;

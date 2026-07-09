@@ -22,9 +22,58 @@ function h(tag, styles, text, parent) {
   if (parent) parent.appendChild(el);
   return el;
 }
-const FONT = "system-ui, 'Segoe UI', sans-serif";
-const PANEL = { background: "rgba(10,19,31,0.92)", border: "1px solid rgba(120,180,255,0.25)", borderRadius: "14px", boxShadow: "0 8px 40px rgba(0,0,0,0.5)" };
-const BTN = { padding: "12px 26px", borderRadius: "10px", border: "none", cursor: "pointer", fontWeight: "800", fontSize: "16px", fontFamily: FONT, letterSpacing: "0.5px" };
+const FONT = "'Segoe UI', system-ui, -apple-system, sans-serif";
+const FONT_DISPLAY = "'Segoe UI', system-ui, sans-serif";
+// AAA glass panels — translucent so the live Three.js world reads through
+const PANEL = {
+  background: "linear-gradient(165deg, rgba(12,24,44,0.72) 0%, rgba(8,16,30,0.82) 100%)",
+  border: "1px solid rgba(140,200,255,0.28)",
+  borderRadius: "16px",
+  boxShadow: "0 12px 48px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(0,0,0,0.25)",
+  backdropFilter: "blur(18px) saturate(1.35)",
+  WebkitBackdropFilter: "blur(18px) saturate(1.35)",
+};
+const PANEL_HOT = Object.assign({}, PANEL, {
+  border: "1px solid rgba(120,200,255,0.55)",
+  boxShadow: "0 12px 48px rgba(0,0,0,0.55), 0 0 32px rgba(60,150,255,0.22), inset 0 1px 0 rgba(255,255,255,0.14)",
+});
+const BTN = {
+  padding: "12px 26px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.08)",
+  cursor: "pointer", fontWeight: "800", fontSize: "15px", fontFamily: FONT,
+  letterSpacing: "1.2px", textTransform: "uppercase", transition: "transform .12s ease, box-shadow .15s ease, filter .12s",
+};
+function ensureAAAStyles() {
+  if (document.getElementById("lc-aaa-css")) return;
+  if (!document.getElementById("lc-font-link")) {
+    const link = document.createElement("link");
+    link.id = "lc-font-link";
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap";
+    document.head.appendChild(link);
+  }
+  const st = document.createElement("style");
+  st.id = "lc-aaa-css";
+  st.textContent = `
+    @keyframes lcBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+    @keyframes lcPulse { 0%,100% { opacity: .55 } 50% { opacity: 1 } }
+    @keyframes lcShimmer { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }
+    @keyframes lcTitleIn { 0% { opacity:0; letter-spacing: 28px; filter: blur(8px) } 100% { opacity:1; letter-spacing: 10px; filter: blur(0) } }
+    @keyframes lcPanelIn { 0% { opacity:0; transform: translateY(18px) scale(.97) } 100% { opacity:1; transform: none } }
+    @keyframes lcGlow { 0%,100% { box-shadow: 0 0 24px rgba(60,150,255,.35), 0 8px 28px rgba(0,0,0,.45) } 50% { box-shadow: 0 0 40px rgba(90,180,255,.55), 0 8px 28px rgba(0,0,0,.45) } }
+    @keyframes lcScan { 0% { transform: translateY(-100%) } 100% { transform: translateY(100%) } }
+    .lc-btn-play:hover { transform: translateY(-2px) scale(1.02); filter: brightness(1.08); }
+    .lc-btn-play:active { transform: translateY(1px) scale(.99); }
+    .lc-mode-card { transition: transform .15s ease, border-color .15s, box-shadow .15s; }
+    .lc-mode-card:hover { transform: translateX(4px); border-color: rgba(140,200,255,0.45) !important; }
+    .lc-mode-card.sel { transform: translateX(8px); }
+    .lc-glass-scan::after {
+      content:''; position:absolute; inset:0; pointer-events:none; opacity:.06;
+      background: linear-gradient(180deg, transparent, rgba(180,220,255,.4), transparent);
+      animation: lcScan 7s linear infinite;
+    }
+  `;
+  document.head.appendChild(st);
+}
 
 export function init(W) {
   K = W.SIM;
@@ -56,115 +105,518 @@ const MODE_CARDS = [
 export const MENU_SKINS = [
   { key: "soldier", name: "SGT. BRICK", sub: "Commando" },
   { key: "athlete", name: "DASH", sub: "Track star" },
-  { key: "drifter", name: "SCRAP", sub: "Street raider" },
   { key: "wraith", name: "NIGHTFALL", sub: "Spec-ops · all black" },
   { key: "juggernaut", name: "BULWARK", sub: "Heavy armor" },
   { key: "viper", name: "STINGER", sub: "Venom suit" },
 ];
 export function getChosenSkin() { try { return localStorage.getItem("lc_skin"); } catch (e) { return null; } }
 
+// ═══ CINEMATIC MENU WORLD (live Three.js on the main kernel canvas) ══════════
+export function teardownMenuWorld(W) {
+  if (R._menuStopPv) { try { R._menuStopPv(); } catch (e) {} R._menuStopPv = null; }
+  W._menuWorld = null;
+  if (W._groups && W._groups.menu3d) {
+    const g = W._groups.menu3d;
+    g.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) {
+        if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose && m.dispose());
+        else if (o.material.dispose) o.material.dispose();
+      }
+    });
+    g.clear();
+  }
+  // restore match-time fog/background defaults (maps.js will set real ones)
+  if (W.scene) {
+    W.scene.background = new THREE.Color(0x0a1622);
+    if (W.scene.fog) { W.scene.fog.color = new THREE.Color(0x0a1622); W.scene.fog.density = 0.012; }
+  }
+}
+
+function buildMenuWorld(W) {
+  teardownMenuWorld(W);
+  const g = W.group("menu3d");
+  g.clear();
+
+  // golden-hour tropical sky
+  W.scene.background = new THREE.Color(0x6eb8e8);
+  if (W.scene.fog) {
+    W.scene.fog.color = new THREE.Color(0x8ec8e8);
+    W.scene.fog.density = 0.0048;
+  }
+  if (W.kernel.sun) {
+    W.kernel.sun.position.set(60, 48, 28);
+    W.kernel.sun.intensity = 1.85;
+    W.kernel.sun.color.set(0xfff0d8);
+  }
+  W.kernel.renderer.toneMappingExposure = 1.12;
+
+  // soft sky dome (gradient-ish via large inverted sphere)
+  const skyGeo = new THREE.SphereGeometry(420, 32, 16);
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    uniforms: {
+      topColor: { value: new THREE.Color(0x3a8fd4) },
+      midColor: { value: new THREE.Color(0x9ed0ef) },
+      botColor: { value: new THREE.Color(0xf0c090) },
+    },
+    vertexShader: `varying vec3 vW; void main(){ vec4 w=modelMatrix*vec4(position,1.); vW=normalize(w.xyz); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader: `uniform vec3 topColor,midColor,botColor; varying vec3 vW; void main(){ float h=clamp(vW.y*0.5+0.5,0.,1.); vec3 c=mix(botColor,midColor,smoothstep(0.,0.45,h)); c=mix(c,topColor,smoothstep(0.4,1.,h)); gl_FragColor=vec4(c,1.); }`,
+  });
+  g.add(new THREE.Mesh(skyGeo, skyMat));
+
+  // procedural island (vertex-colored)
+  const SEG = 96, ISLE = 160;
+  const terrGeo = new THREE.PlaneGeometry(ISLE, ISLE, SEG, SEG);
+  terrGeo.rotateX(-Math.PI / 2);
+  const pos = terrGeo.attributes.position;
+  const cols = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const d = Math.sqrt(x * x + z * z) / (ISLE * 0.48);
+    const mask = Math.max(0, 1 - Math.pow(Math.min(1.15, d), 2.4));
+    const n = Math.sin(x * 0.09) * Math.cos(z * 0.08) * 2.2 + Math.sin(x * 0.21 + z * 0.17) * 1.1;
+    let hgt = (6 + n * 3.5 + (1 - d) * 9) * mask - 1.2;
+    // central ridge
+    const ridge = Math.exp(-((x - 8) * (x - 8) + (z + 6) * (z + 6)) / 380);
+    hgt += ridge * 14 * mask;
+    pos.setY(i, hgt);
+    let r, gr, b;
+    if (hgt < 0.6) { r = 0.90; gr = 0.84; b = 0.58; }
+    else if (hgt < 4) { r = 0.28 + n * 0.02; gr = 0.52; b = 0.26; }
+    else if (hgt < 12) { r = 0.22; gr = 0.44; b = 0.22; }
+    else { r = 0.48; gr = 0.44; b = 0.40; }
+    cols[i * 3] = r; cols[i * 3 + 1] = gr; cols[i * 3 + 2] = b;
+  }
+  terrGeo.setAttribute("color", new THREE.BufferAttribute(cols, 3));
+  terrGeo.computeVertexNormals();
+  const terrain = new THREE.Mesh(terrGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0.02 }));
+  terrain.receiveShadow = true;
+  terrain.castShadow = true;
+  g.add(terrain);
+
+  // ocean
+  const water = new THREE.Mesh(
+    new THREE.PlaneGeometry(900, 900, 1, 1).rotateX(-Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: 0x1488b0, transparent: true, opacity: 0.88, roughness: 0.18, metalness: 0.22, envMapIntensity: 1.2 })
+  );
+  water.position.y = 0;
+  water.receiveShadow = true;
+  g.add(water);
+
+  // storm circle — the brand: purple closing ring around the island
+  const stormRing = new THREE.Mesh(
+    new THREE.TorusGeometry(72, 0.55, 10, 96),
+    new THREE.MeshBasicMaterial({ color: 0xb46cff, transparent: true, opacity: 0.72, toneMapped: false })
+  );
+  stormRing.rotation.x = Math.PI / 2;
+  stormRing.position.y = 3.2;
+  g.add(stormRing);
+  const stormGlow = new THREE.Mesh(
+    new THREE.TorusGeometry(72, 2.4, 8, 64),
+    new THREE.MeshBasicMaterial({ color: 0x7a3cff, transparent: true, opacity: 0.18, toneMapped: false, side: THREE.DoubleSide })
+  );
+  stormGlow.rotation.x = Math.PI / 2;
+  stormGlow.position.y = 3.2;
+  g.add(stormGlow);
+
+  // floating sky islands
+  const floaters = [];
+  for (let i = 0; i < 5; i++) {
+    const ang = (i / 5) * Math.PI * 2 + 0.4;
+    const rad = 55 + (i % 3) * 18;
+    const fi = new THREE.Group();
+    const rock = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(3.2 + i * 0.4, 0),
+      new THREE.MeshStandardMaterial({ color: 0x3a4a3a, roughness: 0.9, flatShading: true })
+    );
+    rock.scale.set(1.6, 0.55, 1.3);
+    rock.castShadow = true;
+    fi.add(rock);
+    const top = new THREE.Mesh(
+      new THREE.CylinderGeometry(2.4, 2.8, 0.5, 8),
+      new THREE.MeshStandardMaterial({ color: 0x3d7a42, roughness: 0.85, flatShading: true })
+    );
+    top.position.y = 0.55;
+    fi.add(top);
+    // simple tree
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, 2.2, 6), new THREE.MeshStandardMaterial({ color: 0x4a3020 }));
+    trunk.position.y = 1.5; fi.add(trunk);
+    const canopy = new THREE.Mesh(new THREE.ConeGeometry(1.4, 2.6, 7), new THREE.MeshStandardMaterial({ color: 0x2f7a3a, flatShading: true }));
+    canopy.position.y = 3.1; fi.add(canopy);
+    fi.position.set(Math.cos(ang) * rad, 18 + i * 3.5, Math.sin(ang) * rad);
+    fi.userData = { baseY: fi.position.y, phase: i * 1.3, ang, rad };
+    g.add(fi);
+    floaters.push(fi);
+  }
+
+  // island props — procedural palms/rocks (no async wait for menu boot)
+  for (let i = 0; i < 28; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = 12 + Math.random() * 48;
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    const d = Math.sqrt(x * x + z * z) / (ISLE * 0.48);
+    if (d > 0.92) continue;
+    const yy = (6 + Math.sin(x * 0.09) * Math.cos(z * 0.08) * 2.2) * Math.max(0, 1 - d * d) + 0.2;
+    if (yy < 1.2) continue;
+    const palm = new THREE.Group();
+    const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.35, 4.2 + Math.random(), 6), new THREE.MeshStandardMaterial({ color: 0x6b4a28 }));
+    tr.position.y = 2.1; tr.castShadow = true; palm.add(tr);
+    for (let k = 0; k < 5; k++) {
+      const leaf = new THREE.Mesh(
+        new THREE.ConeGeometry(0.15, 2.8, 4),
+        new THREE.MeshStandardMaterial({ color: 0x2d8a3e, flatShading: true })
+      );
+      leaf.position.set(0, 4.0, 0);
+      leaf.rotation.z = 0.9;
+      leaf.rotation.y = (k / 5) * Math.PI * 2;
+      palm.add(leaf);
+    }
+    palm.position.set(x, yy, z);
+    palm.rotation.y = Math.random() * Math.PI;
+    palm.scale.setScalar(0.7 + Math.random() * 0.55);
+    g.add(palm);
+  }
+
+  // atmospheric dust / spark particles
+  const N = 420;
+  const pGeo = new THREE.BufferGeometry();
+  const pPos = new Float32Array(N * 3);
+  const pBase = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    pBase[i * 3] = (Math.random() - 0.5) * 200;
+    pBase[i * 3 + 1] = Math.random() * 55 + 2;
+    pBase[i * 3 + 2] = (Math.random() - 0.5) * 200;
+    pPos[i * 3] = pBase[i * 3];
+    pPos[i * 3 + 1] = pBase[i * 3 + 1];
+    pPos[i * 3 + 2] = pBase[i * 3 + 2];
+  }
+  pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
+  const pts = new THREE.Points(pGeo, new THREE.PointsMaterial({
+    color: 0xd8ecff, size: 0.55, transparent: true, opacity: 0.55,
+    depthWrite: false, sizeAttenuation: true, toneMapped: false,
+  }));
+  g.add(pts);
+
+  // volumetric-ish god-ray planes
+  for (let i = 0; i < 4; i++) {
+    const ray = new THREE.Mesh(
+      new THREE.PlaneGeometry(8, 55),
+      new THREE.MeshBasicMaterial({ color: 0xffe6b0, transparent: true, opacity: 0.04 + i * 0.01, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })
+    );
+    ray.position.set(-20 + i * 14, 28, -30 + i * 8);
+    ray.rotation.z = -0.35;
+    ray.rotation.y = 0.4;
+    g.add(ray);
+  }
+
+  // soft ground fill light under island
+  const fill = new THREE.PointLight(0x57b0ff, 0.55, 120);
+  fill.position.set(0, 12, 0);
+  g.add(fill);
+
+  W._menuWorld = {
+    t0: performance.now() / 1000,
+    water, stormRing, stormGlow, floaters, pts, pBase, pPos,
+    camR: 92, camH: 34, lookY: 6, speed: 0.065,
+  };
+  // initial camera pose
+  updateMenuWorld(W, 0);
+  // optional bloom for that AAA glow on emissive storm ring
+  try {
+    if (!W.kernel.composer) W.kernel.enableBloom({ strength: 0.45, radius: 0.55, threshold: 0.72 });
+    else if (W.kernel.bloom) { W.kernel.bloom.strength = 0.45; W.kernel.bloom.threshold = 0.72; }
+  } catch (e) { /* postFX optional */ }
+
+  // decorate with real GLBs if present (async, non-blocking)
+  const propUrls = ["palm.glb", "tree.glb", "rocks.glb", "pine.glb"];
+  propUrls.forEach(async (name, idx) => {
+    try {
+      const root = await W.kernel.loadGLTF(W.assetBase + "assets/props/" + name);
+      if (!W._menuWorld || W.phase !== "menu") return;
+      for (let n = 0; n < 3; n++) {
+        const c = root.clone(true);
+        const a = (idx * 1.7 + n * 2.1) % (Math.PI * 2);
+        const rr = 18 + n * 12 + idx * 4;
+        c.position.set(Math.cos(a) * rr, 1.5, Math.sin(a) * rr);
+        c.scale.setScalar(name === "rocks.glb" ? 2.2 : 1.4);
+        c.rotation.y = a;
+        // lift to terrain approx
+        const d = Math.sqrt(c.position.x ** 2 + c.position.z ** 2) / (ISLE * 0.48);
+        const mask = Math.max(0, 1 - Math.pow(Math.min(1.15, d), 2.4));
+        c.position.y = (6 + Math.sin(c.position.x * 0.09) * 2) * mask;
+        g.add(c);
+      }
+    } catch (e) { /* props optional */ }
+  });
+}
+
+export function updateMenuWorld(W, dt) {
+  const M = W._menuWorld;
+  if (!M || W.phase !== "menu") return;
+  const t = performance.now() / 1000 - M.t0;
+  // cinematic orbit — slight elev bob, slow yaw
+  const ang = t * M.speed;
+  const elev = M.camH + Math.sin(t * 0.35) * 3.5;
+  const r = M.camR + Math.sin(t * 0.18) * 6;
+  W.camera.position.set(Math.cos(ang) * r, elev, Math.sin(ang) * r);
+  W.camera.lookAt(0, M.lookY + Math.sin(t * 0.25) * 1.2, 0);
+  W.camera.fov = 42;
+  W.camera.updateProjectionMatrix();
+  // water breathe
+  if (M.water) M.water.position.y = Math.sin(t * 0.7) * 0.18;
+  // storm pulse + slow spin
+  if (M.stormRing) {
+    M.stormRing.rotation.z = t * 0.15;
+    M.stormRing.material.opacity = 0.55 + Math.sin(t * 1.4) * 0.2;
+    M.stormGlow.rotation.z = -t * 0.08;
+    M.stormGlow.material.opacity = 0.12 + Math.sin(t * 1.4) * 0.06;
+    const pulse = 1 + Math.sin(t * 0.9) * 0.015;
+    M.stormRing.scale.setScalar(pulse);
+    M.stormGlow.scale.setScalar(pulse);
+  }
+  // floating islands bob
+  for (const fi of M.floaters) {
+    fi.position.y = fi.userData.baseY + Math.sin(t * 0.7 + fi.userData.phase) * 1.4;
+    fi.rotation.y = t * 0.12 + fi.userData.phase;
+  }
+  // dust drift
+  if (M.pts) {
+    const arr = M.pts.geometry.attributes.position.array;
+    for (let i = 0; i < M.pBase.length / 3; i++) {
+      arr[i * 3] = M.pBase[i * 3] + Math.sin(t * 0.3 + i) * 2;
+      arr[i * 3 + 1] = M.pBase[i * 3 + 1] + Math.sin(t * 0.5 + i * 0.7) * 1.5;
+      arr[i * 3 + 2] = M.pBase[i * 3 + 2] + Math.cos(t * 0.25 + i) * 2;
+    }
+    M.pts.geometry.attributes.position.needsUpdate = true;
+  }
+}
+
 export function showMenu(W, startMatch) {
   W.phase = "menu";
+  W.paused = false;
   document.exitPointerLock && document.exitPointerLock();
   W.kernel.renderer.domElement.style.cursor = "";
   hideHUD();
-  const L = layer("menu", { pointerEvents: "auto", overflow: "hidden", background: "linear-gradient(180deg, #050d1c 0%, #0a2038 42%, #14405c 78%, #1d5e70 100%)" });
-
-  // — animated backdrop: drifting sky-islands, clouds, storm ring, vignette —
-  if (!document.getElementById("lc-menu-css")) {
-    const st = document.createElement("style");
-    st.id = "lc-menu-css";
-    st.textContent = `
-      @keyframes lcBob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-16px) } }
-      @keyframes lcBob2 { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-9px) } }
-      @keyframes lcDrift { 0% { transform: translateX(-6%) } 100% { transform: translateX(105vw) } }
-      @keyframes lcSpin { 0% { transform: translate(-50%,0) rotate(0deg) } 100% { transform: translate(-50%,0) rotate(360deg) } }
-      @keyframes lcPulse { 0%,100% { opacity: .55 } 50% { opacity: .95 } }`;
-    document.head.appendChild(st);
+  ensureAAAStyles();
+  // clear any leftover match geometry so the cinematic diorama owns the frame
+  if (W._groups) {
+    for (const name of Object.keys(W._groups)) {
+      if (name === "menu3d") continue;
+      try { W._groups[name].clear(); } catch (e) {}
+    }
   }
-  const isle = (w, hh) => "data:image/svg+xml," + encodeURIComponent(
-    `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${hh}' viewBox='0 0 200 150'>` +
-    `<polygon points='30,52 170,52 148,64 130,120 100,146 78,110 55,66' fill='#132a3d'/>` +
-    `<ellipse cx='100' cy='46' rx='86' ry='16' fill='#225a46'/>` +
-    `<ellipse cx='100' cy='42' rx='86' ry='14' fill='#2e7d57'/>` +
-    `<rect x='88' y='12' width='7' height='26' fill='#274054'/><ellipse cx='92' cy='12' rx='24' ry='12' fill='#357a50'/>` +
-    `<rect x='128' y='20' width='5' height='20' fill='#274054'/><ellipse cx='131' cy='19' rx='16' ry='9' fill='#357a50'/></svg>`);
-  const bgDeco = h("div", { position: "absolute", inset: "0", pointerEvents: "none" }, null, L);
-  [[0.07, 0.16, 210, "lcBob 9s ease-in-out infinite", 0.9], [0.78, 0.10, 150, "lcBob2 12s ease-in-out infinite", 0.75], [0.62, 0.30, 90, "lcBob 14s ease-in-out infinite", 0.5], [0.16, 0.52, 70, "lcBob2 11s ease-in-out infinite", 0.4]]
-    .forEach(([fx, fy, wpx, anim, op]) => {
-      const d = h("div", { position: "absolute", left: fx * 100 + "%", top: fy * 100 + "%", width: wpx + "px", height: wpx * 0.75 + "px", animation: anim, opacity: String(op) }, null, bgDeco);
-      d.style.backgroundImage = `url("${isle(200, 150)}")`;
-      d.style.backgroundSize = "contain"; d.style.backgroundRepeat = "no-repeat";
-    });
-  for (let i = 0; i < 3; i++) {
-    h("div", { position: "absolute", top: 12 + i * 21 + "%", left: "-10%", width: 260 + i * 90 + "px", height: "34px", borderRadius: "50%", background: "rgba(190,220,255,0.05)", filter: "blur(10px)", animation: `lcDrift ${75 + i * 30}s linear infinite`, animationDelay: -i * 26 + "s" }, null, bgDeco);
-  }
-  // the closing circle, projected on the horizon
-  h("div", { position: "absolute", left: "50%", bottom: "-42vh", width: "78vh", height: "78vh", borderRadius: "50%", border: "3px solid rgba(150,80,255,0.5)", boxShadow: "0 0 60px rgba(150,80,255,0.5), inset 0 0 80px rgba(150,80,255,0.35)", animation: "lcSpin 40s linear infinite, lcPulse 5s ease-in-out infinite" }, null, bgDeco);
-  h("div", { position: "absolute", inset: "0", background: "radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 46%, rgba(2,6,12,0.75) 100%)" }, null, bgDeco);
+  buildMenuWorld(W);
 
-  // — layout: title / [modes+play | skin bay] / controls —
-  const wrap = h("div", { position: "absolute", inset: "0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "18px" }, null, L);
-  h("div", { fontSize: "64px", fontWeight: "900", letterSpacing: "8px", background: "linear-gradient(180deg,#ffffff,#8ec8ff 60%,#57b0ff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 0 26px rgba(80,160,255,0.55)) drop-shadow(0 4px 2px rgba(0,0,0,0.6))" }, "LAST CIRCLE", wrap);
-  h("div", { fontSize: "14px", opacity: "0.8", marginTop: "-18px", letterSpacing: "5px", color: "#bfe0ff" }, "50 DROP · ONE STANDS", wrap);
+  // Glass UI over the live 3D world — NO opaque fill; vignette only
+  const L = layer("menu", {
+    pointerEvents: "auto", overflow: "hidden",
+    background: "radial-gradient(ellipse at 50% 40%, rgba(4,10,20,0.18) 0%, rgba(2,6,14,0.55) 70%, rgba(1,4,10,0.78) 100%)",
+  });
 
-  const cols = h("div", { display: "flex", gap: "26px", alignItems: "stretch" }, null, wrap);
-  const leftCol = h("div", { display: "flex", flexDirection: "column", gap: "12px", justifyContent: "center" }, null, cols);
+  // top chrome bar
+  const topBar = h("div", {
+    position: "absolute", top: "0", left: "0", right: "0", height: "52px",
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "0 28px",
+    background: "linear-gradient(180deg, rgba(4,10,22,0.72), transparent)",
+    borderBottom: "1px solid rgba(120,180,255,0.08)",
+  }, null, L);
+  h("div", {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "13px", fontWeight: "800",
+    letterSpacing: "4px", color: "#8ec8ff", textShadow: "0 0 18px rgba(80,160,255,0.5)",
+  }, "FORGEFLOW  ·  LAST CIRCLE", topBar);
+  h("div", { fontSize: "12px", opacity: "0.55", letterSpacing: "2px", fontWeight: "600" }, "SEASON 1  ·  FREE TO PLAY", topBar);
+
+  // center stack
+  const wrap = h("div", {
+    position: "absolute", inset: "0", display: "flex", flexDirection: "column",
+    alignItems: "center", justifyContent: "center", gap: "20px", padding: "64px 24px 40px",
+  }, null, L);
+
+  // title block
+  const titleBlock = h("div", { textAlign: "center", animation: "lcTitleIn .9s cubic-bezier(.2,.8,.2,1) both" }, null, wrap);
+  h("div", {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "clamp(42px, 7vw, 72px)", fontWeight: "900",
+    letterSpacing: "10px",
+    background: "linear-gradient(180deg, #ffffff 10%, #a8d4ff 55%, #4a9fff 100%)",
+    WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+    filter: "drop-shadow(0 0 32px rgba(80,160,255,0.55)) drop-shadow(0 6px 4px rgba(0,0,0,0.55))",
+  }, "LAST CIRCLE", titleBlock);
+  h("div", {
+    fontFamily: "Rajdhani, " + FONT, fontSize: "15px", fontWeight: "600",
+    letterSpacing: "6px", color: "#b8d8ff", opacity: "0.85", marginTop: "6px",
+    textShadow: "0 2px 12px rgba(0,0,0,0.8)",
+  }, "50 DROP  ·  ONE STANDS  ·  THE STORM CLOSES", titleBlock);
+
+  const cols = h("div", {
+    display: "flex", gap: "28px", alignItems: "stretch", flexWrap: "wrap",
+    justifyContent: "center", animation: "lcPanelIn .7s .15s cubic-bezier(.2,.8,.2,1) both",
+  }, null, wrap);
+  const leftCol = h("div", { display: "flex", flexDirection: "column", gap: "10px", justifyContent: "center", minWidth: "300px" }, null, cols);
 
   let selMode = W.mode === "practice" ? "practice" : (W.mode || "standard");
-  const modeEls = MODE_CARDS.map((m) => {
-    const c = h("div", Object.assign({ padding: "13px 20px", cursor: "pointer", minWidth: "290px", transition: "transform .12s, outline-color .12s" }, PANEL), null, leftCol);
-    h("div", { fontWeight: "900", fontSize: "17px", letterSpacing: "1px" }, m.name, c);
-    h("div", { fontSize: "12px", opacity: "0.7", marginTop: "4px" }, m.sub, c);
+  const modeIcons = { standard: "⚔", quick: "⚡", practice: "◎" };
+  const modeEls = MODE_CARDS.map((m, i) => {
+    const c = h("div", Object.assign({
+      padding: "14px 20px 14px 16px", cursor: "pointer", minWidth: "300px",
+      position: "relative", overflow: "hidden", animation: `lcPanelIn .55s ${0.2 + i * 0.06}s both`,
+    }, PANEL), null, leftCol);
+    c.className = "lc-mode-card lc-glass-scan";
+    const row = h("div", { display: "flex", gap: "14px", alignItems: "center" }, null, c);
+    h("div", {
+      width: "40px", height: "40px", borderRadius: "10px", display: "flex", alignItems: "center",
+      justifyContent: "center", fontSize: "18px",
+      background: "linear-gradient(145deg, rgba(87,176,255,0.25), rgba(40,90,160,0.15))",
+      border: "1px solid rgba(140,200,255,0.25)",
+    }, modeIcons[m.id] || "●", row);
+    const txt = h("div", { flex: "1" }, null, row);
+    h("div", {
+      fontFamily: "Orbitron, " + FONT_DISPLAY, fontWeight: "800", fontSize: "14px",
+      letterSpacing: "2px", color: "#eaf4ff",
+    }, m.name, txt);
+    h("div", { fontFamily: "Rajdhani, " + FONT, fontSize: "14px", fontWeight: "500", opacity: "0.72", marginTop: "2px", color: "#b8d0ea" }, m.sub, txt);
     c.onclick = () => { selMode = m.id; W.events.emit("uiClick"); paint(); };
     return { m, c };
   });
   function paint() {
-    modeEls.forEach(({ m, c }) => { c.style.outline = m.id === selMode ? "2px solid #57b0ff" : "1px solid rgba(120,180,255,0.0)"; c.style.transform = m.id === selMode ? "translateX(6px)" : "none"; });
+    modeEls.forEach(({ m, c }) => {
+      const on = m.id === selMode;
+      c.classList.toggle("sel", on);
+      Object.assign(c.style, on ? PANEL_HOT : PANEL);
+      c.style.borderLeft = on ? "3px solid #57b0ff" : "1px solid rgba(140,200,255,0.28)";
+    });
   }
   paint();
-  const play = h("button", Object.assign({}, BTN, { fontSize: "22px", padding: "16px 0", width: "100%", background: "linear-gradient(180deg,#57b0ff,#2f7fd6)", color: "#fff", boxShadow: "0 6px 24px rgba(60,140,255,0.45)", marginTop: "6px" }), "PLAY", leftCol);
-  play.onclick = () => { W.events.emit("uiClick"); startMatch({ mapId: randomMap(), mode: selMode }); };
+
+  const play = h("button", Object.assign({}, BTN, {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "20px", padding: "18px 0", width: "100%",
+    background: "linear-gradient(180deg, #6ec4ff 0%, #2f7fd6 48%, #1a5fb0 100%)",
+    color: "#fff", marginTop: "8px", letterSpacing: "4px",
+    boxShadow: "0 0 28px rgba(60,150,255,0.4), 0 8px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.25)",
+    border: "1px solid rgba(160,220,255,0.45)",
+    animation: "lcGlow 3.2s ease-in-out infinite",
+  }), "▶  DROP IN", leftCol);
+  play.className = "lc-btn-play";
+  play.onclick = () => {
+    W.events.emit("uiClick");
+    teardownMenuWorld(W);
+    startMatch({ mapId: randomMap(), mode: selMode });
+  };
+
   const subRow = h("div", { display: "flex", gap: "10px" }, null, leftCol);
-  const online = h("button", Object.assign({}, BTN, { flex: "1", fontSize: "13px", padding: "11px 8px", background: "rgba(255,255,255,0.1)", color: "#cfe4ff" }), "🌐 PLAY WITH FRIENDS", subRow);
+  const mkGhost = (label, parent) => h("button", Object.assign({}, BTN, {
+    flex: "1", fontSize: "12px", padding: "12px 8px",
+    background: "rgba(255,255,255,0.06)", color: "#cfe4ff",
+    border: "1px solid rgba(140,200,255,0.2)",
+    fontFamily: "Rajdhani, " + FONT, fontWeight: "700", letterSpacing: "1.5px",
+  }), label, parent);
+  const online = mkGhost("🌐  SQUAD UP", subRow);
   online.onclick = () => { W.events.emit("uiClick"); W.events.emit("openOnline", { mode: selMode }); };
-  const settings = h("button", Object.assign({}, BTN, { flex: "1", fontSize: "13px", padding: "11px 8px", background: "rgba(255,255,255,0.1)", color: "#cfe4ff" }), "⚙ SETTINGS", subRow);
+  const settings = mkGhost("⚙  SETTINGS", subRow);
   settings.onclick = () => { W.events.emit("uiClick"); showSettings(W); };
 
-  // — SKIN BAY: live 3D turntable preview + prev/next (choice persists) —
-  const bay = h("div", Object.assign({ width: "300px", padding: "14px 16px 12px", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }, PANEL), null, cols);
-  h("div", { fontSize: "12px", letterSpacing: "2px", opacity: "0.65", fontWeight: "800" }, "YOUR FIGHTER", bay);
-  const stage = h("div", { position: "relative", width: "260px", height: "250px", borderRadius: "10px", overflow: "hidden", background: "radial-gradient(ellipse at 50% 82%, rgba(87,176,255,0.22), rgba(6,14,26,0.9) 70%)" }, null, bay);
-  const pvCv = h("canvas", { width: "260px", height: "250px" }, null, stage);
-  pvCv.width = 520; pvCv.height = 500;
-  const nameEl = h("div", { fontSize: "19px", fontWeight: "900", letterSpacing: "1.5px", color: "#dff0ff" }, "", bay);
-  const subEl = h("div", { fontSize: "11.5px", opacity: "0.65", marginTop: "-4px" }, "", bay);
-  const nav = h("div", { display: "flex", gap: "10px", alignItems: "center", marginTop: "2px" }, null, bay);
-  const mkArrow = (txt) => h("button", Object.assign({}, BTN, { padding: "7px 18px", fontSize: "18px", background: "rgba(255,255,255,0.12)", color: "#cfe4ff" }), txt, nav);
+  // — SKIN BAY: premium 3D turntable —
+  const bay = h("div", Object.assign({
+    width: "320px", padding: "16px 18px 14px", display: "flex", flexDirection: "column",
+    alignItems: "center", gap: "8px", position: "relative", overflow: "hidden",
+  }, PANEL), null, cols);
+  bay.className = "lc-glass-scan";
+  h("div", {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "11px", letterSpacing: "3px",
+    opacity: "0.7", fontWeight: "800", color: "#9fd0ff",
+  }, "OPERATIVE", bay);
+  const stage = h("div", {
+    position: "relative", width: "280px", height: "280px", borderRadius: "14px",
+    overflow: "hidden",
+    background: "radial-gradient(ellipse at 50% 78%, rgba(87,176,255,0.28) 0%, rgba(8,18,36,0.5) 45%, rgba(4,10,20,0.85) 100%)",
+    border: "1px solid rgba(120,190,255,0.25)",
+    boxShadow: "inset 0 0 40px rgba(40,120,255,0.12), 0 0 24px rgba(40,100,200,0.15)",
+  }, null, bay);
+  // chrome corners
+  [["0","0","borderTop","borderLeft"], ["0","auto","borderTop","borderRight"], ["auto","0","borderBottom","borderLeft"], ["auto","auto","borderBottom","borderRight"]]
+    .forEach(([t, r, a, b], i) => {
+      const c = h("div", {
+        position: "absolute", width: "18px", height: "18px", top: t === "0" ? "8px" : "auto",
+        bottom: t === "auto" ? "8px" : "auto", left: r === "0" ? "8px" : "auto",
+        right: r === "auto" ? "8px" : "auto", pointerEvents: "none", zIndex: 2,
+      }, null, stage);
+      c.style[a] = "2px solid rgba(120,200,255,0.7)";
+      c.style[b] = "2px solid rgba(120,200,255,0.7)";
+    });
+  const pvCv = h("canvas", { width: "280px", height: "280px", display: "block" }, null, stage);
+  pvCv.width = 560; pvCv.height = 560;
+  const nameEl = h("div", {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "18px", fontWeight: "800",
+    letterSpacing: "2px", color: "#eef6ff", textShadow: "0 0 16px rgba(100,180,255,0.4)",
+  }, "", bay);
+  const subEl = h("div", {
+    fontFamily: "Rajdhani, " + FONT, fontSize: "14px", fontWeight: "600",
+    opacity: "0.7", marginTop: "-2px", color: "#a8c8e8", letterSpacing: "1px",
+  }, "", bay);
+  const nav = h("div", { display: "flex", gap: "10px", alignItems: "center", marginTop: "4px" }, null, bay);
+  const mkArrow = (txt) => h("button", Object.assign({}, BTN, {
+    padding: "8px 18px", fontSize: "18px", background: "rgba(255,255,255,0.08)",
+    color: "#cfe4ff", border: "1px solid rgba(140,200,255,0.25)",
+  }), txt, nav);
   const prev = mkArrow("‹");
-  const dots = h("div", { display: "flex", gap: "6px" }, null, nav);
-  const dotEls = MENU_SKINS.map(() => h("div", { width: "8px", height: "8px", borderRadius: "50%", background: "rgba(255,255,255,0.25)", transition: "background .15s" }, null, dots));
+  const dots = h("div", { display: "flex", gap: "7px" }, null, nav);
+  const dotEls = MENU_SKINS.map(() => h("div", {
+    width: "9px", height: "9px", borderRadius: "50%",
+    background: "rgba(255,255,255,0.22)", transition: "all .18s",
+    boxShadow: "0 0 0 0 rgba(87,176,255,0)",
+  }, null, dots));
   const next = mkArrow("›");
 
   let skinIdx = Math.max(0, MENU_SKINS.findIndex((s) => s.key === getChosenSkin()));
   let pvRig = null, pvRunning = true, pvBones = null, poseMod = null, pvIdleRelax = false;
   import("./pose.js" + (new URL(import.meta.url).search || "")).then((m) => { poseMod = m; });
   const pvScene = new THREE.Scene();
-  const pvCam = new THREE.PerspectiveCamera(34, 520 / 500, 0.1, 30);
-  pvCam.position.set(0, 1.25, 3.55); pvCam.lookAt(0, 0.92, 0);
-  pvScene.add(new THREE.HemisphereLight(0xcfe8ff, 0x2a3444, 1.25));
-  const pvKey = new THREE.DirectionalLight(0xffffff, 2.1); pvKey.position.set(2.2, 3.2, 2.6); pvScene.add(pvKey);
-  const pvRim = new THREE.DirectionalLight(0x57b0ff, 1.4); pvRim.position.set(-2.4, 2.2, -2.4); pvScene.add(pvRim);
-  const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.95, 0.09, 40), new THREE.MeshStandardMaterial({ color: 0x1c3852, roughness: 0.6 }));
-  disc.position.y = -0.045;
+  const pvCam = new THREE.PerspectiveCamera(32, 1, 0.1, 30);
+  pvCam.position.set(0, 1.2, 3.4); pvCam.lookAt(0, 0.95, 0);
+  pvScene.add(new THREE.HemisphereLight(0xd8f0ff, 0x1a2838, 1.15));
+  const pvKey = new THREE.DirectionalLight(0xfff2e0, 2.4); pvKey.position.set(2.4, 3.6, 2.8); pvScene.add(pvKey);
+  const pvRim = new THREE.DirectionalLight(0x57b0ff, 1.8); pvRim.position.set(-2.6, 2.4, -2.2); pvScene.add(pvRim);
+  const pvKick = new THREE.DirectionalLight(0xff8866, 0.55); pvKick.position.set(0, 1, -3); pvScene.add(pvKick);
+  // reflective stage floor
+  const disc = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.05, 1.15, 0.08, 48),
+    new THREE.MeshStandardMaterial({ color: 0x152a42, roughness: 0.35, metalness: 0.65, envMapIntensity: 1.2 })
+  );
+  disc.position.y = -0.04;
   pvScene.add(disc);
-  const pvR = new THREE.WebGLRenderer({ canvas: pvCv, antialias: true, alpha: true });
-  pvR.setSize(520, 500, false);
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(1.08, 0.025, 8, 48),
+    new THREE.MeshBasicMaterial({ color: 0x57b0ff, transparent: true, opacity: 0.55, toneMapped: false })
+  );
+  ring.rotation.x = Math.PI / 2; ring.position.y = 0.02;
+  pvScene.add(ring);
+  // soft ground glow
+  const glow = new THREE.Mesh(
+    new THREE.CircleGeometry(1.4, 32),
+    new THREE.MeshBasicMaterial({ color: 0x3a8fff, transparent: true, opacity: 0.12, toneMapped: false })
+  );
+  glow.rotation.x = -Math.PI / 2; glow.position.y = 0.01;
+  pvScene.add(glow);
+
+  const pvR = new THREE.WebGLRenderer({ canvas: pvCv, antialias: true, alpha: true, powerPreference: "high-performance" });
+  pvR.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  pvR.setSize(560, 560, false);
+  pvR.toneMapping = THREE.ACESFilmicToneMapping;
+  pvR.toneMappingExposure = 1.15;
+  pvR.outputColorSpace = THREE.SRGBColorSpace;
+
   async function setSkin(i) {
     skinIdx = (i + MENU_SKINS.length) % MENU_SKINS.length;
     const meta = MENU_SKINS[skinIdx];
-    nameEl.textContent = meta.name; subEl.textContent = meta.sub;
-    dotEls.forEach((d, j) => { d.style.background = j === skinIdx ? "#57b0ff" : "rgba(255,255,255,0.25)"; });
+    nameEl.textContent = meta.name; subEl.textContent = meta.sub.toUpperCase();
+    dotEls.forEach((d, j) => {
+      const on = j === skinIdx;
+      d.style.background = on ? "#57b0ff" : "rgba(255,255,255,0.22)";
+      d.style.boxShadow = on ? "0 0 10px rgba(87,176,255,0.8)" : "none";
+      d.style.transform = on ? "scale(1.25)" : "scale(1)";
+    });
     try { localStorage.setItem("lc_skin", meta.key); } catch (e) {}
     try {
       const rig = await W.kernel.loadCharacter(W.assetBase + "assets/chars/meshy/" + meta.key + ".glb");
@@ -173,8 +625,6 @@ export function showMenu(W, startMatch) {
       rig.scene.position.set(0, 0, 0);
       pvScene.add(rig.scene);
       pvBones = poseMod ? poseMod.findArmBones(rig.scene) : null;
-      // EMOTE SHOWCASE (owner: the locker should show the character off, not
-      // the Meshy library idle): cheer greeting once → dance loop
       let cheerClip = null, danceClip = null;
       for (const c of ["cheer", "dance"]) {
         try {
@@ -186,7 +636,7 @@ export function showMenu(W, startMatch) {
           }
         } catch (e) {}
       }
-      if (pvRig !== rig) return;   // user already clicked past this skin
+      if (pvRig !== rig) return;
       if (cheerClip) {
         rig.play("cheer_menu", { once: true });
         pvIdleRelax = false;
@@ -197,43 +647,77 @@ export function showMenu(W, startMatch) {
       } else {
         const first = rig.animations[0];
         if (first) rig.play(first.name);
-        pvIdleRelax = true;        // raw idle needs the relax layer
+        pvIdleRelax = true;
       }
-    } catch (e) { /* still baking — text only */ }
+    } catch (e) { /* still baking */ }
   }
   prev.onclick = () => { W.events.emit("uiClick"); setSkin(skinIdx - 1); };
   next.onclick = () => { W.events.emit("uiClick"); setSkin(skinIdx + 1); };
   setSkin(skinIdx);
   (function pvLoop() {
-    if (!pvRunning || !R.menu || !R.menu.isConnected) { pvR.dispose(); if (pvRig) W.kernel.disposeMixer(pvRig.mixer); return; }
+    if (!pvRunning || !R.menu || !R.menu.isConnected) {
+      pvR.dispose();
+      if (pvRig) W.kernel.disposeMixer(pvRig.mixer);
+      return;
+    }
+    const t = performance.now() / 1000;
     if (pvRig) {
-      pvRig.scene.rotation.y += 0.008;
-      // emotes own the body; relax only over a raw-idle fallback
+      pvRig.scene.rotation.y += 0.01;
       if (pvIdleRelax && poseMod) {
         if (!pvBones) pvBones = poseMod.findArmBones(pvRig.scene);
         if (pvBones) poseMod.applyArmPose(pvRig.scene, pvBones, "relax", 1);
       }
     }
+    if (ring) ring.material.opacity = 0.4 + Math.sin(t * 2) * 0.15;
+    if (glow) glow.material.opacity = 0.08 + Math.sin(t * 1.5) * 0.04;
     pvR.render(pvScene, pvCam);
     requestAnimationFrame(pvLoop);
   })();
   R._menuStopPv = () => { pvRunning = false; };
 
-  h("div", { fontSize: "12px", opacity: "0.55", maxWidth: "760px", textAlign: "center", lineHeight: "1.6" },
-    "WASD move · Mouse aim/fire · RMB aim down sights · SPACE jump / toggle parachute · SHIFT sprint · R reload · E loot (hold E for chests) · 1–5 / scroll weapons · B dance · N cheer · M map", wrap);
+  // bottom controls strip
+  h("div", {
+    fontFamily: "Rajdhani, " + FONT, fontSize: "13px", fontWeight: "600",
+    opacity: "0.6", maxWidth: "820px", textAlign: "center", lineHeight: "1.7",
+    letterSpacing: "0.5px", color: "#c0d4ec",
+    textShadow: "0 2px 8px rgba(0,0,0,0.9)",
+    animation: "lcPanelIn .6s .4s both",
+  },
+  "WASD MOVE  ·  MOUSE AIM/FIRE  ·  RMB ADS  ·  SPACE JUMP / CHUTE  ·  SHIFT SPRINT  ·  R RELOAD  ·  E LOOT  ·  1–5 WEAPONS  ·  M MAP",
+  wrap);
+
   import("./audio.js" + (new URL(import.meta.url).search || "")).then((m) => m.startMenuMusic(W));
 }
 
 export function showLoading(W, text) {
   // a new match must clear every stray screen from the previous one
   ["post", "death", "pause", "settings", "bigmap", "menu", "hud"].forEach((n) => { if (R[n]) { R[n].remove(); R[n] = null; } });
+  teardownMenuWorld(W);
   W.paused = false;
-  const L = layer("loading", { pointerEvents: "auto", background: "rgba(6,12,22,0.96)", display: "flex", alignItems: "center", justifyContent: "center" });
-  const box = h("div", { textAlign: "center" }, null, L);
-  h("div", { fontSize: "30px", fontWeight: "900", letterSpacing: "3px" }, "LAST CIRCLE", box);
-  h("div", { fontSize: "16px", opacity: "0.8", marginTop: "12px" }, text || "Loading…", box);
-  const bar = h("div", { width: "280px", height: "6px", background: "rgba(255,255,255,0.12)", borderRadius: "3px", margin: "18px auto 0", overflow: "hidden" }, null, box);
-  const fill = h("div", { width: "30%", height: "100%", background: "#57b0ff", borderRadius: "3px", transition: "width .4s" }, null, bar);
+  ensureAAAStyles();
+  const L = layer("loading", {
+    pointerEvents: "auto", display: "flex", alignItems: "center", justifyContent: "center",
+    background: "radial-gradient(ellipse at 50% 40%, rgba(20,40,70,0.55) 0%, rgba(4,10,20,0.92) 70%, rgba(2,6,12,0.97) 100%)",
+  });
+  const box = h("div", Object.assign({ textAlign: "center", padding: "36px 48px", minWidth: "360px" }, PANEL), null, L);
+  h("div", {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "28px", fontWeight: "900", letterSpacing: "6px",
+    background: "linear-gradient(180deg,#fff,#7eb8ff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+  }, "LAST CIRCLE", box);
+  h("div", {
+    fontFamily: "Rajdhani, " + FONT, fontSize: "16px", fontWeight: "600", opacity: "0.85",
+    marginTop: "14px", letterSpacing: "2px", color: "#b8d4f0",
+  }, text || "DEPLOYING…", box);
+  const bar = h("div", {
+    width: "300px", height: "4px", background: "rgba(255,255,255,0.1)", borderRadius: "2px",
+    margin: "22px auto 0", overflow: "hidden", border: "1px solid rgba(120,180,255,0.2)",
+  }, null, box);
+  const fill = h("div", {
+    width: "30%", height: "100%",
+    background: "linear-gradient(90deg,#2f7fd6,#6ec4ff,#2f7fd6)", backgroundSize: "200% 100%",
+    borderRadius: "2px", transition: "width .4s", animation: "lcShimmer 1.6s linear infinite",
+    boxShadow: "0 0 12px rgba(87,176,255,0.6)",
+  }, null, bar);
   let p = 30;
   R._loadIv = setInterval(() => { p = Math.min(92, p + 8); fill.style.width = p + "%"; }, 300);
 }
@@ -243,31 +727,67 @@ export function showLobby(W, onDone) {
   if (R._loadIv) { clearInterval(R._loadIv); R._loadIv = null; }
   if (R.loading) { R.loading.remove(); R.loading = null; }
   if (R.menu) { R.menu.remove(); R.menu = null; }
-  const L = layer("lobby", { pointerEvents: "auto", background: "rgba(6,12,22,0.88)" });
-  const wrap = h("div", { position: "absolute", inset: "0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px" }, null, L);
+  teardownMenuWorld(W);
+  ensureAAAStyles();
+  const L = layer("lobby", {
+    pointerEvents: "auto",
+    background: "radial-gradient(ellipse at 50% 30%, rgba(10,24,48,0.55) 0%, rgba(4,10,20,0.88) 100%)",
+  });
+  const wrap = h("div", {
+    position: "absolute", inset: "0", display: "flex", flexDirection: "column",
+    alignItems: "center", justifyContent: "center", gap: "18px",
+  }, null, L);
   const mapName = (W.map && W.map.K && W.map.K.name) || W.mapId;
-  h("div", { fontSize: "26px", fontWeight: "900", letterSpacing: "2px" }, mapName.toUpperCase() + " — " + (W.mode === "quick" ? "QUICK MATCH" : W.mode === "practice" ? "PRACTICE" : "BATTLE ROYALE"), wrap);
-  const count = h("div", { fontSize: "16px", opacity: "0.85" }, "Filling lobby… 1/" + W.actors.length, wrap);
-  const grid = h("div", { display: "grid", gridTemplateColumns: "repeat(10, 110px)", gap: "5px", maxWidth: "1180px" }, null, wrap);
-  const cells = W.actors.map((a, i) => {
-    const c = h("div", { padding: "5px 7px", fontSize: "10px", borderRadius: "6px", background: "rgba(255,255,255,0.05)", color: "transparent", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", border: "1px solid rgba(255,255,255,0.06)" }, a.name, grid);
+  const modeLabel = W.mode === "quick" ? "QUICK MATCH" : W.mode === "practice" ? "PRACTICE" : "BATTLE ROYALE";
+  h("div", {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "13px", fontWeight: "800",
+    letterSpacing: "4px", color: "#8ec8ff", opacity: "0.85",
+  }, "MATCH LOBBY", wrap);
+  h("div", {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "28px", fontWeight: "900", letterSpacing: "3px",
+    textShadow: "0 0 24px rgba(80,160,255,0.4)",
+  }, mapName.toUpperCase() + "  ·  " + modeLabel, wrap);
+  const count = h("div", {
+    fontFamily: "Rajdhani, " + FONT, fontSize: "18px", fontWeight: "600", opacity: "0.9", color: "#c8dff8",
+  }, "FILLING LOBBY… 1/" + W.actors.length, wrap);
+  const grid = h("div", {
+    display: "grid", gridTemplateColumns: "repeat(10, 108px)", gap: "6px", maxWidth: "1180px",
+    padding: "16px", borderRadius: "14px",
+    background: "rgba(6,14,28,0.55)", border: "1px solid rgba(120,180,255,0.15)",
+    boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
+  }, null, wrap);
+  const cells = W.actors.map((a) => {
+    const c = h("div", {
+      padding: "6px 8px", fontSize: "11px", borderRadius: "6px",
+      background: "rgba(255,255,255,0.04)", color: "transparent",
+      overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis",
+      border: "1px solid rgba(255,255,255,0.05)", fontFamily: "Rajdhani, " + FONT, fontWeight: "600",
+    }, a.name, grid);
     return c;
   });
-  const cd = h("div", { fontSize: "42px", fontWeight: "900", color: "#57b0ff", minHeight: "52px" }, "", wrap);
-  if (W.mode === "practice") h("div", { fontSize: "13px", opacity: "0.7" }, "Sandbox — no storm. Range targets south, movement course east.", wrap);
+  const cd = h("div", {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "56px", fontWeight: "900",
+    color: "#6ec4ff", minHeight: "64px", textShadow: "0 0 32px rgba(87,176,255,0.55)",
+  }, "", wrap);
+  if (W.mode === "practice") h("div", { fontSize: "13px", opacity: "0.7", letterSpacing: "1px" }, "SANDBOX — NO STORM. RANGE TARGETS SOUTH, MOVEMENT COURSE EAST.", wrap);
 
   // fill animation then countdown
   let filled = 1;
-  cells[0].style.color = "#9fd7ff"; cells[0].style.background = "rgba(87,176,255,0.18)";
+  cells[0].style.color = "#9fd7ff";
+  cells[0].style.background = "rgba(87,176,255,0.22)";
+  cells[0].style.borderColor = "rgba(87,176,255,0.45)";
+  cells[0].style.boxShadow = "0 0 12px rgba(87,176,255,0.25)";
   const fillIv = setInterval(() => {
     const step = 3 + Math.floor(Math.random() * 5);
     for (let i = 0; i < step && filled < cells.length; i++, filled++) {
       cells[filled].style.color = "#dfeaff";
+      cells[filled].style.background = "rgba(255,255,255,0.07)";
+      cells[filled].style.borderColor = "rgba(140,180,220,0.18)";
     }
-    count.textContent = (W.net ? "Waiting for friends… " : "Filling lobby… ") + filled + "/" + W.actors.length;
+    count.textContent = (W.net ? "WAITING FOR SQUAD… " : "FILLING LOBBY… ") + filled + "/" + W.actors.length;
     if (filled >= cells.length) {
       clearInterval(fillIv);
-      count.textContent = W.actors.length + "/" + W.actors.length + " — ready";
+      count.textContent = W.actors.length + "/" + W.actors.length + "  —  ALL OPERATIVES READY";
       let n = W.mode === "practice" ? 1 : 3;
       cd.textContent = n;
       W.events.emit("countdownBeep", false);
@@ -803,23 +1323,47 @@ function showDeath(W, killerId, weaponId) {
 export function showPostMatch(W, res) {
   hideHUD();
   ["pause", "death"].forEach((n) => { if (R[n]) { R[n].remove(); R[n] = null; } });
-  const L = layer("post", { pointerEvents: "auto", background: "rgba(4,8,16,0.9)", display: "flex", alignItems: "center", justifyContent: "center" });
-  const box = h("div", Object.assign({ padding: "40px 60px", textAlign: "center", display: "flex", flexDirection: "column", gap: "8px", minWidth: "420px" }, PANEL), null, L);
+  ensureAAAStyles();
+  const L = layer("post", {
+    pointerEvents: "auto", display: "flex", alignItems: "center", justifyContent: "center",
+    background: "radial-gradient(ellipse at 50% 35%, rgba(12,28,52,0.5) 0%, rgba(4,8,16,0.92) 100%)",
+  });
+  const box = h("div", Object.assign({
+    padding: "44px 64px", textAlign: "center", display: "flex", flexDirection: "column",
+    gap: "10px", minWidth: "440px", position: "relative", overflow: "hidden",
+  }, PANEL), null, L);
+  box.className = "lc-glass-scan";
   if (res.victory) {
-    h("div", { fontSize: "44px", fontWeight: "900", color: "#ffd54a", textShadow: "0 0 30px rgba(255,213,74,0.5)", letterSpacing: "3px" }, "VICTORY ROYALE", box);
+    h("div", {
+      fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "42px", fontWeight: "900", color: "#ffd54a",
+      textShadow: "0 0 36px rgba(255,213,74,0.55)", letterSpacing: "4px",
+    }, "VICTORY ROYALE", box);
     confetti(L);
   } else {
-    h("div", { fontSize: "36px", fontWeight: "900", letterSpacing: "3px" }, "MATCH OVER", box);
+    h("div", {
+      fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "34px", fontWeight: "900", letterSpacing: "4px",
+    }, "MATCH OVER", box);
   }
-  h("div", { fontSize: "20px", fontWeight: "800", color: "#9fd7ff", marginBottom: "10px" }, "#" + res.placement + " OF " + (W.match ? W.match.totalPlayers : 50), box);
-  const grid = h("div", { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 30px", fontSize: "15px", textAlign: "left", margin: "0 auto" }, null, box);
+  h("div", {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "22px", fontWeight: "800",
+    color: "#9fd7ff", marginBottom: "12px", letterSpacing: "2px",
+  }, "#" + res.placement + " OF " + (W.match ? W.match.totalPlayers : 50), box);
+  const grid = h("div", {
+    display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 36px", fontSize: "16px",
+    textAlign: "left", margin: "0 auto", fontFamily: "Rajdhani, " + FONT, fontWeight: "600",
+  }, null, box);
   stat(grid, "Eliminations", res.kills);
   stat(grid, "Damage dealt", res.damage);
   stat(grid, "Accuracy", res.accuracy + "%");
   stat(grid, "Survived", fmtT(res.timeS));
-  // one life per match — no instant requeue; back to the menu
-  const row = h("div", { display: "flex", gap: "12px", justifyContent: "center", marginTop: "22px" }, null, box);
-  const menu = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff", fontSize: "18px", padding: "14px 44px" }), "MAIN MENU", row);
+  const row = h("div", { display: "flex", gap: "12px", justifyContent: "center", marginTop: "24px" }, null, box);
+  const menu = h("button", Object.assign({}, BTN, {
+    fontFamily: "Orbitron, " + FONT_DISPLAY,
+    background: "linear-gradient(180deg,#6ec4ff,#2f7fd6)", color: "#fff",
+    fontSize: "16px", padding: "14px 48px", letterSpacing: "2px",
+    boxShadow: "0 0 24px rgba(60,150,255,0.4)",
+  }), "MAIN MENU", row);
+  menu.className = "lc-btn-play";
   menu.onclick = () => { L.remove(); R.post = null; res.onMenu(); };
 }
 function stat(grid, label, val) {
