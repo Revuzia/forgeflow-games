@@ -68,7 +68,7 @@ export class SnakeField {
     // food instancing
     const foodGeo = new THREE.IcosahedronGeometry(1, 1);
     const foodMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.08 });
-    glowify(foodMat, 0.38);
+    glowify(foodMat, 0.22);
     this.foodMesh = new THREE.InstancedMesh(foodGeo, foodMat, MAX_FOOD);
     this.foodMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.foodMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_FOOD * 3), 3);

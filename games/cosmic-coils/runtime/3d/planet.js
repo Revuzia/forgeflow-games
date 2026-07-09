@@ -195,14 +195,14 @@ function makeAtmosphere(R, colorHex) {
   const geo = new THREE.SphereGeometry(R * 1.035, 64, 48);
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
-    uniforms: { uColor: { value: new THREE.Color(colorHex).multiplyScalar(0.55) } },
+    uniforms: { uColor: { value: new THREE.Color(colorHex).multiplyScalar(0.42) } },
     vertexShader: `
       varying vec3 vN; varying vec3 vE;
       void main(){ vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position,1.0); vE = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }
     `,
     fragmentShader: `
       varying vec3 vN; varying vec3 vE; uniform vec3 uColor;
-      void main(){ float f = pow(1.0 - abs(dot(vN, vE)), 3.8); gl_FragColor = vec4(uColor, f * 0.16); }
+      void main(){ float f = pow(1.0 - abs(dot(vN, vE)), 4.2); gl_FragColor = vec4(uColor, f * 0.10); }
     `,
   });
   return new THREE.Mesh(geo, mat);

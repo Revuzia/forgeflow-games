@@ -64,7 +64,10 @@ const css = `
 @media (max-width:700px){.cc-lb{display:none}.cc-map{width:110px;height:110px}.cc-score .len{font-size:20px}.cc-count{font-size:70px}}
 `;
 
-const WICON = { calm: "☾", rain: "🌧", fireflies: "✨", ashstorm: "🌪", emberrain: "☄", blizzard: "🌨", aurora: "🌌", sandstorm: "🌵", heatwave: "🔥", sporestorm: "🍄", voidstorm: "⚡" };
+// full-color emoji only (the old ☾/☄ text-symbols rendered as a bare "C"/dot)
+const WICON = { calm: "🌙", rain: "🌧️", fireflies: "✨", ashstorm: "🌪️", emberrain: "☄️", blizzard: "🌨️", aurora: "🌌", sandstorm: "🏜️", heatwave: "🔥", sporestorm: "🍄", voidstorm: "⚡" };
+// clean display labels (avoids run-together "EMBERRAIN"/"HEATWAVE")
+const WNAME = { calm: "CALM SKIES", rain: "RAIN", fireflies: "FIREFLIES", ashstorm: "ASH STORM", emberrain: "EMBER RAIN", blizzard: "BLIZZARD", aurora: "AURORA", sandstorm: "SANDSTORM", heatwave: "HEAT WAVE", sporestorm: "SPORE STORM", voidstorm: "VOID STORM" };
 
 export class HUD {
   constructor(container, audio) {
@@ -79,7 +82,7 @@ export class HUD {
     container.appendChild(this.root);
     this.root.innerHTML = `
       <div class="cc-panel cc-score"><div class="len">0</div><div class="sub">☠ <span class="kills">0</span> · best <span class="best">0</span> · rank <span class="rank">-</span></div></div>
-      <div class="cc-panel cc-weather"><span class="wi">☾</span><span class="wt">CALM SKIES</span></div>
+      <div class="cc-panel cc-weather"><span class="wi">🌙</span><span class="wt">CALM SKIES</span></div>
       <div class="cc-panel cc-lb"><h4>LONGEST COILS</h4><div class="rows"></div></div>
       <div class="cc-feed"></div>
       <div class="cc-toasts"></div>
@@ -228,16 +231,16 @@ export class HUD {
     const wk = weather.kind;
     const approaching = wk === "calm" && weather.phase > 0.82 && weather.next;
     if (approaching) {
-      this.wiEl.textContent = WICON[weather.next] || "☁";
-      this.wtEl.textContent = (weather.next || "").toUpperCase() + " APPROACHING…";
+      this.wiEl.textContent = WICON[weather.next] || "☁️";
+      this.wtEl.textContent = (WNAME[weather.next] || "WEATHER") + " APPROACHING…";
       this.weatherEl.classList.add("active");
     } else {
-      this.wiEl.textContent = WICON[wk] || "☾";
-      this.wtEl.textContent = wk === "calm" ? "CALM SKIES" : wk.toUpperCase();
+      this.wiEl.textContent = WICON[wk] || "🌙";
+      this.wtEl.textContent = WNAME[wk] || "CALM SKIES";
       this.weatherEl.classList.toggle("active", wk !== "calm");
     }
     if (wk !== this._lastWeather) {
-      if (wk !== "calm") this.toast((WICON[wk] || "") + " " + wk.toUpperCase() + " — food surge!", "warn");
+      if (wk !== "calm") this.toast((WICON[wk] || "") + " " + (WNAME[wk] || wk) + " — food surge!", "warn");
       this._lastWeather = wk;
     }
 

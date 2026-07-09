@@ -97,7 +97,7 @@ export class Game {
 
   _applyBloom() {
     // dimmer global bloom so atmosphere ring + essence stay readable
-    const base = this.W && (this.W.biome === "abyss" || this.W.biome === "ember") ? 0.58 : 0.48;
+    const base = this.W && (this.W.biome === "abyss" || this.W.biome === "ember") ? 0.46 : 0.38;
     const t = QUALITY_TIERS[this.settings.quality] || QUALITY_TIERS.high;
     this.bloom.strength = base * t.bloom;
   }

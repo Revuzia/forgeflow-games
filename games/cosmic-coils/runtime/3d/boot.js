@@ -41,9 +41,10 @@ try {
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  // lower strength/threshold so world limb + essence don't blow out
+  // higher THRESHOLD (0.82) = only the brightest cores bloom, so the whole
+  // scene stops washing out; strength/radius kept modest. (owner: too glowy)
   const bloom = new UnrealBloomPass(
-    new THREE.Vector2(container.clientWidth, container.clientHeight), 0.48, 0.45, 0.72);
+    new THREE.Vector2(container.clientWidth, container.clientHeight), 0.42, 0.42, 0.82);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
