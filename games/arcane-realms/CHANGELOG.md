@@ -1,5 +1,39 @@
 # Arcane Realms TCG — Changelog
 
+## v1.4.0 — 2026-07-09 (Deck-select button, card-art fit, per-element spell SFX, full-body heroes)
+
+### Deck picker: pick THEN battle (no accidental launch)
+- Choosing a battle deck no longer launches the match the instant you click a
+  deck. Clicking a deck now **selects** it (gold highlight); a **⚔ Battle**
+  button (disabled until you pick) starts the match. Double-click a deck to
+  pick-and-go. Cancel still backs out.
+
+### Card art fits the frame — no more guillotined heads
+- ~124 of the card arts are portrait (0.75) inside a landscape art window; the
+  old cover-crop centered them and shifted UP, slicing off heads (the Ancient
+  Sphinx, etc.). Art is now **aspect-aware**: portrait art anchors to the TOP
+  (show the face, crop the legs), landscape art stays centered. Fixes every
+  affected card at once — hand, board, hover, and reward reveals.
+
+### Distinct spell-cast sound per element
+- Casting a spell now plays a **per-realm cast voice** instead of one generic
+  chime: ember = a fiery whoosh + roar, tide = an icy shimmer sweep, grove = a
+  warm rising triad, dawn = ascending light-bells, grave = a dark descending
+  swell, arcane/neutral = a sparkling chord. (New `spell_*` cases in the audio
+  synth; routed by `def.realm` at cast time.)
+
+### 3D heroes are now FULL-BODY characters
+- The hero busts are replaced by **full-body 3D characters** (head to feet).
+  Generated fresh: full-body concept art per realm (xAI) → Meshy image-to-3D →
+  gltf-transform optimize (6 heroes, 180 Meshy credits, 2.5–6.5 MB each).
+- Reworked placement + lighting: heroes are **smaller** and frame the arena
+  diagonally (player warlord at the near bottom-left, enemy looming at the far
+  back) so they never cover the hand or the board minis. A dedicated hero key +
+  camera-side fill light keeps dark-armored heroes (ember/grave) readable
+  against the dark board. Feet planted, gentle idle sway.
+
+Selftest 214. Cache-bust `?v=14` → `?v=16`.
+
 ## v1.3.9 — 2026-07-09 (Campaign story rework, goons, final boss, hero visibility)
 
 ### Campaign is a real story now — goons per step, boss as the finale

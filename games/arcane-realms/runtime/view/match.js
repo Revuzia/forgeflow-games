@@ -6,10 +6,10 @@
 // always shows my side at the bottom via syncFromState(state, mySide).
 
 import * as THREE from 'three';
-import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=14';
-import { cardById, REALMS } from '../sim/cards.js?v=14';
-import { chooseAction } from '../sim/ai.js?v=14';
-import { Audio2 } from './audio.js?v=14';
+import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=16';
+import { cardById, REALMS } from '../sim/cards.js?v=16';
+import { chooseAction } from '../sim/ai.js?v=16';
+import { Audio2 } from './audio.js?v=16';
 
 const REALM_COLOR = (id) => REALMS[cardById(id).realm]?.color ?? 0x8d99ae;
 
@@ -207,7 +207,9 @@ export class Match {
         case 'fatigue': this.floatAt(scene.heroPos(this.relOf(ev.p)), `Fatigue ${ev.amount}!`, 'bad'); break;
         case 'play-creature': Audio2.sfx('summon'); break;
         case 'play-spell': {
-          Audio2.sfx('spell');
+          // distinct cast voice per realm — fire ≠ frost ≠ shadow ≠ light…
+          const sr = cardById(ev.card).realm;
+          Audio2.sfx(['ember', 'tide', 'grove', 'dawn', 'grave'].includes(sr) ? 'spell_' + sr : 'spell_arcane');
           await this.spellChoreography(ev);
           break;
         }

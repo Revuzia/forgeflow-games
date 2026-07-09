@@ -213,28 +213,30 @@ export const Audio2 = {
   sfx(name) {
     if (!this.enabled || !this.ensure()) return;
     const t = ctx.currentTime + 0.005;
-    const noise = (len, filtType, freq, vol, sweepTo = null) => {
+    const noise = (len, filtType, freq, vol, sweepTo = null, at = 0) => {
+      const st = t + at;
       const buf = ctx.createBuffer(1, Math.max(1, ctx.sampleRate * len), ctx.sampleRate);
       const d = buf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
       const s = ctx.createBufferSource(); s.buffer = buf;
       const f = ctx.createBiquadFilter(); f.type = filtType;
-      f.frequency.setValueAtTime(freq, t);
-      if (sweepTo) f.frequency.exponentialRampToValueAtTime(sweepTo, t + len);
-      const g = ctx.createGain(); g.gain.setValueAtTime(vol, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + len);
+      f.frequency.setValueAtTime(freq, st);
+      if (sweepTo) f.frequency.exponentialRampToValueAtTime(sweepTo, st + len);
+      const g = ctx.createGain(); g.gain.setValueAtTime(vol, st);
+      g.gain.exponentialRampToValueAtTime(0.001, st + len);
       s.connect(f); f.connect(g); g.connect(sfxGain);
-      s.start(t);
+      s.start(st);
     };
-    const tone = (freq, len, vol, type = 'sine', to = null) => {
+    const tone = (freq, len, vol, type = 'sine', to = null, at = 0) => {
+      const st = t + at;
       const o = ctx.createOscillator(); o.type = type;
-      o.frequency.setValueAtTime(freq, t);
-      if (to) o.frequency.exponentialRampToValueAtTime(to, t + len);
+      o.frequency.setValueAtTime(freq, st);
+      if (to) o.frequency.exponentialRampToValueAtTime(to, st + len);
       const g = ctx.createGain();
-      g.gain.setValueAtTime(vol, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + len);
+      g.gain.setValueAtTime(vol, st);
+      g.gain.exponentialRampToValueAtTime(0.001, st + len);
       o.connect(g); g.connect(sfxGain);
-      o.start(t); o.stop(t + len + 0.05);
+      o.start(st); o.stop(st + len + 0.05);
     };
     switch (name) {
       case 'hover': tone(880, 0.05, 0.05, 'sine'); break;
@@ -248,6 +250,35 @@ export const Audio2 = {
       case 'impact': noise(0.16, 'lowpass', 500, 0.5); tone(90, 0.18, 0.4, 'sine', 45); break;
       case 'death': noise(0.4, 'lowpass', 700, 0.3, 120); tone(160, 0.4, 0.2, 'sawtooth', 60); break;
       case 'spell': [0, 0.05, 0.1].forEach((dt, i) => tone(700 + i * 260, 0.22, 0.1, 'sine')); noise(0.25, 'highpass', 2500, 0.08); break;
+      // ── per-element spell CAST voices (distinct per realm) ──────────
+      case 'spell_ember': // fire: whoosh up → low roar + crackle
+        noise(0.30, 'lowpass', 520, 0.22, 2200);
+        tone(150, 0.34, 0.26, 'sawtooth', 62);
+        noise(0.22, 'highpass', 3200, 0.09, null, 0.06);
+        break;
+      case 'spell_tide': // frost: icy shimmer sweeping down + watery ring
+        tone(1950, 0.42, 0.13, 'sine', 520);
+        noise(0.34, 'highpass', 5200, 0.11, 2800);
+        tone(780, 0.30, 0.09, 'triangle', 1160, null, 0.05);
+        break;
+      case 'spell_grove': // nature: warm rising major triad + leafy rustle
+        [0, 0.05, 0.10].forEach((dt, i) => tone(392 * Math.pow(1.26, i), 0.34, 0.10, 'triangle', null, dt));
+        noise(0.30, 'bandpass', 1300, 0.07, 2600);
+        break;
+      case 'spell_dawn': // light: bright ascending bells + airy shimmer
+        [0, 0.06, 0.12, 0.18].forEach((dt, i) => tone(660 * Math.pow(1.335, i), 0.5, 0.08, 'sine', null, dt));
+        noise(0.40, 'highpass', 6000, 0.05);
+        break;
+      case 'spell_grave': // shadow: low descending swell + sub + rush
+        tone(240, 0.45, 0.16, 'sawtooth', 70);
+        tone(180, 0.40, 0.11, 'sine', 55, null, 0.03);
+        noise(0.40, 'lowpass', 520, 0.10, 140);
+        break;
+      case 'spell_arcane': // neutral: sparkly rising magic chord
+        [0, 0.04, 0.08, 0.12].forEach((dt, i) => tone(700 + i * 280, 0.24, 0.08, 'sine', null, dt));
+        noise(0.26, 'highpass', 3500, 0.07);
+        tone(1320, 0.30, 0.06, 'triangle', 1980, null, 0.04);
+        break;
       case 'freeze': tone(1400, 0.35, 0.12, 'sine', 500); noise(0.3, 'highpass', 4000, 0.1); break;
       case 'heal': [0, 0.08, 0.16].forEach((dt, i) => tone(520 * Math.pow(1.25, i), 0.3, 0.09, 'sine')); break;
       case 'buff': tone(440, 0.2, 0.12, 'triangle', 660); break;

@@ -4,7 +4,7 @@
 // board and as plain canvases in the DOM (deck builder / collection / inspect).
 
 import * as THREE from 'three';
-import { CARDS, REALMS, cardById } from '../sim/cards.js?v=14';
+import { CARDS, REALMS, cardById } from '../sim/cards.js?v=16';
 
 export const CARD_W = 512, CARD_H = 768;
 
@@ -177,10 +177,13 @@ export function drawCard(canvas, cardId, { forceArt = null } = {}) {
   const art = artCache.get(cardId);
   const img = forceArt || (art && art.loaded ? art.img : null);
   if (img) {
-    // cover-crop
+    // cover-crop, but aspect-aware: many arts are PORTRAIT (0.75) in a landscape
+    // frame — centering + an upward shift used to guillotine heads. Anchor tall
+    // art toward the TOP (show the face, crop the legs); center landscape art.
     const s = Math.max(aw / img.width, ah / img.height);
     const dw = img.width * s, dh = img.height * s;
-    g.drawImage(img, ax + (aw - dw) / 2, ay + (ah - dh) / 2 - dh * 0.04, dw, dh);
+    const bias = img.width / img.height < aw / ah ? 0.1 : 0.5; // 0=top, .5=center
+    g.drawImage(img, ax + (aw - dw) / 2, ay - (dh - ah) * bias, dw, dh);
   } else {
     const ph = g.createLinearGradient(0, ay, 0, ay + ah);
     ph.addColorStop(0, shade(realm.css, -0.3));
@@ -319,7 +322,8 @@ export function drawBoardCard(canvas, cardId) {
   if (img) {
     const s = Math.max(aw / img.width, ah / img.height);
     const dw = img.width * s, dh = img.height * s;
-    g.drawImage(img, ax + (aw - dw) / 2, ay + (ah - dh) / 2, dw, dh);
+    const bias = img.width / img.height < aw / ah ? 0.1 : 0.5; // portrait art → show head
+    g.drawImage(img, ax + (aw - dw) / 2, ay - (dh - ah) * bias, dw, dh);
   } else {
     const ph = g.createLinearGradient(0, ay, 0, ay + ah);
     ph.addColorStop(0, shade(realm.css, -0.3));

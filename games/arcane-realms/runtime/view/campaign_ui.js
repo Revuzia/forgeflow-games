@@ -1,11 +1,11 @@
 // Arcane Realms TCG — Campaign screens: chapter map, NPC dialogue bubbles,
 // rewards reveal, achievements panel, card-back gallery.
 
-import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=14';
-import { battleState, campaignSummary, achievementList, buyPack } from '../campaign/progression.js?v=14';
-import { REALMS, cardById } from '../sim/cards.js?v=14';
-import { drawCard } from './cardtex.js?v=14';
-import { Audio2 } from './audio.js?v=14';
+import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=16';
+import { battleState, campaignSummary, achievementList, buyPack } from '../campaign/progression.js?v=16';
+import { REALMS, cardById } from '../sim/cards.js?v=16';
+import { drawCard } from './cardtex.js?v=16';
+import { Audio2 } from './audio.js?v=16';
 
 // battle-node positions on the world map (percent of the 16:9 artwork)
 const MAP_POS = {
@@ -212,16 +212,32 @@ export class CampaignUI {
     m.append(ui.el('h3', null, 'CHOOSE YOUR DECK'));
     const grid = ui.el('div', 'deck-pick');
     const decks = ui.availableDecks();
+    let selected = null;
+    const tiles = [];
+    const launch = () => { if (!selected) return; Audio2.sfx('click'); wrap.remove(); cb(selected); };
     for (const d of decks) {
       const t = ui.el('div', 'deck-tile');
       t.append(ui.el('div', 'dname', d.name), ui.el('div', 'dreal', d.desc || 'Custom deck'));
-      t.onclick = () => { Audio2.sfx('click'); wrap.remove(); cb(d); };
+      t.onclick = () => {
+        Audio2.sfx('hover');
+        selected = d;
+        tiles.forEach((x) => x.classList.remove('sel'));
+        t.classList.add('sel');
+        battle.disabled = false;
+      };
+      t.ondblclick = launch;               // power-user shortcut: pick + go
+      tiles.push(t);
       grid.append(t);
     }
+    // two-step: select a deck (highlights), THEN press Battle — no accidental launch
+    const btns = ui.el('div', 'deck-pick-btns');
+    const battle = ui.el('button', 'btn primary', '⚔ Battle');
+    battle.disabled = true;
+    battle.onclick = launch;
     const cancel = ui.el('button', 'btn small', 'Cancel');
-    cancel.style.cssText = 'display:block;margin:8px auto 0';
     cancel.onclick = () => wrap.remove();
-    m.append(grid, cancel);
+    btns.append(battle, cancel);
+    m.append(grid, btns);
     wrap.append(m);
     ui.root.append(wrap);
   }

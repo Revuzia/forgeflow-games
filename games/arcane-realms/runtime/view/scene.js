@@ -2,9 +2,9 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=14';
-import { REALMS, cardById } from '../sim/cards.js?v=14';
-import { FX } from './fx.js?v=14';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=16';
+import { REALMS, cardById } from '../sim/cards.js?v=16';
+import { FX } from './fx.js?v=16';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 export const LAYOUT = {
@@ -12,8 +12,12 @@ export const LAYOUT = {
   handZ: 4.52, handY: 1.0, enemyHandZ: -3.98,
   deckX: 7.5, playerDeckZ: 3.1, enemyDeckZ: -3.1,
   trapX: -7.35, playerTrapZ: 2.35, enemyTrapZ: -2.35,
-  heroPlayer: new THREE.Vector3(0, 0.02, 3.28),
-  heroEnemy: new THREE.Vector3(0, 0.02, -4.05), // pushed back — clears the enemy card row + minis
+  // full-body heroes frame the arena diagonally: the player warlord stands at
+  // the near bottom-left (raised onto the board so the whole figure clears the
+  // hand row + near rim), the enemy looms at the far back. Tuned in-browser so
+  // both read fully without covering the central hand or the board minis.
+  heroPlayer: new THREE.Vector3(-5.15, 0.25, 1.5),
+  heroEnemy: new THREE.Vector3(-1.5, 0.45, -4.05),
 };
 
 // ── tiny tween engine ────────────────────────────────────────────
@@ -770,7 +774,7 @@ export class BoardScene {
   // ── 3D legendary minis ─────────────────────────────────────────
   async _gltfLoader() {
     if (!this._gltfLoaderP) {
-      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=14').then((m) => new m.GLTFLoader());
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=16').then((m) => new m.GLTFLoader());
     }
     return this._gltfLoaderP;
   }
@@ -931,9 +935,9 @@ export class BoardScene {
       const model = gltf.scene;
       const box = new THREE.Box3().setFromObject(model);
       const size = box.getSize(new THREE.Vector3());
-      // taller than a mini so the bust rises clearly ABOVE the hand row;
-      // the enemy (far) side gets a touch more to fight perspective shrink
-      const H = rel === 0 ? 3.4 : 3.9;
+      // full-body standing figure — modest height so it reads as a character
+      // beside the board, not a giant; enemy a touch taller vs perspective
+      const H = rel === 0 ? 2.5 : 2.9;
       model.scale.setScalar(H / Math.max(size.y, 0.001));
       let b2 = new THREE.Box3().setFromObject(model);
       const s2 = b2.getSize(new THREE.Vector3());
@@ -951,15 +955,20 @@ export class BoardScene {
       });
       const grp = new THREE.Group(); grp.add(model);
       const pos = rel === 0 ? LAYOUT.heroPlayer : LAYOUT.heroEnemy;
-      // lift the bust off the table + sit it in the gap between hand and board
-      // (enemy comes FORWARD off its hand row so the whole character is seen)
-      grp.position.set(pos.x, rel === 0 ? 0.5 : 0.55, rel === 0 ? pos.z + 0.15 : pos.z + 1.35);
+      // stand at the flank anchor (LAYOUT y lifts the figure onto the board so
+      // the whole body clears the near rim / hand row)
+      grp.position.set(pos.x, pos.y, pos.z);
       this.scene.add(grp);
-      // shared key light for heroes (dim mood board)
+      // dedicated hero lighting — the board is dark and several heroes wear
+      // dark armor (ember/grave), so a strong key + camera-side fill keeps the
+      // full-body characters clearly readable instead of melting into the board
       if (!this.heroLight) {
-        this.heroLight = new THREE.PointLight(0xfff1d8, 60, 22, 2);
-        this.heroLight.position.set(0, 6, 0);
+        this.heroLight = new THREE.PointLight(0xfff1d8, 130, 30, 2);
+        this.heroLight.position.set(0, 8, 2);
         this.scene.add(this.heroLight);
+        this.heroFill = new THREE.DirectionalLight(0xdfe6ff, 1.5);
+        this.heroFill.position.set(0, 6, 12); // from the camera side
+        this.scene.add(this.heroFill);
       }
       // hide the flat disc face; keep the ring as a targeting/glow base
       const disc = this.heroMeshes[rel];
@@ -969,7 +978,10 @@ export class BoardScene {
         this.scene.remove(this.heroModels[rel].grp);
         this.heroModels[rel].grp.traverse((o) => o.geometry?.dispose?.());
       }
-      this.heroModels[rel] = { grp, seed: rel * 3.14, baseY: grp.position.y };
+      // face mostly the camera but angle slightly inward toward the board
+      const baseYaw = rel === 0 ? 0.20 : -0.20;
+      grp.rotation.y = baseYaw;
+      this.heroModels[rel] = { grp, seed: rel * 3.14, baseY: grp.position.y, baseYaw };
     } catch (e) { /* GLB missing → keep the disc portrait */ }
   }
 
@@ -1060,10 +1072,10 @@ export class BoardScene {
         }
       }
     }
-    // hero characters: gentle idle breathing sway
+    // hero characters: gentle idle sway around their facing; feet stay planted
     if (this.heroModels) for (const hm of this.heroModels) if (hm) {
-      hm.grp.rotation.y = Math.sin(this.time * 0.6 + hm.seed) * 0.06;
-      hm.grp.position.y = (hm.baseY || 0.4) + (Math.sin(this.time * 1.1 + hm.seed) + 1) * 0.03;
+      hm.grp.rotation.y = (hm.baseYaw || 0) + Math.sin(this.time * 0.6 + hm.seed) * 0.05;
+      hm.grp.position.y = (hm.baseY || 0.02) + (Math.sin(this.time * 1.1 + hm.seed) + 1) * 0.008;
     }
     // diorama: crystals spin, braziers flicker embers
     for (const c of this.dioramaSpin) { c.rotation.y += dt * 0.5; c.position.y = 1.5 + Math.sin(this.time * 1.2 + c.position.x) * 0.1; }

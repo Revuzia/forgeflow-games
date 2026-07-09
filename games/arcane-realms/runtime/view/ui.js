@@ -1,11 +1,11 @@
 // Arcane Realms TCG — DOM UI layer: menu, deck builder, collection, settings,
 // match HUD (hero plates, phase bar, banners, floaters, arrow, tooltips).
 
-import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=14';
-import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=14';
-import { DIFFICULTIES } from '../sim/ai.js?v=14';
-import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=14';
-import { Audio2 } from './audio.js?v=14';
+import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=16';
+import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=16';
+import { DIFFICULTIES } from '../sim/ai.js?v=16';
+import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=16';
+import { Audio2 } from './audio.js?v=16';
 
 // ── persistence ─────────────────────────────────────────────────
 const LS_KEY = 'arcane_realms_save_v1';
@@ -100,6 +100,7 @@ const CSS = `
 .modal h3{color:var(--gold-hi);letter-spacing:.12em;font-size:22px;margin-bottom:14px;text-align:center}
 /* setup */
 .deck-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin:10px 0 18px}
+.deck-pick-btns{display:flex;gap:12px;justify-content:center;align-items:center;margin-top:4px}
 .deck-tile{pointer-events:auto;cursor:pointer;border:1px solid #3a2a5c;border-radius:10px;padding:12px 14px;background:#1b1330;transition:all .12s}
 .deck-tile:hover{border-color:var(--gold)}
 .deck-tile.sel{border-color:var(--gold-hi);background:#2a1f47;box-shadow:0 0 0 1px var(--gold-hi), 0 6px 18px rgba(212,149,43,.25)}

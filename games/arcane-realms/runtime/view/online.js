@@ -5,7 +5,7 @@
 // the other side (see Match.pumpRemote). A post-action state hash catches
 // desyncs and triggers a host-authoritative resync.
 
-import { NetPlay } from '../net/netplay.js?v=14';
+import { NetPlay } from '../net/netplay.js?v=16';
 
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export function friendlyCode(n = 4) {
