@@ -6,10 +6,10 @@
 // always shows my side at the bottom via syncFromState(state, mySide).
 
 import * as THREE from 'three';
-import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=13';
-import { cardById, REALMS } from '../sim/cards.js?v=13';
-import { chooseAction } from '../sim/ai.js?v=13';
-import { Audio2 } from './audio.js?v=13';
+import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=14';
+import { cardById, REALMS } from '../sim/cards.js?v=14';
+import { chooseAction } from '../sim/ai.js?v=14';
+import { Audio2 } from './audio.js?v=14';
 
 const REALM_COLOR = (id) => REALMS[cardById(id).realm]?.color ?? 0x8d99ae;
 

@@ -1,11 +1,11 @@
 // Arcane Realms TCG — Campaign screens: chapter map, NPC dialogue bubbles,
 // rewards reveal, achievements panel, card-back gallery.
 
-import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=13';
-import { battleState, campaignSummary, achievementList, buyPack } from '../campaign/progression.js?v=13';
-import { REALMS, cardById } from '../sim/cards.js?v=13';
-import { drawCard } from './cardtex.js?v=13';
-import { Audio2 } from './audio.js?v=13';
+import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=14';
+import { battleState, campaignSummary, achievementList, buyPack } from '../campaign/progression.js?v=14';
+import { REALMS, cardById } from '../sim/cards.js?v=14';
+import { drawCard } from './cardtex.js?v=14';
+import { Audio2 } from './audio.js?v=14';
 
 // battle-node positions on the world map (percent of the 16:9 artwork)
 const MAP_POS = {
@@ -14,9 +14,12 @@ const MAP_POS = {
   ch3b1: [41, 55], ch3b2: [46, 39], ch3b3: [52, 23], ch3b4: [55, 40],
   ch4b1: [57, 62], ch4b2: [63, 81], ch4b3: [74, 89], ch4b4: [69, 65],
   ch5b1: [77, 50], ch5b2: [83, 38], ch5b3: [88, 27], ch5b4: [93, 15],
+  // ch6 — descent from the spires into the Nexus core; converges on the map's heart
+  ch6b1: [72, 33], ch6b2: [61, 44], ch6b3: [52, 40], ch6b4: [50, 53],
 };
 const MAP_LABEL = {
   ch1: [15, 10], ch2: [17, 62], ch3: [47, 9], ch4: [63, 51], ch5: [82, 60],
+  ch6: [50, 65],
 };
 
 const CSS = `
@@ -255,13 +258,26 @@ export class CampaignUI {
     let i = 0;
     const showLine = () => {
       const line = seq[i];
-      const isCm = line.who === 'cm';
-      portrait.className = isCm ? '' : 'pv';
-      portrait.style.backgroundImage = isCm
-        ? `url(assets/ui/${chapter.commander.portrait}.jpg)`
-        : `url(assets/ui/hero_${myHero}.jpg)`;
-      name.textContent = isCm ? chapter.commander.name : 'You';
-      name.style.color = isCm ? '#ffd45f' : '#8ac4ff';
+      const who = line.who;
+      const isPlayer = who === 'pv';
+      let img, nm, col;
+      if (who === 'goon' && battle.goon) {
+        img = `assets/art/${battle.goon.portrait}.jpg`; // goon = this battle's minion (card art)
+        nm = battle.goon.name;
+        col = '#ff9a4d';                                 // orange — a lieutenant, not the boss
+      } else if (isPlayer) {
+        img = `assets/ui/hero_${myHero}.jpg`;
+        nm = 'You';
+        col = '#8ac4ff';
+      } else { // 'cm' — the chapter boss/commander
+        img = `assets/ui/${chapter.commander.portrait}.jpg`;
+        nm = chapter.commander.name;
+        col = '#ffd45f';
+      }
+      portrait.className = isPlayer ? 'pv' : '';
+      portrait.style.backgroundImage = `url(${img})`;
+      name.textContent = nm;
+      name.style.color = col;
       text.textContent = line.text;
       hint.textContent = i === seq.length - 1 ? doneLabel : 'Click to continue…';
       Audio2.sfx('click');

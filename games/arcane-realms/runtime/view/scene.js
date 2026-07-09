@@ -2,9 +2,9 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=13';
-import { REALMS, cardById } from '../sim/cards.js?v=13';
-import { FX } from './fx.js?v=13';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=14';
+import { REALMS, cardById } from '../sim/cards.js?v=14';
+import { FX } from './fx.js?v=14';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 export const LAYOUT = {
@@ -770,7 +770,7 @@ export class BoardScene {
   // ── 3D legendary minis ─────────────────────────────────────────
   async _gltfLoader() {
     if (!this._gltfLoaderP) {
-      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=13').then((m) => new m.GLTFLoader());
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=14').then((m) => new m.GLTFLoader());
     }
     return this._gltfLoaderP;
   }
@@ -931,11 +931,14 @@ export class BoardScene {
       const model = gltf.scene;
       const box = new THREE.Box3().setFromObject(model);
       const size = box.getSize(new THREE.Vector3());
-      model.scale.setScalar(2.4 / Math.max(size.y, 0.001)); // portrait bust, stands behind the row
+      // taller than a mini so the bust rises clearly ABOVE the hand row;
+      // the enemy (far) side gets a touch more to fight perspective shrink
+      const H = rel === 0 ? 3.4 : 3.9;
+      model.scale.setScalar(H / Math.max(size.y, 0.001));
       let b2 = new THREE.Box3().setFromObject(model);
       const s2 = b2.getSize(new THREE.Vector3());
       const ext = Math.max(s2.x, s2.z);
-      if (ext > 2.2) { model.scale.multiplyScalar(2.2 / ext); b2 = new THREE.Box3().setFromObject(model); }
+      if (ext > 3.0) { model.scale.multiplyScalar(3.0 / ext); b2 = new THREE.Box3().setFromObject(model); }
       const c = b2.getCenter(new THREE.Vector3());
       model.position.x -= c.x; model.position.z -= c.z; model.position.y -= b2.min.y;
       model.traverse((o) => {
@@ -948,7 +951,9 @@ export class BoardScene {
       });
       const grp = new THREE.Group(); grp.add(model);
       const pos = rel === 0 ? LAYOUT.heroPlayer : LAYOUT.heroEnemy;
-      grp.position.set(pos.x, 0.02, pos.z);
+      // lift the bust off the table + sit it in the gap between hand and board
+      // (enemy comes FORWARD off its hand row so the whole character is seen)
+      grp.position.set(pos.x, rel === 0 ? 0.5 : 0.55, rel === 0 ? pos.z + 0.15 : pos.z + 1.35);
       this.scene.add(grp);
       // shared key light for heroes (dim mood board)
       if (!this.heroLight) {
@@ -964,7 +969,7 @@ export class BoardScene {
         this.scene.remove(this.heroModels[rel].grp);
         this.heroModels[rel].grp.traverse((o) => o.geometry?.dispose?.());
       }
-      this.heroModels[rel] = { grp, seed: rel * 3.14 };
+      this.heroModels[rel] = { grp, seed: rel * 3.14, baseY: grp.position.y };
     } catch (e) { /* GLB missing → keep the disc portrait */ }
   }
 
@@ -1058,7 +1063,7 @@ export class BoardScene {
     // hero characters: gentle idle breathing sway
     if (this.heroModels) for (const hm of this.heroModels) if (hm) {
       hm.grp.rotation.y = Math.sin(this.time * 0.6 + hm.seed) * 0.06;
-      hm.grp.position.y = 0.02 + (Math.sin(this.time * 1.1 + hm.seed) + 1) * 0.02;
+      hm.grp.position.y = (hm.baseY || 0.4) + (Math.sin(this.time * 1.1 + hm.seed) + 1) * 0.03;
     }
     // diorama: crystals spin, braziers flicker embers
     for (const c of this.dioramaSpin) { c.rotation.y += dt * 0.5; c.position.y = 1.5 + Math.sin(this.time * 1.2 + c.position.x) * 0.1; }

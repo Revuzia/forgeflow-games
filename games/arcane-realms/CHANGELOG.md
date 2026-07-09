@@ -1,5 +1,38 @@
 # Arcane Realms TCG — Changelog
 
+## v1.3.9 — 2026-07-09 (Campaign story rework, goons, final boss, hero visibility)
+
+### Campaign is a real story now — goons per step, boss as the finale
+- Each chapter's first three battles are now fought against a **different goon**
+  (a lieutenant of that realm's Warden) — not the boss talking every round. The
+  goon speaks with **their own card art and name** (orange nameplate), and the
+  dialogue is **multi-line and story-connected**: you're crossing the five realms
+  to reach the failing **Arcane Nexus**, and each Warden's minions test you before
+  the Warden yields their **Seal** and warns of the darkness beneath.
+- The chapter boss (Thornqueen, Lich-Lord, Flame-Khan, Tidecaller, Lightwarden)
+  is now strictly the **4th/final battle** of its chapter, and gives you a Seal.
+- Ch5's finale re-framed: Lightwarden Serathiel reveals the five Seals were never
+  holding the realms apart — they were **caging Aetherion**, the world-before-it-
+  was-divided.
+
+### New final chapter — "The Sundered Nexus" (Chapter 6)
+- A true endgame: **Aetherion, the Convergence** — a boss that is **all five
+  biomes fused into one** (ember + tide + grove + dawn + grave), with a 30-card
+  deck drawn from every realm's legendaries, epics, and rares. New xAI-generated
+  portrait (`cm_convergence.jpg`).
+- Three escalating goon battles first (Echo of Ash and Root, The Hollow Crown,
+  The Fivefold Mirror), then Aetherion at the Nexus core. Rewards preserve full
+  card obtainability; "Champion of the Nexus" achievement now = clear all **24**
+  battles. World-map adds the ch6 nodes converging on the map's heart.
+
+### 3D hero characters clearly visible + hand-count icon removed
+- The enemy 3D hero was raised and **brought forward** off the hand row so it's no
+  longer occluded — both heroes now read prominently (verified in-match).
+- The **✋ hand-count HUD icon is gone** (both players).
+
+Selftest 214 (6 chapters / 24 battles, obtainability preserved). Cache-bust
+`?v=13` → `?v=14`.
+
 ## v1.3.8 — 2026-07-09 (Fixed minis, multi-attack, 3D hero characters)
 
 ### All 9 broken sketchfab minis replaced with Meshy models

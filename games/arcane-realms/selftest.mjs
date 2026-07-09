@@ -713,8 +713,8 @@ section('campaign & progression');
   const { EXPANSION_IDS } = await import('./runtime/sim/cards.js?v=13');
 
   const battles = allBattles();
-  ok(CHAPTERS.length === 5, '5 chapters');
-  ok(battles.length === 20, '20 battles');
+  ok(CHAPTERS.length === 6, '6 chapters');
+  ok(battles.length === 24, '24 battles');
   let dataOk = true;
   for (const ch of CHAPTERS) {
     if (ch.deck.length !== 30) { dataOk = false; ok(false, `${ch.id} enemy deck must be 30 (${ch.deck.length})`); }
@@ -742,7 +742,7 @@ section('campaign & progression');
   const baseOwned = Object.keys(fakeStore.data.owned).length;
   ok(baseOwned === COLLECTIBLE.length - EXPANSION_IDS.size, `base set owned at start (${baseOwned})`);
   for (const b of battles) prog.grantBattleRewards(fakeStore, b);
-  ok(Object.keys(fakeStore.data.battlesWon).length === 20, 'all battles recorded');
+  ok(Object.keys(fakeStore.data.battlesWon).length === 24, 'all battles recorded');
   ok(fakeStore.data.gold > 500, `campaign gold flows (${fakeStore.data.gold})`);
   const unlocked = prog.checkAchievements(fakeStore);
   ok(unlocked.length >= 6, `achievements fire on a full clear (${unlocked.length})`);
