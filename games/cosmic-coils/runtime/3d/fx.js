@@ -98,10 +98,10 @@ export class FX {
     this._initClouds();
     scene.add(this.cp);
 
-    // rainbow (verdant, after rain) + aurora (glacier) — one cheap mesh each,
-    // created on demand and only drawn while fading in/out
+    // rainbow (verdant, after rain) — one cheap mesh, drawn only while fading.
+    // (aurora is now a DISTANT sky-dome effect in planet.js, not an overhead
+    // plane — the old plane obscured the surface when you rolled under it.)
     this._rainbow = null; this._rainbowT = 0; this._rainbowMax = 20;
-    this._aurora = null; this._auroraA = 0;
     this._lastWxKind = "calm";
 
     this._tmp = new THREE.Vector3();
@@ -138,31 +138,6 @@ export class FX {
           vec3 col = hue(0.83 * (1.0 - band));
           float edge = smoothstep(0.0, 0.15, band) * smoothstep(1.0, 0.85, band);
           gl_FragColor = vec4(col, uA * edge * 0.5);
-        }`,
-    });
-    const m = new THREE.Mesh(geo, mat);
-    m.visible = false;
-    this.scene.add(m);
-    return m;
-  }
-
-  _makeAurora() {
-    const geo = new THREE.PlaneGeometry(90, 16, 48, 1);
-    const mat = new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false,
-      uniforms: { uA: { value: 0 }, uT: { value: 0 } },
-      vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-      fragmentShader: `
-        varying vec2 vUv; uniform float uA, uT;
-        float n1(float x){ return fract(sin(x * 127.1) * 43758.5453); }
-        void main(){
-          float x = vUv.x * 9.0 + uT * 0.22;
-          float band = 0.5 + 0.5 * sin(x + sin(x * 0.53 + uT * 0.4) * 1.8);
-          float rays = 0.6 + 0.4 * sin(vUv.x * 60.0 + uT * 1.1 + n1(floor(vUv.x * 60.0)) * 6.0);
-          float vfade = smoothstep(0.0, 0.25, vUv.y) * smoothstep(1.0, 0.55, vUv.y);
-          vec3 col = mix(vec3(0.2, 1.0, 0.55), vec3(0.55, 0.35, 1.0), band);
-          col = mix(col, vec3(0.25, 0.9, 0.9), 0.3 + 0.3 * sin(uT * 0.3));
-          gl_FragColor = vec4(col, uA * vfade * rays * 0.4);
         }`,
     });
     const m = new THREE.Mesh(geo, mat);
@@ -422,25 +397,7 @@ export class FX {
       rb.material.uniforms.uA.value = Math.min(1, Math.min((1 - k) * 6, k * 4));
       if (this._rainbowT <= 0) rb.visible = false;
     }
-
-    // ── aurora curtain (glacier's calm-variant event) ──
-    {
-      const want = this.weatherKind === "aurora" ? this.weatherI : 0;
-      this._auroraA += (want - this._auroraA) * Math.min(1, dt * 0.7);
-      if (this._auroraA > 0.02) {
-        if (!this._aurora) this._aurora = this._makeAurora();
-        const au = this._aurora;
-        au.visible = true;
-        const up = this._tmp.copy(anchor).normalize();
-        const east = this._tmp2.set(0.2, 1, 0.35).cross(up).normalize();
-        au.position.copy(up).multiplyScalar(this.W.R + 20).addScaledVector(east, 30);
-        // stand the curtain up: local +Y along the planet normal, facing the player
-        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), up);
-        au.quaternion.copy(q);
-        au.material.uniforms.uA.value = this._auroraA;
-        au.material.uniforms.uT.value = this.t;
-      } else if (this._aurora) this._aurora.visible = false;
-    }
+    // (aurora now lives in the distant sky dome — see planet.js update())
   }
 
   setWorld(W, biomeDef) {
@@ -456,10 +413,9 @@ export class FX {
       this.scene.remove(p);
       p.geometry.dispose(); p.material.uniforms.uTex.value.dispose(); p.material.dispose();
     }
-    for (const m of [this._rainbow, this._aurora]) {
-      if (!m) continue;
-      this.scene.remove(m);
-      m.geometry.dispose(); m.material.dispose();
+    if (this._rainbow) {
+      this.scene.remove(this._rainbow);
+      this._rainbow.geometry.dispose(); this._rainbow.material.dispose();
     }
   }
 }

@@ -421,7 +421,7 @@ export class Game {
     const anchor = this._headWorld(me || (W.snakes.find((s) => s.alive)));
     this.fx.setWeather(w.kind, w.intensity);
     this.fx.update(dt, anchor, anchor ? anchor.clone().normalize() : null);
-    this.planet.update(dt, w.mods.vis, this.fx.flash);
+    this.planet.update(dt, w.mods.vis, this.fx.flash, w.kind === "aurora" ? w.intensity : 0);
 
     // boost FX + audio
     if (me && me.alive && me.boosting) {

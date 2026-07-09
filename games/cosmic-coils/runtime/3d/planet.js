@@ -148,13 +148,14 @@ function makeSky(def, seed) {
       uSeed: { value: (seed % 1000) / 1000 },
       uTime: { value: 0 },
       uFlash: { value: 0 },
+      uAurora: { value: 0 },
     },
     vertexShader: `
       varying vec3 vDir;
       void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
     `,
     fragmentShader: `
-      varying vec3 vDir; uniform vec3 uHorizon,uZenith,uNebula,uNebula2; uniform float uStars,uSeed,uTime,uFlash;
+      varying vec3 vDir; uniform vec3 uHorizon,uZenith,uNebula,uNebula2; uniform float uStars,uSeed,uTime,uFlash,uAurora;
       float hash(vec3 p){ p=fract(p*0.3183099+vec3(0.1,0.2,0.3)); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
       float noise(vec3 x){ vec3 i=floor(x),f=fract(x); f=f*f*(3.0-2.0*f);
         return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
@@ -180,6 +181,23 @@ function makeSky(def, seed) {
         float tw = 0.55 + 0.45 * sin(uTime * 2.0 + hash(c1) * 40.0);
         col += vec3(1.0) * st * tw + vec3(0.8, 0.9, 1.0) * st2 * 0.7;
         col += vec3(0.9, 0.95, 1.0) * uFlash; // lightning
+        // ── distant AURORA BOREALIS — shimmering green curtains with a purple
+        // base, LOW on the horizon (never overhead, so it can't obscure play),
+        // occupying one drifting region of the sky. Ref: real aurora = green
+        // vertical rays, purple/magenta fringe at the base.
+        if (uAurora > 0.001) {
+          float az = atan(vDir.z, vDir.x);
+          float h = vDir.y;                                   // 0 = horizon
+          float vband = smoothstep(0.0, 0.06, h) * smoothstep(0.55, 0.18, h);
+          float region = smoothstep(0.12, 0.7, 0.5 + 0.5 * sin(az + uSeed * 6.283 + uTime * 0.03));
+          float ray = 0.5 + 0.5 * sin(az * 42.0 + sin(az * 6.0 + uTime * 0.5) * 3.0 + uTime * 0.7);
+          ray *= 0.55 + 0.45 * sin(az * 110.0 - uTime * 1.3);
+          ray = pow(max(0.0, ray), 1.4);
+          float cloud = 0.55 + 0.45 * fbm(vec3(az * 2.0, h * 3.0 + uTime * 0.05, uSeed * 10.0));
+          float a = vband * region * ray * cloud * uAurora;
+          vec3 acol = mix(vec3(0.55, 0.15, 0.95), vec3(0.15, 1.0, 0.5), smoothstep(0.02, 0.30, h));
+          col += acol * a * 1.15;
+        }
         gl_FragColor = vec4(col, 1.0);
       }
     `,
@@ -539,10 +557,14 @@ export class Planet {
   }
 
   /** vis: 1 clear … 0.5 stormy; flash: lightning 0..1 */
-  update(dt, visMul, flash) {
+  update(dt, visMul, flash, auroraTarget) {
     this._time += dt;
     this.sky.material.uniforms.uTime.value = this._time;
     this.sky.material.uniforms.uFlash.value = flash || 0;
+    // distant aurora in the sky dome (smoothed) — replaces the old overhead
+    // curtain that obscured the surface when you rolled under it
+    this._auroraA = (this._auroraA || 0) + ((auroraTarget || 0) - (this._auroraA || 0)) * Math.min(1, dt * 0.5);
+    this.sky.material.uniforms.uAurora.value = this._auroraA;
     const targetD = this.baseFogDensity / Math.max(0.3, visMul * visMul);
     this.fog.density += (targetD - this.fog.density) * Math.min(1, dt * 1.5);
     if (this.liquid) {

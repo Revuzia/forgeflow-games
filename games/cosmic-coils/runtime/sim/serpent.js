@@ -531,91 +531,101 @@ export function attachBrain(W, sn) {
 }
 
 // ── AI ───────────────────────────────────────────────────────────────────────
-const AI_STEERS = [0, 0.45, -0.45, 0.95, -0.95];
+// finer steer set (more options → smoother, less all-or-nothing turning)
+const AI_STEERS = [0, 0.28, -0.28, 0.58, -0.58, 0.92, -0.92];
 function aiThink(W, sn) {
   const ai = sn.ai;
-  ai.thinkAt = W.time + 0.11 + hash2(ai.wanderSeed, Math.floor(W.time * 9)) * 0.05;
+  ai.thinkAt = W.time + 0.09 + hash2(ai.wanderSeed, Math.floor(W.time * 9)) * 0.04;
   const myR = segRadius(sn.mass);
-  const spd = speedOf(sn.mass) * (sn.boost ? CONST.BOOST_MULT : 1);
-  const horizon = 1.15; // s lookahead
+  const boosting0 = sn.boost && sn.mass > CONST.BOOST_MIN_MASS;
+  const spd = speedOf(sn.mass) * (boosting0 ? CONST.BOOST_MULT : 1);
   const tr = turnRate(sn.mass);
+  const SAMPLES = 6;
+  const horizon = 1.7; // s lookahead (longer + finer → catches the curl a hard turn makes)
 
-  let bestScore = -1e9, bestSteer = 0, wantBoost = false;
+  // CURL RISK (owner: "it curls into itself and dies"): if the body is longer
+  // than the tightest turn circle, a sustained hard turn re-crosses its own
+  // trail → self-death. Penalise hard steers in proportion so long snakes turn
+  // gently and never bite their own tail.
+  const turnCircleArc = 2 * Math.PI * spd / Math.max(0.001, tr);
+  const bodyArc = segCount(sn.mass) * segSpacing(sn.mass);
+  const curlRisk = Math.min(1.8, bodyArc / (turnCircleArc * 0.85));
 
-  // threat scan once: nearest bigger head aiming at us, and bodies near
+  // gather nearby food ONCE (perf: never scan all ~1200 gems per steer/sample)
+  const nearFood = [];
+  for (const f of W.food.values()) {
+    if (angDist(sn.u, f.u) * W.R < 8) nearFood.push(f);
+  }
+
+  // threat + nearby bodies ONCE. `bodies` = every body worth colliding against
+  // (own body always included, from the neck window onward).
   let fleeDir = null, threat = 0;
+  const bodies = [];
   for (const s2 of W.snakes) {
-    if (s2 === sn || !s2.alive) continue;
-    const dAng = angDist(sn.u, s2.u) * W.R;
-    if (dAng < 9 && s2.mass > sn.mass * 1.15 && s2.shield <= 0) {
-      // are they heading toward me?
-      V.sub(_tmpA, sn.u, s2.u);
-      const toward = V.dot(_tmpA, s2.t);
-      if (toward > 0) {
-        const th = (9 - dAng) / 9 * (0.5 + toward * 0.5);
-        if (th > threat) {
-          threat = th;
-          fleeDir = V.sub(V.make(), sn.u, s2.u);
+    if (!s2.alive) continue;
+    const isSelf = s2 === sn;
+    if (!isSelf && s2.shield > 0) continue;
+    const dHead = angDist(sn.u, s2.u) * W.R;
+    if (isSelf) {
+      bodies.push({ s: s2, skip: selfSkipSegs(sn), stride: Math.max(3, Math.ceil(s2.segN / 130)) });
+    } else {
+      const reach = segCount(s2.mass) * segSpacing(s2.mass);
+      if (dHead < reach + 7) bodies.push({ s: s2, skip: 0, stride: Math.max(3, Math.ceil(s2.segN / 100)) });
+      if (dHead < 11 && s2.mass > sn.mass * 1.12) {
+        V.sub(_tmpA, sn.u, s2.u);               // vector from them → me
+        const toward = V.dot(_tmpA, s2.t);       // >0 ⇒ they're heading at me
+        if (toward > 0) {
+          const th = (11 - dHead) / 11 * (0.5 + toward * 0.5);
+          if (th > threat) { threat = th; fleeDir = V.sub(V.make(), sn.u, s2.u); }
         }
       }
     }
   }
 
+  let bestScore = -1e18, bestSteer = 0;
   for (const st of AI_STEERS) {
-    // simulate arc: heading rotated by st*tr over time, position advanced
-    let score = hash2(ai.wanderSeed + (st * 100) | 0, Math.floor(W.time * 2)) * 0.35; // wander tiebreak
-    // sample 3 future points
+    let score = hash2(ai.wanderSeed + ((st * 100) | 0), Math.floor(W.time * 2)) * 0.3; // wander tiebreak
+    score -= Math.abs(st) * curlRisk * 42;   // long-snake hard-turn (curl) penalty
     const su = V.copy(V.make(), sn.u), stan = V.copy(V.make(), sn.t);
     let dead = false;
-    for (let k = 1; k <= 3; k++) {
-      const dt = (horizon / 3);
-      // rotate tangent
-      const phi = st * tr * dt;
+    const sdt = horizon / SAMPLES;
+    for (let k = 1; k <= SAMPLES && !dead; k++) {
+      const phi = st * tr * sdt;
       V.cross(_tmpB, su, stan);
       V.set(stan,
         stan.x * Math.cos(phi) + _tmpB.x * Math.sin(phi),
         stan.y * Math.cos(phi) + _tmpB.y * Math.sin(phi),
         stan.z * Math.cos(phi) + _tmpB.z * Math.sin(phi));
-      const th = (spd * dt) / W.R;
+      const th = (spd * sdt) / W.R;
       const c = Math.cos(th), s = Math.sin(th);
       V.set(su, su.x * c + stan.x * s, su.y * c + stan.y * s, su.z * c + stan.z * s);
       V.norm(su, su);
       const d2 = V.dot(stan, su);
       V.set(stan, stan.x - su.x * d2, stan.y - su.y * d2, stan.z - su.z * d2);
       V.norm(stan, stan);
-      // danger: proximity to any snake body sample (own body included, past
-      // the same neck window used for the real self-collision rule)
-      for (const s2 of W.snakes) {
-        const isSelf = s2 === sn;
-        if (!s2.alive || (!isSelf && s2.shield > 0)) continue;
-        if (!isSelf) {
-          const gap = angDist(su, s2.u) * W.R;
-          const reach = segCount(s2.mass) * segSpacing(s2.mass);
-          if (gap > reach + 4) continue;
-        }
-        // sample the body coarsely (every 6th cached seg)
-        for (let i = isSelf ? selfSkipSegs(sn) : 0; i < s2.segN; i += 6) {
-          const dx = su.x - s2.segs[i * 3], dy = su.y - s2.segs[i * 3 + 1], dz = su.z - s2.segs[i * 3 + 2];
-          const d = Math.sqrt(dx * dx + dy * dy + dz * dz) * W.R; // segs are unit-sphere pts
-          const kill = (myR + segRadius(s2.mass)) / W.R * W.R * 1.15 + 0.55;
-          if (d < kill) { score -= 4000 / k; dead = true; break; }
-          else if (d < kill + 3.2) score -= (kill + 3.2 - d) * (26 / k);
+      // body proximity (own + others)
+      for (const b of bodies) {
+        const s2 = b.s, segs = s2.segs, segN = s2.segN;
+        const kill = myR * 0.9 + segRadius(s2.mass) * 0.95 + 0.4;
+        for (let i = b.skip; i < segN; i += b.stride) {
+          const dx = su.x - segs[i * 3], dy = su.y - segs[i * 3 + 1], dz = su.z - segs[i * 3 + 2];
+          const d = Math.sqrt(dx * dx + dy * dy + dz * dz) * W.R;
+          if (d < kill) { dead = true; break; }
+          else if (d < kill + 3.6) score -= (kill + 3.6 - d) * (70 / k);
         }
         if (dead) break;
       }
       if (dead) break;
-      // food attraction at this sample
-      let fscore = 0;
-      for (const f of W.food.values()) {
+      // food pull (nearby only)
+      for (const f of nearFood) {
         const d = angDist(su, f.u) * W.R;
-        if (d < 5.5) fscore += (f.tier === 9 ? 2.6 : 1) * f.value * (1 - d / 5.5);
+        if (d < 5) score += (f.tier === 9 ? 2.4 : 1) * f.value * (1 - d / 5) * ai.greed * (1.1 - k * 0.1);
       }
-      score += fscore * ai.greed * (1.15 - k * 0.25);
     }
-    // flee bias
-    if (fleeDir && threat > 0.15) {
-      // score steering options by alignment with fleeDir after first rotation
-      const phi = st * tr * 0.4;
+    if (dead) { score = -1e9 - Math.abs(st); }   // ABSOLUTE veto — flee can never pick a death
+    else if (fleeDir && threat > 0.15) {
+      // reward the escape that best aligns heading away from the threat
+      const phi = st * tr * 0.5;
       V.cross(_tmpB, sn.u, sn.t);
       V.set(_tmpC,
         sn.t.x * Math.cos(phi) + _tmpB.x * Math.sin(phi),
@@ -623,38 +633,60 @@ function aiThink(W, sn) {
         sn.t.z * Math.cos(phi) + _tmpB.z * Math.sin(phi));
       const k2 = V.dot(fleeDir, sn.u);
       V.set(_tmpA, fleeDir.x - sn.u.x * k2, fleeDir.y - sn.u.y * k2, fleeDir.z - sn.u.z * k2);
-      if (V.len(_tmpA) > 1e-4) {
-        V.norm(_tmpA, _tmpA);
-        score += V.dot(_tmpC, _tmpA) * threat * ai.caution * 160;
-      }
+      if (V.len(_tmpA) > 1e-4) { V.norm(_tmpA, _tmpA); score += V.dot(_tmpC, _tmpA) * threat * ai.caution * 130; }
     }
     if (score > bestScore) { bestScore = score; bestSteer = st; }
   }
 
-  // hunting: cut in front of a smaller nearby snake
-  if (threat < 0.2 && ai.aggression > 0.45) {
+  const canBoost = sn.mass > CONST.BOOST_MIN_MASS + 4;
+  // HUNTING: steer to cut off a clearly-smaller snake, and SPRINT to close.
+  // The hard-turn part of the cut is gated by curlRisk (a long hunter turns
+  // gently so it can't curl into itself), but the BOOST is not — boosting a
+  // long snake widens its arc, so sprinting is always self-safe.
+  if (threat < 0.3 && ai.aggression > 0.4) {
     for (const s2 of W.snakes) {
-      if (s2 === sn || !s2.alive || s2.shield > 0 || s2.mass * 1.35 > sn.mass) continue;
+      if (s2 === sn || !s2.alive || s2.shield > 0 || s2.mass * 1.4 > sn.mass) continue;
       const d = angDist(sn.u, s2.u) * W.R;
-      if (d < 7.5 && d > 2.0) {
-        // aim at point ahead of their head
-        const lead = Math.min(3.4, d * 0.55) / W.R;
-        const c = Math.cos(lead), s = Math.sin(lead);
-        V.set(_tmpA, s2.u.x * c + s2.t.x * s, s2.u.y * c + s2.t.y * s, s2.u.z * c + s2.t.z * s);
-        const cut = steerToward(W, sn, _tmpA);
-        bestSteer = bestSteer * 0.35 + cut * 0.65;
-        if (d < 4.5 && hash2(ai.wanderSeed, Math.floor(W.time * 3)) < ai.aggression * 0.5) {
-          ai.boostUntil = W.time + 0.5;
+      if (d < 12 && d > 1.6) {
+        if (d < 9) {
+          const lead = Math.min(3.4, d * 0.55) / W.R;
+          const c = Math.cos(lead), s = Math.sin(lead);
+          V.set(_tmpA, s2.u.x * c + s2.t.x * s, s2.u.y * c + s2.t.y * s, s2.u.z * c + s2.t.z * s);
+          const cut = steerToward(W, sn, _tmpA);
+          const blend = curlRisk < 1.2 ? 0.6 : 0.3;
+          bestSteer = bestSteer * (1 - blend) + Math.max(-0.85, Math.min(0.85, cut)) * blend;
         }
+        if (canBoost) ai.boostUntil = Math.max(ai.boostUntil, W.time + 0.9);  // sprint to close
         break;
       }
     }
   }
-  if (threat > 0.5 && sn.mass > CONST.BOOST_MIN_MASS + 8) ai.boostUntil = W.time + 0.45;
+  // ESCAPE: sprint away from a real threat. Plus a PANIC sprint whenever any
+  // notably-bigger head is right on top of us (≤7u) — this is the "player
+  // attacks an NPC → it bolts" case, and it fires even if the aim check missed.
+  let panic = false;
+  for (const s2 of W.snakes) {
+    if (s2 === sn || !s2.alive || s2.shield > 0 || s2.mass < sn.mass * 1.15) continue;
+    if (angDist(sn.u, s2.u) * W.R < 7) { panic = true; break; }
+  }
+  if (canBoost && (threat > 0.25 || panic)) ai.boostUntil = Math.max(ai.boostUntil, W.time + 1.0);
+  // OPPORTUNIST: when calm, occasionally dash toward a rich prize ahead — keeps
+  // idle bots lively (visible boosting even outside combat)
+  if (canBoost && threat < 0.15 && W.time > ai.boostUntil) {
+    for (const f of nearFood) {
+      if ((f.tier !== 9 && f.tier !== 3) || angDist(sn.u, f.u) * W.R > 9) continue;
+      const kk = V.dot(f.u, sn.u);
+      V.set(_tmpA, f.u.x - sn.u.x * kk, f.u.y - sn.u.y * kk, f.u.z - sn.u.z * kk);
+      if (V.len(_tmpA) > 1e-4 && V.dot(V.norm(_tmpA, _tmpA), sn.t) > 0.45 &&
+          hash2(ai.wanderSeed, Math.floor(W.time * 1.5)) < 0.35) {
+        ai.boostUntil = W.time + 0.7;
+      }
+      break;
+    }
+  }
 
   sn.steer = bestSteer;
-  wantBoost = W.time < ai.boostUntil && sn.mass > CONST.BOOST_MIN_MASS + 4;
-  sn.boost = wantBoost;
+  sn.boost = W.time < ai.boostUntil && canBoost;
 }
 
 // ── main step ────────────────────────────────────────────────────────────────
