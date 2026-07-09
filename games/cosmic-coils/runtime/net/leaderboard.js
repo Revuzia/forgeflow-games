@@ -1,13 +1,14 @@
 /**
  * Cosmic Coils — runtime/net/leaderboard.js
- * Global leaderboard over the registry Supabase project (Postgres + PostgREST).
- * Read = public SELECT; submit = the `cc_submit_score` SECURITY DEFINER RPC
- * (anonymous play, so validation is server-side). Everything degrades to null
- * on any error (table not migrated yet, offline, etc.) — the caller then shows
- * device-local records instead. No supabase-js needed; plain fetch.
+ * Global leaderboard over the SAME Supabase project the multiplayer uses
+ * (wugoxdewcdxzfppgzohy — Postgres + PostgREST). Read = public SELECT; submit =
+ * the `cc_submit_score` SECURITY DEFINER RPC (anonymous play, so validation is
+ * server-side). Table + RPC live (migration 0007 applied 2026-07-09).
+ * Everything degrades to null on any error (offline etc.) — the caller then
+ * shows device-local records instead. No supabase-js needed; plain fetch.
  */
-const SUPA_URL = "https://qkidwgyapmitrdxnavmi.supabase.co";
-const SUPA_KEY = "sb_publishable_OY39hagVV9OObItwE2VYoA_YuAu0FPZ";
+const SUPA_URL = "https://wugoxdewcdxzfppgzohy.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1Z294ZGV3Y2R4emZwcGd6b2h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5OTU0MzEsImV4cCI6MjA2OTU3MTQzMX0.ljJYgVp0n9d_tJeL3ZG6liYfW0lQ7d_29svPMbUAves";
 
 const HEADERS = { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY };
 

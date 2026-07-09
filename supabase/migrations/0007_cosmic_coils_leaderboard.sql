@@ -1,9 +1,10 @@
 -- 0007_cosmic_coils_leaderboard.sql
 -- Global leaderboard for Cosmic Coils (anonymous arcade play — no auth).
 --
--- Apply BY HAND: paste into Supabase Dashboard → SQL Editor → Run, on the
--- REGISTRY project qkidwgyapmitrdxnavmi (the one with the games catalog).
--- Until applied, the client degrades to device-local records automatically.
+-- APPLIED 2026-07-09 to the MULTIPLAYER project wugoxdewcdxzfppgzohy (the same
+-- project coilnet's Realtime uses — it has Postgres too), via the pooler DB
+-- connection in api_config.json → supabase.db. This file is the record of that
+-- change; it is idempotent (IF NOT EXISTS / OR REPLACE) so re-running is safe.
 --
 -- Model: a flat scores table with public READ (RLS policy) and a single
 -- SECURITY DEFINER submit RPC callable by anon (players aren't signed in).

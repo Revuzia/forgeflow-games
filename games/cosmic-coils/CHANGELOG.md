@@ -2,13 +2,12 @@
 
 ## 8 — 2026-07-09 · Arcade polish batch (leaderboard, countdown, combo, touch, auto-quality)
 - **Global leaderboard** (`runtime/net/leaderboard.js`, Records → 🌍 GLOBAL tab):
-  reads the public top-20 and submits each run (once) to the registry Supabase
-  project via the anon-safe `cc_submit_score` RPC. Fully degrades to device-local
-  records when offline / not yet migrated. **Activation is one manual step**:
-  apply `supabase/migrations/0007_cosmic_coils_leaderboard.sql` in the Dashboard
-  SQL editor (the project has no programmatic DDL path here) — until then the
-  board silently shows local records. Client verified against live PostgREST
-  (correct read/submit shapes; 404-on-missing-table handled).
+  reads the public top-20 and submits each run (once) via the anon-safe
+  `cc_submit_score` RPC. **LIVE** — migration `0007_cosmic_coils_leaderboard.sql`
+  applied 2026-07-09 to the multiplayer project `wugoxdewcdxzfppgzohy` (same
+  project coilnet uses; it has Postgres too). Verified end-to-end: an in-game
+  death submits and appears on the board. Still degrades to device-local records
+  if the network is unavailable.
 - **Match-start countdown**: 3·2·1·GO! flourish on every match start (visual only —
   the snake moves under its spawn shield; no input gating).
 - **Combo HUD**: the existing eat-combo (previously audio-only) now shows a
