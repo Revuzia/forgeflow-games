@@ -7,7 +7,7 @@
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
 const E = await import("../sim/escape_sim.js" + V);
-const { TOOLS, PROP_TOOLS, PROP_TOOL_IDS } = await import("./builder.js" + V);
+const { TOOLS, PROP_TOOLS, PROP_TOOL_IDS, FLOOR_MODES } = await import("./builder.js" + V);
 const { fmtTime } = await import("./escape.js" + V);
 
 export class Hud {
@@ -129,7 +129,13 @@ export class Hud {
       }
       sub.appendChild(el(`<span class="df-subsep">·</span>`));
     }
-    if (b.tool === "enemy") {
+    if (b.tool === "floor") {
+      const fm = b.toolOpt.floorMode || "floor";
+      mkOpts(FLOOR_MODES.map((m) => m.id), fm,
+        (id) => { const m = FLOOR_MODES.find((x) => x.id === id); return `${m.icon} ${m.label}`; },
+        (id) => b.setTool("floor", { floorMode: id }));
+      sub.appendChild(el(`<span class="df-subnote">${fm === "raise" || fm === "lower" ? "Drag over cells to " + fm + " them — smooth rolling terrain" : "Drag to fill a rectangle" + (fm !== "floor" ? " with " + fm : "")}</span>`));
+    } else if (b.tool === "enemy") {
       const roster = D.ENEMIES[b.d.theme];
       mkOpts(Object.keys(roster), b.toolOpt.etype || Object.keys(roster)[0],
         (k) => `${roster[k].boss ? "👑 " : ""}${roster[k].label}`, (k) => b.setTool("enemy", { etype: k }));

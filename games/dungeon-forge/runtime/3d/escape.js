@@ -835,7 +835,7 @@ export class Escape {
     for (const [id, a] of this.actors) {
       const p = a.p;
       const ct = D.cellType(this.d, p.f, E.w2c(p.x), E.w2c(p.z));
-      const surfY = (ct === D.CT.RAISED ? D.RAISED_H : 0) + (ct === D.CT.WATER ? -0.25 : 0);
+      const surfY = D.cellHeight(this.d, p.f, E.w2c(p.x), E.w2c(p.z)) + (ct === D.CT.WATER ? -0.25 : 0);
       a.surfY = a.surfY == null ? surfY : a.surfY + (surfY - a.surfY) * Math.min(1, dt * 10);
       const y = p.f * FLOOR_H + (p.climb ? climbY(p) : 0) + a.surfY;
       a.grp.position.set(p.x, y, p.z);
@@ -904,7 +904,7 @@ export class Escape {
         const e = this.target;
         const ect = D.cellType(this.d, e.f, E.w2c(e.x), E.w2c(e.z));
         this.targetRing.visible = true;
-        this.targetRing.position.set(e.x, e.f * FLOOR_H + (ect === D.CT.RAISED ? D.RAISED_H : 0) + 0.06, e.z);
+        this.targetRing.position.set(e.x, e.f * FLOOR_H + D.cellHeight(this.d, e.f, E.w2c(e.x), E.w2c(e.z)) + 0.06, e.z);
         this.targetRing.material.opacity = 0.6 + Math.sin(t * 6) * 0.25;
         this.g.hud.setTarget(e, this.d);
       } else {

@@ -149,7 +149,7 @@ export class EnemyPool {
         continue;
       }
       const ct = D.cellType(this.d, e.f, Math.floor(e.x / 4), Math.floor(e.z / 4));
-      const surfY = (ct === D.CT.RAISED ? D.RAISED_H : 0) + (ct === D.CT.WATER ? -0.25 : 0);
+      const surfY = D.cellHeight(this.d, e.f, Math.floor(e.x / 4), Math.floor(e.z / 4)) + (ct === D.CT.WATER ? -0.25 : 0);
       v.surfY = v.surfY == null ? surfY : v.surfY + (surfY - v.surfY) * Math.min(1, dt * 10);
       v.grp.position.set(e.x, e.f * FLOOR_H + v.surfY, e.z);
       v.grp.rotation.y = e.yaw + Math.PI;

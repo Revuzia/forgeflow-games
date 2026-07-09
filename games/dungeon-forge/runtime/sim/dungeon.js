@@ -23,17 +23,26 @@ export const THEMES = ["fantasy", "scifi"];
 // Cell types — every truthy cell is walkable floor; the type flavors it.
 // 1 stone floor · 2 LAVA (burns players) · 3 WATER (slows) · 4 RAISED platform
 export const CT = { FLOOR: 1, LAVA: 2, WATER: 3, RAISED: 4 };
-export const RAISED_H = 1.1;           // world-units height of a raised platform
+export const RAISED_H = 1.1;           // world-units height of a legacy raised platform
 export const LAVA_DPS = { dmg: 10 };   // per hit through the 0.45s i-frame gate
 export const WATER_SLOW = 0.55;        // speed multiplier in water
+export const HEIGHT_STEP = 0.55;       // world-units per raise/lower level (rolling terrain)
+export const HEIGHT_MIN = -3, HEIGHT_MAX = 5;   // clamp on per-cell height levels
 
 export function cellType(d, f, x, z) {
   const fl = d.floors[f];
   return fl ? (fl.cells[ck(x, z)] | 0) : 0;
 }
-/** Walk-surface height of a cell (0 or RAISED_H). */
+/** Per-cell height LEVEL from raise/lower (integer; 0 = flat). */
+export function cellLevel(d, f, x, z) {
+  const fl = d.floors[f];
+  return fl && fl.heights ? (fl.heights[ck(x, z)] | 0) : 0;
+}
+/** Walk-surface height of a cell: rolling height levels + legacy raised platforms. */
 export function cellHeight(d, f, x, z) {
-  return cellType(d, f, x, z) === CT.RAISED ? RAISED_H : 0;
+  let h = cellLevel(d, f, x, z) * HEIGHT_STEP;
+  if (cellType(d, f, x, z) === CT.RAISED) h += RAISED_H;
+  return h;
 }
 
 // Object kinds and their per-kind default props. `solid` objects block walking.
@@ -133,7 +142,7 @@ export function newDungeon(opts = {}) {
 }
 
 export function emptyFloor() {
-  return { cells: {}, objects: [] };       // cells: {"x,z":1}, objects: [{id,kind,x,z,rot,...}]
+  return { cells: {}, heights: {}, objects: [] };  // cells: {"x,z":1}, heights: {"x,z":level}, objects: […]
 }
 
 export const ck = (x, z) => x + "," + z;
@@ -186,6 +195,18 @@ export function applyOp(d, op) {
       delete fl.cells[ck(op.x, op.z)];
       // erase everything that stood on the cell
       fl.objects = fl.objects.filter((o) => !(o.x === op.x && o.z === op.z));
+      if (fl.heights) delete fl.heights[ck(op.x, op.z)];
+      return { ok: true };
+    }
+    case "raise": case "lower": {
+      if (!inBounds(op.x, op.z)) return { ok: false, err: "oob" };
+      const fl = d.floors[op.f];
+      if (!fl) return { ok: false, err: "nofloor" };
+      if (!fl.cells[ck(op.x, op.z)]) return { ok: false, err: "nocell" }; // only on existing floor
+      fl.heights = fl.heights || {};
+      const k = ck(op.x, op.z);
+      const nv = Math.max(HEIGHT_MIN, Math.min(HEIGHT_MAX, (fl.heights[k] | 0) + (op.t === "raise" ? 1 : -1)));
+      if (nv === 0) delete fl.heights[k]; else fl.heights[k] = nv;
       return { ok: true };
     }
     case "obj+": {
@@ -497,6 +518,11 @@ export function sanitize(raw) {
         const [x, z] = k.split(",").map(Number);
         const ct = fl.cells[k] | 0;
         if (inBounds(x, z)) nf.cells[ck(x, z)] = ct >= 1 && ct <= 4 ? ct : 1;
+      }
+      if (fl && fl.heights) for (const k of Object.keys(fl.heights)) {
+        const [x, z] = k.split(",").map(Number);
+        const lv = Math.max(HEIGHT_MIN, Math.min(HEIGHT_MAX, fl.heights[k] | 0));
+        if (inBounds(x, z) && lv !== 0 && nf.cells[ck(x, z)]) nf.heights[ck(x, z)] = lv;
       }
       if (fl && Array.isArray(fl.objects)) for (const o of fl.objects.slice(0, 4000)) {
         if (!o || !KINDS[o.kind] || !inBounds(o.x | 0, o.z | 0)) continue;

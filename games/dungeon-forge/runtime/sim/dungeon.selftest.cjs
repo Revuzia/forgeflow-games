@@ -467,6 +467,32 @@ const ok = (cond, name, extra) => {
     ok(!bl2.ok && bl2.err === "used", "sage blesses only once per run");
   }
 
+  // ── 15d. rolling terrain: raise / lower height levels ───────────
+  console.log("[terrain height]");
+  {
+    const dd = newDungeon({ name: "H", theme: "fantasy", seed: 1 });
+    stampRoom(dd, 0, 5, 5, 4, 4);
+    ok(!applyOp(dd, { t: "raise", f: 0, x: 99, z: 99 }).ok, "can't raise a non-floor cell");
+    applyOp(dd, { t: "raise", f: 0, x: 6, z: 6 });
+    applyOp(dd, { t: "raise", f: 0, x: 6, z: 6 });   // level 2
+    ok(D.cellLevel(dd, 0, 6, 6) === 2, "raise ×2 → level 2", D.cellLevel(dd, 0, 6, 6));
+    ok(Math.abs(D.cellHeight(dd, 0, 6, 6) - 2 * D.HEIGHT_STEP) < 1e-6, "cellHeight = level×step");
+    applyOp(dd, { t: "lower", f: 0, x: 6, z: 6 });
+    applyOp(dd, { t: "lower", f: 0, x: 6, z: 6 });
+    applyOp(dd, { t: "lower", f: 0, x: 6, z: 6 });   // level -1
+    ok(D.cellLevel(dd, 0, 6, 6) === -1, "lower below 0 works (level -1)", D.cellLevel(dd, 0, 6, 6));
+    // clamp
+    for (let i = 0; i < 20; i++) applyOp(dd, { t: "raise", f: 0, x: 6, z: 6 });
+    ok(D.cellLevel(dd, 0, 6, 6) === D.HEIGHT_MAX, "height clamps at HEIGHT_MAX");
+    // heights survive serialize roundtrip
+    applyOp(dd, { t: "raise", f: 0, x: 7, z: 7 });
+    const back = sanitize(serialize(dd));
+    ok(D.cellLevel(back, 0, 7, 7) === 1 && D.cellLevel(back, 0, 6, 6) === D.HEIGHT_MAX, "heights survive serialize roundtrip");
+    // erasing the cell clears its height
+    applyOp(dd, { t: "cell-", f: 0, x: 7, z: 7 });
+    ok(D.cellLevel(dd, 0, 7, 7) === 0, "cell- clears the cell's height");
+  }
+
   // ── 16. scale: 1 / 10 / 20 / 30-room dungeons ──────────────────
   console.log("[scale]");
   const genRooms = (n) => {

@@ -513,51 +513,67 @@ export function makeCellSurfaces(D, d, f, kit) {
     (byType[fl.cells[k] | 0] || byType[1]).push([x, z]);
   }
 
-  // stone floor tiles: type 1 at y0, type 4 at +RH (same kit tile)
+  // ── SMOOTH ROLLING TERRAIN ────────────────────────────────────────────────
+  // Cells raised/lowered by the height tool (and legacy RAISED platforms) form a
+  // continuous heightmap mesh with sloped, rounded transitions — no voxel boxes.
+  // Flat (level-0, non-adjacent) floor tiles keep the crisp kit stone.
   const m4 = new THREE.Matrix4();
-  const stone = byType[1].map(([x, z]) => [x, z, 0]).concat(byType[4].map(([x, z]) => [x, z, RH]));
-  if (stone.length) {
-    const inst = makeInstanced(kit.floor.scene, stone.length);
-    stone.forEach(([x, z, y], i) => { m4.makeTranslation(x * CELL + CELL / 2, y, z * CELL + CELL / 2); inst.setMatrixAt(i, m4); });
-    inst.setCount(stone.length); inst.commit();
+  const isFloorish = (cx, cz) => { const t = fl.cells[D.ck(cx, cz)] | 0; return t === 1 || t === 4; };
+  const hAt = (cx, cz) => (fl.cells[D.ck(cx, cz)] ? D.cellHeight(d, f, cx, cz) : 0);
+  const anyHeight = cells.some((k) => { const [x, z] = k.split(",").map(Number); return isFloorish(x, z) && hAt(x, z) !== 0; });
+  const terrain = new Set();
+  if (anyHeight) {
+    for (const [x, z] of byType[1].concat(byType[4])) {
+      let near = hAt(x, z) !== 0;
+      for (let dx = -1; dx <= 1 && !near; dx++) for (let dz = -1; dz <= 1 && !near; dz++)
+        if (isFloorish(x + dx, z + dz) && hAt(x + dx, z + dz) !== 0) near = true;
+      if (near) terrain.add(D.ck(x, z));
+    }
+  }
+  // corner height = average of the up-to-4 real floor cells meeting that corner
+  const cornerH = (cx, cz) => {
+    let s = 0, n = 0;
+    for (const [ox, oz] of [[cx - 1, cz - 1], [cx, cz - 1], [cx - 1, cz], [cx, cz]])
+      if (isFloorish(ox, oz)) { s += hAt(ox, oz); n++; }
+    return n ? s / n : 0;
+  };
+
+  // flat kit tiles for level-0 cells the terrain mesh doesn't cover
+  const flat = byType[1].filter(([x, z]) => !terrain.has(D.ck(x, z)));
+  if (flat.length) {
+    const inst = makeInstanced(kit.floor.scene, flat.length);
+    flat.forEach(([x, z], i) => { m4.makeTranslation(x * CELL + CELL / 2, 0, z * CELL + CELL / 2); inst.setMatrixAt(i, m4); });
+    inst.setCount(flat.length); inst.commit();
     group.add(inst.group);
   }
 
-  // raised skirts + step wedges toward every lower walkable neighbor
-  if (byType[4].length) {
-    const skirtGeo = new THREE.BoxGeometry(CELL, RH, CELL);
-    const skirtMat = new THREE.MeshStandardMaterial({ color: 0x4a4a58, roughness: 0.9 });
-    const skirts = new THREE.InstancedMesh(skirtGeo, skirtMat, byType[4].length);
-    byType[4].forEach(([x, z], i) => {
-      m4.makeTranslation(x * CELL + CELL / 2, RH / 2 - 0.02, z * CELL + CELL / 2);
-      skirts.setMatrixAt(i, m4);
-    });
-    skirts.instanceMatrix.needsUpdate = true;
-    group.add(skirts);
-    // steps: 3-step wedge, instanced, rotated toward the lower neighbor
-    const stepGeo = mergeSteps(CELL);
-    const stepMat = new THREE.MeshStandardMaterial({ color: 0x5a5a6a, roughness: 0.85 });
-    const spots = [];
-    for (const [x, z] of byType[4]) {
-      for (let s = 0; s < 4; s++) {
-        const nx = x + D.DIRS[s].dx, nz = z + D.DIRS[s].dz;
-        const nt = fl.cells[D.ck(nx, nz)] | 0;
-        if (nt && nt !== 4) spots.push([x, z, s]);
+  // rolling heightmap mesh over the elevated region — solid stone tinted per theme
+  if (terrain.size) {
+    const SUB = 3, row = SUB + 1;
+    const pos = [], idx = [];
+    let vb = 0;
+    for (const k of terrain) {
+      const [x, z] = k.split(",").map(Number);
+      const h00 = cornerH(x, z), h10 = cornerH(x + 1, z), h01 = cornerH(x, z + 1), h11 = cornerH(x + 1, z + 1);
+      for (let iz = 0; iz <= SUB; iz++) for (let ix = 0; ix <= SUB; ix++) {
+        const fx = ix / SUB, fz = iz / SUB;
+        const h = (h00 * (1 - fx) + h10 * fx) * (1 - fz) + (h01 * (1 - fx) + h11 * fx) * fz;
+        pos.push((x + fx) * CELL, h, (z + fz) * CELL);
       }
+      for (let iz = 0; iz < SUB; iz++) for (let ix = 0; ix < SUB; ix++) {
+        const a = vb + iz * row + ix, b = a + 1, c = a + row, e = c + 1;
+        idx.push(a, c, b, b, c, e);
+      }
+      vb += row * row;
     }
-    if (spots.length) {
-      const steps = new THREE.InstancedMesh(stepGeo, stepMat, spots.length);
-      const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), pos = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
-      spots.forEach(([x, z, s], i) => {
-        const yaw = s === 0 ? 0 : s === 1 ? Math.PI / 2 : s === 2 ? Math.PI : -Math.PI / 2;
-        pos.set(x * CELL + CELL / 2, 0, z * CELL + CELL / 2);
-        q.setFromAxisAngle(up, yaw);
-        m4.compose(pos, q, one);
-        steps.setMatrixAt(i, m4);
-      });
-      steps.instanceMatrix.needsUpdate = true;
-      group.add(steps);
-    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx); geo.computeVertexNormals();
+    const mat = new THREE.MeshStandardMaterial({
+      color: d.theme === "scifi" ? 0x51606e : 0x8a5836, roughness: 0.96, metalness: 0.0, flatShading: false,
+    });
+    const tmesh = new THREE.Mesh(geo, mat);
+    group.add(tmesh);
   }
 
   // lava sheet — flowing procedural shader, animated via uTime in update

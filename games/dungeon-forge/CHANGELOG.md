@@ -225,3 +225,16 @@ Initial release.
   Animated via uTime in both escape and builder. Verified live: both compile and
   render beautifully. (The lava/water→Floor-subtype toolbar move ships with the
   raise/rolling-terrain work in the next slice.)
+
+## v1.4.9 — 2026-07-07 (/loop batch 7: Floor sub-types + rolling terrain)
+- **Lava/Water/Raised out of the top toolbar (2+3)**: the Floor tool is now a
+  category with modes Floor · Lava · Water · Raise · Lower. Top toolbar drops to
+  10 tools. Floor/Lava/Water drag-fill a rectangle with the chosen surface;
+  Raise/Lower sculpt cell height by dragging.
+- **Smooth ROLLING terrain (3)**: per-cell height LEVELS (raise/lower, clamped
+  −3..+5) replace the binary raised platform. The elevated region renders as a
+  continuous heightmap mesh with corner-averaged, subdivided, sloped transitions
+  — no more voxel blocks. Player/enemy surface height now follows cellHeight
+  (smoothed by the existing step lerp). Legacy raised platforms auto-upgrade to
+  the rolling mesh. Verified live: a raised region reads as a smooth mound.
+  Selftest → 137 (raise/lower levels, clamp, serialize roundtrip, cell- clears).
