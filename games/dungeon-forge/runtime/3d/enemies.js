@@ -11,6 +11,7 @@ const D = await import("../sim/dungeon.js" + V);
 const { Assets, creatureClips, makeCreature, findArmBones, relaxArms } = await import("./assets.js" + V);
 
 const FLOOR_H = 4.4;
+const _eSwing = new THREE.Vector3(); // scratch: enemy right-vector for gait arm-swing
 
 export class EnemyPool {
   constructor(game, root, dungeon) {
@@ -165,12 +166,26 @@ export class EnemyPool {
         if (v.oneshotT <= 0 && v.cur) { v.cur.reset().play(); if (v.osAct) v.osAct.crossFadeTo(v.cur, 0.14, false); }
       } else if (v.actions.walk || v.actions.run) {
         const moving = e.state === "chase" || e.moving;
-        this._play(v, moving ? (e.state === "chase" && v.actions.run ? "run" : "walk") : "idle");
+        const running = moving && e.state === "chase" && v.actions.run;
+        this._play(v, moving ? (running ? "run" : "walk") : "idle");
         e.moving = false;
-        // Meshy enemies have no idle clip — relax the arms to the sides while standing
+        // Meshy enemies were auto-rigged in an A-pose (arms flung out in every
+        // clip). Pull the arms to the sides EVERY frame — idle and while moving —
+        // with a procedural gait swing so walking still reads. Fades during
+        // attack/hit one-shots so those clips play unmodified.
         if (v.armBones && v.oneshotT <= 0) {
-          v.relaxW += ((moving ? 0 : 1) - v.relaxW) * Math.min(1, dt * 10);
-          if (v.relaxW > 0.02) { v.obj.updateMatrixWorld(true); relaxArms(v.armBones, v.relaxW); }
+          v.relaxW += (1 - v.relaxW) * Math.min(1, dt * 10);
+          if (v.relaxW > 0.02) {
+            v.obj.updateMatrixWorld(true);
+            relaxArms(v.armBones, v.relaxW);
+            if (moving) {
+              v.gait = (v.gait || 0) + dt * (running ? 12 : 8);
+              const sw = Math.sin(v.gait) * (running ? 0.55 : 0.4) * v.relaxW;
+              _eSwing.set(1, 0, 0).applyQuaternion(v.grp.quaternion);
+              v.armBones.rArm.rotateOnWorldAxis(_eSwing, sw);  v.armBones.rArm.updateMatrixWorld(true);
+              v.armBones.lArm.rotateOnWorldAxis(_eSwing, -sw); v.armBones.lArm.updateMatrixWorld(true);
+            }
+          }
         }
       }
       // status auras: fire embers / poison bubbles / frost drips / stun stars

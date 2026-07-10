@@ -17,6 +17,7 @@ const { EnemyPool } = await import("./enemies.js" + V);
 const FLOOR_H = 4.4;
 const CELL = D.CELL;
 const c2w = E.c2w;
+const _swingAxis = new THREE.Vector3(); // scratch: character right-vector for gait arm-swing
 
 const SKINS = ["knight", "barbarian", "sorceress", "rogue"];
 const TIER_COLORS = [0x8a6a4a, 0xcfd6e4, 0xffd769]; // bronze / steel / gold
@@ -844,19 +845,35 @@ export class Escape {
       a.grp.visible = (p.alive || a.proc || a._deadPose) && !p.escaped && (this.me() ? Math.abs(p.f - this.me().f) <= 1 : true);
       a.mixer.update(dt);
       this._procUpdate(a, dt);
-      let idlePose = false;
+      let relaxTarget = 0, locomote = false, sprinting = false;
       if (a.oneshotT > 0) { a.oneshotT -= dt; if (a.oneshotT <= 0 && a.cur) { a.cur.reset().play(); if (a.osAct) a.osAct.crossFadeTo(a.cur, 0.15, false); } }
       else {
-        const moving = Math.hypot(p.input.mx, p.input.mz) > 0.01 || (p.remote && p.netMoving);
-        this._playAnim(a, moving ? (p.input.sprint ? "run" : "walk") : "idle");
-        idlePose = !moving;
+        locomote = Math.hypot(p.input.mx, p.input.mz) > 0.01 || (p.remote && p.netMoving);
+        sprinting = !!p.input.sprint;
+        this._playAnim(a, locomote ? (sprinting ? "run" : "walk") : "idle");
+        relaxTarget = 1; // arms hang at the sides during idle AND locomotion (see below)
       }
-      // Meshy idle flings the arms out — relax them to the sides while standing
-      // (fades out during walk/attack so those clips read normally). Not for
-      // procedural fallback rigs, which animate the bones themselves.
+      // Meshy auto-rigged every clip in an A-pose: idle, walk AND run all fling
+      // the arms out (radial ≥0.9 torso-heights). Pull the arms down to the
+      // sides EVERY frame — not just when standing — then add a procedural gait
+      // swing so walking/running still reads as motion. Fades to 0 during attack
+      // one-shots so the swing clips play unmodified. Skips procedural rigs.
       if (a.armBones && !a.proc) {
-        a.relaxW += ((idlePose ? 1 : 0) - a.relaxW) * Math.min(1, dt * 12);
-        if (a.relaxW > 0.02) { a.obj.updateMatrixWorld(true); relaxArms(a.armBones, a.relaxW); }
+        a.relaxW += (relaxTarget - a.relaxW) * Math.min(1, dt * 12);
+        if (a.relaxW > 0.02) {
+          a.obj.updateMatrixWorld(true);
+          relaxArms(a.armBones, a.relaxW);
+          if (locomote) {
+            a.gait = (a.gait || 0) + dt * (sprinting ? 12.5 : 8.5);
+            const sw = Math.sin(a.gait) * (sprinting ? 0.6 : 0.42) * a.relaxW;
+            _swingAxis.set(1, 0, 0).applyQuaternion(a.grp.quaternion); // world right-vector
+            const b = a.armBones;
+            b.rArm.rotateOnWorldAxis(_swingAxis, sw);  b.rArm.updateMatrixWorld(true);
+            b.lArm.rotateOnWorldAxis(_swingAxis, -sw); b.lArm.updateMatrixWorld(true);
+            b.rFore.rotateOnWorldAxis(_swingAxis, sw * 0.35);
+            b.lFore.rotateOnWorldAxis(_swingAxis, -sw * 0.35);
+          }
+        }
       }
       if (id === this.myId) a.obj.visible = !this.fp;
     }

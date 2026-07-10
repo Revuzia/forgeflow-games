@@ -263,3 +263,18 @@ Initial release.
   (bat/wisp/gargoyle/dragon/xeno drone/floater) animate + hover.
 - Per-type render heights tuned. Verified live: all 12 new fantasy enemies render
   with valid bounds + mixers + full action sets. Selftest → 159 (auto kill-tests).
+
+## v1.6.1 — 2026-07-09 (serious animation pass: arms-at-side locomotion)
+- **Fixed the persistent "arms flung out" pose while MOVING.** Diagnosis (measured
+  every clip's arm bones in-engine): Meshy auto-rigged every clip in an A-pose, so
+  idle, walk AND run all land at radial ≥0.9 torso-heights with hands at hip
+  height. The old `relaxArms` correction only ran while standing still — the moment
+  the hero walked, the arms flared back out (this is what the screenshots showed).
+- Now `relaxArms` runs EVERY frame across idle/walk/run (fades to 0 only during
+  attack one-shots so the swing clips play unmodified), plus a procedural gait
+  arm-swing (world-right-axis rotation synced to stride) so walking/running still
+  reads as motion. Verified live: idle rR 0.68 / hands below hips (vR −0.26);
+  walk relaxW 1.0 with gait swing (rR 0.56↔0.69); run swings too.
+- Same continuous-relax + gait applied to the 4 Meshy enemies (cultist/ogre/
+  cyborg/sentinel) which shared the A-pose. Attack clips verified as real swings
+  (C_slash1 overhead vR 1.09, C_finisher two-hand smash vR 1.38 — not crossed).
