@@ -580,8 +580,8 @@ export class Escape {
     if (this.keys["KeyA"] || this.keys["ArrowLeft"]) fx -= 1;
     if (this.keys["KeyD"] || this.keys["ArrowRight"]) fx += 1;
     const yaw = this.camYaw;
-    p.input.mx = Math.sin(yaw) * fz + Math.cos(yaw) * fx;
-    p.input.mz = Math.cos(yaw) * fz - Math.sin(yaw) * fx;
+    p.input.mx = Math.sin(yaw) * fz - Math.cos(yaw) * fx; // fx strafe = camera screen-right (was inverted)
+    p.input.mz = Math.cos(yaw) * fz + Math.sin(yaw) * fx;
     p.input.sprint = !!(this.keys["ShiftLeft"] || this.keys["ShiftRight"]);
     p.input.yaw = yaw;                    // face where the camera looks
     // soft aim assist: attacking with a lock pulls your facing onto the target

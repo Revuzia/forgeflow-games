@@ -344,6 +344,20 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.6.9 — 2026-07-09 (inverted strafe + walk-shrink fixes)
+- **Inverted A/D strafe fixed** (owner: 'A goes right and D goes left'). The
+  camera-relative strafe term had the wrong sign in _gatherInput (escape.js) —
+  flipped only the fx (strafe) terms so A=screen-left, D=screen-right; W/S
+  untouched. Verified empirically (frozen-camera displacement: D dot +1, A dot −1).
+- **Character no longer shrinks while walking** (owner). Root cause (found by a
+  multi-agent audit): the Meshy idle clip bakes a uniform Hips root-scale of
+  1.1765 while walk/run/combat clips bake 1.0, so the mixer shrank the body to
+  0.85× whenever a locomotion clip played (poseRig measured against the inflated
+  idle). Fix: strip `.scale` bone tracks when cloning each char clip — skeleton
+  stays at constant bind scale. Verified: torso height ratio walk/idle 1.02 (was
+  ~0.85). Appearance unchanged (the 1.1765 is a pure root scale already
+  normalized away by obj.scale = 1.72/height).
+
 ## v1.6.8 — 2026-07-09 (player facing fix)
 - **Player now faces forward** (owner: 'facing the wrong way'). The player rig's
   rotation had a stray `+ Math.PI` that pointed the character AT the chase camera

@@ -149,12 +149,12 @@ export class Assets {
         const anims = [];
         const addClip = async (rel, name, fallbackFirst) => {
           const g = await this.load(rel).catch(() => null);
-          if (g && g.animations && g.animations[0]) { const c = g.animations[0].clone(); c.name = name; anims.push(c); return true; }
+          if (g && g.animations && g.animations[0]) { const c = g.animations[0].clone(); c.tracks = c.tracks.filter((t) => !/\.scale$/.test(t.name)); c.name = name; anims.push(c); return true; } // strip baked bone-scale (idle bakes Hips 1.1765 → shrinks on walk)
           return false;
         };
         // real generated idle (arms down) — falls back to the base bind clip only if missing
         const gotIdle = await addClip(`chars/meshy/${n}/anim_idle.glb`, "Idle");
-        if (!gotIdle && base.animations && base.animations[0]) { const c = base.animations[0].clone(); c.name = "Idle"; anims.push(c); }
+        if (!gotIdle && base.animations && base.animations[0]) { const c = base.animations[0].clone(); c.tracks = c.tracks.filter((t) => !/\.scale$/.test(t.name)); c.name = "Idle"; anims.push(c); }
         await addClip(`chars/meshy/${n}/walk_arm.glb`, "Walk");
         await addClip(`chars/meshy/${n}/run_arm.glb`, "Run");
         await Promise.all((CLIPS[n] || []).map((cn) => addClip(`chars/meshy/${n}/anim_${cn}.glb`, "C_" + cn)));
