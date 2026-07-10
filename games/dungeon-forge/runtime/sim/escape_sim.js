@@ -122,7 +122,9 @@ export function newRun(d, runSeed, players) {
   d.floors.forEach((fl, f) => fl.objects.forEach((o) => {
     if (o.kind !== "enemy") return;
     const roster = ENEMIES[d.theme] || ENEMIES.fantasy;
-    const K = roster[o.etype] || roster[Object.keys(roster)[0]];
+    const base = roster[o.etype] || roster[Object.keys(roster)[0]];
+    // per-placement stat overrides (hp/dmg/speed) set by the builder, else defaults
+    const K = (o.stats && typeof o.stats === "object") ? { ...base, ...o.stats } : base;
     const boundKey = fl.objects.find((k) => k.kind === "key" && k.x === o.x && k.z === o.z);
     st.enemies.push({
       id: "e" + eid++, src: o.id, etype: o.etype, f, K,

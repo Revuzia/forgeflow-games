@@ -85,6 +85,23 @@ export const NPC_TYPES = {
 };
 export const NPC_TYPE_IDS = Object.keys(NPC_TYPES);
 
+// Which enemy stats the builder may override per placement, with clamp ranges.
+export const ENEMY_STAT_DEFS = [
+  { key: "hp",    label: "HP",    min: 1,   max: 9999, step: 5,   int: true },
+  { key: "dmg",   label: "DMG",   min: 0,   max: 999,  step: 1,   int: true },
+  { key: "speed", label: "Speed", min: 0.3, max: 8,    step: 0.1, int: false },
+];
+/** Validate + clamp a per-placement stat override; undefined if nothing valid. */
+export function clampStats(s) {
+  if (!s || typeof s !== "object") return undefined;
+  const out = {};
+  for (const d of ENEMY_STAT_DEFS) {
+    const v = s[d.key];
+    if (v != null && isFinite(v)) out[d.key] = d.int ? Math.max(d.min, Math.min(d.max, Math.round(v))) : Math.max(d.min, Math.min(d.max, Math.round(v * 100) / 100));
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 // Enemy roster per theme: [id, hp, dmg, speed, aggroR, attackR, attackCd, xp]
 export const ENEMIES = {
   fantasy: {
@@ -264,6 +281,8 @@ export function applyOp(d, op) {
       if (!hit) return { ok: false, err: "noobj" };
       const ALLOW = ["x", "z", "rot", "locked", "etype", "ttype", "dtype", "color", "stock", "ntype"];
       for (const k of ALLOW) if (op.p && op.p[k] !== undefined) hit.obj[k] = op.p[k];
+      if (op.p && op.p.stats !== undefined) { const s = clampStats(op.p.stats); if (s) hit.obj.stats = s; else delete hit.obj.stats; }
+      if (op.p && op.p.etype !== undefined) delete hit.obj.stats; // changing type resets to that type's defaults
       return { ok: true };
     }
     case "floor+": {
@@ -561,7 +580,7 @@ export function sanitize(raw) {
         if (!o || !KINDS[o.kind] || !inBounds(o.x | 0, o.z | 0)) continue;
         const c = { id: String(o.id || "o" + out.nid++).slice(0, 12), kind: o.kind, x: o.x | 0, z: o.z | 0, rot: (o.rot | 0) % 4 };
         if (o.kind === "door") c.locked = !!o.locked;
-        if (o.kind === "enemy") c.etype = String(o.etype || "").slice(0, 16);
+        if (o.kind === "enemy") { c.etype = String(o.etype || "").slice(0, 16); const s = clampStats(o.stats); if (s) c.stats = s; }
         if (o.kind === "trap") c.ttype = TRAPS.includes(o.ttype) ? o.ttype : "spikes";
         if (o.kind === "decor") c.dtype = String(o.dtype || "").slice(0, 16);
         if (o.kind === "npc") {

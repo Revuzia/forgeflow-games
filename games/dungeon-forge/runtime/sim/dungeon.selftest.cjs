@@ -107,6 +107,32 @@ const ok = (cond, name, extra) => {
   ok(dec && serialize(dec) === serialize(back), "share roundtrip identical");
   ok((await decodeShare("DF1.garbage!!")) === null, "garbage share → null");
 
+  // ── 4b. per-placement enemy stat overrides ─────────────────────
+  console.log("[enemy stat overrides]");
+  {
+    const ds = newDungeon({ theme: "fantasy" });
+    stampRoom(ds, 0, 5, 5, 6, 6);
+    applyOp(ds, { t: "obj+", f: 0, o: { kind: "spawn", x: 6, z: 6 } });
+    applyOp(ds, { t: "obj+", f: 0, o: { kind: "exit", x: 9, z: 9 } });
+    const en = applyOp(ds, { t: "obj+", f: 0, o: { kind: "enemy", x: 7, z: 7, etype: "skeleton" } });
+    ok(en.ok, "stat-ov: enemy placed");
+    const baseHp = D.ENEMIES.fantasy.skeleton.hp;
+    ok(applyOp(ds, { t: "objEdit", id: en.id, p: { stats: { hp: 500, dmg: 99 } } }).ok, "stat-ov: objEdit stats");
+    let eo = D.objById(ds, en.id).obj;
+    ok(eo.stats && eo.stats.hp === 500 && eo.stats.dmg === 99, "stat-ov: stored on object");
+    applyOp(ds, { t: "objEdit", id: en.id, p: { stats: { hp: 99999, speed: 0.01 } } });
+    eo = D.objById(ds, en.id).obj;
+    ok(eo.stats.hp === 9999 && eo.stats.speed === 0.3, "stat-ov: clamped to range (" + eo.stats.hp + "/" + eo.stats.speed + ")");
+    applyOp(ds, { t: "objEdit", id: en.id, p: { stats: { hp: 500, dmg: 99 } } });
+    const rtE = sanitize(serialize(ds)).floors[0].objects.find((o) => o.kind === "enemy");
+    ok(rtE.stats && rtE.stats.hp === 500, "stat-ov: survives sanitize roundtrip");
+    const rr = newRun(ds, 42, [{ id: "P1" }]);
+    ok(rr.enemies[0].K.hp === 500 && rr.enemies[0].K.dmg === 99, "stat-ov: sim K uses override");
+    ok(rr.enemies[0].hp > baseHp * 1.5, "stat-ov: spawned hp scaled from override not default");
+    applyOp(ds, { t: "objEdit", id: en.id, p: { etype: "orc" } });
+    ok(!D.objById(ds, en.id).obj.stats, "stat-ov: changing type resets stats");
+  }
+
   // ── 5. loot determinism ─────────────────────────────────────────
   console.log("[loot]");
   const l1 = JSON.stringify(rollLoot(s, "oX", 123, null));

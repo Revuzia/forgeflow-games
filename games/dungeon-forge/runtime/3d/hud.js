@@ -225,7 +225,16 @@ export class Hud {
     }
     if (o.kind === "enemy") {
       const roster = D.ENEMIES[b.d.theme];
-      extra = `<select data-a="etype" class="df-diff">${Object.keys(roster).map((k) => `<option value="${k}" ${k === o.etype ? "selected" : ""}>${roster[k].label}</option>`).join("")}</select>`;
+      const def = roster[o.etype] || roster[Object.keys(roster)[0]];
+      const overridden = o.stats && Object.keys(o.stats).length;
+      const rows = D.ENEMY_STAT_DEFS.map((s) => {
+        const isOv = o.stats && o.stats[s.key] != null;
+        const val = isOv ? o.stats[s.key] : def[s.key];
+        return `<label class="df-stat ${isOv ? "ov" : ""}"><span>${s.label}</span><input type="number" data-stat="${s.key}" value="${val}" min="${s.min}" max="${s.max}" step="${s.step}"><small>def ${def[s.key]}</small></label>`;
+      }).join("");
+      extra = `<select data-a="etype" class="df-diff">${Object.keys(roster).map((k) => `<option value="${k}" ${k === o.etype ? "selected" : ""}>${roster[k].label}</option>`).join("")}</select>
+        <div class="df-statgrid">${rows}</div>
+        ${overridden ? `<button data-a="statreset" class="df-btn tiny">↺ Reset stats to default</button>` : `<div class="df-selnote">Tweak this creature's stats — they override the defaults for this placement only.</div>`}`;
     }
     if (o.kind === "trap") {
       extra = `<select data-a="ttype" class="df-diff">${D.TRAPS.map((k) => `<option value="${k}" ${k === o.ttype ? "selected" : ""}>${k}</option>`).join("")}</select>`;
@@ -241,7 +250,16 @@ export class Hud {
     this.root.appendChild(this.selPanel);
     const q = (s) => this.selPanel.querySelector(s);
     if (q('[data-a="lock"]')) q('[data-a="lock"]').onclick = () => { b.toggleLock(); };
-    if (q('[data-a="etype"]')) q('[data-a="etype"]').onchange = (e) => b._editSel({ etype: e.target.value });
+    if (q('[data-a="etype"]')) q('[data-a="etype"]').onchange = (e) => { b._editSel({ etype: e.target.value }); b.g.hud.showSelection(b, D.objById(b.d, b.sel)); };
+    this.selPanel.querySelectorAll("[data-stat]").forEach((inp) => {
+      inp.onchange = () => {
+        const stats = Object.assign({}, o.stats || {});
+        stats[inp.dataset.stat] = parseFloat(inp.value);
+        b._editSel({ stats });
+        b.g.hud.showSelection(b, D.objById(b.d, b.sel)); // reflect clamp + override state
+      };
+    });
+    if (q('[data-a="statreset"]')) q('[data-a="statreset"]').onclick = () => { b._editSel({ stats: null }); b.g.hud.showSelection(b, D.objById(b.d, b.sel)); };
     if (q('[data-a="ttype"]')) q('[data-a="ttype"]').onchange = (e) => b._editSel({ ttype: e.target.value });
     if (q('[data-a="ntype"]')) q('[data-a="ntype"]').onchange = (e) => { b._editSel({ ntype: e.target.value }); b.g.hud.showSelection(b, D.objById(b.d, b.sel)); };
     this.selPanel.querySelectorAll("[data-shop]").forEach((btn) => btn.onclick = () => {
@@ -579,6 +597,14 @@ function injectStyle() {
   .df-selhead{font-weight:800;font-size:15px} .dim{opacity:.55;font-weight:600;font-size:12px}
   .df-selrow{display:flex;gap:8px} .df-selrow .df-btn{flex:1}
   .df-selnote{font-size:11.5px;opacity:.75;line-height:1.45}
+  .df-statgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+  .df-stat{display:flex;flex-direction:column;gap:2px;font-size:10px;font-weight:700;opacity:.85}
+  .df-stat>span{letter-spacing:.4px}
+  .df-stat.ov{opacity:1} .df-stat.ov>span{color:var(--acc)}
+  .df-stat input{width:100%;background:rgba(20,24,38,.85);border:1px solid rgba(150,170,255,.3);border-radius:7px;color:#fff;padding:4px 5px;font-size:12.5px;font-weight:700}
+  .df-stat.ov input{border-color:var(--acc);background:rgba(90,110,220,.18)}
+  .df-stat small{opacity:.5;font-size:8.5px;font-weight:600}
+  .df-btn.tiny{font-size:11px;padding:5px 8px}
   .df-shopcfg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   .df-shoptog{background:rgba(16,20,34,.85);border:1px solid rgba(150,170,255,.25);color:#cfd6f4;border-radius:9px;padding:6px 8px;font-size:12px;font-weight:700;cursor:pointer}
   .df-shoptog.on{border-color:var(--acc);color:var(--acc);background:rgba(90,110,220,.2)}

@@ -344,4 +344,16 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
-- (Per-placement editable stats: next slice.)
+## v1.6.6 — 2026-07-09 (editable per-placement enemy stats — finishes #9)
+- **Enemy stats are now adjustable per placement** (owner: 'stats … standard but
+  can be adjustable by world builder'). Selecting a placed enemy shows HP / DMG /
+  Speed number fields in the selection panel, pre-filled with that creature's
+  defaults; edited fields highlight in the accent colour and show "def N", with a
+  "↺ Reset stats to default" button.
+- Overrides stored as `o.stats = {hp,dmg,speed}` on the object, validated + clamped
+  (ENEMY_STAT_DEFS + clampStats in dungeon.js), merged over the roster defaults
+  when the escape sim spawns the enemy (`K = {...base, ...o.stats}`). Survives
+  save / share / relay via sanitize; changing the creature type clears the override.
+- Verified end-to-end live: edit orc HP 150→500 → persists on object → survives an
+  escape→builder round-trip → orc spawns in escape with K.hp 500 (dmg stays 22).
+  Selftest +8 assertions (store/clamp/roundtrip/sim-spawn/type-reset) → 167 green.
