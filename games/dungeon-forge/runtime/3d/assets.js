@@ -166,58 +166,64 @@ export class Assets {
     return out;
   }
 
-/** Procedural class weapons — built once, cloned per actor. */
+/** Procedural class weapons — built once, cloned per actor. All modelled along
+   *  +Y (grip at the bottom, tip up) so attachWeapon's rest/gripFrac apply.
+   *  Ported from ForgeFlow Thronedrift's weapon set (cleaner build than the old
+   *  DF axe/staff). */
   static makeClassWeapon(cls) {
+    const steel = () => new THREE.MeshStandardMaterial({ color: 0xc8ccd8, metalness: 0.85, roughness: 0.3 });
+    const gold = () => new THREE.MeshStandardMaterial({ color: 0xe8b83a, metalness: 0.95, roughness: 0.25 });
+    const ember = () => new THREE.MeshStandardMaterial({ color: 0xff5a2a, emissive: 0xff3a10, emissiveIntensity: 1.6 });
+    const wood = () => new THREE.MeshStandardMaterial({ color: 0x4a2e1a, roughness: 0.9 });
     const g = new THREE.Group();
-    const metal = new THREE.MeshStandardMaterial({ color: 0xc8ccd8, metalness: 0.85, roughness: 0.3 });
-    const wood = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.85 });
     if (cls === "barbarian") {
-      // two-handed war axe
-      const haft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.5, 8), wood);
-      haft.position.y = 0.45;
-      const head = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.07, 20, 1, false, -Math.PI * 0.42, Math.PI * 0.84), metal);
-      head.rotation.z = Math.PI / 2;
-      head.position.set(0, 1.05, 0.13);
-      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.22, 8), metal);
-      spike.position.y = 1.3;
-      g.add(haft, head, spike);
+      // two-handed greatblade
+      const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.55, 8), wood()); grip.position.y = 0.15;
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.1), gold()); guard.position.y = 0.46;
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.5, 0.045), steel()); blade.position.y = 1.24;
+      const edge = new THREE.Mesh(new THREE.ConeGeometry(0.115, 0.3, 4), steel()); edge.scale.z = 0.28; edge.position.y = 2.06; edge.rotation.y = Math.PI / 4;
+      const core = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.4, 0.055), ember()); core.position.y = 1.24;
+      const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), gold()); pommel.position.y = -0.14;
+      g.add(grip, guard, blade, edge, core, pommel);
     } else if (cls === "sorceress") {
       // arcane staff with a glowing orb
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 1.55, 8), wood);
-      pole.position.y = 0.5;
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.036, 1.5, 8), wood()); pole.position.y = 0.5;
       const orb = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 12),
         new THREE.MeshStandardMaterial({ color: 0x9a6bff, emissive: 0x8f5aff, emissiveIntensity: 2.4 }));
       orb.position.y = 1.34;
-      const cage = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.018, 8, 20), metal);
-      cage.position.y = 1.34;
-      g.add(pole, orb, cage);
-      g.userData.orb = orb;
+      const cage = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.018, 8, 20), gold()); cage.position.y = 1.34;
+      g.add(pole, orb, cage); g.userData.orb = orb;
     } else if (cls === "rogue") {
-      // curved dagger
-      const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.032, 0.22, 8), wood);
-      grip.position.y = 0.1;
-      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.05), metal);
-      guard.position.y = 0.23;
-      const blade = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.5, 4), metal);
-      blade.scale.z = 0.4;
-      blade.position.y = 0.5;
-      g.add(grip, guard, blade);
+      // dagger
+      const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.03, 0.2, 8), wood()); grip.position.y = 0.06;
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.028, 0.05), gold()); guard.position.y = 0.18;
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.42, 0.02), steel()); blade.position.y = 0.4;
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.036, 0.12, 4), steel()); tip.scale.z = 0.4; tip.position.y = 0.66; tip.rotation.y = Math.PI / 4;
+      g.add(grip, guard, blade, tip);
+    } else {
+      // knight (default) — arming sword
+      const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.038, 0.26, 8), wood()); grip.position.y = 0.08;
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.045, 0.07), gold()); guard.position.y = 0.24;
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.95, 0.03), steel()); blade.position.y = 0.75;
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.18, 4), steel()); tip.scale.z = 0.3; tip.position.y = 1.31; tip.rotation.y = Math.PI / 4;
+      const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), gold()); pommel.position.y = -0.06;
+      g.add(grip, guard, blade, tip, pommel);
     }
     return g;
   }
 
-  /** Knight round shield (left arm). */
+  /** Knight round shield (off arm). Face normal = local +Z; heater-red + gold rim. */
   static makeShield() {
+    const gold = () => new THREE.MeshStandardMaterial({ color: 0xe8b83a, metalness: 0.95, roughness: 0.25 });
     const g = new THREE.Group();
-    const face = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.05, 22),
-      new THREE.MeshStandardMaterial({ color: 0x3a4a6a, metalness: 0.6, roughness: 0.4 }));
-    face.rotation.x = Math.PI / 2;
-    const boss = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 10),
-      new THREE.MeshStandardMaterial({ color: 0xd8c46a, metalness: 0.9, roughness: 0.25 }));
-    boss.position.z = 0.05;
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.025, 8, 26),
-      new THREE.MeshStandardMaterial({ color: 0xd8c46a, metalness: 0.9, roughness: 0.3 }));
-    g.add(face, boss, rim);
+    const face = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.05, 24),
+      new THREE.MeshStandardMaterial({ color: 0x7a1f1a, metalness: 0.5, roughness: 0.5 }));
+    face.rotation.x = Math.PI / 2;   // disc lies in XY, normal → +Z
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.31, 0.028, 8, 28), gold());
+    const boss = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 10), gold()); boss.position.z = 0.05;
+    const sig = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.016, 6, 20),
+      new THREE.MeshStandardMaterial({ color: 0xe8b83a, emissive: 0x6a4a10, emissiveIntensity: 0.5, metalness: 0.9 })); sig.position.z = 0.04;
+    g.add(face, rim, boss, sig);
     return g;
   }
 

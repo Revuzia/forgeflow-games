@@ -27,13 +27,20 @@ const TIER_COLORS = [0x8a6a4a, 0xcfd6e4, 0xffd769]; // bronze / steel / gold
 // the desired world direction of the +Y shaft in the character's frame (+Z fwd,
 // +Y up) at the idle stance. The grip is placed at the hand and the shaft is
 // oriented from the hand-bone's real world basis, so it stops clipping the hip.
+// palm = how far to push the grip INTO the fist along the hand bone (Thronedrift's
+// missing-in-DF calibration — without it the weapon floats at the wrist joint).
 const WEAPON_CFG = {
-  knight:    { scale: 1.0, gripFrac: 0.14, rest: [0.15, 0.62, 0.77] }, // sword: blade fwd-up
-  barbarian: { scale: 1.0, gripFrac: 0.26, rest: [0.10, 0.95, 0.30] }, // axe: head up-fwd
-  sorceress: { scale: 1.0, gripFrac: 0.44, rest: [0.05, 0.99, 0.14] }, // staff: orb up
-  rogue:     { scale: 0.9, gripFrac: 0.30, rest: [0.10, 0.20, 0.97] }, // dagger: blade fwd
+  knight:    { scale: 1.0, gripFrac: 0.14, palm: 0.12, rest: [0.12, 0.90, 0.42] }, // sword: blade UP-fwd
+  barbarian: { scale: 1.0, gripFrac: 0.13, palm: 0.13, rest: [0.10, 0.95, 0.30] }, // greatblade: up
+  sorceress: { scale: 1.0, gripFrac: 0.44, palm: 0.12, rest: [0.05, 0.99, 0.14] }, // staff: orb up
+  rogue:     { scale: 0.95, gripFrac: 0.20, palm: 0.10, rest: [0.10, 0.55, 0.83] }, // dagger: fwd-up
 };
-const _wq = new THREE.Quaternion(), _wq2 = new THREE.Quaternion(), _wv = new THREE.Vector3(), _wy = new THREE.Vector3(0, 1, 0);
+// Rigs regenerated from clean T-pose art: their idle clip stands naturally, so we
+// DON'T relaxArms at rest (only during walk/run) and compute the grip on the real
+// idle pose. Old rigs + enemies (no idle clip) keep relax-always. Add each class
+// here as it is regenerated through meshy_chars_img.py.
+const CLEAN_RIGS = new Set(["knight"]);
+const _wq = new THREE.Quaternion(), _wq2 = new THREE.Quaternion(), _wv = new THREE.Vector3(), _wy = new THREE.Vector3(0, 1, 0), _wz = new THREE.Vector3(0, 0, 1);
 const _wp = new THREE.Vector3(), _wsc = new THREE.Vector3();
 /** Scale a holder to cancel a bone's ACTUAL world scale (Meshy armatures bind
  *  bones at ~0.01 and rigScale does not match it — measure it directly). */
@@ -344,7 +351,7 @@ export class Escape {
     const tag = p.id === this.myId ? null : this._nameTag(p.name);
     if (tag) { tag.position.y = 2.3; grp.add(tag); }
     this.root.add(grp);
-    const a = { p, grp, obj, mixer, actions, cur: null, oneshotT: 0, bones, armBones: findArmBones(obj), relaxW: 0, rigScale: obj.scale.x, equip: {} };
+    const a = { p, grp, obj, mixer, actions, cur: null, oneshotT: 0, bones, armBones: findArmBones(obj), relaxW: 0, rigScale: obj.scale.x, equip: {}, cleanRig: CLEAN_RIGS.has(p.cls) };
     this._refreshEquip(a);
     this._playAnim(a, "idle");
     this.actors.set(p.id, a);
@@ -377,33 +384,41 @@ export class Escape {
     // hip). Pose the rig at its idle/relaxed rest first so the grip transform
     // matches how the player actually stands.
     if (a.bones.hand) {
-      if (a.actions && a.actions.idle) { a.actions.idle.reset().play(); a.mixer.update(0); }
+      // settle the idle clip so the grip is computed at how the player really stands.
+      // Clean T-pose rigs stand naturally → no relaxArms at rest; old rigs still relax.
+      if (a.actions && a.actions.idle) { a.actions.idle.reset().play(); a.mixer.update(a.cleanRig ? 0.35 : 0); }
       a.obj.updateMatrixWorld(true);
-      if (a.armBones) { relaxArms(a.armBones, 1); a.obj.updateMatrixWorld(true); }
+      if (a.armBones && !a.cleanRig) { relaxArms(a.armBones, 1); a.obj.updateMatrixWorld(true); }
       const cfg = WEAPON_CFG[cls] || WEAPON_CFG.knight;
-      let main;
-      if (cls === "knight") {
-        main = this.g.assets.clone(this.props.sword || this.props.blaster);
-        // size by BLADE LENGTH (+Y), not footprint — normalizeFoot sized by the
-        // thin x/z width and blew a long thin blade up ~10× (the giant-sword bug)
-        Assets.normalizeH(main, 1.15 + 0.1 * (p.weaponTier || 0));
-      } else {
-        main = Assets.makeClassWeapon(cls);
-        main.scale.setScalar(cfg.scale + 0.1 * (p.weaponTier || 0));
-      }
+      // every class uses a proper procedural weapon now (Thronedrift set) — the
+      // knight no longer falls back to the untextured Kenney prop.
+      const main = Assets.makeClassWeapon(cls);
+      main.scale.setScalar(1 + 0.06 * (p.weaponTier || 0));   // cfg.scale applied by _gripMount
       tierTint(main);
       a.equip.weapon = this._gripMount(a, main, a.bones.hand, cfg);
       if (cls === "rogue" && a.bones.handL) {
         const off = Assets.makeClassWeapon("rogue");
-        off.scale.setScalar(cfg.scale + 0.1 * (p.weaponTier || 0));
+        off.scale.setScalar(1 + 0.06 * (p.weaponTier || 0));
         tierTint(off);
         a.equip.offhand = this._gripMount(a, off, a.bones.handL, cfg);
       }
       if (cls === "knight" && a.bones.handL) {
+        // Shield: strap to the off hand, broad face pointing FORWARD. makeShield's
+        // face normal is local +Z, so map +Z → the character's forward (rig-independent,
+        // unlike the old raw local rotation that assumed the previous rig's hand axes).
         const sh = Assets.makeShield();
-        sh.rotation.set(0, Math.PI / 2, 0);
-        sh.position.set(0, 0.12, 0.03);
-        a.equip.shield = mount(sh, a.bones.handL);
+        const holder = new THREE.Group();
+        a.obj.updateMatrixWorld(true);
+        holder.scale.setScalar(boneCounterScale(a.bones.handL));
+        holder.add(sh);
+        a.bones.handL.add(holder);
+        a.obj.updateMatrixWorld(true);
+        a.bones.handL.getWorldQuaternion(_wq);
+        _wv.set(0.25, 0.05, 1).normalize();                       // forward + slight outward
+        _wq2.setFromUnitVectors(_wz, _wv);                        // shield +Z (face) → forward
+        holder.quaternion.copy(_wq.invert().multiply(_wq2));
+        sh.position.set(0.04, 0, 0.05);
+        a.equip.shield = holder;
       }
     }
     // armor — chest plate + shoulder pads once found
@@ -435,9 +450,13 @@ export class Escape {
     const box = new THREE.Box3().setFromObject(mesh);
     const h = Math.max(0.001, box.max.y - box.min.y);
     mesh.position.y -= box.min.y + h * (cfg.gripFrac != null ? cfg.gripFrac : 0.2); // grip → holder origin
+    const counter = boneCounterScale(bone);           // cancel the bone's true world scale
     const holder = new THREE.Group();
+    holder.scale.setScalar(counter * (cfg.scale || 1));
+    // hand-bone origin = the WRIST; push the grip up into the palm/fist along the
+    // bone's local +Y (scaled back into bone-local units) so it doesn't float.
+    holder.position.y = (cfg.palm != null ? cfg.palm : 0.1) * counter;
     a.obj.updateMatrixWorld(true);
-    holder.scale.setScalar(boneCounterScale(bone));   // cancel the bone's true world scale
     holder.add(mesh);
     bone.add(holder);
     a.obj.updateMatrixWorld(true);
@@ -948,8 +967,19 @@ export class Escape {
         locomote = Math.hypot(p.input.mx, p.input.mz) > 0.01 || (p.remote && p.netMoving);
         sprinting = !!p.input.sprint;
         this._playAnim(a, locomote ? (sprinting ? "run" : "walk") : "idle");
-        relaxTarget = 1; // arms hang at the sides during idle AND locomotion (see below)
+        // FOOT-SLIDE FIX: the Meshy walk/run clips cycle in place, so if the clip
+        // cadence doesn't match the ground speed the feet skate. Scale the clip's
+        // timeScale by the actor's real horizontal velocity (clip stride ≈ 2.3 u/s).
+        if (locomote) {
+          const gs = a._pp ? Math.hypot(p.x - a._pp.x, p.z - a._pp.z) / Math.max(1e-4, dt) : 0;
+          const act = a.actions[sprinting ? "run" : "walk"];
+          if (act) act.timeScale = Math.max(0.8, Math.min(2.8, gs / 2.3));
+        }
+        // Old rigs: relax arms at idle AND locomotion (their clips fling arms out).
+        // Clean T-pose rigs: idle stands naturally → relax ONLY during locomotion.
+        relaxTarget = a.cleanRig ? (locomote ? 1 : 0) : 1;
       }
+      a._pp = { x: p.x, z: p.z };
       // Meshy auto-rigged every clip in an A-pose: idle, walk AND run all fling
       // the arms out (radial ≥0.9 torso-heights). Pull the arms down to the
       // sides EVERY frame — not just when standing — then add a procedural gait
