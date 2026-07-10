@@ -152,9 +152,12 @@ export class EnemyPool {
         continue;
       }
       const ct = D.cellType(this.d, e.f, Math.floor(e.x / 4), Math.floor(e.z / 4));
-      const surfY = D.cellHeight(this.d, e.f, Math.floor(e.x / 4), Math.floor(e.z / 4)) + (ct === D.CT.WATER ? -0.25 : 0);
+      // liquids submerge enemies to chest depth too (matches the player swim)
+      const inLiquid = ct === D.CT.WATER || ct === D.CT.LAVA;
+      const surfY = D.cellHeight(this.d, e.f, Math.floor(e.x / 4), Math.floor(e.z / 4)) + (inLiquid ? -0.7 : 0);
       v.surfY = v.surfY == null ? surfY : v.surfY + (surfY - v.surfY) * Math.min(1, dt * 10);
-      v.grp.position.set(e.x, e.f * FLOOR_H + v.surfY, e.z);
+      const swimBob = inLiquid && v.surfY < -0.3 ? Math.sin(t * 4.6 + e.x * 2) * 0.06 : 0;
+      v.grp.position.set(e.x, e.f * FLOOR_H + v.surfY + swimBob, e.z);
       v.grp.rotation.y = e.yaw;   // creature rigs face +Z = yaw dir (the stray +PI made enemies walk BACKWARDS)
       v.grp.visible = me ? Math.abs(e.f - me.f) <= 1 : true;
       if (far) { v.bar.grp.visible = false; continue; }

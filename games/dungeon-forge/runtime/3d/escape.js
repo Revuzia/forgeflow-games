@@ -1045,11 +1045,36 @@ export class Escape {
     for (const [id, a] of this.actors) {
       const p = a.p;
       const ct = D.cellType(this.d, p.f, E.w2c(p.x), E.w2c(p.z));
-      const surfY = D.cellHeight(this.d, p.f, E.w2c(p.x), E.w2c(p.z)) + (ct === D.CT.WATER ? -0.25 : 0);
+      // SWIMMING: water/lava sinks the body to chest depth (not the old ankle wade)
+      const liquid = ct === D.CT.WATER || ct === D.CT.LAVA;
+      const surfY = D.cellHeight(this.d, p.f, E.w2c(p.x), E.w2c(p.z)) + (liquid ? -0.85 : 0);
       a.surfY = a.surfY == null ? surfY : a.surfY + (surfY - a.surfY) * Math.min(1, dt * 10);
-      const y = p.f * FLOOR_H + (p.climb ? climbY(p) : 0) + a.surfY;
+      const swimming = liquid && a.surfY < -0.4;
+      a._swimT = swimming ? (a._swimT || 0) + dt : 0;
+      const bob = swimming ? Math.sin(a._swimT * 5.2) * 0.07 : 0;
+      const y = p.f * FLOOR_H + (p.climb ? climbY(p) : 0) + a.surfY + bob;
       a.grp.position.set(p.x, y, p.z);
       if (a._fellT > 0) { a._fellT -= dt; a.grp.position.y -= (0.6 - a._fellT) * 4.5; } // swallowed by the pit
+      const movingLq = Math.hypot(p.input.mx, p.input.mz) > 0.01;
+      // lean into the stroke while swimming forward; level out on land
+      const leanTarget = swimming && movingLq ? 0.5 : 0;
+      a._lean = (a._lean || 0) + (leanTarget - (a._lean || 0)) * Math.min(1, dt * 6);
+      a.grp.rotation.x = a._lean;
+      // entry SPLASH + stroke splashes + lava embers on the swimmer
+      if (swimming && !a._wasLiquid) {
+        this.g.fx.burst(a.grp.position.clone().setY(p.f * FLOOR_H + 0.35), ct === D.CT.LAVA ? 0xff7a22 : 0x9fd4ff, 22);
+        if (id === this.myId) this.g.audio.step();
+      }
+      a._wasLiquid = swimming;
+      if (swimming) {
+        if (ct === D.CT.LAVA && Math.random() < 0.35) {
+          this.g.fx.spawn(new THREE.Vector3(p.x + (Math.random() - .5) * 0.9, p.f * FLOOR_H + 0.4, p.z + (Math.random() - .5) * 0.9),
+            new THREE.Vector3((Math.random() - .5) * .6, 1.6 + Math.random() * 1.2, (Math.random() - .5) * .6), 0.5, 2.0, Math.random() < 0.7 ? 0xff7a22 : 0xffd23a);
+        } else if (ct === D.CT.WATER && movingLq && Math.random() < 0.3) {
+          this.g.fx.spawn(new THREE.Vector3(p.x + (Math.random() - .5) * 0.7, p.f * FLOOR_H + 0.3, p.z + (Math.random() - .5) * 0.7),
+            new THREE.Vector3((Math.random() - .5) * .8, 0.8 + Math.random() * 0.7, (Math.random() - .5) * .8), 0.4, 1.6, 0x9fd4ff);
+        }
+      }
       a.grp.rotation.y = p.yaw; // Meshy char rigs face +Z = the yaw/look direction (away from the chase cam)
       a.grp.visible = (p.alive || a.proc || a._deadPose) && !p.escaped && (this.me() ? Math.abs(p.f - this.me().f) <= 1 : true);
       a.mixer.update(dt);

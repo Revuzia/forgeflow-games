@@ -344,6 +344,16 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.8.3 — 2026-07-10 (swimming + lava swimming)
+- **Water is swum, not walked on**: entering water sinks the body to chest depth
+  (-0.78u, was an ankle wade), with a gentle swim bob, a forward lean while
+  stroking (levels out when you stop), an entry splash and stroke splashes.
+- **Lava is swum too — while it burns**: same chest-deep sink + bob, plus a
+  constant shower of embers off the swimmer (burn damage unchanged).
+- Enemies submerge to chest depth in liquids as well, with their own bob.
+- Verified live: land y=0 → water/lava y=-0.78, bob amplitude 0.14, lean 0.5
+  swimming forward → 0 at rest, 30hp burned + 109 ember particles in lava.
+
 ## v1.8.2 — 2026-07-10 (explosive barrels)
 - **Barrels (fantasy) and canisters (sci-fi) are now LIVE explosives**:
   - **Pushable** — walk into one to shove it into position (the Barbarian bullies
