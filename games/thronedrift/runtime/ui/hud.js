@@ -227,8 +227,10 @@ export class HUD {
         <div style="font-size:28px;font-weight:900;color:${GOLD};text-align:center;font-family:Georgia,serif;margin-bottom:14px">HOW TO PLAY</div>
         <div style="font-size:14px;line-height:1.9;color:#e8dcc8">
           <b style="color:#ffd24a">Move</b> — WASD / arrows, or the left touch joystick<br>
-          <b style="color:#ffd24a">Attack</b> — J / Space / Left-click (spam away — click also aims)<br>
+          <b style="color:#ffd24a">Attack</b> — J / Left-click (spam away — click also aims)<br>
           <b style="color:#ffd24a">Abilities</b> — 1 · 2 · 3, or the buttons bottom-right<br>
+          <b style="color:#ffd24a">Skill</b> — SHIFT: Lunge (Warrior) · Roll (Archer) · Blink (Mage) — chip bottom-left<br>
+          <b style="color:#ffd24a">Jump</b> — SPACE<br>
           <b style="color:#ffd24a">Warrior mode swap</b> — TAB: Two-Handed ⇄ Sword & Shield<br>
           <b style="color:#ffd24a">Block</b> — HOLD 3 in Sword & Shield · perfect timing = stun pulse<br>
           <b style="color:#ffd24a">Camera</b> — scroll to zoom · right-drag to rotate<br>
@@ -640,8 +642,9 @@ export class HUD {
     // bottom-right: ability cluster (industry-standard diamond: big basic in the
     // corner, three specials arced around it — NOT a flat row)
     this.elAbil = el("div", "position:absolute;bottom:48px;right:14px;width:196px;height:196px;pointer-events:auto;"); // 48px clears the game_controls bar (fullscreen/mute) in the corner
-    // bottom-left: warrior weapon-mode toggle lives by the movement thumb
-    this.elToggle = el("div", "position:absolute;bottom:170px;left:18px;pointer-events:auto;display:none;");
+    // bottom-left utility column by the movement thumb: TAB swap on top
+    // (warrior only), SHIFT movement skill under it (all classes)
+    this.elToggle = el("div", "position:absolute;bottom:96px;left:18px;pointer-events:auto;display:none;flex-direction:column;align-items:center;gap:10px;");
     // toast (bestiary discoveries etc.)
     this.elToast = el("div", "position:absolute;top:74px;left:50%;transform:translateX(-50%);pointer-events:none;");
     // bottom-left joystick zone
@@ -683,24 +686,14 @@ export class HUD {
       return { cd, cdTxt, btn };
     };
     for (let i = 0; i < kit.abilities.length; i++) this._btns.push(mkBtn(kit.abilities[i], i, false));
-    // SHIFT movement skill — small chip up-left of the cluster
-    const dashType = cls.name === "Warrior" ? "lunge" : cls.name === "Archer" ? "roll" : "blink";
-    const dwrap = el("div", `position:absolute;right:176px;bottom:44px;width:48px;height:48px;`);
-    const dbtn = el("div", `position:absolute;inset:0;border-radius:50%;${frameCss}border-color:${cls.uiColor};
-      background:url(assets/ui/sk_dash_${dashType}.jpg?v=7) center/cover, rgba(16,8,26,.92);`, "");
-    dbtn.className = "cf-btn";
-    const dcd = el("div", `position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(8,4,14,.85) 0turn, transparent 0turn);pointer-events:none;`);
-    const dtxt = el("div", `position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;text-shadow:0 0 6px #000;pointer-events:none;opacity:0`);
-    const dkey = el("div", `position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);background:#241436;border:1.5px solid ${GOLD};border-radius:6px;font-size:8px;font-weight:800;color:${GOLD};padding:1px 4px;pointer-events:none`, "SHIFT");
-    dwrap.append(dbtn, dcd, dtxt, dkey);
-    dbtn.onpointerdown = (e) => { e.preventDefault(); this.input.touchDash(); };
-    this.elAbil.appendChild(dwrap);
-    this._btns.push({ cd: dcd, cdTxt: dtxt, btn: dbtn });
     this._basicBtn = mkBtn(kit.basic, -1, true);
-    // weapon-mode toggle: bottom-LEFT, by the movement thumb (warrior only)
+    // LEFT utility column (owner: SHIFT lives on the left, under the TAB):
+    // TAB swap on top for the warrior, SHIFT skill chip below it — and for
+    // classes without a mode swap the SHIFT chip alone holds the column
+    this.elToggle.style.display = "flex";
+    this.elToggle.innerHTML = "";
     if (modeCount > 1) {
-      this.elToggle.style.display = "block";
-      this.elToggle.innerHTML = "";
+      const twrap = el("div", "text-align:center");
       const tog = el("div", `position:relative;width:58px;height:58px;border-radius:14px;${frameCss}display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;font-size:22px;border-color:${cls.uiColor};overflow:hidden;
         background:url(assets/ui/sk_swap.jpg?v=7) center/cover, rgba(16,8,26,.92)`, `<div style="width:100%;text-align:center;font-size:8.5px;color:#ffe9a8;font-weight:800;background:rgba(8,4,14,.7);padding:1px 0">TAB</div>`);
       tog.className = "cf-btn";
@@ -709,8 +702,22 @@ export class HUD {
       this._swapCdEl = togCd;
       tog.onpointerdown = (e) => { e.preventDefault(); this.input.touchToggle(); };
       const label = el("div", `margin-top:4px;text-align:center;font-size:10px;font-weight:800;color:${cls.uiColor};text-shadow:0 1px 2px #000;letter-spacing:.5px`, kit.label.toUpperCase());
-      this.elToggle.append(tog, label);
-    } else this.elToggle.style.display = "none";
+      twrap.append(tog, label);
+      this.elToggle.appendChild(twrap);
+    } else this._swapCdEl = null;
+    // SHIFT movement skill chip (all classes)
+    const dashType = cls.name === "Warrior" ? "lunge" : cls.name === "Archer" ? "roll" : "blink";
+    const dwrap = el("div", `position:relative;width:48px;height:48px;margin-bottom:5px`);
+    const dbtn = el("div", `position:absolute;inset:0;border-radius:50%;${frameCss}border-color:${cls.uiColor};
+      background:url(assets/ui/sk_dash_${dashType}.jpg?v=7) center/cover, rgba(16,8,26,.92);`, "");
+    dbtn.className = "cf-btn";
+    const dcd = el("div", `position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(8,4,14,.85) 0turn, transparent 0turn);pointer-events:none;`);
+    const dtxt = el("div", `position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;text-shadow:0 0 6px #000;pointer-events:none;opacity:0`);
+    const dkey = el("div", `position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);background:#241436;border:1.5px solid ${GOLD};border-radius:6px;font-size:8px;font-weight:800;color:${GOLD};padding:1px 4px;pointer-events:none`, "SHIFT");
+    dwrap.append(dbtn, dcd, dtxt, dkey);
+    dbtn.onpointerdown = (e) => { e.preventDefault(); this.input.touchDash(); };
+    this.elToggle.appendChild(dwrap);
+    this._btns.push({ cd: dcd, cdTxt: dtxt, btn: dbtn });
     this.elFace().textContent = cls.portrait;
   }
 

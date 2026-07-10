@@ -1,5 +1,13 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v1.3.1 — 2026-07-10 (SHIFT chip → left column)
+- SHIFT skill chip moved to the bottom-LEFT utility column for ALL classes:
+  warrior stacks TAB swap on top with SHIFT under it; archer/mage get the
+  SHIFT chip alone at the same anchor (constant muscle memory)
+- Right-hand cluster back to pure combat: basic + 3 abilities only
+- HOW TO PLAY refreshed: SHIFT skill + SPACE jump lines added; stale
+  "Space attacks" removed (Space has been jump-only since v1.2)
+
 ## v1.3 — 2026-07-10 (stats, static backdrop, level-select redesign)
 - LEADERBOARDS → STATS: the panel shows the player's own records, so it is
   now labeled that way. Upgraded: WIN RATE / TOTAL WINS / DAMAGE DEALT chips,
