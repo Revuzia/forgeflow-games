@@ -72,13 +72,15 @@ export function effAtk(state, side, unit) {
   let a = unit.atk;
   if (!unit.silenced) {
     if (unit.frenzy && unit.hp < unit.maxHp) a += unit.frenzy;
-    // auras from OTHER friendly units
+    // +Attack auras from OTHER friendly units (read-time). filter: none = all others,
+    // {tribe} = one tribe, {tribes:[...]} = several.
     for (const other of state.players[side].board) {
       if (other === unit || other.silenced) continue;
       const aura = cardById(other.card).aura;
       if (aura && aura.atk) {
         const f = aura.filter || {};
-        if (!f.tribe || def.tribe === f.tribe) a += aura.atk;
+        const tribes = f.tribes || (f.tribe ? [f.tribe] : null);
+        if (!tribes || tribes.includes(def.tribe)) a += aura.atk;
       }
     }
   }
@@ -87,6 +89,48 @@ export function effAtk(state, side, unit) {
 
 export function hasKw(unit, kw) {
   return !unit.silenced && unit.kw.includes(kw);
+}
+
+// Keyword-grant auras (e.g. "your other creatures have Lifesteal/Piercing"). Unlike
+// +Attack auras (read-time in effAtk), granted keywords are materialised onto the
+// unit's kw list and re-derived whenever the board changes — this can't kill a unit,
+// so no death cascade. Innate keywords are never removed; only aura-granted ones.
+function recomputeAuraKw(state) {
+  for (let p = 0; p < 2; p++) {
+    const board = state.players[p].board;
+    for (const u of board) {
+      const grant = new Set();
+      if (!u.silenced) {
+        const def = cardById(u.card);
+        for (const other of board) {
+          if (other === u || other.silenced) continue;
+          const aura = cardById(other.card).aura;
+          if (!aura || !aura.grant) continue;
+          const f = aura.filter || {};
+          const tribes = f.tribes || (f.tribe ? [f.tribe] : null);
+          if (!tribes || tribes.includes(def.tribe)) for (const k of aura.grant) grant.add(k);
+        }
+      }
+      const innate = cardById(u.card).kw || [];
+      for (const k of (u._auraKw || [])) if (!grant.has(k) && !innate.includes(k)) {
+        const i = u.kw.indexOf(k); if (i >= 0) u.kw.splice(i, 1);
+      }
+      for (const k of grant) if (!u.kw.includes(k)) u.kw.push(k);
+      u._auraKw = [...grant];
+    }
+  }
+}
+
+// Overcharge: friendly units whose aura triggers when their controller casts a spell.
+function fireSpellwatch(state, side, ev) {
+  for (const w of state.players[side].board.slice()) {
+    if (w.silenced || w.hp <= 0) continue;
+    const aura = cardById(w.card).aura;
+    if (aura && aura.trigger === 'spell-played' && aura.fx) {
+      ev.push({ t: 'overcharge', iid: w.iid, card: w.card });
+      resolveOps(state, aura.fx, { side, selfUnit: w, chosen: null, card: cardById(w.card) }, ev);
+    }
+  }
 }
 
 export function makeUnit(state, cardId) {
@@ -263,8 +307,18 @@ function reapDeaths(state, ev) {
         // enemy-death traps (opponent of the dead unit's owner)
         const foe = opponentOf(p);
         fireTraps(state, foe, 'enemy-death', { deadCard: u.card, deadSide: p }, ev);
+        // deathwatch: this owner's surviving units that trigger on a friendly death
+        for (const w of pl.board.slice()) {
+          if (w.silenced || w.hp <= 0 || w._venomed || w._destroyed) continue;
+          const wa = cardById(w.card).aura;
+          if (wa && wa.trigger === 'friendly-creature-dies' && wa.fx) {
+            ev.push({ t: 'deathwatch', iid: w.iid, card: w.card });
+            resolveOps(state, wa.fx, { side: p, selfUnit: w, chosen: null, card: cardById(w.card) }, ev);
+          }
+        }
       }
     }
+    recomputeAuraKw(state); // an anthem may have died — revert its granted keywords
     if (!any) break;
   }
 }
@@ -649,7 +703,24 @@ export function resolveOps(state, ops, ctx, ev) {
         break;
       }
       case 'negate-spell': break; // handled in fireTraps
-      case 'steal-corpse': break; // handled in fireTraps
+      case 'steal-corpse': {
+        // rally/fx path: reanimate a random creature from the ENEMY grave onto your board.
+        // (The trap path is handled separately in fireTraps with the just-died corpse.)
+        const pl = state.players[ctx.side];
+        if (pl.board.length >= MAX_BOARD) break;
+        const g = state.players[opponentOf(ctx.side)].grave;
+        const pool = g.filter((id) => {
+          const d = cardById(id);
+          return d.type === 'creature' && d.rarity !== 'token' && (!op.filter || !op.filter.maxCost || d.cost <= op.filter.maxCost);
+        });
+        if (!pool.length) break;
+        const pick = rngPick(state, pool);
+        g.splice(g.lastIndexOf(pick), 1);
+        const u = makeUnit(state, pick);
+        pl.board.push(u);
+        ev.push({ t: 'summon', p: ctx.side, iid: u.iid, card: pick, stolen: true });
+        break;
+      }
       default: throw new Error('unknown op: ' + op.op);
     }
   }
@@ -816,6 +887,7 @@ export function applyAction(state, action) {
           precaptureHp(state, def.rally, ctx);
           resolveOps(state, def.rally, ctx, ev);
         }
+        recomputeAuraKw(state); // a new creature may grant, or newly receive, keyword auras
       } else if (def.type === 'spell') {
         ev.push({ t: 'play-spell', p: side, card: h.card, handIid: h.iid, target: action.target || null });
         // counterspell traps
@@ -828,6 +900,7 @@ export function applyAction(state, action) {
           precaptureHp(state, def.fx, ctx);
           resolveOps(state, def.fx, ctx, ev);
           pl.grave.push(h.card);
+          fireSpellwatch(state, side, ev); // Overcharge — friendly units that react to your spells
         }
       } else if (def.type === 'trap') {
         pl.traps.push({ iid: h.iid, card: h.card });

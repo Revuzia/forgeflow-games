@@ -53,6 +53,30 @@ function T(id, name, realm, cost, rarity, extra = {}) {
   return { id, name, realm, type: 'trap', cost, rarity, ...extra };
 }
 
+// ── Aetherbound (dual-realm expansion) ──
+// Every dual card belongs to a PAIR of realms (the ten C(5,2) combinations). It
+// carries realms:[a,b]; its primary/tint realm (for frames + fx) is the first.
+// The 2-letter id prefix is the pair key, so realms can never drift from the id.
+const PAIRS = {
+  et: ['ember', 'tide'], eg: ['ember', 'grove'], ed: ['ember', 'dawn'], ev: ['ember', 'grave'],
+  tg: ['tide', 'grove'], td: ['tide', 'dawn'], tv: ['tide', 'grave'],
+  gd: ['grove', 'dawn'], gv: ['grove', 'grave'], dv: ['dawn', 'grave'],
+};
+// canonical realm list: dual cards → both realms; single-realm cards → [realm].
+export function realmsOf(c) { return c.realms && c.realms.length ? c.realms : [c.realm]; }
+function CD(id, name, cost, atk, hp, rarity, tribe, extra = {}) {
+  const [a, b] = PAIRS[id.slice(0, 2)];
+  return C(id, name, a, cost, atk, hp, rarity, tribe, { ...extra, realms: [a, b] });
+}
+function SD(id, name, cost, rarity, extra = {}) {
+  const [a, b] = PAIRS[id.slice(0, 2)];
+  return S(id, name, a, cost, rarity, { ...extra, realms: [a, b] });
+}
+function TD(id, name, cost, rarity, extra = {}) {
+  const [a, b] = PAIRS[id.slice(0, 2)];
+  return T(id, name, a, cost, rarity, { ...extra, realms: [a, b] });
+}
+
 // ───────────────────────────── EMBERFORGE (19) ─────────────────────────────
 const EMBER = [
   C('ef01', 'Cinder Whelp', 'ember', 1, 2, 1, 'common', 'Dragon', {
@@ -1038,15 +1062,190 @@ export const TOKENS = {
   }),
   tk_fury:       C('tk_fury', 'Fury Spirit', 'ember', 3, 3, 2, 'token', 'Elemental', { kw: ['swift'], text: 'Swift.', flavor: 'Rage with a schedule.' }),
   tk_sapling:    C('tk_sapling', 'Sapling', 'grove', 2, 2, 2, 'token', 'Treant', { kw: ['guard'], text: 'Guard.', flavor: 'Someday, a wall of oak.' }),
+  // Aetherbound tokens
+  tk_sunspark:   C('tk_sunspark', 'Sunspark Soldier', 'dawn', 1, 1, 1, 'token', 'Soldier', { text: '', flavor: 'A spark given a spear.' }),
+  tk_sunbloom:   C('tk_sunbloom', 'Sunbloom Sapling', 'grove', 1, 1, 1, 'token', 'Sapling', { text: '', flavor: 'It turns to face the dawn.' }),
+  tk_rotsprout:  C('tk_rotsprout', 'Rotsprout', 'grove', 1, 1, 1, 'token', 'Plant', { text: '', flavor: 'Grown from what was buried.' }),
+  tk_fungalhound:C('tk_fungalhound', 'Fungalhound', 'grove', 2, 2, 2, 'token', 'Beast', { text: '', flavor: 'It hunts on a scent of decay.' }),
+  tk_spirit:     C('tk_spirit', 'Pale Spirit', 'grave', 1, 1, 1, 'token', 'Spirit', { text: '', flavor: 'A debt the grave repays.' }),
 };
+
+// ═══════════════ AETHERBOUND: THE TEN PACTS — 60 dual-realm cards ═══════════════
+// The Tempest Circle — ember+tide — Izzet "Overcharge" spell-tempo
+const ET = [
+  CD('et01', 'Cinderwake Eel', 2, 2, 2, 'common', 'Elemental', {
+    target: { kind: 'enemy-creature' }, rally: [{ op: 'damage', amount: 1, target: 'chosen' }, { op: 'freeze', target: 'chosen' }],
+    text: 'Rally: deal 1 damage to an enemy creature and Freeze it.', flavor: 'It boils the shallows and ices them over in the same heartbeat.' }),
+  SD('et02', 'Scaldshock', 1, 'common', {
+    target: { kind: 'creature' }, fx: [{ op: 'damage', amount: 2, target: 'chosen' }],
+    text: 'Deal 2 damage to a creature.', flavor: 'Superheated brine — a slap from the sea and the forge at once.' }),
+  CD('et03', 'Galvanic Tidecaller', 3, 2, 3, 'uncommon', 'Elemental', {
+    aura: { trigger: 'spell-played', fx: [{ op: 'damage', amount: 1, target: 'enemy-hero' }] },
+    text: 'Overcharge — after you cast a spell, deal 1 damage to the enemy hero.', flavor: 'Every spell you sling, she grounds through the enemy’s crown.' }),
+  SD('et04', 'Maelstrom Bolt', 4, 'rare', {
+    target: { kind: 'any' }, fx: [{ op: 'damage', amount: 4, target: 'chosen' }, { op: 'draw', count: 1, who: 'self' }],
+    text: 'Deal 4 damage to any target. Draw a card.', flavor: 'The whirlpool spins up a thunderhead; the thunderhead answers.' }),
+  TD('et05', 'Riptide Counter', 3, 'rare', {
+    trap: { on: 'enemy-spell', fx: [{ op: 'negate-spell' }, { op: 'damage', amount: 2, target: 'enemy-hero' }] },
+    text: 'Trap: when the enemy casts a spell, negate it and deal 2 damage to the enemy hero.', flavor: 'The tide swallows the incantation whole, then spits back cinders.' }),
+  CD('et06', 'Stormcrown Leviathan', 7, 6, 6, 'legendary', 'Dragon', {
+    kw: ['flying'], aura: { trigger: 'spell-played', fx: [{ op: 'damage', amount: 2, target: 'random-enemy-creature' }, { op: 'draw', count: 1, who: 'self' }] },
+    text: 'Flying. Overcharge — after you cast a spell, deal 2 damage to a random enemy creature and draw a card.', flavor: 'Where fire meets frost, the sky itself grows a crown of thunder.' }),
+];
+// The Wildfire Horde — ember+grove — Gruul "Rampage"
+const EG = [
+  CD('eg01', 'Cinderbark Grazer', 2, 2, 3, 'common', 'Beast', {
+    rally: [{ op: 'ramp', amount: 1 }], text: 'Rally: gain a Mana Crystal.', flavor: 'It grazes the ash-fed ferns that grow where the wildfire has passed.' }),
+  CD('eg02', 'Ashmane Charger', 3, 4, 2, 'common', 'Beast', {
+    kw: ['swift'], text: 'Swift.', flavor: 'A mane of living flame, hooves that leave the grass burning.' }),
+  SD('eg03', 'Trailblaze', 2, 'common', {
+    target: { kind: 'friendly-creature' }, fx: [{ op: 'buff', atk: 2, hp: 1, kw: ['piercing'], target: 'chosen' }],
+    text: 'Give a friendly creature +2/+1 and Piercing.', flavor: 'Vines erupt into flame along the beast’s path.' }),
+  CD('eg04', 'Emberhoof Vanguard', 3, 2, 3, 'uncommon', 'Beast', {
+    kw: ['swift'], rally: [{ op: 'ramp', amount: 1 }], text: 'Swift. Rally: gain a Mana Crystal.', flavor: 'Where its hooves land, the fire and the herd both follow.' }),
+  CD('eg05', 'Warhorn Emberbull', 4, 3, 5, 'rare', 'Beast', {
+    aura: { atk: 1, grant: ['piercing'], filter: { tribes: ['Beast', 'Dragon'] } },
+    text: 'Your other Beast and Dragon creatures have +1 Attack and Piercing.', flavor: 'One bellow, and every beast remembers it is bigger than what blocks it.' }),
+  CD('eg06', 'Vorrgax, the Wildfire Titan', 7, 7, 7, 'epic', 'Dragon', {
+    kw: ['piercing', 'frenzy'], frenzy: 3, rites: [{ op: 'aoe', amount: 2, side: 'enemy', includeHero: true }],
+    text: 'Piercing. Frenzy +3. Last Rites: deal 2 damage to all enemies.', flavor: 'The Pact’s first seam still burns in its chest — wound it, and the wildfire answers.' }),
+];
+// The Radiant Vanguard — ember+dawn — Boros "Valor"
+const ED = [
+  CD('ed01', 'Emberlight Recruit', 1, 2, 1, 'common', 'Soldier', { kw: ['swift'], text: 'Swift.', flavor: 'She lit her blade from the dawn and did not wait for orders.' }),
+  SD('ed02', 'Muster the Faithful', 2, 'common', {
+    fx: [{ op: 'summon', token: 'tk_sunspark', count: 2, who: 'owner' }], text: 'Summon two 1/1 Sunspark Soldiers.', flavor: 'Two sparks from one altar; two shields for one dawn.' }),
+  CD('ed03', 'Vanguard Banneret', 3, 2, 3, 'uncommon', 'Paladin', {
+    rally: [{ op: 'buff', atk: 1, hp: 1, target: 'all-friendly-creatures' }], text: 'Valor — Rally: give all friendly creatures +1/+1.', flavor: 'Raise the banner and every soldier stands a hand taller.' }),
+  CD('ed04', 'Sunhallowed Reaver', 4, 4, 3, 'uncommon', 'Paladin', { kw: ['swift', 'lifesteal'], text: 'Swift, Lifesteal.', flavor: 'Every wound she deals is a prayer answered on her own behalf.' }),
+  SD('ed05', 'Blazing Crusade', 4, 'rare', {
+    fx: [{ op: 'buff', atk: 1, hp: 1, kw: ['swift'], target: 'all-friendly-creatures' }], text: 'Give all friendly creatures +1/+1 and Swift.', flavor: 'Dawn breaks, the horn sounds, and the whole line surges as one.' }),
+  CD('ed06', 'Aurelian, the Dawnbanner', 6, 5, 6, 'epic', 'Paladin', {
+    kw: ['guard'], aura: { atk: 2 }, text: 'Guard. Anthem — your other creatures have +2 Attack.', flavor: 'Where his banner burns, no soldier is small.' }),
+];
+// The Cinder Cult — ember+grave — Rakdos "Immolate"
+const EV = [
+  CD('ev01', 'Ashborn Whelp', 1, 2, 1, 'common', 'Undead', {
+    rites: [{ op: 'damage', amount: 1, target: 'enemy-hero' }], text: 'Last Rites: deal 1 damage to the enemy hero.', flavor: 'It was hatched dead, and dies burning — the cult prefers it that way.' }),
+  CD('ev02', 'Graveflame Cultist', 2, 3, 2, 'common', 'Cultist', {
+    rites: [{ op: 'aoe', amount: 1, side: 'enemy' }], text: 'Last Rites: deal 1 damage to all enemy creatures.', flavor: 'When a cultist falls, the pyre they carry does not.' }),
+  SD('ev03', 'Feed the Pyre', 2, 'common', {
+    target: { kind: 'friendly-creature' }, fx: [{ op: 'destroy', target: 'chosen', friendly: true }, { op: 'damage', amount: 2, target: 'enemy-hero' }, { op: 'draw', count: 1, who: 'self' }],
+    text: 'Destroy a friendly creature. Deal 2 damage to the enemy hero and draw a card.', flavor: 'Every soul the cult spends is a soul the enemy pays for.' }),
+  CD('ev04', 'Pyreheart Zealot', 3, 3, 3, 'uncommon', 'Cultist', {
+    aura: { trigger: 'friendly-creature-dies', fx: [{ op: 'damage', amount: 1, target: 'random-enemy-creature' }] }, rites: [{ op: 'damage', amount: 1, target: 'enemy-hero' }],
+    text: 'When another friendly creature dies, deal 1 damage to a random enemy creature. Last Rites: 1 to the enemy hero.', flavor: '“Do not mourn the fallen. Aim them.”' }),
+  SD('ev05', 'Cataclysm Immolation', 5, 'rare', {
+    fx: [{ op: 'aoe', amount: 3, side: 'all' }, { op: 'damage', amount: 2, target: 'enemy-hero' }],
+    text: 'Deal 3 damage to ALL creatures, then 2 damage to the enemy hero.', flavor: 'It does not clear the field. It offers the whole field to the fire.' }),
+  CD('ev06', 'Malgroth, the Cinder Tyrant', 6, 6, 6, 'legendary', 'Demon', {
+    kw: ['swift'], rally: [{ op: 'damage', amount: 2, target: 'enemy-hero' }], aura: { trigger: 'friendly-creature-dies', fx: [{ op: 'damage', amount: 1, target: 'enemy-hero' }] },
+    text: 'Swift. Rally: deal 2 damage to the enemy hero. When a friendly creature dies, deal 1 to the enemy hero.', flavor: '“Bring me your dead. I will send them ahead of you.”' }),
+];
+// The Deepgrove Synod — tide+grove — Simic "Bloom"
+const TG = [
+  CD('tg01', 'Mirefen Sproutling', 2, 2, 2, 'common', 'Beast', {
+    kw: ['regenerate'], regenerate: 1, rally: [{ op: 'ramp', amount: 1 }], text: 'Regenerate 1. Rally: gain a Mana Crystal.', flavor: 'It roots where salt-water meets sweet-water, and drinks both.' }),
+  SD('tg02', 'Kelpweave Blessing', 1, 'common', {
+    target: { kind: 'friendly-creature' }, fx: [{ op: 'buff', atk: 1, hp: 2, target: 'chosen' }], text: 'Bloom: give a friendly creature +1/+2.', flavor: 'Woven kelp tightens over old wounds, and the vine remembers to grow.' }),
+  CD('tg03', 'Synod Cultivator', 3, 2, 3, 'uncommon', 'Druid', {
+    target: { kind: 'friendly-creature' }, rally: [{ op: 'buff', atk: 2, hp: 2, target: 'chosen' }, { op: 'ramp', amount: 1 }],
+    text: 'Rally: give a friendly creature +2/+2, then gain a Mana Crystal.', flavor: 'Feed the water, and the water feeds the grove.' }),
+  SD('tg04', 'Springtide Surge', 4, 'rare', {
+    fx: [{ op: 'ramp', amount: 1 }, { op: 'buff', atk: 1, hp: 1, target: 'all-friendly-creatures' }], text: 'Gain a Mana Crystal, then give all friendly creatures +1/+1.', flavor: 'The thaw broke all at once, and every root drank the rising sea.' }),
+  CD('tg05', 'Deeproot Behemoth', 5, 4, 6, 'rare', 'Beast', {
+    kw: ['guard', 'regenerate'], regenerate: 2, target: { kind: 'enemy-creature' }, rally: [{ op: 'freeze', target: 'chosen' }],
+    text: 'Guard. Regenerate 2. Rally: Freeze an enemy creature.', flavor: 'It walks the seabed as slowly as a forest grows — and stops just as little.' }),
+  CD('tg06', 'Thalassa, the Everbloom', 7, 6, 7, 'epic', 'Beast', {
+    kw: ['ward', 'regenerate'], regenerate: 3, rally: [{ op: 'buff', atk: 2, hp: 2, target: 'all-friendly-creatures' }, { op: 'ramp', amount: 2 }],
+    text: 'Ward. Regenerate 3. Rally: give all friendly creatures +2/+2 and gain 2 Mana Crystals.', flavor: 'Where her roots meet the tide, the season never ends.' }),
+];
+// The Aegis Court — tide+dawn — Azorius "Lockdown"
+const TDX = [
+  CD('td01', 'Frostlight Sentinel', 2, 2, 4, 'common', 'Guardian', { kw: ['guard', 'regenerate'], regenerate: 1, text: 'Guard. Regenerate 1.', flavor: 'Where the tide meets the dawn, it freezes into a shield.' }),
+  SD('td02', 'Rimebound Blessing', 2, 'common', {
+    target: { kind: 'enemy-creature' }, fx: [{ op: 'freeze', target: 'chosen' }, { op: 'heal', amount: 3, target: 'self-hero' }],
+    text: 'Freeze an enemy creature and restore 3 health to your hero.', flavor: 'Hold still, child. This will only sting until spring.' }),
+  CD('td03', 'Tidewarden of the Aegis', 3, 2, 5, 'uncommon', 'Paladin', {
+    kw: ['guard'], target: { kind: 'enemy-creature' }, rally: [{ op: 'freeze', target: 'chosen' }],
+    text: 'Guard. Rally: Freeze an enemy creature.', flavor: 'The Aegis Court does not defeat you. It refuses to let you move.' }),
+  TD('td04', 'Sanctified Rebuff', 2, 'uncommon', {
+    trap: { on: 'enemy-spell', fx: [{ op: 'negate-spell' }, { op: 'heal', amount: 2, target: 'self-hero' }] },
+    text: 'Trap: when the enemy casts a spell, negate it and restore 2 health to your hero.', flavor: 'Your incantation shatters on the frozen glass of a prayer.' }),
+  SD('td05', 'Glacial Sanctuary', 5, 'rare', {
+    fx: [{ op: 'freeze-all' }, { op: 'heal', amount: 5, target: 'self-hero' }], text: 'Freeze all enemy creatures and restore 5 health to your hero.', flavor: 'The war simply pauses — and waits for you to lose your nerve.' }),
+  CD('td06', 'Sariel, the Frozen Dawn', 7, 6, 8, 'legendary', 'Paladin', {
+    kw: ['guard', 'ward'], rally: [{ op: 'freeze-all' }, { op: 'draw', count: 2, who: 'self' }],
+    text: 'Guard, Ward. Rally: Freeze all enemy creatures, then draw 2 cards.', flavor: 'She raised no sword. She raised the temperature to nothing, and named it peace.' }),
+];
+// The Veiled Hand — tide+grave — Dimir "Secrets"
+const TV = [
+  CD('tv01', 'Silt Veilling', 2, 2, 2, 'common', 'Undead', { kw: ['stealth'], rites: [{ op: 'draw', count: 1, who: 'self' }], text: 'Stealth. Last Rites: draw a card.', flavor: 'It carries whispers the drowned were never meant to keep.' }),
+  SD('tv02', 'Undertow Recall', 3, 'common', {
+    target: { kind: 'creature' }, fx: [{ op: 'bounce', target: 'chosen' }, { op: 'draw', count: 1, who: 'self' }], text: 'Return a creature to its owner’s hand. Draw a card.', flavor: 'The tide gives nothing back without taking a secret in trade.' }),
+  TD('tv03', 'Drowned Ambush', 2, 'common', {
+    trap: { on: 'hero-attacked', fx: [{ op: 'damage', amount: 3, target: 'trigger-attacker' }, { op: 'draw', count: 1, who: 'self' }] },
+    text: 'Trap: when your hero is attacked, deal 3 damage to the attacker and draw a card.', flavor: 'They followed the current in. The current did not let them leave.' }),
+  CD('tv04', 'Veilspun Infiltrator', 3, 3, 3, 'uncommon', 'Undead', { kw: ['stealth'], rally: [{ op: 'draw', count: 1, who: 'self' }], text: 'Stealth. Rally: draw a card.', flavor: 'You will not see the Hand until it has already closed.' }),
+  CD('tv05', 'Gravetide Reclaimer', 4, 3, 4, 'rare', 'Undead', {
+    kw: ['ward'], rally: [{ op: 'steal-corpse' }], text: 'Ward. Rally: reanimate a creature from the enemy’s graveyard under your control.', flavor: 'The sea keeps every drowned soul on a very short leash.' }),
+  CD('tv06', 'Maelstrom Chronicler', 5, 4, 5, 'epic', 'Undead', {
+    kw: ['ward'], rally: [{ op: 'draw', count: 2, who: 'self' }], rites: [{ op: 'resurrect', count: 1 }],
+    text: 'Ward. Rally: draw 2 cards. Last Rites: reanimate one of your fallen creatures.', flavor: 'Every secret the deep swallowed, it wrote down. In ice. In bone.' }),
+];
+// The Verdant Choir — grove+dawn — Selesnya "Flourish"
+const GD = [
+  CD('gd01', 'Sapling Shepherd', 3, 2, 3, 'common', 'Druid', { rally: [{ op: 'summon', token: 'tk_sunbloom', count: 1, who: 'owner' }], text: 'Rally: summon a 1/1 Sunbloom Sapling.', flavor: 'Every seedling she tends is blessed under the first light of the seam.' }),
+  SD('gd02', 'Gild the Grove', 2, 'common', { fx: [{ op: 'buff', atk: 1, hp: 1, target: 'all-friendly-creatures' }], text: 'Give all your creatures +1/+1.', flavor: 'Where light drips onto leaf, the whole grove stands a little taller.' }),
+  CD('gd03', 'Verdant Evangelist', 3, 2, 2, 'uncommon', 'Paladin', { rally: [{ op: 'summon', token: 'tk_sunbloom', count: 2, who: 'owner' }], text: 'Flourish — Rally: summon two 1/1 Sunbloom Saplings.', flavor: '“Two more voices for the Choir. The song is never finished.”' }),
+  CD('gd04', 'Dawnwreath Warden', 5, 4, 5, 'rare', 'Paladin', {
+    kw: ['guard'], rally: [{ op: 'buff', atk: 1, hp: 1, kw: ['guard'], target: 'all-friendly-creatures' }], text: 'Guard. Rally: give all your creatures +1/+1 and Guard.', flavor: 'Beneath her wreath of morninglight, every sapling becomes a shield.' }),
+  SD('gd05', 'Flourishing Hymn', 5, 'rare', {
+    fx: [{ op: 'summon', token: 'tk_sunbloom', count: 2, who: 'owner' }, { op: 'buff', atk: 1, hp: 1, target: 'all-friendly-creatures' }], text: 'Summon two 1/1 Sunbloom Saplings, then give all your creatures +1/+1.', flavor: 'The seam sings, and the grove answers in a chorus of green and gold.' }),
+  CD('gd06', 'Elarion, Voice of the Verdant Choir', 7, 6, 6, 'legendary', 'Ancient', {
+    kw: ['guard'], rally: [{ op: 'summon', token: 'tk_sunbloom', count: 3, who: 'owner' }, { op: 'buff', atk: 2, hp: 2, kw: ['guard'], target: 'all-friendly-creatures' }],
+    text: 'Guard. Rally: summon three Saplings, then give all your creatures +2/+2 and Guard.', flavor: '“Where two elements touched, they did not war. They sang. And I am that song.”' }),
+];
+// The Rotwood Circle — grove+grave — Golgari "Undergrowth"
+const GV = [
+  CD('gv01', 'Thornshell Grub', 1, 1, 2, 'common', 'Beast', { rites: [{ op: 'summon', token: 'tk_rotsprout', count: 1, who: 'owner' }], text: 'Last Rites: summon a 1/1 Rotsprout.', flavor: 'It dies feeding the loam, and the loam answers.' }),
+  CD('gv02', 'Mirefang Viper', 2, 2, 2, 'common', 'Beast', { kw: ['venomous'], text: 'Venomous.', flavor: 'In the Rotwood, every bite is a burial.' }),
+  SD('gv03', 'Blightbloom Spores', 2, 'common', {
+    target: { kind: 'friendly-creature' }, fx: [{ op: 'buff', atk: 1, hp: 1, kw: ['venomous'], target: 'chosen' }], text: 'Give a friendly creature +1/+1 and Venomous.', flavor: 'Feed it the dead, and watch what blooms.' }),
+  CD('gv04', 'Rotwood Broodmother', 4, 3, 4, 'uncommon', 'Beast', { rites: [{ op: 'summon', token: 'tk_fungalhound', count: 2, who: 'owner' }], text: 'Undergrowth — Last Rites: summon two 2/2 Fungalhounds.', flavor: 'Her death is not an ending. It is a litter.' }),
+  CD('gv05', 'Corpsegorge Bramble', 5, 4, 5, 'rare', 'Plant', {
+    kw: ['regenerate'], regenerate: 2, rally: [{ op: 'steal-corpse' }], text: 'Regenerate 2. Rally: reanimate a creature from the enemy’s graveyard under your control.', flavor: 'The bramble does not bury the fallen. It wears them.' }),
+  CD('gv06', 'Sythrala, Matriarch of the Rotwood', 7, 6, 7, 'legendary', 'Beast', {
+    kw: ['guard', 'lifesteal'], rally: [{ op: 'resurrect', count: 2, filter: { maxCost: 6 } }], aura: { atk: 1 },
+    text: 'Guard, Lifesteal. Rally: reanimate two of your fallen creatures (cost 6 or less). Your other creatures have +1 Attack.', flavor: 'Every child of the wood returns to her. So does every corpse.' }),
+];
+// The Pale Ministry — dawn+grave — Orzhov "Tithe"
+const DV = [
+  CD('dv01', 'Almsgiver Acolyte', 2, 2, 2, 'common', 'Cleric', { kw: ['lifesteal'], rites: [{ op: 'summon', token: 'tk_spirit', count: 1, who: 'owner' }], text: 'Lifesteal. Last Rites: summon a 1/1 Pale Spirit.', flavor: 'Her tithe is paid in blood, and repaid in ghosts.' }),
+  SD('dv02', 'Tithe of Blood', 2, 'common', {
+    target: { kind: 'any' }, fx: [{ op: 'damage', amount: 2, target: 'chosen' }, { op: 'heal', amount: 2, target: 'self-hero' }], text: 'Deal 2 damage to any target. Restore 2 health to your hero.', flavor: 'What the shadow takes, the light collects.' }),
+  CD('dv03', 'Pale Almswarden', 3, 3, 3, 'uncommon', 'Cleric', {
+    kw: ['lifesteal'], target: { kind: 'enemy-creature' }, rally: [{ op: 'damage', amount: 2, target: 'chosen' }, { op: 'heal', amount: 2, target: 'self-hero' }],
+    text: 'Lifesteal. Rally: deal 2 damage to an enemy and restore 2 health to your hero.', flavor: 'The Ministry’s collector arrives; the ledger of the living grows short.' }),
+  CD('dv04', 'Sepulcher Confessor', 4, 3, 5, 'uncommon', 'Cleric', { kw: ['guard'], rites: [{ op: 'summon', token: 'tk_spirit', count: 2, who: 'owner' }], text: 'Guard. Last Rites: summon two 1/1 Pale Spirits.', flavor: 'Break the wall and two more rise to take confession.' }),
+  CD('dv05', 'Reliquary of the Pale Choir', 5, 3, 6, 'rare', 'Construct', { kw: ['guard'], aura: { grant: ['lifesteal'] }, text: 'Guard. Your other creatures have Lifesteal.', flavor: 'Every blade the choir raises drinks, and the choir never thirsts.' }),
+  CD('dv06', 'Vael, the Pale Tithe', 6, 5, 6, 'epic', 'Archon', {
+    kw: ['lifesteal'], rally: [{ op: 'aoe', amount: 2, side: 'enemy' }, { op: 'heal', amount: 3, target: 'self-hero' }],
+    text: 'Lifesteal. Rally: deal 2 damage to all enemy creatures and restore 3 health to your hero.', flavor: '“The living owe. I have come to collect in full.”' }),
+];
+const DUAL = [...ET, ...EG, ...ED, ...EV, ...TG, ...TDX, ...TV, ...GD, ...GV, ...DV];
 
 // the campaign expansion — unlockable set (base set is owned from the start)
 export const EXPANSION_IDS = new Set(
   [...EMBER_X, ...TIDE_X, ...GROVE_X, ...DAWN_X, ...GRAVE_X, ...NEUTRAL_X].map((c) => c.id));
 
+// Aetherbound — the dual-realm expansion (pack-only, like EXPANSION_IDS)
+export const EXPANSION2_IDS = new Set(DUAL.map((c) => c.id));
+
 export const CARDS = {};
 for (const c of [...EMBER, ...TIDE, ...GROVE, ...DAWN, ...GRAVE, ...NEUTRAL,
-                 ...EMBER_X, ...TIDE_X, ...GROVE_X, ...DAWN_X, ...GRAVE_X, ...NEUTRAL_X]) CARDS[c.id] = c;
+                 ...EMBER_X, ...TIDE_X, ...GROVE_X, ...DAWN_X, ...GRAVE_X, ...NEUTRAL_X,
+                 ...DUAL]) CARDS[c.id] = c;
 for (const [k, v] of Object.entries(TOKENS)) CARDS[k] = v;
 
 export const COLLECTIBLE = Object.values(CARDS).filter((c) => c.rarity !== 'token');
@@ -1062,7 +1261,7 @@ export const SET_STATS = (() => {
   const s = { total: COLLECTIBLE.length, byRarity: {}, byRealm: {}, byType: {} };
   for (const c of COLLECTIBLE) {
     s.byRarity[c.rarity] = (s.byRarity[c.rarity] || 0) + 1;
-    s.byRealm[c.realm] = (s.byRealm[c.realm] || 0) + 1;
+    for (const r of realmsOf(c)) s.byRealm[r] = (s.byRealm[r] || 0) + 1; // duals count for both
     s.byType[c.type] = (s.byType[c.type] || 0) + 1;
   }
   return s;

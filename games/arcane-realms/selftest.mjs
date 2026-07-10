@@ -799,6 +799,40 @@ section('campaign & progression');
   ok(prog.copiesOf(legacy, 'nt01') === 1, 'legacy boolean ownership migrates to 1 copy');
 }
 
+// ───────────────────── 10b. Aetherbound dual-realm expansion ─────────────────────
+section('aetherbound (dual-realm expansion)');
+{
+  const { EXPANSION2_IDS, realmsOf, cardById: cb } = await import('./runtime/sim/cards.js?v=13');
+  const PAIRS = { et: ['ember', 'tide'], eg: ['ember', 'grove'], ed: ['ember', 'dawn'], ev: ['ember', 'grave'], tg: ['tide', 'grove'], td: ['tide', 'dawn'], tv: ['tide', 'grave'], gd: ['grove', 'dawn'], gv: ['grove', 'grave'], dv: ['dawn', 'grave'] };
+  ok(EXPANSION2_IDS.size === 60, `Aetherbound has 60 cards (${EXPANSION2_IDS.size})`);
+  let dualOk = true;
+  const byR = {};
+  for (const id of EXPANSION2_IDS) {
+    const c = cb(id); const rs = realmsOf(c); const want = PAIRS[id.slice(0, 2)];
+    byR[c.rarity] = (byR[c.rarity] || 0) + 1;
+    if (!want || rs.length !== 2 || rs[0] !== want[0] || rs[1] !== want[1] || rs[0] === rs[1] || rs.includes('neutral')) { dualOk = false; console.error('  bad dual: ' + id + ' ' + JSON.stringify(rs)); }
+  }
+  ok(dualOk, 'every dual card carries two distinct non-neutral realms matching its id prefix');
+  ok(byR.common === 24 && byR.uncommon === 13 && byR.rare === 13 && byR.epic === 5 && byR.legendary === 5, `rarity split 24/13/13/5/5 (${JSON.stringify(byR)})`);
+
+  // engine mechanics added for this set
+  const FILL = Array(30).fill('nt01');
+  const mk = () => { const s = createGame({ seed: 5, decks: [FILL.slice(), FILL.slice()], first: 0 }); s.phase = 'main'; return s; };
+  const put = (s, side, id) => { const u = makeUnit(s, id); u.sick = false; s.players[side].board.push(u); return u; };
+  const give = (s, side, id) => { const h = { iid: s.iid++, card: id }; s.players[side].hand.push(h); return h; };
+
+  // Overcharge (spell-played): et03 pings enemy hero when you cast
+  { const s = mk(); s.players[0].mana = 9; put(s, 0, 'et03'); const t = put(s, 1, 'nt01'); const b = s.players[1].hp; const h = give(s, 0, 'et02'); applyAction(s, { type: 'play', iid: h.iid, target: { kind: 'unit', iid: t.iid } }); ok(s.players[1].hp === b - 1, 'Overcharge pings the enemy hero on your spell'); }
+  // Deathwatch (friendly-creature-dies): ev04 pings a random enemy creature on a friendly death
+  { const s = mk(); s.players[0].mana = 9; put(s, 0, 'ev04'); const chum = put(s, 0, 'nt01'); const e = put(s, 1, 'nt01'); const b = e.hp; const h = give(s, 0, 'ev03'); applyAction(s, { type: 'play', iid: h.iid, target: { kind: 'unit', iid: chum.iid } }); ok(e.hp === b - 1, 'Deathwatch fires when a friendly creature dies'); }
+  // Anthem +Attack aura (read-time): ed06 gives others +2 attack
+  { const s = mk(); const a = put(s, 0, 'nt01'); const base = effAtk(s, 0, a); put(s, 0, 'ed06'); ok(effAtk(s, 0, a) === base + 2, 'atk anthem grants +2 attack to others'); }
+  // Keyword-grant aura + revert: dv05 grants Lifesteal; it reverts when the anthem dies
+  { const s = mk(); s.players[0].mana = 9; const r = put(s, 0, 'dv05'); r.hp = 1; const a = put(s, 0, 'nt01'); applyAction(s, { type: 'play', iid: give(s, 0, 'nt01').iid, slot: 2 }); ok(hasKw(a, 'lifesteal'), 'keyword aura grants Lifesteal to others'); applyAction(s, { type: 'play', iid: give(s, 0, 'et02').iid, target: { kind: 'unit', iid: r.iid } }); ok(!hasKw(a, 'lifesteal'), 'keyword aura reverts when the anthem dies'); }
+  // steal-corpse (rally, enemy grave): tv05 reanimates the enemy's fallen creature
+  { const s = mk(); s.players[0].mana = 9; s.players[1].grave.push('nt01'); applyAction(s, { type: 'play', iid: give(s, 0, 'tv05').iid }); ok(s.players[0].board.some((u) => u.card === 'nt01') && !s.players[1].grave.includes('nt01'), 'steal-corpse pulls the enemy corpse onto your board'); }
+}
+
 // ───────────────────── 11. assets (optional gate) ─────────────────────
 if (args.has('--assets')) {
   section('asset coverage');
