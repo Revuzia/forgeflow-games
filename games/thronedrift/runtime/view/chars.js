@@ -340,12 +340,12 @@ export function makeShield() {
 
 export function makeBow() {
   const g = new THREE.Group();
-  const limb = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.028, 8, 24, Math.PI * 1.15), wood());
-  limb.rotation.z = -Math.PI * 0.575;
+  const limb = new THREE.Mesh(new THREE.TorusGeometry(0.48, 0.024, 8, 24, Math.PI * 0.85), wood());
+  limb.rotation.z = -Math.PI * 0.925;   // arc symmetric about the string (+Y)
   const stringMat = new THREE.MeshBasicMaterial({ color: 0xf2e8c8 });
-  const str = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.02, 4), stringMat);
-  const tipA = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), gold()); tipA.position.y = 0.51;
-  const tipB = tipA.clone(); tipB.position.y = -0.51;
+  const str = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.92, 4), stringMat);
+  const tipA = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), gold()); tipA.position.y = 0.46;
+  const tipB = tipA.clone(); tipB.position.y = -0.46;
   g.add(limb, str, tipA, tipB);
   return g;
 }

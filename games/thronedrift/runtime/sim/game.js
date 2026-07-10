@@ -5,7 +5,7 @@
 
 import * as THREE from "three";
 import { ARENAS, BOARD_RADIUS, REST_BETWEEN_WAVES } from "../data/arenas.js";
-import { ENEMY_TYPES, waveComp } from "../data/enemies.js";
+import { ALL_TYPES, waveComp } from "../data/enemies.js";
 import { CLASSES, COMBO_TIERS, COMBO_WINDOW } from "../data/abilities.js";
 import { ArenaBoard } from "../view/arena.js";
 import { Actor, makeGreatblade, makeSword, makeShield, makeBow, makeStaff, makeArrow, makeSpinTrail } from "../view/chars.js";
@@ -30,6 +30,8 @@ export class Game {
     this.timeScale = 1; this.hitstopT = 0;
     this.shake = 0;
     this.timers = [];
+    this.settings = { shake: save.get("set_shake", true), dmgNum: save.get("set_dmgnum", true) };
+    hud.cb.onSettings = (k, v) => { this.settings[k] = v; };
     this.raycaster = new THREE.Raycaster();
     this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this._v = new THREE.Vector3(); this._v2 = new THREE.Vector3();
@@ -45,6 +47,7 @@ export class Game {
 
   startRun(classId, arenaIdx) {
     this.cleanupRun();
+    this.disposeShowcase();
     this.hud.hideMenus();
     this.hud.clearPanel();
     this.classId = classId;
@@ -101,6 +104,7 @@ export class Game {
     this.enemies = [];
     this.projectiles = [];
     this.fallers = [];           // rain-of-arrows falling shafts
+    this.pickups = [];           // heart drops
     this.spawnQueue = [];        // {type, t} — t until ground telegraph
     this.pendingSpawns = [];     // {type, x, z, t} — telegraph shown, erupting soon
     this.waveIdx = -1; this.waveActive = false; this.restT = 1.4;
@@ -130,7 +134,9 @@ export class Game {
     if (this.enemies) for (const e of this.enemies) e.actor.dispose();
     if (this.projectiles) for (const p of this.projectiles) p.mesh.removeFromParent();
     if (this.fallers) for (const f of this.fallers) f.mesh.removeFromParent();
-    this.enemies = []; this.projectiles = []; this.fallers = []; this.timers = [];
+    if (this.pickups) for (const p of this.pickups) p.mesh.removeFromParent();
+    this.bossRef = null; if (this.hud.setBoss) this.hud.setBoss(null);
+    this.enemies = []; this.projectiles = []; this.fallers = []; this.pickups = []; this.timers = [];
     this.pendingSpawns = []; this.spawnQueue = [];
     this.timeScale = 1; this.shake = 0; this.paused = false;
   }
@@ -144,7 +150,7 @@ export class Game {
     else if (model === "knight") {
       actor.attachWeapon(makeSword(), "Right", { gripFrac: 0.14, rest: [0.15, 0.62, 0.77] });
       actor.attachShield(makeShield());
-    } else if (model === "rogue") actor.attachWeapon(makeBow(), "Left", { gripFrac: 0.5, rest: [0.08, 0.95, 0.25] });
+    } else if (model === "rogue") actor.attachWeapon(makeBow(), "Left", { gripFrac: 0.5, scale: 0.8, rest: [0.08, 0.95, 0.25] });
     else if (model === "sorceress") actor.attachWeapon(makeStaff(), "Right", { gripFrac: 0.44, rest: [0.05, 0.99, 0.14] });
   }
 
@@ -182,7 +188,7 @@ export class Game {
   }
 
   spawnEnemy(type, x, z) {
-    const def = ENEMY_TYPES[type];
+    const def = ALL_TYPES[type];
     const lib = this.enemyLib[def.model];
     if (!lib) return;
     const actor = new Actor(lib, { height: def.height, tint: this.arena.enemyTint });
@@ -197,6 +203,12 @@ export class Game {
       dead: false, deadT: 0,
     };
     this.enemies.push(e);
+    if (def.boss) {
+      this.bossRef = e;
+      this.hud.setBoss(def.name, 1);
+      this.hud.banner(def.name.toUpperCase(), { color: "#" + this.arena.accent.toString(16).padStart(6, "0"), sub: def.role, dur: 2.6, size: 40 });
+      this.addShake(0.6);
+    }
     // eruption burst — dirt + realm magic
     this.fx.burst(x, 0.3, z, { count: 22, color: 0x6a5040, color2: this.arena.portal, speed: 3.5, up: 3.2, life: 0.55, spread: 1.5 });
     SFX.play("slam");
@@ -274,6 +286,7 @@ export class Game {
     this.cleanupRun();
     this.state = "menu";
     this.hud.clearPanel();
+    this.buildMenuShowcase();
     this.hud.showTitle();
   }
 
@@ -324,7 +337,8 @@ export class Game {
     this.hud.setScore(this.score);
     if (!silent) SFX.play(heavy ? "hit_heavy" : "hit");
     const y = e.def.height * 0.7;
-    this.text.spawn(String(Math.round(dmg)), e.x + rand(-0.3, 0.3), y, e.z, { color: heavy ? "#ffcf4a" : "#fff", size: heavy ? 24 : 17 });
+    if (this.settings.dmgNum !== false)
+      this.text.spawn(String(Math.round(dmg)), e.x + rand(-0.3, 0.3), y, e.z, { color: heavy ? "#ffcf4a" : "#fff", size: heavy ? 24 : 17 });
     this.fx.burst(e.x, y * 0.7, e.z, { count: heavy ? 16 : 8, color: 0xffe0a0, color2: 0xff5a3a, speed: 3.2, up: 2, life: 0.35 });
     if (knockback) {
       const d = Math.max(0.001, Math.hypot(e.x - fromX, e.z - fromZ));
@@ -359,6 +373,15 @@ export class Game {
   killEnemy(e) {
     if (e.dead) return;
     e.dead = true; e.deadT = 0;
+    if (e.def.boss) {
+      this.bossRef = null;
+      this.hud.setBoss(null);
+      this.hud.banner(e.def.name.split(",")[0].toUpperCase() + " FALLS!", { color: "#ffd24a", dur: 2.2, size: 44 });
+      this.addShake(0.9); this.hitstop(0.1);
+    }
+    // rare heart drop (bosses always drop two)
+    const drops = e.def.boss ? 2 : (Math.random() < 0.08 ? 1 : 0);
+    for (let n = 0; n < drops; n++) this.spawnPickup(e.x + rand(-0.8, 0.8), e.z + rand(-0.8, 0.8));
     const pts = e.def.score * this.mult;
     this.score += pts;
     this.hud.setScore(this.score);
@@ -399,7 +422,7 @@ export class Game {
     return best;
   }
 
-  addShake(m) { this.shake = Math.min(1.4, this.shake + m); }
+  addShake(m) { if (this.settings.shake === false) return; this.shake = Math.min(1.4, this.shake + m); }
   hitstop(t) { this.hitstopT = Math.max(this.hitstopT, t); }
 
   // ================= PLAYER ABILITIES ===================================
@@ -715,6 +738,9 @@ export class Game {
     this.hud.update(hudDt);
 
     if (this.state === "playing" && this.input.pausePressed()) this.setPaused(!this.paused);
+    if (this.state === "menu" && this.showcaseActors) {
+      for (const a of this.showcaseActors) { a.update(dt); a.updateRelax(dt, 1, false); }
+    }
     if (this.state === "playing" && !this.paused) this.updatePlaying(dt, hudDt);
     else if (this.state === "gameover" || this.state === "arenaclear") {
       // let corpses/FX settle behind the panel
@@ -919,7 +945,10 @@ export class Game {
         const speed = e.def.speed * slow;
         let mvx = 0, mvz = 0;
 
-        if (e.def.ranged) {
+        const bossBusy = e.def.boss && this.updateBossKit(e, dt, d);
+        if (bossBusy) {
+          // winding up / charging — telegraphs are on the floor, movement is scripted
+        } else if (e.def.ranged) {
           // wisps hover at keepDist and lob bolts
           const want = e.def.keepDist;
           const dir = d > want + 1 ? 1 : d < want - 1 ? -1 : 0;
@@ -1034,10 +1063,57 @@ export class Game {
       }
     }
 
+    // ---- heart pickups
+    this.updatePickups(dt);
+
+    // ---- boss health bar
+    if (this.bossRef) this.hud.setBoss(this.bossRef.def.name, Math.max(0, this.bossRef.hp / this.bossRef.maxHp));
+
     // ---- enemy health bars
     if (this.bars) {
       const r = this.container.getBoundingClientRect();
       this.bars.update(this.enemies, r.width, r.height);
+    }
+  }
+
+  _heartTexture() {
+    if (!this.__heartTex) {
+      const S = 96, c = document.createElement("canvas"); c.width = c.height = S;
+      const g = c.getContext("2d");
+      g.font = "76px serif"; g.textAlign = "center"; g.textBaseline = "middle";
+      g.shadowColor = "rgba(255,60,80,.9)"; g.shadowBlur = 14;
+      g.fillText("❤️", S / 2, S / 2 + 4);
+      this.__heartTex = new THREE.CanvasTexture(c);
+    }
+    return this.__heartTex;
+  }
+
+  spawnPickup(x, z) {
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: this._heartTexture(), transparent: true, depthWrite: false }));
+    spr.scale.setScalar(0.9);
+    const dc = Math.hypot(x, z);
+    if (dc > BOARD_RADIUS - 1) { x *= (BOARD_RADIUS - 1) / dc; z *= (BOARD_RADIUS - 1) / dc; }
+    spr.position.set(x, 1, z);
+    this.scene.add(spr);
+    this.pickups.push({ mesh: spr, x, z, t: 12, phase: rand(Math.PI * 2) });
+  }
+
+  updatePickups(dt) {
+    for (let i = this.pickups.length - 1; i >= 0; i--) {
+      const p = this.pickups[i];
+      p.t -= dt;
+      p.mesh.position.y = 1 + Math.sin(performance.now() / 300 + p.phase) * 0.18;
+      p.mesh.material.rotation += dt * 1.5;
+      p.mesh.material.opacity = p.t < 3 ? (Math.floor(p.t * 6) % 2 ? 0.25 : 1) : 1; // blink before despawn
+      if (dist2(p.x, p.z, this.px, this.pz) < 1.9) {
+        this.hp = Math.min(this.maxHp, this.hp + 1);
+        this.hud.setHearts(this.hp, this.maxHp);
+        this.text.spawn("+❤", this.px, 2.2, this.pz, { color: "#ff6a8a", size: 22 });
+        this.fx.burst(this.px, 1.4, this.pz, { count: 14, color: 0xff5a7a, color2: 0xffc0d0, speed: 2.5, up: 2, life: 0.5 });
+        SFX.play("heal");
+        p.t = 0;
+      }
+      if (p.t <= 0) { p.mesh.removeFromParent(); this.pickups.splice(i, 1); }
     }
   }
 
@@ -1069,17 +1145,158 @@ export class Game {
     }
   }
 
+  /**
+   * Boss ability engine: each realm boss cycles a small class-flavored kit
+   * (slam / charge / volley / nova / summon / blink). Every projectile flies
+   * STRAIGHT - bosses telegraph, the player dodges. Returns true while the
+   * boss is winding up or charging (normal chase/attack suspended).
+   */
+  updateBossKit(e, dt, d) {
+    if (!e.kitCds) e.kitCds = e.def.kit.map((k) => k.cd * rand(0.35, 0.7));
+    for (let i = 0; i < e.kitCds.length; i++) e.kitCds[i] -= dt;
+
+    if (e.cast) {
+      const c = e.cast, k = c.k;
+      c.t -= dt;
+      if (k.type === "charge" && c.phase === "go") {
+        e.x += c.dx * k.speed * dt; e.z += c.dz * k.speed * dt;
+        const dc = Math.hypot(e.x, e.z);
+        if (dc > BOARD_RADIUS) { e.x *= BOARD_RADIUS / dc; e.z *= BOARD_RADIUS / dc; c.t = 0; }
+        if (!c.hit && Math.hypot(this.px - e.x, this.pz - e.z) < 1.7) {
+          c.hit = true;
+          this.hurtPlayer(k.dmg, e.x - c.dx, e.z - c.dz);
+        }
+        this.fx.burst(e.x, 0.5, e.z, { count: 2, color: this.arena.accent, speed: 1.5, up: 1, life: 0.3 });
+        if (c.t <= 0) e.cast = null;
+        return true;
+      }
+      if (c.t > 0) return true; // telegraph still showing
+      // windup complete - fire
+      if (k.type === "slam") {
+        this.decals.spawn("ring", e.x, e.z, k.radius, 0.55, { grow: true });
+        this.fx.burst(e.x, 0.5, e.z, { count: 32, color: this.arena.accent, speed: 6, up: 3.2, life: 0.55, spread: 2 });
+        this.addShake(0.7); SFX.play("slam");
+        if (dist2(this.px, this.pz, e.x, e.z) <= (k.radius + PLAYER_R) ** 2) this.hurtPlayer(k.dmg, e.x, e.z);
+      } else if (k.type === "volley") {
+        const base = Math.atan2(this.pz - e.z, this.px - e.x);
+        for (let n = 0; n < k.count; n++) {
+          const a = base + (k.count > 1 ? (n / (k.count - 1) - 0.5) * k.spread : 0);
+          this.spawnProjectile({ x: e.x, z: e.z, y: 1.4, vx: Math.cos(a) * k.speed, vz: Math.sin(a) * k.speed,
+            dmg: k.dmg, range: 30, friendly: false, tint: this.arena.portal, trailRate: 0.5 });
+        }
+        SFX.play("bolt");
+      } else if (k.type === "nova") {
+        for (let n = 0; n < k.count; n++) {
+          const a = (n / k.count) * Math.PI * 2;
+          this.spawnProjectile({ x: e.x, z: e.z, y: 1.2, vx: Math.cos(a) * k.speed, vz: Math.sin(a) * k.speed,
+            dmg: k.dmg, range: 30, friendly: false, tint: this.arena.portal, trailRate: 0.5 });
+        }
+        SFX.play("frost");
+      } else if (k.type === "summon") {
+        for (let n = 0; n < k.count; n++) {
+          const a = rand(Math.PI * 2), r = rand(1.6, 3.2);
+          this.spawnEnemy(k.unit, e.x + Math.cos(a) * r, e.z + Math.sin(a) * r);
+        }
+        SFX.play("ui_big");
+      } else if (k.type === "blink") {
+        this.fx.burst(e.x, 1.2, e.z, { count: 22, color: this.arena.portal, speed: 3, up: 2, life: 0.45 });
+        const a = rand(Math.PI * 2), r = rand(k.range[0], k.range[1]);
+        e.x = this.px + Math.cos(a) * r; e.z = this.pz + Math.sin(a) * r;
+        const dc = Math.hypot(e.x, e.z);
+        if (dc > BOARD_RADIUS - 1) { e.x *= (BOARD_RADIUS - 1) / dc; e.z *= (BOARD_RADIUS - 1) / dc; }
+        this.fx.burst(e.x, 1.2, e.z, { count: 22, color: this.arena.portal, speed: 3, up: 2, life: 0.45 });
+        SFX.play("ward");
+      }
+      e.cast = null;
+      return false;
+    }
+
+    // pick a ready ability
+    for (let i = 0; i < e.def.kit.length; i++) {
+      if (e.kitCds[i] > 0) continue;
+      const k = e.def.kit[i];
+      if (k.type === "slam" && d > k.radius + 1.6) continue;
+      if (k.type === "charge" && d < 4) continue;
+      e.kitCds[i] = k.cd;
+      if (k.type === "slam") this.decals.spawn("reticle", e.x, e.z, k.radius, k.windup, { spin: 2 });
+      else if (k.type === "charge") {
+        const a = Math.atan2(this.pz - e.z, this.px - e.x);
+        for (let s = 1; s <= 5; s++)
+          this.decals.spawn("reticle", e.x + Math.cos(a) * s * 2.4, e.z + Math.sin(a) * s * 2.4, 0.85, k.windup + 0.1);
+      } else {
+        this.fx.burst(e.x, e.def.height * 0.7, e.z, { count: 14, color: this.arena.portal, speed: 2, up: 1.6, life: Math.max(0.4, k.windup || 0.5) });
+      }
+      const cast = { k, t: k.windup != null ? k.windup : 0.6, phase: "windup" };
+      e.cast = cast;
+      if (k.type === "charge") {
+        const d2 = Math.max(0.001, Math.hypot(this.px - e.x, this.pz - e.z));
+        cast.dx = (this.px - e.x) / d2; cast.dz = (this.pz - e.z) / d2;
+        this.after(k.windup, () => {
+          if (e.cast === cast && !e.dead) { cast.phase = "go"; cast.t = k.dur; cast.hit = false; SFX.play("swing_big"); }
+        });
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /** menu 3D showcase: the three champions on a drifting dais (title screen) */
+  buildMenuShowcase() {
+    if (this.showcase || !this.heroLib) return;
+    const g = new THREE.Group();
+    this.scene.fog = new THREE.Fog(0x120a1e, 16, 44);
+    const hemi = new THREE.HemisphereLight(0xb59aff, 0x120a1e, 0.95);
+    const key = new THREE.DirectionalLight(0xffe0b0, 1.7); key.position.set(4, 8, 6);
+    const rim = new THREE.PointLight(0xe8b83a, 24, 32, 1.8); rim.position.set(0, 3.2, -3);
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(60, 16, 12),
+      new THREE.MeshBasicMaterial({ color: 0x0d0716, side: THREE.BackSide, fog: false }));
+    const plat = new THREE.Mesh(new THREE.CylinderGeometry(6.6, 6.9, 0.6, 48),
+      new THREE.MeshStandardMaterial({ color: 0x241a2e, metalness: 0.6, roughness: 0.5 }));
+    plat.position.y = -0.31;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(6.7, 0.09, 8, 60),
+      new THREE.MeshStandardMaterial({ color: 0xe8b83a, emissive: 0xe8b83a, emissiveIntensity: 1.8 }));
+    ring.rotation.x = Math.PI / 2; ring.position.y = 0.03;
+    g.add(hemi, key, rim, sky, plat, ring);
+    this.showcaseActors = [];
+    const lineup = [["barbarian", -2.8], ["rogue", 0], ["sorceress", 2.8]];
+    for (const pair of lineup) {
+      const a = new Actor(this.heroLib[pair[0]], { height: 1.85 });
+      this._equip(a, pair[0]);
+      a.root.position.set(pair[1], 0, 0);
+      a.play("Idle");
+      g.add(a.root);
+      this.showcaseActors.push(a);
+    }
+    this.scene.add(g);
+    this.showcase = g;
+  }
+
+  disposeShowcase() {
+    if (!this.showcase) return;
+    for (const a of this.showcaseActors) a.dispose();
+    this.scene.remove(this.showcase);
+    this.showcase = null; this.showcaseActors = [];
+  }
+
   updateCamera(dt) {
     const tx = this.px ?? 0, tz = this.pz ?? 0;
     // player-adjustable framing: wheel/pinch zoom, right-drag orbit + pitch
     const zoom = this.input.camZoom, yaw = this.input.camYaw, pitch = this.input.camPitch;
     const horiz = 14.5 * zoom, up = 19 * zoom * pitch;
-    const off = this.state === "menu"
-      ? { x: 10, y: 15, z: 14 }
-      : { x: Math.sin(yaw) * horiz, y: up, z: Math.cos(yaw) * horiz };
+    if (this.state === "menu") {
+      // hero-showcase framing: eye-level dolly; pull back on narrow screens so
+      // all three champions stay in frame
+      const aspect = this.camera.aspect || 1.6;
+      const back = 7.4 * Math.min(1.9, Math.max(1, 1.45 / Math.max(0.6, aspect)));
+      this._v2.set(Math.sin(performance.now() / 7000) * 0.7, 2.35 + (back - 7.4) * 0.18, back);
+      this.camera.position.lerp(this._v2, damp(4, dt));
+      this.camera.lookAt(0, 1.15, 0);
+      return;
+    }
+    const off = { x: Math.sin(yaw) * horiz, y: up, z: Math.cos(yaw) * horiz };
     // bias follow toward board center so the rim + void stay framed
-    const lx = this.state === "menu" ? Math.cos(performance.now() / 9000) * 8 : tx * 0.72;
-    const lz = this.state === "menu" ? Math.sin(performance.now() / 9000) * 8 : tz * 0.72;
+    const lx = tx * 0.72;
+    const lz = tz * 0.72;
     this._v2.set(lx + off.x, off.y, lz + off.z);
     this.camera.position.lerp(this._v2, damp(5, dt));
     this.shake = Math.max(0, this.shake - dt * 2.2);

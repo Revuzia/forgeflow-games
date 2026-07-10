@@ -7,6 +7,7 @@ import { HUD } from "./ui/hud.js";
 import { Game } from "./sim/game.js";
 import { loadHeroes, loadEnemyModels } from "./view/chars.js";
 import { SFX } from "./core/audio.js";
+import { save } from "./core/util.js";
 
 const container = document.getElementById("game-container");
 const hudRoot = document.getElementById("hud");
@@ -14,7 +15,8 @@ const hudRoot = document.getElementById("hud");
 // ---- loading overlay -------------------------------------------------------
 const loadEl = document.createElement("div");
 loadEl.style.cssText = `position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  background:radial-gradient(ellipse at 50% 35%,#2a1038,#0b0710 75%);z-index:10;color:#e8dcc8;font-family:Georgia,serif;`;
+  background:linear-gradient(rgba(10,6,18,.55),rgba(10,6,18,.85)),url(menu_bg.png?v=3) center/cover no-repeat,
+  radial-gradient(ellipse at 50% 35%,#2a1038,#0b0710 75%);z-index:10;color:#e8dcc8;font-family:Georgia,serif;`;
 loadEl.innerHTML = `
   <div style="font-size:44px;font-weight:900;letter-spacing:3px;
     background:linear-gradient(180deg,#ffe9a8,#e8b83a 50%,#ff6a2a);-webkit-background-clip:text;background-clip:text;color:transparent">THRONEDRIFT</div>
@@ -53,7 +55,7 @@ window.addEventListener("resize", () => {
   const upd = () => setProgress(heroF * 0.55 + enemyF * 0.4, heroF < 1 ? "Summoning champions…" : "Rousing the legions…");
   const [heroes, enemies] = await Promise.all([
     loadHeroes(["barbarian", "knight", "sorceress", "rogue"], (f) => { heroF = f; upd(); }),
-    loadEnemyModels(["skeleton", "imp", "orc", "brute", "wisp", "demon"], (f) => { enemyF = f; upd(); }),
+    loadEnemyModels(["imp", "skeleton", "brute", "slime", "bat", "yeti", "spider", "gargoyle", "wisp", "zombie", "skull", "ghost", "orc", "myconid", "cyclops", "demon", "giant", "dragon", "cthulhu", "ninja"], (f) => { enemyF = f; upd(); }),
   ]);
   setProgress(1, "Ready.");
 
@@ -73,7 +75,9 @@ window.addEventListener("resize", () => {
     }),
   };
 
+  SFX.setVolume(save.get("set_vol", 0.5));
   loadEl.remove();
+  game.buildMenuShowcase();
   hud.showTitle();
   window.addEventListener("pointerdown", () => SFX.unlock(), { once: true });
 

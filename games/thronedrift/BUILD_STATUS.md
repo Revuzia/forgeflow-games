@@ -1,5 +1,11 @@
 # Thronedrift — Build Status (loop tracker)
 
+## Iteration 3 — 2026-07-10 ✅ BOSSES + BESTIARY×20 + LIVE-3D MENU + SETTINGS
+Feedback batch 2 landed (CHANGELOG v0.3). Verified headless: Vulkar spawns wave
+5 w/ HP bar + telegraphed casts; menu showcase 3 heroes + cards; settings/
+bestiary screens; heart drops. Visual: title screenshot w/ all 3 champions.
+Queue adds: boss fights realms 2-5 live QA; bestiary 3D portraits; music.
+
 ## Iteration 2 — 2026-07-10 ✅ OWNER FEEDBACK BATCH + RENAME + DEPLOY
 All 20 owner feedback items from the /loop message landed (see CHANGELOG v0.2).
 Verified: weapon scale/grips, relaxArms, 7 hearts, fan=7 arrows, rain fallers=8,

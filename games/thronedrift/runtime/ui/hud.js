@@ -5,13 +5,21 @@
 
 import { CLASSES } from "../data/abilities.js";
 import { ARENAS } from "../data/arenas.js";
-import { ENEMY_TYPES } from "../data/enemies.js";
+import { ALL_TYPES } from "../data/enemies.js";
 import { formatScore, clamp, save } from "../core/util.js";
 import { SFX } from "../core/audio.js";
 
 const TITLE = "THRONEDRIFT";
 const TAGLINE = "Five drifting thrones. One champion. Endless waves.";
-const BESTIARY_FACES = { skeleton: "💀", imp: "👺", slime: "🟢", orc: "👹", brute: "🧌", wisp: "👻", demon: "👿" };
+const BESTIARY_FACES = {
+  imp: "👺", skeleton: "💀", brute: "🧌",
+  slime: "🟢", bat: "🦇", yeti: "🦍",
+  spider: "🕷️", gargoyle: "🗿", wisp: "💠",
+  zombie: "🧟", skull: "☠️", ghost: "👻",
+  orc: "👹", myconid: "🍄", cyclops: "👁️",
+  vulkar: "👿", boreas: "🧊", skalvyrn: "🐲",
+  zhymoth: "🐙", aurex: "🥷",
+};
 
 const GOLD = "#e8b83a", PURPLE = "#7a4dcf", DARKPANEL = "rgba(16,8,26,0.92)";
 
@@ -60,36 +68,98 @@ export class HUD {
   // ============ MENUS =====================================================
 
   showTitle() {
-    this._menu(`
-      <div style="text-align:center;animation:cfPop .5s ease-out;position:relative;z-index:2">
-        <div style="font-size:15px;letter-spacing:8px;color:#cdb8ee;margin-bottom:6px;text-shadow:0 2px 6px #000">FORGEFLOW GAMES</div>
-        <div style="font-size:72px;font-weight:900;letter-spacing:5px;line-height:1;
-          background:linear-gradient(180deg,#ffe9a8 0%,#e8b83a 45%,#c88a3a 70%,#9a5dff 115%);
-          -webkit-background-clip:text;background-clip:text;color:transparent;
-          filter:drop-shadow(0 4px 14px rgba(0,0,0,.85));font-family:Georgia,serif">${TITLE}</div>
-        <div style="font-size:16px;color:#e8dcc8;margin-top:14px;max-width:460px;text-shadow:0 2px 5px #000">${TAGLINE}</div>
-        <div id="cf-start" class="cf-btn" style="margin:30px auto 0;width:250px;padding:15px 0;${frameCss}
-          font-size:20px;font-weight:800;text-align:center;animation:cfPulse 2s infinite">PLAY</div>
-        <div style="display:flex;gap:14px;justify-content:center;margin-top:14px">
-          <div id="cf-bestiary" class="cf-btn" style="padding:10px 22px;${frameCss}font-size:14px;font-weight:700">📖 BESTIARY</div>
-          <div id="cf-howto" class="cf-btn" style="padding:10px 22px;${frameCss}font-size:14px;font-weight:700">🎮 HOW TO PLAY</div>
+    // transparent menu over the LIVE 3D champion showcase — click a champion
+    // card (aligned under each hero) to enter; no separate PLAY step
+    const cards = Object.entries(CLASSES).map(([id, c]) => {
+      const kitLine = c.modes
+        ? "Two-Handed \u21C4 Sword & Shield \u00B7 true Block"
+        : Object.values(c.kits)[0].abilities.map((a) => a.name).join(" \u00B7 ");
+      return `
+      <div class="cf-card" data-cls="${id}" style="${frameCss}width:min(240px,29vw);padding:12px 12px 14px;text-align:center;background:rgba(14,7,22,.72)">
+        <div style="font-size:20px;font-weight:900;color:${c.uiColor}">${c.portrait} ${c.name.toUpperCase()}</div>
+        <div style="font-size:11.5px;color:#cbbfe0;min-height:34px;margin-top:5px">${kitLine}</div>
+        <div style="font-size:11px;color:#8a7aa8;margin-top:4px">${"\u2764".repeat(c.hearts)}</div>
+        <div style="margin-top:7px;font-size:12px;font-weight:800;color:#ffd24a;letter-spacing:1px;animation:cfPulse 2s infinite;border:1.5px solid #e8b83a;border-radius:8px;padding:5px 0">ENTER THE DRIFT</div>
+      </div>`;
+    }).join("");
+    this._menuClear(`
+      <div style="position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:space-between;height:100%;width:100%;padding:18px 10px 16px;box-sizing:border-box">
+        <div style="text-align:center;animation:cfPop .5s ease-out">
+          <div style="font-size:13px;letter-spacing:7px;color:#cdb8ee;text-shadow:0 2px 6px #000">FORGEFLOW GAMES</div>
+          <div style="font-size:52px;font-weight:900;letter-spacing:4px;line-height:1;
+            background:linear-gradient(180deg,#ffe9a8 0%,#e8b83a 45%,#c88a3a 70%,#9a5dff 115%);
+            -webkit-background-clip:text;background-clip:text;color:transparent;
+            filter:drop-shadow(0 4px 14px rgba(0,0,0,.9));font-family:Georgia,serif">${TITLE}</div>
+          <div style="font-size:14px;color:#e8dcc8;margin-top:6px;text-shadow:0 2px 5px #000">${TAGLINE}</div>
+          <div style="display:flex;gap:10px;justify-content:center;margin-top:12px">
+            <div id="cf-bestiary" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">\uD83D\uDCD6 BESTIARY</div>
+            <div id="cf-howto" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">\uD83C\uDFAE HOW TO PLAY</div>
+            <div id="cf-settings" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">\u2699\uFE0F SETTINGS</div>
+          </div>
         </div>
-        <div style="margin-top:16px;font-size:12px;color:#b8a8d0;text-shadow:0 1px 3px #000">Best: ${formatScore(save.get("hiscore", 0))}</div>
+        <div style="width:100%;max-width:900px;display:flex;justify-content:space-between;gap:10px;align-items:flex-end">
+          ${cards}
+        </div>
       </div>`);
-    this.layerMenu.querySelector("#cf-start").onclick = () => { SFX.unlock(); SFX.play("ui_big"); this.showClassSelect(); };
+    for (const card of this.layerMenu.querySelectorAll(".cf-card"))
+      card.onclick = () => { SFX.unlock(); SFX.play("ui_big"); this.showArenaSelect(card.dataset.cls); };
     this.layerMenu.querySelector("#cf-bestiary").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showBestiary(); };
     this.layerMenu.querySelector("#cf-howto").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showHowTo(); };
+    this.layerMenu.querySelector("#cf-settings").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showSettings(); };
+  }
+
+  showSettings() {
+    const vol = Math.round((save.get("set_vol", 0.5)) * 100);
+    const shake = save.get("set_shake", true), dmg = save.get("set_dmgnum", true);
+    const tog = (id, label, on) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+        <span style="font-size:15px;color:#e8dcc8">${label}</span>
+        <div id="${id}" class="cf-btn" data-on="${on}" style="${frameCss}padding:6px 18px;font-size:13px;font-weight:800;color:${on ? "#7dff9a" : "#8a7aa8"}">${on ? "ON" : "OFF"}</div>
+      </div>`;
+    this._menu(`
+      <div style="${frameCss}width:min(420px,90vw);padding:26px 30px;position:relative;z-index:2">
+        <div style="font-size:28px;font-weight:900;color:${GOLD};text-align:center;font-family:Georgia,serif;margin-bottom:8px">SETTINGS</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+          <span style="font-size:15px;color:#e8dcc8">Sound volume</span>
+          <input id="cf-vol" type="range" min="0" max="100" value="${vol}" style="width:150px;accent-color:#e8b83a">
+        </div>
+        ${tog("cf-shake", "Screen shake", shake)}
+        ${tog("cf-dmg", "Damage numbers", dmg)}
+        <div id="cf-reset" class="cf-btn" style="margin-top:22px;text-align:center;${frameCss}padding:9px 0;font-size:13px;font-weight:800;color:#ff8a8a;border-color:#a04040">RESET PROGRESS</div>
+        <div id="cf-back" class="cf-btn" style="display:block;margin:16px auto 0;width:130px;text-align:center;padding:9px 0;${frameCss}font-size:14px;font-weight:700">\u2190 BACK</div>
+      </div>`);
+    const M = this.layerMenu;
+    M.querySelector("#cf-vol").oninput = (e) => { const v = e.target.value / 100; save.set("set_vol", v); SFX.setVolume(v); SFX.play("ui"); };
+    const wireTog = (id, key) => {
+      const b = M.querySelector(id);
+      b.onclick = () => {
+        const on = !(b.dataset.on === "true");
+        b.dataset.on = String(on); b.textContent = on ? "ON" : "OFF"; b.style.color = on ? "#7dff9a" : "#8a7aa8";
+        save.set(key, on); this.cb.onSettings && this.cb.onSettings(key.replace("set_", "") === "shake" ? "shake" : "dmgNum", on);
+        SFX.play("ui");
+      };
+    };
+    wireTog("#cf-shake", "set_shake");
+    wireTog("#cf-dmg", "set_dmgnum");
+    const rst = M.querySelector("#cf-reset");
+    rst.onclick = () => {
+      if (rst.dataset.armed) {
+        for (const k of ["unlocked", "hiscore", "bestiary"]) save.set(k, k === "unlocked" ? 1 : k === "hiscore" ? 0 : []);
+        rst.textContent = "PROGRESS RESET"; rst.dataset.armed = ""; SFX.play("ui_big");
+      } else { rst.dataset.armed = "1"; rst.textContent = "CLICK AGAIN TO CONFIRM"; SFX.play("ui"); }
+    };
+    M.querySelector("#cf-back").onclick = () => { SFX.play("ui"); this.showTitle(); };
   }
 
   showBestiary() {
     const discovered = new Set(save.get("bestiary", []));
-    const cards = Object.entries(ENEMY_TYPES).map(([id, d]) => {
+    const cards = Object.entries(ALL_TYPES).map(([id, d]) => {
       const known = discovered.has(id);
       return known ? `
         <div style="${frameCss}width:196px;padding:14px 12px;text-align:center">
           <div style="font-size:40px">${BESTIARY_FACES[id] || "❔"}</div>
-          <div style="font-size:17px;font-weight:900;color:#ffd24a;margin-top:4px">${d.name}</div>
-          <div style="font-size:11px;letter-spacing:1.5px;color:#b89ae0">${d.role.toUpperCase()}</div>
+          <div style="font-size:16px;font-weight:900;color:${d.boss ? "#ff6a8a" : "#ffd24a"};margin-top:4px">${d.name}</div>
+          <div style="font-size:11px;letter-spacing:1.5px;color:${d.boss ? "#ff9ab0" : "#b89ae0"}">${d.role.toUpperCase()} · REALM ${d.realm}</div>
           <div style="font-size:11.5px;color:#cbbfe0;font-style:italic;min-height:56px;margin-top:7px">"${d.lore}"</div>
           <div style="display:flex;justify-content:space-around;margin-top:8px;font-size:11px;color:#e8dcc8">
             <span>❤️ ${d.hp}</span><span>⚔️ ${d.dmg}</span><span>👟 ${d.speed}</span></div>
@@ -105,7 +175,7 @@ export class HUD {
     this._menu(`
       <div style="text-align:center;max-width:1100px;position:relative;z-index:2">
         <div style="font-size:34px;font-weight:900;color:${GOLD};margin-bottom:6px;font-family:Georgia,serif">BESTIARY</div>
-        <div style="font-size:13px;color:#b89ae0;margin-bottom:18px">${discovered.size} / ${Object.keys(ENEMY_TYPES).length} foes recorded</div>
+        <div style="font-size:13px;color:#b89ae0;margin-bottom:18px">${discovered.size} / ${Object.keys(ALL_TYPES).length} foes recorded · 3 foes + 1 boss per realm</div>
         <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;max-height:62vh;overflow-y:auto;padding:4px">${cards}</div>
         <div id="cf-back" class="cf-btn" style="display:inline-block;margin-top:20px;padding:10px 30px;${frameCss}font-size:15px;font-weight:700">← BACK</div>
       </div>`);
@@ -181,6 +251,15 @@ export class HUD {
       };
     }
     this.layerMenu.querySelector("#cf-back").onclick = () => { SFX.play("ui"); this.showClassSelect(); };
+  }
+
+  _menuClear(inner) {
+    // transparent menu: light vignette only — the live 3D scene shows through
+    this.layerMenu.style.display = "flex";
+    this.layerMenu.style.cssText += "align-items:center;justify-content:center;";
+    this.layerMenu.innerHTML = `
+      <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 42%,transparent 34%,rgba(8,4,14,.62) 100%)"></div>` + inner;
+    this.layerGame.style.display = "none";
   }
 
   _menu(inner) {
@@ -297,20 +376,45 @@ export class HUD {
   }
 
   setHearts(hp, max) {
-    // layered hearts with partial fill — chip damage (blocked hits, DoT) shows
-    let html = "";
-    for (let i = 0; i < max; i++) {
-      const pct = Math.round(clamp(hp - i, 0, 1) * 100);
-      html += `<span style="position:relative;display:inline-block;width:22px">` +
-        `<span style="filter:grayscale(1) brightness(.35)">❤️</span>` +
-        `<span style="position:absolute;left:0;top:0;overflow:hidden;width:${pct}%;white-space:nowrap">❤️</span></span>`;
-    }
+    // hearts DRAIN smoothly (animated fill, no stepped halves): persistent
+    // spans whose colored overlay width transitions on every change
     const elH = this.elPortrait.querySelector("#cf-hearts");
+    if (!this._heartFills || this._heartFills.length !== max) {
+      elH.innerHTML = "";
+      this._heartFills = [];
+      for (let i = 0; i < max; i++) {
+        const wrap = document.createElement("span");
+        wrap.style.cssText = "position:relative;display:inline-block;width:22px";
+        wrap.innerHTML = `<span style="filter:grayscale(1) brightness(.35)">❤️</span>`;
+        const fill = document.createElement("span");
+        fill.style.cssText = "position:absolute;left:0;top:0;overflow:hidden;width:100%;white-space:nowrap;transition:width .45s ease";
+        fill.textContent = "❤️";
+        wrap.appendChild(fill);
+        elH.appendChild(wrap);
+        this._heartFills.push(fill);
+      }
+    }
+    for (let i = 0; i < max; i++)
+      this._heartFills[i].style.width = `${Math.round(clamp(hp - i, 0, 1) * 100)}%`;
     if (elH.dataset.prev && parseFloat(elH.dataset.prev) > hp) {
       elH.style.animation = "none"; void elH.offsetWidth; elH.style.animation = "cfPop .3s ease-out";
     }
     elH.dataset.prev = String(hp);
-    elH.innerHTML = html;
+  }
+
+  /** boss health bar (top-center, under the score) — null hides it */
+  setBoss(name, frac) {
+    if (!this._bossBar) {
+      this._bossBar = el("div", `position:absolute;top:78px;left:50%;transform:translateX(-50%);width:min(460px,72vw);display:none;text-align:center;`);
+      this._bossBar.innerHTML = `<div id="cf-bossname" style="font-size:14px;font-weight:900;color:#ff9ab0;letter-spacing:2px;text-shadow:0 2px 4px #000"></div>
+        <div style="height:12px;border:2px solid #e8b83a;border-radius:7px;background:rgba(10,4,16,.8);overflow:hidden;margin-top:3px">
+        <div id="cf-bossfill" style="height:100%;width:100%;background:linear-gradient(90deg,#ff2a4a,#ff7a3a);transition:width .2s"></div></div>`;
+      this.layerGame.appendChild(this._bossBar);
+    }
+    if (name == null) { this._bossBar.style.display = "none"; return; }
+    this._bossBar.style.display = "block";
+    this._bossBar.querySelector("#cf-bossname").textContent = name.toUpperCase();
+    this._bossBar.querySelector("#cf-bossfill").style.width = `${Math.round(clamp(frac, 0, 1) * 100)}%`;
   }
 
   setGold(g) { this.elPortrait.querySelector("#cf-gold").textContent = g; }

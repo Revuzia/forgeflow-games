@@ -2,11 +2,11 @@
 // No audio files needed; every cue is synthesized. game_controls.js global mute
 // works because we route everything through one master GainNode on a shared ctx.
 
-let ctx = null, master = null;
+let ctx = null, master = null, desiredVol = 0.5;
 function ensure() {
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
-    master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination);
+    master = ctx.createGain(); master.gain.value = desiredVol; master.connect(ctx.destination);
     window.__THRONEDRIFT_AUDIO__ = ctx; // discoverable for mute integrations
   }
   if (ctx.state === "suspended") ctx.resume();
@@ -59,6 +59,7 @@ const cues = {
   mode:      () => { noise({ dur: 0.14, vol: 0.2, freq: 3000, q: 2, slide: -1500 }); tone({ freq: 240, type: "square", dur: 0.1, vol: 0.16, delay: 0.05 }); },
   hurt:      () => { tone({ freq: 200, type: "sawtooth", dur: 0.2, vol: 0.3, slide: -120 }); },
   death:     () => { tone({ freq: 300, type: "sawtooth", dur: 0.5, vol: 0.3, slide: -240 }); noise({ dur: 0.4, vol: 0.2, freq: 400, q: 0.6, slide: -300 }); },
+  heal:      () => { tone({ freq: 620, type: "triangle", dur: 0.12, vol: 0.22 }); tone({ freq: 930, type: "triangle", dur: 0.18, vol: 0.2, delay: 0.09 }); },
   coin:      () => { tone({ freq: 1320, type: "triangle", dur: 0.07, vol: 0.15 }); tone({ freq: 1760, type: "triangle", dur: 0.12, vol: 0.13, delay: 0.06 }); },
   ward:      () => tone({ freq: 420, type: "sine", dur: 0.5, vol: 0.2, slide: 220 }),
   rain:      () => noise({ dur: 0.5, vol: 0.2, freq: 1200, q: 0.6, slide: 800 }),
@@ -71,4 +72,6 @@ const cues = {
 export const SFX = {
   play(name) { try { (cues[name] || (() => {}))(); } catch (e) { /* audio blocked pre-gesture; ignore */ } },
   unlock() { try { ensure(); } catch (e) {} },
+  setVolume(v) { desiredVol = Math.max(0, Math.min(1, v)); if (master) master.gain.value = desiredVol; },
+  getVolume() { return desiredVol; },
 };

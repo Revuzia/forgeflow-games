@@ -1,5 +1,20 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v0.3 — 2026-07-10 (feedback batch 2: bosses, bestiary x20, new main menu)
+- Main menu rebuilt: LIVE 3D champion showcase (three heroes on a gold dais,
+  click a champion card to enter — no PLAY step); aspect-adaptive menu camera
+- SETTINGS screen: sound volume, screen shake, damage numbers, reset progress
+- Loading screen uses the key art
+- Roster: 15 regulars = 3 per realm (new: bat/spider/zombie/ghost/skull/
+  gargoyle/yeti/cyclops/myconid) with per-realm spawn pools
+- 5 REALM BOSSES with class-flavored kits (Vulkar warrior / Boreas frost
+  warrior / Skalvyrn archer / Zhy'moth mage / Aurex blademaster): telegraphed
+  slams, charges, straight dodgeable volleys/novas, summons, blinks; boss HP
+  bar + intro/death banners; boss ends every realm
+- Healing: +1 heart on wave clear AND rare heart drops (8% kills, bosses 2x)
+- Hearts now DRAIN smoothly (animated fill, no stepped halves)
+- Bow rebuilt (was rendering as a giant ring); bestiary 20 entries w/ realm tags
+
 ## v0.2 — 2026-07-10 (rename + owner feedback batch)
 - RENAMED Crownfire Arenas → **Thronedrift** (biome-neutral; xAI-assisted, conflict-screened)
 - xAI key art: menu_bg.png title background (Ken Burns + scrim) + thumbnail.png
