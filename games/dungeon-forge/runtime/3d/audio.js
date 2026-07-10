@@ -130,9 +130,13 @@ export class GameAudio {
       case "door_open": return this._playFile(FILES.door_open, 0.8);
       case "door_close": return this._playFile(FILES.door_close, 0.8);
       case "chest": return this._playFile(FILES.chest, 0.8);
-      case "swing": return this._playFile(FILES.swing, 0.55, 1.15);
-      case "hit": return this._playFile(FILES.hit, 0.7);
-      case "hurt": this._playFile(FILES.hurt, 0.8); return this._blip(160, 0.2, "sawtooth", 0.12, -80);
+      case "swing": this._blip(340, 0.1, "sine", 0.1, -180); return this._playFile(FILES.swing, 0.9, 1.15);
+      case "hit": this._blip(95, 0.12, "square", 0.16, -40); return this._playFile(FILES.hit, 1.0);
+      case "hurt": this._playFile(FILES.hurt, 1.0); return this._blip(160, 0.2, "sawtooth", 0.16, -80);
+      case "eattack": this._blip(150, 0.14, "sawtooth", 0.12, -60); return this._playFile(FILES.swing, 0.5, 0.8);
+      case "fire": this._blip(200, 0.3, "sawtooth", 0.16, -140); return this._blip(90, 0.34, "sine", 0.2, -50);
+      case "frost": this._blip(1350, 0.16, "triangle", 0.16, -420); return this._blip(880, 0.2, "sine", 0.1, 320);
+      case "explosion": this._blip(60, 0.5, "sawtooth", 0.3, -30); this._blip(140, 0.3, "square", 0.2, -100); return this._playFile(FILES.hit, 1.0, 0.6);
       case "die": return this._blip(220, 0.7, "sawtooth", 0.22, -170);
       case "edie": return this._blip(300, 0.4, "square", 0.14, -220);
       case "key": this._blip(880, 0.09, "triangle", 0.2); return setTimeout(() => this._blip(1320, 0.14, "triangle", 0.2), 90);

@@ -205,9 +205,16 @@ const ok = (cond, name, extra) => {
     ok(!gearDrop || (gearDrop.item && gearDrop.item.slot === gearDrop.kind), "item: chest gear drops carry item objects");
     // hotbar slots per class (shared by HUD + Digit-N input)
     const hbK = E.hotbar(newRun(idg, 1, [{ id: "K", skin: 0 }]).players[0]);
-    ok(hbK.map((s) => s.act).join(",") === "melee,special,potion,mana", "hotbar: knight = attack/special/potion/mana");
+    ok(hbK.map((s) => s.act).join(",") === "special,potion,mana", "hotbar: knight = special/potion/mana (LMB attack not a slot)");
     const hbS = E.hotbar(newRun(idg, 1, [{ id: "S", skin: 2 }]).players[0]);
-    ok(hbS.map((s) => s.act).join(",") === "melee,special,frost,chain,potion,mana", "hotbar: sorceress adds frost+chain");
+    ok(hbS.map((s) => s.act).join(",") === "special,frost,chain,potion,mana", "hotbar: sorceress = fire/frost/chain/potion/mana");
+    // sorceress LMB = arcane bolt (ranged basic), not a melee swing
+    const srun = newRun(idg, 3, [{ id: "S", skin: 2 }]);
+    const sp2 = srun.players[0];
+    sp2.input.melee = true;
+    E.tick(srun, 1 / 30);
+    ok(srun.bolts.some((b) => b.elem === "arcane" && b.owner === "S"), "sorceress LMB fires an arcane bolt");
+    ok(srun.events.some((e2) => e2.type === "cast" && e2.kind === "arcane"), "arcane bolt emits cast event");
   }
 
   // ── 4f. floor textures (surface paint) ──────────────────────────

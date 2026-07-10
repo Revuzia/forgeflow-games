@@ -39,7 +39,7 @@ const WEAPON_CFG = {
 // DON'T relaxArms at rest (only during walk/run) and compute the grip on the real
 // idle pose. Old rigs + enemies (no idle clip) keep relax-always. Add each class
 // here as it is regenerated through meshy_chars_img.py.
-const CLEAN_RIGS = new Set(["knight"]);
+const CLEAN_RIGS = new Set(["knight", "barbarian", "sorceress", "rogue"]);
 const _wq = new THREE.Quaternion(), _wq2 = new THREE.Quaternion(), _wv = new THREE.Vector3(), _wy = new THREE.Vector3(0, 1, 0), _wz = new THREE.Vector3(0, 0, 1);
 const _wp = new THREE.Vector3(), _wsc = new THREE.Vector3();
 /** Scale a holder to cancel a bone's ACTUAL world scale (Meshy armatures bind
@@ -252,11 +252,12 @@ export class Escape {
         break;
       }
       case "light": {
+        // toned down (was intensity 11 + emissive 2.6 → blinding bloom halos)
         const col = new THREE.Color(o.color || (this.d.theme === "scifi" ? "#37e0ff" : "#ff9a3c"));
-        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 2.6 }));
+        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.1 }));
         orb.position.y = 3.1; grp.add(orb);
-        const l = new THREE.PointLight(col, 11, 18, 1.35); l.position.y = 3.0; grp.add(l);
-        this.lightPool.push({ light: l, base: 11, grp, f });
+        const l = new THREE.PointLight(col, 4.5, 15, 1.5); l.position.y = 3.0; grp.add(l);
+        this.lightPool.push({ light: l, base: 4.5, grp, f });
         break;
       }
       case "decor": {
@@ -626,6 +627,21 @@ export class Escape {
       if (e.code === "KeyC" && !e.repeat && p) this._chain = true; // Sorceress chain lightning (edge-triggered)
       const dm = e.code.match(/^Digit([1-9])$/); // hotbar: number keys fire the mapped slot
       if (dm && p && !e.repeat) { const s = E.hotbar(p)[+dm[1] - 1]; if (s) this._hotkey = s.act; }
+      // TAB target cycling: first press locks the nearest enemy, each press cycles
+      // outward; past the last one it UNLOCKS and frees the player (owner spec).
+      if (e.code === "Tab" && p && !e.repeat) {
+        e.preventDefault();
+        const near = this.run.enemies
+          .filter((x) => x.alive && x.f === p.f && ((x.x - p.x) ** 2 + (x.z - p.z) ** 2) < 16 * 16)
+          .sort((a, b) => ((a.x - p.x) ** 2 + (a.z - p.z) ** 2) - ((b.x - p.x) ** 2 + (b.z - p.z) ** 2));
+        if (!near.length) { this.lockedId = null; }
+        else {
+          const i = near.findIndex((x) => x.id === this.lockedId);
+          const nxt = i + 1;                    // -1 (none locked) → 0 = nearest
+          if (nxt >= near.length) { this.lockedId = null; this.g.audio.sfx("ui"); }
+          else { this.lockedId = near[nxt].id; this.g.audio.sfx("confirm"); }
+        }
+      }
       if (e.code === "Escape") { /* pointer lock exits natively */ }
     }, window);
     on("keyup", (e) => { this.keys[e.code] = false; if (e.code === "KeyF") this._special = false; if (e.code === "KeyR") this._frost = false; }, window);
@@ -764,7 +780,7 @@ export class Escape {
         case "cast": {
           const a = this.actors.get(ev.id);
           if (a) this._playCombat(a, ev.kind, 0, 0.4);
-          g.audio.sfx(ev.kind === "knife" ? "swing" : "bolt");
+          g.audio.sfx(ev.kind === "knife" ? "swing" : ev.kind === "fire" ? "fire" : ev.kind === "frost" ? "frost" : "bolt");
           break;
         }
         case "boltHit": {
@@ -876,7 +892,13 @@ export class Escape {
         case "climb": g.audio.sfx("stairs"); break;
         case "floor": if (ev.id === this.myId) this._syncFloorVis(); break;
         case "aggro": g.audio.sfx("aggro"); break;
-        case "eattack": this.enemies.onAttack(ev); break;
+        case "eattack": {
+          this.enemies.onAttack(ev);
+          // audible enemy swings when they're near the player
+          const en = this.run.enemies.find((x) => x.id === ev.id), meS = this.me();
+          if (en && meS && en.f === meS.f && ((en.x - meS.x) ** 2 + (en.z - meS.z) ** 2) < 12 * 12) g.audio.sfx("eattack");
+          break;
+        }
         case "eshoot": g.audio.sfx("bolt"); break;
         case "escape": {
           const p = this.run.players.find((pl) => pl.id === ev.id);
@@ -1041,10 +1063,14 @@ export class Escape {
           new THREE.Vector3((Math.random() - .5) * .4, 1.4 + Math.random(), (Math.random() - .5) * .4), 0.7, 2.0, 0xff7a22);
     }
 
-    // soft target lock: ring under the target + HUD plate
+    // target lock: TAB hard-lock (cycles nearby enemies) beats the soft auto-pick
     const meT = this.me();
     if (meT && meT.alive && !meT.escaped) {
-      this.target = E.pickTarget(this.run, meT);
+      if (this.lockedId) {
+        const le = this.run.enemies.find((x) => x.id === this.lockedId);
+        if (le && le.alive && le.f === meT.f && ((le.x - meT.x) ** 2 + (le.z - meT.z) ** 2) < 20 * 20) this.target = le;
+        else { this.lockedId = null; this.target = E.pickTarget(this.run, meT); }
+      } else this.target = E.pickTarget(this.run, meT);
       if (this.target) {
         const e = this.target;
         const ect = D.cellType(this.d, e.f, E.w2c(e.x), E.w2c(e.z));

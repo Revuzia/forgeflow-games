@@ -155,7 +155,7 @@ export class EnemyPool {
       const surfY = D.cellHeight(this.d, e.f, Math.floor(e.x / 4), Math.floor(e.z / 4)) + (ct === D.CT.WATER ? -0.25 : 0);
       v.surfY = v.surfY == null ? surfY : v.surfY + (surfY - v.surfY) * Math.min(1, dt * 10);
       v.grp.position.set(e.x, e.f * FLOOR_H + v.surfY, e.z);
-      v.grp.rotation.y = e.yaw + Math.PI;
+      v.grp.rotation.y = e.yaw;   // creature rigs face +Z = yaw dir (the stray +PI made enemies walk BACKWARDS)
       v.grp.visible = me ? Math.abs(e.f - me.f) <= 1 : true;
       if (far) { v.bar.grp.visible = false; continue; }
       if (v.hover) v.obj.position.y = 0.9 + Math.sin(t * 3 + e.x) * 0.18;

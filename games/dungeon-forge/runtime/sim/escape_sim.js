@@ -599,6 +599,19 @@ function breakDecorInRange(st, p, range, byId) {
 function playerMelee(st, p) {
   if (p.meleeT > 0 || p.stunT > 0) return;
   const cls = CLASSES[p.cls] || CLASSES.knight;
+  // Sorceress NORMAL attack (LMB) = shooting an ARCANE BOLT, not a staff swing
+  // (owner spec). Free (no mana), quick cooldown — her bread-and-butter ranged poke.
+  if (p.cls === "sorceress") {
+    p.meleeT = PLAYER.boltCd;
+    const vx = Math.sin(p.yaw), vz = Math.cos(p.yaw);
+    st.bolts.push({
+      id: "b" + st.nextBolt++, owner: p.id, f: p.f, elem: "arcane",
+      x: p.x + vx * 0.6, z: p.z + vz * 0.6, vx: vx * PLAYER.boltSpeed, vz: vz * PLAYER.boltSpeed,
+      ttl: 1.4, dmg: PLAYER.boltDmg * combatMul(p),
+    });
+    emit(st, "cast", { id: p.id, kind: "arcane" });
+    return;
+  }
   const M = cls.melee;
   // chain bookkeeping: continue if the last swing was recent, else restart
   p.combo = (st.time - p.comboT) < (M.cd + COMBO_WINDOW) ? (p.combo % 3) + 1 : 1;
@@ -672,7 +685,7 @@ function playerFrost(st, p) {
 /** C: Sorceress chain lightning — arcs to up to 3 nearby enemies (−20%/jump) + micro-stun. */
 function castChain(st, p) {
   if (p.cls !== "sorceress" || (p.chainT || 0) > 0 || p.stunT > 0 || p.mana < 22) return;
-  const R2 = 6.5 * 6.5;
+  const R2 = 9 * 9;   // range increased 6.5 → 9 (owner request)
   const cand = st.enemies.filter((e) => e.alive && e.f === p.f && ((e.x - p.x) ** 2 + (e.z - p.z) ** 2) <= R2)
     .sort((a, b) => ((a.x - p.x) ** 2 + (a.z - p.z) ** 2) - ((b.x - p.x) ** 2 + (b.z - p.z) ** 2))
     .slice(0, 3);
@@ -691,13 +704,15 @@ function castChain(st, p) {
 /** The player's action hotbar (ordered) — shared by the HUD (render) and the
  *  escape input (Digit1-N routing). Each slot: {act, icon, label, key, cd, max, count}. */
 export function hotbar(p) {
+  // The NORMAL attack lives on LMB (melee; sorceress = arcane bolt) and is NOT a
+  // hotbar slot (owner spec). Slots are class abilities + consumables:
+  // sorceress → 1 Fireball · 2 Frost · 3 Chain · 4 Health pot · 5 Mana pot.
   const cls = CLASSES[p.cls] || CLASSES.knight;
   const k = cls.special && cls.special.kind;
   const sName = { bash: "Shield Bash", crush: "Crush", fire: "Fireball", knife: "Poison Knife" }[k] || "Special";
   const sIcon = { bash: "🛡", crush: "💥", fire: "🔥", knife: "🗡️" }[k] || "✦";
   const slots = [
-    { act: "melee",   icon: "⚔️", label: "Attack",  key: "LMB", cd: 0, max: 1 },
-    { act: "special", icon: sIcon, label: sName,     key: "RMB", cd: p.specialT || 0, max: cls.special ? cls.special.cd : 1 },
+    { act: "special", icon: sIcon, label: sName, key: "RMB", cd: p.specialT || 0, max: cls.special ? cls.special.cd : 1 },
   ];
   if (cls.frost) slots.push({ act: "frost", icon: "❄️", label: "Frost Shard", key: "R", cd: p.frostT || 0, max: cls.frost.cd });
   if (p.cls === "sorceress") slots.push({ act: "chain", icon: "⚡", label: "Chain Lightning", key: "C", cd: p.chainT || 0, max: 3 });
