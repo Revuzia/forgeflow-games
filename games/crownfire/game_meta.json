@@ -1,0 +1,18 @@
+{
+  "title": "Crownfire Arenas",
+  "short_description": "Top-down arena wave survival across five floating realm-boards. Warrior with two full weapon kits, Archer, Mage — combos, shock/burn/frost, radial cooldowns, and the Crown of Fire at the end.",
+  "description": "Crownfire Arenas drops your champion onto five floating realm-boards — the volcanic Emberthrone, the frozen Glacier Court, the storm-lashed Tempest Ring, the void-cracked Umbra Throne and the sun-forged Aurelian Bastion — each with its own floor, lighting, ambient magic and combat modifiers. Fight escalating waves of skeletons, imps, orcs, brutes, wisps and realm champions. The Warrior swaps between a colossal two-hander (Whirlwind, Ground Slam, Earthsplitter) and sword & shield with a true directional Block, Shield Bash shock-stuns and perfect-parry pulses. The Archer zones with fan shots, fire arrows and arrow rain; the Mage controls space with fireballs, frost orbs and an arcane ward. Chain hits into 2x–32x combo multipliers, burn and freeze the ground itself, clear waves for big banner moments, and claim the Crown of Fire.",
+  "genre": "action",
+  "sub_genre": "arena-survival",
+  "difficulty": "medium",
+  "controls_keyboard": "WASD move · J / Click attack · 1 2 3 abilities · Hold 3 Block (Sword & Shield) · TAB weapon mode (Warrior) · Touch: joystick + ability buttons",
+  "tags": [
+    "action",
+    "arena",
+    "wave-survival",
+    "3d",
+    "hack-and-slash",
+    "singleplayer",
+    "mobile-friendly"
+  ]
+}

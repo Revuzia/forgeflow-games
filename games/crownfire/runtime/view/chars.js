@@ -1,0 +1,256 @@
+// Crownfire Arenas — character/enemy model loading + Actor animation wrapper.
+// Heroes are Meshy auto-rigged humanoids (base.glb + armature-only clips)
+// retargeted by bone name. Recipe (proven in Dungeon Forge): strip baked
+// .scale tracks (idle bakes Hips scale → model shrinks on walk) and strip
+// Shoulder/Arm/Hand .position tracks (they raise shoulders → permanent shrug).
+
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { clone as skClone } from "three/addons/utils/SkeletonUtils.js";
+
+const loader = new GLTFLoader();
+const CACHE = {};
+
+function load(rel) {
+  if (!CACHE[rel]) CACHE[rel] = new Promise((res, rej) => loader.load(`assets/${rel}`, res, undefined, rej));
+  return CACHE[rel];
+}
+
+function cleanClip(clip, name) {
+  const c = clip.clone();
+  c.tracks = c.tracks.filter((t) => !/\.scale$/.test(t.name) && !/(Shoulder|Arm|Hand)\.position$/.test(t.name));
+  c.name = name;
+  return c;
+}
+
+function prepScene(scene) {
+  scene.traverse((o) => {
+    if (o.isLight) { o.removeFromParent(); return; }  // GLB punctual lights tank fps
+    if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; }
+  });
+  return scene;
+}
+
+// ---------- hero + enemy libraries ---------------------------------------
+
+const HERO_CLIPS = {
+  knight: ["slash1", "slash2", "finisher", "parry", "hit", "death"],
+  barbarian: ["slash1", "slash2", "finisher", "hit", "death"],
+  sorceress: ["melee", "cast1", "cast2", "hit", "death"],
+  rogue: ["slash1", "slash2", "finisher", "hit", "death"],
+};
+
+export async function loadHeroes(names, onProgress) {
+  const out = {};
+  let done = 0;
+  await Promise.all(names.map(async (n) => {
+    const base = await load(`chars/meshy/${n}/base.glb`);
+    const anims = [];
+    const add = async (rel, name) => {
+      const g = await load(rel).catch(() => null);
+      if (g && g.animations && g.animations[0]) { anims.push(cleanClip(g.animations[0], name)); return true; }
+      return false;
+    };
+    if (!(await add(`chars/meshy/${n}/anim_idle.glb`, "Idle")) && base.animations[0])
+      anims.push(cleanClip(base.animations[0], "Idle"));
+    await add(`chars/meshy/${n}/walk_arm.glb`, "Walk");
+    await add(`chars/meshy/${n}/run_arm.glb`, "Run");
+    await Promise.all((HERO_CLIPS[n] || []).map((cn) => add(`chars/meshy/${n}/anim_${cn}.glb`, "C_" + cn)));
+    out[n] = { scene: prepScene(base.scene), animations: anims };
+    onProgress && onProgress(++done / names.length);
+  }));
+  return out;
+}
+
+export async function loadEnemyModels(names, onProgress) {
+  const out = {};
+  let done = 0;
+  await Promise.all(names.map(async (n) => {
+    try {
+      const g = await load(`enemies/${n}.glb`);
+      out[n] = { scene: prepScene(g.scene), animations: g.animations || [] };
+    } catch (e) { console.warn("[chars] enemy load failed:", n, e); }
+    onProgress && onProgress(++done / names.length);
+  }));
+  return out;
+}
+
+// ---------- actor ----------------------------------------------------------
+
+export class Actor {
+  constructor(lib, { height = 1.7, tint = null } = {}) {
+    this.root = new THREE.Group();                 // world transform lives here
+    this.model = skClone(lib.scene);
+    this.root.add(this.model);
+    this.height = height;
+
+    if (tint) this.model.traverse((o) => {
+      if (o.isMesh && o.material) {
+        o.material = o.material.clone();
+        o.material.color && o.material.color.lerp(new THREE.Color(tint), 0.22);
+      }
+    });
+
+    this.mixer = new THREE.AnimationMixer(this.model);
+    this.actions = {};
+    for (const clip of lib.animations) this.actions[clip.name] = this.mixer.clipAction(clip);
+    this.current = null;
+    this._oneShot = null;
+
+    // find generic locomotion clips for library enemies (clip names vary)
+    if (!this.actions.Walk) {
+      for (const clip of lib.animations) {
+        const n = clip.name.toLowerCase();
+        if (/walk|run|move|fly/.test(n) && !this.actions.Walk) this.actions.Walk = this.mixer.clipAction(clip);
+        if (/idle|stand/.test(n) && !this.actions.Idle) this.actions.Idle = this.mixer.clipAction(clip);
+        if (/attack|bite|punch|hit(?!_react)/.test(n) && !this.actions.C_attack) this.actions.C_attack = this.mixer.clipAction(clip);
+      }
+      if (!this.actions.Idle && lib.animations[0]) this.actions.Idle = this.mixer.clipAction(lib.animations[0]);
+      if (!this.actions.Walk) this.actions.Walk = this.actions.Idle;
+    }
+
+    // --- normalize to target height, feet at y=0 -------------------------
+    // Meshy/library skinned rigs: geometry bounds are bind-pose garbage and
+    // Box3 ignores bone transforms — pose one frame, then measure from BONE
+    // world positions (padded; bones carry no mesh volume). Static meshes
+    // fall back to Box3. (Dungeon Forge poseRig recipe.)
+    const probe = this.actions.Idle || Object.values(this.actions)[0];
+    if (probe) { probe.play(); this.mixer.update(0.05); }
+    this.model.updateMatrixWorld(true);
+    let minY = Infinity, maxY = -Infinity, hasBones = false;
+    const v = new THREE.Vector3();
+    this.model.traverse((o) => {
+      if (o.isBone) { hasBones = true; o.getWorldPosition(v); minY = Math.min(minY, v.y); maxY = Math.max(maxY, v.y); }
+    });
+    let srcH, groundY;
+    if (hasBones) {
+      srcH = Math.max(0.25, maxY - minY) * 1.25;
+      groundY = Math.min(0, minY);
+    } else {
+      const box = new THREE.Box3().setFromObject(this.model);
+      srcH = Math.max(0.2, box.max.y - box.min.y);
+      groundY = box.min.y;
+    }
+    const s = height / srcH;
+    this.model.scale.setScalar(s);
+    this.model.position.y = -groundY * s;
+    if (probe) probe.stop();
+  }
+
+  play(name, { fade = 0.12, timeScale = 1 } = {}) {
+    const a = this.actions[name];
+    if (!a || a === this.current) { if (a) a.timeScale = timeScale; return; }
+    a.reset().setEffectiveTimeScale(timeScale).setEffectiveWeight(1).fadeIn(fade).play();
+    if (this.current) this.current.fadeOut(fade);
+    this.current = a;
+  }
+
+  /** play a combat clip once, then resume locomotion; returns clip duration/timeScale */
+  playOnce(name, { timeScale = 1, fade = 0.06 } = {}) {
+    const a = this.actions[name];
+    if (!a) return 0.4;
+    a.reset().setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true;
+    a.setEffectiveTimeScale(timeScale).setEffectiveWeight(1).fadeIn(fade).play();
+    if (this.current && this.current !== a) this.current.fadeOut(fade);
+    this._oneShot = a; this.current = a;
+    return a.getClip().duration / timeScale;
+  }
+
+  update(dt) { this.mixer.update(dt); }
+
+  /** attach a prop to a hand bone (Meshy rig: bones contain "Hand") */
+  attachHand(obj, side = "Right") {
+    let bone = null;
+    this.model.traverse((o) => { if (!bone && o.isBone && o.name.includes(side) && o.name.includes("Hand")) bone = o; });
+    if (!bone) this.model.traverse((o) => { if (!bone && o.isBone && new RegExp(side, "i").test(o.name) && /hand|wrist/i.test(o.name)) bone = o; });
+    if (bone) {
+      // counter the model normalization so the prop keeps world-ish scale
+      const s = 1 / this.model.scale.x;
+      obj.scale.multiplyScalar(s * 0.9);
+      bone.add(obj);
+    } else this.root.add(obj); // fallback: visible at least
+    return !!bone;
+  }
+
+  /** attach to forearm (shield) */
+  attachForearm(obj, side = "Left") {
+    let bone = null;
+    this.model.traverse((o) => { if (!bone && o.isBone && o.name.includes(side) && /forearm|lowerarm/i.test(o.name)) bone = o; });
+    if (!bone) return this.attachHand(obj, side);
+    const s = 1 / this.model.scale.x;
+    obj.scale.multiplyScalar(s * 0.9);
+    bone.add(obj);
+    return true;
+  }
+
+  dispose() {
+    this.mixer.stopAllAction();
+    this.root.removeFromParent();
+  }
+}
+
+// ---------- weapon props (crownfire styling: crimson / steel / gold) -------
+
+const steel = () => new THREE.MeshStandardMaterial({ color: 0xc8ccd8, metalness: 0.85, roughness: 0.3 });
+const gold = () => new THREE.MeshStandardMaterial({ color: 0xe8b83a, metalness: 0.95, roughness: 0.25 });
+const ember = () => new THREE.MeshStandardMaterial({ color: 0xff5a2a, emissive: 0xff3a10, emissiveIntensity: 1.6 });
+const wood = () => new THREE.MeshStandardMaterial({ color: 0x4a2e1a, roughness: 0.9 });
+
+export function makeGreatblade() {
+  const g = new THREE.Group();
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.55, 8), wood()); grip.position.y = 0.15;
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.1), gold()); guard.position.y = 0.46;
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.5, 0.045), steel()); blade.position.y = 1.24;
+  const edge = new THREE.Mesh(new THREE.ConeGeometry(0.115, 0.3, 4), steel()); edge.scale.z = 0.28; edge.position.y = 2.06; edge.rotation.y = Math.PI / 4;
+  const core = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.4, 0.055), ember()); core.position.y = 1.24;
+  const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), gold()); pommel.position.y = -0.14;
+  g.add(grip, guard, blade, edge, core, pommel);
+  return g;
+}
+
+export function makeSword() {
+  const g = new THREE.Group();
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.038, 0.26, 8), wood()); grip.position.y = 0.08;
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.045, 0.07), gold()); guard.position.y = 0.24;
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.95, 0.03), steel()); blade.position.y = 0.75;
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.18, 4), steel()); tip.scale.z = 0.3; tip.position.y = 1.31; tip.rotation.y = Math.PI / 4;
+  g.add(grip, guard, blade, tip);
+  return g;
+}
+
+export function makeShield() {
+  const g = new THREE.Group();
+  const face = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.05, 24),
+    new THREE.MeshStandardMaterial({ color: 0x7a1f1a, metalness: 0.55, roughness: 0.45 }));
+  face.rotation.x = Math.PI / 2;
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.03, 8, 28), gold());
+  const boss = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), gold()); boss.position.z = 0.05;
+  const sig = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.018, 6, 20), ember()); sig.position.z = 0.04;
+  g.add(face, rim, boss, sig);
+  g.rotation.y = Math.PI / 2;
+  return g;
+}
+
+export function makeBow() {
+  const g = new THREE.Group();
+  const limb = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.028, 8, 24, Math.PI * 1.15), wood());
+  limb.rotation.z = -Math.PI * 0.575;
+  const stringMat = new THREE.MeshBasicMaterial({ color: 0xf2e8c8 });
+  const str = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.02, 4), stringMat);
+  const tipA = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), gold()); tipA.position.y = 0.51;
+  const tipB = tipA.clone(); tipB.position.y = -0.51;
+  g.add(limb, str, tipA, tipB);
+  return g;
+}
+
+export function makeStaff() {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, 1.55, 8), wood()); pole.position.y = 0.5;
+  const orb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 12),
+    new THREE.MeshStandardMaterial({ color: 0x9a5dff, emissive: 0x8a4dff, emissiveIntensity: 2.6 }));
+  orb.position.y = 1.36;
+  const cage = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.02, 8, 20), gold()); cage.position.y = 1.36;
+  const cage2 = cage.clone(); cage2.rotation.x = Math.PI / 2;
+  g.add(pole, orb, cage, cage2);
+  return g;
+}

@@ -1,0 +1,91 @@
+// Crownfire Arenas — the five realm boards.
+// Each def drives the procedural board builder (view/arena.js): floor canvas
+// style, rim/pylon treatment, sky + fog, ambient particle system, portal tint,
+// and light combat modifiers. Art only changes between realms — combat is shared.
+
+export const ARENAS = [
+  {
+    id: "emberthrone", name: "Emberthrone", order: 1,
+    tagline: "Cracked volcanic seat of the first crown",
+    clearWord: "EMBERTHRONE CONQUERED!",
+    floor: "ember",            // volcanic stone + lava seams
+    sky: { top: 0x1a0908, bottom: 0x4a1608 },
+    fog: { color: 0x2a0d06, near: 30, far: 90 },
+    hemi: { sky: 0xff9a55, ground: 0x2a0a06, intensity: 0.75 },
+    sun: { color: 0xffb066, intensity: 1.6, pos: [14, 24, 8] },
+    rimGlow: 0xff5a22, runeGlow: 0xffa030,
+    accent: 0xff6a2a, portal: 0xff4d1a,
+    particles: "embers",
+    enemyTint: 0xffb08a,
+    modifiers: { fireResidualMult: 1.35, frostResidualMult: 1, shockDurMult: 1 },
+    waves: 5,
+  },
+  {
+    id: "glaciercourt", name: "Glacier Court", order: 2,
+    tagline: "Frozen court of the pale sovereigns",
+    clearWord: "GLACIER COURT CONQUERED!",
+    floor: "ice",
+    sky: { top: 0x0a1420, bottom: 0x1e4258 },
+    fog: { color: 0x10222e, near: 30, far: 95 },
+    hemi: { sky: 0x9adfff, ground: 0x0c1a24, intensity: 0.8 },
+    sun: { color: 0xbfeaff, intensity: 1.5, pos: [-12, 26, 10] },
+    rimGlow: 0x35c8ff, runeGlow: 0x8ae8ff,
+    accent: 0x4fd8ff, portal: 0x2fb8ff,
+    particles: "snow",
+    enemyTint: 0xa8d8ff,
+    modifiers: { fireResidualMult: 1, frostResidualMult: 1.4, shockDurMult: 1 },
+    waves: 6,
+  },
+  {
+    id: "tempestring", name: "Tempest Ring", order: 3,
+    tagline: "Storm-lashed proving ground in the clouds",
+    clearWord: "TEMPEST RING CONQUERED!",
+    floor: "storm",
+    sky: { top: 0x0d0a1e, bottom: 0x2c2050 },
+    fog: { color: 0x171030, near: 28, far: 88 },
+    hemi: { sky: 0xb59aff, ground: 0x100a20, intensity: 0.7 },
+    sun: { color: 0xcdb8ff, intensity: 1.4, pos: [10, 25, -10] },
+    rimGlow: 0x9a55ff, runeGlow: 0xc9a2ff,
+    accent: 0xa25dff, portal: 0x8a3aff,
+    particles: "storm",           // wind streaks + periodic lightning flash
+    enemyTint: 0xc8b0ff,
+    modifiers: { fireResidualMult: 1, frostResidualMult: 1, shockDurMult: 1.5 },
+    waves: 6,
+  },
+  {
+    id: "umbrathrone", name: "Umbra Throne", order: 4,
+    tagline: "Void-cracked seat of the eclipsed king",
+    clearWord: "UMBRA THRONE CONQUERED!",
+    floor: "void",
+    sky: { top: 0x070310, bottom: 0x25082e },
+    fog: { color: 0x120518, near: 24, far: 78 },
+    hemi: { sky: 0xe055c8, ground: 0x0a0310, intensity: 0.55 },
+    sun: { color: 0xff66dd, intensity: 1.1, pos: [-14, 22, -8] },
+    rimGlow: 0xe03ab8, runeGlow: 0xff7ae0,
+    accent: 0xef4dc9, portal: 0xd428aa,
+    particles: "void",
+    enemyTint: 0xf0a0e0,
+    modifiers: { fireResidualMult: 1.15, frostResidualMult: 1.15, shockDurMult: 1.15 },
+    waves: 7,
+  },
+  {
+    id: "aurelianbastion", name: "Aurelian Bastion", order: 5,
+    tagline: "Sun-forged bastion where the crown is claimed",
+    clearWord: "THE CROWN IS CLAIMED!",
+    clearIsFinal: true,
+    floor: "solar",
+    sky: { top: 0x1c1206, bottom: 0x6a4a14 },
+    fog: { color: 0x33240c, near: 34, far: 100 },
+    hemi: { sky: 0xffe8a8, ground: 0x2a1c08, intensity: 0.95 },
+    sun: { color: 0xffe9b0, intensity: 2.0, pos: [8, 28, 12] },
+    rimGlow: 0xffc63a, runeGlow: 0xffe27a,
+    accent: 0xffc21e, portal: 0xffaa00,
+    particles: "gold",            // drifting gold dust + god-ray cones
+    enemyTint: 0xffe0a0,
+    modifiers: { fireResidualMult: 1.2, frostResidualMult: 1.2, shockDurMult: 1.2 },
+    waves: 8,
+  },
+];
+
+export const BOARD_RADIUS = 13.5;    // playable radius (soft circular bound) — small enough that the camera always frames the board edge + surrounding void (floating realm-board readability)
+export const REST_BETWEEN_WAVES = 3.2;
