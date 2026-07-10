@@ -243,7 +243,7 @@ export class Escape {
       case "npc": {
         const T = D.NPC_TYPES[o.ntype] || D.NPC_TYPES.merchant;
         grp.add(makeNpc(o.ntype, this.d.theme));
-        grp.add(this._sprite(T.icon, 1.1, 2.7));
+        grp.add(this._sprite(T.icon, 0.8, 3.2));
         const l = new THREE.PointLight(T.tint || 0xffd769, this.g.look.torchI * 0.3, 12, 1.4);
         l.position.y = 2.7; grp.add(l);
         this.lightPool.push({ light: l, base: this.g.look.torchI * 0.3, grp, f });

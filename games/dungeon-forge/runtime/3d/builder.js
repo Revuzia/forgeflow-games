@@ -374,9 +374,9 @@ export class Builder {
     return spr;
   }
   _merchBadge(icon) {
-    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTexture(icon || "🛒"), transparent: true, depthTest: false }));
-    spr.scale.set(1.4, 1.4, 1);
-    spr.position.y = 3.1;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTexture(icon || "🪙"), transparent: true, depthTest: false }));
+    spr.scale.set(0.9, 0.9, 1);
+    spr.position.y = 3.35;
     return spr;
   }
 

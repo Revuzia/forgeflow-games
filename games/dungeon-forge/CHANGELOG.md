@@ -291,3 +291,24 @@ Initial release.
     crystal, and a floating open tome. Violet emissive glow.
 - Wired through escape.js + builder.js (both call makeNpc); verified all 3 render
   distinctly in the builder with correct per-type props + tint. Selftest 159.
+
+## v1.6.3 — 2026-07-09 (NPC visual overhaul — stylized flat-shaded figures)
+- **makeNpc fully re-crafted** after owner feedback ("not polished, visually
+  displeasing"): flat-shaded stylized low-poly look, lathe-curved robes with
+  cinched waists + flared hems, gold trim (hem/collar/cuffs/belt buckle), real
+  faces (eyes, brows, nose), mitt hands, posed asymmetric arms with held items.
+- **Merchant**: feathered cap w/ gold band, short beard, coin offered in the
+  right hand + ledger in the left, patterned canvas-texture rug (gold diamond
+  border), draped counter w/ trim, stacked coins, working-look brass balance
+  scale, iron-banded strongbox, goods sack.
+- **Blacksmith**: red bandana, dark beard, leather apron w/ straps + pocket,
+  gloves, hammer, stone slab strewn with coals (some glowing), stump-mounted
+  anvil with a GLOWING hot iron bar, tripod brazier with molten embers, quench
+  bucket. Icon ⚒ → 🔨 (⚒ rendered as a giant black glyph sprite).
+- **Sage**: open-faced cowl (face + beard visible; peaked hood sits back),
+  brighter layered violet robe w/ pale trim, long white beard, gnarled crystal
+  staff (gold claw, glowing octahedron), floating tome above the open palm,
+  orbiting arcane shards, glowing runic circle base (canvas texture, 16 runes).
+- Badges shrunk + raised (escape 1.1→0.8 @3.2, builder 1.4→0.9 @3.35) so the
+  icon no longer dwarfs the model. Sci-fi variants recolored (steel/cyan/holo).
+- Verified all 3 live from the front in-browser; selftest 159 green.
