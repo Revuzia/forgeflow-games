@@ -344,6 +344,22 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.7.6 — 2026-07-10 (XP & leveling foundation)
+- **Kills now grant XP and the player levels up.** Each enemy is worth XP scaled
+  to its HP+damage (bosses ×3); crossing the per-level threshold raises the level,
+  adds +12 max HP, full-heals, and boosts damage. Curve is exponential
+  (`xpToNext = 45·1.35^(lvl-1)`), cap L30. Overflow XP carries into the next level.
+- **HUD**: a gold **Lv N** chip + an XP progress bar (with `x / y XP` readout, "MAX"
+  at cap) sit atop the health/mana vitals. Level-ups pop a toast + golden burst.
+- **Refactor**: the five identical attack multipliers (charms · weapon tier · gear
+  affixes) are now one `combatMul(p)` — which also folds in the +4%/level damage,
+  so melee/bolt/special/frost/chain all scale with level from a single source.
+  Foundation for the per-class skill trees (abilities gate on level next).
+- Selftest +9 → 203: curve rises, boss 3×, start L1/0xp, threshold levels up
+  (+maxHp, full-heal, event), overflow carries multiple levels, a kill awards xp.
+  Verified live: Lv1→2 raised maxHp 85→97 and refilled; HUD chip + bar render and
+  update (0%→40%→29.5% carrying 18 overflow), whole vitals stack fits the viewport.
+
 ## v1.7.5 — 2026-07-10 (Floor tool: Raise/Lower removed + procedural floor textures)
 - **Raise/Lower are gone from the Floor tool** (owner request) — the sub-palette is
   now just Floor · Lava · Water. The sim still honours legacy per-cell height data so

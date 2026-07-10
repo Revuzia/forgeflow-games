@@ -312,8 +312,10 @@ export class Hud {
     this.e = esc_;
     this.eWrap = el(`<div class="df-play">
       <div class="df-vitals">
+        <div class="df-lvlrow"><span class="df-lvl" data-a="lvl">Lv 1</span><span class="df-xptxt" data-a="xptxt"></span></div>
         <div class="df-bar hp"><div class="fill" data-a="hp"></div><span data-a="hptxt"></span></div>
         <div class="df-bar mana"><div class="fill" data-a="mana"></div></div>
+        <div class="df-bar xp"><div class="fill" data-a="xp"></div></div>
         <div class="df-inv">
           <span class="df-slot" data-a="keys" title="Keys">🗝️ 0</span>
           <span class="df-slot" data-a="gold" title="Gold">💰 0</span>
@@ -406,6 +408,12 @@ export class Hud {
     q('[data-a="hp"]').style.width = Math.max(0, p.hp) + "%";
     q('[data-a="hptxt"]').textContent = Math.max(0, Math.round(p.hp)) + " HP";
     q('[data-a="mana"]').style.width = Math.max(0, (p.mana / E.PLAYER.mana) * 100) + "%";
+    // level + XP toward next
+    const lvl = p.level || 1, maxed = lvl >= E.LEVELING.maxLevel;
+    const need = E.xpToNext(lvl);
+    q('[data-a="lvl"]').textContent = "Lv " + lvl;
+    q('[data-a="xp"]').style.width = (maxed ? 100 : Math.max(0, Math.min(100, ((p.xp || 0) / need) * 100))) + "%";
+    q('[data-a="xptxt"]').textContent = maxed ? "MAX" : (p.xp || 0) + " / " + need + " XP";
     q('[data-a="keys"]').textContent = "🗝️ " + p.keys;
     q('[data-a="gold"]').textContent = "💰 " + p.gold;
     q('[data-a="potions"]').textContent = "🧪 " + p.potions;
@@ -650,9 +658,14 @@ function injectStyle() {
   .df-vitals{position:absolute;left:16px;bottom:16px;display:flex;flex-direction:column;gap:7px;width:270px}
   .df-bar{position:relative;height:22px;background:rgba(8,10,18,.8);border:1px solid rgba(150,170,255,.3);border-radius:11px;overflow:hidden}
   .df-bar.mana{height:10px;border-radius:6px}
+  .df-bar.xp{height:8px;border-radius:5px}
   .df-bar .fill{position:absolute;inset:0;width:100%;transition:width .18s}
   .df-bar.hp .fill{background:linear-gradient(90deg,#ff4455,#ff7a55)}
   .df-bar.mana .fill{background:linear-gradient(90deg,#3d7bff,#37e0ff)}
+  .df-bar.xp .fill{background:linear-gradient(90deg,#c79a2e,#ffe27a)}
+  .df-lvlrow{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:1px}
+  .df-lvl{font-size:13px;font-weight:800;color:#ffe27a;text-shadow:0 1px 3px #000;letter-spacing:.3px}
+  .df-xptxt{font-size:10px;font-weight:700;color:#d8dcea;opacity:.85;text-shadow:0 1px 2px #000}
   .df-bar span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;text-shadow:0 1px 3px #000}
   .df-inv{display:flex;gap:7px}
   .df-slot{background:rgba(8,10,18,.8);border:1px solid rgba(150,170,255,.25);border-radius:9px;padding:5px 10px;font-size:13px;font-weight:800}

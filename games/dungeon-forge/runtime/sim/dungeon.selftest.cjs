@@ -237,6 +237,40 @@ const ok = (cond, name, extra) => {
     ok(D.FLOOR_TEX_IDS.length >= 6 && D.FLOOR_TEX_IDS[0] === "stone", "tex: FLOOR_TEX_IDS defined (stone default first)");
   }
 
+  // ── 4g. XP & leveling ───────────────────────────────────────────
+  console.log("[xp/level]");
+  {
+    const xg = newDungeon({ theme: "fantasy" });
+    stampRoom(xg, 0, 5, 5, 6, 6);
+    applyOp(xg, { t: "obj+", f: 0, o: { kind: "spawn", x: 6, z: 6 } });
+    applyOp(xg, { t: "obj+", f: 0, o: { kind: "exit", x: 9, z: 9 } });
+    // curve rises with level; boss worth 3×
+    ok(E.xpToNext(2) > E.xpToNext(1), "xp: xpToNext rises with level");
+    ok(E.xpFromEnemy({ hp: 30, dmg: 5, boss: true }) === 3 * E.xpFromEnemy({ hp: 30, dmg: 5 }), "xp: boss worth 3× a normal kill");
+    const xr = newRun(xg, 7, [{ id: "P1" }]);
+    const xp = xr.players[0];
+    ok(xp.level === 1 && xp.xp === 0, "xp: players start at level 1 / 0 xp");
+    const baseMax = xp.maxHp, mul1 = E.combatMul(xp);
+    // grant exactly the L1→L2 threshold → single level-up, hp refilled, event emitted
+    xp.hp = 5;
+    E.gainXp(xr, xp, E.xpToNext(1));
+    ok(xp.level === 2, "xp: reaching threshold levels up to 2");
+    ok(xp.maxHp === baseMax + E.LEVELING.hpPerLevel && xp.hp === xp.maxHp, "xp: level-up adds maxHp (" + xp.maxHp + ") and full-heals");
+    ok(xr.events.some((e) => e.type === "levelup" && e.level === 2), "xp: levelup event emitted");
+    ok(E.combatMul(xp) > mul1, "xp: higher level raises combatMul (" + E.combatMul(xp).toFixed(3) + ")");
+    // a big grant can carry several levels at once
+    const before = xp.level;
+    E.gainXp(xr, xp, E.xpToNext(2) + E.xpToNext(3) + E.xpToNext(4));
+    ok(xp.level >= before + 3, "xp: overflow grant carries multiple levels (now " + xp.level + ")");
+    // killing an enemy actually awards xp through damageEnemy
+    const kr = newRun(xg, 8, [{ id: "P1" }]);
+    const kp = kr.players[0];
+    const fake = { id: "eZ", alive: true, hp: 1, K: { hp: 40, dmg: 6, gold: 5 }, x: 24, z: 24, f: 0, key: null, state: "patrol" };
+    kr.enemies.push(fake);
+    E.damageEnemy(kr, fake, 50, "P1");
+    ok(kp.xp === E.xpFromEnemy(fake.K) && kp.gold === 45, "xp: a kill awards xp (" + kp.xp + ") + gold");
+  }
+
   // ── 5. loot determinism ─────────────────────────────────────────
   console.log("[loot]");
   const l1 = JSON.stringify(rollLoot(s, "oX", 123, null));

@@ -788,6 +788,15 @@ export class Escape {
           g.fx.burst(new THREE.Vector3(ev.x, ev.f * FLOOR_H + 1, ev.z), 0xff5566, 20);
           break;
         }
+        case "levelup": {
+          if (ev.id === this.myId) {
+            g.hud.toast(`⭐ Level ${ev.level}! +HP, stronger attacks`, "loot");
+            g.audio.sfx("confirm");
+          }
+          const a = this.actors.get(ev.id);
+          if (a && a.grp) g.fx.burst(a.grp.position.clone().setY(a.grp.position.y + 1.1), 0xffe27a, 34);
+          break;
+        }
         case "decorBreak": {
           if (this.run) this.run.brokenDecor && this.run.brokenDecor.add(ev.id);
           const m = this.objMeshes.get(ev.id);

@@ -24,6 +24,36 @@ export const PLAYER = {
   mana: 100, manaRegen: 9, potionHeal: 35, manaPotRestore: 60, respawnS: 5,
 };
 
+// ── XP & leveling ───────────────────────────────────────────────────────────
+// Kills grant XP; enough XP raises the player's level, which adds max-HP and a
+// small damage bonus (folded into combatMul). Level gates future class skills.
+export const LEVELING = { maxLevel: 30, hpPerLevel: 12, dmgPerLevel: 0.04, baseXp: 45, growth: 1.35 };
+export function xpToNext(lvl) { return Math.round(LEVELING.baseXp * Math.pow(LEVELING.growth, Math.max(0, (lvl || 1) - 1))); }
+export function xpFromEnemy(K) {
+  const base = Math.max(5, Math.round((K.hp || 30) * 0.4 + (K.dmg || 5) * 1.1));
+  return K.boss ? base * 3 : base;
+}
+export function gainXp(st, p, amount) {
+  if (!p || amount <= 0 || p.level >= LEVELING.maxLevel) return;
+  p.xp = (p.xp || 0) + amount;
+  let leveled = false;
+  while (p.level < LEVELING.maxLevel && p.xp >= xpToNext(p.level)) {
+    p.xp -= xpToNext(p.level);
+    p.level++;
+    p.baseMaxHp = (p.baseMaxHp || 100) + LEVELING.hpPerLevel;
+    leveled = true;
+  }
+  if (p.level >= LEVELING.maxLevel) p.xp = 0;          // capped: bar shows full/maxed
+  if (leveled) { recomputeMaxHp(p); p.hp = p.maxHp; emit(st, "levelup", { id: p.id, level: p.level }); }
+}
+
+// Aggregate offensive multiplier: charms + found-weapon tier + gear affixes + level.
+// Single source so every attack (melee/bolt/special/frost/chain) scales uniformly.
+export function combatMul(p) {
+  return (1 + 0.2 * (p.charms || 0)) * (1 + 0.12 * (p.weaponTier || 0)) *
+         (1 + (p.gearDmg || 0)) * (1 + LEVELING.dmgPerLevel * ((p.level || 1) - 1));
+}
+
 /**
  * CLASSES — four industry-standard kits. LMB always drives the 3-hit melee
  * combo (per-stage damage, finisher bonus); RMB is the class special; the
@@ -111,6 +141,7 @@ export function newRun(d, runSeed, players) {
       f: spawn.f, x: c2w(spawn.obj.x) + (i % 2) * 0.9 - 0.45, z: c2w(spawn.obj.z) + Math.floor(i / 2) * 0.9 - 0.45,
       yaw: (spawn.obj.rot || 0) * Math.PI / 2, hp: cls.hp, mana: PLAYER.mana,
       alive: true, escaped: false, deaths: 0, gold: 40, keys: 0, potions: 1, manaPots: 0, charms: 0,
+      level: 1, xp: 0,             // progression: gainXp() raises level → +maxHp +dmg
       weaponTier: 0, armorTier: 0, // derived from equipped items (see recomputeGear)
       baseMaxHp: cls.hp, blessHp: 0, equipped: { weapon: null, armor: null }, inventory: [], gearDmg: 0, gearMaxHp: 0,
       meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null, // climb: {t, from, to}
@@ -159,6 +190,7 @@ export function addPlayer(st, p) {
     f: st.spawn.f, x: c2w(st.spawn.x) + (i % 2) * 0.9 - 0.45, z: c2w(st.spawn.z) + Math.floor(i / 2) * 0.9 - 0.45,
     yaw: 0, hp: cls.hp, mana: PLAYER.mana,
     alive: true, escaped: false, deaths: 0, gold: 40, keys: 0, potions: 1, manaPots: 0, charms: 0,
+    level: 1, xp: 0,
     weaponTier: 0, armorTier: 0,
     baseMaxHp: cls.hp, blessHp: 0, equipped: { weapon: null, armor: null }, inventory: [], gearDmg: 0, gearMaxHp: 0,
     meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null,
@@ -478,8 +510,8 @@ export function damageEnemy(st, e, dmg, byId, elem) {
     e.alive = false;
     if (e.key) { e.droppedKey = e.key; e.key = null; }
     const p = st.players.find((pl) => pl.id === byId);
-    if (p) p.gold += e.K.gold;
-    emit(st, "edied", { id: e.id, by: byId, key: e.droppedKey, gold: e.K.gold, x: e.x, z: e.z, f: e.f });
+    if (p) { p.gold += e.K.gold; gainXp(st, p, xpFromEnemy(e.K)); }
+    emit(st, "edied", { id: e.id, by: byId, key: e.droppedKey, gold: e.K.gold, xp: xpFromEnemy(e.K), x: e.x, z: e.z, f: e.f });
     return;
   }
   // Retaliate: any hit aggros the enemy onto its attacker — even a projectile
@@ -573,7 +605,7 @@ function playerMelee(st, p) {
   p.comboT = st.time;
   p.meleeT = M.cd * (p.combo === 3 ? 1.25 : 1); // finisher recovers a touch slower
   emit(st, "swing", { id: p.id, stage: p.combo });
-  const dmg = M.dmg[p.combo - 1] * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)) * (1 + (p.gearDmg || 0));
+  const dmg = M.dmg[p.combo - 1] * combatMul(p);
   for (const e of meleeHits(st, p, M.range, M.arc)) {
     damageEnemy(st, e, dmg, p.id);
     if (M.poison && e.alive) applyStatus(st, e, "poison", M.poison, p.id);
@@ -599,7 +631,7 @@ function playerSpecial(st, p) {
   if (S.kind === "crush") {
     p.specialT = S.cd;
     emit(st, "crush", { id: p.id });
-    const dmg = cls.melee.dmg[2] * S.dmgMul * 0.6 * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)) * (1 + (p.gearDmg || 0));
+    const dmg = cls.melee.dmg[2] * S.dmgMul * 0.6 * combatMul(p);
     for (const e of meleeHits(st, p, S.range, 2.6)) damageEnemy(st, e, dmg, p.id);
     return;
   }
@@ -611,7 +643,7 @@ function playerSpecial(st, p) {
     st.bolts.push({
       id: "b" + st.nextBolt++, owner: p.id, f: p.f, elem: S.kind === "fire" ? "fire" : "knife",
       x: p.x + vx * 0.6, z: p.z + vz * 0.6, vx: vx * S.speed, vz: vz * S.speed,
-      ttl: 1.5, dmg: S.dmg * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)) * (1 + (p.gearDmg || 0)),
+      ttl: 1.5, dmg: S.dmg * combatMul(p),
       status: S.kind === "fire" ? { kind: "burn", cfg: S.burn } : { kind: "poison", cfg: S.poison },
     });
     emit(st, "cast", { id: p.id, kind: S.kind });
@@ -631,7 +663,7 @@ function playerFrost(st, p) {
   st.bolts.push({
     id: "b" + st.nextBolt++, owner: p.id, f: p.f, elem: "frost",
     x: p.x + vx * 0.6, z: p.z + vz * 0.6, vx: vx * F.speed, vz: vz * F.speed,
-    ttl: 1.5, dmg: F.dmg * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)) * (1 + (p.gearDmg || 0)),
+    ttl: 1.5, dmg: F.dmg * combatMul(p),
     status: { kind: "frost", cfg: F.slow },
   });
   emit(st, "cast", { id: p.id, kind: "frost" });
@@ -646,7 +678,7 @@ function castChain(st, p) {
     .slice(0, 3);
   if (!cand.length) return;
   p.chainT = 3; p.mana -= 22;
-  const base = 22 * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)) * (1 + (p.gearDmg || 0));
+  const base = 22 * combatMul(p);
   const pts = [{ x: p.x, z: p.z, f: p.f }];
   cand.forEach((e, i) => {
     damageEnemy(st, e, base * Math.pow(0.8, i), p.id, "lightning");
