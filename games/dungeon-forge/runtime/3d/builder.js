@@ -10,6 +10,7 @@ import * as THREE from "three";
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
 const { makeInstanced, Assets, creatureClips, makeTorch, makeCreature, makeCellSurfaces, makeNpc } = await import("./assets.js" + V);
+const { Thumbnailer } = await import("./thumbs.js" + V);
 
 const FLOOR_H = 4.4;
 const CELL = D.CELL;
@@ -125,6 +126,8 @@ export class Builder {
     this.props = await this.g.assets.props(dungeon.theme);
     this.enemyTpls = await this.g.assets.enemies(dungeon.theme);
     this.items = await this.g.assets.items();
+    // one shared offscreen thumbnail renderer for the picker palettes
+    this.thumbs = this.g._thumbs || (this.g._thumbs = new Thumbnailer(128));
 
     this.root = new THREE.Group();
     this.g.world.add(this.root);
@@ -713,6 +716,26 @@ export class Builder {
     if (opt) Object.assign(this.toolOpt, opt);
     this.select(null);
     this.g.hud.refreshBuilder(this);
+  }
+
+  /** Rendered PNG thumbnail (data URL) of a picker option, cached by kind+key.
+   *  kind ∈ enemy | npc | decor. Returns null if the model can't be built. */
+  thumbFor(kind, key) {
+    if (!this.thumbs) return null;
+    const A = this.g.assets, theme = this.d.theme;
+    return this.thumbs.get(`${theme}:${kind}:${key}`, () => {
+      if (kind === "enemy") {
+        const tpl = this.enemyTpls[key] || Object.values(this.enemyTpls)[0];
+        if (!tpl) return null;
+        return makeCreature(A, tpl, 1.8, THREE).obj;
+      }
+      if (kind === "npc") return makeNpc(key, theme);
+      if (kind === "decor") {
+        const tpl = this.props[key] || this.props.crate;
+        return tpl ? A.clone(tpl) : null;
+      }
+      return null;
+    });
   }
 
   validateNow() { return D.validate(this.d); }

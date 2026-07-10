@@ -114,9 +114,23 @@ export class Hud {
     // sub options
     const sub = this.bSub;
     sub.innerHTML = "";
+    sub.className = "df-subopts";
     const mkOpts = (list, cur, fmt, onpick) => {
       for (const it of list) {
         const o = el(`<button class="df-sub ${it === cur ? "on" : ""}">${fmt(it)}</button>`);
+        o.onclick = () => { this.g.audio.sfx("ui"); onpick(it); this.refreshBuilder(b); };
+        sub.appendChild(o);
+      }
+    };
+    // thumbnail picker: an IMAGE of each option (rendered from its 3D model) +
+    // a caption + optional stat line, instead of a text name.
+    const mkThumbOpts = (list, cur, kind, labelFn, statFn, onpick) => {
+      sub.classList.add("thumbs");
+      for (const it of list) {
+        const thumb = b.thumbFor(kind, it);
+        const img = thumb ? `<img class="df-thumbimg" src="${thumb}" alt="" draggable="false">` : `<div class="df-thumbimg df-thumbph">?</div>`;
+        const stat = statFn ? `<span class="df-thumbstat">${statFn(it)}</span>` : "";
+        const o = el(`<button class="df-thumb ${it === cur ? "on" : ""}" title="${esc(labelFn(it))}">${img}<span class="df-thumblbl">${esc(labelFn(it))}</span>${stat}</button>`);
         o.onclick = () => { this.g.audio.sfx("ui"); onpick(it); this.refreshBuilder(b); };
         sub.appendChild(o);
       }
@@ -138,12 +152,17 @@ export class Hud {
       sub.appendChild(el(`<span class="df-subnote">${fm === "raise" || fm === "lower" ? "Drag over cells to " + fm + " them — smooth rolling terrain" : "Drag to fill a rectangle" + (fm !== "floor" ? " with " + fm : "")}</span>`));
     } else if (b.tool === "enemy") {
       const roster = D.ENEMIES[b.d.theme];
-      mkOpts(Object.keys(roster), b.toolOpt.etype || Object.keys(roster)[0],
-        (k) => `${roster[k].boss ? "👑 " : ""}${roster[k].label}`, (k) => b.setTool("enemy", { etype: k }));
+      mkThumbOpts(Object.keys(roster), b.toolOpt.etype || Object.keys(roster)[0], "enemy",
+        (k) => `${roster[k].boss ? "👑 " : ""}${roster[k].label}`,
+        (k) => `<b>❤${roster[k].hp}</b> ⚔${roster[k].dmg}`,
+        (k) => b.setTool("enemy", { etype: k }));
     } else if (b.tool === "trap") {
       mkOpts(D.TRAPS, b.toolOpt.ttype || "spikes", (k) => k === "spikes" ? "⚙ Spikes" : (b.d.theme === "scifi" ? "🔴 Laser vent" : "🔥 Flame vent"), (k) => b.setTool("trap", { ttype: k }));
     } else if (b.tool === "decor") {
-      mkOpts(D.DECOR[b.d.theme], b.toolOpt.dtype || D.DECOR[b.d.theme][0], (k) => k, (k) => b.setTool("decor", { dtype: k }));
+      sub.appendChild(el(`<div class="df-flexbreak"></div>`));
+      mkThumbOpts(D.DECOR[b.d.theme], b.toolOpt.dtype || D.DECOR[b.d.theme][0], "decor",
+        (k) => k.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()), null,
+        (k) => b.setTool("decor", { dtype: k }));
     } else if (b.tool === "light") {
       const cols = b.d.theme === "scifi" ? ["#37e0ff", "#ff3d81", "#59ff9c", "#ffd769"] : ["#ff9a3c", "#8f6bff", "#59ff9c", "#ff5566"];
       mkOpts(cols, b.toolOpt.color || cols[0], (c) => `<span class="swatch" style="background:${c}"></span>`, (c) => b.setTool("light", { color: c }));
@@ -154,9 +173,10 @@ export class Hud {
     } else if (b.tool === "door") {
       sub.appendChild(el(`<span class="df-subnote">Place in a corridor · click the door afterwards to toggle its 🔒 lock</span>`));
     } else if (b.tool === "npc") {
-      mkOpts(D.NPC_TYPE_IDS, b.toolOpt.ntype || "merchant",
-        (k) => `${D.NPC_TYPES[k].icon} ${D.NPC_TYPES[k].label}`, (k) => b.setTool("npc", { ntype: k }));
-      sub.appendChild(el(`<span class="df-subnote">Players press E at an NPC — merchant sells goods, blacksmith upgrades gear (15% off), sage grants a blessing</span>`));
+      mkThumbOpts(D.NPC_TYPE_IDS, b.toolOpt.ntype || "merchant", "npc",
+        (k) => D.NPC_TYPES[k].label,
+        (k) => `${D.NPC_TYPES[k].icon} ${k === "merchant" ? "sells" : k === "blacksmith" ? "−15% gear" : "+25 HP"}`,
+        (k) => b.setTool("npc", { ntype: k }));
     }
 
     // floors
@@ -538,6 +558,15 @@ function injectStyle() {
   .df-sub .swatch{display:inline-block;width:22px;height:14px;border-radius:4px}
   .df-subnote{background:rgba(10,13,22,.8);border-radius:10px;padding:6px 12px;font-size:12px;opacity:.85}
   .df-subsep{opacity:.35;align-self:center;padding:0 2px;font-weight:800}
+  .df-flexbreak{flex-basis:100%;height:0}
+  .df-subopts.thumbs{background:rgba(10,13,22,.9);border:1px solid rgba(150,170,255,.25);border-radius:14px;padding:8px;max-height:52vh;max-width:min(720px,94vw);overflow-y:auto;align-items:flex-start}
+  .df-thumb{position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;background:rgba(20,24,38,.55);border:1.5px solid transparent;border-radius:10px;padding:4px 3px;color:#cfd6f4;width:72px}
+  .df-thumb:hover{border-color:rgba(150,170,255,.45);background:rgba(40,48,74,.55)}
+  .df-thumb.on{border-color:var(--acc);background:rgba(90,110,220,.24)}
+  .df-thumbimg{width:60px;height:60px;object-fit:contain;border-radius:7px;background:radial-gradient(circle at 50% 34%,rgba(96,116,196,.28),rgba(10,13,22,.05))}
+  .df-thumbph{display:flex;align-items:center;justify-content:center;font-size:22px;opacity:.5}
+  .df-thumblbl{font-size:9.5px;font-weight:700;line-height:1.12;text-align:center;max-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .df-thumbstat{font-size:8.5px;opacity:.82;font-weight:700;letter-spacing:.2px} .df-thumbstat b{color:#ff8a9a;font-weight:800}
   .df-floors{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;pointer-events:auto}
   .df-floor{width:44px;height:40px;background:rgba(10,13,22,.88);border:1px solid rgba(150,170,255,.3);border-radius:10px;color:#cfd6f4;font-weight:800;font-size:15px}
   .df-floor.on{border-color:var(--acc);color:var(--acc)} .df-floor.add{opacity:.7}

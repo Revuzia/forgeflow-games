@@ -328,3 +328,20 @@ Initial release.
   now a centered card just above the tool palette with an accent border, glow,
   and a downward pointer arrow. Verified live (order, badges, Digit2→Door,
   ring+box render, panel bottom above palette top, centered). Selftest 159.
+
+## v1.6.5 — 2026-07-09 (thumbnail pickers — images, not names)
+- **New offscreen thumbnail renderer** (runtime/3d/thumbs.js): a dedicated 128px
+  WebGL context that renders any model (enemy GLB / NPC / prop) to a framed,
+  3/4-view PNG data URL, cached by theme:kind:id. One context, reused session-wide.
+- **Builder pickers now show a rendered IMAGE of each option** instead of a text
+  name (owner: 'i want the images not the names', 'far from INDUSTRY STANDARD'):
+  - **Enemy** picker: all 24 creatures as thumbnails in a scrollable grid, each
+    with its name + ❤hp ⚔dmg stat line.
+  - **NPC** picker: merchant / blacksmith / sage figures as thumbnails + role note.
+  - **Decor** picker: all props (barrel/crate/bookshelf/pillar/coffin/…) as
+    thumbnails under the prop-category row.
+  - b.thumbFor(kind, key) builds the model (makeCreature / makeNpc / prop clone)
+    and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
+    thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
+    instant thereafter. Selftest 159.
+- (Per-placement editable stats: next slice.)
