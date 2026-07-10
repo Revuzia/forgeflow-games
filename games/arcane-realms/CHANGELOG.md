@@ -1,5 +1,32 @@
 # Arcane Realms TCG — Changelog
 
+## v1.5.0 — 2026-07-09 (3D bosses-only, gang-up attacks, Rally prompt, UX fixes)
+
+- **3D is now boss-battle only.** Grunt (campaign non-boss) battles use the flat
+  cards + flat hero portrait "like before" — faster and cleaner. Boss fights,
+  custom duels, and online matches keep the full 3D minis + hero models. Gated by
+  a `use3d` flag (campaign passes `battle.boss`).
+- **Heroes centred + camera pulled back.** In 3D battles the hero models are
+  centred (player bottom, enemy top) instead of off to the side, and the camera
+  starts more zoomed-out so more of the board reads.
+- **Gang-up attacks (no Attack button).** Click one of your creatures, then
+  another (each shows an arrow), then click the enemy — they all strike it
+  together. Click a selected creature again to deselect; the ⚔ Attack button is
+  gone.
+- **Rally now prompts for its target.** A creature whose Rally needs a target
+  (e.g. Mirrorplane Archon) used to silently skip the Rally when summoned onto an
+  empty board. Now it highlights valid targets and asks you to pick one (Esc /
+  click-away skips it when the Rally is optional).
+- **Board stat orbs no longer overlap neighbours** (inset + slightly smaller).
+- **Reduced the board-hover lift** — hovering a creature no longer enlarges it so
+  much that it covers the card you're trying to target. Right-click for a closer
+  look.
+- **Pause menu Concede / Main Menu now work** — they used native `confirm()`,
+  which Chrome blocks inside the embedded hub iframe; replaced with an in-game
+  confirm dialog.
+
+Cache-bust `?v=18` → `?v=19`.
+
 ## v1.4.1 — 2026-07-09 (Hero hit reactions)
 
 - When a hero (yours or the enemy's) takes damage, the 3D character now **reacts

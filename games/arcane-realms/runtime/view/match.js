@@ -6,10 +6,10 @@
 // always shows my side at the bottom via syncFromState(state, mySide).
 
 import * as THREE from 'three';
-import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=18';
-import { cardById, REALMS } from '../sim/cards.js?v=18';
-import { chooseAction } from '../sim/ai.js?v=18';
-import { Audio2 } from './audio.js?v=18';
+import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=19';
+import { cardById, REALMS } from '../sim/cards.js?v=19';
+import { chooseAction } from '../sim/ai.js?v=19';
+import { Audio2 } from './audio.js?v=19';
 
 const REALM_COLOR = (id) => REALMS[cardById(id).realm]?.color ?? 0x8d99ae;
 
@@ -26,7 +26,7 @@ function hashState(state) {
 export class Match {
   constructor({ scene, ui, playerDeck, aiDeck, difficulty, heroes, seed, settings,
                 mode = 'ai', net = null, mySide = 0, sharedState = null, names,
-                cardbacks = null, onGameOver = null }) {
+                cardbacks = null, onGameOver = null, use3d = true }) {
     this.onGameOver = onGameOver;
     this.scene = scene;
     this.ui = ui;
@@ -47,7 +47,7 @@ export class Match {
     this.over = false;
     this.drag = null;        // hand-card drag
     this.select = null;      // attack selection {iid, attacks, viaCombat, moved}
-    this.attackQueue = [];   // multi-attack: {attacker, action, viaCombat} queued, resolved together
+    this.attackQueue = [];   // SELECTED attackers {iid, attacks, viaCombat} — all strike one clicked target
     this.hoverIid = null;
     this.legal = [];
     this.stats = { dmgDealt: 0, cardsPlayed: 0 };
@@ -57,6 +57,7 @@ export class Match {
     scene.animSpeed = this.speed;
     scene.reduceShake = !settings.shake;
     scene.fx.density = settings.particles ? 1 : 0.45;
+    scene.use3d = use3d; // gate 3D minis + hero models (bosses only in campaign)
 
     // heroes[] is by ABSOLUTE engine side; scene wants rel (0 = bottom = me)
     scene.setHeroPortrait(0, heroes[this.mySide]);
@@ -113,8 +114,8 @@ export class Match {
       const attackers = new Set(this.legal.filter((a) => a.type === 'attack').map((a) => a.attacker));
       for (const iid of attackers) this.scene.setGlow(iid, 0xffd45f, true);
     }
-    // queued attackers keep their "committed" orange ring
-    for (const item of this.attackQueue) this.scene.setGlow(item.attacker, 0xff7a3d, true);
+    // selected attackers keep their "ready" ring
+    for (const item of this.attackQueue) this.scene.setGlow(item.iid, 0xffd45f, true);
     this.ui.hudUpdate(this.state, this);
   }
 
@@ -605,49 +606,42 @@ export class Match {
     this.ui.hideArrow();
   }
 
-  // QUEUE an attack instead of resolving immediately — the player can line up
-  // several (each shows a committed arrow) then resolve them together.
-  commitAttack(match) {
-    const sel = this.select;
-    const fromPos = this.scene.posOf(sel.iid) || new THREE.Vector3();
-    const toPos = this.posOfTarget(match.target);
-    this.attackQueue.push({ attacker: sel.iid, action: match, viaCombat: sel.viaCombat });
-    // committed look + persistent arrow
-    this.scene.setGlow(sel.iid, 0xff7a3d, true);
-    const f = this.scene.worldToScreen(fromPos);
-    const t = this.scene.worldToScreen(toPos);
-    this.ui.addQueuedArrow(sel.iid, f.x, f.y, t.x, t.y);
-    this.clearSelect();
-    this.refreshLegal();
-    this.ui.showAttackButton(this.attackQueue.length);
-    this.ui.coach('multi-attack', 'You can line up <b>several attacks</b> — pick another creature and target. Press <b>⚔ Attack</b> (or End Turn) to resolve them all.');
+  // multi-attack, gang-up style: SELECTED attackers (this.attackQueue holds
+  // {iid, attacks, viaCombat}) each show an arrow; clicking one enemy makes them
+  // all strike it. No separate Attack button.
+  redrawSelectArrows(cx, cy) {
+    this.ui.clearQueuedArrows();
+    for (const item of this.attackQueue) {
+      const f = this.scene.worldToScreen(this.scene.posOf(item.iid) || new THREE.Vector3());
+      const tx = cx != null ? cx : f.x, ty = cy != null ? cy : f.y - 70;
+      this.ui.addQueuedArrow(item.iid, f.x, f.y, tx, ty);
+    }
   }
 
-  // resolve every queued attack in order (skipping any made illegal by earlier
-  // ones, e.g. a target that already died)
-  async resolveAttacks() {
+  // resolve every selected attacker against the one chosen target (skipping any
+  // made illegal by an earlier hit, e.g. the target already died)
+  async resolveSelectedAttacks(tgt) {
     if (this.busy || !this.attackQueue.length) return;
-    const q = this.attackQueue; this.attackQueue = [];
+    const sel = this.attackQueue; this.attackQueue = [];
     this.ui.clearQueuedArrows();
-    this.ui.showAttackButton(0);
     this.scene.clearGlows();
-    if (q.some((x) => x.viaCombat) && this.state.phase === 'main') await this.doAction({ type: 'combat' });
-    for (const item of q) {
+    if (sel.some((x) => x.viaCombat) && this.state.phase === 'main') await this.doAction({ type: 'combat' });
+    for (const item of sel) {
       if (this.over) break;
-      const stillLegal = legalActions(this.state).some(
-        (a) => a.type === 'attack' && a.attacker === item.action.attacker && this.sameTarget(a.target, item.action.target));
-      if (stillLegal) await this.doAction(item.action);
+      const action = legalActions(this.state).find(
+        (a) => a.type === 'attack' && a.attacker === item.iid && this.sameTarget(a.target, tgt));
+      if (action) await this.doAction(action);
     }
     this.ui.coach('exhausted', 'After attacking, a creature is <b>exhausted 💤</b> — it dims and rests until your next turn.');
+    this.refreshLegal();
   }
 
-  // discard any queued attacks (turn change / concede) without resolving
+  // drop the current attacker selection (turn change / concede / cancel)
   clearAttackQueue() {
     if (!this.attackQueue.length) return;
-    for (const item of this.attackQueue) this.scene.setGlow(item.attacker, 0, false);
+    for (const item of this.attackQueue) this.scene.setGlow(item.iid, 0, false);
     this.attackQueue = [];
     this.ui.clearQueuedArrows();
-    this.ui.showAttackButton(0);
   }
 
   async commitSpell(tgt) {
@@ -676,14 +670,18 @@ export class Match {
     if (this.over) return;
     const hit = this.scene.pick(e.clientX, e.clientY);
     if (this.drag) { this.dragMove(e, hit); return; }
-    // selection arrow follows the cursor (sticky click-to-target mode)
-    if (this.select) {
-      const fromPos = this.select.kind === 'spell'
-        ? (this.scene.cards.get(this.select.iid)?.group.position || new THREE.Vector3())
-        : (this.scene.posOf(this.select.iid) || new THREE.Vector3());
+    // spell arrow follows the cursor (sticky click-to-target mode)
+    if (this.select && this.select.kind === 'spell') {
+      const fromPos = this.scene.cards.get(this.select.iid)?.group.position || new THREE.Vector3();
       const from = this.scene.worldToScreen(fromPos);
-      this.ui.showArrow(from.x, from.y, e.clientX, e.clientY, this.select.kind);
+      this.ui.showArrow(from.x, from.y, e.clientX, e.clientY, 'spell');
       if (e.buttons & 1) this.select.moved = true;
+      el_cursor(this.scene.renderer.domElement, hit, this);
+      return;
+    }
+    // every selected attacker's arrow follows the cursor toward the target
+    if (this.attackQueue.length) {
+      this.redrawSelectArrows(e.clientX, e.clientY);
       el_cursor(this.scene.renderer.domElement, hit, this);
       return;
     }
@@ -723,30 +721,28 @@ export class Match {
     if (this.busy || this.over || !this.myTurn() || e.button !== 0) return;
     const hit = this.scene.pick(e.clientX, e.clientY);
 
-    // click-to-target: a selection is armed → this click picks the target (or cancels)
-    if (this.select) {
+    // a spell is armed → this click picks its target (or cancels)
+    if (this.select && this.select.kind === 'spell') {
       const tgt = this.hitToTarget(hit);
-      if (this.select.kind === 'attack') {
-        const match = tgt && this.select.attacks.find((a) => this.sameTarget(a.target, tgt));
-        if (match) { this.commitAttack(match); }
-        else if (hit && hit.kind === 'board' && hit.side === 0 && hit.iid !== this.select.iid) {
-          this.trySelectAttacker(hit);
-        } else {
-          // clicked an illegal target — if a Guard is why, say so
-          if (tgt && this.enemyHasGuard() &&
-              (tgt.kind === 'hero' ? tgt.p === this.foeSide
-                                   : !this.isGuard(this.findUnit(tgt.iid)))) {
-            Audio2.sfx('error');
-            this.ui.toast('🛡 Blocked by Guard — destroy the enemy Guard creature(s) first.');
-          }
-          this.clearSelect();
-          this.refreshLegal();
-        }
-      } else {
-        // spell targeting
-        if (tgt && this.select.plays.some((a) => this.sameTarget(a.target, tgt))) this.commitSpell(tgt);
-        else { this.clearSelect(); this.refreshLegal(); }
+      if (tgt && this.select.plays.some((a) => this.sameTarget(a.target, tgt))) this.commitSpell(tgt);
+      else { this.clearSelect(); this.refreshLegal(); }
+      return;
+    }
+
+    // attackers are selected → this click is the SHARED target (they all strike),
+    // or toggles another of your creatures into the selection
+    if (this.attackQueue.length) {
+      const tgt = this.hitToTarget(hit);
+      const valid = tgt && this.attackQueue.some((item) => item.attacks.some((a) => this.sameTarget(a.target, tgt)));
+      if (valid) { this.resolveSelectedAttacks(tgt); return; }
+      if (hit && hit.kind === 'board' && hit.side === 0) { this.trySelectAttacker(hit); return; }
+      if (tgt && this.enemyHasGuard() &&
+          (tgt.kind === 'hero' ? tgt.p === this.foeSide : !this.isGuard(this.findUnit(tgt.iid)))) {
+        Audio2.sfx('error');
+        this.ui.toast('🛡 Blocked by Guard — destroy the enemy Guard creature(s) first.');
+        return; // keep the selection so they can pick a legal target
       }
+      this.clearAttackQueue(); this.refreshLegal(); // clicked away → cancel selection
       return;
     }
 
@@ -770,10 +766,15 @@ export class Match {
     }
   }
 
+  // toggle a creature in/out of the attacker selection; clicking an already
+  // selected one deselects it
   trySelectAttacker(hit) {
-    if (this.attackQueue.some((x) => x.attacker === hit.iid)) {
-      this.ui.toast('Already queued to attack — press ⚔ Attack to resolve.');
-      Audio2.sfx('error');
+    const idx = this.attackQueue.findIndex((x) => x.iid === hit.iid);
+    if (idx >= 0) {
+      this.scene.setGlow(hit.iid, 0, false);
+      this.attackQueue.splice(idx, 1);
+      this.redrawSelectArrows();
+      this.refreshLegal();
       return;
     }
     let attacks = this.legal.filter((a) => a.type === 'attack' && a.attacker === hit.iid);
@@ -790,16 +791,16 @@ export class Match {
       const u = this.findUnit(hit.iid);
       if (u) this.ui.toast(u.tapped ? 'Exhausted — already attacked this turn.' : u.frozen ? 'Frozen solid.' : u.sick ? 'Summoning sickness — ready next turn.' : 'No attack available.');
       Audio2.sfx('error');
-      this.clearSelect();
-      this.refreshLegal();
       return;
     }
-    this.scene.clearGlows();
-    // teach Guard the first time it actually constrains the player's targets
+    this.attackQueue.push({ iid: hit.iid, attacks, viaCombat });
+    this.scene.setGlow(hit.iid, 0xffd45f, true);
+    Audio2.sfx('click');
     if (this.enemyHasGuard() && !attacks.some((a) => a.target.kind === 'hero')) {
-      this.ui.coach('guard', '🛡 The enemy has a <b>Guard</b>. You must destroy Guard creatures before you can attack the hero or anything behind them.');
+      this.ui.coach('guard', '🛡 The enemy has a <b>Guard</b>. Destroy Guard creatures before you can attack the hero or anything behind them.');
     }
-    this.beginSelect(hit.iid, attacks, viaCombat);
+    this.ui.coach('multi-attack', 'Pick <b>one or more of your creatures</b> (each shows an arrow), then click the <b>enemy</b> — they all strike together.');
+    this.redrawSelectArrows();
   }
 
   whyUnplayable(iid) {
@@ -852,19 +853,12 @@ export class Match {
   async pointerUp(e) {
     const d = this.drag;
     if (!d) {
-      // drag-release while a selection is armed also confirms (both styles work)
-      if (this.select && this.select.moved) {
+      // drag-release while a spell is armed also confirms it (drag OR click work)
+      if (this.select && this.select.kind === 'spell' && this.select.moved) {
         const hit = this.scene.pick(e.clientX, e.clientY);
         const tgt = this.hitToTarget(hit);
-        if (this.select.kind === 'attack') {
-          const match = tgt && this.select.attacks.find((a) => this.sameTarget(a.target, tgt));
-          if (match) { this.commitAttack(match); return; }
-        } else if (tgt && this.select.plays.some((a) => this.sameTarget(a.target, tgt))) {
-          this.commitSpell(tgt);
-          return;
-        }
-        // released over nothing → stay in sticky mode
-        this.select.moved = false;
+        if (tgt && this.select.plays.some((a) => this.sameTarget(a.target, tgt))) { this.commitSpell(tgt); return; }
+        this.select.moved = false; // released over nothing → stay in sticky mode
       }
       return;
     }
@@ -877,13 +871,24 @@ export class Match {
       let action = null;
       if (d.def.type === 'creature') {
         if (hit && hit.point && hit.point.z < 3.6) {
-          const base = d.plays.find((a) => !a.target) || d.plays[0];
-          action = { ...base, slot: d.slot ?? undefined };
+          const slot = d.slot ?? undefined;
+          const targeted = d.plays.filter((a) => a.target); // Rally-with-target options
+          let play = d.plays.find((a) => !a.target) || d.plays[0];
           if (hit.kind === 'board' || hit.kind === 'hero') {
+            // dropped directly on a valid Rally target
             const tgt = this.hitToTarget(hit);
-            const withTgt = d.plays.find((a) => this.sameTarget(a.target, tgt));
-            if (withTgt) action = { ...withTgt, slot: d.slot ?? undefined };
+            const withTgt = targeted.find((a) => this.sameTarget(a.target, tgt));
+            if (withTgt) play = withTgt;
+          } else if (targeted.length) {
+            // has a targeted Rally but wasn't dropped on a target — PROMPT so the
+            // Rally actually fires (previously it silently played with no target)
+            this.scene.syncFromState(this.state, this.mySide);
+            const picked = await this.chooseRallyTarget(targeted, !!d.def.target?.optional);
+            if (picked === 'cancel') play = null;           // bailed on a required target
+            else if (picked) play = picked;                 // chose a target
+            // picked === null + optional → keep the no-target play (skip Rally)
           }
+          action = play ? { ...play, slot } : null;
         }
       } else if (d.def.target) {
         const tgt = this.hitToTarget(hit);
@@ -936,6 +941,38 @@ export class Match {
     });
   }
 
+  // choose the target for a creature's Rally on summon (glow valid targets,
+  // click to fire; Esc / click-away skips it when the Rally is optional)
+  chooseRallyTarget(candidates, optional) {
+    return new Promise((resolve) => {
+      this.ui.toast(optional ? '✨ Rally — choose a target (or Esc to skip)' : '✨ Rally — choose a target');
+      this.scene.clearGlows();
+      for (const a of candidates) {
+        if (a.target.kind === 'unit') this.scene.setGlow(a.target.iid, 0x6fd8ff, true);
+        else this.scene.setHeroGlow(this.relOf(a.target.p), true);
+      }
+      const el = this.scene.renderer.domElement;
+      const done = (val) => {
+        el.removeEventListener('pointerdown', onDown, true);
+        window.removeEventListener('keydown', onKey);
+        this.scene.clearGlows();
+        resolve(val);
+      };
+      const onDown = (e) => {
+        e.stopPropagation();
+        const hit = this.scene.pick(e.clientX, e.clientY);
+        const tgt = this.hitToTarget(hit);
+        const match = tgt && candidates.find((a) => this.sameTarget(a.target, tgt));
+        if (match) done(match);
+        else if (optional) done(null); // clicked away + optional → skip the Rally
+        // required + missed → keep waiting for a valid target
+      };
+      const onKey = (e) => { if (e.key === 'Escape') done(optional ? null : 'cancel'); };
+      el.addEventListener('pointerdown', onDown, true);
+      window.addEventListener('keydown', onKey);
+    });
+  }
+
   hitToTarget(hit) {
     if (!hit) return null;
     if (hit.kind === 'hero') return { kind: 'hero', p: hit.p === 0 ? this.mySide : this.foeSide };
@@ -955,8 +992,7 @@ export class Match {
   }
   async endTurn() {
     if (this.busy || !this.myTurn()) return;
-    // resolve any queued attacks first so nothing is silently dropped
-    if (this.attackQueue.length) { await this.resolveAttacks(); if (this.over) return; }
+    this.clearAttackQueue(); // drop any pending attacker selection
     Audio2.sfx('click');
     await this.doAction({ type: 'end' });
   }

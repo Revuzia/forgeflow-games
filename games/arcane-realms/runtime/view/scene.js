@@ -2,9 +2,9 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=18';
-import { REALMS, cardById } from '../sim/cards.js?v=18';
-import { FX } from './fx.js?v=18';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=19';
+import { REALMS, cardById } from '../sim/cards.js?v=19';
+import { FX } from './fx.js?v=19';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 const HIT_RED = new THREE.Color(0x9a1408); // hero hit-flash tint
@@ -13,12 +13,12 @@ export const LAYOUT = {
   handZ: 4.52, handY: 1.0, enemyHandZ: -3.98,
   deckX: 7.5, playerDeckZ: 3.1, enemyDeckZ: -3.1,
   trapX: -7.35, playerTrapZ: 2.35, enemyTrapZ: -2.35,
-  // full-body heroes frame the arena diagonally: the player warlord stands at
-  // the near bottom-left (raised onto the board so the whole figure clears the
-  // hand row + near rim), the enemy looms at the far back. Tuned in-browser so
-  // both read fully without covering the central hand or the board minis.
-  heroPlayer: new THREE.Vector3(-5.15, 0.25, 1.5),
-  heroEnemy: new THREE.Vector3(-1.5, 0.45, -4.05),
+  // heroes stand CENTERED (Hearthstone-style): player at the near bottom-centre,
+  // enemy at the far top-centre, each raised to clear the board slab. Boss
+  // battles only (grunts stay flat). Depth ≈ the v1.3.9 positions that rendered
+  // clearly in a focused browser.
+  heroPlayer: new THREE.Vector3(0, 0.45, 3.35),
+  heroEnemy: new THREE.Vector3(0, 0.45, -3.75),
 };
 
 // ── tiny tween engine ────────────────────────────────────────────
@@ -208,9 +208,11 @@ export class BoardScene {
     this.scene.background = new THREE.Color('#0b0714');
     this.scene.fog = new THREE.Fog('#0b0714', 18, 30);
 
-    this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 60);
-    this.camera.position.set(0, 10.6, 9.15);
-    this.camera.lookAt(0, 0, 0.62);
+    // pulled back + slightly wider than before so more of the board reads and
+    // there's room for the centred heroes in front of each card row
+    this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 60);
+    this.camera.position.set(0, 12.1, 11.2);
+    this.camera.lookAt(0, 0, 0.35);
     this.camShakeT = 0; this.camShakeAmp = 0;
     this.camBase = this.camera.position.clone();
     // scroll-wheel zoom: dolly toward the board centre to inspect cards & the
@@ -351,7 +353,7 @@ export class BoardScene {
     this.renderer.setSize(w, h);
     this.camera.aspect = w / h;
     // keep whole table in view on narrow screens
-    this.camera.fov = w / h < 1.45 ? 50 : 42;
+    this.camera.fov = w / h < 1.45 ? 52 : 45;
     this.camera.updateProjectionMatrix();
   }
 
@@ -460,7 +462,8 @@ export class BoardScene {
       return { x: s.x - cr.left, y: s.y - cr.top };
     };
     const put = (el, xy) => { el.style.left = xy.x + 'px'; el.style.top = xy.y + 'px'; el.style.display = ''; };
-    const KX = CW / 2 * 0.86, KY = CH / 2 * 0.9;
+    // inset the orbs well INSIDE the card so they never bleed onto a neighbour
+    const KX = CW / 2 * 0.6, KY = CH / 2 * 0.82;
     if (e.chips) { put(e.chips.atk, corner(-KX, -KY)); put(e.chips.hp, corner(KX, -KY)); } // bottom L/R
     for (const b of e.badges) {
       const c = b._corner === 'tr' ? corner(KX, KY) : corner(-KX, KY - b._i * 0.5); // top R / top L stack
@@ -504,21 +507,18 @@ export class BoardScene {
     if (!e || e.zone !== 'board') return;
     if (on === !!e.boardHover) return;
     e.boardHover = on;
-    // while ANY card is enlarged, hide EVERY nameplate so the full rules-text
-    // card overlaps cleanly (orbs were bleeding over the enlarged card)
-    this._hoverActive = on;
     this.setHoverFront(iid, on);
-    const face = on ? getCard(e.cardId).tex : getBoardCard(e.cardId).tex;
-    if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
-    if (on) for (const c of this.cards.values()) this.hideNameplate(c);
+    // gentle highlight only — a small raise, no big enlarge and no rules-text
+    // swap. It used to lift +1.5 @ scale 1.72 which covered the card you were
+    // trying to TARGET. For a closer look, right-click (inspect).
     const base = this.boardTransform(e.side, e.slot, (e.side === 0 ? this._lastMyBoardN : this._lastFoeBoardN) || 6);
     if (on) {
       this.applyTransform(e, {
-        pos: base.pos.clone().add(new THREE.Vector3(0, 1.5, e.side === 0 ? 0.4 : 0.85)),
-        rotX: -0.62, rotZ: 0, scale: 1.72,
-      }, 0.16);
+        pos: base.pos.clone().add(new THREE.Vector3(0, 0.22, e.side === 0 ? 0.1 : 0.15)),
+        rotX: base.rotX, rotZ: base.rotZ, scale: 1.08,
+      }, 0.13);
     } else {
-      this.applyTransform(e, base, 0.16);
+      this.applyTransform(e, base, 0.13);
     }
   }
 
@@ -615,7 +615,7 @@ export class BoardScene {
         }
         // lazy 3D mini — any mapped card (legendaries + curated epics).
         // Legendaries idle-animate (grander); epics stay static (tier).
-        const mspec = MINI_MAP[u.card];
+        const mspec = this.use3d !== false ? MINI_MAP[u.card] : null; // grunts: flat card only
         if (mspec && !this.minis.has(u.iid)) this.spawnMini(u.iid, mspec, rel, def.rarity === 'legendary');
         // exhausted creatures rest dimmed; summon-sick get a lighter sheen
         e.mesh.material.color.setScalar(u.tapped ? 0.48 : u.sick ? 0.82 : 1);
@@ -775,7 +775,7 @@ export class BoardScene {
   // ── 3D legendary minis ─────────────────────────────────────────
   async _gltfLoader() {
     if (!this._gltfLoaderP) {
-      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=18').then((m) => new m.GLTFLoader());
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=19').then((m) => new m.GLTFLoader());
     }
     return this._gltfLoaderP;
   }
@@ -916,7 +916,17 @@ export class BoardScene {
     tex.colorSpace = THREE.SRGBColorSpace;
     grp.children[1].material.map = tex;
     grp.children[1].material.needsUpdate = true;
-    this.setHeroModel(rel, realm); // 3D character (replaces the flat disc)
+    if (this.use3d !== false) {
+      this.setHeroModel(rel, realm); // 3D character (replaces the flat disc)
+    } else {
+      // flat mode (grunt battles): keep the disc portrait, drop any 3D model
+      grp.children[1].visible = true;
+      if (this.heroModels && this.heroModels[rel]) {
+        this.scene.remove(this.heroModels[rel].grp);
+        this.heroModels[rel].grp.traverse((o) => o.geometry?.dispose?.());
+        this.heroModels[rel] = null;
+      }
+    }
   }
 
   // load a standing 3D hero character (Meshy, from the portrait art) behind
@@ -979,8 +989,8 @@ export class BoardScene {
         this.scene.remove(this.heroModels[rel].grp);
         this.heroModels[rel].grp.traverse((o) => o.geometry?.dispose?.());
       }
-      // face mostly the camera but angle slightly inward toward the board
-      const baseYaw = rel === 0 ? 0.20 : -0.20;
+      // centred heroes face straight at the camera
+      const baseYaw = 0;
       grp.rotation.y = baseYaw;
       this.heroModels[rel] = {
         grp, rel, seed: rel * 3.14, baseY: grp.position.y, baseZ: grp.position.z, baseYaw,

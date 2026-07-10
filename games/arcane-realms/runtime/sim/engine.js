@@ -2,8 +2,8 @@
 // The view layer replays the `events` returned by applyAction as animations.
 // AI and selftest drive the exact same action API the player uses.
 
-import { CARDS, COLLECTIBLE, cardById } from './cards.js?v=18';
-import { rngInt, rngPick, rngShuffle, seedFrom } from './rng.js?v=18';
+import { CARDS, COLLECTIBLE, cardById } from './cards.js?v=19';
+import { rngInt, rngPick, rngShuffle, seedFrom } from './rng.js?v=19';
 
 export const MAX_BOARD = 6;
 export const MAX_HAND = 10;

@@ -1,11 +1,11 @@
 // Arcane Realms TCG — DOM UI layer: menu, deck builder, collection, settings,
 // match HUD (hero plates, phase bar, banners, floaters, arrow, tooltips).
 
-import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=18';
-import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=18';
-import { DIFFICULTIES } from '../sim/ai.js?v=18';
-import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=18';
-import { Audio2 } from './audio.js?v=18';
+import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=19';
+import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=19';
+import { DIFFICULTIES } from '../sim/ai.js?v=19';
+import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=19';
+import { Audio2 } from './audio.js?v=19';
 
 // ── persistence ─────────────────────────────────────────────────
 const LS_KEY = 'arcane_realms_save_v1';
@@ -166,8 +166,8 @@ const CSS = `
 .zinfo{font-size:12px;color:var(--dim);display:flex;gap:10px}
 /* stat nameplate overlay — HTML orbs + badges below each 3D creature */
 #np-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden;font-family:Georgia,serif}
-.np-orb{position:absolute;transform:translate(-50%,-50%);width:32px;height:32px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:#fff;
+.np-orb{position:absolute;transform:translate(-50%,-50%);width:28px;height:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff;
   border:2px solid rgba(0,0,0,.6);box-shadow:0 2px 6px rgba(0,0,0,.65), inset 0 2px 3px rgba(255,255,255,.35);
   text-shadow:0 1px 2px rgba(0,0,0,.9);line-height:1}
 .np-orb.atk[data-s=atk]{background:radial-gradient(circle at 38% 32%,#ff6a5a,#c8392e 60%,#5a140d)}
@@ -999,13 +999,10 @@ export class UI {
     // teach the ordering rule instead
     const btns = this.el('div');
     btns.id = 'turnbtns';
-    // multi-attack: appears when ≥1 attack is queued; resolves them together
-    this.attackBtn = this.el('button', 'btn small', '⚔ Attack');
-    this.attackBtn.style.display = 'none';
-    this.attackBtn.onclick = () => this.match?.resolveAttacks();
+    // multi-attack is now gang-up (pick attackers, click one target) — no button
     this.endBtn = this.el('button', 'btn small primary', 'End Turn');
     this.endBtn.onclick = () => this.match?.endTurn();
-    btns.append(this.attackBtn, this.endBtn);
+    btns.append(this.endBtn);
     // tools
     const tools = this.el('div');
     tools.id = 'matchtools';
@@ -1013,7 +1010,7 @@ export class UI {
     gear.onclick = () => this.matchSettings();
     const flag = this.el('div', 'tool', '🏳');
     flag.title = 'Concede';
-    flag.onclick = () => { if (confirm('Concede this match?')) this.match?.concede(); };
+    flag.onclick = () => this.confirmBox('Concede this match?', () => this.match?.concede());
     tools.append(gear, flag);
     // overlays
     this.floatLayer = this.el('div');
@@ -1309,6 +1306,26 @@ export class UI {
     this.root.append(wrap);
   }
 
+  // in-DOM confirm — native confirm() is blocked in the embedded hub iframe,
+  // which is why Concede / Main Menu appeared to "do nothing"
+  confirmBox(msg, onYes) {
+    const wrap = this.el('div', 'modal-wrap');
+    wrap.style.zIndex = 200;
+    const m = this.el('div', 'modal');
+    m.style.maxWidth = 'min(92vw,420px)';
+    m.append(this.el('div', null, `<div style="font-size:16px;line-height:1.5;color:#efe9fb;margin-bottom:18px">${msg}</div>`));
+    const row = this.el('div');
+    row.style.cssText = 'display:flex;gap:12px;justify-content:center';
+    const yes = this.el('button', 'btn primary', 'Yes');
+    yes.onclick = () => { Audio2.sfx('click'); wrap.remove(); onYes(); };
+    const no = this.el('button', 'btn', 'Cancel');
+    no.onclick = () => { Audio2.sfx('click'); wrap.remove(); };
+    row.append(yes, no);
+    m.append(row);
+    wrap.append(m);
+    this.root.append(wrap);
+  }
+
   matchSettings() {
     const wrap = this.el('div', 'modal-wrap');
     const m = this.el('div', 'modal');
@@ -1342,15 +1359,14 @@ export class UI {
     const resume = this.el('button', 'btn small primary', '▶ Resume');
     resume.onclick = () => { Audio2.sfx('click'); wrap.remove(); };
     const concede = this.el('button', 'btn small danger', '🏳 Concede');
-    concede.onclick = () => { if (confirm('Concede this match?')) { wrap.remove(); this.match?.concede(); } };
+    concede.onclick = () => this.confirmBox('Concede this match?', () => { wrap.remove(); this.match?.concede(); });
     const menu = this.el('button', 'btn small', '🏠 Main Menu');
-    menu.onclick = () => {
-      if (!confirm('Quit to the main menu? This forfeits the current match.')) return;
+    menu.onclick = () => this.confirmBox('Quit to the main menu? This forfeits the current match.', () => {
       Audio2.sfx('click'); wrap.remove();
       this.match?.destroy(); this.match = null;
       window.__ARC__.leaveMatch();
       this.show('menu');
-    };
+    });
     row.append(resume, concede, menu);
     m.append(row);
     m.append(this.el('div', 'hint', 'Right-click any card for a closer look · SPACE ends your turn'));
