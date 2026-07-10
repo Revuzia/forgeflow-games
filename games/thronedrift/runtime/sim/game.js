@@ -1107,15 +1107,23 @@ export class Game {
       new THREE.MeshStandardMaterial({ color: 0xe8b83a, emissive: 0xe8b83a, emissiveIntensity: 1.8 }));
     ring.rotation.x = Math.PI / 2; ring.position.y = 0.03;
     g.add(hemi, key, rim, sky, plat, ring);
-    // key-art backdrop BEHIND the heroes (the title lost its background when
-    // the live 3D showcase replaced the flat art — owner feedback)
-    new THREE.TextureLoader().load("menu_bg.png", (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      const bg = new THREE.Mesh(new THREE.PlaneGeometry(120, 68),
-        new THREE.MeshBasicMaterial({ map: tex, fog: false, color: 0x777788, depthWrite: false }));
-      bg.position.set(0, 16, -42);
-      g.add(bg);
-    });
+    // key-art backdrop parented to the CAMERA: zero parallax from the menu
+    // dolly (owner: background must be STATIC) and cover-fit to the frustum
+    // every frame so the whole painting reads instead of a hard crop
+    if (!this.menuBgPlane) {
+      new THREE.TextureLoader().load("menu_bg.png", (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        this.menuBgAspect = tex.image.width / tex.image.height;
+        const bg = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+          // depthWrite stays ON: without it the sky sphere overpaints the
+          // backdrop whenever it sorts later (found via gl.readPixels bisect)
+          new THREE.MeshBasicMaterial({ map: tex, fog: false, color: 0x8a90a2 }));
+        this.menuBgPlane = bg;
+        this.camera.add(bg);
+        this.scene.add(this.camera); // children of the camera only render if it's in the graph
+        this._fitMenuBg();
+      });
+    }
     this.showcaseActors = [];
     const lineup = [["barbarian", -2.8], ["rogue", 0], ["sorceress", 2.8]];
     for (const pair of lineup) {
@@ -1138,11 +1146,25 @@ export class Game {
     this.showcase = null; this.showcaseActors = [];
   }
 
+  /** cover-fit the camera-child key art to the frustum at fixed depth */
+  _fitMenuBg() {
+    const bg = this.menuBgPlane;
+    if (!bg) return;
+    const d = 34;
+    const h = 2 * d * Math.tan((this.camera.fov * Math.PI) / 360);
+    const w = h * (this.camera.aspect || 1.6);
+    const ta = this.menuBgAspect || 16 / 9;
+    const ph = Math.max(h, w / ta);
+    bg.scale.set(ph * ta, ph, 1);
+    bg.position.set(0, 0, -d);
+  }
+
   updateCamera(dt) {
     const zoom = this.input.camZoom, yaw = this.input.camYaw, pitch = this.input.camPitch;
     // default elevation ~43° (was ~53° overhead — owner feedback); pitch 20°-57°
     const horiz = 15 * zoom, up = 14 * zoom * pitch;
     if (this.state === "menu") {
+      if (this.menuBgPlane) { this.menuBgPlane.visible = true; this._fitMenuBg(); }
       const aspect = this.camera.aspect || 1.6;
       const back = 7.4 * Math.min(2.3, Math.max(1, 1.5 / Math.max(0.55, aspect)));
       this._v2.set(Math.sin(performance.now() / 7000) * 0.7, 2.35 + (back - 7.4) * 0.18, back);
@@ -1150,6 +1172,7 @@ export class Game {
       this.camera.lookAt(0, 1.15, 0);
       return;
     }
+    if (this.menuBgPlane) this.menuBgPlane.visible = false;
     const target = this.cameraTarget && !this.cameraTarget.dead ? this.cameraTarget : this.local;
     const tx = target ? target.x : 0, tz = target ? target.z : 0;
     const off = { x: Math.sin(yaw) * horiz, y: up, z: Math.cos(yaw) * horiz };

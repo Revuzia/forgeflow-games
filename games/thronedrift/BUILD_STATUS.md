@@ -10,6 +10,12 @@ NetController (12Hz state, victim hit-authority per last-circle) + global
 leaderboards need supabase/migrations/0004 applied to qkid + portal-SDK
 score submission (research in workflows/wf_f94f9fcd journal).
 
+PLAYER LEADERBOARDS — owner spec (2026-07-10, ships with online phase):
+boards rank PLAYERS, not the local player's own history. Categories: MOST
+DAMAGE DEALT · BEST W/L RATIO · MOST WINS. Every category gets per-class
+tabs (e.g. top damage dealt by Warrior). Until then the in-game panel is
+labeled STATS (v1.3) and shows only local records.
+
 ## ✅ BUILD COMPLETE — 2026-07-10 (loop closed after 5 iterations)
 Every deliverable from the original spec + both owner feedback batches is
 shipped and LIVE at https://forgeflowgames.com/games/thronedrift/ .

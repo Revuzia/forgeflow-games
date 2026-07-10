@@ -54,7 +54,6 @@ export class HUD {
     const st = document.createElement("style");
     st.textContent = `
       @keyframes cfPop { 0%{transform:scale(.3);opacity:0} 40%{transform:scale(1.15);opacity:1} 100%{transform:scale(1)} }
-      @keyframes cfKenBurns { 0%{transform:scale(1)} 100%{transform:scale(1.07)} }
       @keyframes cfPanelIn { 0%{transform:translate(-50%,-50%) scale(.45) rotate(-2deg);opacity:0} 55%{transform:translate(-50%,-50%) scale(1.08);opacity:1} 100%{transform:translate(-50%,-50%) scale(1)} }
       @keyframes cfToastIn { 0%{transform:translate(-50%,-16px);opacity:0} 12%{transform:translate(-50%,0);opacity:1} 85%{transform:translate(-50%,0);opacity:1} 100%{transform:translate(-50%,-10px);opacity:0} }
       @keyframes cfBannerIn { 0%{transform:scale(.4) rotate(-4deg);opacity:0} 50%{transform:scale(1.12) rotate(1deg);opacity:1} 100%{transform:scale(1) rotate(0)} }
@@ -98,7 +97,7 @@ export class HUD {
           <div style="font-size:14px;color:#e8dcc8;margin-top:6px;text-shadow:0 2px 5px #000">${TAGLINE}</div>
           <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap;max-width:94vw">
             <div id="cf-versus" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:800;border-color:#ff6a8a;color:#ff9ab0">\u2694\uFE0F VERSUS</div>
-            <div id="cf-boards" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">\uD83C\uDFC6 LEADERBOARDS</div>
+            <div id="cf-boards" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">📊 STATS</div>
             <div id="cf-bestiary" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">\uD83D\uDCD6 BESTIARY</div>
             <div id="cf-howto" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">\uD83C\uDFAE HOW TO PLAY</div>
             <div id="cf-settings" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">\u2699\uFE0F SETTINGS</div>
@@ -111,7 +110,7 @@ export class HUD {
     for (const card of this.layerMenu.querySelectorAll(".cf-card"))
       card.onclick = () => { SFX.unlock(); SFX.play("ui_big"); this.showArenaSelect(card.dataset.cls); };
     this.layerMenu.querySelector("#cf-versus").onclick = () => { SFX.unlock(); SFX.play("ui_big"); this.showVersusModes(); };
-    this.layerMenu.querySelector("#cf-boards").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showLeaderboards(); };
+    this.layerMenu.querySelector("#cf-boards").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showStats(); };
     this.layerMenu.querySelector("#cf-bestiary").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showBestiary(); };
     this.layerMenu.querySelector("#cf-howto").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showHowTo(); };
     this.layerMenu.querySelector("#cf-settings").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showSettings(); };
@@ -293,32 +292,67 @@ export class HUD {
     this.layerMenu.querySelector("#cf-back").onclick = () => { SFX.play("ui"); this.showTitle(); };
   }
 
-  /** level chooser inside a realm: L1-L4 escalate, L5 = the Warden */
+  /** level chooser inside a realm: cinematic realm banner + campaign path,
+   *  L1-L4 medallions escalate, L5 = the Warden with a live 3D portrait */
   showLevelSelect(classId, arenaIdx) {
     const a = ARENAS[arenaIdx];
     const col = "#" + a.accent.toString(16).padStart(6, "0");
     const prog = save.get("progress", {});
     const done = prog[a.order] || 0;             // levels completed in this realm
-    const boss = BOSS_TYPES[REALM_ROSTERS[a.order].boss];
+    const bossId = REALM_ROSTERS[a.order].boss;
+    const boss = BOSS_TYPES[bossId];
+    const bossImg = this.cb.portrait ? this.cb.portrait(bossId) : null;
+    const art = `assets/ui/realm_${a.order}.jpg?v=8`;
+    const ROMAN = ["I", "II", "III", "IV"];
     const nodes = [];
     for (let l = 0; l < LEVELS_PER_REALM; l++) {
       const isBoss = l === LEVELS_PER_REALM - 1;
       const unlocked = l <= done;
       const cleared = l < done;
+      const next = l === done;
+      const size = isBoss ? 106 : 84;
+      const border = !unlocked ? "#3a2f4a" : isBoss ? "#ff6a8a" : cleared ? col : GOLD;
+      const waves = levelWaves(a.order, l);
+      const face = isBoss
+        ? (bossImg
+          ? `<img src="${bossImg}" style="width:100%;height:100%;object-fit:cover" draggable="false">`
+          : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:44px;background:#160c20">👑</div>`)
+        : `<div style="position:absolute;inset:0;background:linear-gradient(rgba(16,9,26,${cleared ? ".25" : ".5"}),rgba(16,9,26,${cleared ? ".4" : ".66"})),url(${art}) ${16 + l * 23}% 36%/300% auto"></div>
+           <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:${unlocked ? 30 : 24}px;font-weight:900;font-family:Georgia,serif;color:${unlocked ? "#ffe9a8" : "#7a6a92"};text-shadow:0 2px 8px #000">${unlocked ? ROMAN[l] : "🔒"}</div>`;
       nodes.push(`
-        <div class="cf-card" data-level="${l}" data-locked="${!unlocked}" style="${frameCss}width:150px;padding:16px 10px;text-align:center;${unlocked ? "" : "opacity:.42;filter:grayscale(.7)"};${isBoss ? `border-color:#ff6a8a` : ""}">
-          <div style="font-size:${isBoss ? 34 : 30}px">${isBoss ? "👑" : cleared ? "✅" : unlocked ? "⚔️" : "🔒"}</div>
-          <div style="font-size:15px;font-weight:900;color:${isBoss ? "#ff9ab0" : col};margin-top:6px">${isBoss ? "BOSS" : "LEVEL " + (l + 1)}</div>
-          <div style="font-size:11px;color:#cbbfe0;min-height:30px;margin-top:4px">${isBoss ? boss.name : levelWaves(a.order, l) + " waves"}</div>
+        <div class="cf-card" data-level="${l}" data-locked="${!unlocked}" style="position:relative;z-index:2;width:19%;text-align:center;${unlocked ? "" : "opacity:.55;cursor:default"}">
+          <div style="position:relative;width:${size}px;height:${size}px;margin:${(110 - size) / 2}px auto 10px">
+            <div style="position:absolute;inset:0;border-radius:50%;overflow:hidden;border:3px solid ${border};background:#160c20;box-shadow:0 6px 18px rgba(0,0,0,.55)${cleared ? `,0 0 14px ${col}88` : ""};${next ? "animation:cfPulse 1.8s infinite;" : ""}${unlocked ? "" : "filter:grayscale(.75) brightness(.62);"}">${face}</div>
+            ${cleared ? `<div style="position:absolute;top:-3px;right:-3px;width:26px;height:26px;border-radius:50%;background:#12351d;border:2px solid #7dff9a;color:#7dff9a;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900">✔</div>` : ""}
+            ${isBoss ? `<div style="position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:20px;filter:drop-shadow(0 2px 3px #000)">👑</div>` : ""}
+          </div>
+          ${isBoss
+            ? `<div style="font-size:15.5px;font-weight:900;color:#ff9ab0;font-family:Georgia,serif;letter-spacing:1px">${boss.name.split(",")[0].toUpperCase()}</div>
+               <div style="font-size:10.5px;color:#cbbfe0;font-style:italic">${(boss.name.split(",")[1] || "Realm Warden").trim()}</div>
+               <div style="font-size:9.5px;font-weight:800;letter-spacing:2px;color:#ff6a8a;margin-top:3px">☠ BOSS FIGHT</div>`
+            : `<div style="font-size:14px;font-weight:900;color:${unlocked ? col : "#6a5a80"}">LEVEL ${l + 1}</div>
+               <div style="font-size:10px;color:${unlocked ? col : "#5a4c70"};letter-spacing:3px;margin-top:2px;opacity:.9">${"◆".repeat(waves)}</div>
+               <div style="font-size:9px;letter-spacing:1.5px;color:#8a7aa8;margin-top:1px">${waves} WAVES</div>`}
+          ${next ? `<div style="display:inline-block;margin-top:6px;font-size:9.5px;font-weight:900;letter-spacing:2px;color:#120a1e;background:${isBoss ? "#ff6a8a" : GOLD};border-radius:6px;padding:2.5px 9px">▶ NEXT</div>` : ""}
         </div>`);
     }
+    const prog01 = Math.min(1, done / (LEVELS_PER_REALM - 1)) * 100;
     this._menu(`
-      <div style="text-align:center;max-width:960px;position:relative;z-index:2">
-        <div style="font-size:15px;letter-spacing:3px;color:#b89ae0">REALM ${a.order}</div>
-        <div style="font-size:34px;font-weight:900;color:${col};margin-bottom:6px;font-family:Georgia,serif">${a.name.toUpperCase()}</div>
-        <div style="font-size:13px;color:#cbbfe0;margin-bottom:20px">${a.tagline}</div>
-        <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">${nodes.join("")}</div>
-        <div id="cf-back" class="cf-btn" style="display:inline-block;margin-top:22px;padding:9px 26px;${frameCss}font-size:14px">← Realms</div>
+      <div style="width:min(960px,94vw);position:relative;z-index:2;animation:cfPop .45s ease-out">
+        <div style="position:relative;height:min(200px,26vh);border-radius:16px;overflow:hidden;border:1.5px solid rgba(232,184,58,.55);box-shadow:0 12px 38px rgba(0,0,0,.65);background:url(${art}) center 30%/cover">
+          <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,6,16,.08) 32%,rgba(13,8,20,.92) 100%)"></div>
+          <div style="position:absolute;left:24px;bottom:14px;text-align:left">
+            <div style="font-size:12px;letter-spacing:4px;color:#cdb8ee;text-shadow:0 2px 5px #000">REALM ${a.order}</div>
+            <div style="font-size:min(40px,6vw);font-weight:900;color:${col};font-family:Georgia,serif;line-height:1.08;text-shadow:0 3px 14px rgba(0,0,0,.95)">${a.name.toUpperCase()}</div>
+            <div style="font-size:12.5px;color:#e8dcc8;font-style:italic;text-shadow:0 2px 4px #000">${a.tagline}</div>
+          </div>
+          <div style="position:absolute;right:16px;bottom:14px;${frameCss}padding:6px 13px;font-size:12px;font-weight:800;color:${done >= LEVELS_PER_REALM ? "#7dff9a" : GOLD}">${done >= LEVELS_PER_REALM ? "✔ REALM CLEARED" : done + " / " + LEVELS_PER_REALM + " CLEARED"}</div>
+        </div>
+        <div style="position:relative;display:flex;justify-content:space-between;align-items:flex-start;margin-top:26px">
+          <div style="position:absolute;left:9%;right:9%;top:54px;height:3px;border-radius:2px;z-index:1;background:linear-gradient(90deg,${col} 0%,${col} ${prog01}%,rgba(130,110,160,.28) ${prog01}%,rgba(130,110,160,.28) 100%)"></div>
+          ${nodes.join("")}
+        </div>
+        <div style="text-align:center"><div id="cf-back" class="cf-btn" style="display:inline-block;margin-top:24px;padding:9px 26px;${frameCss}font-size:14px">← Realms</div></div>
       </div>`);
     for (const card of this.layerMenu.querySelectorAll(".cf-card")) {
       card.onclick = () => {
@@ -488,35 +522,48 @@ export class HUD {
     if (cx) cx.onclick = () => { SFX.play("ui"); this._stopLobby(); this.showVersusModes(); };
   }
 
-  /** local leaderboards: mode wins, per-class stats, recent matches */
-  showLeaderboards() {
+  /** local STATS panel — the player's own records. True player-vs-player
+   *  leaderboards (most damage, best W/L, per-class tabs) ship with online. */
+  showStats() {
     const s = save.get("pvp_stats", { modes: {}, classes: {}, records: [] });
+    const recs = s.records || [];
+    const tGames = Object.values(s.modes).reduce((n, m) => n + m.games, 0);
+    const tWins = Object.values(s.modes).reduce((n, m) => n + m.wins, 0);
+    const tDmg = Object.values(s.classes).reduce((n, c) => n + (c.dmg || 0), 0);
+    const pct = (w, g) => (g ? Math.round((w / g) * 100) + "%" : "—");
+    const chip = (label, val, col) => `
+      <div style="flex:1;text-align:center;padding:10px 4px;border:1.5px solid rgba(232,184,58,.4);border-radius:12px;background:rgba(36,20,54,.5)">
+        <div style="font-size:21px;font-weight:900;color:${col}">${val}</div>
+        <div style="font-size:9.5px;letter-spacing:1.5px;color:#8a7aa8;margin-top:2px">${label}</div></div>`;
     const modeRow = (id, label) => {
       const m = s.modes[id] || { games: 0, wins: 0 };
       return `<div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0;border-bottom:1px solid rgba(232,184,58,.15)">
-        <span style="color:#e8dcc8">${label}</span><span style="color:#ffd24a;font-weight:800">${m.wins} W \u2014 ${m.games - m.wins} L</span></div>`;
+        <span style="color:#e8dcc8">${label}</span><span style="color:#ffd24a;font-weight:800">${m.wins} W — ${m.games - m.wins} L
+        <span style="color:#8a7aa8;font-size:12px;font-weight:600">· ${pct(m.wins, m.games)}</span></span></div>`;
     };
     const clsRows = Object.entries(CLASSES).map(([id, c]) => {
       const st = s.classes[id] || { games: 0, wins: 0, kills: 0, dmg: 0 };
+      const best = recs.reduce((b, r) => (r.cls === id && r.dmg > b ? r.dmg : b), 0);
       return `<div style="display:flex;justify-content:space-between;font-size:13.5px;padding:6px 0;border-bottom:1px solid rgba(232,184,58,.12)">
-        <span style="color:${c.uiColor};font-weight:800">${c.portrait} ${c.name}</span>
-        <span style="color:#cbbfe0">${st.wins}W \u00B7 ${st.kills} kills \u00B7 ${formatScore(st.dmg)} dmg</span></div>`;
+        <span style="color:${c.uiColor};font-weight:800">${c.portrait} ${c.name} <span style="color:#8a7aa8;font-weight:600;font-size:11.5px">${pct(st.wins, st.games)} WR</span></span>
+        <span style="color:#cbbfe0">${st.wins}W · ${st.kills} kills · ${formatScore(st.dmg)} dmg${best ? ` · best ${formatScore(best)}` : ""}</span></div>`;
     }).join("");
-    const recs = (s.records || []).slice(0, 8).map((r) => `
+    const recRows = recs.slice(0, 8).map((r) => `
       <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:${r.won ? "#7dff9a" : "#b8a0a8"}">
-        <span>${r.won ? "\u2705" : "\u274C"} ${r.mode.toUpperCase()} \u00B7 ${CLASSES[r.cls]?.portrait || ""} ${r.kills}K/${r.deaths}D</span>
-        <span>${formatScore(r.dmg)} dmg</span></div>`).join("") || `<div style="font-size:13px;color:#8a7aa8">No matches yet \u2014 enter the VERSUS arenas!</div>`;
+        <span>${r.won ? "✅" : "❌"} ${r.mode.toUpperCase()} · ${CLASSES[r.cls]?.portrait || ""} ${r.kills}K/${r.deaths}D</span>
+        <span>${formatScore(r.dmg)} dmg</span></div>`).join("") || `<div style="font-size:13px;color:#8a7aa8">No matches yet — enter the VERSUS arenas!</div>`;
     this._menu(`
-      <div style="${frameCss}width:min(520px,92vw);padding:24px 30px;position:relative;z-index:2;max-height:80vh;overflow-y:auto">
-        <div style="font-size:28px;font-weight:900;color:${GOLD};text-align:center;font-family:Georgia,serif">LEADERBOARDS</div>
-        <div style="font-size:11px;color:#8a7aa8;text-align:center;margin-bottom:12px">Your local records \u00B7 global boards arrive with online play</div>
-        <div style="font-size:13px;font-weight:800;color:#ff9ab0;letter-spacing:2px;margin-top:8px">MODE WINS</div>
-        ${modeRow("ffa", "\uD83D\uDD25 Free-for-all")}${modeRow("duel", "\u2694\uFE0F Duel")}${modeRow("teams", "\uD83D\uDEE1 Teams 2v2")}
+      <div style="${frameCss}width:min(560px,92vw);padding:24px 30px;position:relative;z-index:2;max-height:82vh;overflow-y:auto">
+        <div style="font-size:28px;font-weight:900;color:${GOLD};text-align:center;font-family:Georgia,serif">YOUR STATS</div>
+        <div style="font-size:11px;color:#8a7aa8;text-align:center;margin-bottom:12px">Local records — player leaderboards arrive with online play</div>
+        <div style="display:flex;gap:10px">${chip("WIN RATE", pct(tWins, tGames), "#ffd24a")}${chip("TOTAL WINS", tWins, "#7dff9a")}${chip("DAMAGE DEALT", formatScore(tDmg), "#ff9ab0")}</div>
+        <div style="font-size:13px;font-weight:800;color:#ff9ab0;letter-spacing:2px;margin-top:16px">MODE RECORDS</div>
+        ${modeRow("ffa", "🔥 Free-for-all")}${modeRow("duel", "⚔️ Duel")}${modeRow("teams", "🛡 Teams 2v2")}
         <div style="font-size:13px;font-weight:800;color:#ff9ab0;letter-spacing:2px;margin-top:16px">PER CLASS</div>
         ${clsRows}
         <div style="font-size:13px;font-weight:800;color:#ff9ab0;letter-spacing:2px;margin-top:16px">RECENT MATCHES</div>
-        ${recs}
-        <div id="cf-back" class="cf-btn" style="display:block;margin:18px auto 0;width:130px;text-align:center;padding:9px 0;${frameCss}font-size:14px;font-weight:700">\u2190 BACK</div>
+        ${recRows}
+        <div id="cf-back" class="cf-btn" style="display:block;margin:18px auto 0;width:130px;text-align:center;padding:9px 0;${frameCss}font-size:14px;font-weight:700">← BACK</div>
       </div>`);
     this.layerMenu.querySelector("#cf-back").onclick = () => { SFX.play("ui"); this.showTitle(); };
   }
@@ -562,8 +609,8 @@ export class HUD {
     this.layerMenu.style.cssText += "align-items:center;justify-content:center;";
     // house menu pattern: full-bleed key art + Ken Burns drift + radial/linear scrim
     this.layerMenu.innerHTML = `
-      <div style="position:absolute;inset:0;background:url(menu_bg.png?v=4) center/cover no-repeat,
-        radial-gradient(ellipse at 50% 30%,#2a1038,#0b0710 75%);animation:cfKenBurns 36s ease-in-out infinite alternate"></div>
+      <div style="position:absolute;inset:0;background:url(menu_bg.png?v=8) center/cover no-repeat,
+        radial-gradient(ellipse at 50% 30%,#2a1038,#0b0710 75%)"></div>
       <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(8,4,14,.28) 0%,rgba(8,4,14,.82) 100%),
         linear-gradient(rgba(10,6,20,.30),rgba(10,6,20,.72))"></div>` + inner;
     this.layerGame.style.display = "none";

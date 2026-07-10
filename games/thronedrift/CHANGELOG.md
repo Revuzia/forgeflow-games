@@ -1,6 +1,23 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
-## v1.2 — 2026-07-10 (polish batch: icons, jump, cursor, PVP tuning)
+## v1.3 — 2026-07-10 (stats, static backdrop, level-select redesign)
+- LEADERBOARDS → STATS: the panel shows the player's own records, so it is
+  now labeled that way. Upgraded: WIN RATE / TOTAL WINS / DAMAGE DEALT chips,
+  per-mode win %, per-class win rate + best-match damage. True player
+  leaderboards (most damage, best W/L, per-class tabs) specced for the online
+  phase — see BUILD_STATUS.
+- Title backdrop STATIC + full-view: key-art plane is now a CAMERA CHILD
+  (zero parallax from the menu dolly) cover-fit to the frustum every frame —
+  the whole 16:9 painting reads instead of a hard center crop (was a fixed
+  120×68 world plane ≈ half the art off-screen). depthWrite must stay ON or
+  the sky sphere overpaints it (gl.readPixels bisect).
+- Ken Burns drift removed from submenu key art — all menu backgrounds static
+- LEVEL SELECT redesigned for all 5 realms: cinematic realm-art banner
+  (name + tagline + progress badge), campaign path with connector line that
+  fills in realm color, circular art medallions with roman numerals, wave
+  pips, ✔ cleared badges, pulsing NEXT chip, locked states, and the realm
+  Warden as a live 3D-rendered portrait in a crowned crimson medallion
+- renderPortrait reused for boss portraits (dataURL, cached per type)
 - xAI SKILL ICONS: all 16 abilities + basics + 3 dash skills + TAB swap now
   use generated painterly icon art on the buttons (assets/ui/sk_*.jpg)
 - Custom xAI game CURSOR (golden gauntlet arrow, alpha-cut, 48px)

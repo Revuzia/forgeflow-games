@@ -16,7 +16,7 @@ const hudRoot = document.getElementById("hud");
 // ---- loading overlay -------------------------------------------------------
 const loadEl = document.createElement("div");
 loadEl.style.cssText = `position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  background:linear-gradient(rgba(10,6,18,.55),rgba(10,6,18,.85)),url(menu_bg.png?v=4) center/cover no-repeat,
+  background:linear-gradient(rgba(10,6,18,.55),rgba(10,6,18,.85)),url(menu_bg.png?v=8) center/cover no-repeat,
   radial-gradient(ellipse at 50% 35%,#2a1038,#0b0710 75%);z-index:10;color:#e8dcc8;font-family:Georgia,serif;`;
 loadEl.innerHTML = `
   <div style="font-size:44px;font-weight:900;letter-spacing:3px;
