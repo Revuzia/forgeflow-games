@@ -2,11 +2,12 @@
 // achievements, Arcane Packs, card backs. All state lives in Store.data
 // (localStorage) and is validated/covered by selftest.
 
-import { CARDS, COLLECTIBLE, EXPANSION_IDS, cardById } from '../sim/cards.js?v=21';
-import { STARTER_DECKS } from '../sim/decks.js?v=21';
-import { CHAPTERS, ACHIEVEMENTS, CARDBACK_INFO, PACK_COST, PACK_SIZE, PACK_WEIGHTS, allBattles } from './campaign_data.js?v=21';
+import { CARDS, COLLECTIBLE, EXPANSION_IDS, cardById } from '../sim/cards.js?v=22';
+import { STARTER_DECKS } from '../sim/decks.js?v=22';
+import { CHAPTERS, ACHIEVEMENTS, CARDBACK_INFO, PACK_COST, PACK_SIZE, PACK_WEIGHTS, DUPE_FACTOR, SELL_VALUES, allBattles } from './campaign_data.js?v=22';
 
-export { PACK_COST, PACK_SIZE };
+export { PACK_COST, PACK_SIZE, SELL_VALUES };
+export function sellValue(rarity) { return SELL_VALUES[rarity] ?? 5; }
 
 // ── setup / migration ────────────────────────────────────────────
 export function initProgress(store) {
@@ -15,8 +16,10 @@ export function initProgress(store) {
     d.owned = {};
     // the full BASE set is owned from the start (starter decks + pvp fully
     // playable); the 60-card expansion unlocks through the campaign
-    for (const c of COLLECTIBLE) if (!EXPANSION_IDS.has(c.id)) d.owned[c.id] = true;
+    for (const c of COLLECTIBLE) if (!EXPANSION_IDS.has(c.id)) d.owned[c.id] = 1;
   }
+  // migrate legacy boolean ownership → copy counts (needed for duplicates + selling)
+  for (const k in d.owned) if (d.owned[k] === true) d.owned[k] = 1;
   d.gold = d.gold ?? 0;
   d.battlesWon = d.battlesWon || {};        // battleId -> winCount
   d.achievements = d.achievements || {};    // achId -> true (claimed)
@@ -30,8 +33,33 @@ export function initProgress(store) {
 export function isOwned(store, cardId) {
   return !!store.data.owned[cardId];
 }
+export function copiesOf(store, cardId) {
+  const v = store.data.owned[cardId];
+  return v === true ? 1 : (v || 0);
+}
 export function ownedCount(store) {
   return Object.keys(store.data.owned).length;
+}
+// total duplicate copies across the collection (extras beyond the first of each) —
+// drives the "sellable dupes" hint in the collection header.
+export function dupeCount(store) {
+  let n = 0;
+  for (const k in store.data.owned) n += Math.max(0, copiesOf(store, k) - 1);
+  return n;
+}
+
+// sell one duplicate copy for gold. Only extras (copies ≥ 2) can be sold, so the
+// collection count never regresses and no saved deck can break.
+export function sellCard(store, cardId) {
+  const c = cardById(cardId);
+  if (!c) return { ok: false, reason: 'Unknown card.' };
+  const n = copiesOf(store, cardId);
+  if (n <= 1) return { ok: false, reason: 'Only duplicate copies can be sold.' };
+  const gold = sellValue(c.rarity);
+  store.data.owned[cardId] = n - 1;
+  store.data.gold = (store.data.gold || 0) + gold;
+  store.save();
+  return { ok: true, gold, copies: n - 1 };
 }
 
 // battle availability: chapter N unlocks when chapter N-1's boss is beaten;
@@ -66,10 +94,10 @@ export function grantBattleRewards(store, battle) {
   if (firstClear) {
     out.gold = battle.rewards.gold;
     for (const id of battle.rewards.cards || []) {
-      if (!d.owned[id]) { d.owned[id] = true; out.newCards.push(id); }
-      else out.dupes.push(id);
+      if (!d.owned[id]) { d.owned[id] = 1; out.newCards.push(id); }
+      else { d.owned[id] = copiesOf(store, id) + 1; out.dupes.push(id); }
     }
-    for (let i = 0; i < (battle.rewards.pack || 0); i++) out.packCards.push(...rollPack(store, 2));
+    for (let i = 0; i < (battle.rewards.pack || 0); i++) out.packCards.push(...rollPack(store, 2).map((c) => c.id));
     if (battle.rewards.cardback && !d.cardbacks[battle.rewards.cardback]) {
       d.cardbacks[battle.rewards.cardback] = true;
       out.cardback = battle.rewards.cardback;
@@ -82,32 +110,49 @@ export function grantBattleRewards(store, battle) {
   return out;
 }
 
-// weighted random UNOWNED expansion cards (never dupes). count may come up
-// short when the collection nears completion — that's fine.
+// rarity-weighted pick from `pool`; owned cards get DUPE_FACTOR weight so they
+// appear only occasionally (as sellable duplicates).
+function weightedPick(pool, d) {
+  let total = 0;
+  const weighted = pool.map((c) => {
+    total += (PACK_WEIGHTS[c.rarity] || 1) * (d.owned[c.id] ? DUPE_FACTOR : 1);
+    return [total, c];
+  });
+  const roll = Math.random() * total;
+  return weighted.find(([t]) => roll < t)[1];
+}
+
+// A pack of expansion cards. The FIRST slot is a "pity" slot — guaranteed to be a
+// brand-new card while any remain — so a pack never disappoints. The remaining
+// slots roll from the whole expansion with unowned heavily favoured, letting
+// duplicates trickle in as the set fills. Returns [{id, isNew, rarity}].
 export function rollPack(store, count = PACK_SIZE) {
   const d = store.data;
+  const expansion = COLLECTIBLE.filter((c) => EXPANSION_IDS.has(c.id));
   const out = [];
   for (let i = 0; i < count; i++) {
-    const pool = COLLECTIBLE.filter((c) => EXPANSION_IDS.has(c.id) && !d.owned[c.id]);
-    if (!pool.length) break;
-    let total = 0;
-    const weighted = pool.map((c) => { total += (PACK_WEIGHTS[c.rarity] || 1); return [total, c]; });
-    const roll = Math.random() * total;
-    const pick = weighted.find(([t]) => roll < t)[1];
-    d.owned[pick.id] = true;
-    out.push(pick.id);
+    const unowned = expansion.filter((c) => !d.owned[c.id]);
+    let pick;
+    if (i === 0 && unowned.length) pick = weightedPick(unowned, d); // pity: guaranteed new
+    else if (expansion.length) pick = weightedPick(expansion, d);
+    else break;
+    const isNew = !d.owned[pick.id];
+    d.owned[pick.id] = copiesOf(store, pick.id) + 1;
+    out.push({ id: pick.id, isNew, rarity: pick.rarity });
   }
   store.save();
   return out;
 }
 
+// returns {ok, cards:[{id,isNew,rarity,dupGold}]} — dupGold is the sell-back value
+// shown on duplicate reveals.
 export function buyPack(store) {
   const d = store.data;
   if (d.gold < PACK_COST) return { ok: false, reason: `Needs ${PACK_COST} gold.` };
-  const pool = COLLECTIBLE.filter((c) => EXPANSION_IDS.has(c.id) && !d.owned[c.id]);
-  if (!pool.length) return { ok: false, reason: 'Collection complete — no cards left to find!' };
+  const unowned = COLLECTIBLE.filter((c) => EXPANSION_IDS.has(c.id) && !d.owned[c.id]);
+  if (!unowned.length) return { ok: false, reason: 'Collection complete — no new cards to find!' };
   d.gold -= PACK_COST;
-  const cards = rollPack(store, PACK_SIZE);
+  const cards = rollPack(store, PACK_SIZE).map((c) => ({ ...c, dupGold: c.isNew ? 0 : sellValue(c.rarity) }));
   store.save();
   return { ok: true, cards };
 }
@@ -138,7 +183,7 @@ export function checkAchievements(store) {
     const grant = { id: a.id, name: a.name, desc: a.desc, gold: a.rewards.gold || 0, cards: [], cardback: null };
     d.gold += grant.gold;
     for (const id of a.rewards.cards || []) {
-      if (!d.owned[id]) { d.owned[id] = true; grant.cards.push(id); }
+      if (!d.owned[id]) { d.owned[id] = 1; grant.cards.push(id); }
     }
     if (a.rewards.cardback && !d.cardbacks[a.rewards.cardback]) {
       d.cardbacks[a.rewards.cardback] = true;

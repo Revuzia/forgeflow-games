@@ -773,6 +773,29 @@ section('campaign & progression');
   prog.initProgress(freshStore);
   const allStarterOwned = STARTER_DECKS.every((d) => d.cards.every((id) => freshStore.data.owned[id]));
   ok(allStarterOwned, 'all starter deck cards owned from the start');
+
+  // ── Arcane Pack duplicates + selling ──
+  const econ = { data: { record: { wins: 0, losses: 0 } }, save() { /* noop */ } };
+  prog.initProgress(econ);
+  const pk = prog.rollPack(econ, 3);
+  ok(pk.length === 3 && pk[0].isNew, 'pack pity slot always leads with a new card while any remain');
+  ok(pk.every((c) => cardById(c.id) && EXPANSION_IDS.has(c.id)), 'pack rolls only real expansion cards');
+  const someId = [...EXPANSION_IDS][0];
+  econ.data.owned[someId] = 2;
+  const gBefore = econ.data.gold;
+  const sold = prog.sellCard(econ, someId);
+  ok(sold.ok && econ.data.gold === gBefore + prog.sellValue(cardById(someId).rarity), 'selling a duplicate yields the rarity value');
+  ok(prog.copiesOf(econ, someId) === 1, 'selling never drops below one copy');
+  ok(!prog.sellCard(econ, someId).ok, 'cannot sell your last copy');
+  ok(prog.sellValue('legendary') > prog.sellValue('common'), 'rarer duplicates sell for more gold');
+  const ownedNow = Object.keys(econ.data.owned).length;
+  econ.data.owned[someId] = 3; prog.sellCard(econ, someId);
+  ok(Object.keys(econ.data.owned).length === ownedNow, 'selling a dupe never reduces the owned-card count');
+  ok(prog.dupeCount(econ) >= 1, 'dupeCount tracks spare copies');
+  // legacy boolean ownership migrates to a copy count
+  const legacy = { data: { owned: { nt01: true }, gold: 0 }, save() { /* noop */ } };
+  prog.initProgress(legacy);
+  ok(prog.copiesOf(legacy, 'nt01') === 1, 'legacy boolean ownership migrates to 1 copy');
 }
 
 // ───────────────────── 11. assets (optional gate) ─────────────────────

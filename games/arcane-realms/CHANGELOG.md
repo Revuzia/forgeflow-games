@@ -1,5 +1,35 @@
 # Arcane Realms TCG — Changelog
 
+## v1.6.0 — 2026-07-09 (3D Arcane Pack opening + duplicates + sell-for-gold)
+
+A full store/pack loop, Hearthstone-style but in Three.js.
+
+- **Cinematic 3D pack opening.** Buying an Arcane Pack in the Collection now opens
+  a full-screen Three.js reveal (`runtime/view/packreveal.js`): the pack is the
+  arcane card-back art floating in a rotating rune ring with orbiting glints and a
+  warm glow. **Click the pack** → it winds up, bursts with a flash + particle
+  explosion, and the cards **fan out and flip face-up** one by one, then a
+  Continue button. Falls back to the flat DOM reveal if WebGL is unavailable.
+- **Per-rarity reveal FX** (owner spec): new commons/uncommons get a soft glow;
+  **rare** adds a ring pulse; **epic** an expanding purple energy ring + purple
+  aura; **legendary** a golden ray-burst, screen shake, and screen flash. A
+  **duplicate** shows muted with a `Duplicate +Ng` tag (its sell-back value).
+  Screen shake / particle density honour the Settings toggles.
+- **Duplicates + selling.** Ownership is now a **copy count** (migrates the old
+  boolean → 1). Packs roll from the expansion with a guaranteed-new "pity" slot
+  (a pack never disappoints) plus dupe-capable slots weighted toward cards you
+  don't own — so duplicates trickle in as the set fills. **Sell duplicate copies
+  for gold** from a card's inspect panel (common 5 · uncommon 10 · rare 20 · epic
+  45 · legendary 90). Selling only ever removes *extra* copies, so the collection
+  count never regresses and no saved deck can break. Collection cells show a `×N`
+  duplicate badge; the gold chip updates live.
+- **Restyled pack button** — a proper arcane booster icon (inline SVG, foil-sheen
+  animation) replacing the 📦 emoji.
+- Selftest: +9 economy tests (pity slot, sell value/floor, migration, dupeCount) —
+  **133 passed, 0 failed**.
+
+Cache-bust `?v=21` → `?v=22`.
+
 ## v1.5.2 — 2026-07-09 (Token art, full-card hover, hero in front, confirm-box fit)
 
 - **Tokens no longer render blank.** Summoned tokens (Vale Wolf, etc.) aren't in

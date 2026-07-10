@@ -377,6 +377,12 @@ export const CARDBACK_INFO = {
 export const PACK_COST = 100;
 export const PACK_SIZE = 3;
 export const PACK_WEIGHTS = { common: 46, uncommon: 30, rare: 15, epic: 6, legendary: 3 };
+// an already-owned card is this much less likely than an unowned one of the same
+// rarity — so packs still favour progress but duplicates trickle in to sell.
+export const DUPE_FACTOR = 0.22;
+// gold refunded when selling a duplicate copy, by rarity. Tuned against PACK_COST
+// (100): a legendary dupe nearly buys a pack; a handful of commons does too.
+export const SELL_VALUES = { common: 5, uncommon: 10, rare: 20, epic: 45, legendary: 90, token: 0 };
 
 export function allBattles() {
   return CHAPTERS.flatMap((c) => c.battles.map((b) => ({ ...b, chapter: c })));

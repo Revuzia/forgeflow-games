@@ -4,7 +4,7 @@
 // board and as plain canvases in the DOM (deck builder / collection / inspect).
 
 import * as THREE from 'three';
-import { CARDS, REALMS, cardById } from '../sim/cards.js?v=21';
+import { CARDS, REALMS, cardById } from '../sim/cards.js?v=22';
 
 export const CARD_W = 512, CARD_H = 768;
 

@@ -1,11 +1,11 @@
 // Arcane Realms TCG — DOM UI layer: menu, deck builder, collection, settings,
 // match HUD (hero plates, phase bar, banners, floaters, arrow, tooltips).
 
-import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=21';
-import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=21';
-import { DIFFICULTIES } from '../sim/ai.js?v=21';
-import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=21';
-import { Audio2 } from './audio.js?v=21';
+import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=22';
+import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=22';
+import { DIFFICULTIES } from '../sim/ai.js?v=22';
+import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=22';
+import { Audio2 } from './audio.js?v=22';
 
 // ── persistence ─────────────────────────────────────────────────
 const LS_KEY = 'arcane_realms_save_v1';
@@ -770,6 +770,11 @@ export class UI {
       }
       const n = counts[c.id] || 0;
       if (n) cell.append(this.el('div', 'cnt', '×' + n));
+      // collection view: flag cards you hold spare copies of (sellable duplicates)
+      if (!this.working && this.copiesOf) {
+        const cp = this.copiesOf(c.id);
+        if (cp >= 2) cell.append(this.el('div', 'dupe-badge', '×' + cp));
+      }
       if (this.working) {
         const cap = c.rarity === 'legendary' ? MAX_LEGENDARY_COPIES : MAX_COPIES;
         const realmLocked = c.realm !== 'neutral' && deckRealms.size >= 2 && !deckRealms.has(c.realm);
@@ -785,7 +790,7 @@ export class UI {
         };
         cell.oncontextmenu = (e) => { e.preventDefault(); this.showInspect(c.id); };
       } else {
-        cell.onclick = () => { Audio2.sfx('click'); this.showInspect(c.id); };
+        cell.onclick = () => { Audio2.sfx('click'); this.showInspect(c.id, null, { sellable: true }); };
       }
       grid.append(cell);
     }
@@ -1270,7 +1275,7 @@ export class UI {
     this.inspectEl.style.display = 'block';
   }
 
-  showInspect(cardId, unit) {
+  showInspect(cardId, unit, opts = {}) {
     // modal version (right-click / collection click)
     const wrap = this.el('div', 'modal-wrap');
     const m = this.el('div', 'modal');
@@ -1295,6 +1300,31 @@ export class UI {
       const fl = this.el('div', null, '“' + def.flavor + '”');
       fl.style.cssText = 'font-style:italic;color:#8d78b8;margin-top:6px';
       right.append(fl);
+    }
+    // ── collection: copies owned + sell a duplicate for gold ──
+    if (opts.sellable && this.copiesOf) {
+      const n0 = this.copiesOf(cardId);
+      const info = this.el('div', null, `You own <b style="color:#ffe9a8">×${n0}</b>`);
+      info.style.cssText = 'font-size:13px;color:#c4b4e4;margin-top:2px';
+      right.append(info);
+      if (this.sellCard && def.rarity !== 'token') {
+        const val = this.sellValueOf ? this.sellValueOf(def.rarity) : 0;
+        const sell = this.el('button', 'sell-btn');
+        const label = (n) => n >= 2 ? `Sell duplicate · +${val}g` : 'No duplicates to sell';
+        sell.textContent = label(n0); sell.disabled = n0 < 2;
+        sell.onclick = () => {
+          const r = this.sellCard(cardId);
+          if (!r.ok) { Audio2.sfx('error'); this.toast(r.reason); return; }
+          Audio2.sfx('coin');
+          this.toast(`Sold a duplicate ${def.name} for ${r.gold}g.`);
+          const nn = this.copiesOf(cardId);
+          info.innerHTML = `You own <b style="color:#ffe9a8">×${nn}</b>`;
+          sell.textContent = label(nn); sell.disabled = nn < 2;
+          if (this.onGoldChange) this.onGoldChange();
+          if (this.gridEl) this.renderGrid();
+        };
+        right.append(sell);
+      }
     }
     const close = this.el('button', 'btn small', 'Close');
     close.style.marginTop = 'auto';

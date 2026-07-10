@@ -1,18 +1,19 @@
 // Arcane Realms TCG — boot: asset warmup, screen flow, main loop, debug hooks.
 import * as THREE from 'three';
-import { BoardScene } from './view/scene.js?v=21';
-import { UI, Store } from './view/ui.js?v=21';
-import { Match } from './view/match.js?v=21';
-import { Audio2 } from './view/audio.js?v=21';
-import { OnlineSession } from './view/online.js?v=21';
-import { preload, getCardBack } from './view/cardtex.js?v=21';
-import { STARTER_DECKS, validateDeck } from './sim/decks.js?v=21';
-import { COLLECTIBLE, cardById, TOKENS } from './sim/cards.js?v=21';
-import { createGame, legalActions, applyAction, makeUnit } from './sim/engine.js?v=21';
-import { chooseAction, runAiTurn } from './sim/ai.js?v=21';
-import { CampaignUI } from './view/campaign_ui.js?v=21';
-import { CARDBACK_INFO } from './campaign/campaign_data.js?v=21';
-import { initProgress, isOwned, ownedCount, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=21';
+import { BoardScene } from './view/scene.js?v=22';
+import { UI, Store } from './view/ui.js?v=22';
+import { Match } from './view/match.js?v=22';
+import { Audio2 } from './view/audio.js?v=22';
+import { OnlineSession } from './view/online.js?v=22';
+import { preload, getCardBack } from './view/cardtex.js?v=22';
+import { STARTER_DECKS, validateDeck } from './sim/decks.js?v=22';
+import { COLLECTIBLE, cardById, TOKENS } from './sim/cards.js?v=22';
+import { createGame, legalActions, applyAction, makeUnit } from './sim/engine.js?v=22';
+import { chooseAction, runAiTurn } from './sim/ai.js?v=22';
+import { CampaignUI } from './view/campaign_ui.js?v=22';
+import { openPackReveal } from './view/packreveal.js?v=22';
+import { CARDBACK_INFO } from './campaign/campaign_data.js?v=22';
+import { initProgress, isOwned, ownedCount, copiesOf, sellCard, sellValue, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=22';
 
 const container = document.getElementById('game-container');
 const splash = document.getElementById('boot-splash');
@@ -66,6 +67,10 @@ async function boot() {
   campaignUI = new CampaignUI(ui, Store, { onBattle: startCampaignBattle });
   ui.onCampaign = () => campaignUI.open();
   ui.isOwnedFn = (id) => isOwned(Store, id);
+  ui.copiesOf = (id) => copiesOf(Store, id);
+  ui.sellCard = (id) => sellCard(Store, id);
+  ui.sellValueOf = (rarity) => sellValue(rarity);
+  ui.onGoldChange = () => campaignUI.refreshGold();
   ui.campaignStrip = () => campaignUI.collectionStrip();
   ui.collectionTitle = () => `COLLECTION — ${ownedCount(Store)}/${COLLECTIBLE.length} OWNED`;
   ui.afterMatch = () => {
@@ -314,6 +319,8 @@ window.__ARC__ = {
   },
   leaveMatch,
   cardCount: COLLECTIBLE.length,
+  // debug: force a pack reveal with a specific card list (rarity FX testing)
+  packReveal: (cards) => openPackReveal(cards, { cardbackFile: myBackFile(), shake: Store.data.settings?.shake !== false, particles: Store.data.settings?.particles !== false }),
 };
 
 boot();

@@ -1,11 +1,25 @@
 // Arcane Realms TCG — Campaign screens: chapter map, NPC dialogue bubbles,
 // rewards reveal, achievements panel, card-back gallery.
 
-import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=21';
-import { battleState, campaignSummary, achievementList, buyPack } from '../campaign/progression.js?v=21';
-import { REALMS, cardById } from '../sim/cards.js?v=21';
-import { drawCard } from './cardtex.js?v=21';
-import { Audio2 } from './audio.js?v=21';
+import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=22';
+import { battleState, campaignSummary, achievementList, buyPack, dupeCount } from '../campaign/progression.js?v=22';
+import { REALMS, cardById } from '../sim/cards.js?v=22';
+import { drawCard } from './cardtex.js?v=22';
+import { Audio2 } from './audio.js?v=22';
+import { openPackReveal } from './packreveal.js?v=22';
+
+// compact arcane booster-pack icon for the store button
+const PACK_SVG = `<svg viewBox="0 0 40 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="30" height="36">
+<defs><linearGradient id="pkg" x1="0" y1="0" x2="40" y2="48" gradientUnits="userSpaceOnUse">
+<stop stop-color="#8a5cf0"/><stop offset=".55" stop-color="#4a2a8c"/><stop offset="1" stop-color="#241246"/></linearGradient></defs>
+<rect x="4" y="3" width="32" height="42" rx="5" fill="url(#pkg)" stroke="#ffd45f" stroke-width="2"/>
+<path d="M4 12 L36 12" stroke="#ffd45f" stroke-width="1.5" opacity=".7"/>
+<path d="M20 6 L23 10 L20 8 L17 10 Z" fill="#ffe9a8"/>
+<g transform="translate(20 27)" fill="#ffe9a8">
+<path d="M0 -9 L2.2 -2.2 L9 0 L2.2 2.2 L0 9 L-2.2 2.2 L-9 0 L-2.2 -2.2 Z"/>
+<circle cx="0" cy="0" r="2.4" fill="#fff6d8"/></g>
+<circle cx="10" cy="38" r="1.3" fill="#c9a6ff" opacity=".8"/>
+<circle cx="30" cy="38" r="1.3" fill="#c9a6ff" opacity=".8"/></svg>`;
 
 // battle-node positions on the world map (percent of the 16:9 artwork)
 const MAP_POS = {
@@ -66,6 +80,23 @@ const CSS = `
 .bnode.boss .bname{color:#ffd45f}
 .bnode .bboss{position:absolute;top:-9px;right:-6px;font-size:17px;filter:drop-shadow(0 2px 3px #000)}
 .goldchip{display:inline-flex;align-items:center;gap:6px;background:#241a3a;border:1px solid #6b4d12;color:#ffd45f;border-radius:18px;padding:5px 14px;font-size:15px;font-weight:700}
+.pack-btn{display:inline-flex;align-items:center;gap:9px;cursor:pointer;border:none;border-radius:14px;padding:6px 16px 6px 9px;position:relative;overflow:hidden;
+  background:linear-gradient(135deg,#7a3fd4,#4a2a8c 55%,#2a1a52);color:#fff;font-family:inherit;
+  box-shadow:0 4px 16px rgba(120,60,220,.42),inset 0 1px 0 rgba(255,255,255,.16);transition:transform .12s,box-shadow .12s}
+.pack-btn:hover{transform:translateY(-2px);box-shadow:0 9px 26px rgba(150,90,240,.55),inset 0 1px 0 rgba(255,255,255,.22)}
+.pack-btn:active{transform:translateY(0)}
+.pack-btn:disabled{filter:grayscale(.6) brightness(.7);cursor:default;transform:none;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.pack-btn .pack-ico{width:30px;height:36px;flex:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
+.pack-btn .pack-lbl{display:flex;flex-direction:column;line-height:1.12;font-size:14.5px;font-weight:800;letter-spacing:.03em;text-align:left}
+.pack-btn .pack-lbl b{font-size:11.5px;color:#ffe08a;font-weight:800;letter-spacing:.08em}
+.pack-btn::after{content:'';position:absolute;top:0;left:-60%;width:38%;height:100%;pointer-events:none;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.32),transparent);transform:skewX(-18deg);animation:packsheen 3.6s ease-in-out infinite}
+@keyframes packsheen{0%,62%{left:-60%}82%,100%{left:130%}}
+.sell-btn{background:linear-gradient(180deg,#3a2c12,#241a0a);border:1px solid #6b4d12;color:#ffd45f;border-radius:10px;padding:9px 15px;font-weight:800;cursor:pointer;transition:all .12s}
+.sell-btn:hover{border-color:#ffd45f;box-shadow:0 0 12px rgba(240,185,58,.32);transform:translateY(-1px)}
+.sell-btn:disabled{opacity:.4;cursor:default;box-shadow:none;transform:none}
+.dupe-badge{position:absolute;top:6px;left:6px;background:linear-gradient(180deg,#7a5a16,#4a3410);border:1px solid #ffd45f;color:#ffe9a8;
+  font-size:12px;font-weight:800;border-radius:8px;padding:1px 7px;box-shadow:0 2px 8px rgba(0,0,0,.6);z-index:3}
 /* dialogue */
 #dlg-overlay{position:absolute;inset:0;background:rgba(5,3,10,.82);display:flex;align-items:flex-end;justify-content:center;z-index:70;pointer-events:auto}
 #dlg-box{width:min(860px,94vw);margin-bottom:7vh;background:linear-gradient(180deg,#221a3c,#150f26);border:1px solid #4a3a78;border-radius:16px;padding:20px 24px;box-shadow:0 18px 60px rgba(0,0,0,.8)}
@@ -434,19 +465,37 @@ export class CampaignUI {
     const strip = ui.el('div');
     strip.style.cssText = 'display:flex;gap:10px;align-items:center';
     const gold = ui.el('div', 'goldchip', `🪙 ${d.gold}`);
-    const buy = ui.el('button', 'btn small primary', `📦 Arcane Pack (${PACK_COST}g)`);
+    this._goldEl = gold;
+    const buy = ui.el('button', 'pack-btn');
+    buy.innerHTML = `<span class="pack-ico">${PACK_SVG}</span><span class="pack-lbl">Arcane Pack<b>${PACK_COST} GOLD</b></span>`;
     buy.onclick = () => {
       const res = buyPack(this.store);
       if (!res.ok) { Audio2.sfx('error'); ui.toast(res.reason); return; }
-      Audio2.sfx('legendary');
-      gold.textContent = `🪙 ${d.gold}`;
-      this.showRewards(null, { winLine: '' }, { firstClear: true, gold: 0, newCards: res.cards, packCards: [], cardback: null }, () => {
+      this.refreshGold();
+      const done = () => {
         if (ui.gridEl) ui.renderGrid();
         const hdr = ui.root.querySelector('#scr-collection .topbar h2');
         if (hdr) hdr.textContent = ui.collectionTitle();
-      });
+      };
+      // cinematic 3D open; fall back to the flat DOM reveal if WebGL is unavailable
+      try {
+        const st = this.store.settings || {};
+        openPackReveal(res.cards, {
+          onDone: done,
+          cardbackFile: (CARDBACK_INFO[d.cardback] || CARDBACK_INFO.default).file,
+          shake: st.shake !== false,
+          particles: st.particles !== false,
+        });
+      } catch (e) {
+        Audio2.sfx('legendary');
+        this.showRewards(null, { winLine: '' }, { firstClear: true, gold: 0, newCards: res.cards.filter((c) => c.isNew).map((c) => c.id), packCards: res.cards.filter((c) => !c.isNew).map((c) => c.id), cardback: null }, done);
+      }
     };
     strip.append(gold, buy);
     return strip;
+  }
+
+  refreshGold() {
+    if (this._goldEl) this._goldEl.textContent = `🪙 ${this.store.data.gold}`;
   }
 }
