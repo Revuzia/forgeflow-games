@@ -55,6 +55,7 @@ export class HUD {
     st.textContent = `
       @keyframes cfPop { 0%{transform:scale(.3);opacity:0} 40%{transform:scale(1.15);opacity:1} 100%{transform:scale(1)} }
       @keyframes cfKenBurns { 0%{transform:scale(1)} 100%{transform:scale(1.07)} }
+      @keyframes cfPanelIn { 0%{transform:translate(-50%,-50%) scale(.45) rotate(-2deg);opacity:0} 55%{transform:translate(-50%,-50%) scale(1.08);opacity:1} 100%{transform:translate(-50%,-50%) scale(1)} }
       @keyframes cfToastIn { 0%{transform:translate(-50%,-16px);opacity:0} 12%{transform:translate(-50%,0);opacity:1} 85%{transform:translate(-50%,0);opacity:1} 100%{transform:translate(-50%,-10px);opacity:0} }
       @keyframes cfBannerIn { 0%{transform:scale(.4) rotate(-4deg);opacity:0} 50%{transform:scale(1.12) rotate(1deg);opacity:1} 100%{transform:scale(1) rotate(0)} }
       @keyframes cfFadeOut { to{opacity:0} }
@@ -133,6 +134,8 @@ export class HUD {
       ${tog("cf-music", "Music", music)}
       ${tog("cf-shake", "Screen shake", shake)}
       ${tog("cf-dmg", "Damage numbers", dmg)}
+      ${tog("cf-invx", "Invert camera X", save.get("set_invx", false))}
+      ${tog("cf-invy", "Invert camera Y", save.get("set_invy", false))}
       <div id="cf-reset" class="cf-btn" style="margin-top:22px;text-align:center;${frameCss}padding:9px 0;font-size:13px;font-weight:800;color:#ff8a8a;border-color:#a04040">RESET PROGRESS</div>
       <div id="cf-back" class="cf-btn" style="display:block;margin:16px auto 0;width:130px;text-align:center;padding:9px 0;${frameCss}font-size:14px;font-weight:700">\u2190 BACK</div>`;
   }
@@ -153,6 +156,8 @@ export class HUD {
     wireTog("#cf-music", "set_music", null);
     wireTog("#cf-shake", "set_shake", "shake");
     wireTog("#cf-dmg", "set_dmgnum", "dmgNum");
+    wireTog("#cf-invx", "set_invx", "invertX");
+    wireTog("#cf-invy", "set_invy", "invertY");
     const rst = M.querySelector("#cf-reset");
     rst.onclick = () => {
       if (rst.dataset.armed) {
@@ -176,7 +181,7 @@ export class HUD {
     this.clearPanel();
     this._panel = document.createElement("div");
     this._panel.style.cssText = `position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);${frameCss}
-      width:min(420px,90vw);padding:26px 30px;pointer-events:auto;animation:cfBannerIn .3s ease-out`;
+      width:min(420px,90vw);padding:26px 30px;pointer-events:auto;animation:cfPanelIn .3s ease-out`;
     this._panel.innerHTML = this._settingsHTML();
     this.layerBanner.appendChild(this._panel);
     this._wireSettings(this._panel, backFn);
@@ -617,7 +622,8 @@ export class HUD {
       const pos = big ? { r: 0, b: 0 } : SLOTS[idx];
       const wrap = el("div", `position:absolute;right:${pos.r}px;bottom:${pos.b}px;width:${size}px;height:${size}px;`);
       const btn = el("div", `position:absolute;inset:0;border-radius:50%;${frameCss}display:flex;align-items:center;justify-content:center;
-        font-size:${big ? 36 : 25}px;border-color:${cls.uiColor};`, def.icon || "⚔");
+        font-size:${big ? 36 : 25}px;border-color:${cls.uiColor};
+        background:url(assets/ui/sk_${def.id}.jpg?v=7) center/cover, rgba(16,8,26,.92);text-shadow:0 0 8px #000;`, "");
       btn.className = "cf-btn";
       const cd = el("div", `position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(8,4,14,.85) 0turn, transparent 0turn);pointer-events:none;`);
       const cdTxt = el("div", `position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:${big ? 22 : 17}px;font-weight:900;color:#fff;text-shadow:0 0 6px #000;pointer-events:none;opacity:0`);
@@ -631,9 +637,10 @@ export class HUD {
     };
     for (let i = 0; i < kit.abilities.length; i++) this._btns.push(mkBtn(kit.abilities[i], i, false));
     // SHIFT movement skill — small chip up-left of the cluster
-    const dashIcon = cls.name === "Warrior" ? "⤞" : cls.name === "Archer" ? "↷" : "✦";
+    const dashType = cls.name === "Warrior" ? "lunge" : cls.name === "Archer" ? "roll" : "blink";
     const dwrap = el("div", `position:absolute;right:176px;bottom:44px;width:48px;height:48px;`);
-    const dbtn = el("div", `position:absolute;inset:0;border-radius:50%;${frameCss}display:flex;align-items:center;justify-content:center;font-size:20px;border-color:${cls.uiColor};`, dashIcon);
+    const dbtn = el("div", `position:absolute;inset:0;border-radius:50%;${frameCss}border-color:${cls.uiColor};
+      background:url(assets/ui/sk_dash_${dashType}.jpg?v=7) center/cover, rgba(16,8,26,.92);`, "");
     dbtn.className = "cf-btn";
     const dcd = el("div", `position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(8,4,14,.85) 0turn, transparent 0turn);pointer-events:none;`);
     const dtxt = el("div", `position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;text-shadow:0 0 6px #000;pointer-events:none;opacity:0`);
@@ -647,13 +654,22 @@ export class HUD {
     if (modeCount > 1) {
       this.elToggle.style.display = "block";
       this.elToggle.innerHTML = "";
-      const tog = el("div", `width:58px;height:58px;border-radius:14px;${frameCss}display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;border-color:${cls.uiColor}`, `${kit.icon}<div style="font-size:8.5px;color:#b89ae0;font-weight:700">TAB</div>`);
+      const tog = el("div", `position:relative;width:58px;height:58px;border-radius:14px;${frameCss}display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;font-size:22px;border-color:${cls.uiColor};overflow:hidden;
+        background:url(assets/ui/sk_swap.jpg?v=7) center/cover, rgba(16,8,26,.92)`, `<div style="width:100%;text-align:center;font-size:8.5px;color:#ffe9a8;font-weight:800;background:rgba(8,4,14,.7);padding:1px 0">TAB</div>`);
       tog.className = "cf-btn";
+      const togCd = el("div", `position:absolute;inset:0;background:conic-gradient(rgba(8,4,14,.85) 0turn, transparent 0turn);pointer-events:none;`);
+      tog.appendChild(togCd);
+      this._swapCdEl = togCd;
       tog.onpointerdown = (e) => { e.preventDefault(); this.input.touchToggle(); };
       const label = el("div", `margin-top:4px;text-align:center;font-size:10px;font-weight:800;color:${cls.uiColor};text-shadow:0 1px 2px #000;letter-spacing:.5px`, kit.label.toUpperCase());
       this.elToggle.append(tog, label);
     } else this.elToggle.style.display = "none";
     this.elFace().textContent = cls.portrait;
+  }
+
+  /** TAB weapon-swap cooldown radial */
+  setSwapCd(frac, secs) {
+    if (this._swapCdEl) this._swapCdEl.style.background = `conic-gradient(rgba(8,4,14,.85) ${clamp(frac, 0, 1)}turn, transparent ${clamp(frac, 0, 1)}turn)`;
   }
 
   /** short top toast (bestiary discoveries, etc.) */
@@ -782,7 +798,7 @@ export class HUD {
   panel({ title, titleColor = GOLD, lines = [], buttons = [] }) {
     this.clearPanel();
     this._panel = el("div", `position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);${frameCss}
-      padding:34px 46px;text-align:center;pointer-events:auto;animation:cfBannerIn .5s ease-out;min-width:320px;max-width:92vw`);
+      padding:34px 46px;text-align:center;pointer-events:auto;animation:cfPanelIn .5s ease-out;min-width:320px;max-width:92vw`);
     this._panel.innerHTML =
       `<div style="font-size:38px;font-weight:900;color:${titleColor};font-family:Georgia,serif;letter-spacing:2px;text-shadow:0 0 18px ${titleColor}66">${title}</div>` +
       lines.map((l) => `<div style="font-size:17px;color:#e8dcc8;margin-top:12px">${l}</div>`).join("") +

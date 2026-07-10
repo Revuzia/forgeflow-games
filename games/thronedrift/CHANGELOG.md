@@ -1,5 +1,20 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v1.2 — 2026-07-10 (polish batch: icons, jump, cursor, PVP tuning)
+- xAI SKILL ICONS: all 16 abilities + basics + 3 dash skills + TAB swap now
+  use generated painterly icon art on the buttons (assets/ui/sk_*.jpg)
+- Custom xAI game CURSOR (golden gauntlet arrow, alpha-cut, 48px)
+- SPACE = JUMP (dedicated): parabolic hop w/ squash & stretch + dust; Space
+  no longer triggers attacks
+- TAB weapon swap now has a 2.5s cooldown with its own radial on the chip
+- PVP champion-vs-champion damage HALVED (0.06x conversion) for all modes
+- Camera orbit axes corrected + "Invert camera X/Y" toggles in Settings
+- Death audio layered: recorded impact + synthesized sub-drop / bell + drone
+  (single samples read cheap)
+- Modals/panels always animate FROM CENTER (cfPanelIn keeps the translate)
+- Title screen key-art backdrop restored — now rendered in-scene BEHIND the
+  live 3D champions
+
 ## v1.1 — 2026-07-10 (SHIFT skills + polish batch)
 - SHIFT MOVEMENT SKILLS: Warrior LUNGE (dash + blade drag damage), Mage BLINK
   (teleport along facing, brief iframes), Archer ROLL (dodge with iframes).

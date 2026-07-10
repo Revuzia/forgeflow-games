@@ -33,7 +33,11 @@ export class Game {
     this.shake = 0;
     this.timers = [];
     this.settings = { shake: save.get("set_shake", true), dmgNum: save.get("set_dmgnum", true) };
-    hud.cb.onSettings = (k, v) => { this.settings[k] = v; };
+    hud.cb.onSettings = (k, v) => {
+      this.settings[k] = v;
+      if (k === "invertX") this.input.invertX = v;
+      if (k === "invertY") this.input.invertY = v;
+    };
     this.raycaster = new THREE.Raycaster();
     this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this._v = new THREE.Vector3(); this._v2 = new THREE.Vector3();
@@ -419,7 +423,7 @@ export class Game {
    *  pools) into hearts: TTK lands at ~4-8s instead of one-shots. */
   applyDamage(target, dmg, opts = {}, attacker = null) {
     if (target.isChampion) {
-      const scaled = attacker && attacker.isChampion ? Math.max(0.35, dmg * 0.12) : dmg;
+      const scaled = attacker && attacker.isChampion ? Math.max(0.2, dmg * 0.06) : dmg;  // halved — standard PVP damage reduction
       const hit = target.takeDamage(scaled, opts.fromX ?? (attacker ? attacker.x : undefined), opts.fromZ ?? (attacker ? attacker.z : undefined), attacker, dmg);
       if (hit && opts.knockback) {
         const fx = opts.fromX ?? attacker.x, fz = opts.fromZ ?? attacker.z;
@@ -1103,6 +1107,15 @@ export class Game {
       new THREE.MeshStandardMaterial({ color: 0xe8b83a, emissive: 0xe8b83a, emissiveIntensity: 1.8 }));
     ring.rotation.x = Math.PI / 2; ring.position.y = 0.03;
     g.add(hemi, key, rim, sky, plat, ring);
+    // key-art backdrop BEHIND the heroes (the title lost its background when
+    // the live 3D showcase replaced the flat art — owner feedback)
+    new THREE.TextureLoader().load("menu_bg.png", (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const bg = new THREE.Mesh(new THREE.PlaneGeometry(120, 68),
+        new THREE.MeshBasicMaterial({ map: tex, fog: false, color: 0x777788, depthWrite: false }));
+      bg.position.set(0, 16, -42);
+      g.add(bg);
+    });
     this.showcaseActors = [];
     const lineup = [["barbarian", -2.8], ["rogue", 0], ["sorceress", 2.8]];
     for (const pair of lineup) {

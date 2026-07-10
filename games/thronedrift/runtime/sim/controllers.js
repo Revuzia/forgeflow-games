@@ -11,6 +11,7 @@ export class ControllerBase {
   get abilityHeld() { return [false, false, false]; }
   togglePressed() { return false; }            // edge — consumed on read
   dashPressed() { return false; }              // edge — consumed on read
+  jumpPressed() { return false; }              // edge — consumed on read
   aim() { return null; }                       // {x,z} world point or null
   update(dt, champ, game) {}
 }
@@ -24,6 +25,7 @@ export class PlayerController extends ControllerBase {
   get abilityHeld() { return this.input.abilityHeld; }
   togglePressed() { return this.input.togglePressed(); }
   dashPressed() { return this.input.dashPressed(); }
+  jumpPressed() { return this.input.jumpPressed(); }
   aim() {
     const g = this.game, inp = this.input;
     if (!inp.pointer.down || ("ontouchstart" in window)) return null;

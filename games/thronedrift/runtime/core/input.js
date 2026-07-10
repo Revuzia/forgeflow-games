@@ -16,6 +16,7 @@ export class Input {
     this.enabled = false;
     // camera controls: wheel/pinch zoom + right-drag orbit (yaw) and pitch
     this.camZoom = 1; this.camYaw = 0; this.camPitch = 1;
+    this.invertX = false; this.invertY = false;   // camera orbit inversion (settings)
     this._rightDrag = null;
     this._pinch = new Map();
 
@@ -24,7 +25,8 @@ export class Input {
       if (e.code === "Tab") e.preventDefault();
       this.keys.add(e.code);
       if (!this.enabled) return;
-      if (e.code === "KeyJ" || e.code === "Space") this.basicHeld = true;
+      if (e.code === "KeyJ") this.basicHeld = true;
+      if (e.code === "Space") { e.preventDefault(); this._jumpEdge = true; }
       if (e.code === "Digit1" || e.code === "KeyU") this._press(0, true);
       if (e.code === "Digit2" || e.code === "KeyI") this._press(1, true);
       if (e.code === "Digit3" || e.code === "KeyO") this._press(2, true);
@@ -34,7 +36,7 @@ export class Input {
     });
     window.addEventListener("keyup", (e) => {
       this.keys.delete(e.code);
-      if (e.code === "KeyJ" || e.code === "Space") this.basicHeld = false;
+      if (e.code === "KeyJ") this.basicHeld = false;
       if (e.code === "Digit1" || e.code === "KeyU") this._press(0, false);
       if (e.code === "Digit2" || e.code === "KeyI") this._press(1, false);
       if (e.code === "Digit3" || e.code === "KeyO") this._press(2, false);
@@ -73,8 +75,11 @@ export class Input {
         return;
       }
       if (this._rightDrag) {
-        this.camYaw += (e.clientX - this._rightDrag.x) * 0.006;
-        this.camPitch = Math.min(1.6, Math.max(0.45, this.camPitch + (e.clientY - this._rightDrag.y) * 0.004)); // drag DOWN looks down; wide range for full angle control
+        // default = drag right pans view right, drag down tilts down (owner
+        // reported prior mapping as inverted); settings can flip either axis
+        const sx = this.invertX ? 1 : -1, sy = this.invertY ? 1 : -1;
+        this.camYaw += (e.clientX - this._rightDrag.x) * 0.006 * sx;
+        this.camPitch = Math.min(1.6, Math.max(0.45, this.camPitch + (e.clientY - this._rightDrag.y) * 0.004 * sy));
         this._rightDrag = { x: e.clientX, y: e.clientY };
         return;
       }
@@ -84,7 +89,7 @@ export class Input {
       this._pinch.delete(e.pointerId);
       if (e.button === 2) { this._rightDrag = null; return; }
       if (e.pointerType === "touch") return;
-      this.pointer.down = false; this.basicHeld = this.keys.has("KeyJ") || this.keys.has("Space");
+      this.pointer.down = false; this.basicHeld = this.keys.has("KeyJ");
     });
     window.addEventListener("pointercancel", (e) => this._pinch.delete(e.pointerId));
   }
@@ -123,6 +128,7 @@ export class Input {
   abilityPressed(i) { const v = this._abilityEdges[i]; this._abilityEdges[i] = false; return v; }
   togglePressed() { const v = this._toggleEdge; this._toggleEdge = false; return v; }
   dashPressed() { const v = this._dashEdge; this._dashEdge = false; return v; }
+  jumpPressed() { const v = this._jumpEdge; this._jumpEdge = false; return v; }
   touchDash() { if (this.enabled) this._dashEdge = true; }
   pausePressed() { const v = this._pauseEdge; this._pauseEdge = false; return v; }
   clearEdges() { this._abilityEdges = [false, false, false]; this._toggleEdge = false; this._pauseEdge = false; }

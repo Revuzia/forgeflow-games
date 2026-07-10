@@ -84,6 +84,19 @@ function playSample(name) {
   el.volume = Math.min(1, desiredVol * 1.4);
   el.currentTime = 0;
   el.play().catch(() => {});
+  // layered synth body under the sample — a lone sample reads thin/cheap
+  try {
+    if (name === "death") {
+      tone({ freq: 95, type: "sine", dur: 0.55, vol: 0.5, slide: -60 });
+      noise({ dur: 0.5, vol: 0.22, freq: 320, q: 0.5, slide: -220 });
+    } else if (name === "game_over") {
+      tone({ freq: 55, type: "sine", dur: 1.4, vol: 0.55, slide: -18 });
+      tone({ freq: 110, type: "triangle", dur: 1.0, vol: 0.25, slide: -40, delay: 0.1 });
+      noise({ dur: 1.2, vol: 0.14, freq: 240, q: 0.4, slide: -140 });
+    } else if (name === "hurt") {
+      tone({ freq: 130, type: "sine", dur: 0.18, vol: 0.3, slide: -50 });
+    }
+  } catch (e) {}
 }
 
 export const SFX = {

@@ -44,6 +44,8 @@ export class Champion {
     this.kills = 0; this.deaths = 0; this.dmgDealt = 0;
     this.dashDef = DASHES[classId];
     this.dashCd = 0; this.dashing = null;   // {t, vx, vz, def}
+    this.swapCd = 0;                        // TAB weapon-mode cooldown
+    this.jumpVy = 0; this.airY = 0;         // SPACE jump
 
     // actors — warrior gets one per weapon mode
     this.group = new THREE.Group();
@@ -488,12 +490,29 @@ export class Champion {
     if (this.dashing) this._updateDash(dt);
     else if (live && !shocked && ctrl.dashPressed()) this.castDash();
 
-    // mode toggle
+    // mode toggle (on a short cooldown like the dash — owner request)
+    if (this.swapCd > 0) this.swapCd -= dt;
     if (live && !shocked && ctrl.togglePressed()) {
-      if (this.modeKeys.length > 1 && !this.spin) {
+      if (this.modeKeys.length > 1 && !this.spin && this.swapCd <= 0) {
+        this.swapCd = 2.5;
         this.endBlock();
         this.modeIdx = (this.modeIdx + 1) % this.modeKeys.length;
         this._applyMode(false);
+      }
+    }
+
+    // SPACE jump — pure verticality, weapons stay usable
+    if (live && !shocked && this.airY === 0 && !this.dashing && ctrl.jumpPressed()) {
+      this.jumpVy = 6.6;
+      SFX.play("swing");
+      this.game.fx.burst(this.x, 0.15, this.z, { count: 6, color: 0xcfc8b8, speed: 1.5, up: 0.8, life: 0.3 });
+    }
+    if (this.airY > 0 || this.jumpVy > 0) {
+      this.airY += this.jumpVy * dt;
+      this.jumpVy -= 17 * dt;
+      if (this.airY <= 0) {
+        if (this.jumpVy < -3) this.game.fx.burst(this.x, 0.15, this.z, { count: 8, color: 0xcfc8b8, speed: 2, up: 1, life: 0.3 });
+        this.airY = 0; this.jumpVy = 0;
       }
     }
 
@@ -568,7 +587,10 @@ export class Champion {
     const relaxTarget = (this.attackAnimT > 0 || this.spin || this.block.active || this.dashing) ? 0 : (moving ? 1 : idleRelax);
     actor.updateRelax(dt, relaxTarget, moving, mv.mag > 0.55);
 
-    this.group.position.set(this.x, 0, this.z);
+    // squash & stretch sells the jump without a dedicated clip
+    const stretch = this.airY > 0 ? 1 + Math.min(0.12, Math.abs(this.jumpVy) * 0.015) : 1;
+    this.group.scale.set(1 / Math.sqrt(stretch), stretch, 1 / Math.sqrt(stretch));
+    this.group.position.set(this.x, this.airY, this.z);
     if (!this.spin) this.group.rotation.y = -this.facing + Math.PI / 2;
 
     // iframes flash
@@ -597,6 +619,7 @@ export class Champion {
       const list = defs.map((d, i) => ({ frac: d ? clamp(cds[i] / d.cd, 0, 1) : 0, secs: Math.max(0, cds[i]) }));
       if (this.dashDef) list.push({ frac: clamp(this.dashCd / this.dashDef.cd, 0, 1), secs: Math.max(0, this.dashCd) });
       g.hud.setCooldowns(list);
+      if (this.modeKeys.length > 1 && g.hud.setSwapCd) g.hud.setSwapCd(clamp(this.swapCd / 2.5, 0, 1), Math.max(0, this.swapCd));
     }
   }
 

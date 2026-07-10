@@ -80,6 +80,8 @@ window.addEventListener("resize", () => {
   SFX.setVolume(save.get("set_vol", 0.5));
   Music.setVolume(save.get("set_vol", 0.5));
   Music.setEnabled(save.get("set_music", true));
+  input.invertX = save.get("set_invx", false);
+  input.invertY = save.get("set_invy", false);
   // global controls-bar pause button (game_controls.js) drives this hook
   window.__PAUSE__ = {
     toggle: () => game.setPaused(!game.paused),
