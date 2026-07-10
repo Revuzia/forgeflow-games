@@ -1,0 +1,32 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e5]:
+    - generic [ref=e6]: COSMIC COILS
+    - generic [ref=e7]: EAT · GROW · RULE THE PLANET
+    - textbox "your serpent's name" [ref=e9]
+    - generic [ref=e10]:
+      - button "‹" [ref=e11] [cursor=pointer]
+      - button "›" [ref=e13] [cursor=pointer]
+    - generic [ref=e14]: NOVA · skin 1/10
+    - generic [ref=e15]:
+      - button "▶ PRACTICE VS AI" [ref=e16] [cursor=pointer]
+      - button "🌐 PLAY ONLINE" [ref=e17] [cursor=pointer]
+      - generic [ref=e18]:
+        - button "🏆 RECORDS" [ref=e19] [cursor=pointer]
+        - button "⚙️ SETTINGS" [ref=e20] [cursor=pointer]
+        - button "❓ HOW TO" [ref=e21] [cursor=pointer]
+    - generic [ref=e22]:
+      - generic [ref=e23]: 🌿 Verdant
+      - generic [ref=e24]: 🌋 Ember
+      - generic [ref=e25]: ❄️ Glacier
+      - generic [ref=e26]: 🏜️ Dune
+      - generic [ref=e27]: 🔮 Abyss
+    - generic [ref=e28]:
+      - text: every match spawns on a random living planet · dynamic weather · real online multiplayer
+      - text: original xAI-generated worlds · fully procedural score · a ForgeFlow Games original
+  - generic [ref=e29]:
+    - button "Fullscreen (F)" [ref=e30] [cursor=pointer]:
+      - img [ref=e31]
+    - button "Mute (M)" [ref=e33] [cursor=pointer]:
+      - img [ref=e34]
+    - button "Pause (ESC)" [ref=e38] [cursor=pointer]:
+      - img [ref=e39]

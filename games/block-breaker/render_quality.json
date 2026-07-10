@@ -1,0 +1,11 @@
+{
+ "slug": "block-breaker",
+ "dimension": "unknown",
+ "render_path": "unknown",
+ "markers": {},
+ "missing": [],
+ "warnings": [],
+ "ok": false,
+ "verdict": "fail",
+ "reason": "could not classify render path"
+}

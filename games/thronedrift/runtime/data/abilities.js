@@ -1,4 +1,4 @@
-// Crownfire Arenas — data-driven ability definitions.
+// Thronedrift — data-driven ability definitions.
 // Every kit is 1 spamable basic + 3 specials. The sim (sim/game.js) implements
 // a small set of behavior primitives ("type"); everything else is data.
 //
@@ -11,13 +11,15 @@ export const CLASSES = {
   warrior: {
     name: "Warrior", color: 0xff4d3a, uiColor: "#ff6a4a",
     portrait: "⚔️", desc: "Two kits in one: colossal two-hander or sword & shield with a true Block.",
-    speed: 6.0, hearts: 5,
+    speed: 6.2, hearts: 7,   // melee eats hits the ranged classes never take — extra hearts
     modes: ["twohand", "sworboard"],
     kits: {
       twohand: {
         label: "Two-Handed", icon: "🗡", model: "barbarian",
+        // anim note: barbarian slash1 is a 7.7s charged chop — unusable for spam;
+        // finisher (1.87s hammer swing) + slash2 read as real chops when rate-fitted
         basic: { id: "heavy_slash", name: "Heavy Slash", type: "melee", dmg: 12, arc: 1.9, range: 2.9,
-                 rate: 0.52, anim: ["slash1", "slash2"], animScale: 1.5, sfx: "swing_big", trail: 0xff5a3a },
+                 rate: 0.52, anim: ["finisher", "slash2"], animScale: 1.5, sfx: "swing_big", trail: 0xff5a3a },
         abilities: [
           { id: "whirlwind", name: "Whirlwind", callout: "WHIRLWIND!", icon: "🌪", cd: 6,
             type: "spin", dmg: 9, radius: 3.6, ticks: 5, duration: 1.1,
@@ -60,14 +62,14 @@ export const CLASSES = {
         basic: { id: "single_arrow", name: "Single Arrow", type: "shot", dmg: 7, count: 1,
                  speed: 22, rate: 0.30, range: 18, anim: ["slash1", "slash2"], animScale: 2.0, sfx: "shot", tint: 0xffc060 },
         abilities: [
-          { id: "fan_shot", name: "Fan Shot", callout: "FAN SHOT!", icon: "📡", cd: 5,
-            type: "shot", dmg: 8, count: 6, spread: 0.8, speed: 20, range: 15,
+          { id: "fan_shot", name: "Fan Shot", callout: "FAN SHOT!", icon: "⫸", cd: 5,
+            type: "shot", dmg: 8, count: 7, spread: 1.15, speed: 20, range: 15,
             anim: "finisher", animScale: 1.6, sfx: "shot", tint: 0xffc060 },
           { id: "fire_arrow", name: "Fire Arrow", callout: "FIRE ARROW!", icon: "🔥", cd: 8,
             type: "bomb", dmg: 20, speed: 19, radius: 3.2, range: 17,
             residual: { kind: "fire", radius: 2.8, life: 4, dps: 8 }, status: { burn: 3 },
             anim: "slash1", animScale: 1.6, sfx: "shot", tint: 0xff6a20 },
-          { id: "arrow_rain", name: "Rain of Arrows", callout: "RAIN OF ARROWS!", icon: "🌧", cd: 12,
+          { id: "arrow_rain", name: "Rain of Arrows", callout: "RAIN OF ARROWS!", icon: "🎯", cd: 12,
             type: "rain", dmg: 12, radius: 4.4, delay: 0.9, volleys: 3, volleyGap: 0.35, range: 14,
             anim: "slash2", animScale: 1.4, sfx: "rain", shake: 0.4 },
         ],

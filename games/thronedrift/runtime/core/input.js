@@ -1,4 +1,4 @@
-// Crownfire Arenas — unified keyboard / mouse / touch input.
+// Thronedrift — unified keyboard / mouse / touch input.
 // Physical key codes are used so WASD positions also serve ZQSD (AZERTY) users.
 // HUD pipes virtual joystick + touch ability buttons into this same object.
 
@@ -14,6 +14,10 @@ export class Input {
     this._pauseEdge = false;
     this.pointer = { x: 0, y: 0, down: false }; // NDC coords for aim raycast
     this.enabled = false;
+    // camera controls: wheel/pinch zoom + right-drag orbit (yaw) and pitch
+    this.camZoom = 1; this.camYaw = 0; this.camPitch = 1;
+    this._rightDrag = null;
+    this._pinch = new Map();
 
     window.addEventListener("keydown", (e) => {
       if (e.repeat) return;
@@ -38,17 +42,50 @@ export class Input {
   }
 
   bindCanvas(canvas) {
+    canvas.addEventListener("contextmenu", (e) => e.preventDefault()); // right-drag orbits
+    canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      this.camZoom = Math.min(1.6, Math.max(0.55, this.camZoom * (1 + e.deltaY * 0.0011)));
+    }, { passive: false });
     canvas.addEventListener("pointerdown", (e) => {
-      if (e.pointerType === "touch") return; // touch handled by HUD joystick/buttons
+      if (e.pointerType === "touch") {
+        // two-finger pinch on the canvas = zoom (joystick/buttons live on HUD)
+        this._pinch.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        return;
+      }
+      if (e.button === 2) { this._rightDrag = { x: e.clientX, y: e.clientY }; return; }
       this.pointer.down = true;
       if (this.enabled) this.basicHeld = true;
       this._updPointer(e, canvas);
     });
-    canvas.addEventListener("pointermove", (e) => this._updPointer(e, canvas));
+    canvas.addEventListener("pointermove", (e) => {
+      if (e.pointerType === "touch" && this._pinch.has(e.pointerId)) {
+        const pts = this._pinch;
+        if (pts.size === 2) {
+          const [a, b] = [...pts.values()];
+          const before = Math.hypot(a.x - b.x, a.y - b.y);
+          pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          const [a2, b2] = [...pts.values()];
+          const after = Math.hypot(a2.x - b2.x, a2.y - b2.y);
+          if (before > 0) this.camZoom = Math.min(1.6, Math.max(0.55, this.camZoom * (before / after)));
+        } else pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        return;
+      }
+      if (this._rightDrag) {
+        this.camYaw += (e.clientX - this._rightDrag.x) * 0.006;
+        this.camPitch = Math.min(1.35, Math.max(0.6, this.camPitch - (e.clientY - this._rightDrag.y) * 0.004));
+        this._rightDrag = { x: e.clientX, y: e.clientY };
+        return;
+      }
+      this._updPointer(e, canvas);
+    });
     window.addEventListener("pointerup", (e) => {
+      this._pinch.delete(e.pointerId);
+      if (e.button === 2) { this._rightDrag = null; return; }
       if (e.pointerType === "touch") return;
       this.pointer.down = false; this.basicHeld = this.keys.has("KeyJ") || this.keys.has("Space");
     });
+    window.addEventListener("pointercancel", (e) => this._pinch.delete(e.pointerId));
   }
 
   _updPointer(e, canvas) {

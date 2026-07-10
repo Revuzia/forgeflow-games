@@ -1,12 +1,17 @@
-// Crownfire Arenas — DOM HUD + menus.
+// Thronedrift — DOM HUD + menus.
 // Premium gold/purple frame language. Radial cooldowns are conic-gradient
 // overlays on circular buttons. Touch joystick + ability buttons pipe into
 // the shared Input object. All screens are DOM (crisp text, no canvas UI).
 
 import { CLASSES } from "../data/abilities.js";
 import { ARENAS } from "../data/arenas.js";
-import { formatScore, clamp } from "../core/util.js";
+import { ENEMY_TYPES } from "../data/enemies.js";
+import { formatScore, clamp, save } from "../core/util.js";
 import { SFX } from "../core/audio.js";
+
+const TITLE = "THRONEDRIFT";
+const TAGLINE = "Five drifting thrones. One champion. Endless waves.";
+const BESTIARY_FACES = { skeleton: "💀", imp: "👺", slime: "🟢", orc: "👹", brute: "🧌", wisp: "👻", demon: "👿" };
 
 const GOLD = "#e8b83a", PURPLE = "#7a4dcf", DARKPANEL = "rgba(16,8,26,0.92)";
 
@@ -37,6 +42,8 @@ export class HUD {
     const st = document.createElement("style");
     st.textContent = `
       @keyframes cfPop { 0%{transform:scale(.3);opacity:0} 40%{transform:scale(1.15);opacity:1} 100%{transform:scale(1)} }
+      @keyframes cfKenBurns { 0%{transform:scale(1)} 100%{transform:scale(1.07)} }
+      @keyframes cfToastIn { 0%{transform:translate(-50%,-16px);opacity:0} 12%{transform:translate(-50%,0);opacity:1} 85%{transform:translate(-50%,0);opacity:1} 100%{transform:translate(-50%,-10px);opacity:0} }
       @keyframes cfBannerIn { 0%{transform:scale(.4) rotate(-4deg);opacity:0} 50%{transform:scale(1.12) rotate(1deg);opacity:1} 100%{transform:scale(1) rotate(0)} }
       @keyframes cfFadeOut { to{opacity:0} }
       @keyframes cfPulse { 0%,100%{box-shadow:0 0 14px rgba(232,184,58,.5)} 50%{box-shadow:0 0 30px rgba(232,184,58,.95)} }
@@ -54,19 +61,78 @@ export class HUD {
 
   showTitle() {
     this._menu(`
-      <div style="text-align:center;animation:cfPop .5s ease-out">
-        <div style="font-size:15px;letter-spacing:8px;color:#b89ae0;margin-bottom:6px">FORGEFLOW GAMES</div>
-        <div style="font-size:64px;font-weight:900;letter-spacing:3px;line-height:1;
-          background:linear-gradient(180deg,#ffe9a8 0%,#e8b83a 45%,#a2521a 70%,#ff6a2a 100%);
+      <div style="text-align:center;animation:cfPop .5s ease-out;position:relative;z-index:2">
+        <div style="font-size:15px;letter-spacing:8px;color:#cdb8ee;margin-bottom:6px;text-shadow:0 2px 6px #000">FORGEFLOW GAMES</div>
+        <div style="font-size:72px;font-weight:900;letter-spacing:5px;line-height:1;
+          background:linear-gradient(180deg,#ffe9a8 0%,#e8b83a 45%,#c88a3a 70%,#9a5dff 115%);
           -webkit-background-clip:text;background-clip:text;color:transparent;
-          text-shadow:0 0 40px rgba(255,120,40,.35);font-family:Georgia,serif">CROWNFIRE<br>ARENAS</div>
-        <div style="font-size:16px;color:#cdb8ee;margin-top:14px;max-width:430px">
-          Five floating realm-boards. Endless legions. One crown of fire.<br>Claim it.</div>
-        <div id="cf-start" class="cf-btn" style="margin:34px auto 0;width:240px;padding:15px 0;${frameCss}
-          font-size:20px;font-weight:800;text-align:center;animation:cfPulse 2s infinite">ENTER THE ARENAS</div>
-        <div style="margin-top:18px;font-size:12px;color:#8a7aa8">WASD move · J / click attack · 1 2 3 abilities · TAB weapon mode (Warrior)</div>
+          filter:drop-shadow(0 4px 14px rgba(0,0,0,.85));font-family:Georgia,serif">${TITLE}</div>
+        <div style="font-size:16px;color:#e8dcc8;margin-top:14px;max-width:460px;text-shadow:0 2px 5px #000">${TAGLINE}</div>
+        <div id="cf-start" class="cf-btn" style="margin:30px auto 0;width:250px;padding:15px 0;${frameCss}
+          font-size:20px;font-weight:800;text-align:center;animation:cfPulse 2s infinite">PLAY</div>
+        <div style="display:flex;gap:14px;justify-content:center;margin-top:14px">
+          <div id="cf-bestiary" class="cf-btn" style="padding:10px 22px;${frameCss}font-size:14px;font-weight:700">📖 BESTIARY</div>
+          <div id="cf-howto" class="cf-btn" style="padding:10px 22px;${frameCss}font-size:14px;font-weight:700">🎮 HOW TO PLAY</div>
+        </div>
+        <div style="margin-top:16px;font-size:12px;color:#b8a8d0;text-shadow:0 1px 3px #000">Best: ${formatScore(save.get("hiscore", 0))}</div>
       </div>`);
     this.layerMenu.querySelector("#cf-start").onclick = () => { SFX.unlock(); SFX.play("ui_big"); this.showClassSelect(); };
+    this.layerMenu.querySelector("#cf-bestiary").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showBestiary(); };
+    this.layerMenu.querySelector("#cf-howto").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showHowTo(); };
+  }
+
+  showBestiary() {
+    const discovered = new Set(save.get("bestiary", []));
+    const cards = Object.entries(ENEMY_TYPES).map(([id, d]) => {
+      const known = discovered.has(id);
+      return known ? `
+        <div style="${frameCss}width:196px;padding:14px 12px;text-align:center">
+          <div style="font-size:40px">${BESTIARY_FACES[id] || "❔"}</div>
+          <div style="font-size:17px;font-weight:900;color:#ffd24a;margin-top:4px">${d.name}</div>
+          <div style="font-size:11px;letter-spacing:1.5px;color:#b89ae0">${d.role.toUpperCase()}</div>
+          <div style="font-size:11.5px;color:#cbbfe0;font-style:italic;min-height:56px;margin-top:7px">"${d.lore}"</div>
+          <div style="display:flex;justify-content:space-around;margin-top:8px;font-size:11px;color:#e8dcc8">
+            <span>❤️ ${d.hp}</span><span>⚔️ ${d.dmg}</span><span>👟 ${d.speed}</span></div>
+        </div>` : `
+        <div style="${frameCss}width:196px;padding:14px 12px;text-align:center;opacity:.5;filter:grayscale(.8)">
+          <div style="font-size:40px">❔</div>
+          <div style="font-size:17px;font-weight:900;color:#8a7aa8;margin-top:4px">???</div>
+          <div style="font-size:11px;letter-spacing:1.5px;color:#6a5a88">UNDISCOVERED</div>
+          <div style="font-size:11.5px;color:#8a7aa8;font-style:italic;min-height:56px;margin-top:7px">Face this foe in the arenas to record it.</div>
+          <div style="height:16px"></div>
+        </div>`;
+    }).join("");
+    this._menu(`
+      <div style="text-align:center;max-width:1100px;position:relative;z-index:2">
+        <div style="font-size:34px;font-weight:900;color:${GOLD};margin-bottom:6px;font-family:Georgia,serif">BESTIARY</div>
+        <div style="font-size:13px;color:#b89ae0;margin-bottom:18px">${discovered.size} / ${Object.keys(ENEMY_TYPES).length} foes recorded</div>
+        <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;max-height:62vh;overflow-y:auto;padding:4px">${cards}</div>
+        <div id="cf-back" class="cf-btn" style="display:inline-block;margin-top:20px;padding:10px 30px;${frameCss}font-size:15px;font-weight:700">← BACK</div>
+      </div>`);
+    this.layerMenu.querySelector("#cf-back").onclick = () => { SFX.play("ui"); this.showTitle(); };
+  }
+
+  showHowTo() {
+    this._menu(`
+      <div style="${frameCss}max-width:560px;padding:26px 34px;position:relative;z-index:2">
+        <div style="font-size:28px;font-weight:900;color:${GOLD};text-align:center;font-family:Georgia,serif;margin-bottom:14px">HOW TO PLAY</div>
+        <div style="font-size:14px;line-height:1.9;color:#e8dcc8">
+          <b style="color:#ffd24a">Move</b> — WASD / arrows, or the left touch joystick<br>
+          <b style="color:#ffd24a">Attack</b> — J / Space / Left-click (spam away — click also aims)<br>
+          <b style="color:#ffd24a">Abilities</b> — 1 · 2 · 3, or the buttons bottom-right<br>
+          <b style="color:#ffd24a">Warrior mode swap</b> — TAB: Two-Handed ⇄ Sword & Shield<br>
+          <b style="color:#ffd24a">Block</b> — HOLD 3 in Sword & Shield · perfect timing = stun pulse<br>
+          <b style="color:#ffd24a">Camera</b> — scroll to zoom · right-drag to rotate<br>
+          <b style="color:#ffd24a">Pause</b> — ESC
+          <hr style="border-color:rgba(232,184,58,.25);margin:10px 0">
+          <b style="color:#b0a0ff">SHOCK</b> stuns · <b style="color:#ff8a3a">BURN</b> melts over time · <b style="color:#8ae0ff">FROST</b> slows.
+          Fire and frost linger on the ground — herd enemies through them.
+          Chain hits fast to grow your <b style="color:#ffd24a">combo multiplier</b> up to 32×.
+          Clear every wave, conquer all five thrones, claim the crown.
+        </div>
+        <div id="cf-back" class="cf-btn" style="display:block;margin:18px auto 0;width:140px;text-align:center;padding:10px 0;${frameCss}font-size:15px;font-weight:700">← BACK</div>
+      </div>`);
+    this.layerMenu.querySelector("#cf-back").onclick = () => { SFX.play("ui"); this.showTitle(); };
   }
 
   showClassSelect() {
@@ -87,7 +153,7 @@ export class HUD {
   }
 
   showArenaSelect(classId) {
-    const unlocked = parseInt(localStorage.getItem("crownfire_unlocked") || "1", 10);
+    const unlocked = save.get("unlocked", 1);
     const cards = ARENAS.map((a, i) => {
       const locked = a.order > unlocked;
       const col = "#" + a.accent.toString(16).padStart(6, "0");
@@ -119,8 +185,13 @@ export class HUD {
 
   _menu(inner) {
     this.layerMenu.style.display = "flex";
-    this.layerMenu.style.cssText += "align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 30%,rgba(60,20,80,.55),rgba(8,4,14,.9));";
-    this.layerMenu.innerHTML = inner;
+    this.layerMenu.style.cssText += "align-items:center;justify-content:center;";
+    // house menu pattern: full-bleed key art + Ken Burns drift + radial/linear scrim
+    this.layerMenu.innerHTML = `
+      <div style="position:absolute;inset:0;background:url(menu_bg.png?v=2) center/cover no-repeat,
+        radial-gradient(ellipse at 50% 30%,#2a1038,#0b0710 75%);animation:cfKenBurns 36s ease-in-out infinite alternate"></div>
+      <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(8,4,14,.28) 0%,rgba(8,4,14,.82) 100%),
+        linear-gradient(rgba(10,6,20,.30),rgba(10,6,20,.72))"></div>` + inner;
     this.layerGame.style.display = "none";
   }
 
@@ -145,8 +216,13 @@ export class HUD {
     this.elWave = el("div", `position:absolute;top:12px;right:12px;text-align:right;${frameCss}padding:8px 14px;`);
     this.elWave.innerHTML = `<div id="cf-wavetxt" style="font-size:19px;font-weight:900">WAVE 1/5</div>
       <div id="cf-arenatxt" style="font-size:12px;color:#b89ae0"></div>`;
-    // bottom-right: abilities + basic + mode toggle
-    this.elAbil = el("div", "position:absolute;bottom:18px;right:16px;display:flex;gap:12px;align-items:flex-end;pointer-events:auto;");
+    // bottom-right: ability cluster (industry-standard diamond: big basic in the
+    // corner, three specials arced around it — NOT a flat row)
+    this.elAbil = el("div", "position:absolute;bottom:16px;right:14px;width:196px;height:196px;pointer-events:auto;");
+    // bottom-left: warrior weapon-mode toggle lives by the movement thumb
+    this.elToggle = el("div", "position:absolute;bottom:170px;left:18px;pointer-events:auto;display:none;");
+    // toast (bestiary discoveries etc.)
+    this.elToast = el("div", "position:absolute;top:74px;left:50%;transform:translateX(-50%);pointer-events:none;");
     // bottom-left joystick zone
     this.elJoyZone = el("div", "position:absolute;bottom:0;left:0;width:45%;height:55%;pointer-events:auto;");
     this.elJoyBase = el("div", `position:absolute;width:110px;height:110px;border-radius:50%;border:2px solid rgba(232,184,58,.5);
@@ -156,7 +232,7 @@ export class HUD {
     this.elJoyZone.append(this.elJoyBase, this.elJoyKnob);
     // tutorial hint
     this.elHint = el("div", `position:absolute;bottom:120px;left:50%;transform:translateX(-50%);${frameCss}padding:9px 20px;font-size:14px;opacity:0;transition:opacity .4s;text-align:center;max-width:90vw`);
-    L.append(this.elPortrait, this.elScoreWrap, this.elWave, this.elAbil, this.elJoyZone, this.elHint);
+    L.append(this.elPortrait, this.elScoreWrap, this.elWave, this.elAbil, this.elToggle, this.elToast, this.elJoyZone, this.elHint);
     this._bindJoystick();
     this._score = 0; this._scoreShown = 0;
   }
@@ -165,21 +241,14 @@ export class HUD {
   setKit(cls, kit, modeIdx, modeCount) {
     this.elAbil.innerHTML = "";
     this._btns = [];
-    // mode toggle (warrior only)
-    if (modeCount > 1) {
-      const tog = el("div", `width:52px;height:52px;border-radius:12px;${frameCss}display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:20px;margin-bottom:6px;`, `${kit.icon}<div style="font-size:8.5px;color:#b89ae0;font-weight:700">TAB</div>`);
-      tog.className = "cf-btn";
-      tog.onpointerdown = (e) => { e.preventDefault(); this.input.touchToggle(); };
-      const wrap = el("div", "display:flex;flex-direction:column;align-items:center;gap:4px;");
-      const label = el("div", `font-size:10px;font-weight:800;color:${cls.uiColor};text-shadow:0 1px 2px #000;letter-spacing:.5px`, kit.label.toUpperCase());
-      wrap.append(tog, label);
-      this.elAbil.appendChild(wrap);
-    }
+    // diamond cluster positions (px from the container's bottom-right)
+    const SLOTS = [{ r: 104, b: 0 }, { r: 88, b: 88 }, { r: 0, b: 104 }];
     const mkBtn = (def, idx, big) => {
-      const size = big ? 84 : 64;
-      const wrap = el("div", `position:relative;width:${size}px;height:${size}px;`);
+      const size = big ? 86 : 62;
+      const pos = big ? { r: 0, b: 0 } : SLOTS[idx];
+      const wrap = el("div", `position:absolute;right:${pos.r}px;bottom:${pos.b}px;width:${size}px;height:${size}px;`);
       const btn = el("div", `position:absolute;inset:0;border-radius:50%;${frameCss}display:flex;align-items:center;justify-content:center;
-        font-size:${big ? 34 : 26}px;border-color:${cls.uiColor};`, def.icon || "⚔");
+        font-size:${big ? 36 : 25}px;border-color:${cls.uiColor};`, def.icon || "⚔");
       btn.className = "cf-btn";
       const cd = el("div", `position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(8,4,14,.85) 0turn, transparent 0turn);pointer-events:none;`);
       const cdTxt = el("div", `position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:${big ? 22 : 17}px;font-weight:900;color:#fff;text-shadow:0 0 6px #000;pointer-events:none;opacity:0`);
@@ -193,7 +262,25 @@ export class HUD {
     };
     for (let i = 0; i < kit.abilities.length; i++) this._btns.push(mkBtn(kit.abilities[i], i, false));
     this._basicBtn = mkBtn(kit.basic, -1, true);
+    // weapon-mode toggle: bottom-LEFT, by the movement thumb (warrior only)
+    if (modeCount > 1) {
+      this.elToggle.style.display = "block";
+      this.elToggle.innerHTML = "";
+      const tog = el("div", `width:58px;height:58px;border-radius:14px;${frameCss}display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;border-color:${cls.uiColor}`, `${kit.icon}<div style="font-size:8.5px;color:#b89ae0;font-weight:700">TAB</div>`);
+      tog.className = "cf-btn";
+      tog.onpointerdown = (e) => { e.preventDefault(); this.input.touchToggle(); };
+      const label = el("div", `margin-top:4px;text-align:center;font-size:10px;font-weight:800;color:${cls.uiColor};text-shadow:0 1px 2px #000;letter-spacing:.5px`, kit.label.toUpperCase());
+      this.elToggle.append(tog, label);
+    } else this.elToggle.style.display = "none";
     this.elFace().textContent = cls.portrait;
+  }
+
+  /** short top toast (bestiary discoveries, etc.) */
+  toast(text, color = "#8ae0ff") {
+    const t = el("div", `${frameCss}padding:8px 18px;font-size:14px;font-weight:800;color:${color};white-space:nowrap;
+      position:absolute;left:50%;animation:cfToastIn 2.6s ease forwards;`, text);
+    this.elToast.appendChild(t);
+    setTimeout(() => t.remove(), 2700);
   }
 
   elFace() { return this.elPortrait.querySelector("#cf-face"); }
@@ -210,10 +297,20 @@ export class HUD {
   }
 
   setHearts(hp, max) {
-    const full = Math.ceil(hp);
-    let s = "";
-    for (let i = 0; i < max; i++) s += i < full ? "❤️" : "🖤";
-    this.elPortrait.querySelector("#cf-hearts").textContent = s;
+    // layered hearts with partial fill — chip damage (blocked hits, DoT) shows
+    let html = "";
+    for (let i = 0; i < max; i++) {
+      const pct = Math.round(clamp(hp - i, 0, 1) * 100);
+      html += `<span style="position:relative;display:inline-block;width:22px">` +
+        `<span style="filter:grayscale(1) brightness(.35)">❤️</span>` +
+        `<span style="position:absolute;left:0;top:0;overflow:hidden;width:${pct}%;white-space:nowrap">❤️</span></span>`;
+    }
+    const elH = this.elPortrait.querySelector("#cf-hearts");
+    if (elH.dataset.prev && parseFloat(elH.dataset.prev) > hp) {
+      elH.style.animation = "none"; void elH.offsetWidth; elH.style.animation = "cfPop .3s ease-out";
+    }
+    elH.dataset.prev = String(hp);
+    elH.innerHTML = html;
   }
 
   setGold(g) { this.elPortrait.querySelector("#cf-gold").textContent = g; }

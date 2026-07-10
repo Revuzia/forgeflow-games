@@ -1,0 +1,33 @@
+{
+  "title": "Pirate's Cove",
+  "slug": "pirates-cove",
+  "genre": "openseas",
+  "renderer": "three",
+  "tagline": "Sail. Plunder. Recruit.",
+  "seed": 42317,
+  "view": { "width": 1024, "height": 640, "background": "#0a1622" },
+  "setup": {
+    "sea": 1400,
+    "islands": 18,
+    "seed": 42317
+  },
+  "sfx": {
+    "fire": "assets/audio/cannon.ogg",
+    "hit": "assets/audio/hit.ogg",
+    "miss": "assets/audio/splash.ogg",
+    "move": "assets/audio/splash.ogg",
+    "sink": "assets/audio/sink.ogg"
+  },
+  "music": {
+    "explore": "assets/audio/music_explore.ogg",
+    "battle": "assets/audio/music_battle.ogg"
+  },
+  "credits": {
+    "creatures": [
+      "Hawk (flapping bird) — Sherkiz (CC-BY), via Poly Pizza",
+      "Away-party characters (Ranger hero / Rogue pirate / Warrior marauder / Cleric crew / Wizard) — Quaternius RPG Characters (CC0)",
+      "Skeleton — Poly Pizza (CC0)",
+      "Cutlass — Poly Pizza (CC0)"
+    ]
+  }
+}

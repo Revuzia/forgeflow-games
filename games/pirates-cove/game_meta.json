@@ -1,0 +1,11 @@
+{
+  "title": "Pirate's Cove",
+  "short_description": "A live open-ocean pirate sandbox — sail freely, raid patrolling ships in real-time D&D combat, and dock at explorable islands for treasure, away-team fights, and crew.",
+  "description": "Pirate's Cove is a real-time 3D open-sea sandbox. You sail a ship across a vast reflective ocean — throttle and rudder, a chase camera at your stern — while NPC ships patrol and wander the waves. Some are pirates and marauders who will hunt you; combat is LIVE (not turn-based) and resolves on the same d20 to-hit, damage-band, and critical-hit dice as Tide Breakers. Scattered across the sea are dozens of little islands: sail close and dock to find buried treasure, fight pirates ashore, drive off marauders, or rescue castaways who join your crew. Built on the shared three.js kernel, reflective Water, and ship models of the Tide Breakers family.",
+  "genre": "adventure",
+  "sub_genre": "naval-sandbox",
+  "difficulty": "medium",
+  "status": "published",
+  "controls_keyboard": "W/S throttle · A/D steer · SPACE fire broadside · E dock · ashore: WASD move, SPACE blade/🏹 bow, E back to ship",
+  "tags": ["adventure", "naval", "real-time", "3d", "exploration", "pirates", "sandbox", "rpg"]
+}

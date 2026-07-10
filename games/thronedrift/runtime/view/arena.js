@@ -1,4 +1,4 @@
-// Crownfire Arenas — procedural realm-board builder.
+// Thronedrift — procedural realm-board builder.
 // Every realm is a floating circular "realm board": ornate rim, glowing rune
 // ring, biome floor painted on a 2048px canvas (albedo + emissive), floating
 // rock underside, orbiting debris, sky dome, portal rings and ambient FX.
@@ -282,20 +282,6 @@ export class ArenaBoard {
       this._disposables.push(m.geometry);
     }
 
-    // spawn portal rings (4, at board edge)
-    this.portals = [];
-    const portalMat = new THREE.MeshBasicMaterial({ color: def.portal, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
-    for (let i = 0; i < 4; i++) {
-      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-      const p = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.12, 8, 40), portalMat);
-      const x = Math.cos(a) * (BOARD_RADIUS - 1.2), z = Math.sin(a) * (BOARD_RADIUS - 1.2);
-      p.position.set(x, 1.6, z); p.lookAt(0, 1.6, 0);
-      p.userData = { angle: a, x, z };
-      this.group.add(p); this.portals.push(p);
-      this._disposables.push(p.geometry);
-    }
-    this._disposables.push(portalMat);
-
     // camera follows the player across the board — bias the follow target
     // toward center so the far rim stays in frame (handled in game.js).
     // solar god-ray cones
@@ -313,11 +299,12 @@ export class ArenaBoard {
     this.ambient = new AmbientField(this.group, def);
   }
 
-  /** world position of a spawn portal (spread index across the 4 rings) */
-  spawnPoint(i) {
-    const p = this.portals[i % this.portals.length].userData;
-    const jitter = 1.2;
-    return { x: p.x + rand(-jitter, jitter), z: p.z + rand(-jitter, jitter) };
+  /** random ground spawn point — enemies erupt anywhere on the board, near or
+   *  far (a telegraph decal in the sim keeps close spawns fair) */
+  spawnPoint() {
+    const a = rand(Math.PI * 2);
+    const r = 2.5 + Math.sqrt(Math.random()) * (BOARD_RADIUS - 3.5);
+    return { x: Math.cos(a) * r, z: Math.sin(a) * r };
   }
 
   update(dt) {
@@ -328,7 +315,6 @@ export class ArenaBoard {
       m.position.set(Math.cos(u.a) * u.r, u.y + Math.sin(this.t * 0.6 + u.r) * 0.8, Math.sin(u.a) * u.r);
       m.rotation.x += u.spin * dt; m.rotation.y += u.spin * 0.7 * dt;
     }
-    for (const p of this.portals) { p.rotation.z += dt * 1.5; const s = 1 + Math.sin(this.t * 3 + p.userData.angle) * 0.06; p.scale.set(s, s, s); }
     this.glowMat.emissiveIntensity = 2.0 + Math.sin(this.t * 2.2) * 0.5;
     // storm realm: random lightning flashes
     if (this.stormLight) {

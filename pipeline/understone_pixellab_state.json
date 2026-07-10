@@ -125,6 +125,112 @@
         "idle": true,
         "angry": true
       }
+    },
+    "npcGuide": {
+      "id": "8ead985e-b7fa-4038-9f8e-99633840ced3",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true
+      }
+    },
+    "npcMerchant": {
+      "id": "14ec9ba9-e888-4696-8253-e07c6517df8a",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true
+      }
+    },
+    "npcNurse": {
+      "id": "71c88d7b-62ec-4f9f-8ec5-d83905d85b25",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true
+      }
+    },
+    "npcDemolitionist": {
+      "id": "08dfdf0b-30d2-4065-a4da-f3e856bac219",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true
+      }
+    },
+    "npcBlacksmith": {
+      "id": "657c709d-9538-414f-9c3b-097101300930",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true
+      }
+    },
+    "npcArmsDealer": {
+      "id": "161aa896-2599-4254-bd4b-a60fb5705d97",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true
+      }
+    },
+    "npcWizard": {
+      "id": "3f405466-74f6-4ae1-a298-c55763215f29",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true
+      }
+    },
+    "npcDryad": {
+      "id": "e3f1c2a9-ed54-4587-9d53-3c2264eeb5c8",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true
+      }
+    },
+    "npcOldMiner": {
+      "id": "acaed131-e47a-453d-b5c8-e98f647d20e6",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true
+      }
+    },
+    "npcDeepTrader": {
+      "id": "85d6a31b-bb67-40fe-aab2-e6aba12d72d4",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true
+      }
+    },
+    "hornet": {
+      "id": "1c591119-06be-40c7-b07f-eeab00419be6",
+      "anims": {
+        "idle": true,
+        "angry": true
+      }
+    },
+    "harpy": {
+      "id": "27874bb3-e07e-46f7-83d7-ad0a15af3646",
+      "anims": {
+        "walk": true,
+        "breathing-idle": true,
+        "cross-punch": true
+      }
+    },
+    "antlion": {
+      "id": "772b5eaa-4208-4b6b-98d1-538339d7d817",
+      "anims": {
+        "idle": true,
+        "angry": true
+      }
+    },
+    "crab": {
+      "id": "8b1734c1-050d-481e-81f3-9306b36d613d",
+      "anims": {
+        "idle": true,
+        "angry": true
+      }
+    },
+    "piranha": {
+      "id": "ecda9ec6-b471-4e98-b417-4fbaaddcc6fd",
+      "anims": {
+        "idle": true,
+        "angry": true
+      }
     }
   }
 }

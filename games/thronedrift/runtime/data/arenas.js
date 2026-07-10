@@ -1,4 +1,4 @@
-// Crownfire Arenas — the five realm boards.
+// Thronedrift — the five realm boards.
 // Each def drives the procedural board builder (view/arena.js): floor canvas
 // style, rim/pylon treatment, sky + fog, ambient particle system, portal tint,
 // and light combat modifiers. Art only changes between realms — combat is shared.

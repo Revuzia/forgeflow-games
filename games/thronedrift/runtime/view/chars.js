@@ -1,4 +1,4 @@
-// Crownfire Arenas — character/enemy model loading + Actor animation wrapper.
+// Thronedrift — character/enemy model loading + Actor animation wrapper.
 // Heroes are Meshy auto-rigged humanoids (base.glb + armature-only clips)
 // retargeted by bone name. Recipe (proven in Dungeon Forge): strip baked
 // .scale tracks (idle bakes Hips scale → model shrinks on walk) and strip
@@ -96,6 +96,8 @@ export class Actor {
     for (const clip of lib.animations) this.actions[clip.name] = this.mixer.clipAction(clip);
     this.current = null;
     this._oneShot = null;
+    this.armBones = findArmBones(this.model);   // Meshy humanoids only; null for creatures
+    this.relaxW = 0;
 
     // find generic locomotion clips for library enemies (clip names vary)
     if (!this.actions.Walk) {
@@ -158,29 +160,78 @@ export class Actor {
 
   update(dt) { this.mixer.update(dt); }
 
-  /** attach a prop to a hand bone (Meshy rig: bones contain "Hand") */
-  attachHand(obj, side = "Right") {
-    let bone = null;
-    this.model.traverse((o) => { if (!bone && o.isBone && o.name.includes(side) && o.name.includes("Hand")) bone = o; });
-    if (!bone) this.model.traverse((o) => { if (!bone && o.isBone && new RegExp(side, "i").test(o.name) && /hand|wrist/i.test(o.name)) bone = o; });
-    if (bone) {
-      // counter the model normalization so the prop keeps world-ish scale
-      const s = 1 / this.model.scale.x;
-      obj.scale.multiplyScalar(s * 0.9);
-      bone.add(obj);
-    } else this.root.add(obj); // fallback: visible at least
-    return !!bone;
+  /**
+   * Per-frame arm relax + procedural gait swing (Dungeon Forge recipe).
+   * Meshy auto-rigged every clip in an A-pose — idle/walk/run all fling the
+   * arms outward, which reads as "broken". Pull the arms down EVERY frame,
+   * fading to 0 while combat one-shots play so swing clips run unmodified.
+   * Call AFTER mixer.update().
+   */
+  updateRelax(dt, target, moving, sprint) {
+    if (!this.armBones) return;
+    this.relaxW += (target - this.relaxW) * Math.min(1, dt * 12);
+    if (this.relaxW <= 0.02) return;
+    this.model.updateMatrixWorld(true);
+    relaxArms(this.armBones, this.relaxW);
+    if (moving) {
+      this.gait = (this.gait || 0) + dt * (sprint ? 12.5 : 8.5);
+      const sw = Math.sin(this.gait) * (sprint ? 0.6 : 0.42) * this.relaxW;
+      this.root.getWorldQuaternion(_gq);
+      _swingAxis.set(1, 0, 0).applyQuaternion(_gq); // world right-vector
+      const b = this.armBones;
+      b.rArm.rotateOnWorldAxis(_swingAxis, sw); b.rArm.updateMatrixWorld(true);
+      b.lArm.rotateOnWorldAxis(_swingAxis, -sw); b.lArm.updateMatrixWorld(true);
+      b.rFore.rotateOnWorldAxis(_swingAxis, sw * 0.35);
+      b.lFore.rotateOnWorldAxis(_swingAxis, -sw * 0.35);
+    }
   }
 
-  /** attach to forearm (shield) */
-  attachForearm(obj, side = "Left") {
+  _findBone(side, rx) {
     let bone = null;
-    this.model.traverse((o) => { if (!bone && o.isBone && o.name.includes(side) && /forearm|lowerarm/i.test(o.name)) bone = o; });
-    if (!bone) return this.attachHand(obj, side);
-    const s = 1 / this.model.scale.x;
-    obj.scale.multiplyScalar(s * 0.9);
-    bone.add(obj);
-    return true;
+    this.model.traverse((o) => { if (!bone && o.isBone && o.name.includes(side) && rx.test(o.name)) bone = o; });
+    return bone;
+  }
+
+  /**
+   * Grip a +Y-shafted weapon in the fist (DF _gripMount): place its grip point
+   * at the hand, cancel the bone's TRUE world scale (Meshy armatures bind at
+   * ~0.01 — countering only the model normalization leaves props ~100× small),
+   * and orient the shaft along cfg.rest from the hand bone's real world basis,
+   * computed at the posed idle stance so it follows every animation.
+   */
+  attachWeapon(mesh, side, cfg) {
+    const bone = this._findBone(side, /Hand/) || this._findBone(side, /hand|wrist/i);
+    if (!bone) { this.root.add(mesh); return null; }
+    // pose the rig how the player actually stands before snapshotting the basis
+    if (this.actions.Idle) { this.actions.Idle.reset().play(); this.mixer.update(0.05); }
+    this.model.updateMatrixWorld(true);
+    if (this.armBones) { relaxArms(this.armBones, 1); this.model.updateMatrixWorld(true); }
+    mesh.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(mesh);
+    const h = Math.max(0.001, box.max.y - box.min.y);
+    mesh.position.y -= box.min.y + h * (cfg.gripFrac ?? 0.2);   // grip → holder origin
+    const holder = new THREE.Group();
+    holder.scale.setScalar(boneCounterScale(bone) * (cfg.scale || 1));
+    holder.add(mesh);
+    bone.add(holder);
+    this.model.updateMatrixWorld(true);
+    bone.getWorldQuaternion(_gq);                                // hand world orientation
+    _gv.fromArray(cfg.rest).normalize();                         // desired shaft dir
+    _gq2.setFromUnitVectors(_gy, _gv);                           // +Y → rest (world)
+    holder.quaternion.copy(_gq.invert().multiply(_gq2));         // → bone local
+    return holder;
+  }
+
+  /** strap a shield to the left hand (counter-scaled holder, DF offsets) */
+  attachShield(mesh) {
+    const bone = this._findBone("Left", /Hand/) || this._findBone("Left", /hand|wrist/i);
+    if (!bone) { this.root.add(mesh); return null; }
+    const holder = new THREE.Group();
+    holder.scale.setScalar(boneCounterScale(bone));
+    mesh.position.set(0, 0.12, 0.03);
+    holder.add(mesh);
+    bone.add(holder);
+    return holder;
   }
 
   dispose() {
@@ -189,7 +240,63 @@ export class Actor {
   }
 }
 
-// ---------- weapon props (crownfire styling: crimson / steel / gold) -------
+// ---------- Meshy rig helpers (ported from Dungeon Forge assets.js) ---------
+
+const _gq = new THREE.Quaternion(), _gq2 = new THREE.Quaternion();
+const _gv = new THREE.Vector3(), _gy = new THREE.Vector3(0, 1, 0);
+const _swingAxis = new THREE.Vector3();
+const _rp1 = new THREE.Vector3(), _rp2 = new THREE.Vector3(), _rt = new THREE.Vector3();
+const _rq1 = new THREE.Quaternion(), _rq2 = new THREE.Quaternion(), _rq3 = new THREE.Quaternion();
+
+/** Cancel a bone's ACTUAL world scale (Meshy armatures bind bones at ~0.01). */
+function boneCounterScale(bone) {
+  bone.matrixWorld.decompose(_rp1, _rq1, _rt);
+  return 1 / Math.max(1e-5, _rt.x);
+}
+
+/** Cache the six arm-chain bones (by Meshy rig name) for relaxArms(). */
+export function findArmBones(root) {
+  const b = {};
+  root.traverse((o) => {
+    if (!o.isBone) return;
+    switch (o.name) {
+      case "RightArm": b.rArm = o; break;
+      case "RightForeArm": b.rFore = o; break;
+      case "RightHand": b.rHand = o; break;
+      case "LeftArm": b.lArm = o; break;
+      case "LeftForeArm": b.lFore = o; break;
+      case "LeftHand": b.lHand = o; break;
+    }
+  });
+  return (b.rArm && b.lArm) ? b : null;
+}
+
+function _relaxOne(arm, fore, tx, ty, tz, blend) {
+  if (!arm || !fore) return;
+  arm.getWorldPosition(_rp1); fore.getWorldPosition(_rp2);
+  _rp2.sub(_rp1); if (_rp2.lengthSq() < 1e-8) return;
+  _rp2.normalize(); _rt.set(tx, ty, tz).normalize();
+  _rq1.setFromUnitVectors(_rp2, _rt);        // world-space correction (current → target dir)
+  arm.getWorldQuaternion(_rq2);
+  _rq1.multiply(_rq2);                        // new desired world quat
+  arm.parent.getWorldQuaternion(_rq3);
+  _rq3.invert().multiply(_rq1);               // → local space of the arm bone
+  arm.quaternion.slerp(_rq3, blend);
+  arm.updateMatrixWorld(true);
+}
+
+/** Force the arms to hang relaxed at the sides (amount 0..1 blends). */
+export function relaxArms(b, amount) {
+  if (!b) return;
+  const a = amount == null ? 1 : Math.max(0, Math.min(1, amount));
+  if (a <= 0) return;
+  _relaxOne(b.rArm, b.rFore, -0.28, -1, 0.02, 0.92 * a);
+  _relaxOne(b.lArm, b.lFore, 0.28, -1, 0.02, 0.92 * a);
+  _relaxOne(b.rFore, b.rHand, -0.08, -1, 0.05, 0.85 * a);
+  _relaxOne(b.lFore, b.lHand, 0.08, -1, 0.05, 0.85 * a);
+}
+
+// ---------- weapon props (thronedrift styling: crimson / steel / gold) -------
 
 const steel = () => new THREE.MeshStandardMaterial({ color: 0xc8ccd8, metalness: 0.85, roughness: 0.3 });
 const gold = () => new THREE.MeshStandardMaterial({ color: 0xe8b83a, metalness: 0.95, roughness: 0.25 });
@@ -240,6 +347,45 @@ export function makeBow() {
   const tipA = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), gold()); tipA.position.y = 0.51;
   const tipB = tipA.clone(); tipB.position.y = -0.51;
   g.add(limb, str, tipA, tipB);
+  return g;
+}
+
+/** real arrow (shaft + steel head + fletching), built along +Z for lookAt flight */
+export function makeArrow(tint = 0xffc060) {
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.72, 6),
+    new THREE.MeshBasicMaterial({ color: 0x8a5c30 }));
+  shaft.rotation.x = Math.PI / 2;
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.16, 6),
+    new THREE.MeshBasicMaterial({ color: 0xd8dce8 }));
+  head.rotation.x = Math.PI / 2; head.position.z = 0.42;
+  const fMat = new THREE.MeshBasicMaterial({ color: tint, side: THREE.DoubleSide });
+  for (let i = 0; i < 3; i++) {
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.16), fMat);
+    f.position.z = -0.3;
+    f.rotation.z = (i / 3) * Math.PI * 2;
+    f.rotation.x = 0.25;
+    g.add(f);
+  }
+  g.add(shaft, head);
+  return g;
+}
+
+/** spinning blade-trail ring for Whirlwind (additive arc sweep, spun by the sim) */
+export function makeSpinTrail(color = 0xff5a3a) {
+  const g = new THREE.Group();
+  const mk = (rad, h, op) => {
+    const geo = new THREE.CylinderGeometry(rad, rad, h, 40, 1, true, 0, Math.PI * 1.35);
+    const mat = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: op, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    return new THREE.Mesh(geo, mat);
+  };
+  const outer = mk(2.9, 0.5, 0.55); outer.position.y = 1.0;
+  const inner = mk(2.1, 0.32, 0.35); inner.position.y = 1.15; inner.rotation.y = Math.PI * 0.8;
+  const gold = mk(3.1, 0.14, 0.7); gold.material.color = new THREE.Color(0xffd24a); gold.position.y = 0.95;
+  g.add(outer, inner, gold);
   return g;
 }
 

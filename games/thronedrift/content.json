@@ -1,0 +1,23 @@
+{
+  "title": "Thronedrift",
+  "slug": "thronedrift",
+  "genre": "arena-survival",
+  "renderer": "three",
+  "tagline": "Five drifting thrones. One champion. Endless waves.",
+  "view": { "width": 1280, "height": 720, "background": "#0b0710" },
+  "setup": {
+    "arenas": 5,
+    "classes": 3,
+    "warriorModes": 2,
+    "enemyTypes": 7,
+    "statuses": ["shock", "burn", "frost"],
+    "campaign": true,
+    "bestiary": true
+  },
+  "credits": {
+    "characters": "Meshy auto-rigged heroes (ForgeFlow shared set)",
+    "enemies": "ForgeFlow creature library (CC0)",
+    "art": "xAI-generated key art; procedural realm boards",
+    "audio": "Procedural WebAudio SFX"
+  }
+}

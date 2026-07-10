@@ -1,4 +1,4 @@
-// Crownfire Arenas — procedural WebAudio SFX manager.
+// Thronedrift — procedural WebAudio SFX manager.
 // No audio files needed; every cue is synthesized. game_controls.js global mute
 // works because we route everything through one master GainNode on a shared ctx.
 
@@ -7,7 +7,7 @@ function ensure() {
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
     master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination);
-    window.__CROWNFIRE_AUDIO__ = ctx; // discoverable for mute integrations
+    window.__THRONEDRIFT_AUDIO__ = ctx; // discoverable for mute integrations
   }
   if (ctx.state === "suspended") ctx.resume();
   return ctx;

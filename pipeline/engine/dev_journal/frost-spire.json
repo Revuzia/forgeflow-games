@@ -74,7 +74,16 @@
       "Playtested on all difficulties by at least one external tester\u00e2\u20ac\u201dfeedback loop closed"
     ]
   },
-  "open_issues": [],
+  "open_issues": [
+    {
+      "id": 10,
+      "milestone": "M1",
+      "severity": "high",
+      "issue": "play:errors \u2014 console_errors=4 lastErr=None",
+      "status": "open",
+      "found": "2026-06-12T08:16:47.670035+00:00"
+    }
+  ],
   "changelog": [
     {
       "ts": "2026-06-10T06:31:09.666487+00:00",
@@ -387,8 +396,295 @@
       "milestone": "M1",
       "action": "STATE RESET",
       "result": "M1-M4 advances were fail-open on tester crashes (truncated game.js from the audio re-attach bug). Reset to M1; gate is now fail-closed."
+    },
+    {
+      "ts": "2026-06-12T07:19:05.150640+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T07:22:13.092454+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T07:27:31.283350+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T07:30:40.733648+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T07:33:46.137804+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T07:36:50.142264+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T07:39:54.998755+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T07:42:59.033594+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T07:46:02.754566+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T07:49:06.225182+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T07:52:08.635315+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T07:55:12.271123+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T07:58:16.675364+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T08:01:20.038675+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T08:04:24.826381+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T08:07:27.710651+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T08:10:31.548499+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T08:13:38.682479+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T08:16:47.673227+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: errors scope=ok panel=ok open=1"
+    },
+    {
+      "ts": "2026-06-12T08:16:57.459601+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "author/revise FAIL (1/3): revision invalid: no game.js code in revision output (old file kept)"
+    },
+    {
+      "ts": "2026-06-12T08:17:06.926862+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "author/revise FAIL (2/3): revision invalid: no game.js code in revision output (old file kept)"
+    },
+    {
+      "ts": "2026-06-12T08:17:16.090576+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "author/revise FAIL (3/3): revision invalid: no game.js code in revision output (old file kept)"
+    },
+    {
+      "ts": "2026-06-12T08:17:16.091185+00:00",
+      "milestone": "M1",
+      "action": "PARKED",
+      "result": "3 consecutive authoring failures \u2014 moving on"
     }
   ],
-  "sessions": 2,
-  "created": "2026-06-10T02:21:46.614351+00:00"
+  "sessions": 3,
+  "created": "2026-06-10T02:21:46.614351+00:00",
+  "telemetry": [
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": 0.6,
+      "lives_lost": 0,
+      "max_score": 330,
+      "max_level": 1,
+      "end_state": "play",
+      "milestone": "M1",
+      "ts": "2026-06-12T07:42:59.031028+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": 0.6,
+      "lives_lost": 0,
+      "max_score": 330,
+      "max_level": 1,
+      "end_state": "play",
+      "milestone": "M1",
+      "ts": "2026-06-12T07:46:02.751955+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": 0.6,
+      "lives_lost": 0,
+      "max_score": 329,
+      "max_level": 1,
+      "end_state": "play",
+      "milestone": "M1",
+      "ts": "2026-06-12T07:49:06.222728+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": 0.6,
+      "lives_lost": 0,
+      "max_score": 327,
+      "max_level": 1,
+      "end_state": "play",
+      "milestone": "M1",
+      "ts": "2026-06-12T07:52:08.632789+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": 0.6,
+      "lives_lost": 0,
+      "max_score": 329,
+      "max_level": 1,
+      "end_state": "play",
+      "milestone": "M1",
+      "ts": "2026-06-12T07:55:12.268658+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": 0.6,
+      "lives_lost": 0,
+      "max_score": 330,
+      "max_level": 1,
+      "end_state": "play",
+      "milestone": "M1",
+      "ts": "2026-06-12T07:58:16.672887+00:00"
+    },
+    {
+      "duration_s": 9.9,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": 0.6,
+      "lives_lost": 0,
+      "max_score": 328,
+      "max_level": 1,
+      "end_state": "play",
+      "milestone": "M1",
+      "ts": "2026-06-12T08:01:20.033876+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": 0.6,
+      "lives_lost": 0,
+      "max_score": 327,
+      "max_level": 1,
+      "end_state": "play",
+      "milestone": "M1",
+      "ts": "2026-06-12T08:04:24.823639+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": 0.6,
+      "lives_lost": 0,
+      "max_score": 329,
+      "max_level": 1,
+      "end_state": "play",
+      "milestone": "M1",
+      "ts": "2026-06-12T08:07:27.706848+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": 0.6,
+      "lives_lost": 0,
+      "max_score": 326,
+      "max_level": 1,
+      "end_state": "play",
+      "milestone": "M1",
+      "ts": "2026-06-12T08:10:31.545484+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": 0.6,
+      "lives_lost": 0,
+      "max_score": 330,
+      "max_level": 1,
+      "end_state": "play",
+      "milestone": "M1",
+      "ts": "2026-06-12T08:13:38.679207+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": 0.6,
+      "lives_lost": 0,
+      "max_score": 330,
+      "max_level": 1,
+      "end_state": "play",
+      "milestone": "M1",
+      "ts": "2026-06-12T08:16:47.670065+00:00"
+    }
+  ],
+  "parked": true,
+  "parked_reason": "3 consecutive engine authoring failures at M1: revision invalid: no game.js code in revision output (old file kept)",
+  "parked_at": "2026-06-12T08:17:16.091170+00:00"
 }

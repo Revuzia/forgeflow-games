@@ -1,4 +1,4 @@
-// Crownfire Arenas — small math/util helpers shared across modules.
+// Thronedrift — small math/util helpers shared across modules.
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const rand = (a = 1, b) => (b === undefined ? Math.random() * a : a + Math.random() * (b - a));
@@ -18,3 +18,13 @@ export function angleLerp(a, b, t) {
 export const damp = (rate, dt) => 1 - Math.exp(-rate * dt);
 
 export function formatScore(n) { return String(Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+
+// single localStorage namespace — change here if the game is ever renamed/re-slugged
+export const SAVE_PREFIX = "thronedrift";
+export const save = {
+  get(key, fallback) {
+    try { const v = localStorage.getItem(`${SAVE_PREFIX}_${key}`); return v === null ? fallback : JSON.parse(v); }
+    catch (e) { return fallback; }
+  },
+  set(key, val) { try { localStorage.setItem(`${SAVE_PREFIX}_${key}`, JSON.stringify(val)); } catch (e) {} },
+};

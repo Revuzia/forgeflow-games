@@ -1,10 +1,23 @@
-# Crownfire Arenas — Build Status (loop tracker)
+# Thronedrift — Build Status (loop tracker)
+
+## Iteration 2 — 2026-07-10 ✅ OWNER FEEDBACK BATCH + RENAME + DEPLOY
+All 20 owner feedback items from the /loop message landed (see CHANGELOG v0.2).
+Verified: weapon scale/grips, relaxArms, 7 hearts, fan=7 arrows, rain fallers=8,
+fire+frost residuals, bestiary discovery, ground spawns, pause, camera orbit/zoom.
+Remaining polish queue:
+1. Balance validation across realms 2-5 (owner played mid-build — watch feedback)
+2. Arenas 3-5 visual QA + full campaign → CROWN CLAIMED panel live check
+3. Meshy bow-draw anim set for Archer (rogue slashes still stand in)
+4. Runtime 3D portraits in bestiary (models already loaded — render-to-canvas)
+5. Stock music via audio_mapper (9 tracks) — SFX-only today
+6. selftest.mjs node gate
+7. Mobile device pass (touch cluster hit targets, pinch zoom)
 
 Working doc for the /loop build. Update every iteration. Delete when shipped.
 
 ## Iteration 1 — 2026-07-10 ✅ VERTICAL SLICE PLAYABLE
 
-**Done + verified in browser (localhost:8197/games/crownfire/):**
+**Done + verified in browser (localhost:8197/games/thronedrift/):**
 - Boot, loading screen, title → class select → arena select → playing flow
 - Emberthrone + Glacier Court render **visually distinct** (screenshots verified);
   board = floating realm disc w/ rune ring, motif, rim pylons, debris, sky, portals
@@ -36,15 +49,15 @@ Working doc for the /loop build. Update every iteration. Delete when shipped.
 5. **Mobile pass**: joystick + touch buttons on 375px viewport; DPR/fps check.
 6. **Audio**: procedural SFX QA (mute toggle via game_controls), consider stock
    music via audio_mapper (9 tracks avail) or keep silent+SFX.
-7. **thumbnail.png**: pipeline/generate_cover.py --out games/crownfire (writes
+7. **thumbnail.png**: pipeline/generate_cover.py --out games/thronedrift (writes
    thumbnail.png directly — that IS the catalog card for new games).
 8. **selftest.mjs**: node syntax-load of all runtime modules + data invariants
    (5 arenas, 3 classes × kit shape, cd>0, enemy defs sane) like siegeheart.
 9. Meshy bow-draw anim set for Archer (currently rogue slash reinterpreted).
-10. **Deploy**: python pipeline/deploy_game.py --game-dir games/crownfire --slug
+10. **Deploy**: python pipeline/deploy_game.py --game-dir games/thronedrift --slug
     crownfire (auto-runs portal rebuild). Publish toggle after full QA only.
 
 ## Conventions locked
-- Slug `crownfire` · port 8197 in .claude/launch.json · ?v=1 cache-bust suffix
+- Slug `thronedrift` (renamed from crownfire 07-10) · port 8197 in .claude/launch.json · ?v=1 cache-bust suffix
 - Assets: chars from dungeon-forge Meshy set (shared), enemies from creature lib
 - __FFG3D__.stats() eval hook for automated verification

@@ -46,24 +46,26 @@
     {
       "slug": "frost-spire",
       "genre": "platformer",
-      "status": "dev",
+      "status": "held",
       "brief": "Original-IP platformer game (sub-genre: precision-platformer). Capture the core mechanics and game-feel of \"Celeste\" (critically acclaimed, 92%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
       "master_list_bucket": "platformer",
       "master_list_id": 4,
       "inspired_by": "Celeste",
       "rating": 92,
-      "detail": "active deep-dev target (one-game policy)",
-      "updated": "2026-06-10T06:33:32.099162+00:00"
+      "detail": "parked: engine authoring failures",
+      "updated": "2026-06-12T08:17:16.106344+00:00"
     },
     {
       "slug": "ember-spire",
       "genre": "platformer",
-      "status": "backlog",
+      "status": "dev",
       "brief": "Original-IP platformer game (sub-genre: 2d-platformer). Capture the core mechanics and game-feel of \"Rayman Legends\" (critically acclaimed, 91%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
       "master_list_bucket": "platformer",
       "master_list_id": 3,
       "inspired_by": "Rayman Legends",
-      "rating": 91
+      "rating": 91,
+      "detail": "active deep-dev target (reconciled)",
+      "updated": "2026-06-15T21:47:51.638868+00:00"
     },
     {
       "slug": "solar-spire",

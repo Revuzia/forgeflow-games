@@ -1,4 +1,4 @@
-// Crownfire Arenas — core simulation: player controller, ability primitives,
+// Thronedrift — core simulation: player controller, ability primitives,
 // enemy AI, waves, statuses (Shock/Burn/Frost), ground residuals, combo/score,
 // camera follow + screen shake + hit-stop, and run flow (wave clear → realm
 // clear → crown claimed / game over).
@@ -8,13 +8,15 @@ import { ARENAS, BOARD_RADIUS, REST_BETWEEN_WAVES } from "../data/arenas.js";
 import { ENEMY_TYPES, waveComp } from "../data/enemies.js";
 import { CLASSES, COMBO_TIERS, COMBO_WINDOW } from "../data/abilities.js";
 import { ArenaBoard } from "../view/arena.js";
-import { Actor, makeGreatblade, makeSword, makeShield, makeBow, makeStaff } from "../view/chars.js";
-import { Particles, FloatText, Decals } from "../view/fx.js";
+import { Actor, makeGreatblade, makeSword, makeShield, makeBow, makeStaff, makeArrow, makeSpinTrail } from "../view/chars.js";
+import { Particles, FloatText, Decals, WorldBars } from "../view/fx.js";
 import { SFX } from "../core/audio.js";
-import { clamp, lerp, rand, randInt, angleLerp, damp, dist2, formatScore } from "../core/util.js";
+import { clamp, lerp, rand, randInt, angleLerp, damp, dist2, formatScore, save } from "../core/util.js";
 
 const PLAYER_R = 0.65;         // player collision radius
-const IFRAMES = 0.7;
+const IFRAMES = 0.9;
+const SPAWN_TELEGRAPH = 0.85;  // ground-warning time before an enemy erupts
+const RISE_TIME = 0.45;        // how long an enemy takes to climb out of the ground
 
 export class Game {
   constructor({ renderer, camera, hud, input, heroes, enemies, container }) {
@@ -52,6 +54,8 @@ export class Game {
     this.fx = new Particles(this.scene);
     this.text = new FloatText(this.hud.layerGame, this.camera);
     this.decals = new Decals(this.scene);
+    this.bars = new WorldBars(this.hud.layerGame, this.camera);
+    this.discovered = new Set(save.get("bestiary", []));
 
     const cls = CLASSES[classId];
     this.cls = cls;
@@ -96,8 +100,11 @@ export class Game {
     // sim collections
     this.enemies = [];
     this.projectiles = [];
-    this.spawnQueue = [];
+    this.fallers = [];           // rain-of-arrows falling shafts
+    this.spawnQueue = [];        // {type, t} — t until ground telegraph
+    this.pendingSpawns = [];     // {type, x, z, t} — telegraph shown, erupting soon
     this.waveIdx = -1; this.waveActive = false; this.restT = 1.4;
+    this.paused = false;
 
     this.hud.setKit(cls, this.kit(), this.modeIdx, this.modeKeys.length);
     this.hud.setHearts(this.hp, this.maxHp);
@@ -118,21 +125,27 @@ export class Game {
     if (this.fx) { this.fx.dispose(this.scene); this.fx = null; }
     if (this.decals) { this.decals.clear(); this.decals = null; }
     if (this.text) { this.text.clear(); this.text = null; }
+    if (this.bars) { this.bars.clear(); this.bars = null; }
     if (this.playerGroup) { this.scene.remove(this.playerGroup); this.playerGroup = null; }
     if (this.enemies) for (const e of this.enemies) e.actor.dispose();
     if (this.projectiles) for (const p of this.projectiles) p.mesh.removeFromParent();
-    this.enemies = []; this.projectiles = []; this.timers = [];
-    this.timeScale = 1; this.shake = 0;
+    if (this.fallers) for (const f of this.fallers) f.mesh.removeFromParent();
+    this.enemies = []; this.projectiles = []; this.fallers = []; this.timers = [];
+    this.pendingSpawns = []; this.spawnQueue = [];
+    this.timeScale = 1; this.shake = 0; this.paused = false;
   }
 
   kit() { return this.cls.kits[this.modeKeys[this.modeIdx]]; }
   modeKey() { return this.modeKeys[this.modeIdx]; }
 
   _equip(actor, model) {
-    if (model === "barbarian") actor.attachHand(makeGreatblade(), "Right");
-    else if (model === "knight") { actor.attachHand(makeSword(), "Right"); actor.attachForearm(makeShield(), "Left"); }
-    else if (model === "rogue") actor.attachHand(makeBow(), "Left");
-    else if (model === "sorceress") actor.attachHand(makeStaff(), "Right");
+    // grip fracs/rest dirs follow DF's WEAPON_CFG conventions (+Y shaft weapons)
+    if (model === "barbarian") actor.attachWeapon(makeGreatblade(), "Right", { gripFrac: 0.13, rest: [0.10, 0.95, 0.30] });
+    else if (model === "knight") {
+      actor.attachWeapon(makeSword(), "Right", { gripFrac: 0.14, rest: [0.15, 0.62, 0.77] });
+      actor.attachShield(makeShield());
+    } else if (model === "rogue") actor.attachWeapon(makeBow(), "Left", { gripFrac: 0.5, rest: [0.08, 0.95, 0.25] });
+    else if (model === "sorceress") actor.attachWeapon(makeStaff(), "Right", { gripFrac: 0.44, rest: [0.05, 0.99, 0.14] });
   }
 
   _applyMode(first) {
@@ -157,34 +170,42 @@ export class Game {
     this.waveIdx++;
     this.waveActive = true;
     const comp = waveComp(this.arena.order, this.waveIdx, this.arena.waves);
-    let i = 0, delay = 0.4;
+    let delay = 0.5;
     for (const [type, count] of comp)
       for (let n = 0; n < count; n++) {
-        this.spawnQueue.push({ type, t: delay, portal: i % 4 });
-        delay += rand(0.18, 0.4); i++;
+        this.spawnQueue.push({ type, t: delay });
+        delay += rand(0.35, 0.75); // slower trickle than iteration 1 — no instant onslaught
       }
     this.hud.setWave(this.waveIdx + 1, this.arena.waves, this.arena.name, "#" + this.arena.accent.toString(16).padStart(6, "0"));
     this.hud.banner(`WAVE ${this.waveIdx + 1}`, { color: "#f2e8d8", dur: 1.4, size: 46 });
     SFX.play("ui_big");
   }
 
-  spawnEnemy(type, portal) {
+  spawnEnemy(type, x, z) {
     const def = ENEMY_TYPES[type];
     const lib = this.enemyLib[def.model];
     if (!lib) return;
-    const p = this.board.spawnPoint(portal);
     const actor = new Actor(lib, { height: def.height, tint: this.arena.enemyTint });
-    actor.root.position.set(p.x, 0, p.z);
+    actor.root.position.set(x, -def.height, z);
     this.scene.add(actor.root);
     actor.play("Walk", { timeScale: 1.1 });
     const e = {
-      def, type, actor, x: p.x, z: p.z, hp: def.hp, maxHp: def.hp,
-      atkT: rand(0.4, 1), windup: 0, statuses: { shock: 0, burn: 0, frost: 0 },
-      knockX: 0, knockZ: 0, spawnT: 0.5, statusFxT: 0, floatPhase: rand(Math.PI * 2),
+      def, type, actor, x, z, hp: def.hp, maxHp: def.hp,
+      atkT: rand(0.6, 1.4), windup: 0, statuses: { shock: 0, burn: 0, frost: 0 },
+      knockX: 0, knockZ: 0, spawnT: RISE_TIME + 0.3, riseT: RISE_TIME,
+      statusFxT: 0, floatPhase: rand(Math.PI * 2), hopT: rand(0.6),
       dead: false, deadT: 0,
     };
     this.enemies.push(e);
-    this.fx.burst(p.x, 1.2, p.z, { count: 18, color: this.arena.portal, speed: 3, up: 2.2, life: 0.5 });
+    // eruption burst — dirt + realm magic
+    this.fx.burst(x, 0.3, z, { count: 22, color: 0x6a5040, color2: this.arena.portal, speed: 3.5, up: 3.2, life: 0.55, spread: 1.5 });
+    SFX.play("slam");
+    // bestiary discovery
+    if (!this.discovered.has(type)) {
+      this.discovered.add(type);
+      save.set("bestiary", [...this.discovered]);
+      this.hud.toast(`NEW FOE — ${def.name.toUpperCase()}`, "#8ae0ff");
+    }
     return e;
   }
 
@@ -206,10 +227,10 @@ export class Game {
     this.input.enabled = false;
     SFX.play("victory");
     const final = this.arena.clearIsFinal;
-    const unlocked = parseInt(localStorage.getItem("crownfire_unlocked") || "1", 10);
-    if (!final && this.arena.order + 1 > unlocked) localStorage.setItem("crownfire_unlocked", String(this.arena.order + 1));
-    const hi = parseInt(localStorage.getItem("crownfire_hiscore") || "0", 10);
-    if (this.score > hi) localStorage.setItem("crownfire_hiscore", String(this.score));
+    const unlocked = save.get("unlocked", 1);
+    if (!final && this.arena.order + 1 > unlocked) save.set("unlocked", this.arena.order + 1);
+    const hi = save.get("hiscore", 0);
+    if (this.score > hi) save.set("hiscore", this.score);
     const lines = [
       `Final score: <b style="color:#ffd24a;font-size:24px">${formatScore(this.score)}</b>`,
       `Best: ${formatScore(Math.max(hi, this.score))} · Gold earned: 🪙 ${this.gold}`,
@@ -233,8 +254,8 @@ export class Game {
     this.input.enabled = false;
     this.playerActor.playOnce("C_death", { timeScale: 1 });
     SFX.play("game_over");
-    const hi = parseInt(localStorage.getItem("crownfire_hiscore") || "0", 10);
-    if (this.score > hi) localStorage.setItem("crownfire_hiscore", String(this.score));
+    const hi = save.get("hiscore", 0);
+    if (this.score > hi) save.set("hiscore", this.score);
     setTimeout(() => this.hud.panel({
       title: "FALLEN IN THE ARENA",
       titleColor: "#ff5a4a",
@@ -254,6 +275,24 @@ export class Game {
     this.state = "menu";
     this.hud.clearPanel();
     this.hud.showTitle();
+  }
+
+  setPaused(v) {
+    if (this.state !== "playing") return;
+    this.paused = v;
+    SFX.play("ui");
+    if (v) {
+      this.hud.panel({
+        title: "PAUSED", titleColor: "#e8b83a",
+        lines: [`${this.arena.name} — wave ${this.waveIdx + 1}/${this.arena.waves}`,
+          `<span style="font-size:13px;color:#b89ae0">Scroll = zoom · Right-drag = rotate camera · ESC = resume</span>`],
+        buttons: [
+          { label: "RESUME", fn: () => this.setPaused(false) },
+          { label: "RESTART REALM", fn: () => this.startRun(this.classId, this.arenaIdx) },
+          { label: "QUIT TO MENU", fn: () => this.toMenu() },
+        ],
+      });
+    } else this.hud.clearPanel();
   }
 
   // ================= COMBAT HELPERS =====================================
@@ -372,8 +411,13 @@ export class Game {
     const tgt = this.nearestEnemy(b.range ? Math.max(7, b.range) : 8);
     if (tgt) this.facing = Math.atan2(tgt.z - this.pz, tgt.x - this.px);
     const anim = Array.isArray(b.anim) ? b.anim[this.basicAlt++ % b.anim.length] : b.anim;
-    const dur = this.playerActor.playOnce("C_" + anim, { timeScale: b.animScale });
-    this.attackAnimT = Math.min(dur * 0.8, b.rate * 0.9);
+    // fit the swing clip INSIDE the attack rate — restarting a half-played clip
+    // every press is what made spam attacks look broken in iteration 1
+    const action = this.playerActor.actions["C_" + anim];
+    const clipDur = action ? action.getClip().duration : 0.5;
+    const ts = clipDur / Math.max(0.22, b.rate * 0.95);
+    const dur = this.playerActor.playOnce("C_" + anim, { timeScale: ts });
+    this.attackAnimT = Math.min(dur * 0.7, b.rate * 0.8);
     SFX.play(b.sfx);
     if (b.type === "melee") {
       this.after(dur * 0.35, () => {
@@ -401,22 +445,42 @@ export class Game {
         dmg: def.dmg, range: def.range || 16, friendly: true,
         tint: def.tint || 0xffd080, arrow: this.classId === "archer",
         bomb: def.type === "bomb" ? def : null,
+        // trail density: heavy magic > bolts > arrows
+        trailRate: def.type === "bomb" ? 0.95 : this.classId === "mage" ? 0.6 : 0.22,
       });
     }
   }
 
-  spawnProjectile(o) {
-    let mesh;
-    if (o.arrow) {
-      mesh = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.65, 6),
-        new THREE.MeshBasicMaterial({ color: o.tint }));
-      mesh.rotation.x = Math.PI / 2;
-    } else {
-      mesh = new THREE.Mesh(new THREE.SphereGeometry(o.bomb ? 0.3 : 0.17, 10, 8),
-        new THREE.MeshBasicMaterial({ color: o.tint }));
+  _glowTexture() {
+    if (!this.__glowTex) {
+      const S = 64, c = document.createElement("canvas"); c.width = c.height = S;
+      const g = c.getContext("2d");
+      const grd = g.createRadialGradient(S / 2, S / 2, 2, S / 2, S / 2, S / 2);
+      grd.addColorStop(0, "rgba(255,255,255,1)"); grd.addColorStop(0.35, "rgba(255,255,255,0.5)"); grd.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = grd; g.fillRect(0, 0, S, S);
+      this.__glowTex = new THREE.CanvasTexture(c);
     }
+    return this.__glowTex;
+  }
+
+  spawnProjectile(o) {
     const wrap = new THREE.Group();
-    wrap.add(mesh);
+    if (o.arrow) {
+      wrap.add(makeArrow(o.tint));
+    } else {
+      const core = new THREE.Mesh(new THREE.SphereGeometry(o.bomb ? 0.28 : 0.15, 12, 10),
+        new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      wrap.add(core);
+    }
+    if (!o.arrow || o.bomb) {
+      // soft additive glow halo sells the "magic missile" read
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: this._glowTexture(), color: o.tint, transparent: true, opacity: 0.9,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      }));
+      glow.scale.setScalar(o.bomb ? 1.6 : 0.9);
+      wrap.add(glow);
+    }
     wrap.position.set(o.x, o.y, o.z);
     wrap.lookAt(o.x + o.vx, o.y, o.z + o.vz);
     this.scene.add(wrap);
@@ -431,7 +495,11 @@ export class Game {
     this.cds[key][slot] = def.cd;
     const tgt = this.nearestEnemy(12);
     if (tgt && def.type !== "spin" && def.type !== "ward") this.facing = Math.atan2(tgt.z - this.pz, tgt.x - this.px);
-    const dur = this.playerActor.playOnce("C_" + def.anim, { timeScale: def.animScale });
+    // fit the clip into a ~0.9s ability window (some Meshy clips run 2-8s raw)
+    const abAction = this.playerActor.actions["C_" + def.anim];
+    const abClipDur = abAction ? abAction.getClip().duration : 0.6;
+    const abTs = Math.max(def.animScale || 1, abClipDur / 0.9);
+    const dur = this.playerActor.playOnce("C_" + def.anim, { timeScale: abTs });
     this.attackAnimT = Math.min(dur * 0.85, 1.0);
     if (def.callout) this.hud.callout(def.callout, this.cls.uiColor);
     SFX.play(def.sfx);
@@ -456,6 +524,10 @@ export class Game {
       }
       case "spin": {
         this.spin = { def, t: def.duration, tickT: 0, interval: def.duration / def.ticks };
+        // spinning blade-trail ring — Whirlwind finally LOOKS like a whirlwind
+        this.spinTrail = makeSpinTrail(this.cls.color);
+        this.playerGroup.add(this.spinTrail);
+        this.decals.spawn("ring", this.px, this.pz, def.radius, def.duration, { grow: true, spin: 3 });
         break;
       }
       case "slam": {
@@ -498,6 +570,10 @@ export class Game {
         });
         break;
       }
+      case "shot": {   // Fan Shot — volley of real projectiles in a visible cone
+        this.after(dur * 0.25, () => this.spawnShots(def, true));
+        break;
+      }
       case "bomb": {
         this.after(dur * 0.3, () => this.spawnShots(def, true));
         break;
@@ -515,6 +591,20 @@ export class Game {
           if (s > bestScore) { bestScore = s; tx = c.x; tz = c.z; }
         }
         this.decals.spawn("reticle", tx, tz, def.radius, def.delay + def.volleys * def.volleyGap, { spin: 1.2 });
+        // visible arrow shafts falling into the circle, timed to land on each volley
+        for (let v = 0; v < def.volleys; v++) {
+          this.after(Math.max(0.05, def.delay + v * def.volleyGap - 0.32), () => {
+            for (let n = 0; n < 8; n++) {
+              const a2 = rand(Math.PI * 2), r2 = Math.sqrt(Math.random()) * def.radius;
+              const ax = tx + Math.cos(a2) * r2, az = tz + Math.sin(a2) * r2;
+              const m = makeArrow(0xffc060);
+              m.position.set(ax, 9 + rand(0, 2), az);
+              m.lookAt(ax, -10, az);   // nose-down
+              this.scene.add(m);
+              this.fallers.push({ mesh: m, vy: 30 });
+            }
+          });
+        }
         for (let v = 0; v < def.volleys; v++) {
           this.after(def.delay + v * def.volleyGap, () => {
             SFX.play("rain");
@@ -624,7 +714,8 @@ export class Game {
     }
     this.hud.update(hudDt);
 
-    if (this.state === "playing") this.updatePlaying(dt, hudDt);
+    if (this.state === "playing" && this.input.pausePressed()) this.setPaused(!this.paused);
+    if (this.state === "playing" && !this.paused) this.updatePlaying(dt, hudDt);
     else if (this.state === "gameover" || this.state === "arenaclear") {
       // let corpses/FX settle behind the panel
       if (this.playerActor) this.playerActor.update(dt);
@@ -693,10 +784,15 @@ export class Game {
       this.spin.t -= dt;
       this.spin.tickT -= dt;
       this.playerGroup.rotation.y -= 13 * dt; // visual whirl
+      if (this.spinTrail) {
+        this.spinTrail.rotation.y += 22 * dt;  // trail spins faster than the body
+        const pulse = 1 + Math.sin(this.spin.t * 30) * 0.08;
+        this.spinTrail.scale.set(pulse, 1, pulse);
+      }
       if (this.spin.tickT <= 0) {
         this.spin.tickT = this.spin.interval;
         const d = this.spin.def;
-        this.fx.burst(this.px, 0.9, this.pz, { count: 14, color: 0xff5a3a, color2: 0xffd24a, speed: 5, up: 1.2, life: 0.35, spread: 2.5 });
+        this.fx.burst(this.px, 0.9, this.pz, { count: 18, color: 0xff5a3a, color2: 0xffd24a, speed: 6, up: 1.4, life: 0.4, spread: 3 });
         for (const e of this.enemies) {
           if (e.dead) continue;
           if (dist2(e.x, e.z, this.px, this.pz) <= d.radius * d.radius)
@@ -704,13 +800,20 @@ export class Game {
         }
         SFX.play("swing_big");
       }
-      if (this.spin.t <= 0) { this.spin = null; this.playerGroup.rotation.y = 0; }
+      if (this.spin.t <= 0) {
+        this.spin = null; this.playerGroup.rotation.y = 0;
+        if (this.spinTrail) { this.spinTrail.removeFromParent(); this.spinTrail = null; }
+      }
     } else if (this.attackAnimT <= 0 && !this.dead) {
       if (mv.mag > 0.55) actor.play("Run", { timeScale: 1.2 });
       else if (mv.mag > 0.05) actor.play("Walk", { timeScale: 1.1 });
       else if (!this.block.active) actor.play("Idle");
     }
     actor.update(dt);
+    // arms hang at the sides (A-pose fix), procedural swing while moving,
+    // faded out during attacks/spins so combat clips play unmodified
+    const relaxTarget = (this.attackAnimT > 0 || this.spin || this.dead || this.block.active) ? 0 : 1;
+    actor.updateRelax(dt, relaxTarget, mv.mag > 0.05, mv.mag > 0.55);
 
     // place player
     this.playerGroup.position.set(this.px, 0, this.pz);
@@ -741,14 +844,25 @@ export class Game {
     for (let i = 0; i < 3; i++) if (cds[i] > 0) cds[i] -= dt;
     this.hud.setCooldowns(defs.map((d, i) => ({ frac: d ? clamp(cds[i] / d.cd, 0, 1) : 0, secs: Math.max(0, cds[i]) })));
 
-    // ---- spawn queue / wave state
+    // ---- spawn queue / wave state (ground eruption: telegraph decal → rise)
     if (this.waveActive) {
       for (let i = this.spawnQueue.length - 1; i >= 0; i--) {
         const s = this.spawnQueue[i];
         s.t -= dt;
-        if (s.t <= 0) { this.spawnQueue.splice(i, 1); this.spawnEnemy(s.type, s.portal); }
+        if (s.t <= 0) {
+          this.spawnQueue.splice(i, 1);
+          const p = this.board.spawnPoint();
+          this.decals.spawn("reticle", p.x, p.z, 1.1, SPAWN_TELEGRAPH, { spin: 2.4 });
+          this.fx.burst(p.x, 0.15, p.z, { count: 6, color: this.arena.portal, speed: 1, up: 1.2, life: 0.4 });
+          this.pendingSpawns.push({ type: s.type, x: p.x, z: p.z, t: SPAWN_TELEGRAPH });
+        }
       }
-      if (this.spawnQueue.length === 0 && this.enemies.every((e) => e.dead)) this.waveCleared();
+      for (let i = this.pendingSpawns.length - 1; i >= 0; i--) {
+        const s = this.pendingSpawns[i];
+        s.t -= dt;
+        if (s.t <= 0) { this.pendingSpawns.splice(i, 1); this.spawnEnemy(s.type, s.x, s.z); }
+      }
+      if (this.spawnQueue.length === 0 && this.pendingSpawns.length === 0 && this.enemies.every((e) => e.dead)) this.waveCleared();
     } else {
       this.restT -= dt;
       if (this.restT <= 0 && this.state === "playing") this.startWave();
@@ -770,6 +884,15 @@ export class Game {
         continue;
       }
       e.spawnT -= dt;
+      // climbing out of the ground — no AI, no damage-dealing yet
+      if (e.riseT > 0) {
+        e.riseT -= dt;
+        const f = Math.max(0, e.riseT / RISE_TIME);
+        e.actor.root.position.set(e.x, -e.def.height * f * f, e.z);
+        e.actor.update(dt);
+        if (Math.random() < dt * 20) this.fx.burst(e.x, 0.2, e.z, { count: 2, color: 0x6a5040, speed: 1.5, up: 2, life: 0.3 });
+        continue;
+      }
       const st = e.statuses;
       for (const k of ["shock", "burn", "frost"]) if (st[k] > 0) st[k] -= dt;
 
@@ -838,8 +961,20 @@ export class Game {
           const min = (e.def.height + o.def.height) * 0.22;
           if (od > 0.001 && od < min) { mvx += ox / od * 2.4; mvz += oz / od * 2.4; }
         }
+        // movement personality: slimes bounce (move mid-hop), brutes lumber
+        let hopY = 0, moveMult = 1;
+        if (e.def.move === "hop") {
+          e.hopT += dt * slow;
+          const phase = (e.hopT % 0.62) / 0.62;
+          hopY = Math.max(0, Math.sin(phase * Math.PI * 2)) * 0.6;
+          moveMult = hopY > 0.06 ? 1.7 : 0.08;           // airborne = surge, grounded = squat
+          const squash = hopY < 0.06 ? 0.82 : 1.06;
+          A.model.scale.y = A.model.scale.x * squash;    // squash & stretch
+        } else if (e.def.move === "lumber") {
+          A.root.rotation.z = Math.sin(e.hopT += dt * 4) * 0.05;
+        }
         // knockback decay
-        e.x += (mvx + e.knockX) * dt; e.z += (mvz + e.knockZ) * dt;
+        e.x += (mvx * moveMult + e.knockX) * dt; e.z += (mvz * moveMult + e.knockZ) * dt;
         e.knockX *= Math.exp(-6 * dt); e.knockZ *= Math.exp(-6 * dt);
         const dc = Math.hypot(e.x, e.z);
         if (dc > BOARD_RADIUS) { e.x *= BOARD_RADIUS / dc; e.z *= BOARD_RADIUS / dc; }
@@ -848,8 +983,9 @@ export class Game {
         const moving = Math.hypot(mvx, mvz) > 0.4;
         A.play(moving ? "Walk" : "Idle", { timeScale: moving ? 1.1 * slow : 1 });
         A.root.rotation.y = -Math.atan2(dz, dx) + Math.PI / 2;
+        e.renderY = hopY;
       }
-      const floatY = e.def.floatH ? e.def.floatH + Math.sin(performance.now() / 400 + e.floatPhase) * 0.2 : 0;
+      const floatY = e.def.floatH ? e.def.floatH + Math.sin(performance.now() / 400 + e.floatPhase) * 0.2 : (e.renderY || 0);
       A.root.position.set(e.x, floatY, e.z);
     }
 
@@ -873,7 +1009,8 @@ export class Game {
             dead = true; break;
           }
         }
-        if (!dead && Math.random() < 0.35) this.fx.burst(x, p.mesh.position.y, z, { count: 1, color: p.tint, speed: 0.3, up: 0, life: 0.25, gravity: 0 });
+        if (!dead && Math.random() < (p.trailRate ?? 0.35))
+          this.fx.burst(x, p.mesh.position.y, z, { count: p.bomb ? 2 : 1, color: p.tint, speed: 0.4, up: 0.2, life: p.bomb ? 0.45 : 0.28, gravity: 0.5 });
       } else {
         if (dist2(this.px, this.pz, x, z) < (PLAYER_R + 0.35) ** 2) {
           this.hurtPlayer(p.dmg, x - p.vx, z - p.vz);
@@ -887,7 +1024,21 @@ export class Game {
       if (dead) { p.mesh.removeFromParent(); this.projectiles.splice(i, 1); }
     }
 
-    if (this.input.pausePressed()) this.hud.banner("REALM " + this.arena.order + " · " + this.arena.name.toUpperCase(), { dur: 1.2, size: 30 });
+    // ---- rain-of-arrows fallers
+    for (let i = this.fallers.length - 1; i >= 0; i--) {
+      const f = this.fallers[i];
+      f.mesh.position.y -= f.vy * dt;
+      if (f.mesh.position.y <= 0.15) {
+        this.fx.burst(f.mesh.position.x, 0.25, f.mesh.position.z, { count: 4, color: 0xffd080, color2: 0xff8a40, speed: 2, up: 1.6, life: 0.3 });
+        f.mesh.removeFromParent(); this.fallers.splice(i, 1);
+      }
+    }
+
+    // ---- enemy health bars
+    if (this.bars) {
+      const r = this.container.getBoundingClientRect();
+      this.bars.update(this.enemies, r.width, r.height);
+    }
   }
 
   explode(def, x, z) {
@@ -895,11 +1046,16 @@ export class Game {
     this.addShake(def.shake || 0.4);
     if (def.hitstop) this.hitstop(def.hitstop);
     const isFrost = def.residual && def.residual.kind === "frost";
-    this.decals.spawn("ring", x, z, def.radius, 0.5, { grow: true });
+    this.decals.spawn(isFrost ? "shock" : "ring", x, z, def.radius, 0.55, { grow: true });
+    this.decals.spawn("ring", x, z, def.radius * 0.55, 0.35, { grow: true });
     this.fx.burst(x, 0.8, z, {
-      count: 30, color: isFrost ? 0x8ae0ff : 0xffb060, color2: isFrost ? 0xffffff : 0xff4a20,
-      speed: 6, up: 3, life: 0.55, spread: 2,
+      count: 44, color: isFrost ? 0x8ae0ff : 0xffb060, color2: isFrost ? 0xffffff : 0xff4a20,
+      speed: 7, up: 3.5, life: 0.6, spread: 2,
     });
+    // secondary slow-motes wave (embers linger / ice crystals drift)
+    this.after(0.08, () => this.fx.burst(x, 0.5, z, {
+      count: 18, color: isFrost ? 0xd8f4ff : 0xff7a2a, speed: 2.5, up: isFrost ? 1 : 2.4, life: 0.9, gravity: isFrost ? 2 : 1, spread: def.radius * 0.5,
+    }));
     for (const e of this.enemies) {
       if (e.dead) continue;
       if (dist2(e.x, e.z, x, z) <= (def.radius + e.def.height * 0.2) ** 2)
@@ -915,7 +1071,12 @@ export class Game {
 
   updateCamera(dt) {
     const tx = this.px ?? 0, tz = this.pz ?? 0;
-    const off = this.state === "menu" ? { x: 10, y: 15, z: 14 } : { x: 0, y: 19, z: 14.5 };
+    // player-adjustable framing: wheel/pinch zoom, right-drag orbit + pitch
+    const zoom = this.input.camZoom, yaw = this.input.camYaw, pitch = this.input.camPitch;
+    const horiz = 14.5 * zoom, up = 19 * zoom * pitch;
+    const off = this.state === "menu"
+      ? { x: 10, y: 15, z: 14 }
+      : { x: Math.sin(yaw) * horiz, y: up, z: Math.cos(yaw) * horiz };
     // bias follow toward board center so the rim + void stay framed
     const lx = this.state === "menu" ? Math.cos(performance.now() / 9000) * 8 : tx * 0.72;
     const lz = this.state === "menu" ? Math.sin(performance.now() / 9000) * 8 : tz * 0.72;

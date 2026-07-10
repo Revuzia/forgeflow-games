@@ -1,4 +1,4 @@
-# Crownfire Arenas
+# Thronedrift
 
 Top-down isometric 3D arena wave-survival (Three.js/WebGL). Five floating
 realm-boards, three champions, combo multipliers, shock/burn/frost statuses,
@@ -12,7 +12,7 @@ Static ES modules — any web server from this directory:
 python ../../serve_nocache.py   # or: python -m http.server 8080
 ```
 
-Open `http://localhost:<port>/games/crownfire/`. No build step; Three.js 0.172
+Open `http://localhost:<port>/games/thronedrift/`. No build step; Three.js 0.172
 loads from CDN via import map.
 
 ## Controls
@@ -48,7 +48,7 @@ swapping never resets or refunds timers.
 5. **Aurelian Bastion** — white-gold marble, god-rays, final realm. **THE CROWN IS CLAIMED!**
 
 Campaign progression (clearing a realm unlocks the next; stored in
-localStorage `crownfire_unlocked`) plus free arena select of anything unlocked.
+localStorage `thronedrift_unlocked`) plus free arena select of anything unlocked.
 
 ## Assets
 

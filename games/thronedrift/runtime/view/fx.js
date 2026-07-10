@@ -1,4 +1,4 @@
-// Crownfire Arenas — juice: pooled burst particles, floating combat text
+// Thronedrift — juice: pooled burst particles, floating combat text
 // (DOM, projected each frame), and ground decals (residual fire/frost patches,
 // slam shockwaves, target reticles). Screen shake + hit-stop live in game.js.
 
@@ -111,6 +111,45 @@ export class FloatText {
   }
 
   clear() { for (const it of [...this.items]) this._kill(it); }
+}
+
+// ---------- enemy health bars (DOM projected, shown once damaged) -----------
+
+export class WorldBars {
+  constructor(container, camera) {
+    this.container = container; this.camera = camera;
+    this.bars = new Map();       // enemy → {wrap, fill}
+    this.v = new THREE.Vector3();
+  }
+
+  /** call once per frame with the live enemy list */
+  update(enemies, w, h) {
+    const seen = new Set();
+    for (const e of enemies) {
+      if (e.dead || e.hp >= e.maxHp) continue;
+      seen.add(e);
+      let b = this.bars.get(e);
+      if (!b) {
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "position:absolute;left:0;top:0;width:42px;height:6px;transform:translate(-50%,-50%);" +
+          "background:rgba(10,4,16,.8);border:1px solid rgba(232,184,58,.55);border-radius:3px;pointer-events:none;overflow:hidden";
+        const fill = document.createElement("div");
+        fill.style.cssText = "height:100%;width:100%;background:linear-gradient(90deg,#ff4a3a,#ff7a4a);border-radius:2px;transition:width .12s";
+        wrap.appendChild(fill);
+        this.container.appendChild(wrap);
+        b = { wrap, fill };
+        this.bars.set(e, b);
+      }
+      this.v.set(e.x, e.def.height + 0.45, e.z).project(this.camera);
+      if (this.v.z > 1) { b.wrap.style.display = "none"; continue; }
+      b.wrap.style.display = "block";
+      b.wrap.style.transform = `translate(${(this.v.x * 0.5 + 0.5) * w}px,${(-this.v.y * 0.5 + 0.5) * h}px) translate(-50%,-50%)`;
+      b.fill.style.width = `${clamp(e.hp / e.maxHp, 0, 1) * 100}%`;
+    }
+    for (const [e, b] of this.bars) if (!seen.has(e)) { b.wrap.remove(); this.bars.delete(e); }
+  }
+
+  clear() { for (const [, b] of this.bars) b.wrap.remove(); this.bars.clear(); }
 }
 
 // ---------- ground decals (residuals, shockwaves, reticles) ----------------

@@ -1,0 +1,43 @@
+{
+ "slug": "void-skirmish-3d",
+ "ok": false,
+ "verdict": "fail",
+ "bytes": 17174064,
+ "mb": 16.38,
+ "budget_mb": 12.0,
+ "top": [
+  {
+   "mb": 3.05,
+   "file": "runtime\\3d\\characters\\brainstem.glb"
+  },
+  {
+   "mb": 2.06,
+   "file": "runtime\\3d\\characters\\soldier.glb"
+  },
+  {
+   "mb": 1.85,
+   "file": "runtime\\3d\\characters\\adventurer.glb"
+  },
+  {
+   "mb": 1.49,
+   "file": "runtime\\3d\\characters\\swat.glb"
+  },
+  {
+   "mb": 0.72,
+   "file": "runtime\\3d\\characters\\alien.glb"
+  },
+  {
+   "mb": 0.68,
+   "file": "assets\\audio\\music.ogg"
+  },
+  {
+   "mb": 0.68,
+   "file": "runtime\\3d\\characters\\robot_enemy_large_gun.glb"
+  },
+  {
+   "mb": 0.6,
+   "file": "content.json"
+  }
+ ],
+ "reason": "16.38MB > 12.0MB budget"
+}

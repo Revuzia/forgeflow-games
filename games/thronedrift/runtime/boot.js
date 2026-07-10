@@ -1,4 +1,4 @@
-// Crownfire Arenas — bootstrap: renderer, asset preload (Meshy heroes +
+// Thronedrift — bootstrap: renderer, asset preload (Meshy heroes +
 // creature-library enemies), HUD/Input wiring, main loop.
 
 import * as THREE from "three";
@@ -17,7 +17,7 @@ loadEl.style.cssText = `position:absolute;inset:0;display:flex;flex-direction:co
   background:radial-gradient(ellipse at 50% 35%,#2a1038,#0b0710 75%);z-index:10;color:#e8dcc8;font-family:Georgia,serif;`;
 loadEl.innerHTML = `
   <div style="font-size:44px;font-weight:900;letter-spacing:3px;
-    background:linear-gradient(180deg,#ffe9a8,#e8b83a 50%,#ff6a2a);-webkit-background-clip:text;background-clip:text;color:transparent">CROWNFIRE ARENAS</div>
+    background:linear-gradient(180deg,#ffe9a8,#e8b83a 50%,#ff6a2a);-webkit-background-clip:text;background-clip:text;color:transparent">THRONEDRIFT</div>
   <div style="width:280px;height:10px;border:2px solid #e8b83a;border-radius:6px;margin-top:26px;overflow:hidden">
     <div id="cf-loadbar" style="width:0%;height:100%;background:linear-gradient(90deg,#7a4dcf,#e8b83a);transition:width .2s"></div></div>
   <div id="cf-loadtxt" style="margin-top:12px;font-size:13px;color:#b89ae0">Forging the realms…</div>`;
@@ -84,6 +84,6 @@ window.addEventListener("resize", () => {
     renderer.render(game.scene, camera);
   });
 })().catch((err) => {
-  console.error("[crownfire] boot failed:", err);
+  console.error("[thronedrift] boot failed:", err);
   setProgress(1, "Failed to load — check console.");
 });

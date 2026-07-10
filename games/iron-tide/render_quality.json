@@ -1,0 +1,21 @@
+{
+ "slug": "iron-tide",
+ "dimension": "3d",
+ "render_path": "three-kernel",
+ "markers": {
+  "toneMapping": true,
+  "shadows": true,
+  "lights": true,
+  "postfx": true,
+  "pbr": true,
+  "srgb": false,
+  "textured": true
+ },
+ "missing": [],
+ "warnings": [
+  "advisory: missing srgb (Phase 2 makes pbr+textured required)"
+ ],
+ "ok": true,
+ "verdict": "pass",
+ "reason": "AAA render markers present"
+}

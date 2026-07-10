@@ -1,0 +1,677 @@
+{
+  "slug": "ember-spire",
+  "genre": "platformer",
+  "title": "Lumina: Ember's Awakening",
+  "brief": "Original-IP platformer game (sub-genre: 2d-platformer). Capture the core mechanics and game-feel of \"Rayman Legends\" (critically acclaimed, 91%) \u2014 but with your OWN original name, theme, characters and art. Do NOT reference or reuse that title's IP. SIGNATURE MECHANIC for this genre: gravity + jump/coyote/dash feel + hazard traversal + goal. MUST SHIP COMPLETE: a working menu (title + difficulty + how-to + settings via FFG.Shell), the page control bar (fullscreen/mute/pause), a clear win AND lose state, readable HUD, and polished feel \u2014 it must play start-to-finish with no manual fixes.",
+  "inspired_by": "Rayman Legends",
+  "rating": 91,
+  "milestone": "M1",
+  "milestones": {
+    "M0": {
+      "status": "done",
+      "done_when": "design doc written: core loop, verbs, scope, art direction, definition_of_done"
+    },
+    "M1": {
+      "status": "in_progress",
+      "done_when": "core loop genuinely playable in ONE level: structure+feel green, no crash"
+    },
+    "M2": {
+      "status": "todo",
+      "done_when": "every verb in the design doc implemented and survives the play-bot"
+    },
+    "M3": {
+      "status": "todo",
+      "done_when": "multiple levels + progression + a real difficulty curve; everything reachable"
+    },
+    "M4": {
+      "status": "todo",
+      "done_when": "menu + audio + game-feel/juice; vision fidelity high; zero crashes"
+    },
+    "M5": {
+      "status": "todo",
+      "done_when": "deep QA: structure+feel+fidelity+review all green across repeated playthroughs"
+    }
+  },
+  "design_doc": {
+    "title": "Lumina: Ember's Awakening",
+    "core_loop": "Guide Lumina, a sentient wisp of living light, through a decaying shadow-realm to reignite the Primordial Flames scattered across five corrupted biomes. Each level demands precise platforming through rhythm-synced environmental hazards\u2014pulsing void-spikes, collapsing shadow platforms, and gravitational rifts\u2014while collecting ember shards to unlock new movement abilities. The core satisfaction comes from chaining wall-runs, mid-air dashes, and glide-bursts to maintain flow state through increasingly complex gauntlets, culminating in a boss encounter where you must navigate attack patterns while racing against a darkness-creep timer.",
+    "verbs": [
+      "run (variable speed based on input)",
+      "jump (coyote-time: 0.15s grace window)",
+      "double-jump (unlocked mid-game)",
+      "dash (8-directional, 0.3s cooldown, i-frames during dash)",
+      "wall-slide (reduced fall speed on vertical surfaces)",
+      "wall-jump (directional launch off walls)",
+      "glide (hold jump at apex, slower descent)",
+      "collect (ember shards auto-magnetize within 2 tiles)",
+      "activate (light-beacons to checkpoint/unlock gates)"
+    ],
+    "scope": "IN: 5 handcrafted biomes (4 levels each + 1 boss = 25 levels total), 60-90 min first-playthrough, time-attack mode per level, 3 difficulty presets (Spark/Flame/Inferno affecting hazard speed + checkpoint density), accessibility options (toggle i-frames, adjust timers), persistent progress save. OUT: procedural generation, multiplayer, spoken dialogue (environmental storytelling only via background art + brief text cards), achievements/trophies, post-game content, level editor, multiple playable characters.",
+    "art_direction": "High-contrast luminescent aesthetic: Lumina renders as a radiant golden-white particle trail against deep indigo/obsidian backgrounds. Environments use a restricted palette (midnight blues #1a1a2e, corrupt purples #6a0572, toxic greens #16213e for hazards, warm amber/gold #ffa500 for collectibles and safe zones). All platforms have subtle pulse-glow edges. Parallax backgrounds feature silhouetted ruins and giant petrified fauna. Particle-heavy: every action leaves light streaks, dashes emit nova bursts, deaths scatter embers. UI uses clean sans-serif with glowing accents. Mood: melancholic beauty, Hollow Knight meets Ori's environmental storytelling but purely through color/light language.",
+    "milestone_plan": {
+      "M1": "Vertical slice (1 complete level, 60s duration): Run, jump, wall-jump, dash functional with tight physics tuning (jump arc feels floaty-but-responsive, dash snappy). 3 hazard types implemented (spikes, collapsing platforms, moving saw-blades). Title screen + HUD (ember count, timer) + win/lose states. FFG.Shell integration (difficulty select, pause, mute, fullscreen). Prove the core feel.",
+      "M2": "Core mechanics complete: All 9 verbs implemented and tuned. Physics locked (gravity 2400 px/s\u00b2, jump force 850 px/s, dash 1600 px/s). 5 hazard archetypes (spikes, saws, void-zones, gravity-wells, timed-lasers) + checkpoint system. 3 biomes drafted (layouts only, placeholder art). Difficulty modifier system working (adjusts hazard speed \u00b130%, checkpoint spacing).",
+      "M3": "Content pass: All 25 levels built and playable end-to-end. Each biome introduces 1 new mechanic layer (Biome 2: moving platforms, Biome 3: gravity inversion zones, Biome 4: rhythm-synced barriers, Biome 5: boss arena with 3-phase pattern). Collectible placement tuned (80% shards required to unlock final boss). Time-attack par times set per level.",
+      "M4": "Polish and juice: Particle systems for all actions (dash trails, jump puffs, death bursts). Screen shake on dash/landing. Dynamic camera (slight lead on player movement direction). Audio integration (movement SFX, hazard hums, ambient drone, victory jingle). HUD animations (ember counter increments smoothly, timer flashes <10s remaining). Transition animations (level enter/exit fades). Settings persistence (volume, difficulty, progress save/load).",
+      "M5": "Ship-ready: Full QA pass on all 25 levels (no soft-locks, all checkpoints functional). How-to-play screen with animated GIF demos of each verb. Credits screen. Build optimization (target 60fps, <50MB bundle). Accessibility audit (colorblind-safe palette verified, input rebinding if time permits). Final tuning pass on difficulty curve (Inferno mode validated beatable by playtester). Deploy to itch.io + Newgrounds with gameplay trailer."
+    },
+    "definition_of_done": [
+      "Player can launch game, select difficulty, and complete all 25 levels from title screen to credits without manual intervention",
+      "All 9 movement verbs respond within 1 frame of input with tuned parameters (no floaty/sluggish feel)",
+      "Death states trigger immediately on hazard collision, respawn at last checkpoint within 0.8s, retry count tracked per level",
+      "Win state triggers on final boss defeat, displays completion time + total embers collected, unlocks time-attack mode",
+      "HUD permanently visible: ember count (current/total per level), timer (MM:SS.ms), death counter, no overlapping UI elements",
+      "FFG.Shell integration: pause menu accessible via ESC, settings persist across sessions (volume/difficulty), fullscreen toggle functional, mute affects all audio channels",
+      "All 5 biomes visually distinct (unique background parallax + hazard color themes), no placeholder art in shipped build",
+      "Accessibility: difficulty presets modify hazard speed (\u00b130%) and checkpoint density (\u00b150%), settings include separate music/SFX sliders",
+      "Performance: maintains 60fps on mid-tier hardware (2019 integrated GPU equivalent), load times <2s between levels",
+      "No game-breaking bugs: no soft-locks, no sequence breaks, all checkpoints save correctly, progress persists through browser refresh (localStorage)",
+      "How-to-play screen demonstrates all verbs with looping visual examples, accessible from title screen and pause menu",
+      "Audio: 15+ SFX cues (jump/land/dash/death/collect/checkpoint/win/lose), 2 music tracks minimum (menu + gameplay loop), all audio respects mute setting"
+    ]
+  },
+  "open_issues": [
+    {
+      "id": 3,
+      "milestone": "M1",
+      "severity": "high",
+      "issue": "play:start \u2014 after_start=menu",
+      "status": "open",
+      "found": "2026-06-17T08:52:27.243527+00:00"
+    },
+    {
+      "id": 4,
+      "milestone": "M1",
+      "severity": "high",
+      "issue": "play:liveness \u2014 frames 60->60",
+      "status": "open",
+      "found": "2026-06-17T08:52:27.243537+00:00"
+    },
+    {
+      "id": 7,
+      "milestone": "M1",
+      "severity": "high",
+      "issue": "play:controls \u2014 input-caused changes: NONE (idle baseline matched driven)",
+      "status": "open",
+      "found": "2026-06-17T08:52:27.243540+00:00"
+    },
+    {
+      "id": 8,
+      "milestone": "M1",
+      "severity": "high",
+      "issue": "play:progression \u2014 states=['menu'] maxScore=0 maxLevel=1",
+      "status": "open",
+      "found": "2026-06-17T08:52:27.243542+00:00"
+    },
+    {
+      "id": 9,
+      "milestone": "M1",
+      "severity": "high",
+      "issue": "play:audio \u2014 buffers=11 music=False",
+      "status": "open",
+      "found": "2026-06-17T08:52:27.243544+00:00"
+    },
+    {
+      "id": 10,
+      "milestone": "M1",
+      "severity": "high",
+      "issue": "play:errors \u2014 console_errors=1 lastErr=ReferenceError: LEVELS is not defined",
+      "status": "open",
+      "found": "2026-06-17T08:52:27.243546+00:00"
+    },
+    {
+      "id": 7,
+      "milestone": "M1",
+      "severity": "high",
+      "issue": "scope \u2014 design doc promises 25 level(s); game declares 0 (no LEVELS/WORLDS array or *_COUNT declaration found) \u2014 BUILD THE REMAINING 25",
+      "status": "open",
+      "found": "2026-06-17T08:52:27.244415+00:00"
+    }
+  ],
+  "changelog": [
+    {
+      "ts": "2026-06-16T06:48:43.285878+00:00",
+      "milestone": "M0",
+      "action": "design doc",
+      "result": "title=Lumina: Ember's Awakening"
+    },
+    {
+      "ts": "2026-06-16T06:51:14.824434+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T06:53:37.926846+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T06:57:49.500001+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T07:02:04.791423+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T07:06:12.355644+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T07:09:39.578518+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T07:14:40.974382+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T07:18:27.475065+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T07:22:37.110680+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T07:26:11.622675+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T07:34:45.514532+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T07:38:38.881700+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T07:42:41.280732+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T07:46:34.750995+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T07:51:04.717363+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T07:54:37.439730+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T07:58:18.193675+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T08:02:31.858384+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T08:06:56.918639+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T08:10:25.445360+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T08:14:22.301088+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T08:18:09.866918+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T08:22:42.296062+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T08:27:23.482751+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T08:30:51.820941+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T08:35:15.038036+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T08:39:18.808656+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T08:43:12.621478+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T08:46:43.025576+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T08:50:31.263055+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-16T08:54:01.687366+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T06:50:41.575263+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T06:55:19.324297+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T06:58:56.107678+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:02:40.248072+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:06:06.834647+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:10:23.760461+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:14:12.667529+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:17:28.083629+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:21:17.754068+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:25:38.191812+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:29:54.497334+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:34:34.429777+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:38:04.643733+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:41:36.627985+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:45:48.873515+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:50:03.508864+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:53:22.802270+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T07:57:26.358452+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:01:23.476766+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:04:58.125573+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:08:33.389367+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:11:43.732379+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:15:34.968257+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:19:11.837322+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:22:31.309968+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:25:53.713989+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:28:08.219508+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:32:13.304736+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:35:31.395543+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:38:30.017201+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:40:45.013614+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:44:20.490897+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:48:53.415465+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    },
+    {
+      "ts": "2026-06-17T08:52:27.244421+00:00",
+      "milestone": "M1",
+      "action": "engine pass",
+      "result": "play=@normal: play HOLD \u2014 failed: start, liveness, controls, prog scope=ok panel=ok open=7"
+    }
+  ],
+  "sessions": 2,
+  "created": "2026-06-15T21:47:51.635283+00:00",
+  "telemetry": [
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": null,
+      "lives_lost": 0,
+      "max_score": 0,
+      "max_level": 1,
+      "end_state": "menu",
+      "milestone": "M1",
+      "ts": "2026-06-17T08:15:34.967502+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": null,
+      "lives_lost": 0,
+      "max_score": 0,
+      "max_level": 1,
+      "end_state": "menu",
+      "milestone": "M1",
+      "ts": "2026-06-17T08:19:11.836446+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": null,
+      "lives_lost": 0,
+      "max_score": 0,
+      "max_level": 1,
+      "end_state": "menu",
+      "milestone": "M1",
+      "ts": "2026-06-17T08:22:31.309179+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": null,
+      "lives_lost": 0,
+      "max_score": 0,
+      "max_level": 1,
+      "end_state": "menu",
+      "milestone": "M1",
+      "ts": "2026-06-17T08:25:53.713218+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": null,
+      "lives_lost": 0,
+      "max_score": 0,
+      "max_level": 1,
+      "end_state": "menu",
+      "milestone": "M1",
+      "ts": "2026-06-17T08:28:08.218762+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": null,
+      "lives_lost": 0,
+      "max_score": 0,
+      "max_level": 1,
+      "end_state": "menu",
+      "milestone": "M1",
+      "ts": "2026-06-17T08:32:13.303907+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": null,
+      "lives_lost": 0,
+      "max_score": 0,
+      "max_level": 1,
+      "end_state": "menu",
+      "milestone": "M1",
+      "ts": "2026-06-17T08:35:31.394372+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": null,
+      "lives_lost": 0,
+      "max_score": 0,
+      "max_level": 1,
+      "end_state": "menu",
+      "milestone": "M1",
+      "ts": "2026-06-17T08:38:30.016206+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": null,
+      "lives_lost": 0,
+      "max_score": 0,
+      "max_level": 1,
+      "end_state": "menu",
+      "milestone": "M1",
+      "ts": "2026-06-17T08:40:45.012788+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": null,
+      "lives_lost": 0,
+      "max_score": 0,
+      "max_level": 1,
+      "end_state": "menu",
+      "milestone": "M1",
+      "ts": "2026-06-17T08:44:20.490040+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": null,
+      "lives_lost": 0,
+      "max_score": 0,
+      "max_level": 1,
+      "end_state": "menu",
+      "milestone": "M1",
+      "ts": "2026-06-17T08:48:53.414715+00:00"
+    },
+    {
+      "duration_s": 10.2,
+      "difficulty": "normal",
+      "genre_profile": "platformer",
+      "time_to_first_score_s": null,
+      "lives_lost": 0,
+      "max_score": 0,
+      "max_level": 1,
+      "end_state": "menu",
+      "milestone": "M1",
+      "ts": "2026-06-17T08:52:27.243552+00:00"
+    }
+  ]
+}
