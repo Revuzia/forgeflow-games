@@ -1,5 +1,27 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v1.0 — 2026-07-10 (VERSUS: PVP arenas + the Champion engine)
+- CHAMPION ENGINE: all fighters (you, bots, future online players) are Champion
+  entities running the identical data-driven kits via a controller interface
+  (human input / utility-AI bots produce the same input surface). Campaign is
+  unchanged — one champion vs waves; mobs now target the nearest champion.
+- VERSUS MODES: FREE-FOR-ALL (5 champions, first to 10, respawns + spectate
+  your killer), DUEL (1v1, best of 3 rounds), TEAMS (2v2, best of 3 team wipes,
+  no friendly fire). Round resets with 3-2-1 FIGHT countdowns.
+- LOBBY: quick match with search timer, staggered joins, CANCEL, vote-to-start
+  (empty slots become AI on start), private-room toggle w/ code, auto countdown.
+  Quick matches always include intelligent AI champions (class-aware kit usage,
+  telegraph dodging, kiting, strafing, shield use).
+- PVP combat: champion-vs-champion damage conversion (weapon numbers -> hearts,
+  TTK ~5-8s), full statuses (shock/burn/frost/knockback) between champions,
+  team-stamped residual patches, owner/team projectile resolution.
+- HUD: live K/D scoreboard, kill feed, round pips, match status + timer,
+  champion overhead HP bars, victory panel w/ full match stats.
+- LEADERBOARDS (local): per-mode W/L, per-class wins/kills/damage, recent
+  matches — on the title screen. Global boards ship with online play (relay
+  research done: Supabase Realtime transport mapped from Pirates Cove stack).
+- Versus pause = menu overlay but bots keep fighting; LEAVE MATCH exits clean.
+
 ## v0.9 — 2026-07-10 (campaign overhaul: realms are 5 LEVELS deep)
 - CAMPAIGN RESTRUCTURE: each realm = 5 levels (L1: 3 waves → L4: 6 waves,
   rising difficulty), L5 = dedicated BOSS FIGHT (+25% boss HP, boss music,

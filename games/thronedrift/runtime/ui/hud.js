@@ -6,6 +6,8 @@
 import { CLASSES } from "../data/abilities.js";
 import { ARENAS } from "../data/arenas.js";
 import { LEVELS_PER_REALM, levelWaves, REALM_ROSTERS, BOSS_TYPES } from "../data/enemies.js";
+import { rand } from "../core/util.js";
+import { botName, botClass } from "../sim/controllers.js";
 import { ALL_TYPES } from "../data/enemies.js";
 import { formatScore, clamp, save } from "../core/util.js";
 import { SFX } from "../core/audio.js";
@@ -94,6 +96,8 @@ export class HUD {
             filter:drop-shadow(0 4px 14px rgba(0,0,0,.9));font-family:Georgia,serif">${TITLE}</div>
           <div style="font-size:14px;color:#e8dcc8;margin-top:6px;text-shadow:0 2px 5px #000">${TAGLINE}</div>
           <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap;max-width:94vw">
+            <div id="cf-versus" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:800;border-color:#ff6a8a;color:#ff9ab0">\u2694\uFE0F VERSUS</div>
+            <div id="cf-boards" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">\uD83C\uDFC6 LEADERBOARDS</div>
             <div id="cf-bestiary" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">\uD83D\uDCD6 BESTIARY</div>
             <div id="cf-howto" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">\uD83C\uDFAE HOW TO PLAY</div>
             <div id="cf-settings" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">\u2699\uFE0F SETTINGS</div>
@@ -105,6 +109,8 @@ export class HUD {
       </div>`);
     for (const card of this.layerMenu.querySelectorAll(".cf-card"))
       card.onclick = () => { SFX.unlock(); SFX.play("ui_big"); this.showArenaSelect(card.dataset.cls); };
+    this.layerMenu.querySelector("#cf-versus").onclick = () => { SFX.unlock(); SFX.play("ui_big"); this.showVersusModes(); };
+    this.layerMenu.querySelector("#cf-boards").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showLeaderboards(); };
     this.layerMenu.querySelector("#cf-bestiary").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showBestiary(); };
     this.layerMenu.querySelector("#cf-howto").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showHowTo(); };
     this.layerMenu.querySelector("#cf-settings").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showSettings(); };
@@ -317,6 +323,224 @@ export class HUD {
       };
     }
     this.layerMenu.querySelector("#cf-back").onclick = () => { SFX.play("ui"); this.showArenaSelect(classId); };
+  }
+
+  // ── VERSUS ────────────────────────────────────────────────────────────────
+
+  showVersusModes() {
+    this._stopLobby();
+    const modes = [
+      { id: "ffa", icon: "\uD83D\uDD25", name: "FREE-FOR-ALL", desc: "5 champions. First to 10 kills. Respawns.", players: "5 players" },
+      { id: "duel", icon: "\u2694\uFE0F", name: "DUEL", desc: "1v1 · best of 3 rounds. No respawns.", players: "2 players" },
+      { id: "teams", icon: "\uD83D\uDEE1", name: "TEAMS", desc: "2v2 · best of 3 team wipes.", players: "4 players" },
+    ];
+    const cards = modes.map((m) => `
+      <div class="cf-card" data-mode="${m.id}" style="${frameCss}width:210px;padding:20px 16px;text-align:center">
+        <div style="font-size:42px">${m.icon}</div>
+        <div style="font-size:20px;font-weight:900;color:#ff9ab0;margin-top:6px">${m.name}</div>
+        <div style="font-size:12px;color:#cbbfe0;min-height:40px;margin-top:6px">${m.desc}</div>
+        <div style="font-size:11px;color:#8a7aa8;margin-top:6px">${m.players} · quick match fills with AI champions</div>
+      </div>`).join("");
+    this._menu(`
+      <div style="text-align:center;position:relative;z-index:2">
+        <div style="font-size:34px;font-weight:900;color:#ff9ab0;margin-bottom:20px;font-family:Georgia,serif">VERSUS ARENAS</div>
+        <div style="display:flex;gap:18px;justify-content:center;flex-wrap:wrap">${cards}</div>
+        <div id="cf-back" class="cf-btn" style="display:inline-block;margin-top:24px;padding:9px 26px;${frameCss}font-size:14px">\u2190 Title</div>
+      </div>`);
+    for (const card of this.layerMenu.querySelectorAll(".cf-card"))
+      card.onclick = () => { SFX.play("ui_big"); this.showLobby(card.dataset.mode); };
+    this.layerMenu.querySelector("#cf-back").onclick = () => { SFX.play("ui"); this.showTitle(); };
+  }
+
+  _stopLobby() {
+    if (this._lobbyTimer) { clearInterval(this._lobbyTimer); this._lobbyTimer = null; }
+    this._lobby = null;
+  }
+
+  /** matchmaking lobby: slots, search timer, cancel, vote-to-start, countdown */
+  showLobby(modeId) {
+    this._stopLobby();
+    const slots = modeId === "ffa" ? 5 : modeId === "duel" ? 2 : 4;
+    const L = this._lobby = {
+      modeId, slots, classId: "warrior", arenaIdx: Math.floor(Math.random() * 5),
+      private: false, code: "TD-" + Math.random().toString(36).slice(2, 6).toUpperCase(),
+      members: [{ name: "You", classId: "warrior", isLocal: true, ready: false, isBot: false }],
+      searchT: 0, nextJoinT: rand(2.5, 4.5), countdown: null,
+    };
+    const render = () => this._renderLobby();
+    this._lobbyTimer = setInterval(() => {
+      const l = this._lobby;
+      if (!l || l.countdown != null) return;
+      l.searchT += 0.5;
+      if (!l.private && l.members.length < l.slots) {
+        l.nextJoinT -= 0.5;
+        if (l.nextJoinT <= 0) {
+          l.nextJoinT = rand(2.5, 5);
+          l.members.push({ name: botName(), classId: botClass(), isBot: true, ready: false, readyIn: rand(1, 2.5) });
+        }
+      }
+      for (const m of l.members) {
+        if (m.isBot && !m.ready) { m.readyIn -= 0.5; if (m.readyIn <= 0) m.ready = true; }
+      }
+      // auto-launch when full and everyone is ready
+      const localReady = l.members.find((m) => m.isLocal).ready;
+      if (localReady && l.members.every((m) => m.ready)) this._beginLobbyCountdown();
+      render();
+    }, 500);
+    render();
+  }
+
+  _beginLobbyCountdown() {
+    const l = this._lobby;
+    if (!l || l.countdown != null) return;
+    l.countdown = 3;
+    const tick = () => {
+      if (!this._lobby) return;
+      if (l.countdown <= 0) { this._launchLobby(); return; }
+      SFX.play("ui_big");
+      this._renderLobby();
+      l.countdown--;
+      setTimeout(tick, 1000);
+    };
+    tick();
+  }
+
+  _launchLobby() {
+    const l = this._lobby;
+    this._stopLobby();
+    // fill empty slots with AI, assign teams
+    const roster = [];
+    const members = [...l.members];
+    while (members.length < l.slots) members.push({ name: botName(), classId: botClass(), isBot: true });
+    members.forEach((m, i) => {
+      let team;
+      if (l.modeId === "ffa") team = "T" + i;
+      else if (l.modeId === "duel") team = i === 0 ? "A" : "B";
+      else team = i < 2 ? "A" : "B";
+      roster.push({ classId: m.isLocal ? l.classId : m.classId, name: m.isLocal ? "You" : m.name, isBot: !m.isLocal, isLocal: !!m.isLocal, team, skill: rand(0.85, 1.15) });
+    });
+    this.cb.onStartVersus && this.cb.onStartVersus(l.modeId, l.classId, l.arenaIdx, roster);
+  }
+
+  _renderLobby() {
+    const l = this._lobby;
+    if (!l) return;
+    const modeName = l.modeId === "ffa" ? "FREE-FOR-ALL" : l.modeId === "duel" ? "DUEL \u00B7 Bo3" : "TEAMS 2v2 \u00B7 Bo3";
+    const arena = ARENAS[l.arenaIdx];
+    const classChips = Object.entries(CLASSES).map(([id, c]) => `
+      <div class="cf-btn lobby-class" data-cls="${id}" style="${frameCss}padding:7px 14px;font-size:13px;font-weight:800;${l.classId === id ? `border-color:${c.uiColor};color:${c.uiColor}` : "opacity:.6"}">${c.portrait} ${c.name}</div>`).join("");
+    const rows = [];
+    for (let i = 0; i < l.slots; i++) {
+      const m = l.members[i];
+      const teamTag = l.modeId === "teams" ? `<span style="color:${i < 2 ? "#7dbaff" : "#ff9a8a"};font-weight:800">${i < 2 ? "ALLY" : "ENEMY"}</span> ` : "";
+      rows.push(m ? `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;${frameCss}margin-top:8px">
+          <span style="font-size:14px">${teamTag}${m.isLocal ? "\u27A4 <b>You</b>" : m.name} ${m.isBot ? '<span style="font-size:10px;color:#8a7aa8">AI</span>' : ""} <span style="opacity:.6;font-size:12px">${CLASSES[m.isLocal ? l.classId : m.classId].portrait}</span></span>
+          <span style="font-size:12px;font-weight:800;color:${m.ready ? "#7dff9a" : "#8a7aa8"}">${m.ready ? "READY" : "\u2026"}</span>
+        </div>` : `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;${frameCss}margin-top:8px;opacity:.45">
+          <span style="font-size:13px;color:#8a7aa8">${l.private ? "Waiting for a friend\u2026" : "Searching\u2026"}</span>
+          <span style="font-size:11px;color:#8a7aa8">AI fills on start</span>
+        </div>`);
+    }
+    const me = l.members.find((m) => m.isLocal);
+    const readyCount = l.members.filter((m) => m.ready).length;
+    const center = l.countdown != null
+      ? `<div style="font-size:44px;font-weight:900;color:#ffd24a;font-family:Georgia,serif;animation:cfPop .4s">STARTING IN ${l.countdown}\u2026</div>`
+      : `<div style="display:flex;gap:12px;justify-content:center;margin-top:16px">
+          <div id="lb-ready" class="cf-btn" style="${frameCss}padding:12px 30px;font-size:16px;font-weight:900;${me.ready ? "color:#7dff9a" : "animation:cfPulse 2s infinite"}">${me.ready ? `VOTED \u2713 (${readyCount}/${l.members.length})` : "READY \u2014 VOTE TO START"}</div>
+          <div id="lb-cancel" class="cf-btn" style="${frameCss}padding:12px 26px;font-size:14px;font-weight:700;color:#ff8a8a">CANCEL</div>
+        </div>`;
+    this._menu(`
+      <div style="text-align:center;max-width:560px;width:92vw;position:relative;z-index:2">
+        <div style="font-size:28px;font-weight:900;color:#ff9ab0;font-family:Georgia,serif">${modeName}</div>
+        <div style="font-size:12px;color:#8a7aa8;margin-top:2px">Searching ${Math.floor(l.searchT)}s \u00B7 quick matches always include AI champions</div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px">${classChips}</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:10px">
+          <div id="lb-arena" class="cf-btn" style="${frameCss}padding:6px 14px;font-size:12px">\uD83C\uDFDF ${arena.name} \u21BB</div>
+          <div id="lb-priv" class="cf-btn" style="${frameCss}padding:6px 14px;font-size:12px;${l.private ? "color:#7dff9a" : ""}">${l.private ? `\uD83D\uDD12 PRIVATE \u00B7 CODE ${l.code}` : "\uD83C\uDF10 QUICK MATCH"}</div>
+        </div>
+        <div style="max-height:38vh;overflow-y:auto;margin-top:8px">${rows.join("")}</div>
+        ${center}
+      </div>`);
+    const M = this.layerMenu;
+    for (const chip of M.querySelectorAll(".lobby-class"))
+      chip.onclick = () => { l.classId = chip.dataset.cls; SFX.play("ui"); this._renderLobby(); };
+    const ar = M.querySelector("#lb-arena");
+    if (ar) ar.onclick = () => { l.arenaIdx = (l.arenaIdx + 1) % ARENAS.length; SFX.play("ui"); this._renderLobby(); };
+    const pv = M.querySelector("#lb-priv");
+    if (pv) pv.onclick = () => { l.private = !l.private; SFX.play("ui"); this._renderLobby(); };
+    const rd = M.querySelector("#lb-ready");
+    if (rd) rd.onclick = () => {
+      const me2 = l.members.find((m) => m.isLocal);
+      me2.ready = !me2.ready;
+      SFX.play("ui_big");
+      // everyone present ready -> countdown (empty slots become AI)
+      if (me2.ready && l.members.every((m) => m.ready)) this._beginLobbyCountdown();
+      this._renderLobby();
+    };
+    const cx = M.querySelector("#lb-cancel");
+    if (cx) cx.onclick = () => { SFX.play("ui"); this._stopLobby(); this.showVersusModes(); };
+  }
+
+  /** local leaderboards: mode wins, per-class stats, recent matches */
+  showLeaderboards() {
+    const s = save.get("pvp_stats", { modes: {}, classes: {}, records: [] });
+    const modeRow = (id, label) => {
+      const m = s.modes[id] || { games: 0, wins: 0 };
+      return `<div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0;border-bottom:1px solid rgba(232,184,58,.15)">
+        <span style="color:#e8dcc8">${label}</span><span style="color:#ffd24a;font-weight:800">${m.wins} W \u2014 ${m.games - m.wins} L</span></div>`;
+    };
+    const clsRows = Object.entries(CLASSES).map(([id, c]) => {
+      const st = s.classes[id] || { games: 0, wins: 0, kills: 0, dmg: 0 };
+      return `<div style="display:flex;justify-content:space-between;font-size:13.5px;padding:6px 0;border-bottom:1px solid rgba(232,184,58,.12)">
+        <span style="color:${c.uiColor};font-weight:800">${c.portrait} ${c.name}</span>
+        <span style="color:#cbbfe0">${st.wins}W \u00B7 ${st.kills} kills \u00B7 ${formatScore(st.dmg)} dmg</span></div>`;
+    }).join("");
+    const recs = (s.records || []).slice(0, 8).map((r) => `
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;color:${r.won ? "#7dff9a" : "#b8a0a8"}">
+        <span>${r.won ? "\u2705" : "\u274C"} ${r.mode.toUpperCase()} \u00B7 ${CLASSES[r.cls]?.portrait || ""} ${r.kills}K/${r.deaths}D</span>
+        <span>${formatScore(r.dmg)} dmg</span></div>`).join("") || `<div style="font-size:13px;color:#8a7aa8">No matches yet \u2014 enter the VERSUS arenas!</div>`;
+    this._menu(`
+      <div style="${frameCss}width:min(520px,92vw);padding:24px 30px;position:relative;z-index:2;max-height:80vh;overflow-y:auto">
+        <div style="font-size:28px;font-weight:900;color:${GOLD};text-align:center;font-family:Georgia,serif">LEADERBOARDS</div>
+        <div style="font-size:11px;color:#8a7aa8;text-align:center;margin-bottom:12px">Your local records \u00B7 global boards arrive with online play</div>
+        <div style="font-size:13px;font-weight:800;color:#ff9ab0;letter-spacing:2px;margin-top:8px">MODE WINS</div>
+        ${modeRow("ffa", "\uD83D\uDD25 Free-for-all")}${modeRow("duel", "\u2694\uFE0F Duel")}${modeRow("teams", "\uD83D\uDEE1 Teams 2v2")}
+        <div style="font-size:13px;font-weight:800;color:#ff9ab0;letter-spacing:2px;margin-top:16px">PER CLASS</div>
+        ${clsRows}
+        <div style="font-size:13px;font-weight:800;color:#ff9ab0;letter-spacing:2px;margin-top:16px">RECENT MATCHES</div>
+        ${recs}
+        <div id="cf-back" class="cf-btn" style="display:block;margin:18px auto 0;width:130px;text-align:center;padding:9px 0;${frameCss}font-size:14px;font-weight:700">\u2190 BACK</div>
+      </div>`);
+    this.layerMenu.querySelector("#cf-back").onclick = () => { SFX.play("ui"); this.showTitle(); };
+  }
+
+  /** versus: repurpose the wave box for mode status (null restores nothing) */
+  setMatchStatus(text, sub, accent) {
+    if (text == null) return;
+    this.elWave.querySelector("#cf-wavetxt").textContent = text;
+    const a = this.elWave.querySelector("#cf-arenatxt");
+    a.textContent = sub || "";
+    a.style.color = accent || "#b89ae0";
+  }
+
+  /** live K/D board (right side, under the wave/status box) */
+  setScoreboard(champions, modeId, roundWins) {
+    if (!this._scorePanel) {
+      this._scorePanel = el("div", `position:absolute;top:76px;right:12px;${frameCss}padding:8px 12px;min-width:170px;display:none;font-size:12.5px;`);
+      this.layerGame.appendChild(this._scorePanel);
+    }
+    if (!champions) { this._scorePanel.style.display = "none"; return; }
+    this._scorePanel.style.display = "block";
+    const rows = [...champions].sort((a, b) => b.kills - a.kills).map((c) => {
+      const teamCol = modeId === "teams" ? (c.team === "A" ? "#7dbaff" : "#ff9a8a") : c.isLocal ? "#ffd24a" : "#cbbfe0";
+      return `<div style="display:flex;justify-content:space-between;gap:10px;padding:2px 0;color:${teamCol};${c.dead ? "opacity:.5" : ""}">
+        <span>${c.isLocal ? "\u27A4 " : ""}${c.name}</span><span>\u2694${c.kills} \uD83D\uDC80${c.deaths}</span></div>`;
+    }).join("");
+    const pips = modeId !== "ffa" && roundWins
+      ? `<div style="text-align:center;font-size:13px;font-weight:900;color:#ffd24a;margin-bottom:2px">${Object.entries(roundWins).map(([t, w]) => `${t}:${w}`).join(" \u00B7 ") || "0 \u00B7 0"}</div>` : "";
+    this._scorePanel.innerHTML = pips + rows;
   }
 
   _menuClear(inner) {

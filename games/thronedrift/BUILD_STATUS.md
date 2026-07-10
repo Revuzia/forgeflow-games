@@ -1,5 +1,15 @@
 # Thronedrift — Build Status
 
+## v1.0 — VERSUS SHIPPED (2026-07-10)
+Champion engine + FFA/Duel/Teams vs intelligent bots + lobby UX + local
+leaderboards. Verified headless: all 3 modes complete matches end-to-end;
+lobby real-time flow (join → vote → countdown → launch) verified live.
+NEXT (online): NetPlay transport copy from games/pirates-cove/runtime/net/
+ffg_netplay.js (Supabase Realtime, quick-match lobby channel, room codes) +
+NetController (12Hz state, victim hit-authority per last-circle) + global
+leaderboards need supabase/migrations/0004 applied to qkid + portal-SDK
+score submission (research in workflows/wf_f94f9fcd journal).
+
 ## ✅ BUILD COMPLETE — 2026-07-10 (loop closed after 5 iterations)
 Every deliverable from the original spec + both owner feedback batches is
 shipped and LIVE at https://forgeflowgames.com/games/thronedrift/ .
