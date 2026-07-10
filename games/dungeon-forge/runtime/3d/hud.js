@@ -407,18 +407,20 @@ export class Hud {
     const at = q('[data-a="at"]'); at.style.display = p.armorTier ? "" : "none"; at.textContent = "🛡 " + ROM[p.armorTier || 0];
     at.style.color = rHex(eq.armor) || ""; at.title = gearTip(eq.armor) || "Armor tier";
     q('[data-a="timer"]').textContent = fmtTime(esc_.run.time);
-    // class ability bar (special + combo pips)
+    // action hotbar — real slots with Digit1-N keys, cooldown overlays + counts
     const ab = q('[data-a="abilities"]');
     if (ab) {
-      const cls = E.CLASSES[p.cls] || E.CLASSES.knight;
-      const sName = { bash: "Shield Bash", crush: "Crush", fire: "Fire Bolt", knife: "Poison Knife" }[cls.special && cls.special.kind] || "Special";
-      const sCd = cls.special ? cls.special.cd : 1;
-      const sReady = (p.specialT || 0) <= 0;
-      const comboOn = (esc_.run.time - (p.comboT || 0)) < 1.4 && p.combo > 0;
-      let html = `<span class="df-ab ${sReady ? "" : "cd"}"><b>RMB</b> ${sName}${sReady ? "" : " " + (p.specialT).toFixed(1) + "s"}</span>`;
-      if (cls.frost) { const fReady = (p.frostT || 0) <= 0; html += `<span class="df-ab ${fReady ? "" : "cd"}"><b>R</b> Frost${fReady ? "" : " " + (p.frostT).toFixed(1) + "s"}</span>`; }
-      html += `<span class="df-combo ${comboOn ? "on" : ""}">${comboOn ? "COMBO ×" + p.combo : ""}</span>`;
-      ab.innerHTML = html;
+      const slots = E.hotbar(p);
+      const comboOn = (esc_.run.time - (p.comboT || 0)) < 1.4 && p.combo > 1;
+      ab.innerHTML = slots.map((s, i) => {
+        const onCd = (s.cd || 0) > 0.05, cdFrac = s.max ? Math.max(0, (s.cd || 0) / s.max) : 0;
+        const empty = s.count === 0;
+        return `<div class="df-hslot ${onCd ? "cd" : ""} ${empty ? "off" : ""}" title="${esc(s.label)} · ${s.key} or ${i + 1}">
+          <span class="hk">${i + 1}</span><span class="hic">${s.icon}</span>
+          ${s.count != null ? `<span class="hct">${s.count}</span>` : ""}
+          ${onCd ? `<span class="hcd" style="height:${(cdFrac * 100).toFixed(0)}%"></span><span class="hcdt">${s.cd.toFixed(1)}</span>` : ""}
+        </div>`;
+      }).join("") + `<span class="df-combo ${comboOn ? "on" : ""}">${comboOn ? "×" + p.combo : ""}</span>`;
     }
     // interact prompt — merchant takes priority
     const merch = p.alive && !p.escaped ? E.nearestMerchant(esc_.run, p) : null;
@@ -642,12 +644,16 @@ function injectStyle() {
   .df-prompt{position:absolute;left:50%;top:58%;transform:translateX(-50%);background:rgba(10,13,22,.92);border:1px solid var(--acc);border-radius:12px;padding:9px 18px;font-size:15px;font-weight:700}
   .df-prompt b{color:var(--acc);border:1px solid var(--acc);border-radius:6px;padding:1px 7px;margin-right:6px}
   .df-prompt.need{border-color:#ff5566;color:#ffb0b8}
-  .df-abilities{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center}
-  .df-ab{background:rgba(8,10,18,.82);border:1px solid rgba(150,170,255,.3);border-radius:9px;padding:5px 11px;font-size:12px;font-weight:700}
-  .df-ab b{color:var(--acc);border:1px solid var(--acc);border-radius:5px;padding:0 5px;margin-right:5px;font-size:11px}
-  .df-ab.cd{opacity:.5;border-color:rgba(120,130,160,.3)}
-  .df-ab.cd b{color:#8894b8;border-color:#8894b8}
-  .df-combo{font-size:15px;font-weight:900;letter-spacing:1px;color:#ffcf5a;text-shadow:0 0 8px rgba(255,180,70,.6);min-width:70px;opacity:0;transition:opacity .1s}
+  .df-abilities{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:7px;align-items:flex-end}
+  .df-hslot{position:relative;width:52px;height:52px;background:rgba(8,10,18,.85);border:1.5px solid rgba(150,170,255,.32);border-radius:11px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .df-hslot .hic{font-size:24px;line-height:1}
+  .df-hslot .hk{position:absolute;top:2px;left:5px;font-size:10px;font-weight:800;color:#9fb0e8;opacity:.85;z-index:3}
+  .df-hslot .hct{position:absolute;bottom:2px;right:5px;font-size:13px;font-weight:900;color:#fff;text-shadow:0 1px 2px #000;z-index:3}
+  .df-hslot .hcd{position:absolute;left:0;bottom:0;width:100%;background:rgba(20,26,44,.78);z-index:2}
+  .df-hslot .hcdt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#cfd6f4;z-index:3}
+  .df-hslot.cd .hic{opacity:.4}
+  .df-hslot.off{opacity:.4;filter:grayscale(.7)}
+  .df-combo{font-size:16px;font-weight:900;letter-spacing:1px;color:#ffcf5a;text-shadow:0 0 8px rgba(255,180,70,.6);min-width:34px;opacity:0;transition:opacity .1s;align-self:center}
   .df-combo.on{opacity:1}
   .df-crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:22px;opacity:.65;text-shadow:0 0 4px #000}
   .df-vignette{position:absolute;inset:0;pointer-events:none;opacity:0}

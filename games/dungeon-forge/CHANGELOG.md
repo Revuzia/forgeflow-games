@@ -344,6 +344,19 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.7.4 — 2026-07-10 (assignable action hotbar)
+- **The read-only ability bar is now a real hotbar** — 6 slots showing the
+  player's abilities + consumables with icons, cooldown fill overlays, and
+  consumable counts: 1 Attack · 2 Special (class fireball/crush/bash/poison) ·
+  3 Frost · 4 Chain Lightning (Sorceress) · 5 Health Potion · 6 Mana Potion.
+  Empty consumables dim. Slots are built from a shared `hotbar(p)` (escape_sim)
+  so per-class kits (Knight has no frost/chain) renumber cleanly.
+- **Number keys 1-N activate the mapped slot** (routed through the same input
+  flags as the dedicated keys, which keep working). Verified live: Digit2 fired
+  the Fireball, Digit5 drank a Health Potion (hp 50→85); hotbar shows 6 slots.
+- Selftest +2 (per-class hotbar composition) → 187. Completes the RPG-foundations
+  trio (mana potion → item model → hotbar) — abilities/skills now have real slots.
+
 ## v1.7.3 — 2026-07-09 (item/equipment data model — the loot keystone)
 - **Real item objects** replace the bare weaponTier/armorTier integers:
   `{id, slot, rarity, base, tier, affixes[], name}`. RARITY (common/magic/rare/

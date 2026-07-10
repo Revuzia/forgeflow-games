@@ -203,6 +203,11 @@ const ok = (cond, name, extra) => {
     let gearDrop = null;
     for (let s = 0; s < 40 && !gearDrop; s++) gearDrop = D.rollLoot(idg, "c" + s, 5, null).find((x) => x.kind === "weapon" || x.kind === "armor");
     ok(!gearDrop || (gearDrop.item && gearDrop.item.slot === gearDrop.kind), "item: chest gear drops carry item objects");
+    // hotbar slots per class (shared by HUD + Digit-N input)
+    const hbK = E.hotbar(newRun(idg, 1, [{ id: "K", skin: 0 }]).players[0]);
+    ok(hbK.map((s) => s.act).join(",") === "melee,special,potion,mana", "hotbar: knight = attack/special/potion/mana");
+    const hbS = E.hotbar(newRun(idg, 1, [{ id: "S", skin: 2 }]).players[0]);
+    ok(hbS.map((s) => s.act).join(",") === "melee,special,frost,chain,potion,mana", "hotbar: sorceress adds frost+chain");
   }
 
   // ── 5. loot determinism ─────────────────────────────────────────

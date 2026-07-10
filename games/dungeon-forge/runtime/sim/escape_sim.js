@@ -656,6 +656,24 @@ function castChain(st, p) {
   emit(st, "chain", { id: p.id, pts, elem: "arc" });
 }
 
+/** The player's action hotbar (ordered) — shared by the HUD (render) and the
+ *  escape input (Digit1-N routing). Each slot: {act, icon, label, key, cd, max, count}. */
+export function hotbar(p) {
+  const cls = CLASSES[p.cls] || CLASSES.knight;
+  const k = cls.special && cls.special.kind;
+  const sName = { bash: "Shield Bash", crush: "Crush", fire: "Fireball", knife: "Poison Knife" }[k] || "Special";
+  const sIcon = { bash: "🛡", crush: "💥", fire: "🔥", knife: "🗡️" }[k] || "✦";
+  const slots = [
+    { act: "melee",   icon: "⚔️", label: "Attack",  key: "LMB", cd: 0, max: 1 },
+    { act: "special", icon: sIcon, label: sName,     key: "RMB", cd: p.specialT || 0, max: cls.special ? cls.special.cd : 1 },
+  ];
+  if (cls.frost) slots.push({ act: "frost", icon: "❄️", label: "Frost Shard", key: "R", cd: p.frostT || 0, max: cls.frost.cd });
+  if (p.cls === "sorceress") slots.push({ act: "chain", icon: "⚡", label: "Chain Lightning", key: "C", cd: p.chainT || 0, max: 3 });
+  slots.push({ act: "potion", icon: "🧪", label: "Health Potion", key: "Q", count: p.potions });
+  slots.push({ act: "mana",   icon: "🔷", label: "Mana Potion",   key: "X", count: p.manaPots || 0 });
+  return slots;
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // enemy AI

@@ -603,6 +603,8 @@ export class Escape {
       if (e.code === "KeyF" && p) this._special = true;
       if (e.code === "KeyR" && p) this._frost = true;
       if (e.code === "KeyC" && !e.repeat && p) this._chain = true; // Sorceress chain lightning (edge-triggered)
+      const dm = e.code.match(/^Digit([1-9])$/); // hotbar: number keys fire the mapped slot
+      if (dm && p && !e.repeat) { const s = E.hotbar(p)[+dm[1] - 1]; if (s) this._hotkey = s.act; }
       if (e.code === "Escape") { /* pointer lock exits natively */ }
     }, window);
     on("keyup", (e) => { this.keys[e.code] = false; if (e.code === "KeyF") this._special = false; if (e.code === "KeyR") this._frost = false; }, window);
@@ -638,6 +640,16 @@ export class Escape {
     p.input.special = !!this._special;
     p.input.frost = !!this._frost;
     p.input.chain = !!this._chain; this._chain = false; // consume the edge-trigger
+    // hotbar number-key: fire the mapped slot's action once
+    if (this._hotkey) {
+      const act = this._hotkey; this._hotkey = null;
+      if (act === "melee") p.input.melee = true;
+      else if (act === "special") p.input.special = true;
+      else if (act === "frost") p.input.frost = true;
+      else if (act === "chain") p.input.chain = true;
+      else if (act === "potion") p.input.potionDown = true;
+      else if (act === "mana") p.input.manaDown = true;
+    }
   }
 
   /** Interact with an NPC — sage grants a one-time blessing, merchant/blacksmith
