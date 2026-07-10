@@ -854,7 +854,7 @@ export class Escape {
       a.surfY = a.surfY == null ? surfY : a.surfY + (surfY - a.surfY) * Math.min(1, dt * 10);
       const y = p.f * FLOOR_H + (p.climb ? climbY(p) : 0) + a.surfY;
       a.grp.position.set(p.x, y, p.z);
-      a.grp.rotation.y = p.yaw + Math.PI; // rigs face +Z opposite
+      a.grp.rotation.y = p.yaw; // Meshy char rigs face +Z = the yaw/look direction (away from the chase cam)
       a.grp.visible = (p.alive || a.proc || a._deadPose) && !p.escaped && (this.me() ? Math.abs(p.f - this.me().f) <= 1 : true);
       a.mixer.update(dt);
       this._procUpdate(a, dt);

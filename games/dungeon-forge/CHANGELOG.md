@@ -344,6 +344,14 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.6.8 — 2026-07-09 (player facing fix)
+- **Player now faces forward** (owner: 'facing the wrong way'). The player rig's
+  rotation had a stray `+ Math.PI` that pointed the character AT the chase camera
+  — so you saw its front and it "shot out of its back". Removed the offset so the
+  Meshy char rigs face the yaw/look direction (into the scene). Verified: rig
+  forward now dot −1 vs the camera (faces away); the knight shows its back + cape.
+  Camera + enemy facing unchanged (enemies correctly face the player they aggro).
+
 ## v1.6.7 — 2026-07-09 (more props + breakable decor + colormap 404 fix)
 - **Smashable decor**: barrels, crates, coffins, debris (+ new pot/urn/bones and
   sci-fi canister) now BREAK when meleed or hit by a player bolt — shatter FX,
