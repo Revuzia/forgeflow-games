@@ -69,11 +69,12 @@ export class Hud {
     // tool palette
     this.bPal = el(`<div class="df-palette"></div>`);
     this.bWrap.appendChild(this.bPal);
-    for (const t of TOOLS) {
-      const btn = el(`<button class="df-tool" data-tool="${t.id}" title="${t.label}"><span class="ico">${t.icon}</span><span class="lbl">${t.label}</span></button>`);
+    TOOLS.forEach((t, i) => {
+      const key = i === 9 ? 0 : i + 1;
+      const btn = el(`<button class="df-tool" data-tool="${t.id}" title="${t.label} (${key})"><span class="df-key">${key}</span><span class="ico">${t.icon}</span><span class="lbl">${t.label}</span></button>`);
       btn.onclick = () => { this.g.audio.sfx("ui"); b.setTool(t.id); };
       this.bPal.appendChild(btn);
-    }
+    });
     // sub-options row (enemy type / trap type / decor type / light color)
     this.bSub = el(`<div class="df-subopts"></div>`);
     this.bWrap.appendChild(this.bSub);
@@ -81,7 +82,7 @@ export class Hud {
     // floor switcher + hints
     this.bSide = el(`<div class="df-floors"></div>`);
     this.bWrap.appendChild(this.bSide);
-    this.bHint = el(`<div class="df-hint">LMB place · drag paint · Select → drag to move · Del delete · Ctrl+Z undo · RMB orbit · MMB/Shift pan · wheel zoom · R rotate · Tab floor</div>`);
+    this.bHint = el(`<div class="df-hint">1-0 pick tool · LMB place · drag paint · Select → drag to move · Del delete · Ctrl+Z undo · RMB orbit · MMB/Shift pan · wheel zoom · R rotate · Tab floor</div>`);
     this.bWrap.appendChild(this.bHint);
     this.bValid = el(`<div class="df-validchip" data-a="vchip"></div>`);
     this.bWrap.appendChild(this.bValid);
@@ -525,10 +526,12 @@ function injectStyle() {
   .df-grow{flex:1}
   .df-room{border-color:var(--acc);color:var(--acc);letter-spacing:2px}
   .df-palette{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:6px;background:rgba(10,13,22,.88);border:1px solid rgba(150,170,255,.25);border-radius:16px;padding:8px;pointer-events:auto;flex-wrap:wrap;justify-content:center;max-width:96vw}
-  .df-tool{display:flex;flex-direction:column;align-items:center;gap:2px;background:transparent;border:1px solid transparent;border-radius:12px;padding:7px 9px;color:#cfd6f4;min-width:58px}
+  .df-tool{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;background:transparent;border:1px solid transparent;border-radius:12px;padding:7px 9px;color:#cfd6f4;min-width:58px}
   .df-tool .ico{font-size:21px} .df-tool .lbl{font-size:10px;font-weight:700;letter-spacing:.4px;opacity:.8}
+  .df-tool .df-key{position:absolute;top:2px;left:5px;font-size:9px;font-weight:800;opacity:.45;color:#9fb0e8;line-height:1}
   .df-tool:hover{border-color:rgba(150,170,255,.4)}
   .df-tool.on{background:rgba(90,110,220,.25);border-color:var(--acc);color:#fff}
+  .df-tool.on .df-key{opacity:.85;color:var(--acc)}
   .df-subopts{position:absolute;bottom:96px;left:50%;transform:translateX(-50%);display:flex;gap:6px;pointer-events:auto;flex-wrap:wrap;justify-content:center;max-width:92vw}
   .df-sub{background:rgba(10,13,22,.88);border:1px solid rgba(150,170,255,.25);color:#cfd6f4;border-radius:10px;padding:6px 12px;font-size:12px;font-weight:700}
   .df-sub.on{border-color:var(--acc);color:var(--acc)}
@@ -542,7 +545,8 @@ function injectStyle() {
   .df-validchip{position:absolute;top:60px;left:12px;pointer-events:auto;cursor:pointer;border-radius:10px;padding:7px 12px;font-size:12px;font-weight:800;border:1px solid}
   .df-validchip.good{background:rgba(20,60,40,.75);border-color:rgba(90,255,160,.5);color:#7dffb0}
   .df-validchip.bad{background:rgba(70,25,25,.8);border-color:rgba(255,110,110,.5);color:#ffa0a0}
-  .df-selpanel{position:absolute;left:12px;top:110px;width:250px;background:rgba(10,13,22,.94);border:1px solid rgba(150,170,255,.3);border-radius:14px;padding:14px;pointer-events:auto;display:flex;flex-direction:column;gap:10px}
+  .df-selpanel{position:absolute;bottom:104px;left:50%;transform:translateX(-50%);width:min(340px,92vw);background:rgba(10,13,22,.96);border:1px solid var(--acc);border-radius:14px;padding:13px 15px;pointer-events:auto;display:flex;flex-direction:column;gap:9px;box-shadow:0 0 22px rgba(90,110,220,.28),0 6px 20px rgba(0,0,0,.5)}
+  .df-selpanel::after{content:"";position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);border:8px solid transparent;border-top-color:var(--acc);border-bottom:0}
   .df-selhead{font-weight:800;font-size:15px} .dim{opacity:.55;font-weight:600;font-size:12px}
   .df-selrow{display:flex;gap:8px} .df-selrow .df-btn{flex:1}
   .df-selnote{font-size:11.5px;opacity:.75;line-height:1.45}

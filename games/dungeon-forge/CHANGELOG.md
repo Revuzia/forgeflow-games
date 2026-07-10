@@ -312,3 +312,19 @@ Initial release.
 - Badges shrunk + raised (escape 1.1→0.8 @3.2, builder 1.4→0.9 @3.35) so the
   icon no longer dwarfs the model. Sci-fi variants recolored (steel/cyan/holo).
 - Verified all 3 live from the front in-browser; selftest 159 green.
+
+## v1.6.4 — 2026-07-09 (builder UX: toolbar order + hotkeys + selection)
+- **Toolbar reordered** (owner request): placement tools first, then Select &
+  Erase at the END just before the Exit-portal tool —
+  Floor·Door·Stairs·Props·Enemy·NPC·Spawn·Select·Erase·Exit.
+- **Number-key hotkeys 1-0** select the toolbar tools left→right (1=Floor …
+  8=Select, 9=Erase, 0=Exit). Each button shows its key as a small corner badge
+  (highlighted on the active tool). Hint bar updated.
+- **Selection now reads as selected**: a pulsing green (cyan in sci-fi) glow ring
+  on the ground under the picked object PLUS a synced wireframe outline box
+  (BoxHelper), driven in builder update() and re-acquired if the object is
+  re-rendered/moved. Cleared on deselect / floor change.
+- **Selection/edit panel moved ABOVE the toolbar** — was a fixed top-left panel;
+  now a centered card just above the tool palette with an accent border, glow,
+  and a downward pointer arrow. Verified live (order, badges, Digit2→Door,
+  ring+box render, panel bottom above palette top, centered). Selftest 159.

@@ -15,15 +15,17 @@ const FLOOR_H = 4.4;
 const CELL = D.CELL;
 
 export const TOOLS = [
-  { id: "select", icon: "🖱️", label: "Select" },
+  // Placement tools first; Select + Erase sit at the end just before the Exit
+  // portal (owner request). Number keys 1-0 map to this order left→right.
   { id: "floor", icon: "⬜", label: "Floor" },   // → floor / lava / water paint + raise / lower
-  { id: "erase", icon: "🧹", label: "Erase" },
   { id: "door", icon: "🚪", label: "Door" },
   { id: "stairs", icon: "🪜", label: "Stairs" },
   { id: "props", icon: "🎁", label: "Props" },   // → chest / key / trap / light / decor
   { id: "enemy", icon: "👹", label: "Enemy" },
   { id: "npc", icon: "🧙", label: "NPC" },
   { id: "spawn", icon: "🚩", label: "Spawn" },
+  { id: "select", icon: "🖱️", label: "Select" },
+  { id: "erase", icon: "🧹", label: "Erase" },
   { id: "exit", icon: "🌀", label: "Exit" },
 ];
 
@@ -427,6 +429,12 @@ export class Builder {
       this.keys[e.code] = true;
       if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ") { e.preventDefault(); if (e.shiftKey) this.redo(); else this.undo(); return; }
       if ((e.ctrlKey || e.metaKey) && e.code === "KeyY") { e.preventDefault(); this.redo(); return; }
+      // number keys 1-9,0 select the toolbar tools left→right (10 tools)
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && /^Digit[0-9]$/.test(e.code)) {
+        const n = +e.code.slice(5); const idx = n === 0 ? 9 : n - 1;
+        if (TOOLS[idx]) { this.g.audio.sfx("ui"); this.setTool(TOOLS[idx].id); e.preventDefault(); }
+        return;
+      }
       if (e.code === "KeyR") { this.rot = (this.rot + 1) % 4; if (this.sel) this._editSel({ rot: (D.objById(this.d, this.sel)?.obj.rot + 1) % 4 }); }
       if (e.code === "Delete" || e.code === "Backspace") { if (this.sel) this.deleteSelected(); }
       if (e.code === "Tab") { e.preventDefault(); this.setFloor((this.floor + 1) % this.d.floors.length); }
@@ -767,6 +775,32 @@ export class Builder {
         if (m.userData.kind === "key") m.children.forEach((c) => { if (!c.isPointLight && !c.isSprite) c.rotation.y = t * 1.6; });
         if (m.userData.kind === "exit") m.children.forEach((c) => { if (c.geometry && c.geometry.type === "TorusGeometry") c.rotation.z = t * 0.8; });
       }
+    }
+    // selection indicator: a pulsing glow ring on the ground under the selected
+    // object (+ a synced outline box) so it clearly reads as selected
+    const selHit = this.sel ? D.objById(this.d, this.sel) : null;
+    if (selHit && selHit.f === this.floor) {
+      const col = this.d.theme === "scifi" ? 0x35e6ff : 0x63ff9c;
+      if (!this._selRing || this._selRing.parent !== this.root) {
+        this._selRing = new THREE.Mesh(
+          new THREE.RingGeometry(CELL * 0.34, CELL * 0.48, 40).rotateX(-Math.PI / 2),
+          new THREE.MeshBasicMaterial({ color: col, transparent: true, depthTest: false, side: THREE.DoubleSide }));
+        this._selRing.renderOrder = 997; this.root.add(this._selRing);
+      }
+      this._selRing.visible = true;
+      this._selRing.position.set(selHit.obj.x * CELL + CELL / 2, this.floor * FLOOR_H + 0.09, selHit.obj.z * CELL + CELL / 2);
+      this._selRing.material.color.setHex(col);
+      this._selRing.material.opacity = 0.45 + 0.4 * Math.abs(Math.sin(t * 4.5));
+      const selMesh = this.objMeshes.get(this.sel);
+      if (selMesh) {
+        if (!this._selBox || this._selBox.parent !== this.root) { this._selBox = new THREE.BoxHelper(selMesh, col); this._selBox.material.transparent = true; this._selBox.material.depthTest = false; this._selBox.renderOrder = 998; this.root.add(this._selBox); this._selBoxT = selMesh; }
+        else { if (this._selBoxT !== selMesh) { this._selBox.setFromObject(selMesh); this._selBoxT = selMesh; } this._selBox.update(); }
+        this._selBox.material.color.setHex(col); this._selBox.visible = true;
+        this._selBox.material.opacity = 0.35 + 0.35 * Math.abs(Math.sin(t * 4.5));
+      } else if (this._selBox) this._selBox.visible = false;
+    } else {
+      if (this._selRing) this._selRing.visible = false;
+      if (this._selBox) this._selBox.visible = false;
     }
     // expire stale cursors
     for (const [id, c] of this.peerCursors) {
