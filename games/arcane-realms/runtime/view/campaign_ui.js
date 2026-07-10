@@ -1,11 +1,11 @@
 // Arcane Realms TCG — Campaign screens: chapter map, NPC dialogue bubbles,
 // rewards reveal, achievements panel, card-back gallery.
 
-import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=17';
-import { battleState, campaignSummary, achievementList, buyPack } from '../campaign/progression.js?v=17';
-import { REALMS, cardById } from '../sim/cards.js?v=17';
-import { drawCard } from './cardtex.js?v=17';
-import { Audio2 } from './audio.js?v=17';
+import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=18';
+import { battleState, campaignSummary, achievementList, buyPack } from '../campaign/progression.js?v=18';
+import { REALMS, cardById } from '../sim/cards.js?v=18';
+import { drawCard } from './cardtex.js?v=18';
+import { Audio2 } from './audio.js?v=18';
 
 // battle-node positions on the world map (percent of the 16:9 artwork)
 const MAP_POS = {
@@ -234,7 +234,7 @@ export class CampaignUI {
     const battle = ui.el('button', 'btn primary', '⚔ Battle');
     battle.disabled = true;
     battle.onclick = launch;
-    const cancel = ui.el('button', 'btn small', 'Cancel');
+    const cancel = ui.el('button', 'btn', 'Cancel'); // same base size as Battle (equal-width via CSS)
     cancel.onclick = () => wrap.remove();
     btns.append(battle, cancel);
     m.append(grid, btns);

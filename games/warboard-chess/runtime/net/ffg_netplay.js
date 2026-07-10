@@ -90,15 +90,20 @@ export class NetPlay {
             done = true;
             const code = (a.slice(-4) + b.slice(-4)).toUpperCase();
             this.host = this.id === a;
-            try { await lobby.untrack(); this.sb.removeChannel(lobby); } catch (e) {}
-            this.lobby = null;
+            // Join the room FIRST, then LINGER in the lobby a few seconds before
+            // leaving. Untracking immediately orphaned whichever peer joined the
+            // lobby first — its presence-sync read a live state that no longer
+            // held us — so quick match never connected. Lingering lets BOTH peers
+            // observe the same two-peer snapshot and pair into the same room.
             await this.joinRoom(code, this.host);
             this._emit("matched", { room: code, host: this.host });
             resolve({ room: code, host: this.host });
+            setTimeout(() => { try { lobby.untrack(); this.sb.removeChannel(lobby); } catch (e) {} if (this.lobby === lobby) this.lobby = null; }, 4000);
           }
         }
       };
       lobby.on("presence", { event: "sync" }, tryPair);
+      lobby.on("presence", { event: "join" }, tryPair); // fire on arrival, not just full re-sync
       lobby.subscribe(async (status) => { if (status === "SUBSCRIBED") { await lobby.track({ id: this.id }); tryPair(); } });
       if (timeoutMs) setTimeout(() => { if (!done) { done = true; try { this.sb.removeChannel(lobby); } catch (e) {} this._emit("timeout", {}); resolve(null); } }, timeoutMs);
     });

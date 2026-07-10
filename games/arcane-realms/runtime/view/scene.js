@@ -2,9 +2,9 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=17';
-import { REALMS, cardById } from '../sim/cards.js?v=17';
-import { FX } from './fx.js?v=17';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=18';
+import { REALMS, cardById } from '../sim/cards.js?v=18';
+import { FX } from './fx.js?v=18';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 const HIT_RED = new THREE.Color(0x9a1408); // hero hit-flash tint
@@ -775,7 +775,7 @@ export class BoardScene {
   // ── 3D legendary minis ─────────────────────────────────────────
   async _gltfLoader() {
     if (!this._gltfLoaderP) {
-      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=17').then((m) => new m.GLTFLoader());
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=18').then((m) => new m.GLTFLoader());
     }
     return this._gltfLoaderP;
   }

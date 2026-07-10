@@ -80,15 +80,23 @@ export class NetPlay {
             done = true;
             const code = (a.slice(-4) + b.slice(-4)).toUpperCase().replace(/[^A-Z0-9]/g, 'X');
             this.host = this.id === a;
-            try { await lobby.untrack(); this.sb.removeChannel(lobby); } catch { /* closed */ }
-            this.lobby = null;
+            // Join the derived room FIRST, but stay tracked in the lobby a few
+            // seconds. The old code untracked immediately, so the peer who joined
+            // the lobby first would read a live presenceState() that no longer
+            // contained us and would never pair — orphaning both sides. Lingering
+            // guarantees BOTH players observe the same two-peer snapshot.
             await this.joinRoom(code, this.host);
             this._emit('matched', { room: code, host: this.host });
             resolve({ room: code, host: this.host });
+            setTimeout(() => {
+              try { lobby.untrack(); this.sb.removeChannel(lobby); } catch { /* closed */ }
+              if (this.lobby === lobby) this.lobby = null;
+            }, 4000);
           }
         }
       };
       lobby.on('presence', { event: 'sync' }, tryPair);
+      lobby.on('presence', { event: 'join' }, tryPair); // fire on arrival, not just full re-sync
       lobby.subscribe(async (status) => {
         if (status === 'SUBSCRIBED') { await lobby.track({ id: this.id }); tryPair(); }
       });
