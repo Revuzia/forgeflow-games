@@ -22,7 +22,7 @@ const _swatch = new Map();   // id → data URL
 
 // Picker metadata (id + human label). Order = picker order; "stone" first.
 export const FLOOR_TEX_DEFS = [
-  { id: "stone",     label: "Stone" },       // default → kit tile (no override)
+  { id: "stone",     label: "Original" },    // default → the kit's own tile (no override)
   { id: "cobble",    label: "Cobble" },
   { id: "brick",     label: "Brick" },
   { id: "flagstone", label: "Flagstone" },
@@ -194,11 +194,29 @@ export function floorTexture(id) {
   return t;
 }
 
-/** Small data-URL swatch of a floor texture for the HUD picker (cached). */
+/** Small data-URL swatch of a floor texture for the HUD picker (cached).
+ *  "stone" gets a hand-drawn swatch matching the kit's terracotta tile so the
+ *  "Original" option is recognizable (it has no procedural EVAL entry). */
 export function floorTexSwatch(id) {
-  if (!id || !EVAL[id]) return null;
+  if (!id || (!EVAL[id] && id !== "stone")) return null;
   if (_swatch.has(id)) return _swatch.get(id);
-  const url = canvasFor(id).toDataURL("image/png");
+  let cv;
+  if (id === "stone") {
+    cv = document.createElement("canvas");
+    cv.width = cv.height = SZ;
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#9a4c2e";                           // kit tile terracotta
+    ctx.fillRect(0, 0, SZ, SZ);
+    const rng = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+    for (let i = 0; i < 26; i++) {                        // the kit's darker speckles
+      const r = 4 + rng() * 9;
+      ctx.fillStyle = rng() < 0.7 ? "rgba(110,48,26,0.55)" : "rgba(180,105,70,0.4)";
+      ctx.beginPath(); ctx.arc(rng() * SZ, rng() * SZ, r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.strokeStyle = "rgba(60,25,14,0.5)"; ctx.lineWidth = 5;   // tile edge line
+    ctx.strokeRect(2, 2, SZ - 4, SZ - 4);
+  } else cv = canvasFor(id);
+  const url = cv.toDataURL("image/png");
   _swatch.set(id, url);
   return url;
 }

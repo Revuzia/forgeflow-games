@@ -345,7 +345,7 @@ export function applyOp(d, op) {
     case "objEdit": {
       const hit = objById(d, op.id);
       if (!hit) return { ok: false, err: "noobj" };
-      const ALLOW = ["x", "z", "rot", "locked", "etype", "ttype", "dtype", "color", "stock", "ntype"];
+      const ALLOW = ["x", "z", "rot", "locked", "etype", "ttype", "dtype", "color", "stock", "ntype", "dir"];
       for (const k of ALLOW) if (op.p && op.p[k] !== undefined) hit.obj[k] = op.p[k];
       if (op.p && op.p.stats !== undefined) { const s = clampStats(op.p.stats); if (s) hit.obj.stats = s; else delete hit.obj.stats; }
       if (op.p && op.p.etype !== undefined) delete hit.obj.stats; // changing type resets to that type's defaults
@@ -462,10 +462,15 @@ export function stairLinks(d) {
   const out = [];
   d.floors.forEach((fl, f) => {
     for (const o of fl.objects) {
-      if (o.kind !== "stairs" || f + 1 >= d.floors.length) continue;
+      if (o.kind !== "stairs") continue;
       const dir = DIRS[o.rot % 4];
       const lx = o.x + dir.dx, lz = o.z + dir.dz;
-      if (hasCell(d, f + 1, lx, lz)) out.push({ from: { f, x: o.x, z: o.z }, to: { f: f + 1, x: lx, z: lz }, rot: o.rot, id: o.id });
+      if ((o.dir | 0) === -1) {
+        // stairs DOWN: the landing is one floor BELOW (climb tween handles both ways)
+        if (f - 1 >= 0 && hasCell(d, f - 1, lx, lz)) out.push({ from: { f, x: o.x, z: o.z }, to: { f: f - 1, x: lx, z: lz }, rot: o.rot, id: o.id, down: true });
+      } else if (f + 1 < d.floors.length && hasCell(d, f + 1, lx, lz)) {
+        out.push({ from: { f, x: o.x, z: o.z }, to: { f: f + 1, x: lx, z: lz }, rot: o.rot, id: o.id });
+      }
     }
   });
   return out;
@@ -659,6 +664,7 @@ export function sanitize(raw) {
         if (o.kind === "door") c.locked = !!o.locked;
         if (o.kind === "enemy") { c.etype = String(o.etype || "").slice(0, 16); const s = clampStats(o.stats); if (s) c.stats = s; }
         if (o.kind === "trap") c.ttype = TRAPS.includes(o.ttype) ? o.ttype : "spikes";
+        if (o.kind === "stairs" && (o.dir | 0) === -1) c.dir = -1;   // stairs DOWN
         if (o.kind === "decor") c.dtype = String(o.dtype || "").slice(0, 16);
         if (o.kind === "npc") {
           c.ntype = NPC_TYPES[o.ntype] ? o.ntype : "merchant";

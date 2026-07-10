@@ -165,6 +165,12 @@ export class Hud {
         }
         sub.classList.add("thumbs");
       }
+    } else if (b.tool === "stairs") {
+      const sd = b.toolOpt.sdir === -1 ? -1 : 1;
+      mkOpts([1, -1], sd, (v) => v === 1 ? "⬆️ Stairs Up" : "⬇️ Stairs Down", (v) => b.setTool("stairs", { sdir: v }));
+      sub.appendChild(el(`<span class="df-subnote">${sd === -1
+        ? "Descends to the floor below (needs floor 2+) · R rotates · landing auto-added"
+        : "Climbs to the floor above · R rotates · landing auto-added"}</span>`));
     } else if (b.tool === "enemy") {
       const roster = D.ENEMIES[b.d.theme];
       mkThumbOpts(Object.keys(roster), b.toolOpt.etype || Object.keys(roster)[0], "enemy",

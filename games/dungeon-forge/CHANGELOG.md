@@ -344,6 +344,16 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.8.7 — 2026-07-10 (builder fixes: toolbar order, Original texture, stairs DOWN)
+- **Toolbar reordered** (owner spec): … 6 NPC · **7 Select · 8 Erase · 9 Spawn** · 0 Exit.
+- **"Original" floor texture**: the default kit tile now has a recognizable
+  terracotta swatch labeled **Original** in the Floor picker — one click paints
+  any cell back to the stock floor.
+- **Stairs UP / DOWN**: the Stairs tool has a direction picker. Down-stairs
+  descend to the floor below (blocked on floor 1 with a clear warning), auto-add
+  their landing tile below, render as a flipped flight, and the sim links/climb
+  work both ways. Selftest 233 → 236.
+
 ## v1.8.6 — 2026-07-10 (menu overhaul batch: one carousel, simpler Build, pause polish, wider cutaway)
 - **Play menu**: FEATURED / BY PLAYERS merged into ONE **DUNGEONS** carousel
   (7 cards). **Hold-and-drag scrolling** (grab the shelf and pull), thin amber

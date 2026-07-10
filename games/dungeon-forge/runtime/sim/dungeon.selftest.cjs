@@ -579,6 +579,30 @@ const ok = (cond, name, extra) => {
     }
   }
 
+  // ── 9e. stairs DOWN ──────────────────────────────────────────────
+  console.log("[stairs-down]");
+  {
+    const sd = newDungeon({ theme: "fantasy" });
+    stampRoom(sd, 0, 5, 5, 4, 4);                       // ground floor
+    applyOp(sd, { t: "floor+" });
+    stampRoom(sd, 1, 5, 5, 4, 4);                       // upper floor
+    applyOp(sd, { t: "obj+", f: 1, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(sd, { t: "obj+", f: 0, o: { kind: "exit", x: 8, z: 8 } });
+    applyOp(sd, { t: "obj+", f: 1, o: { kind: "stairs", x: 6, z: 6, rot: 0, dir: -1 } }); // DOWN, landing (6,7) below
+    const links = stairLinks(sd);
+    const dn = links.find((l) => l.down);
+    ok(!!dn && dn.from.f === 1 && dn.to.f === 0 && dn.to.x === 6 && dn.to.z === 7, "stairs-down: link goes f1 → f0 at the landing");
+    // sanitize keeps dir
+    const back = sanitize(serialize(sd));
+    ok(back.floors[1].objects.some((o) => o.kind === "stairs" && o.dir === -1), "stairs-down: dir survives serialize roundtrip");
+    // walking onto the down-stairs cell starts a descend
+    const rr = newRun(sd, 31, [{ id: "P1" }]);
+    const rp = rr.players[0];
+    rp.x = c2w(6); rp.z = c2w(6);                        // stand on the stairs (floor 1)
+    for (let i = 0; i < 80 && rp.f === 1; i++) tick(rr, 1 / 60);
+    ok(rp.f === 0, "stairs-down: climbing DOWN switches to floor 0");
+  }
+
   // ── 10. pathfinding + LOS ───────────────────────────────────────
   console.log("[path+los]");
   const run6 = newRun(s, 6000, [{ id: "P1" }]);

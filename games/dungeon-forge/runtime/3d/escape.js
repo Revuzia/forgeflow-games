@@ -215,6 +215,8 @@ export class Escape {
           m.scale.multiplyScalar(Math.min((CELL * 2) / Math.max(size.z, 0.01), (FLOOR_H + 0.15) / Math.max(size.y, 0.01)));
           const b2 = new THREE.Box3().setFromObject(m); m.position.y -= b2.min.y;
           m.position.z += CELL / 2;
+          // stairs DOWN: same flight flipped — low end at the landing one floor below
+          if (o.dir === -1) { m.rotation.y = Math.PI; m.position.y -= FLOOR_H; }
         }
         break;
       }

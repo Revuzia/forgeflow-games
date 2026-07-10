@@ -19,14 +19,14 @@ export const TOOLS = [
   // Placement tools first; Select + Erase sit at the end just before the Exit
   // portal (owner request). Number keys 1-0 map to this order left→right.
   { id: "floor", icon: "⬜", label: "Floor" },   // → floor / lava / water paint + floor texture
-  { id: "door", icon: "🚪", label: "Door" },
-  { id: "stairs", icon: "🪜", label: "Stairs" },
+  { id: "door", icon: "🚪", label: "Door" },     // becomes WALLS (door moves inside) — task #14
+  { id: "stairs", icon: "🪜", label: "Stairs" }, // → up / down
   { id: "props", icon: "🎁", label: "Props" },   // → chest / key / trap / light / decor
   { id: "enemy", icon: "👹", label: "Enemy" },
   { id: "npc", icon: "🧙", label: "NPC" },
-  { id: "spawn", icon: "🚩", label: "Spawn" },
-  { id: "select", icon: "🖱️", label: "Select" },
-  { id: "erase", icon: "🧹", label: "Erase" },
+  { id: "select", icon: "🖱️", label: "Select" }, // 7 (owner order: select 7 · erase 8 · spawn 9)
+  { id: "erase", icon: "🧹", label: "Erase" },   // 8
+  { id: "spawn", icon: "🚩", label: "Spawn" },   // 9
   { id: "exit", icon: "🌀", label: "Exit" },
 ];
 
@@ -280,7 +280,9 @@ export class Builder {
         if (m) { const b = new THREE.Box3().setFromObject(m); const size = b.getSize(new THREE.Vector3());
           m.scale.multiplyScalar(Math.min((CELL * 2) / Math.max(size.z, 0.01), (FLOOR_H + 0.15) / Math.max(size.y, 0.01)));
           const b2 = new THREE.Box3().setFromObject(m); m.position.y -= b2.min.y;
-          m.position.z += CELL / 2; }
+          m.position.z += CELL / 2;
+          // stairs DOWN: same flight flipped — low end at the landing one floor below
+          if (o.dir === -1) { m.rotation.y = Math.PI; m.position.y -= FLOOR_H; } }
         break;
       }
       case "chest": add(this.props.chest || this.props.chestShared, 1.5); break;
@@ -638,6 +640,10 @@ export class Builder {
     if (this.tool === "npc") { o.ntype = this.toolOpt.ntype || "merchant"; o.stock = D.SHOP_IDS.slice(); }
     if (this.tool === "light") o.color = this.toolOpt.color;
     if (this.tool === "torch") o.kind = "torch";
+    if (this.tool === "stairs" && this.toolOpt.sdir === -1) {
+      if (this.floor === 0) { this.g.hud.toast("Stairs DOWN need a floor below — you're on floor 1", "warn"); this.g.audio.sfx("error"); return; }
+      o.dir = -1;
+    }
     const op = { t: "obj+", f: this.floor, o };
     const res = this.applyLocal(op);
     if (!res.ok) { this.g.hud.toast(placeError(res.err), "warn"); this.g.audio.sfx("error"); }
@@ -649,13 +655,21 @@ export class Builder {
   }
 
   _ensureLanding(cell) {
-    // auto-create the landing cell one floor up so stairs "just work"
+    // auto-create the landing cell one floor up (or DOWN) so stairs "just work"
     const dir = D.DIRS[this.rot % 4];
+    const lx = cell.x + dir.dx, lz = cell.z + dir.dz;
+    if (this.toolOpt.sdir === -1) {
+      if (this.floor === 0) return;   // guarded in _placeAt already
+      if (!D.hasCell(this.d, this.floor - 1, lx, lz)) {
+        this.applyLocal({ t: "cell+", f: this.floor - 1, x: lx, z: lz });
+        this.g.hud.toast("Landing tile added on the floor below", "info");
+      }
+      return;
+    }
     if (this.floor + 1 >= this.d.floors.length) {
       if (this.d.floors.length < D.MAX_FLOORS) { this.applyLocal({ t: "floor+" }); this.g.hud.toast("Added floor " + (this.d.floors.length) + " for the stairs", "info"); }
       else return;
     }
-    const lx = cell.x + dir.dx, lz = cell.z + dir.dz;
     if (!D.hasCell(this.d, this.floor + 1, lx, lz)) {
       this.applyLocal({ t: "cell+", f: this.floor + 1, x: lx, z: lz });
       this.g.hud.toast("Landing tile added on the floor above", "info");
