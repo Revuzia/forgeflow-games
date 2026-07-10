@@ -6,10 +6,10 @@
 // always shows my side at the bottom via syncFromState(state, mySide).
 
 import * as THREE from 'three';
-import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=16';
-import { cardById, REALMS } from '../sim/cards.js?v=16';
-import { chooseAction } from '../sim/ai.js?v=16';
-import { Audio2 } from './audio.js?v=16';
+import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=17';
+import { cardById, REALMS } from '../sim/cards.js?v=17';
+import { chooseAction } from '../sim/ai.js?v=17';
+import { Audio2 } from './audio.js?v=17';
 
 const REALM_COLOR = (id) => REALMS[cardById(id).realm]?.color ?? 0x8d99ae;
 
@@ -245,7 +245,8 @@ export class Match {
           if (ev.target.kind === 'hero') {
             scene.shake(0.22);
             if (ev.target.p === this.foeSide) this.stats.dmgDealt += ev.amount;
-            this.ui.heroHit(this.relOf(ev.target.p));
+            this.ui.heroHit(this.relOf(ev.target.p));      // HUD plate flash
+            scene.heroFlinch(this.relOf(ev.target.p));     // 3D character recoils + flashes red
           }
           await this.wait(110);
           break;

@@ -2,11 +2,12 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=16';
-import { REALMS, cardById } from '../sim/cards.js?v=16';
-import { FX } from './fx.js?v=16';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=17';
+import { REALMS, cardById } from '../sim/cards.js?v=17';
+import { FX } from './fx.js?v=17';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
+const HIT_RED = new THREE.Color(0x9a1408); // hero hit-flash tint
 export const LAYOUT = {
   playerBoardZ: 1.22, enemyBoardZ: -1.72, slotDX: 1.62,
   handZ: 4.52, handY: 1.0, enemyHandZ: -3.98,
@@ -774,7 +775,7 @@ export class BoardScene {
   // ── 3D legendary minis ─────────────────────────────────────────
   async _gltfLoader() {
     if (!this._gltfLoaderP) {
-      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=16').then((m) => new m.GLTFLoader());
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=17').then((m) => new m.GLTFLoader());
     }
     return this._gltfLoaderP;
   }
@@ -981,8 +982,28 @@ export class BoardScene {
       // face mostly the camera but angle slightly inward toward the board
       const baseYaw = rel === 0 ? 0.20 : -0.20;
       grp.rotation.y = baseYaw;
-      this.heroModels[rel] = { grp, seed: rel * 3.14, baseY: grp.position.y, baseYaw };
+      this.heroModels[rel] = {
+        grp, rel, seed: rel * 3.14, baseY: grp.position.y, baseZ: grp.position.z, baseYaw,
+        recoilDir: rel === 0 ? 1 : -1, // player staggers toward the camera, enemy toward the back
+        flinchT: 0, flinchDur: 0.44, flashMats: null,
+      };
     } catch (e) { /* GLB missing → keep the disc portrait */ }
+  }
+
+  // hit reaction: recoil + red flash when this hero takes damage
+  heroFlinch(rel) {
+    const hm = this.heroModels && this.heroModels[rel];
+    if (!hm) return;
+    hm.flinchT = hm.flinchDur;
+    if (!hm.flashMats) { // cache emissive materials + their base colour once
+      hm.flashMats = [];
+      hm.grp.traverse((o) => {
+        if (!o.isMesh) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        for (const mt of mats) if (mt && mt.emissive) { mt.userData._be = mt.emissive.getHex(); hm.flashMats.push(mt); }
+      });
+    }
+    this.shake(0.16);
   }
 
   posOf(iid) {
@@ -1072,10 +1093,23 @@ export class BoardScene {
         }
       }
     }
-    // hero characters: gentle idle sway around their facing; feet stay planted
+    // hero characters: gentle idle sway around their facing; feet stay planted.
+    // when hit, they recoil (stagger back + pitch + shudder) and flash red.
     if (this.heroModels) for (const hm of this.heroModels) if (hm) {
-      hm.grp.rotation.y = (hm.baseYaw || 0) + Math.sin(this.time * 0.6 + hm.seed) * 0.05;
+      let recoil = 0, pitch = 0, shud = 0, flash = 0;
+      if (hm.flinchT > 0) {
+        hm.flinchT = Math.max(0, hm.flinchT - dt);
+        const env = Math.sin((1 - hm.flinchT / hm.flinchDur) * Math.PI); // 0→1→0
+        recoil = env * 0.3 * hm.recoilDir;              // stagger toward own side
+        pitch = env * 0.16;                             // flinch backward
+        shud = Math.sin(this.time * 55) * env * 0.06;   // fast shudder
+        flash = env;
+      }
+      hm.grp.rotation.y = (hm.baseYaw || 0) + Math.sin(this.time * 0.6 + hm.seed) * 0.05 + shud;
+      hm.grp.rotation.x = pitch;
+      hm.grp.position.z = (hm.baseZ ?? hm.grp.position.z) + recoil;
       hm.grp.position.y = (hm.baseY || 0.02) + (Math.sin(this.time * 1.1 + hm.seed) + 1) * 0.008;
+      if (hm.flashMats) for (const mt of hm.flashMats) mt.emissive.setHex(mt.userData._be || 0).lerp(HIT_RED, flash * 0.85);
     }
     // diorama: crystals spin, braziers flicker embers
     for (const c of this.dioramaSpin) { c.rotation.y += dt * 0.5; c.position.y = 1.5 + Math.sin(this.time * 1.2 + c.position.x) * 0.1; }

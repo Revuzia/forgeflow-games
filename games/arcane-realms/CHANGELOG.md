@@ -1,5 +1,16 @@
 # Arcane Realms TCG — Changelog
 
+## v1.4.1 — 2026-07-09 (Hero hit reactions)
+
+- When a hero (yours or the enemy's) takes damage, the 3D character now **reacts
+  to the hit**: it flashes red, recoils/staggers backward with a pitch, and
+  shudders, then settles back to its idle. Driven from the engine's `damage`
+  event (combat + spells), alongside the existing HUD-plate flash. New
+  `scene.heroFlinch(rel)` + a flinch pass in the hero update loop.
+- (Audit: all 22 legendary/epic creature minis + 6 heroes verified — all load,
+  none degenerate, all render as complete figures. Mirrorplane Archon kept as-is
+  per owner — it matches the card.) Cache-bust `?v=16` → `?v=17`.
+
 ## v1.4.0 — 2026-07-09 (Deck-select button, card-art fit, per-element spell SFX, full-body heroes)
 
 ### Deck picker: pick THEN battle (no accidental launch)
