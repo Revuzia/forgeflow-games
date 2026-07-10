@@ -344,6 +344,28 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.7.1 — 2026-07-09 (spell FX overhaul + chain lightning + class design)
+- Built by a **6-agent workflow** (one per effect + design + integration). Four
+  upgraded, reference-matched spell effects in fx.js, self-contained + merge-safe:
+  - **Frost bolt** → a faceted crystalline ICE SHARD (elongated octahedron, cyan→
+    white additive layers) oriented along velocity, spinning, with a cold swirl +
+    icy trail; impact shatters into 9 tumbling shards + a frost ring + spray.
+  - **Fireball** → a churning 3-layer core (white-hot→orange→deep-red, counter-
+    rotating + flickering) with a dense buoyant ember/smoke TRAIL; impact = fire
+    dome + smoke plume + expanding ring.
+  - **Chain lightning** (NEW ability, Sorceress KeyC) → jagged blue-white
+    LineSegments arcs with forked branches + sparks that JUMP to up to 3 nearby
+    enemies (−20%/jump, 0.3s micro-stun). New sim castChain + 'chain' event +
+    relay. Verified live: arc renders caster→enemy with a 22 damage number.
+  - **Poison cloud** → a lingering drifting green toxic billow + ground glow disc;
+    fires on the Rogue's poison-knife impact (or fx.poisonCloud()).
+- syncBolts now renders per-element projectiles (frost crystal / fireball) instead
+  of a plain sphere; boltHit routes to the upgraded impacts. Verified all four
+  create their FX objects in-game (fireball group, frost crystal, arc, cloud).
+- **Per-class ability + leveling design** (knight/barbarian/sorceress/rogue,
+  Diablo-like) captured in games/dungeon-forge/DESIGN_CLASSES.md — the roadmap for
+  the leveling/skill-tree build-out (task #23). Selftest 174.
+
 ## v1.7.0 — 2026-07-09 (weapons flush in hand — no more through-the-hip)
 - **Weapons are now gripped correctly in the fist** (owner: 'hold weapons the
   right way not through the hip'). Two faults, both fixed:

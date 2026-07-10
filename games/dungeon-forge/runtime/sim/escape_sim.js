@@ -107,7 +107,7 @@ export function newRun(d, runSeed, players) {
     st.players.push({
       id: p.id, name: p.name || "Player", skin: p.skin || 0, slot: i,
       cls: CLASS_ORDER[(p.skin || 0) % CLASS_ORDER.length],
-      maxHp: cls.hp, combo: 0, comboT: 0, specialT: 0, frostT: 0, stunT: 0,
+      maxHp: cls.hp, combo: 0, comboT: 0, specialT: 0, frostT: 0, chainT: 0, stunT: 0,
       f: spawn.f, x: c2w(spawn.obj.x) + (i % 2) * 0.9 - 0.45, z: c2w(spawn.obj.z) + Math.floor(i / 2) * 0.9 - 0.45,
       yaw: (spawn.obj.rot || 0) * Math.PI / 2, hp: cls.hp, mana: PLAYER.mana,
       alive: true, escaped: false, deaths: 0, gold: 40, keys: 0, potions: 1, charms: 0,
@@ -154,7 +154,7 @@ export function addPlayer(st, p) {
   const np = {
     id: p.id, name: p.name || "Player", skin: p.skin || 0, slot: i,
     cls: CLASS_ORDER[(p.skin || 0) % CLASS_ORDER.length],
-    maxHp: cls.hp, combo: 0, comboT: 0, specialT: 0, frostT: 0, stunT: 0,
+    maxHp: cls.hp, combo: 0, comboT: 0, specialT: 0, frostT: 0, chainT: 0, stunT: 0,
     f: st.spawn.f, x: c2w(st.spawn.x) + (i % 2) * 0.9 - 0.45, z: c2w(st.spawn.z) + Math.floor(i / 2) * 0.9 - 0.45,
     yaw: 0, hp: cls.hp, mana: PLAYER.mana,
     alive: true, escaped: false, deaths: 0, gold: 40, keys: 0, potions: 1, charms: 0,
@@ -599,6 +599,24 @@ function playerFrost(st, p) {
   emit(st, "cast", { id: p.id, kind: "frost" });
 }
 
+/** C: Sorceress chain lightning — arcs to up to 3 nearby enemies (−20%/jump) + micro-stun. */
+function castChain(st, p) {
+  if (p.cls !== "sorceress" || (p.chainT || 0) > 0 || p.stunT > 0 || p.mana < 22) return;
+  const R2 = 6.5 * 6.5;
+  const cand = st.enemies.filter((e) => e.alive && e.f === p.f && ((e.x - p.x) ** 2 + (e.z - p.z) ** 2) <= R2)
+    .sort((a, b) => ((a.x - p.x) ** 2 + (a.z - p.z) ** 2) - ((b.x - p.x) ** 2 + (b.z - p.z) ** 2))
+    .slice(0, 3);
+  if (!cand.length) return;
+  p.chainT = 3; p.mana -= 22;
+  const base = 22 * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0));
+  const pts = [{ x: p.x, z: p.z, f: p.f }];
+  cand.forEach((e, i) => {
+    damageEnemy(st, e, base * Math.pow(0.8, i), p.id, "lightning");
+    if (e.alive) { e.stunT = Math.max(e.stunT || 0, 0.3); emit(st, "estatus", { id: e.id, kind: "stun", dur: 0.3 }); }
+    pts.push({ x: e.x, z: e.z, f: e.f });
+  });
+  emit(st, "chain", { id: p.id, pts, elem: "arc" });
+}
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -726,6 +744,7 @@ export function tick(st, dt, opts = {}) {
     p.boltT = Math.max(0, p.boltT - dt);
     p.specialT = Math.max(0, p.specialT - dt);
     p.frostT = Math.max(0, p.frostT - dt);
+    p.chainT = Math.max(0, (p.chainT || 0) - dt);
     p.stunT = Math.max(0, (p.stunT || 0) - dt);
     p.hurtT = Math.max(0, p.hurtT - dt);
     p.mana = Math.min(PLAYER.mana, p.mana + PLAYER.manaRegen * dt);
@@ -788,6 +807,7 @@ export function tick(st, dt, opts = {}) {
     if (p.input.melee) playerMelee(st, p);
     if (p.input.special || p.input.bolt) playerSpecial(st, p);   // RMB (bolt kept as alias)
     if (p.input.frost) playerFrost(st, p);                        // R — sorceress only
+    if (p.input.chain) castChain(st, p);                          // C — sorceress chain lightning
     if (p.input.interactDown) { doInteract(st, p); }
     if (p.input.potionDown && p.potions > 0 && p.hp < PLAYER.hp) {
       p.potions--; p.hp = Math.min(PLAYER.hp, p.hp + PLAYER.potionHeal);

@@ -601,6 +601,7 @@ export class Escape {
       if (e.code === "KeyV") this.fp = !this.fp;
       if (e.code === "KeyF" && p) this._special = true;
       if (e.code === "KeyR" && p) this._frost = true;
+      if (e.code === "KeyC" && !e.repeat && p) this._chain = true; // Sorceress chain lightning (edge-triggered)
       if (e.code === "Escape") { /* pointer lock exits natively */ }
     }, window);
     on("keyup", (e) => { this.keys[e.code] = false; if (e.code === "KeyF") this._special = false; if (e.code === "KeyR") this._frost = false; }, window);
@@ -635,6 +636,7 @@ export class Escape {
     p.input.melee = !!this._melee;
     p.input.special = !!this._special;
     p.input.frost = !!this._frost;
+    p.input.chain = !!this._chain; this._chain = false; // consume the edge-trigger
   }
 
   /** Interact with an NPC — sage grants a one-time blessing, merchant/blacksmith
@@ -732,9 +734,20 @@ export class Escape {
           break;
         }
         case "boltHit": {
+          const at = new THREE.Vector3(ev.x, ev.f * FLOOR_H + 1.1, ev.z);
           const col = ev.elem === "fire" ? 0xff6a1f : ev.elem === "frost" ? 0x5ad6ff : ev.elem === "knife" ? 0x7dff8f : 0x8f6bff;
-          g.fx.elementBurst(new THREE.Vector3(ev.x, ev.f * FLOOR_H + 1.1, ev.z), ev.elem || "arcane");
-          if (ev.wall) g.fx.burst(new THREE.Vector3(ev.x, ev.f * FLOOR_H + 1.1, ev.z), col, 6);
+          if (ev.elem === "fire") g.fx._fireImpact(at);
+          else if (ev.elem === "frost") g.fx._frostImpact(at);
+          else g.fx.elementBurst(at, ev.elem || "arcane");
+          if (ev.elem === "knife" && !ev.wall) g.fx.poisonCloud(new THREE.Vector3(ev.x, ev.f * FLOOR_H + 1.0, ev.z), 2.0, 4.5);
+          if (ev.wall) g.fx.burst(at, col, 6);
+          break;
+        }
+        case "chain": {
+          const pts = ev.pts || [];
+          const toWorld = (q) => new THREE.Vector3(q.x, (q.f == null ? (ev.f || 0) : q.f) * FLOOR_H + 1.2, q.z);
+          for (let i = 0; i < pts.length - 1; i++) g.fx.chainLightning(toWorld(pts[i]), toWorld(pts[i + 1]));
+          if (pts.length > 1) { g.audio.sfx("bolt"); if (ev.id === this.myId) g.hud.shake(0.2); }
           break;
         }
         case "estatus": {
