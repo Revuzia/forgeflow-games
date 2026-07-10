@@ -49,3 +49,5 @@ pipeline/engine/_capfix_test.png
 pipeline/engine/*.png.lit
 
 asset_gen/
+.claude/worktrees/
+.wrangler/
