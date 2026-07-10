@@ -11,7 +11,7 @@ import * as THREE from "three";
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
 const E = await import("../sim/escape_sim.js" + V);
-const { makeInstanced, Assets, charClips, makeTorch, makeCellSurfaces, makeMerchant, findArmBones, relaxArms } = await import("./assets.js" + V);
+const { makeInstanced, Assets, charClips, makeTorch, makeCellSurfaces, makeNpc, findArmBones, relaxArms } = await import("./assets.js" + V);
 const { EnemyPool } = await import("./enemies.js" + V);
 
 const FLOOR_H = 4.4;
@@ -242,8 +242,8 @@ export class Escape {
       }
       case "npc": {
         const T = D.NPC_TYPES[o.ntype] || D.NPC_TYPES.merchant;
-        grp.add(makeMerchant(this.d.theme));
-        grp.add(this._sprite(T.icon, 1.4, 3.1));
+        grp.add(makeNpc(o.ntype, this.d.theme));
+        grp.add(this._sprite(T.icon, 1.1, 2.7));
         const l = new THREE.PointLight(T.tint || 0xffd769, this.g.look.torchI * 0.3, 12, 1.4);
         l.position.y = 2.7; grp.add(l);
         this.lightPool.push({ light: l, base: this.g.look.torchI * 0.3, grp, f });

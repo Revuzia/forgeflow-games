@@ -327,36 +327,120 @@ export function makeCreature(assets, tpl, targetH, THREE_) {
   return { obj, mixer };
 }
 
-/** Procedural merchant stall + shopkeeper — reads clearly as a vendor in both
- *  the builder and escape, no character rig required. Returns a group ~2 cells. */
-export function makeMerchant(theme) {
-  const g = new THREE.Group();
+/** Distinct hand-built 3D NPCs — merchant, blacksmith, sage — for both the
+ *  builder and escape. Each reads at a glance from its silhouette + signature
+ *  station (coin stall / anvil+forge / arcane staff+tome), theme-swapped for
+ *  fantasy vs sci-fi. ~1.9 units tall on a small round base. Replaces the old
+ *  one-size-fits-all stall. userData.figure = the humanoid (for the idle bob). */
+export function makeNpc(ntype, theme) {
   const scifi = theme === "scifi";
-  const woodC = scifi ? 0x2a3340 : 0x6a4326, clothC = scifi ? 0x1f6f8f : 0x8a2b2b;
-  const wood = new THREE.MeshStandardMaterial({ color: woodC, roughness: 0.85, metalness: scifi ? 0.6 : 0 });
-  const cloth = new THREE.MeshStandardMaterial({ color: clothC, roughness: 0.9, emissive: scifi ? 0x0a3a4a : 0x1a0505, emissiveIntensity: scifi ? 0.4 : 0.1 });
-  // counter
-  const top = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.16, 0.9), wood); top.position.set(0, 1.0, 0.5); g.add(top);
-  for (const sx of [-1, 1]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.0, 0.14), wood); leg.position.set(sx * 1.05, 0.5, 0.5); g.add(leg); }
-  // awning
-  const awn = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.1, 1.2), cloth); awn.position.set(0, 2.5, 0.2); awn.rotation.x = -0.18; g.add(awn);
-  for (const sx of [-1, 1]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.5, 8), wood); post.position.set(sx * 1.2, 1.25, 0.6); g.add(post); }
-  // striped awning trim
-  for (let i = -5; i <= 5; i++) { if (i % 2) continue; const s = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.28, 0.02), new THREE.MeshStandardMaterial({ color: 0xf0e4c8 })); s.position.set(i * 0.24, 2.34, 0.82); g.add(s); }
-  // gold coins on the counter
-  const coinMat = new THREE.MeshStandardMaterial({ color: 0xffd769, metalness: 0.9, roughness: 0.25, emissive: 0xffb000, emissiveIntensity: 0.35 });
-  for (let i = 0; i < 5; i++) { const cn = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.03, 14), coinMat); cn.position.set(-0.7 + i * 0.12, 1.1, 0.4 + (i % 2) * 0.12); g.add(cn); }
-  // shopkeeper figure (simple, behind the counter)
-  const skin = new THREE.MeshStandardMaterial({ color: 0xd8a97e, roughness: 0.7 });
-  const robe = new THREE.MeshStandardMaterial({ color: scifi ? 0x35506a : 0x3a5a3a, roughness: 0.85 });
-  const fig = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, 0.95, 12), robe); body.position.y = 0.62; fig.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 14, 12), skin); head.position.y = 1.28; fig.add(head);
-  const hat = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.34, 12), new THREE.MeshStandardMaterial({ color: scifi ? 0x223a4a : 0x5a3a22, roughness: 0.9 })); hat.position.y = 1.5; fig.add(hat);
-  for (const sx of [-1, 1]) { const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.6, 8), robe); arm.position.set(sx * 0.3, 0.75, 0.05); arm.rotation.z = sx * 0.5; fig.add(arm); }
-  fig.position.set(0, 0.14, -0.15);
-  g.add(fig);
+  const g = new THREE.Group();
+  const mat = (c, o = {}) => new THREE.MeshStandardMaterial({
+    color: c, roughness: o.r == null ? 0.82 : o.r, metalness: o.m == null ? (scifi ? 0.45 : 0) : o.m,
+    emissive: o.e == null ? 0x000000 : o.e, emissiveIntensity: o.ei == null ? 1 : o.ei });
+  const skinM = mat(scifi ? 0xc2c9d2 : 0xd9a97e, { r: 0.7, m: scifi ? 0.3 : 0 });
+  const woodM = mat(scifi ? 0x2a3340 : 0x5a3f28, { r: 0.85, m: scifi ? 0.55 : 0 });
+  const ironM = mat(scifi ? 0x8792a0 : 0x3b3f47, { r: 0.5, m: 0.85 });
+  const coinM = mat(0xffd769, { r: 0.25, m: 0.9, e: 0xffb000, ei: 0.4 });
+
+  // round base so each NPC reads as a station
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 1.04, 0.12, 24),
+    mat(scifi ? 0x28313d : 0x362a20, { r: 0.95, m: scifi ? 0.5 : 0, e: scifi ? 0x0a2833 : 0x000000, ei: scifi ? 0.35 : 0 }));
+  base.position.y = 0.06; g.add(base);
+
+  // ── shared humanoid ──────────────────────────────────────────────────────
+  function humanoid({ robeC, robeE, hoodC, beardC, capC, wide, hands }) {
+    const h = new THREE.Group();
+    const robe = mat(robeC, { r: 0.85, e: robeE || 0x000000, ei: robeE ? 0.3 : 0 });
+    const skirt = new THREE.Mesh(new THREE.ConeGeometry(wide ? 0.56 : 0.46, 1.15, 16), robe); skirt.position.y = 0.66; h.add(skirt);
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(wide ? 0.36 : 0.28, wide ? 0.44 : 0.34, 0.66, 14), robe); torso.position.y = 1.28; h.add(torso);
+    const sh = new THREE.Mesh(new THREE.SphereGeometry(wide ? 0.42 : 0.33, 14, 10), robe); sh.position.y = 1.56; sh.scale.y = 0.55; h.add(sh);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 14), skinM); head.position.y = 1.9; h.add(head);
+    if (hoodC) { const hd = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), mat(hoodC, { r: 0.9 })); hd.position.y = 1.95; h.add(hd); }
+    if (capC) { const cap = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.34, 14), mat(capC, { r: 0.9 })); cap.position.y = 2.12; h.add(cap);
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.05, 14), mat(capC, { r: 0.9 })); brim.position.y = 1.96; h.add(brim); }
+    if (beardC) { const bd = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.42, 12), mat(beardC, { r: 0.95 })); bd.position.set(0, 1.74, 0.11); bd.rotation.x = 0.12; h.add(bd); }
+    const arms = {};
+    for (const sx of [-1, 1]) {
+      const key = sx < 0 ? "l" : "r";
+      const shoulderX = sx * (wide ? 0.44 : 0.35);
+      const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.44, 8), robe); upper.position.set(shoulderX, 1.36, 0.02); upper.rotation.z = sx * 0.2; h.add(upper);
+      const fore = new THREE.Group(); fore.position.set(shoulderX + sx * 0.05, 1.16, 0.03);
+      const foreM = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.07, 0.4, 8), skinM); foreM.position.y = -0.17; fore.add(foreM);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), skinM); hand.position.y = -0.38; fore.add(hand);
+      const pose = (hands && hands[key]) || { x: -0.5, z: 0 };
+      fore.rotation.set(pose.x, 0, pose.z); h.add(fore);
+      arms[key] = fore;
+    }
+    h.userData.arms = arms;
+    return h;
+  }
+
+  let fig, tint;
+  if (ntype === "blacksmith") {
+    // ── BLACKSMITH: burly, leather apron, hammer, anvil + forge glow ──
+    tint = 0xff8a3c;
+    fig = humanoid({ robeC: scifi ? 0x39434f : 0x5b4636, wide: true, capC: scifi ? 0x22303c : 0x2c1f16,
+      hands: { r: { x: -1.15, z: 0.1 }, l: { x: -0.55, z: 0 } } });
+    const apron = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.8, 0.1), mat(scifi ? 0x2a3946 : 0x3a2418, { r: 0.9, m: scifi ? 0.4 : 0 }));
+    apron.position.set(0, 1.1, 0.32); fig.add(apron);
+    // hammer in the right hand
+    const hammer = new THREE.Group();
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.6, 8), woodM); hammer.add(handle);
+    const headH = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.28), ironM); headH.position.y = 0.3; hammer.add(headH);
+    hammer.position.set(0, -0.5, 0.02); hammer.rotation.x = 0.2; fig.userData.arms.r.add(hammer);
+    fig.position.set(-0.18, 0.12, -0.12); g.add(fig);
+    // anvil
+    const anvil = new THREE.Group();
+    anvil.add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.28), ironM)); // top
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.34, 10), ironM); horn.rotation.z = -Math.PI / 2; horn.position.set(0.38, 0, 0); anvil.add(horn);
+    const waist = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.2), ironM); waist.position.y = -0.19; anvil.add(waist);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.12, 0.28), ironM); foot.position.y = -0.36; anvil.add(foot);
+    anvil.position.set(0.62, 0.7, 0.34); g.add(anvil);
+    // forge ember on the anvil + warm light
+    const ember = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), mat(0xff5a1e, { e: 0xff5a1e, ei: 2.4, r: 0.4 }));
+    ember.position.set(0.62, 0.82, 0.34); g.add(ember); g.userData.ember = ember;
+  } else if (ntype === "sage") {
+    // ── SAGE: tall, hooded robe, white beard, glowing staff + floating tome ──
+    tint = 0x8f6bff;
+    fig = humanoid({ robeC: scifi ? 0x2b2350 : 0x33285e, robeE: scifi ? 0x2a1e66 : 0x1c1440,
+      hoodC: scifi ? 0x241d45 : 0x271e4d, beardC: scifi ? 0xbfc6e0 : 0xe6e2d6,
+      hands: { r: { x: -0.35, z: -0.15 }, l: { x: -0.7, z: 0.1 } } });
+    fig.scale.setScalar(1.06);
+    fig.position.set(-0.12, 0.12, -0.05); g.add(fig);
+    // staff held in the right hand, standing tall
+    const staff = new THREE.Group();
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.045, 2.2, 8), woodM); shaft.position.y = 1.1; staff.add(shaft);
+    const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.16), mat(tint, { e: tint, ei: 2.6, r: 0.2, m: 0.1 })); crystal.position.y = 2.28; staff.add(crystal);
+    const claw = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.03, 8, 16), ironM); claw.position.y = 2.16; claw.rotation.x = Math.PI / 2; staff.add(claw);
+    staff.position.set(0.5, 0.12, 0.12); g.add(staff);
+    g.userData.crystal = crystal;
+    // floating open tome beside the sage
+    const tome = new THREE.Group();
+    for (const sx of [-1, 1]) { const pg = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.02, 0.34), mat(0xf3ecd6, { r: 0.8, e: tint, ei: 0.25 })); pg.position.set(sx * 0.15, 0, 0); pg.rotation.z = sx * 0.25; tome.add(pg); }
+    tome.position.set(-0.62, 1.35, 0.2); g.add(tome); g.userData.tome = tome;
+  } else {
+    // ── MERCHANT: trader with a coin counter, goods sack, coin pouch ──
+    tint = 0xffd769;
+    fig = humanoid({ robeC: scifi ? 0x1f6f8f : 0x3a5a3a, capC: scifi ? 0x124a5e : 0x6a3f1e,
+      hands: { r: { x: -0.9, z: 0.15 }, l: { x: -0.85, z: -0.15 } } });
+    fig.position.set(0, 0.12, -0.28); g.add(fig);
+    // sash across the chest
+    const sash = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.72, 0.36), mat(scifi ? 0x0d3a4a : 0x8a2b2b, { r: 0.85, e: scifi ? 0x0a3a4a : 0x000000, ei: scifi ? 0.4 : 0 }));
+    sash.position.set(0.02, 1.2, 0.02); sash.rotation.z = 0.5; fig.add(sash);
+    // coin counter in front
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.14, 0.5), woodM); counter.position.set(0, 0.86, 0.5); g.add(counter);
+    for (const sx of [-1, 1]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.8, 0.1), woodM); leg.position.set(sx * 0.42, 0.4, 0.5); g.add(leg); }
+    // stacked coins + a small goods sack on the counter
+    for (let i = 0; i < 3; i++) { const cn = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.028, 14), coinM); cn.position.set(-0.3, 0.95 + i * 0.03, 0.5); g.add(cn); }
+    for (let i = 0; i < 4; i++) { const cn = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.026, 14), coinM); cn.position.set(-0.05 + (i % 2) * 0.16, 0.95, 0.42 + Math.floor(i / 2) * 0.14); g.add(cn); }
+    const sack = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), mat(scifi ? 0x35506a : 0x7a5a34, { r: 0.9 })); sack.scale.y = 0.85; sack.position.set(0.32, 1.02, 0.5); g.add(sack);
+    const tie = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 0.1, 8), mat(scifi ? 0x35506a : 0x5a4326)); tie.position.set(0.32, 1.14, 0.5); g.add(tie);
+    // coin pouch in the merchant's right hand
+    const pouch = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), mat(0x8a5a2a, { r: 0.9 })); pouch.scale.y = 0.9; pouch.position.set(0, -0.42, 0); fig.userData.arms.r.add(pouch);
+  }
   g.userData.figure = fig;
+  g.userData.tint = tint;
   return g;
 }
 

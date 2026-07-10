@@ -278,3 +278,16 @@ Initial release.
 - Same continuous-relax + gait applied to the 4 Meshy enemies (cultist/ogre/
   cyborg/sentinel) which shared the A-pose. Attack clips verified as real swings
   (C_slash1 overhead vR 1.09, C_finisher two-hand smash vR 1.38 — not crossed).
+
+## v1.6.2 — 2026-07-09 (NPCs rebuilt as distinct 3D figures)
+- **Replaced the one-size-fits-all merchant stall** (used for all 3 NPC types +
+  a floating emoji) with `makeNpc(ntype, theme)` — a real hand-built figure per
+  type, theme-swapped fantasy/sci-fi, each on a round base station:
+  - **Merchant**: robed trader w/ cap + sash, a coin counter (stacked gold coins
+    + goods sack), coin pouch in hand. Icon changed 🛒 → 🪙 (no more cart).
+  - **Blacksmith**: burly, leather apron, cap, hammer in hand, an anvil (horn +
+    waist + foot) with a glowing forge ember + warm light.
+  - **Sage**: taller hooded robe, white beard, a tall staff topped with a glowing
+    crystal, and a floating open tome. Violet emissive glow.
+- Wired through escape.js + builder.js (both call makeNpc); verified all 3 render
+  distinctly in the builder with correct per-type props + tint. Selftest 159.

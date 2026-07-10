@@ -9,7 +9,7 @@ import * as THREE from "three";
 
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
-const { makeInstanced, Assets, creatureClips, makeTorch, makeCreature, makeCellSurfaces, makeMerchant } = await import("./assets.js" + V);
+const { makeInstanced, Assets, creatureClips, makeTorch, makeCreature, makeCellSurfaces, makeNpc } = await import("./assets.js" + V);
 
 const FLOOR_H = 4.4;
 const CELL = D.CELL;
@@ -330,7 +330,7 @@ export class Builder {
       }
       case "npc": {
         const T = D.NPC_TYPES[o.ntype] || D.NPC_TYPES.merchant;
-        grp.add(makeMerchant(this.d.theme));
+        grp.add(makeNpc(o.ntype, this.d.theme));
         grp.add(this._merchBadge(T.icon));
         const l = new THREE.PointLight(T.tint || 0xffd769, 6, 8); l.position.y = 2.7; grp.add(l);
         break;

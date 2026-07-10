@@ -79,7 +79,7 @@ export const SHOP_IDS = Object.keys(SHOP);
  *  - sage: a one-time blessing (grants +25 max HP and a full heal per run)
  */
 export const NPC_TYPES = {
-  merchant:   { label: "Merchant",   icon: "🛒", tint: 0xffd769, sells: ["potion", "mana", "charm"] },
+  merchant:   { label: "Merchant",   icon: "🪙", tint: 0xffd769, sells: ["potion", "mana", "charm"] },
   blacksmith: { label: "Blacksmith", icon: "⚒",  tint: 0xff8a3c, sells: ["weapon", "armor"], discount: 0.85 },
   sage:       { label: "Sage",       icon: "📜", tint: 0x8f6bff, blessing: { maxHp: 25 } },
 };
