@@ -179,6 +179,32 @@ const ok = (cond, name, extra) => {
     ok(mp.hp === 125, "potion: heals a Sage-blessed player past 100 to maxHp (hp " + mp.hp + ")");
   }
 
+  // ── 4e. item / equipment model ──────────────────────────────────
+  console.log("[item model]");
+  {
+    const idg = newDungeon({ theme: "fantasy" });
+    stampRoom(idg, 0, 5, 5, 6, 6);
+    applyOp(idg, { t: "obj+", f: 0, o: { kind: "spawn", x: 6, z: 6 } });
+    applyOp(idg, { t: "obj+", f: 0, o: { kind: "exit", x: 9, z: 9 } });
+    const irun = newRun(idg, 99, [{ id: "P1" }]);
+    const ip = irun.players[0];
+    const baseMax = ip.maxHp;
+    ok(ip.equipped.weapon === null && ip.weaponTier === 0, "item: empty weapon slot, tier 0");
+    const gen = D.makeItem("armor", 2, D.mulberry(7));
+    ok(D.RARITY_IDS.includes(gen.rarity) && gen.slot === "armor" && gen.tier === 2 && gen.affixes.length === Math.min(D.RARITY[gen.rarity].affixes, 2), "item: makeItem valid (" + gen.rarity + "/" + gen.affixes.length + "aff)");
+    const w = { id: "tw", slot: "weapon", rarity: "rare", base: "Blade", tier: 3, affixes: [{ stat: "dmg", val: 10, label: "+10% Damage" }, { stat: "maxHp", val: 20, label: "+20 Max HP" }], name: "Fabled Blade" };
+    E.grantLoot(irun, ip, { kind: "weapon", item: w });
+    ok(ip.equipped.weapon === w && ip.weaponTier === 3, "item: better item auto-equips + derives weaponTier 3");
+    ok(ip.maxHp === baseMax + 20, "item: +20 maxHp affix raises maxHp to " + ip.maxHp);
+    ok(Math.abs(ip.gearDmg - 0.10) < 1e-6, "item: +10% dmg affix → gearDmg " + ip.gearDmg);
+    const worse = { id: "w2", slot: "weapon", rarity: "common", base: "Blade", tier: 1, affixes: [], name: "Blade" };
+    E.grantLoot(irun, ip, { kind: "weapon", item: worse });
+    ok(ip.equipped.weapon === w && ip.inventory.includes(worse), "item: worse item banked in inventory");
+    let gearDrop = null;
+    for (let s = 0; s < 40 && !gearDrop; s++) gearDrop = D.rollLoot(idg, "c" + s, 5, null).find((x) => x.kind === "weapon" || x.kind === "armor");
+    ok(!gearDrop || (gearDrop.item && gearDrop.item.slot === gearDrop.kind), "item: chest gear drops carry item objects");
+  }
+
   // ── 5. loot determinism ─────────────────────────────────────────
   console.log("[loot]");
   const l1 = JSON.stringify(rollLoot(s, "oX", 123, null));

@@ -72,6 +72,48 @@ export const SHOP = {
 };
 export const SHOP_IDS = Object.keys(SHOP);
 
+// ── item / equipment model (Diablo-like: slot + rarity + tier + rolled affixes) ──
+// The KEYSTONE for loot depth. Equipped weapon/armor items derive the existing
+// weaponTier/armorTier (so combat + tier-tint gear keep working); rarity adds
+// rolled affixes that grant stat bonuses.
+export const RARITY = {
+  common:    { affixes: 0, color: 0xcfd6e4, label: "Common",    prefix: "" },
+  magic:     { affixes: 1, color: 0x6ea8ff, label: "Magic",     prefix: "Charmed" },
+  rare:      { affixes: 2, color: 0xffd769, label: "Rare",      prefix: "Fabled" },
+  legendary: { affixes: 3, color: 0xff8a3c, label: "Legendary", prefix: "Ancient" },
+};
+export const RARITY_IDS = Object.keys(RARITY);
+const RARITY_WEIGHTS = [["common", 56], ["magic", 28], ["rare", 12], ["legendary", 4]];
+const ITEM_BASE = { weapon: "Blade", armor: "Plate", trinket: "Charm" };
+const TIER_WORD = ["", "", "Fine ", "Master "];
+export const AFFIX_POOL = [
+  { stat: "dmg",   short: "Damage", pct: true,  min: 5,  max: 12 },
+  { stat: "maxHp", short: "Max HP", pct: false, min: 12, max: 26 },
+];
+export function rollRarity(rng) {
+  const total = RARITY_WEIGHTS.reduce((s, w) => s + w[1], 0);
+  let r = rng() * total;
+  for (const [id, w] of RARITY_WEIGHTS) { r -= w; if (r <= 0) return id; }
+  return "common";
+}
+/** Build an item {id, slot, rarity, base, tier, affixes[], name}. rng = seeded fn. */
+export function makeItem(slot, tier, rng) {
+  tier = Math.max(1, Math.min(3, tier | 0));
+  const rarity = rollRarity(rng), R = RARITY[rarity];
+  const base = ITEM_BASE[slot] || "Item";
+  const pool = AFFIX_POOL.slice(), affixes = [];
+  for (let i = 0; i < R.affixes && pool.length; i++) {
+    const a = pool.splice((rng() * pool.length) | 0, 1)[0];
+    const val = Math.round((a.min + rng() * (a.max - a.min)) * (1 + 0.4 * (tier - 1)));
+    affixes.push({ stat: a.stat, val, label: "+" + val + (a.pct ? "% " : " ") + a.short });
+  }
+  const id = "it" + ((rng() * 1e9) | 0).toString(36) + tier + slot[0];
+  const name = (R.prefix ? R.prefix + " " : "") + (TIER_WORD[tier] || "") + base;
+  return { id, slot, rarity, base, tier, affixes, name };
+}
+/** Power score for auto-equip / comparison. */
+export function itemScore(it) { return it ? it.tier * 1000 + it.affixes.reduce((s, a) => s + a.val, 0) : -1; }
+
 /**
  * NPC roles a dungeon builder can drop in. Each has a distinct interaction:
  *  - merchant: a general store (editable stock of consumables/upgrades)
@@ -551,8 +593,8 @@ export function rollLoot(d, chestId, runSeed, boundKey) {
   if (rnd() < 0.55) items.push({ kind: "potion" });
   if (rnd() < 0.45) items.push({ kind: "mana" });
   if (rnd() < 0.10 + 0.06 * diff) items.push({ kind: "charm" });                    // +20% damage, run-long
-  if (rnd() < 0.14 + 0.05 * diff) items.push({ kind: "weapon", tier: 1 + (rnd() < 0.3 * diff ? 1 : 0) }); // visible weapon upgrade
-  if (rnd() < 0.14 + 0.05 * diff) items.push({ kind: "armor", tier: 1 + (rnd() < 0.3 * diff ? 1 : 0) });  // visible armor
+  if (rnd() < 0.14 + 0.05 * diff) { const t = 1 + (rnd() < 0.3 * diff ? 1 : 0); items.push({ kind: "weapon", tier: t, item: makeItem("weapon", t, rnd) }); }
+  if (rnd() < 0.14 + 0.05 * diff) { const t = 1 + (rnd() < 0.3 * diff ? 1 : 0); items.push({ kind: "armor",  tier: t, item: makeItem("armor",  t, rnd) }); }
   return items;
 }
 

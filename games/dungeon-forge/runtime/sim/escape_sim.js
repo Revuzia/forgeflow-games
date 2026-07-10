@@ -14,7 +14,7 @@
 import {
   CELL, DIRS, ENEMIES, ck, hasCell, objsAt, findAll, stairLinks,
   mulberry, hashStr, rollLoot, cellType, cellHeight, CT, LAVA_DPS, WATER_SLOW, RAISED_H,
-  SHOP, SHOP_IDS, NPC_TYPES, doorAxis, BREAKABLE_DECOR,
+  SHOP, SHOP_IDS, NPC_TYPES, doorAxis, BREAKABLE_DECOR, makeItem, itemScore,
 } from "./dungeon.js";
 
 export const PLAYER = {
@@ -111,7 +111,8 @@ export function newRun(d, runSeed, players) {
       f: spawn.f, x: c2w(spawn.obj.x) + (i % 2) * 0.9 - 0.45, z: c2w(spawn.obj.z) + Math.floor(i / 2) * 0.9 - 0.45,
       yaw: (spawn.obj.rot || 0) * Math.PI / 2, hp: cls.hp, mana: PLAYER.mana,
       alive: true, escaped: false, deaths: 0, gold: 40, keys: 0, potions: 1, manaPots: 0, charms: 0,
-      weaponTier: 0, armorTier: 0,
+      weaponTier: 0, armorTier: 0, // derived from equipped items (see recomputeGear)
+      baseMaxHp: cls.hp, blessHp: 0, equipped: { weapon: null, armor: null }, inventory: [], gearDmg: 0, gearMaxHp: 0,
       meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null, // climb: {t, from, to}
       input: { mx: 0, mz: 0, sprint: false, melee: false, bolt: false, interact: false, potion: false, yaw: 0 },
       remote: !!p.remote, stepAcc: 0,
@@ -159,6 +160,7 @@ export function addPlayer(st, p) {
     yaw: 0, hp: cls.hp, mana: PLAYER.mana,
     alive: true, escaped: false, deaths: 0, gold: 40, keys: 0, potions: 1, manaPots: 0, charms: 0,
     weaponTier: 0, armorTier: 0,
+    baseMaxHp: cls.hp, blessHp: 0, equipped: { weapon: null, armor: null }, inventory: [], gearDmg: 0, gearMaxHp: 0,
     meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null,
     input: { mx: 0, mz: 0, sprint: false, melee: false, bolt: false, interact: false, potion: false, yaw: 0 },
     remote: !!p.remote, stepAcc: 0,
@@ -413,9 +415,42 @@ export function blessPlayer(st, p, npc) {
   if (st.usedNpcs[npc.id]) return { ok: false, err: "used" };
   st.usedNpcs[npc.id] = true;
   const b = T.blessing;
-  if (b.maxHp) { p.maxHp = (p.maxHp || 100) + b.maxHp; p.hp = p.maxHp; }
+  if (b.maxHp) { p.blessHp = (p.blessHp || 0) + b.maxHp; recomputeMaxHp(p); p.hp = p.maxHp; }
   emit(st, "blessed", { id: p.id, npc: npc.id, maxHp: b.maxHp || 0 });
   return { ok: true };
+}
+
+/** maxHp = base + Sage blessing + gear affixes; keeps hp in range. */
+function recomputeMaxHp(p) {
+  p.maxHp = (p.baseMaxHp || 100) + (p.blessHp || 0) + (p.gearMaxHp || 0);
+  if (p.hp > p.maxHp) p.hp = p.maxHp;
+}
+/** Derive weaponTier/armorTier + affix bonuses from the equipped items. */
+export function recomputeGear(p) {
+  p.weaponTier = p.equipped.weapon ? p.equipped.weapon.tier : 0;
+  p.armorTier = p.equipped.armor ? p.equipped.armor.tier : 0;
+  let dmg = 0, hp = 0;
+  for (const slot of ["weapon", "armor"]) {
+    const it = p.equipped[slot];
+    if (it) for (const a of it.affixes) { if (a.stat === "dmg") dmg += a.val; else if (a.stat === "maxHp") hp += a.val; }
+  }
+  p.gearDmg = dmg / 100;   // % damage bonus (multiplier)
+  p.gearMaxHp = hp;        // flat max-HP bonus
+  recomputeMaxHp(p);
+}
+/** Equip an item if it out-scores the current one; else bank it in inventory. */
+function equipItem(st, p, item) {
+  const slot = item.slot, cur = p.equipped[slot];
+  if (itemScore(item) > itemScore(cur)) {
+    if (cur) p.inventory.push(cur);
+    p.equipped[slot] = item;
+    recomputeGear(p);
+    emit(st, "equip", { id: p.id, slot, tier: item.tier, item });
+    return true;
+  }
+  p.inventory.push(item);
+  emit(st, "loot", { id: p.id, item });
+  return false;
 }
 
 export function grantLoot(st, p, it) {
@@ -424,8 +459,11 @@ export function grantLoot(st, p, it) {
   else if (it.kind === "mana") p.manaPots = (p.manaPots || 0) + 1; // stored, drink with X
   else if (it.kind === "charm") p.charms++;
   else if (it.kind === "key") p.keys++;
-  else if (it.kind === "weapon") { const t = Math.min(3, Math.max(p.weaponTier || 0, it.tier | 0)); if (t !== p.weaponTier) { p.weaponTier = t; emit(st, "equip", { id: p.id, slot: "weapon", tier: t }); } }
-  else if (it.kind === "armor") { const t = Math.min(3, Math.max(p.armorTier || 0, it.tier | 0)); if (t !== p.armorTier) { p.armorTier = t; emit(st, "equip", { id: p.id, slot: "armor", tier: t }); } }
+  else if (it.kind === "weapon" || it.kind === "armor") {
+    // chest loot ships a pre-rolled item; shop/buy has none, so roll one deterministically
+    const item = it.item || makeItem(it.kind, it.tier | 0, mulberry(((st.runSeed || 0) ^ ((st.itemSeq = (st.itemSeq || 0) + 1) * 2654435761)) >>> 0));
+    equipItem(st, p, item);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -535,7 +573,7 @@ function playerMelee(st, p) {
   p.comboT = st.time;
   p.meleeT = M.cd * (p.combo === 3 ? 1.25 : 1); // finisher recovers a touch slower
   emit(st, "swing", { id: p.id, stage: p.combo });
-  const dmg = M.dmg[p.combo - 1] * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0));
+  const dmg = M.dmg[p.combo - 1] * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)) * (1 + (p.gearDmg || 0));
   for (const e of meleeHits(st, p, M.range, M.arc)) {
     damageEnemy(st, e, dmg, p.id);
     if (M.poison && e.alive) applyStatus(st, e, "poison", M.poison, p.id);
@@ -561,7 +599,7 @@ function playerSpecial(st, p) {
   if (S.kind === "crush") {
     p.specialT = S.cd;
     emit(st, "crush", { id: p.id });
-    const dmg = cls.melee.dmg[2] * S.dmgMul * 0.6 * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0));
+    const dmg = cls.melee.dmg[2] * S.dmgMul * 0.6 * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)) * (1 + (p.gearDmg || 0));
     for (const e of meleeHits(st, p, S.range, 2.6)) damageEnemy(st, e, dmg, p.id);
     return;
   }
@@ -573,7 +611,7 @@ function playerSpecial(st, p) {
     st.bolts.push({
       id: "b" + st.nextBolt++, owner: p.id, f: p.f, elem: S.kind === "fire" ? "fire" : "knife",
       x: p.x + vx * 0.6, z: p.z + vz * 0.6, vx: vx * S.speed, vz: vz * S.speed,
-      ttl: 1.5, dmg: S.dmg * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)),
+      ttl: 1.5, dmg: S.dmg * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)) * (1 + (p.gearDmg || 0)),
       status: S.kind === "fire" ? { kind: "burn", cfg: S.burn } : { kind: "poison", cfg: S.poison },
     });
     emit(st, "cast", { id: p.id, kind: S.kind });
@@ -593,7 +631,7 @@ function playerFrost(st, p) {
   st.bolts.push({
     id: "b" + st.nextBolt++, owner: p.id, f: p.f, elem: "frost",
     x: p.x + vx * 0.6, z: p.z + vz * 0.6, vx: vx * F.speed, vz: vz * F.speed,
-    ttl: 1.5, dmg: F.dmg * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)),
+    ttl: 1.5, dmg: F.dmg * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)) * (1 + (p.gearDmg || 0)),
     status: { kind: "frost", cfg: F.slow },
   });
   emit(st, "cast", { id: p.id, kind: "frost" });
@@ -608,7 +646,7 @@ function castChain(st, p) {
     .slice(0, 3);
   if (!cand.length) return;
   p.chainT = 3; p.mana -= 22;
-  const base = 22 * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0));
+  const base = 22 * (1 + 0.2 * p.charms) * (1 + 0.12 * (p.weaponTier || 0)) * (1 + (p.gearDmg || 0));
   const pts = [{ x: p.x, z: p.z, f: p.f }];
   cand.forEach((e, i) => {
     damageEnemy(st, e, base * Math.pow(0.8, i), p.id, "lightning");

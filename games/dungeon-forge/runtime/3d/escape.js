@@ -814,8 +814,14 @@ export class Escape {
           if (a) this._refreshEquip(a);
           if (ev.id === this.myId) {
             g.audio.sfx("confirm");
-            g.hud.toast(ev.slot === "weapon" ? `⚔ Weapon upgraded to tier ${ev.tier}!` : `🛡 Armor equipped — tier ${ev.tier}!`, "loot");
+            const it = ev.item, ic = ev.slot === "weapon" ? "⚔" : "🛡";
+            g.hud.toast(it ? `${ic} ${it.name}${it.affixes && it.affixes.length ? " · " + it.affixes.map((x) => x.label).join(", ") : ""}`
+                           : `${ic} ${ev.slot} tier ${ev.tier}!`, "loot");
           }
+          break;
+        }
+        case "loot": {
+          if (ev.id === this.myId && ev.item) g.hud.toast(`📦 ${ev.item.name} → stash`, "info");
           break;
         }
         case "bought": {

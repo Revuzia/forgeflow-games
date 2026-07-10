@@ -399,8 +399,13 @@ export class Hud {
     const ch = q('[data-a="charms"]');
     ch.style.display = p.charms ? "" : "none"; ch.textContent = "✨ " + p.charms;
     const ROM = ["", "I", "II", "III"];
+    const rHex = (it) => it && D.RARITY[it.rarity] ? "#" + D.RARITY[it.rarity].color.toString(16).padStart(6, "0") : "";
+    const gearTip = (it) => it ? it.name + (it.affixes.length ? " — " + it.affixes.map((a) => a.label).join(", ") : "") : "";
+    const eq = p.equipped || {};
     const wt = q('[data-a="wt"]'); wt.style.display = p.weaponTier ? "" : "none"; wt.textContent = "⚔ " + ROM[p.weaponTier || 0];
+    wt.style.color = rHex(eq.weapon) || ""; wt.title = gearTip(eq.weapon) || "Weapon tier";
     const at = q('[data-a="at"]'); at.style.display = p.armorTier ? "" : "none"; at.textContent = "🛡 " + ROM[p.armorTier || 0];
+    at.style.color = rHex(eq.armor) || ""; at.title = gearTip(eq.armor) || "Armor tier";
     q('[data-a="timer"]').textContent = fmtTime(esc_.run.time);
     // class ability bar (special + combo pips)
     const ab = q('[data-a="abilities"]');

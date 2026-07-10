@@ -344,6 +344,24 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.7.3 — 2026-07-09 (item/equipment data model — the loot keystone)
+- **Real item objects** replace the bare weaponTier/armorTier integers:
+  `{id, slot, rarity, base, tier, affixes[], name}`. RARITY (common/magic/rare/
+  legendary) sets the rolled-affix count; AFFIX_POOL rolls +Damage% / +Max HP,
+  scaled by tier. makeItem/itemScore/rollRarity in dungeon.js.
+- Player now has `equipped {weapon,armor}` + an `inventory[]`; chest loot ships a
+  pre-rolled item (deterministic per chest seed). New gear auto-equips if it
+  out-scores the current slot, else banks in inventory. weaponTier/armorTier are
+  DERIVED from the equipped items (recomputeGear) so all combat math + tier-tint
+  gear appearance keep working unchanged; affixes add gearDmg (× on every damage
+  formula) and gearMaxHp (→ maxHp, alongside the Sage blessing, via recomputeMaxHp).
+- HUD ⚔/🛡 chips now tint by the equipped item's rarity and show its name +
+  affixes on hover; equip/loot toasts name the item.
+- Verified: selftest +7 (auto-equip, tier derive, affix→maxHp/gearDmg, inventory,
+  chest items) → 185; live — legendary weapon shows ⚔ III in orange, name
+  "Ancient Master Blade — +12% Damage, +24 Max HP", weapon still renders, maxHp
+  144. This is the KEYSTONE for the coming rarity/affix/set-item depth (#23 pt2).
+
 ## v1.7.2 — 2026-07-09 (stored mana potion + potion heal-cap fix)
 - **Mana is now a stored, hotkeyed consumable** (audit gap): mana loot / shop
   purchases add a counted 🔷 Mana Potion (p.manaPots) instead of an instant
