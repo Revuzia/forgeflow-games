@@ -6,10 +6,10 @@
 // always shows my side at the bottom via syncFromState(state, mySide).
 
 import * as THREE from 'three';
-import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=19';
-import { cardById, REALMS } from '../sim/cards.js?v=19';
-import { chooseAction } from '../sim/ai.js?v=19';
-import { Audio2 } from './audio.js?v=19';
+import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=20';
+import { cardById, REALMS } from '../sim/cards.js?v=20';
+import { chooseAction } from '../sim/ai.js?v=20';
+import { Audio2 } from './audio.js?v=20';
 
 const REALM_COLOR = (id) => REALMS[cardById(id).realm]?.color ?? 0x8d99ae;
 
@@ -138,6 +138,7 @@ export class Match {
     if (this.over) return;
     this.busy = true;
     if (this.boardHoverIid != null) { this.scene.setBoardHover(this.boardHoverIid, false); this.boardHoverIid = null; }
+    this.hoverIid = null; this.scene._hoverActive = false; // clear any hand-hover overlay state
     this.clearSelect();
     this.scene.clearGlows();
     this.scene.setHeroGlow(0, false);
@@ -697,6 +698,10 @@ export class Match {
         if (idx >= 0) this.scene.applyTransform(prev, this.scene.handTransform(0, idx, handArr.length, false), 0.18);
       }
       this.hoverIid = newHover;
+      // while a hand card is enlarged, hide every board nameplate so the card
+      // renders CLEANLY on top — the HTML orbs (above the canvas) were bleeding
+      // over the pushed-forward card
+      this.scene._hoverActive = !!newHover;
       const cur = this.scene.cards.get(newHover);
       if (cur) {
         cur.hover = true;

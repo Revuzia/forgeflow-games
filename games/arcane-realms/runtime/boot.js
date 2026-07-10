@@ -1,18 +1,18 @@
 // Arcane Realms TCG — boot: asset warmup, screen flow, main loop, debug hooks.
 import * as THREE from 'three';
-import { BoardScene } from './view/scene.js?v=19';
-import { UI, Store } from './view/ui.js?v=19';
-import { Match } from './view/match.js?v=19';
-import { Audio2 } from './view/audio.js?v=19';
-import { OnlineSession } from './view/online.js?v=19';
-import { preload, getCardBack } from './view/cardtex.js?v=19';
-import { STARTER_DECKS, validateDeck } from './sim/decks.js?v=19';
-import { COLLECTIBLE, cardById } from './sim/cards.js?v=19';
-import { createGame, legalActions, applyAction, makeUnit } from './sim/engine.js?v=19';
-import { chooseAction, runAiTurn } from './sim/ai.js?v=19';
-import { CampaignUI } from './view/campaign_ui.js?v=19';
-import { CARDBACK_INFO } from './campaign/campaign_data.js?v=19';
-import { initProgress, isOwned, ownedCount, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=19';
+import { BoardScene } from './view/scene.js?v=20';
+import { UI, Store } from './view/ui.js?v=20';
+import { Match } from './view/match.js?v=20';
+import { Audio2 } from './view/audio.js?v=20';
+import { OnlineSession } from './view/online.js?v=20';
+import { preload, getCardBack } from './view/cardtex.js?v=20';
+import { STARTER_DECKS, validateDeck } from './sim/decks.js?v=20';
+import { COLLECTIBLE, cardById } from './sim/cards.js?v=20';
+import { createGame, legalActions, applyAction, makeUnit } from './sim/engine.js?v=20';
+import { chooseAction, runAiTurn } from './sim/ai.js?v=20';
+import { CampaignUI } from './view/campaign_ui.js?v=20';
+import { CARDBACK_INFO } from './campaign/campaign_data.js?v=20';
+import { initProgress, isOwned, ownedCount, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=20';
 
 const container = document.getElementById('game-container');
 const splash = document.getElementById('boot-splash');
