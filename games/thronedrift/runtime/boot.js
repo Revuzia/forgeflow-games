@@ -78,6 +78,7 @@ window.addEventListener("resize", () => {
 
   SFX.setVolume(save.get("set_vol", 0.5));
   Music.setVolume(save.get("set_vol", 0.5));
+  Music.setEnabled(save.get("set_music", true));
   loadEl.remove();
   game.buildMenuShowcase();
   hud.showTitle();

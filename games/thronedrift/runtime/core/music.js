@@ -5,13 +5,14 @@
 // play() call, and boot retries once on the first pointerdown.
 
 const TRACKS = {
-  menu: "assets/audio/music_menu.ogg",
-  level: "assets/audio/music_level.ogg",
-  boss: "assets/audio/music_boss.ogg",
+  menu: "assets/audio/music_menu.mp3",   // Thunder Bulwark — Greycrown Tempest (own Suno gen)
+  level: "assets/audio/music_level.mp3",  // Thunder Bulwark — Dawnbreak Legion
+  boss: "assets/audio/music_boss.mp3",    // Thunder Bulwark — Warden Requiem
 };
-const BASE_VOL = { menu: 0.4, level: 0.34, boss: 0.42 };
+const BASE_VOL = { menu: 0.3, level: 0.26, boss: 0.34 };  // quieter — owner found the old beds annoying
 
 let master = 0.5;          // scaled by the settings volume
+let enabled = true;
 let current = null, currentName = null;
 const pool = {};
 
@@ -28,6 +29,7 @@ function elFor(name) {
 export const Music = {
   play(name) {
     if (!TRACKS[name]) return;
+    if (!enabled) { currentName = name; return; }   // remember intent; resumes if re-enabled
     if (currentName === name) { this.resume(); return; }
     const next = elFor(name);
     const prev = current;
@@ -53,6 +55,11 @@ export const Music = {
   setVolume(v) {
     master = Math.max(0, Math.min(1, v));
     if (current && currentName) current.volume = BASE_VOL[currentName] * master;
+  },
+  setEnabled(on) {
+    enabled = !!on;
+    if (!enabled) { if (current) current.pause(); }
+    else if (currentName) { const n = currentName; currentName = null; this.play(n); }
   },
   currentName: () => currentName,
 };

@@ -1,5 +1,20 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v0.7 — 2026-07-10 (feedback batch 3: realm-1 fix, swings, grips, music swap)
+- FIXED: Realm 1 card invisible on arena select — absolutely-positioned menu
+  bg/scrim painted OVER static content; locked cards escaped via their
+  opacity/filter stacking contexts, the unlocked card did not (z-index lift)
+- 2H Heavy Slash: full frontal cone swing (rate 0.9s, arc 2.6 rad, dmg 18) +
+  crescent SWIPE arc FX on all melee swings (basics + Frontal Swipe)
+- Run animation: full-strength arm relax + gait swing during locomotion
+  (arms-out run fixed); idle still uses the authored clips untouched
+- Grips: palm offset — hand-bone origin is the WRIST; hilts now seat in the
+  fist; bow tilted battle-ready + rolled arc-forward
+- Heart drops: red UPRIGHT vector heart (emoji rendered purple/sideways)
+- MUSIC swapped to owner's own Suno epic-orchestral (Thunder Bulwark): menu
+  "Greycrown Tempest", waves "Dawnbreak Legion", boss "Warden Requiem" —
+  quieter base volumes + Music ON/OFF toggle in settings
+
 ## v0.6 — 2026-07-10 (idle/grip fixes + full verification pass)
 - Idle poses: trust the AUTHORED Meshy idle clips — relaxArms now runs ONLY
   during walk/run (forcing it at rest made mannequin arms + inverted elbows)

@@ -124,6 +124,7 @@ export class HUD {
           <span style="font-size:15px;color:#e8dcc8">Sound volume</span>
           <input id="cf-vol" type="range" min="0" max="100" value="${vol}" style="width:150px;accent-color:#e8b83a">
         </div>
+        ${tog("cf-music", "Music", save.get("set_music", true))}
         ${tog("cf-shake", "Screen shake", shake)}
         ${tog("cf-dmg", "Damage numbers", dmg)}
         <div id="cf-reset" class="cf-btn" style="margin-top:22px;text-align:center;${frameCss}padding:9px 0;font-size:13px;font-weight:800;color:#ff8a8a;border-color:#a04040">RESET PROGRESS</div>
@@ -139,6 +140,12 @@ export class HUD {
         save.set(key, on); this.cb.onSettings && this.cb.onSettings(key.replace("set_", "") === "shake" ? "shake" : "dmgNum", on);
         SFX.play("ui");
       };
+    };
+    const mb = M.querySelector("#cf-music");
+    mb.onclick = () => {
+      const on = !(mb.dataset.on === "true");
+      mb.dataset.on = String(on); mb.textContent = on ? "ON" : "OFF"; mb.style.color = on ? "#7dff9a" : "#8a7aa8";
+      save.set("set_music", on); Music.setEnabled(on); SFX.play("ui");
     };
     wireTog("#cf-shake", "set_shake");
     wireTog("#cf-dmg", "set_dmgnum");
@@ -219,7 +226,7 @@ export class HUD {
         <div style="margin-top:10px;font-size:11px;color:#8a7aa8">${"❤".repeat(c.hearts)}</div>
       </div>`).join("");
     this._menu(`
-      <div style="text-align:center">
+      <div style="text-align:center;position:relative;z-index:2">
         <div style="font-size:34px;font-weight:900;color:${GOLD};margin-bottom:24px;font-family:Georgia,serif">CHOOSE YOUR CHAMPION</div>
         <div style="display:flex;gap:22px;justify-content:center;flex-wrap:wrap">${cards}</div>
       </div>`);
@@ -243,7 +250,7 @@ export class HUD {
       </div>`;
     }).join("");
     this._menu(`
-      <div style="text-align:center;max-width:1000px">
+      <div style="text-align:center;max-width:1000px;position:relative;z-index:2">
         <div style="font-size:34px;font-weight:900;color:${GOLD};margin-bottom:20px;font-family:Georgia,serif">CHOOSE A REALM</div>
         <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap">${cards}</div>
         <div id="cf-back" class="cf-btn" style="display:inline-block;margin-top:22px;padding:9px 26px;${frameCss}font-size:14px">← Champions</div>

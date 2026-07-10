@@ -18,8 +18,10 @@ export const CLASSES = {
         label: "Two-Handed", icon: "🗡", model: "barbarian",
         // anim note: barbarian slash1 is a 7.7s charged chop — unusable for spam;
         // finisher (1.87s hammer swing) + slash2 read as real chops when rate-fitted
-        basic: { id: "heavy_slash", name: "Heavy Slash", type: "melee", dmg: 12, arc: 1.9, range: 2.9,
-                 rate: 0.52, anim: ["finisher", "slash2"], animScale: 1.5, sfx: "swing_big", trail: 0xff5a3a },
+        // FULL frontal cone swing — slower, heavier, whole clip plays (owner: "it's
+        // a 2H sword, it should be a full swing with the swipe on it")
+        basic: { id: "heavy_slash", name: "Heavy Slash", type: "melee", dmg: 18, arc: 2.6, range: 3.1,
+                 rate: 0.9, anim: ["finisher", "slash2"], animScale: 1.5, sfx: "swing_big", trail: 0xff5a3a },
         abilities: [
           { id: "whirlwind", name: "Whirlwind", callout: "WHIRLWIND!", icon: "🌪", cd: 6,
             type: "spin", dmg: 9, radius: 3.6, ticks: 5, duration: 1.1,

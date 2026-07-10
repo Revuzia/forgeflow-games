@@ -8,7 +8,7 @@ import { ARENAS, BOARD_RADIUS, REST_BETWEEN_WAVES } from "../data/arenas.js";
 import { ALL_TYPES, waveComp } from "../data/enemies.js";
 import { CLASSES, COMBO_TIERS, COMBO_WINDOW } from "../data/abilities.js";
 import { ArenaBoard } from "../view/arena.js";
-import { Actor, makeGreatblade, makeSword, makeShield, makeBow, makeStaff, makeArrow, makeSpinTrail } from "../view/chars.js";
+import { Actor, makeGreatblade, makeSword, makeShield, makeBow, makeStaff, makeArrow, makeSpinTrail, makeSwipeArc } from "../view/chars.js";
 import { Particles, FloatText, Decals, WorldBars } from "../view/fx.js";
 import { SFX } from "../core/audio.js";
 import { Music } from "../core/music.js";
@@ -107,6 +107,7 @@ export class Game {
     this.projectiles = [];
     this.fallers = [];           // rain-of-arrows falling shafts
     this.pickups = [];           // heart drops
+    this.swipes = [];            // crescent slash FX
     this.spawnQueue = [];        // {type, t} — t until ground telegraph
     this.pendingSpawns = [];     // {type, x, z, t} — telegraph shown, erupting soon
     this.waveIdx = -1; this.waveActive = false; this.restT = 1.4;
@@ -138,6 +139,8 @@ export class Game {
     if (this.projectiles) for (const p of this.projectiles) p.mesh.removeFromParent();
     if (this.fallers) for (const f of this.fallers) f.mesh.removeFromParent();
     if (this.pickups) for (const p of this.pickups) p.mesh.removeFromParent();
+    if (this.swipes) for (const s of this.swipes) s.m.removeFromParent();
+    this.swipes = [];
     this.bossRef = null; if (this.hud.setBoss) this.hud.setBoss(null);
     this.enemies = []; this.projectiles = []; this.fallers = []; this.pickups = []; this.timers = [];
     this.pendingSpawns = []; this.spawnQueue = [];
@@ -149,11 +152,11 @@ export class Game {
 
   _equip(actor, model) {
     // grip fracs/rest dirs follow DF's WEAPON_CFG conventions (+Y shaft weapons)
-    if (model === "barbarian") actor.attachWeapon(makeGreatblade(), "Right", { gripFrac: 0.13, rest: [0.10, 0.95, 0.30] });
+    if (model === "barbarian") actor.attachWeapon(makeGreatblade(), "Right", { gripFrac: 0.13, palm: 0.13, rest: [0.10, 0.95, 0.30] });
     else if (model === "knight") {
-      actor.attachWeapon(makeSword(), "Right", { gripFrac: 0.14, rest: [0.15, 0.62, 0.77] });
+      actor.attachWeapon(makeSword(), "Right", { gripFrac: 0.14, palm: 0.12, rest: [0.15, 0.62, 0.77] });
       actor.attachShield(makeShield());
-    } else if (model === "rogue") actor.attachWeapon(makeBow(), "Left", { gripFrac: 0.5, scale: 0.8, rest: [0.08, 0.95, 0.25] });
+    } else if (model === "rogue") actor.attachWeapon(makeBow(), "Left", { gripFrac: 0.5, scale: 0.8, palm: 0.1, roll: Math.PI / 2, rest: [0.06, 0.55, 0.83] });
     // sorceress base.glb has an ornate flame-staff BAKED INTO the model (verified
     // visually) — attaching a procedural one gave her a floating duplicate
   }
@@ -434,6 +437,15 @@ export class Game {
 
   // ================= PLAYER ABILITIES ===================================
 
+  /** crescent slash FX oriented along the current facing */
+  spawnSwipe(color, radius, arc) {
+    const m = makeSwipeArc(color, radius, arc);
+    m.position.set(this.px, 0.9, this.pz);
+    m.rotation.z = -this.facing + Math.PI / 2; // ring arc midline onto facing
+    this.scene.add(m);
+    this.swipes.push({ m, t: 0.22 });
+  }
+
   fireBasic() {
     const b = this.kit().basic;
     this.basicT = b.rate;
@@ -451,10 +463,11 @@ export class Game {
     SFX.play(b.sfx);
     if (b.type === "melee") {
       this.after(dur * 0.35, () => {
+        // visible crescent swipe — the swing must READ as a frontal cone
+        this.spawnSwipe(b.trail || 0xffd24a, b.range, b.arc);
         const hits = this.enemiesInArc(b.arc, b.range);
         for (const e of hits) this.hurtEnemy(e, b.dmg);
         if (hits.length) this.addShake(0.08);
-        // swing trail flash
         this.fx.burst(this.px + Math.cos(this.facing) * 1.6, 1.1, this.pz + Math.sin(this.facing) * 1.6,
           { count: 7, color: b.trail || 0xffffff, speed: 2, up: 1, life: 0.25 });
       });
@@ -538,6 +551,7 @@ export class Game {
     switch (def.type) {
       case "melee": {
         this.after(dur * 0.35, () => {
+          this.spawnSwipe(0xffd24a, def.range, def.arc);
           for (const e of this.enemiesInArc(def.arc, def.range))
             this.hurtEnemy(e, def.dmg, { heavy: true, knockback: def.knockback || 0, status: def.stagger ? { stagger: def.stagger } : null });
         });
@@ -1071,6 +1085,17 @@ export class Game {
       }
     }
 
+    // ---- swipe arcs sweep + fade
+    for (let i = this.swipes.length - 1; i >= 0; i--) {
+      const s = this.swipes[i];
+      s.t -= dt;
+      s.m.rotation.z -= 9 * dt;
+      s.m.material.opacity = Math.max(0, s.t / 0.22) * 0.85;
+      const sc = 1 + (1 - s.t / 0.22) * 0.25;
+      s.m.scale.set(sc, sc, 1);
+      if (s.t <= 0) { s.m.removeFromParent(); s.m.material.dispose(); this.swipes.splice(i, 1); }
+    }
+
     // ---- heart pickups
     this.updatePickups(dt);
 
@@ -1086,11 +1111,21 @@ export class Game {
 
   _heartTexture() {
     if (!this.__heartTex) {
+      // vector heart — emoji glyphs render purple/monochrome on some systems
       const S = 96, c = document.createElement("canvas"); c.width = c.height = S;
       const g = c.getContext("2d");
-      g.font = "76px serif"; g.textAlign = "center"; g.textBaseline = "middle";
-      g.shadowColor = "rgba(255,60,80,.9)"; g.shadowBlur = 14;
-      g.fillText("❤️", S / 2, S / 2 + 4);
+      g.translate(S / 2, S / 2);
+      g.beginPath();
+      g.moveTo(0, 30);
+      g.bezierCurveTo(-42, -2, -26, -34, 0, -14);
+      g.bezierCurveTo(26, -34, 42, -2, 0, 30);
+      g.closePath();
+      g.fillStyle = "#ff2038";
+      g.shadowColor = "rgba(255,40,70,.95)"; g.shadowBlur = 16;
+      g.fill();
+      g.shadowBlur = 0;
+      g.beginPath(); g.ellipse(-11, -14, 7, 5, -0.5, 0, Math.PI * 2);
+      g.fillStyle = "rgba(255,255,255,.5)"; g.fill();
       this.__heartTex = new THREE.CanvasTexture(c);
     }
     return this.__heartTex;
@@ -1111,7 +1146,8 @@ export class Game {
       const p = this.pickups[i];
       p.t -= dt;
       p.mesh.position.y = 1 + Math.sin(performance.now() / 300 + p.phase) * 0.18;
-      p.mesh.material.rotation += dt * 1.5;
+      const pulse = 0.85 + Math.sin(performance.now() / 220 + p.phase) * 0.08;
+      p.mesh.scale.setScalar(pulse);                  // upright, gentle pulse — no spin
       p.mesh.material.opacity = p.t < 3 ? (Math.floor(p.t * 6) % 2 ? 0.25 : 1) : 1; // blink before despawn
       if (dist2(p.x, p.z, this.px, this.pz) < 1.9) {
         this.hp = Math.min(this.maxHp, this.hp + 1);

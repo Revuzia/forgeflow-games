@@ -211,8 +211,13 @@ export class Actor {
     const box = new THREE.Box3().setFromObject(mesh);
     const h = Math.max(0.001, box.max.y - box.min.y);
     mesh.position.y -= box.min.y + h * (cfg.gripFrac ?? 0.2);   // grip → holder origin
+    if (cfg.roll) mesh.rotation.y = cfg.roll;                   // spin about the shaft (bow arc facing, edge alignment)
+    const counter = boneCounterScale(bone);
     const holder = new THREE.Group();
-    holder.scale.setScalar(boneCounterScale(bone) * (cfg.scale || 1));
+    holder.scale.setScalar(counter * (cfg.scale || 1));
+    // hand-bone origin = wrist joint; push the grip into the palm along the
+    // bone's local axis (scaled back up into bone-local units)
+    holder.position.y = (cfg.palm ?? 0.1) * counter;
     holder.add(mesh);
     bone.add(holder);
     this.model.updateMatrixWorld(true);
@@ -291,10 +296,10 @@ export function relaxArms(b, amount) {
   if (!b) return;
   const a = amount == null ? 1 : Math.max(0, Math.min(1, amount));
   if (a <= 0) return;
-  _relaxOne(b.rArm, b.rFore, -0.28, -1, 0.02, 0.8 * a);
-  _relaxOne(b.lArm, b.lFore, 0.28, -1, 0.02, 0.8 * a);
-  _relaxOne(b.rFore, b.rHand, -0.08, -1, 0.05, 0.45 * a);
-  _relaxOne(b.lFore, b.lHand, 0.08, -1, 0.05, 0.45 * a);
+  _relaxOne(b.rArm, b.rFore, -0.28, -1, 0.02, 0.92 * a);
+  _relaxOne(b.lArm, b.lFore, 0.28, -1, 0.02, 0.92 * a);
+  _relaxOne(b.rFore, b.rHand, -0.08, -1, 0.05, 0.85 * a);
+  _relaxOne(b.lFore, b.lHand, 0.08, -1, 0.05, 0.85 * a);
 }
 
 // ---------- weapon props (thronedrift styling: crimson / steel / gold) -------
@@ -388,6 +393,18 @@ export function makeSpinTrail(color = 0xff5a3a) {
   const gold = mk(3.1, 0.14, 0.7); gold.material.color = new THREE.Color(0xffd24a); gold.position.y = 0.95;
   g.add(outer, inner, gold);
   return g;
+}
+
+/** one-shot crescent swipe arc (2H swings / sword strikes) — sim fades+sweeps it */
+export function makeSwipeArc(color = 0xff5a3a, radius = 2.6, arc = 2.4) {
+  const geo = new THREE.RingGeometry(radius * 0.45, radius, 28, 1, -arc / 2, arc);
+  const mat = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.85, side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const m = new THREE.Mesh(geo, mat);
+  m.rotation.x = -Math.PI / 2;
+  return m;
 }
 
 export function makeStaff() {
