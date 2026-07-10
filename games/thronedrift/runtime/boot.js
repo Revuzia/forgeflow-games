@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { Input } from "./core/input.js";
 import { HUD } from "./ui/hud.js";
 import { Game } from "./sim/game.js";
-import { loadHeroes, loadEnemyModels } from "./view/chars.js";
+import { loadHeroes, loadEnemyModels, loadProps } from "./view/chars.js";
 import { SFX } from "./core/audio.js";
 import { save } from "./core/util.js";
 import { Music } from "./core/music.js";
@@ -54,16 +54,17 @@ window.addEventListener("resize", () => {
 (async () => {
   let heroF = 0, enemyF = 0;
   const upd = () => setProgress(heroF * 0.55 + enemyF * 0.4, heroF < 1 ? "Summoning champions…" : "Rousing the legions…");
-  const [heroes, enemies] = await Promise.all([
+  const [heroes, enemies, props] = await Promise.all([
     loadHeroes(["barbarian", "knight", "sorceress", "rogue"], (f) => { heroF = f; upd(); }),
     loadEnemyModels(["imp", "skeleton", "brute", "slime", "bat", "yeti", "spider", "gargoyle", "wisp", "zombie", "skull", "ghost", "orc", "myconid", "cyclops", "demon", "giant", "dragon", "cthulhu", "ninja"], (f) => { enemyF = f; upd(); }),
+    loadProps(["bow"]),
   ]);
   setProgress(1, "Ready.");
 
   const input = new Input();
   input.bindCanvas(renderer.domElement);
   const hud = new HUD(hudRoot, input);
-  const game = new Game({ renderer, camera, hud, input, heroes, enemies, container });
+  const game = new Game({ renderer, camera, hud, input, heroes, enemies, props, container });
 
   // expose numeric eval hooks for automated verification (ffg preview convention)
   window.__FFG3D__ = {

@@ -1,5 +1,17 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v0.8 — 2026-07-10 (weapon-in-hand pass: generated bow + staff surgery)
+- ARCHER: real Meshy-generated recurve bow (assets/props/bow.glb, text-to-3d)
+  replaces the procedural one that read as an upside-down crossbow; auto
+  shaft-normalization (longest axis -> +Y) + vision-tuned vertical grip
+- MAGE: her staff is WELDED into the character mesh (Meshy ignored the
+  empty-hands prompt) and was skinned to unstable mixed weights near her LEFT
+  hand in bind pose. GLB surgery: 755 shaft vertices traced spatially,
+  re-weighted uniformly to Hips (rigid, no gesture-waving) and translated to
+  her measured average right-palm position — staff now stands in front of her
+  palm. Pristine mesh backup: state/thronedrift_sorceress_base_pristine.glb
+- WARRIOR: untouched (owner-approved)
+
 ## v0.7 — 2026-07-10 (feedback batch 3: realm-1 fix, swings, grips, music swap)
 - FIXED: Realm 1 card invisible on arena select — absolutely-positioned menu
   bg/scrim painted OVER static content; locked cards escaped via their

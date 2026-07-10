@@ -8,7 +8,7 @@ import { ARENAS, BOARD_RADIUS, REST_BETWEEN_WAVES } from "../data/arenas.js";
 import { ALL_TYPES, waveComp } from "../data/enemies.js";
 import { CLASSES, COMBO_TIERS, COMBO_WINDOW } from "../data/abilities.js";
 import { ArenaBoard } from "../view/arena.js";
-import { Actor, makeGreatblade, makeSword, makeShield, makeBow, makeStaff, makeArrow, makeSpinTrail, makeSwipeArc } from "../view/chars.js";
+import { Actor, makeGreatblade, makeSword, makeShield, makeBow, makeStaff, makeArrow, makeSpinTrail, makeSwipeArc, normalizeShaftProp } from "../view/chars.js";
 import { Particles, FloatText, Decals, WorldBars } from "../view/fx.js";
 import { SFX } from "../core/audio.js";
 import { Music } from "../core/music.js";
@@ -20,10 +20,10 @@ const SPAWN_TELEGRAPH = 0.85;  // ground-warning time before an enemy erupts
 const RISE_TIME = 0.45;        // how long an enemy takes to climb out of the ground
 
 export class Game {
-  constructor({ renderer, camera, hud, input, heroes, enemies, container }) {
+  constructor({ renderer, camera, hud, input, heroes, enemies, props, container }) {
     this.renderer = renderer; this.camera = camera;
     this.hud = hud; this.input = input;
-    this.heroLib = heroes; this.enemyLib = enemies;
+    this.heroLib = heroes; this.enemyLib = enemies; this.propLib = props || {};
     this.container = container;
 
     this.scene = new THREE.Scene();
@@ -156,7 +156,11 @@ export class Game {
     else if (model === "knight") {
       actor.attachWeapon(makeSword(), "Right", { gripFrac: 0.14, palm: 0.12, rest: [0.15, 0.62, 0.77] });
       actor.attachShield(makeShield());
-    } else if (model === "rogue") actor.attachWeapon(makeBow(), "Left", { gripFrac: 0.5, scale: 0.8, palm: 0.1, roll: Math.PI / 2, rest: [0.06, 0.55, 0.83] });
+    } else if (model === "rogue") {
+      // Meshy-generated bow (assets/props/bow.glb) — procedural fallback
+      const bow = this.propLib.bow ? normalizeShaftProp(this.propLib.bow, 1.2) : makeBow();
+      actor.attachWeapon(bow, "Left", { gripFrac: 0.5, palm: 0.12, roll: 0, rest: [0.05, 0.98, 0.15] });
+    }
     // sorceress base.glb has an ornate flame-staff BAKED INTO the model (verified
     // visually) — attaching a procedural one gave her a floating duplicate
   }

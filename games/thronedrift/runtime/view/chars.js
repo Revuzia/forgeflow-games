@@ -62,6 +62,44 @@ export async function loadHeroes(names, onProgress) {
   return out;
 }
 
+/** static weapon props (Meshy-generated). Returns {} entries that loaded. */
+export async function loadProps(names) {
+  const out = {};
+  await Promise.all(names.map(async (n) => {
+    try {
+      const g = await load(`props/${n}.glb`);
+      out[n] = prepScene(g.scene);
+    } catch (e) { console.warn("[chars] prop load failed:", n, e); }
+  }));
+  return out;
+}
+
+/**
+ * Normalize a generated shaft-like prop for attachWeapon: longest bbox axis
+ * rotated onto +Y, scaled to targetLen, centered so the shaft spans 0..len.
+ */
+export function normalizeShaftProp(scene, targetLen = 1.15) {
+  const wrap = new THREE.Group();
+  const inner = scene.clone(true);
+  wrap.add(inner);
+  const box = new THREE.Box3().setFromObject(inner);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  inner.position.sub(center);                      // center at origin
+  const axes = [["x", size.x], ["y", size.y], ["z", size.z]].sort((a, b) => b[1] - a[1]);
+  const longest = axes[0][0];
+  if (longest === "x") inner.rotation.z = Math.PI / 2;
+  else if (longest === "z") inner.rotation.x = -Math.PI / 2;
+  const len = axes[0][1];
+  const s = targetLen / Math.max(0.001, len);
+  wrap.scale.setScalar(s);
+  const inner2 = new THREE.Group();                // shift so shaft spans 0..targetLen (grip math expects +Y span)
+  wrap.position.y = targetLen / 2;
+  const holder = new THREE.Group();
+  holder.add(wrap);
+  return holder;
+}
+
 export async function loadEnemyModels(names, onProgress) {
   const out = {};
   let done = 0;
