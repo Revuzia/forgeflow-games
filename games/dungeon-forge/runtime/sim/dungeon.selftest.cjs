@@ -210,6 +210,33 @@ const ok = (cond, name, extra) => {
     ok(hbS.map((s) => s.act).join(",") === "melee,special,frost,chain,potion,mana", "hotbar: sorceress adds frost+chain");
   }
 
+  // ── 4f. floor textures (surface paint) ──────────────────────────
+  console.log("[floor-tex]");
+  {
+    const td = newDungeon({ name: "Tex", theme: "fantasy" });
+    // paint a floor cell with a texture id
+    ok(applyOp(td, { t: "cell+", f: 0, x: 6, z: 6, ct: 1, tex: "cobble" }).ok && td.floors[0].tex["6,6"] === "cobble", "tex: floor cell carries texture id");
+    // lava/water never carry a texture (cosmetic floor-only)
+    applyOp(td, { t: "cell+", f: 0, x: 6, z: 6, ct: 2, tex: "cobble" });
+    ok(td.floors[0].tex["6,6"] === undefined, "tex: lava cell drops texture");
+    // repaint back to floor with a texture, then erasing the cell clears it
+    applyOp(td, { t: "cell+", f: 0, x: 7, z: 7, ct: 1, tex: "brick" });
+    applyOp(td, { t: "cell-", f: 0, x: 7, z: 7 });
+    ok(td.floors[0].tex["7,7"] === undefined, "tex: erasing cell clears texture");
+    // unknown / 'stone' texture ids are not stored (stone = default kit tile)
+    applyOp(td, { t: "cell+", f: 0, x: 8, z: 8, ct: 1, tex: "bogus" });
+    applyOp(td, { t: "cell+", f: 0, x: 9, z: 9, ct: 1, tex: "stone" });
+    ok(td.floors[0].tex["8,8"] === undefined && td.floors[0].tex["9,9"] === undefined, "tex: unknown/stone ids not stored");
+    // stampRoom carries a texture to every floored cell
+    const ts = newDungeon({ name: "TexRoom", theme: "fantasy" });
+    stampRoom(ts, 0, 5, 5, 3, 3, 1, "wood");
+    ok(ts.floors[0].tex["5,5"] === "wood" && ts.floors[0].tex["7,7"] === "wood", "tex: stampRoom paints texture across room");
+    // texture survives a serialize→sanitize roundtrip (only on a real floor cell)
+    const back = sanitize(serialize(ts));
+    ok(back.floors[0].tex["6,6"] === "wood", "tex: survives serialize roundtrip");
+    ok(D.FLOOR_TEX_IDS.length >= 6 && D.FLOOR_TEX_IDS[0] === "stone", "tex: FLOOR_TEX_IDS defined (stone default first)");
+  }
+
   // ── 5. loot determinism ─────────────────────────────────────────
   console.log("[loot]");
   const l1 = JSON.stringify(rollLoot(s, "oX", 123, null));

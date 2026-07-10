@@ -9,6 +9,7 @@ const D = await import("../sim/dungeon.js" + V);
 const E = await import("../sim/escape_sim.js" + V);
 const { TOOLS, PROP_TOOLS, PROP_TOOL_IDS, FLOOR_MODES } = await import("./builder.js" + V);
 const { fmtTime } = await import("./escape.js" + V);
+const { FLOOR_TEX_DEFS, floorTexSwatch } = await import("./floor_tex.js" + V);
 
 export class Hud {
   constructor(game) {
@@ -149,7 +150,21 @@ export class Hud {
       mkOpts(FLOOR_MODES.map((m) => m.id), fm,
         (id) => { const m = FLOOR_MODES.find((x) => x.id === id); return `${m.icon} ${m.label}`; },
         (id) => b.setTool("floor", { floorMode: id }));
-      sub.appendChild(el(`<span class="df-subnote">${fm === "raise" || fm === "lower" ? "Drag over cells to " + fm + " them — smooth rolling terrain" : "Drag to fill a rectangle" + (fm !== "floor" ? " with " + fm : "")}</span>`));
+      sub.appendChild(el(`<span class="df-subnote">Drag to fill a rectangle${fm !== "floor" ? " with " + fm : ""}</span>`));
+      // Floor mode: pick the surface texture painted onto each cell (swatch picker)
+      if (fm === "floor") {
+        sub.appendChild(el(`<div class="df-flexbreak"></div>`));
+        const curTex = b.toolOpt.floorTex || "stone";
+        for (const d of FLOOR_TEX_DEFS) {
+          const sw = floorTexSwatch(d.id);
+          const img = sw ? `<img class="df-thumbimg" src="${sw}" alt="" draggable="false">`
+                         : `<div class="df-thumbimg" style="background:repeating-linear-gradient(45deg,#5a5f70,#5a5f70 6px,#4a4f60 6px,#4a4f60 12px)"></div>`;
+          const o = el(`<button class="df-thumb df-texsw ${d.id === curTex ? "on" : ""}" title="${esc(d.label)}">${img}<span class="df-thumblbl">${esc(d.label)}</span></button>`);
+          o.onclick = () => { this.g.audio.sfx("ui"); b.setTool("floor", { floorMode: "floor", floorTex: d.id }); this.refreshBuilder(b); };
+          sub.appendChild(o);
+        }
+        sub.classList.add("thumbs");
+      }
     } else if (b.tool === "enemy") {
       const roster = D.ENEMIES[b.d.theme];
       mkThumbOpts(Object.keys(roster), b.toolOpt.etype || Object.keys(roster)[0], "enemy",
@@ -595,6 +610,8 @@ function injectStyle() {
   .df-thumbph{display:flex;align-items:center;justify-content:center;font-size:22px;opacity:.5}
   .df-thumblbl{font-size:9.5px;font-weight:700;line-height:1.12;text-align:center;max-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .df-thumbstat{font-size:8.5px;opacity:.82;font-weight:700;letter-spacing:.2px} .df-thumbstat b{color:#ff8a9a;font-weight:800}
+  .df-texsw{width:60px}
+  .df-texsw .df-thumbimg{width:52px;height:52px;object-fit:cover;background:none;image-rendering:auto;box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}
   .df-floors{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;pointer-events:auto}
   .df-floor{width:44px;height:40px;background:rgba(10,13,22,.88);border:1px solid rgba(150,170,255,.3);border-radius:10px;color:#cfd6f4;font-weight:800;font-size:15px}
   .df-floor.on{border-color:var(--acc);color:var(--acc)} .df-floor.add{opacity:.7}

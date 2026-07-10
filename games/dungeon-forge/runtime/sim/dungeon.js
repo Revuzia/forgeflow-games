@@ -23,6 +23,11 @@ export const THEMES = ["fantasy", "scifi"];
 // Cell types — every truthy cell is walkable floor; the type flavors it.
 // 1 stone floor · 2 LAVA (burns players) · 3 WATER (slows) · 4 RAISED platform
 export const CT = { FLOOR: 1, LAVA: 2, WATER: 3, RAISED: 4 };
+// Optional per-cell surface texture for walkable floor (type 1). "stone" = the
+// kit's own tile (default, stored as absence). The 3d floor_tex module renders
+// each id; the sim just carries the opaque string so it stays node-testable.
+export const FLOOR_TEX_IDS = ["stone", "cobble", "brick", "flagstone", "dirt", "cave", "wood", "sand", "marble", "moss"];
+const FLOOR_TEX_SET = new Set(FLOOR_TEX_IDS);
 export const RAISED_H = 1.1;           // world-units height of a legacy raised platform
 export const LAVA_DPS = { dmg: 10 };   // per hit through the 0.45s i-frame gate
 export const WATER_SLOW = 0.55;        // speed multiplier in water
@@ -225,7 +230,8 @@ export function newDungeon(opts = {}) {
 }
 
 export function emptyFloor() {
-  return { cells: {}, heights: {}, objects: [] };  // cells: {"x,z":1}, heights: {"x,z":level}, objects: […]
+  // cells: {"x,z":ct} · heights: {"x,z":level} · tex: {"x,z":texId} (floor only) · objects: […]
+  return { cells: {}, heights: {}, tex: {}, objects: [] };
 }
 
 export const ck = (x, z) => x + "," + z;
@@ -269,7 +275,12 @@ export function applyOp(d, op) {
       const fl = d.floors[op.f];
       if (!fl) return { ok: false, err: "nofloor" };
       const ct = op.ct && op.ct >= 1 && op.ct <= 4 ? op.ct | 0 : CT.FLOOR;
-      fl.cells[ck(op.x, op.z)] = ct;
+      const k = ck(op.x, op.z);
+      fl.cells[k] = ct;
+      // surface texture: only walkable floor (type 1) carries one; lava/water/raised clear it
+      fl.tex = fl.tex || {};
+      if (ct === CT.FLOOR && op.tex && op.tex !== "stone" && FLOOR_TEX_SET.has(op.tex)) fl.tex[k] = op.tex;
+      else if (op.tex !== undefined || ct !== CT.FLOOR) delete fl.tex[k];
       return { ok: true };
     }
     case "cell-": {
@@ -279,6 +290,7 @@ export function applyOp(d, op) {
       // erase everything that stood on the cell
       fl.objects = fl.objects.filter((o) => !(o.x === op.x && o.z === op.z));
       if (fl.heights) delete fl.heights[ck(op.x, op.z)];
+      if (fl.tex) delete fl.tex[ck(op.x, op.z)];
       return { ok: true };
     }
     case "raise": case "lower": {
@@ -367,11 +379,16 @@ export function applyOp(d, op) {
 }
 
 // Room stamp helper (builder "room brush"): floors a w×h rect. Returns ops (already applied).
-export function stampRoom(d, f, x0, z0, w, h, ct) {
+// tex (optional) tags each stamped floor cell with a surface texture id.
+export function stampRoom(d, f, x0, z0, w, h, ct, tex) {
   const ops = [];
   for (let x = x0; x < x0 + w; x++)
     for (let z = z0; z < z0 + h; z++)
-      if (inBounds(x, z)) { const op = { t: "cell+", f, x, z, ct: ct || CT.FLOOR }; if (applyOp(d, op).ok) ops.push(op); }
+      if (inBounds(x, z)) {
+        const op = { t: "cell+", f, x, z, ct: ct || CT.FLOOR };
+        if (tex && tex !== "stone") op.tex = tex;
+        if (applyOp(d, op).ok) ops.push(op);
+      }
   return ops;
 }
 
@@ -624,6 +641,12 @@ export function sanitize(raw) {
         const [x, z] = k.split(",").map(Number);
         const lv = Math.max(HEIGHT_MIN, Math.min(HEIGHT_MAX, fl.heights[k] | 0));
         if (inBounds(x, z) && lv !== 0 && nf.cells[ck(x, z)]) nf.heights[ck(x, z)] = lv;
+      }
+      if (fl && fl.tex) for (const k of Object.keys(fl.tex)) {
+        const [x, z] = k.split(",").map(Number);
+        const t = fl.tex[k];
+        // texture only survives on a walkable floor cell (type 1)
+        if (inBounds(x, z) && nf.cells[ck(x, z)] === CT.FLOOR && t !== "stone" && FLOOR_TEX_SET.has(t)) nf.tex[ck(x, z)] = t;
       }
       if (fl && Array.isArray(fl.objects)) for (const o of fl.objects.slice(0, 4000)) {
         if (!o || !KINDS[o.kind] || !inBounds(o.x | 0, o.z | 0)) continue;

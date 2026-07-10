@@ -344,6 +344,29 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.7.5 — 2026-07-10 (Floor tool: Raise/Lower removed + procedural floor textures)
+- **Raise/Lower are gone from the Floor tool** (owner request) — the sub-palette is
+  now just Floor · Lava · Water. The sim still honours legacy per-cell height data so
+  older dungeons keep their rolling terrain; new builds stay flat.
+- **Floor textures** — Floor mode now carries a surface texture painted onto each
+  cell, picked from a swatch row: Stone (default kit tile) · Cobble · Brick ·
+  Flagstone · Dirt · Cave Rock · Wood · Sand · Marble · Mossy. Nine of them are
+  seamless procedural textures generated in-code (`runtime/3d/floor_tex.js`):
+  toroidal Voronoi (cobble/flagstone/moss), running-bond bricks, wood planks with
+  lengthwise grain, marble veins, rippled sand, cracked cave rock — each a 256²
+  canvas that tiles with **zero-delta seams** (verified numerically) and needs no
+  external assets or generation credits.
+- Data model: an optional per-cell `tex` map on each floor (walkable cells only;
+  cleared when a cell becomes lava/water or is erased), threaded through `cell+`,
+  `cell-`, `stampRoom`, and the serialize→sanitize roundtrip. Render splits flat
+  cells into default (kit tile) + textured (a UV-mapped plane on the tile top),
+  since the kit's colormap-atlas UVs can't tile a swapped map. Both builder and
+  play mode render textures via the shared `makeCellSurfaces`.
+- Verified live on the CDN: Floor modes = [floor,lava,water] (no raise/lower); a
+  9-texture striped floor rendered 108 textured instances across 9 distinct
+  CanvasTexture materials; HUD swatch picker shows 10 options (256² thumbnails,
+  click sets the paint texture). Selftest +7 → 194.
+
 ## v1.7.4 — 2026-07-10 (assignable action hotbar)
 - **The read-only ability bar is now a real hotbar** — 6 slots showing the
   player's abilities + consumables with icons, cooldown fill overlays, and

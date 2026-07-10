@@ -18,7 +18,7 @@ const CELL = D.CELL;
 export const TOOLS = [
   // Placement tools first; Select + Erase sit at the end just before the Exit
   // portal (owner request). Number keys 1-0 map to this order left→right.
-  { id: "floor", icon: "⬜", label: "Floor" },   // → floor / lava / water paint + raise / lower
+  { id: "floor", icon: "⬜", label: "Floor" },   // → floor / lava / water paint + floor texture
   { id: "door", icon: "🚪", label: "Door" },
   { id: "stairs", icon: "🪜", label: "Stairs" },
   { id: "props", icon: "🎁", label: "Props" },   // → chest / key / trap / light / decor
@@ -40,13 +40,13 @@ export const PROP_TOOLS = [
 ];
 export const PROP_TOOL_IDS = PROP_TOOLS.map((t) => t.id);
 
-// The Floor tool's sub-modes: three surface paints + a height sculpt pair.
+// The Floor tool's sub-modes: three surface paints (Floor also picks a texture).
+// Raise/Lower were removed per owner request; the sim still honours legacy height
+// data so older dungeons keep their rolling terrain, but new ones stay flat.
 export const FLOOR_MODES = [
   { id: "floor", icon: "⬜", label: "Floor" },
   { id: "lava", icon: "🌋", label: "Lava" },
   { id: "water", icon: "💧", label: "Water" },
-  { id: "raise", icon: "🔼", label: "Raise" },
-  { id: "lower", icon: "🔽", label: "Lower" },
 ];
 const FLOOR_CT = { floor: 1, lava: 2, water: 3 };
 
@@ -494,18 +494,13 @@ export class Builder {
       }
       return;
     }
-    // Floor tool: floor/lava/water paint a rectangle (single click = one cell);
-    // raise/lower sculpt each dragged cell's height. (Room tool merged in here.)
+    // Floor tool: floor/lava/water paint a rectangle (single click = one cell).
+    // Floor mode also tags each cell with the selected surface texture. (Room merged in.)
     if (this.tool === "floor" || this.tool === "room") {
       const mode = this.toolOpt.floorMode || "floor";
       this._pushUndo();
-      if (mode === "raise" || mode === "lower") {
-        this._noUndo = true;
-        this.drag = { height: mode, done: new Set() };
-        this._heightPaint(cell);
-      } else {
-        this.drag = { room: cell, ct: FLOOR_CT[mode] || 1 };
-      }
+      const tex = mode === "floor" ? (this.toolOpt.floorTex || "stone") : "stone";
+      this.drag = { room: cell, ct: FLOOR_CT[mode] || 1, tex };
       return;
     }
     if (PAINT_CT[this.tool] || this.tool === "erase") {   // erase paints free-form
@@ -537,7 +532,6 @@ export class Builder {
     const cell = this._pointerCell(e);
     this.hover = cell;
     if (cell && this.drag && this.drag.paint) this._paint(cell);
-    if (cell && this.drag && this.drag.height) this._heightPaint(cell);
     // drag a selected object onto a new cell (must land on existing floor)
     if (cell && this._moveDrag) {
       const o = D.objById(this.d, this._moveDrag.id);
@@ -560,12 +554,11 @@ export class Builder {
       this._moveDrag = null; this._noUndo = false;
       if (this.g.hud.refreshBuilderUndo) this.g.hud.refreshBuilderUndo(this);
     }
-    if (this.drag && this.drag.height) { this._noUndo = false; if (this.g.hud.refreshBuilderUndo) this.g.hud.refreshBuilderUndo(this); }
     if (this.drag && this.drag.room) {
       const a = this.drag.room, b = this.hover || a;   // click with no drag = single cell
       const x0 = Math.min(a.x, b.x), z0 = Math.min(a.z, b.z);
       const w = Math.abs(a.x - b.x) + 1, h = Math.abs(a.z - b.z) + 1;
-      const ops = D.stampRoom(this.d, this.floor, x0, z0, w, h, this.drag.ct || 1);
+      const ops = D.stampRoom(this.d, this.floor, x0, z0, w, h, this.drag.ct || 1, this.drag.tex);
       if (ops.length) { ops.forEach((op) => this._broadcast(op)); this.rebuildFloor(this.floor); this.g.audio.sfx("place"); }
       else if (this._undo.length) this._undo.pop();   // nothing changed → drop the snapshot
     }
@@ -589,16 +582,6 @@ export class Builder {
     this.roomPreview.position.set((x0 + w / 2) * CELL, this.floor * FLOOR_H + 0.06, (z0 + h / 2) * CELL);
   }
   _clearRoomPreview() { if (this.roomPreview) this.roomPreview.visible = false; }
-
-  // raise/lower a cell's height once per drag gesture (rolling terrain sculpt)
-  _heightPaint(cell) {
-    const k = D.ck(cell.x, cell.z);
-    if (!this.drag || !this.drag.done || this.drag.done.has(k)) return;
-    this.drag.done.add(k);
-    const op = { t: this.drag.height, f: this.floor, x: cell.x, z: cell.z };
-    const res = D.applyOp(this.d, op);
-    if (res.ok) { this._broadcast(op); this.rebuildFloor(this.floor); this.g.audio.sfx("place"); this.g.hud.refreshValidate(this); }
-  }
 
   _paint(cell) {
     if (this.tool === "erase") {

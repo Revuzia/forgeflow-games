@@ -11,6 +11,8 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 
 const REL = new URL("../../", import.meta.url).href; // game root
+const _V = new URL(import.meta.url).search;           // inherit the ?v= cache-bust
+const { floorTexture } = await import("./floor_tex.js" + _V);
 
 export class Assets {
   constructor() {
@@ -883,13 +885,36 @@ export function makeCellSurfaces(D, d, f, kit) {
     return n ? s / n : 0;
   };
 
-  // flat kit tiles for level-0 cells the terrain mesh doesn't cover
+  // flat cells (terrain mesh doesn't cover) split by surface: default → kit stone
+  // tile; a chosen floor texture → a procedural textured plane laid on the tile top.
   const flat = byType[1].filter(([x, z]) => !terrain.has(D.ck(x, z)));
-  if (flat.length) {
-    const inst = makeInstanced(kit.floor.scene, flat.length);
-    flat.forEach(([x, z], i) => { m4.makeTranslation(x * CELL + CELL / 2, 0, z * CELL + CELL / 2); inst.setMatrixAt(i, m4); });
-    inst.setCount(flat.length); inst.commit();
+  const flatDefault = [], flatTex = new Map();
+  for (const [x, z] of flat) {
+    const t = fl.tex && fl.tex[D.ck(x, z)];
+    if (t && t !== "stone") (flatTex.get(t) || flatTex.set(t, []).get(t)).push([x, z]);
+    else flatDefault.push([x, z]);
+  }
+  const kitFloorAt = (list) => {
+    const inst = makeInstanced(kit.floor.scene, list.length);
+    list.forEach(([x, z], i) => { m4.makeTranslation(x * CELL + CELL / 2, 0, z * CELL + CELL / 2); inst.setMatrixAt(i, m4); });
+    inst.setCount(list.length); inst.commit();
     group.add(inst.group);
+  };
+  if (flatDefault.length) kitFloorAt(flatDefault);
+  if (flatTex.size) {
+    kit.floor.scene.updateMatrixWorld(true);
+    const topY = (() => { const b = new THREE.Box3().setFromObject(kit.floor.scene); return isFinite(b.max.y) ? b.max.y : 0.2; })();
+    const planeGeo = new THREE.PlaneGeometry(CELL, CELL).rotateX(-Math.PI / 2);
+    for (const [texId, list] of flatTex) {
+      const map = floorTexture(texId);
+      if (!map) { kitFloorAt(list); continue; }               // unknown id → kit tile
+      const mat = new THREE.MeshStandardMaterial({ map, roughness: 0.94, metalness: 0.0 });
+      const inst = new THREE.InstancedMesh(planeGeo, mat, list.length);
+      inst.frustumCulled = false;
+      list.forEach(([x, z], i) => { m4.makeTranslation(x * CELL + CELL / 2, topY + 0.012, z * CELL + CELL / 2); inst.setMatrixAt(i, m4); });
+      inst.instanceMatrix.needsUpdate = true;
+      group.add(inst);
+    }
   }
 
   // rolling heightmap mesh over the elevated region — solid stone tinted per theme
