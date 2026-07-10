@@ -1366,40 +1366,88 @@ export class UI {
     this.root.append(wrap);
   }
 
-  // one-time "new expansion" announcement, shown on first load after the drop
+  // one-time cinematic expansion reveal, shown on first load after the drop
   showExpansionAnnounce() {
-    const wrap = this.el('div', 'modal-wrap');
-    wrap.style.zIndex = 220;
-    const m = this.el('div', 'modal');
-    m.style.cssText = 'max-width:min(94vw,560px);text-align:center;overflow:hidden;border:1px solid #6b4d9c;' +
-      'background:linear-gradient(180deg,#241a44,#150f26)';
-    // the ten realm-pair seals (ember/tide/grove/dawn/grave)
-    const R = { e: '#e8542f', t: '#2f7fe8', g: '#3fae52', d: '#e8b93a', v: '#8a3fd4' };
-    const PAIRS = [['e', 't'], ['e', 'g'], ['e', 'd'], ['e', 'v'], ['t', 'g'], ['t', 'd'], ['t', 'v'], ['g', 'd'], ['g', 'v'], ['d', 'v']];
-    const seals = PAIRS.map(([a, b]) => `<span style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:2px 3px;background:linear-gradient(120deg,${R[a]} 0 50%,${R[b]} 50% 100%);box-shadow:0 0 0 1.5px rgba(255,255,255,.22),0 2px 6px rgba(0,0,0,.5)"></span>`).join('');
-    m.innerHTML = `
-      <div style="font-family:var(--mono,'Courier New',monospace);font-size:12px;letter-spacing:.34em;color:#ffd45f;text-transform:uppercase">✦ New Expansion ✦</div>
-      <h2 style="margin:8px 0 0;font-size:clamp(34px,7vw,52px);letter-spacing:.05em;font-weight:800;
-        background:linear-gradient(180deg,#fff3c9,#f0b93a 60%,#8a5a13);-webkit-background-clip:text;background-clip:text;color:transparent">AETHERBOUND</h2>
-      <div style="font-style:italic;font-size:19px;color:#d8ccf2;margin-top:2px">The Ten Pacts</div>
-      <div style="margin:16px 0 4px;line-height:1">${seals}</div>
-      <p style="color:#c4b4e4;font-size:15px;line-height:1.6;margin:16px auto 0;max-width:46ch">
-        <b style="color:#efe9fb">60 new dual-realm cards.</b> Where two elements meet — fire &amp; frost, life &amp; death — they fuse into ten Pacts. Each card belongs to <b>two</b> realms, and is playable only in a deck that commits to both.</p>
-      <p style="color:#c4b4e4;font-size:15px;line-height:1.6;margin:10px auto 0;max-width:46ch">
-        Chase <b style="color:#ffd45f">✦&nbsp;golden</b> foil versions of any card, and spend surplus gold on new deck backs in the shop.</p>
-      <div style="margin:16px auto 0;max-width:46ch;background:rgba(255,212,95,.09);border:1px solid #6b4d12;border-radius:12px;padding:12px 16px;color:#ffe9a8;font-size:14px;line-height:1.5">
-        🪙 <b>Gold only — never real money.</b> Open <b>Aetherbound Packs</b> (100 gold) in your Collection. Earn gold from the Campaign and by selling duplicate cards.</div>`;
-    const row = this.el('div');
-    row.style.cssText = 'display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:20px';
-    const dismiss = () => { this.store.aetherboundSeen = true; Store.save(); wrap.remove(); };
-    const go = this.el('button', 'btn primary', 'Open the Collection');
+    if (!document.getElementById('xp-style')) {
+      const st = document.createElement('style'); st.id = 'xp-style';
+      st.textContent = `
+#xp-overlay{position:fixed;inset:0;z-index:240;display:flex;align-items:center;justify-content:center;padding:18px;opacity:0;transition:opacity .45s;
+  background:radial-gradient(ellipse at 50% 24%,rgba(54,33,90,.55),rgba(7,4,14,.94));backdrop-filter:blur(5px);overflow-y:auto}
+#xp-overlay.in{opacity:1}
+#xp-panel{position:relative;width:min(800px,96vw);border-radius:22px;text-align:center;overflow:hidden;margin:auto;
+  background:linear-gradient(180deg,#1b1440,#100a22);border:1px solid rgba(255,212,95,.28);
+  box-shadow:0 34px 100px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.06);animation:xpRise .55s cubic-bezier(.2,1,.3,1)}
+@keyframes xpRise{from{transform:translateY(26px) scale(.97);opacity:0}}
+#xp-hero{position:relative;padding:30px 26px 0}
+#xp-hero::before{content:'';position:absolute;inset:0;background:url('assets/ui/pack_bg.jpg') center top/cover;opacity:.4;
+  -webkit-mask:linear-gradient(#000 6%,transparent 84%);mask:linear-gradient(#000 6%,transparent 84%)}
+#xp-hero>*{position:relative}
+.xp-eyebrow{font-family:'Courier New',monospace;font-size:12px;letter-spacing:.4em;text-transform:uppercase;color:#ffd45f}
+.xp-logo{margin:9px 0 0;font-size:clamp(42px,8.6vw,70px);font-weight:800;letter-spacing:.055em;line-height:1;
+  background:linear-gradient(180deg,#fff6db,#f3c052 58%,#9a6a1e);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 4px 22px rgba(240,185,58,.4));animation:xpGlow 3.5s ease-in-out infinite}
+@keyframes xpGlow{50%{filter:drop-shadow(0 4px 32px rgba(255,210,90,.7))}}
+.xp-sub{font-family:Georgia,serif;font-style:italic;font-size:clamp(18px,2.6vw,24px);color:#e6dcff;margin-top:4px}
+.xp-tag{color:#b9a9df;font-size:14.5px;margin:11px auto 0;max-width:54ch;line-height:1.55}
+.xp-fan{display:flex;justify-content:center;align-items:flex-end;height:216px;margin:2px 0 0}
+.xp-slot{margin:0 -20px;animation:xpDeal .55s cubic-bezier(.2,1.4,.4,1) backwards}
+@keyframes xpDeal{from{opacity:0;transform:translateY(50px)}}
+.xp-c{width:132px;border-radius:9px;overflow:hidden;box-shadow:0 16px 34px rgba(0,0,0,.62);transition:transform .18s,box-shadow .18s;transform-origin:bottom center}
+.xp-c canvas{width:100%;display:block}
+.xp-c:hover{transform:translateY(-20px) scale(1.08)!important;z-index:20;position:relative;box-shadow:0 26px 50px rgba(0,0,0,.72)}
+#xp-body{padding:8px 30px 26px}
+.xp-feats{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:16px 0 4px}
+.xp-feat{flex:1 1 190px;max-width:236px;background:rgba(255,255,255,.035);border:1px solid rgba(180,150,255,.16);border-radius:14px;padding:14px 15px}
+.xp-feat .i{font-size:23px;line-height:1}
+.xp-feat h4{font-family:Georgia,serif;font-size:16px;margin:7px 0 3px;color:#f2ecff}
+.xp-feat p{font-size:12.5px;color:#a99ccb;line-height:1.5;margin:0}
+.xp-how{margin:16px auto 0;max-width:56ch;background:linear-gradient(90deg,rgba(240,98,58,.13),rgba(47,127,232,.13));
+  border:1px solid rgba(255,212,95,.28);border-radius:14px;padding:13px 18px;color:#efe6ff;font-size:14px;line-height:1.55}
+.xp-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:20px}
+.xp-cta .btn{min-width:180px}
+@media (prefers-reduced-motion:reduce){#xp-panel,.xp-logo,.xp-slot{animation:none}}`;
+      document.head.appendChild(st);
+    }
+    const overlay = this.el('div'); overlay.id = 'xp-overlay';
+    const panel = this.el('div'); panel.id = 'xp-panel';
+    const hero = this.el('div'); hero.id = 'xp-hero';
+    hero.innerHTML = `
+      <div class="xp-eyebrow">✦ New Expansion ✦</div>
+      <div class="xp-logo">AETHERBOUND</div>
+      <div class="xp-sub">The Ten Pacts</div>
+      <div class="xp-tag">Along every seam where two elements meet, they bond into ten Pacts — <b style="color:#e6dcff">60 all-new dual-realm cards</b> that fuse fire &amp; frost, life &amp; death, and eight pairings more.</div>`;
+    // a fan of featured marquee dual cards (real art)
+    const fan = this.el('div', 'xp-fan');
+    ['gv06', 'ev06', 'et06', 'td06', 'gd06'].forEach((id, i) => {
+      const slot = this.el('div', 'xp-slot'); slot.style.animationDelay = (0.18 + i * 0.09) + 's';
+      const c = this.el('div', 'xp-c');
+      c.style.transform = `rotate(${(i - 2) * 7}deg) translateY(${Math.abs(i - 2) * 15}px)`;
+      c.style.zIndex = String(10 - Math.abs(i - 2));
+      try { c.append(cardThumb(id, 132)); } catch (e) {}
+      slot.append(c); fan.append(slot);
+    });
+    hero.append(fan);
+    const body = this.el('div'); body.id = 'xp-body';
+    body.innerHTML = `
+      <div class="xp-feats">
+        <div class="xp-feat"><div class="i">🎴</div><h4>Ten Dual Pacts</h4><p>60 cards across all ten realm pairs — each playable only in a deck that runs both of its realms.</p></div>
+        <div class="xp-feat"><div class="i">✦</div><h4>Golden Foils</h4><p>Any card can turn up golden — a shimmering animated version to chase and collect.</p></div>
+        <div class="xp-feat"><div class="i">🂠</div><h4>New Deck Backs</h4><p>Fresh cosmetic card backs to buy and show off on your deck in every match.</p></div>
+      </div>
+      <div class="xp-how">🪙 Open <b>Aetherbound Packs</b> (100 gold each) in your Collection to add these cards to your deck. <b>Use your gold to buy new cards</b> — earn it by playing the Campaign and selling cards you already own.</div>`;
+    const cta = this.el('div', 'xp-cta');
+    const dismiss = () => { this.store.aetherboundSeen = true; Store.save(); overlay.classList.remove('in'); setTimeout(() => overlay.remove(), 420); };
+    const go = this.el('button', 'btn primary', '⚔  Open Packs');
     go.onclick = () => { Audio2.sfx('legendary'); dismiss(); this.openCollection(); };
-    const later = this.el('button', 'btn small', 'Later');
+    const later = this.el('button', 'btn small', 'Explore later');
     later.onclick = () => { Audio2.sfx('click'); dismiss(); };
-    row.append(go, later);
-    m.append(row);
-    wrap.append(m);
-    this.root.append(wrap);
+    cta.append(go, later);
+    body.append(cta);
+    panel.append(hero, body);
+    overlay.append(panel);
+    overlay.onclick = (e) => { if (e.target === overlay) dismiss(); };
+    this.root.append(overlay);
+    requestAnimationFrame(() => overlay.classList.add('in'));
   }
 
   matchSettings() {
