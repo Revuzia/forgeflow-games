@@ -467,6 +467,65 @@ const ok = (cond, name, extra) => {
   for (let i = 0; i < 400; i++) tick(run5, 1 / 60);
   ok(p5.hp < PLAYER.hp, "spike trap damaged the player", p5.hp);
 
+  // ── 9b. booby traps: fire jet / javelin tripwire / secret pit ────
+  console.log("[booby-traps]");
+  {
+    // FIRE JET: rot 1 = burns +X; the victim stands 2 cells down the cone
+    const fd = newDungeon({ theme: "fantasy" });
+    stampRoom(fd, 0, 5, 5, 6, 6);
+    applyOp(fd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(fd, { t: "obj+", f: 0, o: { kind: "exit", x: 10, z: 10 } });
+    applyOp(fd, { t: "obj+", f: 0, o: { kind: "trap", x: 6, z: 7, ttype: "firejet", rot: 1 } });
+    const fr = newRun(fd, 11, [{ id: "P1" }]);
+    const fp = fr.players[0];
+    fp.x = c2w(8); fp.z = c2w(7);                       // 2 cells down the flame cone
+    for (let i = 0; i < 400; i++) tick(fr, 1 / 60);
+    ok(fp.hp < fp.maxHp, "firejet burns a player 2 cells down the cone (" + Math.round(fp.hp) + ")");
+    const fr2 = newRun(fd, 11, [{ id: "P1" }]);
+    fr2.players[0].x = c2w(6); fr2.players[0].z = c2w(5); // OFF the cone (side cell)
+    for (let i = 0; i < 400; i++) tick(fr2, 1 / 60);
+    ok(fr2.players[0].hp === fr2.players[0].maxHp, "firejet does not hit off-cone cells");
+
+    // JAVELIN tripwire: stepping on the cell launches a dart that can skewer an enemy
+    const jd = newDungeon({ theme: "fantasy" });
+    stampRoom(jd, 0, 5, 5, 6, 6);
+    applyOp(jd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(jd, { t: "obj+", f: 0, o: { kind: "exit", x: 10, z: 10 } });
+    applyOp(jd, { t: "obj+", f: 0, o: { kind: "trap", x: 6, z: 6, ttype: "javelin", rot: 1 } });
+    applyOp(jd, { t: "obj+", f: 0, o: { kind: "enemy", x: 9, z: 6, etype: "skeleton" } });
+    const jr = newRun(jd, 12, [{ id: "P1" }]);
+    const jp = jr.players[0];
+    jp.x = c2w(6); jp.z = c2w(6);                       // step on the tripwire
+    tick(jr, 1 / 60);
+    ok(jr.bolts.some((b) => b.elem === "javelin" && b.trap), "tripwire launches a javelin");
+    ok(jr.events.some((e) => e.type === "javelin"), "javelin event emitted");
+    const jEnemy = jr.enemies[0], hp0 = jEnemy.hp;
+    for (let i = 0; i < 90; i++) tick(jr, 1 / 60);      // dart flies +X through the enemy cell
+    ok(jEnemy.hp < hp0 || !jEnemy.alive, "javelin skewers an enemy in its path");
+    const shots = jr.events.filter((e) => e.type === "javelin").length + 1;
+    ok(shots <= 2, "javelin respects its cooldown (fired " + shots + "x in 1.5s)");
+
+    // SECRET PIT: first step arms it; the tile falls away; the victim dies
+    const pd = newDungeon({ theme: "fantasy" });
+    stampRoom(pd, 0, 5, 5, 4, 4);
+    applyOp(pd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(pd, { t: "obj+", f: 0, o: { kind: "exit", x: 8, z: 8 } });
+    applyOp(pd, { t: "obj+", f: 0, o: { kind: "trap", x: 6, z: 6, ttype: "pit" } });
+    const pr = newRun(pd, 13, [{ id: "P1" }]);
+    const pp = pr.players[0];
+    pp.x = c2w(6); pp.z = c2w(6);
+    tick(pr, 1 / 60);
+    ok(pr.events.some((e) => e.type === "pitWarn"), "pit: first footstep cracks the tile");
+    for (let i = 0; i < 40; i++) { pp.x = c2w(6); pp.z = c2w(6); tick(pr, 1 / 60); } // stay on it through the collapse
+    ok(pr.traps.find((t) => t.ttype === "pit").open, "pit: tile falls away (open)");
+    ok(pr.events.concat().length >= 0 && (pp.deaths >= 1 || !pp.alive), "pit: falling is lethal (deaths " + pp.deaths + ")");
+    // determinism: same seed → same jittered spike timeline
+    const sA = newRun(s5, 77, [{ id: "P1" }]), sB = newRun(s5, 77, [{ id: "P1" }]);
+    sA.players[0].x = sB.players[0].x = c2w(6); sA.players[0].z = sB.players[0].z = c2w(5);
+    for (let i = 0; i < 500; i++) { tick(sA, 1 / 60); tick(sB, 1 / 60); }
+    ok(Math.abs(sA.players[0].hp - sB.players[0].hp) < 1e-9, "random spike timing is seed-deterministic");
+  }
+
   // ── 10. pathfinding + LOS ───────────────────────────────────────
   console.log("[path+los]");
   const run6 = newRun(s, 6000, [{ id: "P1" }]);

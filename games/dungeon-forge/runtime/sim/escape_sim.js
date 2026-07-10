@@ -88,9 +88,14 @@ export const CLASS_ORDER = ["knight", "barbarian", "sorceress", "rogue"];
 const COMBO_WINDOW = 0.9; // seconds after cooldown to continue the chain
 
 export const TRAPK = {
-  spikes: { period: 2.9, warn: 0.5, active: 1.0, dmg: 25 },
+  spikes: { period: 2.9, warn: 0.5, active: 1.0, dmg: 25, jitter: 1.8 }, // jitter: random re-arm delay (owner: spikes pop RANDOMLY)
   vent:   { period: 4.2, warn: 0.6, active: 1.5, dmg: 12, tick: 0.4 },
+  firejet:{ period: 4.4, warn: 0.8, active: 1.5, dmg: 14, reach: 3 },    // wall FLAME JET: cone of fire down the facing dir
+  javelin:{ cooldown: 2.6, dmg: 42, speed: 22 },                          // tripwire: a javelin flies across the room
+  pit:    { arm: 0.35 },                                                  // secret floor HOLE: tile falls away → death
 };
+// facing → cell step (rot 0..3 = +Z, +X, -Z, -X — matches placement rot)
+const TRAP_DIR = [[0, 1], [1, 0], [0, -1], [-1, 0]];
 
 const EV = [];
 function emit(st, type, d) { st.events.push(Object.assign({ type }, d)); }
@@ -170,10 +175,11 @@ export function newRun(d, runSeed, players) {
     });
   }));
 
-  // traps
+  // traps (rot = facing for firejet/javelin; pit/javelin carry their own state)
   d.floors.forEach((fl, f) => fl.objects.forEach((o) => {
     if (o.kind !== "trap") return;
-    st.traps.push({ id: o.id, f, x: o.x, z: o.z, ttype: o.ttype || "spikes", phase: rnd() * 2 });
+    st.traps.push({ id: o.id, f, x: o.x, z: o.z, ttype: o.ttype || "spikes", rot: o.rot || 0,
+                    phase: rnd() * 2, cd: 0, open: false, armT: 0 });
   }));
 
   return st;
@@ -956,6 +962,11 @@ export function tick(st, dt, opts = {}) {
         if (!p.alive || p.escaped || p.f !== b.f) continue;
         if (Math.hypot(p.x - b.x, p.z - b.z) < 0.55) { damagePlayer(st, p, b.dmg, "bolt", { x: b.x - b.vx * 0.1, z: b.z - b.vz * 0.1 }); b.ttl = 0; break; }
       }
+      // TRAP projectiles (javelins) skewer enemies too — lure a foe into the line of fire
+      if (b.trap && b.ttl > 0 && simEnemies) for (const e of st.enemies) {
+        if (!e.alive || e.f !== b.f) continue;
+        if (Math.hypot(e.x - b.x, e.z - b.z) < 0.7) { damageEnemy(st, e, b.dmg, null); b.ttl = 0; emit(st, "boltHit", { x: b.x, z: b.z, f: b.f, elem: b.elem }); break; }
+      }
     } else if (simEnemies) {
       for (const e of st.enemies) {
         if (!e.alive || e.f !== b.f) continue;
@@ -969,18 +980,70 @@ export function tick(st, dt, opts = {}) {
   }
   st.bolts = st.bolts.filter((b) => b.ttl > 0);
 
-  // traps
+  // traps — periodic (spikes/vent/firejet), tripwire (javelin), secret pit
+  st._trng = st._trng || mulberry((st.runSeed ^ 0xb00b1e5) >>> 0);
+  const localPlayers = st.players.filter((p) => p.alive && !p.escaped && (!opts.localIds || opts.localIds.has(p.id)));
   for (const t of st.traps) {
     const K = TRAPK[t.ttype] || TRAPK.spikes;
-    t.phase = (t.phase + dt) % K.period;
-    const activeFrom = K.period - K.active;
+    if (t.ttype === "javelin") {
+      // tripwire: stepping on the cell looses a javelin down the facing dir
+      t.cd = Math.max(0, (t.cd || 0) - dt);
+      if (t.cd <= 0) {
+        const tripper = localPlayers.find((p) => p.f === t.f && w2c(p.x) === t.x && w2c(p.z) === t.z);
+        if (tripper) {
+          t.cd = K.cooldown;
+          const [dx, dz] = TRAP_DIR[(t.rot || 0) % 4];
+          // launch a step AHEAD of the plate: the tripper feels the whoosh but the
+          // dart flies on across the room (and skewers whatever stands in the line)
+          st.bolts.push({
+            id: "b" + st.nextBolt++, owner: "trap:" + t.id, hostile: true, trap: true, f: t.f, elem: "javelin",
+            x: c2w(t.x) + dx * 0.8, z: c2w(t.z) + dz * 0.8, vx: dx * K.speed, vz: dz * K.speed, ttl: 2.2, dmg: K.dmg,
+          });
+          emit(st, "javelin", { id: t.id, f: t.f, x: c2w(t.x), z: c2w(t.z), rot: t.rot || 0 });
+        }
+      }
+      continue;
+    }
+    if (t.ttype === "pit") {
+      if (t.open) {
+        // anything standing on an open pit falls in — players die, enemies too
+        for (const p of localPlayers) if (p.f === t.f && w2c(p.x) === t.x && w2c(p.z) === t.z) {
+          p.hurtT = 0;                       // a pit ignores hit i-frames
+          emit(st, "fell", { id: p.id, trap: t.id });
+          damagePlayer(st, p, 9999, "pit");
+        }
+        if (opts.simEnemies !== false) for (const e of st.enemies) {
+          if (e.alive && e.f === t.f && w2c(e.x) === t.x && w2c(e.z) === t.z) { emit(st, "fell", { id: e.id, trap: t.id }); damageEnemy(st, e, 9999, null); }
+        }
+      } else if (t.armT > 0) {
+        t.armT -= dt;
+        if (t.armT <= 0) { t.open = true; emit(st, "pitOpen", { id: t.id, f: t.f, x: t.x, z: t.z }); }
+      } else {
+        // a secret tile: the first footstep starts the collapse
+        if (localPlayers.some((p) => p.f === t.f && w2c(p.x) === t.x && w2c(p.z) === t.z)) { t.armT = K.arm; emit(st, "pitWarn", { id: t.id, f: t.f, x: t.x, z: t.z }); }
+      }
+      continue;
+    }
+    // periodic traps: spikes / vent / firejet
+    t.phase = (t.phase + dt);
+    const period = t.period || K.period;
+    if (t.phase >= period) {
+      t.phase %= period;
+      // owner spec: spikes pop at RANDOM intervals — re-roll each cycle
+      if (K.jitter) t.period = K.period + st._trng() * K.jitter;
+    }
+    const activeFrom = (t.period || K.period) - K.active;
     t.state = t.phase >= activeFrom ? "on" : (t.phase >= activeFrom - K.warn ? "warn" : "off");
     if (t.state === "on") {
-      for (const p of st.players) {
-        if (!p.alive || p.escaped || p.f !== t.f) continue;
-        // trap damage belongs to each victim's OWN sim in multiplayer
-        if (opts.localIds && !opts.localIds.has(p.id)) continue;
-        if (w2c(p.x) === t.x && w2c(p.z) === t.z) damagePlayer(st, p, K.dmg, t.ttype);
+      // firejet burns a CONE of cells down its facing dir; others hit their own cell
+      const cells = [[t.x, t.z]];
+      if (t.ttype === "firejet") {
+        const [dx, dz] = TRAP_DIR[(t.rot || 0) % 4];
+        for (let i = 1; i < (K.reach || 1); i++) cells.push([t.x + dx * i, t.z + dz * i]);
+      }
+      for (const p of localPlayers) {
+        if (p.f !== t.f) continue;
+        if (cells.some(([cx, cz]) => w2c(p.x) === cx && w2c(p.z) === cz)) damagePlayer(st, p, K.dmg, t.ttype);
       }
     }
   }

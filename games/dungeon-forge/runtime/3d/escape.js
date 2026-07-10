@@ -163,7 +163,7 @@ export class Escape {
       const mesh = this._objMesh(o, f);
       if (mesh) {
         mesh.position.y += D.cellHeight(this.d, f, o.x, o.z); // raised platforms lift objects
-        mesh.userData = { id: o.id, f, kind: o.kind };
+        Object.assign(mesh.userData, { id: o.id, f, kind: o.kind }); // MERGE — _objMesh stashes per-kind refs (jetLight/pitLid/spikes/ventDisc)
         group.add(mesh);
         this.objMeshes.set(o.id, mesh);
       }
@@ -236,6 +236,41 @@ export class Escape {
             new THREE.MeshStandardMaterial({ color: 0x2a2a33, emissive: hot, emissiveIntensity: 0.25 }));
           disc.position.y = 0.06; grp.add(disc);
           grp.userData.ventDisc = disc;
+        } else if (o.ttype === "firejet") {
+          // wall-mounted flame nozzle: bracket + snout aimed down the facing dir
+          const rot = -(o.rot || 0) * Math.PI / 2;
+          const jet = new THREE.Group();
+          const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.3),
+            new THREE.MeshStandardMaterial({ color: 0x3a3f4c, metalness: 0.7, roughness: 0.45 }));
+          bracket.position.set(0, 1.05, -1.55);
+          const snout = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 0.55, 10).rotateX(Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: 0x8a4a1a, emissive: 0xff5a1a, emissiveIntensity: 0.5, metalness: 0.6 }));
+          snout.position.set(0, 1.05, -1.2);
+          jet.add(bracket, snout);
+          jet.rotation.y = rot === 0 ? Math.PI : rot + Math.PI; // snout faces the firing dir
+          grp.add(jet);
+          const fl = new THREE.PointLight(0xff7a22, 0, 8, 1.6); fl.position.y = 1.2; grp.add(fl);
+          grp.userData.jetLight = fl; grp.userData.jetRot = o.rot || 0;
+        } else if (o.ttype === "javelin") {
+          // squat launcher block with a loaded dart visible in the slot
+          const base = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2),
+            new THREE.MeshStandardMaterial({ color: 0x4a3a28, roughness: 0.85 }));
+          base.position.y = 0.25;
+          const slot = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, 1.3),
+            new THREE.MeshStandardMaterial({ color: 0x191512 }));
+          slot.position.y = 0.52;
+          const dart = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.1, 8).rotateX(Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: 0x9a8a6a, metalness: 0.6, roughness: 0.4 }));
+          dart.position.y = 0.56;
+          grp.add(base, slot, dart);
+          grp.rotation.y = -(o.rot || 0) * Math.PI / 2;
+        } else if (o.ttype === "pit") {
+          // SECRET tile: nearly invisible — a faint hairline crack (found the hard way)
+          const lid = new THREE.Mesh(new THREE.PlaneGeometry(CELL * 0.96, CELL * 0.96).rotateX(-Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: 0x14161f, transparent: true, opacity: 0.16, roughness: 1 }));
+          lid.position.y = 0.05;
+          grp.add(lid);
+          grp.userData.pitLid = lid;
         } else {
           const m = add(this.props.spikeShared || this.props["spike-trap"], null, CELL * 0.82);
           grp.userData.spikes = m;
@@ -804,6 +839,29 @@ export class Escape {
           this.enemies.setStatus(ev.id, ev.kind, ev.dur);
           break;
         }
+        case "javelin": {
+          g.audio.sfx("javelin");
+          g.fx.burst(new THREE.Vector3(ev.x, ev.f * FLOOR_H + 0.6, ev.z), 0xc8b890, 6); // launcher kick-up
+          break;
+        }
+        case "pitWarn": {
+          g.audio.sfx("rumble");
+          g.fx.burst(new THREE.Vector3(ev.x * CELL + CELL / 2, ev.f * FLOOR_H + 0.2, ev.z * CELL + CELL / 2), 0x8a7a5a, 10); // cracking dust
+          break;
+        }
+        case "pitOpen": {
+          g.audio.sfx("rumble");
+          const at = new THREE.Vector3(ev.x * CELL + CELL / 2, ev.f * FLOOR_H + 0.3, ev.z * CELL + CELL / 2);
+          g.fx.burst(at, 0x6a5a42, 26); g.fx.burst(at, 0x2a2620, 14);
+          if (this.me() && ev.f === this.me().f) g.hud.shake(0.35);
+          break;
+        }
+        case "fell": {
+          const a = this.actors.get(ev.id);
+          if (a) a._fellT = 0.6;             // brief sink-into-the-hole visual
+          if (ev.id === this.myId) { g.hud.toast("The floor gives way beneath you!", "warn"); g.audio.sfx("die"); }
+          break;
+        }
         case "blocked": {
           const a = this.actors.get(ev.id);
           if (a) { g.audio.sfx("hit"); g.fx.burst(a.grp.position.clone().add(new THREE.Vector3(Math.sin(a.p.yaw)*0.6, 1.1, Math.cos(a.p.yaw)*0.6)), 0xcfd6e4, 8); }
@@ -979,6 +1037,7 @@ export class Escape {
       a.surfY = a.surfY == null ? surfY : a.surfY + (surfY - a.surfY) * Math.min(1, dt * 10);
       const y = p.f * FLOOR_H + (p.climb ? climbY(p) : 0) + a.surfY;
       a.grp.position.set(p.x, y, p.z);
+      if (a._fellT > 0) { a._fellT -= dt; a.grp.position.y -= (0.6 - a._fellT) * 4.5; } // swallowed by the pit
       a.grp.rotation.y = p.yaw; // Meshy char rigs face +Z = the yaw/look direction (away from the chase cam)
       a.grp.visible = (p.alive || a.proc || a._deadPose) && !p.escaped && (this.me() ? Math.abs(p.f - this.me().f) <= 1 : true);
       a.mixer.update(dt);
@@ -1045,6 +1104,35 @@ export class Escape {
         const mat = m.userData.ventDisc.material;
         mat.emissiveIntensity = t.state === "on" ? 2.6 : t.state === "warn" ? 1.1 : 0.25;
         if (t.state === "on") this.g.fx.ventJet(m.getWorldPosition(new THREE.Vector3()), this.d.theme);
+      }
+      if (m.userData.jetLight) {
+        // FIRE JET: warn = pilot hiss/glow, on = roaring flame cone down the facing dir
+        const L = m.userData.jetLight;
+        L.intensity = t.state === "on" ? 4 + Math.random() * 2.5 : t.state === "warn" ? 0.8 : 0;
+        if (t.state === "on") {
+          const [dx, dz] = [[0, 1], [1, 0], [0, -1], [-1, 0]][(m.userData.jetRot || 0) % 4];
+          const base = m.getWorldPosition(new THREE.Vector3());
+          for (let i = 0; i < 4; i++) {
+            const along = 0.4 + Math.random() * 9.5;   // tongue spans the full 3-cell burn cone (~12u)
+            this.g.fx.spawn(
+              new THREE.Vector3(base.x + dx * along + (Math.random() - .5) * 0.9, base.y + 0.8 + Math.random() * 0.6, base.z + dz * along + (Math.random() - .5) * 0.9),
+              new THREE.Vector3(dx * (6 + Math.random() * 3), 0.5 + Math.random() * 1.1, dz * (6 + Math.random() * 3)),
+              0.45 + Math.random() * 0.3, 1.7, Math.random() < 0.75 ? 0xff7a22 : 0xffd23a);
+          }
+          if (t._sfxT == null || t._sfxT < this.run.time - 1.3) { t._sfxT = this.run.time; this.g.audio.sfx("fire"); }
+        }
+      }
+      if (m.userData.pitLid && t.open && !m.userData.pitOpened) {
+        // tile falls away → a real HOLE (black shaft + rim), lid gone
+        m.userData.pitOpened = true;
+        m.userData.pitLid.visible = false;
+        const hole = new THREE.Mesh(new THREE.PlaneGeometry(CELL * 0.94, CELL * 0.94).rotateX(-Math.PI / 2),
+          new THREE.MeshBasicMaterial({ color: 0x000000 }));
+        hole.position.y = 0.055;
+        const rim = new THREE.Mesh(new THREE.RingGeometry(CELL * 0.44, CELL * 0.5, 4).rotateX(-Math.PI / 2).rotateY(Math.PI / 4),
+          new THREE.MeshBasicMaterial({ color: 0x3a3326 }));
+        rim.position.y = 0.06;
+        m.add(hole, rim);
       }
     }
 

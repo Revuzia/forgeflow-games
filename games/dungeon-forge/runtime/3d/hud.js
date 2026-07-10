@@ -172,7 +172,17 @@ export class Hud {
         (k) => `<b>❤${roster[k].hp}</b> ⚔${roster[k].dmg}`,
         (k) => b.setTool("enemy", { etype: k }));
     } else if (b.tool === "trap") {
-      mkOpts(D.TRAPS, b.toolOpt.ttype || "spikes", (k) => k === "spikes" ? "⚙ Spikes" : (b.d.theme === "scifi" ? "🔴 Laser vent" : "🔥 Flame vent"), (k) => b.setTool("trap", { ttype: k }));
+      const TL = {
+        spikes: "⚙ Pop-up Spikes", vent: b.d.theme === "scifi" ? "🔴 Laser vent" : "🔥 Flame vent",
+        firejet: "🜂 Wall Fire Jet", javelin: "🏹 Javelin Tripwire", pit: "🕳 Secret Pit",
+      };
+      mkOpts(D.TRAPS, b.toolOpt.ttype || "spikes", (k) => TL[k] || k, (k) => b.setTool("trap", { ttype: k }));
+      const tt = b.toolOpt.ttype || "spikes";
+      sub.appendChild(el(`<span class="df-subnote">${
+        tt === "firejet" ? "Place by a wall · R rotates the flame direction (3-cell burn cone)" :
+        tt === "javelin" ? "Tripwire — steps launch a javelin · R rotates the firing direction (skewers enemies too!)" :
+        tt === "pit" ? "Nearly invisible tile — one step and the floor gives way. Deadly." :
+        tt === "spikes" ? "Spikes pop up at RANDOM intervals" : "Periodic burn vent"}</span>`));
     } else if (b.tool === "decor") {
       sub.appendChild(el(`<div class="df-flexbreak"></div>`));
       mkThumbOpts(D.DECOR[b.d.theme], b.toolOpt.dtype || D.DECOR[b.d.theme][0], "decor",

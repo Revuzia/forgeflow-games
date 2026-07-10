@@ -57,7 +57,7 @@ export const KINDS = {
   chest:  { rotatable: true,  solid: true  }, // props: opened(run-time)
   key:    { rotatable: false, solid: false },
   enemy:  { rotatable: true,  solid: false }, // props: etype
-  trap:   { rotatable: false, solid: false }, // props: ttype (spikes|vent)
+  trap:   { rotatable: true, solid: false },  // props: ttype (spikes|vent|firejet|javelin|pit); rot = firejet/javelin facing
   torch:  { rotatable: true,  solid: false },
   light:  { rotatable: false, solid: false }, // props: color
   decor:  { rotatable: true,  solid: true  }, // props: dtype
@@ -210,7 +210,7 @@ export const DECOR_FOOT = {
   pot: 1.05, urn: 1.15, bones: 1.5, candles: 0.9, lantern: 1.0, canister: 1.2,
 };
 
-export const TRAPS = ["spikes", "vent"];
+export const TRAPS = ["spikes", "vent", "firejet", "javelin", "pit"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // model

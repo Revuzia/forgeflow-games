@@ -243,7 +243,7 @@ export class Builder {
       const mesh = this._objMesh(o, f);
       if (mesh) {
         mesh.position.y += D.cellHeight(this.d, f, o.x, o.z);
-        mesh.userData = { id: o.id, f, kind: o.kind };
+        Object.assign(mesh.userData, { id: o.id, f, kind: o.kind });
         group.add(mesh);
         this.objMeshes.set(o.id, mesh);
       }
@@ -309,6 +309,39 @@ export class Builder {
           const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.12, 20),
             new THREE.MeshStandardMaterial({ color: 0x333340, emissive: this.d.theme === "scifi" ? 0xff2244 : 0xff6a00, emissiveIntensity: 0.6 }));
           disc.position.y = 0.06; grp.add(disc);
+        } else if (o.ttype === "firejet") {
+          const jet = new THREE.Group();
+          const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.3), new THREE.MeshStandardMaterial({ color: 0x3a3f4c, metalness: 0.7 }));
+          bracket.position.set(0, 1.05, -1.55);
+          const snout = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 0.55, 10).rotateX(Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: 0x8a4a1a, emissive: 0xff5a1a, emissiveIntensity: 0.8 }));
+          snout.position.set(0, 1.05, -1.2);
+          // builder preview: show the burn cone so placement reads at a glance
+          const cone = new THREE.Mesh(new THREE.PlaneGeometry(1.6, CELL * 2.6).rotateX(-Math.PI / 2),
+            new THREE.MeshBasicMaterial({ color: 0xff7a22, transparent: true, opacity: 0.18, depthWrite: false }));
+          cone.position.set(0, 0.08, CELL * 1.3 - 1.2);
+          jet.add(bracket, snout, cone);
+          jet.rotation.y = Math.PI;   // model faces the (grp-rotated) firing dir
+          grp.add(jet);
+        } else if (o.ttype === "javelin") {
+          const base = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), new THREE.MeshStandardMaterial({ color: 0x4a3a28, roughness: 0.85 }));
+          base.position.y = 0.25;
+          const dart = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.1, 8).rotateX(Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: 0x9a8a6a, metalness: 0.6 }));
+          dart.position.y = 0.56;
+          const line = new THREE.Mesh(new THREE.PlaneGeometry(0.5, CELL * 3).rotateX(-Math.PI / 2),
+            new THREE.MeshBasicMaterial({ color: 0xc8b890, transparent: true, opacity: 0.16, depthWrite: false }));
+          line.position.set(0, 0.07, CELL * 1.5);
+          grp.add(base, dart, line);
+        } else if (o.ttype === "pit") {
+          // visible in BUILD mode so the builder can see it (invisible in play)
+          const lid = new THREE.Mesh(new THREE.PlaneGeometry(CELL * 0.94, CELL * 0.94).rotateX(-Math.PI / 2),
+            new THREE.MeshBasicMaterial({ color: 0x0a0a10, transparent: true, opacity: 0.75 }));
+          lid.position.y = 0.07;
+          const warn = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.72, 20).rotateX(-Math.PI / 2),
+            new THREE.MeshBasicMaterial({ color: 0xff5566, transparent: true, opacity: 0.8 }));
+          warn.position.y = 0.09;
+          grp.add(lid, warn);
         } else {
           add(this.props.spikeShared || this.props["spike-trap"], null, CELL * 0.8);
         }

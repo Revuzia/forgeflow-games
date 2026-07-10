@@ -344,6 +344,23 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.8.1 — 2026-07-10 (booby traps: fire jets, random spikes, javelins, secret pits)
+- **Four real booby traps** (owner spec), all placeable in the builder's Trap picker:
+  - **🜂 Wall Fire Jet** — a wall nozzle that roars a 3-cell flame cone down its
+    facing direction (R rotates), with real particle flames, flickering light and
+    fire sfx. Builder preview shows the burn cone.
+  - **⚙ Pop-up Spikes** — now pop at RANDOM intervals (seed-deterministic jitter).
+  - **🏹 Javelin Tripwire** — stepping on the plate looses a real javelin (wooden
+    shaft + steel head) that whooshes across the room — and it SKEWERS ENEMIES
+    too, so players can lure foes into the line of fire.
+  - **🕳 Secret Pit** — a nearly invisible tile; one footstep and the floor cracks,
+    falls away (rumble + dust + camera shake) leaving a real hole. Falling is
+    lethal — for players AND enemies. Visible with a red ring in build mode only.
+- Fixed a latent bug: `_buildFloor` REPLACED each object mesh's userData, wiping
+  the per-kind animation refs (vent discs / spikes / new trap parts). Now merged.
+- Selftest 205 → 215 (cone hit + off-cone miss, javelin launch/cooldown/skewer,
+  pit arm/open/lethality, random-spike determinism).
+
 ## v1.8.0 — 2026-07-10 (owner feedback batch 1: combat UX + full cast regen)
 - **All 4 classes regenerated** from clean T-pose reference art (image-to-3d →
   remesh → rig → full anim set, ~775 credits total): natural stances, clean

@@ -160,16 +160,25 @@ export class Fx {
       if (b.elem === "frost") { this._frostBolt(b, floorH); continue; } // self-managed icy crystal
       let m = this.boltMeshes.get(b.id);
       if (!m) {
-        m = b.elem === "fire"
-          ? this._fireBolt(b.hostile)
-          : new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), new THREE.MeshBasicMaterial({ color: b.hostile ? 0xff4444 : col }));
-        if (b.elem !== "fire") { const l = new THREE.PointLight(b.hostile ? 0xff4444 : col, 3, 5); m.add(l); }
+        if (b.elem === "fire") m = this._fireBolt(b.hostile);
+        else if (b.elem === "javelin") {
+          // a real physical dart: wooden shaft + steel head, laid along its flight dir
+          m = new THREE.Group();
+          const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.25, 6).rotateX(Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: 0x8a6a42, roughness: 0.7 }));
+          const head = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.3, 6).rotateX(Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: 0xb8c0cc, metalness: 0.8, roughness: 0.3 }));
+          head.position.z = 0.75;
+          m.add(shaft, head);
+          m.rotation.y = Math.atan2(b.vx, b.vz);   // +Z model → flight dir
+        } else m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), new THREE.MeshBasicMaterial({ color: b.hostile ? 0xff4444 : col }));
+        if (b.elem !== "fire" && b.elem !== "javelin") { const l = new THREE.PointLight(b.hostile ? 0xff4444 : col, 3, 5); m.add(l); }
         this.g.world.add(m);
         this.boltMeshes.set(b.id, m);
       }
-      m.position.set(b.x, b.f * floorH + 1.15, b.z);
+      m.position.set(b.x, b.f * floorH + (b.elem === "javelin" ? 0.95 : 1.15), b.z);
       if (b.elem === "fire") this._fireBoltStep(m, b);
-      else if (Math.random() < 0.5) this.spawn(m.position, new THREE.Vector3(0, 0.3, 0), 0.22, 1.4, b.hostile ? 0xff4444 : col);
+      else if (b.elem !== "javelin" && Math.random() < 0.5) this.spawn(m.position, new THREE.Vector3(0, 0.3, 0), 0.22, 1.4, b.hostile ? 0xff4444 : col);
     }
     for (const [id, m] of this.boltMeshes) if (!seen.has(id)) { this.g.world.remove(m); this.boltMeshes.delete(id); }
     this._frostReap(seen);
