@@ -7,7 +7,7 @@
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
 const E = await import("../sim/escape_sim.js" + V);
-const { TOOLS, PROP_TOOLS, PROP_TOOL_IDS, FLOOR_MODES } = await import("./builder.js" + V);
+const { TOOLS, PROP_TOOLS, PROP_TOOL_IDS, FLOOR_MODES, WALL_MODES } = await import("./builder.js" + V);
 const { fmtTime } = await import("./escape.js" + V);
 const { FLOOR_TEX_DEFS, floorTexSwatch } = await import("./floor_tex.js" + V);
 
@@ -204,8 +204,15 @@ export class Hud {
       sub.appendChild(el(`<span class="df-subnote">${b.d.theme === "scifi" ? "Neon emitter" : "Standing torch"} — lights the room</span>`));
     } else if (b.tool === "key") {
       sub.appendChild(el(`<span class="df-subnote">Drop on the floor, on a 🧰 chest (hides inside) or on a 👹 enemy (they carry it)</span>`));
-    } else if (b.tool === "door") {
-      sub.appendChild(el(`<span class="df-subnote">Place in a corridor · click the door afterwards to toggle its 🔒 lock</span>`));
+    } else if (b.tool === "walls") {
+      const wm = b.toolOpt.wmode || "stone";
+      mkOpts(WALL_MODES.map((m) => m.id), wm,
+        (id) => { const m = WALL_MODES.find((x) => x.id === id); return `${m.icon} ${m.label}`; },
+        (id) => b.setTool("walls", { wmode: id }));
+      sub.appendChild(el(`<span class="df-subnote">${
+        wm === "door" ? "Click a grid LINE between two floor tiles — the door sits ON the wall (lock it via Select)" :
+        wm === "erase" ? "Click a line to remove its wall or door" :
+        "Click/drag along grid LINES between floor tiles to raise " + wm + " walls"}</span>`));
     } else if (b.tool === "npc") {
       mkThumbOpts(D.NPC_TYPE_IDS, b.toolOpt.ntype || "merchant", "npc",
         (k) => D.NPC_TYPES[k].label,

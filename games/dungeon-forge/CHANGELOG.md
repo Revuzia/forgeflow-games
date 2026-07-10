@@ -344,6 +344,25 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.9.0 — 2026-07-10 (THE WALLS TOOL — interior walls + doors on the line)
+- **Toolbar slot 2 is now 🧱 WALLS** (the owner's long-standing ask). Click or
+  drag along the grid LINES between floor tiles to raise interior walls, with a
+  live edge highlight showing exactly which line you're on.
+- **Four wall styles** — 🪨 Stone · 🧱 Brick · 🪵 Wood · ⬛ Metal — for different
+  dungeon looks (style-tinted batches of the kit wall, readable from both rooms).
+- **🚪 Doors now sit ON the wall line, not in a tile** — pick Door in the Walls
+  palette and click a line: the gate arch straddles the edge. Select-click an
+  edge door to toggle its 🔒 lock. In play they open/close/unlock with E exactly
+  like classic doors (same events, same key rules) — and the arch leaf animates.
+- **The sim respects every wall**: movement, enemy pathing, projectiles, line of
+  sight, A* and the solvability checker all treat interior walls as solid and
+  edge doors as gates (locked ones count as key gates). Wall cutaway lowers
+  interior walls too when they block the camera. Legacy cell doors untouched.
+- *Gauntlet of the 99 Steps* now uses a wood partition + edge door mid-hall.
+- Selftest 236 → 255 (placement/rejection, movement/LOS/A* blocking, solvability
+  splits, edge-door unlock flow with key consumption, serialize roundtrip,
+  cell-erase cleanup).
+
 ## v1.8.7 — 2026-07-10 (builder fixes: toolbar order, Original texture, stairs DOWN)
 - **Toolbar reordered** (owner spec): … 6 NPC · **7 Select · 8 Erase · 9 Spawn** · 0 Exit.
 - **"Original" floor texture**: the default kit tile now has a recognizable

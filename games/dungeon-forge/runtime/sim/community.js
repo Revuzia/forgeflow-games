@@ -197,6 +197,9 @@ export const COMMUNITY = [
       O(0, "trap", 30, 27, { ttype: "pit" });
       F(0, 27, 29, 8, 6, "flagstone");              // arena 2 — the long hall
       for (let x = 28; x <= 30; x++) { L(0, x, 31, 2); L(0, x, 32, 2); } // lava moat mid-hall
+      // interior WOOD partition splits the hall — squeeze through its door under fire
+      for (const z of [29, 30, 31, 33, 34]) D.applyOp(d, { t: "wall+", f: 0, x: 31, z, s: 1, wtype: "wood" });
+      D.applyOp(d, { t: "wall+", f: 0, x: 31, z: 32, s: 1, wtype: "wood", door: true });
       O(0, "torch", 27, 29); O(0, "torch", 34, 34);
       O(0, "enemy", 29, 30, { etype: "ogre" });
       O(0, "enemy", 33, 32, { etype: "gargoyle" });

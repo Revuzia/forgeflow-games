@@ -15,6 +15,7 @@ import {
   CELL, DIRS, ENEMIES, ck, hasCell, objsAt, findAll, stairLinks,
   mulberry, hashStr, rollLoot, cellType, cellHeight, CT, LAVA_DPS, WATER_SLOW, RAISED_H,
   SHOP, SHOP_IDS, NPC_TYPES, doorAxis, BREAKABLE_DECOR, EXPLOSIVE_DECOR, BARREL, makeItem, itemScore,
+  edgeWall, edgeMid,
 } from "./dungeon.js";
 
 export const PLAYER = {
@@ -234,7 +235,10 @@ function cellBlocked(st, f, cx, cz, forEnemy) {
   return false;
 }
 
-// door cells restrict crossing to their axis even when open
+// door cells restrict crossing to their axis even when open; interior EDGE
+// walls block their line outright (edge DOORS block until opened). This is the
+// single edge-crossing gate — movement, enemies, bolts, LOS and A* all route
+// through it, so manual walls "just work" everywhere.
 function doorAxisBlocks(st, f, fromX, fromZ, toX, toZ) {
   const moveX = Math.sign(toX - fromX) !== 0;
   for (const [x, z] of [[fromX, fromZ], [toX, toZ]]) {
@@ -242,6 +246,11 @@ function doorAxisBlocks(st, f, fromX, fromZ, toX, toZ) {
       if (o.kind !== "door") continue;
       if ((doorAxis(st.d, f, x, z) === 0) !== moveX) return true; // crossing the door's solid wall
     }
+  }
+  const w = edgeWall(st.d, f, fromX, fromZ, toX, toZ);
+  if (w) {
+    if (!w.door) return true;                 // solid interior wall
+    if (!st.openDoors.has(w.id)) return true; // closed/locked edge door
   }
   return false;
 }
@@ -355,6 +364,18 @@ function nearestInteractable(st, p) {
       const dist = Math.hypot(e.x - p.x, e.z - p.z);
       if (dist < bestD) { bestD = dist; best = { id: e.droppedKey, kind: "key", dropped: true, x: w2c(e.x), z: w2c(e.z) }; }
     }
+  }
+  // EDGE doors (doors on the wall line): door-shaped, so interactHint/doInteract
+  // treat them exactly like cell doors (open/close/unlock by id).
+  const fl = d.floors[p.f];
+  if (fl && fl.walls) for (const k of Object.keys(fl.walls)) {
+    const w = fl.walls[k];
+    if (!w.door) continue;
+    const [ex, ez, es] = k.split(",").map(Number);
+    if (Math.abs(ex - cx) > 1 || Math.abs(ez - cz) > 1) continue;   // near cells only
+    const mid = edgeMid(ex, ez, es);
+    const dist = Math.hypot(mid.x - p.x, mid.z - p.z);
+    if (dist < Math.min(bestD, 3.4)) { bestD = dist; best = { id: w.id, kind: "door", locked: !!w.locked, edge: true, ex, ez, es }; }
   }
   return best;
 }

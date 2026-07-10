@@ -159,10 +159,62 @@ export class Escape {
     });
     wInst.setCount(segs.length); wInst.commit();
     group.add(wInst.group);
+    // manual INTERIOR walls (styled, full height, back-to-back pair per edge)
+    const WTINT = { stone: null, brick: 0xb5654a, wood: 0x8a6a42, metal: 0x9aa4b5 };
+    const man = D.manualWallSegments(this.d, f);
+    const styleBatches = {};
+    for (const w of man) { if (!w.door) (styleBatches[w.type] = styleBatches[w.type] || []).push(w); }
+    const manSegData = [];
+    for (const type of Object.keys(styleBatches)) {
+      const list = styleBatches[type];
+      const inst = makeInstanced(this.kit.wall.scene, list.length * 2);
+      if (WTINT[type]) inst.group.traverse((o) => { if (o.isInstancedMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(WTINT[type]); } });
+      list.forEach((w, i) => {
+        const mid = D.edgeMid(w.x, w.z, w.s);
+        for (let k = 0; k < 2; k++) {
+          const off = (k === 0 ? -0.06 : 0.06);
+          pos.set(mid.x + (w.s === 1 ? off : 0), 0, mid.z + (w.s === 0 ? off : 0));
+          const yaw = (w.s === 0 ? 0 : Math.PI / 2) + k * Math.PI;
+          q.setFromAxisAngle(up, yaw);
+          m4.compose(pos, q, one);
+          inst.setMatrixAt(i * 2 + k, m4);
+          manSegData.push({ inst, idx: i * 2 + k, wx: pos.x, wz: pos.z, yaw });
+        }
+      });
+      inst.setCount(list.length * 2); inst.commit();
+      group.add(inst.group);
+    }
+    // edge DOORS: the gate arch sits ON the line; leaf/bars animate by wall id
+    // (registered in doorLeafs, so the existing "door" event handler runs them)
+    for (const w of man) {
+      if (!w.door) continue;
+      const gg = new THREE.Group();
+      const mid = D.edgeMid(w.x, w.z, w.s);
+      gg.position.set(mid.x, 0, mid.z);
+      gg.rotation.y = w.s === 0 ? -Math.PI / 2 : 0;   // passage crosses the line
+      const A2 = this.g.assets;
+      gg.add(A2.clone(this.kit.gate));
+      const leafTpl = this.kit.gateDoor;
+      const leaf = A2.clone(leafTpl); gg.add(leaf);
+      let mixer = null, openClip = null, closeClip = null;
+      if (leafTpl.animations && leafTpl.animations.length) {
+        mixer = new THREE.AnimationMixer(leaf);
+        openClip = leafTpl.animations.find((a) => a.name === "open") || leafTpl.animations[0];
+        closeClip = leafTpl.animations.find((a) => a.name === "close");
+      }
+      let bars = null;
+      if (w.locked) { bars = A2.clone(this.kit.gateLocked); bars.position.z += 0.03; gg.add(bars); }
+      const lock = w.locked ? this._sprite("🔒", 1.2, 4.5) : null;
+      if (lock) gg.add(lock);
+      this.doorLeafs.set(w.id, { grp: gg, leaf, bars, lock, mixer, openClip, closeClip, open: false });
+      group.add(gg);
+      this.objMeshes.set(w.id, gg);
+    }
     // wall CUTAWAY state: walls between the chase cam and the player lower
-    // themselves (like the builder's low walls) so they never block the view
+    // themselves (like the builder's low walls) so they never block the view.
+    // Manual interior walls join in via per-instance refs.
     this.wallSets = this.wallSets || [];
-    this.wallSets[f] = { inst: wInst, segs: segData, cur: new Float32Array(segData.length).fill(1) };
+    this.wallSets[f] = { inst: wInst, segs: segData, cur: new Float32Array(segData.length).fill(1), man: manSegData, manCur: new Float32Array(manSegData.length).fill(1) };
 
     // ceiling for escape mode (floor tiles of the level above OR a dark plane) — skip: fog + darkness read as ceiling
 
@@ -548,6 +600,31 @@ export class Escape {
       dirty = true;
     }
     if (dirty) ws.inst.commit();
+    // manual interior walls sink too (per-instance refs into their style batches)
+    if (ws.man && ws.man.length) {
+      const dirtyInsts = new Set();
+      for (let i = 0; i < ws.man.length; i++) {
+        const s = ws.man[i];
+        const t = ((s.wx - cam.x) * dx + (s.wz - cam.z) * dz) / len2;
+        let target = 1;
+        if (t > 0.04 && t < 0.94) {
+          const qx = cam.x + dx * t, qz = cam.z + dz * t;
+          const ddx = s.wx - qx, ddz = s.wz - qz;
+          if (ddx * ddx + ddz * ddz < 5.4 * 5.4) target = 0.14;
+        }
+        const cur = ws.manCur[i];
+        if (Math.abs(target - cur) < 0.004) continue;
+        const nv = cur + (target - cur) * Math.min(1, dt * 9);
+        ws.manCur[i] = nv;
+        _cutP.set(s.wx, 0, s.wz);
+        _cutQ.setFromAxisAngle(_wy, s.yaw);
+        _cutS.set(1, nv, 1);
+        _cutM.compose(_cutP, _cutQ, _cutS);
+        s.inst.setMatrixAt(s.idx, _cutM);
+        dirtyInsts.add(s.inst);
+      }
+      for (const inst of dirtyInsts) inst.commit();
+    }
   }
 
   _nameTag(name) {

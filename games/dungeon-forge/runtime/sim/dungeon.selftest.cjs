@@ -603,6 +603,63 @@ const ok = (cond, name, extra) => {
     ok(rp.f === 0, "stairs-down: climbing DOWN switches to floor 0");
   }
 
+  // ── 9f. interior EDGE walls + edge doors (the WALLS tool) ────────
+  console.log("[edge-walls]");
+  {
+    const wd = newDungeon({ theme: "fantasy" });
+    stampRoom(wd, 0, 5, 5, 6, 4);                        // one 6x4 room
+    applyOp(wd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(wd, { t: "obj+", f: 0, o: { kind: "exit", x: 10, z: 8 } });
+    // solid wall row splitting x=7|8 across all four z rows
+    for (let z = 5; z <= 8; z++) ok(applyOp(wd, { t: "wall+", f: 0, x: 7, z, s: 1, wtype: "brick" }).ok, "wall+: places at 7," + z);
+    ok(!applyOp(wd, { t: "wall+", f: 0, x: 20, z: 20, s: 1 }).ok, "wall+: rejected off the floor");
+    // movement blocked: player walks east into the wall line
+    const wr = newRun(wd, 41, [{ id: "P1" }]);
+    const wp = wr.players[0];
+    wp.x = c2w(7); wp.z = c2w(6);
+    for (let i = 0; i < 60; i++) { wp.input.mx = 1; tick(wr, 1 / 60); }
+    wp.input.mx = 0;
+    ok(w2c(wp.x) === 7, "edge wall stops the player (cell " + w2c(wp.x) + ")");
+    // LOS + path blocked through the wall
+    ok(!hasLOS(wr, 0, c2w(7), c2w(6), c2w(8), c2w(6)), "edge wall blocks LOS");
+    ok(findPath(wr, 0, c2w(6), c2w(6), c2w(9), c2w(6)) === null, "edge wall blocks A* (full row)");
+    // solvability: room split with no way through → unsolvable
+    const sv1 = solvability(wd);
+    ok(sv1.solvable === false, "solvability: full wall row splits spawn from exit");
+    // knock one segment out → passable again
+    applyOp(wd, { t: "wall-", f: 0, x: 7, z: 8, s: 1 });
+    ok(solvability(wd).solvable !== false, "wall-: removing a segment reopens the route");
+    // put an EDGE DOOR in the gap instead (locked) + a key on the near side
+    applyOp(wd, { t: "wall+", f: 0, x: 7, z: 8, s: 1, wtype: "wood", door: true, locked: true });
+    const sv2 = solvability(wd);
+    ok(sv2.solvable === false, "locked edge door with no key = unsolvable");
+    applyOp(wd, { t: "obj+", f: 0, o: { kind: "key", x: 6, z: 6 } });
+    ok(solvability(wd).solvable !== false, "locked edge door + reachable key = solvable");
+    // runtime: unlock + open the edge door with the key via doInteract
+    const dr = newRun(wd, 42, [{ id: "P1" }]);
+    const dp = dr.players[0];
+    dp.keys = 1;
+    dp.x = c2w(7) + 1.4; dp.z = c2w(8) + 2.0;            // stand by the edge midpoint
+    const hint = interactHint(dr, dp);
+    ok(!!hint && hint.obj.edge === true && hint.verb === "Unlock", "edge door: interact hint offers Unlock (" + (hint && hint.verb) + ")");
+    ok(doInteract(dr, dp), "edge door: unlock+open succeeds");
+    ok(dp.keys === 0, "edge door: key consumed");
+    ok(dr.events.some((e) => e.type === "unlock") && dr.events.some((e) => e.type === "door" && e.open), "edge door: unlock + door events emitted");
+    // now the player can cross the line
+    dp.x = c2w(7); dp.z = c2w(8);
+    for (let i = 0; i < 60; i++) { dp.input.mx = 1; tick(dr, 1 / 60); }
+    dp.input.mx = 0;
+    ok(w2c(dp.x) >= 8, "edge door open: player crosses the line (cell " + w2c(dp.x) + ")");
+    // serialize roundtrip keeps walls + door flags
+    const backW = sanitize(serialize(wd));
+    const segs = D.manualWallSegments(backW, 0);
+    ok(segs.length === 4 && segs.some((w) => w.door && w.locked && w.type === "wood") && segs.filter((w) => w.type === "brick").length === 3,
+      "edge walls survive serialize roundtrip (" + segs.length + " segs)");
+    // erasing a cell clears its touching walls
+    applyOp(wd, { t: "cell-", f: 0, x: 7, z: 5 });
+    ok(!D.manualWallSegments(wd, 0).some((w) => w.x === 7 && w.z === 5), "cell- clears touching edge walls");
+  }
+
   // ── 10. pathfinding + LOS ───────────────────────────────────────
   console.log("[path+los]");
   const run6 = newRun(s, 6000, [{ id: "P1" }]);

@@ -19,7 +19,7 @@ export const TOOLS = [
   // Placement tools first; Select + Erase sit at the end just before the Exit
   // portal (owner request). Number keys 1-0 map to this order left→right.
   { id: "floor", icon: "⬜", label: "Floor" },   // → floor / lava / water paint + floor texture
-  { id: "door", icon: "🚪", label: "Door" },     // becomes WALLS (door moves inside) — task #14
+  { id: "walls", icon: "🧱", label: "Walls" },   // → wall styles + 🚪 door ON the line + erase
   { id: "stairs", icon: "🪜", label: "Stairs" }, // → up / down
   { id: "props", icon: "🎁", label: "Props" },   // → chest / key / trap / light / decor
   { id: "enemy", icon: "👹", label: "Enemy" },
@@ -48,6 +48,18 @@ export const FLOOR_MODES = [
   { id: "lava", icon: "🌋", label: "Lava" },
   { id: "water", icon: "💧", label: "Water" },
 ];
+
+// The Walls tool's sub-modes: four wall styles, a door ON the line, and erase.
+export const WALL_MODES = [
+  { id: "stone",  icon: "🪨", label: "Stone" },
+  { id: "brick",  icon: "🧱", label: "Brick" },
+  { id: "wood",   icon: "🪵", label: "Wood" },
+  { id: "metal",  icon: "⬛", label: "Metal" },
+  { id: "door",   icon: "🚪", label: "Door" },
+  { id: "erase",  icon: "🧹", label: "Remove" },
+];
+// per-style tint over the kit wall material (stone = the kit's own look)
+export const WALL_TINTS = { stone: null, brick: 0xb5654a, wood: 0x8a6a42, metal: 0x9aa4b5 };
 const FLOOR_CT = { floor: 1, lava: 2, water: 3 };
 
 const PAINT_CT = { floor: 1, lava: 2, water: 3, raise: 4 };
@@ -237,6 +249,42 @@ export class Builder {
     });
     wInst.setCount(segs.length); wInst.commit();
     group.add(wInst.group);
+
+    // manual INTERIOR walls (styled, low like the derived ones) + edge doors
+    const man = D.manualWallSegments(this.d, f);
+    const styleBatches = {};
+    for (const w of man) { if (!w.door) (styleBatches[w.type] = styleBatches[w.type] || []).push(w); }
+    for (const type of Object.keys(styleBatches)) {
+      const list = styleBatches[type];
+      // two back-to-back instances per edge so the wall reads from BOTH rooms
+      const inst = makeInstanced(this.kit.wall.scene, list.length * 2);
+      if (WALL_TINTS[type]) inst.group.traverse((o) => { if (o.isInstancedMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(WALL_TINTS[type]); } });
+      list.forEach((w, i) => {
+        const mid = D.edgeMid(w.x, w.z, w.s);
+        for (let k = 0; k < 2; k++) {
+          const off = (k === 0 ? -0.06 : 0.06);
+          pos.set(mid.x + (w.s === 1 ? off : 0), 0, mid.z + (w.s === 0 ? off : 0));
+          q.setFromAxisAngle(up, (w.s === 0 ? 0 : Math.PI / 2) + k * Math.PI);
+          m4.compose(pos, q, scl);
+          inst.setMatrixAt(i * 2 + k, m4);
+        }
+      });
+      inst.setCount(list.length * 2); inst.commit();
+      group.add(inst.group);
+    }
+    for (const w of man) {
+      if (!w.door) continue;
+      const gg = new THREE.Group();
+      const mid = D.edgeMid(w.x, w.z, w.s);
+      gg.position.set(mid.x, 0, mid.z);
+      gg.rotation.y = w.s === 0 ? -Math.PI / 2 : 0;   // passage crosses the line
+      const gm = this.g.assets.clone(this.kit.gate); gg.add(gm);
+      if (w.locked) { const bars = this.g.assets.clone(this.kit.gateLocked); bars.position.z += 0.02; gg.add(bars); gg.add(this._lockIcon()); }
+      else { const leaf = this.g.assets.clone(this.kit.gateDoor); gg.add(leaf); }
+      gg.userData = { id: w.id, f, kind: "edgedoor", ex: w.x, ez: w.z, es: w.s };
+      group.add(gg);
+      this.objMeshes.set(w.id, gg);
+    }
 
     // objects (sit on the cell's walk surface — raised platforms lift them)
     for (const o of fl.objects) {
@@ -498,6 +546,15 @@ export class Builder {
     return { x, z, px: pt.x, pz: pt.z, ndc };
   }
 
+  /** Nearest cell EDGE (grid line) to the pointer, canonical {x,z,s}. */
+  _pointerEdge(cell) {
+    if (!cell) return null;
+    const fx = cell.px / CELL - cell.x, fz = cell.pz / CELL - cell.z;
+    // distance to each border: +x, -x, +z, -z → side 1, 3, 0, 2
+    const cand = [[1 - fx, 1], [fx, 3], [1 - fz, 0], [fz, 2]].sort((a, b) => a[0] - b[0]);
+    return D.normEdge(cell.x, cell.z, cand[0][1]);
+  }
+
   _pickObject(e) {
     const el = this.g.renderer.domElement;
     const r = el.getBoundingClientRect();
@@ -520,6 +577,22 @@ export class Builder {
     if (!cell) return;
     if (this.tool === "select") {
       const id = this._pickObject(e);
+      // edge doors aren't cell objects — Select-clicking one toggles its 🔒 lock
+      if (id && !D.objById(this.d, id)) {
+        const mesh = this.objMeshes.get(id);
+        const ud = mesh && mesh.userData;
+        if (ud && ud.kind === "edgedoor") {
+          this._pushUndo();
+          const w = this.d.floors[ud.f].walls[D.wk(ud.ex, ud.ez, ud.es)];
+          if (w) {
+            const wasLocked = !!w.locked;
+            this.applyLocal({ t: "wall+", f: ud.f, x: ud.ex, z: ud.ez, s: ud.es, wtype: w.t, door: true, locked: !wasLocked, id: w.id });
+            this.g.audio.sfx(wasLocked ? "unlock" : "lock");
+            this.g.hud.toast(wasLocked ? "Door unlocked" : "🔒 Door locked — players need a key", "info");
+          }
+          return;
+        }
+      }
       this.select(id);
       // start a move-drag on the picked object (drag it to a new cell)
       if (id) {
@@ -527,6 +600,14 @@ export class Builder {
         this._noUndo = true;                       // suppress per-frame snapshots while dragging
         this._moveDrag = { id, moved: false, startCell: cell };
       }
+      return;
+    }
+    // Walls tool: place/erase a wall (or door) on the nearest grid LINE; drag paints a run
+    if (this.tool === "walls") {
+      this._pushUndo();
+      this._noUndo = true;
+      this.drag = { walls: true, lastKey: null };
+      this._placeWallAt(cell);
       return;
     }
     // Floor tool: floor/lava/water paint a rectangle (single click = one cell).
@@ -566,6 +647,8 @@ export class Builder {
     }
     const cell = this._pointerCell(e);
     this.hover = cell;
+    this.hoverEdge = this.tool === "walls" ? this._pointerEdge(cell) : null;
+    if (cell && this.drag && this.drag.walls) this._placeWallAt(cell);
     if (cell && this.drag && this.drag.paint) this._paint(cell);
     // drag a selected object onto a new cell (must land on existing floor)
     if (cell && this._moveDrag) {
@@ -599,6 +682,7 @@ export class Builder {
     }
     this._clearRoomPreview();
     if (this.drag && this.drag.paint) { this._noUndo = false; if (this.g.hud.refreshBuilderUndo) this.g.hud.refreshBuilderUndo(this); }
+    if (this.drag && this.drag.walls) { this._noUndo = false; if (this.g.hud.refreshBuilderUndo) this.g.hud.refreshBuilderUndo(this); }
     this.drag = null;
   }
 
@@ -617,6 +701,23 @@ export class Builder {
     this.roomPreview.position.set((x0 + w / 2) * CELL, this.floor * FLOOR_H + 0.06, (z0 + h / 2) * CELL);
   }
   _clearRoomPreview() { if (this.roomPreview) this.roomPreview.visible = false; }
+
+  /** Walls tool: apply the current wall mode to the edge nearest the pointer. */
+  _placeWallAt(cell) {
+    const e = this._pointerEdge(cell);
+    if (!e || !this.drag || !this.drag.walls) return;
+    const key = D.wk(e.x, e.z, e.s);
+    if (this.drag.lastKey === key) return;                 // one op per edge per drag
+    this.drag.lastKey = key;
+    const mode = this.toolOpt.wmode || "stone";
+    let op;
+    if (mode === "erase") op = { t: "wall-", f: this.floor, x: e.x, z: e.z, s: e.s };
+    else if (mode === "door") op = { t: "wall+", f: this.floor, x: e.x, z: e.z, s: e.s, wtype: "stone", door: true };
+    else op = { t: "wall+", f: this.floor, x: e.x, z: e.z, s: e.s, wtype: mode };
+    const res = this.applyLocal(op);
+    if (res.ok) this.g.audio.sfx(mode === "erase" ? "erase" : "place");
+    else if (res.err === "nocell") this.g.hud.toast("Walls go on lines BETWEEN two floor tiles (the boundary already has a wall)", "warn");
+  }
 
   _paint(cell) {
     if (this.tool === "erase") {
@@ -808,15 +909,29 @@ export class Builder {
     this.g.camera.position.lerp(new THREE.Vector3(cx, cy, cz), Math.min(1, dt * 8));
     this.g.camera.lookAt(this.camT.x, y, this.camT.z);
 
-    // hover highlight + ghost
-    if (this.hover && this.tool !== "select") {
+    // hover highlight + ghost (Walls tool highlights the EDGE line instead)
+    if (this.tool === "walls" && this.hoverEdge) {
+      this.hoverQuad.visible = false;
+      if (!this.edgeBar) {
+        this.edgeBar = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.96, 0.9, 0.22),
+          new THREE.MeshBasicMaterial({ color: 0x66ffcc, transparent: true, opacity: 0.55, depthWrite: false }));
+        this.root.add(this.edgeBar);
+      }
+      const e = this.hoverEdge, mid = D.edgeMid(e.x, e.z, e.s);
+      this.edgeBar.visible = true;
+      this.edgeBar.position.set(mid.x, this.floor * FLOOR_H + 0.5, mid.z);
+      this.edgeBar.rotation.y = e.s === 0 ? 0 : Math.PI / 2;
+      const mode = this.toolOpt.wmode || "stone";
+      this.edgeBar.material.color.set(mode === "erase" ? 0xff5566 : mode === "door" ? 0xffd769 : 0x66ffcc);
+    } else if (this.hover && this.tool !== "select") {
+      if (this.edgeBar) this.edgeBar.visible = false;
       this.hoverQuad.visible = true;
       this.hoverQuad.position.x = this.hover.x * CELL + CELL / 2;
       this.hoverQuad.position.z = this.hover.z * CELL + CELL / 2;
       const valid = PAINT_CT[this.tool] || this.tool === "room" || this.tool === "erase"
         ? true : D.hasCell(this.d, this.floor, this.hover.x, this.hover.z);
       this.hoverQuad.material.color.set(valid ? 0x66ffcc : 0xff5566);
-    } else this.hoverQuad.visible = false;
+    } else { this.hoverQuad.visible = false; if (this.edgeBar) this.edgeBar.visible = false; }
 
     // animated bits: torch flicker, key spin, portal spin, enemy idle mixers
     const t = performance.now() / 1000;

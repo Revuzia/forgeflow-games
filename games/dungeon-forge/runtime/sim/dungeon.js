@@ -235,8 +235,49 @@ export function newDungeon(opts = {}) {
 }
 
 export function emptyFloor() {
-  // cells: {"x,z":ct} · heights: {"x,z":level} · tex: {"x,z":texId} (floor only) · objects: […]
-  return { cells: {}, heights: {}, tex: {}, objects: [] };
+  // cells: {"x,z":ct} · heights: {"x,z":level} · tex: {"x,z":texId} (floor only)
+  // walls: {"x,z,s": {t, id, door?, locked?}} interior EDGE walls (s: 0=+z, 1=+x)
+  // objects: […]
+  return { cells: {}, heights: {}, tex: {}, walls: {}, objects: [] };
+}
+
+// ── interior edge walls (the manual WALLS tool) ───────────────────────────────
+// An edge wall sits ON the grid line between two floor cells. Canonical key is
+// "x,z,s" with s=0 (edge to x,z+1) or s=1 (edge to x+1,z); sides 2/3 normalize
+// to the neighbor. Entries may be a DOOR ({door:true, locked}) — a door on the
+// wall line, openable exactly like a cell door (same runtime events, by id).
+export const WALL_TYPES = ["stone", "brick", "wood", "metal"];
+export const wk = (x, z, s) => x + "," + z + "," + s;
+export function normEdge(x, z, side) {
+  side = ((side | 0) % 4 + 4) % 4;
+  if (side === 0) return { x, z, s: 0 };
+  if (side === 1) return { x, z, s: 1 };
+  if (side === 2) return { x, z: z - 1, s: 0 };
+  return { x: x - 1, z, s: 1 };
+}
+/** Manual wall entry between two orthogonally-adjacent cells (else null). */
+export function edgeWall(d, f, ax, az, bx, bz) {
+  const fl = d.floors[f];
+  if (!fl || !fl.walls) return null;
+  const dx = bx - ax, dz = bz - az;
+  if (Math.abs(dx) + Math.abs(dz) !== 1) return null;
+  const e = dx === 1 ? { x: ax, z: az, s: 1 } : dx === -1 ? { x: bx, z: bz, s: 1 }
+          : dz === 1 ? { x: ax, z: az, s: 0 } : { x: bx, z: bz, s: 0 };
+  return fl.walls[wk(e.x, e.z, e.s)] || null;
+}
+/** World-space midpoint of an edge (for interaction range + render placement). */
+export function edgeMid(x, z, s) {
+  return s === 0 ? { x: (x + 0.5) * CELL, z: (z + 1) * CELL } : { x: (x + 1) * CELL, z: (z + 0.5) * CELL };
+}
+/** All manual wall segments of a floor for the renderers. */
+export function manualWallSegments(d, f) {
+  const fl = d.floors[f];
+  if (!fl || !fl.walls) return [];
+  return Object.keys(fl.walls).map((k) => {
+    const [x, z, s] = k.split(",").map(Number);
+    const w = fl.walls[k];
+    return { x, z, s, key: k, type: w.t || "stone", door: !!w.door, locked: !!w.locked, id: w.id };
+  });
 }
 
 export const ck = (x, z) => x + "," + z;
@@ -296,6 +337,33 @@ export function applyOp(d, op) {
       fl.objects = fl.objects.filter((o) => !(o.x === op.x && o.z === op.z));
       if (fl.heights) delete fl.heights[ck(op.x, op.z)];
       if (fl.tex) delete fl.tex[ck(op.x, op.z)];
+      if (fl.walls) for (const e of [wk(op.x, op.z, 0), wk(op.x, op.z, 1), wk(op.x, op.z - 1, 0), wk(op.x - 1, op.z, 1)]) delete fl.walls[e];
+      return { ok: true };
+    }
+    case "wall+": {
+      const fl = d.floors[op.f];
+      if (!fl) return { ok: false, err: "nofloor" };
+      const e = normEdge(op.x, op.z, op.s != null ? op.s : 0);
+      const nx = e.s === 1 ? e.x + 1 : e.x, nz = e.s === 0 ? e.z + 1 : e.z;
+      if (!inBounds(e.x, e.z) || !inBounds(nx, nz)) return { ok: false, err: "oob" };
+      // interior walls only: both sides must be floor (the boundary already HAS a wall)
+      if (!fl.cells[ck(e.x, e.z)] || !fl.cells[ck(nx, nz)]) return { ok: false, err: "nocell" };
+      fl.walls = fl.walls || {};
+      const key = wk(e.x, e.z, e.s);
+      const prev = fl.walls[key];
+      const w = { t: WALL_TYPES.includes(op.wtype) ? op.wtype : "stone", id: (prev && prev.id) || "w" + d.nid++ };
+      if (op.door) { w.door = true; w.locked = !!op.locked; }
+      if (op.id) { w.id = op.id; const n = parseInt(String(op.id).slice(1), 10); if (!isNaN(n) && n >= d.nid) d.nid = n + 1; }
+      fl.walls[key] = w;
+      return { ok: true, id: w.id };
+    }
+    case "wall-": {
+      const fl = d.floors[op.f];
+      if (!fl || !fl.walls) return { ok: false, err: "nofloor" };
+      const e = normEdge(op.x, op.z, op.s != null ? op.s : 0);
+      const key = wk(e.x, e.z, e.s);
+      if (!fl.walls[key]) return { ok: false, err: "nowall" };
+      delete fl.walls[key];
       return { ok: true };
     }
     case "raise": case "lower": {
@@ -441,6 +509,12 @@ export function passable(d, f, ax, az, bx, bz, openDoors) {
   if (!hasCell(d, f, bx, bz)) return false;
   const dx = bx - ax, dz = bz - az;
   if (Math.abs(dx) + Math.abs(dz) !== 1) return false;
+  // interior EDGE wall on the shared line: solid blocks; a door needs to be open
+  const ew = edgeWall(d, f, ax, az, bx, bz);
+  if (ew) {
+    if (!ew.door) return false;
+    if (!(openDoors && openDoors.has(ew.id))) return false;
+  }
   const moveX = dx !== 0;
   // door on either endpoint: you cross it only along its doorway axis, and only
   // when it's open (unlocked doors are pre-opened by the solvability checker).
@@ -513,11 +587,18 @@ export function solvability(d) {
   if (!spawn || !exit) return { solvable: false, reason: "missing spawn/exit" };
 
   const links = stairLinks(d);
-  const opened = new Set();       // door ids treated as open
+  const opened = new Set();       // door ids treated as open (cell doors AND edge doors)
   const totalKeys = findAll(d, "key").length;
-  const lockedDoors = () => { const m = new Map(); d.floors.forEach((fl) => fl.objects.forEach((o) => { if (o.kind === "door" && o.locked && !opened.has(o.id)) m.set(o.id, o); })); return m; };
+  const eachEdgeDoor = (fn) => d.floors.forEach((fl) => { if (fl.walls) for (const k of Object.keys(fl.walls)) { const w = fl.walls[k]; if (w.door) fn(w, k); } });
+  const lockedDoors = () => {
+    const m = new Map();
+    d.floors.forEach((fl) => fl.objects.forEach((o) => { if (o.kind === "door" && o.locked && !opened.has(o.id)) m.set(o.id, o); }));
+    eachEdgeDoor((w) => { if (w.locked && !opened.has(w.id)) m.set(w.id, w); });
+    return m;
+  };
   // unlocked doors are passable from the start
   d.floors.forEach((fl) => fl.objects.forEach((o) => { if (o.kind === "door" && !o.locked) opened.add(o.id); }));
+  eachEdgeDoor((w) => { if (!w.locked) opened.add(w.id); });
 
   let keys = 0, used = 0;
   const collected = new Set();
@@ -542,6 +623,9 @@ export function solvability(d) {
           const moveX = (nx - x) !== 0;
           if ((doorAxis(d, f, dCell[0], dCell[1]) === 0) === moveX) frontierDoors.add(doorHere.id);
         }
+        // or a locked EDGE door on the shared line?
+        const ew = edgeWall(d, f, x, z, nx, nz);
+        if (ew && ew.door && ew.locked && !opened.has(ew.id)) frontierDoors.add(ew.id);
       }
       // stairs from this cell (both directions)
       for (const L of links) {
@@ -657,6 +741,18 @@ export function sanitize(raw) {
         const t = fl.tex[k];
         // texture only survives on a walkable floor cell (type 1)
         if (inBounds(x, z) && nf.cells[ck(x, z)] === CT.FLOOR && t !== "stone" && FLOOR_TEX_SET.has(t)) nf.tex[ck(x, z)] = t;
+      }
+      if (fl && fl.walls) for (const k of Object.keys(fl.walls)) {
+        const [x, z, s] = k.split(",").map(Number);
+        const w = fl.walls[k];
+        if (!w || (s !== 0 && s !== 1)) continue;
+        const nx = s === 1 ? x + 1 : x, nz = s === 0 ? z + 1 : z;
+        // interior walls need floor on BOTH sides after sanitize
+        if (!inBounds(x, z) || !inBounds(nx, nz) || !nf.cells[ck(x, z)] || !nf.cells[ck(nx, nz)]) continue;
+        const c = { t: WALL_TYPES.includes(w.t) ? w.t : "stone", id: String(w.id || "w" + out.nid++).slice(0, 12) };
+        if (w.door) { c.door = true; c.locked = !!w.locked; }
+        const n = parseInt(c.id.slice(1), 10); if (!isNaN(n) && n >= out.nid) out.nid = n + 1;
+        nf.walls[wk(x, z, s)] = c;
       }
       if (fl && Array.isArray(fl.objects)) for (const o of fl.objects.slice(0, 4000)) {
         if (!o || !KINDS[o.kind] || !inBounds(o.x | 0, o.z | 0)) continue;
