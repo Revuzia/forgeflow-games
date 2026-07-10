@@ -1,5 +1,10 @@
 # Thronedrift — Build Status (loop tracker)
 
+## DEPLOYED LIVE — 2026-07-10
+https://forgeflowgames.com/games/thronedrift/ (CDN 81/81 files 200 after re-upload
+of imp.glb + cthulhu.glb which failed on transient connectivity; Supabase row
+inserted status=published; portal prerender refreshed).
+
 ## Iteration 3 — 2026-07-10 ✅ BOSSES + BESTIARY×20 + LIVE-3D MENU + SETTINGS
 Feedback batch 2 landed (CHANGELOG v0.3). Verified headless: Vulkar spawns wave
 5 w/ HP bar + telegraphed casts; menu showcase 3 heroes + cards; settings/
