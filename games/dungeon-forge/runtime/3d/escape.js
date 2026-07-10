@@ -22,6 +22,23 @@ const _swingAxis = new THREE.Vector3(); // scratch: character right-vector for g
 const SKINS = ["knight", "barbarian", "sorceress", "rogue"];
 const TIER_COLORS = [0x8a6a4a, 0xcfd6e4, 0xffd769]; // bronze / steel / gold
 
+// Per-class weapon grip: all class weapons are modelled along local +Y. gripFrac
+// = where along the weapon's height the fist closes (0 = butt, 1 = tip); rest =
+// the desired world direction of the +Y shaft in the character's frame (+Z fwd,
+// +Y up) at the idle stance. The grip is placed at the hand and the shaft is
+// oriented from the hand-bone's real world basis, so it stops clipping the hip.
+const WEAPON_CFG = {
+  knight:    { scale: 1.0, gripFrac: 0.14, rest: [0.15, 0.62, 0.77] }, // sword: blade fwd-up
+  barbarian: { scale: 1.0, gripFrac: 0.26, rest: [0.10, 0.95, 0.30] }, // axe: head up-fwd
+  sorceress: { scale: 1.0, gripFrac: 0.44, rest: [0.05, 0.99, 0.14] }, // staff: orb up
+  rogue:     { scale: 0.9, gripFrac: 0.30, rest: [0.10, 0.20, 0.97] }, // dagger: blade fwd
+};
+const _wq = new THREE.Quaternion(), _wq2 = new THREE.Quaternion(), _wv = new THREE.Vector3(), _wy = new THREE.Vector3(0, 1, 0);
+const _wp = new THREE.Vector3(), _wsc = new THREE.Vector3();
+/** Scale a holder to cancel a bone's ACTUAL world scale (Meshy armatures bind
+ *  bones at ~0.01 and rigScale does not match it — measure it directly). */
+function boneCounterScale(bone) { bone.matrixWorld.decompose(_wp, _wq, _wsc); return 1 / Math.max(1e-5, _wsc.x); }
+
 export class Escape {
   constructor(game) {
     this.g = game;
@@ -340,7 +357,6 @@ export class Escape {
     const p = a.p;
     // clear old
     for (const k of Object.keys(a.equip)) { const m = a.equip[k]; if (m && m.parent) m.parent.remove(m); delete a.equip[k]; }
-    const inv = 1 / Math.max(0.01, a.rigScale);
     const cls = p.cls || "knight";
     const tierTint = (root) => {
       if (p.weaponTier > 0) {
@@ -349,36 +365,37 @@ export class Escape {
       }
     };
     const mount = (mesh, bone, scale) => {
+      a.obj.updateMatrixWorld(true);
       const holder = new THREE.Group();
-      holder.scale.setScalar(inv * (scale || 1));
+      holder.scale.setScalar(boneCounterScale(bone) * (scale || 1));
       holder.add(mesh);
       bone.add(holder);
       return holder;
     };
-    // class weapons: knight sword+shield · barbarian 2H axe · sorceress staff · rogue dual daggers
+    // class weapons — gripped in the fist + oriented from the hand-bone world
+    // basis (a blind Euler pointed the Meshy hand's arbitrary axes through the
+    // hip). Pose the rig at its idle/relaxed rest first so the grip transform
+    // matches how the player actually stands.
     if (a.bones.hand) {
+      if (a.actions && a.actions.idle) { a.actions.idle.reset().play(); a.mixer.update(0); }
+      a.obj.updateMatrixWorld(true);
+      if (a.armBones) { relaxArms(a.armBones, 1); a.obj.updateMatrixWorld(true); }
+      const cfg = WEAPON_CFG[cls] || WEAPON_CFG.knight;
       let main;
       if (cls === "knight") {
         main = this.g.assets.clone(this.props.sword || this.props.blaster);
         Assets.normalizeFoot(main, 0.95 + 0.12 * (p.weaponTier || 0));
-        main.position.set(0, 0.05, 0.02);
-        main.rotation.set(Math.PI / 2, 0, 0);
       } else {
         main = Assets.makeClassWeapon(cls);
-        const s = (cls === "barbarian" ? 1.0 : cls === "sorceress" ? 1.0 : 0.9) + 0.1 * (p.weaponTier || 0);
-        main.scale.setScalar(s);
-        main.rotation.set(Math.PI / 2, 0, 0);
-        main.position.set(0, 0.04, 0.02);
+        main.scale.setScalar(cfg.scale + 0.1 * (p.weaponTier || 0));
       }
       tierTint(main);
-      a.equip.weapon = mount(main, a.bones.hand);
+      a.equip.weapon = this._gripMount(a, main, a.bones.hand, cfg);
       if (cls === "rogue" && a.bones.handL) {
         const off = Assets.makeClassWeapon("rogue");
-        off.scale.setScalar(0.9 + 0.1 * (p.weaponTier || 0));
-        off.rotation.set(Math.PI / 2, 0, 0);
-        off.position.set(0, 0.04, 0.02);
+        off.scale.setScalar(cfg.scale + 0.1 * (p.weaponTier || 0));
         tierTint(off);
-        a.equip.offhand = mount(off, a.bones.handL);
+        a.equip.offhand = this._gripMount(a, off, a.bones.handL, cfg);
       }
       if (cls === "knight" && a.bones.handL) {
         const sh = Assets.makeShield();
@@ -391,8 +408,9 @@ export class Escape {
     if (p.armorTier > 0 && a.bones.spine) {
       const col = TIER_COLORS[Math.min(2, p.armorTier - 1)];
       const mat = new THREE.MeshStandardMaterial({ color: col, metalness: 0.85, roughness: 0.35, emissive: col, emissiveIntensity: 0.12 });
+      a.obj.updateMatrixWorld(true);
       const holder = new THREE.Group();
-      holder.scale.setScalar(inv);
+      holder.scale.setScalar(boneCounterScale(a.bones.spine));
       const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.3, 0.5, 10, 1, true, -Math.PI * 0.7, Math.PI * 1.4), mat);
       plate.position.set(0, 0.12, 0.1);
       holder.add(plate);
@@ -404,6 +422,28 @@ export class Escape {
       a.bones.spine.add(holder);
       a.equip.armor = holder;
     }
+  }
+
+  /** Grip a shaft weapon in the fist: place its grip at the hand and point its
+   *  +Y shaft along cfg.rest (world dir in the character frame, +Z fwd / +Y up)
+   *  using the hand bone's real world basis, computed once at the idle pose so it
+   *  then follows every animation without clipping the body. */
+  _gripMount(a, mesh, bone, cfg) {
+    mesh.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(mesh);
+    const h = Math.max(0.001, box.max.y - box.min.y);
+    mesh.position.y -= box.min.y + h * (cfg.gripFrac != null ? cfg.gripFrac : 0.2); // grip → holder origin
+    const holder = new THREE.Group();
+    a.obj.updateMatrixWorld(true);
+    holder.scale.setScalar(boneCounterScale(bone));   // cancel the bone's true world scale
+    holder.add(mesh);
+    bone.add(holder);
+    a.obj.updateMatrixWorld(true);
+    bone.getWorldQuaternion(_wq);                     // hand world orientation
+    _wv.fromArray(cfg.rest).normalize();              // desired shaft dir (char frame)
+    _wq2.setFromUnitVectors(_wy, _wv);                // world quat mapping +Y → rest dir
+    holder.quaternion.copy(_wq.invert().multiply(_wq2)); // → hand-bone local, follows animation
+    return holder;
   }
 
   _nameTag(name) {

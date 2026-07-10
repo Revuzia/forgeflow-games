@@ -344,6 +344,25 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.7.0 — 2026-07-09 (weapons flush in hand — no more through-the-hip)
+- **Weapons are now gripped correctly in the fist** (owner: 'hold weapons the
+  right way not through the hip'). Two faults, both fixed:
+  1. Weapons were gripped at their BUTT (mesh origin) and rotated by a blind fixed
+     Euler that ignored the Meshy hand-bone's arbitrary local axes → the shaft
+     cantilevered through the hip. New `_gripMount`: measures each weapon's bbox,
+     places the GRIP (per-class gripFrac) at the hand, and orients the shaft from
+     the hand bone's real world basis toward a per-class rest direction (staff up,
+     sword fwd-up, axe up-fwd, dagger fwd), computed at the idle pose so it then
+     follows every animation.
+  2. **Attachment scale regression** (introduced by v1.6.9's scale-track strip):
+     Meshy armatures bind bones at ~0.01 world scale and the animation scale
+     tracks were inflating them; stripping the tracks left bones at bind scale, so
+     weapons/armor/shield shrank ~100×. Fixed by countering each bone's ACTUAL
+     measured world scale (`boneCounterScale`) instead of the mismatched rigScale.
+- Verified live: Sorceress staff full-size (1.74) held upright with the orb at the
+  top, gripped exactly at the hand (dist 0), beside the body (0.31 from hip, not
+  through it); Knight sword full-size (1.55) fwd-up + shield restored (0.72).
+
 ## v1.6.9 — 2026-07-09 (inverted strafe + walk-shrink fixes)
 - **Inverted A/D strafe fixed** (owner: 'A goes right and D goes left'). The
   camera-relative strafe term had the wrong sign in _gatherInput (escape.js) —
