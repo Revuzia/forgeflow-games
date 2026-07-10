@@ -1,5 +1,11 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v0.5 — 2026-07-10 (portraits + mobile polish; build complete)
+- Bestiary: runtime 3D portraits rendered from the actual GLBs (all 20 foes)
+- Mobile: responsive title sizing, menu buttons wrap, showcase camera pulls
+  back on narrow aspects (all 3 champions framed at 375px), ability cluster
+  raised 48px clear of the fullscreen/mute bar
+
 ## v0.4 — 2026-07-10 (campaign QA + music + selftest)
 - FULL CAMPAIGN VERIFIED headless: all 5 realms cleared, all 5 bosses fought
   (Vulkar slams/charges, Boreas novas/summons, Skalvyrn volleys/blinks x4,

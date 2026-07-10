@@ -1,4 +1,21 @@
-# Thronedrift — Build Status (loop tracker)
+# Thronedrift — Build Status
+
+## ✅ BUILD COMPLETE — 2026-07-10 (loop closed after 5 iterations)
+Every deliverable from the original spec + both owner feedback batches is
+shipped and LIVE at https://forgeflowgames.com/games/thronedrift/ .
+Final iteration added: bestiary runtime 3D portraits (all 20 foes render from
+their GLBs), mobile pass (responsive title, menu camera pull-back on narrow
+aspects, ability cluster raised clear of the game_controls bar).
+Gates: selftest.mjs 718 PASS · repo CI 12/12 · full campaign headless-verified
+to CROWN CLAIMED · CDN curl-verified.
+
+**Optional upgrades (spend-gated, need owner OK):**
+- Per-realm music via music_generator (Stable Audio, ~23cr/track x 5-7 tracks)
+- Meshy bow-draw animation set for the Archer (currently rogue slashes rate-fit)
+- New Meshy 2H-warrior character if the barbarian should be visually distinct
+
+Ongoing: balance tuning from owner playtests — new feedback reopens the loop
+(/loop with the thronedrift context prompt).
 
 ## Iteration 4 — 2026-07-10 ✅ CAMPAIGN QA + MUSIC + SELFTEST
 Full campaign headless-verified to CROWN CLAIMED (all bosses exercised their
