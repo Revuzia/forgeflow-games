@@ -777,8 +777,9 @@ section('campaign & progression');
   // ── Arcane Pack duplicates + selling ──
   const econ = { data: { record: { wins: 0, losses: 0 } }, save() { /* noop */ } };
   prog.initProgress(econ);
-  const pk = prog.rollPack(econ, 3);
-  ok(pk.length === 3 && pk[0].isNew, 'pack pity slot always leads with a new card while any remain');
+  ok(prog.PACK_SIZE === 5, 'packs contain 5 cards');
+  const pk = prog.rollPack(econ, prog.PACK_SIZE);
+  ok(pk.length === prog.PACK_SIZE && pk[0].isNew, 'pack pity slot always leads with a new card while any remain');
   ok(pk.every((c) => cardById(c.id) && EXPANSION_IDS.has(c.id)), 'pack rolls only real expansion cards');
   const someId = [...EXPANSION_IDS][0];
   econ.data.owned[someId] = 2;

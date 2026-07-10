@@ -1,12 +1,12 @@
 // Arcane Realms TCG — Campaign screens: chapter map, NPC dialogue bubbles,
 // rewards reveal, achievements panel, card-back gallery.
 
-import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=22';
-import { battleState, campaignSummary, achievementList, buyPack, dupeCount } from '../campaign/progression.js?v=22';
-import { REALMS, cardById } from '../sim/cards.js?v=22';
-import { drawCard } from './cardtex.js?v=22';
-import { Audio2 } from './audio.js?v=22';
-import { openPackReveal } from './packreveal.js?v=22';
+import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=23';
+import { battleState, campaignSummary, achievementList, buyPack, dupeCount } from '../campaign/progression.js?v=23';
+import { REALMS, cardById } from '../sim/cards.js?v=23';
+import { drawCard } from './cardtex.js?v=23';
+import { Audio2 } from './audio.js?v=23';
+import { openPackReveal } from './packreveal.js?v=23';
 
 // compact arcane booster-pack icon for the store button
 const PACK_SVG = `<svg viewBox="0 0 40 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="30" height="36">

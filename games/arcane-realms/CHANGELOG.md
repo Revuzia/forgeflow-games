@@ -1,5 +1,14 @@
 # Arcane Realms TCG — Changelog
 
+## v1.6.1 — 2026-07-09 (5-card packs + pack-opening backdrop)
+
+- **Packs now contain 5 cards** (`PACK_SIZE` 3 → 5). The reveal fan tightens its
+  spacing and adds a gentle upward bow for 4–5 cards so it reads as a hand.
+- **Pack opening has a real stage.** A generated arcane-vault backdrop
+  (`assets/ui/pack_bg.jpg` — altar, god-ray beam, floating runes, xAI) sits behind
+  the reveal, darkened with a vignette so the pack and cards pop. Warmed at boot.
+- Selftest 134/0. Cache-bust `?v=22` → `?v=23`.
+
 ## v1.6.0 — 2026-07-09 (3D Arcane Pack opening + duplicates + sell-for-gold)
 
 A full store/pack loop, Hearthstone-style but in Three.js.

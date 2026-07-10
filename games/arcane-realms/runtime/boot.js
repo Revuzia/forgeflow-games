@@ -1,19 +1,19 @@
 // Arcane Realms TCG — boot: asset warmup, screen flow, main loop, debug hooks.
 import * as THREE from 'three';
-import { BoardScene } from './view/scene.js?v=22';
-import { UI, Store } from './view/ui.js?v=22';
-import { Match } from './view/match.js?v=22';
-import { Audio2 } from './view/audio.js?v=22';
-import { OnlineSession } from './view/online.js?v=22';
-import { preload, getCardBack } from './view/cardtex.js?v=22';
-import { STARTER_DECKS, validateDeck } from './sim/decks.js?v=22';
-import { COLLECTIBLE, cardById, TOKENS } from './sim/cards.js?v=22';
-import { createGame, legalActions, applyAction, makeUnit } from './sim/engine.js?v=22';
-import { chooseAction, runAiTurn } from './sim/ai.js?v=22';
-import { CampaignUI } from './view/campaign_ui.js?v=22';
-import { openPackReveal } from './view/packreveal.js?v=22';
-import { CARDBACK_INFO } from './campaign/campaign_data.js?v=22';
-import { initProgress, isOwned, ownedCount, copiesOf, sellCard, sellValue, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=22';
+import { BoardScene } from './view/scene.js?v=23';
+import { UI, Store } from './view/ui.js?v=23';
+import { Match } from './view/match.js?v=23';
+import { Audio2 } from './view/audio.js?v=23';
+import { OnlineSession } from './view/online.js?v=23';
+import { preload, getCardBack } from './view/cardtex.js?v=23';
+import { STARTER_DECKS, validateDeck } from './sim/decks.js?v=23';
+import { COLLECTIBLE, cardById, TOKENS } from './sim/cards.js?v=23';
+import { createGame, legalActions, applyAction, makeUnit } from './sim/engine.js?v=23';
+import { chooseAction, runAiTurn } from './sim/ai.js?v=23';
+import { CampaignUI } from './view/campaign_ui.js?v=23';
+import { openPackReveal } from './view/packreveal.js?v=23';
+import { CARDBACK_INFO } from './campaign/campaign_data.js?v=23';
+import { initProgress, isOwned, ownedCount, copiesOf, sellCard, sellValue, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=23';
 
 const container = document.getElementById('game-container');
 const splash = document.getElementById('boot-splash');
@@ -53,6 +53,7 @@ async function boot() {
     loadImage('assets/ui/menu_bg.jpg'),
     loadImage('assets/ui/cardback.jpg'),
   ]);
+  loadImage('assets/ui/pack_bg.jpg'); // warm the pack-opening backdrop (non-blocking)
   setProgress(0.4, 'Shuffling the realms…');
 
   scene = new BoardScene(container);

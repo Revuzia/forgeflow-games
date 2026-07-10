@@ -1,11 +1,11 @@
 // Arcane Realms TCG — DOM UI layer: menu, deck builder, collection, settings,
 // match HUD (hero plates, phase bar, banners, floaters, arrow, tooltips).
 
-import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=22';
-import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=22';
-import { DIFFICULTIES } from '../sim/ai.js?v=22';
-import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=22';
-import { Audio2 } from './audio.js?v=22';
+import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=23';
+import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=23';
+import { DIFFICULTIES } from '../sim/ai.js?v=23';
+import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=23';
+import { Audio2 } from './audio.js?v=23';
 
 // ── persistence ─────────────────────────────────────────────────
 const LS_KEY = 'arcane_realms_save_v1';

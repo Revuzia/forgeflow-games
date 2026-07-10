@@ -375,7 +375,7 @@ export const CARDBACK_INFO = {
 };
 
 export const PACK_COST = 100;
-export const PACK_SIZE = 3;
+export const PACK_SIZE = 5;
 export const PACK_WEIGHTS = { common: 46, uncommon: 30, rare: 15, epic: 6, legendary: 3 };
 // an already-owned card is this much less likely than an unowned one of the same
 // rarity — so packs still favour progress but duplicates trickle in to sell.

@@ -11,8 +11,8 @@
 // card textures from cardtex.js are cloned, never disposed.
 
 import * as THREE from 'three';
-import { getCard, getCardBack, preload } from './cardtex.js?v=22';
-import { Audio2 } from './audio.js?v=22';
+import { getCard, getCardBack, preload } from './cardtex.js?v=23';
+import { Audio2 } from './audio.js?v=23';
 
 const RARITY = {
   common:    { hex: 0xb8c0cc, css: '#b8c0cc', name: 'Common' },
@@ -29,8 +29,12 @@ function injectStyle() {
   if (styled) return; styled = true;
   const s = document.createElement('style');
   s.textContent = `
-#pk-overlay{position:fixed;inset:0;z-index:320;overflow:hidden;opacity:0;transition:opacity .4s;
-  background:radial-gradient(ellipse at 50% 42%,#241640 0%,#0b0714 68%);backdrop-filter:blur(3px);cursor:pointer;pointer-events:auto}
+#pk-overlay{position:fixed;inset:0;z-index:320;overflow:hidden;opacity:0;transition:opacity .4s;cursor:pointer;pointer-events:auto;
+  background:
+    radial-gradient(ellipse at 50% 48%, transparent 26%, rgba(8,5,16,.66) 82%),
+    linear-gradient(rgba(11,7,20,.34), rgba(11,7,20,.52)),
+    url('assets/ui/pack_bg.jpg') center/cover no-repeat,
+    #0b0714}
 #pk-overlay.in{opacity:1}
 #pk-overlay canvas{position:absolute;inset:0;width:100%!important;height:100%!important}
 #pk-flash{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 46%,#fff8e6,#ffe6a0 40%,transparent 72%);opacity:0;pointer-events:none;mix-blend-mode:screen}
@@ -133,7 +137,8 @@ export function openPackReveal(cards, opts = {}) {
   const refreshables = [backTex];
 
   const N = cards.length;
-  const SP = N <= 1 ? 0 : 2.2;          // fan spacing
+  const SP = N <= 1 ? 0 : N <= 3 ? 2.2 : 1.8;   // tighter spacing for a 4-5 card fan
+  const ARC_Y = N <= 3 ? 0 : 0.42;              // gentle upward bow for wider fans
   const CW = 1.5, CH = CW * 768 / 512;  // card plane size
 
   // ── the pack ──
@@ -181,7 +186,8 @@ export function openPackReveal(cards, opts = {}) {
     // rarity aura behind the card
     const auraMat = track(new THREE.SpriteMaterial({ map: softTex, color: rar(cd.rarity).hex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
     const aura = new THREE.Sprite(auraMat); aura.scale.set(3.4, 3.9, 1); aura.position.z = -0.2; grp.add(aura);
-    const tx = (i - (N - 1) / 2) * SP;
+    const t = i - (N - 1) / 2, tmax = Math.max(1, (N - 1) / 2);
+    const tx = t * SP, ty = ARC_Y * (1 - (t / tmax) ** 2);   // middle cards ride slightly higher
     grp.position.set(0, 0, 0); grp.rotation.y = Math.PI; grp.scale.setScalar(0.2); grp.visible = false;
     scene.add(grp);
     // DOM label
@@ -190,7 +196,7 @@ export function openPackReveal(cards, opts = {}) {
     if (cd.isNew) lab.innerHTML = `<span style="color:#8ff0a6">NEW!</span><span class="pk-rar" style="color:${R.css}">${R.name}</span>`;
     else lab.innerHTML = `<span style="color:#ffd45f">Duplicate&nbsp;+${cd.dupGold}g</span><span class="pk-rar" style="color:${R.css}">${R.name}</span>`;
     labels.appendChild(lab);
-    return { cd, grp, aura, auraMat, target: new THREE.Vector3(tx, 0, 0), leanZ: -(i - (N - 1) / 2) * 0.05, lab, revealed: false, t0: 0 };
+    return { cd, grp, aura, auraMat, target: new THREE.Vector3(tx, ty, 0), leanZ: -t * 0.06, lab, revealed: false, t0: 0 };
   });
 
   // ── effect helpers ──
@@ -282,7 +288,7 @@ export function openPackReveal(cards, opts = {}) {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     // pull the camera back so the whole fan fits both axes
-    const fanW = SP * (N - 1) + CW + 1.5, fanH = CH + 1.7;
+    const fanW = SP * (N - 1) + CW + 1.4, fanH = CH + ARC_Y + 1.9;
     const vfov = camera.fov * Math.PI / 180;
     const zH = fanH / (2 * Math.tan(vfov / 2));
     const zW = (fanW / camera.aspect) / (2 * Math.tan(vfov / 2));
