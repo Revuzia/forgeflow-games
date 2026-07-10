@@ -1,11 +1,11 @@
 // Arcane Realms TCG — DOM UI layer: menu, deck builder, collection, settings,
 // match HUD (hero plates, phase bar, banners, floaters, arrow, tooltips).
 
-import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=20';
-import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=20';
-import { DIFFICULTIES } from '../sim/ai.js?v=20';
-import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=20';
-import { Audio2 } from './audio.js?v=20';
+import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=21';
+import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=21';
+import { DIFFICULTIES } from '../sim/ai.js?v=21';
+import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=21';
+import { Audio2 } from './audio.js?v=21';
 
 // ── persistence ─────────────────────────────────────────────────
 const LS_KEY = 'arcane_realms_save_v1';
@@ -1312,13 +1312,13 @@ export class UI {
     const wrap = this.el('div', 'modal-wrap');
     wrap.style.zIndex = 200;
     const m = this.el('div', 'modal');
-    m.style.maxWidth = 'min(92vw,420px)';
-    m.append(this.el('div', null, `<div style="font-size:16px;line-height:1.5;color:#efe9fb;margin-bottom:18px">${msg}</div>`));
+    m.style.cssText = 'max-width:min(92vw,460px);width:max-content;overflow:visible';
+    m.append(this.el('div', null, `<div style="font-size:16px;line-height:1.5;color:#efe9fb;margin-bottom:18px;text-align:center">${msg}</div>`));
     const row = this.el('div');
-    row.style.cssText = 'display:flex;gap:12px;justify-content:center';
-    const yes = this.el('button', 'btn primary', 'Yes');
+    row.style.cssText = 'display:flex;gap:12px;justify-content:center;flex-wrap:wrap';
+    const yes = this.el('button', 'btn small primary', 'Yes');
     yes.onclick = () => { Audio2.sfx('click'); wrap.remove(); onYes(); };
-    const no = this.el('button', 'btn', 'Cancel');
+    const no = this.el('button', 'btn small', 'Cancel');
     no.onclick = () => { Audio2.sfx('click'); wrap.remove(); };
     row.append(yes, no);
     m.append(row);

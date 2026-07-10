@@ -2,9 +2,9 @@
 // achievements, Arcane Packs, card backs. All state lives in Store.data
 // (localStorage) and is validated/covered by selftest.
 
-import { CARDS, COLLECTIBLE, EXPANSION_IDS, cardById } from '../sim/cards.js?v=20';
-import { STARTER_DECKS } from '../sim/decks.js?v=20';
-import { CHAPTERS, ACHIEVEMENTS, CARDBACK_INFO, PACK_COST, PACK_SIZE, PACK_WEIGHTS, allBattles } from './campaign_data.js?v=20';
+import { CARDS, COLLECTIBLE, EXPANSION_IDS, cardById } from '../sim/cards.js?v=21';
+import { STARTER_DECKS } from '../sim/decks.js?v=21';
+import { CHAPTERS, ACHIEVEMENTS, CARDBACK_INFO, PACK_COST, PACK_SIZE, PACK_WEIGHTS, allBattles } from './campaign_data.js?v=21';
 
 export { PACK_COST, PACK_SIZE };
 

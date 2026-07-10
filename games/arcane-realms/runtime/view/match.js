@@ -6,10 +6,10 @@
 // always shows my side at the bottom via syncFromState(state, mySide).
 
 import * as THREE from 'three';
-import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=20';
-import { cardById, REALMS } from '../sim/cards.js?v=20';
-import { chooseAction } from '../sim/ai.js?v=20';
-import { Audio2 } from './audio.js?v=20';
+import { createGame, legalActions, applyAction, cloneState } from '../sim/engine.js?v=21';
+import { cardById, REALMS } from '../sim/cards.js?v=21';
+import { chooseAction } from '../sim/ai.js?v=21';
+import { Audio2 } from './audio.js?v=21';
 
 const REALM_COLOR = (id) => REALMS[cardById(id).realm]?.color ?? 0x8d99ae;
 
@@ -712,8 +712,11 @@ export class Match {
         if (idx >= 0) this.scene.applyTransform(cur, this.scene.handTransform(0, idx, handArr.length, true), 0.16);
       }
     }
-    // board hover: the REAL card enlarges in place with full rules text
-    const newBoardHover = hit && hit.kind === 'board' && !this.busy ? hit.iid : null;
+    // board hover: the REAL card enlarges with full rules text — but NOT while
+    // targeting (spell armed / attackers selected / dragging), so the enlarge
+    // never covers the creature you're trying to click
+    const targeting = (this.select && this.select.kind === 'spell') || this.attackQueue.length > 0 || this.drag;
+    const newBoardHover = hit && hit.kind === 'board' && !this.busy && !targeting ? hit.iid : null;
     if (newBoardHover !== this.boardHoverIid) {
       if (this.boardHoverIid != null) this.scene.setBoardHover(this.boardHoverIid, false);
       this.boardHoverIid = newBoardHover;

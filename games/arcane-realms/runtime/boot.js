@@ -1,18 +1,18 @@
 // Arcane Realms TCG — boot: asset warmup, screen flow, main loop, debug hooks.
 import * as THREE from 'three';
-import { BoardScene } from './view/scene.js?v=20';
-import { UI, Store } from './view/ui.js?v=20';
-import { Match } from './view/match.js?v=20';
-import { Audio2 } from './view/audio.js?v=20';
-import { OnlineSession } from './view/online.js?v=20';
-import { preload, getCardBack } from './view/cardtex.js?v=20';
-import { STARTER_DECKS, validateDeck } from './sim/decks.js?v=20';
-import { COLLECTIBLE, cardById } from './sim/cards.js?v=20';
-import { createGame, legalActions, applyAction, makeUnit } from './sim/engine.js?v=20';
-import { chooseAction, runAiTurn } from './sim/ai.js?v=20';
-import { CampaignUI } from './view/campaign_ui.js?v=20';
-import { CARDBACK_INFO } from './campaign/campaign_data.js?v=20';
-import { initProgress, isOwned, ownedCount, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=20';
+import { BoardScene } from './view/scene.js?v=21';
+import { UI, Store } from './view/ui.js?v=21';
+import { Match } from './view/match.js?v=21';
+import { Audio2 } from './view/audio.js?v=21';
+import { OnlineSession } from './view/online.js?v=21';
+import { preload, getCardBack } from './view/cardtex.js?v=21';
+import { STARTER_DECKS, validateDeck } from './sim/decks.js?v=21';
+import { COLLECTIBLE, cardById, TOKENS } from './sim/cards.js?v=21';
+import { createGame, legalActions, applyAction, makeUnit } from './sim/engine.js?v=21';
+import { chooseAction, runAiTurn } from './sim/ai.js?v=21';
+import { CampaignUI } from './view/campaign_ui.js?v=21';
+import { CARDBACK_INFO } from './campaign/campaign_data.js?v=21';
+import { initProgress, isOwned, ownedCount, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=21';
 
 const container = document.getElementById('game-container');
 const splash = document.getElementById('boot-splash');
@@ -75,6 +75,7 @@ async function boot() {
   setProgress(0.7, 'Waking the Archfoe…');
   // pre-render a handful of starter cards so first hover is instant
   preload(STARTER_DECKS[0].cards.slice(0, 10));
+  preload(Object.keys(TOKENS)); // tokens are summoned mid-game (never in a deck) — warm their art so they never render blank
   await loadImage('assets/ui/board.jpg');
   setProgress(1, 'Ready.');
   setTimeout(() => { splash.style.opacity = '0'; setTimeout(() => splash.remove(), 650); }, 250);

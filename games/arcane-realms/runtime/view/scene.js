@@ -2,9 +2,9 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=20';
-import { REALMS, cardById } from '../sim/cards.js?v=20';
-import { FX } from './fx.js?v=20';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=21';
+import { REALMS, cardById } from '../sim/cards.js?v=21';
+import { FX } from './fx.js?v=21';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 const HIT_RED = new THREE.Color(0x9a1408); // hero hit-flash tint
@@ -13,11 +13,10 @@ export const LAYOUT = {
   handZ: 4.52, handY: 1.0, enemyHandZ: -3.98,
   deckX: 7.5, playerDeckZ: 3.1, enemyDeckZ: -3.1,
   trapX: -7.35, playerTrapZ: 2.35, enemyTrapZ: -2.35,
-  // heroes stand CENTERED (Hearthstone-style): player at the near bottom-centre,
-  // enemy at the far top-centre, each raised to clear the board slab. Boss
-  // battles only (grunts stay flat). Depth ≈ the v1.3.9 positions that rendered
-  // clearly in a focused browser.
-  heroPlayer: new THREE.Vector3(0, 0.45, 3.35),
+  // heroes stand CENTERED (Hearthstone-style). Player is IN FRONT of the hand
+  // (z > handZ 4.52) — owner's call: it can cover the middle hand card but never
+  // the board, and shows the full 3D figure. Enemy looms at the far top-centre.
+  heroPlayer: new THREE.Vector3(0, 0.12, 5.05),
   heroEnemy: new THREE.Vector3(0, 0.45, -3.75),
 };
 
@@ -507,18 +506,22 @@ export class BoardScene {
     if (!e || e.zone !== 'board') return;
     if (on === !!e.boardHover) return;
     e.boardHover = on;
+    // show the FULL rules-text card on hover (like the deck view) + hide every
+    // board orb so it reads cleanly. match.js suppresses this while you're
+    // TARGETING a spell/attack, so it never covers the card you're clicking.
+    this._hoverActive = on;
     this.setHoverFront(iid, on);
-    // gentle highlight only — a small raise, no big enlarge and no rules-text
-    // swap. It used to lift +1.5 @ scale 1.72 which covered the card you were
-    // trying to TARGET. For a closer look, right-click (inspect).
+    const face = on ? getCard(e.cardId).tex : getBoardCard(e.cardId).tex;
+    if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
+    if (on) for (const c of this.cards.values()) this.hideNameplate(c);
     const base = this.boardTransform(e.side, e.slot, (e.side === 0 ? this._lastMyBoardN : this._lastFoeBoardN) || 6);
     if (on) {
       this.applyTransform(e, {
-        pos: base.pos.clone().add(new THREE.Vector3(0, 0.22, e.side === 0 ? 0.1 : 0.15)),
-        rotX: base.rotX, rotZ: base.rotZ, scale: 1.08,
-      }, 0.13);
+        pos: base.pos.clone().add(new THREE.Vector3(0, 1.15, e.side === 0 ? 0.35 : 0.7)),
+        rotX: -0.55, rotZ: 0, scale: 1.5,
+      }, 0.15);
     } else {
-      this.applyTransform(e, base, 0.13);
+      this.applyTransform(e, base, 0.15);
     }
   }
 
@@ -775,7 +778,7 @@ export class BoardScene {
   // ── 3D legendary minis ─────────────────────────────────────────
   async _gltfLoader() {
     if (!this._gltfLoaderP) {
-      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=20').then((m) => new m.GLTFLoader());
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=21').then((m) => new m.GLTFLoader());
     }
     return this._gltfLoaderP;
   }

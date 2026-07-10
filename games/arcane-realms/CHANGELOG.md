@@ -1,5 +1,25 @@
 # Arcane Realms TCG — Changelog
 
+## v1.5.2 — 2026-07-09 (Token art, full-card hover, hero in front, confirm-box fit)
+
+- **Tokens no longer render blank.** Summoned tokens (Vale Wolf, etc.) aren't in
+  any deck so their art wasn't warmed — they flashed blank until the art loaded.
+  Now all token art is preloaded at boot.
+- **Hovering a board creature shows the FULL card again** (art + rules text, like
+  the deck view) instead of the plain board face — but this is suppressed while
+  you're targeting a spell/attack, so it never covers the card you're clicking.
+- **Player hero moved IN FRONT of the hand** (owner preference) — the full 3D
+  figure reads clearly; it can cover the middle hand card but never the board.
+- **Confirm dialog no longer overflows** (was showing a horizontal scrollbar) —
+  fits its buttons, centered text.
+
+Cache-bust `?v=20` → `?v=21`.
+
+## v1.5.1 — 2026-07-09 (hovered hand card over board orbs)
+
+Hand-hover restores `_hoverActive` so an enlarged hand card renders over the
+board minis' HTML orbs. `?v=19` → `?v=20`.
+
 ## v1.5.0 — 2026-07-09 (3D bosses-only, gang-up attacks, Rally prompt, UX fixes)
 
 - **3D is now boss-battle only.** Grunt (campaign non-boss) battles use the flat
