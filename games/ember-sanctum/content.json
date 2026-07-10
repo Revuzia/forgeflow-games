@@ -1,0 +1,25 @@
+{
+  "title": "Ember Sanctum",
+  "slug": "ember-sanctum",
+  "genre": "arena-survival",
+  "renderer": "three",
+  "tagline": "Five realms. Five Wardens. One story sealed in fire — and a PVP arena waiting after.",
+  "view": { "width": 1280, "height": 720, "background": "#0a0612" },
+  "setup": {
+    "arenas": 5,
+    "classes": 3,
+    "warriorModes": 2,
+    "enemyTypes": 5,
+    "namedBosses": 5,
+    "bossSignatureAttacks": 15,
+    "bossDialogue": true,
+    "statuses": ["shock", "burn", "chill", "root"],
+    "campaign": true,
+    "pvpModes": ["duel", "rush", "last"]
+  },
+  "credits": {
+    "characters": "Procedural Three.js champions; Meshy auto-rigged enemies (ForgeFlow shared set)",
+    "art": "Procedural painted realm boards; realm key art from project assets",
+    "audio": "Synthesized WebAudio SFX; music from owner's Suno generations (Kinetic NRG / Thunder Bulwark)"
+  }
+}

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0a0612" />
+    <title>Ember Sanctum</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+    <script type="module" crossorigin src="./assets/index-DM9-Sbwg.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-B_bVNRV3.css">
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- Title / menus -->
+      <div id="screen-title" class="screen active">
+        <div class="title-backdrop"></div>
+        <div class="title-panel">
+          <p class="eyebrow">REALM BOARD SURVIVAL</p>
+          <h1 class="game-title">Ember <span>Sanctum</span></h1>
+          <p class="tagline">Five realms · five named Wardens · a story sealed in fire · PVP duels</p>
+          <div class="class-picker">
+            <p class="class-picker-label">Choose your champion</p>
+            <div id="class-row" class="class-row"></div>
+          </div>
+          <div class="title-actions">
+            <button class="btn primary" id="btn-campaign">Campaign</button>
+            <button class="btn secondary" id="btn-arena-select">PVP Arena</button>
+            <button class="btn ghost" id="btn-how-to">How to Play</button>
+            <button class="btn ghost" id="btn-settings">Settings</button>
+            <button class="btn ghost" id="btn-fullscreen" title="Fullscreen">⛶ Fullscreen</button>
+          </div>
+          <p class="hint-keys">WASD · LMB attack · 1 2 3 skills · Shift · V stance · Scroll zoom · RMB look · F3 debug</p>
+        </div>
+      </div>
+
+      <div id="screen-how" class="screen">
+        <div class="modal-panel">
+          <h2>How to Play</h2>
+          <ul class="how-list">
+            <li><strong>Campaign</strong> — a five-realm story. Each realm has <strong>5 levels</strong> (~4–8 waves each). A named <strong>Realm Warden</strong> with signature attacks ends level 5 — expect a few words before the fight.</li>
+            <li><strong>PVP Arena</strong> — three rival-champion modes: <strong>Duel of Champions</strong> (best of 3), <strong>Ember Rush</strong> (score race), <strong>Last Sanctum</strong> (survival gauntlet). Rival is AI today; online rivals next.</li>
+            <li><strong>Class cards</strong> — champions emote (dance/wave/cheer). <strong>Drag</strong> a card preview to rotate; double-click cycles emotes.</li>
+            <li><strong>Basic attack</strong> is <strong>Left Click</strong> only (Space/J also work). Short cadence, no key 1.</li>
+            <li><strong>Three classes</strong> — Crucible Knight, Storm Adept, Umbral Ranger. Same layout: LMB + 1 / 2 / 3 skills + Shift phase.</li>
+            <li><strong>Crucible Knight stances</strong> — press <strong>V</strong> (or Tab) to swap <strong>Two-Handed</strong> ↔ <strong>Sword &amp; Shield</strong>.</li>
+            <li><strong>1 · 2 · 3</strong> cast class skills (with SFX). Cooldown shows time on each button. Shift = dodge/phase.</li>
+            <li><strong>Camera</strong> — scroll zooms; RMB drag looks left/right and up/down. Invert Y in Settings if needed.</li>
+            <li><strong>Audio</strong> — battle music + skill SFX. Volumes in Settings.</li>
+            <li><strong>F3</strong> toggles the debug overlay (FPS, wave/level, enemies).</li>
+            <li><strong>Waves never pause</strong> — clear a pack and keep moving.</li>
+          </ul>
+          <button class="btn primary" id="btn-how-back">Back</button>
+        </div>
+      </div>
+
+      <div id="screen-settings" class="screen">
+        <div class="modal-panel">
+          <h2>Settings</h2>
+          <div class="settings-list">
+            <label class="settings-row">
+              <span>Music volume</span>
+              <input type="range" id="set-music" min="0" max="100" value="34" />
+              <em id="set-music-val">34%</em>
+            </label>
+            <label class="settings-row">
+              <span>SFX volume</span>
+              <input type="range" id="set-sfx" min="0" max="100" value="90" />
+              <em id="set-sfx-val">90%</em>
+            </label>
+            <label class="settings-row check">
+              <span>Mute all</span>
+              <input type="checkbox" id="set-mute" />
+            </label>
+            <label class="settings-row check">
+              <span>Invert look Y</span>
+              <input type="checkbox" id="set-invert-y" />
+            </label>
+            <p class="settings-hint">F3 — debug overlay · RMB drag — look around (up/down fixed)</p>
+          </div>
+          <div class="row-actions">
+            <button class="btn secondary" id="btn-settings-test-sfx">Test SFX</button>
+            <button class="btn primary" id="btn-settings-back">Back</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="debug-overlay" class="debug-overlay hidden" aria-hidden="true"></div>
+
+      <div id="screen-arena" class="screen">
+        <div class="modal-panel wide">
+          <h2>Choose Your Realm Board</h2>
+          <p class="sub">Each board has unique lighting, floor art, and light combat flavor.</p>
+          <div id="arena-grid" class="arena-grid"></div>
+          <div class="row-actions">
+            <button class="btn ghost" id="btn-arena-back">Back</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- AAA campaign / realm lineup -->
+      <div id="screen-campaign" class="screen">
+        <div class="modal-panel campaign-panel">
+          <h2 id="campaign-map-title">Campaign — Realm Lineup</h2>
+          <p class="sub" id="campaign-map-sub">5 levels · ~4–8 waves per level (varies by realm) · boss on final level · locked until earned</p>
+          <div id="campaign-path" class="campaign-path"></div>
+          <div class="row-actions">
+            <button class="btn ghost" id="btn-campaign-back">Back</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Per-realm level select before start -->
+      <div id="screen-realm-detail" class="screen">
+        <div class="modal-panel campaign-panel">
+          <div id="realm-detail-swatch" class="realm-detail-swatch"></div>
+          <h2 id="realm-detail-title">Realm</h2>
+          <p class="sub" id="realm-detail-sub">Levels &amp; waves</p>
+          <div id="realm-levels" class="realm-levels"></div>
+          <div class="row-actions">
+            <button class="btn ghost" id="btn-realm-back">Back to Realms</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="screen-pause" class="screen">
+        <div class="modal-panel">
+          <h2>Paused</h2>
+          <button class="btn primary" id="btn-resume">Resume</button>
+          <button class="btn secondary" id="btn-restart-run">Restart Run</button>
+          <button class="btn ghost" id="btn-fullscreen-pause">⛶ Fullscreen</button>
+          <button class="btn ghost" id="btn-quit-menu">Quit to Menu</button>
+        </div>
+      </div>
+
+      <!-- PVP Arena — rival champion battles (AI rival now, online rivals next) -->
+      <div id="screen-pvp" class="screen">
+        <div class="modal-panel wide">
+          <h2>PVP Arena</h2>
+          <p class="sub">Battle a rival champion on a random realm board. Rival is AI-driven today — online rivals are coming.</p>
+          <div id="pvp-grid" class="pvp-grid"></div>
+          <div class="row-actions">
+            <button class="btn ghost" id="btn-pvp-back">Back</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Boss confrontation dialogue -->
+      <div id="screen-dialogue" class="screen dialogue-screen"></div>
+
+      <div id="screen-wave" class="screen banner-screen">
+        <div class="banner wave-banner">
+          <p class="banner-eyebrow" id="wave-banner-arena">Ember Crucible</p>
+          <h2 id="wave-banner-title">WAVE CLEAR</h2>
+          <p id="wave-banner-sub">The realm steadies…</p>
+        </div>
+      </div>
+
+      <div id="screen-result" class="screen">
+        <div class="modal-panel result-panel">
+          <p class="eyebrow" id="result-eyebrow">VICTORY</p>
+          <h2 id="result-title">Sanctum Secured</h2>
+          <p id="result-flavor" class="flavor"></p>
+          <div class="stat-grid">
+            <div class="stat"><span>Score</span><strong id="result-score">0</strong></div>
+            <div class="stat"><span>Wave</span><strong id="result-wave">0</strong></div>
+            <div class="stat"><span>Kills</span><strong id="result-kills">0</strong></div>
+            <div class="stat"><span>Best Combo</span><strong id="result-combo">0</strong></div>
+          </div>
+          <div class="row-actions">
+            <button class="btn primary" id="btn-result-restart">Restart</button>
+            <button class="btn secondary" id="btn-result-next" hidden>Next Arena</button>
+            <button class="btn ghost" id="btn-result-menu">Main Menu</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- In-game HUD -->
+      <div id="hud" class="hud hidden">
+        <div class="hud-top">
+          <div class="hud-plate left-plate">
+            <div class="plate-label" id="champ-label">CHAMPION</div>
+            <div class="hp-row">
+              <div id="hearts" class="hearts" aria-label="Health"></div>
+              <div class="hp-bar-row">
+                <div class="hp-bar" title="Health bar"><div id="hp-fill" class="hp-fill"></div></div>
+                <span id="hp-text">100</span>
+              </div>
+            </div>
+            <div class="meta-row">
+              <span id="arena-name">Ember Crucible</span>
+              <span id="wave-text">Wave 1/10</span>
+            </div>
+            <div class="meta-row pvp-row hidden" id="pvp-status"></div>
+          </div>
+          <div class="hud-plate center-plate">
+            <div class="score-block">
+              <span class="plate-label">SCORE</span>
+              <strong id="score-text">0</strong>
+            </div>
+            <div class="combo-block">
+              <span class="plate-label">COMBO</span>
+              <strong id="combo-text">×1.0</strong>
+            </div>
+          </div>
+          <div class="hud-plate right-plate">
+            <button class="icon-btn" id="btn-fs-hud" title="Fullscreen">⛶</button>
+            <button class="icon-btn" id="btn-pause" title="Pause (Esc)">❚❚</button>
+          </div>
+        </div>
+
+        <div class="hud-bottom">
+          <div class="ability-bar" id="ability-bar">
+            <!-- filled by UI -->
+          </div>
+          <div class="touch-zone" id="touch-zone">
+            <div class="stick-base" id="stick-base"><div class="stick-knob" id="stick-knob"></div></div>
+            <div class="touch-abilities">
+              <button class="touch-btn" data-ability="attack">ATK</button>
+              <button class="touch-btn" data-ability="q">1</button>
+              <button class="touch-btn" data-ability="e">2</button>
+              <button class="touch-btn" data-ability="r">3</button>
+              <button class="touch-btn" data-ability="dodge">SHIFT</button>
+              <button class="touch-btn" data-ability="mode" title="Stance (V)">2H</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="status-icons" class="status-icons"></div>
+        <div id="float-layer" class="float-layer"></div>
+      </div>
+
+      <div id="toast" class="toast"></div>
+    </div>
+    <script>window.GAME_CONFIG = { hide_bug_button: true };</script>
+    <script src="game_controls.js"></script>
+    <script>
+      // Surface module load failures (CDN / Vite) so the page never looks "dead"
+      window.addEventListener("error", function (e) {
+        if (window.__emberSanctum) return;
+        var el = document.getElementById("boot-load") || document.createElement("div");
+        el.id = "boot-load";
+        el.style.cssText =
+          "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:200;background:#0b0710;color:#fbbf24;font-family:system-ui;padding:24px;text-align:center";
+        el.innerHTML =
+          "<div><h2 style='color:#e11d48;margin:0 0 12px'>Ember Sanctum failed to load</h2>" +
+          "<p style='color:#e8dcc8;max-width:420px;line-height:1.5'>Open DevTools (F12) → Console for the error.<br/>Run via <code style='color:#fbbf24'>npm run dev</code> from the project folder, then hard-refresh (Ctrl+F5).</p>" +
+          "<p style='color:#b89ae0;font-size:13px;margin-top:12px'>" +
+          (e && e.message ? e.message : "module error") +
+          "</p></div>";
+        if (!el.parentNode) document.body.appendChild(el);
+      });
+      setTimeout(function () {
+        if (!window.__emberSanctum && !document.getElementById("boot-load")) {
+          var w = document.createElement("div");
+          w.style.cssText =
+            "position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:200;background:#1e1b4b;color:#fbbf24;padding:10px 16px;border-radius:8px;font-family:system-ui;font-size:13px";
+          w.textContent = "Still loading… if this never ends, hard-refresh (Ctrl+F5) or check F12 console";
+          document.body.appendChild(w);
+        }
+      }, 15000);
+    </script>
+  </body>
+</html>
