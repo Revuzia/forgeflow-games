@@ -87,12 +87,12 @@ export class HUD {
       <div style="position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:space-between;height:100%;width:100%;padding:18px 10px 16px;box-sizing:border-box">
         <div style="text-align:center;animation:cfPop .5s ease-out">
           <div style="font-size:13px;letter-spacing:7px;color:#cdb8ee;text-shadow:0 2px 6px #000">FORGEFLOW GAMES</div>
-          <div style="font-size:52px;font-weight:900;letter-spacing:4px;line-height:1;
+          <div style="font-size:min(52px,10.5vw);font-weight:900;letter-spacing:4px;line-height:1;
             background:linear-gradient(180deg,#ffe9a8 0%,#e8b83a 45%,#c88a3a 70%,#9a5dff 115%);
             -webkit-background-clip:text;background-clip:text;color:transparent;
             filter:drop-shadow(0 4px 14px rgba(0,0,0,.9));font-family:Georgia,serif">${TITLE}</div>
           <div style="font-size:14px;color:#e8dcc8;margin-top:6px;text-shadow:0 2px 5px #000">${TAGLINE}</div>
-          <div style="display:flex;gap:10px;justify-content:center;margin-top:12px">
+          <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap;max-width:94vw">
             <div id="cf-bestiary" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">\uD83D\uDCD6 BESTIARY</div>
             <div id="cf-howto" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">\uD83C\uDFAE HOW TO PLAY</div>
             <div id="cf-settings" class="cf-btn" style="padding:8px 16px;${frameCss}font-size:12.5px;font-weight:700">\u2699\uFE0F SETTINGS</div>
@@ -156,9 +156,13 @@ export class HUD {
     const discovered = new Set(save.get("bestiary", []));
     const cards = Object.entries(ALL_TYPES).map(([id, d]) => {
       const known = discovered.has(id);
+      const portrait = known && this.cb.portrait ? this.cb.portrait(id) : null;
+      const face = portrait
+        ? `<img src="${portrait}" style="width:92px;height:92px;border-radius:12px;border:2px solid rgba(232,184,58,.4);object-fit:cover">`
+        : `<div style="font-size:40px">${BESTIARY_FACES[id] || "❔"}</div>`;
       return known ? `
         <div style="${frameCss}width:196px;padding:14px 12px;text-align:center">
-          <div style="font-size:40px">${BESTIARY_FACES[id] || "❔"}</div>
+          ${face}
           <div style="font-size:16px;font-weight:900;color:${d.boss ? "#ff6a8a" : "#ffd24a"};margin-top:4px">${d.name}</div>
           <div style="font-size:11px;letter-spacing:1.5px;color:${d.boss ? "#ff9ab0" : "#b89ae0"}">${d.role.toUpperCase()} · REALM ${d.realm}</div>
           <div style="font-size:11.5px;color:#cbbfe0;font-style:italic;min-height:56px;margin-top:7px">"${d.lore}"</div>
@@ -298,7 +302,7 @@ export class HUD {
       <div id="cf-arenatxt" style="font-size:12px;color:#b89ae0"></div>`;
     // bottom-right: ability cluster (industry-standard diamond: big basic in the
     // corner, three specials arced around it — NOT a flat row)
-    this.elAbil = el("div", "position:absolute;bottom:16px;right:14px;width:196px;height:196px;pointer-events:auto;");
+    this.elAbil = el("div", "position:absolute;bottom:48px;right:14px;width:196px;height:196px;pointer-events:auto;"); // 48px clears the game_controls bar (fullscreen/mute) in the corner
     // bottom-left: warrior weapon-mode toggle lives by the movement thumb
     this.elToggle = el("div", "position:absolute;bottom:170px;left:18px;pointer-events:auto;display:none;");
     // toast (bestiary discoveries etc.)

@@ -40,6 +40,7 @@ export class Game {
     this.fx = null; this.text = null; this.decals = null; this.board = null;
 
     hud.cb.onStart = (classId, arenaIdx) => this.startRun(classId, arenaIdx);
+    hud.cb.portrait = (type) => this.renderPortrait(type);
     this.camera.position.set(0, 16, 12);
     this.camera.lookAt(0, 0, 0);
   }
@@ -1245,6 +1246,49 @@ export class Game {
     return false;
   }
 
+  /**
+   * Bestiary portrait: render an enemy model once to a small offscreen frame
+   * and cache the dataURL (grabbed immediately after render — no
+   * preserveDrawingBuffer needed). Same normalized height for every foe.
+   */
+  renderPortrait(type) {
+    this.__portraits = this.__portraits || {};
+    if (this.__portraits[type] !== undefined) return this.__portraits[type];
+    const def = ALL_TYPES[type];
+    const lib = def && this.enemyLib[def.model];
+    if (!lib) { this.__portraits[type] = null; return null; }
+    try {
+      if (!this.__pScene) {
+        this.__pScene = new THREE.Scene();
+        this.__pScene.background = new THREE.Color(0x160c20);
+        this.__pCam = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
+        this.__pScene.add(new THREE.HemisphereLight(0xfff0d8, 0x201828, 1.2));
+        const key = new THREE.DirectionalLight(0xffffff, 2.2);
+        key.position.set(2, 3, 4);
+        this.__pScene.add(key);
+      }
+      const actor = new Actor(lib, { height: 2 });
+      actor.root.rotation.y = Math.PI * 0.18;
+      this.__pScene.add(actor.root);
+      this.__pCam.position.set(0.55, 1.25, 3.4);
+      this.__pCam.lookAt(0, 0.95, 0);
+      const R = this.renderer;
+      const size = new THREE.Vector2();
+      R.getSize(size);
+      R.setSize(200, 200, false);
+      R.render(this.__pScene, this.__pCam);
+      const url = R.domElement.toDataURL("image/png");
+      R.setSize(size.x, size.y, false);
+      actor.dispose();
+      this.__portraits[type] = url;
+      return url;
+    } catch (e) {
+      console.warn("[bestiary] portrait failed:", type, e);
+      this.__portraits[type] = null;
+      return null;
+    }
+  }
+
   /** menu 3D showcase: the three champions on a drifting dais (title screen) */
   buildMenuShowcase() {
     if (this.showcase || !this.heroLib) return;
@@ -1292,7 +1336,7 @@ export class Game {
       // hero-showcase framing: eye-level dolly; pull back on narrow screens so
       // all three champions stay in frame
       const aspect = this.camera.aspect || 1.6;
-      const back = 7.4 * Math.min(1.9, Math.max(1, 1.45 / Math.max(0.6, aspect)));
+      const back = 7.4 * Math.min(2.3, Math.max(1, 1.5 / Math.max(0.55, aspect)));
       this._v2.set(Math.sin(performance.now() / 7000) * 0.7, 2.35 + (back - 7.4) * 0.18, back);
       this.camera.position.lerp(this._v2, damp(4, dt));
       this.camera.lookAt(0, 1.15, 0);
