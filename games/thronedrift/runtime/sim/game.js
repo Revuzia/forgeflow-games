@@ -5,7 +5,7 @@
 
 import * as THREE from "three";
 import { ARENAS, BOARD_RADIUS, REST_BETWEEN_WAVES } from "../data/arenas.js";
-import { ALL_TYPES, waveComp } from "../data/enemies.js";
+import { ALL_TYPES, waveComp, levelWaves, LEVELS_PER_REALM } from "../data/enemies.js";
 import { CLASSES, COMBO_TIERS, COMBO_WINDOW } from "../data/abilities.js";
 import { ArenaBoard } from "../view/arena.js";
 import { Actor, makeGreatblade, makeSword, makeShield, makeBow, makeStaff, makeArrow, makeSpinTrail, makeSwipeArc, normalizeShaftProp } from "../view/chars.js";
@@ -39,7 +39,7 @@ export class Game {
 
     this.fx = null; this.text = null; this.decals = null; this.board = null;
 
-    hud.cb.onStart = (classId, arenaIdx) => this.startRun(classId, arenaIdx);
+    hud.cb.onStart = (classId, arenaIdx, levelIdx) => this.startRun(classId, arenaIdx, levelIdx || 0);
     hud.cb.portrait = (type) => this.renderPortrait(type);
     this.camera.position.set(0, 16, 12);
     this.camera.lookAt(0, 0, 0);
@@ -47,13 +47,15 @@ export class Game {
 
   // ================= RUN SETUP ==========================================
 
-  startRun(classId, arenaIdx) {
+  startRun(classId, arenaIdx, levelIdx = 0) {
     this.cleanupRun();
     this.disposeShowcase();
     this.hud.hideMenus();
     this.hud.clearPanel();
     this.classId = classId;
     this.arenaIdx = arenaIdx;
+    this.levelIdx = levelIdx;
+    this.levelWaveCount = levelWaves(ARENAS[arenaIdx].order, levelIdx);
     this.arena = ARENAS[arenaIdx];
     this.board = new ArenaBoard(this.scene, this.arena);
     this.fx = new Particles(this.scene);
@@ -116,16 +118,17 @@ export class Game {
     this.hud.setKit(cls, this.kit(), this.modeIdx, this.modeKeys.length);
     this.hud.setHearts(this.hp, this.maxHp);
     this.hud.setGold(0); this.hud.setScore(0);
-    this.hud.setWave(1, this.arena.waves, this.arena.name, "#" + this.arena.accent.toString(16).padStart(6, "0"));
+    this.hud.setWave(1, this.levelWaveCount, this.arena.name, "#" + this.arena.accent.toString(16).padStart(6, "0"), this.levelIdx);
     const hintBits = ["<b>WASD</b> move", "<b>J / Click</b> attack", "<b>1 2 3</b> abilities"];
     if (this.modeKeys.length > 1) hintBits.push("<b>TAB</b> weapon mode", "<b>hold 3</b> Block (Sword & Shield)");
     this.hud.hint(hintBits.join(" · "), 7);
 
     this.state = "playing";
-    Music.play("level");
+    Music.play(this.levelIdx >= 4 ? "boss" : "level");
     this.input.enabled = true;
     this.input.clearEdges();
-    this.hud.banner(this.arena.name.toUpperCase(), { color: "#" + this.arena.accent.toString(16).padStart(6, "0"), sub: this.arena.tagline, dur: 2.2, size: 46 });
+    const sub = this.levelIdx >= 4 ? "BOSS LEVEL — " + this.arena.tagline : `Level ${this.levelIdx + 1} of ${LEVELS_PER_REALM}`;
+    this.hud.banner(this.arena.name.toUpperCase(), { color: "#" + this.arena.accent.toString(16).padStart(6, "0"), sub, dur: 2.2, size: 46 });
   }
 
   cleanupRun() {
@@ -186,15 +189,15 @@ export class Game {
   startWave() {
     this.waveIdx++;
     this.waveActive = true;
-    const comp = waveComp(this.arena.order, this.waveIdx, this.arena.waves);
+    const comp = waveComp(this.arena.order, this.levelIdx, this.waveIdx, this.levelWaveCount);
     let delay = 0.5;
     for (const [type, count] of comp)
       for (let n = 0; n < count; n++) {
         this.spawnQueue.push({ type, t: delay });
         delay += rand(0.35, 0.75); // slower trickle than iteration 1 — no instant onslaught
       }
-    this.hud.setWave(this.waveIdx + 1, this.arena.waves, this.arena.name, "#" + this.arena.accent.toString(16).padStart(6, "0"));
-    this.hud.banner(`WAVE ${this.waveIdx + 1}`, { color: "#f2e8d8", dur: 1.4, size: 46 });
+    this.hud.setWave(this.waveIdx + 1, this.levelWaveCount, this.arena.name, "#" + this.arena.accent.toString(16).padStart(6, "0"), this.levelIdx);
+    this.hud.banner(this.levelIdx >= 4 ? "THE WARDEN COMES" : `WAVE ${this.waveIdx + 1}`, { color: "#f2e8d8", dur: 1.4, size: 46 });
     SFX.play("ui_big");
   }
 
@@ -213,6 +216,7 @@ export class Game {
       statusFxT: 0, floatPhase: rand(Math.PI * 2), hopT: rand(0.6),
       dead: false, deadT: 0,
     };
+    if (def.boss && this.levelIdx >= 4) { e.hp = e.maxHp = Math.round(def.hp * 1.25); } // dedicated boss level — a proper battle
     this.enemies.push(e);
     if (def.boss) {
       this.bossRef = e;
@@ -242,8 +246,36 @@ export class Game {
     this.hud.banner("WAVE CLEAR", { color: "#ffd24a", sub: `+${formatScore(bonus)} bonus`, dur: 1.8 });
     this.hp = Math.min(this.maxHp, this.hp + 1);
     this.hud.setHearts(this.hp, this.maxHp);
-    if (this.waveIdx + 1 >= this.arena.waves) { this.arenaCleared(); return; }
+    if (this.waveIdx + 1 >= this.levelWaveCount) { this.levelCleared(); return; }
     this.restT = REST_BETWEEN_WAVES;
+  }
+
+  /** a non-boss level was finished (boss level routes to arenaCleared) */
+  levelCleared() {
+    if (this.levelIdx >= LEVELS_PER_REALM - 1) { this.arenaCleared(); return; }
+    this.state = "arenaclear";
+    this.input.enabled = false;
+    SFX.play("wave_clear");
+    // persist per-realm level progress
+    const prog = save.get("progress", {});
+    const cur = prog[this.arena.order] || 0;
+    if (this.levelIdx + 1 > cur) { prog[this.arena.order] = this.levelIdx + 1; save.set("progress", prog); }
+    const hi = save.get("hiscore", 0);
+    if (this.score > hi) save.set("hiscore", this.score);
+    const nextIsBoss = this.levelIdx + 1 === LEVELS_PER_REALM - 1;
+    this.hud.panel({
+      title: `LEVEL ${this.levelIdx + 1} CLEAR!`,
+      titleColor: "#" + this.arena.accent.toString(16).padStart(6, "0"),
+      lines: [
+        `Score: <b style="color:#ffd24a;font-size:22px">${formatScore(this.score)}</b> · Gold: 🪙 ${this.gold}`,
+        nextIsBoss ? `<b style="color:#ff6a8a">Next: the realm Warden awaits…</b>` : `Next: Level ${this.levelIdx + 2} of ${LEVELS_PER_REALM}`,
+      ],
+      buttons: [
+        { label: nextIsBoss ? "FACE THE WARDEN →" : "NEXT LEVEL →", fn: () => this.startRun(this.classId, this.arenaIdx, this.levelIdx + 1) },
+        { label: "LEVEL SELECT", fn: () => { this.toMenu(); this.hud.showLevelSelect(this.classId, this.arenaIdx); } },
+        { label: "MENU", fn: () => this.toMenu() },
+      ],
+    });
   }
 
   arenaCleared() {
@@ -253,6 +285,9 @@ export class Game {
     const final = this.arena.clearIsFinal;
     const unlocked = save.get("unlocked", 1);
     if (!final && this.arena.order + 1 > unlocked) save.set("unlocked", this.arena.order + 1);
+    const prog = save.get("progress", {});
+    prog[this.arena.order] = LEVELS_PER_REALM;   // realm fully cleared
+    save.set("progress", prog);
     const hi = save.get("hiscore", 0);
     if (this.score > hi) save.set("hiscore", this.score);
     const lines = [
@@ -260,8 +295,8 @@ export class Game {
       `Best: ${formatScore(Math.max(hi, this.score))} · Gold earned: 🪙 ${this.gold}`,
     ];
     const buttons = [];
-    if (!final) buttons.push({ label: "NEXT REALM →", fn: () => this.startRun(this.classId, this.arenaIdx + 1) });
-    buttons.push({ label: "RESTART", fn: () => this.startRun(this.classId, this.arenaIdx) });
+    if (!final) buttons.push({ label: "NEXT REALM →", fn: () => this.startRun(this.classId, this.arenaIdx + 1, 0) });
+    buttons.push({ label: "RESTART BOSS", fn: () => this.startRun(this.classId, this.arenaIdx, this.levelIdx) });
     buttons.push({ label: "MENU", fn: () => this.toMenu() });
     this.hud.panel({
       title: this.arena.clearWord,
@@ -284,11 +319,11 @@ export class Game {
       title: "FALLEN IN THE ARENA",
       titleColor: "#ff5a4a",
       lines: [
-        `You fell on wave ${this.waveIdx + 1} of ${this.arena.name}.`,
+        `You fell on level ${this.levelIdx + 1}, wave ${this.waveIdx + 1} of ${this.arena.name}.`,
         `Score: <b style="color:#ffd24a;font-size:22px">${formatScore(this.score)}</b> · Best: ${formatScore(Math.max(hi, this.score))}`,
       ],
       buttons: [
-        { label: "RESTART", fn: () => this.startRun(this.classId, this.arenaIdx) },
+        { label: "RETRY LEVEL", fn: () => this.startRun(this.classId, this.arenaIdx, this.levelIdx) },
         { label: "MENU", fn: () => this.toMenu() },
       ],
     }), 1100);
@@ -307,18 +342,22 @@ export class Game {
     if (this.state !== "playing") return;
     this.paused = v;
     SFX.play("ui");
-    if (v) {
-      this.hud.panel({
-        title: "PAUSED", titleColor: "#e8b83a",
-        lines: [`${this.arena.name} — wave ${this.waveIdx + 1}/${this.arena.waves}`,
-          `<span style="font-size:13px;color:#b89ae0">Scroll = zoom · Right-drag = rotate camera · ESC = resume</span>`],
-        buttons: [
-          { label: "RESUME", fn: () => this.setPaused(false) },
-          { label: "RESTART REALM", fn: () => this.startRun(this.classId, this.arenaIdx) },
-          { label: "QUIT TO MENU", fn: () => this.toMenu() },
-        ],
-      });
-    } else this.hud.clearPanel();
+    if (v) this._pauseMenu();
+    else this.hud.clearPanel();
+  }
+
+  _pauseMenu() {
+    this.hud.panel({
+      title: "PAUSED", titleColor: "#e8b83a",
+      lines: [`${this.arena.name} — level ${this.levelIdx + 1}, wave ${Math.max(1, this.waveIdx + 1)}`,
+        `<span style="font-size:13px;color:#b89ae0">Scroll = zoom · Right-drag = rotate camera · ESC = resume</span>`],
+      buttons: [
+        { label: "RESUME", fn: () => this.setPaused(false) },
+        { label: "SETTINGS", fn: () => this.hud.settingsPanel(() => this._pauseMenu()) },
+        { label: "RESTART", fn: () => this.startRun(this.classId, this.arenaIdx) },
+        { label: "QUIT TO MENU", fn: () => this.toMenu() },
+      ],
+    });
   }
 
   // ================= COMBAT HELPERS =====================================

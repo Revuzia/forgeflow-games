@@ -1,5 +1,14 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v0.9 — 2026-07-10 (campaign overhaul: realms are 5 LEVELS deep)
+- CAMPAIGN RESTRUCTURE: each realm = 5 levels (L1: 3 waves → L4: 6 waves,
+  rising difficulty), L5 = dedicated BOSS FIGHT (+25% boss HP, boss music,
+  "THE WARDEN COMES"); level-select screen per realm w/ lock/cleared states;
+  per-realm level progress persisted; LEVEL CLEAR panels chain levels
+- Proper in-game PAUSE: ESC or the corner pause button (game_controls hook) —
+  Resume / Settings / Restart / Quit; SETTINGS now reachable mid-run
+- Right-drag camera pitch un-inverted (drag down looks down)
+
 ## v0.8 — 2026-07-10 (weapon-in-hand pass: generated bow + staff surgery)
 - ARCHER: real Meshy-generated recurve bow (assets/props/bow.glb, text-to-3d)
   replaces the procedural one that read as an upside-down crossbow; auto

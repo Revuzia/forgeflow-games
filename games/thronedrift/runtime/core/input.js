@@ -73,7 +73,7 @@ export class Input {
       }
       if (this._rightDrag) {
         this.camYaw += (e.clientX - this._rightDrag.x) * 0.006;
-        this.camPitch = Math.min(1.35, Math.max(0.6, this.camPitch - (e.clientY - this._rightDrag.y) * 0.004));
+        this.camPitch = Math.min(1.35, Math.max(0.6, this.camPitch + (e.clientY - this._rightDrag.y) * 0.004)); // drag DOWN looks down (owner: was inverted)
         this._rightDrag = { x: e.clientX, y: e.clientY };
         return;
       }

@@ -178,20 +178,31 @@ export const REALM_ROSTERS = {
   5: { units: ["orc", "myconid", "cyclops"], boss: "aurex" },
 };
 
-// Wave composition. Gentle opening; the realm's three units phase in one wave
-// apart; FINAL wave = the realm boss + a light escort.
-export function waveComp(arenaOrder, waveIdx /* 0-based */, waveCount) {
-  const roster = REALM_ROSTERS[arenaOrder] || REALM_ROSTERS[1];
+// ── Campaign structure: 5 LEVELS per realm ────────────────────────────────
+// Levels 1-4: escalating wave counts + difficulty. Level 5: the realm BOSS
+// fight (boss + light escort, beefed-up HP). Same rosters throughout.
+
+export const LEVELS_PER_REALM = 5;
+
+/** waves in a given level (levelIdx 0-based; boss level = 1 climactic wave) */
+export function levelWaves(realmOrder, levelIdx) {
+  return levelIdx >= 4 ? 1 : 3 + levelIdx;   // 3,4,5,6 then the boss fight
+}
+
+/** composition for realm r (1-5), level l (0-4), wave w (0-based) */
+export function waveComp(realmOrder, levelIdx, waveIdx, waveCount) {
+  const roster = REALM_ROSTERS[realmOrder] || REALM_ROSTERS[1];
   const [u0, u1, u2] = roster.units;
-  const last = waveIdx === waveCount - 1;
-  const p = arenaOrder - 1;
+  // difficulty pressure: realms are the big steps, levels the small ones
+  const p = (realmOrder - 1) * 1.0 + levelIdx * 0.45;
   const w = waveIdx;
-  if (last) {
-    return [[roster.boss, 1], [u0, 3 + p], [u1, Math.max(1, Math.round(w * 0.5))]];
+  if (levelIdx >= 4) {
+    // BOSS LEVEL — the champion plus a modest escort; the fight is the level
+    return [[roster.boss, 1], [u0, 2 + Math.round(p * 0.8)], [u1, 1 + Math.round(levelIdx * 0.3)]];
   }
   const comp = [];
-  comp.push([u0, Math.round(3 + w * 1.3 + p * 0.8)]);
-  if (w >= 1) comp.push([u1, Math.round(1 + w * 1.0 + p * 0.5)]);
-  if (w >= 2) comp.push([u2, Math.min(4, Math.max(1, Math.round((w - 1) * 0.7 + p * 0.4)))]); // cap heavies — late realm-5 waves were 6-cyclops HP sponges
+  comp.push([u0, Math.round(3 + w * 1.2 + p * 0.8)]);
+  if (w >= 1 || levelIdx >= 2) comp.push([u1, Math.round(1 + w * 0.9 + p * 0.5)]);
+  if (w >= 2 || levelIdx >= 3) comp.push([u2, Math.min(4, Math.max(1, Math.round((w - 1) * 0.6 + p * 0.4)))]);
   return comp;
 }

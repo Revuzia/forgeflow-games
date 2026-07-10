@@ -80,6 +80,11 @@ window.addEventListener("resize", () => {
   SFX.setVolume(save.get("set_vol", 0.5));
   Music.setVolume(save.get("set_vol", 0.5));
   Music.setEnabled(save.get("set_music", true));
+  // global controls-bar pause button (game_controls.js) drives this hook
+  window.__PAUSE__ = {
+    toggle: () => game.setPaused(!game.paused),
+    pause: () => game.setPaused(true),
+  };
   loadEl.remove();
   game.buildMenuShowcase();
   hud.showTitle();

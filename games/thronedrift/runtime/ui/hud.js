@@ -5,6 +5,7 @@
 
 import { CLASSES } from "../data/abilities.js";
 import { ARENAS } from "../data/arenas.js";
+import { LEVELS_PER_REALM, levelWaves, REALM_ROSTERS, BOSS_TYPES } from "../data/enemies.js";
 import { ALL_TYPES } from "../data/enemies.js";
 import { formatScore, clamp, save } from "../core/util.js";
 import { SFX } from "../core/audio.js";
@@ -109,54 +110,70 @@ export class HUD {
     this.layerMenu.querySelector("#cf-settings").onclick = () => { SFX.unlock(); SFX.play("ui"); this.showSettings(); };
   }
 
-  showSettings() {
+  _settingsHTML() {
     const vol = Math.round((save.get("set_vol", 0.5)) * 100);
-    const shake = save.get("set_shake", true), dmg = save.get("set_dmgnum", true);
+    const shake = save.get("set_shake", true), dmg = save.get("set_dmgnum", true), music = save.get("set_music", true);
     const tog = (id, label, on) => `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
         <span style="font-size:15px;color:#e8dcc8">${label}</span>
         <div id="${id}" class="cf-btn" data-on="${on}" style="${frameCss}padding:6px 18px;font-size:13px;font-weight:800;color:${on ? "#7dff9a" : "#8a7aa8"}">${on ? "ON" : "OFF"}</div>
       </div>`;
-    this._menu(`
-      <div style="${frameCss}width:min(420px,90vw);padding:26px 30px;position:relative;z-index:2">
-        <div style="font-size:28px;font-weight:900;color:${GOLD};text-align:center;font-family:Georgia,serif;margin-bottom:8px">SETTINGS</div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
-          <span style="font-size:15px;color:#e8dcc8">Sound volume</span>
-          <input id="cf-vol" type="range" min="0" max="100" value="${vol}" style="width:150px;accent-color:#e8b83a">
-        </div>
-        ${tog("cf-music", "Music", save.get("set_music", true))}
-        ${tog("cf-shake", "Screen shake", shake)}
-        ${tog("cf-dmg", "Damage numbers", dmg)}
-        <div id="cf-reset" class="cf-btn" style="margin-top:22px;text-align:center;${frameCss}padding:9px 0;font-size:13px;font-weight:800;color:#ff8a8a;border-color:#a04040">RESET PROGRESS</div>
-        <div id="cf-back" class="cf-btn" style="display:block;margin:16px auto 0;width:130px;text-align:center;padding:9px 0;${frameCss}font-size:14px;font-weight:700">\u2190 BACK</div>
-      </div>`);
-    const M = this.layerMenu;
+    return `
+      <div style="font-size:28px;font-weight:900;color:${GOLD};text-align:center;font-family:Georgia,serif;margin-bottom:8px">SETTINGS</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+        <span style="font-size:15px;color:#e8dcc8">Sound volume</span>
+        <input id="cf-vol" type="range" min="0" max="100" value="${vol}" style="width:150px;accent-color:#e8b83a">
+      </div>
+      ${tog("cf-music", "Music", music)}
+      ${tog("cf-shake", "Screen shake", shake)}
+      ${tog("cf-dmg", "Damage numbers", dmg)}
+      <div id="cf-reset" class="cf-btn" style="margin-top:22px;text-align:center;${frameCss}padding:9px 0;font-size:13px;font-weight:800;color:#ff8a8a;border-color:#a04040">RESET PROGRESS</div>
+      <div id="cf-back" class="cf-btn" style="display:block;margin:16px auto 0;width:130px;text-align:center;padding:9px 0;${frameCss}font-size:14px;font-weight:700">\u2190 BACK</div>`;
+  }
+
+  _wireSettings(M, backFn) {
     M.querySelector("#cf-vol").oninput = (e) => { const v = e.target.value / 100; save.set("set_vol", v); SFX.setVolume(v); Music.setVolume(v); SFX.play("ui"); };
-    const wireTog = (id, key) => {
+    const wireTog = (id, key, cbKey) => {
       const b = M.querySelector(id);
       b.onclick = () => {
         const on = !(b.dataset.on === "true");
         b.dataset.on = String(on); b.textContent = on ? "ON" : "OFF"; b.style.color = on ? "#7dff9a" : "#8a7aa8";
-        save.set(key, on); this.cb.onSettings && this.cb.onSettings(key.replace("set_", "") === "shake" ? "shake" : "dmgNum", on);
+        save.set(key, on);
+        if (key === "set_music") Music.setEnabled(on);
+        else this.cb.onSettings && this.cb.onSettings(cbKey, on);
         SFX.play("ui");
       };
     };
-    const mb = M.querySelector("#cf-music");
-    mb.onclick = () => {
-      const on = !(mb.dataset.on === "true");
-      mb.dataset.on = String(on); mb.textContent = on ? "ON" : "OFF"; mb.style.color = on ? "#7dff9a" : "#8a7aa8";
-      save.set("set_music", on); Music.setEnabled(on); SFX.play("ui");
-    };
-    wireTog("#cf-shake", "set_shake");
-    wireTog("#cf-dmg", "set_dmgnum");
+    wireTog("#cf-music", "set_music", null);
+    wireTog("#cf-shake", "set_shake", "shake");
+    wireTog("#cf-dmg", "set_dmgnum", "dmgNum");
     const rst = M.querySelector("#cf-reset");
     rst.onclick = () => {
       if (rst.dataset.armed) {
-        for (const k of ["unlocked", "hiscore", "bestiary"]) save.set(k, k === "unlocked" ? 1 : k === "hiscore" ? 0 : []);
+        for (const k of ["unlocked", "hiscore", "bestiary", "progress"]) save.set(k, k === "unlocked" ? 1 : k === "hiscore" ? 0 : k === "bestiary" ? [] : {});
         rst.textContent = "PROGRESS RESET"; rst.dataset.armed = ""; SFX.play("ui_big");
       } else { rst.dataset.armed = "1"; rst.textContent = "CLICK AGAIN TO CONFIRM"; SFX.play("ui"); }
     };
-    M.querySelector("#cf-back").onclick = () => { SFX.play("ui"); this.showTitle(); };
+    M.querySelector("#cf-back").onclick = () => { SFX.play("ui"); backFn(); };
+  }
+
+  showSettings() {
+    this._menu(`
+      <div style="${frameCss}width:min(420px,90vw);padding:26px 30px;position:relative;z-index:2">
+        ${this._settingsHTML()}
+      </div>`);
+    this._wireSettings(this.layerMenu, () => this.showTitle());
+  }
+
+  /** settings as an in-game overlay (from the pause menu) */
+  settingsPanel(backFn) {
+    this.clearPanel();
+    this._panel = document.createElement("div");
+    this._panel.style.cssText = `position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);${frameCss}
+      width:min(420px,90vw);padding:26px 30px;pointer-events:auto;animation:cfBannerIn .3s ease-out`;
+    this._panel.innerHTML = this._settingsHTML();
+    this.layerBanner.appendChild(this._panel);
+    this._wireSettings(this._panel, backFn);
   }
 
   showBestiary() {
@@ -259,10 +276,47 @@ export class HUD {
       card.onclick = () => {
         if (card.dataset.locked === "true") { SFX.play("ui"); return; }
         SFX.play("ui_big");
-        this.cb.onStart && this.cb.onStart(classId, parseInt(card.dataset.arena, 10));
+        this.showLevelSelect(classId, parseInt(card.dataset.arena, 10));
       };
     }
-    this.layerMenu.querySelector("#cf-back").onclick = () => { SFX.play("ui"); this.showClassSelect(); };
+    this.layerMenu.querySelector("#cf-back").onclick = () => { SFX.play("ui"); this.showTitle(); };
+  }
+
+  /** level chooser inside a realm: L1-L4 escalate, L5 = the Warden */
+  showLevelSelect(classId, arenaIdx) {
+    const a = ARENAS[arenaIdx];
+    const col = "#" + a.accent.toString(16).padStart(6, "0");
+    const prog = save.get("progress", {});
+    const done = prog[a.order] || 0;             // levels completed in this realm
+    const boss = BOSS_TYPES[REALM_ROSTERS[a.order].boss];
+    const nodes = [];
+    for (let l = 0; l < LEVELS_PER_REALM; l++) {
+      const isBoss = l === LEVELS_PER_REALM - 1;
+      const unlocked = l <= done;
+      const cleared = l < done;
+      nodes.push(`
+        <div class="cf-card" data-level="${l}" data-locked="${!unlocked}" style="${frameCss}width:150px;padding:16px 10px;text-align:center;${unlocked ? "" : "opacity:.42;filter:grayscale(.7)"};${isBoss ? `border-color:#ff6a8a` : ""}">
+          <div style="font-size:${isBoss ? 34 : 30}px">${isBoss ? "👑" : cleared ? "✅" : unlocked ? "⚔️" : "🔒"}</div>
+          <div style="font-size:15px;font-weight:900;color:${isBoss ? "#ff9ab0" : col};margin-top:6px">${isBoss ? "BOSS" : "LEVEL " + (l + 1)}</div>
+          <div style="font-size:11px;color:#cbbfe0;min-height:30px;margin-top:4px">${isBoss ? boss.name : levelWaves(a.order, l) + " waves"}</div>
+        </div>`);
+    }
+    this._menu(`
+      <div style="text-align:center;max-width:960px;position:relative;z-index:2">
+        <div style="font-size:15px;letter-spacing:3px;color:#b89ae0">REALM ${a.order}</div>
+        <div style="font-size:34px;font-weight:900;color:${col};margin-bottom:6px;font-family:Georgia,serif">${a.name.toUpperCase()}</div>
+        <div style="font-size:13px;color:#cbbfe0;margin-bottom:20px">${a.tagline}</div>
+        <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">${nodes.join("")}</div>
+        <div id="cf-back" class="cf-btn" style="display:inline-block;margin-top:22px;padding:9px 26px;${frameCss}font-size:14px">← Realms</div>
+      </div>`);
+    for (const card of this.layerMenu.querySelectorAll(".cf-card")) {
+      card.onclick = () => {
+        if (card.dataset.locked === "true") { SFX.play("ui"); return; }
+        SFX.play("ui_big");
+        this.cb.onStart && this.cb.onStart(classId, arenaIdx, parseInt(card.dataset.level, 10));
+      };
+    }
+    this.layerMenu.querySelector("#cf-back").onclick = () => { SFX.play("ui"); this.showArenaSelect(classId); };
   }
 
   _menuClear(inner) {
@@ -433,8 +487,9 @@ export class HUD {
 
   setScore(s) { this._score = s; }
 
-  setWave(n, total, arenaName, accent) {
-    this.elWave.querySelector("#cf-wavetxt").textContent = `WAVE ${n}/${total}`;
+  setWave(n, total, arenaName, accent, levelIdx) {
+    const lvl = levelIdx != null ? (levelIdx >= LEVELS_PER_REALM - 1 ? "BOSS · " : `LVL ${levelIdx + 1} · `) : "";
+    this.elWave.querySelector("#cf-wavetxt").textContent = `${lvl}WAVE ${n}/${total}`;
     const a = this.elWave.querySelector("#cf-arenatxt");
     a.textContent = arenaName.toUpperCase();
     a.style.color = accent;

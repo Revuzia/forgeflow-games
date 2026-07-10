@@ -4,7 +4,7 @@
 // the browser (preview evals + __FFG3D__ hooks); this gate catches data drift.
 
 import { ARENAS, BOARD_RADIUS } from "./runtime/data/arenas.js";
-import { ENEMY_TYPES, BOSS_TYPES, ALL_TYPES, REALM_ROSTERS, waveComp } from "./runtime/data/enemies.js";
+import { ENEMY_TYPES, BOSS_TYPES, ALL_TYPES, REALM_ROSTERS, waveComp, levelWaves, LEVELS_PER_REALM } from "./runtime/data/enemies.js";
 import { CLASSES, COMBO_TIERS, COMBO_WINDOW } from "./runtime/data/abilities.js";
 
 let checks = 0, fails = 0;
@@ -67,19 +67,24 @@ for (let realm = 1; realm <= 5; realm++) {
 }
 ok(new Set(used).size === 15, "all 15 regulars appear exactly once across rosters");
 
-// ── wave composition ────────────────────────────────────────────────────────
+// ── wave composition (5 levels per realm; boss only on level 5) ────────────
+ok(LEVELS_PER_REALM === 5, "5 levels per realm");
 for (const a of ARENAS) {
-  for (let w = 0; w < a.waves; w++) {
-    const comp = waveComp(a.order, w, a.waves);
-    let total = 0;
-    for (const [type, count] of comp) {
-      ok(!!ALL_TYPES[type], `wave ${a.order}/${w + 1} type ${type} exists`);
-      ok(count >= 1, `wave ${a.order}/${w + 1} count >= 1`);
-      total += count;
+  for (let l = 0; l < LEVELS_PER_REALM; l++) {
+    const wc = levelWaves(a.order, l);
+    ok(l < 4 ? wc === 3 + l : wc === 1, `realm ${a.order} L${l + 1} wave count`);
+    for (let w = 0; w < wc; w++) {
+      const comp = waveComp(a.order, l, w, wc);
+      let total = 0, hasBoss = false;
+      for (const [type, count] of comp) {
+        ok(!!ALL_TYPES[type], `r${a.order} L${l + 1} w${w + 1} type ${type} exists`);
+        ok(count >= 1, `r${a.order} L${l + 1} w${w + 1} count >= 1`);
+        if (ALL_TYPES[type].boss) hasBoss = true;
+        total += count;
+      }
+      ok(total <= 40, `r${a.order} L${l + 1} w${w + 1} total ${total} <= 40`);
+      ok(hasBoss === (l === LEVELS_PER_REALM - 1), `r${a.order} L${l + 1} boss only on boss level`);
     }
-    ok(total <= 40, `wave ${a.order}/${w + 1} total ${total} <= 40`);
-    const hasBoss = comp.some(([t]) => ALL_TYPES[t].boss);
-    ok(hasBoss === (w === a.waves - 1), `wave ${a.order}/${w + 1} boss only on final`);
   }
 }
 
