@@ -20,10 +20,12 @@ const { Menu, saveRecord, loadRecords } = await import("./menu.js" + V);
 const { CONST, SKINS, BIOMES, ranking, segRadius } = S;
 
 // graphics tiers: pixel ratio cap, bloom multiplier, particle budget multiplier
+// pixel-ratio caps per tier. HIGH lowered 1.5→1.25 (big GPU win, ~imperceptible
+// sharpness loss with bloom); LOW renders below native for weak machines.
 const QUALITY_TIERS = {
-  high: { dpr: 1.5, bloom: 1, particles: 1 },
-  medium: { dpr: 1.2, bloom: 0.85, particles: 0.75 },
-  low: { dpr: 1.0, bloom: 0.62, particles: 0.5 },
+  high: { dpr: 1.25, bloom: 1, particles: 1 },
+  medium: { dpr: 1.0, bloom: 0.85, particles: 0.75 },
+  low: { dpr: 0.8, bloom: 0.62, particles: 0.5 },
 };
 
 export class Game {

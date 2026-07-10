@@ -68,7 +68,7 @@ export class SnakeField {
     // food instancing
     const foodGeo = new THREE.IcosahedronGeometry(1, 1);
     const foodMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.08 });
-    glowify(foodMat, 0.22);
+    glowify(foodMat, 0.34);
     this.foodMesh = new THREE.InstancedMesh(foodGeo, foodMat, MAX_FOOD);
     this.foodMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.foodMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_FOOD * 3), 3);
@@ -233,15 +233,17 @@ export class SnakeField {
       m4.scale(sc.setScalar(s));
       m4.setPosition(p);
       this.foodMesh.setMatrixAt(fi, m4);
-      // tier colors (essence deliberately muted — bloom was blowing them out)
-      if (f.tier === 0) c.setHex(0xe0a858);
-      else if (f.tier === 1) c.setHex(0x3cc8d8);
-      else if (f.tier === 2) c.setHex(0xd8b840);
-      else if (f.tier === 3) c.setHex(0xd848b0);
-      else c.setHex(0x78c850); // essence
-      const tw = f.tier === 9
-        ? 0.52 + 0.14 * Math.sin(this.t * 2.8 + wob * 2)
-        : 0.62 + 0.22 * Math.sin(this.t * 3.4 + wob * 2);
+      // tier colors — brighter than the over-muted pass (owner: orbs lost too
+      // much glow). Essence is a vivid green; BIGGER essence glows a touch more.
+      if (f.tier === 0) c.setHex(0xffc46a);
+      else if (f.tier === 1) c.setHex(0x54f0ff);
+      else if (f.tier === 2) c.setHex(0xffd94a);
+      else if (f.tier === 3) c.setHex(0xff54d8);
+      else c.setHex(0x9fe86a); // essence
+      const essBoost = f.tier === 9 ? (1 + Math.min(0.5, f.value / 14)) : 1;
+      const tw = (f.tier === 9
+        ? 0.66 + 0.14 * Math.sin(this.t * 2.8 + wob * 2)
+        : 0.74 + 0.22 * Math.sin(this.t * 3.4 + wob * 2)) * essBoost;
       c.multiplyScalar(tw);
       this.foodMesh.setColorAt(fi, c);
       fi++;

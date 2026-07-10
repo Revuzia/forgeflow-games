@@ -107,6 +107,7 @@ export class FX {
     this._tmp = new THREE.Vector3();
     this._tmp2 = new THREE.Vector3();
     this._anchor = new THREE.Vector3(0, 0, CONST.R + 6);
+    this._ref = new THREE.Vector3(); this._t1 = new THREE.Vector3(); this._t2 = new THREE.Vector3();
   }
 
   _initClouds() {
@@ -213,10 +214,18 @@ export class FX {
   }
 
   _wxRespawn(w, anchor, normal) {
-    // scatter in a bubble around the anchor, biased "up" along the normal
-    w.p.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).multiplyScalar(34);
-    w.p.add(this._tmp2.copy(normal).multiplyScalar(8 + Math.random() * 18));
-    w.p.add(anchor);
+    // scatter in a HORIZONTAL disk around the player (tangent plane) and place
+    // it clearly ABOVE along the surface normal — so precipitation visibly
+    // falls DOWN through view (the old world-axis cube put drops below/beside,
+    // which read ambiguously / "upward").
+    const ref = Math.abs(normal.y) < 0.9 ? this._ref.set(0, 1, 0) : this._ref.set(1, 0, 0);
+    this._t1.crossVectors(ref, normal).normalize();
+    this._t2.crossVectors(normal, this._t1);
+    const a = Math.random() * 6.2832, r = 6 + Math.random() * 28;
+    w.p.copy(anchor)
+      .addScaledVector(this._t1, Math.cos(a) * r)
+      .addScaledVector(this._t2, Math.sin(a) * r)
+      .addScaledVector(normal, 14 + Math.random() * 34);
   }
 
   update(dt, playerHead, playerNormal) {

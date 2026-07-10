@@ -20,8 +20,12 @@ async function resolveContent() {
 }
 
 function makeRenderer(container) {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  // MSAA (antialias) OFF: it multi-samples every edge pixel, costing GPU fill —
+  // largely redundant here because bloom softens edges and the pixel-ratio
+  // supersamples. Big perf win; the quality tier's pixel ratio is applied by
+  // Game.applySettings right after boot.
+  const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.92;
@@ -43,6 +47,10 @@ try {
   composer.addPass(new RenderPass(scene, camera));
   // higher THRESHOLD (0.82) = only the brightest cores bloom, so the whole
   // scene stops washing out; strength/radius kept modest. (owner: too glowy)
+  // UnrealBloomPass already renders its extraction + blur mips at HALF the
+  // composer resolution internally (setSize halves what it's given), so the
+  // "half-res bloom" saving is inherent. The lower pixel ratio (HIGH=1.25) +
+  // MSAA-off above are the added GPU wins this pass.
   const bloom = new UnrealBloomPass(
     new THREE.Vector2(container.clientWidth, container.clientHeight), 0.42, 0.42, 0.82);
   composer.addPass(bloom);
