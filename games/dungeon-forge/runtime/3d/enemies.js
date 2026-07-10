@@ -31,7 +31,9 @@ export class EnemyPool {
     const grp = new THREE.Group();
     const K = e.K || {};
     const H = { spider: 1.15, drone: 0.95, slime: 1.2, turret: 1.6, imp: 1.35, myconid: 1.45, cyclops: 2.3, blob: 1.5, warbot: 2.1, xeno: 2.3,
-                cultist: 1.85, ogre: 2.3, cyborg: 1.9, sentinel: 2.2 };
+                cultist: 1.85, ogre: 2.3, cyborg: 1.9, sentinel: 2.2,
+                bat: 0.85, skull: 1.0, wisp: 0.9, frog: 1.1, cactoro: 1.5, gargoyle: 1.7, ninja: 1.8, cthulhu: 2.0, brute: 1.95, yeti: 2.15, giant: 2.6,
+                xenosmall: 1.0, floater: 1.1, striker: 2.0, warframe: 2.1, xenobig: 2.25 };
     const h = K.boss ? 2.7 : (H[e.etype] || 1.75);
     const made = makeCreature(this.g.assets, tpl, h, THREE);
     const obj = made.obj;

@@ -101,8 +101,10 @@ export class Assets {
   async enemies(theme) {
     const t = theme === "scifi" ? "scifi" : "fantasy";
     const names = t === "fantasy"
-      ? ["spider", "skeleton", "zombie", "ghost", "slime", "orc", "imp", "myconid", "cyclops", "demon"]
-      : ["drone", "robot", "android", "turret", "mech", "blob", "warbot", "xeno", "alien"];
+      ? ["spider", "skeleton", "zombie", "ghost", "slime", "orc", "imp", "myconid", "cyclops", "demon",
+         "bat", "skull", "wisp", "frog", "cactoro", "gargoyle", "ninja", "cthulhu", "brute", "yeti", "giant", "dragon"]
+      : ["drone", "robot", "android", "turret", "mech", "blob", "warbot", "xeno", "alien",
+         "xenosmall", "floater", "striker", "warframe", "xenobig"];
     const m = {};
     for (const n of names) m[n] = n === "turret"
       ? this.load("props/scifi/turret.glb")
@@ -403,12 +405,12 @@ export function findClip(animations, ...suffixes) {
 /** Standard creature clip set (Quaternius naming variants). */
 export function creatureClips(animations) {
   return {
-    idle: findClip(animations, "idle", "flying_idle", "robot_idle", "slime_idle", "spider_idle"),
-    walk: findClip(animations, "walk", "walking", "robot_walking", "slime_walk", "spider_walk", "fast_flying", "run", "running"),
-    run: findClip(animations, "run", "running", "robot_running", "fast_flying", "walk"),
-    attack: findClip(animations, "attack", "punch", "robot_punch", "bite_front", "headbutt", "slime_attack", "spider_attack", "kick", "shoot_small"),
-    death: findClip(animations, "death", "robot_death", "slime_death", "spider_death"),
-    hit: findClip(animations, "hitrecieve", "hitreact", "hitrecieve_1", "recievehit"),
+    idle: findClip(animations, "idle", "flying_idle", "robot_idle", "slime_idle", "spider_idle", "flying", "hover", "float", "fly"),
+    walk: findClip(animations, "walk", "walking", "robot_walking", "slime_walk", "spider_walk", "fast_flying", "run", "running", "flying", "fly", "move"),
+    run: findClip(animations, "run", "running", "robot_running", "fast_flying", "walk", "flying", "fly"),
+    attack: findClip(animations, "attack", "punch", "robot_punch", "bite_front", "bite", "headbutt", "slime_attack", "spider_attack", "kick", "shoot_small", "shoot", "cast", "spell"),
+    death: findClip(animations, "death", "robot_death", "slime_death", "spider_death", "die"),
+    hit: findClip(animations, "hitrecieve", "hitreact", "hitrecieve_1", "recievehit", "hit", "damage"),
   };
 }
 

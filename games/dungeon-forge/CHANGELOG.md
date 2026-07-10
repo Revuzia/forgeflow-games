@@ -252,3 +252,14 @@ Initial release.
   not floating at a tile centre). Selftest → 142.
 
 —— With this, every item from the builder-feedback pass is done (v1.4.1 → v1.5.0). ——
+
+## v1.6.0 — 2026-07-09 (/loop2 batch 1: +17 creatures)
+- **Roster nearly doubled** (~19 → 40 enemies). +12 fantasy: Cave Bat, Floating
+  Skull, Wisp, Cave Toad, Cactoro, Gargoyle, Shadow Ninja, Spawn of Cthulhu,
+  Tribal Brute, Yeti, Giant, Young Dragon (mini-boss). +5 sci-fi: Xeno Drone,
+  Void Floater, Strike Mech, Warframe, Xeno Brute. All CC0 Quaternius/Kenney
+  (gltf→glb, textures shrunk), with idle/walk/attack/death/hit clips.
+- creatureClips now also maps flying/hover/fly/bite/cast clip names, so flyers
+  (bat/wisp/gargoyle/dragon/xeno drone/floater) animate + hover.
+- Per-type render heights tuned. Verified live: all 12 new fantasy enemies render
+  with valid bounds + mixers + full action sets. Selftest → 159 (auto kill-tests).
