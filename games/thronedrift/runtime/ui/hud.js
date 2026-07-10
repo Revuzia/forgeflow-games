@@ -8,6 +8,7 @@ import { ARENAS } from "../data/arenas.js";
 import { ALL_TYPES } from "../data/enemies.js";
 import { formatScore, clamp, save } from "../core/util.js";
 import { SFX } from "../core/audio.js";
+import { Music } from "../core/music.js";
 
 const TITLE = "THRONEDRIFT";
 const TAGLINE = "Five drifting thrones. One champion. Endless waves.";
@@ -129,7 +130,7 @@ export class HUD {
         <div id="cf-back" class="cf-btn" style="display:block;margin:16px auto 0;width:130px;text-align:center;padding:9px 0;${frameCss}font-size:14px;font-weight:700">\u2190 BACK</div>
       </div>`);
     const M = this.layerMenu;
-    M.querySelector("#cf-vol").oninput = (e) => { const v = e.target.value / 100; save.set("set_vol", v); SFX.setVolume(v); SFX.play("ui"); };
+    M.querySelector("#cf-vol").oninput = (e) => { const v = e.target.value / 100; save.set("set_vol", v); SFX.setVolume(v); Music.setVolume(v); SFX.play("ui"); };
     const wireTog = (id, key) => {
       const b = M.querySelector(id);
       b.onclick = () => {
@@ -267,7 +268,7 @@ export class HUD {
     this.layerMenu.style.cssText += "align-items:center;justify-content:center;";
     // house menu pattern: full-bleed key art + Ken Burns drift + radial/linear scrim
     this.layerMenu.innerHTML = `
-      <div style="position:absolute;inset:0;background:url(menu_bg.png?v=2) center/cover no-repeat,
+      <div style="position:absolute;inset:0;background:url(menu_bg.png?v=4) center/cover no-repeat,
         radial-gradient(ellipse at 50% 30%,#2a1038,#0b0710 75%);animation:cfKenBurns 36s ease-in-out infinite alternate"></div>
       <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(8,4,14,.28) 0%,rgba(8,4,14,.82) 100%),
         linear-gradient(rgba(10,6,20,.30),rgba(10,6,20,.72))"></div>` + inner;

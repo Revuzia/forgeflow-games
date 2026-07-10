@@ -11,6 +11,7 @@ import { ArenaBoard } from "../view/arena.js";
 import { Actor, makeGreatblade, makeSword, makeShield, makeBow, makeStaff, makeArrow, makeSpinTrail } from "../view/chars.js";
 import { Particles, FloatText, Decals, WorldBars } from "../view/fx.js";
 import { SFX } from "../core/audio.js";
+import { Music } from "../core/music.js";
 import { clamp, lerp, rand, randInt, angleLerp, damp, dist2, formatScore, save } from "../core/util.js";
 
 const PLAYER_R = 0.65;         // player collision radius
@@ -119,6 +120,7 @@ export class Game {
     this.hud.hint(hintBits.join(" · "), 7);
 
     this.state = "playing";
+    Music.play("level");
     this.input.enabled = true;
     this.input.clearEdges();
     this.hud.banner(this.arena.name.toUpperCase(), { color: "#" + this.arena.accent.toString(16).padStart(6, "0"), sub: this.arena.tagline, dur: 2.2, size: 46 });
@@ -205,6 +207,7 @@ export class Game {
     this.enemies.push(e);
     if (def.boss) {
       this.bossRef = e;
+      Music.play("boss");
       this.hud.setBoss(def.name, 1);
       this.hud.banner(def.name.toUpperCase(), { color: "#" + this.arena.accent.toString(16).padStart(6, "0"), sub: def.role, dur: 2.6, size: 40 });
       this.addShake(0.6);
@@ -285,6 +288,7 @@ export class Game {
   toMenu() {
     this.cleanupRun();
     this.state = "menu";
+    Music.play("menu");
     this.hud.clearPanel();
     this.buildMenuShowcase();
     this.hud.showTitle();
@@ -375,6 +379,7 @@ export class Game {
     e.dead = true; e.deadT = 0;
     if (e.def.boss) {
       this.bossRef = null;
+      Music.play("level");
       this.hud.setBoss(null);
       this.hud.banner(e.def.name.split(",")[0].toUpperCase() + " FALLS!", { color: "#ffd24a", dur: 2.2, size: 44 });
       this.addShake(0.9); this.hitstop(0.1);

@@ -1,5 +1,12 @@
 # Thronedrift — Build Status (loop tracker)
 
+## Iteration 4 — 2026-07-10 ✅ CAMPAIGN QA + MUSIC + SELFTEST
+Full campaign headless-verified to CROWN CLAIMED (all bosses exercised their
+kits). Heavies capped 4/wave. Music beds wired (menu/level/boss). selftest.mjs
+PASS 718. Remaining queue: bestiary runtime 3D portraits; mobile touch pass
+(375px: cluster hit targets, pinch); balance watch on owner playtests; consider
+per-realm Stable Audio tracks later (music_generator, ~23cr/track).
+
 ## DEPLOYED LIVE — 2026-07-10
 https://forgeflowgames.com/games/thronedrift/ (CDN 81/81 files 200 after re-upload
 of imp.glb + cthulhu.glb which failed on transient connectivity; Supabase row

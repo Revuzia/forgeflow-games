@@ -1,5 +1,15 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v0.4 — 2026-07-10 (campaign QA + music + selftest)
+- FULL CAMPAIGN VERIFIED headless: all 5 realms cleared, all 5 bosses fought
+  (Vulkar slams/charges, Boreas novas/summons, Skalvyrn volleys/blinks x4,
+  Zhy'moth orbs/skulls/blinks x5, Aurex knives/dashes) -> THE CROWN IS CLAIMED
+- Balance: heavy units capped at 4/wave (realm-5 late waves were 6-cyclops
+  HP sponges body-blocking all projectiles)
+- MUSIC: menu/level/boss beds (Kenney pool via audio_mapper, distinct tracks,
+  crossfaded; game_controls mute covers them; settings volume wired)
+- selftest.mjs: 718 data-invariant checks (arenas, rosters, kits, waves) PASS
+
 ## v0.3 — 2026-07-10 (feedback batch 2: bosses, bestiary x20, new main menu)
 - Main menu rebuilt: LIVE 3D champion showcase (three heroes on a gold dais,
   click a champion card to enter — no PLAY step); aspect-adaptive menu camera

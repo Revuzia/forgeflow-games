@@ -8,6 +8,7 @@ import { Game } from "./sim/game.js";
 import { loadHeroes, loadEnemyModels } from "./view/chars.js";
 import { SFX } from "./core/audio.js";
 import { save } from "./core/util.js";
+import { Music } from "./core/music.js";
 
 const container = document.getElementById("game-container");
 const hudRoot = document.getElementById("hud");
@@ -15,7 +16,7 @@ const hudRoot = document.getElementById("hud");
 // ---- loading overlay -------------------------------------------------------
 const loadEl = document.createElement("div");
 loadEl.style.cssText = `position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  background:linear-gradient(rgba(10,6,18,.55),rgba(10,6,18,.85)),url(menu_bg.png?v=3) center/cover no-repeat,
+  background:linear-gradient(rgba(10,6,18,.55),rgba(10,6,18,.85)),url(menu_bg.png?v=4) center/cover no-repeat,
   radial-gradient(ellipse at 50% 35%,#2a1038,#0b0710 75%);z-index:10;color:#e8dcc8;font-family:Georgia,serif;`;
 loadEl.innerHTML = `
   <div style="font-size:44px;font-weight:900;letter-spacing:3px;
@@ -66,7 +67,7 @@ window.addEventListener("resize", () => {
 
   // expose numeric eval hooks for automated verification (ffg preview convention)
   window.__FFG3D__ = {
-    game, renderer,
+    game, renderer, music: Music,
     stats: () => ({
       state: game.state, hp: game.hp, score: game.score, wave: game.waveIdx + 1,
       enemies: game.enemies ? game.enemies.filter((e) => !e.dead).length : 0,
@@ -76,10 +77,11 @@ window.addEventListener("resize", () => {
   };
 
   SFX.setVolume(save.get("set_vol", 0.5));
+  Music.setVolume(save.get("set_vol", 0.5));
   loadEl.remove();
   game.buildMenuShowcase();
   hud.showTitle();
-  window.addEventListener("pointerdown", () => SFX.unlock(), { once: true });
+  window.addEventListener("pointerdown", () => { SFX.unlock(); Music.play("menu"); }, { once: true });
 
   const clock = new THREE.Clock();
   renderer.setAnimationLoop(() => {

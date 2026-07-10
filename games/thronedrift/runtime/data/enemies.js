@@ -192,6 +192,6 @@ export function waveComp(arenaOrder, waveIdx /* 0-based */, waveCount) {
   const comp = [];
   comp.push([u0, Math.round(3 + w * 1.3 + p * 0.8)]);
   if (w >= 1) comp.push([u1, Math.round(1 + w * 1.0 + p * 0.5)]);
-  if (w >= 2) comp.push([u2, Math.max(1, Math.round((w - 1) * 0.7 + p * 0.4))]);
+  if (w >= 2) comp.push([u2, Math.min(4, Math.max(1, Math.round((w - 1) * 0.7 + p * 0.4)))]); // cap heavies — late realm-5 waves were 6-cyclops HP sponges
   return comp;
 }
