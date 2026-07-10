@@ -1,5 +1,19 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v0.6 — 2026-07-10 (idle/grip fixes + full verification pass)
+- Idle poses: trust the AUTHORED Meshy idle clips — relaxArms now runs ONLY
+  during walk/run (forcing it at rest made mannequin arms + inverted elbows)
+- Grips: hand-basis snapshot at the settled authored idle (per-weapon poseT);
+  mage's procedural staff REMOVED — her model has an ornate staff baked in
+  (was rendering as a floating duplicate)
+- Block: removed the sub-0.5 damage floor — blocked chip damage now drains the
+  smooth hearts instead of silently immunizing everything under 3 dmg
+- VERIFIED live + preview: live CDN build boots and plays; music starts on
+  first gesture; wheel zoom / right-drag orbit / touch joystick via real
+  events; pause/resume; settings toggles take effect; perfect + late + rear
+  block math; boss fight visuals (HP bar, telegraphs, WHIRLWIND trail);
+  all five realm boards screenshot-distinct
+
 ## v0.5 — 2026-07-10 (portraits + mobile polish; build complete)
 - Bestiary: runtime 3D portraits rendered from the actual GLBs (all 20 foes)
 - Mobile: responsive title sizing, menu buttons wrap, showcase camera pulls

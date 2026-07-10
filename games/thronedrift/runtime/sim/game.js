@@ -154,7 +154,8 @@ export class Game {
       actor.attachWeapon(makeSword(), "Right", { gripFrac: 0.14, rest: [0.15, 0.62, 0.77] });
       actor.attachShield(makeShield());
     } else if (model === "rogue") actor.attachWeapon(makeBow(), "Left", { gripFrac: 0.5, scale: 0.8, rest: [0.08, 0.95, 0.25] });
-    else if (model === "sorceress") actor.attachWeapon(makeStaff(), "Right", { gripFrac: 0.44, rest: [0.05, 0.99, 0.14] });
+    // sorceress base.glb has an ornate flame-staff BAKED INTO the model (verified
+    // visually) — attaching a procedural one gave her a floating duplicate
   }
 
   _applyMode(first) {
@@ -708,8 +709,7 @@ export class Game {
           return false;
         }
         SFX.play("block");
-        dmg *= (1 - this.block.def.dr);
-        if (dmg < 0.5) return false;
+        dmg *= (1 - this.block.def.dr);   // chip damage drains the smooth hearts — block reduces, never fully immunizes
       }
     }
     this.hp -= dmg;
@@ -745,7 +745,7 @@ export class Game {
 
     if (this.state === "playing" && this.input.pausePressed()) this.setPaused(!this.paused);
     if (this.state === "menu" && this.showcaseActors) {
-      for (const a of this.showcaseActors) { a.update(dt); a.updateRelax(dt, 1, false); }
+      for (const a of this.showcaseActors) { a.update(dt); a.updateRelax(dt, 0, false); }
     }
     if (this.state === "playing" && !this.paused) this.updatePlaying(dt, hudDt);
     else if (this.state === "gameover" || this.state === "arenaclear") {
@@ -842,10 +842,12 @@ export class Game {
       else if (!this.block.active) actor.play("Idle");
     }
     actor.update(dt);
-    // arms hang at the sides (A-pose fix), procedural swing while moving,
-    // faded out during attacks/spins so combat clips play unmodified
-    const relaxTarget = (this.attackAnimT > 0 || this.spin || this.dead || this.block.active) ? 0 : 1;
-    actor.updateRelax(dt, relaxTarget, mv.mag > 0.05, mv.mag > 0.55);
+    // relax ONLY during locomotion — Meshy walk/run clips fling the arms out,
+    // but the authored idle already stands naturally (forcing relax at rest
+    // made everyone a mannequin and inverted elbows — owner feedback)
+    const moving = mv.mag > 0.05;
+    const relaxTarget = (this.attackAnimT > 0 || this.spin || this.dead || this.block.active || !moving) ? 0 : 1;
+    actor.updateRelax(dt, relaxTarget, moving, mv.mag > 0.55);
 
     // place player
     this.playerGroup.position.set(this.px, 0, this.pz);

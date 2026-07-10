@@ -202,10 +202,11 @@ export class Actor {
   attachWeapon(mesh, side, cfg) {
     const bone = this._findBone(side, /Hand/) || this._findBone(side, /hand|wrist/i);
     if (!bone) { this.root.add(mesh); return null; }
-    // pose the rig how the player actually stands before snapshotting the basis
-    if (this.actions.Idle) { this.actions.Idle.reset().play(); this.mixer.update(0.05); }
+    // snapshot the hand basis at the AUTHORED idle pose (settled mid-clip) —
+    // the idle clip is what plays at rest, so the grip must be computed there.
+    // (No relaxArms here: relax now only runs during walk/run.)
+    if (this.actions.Idle) { this.actions.Idle.reset().play(); this.mixer.update(cfg.poseT ?? 0.35); }
     this.model.updateMatrixWorld(true);
-    if (this.armBones) { relaxArms(this.armBones, 1); this.model.updateMatrixWorld(true); }
     mesh.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(mesh);
     const h = Math.max(0.001, box.max.y - box.min.y);
@@ -290,10 +291,10 @@ export function relaxArms(b, amount) {
   if (!b) return;
   const a = amount == null ? 1 : Math.max(0, Math.min(1, amount));
   if (a <= 0) return;
-  _relaxOne(b.rArm, b.rFore, -0.28, -1, 0.02, 0.92 * a);
-  _relaxOne(b.lArm, b.lFore, 0.28, -1, 0.02, 0.92 * a);
-  _relaxOne(b.rFore, b.rHand, -0.08, -1, 0.05, 0.85 * a);
-  _relaxOne(b.lFore, b.lHand, 0.08, -1, 0.05, 0.85 * a);
+  _relaxOne(b.rArm, b.rFore, -0.28, -1, 0.02, 0.8 * a);
+  _relaxOne(b.lArm, b.lFore, 0.28, -1, 0.02, 0.8 * a);
+  _relaxOne(b.rFore, b.rHand, -0.08, -1, 0.05, 0.45 * a);
+  _relaxOne(b.lFore, b.lHand, 0.08, -1, 0.05, 0.45 * a);
 }
 
 // ---------- weapon props (thronedrift styling: crimson / steel / gold) -------
