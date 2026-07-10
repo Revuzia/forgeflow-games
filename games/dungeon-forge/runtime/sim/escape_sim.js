@@ -14,7 +14,7 @@
 import {
   CELL, DIRS, ENEMIES, ck, hasCell, objsAt, findAll, stairLinks,
   mulberry, hashStr, rollLoot, cellType, cellHeight, CT, LAVA_DPS, WATER_SLOW, RAISED_H,
-  SHOP, SHOP_IDS, NPC_TYPES, doorAxis, BREAKABLE_DECOR, makeItem, itemScore,
+  SHOP, SHOP_IDS, NPC_TYPES, doorAxis, BREAKABLE_DECOR, EXPLOSIVE_DECOR, BARREL, makeItem, itemScore,
 } from "./dungeon.js";
 
 export const PLAYER = {
@@ -182,6 +182,13 @@ export function newRun(d, runSeed, players) {
                     phase: rnd() * 2, cd: 0, open: false, armT: 0 });
   }));
 
+  // explosive barrels: barrel/canister decor becomes a live pushable entity
+  st.barrels = [];
+  d.floors.forEach((fl, f) => fl.objects.forEach((o) => {
+    if (o.kind !== "decor" || !EXPLOSIVE_DECOR.has(o.dtype)) return;
+    st.barrels.push({ id: "brl" + o.id, src: o.id, f, x: c2w(o.x), z: c2w(o.z), hp: BARREL.hp, alive: true });
+  }));
+
   return st;
 }
 
@@ -216,7 +223,11 @@ function cellBlocked(st, f, cx, cz, forEnemy) {
   if (!hasCell(d, f, cx, cz)) return true;
   for (const o of objsAt(d, f, cx, cz)) {
     if (o.kind === "door" && !st.openDoors.has(o.id)) return true;
-    if (o.kind === "decor") { if (st.brokenDecor.has(o.id)) continue; return true; } // smashed decor no longer blocks
+    if (o.kind === "decor") {
+      if (st.brokenDecor.has(o.id)) continue;            // smashed decor no longer blocks
+      if (EXPLOSIVE_DECOR.has(o.dtype)) continue;        // barrels are PUSHED, not walls
+      return true;
+    }
     if (o.kind === "chest" || o.kind === "npc") return true;
     if (forEnemy && o.kind === "door") return true; // enemies never path through doors (even open? open ok)
   }
@@ -508,6 +519,36 @@ export function grantLoot(st, p, it) {
 // combat
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Hit an explosive barrel — enough damage and it goes off. */
+export function damageBarrel(st, b, dmg, byId) {
+  if (!b || !b.alive) return;
+  b.hp -= dmg;
+  if (b.hp <= 0) explodeBarrel(st, b, byId);
+}
+
+/** BOOM: AoE hurts enemies AND players (friendly fire!), chains to nearby barrels. */
+export function explodeBarrel(st, b, byId) {
+  if (!b.alive) return;
+  b.alive = false;
+  st.brokenDecor.add(b.src);                     // the decor object is gone for good
+  emit(st, "boom", { id: b.id, src: b.src, by: byId, f: b.f, x: b.x, z: b.z });
+  const R = BARREL.boomR;
+  for (const p of st.players) {
+    if (!p.alive || p.escaped || p.f !== b.f) continue;
+    const d2 = Math.hypot(p.x - b.x, p.z - b.z);
+    if (d2 < R) damagePlayer(st, p, BARREL.boomDmgP * (1 - 0.6 * d2 / R), "explosion", { x: b.x, z: b.z });
+  }
+  for (const e of st.enemies) {
+    if (!e.alive || e.f !== b.f) continue;
+    const d2 = Math.hypot(e.x - b.x, e.z - b.z);
+    if (d2 < R) damageEnemy(st, e, BARREL.boomDmgE * (1 - 0.6 * d2 / R), byId, "fire");
+  }
+  for (const nb of st.barrels) {                 // chain reaction
+    if (!nb.alive || nb.f !== b.f) continue;
+    if (Math.hypot(nb.x - b.x, nb.z - b.z) < R) damageBarrel(st, nb, 999, byId);
+  }
+}
+
 export function damageEnemy(st, e, dmg, byId, elem) {
   if (!e.alive) return;
   e.hp -= dmg; e.hurtT = 0.25;
@@ -629,7 +670,12 @@ function playerMelee(st, p) {
     damageEnemy(st, e, dmg, p.id);
     if (M.poison && e.alive) applyStatus(st, e, "poison", M.poison, p.id);
   }
-  breakDecorInRange(st, p, M.range, p.id); // smash nearby barrels/crates/pots
+  breakDecorInRange(st, p, M.range, p.id); // smash nearby crates/pots
+  // whacking an explosive barrel sets it off
+  for (const b of st.barrels) {
+    if (!b.alive || b.f !== p.f) continue;
+    if (Math.hypot(b.x - p.x, b.z - p.z) <= M.range + BARREL.radius) damageBarrel(st, b, dmg, p.id);
+  }
 }
 
 /** RMB class special: bash (stun), crush (heavy), fire bolt, poison knife. */
@@ -893,6 +939,16 @@ export function tick(st, dt, opts = {}) {
       p.x = r.x; p.z = r.z;
       p.stepAcc += Math.hypot(mx, mz);
       if (p.stepAcc > 2.2) { p.stepAcc = 0; emit(st, "step", { id: p.id, wet: ctHere === CT.WATER }); }
+      // shove explosive barrels you walk into (the barbarian bullies them hardest)
+      const pushMul = p.cls === "barbarian" ? 2.1 : 1.0;
+      for (const b of st.barrels) {
+        if (!b.alive || b.f !== p.f) continue;
+        const dx = b.x - p.x, dz = b.z - p.z;
+        const dist = Math.hypot(dx, dz), overlap = (PLAYER.radius + BARREL.radius) - dist;
+        if (overlap <= 0 || dist < 1e-4) continue;
+        const nx = b.x + (dx / dist) * overlap * pushMul, nz = b.z + (dz / dist) * overlap * pushMul;
+        if (!cellBlocked(st, b.f, w2c(nx), w2c(nz), false)) { b.x = nx; b.z = nz; b.moved = true; }
+      }
     }
     // LAVA burns anyone standing in it (the 0.45s i-frame gate paces the DoT)
     if (ctHere === CT.LAVA) damagePlayer(st, p, LAVA_DPS.dmg, "lava");
@@ -955,6 +1011,15 @@ export function tick(st, dt, opts = {}) {
     }
     if (cellBlocked(st, b.f, w2c(nx), w2c(nz), false) || doorAxisBlocks(st, b.f, w2c(b.x), w2c(b.z), w2c(nx), w2c(nz))) { b.ttl = 0; emit(st, "boltHit", { x: b.x, z: b.z, f: b.f, wall: true }); continue; }
     b.x = nx; b.z = nz;
+    // any projectile detonates explosive barrels — spells, javelins, enemy plasma
+    if (simEnemies) for (const brl of st.barrels) {
+      if (!brl.alive || brl.f !== b.f) continue;
+      if (Math.hypot(brl.x - b.x, brl.z - b.z) < BARREL.radius + 0.25) {
+        damageBarrel(st, brl, Math.max(b.dmg, BARREL.hp), b.hostile ? null : b.owner);
+        b.ttl = 0; emit(st, "boltHit", { x: b.x, z: b.z, f: b.f, elem: b.elem }); break;
+      }
+    }
+    if (b.ttl <= 0) continue;
     if (b.hostile) {
       // hostile-bolt damage is HOST authority (guests' copies are visual-only;
       // victims receive the relayed phit and apply it to themselves)

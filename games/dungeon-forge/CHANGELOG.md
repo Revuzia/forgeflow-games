@@ -344,6 +344,20 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.8.2 — 2026-07-10 (explosive barrels)
+- **Barrels (fantasy) and canisters (sci-fi) are now LIVE explosives**:
+  - **Pushable** — walk into one to shove it into position (the Barbarian bullies
+    them at 2×). The mesh rolls with the entity; they no longer block cells.
+  - **Explode when hit or shot** — melee, any spell bolt, a trap javelin, even an
+    enemy plasma shot sets them off: fireball + shockwave + smoke + screen shake
+    + a proper boom. The blast hurts **enemies AND players** (falloff), and
+    **chains** to barrels next door.
+  - Players can herd barrels into choke points and detonate them from range —
+    build-your-own ambush, exactly as the owner asked.
+- Builder Decor picker marks explosive types 💥 with a warning note.
+- Selftest 215 → 222 (entity spin-up, push, melee boom, chain, enemy+player AoE,
+  ranged detonation; the old smash-for-gold test moved from barrel → crate).
+
 ## v1.8.1 — 2026-07-10 (booby traps: fire jets, random spikes, javelins, secret pits)
 - **Four real booby traps** (owner spec), all placeable in the builder's Trap picker:
   - **🜂 Wall Fire Jet** — a wall nozzle that roars a 3-cell flame cone down its

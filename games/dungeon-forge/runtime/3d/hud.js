@@ -186,8 +186,11 @@ export class Hud {
     } else if (b.tool === "decor") {
       sub.appendChild(el(`<div class="df-flexbreak"></div>`));
       mkThumbOpts(D.DECOR[b.d.theme], b.toolOpt.dtype || D.DECOR[b.d.theme][0], "decor",
-        (k) => k.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()), null,
+        (k) => (D.EXPLOSIVE_DECOR.has(k) ? "💥 " : "") + k.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()), null,
         (k) => b.setTool("decor", { dtype: k }));
+      if (D.EXPLOSIVE_DECOR.has(b.toolOpt.dtype)) {
+        sub.appendChild(el(`<span class="df-subnote">💥 EXPLOSIVE — players can push it, and any hit or shot detonates it (AoE hurts everyone, chains!)</span>`));
+      }
     } else if (b.tool === "light") {
       const cols = b.d.theme === "scifi" ? ["#37e0ff", "#ff3d81", "#59ff9c", "#ffd769"] : ["#ff9a3c", "#8f6bff", "#59ff9c", "#ff5566"];
       mkOpts(cols, b.toolOpt.color || cols[0], (c) => `<span class="swatch" style="background:${c}"></span>`, (c) => b.setTool("light", { color: c }));

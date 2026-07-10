@@ -140,8 +140,8 @@ const ok = (cond, name, extra) => {
     stampRoom(bd, 0, 5, 5, 8, 8);
     applyOp(bd, { t: "obj+", f: 0, o: { kind: "spawn", x: 6, z: 6 } });
     applyOp(bd, { t: "obj+", f: 0, o: { kind: "exit", x: 11, z: 11 } });
-    const barrel = applyOp(bd, { t: "obj+", f: 0, o: { kind: "decor", x: 8, z: 6, dtype: "barrel" } });
-    ok(barrel.ok, "break: barrel placed");
+    const barrel = applyOp(bd, { t: "obj+", f: 0, o: { kind: "decor", x: 8, z: 6, dtype: "crate" } });
+    ok(barrel.ok, "break: crate placed");   // (barrels are EXPLOSIVE entities now — crates are the breakable)
     ok(!applyOp(bd, { t: "obj+", f: 0, o: { kind: "decor", x: 9, z: 6, dtype: "pot" } }).ok === false, "break: new prop type 'pot' places");
     const brun = newRun(bd, 55, [{ id: "P1" }]);
     const bp = brun.players[0];
@@ -150,7 +150,7 @@ const ok = (cond, name, extra) => {
     bp.x = c2w(8) - 1.0; bp.z = c2w(6); bp.input.yaw = 0; bp.input.melee = true;
     for (let i = 0; i < 60 && brun.brokenDecor.size === 0; i++) tick(brun, 1 / 60);
     bp.input.melee = false;
-    ok(brun.brokenDecor.has(barrel.id), "break: barrel smashed by melee");
+    ok(brun.brokenDecor.has(barrel.id), "break: crate smashed by melee");
     ok(bp.gold > gold0, "break: got gold (" + (bp.gold - gold0) + ")");
     const pass = E.moveCircle(brun, 0, c2w(8) - 1.5, c2w(6), 1.4, 0, 0.35, false);
     ok(w2c(pass.x) >= 8, "break: smashed barrel cell now passable (cell " + w2c(pass.x) + ")");
@@ -524,6 +524,44 @@ const ok = (cond, name, extra) => {
     sA.players[0].x = sB.players[0].x = c2w(6); sA.players[0].z = sB.players[0].z = c2w(5);
     for (let i = 0; i < 500; i++) { tick(sA, 1 / 60); tick(sB, 1 / 60); }
     ok(Math.abs(sA.players[0].hp - sB.players[0].hp) < 1e-9, "random spike timing is seed-deterministic");
+  }
+
+  // ── 9c. explosive barrels ────────────────────────────────────────
+  console.log("[barrels]");
+  {
+    const bd = newDungeon({ theme: "fantasy" });
+    stampRoom(bd, 0, 5, 5, 6, 6);
+    applyOp(bd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(bd, { t: "obj+", f: 0, o: { kind: "exit", x: 10, z: 10 } });
+    applyOp(bd, { t: "obj+", f: 0, o: { kind: "decor", x: 7, z: 7, dtype: "barrel" } });
+    applyOp(bd, { t: "obj+", f: 0, o: { kind: "decor", x: 8, z: 7, dtype: "barrel" } });
+    applyOp(bd, { t: "obj+", f: 0, o: { kind: "enemy", x: 7, z: 8, etype: "skeleton" } });
+    const br = newRun(bd, 21, [{ id: "P1" }]);
+    ok(br.barrels.length === 2, "barrel decor spins up live entities (" + br.barrels.length + ")");
+    // PUSH: walk into the first barrel — it must give way
+    const bp = br.players[0], b1 = br.barrels[0];
+    const bx0 = b1.x, bz0 = b1.z;
+    bp.x = b1.x - 0.9; bp.z = b1.z;                 // stand just west, walk east
+    bp.input.mx = 1; bp.input.mz = 0;
+    for (let i = 0; i < 30; i++) tick(br, 1 / 60);
+    bp.input.mx = 0;
+    ok(Math.hypot(b1.x - bx0, b1.z - bz0) > 0.2, "walking into a barrel PUSHES it (" + Math.hypot(b1.x - bx0, b1.z - bz0).toFixed(2) + "u)");
+    // EXPLODE on melee: stand by it and swing until it pops; AoE hurts enemy + player
+    const en = br.enemies[0]; en.x = b1.x + 1.2; en.z = b1.z;   // park the skeleton next to the barrel
+    const eh0 = en.hp, ph0 = bp.hp;
+    bp.x = b1.x - 1.2; bp.z = b1.z; bp.yaw = Math.PI / 2;       // face +X toward the barrel
+    for (let i = 0; i < 60 && b1.alive; i++) { bp.input.melee = true; tick(br, 1 / 60); bp.input.melee = false; }
+    ok(!b1.alive, "hitting a barrel explodes it");
+    ok(br.events.concat().length >= 0 && !br.barrels[1].alive, "explosion CHAINS to the barrel next door");
+    ok(en.hp < eh0 || !en.alive, "blast hurts the enemy (" + Math.round(eh0 - en.hp) + " dmg)");
+    ok(bp.hp < ph0, "blast hurts the careless player too (" + Math.round(ph0 - bp.hp) + " dmg)");
+    // bolts detonate barrels
+    const br2 = newRun(bd, 22, [{ id: "P1", skin: 2 }]);        // sorceress
+    const sp = br2.players[0], b2 = br2.barrels[0];
+    sp.x = b2.x - 6; sp.z = b2.z; sp.input.yaw = Math.PI / 2;   // aim east at the barrel (sim copies input.yaw)
+    sp.input.melee = true; tick(br2, 1 / 60); sp.input.melee = false;
+    for (let i = 0; i < 60 && b2.alive; i++) tick(br2, 1 / 60);
+    ok(!b2.alive, "an arcane bolt detonates a barrel from range");
   }
 
   // ── 10. pathfinding + LOS ───────────────────────────────────────

@@ -203,7 +203,12 @@ export const DECOR = {
   scifi:   ["crate", "canister", "terminal", "barrier", "cables"],
 };
 // Decor the player can smash in escape (shatter FX + a little gold/loot).
-export const BREAKABLE_DECOR = new Set(["barrel", "crate", "pot", "urn", "coffin", "debris", "bones", "canister"]);
+export const BREAKABLE_DECOR = new Set(["crate", "pot", "urn", "coffin", "debris", "bones"]);
+// EXPLOSIVE decor becomes a live barrel entity in escape: pushable, and it
+// EXPLODES when hit or shot (AoE hurts enemies AND players; chains). Players
+// shove them into position to build their own ambushes.
+export const EXPLOSIVE_DECOR = new Set(["barrel", "canister"]);
+export const BARREL = { hp: 24, radius: 0.5, boomDmgP: 40, boomDmgE: 65, boomR: 3.2 };
 // Render footprint (cell-fraction) per decor type — small props stay small.
 export const DECOR_FOOT = {
   pillar: 1.4, bookshelf: 2.2, terminal: 2.2, barrier: 2.0, cables: 1.6, coffin: 2.4,

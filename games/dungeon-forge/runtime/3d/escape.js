@@ -844,6 +844,18 @@ export class Escape {
           g.fx.burst(new THREE.Vector3(ev.x, ev.f * FLOOR_H + 0.6, ev.z), 0xc8b890, 6); // launcher kick-up
           break;
         }
+        case "boom": {
+          // barrel explosion: fireball + shockwave ring + smoke + big shake
+          const at = new THREE.Vector3(ev.x, ev.f * FLOOR_H + 0.9, ev.z);
+          g.fx._fireImpact(at);
+          g.fx.burst(at, 0xff7a22, 30); g.fx.burst(at.clone().setY(at.y + 0.5), 0x2a2620, 18);
+          const bm = this.objMeshes.get(ev.src);
+          if (bm) bm.visible = false;
+          g.audio.sfx("explosion");
+          const meB = this.me();
+          if (meB && ev.f === meB.f && Math.hypot(ev.x - meB.x, ev.z - meB.z) < 14) g.hud.shake(0.5);
+          break;
+        }
         case "pitWarn": {
           g.audio.sfx("rumble");
           g.fx.burst(new THREE.Vector3(ev.x * CELL + CELL / 2, ev.f * FLOOR_H + 0.2, ev.z * CELL + CELL / 2), 0x8a7a5a, 10); // cracking dust
@@ -1134,6 +1146,13 @@ export class Escape {
         rim.position.y = 0.06;
         m.add(hole, rim);
       }
+    }
+
+    // explosive barrels track their sim entity (players shove them around)
+    if (this.run.barrels) for (const b of this.run.barrels) {
+      if (!b.alive || !b.moved) continue;
+      const bm = this.objMeshes.get(b.src);
+      if (bm) { bm.position.x = b.x; bm.position.z = b.z; }
     }
 
     // door mixers
