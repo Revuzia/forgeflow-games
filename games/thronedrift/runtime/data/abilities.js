@@ -7,11 +7,18 @@
 //
 // anim: Meshy clip name (C_ prefix added by the actor), animScale: timeScale.
 
+// SHIFT movement skills — every class gets a signature dash
+export const DASHES = {
+  warrior: { type: "lunge", cd: 5, dist: 5.5, dur: 0.22, dmg: 14, callout: "LUNGE!", icon: "⤞" },
+  archer: { type: "roll", cd: 4, dist: 4.8, dur: 0.3, callout: null, icon: "↷" },
+  mage: { type: "blink", cd: 6, dist: 7, callout: "BLINK!", icon: "✦" },
+};
+
 export const CLASSES = {
   warrior: {
     name: "Warrior", color: 0xff4d3a, uiColor: "#ff6a4a",
     portrait: "⚔️", desc: "Two kits in one: colossal two-hander or sword & shield with a true Block.",
-    speed: 6.2, hearts: 7,   // melee eats hits the ranged classes never take — extra hearts
+    speed: 5.9, hearts: 7,   // melee eats hits the ranged classes never take — extra hearts
     modes: ["twohand", "sworboard"],
     kits: {
       twohand: {
@@ -57,7 +64,7 @@ export const CLASSES = {
   archer: {
     name: "Archer", color: 0xffa03a, uiColor: "#ffb050",
     portrait: "🏹", desc: "Ranged zoning: fast arrows, explosive fire, and a rain of death.",
-    speed: 6.4, hearts: 4, model: "rogue",
+    speed: 6.3, hearts: 4, model: "rogue",
     kits: {
       base: {
         label: "Bow", icon: "🏹", model: "rogue",
@@ -82,7 +89,7 @@ export const CLASSES = {
   mage: {
     name: "Mage", color: 0x9a5dff, uiColor: "#b07aff",
     portrait: "🔮", desc: "Elemental control: fire, frost, and an arcane ward.",
-    speed: 5.7, hearts: 4, model: "sorceress",
+    speed: 6.1, hearts: 4, model: "sorceress",
     kits: {
       base: {
         label: "Staff", icon: "🔮", model: "sorceress",

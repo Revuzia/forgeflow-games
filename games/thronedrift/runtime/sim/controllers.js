@@ -10,6 +10,7 @@ export class ControllerBase {
   abilityPressed(i) { return false; }          // edge — consumed on read
   get abilityHeld() { return [false, false, false]; }
   togglePressed() { return false; }            // edge — consumed on read
+  dashPressed() { return false; }              // edge — consumed on read
   aim() { return null; }                       // {x,z} world point or null
   update(dt, champ, game) {}
 }
@@ -22,6 +23,7 @@ export class PlayerController extends ControllerBase {
   abilityPressed(i) { return this.input.abilityPressed(i); }
   get abilityHeld() { return this.input.abilityHeld; }
   togglePressed() { return this.input.togglePressed(); }
+  dashPressed() { return this.input.dashPressed(); }
   aim() {
     const g = this.game, inp = this.input;
     if (!inp.pointer.down || ("ontouchstart" in window)) return null;
@@ -45,6 +47,7 @@ export class BotController extends ControllerBase {
     this._edges = [false, false, false];
     this._held = [false, false, false];
     this._toggle = false;
+    this._dash = false;
     this._aim = null;
     this._thinkT = 0;
     this._strafeDir = Math.random() < 0.5 ? 1 : -1;
@@ -56,6 +59,7 @@ export class BotController extends ControllerBase {
   abilityPressed(i) { const v = this._edges[i]; this._edges[i] = false; return v; }
   get abilityHeld() { return this._held; }
   togglePressed() { const v = this._toggle; this._toggle = false; return v; }
+  dashPressed() { const v = this._dash; this._dash = false; return v; }
   aim() { return this._aim; }
 
   update(dt, c, g) {
@@ -137,6 +141,15 @@ export class BotController extends ControllerBase {
         }
       }
       if (use) this._edges[i] = true;
+    }
+
+    // SHIFT skill: melee lunges to close range, ranged dashes to escape
+    if (c.dashCd <= 0 && Math.random() < 0.5 * this.skill) {
+      if (melee && d > 4 && d < 9) this._dash = true;                       // close the gap
+      else if (!melee && hurt && d < 4.5) {                                  // escape
+        this._aim = { x: c.x - nx * 8, z: c.z - nz * 8 };
+        this._dash = true;
+      }
     }
 
     // warriors: prefer 2H vs crowds, sword&board when hurt in a brawl

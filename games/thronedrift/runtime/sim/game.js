@@ -628,7 +628,7 @@ export class Game {
 
     if (this.state === "playing" && this.input.pausePressed()) this.setPaused(!this.paused);
     if (this.state === "menu" && this.showcaseActors) {
-      for (const a of this.showcaseActors) { a.update(dt); a.updateRelax(dt, 0, false); }
+      for (const a of this.showcaseActors) { a.update(dt); a.updateRelax(dt, a.idleRelax || 0, false); }
     }
     const versus = this.mode && !this.mode.usesWaves;
     // pausing only freezes the sim in campaign; a versus match keeps running
@@ -1127,7 +1127,8 @@ export class Game {
 
   updateCamera(dt) {
     const zoom = this.input.camZoom, yaw = this.input.camYaw, pitch = this.input.camPitch;
-    const horiz = 14.5 * zoom, up = 19 * zoom * pitch;
+    // default elevation ~43° (was ~53° overhead — owner feedback); pitch 20°-57°
+    const horiz = 15 * zoom, up = 14 * zoom * pitch;
     if (this.state === "menu") {
       const aspect = this.camera.aspect || 1.6;
       const back = 7.4 * Math.min(2.3, Math.max(1, 1.5 / Math.max(0.55, aspect)));

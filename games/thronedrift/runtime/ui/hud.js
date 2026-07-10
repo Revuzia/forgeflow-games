@@ -265,8 +265,8 @@ export class HUD {
       return `
       <div class="cf-card" data-arena="${i}" data-locked="${locked}" style="${frameCss}width:172px;padding:16px 12px;text-align:center;${locked ? "opacity:.45;filter:grayscale(.7)" : ""}">
         <div style="font-size:13px;color:#8a7aa8">REALM ${a.order}</div>
-        <div style="width:74px;height:74px;margin:10px auto;border-radius:50%;border:3px solid ${col};
-          background:radial-gradient(circle at 38% 32%, ${col}55, #120a1e 70%);box-shadow:0 0 16px ${col}88"></div>
+        <div style="width:120px;height:86px;margin:10px auto;border-radius:12px;border:2px solid ${col};
+          background:url(assets/ui/realm_${a.order}.jpg?v=6) center/cover no-repeat;box-shadow:0 0 16px ${col}88"></div>
         <div style="font-size:17px;font-weight:900;color:${col}">${a.name}</div>
         <div style="font-size:11px;color:#cbbfe0;min-height:42px;margin-top:5px">${locked ? "🔒 Conquer the previous realm" : a.tagline}</div>
         <div style="font-size:11px;color:#8a7aa8;margin-top:6px">${a.waves} waves</div>
@@ -630,6 +630,18 @@ export class HUD {
       return { cd, cdTxt, btn };
     };
     for (let i = 0; i < kit.abilities.length; i++) this._btns.push(mkBtn(kit.abilities[i], i, false));
+    // SHIFT movement skill — small chip up-left of the cluster
+    const dashIcon = cls.name === "Warrior" ? "⤞" : cls.name === "Archer" ? "↷" : "✦";
+    const dwrap = el("div", `position:absolute;right:176px;bottom:44px;width:48px;height:48px;`);
+    const dbtn = el("div", `position:absolute;inset:0;border-radius:50%;${frameCss}display:flex;align-items:center;justify-content:center;font-size:20px;border-color:${cls.uiColor};`, dashIcon);
+    dbtn.className = "cf-btn";
+    const dcd = el("div", `position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(8,4,14,.85) 0turn, transparent 0turn);pointer-events:none;`);
+    const dtxt = el("div", `position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;text-shadow:0 0 6px #000;pointer-events:none;opacity:0`);
+    const dkey = el("div", `position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);background:#241436;border:1.5px solid ${GOLD};border-radius:6px;font-size:8px;font-weight:800;color:${GOLD};padding:1px 4px;pointer-events:none`, "SHIFT");
+    dwrap.append(dbtn, dcd, dtxt, dkey);
+    dbtn.onpointerdown = (e) => { e.preventDefault(); this.input.touchDash(); };
+    this.elAbil.appendChild(dwrap);
+    this._btns.push({ cd: dcd, cdTxt: dtxt, btn: dbtn });
     this._basicBtn = mkBtn(kit.basic, -1, true);
     // weapon-mode toggle: bottom-LEFT, by the movement thumb (warrior only)
     if (modeCount > 1) {
@@ -674,7 +686,7 @@ export class HUD {
       this._heartFills = [];
       for (let i = 0; i < max; i++) {
         const wrap = document.createElement("span");
-        wrap.style.cssText = "position:relative;display:inline-block;width:22px";
+        wrap.style.cssText = "position:relative;display:inline-block;width:1.3em;overflow:visible";
         wrap.innerHTML = `<span style="filter:grayscale(1) brightness(.35)">❤️</span>`;
         const fill = document.createElement("span");
         fill.style.cssText = "position:absolute;left:0;top:0;overflow:hidden;width:100%;white-space:nowrap;transition:width .45s ease";

@@ -30,6 +30,7 @@ export class Input {
       if (e.code === "Digit3" || e.code === "KeyO") this._press(2, true);
       if (e.code === "Tab" || e.code === "KeyF") this._toggleEdge = true;
       if (e.code === "Escape" || e.code === "KeyP") this._pauseEdge = true;
+      if (e.code === "ShiftLeft" || e.code === "ShiftRight") this._dashEdge = true;
     });
     window.addEventListener("keyup", (e) => {
       this.keys.delete(e.code);
@@ -45,7 +46,7 @@ export class Input {
     canvas.addEventListener("contextmenu", (e) => e.preventDefault()); // right-drag orbits
     canvas.addEventListener("wheel", (e) => {
       e.preventDefault();
-      this.camZoom = Math.min(1.6, Math.max(0.55, this.camZoom * (1 + e.deltaY * 0.0011)));
+      this.camZoom = Math.min(1.9, Math.max(0.5, this.camZoom * (1 + e.deltaY * 0.0011)));
     }, { passive: false });
     canvas.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "touch") {
@@ -73,7 +74,7 @@ export class Input {
       }
       if (this._rightDrag) {
         this.camYaw += (e.clientX - this._rightDrag.x) * 0.006;
-        this.camPitch = Math.min(1.35, Math.max(0.6, this.camPitch + (e.clientY - this._rightDrag.y) * 0.004)); // drag DOWN looks down (owner: was inverted)
+        this.camPitch = Math.min(1.6, Math.max(0.45, this.camPitch + (e.clientY - this._rightDrag.y) * 0.004)); // drag DOWN looks down; wide range for full angle control
         this._rightDrag = { x: e.clientX, y: e.clientY };
         return;
       }
@@ -121,6 +122,8 @@ export class Input {
   // edge-triggered reads (consume)
   abilityPressed(i) { const v = this._abilityEdges[i]; this._abilityEdges[i] = false; return v; }
   togglePressed() { const v = this._toggleEdge; this._toggleEdge = false; return v; }
+  dashPressed() { const v = this._dashEdge; this._dashEdge = false; return v; }
+  touchDash() { if (this.enabled) this._dashEdge = true; }
   pausePressed() { const v = this._pauseEdge; this._pauseEdge = false; return v; }
   clearEdges() { this._abilityEdges = [false, false, false]; this._toggleEdge = false; this._pauseEdge = false; }
 }

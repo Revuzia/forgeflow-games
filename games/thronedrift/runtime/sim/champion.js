@@ -5,7 +5,7 @@
 
 import * as THREE from "three";
 import { BOARD_RADIUS } from "../data/arenas.js";
-import { CLASSES, COMBO_TIERS, COMBO_WINDOW } from "../data/abilities.js";
+import { CLASSES, COMBO_TIERS, COMBO_WINDOW, DASHES } from "../data/abilities.js";
 import { Actor, makeGreatblade, makeSword, makeShield, makeBow, makeStaff, makeArrow, makeSpinTrail, normalizeShaftProp } from "../view/chars.js";
 import { SFX } from "../core/audio.js";
 import { clamp, rand, angleLerp, damp, dist2 } from "../core/util.js";
@@ -42,6 +42,8 @@ export class Champion {
     this.knockX = 0; this.knockZ = 0;
     this.statusFxT = 0;
     this.kills = 0; this.deaths = 0; this.dmgDealt = 0;
+    this.dashDef = DASHES[classId];
+    this.dashCd = 0; this.dashing = null;   // {t, vx, vz, def}
 
     // actors — warrior gets one per weapon mode
     this.group = new THREE.Group();
@@ -68,7 +70,10 @@ export class Champion {
 
   _equip(actor, model) {
     const g = this.game;
-    if (model === "barbarian") actor.attachWeapon(makeGreatblade(), "Right", { gripFrac: 0.13, palm: 0.13, rest: [0.10, 0.95, 0.30] });
+    if (model === "barbarian") {
+      actor.attachWeapon(makeGreatblade(), "Right", { gripFrac: 0.13, palm: 0.13, rest: [0.10, 0.95, 0.30] });
+      actor.idleRelax = 0.85;   // his authored idle is arms-out; others stand naturally
+    }
     else if (model === "knight") {
       actor.attachWeapon(makeSword(), "Right", { gripFrac: 0.14, palm: 0.12, rest: [0.15, 0.62, 0.77] });
       actor.attachShield(makeShield());
@@ -303,6 +308,47 @@ export class Champion {
     }
   }
 
+  castDash() {
+    const g = this.game, d = this.dashDef;
+    if (!d || this.dashCd > 0 || this.spin || this.dashing) return;
+    this.dashCd = d.cd;
+    const dx = Math.cos(this.facing), dz = Math.sin(this.facing);
+    if (d.callout && this.isLocal) g.hud.callout(d.callout, this.cls.uiColor);
+    if (d.type === "blink") {
+      g.fx.burst(this.x, 1.2, this.z, { count: 22, color: this.cls.color, color2: 0xffffff, speed: 3, up: 2, life: 0.45 });
+      this.x += dx * d.dist; this.z += dz * d.dist;
+      const dc = Math.hypot(this.x, this.z);
+      if (dc > BOARD_RADIUS - 0.5) { this.x *= (BOARD_RADIUS - 0.5) / dc; this.z *= (BOARD_RADIUS - 0.5) / dc; }
+      this.iframeT = Math.max(this.iframeT, 0.3);
+      g.fx.burst(this.x, 1.2, this.z, { count: 22, color: this.cls.color, color2: 0xffffff, speed: 3, up: 2, life: 0.45 });
+      SFX.play("ward");
+      return;
+    }
+    this.dashing = { t: d.dur, vx: dx * d.dist / d.dur, vz: dz * d.dist / d.dur, def: d };
+    if (d.type === "roll") { this.iframeT = Math.max(this.iframeT, d.dur + 0.2); this.actor.play("Run", { timeScale: 2 }); }
+    else this.actor.playOnce(this.actor.actions["C_finisher"] ? "C_finisher" : "C_slash1", { timeScale: 2.4 });
+    SFX.play(d.type === "lunge" ? "swing_big" : "swing");
+  }
+
+  _updateDash(dt) {
+    const g = this.game, ds = this.dashing;
+    ds.t -= dt;
+    this.x += ds.vx * dt; this.z += ds.vz * dt;
+    const dc = Math.hypot(this.x, this.z);
+    if (dc > BOARD_RADIUS) { this.x *= BOARD_RADIUS / dc; this.z *= BOARD_RADIUS / dc; ds.t = 0; }
+    g.fx.burst(this.x, 0.4, this.z, { count: 2, color: this.cls.color, speed: 1, up: 0.6, life: 0.25 });
+    if (ds.t <= 0) {
+      if (ds.def.type === "lunge") {
+        g.spawnSwipe(this, 0xff5a3a, 2.4, 2.0);
+        for (const t of g.hostilesInLine(this, this.facing, ds.def.dist * 0.7, 1.8))
+          g.applyDamage(t, ds.def.dmg, { heavy: true, knockback: 2 }, this);
+        if (this.isLocal) g.addShake(0.3);
+        SFX.play("hit_heavy");
+      }
+      this.dashing = null;
+    }
+  }
+
   startBlock(def, slot) {
     const key = this.modeKey();
     if (this.cds[key][slot] > 0 || this.block.active) return;
@@ -437,6 +483,11 @@ export class Champion {
     const live = g.roundLive !== false;
     ctrl.update && ctrl.update(dt, this, g);
 
+    // dash cooldown + active dash
+    if (this.dashCd > 0) this.dashCd -= dt;
+    if (this.dashing) this._updateDash(dt);
+    else if (live && !shocked && ctrl.dashPressed()) this.castDash();
+
     // mode toggle
     if (live && !shocked && ctrl.togglePressed()) {
       if (this.modeKeys.length > 1 && !this.spin) {
@@ -463,10 +514,13 @@ export class Champion {
       if (ctrl.basicHeld && this.basicT <= 0 && !this.spin && !this.block.active) this.fireBasic();
     }
 
-    // movement
-    const mv = live && !shocked ? ctrl.moveVec() : { x: 0, z: 0, mag: 0 };
+    // movement (a kinetic dash overrides steering)
+    const mv = live && !shocked && !this.dashing ? ctrl.moveVec() : { x: 0, z: 0, mag: 0 };
     const frostMult = st.frost > 0 ? 0.55 : 1;
-    const spd = this.cls.speed * frostMult * (this.block.active ? 0.45 : 1) * (this.attackAnimT > 0 && this.classId !== "archer" ? 0.55 : 1);
+    // melee slows less than before while swinging; ranged barely slows —
+    // this was why archers FELT far faster than warriors
+    const atkSlow = this.attackAnimT > 0 ? (this.kit().basic.type === "melee" ? 0.7 : 0.85) : 1;
+    const spd = this.cls.speed * frostMult * (this.block.active ? 0.45 : 1) * atkSlow;
     this.x += mv.x * spd * dt + this.knockX * dt;
     this.z += mv.z * spd * dt + this.knockZ * dt;
     this.knockX *= Math.exp(-6 * dt); this.knockZ *= Math.exp(-6 * dt);
@@ -509,7 +563,9 @@ export class Champion {
     }
     actor.update(shocked ? dt * 0.08 : dt);
     const moving = mv.mag > 0.05;
-    const relaxTarget = (this.attackAnimT > 0 || this.spin || this.block.active || !moving) ? 0 : 1;
+    // barbarian's authored idle flares the arms — he alone relaxes at rest too
+    const idleRelax = actor.idleRelax || 0;
+    const relaxTarget = (this.attackAnimT > 0 || this.spin || this.block.active || this.dashing) ? 0 : (moving ? 1 : idleRelax);
     actor.updateRelax(dt, relaxTarget, moving, mv.mag > 0.55);
 
     this.group.position.set(this.x, 0, this.z);
@@ -538,7 +594,9 @@ export class Champion {
     for (let i = 0; i < 3; i++) if (cds[i] > 0) cds[i] -= dt;
     if (this.isLocal) {
       const defs = this.kit().abilities;
-      g.hud.setCooldowns(defs.map((d, i) => ({ frac: d ? clamp(cds[i] / d.cd, 0, 1) : 0, secs: Math.max(0, cds[i]) })));
+      const list = defs.map((d, i) => ({ frac: d ? clamp(cds[i] / d.cd, 0, 1) : 0, secs: Math.max(0, cds[i]) }));
+      if (this.dashDef) list.push({ frac: clamp(this.dashCd / this.dashDef.cd, 0, 1), secs: Math.max(0, this.dashCd) });
+      g.hud.setCooldowns(list);
     }
   }
 

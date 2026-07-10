@@ -1,5 +1,21 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v1.1 — 2026-07-10 (SHIFT skills + polish batch)
+- SHIFT MOVEMENT SKILLS: Warrior LUNGE (dash + blade drag damage), Mage BLINK
+  (teleport along facing, brief iframes), Archer ROLL (dodge with iframes).
+  Own cooldown chip in the HUD cluster; bots use them (close gaps / escape)
+- Real SFX (Kenney CC0): death = heavy punch impact, defeat = deep bell toll,
+  hurt = body hit — the synth chimes read as OS sounds
+- Speeds rebalanced: warrior 5.9 / mage 6.1 / archer 6.3, and melee attack
+  slow eased 0.55→0.7 (this was why archers FELT far faster)
+- Barbarian: idle arm-relax (his authored idle is the arms-out one)
+- Mage staff surgery v6: banded-radius selection — the A-pose arm no longer
+  gets dragged along (the "meshed" plank); staff clean in hand
+- Hearts HUD: glyph-width fix — no more clipped hearts
+- Camera: default elevation lowered ~53°→43°, pitch range widened (20°-57°),
+  zoom range widened
+- Arena select: xAI-generated realm card art (5 images, assets/ui/)
+
 ## v1.0 — 2026-07-10 (VERSUS: PVP arenas + the Champion engine)
 - CHAMPION ENGINE: all fighters (you, bots, future online players) are Champion
   entities running the identical data-driven kits via a controller interface

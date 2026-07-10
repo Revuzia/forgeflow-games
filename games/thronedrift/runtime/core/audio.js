@@ -69,8 +69,30 @@ const cues = {
   game_over: () => [392, 349, 311, 261].forEach((f, i) => tone({ freq: f, type: "sawtooth", dur: 0.4, vol: 0.2, delay: i * 0.22 })),
 };
 
+// real recorded samples (Kenney CC0) override procedural cues for these —
+// the synth "death"/"game_over" read as OS chimes (owner feedback)
+const SAMPLES = {
+  death: "assets/audio/sfx_death.ogg",
+  game_over: "assets/audio/sfx_defeat.ogg",
+  hurt: "assets/audio/sfx_hurt.ogg",
+};
+const samplePool = {};
+function playSample(name) {
+  let arr = samplePool[name];
+  if (!arr) arr = samplePool[name] = [0, 1, 2].map(() => { const a = new Audio(SAMPLES[name]); a.preload = "auto"; return a; });
+  const el = arr.find((a) => a.paused) || arr[0];
+  el.volume = Math.min(1, desiredVol * 1.4);
+  el.currentTime = 0;
+  el.play().catch(() => {});
+}
+
 export const SFX = {
-  play(name) { try { (cues[name] || (() => {}))(); } catch (e) { /* audio blocked pre-gesture; ignore */ } },
+  play(name) {
+    try {
+      if (SAMPLES[name]) { playSample(name); return; }
+      (cues[name] || (() => {}))();
+    } catch (e) { /* audio blocked pre-gesture; ignore */ }
+  },
   unlock() { try { ensure(); } catch (e) {} },
   setVolume(v) { desiredVol = Math.max(0, Math.min(1, v)); if (master) master.gain.value = desiredVol; },
   getVolume() { return desiredVol; },
