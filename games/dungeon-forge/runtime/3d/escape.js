@@ -42,6 +42,7 @@ const WEAPON_CFG = {
 const CLEAN_RIGS = new Set(["knight", "barbarian", "sorceress", "rogue"]);
 const _wq = new THREE.Quaternion(), _wq2 = new THREE.Quaternion(), _wv = new THREE.Vector3(), _wy = new THREE.Vector3(0, 1, 0), _wz = new THREE.Vector3(0, 0, 1);
 const _wp = new THREE.Vector3(), _wsc = new THREE.Vector3();
+const _cutP = new THREE.Vector3(), _cutQ = new THREE.Quaternion(), _cutS = new THREE.Vector3(), _cutM = new THREE.Matrix4();
 /** Scale a holder to cancel a bone's ACTUAL world scale (Meshy armatures bind
  *  bones at ~0.01 and rigScale does not match it — measure it directly). */
 function boneCounterScale(bone) { bone.matrixWorld.decompose(_wp, _wq, _wsc); return 1 / Math.max(1e-5, _wsc.x); }
@@ -146,6 +147,7 @@ export class Escape {
     const segs = D.wallSegments(this.d, f);
     const wInst = makeInstanced(this.kit.wall.scene, Math.max(1, segs.length));
     const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), pos = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+    const segData = [];
     segs.forEach((s, i) => {
       const dir = D.DIRS[s.side];
       pos.set(s.x * CELL + CELL / 2 + dir.dx * (CELL / 2 - 0.12), 0, s.z * CELL + CELL / 2 + dir.dz * (CELL / 2 - 0.12));
@@ -153,9 +155,14 @@ export class Escape {
       q.setFromAxisAngle(up, yaw);
       m4.compose(pos, q, one);
       wInst.setMatrixAt(i, m4);
+      segData.push({ wx: pos.x, wz: pos.z, yaw });
     });
     wInst.setCount(segs.length); wInst.commit();
     group.add(wInst.group);
+    // wall CUTAWAY state: walls between the chase cam and the player lower
+    // themselves (like the builder's low walls) so they never block the view
+    this.wallSets = this.wallSets || [];
+    this.wallSets[f] = { inst: wInst, segs: segData, cur: new Float32Array(segData.length).fill(1) };
 
     // ceiling for escape mode (floor tiles of the level above OR a dark plane) — skip: fog + darkness read as ceiling
 
@@ -501,6 +508,42 @@ export class Escape {
     _wq2.setFromUnitVectors(_wy, _wv);                // world quat mapping +Y → rest dir
     holder.quaternion.copy(_wq.invert().multiply(_wq2)); // → hand-bone local, follows animation
     return holder;
+  }
+
+  /** Lower every wall segment sitting between the chase camera and the player
+   *  (project each wall onto the camera→player line in XZ; near + between →
+   *  sink toward 0.14 height, else grow back to 1). Writes only instances whose
+   *  scale is actually changing, so the steady-state cost is ~zero. */
+  _wallCutaway(dt) {
+    const me = this.me();
+    if (!me || this.fp) return;                      // first-person needs no cutaway
+    const ws = this.wallSets && this.wallSets[me.f];
+    if (!ws || !ws.segs.length) return;
+    const cam = this.g.camera.position;
+    const dx = me.x - cam.x, dz = me.z - cam.z;
+    const len2 = dx * dx + dz * dz || 1;
+    let dirty = false;
+    for (let i = 0; i < ws.segs.length; i++) {
+      const s = ws.segs[i];
+      const t = ((s.wx - cam.x) * dx + (s.wz - cam.z) * dz) / len2;
+      let target = 1;
+      if (t > 0.04 && t < 0.94) {
+        const qx = cam.x + dx * t, qz = cam.z + dz * t;
+        const ddx = s.wx - qx, ddz = s.wz - qz;
+        if (ddx * ddx + ddz * ddz < 2.6 * 2.6) target = 0.14;
+      }
+      const cur = ws.cur[i];
+      if (Math.abs(target - cur) < 0.004) continue;
+      const nv = cur + (target - cur) * Math.min(1, dt * 9);
+      ws.cur[i] = nv;
+      _cutP.set(s.wx, 0, s.wz);
+      _cutQ.setFromAxisAngle(_wy, s.yaw);
+      _cutS.set(1, nv, 1);
+      _cutM.compose(_cutP, _cutQ, _cutS);
+      ws.inst.setMatrixAt(i, _cutM);
+      dirty = true;
+    }
+    if (dirty) ws.inst.commit();
   }
 
   _nameTag(name) {
@@ -1179,6 +1222,9 @@ export class Escape {
       const bm = this.objMeshes.get(b.src);
       if (bm) { bm.position.x = b.x; bm.position.z = b.z; }
     }
+
+    // wall cutaway: any wall between the camera and the player sinks down
+    this._wallCutaway(dt);
 
     // door mixers
     for (const [, dl] of this.doorLeafs) if (dl.mixer) dl.mixer.update(dt);

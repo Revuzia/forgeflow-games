@@ -344,6 +344,15 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.8.4 — 2026-07-10 (wall cutaway)
+- **Walls now come down as you walk** (owner request): every wall segment sitting
+  between the chase camera and the player smoothly sinks to 14% height (the
+  builder's low-wall look) and grows back the moment it stops occluding. Pure
+  per-instance matrix writes — only transitioning walls are touched per frame,
+  steady-state cost ~zero. Skipped in first-person.
+- Verified live: player behind a wall row → exactly the 4 occluding segments
+  sank to 0.14 (46 others untouched); camera beside the player → all recovered.
+
 ## v1.8.3 — 2026-07-10 (swimming + lava swimming)
 - **Water is swum, not walked on**: entering water sinks the body to chest depth
   (-0.78u, was an ankle wade), with a gentle swim bob, a forward lean while
