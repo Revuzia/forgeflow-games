@@ -86,6 +86,14 @@ const CSS = `
 .pack-btn:hover{transform:translateY(-2px);box-shadow:0 9px 26px rgba(150,90,240,.55),inset 0 1px 0 rgba(255,255,255,.22)}
 .pack-btn:active{transform:translateY(0)}
 .pack-btn.aether{background:linear-gradient(135deg,#e0b64a,#8a3fd4 56%,#2a1a52)}
+.pack-grid{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:16px}
+.pack-tile{flex:1 1 260px;max-width:300px;background:linear-gradient(180deg,#1f1740,#150f28);border:1px solid #4a3a78;border-radius:16px;padding:20px 18px 18px;display:flex;flex-direction:column;align-items:center;transition:border-color .15s,transform .15s}
+.pack-tile:hover{border-color:#ffd45f;transform:translateY(-3px)}
+.pack-tile.aether{border-color:#8a5cc0;background:linear-gradient(180deg,#2a1f48,#170f2c)}
+.pack-tile-ico{width:56px;height:66px;filter:drop-shadow(0 3px 8px rgba(0,0,0,.55))}
+.pack-tile-name{font-family:Georgia,serif;font-size:20px;font-weight:700;color:#f4eeff;margin-top:8px}
+.pack-tile-tag{font-family:'Courier New',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#ffd45f;margin-top:3px}
+.pack-tile-desc{font-size:13px;color:#b9a9df;line-height:1.5;margin-top:10px;flex:1}
 .cb-sec{font-family:'Segoe UI',system-ui,sans-serif;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#8d78b8;margin:16px 0 2px;font-weight:800}
 .pack-btn:disabled{filter:grayscale(.6) brightness(.7);cursor:default;transform:none;box-shadow:0 4px 16px rgba(0,0,0,.3)}
 .pack-btn .pack-ico{width:30px;height:36px;flex:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
@@ -477,25 +485,59 @@ export class CampaignUI {
     ui.root.append(wrap);
   }
 
-  // gold + pack purchase strip for the Collection screen
+  // gold + a single "Open Packs" entry point for the Collection screen
   collectionStrip() {
     const ui = this.ui;
     const d = this.store.data;
     const strip = ui.el('div');
-    strip.style.cssText = 'display:flex;gap:10px;align-items:center';
-    strip.style.flexWrap = 'wrap';
+    strip.style.cssText = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap';
     const gold = ui.el('div', 'goldchip', `🪙 ${d.gold}`);
     this._goldEl = gold;
-    const mkPack = (label, which, sub, cls) => {
-      const buy = ui.el('button', 'pack-btn' + (cls ? ' ' + cls : ''));
-      buy.innerHTML = `<span class="pack-ico">${PACK_SVG}</span><span class="pack-lbl">${label}<b>${sub}</b></span>`;
-      buy.onclick = () => this.openPack(which);
-      return buy;
-    };
-    strip.append(gold,
-      mkPack('Arcane Pack', 'arcane', `${PACK_COST} GOLD`),
-      mkPack('Aetherbound Pack', 'aetherbound', `${PACK_COST}g · DUALS`, 'aether'));
+    const buy = ui.el('button', 'pack-btn');
+    buy.innerHTML = `<span class="pack-ico">${PACK_SVG}</span><span class="pack-lbl">Open Packs<b>ARCANE · AETHERBOUND</b></span>`;
+    buy.onclick = () => this.openPackChooser();
+    strip.append(gold, buy);
     return strip;
+  }
+
+  // choose which pack to buy — each with its own art + info
+  openPackChooser() {
+    const ui = this.ui;
+    const d = this.store.data;
+    const wrap = ui.el('div', 'modal-wrap');
+    wrap.style.zIndex = 210;
+    const m = ui.el('div', 'modal');
+    m.style.cssText = 'max-width:min(94vw,700px);text-align:center';
+    const head = ui.el('div');
+    head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap';
+    const goldChip = ui.el('div', 'goldchip', `🪙 ${d.gold}`);
+    head.append(ui.el('h3', null, '📦 OPEN A PACK'), goldChip);
+    m.append(head, ui.el('div', 'hint', `Each pack contains 5 cards for ${PACK_COST} gold, weighted toward cards you don’t own yet. Pick a set to open.`));
+    const grid = ui.el('div', 'pack-grid');
+    const PACKS = [
+      { which: 'arcane', name: 'Arcane Pack', tag: 'The Founding Set', cls: '', desc: 'Cards across the five realms — Emberforge, Tidecall, Wildgrove, Dawnward &amp; Gravemire.' },
+      { which: 'aetherbound', name: 'Aetherbound Pack', tag: 'The Ten Pacts', cls: 'aether', desc: '60 dual-realm cards that fuse two elements each — plus a chance at <b style="color:#ffe9a8">✦ golden</b> foils.' },
+    ];
+    for (const p of PACKS) {
+      const tile = ui.el('div', 'pack-tile' + (p.cls ? ' ' + p.cls : ''));
+      tile.innerHTML = `<div class="pack-tile-ico">${PACK_SVG}</div>` +
+        `<div class="pack-tile-name">${p.name}</div>` +
+        `<div class="pack-tile-tag">${p.tag}</div>` +
+        `<div class="pack-tile-desc">${p.desc}</div>`;
+      const buy = ui.el('button', 'btn primary', `Open · ${PACK_COST} 🪙`);
+      buy.style.cssText = 'margin-top:12px;width:100%';
+      buy.onclick = () => { wrap.remove(); this.openPack(p.which); };
+      tile.append(buy);
+      grid.append(tile);
+    }
+    m.append(grid);
+    const close = ui.el('button', 'btn small', 'Close');
+    close.style.cssText = 'display:block;margin:14px auto 0';
+    close.onclick = () => wrap.remove();
+    m.append(close);
+    wrap.append(m);
+    wrap.onclick = (e) => { if (e.target === wrap) wrap.remove(); };
+    ui.root.append(wrap);
   }
 
   openPack(which) {
@@ -515,7 +557,6 @@ export class CampaignUI {
       openPackReveal(res.cards, {
         onDone: done,
         cardbackFile: (CARDBACK_INFO[d.cardback] || CARDBACK_INFO.default).file,
-        backdrop: which === 'aetherbound' ? 'assets/ui/pack_bg.jpg' : 'assets/ui/pack_bg.jpg',
         shake: st.shake !== false,
         particles: st.particles !== false,
       });

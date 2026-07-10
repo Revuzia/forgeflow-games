@@ -889,7 +889,12 @@ export class UI {
   openCollection() {
     const s = this.root.querySelector('#scr-collection');
     s.innerHTML = '';
+    // atmospheric backdrop, same as the menu (content sits above via z-index)
+    const bg = this.el('div', 'menu-bg'); bg.style.cssText = 'background-image:url(assets/ui/menu_bg.jpg);z-index:0';
+    const veil = this.el('div', 'menu-veil'); veil.style.zIndex = '0';
+    s.append(bg, veil);
     const top = this.el('div', 'topbar');
+    top.style.cssText = 'position:relative;z-index:2';
     const back = this.el('button', 'btn small', '← Menu');
     back.onclick = () => { Audio2.sfx('click'); this.show('menu'); };
     const title = this.collectionTitle ? this.collectionTitle() : `COLLECTION — ${COLLECTIBLE.length} CARDS`;
@@ -897,6 +902,7 @@ export class UI {
     if (this.campaignStrip) top.append(this.campaignStrip());
     top.append(back);
     const col = this.el('div', 'col-side');
+    col.style.cssText = 'position:relative;z-index:1';
     this.working = null;
     this.filterState = { search: '', realm: null, cost: null, type: null, rarity: null };
     this.buildFilters(col, () => this.renderGrid());
@@ -1405,6 +1411,7 @@ export class UI {
   border:1px solid rgba(255,212,95,.28);border-radius:14px;padding:13px 18px;color:#efe6ff;font-size:14px;line-height:1.55}
 .xp-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:20px}
 .xp-cta .btn{min-width:180px}
+@media (max-width:620px){.xp-feat{flex:1 1 100%;max-width:none}.xp-c{width:112px}.xp-slot{margin:0 -16px}}
 @media (prefers-reduced-motion:reduce){#xp-panel,.xp-logo,.xp-slot{animation:none}}`;
       document.head.appendChild(st);
     }
@@ -1434,7 +1441,7 @@ export class UI {
         <div class="xp-feat"><div class="i">✦</div><h4>Golden Foils</h4><p>Any card can turn up golden — a shimmering animated version to chase and collect.</p></div>
         <div class="xp-feat"><div class="i">🂠</div><h4>New Deck Backs</h4><p>Fresh cosmetic card backs to buy and show off on your deck in every match.</p></div>
       </div>
-      <div class="xp-how">🪙 Open <b>Aetherbound Packs</b> (100 gold each) in your Collection to add these cards to your deck. <b>Use your gold to buy new cards</b> — earn it by playing the Campaign and selling cards you already own.</div>`;
+      <div class="xp-how">🪙 Open <b>Aetherbound Packs</b> in your Collection to add these cards to your deck. <b>Use your gold to buy new cards</b> — earn it by playing the Campaign and selling cards you already own.</div>`;
     const cta = this.el('div', 'xp-cta');
     const dismiss = () => { this.store.aetherboundSeen = true; Store.save(); overlay.classList.remove('in'); setTimeout(() => overlay.remove(), 420); };
     const go = this.el('button', 'btn primary', '⚔  Open Packs');

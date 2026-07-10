@@ -846,8 +846,9 @@ section('aetherbound (dual-realm expansion)');
   ok(P.buyPack(econ, 'arcane').cards.every((c) => !EXPANSION2_IDS.has(c.id)), 'Arcane pack never rolls dual cards');
   ok(P.goldenSellValue('legendary') > P.sellValue('legendary'), 'golden cards sell for more than normal');
   let sawGolden = false, invOk = true;
-  for (let i = 0; i < 40; i++) { const r = P.buyPack(econ, 'aetherbound'); if (!r.ok) break; if (r.cards.some((c) => c.golden)) sawGolden = true; }
-  for (const id in econ.data.golden) if (econ.data.golden[id] > (econ.data.owned[id] || 0)) invOk = false;
+  const gstore = { data: { record: {} }, save() { /* noop */ } }; P.initProgress(gstore);
+  for (let i = 0; i < 60; i++) { const r = P.rollPack(gstore, 5, EXPANSION2_IDS); if (r.some((c) => c.golden)) sawGolden = true; } // 300 rolls — golden virtually certain
+  for (const id in gstore.data.golden) if (gstore.data.golden[id] > (gstore.data.owned[id] || 0)) invOk = false;
   ok(sawGolden, 'golden cards drop from packs');
   ok(invOk, 'golden copies never exceed total owned copies');
   // gold shop for card backs
