@@ -87,6 +87,8 @@ async function boot() {
   setProgress(1, 'Ready.');
   setTimeout(() => { splash.style.opacity = '0'; setTimeout(() => splash.remove(), 650); }, 250);
   requestAnimationFrame(tick);
+  // one-time "Aetherbound" expansion announcement, after the menu appears
+  if (!Store.data.aetherboundSeen) setTimeout(() => { try { ui.showExpansionAnnounce(); } catch (e) {} }, 1000);
 }
 
 function applySettings() {

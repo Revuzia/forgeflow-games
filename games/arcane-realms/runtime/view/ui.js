@@ -1366,6 +1366,42 @@ export class UI {
     this.root.append(wrap);
   }
 
+  // one-time "new expansion" announcement, shown on first load after the drop
+  showExpansionAnnounce() {
+    const wrap = this.el('div', 'modal-wrap');
+    wrap.style.zIndex = 220;
+    const m = this.el('div', 'modal');
+    m.style.cssText = 'max-width:min(94vw,560px);text-align:center;overflow:hidden;border:1px solid #6b4d9c;' +
+      'background:linear-gradient(180deg,#241a44,#150f26)';
+    // the ten realm-pair seals (ember/tide/grove/dawn/grave)
+    const R = { e: '#e8542f', t: '#2f7fe8', g: '#3fae52', d: '#e8b93a', v: '#8a3fd4' };
+    const PAIRS = [['e', 't'], ['e', 'g'], ['e', 'd'], ['e', 'v'], ['t', 'g'], ['t', 'd'], ['t', 'v'], ['g', 'd'], ['g', 'v'], ['d', 'v']];
+    const seals = PAIRS.map(([a, b]) => `<span style="display:inline-block;width:26px;height:26px;border-radius:50%;margin:2px 3px;background:linear-gradient(120deg,${R[a]} 0 50%,${R[b]} 50% 100%);box-shadow:0 0 0 1.5px rgba(255,255,255,.22),0 2px 6px rgba(0,0,0,.5)"></span>`).join('');
+    m.innerHTML = `
+      <div style="font-family:var(--mono,'Courier New',monospace);font-size:12px;letter-spacing:.34em;color:#ffd45f;text-transform:uppercase">✦ New Expansion ✦</div>
+      <h2 style="margin:8px 0 0;font-size:clamp(34px,7vw,52px);letter-spacing:.05em;font-weight:800;
+        background:linear-gradient(180deg,#fff3c9,#f0b93a 60%,#8a5a13);-webkit-background-clip:text;background-clip:text;color:transparent">AETHERBOUND</h2>
+      <div style="font-style:italic;font-size:19px;color:#d8ccf2;margin-top:2px">The Ten Pacts</div>
+      <div style="margin:16px 0 4px;line-height:1">${seals}</div>
+      <p style="color:#c4b4e4;font-size:15px;line-height:1.6;margin:16px auto 0;max-width:46ch">
+        <b style="color:#efe9fb">60 new dual-realm cards.</b> Where two elements meet — fire &amp; frost, life &amp; death — they fuse into ten Pacts. Each card belongs to <b>two</b> realms, and is playable only in a deck that commits to both.</p>
+      <p style="color:#c4b4e4;font-size:15px;line-height:1.6;margin:10px auto 0;max-width:46ch">
+        Chase <b style="color:#ffd45f">✦&nbsp;golden</b> foil versions of any card, and spend surplus gold on new deck backs in the shop.</p>
+      <div style="margin:16px auto 0;max-width:46ch;background:rgba(255,212,95,.09);border:1px solid #6b4d12;border-radius:12px;padding:12px 16px;color:#ffe9a8;font-size:14px;line-height:1.5">
+        🪙 <b>Gold only — never real money.</b> Open <b>Aetherbound Packs</b> (100 gold) in your Collection. Earn gold from the Campaign and by selling duplicate cards.</div>`;
+    const row = this.el('div');
+    row.style.cssText = 'display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:20px';
+    const dismiss = () => { this.store.aetherboundSeen = true; Store.save(); wrap.remove(); };
+    const go = this.el('button', 'btn primary', 'Open the Collection');
+    go.onclick = () => { Audio2.sfx('legendary'); dismiss(); this.openCollection(); };
+    const later = this.el('button', 'btn small', 'Later');
+    later.onclick = () => { Audio2.sfx('click'); dismiss(); };
+    row.append(go, later);
+    m.append(row);
+    wrap.append(m);
+    this.root.append(wrap);
+  }
+
   matchSettings() {
     const wrap = this.el('div', 'modal-wrap');
     const m = this.el('div', 'modal');
