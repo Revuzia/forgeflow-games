@@ -1,5 +1,32 @@
 # Arcane Realms TCG — Changelog
 
+## v1.7.0 — 2026-07-10 (AETHERBOUND: THE TEN PACTS — 60-card dual-realm expansion)
+
+The first expansion. 177 → **237 cards**. Story: Aetherion's fusion cracked the
+aether, and along every seam where two elements met they bonded into ten Pacts.
+
+- **60 dual-realm cards** across all ten realm pairs (Ravnica-guild archetypes:
+  Izzet/Gruul/Boros/Rakdos/Simic/Azorius/Dimir/Selesnya/Golgari/Orzhov). Rarity
+  24C/13U/13R/5E/5L. A dual card belongs to **both** realms — playable only in a
+  deck that commits to both (the existing 2-realm rule does the rest).
+- **Engine**: an extended aura layer — read-time +Attack anthems (all / tribes),
+  keyword-grant auras (grant Lifesteal/Piercing; revert when the anthem dies), and
+  two new triggered auras: **Overcharge** (on your spell) + **deathwatch** (on a
+  friendly death). General **steal-corpse** op (reanimate from the enemy grave).
+- **Two-color card frames** — diagonal realm-blend body, dual borders, and a
+  "Realm A + Realm B" type line. Mono cards render exactly as before.
+- **Golden (foil) cards** — any card can drop golden from a pack (~1-in-5 packs;
+  4/4/6/8/10% by rarity; 20-pack pity). Baked foil + animated sheen in the
+  collection, a gold spectacle in the pack reveal, and a higher sell value.
+- **Aetherbound Pack** (100g) alongside the Arcane Pack — the only source of the
+  dual set + goldens. Duals are pack-only (excluded from the free base set).
+- **Card-back gold shop** — 10 new backs buyable with gold (300/800/1,500/3,000);
+  the original 8 stay earn-only. A pure soft-currency sink.
+- **10 Pact marquee 3D minis** (one legendary per pair) via Meshy, wired into
+  MINI_MAP for boss/custom/online 3D battles.
+- Selftest +18 (dual integrity, rarity split, all new mechanics, golden, both
+  packs, shop). **155/0**. Cache-bust `v=23` → `v=24`.
+
 ## v1.6.1 — 2026-07-09 (5-card packs + pack-opening backdrop)
 
 - **Packs now contain 5 cards** (`PACK_SIZE` 3 → 5). The reveal fan tightens its

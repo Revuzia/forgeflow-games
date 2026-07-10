@@ -1,5 +1,5 @@
 // Arcane Realms TCG — deck rules + the six prebuilt starter decks.
-import { CARDS, cardById } from './cards.js?v=23';
+import { CARDS, cardById, realmsOf } from './cards.js?v=24';
 
 export const DECK_SIZE = 30;
 export const MAX_COPIES = 2;
@@ -16,7 +16,7 @@ export function validateDeck(cardIds) {
     const c = CARDS[id];
     if (!c || c.rarity === 'token') { errors.push(`invalid card: ${id}`); continue; }
     counts[id] = (counts[id] || 0) + 1;
-    if (c.realm !== 'neutral') realms.add(c.realm);
+    for (const r of realmsOf(c)) if (r !== 'neutral') realms.add(r); // a dual card counts for BOTH realms
   }
   for (const [id, n] of Object.entries(counts)) {
     const c = CARDS[id];

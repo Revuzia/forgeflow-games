@@ -710,7 +710,7 @@ section('campaign & progression');
 {
   const { CHAPTERS, ACHIEVEMENTS, CARDBACK_INFO, allBattles } = await import('./runtime/campaign/campaign_data.js?v=13');
   const prog = await import('./runtime/campaign/progression.js?v=13');
-  const { EXPANSION_IDS } = await import('./runtime/sim/cards.js?v=13');
+  const { EXPANSION_IDS, EXPANSION2_IDS } = await import('./runtime/sim/cards.js?v=13');
 
   const battles = allBattles();
   ok(CHAPTERS.length === 6, '6 chapters');
@@ -740,21 +740,20 @@ section('campaign & progression');
   const fakeStore = { data: { record: { wins: 60, losses: 0 } }, save() { /* noop */ } };
   prog.initProgress(fakeStore);
   const baseOwned = Object.keys(fakeStore.data.owned).length;
-  ok(baseOwned === COLLECTIBLE.length - EXPANSION_IDS.size, `base set owned at start (${baseOwned})`);
+  ok(baseOwned === COLLECTIBLE.length - EXPANSION_IDS.size - EXPANSION2_IDS.size, `base set owned at start (${baseOwned})`);
   for (const b of battles) prog.grantBattleRewards(fakeStore, b);
   ok(Object.keys(fakeStore.data.battlesWon).length === 24, 'all battles recorded');
   ok(fakeStore.data.gold > 500, `campaign gold flows (${fakeStore.data.gold})`);
   const unlocked = prog.checkAchievements(fakeStore);
   ok(unlocked.length >= 6, `achievements fire on a full clear (${unlocked.length})`);
-  // buy packs until the collection completes (gold faucet for the test)
-  fakeStore.data.gold = 100000;
+  // buy BOTH packs until the collection completes (gold faucet for the test)
+  fakeStore.data.gold = 1000000;
   let guard = 0;
-  while (guard++ < 50) {
-    const r = prog.buyPack(fakeStore);
-    if (!r.ok) break;
-  }
+  while (guard++ < 80) { const r = prog.buyPack(fakeStore, 'arcane'); if (!r.ok) break; }
+  guard = 0;
+  while (guard++ < 80) { const r = prog.buyPack(fakeStore, 'aetherbound'); if (!r.ok) break; }
   ok(Object.keys(fakeStore.data.owned).length === COLLECTIBLE.length,
-    `full clear + achievements + packs = 100% collection (${Object.keys(fakeStore.data.owned).length}/${COLLECTIBLE.length})`);
+    `full clear + achievements + both packs = 100% collection (${Object.keys(fakeStore.data.owned).length}/${COLLECTIBLE.length})`);
   ok(Object.keys(fakeStore.data.cardbacks).length >= 7, `card backs earned (${Object.keys(fakeStore.data.cardbacks).length})`);
 
   // battle mods apply
@@ -831,6 +830,35 @@ section('aetherbound (dual-realm expansion)');
   { const s = mk(); s.players[0].mana = 9; const r = put(s, 0, 'dv05'); r.hp = 1; const a = put(s, 0, 'nt01'); applyAction(s, { type: 'play', iid: give(s, 0, 'nt01').iid, slot: 2 }); ok(hasKw(a, 'lifesteal'), 'keyword aura grants Lifesteal to others'); applyAction(s, { type: 'play', iid: give(s, 0, 'et02').iid, target: { kind: 'unit', iid: r.iid } }); ok(!hasKw(a, 'lifesteal'), 'keyword aura reverts when the anthem dies'); }
   // steal-corpse (rally, enemy grave): tv05 reanimates the enemy's fallen creature
   { const s = mk(); s.players[0].mana = 9; s.players[1].grave.push('nt01'); applyAction(s, { type: 'play', iid: give(s, 0, 'tv05').iid }); ok(s.players[0].board.some((u) => u.card === 'nt01') && !s.players[1].grave.includes('nt01'), 'steal-corpse pulls the enemy corpse onto your board'); }
+
+  // deck legality: a dual card counts for BOTH realms (et01 = ember+tide)
+  const realmErr = (ids) => validateDeck(ids).errors.some((e) => e.includes('realms'));
+  ok(!realmErr(['et01', 'ef01', 'tc02']), 'ember+tide dual is legal alongside mono-ember + mono-tide');
+  ok(realmErr(['et01', 'ef01', 'tc02', 'wg01']), 'adding a Grove card to an Ember/Tide deck is rejected (3 realms)');
+  ok(realmErr(['et01', 'ef01', 'wg01']), 'an Ember+Tide dual is illegal in an Ember/Grove shell');
+
+  // golden cards + second pack + card-back gold shop
+  const P = await import('./runtime/campaign/progression.js?v=13');
+  const { CARDBACK_INFO: CBI } = await import('./runtime/campaign/campaign_data.js?v=13');
+  const econ = { data: { record: {} }, save() { /* noop */ } };
+  P.initProgress(econ); econ.data.gold = 1000000;
+  ok(P.buyPack(econ, 'aetherbound').cards.every((c) => EXPANSION2_IDS.has(c.id)), 'Aetherbound pack rolls only dual cards');
+  ok(P.buyPack(econ, 'arcane').cards.every((c) => !EXPANSION2_IDS.has(c.id)), 'Arcane pack never rolls dual cards');
+  ok(P.goldenSellValue('legendary') > P.sellValue('legendary'), 'golden cards sell for more than normal');
+  let sawGolden = false, invOk = true;
+  for (let i = 0; i < 40; i++) { const r = P.buyPack(econ, 'aetherbound'); if (!r.ok) break; if (r.cards.some((c) => c.golden)) sawGolden = true; }
+  for (const id in econ.data.golden) if (econ.data.golden[id] > (econ.data.owned[id] || 0)) invOk = false;
+  ok(sawGolden, 'golden cards drop from packs');
+  ok(invOk, 'golden copies never exceed total owned copies');
+  // gold shop for card backs
+  const buyableId = Object.keys(CBI).find((id) => CBI[id].price);
+  ok(buyableId, 'the card-back gold shop has priced entries');
+  const g4 = { data: { record: {} }, save() { /* noop */ } }; P.initProgress(g4);
+  g4.data.gold = 50;
+  ok(!P.buyCardback(g4, buyableId).ok, 'cannot buy a card back without enough gold');
+  g4.data.gold = 100000;
+  ok(P.buyCardback(g4, buyableId).ok && g4.data.cardbacks[buyableId] && g4.data.gold === 100000 - CBI[buyableId].price, 'buying a card back deducts gold and grants it');
+  ok(!P.buyCardback(g4, buyableId).ok, 'cannot re-buy an owned card back');
 }
 
 // ───────────────────── 11. assets (optional gate) ─────────────────────

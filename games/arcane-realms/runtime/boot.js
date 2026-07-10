@@ -1,19 +1,19 @@
 // Arcane Realms TCG — boot: asset warmup, screen flow, main loop, debug hooks.
 import * as THREE from 'three';
-import { BoardScene } from './view/scene.js?v=23';
-import { UI, Store } from './view/ui.js?v=23';
-import { Match } from './view/match.js?v=23';
-import { Audio2 } from './view/audio.js?v=23';
-import { OnlineSession } from './view/online.js?v=23';
-import { preload, getCardBack } from './view/cardtex.js?v=23';
-import { STARTER_DECKS, validateDeck } from './sim/decks.js?v=23';
-import { COLLECTIBLE, cardById, TOKENS } from './sim/cards.js?v=23';
-import { createGame, legalActions, applyAction, makeUnit } from './sim/engine.js?v=23';
-import { chooseAction, runAiTurn } from './sim/ai.js?v=23';
-import { CampaignUI } from './view/campaign_ui.js?v=23';
-import { openPackReveal } from './view/packreveal.js?v=23';
-import { CARDBACK_INFO } from './campaign/campaign_data.js?v=23';
-import { initProgress, isOwned, ownedCount, copiesOf, sellCard, sellValue, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=23';
+import { BoardScene } from './view/scene.js?v=24';
+import { UI, Store } from './view/ui.js?v=24';
+import { Match } from './view/match.js?v=24';
+import { Audio2 } from './view/audio.js?v=24';
+import { OnlineSession } from './view/online.js?v=24';
+import { preload, getCardBack } from './view/cardtex.js?v=24';
+import { STARTER_DECKS, validateDeck } from './sim/decks.js?v=24';
+import { COLLECTIBLE, cardById, TOKENS } from './sim/cards.js?v=24';
+import { createGame, legalActions, applyAction, makeUnit } from './sim/engine.js?v=24';
+import { chooseAction, runAiTurn } from './sim/ai.js?v=24';
+import { CampaignUI } from './view/campaign_ui.js?v=24';
+import { openPackReveal } from './view/packreveal.js?v=24';
+import { CARDBACK_INFO } from './campaign/campaign_data.js?v=24';
+import { initProgress, isOwned, ownedCount, copiesOf, sellCard, sellValue, anyGolden, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=24';
 
 const container = document.getElementById('game-container');
 const splash = document.getElementById('boot-splash');
@@ -69,6 +69,7 @@ async function boot() {
   ui.onCampaign = () => campaignUI.open();
   ui.isOwnedFn = (id) => isOwned(Store, id);
   ui.copiesOf = (id) => copiesOf(Store, id);
+  ui.anyGolden = (id) => anyGolden(Store, id);
   ui.sellCard = (id) => sellCard(Store, id);
   ui.sellValueOf = (rarity) => sellValue(rarity);
   ui.onGoldChange = () => campaignUI.refreshGold();

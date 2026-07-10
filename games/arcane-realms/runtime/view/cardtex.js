@@ -4,7 +4,7 @@
 // board and as plain canvases in the DOM (deck builder / collection / inspect).
 
 import * as THREE from 'three';
-import { CARDS, REALMS, cardById } from '../sim/cards.js?v=23';
+import { CARDS, REALMS, cardById, realmsOf } from '../sim/cards.js?v=24';
 
 export const CARD_W = 512, CARD_H = 768;
 
@@ -95,17 +95,48 @@ function shade(hex, amt) {
   return '#' + c.getHexString();
 }
 
+// the two realm colors of a card (mono cards: a === b, so every dual-aware
+// branch degrades to the original single-realm look).
+function dualCss(card) {
+  const rs = realmsOf(card);
+  const a = (REALMS[rs[0]] || REALMS.neutral).css;
+  const b = (REALMS[rs[1]] || REALMS[rs[0]] || REALMS.neutral).css;
+  return { a, b, dual: rs.length > 1 && rs[0] !== rs[1], names: rs.map((r) => (REALMS[r] || REALMS.neutral).name) };
+}
+
+// baked golden-foil overlay (the animated sheen lives at the consumer layer — CSS
+// in the collection, an additive plane in 3D). Drawn last, clipped to the body.
+function applyFoil(g, board) {
+  g.save();
+  roundRect(g, 8, 8, CARD_W - 16, CARD_H - 16, 26); g.clip();
+  g.globalCompositeOperation = 'overlay';
+  const wash = g.createLinearGradient(0, 0, CARD_W, CARD_H);
+  wash.addColorStop(0, 'rgba(255,225,140,0.42)'); wash.addColorStop(0.5, 'rgba(255,170,50,0.10)'); wash.addColorStop(1, 'rgba(255,225,140,0.42)');
+  g.fillStyle = wash; g.fillRect(0, 0, CARD_W, CARD_H);
+  g.globalCompositeOperation = 'screen';
+  g.strokeStyle = 'rgba(255,245,200,0.09)'; g.lineWidth = 4;
+  g.beginPath();
+  for (let x = -CARD_H; x < CARD_W + CARD_H; x += 30) { g.moveTo(x, 0); g.lineTo(x + CARD_H, CARD_H); }
+  g.stroke();
+  g.restore();
+  g.save();
+  g.font = '800 34px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.shadowColor = '#ffcf5a'; g.shadowBlur = 14; g.fillStyle = '#fff2c8';
+  g.fillText('✦', CARD_W - 46, board ? 52 : 44);
+  g.restore();
+}
+
 function drawFrame(g, card) {
-  const realm = REALMS[card.realm] || REALMS.neutral;
+  const { a: cA, b: cB, dual } = dualCss(card);
   const rc = RARITY_COLOR[card.rarity] || RARITY_COLOR.common;
   const legendary = card.rarity === 'legendary';
   const epic = card.rarity === 'epic';
 
-  // base card body — realm-tinted dark gradient
-  const bg = g.createLinearGradient(0, 0, 0, CARD_H);
-  bg.addColorStop(0, shade(realm.css, -0.62));
+  // base card body — mono: vertical realm gradient (unchanged); dual: diagonal two-realm blend
+  const bg = g.createLinearGradient(0, 0, dual ? CARD_W : 0, CARD_H);
+  bg.addColorStop(0, shade(cA, -0.62));
   bg.addColorStop(0.5, '#171224');
-  bg.addColorStop(1, shade(realm.css, -0.72));
+  bg.addColorStop(1, shade(cB, -0.72));
   roundRect(g, 6, 6, CARD_W - 12, CARD_H - 12, 30);
   g.fillStyle = bg; g.fill();
 
@@ -117,14 +148,17 @@ function drawFrame(g, card) {
     borderGrad.addColorStop(0, '#f5d97a'); borderGrad.addColorStop(0.5, '#b8860b'); borderGrad.addColorStop(1, '#f5d97a');
   } else if (epic) {
     borderGrad.addColorStop(0, '#d78bff'); borderGrad.addColorStop(0.5, '#7a2ea8'); borderGrad.addColorStop(1, '#d78bff');
+  } else if (dual) {
+    borderGrad.addColorStop(0, shade(cA, 0.12)); borderGrad.addColorStop(0.5, shade(cA, -0.2)); borderGrad.addColorStop(0.5, shade(cB, -0.2)); borderGrad.addColorStop(1, shade(cB, 0.12));
   } else {
     borderGrad.addColorStop(0, shade(rc, 0.1)); borderGrad.addColorStop(1, shade(rc, -0.4));
   }
   g.strokeStyle = borderGrad; g.stroke();
-  // inner hairline in realm color
+  // inner hairline — mono: solid realm; dual: two-realm gradient
   roundRect(g, 14, 14, CARD_W - 28, CARD_H - 28, 24);
   g.lineWidth = 2.5;
-  g.strokeStyle = shade(realm.css, 0.15);
+  if (dual) { const h = g.createLinearGradient(0, 0, CARD_W, 0); h.addColorStop(0, shade(cA, 0.18)); h.addColorStop(1, shade(cB, 0.18)); g.strokeStyle = h; }
+  else g.strokeStyle = shade(cA, 0.15);
   g.stroke();
 
   if (legendary) {
@@ -159,9 +193,10 @@ function drawFrame(g, card) {
   }
 }
 
-export function drawCard(canvas, cardId, { forceArt = null } = {}) {
+export function drawCard(canvas, cardId, { forceArt = null, golden = false } = {}) {
   const card = cardById(cardId);
   const realm = REALMS[card.realm] || REALMS.neutral;
+  const dc = dualCss(card);
   const rc = RARITY_COLOR[card.rarity] || RARITY_COLOR.common;
   canvas.width = CARD_W; canvas.height = CARD_H;
   const g = canvas.getContext('2d');
@@ -201,13 +236,16 @@ export function drawCard(canvas, cardId, { forceArt = null } = {}) {
   g.fillStyle = vg; g.fillRect(ax, ay, aw, ah);
   g.restore();
   roundRect(g, ax, ay, aw, ah, 14);
-  g.lineWidth = 3; g.strokeStyle = shade(realm.css, -0.15); g.stroke();
+  g.lineWidth = 3;
+  if (dc.dual) { const gr = g.createLinearGradient(ax, 0, ax + aw, 0); gr.addColorStop(0, shade(dc.a, -0.12)); gr.addColorStop(1, shade(dc.b, -0.12)); g.strokeStyle = gr; }
+  else g.strokeStyle = shade(realm.css, -0.15);
+  g.stroke();
 
   // ── name banner ──
   const ny = ay + ah + 4;
-  const nbGrad = g.createLinearGradient(0, ny, 0, ny + 52);
-  nbGrad.addColorStop(0, shade(realm.css, -0.25));
-  nbGrad.addColorStop(1, shade(realm.css, -0.6));
+  const nbGrad = dc.dual ? g.createLinearGradient(28, 0, CARD_W - 28, 0) : g.createLinearGradient(0, ny, 0, ny + 52);
+  nbGrad.addColorStop(0, shade(dc.dual ? dc.a : realm.css, -0.25));
+  nbGrad.addColorStop(1, shade(dc.dual ? dc.b : realm.css, -0.6));
   roundRect(g, 28, ny, CARD_W - 56, 52, 12);
   g.fillStyle = nbGrad; g.fill();
   g.lineWidth = 2; g.strokeStyle = 'rgba(255,255,255,.25)'; g.stroke();
@@ -223,7 +261,7 @@ export function drawCard(canvas, cardId, { forceArt = null } = {}) {
   const typeBits = [];
   if (card.type === 'creature') typeBits.push(card.tribe || 'Creature');
   else typeBits.push(card.type === 'trap' ? 'Trap' : 'Spell');
-  typeBits.push(realm.name);
+  typeBits.push(dc.dual ? dc.names.join(' + ') : realm.name);
   typeBits.push(RARITY_LABEL[card.rarity]);
   g.font = '600 20px Georgia, serif';
   g.fillStyle = shade(rc, 0.25);
@@ -293,20 +331,22 @@ export function drawCard(canvas, cardId, { forceArt = null } = {}) {
   }
   g.restore();
 
+  if (golden) applyFoil(g, false);
   // art not in yet → kick the load and redraw THIS canvas when it lands
   // (fixes placeholder cards in reward reveals / inspect modals)
   const artState = artCache.get(cardId);
   if (!forceArt && (!artState || (!artState.loaded && !artState.error))) {
-    loadArt(cardId, () => drawCard(canvas, cardId));
+    loadArt(cardId, () => drawCard(canvas, cardId, { golden }));
   }
   return canvas;
 }
 
 // ── BOARD variant: Hearthstone-style in-play card — big art, name, no rules
 // text (hover/inspect gives details), no baked stat gems (live chips own those).
-export function drawBoardCard(canvas, cardId) {
+export function drawBoardCard(canvas, cardId, { golden = false } = {}) {
   const card = cardById(cardId);
   const realm = REALMS[card.realm] || REALMS.neutral;
+  const dc = dualCss(card);
   canvas.width = CARD_W; canvas.height = CARD_H;
   const g = canvas.getContext('2d');
   g.clearRect(0, 0, CARD_W, CARD_H);
@@ -336,13 +376,16 @@ export function drawBoardCard(canvas, cardId) {
   g.fillStyle = vg; g.fillRect(ax, ay, aw, ah);
   g.restore();
   roundRect(g, ax, ay, aw, ah, 18);
-  g.lineWidth = 3; g.strokeStyle = shade(realm.css, -0.1); g.stroke();
+  g.lineWidth = 3;
+  if (dc.dual) { const gr = g.createLinearGradient(ax, 0, ax + aw, 0); gr.addColorStop(0, shade(dc.a, -0.1)); gr.addColorStop(1, shade(dc.b, -0.1)); g.strokeStyle = gr; }
+  else g.strokeStyle = shade(realm.css, -0.1);
+  g.stroke();
 
   // name banner — big and readable at board size
   const ny = CARD_H - 128;
-  const nbGrad = g.createLinearGradient(0, ny, 0, ny + 66);
-  nbGrad.addColorStop(0, shade(realm.css, -0.18));
-  nbGrad.addColorStop(1, shade(realm.css, -0.58));
+  const nbGrad = dc.dual ? g.createLinearGradient(22, 0, CARD_W - 22, 0) : g.createLinearGradient(0, ny, 0, ny + 66);
+  nbGrad.addColorStop(0, shade(dc.dual ? dc.a : realm.css, -0.18));
+  nbGrad.addColorStop(1, shade(dc.dual ? dc.b : realm.css, -0.58));
   roundRect(g, 22, ny, CARD_W - 44, 66, 14);
   g.fillStyle = nbGrad; g.fill();
   g.lineWidth = 2.5; g.strokeStyle = 'rgba(255,255,255,.3)'; g.stroke();
@@ -361,22 +404,24 @@ export function drawBoardCard(canvas, cardId) {
 
   // NO cost gem on board creatures — mana cost is irrelevant once in play and
   // players mistook the top-left cost for attack. Cost still shows in hand/hover.
+  if (golden) applyFoil(g, true);
   return canvas;
 }
 
 const boardCache = new Map();
-export function getBoardCard(cardId) {
-  let c = boardCache.get(cardId);
+export function getBoardCard(cardId, golden = false) {
+  const key = cardId + (golden ? ':g' : '');
+  let c = boardCache.get(key);
   if (!c) {
     const canvas = document.createElement('canvas');
-    drawBoardCard(canvas, cardId);
+    drawBoardCard(canvas, cardId, { golden });
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;
     c = { canvas, tex };
-    boardCache.set(cardId, c);
+    boardCache.set(key, c);
     loadArt(cardId, () => {
-      drawBoardCard(canvas, cardId);
+      drawBoardCard(canvas, cardId, { golden });
       tex.needsUpdate = true;
     });
   }
@@ -384,18 +429,19 @@ export function getBoardCard(cardId) {
 }
 
 // cached full-size canvas + THREE texture
-export function getCard(cardId) {
-  let c = cardCache.get(cardId);
+export function getCard(cardId, golden = false) {
+  const key = cardId + (golden ? ':g' : '');
+  let c = cardCache.get(key);
   if (!c) {
     const canvas = document.createElement('canvas');
-    drawCard(canvas, cardId);
+    drawCard(canvas, cardId, { golden });
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 4;
     c = { canvas, tex };
-    cardCache.set(cardId, c);
+    cardCache.set(key, c);
     loadArt(cardId, () => {
-      drawCard(canvas, cardId);
+      drawCard(canvas, cardId, { golden });
       tex.needsUpdate = true;
       if (c.onArt) c.onArt();
     });
@@ -447,14 +493,14 @@ export function getCardBack(file = 'cardback.jpg') {
 }
 
 // small canvas for DOM grids (deck builder / collection)
-export function cardThumb(cardId, w = 210) {
-  const { canvas } = getCard(cardId);
+export function cardThumb(cardId, w = 210, golden = false) {
+  const { canvas } = getCard(cardId, golden);
   const out = document.createElement('canvas');
   out.width = w; out.height = Math.round(w * CARD_H / CARD_W);
   const g = out.getContext('2d');
   g.drawImage(canvas, 0, 0, out.width, out.height);
   // keep thumbs fresh once art lands
-  const c = cardCache.get(cardId);
+  const c = cardCache.get(cardId + (golden ? ':g' : ''));
   const prev = c.onArt;
   c.onArt = () => {
     if (prev) prev();

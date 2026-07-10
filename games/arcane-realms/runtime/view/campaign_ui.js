@@ -1,12 +1,12 @@
 // Arcane Realms TCG — Campaign screens: chapter map, NPC dialogue bubbles,
 // rewards reveal, achievements panel, card-back gallery.
 
-import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=23';
-import { battleState, campaignSummary, achievementList, buyPack, dupeCount } from '../campaign/progression.js?v=23';
-import { REALMS, cardById } from '../sim/cards.js?v=23';
-import { drawCard } from './cardtex.js?v=23';
-import { Audio2 } from './audio.js?v=23';
-import { openPackReveal } from './packreveal.js?v=23';
+import { CHAPTERS, CARDBACK_INFO, PACK_COST } from '../campaign/campaign_data.js?v=24';
+import { battleState, campaignSummary, achievementList, buyPack, buyCardback, dupeCount } from '../campaign/progression.js?v=24';
+import { REALMS, cardById } from '../sim/cards.js?v=24';
+import { drawCard } from './cardtex.js?v=24';
+import { Audio2 } from './audio.js?v=24';
+import { openPackReveal } from './packreveal.js?v=24';
 
 // compact arcane booster-pack icon for the store button
 const PACK_SVG = `<svg viewBox="0 0 40 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="30" height="36">
@@ -85,6 +85,8 @@ const CSS = `
   box-shadow:0 4px 16px rgba(120,60,220,.42),inset 0 1px 0 rgba(255,255,255,.16);transition:transform .12s,box-shadow .12s}
 .pack-btn:hover{transform:translateY(-2px);box-shadow:0 9px 26px rgba(150,90,240,.55),inset 0 1px 0 rgba(255,255,255,.22)}
 .pack-btn:active{transform:translateY(0)}
+.pack-btn.aether{background:linear-gradient(135deg,#e0b64a,#8a3fd4 56%,#2a1a52)}
+.cb-sec{font-family:'Segoe UI',system-ui,sans-serif;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#8d78b8;margin:16px 0 2px;font-weight:800}
 .pack-btn:disabled{filter:grayscale(.6) brightness(.7);cursor:default;transform:none;box-shadow:0 4px 16px rgba(0,0,0,.3)}
 .pack-btn .pack-ico{width:30px;height:36px;flex:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
 .pack-btn .pack-lbl{display:flex;flex-direction:column;line-height:1.12;font-size:14.5px;font-weight:800;letter-spacing:.03em;text-align:left}
@@ -422,33 +424,50 @@ export class CampaignUI {
     const d = this.store.data;
     const wrap = ui.el('div', 'modal-wrap');
     const m = ui.el('div', 'modal');
-    m.style.minWidth = 'min(92vw,720px)';
-    m.append(ui.el('h3', null, '🂠 CARD BACKS'));
-    m.append(ui.el('div', 'hint', 'Earn card backs by conquering Campaign chapters and achievements. Your choice shows on your deck and hand in every mode.'));
-    const grid = ui.el('div', 'cb-grid');
-    grid.style.marginTop = '14px';
+    m.style.minWidth = 'min(94vw,760px)';
+    const head = ui.el('div');
+    head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap';
+    const goldChip = ui.el('div', 'goldchip', `🪙 ${d.gold}`);
+    head.append(ui.el('h3', null, '🂠 CARD BACKS'), goldChip);
+    m.append(head);
+    m.append(ui.el('div', 'hint', 'Your equipped back shows on your deck and hand in every mode. Earn some through the Campaign; buy the rest with gold.'));
     const tiles = [];
-    for (const [id, info] of Object.entries(CARDBACK_INFO)) {
+    const equip = (id, t) => {
+      Audio2.sfx('click'); d.cardback = id; this.store.save();
+      tiles.forEach((x) => x.classList.remove('sel')); t.classList.add('sel');
+      t.querySelector('.cb-hint').textContent = 'Equipped';
+      this.ui.toast(`Card back equipped: ${CARDBACK_INFO[id].name}`);
+    };
+    const mkTile = (id, info) => {
       const ownedBack = !!d.cardbacks[id];
+      const shop = !!info.price;
       const t = ui.el('div', 'cb-tile' + (d.cardback === id ? ' sel' : '') + (ownedBack ? '' : ' locked'));
-      const img = document.createElement('img');
-      img.src = `assets/ui/${info.file}`;
-      t.append(img, ui.el('div', 'cb-name', info.name), ui.el('div', 'cb-hint', ownedBack ? (d.cardback === id ? 'Equipped' : 'Click to equip') : '🔒 ' + info.hint));
-      if (ownedBack) {
-        t.onclick = () => {
-          Audio2.sfx('click');
-          d.cardback = id;
-          this.store.save();
-          tiles.forEach((x) => x.classList.remove('sel'));
-          t.classList.add('sel');
-          t.querySelector('.cb-hint').textContent = 'Equipped';
-          this.ui.toast(`Card back equipped: ${info.name}`);
+      const img = document.createElement('img'); img.src = `assets/ui/${info.file}`;
+      const hintTxt = ownedBack ? (d.cardback === id ? 'Equipped' : 'Click to equip') : (shop ? `🪙 ${info.price}` : '🔒 ' + (info.hint || 'Locked'));
+      t.append(img, ui.el('div', 'cb-name', info.name), ui.el('div', 'cb-hint', hintTxt));
+      if (ownedBack) t.onclick = () => equip(id, t);
+      else if (shop) {
+        const buy = ui.el('button', 'sell-btn', `Buy · ${info.price}g`);
+        buy.style.marginTop = '6px';
+        buy.onclick = (e) => {
+          e.stopPropagation();
+          const r = buyCardback(this.store, id);
+          if (!r.ok) { Audio2.sfx('error'); this.ui.toast(r.reason); return; }
+          Audio2.sfx('coin'); this.ui.toast(`Purchased: ${info.name}`);
+          goldChip.textContent = `🪙 ${d.gold}`;
+          if (this.refreshGold) this.refreshGold();
+          t.classList.remove('locked'); buy.remove();
+          t.querySelector('.cb-hint').textContent = 'Click to equip';
+          t.onclick = () => equip(id, t);
         };
+        t.append(buy);
       }
-      tiles.push(t);
-      grid.append(t);
-    }
-    m.append(grid);
+      tiles.push(t); return t;
+    };
+    const earned = ui.el('div', 'cb-grid'); earned.style.marginTop = '8px';
+    const shopGrid = ui.el('div', 'cb-grid'); shopGrid.style.marginTop = '8px';
+    for (const [id, info] of Object.entries(CARDBACK_INFO)) (info.price ? shopGrid : earned).append(mkTile(id, info));
+    m.append(ui.el('div', 'cb-sec', 'EARNED'), earned, ui.el('div', 'cb-sec', 'GOLD SHOP'), shopGrid);
     const close = ui.el('button', 'btn small primary', 'Close');
     close.style.cssText = 'display:block;margin:16px auto 0';
     close.onclick = () => wrap.remove();
@@ -464,35 +483,46 @@ export class CampaignUI {
     const d = this.store.data;
     const strip = ui.el('div');
     strip.style.cssText = 'display:flex;gap:10px;align-items:center';
+    strip.style.flexWrap = 'wrap';
     const gold = ui.el('div', 'goldchip', `🪙 ${d.gold}`);
     this._goldEl = gold;
-    const buy = ui.el('button', 'pack-btn');
-    buy.innerHTML = `<span class="pack-ico">${PACK_SVG}</span><span class="pack-lbl">Arcane Pack<b>${PACK_COST} GOLD</b></span>`;
-    buy.onclick = () => {
-      const res = buyPack(this.store);
-      if (!res.ok) { Audio2.sfx('error'); ui.toast(res.reason); return; }
-      this.refreshGold();
-      const done = () => {
-        if (ui.gridEl) ui.renderGrid();
-        const hdr = ui.root.querySelector('#scr-collection .topbar h2');
-        if (hdr) hdr.textContent = ui.collectionTitle();
-      };
-      // cinematic 3D open; fall back to the flat DOM reveal if WebGL is unavailable
-      try {
-        const st = this.store.settings || {};
-        openPackReveal(res.cards, {
-          onDone: done,
-          cardbackFile: (CARDBACK_INFO[d.cardback] || CARDBACK_INFO.default).file,
-          shake: st.shake !== false,
-          particles: st.particles !== false,
-        });
-      } catch (e) {
-        Audio2.sfx('legendary');
-        this.showRewards(null, { winLine: '' }, { firstClear: true, gold: 0, newCards: res.cards.filter((c) => c.isNew).map((c) => c.id), packCards: res.cards.filter((c) => !c.isNew).map((c) => c.id), cardback: null }, done);
-      }
+    const mkPack = (label, which, sub, cls) => {
+      const buy = ui.el('button', 'pack-btn' + (cls ? ' ' + cls : ''));
+      buy.innerHTML = `<span class="pack-ico">${PACK_SVG}</span><span class="pack-lbl">${label}<b>${sub}</b></span>`;
+      buy.onclick = () => this.openPack(which);
+      return buy;
     };
-    strip.append(gold, buy);
+    strip.append(gold,
+      mkPack('Arcane Pack', 'arcane', `${PACK_COST} GOLD`),
+      mkPack('Aetherbound Pack', 'aetherbound', `${PACK_COST}g · DUALS`, 'aether'));
     return strip;
+  }
+
+  openPack(which) {
+    const ui = this.ui;
+    const d = this.store.data;
+    const res = buyPack(this.store, which);
+    if (!res.ok) { Audio2.sfx('error'); ui.toast(res.reason); return; }
+    this.refreshGold();
+    const done = () => {
+      if (ui.gridEl) ui.renderGrid();
+      const hdr = ui.root.querySelector('#scr-collection .topbar h2');
+      if (hdr) hdr.textContent = ui.collectionTitle();
+    };
+    // cinematic 3D open; fall back to the flat DOM reveal if WebGL is unavailable
+    try {
+      const st = this.store.settings || {};
+      openPackReveal(res.cards, {
+        onDone: done,
+        cardbackFile: (CARDBACK_INFO[d.cardback] || CARDBACK_INFO.default).file,
+        backdrop: which === 'aetherbound' ? 'assets/ui/pack_bg.jpg' : 'assets/ui/pack_bg.jpg',
+        shake: st.shake !== false,
+        particles: st.particles !== false,
+      });
+    } catch (e) {
+      Audio2.sfx('legendary');
+      this.showRewards(null, { winLine: '' }, { firstClear: true, gold: 0, newCards: res.cards.filter((c) => c.isNew).map((c) => c.id), packCards: res.cards.filter((c) => !c.isNew).map((c) => c.id), cardback: null }, done);
+    }
   }
 
   refreshGold() {

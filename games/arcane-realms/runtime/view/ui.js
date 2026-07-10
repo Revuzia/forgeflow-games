@@ -1,11 +1,11 @@
 // Arcane Realms TCG — DOM UI layer: menu, deck builder, collection, settings,
 // match HUD (hero plates, phase bar, banners, floaters, arrow, tooltips).
 
-import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById } from '../sim/cards.js?v=23';
-import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=23';
-import { DIFFICULTIES } from '../sim/ai.js?v=23';
-import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=23';
-import { Audio2 } from './audio.js?v=23';
+import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById, realmsOf } from '../sim/cards.js?v=24';
+import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=24';
+import { DIFFICULTIES } from '../sim/ai.js?v=24';
+import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=24';
+import { Audio2 } from './audio.js?v=24';
 
 // ── persistence ─────────────────────────────────────────────────
 const LS_KEY = 'arcane_realms_save_v1';
@@ -124,6 +124,12 @@ const CSS = `
 .chip.on{color:#fff;border-color:currentColor}
 .grid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:14px;padding:16px;align-content:start}
 .cardcell{position:relative;cursor:pointer;transition:transform .14s;border-radius:10px}
+.cardcell.foil{box-shadow:0 0 0 2px #ffd45f,0 0 16px rgba(255,207,90,.5)}
+.cardcell.foil::after{content:"";position:absolute;inset:0;border-radius:10px;pointer-events:none;overflow:hidden;
+  background:linear-gradient(115deg,transparent 30%,rgba(255,245,200,.5) 48%,transparent 62%);background-size:250% 100%;
+  animation:foilsweep 3s linear infinite;mix-blend-mode:screen}
+@keyframes foilsweep{0%{background-position:170% 0}100%{background-position:-70% 0}}
+.foil-badge{position:absolute;top:6px;right:6px;color:#fff2c8;font-size:16px;text-shadow:0 0 8px #ffcf5a,0 1px 3px #000;z-index:3;pointer-events:none}
 .cardcell:hover{transform:translateY(-16px) scale(1.52);z-index:20}
 .cardcell canvas{width:100%;height:auto;display:block;border-radius:10px;box-shadow:0 6px 16px rgba(0,0,0,.55)}
 .cardcell .cnt{position:absolute;top:6px;right:6px;background:var(--gold);color:#1a1005;font-weight:700;font-size:14px;border-radius:12px;padding:2px 9px;box-shadow:0 2px 6px rgba(0,0,0,.6)}
@@ -737,7 +743,7 @@ export class UI {
     const f = this.filterState;
     return COLLECTIBLE.filter((c) => {
       if (f.search && !(c.name.toLowerCase().includes(f.search) || (c.text || '').toLowerCase().includes(f.search) || (c.tribe || '').toLowerCase().includes(f.search))) return false;
-      if (f.realm && c.realm !== f.realm) return false;
+      if (f.realm && !realmsOf(c).includes(f.realm)) return false; // a dual matches either of its realms
       if (f.type && c.type !== f.type) return false;
       if (f.rarity && c.rarity !== f.rarity) return false;
       if (f.cost != null) {
@@ -755,10 +761,13 @@ export class UI {
     grid.innerHTML = '';
     const counts = {};
     if (this.working) for (const id of this.working.cards) counts[id] = (counts[id] || 0) + 1;
-    const deckRealms = this.working ? new Set(this.working.cards.map((id) => CARDS[id].realm).filter((r) => r !== 'neutral')) : new Set();
+    const deckRealms = new Set();
+    if (this.working) for (const id of this.working.cards) for (const r of realmsOf(CARDS[id])) if (r !== 'neutral') deckRealms.add(r);
     for (const c of this.filteredCards()) {
       const cell = this.el('div', 'cardcell');
-      cell.append(cardThumb(c.id, 210));
+      const golden = !this.working && this.anyGolden && this.anyGolden(c.id);
+      cell.append(cardThumb(c.id, 210, golden));
+      if (golden) { cell.classList.add('foil'); cell.append(this.el('div', 'foil-badge', '✦')); }
       const owned = this.isOwned(c.id);
       if (!owned) {
         cell.classList.add('locked');
@@ -777,7 +786,8 @@ export class UI {
       }
       if (this.working) {
         const cap = c.rarity === 'legendary' ? MAX_LEGENDARY_COPIES : MAX_COPIES;
-        const realmLocked = c.realm !== 'neutral' && deckRealms.size >= 2 && !deckRealms.has(c.realm);
+        const cardRealms = realmsOf(c).filter((r) => r !== 'neutral');
+        const realmLocked = new Set([...deckRealms, ...cardRealms]).size > 2; // dual counts for both realms
         if (n >= cap || realmLocked || this.working.cards.length >= DECK_SIZE) cell.classList.add('dim');
         cell.onclick = () => {
           if (this.working.cards.length >= DECK_SIZE) return this.toast('Deck is full (30).');

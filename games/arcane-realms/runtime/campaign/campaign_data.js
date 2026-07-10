@@ -372,6 +372,17 @@ export const CARDBACK_INFO = {
   cb_celestial: { name: 'Celestial Spires', file: 'cb_celestial.jpg', hint: 'Clear Chapter 5' },
   cb_champion:  { name: 'Nexus Champion', file: 'cb_champion.jpg', hint: 'Complete the Campaign' },
   cb_collector: { name: 'The Collector', file: 'cb_collector.jpg', hint: 'Own 5 Epic cards' },
+  // ── Gold Shop (buyable with gold — entries with a `price` + `tier`) ──
+  cb_arcanite:   { name: 'Arcanite Weave', file: 'cb_arcanite.jpg', tier: 'common', price: 300 },
+  cb_runeforge:  { name: 'Runeforge', file: 'cb_runeforge.jpg', tier: 'common', price: 300 },
+  cb_emberleaf:  { name: 'Emberleaf', file: 'cb_emberleaf.jpg', tier: 'common', price: 300 },
+  cb_tidewoven:  { name: 'Tidewoven', file: 'cb_tidewoven.jpg', tier: 'rare', price: 800 },
+  cb_thornmail:  { name: 'Thornmail', file: 'cb_thornmail.jpg', tier: 'rare', price: 800 },
+  cb_gilded:     { name: 'Gilded Sigil', file: 'cb_gilded.jpg', tier: 'rare', price: 800 },
+  cb_astral:     { name: 'Astral Ward', file: 'cb_astral.jpg', tier: 'epic', price: 1500 },
+  cb_obsidian:   { name: 'Obsidian Pact', file: 'cb_obsidian.jpg', tier: 'epic', price: 1500 },
+  cb_aetherbound:{ name: 'Aetherbound', file: 'cb_aetherbound.jpg', tier: 'legendary', price: 3000 },
+  cb_prismatic:  { name: 'Prismatic Seal', file: 'cb_prismatic.jpg', tier: 'legendary', price: 3000 },
 };
 
 export const PACK_COST = 100;
@@ -383,6 +394,11 @@ export const DUPE_FACTOR = 0.22;
 // gold refunded when selling a duplicate copy, by rarity. Tuned against PACK_COST
 // (100): a legendary dupe nearly buys a pack; a handful of commons does too.
 export const SELL_VALUES = { common: 5, uncommon: 10, rare: 20, epic: 45, legendary: 90, token: 0 };
+// golden (foil) cards: per-card chance by rarity, and their (higher) sell value.
+// ≈ 20% chance of at least one golden per 5-card pack; a golden legendary ≈ 0.55%/pack.
+export const GOLD_CHANCE = { common: 0.04, uncommon: 0.04, rare: 0.06, epic: 0.08, legendary: 0.10, token: 0 };
+export const GOLDEN_SELL = { common: 10, uncommon: 20, rare: 60, epic: 200, legendary: 600, token: 0 };
+export const GOLDEN_PITY = 20; // guaranteed a golden at least this often
 
 export function allBattles() {
   return CHAPTERS.flatMap((c) => c.battles.map((b) => ({ ...b, chapter: c })));

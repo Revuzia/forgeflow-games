@@ -11,8 +11,8 @@
 // card textures from cardtex.js are cloned, never disposed.
 
 import * as THREE from 'three';
-import { getCard, getCardBack, preload } from './cardtex.js?v=23';
-import { Audio2 } from './audio.js?v=23';
+import { getCard, getCardBack, preload } from './cardtex.js?v=24';
+import { Audio2 } from './audio.js?v=24';
 
 const RARITY = {
   common:    { hex: 0xb8c0cc, css: '#b8c0cc', name: 'Common' },
@@ -176,7 +176,7 @@ export function openPackReveal(cards, opts = {}) {
   // ── cards (built now, hidden until reveal) ──
   const cardObjs = cards.map((cd, i) => {
     const grp = new THREE.Group();
-    const frontTex = track(new THREE.CanvasTexture(getCard(cd.id).canvas));
+    const frontTex = track(new THREE.CanvasTexture(getCard(cd.id, cd.golden).canvas));
     frontTex.colorSpace = THREE.SRGBColorSpace; frontTex.anisotropy = 8; refreshables.push(frontTex);
     const front = new THREE.Mesh(track(new THREE.PlaneGeometry(CW, CH)), track(new THREE.MeshBasicMaterial({ map: frontTex })));
     front.position.z = 0.006;
@@ -193,8 +193,9 @@ export function openPackReveal(cards, opts = {}) {
     // DOM label
     const lab = document.createElement('div'); lab.className = 'pk-label';
     const R = rar(cd.rarity);
-    if (cd.isNew) lab.innerHTML = `<span style="color:#8ff0a6">NEW!</span><span class="pk-rar" style="color:${R.css}">${R.name}</span>`;
-    else lab.innerHTML = `<span style="color:#ffd45f">Duplicate&nbsp;+${cd.dupGold}g</span><span class="pk-rar" style="color:${R.css}">${R.name}</span>`;
+    const gp = cd.golden ? '<span style="color:#ffe9a8">✦&nbsp;GOLDEN</span> · ' : '';
+    if (cd.isNew) lab.innerHTML = `${gp}<span style="color:#8ff0a6">NEW!</span><span class="pk-rar" style="color:${R.css}">${R.name}</span>`;
+    else lab.innerHTML = `${gp}<span style="color:#ffd45f">Duplicate&nbsp;+${cd.dupGold}g</span><span class="pk-rar" style="color:${R.css}">${R.name}</span>`;
     labels.appendChild(lab);
     return { cd, grp, aura, auraMat, target: new THREE.Vector3(tx, ty, 0), leanZ: -t * 0.06, lab, revealed: false, t0: 0 };
   });
@@ -227,6 +228,13 @@ export function openPackReveal(cards, opts = {}) {
   // fire the per-rarity reward FX when a card lands face-up
   function fireRarityFx(o) {
     const R = rar(o.cd.rarity); const at = o.grp.position;
+    if (o.cd.golden) { // a golden of ANY rarity gets its own gold spectacle
+      Audio2.sfx('legendary');
+      ringPulse(at, { color: 0xffe9a8, ttl: 0.95, max: 4.6 });
+      burst(at, 64, { color: 0xfff0c0, speed: 6, size: 0.22, ttl: 1.2, spread: 1.5 });
+      flashScreen(0.7); shake(0.4); o.auraMat.color.setHex(0xffd45f);
+      return;
+    }
     if (!o.cd.isNew) { Audio2.sfx('coin'); o.auraMat.color.setHex(0x6a6a78); return; }
     if (o.cd.rarity === 'legendary') {
       Audio2.sfx('legendary');
@@ -359,7 +367,7 @@ export function openPackReveal(cards, opts = {}) {
         o.grp.rotation.z = o.leanZ * e;
         if (!o.revealed && fk >= 1) { o.revealed = true; fireRarityFx(o); }
         if (o.revealed) {
-          const target = o.cd.isNew ? (o.cd.rarity === 'legendary' ? 0.9 : o.cd.rarity === 'epic' ? 0.7 : 0.5) : 0.14;
+          const target = o.cd.golden ? 0.95 : o.cd.isNew ? (o.cd.rarity === 'legendary' ? 0.9 : o.cd.rarity === 'epic' ? 0.7 : 0.5) : 0.14;
           o.auraMat.opacity += (target + Math.sin(clock * 3) * 0.06 - o.auraMat.opacity) * Math.min(1, dt * 6);
           o.lab.style.opacity = '1';
         }

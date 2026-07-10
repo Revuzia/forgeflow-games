@@ -2,9 +2,9 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=23';
-import { REALMS, cardById } from '../sim/cards.js?v=23';
-import { FX } from './fx.js?v=23';
+import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=24';
+import { REALMS, cardById } from '../sim/cards.js?v=24';
+import { FX } from './fx.js?v=24';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 const HIT_RED = new THREE.Color(0x9a1408); // hero hit-flash tint
@@ -146,6 +146,17 @@ export const MINI_MAP = {
   wg17:  { file: 'mini_wg17.glb',  s: 1.4,  cap: 1.5, glow: 0x59d97a }, // Primal Colossus
   dw13:  { file: 'mini_dw13.glb',  s: 1.3,  hover: 0.25, glow: 0xffd76a }, // Seraph of Mercy
   wgc8:  { file: 'mini_wgc8.glb',  s: 1.4,  glow: 0x59d97a }, // Emerald Wyrm
+  // ── Aetherbound: the 10 Pact marquee minis (one per realm pair) ──
+  et06:  { file: 'mini_et06.glb',  s: 1.7,  cap: 2.4, glow: 0xa878ff }, // Stormcrown Leviathan
+  eg06:  { file: 'mini_eg06.glb',  s: 1.7,  cap: 2.0, glow: 0xff9a3e }, // Vorrgax, the Wildfire Titan
+  ed06:  { file: 'mini_ed06.glb',  s: 1.55, glow: 0xffb84a }, // Aurelian, the Dawnbanner
+  ev06:  { file: 'mini_ev06.glb',  s: 1.6,  glow: 0xd85cc0 }, // Malgroth, the Cinder Tyrant
+  tg06:  { file: 'mini_tg06.glb',  s: 1.7,  cap: 2.0, glow: 0x4fd0b0 }, // Thalassa, the Everbloom
+  td06:  { file: 'mini_td06.glb',  s: 1.55, glow: 0x8fd0ff }, // Sariel, the Frozen Dawn
+  tv06:  { file: 'mini_tv06.glb',  s: 1.5,  glow: 0x6f8fe8 }, // Maelstrom Chronicler
+  gd06:  { file: 'mini_gd06.glb',  s: 1.65, cap: 1.6, glow: 0x9fd96a }, // Elarion, Voice of the Verdant Choir
+  gv06:  { file: 'mini_gv06.glb',  s: 1.6,  glow: 0x7fbf5c }, // Sythrala, Matriarch of the Rotwood
+  dv06:  { file: 'mini_dv06.glb',  s: 1.55, glow: 0xc9a6ff }, // Vael, the Pale Tithe
 };
 
 // element-styled FX auras — LEGENDARIES ONLY (epics get the bare model).
@@ -778,7 +789,7 @@ export class BoardScene {
   // ── 3D legendary minis ─────────────────────────────────────────
   async _gltfLoader() {
     if (!this._gltfLoaderP) {
-      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=23').then((m) => new m.GLTFLoader());
+      this._gltfLoaderP = import('../../vendor/GLTFLoader.js?v=24').then((m) => new m.GLTFLoader());
     }
     return this._gltfLoaderP;
   }
