@@ -227,7 +227,7 @@ export class HUD {
         <div style="font-size:28px;font-weight:900;color:${GOLD};text-align:center;font-family:Georgia,serif;margin-bottom:14px">HOW TO PLAY</div>
         <div style="font-size:14px;line-height:1.9;color:#e8dcc8">
           <b style="color:#ffd24a">Move</b> — WASD / arrows, or the left touch joystick<br>
-          <b style="color:#ffd24a">Attack</b> — J / Left-click (spam away — click also aims)<br>
+          <b style="color:#ffd24a">Attack</b> — Left-click / hold (click also aims)<br>
           <b style="color:#ffd24a">Abilities</b> — 1 · 2 · 3, or the buttons bottom-right<br>
           <b style="color:#ffd24a">Skill</b> — SHIFT: Lunge (Warrior) · Roll (Archer) · Blink (Mage) — chip bottom-left<br>
           <b style="color:#ffd24a">Jump</b> — SPACE<br>
@@ -671,13 +671,18 @@ export class HUD {
       const size = big ? 86 : 62;
       const pos = big ? { r: 0, b: 0 } : SLOTS[idx];
       const wrap = el("div", `position:absolute;right:${pos.r}px;bottom:${pos.b}px;width:${size}px;height:${size}px;`);
-      const btn = el("div", `position:absolute;inset:0;border-radius:50%;${frameCss}display:flex;align-items:center;justify-content:center;
+      const btn = el("div", `position:absolute;inset:0;border-radius:50%;overflow:hidden;${frameCss}display:flex;align-items:center;justify-content:center;
         font-size:${big ? 36 : 25}px;border-color:${cls.uiColor};
         background:url(assets/ui/sk_${def.id}.jpg?v=7) center/cover, rgba(16,8,26,.92);text-shadow:0 0 8px #000;`, "");
       btn.className = "cf-btn";
+      // spell/action name banner inside the card (owner request); long
+      // single-word names (EARTHSPLITTER) shrink to clear the circle chord
+      const nfs = big ? 8.5 : def.name.length > 11 ? 5.5 : 6.5;
+      btn.appendChild(el("div", `position:absolute;left:0;right:0;bottom:0;text-align:center;font-size:${nfs}px;line-height:1.15;font-weight:800;letter-spacing:.2px;color:#ffe9a8;background:rgba(8,4,14,.72);padding:2px 5px 3px;pointer-events:none`, def.name.toUpperCase()));
       const cd = el("div", `position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(8,4,14,.85) 0turn, transparent 0turn);pointer-events:none;`);
       const cdTxt = el("div", `position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:${big ? 22 : 17}px;font-weight:900;color:#fff;text-shadow:0 0 6px #000;pointer-events:none;opacity:0`);
-      const key = el("div", `position:absolute;bottom:-4px;right:-2px;background:#241436;border:1.5px solid ${GOLD};border-radius:6px;font-size:10px;font-weight:800;color:${GOLD};padding:1px 5px;pointer-events:none`, big ? "J" : String(idx + 1));
+      // hotkey tag rides the TOP corner so it never covers the name strip
+      const key = el("div", `position:absolute;top:-4px;right:-2px;background:#241436;border:1.5px solid ${GOLD};border-radius:6px;font-size:${big ? 9 : 10}px;font-weight:800;color:${GOLD};padding:1px 5px;pointer-events:none`, big ? "LMB" : String(idx + 1));
       wrap.append(btn, cd, cdTxt, key);
       const down = (e) => { e.preventDefault(); big ? this.input.touchBasic(true) : this.input.touchAbility(idx, true); };
       const up = () => { big ? this.input.touchBasic(false) : this.input.touchAbility(idx, false); };
@@ -708,9 +713,10 @@ export class HUD {
     // SHIFT movement skill chip (all classes)
     const dashType = cls.name === "Warrior" ? "lunge" : cls.name === "Archer" ? "roll" : "blink";
     const dwrap = el("div", `position:relative;width:48px;height:48px;margin-bottom:5px`);
-    const dbtn = el("div", `position:absolute;inset:0;border-radius:50%;${frameCss}border-color:${cls.uiColor};
+    const dbtn = el("div", `position:absolute;inset:0;border-radius:50%;overflow:hidden;${frameCss}border-color:${cls.uiColor};
       background:url(assets/ui/sk_dash_${dashType}.jpg?v=7) center/cover, rgba(16,8,26,.92);`, "");
     dbtn.className = "cf-btn";
+    dbtn.appendChild(el("div", `position:absolute;left:0;right:0;bottom:0;text-align:center;font-size:6.5px;font-weight:800;letter-spacing:.4px;color:#ffe9a8;background:rgba(8,4,14,.72);padding:2px 2px 3px;pointer-events:none`, dashType.toUpperCase()));
     const dcd = el("div", `position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(8,4,14,.85) 0turn, transparent 0turn);pointer-events:none;`);
     const dtxt = el("div", `position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;text-shadow:0 0 6px #000;pointer-events:none;opacity:0`);
     const dkey = el("div", `position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);background:#241436;border:1.5px solid ${GOLD};border-radius:6px;font-size:8px;font-weight:800;color:${GOLD};padding:1px 4px;pointer-events:none`, "SHIFT");

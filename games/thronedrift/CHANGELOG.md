@@ -1,5 +1,14 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v1.3.2 — 2026-07-10 (card names + LMB)
+- Every ability card shows its spell/action NAME on an in-card banner strip
+  (WHIRLWIND, GROUND SLAM, EARTHSPLITTER, FAN SHOT, FIREBALL, …); long
+  single-word names auto-shrink to clear the circle chord; SHIFT chip shows
+  LUNGE / ROLL / BLINK
+- Basic-attack keycap "J" replaced with "LMB" (attack = left-click); hotkey
+  tags moved to the TOP corner of each card so they never cover the names
+- HOW TO PLAY: attack line now "Left-click / hold"
+
 ## v1.3.1 — 2026-07-10 (SHIFT chip → left column)
 - SHIFT skill chip moved to the bottom-LEFT utility column for ALL classes:
   warrior stacks TAB swap on top with SHIFT under it; archer/mage get the
