@@ -344,6 +344,22 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.8.0 — 2026-07-10 (owner feedback batch 1: combat UX + full cast regen)
+- **All 4 classes regenerated** from clean T-pose reference art (image-to-3d →
+  remesh → rig → full anim set, ~775 credits total): natural stances, clean
+  fingers-together hands, and the sorceress **no longer has the staff baked
+  across her body** — she holds one proper orb staff via the ported grip system.
+- **Enemies no longer walk backwards** (stray +PI on the view yaw).
+- **Hotbar rework**: the normal attack lives on LMB only; the **sorceress's normal
+  attack is now an ARCANE BOLT** (free ranged poke). Slots: 1 Fireball · 2 Frost ·
+  3 Chain Lightning (range 6.5→9) · 4 Health potion · 5 Mana potion.
+- **TAB target cycling**: lock nearest → cycle outward → unlock past the last.
+- **Lights toned down** (placed lights were intensity 11 + emissive 2.6 → blinding).
+- **F3 debug** now works: fps + draw calls + tris + position + live enemy count.
+- **Combat audio**: punchier swing/hit/hurt, distinct fire/frost cast sounds,
+  audible enemy attacks, explosion sfx staged for the barrel feature.
+- Selftest 203 → 205.
+
 ## v1.7.7 — 2026-07-10 (character shrug + giant-sword fixes — no regen needed)
 - **The "shrug" stance is fixed** — root cause was the Meshy idle clip animating the
   **shoulder/arm/hand POSITION tracks** (raising the shoulders), while the `relaxArms`
