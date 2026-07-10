@@ -530,7 +530,9 @@ export class Escape {
       if (t > 0.04 && t < 0.94) {
         const qx = cam.x + dx * t, qz = cam.z + dz * t;
         const ddx = s.wx - qx, ddz = s.wz - qz;
-        if (ddx * ddx + ddz * ddz < 2.6 * 2.6) target = 0.14;
+        // 5.4u corridor (CELL=4): the intersecting wall AND its neighbors drop, so
+        // ~3 segments open up in the view direction (owner: one wall wasn't enough)
+        if (ddx * ddx + ddz * ddz < 5.4 * 5.4) target = 0.14;
       }
       const cur = ws.cur[i];
       if (Math.abs(target - cur) < 0.004) continue;

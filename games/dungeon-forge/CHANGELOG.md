@@ -344,6 +344,20 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.8.6 — 2026-07-10 (menu overhaul batch: one carousel, simpler Build, pause polish, wider cutaway)
+- **Play menu**: FEATURED / BY PLAYERS merged into ONE **DUNGEONS** carousel
+  (7 cards). **Hold-and-drag scrolling** (grab the shelf and pull), thin amber
+  scrollbar, edge fades, arrow paging. **MY DUNGEONS is now your pin board** —
+  your own builds live there, and loading a friend's dungeon code **pins it
+  there too** (shows "· by <author>").
+- **Build menu**: template grid gone. Now just **▶ Continue** (reopens your last
+  build), **✨ New Build**, MY DUNGEONS — where every dungeon has a **📋 Code**
+  button that copies its share code — and the import row.
+- **Pause menu polished**: glowing ⏸ header, live run chips (time · floor ·
+  gold · kills · level), full-width icon buttons with hover lift.
+- **Wall cutaway widened**: the whole sightline opens now (8 segments in the
+  two-room test, was 1-4) — at least the closest 3 walls in the view direction.
+
 ## v1.8.5 — 2026-07-10 (five community dungeons + "by players" carousel + menu polish)
 - **Five hand-authored dungeons** in a new BY PLAYERS carousel on the play menu,
   every one showcasing the new systems (floor textures, fire jets, javelin

@@ -228,26 +228,39 @@ export class Menu {
     const mine = this.myDungeons();
     const rows = mine.map((m, i) => `
       <div class="dfm-row">
-        <span>${m.theme === "scifi" ? "🤖" : "🏰"} <b>${esc(m.name)}</b></span>
+        <span>${m.theme === "scifi" ? "🤖" : "🏰"} <b>${esc(m.name)}</b>${m.pinnedFrom ? ` <span class="dim">· by ${esc(m.pinnedFrom)}</span>` : ""}</span>
         <span class="dfm-rowbtns">
+          <button data-code="${i}" class="df-btn" title="Copy this dungeon's share code">📋 Code</button>
           <button data-edit="${i}" class="df-btn">⚒ Edit</button>
           <button data-del="${i}" class="df-btn danger">🗑</button>
         </span>
       </div>`).join("");
-    const tmplBtns = (theme) => D.STARTER_TEMPLATES.map((t) =>
-      `<button data-tmpl="${theme}:${t.kind}" class="df-tmpl" title="${t.desc}"><span class="ti">${t.icon}</span><span class="tl">${t.label}</span><span class="td">${t.desc}</span></button>`).join("");
-    this.g.hud.modal(`<h3>⚒️ New Build</h3>
-      <div class="dfm-tmplhead">🏰 Fantasy</div>
-      <div class="dfm-tmplrow">${tmplBtns("fantasy")}</div>
-      <div class="dfm-tmplhead">🤖 Sci-Fi</div>
-      <div class="dfm-tmplrow">${tmplBtns("scifi")}</div>
-      ${mine.length ? `<div class="dfm-listhead">MY DUNGEONS</div>${rows}` : `<div class="df-lb">No saved dungeons yet — pick a template above.</div>`}
+    // owner spec: no theme/template grid — just Continue, New Build, My Dungeons
+    // (each with its share CODE) and the import row. Theme switches in-builder.
+    const last = mine[0];
+    this.g.hud.modal(`<h3>⚒️ Build</h3>
+      <div class="df-selrow" style="flex-direction:column;gap:9px;margin-top:4px">
+        ${last ? `<button data-a="cont" class="df-btn accent dfm-pbtn">▶ &nbsp;Continue — “${esc(last.name)}”</button>` : ""}
+        <button data-a="newb" class="df-btn dfm-pbtn">✨ &nbsp;New Build</button>
+      </div>
+      ${mine.length ? `<div class="dfm-listhead">MY DUNGEONS</div>${rows}` : ""}
       <div class="dfm-listhead" style="margin-top:6px">HAVE A SHARE CODE FROM A FRIEND?</div>
       <div class="df-selrow"><input data-a="code" name="shareCode" placeholder="paste a share code to edit their dungeon (DF1.…)" style="flex:1" class="df-name"><button data-a="imp" class="df-btn">Import</button></div>`,
       (m) => {
-        m.querySelectorAll("[data-tmpl]").forEach((b) => b.onclick = () => {
-          const [theme, kind] = b.dataset.tmpl.split(":");
-          this.g.hud.closeModal(); this.g.setMode("build", { dungeon: D.starterTemplate(theme, kind) });
+        if (last) m.querySelector('[data-a="cont"]').onclick = () => {
+          const d = D.sanitize(last.json);
+          if (d) { this.g.audio.sfx("confirm"); this.g.hud.closeModal(); this.g.setMode("build", { dungeon: d }); }
+        };
+        m.querySelector('[data-a="newb"]').onclick = () => {
+          this.g.audio.sfx("confirm"); this.g.hud.closeModal();
+          this.g.setMode("build", { dungeon: D.starterTemplate("fantasy", "room") });
+        };
+        m.querySelectorAll("[data-code]").forEach((b) => b.onclick = async () => {
+          const d = D.sanitize(mine[+b.dataset.code].json);
+          if (!d) return;
+          const code = await D.encodeShare(d);
+          try { await navigator.clipboard.writeText(code); this.g.hud.toast("📋 Share code copied — send it to a friend!", "info"); }
+          catch (e) { prompt("Copy this dungeon's share code:", code); }
         });
         m.querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => {
           const d = D.sanitize(mine[+b.dataset.edit].json);
@@ -270,47 +283,64 @@ export class Menu {
   playFlow() {
     const mine = this.myDungeons();
     const best = this.bestTimes();
-    const row = (label, meta, best_, attrs) => `
-      <div class="dfm-row">
-        <span>${label}<br><span class="dim">${meta}${best_ != null ? ` · best ${fmtTime(best_)}` : ""}</span></span>
-        <span class="dfm-rowbtns"><button ${attrs} class="df-btn accent">▶ Play</button></span>
-      </div>`;
-    const rows = mine.map((m, i) => row(
-      `${m.theme === "scifi" ? "🤖" : "🏰"} <b>${esc(m.name)}</b>`,
-      `${m.theme} · diff ${m.difficulty}`, best["local:" + m.name], `data-play="${i}"`)).join("");
-    // "by players" community carousel cards
+    // ONE carousel of all built-in dungeons (owner spec: no FEATURED/BY PLAYERS split)
+    const catalog = [
+      { key: "sample-f", name: "The Forge Trials", author: "ForgeFlow", theme: "fantasy", difficulty: 2,
+        blurb: "Locked doors, lava ledges, two floors of trials.", make: () => sampleDungeon("fantasy"), score: "sample:fantasy" },
+      { key: "sample-s", name: "Meltdown Facility", author: "ForgeFlow", theme: "scifi", difficulty: 2,
+        blurb: "Turrets and coolant leaks, two decks down.", make: () => sampleDungeon("scifi"), score: "sample:scifi" },
+      ...COMMUNITY.map((c) => ({ key: c.key, name: c.name, author: c.author, theme: c.theme, difficulty: c.difficulty,
+        blurb: c.blurb, make: () => c.build(), score: "community:" + c.key })),
+    ];
     const skulls = (n) => "💀".repeat(Math.max(1, Math.min(3, n)));
-    const cards = COMMUNITY.map((c, i) => `
+    const cards = catalog.map((c, i) => `
       <button class="dfm-ccard" data-c="${i}" title="${esc(c.blurb)}">
         <span class="cth">${c.theme === "scifi" ? "🤖" : "🏰"}</span>
         <span class="cnm">${esc(c.name)}</span>
         <span class="cby">by ${esc(c.author)}</span>
         <span class="cdf">${skulls(c.difficulty)} <span class="cdl">${["", "easy", "tricky", "brutal"][c.difficulty] || ""}</span></span>
         <span class="cbl">${esc(c.blurb)}</span>
-        ${best["community:" + c.key] != null ? `<span class="cbt">best ${fmtTime(best["community:" + c.key])}</span>` : ""}
+        ${best[c.score] != null ? `<span class="cbt">best ${fmtTime(best[c.score])}</span>` : ""}
       </button>`).join("");
+    // MY DUNGEONS = the player's pins: their own builds + code-loaded imports
+    const row = (label, meta, best_, attrs) => `
+      <div class="dfm-row">
+        <span>${label}<br><span class="dim">${meta}${best_ != null ? ` · best ${fmtTime(best_)}` : ""}</span></span>
+        <span class="dfm-rowbtns"><button ${attrs} class="df-btn accent">▶ Play</button></span>
+      </div>`;
+    const rows = mine.map((m, i) => row(
+      `${m.theme === "scifi" ? "🤖" : "🏰"} <b>${esc(m.name)}</b>${m.pinnedFrom ? ` <span class="dim">· by ${esc(m.pinnedFrom)}</span>` : ""}`,
+      `${m.theme} · diff ${m.difficulty}`, best["local:" + m.name], `data-play="${i}"`)).join("");
     this.g.hud.modal(`<h3>▶ Escape a dungeon</h3>
-      <div class="dfm-listhead">FEATURED</div>
-      ${row("🏰 <b>The Forge Trials</b>", "fantasy · 2 floors · locked doors", best["sample:fantasy"], 'data-s="fantasy"')}
-      ${row("🤖 <b>Meltdown Facility</b>", "sci-fi · 2 floors · turrets", best["sample:scifi"], 'data-s="scifi"')}
-      <div class="dfm-listhead">BY PLAYERS</div>
+      <div class="dfm-listhead">DUNGEONS</div>
       <div class="dfm-carwrap">
         <button class="dfm-cararrow left" data-a="cl">‹</button>
         <div class="dfm-carousel" data-a="car">${cards}</div>
         <button class="dfm-cararrow right" data-a="cr">›</button>
       </div>
-      ${mine.length ? `<div class="dfm-listhead">MY DUNGEONS</div>${rows}` : ""}
-      <div class="df-selrow" style="margin-top:8px"><input data-a="code" name="dungeonCode" placeholder="dungeon code (from a friend)" style="flex:1" class="df-name"><button data-a="go" class="df-btn">Load</button></div>`,
+      <div class="dfm-listhead">MY DUNGEONS</div>
+      ${mine.length ? rows : `<div class="df-lb">Your builds and any dungeon you load with a code get pinned here.</div>`}
+      <div class="df-selrow" style="margin-top:8px"><input data-a="code" name="dungeonCode" placeholder="dungeon code (from a friend) — loads AND pins it here" style="flex:1" class="df-name"><button data-a="go" class="df-btn">Load</button></div>`,
       (m) => {
-        m.querySelectorAll("[data-s]").forEach((b) => b.onclick = () => { this.g.hud.closeModal(); this.startEscape(sampleDungeon(b.dataset.s), "menu", "sample:" + b.dataset.s); });
-        m.querySelectorAll("[data-c]").forEach((b) => b.onclick = () => {
-          const c = COMMUNITY[+b.dataset.c];
-          this.g.audio.sfx("confirm"); this.g.hud.closeModal();
-          this.startEscape(c.build(), "menu", "community:" + c.key);
-        });
+        // drag-to-scroll ("hold scroll"): grab anywhere on the shelf and pull
         const car = m.querySelector('[data-a="car"]');
-        m.querySelector('[data-a="cl"]').onclick = () => { this.g.audio.sfx("ui"); car.scrollLeft -= 200; };
-        m.querySelector('[data-a="cr"]').onclick = () => { this.g.audio.sfx("ui"); car.scrollLeft += 200; };
+        let drag = null;
+        car.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, s: car.scrollLeft, moved: false }; });
+        car.addEventListener("pointermove", (e) => {
+          if (!drag) return;
+          if (Math.abs(e.clientX - drag.x) > 6 && !drag.moved) { drag.moved = true; try { car.setPointerCapture(e.pointerId); } catch (err) {} }
+          car.scrollLeft = drag.s - (e.clientX - drag.x);
+        });
+        const endDrag = () => { if (drag && drag.moved) car._suppressClick = true; drag = null; setTimeout(() => { car._suppressClick = false; }, 0); };
+        car.addEventListener("pointerup", endDrag); car.addEventListener("pointercancel", endDrag);
+        m.querySelectorAll("[data-c]").forEach((b) => b.onclick = () => {
+          if (car._suppressClick) return;                       // it was a drag, not a pick
+          const c = catalog[+b.dataset.c];
+          this.g.audio.sfx("confirm"); this.g.hud.closeModal();
+          this.startEscape(c.make(), "menu", c.score);
+        });
+        m.querySelector('[data-a="cl"]').onclick = () => { this.g.audio.sfx("ui"); car.scrollLeft -= 220; };
+        m.querySelector('[data-a="cr"]').onclick = () => { this.g.audio.sfx("ui"); car.scrollLeft += 220; };
         m.querySelectorAll("[data-play]").forEach((b) => b.onclick = () => {
           const entry = mine[+b.dataset.play];
           const d = D.sanitize(entry.json);
@@ -323,8 +353,17 @@ export class Menu {
         m.querySelector('[data-a="go"]').onclick = async () => {
           const code = m.querySelector('[data-a="code"]').value.trim();
           const d = code.startsWith("DF1.") ? await D.decodeShare(code) : await this.cloud.fetchDungeon(code);
-          if (d) { this.g.hud.closeModal(); this.startEscape(d, "menu", code.startsWith("DF1.") ? null : "cloud:" + code.toUpperCase(), code.startsWith("DF1.") ? null : code.toUpperCase()); }
-          else this.g.hud.toast("Couldn't load that code", "warn");
+          if (!d) { this.g.hud.toast("Couldn't load that code", "warn"); return; }
+          // PIN it: code-loaded dungeons save into My Dungeons (owner spec)
+          const list = this.myDungeons();
+          if (!list.some((x) => x.name === d.name)) {
+            list.unshift({ name: d.name, theme: d.theme, difficulty: d.difficulty, json: D.serialize(d),
+                           savedAt: Date.now(), cloudId: code.startsWith("DF1.") ? null : code.toUpperCase(), pinnedFrom: d.author || "a friend" });
+            localStorage.setItem(LS + "dungeons", JSON.stringify(list.slice(0, 40)));
+            this.g.hud.toast("📌 Pinned to My Dungeons", "info");
+          }
+          this.g.hud.closeModal();
+          this.startEscape(d, "menu", code.startsWith("DF1.") ? "local:" + d.name : "cloud:" + code.toUpperCase(), code.startsWith("DF1.") ? null : code.toUpperCase());
         };
       });
   }
@@ -368,14 +407,25 @@ export class Menu {
     });
   }
 
-  /** Esc during a run → standard pause menu (resume / settings / quit). */
+  /** Esc during a run → pause menu with live run stats. */
   pauseOverlay(escMode) {
-    this.g.hud.modal(`<h3>⏸ Paused</h3>
-      <div class="df-lb">The dungeon waits for no one — enemies keep prowling${this.g.session ? " (multiplayer keeps running)" : ""}.</div>
-      <div class="df-selrow" style="flex-direction:column;gap:8px">
-        <button data-a="resume" class="df-btn accent">▶ Resume</button>
-        <button data-a="set" class="df-btn">⚙ Settings</button>
-        <button data-a="quit" class="df-btn danger">Leave run</button>
+    const run = escMode && escMode.run, me = run && run.players.find((p) => p.id === escMode.myId);
+    const kills = run ? run.enemies.filter((e) => !e.alive).length : 0;
+    const chips = run ? `
+      <div class="dfm-pchips">
+        <span class="dfm-pchip">⏱ ${fmtTime(run.time)}</span>
+        <span class="dfm-pchip">🗺 Floor ${(me ? me.f : 0) + 1}/${escMode.d.floors.length}</span>
+        <span class="dfm-pchip">💰 ${me ? me.gold : 0}</span>
+        <span class="dfm-pchip">⚔ ${kills} slain</span>
+        <span class="dfm-pchip">⭐ Lv ${me && me.level || 1}</span>
+      </div>` : "";
+    this.g.hud.modal(`<div class="dfm-pausehead"><span class="pico">⏸</span><h3>Paused</h3></div>
+      ${chips}
+      <div class="dfm-pausetip">The dungeon waits for no one — enemies keep prowling${this.g.session ? " (multiplayer keeps running)" : ""}.</div>
+      <div class="df-selrow" style="flex-direction:column;gap:9px">
+        <button data-a="resume" class="df-btn accent dfm-pbtn">▶ &nbsp;Resume</button>
+        <button data-a="set" class="df-btn dfm-pbtn">⚙ &nbsp;Settings</button>
+        <button data-a="quit" class="df-btn danger dfm-pbtn">🚪 &nbsp;Leave run</button>
       </div>`, (m) => {
       m.querySelector('[data-a="resume"]').onclick = () => {
         this.g.hud.closeModal();
@@ -669,8 +719,16 @@ const css = `
 .dfm-listhead:after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(255,179,71,.35),transparent)}
 /* ── "by players" carousel ── */
 .dfm-carwrap{position:relative;margin:2px 0 4px}
-.dfm-carousel{display:flex;gap:9px;overflow-x:auto;padding:4px 26px 8px;scrollbar-width:none}
-.dfm-carousel::-webkit-scrollbar{display:none}
+.dfm-carwrap:before,.dfm-carwrap:after{content:"";position:absolute;top:0;bottom:10px;width:26px;z-index:1;pointer-events:none}
+.dfm-carwrap:before{left:0;background:linear-gradient(90deg,rgba(16,19,34,.95),transparent)}
+.dfm-carwrap:after{right:0;background:linear-gradient(-90deg,rgba(16,19,34,.95),transparent)}
+.dfm-carousel{display:flex;gap:9px;overflow-x:auto;padding:4px 26px 10px;cursor:grab;user-select:none;
+  scrollbar-width:thin;scrollbar-color:rgba(255,179,71,.55) rgba(150,170,255,.10)}
+.dfm-carousel:active{cursor:grabbing}
+.dfm-carousel::-webkit-scrollbar{height:6px}
+.dfm-carousel::-webkit-scrollbar-track{background:rgba(150,170,255,.10);border-radius:99px;margin:0 26px}
+.dfm-carousel::-webkit-scrollbar-thumb{background:linear-gradient(90deg,#c98a2e,#ffb347);border-radius:99px}
+.dfm-carousel::-webkit-scrollbar-thumb:hover{background:#ffc76a}
 .dfm-ccard{flex:0 0 172px;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:11px 12px;border-radius:13px;text-align:left;cursor:pointer;color:#eef;
   border:1px solid rgba(150,170,255,.26);background:linear-gradient(160deg,rgba(44,52,88,.9),rgba(22,26,44,.92));transition:all .14s}
 .dfm-ccard:hover{border-color:var(--df-accent,#ffb347);transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.45)}
@@ -684,6 +742,15 @@ const css = `
   background:rgba(14,17,30,.88);color:#cfd6f4;font-size:19px;font-weight:800;cursor:pointer;transition:all .12s;display:flex;align-items:center;justify-content:center}
 .dfm-cararrow:hover{border-color:var(--df-accent,#ffb347);color:#fff}
 .dfm-cararrow.left{left:-2px} .dfm-cararrow.right{right:-2px}
+/* ── pause menu ── */
+.dfm-pausehead{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:2px}
+.dfm-pausehead .pico{font-size:22px;filter:drop-shadow(0 0 8px rgba(255,179,71,.6))}
+.dfm-pausehead h3{margin:0}
+.dfm-pchips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:8px 0 2px}
+.dfm-pchip{font-size:11.5px;font-weight:800;letter-spacing:.3px;color:#e6ebff;background:linear-gradient(160deg,rgba(52,62,104,.85),rgba(26,30,52,.9));border:1px solid rgba(150,170,255,.28);border-radius:999px;padding:5px 11px}
+.dfm-pausetip{font-size:12px;color:#9aa6cf;font-style:italic;margin:8px 0 12px;text-align:center}
+.dfm-pbtn{width:100%;padding:12px 18px;font-size:14.5px;border-radius:12px;transition:all .13s}
+.dfm-pbtn:hover{transform:translateY(-1px)}
 .dfm-tmplhead{font-size:12px;font-weight:800;letter-spacing:1px;opacity:.85;margin:8px 0 5px;text-align:left}
 .dfm-tmplrow{display:flex;gap:7px;margin-bottom:4px}
 .df-tmpl{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:9px 6px;border-radius:11px;border:1px solid rgba(150,170,255,.28);background:linear-gradient(180deg,rgba(40,48,80,.85),rgba(24,28,48,.85));color:#eef;cursor:pointer;transition:all .13s}
