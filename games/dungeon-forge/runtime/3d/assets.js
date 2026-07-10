@@ -95,7 +95,11 @@ export class Assets {
     // shared
     m.chestShared = this.load("props/fantasy/chest.glb");
     m.spikeShared = this.load("props/fantasy/spike-trap.glb");
-    return promiseMap(m);
+    return promiseMap(m).then((out) => {
+      // procedural breakable props (no GLB assets) — wrapped for the clone path
+      for (const n of (t === "fantasy" ? ["pot", "urn", "bones"] : ["canister"])) out[n] = { scene: makeProp(n, t), animations: [] };
+      return out;
+    });
   }
 
   async enemies(theme) {
@@ -657,6 +661,45 @@ export function makeNpc(ntype, theme) {
   }
   g.userData.figure = fig;
   g.userData.tint = tint;
+  return g;
+}
+
+/** Procedural breakable props (pot / urn / bones / canister) — flat-shaded
+ *  low-poly to match the rest, no GLB assets needed. Returned as a group so the
+ *  caller wraps it as { scene, animations: [] } for the clone path. */
+export function makeProp(type, theme) {
+  const scifi = theme === "scifi";
+  const g = new THREE.Group();
+  const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, flatShading: !o.smooth, roughness: o.r == null ? 0.88 : o.r, metalness: o.m == null ? (scifi ? 0.4 : 0.02) : o.m, emissive: o.e || 0x000000, emissiveIntensity: o.ei == null ? 1 : o.ei });
+  const lathe = (pts, seg, mat) => new THREE.Mesh(new THREE.LatheGeometry(pts.map((p) => new THREE.Vector2(p[0], p[1])), seg || 16), mat);
+  if (type === "pot") {
+    const clay = M(0xb06a3c, { r: 0.9 });
+    g.add(lathe([[0.02, 0], [0.34, 0.06], [0.42, 0.32], [0.3, 0.6], [0.25, 0.68], [0.29, 0.76], [0.2, 0.78]], 18, clay));
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.032, 8, 18), M(0x8a5230, { r: 0.9 })); rim.rotation.x = Math.PI / 2; rim.position.y = 0.78; g.add(rim);
+    const crack = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.3, 0.02), M(0x5a3820)); crack.position.set(0.32, 0.35, 0.12); crack.rotation.z = 0.2; g.add(crack);
+  } else if (type === "urn") {
+    const cer = M(0x76828e, { r: 0.7, m: 0.12 });
+    g.add(lathe([[0.02, 0], [0.2, 0.04], [0.36, 0.42], [0.38, 0.72], [0.22, 0.94], [0.14, 1.02], [0.2, 1.12], [0.12, 1.16]], 18, cer));
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.365, 0.365, 0.16, 18, 1, true), M(0xb4472e, { r: 0.85 })); band.position.y = 0.58; g.add(band);
+    for (const sx of [-1, 1]) { const h = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.024, 6, 10, Math.PI), M(0x4a545e)); h.position.set(sx * 0.32, 0.84, 0); h.rotation.z = sx > 0 ? -Math.PI / 2 : Math.PI / 2; g.add(h); }
+  } else if (type === "bones") {
+    const bone = M(0xe8e2d0, { r: 0.82 });
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), bone); skull.scale.set(1, 0.92, 1.12); skull.position.set(-0.05, 0.17, 0.02); g.add(skull);
+    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 0.17), bone); jaw.position.set(-0.05, 0.07, 0.08); g.add(jaw);
+    for (const [ex, ez] of [[0.06, -0.05], [-0.16, -0.02]]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), M(0x201a14)); e.position.set(skull.position.x + ex, 0.19, 0.14 + ez); g.add(e); }
+    for (const [x, z, rot] of [[0.28, 0.08, 0.5], [0.22, -0.18, -0.6], [-0.02, 0.28, 1.25], [-0.28, -0.12, -0.2]]) {
+      const b = new THREE.Group();
+      b.add(new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.36, 7), bone));
+      for (const yy of [-1, 1]) { const k = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), bone); k.position.y = yy * 0.2; b.add(k); }
+      b.position.set(x, 0.05, z); b.rotation.set(Math.PI / 2 * 0.85, rot, rot * 0.4); g.add(b);
+    }
+  } else { // canister (sci-fi)
+    const metal = M(0x8792a0, { r: 0.45, m: 0.8 });
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.92, 16), metal).translateY(0.46));
+    for (const yy of [0.18, 0.74]) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.03, 8, 18), M(0x3a4450, { m: 0.7 })); ring.rotation.x = Math.PI / 2; ring.position.y = yy; g.add(ring); }
+    const glow = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.16, 16), M(0x35e0e8, { e: 0x35e0e8, ei: 1.9, r: 0.3, m: 0.1 })); glow.position.y = 0.5; g.add(glow);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 0.13, 16), M(0x2a3340, { m: 0.8 })); cap.position.y = 0.98; g.add(cap);
+  }
   return g;
 }
 

@@ -152,8 +152,15 @@ export const ENEMIES = {
 
 // Decor sets per theme (dtype → asset name; render layer decides the file)
 export const DECOR = {
-  fantasy: ["barrel", "crate", "bookshelf", "pillar", "coffin", "debris", "candles", "lantern"],
-  scifi:   ["crate", "terminal", "barrier", "cables"],
+  fantasy: ["barrel", "crate", "pot", "urn", "bookshelf", "pillar", "coffin", "debris", "bones", "candles", "lantern"],
+  scifi:   ["crate", "canister", "terminal", "barrier", "cables"],
+};
+// Decor the player can smash in escape (shatter FX + a little gold/loot).
+export const BREAKABLE_DECOR = new Set(["barrel", "crate", "pot", "urn", "coffin", "debris", "bones", "canister"]);
+// Render footprint (cell-fraction) per decor type — small props stay small.
+export const DECOR_FOOT = {
+  pillar: 1.4, bookshelf: 2.2, terminal: 2.2, barrier: 2.0, cables: 1.6, coffin: 2.4,
+  pot: 1.05, urn: 1.15, bones: 1.5, candles: 0.9, lantern: 1.0, canister: 1.2,
 };
 
 export const TRAPS = ["spikes", "vent"];

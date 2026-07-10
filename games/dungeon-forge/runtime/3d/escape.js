@@ -237,7 +237,8 @@ export class Escape {
       }
       case "decor": {
         const tpl = this.props[o.dtype] || this.props.crate;
-        add(tpl, null, o.dtype === "pillar" ? 1.4 : o.dtype === "bookshelf" || o.dtype === "terminal" ? 2.2 : 1.8);
+        const m = add(tpl, null, D.DECOR_FOOT[o.dtype] || 1.8);
+        if (m) m.userData.decorId = o.id;
         break;
       }
       case "npc": {
@@ -721,6 +722,18 @@ export class Escape {
           g.fx.burst(new THREE.Vector3(ev.x, ev.f * FLOOR_H + 1, ev.z), 0xff5566, 20);
           break;
         }
+        case "decorBreak": {
+          if (this.run) this.run.brokenDecor && this.run.brokenDecor.add(ev.id);
+          const m = this.objMeshes.get(ev.id);
+          if (m) m.visible = false;
+          const col = (ev.dtype === "pot" || ev.dtype === "urn") ? 0xb06a3c : ev.dtype === "bones" ? 0xe8e2d0 : ev.dtype === "canister" ? 0x8792a0 : 0x8a5a34;
+          const at = new THREE.Vector3(ev.x, ev.f * FLOOR_H + 0.7, ev.z);
+          g.fx.burst(at, col, 20);
+          g.fx.burst(at.clone().setY(ev.f * FLOOR_H + 0.5), 0xffd769, 8); // gold sparkle
+          g.audio.sfx("erase");
+          if (ev.by === this.myId && ev.gold) g.hud.toast(`💰 +${ev.gold} gold`, "info");
+          break;
+        }
         case "phit": {
           if (ev.id === this.myId) { g.hud.damageFlash(); g.audio.sfx("hurt"); }
           const a = this.actors.get(ev.id);
@@ -1013,6 +1026,7 @@ export class Escape {
     if (ev.type === "unlock") st.unlockedDoors.add(ev.id);
     if (ev.type === "chest") st.openedChests.add(ev.id);
     if (ev.type === "keyTake") st.takenItems.add(ev.id);
+    if (ev.type === "decorBreak") st.brokenDecor && st.brokenDecor.add(ev.id);
     if (ev.type === "ehit") { const e = st.enemies.find((x) => x.id === ev.id); if (e) { e.hp = ev.hp; e.hurtT = 0.25; if (e.hp <= 0 && e.alive) { e.alive = false; if (e.key) { e.droppedKey = e.key; e.key = null; } } } }
     if (ev.type === "edied") { const e = st.enemies.find((x) => x.id === ev.id); if (e && e.alive) { e.alive = false; if (e.key) { e.droppedKey = e.key; e.key = null; } } }
     if (ev.type === "escape") { const p = st.players.find((x) => x.id === ev.by || x.id === ev.id); if (p) p.escaped = true; }

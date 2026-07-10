@@ -344,6 +344,23 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.6.7 — 2026-07-09 (more props + breakable decor + colormap 404 fix)
+- **Smashable decor**: barrels, crates, coffins, debris (+ new pot/urn/bones and
+  sci-fi canister) now BREAK when meleed or hit by a player bolt — shatter FX,
+  3–8 gold, and the cell becomes walkable (owner: 'interactables we can break').
+  Tracked in st.brokenDecor (MP-relayed via a decorBreak event); collision +
+  render both honour it. Deterministic gold (hashStr) for MP consistency.
+- **3 new fantasy props** (pot, urn, bones) + **1 sci-fi** (canister), hand-built
+  flat-shaded (assets.makeProp), injected into the props map and auto-thumbnailed
+  in the picker — fantasy decor 8 → 11. Per-type render footprint map (DECOR_FOOT)
+  so small props stay small.
+- **Fixed the Textures/colormap.png 404**: items/coin.glb + items/key.glb
+  referenced an external colormap with no sibling Textures/ dir — copied the kit
+  colormap into items/Textures/ (same fix as the earlier chest-texture bug).
+- Verified live: 11 decor thumbnails all render; decorBreak hides the mesh +
+  marks it broken for collision; clean reload shows no colormap 404. Selftest +7
+  (place/smash/gold/passable/roundtrip) → 174 green.
+
 ## v1.6.6 — 2026-07-09 (editable per-placement enemy stats — finishes #9)
 - **Enemy stats are now adjustable per placement** (owner: 'stats … standard but
   can be adjustable by world builder'). Selecting a placed enemy shows HP / DMG /

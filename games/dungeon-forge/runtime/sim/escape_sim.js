@@ -14,7 +14,7 @@
 import {
   CELL, DIRS, ENEMIES, ck, hasCell, objsAt, findAll, stairLinks,
   mulberry, hashStr, rollLoot, cellType, cellHeight, CT, LAVA_DPS, WATER_SLOW, RAISED_H,
-  SHOP, SHOP_IDS, NPC_TYPES, doorAxis,
+  SHOP, SHOP_IDS, NPC_TYPES, doorAxis, BREAKABLE_DECOR,
 } from "./dungeon.js";
 
 export const PLAYER = {
@@ -91,6 +91,7 @@ export function newRun(d, runSeed, players) {
     unlockedDoors: new Set(),      // locked doors that have been unlocked
     openedChests: new Set(),
     takenItems: new Set(),         // key/loot pickup ids
+    brokenDecor: new Set(),        // smashed breakable decor ids
     exit: { f: exit.f, x: exit.obj.x, z: exit.obj.z },
     spawn: { f: spawn.f, x: spawn.obj.x, z: spawn.obj.z, rot: spawn.obj.rot || 0 },
     players: [],
@@ -175,7 +176,8 @@ function cellBlocked(st, f, cx, cz, forEnemy) {
   if (!hasCell(d, f, cx, cz)) return true;
   for (const o of objsAt(d, f, cx, cz)) {
     if (o.kind === "door" && !st.openDoors.has(o.id)) return true;
-    if (o.kind === "decor" || o.kind === "chest" || o.kind === "npc") return true;
+    if (o.kind === "decor") { if (st.brokenDecor.has(o.id)) continue; return true; } // smashed decor no longer blocks
+    if (o.kind === "chest" || o.kind === "npc") return true;
     if (forEnemy && o.kind === "door") return true; // enemies never path through doors (even open? open ok)
   }
   return false;
@@ -505,6 +507,25 @@ export function applyStatus(st, e, kind, cfg, byId) {
 }
 
 /** 3-hit combo melee: hold LMB to chain 1 → 2 → finisher. */
+/** Smash a breakable decor: mark it broken, drop a little gold, emit the event. */
+function breakDecor(st, o, f, byId) {
+  if (st.brokenDecor.has(o.id)) return;
+  st.brokenDecor.add(o.id);
+  const gold = 3 + (hashStr(o.id + "g") % 6); // 3–8 gold, deterministic per prop (MP-safe)
+  const pl = st.players.find((x) => x.id === byId);
+  if (pl) pl.gold += gold;
+  emit(st, "decorBreak", { id: o.id, x: c2w(o.x), z: c2w(o.z), f, dtype: o.dtype, gold, by: byId });
+}
+/** Break any breakable decor within `range` of the player (melee smash). */
+function breakDecorInRange(st, p, range, byId) {
+  const fl = st.d.floors[p.f]; if (!fl) return;
+  const r2 = (range + 1.3) ** 2;
+  for (const o of fl.objects) {
+    if (o.kind !== "decor" || !BREAKABLE_DECOR.has(o.dtype) || st.brokenDecor.has(o.id)) continue;
+    if ((c2w(o.x) - p.x) ** 2 + (c2w(o.z) - p.z) ** 2 <= r2) breakDecor(st, o, p.f, byId);
+  }
+}
+
 function playerMelee(st, p) {
   if (p.meleeT > 0 || p.stunT > 0) return;
   const cls = CLASSES[p.cls] || CLASSES.knight;
@@ -519,6 +540,7 @@ function playerMelee(st, p) {
     damageEnemy(st, e, dmg, p.id);
     if (M.poison && e.alive) applyStatus(st, e, "poison", M.poison, p.id);
   }
+  breakDecorInRange(st, p, M.range, p.id); // smash nearby barrels/crates/pots
 }
 
 /** RMB class special: bash (stun), crush (heavy), fire bolt, poison knife. */
@@ -787,6 +809,16 @@ export function tick(st, dt, opts = {}) {
   for (const b of st.bolts) {
     b.ttl -= dt;
     const nx = b.x + b.vx * dt, nz = b.z + b.vz * dt;
+    // player bolts smash breakable decor they fly into (host-authoritative)
+    if (!b.hostile && simEnemies) {
+      const bcx = w2c(nx), bcz = w2c(nz), bfl = st.d.floors[b.f];
+      if (bfl) for (const o of bfl.objects) {
+        if (o.kind === "decor" && o.x === bcx && o.z === bcz && BREAKABLE_DECOR.has(o.dtype) && !st.brokenDecor.has(o.id)) {
+          breakDecor(st, o, b.f, b.owner); b.ttl = 0; emit(st, "boltHit", { x: nx, z: nz, f: b.f }); break;
+        }
+      }
+      if (b.ttl <= 0) continue;
+    }
     if (cellBlocked(st, b.f, w2c(nx), w2c(nz), false) || doorAxisBlocks(st, b.f, w2c(b.x), w2c(b.z), w2c(nx), w2c(nz))) { b.ttl = 0; emit(st, "boltHit", { x: b.x, z: b.z, f: b.f, wall: true }); continue; }
     b.x = nx; b.z = nz;
     if (b.hostile) {

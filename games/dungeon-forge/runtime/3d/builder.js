@@ -330,7 +330,7 @@ export class Builder {
       }
       case "decor": {
         const tpl = this.props[o.dtype] || this.props.crate;
-        add(tpl, null, o.dtype === "pillar" ? 1.4 : o.dtype === "bookshelf" || o.dtype === "terminal" ? 2.2 : 1.8);
+        add(tpl, null, D.DECOR_FOOT[o.dtype] || 1.8);
         break;
       }
       case "npc": {

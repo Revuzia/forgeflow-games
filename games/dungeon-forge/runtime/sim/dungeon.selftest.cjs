@@ -133,6 +133,31 @@ const ok = (cond, name, extra) => {
     ok(!D.objById(ds, en.id).obj.stats, "stat-ov: changing type resets stats");
   }
 
+  // ── 4c. breakable decor ────────────────────────────────────────
+  console.log("[breakable decor]");
+  {
+    const bd = newDungeon({ theme: "fantasy" });
+    stampRoom(bd, 0, 5, 5, 8, 8);
+    applyOp(bd, { t: "obj+", f: 0, o: { kind: "spawn", x: 6, z: 6 } });
+    applyOp(bd, { t: "obj+", f: 0, o: { kind: "exit", x: 11, z: 11 } });
+    const barrel = applyOp(bd, { t: "obj+", f: 0, o: { kind: "decor", x: 8, z: 6, dtype: "barrel" } });
+    ok(barrel.ok, "break: barrel placed");
+    ok(!applyOp(bd, { t: "obj+", f: 0, o: { kind: "decor", x: 9, z: 6, dtype: "pot" } }).ok === false, "break: new prop type 'pot' places");
+    const brun = newRun(bd, 55, [{ id: "P1" }]);
+    const bp = brun.players[0];
+    ok(brun.brokenDecor.size === 0, "break: nothing broken yet");
+    const gold0 = bp.gold;
+    bp.x = c2w(8) - 1.0; bp.z = c2w(6); bp.input.yaw = 0; bp.input.melee = true;
+    for (let i = 0; i < 60 && brun.brokenDecor.size === 0; i++) tick(brun, 1 / 60);
+    bp.input.melee = false;
+    ok(brun.brokenDecor.has(barrel.id), "break: barrel smashed by melee");
+    ok(bp.gold > gold0, "break: got gold (" + (bp.gold - gold0) + ")");
+    const pass = E.moveCircle(brun, 0, c2w(8) - 1.5, c2w(6), 1.4, 0, 0.35, false);
+    ok(w2c(pass.x) >= 8, "break: smashed barrel cell now passable (cell " + w2c(pass.x) + ")");
+    const rt = sanitize(serialize(bd)).floors[0].objects.find((o) => o.dtype === "pot");
+    ok(rt && rt.kind === "decor", "break: pot survives sanitize roundtrip");
+  }
+
   // ── 5. loot determinism ─────────────────────────────────────────
   console.log("[loot]");
   const l1 = JSON.stringify(rollLoot(s, "oX", 123, null));
