@@ -344,6 +344,23 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.8.5 — 2026-07-10 (five community dungeons + "by players" carousel + menu polish)
+- **Five hand-authored dungeons** in a new BY PLAYERS carousel on the play menu,
+  every one showcasing the new systems (floor textures, fire jets, javelin
+  tripwires, secret pits, explosive barrels, swimming, NPCs, finale bosses):
+  - 🏰 *Cellars of the Drowned King* by Mirella (easy) — flooded cellars, vault tripwire
+  - 🏰 *The Ember Foundry* by TorchBearer99 (tricky) — lava channel, fire-jet corridor, blacksmith, cyclops
+  - 🏰 *The Serpent's Bathhouse* by Naga (tricky) — marble pools, lying floors, cthulhu shrine
+  - 🤖 *Blackout: Sector 7* by VOLTA (brutal) — two decks, canister stacks, warframe bridge
+  - 🏰 *Gauntlet of the 99 Steps* by GrimJim (brutal) — one long trapped road to a dragon
+  All live in `runtime/sim/community.js` (pure ops) and are selftest-enforced:
+  schema-valid + key/lock solvable + escape sim runs clean.
+- **Carousel UI**: horizontal cards (theme, author, difficulty skulls, blurb, your
+  best time) with arrow paging; per-dungeon best times recorded (`community:` keys).
+- **Menu polish**: accent section headers with gradient rules, row hover states,
+  card hover lift — toward the arcane-realms/thronedrift standard.
+- Selftest 222 → 233.
+
 ## v1.8.4 — 2026-07-10 (wall cutaway)
 - **Walls now come down as you walk** (owner request): every wall segment sitting
   between the chase camera and the player smoothly sinks to 14% height (the

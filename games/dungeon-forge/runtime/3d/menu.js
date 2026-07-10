@@ -12,6 +12,7 @@ const { Cloud } = await import("../net/cloud.js" + V);
 const { Session } = await import("../net/forgenet.js" + V);
 const { fmtTime } = await import("./escape.js" + V);
 const { Assets, poseRig, findArmBones, relaxArms } = await import("./assets.js" + V);
+const { COMMUNITY } = await import("../sim/community.js" + V);
 
 const LS = "df_";
 
@@ -277,14 +278,39 @@ export class Menu {
     const rows = mine.map((m, i) => row(
       `${m.theme === "scifi" ? "🤖" : "🏰"} <b>${esc(m.name)}</b>`,
       `${m.theme} · diff ${m.difficulty}`, best["local:" + m.name], `data-play="${i}"`)).join("");
+    // "by players" community carousel cards
+    const skulls = (n) => "💀".repeat(Math.max(1, Math.min(3, n)));
+    const cards = COMMUNITY.map((c, i) => `
+      <button class="dfm-ccard" data-c="${i}" title="${esc(c.blurb)}">
+        <span class="cth">${c.theme === "scifi" ? "🤖" : "🏰"}</span>
+        <span class="cnm">${esc(c.name)}</span>
+        <span class="cby">by ${esc(c.author)}</span>
+        <span class="cdf">${skulls(c.difficulty)} <span class="cdl">${["", "easy", "tricky", "brutal"][c.difficulty] || ""}</span></span>
+        <span class="cbl">${esc(c.blurb)}</span>
+        ${best["community:" + c.key] != null ? `<span class="cbt">best ${fmtTime(best["community:" + c.key])}</span>` : ""}
+      </button>`).join("");
     this.g.hud.modal(`<h3>▶ Escape a dungeon</h3>
       <div class="dfm-listhead">FEATURED</div>
       ${row("🏰 <b>The Forge Trials</b>", "fantasy · 2 floors · locked doors", best["sample:fantasy"], 'data-s="fantasy"')}
       ${row("🤖 <b>Meltdown Facility</b>", "sci-fi · 2 floors · turrets", best["sample:scifi"], 'data-s="scifi"')}
+      <div class="dfm-listhead">BY PLAYERS</div>
+      <div class="dfm-carwrap">
+        <button class="dfm-cararrow left" data-a="cl">‹</button>
+        <div class="dfm-carousel" data-a="car">${cards}</div>
+        <button class="dfm-cararrow right" data-a="cr">›</button>
+      </div>
       ${mine.length ? `<div class="dfm-listhead">MY DUNGEONS</div>${rows}` : ""}
       <div class="df-selrow" style="margin-top:8px"><input data-a="code" name="dungeonCode" placeholder="dungeon code (from a friend)" style="flex:1" class="df-name"><button data-a="go" class="df-btn">Load</button></div>`,
       (m) => {
         m.querySelectorAll("[data-s]").forEach((b) => b.onclick = () => { this.g.hud.closeModal(); this.startEscape(sampleDungeon(b.dataset.s), "menu", "sample:" + b.dataset.s); });
+        m.querySelectorAll("[data-c]").forEach((b) => b.onclick = () => {
+          const c = COMMUNITY[+b.dataset.c];
+          this.g.audio.sfx("confirm"); this.g.hud.closeModal();
+          this.startEscape(c.build(), "menu", "community:" + c.key);
+        });
+        const car = m.querySelector('[data-a="car"]');
+        m.querySelector('[data-a="cl"]').onclick = () => { this.g.audio.sfx("ui"); car.scrollLeft -= 200; };
+        m.querySelector('[data-a="cr"]').onclick = () => { this.g.audio.sfx("ui"); car.scrollLeft += 200; };
         m.querySelectorAll("[data-play]").forEach((b) => b.onclick = () => {
           const entry = mine[+b.dataset.play];
           const d = D.sanitize(entry.json);
@@ -636,9 +662,28 @@ const css = `
 .dfm-help{background:rgba(255,180,70,.14);border:1px solid var(--df-accent,#ffb347);color:#ffd9a0;cursor:pointer;font-size:13px;font-weight:800;padding:8px 16px;border-radius:11px;transition:all .13s}
 .dfm-help:hover{background:rgba(255,180,70,.26);color:#fff}
 .dfm-link{background:none;border:none;color:#aab6e8;cursor:pointer;font-size:12.5px;text-decoration:underline}
-.dfm-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(150,170,255,.12);font-size:14px;text-align:left}
+.dfm-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid rgba(150,170,255,.12);font-size:14px;text-align:left;border-radius:8px;transition:background .12s}
+.dfm-row:hover{background:rgba(90,110,220,.10)}
 .dfm-rowbtns{display:flex;gap:6px}
-.dfm-listhead{font-size:11px;font-weight:800;letter-spacing:2px;opacity:.6;margin:10px 0 4px;text-align:left}
+.dfm-listhead{font-size:11px;font-weight:800;letter-spacing:2px;color:var(--df-accent,#ffb347);opacity:.9;margin:12px 0 5px;text-align:left;display:flex;align-items:center;gap:8px}
+.dfm-listhead:after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(255,179,71,.35),transparent)}
+/* ── "by players" carousel ── */
+.dfm-carwrap{position:relative;margin:2px 0 4px}
+.dfm-carousel{display:flex;gap:9px;overflow-x:auto;padding:4px 26px 8px;scrollbar-width:none}
+.dfm-carousel::-webkit-scrollbar{display:none}
+.dfm-ccard{flex:0 0 172px;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:11px 12px;border-radius:13px;text-align:left;cursor:pointer;color:#eef;
+  border:1px solid rgba(150,170,255,.26);background:linear-gradient(160deg,rgba(44,52,88,.9),rgba(22,26,44,.92));transition:all .14s}
+.dfm-ccard:hover{border-color:var(--df-accent,#ffb347);transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.45)}
+.dfm-ccard .cth{font-size:20px;line-height:1}
+.dfm-ccard .cnm{font-size:13px;font-weight:800;line-height:1.15;color:#f3f6ff}
+.dfm-ccard .cby{font-size:10px;color:#9fb0e8;font-style:italic}
+.dfm-ccard .cdf{font-size:10.5px;margin-top:2px} .dfm-ccard .cdl{opacity:.65;font-weight:700;letter-spacing:.4px}
+.dfm-ccard .cbl{font-size:9.5px;line-height:1.3;color:#aeb7dd;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.dfm-ccard .cbt{font-size:9.5px;color:#7dffb0;font-weight:800;margin-top:2px}
+.dfm-cararrow{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:24px;height:44px;border-radius:9px;border:1px solid rgba(150,170,255,.3);
+  background:rgba(14,17,30,.88);color:#cfd6f4;font-size:19px;font-weight:800;cursor:pointer;transition:all .12s;display:flex;align-items:center;justify-content:center}
+.dfm-cararrow:hover{border-color:var(--df-accent,#ffb347);color:#fff}
+.dfm-cararrow.left{left:-2px} .dfm-cararrow.right{right:-2px}
 .dfm-tmplhead{font-size:12px;font-weight:800;letter-spacing:1px;opacity:.85;margin:8px 0 5px;text-align:left}
 .dfm-tmplrow{display:flex;gap:7px;margin-bottom:4px}
 .df-tmpl{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:9px 6px;border-radius:11px;border:1px solid rgba(150,170,255,.28);background:linear-gradient(180deg,rgba(40,48,80,.85),rgba(24,28,48,.85));color:#eef;cursor:pointer;transition:all .13s}

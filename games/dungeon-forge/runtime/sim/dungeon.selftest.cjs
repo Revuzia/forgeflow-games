@@ -564,6 +564,21 @@ const ok = (cond, name, extra) => {
     ok(!b2.alive, "an arcane bolt detonates a barrel from range");
   }
 
+  // ── 9d. community dungeons (the "by players" carousel) ──────────
+  console.log("[community]");
+  {
+    const { COMMUNITY } = await import("./community.js");
+    ok(COMMUNITY.length >= 5, "community: " + COMMUNITY.length + " authored dungeons");
+    for (const c of COMMUNITY) {
+      const cd = c.build();
+      const v = validate(cd);
+      ok(v.ok, "community/" + c.key + ": validates", v.ok ? "" : v.problems[0].msg);
+      let simOk = true;
+      try { const r = newRun(cd, 42, [{ id: "P1" }]); for (let i = 0; i < 300; i++) tick(r, 1 / 60); } catch (e) { simOk = false; }
+      ok(simOk, "community/" + c.key + ": escape sim runs clean");
+    }
+  }
+
   // ── 10. pathfinding + LOS ───────────────────────────────────────
   console.log("[path+los]");
   const run6 = newRun(s, 6000, [{ id: "P1" }]);
