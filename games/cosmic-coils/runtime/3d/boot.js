@@ -25,7 +25,7 @@ function makeRenderer(container) {
   // supersamples. Big perf win; the quality tier's pixel ratio is applied by
   // Game.applySettings right after boot.
   const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.92;
@@ -52,7 +52,7 @@ try {
   // "half-res bloom" saving is inherent. The lower pixel ratio (HIGH=1.25) +
   // MSAA-off above are the added GPU wins this pass.
   const bloom = new UnrealBloomPass(
-    new THREE.Vector2(container.clientWidth, container.clientHeight), 0.42, 0.42, 0.82);
+    new THREE.Vector2(container.clientWidth, container.clientHeight), 0.5, 0.42, 0.72);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 

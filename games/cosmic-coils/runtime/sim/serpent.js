@@ -94,7 +94,7 @@ export function terrainH(u, seed, amp = 1.6) {
 // ── constants ────────────────────────────────────────────────────────────────
 export const CONST = {
   R: 96,                 // planet radius (world units) — doubled from 48
-  SLOTS: 12,             // total snakes in a match
+  SLOTS: 16,             // total snakes in a match (big world → livelier)
   FOOD_TARGET: 1200,     // gems kept in the world (~same density on 4× surface)
   PATH_STEP: 0.30,       // arc distance between recorded path samples
   BASE_SPEED: 7.0,       // u/s

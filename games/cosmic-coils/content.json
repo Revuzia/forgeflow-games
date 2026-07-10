@@ -7,7 +7,7 @@
   "seed": 20260706,
   "view": { "background": "#050510" },
   "setup": {
-    "slots": 12,
+    "slots": 16,
     "biomes": ["verdant", "ember", "glacier", "dune", "abyss"],
     "foodTarget": 1200
   },

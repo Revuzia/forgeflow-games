@@ -28,6 +28,7 @@ export const BIOME_DEFS = {
     fog: 0x0a2321, fogDensity: 0.0018,
     ambientMotes: { color: 0xaaffcc, n: 140, mode: "firefly" },
     clouds: { color: 0xffffff, n: 40, alpha: 0.18, alt: [20, 32] },
+    dayNight: { len: 210, night: 0.55 },  // green day → firefly night
     accent: 0x53ffb4,
   },
   ember: {
@@ -43,6 +44,7 @@ export const BIOME_DEFS = {
     fog: 0x1d0c08, fogDensity: 0.002,
     ambientMotes: { color: 0xffa040, n: 170, mode: "ember" },
     clouds: { color: 0x4a3a3c, n: 30, alpha: 0.20, alt: [22, 34] },
+    dayNight: { len: 190, night: 0.42 },  // lava keeps nights lit
     accent: 0xff7b3a,
   },
   glacier: {
@@ -58,6 +60,7 @@ export const BIOME_DEFS = {
     fog: 0x10222e, fogDensity: 0.0016,
     ambientMotes: { color: 0xd8f6ff, n: 120, mode: "sparkle" },
     clouds: { color: 0xeaf6ff, n: 22, alpha: 0.13, alt: [24, 36] },
+    dayNight: { len: 230, night: 0.60 },  // cold day → aurora night
     accent: 0x6fe3ff,
   },
   dune: {
@@ -73,6 +76,7 @@ export const BIOME_DEFS = {
     fog: 0x2e1d10, fogDensity: 0.0017,
     ambientMotes: { color: 0xffe0a0, n: 90, mode: "dust" },
     clouds: { color: 0xe8cf9a, n: 16, alpha: 0.12, alt: [20, 30] },
+    dayNight: { len: 175, night: 0.66 },  // bright day, cold dark night
     accent: 0xffc858,
   },
   abyss: {
@@ -88,6 +92,7 @@ export const BIOME_DEFS = {
     fog: 0x150a2e, fogDensity: 0.0019,
     ambientMotes: { color: 0xe27aff, n: 160, mode: "spore" },
     clouds: { color: 0xb88aff, n: 34, alpha: 0.14, alt: [24, 36] },
+    dayNight: { len: 250, night: 0.40 },  // already dark — subtle swing
     accent: 0xe05aff,
   },
 };
@@ -149,13 +154,14 @@ function makeSky(def, seed) {
       uTime: { value: 0 },
       uFlash: { value: 0 },
       uAurora: { value: 0 },
+      uDay: { value: 1 },
     },
     vertexShader: `
       varying vec3 vDir;
       void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
     `,
     fragmentShader: `
-      varying vec3 vDir; uniform vec3 uHorizon,uZenith,uNebula,uNebula2; uniform float uStars,uSeed,uTime,uFlash,uAurora;
+      varying vec3 vDir; uniform vec3 uHorizon,uZenith,uNebula,uNebula2; uniform float uStars,uSeed,uTime,uFlash,uAurora,uDay;
       float hash(vec3 p){ p=fract(p*0.3183099+vec3(0.1,0.2,0.3)); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
       float noise(vec3 x){ vec3 i=floor(x),f=fract(x); f=f*f*(3.0-2.0*f);
         return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
@@ -163,12 +169,15 @@ function makeSky(def, seed) {
       float fbm(vec3 p){ float s=0.0,a=0.5; for(int i=0;i<4;i++){ s+=a*noise(p); a*=0.5; p*=2.1; } return s; }
       void main(){
         float up = vDir.y * 0.5 + 0.5;
+        // uDay: 1 = noon, 0 = midnight. Warm horizon by day, deep+dark by night.
         vec3 col = mix(uHorizon, uZenith, smoothstep(0.0, 0.85, up));
-        // nebula bands
+        col *= (0.32 + 0.68 * uDay);                 // night darkens the sky mood
+        // nebula bands (a touch brighter at night — space shows through)
         float n1 = fbm(vDir * 2.6 + uSeed * 37.0);
         float n2 = fbm(vDir * 4.2 - uSeed * 23.0 + 5.0);
-        col += uNebula * smoothstep(0.55, 0.9, n1) * 0.55;
-        col += uNebula2 * smoothstep(0.6, 0.95, n2) * 0.45;
+        float neb = 0.72 + 0.28 * (1.0 - uDay);
+        col += uNebula * smoothstep(0.55, 0.9, n1) * 0.55 * neb;
+        col += uNebula2 * smoothstep(0.6, 0.95, n2) * 0.45 * neb;
         // stars: two layers of round point twinkles (falloff from cell center)
         vec3 sd = vDir * 240.0;
         vec3 c1 = floor(sd); vec3 f1 = fract(sd) - 0.5;
@@ -179,7 +188,8 @@ function makeSky(def, seed) {
         float on2 = step(0.999, hash(c2));
         float st2 = on2 * smoothstep(0.06, 0.0, dot(f2, f2)) * uStars;
         float tw = 0.55 + 0.45 * sin(uTime * 2.0 + hash(c1) * 40.0);
-        col += vec3(1.0) * st * tw + vec3(0.8, 0.9, 1.0) * st2 * 0.7;
+        float starDay = 0.5 + 1.1 * (1.0 - uDay);    // far more stars at night
+        col += (vec3(1.0) * st * tw + vec3(0.8, 0.9, 1.0) * st2 * 0.7) * starDay;
         col += vec3(0.9, 0.95, 1.0) * uFlash; // lightning
         // ── distant AURORA BOREALIS — shimmering green curtains with a purple
         // base, LOW on the horizon (never overhead, so it can't obscure play),
@@ -504,7 +514,8 @@ export class Planet {
     this.atmo = makeAtmosphere(R, def.accent);
     this.group.add(this.atmo);
 
-    // lights (created ONCE — never add lights later)
+    // lights (created ONCE — never add lights later). Intensities are driven
+    // by the day/night cycle in update().
     const sd = def.sun.dir;
     this.sun = new THREE.DirectionalLight(def.sun.color, def.sun.int);
     this.sun.position.set(sd[0] * 600, sd[1] * 600, sd[2] * 600);
@@ -514,6 +525,11 @@ export class Planet {
     this.amb = new THREE.AmbientLight(0xffffff, 0.22);
     this.group.add(this.amb);
     this._hemiBase = def.hemi.int;
+    this._sunBase = def.sun.int;
+    this._ambBase = 0.22;
+    this._sunAzimuth = Math.atan2(sd[2], sd[0]);   // for the day-arc sweep
+    // start each match mid-morning so you don't spawn in the dark
+    this._tod = 0.34;
 
     // fog
     this.fog = new THREE.FogExp2(def.fog, def.fogDensity);
@@ -565,13 +581,27 @@ export class Planet {
     // curtain that obscured the surface when you rolled under it
     this._auroraA = (this._auroraA || 0) + ((auroraTarget || 0) - (this._auroraA || 0)) * Math.min(1, dt * 0.5);
     this.sky.material.uniforms.uAurora.value = this._auroraA;
+
+    // ── DAY / NIGHT CYCLE (per-biome length + darkness) ──
+    const cyc = this.def.dayNight || { len: 210, night: 0.55 };
+    this._tod = (this._tod + dt / cyc.len) % 1;                 // 0 midnight → 0.5 noon
+    const day = 0.5 - 0.5 * Math.cos(this._tod * 6.2832);        // 0 at night, 1 at noon
+    const lum = 1 - cyc.night * (1 - day);                       // 1 noon … (1-night) midnight
+    this.sky.material.uniforms.uDay.value = lum;
+    // lights follow the sun; snakes/orbs glow (emissive) so they read even at night
+    this.sun.intensity = this._sunBase * (0.14 + 0.86 * lum);
+    this.amb.intensity = this._ambBase * (0.45 + 0.55 * lum);
+    // sun arcs across the sky: azimuth sweeps once per day, elevation high at noon
+    const az = this._sunAzimuth + this._tod * 6.2832;
+    const elev = 0.25 + 0.95 * day;
+    this.sun.position.set(Math.cos(az) * 600, elev * 600, Math.sin(az) * 600);
     const targetD = this.baseFogDensity / Math.max(0.3, visMul * visMul);
     this.fog.density += (targetD - this.fog.density) * Math.min(1, dt * 1.5);
     if (this.liquid) {
       const pulse = 1 + Math.sin(this._time * 1.7) * 0.12;
       this.liquidMat.color.setHex(this.def.liquid.color).multiplyScalar(this.liquidGlow * pulse);
     }
-    this.hemi.intensity = this._hemiBase * (0.85 + 0.15 * visMul) + (flash || 0) * 2.2;
+    this.hemi.intensity = this._hemiBase * (0.85 + 0.15 * visMul) * (0.4 + 0.6 * lum) + (flash || 0) * 2.2;
   }
 
   dispose() {

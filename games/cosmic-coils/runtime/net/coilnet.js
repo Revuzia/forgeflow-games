@@ -396,7 +396,7 @@ class Session {
     this.mySlot = 0;
     let next = 1;
     const roster = [{ peer: this.net.id, slot: 0, name: this.myName, skin: this.mySkin }];
-    for (const [pid, p] of this.peers) { p.slot = next; roster.push({ peer: pid, slot: next, name: p.name, skin: p.skinId }); next++; if (next >= 12) break; }
+    for (const [pid, p] of this.peers) { p.slot = next; roster.push({ peer: pid, slot: next, name: p.name, skin: p.skinId }); next++; if (next >= 16) break; }
     this.send("start", { cfg, roster });
     this._beginMatch(cfg, roster, 0);
   }

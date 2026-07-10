@@ -13,7 +13,7 @@ const V = new URL(import.meta.url).search;
 const S = await import("../sim/serpent.js" + V);
 const { CONST, SKINS, terrainH, segRadius, segSpacing } = S;
 
-const MAX_SEGS = 12 * (CONST.SEG_MAX + 2);
+const MAX_SEGS = CONST.SLOTS * (CONST.SEG_MAX + 2);
 const MAX_FOOD = 2400;
 
 /** inject per-instance color into the emissive term (the glow trick) */
@@ -68,7 +68,7 @@ export class SnakeField {
     // food instancing
     const foodGeo = new THREE.IcosahedronGeometry(1, 1);
     const foodMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.08 });
-    glowify(foodMat, 0.34);
+    glowify(foodMat, 0.95);
     this.foodMesh = new THREE.InstancedMesh(foodGeo, foodMat, MAX_FOOD);
     this.foodMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.foodMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_FOOD * 3), 3);

@@ -23,9 +23,9 @@ const { CONST, SKINS, BIOMES, ranking, segRadius } = S;
 // pixel-ratio caps per tier. HIGH lowered 1.5→1.25 (big GPU win, ~imperceptible
 // sharpness loss with bloom); LOW renders below native for weak machines.
 const QUALITY_TIERS = {
-  high: { dpr: 1.25, bloom: 1, particles: 1 },
-  medium: { dpr: 1.0, bloom: 0.85, particles: 0.75 },
-  low: { dpr: 0.8, bloom: 0.62, particles: 0.5 },
+  high: { dpr: 1.5, bloom: 1, particles: 1 },
+  medium: { dpr: 1.25, bloom: 0.85, particles: 0.75 },
+  low: { dpr: 1.0, bloom: 0.62, particles: 0.5 },
 };
 
 export class Game {
@@ -53,6 +53,7 @@ export class Game {
     this._camUp = new THREE.Vector3(0, 1, 0);
     this._menuOrbit = 0;
     this.texLoader = new THREE.TextureLoader();
+    this._slots = (this.content && this.content.setup && this.content.setup.slots) || 16;
     // boost has three independent sources (W key, SPACE, LMB) so releasing one
     // never cancels another that's still held; same for the slow lever (S, RMB)
     this.input = { steerMouse: 0, kb: 0, bW: false, bSpace: false, bMouse: false, sKey: false, sMouse: false, touchBoost: false, touchStick: 0, touchSteer: null, throttle: 0, zoomTarget: 1 };
@@ -98,8 +99,10 @@ export class Game {
   }
 
   _applyBloom() {
-    // dimmer global bloom so atmosphere ring + essence stay readable
-    const base = this.W && (this.W.biome === "abyss" || this.W.biome === "ember") ? 0.46 : 0.38;
+    // bloom threshold (0.72, set in boot) already gates the wash to only bright
+    // things (orbs/snakes/veins), so a healthy strength makes THOSE glow without
+    // flattening the planet. (owner: orbs barely glowed.)
+    const base = this.W && (this.W.biome === "abyss" || this.W.biome === "ember") ? 0.62 : 0.54;
     const t = QUALITY_TIERS[this.settings.quality] || QUALITY_TIERS.high;
     this.bloom.strength = base * t.bloom;
   }
@@ -133,7 +136,7 @@ export class Game {
     if (this._deathTimer) { clearTimeout(this._deathTimer); this._deathTimer = null; }
     this._deathGen++;
     this._disposeWorld();
-    const W = S.createWorld({ seed, biome, simulateBots, idPrefix, slots: 12, foodTarget: this.content.setup?.foodTarget || S.CONST.FOOD_TARGET });
+    const W = S.createWorld({ seed, biome, simulateBots, idPrefix, slots: this._slots, foodTarget: this.content.setup?.foodTarget || S.CONST.FOOD_TARGET });
     this.W = W;
     this.planet = new Planet(this.scene, W.biome, W.seed, this.texLoader);
     this.snakeField = new SnakeField(this.scene, W);
@@ -148,7 +151,7 @@ export class Game {
     const seed = (Math.random() * 0xffffffff) >>> 0;
     const biome = BIOMES[Math.floor(Math.random() * BIOMES.length)];
     const W = this._makeWorld({ seed, biome, simulateBots: true });
-    for (let i = 0; i < 12; i++) S.spawnSnake(W, i, { isBot: true });
+    for (let i = 0; i < this._slots; i++) S.spawnSnake(W, i, { isBot: true });
     // pre-roll so the attract planet is already alive with big snakes
     for (let i = 0; i < 60 * 20; i++) S.step(W, 1 / 60);
     S.drainEvents(W);
@@ -164,7 +167,7 @@ export class Game {
     const W = this._makeWorld({ seed, biome, simulateBots: true });
     const prof = this.menu.getProfile();
     S.spawnSnake(W, 0, { isBot: false, name: prof.name, skinId: prof.skinId });
-    for (let i = 1; i < 12; i++) S.spawnSnake(W, i, { isBot: true });
+    for (let i = 1; i < this._slots; i++) S.spawnSnake(W, i, { isBot: true });
     S.drainEvents(W);
     this.mode = "practice"; this._runSubmitted = false;
     this.mySlot = 0;
@@ -199,7 +202,7 @@ export class Game {
         name: r.name, skinId: r.skinId,
       });
     }
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < this._slots; i++) {
       if (!humanSlots.has(i)) S.spawnSnake(W, i, { isBot: true, netRemote: !net.isHost() });
     }
     S.drainEvents(W);
