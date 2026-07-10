@@ -344,6 +344,17 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.7.2 — 2026-07-09 (stored mana potion + potion heal-cap fix)
+- **Mana is now a stored, hotkeyed consumable** (audit gap): mana loot / shop
+  purchases add a counted 🔷 Mana Potion (p.manaPots) instead of an instant
+  refill; press **X** to drink one for +60 mana (parity with 🧪 Health / Q). New
+  HUD slot (hidden at 0), manapot event + toast, SHOP entry relabelled.
+- **Fixed the potion heal cap**: health potions now heal up to `p.maxHp`, not the
+  constant 100 — so a Sage-blessed player (maxHp 125) can potion above 100 (it was
+  a silent no-op there before). Verified: hp 110 + potion → 125.
+- Selftest +4 (grant-stores-pot, X-drinks-+60, blessed-potion-to-maxHp) → 178.
+  Verified live: HUD 🔷2→🔷1, drink restored mana. First RPG-foundations slice.
+
 ## v1.7.1 — 2026-07-09 (spell FX overhaul + chain lightning + class design)
 - Built by a **6-agent workflow** (one per effect + design + integration). Four
   upgraded, reference-matched spell effects in fx.js, self-contained + merge-safe:

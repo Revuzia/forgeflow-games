@@ -65,7 +65,7 @@ export const KINDS = {
 // The builder toggles which of these a given merchant offers (default: all).
 export const SHOP = {
   potion: { label: "Health Potion", price: 25, icon: "🧪", desc: "+35 HP on use (Q)" },
-  mana:   { label: "Energy Refill",  price: 18, icon: "🔷", desc: "Restore full mana" },
+  mana:   { label: "Mana Potion",    price: 18, icon: "🔷", desc: "+60 mana on use (X)" },
   weapon: { label: "Weapon Upgrade", price: 70, icon: "⚔", desc: "+1 weapon tier (more damage)" },
   armor:  { label: "Armor Upgrade",  price: 70, icon: "🛡", desc: "+1 armor tier (soak damage)" },
   charm:  { label: "Damage Charm",   price: 90, icon: "✨", desc: "+20% damage, whole run" },

@@ -158,6 +158,27 @@ const ok = (cond, name, extra) => {
     ok(rt && rt.kind === "decor", "break: pot survives sanitize roundtrip");
   }
 
+  // ── 4d. stored mana potions + potion heals to maxHp ─────────────
+  console.log("[mana pots + potion cap]");
+  {
+    const md = newDungeon({ theme: "fantasy" });
+    stampRoom(md, 0, 5, 5, 6, 6);
+    applyOp(md, { t: "obj+", f: 0, o: { kind: "spawn", x: 6, z: 6 } });
+    applyOp(md, { t: "obj+", f: 0, o: { kind: "exit", x: 9, z: 9 } });
+    const mrun = newRun(md, 88, [{ id: "P1", skin: 2 }]);
+    const mp = mrun.players[0];
+    ok(mp.manaPots === 0, "mana: start with 0 mana pots");
+    mp.mana = 20;
+    E.grantLoot(mrun, mp, { kind: "mana" });
+    ok(mp.manaPots === 1 && mp.mana === 20, "mana: loot stores a pot (no instant refill)");
+    mp.input.manaDown = true; tick(mrun, 1 / 60);
+    ok(mp.manaPots === 0 && Math.abs(mp.mana - 80) < 1, "mana: X drinks +60 (mana " + mp.mana.toFixed(1) + ")");
+    // blessed player (maxHp 125) can now potion above 100 (was capped)
+    mp.maxHp = 125; mp.hp = 110; mp.potions = 1;
+    mp.input.potionDown = true; tick(mrun, 1 / 60);
+    ok(mp.hp === 125, "potion: heals a Sage-blessed player past 100 to maxHp (hp " + mp.hp + ")");
+  }
+
   // ── 5. loot determinism ─────────────────────────────────────────
   console.log("[loot]");
   const l1 = JSON.stringify(rollLoot(s, "oX", 123, null));

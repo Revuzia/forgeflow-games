@@ -21,7 +21,7 @@ export const PLAYER = {
   hp: 100, speed: 4.6, sprint: 6.6, radius: 0.42,
   meleeDmg: 30, meleeRange: 2.0, meleeArc: Math.PI * 0.62, meleeCd: 0.55,
   boltDmg: 16, boltSpeed: 15, boltCd: 0.32, boltMana: 12,
-  mana: 100, manaRegen: 9, potionHeal: 35, respawnS: 5,
+  mana: 100, manaRegen: 9, potionHeal: 35, manaPotRestore: 60, respawnS: 5,
 };
 
 /**
@@ -110,7 +110,7 @@ export function newRun(d, runSeed, players) {
       maxHp: cls.hp, combo: 0, comboT: 0, specialT: 0, frostT: 0, chainT: 0, stunT: 0,
       f: spawn.f, x: c2w(spawn.obj.x) + (i % 2) * 0.9 - 0.45, z: c2w(spawn.obj.z) + Math.floor(i / 2) * 0.9 - 0.45,
       yaw: (spawn.obj.rot || 0) * Math.PI / 2, hp: cls.hp, mana: PLAYER.mana,
-      alive: true, escaped: false, deaths: 0, gold: 40, keys: 0, potions: 1, charms: 0,
+      alive: true, escaped: false, deaths: 0, gold: 40, keys: 0, potions: 1, manaPots: 0, charms: 0,
       weaponTier: 0, armorTier: 0,
       meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null, // climb: {t, from, to}
       input: { mx: 0, mz: 0, sprint: false, melee: false, bolt: false, interact: false, potion: false, yaw: 0 },
@@ -157,7 +157,7 @@ export function addPlayer(st, p) {
     maxHp: cls.hp, combo: 0, comboT: 0, specialT: 0, frostT: 0, chainT: 0, stunT: 0,
     f: st.spawn.f, x: c2w(st.spawn.x) + (i % 2) * 0.9 - 0.45, z: c2w(st.spawn.z) + Math.floor(i / 2) * 0.9 - 0.45,
     yaw: 0, hp: cls.hp, mana: PLAYER.mana,
-    alive: true, escaped: false, deaths: 0, gold: 40, keys: 0, potions: 1, charms: 0,
+    alive: true, escaped: false, deaths: 0, gold: 40, keys: 0, potions: 1, manaPots: 0, charms: 0,
     weaponTier: 0, armorTier: 0,
     meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null,
     input: { mx: 0, mz: 0, sprint: false, melee: false, bolt: false, interact: false, potion: false, yaw: 0 },
@@ -421,7 +421,7 @@ export function blessPlayer(st, p, npc) {
 export function grantLoot(st, p, it) {
   if (it.kind === "gold") p.gold += it.n || 10;
   else if (it.kind === "potion") p.potions++;
-  else if (it.kind === "mana") p.mana = PLAYER.mana;
+  else if (it.kind === "mana") p.manaPots = (p.manaPots || 0) + 1; // stored, drink with X
   else if (it.kind === "charm") p.charms++;
   else if (it.kind === "key") p.keys++;
   else if (it.kind === "weapon") { const t = Math.min(3, Math.max(p.weaponTier || 0, it.tier | 0)); if (t !== p.weaponTier) { p.weaponTier = t; emit(st, "equip", { id: p.id, slot: "weapon", tier: t }); } }
@@ -809,11 +809,16 @@ export function tick(st, dt, opts = {}) {
     if (p.input.frost) playerFrost(st, p);                        // R — sorceress only
     if (p.input.chain) castChain(st, p);                          // C — sorceress chain lightning
     if (p.input.interactDown) { doInteract(st, p); }
-    if (p.input.potionDown && p.potions > 0 && p.hp < PLAYER.hp) {
-      p.potions--; p.hp = Math.min(PLAYER.hp, p.hp + PLAYER.potionHeal);
+    const maxHp = p.maxHp || PLAYER.hp;
+    if (p.input.potionDown && p.potions > 0 && p.hp < maxHp) {
+      p.potions--; p.hp = Math.min(maxHp, p.hp + PLAYER.potionHeal); // heal up to maxHp (Sage blessing counts)
       emit(st, "potion", { id: p.id, hp: p.hp });
     }
-    p.input.interactDown = false; p.input.potionDown = false;
+    if (p.input.manaDown && (p.manaPots || 0) > 0 && p.mana < PLAYER.mana) {
+      p.manaPots--; p.mana = Math.min(PLAYER.mana, p.mana + PLAYER.manaPotRestore);
+      emit(st, "manapot", { id: p.id, mana: p.mana });
+    }
+    p.input.interactDown = false; p.input.potionDown = false; p.input.manaDown = false;
 
     // exit portal
     if (p.f === st.exit.f && cx === st.exit.x && cz === st.exit.z) {

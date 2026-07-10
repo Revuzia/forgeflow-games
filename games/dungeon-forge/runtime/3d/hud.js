@@ -303,6 +303,7 @@ export class Hud {
           <span class="df-slot" data-a="keys" title="Keys">🗝️ 0</span>
           <span class="df-slot" data-a="gold" title="Gold">💰 0</span>
           <span class="df-slot" data-a="potions" title="Q to drink">🧪 1</span>
+          <span class="df-slot" data-a="manapots" title="X to drink">🔷 0</span>
           <span class="df-slot" data-a="charms" title="Damage charms" style="display:none">✨ 0</span>
           <span class="df-slot tier" data-a="wt" title="Weapon tier" style="display:none">⚔ I</span>
           <span class="df-slot tier" data-a="at" title="Armor tier" style="display:none">🛡 I</span>
@@ -393,6 +394,8 @@ export class Hud {
     q('[data-a="keys"]').textContent = "🗝️ " + p.keys;
     q('[data-a="gold"]').textContent = "💰 " + p.gold;
     q('[data-a="potions"]').textContent = "🧪 " + p.potions;
+    const mp = q('[data-a="manapots"]');
+    if (mp) { mp.style.display = (p.manaPots || 0) ? "" : "none"; mp.textContent = "🔷 " + (p.manaPots || 0); }
     const ch = q('[data-a="charms"]');
     ch.style.display = p.charms ? "" : "none"; ch.textContent = "✨ " + p.charms;
     const ROM = ["", "I", "II", "III"];

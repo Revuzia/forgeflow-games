@@ -598,6 +598,7 @@ export class Escape {
         else p.input.interactDown = true;
       }
       if (e.code === "KeyQ" && p) p.input.potionDown = true;
+      if (e.code === "KeyX" && p) p.input.manaDown = true;
       if (e.code === "KeyV") this.fp = !this.fp;
       if (e.code === "KeyF" && p) this._special = true;
       if (e.code === "KeyR" && p) this._frost = true;
@@ -822,6 +823,7 @@ export class Escape {
           break;
         }
         case "potion": if (ev.id === this.myId) { g.audio.sfx("potion"); g.hud.toast("🧪 +35 HP", "loot"); } break;
+        case "manapot": if (ev.id === this.myId) { g.audio.sfx("potion"); g.hud.toast("🔷 +60 Mana", "loot"); } break;
         case "step": if (ev.id === this.myId) g.audio.step(); break;
         case "climb": g.audio.sfx("stairs"); break;
         case "floor": if (ev.id === this.myId) this._syncFloorVis(); break;
