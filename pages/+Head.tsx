@@ -10,6 +10,14 @@ export default function Head() {
       <meta property="og:site_name" content="ForgeFlow Games" />
       <meta property="og:image" content="/images/og-default.png" />
       <meta name="twitter:card" content="summary_large_image" />
+      {/* Google Analytics 4 — property 545027229 (forgeflowgames.com) */}
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-Z1R90RFQKP"></script>
+      <script
+        dangerouslySetInnerHTML={{
+          __html:
+            "window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-Z1R90RFQKP');",
+        }}
+      />
     </>
   );
 }
