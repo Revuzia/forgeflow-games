@@ -384,7 +384,9 @@ export class Escape {
       let main;
       if (cls === "knight") {
         main = this.g.assets.clone(this.props.sword || this.props.blaster);
-        Assets.normalizeFoot(main, 0.95 + 0.12 * (p.weaponTier || 0));
+        // size by BLADE LENGTH (+Y), not footprint — normalizeFoot sized by the
+        // thin x/z width and blew a long thin blade up ~10× (the giant-sword bug)
+        Assets.normalizeH(main, 1.15 + 0.1 * (p.weaponTier || 0));
       } else {
         main = Assets.makeClassWeapon(cls);
         main.scale.setScalar(cfg.scale + 0.1 * (p.weaponTier || 0));

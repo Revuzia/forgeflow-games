@@ -344,6 +344,22 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.7.7 — 2026-07-10 (character shrug + giant-sword fixes — no regen needed)
+- **The "shrug" stance is fixed** — root cause was the Meshy idle clip animating the
+  **shoulder/arm/hand POSITION tracks** (raising the shoulders), while the `relaxArms`
+  hack only corrected rotation, so it could never undo the raised shoulders. Now we
+  strip those position tracks from every character clip (same pattern as the existing
+  scale-track strip). Verified live: all 4 classes stand with arms hanging naturally
+  (hands 0.41–0.52 below the shoulders), not shrugging.
+- **The oversized knight sword is fixed** — the sword GLB was sized with
+  `normalizeFoot(0.95)` (footprint = max of x/z width). A blade is thin in x/z and long
+  in +Y, so scaling its narrow width to 0.95 blew the length up ~10× (the giant,
+  backwards blade). Switched to `normalizeH` (size by blade length). Verified: the
+  blade is now 1.04 units ≈ 0.7× body height, held correctly in hand.
+- **Diagnosis note:** inspected the live rigs first — they're clean 24-bone Meshy
+  humanoids with a fine A-pose bind, so **no T-pose regeneration was needed** (saved
+  ~212 Meshy credits). Both fixes are code-only, $0.
+
 ## v1.7.6 — 2026-07-10 (XP & leveling foundation)
 - **Kills now grant XP and the player levels up.** Each enemy is worth XP scaled
   to its HP+damage (bosses ×3); crossing the per-level threshold raises the level,
