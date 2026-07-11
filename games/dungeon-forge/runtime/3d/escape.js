@@ -17,6 +17,7 @@ const { EnemyPool } = await import("./enemies.js" + V);
 const FLOOR_H = 4.4;
 const CELL = D.CELL;
 const c2w = E.c2w;
+const { landingMarker } = await import("./stair_marker.js" + V);
 const _swingAxis = new THREE.Vector3(); // scratch: character right-vector for gait arm-swing
 
 const SKINS = ["knight", "barbarian", "sorceress", "rogue"];
@@ -226,6 +227,17 @@ export class Escape {
         group.add(mesh);
         this.objMeshes.set(o.id, mesh);
       }
+    }
+    // landing markers: the OTHER end of every staircase renders a descending
+    // stairwell + glow ring, so the connection is visible on BOTH floors and the
+    // player can see (and walk onto) the spot to go back down.
+    this.landingRings = this.landingRings || [];
+    for (const L of D.stairLinks(this.d)) {
+      if (L.to.f !== f) continue;
+      const lm = landingMarker(L, CELL);
+      lm.position.set(L.to.x * CELL + CELL / 2, D.cellHeight(this.d, f, L.to.x, L.to.z) + 0.02, L.to.z * CELL + CELL / 2);
+      group.add(lm);
+      if (lm.userData.ring) this.landingRings.push(lm.userData.ring);
     }
     return { group, count: Object.keys(fl.cells).length };
   }

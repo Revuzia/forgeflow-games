@@ -603,6 +603,40 @@ const ok = (cond, name, extra) => {
     ok(rp.f === 0, "stairs-down: climbing DOWN switches to floor 0");
   }
 
+  // ── 9e2. BIDIRECTIONAL stairs (walk up AND back down, anti-bounce) ──
+  console.log("[stairs-bidirectional]");
+  {
+    const bd = newDungeon({ theme: "fantasy" });
+    stampRoom(bd, 0, 5, 5, 4, 4);
+    applyOp(bd, { t: "floor+" });
+    stampRoom(bd, 1, 5, 5, 4, 4);
+    applyOp(bd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(bd, { t: "obj+", f: 0, o: { kind: "exit", x: 8, z: 8 } });
+    // UP staircase on floor 0 at (6,6) rot 0 → landing (6,7) on floor 1
+    applyOp(bd, { t: "obj+", f: 0, o: { kind: "stairs", x: 6, z: 6, rot: 0 } });
+    const rr = newRun(bd, 51, [{ id: "P1" }]);
+    const rp = rr.players[0];
+    // climb UP: stand on the stairs cell
+    rp.x = c2w(6); rp.z = c2w(6);
+    for (let i = 0; i < 90 && rp.f === 0; i++) tick(rr, 1 / 60);
+    ok(rp.f === 1, "bidir: walking onto stairs climbs UP to floor 1");
+    ok(w2c(rp.x) === 6 && w2c(rp.z) === 7, "bidir: arrives on the landing (6,7)");
+    // ANTI-BOUNCE: staying on the landing must NOT send you back down
+    for (let i = 0; i < 60; i++) tick(rr, 1 / 60);
+    ok(rp.f === 1, "bidir: standing on the landing does NOT bounce back down");
+    // step OFF the landing, then back ON → descend
+    rp.x = c2w(6); rp.z = c2w(9);          // move away (re-arm the lock)
+    for (let i = 0; i < 20; i++) tick(rr, 1 / 60);
+    ok(rp.stairLock == null, "bidir: stairLock clears after stepping off");
+    rp.x = c2w(6); rp.z = c2w(7);          // step back onto the landing
+    for (let i = 0; i < 90; i++) tick(rr, 1 / 60);   // let the whole climb tween finish
+    ok(rp.f === 0, "bidir: stepping back onto the landing descends to floor 0");
+    ok(w2c(rp.x) === 6 && w2c(rp.z) === 6, "bidir: arrives back on the stair cell (6,6)");
+    // and it does not immediately re-climb
+    for (let i = 0; i < 60; i++) tick(rr, 1 / 60);
+    ok(rp.f === 0, "bidir: standing on the stair cell after descent does NOT re-climb");
+  }
+
   // ── 9f. interior EDGE walls + edge doors (the WALLS tool) ────────
   console.log("[edge-walls]");
   {

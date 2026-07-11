@@ -344,6 +344,18 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.9.2 — 2026-07-10 (stairs go BOTH ways + visible landings)
+- **Stairs are bidirectional now.** You climb a staircase up AND walk back down
+  the same one — no key, just step onto either end. An anti-bounce lock keeps you
+  from ping-ponging (arrive → the cell won't re-trigger until you step off it).
+  Fixes the in-game "stairs are closed off, I can't go back down" bug.
+- **The landing tile is no longer a blank square.** The connected end of every
+  staircase renders a recessed stairwell + a glowing green down-ring + chevron on
+  the OTHER floor, so the connection is obvious on both levels (and you can see
+  exactly where to step to descend). Shows in the builder too.
+- Selftest 255 → 262 (climb up, anti-bounce hold, step-off re-arm, descend, no
+  re-climb). Browser-verified end-to-end.
+
 ## v1.9.1 — 2026-07-10 (builder shows REAL walls)
 - **The builder now renders full-height walls** (they were squashed to 42% —
   "how am I supposed to add doors and put traps if I can't see the walls?").

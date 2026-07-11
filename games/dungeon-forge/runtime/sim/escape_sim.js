@@ -150,7 +150,7 @@ export function newRun(d, runSeed, players) {
       level: 1, xp: 0,             // progression: gainXp() raises level → +maxHp +dmg
       weaponTier: 0, armorTier: 0, // derived from equipped items (see recomputeGear)
       baseMaxHp: cls.hp, blessHp: 0, equipped: { weapon: null, armor: null }, inventory: [], gearDmg: 0, gearMaxHp: 0,
-      meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null, // climb: {t, from, to}
+      meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null, stairLock: null, // climb: {t, from, to}
       input: { mx: 0, mz: 0, sprint: false, melee: false, bolt: false, interact: false, potion: false, yaw: 0 },
       remote: !!p.remote, stepAcc: 0,
     });
@@ -929,7 +929,7 @@ export function tick(st, dt, opts = {}) {
       p.respawnT -= dt;
       if (p.respawnT <= 0) {
         p.alive = true; p.hp = Math.round((p.maxHp || PLAYER.hp) * 0.6);
-        p.f = st.spawn.f; p.x = c2w(st.spawn.x); p.z = c2w(st.spawn.z); p.climb = null;
+        p.f = st.spawn.f; p.x = c2w(st.spawn.x); p.z = c2w(st.spawn.z); p.climb = null; p.stairLock = null;
         emit(st, "respawn", { id: p.id });
       }
       continue;
@@ -974,18 +974,23 @@ export function tick(st, dt, opts = {}) {
     // LAVA burns anyone standing in it (the 0.45s i-frame gate paces the DoT)
     if (ctHere === CT.LAVA) damagePlayer(st, p, LAVA_DPS.dmg, "lava");
 
-    // stairs: stepping onto a stairs cell starts a climb to the landing
+    // stairs: BIDIRECTIONAL — stepping onto EITHER end transports you to the
+    // other, no key needed. Anti-bounce: the cell you just arrived at is locked
+    // until you step off it, so you don't ping-pong (climb up → land → the
+    // landing sends you back down → …). Both ends are walk-triggered because the
+    // landing renders its own down-stair marker, so it reads as a staircase too.
     const cx = w2c(p.x), cz = w2c(p.z);
-    for (const L of st.stairs) {
-      if (L.from.f === p.f && L.from.x === cx && L.from.z === cz) {
-        p.climb = { t: 0, fx: p.x, fz: p.z, tx: c2w(L.to.x), tz: c2w(L.to.z), tf: L.to.f, up: true };
-        emit(st, "climb", { id: p.id, up: true });
-        break;
-      }
-      // descend: stand on the landing and walk back onto it → go down
-      if (L.to.f === p.f && L.to.x === cx && L.to.z === cz && p.input.interactDown) {
-        p.climb = { t: 0, fx: p.x, fz: p.z, tx: c2w(L.from.x), tz: c2w(L.from.z), tf: L.from.f, up: false };
-        emit(st, "climb", { id: p.id, up: false });
+    const hereKey = p.f + "," + cx + "," + cz;
+    if (p.stairLock && p.stairLock !== hereKey) p.stairLock = null;  // stepped off → re-arm
+    if (!p.stairLock) {
+      for (const L of st.stairs) {
+        const onFrom = L.from.f === p.f && L.from.x === cx && L.from.z === cz;
+        const onTo = L.to.f === p.f && L.to.x === cx && L.to.z === cz;
+        if (!onFrom && !onTo) continue;
+        const dst = onFrom ? L.to : L.from;
+        p.climb = { t: 0, fx: p.x, fz: p.z, tx: c2w(dst.x), tz: c2w(dst.z), tf: dst.f, up: onFrom };
+        p.stairLock = dst.f + "," + dst.x + "," + dst.z;   // don't re-trigger on arrival
+        emit(st, "climb", { id: p.id, up: onFrom });
         break;
       }
     }

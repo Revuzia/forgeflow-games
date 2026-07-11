@@ -11,6 +11,7 @@ const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
 const { makeInstanced, Assets, creatureClips, makeTorch, makeCreature, makeCellSurfaces, makeNpc } = await import("./assets.js" + V);
 const { Thumbnailer } = await import("./thumbs.js" + V);
+const { landingMarker } = await import("./stair_marker.js" + V);
 
 const FLOOR_H = 4.4;
 const CELL = D.CELL;
@@ -307,6 +308,14 @@ export class Builder {
         group.add(mesh);
         this.objMeshes.set(o.id, mesh);
       }
+    }
+    // stair LANDING markers (the connected end on the OTHER floor) so a stairwell
+    // is visible on both floors — the auto-added landing is no longer a blank tile
+    for (const L of D.stairLinks(this.d)) {
+      if (L.to.f !== f) continue;
+      const lm = landingMarker(L, CELL);
+      lm.position.set(L.to.x * CELL + CELL / 2, D.cellHeight(this.d, f, L.to.x, L.to.z) + 0.02, L.to.z * CELL + CELL / 2);
+      group.add(lm);
     }
     return { group, surf, wInst };
   }
