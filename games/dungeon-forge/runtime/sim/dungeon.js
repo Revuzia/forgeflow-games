@@ -424,6 +424,15 @@ export function applyOp(d, op) {
       d.floors.push(emptyFloor());
       return { ok: true };
     }
+    case "floor-below": {
+      // add a SUBLEVEL beneath the whole dungeon. Objects live inside fl.objects
+      // (no stored floor index), so unshift shifts every floor up an index for
+      // free — spawn/exit/stairs/walls all stay with their floor. stairLinks +
+      // findAll recompute indices live, so nothing else needs rewriting.
+      if (d.floors.length >= MAX_FLOORS) return { ok: false, err: "maxfloors" };
+      d.floors.unshift(emptyFloor());
+      return { ok: true };
+    }
     case "floor-": {
       if (d.floors.length <= 1) return { ok: false, err: "minfloors" };
       if (op.f !== d.floors.length - 1) return { ok: false, err: "toponly" };

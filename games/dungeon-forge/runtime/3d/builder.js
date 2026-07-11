@@ -801,8 +801,16 @@ export class Builder {
     if (this.tool === "light") o.color = this.toolOpt.color;
     if (this.tool === "torch") o.kind = "torch";
     if (this.tool === "stairs" && this.toolOpt.sdir === -1) {
-      if (this.floor === 0) { this.g.hud.toast("Stairs DOWN need a floor below — you're on floor 1", "warn"); this.g.audio.sfx("error"); return; }
       o.dir = -1;
+      // on the lowest floor, DIG a new sublevel beneath the whole dungeon so you
+      // can always descend (owner: "why can't we go into a SUBLEVEL?")
+      if (this.floor === 0) {
+        if (this.d.floors.length >= D.MAX_FLOORS) { this.g.hud.toast("Max floors reached — can't dig deeper", "warn"); this.g.audio.sfx("error"); return; }
+        this._pushUndo(); this._noUndo = true;   // group the dig + placement into one undo
+        this.applyLocal({ t: "floor-below" });
+        this.floor = 1;                          // the floor we were on is now index 1; the sublevel is 0
+        this.g.hud.toast("Dug a sublevel below — stairs descend into it", "info");
+      }
     }
     const op = { t: "obj+", f: this.floor, o };
     const res = this.applyLocal(op);
@@ -812,6 +820,8 @@ export class Builder {
       if (this.tool === "stairs") this._ensureLanding(cell);
       if (this.tool === "door") this.select(res.id); // immediately show the lock toggle
     }
+    if (this._noUndo) { this._noUndo = false; if (this.g.hud.refreshBuilderUndo) this.g.hud.refreshBuilderUndo(this); }
+    this.g.hud.refreshBuilder(this);   // floor count/label may have changed (sublevel dig)
   }
 
   _ensureLanding(cell) {

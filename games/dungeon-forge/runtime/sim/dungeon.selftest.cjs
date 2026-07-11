@@ -637,6 +637,35 @@ const ok = (cond, name, extra) => {
     ok(rp.f === 0, "bidir: standing on the stair cell after descent does NOT re-climb");
   }
 
+  // ── 9e3. SUBLEVEL dig (floor-below unshift + reindex integrity) ──
+  console.log("[sublevel]");
+  {
+    const sub = newDungeon({ theme: "fantasy" });
+    stampRoom(sub, 0, 5, 5, 4, 4);
+    applyOp(sub, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(sub, { t: "obj+", f: 0, o: { kind: "exit", x: 8, z: 8 } });
+    ok(applyOp(sub, { t: "floor-below" }).ok, "floor-below digs a sublevel");
+    ok(sub.floors.length === 2, "now 2 floors");
+    ok(findAll(sub, "spawn")[0].f === 1, "spawn reindexed onto floor 1 (old ground)");
+    ok(findAll(sub, "exit")[0].f === 1, "exit reindexed onto floor 1");
+    ok(Object.keys(sub.floors[0].cells).length === 0, "the new sublevel (floor 0) starts empty");
+    // build the sublevel + a down staircase from floor 1 into it
+    stampRoom(sub, 0, 5, 5, 4, 4);
+    applyOp(sub, { t: "obj+", f: 1, o: { kind: "stairs", x: 6, z: 6, rot: 0, dir: -1 } }); // landing (6,7) on floor 0
+    const links = stairLinks(sub);
+    ok(links.some((l) => l.down && l.from.f === 1 && l.to.f === 0), "down-stairs links floor 1 → sublevel 0");
+    ok(solvability(sub).solvable !== false, "sublevel dungeon still solvable");
+    // run: player spawns on floor 1 and can descend into the sublevel
+    const rr = newRun(sub, 60, [{ id: "P1" }]);
+    const rp = rr.players[0];
+    ok(rp.f === 1, "player spawns on floor 1");
+    rp.x = c2w(6); rp.z = c2w(6);
+    for (let i = 0; i < 90; i++) tick(rr, 1 / 60);
+    ok(rp.f === 0, "player descends the stairs into the sublevel");
+    // serialize roundtrip keeps both floors
+    ok(sanitize(serialize(sub)).floors.length === 2, "sublevel survives serialize roundtrip");
+  }
+
   // ── 9f. interior EDGE walls + edge doors (the WALLS tool) ────────
   console.log("[edge-walls]");
   {

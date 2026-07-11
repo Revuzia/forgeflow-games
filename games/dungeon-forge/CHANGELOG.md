@@ -344,6 +344,18 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.9.3 — 2026-07-10 (dig SUBLEVELS with stairs down)
+- **Stairs Down on the lowest floor now DIGS a sublevel** beneath the whole
+  dungeon (owner: "why can't we go into a SUBLEVEL?") instead of refusing. The
+  new basement is added below, you stay on your floor, and the staircase drops
+  into it with its landing auto-added — mirroring how Stairs Up grows a floor
+  above. The dig + placement is a single undo.
+- Model op `floor-below` unshifts a floor; since objects live in fl.objects (no
+  stored floor index) every existing floor shifts up an index for free, and
+  stairLinks/findAll recompute live — spawn/exit/stairs/walls all stay correct.
+- Selftest 262 → 272 (dig, reindex integrity, down-link, solvable, descend,
+  roundtrip). Browser-verified: 1→2 floors, grouped undo/redo, sublevel viewable.
+
 ## v1.9.2 — 2026-07-10 (stairs go BOTH ways + visible landings)
 - **Stairs are bidirectional now.** You climb a staircase up AND walk back down
   the same one — no key, just step onto either end. An anti-bounce lock keeps you
