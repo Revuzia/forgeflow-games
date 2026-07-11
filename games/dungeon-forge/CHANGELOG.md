@@ -344,6 +344,15 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.9.1 — 2026-07-10 (builder shows REAL walls)
+- **The builder now renders full-height walls** (they were squashed to 42% —
+  "how am I supposed to add doors and put traps if I can't see the walls?").
+  The playtest cutaway runs in build mode too: only the walls between your
+  camera and the spot you're editing sink out of the way, and they spring back
+  as you orbit. Works for boundary walls AND manual interior walls.
+- Verified live: 32 boundary walls render full; a low camera angle sinks
+  exactly the 4 occluders; orbiting back to top-down restores all 32.
+
 ## v1.9.0 — 2026-07-10 (THE WALLS TOOL — interior walls + doors on the line)
 - **Toolbar slot 2 is now 🧱 WALLS** (the owner's long-standing ask). Click or
   drag along the grid LINES between floor tiles to raise interior walls, with a

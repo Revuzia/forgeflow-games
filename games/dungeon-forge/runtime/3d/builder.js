@@ -64,6 +64,9 @@ const FLOOR_CT = { floor: 1, lava: 2, water: 3 };
 
 const PAINT_CT = { floor: 1, lava: 2, water: 3, raise: 4 };
 
+// scratch objects for the wall-cutaway matrix writes (no per-frame allocation)
+const _bcP = new THREE.Vector3(), _bcQ = new THREE.Quaternion(), _bcS = new THREE.Vector3(), _bcM = new THREE.Matrix4(), _bcUp = new THREE.Vector3(0, 1, 0);
+
 export class Builder {
   constructor(game) {
     this.g = game;
@@ -235,8 +238,11 @@ export class Builder {
     // wall plane inside the door cell, so no edge filtering is needed
     const segs = D.wallSegments(this.d, f);
     const wInst = makeInstanced(this.kit.wall.scene, Math.max(1, segs.length));
-    // builder shows LOW walls so you can always see inside your dungeon
-    const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), pos = new THREE.Vector3(), scl = new THREE.Vector3(1, 0.42, 1);
+    // FULL-height walls in the builder too (owner: "how am I supposed to add
+    // doors if I can't see the walls?") — the cutaway pass below sinks only the
+    // walls between the camera and the orbit target, exactly like playtest.
+    const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), pos = new THREE.Vector3(), scl = new THREE.Vector3(1, 1, 1);
+    const segData = [];
     segs.forEach((s, i) => {
       const cx = s.x * CELL + CELL / 2, cz = s.z * CELL + CELL / 2;
       const dir = D.DIRS[s.side];
@@ -246,9 +252,12 @@ export class Builder {
       q.setFromAxisAngle(up, yaw);
       m4.compose(pos, q, scl);
       wInst.setMatrixAt(i, m4);
+      segData.push({ wx: pos.x, wz: pos.z, yaw });
     });
     wInst.setCount(segs.length); wInst.commit();
     group.add(wInst.group);
+    this.wallSets = this.wallSets || [];
+    this.wallSets[f] = { inst: wInst, segs: segData, cur: new Float32Array(segData.length).fill(1), man: [], manCur: null };
 
     // manual INTERIOR walls (styled, low like the derived ones) + edge doors
     const man = D.manualWallSegments(this.d, f);
@@ -264,14 +273,17 @@ export class Builder {
         for (let k = 0; k < 2; k++) {
           const off = (k === 0 ? -0.06 : 0.06);
           pos.set(mid.x + (w.s === 1 ? off : 0), 0, mid.z + (w.s === 0 ? off : 0));
-          q.setFromAxisAngle(up, (w.s === 0 ? 0 : Math.PI / 2) + k * Math.PI);
+          const yaw2 = (w.s === 0 ? 0 : Math.PI / 2) + k * Math.PI;
+          q.setFromAxisAngle(up, yaw2);
           m4.compose(pos, q, scl);
           inst.setMatrixAt(i * 2 + k, m4);
+          this.wallSets[f].man.push({ inst, idx: i * 2 + k, wx: pos.x, wz: pos.z, yaw: yaw2 });
         }
       });
       inst.setCount(list.length * 2); inst.commit();
       group.add(inst.group);
     }
+    this.wallSets[f].manCur = new Float32Array(this.wallSets[f].man.length).fill(1);
     for (const w of man) {
       if (!w.door) continue;
       const gg = new THREE.Group();
@@ -544,6 +556,44 @@ export class Builder {
     const x = Math.floor(pt.x / CELL), z = Math.floor(pt.z / CELL);
     if (!D.inBounds(x, z)) return null;
     return { x, z, px: pt.x, pz: pt.z, ndc };
+  }
+
+  /** Sink walls between the camera and the orbit focus (same feel as playtest),
+   *  so full-height walls never hide the area you're editing. */
+  _wallCutaway(dt) {
+    const ws = this.wallSets && this.wallSets[this.floor];
+    if (!ws) return;
+    const cam = this.g.camera.position;
+    const tx = this.camT.x, tz = this.camT.z;
+    const dx = tx - cam.x, dz = tz - cam.z;
+    const len2 = dx * dx + dz * dz || 1;
+    const lowerOne = (segs, cur, instOf) => {
+      const dirty = new Set();
+      for (let i = 0; i < segs.length; i++) {
+        const s = segs[i];
+        const t = ((s.wx - cam.x) * dx + (s.wz - cam.z) * dz) / len2;
+        let target = 1;
+        if (t > 0.04 && t < 0.96) {
+          const qx = cam.x + dx * t, qz = cam.z + dz * t;
+          const ddx = s.wx - qx, ddz = s.wz - qz;
+          if (ddx * ddx + ddz * ddz < 6.5 * 6.5) target = 0.16;
+        }
+        const c = cur[i];
+        if (Math.abs(target - c) < 0.004) continue;
+        const nv = c + (target - c) * Math.min(1, dt * 9);
+        cur[i] = nv;
+        _bcP.set(s.wx, 0, s.wz);
+        _bcQ.setFromAxisAngle(_bcUp, s.yaw);
+        _bcS.set(1, nv, 1);
+        _bcM.compose(_bcP, _bcQ, _bcS);
+        const inst = instOf(s);
+        inst.setMatrixAt(s.idx != null ? s.idx : i, _bcM);
+        dirty.add(inst);
+      }
+      for (const inst of dirty) inst.commit();
+    };
+    lowerOne(ws.segs, ws.cur, () => ws.inst);
+    if (ws.man && ws.man.length && ws.manCur) lowerOne(ws.man, ws.manCur, (s) => s.inst);
   }
 
   /** Nearest cell EDGE (grid line) to the pointer, canonical {x,z,s}. */
@@ -908,6 +958,9 @@ export class Builder {
     const cy = y + Math.sin(this.camPitch) * this.camDist;
     this.g.camera.position.lerp(new THREE.Vector3(cx, cy, cz), Math.min(1, dt * 8));
     this.g.camera.lookAt(this.camT.x, y, this.camT.z);
+
+    // walls between the camera and the orbit focus sink — full walls otherwise
+    this._wallCutaway(dt);
 
     // hover highlight + ghost (Walls tool highlights the EDGE line instead)
     if (this.tool === "walls" && this.hoverEdge) {
