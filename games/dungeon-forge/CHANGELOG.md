@@ -344,6 +344,22 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.9.7 — 2026-07-10 (distinct traps, all verified firing)
+- **Five clearly-distinct trap types** (each a different damage flavor), relabelled
+  so they don't read alike:
+  - ⚙ **Pop-up Spikes** — iron spikes erupt from the floor (physical)
+  - ☠ **Poison Gas Vent** — now GREEN with a grate + a rising toxic-gas cloud
+    (was fire-coloured and looked like the fire jet)
+  - 🔥 **Wall Fire Jet** — a 3-cell flame cone from the wall
+  - 🏹 **Javelin Tripwire** — launches a dart across the room
+  - 🕳 **Secret Pit** — the floor gives way; instant death (jump to clear it)
+  Picker notes now spell out the flavor + how each behaves.
+- **Every trap verified firing in play** (owner asked to test them all): spikes 150dmg,
+  poison 72dmg, fire 56dmg, javelin launches its dart, pit → fall → death. Confirmed
+  render refs + damage + events for each.
+- Checked all 13 decor types — every one is textured or properly materialed (no
+  actual untextured props; the dark shapes in the report were dim-lit objects).
+
 ## v1.9.6 — 2026-07-10 (doors overhaul + sublevel review fixes)
 ### Doors
 - **Procedural doors that fill a wall opening** — the old broken kit gate is gone.

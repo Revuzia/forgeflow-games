@@ -179,16 +179,17 @@ export class Hud {
         (k) => b.setTool("enemy", { etype: k }));
     } else if (b.tool === "trap") {
       const TL = {
-        spikes: "⚙ Pop-up Spikes", vent: b.d.theme === "scifi" ? "🔴 Laser vent" : "🔥 Flame vent",
-        firejet: "🜂 Wall Fire Jet", javelin: "🏹 Javelin Tripwire", pit: "🕳 Secret Pit",
+        spikes: "⚙ Pop-up Spikes", vent: b.d.theme === "scifi" ? "☣ Toxin Vent" : "☠ Poison Gas Vent",
+        firejet: "🔥 Wall Fire Jet", javelin: "🏹 Javelin Tripwire", pit: "🕳 Secret Pit",
       };
       mkOpts(D.TRAPS, b.toolOpt.ttype || "spikes", (k) => TL[k] || k, (k) => b.setTool("trap", { ttype: k }));
       const tt = b.toolOpt.ttype || "spikes";
       sub.appendChild(el(`<span class="df-subnote">${
-        tt === "firejet" ? "Place by a wall · R rotates the flame direction (3-cell burn cone)" :
-        tt === "javelin" ? "Tripwire — steps launch a javelin · R rotates the firing direction (skewers enemies too!)" :
-        tt === "pit" ? "Nearly invisible tile — one step and the floor gives way. Deadly." :
-        tt === "spikes" ? "Spikes pop up at RANDOM intervals" : "Periodic burn vent"}</span>`));
+        tt === "firejet" ? "🔥 FIRE: mount by a wall — roars a 3-cell flame cone. R rotates the direction." :
+        tt === "javelin" ? "🏹 PROJECTILE: a tripwire launches a javelin across the room (skewers enemies too!). R aims it." :
+        tt === "pit" ? "🕳 FALL: a nearly-invisible tile — one step and the floor gives way. Instant death (jump to clear it)." :
+        tt === "spikes" ? "⚙ PHYSICAL: iron spikes erupt from the floor at random intervals." :
+        "☠ POISON: erupts a cloud of toxic gas from a floor grate on a timer."}</span>`));
     } else if (b.tool === "decor") {
       sub.appendChild(el(`<div class="df-flexbreak"></div>`));
       mkThumbOpts(D.DECOR[b.d.theme], b.toolOpt.dtype || D.DECOR[b.d.theme][0], "decor",

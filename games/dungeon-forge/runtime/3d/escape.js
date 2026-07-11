@@ -299,11 +299,17 @@ export class Escape {
       case "enemy": return null; // EnemyPool owns these
       case "trap": {
         if (o.ttype === "vent") {
-          const hot = this.d.theme === "scifi" ? 0xff2244 : 0xff6a00;
+          // POISON GAS vent (green) — clearly different from the orange fire jet.
+          // A slotted grate over a sickly-green glow.
+          const gas = this.d.theme === "scifi" ? 0x66ff33 : 0x4fdd52;
           const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 0.12, 20),
-            new THREE.MeshStandardMaterial({ color: 0x2a2a33, emissive: hot, emissiveIntensity: 0.25 }));
+            new THREE.MeshStandardMaterial({ color: 0x232a25, emissive: gas, emissiveIntensity: 0.25 }));
           disc.position.y = 0.06; grp.add(disc);
+          const grate = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.09, 6, 18),
+            new THREE.MeshStandardMaterial({ color: 0x3a4038, metalness: 0.6, roughness: 0.5 }));
+          grate.rotation.x = -Math.PI / 2; grate.position.y = 0.16; grp.add(grate);
           grp.userData.ventDisc = disc;
+          grp.userData.ventGas = gas;
         } else if (o.ttype === "firejet") {
           // wall-mounted flame nozzle: bracket + snout aimed down the facing dir
           const rot = -(o.rot || 0) * Math.PI / 2;
@@ -1305,8 +1311,14 @@ export class Escape {
       }
       if (m.userData.ventDisc) {
         const mat = m.userData.ventDisc.material;
-        mat.emissiveIntensity = t.state === "on" ? 2.6 : t.state === "warn" ? 1.1 : 0.25;
-        if (t.state === "on") this.g.fx.ventJet(m.getWorldPosition(new THREE.Vector3()), this.d.theme);
+        mat.emissiveIntensity = t.state === "on" ? 2.4 : t.state === "warn" ? 1.1 : 0.25;
+        if (t.state === "on") {                       // a rising cloud of sickly-green poison gas
+          const base = m.getWorldPosition(new THREE.Vector3());
+          for (let i = 0; i < 3; i++) this.g.fx.spawn(
+            new THREE.Vector3(base.x + (Math.random() - .5) * 1.8, base.y + 0.2, base.z + (Math.random() - .5) * 1.8),
+            new THREE.Vector3((Math.random() - .5) * .5, 1.1 + Math.random() * 0.8, (Math.random() - .5) * .5),
+            0.9, 2.2, m.userData.ventGas || 0x4fdd52);
+        }
       }
       if (m.userData.jetLight) {
         // FIRE JET: warn = pilot hiss/glow, on = roaring flame cone down the facing dir
