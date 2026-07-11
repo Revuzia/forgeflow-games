@@ -82,8 +82,11 @@ export class Champion {
     } else if (model === "rogue") {
       const bow = g.propLib.bow ? normalizeShaftProp(g.propLib.bow, 1.2) : makeBow();
       actor.attachWeapon(bow, "Left", { gripFrac: 0.5, palm: 0.12, roll: 0, rest: [0.05, 0.98, 0.15] });
+    } else if (model === "sorceress") {
+      // her baked-in staff is surgically collapsed (three grafts all read
+      // broken); she now carries a proper attached staff like everyone else
+      actor.attachWeapon(makeStaff(), "Right", { gripFrac: 0.32, palm: 0.12, rest: [0.12, 0.96, 0.22] });
     }
-    // sorceress carries her own baked staff
   }
 
   _applyMode(first) {

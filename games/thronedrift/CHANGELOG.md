@@ -1,5 +1,16 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v1.3.3 — 2026-07-10 (sorceress staff: removed bake, proper attach)
+- The baked-in staff is GONE for good: pristine mesh restored, then the 464
+  staff verts collapsed to one interior point with uniform Hips weights —
+  zero-area triangles in every pose (surgery grafts kept reading broken)
+- She now carries a procedural staff (orb + gold cage) through the SAME
+  weapon-grip system as every other champion (gripFrac .32, palm offset,
+  near-vertical rest) — upright in the right hand, follows cast swings
+- Rig learning recorded (owner's Meshy 6 field-report): no capes/wings/held
+  props in source art for riggable characters; hands have no finger bones so
+  grips rely on the palm offset (see memory + BUILD_STATUS)
+
 ## v1.3.2 — 2026-07-10 (card names + LMB)
 - Every ability card shows its spell/action NAME on an in-card banner strip
   (WHIRLWIND, GROUND SLAM, EARTHSPLITTER, FAN SHOT, FIREBALL, …); long
