@@ -199,9 +199,13 @@ export const ENEMIES = {
 
 // Decor sets per theme (dtype → asset name; render layer decides the file)
 export const DECOR = {
-  fantasy: ["barrel", "crate", "pot", "urn", "bookshelf", "pillar", "coffin", "debris", "bones", "candles", "lantern"],
-  scifi:   ["crate", "canister", "terminal", "barrier", "cables"],
+  // torch + wall-torch are decor now (they light the room); Light was removed as
+  // its own tool per owner request.
+  fantasy: ["torch", "wall-torch", "barrel", "crate", "pot", "urn", "bookshelf", "pillar", "coffin", "debris", "bones", "candles", "lantern"],
+  scifi:   ["lamp", "crate", "canister", "terminal", "barrier", "cables"],
 };
+// decor types that emit light (rendered with a torch/lamp glow)
+export const LIGHT_DECOR = new Set(["torch", "wall-torch", "lantern", "candles", "lamp"]);
 // Decor the player can smash in escape (shatter FX + a little gold/loot).
 export const BREAKABLE_DECOR = new Set(["crate", "pot", "urn", "coffin", "debris", "bones"]);
 // EXPLOSIVE decor becomes a live barrel entity in escape: pushable, and it

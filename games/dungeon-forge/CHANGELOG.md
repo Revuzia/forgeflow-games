@@ -344,6 +344,16 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.9.5 — 2026-07-10 (play-floor isolation · quieter stairs · Light→Decor)
+- **Play mode shows ONLY the floor you're on.** You no longer see the floor above
+  (or any other) bleeding into view — each floor is isolated until you climb.
+- **Stairs landings are quieter.** Dropped the big glowing green ring/chevron
+  (it read like a spotlight); the recessed descending stairwell reads as
+  "stairs down" on its own.
+- **Light folded into Decor.** Removed the separate Light tool; torch + wall-torch
+  (and lantern/candles, sci-fi lamp) are decor items now and still cast a warm
+  light + flame. Props palette is now Chest · Key · Trap · Decor.
+
 ## v1.9.4 — 2026-07-10 (chest glow + SPACE jump)
 - **Chests now glow.** Unopened chests wear a pulsing gold ring so it's obvious
   they're lootable — walk up and press **E** ("E Open chest" prompt) to grab the

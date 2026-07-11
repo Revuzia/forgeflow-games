@@ -36,8 +36,7 @@ export const PROP_TOOLS = [
   { id: "chest", icon: "🧰", label: "Chest" },
   { id: "key", icon: "🗝️", label: "Key" },
   { id: "trap", icon: "🕸️", label: "Trap" },
-  { id: "torch", icon: "🔥", label: "Light" },
-  { id: "decor", icon: "🏺", label: "Decor" },
+  { id: "decor", icon: "🏺", label: "Decor" },   // torches/lanterns live in here now (owner)
 ];
 export const PROP_TOOL_IDS = PROP_TOOLS.map((t) => t.id);
 
@@ -433,6 +432,7 @@ export class Builder {
         break;
       }
       case "decor": {
+        if (o.dtype === "torch" || o.dtype === "wall-torch") { grp.add(makeTorch(this.d.theme)); const l = new THREE.PointLight(this.g.look.torch, 6, 11, 1.6); l.position.y = 2.6; grp.add(l); grp.userData.flicker = l; break; }
         const tpl = this.props[o.dtype] || this.props.crate;
         add(tpl, null, D.DECOR_FOOT[o.dtype] || 1.8);
         break;

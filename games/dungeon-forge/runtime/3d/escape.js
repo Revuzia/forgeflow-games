@@ -374,6 +374,22 @@ export class Escape {
         break;
       }
       case "decor": {
+        // light-emitting decor (torch / wall-torch / lantern / candles / lamp)
+        // renders its model AND casts a warm point light + flame, so "Light" is
+        // just a decor choice now.
+        if (D.LIGHT_DECOR.has(o.dtype)) {
+          if (o.dtype === "torch" || o.dtype === "wall-torch") { grp.add(makeTorch(this.d.theme)); this.g.fx.attachFlame(grp, this.d.theme, 2.45); }
+          else {
+            const m2 = add(this.props[o.dtype], null, D.DECOR_FOOT[o.dtype] || 1.4);
+            if (m2) m2.userData.decorId = o.id;
+            else { const col = new THREE.Color(this.d.theme === "scifi" ? 0x37e0ff : 0xffd08a); const orb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.1 })); orb.position.y = 2.2; grp.add(orb); }
+          }
+          const warm = this.d.theme === "scifi" ? 0x37e0ff : this.g.look.torch;
+          const l = new THREE.PointLight(warm, this.g.look.torchI * 0.32, 16, 1.4);
+          l.position.y = o.dtype === "candles" ? 1.2 : 2.6; grp.add(l);
+          this.lightPool.push({ light: l, base: this.g.look.torchI * 0.32, grp, f });
+          break;
+        }
         const tpl = this.props[o.dtype] || this.props.crate;
         const m = add(tpl, null, D.DECOR_FOOT[o.dtype] || 1.8);
         if (m) m.userData.decorId = o.id;
@@ -1163,7 +1179,10 @@ export class Escape {
   _syncFloorVis(force) {
     const p = this.me();
     const f = p ? p.f : 0;
-    this.floorGroups.forEach((gr, i) => { gr.group.visible = Math.abs(i - f) <= 1; });
+    // ONLY the floor you're on renders in play (owner: never see the floor above
+    // or any other floor). During a stair climb the sim flips p.f at the tween's
+    // half-point, so the destination floor pops in as you arrive — intended.
+    this.floorGroups.forEach((gr, i) => { gr.group.visible = i === f; });
     this.g.hud.setFloor(f + 1, this.d.floors.length);
   }
 
@@ -1346,13 +1365,12 @@ export class Escape {
     const t = performance.now() / 1000;
     for (const m of this.lavaMats) if (m.uniforms) m.uniforms.uTime.value = t;
     for (const m of this.waterMats) if (m.uniforms) m.uniforms.uTime.value = t;
-    // pulse the gold ring under unopened chests + the green landing rings
+    // pulse the gold ring under unopened chests
     const pulse = 0.55 + 0.35 * (0.5 + 0.5 * Math.sin(t * 3));
     for (const [id, m] of this.objMeshes) {
       const glow = m.userData && m.userData.chestGlow;
       if (glow) { const opened = this.run.openedChests && this.run.openedChests.has(id); glow.visible = !opened; if (!opened) { glow.material.opacity = pulse; glow.scale.setScalar(1 + 0.06 * Math.sin(t * 3)); } }
     }
-    for (const r of (this.landingRings || [])) { r.material.opacity = 0.55 + 0.3 * (0.5 + 0.5 * Math.sin(t * 2.4)); }
     if (this.lavaSpots.length && Math.random() < 0.3) {
       const s = this.lavaSpots[(Math.random() * this.lavaSpots.length) | 0];
       const me0 = this.me();

@@ -13,20 +13,16 @@ export function landingMarker(L, CELL) {
   const ddx = Math.sign((L.from.x || 0) - (L.to.x || 0)), ddz = Math.sign((L.from.z || 0) - (L.to.z || 0));
   const rot = ddz > 0 ? 0 : ddx > 0 ? 1 : ddz < 0 ? 2 : 3;
   grp.rotation.y = -rot * Math.PI / 2;
-  const stepMat = new THREE.MeshStandardMaterial({ color: 0x2a3550, roughness: 0.85, metalness: 0.1 });
-  const pit = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.78, 0.24, CELL * 0.78), new THREE.MeshStandardMaterial({ color: 0x12161f, roughness: 1 }));
-  pit.position.y = 0.12; grp.add(pit);
-  for (let i = 0; i < 3; i++) {                          // three receding steps (into +z = toward origin)
-    const s = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.66, 0.16, CELL * 0.2), stepMat);
-    s.position.set(0, 0.30 - i * 0.12, -CELL * 0.2 + i * CELL * 0.2);
+  // A recessed stairwell descending into the floor — reads as "stairs down" on
+  // its own, no glowing ring/light (owner: "we can see the tile that it's stairs
+  // down"). Just a dark pit + three descending steps.
+  const pit = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.82, 0.5, CELL * 0.82), new THREE.MeshStandardMaterial({ color: 0x0c0f16, roughness: 1 }));
+  pit.position.y = -0.24; grp.add(pit);                  // sunk into the floor
+  for (let i = 0; i < 3; i++) {                          // three descending steps (into +z = toward origin)
+    const s = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.7, 0.14, CELL * 0.22),
+      new THREE.MeshStandardMaterial({ color: 0x3a4560, roughness: 0.8, metalness: 0.12 }));
+    s.position.set(0, 0.02 - i * 0.16, -CELL * 0.24 + i * CELL * 0.24);
     grp.add(s);
   }
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.09, 8, 28),
-    new THREE.MeshBasicMaterial({ color: 0x59ff9c, transparent: true, opacity: 0.85 }));
-  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.55; grp.add(ring);
-  const chev = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.4, 4),
-    new THREE.MeshBasicMaterial({ color: 0x59ff9c, transparent: true, opacity: 0.9 }));
-  chev.rotation.x = Math.PI; chev.position.y = 0.55; grp.add(chev);
-  grp.userData.ring = ring;
   return grp;
 }
