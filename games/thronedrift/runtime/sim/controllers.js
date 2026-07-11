@@ -19,7 +19,16 @@ export class ControllerBase {
 /** wraps the shared Input instance (only ever drives the local champion) */
 export class PlayerController extends ControllerBase {
   constructor(input, game) { super(); this.input = input; this.game = game; }
-  moveVec() { return this.input.moveVec(); }
+  moveVec() {
+    // camera-relative WASD (industry standard): W is ALWAYS screen-forward,
+    // A screen-left, etc., no matter how the camera has been orbited. The
+    // raw vector is screen-space; rotate it by the camera yaw into world.
+    const v = this.input.moveVec();
+    const yaw = this.input.camYaw;
+    if (!v.mag || !yaw) return v;
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    return { x: v.x * c + v.z * s, z: v.z * c - v.x * s, mag: v.mag };
+  }
   get basicHeld() { return this.input.basicHeld; }
   abilityPressed(i) { return this.input.abilityPressed(i); }
   get abilityHeld() { return this.input.abilityHeld; }

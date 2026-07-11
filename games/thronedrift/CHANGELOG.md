@@ -1,5 +1,13 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v1.3.4 — 2026-07-10 (camera-relative movement)
+- WASD is now CAMERA-RELATIVE (industry standard): W is always screen-
+  forward, A/D screen-left/right, S back — no matter how far the camera has
+  been orbited. Raw input was world-fixed, so after a right-drag orbit "W"
+  walked in a stale world direction. PlayerController rotates the move
+  vector by camYaw; bots keep world-space steering; touch joystick inherits
+  the fix. Verified at yaw 0/90/180: displacement matches screen axes exactly.
+
 ## v1.3.3 — 2026-07-10 (sorceress staff: removed bake, proper attach)
 - The baked-in staff is GONE for good: pristine mesh restored, then the 464
   staff verts collapsed to one interior point with uniform Hips weights —
