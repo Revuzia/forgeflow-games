@@ -344,6 +344,21 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.9.4 — 2026-07-10 (chest glow + SPACE jump)
+- **Chests now glow.** Unopened chests wear a pulsing gold ring so it's obvious
+  they're lootable — walk up and press **E** ("E Open chest" prompt) to grab the
+  contents. (The mechanic already worked; this makes it discoverable.)
+- **SPACE = jump.** The player hops in a real arc (jump velocity + gravity, sim
+  stays 2D) with a whoop + landing thud. While airborne you **clear floor traps**
+  — jump over pop-up spikes, steam vents and secret pits. Wall fire-jets and
+  javelins still catch you (they're at body height). Blocked mid-stair-climb and
+  while swimming so it never fights those.
+- Landing rings + chest glows pulse each frame. How-to screen updated (walls,
+  bidirectional stairs/sublevels, Space jump, glowing chests, Tab target).
+- Selftest 272 → 276 (pit kills grounded / airborne clears it; spikes hurt
+  grounded / airborne dodges). Browser-verified: chest glow + jump arc 1.24u,
+  airborne during peak, lands clean.
+
 ## v1.9.3 — 2026-07-10 (dig SUBLEVELS with stairs down)
 - **Stairs Down on the lowest floor now DIGS a sublevel** beneath the whole
   dungeon (owner: "why can't we go into a SUBLEVEL?") instead of refusing. The

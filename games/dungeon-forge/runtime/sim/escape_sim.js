@@ -150,7 +150,7 @@ export function newRun(d, runSeed, players) {
       level: 1, xp: 0,             // progression: gainXp() raises level → +maxHp +dmg
       weaponTier: 0, armorTier: 0, // derived from equipped items (see recomputeGear)
       baseMaxHp: cls.hp, blessHp: 0, equipped: { weapon: null, armor: null }, inventory: [], gearDmg: 0, gearMaxHp: 0,
-      meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null, stairLock: null, // climb: {t, from, to}
+      meleeT: 0, boltT: 0, hurtT: 0, respawnT: 0, climb: null, stairLock: null, airborne: false, // climb: {t, from, to}
       input: { mx: 0, mz: 0, sprint: false, melee: false, bolt: false, interact: false, potion: false, yaw: 0 },
       remote: !!p.remote, stepAcc: 0,
     });
@@ -1098,7 +1098,8 @@ export function tick(st, dt, opts = {}) {
     if (t.ttype === "pit") {
       if (t.open) {
         // anything standing on an open pit falls in — players die, enemies too
-        for (const p of localPlayers) if (p.f === t.f && w2c(p.x) === t.x && w2c(p.z) === t.z) {
+        // (a JUMPing player clears the hole — airborne skips the plunge)
+        for (const p of localPlayers) if (p.f === t.f && w2c(p.x) === t.x && w2c(p.z) === t.z && !p.airborne) {
           p.hurtT = 0;                       // a pit ignores hit i-frames
           emit(st, "fell", { id: p.id, trap: t.id });
           damagePlayer(st, p, 9999, "pit");
@@ -1110,8 +1111,8 @@ export function tick(st, dt, opts = {}) {
         t.armT -= dt;
         if (t.armT <= 0) { t.open = true; emit(st, "pitOpen", { id: t.id, f: t.f, x: t.x, z: t.z }); }
       } else {
-        // a secret tile: the first footstep starts the collapse
-        if (localPlayers.some((p) => p.f === t.f && w2c(p.x) === t.x && w2c(p.z) === t.z)) { t.armT = K.arm; emit(st, "pitWarn", { id: t.id, f: t.f, x: t.x, z: t.z }); }
+        // a secret tile: the first footstep starts the collapse (a jump won't trip it)
+        if (localPlayers.some((p) => p.f === t.f && w2c(p.x) === t.x && w2c(p.z) === t.z && !p.airborne)) { t.armT = K.arm; emit(st, "pitWarn", { id: t.id, f: t.f, x: t.x, z: t.z }); }
       }
       continue;
     }
@@ -1134,6 +1135,9 @@ export function tick(st, dt, opts = {}) {
       }
       for (const p of localPlayers) {
         if (p.f !== t.f) continue;
+        // spikes/vent erupt from the FLOOR — a jump clears them; firejet is a wall
+        // trap at body height, so airborne players still get scorched.
+        if (p.airborne && (t.ttype === "spikes" || t.ttype === "vent")) continue;
         if (cells.some(([cx, cz]) => w2c(p.x) === cx && w2c(p.z) === cz)) damagePlayer(st, p, K.dmg, t.ttype);
       }
     }

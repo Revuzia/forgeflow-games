@@ -139,6 +139,7 @@ export class GameAudio {
       case "explosion": this._blip(60, 0.5, "sawtooth", 0.3, -30); this._blip(140, 0.3, "square", 0.2, -100); return this._playFile(FILES.hit, 1.0, 0.6);
       case "javelin": this._blip(900, 0.12, "sine", 0.14, -500); return this._playFile(FILES.swing, 0.8, 1.5);
       case "rumble": this._blip(48, 0.6, "sawtooth", 0.26, -14); return this._blip(85, 0.45, "triangle", 0.2, -40);
+      case "jump": return this._blip(320, 0.16, "sine", 0.12, 260); // rising whoop
       case "die": return this._blip(220, 0.7, "sawtooth", 0.22, -170);
       case "edie": return this._blip(300, 0.4, "square", 0.14, -220);
       case "key": this._blip(880, 0.09, "triangle", 0.2); return setTimeout(() => this._blip(1320, 0.14, "triangle", 0.2), 90);

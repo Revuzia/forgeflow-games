@@ -287,6 +287,11 @@ export class Escape {
       case "chest": {
         const m = add(this.props.chest || this.props.chestShared, 1.5);
         grp.userData.lid = m;
+        // a soft gold glow ring so unopened chests visibly invite "press E"
+        const glow = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.07, 8, 24),
+          new THREE.MeshBasicMaterial({ color: 0xffd769, transparent: true, opacity: 0.7 }));
+        glow.rotation.x = -Math.PI / 2; glow.position.y = 0.12; grp.add(glow);
+        grp.userData.chestGlow = glow;
         break;
       }
       case "key": {
@@ -792,6 +797,7 @@ export class Escape {
       }
       if (e.code === "KeyQ" && p) p.input.potionDown = true;
       if (e.code === "KeyX" && p) p.input.manaDown = true;
+      if (e.code === "Space" && p && !e.repeat) { e.preventDefault(); this._jumpReq = true; }
       if (e.code === "KeyV") this.fp = !this.fp;
       if (e.code === "KeyF" && p) this._special = true;
       if (e.code === "KeyR" && p) this._frost = true;
@@ -1188,7 +1194,21 @@ export class Escape {
       const swimming = liquid && a.surfY < -0.4;
       a._swimT = swimming ? (a._swimT || 0) + dt : 0;
       const bob = swimming ? Math.sin(a._swimT * 5.2) * 0.07 : 0;
-      const y = p.f * FLOOR_H + (p.climb ? climbY(p) : 0) + a.surfY + bob;
+      // JUMP (SPACE): a vertical hop on the local player's actor. Sim stays 2D;
+      // this is a render-layer arc (jump velocity + gravity). Blocked mid-climb
+      // or while swimming so it never fights the stair tween / water sink.
+      if (id === this.myId && this._jumpReq) {
+        this._jumpReq = false;
+        if (!a._jumpV && (a._jumpY || 0) <= 0.001 && !p.climb && !swimming) {
+          a._jumpV = 7.2; p.airborne = true; this.g.audio.sfx("jump");
+        }
+      }
+      if (a._jumpV || (a._jumpY || 0) > 0) {
+        a._jumpV -= 20 * dt;                 // gravity
+        a._jumpY = (a._jumpY || 0) + a._jumpV * dt;
+        if (a._jumpY <= 0) { a._jumpY = 0; a._jumpV = 0; if (p.airborne) { p.airborne = false; this.g.audio.sfx("step"); } }
+      }
+      const y = p.f * FLOOR_H + (p.climb ? climbY(p) : 0) + a.surfY + bob + (a._jumpY || 0);
       a.grp.position.set(p.x, y, p.z);
       if (a._fellT > 0) { a._fellT -= dt; a.grp.position.y -= (0.6 - a._fellT) * 4.5; } // swallowed by the pit
       const movingLq = Math.hypot(p.input.mx, p.input.mz) > 0.01;
@@ -1326,6 +1346,13 @@ export class Escape {
     const t = performance.now() / 1000;
     for (const m of this.lavaMats) if (m.uniforms) m.uniforms.uTime.value = t;
     for (const m of this.waterMats) if (m.uniforms) m.uniforms.uTime.value = t;
+    // pulse the gold ring under unopened chests + the green landing rings
+    const pulse = 0.55 + 0.35 * (0.5 + 0.5 * Math.sin(t * 3));
+    for (const [id, m] of this.objMeshes) {
+      const glow = m.userData && m.userData.chestGlow;
+      if (glow) { const opened = this.run.openedChests && this.run.openedChests.has(id); glow.visible = !opened; if (!opened) { glow.material.opacity = pulse; glow.scale.setScalar(1 + 0.06 * Math.sin(t * 3)); } }
+    }
+    for (const r of (this.landingRings || [])) { r.material.opacity = 0.55 + 0.3 * (0.5 + 0.5 * Math.sin(t * 2.4)); }
     if (this.lavaSpots.length && Math.random() < 0.3) {
       const s = this.lavaSpots[(Math.random() * this.lavaSpots.length) | 0];
       const me0 = this.me();

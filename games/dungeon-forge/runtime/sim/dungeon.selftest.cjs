@@ -666,6 +666,40 @@ const ok = (cond, name, extra) => {
     ok(sanitize(serialize(sub)).floors.length === 2, "sublevel survives serialize roundtrip");
   }
 
+  // ── 9e4. JUMP dodges floor traps (airborne skips spikes/vent/pit) ──
+  console.log("[jump-dodge]");
+  {
+    const jd = newDungeon({ theme: "fantasy" });
+    stampRoom(jd, 0, 4, 4, 6, 6);
+    applyOp(jd, { t: "obj+", f: 0, o: { kind: "spawn", x: 4, z: 4 } });
+    applyOp(jd, { t: "obj+", f: 0, o: { kind: "exit", x: 9, z: 9 } });
+    applyOp(jd, { t: "obj+", f: 0, o: { kind: "trap", x: 6, z: 6, ttype: "pit" } });
+    // grounded: standing on the pit collapses it and kills you
+    let rr = newRun(jd, 70, [{ id: "P1" }]); let rp = rr.players[0];
+    rp.x = c2w(6); rp.z = c2w(6);
+    for (let i = 0; i < 120 && rp.deaths === 0; i++) tick(rr, 1 / 60);
+    ok(rp.deaths > 0, "pit kills a GROUNDED player");
+    // airborne the whole time: the pit never trips → you clear it
+    rr = newRun(jd, 70, [{ id: "P1" }]); rp = rr.players[0];
+    rp.x = c2w(6); rp.z = c2w(6);
+    for (let i = 0; i < 120; i++) { rp.airborne = true; tick(rr, 1 / 60); }
+    ok(rp.alive && rp.deaths === 0, "JUMPing (airborne) clears the pit — no death");
+    // spikes: grounded loses HP over time, airborne takes none
+    const sd = newDungeon({ theme: "fantasy" });
+    stampRoom(sd, 0, 4, 4, 6, 6);
+    applyOp(sd, { t: "obj+", f: 0, o: { kind: "spawn", x: 4, z: 4 } });
+    applyOp(sd, { t: "obj+", f: 0, o: { kind: "exit", x: 9, z: 9 } });
+    applyOp(sd, { t: "obj+", f: 0, o: { kind: "trap", x: 6, z: 6, ttype: "spikes" } });
+    let sr = newRun(sd, 71, [{ id: "P1" }]); let spp = sr.players[0];
+    const hp0 = spp.hp; spp.x = c2w(6); spp.z = c2w(6);
+    for (let i = 0; i < 400; i++) tick(sr, 1 / 60);   // several spike cycles
+    ok(spp.hp < hp0 || spp.deaths > 0, "spikes hurt a GROUNDED player");
+    sr = newRun(sd, 71, [{ id: "P1" }]); spp = sr.players[0];
+    const hp1 = spp.hp; spp.x = c2w(6); spp.z = c2w(6);
+    for (let i = 0; i < 400; i++) { spp.airborne = true; tick(sr, 1 / 60); }
+    ok(spp.hp === hp1 && spp.deaths === 0, "airborne dodges the spikes entirely");
+  }
+
   // ── 9f. interior EDGE walls + edge doors (the WALLS tool) ────────
   console.log("[edge-walls]");
   {
