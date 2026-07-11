@@ -344,6 +344,30 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.9.6 — 2026-07-10 (doors overhaul + sublevel review fixes)
+### Doors
+- **Procedural doors that fill a wall opening** — the old broken kit gate is gone.
+  Every door now has stone jambs + a lintel so it clearly *replaces a wall
+  segment*, and a leaf that **swings open on its hinge** in play.
+- **Four door styles**: 🚪 Wood (planks + iron bands + ring), 🛡 Iron (studded
+  slab), 🔲 Bars (see-through portcullis), 🏛 Ornate (gold-trimmed arch). Pick
+  the style in the Walls → Door palette.
+- **Select a door to edit it**: change style, **⟳ Rotate** (flip the hinge side),
+  **✥ Move** it to another wall line, lock/unlock, or delete — not just lock.
+### Sublevel/stairs fixes (from an adversarial self-review)
+- **Co-build desync fixed**: a peer receiving a remote sublevel dig now reindexes
+  its current floor, so both builders keep editing the same room.
+- **No lost content**: `floor-below` + stairs edits now trigger a full rebuild, so
+  a sublevel dig (even onto an occupied cell) never leaves a floor unrendered.
+- **No false validation error**: `validate()` now understands down-stairs, so the
+  sublevel feature no longer reports a bogus "stairs lead nowhere".
+- **No stair soft-lock**: pressing interact on a staircase always transports, so a
+  player can never be permanently stranded on a walled-in landing (was a co-op
+  run-blocker).
+- **No ghost landing markers**: deleting a staircase now clears its landing marker
+  on the connected floor.
+- Selftest 276 → 284.
+
 ## v1.9.5 — 2026-07-10 (play-floor isolation · quieter stairs · Light→Decor)
 - **Play mode shows ONLY the floor you're on.** You no longer see the floor above
   (or any other) bleeding into view — each floor is isolated until you climb.

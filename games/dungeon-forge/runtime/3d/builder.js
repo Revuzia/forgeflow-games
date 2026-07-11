@@ -9,7 +9,7 @@ import * as THREE from "three";
 
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
-const { makeInstanced, Assets, creatureClips, makeTorch, makeCreature, makeCellSurfaces, makeNpc } = await import("./assets.js" + V);
+const { makeInstanced, Assets, creatureClips, makeTorch, makeCreature, makeCellSurfaces, makeNpc, makeDoor } = await import("./assets.js" + V);
 const { Thumbnailer } = await import("./thumbs.js" + V);
 const { landingMarker } = await import("./stair_marker.js" + V);
 
@@ -290,9 +290,8 @@ export class Builder {
       const mid = D.edgeMid(w.x, w.z, w.s);
       gg.position.set(mid.x, 0, mid.z);
       gg.rotation.y = w.s === 0 ? -Math.PI / 2 : 0;   // passage crosses the line
-      const gm = this.g.assets.clone(this.kit.gate); gg.add(gm);
-      if (w.locked) { const bars = this.g.assets.clone(this.kit.gateLocked); bars.position.z += 0.02; gg.add(bars); gg.add(this._lockIcon()); }
-      else { const leaf = this.g.assets.clone(this.kit.gateDoor); gg.add(leaf); }
+      gg.add(makeDoor(w.dtype || "wood", { flip: w.flip }));
+      if (w.locked) gg.add(this._lockIcon());
       gg.userData = { id: w.id, f, kind: "edgedoor", ex: w.x, ez: w.z, es: w.s };
       group.add(gg);
       this.objMeshes.set(w.id, gg);
@@ -605,6 +604,51 @@ export class Builder {
     if (ws.man && ws.man.length && ws.manCur) lowerOne(ws.man, ws.manCur, (s) => s.inst);
   }
 
+  // ── edge-door selection (type · rotate/flip · move · lock · delete) ─────────
+  _edgeWall(ud) { return this.d.floors[ud.f] && this.d.floors[ud.f].walls[D.wk(ud.ex, ud.ez, ud.es)]; }
+  selectEdgeDoor(ud) {
+    this.select(null);                 // clear any object selection
+    this.selEdge = ud;
+    const w = this._edgeWall(ud);
+    if (w) this.g.hud.showEdgeDoorSelection(this, ud, w);
+  }
+  edgeDoorEdit(patch) {
+    const ud = this.selEdge; if (!ud) return;
+    const w = this._edgeWall(ud); if (!w) return;
+    this._pushUndo();
+    const next = Object.assign({ t: "wall+", f: ud.f, x: ud.ex, z: ud.ez, s: ud.es, wtype: w.t, door: true, id: w.id, dtype: w.dtype, locked: w.locked, flip: w.flip }, patch);
+    this.applyLocal(next);
+    const w2 = this._edgeWall(ud);
+    if (w2) this.g.hud.showEdgeDoorSelection(this, ud, w2);   // refresh the panel
+  }
+  edgeDoorDelete() {
+    const ud = this.selEdge; if (!ud) return;
+    this._pushUndo();
+    this.applyLocal({ t: "wall-", f: ud.f, x: ud.ex, z: ud.ez, s: ud.es });  // remove door + its wall
+    this.selEdge = null; this._edgeMove = null;
+    this.g.hud.hideSelection();
+    this.g.audio.sfx("erase");
+  }
+  edgeDoorMove() {
+    if (!this.selEdge) return;
+    this._edgeMove = this.selEdge;
+    this.g.hud.toast("Click a wall line to move the door there", "info");
+  }
+  _relocateEdgeDoor(cell) {
+    const src = this._edgeMove; this._edgeMove = null;
+    const w = this._edgeWall(src); if (!w) { this.g.hud.hideSelection(); return; }
+    const e = this._pointerEdge(cell); if (!e) return;
+    const destKey = D.wk(e.x, e.z, e.s), srcKey = D.wk(src.ex, src.ez, src.es);
+    if (destKey === srcKey) { this.selectEdgeDoor(src); return; }
+    this._pushUndo(); this._noUndo = true;
+    const dtype = w.dtype, locked = w.locked, flip = w.flip, wt = w.t;
+    this.applyLocal({ t: "wall-", f: src.f, x: src.ex, z: src.ez, s: src.es });
+    const res = this.applyLocal({ t: "wall+", f: this.floor, x: e.x, z: e.z, s: e.s, wtype: wt, door: true, dtype, locked, flip });
+    this._noUndo = false;
+    if (res.ok) { this.g.audio.sfx("place"); this.selectEdgeDoor({ f: this.floor, ex: e.x, ez: e.z, es: e.s }); }
+    else { this.g.hud.toast("Doors go on a wall line between two floor tiles", "warn"); this.g.audio.sfx("error"); }
+  }
+
   /** Nearest cell EDGE (grid line) to the pointer, canonical {x,z,s}. */
   _pointerEdge(cell) {
     if (!cell) return null;
@@ -635,22 +679,16 @@ export class Builder {
     const cell = this._pointerCell(e);
     if (!cell) return;
     if (this.tool === "select") {
+      // MOVE mode: a door was picked "Move", the next click relocates it to the
+      // nearest wall edge under the cursor
+      if (this._edgeMove) { this._relocateEdgeDoor(cell); return; }
       const id = this._pickObject(e);
-      // edge doors aren't cell objects — Select-clicking one toggles its 🔒 lock
+      // edge doors aren't cell objects — Select-clicking one opens their panel
+      // (door type · rotate/flip · move · lock · delete)
       if (id && !D.objById(this.d, id)) {
         const mesh = this.objMeshes.get(id);
         const ud = mesh && mesh.userData;
-        if (ud && ud.kind === "edgedoor") {
-          this._pushUndo();
-          const w = this.d.floors[ud.f].walls[D.wk(ud.ex, ud.ez, ud.es)];
-          if (w) {
-            const wasLocked = !!w.locked;
-            this.applyLocal({ t: "wall+", f: ud.f, x: ud.ex, z: ud.ez, s: ud.es, wtype: w.t, door: true, locked: !wasLocked, id: w.id });
-            this.g.audio.sfx(wasLocked ? "unlock" : "lock");
-            this.g.hud.toast(wasLocked ? "Door unlocked" : "🔒 Door locked — players need a key", "info");
-          }
-          return;
-        }
+        if (ud && ud.kind === "edgedoor") { this.selectEdgeDoor(ud); return; }
       }
       this.select(id);
       // start a move-drag on the picked object (drag it to a new cell)
@@ -771,10 +809,10 @@ export class Builder {
     const mode = this.toolOpt.wmode || "stone";
     let op;
     if (mode === "erase") op = { t: "wall-", f: this.floor, x: e.x, z: e.z, s: e.s };
-    else if (mode === "door") op = { t: "wall+", f: this.floor, x: e.x, z: e.z, s: e.s, wtype: "stone", door: true };
+    else if (mode === "door") op = { t: "wall+", f: this.floor, x: e.x, z: e.z, s: e.s, wtype: "stone", door: true, dtype: this.toolOpt.wdoor || "wood" };
     else op = { t: "wall+", f: this.floor, x: e.x, z: e.z, s: e.s, wtype: mode };
     const res = this.applyLocal(op);
-    if (res.ok) this.g.audio.sfx(mode === "erase" ? "erase" : "place");
+    if (res.ok) { this.g.audio.sfx(mode === "erase" ? "erase" : "place"); if (mode === "door") this.selectEdgeDoor({ f: this.floor, ex: e.x, ez: e.z, es: e.s }); }
     else if (res.err === "nocell") this.g.hud.toast("Walls go on lines BETWEEN two floor tiles (the boundary already has a wall)", "warn");
   }
 
@@ -848,19 +886,32 @@ export class Builder {
 
   // ── op plumbing (local + remote) ───────────────────────────────────────────
   applyLocal(op) {
+    // stairs edits render a landing marker on the OTHER floor, and obj- removes
+    // the object before we can inspect it — so decide the full-rebuild need
+    // BEFORE mutating (review fix: ghost landing markers).
+    const stairsTouch = this._touchesStairs(op);
     const res = D.applyOp(this.d, op);
     if (res.ok) {
       this._broadcast(op);
       this.rebuildFloor(op.f != null ? op.f : this.floor);
-      if (op.t === "floor+" || op.t === "floor-") this.rebuildAll();
+      // floor+/-/below reindex all floors; stairs edits touch two floors.
+      if (op.t === "floor+" || op.t === "floor-" || op.t === "floor-below" || stairsTouch) this.rebuildAll();
       this.g.hud.refreshValidate(this);
     }
     return res;
+  }
+  _touchesStairs(op) {
+    if (op.t === "obj+") return !!(op.o && op.o.kind === "stairs");
+    if (op.t === "obj-" || op.t === "objEdit") { const h = D.objById(this.d, op.id); return !!(h && h.obj.kind === "stairs"); }
+    return false;
   }
   _broadcast(op) { if (this.session) this.session.sendOp(op); }
   applyRemoteOp(op) {
     const res = D.applyOp(this.d, op);
     if (res.ok) {
+      // a remote sublevel dig unshifts all floors — bump our view index so we
+      // keep tracking the same absolute floor (review fix: co-build desync).
+      if (op.t === "floor-below") this.floor = Math.min(this.d.floors.length - 1, this.floor + 1);
       this.rebuildAll();
       this.g.hud.refreshValidate(this);
     }

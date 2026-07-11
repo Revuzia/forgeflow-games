@@ -208,9 +208,17 @@ export class Hud {
       const wm = b.toolOpt.wmode || "stone";
       mkOpts(WALL_MODES.map((m) => m.id), wm,
         (id) => { const m = WALL_MODES.find((x) => x.id === id); return `${m.icon} ${m.label}`; },
-        (id) => b.setTool("walls", { wmode: id }));
+        (id) => b.setTool("walls", { wmode: id, wdoor: b.toolOpt.wdoor }));
+      if (wm === "door") {
+        const DT = D.DOOR_TYPES || ["wood", "iron", "bars", "ornate"];
+        const ICON = { wood: "🚪", iron: "🛡", bars: "🔲", ornate: "🏛" };
+        const wd = b.toolOpt.wdoor || "wood";
+        const row = el(`<div style="display:flex;gap:5px;margin-top:5px">${DT.map((t) => `<button class="df-sub ${wd === t ? "on" : ""}" data-wdoor="${t}">${ICON[t] || "🚪"} ${t}</button>`).join("")}</div>`);
+        row.querySelectorAll("[data-wdoor]").forEach((btn) => btn.onclick = () => { b.g.audio.sfx("ui"); b.setTool("walls", { wmode: "door", wdoor: btn.dataset.wdoor }); });
+        sub.appendChild(row);
+      }
       sub.appendChild(el(`<span class="df-subnote">${
-        wm === "door" ? "Click a grid LINE between two floor tiles — the door sits ON the wall (lock it via Select)" :
+        wm === "door" ? "Click a wall LINE — the door replaces that wall segment. Select it later to change style, rotate, move or lock it." :
         wm === "erase" ? "Click a line to remove its wall or door" :
         "Click/drag along grid LINES between floor tiles to raise " + wm + " walls"}</span>`));
     } else if (b.tool === "npc") {
@@ -312,6 +320,33 @@ export class Hud {
     });
     q('[data-a="rot"]').onclick = () => b.rotateSelected();
     q('[data-a="del"]').onclick = () => b.deleteSelected();
+  }
+  /** Selection panel for an edge DOOR (a door on a wall line): pick its type,
+   *  rotate (flip the hinge), move it to another wall, lock, or delete. */
+  showEdgeDoorSelection(b, ud, w) {
+    this.hideSelection();
+    const DT = D.DOOR_TYPES || ["wood", "iron", "bars", "ornate"];
+    const ICON = { wood: "🚪", iron: "🛡", bars: "🔲", ornate: "🏛" };
+    const typeBtns = DT.map((t) => `<button class="df-sub ${w.dtype === t ? "on" : ""}" data-dtype="${t}">${ICON[t] || "🚪"} ${t}</button>`).join("");
+    this.selPanel = el(`<div class="df-selpanel">
+      <div class="df-selhead">Door <span class="dim">· ${w.t} wall</span></div>
+      <div class="df-selnote">Door style:</div>
+      <div class="df-subopts" style="position:static;transform:none;margin:0 0 6px">${typeBtns}</div>
+      <button data-a="lock" class="df-btn ${w.locked ? "danger" : ""}">${w.locked ? "🔒 LOCKED — needs key" : "🔓 Unlocked"}</button>
+      <div class="df-selrow" style="margin-top:6px">
+        <button data-a="rot" class="df-btn">⟳ Rotate</button>
+        <button data-a="move" class="df-btn">✥ Move</button>
+        <button data-a="del" class="df-btn danger">🗑 Delete</button>
+      </div>
+      ${w.locked ? `<div class="df-selnote">Place at least one 🗝️ key players can reach!</div>` : ""}
+    </div>`);
+    this.root.appendChild(this.selPanel);
+    const q = (s) => this.selPanel.querySelector(s);
+    this.selPanel.querySelectorAll("[data-dtype]").forEach((btn) => btn.onclick = () => { this.g.audio.sfx("ui"); b.edgeDoorEdit({ dtype: btn.dataset.dtype }); });
+    q('[data-a="lock"]').onclick = () => { const nl = !w.locked; b.g.audio.sfx(nl ? "lock" : "unlock"); b.edgeDoorEdit({ locked: nl }); };
+    q('[data-a="rot"]').onclick = () => { b.g.audio.sfx("ui"); b.edgeDoorEdit({ flip: !w.flip }); };
+    q('[data-a="move"]').onclick = () => b.edgeDoorMove();
+    q('[data-a="del"]').onclick = () => b.edgeDoorDelete();
   }
   hideSelection() { if (this.selPanel) { this.selPanel.remove(); this.selPanel = null; } }
 

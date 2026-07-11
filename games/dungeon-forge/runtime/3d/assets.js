@@ -738,6 +738,72 @@ export function makeTorch(theme) {
   return grp;
 }
 
+// Procedural DOOR that fills a wall opening: two stone jambs + a lintel (so it
+// reads as "a door set into the wall", replacing a wall segment) plus a styled
+// leaf. Types: wood (planked + iron bands), iron (studded slab), bars
+// (portcullis — see-through vertical bars), ornate (arched, gold-trimmed).
+// Built along local X (the doorway spans X); callers rotate the group onto the
+// edge. locked=true shows a barred/lock look. CELL≈4, wall height ≈4.4.
+export const DOOR_TYPES = ["wood", "iron", "bars", "ornate"];
+export function makeDoor(type, opts = {}) {
+  const H = 4.2, W = 3.4, T = 0.34;           // opening height, width, thickness
+  const grp = new THREE.Group();
+  const stone = () => new THREE.MeshStandardMaterial({ color: 0x5b647a, roughness: 0.9, metalness: 0.05 });
+  const iron = () => new THREE.MeshStandardMaterial({ color: 0x2b2f3a, roughness: 0.5, metalness: 0.85 });
+  const woodM = () => new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.9 });
+  const gold = () => new THREE.MeshStandardMaterial({ color: 0xe8b83a, roughness: 0.3, metalness: 0.9 });
+  // frame: two jambs + a lintel that clearly seat the door in the wall line
+  const jw = 0.55;
+  for (const sx of [-1, 1]) {
+    const jamb = new THREE.Mesh(new THREE.BoxGeometry(jw, H, T + 0.12), stone());
+    jamb.position.set(sx * (W / 2 + jw / 2 - 0.05), H / 2, 0); grp.add(jamb);
+  }
+  const lintel = new THREE.Mesh(new THREE.BoxGeometry(W + jw * 2, 0.6, T + 0.12), stone());
+  lintel.position.set(0, H - 0.3, 0); grp.add(lintel);
+  // the leaf (hinged on the left jamb → offset the pivot so Rotate/flip reads)
+  const leaf = new THREE.Group();
+  leaf.position.set(-W / 2, 0, 0);            // hinge at the left jamb
+  grp.add(leaf); grp.userData.leaf = leaf;
+  const lw = W - 0.15, lh = H - 0.5;
+  const mk = (g, m) => { const me = new THREE.Mesh(g, m); leaf.add(me); return me; };
+  if (type === "bars") {
+    // portcullis: a top rail + vertical bars (see-through)
+    mk(new THREE.BoxGeometry(lw, 0.2, T), iron()).position.set(W / 2, lh - 0.1, 0);
+    mk(new THREE.BoxGeometry(lw, 0.2, T), iron()).position.set(W / 2, 0.6, 0);
+    const n = 6;
+    for (let i = 0; i < n; i++) {
+      const bar = mk(new THREE.CylinderGeometry(0.09, 0.09, lh, 8), iron());
+      bar.position.set(0.3 + i * (lw / (n - 1)) * 0.92, lh / 2 + 0.35, 0);
+    }
+  } else if (type === "iron") {
+    const slab = mk(new THREE.BoxGeometry(lw, lh, T), iron()); slab.position.set(W / 2, lh / 2 + 0.35, 0);
+    // rivets
+    for (let ix = 0; ix < 3; ix++) for (let iy = 0; iy < 4; iy++) {
+      const r = mk(new THREE.SphereGeometry(0.08, 8, 6), new THREE.MeshStandardMaterial({ color: 0x9aa0ae, metalness: 0.95, roughness: 0.3 }));
+      r.position.set(0.7 + ix * (lw - 1.4) / 2, 0.9 + iy * (lh - 0.9) / 3, T / 2);
+    }
+  } else if (type === "ornate") {
+    const slab = mk(new THREE.BoxGeometry(lw, lh, T), woodM()); slab.position.set(W / 2, lh / 2 + 0.35, 0);
+    // gold arch trim + central boss
+    const arch = mk(new THREE.TorusGeometry(lw / 2.3, 0.08, 8, 20, Math.PI), gold());
+    arch.position.set(W / 2, lh + 0.1, T / 2); arch.rotation.z = 0;
+    const boss = mk(new THREE.CylinderGeometry(0.28, 0.28, 0.12, 16), gold());
+    boss.rotation.x = Math.PI / 2; boss.position.set(W / 2, lh / 2 + 0.35, T / 2 + 0.05);
+    for (const sy of [0.9, lh - 0.2]) { const band = mk(new THREE.BoxGeometry(lw, 0.14, T + 0.04), gold()); band.position.set(W / 2, sy, 0); }
+  } else {
+    // wood (default): vertical planks + two iron bands + a ring handle
+    const nPl = 5;
+    for (let i = 0; i < nPl; i++) {
+      const pl = mk(new THREE.BoxGeometry(lw / nPl - 0.04, lh, T), woodM());
+      pl.position.set(0.2 + i * (lw / nPl) + (lw / nPl) / 2 - 0.1, lh / 2 + 0.35, 0);
+    }
+    for (const sy of [1.1, lh - 0.1]) { const band = mk(new THREE.BoxGeometry(lw, 0.18, T + 0.05), iron()); band.position.set(W / 2, sy, 0); }
+    const ring = mk(new THREE.TorusGeometry(0.16, 0.045, 8, 16), iron()); ring.position.set(W - 0.5, lh / 2 + 0.35, T / 2 + 0.04);
+  }
+  if (opts.flip) grp.scale.x = -1;             // Rotate = swap the hinge side
+  return grp;
+}
+
 export function stripLights(root) {
   const dead = [];
   root.traverse((o) => { if (o.isLight) dead.push(o); });

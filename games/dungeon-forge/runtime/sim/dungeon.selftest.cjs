@@ -655,6 +655,7 @@ const ok = (cond, name, extra) => {
     const links = stairLinks(sub);
     ok(links.some((l) => l.down && l.from.f === 1 && l.to.f === 0), "down-stairs links floor 1 → sublevel 0");
     ok(solvability(sub).solvable !== false, "sublevel dungeon still solvable");
+    ok(validate(sub).ok, "sublevel down-stairs validate clean (no false top-floor error)", (validate(sub).problems[0]||{}).msg);
     // run: player spawns on floor 1 and can descend into the sublevel
     const rr = newRun(sub, 60, [{ id: "P1" }]);
     const rp = rr.players[0];
@@ -755,6 +756,48 @@ const ok = (cond, name, extra) => {
     // erasing a cell clears its touching walls
     applyOp(wd, { t: "cell-", f: 0, x: 7, z: 5 });
     ok(!D.manualWallSegments(wd, 0).some((w) => w.x === 7 && w.z === 5), "cell- clears touching edge walls");
+  }
+
+  // ── 9g. stairs soft-lock escape hatch + door dtype roundtrip ────
+  console.log("[stairs-hatch+doors]");
+  {
+    // walled-in landing: player climbs up, lands in a 1-cell alcove with no
+    // walkable neighbour; the anti-bounce lock would strand them — interactDown
+    // must let them descend anyway.
+    const hd = newDungeon({ theme: "fantasy" });
+    stampRoom(hd, 0, 5, 5, 4, 4);
+    applyOp(hd, { t: "floor+" });
+    stampRoom(hd, 1, 5, 5, 4, 4);
+    applyOp(hd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(hd, { t: "obj+", f: 0, o: { kind: "exit", x: 8, z: 8 } });
+    applyOp(hd, { t: "obj+", f: 0, o: { kind: "stairs", x: 6, z: 6, rot: 0 } }); // landing (6,7) on f1
+    // wall the landing (6,7) on all four sides so it is a dead-end alcove
+    for (const [x, z, sd] of [[6, 7, 0], [6, 7, 1], [6, 6, 0], [5, 7, 1]]) applyOp(hd, { t: "wall+", f: 1, x, z, s: sd, wtype: "stone" });
+    const hr = newRun(hd, 80, [{ id: "P1" }]);
+    const hp = hr.players[0];
+    hp.x = c2w(6); hp.z = c2w(6);
+    for (let i = 0; i < 60; i++) tick(hr, 1 / 60);       // climb up into the alcove
+    ok(hp.f === 1, "hatch: climbed into the walled landing");
+    for (let i = 0; i < 60; i++) tick(hr, 1 / 60);       // stuck: lock held, no walkable exit
+    ok(hp.f === 1 && hp.stairLock != null, "hatch: still locked in the alcove (would soft-lock)");
+    for (let i = 0; i < 60 && hp.f === 1; i++) { hp.input.interactDown = true; tick(hr, 1 / 60); }
+    ok(hp.f === 0, "hatch: pressing interact descends out of the dead-end landing");
+
+    // door dtype + flip survive placement + serialize roundtrip
+    const dd = newDungeon({ theme: "fantasy" });
+    stampRoom(dd, 0, 5, 5, 4, 4);
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(dd, { t: "obj+", f: 0, o: { kind: "exit", x: 8, z: 8 } });
+    ok(applyOp(dd, { t: "wall+", f: 0, x: 6, z: 6, s: 1, wtype: "stone", door: true, dtype: "iron", flip: true }).ok, "door: place iron door");
+    const seg = D.manualWallSegments(dd, 0).find((w) => w.door);
+    ok(seg && seg.dtype === "iron" && seg.flip === true, "door: dtype+flip stored");
+    const back = sanitize(serialize(dd));
+    const seg2 = D.manualWallSegments(back, 0).find((w) => w.door);
+    ok(seg2 && seg2.dtype === "iron" && seg2.flip === true, "door: dtype+flip survive roundtrip");
+    // default door type is wood; junk dtype falls back to wood
+    applyOp(dd, { t: "wall+", f: 0, x: 6, z: 7, s: 1, wtype: "stone", door: true, dtype: "bogus" });
+    const seg3 = D.manualWallSegments(dd, 0).find((w) => w.x === 6 && w.z === 7 && w.door);
+    ok(seg3 && seg3.dtype === "wood", "door: invalid dtype falls back to wood");
   }
 
   // ── 10. pathfinding + LOS ───────────────────────────────────────

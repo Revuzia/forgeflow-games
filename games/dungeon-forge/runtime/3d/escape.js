@@ -11,7 +11,7 @@ import * as THREE from "three";
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
 const E = await import("../sim/escape_sim.js" + V);
-const { makeInstanced, Assets, charClips, makeTorch, makeCellSurfaces, makeNpc, findArmBones, relaxArms } = await import("./assets.js" + V);
+const { makeInstanced, Assets, charClips, makeTorch, makeCellSurfaces, makeNpc, findArmBones, relaxArms, makeDoor } = await import("./assets.js" + V);
 const { EnemyPool } = await import("./enemies.js" + V);
 
 const FLOOR_H = 4.4;
@@ -185,29 +185,19 @@ export class Escape {
       inst.setCount(list.length * 2); inst.commit();
       group.add(inst.group);
     }
-    // edge DOORS: the gate arch sits ON the line; leaf/bars animate by wall id
-    // (registered in doorLeafs, so the existing "door" event handler runs them)
+    // edge DOORS: a procedural door set into the wall opening (jambs + styled
+    // leaf), hinged so it swings open. Registered in doorLeafs by wall id.
     for (const w of man) {
       if (!w.door) continue;
       const gg = new THREE.Group();
       const mid = D.edgeMid(w.x, w.z, w.s);
       gg.position.set(mid.x, 0, mid.z);
       gg.rotation.y = w.s === 0 ? -Math.PI / 2 : 0;   // passage crosses the line
-      const A2 = this.g.assets;
-      gg.add(A2.clone(this.kit.gate));
-      const leafTpl = this.kit.gateDoor;
-      const leaf = A2.clone(leafTpl); gg.add(leaf);
-      let mixer = null, openClip = null, closeClip = null;
-      if (leafTpl.animations && leafTpl.animations.length) {
-        mixer = new THREE.AnimationMixer(leaf);
-        openClip = leafTpl.animations.find((a) => a.name === "open") || leafTpl.animations[0];
-        closeClip = leafTpl.animations.find((a) => a.name === "close");
-      }
-      let bars = null;
-      if (w.locked) { bars = A2.clone(this.kit.gateLocked); bars.position.z += 0.03; gg.add(bars); }
+      const door = makeDoor(w.dtype || "wood", { flip: w.flip });
+      gg.add(door);
       const lock = w.locked ? this._sprite("🔒", 1.2, 4.5) : null;
       if (lock) gg.add(lock);
-      this.doorLeafs.set(w.id, { grp: gg, leaf, bars, lock, mixer, openClip, closeClip, open: false });
+      this.doorLeafs.set(w.id, { grp: gg, hinge: door.userData.leaf, lock, locked: w.locked, targetA: 0, curA: 0, open: false });
       group.add(gg);
       this.objMeshes.set(w.id, gg);
     }
@@ -1151,6 +1141,7 @@ export class Escape {
     const dl = this.doorLeafs.get(id);
     if (!dl) return;
     dl.open = open;
+    if (dl.hinge) { dl.targetA = open ? -1.55 : 0; return; }  // swing the leaf on its hinge
     if (dl.mixer && dl.openClip) {
       dl.mixer.stopAllAction();
       const clip = open ? dl.openClip : (dl.closeClip || dl.openClip);
@@ -1358,8 +1349,14 @@ export class Escape {
     // wall cutaway: any wall between the camera and the player sinks down
     this._wallCutaway(dt);
 
-    // door mixers
-    for (const [, dl] of this.doorLeafs) if (dl.mixer) dl.mixer.update(dt);
+    // door mixers + hinge swings
+    for (const [, dl] of this.doorLeafs) {
+      if (dl.mixer) dl.mixer.update(dt);
+      if (dl.hinge && Math.abs(dl.targetA - dl.curA) > 0.001) {
+        dl.curA += (dl.targetA - dl.curA) * Math.min(1, dt * 9);
+        dl.hinge.rotation.y = dl.curA;
+      }
+    }
 
     // lava/water sheet animation + lava embers
     const t = performance.now() / 1000;

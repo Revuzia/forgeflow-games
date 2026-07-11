@@ -251,6 +251,7 @@ export function emptyFloor() {
 // to the neighbor. Entries may be a DOOR ({door:true, locked}) — a door on the
 // wall line, openable exactly like a cell door (same runtime events, by id).
 export const WALL_TYPES = ["stone", "brick", "wood", "metal"];
+export const DOOR_TYPES = ["wood", "iron", "bars", "ornate"];
 export const wk = (x, z, s) => x + "," + z + "," + s;
 export function normEdge(x, z, side) {
   side = ((side | 0) % 4 + 4) % 4;
@@ -280,7 +281,7 @@ export function manualWallSegments(d, f) {
   return Object.keys(fl.walls).map((k) => {
     const [x, z, s] = k.split(",").map(Number);
     const w = fl.walls[k];
-    return { x, z, s, key: k, type: w.t || "stone", door: !!w.door, locked: !!w.locked, id: w.id };
+    return { x, z, s, key: k, type: w.t || "stone", door: !!w.door, locked: !!w.locked, dtype: w.dtype || "wood", flip: !!w.flip, id: w.id };
   });
 }
 
@@ -356,7 +357,11 @@ export function applyOp(d, op) {
       const key = wk(e.x, e.z, e.s);
       const prev = fl.walls[key];
       const w = { t: WALL_TYPES.includes(op.wtype) ? op.wtype : "stone", id: (prev && prev.id) || "w" + d.nid++ };
-      if (op.door) { w.door = true; w.locked = !!op.locked; }
+      if (op.door) {
+        w.door = true; w.locked = !!op.locked;
+        w.dtype = DOOR_TYPES.includes(op.dtype) ? op.dtype : (prev && prev.dtype) || "wood";
+        if (op.flip != null ? op.flip : (prev && prev.flip)) w.flip = true;
+      }
       if (op.id) { w.id = op.id; const n = parseInt(String(op.id).slice(1), 10); if (!isNaN(n) && n >= d.nid) d.nid = n + 1; }
       fl.walls[key] = w;
       return { ok: true, id: w.id };
@@ -573,14 +578,19 @@ export function validate(d) {
   const exits = findAll(d, "exit");
   if (spawns.length !== 1) problems.push({ code: "spawn", msg: spawns.length ? "Multiple spawns" : "Place a player spawn" });
   if (exits.length !== 1) problems.push({ code: "exit", msg: exits.length ? "Multiple exits" : "Place an exit portal" });
-  // stairs landings
+  // stairs landings — down-stairs (o.dir === -1) land one floor BELOW, up above
   d.floors.forEach((fl, f) => {
     for (const o of fl.objects) {
       if (o.kind !== "stairs") continue;
-      if (f + 1 >= d.floors.length) { problems.push({ code: "stairs", id: o.id, msg: "Stairs on the top floor lead nowhere" }); continue; }
       const dir = DIRS[o.rot % 4];
-      if (!hasCell(d, f + 1, o.x + dir.dx, o.z + dir.dz))
-        problems.push({ code: "stairs", id: o.id, msg: `Stairs need a floor tile above the landing (floor ${f + 2})` });
+      const lx = o.x + dir.dx, lz = o.z + dir.dz;
+      if ((o.dir | 0) === -1) {
+        if (f - 1 < 0) { problems.push({ code: "stairs", id: o.id, msg: "Stairs on the bottom floor lead nowhere" }); continue; }
+        if (!hasCell(d, f - 1, lx, lz)) problems.push({ code: "stairs", id: o.id, msg: `Stairs need a floor tile below the landing (floor ${f})` });
+      } else {
+        if (f + 1 >= d.floors.length) { problems.push({ code: "stairs", id: o.id, msg: "Stairs on the top floor lead nowhere" }); continue; }
+        if (!hasCell(d, f + 1, lx, lz)) problems.push({ code: "stairs", id: o.id, msg: `Stairs need a floor tile above the landing (floor ${f + 2})` });
+      }
     }
   });
   const solv = spawns.length === 1 && exits.length === 1 ? solvability(d) : null;
@@ -763,7 +773,7 @@ export function sanitize(raw) {
         // interior walls need floor on BOTH sides after sanitize
         if (!inBounds(x, z) || !inBounds(nx, nz) || !nf.cells[ck(x, z)] || !nf.cells[ck(nx, nz)]) continue;
         const c = { t: WALL_TYPES.includes(w.t) ? w.t : "stone", id: String(w.id || "w" + out.nid++).slice(0, 12) };
-        if (w.door) { c.door = true; c.locked = !!w.locked; }
+        if (w.door) { c.door = true; c.locked = !!w.locked; c.dtype = DOOR_TYPES.includes(w.dtype) ? w.dtype : "wood"; if (w.flip) c.flip = true; }
         const n = parseInt(c.id.slice(1), 10); if (!isNaN(n) && n >= out.nid) out.nid = n + 1;
         nf.walls[wk(x, z, s)] = c;
       }

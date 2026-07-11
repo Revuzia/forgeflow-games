@@ -982,7 +982,10 @@ export function tick(st, dt, opts = {}) {
     const cx = w2c(p.x), cz = w2c(p.z);
     const hereKey = p.f + "," + cx + "," + cz;
     if (p.stairLock && p.stairLock !== hereKey) p.stairLock = null;  // stepped off → re-arm
-    if (!p.stairLock) {
+    // pressing interact on a stair endpoint always transports, even while the
+    // anti-bounce lock is held — the manual escape hatch so a player on a
+    // dead-end landing (walled-in alcove) can never be permanently soft-locked.
+    if (!p.stairLock || p.input.interactDown) {
       for (const L of st.stairs) {
         const onFrom = L.from.f === p.f && L.from.x === cx && L.from.z === cz;
         const onTo = L.to.f === p.f && L.to.x === cx && L.to.z === cz;
