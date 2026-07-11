@@ -13,11 +13,12 @@ export const LAYOUT = {
   handZ: 4.52, handY: 1.0, enemyHandZ: -3.98,
   deckX: 7.5, playerDeckZ: 3.1, enemyDeckZ: -3.1,
   trapX: -7.35, playerTrapZ: 2.35, enemyTrapZ: -2.35,
-  // heroes stand CENTERED (Hearthstone-style). Player is IN FRONT of the hand
-  // (z > handZ 4.52) — owner's call: it can cover the middle hand card but never
-  // the board, and shows the full 3D figure. Enemy looms at the far top-centre.
+  // heroes stand CENTERED (Hearthstone-style), each IN FRONT of its OWN hand row
+  // so the full 3D figure reads over the cards (never over the board). Player sits
+  // in front of handZ 4.52 (margin ~0.53); the enemy mirrors that — in front of its
+  // hand (enemyHandZ+0.35 = -3.63), not behind it. Applies at every camera pitch.
   heroPlayer: new THREE.Vector3(0, 0.12, 5.05),
-  heroEnemy: new THREE.Vector3(0, 0.45, -3.75),
+  heroEnemy: new THREE.Vector3(0, 0.44, -3.12),
 };
 
 // ── tiny tween engine ────────────────────────────────────────────
@@ -234,6 +235,26 @@ export class BoardScene {
       ev.preventDefault();
       this.zoomTarget = Math.max(0, Math.min(1, this.zoomTarget - ev.deltaY * 0.0012));
     }, { passive: false });
+    // RIGHT-drag: tilt the view up/down (orbit pitch around the board pivot).
+    // Non-inverted: drag UP → the camera drops to a lower, more side-on angle
+    // (you "look up" at the board); drag DOWN → a higher, more top-down angle.
+    // Clamped so you never dip under the table or flip fully overhead. The hand
+    // cards re-tilt to keep facing the camera (see _retiltCards / handTransform).
+    this.pitch = 0; this.pitchTarget = 0; this._pdrag = null;
+    const cel = this.renderer.domElement;
+    cel.addEventListener('contextmenu', (e) => e.preventDefault());
+    cel.addEventListener('pointerdown', (e) => {
+      if (e.button === 2) { this._pdrag = { y: e.clientY, base: this.pitchTarget }; cel.setPointerCapture?.(e.pointerId); }
+    });
+    cel.addEventListener('pointermove', (e) => {
+      if (!this._pdrag) return;
+      const dy = e.clientY - this._pdrag.y;
+      this.pitchTarget = Math.max(-0.42, Math.min(0.6, this._pdrag.base + dy * 0.0032));
+    });
+    this._retiltPitch = 0;
+    const endPitch = (e) => { if (this._pdrag) { cel.releasePointerCapture?.(e.pointerId); this._pdrag = null; } };
+    cel.addEventListener('pointerup', endPitch);
+    cel.addEventListener('pointercancel', endPitch);
 
     // lights (table only — cards are unlit for color fidelity)
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.85));
@@ -496,7 +517,7 @@ export class BoardScene {
       const z = LAYOUT.handZ - (hovered ? 0.55 : 0) + arc * 0.05;
       return {
         pos: new THREE.Vector3(x, y, z),
-        rotX: -0.56 + (hovered ? 0.1 : 0),
+        rotX: -0.56 + (hovered ? 0.1 : 0) + (this.pitch || 0),
         rotZ: hovered ? 0 : -(i - (n - 1) / 2) * 0.045,
         scale: hovered ? 1.62 : 0.94,
       };
@@ -506,8 +527,17 @@ export class BoardScene {
     // squares. Brought slightly forward + bigger; gentle mirrored fan.
     return {
       pos: new THREE.Vector3(x * 0.94, LAYOUT.handY + 0.32, LAYOUT.enemyHandZ + 0.35),
-      rotX: -0.42, rotZ: (i - (n - 1) / 2) * 0.04, scale: 0.9,
+      rotX: -0.42 + (this.pitch || 0), rotZ: (i - (n - 1) / 2) * 0.04, scale: 0.9,
     };
+  }
+
+  // re-tilt hand cards so they keep facing the camera as the view pitch changes.
+  // cheap: touches only the X rotation of hand-zone cards (no chip/mini rebuild).
+  _retiltCards() {
+    for (const e of this.cards.values()) {
+      if (e.zone !== 'hand' || e.li == null) continue;
+      e.inner.rotation.x = this.handTransform(e.side, e.li, e.ln, e.hover && e.side === 0).rotX;
+    }
   }
 
   // board hover: enlarge the REAL card in place and swap to the full-detail
@@ -593,6 +623,7 @@ export class BoardScene {
           e.group.position.set(LAYOUT.deckX, 0.3, dz);
         }
         e.zone = 'hand'; e.side = rel; e.cardId = h.card;
+        e.li = i; e.ln = pl.hand.length; // remembered so _retiltCards can re-face the camera on pitch
         // enemy hand shows card BACKS
         const face = rel === 0 ? getCard(h.card).tex : this.backs[1].tex;
         if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
@@ -1152,7 +1183,7 @@ export class BoardScene {
       if (h.userData.glow) h.children[0].material.opacity = 0.55 + Math.sin(this.time * 6) * 0.35;
       else h.children[0].material.opacity = 0.9;
     }
-    // camera: zoom (dolly toward pivot) + shake, then re-aim at the pivot
+    // camera: zoom (dolly toward pivot) + shake + user pitch, then re-aim at pivot
     this.zoom += (this.zoomTarget - this.zoom) * Math.min(1, dt * 9);
     const rest = this.camBase.clone().lerp(this.camZoomPos, this.zoom);
     if (this.camShakeT > 0) {
@@ -1162,6 +1193,17 @@ export class BoardScene {
       rest.y += (Math.random() - 0.5) * a * 0.6;
       rest.z += (Math.random() - 0.5) * a;
     }
+    // user pitch: orbit the rest position around the board pivot on the Y-Z plane
+    // (drag up → higher/top-down, drag down → lower/side-on). Smoothed toward target.
+    this.pitch += (this.pitchTarget - this.pitch) * Math.min(1, dt * 10);
+    if (Math.abs(this.pitch) > 1e-4) {
+      const oy = rest.y - this.camPivot.y, oz = rest.z - this.camPivot.z;
+      const c = Math.cos(this.pitch), s = Math.sin(this.pitch);
+      rest.y = this.camPivot.y + oy * c - oz * s;
+      rest.z = this.camPivot.z + oy * s + oz * c;
+    }
+    // re-face the hand cards to the camera as the pitch settles (item 4)
+    if (Math.abs(this.pitch - this._retiltPitch) > 0.0015) { this._retiltPitch = this.pitch; this._retiltCards(); }
     this.camera.position.copy(rest);
     this.camera.lookAt(this.camPivot);
     this.renderer.render(this.scene, this.camera);
