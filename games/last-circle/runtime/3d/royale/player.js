@@ -83,10 +83,6 @@ const SKINS = ["soldier", "athlete", "wraith", "juggernaut", "viper"];
 // Arms are posed at runtime (pose.js); locomotion + jump/swim clips load.
 const MESHY_CLIPS = ["walk", "run", "death", "dance", "cheer", "jump", "swim"];
 const _v3 = new THREE.Vector3();
-// scratch for skin-independent weapon aiming (barrel → aim dir each frame)
-const _aimDir = new THREE.Vector3(), _aimUp = new THREE.Vector3(0, 1, 0);
-const _aimX = new THREE.Vector3(), _aimY = new THREE.Vector3();
-const _aimM = new THREE.Matrix4(), _aimQW = new THREE.Quaternion(), _aimQP = new THREE.Quaternion();
 
 async function preloadMeshySkin(W, key) {
   const url = W.assetBase + "assets/chars/meshy/" + key + ".glb";
@@ -784,31 +780,8 @@ function syncObj(W, a, dt, far) {
       if (mode) a._armMode = mode;
       // camera pitch > 0 = looking down; the pose layer wants aim-up positive
       if (a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, a._armMode, a._armW, -a.pitch);
-
-      // ── SKIN-INDEPENDENT BARREL AIM ─────────────────────────────────────
-      // Meshy rigs DON'T share a common hand-bone orientation (a fixed hand
-      // rotation aimed soldier's gun forward but juggernaut's BACKWARD), so
-      // orient the weapon holder every frame so the barrel (+Z) points where
-      // the actor aims — grip stays at the fist, direction is rig-agnostic.
-      if (mode === "gunReady" || mode === "reload") {
-        const yaw = a.yaw, pit = -a.pitch * 0.9;
-        const cy = Math.cos(yaw), sywv = Math.sin(yaw), cpv = Math.cos(pit), spv = Math.sin(pit);
-        _aimDir.set(-sywv * cpv, spv, -cy * cpv).normalize();      // world barrel dir
-        _aimX.crossVectors(_aimUp, _aimDir).normalize();           // right
-        if (_aimX.lengthSq() < 1e-6) _aimX.set(1, 0, 0);
-        _aimY.crossVectors(_aimDir, _aimX).normalize();            // up
-        _aimM.makeBasis(_aimX, _aimY, _aimDir);
-        _aimQW.setFromRotationMatrix(_aimM);                       // desired WORLD quat
-        if (a.handBone) {
-          // flush the hand bone's world matrix AFTER the arm pose moved it, or
-          // the compensation uses a stale orientation (broke some skins)
-          a.handBone.updateWorldMatrix(true, false);
-          a.handBone.getWorldQuaternion(_aimQP);
-          a.hand.quaternion.copy(_aimQP.invert().multiply(_aimQW)); // → hand-bone local
-        } else {
-          a.hand.quaternion.copy(_aimQW);
-        }
-      }
+      // (per-frame barrel aiming removed — it was fragile and unverifiable;
+      //  weapon orientation now uses the per-skin calibration set at load)
     }
   }
 }

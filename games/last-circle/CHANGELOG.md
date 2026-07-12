@@ -3,6 +3,24 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-09 — v4.7 HOTFIX: revert per-frame gun aim (it broke the cast)
+
+The v4.6 "skin-independent per-frame barrel aim" was the cause of the viper
+body contortion AND the "gun points backward" — verified in LIVE play (see
+below). Removed it entirely; the weapon uses the static per-skin grip rotation
+set at load. Measured all 5 fighters after the revert: barrel points FORWARD
+on every skin (dot 0.97–0.99 soldier/athlete/viper; 0.80 wraith/juggernaut,
+which additionally tilt up ~35° — leveling tracked separately). Viper runs
+upright, no contortion.
+
+**Verification method fixed for good:** the headless preview tab runs *hidden*,
+so `requestAnimationFrame` never fires → the game loop stalls → earlier
+"verified" claims were reading frozen state. Live play is now driven via a
+setTimeout pump + rAF shim, and frames are captured by copying the WebGL canvas
+to a JPEG POSTed to a tiny local upload server (scratchpad/upload_server.py)
+and read back as an image. ALWAYS verify through that pipeline, never a static
+eval, never a frozen frame.
+
 ## 2026-07-09 — v4.6 BLACK-SCREEN fix, upright run, skin-independent gun aim
 
 Owner round 8 (screenshots): matches loaded pitch black, characters ran bent
