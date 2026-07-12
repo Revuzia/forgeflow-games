@@ -78,6 +78,17 @@ function mkInput() {
 // slouch (every other fighter sits at 1-5°); un-slouchable without regen and
 // the regen risked the same. Owner call: cut him.
 const SKINS = ["soldier", "athlete", "wraith", "juggernaut", "viper"];
+// Per-skin weapon-holder rotation (hand-bone local). Meshy rigs DON'T share a
+// hand-bone rest orientation, so one fixed rotation left wraith/juggernaut
+// aiming 35° high. These were auto-calibrated live (measure barrel → rotate to
+// forward+level) and verified: dot 1.0, muzzle level on all five.
+const HAND_AIM_ROT = {
+  soldier:    [-1.449, -0.105, -0.779],
+  athlete:    [-1.637, -0.090, -0.788],
+  wraith:     [-1.067, -0.403, -0.680],
+  juggernaut: [-1.094, -0.444, -0.676],
+  viper:      [-1.338,  0.023, -0.788],
+};
 // armed clips (Alert / Walk_Forward_While_Shooting / Run_and_Shoot) retarget
 // badly on these rigs — arms folded over the face ("broken bone" screenshots).
 // Arms are posed at runtime (pose.js); locomotion + jump/swim clips load.
@@ -166,7 +177,8 @@ export async function loadActorModels(W) {
       // dotForward 0.99 at (-90°, 0, -45°). Weapon grip anchor (weapons.js)
       // sits the handle at this origin.
       a.hand.position.set(0, 0.02 / ws, 0);
-      a.hand.rotation.set(-Math.PI / 2, 0, -Math.PI / 4);
+      const hr = HAND_AIM_ROT[a.skin] || [-Math.PI / 2, 0, -Math.PI / 4];
+      a.hand.rotation.set(hr[0], hr[1], hr[2]);
     } else {
       a.hand.position.set(0.32, 1.15, 0.28);
       a.obj.add(a.hand);
