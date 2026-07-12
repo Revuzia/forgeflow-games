@@ -3,6 +3,22 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-09 — v4.8 per-skin weapon calibration (level barrel on all 5)
+
+wraith + juggernaut aimed ~35° high with the shared grip rotation (their
+Meshy hand-bone rest differs). Auto-calibrated each rig LIVE (measure barrel
+world dir → rotate to forward+level) and baked the five per-skin hand
+rotations into `HAND_AIM_ROT`. Verified in live play: dot 1.0, muzzle level on
+soldier/athlete/wraith/juggernaut/viper (montage in scratchpad).
+
+**Verification-pipeline lesson (never crash the preview again):** driving the
+game with a setTimeout pump + rAF shim (needed because the headless tab is
+hidden) leaks a WebGL context on every `startMatch`; ~15 restarts wedged the
+renderer. Rules: (1) RELOAD the page between skin tests, don't loop
+`startMatch`; (2) `clearInterval(window.__pump)` + restore `requestAnimationFrame`
+BEFORE any navigate, or CDP navigation hangs 300s on the still-busy page;
+(3) cap matches per page load.
+
 ## 2026-07-09 — v4.7 HOTFIX: revert per-frame gun aim (it broke the cast)
 
 The v4.6 "skin-independent per-frame barrel aim" was the cause of the viper
