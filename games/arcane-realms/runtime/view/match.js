@@ -12,6 +12,8 @@ import { chooseAction } from '../sim/ai.js?v=23';
 import { Audio2 } from './audio.js?v=23';
 
 const REALM_COLOR = (id) => REALMS[cardById(id).realm]?.color ?? 0x8d99ae;
+// css hex of a card's realm color — tints the targeting arrows per element
+const REALM_CSS = (id) => '#' + REALM_COLOR(id).toString(16).padStart(6, '0');
 
 function hashState(state) {
   // cheap deterministic digest for online desync detection (djb2 over JSON)
@@ -533,7 +535,17 @@ export class Match {
       if (this.select) { this.clearSelect(); this.refreshLegal(); return; }
       this.inspectAt(e.clientX, e.clientY);
     };
-    this.onKey = (e) => { if (e.key === 'Escape' && this.select) { this.clearSelect(); this.refreshLegal(); } };
+    this.onKey = (e) => {
+      if (e.key === 'Escape') {
+        if (this.select) { this.clearSelect(); this.refreshLegal(); }
+        else if (this.ui && this.ui.matchSettings && !document.querySelector('.modal-wrap')) this.ui.matchSettings(); // Esc = pause (industry standard)
+      }
+      if (e.key === 'f' || e.key === 'F') {
+        if (!/input|textarea/i.test((e.target && e.target.tagName) || "")) {
+          if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {});
+        }
+      }
+    };
     el.addEventListener('pointermove', this.onMove);
     el.addEventListener('pointerdown', this.onDown);
     window.addEventListener('pointerup', this.onUp);
@@ -585,7 +597,7 @@ export class Match {
       else this.scene.setHeroGlow(this.relOf(a.target.p), true);
     }
     const from = this.scene.worldToScreen(this.scene.posOf(iid) || new THREE.Vector3());
-    this.ui.showArrow(from.x, from.y, from.x, from.y - 30, 'attack');
+    this.ui.showArrow(from.x, from.y, from.x, from.y - 30, 'attack', REALM_CSS(this.unitCard(iid)));
     Audio2.sfx('click');
   }
 
@@ -606,7 +618,7 @@ export class Match {
     this.scene.setGlow(hit.iid, 0x6fd8ff, true);
     this.highlightPlays(plays);
     const from = this.scene.worldToScreen(castPos);
-    this.ui.showArrow(from.x, from.y, from.x, from.y - 30, 'spell');
+    this.ui.showArrow(from.x, from.y, from.x, from.y - 30, 'spell', REALM_CSS(entry.cardId));
     Audio2.sfx('click');
   }
 
@@ -627,7 +639,8 @@ export class Match {
     for (const item of this.attackQueue) {
       const f = this.scene.worldToScreen(this.scene.posOf(item.iid) || new THREE.Vector3());
       const tx = cx != null ? cx : f.x, ty = cy != null ? cy : f.y - 70;
-      this.ui.addQueuedArrow(item.iid, f.x, f.y, tx, ty);
+      // each attacker's arrow carries its own element color
+      this.ui.addQueuedArrow(item.iid, f.x, f.y, tx, ty, REALM_CSS(this.unitCard(item.iid)));
     }
   }
 
@@ -687,7 +700,7 @@ export class Match {
     if (this.select && this.select.kind === 'spell') {
       const fromPos = this.scene.cards.get(this.select.iid)?.group.position || new THREE.Vector3();
       const from = this.scene.worldToScreen(fromPos);
-      this.ui.showArrow(from.x, from.y, e.clientX, e.clientY, 'spell');
+      this.ui.showArrow(from.x, from.y, e.clientX, e.clientY, 'spell', REALM_CSS(this.select.cardId));
       if (e.buttons & 1) this.select.moved = true;
       el_cursor(this.scene.renderer.domElement, hit, this);
       return;
@@ -874,7 +887,7 @@ export class Match {
         } else { d.slot = null; this.scene.hideGhost(); }
       } else if (d.def.target) {
         const from = this.scene.worldToScreen(entry.group.position);
-        this.ui.showArrow(from.x, from.y, e.clientX, e.clientY, 'spell');
+        this.ui.showArrow(from.x, from.y, e.clientX, e.clientY, 'spell', REALM_CSS(d.cardId));
       }
     }
   }
