@@ -135,6 +135,7 @@ export class HUD {
       ${tog("cf-dmg", "Damage numbers", dmg)}
       ${tog("cf-invx", "Invert camera X", save.get("set_invx", false))}
       ${tog("cf-invy", "Invert camera Y", save.get("set_invy", false))}
+      <div id="cf-fs" class="cf-btn" style="margin-top:14px;text-align:center;${frameCss}padding:9px 0;font-size:13px;font-weight:800">⛶ TOGGLE FULLSCREEN</div>
       <div id="cf-reset" class="cf-btn" style="margin-top:22px;text-align:center;${frameCss}padding:9px 0;font-size:13px;font-weight:800;color:#ff8a8a;border-color:#a04040">RESET PROGRESS</div>
       <div id="cf-back" class="cf-btn" style="display:block;margin:16px auto 0;width:130px;text-align:center;padding:9px 0;${frameCss}font-size:14px;font-weight:700">\u2190 BACK</div>`;
   }
@@ -157,6 +158,8 @@ export class HUD {
     wireTog("#cf-dmg", "set_dmgnum", "dmgNum");
     wireTog("#cf-invx", "set_invx", "invertX");
     wireTog("#cf-invy", "set_invy", "invertY");
+    const fsb = M.querySelector("#cf-fs");
+    if (fsb) fsb.onclick = () => { SFX.play("ui"); if (window.__CONTROLS__) window.__CONTROLS__.toggleFullscreen(); };
     const rst = M.querySelector("#cf-reset");
     rst.onclick = () => {
       if (rst.dataset.armed) {
@@ -372,8 +375,8 @@ export class HUD {
     this._stopLobby();
     const modes = [
       { id: "ffa", icon: "\uD83D\uDD25", name: "FREE-FOR-ALL", desc: "5 champions. First to 10 kills. Respawns.", players: "5 players" },
-      { id: "duel", icon: "\u2694\uFE0F", name: "DUEL", desc: "1v1 · best of 3 rounds. No respawns.", players: "2 players" },
-      { id: "teams", icon: "\uD83D\uDEE1", name: "TEAMS", desc: "2v2 · best of 3 team wipes.", players: "4 players" },
+      { id: "duel", icon: "\u2694\uFE0F", name: "DUEL", desc: "1v1 · best of 5 rounds. No respawns.", players: "2 players" },
+      { id: "teams", icon: "\uD83D\uDEE1", name: "TEAMS", desc: "2v2 · best of 5 team wipes.", players: "4 players" },
     ];
     const cards = modes.map((m) => `
       <div class="cf-card" data-mode="${m.id}" style="${frameCss}width:210px;padding:20px 16px;text-align:center">
@@ -405,6 +408,7 @@ export class HUD {
     const L = this._lobby = {
       modeId, slots, classId: "warrior", arenaIdx: Math.floor(Math.random() * 5),
       private: false, code: "TD-" + Math.random().toString(36).slice(2, 6).toUpperCase(),
+      isHost: true,   // room creator; joiners of net rooms will get false
       members: [{ name: "You", classId: "warrior", isLocal: true, ready: false, isBot: false }],
       searchT: 0, nextJoinT: rand(2.5, 4.5), countdown: null,
     };
@@ -423,9 +427,7 @@ export class HUD {
       for (const m of l.members) {
         if (m.isBot && !m.ready) { m.readyIn -= 0.5; if (m.readyIn <= 0) m.ready = true; }
       }
-      // auto-launch when full and everyone is ready
-      const localReady = l.members.find((m) => m.isLocal).ready;
-      if (localReady && l.members.every((m) => m.ready)) this._beginLobbyCountdown();
+      // no auto-launch: only the room creator starts the match
       render();
     }, 500);
     render();
@@ -486,10 +488,16 @@ export class HUD {
     }
     const me = l.members.find((m) => m.isLocal);
     const readyCount = l.members.filter((m) => m.ready).length;
+    const allReady = me.ready && l.members.every((m) => m.ready);
+    const mainBtn = !me.ready
+      ? `<div id="lb-ready" class="cf-btn" style="${frameCss}padding:12px 30px;font-size:16px;font-weight:900;animation:cfPulse 2s infinite">READY UP</div>`
+      : allReady && l.isHost
+        ? `<div id="lb-start" class="cf-btn" style="${frameCss}padding:12px 34px;font-size:16px;font-weight:900;border-color:#7dff9a;color:#7dff9a;animation:cfPulse 1.6s infinite">▶ START MATCH</div>`
+        : `<div style="${frameCss}padding:12px 30px;font-size:15px;font-weight:800;color:#7dff9a">READY ✓ (${readyCount}/${l.members.length})${l.isHost ? " — waiting on champions…" : " — waiting for host…"}</div>`;
     const center = l.countdown != null
-      ? `<div style="font-size:44px;font-weight:900;color:#ffd24a;font-family:Georgia,serif;animation:cfPop .4s">STARTING IN ${l.countdown}\u2026</div>`
+      ? `<div style="font-size:44px;font-weight:900;color:#ffd24a;font-family:Georgia,serif;animation:cfPop .4s">STARTING IN ${l.countdown}…</div>`
       : `<div style="display:flex;gap:12px;justify-content:center;margin-top:16px">
-          <div id="lb-ready" class="cf-btn" style="${frameCss}padding:12px 30px;font-size:16px;font-weight:900;${me.ready ? "color:#7dff9a" : "animation:cfPulse 2s infinite"}">${me.ready ? `VOTED \u2713 (${readyCount}/${l.members.length})` : "READY \u2014 VOTE TO START"}</div>
+          ${mainBtn}
           <div id="lb-cancel" class="cf-btn" style="${frameCss}padding:12px 26px;font-size:14px;font-weight:700;color:#ff8a8a">CANCEL</div>
         </div>`;
     this._menu(`
@@ -513,13 +521,14 @@ export class HUD {
     if (pv) pv.onclick = () => { l.private = !l.private; SFX.play("ui"); this._renderLobby(); };
     const rd = M.querySelector("#lb-ready");
     if (rd) rd.onclick = () => {
-      const me2 = l.members.find((m) => m.isLocal);
-      me2.ready = !me2.ready;
+      l.members.find((m) => m.isLocal).ready = true;
       SFX.play("ui_big");
-      // everyone present ready -> countdown (empty slots become AI)
-      if (me2.ready && l.members.every((m) => m.ready)) this._beginLobbyCountdown();
       this._renderLobby();
     };
+    // host authority: only the room creator can launch the match (net-room
+    // joiners will see "waiting for host" when online rooms land)
+    const st = M.querySelector("#lb-start");
+    if (st) st.onclick = () => { if (l.isHost) { SFX.play("ui_big"); this._beginLobbyCountdown(); } };
     const cx = M.querySelector("#lb-cancel");
     if (cx) cx.onclick = () => { SFX.play("ui"); this._stopLobby(); this.showVersusModes(); };
   }

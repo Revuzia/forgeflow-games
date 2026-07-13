@@ -82,10 +82,14 @@ export class Champion {
     } else if (model === "rogue") {
       const bow = g.propLib.bow ? normalizeShaftProp(g.propLib.bow, 1.2) : makeBow();
       actor.attachWeapon(bow, "Left", { gripFrac: 0.5, palm: 0.12, roll: 0, rest: [0.05, 0.98, 0.15] });
+      actor.idleRelax = 0.65;   // authored idle flares his arms (owner screenshot)
     } else if (model === "sorceress") {
       // her baked-in staff is surgically collapsed (three grafts all read
       // broken); she now carries a proper attached staff like everyone else
-      actor.attachWeapon(makeStaff(), "Right", { gripFrac: 0.32, palm: 0.12, rest: [0.12, 0.96, 0.22] });
+      const staff = makeStaff();
+      staff.scale.setScalar(0.88);   // full-size read as oversized in-hand
+      actor.attachWeapon(staff, "Right", { gripFrac: 0.38, palm: 0.12, rest: [0.1, 0.97, 0.18] });
+      actor.idleRelax = 0.6;    // same arms-out authored idle as the rogue
     }
   }
 
@@ -579,8 +583,11 @@ export class Champion {
         if (this.spinTrail) { this.spinTrail.removeFromParent(); this.spinTrail = null; }
       }
     } else if (this.attackAnimT <= 0) {
-      if (mv.mag > 0.55) actor.play("Run", { timeScale: 1.2 });
-      else if (mv.mag > 0.05) actor.play("Walk", { timeScale: 1.1 });
+      // feet match actual ground speed (class speed + frost/block/attack
+      // slows) instead of one fixed rate — kills the skating look
+      const gs = spd * mv.mag;
+      if (mv.mag > 0.55) actor.play("Run", { timeScale: clamp(1.2 * gs / 6.1, 0.7, 1.6) });
+      else if (mv.mag > 0.05) actor.play("Walk", { timeScale: clamp(1.1 * gs / 2.6, 0.6, 1.5) });
       else if (!this.block.active) actor.play("Idle");
     }
     actor.update(shocked ? dt * 0.08 : dt);

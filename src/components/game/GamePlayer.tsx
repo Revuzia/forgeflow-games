@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { Game } from "../../lib/supabase";
 import { initGameBridge, destroyGameBridge } from "../../lib/gameBridge";
 
@@ -7,7 +7,6 @@ type Props = {
 };
 
 export default function GamePlayer({ game }: Props) {
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showPreroll, setShowPreroll] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -20,22 +19,9 @@ export default function GamePlayer({ game }: Props) {
   // update — kills the running game).
   const mountNonce = useRef<string>(String(Date.now()));
 
-  const toggleFullscreen = useCallback(() => {
-    if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().then(() => setIsFullscreen(true));
-    } else {
-      document.exitFullscreen().then(() => setIsFullscreen(false));
-    }
-  }, []);
-
-  useEffect(() => {
-    const handleEsc = () => {
-      if (!document.fullscreenElement) setIsFullscreen(false);
-    };
-    document.addEventListener("fullscreenchange", handleEsc);
-    return () => document.removeEventListener("fullscreenchange", handleEsc);
-  }, []);
+  // 2026-07-10 — Portal-level fullscreen button REMOVED (owner): every game's
+  // own bottom-right controls bar (game_controls.js) is the single fullscreen
+  // entry point; the iframe carries allow="fullscreen" so it works from inside.
 
   // Listen for PostMessage from game iframe (ad triggers, analytics)
   useEffect(() => {
@@ -127,20 +113,8 @@ export default function GamePlayer({ game }: Props) {
         wasn't centered in the viewport so the breakout pulled the left
         column off-screen (x=-154).
        */}
-      <div
-        className={
-          isFullscreen
-            ? "relative w-screen h-screen"
-            : "relative aspect-video w-full bg-black rounded-lg overflow-hidden"
-        }
-      >
-        <div
-          className={
-            isFullscreen
-              ? "w-full h-full"
-              : "absolute inset-0"
-          }
-        >
+      <div className="relative aspect-video w-full bg-black rounded-lg overflow-hidden">
+        <div className="absolute inset-0">
         {!showPreroll && (
           <iframe
             ref={iframeRef}
@@ -169,26 +143,6 @@ export default function GamePlayer({ game }: Props) {
           </div>
         )}
 
-        {/* Controls overlay */}
-        {!showPreroll && (
-          <div className="absolute top-3 right-3 z-10 flex items-center gap-2 opacity-0 hover:opacity-100 transition-opacity duration-300">
-            <button
-              onClick={toggleFullscreen}
-              className="p-2 rounded-lg bg-black/60 text-white hover:bg-black/80 transition-colors"
-              title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-            >
-              {isFullscreen ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                </svg>
-              )}
-            </button>
-          </div>
-        )}
         </div>
       </div>
     </div>

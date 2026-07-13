@@ -1,5 +1,28 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v1.4 — 2026-07-10 (animation pass, Bo5, host lobbies, controls-bar v2)
+- LOCOMOTION SPEED-MATCH: run/walk clip timeScale now follows actual ground
+  speed (class speed + frost/block/attack slows) — no more skating feet.
+  Verified: warrior 1.161 (=1.2×5.9/6.1), frost-slowed 0.7.
+- IDLE RELAX for rogue (.65) + sorceress (.6) — their authored idles flare
+  the arms out (owner screenshot); they now stand naturally like the others
+- Staff resized ×0.88 + regripped (gripFrac .38) — proper in-hand proportion
+- DUEL + TEAMS are BEST OF 5 (first to 3 rounds); all copy updated
+- LOBBY HOST AUTHORITY: no more auto-launch — everyone readies up, then only
+  the room CREATOR gets the ▶ START MATCH button (net joiners will see
+  "waiting for host"); verified no auto-start across live lobby ticks
+- Camera default zoom 1 → 1.25 (starts pulled back)
+- SETTINGS gains ⛶ TOGGLE FULLSCREEN row (drives the shared controls bar)
+- game_controls.js v2 (SHARED — copied to all 19 game dirs): universal mute
+  (Audio/AudioContext constructor wrap — every game's music/SFX obeys the
+  bar's mute button, resume suppressed while muted), page-wide right-click
+  context-menu block, ESC Keyboard Lock in fullscreen (Chromium: tap = game
+  pause menu, HOLD = exit; other browsers unchanged), pause button = game
+  menu via __PAUSE__, F-hotkey opt-out (fs_hotkey:false here — F was
+  colliding with the warrior weapon swap)
+- Portal GamePlayer.tsx: top-right fullscreen overlay REMOVED — the games'
+  bottom-right bar is the single fullscreen control
+
 ## v1.3.4 — 2026-07-10 (camera-relative movement)
 - WASD is now CAMERA-RELATIVE (industry standard): W is always screen-
   forward, A/D screen-left/right, S back — no matter how far the camera has

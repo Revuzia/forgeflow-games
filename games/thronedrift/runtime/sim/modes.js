@@ -210,10 +210,10 @@ class RoundsMode extends VersusMode {
   }
 }
 
-// ── DUEL — 1v1, best of 3 ──────────────────────────────────────────────────
+// ── DUEL — 1v1, best of 5 ──────────────────────────────────────────────────
 export class DuelMode extends RoundsMode {
-  constructor(roster) { super({ modeId: "duel", roster, rounds: 2 }); }
-  statusText() { return `DUEL · BEST OF 3 · ROUND ${this.roundNum}`; }
+  constructor(roster) { super({ modeId: "duel", roster, rounds: 3 }); }
+  statusText() { return `DUEL · BEST OF 5 · ROUND ${this.roundNum}`; }
   subText() {
     const w = this.roundWins;
     const mine = this.game ? (w[this.game.local.team] || 0) : 0;
@@ -222,10 +222,10 @@ export class DuelMode extends RoundsMode {
   }
 }
 
-// ── TEAMS — 2v2, best of 3 team wipes ──────────────────────────────────────
+// ── TEAMS — 2v2, best of 5 team wipes ──────────────────────────────────────
 export class TeamsMode extends RoundsMode {
-  constructor(roster) { super({ modeId: "teams", roster, rounds: 2 }); }
-  statusText() { return `2v2 · BEST OF 3 · ROUND ${this.roundNum}`; }
+  constructor(roster) { super({ modeId: "teams", roster, rounds: 3 }); }
+  statusText() { return `2v2 · BEST OF 5 · ROUND ${this.roundNum}`; }
   subText() { return this.game ? `${this.roundWins.A || 0} — ${this.roundWins.B || 0}` : ""; }
   spawnPoint(i, n) {
     // teams spawn on opposite sides, teammates adjacent

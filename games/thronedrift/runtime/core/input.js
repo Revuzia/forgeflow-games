@@ -15,7 +15,7 @@ export class Input {
     this.pointer = { x: 0, y: 0, down: false }; // NDC coords for aim raycast
     this.enabled = false;
     // camera controls: wheel/pinch zoom + right-drag orbit (yaw) and pitch
-    this.camZoom = 1; this.camYaw = 0; this.camPitch = 1;
+    this.camZoom = 1.25; this.camYaw = 0; this.camPitch = 1;   // start pulled back (owner)
     this.invertX = false; this.invertY = false;   // camera orbit inversion (settings)
     this._rightDrag = null;
     this._pinch = new Map();
