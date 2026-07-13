@@ -1,5 +1,13 @@
 # Dungeon Forge — CHANGELOG
 
+## v1.14.1 — 2026-07-13 (wall-drag: gap-free runs + clean corners)
+- **Wall tool no longer leaves gaps.** The drag used to place a single edge per
+  pointer sample, so a quick drag skipped segments and corners didn't close (you
+  had to go back and fill them in). It now INTERPOLATES — every edge between samples
+  is filled — and a corner extends the old run into the junction, then starts the
+  perpendicular run from that same grid corner, so L-shapes turn smoothly in one
+  stroke. Edges are deduped across the drag; the stairs-block warning shows once.
+
 ## v1.14.0 — 2026-07-13 (12 new prebuilt delves + 6-floor support)
 - **12 procedurally-authored "by players" dungeons** added to the play carousel
   (now 17 total): 3–6 floors each, Diablo-grade density — 22–73 levelled enemies,

@@ -720,7 +720,7 @@ export class Builder {
     if (this.tool === "walls") {
       this._pushUndo();
       this._noUndo = true;
-      this.drag = { walls: true, lastKey: null };
+      this.drag = { walls: true, lastKey: null, placed: new Set() };
       this._placeWallAt(cell);
       return;
     }
@@ -844,11 +844,15 @@ export class Builder {
     if (!raw || !this.drag || !this.drag.walls) return;
     const mode = this.toolOpt.wmode || "stone";
     if (mode === "door") { this._placeWallEdge(raw, mode); this.drag.run = null; return; }
+    this._wallSfx = false;
     let run = this.drag.run;
     if (!run) {
-      run = this.drag.run = { s: raw.s, fixed: raw.s === 0 ? raw.z : raw.x };
+      // anchor the run at the first edge (track its along-coordinate so later
+      // samples fill the whole line, not just the newest edge → no gaps)
+      run = this.drag.run = { s: raw.s, fixed: raw.s === 0 ? raw.z : raw.x, along: raw.s === 0 ? raw.x : raw.z };
+      this._wallOp(raw.x, raw.z, raw.s, mode);
       this.drag.lastCell = { x: cell.x, z: cell.z };
-      this._placeWallEdge(raw, mode);
+      if (this._wallSfx) this.g.audio.sfx(mode === "erase" ? "erase" : "place");
       return;
     }
     const last = this.drag.lastCell || { x: cell.x, z: cell.z };
@@ -856,15 +860,39 @@ export class Builder {
     const dAlong = run.s === 0 ? Math.abs(cell.x - last.x) : Math.abs(cell.z - last.z);
     const dPerp = run.s === 0 ? Math.abs(cell.z - last.z) : Math.abs(cell.x - last.x);
     if (raw.s !== run.s && dPerp >= 1 && dPerp >= dAlong) {
-      // turned a corner → re-anchor a new run on the perpendicular axis
-      run = this.drag.run = { s: raw.s, fixed: raw.s === 0 ? raw.z : raw.x };
+      // CORNER: extend the old run all the way INTO the junction, then re-anchor a
+      // new run on the perpendicular axis whose along-coord STARTS at the old run's
+      // fixed line. Both meet at the same grid corner → a clean, gap-free turn.
+      const Fb = raw.s === 0 ? raw.z : raw.x;
+      this._fillRun(run.s, run.fixed, run.along, Fb, mode);
+      run = this.drag.run = { s: raw.s, fixed: Fb, along: run.fixed };
     }
-    // project the pointer onto the run's line (fixed coord + pointer's along coord)
-    const e = run.s === 0 ? { x: cell.x, z: run.fixed, s: 0 } : { x: run.fixed, z: cell.z, s: 1 };
+    // fill every edge from the run's last along-coord to the pointer's (interpolate
+    // so a fast drag can't skip segments — the old "one edge per sample" bug)
+    const target = run.s === 0 ? cell.x : cell.z;
+    this._fillRun(run.s, run.fixed, run.along, target, mode);
+    run.along = target;
     this.drag.lastCell = { x: cell.x, z: cell.z };
-    this._placeWallEdge(e, mode);
+    if (this._wallSfx) this.g.audio.sfx(mode === "erase" ? "erase" : "place");
   }
-  /** Issue the wall op for one edge (dedup per drag), with sfx + errors. */
+  /** Fill every wall edge along one axis from a0..a1 (inclusive) at `fixed`. */
+  _fillRun(s, fixed, a0, a1, mode) {
+    const lo = Math.min(a0, a1), hi = Math.max(a0, a1);
+    for (let a = lo; a <= hi; a++) this._wallOp(s === 0 ? a : fixed, s === 0 ? fixed : a, s, mode);
+  }
+  /** One wall edge op, deduped across the whole drag; silent (batched sfx). */
+  _wallOp(x, z, s, mode) {
+    const key = D.wk(x, z, s);
+    const placed = this.drag && this.drag.placed;
+    if (placed && placed.has(key)) return;
+    const op = mode === "erase"
+      ? { t: "wall-", f: this.floor, x, z, s }
+      : { t: "wall+", f: this.floor, x, z, s, wtype: mode };
+    const res = this.applyLocal(op);
+    if (res.ok) { if (placed) placed.add(key); this._wallSfx = true; }
+    else if (res.err === "stairwall" && this.drag && !this.drag._stairWarned) { this.drag._stairWarned = true; this.g.hud.toast("Can't put a wall through the stairs", "warn"); }
+  }
+  /** Single edge placement — used for DOOR mode (selects the placed edge door). */
   _placeWallEdge(e, mode) {
     const key = D.wk(e.x, e.z, e.s);
     if (this.drag && this.drag.lastKey === key) return;    // one op per edge per drag
