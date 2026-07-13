@@ -1567,6 +1567,7 @@ register3d("navalfree", async function (kernel, content) {
       title: content.title || "Tide Breakers",
       tagline: content.tagline || "Open-water naval skirmish.",
       music: null, // procedural OPEN-OCEAN loop (createNavalMusic), not a shared file
+      onMusicVolume: function (v) { navalMusic.setVolume(0.3 * v); }, // MUSIC slider drives the procedural loop (was a no-op)
       menuImage: (content.assets && content.assets.menu_image) || null,
       difficulties: ["easy", "normal", "hard"],
       defaultDifficulty: content.difficulty || "normal",
@@ -1605,6 +1606,7 @@ register3d("navalfree", async function (kernel, content) {
       } catch (e) { /* additive — never block the menu */ }
     };
     if (shell.phase === "menu") shell.menu();
+    if (shell && typeof shell.musicVolume === "number") navalMusic.setVolume(0.3 * shell.musicVolume); // apply saved MUSIC volume at boot
     // Launcher deep-link. ?mode=ai -> SHOW THE MENU (so the difficulty picker + music
     // appear; the PLAY gesture is what lets audio play). ?mode=online opens the vs-People
     // flow. (Auto-starting on ?mode=ai skipped the menu — the _play.html launch bug.)

@@ -162,7 +162,11 @@
       return wrap;
     }
     panel.appendChild(slider("MUSIC", this.musicVolume, function (v) {
-      self.musicVolume = v; if (self._music) self._music.volume = v; self._persist();
+      self.musicVolume = v; if (self._music) self._music.volume = v;
+      // games with PROCEDURAL music (no _music element) hook in here — without
+      // this the MUSIC slider was a silent no-op for them
+      if (self.o && typeof self.o.onMusicVolume === "function") self.o.onMusicVolume(v);
+      self._persist();
     }));
     panel.appendChild(slider("SOUND FX", this.sfxVolume, function (v) {
       self.sfxVolume = v; FFG.sfxVolume = v; self._persist();
