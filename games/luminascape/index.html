@@ -5826,6 +5826,28 @@ const fillEl=document.getElementById('loadfill'); if(fillEl)fillEl.style.width='
 /* ready + load-screen fade are driven by manager.onLoad (waits for textures AND models) */
 requestAnimationFrame(loop);
 
+/* ---------- __LS__ bridge — LuminaScape Together (net/lumina_net.js) reads
+   game internals through this tiny surface; keeps the co-op module out of
+   this file and the game refactor-free. Getters defer so load order is safe. */
+window.__LS__={
+  get player(){ return player; },
+  get playMode(){ return playMode; },
+  get playerYaw(){ return playerYaw; },
+  get scene(){ return scene; },
+  get THREE(){ return THREE; },
+  get camTgt(){ return (typeof cam!=='undefined'&&cam)?cam.tgt:null; },
+  get dirty(){ return _dirty; },
+  makePlayer:()=>makePlayer(),
+  toast:(m)=>{ try{ toast(m); }catch(e){} },
+  enterPlay:()=>{ if(!playMode)togglePlay(); },
+  getHeight:(x,z)=>getHeight(x,z),
+  saveWorld:()=>saveWorld(),
+  loadWorld:()=>loadWorld(),
+  idbGet:(k)=>_idbGet(k),
+  idbSet:(k,v)=>_idbSet(k,v),
+  activeKey:()=>_activeKey(),
+};
+
 /* ---------- __MS__ debug API (for headless verification) ---------- */
 window.__MS__={
   ready:()=>ready,
@@ -6333,5 +6355,6 @@ window.__MS__={
   THREE, scene, camera, renderer, composer
 };
 </script>
+<script type="module" src="net/lumina_net.js"></script>
 </body>
 </html>
