@@ -540,11 +540,7 @@ export class Match {
         if (this.select) { this.clearSelect(); this.refreshLegal(); }
         else if (this.ui && this.ui.matchSettings && !document.querySelector('.modal-wrap')) this.ui.matchSettings(); // Esc = pause (industry standard)
       }
-      if (e.key === 'f' || e.key === 'F') {
-        if (!/input|textarea/i.test((e.target && e.target.tagName) || "")) {
-          if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {});
-        }
-      }
+      // F/fullscreen is owned by the shared control bar (game_controls.js)
     };
     el.addEventListener('pointermove', this.onMove);
     el.addEventListener('pointerdown', this.onDown);
