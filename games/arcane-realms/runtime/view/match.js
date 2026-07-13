@@ -625,7 +625,7 @@ export class Match {
     this.select = { kind: 'spell', iid: hit.iid, cardId: entry.cardId, plays, moved: false };
     this.scene.setHoverFront(hit.iid, true);
     this.scene.tweens.killOf(entry.group.position);
-    const castPos = new THREE.Vector3(entry.group.position.x >= 0 ? 5.45 : -5.45, 1.5, 4.25);
+    const castPos = new THREE.Vector3(5.45, 1.5, 4.25); // ALWAYS the right flank (owner)
     this.scene.applyTransform(entry, {
       pos: castPos,
       rotX: this.scene.faceCamRotX(castPos.y, castPos.z), rotZ: 0, scale: 0.98,

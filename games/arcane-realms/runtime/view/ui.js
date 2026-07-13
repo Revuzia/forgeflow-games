@@ -1073,15 +1073,8 @@ export class UI {
     this.endBtn = this.el('button', 'btn small primary', 'End Turn');
     this.endBtn.onclick = () => this.match?.endTurn();
     btns.append(this.timerEl, this.endBtn);
-    // tools
-    const tools = this.el('div');
-    tools.id = 'matchtools';
-    const gear = this.el('div', 'tool', '⚙');
-    gear.onclick = () => this.matchSettings();
-    const flag = this.el('div', 'tool', '🏳');
-    flag.title = 'Concede';
-    flag.onclick = () => this.confirmBox('Concede this match?', () => this.match?.concede());
-    tools.append(gear, flag);
+    // top-right tools REMOVED (owner): the shared bottom-right control bar's
+    // pause button opens the ⏸ PAUSED modal, which has Resume/Concede/Main Menu.
     // overlays
     this.floatLayer = this.el('div');
     this.bannerEl = this.el('div'); this.bannerEl.id = 'banner';
@@ -1120,7 +1113,7 @@ export class UI {
     this.inspectCanvas = insCanvas;
     this.inspectKws = this.el('div', 'kws');
     this.inspectEl.append(insCanvas, this.inspectKws);
-    hud.append(this.plateMe, this.plateFoe, this.histFoe, this.histMe, btns, tools, this.bannerEl, this.cardBannerEl, this.toastEl, this.arrowSvg, this.inspectEl, this.floatLayer);
+    hud.append(this.plateMe, this.plateFoe, this.histFoe, this.histMe, btns, this.bannerEl, this.cardBannerEl, this.toastEl, this.arrowSvg, this.inspectEl, this.floatLayer);
     s.append(hud);
     this.root.append(s);
   }
