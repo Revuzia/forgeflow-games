@@ -140,6 +140,7 @@ class Match {
     if (t === "st") { this._onPeerState(from, d); return; }
     if (t === "bst") { if (from === this._hostId) for (const b of d.list || []) this._onBotState(b); return; }
     if (t === "bfire") { if (from === this._hostId) this._renderBotFire(d); return; }
+    if (t === "pfire") { this._renderPeerVolley(from, d); return; }
     if (t === "hit") { if (d.to === this.net.id) this._takeHit(d); return; }
     if (t === "phit") { if (this.amHost()) this._botTakeHit(d); return; }
     if (t === "sunk") { this._peerSunk(from); return; }
@@ -295,7 +296,28 @@ class Match {
       },
       meSunk: () => this._meSunk(),
       pvpEntrySunk: () => {},     // sinks are event-driven; local hp never kills an arena entry
+      localVolley: (side, targets) => {   // my broadside VISUALS → everyone else renders them
+        const p = A().player;
+        const ids = targets.map((t) => t.peerId || t.botId).filter(Boolean);
+        this._say("pfire", { x: +p.x.toFixed(1), z: +p.z.toFixed(1), tgts: ids });
+      },
     };
+  }
+
+  /** Another captain fired — render their muzzle smoke + cannonball arcs here. */
+  _renderPeerVolley(from, d) {
+    if (this.state !== "live") return;
+    const api = A();
+    const firer = this.entries.get(from);
+    const fx = firer ? firer.x : d.x, fz = firer ? firer.z : d.z;
+    api.sfxAt("fire", fx, fz, 0.6);
+    for (const id of (d.tgts || []).slice(0, 4)) {
+      const tgt = id === this.net.id ? api.player : this.entries.get(id);
+      if (!tgt) continue;
+      api.muzzle(fx, fz, tgt.x, tgt.z);
+      // Cosmetic arc only — the real damage arrives via the `hit` message
+      api.fireBall(fx, fz, tgt, { hit: false, crit: false, dmg: 0 }, () => {}, (ax, az) => api.burst(ax, az, false, false));
+    }
   }
 
   _friendly(tgt) {

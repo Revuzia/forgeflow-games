@@ -1,23 +1,19 @@
-/* ForgeFlow Games — game_controls.js  (v2, 2026-07-10)
- * Page-level control bar (OUTSIDE game canvas): Fullscreen, Mute, Pause, Report Bug.
+/* ForgeFlow Games — game_controls.js
+ * Page-level control bar (OUTSIDE game canvas): Fullscreen, Mute, Report Bug.
  *
- * Layout: floating bar BOTTOM-RIGHT of the viewport — the one place that never
- * obscures a game HUD (score/hearts live top). This is the ONLY fullscreen
- * button; the portal's old top-right overlay is removed (owner 2026-07-10).
+ * Why not inside game canvas: the canvas can obscure, resize, or break event
+ * hit-testing for on-canvas overlays. A page-fixed button bar always reachable.
  *
- * v2 additions (owner batch 2026-07-10):
- *  - UNIVERSAL MUTE: Audio + AudioContext constructors are wrapped at load
- *    (this script runs before any game code), so every music/SFX instance in
- *    every game responds to the mute button — no per-game wiring needed.
- *    While muted, a game's own ctx.resume() calls are held off.
- *  - ESC KEYBOARD LOCK: in fullscreen we request Keyboard Lock on Escape
- *    (Chromium): a TAP of ESC reaches the game (pause menu) and only
- *    PRESS-AND-HOLD exits fullscreen. Other browsers keep default behavior.
- *  - RIGHT-CLICK: context menu is blocked page-wide (games use right-drag).
- *  - Pause button drives window.__PAUSE__.toggle() (game menu) when exposed.
+ * Layout: floating bar top-right of the VIEWPORT (not canvas). Icons only,
+ * semi-transparent, tooltips on hover.
  *
- * Config: window.GAME_CONFIG.hide_controls / .hide_bug_button / .fs_hotkey=false
- * (set fs_hotkey:false when the game itself binds the F key).
+ * Integrates with:
+ *   - pause.js (auto-pauses on fullscreen change for safety)
+ *   - deep_audit.js (Report Bug → window.__AUDIT__.reportBug(msg))
+ *   - Any <audio> or AudioContext in the game (global mute toggle)
+ *
+ * Can be hidden via: window.GAME_CONFIG.hide_controls = true
+ * Bug button specifically hidden via: window.GAME_CONFIG.hide_bug_button = true
  */
 (function () {
   "use strict";
@@ -25,51 +21,18 @@
   if (window.__CONTROLS__) return;
 
   const CFG = window.GAME_CONFIG || {};
+  if (CFG.hide_controls === true) return;
 
   const state = {
     muted: false,
-    audioEls: [],        // every Audio()/DOM-discovered element
-    ctxs: [],            // every AudioContext, with .__ffResume original
+    prevVolumes: new WeakMap(),
   };
-
-  // ─── Universal audio capture (must run before game code) ───────
-  try {
-    const NativeAudio = window.Audio;
-    if (NativeAudio) {
-      const WrappedAudio = function (src) {
-        const el = src === undefined ? new NativeAudio() : new NativeAudio(src);
-        state.audioEls.push(el);
-        if (state.muted) el.muted = true;
-        return el;
-      };
-      WrappedAudio.prototype = NativeAudio.prototype;
-      window.Audio = WrappedAudio;
-    }
-    ["AudioContext", "webkitAudioContext"].forEach(function (name) {
-      const Native = window[name];
-      if (!Native) return;
-      const Wrapped = function () {
-        const ctx = new Native();
-        ctx.__ffResume = ctx.resume.bind(ctx);
-        ctx.resume = function () { return state.muted ? Promise.resolve() : ctx.__ffResume(); };
-        state.ctxs.push(ctx);
-        if (state.muted) { try { ctx.suspend(); } catch (e) {} }
-        return ctx;
-      };
-      Wrapped.prototype = Native.prototype;
-      window[name] = Wrapped;
-    });
-  } catch (e) {}
-
-  // ─── Right-click: no context menu anywhere on a game page ──────
-  window.addEventListener("contextmenu", function (e) { e.preventDefault(); }, { capture: true });
-
-  if (CFG.hide_controls === true) return;
 
   // ─── Build the bar ──────────────────────────────────────────────
   function _makeBar() {
     const bar = document.createElement("div");
     bar.id = "__ff_controls__";
+    // 2026-04-17: moved to bottom-right + smaller so top HUD (score/lives/hearts) is unobstructed
     bar.style.cssText = [
       "position:fixed", "bottom:8px", "right:8px", "z-index:2147483600",
       "display:flex", "gap:4px", "align-items:center",
@@ -80,8 +43,8 @@
       "pointer-events:auto",
       "opacity:0.65", "transition:opacity .15s",
     ].join(";");
-    bar.addEventListener("mouseenter", function () { bar.style.opacity = "1"; });
-    bar.addEventListener("mouseleave", function () { bar.style.opacity = "0.65"; });
+    bar.addEventListener("mouseenter", () => { bar.style.opacity = "1"; });
+    bar.addEventListener("mouseleave", () => { bar.style.opacity = "0.65"; });
     return bar;
   }
 
@@ -98,10 +61,10 @@
       "transition:background .15s, transform .1s",
     ].join(";");
     b.innerHTML = svgInner;
-    b.addEventListener("mouseenter", function () { b.style.background = "rgba(255,255,255,0.2)"; });
-    b.addEventListener("mouseleave", function () { b.style.background = "rgba(255,255,255,0.08)"; });
-    b.addEventListener("mousedown",  function () { b.style.transform = "scale(0.94)"; });
-    b.addEventListener("mouseup",    function () { b.style.transform = "scale(1)"; });
+    b.addEventListener("mouseenter", () => { b.style.background = "rgba(255,255,255,0.2)"; });
+    b.addEventListener("mouseleave", () => { b.style.background = "rgba(255,255,255,0.08)"; });
+    b.addEventListener("mousedown",  () => { b.style.transform = "scale(0.94)"; });
+    b.addEventListener("mouseup",    () => { b.style.transform = "scale(1)"; });
     b.addEventListener("click", onClick);
     return b;
   }
@@ -115,7 +78,7 @@
     pause:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16" fill="currentColor"/><rect x="14" y="4" width="4" height="16" fill="currentColor"/></svg>',
   };
 
-  // ─── Fullscreen (+ ESC keyboard lock where supported) ───────────
+  // ─── Fullscreen ─────────────────────────────────────────────────
   function isFullscreen() {
     return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
   }
@@ -129,41 +92,35 @@
       if (fn) fn.call(target);
     }
   }
-  function lockEsc() {
-    // Chromium Keyboard Lock: ESC tap goes to the game (pause menu); only
-    // press-and-hold exits fullscreen. No-op on Firefox/Safari.
-    try {
-      if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock(["Escape"]).catch(function () {});
-    } catch (e) {}
-  }
-  function unlockEsc() {
-    try { if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock(); } catch (e) {}
-  }
 
-  // ─── Mute (universal via the constructor wraps + legacy paths) ──
-  function applyMute() {
+  // ─── Mute ───────────────────────────────────────────────────────
+  // Covers 3 audio strategies:
+  //   1. <audio>/<video> elements in DOM (querySelectorAll)
+  //   2. Detached `new Audio(...)` instances registered via window.__GAME_AUDIO__ (array)
+  //   3. AudioContext at window.__AUDIO_CTX__
+  //   4. Custom games listening for 'mutechange' event (dispatched below)
+  function toggleMute() {
+    state.muted = !state.muted;
     try {
-      document.querySelectorAll("audio, video").forEach(function (a) { a.muted = state.muted; });
-      state.audioEls.forEach(function (a) { try { a.muted = state.muted; } catch (e) {} });
-      if (Array.isArray(window.__GAME_AUDIO__)) {
-        window.__GAME_AUDIO__.forEach(function (a) { if (a) { try { a.muted = state.muted; } catch (e) {} } });
-      }
-      state.ctxs.forEach(function (c) {
-        try {
-          if (state.muted && c.state === "running") c.suspend();
-          else if (!state.muted && c.state === "suspended") c.__ffResume();
-        } catch (e) {}
+      // Strategy 1: DOM audio/video
+      document.querySelectorAll("audio, video").forEach(function (a) {
+        a.muted = state.muted;
       });
+      // Strategy 2: detached Audio instances registered by the game
+      if (Array.isArray(window.__GAME_AUDIO__)) {
+        window.__GAME_AUDIO__.forEach(function (a) {
+          if (!a) return;
+          try { a.muted = state.muted; } catch (e) {}
+        });
+      }
+      // Strategy 3: Web Audio context
       if (window.__AUDIO_CTX__) {
         if (state.muted && window.__AUDIO_CTX__.state === "running") window.__AUDIO_CTX__.suspend();
         else if (!state.muted && window.__AUDIO_CTX__.state === "suspended") window.__AUDIO_CTX__.resume();
       }
+      // Strategy 4: broadcast — games implement their own response
       window.dispatchEvent(new CustomEvent("mutechange", { detail: { muted: state.muted } }));
     } catch (e) {}
-  }
-  function toggleMute() {
-    state.muted = !state.muted;
-    applyMute();
     try { localStorage.setItem("ff_muted", state.muted ? "1" : "0"); } catch (e) {}
     btns.mute.innerHTML = state.muted ? SVG.volOff : SVG.volOn;
     btns.mute.title = state.muted ? "Unmute (M)" : "Mute (M)";
@@ -195,7 +152,7 @@
   const btns = {
     fs:    _makeBtn("Fullscreen (F)", SVG.fsEnter, toggleFullscreen),
     mute:  _makeBtn("Mute (M)",       SVG.volOn,   toggleMute),
-    pause: _makeBtn("Pause / Menu",   SVG.pause,   function () {
+    pause: _makeBtn("Pause (ESC)",    SVG.pause,   function () {
       if (window.__PAUSE__ && window.__PAUSE__.toggle) window.__PAUSE__.toggle();
     }),
     bug:   _makeBtn("Report a bug",   SVG.bug,     reportBug),
@@ -211,24 +168,20 @@
   }
   mount();
 
-  // Keyboard shortcuts: F = fullscreen (unless the game claims F), M = mute
+  // Keyboard shortcuts: F = fullscreen, M = mute (avoid conflict with game inputs by ignoring when typing)
   window.addEventListener("keydown", function (e) {
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
-    if (e.code === "KeyF" && CFG.fs_hotkey !== false) { toggleFullscreen(); e.preventDefault(); }
+    if (e.code === "KeyF") { toggleFullscreen(); e.preventDefault(); }
     else if (e.code === "KeyM") { toggleMute(); e.preventDefault(); }
   });
 
-  // Sync fullscreen icon on change (F11/ESC too) + ESC lock lifecycle
+  // Sync fullscreen icon when user presses F11 or ESC
   document.addEventListener("fullscreenchange", function () {
-    const fs = isFullscreen();
-    btns.fs.innerHTML = fs ? SVG.fsExit : SVG.fsEnter;
-    if (fs) lockEsc();
-    else {
-      unlockEsc();
-      // Auto-pause on exiting fullscreen if game was mid-play
-      if (window.__PAUSE__ && typeof window.__PAUSE__.pause === "function") {
-        try { window.__PAUSE__.pause(); } catch (e) {}
-      }
+    btns.fs.innerHTML = isFullscreen() ? SVG.fsExit : SVG.fsEnter;
+    // Auto-pause on exiting fullscreen if game was mid-play
+    if (!isFullscreen() && window.__PAUSE__ && typeof window.__PAUSE__.pause === "function") {
+      // only if something was actively running
+      try { window.__PAUSE__.pause(); } catch (e) {}
     }
   });
 
@@ -242,7 +195,6 @@
     toggleFullscreen: toggleFullscreen,
     toggleMute: toggleMute,
     isMuted: function () { return state.muted; },
-    isFullscreen: isFullscreen,
     reportBug: reportBug,
   };
 })();

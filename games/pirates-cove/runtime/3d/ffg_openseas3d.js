@@ -1217,6 +1217,9 @@ register3d("openseas", async function (kernel, content) {
   function fireBroadside(side, hits) {
     if (side < 0) player.reloadTP = PLAYER_RELOAD; else player.reloadTS = PLAYER_RELOAD;
     playSfx("fire", 0.9, 0.95 + Math.random() * 0.1);                 // cosmetic pitch -> Math.random (no rng desync)
+    // Cove Arena: let every other client RENDER this volley (muzzles + balls) —
+    // damage still flows shooter→victim via the hit path; this is pure visuals.
+    if (pvp.active && pvp.hooks && pvp.hooks.localVolley) { try { pvp.hooks.localVolley(side, hits.map((h) => h.n)); } catch (e) {} }
     const volleyN = 2 + Math.min(upg.cannon, 2);                      // balls per broadside START at 2, +1 per "Bigger Cannons" tier up to 4 (was a flat 4 -> too strong from the start; now it's an UPGRADE)
     const yaw = player.yaw, fX = Math.sin(yaw), fZ = Math.cos(yaw);   // forward unit
     const bX = Math.cos(yaw) * side, bZ = -Math.sin(yaw) * side;      // beam (port/starboard) unit
