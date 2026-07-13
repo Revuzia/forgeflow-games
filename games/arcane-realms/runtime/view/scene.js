@@ -568,7 +568,11 @@ export class BoardScene {
   // place HTML orbs + badges at the CARD's actual corners (owner: bottom
   // corners, not centered). localToWorld handles per-side tilt/scale exactly.
   placeNameplate(e) {
-    if (this._hoverActive || e.boardHover) { this.hideNameplate(e); return; }
+    // hide ALL board orbs while ANY card is hover-enlarged (hand OR board) —
+    // the orbs are HTML above the canvas, so they'd overlap the enlarged card.
+    // Two separate flags: match.js owns _hoverActive (hand), setBoardHover owns
+    // _boardHoverActive — so un-hovering one can't clobber the other's state.
+    if (this._hoverActive || this._boardHoverActive || e.boardHover) { this.hideNameplate(e); return; }
     e.mesh.updateWorldMatrix(true, false);
     const cr = this.container.getBoundingClientRect();
     const corner = (lx, ly) => {
@@ -606,11 +610,14 @@ export class BoardScene {
       // hovered: rise well above the fan, fully readable, in front of everything
       const y = LAYOUT.handY + 0.3 - arc * 0.12 + (hovered ? 1.15 : 0);
       const z = LAYOUT.handZ - (hovered ? 0.55 : 0) + arc * 0.05;
+      // side-on pitch brings the camera down toward the hand — damp the card
+      // scale responsively so the near cards can't balloon over the board/HUD
+      const pd = 1 - Math.max(0, this.pitch || 0) * 0.55;
       return {
         pos: new THREE.Vector3(x, y, z),
         rotX: this.faceCamRotX(y, z) + (hovered ? 0.08 : 0),
         rotZ: hovered ? 0 : -(i - (n - 1) / 2) * 0.045,
-        scale: hovered ? 1.62 : 0.94,
+        scale: (hovered ? 1.62 : 0.94) * pd,
       };
     }
     // enemy hand (face-down backs) — tilt toward the camera like the player's
@@ -643,7 +650,10 @@ export class BoardScene {
       if (e.zone !== 'hand' || e.li == null) continue;
       const t = this.handTransform(e.side, e.li, e.ln, e.hover && e.side === 0);
       e.inner.rotation.x = t.rotX;
-      if (e.side === 0) this._placeHandHit(e, e.hover ? this.handTransform(0, e.li, e.ln, false) : t);
+      if (e.side === 0) {
+        e.group.scale.setScalar(t.scale); // pitch-responsive size (see handTransform)
+        this._placeHandHit(e, e.hover ? this.handTransform(0, e.li, e.ln, false) : t);
+      }
     }
   }
 
@@ -657,7 +667,7 @@ export class BoardScene {
     // show the FULL rules-text card on hover (like the deck view) + hide every
     // board orb so it reads cleanly. match.js suppresses this while you're
     // TARGETING a spell/attack, so it never covers the card you're clicking.
-    this._hoverActive = on;
+    this._boardHoverActive = on;
     this.setHoverFront(iid, on);
     const face = on ? getCard(e.cardId).tex : getBoardCard(e.cardId).tex;
     if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
