@@ -165,6 +165,12 @@ export const ENEMY_STAT_DEFS = [
   { key: "dmg",   label: "DMG",   min: 0,   max: 999,  step: 1,   int: true },
   { key: "speed", label: "Speed", min: 0.3, max: 8,    step: 0.1, int: false },
 ];
+export const ENEMY_LEVEL_MAX = 60;
+/** Default LEVEL for an enemy when the builder didn't set one: deeper floors and
+ *  higher dungeon difficulty spawn stronger foes (player starts at level 1). */
+export function defaultEnemyLevel(difficulty, f) {
+  return Math.max(1, 1 + ((difficulty || 1) - 1) * 2 + (f || 0) * 2);
+}
 /** Validate + clamp a per-placement stat override; undefined if nothing valid. */
 export function clampStats(s) {
   if (!s || typeof s !== "object") return undefined;
@@ -486,6 +492,7 @@ export function applyOp(d, op) {
       const ALLOW = ["x", "z", "rot", "locked", "etype", "ttype", "dtype", "color", "stock", "ntype", "dir"];
       for (const k of ALLOW) if (op.p && op.p[k] !== undefined) hit.obj[k] = op.p[k];
       if (op.p && op.p.stats !== undefined) { const s = clampStats(op.p.stats); if (s) hit.obj.stats = s; else delete hit.obj.stats; }
+      if (op.p && op.p.level !== undefined) { const lv = Math.round(+op.p.level); if (isFinite(lv) && lv >= 1) hit.obj.level = Math.min(ENEMY_LEVEL_MAX, lv); else delete hit.obj.level; }
       if (op.p && op.p.etype !== undefined) delete hit.obj.stats; // changing type resets to that type's defaults
       return { ok: true };
     }
@@ -842,7 +849,7 @@ export function sanitize(raw) {
         if (!o || !KINDS[o.kind] || !inBounds(o.x | 0, o.z | 0)) continue;
         const c = { id: String(o.id || "o" + out.nid++).slice(0, 12), kind: o.kind, x: o.x | 0, z: o.z | 0, rot: (o.rot | 0) % 4 };
         if (o.kind === "door") c.locked = !!o.locked;
-        if (o.kind === "enemy") { c.etype = String(o.etype || "").slice(0, 16); const s = clampStats(o.stats); if (s) c.stats = s; }
+        if (o.kind === "enemy") { c.etype = String(o.etype || "").slice(0, 16); const s = clampStats(o.stats); if (s) c.stats = s; if (o.level != null && isFinite(o.level)) c.level = Math.max(1, Math.min(ENEMY_LEVEL_MAX, Math.round(o.level))); }
         if (o.kind === "trap") c.ttype = TRAPS.includes(o.ttype) ? o.ttype : "spikes";
         if (o.kind === "stairs" && (o.dir | 0) === -1) c.dir = -1;   // stairs DOWN
         if (o.kind === "decor") c.dtype = String(o.dtype || "").slice(0, 16);

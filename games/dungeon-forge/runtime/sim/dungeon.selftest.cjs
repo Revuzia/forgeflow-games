@@ -306,6 +306,36 @@ const ok = (cond, name, extra) => {
     ok(E.hasLOS(pr, 0, pe.x, pe.z, pp.x, pp.z) ? pe.x > E.c2w(11) : true, "aggro: chaser actually closes distance toward the player");
   }
 
+  // ── 4c. enemy LEVEL scaling + slower leveling ──────────────────
+  console.log("[enemy: levels]");
+  {
+    ok(E.xpToNext(1) === 80, "level: L1->L2 needs the slower 80xp (was 45)");
+    ok(D.defaultEnemyLevel(1, 0) === 1 && D.defaultEnemyLevel(3, 0) === 5 && D.defaultEnemyLevel(2, 3) > D.defaultEnemyLevel(2, 0),
+      "level: default scales with difficulty + floor depth");
+    const lg = D.newDungeon({ theme: "fantasy", name: "L", difficulty: 1 });
+    D.stampRoom(lg, 0, 10, 10, 8, 8);
+    D.applyOp(lg, { t: "obj+", f: 0, o: { kind: "spawn", x: 11, z: 11 } });
+    D.applyOp(lg, { t: "obj+", f: 0, o: { kind: "exit", x: 16, z: 16 } });
+    D.applyOp(lg, { t: "obj+", f: 0, o: { kind: "enemy", x: 12, z: 12, etype: "skeleton", level: 1 } });
+    const hiId = D.applyOp(lg, { t: "obj+", f: 0, o: { kind: "enemy", x: 13, z: 12, etype: "skeleton", level: 12 } }).id
+      || lg.floors[0].objects.find((o) => o.kind === "enemy" && o.x === 13).id;
+    const lr = newRun(lg, 9, [{ id: "P1" }]);
+    const e1 = lr.enemies.find((e) => e.level === 1), eHi = lr.enemies.find((e) => e.level === 12);
+    ok(e1 && eHi, "level: enemies spawn with their assigned levels");
+    ok(eHi.K.hp > e1.K.hp * 2.5, "level: L12 far tankier (" + eHi.K.hp + " vs " + e1.K.hp + ")");
+    ok(eHi.K.dmg > e1.K.dmg * 1.8, "level: L12 hits harder (" + eHi.K.dmg + " vs " + e1.K.dmg + ")");
+    ok(E.xpFromEnemy(eHi.K) > E.xpFromEnemy(e1.K), "level: higher level worth more xp");
+    // objEdit + serialize round-trip persists the level
+    const hi = lg.floors[0].objects.find((o) => o.kind === "enemy" && o.x === 13);
+    D.applyOp(lg, { t: "objEdit", id: hi.id, p: { level: 20 } });
+    ok(hi.level === 20, "level: objEdit sets enemy level");
+    const round = D.sanitize(D.serialize(lg));
+    ok(round.floors[0].objects.find((o) => o.kind === "enemy" && o.x === 13).level === 20, "level: survives serialize round-trip");
+    // clamp: absurd level pinned to the cap
+    D.applyOp(lg, { t: "objEdit", id: hi.id, p: { level: 9999 } });
+    ok(hi.level === D.ENEMY_LEVEL_MAX, "level: clamped to ENEMY_LEVEL_MAX");
+  }
+
   // ── 5. loot determinism ─────────────────────────────────────────
   console.log("[loot]");
   const l1 = JSON.stringify(rollLoot(s, "oX", 123, null));
@@ -479,7 +509,8 @@ const ok = (cond, name, extra) => {
     p.input.special = true;
     for (let i = 0; i < 6; i++) tick(r, 1 / 60);
     const crushDmg = hp0 - e.hp;
-    ok(crushDmg > 55, "barbarian crush is heavy (" + crushDmg.toFixed(0) + ")");
+    // crush is a heavy hit — well above a barbarian stage-1 swing (24 post-rebalance)
+    ok(crushDmg > 45, "barbarian crush is heavy (" + crushDmg.toFixed(0) + ")");
   }
 
   // ── 9. traps hurt ───────────────────────────────────────────────

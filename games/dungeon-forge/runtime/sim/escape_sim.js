@@ -12,7 +12,7 @@
  */
 
 import {
-  CELL, DIRS, ENEMIES, ck, hasCell, objsAt, findAll, stairLinks,
+  CELL, DIRS, ENEMIES, defaultEnemyLevel, ck, hasCell, objsAt, findAll, stairLinks,
   mulberry, hashStr, rollLoot, cellType, cellHeight, CT, LAVA_DPS, WATER_SLOW, RAISED_H,
   SHOP, SHOP_IDS, NPC_TYPES, doorAxis, BREAKABLE_DECOR, breakableDecor, EXPLOSIVE_DECOR, BARREL, makeItem, itemScore,
   edgeWall, edgeMid,
@@ -20,15 +20,20 @@ import {
 
 export const PLAYER = {
   hp: 100, speed: 4.6, sprint: 6.6, radius: 0.42,
-  meleeDmg: 30, meleeRange: 2.0, meleeArc: Math.PI * 0.62, meleeCd: 0.55,
-  boltDmg: 16, boltSpeed: 15, boltCd: 0.32, boltMana: 12,
+  meleeDmg: 22, meleeRange: 2.0, meleeArc: Math.PI * 0.62, meleeCd: 0.55,
+  boltDmg: 11, boltSpeed: 15, boltCd: 0.32, boltMana: 12,   // lowered early damage (owner) — grows via combatMul level scaling
   mana: 100, manaRegen: 9, potionHeal: 35, manaPotRestore: 60, respawnS: 5,
 };
 
 // ── XP & leveling ───────────────────────────────────────────────────────────
 // Kills grant XP; enough XP raises the player's level, which adds max-HP and a
 // small damage bonus (folded into combatMul). Level gates future class skills.
-export const LEVELING = { maxLevel: 30, hpPerLevel: 12, dmgPerLevel: 0.04, baseXp: 45, growth: 1.35 };
+// Slower curve (owner: leveling was WAY too fast) + steeper per-level damage so
+// your spells/attacks visibly grow as you level (offsets the tankier levelled foes).
+export const LEVELING = { maxLevel: 30, hpPerLevel: 14, dmgPerLevel: 0.06, baseXp: 80, growth: 1.45 };
+// Enemy LEVEL scaling: each level above 1 adds hp/dmg/gold. Big gaps make a "red"
+// (much higher level than you) a genuine wall — huge hp + hard hits.
+export const ENEMY_LVL = { hpPer: 0.35, dmgPer: 0.18, goldPer: 0.25 };
 export function xpToNext(lvl) { return Math.round(LEVELING.baseXp * Math.pow(LEVELING.growth, Math.max(0, (lvl || 1) - 1))); }
 export function xpFromEnemy(K) {
   const base = Math.max(5, Math.round((K.hp || 30) * 0.4 + (K.dmg || 5) * 1.1));
@@ -62,27 +67,30 @@ export function combatMul(p) {
  * dmg arrays are [stage1, stage2, finisher].
  */
 export const CLASSES = {
+  // Base damage lowered ~28% (owner: "shouldn't deal so much damage right away").
+  // It scales back up through combatMul (level + gear + charms), so a levelled
+  // character hits hard while a fresh one has to work for kills.
   knight: {
     label: "Knight", hp: 120, speed: 4.4,
-    melee: { dmg: [24, 26, 40], range: 2.0, arc: 1.75, cd: 0.5 },
+    melee: { dmg: [17, 19, 29], range: 2.0, arc: 1.75, cd: 0.5 },
     shield: { reduce: 0.45, frontArc: 1.05 },          // blocks 45% from the front
-    special: { kind: "bash", dmg: 18, stun: 1.2, range: 2.3, cd: 5 },
+    special: { kind: "bash", dmg: 13, stun: 1.2, range: 2.3, cd: 5 },
   },
   barbarian: {
     label: "Barbarian", hp: 110, speed: 4.5,
-    melee: { dmg: [34, 36, 55], range: 2.35, arc: 2.3, cd: 0.72, twoHanded: true },
+    melee: { dmg: [24, 26, 40], range: 2.35, arc: 2.3, cd: 0.72, twoHanded: true },
     special: { kind: "crush", dmgMul: 2.2, range: 2.5, cd: 3 },
   },
   sorceress: {
     label: "Sorceress", hp: 85, speed: 4.6,
-    melee: { dmg: [14, 14, 22], range: 1.9, arc: 1.6, cd: 0.5 },
-    special: { kind: "fire", dmg: 20, burn: { dps: 5, dur: 3 }, cd: 0.55, mana: 16, speed: 15 },
-    frost: { dmg: 12, slow: { mul: 0.45, dur: 2.5 }, cd: 0.7, mana: 14, speed: 13 },
+    melee: { dmg: [10, 10, 16], range: 1.9, arc: 1.6, cd: 0.5 },
+    special: { kind: "fire", dmg: 14, burn: { dps: 5, dur: 3 }, cd: 0.55, mana: 16, speed: 15 },
+    frost: { dmg: 9, slow: { mul: 0.45, dur: 2.5 }, cd: 0.7, mana: 14, speed: 13 },
   },
   rogue: {
     label: "Rogue", hp: 90, speed: 5.2,
-    melee: { dmg: [13, 13, 24], range: 1.8, arc: 1.5, cd: 0.34, poison: { dps: 6, dur: 4, maxStacks: 3 } },
-    special: { kind: "knife", dmg: 10, poison: { dps: 6, dur: 4, maxStacks: 3 }, cd: 1.4, speed: 17 },
+    melee: { dmg: [9, 9, 17], range: 1.8, arc: 1.5, cd: 0.34, poison: { dps: 6, dur: 4, maxStacks: 3 } },
+    special: { kind: "knife", dmg: 7, poison: { dps: 6, dur: 4, maxStacks: 3 }, cd: 1.4, speed: 17 },
   },
 };
 export const CLASS_ORDER = ["knight", "barbarian", "sorceress", "rogue"];
@@ -163,12 +171,23 @@ export function newRun(d, runSeed, players) {
     const roster = ENEMIES[d.theme] || ENEMIES.fantasy;
     const base = roster[o.etype] || roster[Object.keys(roster)[0]];
     // per-placement stat overrides (hp/dmg/speed) set by the builder, else defaults
-    const K = (o.stats && typeof o.stats === "object") ? { ...base, ...o.stats } : base;
+    const baseK = (o.stats && typeof o.stats === "object") ? { ...base, ...o.stats } : base;
+    // LEVEL scaling: level (builder-set or floor/difficulty default) inflates hp/dmg/gold.
+    // Baked into a per-enemy K so every downstream use (attack dmg, xp reward, hp bar)
+    // reflects it. A high level vs the player = a "red" wall: huge hp + hard hits.
+    const level = (o.level != null && isFinite(o.level)) ? Math.max(1, Math.round(o.level)) : defaultEnemyLevel(d.difficulty, f);
+    const LV = level - 1;
+    const diffMul = 0.85 + 0.15 * (d.difficulty || 1);
+    const K = { ...baseK,
+      hp: Math.max(1, Math.round(baseK.hp * diffMul * (1 + ENEMY_LVL.hpPer * LV))),
+      dmg: Math.round(baseK.dmg * (1 + ENEMY_LVL.dmgPer * LV) * 10) / 10,
+      gold: Math.round((baseK.gold || 5) * (1 + ENEMY_LVL.goldPer * LV)),
+    };
     const boundKey = fl.objects.find((k) => k.kind === "key" && k.x === o.x && k.z === o.z);
     st.enemies.push({
-      id: "e" + eid++, src: o.id, etype: o.etype, f, K,
+      id: "e" + eid++, src: o.id, etype: o.etype, f, K, level,
       x: c2w(o.x), z: c2w(o.z), yaw: (o.rot || 0) * Math.PI / 2,
-      hp: K.hp * (0.85 + 0.15 * (d.difficulty || 1)), alive: true,
+      hp: K.hp, alive: true,
       state: "patrol", atkT: 0, repathT: 0, path: null, home: { x: c2w(o.x), z: c2w(o.z) },
       patrolT: 1 + rnd() * 2, target: null, hurtT: 0,
       key: boundKey ? boundKey.id : null,

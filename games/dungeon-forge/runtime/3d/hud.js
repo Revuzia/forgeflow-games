@@ -299,7 +299,11 @@ export class Hud {
         return `<label class="df-stat ${isOv ? "ov" : ""}"><span>${s.label}</span><input type="number" data-stat="${s.key}" value="${val}" min="${s.min}" max="${s.max}" step="${s.step}"><small>def ${def[s.key]}</small></label>`;
       }).join("");
       const carriesKey = D.objsAt(b.d, b.floor, o.x, o.z).some((k) => k.kind === "key");
+      const dlvl = D.defaultEnemyLevel(b.d.difficulty, b.floor);
+      const curLvl = (o.level != null) ? o.level : dlvl;
       extra = `<select data-a="etype" class="df-diff">${Object.keys(roster).map((k) => `<option value="${k}" ${k === o.etype ? "selected" : ""}>${roster[k].label}</option>`).join("")}</select>
+        <label class="df-stat ${o.level != null ? "ov" : ""}"><span>⚔ Level</span><input type="number" data-a="elevel" value="${curLvl}" min="1" max="${D.ENEMY_LEVEL_MAX}" step="1"><small>def ${dlvl}</small></label>
+        <div class="df-selnote">Higher level = tankier + hits harder. Players see a threat colour ring (green→white→yellow→orange→red vs their level).</div>
         <button data-a="enemykey" class="df-btn ${carriesKey ? "accent" : ""}">${carriesKey ? "🗝 Carries a key — click to remove" : "🗝 Give key (drops on defeat)"}</button>
         <div class="df-statgrid">${rows}</div>
         ${overridden ? `<button data-a="statreset" class="df-btn tiny">↺ Reset stats to default</button>` : `<div class="df-selnote">Tweak this creature's stats — they override the defaults for this placement only.</div>`}`;
@@ -331,6 +335,7 @@ export class Hud {
       };
     });
     if (q('[data-a="statreset"]')) q('[data-a="statreset"]').onclick = () => { b._editSel({ stats: null }); b.g.hud.showSelection(b, D.objById(b.d, b.sel)); };
+    if (q('[data-a="elevel"]')) q('[data-a="elevel"]').onchange = (e) => { const v = parseInt(e.target.value, 10); b._editSel({ level: (isFinite(v) && v >= 1) ? v : null }); b.g.hud.showSelection(b, D.objById(b.d, b.sel)); };
     if (q('[data-a="enemykey"]')) q('[data-a="enemykey"]').onclick = () => b.toggleEnemyKey();
     this.selPanel.querySelectorAll("[data-ttype]").forEach((btn) => btn.onclick = () => { b._editSel({ ttype: btn.dataset.ttype }); b.g.hud.showSelection(b, D.objById(b.d, b.sel)); });
     if (q('[data-a="ntype"]')) q('[data-a="ntype"]').onchange = (e) => { b._editSel({ ntype: e.target.value }); b.g.hud.showSelection(b, D.objById(b.d, b.sel)); };

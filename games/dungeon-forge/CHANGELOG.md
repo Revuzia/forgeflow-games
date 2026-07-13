@@ -1,5 +1,20 @@
 # Dungeon Forge — CHANGELOG
 
+## v1.13.0 — 2026-07-13 (enemy levels + threat colours + combat rebalance)
+- **Enemy LEVEL system**: every enemy has a `level` (builder-settable in the enemy
+  panel; default scales with dungeon difficulty + floor depth). Level inflates
+  hp/dmg/xp (hp +35%/lvl, dmg +18%/lvl), so a high-level foe is a real wall — e.g. a
+  level-12 skeleton is 291hp/38dmg vs a level-1's 60hp/13dmg, and a fresh player needs
+  ~27 bolts to drop it.
+- **Threat-colour con ring**: each enemy shows a ground ring coloured by (its level −
+  your level): green (way below) → white (neutral) → yellow (a bit above) → orange
+  (clearly above) → red (deadly, pulsing). Reads at a glance whether a fight is safe.
+- **Combat rebalance**: base player damage cut ~28% (melee arrays, bolt, specials,
+  frost) so early kills take work; it scales back up through combatMul, whose
+  per-level bonus was steepened (0.04→0.06) so spells/attacks visibly grow as you level.
+- **Slower leveling**: XP curve stretched (baseXp 45→80, growth 1.35→1.45) — far fewer
+  levels per dungeon.
+
 ## v1.12.1 — 2026-07-13 (FX + visual polish batch)
 - **Fire-jet trap**: real-fire particle FX — layered flame tongues colour-graded by
   distance (white-hot core → yellow → orange → smoke), buoyant lift, rising embers.

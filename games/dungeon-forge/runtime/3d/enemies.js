@@ -13,6 +13,17 @@ const { Assets, creatureClips, makeCreature, findArmBones, relaxArms } = await i
 const FLOOR_H = 4.4;
 const _eSwing = new THREE.Vector3(); // scratch: enemy right-vector for gait arm-swing
 
+// Threat colour by (enemyLevel − playerLevel) — the Diablo-style con system:
+// green = way below you, white = neutral/safe, yellow = a bit above, orange =
+// clearly above, red = will probably kill you. Returns {hex, deadly}.
+function threatOf(delta) {
+  if (delta <= -3) return { hex: 0x4fd44f, deadly: false }; // green
+  if (delta <= 0)  return { hex: 0xdfe4ee, deadly: false }; // white
+  if (delta <= 2)  return { hex: 0xf2d43a, deadly: false }; // yellow
+  if (delta <= 4)  return { hex: 0xff8a1e, deadly: false }; // orange
+  return { hex: 0xff2e2e, deadly: true };                    // red — deadly
+}
+
 export class EnemyPool {
   constructor(game, root, dungeon) {
     this.g = game;
@@ -60,9 +71,14 @@ export class EnemyPool {
     const bar = makeBar();
     bar.grp.position.y = h + 0.35;
     grp.add(bar.grp);
+    // threat-con ring at the feet — colour reflects this foe's level vs yours
+    const threat = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.74, 28),
+      new THREE.MeshBasicMaterial({ color: 0xdfe4ee, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false }));
+    threat.rotation.x = -Math.PI / 2; threat.position.y = 0.05; threat.renderOrder = 2;
+    grp.add(threat);
 
     this.root.add(grp);
-    const view = { e, grp, obj, mixer, actions, cur: null, oneshotT: 0, hover, bar, dead: false, fade: 1 };
+    const view = { e, grp, obj, mixer, actions, cur: null, oneshotT: 0, hover, bar, threat, dead: false, fade: 1 };
     // Meshy enemies ship walk/run but no idle clip → relax arms to the sides while standing
     if (tpl.meshy) { view.armBones = findArmBones(obj); view.relaxW = 0; }
     if (actions.idle) this._play(view, "idle");
@@ -163,6 +179,13 @@ export class EnemyPool {
       v.grp.position.set(e.x, e.f * FLOOR_H + v.surfY + swimBob, e.z);
       v.grp.rotation.y = e.yaw;   // creature rigs face +Z = yaw dir (the stray +PI made enemies walk BACKWARDS)
       v.grp.visible = me ? e.f === me.f : true;   // only the current floor renders (owner)
+      // threat-con ring colour by this foe's level vs the local player's level
+      if (v.threat) {
+        const th = threatOf((e.level || 1) - (me ? (me.level || 1) : 1));
+        v.threat.material.color.setHex(th.hex);
+        v.threat.material.opacity = th.deadly ? 0.42 + 0.3 * (0.5 + 0.5 * Math.sin(t * 5)) : 0.5; // deadly pulses
+        v.threat.visible = v.grp.visible;
+      }
       if (far) { v.bar.grp.visible = false; continue; }
       if (v.hover) v.obj.position.y = 0.9 + Math.sin(t * 3 + e.x) * 0.18;
       if (e.etype === "slime" && !v.mixer) v.obj.scale.y = 1 + Math.sin(t * 6) * 0.06;
