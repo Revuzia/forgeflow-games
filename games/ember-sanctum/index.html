@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="./assets/index-B9FeTWSN.js"></script>
+    <script type="module" crossorigin src="./assets/index-BXkgw2Lk.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-DlcfVYJ4.css">
   </head>
   <body>
@@ -79,6 +79,14 @@
               <span>Invert look Y</span>
               <input type="checkbox" id="set-invert-y" />
             </label>
+            <label class="settings-row">
+              <span>Graphics quality</span>
+              <select id="set-quality">
+                <option value="low">Low (fast)</option>
+                <option value="med">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
             <p class="settings-hint">F3 — debug overlay · RMB drag — look around (up/down fixed)</p>
           </div>
           <div class="row-actions">
@@ -131,6 +139,7 @@
           <h2>Paused</h2>
           <button class="btn primary" id="btn-resume">Resume</button>
           <button class="btn secondary" id="btn-restart-run">Restart Run</button>
+          <button class="btn ghost" id="btn-settings-pause">⚙ Settings</button>
           <button class="btn ghost" id="btn-fullscreen-pause">⛶ Fullscreen</button>
           <button class="btn ghost" id="btn-quit-menu">Quit to Menu</button>
         </div>
