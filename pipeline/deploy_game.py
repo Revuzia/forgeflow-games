@@ -382,6 +382,30 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, r
         print(f"Error: {game_dir} does not exist")
         return {"ok": False, "uploaded": 0, "total": 0, "url": None, "reason": "missing dir"}
 
+    # ── staged-content guard (owner-deferred releases) ────────────────────
+    # Slugs listed in state/staged_slugs.json have unreleased content STAGED on
+    # master that must NOT reach the live hub. If this tree still contains the
+    # staged marker, abort — deploy that slug from its release branch (e.g. the
+    # 'live' worktree) instead. Guards against bulk fleet redeploys from master
+    # silently leaking a staged expansion (happened 2026-07-13, arcane-realms).
+    # Intentional override (the actual reveal): set ALLOW_STAGED_DEPLOY=1.
+    try:
+        _pins = json.loads((Path("C:\\Users\\TestRun\\Claude Claw\\state") / "staged_slugs.json").read_text(encoding="utf-8"))
+    except Exception:
+        _pins = {}
+    _pin = _pins.get(slug)
+    if _pin and not os.environ.get("ALLOW_STAGED_DEPLOY"):
+        _pf = game_dir / _pin.get("file", "")
+        try:
+            _hit = _pf.exists() and _pin.get("marker", "") in _pf.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            _hit = False
+        if _hit:
+            _safe_print(f"ABORT: '{slug}' tree contains the staged marker '{_pin.get('marker')}' in {_pin.get('file')}.")
+            _safe_print(f"  Reason: {_pin.get('note', 'staged content is not cleared for live')}")
+            _safe_print("  Deploy this slug from its release branch/worktree, or set ALLOW_STAGED_DEPLOY=1 to override intentionally.")
+            return {"ok": False, "uploaded": 0, "total": 0, "url": None, "reason": "staged-content guard"}
+
     metadata = {}
     if metadata_path:
         metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
