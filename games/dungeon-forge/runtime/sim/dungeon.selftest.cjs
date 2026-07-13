@@ -278,6 +278,34 @@ const ok = (cond, name, extra) => {
     ok(kp.xp === E.xpFromEnemy(fake.K) && kp.gold === 45, "xp: a kill awards xp (" + kp.xp + ") + gold");
   }
 
+  // ── 4b. enemy aggro: group aggro + persistent pursuit ──────────
+  console.log("[enemy: aggro]");
+  {
+    const ag = D.newDungeon({ theme: "fantasy", name: "Ag" });
+    D.stampRoom(ag, 0, 10, 10, 22, 6);
+    D.applyOp(ag, { t: "obj+", f: 0, o: { kind: "spawn", x: 11, z: 12 } });
+    D.applyOp(ag, { t: "obj+", f: 0, o: { kind: "exit", x: 30, z: 12 } });
+    D.applyOp(ag, { t: "obj+", f: 0, o: { kind: "enemy", x: 18, z: 12, etype: "skeleton" } });
+    D.applyOp(ag, { t: "obj+", f: 0, o: { kind: "enemy", x: 19, z: 12, etype: "skeleton" } }); // a friend 1 cell over
+    D.applyOp(ag, { t: "obj+", f: 0, o: { kind: "enemy", x: 27, z: 12, etype: "skeleton" } }); // far friend (>CELL*5)
+    const ar = newRun(ag, 5, [{ id: "P1" }]);
+    const [e0, e1, eFar] = ar.enemies;
+    e0.state = e1.state = eFar.state = "patrol";
+    E.damageEnemy(ar, e0, 1, "P1");
+    ok(e0.state === "chase", "aggro: a hit enemy enters chase");
+    ok(e1.state === "chase" && e1.target === "P1", "aggro: nearby friend group-aggros onto the attacker");
+    ok(eFar.state === "patrol", "aggro: a far-off enemy is NOT pulled into the pack");
+    // persistent pursuit: with the target in sight, a chasing enemy stays locked
+    // on even when it is well beyond the old home-leash distance
+    const pr = newRun(ag, 6, [{ id: "P1" }]);
+    const pe = pr.enemies[0], pp = pr.players[0];
+    pp.x = E.c2w(30); pp.z = E.c2w(12);            // player at the far exit end (open room → LOS)
+    pe.x = E.c2w(11); pe.z = E.c2w(12); pe.state = "chase"; pe.target = "P1"; pe.home = { x: pe.x, z: pe.z };
+    for (let i = 0; i < 30; i++) tick(pr, 1 / 60);
+    ok(pe.state === "chase", "aggro: chaser keeps pursuing a distant but visible target (no home-leash)");
+    ok(E.hasLOS(pr, 0, pe.x, pe.z, pp.x, pp.z) ? pe.x > E.c2w(11) : true, "aggro: chaser actually closes distance toward the player");
+  }
+
   // ── 5. loot determinism ─────────────────────────────────────────
   console.log("[loot]");
   const l1 = JSON.stringify(rollLoot(s, "oX", 123, null));

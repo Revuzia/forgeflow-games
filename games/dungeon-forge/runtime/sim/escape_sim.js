@@ -588,6 +588,22 @@ export function damageEnemy(st, e, dmg, byId, elem) {
   if (byId && st.players.some((pl) => pl.id === byId && pl.alive)) {
     if (e.state !== "chase") emit(st, "aggro", { id: e.id });
     e.state = "chase"; e.target = byId; e.repathT = 0;
+    alertPack(st, e, byId);            // its nearby friends aggro together
+  }
+}
+
+// Pack aggro: when one enemy engages a player, idle enemies within `radius` on
+// the same floor join the fight against the same target. Makes a shot into a
+// cluster wake the whole cluster (owner request); cheap + idempotent (skips
+// enemies already chasing).
+export function alertPack(st, e, targetId, radius = CELL * 5) {
+  const r2 = radius * radius;
+  for (const o of st.enemies) {
+    if (o === e || !o.alive || o.f !== e.f || o.state === "chase") continue;
+    if ((o.x - e.x) ** 2 + (o.z - e.z) ** 2 <= r2) {
+      o.state = "chase"; o.target = targetId; o.repathT = 0;
+      emit(st, "aggro", { id: o.id });
+    }
   }
 }
 
@@ -835,7 +851,7 @@ function stepEnemy(st, e, dt, rnd, simEnemies) {
 
   if (e.state === "patrol") {
     e.patrolT -= dt;
-    if (seesTarget) { e.state = "chase"; e.target = target.id; emit(st, "aggro", { id: e.id }); }
+    if (seesTarget) { e.state = "chase"; e.target = target.id; emit(st, "aggro", { id: e.id }); alertPack(st, e, target.id); }
     else if (!K.static) {
       if (e.patrolT <= 0) {
         e.patrolT = 1.6 + rnd() * 2.4;
@@ -848,8 +864,10 @@ function stepEnemy(st, e, dt, rnd, simEnemies) {
   }
   if (e.state === "chase") {
     if (!target || !target.alive || target.f !== e.f) { e.state = "patrol"; e.path = null; return; }
-    const distHome = Math.hypot(e.x - e.home.x, e.z - e.home.z);
-    if (tDist > K.aggro * 2.2 || distHome > CELL * 12) { e.state = "patrol"; e.path = null; return; }
+    // Persistent pursuit: once aggroed, chase relentlessly and A*-path the whole
+    // way to the player (no home-leash). Only give up if the target is very far
+    // AND out of sight — i.e. they genuinely lost you (Diablo-style stickiness).
+    if (tDist > K.aggro * 6 && !hasLOS(st, e.f, e.x, e.z, target.x, target.z)) { e.state = "patrol"; e.path = null; return; }
 
     if (K.ranged) {
       // turret: aim + shoot when LOS

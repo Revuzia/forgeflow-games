@@ -1,5 +1,16 @@
 # Dungeon Forge — CHANGELOG
 
+## v1.12.0 — 2026-07-13 (combat behavior: pack aggro, persistent chase, hard auto-target)
+- **Group aggro**: damaging one enemy (incl. a ranged bolt into a crowd) now wakes
+  its nearby friends (within 5 cells, same floor) onto the same attacker via a new
+  `alertPack()`; also fires on first-sight. Shoot into a cluster → the cluster wakes.
+- **Persistent pursuit**: removed the old home-leash (enemies used to give up after
+  ~12 cells from spawn). Aggroed enemies now A*-path the whole way to the player and
+  only disengage if the target is very far AND out of sight.
+- **TAB hard auto-target**: with a TAB-locked enemy, every spell/attack now aims
+  directly at it regardless of camera facing (was a narrow soft-assist cone). The
+  soft cone still applies to the auto-picked (un-locked) target.
+
 ## v1.11.2 — 2026-07-13 (chest lid animation + enemies count badge)
 - **Chest open animation**: chests are now a procedural model (`makeChest`) whose
   **lid is a separate group hinged at the back-top edge**. Opening eases only the

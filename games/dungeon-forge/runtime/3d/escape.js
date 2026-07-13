@@ -891,13 +891,22 @@ export class Escape {
     p.input.mz = Math.cos(yaw) * fz + Math.sin(yaw) * fx;
     p.input.sprint = !!(this.keys["ShiftLeft"] || this.keys["ShiftRight"]);
     p.input.yaw = yaw;                    // face where the camera looks
-    // soft aim assist: attacking with a lock pulls your facing onto the target
-    if (this.target && (this._melee || this._special || this._frost)) {
+    // aim assist / auto-target when an offensive action is triggered this frame
+    const hotOff = this._hotkey && (this._hotkey === "melee" || this._hotkey === "special" || this._hotkey === "frost" || this._hotkey === "chain");
+    const attacking = this._melee || this._special || this._frost || this._chain || hotOff;
+    if (this.target && attacking) {
       const ty = Math.atan2(this.target.x - p.x, this.target.z - p.z);
-      let d = ty - yaw;
-      while (d > Math.PI) d -= Math.PI * 2;
-      while (d < -Math.PI) d += Math.PI * 2;
-      if (Math.abs(d) < 0.55) p.input.yaw = ty;
+      if (this.lockedId) {
+        // TAB HARD-LOCK: every spell/attack auto-targets the locked enemy,
+        // regardless of where the camera faces (owner request).
+        p.input.yaw = ty;
+      } else {
+        // soft assist for the auto-picked target: only snap within a cone
+        let d = ty - yaw;
+        while (d > Math.PI) d -= Math.PI * 2;
+        while (d < -Math.PI) d += Math.PI * 2;
+        if (Math.abs(d) < 0.55) p.input.yaw = ty;
+      }
     }
     p.input.melee = !!this._melee;
     p.input.special = !!this._special || this._specialOnce; this._specialOnce = false; // RMB-tap one-shot
