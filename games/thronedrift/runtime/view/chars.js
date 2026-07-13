@@ -149,6 +149,11 @@ export class Actor {
       if (!this.actions.Walk) this.actions.Walk = this.actions.Idle;
     }
 
+    // move-and-shoot layering: split clips into disjoint track sets so the
+    // legs can keep running while the arms play an attack. Lower = hips+legs,
+    // upper = everything else. Non-overlapping tracks blend cleanly at once.
+    this._buildLayers();
+
     // --- normalize to target height, feet at y=0 -------------------------
     // Meshy/library skinned rigs: geometry bounds are bind-pose garbage and
     // Box3 ignores bone transforms — pose one frame, then measure from BONE
@@ -197,6 +202,69 @@ export class Actor {
   }
 
   update(dt) { this.mixer.update(dt); }
+
+  // ---- move-and-shoot layering ----------------------------------------
+  /** build lower-body loco variants + upper-body attack variants by track
+   *  filtering (bone name). Silent no-op when a source clip is absent. */
+  _buildLayers() {
+    const LOWER = /(Hips|UpLeg|Leg|Knee|Shin|Thigh|Foot|Ankle|Toe)/i;
+    const mk = (src, dst, keepLower) => {
+      const a = this.actions[src];
+      if (!a || this.actions[dst]) return;
+      const clip = a.getClip();
+      const tracks = clip.tracks.filter((t) => {
+        const bone = t.name.split(".")[0];
+        return keepLower ? LOWER.test(bone) : !LOWER.test(bone);
+      });
+      if (!tracks.length) return;
+      const nc = new THREE.AnimationClip(dst, clip.duration, tracks);
+      this.actions[dst] = this.mixer.clipAction(nc);
+    };
+    mk("Idle", "Idle__L", true);
+    mk("Walk", "Walk__L", true);
+    mk("Run", "Run__L", true);
+    for (const name of Object.keys(this.actions)) {
+      if (name.startsWith("C_") && !name.endsWith("__U")) mk(name, name + "__U", false);
+    }
+    this._lowerLoop = null; this._layered = false;
+  }
+
+  /** returns true if this actor can layer the given attack over locomotion */
+  canLayer(attackName) { return !!this.actions[attackName + "__U"]; }
+
+  /** lower loco (hips+legs) + upper attack (torso+arms), played together */
+  playLayered(attackName, locoName, { timeScale = 1, fade = 0.05, lowerTS = 1 } = {}) {
+    const upper = this.actions[attackName + "__U"];
+    const lower = this.actions[locoName + "__L"];
+    if (!upper || !lower) return this.playOnce(attackName, { timeScale, fade });
+    this._setLower(lower, lowerTS, fade);
+    if (this.current) { this.current.fadeOut(fade); this.current = null; }
+    upper.reset().setLoop(THREE.LoopOnce, 1); upper.clampWhenFinished = true;
+    upper.setEffectiveTimeScale(timeScale).setEffectiveWeight(1).fadeIn(fade).play();
+    this._oneShot = upper; this._layered = true;
+    return upper.getClip().duration / timeScale;
+  }
+
+  /** keep the layered legs alive + retimed while the upper attack clamps */
+  updateLower(locoName, lowerTS) {
+    const lower = this.actions[locoName + "__L"];
+    if (lower) this._setLower(lower, lowerTS, 0.1);
+  }
+
+  _setLower(lower, ts, fade) {
+    if (this._lowerLoop !== lower) {
+      if (this._lowerLoop) this._lowerLoop.fadeOut(fade);
+      lower.reset().setEffectiveWeight(1).fadeIn(fade).play();
+      this._lowerLoop = lower;
+    }
+    lower.setEffectiveTimeScale(ts);
+  }
+
+  /** drop the layered lower loop and return to single-clip playback */
+  clearLayer(fade = 0.1) {
+    if (this._lowerLoop) { this._lowerLoop.fadeOut(fade); this._lowerLoop = null; }
+    this._layered = false;
+  }
 
   /**
    * Per-frame arm relax + procedural gait swing (Dungeon Forge recipe).

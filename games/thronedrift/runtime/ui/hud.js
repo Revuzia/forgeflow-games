@@ -747,7 +747,9 @@ export class HUD {
     dbtn.appendChild(el("div", `position:absolute;left:0;right:0;bottom:0;text-align:center;font-size:6.5px;font-weight:800;letter-spacing:.4px;color:#ffe9a8;background:rgba(8,4,14,.72);padding:2px 2px 3px;pointer-events:none`, dashType.toUpperCase()));
     const dcd = el("div", `position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(8,4,14,.85) 0turn, transparent 0turn);pointer-events:none;`);
     const dtxt = el("div", `position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;text-shadow:0 0 6px #000;pointer-events:none;opacity:0`);
-    const dkey = el("div", `position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);background:#241436;border:1.5px solid ${GOLD};border-radius:6px;font-size:8px;font-weight:800;color:${GOLD};padding:1px 4px;pointer-events:none`, "SHIFT");
+    // hotkey tag rides the TOP-right corner (matches the 1/2/3/LMB tags) so it
+    // never covers the skill name at the bottom of the chip (owner)
+    const dkey = el("div", `position:absolute;top:-5px;right:-4px;background:#241436;border:1.5px solid ${GOLD};border-radius:6px;font-size:8px;font-weight:800;color:${GOLD};padding:1px 4px;pointer-events:none`, "SHIFT");
     dwrap.append(dbtn, dcd, dtxt, dkey);
     dbtn.onpointerdown = (e) => { e.preventDefault(); this.input.touchDash(); };
     this.elToggle.appendChild(dwrap);

@@ -31,6 +31,12 @@ export class Champion {
     this.gold = 0; this.score = 0;
     this.iframeT = 0; this.wardHp = 0; this.wardT = 0;
     this.basicT = 0; this.attackAnimT = 0; this.basicAlt = 0;
+    // separate ability lock: basics keep attackAnimT busy, but abilities may
+    // interrupt basics — only ANOTHER ability blocks a cast (owner: skills
+    // felt stuck while auto-attacking)
+    this.abilityLockT = 0;
+    // move-and-shoot layer state (updated each frame from locomotion)
+    this._layerMove = false; this._layerLoco = "Walk"; this._layerTS = 1;
     this.block = { active: false, raisedAt: 0, holdT: 0 };
     this.spin = null; this.spinTrail = null;
     this.dead = false; this.respawnT = 0; this.deadT = 0;
@@ -146,7 +152,10 @@ export class Champion {
     const action = this.actor.actions["C_" + anim];
     const clipDur = action ? action.getClip().duration : 0.5;
     const ts = clipDur / Math.max(0.22, b.rate * 0.95);
-    const dur = this.actor.playOnce("C_" + anim, { timeScale: ts });
+    // moving → play the swing over running legs (move-and-shoot); else full body
+    const dur = (this._layerMove && this.actor.canLayer("C_" + anim))
+      ? this.actor.playLayered("C_" + anim, this._layerLoco, { timeScale: ts, lowerTS: this._layerTS })
+      : this.actor.playOnce("C_" + anim, { timeScale: ts });
     this.attackAnimT = Math.min(dur * 0.7, b.rate * 0.8);
     SFX.play(b.sfx);
     if (b.type === "melee") {
@@ -187,7 +196,7 @@ export class Champion {
     const g = this.game;
     const key = this.modeKey();
     const def = this.kit().abilities[slot];
-    if (!def || this.cds[key][slot] > 0 || this.attackAnimT > 0.15) return;
+    if (!def || this.cds[key][slot] > 0 || this.abilityLockT > 0.15) return;
     if (def.type === "block") { this.startBlock(def, slot); return; }
     this.cds[key][slot] = def.cd;
     const tgt = g.nearestHostile(this, 12);
@@ -195,8 +204,13 @@ export class Champion {
     const abAction = this.actor.actions["C_" + def.anim];
     const abClipDur = abAction ? abAction.getClip().duration : 0.6;
     const abTs = Math.max(def.animScale || 1, abClipDur / 0.9);
-    const dur = this.actor.playOnce("C_" + def.anim, { timeScale: abTs });
+    // ranged casts layer over running legs too; melee/spin/ward stay full-body
+    const layerCast = (def.type === "shot" || def.type === "bomb") && this._layerMove && this.actor.canLayer("C_" + def.anim);
+    const dur = layerCast
+      ? this.actor.playLayered("C_" + def.anim, this._layerLoco, { timeScale: abTs, lowerTS: this._layerTS })
+      : this.actor.playOnce("C_" + def.anim, { timeScale: abTs });
     this.attackAnimT = Math.min(dur * 0.85, 1.0);
+    this.abilityLockT = this.attackAnimT;   // gates the NEXT ability only
     if (def.callout && this.isLocal) g.hud.callout(def.callout, this.cls.uiColor);
     SFX.play(def.sfx);
     if (def.shake && this.isLocal) g.addShake(def.shake);
@@ -537,7 +551,9 @@ export class Champion {
         } else if (ctrl.abilityPressed(i)) this.castAbility(i);
       }
       this.basicT -= dt;
-      if (ctrl.basicHeld && this.basicT <= 0 && !this.spin && !this.block.active) this.fireBasic();
+      // basic pauses only while an ABILITY is actively animating (so it does
+      // not stomp the cast), then resumes — auto-attack + skills coexist
+      if (ctrl.basicHeld && this.basicT <= 0 && !this.spin && !this.block.active && this.abilityLockT <= 0) this.fireBasic();
     }
 
     // movement (a kinetic dash overrides steering)
@@ -561,6 +577,16 @@ export class Champion {
     // locomotion / spin
     const actor = this.actor;
     this.attackAnimT -= dt;
+    if (this.abilityLockT > 0) this.abilityLockT -= dt;
+    // resolve locomotion clip + speed-matched timescale once (feet match ground
+    // speed); publish for next frame's move-and-shoot layering decision
+    const gs = spd * mv.mag;
+    const running = mv.mag > 0.55;
+    const locoName = running ? "Run" : mv.mag > 0.05 ? "Walk" : "Idle";
+    const locoTS = running ? clamp(1.2 * gs / 6.1, 0.7, 1.6) : mv.mag > 0.05 ? clamp(1.1 * gs / 2.6, 0.6, 1.5) : 1;
+    this._layerMove = mv.mag > 0.05;
+    this._layerLoco = running ? "Run" : "Walk";
+    this._layerTS = locoTS;
     if (this.spin) {
       this.spin.t -= dt;
       this.spin.tickT -= dt;
@@ -583,12 +609,13 @@ export class Champion {
         if (this.spinTrail) { this.spinTrail.removeFromParent(); this.spinTrail = null; }
       }
     } else if (this.attackAnimT <= 0) {
-      // feet match actual ground speed (class speed + frost/block/attack
-      // slows) instead of one fixed rate — kills the skating look
-      const gs = spd * mv.mag;
-      if (mv.mag > 0.55) actor.play("Run", { timeScale: clamp(1.2 * gs / 6.1, 0.7, 1.6) });
-      else if (mv.mag > 0.05) actor.play("Walk", { timeScale: clamp(1.1 * gs / 2.6, 0.6, 1.5) });
-      else if (!this.block.active) actor.play("Idle");
+      // not attacking: single-clip full-body locomotion (drop any layer)
+      if (actor._layered) actor.clearLayer();
+      if (locoName === "Idle") { if (!this.block.active) actor.play("Idle"); }
+      else actor.play(locoName, { timeScale: locoTS });
+    } else if (actor._layered) {
+      // mid-attack while moving: keep the legs running under the upper swing
+      actor.updateLower(locoName, locoTS);
     }
     actor.update(shocked ? dt * 0.08 : dt);
     const moving = mv.mag > 0.05;

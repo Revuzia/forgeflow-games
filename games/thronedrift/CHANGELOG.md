@@ -1,5 +1,21 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v1.6 — 2026-07-13 (move-and-shoot, skill/auto-attack decouple, SHIFT tag)
+- MOVE-AND-SHOOT: attacking while moving now keeps the LEGS running while the
+  arms play the swing/shot. Each clip is split into disjoint track sets —
+  lower (hips+legs) loco + upper (torso+arms) attack play together via the
+  mixer's per-track blend (Actor._buildLayers / playLayered). Verified: leg
+  bone sweeps a full 1.9-rad stride during an archer shot; arrows fire mid-run.
+  Basic + ranged casts layer; melee/spin/ward abilities stay full-body (plant).
+- SKILLS NO LONGER BLOCKED BY AUTO-ATTACK: castAbility was gated on
+  attackAnimT>0.15, which the held basic kept elevated (~11% of casts blocked,
+  felt "stuck"). New abilityLockT gates ability-vs-ability only; abilities
+  interrupt basics; basic pauses only while an ability animates. Verified: a
+  skill fires mid basic-swing; 4/4 rotation casts fire during continuous
+  auto-attack.
+- SHIFT chip hotkey tag moved to the TOP-RIGHT corner (was a bottom label
+  overlapping the ROLL/LUNGE/BLINK name) — matches the 1/2/3/LMB tags.
+
 ## v1.5.1 — 2026-07-13 (showcase weapon grips)
 - BARBARIAN greatblade now hangs DOWN at his side (rest [0.3,-0.9,0.2]) —
   the calm-idle arm is already lowered, so the previous upward rest ran the
