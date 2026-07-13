@@ -1,5 +1,12 @@
 # Bastion Realms — Changelog
 
+## v1.6 — 2026-07-07
+- **Coins render everywhere now**: replaced the 🪙 emoji (Unicode 13.0 — a blank/yellow box on
+  machines without a 2020+ emoji font) with a CSS-drawn gold coin, across the gold counter, tower
+  cards, upgrade/sell buttons and wave-clear toasts.
+- **Storm Coil now fires the thick two-layer ribbon lightning** (glow + white-hot core, jagged arc)
+  matching Siegeheart's Storm Caller — was a thin single-line beam.
+
 ## v1.5 — 2026-07-07 (per-biome assault flavor)
 - Each biome now has its own HUD assault icon + call-to-action, distinct from Siegeheart's set:
   Verdant Hollow 🐺 Raise the Hunt, Cinder Wastes 🌋 Wake the Mountain, Frostmaw Expanse ❄️ Loose

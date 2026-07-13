@@ -57,6 +57,7 @@ h2.bs-h2{font-size:32px;letter-spacing:0.18em;color:#f0e2c0;margin-bottom:4px;te
   border-radius:0 0 10px 10px;padding:8px 24px;pointer-events:auto;box-shadow:0 4px 24px rgba(0,0,0,0.6)}
 .bs-stat{display:flex;align-items:center;gap:7px;font-size:17.5px;font-weight:700}
 .bs-stat.gold{color:#ffd76a}.bs-stat.wave{color:#c8a8ff}
+.coin{display:inline-block;width:0.82em;height:0.82em;border-radius:50%;background:radial-gradient(circle at 34% 30%,#ffe9a6,#eab63c 58%,#b07d1c);box-shadow:inset 0 0 0 1px rgba(255,255,255,.4),0 0 0 1px #7c5410;vertical-align:-0.04em;margin:0 1px}
 .bs-bastion{display:flex;flex-direction:column;gap:2px;min-width:210px}
 .bs-bastion .lbl{font-size:10px;letter-spacing:0.22em;color:#b89868;display:flex;justify-content:space-between}
 .bs-bastion .track{height:13px;background:#161210;border:1px solid var(--edge);border-radius:3px;overflow:hidden}
@@ -351,7 +352,7 @@ export function createUI(container, handlers) {
       const top = el('div', 'bs-hud-top');
       const bar = el('div', 'bs-hud-bar');
       bar.innerHTML = `
-        <div class="bs-stat gold">🪙 <span id="bs-gold">0</span></div>
+        <div class="bs-stat gold"><span class="coin"></span><span id="bs-gold">0</span></div>
         <div class="bs-bastion">
           <div class="lbl"><span>🏰 KEEP</span><span id="bs-hpnum">100/100</span></div>
           <div class="track"><div class="fill" id="bs-hpfill" style="width:100%"></div></div>
@@ -385,7 +386,7 @@ export function createUI(container, handlers) {
         card.appendChild(el('div', 'hk', String(i + 1)));
         if (!unlocked) card.appendChild(el('div', 'lock', '🔒'));
         card.appendChild(iconCanvas(d.icon));
-        card.append(el('div', 'tn', d.name), el('div', 'tc', '🪙' + d.cost));
+        card.append(el('div', 'tn', d.name), el('div', 'tc', '<span class="coin"></span>' + d.cost));
         if (unlocked) card.onclick = () => handlers.selectBuild(tid);
         bb.appendChild(card);
         h.cards[tid] = { card, unlocked };
@@ -490,14 +491,14 @@ export function createUI(container, handlers) {
           h.sel.appendChild(mode);
         }
         if (canUp) {
-          const up = el('button', 'pbtn gold', `⬆ Upgrade 🪙${upCost}`);
+          const up = el('button', 'pbtn gold', `⬆ Upgrade <span class="coin"></span>${upCost}`);
           up.disabled = !afford;
           up.onclick = () => handlers.upgrade(tw.id);
           h.sel.appendChild(up);
         } else {
           h.sel.appendChild(el('div', 'lvl', '★ MAX LEVEL'));
         }
-        const sell = el('button', 'pbtn red', `💰 Sell +🪙${refund}`);
+        const sell = el('button', 'pbtn red', `💰 Sell +<span class="coin"></span>${refund}`);
         sell.onclick = () => handlers.sell(tw.id);
         h.sel.appendChild(sell);
         h.selKills = h.sel.querySelector('#bs-selkills');

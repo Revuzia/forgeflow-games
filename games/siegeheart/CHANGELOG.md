@@ -1,5 +1,10 @@
 # Siegeheart — Changelog
 
+## v1.4.3 — 2026-07-07
+- **Coins render everywhere now**: replaced the 🪙 emoji (Unicode 13.0 — showed as a blank/yellow
+  box on machines without a 2020+ emoji font) with a CSS-drawn gold coin. Affects the gold counter,
+  tower cards, upgrade/sell buttons and wave-bonus toasts.
+
 ## v1.4.2 — 2026-07-07
 - **Per-world assault icon + call-to-action** (the war horn only fit the Colosseum): each front now
   has its own HUD marker and "start wave" verb — Colosseum 📯 Sound the Horn, Gothic Castle 🦇 Toll

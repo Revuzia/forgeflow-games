@@ -344,7 +344,7 @@ export function createGame(env) {
           audio.play('waveHorn');
           break;
         case 'waveEnd':
-          ui.toast(`Wave ${ev.idx + 1} repelled <b>+🪙${ev.bonus}</b>`);
+          ui.toast(`Wave ${ev.idx + 1} repelled <b>+<span class="coin"></span>${ev.bonus}</b>`);
           audio.play('coin');
           break;
         case 'build': {

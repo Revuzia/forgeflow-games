@@ -52,6 +52,7 @@ h2.br-h2{font-size:34px;letter-spacing:0.2em;color:#f0e6c8;margin-bottom:6px;tex
 .br-stat{display:flex;align-items:center;gap:7px;font-size:18px;font-weight:700;letter-spacing:0.03em}
 .br-stat .ico{font-size:19px}
 .br-stat.gold{color:#ffd76a}.br-stat.lives{color:#ff8a7a}.br-stat.wave{color:#9adcff}
+.coin{display:inline-block;width:0.82em;height:0.82em;border-radius:50%;background:radial-gradient(circle at 34% 30%,#ffe9a6,#eab63c 58%,#b07d1c);box-shadow:inset 0 0 0 1px rgba(255,255,255,.4),0 0 0 1px #7c5410;vertical-align:-0.04em;margin:0 1px}
 .br-speed{display:flex;gap:4px;margin-left:8px}
 .br-speed button,.br-pausebtn{pointer-events:auto;background:#1a2438;border:1px solid var(--edge);color:#cfd8e8;border-radius:6px;
   padding:4px 11px;cursor:pointer;font-size:14px;font-weight:700}
@@ -377,7 +378,7 @@ export function createUI(container, handlers) {
       const top = el('div', 'br-hud-top');
       const bar = el('div', 'br-hud-bar');
       bar.innerHTML = `
-        <div class="br-stat gold"><span class="ico">🪙</span><span id="br-gold">0</span></div>
+        <div class="br-stat gold"><span class="coin"></span><span id="br-gold">0</span></div>
         <div class="br-stat lives"><span class="ico">❤️</span><span id="br-lives">20</span></div>
         <div class="br-stat wave" title="Assaults"><span class="ico">${wt.icon}</span><span id="br-wave">–</span><span id="br-next" style="color:#9ab;font-size:11px;margin-left:6px"></span></div>`;
       const speed = el('div', 'br-speed');
@@ -407,7 +408,7 @@ export function createUI(container, handlers) {
         card.appendChild(el('div', 'hk', String(i + 1)));
         if (!unlocked) card.appendChild(el('div', 'lock', '🔒'));
         card.appendChild(iconCanvas(d.icon));
-        card.append(el('div', 'tn', d.name), el('div', 'tc', '🪙' + d.cost));
+        card.append(el('div', 'tn', d.name), el('div', 'tc', '<span class="coin"></span>' + d.cost));
         if (unlocked) {
           card.onclick = () => handlers.selectBuild(tid);
         }
@@ -533,14 +534,14 @@ export function createUI(container, handlers) {
           h.sel.appendChild(mode);
         }
         if (canUp) {
-          const up = el('button', 'pbtn gold', `⬆ Upgrade 🪙${upCost}`);
+          const up = el('button', 'pbtn gold', `⬆ Upgrade <span class="coin"></span>${upCost}`);
           up.disabled = !afford;
           up.onclick = () => handlers.upgrade(tw.id);
           h.sel.appendChild(up);
         } else {
           h.sel.appendChild(el('div', 'lvl', '★ MAX LEVEL'));
         }
-        const sell = el('button', 'pbtn red', `💰 Sell +🪙${refund}`);
+        const sell = el('button', 'pbtn red', `💰 Sell +<span class="coin"></span>${refund}`);
         sell.onclick = () => handlers.sell(tw.id);
         h.sel.appendChild(sell);
         h.selKills = h.sel.querySelector('#br-selkills');

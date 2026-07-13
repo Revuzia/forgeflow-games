@@ -358,7 +358,7 @@ export function createGame(env) {
           break;
         }
         case 'waveEnd':
-          ui.toast(`Wave ${ev.idx + 1} cleared <b>+🪙${ev.bonus}</b>`);
+          ui.toast(`Wave ${ev.idx + 1} cleared <b>+<span class="coin"></span>${ev.bonus}</b>`);
           audio.play('coins2', { vol: 0.4 });
           break;
         case 'build': {
