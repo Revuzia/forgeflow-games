@@ -762,10 +762,10 @@ export class Builder {
     const cell = this._pointerCell(e);
     this.hover = cell;
     this.hoverEdge = this.tool === "walls" ? this._pointerEdge(cell) : null;
-    // mid-drag the highlight snaps to the locked run line (matches placement)
+    // mid-drag the highlight snaps to the current run line (matches placement)
     if (cell && this.hoverEdge && this.drag && this.drag.walls && this.drag.run) {
       const run = this.drag.run;
-      this.hoverEdge = run.s === 0 ? { x: cell.x, z: run.z, s: 0 } : { x: run.x, z: cell.z, s: 1 };
+      this.hoverEdge = run.s === 0 ? { x: cell.x, z: run.fixed, s: 0 } : { x: run.fixed, z: cell.z, s: 1 };
     }
     if (cell && this.drag && this.drag.walls) this._placeWallAt(cell);
     if (cell && this.drag && this.drag.paint) this._paint(cell);
@@ -827,24 +827,41 @@ export class Builder {
   }
   _clearRoomPreview() { if (this.roomPreview) this.roomPreview.visible = false; }
 
-  /** Walls tool: apply the current wall mode to the edge nearest the pointer.
-   *  A held drag locks to the FIRST edge's line (same s, same fixed coordinate)
-   *  and projects the pointer onto it, so runs come out straight even when the
-   *  mouse wanders a tile off (owner: "I want to go in a straight line"). */
+  /** Walls tool: draw along grid LINES. A held drag stays on the current run's
+   *  axis so a wandering mouse can't box in side tiles, BUT when you deliberately
+   *  move perpendicular (onto a new row/column) the run PIVOTS and turns the
+   *  corner — so you can draw L-shapes without releasing (owner request). Door
+   *  mode is a single placement (no run). */
   _placeWallAt(cell) {
-    let e = this._pointerEdge(cell);
-    if (!e || !this.drag || !this.drag.walls) return;
-    const run = this.drag.run;
-    if (!run) this.drag.run = { s: e.s, x: e.x, z: e.z };  // first edge anchors the line
-    else {
-      // project onto the run line: keep the anchor's orientation + fixed coord,
-      // take only the along-the-line coordinate from the pointer
-      e = run.s === 0 ? { x: cell.x, z: run.z, s: 0 } : { x: run.x, z: cell.z, s: 1 };
-    }
-    const key = D.wk(e.x, e.z, e.s);
-    if (this.drag.lastKey === key) return;                 // one op per edge per drag
-    this.drag.lastKey = key;
+    const raw = this._pointerEdge(cell);
+    if (!raw || !this.drag || !this.drag.walls) return;
     const mode = this.toolOpt.wmode || "stone";
+    if (mode === "door") { this._placeWallEdge(raw, mode); this.drag.run = null; return; }
+    let run = this.drag.run;
+    if (!run) {
+      run = this.drag.run = { s: raw.s, fixed: raw.s === 0 ? raw.z : raw.x };
+      this.drag.lastCell = { x: cell.x, z: cell.z };
+      this._placeWallEdge(raw, mode);
+      return;
+    }
+    const last = this.drag.lastCell || { x: cell.x, z: cell.z };
+    // movement since the last sample, split into "along the run" vs "perpendicular"
+    const dAlong = run.s === 0 ? Math.abs(cell.x - last.x) : Math.abs(cell.z - last.z);
+    const dPerp = run.s === 0 ? Math.abs(cell.z - last.z) : Math.abs(cell.x - last.x);
+    if (raw.s !== run.s && dPerp >= 1 && dPerp >= dAlong) {
+      // turned a corner → re-anchor a new run on the perpendicular axis
+      run = this.drag.run = { s: raw.s, fixed: raw.s === 0 ? raw.z : raw.x };
+    }
+    // project the pointer onto the run's line (fixed coord + pointer's along coord)
+    const e = run.s === 0 ? { x: cell.x, z: run.fixed, s: 0 } : { x: run.fixed, z: cell.z, s: 1 };
+    this.drag.lastCell = { x: cell.x, z: cell.z };
+    this._placeWallEdge(e, mode);
+  }
+  /** Issue the wall op for one edge (dedup per drag), with sfx + errors. */
+  _placeWallEdge(e, mode) {
+    const key = D.wk(e.x, e.z, e.s);
+    if (this.drag && this.drag.lastKey === key) return;    // one op per edge per drag
+    if (this.drag) this.drag.lastKey = key;
     let op;
     if (mode === "erase") op = { t: "wall-", f: this.floor, x: e.x, z: e.z, s: e.s };
     else if (mode === "door") op = { t: "wall+", f: this.floor, x: e.x, z: e.z, s: e.s, wtype: "stone", door: true, dtype: this.toolOpt.wdoor || "wood" };
@@ -852,6 +869,7 @@ export class Builder {
     const res = this.applyLocal(op);
     if (res.ok) { this.g.audio.sfx(mode === "erase" ? "erase" : "place"); if (mode === "door") this.selectEdgeDoor({ f: this.floor, ex: e.x, ez: e.z, es: e.s }); }
     else if (res.err === "nocell") this.g.hud.toast("Walls go on lines BETWEEN two floor tiles (the boundary already has a wall)", "warn");
+    else if (res.err === "stairwall") this.g.hud.toast("Can't put a wall through the stairs", "warn");
   }
 
   _paint(cell) {
