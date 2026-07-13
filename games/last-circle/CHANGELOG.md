@@ -3,6 +3,53 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-12 — v4.9 real sky + proper freefall/canopy + click-to-play menu (?v=15, LIVE)
+
+Owner round: "do the falling boneless, realsky and clouds and birds, run to
+check mouse look, and fix the menu." All done, verified in live play (pump +
+rAF-shim + canvas→JPEG upload pipeline), then deployed to the CDN (?v=15) and
+re-verified on the live workers.dev URL.
+
+- **REAL SKY (`maps.js`):** added a gradient sky dome (ShaderMaterial, horizon→
+  zenith), 24 drifting cloud groups (soft radial-gradient billboard sprites,
+  3–5 puffs each), and 3 looping bird flocks (V-silhouette sprites) — all
+  map-agnostic off each map's `sky` colour. Verified from altitude: fluffy
+  clouds + V-birds render against the dome (shots `skydive_gamecam`,
+  `birds_close`). **Fog thinned** (isla_viva 0.0011→0.0006, ashgrid
+  0.0013→0.0007, deepwood 0.0016→0.0009) so the ground no longer washes white
+  when you look down while dropping — the dome now covers the far distance, the
+  fog is just light atmospheric haze (storm keeps its own heavier weather).
+- **PROPER FREEFALL + CANOPY (`pose.js`):** the skydive/hang arm+leg targets
+  were single straight lines (no elbow/knee bend) → the "boneless spread-eagle"
+  and "arms rammed straight up" the owner flagged. Rebuilt both with real joint
+  articulation: skydive = box/arch (upper arms out at shoulder level, forearms
+  bent ~90° so hands come up-and-forward; thighs splayed back, knees bent so the
+  shins kick up) — verified live (bones: head down-forward, hips up, feet kicked
+  up-and-back, hands forward-spread; shot `skydive_fixed`). Canopy hang = upper
+  arms reach up-and-out to the risers, forearms angle back up to the toggles
+  (bent elbows, not straight up), legs dangle with a slight knee bend — verified
+  live under an open chute (shot `hang_frozen`). No Meshy regen — pure runtime
+  pose layer.
+- **MENU click-to-play (`hud.js`):** removed the separate "▶ DROP IN" button;
+  each of the 3 glass mode cards (BATTLE ROYALE / QUICK MATCH / PRACTICE) is now
+  the play button — one click launches that mode, with a ▶ chevron affordance
+  and a "CHOOSE A MODE TO DEPLOY" hint. Already glassmorphic (backdrop-filter
+  blur 18px, saturate 1.35, rounded, blue glow). Verified on the LIVE deploy:
+  3 cards, each `onclick` launches, no DROP IN button, glass confirmed.
+- **MOUSE-LOOK verified LIVE:** the existing model is correct — any mousedown
+  requests pointer lock, then `mousemove`'s `movementX/Y` drive `input.yaw/pitch`
+  (cursor-follow aim is the lock-denied fallback). Proven in a live match via
+  the RMB-drag path (same yaw code): movementX=140 drove yaw 0.000→−0.246→−0.493,
+  movementY drove pitch 0→0.106, and the camera world-dir rotated (−0.057,−0.998)
+  → (0.418,−0.904). (Real pointer-lock *engagement* still needs a focused real
+  browser — the headless preview tab is `hidden`.)
+- Sim selftest 45/45. `HAND_AIM_ROT` gun calibration and the 5-skin roster
+  (drifter cut) unchanged.
+- **Test-harness note:** reviving a dead actor (`hp:0`) in the verify harness
+  leaves `a.obj` detached from the scene (death path `victim.obj.parent.remove`,
+  player.js:893) → the body renders nowhere. It is a *test artifact only*
+  (normal freefall never kills you); re-add with `k.scene.add(a.obj)` to inspect.
+
 ## 2026-07-09 — v4.8 per-skin weapon calibration (level barrel on all 5)
 
 wraith + juggernaut aimed ~35° high with the shared grip rotation (their

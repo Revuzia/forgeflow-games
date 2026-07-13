@@ -15,9 +15,9 @@ import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js"
 
 // Practice uses a random battle map (no dedicated range — owner direction).
 export const MAPS = {
-  isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#7fd4f0", fog: 0.0011, themeColor: "#22d3a0", water: true },
-  ashgrid:   { name: "Ashgrid", theme: "urban", sky: "#aab6c4", fog: 0.0013, themeColor: "#e0685a", water: false },
-  deepwood:  { name: "Deepwood", theme: "forest", sky: "#9fc7e8", fog: 0.0016, themeColor: "#7fb069", water: true },
+  isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#7fd4f0", fog: 0.0006, themeColor: "#22d3a0", water: true },
+  ashgrid:   { name: "Ashgrid", theme: "urban", sky: "#aab6c4", fog: 0.0007, themeColor: "#e0685a", water: false },
+  deepwood:  { name: "Deepwood", theme: "forest", sky: "#9fc7e8", fog: 0.0009, themeColor: "#7fb069", water: true },
 };
 
 const SIZE = 1600;               // meters, square
@@ -160,6 +160,75 @@ export async function buildMap(W, mapId) {
     water.name = "water";
     g.add(water);
     W.kernel.onUpdate((dt, t) => { water.position.y = waterY + Math.sin(t * 0.7) * 0.12; });
+  }
+
+  // ── SKY: gradient dome + drifting clouds + looping birds ──────────────────
+  // (owner: "we should have a real sky, with real clouds, and birds")
+  {
+    const horizon = new THREE.Color(K.sky);
+    const zenith = horizon.clone().lerp(new THREE.Color(0x2f74c8), 0.55).multiplyScalar(0.9);
+    const skyGeo = new THREE.SphereGeometry(SIZE * 0.82, 24, 16);
+    const skyMat = new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false, fog: false,
+      uniforms: { top: { value: zenith }, bot: { value: horizon } },
+      vertexShader: "varying vec3 vp; void main(){ vp = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
+      fragmentShader: "varying vec3 vp; uniform vec3 top; uniform vec3 bot; void main(){ float h = clamp(normalize(vp).y, 0.0, 1.0); gl_FragColor = vec4(mix(bot, top, pow(h, 0.62)), 1.0); }",
+    });
+    const sky = new THREE.Mesh(skyGeo, skyMat);
+    sky.renderOrder = -10; sky.frustumCulled = false; sky.name = "sky";
+    g.add(sky);
+
+    // soft cloud-puff sprite texture
+    const ccv = document.createElement("canvas"); ccv.width = ccv.height = 128;
+    const cx2 = ccv.getContext("2d");
+    const cgrad = cx2.createRadialGradient(64, 64, 4, 64, 64, 62);
+    cgrad.addColorStop(0, "rgba(255,255,255,0.95)"); cgrad.addColorStop(0.5, "rgba(255,255,255,0.45)"); cgrad.addColorStop(1, "rgba(255,255,255,0)");
+    cx2.fillStyle = cgrad; cx2.fillRect(0, 0, 128, 128);
+    const cloudTex = new THREE.CanvasTexture(ccv);
+    const clouds = [];
+    for (let i = 0; i < 24; i++) {
+      const grp = new THREE.Group();
+      const puffs = 3 + Math.floor(rng() * 3);
+      for (let p = 0; p < puffs; p++) {
+        const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.8, depthWrite: false, fog: false }));
+        const sc = 46 + rng() * 70;
+        s.scale.set(sc, sc * 0.58, 1);
+        s.position.set((rng() - 0.5) * sc * 1.7, (rng() - 0.5) * sc * 0.28, (rng() - 0.5) * sc * 1.3);
+        grp.add(s);
+      }
+      const ang = rng() * Math.PI * 2, rad = 180 + rng() * (HALF * 0.85);
+      grp.position.set(Math.cos(ang) * rad, 130 + rng() * 100, Math.sin(ang) * rad);
+      grp.userData.drift = 2.5 + rng() * 4;
+      g.add(grp); clouds.push(grp);
+    }
+
+    // bird "V" sprite texture + a few looping flocks
+    const bcv = document.createElement("canvas"); bcv.width = bcv.height = 32;
+    const bx = bcv.getContext("2d"); bx.strokeStyle = "rgba(38,40,52,0.92)"; bx.lineWidth = 3; bx.lineCap = "round";
+    bx.beginPath(); bx.moveTo(4, 21); bx.lineTo(16, 11); bx.lineTo(28, 21); bx.stroke();
+    const birdTex = new THREE.CanvasTexture(bcv);
+    const flocks = [];
+    for (let f = 0; f < 3; f++) {
+      const flock = new THREE.Group();
+      const n = 5 + Math.floor(rng() * 5);
+      for (let b = 0; b < n; b++) {
+        const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: birdTex, transparent: true, depthWrite: false, fog: false }));
+        s.scale.setScalar(3 + rng() * 2.5);
+        s.userData.ph = rng() * Math.PI * 2; s.userData.ix = b;
+        flock.add(s);
+      }
+      flock.userData = { cx: (rng() - 0.5) * HALF, cz: (rng() - 0.5) * HALF, cy: 75 + rng() * 55, fr: 22 + rng() * 34, spd: 0.05 + rng() * 0.05, ph: rng() * Math.PI * 2 };
+      g.add(flock); flocks.push(flock);
+    }
+
+    W.kernel.onUpdate((dt, t) => {
+      for (const c of clouds) { c.position.x += c.userData.drift * dt; if (c.position.x > HALF * 1.15) c.position.x = -HALF * 1.15; }
+      for (const fl of flocks) {
+        const u = fl.userData, a = t * u.spd + u.ph;
+        fl.position.set(u.cx + Math.cos(a) * u.fr * 6, u.cy + Math.sin(a * 0.7) * 7, u.cz + Math.sin(a) * u.fr * 6);
+        for (const s of fl.children) s.position.set((s.userData.ix - fl.children.length / 2) * 4.5, Math.sin(t * 6 + s.userData.ph) * 1.6, (s.userData.ix % 2) * 3);
+      }
+    });
   }
 
   // ── structures: batched boxes + colliders ─────────────────────────────────

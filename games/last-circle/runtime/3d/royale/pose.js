@@ -88,12 +88,17 @@ export const POSES = {
   // two-handed gun at chest: right forearm forward (gun points +Z), left hand
   // reaches to the weapon's fore-end
   gunReady: [[-0.22, -0.85, 0.42], [-0.06, 0.1, 0.99], [0.3, -0.8, 0.42], [-0.42, 0.16, 0.88]],
-  // belly-down skydive: arms swept out and back, legs arched back in a spread
-  skydive: [[-0.9, -0.1, -0.3], [-0.95, 0.05, -0.25], [0.9, -0.1, -0.3], [0.95, 0.05, -0.25],
-            [-0.3, -0.85, -0.35], [-0.32, -0.7, -0.6], [0.3, -0.85, -0.35], [0.32, -0.7, -0.6]],
-  // under canopy: both hands up on the risers, legs together hanging straight
-  hang: [[-0.3, 0.95, 0.05], [-0.12, 0.99, 0.04], [0.3, 0.95, 0.05], [0.12, 0.99, 0.04],
-         [-0.1, -0.99, 0.03], [-0.08, -0.96, -0.15], [0.1, -0.99, 0.03], [0.08, -0.96, -0.15]],
+  // belly-down skydive "box/arch": upper arms out to the sides at shoulder
+  // level, forearms bent ~90° at the elbow so the hands come up & forward
+  // (not one rigid spread-eagle line); thighs splayed back, knees bent so the
+  // shins kick up behind — the classic stable freefall arch, not a stiff X.
+  skydive: [[-0.90, 0.12, 0.20], [-0.30, 0.44, 0.85], [0.90, 0.12, 0.20], [0.30, 0.44, 0.85],
+            [-0.42, -0.78, -0.46], [-0.30, 0.06, -0.86], [0.42, -0.78, -0.46], [0.30, 0.06, -0.86]],
+  // under canopy: upper arms reach up & OUT toward the risers, forearms angle
+  // back up to the toggles → bent elbows (a relaxed hang, not arms rammed
+  // straight up); legs dangle with a slight knee bend, feet drifting forward.
+  hang: [[-0.60, 0.78, 0.10], [-0.20, 0.97, 0.08], [0.60, 0.78, 0.10], [0.20, 0.97, 0.08],
+         [-0.14, -0.97, 0.10], [-0.12, -0.86, -0.34], [0.14, -0.97, 0.10], [0.12, -0.86, -0.34]],
   // reload: muzzle dips, left hand works at the receiver
   reload: [[-0.2, -0.7, 0.6], [-0.05, -0.25, 0.95], [0.28, -0.75, 0.5], [-0.3, -0.15, 0.9]],
 };

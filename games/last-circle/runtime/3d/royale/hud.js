@@ -476,7 +476,17 @@ export function showMenu(W, startMatch) {
       letterSpacing: "2px", color: "#eaf4ff",
     }, m.name, txt);
     h("div", { fontFamily: "Rajdhani, " + FONT, fontSize: "14px", fontWeight: "500", opacity: "0.72", marginTop: "2px", color: "#b8d0ea" }, m.sub, txt);
-    c.onclick = () => { selMode = m.id; W.events.emit("uiClick"); paint(); };
+    // the card IS the play button — one click launches this mode (no separate DROP IN)
+    h("div", {
+      fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "16px", fontWeight: "900",
+      color: "#8ec8ff", opacity: "0.85", paddingLeft: "6px",
+      textShadow: "0 0 14px rgba(80,160,255,0.6)",
+    }, "▶", row);
+    c.onclick = () => {
+      selMode = m.id; W.events.emit("uiClick"); paint();
+      teardownMenuWorld(W);
+      startMatch({ mapId: randomMap(), mode: m.id });
+    };
     return { m, c };
   });
   function paint() {
@@ -489,20 +499,12 @@ export function showMenu(W, startMatch) {
   }
   paint();
 
-  const play = h("button", Object.assign({}, BTN, {
-    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "20px", padding: "18px 0", width: "100%",
-    background: "linear-gradient(180deg, #6ec4ff 0%, #2f7fd6 48%, #1a5fb0 100%)",
-    color: "#fff", marginTop: "8px", letterSpacing: "4px",
-    boxShadow: "0 0 28px rgba(60,150,255,0.4), 0 8px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.25)",
-    border: "1px solid rgba(160,220,255,0.45)",
-    animation: "lcGlow 3.2s ease-in-out infinite",
-  }), "▶  DROP IN", leftCol);
-  play.className = "lc-btn-play";
-  play.onclick = () => {
-    W.events.emit("uiClick");
-    teardownMenuWorld(W);
-    startMatch({ mapId: randomMap(), mode: selMode });
-  };
+  // (No separate DROP IN button — each mode card above launches on click.)
+  h("div", {
+    fontFamily: "Rajdhani, " + FONT, fontSize: "12px", fontWeight: "700",
+    letterSpacing: "2.5px", color: "#9fd0ff", opacity: "0.7", textAlign: "center",
+    marginTop: "6px", marginBottom: "2px", animation: "lcGlow 3.2s ease-in-out infinite",
+  }, "◂  CHOOSE A MODE TO DEPLOY  ▸", leftCol);
 
   const subRow = h("div", { display: "flex", gap: "10px" }, null, leftCol);
   const mkGhost = (label, parent) => h("button", Object.assign({}, BTN, {
