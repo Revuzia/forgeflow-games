@@ -1,5 +1,28 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v1.5 — 2026-07-13 (Meshy library animations, owner-approved re-rig ~128cr)
+- ALL FOUR HEROES play proper Meshy animation-library clips: calm Idle_02
+  stances (the arms-out A-pose idles are gone for real), armed combat walk
+  (21), real run cycles (Run_02/Run_03), fresh combat sets — and the archer
+  finally uses ACTUAL ARCHERY clips (224-226) instead of re-timed slashes.
+- HOW: old hero rig task ids had expired at Meshy, so each mesh was re-rigged
+  (5cr each, data-URI upload of the unskinned GLB) and clips generated
+  against the new rigs (3cr each). Meshy's re-rig RETOPOLOGIZES the mesh
+  (decimated, unusable) — so we keep the ORIGINAL meshes and retarget the
+  clips in WORLD SPACE (pipeline/retarget_clips_v3.py): both rig generations
+  bind the same character, so per-bone world orientations transfer with a
+  rest-pose correction; resampled at 30fps, Hips translation rescaled,
+  rotation-only elsewhere. (Local rest-delta retarget was NOT enough — the
+  generations use different bone axis conventions.)
+- Arm-relax + gait hacks RETIRED for heroes (they existed to fight the old
+  clips). Sorceress: the baked staff now reads planted-and-held in Idle_02 —
+  her best state yet, on the untouched original mesh.
+- Barbarian greatblade re-angled to a shoulder carry for the calm idle.
+- Action-pick lesson recorded: Axe_Stance(85)/Combat_Stance(89)/Idle_03(12)
+  read wrong as base idles (ready poses / stretching); Idle_02(11) is the
+  neutral. Also: poseRig height-normalizes on the AUTHORED idle, so dramatic
+  idle picks inflate character scale.
+
 ## v1.4.1 — 2026-07-13 (auto-attack stall fix, original sorceress mesh)
 - AUTO-ATTACK STALL FIXED: the held-attack latch was gated on input.enabled,
   so click-and-holding through any input-disabled window (PVP round

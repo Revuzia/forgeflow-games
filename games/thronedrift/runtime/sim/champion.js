@@ -73,8 +73,8 @@ export class Champion {
   _equip(actor, model) {
     const g = this.game;
     if (model === "barbarian") {
-      actor.attachWeapon(makeGreatblade(), "Right", { gripFrac: 0.13, palm: 0.13, rest: [0.10, 0.95, 0.30] });
-      actor.idleRelax = 0.85;   // his authored idle is arms-out; others stand naturally
+      // shoulder-carry diagonal for the calm Idle_02 (dead-vertical read odd)
+      actor.attachWeapon(makeGreatblade(), "Right", { gripFrac: 0.13, palm: 0.13, rest: [0.5, 0.75, 0.3] });
     }
     else if (model === "knight") {
       actor.attachWeapon(makeSword(), "Right", { gripFrac: 0.14, palm: 0.12, rest: [0.15, 0.62, 0.77] });
@@ -82,7 +82,6 @@ export class Champion {
     } else if (model === "rogue") {
       const bow = g.propLib.bow ? normalizeShaftProp(g.propLib.bow, 1.2) : makeBow();
       actor.attachWeapon(bow, "Left", { gripFrac: 0.5, palm: 0.12, roll: 0, rest: [0.05, 0.98, 0.15] });
-      actor.idleRelax = 0.65;   // authored idle flares his arms (owner screenshot)
     } else if (model === "sorceress") {
       // ORIGINAL Meshy mesh restored (owner 2026-07-13): the baked staff
       // stays as authored — every local surgery graft read worse. No
@@ -591,10 +590,9 @@ export class Champion {
     }
     actor.update(shocked ? dt * 0.08 : dt);
     const moving = mv.mag > 0.05;
-    // barbarian's authored idle flares the arms — he alone relaxes at rest too
-    const idleRelax = actor.idleRelax || 0;
-    const relaxTarget = (this.attackAnimT > 0 || this.spin || this.block.active || this.dashing) ? 0 : (moving ? 1 : idleRelax);
-    actor.updateRelax(dt, relaxTarget, moving, mv.mag > 0.55);
+    // v1.5: proper Meshy library clips on fresh rigs — the arm-relax hack is
+    // retired for heroes (it existed to fight the old arms-out clips)
+    actor.updateRelax(dt, 0, moving, mv.mag > 0.55);
 
     // squash & stretch sells the jump without a dedicated clip
     const stretch = this.airY > 0 ? 1 + Math.min(0.12, Math.abs(this.jumpVy) * 0.015) : 1;
