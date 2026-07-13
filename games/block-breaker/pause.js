@@ -41,14 +41,26 @@
       "font-family:system-ui,-apple-system,sans-serif", "color:#fff",
       "pointer-events:auto", "user-select:none",
     ].join(";");
+    var vols = (window.__BB_SETVOL__ && window.__BB_SETVOL__.get()) || { music: 1, sfx: 1 };
     el.innerHTML =
       '<div style="font-size:56px;font-weight:900;letter-spacing:4px;text-shadow:0 2px 14px rgba(0,0,0,.5)">PAUSED</div>' +
       '<button id="__pause_resume__" style="padding:14px 40px;font-size:18px;font-weight:700;border:none;border-radius:12px;cursor:pointer;background:linear-gradient(135deg,#00d4ff,#00a8cc);color:#fff;box-shadow:0 4px 20px rgba(0,212,255,0.4)">Resume (ESC)</button>' +
+      '<div style="display:flex;flex-direction:column;gap:10px;background:rgba(20,26,40,.85);border:1px solid rgba(120,180,255,.3);border-radius:14px;padding:16px 22px;min-width:280px">' +
+        '<label style="display:flex;justify-content:space-between;align-items:center;gap:14px;font-size:14px;font-weight:600">\uD83C\uDFB5 Music <input id="__pause_mvol__" type="range" min="0" max="100" value="' + Math.round(vols.music * 100) + '" style="width:140px;accent-color:#00d4ff"></label>' +
+        '<label style="display:flex;justify-content:space-between;align-items:center;gap:14px;font-size:14px;font-weight:600">\uD83D\uDD08 SFX <input id="__pause_svol__" type="range" min="0" max="100" value="' + Math.round(vols.sfx * 100) + '" style="width:140px;accent-color:#00d4ff"></label>' +
+      '</div>' +
+      '<button id="__pause_quit__" style="padding:10px 30px;font-size:14px;font-weight:700;border:1px solid rgba(255,120,120,.5);border-radius:10px;cursor:pointer;background:rgba(90,30,30,.8);color:#ffb3b3">\uD83D\uDEAA Quit to Menu</button>' +
       '<div style="font-size:13px;color:#aaa">Press <b>ESC</b> or <b>P</b> to resume</div>';
     el.addEventListener("click", function (e) {
       if (e.target.id === "__pause_resume__" || e.target === el) {
         resume();
       }
+      if (e.target.id === "__pause_quit__") { try { location.reload(); } catch (err) {} }
+    });
+    el.addEventListener("input", function (e) {
+      var v = (+e.target.value) / 100;
+      if (e.target.id === "__pause_mvol__" && window.__BB_SETVOL__) window.__BB_SETVOL__.music(v);
+      if (e.target.id === "__pause_svol__" && window.__BB_SETVOL__) window.__BB_SETVOL__.sfx(v);
     });
     document.body.appendChild(el);
     return el;

@@ -59,6 +59,8 @@ const ClimberGame = () => {
   const [showMenu, setShowMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [muted, setMuted] = useState(() => localStorage.getItem('sbMuted') === '1');
+  const [musicVol, setMusicVol] = useState(() => { const v = parseFloat(localStorage.getItem('sbMusicVol')); return isNaN(v) ? 1 : v; });
+  const [sfxVol, setSfxVol] = useState(() => { const v = parseFloat(localStorage.getItem('sbSfxVol')); return isNaN(v) ? 1 : v; });
   const [progress, setProgress] = useState(() => {
     const saved = localStorage.getItem('skyBattleProgress');
     return saved ? JSON.parse(saved) : { 'Sky Temple': 0 };
@@ -1324,12 +1326,12 @@ const ClimberGame = () => {
     if (!a) return;
     const wantsMusic = gameState === 'menu' || gameState === 'themeSelect' || gameState === 'playing';
     if (wantsMusic) {
-      a.volume = 0.3;
+      a.volume = 0.3 * musicVol;
       a.play().catch(() => { /* blocked until first gesture */ });
     } else {
       a.pause();
     }
-  }, [gameState]);
+  }, [gameState, musicVol]);
 
   const sfxRefs = {
     jump: useRef(null),
@@ -1343,7 +1345,8 @@ const ClimberGame = () => {
     if (localStorage.getItem('sbMuted') === '1') return;
     const a = sfxRefs[key]?.current;
     if (!a) return;
-    try { a.currentTime = 0; a.volume = 0.45; a.play().catch(() => {}); } catch {}
+    const sv = parseFloat(localStorage.getItem('sbSfxVol')); const svv = isNaN(sv) ? 1 : sv;
+    try { a.currentTime = 0; a.volume = 0.45 * svv; a.play().catch(() => {}); } catch {}
   }, []);
 
   return (
@@ -1556,6 +1559,19 @@ const ClimberGame = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowSettings(false)}>
           <div className="bg-slate-800 border-2 border-cyan-500/50 rounded-2xl p-6 w-80 max-w-[90vw] text-center" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-xl font-bold text-cyan-300 mb-4">⚙ Settings</h3>
+            <div className="flex items-center justify-between mb-3">
+              <span className="font-semibold">🎵 Music</span>
+              <input type="range" min="0" max="100" value={Math.round(musicVol * 100)}
+                onChange={(e) => { const v = (+e.target.value) / 100; setMusicVol(v); localStorage.setItem('sbMusicVol', String(v)); if (bgmRef.current) bgmRef.current.volume = 0.3 * v; }}
+                className="w-36 accent-cyan-400" />
+            </div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="font-semibold">🔈 SFX</span>
+              <input type="range" min="0" max="100" value={Math.round(sfxVol * 100)}
+                onChange={(e) => { const v = (+e.target.value) / 100; setSfxVol(v); localStorage.setItem('sbSfxVol', String(v)); }}
+                onMouseUp={() => playSfx('coin')}
+                className="w-36 accent-cyan-400" />
+            </div>
             <div className="flex items-center justify-between mb-4">
               <span className="font-semibold">Sound</span>
               <button onClick={() => { const m = !muted; setMuted(m); localStorage.setItem('sbMuted', m ? '1' : '0'); if (bgmRef.current) bgmRef.current.muted = m; }}
@@ -1794,6 +1810,12 @@ const ClimberGame = () => {
                     className="w-full px-8 py-4 bg-gradient-to-r from-green-500 to-cyan-600 rounded-xl font-bold text-xl hover:scale-105 transition-all duration-300 shadow-lg"
                   >
                     Resume Battle
+                  </button>
+                  <button
+                    onClick={() => setShowSettings(true)}
+                    className="w-full px-8 py-4 bg-gradient-to-r from-cyan-700 to-cyan-600 rounded-xl font-bold text-xl hover:scale-105 transition-all duration-300 shadow-lg"
+                  >
+                    ⚙ Settings
                   </button>
                   <button
                     onClick={resetGame}
