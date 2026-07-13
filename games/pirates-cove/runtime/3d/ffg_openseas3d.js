@@ -274,6 +274,12 @@ register3d("openseas", async function (kernel, content) {
   function islandRadiusFor(level) { return 90 + level * 13 + rand(-12, 18); }        // island radius grows with level (small easy .. big hard)
   function buildIslandLevelPlan(n) { const p = []; for (let i = 0; i < n; i++) { const t = i / Math.max(1, n - 1); p.push(Math.max(1, Math.min(7, Math.round(1 + t * t * 6)))); } return p; }   // ascending, front-biased to easy levels
 
+  // ── COVE ARENA (PVP) bridge — runtime/net/covenet.js drives online matches
+  // through this surface. pvp.active gates the sandbox systems; pvp-flagged
+  // entries in npcs[] are REMOTE ships (players/bots) whose movement + hp are
+  // owned by the net module — the sandbox must never AI-step or hp-kill them. ──
+  const pvp = { active: false, hooks: null };
+
   // ── NPC ships ────────────────────────────────────────────────────────────────
   const npcs = [];   // { x,z,yaw,speed,mesh,hostile, level, dmg, hp, hpMax, type, rIn, rOut, ... }
 
@@ -1222,7 +1228,9 @@ register3d("openseas", async function (kernel, content) {
       muzzle(mx, mz, tgt.x, tgt.z);
       const res = rollShot(player.gunDmg, tgt.evasion, Math.hypot(tgt.x - player.x, tgt.z - player.z) / FIRE_RANGE);
       fireBall(mx, mz, tgt, res,
-        () => { if (!tgt.alive) return; tgt.hp -= res.dmg; if (!tgt.hostile) tgt.hostile = true; damageFlash(tgt); burst(tgt.x, tgt.z, true, res.crit); sfxAt("hit", tgt.x, tgt.z, res.crit ? 1 : 0.85); if (tgt.hp <= 0) sinkNPC(tgt); else if (selected === tgt) refreshInfo(); },   // attacking a neutral PROVOKES it
+        () => { if (!tgt.alive) return;
+          if (tgt.pvp) { damageFlash(tgt); burst(tgt.x, tgt.z, true, res.crit); sfxAt("hit", tgt.x, tgt.z, res.crit ? 1 : 0.85); if (pvp.hooks && pvp.hooks.localHit) pvp.hooks.localHit(tgt, res); return; }   // arena: the victim applies the damage
+          tgt.hp -= res.dmg; if (!tgt.hostile) tgt.hostile = true; damageFlash(tgt); burst(tgt.x, tgt.z, true, res.crit); sfxAt("hit", tgt.x, tgt.z, res.crit ? 1 : 0.85); if (tgt.hp <= 0) sinkNPC(tgt); else if (selected === tgt) refreshInfo(); },   // attacking a neutral PROVOKES it
         (ax, az) => { burst(ax, az, false, false); sfxAt("miss", ax, az, 0.7); }, PLAYER_LEAD);   // YOUR guns lead well -> moving enemies are hittable
     }
   }
@@ -1248,6 +1256,7 @@ register3d("openseas", async function (kernel, content) {
     fireBroadside(side, [{ n: selected, d2 }]);                                                               // volley the SELECTED ship only
   }
   function enemyFire(n, dt) {
+    if (n.pvp) return;   // arena ships never use sandbox AI fire
     if (!n.alive || !n.hostile) return;
     if (mode !== "sail") return;                                     // HARD ASHORE GUARANTEE: no fire while you're on land (reload doesn't even tick)
     n.reloadT -= dt;
@@ -1266,6 +1275,7 @@ register3d("openseas", async function (kernel, content) {
     }
   }
   function sinkNPC(n) {
+    if (n.pvp) { if (pvp.hooks && pvp.hooks.pvpEntrySunk) pvp.hooks.pvpEntrySunk(n); return; }   // authority for arena ships lives on the net module
     n.alive = false; n.hp = 0; n.sinkT = 0;
     burst(n.x, n.z, true, false); sinkSplash(n.x, n.z, (n.level || 1) >= 4); sfxAt("sink", n.x, n.z, 1);
     if (selected === n) deselect();
@@ -1292,13 +1302,14 @@ register3d("openseas", async function (kernel, content) {
       const pv = _shipVel(player), nv = _shipVel(n), closing = Math.abs((pv.x - nv.x) * ux + (pv.z - nv.z) * uz) + 5;
       const base = RAM_BASE * (0.5 + Math.min(1.7, closing / 26)), hull = (upg.hull || 0);
       const nRes = 1 + (n.level || 1) * 0.13, nRam = 1 + (n.level || 1) * 0.11;   // higher-level ships = TOUGHER hull + ram HARDER (they carry upgrades)
-      n.hp -= Math.round(base * (1 + hull * 0.6) / nRes); n.hostile = true; damageFlash(n);   // your reinforced bow hits harder; their tougher hull takes less
+      if (n.pvp) { damageFlash(n); if (pvp.hooks && pvp.hooks.localRam) pvp.hooks.localRam(n, Math.round(base * (1 + hull * 0.6) / nRes)); }   // arena: route ram damage to the owner
+      else { n.hp -= Math.round(base * (1 + hull * 0.6) / nRes); n.hostile = true; damageFlash(n); }   // your reinforced bow hits harder; their tougher hull takes less
       player.hp -= Math.round(base * nRam / (1 + hull * 0.5)); damageFlash(player);            // a bigger enemy rams YOU harder; your hull upgrade absorbs it
       player.speed = player.speed > 2 ? -5 : player.speed;                        // SOLID impact — a forward ram bounces you back; you must reverse to peel off
       n.speed *= 0.4;
       burst((player.x + n.x) / 2, (player.z + n.z) / 2, true, false); sfxAt("hit", n.x, n.z, 0.9); addShake(1.0);
       player.collCD = n.collCD = RAM_CD;
-      if (n.hp <= 0) { banner("💥 Rammed her under!"); if (selected === n) deselect(); sinkNPC(n); }
+      if (!n.pvp && n.hp <= 0) { banner("💥 Rammed her under!"); if (selected === n) deselect(); sinkNPC(n); }
       if (player.hp <= 0) { sinkPlayer(); return; }
     }
     for (let i = 0; i < npcs.length; i++) { const a = npcs[i]; if (!a.alive || !a.mesh.visible) continue;   // ship <-> ship (near only)
@@ -1306,6 +1317,7 @@ register3d("openseas", async function (kernel, content) {
         const dx = b.x - a.x, dz = b.z - a.z, d2 = dx * dx + dz * dz; if (d2 >= DR2 || d2 < 1) continue;
         const d = Math.sqrt(d2), ux = dx / d, uz = dz / d, push = (DR - d) * 0.5;
         a.x -= ux * push; a.z -= uz * push; b.x += ux * push; b.z += uz * push;
+        if (a.pvp || b.pvp) continue;   // arena ships: push-apart only — hp is owned remotely
         if ((a.collCD || 0) > 0 || (b.collCD || 0) > 0) continue;
         const av = _shipVel(a), bv = _shipVel(b), closing = Math.abs((av.x - bv.x) * ux + (av.z - bv.z) * uz) + 4;
         const dmg = RAM_BASE * 0.45 * (0.5 + Math.min(1.5, closing / 26));
@@ -1324,6 +1336,7 @@ register3d("openseas", async function (kernel, content) {
     n.mesh.visible = true; n.mesh.rotation.z = 0; n.mesh.position.set(x, 0, z);   // (scale is baked into the pivot — leave it)
   }
   function sinkPlayer() {
+    if (pvp.active) { if (pvp.hooks && pvp.hooks.meSunk) pvp.hooks.meSunk(); return; }   // arena: spectate + match logic, no harbor respawn
     playSfx("sink", 1, 0.9);
     banner(`💀 Your ship was sunk! Back to ${TOWN_NAME}.`);
     if (mode === "ashore") leaveIsland();
@@ -2059,11 +2072,13 @@ register3d("openseas", async function (kernel, content) {
       <div style="font:900 clamp(34px,7vw,64px) Georgia,serif;letter-spacing:2px;background:linear-gradient(#fff2cf,#f1c368,#b9822c);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 3px 22px rgba(0,0,0,.5)">PIRATE'S COVE</div>
       <div style="margin-top:8px;font-size:clamp(13px,2.3vw,19px);color:#bfe0ef;letter-spacing:4px;opacity:.9">☠ SAIL &nbsp;·&nbsp; PLUNDER &nbsp;·&nbsp; RECRUIT ☠</div>
       <button id="pc-play" style="margin-top:28px;font:800 20px 'Segoe UI';padding:14px 48px;border-radius:12px;cursor:pointer;border:1px solid #ffe08a;background:linear-gradient(#ffe9a8,#f0b64e);color:#3a2408;box-shadow:0 6px 26px rgba(0,0,0,.5),inset 0 1px 0 #fff6d8">▶ Set Sail</button>
+      <button id="pc-arena" style="margin-top:12px;font:800 16px 'Segoe UI';padding:11px 40px;border-radius:12px;cursor:pointer;border:1px solid #7fd7ff;background:linear-gradient(#bfe9ff,#4f9fd0);color:#082438;box-shadow:0 6px 26px rgba(0,0,0,.5),inset 0 1px 0 #eaf8ff">⚔ Cove Arena — PVP</button>
       <div style="margin-top:24px;font-size:12.5px;color:#9fbdcf;line-height:1.8;opacity:.85">
         <b>W/S</b> sail &nbsp; <b>A/D</b> steer &nbsp; <b>LEFT-CLICK</b> target a ship &nbsp; <b>SPACE</b> fire &nbsp; <b>E</b> dock &nbsp; <b>right-drag</b> look<br>
         Dock islands to explore on foot · dock <b style="color:#ffd36a">Tortuga</b> to upgrade &amp; hire crew</div>`;
     (kernel.parent || document.body).appendChild(el);
     el.querySelector("#pc-play").addEventListener("click", startGame);
+    el.querySelector("#pc-arena").addEventListener("click", () => { startGame(); (window.__PC_ARENA__ && window.__PC_ARENA__.openMenu) ? window.__PC_ARENA__.openMenu() : banner("⚠ Arena module still loading — try again in a second"); });
     _titleEl = el;
   }
   function startGame() { if (gameStarted) return; gameStarted = true; if (_titleEl) _titleEl.style.display = "none"; resumeAudio(); banner("⚓ Fair winds, Captain!"); }
@@ -2164,6 +2179,7 @@ register3d("openseas", async function (kernel, content) {
     for (let i = 0, k = Math.min(ENGAGE_CAP, _engageScan.length); i < k; i++) _engageScan[i].n.engaged = true;   // nearest few only
   }
   function stepNPC(n, dt) {
+    if (n.pvp) return;   // arena ships: net module owns movement
     if (n.flashT > 0) stepFlash(n, dt);               // decay the on-hit damage-flash
     if (!n.alive) {                                   // sinking -> heel over + go down, then respawn in-belt
       n.sinkT += dt;
@@ -2267,7 +2283,7 @@ register3d("openseas", async function (kernel, content) {
   kernel.onUpdate((dt) => {
     water.material.uniforms["time"].value += dt * 0.6;
     ashoreFill.intensity += ((mode === "ashore" ? 1.55 : 0) - ashoreFill.intensity) * Math.min(1, dt * 3);   // brighten on foot so characters pop, dark at sea
-    stepNight(dt);                                                    // day<->night palette tween (renders even while paused, like the fill above)
+    if (!pvp.active) stepNight(dt);                                   // day<->night palette tween (frozen during arena matches) (renders even while paused, like the fill above)
     _shadowAcc += dt; if (_shadowAcc > 0.33) { _shadowAcc = 0; kernel.renderer.shadowMap.needsUpdate = true; }   // on-demand shadows (see setup)
     if (!paused) {   // ⏸ PAUSE freezes the ENTIRE sim; the still scene + camera + HUD below keep rendering behind the menu
     if (mode === "sail") { player.reloadTP -= dt; player.reloadTS -= dt; stepPlayer(dt); } else { stepHero(dt); stepCrew(dt); stepFoot(dt); updateOverlay(dt); }
@@ -2277,8 +2293,9 @@ register3d("openseas", async function (kernel, content) {
     for (const n of npcs) { stepNPC(n, dt); enemyFire(n, dt);          // ships wander + circle + shoot back
       if (n.alive && n.mesh.visible && n.speed > 10) { const ddx = n.x - player.x, ddz = n.z - player.z; if (ddx * ddx + ddz * ddz < 520 * 520) { n.wakeT = (n.wakeT || 0) - dt; if (n.wakeT <= 0) { n.wakeT = 0.22; shipWake(n.x, n.z, n.yaw, 2.6); } } } }   // foam behind TRULY-NEAR moving ships only (keeps the pool for the player)
     stepCollisions(dt);                                             // ship-on-ship RAMMING: hull collisions damage both (upgrade-scaled)
-    stepBoss(dt);                                                    // Dreadmaw rise/hunt/flee + reap sunk bosses (AFTER the npc loop so splicing npcs[] is safe)
-    stepStorm(dt);                                                   // squall onset/pass + rain + lightning (the intensity RAMP + palette live in stepNight/applyEnv, pre-!paused)
+    if (pvp.active && pvp.hooks && pvp.hooks.step) pvp.hooks.step(dt);   // Cove Arena: net sync + bots + bounds + win checks
+    if (!pvp.active) stepBoss(dt);                                                    // Dreadmaw rise/hunt/flee + reap sunk bosses (AFTER the npc loop so splicing npcs[] is safe)
+    if (!pvp.active) stepStorm(dt);                                  // squall onset/pass + rain + lightning (the intensity RAMP + palette live in stepNight/applyEnv, pre-!paused)
     updateShots(dt); updateFx(dt); updateWakes(dt); updateDebris(dt); updateGunsmoke(dt);  // cannonballs + flashes + wakes + sink debris + gunsmoke
     updateMusicState(dt);                                             // crossfade explore <-> battle music by combat state
     // cull far islands (their terrain + props) — fog hides them anyway; keeps the big scene cheap.
@@ -2310,6 +2327,26 @@ register3d("openseas", async function (kernel, content) {
   });
   drawHUD();
   buildTitle(); buildMinimap();                    // title overlay (up until "Set Sail") + corner radar
+
+  // ── Cove Arena bridge: everything covenet.js needs, read-mostly. ──
+  if (typeof window !== "undefined") {
+    window.__PC_ARENA__ = Object.assign(window.__PC_ARENA__ || {}, {
+      pvp, THREE, scene,
+      get player() { return player; },
+      get npcs() { return npcs; },
+      get islandsXZR() { return islands.map((i) => ({ x: i.x, z: i.z, r: i.r })); },
+      get mode() { return mode; },
+      get gameStarted() { return gameStarted; },
+      get SEA() { return SEA; },
+      get FIRE_RANGE() { return FIRE_RANGE; },
+      townPos, makeShip, faceYaw, fwd, relBearing, banner, damageFlash, addShake,
+      burst, muzzle, sinkSplash, sfxAt, playSfx, rollShot, fireBall, clampSea,
+      startGame, sinkPlayer,
+      hideSandboxShips() { for (const n of npcs) { if (!n.pvp) { n._stashAlive = n.alive; n.alive = false; if (n.mesh) n.mesh.visible = false; } } },
+      restoreSandboxShips() { for (const n of npcs) { if (!n.pvp) { if (n._stashAlive) n.alive = true; delete n._stashAlive; if (n.mesh) n.mesh.visible = true; } } },
+      removePvpEntries() { for (let i = npcs.length - 1; i >= 0; i--) { const n = npcs[i]; if (n.pvp) { if (n.mesh) { scene.remove(n.mesh); n.mesh.traverse((o) => { if (o.isMesh) { o.geometry && o.geometry.dispose(); (Array.isArray(o.material) ? o.material : [o.material]).forEach((mt) => mt && mt.dispose && mt.dispose()); } }); } npcs.splice(i, 1); } } },
+    });
+  }
 
   // Headless-test / debug hook.
   if (typeof window !== "undefined") {
