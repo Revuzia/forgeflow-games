@@ -1,5 +1,17 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v1.5.1 — 2026-07-13 (showcase weapon grips)
+- BARBARIAN greatblade now hangs DOWN at his side (rest [0.3,-0.9,0.2]) —
+  the calm-idle arm is already lowered, so the previous upward rest ran the
+  blade straight up across his face. Face clear, arms uncrossed.
+- ARCHER bow rolled π/2 to FACE FORWARD (was edge-on / pointing left).
+- MAGE staff diagnosed: baked staff is weighted 97% to a single bone
+  (LeftForeArm) — it is strapped to her forearm, not gripped in her hand,
+  so it follows wherever that arm goes. Cannot be moved into her hand
+  without a new mesh. Empty-handed T-pose source confirmed to exist
+  (dungeon-forge/assets/chars/_tpose_src/sorceress_tpose.jpg) → regen is the
+  real fix (owner-gated, see BUILD_STATUS).
+
 ## v1.5 — 2026-07-13 (Meshy library animations, owner-approved re-rig ~128cr)
 - ALL FOUR HEROES play proper Meshy animation-library clips: calm Idle_02
   stances (the arms-out A-pose idles are gone for real), armed combat walk
