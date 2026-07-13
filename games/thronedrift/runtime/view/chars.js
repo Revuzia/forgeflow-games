@@ -201,7 +201,68 @@ export class Actor {
     return a.getClip().duration / timeScale;
   }
 
-  update(dt) { this.mixer.update(dt); }
+  update(dt) { this.mixer.update(dt); if (this.hasBowRig) this.updateBowRig(); }
+
+  // ---- two-handed bow rig: a live string + nocked arrow spanning the bow
+  //      tips and the DRAW hand, so archery clips read as a real bow draw ----
+  attachBowRig(holder) {
+    if (!holder) return;
+    this._bowHolder = holder;
+    const mesh = holder.children[0];
+    // tip markers on the bow (mesh-local; calibrated to the limb ends)
+    this._bowTop = new THREE.Object3D(); this._bowTop.position.y = 1.12;
+    this._bowBot = new THREE.Object3D(); this._bowBot.position.y = 0.08;
+    mesh.add(this._bowTop, this._bowBot);
+    this._drawBone = this._findBone("Right", /Hand/) || this._findBone("Right", /hand|wrist/i);
+    const strMat = new THREE.MeshBasicMaterial({ color: 0xeadfbe });
+    this._bowSeg = [
+      new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 1, 5), strMat),
+      new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 1, 5), strMat),
+    ];
+    this._bowArrow = makeArrow(0xffc060);
+    this.root.add(this._bowSeg[0], this._bowSeg[1], this._bowArrow);
+    this.hasBowRig = true;
+  }
+
+  updateBowRig() {
+    if (!this._drawBone) return;
+    this.root.updateMatrixWorld(true);
+    // STABILIZE the bow: keep it vertical (+Y up) and yawed to the character's
+    // facing, so it stops tumbling with every hand-animation frame. The hand
+    // still provides the grip POSITION; we only override its rotation.
+    if (this._bowHolder) {
+      this.root.getWorldQuaternion(_bq1);
+      _be.setFromQuaternion(_bq1, "YXZ");
+      _be.set(0, _be.y + Math.PI, 0);   // vertical bow, arc facing forward
+      _bq2.setFromEuler(_be);
+      const hb = this._bowHolder.parent;
+      hb.getWorldQuaternion(_bq3);
+      this._bowHolder.quaternion.copy(_bq3.invert().multiply(_bq2));
+      this.root.updateMatrixWorld(true);
+    }
+    const top = this.root.worldToLocal(this._bowTop.getWorldPosition(_bv1));
+    const bot = this.root.worldToLocal(this._bowBot.getWorldPosition(_bv2));
+    const draw = this.root.worldToLocal(this._drawBone.getWorldPosition(_bv3));
+    this._stretchSeg(this._bowSeg[0], top, draw);
+    this._stretchSeg(this._bowSeg[1], draw, bot);
+    // nocked arrow rides the draw hand, pointing FORWARD (character facing) —
+    // straight through the bow grip toward the target, not at the bow center
+    this._bowArrow.position.copy(draw);
+    _bv5.set(0, 0, 1).applyQuaternion(_bq1);   // world forward (from stabilize step)
+    this.root.getWorldQuaternion(_bq2);
+    _bv5.applyQuaternion(_bq2.invert());        // → root-local forward
+    this._bowArrow.quaternion.setFromUnitVectors(_bz, _bv5.normalize());
+    // hide the string/arrow when face-down (death) so it doesn't float
+    const show = this.model.visible;
+    this._bowSeg[0].visible = this._bowSeg[1].visible = this._bowArrow.visible = show;
+  }
+
+  _stretchSeg(cyl, a, b) {
+    _bv6.copy(a).add(b).multiplyScalar(0.5); cyl.position.copy(_bv6);
+    _bv7.copy(b).sub(a); const len = Math.max(0.001, _bv7.length());
+    cyl.scale.set(1, len, 1);
+    cyl.quaternion.setFromUnitVectors(_by, _bv7.divideScalar(len));
+  }
 
   // ---- move-and-shoot layering ----------------------------------------
   /** build lower-body loco variants + upper-body attack variants by track
@@ -357,6 +418,11 @@ export class Actor {
 const _gq = new THREE.Quaternion(), _gq2 = new THREE.Quaternion();
 const _gv = new THREE.Vector3(), _gy = new THREE.Vector3(0, 1, 0);
 const _swingAxis = new THREE.Vector3();
+const _bv1 = new THREE.Vector3(), _bv2 = new THREE.Vector3(), _bv3 = new THREE.Vector3();
+const _bv4 = new THREE.Vector3(), _bv5 = new THREE.Vector3(), _bv6 = new THREE.Vector3(), _bv7 = new THREE.Vector3();
+const _by = new THREE.Vector3(0, 1, 0), _bz = new THREE.Vector3(0, 0, 1);
+const _bq1 = new THREE.Quaternion(), _bq2 = new THREE.Quaternion(), _bq3 = new THREE.Quaternion();
+const _be = new THREE.Euler();
 const _rp1 = new THREE.Vector3(), _rp2 = new THREE.Vector3(), _rt = new THREE.Vector3();
 const _rq1 = new THREE.Quaternion(), _rq2 = new THREE.Quaternion(), _rq3 = new THREE.Quaternion();
 

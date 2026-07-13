@@ -88,9 +88,12 @@ export class Champion {
       actor.attachWeapon(makeSword(), "Right", { gripFrac: 0.14, palm: 0.12, rest: [0.15, 0.62, 0.77] });
       actor.attachShield(makeShield());
     } else if (model === "rogue") {
-      const bow = g.propLib.bow ? normalizeShaftProp(g.propLib.bow, 1.2) : makeBow();
-      // roll π/2 turns the bow's curve to FACE FORWARD (was edge-on/left — owner)
-      actor.attachWeapon(bow, "Left", { gripFrac: 0.5, palm: 0.12, roll: Math.PI / 2, rest: [0.05, 0.98, 0.15] });
+      const bow = g.propLib.bow ? normalizeShaftProp(g.propLib.bow, 1.25) : makeBow();
+      // bow held vertical in the LEFT hand; a live string + nocked arrow (bow
+      // rig) spans the limbs to the DRAW hand, so archery clips read as a
+      // two-handed bow draw instead of a one-hand carry (owner request)
+      const holder = actor.attachWeapon(bow, "Left", { gripFrac: 0.5, palm: 0.1, roll: 0, rest: [0.12, 0.95, 0.1] });
+      actor.attachBowRig(holder);
     } else if (model === "sorceress") {
       // ORIGINAL Meshy mesh restored (owner 2026-07-13): the baked staff
       // stays as authored — every local surgery graft read worse. No
