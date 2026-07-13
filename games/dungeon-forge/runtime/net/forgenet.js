@@ -41,6 +41,15 @@ export class Session {
     return ids[0] === this.net.id;
   }
   roomCode() { return this.net.room; }
+  /** Warn once when a peer runs a different build — a stale cached client
+   *  silently rejects op kinds it doesn't know (props/NPCs/stairs vanish for
+   *  them), which looks like "my friend can't see what I place". */
+  _checkVersion(remoteV, who) {
+    if (remoteV === undefined || remoteV === V || this._verWarned) return;
+    this._verWarned = true;
+    this.g.hud.toast("⚠ " + (who || "A teammate") + " is on a different game version — EVERYONE hard-refresh (Ctrl+F5) or builds won't sync fully", "warn");
+  }
+
   roster() {
     const list = [{ id: this.net.id, name: this.me.name, skin: this.me.skin }];
     for (const [pid, p] of this.peers) list.push({ id: pid, name: p.name, skin: p.skin });
@@ -56,13 +65,13 @@ export class Session {
     this.phase = phase;
     this.dungeon = dungeon;
     await this.net.joinRoom(code, true);
-    this.send("hello", { name: this.me.name, skin: this.me.skin });
+    this.send("hello", { name: this.me.name, skin: this.me.skin, v: V });
     this._updateRoomChip();
   }
 
   async join(code) {
     await this.net.joinRoom(code, null);
-    this.send("hello", { name: this.me.name, skin: this.me.skin });
+    this.send("hello", { name: this.me.name, skin: this.me.skin, v: V });
     this.g.hud.toast("Joining room " + code + "…", "info");
     // wait for a keyframe from the host
     const ok = await new Promise((res) => {
@@ -221,6 +230,7 @@ export class Session {
         this.g.hud.toast("👋 " + d.name + " joined the room", "info");
         this.g.audio.sfx("confirm");
       }
+      this._checkVersion(d.v, d.name);
       this._updateRoomChip();
       if (this.isHost()) {
         this._sendKeyframe();

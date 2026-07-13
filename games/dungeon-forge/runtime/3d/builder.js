@@ -47,6 +47,10 @@ export const FLOOR_MODES = [
   { id: "floor", icon: "⬜", label: "Floor" },
   { id: "lava", icon: "🌋", label: "Lava" },
   { id: "water", icon: "💧", label: "Water" },
+  // sculpting is back (owner: "adds texture to the game") — now that the sim
+  // walks the SAME rendered slope (surfaceHeightAt), collision + objects work
+  { id: "raise", icon: "⛰", label: "Raise" },
+  { id: "lower", icon: "🕳", label: "Lower" },
 ];
 
 // The Walls tool's sub-modes: four wall styles, a door ON the line, and erase.
@@ -289,7 +293,8 @@ export class Builder {
       const gg = new THREE.Group();
       const mid = D.edgeMid(w.x, w.z, w.s);
       gg.position.set(mid.x, 0, mid.z);
-      gg.rotation.y = w.s === 0 ? -Math.PI / 2 : 0;   // passage crosses the line
+      // door always aligns with its wall (s=0 edge runs along X, like makeDoor)
+      gg.rotation.y = w.s === 0 ? 0 : Math.PI / 2;
       gg.add(makeDoor(w.dtype || "wood", { flip: w.flip }));
       if (w.locked) gg.add(this._lockIcon());
       gg.userData = { id: w.id, f, kind: "edgedoor", ex: w.x, ez: w.z, es: w.s };
@@ -301,7 +306,7 @@ export class Builder {
     for (const o of fl.objects) {
       const mesh = this._objMesh(o, f);
       if (mesh) {
-        mesh.position.y += D.cellHeight(this.d, f, o.x, o.z);
+        mesh.position.y += D.surfaceHeightAt(this.d, f, o.x * CELL + CELL / 2, o.z * CELL + CELL / 2); // ON the rendered ground
         Object.assign(mesh.userData, { id: o.id, f, kind: o.kind });
         group.add(mesh);
         this.objMeshes.set(o.id, mesh);
@@ -312,7 +317,7 @@ export class Builder {
     for (const L of D.stairLinks(this.d)) {
       if (L.to.f !== f) continue;
       const lm = landingMarker(L, CELL);
-      lm.position.set(L.to.x * CELL + CELL / 2, D.cellHeight(this.d, f, L.to.x, L.to.z) + 0.02, L.to.z * CELL + CELL / 2);
+      lm.position.set(L.to.x * CELL + CELL / 2, D.surfaceHeightAt(this.d, f, L.to.x * CELL + CELL / 2, L.to.z * CELL + CELL / 2) + 0.02, L.to.z * CELL + CELL / 2);
       group.add(lm);
     }
     return { group, surf, wInst };
@@ -354,6 +359,11 @@ export class Builder {
       }
       case "chest": add(this.props.chest || this.props.chestShared, 1.5); break;
       case "key": {
+        // a key CARRIED by an enemy (or hidden in a chest) renders nothing of its
+        // own — the carrier's 🗝 badge is the only marker; no 3D key on the model
+        // (owner: "no 3d key in dungeon builder, but yes on drop after defeating")
+        const carrier = D.objsAt(this.d, f, o.x, o.z).some((c) => c.kind === "enemy" || c.kind === "chest");
+        if (carrier) break;
         const k = add(this.items.key, null, 1.0);
         if (k) { k.position.y = 0.8; grp.userData.spin = k; }
         const glow = new THREE.PointLight(0xffd769, 4, 5); glow.position.y = 1.2; grp.add(glow);
@@ -675,7 +685,7 @@ export class Builder {
   }
 
   _onDown(e) {
-    if (e.button === 2 || e.button === 1) { this._orbit = { x: e.clientX, y: e.clientY, pan: e.button === 1 || e.shiftKey }; return; }
+    if (e.button === 2 || e.button === 1) { this._orbit = { x: e.clientX, y: e.clientY, pan: e.button === 1 || e.shiftKey, btn: e.button, moved: false }; return; }
     const cell = this._pointerCell(e);
     if (!cell) return;
     if (this.tool === "select") {
@@ -712,6 +722,12 @@ export class Builder {
     if (this.tool === "floor" || this.tool === "room") {
       const mode = this.toolOpt.floorMode || "floor";
       this._pushUndo();
+      if (mode === "raise" || mode === "lower") {
+        this._noUndo = true;
+        this.drag = { paint: true, hmode: mode, done: new Set() };
+        this._paint(cell);
+        return;
+      }
       const tex = mode === "floor" ? (this.toolOpt.floorTex || "stone") : "stone";
       this.drag = { room: cell, ct: FLOOR_CT[mode] || 1, tex };
       return;
@@ -731,6 +747,7 @@ export class Builder {
     if (this._orbit) {
       const dx = e.clientX - this._orbit.x, dy = e.clientY - this._orbit.y;
       this._orbit.x = e.clientX; this._orbit.y = e.clientY;
+      if (Math.abs(dx) + Math.abs(dy) > 3) this._orbit.moved = true;  // drag, not a click
       if (this._orbit.pan) {
         const s = this.camDist / 500;
         const cos = Math.cos(this.camYaw), sin = Math.sin(this.camYaw);
@@ -745,6 +762,11 @@ export class Builder {
     const cell = this._pointerCell(e);
     this.hover = cell;
     this.hoverEdge = this.tool === "walls" ? this._pointerEdge(cell) : null;
+    // mid-drag the highlight snaps to the locked run line (matches placement)
+    if (cell && this.hoverEdge && this.drag && this.drag.walls && this.drag.run) {
+      const run = this.drag.run;
+      this.hoverEdge = run.s === 0 ? { x: cell.x, z: run.z, s: 0 } : { x: run.x, z: cell.z, s: 1 };
+    }
     if (cell && this.drag && this.drag.walls) this._placeWallAt(cell);
     if (cell && this.drag && this.drag.paint) this._paint(cell);
     // drag a selected object onto a new cell (must land on existing floor)
@@ -762,7 +784,13 @@ export class Builder {
   }
 
   _onUp(e) {
-    if (this._orbit) { this._orbit = null; return; }
+    if (this._orbit) {
+      const ob = this._orbit; this._orbit = null;
+      // RIGHT-CLICK (no drag) = rotate (owner request): the selected/hovered
+      // object in Select, an edge door's hinge, or the placement ghost.
+      if (ob.btn === 2 && !ob.moved) this._rightClickRotate(e);
+      return;
+    }
     if (this._moveDrag) {
       // if the object never actually moved, drop the snapshot we pushed on down
       if (!this._moveDrag.moved && this._undo.length) this._undo.pop();
@@ -799,10 +827,20 @@ export class Builder {
   }
   _clearRoomPreview() { if (this.roomPreview) this.roomPreview.visible = false; }
 
-  /** Walls tool: apply the current wall mode to the edge nearest the pointer. */
+  /** Walls tool: apply the current wall mode to the edge nearest the pointer.
+   *  A held drag locks to the FIRST edge's line (same s, same fixed coordinate)
+   *  and projects the pointer onto it, so runs come out straight even when the
+   *  mouse wanders a tile off (owner: "I want to go in a straight line"). */
   _placeWallAt(cell) {
-    const e = this._pointerEdge(cell);
+    let e = this._pointerEdge(cell);
     if (!e || !this.drag || !this.drag.walls) return;
+    const run = this.drag.run;
+    if (!run) this.drag.run = { s: e.s, x: e.x, z: e.z };  // first edge anchors the line
+    else {
+      // project onto the run line: keep the anchor's orientation + fixed coord,
+      // take only the along-the-line coordinate from the pointer
+      e = run.s === 0 ? { x: cell.x, z: run.z, s: 0 } : { x: run.x, z: cell.z, s: 1 };
+    }
     const key = D.wk(e.x, e.z, e.s);
     if (this.drag.lastKey === key) return;                 // one op per edge per drag
     this.drag.lastKey = key;
@@ -823,6 +861,15 @@ export class Builder {
       if (objs.length) { this.applyLocal({ t: "obj-", id: objs[objs.length - 1].id }); return; }
       if (!D.hasCell(this.d, this.floor, cell.x, cell.z)) return;
       this.applyLocal({ t: "cell-", f: this.floor, x: cell.x, z: cell.z });
+      return;
+    }
+    if (this.drag && this.drag.hmode) {           // Raise/Lower sculpting
+      const k = cell.x + "," + cell.z;
+      if (this.drag.done.has(k)) return;           // one step per cell per drag
+      if (!D.hasCell(this.d, this.floor, cell.x, cell.z)) return;
+      this.drag.done.add(k);
+      const res = this.applyLocal({ t: this.drag.hmode, f: this.floor, x: cell.x, z: cell.z });
+      if (res.ok) this.g.audio.sfx("place");
       return;
     }
     const ct = PAINT_CT[this.tool] || 1;
@@ -892,7 +939,10 @@ export class Builder {
     const stairsTouch = this._touchesStairs(op);
     const res = D.applyOp(this.d, op);
     if (res.ok) {
-      this._broadcast(op);
+      // broadcast the ASSIGNED id with obj+ ops — otherwise every peer mints its
+      // own id and interleaved edits make ids diverge across clients (breaking
+      // any later objEdit/obj- on the same object)
+      this._broadcast(op.t === "obj+" && res.id && !op.o.id ? { ...op, o: { ...op.o, id: res.id } } : op);
       this.rebuildFloor(op.f != null ? op.f : this.floor);
       // floor+/-/below reindex all floors; stairs edits touch two floors.
       if (op.t === "floor+" || op.t === "floor-" || op.t === "floor-below" || stairsTouch) this.rebuildAll();
@@ -914,6 +964,15 @@ export class Builder {
       if (op.t === "floor-below") this.floor = Math.min(this.d.floors.length - 1, this.floor + 1);
       this.rebuildAll();
       this.g.hud.refreshValidate(this);
+    } else {
+      // NEVER drop a teammate's edit silently — this is how "my friend can't
+      // see what I place" hides. Most common cause: a stale cached build that
+      // doesn't know the op kind. Tell the user how to fix it, once.
+      console.warn("[co-build] remote op rejected:", op.t, res.err, op);
+      if (!this._remoteOpWarned) {
+        this._remoteOpWarned = true;
+        this.g.hud.toast("⚠ A teammate's edit couldn't apply (" + res.err + ") — hard-refresh (Ctrl+F5) to resync versions", "warn");
+      }
     }
     return res;
   }
@@ -940,6 +999,43 @@ export class Builder {
     if (!this.sel) return;
     const hit = D.objById(this.d, this.sel);
     if (hit) this._editSel({ rot: ((hit.obj.rot || 0) + 1) % 4 });
+  }
+  /** Enemy panel: toggle whether this enemy carries a 🗝 key (drops on defeat). */
+  toggleEnemyKey() {
+    if (!this.sel) return;
+    const hit = D.objById(this.d, this.sel);
+    if (!hit || hit.obj.kind !== "enemy") return;
+    this._pushUndo();
+    const key = D.objsAt(this.d, hit.f, hit.obj.x, hit.obj.z).find((o) => o.kind === "key");
+    if (key) { this.applyLocal({ t: "obj-", id: key.id }); this.g.hud.toast("Key removed from this enemy", "info"); }
+    else { this.applyLocal({ t: "obj+", f: hit.f, o: { kind: "key", x: hit.obj.x, z: hit.obj.z } }); this.g.hud.toast("🗝 This enemy now carries a key — it drops when defeated", "info"); }
+    this.g.audio.sfx("ui");
+    this.g.hud.showSelection(this, D.objById(this.d, this.sel));
+  }
+  /** Right-click (not drag) rotates: object under the cursor in Select, an edge
+   *  door's hinge, or the placement ghost in any placement tool. */
+  _rightClickRotate(e) {
+    if (this.tool === "select") {
+      const id = this._pickObject(e);
+      if (!id) return;
+      if (!D.objById(this.d, id)) {                 // edge door → flip its hinge
+        const mesh = this.objMeshes.get(id);
+        const ud = mesh && mesh.userData;
+        if (ud && ud.kind === "edgedoor") {
+          const w = this._edgeWall(ud);
+          if (w) { this.selEdge = ud; this.g.audio.sfx("ui"); this.edgeDoorEdit({ flip: !w.flip }); }
+        }
+        return;
+      }
+      this.select(id);
+      this.g.audio.sfx("ui");
+      this.rotateSelected();
+      return;
+    }
+    // placement tools: rotate the ghost, exactly like R
+    this.rot = (this.rot + 1) % 4;
+    this.g.audio.sfx("ui");
+    if (this.g.hud.refreshBuilder) this.g.hud.refreshBuilder(this);
   }
   deleteSelected() {
     if (!this.sel) return;

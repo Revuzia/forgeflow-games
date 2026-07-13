@@ -344,6 +344,42 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.10.0 — 2026-07-12 (owner batch: doors/walls/co-build/exit gate/terrain/music)
+- **Doors now always align to their wall** — they rendered 90° sideways (the old
+  kit-gate rotation mapping survived into the new procedural doors). Right-click
+  or the panel's Rotate flips the hinge; Move relocates to another wall line.
+- **Right-click = rotate** everywhere in the builder (placement ghost, selected
+  object, edge-door hinge). RMB-drag still orbits.
+- **Wall drags lock to a straight line** — the first edge anchors the run and the
+  pointer projects onto it, so a wandering mouse can't box in side tiles.
+- **Co-build hardening** (friend-couldn't-see-my-props report):
+  - obj+ ops now broadcast their assigned id → ids converge across peers
+    (interleaved edits no longer corrupt later edits/deletes)
+  - version handshake: peers on a stale cached build get a loud "hard-refresh
+    (Ctrl+F5)" warning on join — a stale client silently REJECTS op kinds it
+    doesn't know (that's how props/NPCs/stairs vanished for your friend)
+  - a teammate's edit that fails to apply now surfaces a toast + console warn
+    instead of disappearing silently
+  - verified end-to-end through a live relay room: chest/trap/NPC/enemy/decor/
+    stairs/walls/cells all replicate, ids identical on both sides
+- **Exit portal is sealed until every enemy is dead.** The HUD lists remaining
+  enemy kinds + counts — bosses stay hidden ("+?" … "something stirs").
+  Objective text + sealed-portal toast included.
+- **Enemy-carried keys**: no more 3D key sitting on the enemy — the builder shows
+  only the 🗝 badge, the enemy panel gains "🗝 Give key (drops on defeat)", and
+  the key appears in the world only when dropped.
+- **Rolling terrain fixed at the root**: the sim now walks the SAME smooth
+  corner-averaged surface the renderer draws (`surfaceHeightAt`), so players ride
+  visible slopes and chests/objects sit exactly ON the ground (they used to sink
+  or float where render and sim disagreed). **Raise ⛰ / Lower 🕳 sculpting is
+  back** in the Floor palette, one step per cell per drag.
+- **Builder music calmed**: build mode was wired to the intense BATTLE track;
+  it now plays the mysterious dungeon-ambience track. (Music stock is 9 tracks
+  total — a bespoke generated builder theme is a ~23-credit Stability job,
+  offered separately.)
+- Enemies on other floors no longer render (matches play-floor isolation).
+- Selftest 288 → 294 (exit gate, enemy key binding, surface heights, raise op guards).
+
 ## v1.9.7 — 2026-07-10 (distinct traps, all verified firing)
 - **Five clearly-distinct trap types** (each a different damage flavor), relabelled
   so they don't read alike:

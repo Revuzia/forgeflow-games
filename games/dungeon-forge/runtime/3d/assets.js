@@ -949,13 +949,9 @@ export function makeCellSurfaces(D, d, f, kit) {
       if (near) terrain.add(D.ck(x, z));
     }
   }
-  // corner height = average of the up-to-4 real floor cells meeting that corner
-  const cornerH = (cx, cz) => {
-    let s = 0, n = 0;
-    for (const [ox, oz] of [[cx - 1, cz - 1], [cx, cz - 1], [cx - 1, cz], [cx, cz]])
-      if (isFloorish(ox, oz)) { s += hAt(ox, oz); n++; }
-    return n ? s / n : 0;
-  };
+  // corner height comes from the SIM (D.cornerHeight) so the rendered slope and
+  // the walk/placement surface (D.surfaceHeightAt) can never disagree
+  const cornerH = (cx, cz) => D.cornerHeight(d, f, cx, cz);
 
   // flat cells (terrain mesh doesn't cover) split by surface: default → kit stone
   // tile; a chosen floor texture → a procedural textured plane laid on the tile top.

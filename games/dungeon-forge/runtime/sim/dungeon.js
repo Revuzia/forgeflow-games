@@ -50,6 +50,33 @@ export function cellHeight(d, f, x, z) {
   return h;
 }
 
+/** Corner height = average of the up-to-4 walkable cells meeting that corner —
+ *  the EXACT rule the rolling-terrain mesh uses (makeCellSurfaces), kept here so
+ *  sim and render can never disagree about where the ground is. */
+export function cornerHeight(d, f, cx, cz) {
+  const fl = d.floors[f];
+  if (!fl) return 0;
+  let s = 0, n = 0;
+  for (const [ox, oz] of [[cx - 1, cz - 1], [cx, cz - 1], [cx - 1, cz], [cx, cz]]) {
+    const t = fl.cells[ck(ox, oz)] | 0;
+    if (t === CT.FLOOR || t === CT.RAISED) { s += cellHeight(d, f, ox, oz); n++; }
+  }
+  return n ? s / n : 0;
+}
+/** Ground height at a WORLD position: bilinear over the containing cell's four
+ *  corner heights — i.e. the height of the RENDERED rolling terrain, so feet and
+ *  objects sit exactly on the visible ground (the old per-cell cellHeight made
+ *  chests sink into slopes and players ignore the visible rise). */
+export function surfaceHeightAt(d, f, wx, wz) {
+  const cx = Math.floor(wx / CELL), cz = Math.floor(wz / CELL);
+  const h = cellHeight(d, f, cx, cz);
+  const c00 = cornerHeight(d, f, cx, cz), c10 = cornerHeight(d, f, cx + 1, cz),
+        c01 = cornerHeight(d, f, cx, cz + 1), c11 = cornerHeight(d, f, cx + 1, cz + 1);
+  if (c00 === h && c10 === h && c01 === h && c11 === h) return h;   // flat — fast path
+  const fx = wx / CELL - cx, fz = wz / CELL - cz;
+  return (c00 * (1 - fx) + c10 * fx) * (1 - fz) + (c01 * (1 - fx) + c11 * fx) * fz;
+}
+
 // Object kinds and their per-kind default props. `solid` objects block walking.
 export const KINDS = {
   door:   { rotatable: true,  solid: true  }, // props: locked

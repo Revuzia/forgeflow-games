@@ -1014,10 +1014,19 @@ export function tick(st, dt, opts = {}) {
     }
     p.input.interactDown = false; p.input.potionDown = false; p.input.manaDown = false;
 
-    // exit portal
+    // exit portal — SEALED until every enemy in the dungeon is defeated
+    // (owner rule: clear the dungeon before you may leave)
     if (p.f === st.exit.f && cx === st.exit.x && cz === st.exit.z) {
-      p.escaped = true;
-      emit(st, "escape", { id: p.id, t: st.time });
+      const left = st.enemies.filter((e) => e.alive).length;
+      if (left > 0) {
+        if (!p._exitDeniedT || st.time - p._exitDeniedT > 2.5) {   // throttle the reminder
+          p._exitDeniedT = st.time;
+          emit(st, "exitSealed", { id: p.id, left });
+        }
+      } else {
+        p.escaped = true;
+        emit(st, "escape", { id: p.id, t: st.time });
+      }
     }
   }
 

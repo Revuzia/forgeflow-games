@@ -800,6 +800,54 @@ const ok = (cond, name, extra) => {
     ok(seg3 && seg3.dtype === "wood", "door: invalid dtype falls back to wood");
   }
 
+  // ── 9h. exit sealed until every enemy is defeated ────────────────
+  console.log("[exit-gate]");
+  {
+    const xd = newDungeon({ theme: "fantasy" });
+    stampRoom(xd, 0, 5, 5, 6, 6);
+    applyOp(xd, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(xd, { t: "obj+", f: 0, o: { kind: "exit", x: 9, z: 9 } });
+    applyOp(xd, { t: "obj+", f: 0, o: { kind: "enemy", x: 7, z: 5, etype: "skeleton" } });
+    applyOp(xd, { t: "obj+", f: 0, o: { kind: "key", x: 7, z: 5 } });   // carried key
+    const xr = newRun(xd, 90, [{ id: "P1" }]);
+    const xp = xr.players[0];
+    // stand on the exit with the skeleton alive → sealed
+    xp.x = c2w(9); xp.z = c2w(9);
+    for (let i = 0; i < 30; i++) tick(xr, 1 / 60);
+    const evs1 = xr.events.splice(0);
+    ok(!xp.escaped, "exit-gate: sealed while an enemy lives");
+    ok(evs1.some((e) => e.type === "exitSealed" && e.left === 1), "exit-gate: exitSealed event emitted (left=1)");
+    // kill the skeleton → its key drops → exit opens
+    const en = xr.enemies[0];
+    en.hp = 0; en.alive = false; en.droppedKey = en.key || null;
+    for (let i = 0; i < 30; i++) tick(xr, 1 / 60);
+    ok(xp.escaped, "exit-gate: opens once every enemy is dead");
+    ok(xr.enemies[0].key, "enemy-key: run bound the key to the enemy");
+  }
+
+  // ── 9i. rolling-terrain surface (sim == render ground) ──────────
+  console.log("[surface-height]");
+  {
+    const td = newDungeon({ theme: "fantasy" });
+    stampRoom(td, 0, 5, 5, 5, 5);
+    ok(D.surfaceHeightAt(td, 0, c2w(7), c2w(7)) === 0, "flat ground = 0");
+    applyOp(td, { t: "raise", f: 0, x: 7, z: 7 });
+    applyOp(td, { t: "raise", f: 0, x: 7, z: 7 });          // level 2 → cellHeight 1.1
+    ok(!applyOp(td, { t: "raise", f: 0, x: 30, z: 30 }).ok, "raise rejected off the floor");
+    const cH = D.cellHeight(td, 0, 7, 7);
+    ok(Math.abs(cH - 1.1) < 1e-9, "cellHeight = 2 steps (" + cH + ")");
+    const sMid = D.surfaceHeightAt(td, 0, c2w(7), c2w(7));
+    ok(sMid > 0.2 && sMid <= cH, "surface at the raised cell center rises (" + sMid.toFixed(2) + ") on the smooth slope");
+    // the surface is continuous: approaching the raised cell from a flat neighbor
+    // starts rising BEFORE the border (matches the rendered slope)
+    const sNear = D.surfaceHeightAt(td, 0, c2w(6) + 1.8, c2w(7));
+    const sFar = D.surfaceHeightAt(td, 0, c2w(5) + 0.2, c2w(7));
+    ok(sNear > sFar, "slope rises smoothly toward the raised cell (" + sFar.toFixed(2) + " → " + sNear.toFixed(2) + ")");
+    // corner average parity with the render rule
+    const c = D.cornerHeight(td, 0, 7, 7);
+    ok(c > 0 && c < cH, "corner height averages raised+flat neighbors (" + c.toFixed(2) + ")");
+  }
+
   // ── 10. pathfinding + LOS ───────────────────────────────────────
   console.log("[path+los]");
   const run6 = newRun(s, 6000, [{ id: "P1" }]);

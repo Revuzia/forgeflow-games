@@ -192,7 +192,10 @@ export class Escape {
       const gg = new THREE.Group();
       const mid = D.edgeMid(w.x, w.z, w.s);
       gg.position.set(mid.x, 0, mid.z);
-      gg.rotation.y = w.s === 0 ? -Math.PI / 2 : 0;   // passage crosses the line
+      // the door ALWAYS aligns with its wall: makeDoor spans local X, and an s=0
+      // edge runs along X (same mapping as the wall instances above). Rotate =
+      // hinge flip only — orientation is dictated by the wall, never freehand.
+      gg.rotation.y = w.s === 0 ? 0 : Math.PI / 2;
       const door = makeDoor(w.dtype || "wood", { flip: w.flip });
       gg.add(door);
       const lock = w.locked ? this._sprite("🔒", 1.2, 4.5) : null;
@@ -212,7 +215,7 @@ export class Escape {
     for (const o of fl.objects) {
       const mesh = this._objMesh(o, f);
       if (mesh) {
-        mesh.position.y += D.cellHeight(this.d, f, o.x, o.z); // raised platforms lift objects
+        mesh.position.y += D.surfaceHeightAt(this.d, f, o.x * CELL + CELL / 2, o.z * CELL + CELL / 2); // sit ON the rendered ground (slopes included)
         Object.assign(mesh.userData, { id: o.id, f, kind: o.kind }); // MERGE — _objMesh stashes per-kind refs (jetLight/pitLid/spikes/ventDisc)
         group.add(mesh);
         this.objMeshes.set(o.id, mesh);
@@ -225,7 +228,7 @@ export class Escape {
     for (const L of D.stairLinks(this.d)) {
       if (L.to.f !== f) continue;
       const lm = landingMarker(L, CELL);
-      lm.position.set(L.to.x * CELL + CELL / 2, D.cellHeight(this.d, f, L.to.x, L.to.z) + 0.02, L.to.z * CELL + CELL / 2);
+      lm.position.set(L.to.x * CELL + CELL / 2, D.surfaceHeightAt(this.d, f, L.to.x * CELL + CELL / 2, L.to.z * CELL + CELL / 2) + 0.02, L.to.z * CELL + CELL / 2);
       group.add(lm);
       if (lm.userData.ring) this.landingRings.push(lm.userData.ring);
     }
@@ -926,6 +929,9 @@ export class Escape {
           break;
         }
         case "denied": g.audio.sfx("error"); g.hud.toast("Locked. Find a key 🗝️", "warn"); break;
+        case "exitSealed":
+          if (ev.id === this.myId) { g.audio.sfx("error"); g.hud.toast(`🌀 The portal is sealed — ${ev.left} ${ev.left === 1 ? "enemy" : "enemies"} still alive`, "warn"); }
+          break;
         case "chest": {
           const m = this.objMeshes.get(ev.id);
           if (m && m.userData.lid) { m.userData.lid.rotation.x = -0.6; }
@@ -1205,7 +1211,9 @@ export class Escape {
       const ct = D.cellType(this.d, p.f, E.w2c(p.x), E.w2c(p.z));
       // SWIMMING: water/lava sinks the body to chest depth (not the old ankle wade)
       const liquid = ct === D.CT.WATER || ct === D.CT.LAVA;
-      const surfY = D.cellHeight(this.d, p.f, E.w2c(p.x), E.w2c(p.z)) + (liquid ? -0.85 : 0);
+      // surfaceHeightAt = the RENDERED ground (bilinear slope), so feet ride the
+      // visible rise instead of popping at cell borders
+      const surfY = D.surfaceHeightAt(this.d, p.f, p.x, p.z) + (liquid ? -0.85 : 0);
       a.surfY = a.surfY == null ? surfY : a.surfY + (surfY - a.surfY) * Math.min(1, dt * 10);
       const swimming = liquid && a.surfY < -0.4;
       a._swimT = swimming ? (a._swimT || 0) + dt : 0;

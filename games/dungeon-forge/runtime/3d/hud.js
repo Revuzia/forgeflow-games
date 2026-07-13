@@ -83,7 +83,7 @@ export class Hud {
     // floor switcher + hints
     this.bSide = el(`<div class="df-floors"></div>`);
     this.bWrap.appendChild(this.bSide);
-    this.bHint = el(`<div class="df-hint">1-0 pick tool · LMB place · drag paint · Select → drag to move · Del delete · Ctrl+Z undo · RMB orbit · MMB/Shift pan · wheel zoom · R rotate · Tab floor</div>`);
+    this.bHint = el(`<div class="df-hint">1-0 pick tool · LMB place · drag paint · Select → drag to move · Del delete · Ctrl+Z undo · RMB-drag orbit · R / right-click rotate · MMB/Shift pan · wheel zoom · Tab floor</div>`);
     this.bWrap.appendChild(this.bHint);
     this.bValid = el(`<div class="df-validchip" data-a="vchip"></div>`);
     this.bWrap.appendChild(this.bValid);
@@ -150,7 +150,10 @@ export class Hud {
       mkOpts(FLOOR_MODES.map((m) => m.id), fm,
         (id) => { const m = FLOOR_MODES.find((x) => x.id === id); return `${m.icon} ${m.label}`; },
         (id) => b.setTool("floor", { floorMode: id }));
-      sub.appendChild(el(`<span class="df-subnote">Drag to fill a rectangle${fm !== "floor" ? " with " + fm : ""}</span>`));
+      sub.appendChild(el(`<span class="df-subnote">${
+        fm === "raise" ? "Click/drag existing tiles to sculpt the ground UP one step (players walk the slope; objects sit on top)" :
+        fm === "lower" ? "Click/drag existing tiles to sink the ground one step (dig trenches + pits)" :
+        "Drag to fill a rectangle" + (fm !== "floor" ? " with " + fm : "")}</span>`));
       // Floor mode: pick the surface texture painted onto each cell (swatch picker)
       if (fm === "floor") {
         sub.appendChild(el(`<div class="df-flexbreak"></div>`));
@@ -282,7 +285,9 @@ export class Hud {
         const val = isOv ? o.stats[s.key] : def[s.key];
         return `<label class="df-stat ${isOv ? "ov" : ""}"><span>${s.label}</span><input type="number" data-stat="${s.key}" value="${val}" min="${s.min}" max="${s.max}" step="${s.step}"><small>def ${def[s.key]}</small></label>`;
       }).join("");
+      const carriesKey = D.objsAt(b.d, b.floor, o.x, o.z).some((k) => k.kind === "key");
       extra = `<select data-a="etype" class="df-diff">${Object.keys(roster).map((k) => `<option value="${k}" ${k === o.etype ? "selected" : ""}>${roster[k].label}</option>`).join("")}</select>
+        <button data-a="enemykey" class="df-btn ${carriesKey ? "accent" : ""}">${carriesKey ? "🗝 Carries a key — click to remove" : "🗝 Give key (drops on defeat)"}</button>
         <div class="df-statgrid">${rows}</div>
         ${overridden ? `<button data-a="statreset" class="df-btn tiny">↺ Reset stats to default</button>` : `<div class="df-selnote">Tweak this creature's stats — they override the defaults for this placement only.</div>`}`;
     }
@@ -310,6 +315,7 @@ export class Hud {
       };
     });
     if (q('[data-a="statreset"]')) q('[data-a="statreset"]').onclick = () => { b._editSel({ stats: null }); b.g.hud.showSelection(b, D.objById(b.d, b.sel)); };
+    if (q('[data-a="enemykey"]')) q('[data-a="enemykey"]').onclick = () => b.toggleEnemyKey();
     if (q('[data-a="ttype"]')) q('[data-a="ttype"]').onchange = (e) => b._editSel({ ttype: e.target.value });
     if (q('[data-a="ntype"]')) q('[data-a="ntype"]').onchange = (e) => { b._editSel({ ntype: e.target.value }); b.g.hud.showSelection(b, D.objById(b.d, b.sel)); };
     this.selPanel.querySelectorAll("[data-shop]").forEach((btn) => btn.onclick = () => {
@@ -389,6 +395,7 @@ export class Hud {
         </div>
       </div>
       <div class="df-topright">
+        <span class="df-chip" data-a="foes" title="Enemies remaining — the exit unseals when they're all defeated">👹</span>
         <span class="df-chip" data-a="timer">0.0s</span>
         <span class="df-chip" data-a="floorN">Floor 1</span>
         <button class="df-btn ghost" data-a="settings" title="Settings">⚙</button>
@@ -411,7 +418,8 @@ export class Hud {
     this.mapCtx = this.eWrap.querySelector('[data-a="map"]').getContext("2d");
     this.explored = new Set();
     const obj = this.eWrap.querySelector('[data-a="obj"]');
-    obj.innerHTML = "🌀 Find the exit portal" + (D.findAll(esc_.d, "door").some((h) => h.obj.locked) ? " — locked doors need 🗝️ keys" : "");
+    obj.innerHTML = (esc_.run.enemies.length ? "⚔ Defeat every enemy to unseal the 🌀 exit" : "🌀 Find the exit portal")
+      + (D.findAll(esc_.d, "door").some((h) => h.obj.locked) ? " — locked doors need 🗝️ keys" : "");
     setTimeout(() => obj.classList.add("out"), 5200);
     this._mapT = 0;
   }
@@ -492,6 +500,22 @@ export class Hud {
     const at = q('[data-a="at"]'); at.style.display = p.armorTier ? "" : "none"; at.textContent = "🛡 " + ROM[p.armorTier || 0];
     at.style.color = rHex(eq.armor) || ""; at.title = gearTip(eq.armor) || "Armor tier";
     q('[data-a="timer"]').textContent = fmtTime(esc_.run.time);
+    // remaining enemies: kinds + counts, EXCEPT bosses (their presence shows
+    // only as a mystery "+?" — players shouldn't see a boss coming)
+    const foes = q('[data-a="foes"]');
+    if (foes) {
+      const roster = D.ENEMIES[esc_.d.theme] || {};
+      const byKind = {}; let hidden = 0;
+      for (const e2 of esc_.run.enemies) {
+        if (!e2.alive) continue;
+        if (roster[e2.etype] && roster[e2.etype].boss) { hidden++; continue; }
+        byKind[e2.etype] = (byKind[e2.etype] || 0) + 1;
+      }
+      const parts = Object.keys(byKind).map((k) => (roster[k] ? roster[k].label : k) + " ×" + byKind[k]);
+      const label = parts.length ? "👹 " + parts.join(" · ") + (hidden ? " +?" : "")
+        : hidden ? "👹 …something stirs" : "✓ Cleared — exit open!";
+      if (foes.textContent !== label) { foes.textContent = label; foes.style.color = parts.length || hidden ? "" : "#7dffb0"; }
+    }
     // action hotbar — real slots with Digit1-N keys, cooldown overlays + counts
     const ab = q('[data-a="abilities"]');
     if (ab) {
