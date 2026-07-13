@@ -157,6 +157,16 @@ const CSS = `
 #hud{position:absolute;inset:0;pointer-events:none;z-index:10}
 .plate{position:absolute;left:14px;display:flex;align-items:center;gap:12px;pointer-events:auto}
 .plate.me{bottom:16px}.plate.foe{top:16px}
+/* recent-plays history (HS-style): the foe's last plays under their plate
+   (top-left), mine above my plate (bottom-left); newest sits nearest mid-screen */
+#hist-foe,#hist-me{position:absolute;left:16px;display:flex;flex-direction:column;gap:6px;pointer-events:auto;z-index:9}
+#hist-foe{top:110px}
+#hist-me{bottom:110px}
+.hist-tile{width:46px;border-radius:6px;overflow:hidden;border:1px solid #3a2a5c;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer;opacity:0;transform:translateX(-14px);transition:opacity .25s,transform .25s;background:#171226}
+.hist-tile.in{opacity:.92;transform:none}
+.hist-tile:hover{opacity:1;border-color:var(--gold)}
+.hist-tile canvas{display:block;width:100%;height:auto}
+.hist-tile.hidden-trap{display:flex;align-items:center;justify-content:center;aspect-ratio:210/294;font-size:18px;color:#8d78b8;background:linear-gradient(160deg,#241a3a,#120c20)}
 .plate .portrait{width:78px;height:78px;border-radius:50%;border:3px solid var(--gold);background-size:cover;background-position:center;box-shadow:0 4px 18px rgba(0,0,0,.65)}
 .plate.hit .portrait{animation:hitflash .45s}
 @keyframes hitflash{0%{box-shadow:0 0 0 6px rgba(212,63,63,.9)}100%{box-shadow:0 4px 18px rgba(0,0,0,.65)}}
@@ -1043,6 +1053,9 @@ export class UI {
     };
     this.plateMe = mkPlate('me');
     this.plateFoe = mkPlate('foe');
+    // recent-plays history strips (see histAdd)
+    this.histFoe = this.el('div'); this.histFoe.id = 'hist-foe';
+    this.histMe = this.el('div'); this.histMe.id = 'hist-me';
     // buttons — no phase strip: attacking auto-enters combat, coach tips
     // teach the ordering rule instead
     const btns = this.el('div');
@@ -1107,7 +1120,7 @@ export class UI {
     this.inspectCanvas = insCanvas;
     this.inspectKws = this.el('div', 'kws');
     this.inspectEl.append(insCanvas, this.inspectKws);
-    hud.append(this.plateMe, this.plateFoe, btns, tools, this.bannerEl, this.cardBannerEl, this.toastEl, this.arrowSvg, this.inspectEl, this.floatLayer);
+    hud.append(this.plateMe, this.plateFoe, this.histFoe, this.histMe, btns, tools, this.bannerEl, this.cardBannerEl, this.toastEl, this.arrowSvg, this.inspectEl, this.floatLayer);
     s.append(hud);
     this.root.append(s);
   }
@@ -1116,7 +1129,34 @@ export class UI {
     this.match = match;
     this.plateMe.querySelector('.portrait').style.backgroundImage = `url(assets/ui/hero_${heroes[0]}.jpg)`;
     this.plateFoe.querySelector('.portrait').style.backgroundImage = `url(assets/ui/hero_${heroes[1]}.jpg)`;
+    this.histClear();
     this.show('match');
+  }
+
+  // ── recent-plays history (HS-style, last 5 per player) ──────────
+  // rel 0 = me (bottom-left, newest on top), rel 1 = foe (top-left, newest on
+  // bottom) — newest always sits nearest mid-screen. Hover previews the card;
+  // click opens the full inspect. Enemy traps stay hidden (⧗ tile).
+  histAdd(rel, cardId, hiddenTrap = false) {
+    const wrap = rel === 0 ? this.histMe : this.histFoe;
+    if (!wrap) return;
+    const t = this.el('div', 'hist-tile' + (hiddenTrap ? ' hidden-trap' : ''));
+    if (hiddenTrap) {
+      t.textContent = '⧗';
+      t.title = 'Trap set';
+    } else {
+      try { t.append(cardThumb(cardId, 104)); } catch (e) { return; }
+      t.onmouseenter = (ev) => this.hoverPreview(cardId, null, ev.clientX, ev.clientY, 'grid');
+      t.onmouseleave = () => this.hoverPreview(null);
+      t.onclick = () => this.showInspect(cardId);
+    }
+    if (rel === 0) wrap.prepend(t); else wrap.append(t);
+    requestAnimationFrame(() => t.classList.add('in'));
+    while (wrap.children.length > 5) (rel === 0 ? wrap.lastChild : wrap.firstChild).remove();
+  }
+  histClear() {
+    if (this.histFoe) this.histFoe.innerHTML = '';
+    if (this.histMe) this.histMe.innerHTML = '';
   }
 
   hudUpdate(state, match) {
