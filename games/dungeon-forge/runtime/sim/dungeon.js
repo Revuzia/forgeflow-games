@@ -14,7 +14,7 @@
  */
 
 export const SIZE = 64;          // cells per side, per floor
-export const MAX_FLOORS = 5;
+export const MAX_FLOORS = 6;   // up to 6 floors (owner: prebuilt delves run 3–6 deep)
 export const CELL = 4;           // world units per cell
 export const FLOOR_H = 5;        // vertical world units between floors
 

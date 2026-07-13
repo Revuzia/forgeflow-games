@@ -18,6 +18,105 @@ function helpers(d) {
   };
 }
 
+// ── procedural multi-floor generator ───────────────────────────────────────
+// Diablo-grade dungeon: one big connected hall per floor, linked by stairs, with
+// dense levelled enemy packs (a few elites + a boss on the deepest floor), trap
+// clusters, a hazard pool, chests, decor and lights. Deterministic per seed, so
+// the node selftest validates + boots every one. Solvable by construction (each
+// floor is a single connected room; stairs land inside the next floor's hall).
+const POOLS = {
+  fantasy: {
+    common: ["spider", "skeleton", "zombie", "slime", "bat", "frog", "imp", "wisp", "skull"],
+    tough:  ["orc", "cultist", "gargoyle", "ninja", "brute", "myconid", "cactoro", "cthulhu"],
+    elite:  ["cyclops", "ogre", "yeti", "giant"],
+    boss:   ["dragon", "demon"],
+    decor:  ["barrel", "crate", "pot", "urn", "bones", "debris", "bookshelf", "coffin", "pillar", "candles"],
+    explosive: "barrel", light: "torch",
+  },
+  scifi: {
+    common: ["drone", "robot", "blob", "xenosmall", "floater"],
+    tough:  ["android", "cyborg", "turret", "warbot", "striker"],
+    elite:  ["mech", "xeno", "sentinel", "warframe", "xenobig"],
+    boss:   ["alien"],
+    decor:  ["crate", "canister", "terminal", "barrier", "cables", "lamp"],
+    explosive: "canister", light: "lamp",
+  },
+};
+const TRAP_KINDS = ["spikes", "vent", "firejet", "javelin", "pit"];
+
+function gen(cfg) {
+  const d = D.newDungeon({ name: cfg.name, theme: cfg.theme, difficulty: cfg.difficulty, author: cfg.author, seed: cfg.seed });
+  const { F, O, L } = helpers(d);
+  const rnd = D.mulberry(cfg.seed >>> 0);
+  const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+  const pick = (a) => a[Math.floor(rnd() * a.length)];
+  const P = POOLS[cfg.theme] || POOLS.fantasy;
+  const fant = cfg.theme === "fantasy";
+  const floors = Math.max(3, Math.min(6, cfg.floors));
+  const tex = cfg.tex || (fant ? "cobble" : "stone");
+  const hazardCT = cfg.hazard === "water" ? 3 : cfg.hazard === "lava" ? 2 : 0;
+  for (let f = 1; f < floors; f++) D.applyOp(d, { t: "floor+" });
+
+  const HX = 17, HZ = 17, HW = Math.min(28, cfg.hallW || 24), HH = Math.min(22, cfg.hallH || 18);
+  const sX = HX + HW - 3, sZ = HZ + HH - 3;   // stairs / exit cell; landing = (sX, sZ+1)
+  const used = new Set();
+  const uk = (f, x, z) => f + ":" + x + "," + z;
+  const place = (f, kind, x, z, props) => {
+    if (used.has(uk(f, x, z))) return false;
+    const r = O(f, kind, x, z, props);
+    if (r && r.ok) { used.add(uk(f, x, z)); return true; }
+    return false;
+  };
+  const rndCell = (f) => {
+    for (let t = 0; t < 40; t++) { const x = ri(HX + 1, HX + HW - 2), z = ri(HZ + 1, HZ + HH - 2); if (!used.has(uk(f, x, z))) return [x, z]; }
+    return null;
+  };
+
+  for (let f = 0; f < floors; f++) {
+    F(f, HX, HZ, HW, HH, tex);
+    if (f > 0) used.add(uk(f, sX, sZ + 1));        // keep the stair-landing cell clear
+    // corner lights
+    for (const [cx, cz, col] of [[HX, HZ, "#ffcf7a"], [HX + HW - 1, HZ, "#7ac6ff"], [HX, HZ + HH - 1, "#7ac6ff"], [HX + HW - 1, HZ + HH - 1, "#ffcf7a"]])
+      place(f, fant ? "torch" : "light", cx, cz, fant ? undefined : { color: col });
+    // hazard pool — constrained to the LEFT/near portion so it never overlaps the
+    // stairs/exit cell (sX,sZ) or its landing (a seed-placed pool there = no exit).
+    if (hazardCT) { const px = ri(HX + 4, sX - 5), pz = ri(HZ + 4, sZ - 4); for (let x = px; x < px + 3; x++) for (let z = pz; z < pz + 2; z++) { L(f, x, z, hazardCT); used.add(uk(f, x, z)); } }
+    // spawn + a merchant on floor 0
+    if (f === 0) {
+      place(0, "spawn", HX + 1, HZ + 1, { rot: 1 });
+      place(0, "npc", HX + 3, HZ + 1, { ntype: pick(["merchant", "blacksmith", "sage"]), stock: fant ? undefined : ["potion", "mana", "charm"] });
+    }
+    // vertical connector: stairs up (or the exit on the deepest floor)
+    if (f < floors - 1) place(f, "stairs", sX, sZ, { rot: 0 });
+    else place(f, "exit", sX, sZ);
+    // enemy packs — levelled by depth; ~10% elites at +2..4 (orange/red rings)
+    const baseLvl = D.defaultEnemyLevel(cfg.difficulty, f);
+    const packN = 4 + cfg.difficulty + f * 2;
+    for (let i = 0; i < packN; i++) {
+      const c = rndCell(f); if (!c) break;
+      const roll = rnd();
+      const et = roll < 0.6 ? pick(P.common) : roll < 0.9 ? pick(P.tough) : pick(P.elite);
+      const lvl = Math.max(1, baseLvl + (roll >= 0.9 ? ri(2, 4) : ri(-1, 1)));
+      const keyCarrier = f === 0 && i === 0;     // first foe on floor 0 holds a bonus key
+      place(f, "enemy", c[0], c[1], { etype: et, level: lvl });
+      if (keyCarrier) place(f, "key", c[0], c[1]);
+    }
+    // boss on the deepest floor (high level → red con ring)
+    if (f === floors - 1) { const c = rndCell(f) || [HX + HW - 4, HZ + 2]; place(f, "enemy", c[0], c[1], { etype: pick(P.boss), level: baseLvl + ri(5, 8), rot: 2 }); }
+    // trap cluster
+    for (let i = 0, n = 2 + f; i < n; i++) { const c = rndCell(f); if (!c) break; place(f, "trap", c[0], c[1], { ttype: pick(TRAP_KINDS), rot: ri(0, 3) }); }
+    // chests (extra on the finale floor)
+    for (let i = 0, n = 2 + (f === floors - 1 ? 2 : 1); i < n; i++) { const c = rndCell(f); if (!c) break; place(f, "chest", c[0], c[1], { rot: ri(0, 3) }); }
+    // decor scatter — ~35% explosive barrels/canisters
+    for (let i = 0, n = 6 + f * 2; i < n; i++) { const c = rndCell(f); if (!c) break; place(f, "decor", c[0], c[1], { dtype: rnd() < 0.35 ? P.explosive : pick(P.decor) }); }
+  }
+  return d;
+}
+// wraps gen() as a COMMUNITY entry
+function proc(cfg) {
+  return { key: cfg.key, name: cfg.name, author: cfg.author, theme: cfg.theme, difficulty: cfg.difficulty, blurb: cfg.blurb, build() { return gen(cfg); } };
+}
+
 export const COMMUNITY = [
   {
     key: "drowned-cellars", name: "Cellars of the Drowned King", author: "Mirella", theme: "fantasy",
@@ -221,4 +320,17 @@ export const COMMUNITY = [
       return d;
     },
   },
+  // ── 12 procedurally-built multi-floor delves (3–6 floors, Diablo-grade) ──────
+  proc({ key: "crypt-hollow-king", name: "Crypt of the Hollow King", author: "Sepulcher", theme: "fantasy", difficulty: 2, floors: 4, tex: "flagstone", hazard: "none", hallW: 24, hallH: 18, blurb: "Four floors of restless dead beneath a fallen throne." }),
+  proc({ key: "sunken-catacombs", name: "The Sunken Catacombs", author: "Tidewarden", theme: "fantasy", difficulty: 2, floors: 5, tex: "cobble", hazard: "water", hallW: 26, hallH: 18, blurb: "Flooded ossuaries. Swim the deep vaults, five levels down." }),
+  proc({ key: "molten-deeps", name: "The Molten Deeps", author: "Cinderhand", theme: "fantasy", difficulty: 3, floors: 5, tex: "cave", hazard: "lava", hallW: 26, hallH: 20, blurb: "Lava caverns and fire jets. The deeper you go, the hotter it gets." }),
+  proc({ key: "frostbite-hollow", name: "Frostbite Hollow", author: "Rimewitch", theme: "fantasy", difficulty: 2, floors: 4, tex: "marble", hazard: "water", hallW: 24, hallH: 18, blurb: "Icy marble halls and frozen pools. Wrap up warm." }),
+  proc({ key: "thornwood-warren", name: "The Thornwood Warren", author: "Mossback", theme: "fantasy", difficulty: 1, floors: 3, tex: "moss", hazard: "none", hallW: 22, hallH: 16, blurb: "A starter delve — beasts and bandits in an overgrown warren." }),
+  proc({ key: "bone-spire", name: "The Bone Spire", author: "GrimJim", theme: "fantasy", difficulty: 3, floors: 6, tex: "brick", hazard: "lava", hallW: 26, hallH: 20, blurb: "Six floors of escalating dread. Elites everywhere. Bring friends." }),
+  proc({ key: "drownmarsh-tombs", name: "Drownmarsh Tombs", author: "Bogwalker", theme: "fantasy", difficulty: 2, floors: 4, tex: "dirt", hazard: "water", hallW: 24, hallH: 18, blurb: "Sinking mud-tombs. Toads, myconids, and worse in the murk." }),
+  proc({ key: "sanctum-embers", name: "Sanctum of Embers", author: "TorchBearer99", theme: "fantasy", difficulty: 3, floors: 5, tex: "brick", hazard: "lava", hallW: 26, hallH: 20, blurb: "A cultist sanctum ringed in fire. The demon lord waits below." }),
+  proc({ key: "derelict-omega", name: "Derelict: Station Omega", author: "VOLTA", theme: "scifi", difficulty: 2, floors: 4, tex: "stone", hazard: "none", hallW: 24, hallH: 18, blurb: "Power's flickering across four decks. The drones still patrol." }),
+  proc({ key: "reactor-meltdown", name: "Reactor Meltdown", author: "Fallout", theme: "scifi", difficulty: 3, floors: 5, tex: "stone", hazard: "lava", hallW: 26, hallH: 20, blurb: "Coolant's gone. Plasma pools and war mechs, five decks deep." }),
+  proc({ key: "cryo-vault-13", name: "Cryo-Vault 13", author: "Kelvin", theme: "scifi", difficulty: 2, floors: 4, tex: "marble", hazard: "water", hallW: 24, hallH: 18, blurb: "A frozen research vault. Something thawed on the lower decks." }),
+  proc({ key: "hive-descent", name: "Hive Descent", author: "Ripley", theme: "scifi", difficulty: 3, floors: 6, tex: "cave", hazard: "lava", hallW: 26, hallH: 20, blurb: "Six levels into the xeno hive. The queen is at the bottom." }),
 ];

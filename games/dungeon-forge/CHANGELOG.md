@@ -1,5 +1,15 @@
 # Dungeon Forge — CHANGELOG
 
+## v1.14.0 — 2026-07-13 (12 new prebuilt delves + 6-floor support)
+- **12 procedurally-authored "by players" dungeons** added to the play carousel
+  (now 17 total): 3–6 floors each, Diablo-grade density — 22–73 levelled enemies,
+  9–27 traps, 10–19 chests, 24–66 decor, hazard pools, a merchant, and a high-level
+  boss on the deepest floor. Enemy levels scale with depth (elites at +2–4, boss at
+  +5–8) so the new threat-colour rings actually mean something. Deterministic per
+  seed; every one passes validate + boots clean in the node selftest.
+- **6-floor dungeons**: raised `MAX_FLOORS` 5→6 (all usages scale off the constant),
+  so both prebuilt delves and the builder now go up to 6 floors deep.
+
 ## v1.13.0 — 2026-07-13 (enemy levels + threat colours + combat rebalance)
 - **Enemy LEVEL system**: every enemy has a `level` (builder-settable in the enemy
   panel; default scales with dungeon difficulty + floor depth). Level inflates
