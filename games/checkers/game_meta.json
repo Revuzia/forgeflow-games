@@ -2,9 +2,10 @@
   "title": "Checkers",
   "short_description": "Calm, classic 3D checkers (draughts) — turned wooden pieces on a warm board, with forced jumps, multi-jumps and kings.",
   "description": "A cozy, unhurried game of checkers rendered in clean 3D. Standard American draughts rules: men move diagonally forward, kings move any direction, captures are forced, and a jump that can continue must — chain your multi-jumps to sweep the board. Reach the far side to crown a king. Play a thoughtful AI across four skill levels, on a warm wooden board under soft light, with gentle piano. Left-click a piece, then a highlighted square.",
-  "genre": "strategy",
-  "sub_genre": "board-game",
+  "genre": "board_game",
+  "sub_genre": "checkers",
   "difficulty": "easy",
+  "status": "published",
   "controls_keyboard": "Left-click a piece to select · click a highlighted square to move · Right-drag rotate camera · scroll zoom · Esc pause · F3 debug",
-  "tags": ["strategy", "checkers", "draughts", "turn-based", "3d", "board-game", "calm"]
+  "tags": ["board-game", "checkers", "draughts", "turn-based", "3d", "calm"]
 }

@@ -2,7 +2,7 @@
   "title": "Arcane Realms TCG",
   "short_description": "A polished fantasy collectible card game — 117 cards across five realms, full deck builder, traps, tap-combat, and a strategic AI in three difficulties.",
   "description": "Arcane Realms is a complete digital trading card game in the browser — a hybrid of Magic: The Gathering and Hearthstone with deep D&D-fantasy flavor. Duel a strategic AI across five realms: the volcanic Emberforge, the scheming Tidecall, the primal Wildgrove, the radiant Dawnward, and the necrotic Gravemire. 117 unique cards with original painted artwork, 11 keywords (Guard, Flying, Ward, Venomous, Cleave and more), Rally and Last Rites triggers, and face-down Traps that fire on your opponent's turn. Creatures tap MTG-style when they attack and untap each turn. Build and save your own decks with the full deck builder (2-realm rule, live mana curve, smart-fill), browse the complete collection with filters, and battle three AI difficulties from Squire to the two-moves-ahead Archmage. Epic and Legendary cards arrive with banners, particle bursts, and golden auras. Original procedural soundtrack and effects.",
-  "genre": "strategy",
+  "genre": "board_game",
   "sub_genre": "card-battler",
   "difficulty": "medium",
   "controls_keyboard": "Drag cards to play · Drag creatures onto targets to attack · Right-click inspect · SPACE next phase · Esc cancel",
