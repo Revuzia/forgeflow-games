@@ -350,14 +350,38 @@ export class BoardScene {
     floor.position.y = -1.55;
     this.scene.add(floor);
 
-    // center line glow
-    const mid = new THREE.Mesh(
-      new THREE.PlaneGeometry(16.4, 0.05),
-      new THREE.MeshBasicMaterial({ color: 0x7a5cb8, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending }),
+    // ── mid-board DIVIDER: a raised, glowing 3D ridge cleanly separating the
+    // two halves (the old hairline glow read as part of the playmat art)
+    const ridgeMat = new THREE.MeshStandardMaterial({
+      color: 0x4a3358, roughness: 0.55, metalness: 0.55,
+      emissive: 0x2a1440, emissiveIntensity: 0.7,
+    });
+    const ridge = new THREE.Mesh(new THREE.BoxGeometry(21.4, 0.09, 0.3), ridgeMat);
+    ridge.position.set(0, 0.005, -0.08);
+    this.scene.add(ridge);
+    const ridgeGlow = new THREE.Mesh(
+      new THREE.PlaneGeometry(21.0, 0.17),
+      new THREE.MeshBasicMaterial({ color: 0xa06cff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
-    mid.rotation.x = -Math.PI / 2;
-    mid.position.set(0, 0.01, -0.08);
-    this.scene.add(mid);
+    ridgeGlow.rotation.x = -Math.PI / 2;
+    ridgeGlow.position.set(0, 0.056, -0.08);
+    this.scene.add(ridgeGlow);
+    this._ridgeGlow = ridgeGlow; // breathes in update()
+    // zone TRAYS: soft glowing outlines around each creature row so "their
+    // half / my half" reads at a glance — purple for the foe, gold for me
+    const mkTray = (z, color) => {
+      const shp = roundRectShape(16.9, 2.55, 0.5);
+      shp.holes.push(roundRectShape(16.62, 2.28, 0.42));
+      const m = new THREE.Mesh(
+        new THREE.ShapeGeometry(shp),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }),
+      );
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(0, 0.012, z);
+      this.scene.add(m);
+    };
+    mkTray(LAYOUT.enemyBoardZ, 0xb45cff);
+    mkTray(LAYOUT.playerBoardZ, 0xd4952b);
 
     // hero plates — compact discs that stay clear of the card rows
     this.heroMeshes = [];
@@ -565,14 +589,39 @@ export class BoardScene {
     else if (unit.tapped) mkBadge('💤', '#cdbcf2', 'tr', 0);
   }
 
+  // screen-space rect of a card's visual (padded) — used for orb occlusion
+  _entryScreenRect(e) {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    if (!r.width) return null;
+    e.mesh.updateWorldMatrix(true, false);
+    let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+    for (const [lx, ly] of [[-CW / 2, -CH / 2], [CW / 2, -CH / 2], [-CW / 2, CH / 2], [CW / 2, CH / 2]]) {
+      const s = this.worldToScreen(e.mesh.localToWorld(new THREE.Vector3(lx, ly, 0)));
+      if (s.x < minX) minX = s.x; if (s.x > maxX) maxX = s.x;
+      if (s.y < minY) minY = s.y; if (s.y > maxY) maxY = s.y;
+    }
+    const pad = 8;
+    return { x0: minX - pad, y0: minY - pad, x1: maxX + pad, y1: maxY + pad };
+  }
+
+  // collect the rects of every ENLARGED card (hand hover, board-hover preview,
+  // played-card showcases) once per frame — orbs hide only where they'd
+  // actually overlap one, so the rest of the board keeps its stats readable.
+  _computeOccRects() {
+    this._occRects = null;
+    for (const e of this.cards.values()) {
+      if (e.dead) continue;
+      if (e._occlude || e.boardHover || (e.zone === 'hand' && e.side === 0 && e.hover)) {
+        const rc = this._entryScreenRect(e);
+        if (rc) (this._occRects = this._occRects || []).push(rc);
+      }
+    }
+  }
+
   // place HTML orbs + badges at the CARD's actual corners (owner: bottom
   // corners, not centered). localToWorld handles per-side tilt/scale exactly.
   placeNameplate(e) {
-    // hide ALL board orbs while ANY card is hover-enlarged (hand OR board) —
-    // the orbs are HTML above the canvas, so they'd overlap the enlarged card.
-    // Two separate flags: match.js owns _hoverActive (hand), setBoardHover owns
-    // _boardHoverActive — so un-hovering one can't clobber the other's state.
-    if (this._hoverActive || this._boardHoverActive || this._showcaseActive || e.boardHover) { this.hideNameplate(e); return; }
+    if (e.boardHover) { this.hideNameplate(e); return; } // its own big preview replaces the stats
     e.mesh.updateWorldMatrix(true, false);
     const cr = this.container.getBoundingClientRect();
     const corner = (lx, ly) => {
@@ -580,10 +629,19 @@ export class BoardScene {
       const s = this.worldToScreen(w);
       return { x: s.x - cr.left, y: s.y - cr.top };
     };
-    const put = (el, xy) => { el.style.left = xy.x + 'px'; el.style.top = xy.y + 'px'; el.style.display = ''; };
     // inset the orbs well INSIDE the card so they never bleed onto a neighbour
     const KX = CW / 2 * 0.6, KY = CH / 2 * 0.82;
-    if (e.chips) { put(e.chips.atk, corner(-KX, -KY)); put(e.chips.hp, corner(KX, -KY)); } // bottom L/R
+    const atkP = corner(-KX, -KY), hpP = corner(KX, -KY);
+    // occlusion: hide THIS card's plate only if it would sit under an enlarged card
+    if (this._occRects) {
+      const hit = (p) => {
+        const gx = p.x + cr.left, gy = p.y + cr.top;
+        return this._occRects.some((rc) => gx > rc.x0 && gx < rc.x1 && gy > rc.y0 && gy < rc.y1);
+      };
+      if (hit(atkP) || hit(hpP)) { this.hideNameplate(e); return; }
+    }
+    const put = (el, xy) => { el.style.left = xy.x + 'px'; el.style.top = xy.y + 'px'; el.style.display = ''; };
+    if (e.chips) { put(e.chips.atk, atkP); put(e.chips.hp, hpP); } // bottom L/R
     for (const b of e.badges) {
       const c = b._corner === 'tr' ? corner(KX, KY) : corner(-KX, KY - b._i * 0.5); // top R / top L stack
       put(b, c);
@@ -899,16 +957,14 @@ export class BoardScene {
     if (!e) e = this.makeCardEntry(iid, cardId, side);
     e.mesh.material.map = getCard(cardId).tex;
     e.mesh.material.needsUpdate = true;
-    this._showcaseActive = (this._showcaseActive || 0) + 1; // orbs hide under the showcase
-    try {
-      const focus = new THREE.Vector3(0, 2.4, 1.4);
-      await this.applyTransform(e, { pos: focus, rotX: this.faceCamRotX(focus.y, focus.z), rotZ: 0, scale: 1.7 }, 0.3, 'backOut');
-      this.fx.ring(new THREE.Vector3(0, 0.4, 1.2), 0xe8b93a, { maxR: 3 });
-      await new Promise((r) => setTimeout(r, 800 / this.animSpeed));
-      this.tweens.add(e.mesh.material, { opacity: 0 }, 0.3);
-      await this.tweens.add(e.group.scale, { x: 0.5, y: 0.5, z: 0.5 }, 0.3, 'sineIn');
-      this.removeEntry(iid);
-    } finally { this._showcaseActive--; }
+    e._occlude = true; // orbs under the showcase rect hide (see _computeOccRects)
+    const focus = new THREE.Vector3(0, 2.4, 1.4);
+    await this.applyTransform(e, { pos: focus, rotX: this.faceCamRotX(focus.y, focus.z), rotZ: 0, scale: 1.7 }, 0.3, 'backOut');
+    this.fx.ring(new THREE.Vector3(0, 0.4, 1.2), 0xe8b93a, { maxR: 3 });
+    await new Promise((r) => setTimeout(r, 800 / this.animSpeed));
+    this.tweens.add(e.mesh.material, { opacity: 0 }, 0.3);
+    await this.tweens.add(e.group.scale, { x: 0.5, y: 0.5, z: 0.5 }, 0.3, 'sineIn');
+    this.removeEntry(iid);
   }
 
   async animEnemyReveal(cardId) {
@@ -917,14 +973,12 @@ export class BoardScene {
     tmp.group.position.set(0, 2.2, -2.2);
     tmp.inner.rotation.x = 0.5;
     tmp.group.scale.setScalar(0.1);
-    this._showcaseActive = (this._showcaseActive || 0) + 1; // orbs hide under the showcase
-    try {
-      await this.applyTransform(tmp, { pos: new THREE.Vector3(0, 2.5, 0.4), rotX: this.faceCamRotX(2.5, 0.4), rotZ: 0, scale: 1.55 }, 0.3, 'backOut');
-      await new Promise((r) => setTimeout(r, 850 / this.animSpeed));
-      this.tweens.add(tmp.mesh.material, { opacity: 0 }, 0.26);
-      await this.tweens.add(tmp.group.scale, { x: 0.4, y: 0.4, z: 0.4 }, 0.26, 'sineIn');
-      this.removeEntry(tmp.iid);
-    } finally { this._showcaseActive--; }
+    tmp._occlude = true; // orbs under the showcase rect hide (see _computeOccRects)
+    await this.applyTransform(tmp, { pos: new THREE.Vector3(0, 2.5, 0.4), rotX: this.faceCamRotX(2.5, 0.4), rotZ: 0, scale: 1.55 }, 0.3, 'backOut');
+    await new Promise((r) => setTimeout(r, 850 / this.animSpeed));
+    this.tweens.add(tmp.mesh.material, { opacity: 0 }, 0.26);
+    await this.tweens.add(tmp.group.scale, { x: 0.4, y: 0.4, z: 0.4 }, 0.26, 'sineIn');
+    this.removeEntry(tmp.iid);
   }
 
   playFxAt(pos, kind, realmColor) {
@@ -1270,6 +1324,7 @@ export class BoardScene {
     // glow pulse (no idle motion — cards hold perfectly still unless hovered).
     // Thin frame reads crisp, so it can sit brighter than the old fuzzy fill.
     const pulse = 0.62 + Math.sin(this.time * 4) * 0.2;
+    this._computeOccRects(); // enlarged-card rects for per-orb occlusion
     for (const e of this.cards.values()) {
       if (e.glowOn) e.glow.material.opacity = pulse;
       if (e.zone === 'board') {
@@ -1338,6 +1393,7 @@ export class BoardScene {
       const ro = 0.22 + (Math.sin(this.time * 1.4) + 1) * 0.07;
       for (const s of this.runeStrips) s.material.opacity = ro;
     }
+    if (this._ridgeGlow) this._ridgeGlow.material.opacity = 0.42 + (Math.sin(this.time * 1.1) + 1) * 0.1;
     this._brazierAcc = (this._brazierAcc || 0) + dt;
     if (this._brazierAcc > 0.09) {
       this._brazierAcc = 0;
