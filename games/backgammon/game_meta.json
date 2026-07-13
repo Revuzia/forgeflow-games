@@ -1,0 +1,11 @@
+{
+  "title": "Backgammon",
+  "short_description": "Calm, classic 3D backgammon — carved checkers on a warm wooden board, real two-dice rolls, hitting to the bar, and bearing off to win.",
+  "description": "A cozy, unhurried game of backgammon rendered in clean 3D. The full standard ruleset: race your fifteen checkers around the board on real two-dice rolls (doubles give you four moves), leave a lone blot and it can be hit and sent to the bar to re-enter, and once all your checkers are home, bear them off to win. Play a thoughtful AI across four skill levels on a warm walnut-and-ivory board under soft light, with gentle piano. Click a checker, then a highlighted point to move.",
+  "genre": "board_game",
+  "sub_genre": "backgammon",
+  "difficulty": "medium",
+  "status": "published",
+  "controls_keyboard": "Left-click a checker to select · click a highlighted point to move · dice roll automatically each turn · Right-drag rotate camera · scroll zoom · Esc pause · F3 debug",
+  "tags": ["board-game", "backgammon", "dice", "turn-based", "3d", "calm"]
+}

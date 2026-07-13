@@ -1,0 +1,22 @@
+{
+  "title": "Backgammon",
+  "slug": "backgammon",
+  "genre": "backgammon3d",
+  "tagline": "A calm, classic game of backgammon in 3D.",
+  "playerSide": "w",
+  "aiDepth": 3,
+  "view": { "width": 960, "height": 600, "background": "#20262e" },
+  "audio": {
+    "music": "assets/audio/music.ogg",
+    "menu_music": "assets/audio/menu_music.ogg"
+  },
+  "sfx": {
+    "click": "assets/audio/click.ogg",
+    "select": "assets/audio/select.ogg",
+    "confirm": "assets/audio/confirm.ogg",
+    "hit": "assets/audio/hit.ogg",
+    "victory": "assets/audio/victory.ogg",
+    "defeat": "assets/audio/defeat.ogg"
+  },
+  "assets": {}
+}

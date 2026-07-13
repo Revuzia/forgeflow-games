@@ -1,0 +1,11 @@
+{
+  "title": "Dominoes",
+  "short_description": "Calm, classic 3D dominoes — ivory double-six tiles on a warm felt table. Match the pips, work the line, empty your hand.",
+  "description": "A cozy, unhurried game of draw dominoes rendered in clean 3D. The full double-six set: 28 ivory tiles, seven to a hand. Match a pip end onto either open end of the snaking line; when you can't play, draw from the boneyard until you can. First to empty their hand wins the round — and if the game blocks up, the lightest hand takes it. Play a thoughtful AI across four skill levels on a warm felt table under soft light, with gentle piano. Left-click a tile, then a highlighted open end.",
+  "genre": "board_game",
+  "sub_genre": "dominoes",
+  "difficulty": "easy",
+  "status": "published",
+  "controls_keyboard": "Left-click a tile to select · click a highlighted open end to play · click the boneyard to draw when stuck · Right-drag rotate camera · scroll zoom · Esc pause · F3 debug",
+  "tags": ["board-game", "dominoes", "draw-dominoes", "double-six", "turn-based", "3d", "calm"]
+}
