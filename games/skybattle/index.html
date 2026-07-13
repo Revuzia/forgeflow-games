@@ -94,6 +94,12 @@ html,body{cursor:url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3
 canvas{cursor:url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2734%27%20height%3D%2734%27%20viewBox%3D%270%200%2034%2034%27%3E%3Cpath%20d%3D%27M4%2011%20V4%20H11%20M23%204%20H30%20V11%20M30%2023%20V30%20H23%20M11%2030%20H4%20V23%27%20fill%3D%27none%27%20stroke%3D%27%23000%27%20stroke-width%3D%275%27%20opacity%3D%270.55%27%20stroke-linecap%3D%27round%27%2F%3E%3Cpath%20d%3D%27M4%2011%20V4%20H11%20M23%204%20H30%20V11%20M30%2023%20V30%20H23%20M11%2030%20H4%20V23%27%20fill%3D%27none%27%20stroke%3D%27%2393c5fd%27%20stroke-width%3D%272.4%27%20stroke-linecap%3D%27round%27%2F%3E%3Ccircle%20cx%3D%2717%27%20cy%3D%2717%27%20r%3D%272.2%27%20fill%3D%27%23f87171%27%20stroke%3D%27%23000%27%20stroke-width%3D%271%27%2F%3E%3C%2Fsvg%3E") 17 17, crosshair;}
 button,a,select,input,label,[role=button],.btn{cursor:url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2728%27%20height%3D%2728%27%20viewBox%3D%270%200%2028%2028%27%3E%3Cpath%20d%3D%27M4%202%20L24%2013%20L15%2016%20L11%2026%20Z%27%20fill%3D%27%230c1524%27%20stroke%3D%27%2393c5fd%27%20stroke-width%3D%272%27%20stroke-linejoin%3D%27round%27%2F%3E%3Ccircle%20cx%3D%2719%27%20cy%3D%2711%27%20r%3D%272.2%27%20fill%3D%27%23f87171%27%2F%3E%3C%2Fsvg%3E") 4 2, auto;}
 </style>
+
+<style id="ffg-guard">/* no text/image highlighting inside the game */
+*{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text}
+img{-webkit-user-drag:none}
+</style>
 </head>
 <body>
   <div id="root"></div>
@@ -176,5 +182,7 @@ button,a,select,input,label,[role=button],.btn{cursor:url("data:image/svg+xml,%3
 
     createRoot(document.getElementById("root")).render(React.createElement(Component));
   </script>
+<script>window.GAME_CONFIG=window.GAME_CONFIG||{hide_bug_button:true};</script>
+<script src="game_controls.js"></script>
 </body>
 </html>

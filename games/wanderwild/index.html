@@ -363,6 +363,12 @@
   .gearTip .gtt-r b{color:#ffd23f}
   .gearTip .gtt-f{margin-top:5px; font-size:10px; opacity:.6; text-align:center; font-style:italic}
 </style>
+
+<style id="ffg-guard">/* no text/image highlighting inside the game */
+*{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text}
+img{-webkit-user-drag:none}
+</style>
 </head>
 <body>
 <div id="app"></div>
@@ -503,7 +509,7 @@ THREE.ShaderChunk.project_vertex = THREE.ShaderChunk.project_vertex
     '#endif\n'+
     '\tgl_Position = projectionMatrix * mvPosition;');   // ALSO tilt the view-space normal by the curve gradient (Jacobian of y-=C(x²+z²)) so toon shading matches the curved silhouette at all angles/distances (was: position curved, normal stale -> wrong toon band toward the horizon)
 /* telemetry seam (overridable no-op) + global error capture so a stray throw is logged, never silent */
-const BUILD='1.0.0';
+const BUILD='1.1.0';
 const __report=(kind,err)=>{ try{ if(window.__telemetry) window.__telemetry(kind,err); }catch(e){} };
 let __frameErrs=0;
 addEventListener('error', e=>__report('window.error', e.error||e.message));
@@ -523,16 +529,17 @@ try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) state.reduce=tru
 const SFX={ buf:{},
   load(){ const vol={step:0.10, jump:0.5, pickup:0.45, interact:0.55, success:0.6};   // footsteps DELIBERATELY soft (owner: walking was too loud); gather lowers pickup further at the call site
     for(const n of ['step','jump','pickup','interact','success']){ const a=new Audio(`assets/audio/${n}.ogg`); a.preload='auto'; a.volume=vol[n]!=null?vol[n]:0.6; this.buf[n]=a; } },   // win.ogg REMOVED — it was a 180s MUSIC TRACK, not an SFX (owner); celebrations use 'success'
-  play(n,opt){ if(!state.sfxOn) return; const a=this.buf[n]; if(a){ try{ const c=a.cloneNode(); const vm=(opt&&opt.vol!=null)?opt.vol:1; c.volume=Math.max(0,Math.min(1,a.volume*vm*(state.volume==null?1:state.volume))); if(opt&&opt.rate) c.playbackRate=opt.rate; c.play().catch(()=>{}); }catch(e){} } } };
+  play(n,opt){ if(!state.sfxOn) return; const a=this.buf[n]; if(a){ try{ const c=a.cloneNode(); const vm=(opt&&opt.vol!=null)?opt.vol:1; const sv=state.sfxVol!=null?state.sfxVol:(state.volume==null?1:state.volume); c.volume=Math.max(0,Math.min(1,a.volume*vm*sv)); if(opt&&opt.rate) c.playbackRate=opt.rate; c.play().catch(()=>{}); }catch(e){} } } };
+function musicVol(){ return state.musicVol!=null?state.musicVol:(state.volume==null?1:state.volume); }
 SFX.load();
 const Music={ on:false, ctx:null, master:null, muted:false, paused:false,
   setVol(v){ if(this.master) this.master.gain.value=(this.muted?0:0.16*v); },
-  setMuted(m){ this.muted=m; if(this.master) this.master.gain.value=m?0:0.16*(state.volume==null?1:state.volume); },
+  setMuted(m){ this.muted=m; if(this.master) this.master.gain.value=m?0:0.16*musicVol(); },
   suspend(){ this.paused=true; try{ if(this.ctx&&this.ctx.state==='running') this.ctx.suspend(); }catch(e){} },
   resume(){ this.paused=false; try{ if(this.ctx&&this.ctx.state==='suspended') this.ctx.resume(); }catch(e){} },
   start(){ if(this.on)return; try{ const C=this.ctx=new (window.AudioContext||window.webkitAudioContext)(); this.on=true;
     if(C.state==='suspended') C.resume();   // satisfy browser autoplay policy (also re-armed on first pointerdown below)
-    const master=this.master=C.createGain(); master.gain.value=(this.muted||!state.musicOn?0:0.16*(state.volume==null?1:state.volume)); const lp=C.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2000; lp.connect(master); master.connect(C.destination);
+    const master=this.master=C.createGain(); master.gain.value=(this.muted||!state.musicOn?0:0.16*musicVol()); const lp=C.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2000; lp.connect(master); master.connect(C.destination);
     // warm, cheerful I–V–vi–IV pad in C major + gentle pentatonic twinkles (cozy, NOT haunting)
     const chords=[[261.63,329.63,392.00],[392.00,493.88,587.33],[220.00,261.63,329.63],[174.61,220.00,261.63]];
     const tw=[523.25,587.33,659.25,783.99,880.00,659.25]; const beat=60/74; let t=C.currentTime+0.15, ci=0;
@@ -2387,7 +2394,7 @@ function save(){ try{ localStorage.setItem('ww2_save',JSON.stringify({ v:SAVE_V,
   questsDone:Quests.done, socks:state.socks, snacksReady:state.snacksReady, discoOn:state.discoOn, won:state.won, req:state.req,
   unlocked:state.unlocked, houseColor:state.houseColor, hat:state.hat, charClass:state.charClass, mana:state.mana, manaMax:state.manaMax, armorDye:state.armorDye, recipePages:state.recipePages, weapons:state.weapons, weapon:state.weapon, hasPickaxe:state.hasPickaxe, hasShovel:state.hasShovel, hasRod:state.hasRod, pickTier:state.pickTier, shovelTier:state.shovelTier, armor:state.armor, armors:state.armors, offhand:state.offhand, offhands:state.offhands, gear:state.gear, dur:state.dur, backpackTier:state.backpackTier, bagCount:state.bagCount, charModel:state.charModel,
   craftedSet:state.craftedSet, reqsFulfilled:state.reqsFulfilled, biomes:state.biomes, eventId:(state.event&&state.event.id), xp:state.xp, level:state.level,
-  tod:state.tod, volume:state.volume, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, needsMin:state.needsMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, chainStep:state.chainStep, questHistory:state.questHistory, _qseq:state._qseq, boardOffers:state.boardOffers, _boardTaken:state._boardTaken, _boardDay:state._boardDay, npcOfferDay:state.npcOfferDay, genDefs:(()=>{const o={};for(const k in Quests.defs){const d=Quests.defs[k];if(d&&d._gen)o[k]={title:d.title,tid:d._tid,p:d._p,pitch:d._pitch,sig:d._sig,reward:d.reward,steps:d.steps};}return o;})(), lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
+  tod:state.tod, volume:state.volume, musicVol:state.musicVol, sfxVol:state.sfxVol, quality:state.quality, musicOn:state.musicOn, sfxOn:state.sfxOn, reduce:state.reduce, homeTier:state.homeTier, mouseSens:state.mouseSens, questMin:state.questMin, needsMin:state.needsMin, selectedSlot:state.selectedSlot, quickItems:state.quickItems, activeQuests:state.activeQuests, chainStep:state.chainStep, questHistory:state.questHistory, _qseq:state._qseq, boardOffers:state.boardOffers, _boardTaken:state._boardTaken, _boardDay:state._boardDay, npcOfferDay:state.npcOfferDay, genDefs:(()=>{const o={};for(const k in Quests.defs){const d=Quests.defs[k];if(d&&d._gen)o[k]={title:d.title,tid:d._tid,p:d._p,pitch:d._pitch,sig:d._sig,reward:d.reward,steps:d.steps};}return o;})(), lore:state.lore, fog:state.fog, met:state.met, badges:state.badges,
   buildBlocks:BMODE.blocks.map(o=>({m:o.mat,x:o.x,y:o.y,z:o.z})), homePaints:state.homePaints, dugCells:VOX.dug,
   tamedMounts:(typeof tamedMountSaveList==='function'?tamedMountSaveList():[]), stables:(state.stables||[]), cubePets:(Array.isArray(state.cubePets)?state.cubePets.filter(k=>PETS[k]):[]), petMode:(['aggressive','defensive','passive'].includes(state.petMode)?state.petMode:'aggressive'), companion:(state.companion&&PETS[state.companion.key]?{key:state.companion.key,hp:Math.max(0,Math.round(state.companion.hp)),name:state.companion.name}:null) })); }catch(e){} }
 // VERSIONED + SANITIZED load: bad/corrupt/legacy data can never crash boot or inject impossible state
@@ -2419,7 +2426,7 @@ function load(){ try{ const raw=localStorage.getItem('ww2_save'); if(!raw) retur
   state.bagCount=num(s.bagCount, Math.max(1,1+(s.backpackTier||0)), 1, 6);   // 50 slots per bag; extra bags = extra tabs (migrate old tier)
   state.craftedSet=(s.craftedSet&&typeof s.craftedSet==='object')?s.craftedSet:{}; state.reqsFulfilled=num(s.reqsFulfilled,0,0,1e9); state.biomes=(s.biomes&&typeof s.biomes==='object')?s.biomes:{}; state.event=DAY_EVENTS.find(e=>e.id===s.eventId)||null;
   if(typeof s.tod==='number'&&Number.isFinite(s.tod)) state.tod=((s.tod%1)+1)%1;
-  if(s.volume!=null) state.volume=clamp(+s.volume||0,0,1); state.musicOn=(s.musicOn!==false); state.sfxOn=(s.sfxOn!==false); state.reduce=!!s.reduce;
+  if(s.volume!=null) state.volume=clamp(+s.volume||0,0,1); if(s.musicVol!=null) state.musicVol=clamp(+s.musicVol||0,0,1); if(s.sfxVol!=null) state.sfxVol=clamp(+s.sfxVol||0,0,1); if(s.quality) state.quality=s.quality; state.musicOn=(s.musicOn!==false); state.sfxOn=(s.sfxOn!==false); state.reduce=!!s.reduce;
   if(s.mouseSens!=null) state.mouseSens=clamp(+s.mouseSens||1,0.2,2.5); state.questMin=!!s.questMin; state.needsMin=!!s.needsMin; state.selectedSlot=num(s.selectedSlot,0,0,9); state.quickItems=(s.quickItems&&typeof s.quickItems==='object')?s.quickItems:{}; state.activeQuests=(s.activeQuests&&typeof s.activeQuests==='object')?s.activeQuests:{}; state.chainStep=(s.chainStep&&typeof s.chainStep==='object')?s.chainStep:{}; try{ rebuildActiveChains(); }catch(e){} state.questHistory=Array.isArray(s.questHistory)?s.questHistory:[]; state._qseq=num(s._qseq,0,0,1e9); state.boardOffers=Array.isArray(s.boardOffers)?s.boardOffers:[]; state._boardTaken=num(s._boardTaken,0,0,9); state._boardDay=num(s._boardDay,0,0,1e9); state.npcOfferDay=(s.npcOfferDay&&typeof s.npcOfferDay==='object')?s.npcOfferDay:{}; if(s.genDefs&&typeof s.genDefs==='object'){ for(const k in s.genDefs){ const g=s.genDefs[k]; if(g&&g.steps&&g.tid) Quests.defs[k]={title:g.title,kind:'bounty',steps:g.steps,reward:g.reward,_gen:true,_tid:g.tid,_p:g.p,_pitch:g.pitch,_sig:g.sig}; } } state.lore=(s.lore&&typeof s.lore==='object')?s.lore:{}; state.fog=(s.fog&&typeof s.fog==='object')?s.fog:{}; state.met=(s.met&&typeof s.met==='object')?s.met:{}; state.badges=(s.badges&&typeof s.badges==='object')?s.badges:{};
   state.homeTier=num(s.homeTier,0,0,3); for(let i=1;i<=state.homeTier;i++) applyHomeTier(i);   // rebuild purchased home upgrades
   state.homePaints=(s.homePaints&&typeof s.homePaints==='object')?s.homePaints:{}; loadBlocks(s.buildBlocks); applyHomePaints();   // restore voxel builds + house repaints (buildWorld ran first, so homes exist)
@@ -2961,20 +2968,31 @@ function buyItem(id){ const it=SHOP.find(x=>x.id===id); if(!it||!canBuy(it))retu
 function togglePause(){ state.paused=!state.paused; const el=document.getElementById('pause'); if(!el)return;
   if(state.paused){ Music.suspend(); renderPause(); el.classList.remove('hidden'); const f=el.querySelector('#resumeBtn'); if(f)f.focus(); }
   else { el.classList.add('hidden'); if(state.musicOn) Music.resume(); } }
+function _audioRowsHTML(){ const mv=Math.round((state.musicVol!=null?state.musicVol:(state.volume==null?1:state.volume))*100), sv=Math.round((state.sfxVol!=null?state.sfxVol:(state.volume==null?1:state.volume))*100), q=state.quality||'auto';
+  return `<label class="prow">\u{1F3B5} Music volume <input id="mvolSlider" type="range" min="0" max="100" value="${mv}"></label>
+    <label class="prow">\u{1F508} SFX volume <input id="svolSlider" type="range" min="0" max="100" value="${sv}"></label>
+    <label class="prow">\u{1F5B1}\uFE0F Mouse sensitivity <input id="sensSlider" type="range" min="20" max="250" value="${Math.round((state.mouseSens||1)*100)}"></label>
+    <label class="prow">\u{1F300} Reduce motion <input id="reduceChk" type="checkbox" ${state.reduce?'checked':''}></label>
+    <label class="prow">\u26F6 Fullscreen <input id="fsChk" type="checkbox" ${document.fullscreenElement?'checked':''}></label>
+    <label class="prow">\u{1F5A5}\uFE0F Quality <select id="qualSel"><option value="auto" ${q==='auto'?'selected':''}>Auto</option><option value="low" ${q==='low'?'selected':''}>Low (fast)</option><option value="high" ${q==='high'?'selected':''}>High</option></select></label>`; }
+function _wireAudioRows(el){
+  el.querySelector('#mvolSlider').oninput=ev=>{ state.musicVol=(+ev.target.value)/100; Music.setVol(state.musicVol); save(); };
+  el.querySelector('#svolSlider').oninput=ev=>{ state.sfxVol=(+ev.target.value)/100; SFX.play('pickup'); save(); };
+  el.querySelector('#sensSlider').oninput=ev=>{ state.mouseSens=clamp((+ev.target.value)/100,0.2,2.5); save(); };
+  el.querySelector('#reduceChk').onchange=ev=>{ state.reduce=ev.target.checked; save(); };
+  el.querySelector('#fsChk').onchange=ev=>{ try{ if(ev.target.checked){ const de=document.documentElement; (de.requestFullscreen||de.webkitRequestFullscreen||de.msRequestFullscreen).call(de); } else { (document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen).call(document); } }catch(e){} };
+  el.querySelector('#qualSel').onchange=ev=>{ state.quality=ev.target.value; applyQuality(); save(); }; }
+function applyQuality(){ const q=state.quality||'auto'; if(q==='low')_setDPR(0); else if(q==='high')_setDPR(999); }
 function renderPause(){ const el=document.getElementById('pause'); el.innerHTML=`<div class="pcard"><h2>⏸ Paused</h2>
-    <label class="prow">🔊 Volume <input id="volSlider" type="range" min="0" max="100" value="${Math.round((state.volume==null?1:state.volume)*100)}"></label>
-    <label class="prow">🎵 Music <input id="musicChk" type="checkbox" ${state.musicOn?'checked':''}></label>
-    <label class="prow">🔈 Sound FX <input id="sfxChk" type="checkbox" ${state.sfxOn?'checked':''}></label>
-    <label class="prow">🌀 Reduce motion <input id="reduceChk" type="checkbox" ${state.reduce?'checked':''}></label>
+    ${_audioRowsHTML()}
     <button class="btn" id="coopBtn" style="background:#37c06a;border-color:#2a8a4a">👥 Play with Friends</button>
     <button class="btn" id="resumeBtn">▶ Resume</button>
+    <button class="btn" id="quitTitleBtn" style="background:#7a3030;border-color:#a04848">🚪 Save & Quit to Title</button>
     <div class="phint">Esc to resume · drag to look · scroll to zoom · <span style="cursor:pointer;text-decoration:underline" id="creditsLink">Credits</span> · v${BUILD}</div></div>`;
+  _wireAudioRows(el);
   el.querySelector('#coopBtn').onclick=()=>{ togglePause(); openCoop(); };
-  el.querySelector('#volSlider').oninput=ev=>{ state.volume=(+ev.target.value)/100; Music.setVol(state.volume); save(); };
-  el.querySelector('#musicChk').onchange=ev=>{ state.musicOn=ev.target.checked; Music.setMuted(!state.musicOn); if(state.musicOn&&!state.paused)Music.resume(); save(); };
-  el.querySelector('#sfxChk').onchange=ev=>{ state.sfxOn=ev.target.checked; if(state.sfxOn)SFX.play('pickup'); save(); };
-  el.querySelector('#reduceChk').onchange=ev=>{ state.reduce=ev.target.checked; save(); };
   el.querySelector('#creditsLink').onclick=()=>toast('🙏 Art: Kenney · Quaternius · KUBIKOS (CC0). See ATTRIBUTION.md');
+  el.querySelector('#quitTitleBtn').onclick=()=>{ save(); location.reload(); };
   el.querySelector('#resumeBtn').onclick=()=>togglePause(); }
 
 /* ============================ TOUCH CONTROLS (mobile) ============================ */
@@ -3599,6 +3617,7 @@ let _mmT=0; let _fpsAcc, _fpsT=0;
 /* 🖥️ ADAPTIVE RESOLUTION — the #1 "FPS stays high for everyone" lever: scale renderer+composer pixelRatio off the live _fpsAcc EMA with hysteresis (step DOWN after 1s sustained <45fps, UP only after 3s sustained >58fps). Scales the fullscreen-pass cost a weak/integrated GPU genuinely can't pay; invisible at the cozy art scale. Reuses the EMA the #fps counter already computes — near-zero per-frame cost. */
 const _DPR_STEPS=[...new Set([0.85,1.0,1.25,1.5].map(s=>Math.min(devicePixelRatio||1,s)))];
 let _dprIdx=_DPR_STEPS.length-1, _dprLowT=0, _dprHiT=0, _pauseN=0, _idleN=0;
+setTimeout(()=>{ try{ applyQuality(); }catch(e){} }, 0);  // persisted Low/High applies at boot
 function _setDPR(i){ i=Math.max(0,Math.min(_DPR_STEPS.length-1,i)); if(i===_dprIdx)return; _dprIdx=i; const r=_DPR_STEPS[i]; renderer.setPixelRatio(r); composer.setPixelRatio(r); renderer.setSize(innerWidth,innerHeight); composer.setSize(innerWidth,innerHeight); renderer.shadowMap.needsUpdate=true; }
 // ── FOG OF WAR: the map starts dark; you reveal terrain as you explore, and named landmarks/people appear once discovered ──
 const FOG_CELL=48;
@@ -4912,7 +4931,7 @@ function renderDebug(dt){ if(!state.debug)return; const el=document.getElementBy
     +`animals ${animals.length}  R[${span(animals,a=>Math.hypot(a.mesh.position.x,a.mesh.position.z))}]\n`
     +`nodes ${nVis}/${nodes.length}  R[${span(nodes,n=>{ n.mesh.getWorldPosition(_np); return Math.hypot(_np.x,_np.z); })}]\n`
     +`drops ${drops.length}  blocks ${BMODE.blocks.length}  homes ${homes.length}`; }
-function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateAutoAttack(dt); updateDungeonHazards(dt); updateMiniDungeonHazards(dt); if(anyUG()){ dungeonClearCheck(); castleClearCheck(); miniClearCheck(); } updateAnimals(dt); updateFauna(dt); updateBanditCamps(dt); updatePacks(dt); updatePatrols(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateWildMounts(dt); updateRiddenMount(); updatePet(dt); updatePetShots(dt); updateTrainingGround(dt); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); updateCombatHud(); updateHotbarCD(); Silly.tick(dt); renderDebug(dt); _fpsAcc=(_fpsAcc===undefined?1/Math.max(dt,1e-3):_fpsAcc*0.9+(1/Math.max(dt,1e-3))*0.1); _fpsT+=dt; if(_fpsT>=0.25){_fpsT=0; const _fe=document.getElementById('fps'); if(_fe)_fe.textContent=Math.round(_fpsAcc)+' fps'; if(ready&&state.running&&!state.paused){ if(_fpsAcc<45){ _dprLowT+=0.25; _dprHiT=0; if(_dprLowT>=1){ _dprLowT=0; _setDPR(_dprIdx-1); } } else if(_fpsAcc>58){ _dprHiT+=0.25; _dprLowT=0; if(_dprHiT>=3){ _dprHiT=0; _setDPR(_dprIdx+1); } } else { _dprLowT=0; _dprHiT=0; } } } _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
+function simTick(dt){ updatePlayer(dt); updateCutaway(dt); updateWorld(dt); updateCombat(dt); updateAutoAttack(dt); updateDungeonHazards(dt); updateMiniDungeonHazards(dt); if(anyUG()){ dungeonClearCheck(); castleClearCheck(); miniClearCheck(); } updateAnimals(dt); updateFauna(dt); updateBanditCamps(dt); updatePacks(dt); updatePatrols(dt); updateDrops(dt); updateGearHoverTooltip(); updateLootBags(dt); updateProjectiles(dt); updatePlayerShots(dt); updateMana(dt); updateMounts(dt); updateWildMounts(dt); updateRiddenMount(); updatePet(dt); updatePetShots(dt); updateTrainingGround(dt); updateFishing(dt); pollChains(); updateInteract(); updateBuild(); updateHeld(dt); Needs.tick(dt); updateNeedsUI(); updateCombatHud(); updateHotbarCD(); Silly.tick(dt); renderDebug(dt); _fpsAcc=(_fpsAcc===undefined?1/Math.max(dt,1e-3):_fpsAcc*0.9+(1/Math.max(dt,1e-3))*0.1); _fpsT+=dt; if(_fpsT>=0.25){_fpsT=0; const _fe=document.getElementById('fps'); if(_fe)_fe.textContent=Math.round(_fpsAcc)+' fps'; if(ready&&state.running&&!state.paused&&(!state.quality||state.quality==='auto')){ if(_fpsAcc<45){ _dprLowT+=0.25; _dprHiT=0; if(_dprLowT>=1){ _dprLowT=0; _setDPR(_dprIdx-1); } } else if(_fpsAcc>58){ _dprHiT+=0.25; _dprLowT=0; if(_dprHiT>=3){ _dprHiT=0; _setDPR(_dprIdx+1); } } else { _dprLowT=0; _dprHiT=0; } } } _mmT+=dt; if(_mmT>=0.09){_mmT=0; revealFog(); drawMinimap(); renderRequests();} if(typeof COOP!=='undefined') COOP.tick(dt); }
 function idleTick(dt){ cam.yaw+=dt*0.12; cam.targetYaw=cam.yaw; if(charMixer)charMixer.update(dt); updatePlayer(0); updateHeld(dt); for(const g of neighbors)g.userData.mix.update(dt); }
 function frameWork(now){ const dt=Math.min((now-last)/1000,0.05); last=now;
   if(__WW_throwOnce){ __WW_throwOnce=false; throw new Error('injected frame error (test)'); }
@@ -5169,20 +5188,10 @@ function charThumb(name){ if(_thumbCache[name]!==undefined) return _thumbCache[n
   }catch(e){ return (_thumbCache[name]=''); } }
 function renderSettings(){ const el=document.getElementById('pause'); if(!el)return;
   el.innerHTML=`<div class="pcard"><h2>⚙ Settings</h2>
-    <label class="prow">🔊 Volume <input id="volSlider" type="range" min="0" max="100" value="${Math.round((state.volume==null?1:state.volume)*100)}"></label>
-    <label class="prow">🎵 Music <input id="musicChk" type="checkbox" ${state.musicOn?'checked':''}></label>
-    <label class="prow">🔈 Sound FX <input id="sfxChk" type="checkbox" ${state.sfxOn?'checked':''}></label>
-    <label class="prow">🖱️ Mouse sensitivity <input id="sensSlider" type="range" min="20" max="250" value="${Math.round((state.mouseSens||1)*100)}"></label>
-    <label class="prow">🌀 Reduce motion <input id="reduceChk" type="checkbox" ${state.reduce?'checked':''}></label>
-    <label class="prow">⛶ Fullscreen <input id="fsChk" type="checkbox" ${document.fullscreenElement?'checked':''}></label>
+    ${_audioRowsHTML()}
     <div style="font-size:11px;opacity:.7;margin:6px 2px">👤 Your look comes from your class & gender (chosen at New Game) and your equipped armor.</div>
     <button class="btn" id="settingsClose">✓ Done</button></div>`;
-  el.querySelector('#volSlider').oninput=ev=>{ state.volume=(+ev.target.value)/100; if(Music.setVol)Music.setVol(state.volume); save(); };
-  el.querySelector('#musicChk').onchange=ev=>{ state.musicOn=ev.target.checked; if(Music.setMuted)Music.setMuted(!state.musicOn); if(state.musicOn&&Music.resume)Music.resume(); save(); };
-  el.querySelector('#sfxChk').onchange=ev=>{ state.sfxOn=ev.target.checked; save(); };
-  el.querySelector('#sensSlider').oninput=ev=>{ state.mouseSens=clamp((+ev.target.value)/100,0.2,2.5); save(); };
-  el.querySelector('#reduceChk').onchange=ev=>{ state.reduce=ev.target.checked; save(); };
-  el.querySelector('#fsChk').onchange=ev=>{ try{ if(ev.target.checked){ const de=document.documentElement; (de.requestFullscreen||de.webkitRequestFullscreen||de.msRequestFullscreen).call(de); } else { (document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen).call(document); } }catch(e){} };   // the settings click IS the user gesture fullscreen needs
+  _wireAudioRows(el);
   el.querySelector('#settingsClose').onclick=closeSettings; }
 document.getElementById('keepBtn').onclick=()=>document.getElementById('winScreen').classList.add('hidden');
 { const g=document.getElementById('gear'); if(g) g.onclick=()=>{ if(invOpen)closeInv(); if(craftOpen)closeCraft(); if(shopOpen)closeShop(); openSettings(); }; }
@@ -5820,5 +5829,7 @@ combatTest:()=>{ const out={}; try{ const t=Object.values(CREATURE_TYPES).find(x
     state._selftesting=false;
     return R; } };
 </script>
+<script>window.GAME_CONFIG=window.GAME_CONFIG||{hide_bug_button:true};</script>
+<script src="game_controls.js"></script>
 </body>
 </html>

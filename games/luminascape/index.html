@@ -171,6 +171,12 @@ html,body{cursor:url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3
 canvas{cursor:url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2728%27%20height%3D%2728%27%20viewBox%3D%270%200%2028%2028%27%3E%3Cpath%20d%3D%27M4%202%20L24%2013%20L15%2016%20L11%2026%20Z%27%20fill%3D%27%230f1a14%27%20stroke%3D%27%236ee7b7%27%20stroke-width%3D%272%27%20stroke-linejoin%3D%27round%27%2F%3E%3Ccircle%20cx%3D%2719%27%20cy%3D%2711%27%20r%3D%272.2%27%20fill%3D%27%23d1fae5%27%2F%3E%3C%2Fsvg%3E") 4 2, auto;}
 button,a,select,input,label,[role=button],.btn{cursor:url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2728%27%20height%3D%2728%27%20viewBox%3D%270%200%2028%2028%27%3E%3Cpath%20d%3D%27M4%202%20L24%2013%20L15%2016%20L11%2026%20Z%27%20fill%3D%27%230f1a14%27%20stroke%3D%27%236ee7b7%27%20stroke-width%3D%272%27%20stroke-linejoin%3D%27round%27%2F%3E%3Ccircle%20cx%3D%2719%27%20cy%3D%2711%27%20r%3D%272.2%27%20fill%3D%27%23d1fae5%27%2F%3E%3C%2Fsvg%3E") 4 2, auto;}
 </style>
+
+<style id="ffg-guard">/* no text/image highlighting inside the game */
+*{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text}
+img{-webkit-user-drag:none;user-drag:none}
+</style>
 </head>
 <body>
 <div id="app"></div>
@@ -1167,7 +1173,7 @@ function reshapeRoad(rec, newHalf){
   if(m2){ rec.mesh.geometry=m2.geometry; old.dispose(); scene.remove(m2); if(m2.material)m2.material.dispose();
     const ti=roads.findIndex(r=>r.mesh===m2); if(ti>=0)roads.splice(ti,1); }
 }
-function _pickRoad(cx,cy){ _ndc.set((cx/innerWidth)*2-1,-(cy/innerHeight)*2+1); _ray.setFromCamera(_ndc,camera);
+function _pickRoad(cx,cy){ const _r=renderer.domElement.getBoundingClientRect(); _ndc.set(((cx-_r.left)/Math.max(1,_r.width))*2-1,-((cy-_r.top)/Math.max(1,_r.height))*2+1); _ray.setFromCamera(_ndc,camera);
   const meshes=roads.map(r=>r.mesh); const hits=_ray.intersectObjects(meshes,false); if(!hits.length)return null;
   return roads.find(r=>r.mesh===hits[0].object)||null;
 }
@@ -1227,7 +1233,8 @@ const _wzPrevDisc=new THREE.Mesh(new THREE.CircleGeometry(1,48), new THREE.MeshB
 _wzPrevDisc.rotation.x=-Math.PI/2; _wzPrevDisc.renderOrder=999; _wzPrevDisc.visible=false; scene.add(_wzPrevDisc);
 const _ray=new THREE.Raycaster(), _ndc=new THREE.Vector2();
 function pickTerrain(clientX,clientY){
-  _ndc.set((clientX/innerWidth)*2-1, -(clientY/innerHeight)*2+1); _ray.setFromCamera(_ndc,camera);
+  const _r=renderer.domElement.getBoundingClientRect();   // canvas-rect NDC: exact even when the page is zoomed/scrolled (mobile visual viewport) — window-based math drifted the brush ring off the cursor
+  _ndc.set(((clientX-_r.left)/Math.max(1,_r.width))*2-1, -((clientY-_r.top)/Math.max(1,_r.height))*2+1); _ray.setFromCamera(_ndc,camera);
   const hits=_ray.intersectObjects([...chunks.values()].map(c=>c.mesh),false);
   return hits.length?hits[0].point:null;
 }
@@ -5846,6 +5853,8 @@ window.__LS__={
   idbGet:(k)=>_idbGet(k),
   idbSet:(k,v)=>_idbSet(k,v),
   activeKey:()=>_activeKey(),
+  pickTerrain:(cx,cy)=>pickTerrain(cx,cy),
+  get camera(){ return camera; },
 };
 
 /* ---------- __MS__ debug API (for headless verification) ---------- */
@@ -6356,5 +6365,7 @@ window.__MS__={
 };
 </script>
 <script type="module" src="net/lumina_net.js"></script>
+<script>window.GAME_CONFIG={hide_bug_button:true};</script>
+<script src="game_controls.js"></script>
 </body>
 </html>

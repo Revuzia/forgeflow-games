@@ -387,11 +387,11 @@ const ui = {
   build() {
     const css = document.createElement("style");
     css.textContent = `
-      #lsnet-btn{position:fixed;left:14px;bottom:14px;z-index:60;font:700 14px Trebuchet MS,sans-serif;
+      #lsnet-btn{position:fixed;left:12px;top:52px;z-index:60;font:700 13px Trebuchet MS,sans-serif;
         background:linear-gradient(160deg,rgba(10,30,20,.92),rgba(6,18,12,.94));color:#bff5d8;border:1px solid rgba(110,231,183,.5);
         border-radius:999px;padding:10px 16px;cursor:pointer;box-shadow:0 6px 22px rgba(0,0,0,.35)}
       #lsnet-btn:hover{border-color:#6ee7b7;box-shadow:0 0 18px rgba(110,231,183,.35)}
-      #lsnet{position:fixed;left:14px;bottom:60px;z-index:61;width:270px;font:14px Trebuchet MS,sans-serif;color:#dcfce7;
+      #lsnet{position:fixed;left:12px;top:96px;z-index:61;width:270px;max-width:86vw;font:14px Trebuchet MS,sans-serif;color:#dcfce7;
         background:linear-gradient(165deg,rgba(9,26,17,.96),rgba(5,14,9,.97));border:1px solid rgba(110,231,183,.45);
         border-radius:16px;padding:14px;display:none;box-shadow:0 14px 44px rgba(0,0,0,.5)}
       #lsnet h3{margin:0 0 8px;font-size:15px;color:#6ee7b7;letter-spacing:.04em}

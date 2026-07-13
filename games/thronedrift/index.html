@@ -13,6 +13,12 @@ canvas{display:block}
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/" } }
 </script>
+
+<style id="ffg-guard">/* no text/image highlighting inside the game */
+*{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text}
+img{-webkit-user-drag:none}
+</style>
 </head><body>
 <div id="game-container"></div>
 <div id="hud"></div>

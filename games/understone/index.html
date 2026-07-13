@@ -20,6 +20,12 @@
   #boot .bar > div { height: 100%; width: 0%; background: linear-gradient(90deg, #7a5c2e, #e8d9a0); transition: width .15s ease; }
   #boot .msg { margin-top: 12px; font-size: 13px; opacity: .7; }
 </style>
+
+<style id="ffg-guard">/* no text/image highlighting inside the game */
+*{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text}
+img{-webkit-user-drag:none}
+</style>
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -30,5 +36,7 @@
   <div class="msg" id="boot-msg">Waking the world…</div>
 </div>
 <script type="module" src="js/main.js"></script>
+<script>window.GAME_CONFIG=window.GAME_CONFIG||{hide_bug_button:true};</script>
+<script src="game_controls.js"></script>
 </body>
 </html>
