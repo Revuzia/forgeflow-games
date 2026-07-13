@@ -49,6 +49,7 @@
     var s = loadSettings();
     this.musicVolume = s.music != null ? s.music : (this.o.musicVolume != null ? this.o.musicVolume : 0.3);
     this.sfxVolume = s.sfx != null ? s.sfx : 1.0;
+    this.quality = s.quality || "med"; // low | med | high (kernel reads it at boot)
     FFG.sfxVolume = this.sfxVolume; // engines read this to scale SFX
     this._build();
     var self = this;
@@ -122,6 +123,14 @@
     sub.appendChild(this._smallBtn("SETTINGS", function () { self.settings(); }));
     this.ov.appendChild(sub);
     this._show();
+    // pause-menu RESTART left a flag: consume it and drop straight into a run
+    var rst = null;
+    try { rst = root.sessionStorage.getItem("ffg_restart"); root.sessionStorage.removeItem("ffg_restart"); } catch (e) {}
+    if (rst) {
+      if (diffs.indexOf(rst) >= 0) this.difficulty = rst;
+      self.hide(); self.phase = "playing"; self._playMusic();
+      if (self.o.onPlay) self.o.onPlay(self.difficulty);
+    }
   };
 
   // How-to-Play / tutorial panel — content supplied by the genre via opts.howTo
@@ -171,11 +180,33 @@
     panel.appendChild(slider("SOUND FX", this.sfxVolume, function (v) {
       self.sfxVolume = v; FFG.sfxVolume = v; self._persist();
     }));
+    // QUALITY preset (industry standard for the 3D games): LOW = 1.0 DPR + no
+    // shadows, MED = 1.5 + shadows, HIGH = 2.0 + shadows. Applies live when the
+    // kernel exposes FFG.applyQuality; always persisted for the next boot.
+    (function () {
+      var qwrap = el("div", "margin-top:16px;text-align:left");
+      qwrap.appendChild(el("div", "font-size:12px;letter-spacing:2px;opacity:.75", "QUALITY"));
+      var qrow = el("div", "display:flex;gap:8px;margin-top:6px");
+      ["low", "med", "high"].forEach(function (q) {
+        var b = el("button", "flex:1;padding:8px 0;border-radius:9px;border:1px solid rgba(160,200,255,.35);background:rgba(20,28,44,.85);color:#dfe8f4;cursor:pointer;font-weight:700;letter-spacing:1px");
+        b.textContent = q.toUpperCase();
+        function mark() { b.style.outline = self.quality === q ? "2px solid #7CFC9A" : "none"; }
+        b.onclick = function () {
+          self.quality = q;
+          if (root.FFG && typeof root.FFG.applyQuality === "function") root.FFG.applyQuality(q);
+          self._persist();
+          Array.prototype.forEach.call(qrow.children, function (c) { c.style.outline = c.textContent.toLowerCase() === q ? "2px solid #7CFC9A" : "none"; });
+        };
+        mark(); qrow.appendChild(b);
+      });
+      qwrap.appendChild(qrow);
+      panel.appendChild(qwrap);
+    })();
     this.ov.appendChild(panel);
     this.ov.appendChild(this._btn("← BACK", function () { self.menu(); }, false));
     this._show();
   };
-  Shell.prototype._persist = function () { saveSettings({ music: this.musicVolume, sfx: this.sfxVolume }); };
+  Shell.prototype._persist = function () { saveSettings({ music: this.musicVolume, sfx: this.sfxVolume, quality: this.quality }); };
 
   Shell.prototype.togglePause = function () {
     if (this.phase === "playing") this.pause();
@@ -189,7 +220,16 @@
     this.ov.appendChild(el("div", "font-size:42px;font-weight:800;letter-spacing:3px", "PAUSED"));
     this.ov.appendChild(this._btn("RESUME", function () { self.resume(); }, true));
     this.ov.appendChild(this._smallBtn("SETTINGS", function () { self._pauseReturn = true; self.settings(); }));
-    this.ov.appendChild(this._smallBtn("RESTART", function () { root.location.reload(); }));
+    // RESTART = reload straight back into a run (same difficulty, via a
+    // sessionStorage flag the menu consumes). QUIT TO MENU = reload to the title.
+    this.ov.appendChild(this._smallBtn("RESTART", function () {
+      try { root.sessionStorage.setItem("ffg_restart", self.difficulty || "1"); } catch (e) {}
+      root.location.reload();
+    }));
+    this.ov.appendChild(this._smallBtn("QUIT TO MENU", function () {
+      try { root.sessionStorage.removeItem("ffg_restart"); } catch (e) {}
+      root.location.reload();
+    }));
     this._show();
     if (this.o.onPause) this.o.onPause();
   };

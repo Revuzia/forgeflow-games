@@ -46,9 +46,24 @@ export class Kernel3D {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     // Cap DPR at 1.5 — at 2x a hi-DPI display renders ~4x the fragments (a top FPS
     // killer). 1.5 is near-indistinguishable and far cheaper.
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-    this.renderer.shadowMap.enabled = true;
+    // QUALITY preset (shell settings → ffg_settings.quality): low = 1.0 DPR +
+    // no shadows, med = 1.5 + shadows (the old fixed cap), high = 2.0 + shadows.
+    const QDPR = { low: 1.0, med: 1.5, high: 2.0 };
+    let _q = "med";
+    try { _q = (JSON.parse(localStorage.getItem("ffg_settings") || "{}").quality) || "med"; } catch (e) {}
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, QDPR[_q] || 1.5));
+    this.renderer.shadowMap.enabled = _q !== "low";
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // live-apply hook for the shell's QUALITY buttons
+    {
+      const kr = this.renderer;
+      window.FFG = window.FFG || {};
+      window.FFG.applyQuality = function (q) {
+        kr.setPixelRatio(Math.min(window.devicePixelRatio || 1, QDPR[q] || 1.5));
+        kr.shadowMap.enabled = q !== "low";
+        kr.shadowMap.needsUpdate = true;
+      };
+    }
     // AgX is the modern filmic tonemap (Blender 4.0 default, three r0.160+) — it
     // grades HDR far more naturally than ACES (softer highlight roll-off, no neon
     // clipping). Feature-detected with an ACES fallback for older builds.
