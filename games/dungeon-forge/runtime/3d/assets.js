@@ -804,6 +804,32 @@ export function makeDoor(type, opts = {}) {
   return grp;
 }
 
+// A cluster of pointed steel spikes for the pop-up spike trap — real spikes
+// (sharp cones) that sit under the floor and thrust UP when the trap fires,
+// not a GLB blob. Built around local origin; the trap render sinks it below the
+// floor and animates it up.
+export function makeSpikes() {
+  const grp = new THREE.Group();
+  const steel = new THREE.MeshStandardMaterial({ color: 0xb8bcc8, metalness: 0.9, roughness: 0.32 });
+  const tip = new THREE.MeshStandardMaterial({ color: 0xe6e9f0, metalness: 0.95, roughness: 0.2 });
+  const rows = [-1.1, 0, 1.1];
+  for (const gx of rows) for (const gz of rows) {
+    const jx = gx * 0.9 + (gx === 0 ? 0 : 0), jz = gz * 0.9;
+    const h = 1.5 + ((gx + gz) % 2 === 0 ? 0.35 : 0);   // slight height variation
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.24, h, 6), steel);
+    spike.position.set(jx, h / 2, jz);
+    grp.add(spike);
+    const point = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.4, 6), tip);
+    point.position.set(jx, h + 0.16, jz);
+    grp.add(point);
+  }
+  // a dark base plate the spikes retract into
+  const base = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.3, 3.3),
+    new THREE.MeshStandardMaterial({ color: 0x1a1c24, roughness: 0.95 }));
+  base.position.y = -0.15; grp.add(base);
+  return grp;
+}
+
 export function stripLights(root) {
   const dead = [];
   root.traverse((o) => { if (o.isLight) dead.push(o); });

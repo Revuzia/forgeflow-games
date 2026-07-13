@@ -11,7 +11,7 @@ import * as THREE from "three";
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
 const E = await import("../sim/escape_sim.js" + V);
-const { makeInstanced, Assets, charClips, makeTorch, makeCellSurfaces, makeNpc, findArmBones, relaxArms, makeDoor } = await import("./assets.js" + V);
+const { makeInstanced, Assets, charClips, makeTorch, makeCellSurfaces, makeNpc, findArmBones, relaxArms, makeDoor, makeSpikes } = await import("./assets.js" + V);
 const { EnemyPool } = await import("./enemies.js" + V);
 
 const FLOOR_H = 4.4;
@@ -349,9 +349,10 @@ export class Escape {
           grp.add(lid);
           grp.userData.pitLid = lid;
         } else {
-          const m = add(this.props.spikeShared || this.props["spike-trap"], null, CELL * 0.82);
+          const m = makeSpikes();      // real pointed steel spikes (procedural)
+          grp.add(m);
           grp.userData.spikes = m;
-          if (m) m.position.y = -0.9; // hidden; rises when active
+          m.position.y = -1.9;         // fully hidden below the floor; thrusts up when active
         }
         break;
       }
@@ -1323,8 +1324,9 @@ export class Escape {
           this.g.fx.burst(sp, 0x6a5a42, 6, 2.6);
         }
         m.userData._spkPrev = t.state;
-        const target = t.state === "on" ? 0 : t.state === "warn" ? -0.55 : -0.95;
-        m.userData.spikes.position.y += (target - m.userData.spikes.position.y) * Math.min(1, dt * (t.state === "on" ? 22 : 6));
+        // fully retracted below the floor (-1.9), a warning peek (-1.5), full thrust (0)
+        const target = t.state === "on" ? 0.1 : t.state === "warn" ? -1.5 : -1.9;
+        m.userData.spikes.position.y += (target - m.userData.spikes.position.y) * Math.min(1, dt * (t.state === "on" ? 24 : 7));
       }
       if (m.userData.ventDisc) {
         const mat = m.userData.ventDisc.material;

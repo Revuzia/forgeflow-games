@@ -848,6 +848,29 @@ const ok = (cond, name, extra) => {
     ok(c > 0 && c < cH, "corner height averages raised+flat neighbors (" + c.toFixed(2) + ")");
   }
 
+  // ── 9j. walls vs stairs + all-decor-destroyable ─────────────────
+  console.log("[walls-stairs+decor]");
+  {
+    const wd2 = newDungeon({ theme: "fantasy" });
+    stampRoom(wd2, 0, 5, 5, 5, 5);
+    applyOp(wd2, { t: "obj+", f: 0, o: { kind: "spawn", x: 5, z: 5 } });
+    applyOp(wd2, { t: "floor+" });
+    stampRoom(wd2, 1, 5, 5, 5, 5);
+    applyOp(wd2, { t: "obj+", f: 1, o: { kind: "exit", x: 8, z: 8 } });
+    // up-stairs at (6,6) rot 0 → faces (6,7); a wall on that edge must be refused
+    applyOp(wd2, { t: "obj+", f: 0, o: { kind: "stairs", x: 6, z: 6, rot: 0 } });
+    const blocked = applyOp(wd2, { t: "wall+", f: 0, x: 6, z: 6, s: 0, wtype: "stone" });
+    ok(!blocked.ok && blocked.err === "stairwall", "wall through the stair flight is refused (" + blocked.err + ")");
+    // a wall elsewhere on the floor still works
+    ok(applyOp(wd2, { t: "wall+", f: 0, x: 5, z: 5, s: 1, wtype: "stone" }).ok, "wall away from the stairs still places");
+    // edgeBetweenCells helper
+    const eb = D.edgeBetweenCells(6, 6, 6, 7);
+    ok(eb && eb.x === 6 && eb.z === 6 && eb.s === 0, "edgeBetweenCells(6,6→6,7) = (6,6,s0)");
+    // every non-explosive decor is breakable; explosives are not
+    ok(D.breakableDecor("bookshelf") && D.breakableDecor("torch") && D.breakableDecor("pillar"), "bookshelf/torch/pillar are breakable now");
+    ok(!D.breakableDecor("barrel") && !D.breakableDecor("canister"), "barrel/canister are NOT breakable (they explode)");
+  }
+
   // ── 10. pathfinding + LOS ───────────────────────────────────────
   console.log("[path+los]");
   const run6 = newRun(s, 6000, [{ id: "P1" }]);

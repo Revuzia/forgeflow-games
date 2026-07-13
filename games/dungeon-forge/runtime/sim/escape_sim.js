@@ -14,7 +14,7 @@
 import {
   CELL, DIRS, ENEMIES, ck, hasCell, objsAt, findAll, stairLinks,
   mulberry, hashStr, rollLoot, cellType, cellHeight, CT, LAVA_DPS, WATER_SLOW, RAISED_H,
-  SHOP, SHOP_IDS, NPC_TYPES, doorAxis, BREAKABLE_DECOR, EXPLOSIVE_DECOR, BARREL, makeItem, itemScore,
+  SHOP, SHOP_IDS, NPC_TYPES, doorAxis, BREAKABLE_DECOR, breakableDecor, EXPLOSIVE_DECOR, BARREL, makeItem, itemScore,
   edgeWall, edgeMid,
 } from "./dungeon.js";
 
@@ -659,7 +659,7 @@ function breakDecorInRange(st, p, range, byId) {
   const fl = st.d.floors[p.f]; if (!fl) return;
   const r2 = (range + 1.3) ** 2;
   for (const o of fl.objects) {
-    if (o.kind !== "decor" || !BREAKABLE_DECOR.has(o.dtype) || st.brokenDecor.has(o.id)) continue;
+    if (o.kind !== "decor" || !breakableDecor(o.dtype) || st.brokenDecor.has(o.id)) continue;
     if ((c2w(o.x) - p.x) ** 2 + (c2w(o.z) - p.z) ** 2 <= r2) breakDecor(st, o, p.f, byId);
   }
 }
@@ -1041,7 +1041,7 @@ export function tick(st, dt, opts = {}) {
     if (!b.hostile && simEnemies) {
       const bcx = w2c(nx), bcz = w2c(nz), bfl = st.d.floors[b.f];
       if (bfl) for (const o of bfl.objects) {
-        if (o.kind === "decor" && o.x === bcx && o.z === bcz && BREAKABLE_DECOR.has(o.dtype) && !st.brokenDecor.has(o.id)) {
+        if (o.kind === "decor" && o.x === bcx && o.z === bcz && breakableDecor(o.dtype) && !st.brokenDecor.has(o.id)) {
           breakDecor(st, o, b.f, b.owner); b.ttl = 0; emit(st, "boltHit", { x: nx, z: nz, f: b.f }); break;
         }
       }

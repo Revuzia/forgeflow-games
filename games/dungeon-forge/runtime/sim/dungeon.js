@@ -233,8 +233,13 @@ export const DECOR = {
 };
 // decor types that emit light (rendered with a torch/lamp glow)
 export const LIGHT_DECOR = new Set(["torch", "wall-torch", "lantern", "candles", "lamp"]);
-// Decor the player can smash in escape (shatter FX + a little gold/loot).
-export const BREAKABLE_DECOR = new Set(["crate", "pot", "urn", "coffin", "debris", "bones"]);
+// EVERY decor is destroyable when hit or shot (owner) EXCEPT the explosive ones
+// (which detonate instead). breakableDecor(dtype) is the single source of truth;
+// BREAKABLE_DECOR kept for anything importing it directly.
+export function breakableDecor(dtype) {
+  return !!dtype && !EXPLOSIVE_DECOR.has(dtype);
+}
+export const BREAKABLE_DECOR = new Set(["torch", "wall-torch", "crate", "pot", "urn", "bookshelf", "pillar", "coffin", "debris", "bones", "candles", "lantern", "lamp", "terminal", "barrier", "cables"]);
 // EXPLOSIVE decor becomes a live barrel entity in escape: pushable, and it
 // EXPLODES when hit or shot (AoE hurts enemies AND players; chains). Players
 // shove them into position to build their own ambushes.
@@ -280,6 +285,16 @@ export function emptyFloor() {
 export const WALL_TYPES = ["stone", "brick", "wood", "metal"];
 export const DOOR_TYPES = ["wood", "iron", "bars", "ornate"];
 export const wk = (x, z, s) => x + "," + z + "," + s;
+/** The normalized edge (x,z,s) that lies between two orthogonally-adjacent
+ *  cells, or null if they aren't orthogonal neighbors. */
+export function edgeBetweenCells(ax, az, bx, bz) {
+  const dx = bx - ax, dz = bz - az;
+  if (Math.abs(dx) + Math.abs(dz) !== 1) return null;
+  if (dx === 1) return { x: ax, z: az, s: 1 };
+  if (dx === -1) return { x: bx, z: bz, s: 1 };
+  if (dz === 1) return { x: ax, z: az, s: 0 };
+  return { x: bx, z: bz, s: 0 };
+}
 export function normEdge(x, z, side) {
   side = ((side | 0) % 4 + 4) % 4;
   if (side === 0) return { x, z, s: 0 };
@@ -380,6 +395,14 @@ export function applyOp(d, op) {
       if (!inBounds(e.x, e.z) || !inBounds(nx, nz)) return { ok: false, err: "oob" };
       // interior walls only: both sides must be floor (the boundary already HAS a wall)
       if (!fl.cells[ck(e.x, e.z)] || !fl.cells[ck(nx, nz)]) return { ok: false, err: "nocell" };
+      // don't let a wall cut through a staircase — reject the edge the flight
+      // crosses (stair cell ↔ the cell it faces / its landing)
+      for (const o of fl.objects) {
+        if (o.kind !== "stairs") continue;
+        const dir = DIRS[(o.rot || 0) % 4];
+        const be = edgeBetweenCells(o.x, o.z, o.x + dir.dx, o.z + dir.dz);
+        if (be && be.x === e.x && be.z === e.z && be.s === e.s) return { ok: false, err: "stairwall" };
+      }
       fl.walls = fl.walls || {};
       const key = wk(e.x, e.z, e.s);
       const prev = fl.walls[key];

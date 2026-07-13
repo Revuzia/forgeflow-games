@@ -136,6 +136,16 @@ export class Hud {
         sub.appendChild(o);
       }
     };
+    // like mkThumbOpts but with a big EMOJI icon instead of a rendered 3D thumb
+    // (for options that have no model — e.g. traps). Same contained panel look.
+    const mkIconOpts = (list, cur, iconFn, labelFn, onpick) => {
+      sub.classList.add("thumbs");
+      for (const it of list) {
+        const o = el(`<button class="df-thumb ${it === cur ? "on" : ""}" title="${esc(labelFn(it))}"><span class="df-thumbimg df-thumbemoji">${iconFn(it)}</span><span class="df-thumblbl">${esc(labelFn(it))}</span></button>`);
+        o.onclick = () => { this.g.audio.sfx("ui"); onpick(it); this.refreshBuilder(b); };
+        sub.appendChild(o);
+      }
+    };
     // Props category: a picker row for chest/key/trap/light/decor, then that tool's own options
     if (PROP_TOOL_IDS.includes(b.tool)) {
       for (const pt of PROP_TOOLS) {
@@ -181,13 +191,16 @@ export class Hud {
         (k) => `<b>❤${roster[k].hp}</b> ⚔${roster[k].dmg}`,
         (k) => b.setTool("enemy", { etype: k }));
     } else if (b.tool === "trap") {
+      // contained icon panel (matches the Decor picker — no more strung-out row)
+      sub.appendChild(el(`<div class="df-flexbreak"></div>`));
       const TL = {
-        spikes: "⚙ Pop-up Spikes", vent: b.d.theme === "scifi" ? "☣ Toxin Vent" : "☠ Poison Gas Vent",
-        firejet: "🔥 Wall Fire Jet", javelin: "🏹 Javelin Tripwire", pit: "🕳 Secret Pit",
+        spikes: "Pop-up Spikes", vent: b.d.theme === "scifi" ? "Toxin Vent" : "Poison Gas Vent",
+        firejet: "Wall Fire Jet", javelin: "Javelin Tripwire", pit: "Secret Pit",
       };
-      mkOpts(D.TRAPS, b.toolOpt.ttype || "spikes", (k) => TL[k] || k, (k) => b.setTool("trap", { ttype: k }));
+      const TI = { spikes: "🔺", vent: "☠", firejet: "🔥", javelin: "🏹", pit: "🕳" };
+      mkIconOpts(D.TRAPS, b.toolOpt.ttype || "spikes", (k) => TI[k] || "⚙", (k) => TL[k] || k, (k) => b.setTool("trap", { ttype: k }));
       const tt = b.toolOpt.ttype || "spikes";
-      sub.appendChild(el(`<span class="df-subnote">${
+      sub.appendChild(el(`<span class="df-subnote df-fullrow">${
         tt === "firejet" ? "🔥 FIRE: mount by a wall — roars a 3-cell flame cone. R rotates the direction." :
         tt === "javelin" ? "🏹 PROJECTILE: a tripwire launches a javelin across the room (skewers enemies too!). R aims it." :
         tt === "pit" ? "🕳 FALL: a nearly-invisible tile — one step and the floor gives way. Instant death (jump to clear it)." :
@@ -292,7 +305,10 @@ export class Hud {
         ${overridden ? `<button data-a="statreset" class="df-btn tiny">↺ Reset stats to default</button>` : `<div class="df-selnote">Tweak this creature's stats — they override the defaults for this placement only.</div>`}`;
     }
     if (o.kind === "trap") {
-      extra = `<select data-a="ttype" class="df-diff">${D.TRAPS.map((k) => `<option value="${k}" ${k === o.ttype ? "selected" : ""}>${k}</option>`).join("")}</select>`;
+      // rounded button chooser (matches the door panel) — no square native <select>
+      const TL = { spikes: "🔺 Spikes", vent: "☠ Poison Vent", firejet: "🔥 Fire Jet", javelin: "🏹 Javelin", pit: "🕳 Secret Pit" };
+      extra = `<div class="df-selnote">Trap type:</div>
+        <div class="df-subopts" style="position:static;transform:none;margin:0 0 2px">${D.TRAPS.map((k) => `<button class="df-sub ${k === o.ttype ? "on" : ""}" data-ttype="${k}">${TL[k] || k}</button>`).join("")}</div>`;
     }
     this.selPanel = el(`<div class="df-selpanel">
       <div class="df-selhead">${kindLabel} <span class="dim">· cell ${o.x},${o.z}</span></div>
@@ -316,7 +332,7 @@ export class Hud {
     });
     if (q('[data-a="statreset"]')) q('[data-a="statreset"]').onclick = () => { b._editSel({ stats: null }); b.g.hud.showSelection(b, D.objById(b.d, b.sel)); };
     if (q('[data-a="enemykey"]')) q('[data-a="enemykey"]').onclick = () => b.toggleEnemyKey();
-    if (q('[data-a="ttype"]')) q('[data-a="ttype"]').onchange = (e) => b._editSel({ ttype: e.target.value });
+    this.selPanel.querySelectorAll("[data-ttype]").forEach((btn) => btn.onclick = () => { b._editSel({ ttype: btn.dataset.ttype }); b.g.hud.showSelection(b, D.objById(b.d, b.sel)); });
     if (q('[data-a="ntype"]')) q('[data-a="ntype"]').onchange = (e) => { b._editSel({ ntype: e.target.value }); b.g.hud.showSelection(b, D.objById(b.d, b.sel)); };
     this.selPanel.querySelectorAll("[data-shop]").forEach((btn) => btn.onclick = () => {
       const cur = new Set((o.stock && o.stock.length ? o.stock : D.SHOP_IDS).slice());
@@ -701,6 +717,8 @@ function injectStyle() {
   .df-thumb:hover{border-color:rgba(150,170,255,.45);background:rgba(40,48,74,.55)}
   .df-thumb.on{border-color:var(--acc);background:rgba(90,110,220,.24)}
   .df-thumbimg{width:60px;height:60px;object-fit:contain;border-radius:7px;background:radial-gradient(circle at 50% 34%,rgba(96,116,196,.28),rgba(10,13,22,.05))}
+  .df-thumbemoji{display:flex;align-items:center;justify-content:center;font-size:34px}
+  .df-fullrow{flex-basis:100%;text-align:center;margin-top:2px}
   .df-thumbph{display:flex;align-items:center;justify-content:center;font-size:22px;opacity:.5}
   .df-thumblbl{font-size:9.5px;font-weight:700;line-height:1.12;text-align:center;max-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .df-thumbstat{font-size:8.5px;opacity:.82;font-weight:700;letter-spacing:.2px} .df-thumbstat b{color:#ff8a9a;font-weight:800}

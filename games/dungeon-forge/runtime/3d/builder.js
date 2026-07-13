@@ -9,7 +9,7 @@ import * as THREE from "three";
 
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
-const { makeInstanced, Assets, creatureClips, makeTorch, makeCreature, makeCellSurfaces, makeNpc, makeDoor } = await import("./assets.js" + V);
+const { makeInstanced, Assets, creatureClips, makeTorch, makeCreature, makeCellSurfaces, makeNpc, makeDoor, makeSpikes } = await import("./assets.js" + V);
 const { Thumbnailer } = await import("./thumbs.js" + V);
 const { landingMarker } = await import("./stair_marker.js" + V);
 
@@ -422,7 +422,7 @@ export class Builder {
           warn.position.y = 0.09;
           grp.add(lid, warn);
         } else {
-          add(this.props.spikeShared || this.props["spike-trap"], null, CELL * 0.8);
+          const sp = makeSpikes(); sp.position.y = 0.1; grp.add(sp);   // real spikes, shown raised in the builder
         }
         break;
       }
