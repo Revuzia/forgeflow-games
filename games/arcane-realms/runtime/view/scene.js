@@ -572,7 +572,7 @@ export class BoardScene {
     // the orbs are HTML above the canvas, so they'd overlap the enlarged card.
     // Two separate flags: match.js owns _hoverActive (hand), setBoardHover owns
     // _boardHoverActive — so un-hovering one can't clobber the other's state.
-    if (this._hoverActive || this._boardHoverActive || e.boardHover) { this.hideNameplate(e); return; }
+    if (this._hoverActive || this._boardHoverActive || this._showcaseActive || e.boardHover) { this.hideNameplate(e); return; }
     e.mesh.updateWorldMatrix(true, false);
     const cr = this.container.getBoundingClientRect();
     const corner = (lx, ly) => {
@@ -899,13 +899,16 @@ export class BoardScene {
     if (!e) e = this.makeCardEntry(iid, cardId, side);
     e.mesh.material.map = getCard(cardId).tex;
     e.mesh.material.needsUpdate = true;
-    const focus = new THREE.Vector3(0, 2.4, 1.4);
-    await this.applyTransform(e, { pos: focus, rotX: -0.5, rotZ: 0, scale: 1.7 }, 0.3, 'backOut');
-    this.fx.ring(new THREE.Vector3(0, 0.4, 1.2), 0xe8b93a, { maxR: 3 });
-    await new Promise((r) => setTimeout(r, 800 / this.animSpeed));
-    this.tweens.add(e.mesh.material, { opacity: 0 }, 0.3);
-    await this.tweens.add(e.group.scale, { x: 0.5, y: 0.5, z: 0.5 }, 0.3, 'sineIn');
-    this.removeEntry(iid);
+    this._showcaseActive = (this._showcaseActive || 0) + 1; // orbs hide under the showcase
+    try {
+      const focus = new THREE.Vector3(0, 2.4, 1.4);
+      await this.applyTransform(e, { pos: focus, rotX: this.faceCamRotX(focus.y, focus.z), rotZ: 0, scale: 1.7 }, 0.3, 'backOut');
+      this.fx.ring(new THREE.Vector3(0, 0.4, 1.2), 0xe8b93a, { maxR: 3 });
+      await new Promise((r) => setTimeout(r, 800 / this.animSpeed));
+      this.tweens.add(e.mesh.material, { opacity: 0 }, 0.3);
+      await this.tweens.add(e.group.scale, { x: 0.5, y: 0.5, z: 0.5 }, 0.3, 'sineIn');
+      this.removeEntry(iid);
+    } finally { this._showcaseActive--; }
   }
 
   async animEnemyReveal(cardId) {
@@ -914,11 +917,14 @@ export class BoardScene {
     tmp.group.position.set(0, 2.2, -2.2);
     tmp.inner.rotation.x = 0.5;
     tmp.group.scale.setScalar(0.1);
-    await this.applyTransform(tmp, { pos: new THREE.Vector3(0, 2.5, 0.4), rotX: -0.5, rotZ: 0, scale: 1.55 }, 0.3, 'backOut');
-    await new Promise((r) => setTimeout(r, 850 / this.animSpeed));
-    this.tweens.add(tmp.mesh.material, { opacity: 0 }, 0.26);
-    await this.tweens.add(tmp.group.scale, { x: 0.4, y: 0.4, z: 0.4 }, 0.26, 'sineIn');
-    this.removeEntry(tmp.iid);
+    this._showcaseActive = (this._showcaseActive || 0) + 1; // orbs hide under the showcase
+    try {
+      await this.applyTransform(tmp, { pos: new THREE.Vector3(0, 2.5, 0.4), rotX: this.faceCamRotX(2.5, 0.4), rotZ: 0, scale: 1.55 }, 0.3, 'backOut');
+      await new Promise((r) => setTimeout(r, 850 / this.animSpeed));
+      this.tweens.add(tmp.mesh.material, { opacity: 0 }, 0.26);
+      await this.tweens.add(tmp.group.scale, { x: 0.4, y: 0.4, z: 0.4 }, 0.26, 'sineIn');
+      this.removeEntry(tmp.iid);
+    } finally { this._showcaseActive--; }
   }
 
   playFxAt(pos, kind, realmColor) {

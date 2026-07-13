@@ -218,15 +218,30 @@ export class Match {
         case 'draw': if (ev.p === this.mySide) Audio2.sfx('draw'); break;
         case 'burn': this.floatAt(scene.heroPos(this.relOf(ev.p)), 'Burned: ' + cardById(ev.card).name, 'bad'); break;
         case 'fatigue': this.floatAt(scene.heroPos(this.relOf(ev.p)), `Fatigue ${ev.amount}!`, 'bad'); break;
-        case 'play-creature': Audio2.sfx('summon'); break;
+        case 'play-creature':
+          Audio2.sfx('summon');
+          this.ui.histAdd?.(this.relOf(ev.p), ev.card);
+          break;
         case 'play-spell': {
           // distinct cast voice per realm — fire ≠ frost ≠ shadow ≠ light…
           const sr = cardById(ev.card).realm;
           Audio2.sfx(['ember', 'tide', 'grove', 'dawn', 'grave'].includes(sr) ? 'spell_' + sr : 'spell_arcane');
+          this.ui.histAdd?.(this.relOf(ev.p), ev.card);
           await this.spellChoreography(ev);
           break;
         }
-        case 'play-trap': Audio2.sfx('trap'); break;
+        case 'play-trap': {
+          Audio2.sfx('trap');
+          // my own trap shows in MY history; the enemy's stays hidden (⧗)
+          const rel = this.relOf(ev.p);
+          if (rel === 0) {
+            const tc = this.state.players[ev.p].traps.find((t) => t.iid === ev.iid)?.card;
+            if (tc) this.ui.histAdd?.(0, tc);
+          } else {
+            this.ui.histAdd?.(1, null, true);
+          }
+          break;
+        }
         case 'trap-trigger': {
           Audio2.sfx('trap');
           this.ui.toast(`Trap: ${cardById(ev.card).name}!`);
@@ -243,11 +258,15 @@ export class Match {
         case 'attack-fizzle': this.floatAt(this.posOfTarget({ kind: 'unit', iid: ev.attacker }), 'Foiled!', 'bad'); break;
         case 'combat': Audio2.sfx('impact'); break;
         case 'tap': {
+          // NO full tilt (owner): just a quick little flicker as the card exhausts —
+          // a small out-and-back wobble; the dim + 💤 badge carry the "used" state.
           const e = scene.cards.get(ev.iid);
           if (e) {
             Audio2.sfx('tap');
             scene.tweens.killOf(e.group.rotation);
-            scene.tweens.add(e.group.rotation, { y: (e.side === 0 ? -1 : 1) * Math.PI / 2 }, 0.3, 'cubicInOut');
+            scene.tweens.add(e.group.rotation, { y: (e.side === 0 ? -1 : 1) * 0.13 }, 0.09, 'cubicOut', () => {
+              scene.tweens.add(e.group.rotation, { y: 0 }, 0.16, 'cubicOut');
+            });
           }
           break;
         }
