@@ -1,5 +1,24 @@
 # Thronedrift — Changelog (né Crownfire Arenas)
 
+## v1.4.1 — 2026-07-13 (auto-attack stall fix, original sorceress mesh)
+- AUTO-ATTACK STALL FIXED: the held-attack latch was gated on input.enabled,
+  so click-and-holding through any input-disabled window (PVP round
+  countdown, level panel, pause) left the button permanently silent until
+  re-pressed. Latch now always tracks the physical button; the sim gates
+  actual firing. Also: middle/side mouse-button releases no longer kill a
+  held LMB attack (pointerup didn't check e.button). Repro-verified with
+  real PointerEvents: held-through-disabled resumes firing; 80s randomized
+  ability/dash/toggle soak = zero stalls.
+- SORCERESS: ORIGINAL Meshy mesh restored (owner call) — v1.3.3's vert
+  collapse missed the ornate staff head, which stayed skinned through her
+  body. All local surgery abandoned; baked staff as authored; procedural
+  staff removed. Proper fix = character regen (see BUILD_STATUS research).
+- Meshy research recorded: animation library has proper presets
+  (Combat_Stance 89 / Axe_Stance 85 idles, Run_02/RunFast, armed walks,
+  ~3cr per clip) but our hero rig task IDs have EXPIRED from the account —
+  new clips need a re-rig (~90-120cr) or full clean regen (~300-350cr,
+  also fixes the staff + hands). Owner-gated.
+
 ## v1.4 — 2026-07-10 (animation pass, Bo5, host lobbies, controls-bar v2)
 - LOCOMOTION SPEED-MATCH: run/walk clip timeScale now follows actual ground
   speed (class speed + frost/block/attack slows) — no more skating feet.

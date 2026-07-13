@@ -33,7 +33,10 @@ const setProgress = (f, txt) => {
 
 // ---- renderer ---------------------------------------------------------------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // fps budget on mobile
+// QUALITY preset from settings: low = 1.0 DPR + no shadows, high = 1.5 + shadows
+const _tdQ = (() => { try { const v = localStorage.getItem("thronedrift_set_quality"); return v ? JSON.parse(v) : "high"; } catch (e) { return "high"; } })();
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, _tdQ === "low" ? 1.0 : 1.5)); // fps budget on mobile
+window.__TD_QUALITY__ = (q) => { renderer.setPixelRatio(Math.min(window.devicePixelRatio, q === "low" ? 1.0 : 1.5)); renderer.shadowMap.enabled = q !== "low"; renderer.shadowMap.needsUpdate = true; };
 renderer.setSize(container.clientWidth, container.clientHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -77,8 +80,8 @@ window.addEventListener("resize", () => {
     }),
   };
 
-  SFX.setVolume(save.get("set_vol", 0.5));
-  Music.setVolume(save.get("set_vol", 0.5));
+  SFX.setVolume(save.get("set_svol", save.get("set_vol", 0.5)));   // split sliders (legacy set_vol fallback)
+  Music.setVolume(save.get("set_mvol", save.get("set_vol", 0.5)));
   Music.setEnabled(save.get("set_music", true));
   input.invertX = save.get("set_invx", false);
   input.invertY = save.get("set_invy", false);

@@ -84,12 +84,11 @@ export class Champion {
       actor.attachWeapon(bow, "Left", { gripFrac: 0.5, palm: 0.12, roll: 0, rest: [0.05, 0.98, 0.15] });
       actor.idleRelax = 0.65;   // authored idle flares his arms (owner screenshot)
     } else if (model === "sorceress") {
-      // her baked-in staff is surgically collapsed (three grafts all read
-      // broken); she now carries a proper attached staff like everyone else
-      const staff = makeStaff();
-      staff.scale.setScalar(0.88);   // full-size read as oversized in-hand
-      actor.attachWeapon(staff, "Right", { gripFrac: 0.38, palm: 0.12, rest: [0.1, 0.97, 0.18] });
-      actor.idleRelax = 0.6;    // same arms-out authored idle as the rogue
+      // ORIGINAL Meshy mesh restored (owner 2026-07-13): the baked staff
+      // stays as authored — every local surgery graft read worse. No
+      // procedural staff, no idle relax (relax fights the authored
+      // staff-carry pose). Proper fix = Meshy animation-library clips,
+      // researched in BUILD_STATUS.
     }
   }
 

@@ -117,8 +117,10 @@ export class HUD {
   }
 
   _settingsHTML() {
-    const vol = Math.round((save.get("set_vol", 0.5)) * 100);
+    const mvol = Math.round((save.get("set_mvol", save.get("set_vol", 0.5))) * 100);
+    const svol = Math.round((save.get("set_svol", save.get("set_vol", 0.5))) * 100);
     const shake = save.get("set_shake", true), dmg = save.get("set_dmgnum", true), music = save.get("set_music", true);
+    const quality = save.get("set_quality", "high");
     const tog = (id, label, on) => `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
         <span style="font-size:15px;color:#e8dcc8">${label}</span>
@@ -127,8 +129,16 @@ export class HUD {
     return `
       <div style="font-size:28px;font-weight:900;color:${GOLD};text-align:center;font-family:Georgia,serif;margin-bottom:8px">SETTINGS</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
-        <span style="font-size:15px;color:#e8dcc8">Sound volume</span>
-        <input id="cf-vol" type="range" min="0" max="100" value="${vol}" style="width:150px;accent-color:#e8b83a">
+        <span style="font-size:15px;color:#e8dcc8">🎵 Music volume</span>
+        <input id="cf-mvol" type="range" min="0" max="100" value="${mvol}" style="width:150px;accent-color:#e8b83a">
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+        <span style="font-size:15px;color:#e8dcc8">🔊 Effects volume</span>
+        <input id="cf-svol" type="range" min="0" max="100" value="${svol}" style="width:150px;accent-color:#e8b83a">
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+        <span style="font-size:15px;color:#e8dcc8">Quality</span>
+        <div id="cf-quality" class="cf-btn" data-q="${quality}" style="${frameCss}padding:6px 18px;font-size:13px;font-weight:800;color:#7dff9a">${quality.toUpperCase()}</div>
       </div>
       ${tog("cf-music", "Music", music)}
       ${tog("cf-shake", "Screen shake", shake)}
@@ -141,7 +151,16 @@ export class HUD {
   }
 
   _wireSettings(M, backFn) {
-    M.querySelector("#cf-vol").oninput = (e) => { const v = e.target.value / 100; save.set("set_vol", v); SFX.setVolume(v); Music.setVolume(v); SFX.play("ui"); };
+    M.querySelector("#cf-mvol").oninput = (e) => { const v = e.target.value / 100; save.set("set_mvol", v); Music.setVolume(v); };
+    M.querySelector("#cf-svol").oninput = (e) => { const v = e.target.value / 100; save.set("set_svol", v); SFX.setVolume(v); SFX.play("ui"); };
+    const qb = M.querySelector("#cf-quality");
+    if (qb) qb.onclick = () => {
+      const q = qb.dataset.q === "high" ? "low" : "high";
+      qb.dataset.q = q; qb.textContent = q.toUpperCase();
+      save.set("set_quality", q);
+      if (window.__TD_QUALITY__) window.__TD_QUALITY__(q);
+      SFX.play("ui");
+    };
     const wireTog = (id, key, cbKey) => {
       const b = M.querySelector(id);
       b.onclick = () => {

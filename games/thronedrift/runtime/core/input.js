@@ -24,8 +24,11 @@ export class Input {
       if (e.repeat) return;
       if (e.code === "Tab") e.preventDefault();
       this.keys.add(e.code);
-      if (!this.enabled) return;
+      // held-attack latch is NOT gated on enabled: holding through an
+      // input-disabled window (round countdown, level panel, pause) used to
+      // leave the button permanently silent. The sim gates actual firing.
       if (e.code === "KeyJ") this.basicHeld = true;
+      if (!this.enabled) return;
       if (e.code === "Space") { e.preventDefault(); this._jumpEdge = true; }
       if (e.code === "Digit1" || e.code === "KeyU") this._press(0, true);
       if (e.code === "Digit2" || e.code === "KeyI") this._press(1, true);
@@ -57,8 +60,9 @@ export class Input {
         return;
       }
       if (e.button === 2) { this._rightDrag = { x: e.clientX, y: e.clientY }; return; }
+      if (e.button !== 0) return;   // middle/side buttons are camera-neutral
       this.pointer.down = true;
-      if (this.enabled) this.basicHeld = true;
+      this.basicHeld = true;        // see keydown note — sim gates firing
       this._updPointer(e, canvas);
     });
     canvas.addEventListener("pointermove", (e) => {
@@ -89,6 +93,7 @@ export class Input {
       this._pinch.delete(e.pointerId);
       if (e.button === 2) { this._rightDrag = null; return; }
       if (e.pointerType === "touch") return;
+      if (e.button !== 0) return;   // only a real LMB release ends the held attack
       this.pointer.down = false; this.basicHeld = this.keys.has("KeyJ");
     });
     window.addEventListener("pointercancel", (e) => this._pinch.delete(e.pointerId));
