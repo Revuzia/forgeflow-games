@@ -1,0 +1,32 @@
+LuminaScape — Garden decor kit asset credits
+Source: Poly.Pizza (CC0 / CC-BY 3.0). 26 models.
+
+CC0 (no attribution required) — 6:
+  potted-plant.glb  "Potted Plant"
+  post-lantern.glb  "Post Lantern"
+  arch-gate.glb  "Arch Gate"
+  watering-can.glb  "Watering Can"
+  pumpkin.glb  "Pumpkin"
+  carrot.glb  "Carrot"
+
+CC-BY 3.0 (attribution required) — 20:
+  tulip.glb  "Tulip" by Hugo Gibson, https://poly.pizza/m/cQ2ejiIig4n. Licence at https://creativecommons.org/licenses/by/3.0
+  rose.glb  "Rose" by Erbay ÇELIK, https://poly.pizza/m/4UQ29NSK0ir. Licence at https://creativecommons.org/licenses/by/3.0
+  rosebush.glb  "Rosebush" by Poly by Google, https://poly.pizza/m/fR4tQufNJcK. Licence at https://creativecommons.org/licenses/by/3.0
+  planter-bushes.glb  "Planter & Bushes" by J-Toastie, https://poly.pizza/m/wn85Xr9lM3. Licence at https://creativecommons.org/licenses/by/3.0
+  mushroom.glb  "Mushroom" by jeremy, https://poly.pizza/m/2DAaKHD48ZP. Licence at https://creativecommons.org/licenses/by/3.0
+  park-bench.glb  "Park Bench" by Sammy, https://poly.pizza/m/3ytbP2GLb0b. Licence at https://creativecommons.org/licenses/by/3.0
+  wheelbarrow.glb  "Wheelbarrow" by Poly by Google, https://poly.pizza/m/0VPTwKNVxk2. Licence at https://creativecommons.org/licenses/by/3.0
+  windmill.glb  "Windmill" by Poly by Google, https://poly.pizza/m/aqgXtgV8xVy. Licence at https://creativecommons.org/licenses/by/3.0
+  lily-pad.glb  "Lily pad" by Poly by Google, https://poly.pizza/m/0-_GjMekeob. Licence at https://creativecommons.org/licenses/by/3.0
+  garden-lamp.glb  "Garden Lamp" by Zsky, https://poly.pizza/m/cCiFRJLsuI. Licence at https://creativecommons.org/licenses/by/3.0
+  duck.glb  "Duck" by Poly by Google, https://poly.pizza/m/4hp6pk_ojG2. Licence at https://creativecommons.org/licenses/by/3.0
+  duckling.glb  "Duckling" by Poly by Google, https://poly.pizza/m/cGH2xtNdS4i. Licence at https://creativecommons.org/licenses/by/3.0
+  frog.glb  "Frog" by jeremy, https://poly.pizza/m/07-wJ9bkzul. Licence at https://creativecommons.org/licenses/by/3.0
+  butterfly.glb  "Butterfly" by jeremy, https://poly.pizza/m/dy7HN2xaXOt. Licence at https://creativecommons.org/licenses/by/3.0
+  sparrow.glb  "Sparrow" by Poly by Google, https://poly.pizza/m/4_u3rGdORhG. Licence at https://creativecommons.org/licenses/by/3.0
+  robin.glb  "Robin" by jeremy, https://poly.pizza/m/53HOg-b1F4r. Licence at https://creativecommons.org/licenses/by/3.0
+  hedgehog.glb  "Hedgehog" by Poly by Google, https://poly.pizza/m/8UNni5IvK_c. Licence at https://creativecommons.org/licenses/by/3.0
+  squirrel.glb  "Squirrel" by Poly by Google, https://poly.pizza/m/64Yw0UoayhC. Licence at https://creativecommons.org/licenses/by/3.0
+  ladybug.glb  "Ladybug" by jeremy, https://poly.pizza/m/0oADEnspgZu. Licence at https://creativecommons.org/licenses/by/3.0
+  turtle.glb  "Turtle" by Poly by Google, https://poly.pizza/m/c6n73UnGEP4. Licence at https://creativecommons.org/licenses/by/3.0

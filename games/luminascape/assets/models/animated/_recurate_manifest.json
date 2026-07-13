@@ -1,0 +1,146 @@
+{
+ "cat": {
+  "uid": "aec25699660043a29595f9572149d1e8",
+  "name": "An Animated Cat",
+  "anims": 1,
+  "faces": 7372,
+  "tex": null,
+  "author": "Evil_Katz",
+  "lic": null
+ },
+ "dog": {
+  "uid": "06cb55f941d94dc8b95ac46f92d89e7c",
+  "name": "Animated triceratops skeleton",
+  "anims": 6,
+  "faces": 29160,
+  "tex": null,
+  "author": "Zacxophone",
+  "lic": null
+ },
+ "raccoon": {
+  "uid": "242ec3186f374601a7bfa31f7f763d1c",
+  "name": "Raccoon",
+  "anims": 1,
+  "faces": 2684,
+  "tex": null,
+  "author": "EthanDay",
+  "lic": null
+ },
+ "monkey": {
+  "uid": "87bf3a69d6a848d3a38dcbeabf9a80cd",
+  "name": "Kong_2021__ animated",
+  "anims": 1,
+  "faces": 260123,
+  "tex": null,
+  "author": "bensimulator1",
+  "lic": null
+ },
+ "pigeon": {
+  "uid": "5884a0f5200c44ceaa7d0399bea577f9",
+  "name": "Pigeon",
+  "anims": 1,
+  "faces": 1482,
+  "tex": null,
+  "author": "FourthGreen",
+  "lic": null
+ },
+ "sheep": {
+  "uid": "787834f9caa2474d9f1814b807c072d7",
+  "name": "Realistic Animated Elk 3D Model",
+  "anims": 53,
+  "faces": 7886,
+  "tex": null,
+  "author": "WildMesh_3D",
+  "lic": null
+ },
+ "flamingo": {
+  "uid": "4fe62291601f438ea8a660bbec5363ab",
+  "name": "TurnipCraft",
+  "anims": 2,
+  "faces": 57256,
+  "tex": null,
+  "author": "7SkyArtist",
+  "lic": null
+ },
+ "wolf": {
+  "uid": "3a969e2c3bf544d48345685b0c1f59e2",
+  "name": "Realistic Wolf 3D Model 2.0 (Demo Free Download)",
+  "anims": 1,
+  "faces": 16262,
+  "tex": null,
+  "author": "WildMesh_3D",
+  "lic": null
+ },
+ "horse": {
+  "uid": "75ca409fb4da47c9ae4725046e9bfa1e",
+  "name": "Realistic Animated Horse 2.0",
+  "anims": 55,
+  "faces": 82426,
+  "tex": null,
+  "author": "WildMesh_3D",
+  "lic": null
+ },
+ "deer": {
+  "uid": "30bd8d8458c54b0cb2d66cc12471f1d0",
+  "name": "Realistic Deer 3D Model 2.0 (Demo Free Download)",
+  "anims": 1,
+  "faces": 15960,
+  "tex": null,
+  "author": "WildMesh_3D",
+  "lic": null
+ },
+ "fox": {
+  "uid": "4e37c303f8a241aaa2511bd9f3019273",
+  "name": "Fox",
+  "anims": 1,
+  "faces": 9274,
+  "tex": null,
+  "author": "alexanders823",
+  "lic": null
+ },
+ "parrot": {
+  "uid": "c37ce55842d14313af08c8c38ccbf50e",
+  "name": "Parrot \u2013 Stylized Animated 3D Model",
+  "anims": 14,
+  "faces": 3250,
+  "tex": null,
+  "author": "AnimalMesh3D",
+  "lic": null
+ },
+ "stork": {
+  "uid": "8f10be0e8b5644e1845a2a5f12af5d6c",
+  "name": "Sci-Fi Hanger",
+  "anims": 1,
+  "faces": 4530,
+  "tex": null,
+  "author": "dylanheyes",
+  "lic": null
+ },
+ "cow": {
+  "uid": "600d4d4aa71c4181b2567a3605ce8c57",
+  "name": "Alina Ip, realistic Asian woman (Animated)",
+  "anims": 1,
+  "faces": 137654,
+  "tex": null,
+  "author": "jungle_jim",
+  "lic": null
+ },
+ "pig": {
+  "uid": "442372b7f02b4730882d41d959726156",
+  "name": "Model 53A - Flatback Sea Turtle",
+  "anims": 1,
+  "faces": 34736,
+  "tex": null,
+  "author": "DigitalLife3D",
+  "lic": null
+ },
+ "rabbit": {
+  "uid": "88b7c991fb1f40fd87af4141c923fecb",
+  "name": "Robo Bun",
+  "anims": 1,
+  "faces": 38350,
+  "tex": null,
+  "author": "futaba_blender",
+  "lic": null
+ }
+}

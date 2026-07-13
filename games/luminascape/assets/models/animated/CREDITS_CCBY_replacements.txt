@@ -1,0 +1,84 @@
+LuminaScape — Animated animal rig replacements
+Downloaded from Sketchfab. ALL models below are licensed CC-BY 4.0 (Creative Commons Attribution).
+Attribution is REQUIRED. Include the credit block below in the game/site (e.g. an in-game Credits screen or CREDITS file shipped with the build).
+==========================================================================================
+
+"Lion" (lion.glb)
+    by Paleo Modelist — https://sketchfab.com/victory_
+    License: CC Attribution (http://creativecommons.org/licenses/by/4.0/)
+    Source: https://sketchfab.com/3d-models/lion-c1c05eb659b94906b29c4637515f8467
+
+"Panther - blue - animated" (panther.glb)
+    by nolanfa — https://sketchfab.com/nolanfa
+    License: CC Attribution (http://creativecommons.org/licenses/by/4.0/)
+    Source: https://sketchfab.com/3d-models/panther-blue-animated-59a67c581a11429581036740b44f6e02
+
+"Leopard Animated" (leopard.glb)
+    by anpapa3 — https://sketchfab.com/anpapa3
+    License: CC Attribution (http://creativecommons.org/licenses/by/4.0/)
+    Source: https://sketchfab.com/3d-models/leopard-animated-63697b76b3c944ffae5b6fbdd003fc68
+
+"Tiger" (tiger.glb)
+    by Blender Artist — https://sketchfab.com/moizmuhammad373
+    License: CC Attribution (http://creativecommons.org/licenses/by/4.0/)
+    Source: https://sketchfab.com/3d-models/tiger-67bbedd727a047869ef7c7b608445484
+
+"Cheetah" (cheetah.glb)
+    by planeta-elefante — https://sketchfab.com/planeta-elefante
+    License: CC Attribution (http://creativecommons.org/licenses/by/4.0/)
+    Source: https://sketchfab.com/3d-models/cheetah-8d3ba32a2ff34acc9b5c590bc06cb561
+
+"Elephant animated with transition animation" (elephant.glb)
+    by theogilat — https://sketchfab.com/theogilat
+    License: CC Attribution (http://creativecommons.org/licenses/by/4.0/)
+    Source: https://sketchfab.com/3d-models/elephant-animated-with-transition-animation-466a15d0875b4b60bca2661c155711d5
+
+"Giraffe" (giraffe.glb)
+    by Maarti — https://sketchfab.com/MaartiBr
+    License: CC Attribution (http://creativecommons.org/licenses/by/4.0/)
+    Source: https://sketchfab.com/3d-models/giraffe-d0a6082e1fcc436db39233acfe9c5f46
+
+"Bull" (bison.glb)
+    by stealth86 — https://sketchfab.com/stealth86
+    License: CC Attribution (http://creativecommons.org/licenses/by/4.0/)
+    Source: https://sketchfab.com/3d-models/bull-d0f2ff31252a4c9cb084b1ac3a2e4d8b
+
+"Low Poly Gazelle" (gazelle.glb)
+    by gameROYadvance — https://sketchfab.com/gameROYadvance
+    License: CC Attribution (http://creativecommons.org/licenses/by/4.0/)
+    Source: https://sketchfab.com/3d-models/low-poly-gazelle-6f6ebf9b249244d1a96bff6346941d8c
+
+"Crocodile" (crocodile.glb)
+    by Fion Noir — https://sketchfab.com/fionnoir
+    License: CC Attribution (http://creativecommons.org/licenses/by/4.0/)
+    Source: https://sketchfab.com/3d-models/crocodile-8a3407ddaad040d6899c7a0fb51868dd
+
+"Hippopotamus" (hippo.glb)
+    by Mateus Schwaab — https://sketchfab.com/Mehrus
+    License: CC Attribution (http://creativecommons.org/licenses/by/4.0/)
+    Source: https://sketchfab.com/3d-models/hippopotamus-e3244268216244808d2603d23ef37310
+
+"Octopus" (octopus.glb)
+    by rkuhlf — https://sketchfab.com/rkuhlf
+    License: CC Attribution (http://creativecommons.org/licenses/by/4.0/)
+    Source: https://sketchfab.com/3d-models/octopus-f9c0186d5ac54bcfada2b6113de40ede
+
+"Kangaroo Character Assignment" (kangaroo.glb)
+    by acdiorr — https://sketchfab.com/acdiorr
+    License: CC Attribution (http://creativecommons.org/licenses/by/4.0/)
+    Source: https://sketchfab.com/3d-models/kangaroo-character-assignment-7ea774fb19184aa8a6f9b7f9a41262d4
+
+"Animated Realistic Boar – 3D Animal Model" (boar.glb)
+    by AnimalMesh 3D — https://sketchfab.com/AnimalMesh3D
+    License: CC Attribution (http://creativecommons.org/licenses/by/4.0/)
+    Source: https://sketchfab.com/3d-models/animated-realistic-boar-3d-animal-model-f672a7fd93e84997b80a54ba30956111
+
+==========================================================================================
+REUSE COPIES (no separate download — same GLB reused under a second species key):
+
+"jaguar.glb"  = copy of leopard.glb  -> credit "Leopard Animated" by anpapa3 (CC-BY 4.0)
+                (no CC-BY jaguar rig with idle/walk exists on Sketchfab under a reasonable
+                 poly budget; leopard is the closest spotted big-cat visual match)
+
+"lioness.glb" = copy of lion.glb      -> credit "Lion" by Paleo Modelist / victory_ (CC-BY 4.0)
+                (correct species; lion rig is idle-only, procedural walk-bob applies)

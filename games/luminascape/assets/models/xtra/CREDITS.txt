@@ -1,0 +1,528 @@
+LuminaScape — bulk asset credits (Poly.Pizza CC0 / CC-BY 3.0)
+
+[tree] tree.glb  "Tree" by Poly by Google, https://poly.pizza/m/doN3tFNYqPo. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] pine-tree.glb  "Pine tree" by Poly by Google, https://poly.pizza/m/7rTNpk6j01O. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] palm-tree.glb  "Palm tree" by jeremy, https://poly.pizza/m/bjGeBbKhAVN. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] fir-tree.glb  "fir tree" by Andrea Zvinakis, https://poly.pizza/m/aiSgX6OitMd. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] cypress-tree.glb  "cypress tree" by Andrea Zvinakis, https://poly.pizza/m/4PHDVmmfFj9. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] pine-tree-with-snow.glb  "Pine Tree with Snow" by Chris Lee, https://poly.pizza/m/3pWKPFASEn-. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] fresh-pine.glb  "Fresh Pine" by Mikael Ganehag Brorsson, https://poly.pizza/m/4X6q_p2KEY9. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] tree-branch.glb  "Tree branch" by Poly by Google, https://poly.pizza/m/8w-ed__H6Tl. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] beech-tree.glb  "Beech tree" by Poly by Google, https://poly.pizza/m/0f0cS20idvd. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] tree-stump.glb  "Tree stump" by Poly by Google, https://poly.pizza/m/esFOngb0uwl. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] palm-tree-02.glb  "Palm Tree 02" by Jarlan Perez, https://poly.pizza/m/aa6owopxwu5. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] birch-tree.glb  "Birch tree" by Poly by Google, https://poly.pizza/m/b0BZj34bN-K. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] palm-tree-01.glb  "Palm Tree 01" by Jarlan Perez, https://poly.pizza/m/3Z-j3UC5jPe. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] a-simple-tree.glb  "A Simple Tree" by Aaron Clifford, https://poly.pizza/m/59b4tdDI4el. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] palm-tree-small-1.glb  "palm tree small 1" by Steve B, https://poly.pizza/m/2rdPBG50i3y. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] simple-tree.glb  "Simple Tree" by zeoxo, https://poly.pizza/m/2NNeu6G8QHG. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] oak-tree.glb  "Oak tree" by Poly by Google, https://poly.pizza/m/0DtsZfSTWzA. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] pine-trees.glb  "Pine Trees" by Esdras Paravizo, https://poly.pizza/m/3AUzuYjDZxR. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] snowy-trees.glb  "Snowy Trees" by Daniel Melchior, https://poly.pizza/m/4yANmlVa-5p. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] lowpoly-tree-sample.glb  "Lowpoly Tree Sample" by Carlos587, https://poly.pizza/m/SohHeimkcz. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] burton-palm-tree.glb  "Burton palm tree" by Tim Ekberg, https://poly.pizza/m/0hj-lF2SU20. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] sycamore-tree.glb  "Sycamore tree" by Poly by Google, https://poly.pizza/m/2S3-H6XeXyC. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] tree-2.glb  "Tree-2" by Marc Solà, https://poly.pizza/m/cRipmFHCEVU. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] tree-roots.glb  "Tree roots" by Poly by Google, https://poly.pizza/m/eYfjQLsebfA. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] tree-frog.glb  "Tree frog" by Poly by Google, https://poly.pizza/m/cwyNyIba6WE. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] yellow-tree.glb  "yellow tree" by Rebecca Kerr, https://poly.pizza/m/fqvqjoeWZc0. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] small-trees.glb  "Small Trees" by Poly by Google, https://poly.pizza/m/fSY0MW1tzEl. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] poplar-tree.glb  "Poplar Tree" by Poly by Google, https://poly.pizza/m/2y-Cl3E7lMf. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] spruce-tree.glb  "Spruce tree" by Poly by Google, https://poly.pizza/m/ahT2_ZxtLIq. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] pine-cone.glb  "Pine cone" by Poly by Google, https://poly.pizza/m/06dagPn-QYn. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] tree-trunk.glb  "Tree Trunk" by Danni Bittman, https://poly.pizza/m/emBcDKepQoj. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] tree-test.glb  "tree-test" by Kazuya Noshiro, https://poly.pizza/m/aMtwI_cKFZD. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] olive-tree.glb  "Olive tree" by Poly by Google, https://poly.pizza/m/cKHksYy9jPk. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] date-palm-tree.glb  "Date palm tree" by Poly by Google, https://poly.pizza/m/f9HQ8FJxn-o. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] poly-tree.glb  "Poly Tree" by avin vij, https://poly.pizza/m/ao80Nl4zqy0. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] bloodwood-tree.glb  "Bloodwood tree" by Poly by Google, https://poly.pizza/m/5MenXQd3qRA. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] palm-tree-in-the-wind.glb  "Palm tree in the wind" by Poly by Google, https://poly.pizza/m/4QNJWJ_owun. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] bonsai.glb  "Bonsai" by Zsky, https://poly.pizza/m/f7SPcHbOxQ. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] macassar-tree.glb  "Macassar tree" by Poly by Google, https://poly.pizza/m/2EW209K0xBw. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] ash-tree.glb  "Ash tree" by Poly by Google, https://poly.pizza/m/23TdGBi6jmv. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] bismarck-palm-tree.glb  "Bismarck palm tree" by Poly by Google, https://poly.pizza/m/7soBza255RP. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] tree-branches.glb  "Tree branches" by Poly by Google, https://poly.pizza/m/8qYeGscm0mc. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] orange-tree.glb  "Orange tree" by Poly by Google, https://poly.pizza/m/8zS7mfHS0i7. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] thatch-palm-tree.glb  "Thatch palm tree" by Poly by Google, https://poly.pizza/m/74GpKCkUqcn. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] umbrella-palm-tree.glb  "Umbrella palm tree" by Poly by Google, https://poly.pizza/m/8Qwgncb6dJT. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] lady-palm-tree.glb  "Lady palm tree" by Poly by Google, https://poly.pizza/m/0b3YlZbTV_S. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] banana-tree.glb  "Banana Tree" by Poly by Google, https://poly.pizza/m/d0WJSiuOz6o. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] tree-long.glb  "Tree Long" by J-Toastie, https://poly.pizza/m/jRrIzWtLRm. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] elm-tree.glb  "Elm tree" by Poly by Google, https://poly.pizza/m/68OOL4zL6Co. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] olive-palm-tree.glb  "Olive palm tree" by Poly by Google, https://poly.pizza/m/9MzVmsoTKra. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] fall-tree-v1.glb  "Fall Tree V1" by Danni Bittman, https://poly.pizza/m/0rx_H4qbwBp. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] triangle-palm.glb  "Triangle palm" by Poly by Google, https://poly.pizza/m/7voU5UPcYFw. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] pear-tree.glb  "Pear tree" by Poly by Google, https://poly.pizza/m/44lGuM746Zi. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] xmas-tree.glb  "Xmas Tree" by mehreen1919, https://poly.pizza/m/VoKNTP6RVt. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] queen-palm-tree.glb  "Queen Palm Tree" by Poly by Google, https://poly.pizza/m/ficLBIjGliK. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] dream-tree.glb  "Dream Tree" by Don Carson, https://poly.pizza/m/0hU3Z00aQep. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] trees-rocks.glb  "Trees & Rocks" by Sham Al Bdour, https://poly.pizza/m/aAIOBNEaD5M. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] tree-assets.glb  "Tree Assets" by Ben Desai, https://poly.pizza/m/eLqmfpqu_Ig. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] flower-bed.glb  "Flower Bed" by Zsky, https://poly.pizza/m/9h7pb9nDc1. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] flower.glb  "Flower" by Poly by Google, https://poly.pizza/m/9znAp0dJiS8. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] flowerpot.glb  "Flowerpot" by Pixel, https://poly.pizza/m/EGUpnTAVrB. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] lily-pad.glb  "Lily pad" by Poly by Google, https://poly.pizza/m/8xHS2Js0MA_. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] red-flower-pot.glb  "Red Flower Pot" by Jarlan Perez, https://poly.pizza/m/63B7aWxa-UE. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] rose.glb  "Rose" by Erbay ÇELIK, https://poly.pizza/m/4UQ29NSK0ir. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] tulip.glb  "Tulip" by Jarlan Perez, https://poly.pizza/m/9qh2uoNIPZW. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] daisy.glb  "Daisy" by Poly by Google, https://poly.pizza/m/ckAqqaCskMy. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] pastel-plume-flowers.glb  "Pastel Plume Flowers" by Danni Bittman, https://poly.pizza/m/eLVv17bTyB-. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] generic-flower-3.glb  "generic flower 3" by Jakob Hippe, https://poly.pizza/m/c0sEl5zWgbW. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] lotus-flower.glb  "Lotus Flower" by Sean Tarrant, https://poly.pizza/m/6rLIFNbNTRG. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] purpil-flower-long-neck.glb  "Purpil flower long neck" by Jakob Hippe, https://poly.pizza/m/1TMHx6tEO8Z. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] potted-flower.glb  "Potted Flower" by Jarlan Perez, https://poly.pizza/m/dkTwMmml0R3. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] dandelion.glb  "Dandelion" by Poly by Google, https://poly.pizza/m/dfJS5VaxRGr. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] inktobvr-day02-little-flow.glb  "InktobVR Day02 Little Flowers" by Kamylle B. Grenier, https://poly.pizza/m/7rniSIUqQri. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] rose-bush.glb  "Rose bush" by Poly by Google, https://poly.pizza/m/aI3Wtnkueq7. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] hibiscus-flower.glb  "Hibiscus flower" by Poly by Google, https://poly.pizza/m/fQVeG1obY8u. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] orchid.glb  "Orchid" by Poly by Google, https://poly.pizza/m/0gEtIcRV4do. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] desert-marigold.glb  "Desert marigold" by Poly by Google, https://poly.pizza/m/dYQFgjU5Eqx. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] heliconia-flower.glb  "Heliconia flower" by Poly by Google, https://poly.pizza/m/06_hk2bO2Ix. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] desert-bloom.glb  "Desert bloom" by Leigh Garland, https://poly.pizza/m/cYdT_ntQiMr. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] plant-flower-pot.glb  "Plant - Flower Pot" by Alex Safayan, https://poly.pizza/m/bVepm2yfJTh. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] flower-vase.glb  "Flower Vase" by Glen Faught, https://poly.pizza/m/69MP7keI4UF. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] daisy-flower.glb  "Daisy Flower" by Jakob Hippe, https://poly.pizza/m/fp8p0Xd8sV6. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] bulb-flower.glb  "Bulb Flower" by Danni Bittman, https://poly.pizza/m/bMLAy1YLmln. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] alien-flower.glb  "Alien Flower" by Meli M, https://poly.pizza/m/9MQX_x7kaJ_. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] hanging-flower-pot.glb  "Hanging Flower Pot" by Zsky, https://poly.pizza/m/qS7bDdISw7. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] flower3.glb  "Flower3" by Natalie Rulon, https://poly.pizza/m/bAil3UWF0yp. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] delonix-flower.glb  "Delonix Flower" by David Rohr, https://poly.pizza/m/6gSAVYcuUl9. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] flower-frame.glb  "Flower Frame" by Hugo Gibson, https://poly.pizza/m/8coLcKGpdOB. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] small-bush.glb  "Small Bush" by J-Toastie, https://poly.pizza/m/qWw3QyWwHe. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] medium-grass-tuft.glb  "medium grass tuft" by Jeremy Eyring, https://poly.pizza/m/dZO9fnJZYGy. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] cattail.glb  "Cattail" by Poly by Google, https://poly.pizza/m/9vCk81sIPve. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] vine.glb  "Vine" by Poly by Google, https://poly.pizza/m/eI7GSQpnVUL. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] greener-grass-tuft.glb  "greener grass tuft" by Jeremy Eyring, https://poly.pizza/m/0ryrZgCxQKd. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] grass-tuft.glb  "Grass Tuft" by Vice Cooper, https://poly.pizza/m/eDfSs5QW7K6. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] planter-bushes.glb  "Planter & Bushes" by J-Toastie, https://poly.pizza/m/wn85Xr9lM3. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] small-indoor-grass-plant.glb  "Small Indoor Grass Plant" by Jarlan Perez, https://poly.pizza/m/2B_cWu5_G12. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] long-bush.glb  "Long Bush" by J-Toastie, https://poly.pizza/m/31Ln9gbcdG. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] shrub.glb  "Shrub" by Poly by Google, https://poly.pizza/m/aMGUklRjpyo. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] green-grass-tall.glb  "green grass tall" by Jeremy Eyring, https://poly.pizza/m/bzqatGYeU2h. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] thorny-vine.glb  "Thorny Vine" by Emmett “TawpShelf” Baber, https://poly.pizza/m/azL1Ln1mCLg. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] rose-bush.glb  "Rose bush" by Poly by Google, https://poly.pizza/m/aI3Wtnkueq7. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] vines.glb  "Vines" by Poly by Google, https://poly.pizza/m/cnimalnLIEA. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] thorny-vine-branching.glb  "Thorny Vine Branching" by Emmett “TawpShelf” Baber, https://poly.pizza/m/0ch9VWi-_AR. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] ivy.glb  "Ivy" by Poly by Google, https://poly.pizza/m/1MOqkeNjCZQ. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] rock.glb  "Rock" by Zsky, https://poly.pizza/m/p5J3xclZRY. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] basic-stone.glb  "basic stone" by felix stief, https://poly.pizza/m/a42J8RzkQgr. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] rock-small.glb  "Rock Small" by J-Toastie, https://poly.pizza/m/4FHNRpc8qH. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] basic-stone-5.glb  "basic stone 5" by felix stief, https://poly.pizza/m/3ius5CPZ9u1. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] crystal-rock.glb  "Crystal Rock" by Cheryl Fong, https://poly.pizza/m/blzFYMl93Rf. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] black-rock.glb  "Black Rock" by Cheryl Fong, https://poly.pizza/m/9pZH5i_bZUW. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] rock-large.glb  "Rock Large" by J-Toastie, https://poly.pizza/m/NZHoMGnwMH. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] stone.glb  "Stone" by Poly by Google, https://poly.pizza/m/50q_bJkLcuq. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] rock-band-poster.glb  "Rock band poster" by jeremy, https://poly.pizza/m/fTsh4nKZ9iK. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] crystal-katana.glb  "Crystal Katana" by Puggicorn, https://poly.pizza/m/dG-cOQRu6b9. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] rubble-rocks.glb  "Rubble Rocks" by Kyle Hickman, https://poly.pizza/m/8mnEv3ilxEP. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] gem-stones.glb  "Gem stones" by Natalia Wojtkowska, https://poly.pizza/m/3fdgnvEHWpS. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] desert-pebble.glb  "Desert pebble" by Leigh Garland, https://poly.pizza/m/fqhwoqMd8A-. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] stone-fence.glb  "Stone fence" by Tycho B, https://poly.pizza/m/bcqpKfleINz. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] basic-stone-3.glb  "basic stone 3" by felix stief, https://poly.pizza/m/3a0ubCurnwU. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] cliff.glb  "Cliff" by Poly by Google, https://poly.pizza/m/bN-rWrWm3mC. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] rock-forms-2.glb  "Rock Forms 2" by S. Paul Michael, https://poly.pizza/m/5pcsRNwXWVF. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] rock-forms-3.glb  "Rock Forms 3" by S. Paul Michael, https://poly.pizza/m/1nhxC9-miLI. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] rock-forms-5-white.glb  "Rock Forms 5 (White)" by S. Paul Michael, https://poly.pizza/m/28cOcmtim4L. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] boulder.glb  "Boulder" by jeremy, https://poly.pizza/m/d1MDVth-0LY. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] japanese-stone-lamp.glb  "Japanese Stone Lamp" by Flopsi, https://poly.pizza/m/5gZfOZIW92k. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] stone-table-v1-0-life-size.glb  "Stone Table v1.0 - Life Sized" by Falibu, https://poly.pizza/m/bHjLIDHkAcF. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] quick-rocks.glb  "Quick Rocks" by Robert Espinoza, https://poly.pizza/m/80WVSdo09x0. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] rock-forms-1.glb  "Rock Forms 1" by S. Paul Michael, https://poly.pizza/m/0Ncl4QmbBlW. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] rock-forms-4.glb  "Rock Forms 4" by S. Paul Michael, https://poly.pizza/m/52USCBChSsZ. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] rock-forms-3-white.glb  "Rock Forms 3 (White)" by S. Paul Michael, https://poly.pizza/m/0PpIe1BnuM8. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] rock-forms-1-white.glb  "Rock Forms 1 (White)" by S. Paul Michael, https://poly.pizza/m/52YLKNuCuBv. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] fantasy-castle-prototype.glb  "Fantasy Castle Prototype" by burunduk, https://poly.pizza/m/ge5Re3P9Ke. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] wood-shed-2-5-1.glb  "Wood Shed 2.5.1" by Rus Hoffman, https://poly.pizza/m/5Ajup2cSgge. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] tower.glb  "tower" by Jie gu, https://poly.pizza/m/3YJwqg2HC6k. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] tent.glb  "Tent" by Poly by Google, https://poly.pizza/m/6oXDU8Ush93. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] hut.glb  "Hut" by Poly by Google, https://poly.pizza/m/5KNeQg_znOu. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] tree-house.glb  "Tree House" by Poly by Google, https://poly.pizza/m/4ysmSywCpkZ. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] lighthouse.glb  "Lighthouse" by Robert Mirabelle, https://poly.pizza/m/3gEvVZoTN7e. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] castle-wall.glb  "Castle Wall" by Corentin Fatus, https://poly.pizza/m/38bjLL8DPCk. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] building.glb  "Building" by Username12, https://poly.pizza/m/4wq2wJXZPB. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] barn.glb  "Barn" by Poly by Google, https://poly.pizza/m/9QaU_A9Ac88. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] silo.glb  "Silo" by Poly by Google, https://poly.pizza/m/8UPiiP129yz. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] skyscraper.glb  "Skyscraper" by Jarlan Perez, https://poly.pizza/m/7WF09z31G_v. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] bird-house.glb  "Bird House" by Zsky, https://poly.pizza/m/jSpF4LjoQp. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] barn-owl.glb  "Barn owl" by Poly by Google, https://poly.pizza/m/eSEv3rCMKbg. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] builder-s-hut.glb  "Builder's Hut" by MiniPoly, https://poly.pizza/m/uj8lZUL4CS. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] house-plant.glb  "House plant" by Poly by Google, https://poly.pizza/m/3qh9saogdJd. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] cottage.glb  "Cottage" by Poly by Google, https://poly.pizza/m/5Wqe1MM87Fa. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] villa.glb  "Villa" by Steren Giannini, https://poly.pizza/m/1ogbmmlgzjv. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] row-house.glb  "Row House" by SoyMaria, https://poly.pizza/m/YjxizbS1U8. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] distant-building-01.glb  "Distant Building 01" by Jarlan Perez, https://poly.pizza/m/17gTxK5SKWd. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] distant-building-02.glb  "Distant Building 02" by Jarlan Perez, https://poly.pizza/m/cdkaiTRNPYB. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] simple-house.glb  "Simple house" by Ryan Sullivan, https://poly.pizza/m/7RPHbi4y7Qc. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] church.glb  "Church" by Poly by Google, https://poly.pizza/m/8jSIJfw17cz. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] building-3.glb  "Building 3" by BIOPTIX XR, https://poly.pizza/m/8s9XwdrggNH. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] house-window.glb  "House Window" by Zsky, https://poly.pizza/m/VeA4lC6TDI. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] brown-building.glb  "Brown Building" by J-Toastie, https://poly.pizza/m/fGKIlWGDNH. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] windmill.glb  "Windmill" by Poly by Google, https://poly.pizza/m/aqgXtgV8xVy. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] tower-defense-turret.glb  "Tower Defense Turret" by Aaron Clifford, https://poly.pizza/m/apxtFwTRN2C. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] farm.glb  "Farm" by Poly by Google, https://poly.pizza/m/5GDbUJV2vQb. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] house-1.glb  "house 1" by Tiff Eidmann, https://poly.pizza/m/0iZUVSQOLMR. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] basic-castle-tower.glb  "basic castle tower" by felix stief, https://poly.pizza/m/9NUK252uLAV. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] inn.glb  "Inn" by Poly by Google, https://poly.pizza/m/40rSrKm-05Q. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] sand-castle.glb  "Sand castle" by Poly by Google, https://poly.pizza/m/flAyWufILbp. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] building-frame.glb  "Building frame" by VR XRTIST, https://poly.pizza/m/f6IpG9b27Eo. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] empire-state-building.glb  "Empire State Building" by Courday Farnam, https://poly.pizza/m/7egp-6G6S57. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] chapel.glb  "Chapel" by Poly by Google, https://poly.pizza/m/6Fk2w-sKlk6. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] little-cottage.glb  "Little Cottage" by Rick Hertel, https://poly.pizza/m/76vpw90XQxS. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] forest-hut.glb  "Forest Hut" by Maciek Krol, https://poly.pizza/m/b4qOUUUD2L4. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] farm-level-1.glb  "Farm, level 1" by Kenny Deriemaeker, https://poly.pizza/m/bTknPYmeGir. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] building-construction-cran.glb  "Building construction crane" by Kieran Farr, https://poly.pizza/m/cm5teXZ5Ctr. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] radio-tower.glb  "Radio tower" by Poly by Google, https://poly.pizza/m/5qe3Ddnvmr_. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] bakery.glb  "Bakery" by Poly by Google, https://poly.pizza/m/6BGhNQlUzRR. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] cabin.glb  "Cabin" by Poly by Google, https://poly.pizza/m/dTSrDa0oz0a. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] building-red-corner.glb  "Building Red Corner" by J-Toastie, https://poly.pizza/m/9JuFwnivP0. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] ranch-style-house.glb  "Ranch Style House" by Zaw Imagineering, https://poly.pizza/m/7I00Ob5WUty. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] farm-house.glb  "Farm house" by Poly by Google, https://poly.pizza/m/bHyQe5jzdiQ. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] castle-tower.glb  "Castle Tower" by Corentin Fatus, https://poly.pizza/m/33q9hiqgpjI. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] apartment-building.glb  "Apartment building" by Poly by Google, https://poly.pizza/m/01lqee-dZAr. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] medium-house.glb  "Medium House" by Pixel, https://poly.pizza/m/4hI5fNvl6z. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] house-with-driveway.glb  "House with driveway" by Poly by Google, https://poly.pizza/m/bnZkUs4qEdG. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] pagoda.glb  "Pagoda" by Poly by Google, https://poly.pizza/m/1zS7ucaAd4J. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] wizard-shop.glb  "Wizard Shop" by Zsky, https://poly.pizza/m/tWJBgjK0mU. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] chapel-and-environment.glb  "Chapel and environment" by Poly by Google, https://poly.pizza/m/aLVE3oD4aDr. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] castle.glb  "Castle" by jeremy, https://poly.pizza/m/0TfSw65gU2G. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] log-cabin.glb  "Log Cabin" by Jarlan Perez, https://poly.pizza/m/et0OmFeZVkb. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] simple-stone-brick-tower.glb  "Simple Stone Brick Tower" by Garrett LeFever, https://poly.pizza/m/2vnqC6KPtfB. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] seaside-villa.glb  "SeaSide Villa" by Yogoshimo 2.0, https://poly.pizza/m/03rq-iA54uU. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] donut-store.glb  "Donut Store" by J-Toastie, https://poly.pizza/m/BvRLKgGwc6. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] fort.glb  "Fort" by Poly by Google, https://poly.pizza/m/b_UDhVGwfY8. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] fyre-festival-tent.glb  "Fyre Festival Tent" by Tipatat Chennavasin, https://poly.pizza/m/66sVQZVUjX2. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg] small-house.glb  "Small House" by Jarlan Perez, https://poly.pizza/m/053kskrV4U_. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] bird.glb  "bird" by Kelli Ray, https://poly.pizza/m/1TjSVf4Yl79. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] fish.glb  "Fish" by Poly by Google, https://poly.pizza/m/etCg5GTESNY. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] mouse.glb  "Mouse" by Poly by Google, https://poly.pizza/m/cx5OT1s5tZE. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] dog.glb  "Dog" by Tom Mayes, https://poly.pizza/m/9xxzXo00gGG. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] cat-tunnel-tube.glb  "Cat tunnel tube" by sirkitree, https://poly.pizza/m/92hjCHnLXGy. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] duckling.glb  "Duckling" by Poly by Google, https://poly.pizza/m/cGH2xtNdS4i. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] squirrel.glb  "Squirrel" by Poly by Google, https://poly.pizza/m/64Yw0UoayhC. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] duck.glb  "Duck" by Poly by Google, https://poly.pizza/m/4hp6pk_ojG2. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] dove.glb  "Dove" by jeremy, https://poly.pizza/m/dGEa6IbVDP_. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] sheep.glb  "Sheep" by Pixel, https://poly.pizza/m/8jHkcfv4tH. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] rabbit.glb  "Rabbit" by Poly by Google, https://poly.pizza/m/5YaZxSwLgXR. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] wolf.glb  "Wolf" by Poly by Google, https://poly.pizza/m/45wMLZn4kj1. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] sparrow.glb  "Sparrow" by Poly by Google, https://poly.pizza/m/4_u3rGdORhG. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] gray-rabbit.glb  "Gray Rabbit" by Noah Lewis, https://poly.pizza/m/3SWesLY5grk. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] flamingo.glb  "Flamingo" by Хмара Сергей, https://poly.pizza/m/5hUIvLVFqet. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] hedgehog.glb  "Hedgehog" by Poly by Google, https://poly.pizza/m/8UNni5IvK_c. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] bird-house.glb  "Bird House" by Zsky, https://poly.pizza/m/jSpF4LjoQp. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] robin.glb  "Robin" by jeremy, https://poly.pizza/m/53HOg-b1F4r. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] hamster.glb  "Hamster" by Poly by Google, https://poly.pizza/m/aRz6-f8rnMq. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] frog.glb  "Frog" by jeremy, https://poly.pizza/m/07-wJ9bkzul. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] butterfly.glb  "Butterfly" by jeremy, https://poly.pizza/m/dy7HN2xaXOt. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] ladybug.glb  "Ladybug" by jeremy, https://poly.pizza/m/0oADEnspgZu. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] barn-owl.glb  "Barn owl" by Poly by Google, https://poly.pizza/m/eSEv3rCMKbg. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] penguin.glb  "Penguin" by Poly by Google, https://poly.pizza/m/fBXvsC6pe_V. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] goose.glb  "Goose" by Poly by Google, https://poly.pizza/m/9wn3If7Qgb4. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] pig.glb  "Pig" by jeremy, https://poly.pizza/m/bbPhEBl5Bh0. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] owl.glb  "Owl" by jeremy, https://poly.pizza/m/3IwTPvL_EAX. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] cow.glb  "Cow" by Poly by Google, https://poly.pizza/m/cv4F0pnMLAJ. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] horse.glb  "Horse" by Poly by Google, https://poly.pizza/m/c3lXOu8gooq. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] cat.glb  "Cat" by Poly by Google, https://poly.pizza/m/dYKICaHpK0c. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] raccoon.glb  "Raccoon" by Poly by Google, https://poly.pizza/m/8LrB_8snYCX. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] parrot.glb  "Parrot" by jeremy, https://poly.pizza/m/3zS1cxISN0E. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] turtle.glb  "Turtle" by Poly by Google, https://poly.pizza/m/c6n73UnGEP4. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] koala.glb  "Koala" by Poly by Google, https://poly.pizza/m/fzCu8FM0HfB. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] fox.glb  "Fox" by Poly by Google, https://poly.pizza/m/cuUeGYY_jQ_. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] bee.glb  "Bee" by jeremy, https://poly.pizza/m/6ktZgxSVVn1. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] goat.glb  "Goat" by jeremy, https://poly.pizza/m/c5VKFNc_wsz. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] trash-dove.glb  "Trash Dove" by 運沙, https://poly.pizza/m/eLozPlheJvf. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] crab.glb  "Crab" by Poly by Google, https://poly.pizza/m/2DgM36qZW2u. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] voxel-pig.glb  "Voxel Pig" by Mauri Helme, https://poly.pizza/m/abovMDkoWAN. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] deer.glb  "Deer" by Poly by Google, https://poly.pizza/m/0tJzk22c46S. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] puppy.glb  "Puppy" by Poly by Google, https://poly.pizza/m/3nFLBC3aXen. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] mallard-duck.glb  "Mallard duck" by Poly by Google, https://poly.pizza/m/frSLi6b6Vid. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] cat-food-cans-closed-open.glb  "Cat Food Cans | closed, open" by sirkitree, https://poly.pizza/m/cpdwLDHiw8-. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] fox-v2.glb  "Fox v2" by Jake Blakeley, https://poly.pizza/m/0-NaVqxdfRu. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] fish-tank.glb  "Fish Tank" by J-Toastie, https://poly.pizza/m/FLnlsLbY2s. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] tree-frog.glb  "Tree frog" by Poly by Google, https://poly.pizza/m/cwyNyIba6WE. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] mule-deer.glb  "Mule Deer" by Poly by Google, https://poly.pizza/m/a4srWJqGtdR. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] lowpoly-squirrel.glb  "Lowpoly Squirrel" by Simon Graff, https://poly.pizza/m/dQdmcEiCXU3. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] bear.glb  "Bear" by jeremy, https://poly.pizza/m/evjB26aGfTh. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] great-horned-owl.glb  "Great horned owl" by Poly by Google, https://poly.pizza/m/fNkq9CwSG6d. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] beetle.glb  "Beetle" by Poly by Google, https://poly.pizza/m/4yufxgZ1QQ2. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] mourning-dove.glb  "Mourning dove" by Poly by Google, https://poly.pizza/m/1cF8DTp2sAi. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] birds-of-paradise-potted-p.glb  "Birds of paradise potted plant" by Poly by Google, https://poly.pizza/m/folDA1yLeEF. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] donkey.glb  "Donkey" by Anonymous, https://poly.pizza/m/0PCb1GZrYJk. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] orange-bird.glb  "Orange Bird" by Anonymous, https://poly.pizza/m/5AKJknHmoBW. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] gray-fox.glb  "Gray fox" by Poly by Google, https://poly.pizza/m/2LZMldgUhTj. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] bird-up.glb  "Bird up!" by Anonymous, https://poly.pizza/m/eTfm8neQCGa. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] morpho-butterfly.glb  "Morpho Butterfly" by marioba, https://poly.pizza/m/Vj3Cd8FE1S. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] cow-bell.glb  "Cow bell" by Poly by Google, https://poly.pizza/m/fV2smrXzOeP. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] river-otter.glb  "River otter" by Poly by Google, https://poly.pizza/m/dJW3JeUWXQ-. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] chicken.glb  "Chicken" by Michael Fuchs, https://poly.pizza/m/ceevYBgv96V. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] dog-is-pink.glb  "dog is pink" by Robert Mark, https://poly.pizza/m/3j0VLVCCJ3V. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] fish-bubbles.glb  "Fish + Bubbles" by Laney XR Labs, https://poly.pizza/m/e3ibcmf30vy. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] squirrel-monkey.glb  "Squirrel monkey" by Poly by Google, https://poly.pizza/m/8J_6QDW6au1. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] quick-little-zebra-fish.glb  "Quick little Zebra Fish" by Naam, https://poly.pizza/m/elRLfCW4QZB. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] chicken-bucket.glb  "Chicken Bucket" by J-Toastie, https://poly.pizza/m/BFI9xp5uzQ. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] long-eared-owl.glb  "Long eared owl" by Poly by Google, https://poly.pizza/m/dVPHzmMmXlg. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] hover-fighter-beetle.glb  "Hover Fighter: Beetle" by Aaron Clifford, https://poly.pizza/m/9teac58P9uv. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] dog-biscuit.glb  "Dog Biscuit" by 598merds, https://poly.pizza/m/X9ReXixG6k. Licence at https://creativecommons.org/licenses/by/3.0
+[critter] creative-cat.glb  "Creative Cat" by Darwin Yamamoto, https://poly.pizza/m/9BTHxUNAlvG. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] table-angle-r.glb  "Table angle - R" by Zoe XR, https://poly.pizza/m/8gp01MLPQ1W. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] sign-board.glb  "Sign Board" by Zsky, https://poly.pizza/m/EQh4uywLZ8. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] fence.glb  "Fence" by Pixel, https://poly.pizza/m/DO2okGSFgu. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] ceiling-lamp.glb  "Ceiling Lamp" by Zsky, https://poly.pizza/m/76VCPcN5C8. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] diy-sign-pointing-right.glb  "DIY Sign pointing Right" by JJ Rohrer, https://poly.pizza/m/aW2SLK6tEGG. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] diy-wooden-pointy-sign.glb  "DIY Wooden Pointy Sign" by JJ Rohrer, https://poly.pizza/m/71GpEgGw41n. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] chair.glb  "Chair" by Poly by Google, https://poly.pizza/m/88nXdqyGV06. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] modern-kitchen-table.glb  "Modern Kitchen Table" by Zsky, https://poly.pizza/m/8juwvUlyrC. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] standing-lamp.glb  "Standing lamp" by jeremy, https://poly.pizza/m/7AqWZQIaCQf. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] flag-1.glb  "Flag 1" by Chris Daniel, https://poly.pizza/m/3l553SpYcc5. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] modular-fence-section-01.glb  "Modular Fence Section 01" by Jarlan Perez, https://poly.pizza/m/dOXldmSfgDX. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] lantern.glb  "Lantern" by Tomáš Bayer, https://poly.pizza/m/d80ay-dCqqj. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] small-working-bench.glb  "Small Working Bench" by Jarlan Perez, https://poly.pizza/m/9iM3PLxSwXT. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] flowerpot.glb  "Flowerpot" by Pixel, https://poly.pizza/m/EGUpnTAVrB. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] modular-fence-section-02.glb  "Modular Fence Section 02" by Jarlan Perez, https://poly.pizza/m/f4oEPwJofoy. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] garden-lamp.glb  "Garden Lamp" by Zsky, https://poly.pizza/m/cCiFRJLsuI. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] fence-2.glb  "Fence 2" by Blue Bird, https://poly.pizza/m/2oiWue-HQ30. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] fence-5.glb  "Fence 5" by Blue Bird, https://poly.pizza/m/7S2MYZuVtRe. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] fence-3.glb  "Fence 3" by Blue Bird, https://poly.pizza/m/7avQ9OQU-ei. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] side-table.glb  "Side table" by Darwin Yamamoto, https://poly.pizza/m/dfL6q_VTWVf. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] lamp.glb  "Lamp" by burunduk, https://poly.pizza/m/OQ2HurCvOz. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] flag.glb  "Flag" by J-Toastie, https://poly.pizza/m/kKyGHOG2Ks. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] tent.glb  "Tent" by Poly by Google, https://poly.pizza/m/6oXDU8Ush93. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] growing-plant-in-pot.glb  "Growing Plant in Pot" by Alden Mauro, https://poly.pizza/m/5jy6QqocEsV. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] road-sign-double.glb  "Road Sign Double" by J-Toastie, https://poly.pizza/m/zjqn0wVnWw. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] barrel.glb  "Barrel" by Nicholas Tinsley, https://poly.pizza/m/bn4arF5wS9R. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] ranch-fence-section.glb  "Ranch Fence Section" by Jarlan Perez, https://poly.pizza/m/eg7VBJVOKB5. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] pot.glb  "Pot" by Nick Slough, https://poly.pizza/m/0lA2eJcUXW. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] wood-water-trough.glb  "Wood Water Trough" by Oliver Herklotz, https://poly.pizza/m/eWOPxWJkqL3. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] stone-fence.glb  "Stone fence" by Tycho B, https://poly.pizza/m/bcqpKfleINz. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] high-top-chair.glb  "High Top Chair" by Jarlan Perez, https://poly.pizza/m/7_JqsRlSg0O. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] wooden-chair.glb  "Wooden Chair" by Jarlan Perez, https://poly.pizza/m/d2vp_YL-E6L. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] park-bench.glb  "Park Bench" by Sammy, https://poly.pizza/m/3ytbP2GLb0b. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] table-and-chairs.glb  "Table and Chairs" by Dave Edwards, https://poly.pizza/m/8YCrudS_CF9. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] gate.glb  "Gate" by Poly by Google, https://poly.pizza/m/07oA3gKcvLt. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] cauldron.glb  "Cauldron" by Zsky, https://poly.pizza/m/ctLCiQVn7u. Licence at https://creativecommons.org/licenses/by/3.0
+[food] carrot.glb  "Carrot" by Poly by Google, https://poly.pizza/m/8mSuB-1kfRm. Licence at https://creativecommons.org/licenses/by/3.0
+[food] banana.glb  "Banana" by Poly by Google, https://poly.pizza/m/ahOO6wz8sV0. Licence at https://creativecommons.org/licenses/by/3.0
+[food] eggplant.glb  "Eggplant" by Poly by Google, https://poly.pizza/m/6n0KjSnXrRT. Licence at https://creativecommons.org/licenses/by/3.0
+[food] green-pepper.glb  "Green pepper" by jeremy, https://poly.pizza/m/5C7fFMm1s1W. Licence at https://creativecommons.org/licenses/by/3.0
+[food] pumpkin.glb  "Pumpkin" by jeremy, https://poly.pizza/m/aWOowZlI9Sq. Licence at https://creativecommons.org/licenses/by/3.0
+[food] tomato.glb  "Tomato" by Poly by Google, https://poly.pizza/m/07DeZpF2_K8. Licence at https://creativecommons.org/licenses/by/3.0
+[food] cucumber.glb  "Cucumber" by jeremy, https://poly.pizza/m/6aGChBQiu8j. Licence at https://creativecommons.org/licenses/by/3.0
+[food] broccoli.glb  "Broccoli" by Poly by Google, https://poly.pizza/m/3rnhf01rmNh. Licence at https://creativecommons.org/licenses/by/3.0
+[food] tomato-slice.glb  "Tomato slice" by Poly by Google, https://poly.pizza/m/e_Ao--Ndvfh. Licence at https://creativecommons.org/licenses/by/3.0
+[food] green-apple.glb  "Green Apple" by BlenderVoyage, https://poly.pizza/m/rVFCW9f2Wa. Licence at https://creativecommons.org/licenses/by/3.0
+[food] chili-pepper.glb  "Chili Pepper" by jeremy, https://poly.pizza/m/2x3UVYE7D-R. Licence at https://creativecommons.org/licenses/by/3.0
+[food] sweet-potato.glb  "Sweet potato" by jeremy, https://poly.pizza/m/9RBO2tCJ9lk. Licence at https://creativecommons.org/licenses/by/3.0
+[food] turnip.glb  "Turnip" by jeremy, https://poly.pizza/m/3LRJDZWTZkG. Licence at https://creativecommons.org/licenses/by/3.0
+[food] mushroom.glb  "Mushroom" by jeremy, https://poly.pizza/m/2DAaKHD48ZP. Licence at https://creativecommons.org/licenses/by/3.0
+[food] plum.glb  "Plum" by jeremy, https://poly.pizza/m/0cVeALx2mxi. Licence at https://creativecommons.org/licenses/by/3.0
+[food] cherry.glb  "Cherry" by Poly by Google, https://poly.pizza/m/aJgYH6O01OM. Licence at https://creativecommons.org/licenses/by/3.0
+[food] apple-green.glb  "Apple - green" by Zoe XR, https://poly.pizza/m/4y6oCfCUAu6. Licence at https://creativecommons.org/licenses/by/3.0
+[person] pleasant-peasant.glb  "Pleasant peasant" by Remy Tauziac, https://poly.pizza/m/f-ePrCSeNjW. Licence at https://creativecommons.org/licenses/by/3.0
+[person] machine-man.glb  "Machine Man" by Vaporworks, https://poly.pizza/m/mWLnPxLY6X. Licence at https://creativecommons.org/licenses/by/3.0
+[person] beef-boy.glb  "Beef boy." by Eric Wilson, https://poly.pizza/m/1FYZuoqW3it. Licence at https://creativecommons.org/licenses/by/3.0
+[pond] crane.glb  "Crane" by Max Hancock, https://poly.pizza/m/aZFdGwasy60. Licence at https://creativecommons.org/licenses/by/3.0
+[pond] beaver.glb  "Beaver" by Poly by Google, https://poly.pizza/m/fwtA7VLrXPr. Licence at https://creativecommons.org/licenses/by/3.0
+[pond] heron.glb  "Heron" by Poly by Google, https://poly.pizza/m/74guNhJR5Ij. Licence at https://creativecommons.org/licenses/by/3.0
+[pond] blue-heron.glb  "Blue Heron" by Poly by Google, https://poly.pizza/m/dMR6NWzjlYT. Licence at https://creativecommons.org/licenses/by/3.0
+[pond] sandhill-crane.glb  "Sandhill crane" by Poly by Google, https://poly.pizza/m/dazPSSmELaQ. Licence at https://creativecommons.org/licenses/by/3.0
+[pond] goldfish.glb  "Goldfish" by Poly by Google, https://poly.pizza/m/0bOZGc8ONrx. Licence at https://creativecommons.org/licenses/by/3.0
+[pond] duck.glb  "Duck 🦆" by Ashley Alicea, https://poly.pizza/m/77BpUN4DEMT. Licence at https://creativecommons.org/licenses/by/3.0
+[pond] brown-pelican.glb  "Brown pelican" by Poly by Google, https://poly.pizza/m/2oAiRa4fave. Licence at https://creativecommons.org/licenses/by/3.0
+[pond] american-white-pelican.glb  "American White Pelican" by Poly by Google, https://poly.pizza/m/2J2HY1oq8l2. Licence at https://creativecommons.org/licenses/by/3.0
+[pond] dragonfly.glb  "Dragonfly" by Poly by Google, https://poly.pizza/m/1W4laTqRGyC. Licence at https://creativecommons.org/licenses/by/3.0
+[season] acorn.glb  "Acorn" by Poly by Google, https://poly.pizza/m/cQ-FnrdHHVw. Licence at https://creativecommons.org/licenses/by/3.0
+[season] candle.glb  "Candle" by Poly by Google, https://poly.pizza/m/aH83BlSFxJu. Licence at https://creativecommons.org/licenses/by/3.0
+[season] red-lantern.glb  "red lantern" by Sophie Kim, https://poly.pizza/m/7PZhxLFiGc2. Licence at https://creativecommons.org/licenses/by/3.0
+[season] present.glb  "Present" by J-Toastie, https://poly.pizza/m/uio7lWWJo3. Licence at https://creativecommons.org/licenses/by/3.0
+[season] pinecone.glb  "Pinecone" by Poly by Google, https://poly.pizza/m/9afIin1wLCy. Licence at https://creativecommons.org/licenses/by/3.0
+[season] fortnum-mason-lantern.glb  "Fortnum & Mason Lantern" by Don Carson, https://poly.pizza/m/dEuhH3BoCKM. Licence at https://creativecommons.org/licenses/by/3.0
+[season] autumn-stoop.glb  "Autumn Stoop" by Don Carson, https://poly.pizza/m/cY_E11vybIj. Licence at https://creativecommons.org/licenses/by/3.0
+[season] candle-lantern.glb  "Candle Lantern" by Hunter Paramore, https://poly.pizza/m/6lpNbvA7Mj8. Licence at https://creativecommons.org/licenses/by/3.0
+[farm] barn-scene.glb  "Barn scene" by Poly by Google, https://poly.pizza/m/cHpm5vR3GKT. Licence at https://creativecommons.org/licenses/by/3.0
+[market] barrel-game-asset.glb  "Barrel - Game Asset" by Don Carson, https://poly.pizza/m/cu9GJ0j13fj. Licence at https://creativecommons.org/licenses/by/3.0
+[market] stand.glb  "Stand" by CMHT Oculus, https://poly.pizza/m/0fdEJlRndTB. Licence at https://creativecommons.org/licenses/by/3.0
+[market] wagon-wheel-game-asset.glb  "Wagon Wheel - Game Asset" by Don Carson, https://poly.pizza/m/fyjlH1IrEPH. Licence at https://creativecommons.org/licenses/by/3.0
+[market] wooden-crate.glb  "wooden crate" by Simon Hischier, https://poly.pizza/m/7aG-wYrxa_e. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] townhouse.glb  "Townhouse" by Emmett “TawpShelf” Baber, https://poly.pizza/m/b1IHJ5v6OjU. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] chalet.glb  "Chalet" by Poly by Google, https://poly.pizza/m/6ufSK2nQBc6. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] smithy.glb  "Smithy" by Felix Gä., https://poly.pizza/m/d8NxRd_seIK. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] house-plants.glb  "House plants" by Poly by Google, https://poly.pizza/m/2aH4y6SWnXz. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] black-smith-shop.glb  "Black Smith Shop" by Zsky, https://poly.pizza/m/PrOdJaBrOu. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] maria-tkachenko-house.glb  "Maria Tkachenko / House" by VR Day Minsk, https://poly.pizza/m/eVfW9IE3U38. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] log-cabin-scene.glb  "Log cabin scene" by Poly by Google, https://poly.pizza/m/2gQe0wyzkhb. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] lifeguard-tower.glb  "Lifeguard Tower" by Daniel Doran, https://poly.pizza/m/eTXK45QuLQT. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] lighthouse-scene.glb  "Lighthouse scene" by Poly by Google, https://poly.pizza/m/1O6BWfUB6ta. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] vertigo-bell-tower.glb  "Vertigo Bell Tower" by Fabio Hofnik, https://poly.pizza/m/3vKSG947XWZ. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] house-from-life-support.glb  "House from "Life Support"" by Danni Bittman, https://poly.pizza/m/4Ov0dW9f5Nf. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] modern-house.glb  "Modern House" by henry ham, https://poly.pizza/m/d_k2teZePG6. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] eleven-tower.glb  "Eleven Tower" by Nick Slough, https://poly.pizza/m/arB1SwPbxBN. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] cabin-and-environment.glb  "Cabin and environment" by Poly by Google, https://poly.pizza/m/e_OOh0DxeJc. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] house-interior.glb  "House interior" by Gabriele Romagnoli, https://poly.pizza/m/AQQ2g0YE2D. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] house-car.glb  "House & Car" by KatTie S, https://poly.pizza/m/8DFKst8XNAB. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] village-house.glb  "Village House" by Ian MacGillivray, https://poly.pizza/m/0JMckVadtWb. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] deaver-s-house.glb  "Deaver's House" by Nick Slough, https://poly.pizza/m/7O3e5ZO7ec_. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] wizard-tower.glb  "Wizard Tower" by Nick Slough, https://poly.pizza/m/fFiFJ3hdY06. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] bungalow.glb  "Bungalow" by Poly by Google, https://poly.pizza/m/2BQju8zKg6Y. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] brit-s-house.glb  "Brit's House" by Anonymous, https://poly.pizza/m/2K3bGB-w2qa. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] sf-house.glb  "Sf House" by burunduk, https://poly.pizza/m/NqGsuyUIyK. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] lopoly-simple-house.glb  "Lopoly simple house" by ABDE “ESFEP”, https://poly.pizza/m/60h5k8GwoKw. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] the-perdue-inn.glb  "The Perdue Inn" by Ben London, https://poly.pizza/m/dCINoG_ON3n. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] bat-signal-thingy.glb  "Bat signal Thingy" by Clorama Dorvilias, https://poly.pizza/m/1XHM3E7rzsT. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] chicken-foot.glb  "Chicken foot" by Poly by Google, https://poly.pizza/m/3HIcQ6E-yGo. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] bat.glb  "Bat" by Poly by Google, https://poly.pizza/m/5_XBqyrOY7x. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] turkey.glb  "Turkey" by jeremy, https://poly.pizza/m/b3E2cqagRPn. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] elephant.glb  "Elephant" by Anonymous, https://poly.pizza/m/9ZnB2UzZ5Z9. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] rat.glb  "Rat" by jeremy, https://poly.pizza/m/9h_k4Jkm3Le. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] buffalo-sunrise.glb  "BUFFALO.SUNRISE" by Семён Хазам, https://poly.pizza/m/fJK-RMDjDh1. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] eagle.glb  "Eagle" by Poly by Google, https://poly.pizza/m/d7CSLvsHULY. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] badger.glb  "Badger" by Poly by Google, https://poly.pizza/m/fXBbhQr-T80. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] raven.glb  "Raven" by Poly by Google, https://poly.pizza/m/7eQ51arTYDj. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] lion.glb  "Lion" by jeremy, https://poly.pizza/m/cC_IFclYA4c. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] zebra.glb  "Zebra" by Poly by Google, https://poly.pizza/m/4HAP_9VDIl4. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] hawk.glb  "Hawk" by jeremy, https://poly.pizza/m/0qIgSrL5qEn. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] sea-lion.glb  "Sea lion" by Poly by Google, https://poly.pizza/m/45HRvXYpvUG. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] gecko.glb  "Gecko" by jeremy, https://poly.pizza/m/3FxwLOrGiNL. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] snake.glb  "Snake" by elkiotbear, https://poly.pizza/m/bJ2kKpMmPq. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] boar.glb  "Boar" by Poly by Google, https://poly.pizza/m/57fSWum6F1P. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] gazelle.glb  "Gazelle" by Poly by Google, https://poly.pizza/m/bPYIQ_XQbrj. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] kangaroo-rat.glb  "Kangaroo rat" by Poly by Google, https://poly.pizza/m/1sa5fbvBAWu. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] tiger.glb  "Tiger" by jeremy, https://poly.pizza/m/54KLm0HdFWy. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] ram.glb  "Ram" by Poly by Google, https://poly.pizza/m/fm86jjk4m7D. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] bison.glb  "Bison" by Poly by Google, https://poly.pizza/m/30FwRBwJ-rC. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] sharp-shinned-hawk.glb  "Sharp shinned hawk" by Poly by Google, https://poly.pizza/m/3auORoUPvs9. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] rhino.glb  "Rhino" by Tom VanAntwerp, https://poly.pizza/m/9deYXdpoeTC. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] marsh-hawk.glb  "Marsh hawk" by Poly by Google, https://poly.pizza/m/cdRfEmOy4uu. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] giraffe.glb  "Giraffe" by Poly by Google, https://poly.pizza/m/c3mlL5owLJA. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] cooper-s-hawk.glb  "Cooper's hawk" by Poly by Google, https://poly.pizza/m/dk_Z98m7THM. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] ferruginous-hawk.glb  "Ferruginous hawk" by Poly by Google, https://poly.pizza/m/6mUdkMMh2JT. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] red-tailed-hawk.glb  "Red-tailed hawk" by Poly by Google, https://poly.pizza/m/9adZAZ2BmGL. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] antelope.glb  "Antelope" by Poly by Google, https://poly.pizza/m/dC2-G-IF8rz. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] desert-eagle.glb  "Desert Eagle" by AdamKokrito, https://poly.pizza/m/5HnKjrbxUx. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] moose-antlers.glb  "Moose antlers" by Poly by Google, https://poly.pizza/m/cX6NECw97x7. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] golden-eagle.glb  "Golden eagle" by Poly by Google, https://poly.pizza/m/2YF1DGWp4vx. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] turkey-vulture.glb  "Turkey vulture" by Poly by Google, https://poly.pizza/m/fvAgunyr1kd. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] eagle-ray-family.glb  "Eagle ray family" by Steren Giannini, https://poly.pizza/m/8oMbCGcf5Tk. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] robotic-owl.glb  "Robotic Owl" by Lee Mason, https://poly.pizza/m/bo3rWtpstA5. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] scuffed-snake.glb  "Scuffed Snake" by NatureStudioz, https://poly.pizza/m/QFBVG1uv5a. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] sea-horse.glb  "sea horse" by Device Lab, https://poly.pizza/m/2i8WB9jqzdc. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] chicken-truck.glb  "Chicken Truck" by John Ingram, https://poly.pizza/m/8YPlI6aoZvP. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] camel.glb  "Camel" by Poly by Google, https://poly.pizza/m/1IBKBalN1yt. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] drumstick-chicken.glb  "Drumstick chicken" by Poly by Google, https://poly.pizza/m/dW3bRecscLJ. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] chicken-lessons.glb  "chicken lessons" by Anonymous, https://poly.pizza/m/2tjmDzIm_Yw. Licence at https://creativecommons.org/licenses/by/3.0
+[bldg2] bouncy-castle.glb  "Bouncy castle" by Poly by Google, https://poly.pizza/m/0oKmmPJ_cD8. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] bamboo.glb  "Bamboo" by Zsky, https://poly.pizza/m/mKh1dBFt9p. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] low-poly-tree.glb  "Low Poly Tree" by julesgamer70000, https://poly.pizza/m/G7B5nPsSZs. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] ivory-cane-palm-tree.glb  "Ivory cane palm tree" by Poly by Google, https://poly.pizza/m/bWPvZ_De7VK. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] spring-fruit-tree.glb  "spring fruit tree" by Robert Krumhansl, https://poly.pizza/m/bY1Wl3VSfKH. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] everglades-palm-tree.glb  "Everglades palm tree" by Poly by Google, https://poly.pizza/m/9hdc5OazR_T. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] tree-with-snow.glb  "Tree - with snow" by Jakers_H, https://poly.pizza/m/269i7SjGmUt. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] christmas-tree.glb  "christmas tree" by sugamo, https://poly.pizza/m/a0M4MYz_yCy. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] banana-tree-with-base.glb  "Banana Tree with base" by Enter Hamlet, https://poly.pizza/m/0FrK_Dk8hon. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] bonsai-tree.glb  "Bonsai Tree 🌲" by Chris Ross, https://poly.pizza/m/5xzinvfz8P-. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] small-palm-tree-2.glb  "small palm tree 2" by Steve B, https://poly.pizza/m/e7nCmm_Yxzn. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] palm-tree-mace.glb  "Palm tree mace" by joney_lol, https://poly.pizza/m/LIpy1qThOW. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] tree-in-a-crate.glb  "Tree in a crate" by Alan Zimmerman, https://poly.pizza/m/dxLfd0f3wIC. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] bare-tree.glb  "Bare Tree" by Username12, https://poly.pizza/m/nLZmk18Sz3. Licence at https://creativecommons.org/licenses/by/3.0
+[tree] christmas-tree-base.glb  "christmas tree base" by sugamo, https://poly.pizza/m/apHeOv3S7GU. Licence at https://creativecommons.org/licenses/by/3.0
+[flower] flower-pot.glb  "Flower Pot" by Zsky, https://poly.pizza/m/XOT4ajEFjU. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] aeomium-plant.glb  "Aeomium plant" by Poly by Google, https://poly.pizza/m/8bsNf85Wp3B. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] small-pot-plant.glb  "Small Pot Plant" by Nick Slough, https://poly.pizza/m/PbjJ35eNTs. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] aloe-vera-plant.glb  "Aloe Vera Plant" by Shivam Jaiswal, https://poly.pizza/m/1lKoZU4ycvZ. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] small-indoor-plant.glb  "Small Indoor Plant" by Jarlan Perez, https://poly.pizza/m/dcJTDkalsP1. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] leaf.glb  "Leaf" by Poly by Google, https://poly.pizza/m/4_FetA14dDV. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] pot-plant.glb  "Pot Plant" by Nick Slough, https://poly.pizza/m/OXA1phQZgL. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] aloe-plant.glb  "Aloe plant" by Poly by Google, https://poly.pizza/m/6hYjnEpV-CC. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] cactus-wren.glb  "Cactus wren" by Poly by Google, https://poly.pizza/m/6b7Ul6MeLrJ. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] fiddle-leaf-plant.glb  "Fiddle-leaf Plant" by Poly by Google, https://poly.pizza/m/2ag6_uuqsnb. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] rubber-fig-potted-plant.glb  "Rubber fig potted plant" by Poly by Google, https://poly.pizza/m/0Xbm2AznJWl. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] barrel-cactus.glb  "Barrel cactus" by Poly by Google, https://poly.pizza/m/5-hrumGDq1K. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] plant-pot.glb  "Plant Pot" by mehreen1919, https://poly.pizza/m/6lagGPf5AV. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] aeonium-plant.glb  "Aeonium plant" by Poly by Google, https://poly.pizza/m/9quRfOvsXaz. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] carnivore-plant.glb  "Carnivore Plant" by Demonweb666, https://poly.pizza/m/9hQPBt759vL. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] pipe-organ-cactus.glb  "Pipe organ cactus" by Poly by Google, https://poly.pizza/m/8rSaubjT4uM. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] green-cactus.glb  "Green Cactus" by Daniel Melchior, https://poly.pizza/m/2Kng1KnfMEc. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] breakfast-cactus.glb  "Breakfast Cactus" by Spencer Wolf, https://poly.pizza/m/bjJ2S3Lgur_. Licence at https://creativecommons.org/licenses/by/3.0
+[bush] coffee-plant.glb  "Coffee plant" by Poly by Google, https://poly.pizza/m/dam5c-OPC8w. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] stones.glb  "Stones" by Poly by Google, https://poly.pizza/m/0vAJVcMEFdv. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] crystal-cove.glb  "Crystal Cove" by Ryan Boyd, https://poly.pizza/m/aH6WxgmB4FR. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] diamonds-in-stone.glb  "Diamonds in stone" by Mark Steelman, https://poly.pizza/m/6Y2ykcwTCH0. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] rock-bridge-and-environm.glb  "Rock bridge and environment" by Poly by Google, https://poly.pizza/m/2-0i7skA6uW. Licence at https://creativecommons.org/licenses/by/3.0
+[rock] 14-seg-crystal-alphabet.glb  "14 Seg Crystal Alphabet" by B B, https://poly.pizza/m/blDdWKyOgPB. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] construction-sign.glb  "Construction sign" by koen caspers, https://poly.pizza/m/4v9QhryzBwT. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] street-objects-lamp-post.glb  "Street Objects - Lamp Post" by Ev Amitay, https://poly.pizza/m/awUS2qoxeSa. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] fence-section.glb  "Fence Section" by Jarlan Perez, https://poly.pizza/m/1lOFMI3Pg8v. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] stop-sign.glb  "Stop Sign" by Poly by Google, https://poly.pizza/m/61MuiDGwjll. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] round-pot.glb  "Round Pot" by Bouggles, https://poly.pizza/m/CeCZ2twDSe. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] beach-chair.glb  "Beach chair" by Poly by Google, https://poly.pizza/m/9TN4PyhWvz1. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] espresso-pot.glb  "Espresso Pot" by Poly by Google, https://poly.pizza/m/fsqUynYjKyA. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] bedside-table.glb  "Bedside Table" by Bouggles, https://poly.pizza/m/RkqWRCU8Nw. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] desk-lamp.glb  "Desk lamp" by jeremy, https://poly.pizza/m/4ScdjC1wytg. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] anvil.glb  "Anvil" by Zsky, https://poly.pizza/m/l14TsgNmIT. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] x10-table.glb  "X10 Table" by BJP Studio, https://poly.pizza/m/bOk8TYDXTRm. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] office-chair.glb  "Office Chair" by sirkitree, https://poly.pizza/m/ehBYxwJPKnQ. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] wood-kitchen-chair.glb  "Wood Kitchen Chair" by Zsky, https://poly.pizza/m/SCL35TZk0H. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] log.glb  "Log" by Poly by Google, https://poly.pizza/m/dkRLlPSdgdR. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] coffee-pot.glb  "Coffee Pot" by S. Paul Michael, https://poly.pizza/m/6lWWUsKNt0C. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] simple-park-bench.glb  "Simple Park Bench" by nudtanunStudent, https://poly.pizza/m/Nj4eoumlsn. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] lamp-post.glb  "Lamp Post" by avin vij, https://poly.pizza/m/46XiLOBFYcE. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] fence-piece.glb  "Fence Piece" by J-Toastie, https://poly.pizza/m/Y6D3Sbc85w. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] fence-gate.glb  "Fence Gate" by Zsky, https://poly.pizza/m/SIimyf3ShX. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] floor-lamp.glb  "Floor Lamp" by Zsky, https://poly.pizza/m/LtyiCbMRhC. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] wood-chair.glb  "Wood chair" by Poly by Google, https://poly.pizza/m/7Jl72KgiRl-. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] bedside-lamp.glb  "Bedside Lamp" by Zsky, https://poly.pizza/m/NQGVFkRh03. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] wood-kitchen-table.glb  "Wood Kitchen Table" by Zsky, https://poly.pizza/m/v2KIlZu7E1. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] minimalist-modern-chair.glb  "Minimalist Modern Chair" by Zsky, https://poly.pizza/m/ufzwKuyJuD. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] haystack.glb  "Haystack" by Poly by Google, https://poly.pizza/m/6LeCqyw00RK. Licence at https://creativecommons.org/licenses/by/3.0
+[decor] tall-vase.glb  "Tall Vase" by Jarlan Perez, https://poly.pizza/m/52xZtzRG244. Licence at https://creativecommons.org/licenses/by/3.0
+[boat] paddle.glb  "Paddle" by Poly by Google, https://poly.pizza/m/cJ__sUf4Dry. Licence at https://creativecommons.org/licenses/by/3.0
+[boat] oar.glb  "Oar" by Poly by Google, https://poly.pizza/m/7qsTvFaVMBY. Licence at https://creativecommons.org/licenses/by/3.0
+[boat] rowboat.glb  "Rowboat" by jeremy, https://poly.pizza/m/7GW6GfvuKkt. Licence at https://creativecommons.org/licenses/by/3.0
+[boat] kayak.glb  "Kayak" by Poly by Google, https://poly.pizza/m/6wu_h830iRe. Licence at https://creativecommons.org/licenses/by/3.0
+[boat] anchor.glb  "Anchor" by Poly by Google, https://poly.pizza/m/fjAwIosTQHy. Licence at https://creativecommons.org/licenses/by/3.0
+[boat] canoe.glb  "Canoe" by Poly by Google, https://poly.pizza/m/9WWwpqIkuc-. Licence at https://creativecommons.org/licenses/by/3.0
+[boat] sailboat.glb  "Sailboat" by jeremy, https://poly.pizza/m/5u49Hzbo5WH. Licence at https://creativecommons.org/licenses/by/3.0
+[boat] military-boat.glb  "Military Boat" by Zsky, https://poly.pizza/m/wouBxOe3CD. Licence at https://creativecommons.org/licenses/by/3.0
+[boat] boat-minimalist.glb  "Boat (minimalist)" by Sébastien Tricheux, https://poly.pizza/m/0IoH9zbsv0D. Licence at https://creativecommons.org/licenses/by/3.0
+[boat] canoe-and-paddles.glb  "Canoe and paddles" by Poly by Google, https://poly.pizza/m/7lcrTaY7sE_. Licence at https://creativecommons.org/licenses/by/3.0
+[food] watermelon.glb  "Watermelon" by jeremy, https://poly.pizza/m/5NXaNnNIzfC. Licence at https://creativecommons.org/licenses/by/3.0
+[food] ear-of-corn.glb  "Ear of corn" by jeremy, https://poly.pizza/m/8uivpGFN5av. Licence at https://creativecommons.org/licenses/by/3.0
+[food] wheat.glb  "Wheat" by Poly by Google, https://poly.pizza/m/4siom7-sFLN. Licence at https://creativecommons.org/licenses/by/3.0
+[food] slice-of-watermelon.glb  "Slice of Watermelon" by ParfaitUwU, https://poly.pizza/m/ILug06v9VM. Licence at https://creativecommons.org/licenses/by/3.0
+[food] apple-red.glb  "Apple - Red" by Username12, https://poly.pizza/m/UlK3IhkeH0. Licence at https://creativecommons.org/licenses/by/3.0
+[food] squash-seed.glb  "Squash seed" by apelab, https://poly.pizza/m/38V-C5r_Slx. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] seagull.glb  "Seagull" by Poly by Google, https://poly.pizza/m/0WRzrtCIIRp. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] lobster.glb  "Lobster" by Poly by Google, https://poly.pizza/m/0IceC4Tzcad. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] ferret.glb  "Ferret" by Poly by Google, https://poly.pizza/m/4I1SBFHWuSo. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] snow-leopard.glb  "Snow leopard" by Poly by Google, https://poly.pizza/m/26tTvxyxkPC. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] cheetah.glb  "Cheetah" by Poly by Google, https://poly.pizza/m/6V3uXmKROCU. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] sloth.glb  "Sloth" by marioba, https://poly.pizza/m/KiJBu1Shwo. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] ostrich.glb  "Ostrich" by Poly by Google, https://poly.pizza/m/1LtIviy4khn. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] walrus.glb  "Walrus" by Poly by Google, https://poly.pizza/m/5T7nIjx9ekP. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] seal.glb  "Seal" by jeremy, https://poly.pizza/m/428MKgODp0H. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] jellyfish.glb  "Jellyfish" by Poly by Google, https://poly.pizza/m/5PxIqPamrag. Licence at https://creativecommons.org/licenses/by/3.0
+[wildlife] seahorse.glb  "Seahorse" by sirkitree, https://poly.pizza/m/3H4CqcG6JGP. Licence at https://creativecommons.org/licenses/by/3.0
+
+[wildlife] peacock-sf.glb  peacock by AndromedaAJ (Sketchfab CC Attribution)
+[wildlife] swan-sf.glb  Coffee machine SWAN RETRO BLUE 15bar by Egor Melentovich (Sketchfab CC Attribution)
+[wildlife] rooster-sf.glb  Handpainted rooster and hen by Enkarra (Sketchfab CC Attribution)
+[wildlife] crow-sf.glb  Low Poly Crow by Tsar Games (Sketchfab CC Attribution)
+[wildlife] tortoise-sf.glb  GIANT_TORTOISE_LOW_POLY_ASSET by TANDA (Sketchfab CC Attribution)
+[wildlife] toad-sf.glb  Toad Warrior by SmugglersStudio (Sketchfab CC Attribution)
+[wildlife] lizard-sf.glb  Cartoon Lizard - Low Poly Game by Theo Kain (Sketchfab CC Attribution)
+[wildlife] mole-sf.glb  Low Poly Mole by AlexFerrart3D (Sketchfab CC Attribution)
+[wildlife] elk-sf.glb  Low-poly Elk by m.altay (Sketchfab CC Attribution)
+[wildlife] reindeer-sf.glb  Low Poly Reindeer by Vertiwizard (Sketchfab CC Attribution-NonCommercial-NoDerivs)
+[wildlife] hippo-sf.glb  Low Poly Hippo by junk (Sketchfab Free Standard)
+[wildlife] gorilla-sf.glb  Gorilla Knight by ikwalsyahmuharam (Sketchfab CC Attribution)
+[wildlife] octopus-sf.glb  Octopus by Btigade (Sketchfab CC Attribution)
+[wildlife] starfish-sf.glb  Starfish - Low Poly/Animated/PBR/Free by Wanna Be Thor (Sketchfab CC Attribution)
+[wildlife] lynx-sf.glb  GM6 Lynx (Low-Poly) by GoldbergR (Sketchfab CC Attribution)
+
+# wildlife additions 2026-07-01 (LuminaScape new-animals wave 1)
+skunk.glb - Skunk by Poly by Google (CC-BY 3.0) - via poly.pizza
+snail.glb - Snail by Roscoe Studio (CC-BY 3.0) - via poly.pizza
+hen.glb - Hen by Poly by Google (CC-BY 3.0) - via poly.pizza
+hummingbird.glb - Hummingbird by Poly by Google (CC-BY 3.0) - via poly.pizza
+woodpecker.glb - Woodpecker by Poly by Google (CC-BY 3.0) - via poly.pizza
+squid.glb - Squid by Quaternius (CC0) - via poly.pizza
+salamander.glb - Salamander by Poly by Google (CC-BY 3.0) - via poly.pizza
+narwhal.glb - Narwhal by Poly by Google (CC-BY 3.0) - via poly.pizza

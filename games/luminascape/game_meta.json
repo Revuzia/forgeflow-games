@@ -1,0 +1,15 @@
+{
+  "title": "LuminaScape",
+  "slug": "luminascape",
+  "description": "A cozy, realistic nature world-builder. Sculpt rolling hills, carve flowing rivers and waterfalls, raise oceans with auto-formed beaches, then paint twelve kinds of ground — lush grass, dry savanna, red clay, gray rock, snow, moss, ash and more. Plant whole forests with a click, scatter wildflower meadows, draw winding roads and fences, and fill your world from a huge palette: real low-poly trees, flowers and rocks, 100+ animals, dozens of cottages and castles, and cozy town, camp and coast decor (fountains, market stalls, campfires, tents, row boats, lanterns). Edit anything — resize with a slider, rotate, recolor, restyle a building's roof, walls, windows and doors, even swap window and door shapes. Animals roam, graze, hunt and sleep on a real day/night clock; homes puff chimney smoke and dove flocks circle overhead. Conjure weather and disasters — rain, thunderstorms, fog, ground mist, overcast skies, drifting 3D clouds, tsunamis, volcanoes, earthquakes and blizzards. Then put on the helmet and walk your world in third person. There's no score and no timer — just a calm, living place to shape however you like.",
+  "short_description": "A cozy nature sandbox: sculpt terrain, carve rivers, paint 12 ground types, and fill a living world with trees, animals, buildings and weather — then walk through it.",
+  "genre": "simulation",
+  "sub_genre": "sandbox-world-builder",
+  "controls_keyboard": "Pick a tool from the bottom bar, then click or drag on the ground. Left-click place/sculpt/paint, click-and-hold to grow, drag to scatter. Right-drag to orbit, scroll to zoom, WASD to pan. Right-click rotates while placing. Press Play (helmet) to walk your world: WASD move, Shift run, drag to look. Ctrl+Z / Ctrl+Y undo/redo.",
+  "controls_gamepad": "",
+  "difficulty": "easy",
+  "has_mobile_support": false,
+  "tags": ["sandbox", "world-builder", "cozy", "nature", "creative", "simulation", "relaxing", "3d", "terrain", "no-combat"],
+  "art_direction": "Cozy painterly low-poly nature diorama as wide key art: a sunlit rolling green island meadow with a winding blue river and a small waterfall, a little cottage with a warm glowing window and a wisp of chimney smoke, clusters of rounded low-poly trees, drifts of red and purple wildflowers, a couple of deer grazing, scattered gray boulders, soft golden late-afternoon sunlight, fluffy white 3D clouds and a gentle blue sky, calm and inviting, Studio-Ghibli-meets-low-poly, vibrant but soft, no text, no UI.",
+  "status": "published"
+}
