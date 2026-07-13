@@ -258,6 +258,21 @@ window.addEventListener('keydown', (e) => {
 });
 
 // ── debug/test hook (Claude Preview + selftest-in-browser) ─────────────
+// pause hook for the shared bottom-right control bar (game_controls.js):
+// in a match → the ⏸ PAUSED settings modal; on the menus → the Settings screen.
+// toggle() with a modal already open closes it instead.
+window.__PAUSE__ = {
+  toggle: () => {
+    const open = document.querySelector('.modal-wrap');
+    if (open) { open.remove(); return; }
+    if (inMatch && match && !match.over && ui?.matchSettings) ui.matchSettings();
+    else if (ui) ui.show('settings');
+  },
+  pause: () => {
+    if (inMatch && match && !match.over && ui?.matchSettings && !document.querySelector('.modal-wrap')) ui.matchSettings();
+  },
+};
+
 window.__ARC__ = {
   version: 1,
   get scene() { return scene; },
