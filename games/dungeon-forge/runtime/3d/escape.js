@@ -1046,6 +1046,7 @@ export class Escape {
           const en = this.run.enemies.find((x) => x.id === ev.id);
           const ecol = ev.elem === "burn" ? 0xff7a1f : ev.elem === "poison" ? 0x8fe04a : ev.elem === "frost" ? 0x5ad6ff : 0xffd769;
           if (en && ev.dmg) g.fx.damageNumber(new THREE.Vector3(en.x, en.f * FLOOR_H + 2.1, en.z), Math.round(ev.dmg), ecol);
+          if (en) g.fx.burst(new THREE.Vector3(en.x, en.f * FLOOR_H + 1.2, en.z), ecol, 7, 4.6);  // impact sparks
           break;
         }
         case "edied": {
@@ -1082,6 +1083,7 @@ export class Escape {
           if (a) {
             this._playCombat(a, "hit", 0, 0.3);
             if (ev.dmg) g.fx.damageNumber(a.grp.position.clone().add(new THREE.Vector3(0, 2.1, 0)), Math.round(ev.dmg), 0xff5566);
+            g.fx.burst(a.grp.position.clone().add(new THREE.Vector3(0, 1.1, 0)), 0xff5566, 6, 3.8);  // hit sparks on the player
           }
           break;
         }
@@ -1314,6 +1316,13 @@ export class Escape {
       const m = this.objMeshes.get(t.id);
       if (!m) continue;
       if (m.userData.spikes) {
+        // eruption burst the instant the spikes fire (steel glints + floor dust)
+        if (t.state === "on" && m.userData._spkPrev !== "on") {
+          const sp = m.getWorldPosition(new THREE.Vector3()); sp.y += 0.4;
+          this.g.fx.burst(sp, 0xc8ccd8, 10, 4.2);
+          this.g.fx.burst(sp, 0x6a5a42, 6, 2.6);
+        }
+        m.userData._spkPrev = t.state;
         const target = t.state === "on" ? 0 : t.state === "warn" ? -0.55 : -0.95;
         m.userData.spikes.position.y += (target - m.userData.spikes.position.y) * Math.min(1, dt * (t.state === "on" ? 22 : 6));
       }
