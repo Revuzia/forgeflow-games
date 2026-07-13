@@ -1104,7 +1104,7 @@ export class Builder {
       if (kind === "npc") return makeNpc(key, theme);
       if (kind === "decor") {
         // procedural for the broken-texture GLBs (torch/wall-torch/barrel/bookshelf)
-        return A.decorMesh(key, theme, this.props, (t) => A.clone(t)).mesh;
+        return decorMesh(key, theme, this.props, (t) => A.clone(t)).mesh;
       }
       return null;
     });

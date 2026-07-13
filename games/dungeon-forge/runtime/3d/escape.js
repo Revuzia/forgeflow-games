@@ -787,17 +787,34 @@ export class Escape {
     this.keys = {};
     on("pointerdown", (e) => {
       if (this.g.hud.modalOpen) return;
-      if (document.pointerLockElement !== el) { el.requestPointerLock(); return; }
+      // FIRST-PERSON keeps FPS-style pointer-lock mouse-look; THIRD-PERSON (the
+      // default chase cam) uses RMB-drag to orbit — no lock, cursor stays free.
+      if (this.fp) { if (document.pointerLockElement !== el) { el.requestPointerLock(); return; } }
       if (e.button === 0) this._melee = true;
-      if (e.button === 2) this._special = true;
+      if (e.button === 2 && !this.fp) { this._rmbDrag = { x: e.clientX, y: e.clientY, moved: false }; e.preventDefault(); }
+      else if (e.button === 2) this._special = true;   // fp: RMB = special
     });
-    on("pointerup", (e) => { if (e.button === 0) this._melee = false; if (e.button === 2) this._special = false; });
+    on("pointerup", (e) => {
+      if (e.button === 0) this._melee = false;
+      if (e.button === 2) {
+        if (this._rmbDrag) { if (!this._rmbDrag.moved) this._specialOnce = true; this._rmbDrag = null; } // a quick RMB tap still fires the special
+        else this._special = false;
+      }
+    });
     on("pointermove", (e) => {
-      if (document.pointerLockElement !== el) return;
       const s = this.g.settings || { sens: 1, invertY: false };
+      if (this._rmbDrag) {                          // RMB-drag orbits the chase cam
+        const dx = e.clientX - this._rmbDrag.x, dy = e.clientY - this._rmbDrag.y;
+        this._rmbDrag.x = e.clientX; this._rmbDrag.y = e.clientY;
+        if (Math.abs(dx) + Math.abs(dy) > 2) this._rmbDrag.moved = true;
+        this.camYaw -= dx * 0.006 * s.sens;
+        this.camPitch = Math.max(-0.25, Math.min(1.15, this.camPitch + dy * 0.005 * s.sens * (s.invertY ? -1 : 1)));
+        return;
+      }
+      if (document.pointerLockElement !== el) return;
       this.camYaw -= e.movementX * 0.0024 * s.sens;
-      const dy = e.movementY * 0.0022 * s.sens * (s.invertY ? -1 : 1);
-      this.camPitch = Math.max(-0.25, Math.min(1.15, this.camPitch + dy));
+      const dyl = e.movementY * 0.0022 * s.sens * (s.invertY ? -1 : 1);
+      this.camPitch = Math.max(-0.25, Math.min(1.15, this.camPitch + dyl));
     });
     // industry-standard pause: releasing pointer lock (Esc) opens the pause overlay
     on("pointerlockchange", () => {
@@ -840,7 +857,9 @@ export class Escape {
           else { this.lockedId = near[nxt].id; this.g.audio.sfx("confirm"); }
         }
       }
-      if (e.code === "Escape") { /* pointer lock exits natively */ }
+      if (e.code === "Escape" && !this.fp && !this.g.hud.modalOpen && !this.run.over && !this._finished) {
+        this.g.menu.pauseOverlay(this);   // third-person has no pointer lock → Esc pauses directly
+      }
     }, window);
     on("keyup", (e) => { this.keys[e.code] = false; if (e.code === "KeyF") this._special = false; if (e.code === "KeyR") this._frost = false; }, window);
   }
@@ -872,7 +891,7 @@ export class Escape {
       if (Math.abs(d) < 0.55) p.input.yaw = ty;
     }
     p.input.melee = !!this._melee;
-    p.input.special = !!this._special;
+    p.input.special = !!this._special || this._specialOnce; this._specialOnce = false; // RMB-tap one-shot
     p.input.frost = !!this._frost;
     p.input.chain = !!this._chain; this._chain = false; // consume the edge-trigger
     // hotbar number-key: fire the mapped slot's action once
@@ -914,7 +933,7 @@ export class Escape {
   closeShop() {
     this._shopOpen = false;
     const el = this.g.renderer.domElement;
-    if (!this.run.over && !this._finished) el.requestPointerLock && el.requestPointerLock();
+    if (this.fp && !this.run.over && !this._finished) el.requestPointerLock && el.requestPointerLock();
   }
 
   // ── event fan-out: sim events → visuals/audio/net ──────────────────────────

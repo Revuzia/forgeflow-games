@@ -410,18 +410,21 @@ export class Hud {
           <span class="df-slot tier" data-a="at" title="Armor tier" style="display:none">🛡 I</span>
         </div>
       </div>
+      <div class="df-topcenter"><span class="df-chip df-timer" data-a="timer">0.0s</span></div>
       <div class="df-topright">
-        <span class="df-chip" data-a="foes" title="Enemies remaining — the exit unseals when they're all defeated">👹</span>
-        <span class="df-chip" data-a="timer">0.0s</span>
         <span class="df-chip" data-a="floorN">Floor 1</span>
         <button class="df-btn ghost" data-a="settings" title="Settings">⚙</button>
         <button class="df-btn ghost" data-a="quit">✕</button>
+      </div>
+      <div class="df-foespanel" data-a="foespanel">
+        <div class="df-foeshead" data-a="foeshead"><span class="df-foestitle" data-a="foestitle">👹 Enemies</span><span class="df-foestoggle" data-a="foestoggle">▾</span></div>
+        <div class="df-foeslist" data-a="foes"></div>
       </div>
       <div class="df-targetplate" data-a="tplate" style="display:none">
         <div class="df-tname" data-a="tname"></div>
         <div class="df-bar thp"><div class="fill" data-a="thp"></div><span data-a="thptxt"></span></div>
       </div>
-      <canvas class="df-minimap" data-a="map" width="180" height="180"></canvas>
+      <div class="df-mapframe"><canvas class="df-minimap" data-a="map" width="180" height="180"></canvas></div>
       <div class="df-prompt" data-a="prompt" style="display:none"></div>
       <div class="df-abilities" data-a="abilities"></div>
       <div class="df-crosshair">·</div>
@@ -431,6 +434,9 @@ export class Hud {
     this.root.appendChild(this.eWrap);
     this.eWrap.querySelector('[data-a="quit"]').onclick = () => { this.g.audio.sfx("ui"); this.g.menu.confirmQuitRun(); };
     this.eWrap.querySelector('[data-a="settings"]').onclick = () => { this.g.audio.sfx("ui"); this.g.showSettings(); };
+    // collapsible enemies panel
+    const foesHead = this.eWrap.querySelector('[data-a="foeshead"]'), foesPanel = this.eWrap.querySelector('[data-a="foespanel"]');
+    if (foesHead) foesHead.onclick = () => { this.g.audio.sfx("ui"); const c = foesPanel.classList.toggle("collapsed"); this.eWrap.querySelector('[data-a="foestoggle"]').textContent = c ? "▸" : "▾"; };
     this.mapCtx = this.eWrap.querySelector('[data-a="map"]').getContext("2d");
     this.explored = new Set();
     const obj = this.eWrap.querySelector('[data-a="obj"]');
@@ -518,19 +524,24 @@ export class Hud {
     q('[data-a="timer"]').textContent = fmtTime(esc_.run.time);
     // remaining enemies: kinds + counts, EXCEPT bosses (their presence shows
     // only as a mystery "+?" — players shouldn't see a boss coming)
+    // remaining enemies — a compact stacked list (top-left, collapsible); bosses
+    // stay hidden ("+?"). Rendered as rows: name · ×count.
     const foes = q('[data-a="foes"]');
     if (foes) {
       const roster = D.ENEMIES[esc_.d.theme] || {};
-      const byKind = {}; let hidden = 0;
+      const byKind = {}; let hidden = 0, total = 0;
       for (const e2 of esc_.run.enemies) {
         if (!e2.alive) continue;
+        total++;
         if (roster[e2.etype] && roster[e2.etype].boss) { hidden++; continue; }
         byKind[e2.etype] = (byKind[e2.etype] || 0) + 1;
       }
-      const parts = Object.keys(byKind).map((k) => (roster[k] ? roster[k].label : k) + " ×" + byKind[k]);
-      const label = parts.length ? "👹 " + parts.join(" · ") + (hidden ? " +?" : "")
-        : hidden ? "👹 …something stirs" : "✓ Cleared — exit open!";
-      if (foes.textContent !== label) { foes.textContent = label; foes.style.color = parts.length || hidden ? "" : "#7dffb0"; }
+      const rows = Object.keys(byKind).map((k) => `<div class="df-foerow"><span>${esc(roster[k] ? roster[k].label : k)}</span><b>×${byKind[k]}</b></div>`);
+      if (hidden) rows.push(`<div class="df-foerow ghost"><span>…something stirs</span><b>+?</b></div>`);
+      const html = rows.length ? rows.join("") : `<div class="df-foerow done">✓ Cleared — exit open!</div>`;
+      if (foes._html !== html) { foes.innerHTML = html; foes._html = html; }
+      const ttl = q('[data-a="foestitle"]');
+      if (ttl) ttl.textContent = `👹 Enemies${total ? " (" + (total - 0) + ")" : ""}`;
     }
     // action hotbar — real slots with Digit1-N keys, cooldown overlays + counts
     const ab = q('[data-a="abilities"]');
@@ -774,7 +785,20 @@ function injectStyle() {
   .df-inv{display:flex;gap:7px}
   .df-slot{background:rgba(8,10,18,.8);border:1px solid rgba(150,170,255,.25);border-radius:9px;padding:5px 10px;font-size:13px;font-weight:800}
   .df-topright{position:absolute;top:12px;right:12px;display:flex;gap:8px;align-items:center}
-  .df-minimap{position:absolute;top:56px;right:12px;border:1px solid rgba(150,170,255,.3);border-radius:12px}
+  .df-topcenter{position:absolute;top:12px;left:50%;transform:translateX(-50%);pointer-events:none}
+  .df-timer{font-variant-numeric:tabular-nums;font-size:15px;padding:8px 16px;background:rgba(10,13,22,.9);border-color:rgba(150,170,255,.3)}
+  /* collapsible enemies panel — top-left */
+  .df-foespanel{position:absolute;top:12px;left:12px;width:190px;background:rgba(10,13,22,.86);border:1px solid rgba(255,110,90,.32);border-radius:12px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+  .df-foeshead{display:flex;justify-content:space-between;align-items:center;padding:7px 11px;cursor:pointer;font-size:12px;font-weight:800;letter-spacing:.4px;color:#ffd0c4;background:rgba(255,110,90,.1)}
+  .df-foeshead:hover{background:rgba(255,110,90,.18)}
+  .df-foestoggle{font-size:11px;opacity:.8}
+  .df-foeslist{max-height:38vh;overflow-y:auto;padding:4px 6px 6px;display:flex;flex-direction:column;gap:2px;scrollbar-width:thin}
+  .df-foespanel.collapsed .df-foeslist{display:none}
+  .df-foerow{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;padding:3px 7px;border-radius:6px;color:#dfe4f2;background:rgba(30,26,34,.4)}
+  .df-foerow b{color:#ff9a8a} .df-foerow.ghost{color:#9aa6cf;font-style:italic} .df-foerow.done{color:#7dffb0;font-weight:800;justify-content:center}
+  /* framed minimap */
+  .df-mapframe{position:absolute;top:56px;right:12px;padding:5px;background:linear-gradient(160deg,rgba(30,38,64,.92),rgba(12,15,26,.92));border:1px solid rgba(150,170,255,.42);border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.05)}
+  .df-minimap{display:block;border-radius:9px;background:rgba(6,8,14,.6)}
   .df-prompt{position:absolute;left:50%;top:58%;transform:translateX(-50%);background:rgba(10,13,22,.92);border:1px solid var(--acc);border-radius:12px;padding:9px 18px;font-size:15px;font-weight:700}
   .df-prompt b{color:var(--acc);border:1px solid var(--acc);border-radius:6px;padding:1px 7px;margin-right:6px}
   .df-prompt.need{border-color:#ff5566;color:#ffb0b8}
@@ -816,7 +840,7 @@ function injectStyle() {
   .df-shopinfo b{font-size:14px}
   .df-shopdesc{font-size:11.5px;opacity:.7}
   .df-shoprow .df-btn{min-width:78px;font-weight:800}
-  @media (max-width:820px){ .df-tool .lbl{display:none} .df-tool{min-width:44px} .df-name{width:130px} .df-minimap{width:120px;height:120px} }
+  @media (max-width:820px){ .df-tool .lbl{display:none} .df-tool{min-width:44px} .df-name{width:130px} .df-minimap{width:120px;height:120px} .df-foespanel{width:150px} }
   `;
   const st = document.createElement("style");
   st.textContent = css;
