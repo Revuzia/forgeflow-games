@@ -261,7 +261,9 @@ export function createUI(container, handlers) {
       ach.onclick = () => { handlers.sfx('uiTap'); ui.showAchievements(() => ui.showMenu()); };
       const set = el('button', 'bs-btn', 'SETTINGS');
       set.onclick = () => { handlers.sfx('uiTap'); ui.showSettings(() => {}); };
-      s.append(play, ach, set);
+      const how = el('button', 'bs-btn', 'HOW TO PLAY');
+      how.onclick = () => { handlers.sfx('uiTap'); ui.showHowTo(() => ui.showMenu()); };
+      s.append(play, ach, how, set);
       s.append(el('div', '', `<div style="margin-top:34px;font-size:11px;color:#6a5c48;letter-spacing:0.12em">A FORGEFLOW GAMES PRODUCTION · ⭐ ${totalStars()}/135</div>`));
       handlers.music('menu');
     },
@@ -549,9 +551,35 @@ export function createUI(container, handlers) {
       restart.onclick = () => { ui.closeOverlay(); handlers.restart(); };
       const settings = el('button', 'bs-btn', 'SETTINGS');
       settings.onclick = () => ui.showSettings(() => ui.showPause(onResume));
+      const how = el('button', 'bs-btn', 'HOW TO PLAY');
+      how.onclick = () => ui.showHowTo(() => ui.showPause(onResume));
       const quit = el('button', 'bs-btn', 'ABANDON THE FIELD');
       quit.onclick = () => { ui.closeOverlay(); handlers.quitToMap(); };
-      box.append(resume, restart, settings, quit);
+      box.append(resume, restart, settings, how, quit);
+      o.appendChild(box);
+      root.appendChild(o);
+    },
+
+    // ---------------- HOW TO PLAY ----------------
+    // Keys mirror the real bindings in game.js — they were undiscoverable before.
+    showHowTo(onBack) {
+      ui.closeOverlay();
+      const o = el('div', 'bs-overlay');
+      ui.overlay = o;
+      const box = el('div', 'bs-panelbox');
+      box.appendChild(el('h2', '', '📖 How to Play'));
+      box.appendChild(el('div', '', `
+        <div style="text-align:left;font-size:13.5px;line-height:1.75;color:#e2d8c6;max-width:460px">
+          <b style="color:#e8b83a">Goal</b> — defend your KEEP at the center: every road leads to it. If the keep falls, the siege is lost.<br><br>
+          <b style="color:#e8b83a">Build</b> — pick a tower (click a card or press <b>1–8</b>), then click a build pad. <b>Esc</b> cancels the pick.<br>
+          <b style="color:#e8b83a">Waves</b> — press <b>SPACE</b> (or the button) to call the next wave early for bonus gold.<br>
+          <b style="color:#e8b83a">Towers</b> — click one to select it · <b>U</b> upgrade · <b>X</b> sell · <b>Esc</b> deselect.<br>
+          <b style="color:#e8b83a">Camera</b> — drag to orbit · wheel to zoom · <b>R</b> resets the view.<br>
+          <b style="color:#e8b83a">Pause</b> — <b>Esc</b> (with nothing selected) opens the pause menu.
+        </div>`));
+      const closeB = el('button', 'bs-btn primary', 'GOT IT');
+      closeB.onclick = () => { handlers.sfx('uiTap'); ui.closeOverlay(); onBack(); };
+      box.appendChild(closeB);
       o.appendChild(box);
       root.appendChild(o);
     },

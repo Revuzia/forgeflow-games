@@ -280,7 +280,9 @@ export function createUI(container, handlers) {
       ach.onclick = () => { handlers.sfx('ui_click'); ui.showAchievements(() => ui.showMenu()); };
       const set = el('button', 'br-btn', 'SETTINGS');
       set.onclick = () => { handlers.sfx('ui_click'); ui.showSettings(() => {}); };
-      s.append(play, ach, set);
+      const how = el('button', 'br-btn', 'HOW TO PLAY');
+      how.onclick = () => { handlers.sfx('ui_click'); ui.showHowTo(() => ui.showMenu()); };
+      s.append(play, ach, how, set);
       s.append(el('div', '', `<div style="margin-top:36px;font-size:11.5px;color:#5a6478;letter-spacing:0.12em">A FORGEFLOW GAMES PRODUCTION · ⭐ ${totalStars()}/135</div>`));
       handlers.music('menu');
     },
@@ -595,9 +597,36 @@ export function createUI(container, handlers) {
       restart.onclick = () => { ui.closeOverlay(); handlers.restart(); };
       const settings = el('button', 'br-btn', 'SETTINGS');
       settings.onclick = () => ui.showSettings(() => ui.showPause(onResume));
+      const how = el('button', 'br-btn', 'HOW TO PLAY');
+      how.onclick = () => ui.showHowTo(() => ui.showPause(onResume));
       const quit = el('button', 'br-btn', 'QUIT TO MAP');
       quit.onclick = () => { ui.closeOverlay(); handlers.quitToMap(); };
-      box.append(resume, restart, settings, quit);
+      box.append(resume, restart, settings, how, quit);
+      o.appendChild(box);
+      root.appendChild(o);
+    },
+
+    // ---------------- HOW TO PLAY ----------------
+    // The keys below mirror the real bindings in game.js (keydown handler) —
+    // players had no way to discover them before this screen existed.
+    showHowTo(onBack) {
+      ui.closeOverlay();
+      const o = el('div', 'br-overlay');
+      ui.overlay = o;
+      const box = el('div', 'br-panelbox');
+      box.appendChild(el('h2', '', '📖 How to Play'));
+      box.appendChild(el('div', '', `
+        <div style="text-align:left;font-size:13.5px;line-height:1.75;color:#cdd6ea;max-width:460px">
+          <b style="color:#e8b83a">Goal</b> — hold the line: stop every wave before it reaches your bastion. Earn ⭐ to unlock new realms.<br><br>
+          <b style="color:#e8b83a">Build</b> — pick a tower (click a card or press <b>1–8</b>), then click a build pad. <b>Esc</b> cancels the pick.<br>
+          <b style="color:#e8b83a">Waves</b> — press <b>SPACE</b> (or the button) to send the next wave early for bonus gold.<br>
+          <b style="color:#e8b83a">Towers</b> — click one to select it · <b>U</b> upgrade · <b>X</b> sell · <b>Esc</b> deselect.<br>
+          <b style="color:#e8b83a">Camera</b> — drag to orbit · wheel to zoom · <b>R</b> resets the view.<br>
+          <b style="color:#e8b83a">Pause</b> — <b>Esc</b> (with nothing selected) opens the pause menu.
+        </div>`));
+      const closeB = el('button', 'br-btn primary', 'GOT IT');
+      closeB.onclick = () => { handlers.sfx('ui_click'); ui.closeOverlay(); onBack(); };
+      box.appendChild(closeB);
       o.appendChild(box);
       root.appendChild(o);
     },
