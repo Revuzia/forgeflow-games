@@ -9,7 +9,7 @@ import * as THREE from "three";
 
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
-const { makeInstanced, Assets, creatureClips, makeTorch, makeCreature, makeCellSurfaces, makeNpc, makeDoor, makeSpikes } = await import("./assets.js" + V);
+const { makeInstanced, Assets, creatureClips, makeTorch, makeWallTorch, makeCreature, makeCellSurfaces, makeNpc, makeDoor, makeSpikes, decorMesh } = await import("./assets.js" + V);
 const { Thumbnailer } = await import("./thumbs.js" + V);
 const { landingMarker } = await import("./stair_marker.js" + V);
 
@@ -441,9 +441,16 @@ export class Builder {
         break;
       }
       case "decor": {
-        if (o.dtype === "torch" || o.dtype === "wall-torch") { grp.add(makeTorch(this.d.theme)); const l = new THREE.PointLight(this.g.look.torch, 6, 11, 1.6); l.position.y = 2.6; grp.add(l); grp.userData.flicker = l; break; }
-        const tpl = this.props[o.dtype] || this.props.crate;
-        add(tpl, null, D.DECOR_FOOT[o.dtype] || 1.8);
+        if (o.dtype === "wall-torch") {
+          const side = D.nearestWallSide(this.d, f, o.x, o.z);
+          const wt = makeWallTorch(this.d.theme); wt.position.y = 2.3;
+          if (side >= 0) { const dir = D.DIRS[side]; wt.position.x = dir.dx * (CELL * 0.44); wt.position.z = dir.dz * (CELL * 0.44); wt.rotation.y = Math.atan2(-dir.dx, -dir.dz); }
+          grp.add(wt); const lw = new THREE.PointLight(this.g.look.torch, 6, 11, 1.6); lw.position.y = 2.6; grp.add(lw); grp.userData.flicker = lw; break;
+        }
+        if (o.dtype === "torch") { grp.add(makeTorch(this.d.theme)); const l = new THREE.PointLight(this.g.look.torch, 6, 11, 1.6); l.position.y = 2.6; grp.add(l); grp.userData.flicker = l; break; }
+        // procedural for the broken-texture GLBs (barrel/bookshelf), else the GLB
+        const dm = decorMesh(o.dtype, this.d.theme, this.props, (t) => this.g.assets.clone(t));
+        if (dm.mesh) { if (dm.foot === "glb") Assets.normalizeFoot(dm.mesh, D.DECOR_FOOT[o.dtype] || 1.8); grp.add(dm.mesh); }
         break;
       }
       case "npc": {
@@ -1096,8 +1103,8 @@ export class Builder {
       }
       if (kind === "npc") return makeNpc(key, theme);
       if (kind === "decor") {
-        const tpl = this.props[key] || this.props.crate;
-        return tpl ? A.clone(tpl) : null;
+        // procedural for the broken-texture GLBs (torch/wall-torch/barrel/bookshelf)
+        return A.decorMesh(key, theme, this.props, (t) => A.clone(t)).mesh;
       }
       return null;
     });

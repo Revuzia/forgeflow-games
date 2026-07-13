@@ -11,7 +11,7 @@ import * as THREE from "three";
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
 const E = await import("../sim/escape_sim.js" + V);
-const { makeInstanced, Assets, charClips, makeTorch, makeCellSurfaces, makeNpc, findArmBones, relaxArms, makeDoor, makeSpikes } = await import("./assets.js" + V);
+const { makeInstanced, Assets, charClips, makeTorch, makeWallTorch, makeCellSurfaces, makeNpc, findArmBones, relaxArms, makeDoor, makeSpikes, decorMesh } = await import("./assets.js" + V);
 const { EnemyPool } = await import("./enemies.js" + V);
 
 const FLOOR_H = 4.4;
@@ -378,7 +378,12 @@ export class Escape {
         // renders its model AND casts a warm point light + flame, so "Light" is
         // just a decor choice now.
         if (D.LIGHT_DECOR.has(o.dtype)) {
-          if (o.dtype === "torch" || o.dtype === "wall-torch") { grp.add(makeTorch(this.d.theme)); this.g.fx.attachFlame(grp, this.d.theme, 2.45); }
+          if (o.dtype === "wall-torch") {
+            const side = D.nearestWallSide(this.d, f, o.x, o.z);
+            const wt = makeWallTorch(this.d.theme); wt.position.y = 2.3;
+            if (side >= 0) { const dir = D.DIRS[side]; wt.position.x = dir.dx * (CELL * 0.44); wt.position.z = dir.dz * (CELL * 0.44); wt.rotation.y = Math.atan2(-dir.dx, -dir.dz); }
+            grp.add(wt); this.g.fx.attachFlame(grp, this.d.theme, 2.75);
+          } else if (o.dtype === "torch") { grp.add(makeTorch(this.d.theme)); this.g.fx.attachFlame(grp, this.d.theme, 2.45); }
           else {
             const m2 = add(this.props[o.dtype], null, D.DECOR_FOOT[o.dtype] || 1.4);
             if (m2) m2.userData.decorId = o.id;
@@ -390,9 +395,9 @@ export class Escape {
           this.lightPool.push({ light: l, base: this.g.look.torchI * 0.32, grp, f });
           break;
         }
-        const tpl = this.props[o.dtype] || this.props.crate;
-        const m = add(tpl, null, D.DECOR_FOOT[o.dtype] || 1.8);
-        if (m) m.userData.decorId = o.id;
+        // procedural for the broken-texture GLBs (barrel/bookshelf), else the GLB
+        const dm = decorMesh(o.dtype, this.d.theme, this.props, (t) => A.clone(t));
+        if (dm.mesh) { if (dm.foot === "glb") Assets.normalizeFoot(dm.mesh, D.DECOR_FOOT[o.dtype] || 1.8); grp.add(dm.mesh); dm.mesh.userData.decorId = o.id; }
         break;
       }
       case "npc": {

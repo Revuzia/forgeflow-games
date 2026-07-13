@@ -830,6 +830,79 @@ export function makeSpikes() {
   return grp;
 }
 
+// Procedural replacements for decor GLBs whose Kenney export shipped a broken
+// 1×1 texture (barrel/bookshelf render flat-untextured). Colored materials, so
+// they always look right. ~1.6u tall to match a cell prop.
+// A wall-mounted torch: a small bracket + short stub + flame, built facing +Z
+// (into the room). The renderer rotates/offsets it onto the cell's wall side.
+export function makeWallTorch(theme) {
+  const grp = new THREE.Group();
+  const fantasy = theme !== "scifi";
+  const metal = new THREE.MeshStandardMaterial({ color: fantasy ? 0x2a2620 : 0x2a3340, metalness: 0.7, roughness: 0.45 });
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.5, 0.12), metal); back.position.set(0, 0, -0.02); grp.add(back);
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.5, 8), metal);
+  arm.rotation.x = -Math.PI / 3.2; arm.position.set(0, 0.14, 0.2); grp.add(arm);
+  const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.09, 0.16, 8), metal); cup.position.set(0, 0.35, 0.38); grp.add(cup);
+  const flame = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8),
+    new THREE.MeshStandardMaterial({ color: fantasy ? 0xffb347 : 0x66eaff, emissive: fantasy ? 0xff8a1f : 0x37e0ff, emissiveIntensity: 2.6 }));
+  flame.position.set(0, 0.5, 0.38); flame.scale.y = 1.4; grp.add(flame);
+  return grp;
+}
+export function makeBarrel(theme) {
+  const grp = new THREE.Group();
+  const scifi = theme === "scifi";
+  const wood = new THREE.MeshStandardMaterial({ color: scifi ? 0x3a4656 : 0x6e4a2a, roughness: 0.8, metalness: scifi ? 0.5 : 0 });
+  const hoop = new THREE.MeshStandardMaterial({ color: scifi ? 0x8792a0 : 0x4a3524, metalness: 0.8, roughness: 0.4 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.52, 1.5, 16), wood);
+  body.position.y = 0.75; grp.add(body);
+  const belly = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.68, 0.9, 16), wood);
+  belly.position.y = 0.75; grp.add(belly);
+  for (const y of [0.24, 0.75, 1.26]) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(y === 0.75 ? 0.69 : 0.6, 0.05, 8, 20), hoop);
+    ring.rotation.x = Math.PI / 2; ring.position.y = y; grp.add(ring);
+  }
+  const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.08, 16), new THREE.MeshStandardMaterial({ color: scifi ? 0x2a3340 : 0x5a3c22, roughness: 0.85 }));
+  lid.position.y = 1.5; grp.add(lid);
+  if (scifi) { const glow = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.2, 16), new THREE.MeshStandardMaterial({ color: 0x35e0e8, emissive: 0x35e0e8, emissiveIntensity: 1.6 })); glow.position.y = 0.9; grp.add(glow); }
+  return grp;
+}
+export function makeBookshelf() {
+  const grp = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: 0x4a3120, roughness: 0.85 });
+  const W = 1.7, H = 2.4, D = 0.55;
+  const panel = (w, h, d, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wood); m.position.set(x, y, z); grp.add(m); };
+  panel(W, 0.12, D, 0, 0.06, 0); panel(W, 0.12, D, 0, H, 0);                 // top + bottom
+  panel(0.12, H, D, -W / 2 + 0.06, H / 2, 0); panel(0.12, H, D, W / 2 - 0.06, H / 2, 0); // sides
+  panel(W, 0.1, D, 0, H * 0.5, 0);            // middle shelf
+  panel(W, H, 0.08, 0, H / 2, -D / 2 + 0.04); // back
+  // rows of colored book spines on the two shelves
+  const cols = [0x8a2f2f, 0x2f5a8a, 0x2f8a4a, 0xb0862f, 0x6a3a8a, 0x8a5a2f];
+  for (const shelfY of [0.35, H * 0.5 + 0.28]) {
+    let bx = -W / 2 + 0.2;
+    while (bx < W / 2 - 0.2) {
+      const bw = 0.1 + (Math.abs(Math.sin(bx * 12)) * 0.09);
+      const bh = 0.7 + Math.abs(Math.sin(bx * 7)) * 0.25;
+      const book = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, 0.34),
+        new THREE.MeshStandardMaterial({ color: cols[(Math.abs(Math.sin(bx * 20) * cols.length) | 0) % cols.length], roughness: 0.75 }));
+      book.position.set(bx + bw / 2, shelfY + bh / 2, 0.05); grp.add(book);
+      bx += bw + 0.015;
+    }
+  }
+  return grp;
+}
+// One place that turns a decor dtype into a mesh — procedural for the broken GLBs
+// (torch/wall-torch/barrel/bookshelf), the GLB clone otherwise. `clone` clones a
+// loaded template; `props` is the loaded prop set. Returns {mesh, foot} where
+// foot is the target height (null = use the mesh as built).
+export function decorMesh(dtype, theme, props, clone) {
+  if (dtype === "wall-torch") return { mesh: makeWallTorch(theme), foot: null };
+  if (dtype === "torch") return { mesh: makeTorch(theme), foot: null };
+  if (dtype === "barrel") return { mesh: makeBarrel(theme), foot: null };
+  if (dtype === "bookshelf") return { mesh: makeBookshelf(), foot: null };
+  const tpl = (props && props[dtype]) || (props && props.crate);
+  return { mesh: tpl ? clone(tpl) : null, foot: "glb" };
+}
+
 export function stripLights(root) {
   const dead = [];
   root.traverse((o) => { if (o.isLight) dead.push(o); });

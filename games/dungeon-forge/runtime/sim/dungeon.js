@@ -312,6 +312,17 @@ export function edgeWall(d, f, ax, az, bx, bz) {
           : dz === 1 ? { x: ax, z: az, s: 0 } : { x: bx, z: bz, s: 0 };
   return fl.walls[wk(e.x, e.z, e.s)] || null;
 }
+/** The side index (DIRS 0..3) of the nearest wall to a cell — a boundary (the
+ *  neighbor isn't floor) or an interior wall — or -1 if the cell is open on all
+ *  sides. Used to mount wall-torches on the actual wall. */
+export function nearestWallSide(d, f, x, z) {
+  for (let s = 0; s < 4; s++) {
+    const nx = x + DIRS[s].dx, nz = z + DIRS[s].dz;
+    if (!hasCell(d, f, nx, nz)) return s;            // boundary wall
+    if (edgeWall(d, f, x, z, nx, nz)) return s;      // interior wall
+  }
+  return -1;
+}
 /** World-space midpoint of an edge (for interaction range + render placement). */
 export function edgeMid(x, z, s) {
   return s === 0 ? { x: (x + 0.5) * CELL, z: (z + 1) * CELL } : { x: (x + 1) * CELL, z: (z + 0.5) * CELL };

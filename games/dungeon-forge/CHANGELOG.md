@@ -344,6 +344,24 @@ Initial release.
     and caches the render. Verified live: 24/24 enemy + 3/3 NPC + 8/8 decor
     thumbnails render (0 placeholders), ~940ms one-time to warm the enemy grid,
     instant thereafter. Selftest 159.
+## v1.11.0 — 2026-07-13 (builder: wall turns, real spikes, trap UI, decor overhaul)
+- **Walls turn corners** — a held wall drag now pivots to a new axis when you
+  move perpendicular, so you can draw L-shapes without releasing; still won't box
+  in stray side tiles.
+- **Walls can't cut through stairs** — wall+ refuses the edge a staircase flight
+  crosses.
+- **Real pop-up spikes** — procedural steel spike cluster (18 cones) that thrusts
+  up from underground when the trap fires, replacing the untextured GLB blob.
+- **Trap picker is a contained icon panel** like Decor (was a strung-out row);
+  the trap-type chooser in the selection panel is rounded buttons, not a native
+  square dropdown.
+- **Decor fixes**: barrel, bookshelf, and the two torches shipped a broken 1×1
+  texture → now procedural (fully coloured). **Wall-torch mounts on the wall** —
+  a smaller bracketed torch that auto-attaches to the cell's nearest wall side
+  (was floor-only). **Every decor is now destroyable** when hit or shot (break FX
+  + loot); barrel/canister still explode.
+- Selftest 294 → 299.
+
 ## v1.10.0 — 2026-07-12 (owner batch: doors/walls/co-build/exit gate/terrain/music)
 - **Doors now always align to their wall** — they rendered 90° sideways (the old
   kit-gate rotation mapping survived into the new procedural doors). Right-click
