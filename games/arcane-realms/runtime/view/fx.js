@@ -6,16 +6,53 @@ import * as THREE from 'three';
 
 const MAX_P = 900;
 
+// 4-cell shape atlas — every particle picks a silhouette, so each element has
+// its own matter: 0 soft dot (smoke/wisps), 1 four-point spark (fire/light),
+// 2 leaf (nature), 3 ice crystal (frost). Shapes keep a safe margin so rotated
+// point-sprites never bleed into the neighboring cell.
+export const P_DOT = 0, P_SPARK = 1, P_LEAF = 2, P_ICE = 3;
 function makeSpriteTex() {
   const c = document.createElement('canvas');
-  c.width = c.height = 64;
+  c.width = 256; c.height = 64;
   const g = c.getContext('2d');
-  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  // cell 0 — soft dot
+  let grad = g.createRadialGradient(32, 32, 0, 32, 32, 30);
   grad.addColorStop(0, 'rgba(255,255,255,1)');
   grad.addColorStop(0.35, 'rgba(255,255,255,.8)');
   grad.addColorStop(1, 'rgba(255,255,255,0)');
   g.fillStyle = grad;
   g.fillRect(0, 0, 64, 64);
+  // cell 1 — four-point spark (star with a hot core)
+  g.save(); g.translate(96, 32);
+  grad = g.createRadialGradient(0, 0, 0, 0, 0, 26);
+  grad.addColorStop(0, 'rgba(255,255,255,.9)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad; g.fillRect(-26, -26, 52, 52);
+  g.fillStyle = 'rgba(255,255,255,1)';
+  g.beginPath();
+  g.moveTo(0, -26); g.quadraticCurveTo(3.5, -3.5, 26, 0); g.quadraticCurveTo(3.5, 3.5, 0, 26);
+  g.quadraticCurveTo(-3.5, 3.5, -26, 0); g.quadraticCurveTo(-3.5, -3.5, 0, -26);
+  g.closePath(); g.fill();
+  g.restore();
+  // cell 2 — leaf (pointed teardrop + vein)
+  g.save(); g.translate(160, 32);
+  g.fillStyle = 'rgba(255,255,255,.95)';
+  g.beginPath();
+  g.moveTo(0, -24); g.quadraticCurveTo(15, -8, 0, 24); g.quadraticCurveTo(-15, -8, 0, -24);
+  g.closePath(); g.fill();
+  g.strokeStyle = 'rgba(120,120,120,.8)'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(0, -20); g.lineTo(0, 20); g.stroke();
+  g.restore();
+  // cell 3 — six-arm ice crystal
+  g.save(); g.translate(224, 32);
+  g.strokeStyle = 'rgba(255,255,255,.95)'; g.lineWidth = 3.4; g.lineCap = 'round';
+  for (let i = 0; i < 6; i++) {
+    g.save(); g.rotate((i * Math.PI) / 3);
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -22);
+    g.moveTo(0, -13); g.lineTo(6, -18); g.moveTo(0, -13); g.lineTo(-6, -18);
+    g.stroke(); g.restore();
+  }
+  g.restore();
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -34,6 +71,9 @@ export class FX {
     this.grav = new Float32Array(MAX_P);
     this.drag = new Float32Array(MAX_P);
     this.baseSize = new Float32Array(MAX_P);
+    this.cell = new Float32Array(MAX_P);   // atlas shape (P_DOT/P_SPARK/P_LEAF/P_ICE)
+    this.rot = new Float32Array(MAX_P);    // sprite rotation
+    this.spin = new Float32Array(MAX_P);   // rotation speed (leaves flutter, flakes twirl)
     this.head = 0;
     this.alive = 0;
 
@@ -41,13 +81,21 @@ export class FX {
     geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
     geo.setAttribute('size', new THREE.BufferAttribute(this.size, 1));
+    geo.setAttribute('acell', new THREE.BufferAttribute(this.cell, 1));
+    geo.setAttribute('arot', new THREE.BufferAttribute(this.rot, 1));
     const mat = new THREE.ShaderMaterial({
       uniforms: { map: { value: makeSpriteTex() } },
       vertexShader: `
         attribute float size;
+        attribute float acell;
+        attribute float arot;
         varying vec3 vColor;
+        varying float vCell;
+        varying float vRot;
         void main(){
           vColor = color;
+          vCell = acell;
+          vRot = arot;
           vec4 mv = modelViewMatrix * vec4(position,1.0);
           gl_PointSize = size * (240.0 / -mv.z);
           gl_Position = projectionMatrix * mv;
@@ -55,8 +103,15 @@ export class FX {
       fragmentShader: `
         uniform sampler2D map;
         varying vec3 vColor;
+        varying float vCell;
+        varying float vRot;
         void main(){
-          vec4 tex = texture2D(map, gl_PointCoord);
+          // rotate the sprite around its center, then map into its atlas cell
+          vec2 p = gl_PointCoord - 0.5;
+          float c = cos(vRot), s = sin(vRot);
+          vec2 q = vec2(c*p.x - s*p.y, s*p.x + c*p.y) + 0.5;
+          q = clamp(q, 0.02, 0.98);
+          vec4 tex = texture2D(map, vec2((q.x + vCell) * 0.25, q.y));
           gl_FragColor = vec4(vColor, 1.0) * tex;
         }`,
       transparent: true,
@@ -76,7 +131,7 @@ export class FX {
     this.emitters = new Map();
   }
 
-  spawn(p, v, color, size, life, grav = 0, drag = 0.99) {
+  spawn(p, v, color, size, life, grav = 0, drag = 0.99, cell = 0, spin = 0) {
     const i = this.head;
     this.head = (this.head + 1) % MAX_P;
     this.pos[i * 3] = p.x; this.pos[i * 3 + 1] = p.y; this.pos[i * 3 + 2] = p.z;
@@ -87,9 +142,12 @@ export class FX {
     this.size[i] = size;
     this.life[i] = life; this.life0[i] = life;
     this.grav[i] = grav; this.drag[i] = drag;
+    this.cell[i] = cell;
+    this.rot[i] = spin ? Math.random() * Math.PI * 2 : 0;
+    this.spin[i] = spin ? (Math.random() - 0.5) * 2 * spin : 0;
   }
 
-  burst(pos, color, { n = 24, speed = 2.2, size = 0.42, life = 0.7, up = 0.6, grav = -2.2, spread = 1 } = {}) {
+  burst(pos, color, { n = 24, speed = 2.2, size = 0.42, life = 0.7, up = 0.6, grav = -2.2, spread = 1, cell = 0, spin = 0 } = {}) {
     n = Math.round(n * this.density);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -97,7 +155,7 @@ export class FX {
       this.spawn(
         pos,
         new THREE.Vector3(Math.cos(a) * r * spread, up * (0.5 + Math.random()), Math.sin(a) * r * spread),
-        color, size * (0.7 + Math.random() * 0.7), life * (0.7 + Math.random() * 0.6), grav);
+        color, size * (0.7 + Math.random() * 0.7), life * (0.7 + Math.random() * 0.6), grav, 0.99, cell, spin);
     }
   }
 
@@ -135,13 +193,27 @@ export class FX {
     }
   }
 
-  snow(pos, { n = 14 } = {}) { // freeze flakes drift down
+  snow(pos, { n = 14 } = {}) { // freeze crystals twirl down
     n = Math.round(n * this.density);
     for (let i = 0; i < n; i++) {
       this.spawn(
         new THREE.Vector3(pos.x + (Math.random() - 0.5) * 1.1, pos.y + 1.2 + Math.random() * 0.5, pos.z + (Math.random() - 0.5) * 1.1),
         new THREE.Vector3((Math.random() - 0.5) * 0.2, -0.7 - Math.random() * 0.4, (Math.random() - 0.5) * 0.2),
-        0x9fdcff, 0.26, 1.1, 0, 0.995);
+        0x9fdcff, 0.3, 1.1, 0, 0.995, P_ICE, 1.6);
+    }
+  }
+
+  // grove signature: leaves burst out and FLUTTER down, spinning as they fall
+  leaves(pos, { n = 18, speed = 1.8, up = 1.4 } = {}) {
+    n = Math.round(n * this.density);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = (0.3 + Math.random() * 0.7) * speed;
+      this.spawn(
+        pos,
+        new THREE.Vector3(Math.cos(a) * r, up * (0.5 + Math.random()), Math.sin(a) * r),
+        Math.random() < 0.7 ? 0x54d06a : 0xa8e06a,
+        0.38 * (0.7 + Math.random() * 0.7), 1.0 + Math.random() * 0.5, -1.3, 0.962, P_LEAF, 3.2);
     }
   }
 
@@ -163,26 +235,29 @@ export class FX {
   explosion(pos, color, { big = false } = {}) {
     const s = big ? 1.6 : 1;
     this.burst(pos, 0xffffff, { n: 10 * s, speed: 1.2, size: 0.8 * s, life: 0.18, up: 0.2, grav: 0 });
-    this.burst(pos, color, { n: 42 * s, speed: 3.2 * s, size: 0.5, life: 0.75, up: 0.9, grav: -2.6 });
+    // fire matter: spinning SPARKS fly out, embers rise off the blast
+    this.burst(pos, color, { n: 34 * s, speed: 3.2 * s, size: 0.5, life: 0.75, up: 0.9, grav: -2.6, cell: P_SPARK, spin: 5 });
+    this.burst(pos, 0xffd45f, { n: 12 * s, speed: 1.4, size: 0.3, life: 1.0, up: 2.2, grav: 0.5, cell: P_SPARK, spin: 3 });
     this.burst(pos, 0x2a2a2a, { n: 14 * s, speed: 1.1, size: 0.65, life: 1.1, up: 1.4, grav: -0.4 }); // smoke
     this.ring(pos, color, { maxR: big ? 3.2 : 2.1, dur: big ? 0.6 : 0.45 });
   }
 
   frostNova(pos, { big = false } = {}) {
     const s = big ? 1.5 : 1;
-    this.burst(pos, 0x9fdcff, { n: 34 * s, speed: 2.4 * s, size: 0.4, life: 0.7, up: 0.4, grav: -1.2 });
+    // ice matter: crystalline shards + twirling flakes
+    this.burst(pos, 0x9fdcff, { n: 26 * s, speed: 2.4 * s, size: 0.44, life: 0.7, up: 0.4, grav: -1.2, cell: P_ICE, spin: 2.4 });
     this.burst(pos, 0xe8f8ff, { n: 12 * s, speed: 0.8, size: 0.6, life: 0.5, up: 0.6, grav: 0 });
     this.ring(pos, 0x7fd0ff, { maxR: 2.4 * s, dur: 0.55 });
     this.snow(pos, { n: 18 * s });
   }
 
   holyPillar(pos) {
-    // column of light: stacked rising motes + double ring
+    // column of light: stacked rising star-motes + double ring
     for (let i = 0; i < 26 * this.density; i++) {
       this.spawn(
         new THREE.Vector3(pos.x + (Math.random() - 0.5) * 0.7, pos.y + Math.random() * 0.3, pos.z + (Math.random() - 0.5) * 0.7),
         new THREE.Vector3((Math.random() - 0.5) * 0.1, 2.4 + Math.random() * 1.6, (Math.random() - 0.5) * 0.1),
-        0xffe9a8, 0.42, 0.9, 0, 0.985);
+        0xffe9a8, 0.4, 0.9, 0, 0.985, P_SPARK, 0.8);
     }
     this.ring(pos, 0xffd45f, { maxR: 1.8, dur: 0.5 });
     this.ring(pos, 0xfff3c9, { maxR: 1.1, dur: 0.7 });
@@ -190,7 +265,7 @@ export class FX {
 
   shadowRend(pos, { big = false } = {}) {
     const s = big ? 1.5 : 1;
-    // implosion: particles rush INWARD then burst up
+    // implosion: smoky wisps rush INWARD then burst up with a few dark sparks
     for (let i = 0; i < 30 * s * this.density; i++) {
       const a = Math.random() * Math.PI * 2;
       const r = 1.4 + Math.random() * 0.8;
@@ -198,21 +273,25 @@ export class FX {
       const v = pos.clone().sub(p).multiplyScalar(2.6);
       this.spawn(p, v, 0x8a3fd4, 0.4, 0.45, 0, 0.97);
     }
-    setTimeout(() => this.burst(pos, 0xb44fe8, { n: 26 * s, speed: 2.2, size: 0.42, life: 0.6, up: 1.4 }), 240);
+    setTimeout(() => {
+      this.burst(pos, 0xb44fe8, { n: 20 * s, speed: 2.2, size: 0.42, life: 0.6, up: 1.4 });
+      this.burst(pos, 0xd88fff, { n: 8 * s, speed: 1.6, size: 0.34, life: 0.7, up: 1.8, cell: P_SPARK, spin: 4 });
+    }, 240);
     this.ring(pos, 0x8a3fd4, { maxR: 2.2 * s, dur: 0.5 });
   }
 
   natureBurst(pos, { big = false } = {}) {
     const s = big ? 1.5 : 1;
-    this.burst(pos, 0x54d06a, { n: 30 * s, speed: 2.2, size: 0.45, life: 0.7, up: 1.2, grav: -1.8 });
-    this.burst(pos, 0xa8e06a, { n: 14 * s, speed: 1.2, size: 0.32, life: 0.9, up: 1.8, grav: -1.2 });
+    // nature matter: real LEAVES flutter out and drift down
+    this.leaves(pos, { n: 22 * s, speed: 2.0, up: 1.5 });
+    this.burst(pos, 0xa8e06a, { n: 10 * s, speed: 1.2, size: 0.3, life: 0.9, up: 1.8, grav: -1.2 });
     this.ring(pos, 0x3fae52, { maxR: 2.2 * s, dur: 0.5 });
   }
 
-  // traveling wave for AoE spells: a wall of light sweeping across positions
-  async aoeSweep(positions, color, { stepMs = 90 } = {}) {
+  // traveling wave for AoE spells: a wall of element matter sweeping across
+  async aoeSweep(positions, color, { stepMs = 90, cell = 0, spin = 0 } = {}) {
     for (const p of positions) {
-      this.burst(p, color, { n: 20, speed: 2.2, size: 0.45, life: 0.6, up: 0.9 });
+      this.burst(p, color, { n: 20, speed: 2.2, size: 0.45, life: 0.6, up: 0.9, cell, spin });
       this.ring(p, color, { maxR: 1.5, dur: 0.4 });
       await new Promise((r) => setTimeout(r, stepMs));
     }
@@ -267,11 +346,14 @@ export class FX {
       this.pos[i * 3] += this.vel[i * 3] * dt;
       this.pos[i * 3 + 1] += this.vel[i * 3 + 1] * dt;
       this.pos[i * 3 + 2] += this.vel[i * 3 + 2] * dt;
+      this.rot[i] += this.spin[i] * dt;
       this.size[i] = this.baseSize[i] * k;
     }
     this.points.geometry.attributes.position.needsUpdate = true;
     this.points.geometry.attributes.size.needsUpdate = true;
     this.points.geometry.attributes.color.needsUpdate = true;
+    this.points.geometry.attributes.acell.needsUpdate = true;
+    this.points.geometry.attributes.arot.needsUpdate = true;
     // rings
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const r = this.rings[i];
@@ -291,15 +373,16 @@ export class FX {
         const S = e.style || 'rise';
         let vx = (R() - 0.5) * 0.15, vy = 0.5 + R() * 0.5, vz = (R() - 0.5) * 0.15;
         let size = 0.22, life = 1.3, y0 = 0.05, sx = 1.05, sz = 1.15, grav = 0, drag = 0.99;
-        if (S === 'ember')       { vy = 0.75 + R() * 0.7;  size = 0.24; life = 1.05; grav = 0.35; }
-        else if (S === 'frost')  { vy = -0.12 - R() * 0.22; y0 = 1.7; size = 0.26; life = 1.7; sx = 1.2; sz = 1.2; }
-        else if (S === 'spore')  { vx = (R() - 0.5) * 0.45; vy = 0.12 + R() * 0.22; vz = (R() - 0.5) * 0.45; size = 0.2; life = 1.9; drag = 0.985; }
-        else if (S === 'light')  { vy = 0.6 + R() * 0.6; size = 0.19; life = 1.25; }
+        let cell = 0, spin = 0;
+        if (S === 'ember')       { vy = 0.75 + R() * 0.7;  size = 0.24; life = 1.05; grav = 0.35; cell = 1; spin = 3; }
+        else if (S === 'frost')  { vy = -0.12 - R() * 0.22; y0 = 1.7; size = 0.28; life = 1.7; sx = 1.2; sz = 1.2; cell = 3; spin = 1.4; }
+        else if (S === 'spore')  { vx = (R() - 0.5) * 0.45; vy = 0.12 + R() * 0.22; vz = (R() - 0.5) * 0.45; size = 0.24; life = 1.9; drag = 0.985; cell = 2; spin = 2.2; }
+        else if (S === 'light')  { vy = 0.6 + R() * 0.6; size = 0.2; life = 1.25; cell = 1; spin = 0.8; }
         else if (S === 'shadow') { vy = 0.32 + R() * 0.4; size = 0.3; life = 1.5; drag = 0.968; }
-        else if (S === 'arcane') { vx = (R() - 0.5) * 0.4; vy = 0.28 + R() * 0.4; vz = (R() - 0.5) * 0.4; size = 0.17; life = 1.6; }
+        else if (S === 'arcane') { vx = (R() - 0.5) * 0.4; vy = 0.28 + R() * 0.4; vz = (R() - 0.5) * 0.4; size = 0.18; life = 1.6; cell = 1; spin = 1.5; }
         this.spawn(
           new THREE.Vector3(e.pos.x + (R() - 0.5) * sx, e.pos.y + y0, e.pos.z + (R() - 0.5) * sz),
-          new THREE.Vector3(vx, vy, vz), e.color, size, life, grav, drag);
+          new THREE.Vector3(vx, vy, vz), e.color, size, life, grav, drag, cell, spin);
       }
     }
   }

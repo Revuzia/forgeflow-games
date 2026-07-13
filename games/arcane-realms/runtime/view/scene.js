@@ -8,6 +8,13 @@ import { FX } from './fx.js?v=23';
 
 const CW = 1.3, CH = CW * (CARD_H / CARD_W); // card world size
 const HIT_RED = new THREE.Color(0x9a1408); // hero hit-flash tint
+// realm-tinted emissive for 3D characters: emissiveMap = the diffuse map, so the
+// texture's HOT parts glow in the realm color (ember hero's red arms/chest, etc.)
+// while dark armor stays dark. Cheap — no extra textures, no shader work.
+const REALM_EMISSIVE = {
+  ember: 0xff5a22, tide: 0x3fb6ff, grove: 0x59d97a,
+  dawn: 0xffd76a, grave: 0xb45cff, neutral: 0x9a7bff,
+};
 export const LAYOUT = {
   playerBoardZ: 1.22, enemyBoardZ: -1.72, slotDX: 1.62,
   handZ: 4.52, handY: 1.0, enemyHandZ: -3.98,
@@ -240,7 +247,6 @@ export class BoardScene {
       const dy = e.clientY - this._pdrag.y;
       this.pitchTarget = Math.max(-0.42, Math.min(0.6, this._pdrag.base + dy * 0.0032));
     });
-    this._retiltPitch = 0;
     const endPitch = (e) => { if (this._pdrag) { cel.releasePointerCapture?.(e.pointerId); this._pdrag = null; } };
     cel.addEventListener('pointerup', endPitch);
     cel.addEventListener('pointercancel', endPitch);
@@ -267,6 +273,82 @@ export class BoardScene {
     table.userData = { kind: 'table' };
     this.scene.add(table);
     this.table = table;
+
+    // ── 3D table build (pure three.js — no external models) ────────
+    // The flat art plane above stays the play surface + pick target; beneath
+    // and around it: a thick stone body, a carved rim with gold corner caps,
+    // glowing rune inlays, a plinth, and a vignetted chamber floor, so the
+    // board reads as a real object in a space instead of a floating image.
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x2a2036, roughness: 0.88, metalness: 0.18 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(21.4, 0.62, 12.6), stoneMat);
+    body.position.y = -0.36;
+    this.scene.add(body);
+    const trimMat = new THREE.MeshStandardMaterial({
+      color: 0x4a3358, roughness: 0.55, metalness: 0.55,
+      emissive: 0x1a0f26, emissiveIntensity: 0.5,
+    });
+    for (const [w, h2, d, x, z] of [
+      [22.6, 0.26, 0.62, 0, -6.6], [22.6, 0.26, 0.62, 0, 6.6],   // long rails
+      [0.62, 0.26, 13.8, -11.0, 0], [0.62, 0.26, 13.8, 11.0, 0], // side rails
+    ]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(w, h2, d), trimMat);
+      rail.position.set(x, 0.05, z);
+      this.scene.add(rail);
+    }
+    const goldMat = new THREE.MeshStandardMaterial({
+      color: 0x8a6a2a, roughness: 0.4, metalness: 0.75,
+      emissive: 0x332008, emissiveIntensity: 0.6,
+    });
+    for (const [x, z] of [[-11.0, -6.6], [11.0, -6.6], [-11.0, 6.6], [11.0, 6.6]]) {
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.4, 1.05), goldMat);
+      cap.position.set(x, 0.1, z);
+      this.scene.add(cap);
+    }
+    // rune inlays: soft additive strips along the rails that slowly breathe
+    this.runeStrips = [];
+    const runeMat = () => new THREE.MeshBasicMaterial({
+      color: 0x8a5fd4, transparent: true, opacity: 0.3,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    for (const z of [-6.6, 6.6]) {
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(20.9, 0.16), runeMat());
+      strip.rotation.x = -Math.PI / 2;
+      strip.position.set(0, 0.185, z);
+      this.scene.add(strip);
+      this.runeStrips.push(strip);
+    }
+    for (const x of [-11.0, 11.0]) {
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 12.1), runeMat());
+      strip.rotation.x = -Math.PI / 2;
+      strip.position.set(x, 0.185, 0);
+      this.scene.add(strip);
+      this.runeStrips.push(strip);
+    }
+    const plinth = new THREE.Mesh(
+      new THREE.BoxGeometry(23.8, 0.5, 14.8),
+      new THREE.MeshStandardMaterial({ color: 0x1b1426, roughness: 0.94, metalness: 0.1 }),
+    );
+    plinth.position.y = -0.95;
+    this.scene.add(plinth);
+    // chamber floor: radial-gradient disc far below — fog vignettes it away
+    const fc = document.createElement('canvas');
+    fc.width = fc.height = 256;
+    const fg = fc.getContext('2d');
+    const fgrad = fg.createRadialGradient(128, 128, 10, 128, 128, 128);
+    fgrad.addColorStop(0, '#241a33');
+    fgrad.addColorStop(0.55, '#120c1e');
+    fgrad.addColorStop(1, '#05030a');
+    fg.fillStyle = fgrad;
+    fg.fillRect(0, 0, 256, 256);
+    const floorTex = new THREE.CanvasTexture(fc);
+    floorTex.colorSpace = THREE.SRGBColorSpace;
+    const floor = new THREE.Mesh(
+      new THREE.CircleGeometry(34, 48),
+      new THREE.MeshBasicMaterial({ map: floorTex }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -1.55;
+    this.scene.add(floor);
 
     // center line glow
     const mid = new THREE.Mesh(
@@ -407,8 +489,20 @@ export class BoardScene {
     ice.position.z = 0.012;
     inner.add(ice);
     this.scene.add(group);
+    // static hover/click proxy (player hand only) — see _placeHandHit
+    let hit = null;
+    if (side === 0) {
+      hit = new THREE.Mesh(
+        new THREE.PlaneGeometry(CW * 1.06, CH * 1.9),
+        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }),
+      );
+      hit.userData = { kind: 'handhit', iid };
+      hit.visible = false;
+      hit.position.y = -50;
+      this.scene.add(hit);
+    }
     const entry = {
-      iid, cardId, side, group, inner, mesh, glow, ice,
+      iid, cardId, side, group, inner, mesh, glow, ice, hit,
       zone: 'limbo', slot: 0, hover: false,
       chips: null, badges: [], tapSpin: 0, dead: false,
       home: { pos: new THREE.Vector3(), rotX: 0, rotZ: 0, scale: 1 },
@@ -427,6 +521,7 @@ export class BoardScene {
     // scene-space nameplate (orbs + badges) lives outside e.group — remove it
     if (e.chips) { e.chips.atk.remove(); e.chips.hp.remove(); }
     for (const b of e.badges) b.remove();
+    if (e.hit) { this.scene.remove(e.hit); e.hit.geometry.dispose(); e.hit.material.dispose(); }
     this.scene.remove(e.group);
     this.cards.delete(iid);
   }
@@ -496,6 +591,13 @@ export class BoardScene {
   }
 
   // ── layout ────────────────────────────────────────────────────
+  // billboard helper: the exact X-tilt that makes a card at (y, z) face the
+  // camera dead-on (industry standard — hand cards read screen-flat like HS).
+  // Uses the LIVE camera position, so pitch/zoom compose automatically.
+  faceCamRotX(y, z) {
+    return -Math.atan2(this.camera.position.y - y, this.camera.position.z - z);
+  }
+
   handTransform(side, i, n, hovered) {
     const spread = Math.min(1.18, 7.4 / Math.max(n, 1));
     const x = (i - (n - 1) / 2) * spread;
@@ -506,7 +608,7 @@ export class BoardScene {
       const z = LAYOUT.handZ - (hovered ? 0.55 : 0) + arc * 0.05;
       return {
         pos: new THREE.Vector3(x, y, z),
-        rotX: -0.56 + (hovered ? 0.1 : 0) + (this.pitch || 0),
+        rotX: this.faceCamRotX(y, z) + (hovered ? 0.08 : 0),
         rotZ: hovered ? 0 : -(i - (n - 1) / 2) * 0.045,
         scale: hovered ? 1.62 : 0.94,
       };
@@ -516,16 +618,32 @@ export class BoardScene {
     // squares. Brought slightly forward + bigger; gentle mirrored fan.
     return {
       pos: new THREE.Vector3(x * 0.94, LAYOUT.handY + 0.32, LAYOUT.enemyHandZ + 0.35),
-      rotX: -0.42 + (this.pitch || 0), rotZ: (i - (n - 1) / 2) * 0.04, scale: 0.9,
+      rotX: this.faceCamRotX(LAYOUT.handY + 0.32, LAYOUT.enemyHandZ + 0.35),
+      rotZ: (i - (n - 1) / 2) * 0.04, scale: 0.9,
     };
   }
 
-  // re-tilt hand cards so they keep facing the camera as the view pitch changes.
+  // invisible, STATIC hover/click proxy for a hand card — raycast against this
+  // instead of the moving visual mesh, so hovering near the card's bottom edge
+  // can't lift the card out from under the pointer (the un/hover flicker loop).
+  // The proxy is taller than the card and extends BELOW it: the whole lane down
+  // to the screen bottom keeps the hover.
+  _placeHandHit(e, t) {
+    if (!e.hit) return;
+    e.hit.position.set(t.pos.x, Math.max(0.35, t.pos.y - 0.55), t.pos.z + 0.02);
+    e.hit.rotation.x = t.rotX;
+    e.hit.visible = true;
+  }
+  _parkHandHit(e) { if (e.hit) { e.hit.visible = false; e.hit.position.y = -50; } }
+
+  // re-tilt hand cards so they keep facing the camera as the view moves.
   // cheap: touches only the X rotation of hand-zone cards (no chip/mini rebuild).
   _retiltCards() {
     for (const e of this.cards.values()) {
       if (e.zone !== 'hand' || e.li == null) continue;
-      e.inner.rotation.x = this.handTransform(e.side, e.li, e.ln, e.hover && e.side === 0).rotX;
+      const t = this.handTransform(e.side, e.li, e.ln, e.hover && e.side === 0);
+      e.inner.rotation.x = t.rotX;
+      if (e.side === 0) this._placeHandHit(e, e.hover ? this.handTransform(0, e.li, e.ln, false) : t);
     }
   }
 
@@ -546,9 +664,9 @@ export class BoardScene {
     if (on) for (const c of this.cards.values()) this.hideNameplate(c);
     const base = this.boardTransform(e.side, e.slot, (e.side === 0 ? this._lastMyBoardN : this._lastFoeBoardN) || 6);
     if (on) {
+      const pos = base.pos.clone().add(new THREE.Vector3(0, 1.15, e.side === 0 ? 0.35 : 0.7));
       this.applyTransform(e, {
-        pos: base.pos.clone().add(new THREE.Vector3(0, 1.15, e.side === 0 ? 0.35 : 0.7)),
-        rotX: -0.55, rotZ: 0, scale: 1.5,
+        pos, rotX: this.faceCamRotX(pos.y, pos.z), rotZ: 0, scale: 1.5,
       }, 0.15);
     } else {
       this.applyTransform(e, base, 0.15);
@@ -612,11 +730,12 @@ export class BoardScene {
           e.group.position.set(LAYOUT.deckX, 0.3, dz);
         }
         e.zone = 'hand'; e.side = rel; e.cardId = h.card;
-        e.li = i; e.ln = pl.hand.length; // remembered so _retiltCards can re-face the camera on pitch
+        e.li = i; e.ln = pl.hand.length; // remembered so _retiltCards can re-face the camera
         // enemy hand shows card BACKS
         const face = rel === 0 ? getCard(h.card).tex : this.backs[1].tex;
         if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
         this.applyTransform(e, this.handTransform(rel, i, pl.hand.length, e.hover && rel === 0), dur);
+        if (rel === 0) this._placeHandHit(e, this.handTransform(0, i, pl.hand.length, false));
         if (e.chips) { e.chips.atk.remove(); e.chips.hp.remove(); e.chips = null; }
         for (const b of e.badges) b.remove(); e.badges = [];
         this.setBadges(e, null);
@@ -631,6 +750,7 @@ export class BoardScene {
         if (!e) e = this.makeCardEntry(u.iid, u.card, rel);
         e.zone = 'board'; e.side = rel; e.slot = i; e.cardId = u.card;
         e.boardHover = false;
+        this._parkHandHit(e);
         const face = getBoardCard(u.card).tex;
         if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
         this.applyTransform(e, this.boardTransform(rel, i, pl.board.length, u.tapped), dur);
@@ -659,6 +779,7 @@ export class BoardScene {
         seen.add(t.iid);
         let e = this.cards.get(t.iid);
         if (!e) e = this.makeCardEntry(t.iid, t.card, rel);
+        this._parkHandHit(e);
         e.zone = 'trap'; e.side = rel;
         const face = rel === 0 ? getCard(t.card).tex : this.backs[1].tex; // you can see your own traps
         if (e.mesh.material.map !== face) { e.mesh.material.map = face; e.mesh.material.needsUpdate = true; }
@@ -851,6 +972,7 @@ export class BoardScene {
       // strip lights baked into the GLB (fps rule); tame mirror-metal mats
       // that go black under our dim mood lighting
       const strip = [];
+      const glowMats = [];
       model.traverse((o) => {
         if (o.isLight) strip.push(o);
         if (o.isMesh) {
@@ -858,6 +980,14 @@ export class BoardScene {
           for (const mt of mats) {
             if (mt.metalness !== undefined && mt.metalness > 0.45) mt.metalness = 0.45;
             if (mt.roughness !== undefined && mt.roughness < 0.35) mt.roughness = 0.35;
+            // per-creature glow: hot texture parts self-illuminate in the card's
+            // MINI_MAP glow color (legendaries pulse; epics hold a soft steady glow)
+            if (mt.emissive !== undefined && mt.map) {
+              mt.emissiveMap = mt.map;
+              mt.emissive = new THREE.Color(spec.glow || 0xf0b93a);
+              mt.emissiveIntensity = legendary ? 0.38 : 0.24;
+              glowMats.push(mt);
+            }
           }
         }
       });
@@ -910,7 +1040,8 @@ export class BoardScene {
       this.minis.set(iid, { group, mixer, offset, hover: spec.hover || 0, disc, discT: 0,
         // legendaries idle-animate; epics hold still (tier). baseYaw so the
         // sway oscillates around the model's facing instead of drifting.
-        idle: legendary && !mixer, baseYaw: group.rotation.y, seed: (iid * 1.7) % 6.28 });
+        idle: legendary && !mixer, baseYaw: group.rotation.y, seed: (iid * 1.7) % 6.28,
+        glowMats, legendary });
       this.tweens.add(group.scale, { x: 1, y: 1, z: 1 }, 0.4, 'backOut');
       this.fx.ring(group.position, 0xf0b93a, { maxR: 1.8, dur: 0.5 });
     } catch (err) {
@@ -990,11 +1121,22 @@ export class BoardScene {
       if (ext > 3.0) { model.scale.multiplyScalar(3.0 / ext); b2 = new THREE.Box3().setFromObject(model); }
       const c = b2.getCenter(new THREE.Vector3());
       model.position.x -= c.x; model.position.z -= c.z; model.position.y -= b2.min.y;
+      const glowMats = [];
       model.traverse((o) => {
         if (o.isLight) o.parent?.remove(o);
         if (o.isMesh) {
           const mats = Array.isArray(o.material) ? o.material : [o.material];
-          for (const mt of mats) { if (mt.metalness > 0.45) mt.metalness = 0.45; if (mt.roughness < 0.35) mt.roughness = 0.35; }
+          for (const mt of mats) {
+            if (mt.metalness > 0.45) mt.metalness = 0.45;
+            if (mt.roughness < 0.35) mt.roughness = 0.35;
+            // realm glow: bright texture parts self-illuminate in the realm tint
+            if (mt.emissive !== undefined && mt.map) {
+              mt.emissiveMap = mt.map;
+              mt.emissive = new THREE.Color(REALM_EMISSIVE[realm] || REALM_EMISSIVE.neutral);
+              mt.emissiveIntensity = 0.3;
+              glowMats.push(mt);
+            }
+          }
           o.userData = { kind: 'hero', p: rel };
         }
       });
@@ -1029,7 +1171,7 @@ export class BoardScene {
       this.heroModels[rel] = {
         grp, rel, seed: rel * 3.14, baseY: grp.position.y, baseZ: grp.position.z, baseYaw,
         recoilDir: rel === 0 ? 1 : -1, // player staggers toward the camera, enemy toward the back
-        flinchT: 0, flinchDur: 0.44, flashMats: null,
+        flinchT: 0, flinchDur: 0.44, flashMats: null, glowMats,
       };
     } catch (e) { /* GLB missing → keep the disc portrait */ }
   }
@@ -1076,7 +1218,12 @@ export class BoardScene {
     );
     this.raycaster.setFromCamera(m, this.camera);
     const targets = [];
-    for (const e of this.cards.values()) if (!e.dead) targets.push(e.mesh);
+    for (const e of this.cards.values()) {
+      if (e.dead) continue;
+      targets.push(e.mesh);
+      // static hand proxies — stable hover/click zones that never move on hover
+      if (e.hit && e.hit.visible && e.zone === 'hand') targets.push(e.hit);
+    }
     for (const h of this.heroMeshes) targets.push(...h.children);
     // 3D hero characters are clickable as their hero too
     if (this.heroModels) for (const hm of this.heroModels) if (hm) hm.grp.traverse((o) => { if (o.isMesh) targets.push(o); });
@@ -1087,6 +1234,10 @@ export class BoardScene {
       if (ud.kind === 'card') {
         const e = this.cards.get(ud.iid);
         if (e) return { kind: e.zone, iid: ud.iid, side: e.side, entry: e, point: h.point };
+      }
+      if (ud.kind === 'handhit') {
+        const e = this.cards.get(ud.iid);
+        if (e && e.zone === 'hand') return { kind: 'hand', iid: ud.iid, side: e.side, entry: e, point: h.point };
       }
       if (ud.kind === 'hero') return { kind: 'hero', p: ud.p, point: h.point };
       if (ud.kind === 'table') return { kind: 'table', point: h.point };
@@ -1129,6 +1280,11 @@ export class BoardScene {
           m.group.position.y = (m.hover || 0) + 0.02 + (Math.sin(this.time * 1.7 + m.seed) + 1) * 0.035;
           m.group.rotation.y = m.baseYaw + Math.sin(this.time * 0.9 + m.seed) * 0.11;
         }
+        // legendary glow breathes; epics hold their steady sheen
+        if (m.legendary && m.glowMats) {
+          const gi = 0.38 + (Math.sin(this.time * 2.2 + m.seed) + 1) * 0.09;
+          for (const mt of m.glowMats) mt.emissiveIntensity = gi;
+        }
         if (m.disc) {
           m.discT = Math.min(1, m.discT + dt * 3);
           m.disc.position.x = m.group.position.x;
@@ -1154,9 +1310,18 @@ export class BoardScene {
       hm.grp.position.z = (hm.baseZ ?? hm.grp.position.z) + recoil;
       hm.grp.position.y = (hm.baseY || 0.02) + (Math.sin(this.time * 1.1 + hm.seed) + 1) * 0.008;
       if (hm.flashMats) for (const mt of hm.flashMats) mt.emissive.setHex(mt.userData._be || 0).lerp(HIT_RED, flash * 0.85);
+      // realm glow breathes softly (intensity only — the flash above owns color)
+      if (hm.glowMats) {
+        const gi = 0.3 + (Math.sin(this.time * 1.8 + hm.seed) + 1) * 0.06;
+        for (const mt of hm.glowMats) mt.emissiveIntensity = gi + flash * 0.5;
+      }
     }
-    // diorama: crystals spin, braziers flicker embers
+    // diorama: crystals spin, braziers flicker embers, rune inlays breathe
     for (const c of this.dioramaSpin) { c.rotation.y += dt * 0.5; c.position.y = 1.5 + Math.sin(this.time * 1.2 + c.position.x) * 0.1; }
+    if (this.runeStrips) {
+      const ro = 0.22 + (Math.sin(this.time * 1.4) + 1) * 0.07;
+      for (const s of this.runeStrips) s.material.opacity = ro;
+    }
     this._brazierAcc = (this._brazierAcc || 0) + dt;
     if (this._brazierAcc > 0.09) {
       this._brazierAcc = 0;
@@ -1191,10 +1356,15 @@ export class BoardScene {
       rest.y = this.camPivot.y + oy * c - oz * s;
       rest.z = this.camPivot.z + oy * s + oz * c;
     }
-    // re-face the hand cards to the camera as the pitch settles (item 4)
-    if (Math.abs(this.pitch - this._retiltPitch) > 0.0015) { this._retiltPitch = this.pitch; this._retiltCards(); }
     this.camera.position.copy(rest);
     this.camera.lookAt(this.camPivot);
+    // billboard upkeep: whenever the camera actually moves (pitch drag, zoom
+    // dolly), re-face the hand cards so they stay screen-flat
+    if (!this._lastCamPos) this._lastCamPos = rest.clone();
+    if (this._lastCamPos.distanceToSquared(rest) > 0.0012) {
+      this._lastCamPos.copy(rest);
+      this._retiltCards();
+    }
     this.renderer.render(this.scene, this.camera);
   }
 }
