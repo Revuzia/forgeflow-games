@@ -818,6 +818,7 @@ function injectStyle() {
   .df-setrow .df-toggle::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s}
   .df-setrow .df-toggle.on::after{left:24px}
   .df-fps{position:absolute;bottom:8px;right:10px;font:700 13px monospace;color:#7dffb0;background:rgba(8,10,16,.7);padding:4px 9px;border-radius:8px;z-index:50;pointer-events:none}
+  .df-dbg{position:absolute;top:10px;left:10px;font:600 12px/1.55 ui-monospace,Consolas,monospace;color:#8effc0;background:rgba(6,10,18,.82);border:1px solid rgba(120,220,180,.32);border-radius:8px;padding:7px 11px;z-index:60;pointer-events:none;white-space:pre;text-align:left}
   .df-shop{display:flex;flex-direction:column;gap:8px;margin:6px 0 14px;max-height:52vh;overflow:auto}
   .df-shoprow{display:flex;align-items:center;gap:12px;background:rgba(16,20,34,.7);border:1px solid rgba(150,170,255,.18);border-radius:12px;padding:9px 12px}
   .df-shopicon{font-size:26px;flex:0 0 auto}

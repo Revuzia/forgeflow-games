@@ -165,31 +165,46 @@ export class Game {
     let fpsAcc = 0, fpsN = 0, fpsT = 0;
     // F3 = debug toggle: forces the fps counter on + a debug readout line
     // (works regardless of the settings toggle — owner: "F3 debug doesn't work").
+    // F3 = a proper top-left dev DEBUG panel (multi-line: perf + player + world),
+    // separate from the plain settings FPS counter (bottom-right).
     window.addEventListener("keydown", (e) => {
       if (e.code !== "F3") return;
       e.preventDefault();
       this._debug = !this._debug;
-      if (this._debug && !this._fpsEl) {
-        this._fpsEl = document.createElement("div");
-        this._fpsEl.className = "df-fps";
-        this._fpsEl.textContent = "-- fps";
-        this.container.appendChild(this._fpsEl);
-      } else if (!this._debug && this._fpsEl && !this.settings.fps) { this._fpsEl.remove(); this._fpsEl = null; }
+      if (this._debug && !this._dbgEl) {
+        this._dbgEl = document.createElement("div");
+        this._dbgEl.className = "df-dbg";
+        this._dbgEl.textContent = "F3 DEBUG …";
+        this.container.appendChild(this._dbgEl);
+      } else if (!this._debug && this._dbgEl) { this._dbgEl.remove(); this._dbgEl = null; }
     });
+    let dbgLo = 999;
     const loop = () => {
       requestAnimationFrame(loop);
       const dt = Math.min(0.1, this.clock.getDelta());
-      if (this._fpsEl) {
+      if (this._dbgEl) { const inst = dt > 0 ? 1 / dt : 0; if (inst < dbgLo) dbgLo = inst; }
+      if (this._fpsEl || this._dbgEl) {
         fpsAcc += dt; fpsN++;
         if ((fpsT += dt) > 0.5) {
-          let txt = Math.round(fpsN / fpsAcc) + " fps";
-          if (this._debug) {
-            const inf = this.renderer.info.render;
+          const fps = Math.round(fpsN / fpsAcc);
+          if (this._fpsEl) this._fpsEl.textContent = fps + " fps";
+          if (this._dbgEl) {
+            const inf = this.renderer.info.render, mem = this.renderer.info.memory;
+            const dpr = this.renderer.getPixelRatio().toFixed(2);
             const p = this.mode === "escape" && this.escape && this.escape.run ? this.escape.me() : null;
-            txt += ` · ${inf.calls} calls · ${(inf.triangles / 1000).toFixed(0)}k tris`;
-            if (p) txt += ` · (${p.x.toFixed(1)}, ${p.z.toFixed(1)}) F${p.f + 1} · ${this.escape.run.enemies.filter((x) => x.alive).length} foes`;
+            let s = `FPS ${fps}  (low ${Math.round(dbgLo)})   mode ${this.mode}\n`;
+            s += `draws ${inf.calls}  tris ${(inf.triangles / 1000).toFixed(1)}k\n`;
+            s += `geo ${mem.geometries}  tex ${mem.textures}  dpr ${dpr}  q ${this.settings.quality}`;
+            if (p) {
+              const foes = this.escape.run.enemies.filter((x) => x.alive);
+              const aggro = foes.filter((x) => x.state === "chase").length;
+              s += `\npos (${p.x.toFixed(1)}, ${p.z.toFixed(1)}) F${p.f + 1}  yaw ${p.yaw.toFixed(2)}\n`;
+              s += `hp ${Math.round(p.hp)}/${p.maxHp}  lvl ${p.level}  mana ${Math.round(p.mana || 0)}\n`;
+              s += `foes ${foes.length} (chasing ${aggro})  t ${this.escape.run.time.toFixed(1)}s`;
+            }
+            this._dbgEl.textContent = s;
           }
-          this._fpsEl.textContent = txt; fpsAcc = 0; fpsN = 0; fpsT = 0;
+          fpsAcc = 0; fpsN = 0; fpsT = 0; dbgLo = 999;
         }
       }
       try {

@@ -148,6 +148,17 @@ export class Assets {
     await Promise.all(names.map(async (n) => {
       try {
         const base = await this.load(`chars/meshy/${n}/base.glb`);
+        // Meshy exports the body with a self-lit WHITE emissive (+ emissive map),
+        // which shows as odd glowing blobs on the hands/face. Kill it so scene
+        // lights shade the character normally (owner: "should just be the character").
+        base.scene.traverse((o) => {
+          if (!o.isMesh || !o.material) return;
+          for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+            if (m && m.emissive && (m.emissiveIntensity || 0) > 0) {
+              m.emissive.setHex(0x000000); m.emissiveIntensity = 0; m.emissiveMap = null; m.needsUpdate = true;
+            }
+          }
+        });
         const anims = [];
         const addClip = async (rel, name, fallbackFirst) => {
           const g = await this.load(rel).catch(() => null);

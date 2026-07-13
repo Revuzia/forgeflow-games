@@ -1,5 +1,20 @@
 # Dungeon Forge — CHANGELOG
 
+## v1.12.1 — 2026-07-13 (FX + visual polish batch)
+- **Fire-jet trap**: real-fire particle FX — layered flame tongues colour-graded by
+  distance (white-hot core → yellow → orange → smoke), buoyant lift, rising embers.
+- **Javelin trap**: the launched dart is now clearly visible — bigger shaft + a
+  glinting steel head + red fletching, a warm point-light, a dust flight-trail, and
+  a launch puff of chips down the firing dir.
+- **Player character**: killed the Meshy GLB's self-lit WHITE emissive that showed as
+  odd glowing blobs on the hands/face — scene lights now shade her normally.
+- **Debug overlay**: F3 now opens a proper multi-line TOP-LEFT dev panel (FPS+low,
+  draws/tris, geo/tex/dpr/quality, player pos/floor/hp/lvl/mana, foes+chasing, time),
+  separate from the plain bottom-right FPS counter.
+- **Enemy animation**: raised the skeleton-freeze cull 45u→80u so visible enemies (e.g.
+  the ogre across a room) keep animating instead of GLIDING; procedural step-bob
+  fallback added for any genuinely clip-less walker.
+
 ## v1.12.0 — 2026-07-13 (combat behavior: pack aggro, persistent chase, hard auto-target)
 - **Group aggro**: damaging one enemy (incl. a ranged bolt into a crowd) now wakes
   its nearby friends (within 5 cells, same floor) onto the same attacker via a new

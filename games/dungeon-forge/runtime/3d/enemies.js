@@ -143,7 +143,10 @@ export class EnemyPool {
       const v = this.views.get(e.id);
       if (!v) continue;
       // distant enemies: skip skinning/anim cost (they still move via sim)
-      const far = me && !v.dead && ((e.x - me.x) ** 2 + (e.z - me.z) ** 2) > 2025;
+      // freeze the skeleton only for GENUINELY distant enemies (80u / 20 cells).
+      // The old 45u cut froze enemies the player can still clearly see, making them
+      // GLIDE (e.g. the ogre across a big room) — owner report.
+      const far = me && !v.dead && ((e.x - me.x) ** 2 + (e.z - me.z) ** 2) > 6400;
       if (v.mixer && !far) v.mixer.update(dt);
       if (v.dead) {
         v.fade -= dt * 0.5;
@@ -190,6 +193,18 @@ export class EnemyPool {
             }
           }
         }
+      } else if (!v.hover) {
+        // No walk/run clip at all → it would GLIDE. Give a procedural step: a body
+        // bob + slight side-to-side waddle while moving so locomotion reads even
+        // without a baked walk clip. Idle plays if present. (Hover enemies excluded
+        // — line above owns their float.)
+        const moving = e.state === "chase" || e.moving; e.moving = false;
+        if (v.actions.idle && v.cur !== v.actions.idle && v.oneshotT <= 0) this._play(v, "idle");
+        if (moving) {
+          v.gait = (v.gait || 0) + dt * 9;
+          v.obj.position.y = Math.abs(Math.sin(v.gait)) * 0.13;   // step bob
+          v.obj.rotation.z = Math.sin(v.gait * 0.5) * 0.05;       // waddle
+        } else if (v.obj) { v.obj.position.y *= 0.82; v.obj.rotation.z *= 0.82; }
       }
       // status auras: fire embers / poison bubbles / frost drips / stun stars
       if (v.status) {

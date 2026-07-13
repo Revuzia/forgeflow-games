@@ -162,15 +162,21 @@ export class Fx {
       if (!m) {
         if (b.elem === "fire") m = this._fireBolt(b.hostile);
         else if (b.elem === "javelin") {
-          // a real physical dart: wooden shaft + steel head, laid along its flight dir
+          // a real physical dart: bigger wooden shaft + a GLINTING steel head, laid
+          // along its flight dir. A dim warm light + a flight trail (below) make the
+          // launch clearly readable across a dark room (owner: "we should see that").
           m = new THREE.Group();
-          const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.25, 6).rotateX(Math.PI / 2),
+          const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.5, 7).rotateX(Math.PI / 2),
             new THREE.MeshStandardMaterial({ color: 0x8a6a42, roughness: 0.7 }));
-          const head = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.3, 6).rotateX(Math.PI / 2),
-            new THREE.MeshStandardMaterial({ color: 0xb8c0cc, metalness: 0.8, roughness: 0.3 }));
-          head.position.z = 0.75;
-          m.add(shaft, head);
+          const head = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.42, 7).rotateX(Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: 0xd7dde8, metalness: 0.85, roughness: 0.22, emissive: 0x6a7686, emissiveIntensity: 0.7 }));
+          head.position.z = 0.92;
+          const fletch = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.34, 0.34),
+            new THREE.MeshStandardMaterial({ color: 0xc23a2a, roughness: 0.8 }));
+          fletch.position.z = -0.66;
+          m.add(shaft, head, fletch);
           m.rotation.y = Math.atan2(b.vx, b.vz);   // +Z model → flight dir
+          const jl = new THREE.PointLight(0xffce7a, 1.6, 4.5); m.add(jl);
         } else m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), new THREE.MeshBasicMaterial({ color: b.hostile ? 0xff4444 : col }));
         if (b.elem !== "fire" && b.elem !== "javelin") { const l = new THREE.PointLight(b.hostile ? 0xff4444 : col, 3, 5); m.add(l); }
         this.g.world.add(m);
@@ -178,7 +184,8 @@ export class Fx {
       }
       m.position.set(b.x, b.f * floorH + (b.elem === "javelin" ? 0.95 : 1.15), b.z);
       if (b.elem === "fire") this._fireBoltStep(m, b);
-      else if (b.elem !== "javelin" && Math.random() < 0.5) this.spawn(m.position, new THREE.Vector3(0, 0.3, 0), 0.22, 1.4, b.hostile ? 0xff4444 : col);
+      else if (b.elem === "javelin") { if (Math.random() < 0.8) this.spawn(m.position, new THREE.Vector3((Math.random() - .5) * .3, 0.15, (Math.random() - .5) * .3), 0.14, 0.5, 0xd8c9a0); } // dust streak behind the dart
+      else if (Math.random() < 0.5) this.spawn(m.position, new THREE.Vector3(0, 0.3, 0), 0.22, 1.4, b.hostile ? 0xff4444 : col);
     }
     for (const [id, m] of this.boltMeshes) if (!seen.has(id)) { this.g.world.remove(m); this.boltMeshes.delete(id); }
     this._frostReap(seen);

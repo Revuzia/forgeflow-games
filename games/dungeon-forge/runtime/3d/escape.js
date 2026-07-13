@@ -1045,7 +1045,13 @@ export class Escape {
         }
         case "javelin": {
           g.audio.sfx("javelin");
-          g.fx.burst(new THREE.Vector3(ev.x, ev.f * FLOOR_H + 0.6, ev.z), 0xc8b890, 6); // launcher kick-up
+          // a visible launch: a puff of dust + a spray of chips down the firing dir
+          const [jdx, jdz] = [[0, 1], [1, 0], [0, -1], [-1, 0]][(ev.rot || 0) % 4];
+          const jp = new THREE.Vector3(ev.x, ev.f * FLOOR_H + 0.75, ev.z);
+          g.fx.burst(jp, 0xc8b890, 10);
+          for (let i = 0; i < 8; i++) g.fx.spawn(jp.clone(),
+            new THREE.Vector3(jdx * (4 + Math.random() * 4) + (Math.random() - .5), 0.6 + Math.random() * 1.2, jdz * (4 + Math.random() * 4) + (Math.random() - .5)),
+            0.14, 0.6, 0xd8c9a0);
           break;
         }
         case "boom": {
@@ -1389,13 +1395,30 @@ export class Escape {
         if (t.state === "on") {
           const [dx, dz] = [[0, 1], [1, 0], [0, -1], [-1, 0]][(m.userData.jetRot || 0) % 4];
           const base = m.getWorldPosition(new THREE.Vector3());
-          for (let i = 0; i < 4; i++) {
-            const along = 0.4 + Math.random() * 9.5;   // tongue spans the full 3-cell burn cone (~12u)
+          // Real-fire look: layered flame tongues down the cone — a hot white/yellow
+          // core at the nozzle grading to orange, dark smoke curling off the tips,
+          // plus a few buoyant embers. Denser + colour-graded by distance for a
+          // roaring jet rather than a sparse spray.
+          for (let i = 0; i < 11; i++) {
+            const t01 = Math.random();
+            const along = 0.3 + t01 * 10.5;                 // spans the full ~12u burn cone
+            const spread = 0.35 + t01 * 1.15;               // widens with distance (cone)
+            const px = base.x + dx * along + (Math.random() - .5) * spread + (dz * (Math.random() - .5) * spread);
+            const pz = base.z + dz * along + (Math.random() - .5) * spread + (dx * (Math.random() - .5) * spread);
+            const py = base.y + 0.7 + Math.random() * 0.5 + t01 * 0.7;
+            // colour by how far along the tongue: core white-hot → yellow → orange → smoke
+            const col = t01 < 0.18 ? 0xffe08a : t01 < 0.5 ? 0xffb028 : t01 < 0.82 ? 0xff6a18 : 0x2a2320;
+            const spd = 5.5 + Math.random() * 3.5;
             this.g.fx.spawn(
-              new THREE.Vector3(base.x + dx * along + (Math.random() - .5) * 0.9, base.y + 0.8 + Math.random() * 0.6, base.z + dz * along + (Math.random() - .5) * 0.9),
-              new THREE.Vector3(dx * (6 + Math.random() * 3), 0.5 + Math.random() * 1.1, dz * (6 + Math.random() * 3)),
-              0.45 + Math.random() * 0.3, 1.7, Math.random() < 0.75 ? 0xff7a22 : 0xffd23a);
+              new THREE.Vector3(px, py, pz),
+              new THREE.Vector3(dx * spd, 1.0 + Math.random() * 1.6 + t01 * 1.2, dz * spd), // buoyant lift grows down the tongue
+              0.4 + Math.random() * 0.35 + t01 * 0.35, 1.4 + t01 * 0.8, col);
           }
+          // a couple of rising embers that pop off the flame
+          if (Math.random() < 0.6) this.g.fx.spawn(
+            new THREE.Vector3(base.x + dx * (1 + Math.random() * 6), base.y + 1.0, base.z + dz * (1 + Math.random() * 6)),
+            new THREE.Vector3((Math.random() - .5) * 1.2, 2.2 + Math.random() * 1.6, (Math.random() - .5) * 1.2),
+            0.12, 1.3, 0xffd23a);
           if (t._sfxT == null || t._sfxT < this.run.time - 1.3) { t._sfxT = this.run.time; this.g.audio.sfx("fire"); }
         }
       }
