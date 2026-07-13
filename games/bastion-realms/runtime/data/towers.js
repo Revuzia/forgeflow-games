@@ -6,7 +6,7 @@ export const TOWERS = {
   bolt: {
     name: 'Bolt Tower', icon: 'bolt', color: 0xc8a24a, dmgType: 'phys', kind: 'bullet',
     desc: 'Rapid single-target bolts. Cheap, reliable backbone.',
-    cost: 100, upCost: [80, 120],
+    cost: 100, upCost: [110, 170],
     range: [6.6, 7.2, 8.0],
     rate: [1.5, 2.0, 2.9],           // shots/sec
     dmg: [11, 18, 29],
@@ -16,7 +16,7 @@ export const TOWERS = {
   sniper: {
     name: 'Sniper Spire', icon: 'sniper', color: 0x7ea1b3, dmgType: 'phys', kind: 'snipe',
     desc: 'Extreme range, huge single hits. Crits do 2.5x. L2 pierces 50% armor.',
-    cost: 175, upCost: [140, 200],
+    cost: 175, upCost: [195, 300],
     range: [12.5, 14.5, 17.0],
     rate: [0.38, 0.44, 0.52],
     dmg: [55, 100, 185],
@@ -27,7 +27,7 @@ export const TOWERS = {
   storm: {
     name: 'Storm Coil', icon: 'storm', color: 0x54c8f0, dmgType: 'magic', kind: 'chain',
     desc: 'Lightning arcs between enemies. Triple damage to shields. L3 briefly stuns.',
-    cost: 250, upCost: [190, 260],
+    cost: 250, upCost: [275, 425],
     range: [7.0, 7.8, 8.6],
     rate: [0.75, 0.85, 1.0],
     dmg: [26, 42, 68],
@@ -39,7 +39,7 @@ export const TOWERS = {
   ember: {
     name: 'Ember Altar', icon: 'ember', color: 0xff7031, dmgType: 'magic', kind: 'burn',
     desc: 'Scorches enemies and sets them ablaze. L3 splashes ignite nearby.',
-    cost: 200, upCost: [150, 210],
+    cost: 200, upCost: [220, 340],
     range: [5.6, 6.2, 6.8],
     rate: [0.9, 1.05, 1.2],
     dmg: [14, 22, 34],
@@ -50,7 +50,7 @@ export const TOWERS = {
   frost: {
     name: 'Frost Obelisk', icon: 'frost', color: 0x86dcff, dmgType: 'magic', kind: 'slow',
     desc: 'Chills enemies, slowing them. L3 can flash-freeze.',
-    cost: 150, upCost: [110, 160],
+    cost: 150, upCost: [165, 255],
     range: [5.8, 6.4, 7.2],
     rate: [0.95, 1.1, 1.25],
     dmg: [7, 11, 16],
@@ -61,7 +61,7 @@ export const TOWERS = {
   venom: {
     name: 'Venom Bloom', icon: 'venom', color: 0x8fd435, dmgType: 'true', kind: 'poison',
     desc: 'Lobs toxin that stacks up to 3x and ignores armor and wards. Cannot hit flying.',
-    cost: 180, upCost: [140, 190],
+    cost: 180, upCost: [200, 305],
     range: [6.4, 7.0, 7.6],
     rate: [0.7, 0.8, 0.95],
     dmg: [6, 9, 13],
@@ -73,7 +73,7 @@ export const TOWERS = {
   cannon: {
     name: 'Cannon Bastion', icon: 'cannon', color: 0x9a8f80, dmgType: 'phys', kind: 'splash',
     desc: 'Explosive shells with area damage. Cannot hit flying. L3 fires double shells.',
-    cost: 220, upCost: [170, 240],
+    cost: 220, upCost: [240, 375],
     range: [6.8, 7.4, 8.0],
     rate: [0.5, 0.58, 0.66],
     dmg: [38, 62, 100],
@@ -85,12 +85,12 @@ export const TOWERS = {
   banner: {
     name: 'War Banner', icon: 'banner', color: 0xe0b64f, dmgType: null, kind: 'support',
     desc: 'Empowers towers in range: faster firing, harder hits, longer reach. Strongest banner only.',
-    cost: 160, upCost: [130, 180],
+    cost: 185, upCost: [205, 315],
     range: [4.6, 5.4, 6.2],
     rate: [0, 0, 0], dmg: [0, 0, 0],
-    buffRate: [0.15, 0.25, 0.35],
-    buffDmg: [0.10, 0.20, 0.30],
-    buffRange: [0.10, 0.15, 0.20],
+    buffRate: [0.12, 0.20, 0.28],
+    buffDmg: [0.08, 0.16, 0.24],
+    buffRange: [0.08, 0.12, 0.16],
     canFlying: false,
   },
 };
@@ -115,7 +115,7 @@ export function totalInvested(id, level) {
   return t;
 }
 
-export const SELL_REFUND = 0.7;
+export const SELL_REFUND = 0.65;
 
 // Tower unlock schedule: [biomeIdx, levelIdx] when the tower becomes available.
 export const TOWER_UNLOCKS = {

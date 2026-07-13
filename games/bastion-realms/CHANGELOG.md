@@ -1,5 +1,14 @@
 # Bastion Realms — Changelog
 
+## v1.7 — 2026-07-07 (economy rebalance — industry-standard tuning)
+- **Start gold cut ~25%** (480+bi*170+li*45 → 360+bi*130+li*40): open with ~2 towers, not ~5. Earn
+  the rest — bounties +38%, wave-clear bonus +30%.
+- **Upgrade costs flipped ABOVE base** (was inverted): Bolt 100 → [110,170], Cannon 220 → [240,375],
+  Sniper 175 → [195,300], etc. Maxing is now a commitment.
+- **War Banner reined in**: buffs −20% (rate/dmg/range) and cost 160 → 185 — the cannon/sniper/banner
+  stack no longer trivializes.
+- **Sell refund 70% → 65%.** Enemy budget trimmed ~8% + per-level relief; full re-gate to **45/45**.
+
 ## v1.6 — 2026-07-07
 - **Coins render everywhere now**: replaced the 🪙 emoji (Unicode 13.0 — a blank/yellow box on
   machines without a 2020+ emoji font) with a CSS-drawn gold coin, across the gold counter, tower

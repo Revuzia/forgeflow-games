@@ -48,7 +48,7 @@ export function levelDef(wi, li) {
     name: LEVEL_NAMES[wi][li],
     seed, map, nRoads,
     waves, waveTotal: waves.length,
-    startGold: 520 + wi * 225 + li * 62 + (GOLD_BONUS[wi + ':' + li] || 0),
+    startGold: 450 + wi * 175 + li * 55 + (GOLD_BONUS[wi + ':' + li] || 0),
     bastionHp: 100,
     prepTime: 20,
     assaultGapBonus: GAP_BONUS[wi + ':' + li] || 0,

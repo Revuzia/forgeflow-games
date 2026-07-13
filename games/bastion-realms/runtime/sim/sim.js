@@ -798,7 +798,7 @@ export function createSim(bi, li, { endless = false } = {}) {
     if (sim.phase === 'wave' && sim.bonusPaidUpTo < sim.waveIdx && sim.time >= sim.waveSpawnEnd) {
       sim.bonusPaidUpTo = sim.waveIdx;
       const wi = sim.waveIdx;
-      const bonus = Math.round((40 + wi * 6) * (1 + bi * 0.5 + li * 0.07));
+      const bonus = Math.round((52 + wi * 7) * (1 + bi * 0.5 + li * 0.07));
       sim.gold += bonus;
       sim.stats.goldEarned += bonus;
       sim.stats.wavesCleared++;

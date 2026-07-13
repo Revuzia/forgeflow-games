@@ -26,7 +26,7 @@ function hpScale(wi, li, wv) {
   return (1 + li * 0.1 + wi * 0.06) * (1 + wv * 0.0265);
 }
 function bountyScale(wi, li, wv) {
-  return Math.sqrt(hpScale(wi, li, wv));
+  return 1.45 * Math.sqrt(hpScale(wi, li, wv));
 }
 
 const PATTERNS = ['rush', 'mixed', 'swarm', 'flyers', 'heavy', 'mixed'];
@@ -69,7 +69,8 @@ export function buildWaves(wi, li, nRoads) {
       continue;
     }
 
-    let budget = 66 * (1 + wi * 0.38) * (1 + li * 0.115) * Math.pow(1.115, wv);
+    const BUDGET_RELIEF = { '1:5': 0.86, '2:6': 0.60, '3:5': 0.86, '3:8': 0.85, '4:6': 0.80, '4:7': 0.76 };
+    let budget = 57 * (1 + wi * 0.38) * (1 + li * 0.115) * Math.pow(1.115, wv) * (BUDGET_RELIEF[wi + ':' + li] || 1);
     if (wv === 0) budget *= 0.55;
     else if (wv === 1) budget *= 0.72;
     else if (wv === 2) budget *= 0.88;

@@ -26,7 +26,7 @@ function hpScale(bi, li, wi) {
   return (1 + li * 0.1 + bi * 0.07) * (1 + wi * 0.03);
 }
 function bountyScale(bi, li, wi) {
-  return Math.sqrt(hpScale(bi, li, wi));
+  return 1.38 * Math.sqrt(hpScale(bi, li, wi));
 }
 
 const PATTERNS = ['rush', 'mixed', 'swarm', 'flyers', 'heavy', 'mixed'];
@@ -68,7 +68,8 @@ export function buildWaves(bi, li) {
     }
 
     // budget for this wave
-    let budget = 62 * (1 + bi * 0.45) * (1 + li * 0.12) * Math.pow(1.12, wi);
+    const BUDGET_RELIEF = { '4:5': 0.72, '4:6': 0.80 };
+    let budget = 57 * (1 + bi * 0.45) * (1 + li * 0.12) * Math.pow(1.12, wi) * (BUDGET_RELIEF[bi + ':' + li] || 1);
     if (wi === 0) budget *= 0.55;             // gentle opener taper
     else if (wi === 1) budget *= 0.72;
     else if (wi === 2) budget *= 0.88;

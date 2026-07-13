@@ -1,5 +1,16 @@
 # Siegeheart — Changelog
 
+## v1.5 — 2026-07-07 (economy rebalance — industry-standard tuning)
+- **Start gold cut ~30%** (520+wi*225+li*62 → 450+wi*175+li*55): you open with ~2 towers, not ~5,
+  matching Kingdom Rush / Bloons TD 6 norms. You now EARN your defense — bounties +45%, wave-clear
+  bonus +25% — instead of front-loading it.
+- **Upgrade costs flipped ABOVE base** (industry standard). Was inverted — e.g. Ballista base 110 but
+  first upgrade only 90. Now upgrades cost more than the tower (Ballista 110 → [120,185], Crossbow
+  170 → [190,290], Storm 260 → [285,440], etc.), so maxing a tower is a real commitment, not the
+  default. This ends the "upgrade crossbow/spire and coast" exploit.
+- **Sell refund 70% → 65%** (between KR's 60% and BTD6's 70%) — less free re-rolling.
+- Enemy budget trimmed ~8% globally + per-level relief on the hardest maps; full re-gate to **45/45**.
+
 ## v1.4.3 — 2026-07-07
 - **Coins render everywhere now**: replaced the 🪙 emoji (Unicode 13.0 — showed as a blank/yellow
   box on machines without a 2020+ emoji font) with a CSS-drawn gold coin. Affects the gold counter,

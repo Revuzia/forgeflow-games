@@ -18,6 +18,8 @@ const LEVEL_NAMES = [
 
 const cache = new Map();
 
+const GOLD_BONUS = { '4:2': 140, '4:5': 220, '4:6': 200 };
+
 export function levelDef(bi, li) {
   const key = bi + ':' + li;
   if (cache.has(key)) return cache.get(key);
@@ -41,7 +43,7 @@ export function levelDef(bi, li) {
     seed, edgeMode: mode,
     cells: gen.cells, route, blocked,
     waves, waveTotal: waves.length,
-    startGold: 480 + bi * 170 + li * 45,
+    startGold: 360 + bi * 130 + li * 40 + (GOLD_BONUS[bi + ':' + li] || 0),
     lives: 20,
     prepTime: 20,
     hazard: biome.hazard,
