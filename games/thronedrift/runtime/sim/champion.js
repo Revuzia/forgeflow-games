@@ -79,9 +79,10 @@ export class Champion {
   _equip(actor, model) {
     const g = this.game;
     if (model === "barbarian") {
-      // blade hangs DOWN at his side (his idle arm is already lowered) — an
-      // upward rest ran the greatblade straight across his face (owner)
-      actor.attachWeapon(makeGreatblade(), "Right", { gripFrac: 0.13, palm: 0.13, rest: [0.3, -0.9, 0.2] });
+      // tip UP, angled out to his right and slightly back — his idle raises the
+      // hand to chest height, so a downward blade crossed his body and hid his
+      // arm ("upside down / twisted"); up-and-out reads as greatsword-at-ready
+      actor.attachWeapon(makeGreatblade(), "Right", { gripFrac: 0.13, palm: 0.13, rest: [0.6, 0.78, -0.1] });
     }
     else if (model === "knight") {
       actor.attachWeapon(makeSword(), "Right", { gripFrac: 0.14, palm: 0.12, rest: [0.15, 0.62, 0.77] });
