@@ -1,8 +1,8 @@
 {
-  "title": "Warboard Chess",
+  "title": "Chess",
   "slug": "warboard-chess",
   "genre": "chess3d",
-  "tagline": "Command an army of living pieces across the warboard.",
+  "tagline": "A calm, classic game of chess in 3D.",
   "playerSide": "w",
   "aiDepth": 2,
   "view": { "width": 960, "height": 600, "background": "#0a1018" },

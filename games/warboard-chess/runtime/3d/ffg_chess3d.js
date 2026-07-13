@@ -126,10 +126,10 @@ register3d("chess3d", async (kernel, content) => {
   // De-washed for a clean, industry-standard chess presentation: a directional key
   // for crisp piece shadows + restrained fill, so the CHECKER reads with contrast
   // (the themes were over-lit — keyI 2+, exposure 1+ — flattening the board to grey).
-  if (kernel.sun) { kernel.sun.color = new THREE.Color(theme.light.key); kernel.sun.intensity = theme.light.keyI * 0.52; kernel.sun.position.set(W * 0.45, Hd * 1.1, -Hd * 0.35); }
-  scene.add(new THREE.HemisphereLight(theme.light.hemiSky, theme.light.hemiGround, theme.light.hemiI * 0.44));
-  scene.add(new THREE.AmbientLight(0xffffff, theme.light.ambI * 0.36));
-  kernel.renderer.toneMappingExposure = theme.exposure * 0.74;
+  if (kernel.sun) { kernel.sun.color = new THREE.Color(theme.light.key); kernel.sun.intensity = theme.light.keyI * 0.72; kernel.sun.position.set(W * 0.45, Hd * 1.1, -Hd * 0.35); }
+  scene.add(new THREE.HemisphereLight(theme.light.hemiSky, theme.light.hemiGround, theme.light.hemiI * 0.72));
+  scene.add(new THREE.AmbientLight(0xffffff, theme.light.ambI * 0.62));   // more FILL so the ivory/ebony pieces read on the darker themes (was 0.44/0.36 → pieces too dark)
+  kernel.renderer.toneMappingExposure = theme.exposure * 0.98;   // brightened for the calm regular-chess look (was 0.74 → pieces read too dark)
   // SSAO was the main chess choppiness — a heavy full-screen depth pass for little gain
   // on a clean board. Drop it; keep cinematic bloom + SMAA (cheap) for the glow + edges.
   if (kernel.enableBloom) kernel.enableBloom({ strength: 0.26, radius: 0.6, threshold: 0.88, ssao: false, gtao: false, smaa: true });
@@ -222,7 +222,7 @@ register3d("chess3d", async (kernel, content) => {
     // SCATTER props in a ring, grounded at y=0. The ring starts WELL OUTSIDE the
     // board (board corners reach 0.707·W) so peaks/trees never sit on the checker —
     // each prop is also clamped so its base never reaches inside BOARD_CLEAR.
-    const N = 40, ring0 = W * 1.25, ring1 = W * 3.1;
+    const N = 0, ring0 = W * 1.25, ring1 = W * 3.1;   // scatter props (trees/peaks) REMOVED — battle clutter that read as floating artifacts on the calm chess board; the ground disc + fog + sky stay
     const BOARD_CLEAR = W * 0.82;   // nothing's footprint may cross this radius
     function makeTree() {
       const g = new THREE.Group();
@@ -398,8 +398,8 @@ register3d("chess3d", async (kernel, content) => {
   // A REAL chess set built with Three.js/WebGL2: turned lathe silhouettes for the
   // pawn/rook/bishop/queen/king + a sculpted (extruded) knight. No character models.
   const PIECE_MAT = {
-    w: new THREE.MeshStandardMaterial({ color: 0xf1e8d0, roughness: 0.42, metalness: 0.06, envMapIntensity: 0.9 }),  // ivory
-    b: new THREE.MeshStandardMaterial({ color: 0x2a2932, roughness: 0.38, metalness: 0.14, envMapIntensity: 0.7 }),  // ebony
+    w: new THREE.MeshStandardMaterial({ color: 0xf1e8d0, roughness: 0.42, metalness: 0.06, envMapIntensity: 0.9, emissive: 0xd0c6a8, emissiveIntensity: 0.52 }),  // ivory — emissive floor so it reads on any theme (AgX crushed the shadowed faces to near-black)
+    b: new THREE.MeshStandardMaterial({ color: 0x2a2932, roughness: 0.38, metalness: 0.14, envMapIntensity: 0.7, emissive: 0x2a2a34, emissiveIntensity: 0.5 }),  // ebony — faint emissive so it's a readable dark, not a void
   };
   const PIECE_H = { P: 1.06, N: 1.28, B: 1.46, R: 1.12, Q: 1.70, K: 1.86 };   // heights in units of T
   // normalized silhouettes [radiusFrac, heightFrac]; r in base-radius units, y in piece-height units
@@ -982,8 +982,8 @@ register3d("chess3d", async (kernel, content) => {
   if (window.FFG && window.FFG.Shell) {
     shell = new window.FFG.Shell({
       parent: kernel.parent,
-      title: content.title || "Warboard Chess",
-      tagline: content.tagline || "Command an army of living pieces.",
+      title: content.title || "Chess",
+      tagline: content.tagline || "A calm, classic game of chess in 3D.",
       music: null, // chess uses the procedural CLASSICAL loop (createClassicalMusic), not a file track
       menuImage: (content.assets && content.assets.menu_image) || null,
       // difficulty BY CHESS SKILL — each maps to a real negamax search depth so the
