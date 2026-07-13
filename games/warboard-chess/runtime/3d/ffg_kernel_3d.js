@@ -48,12 +48,16 @@ export class Kernel3D {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     // live-apply hook for the shell's QUALITY buttons
     {
-      const kr = this.renderer;
+      const kr = this.renderer, self = this;
       window.FFG = window.FFG || {};
       window.FFG.applyQuality = function (q) {
         kr.setPixelRatio(Math.min(window.devicePixelRatio || 1, QDPR[q] || 1.5));
         kr.shadowMap.enabled = q !== "low";
         kr.shadowMap.needsUpdate = true;
+        // CRITICAL: changing pixelRatio resizes the drawing buffer, so the renderer
+        // AND the post-fx composer must be re-fitted — otherwise the composer's
+        // render targets go stale and the screen turns BLACK on a quality change.
+        try { self._resize(); } catch (e) {}
       };
     }
     // AgX is the modern filmic tonemap (Blender 4.0 default, three r0.160+) — it
@@ -148,7 +152,15 @@ export class Kernel3D {
     opts = opts || {};
     const w = this.parent.clientWidth || window.innerWidth;
     const h = this.parent.clientHeight || window.innerHeight;
-    const composer = new EffectComposer(this.renderer);
+    // A plain EffectComposer render target has NO multisampling, so rendering
+    // through post-fx throws away the renderer's MSAA → jagged, "fuzzy" edges.
+    // Give it a 4× multisampled HDR target so piece/board edges stay crisp.
+    let composer;
+    try {
+      const _sz = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+      const _rt = new THREE.WebGLRenderTarget(Math.max(2, _sz.x), Math.max(2, _sz.y), { type: THREE.HalfFloatType, samples: 4 });
+      composer = new EffectComposer(this.renderer, _rt);
+    } catch (e) { composer = new EffectComposer(this.renderer); }
     composer.addPass(new RenderPass(this.scene, this.camera));
     // Opt-in SSAO (contact shadows / ambient occlusion) — grounds props + units
     // in their environment, the single biggest "not flat-lit" fidelity jump.

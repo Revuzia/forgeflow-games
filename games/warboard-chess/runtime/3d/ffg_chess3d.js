@@ -1,10 +1,11 @@
 /**
  * FFG runtime — 3d/ffg_chess3d.js  (ES module)
- * WARBOARD CHESS — 3D battle-chess on the ffg_kernel_3d substrate. Standard chess
- * on an 8×8 board, but every piece is a RIGGED + ANIMATED character (kernel
- * loadCharacter); on a capture the attacker walks in and plays a melee/attack
- * clip while the defender plays its death clip, then the captured piece is
- * removed. The board sits in one of several ENVIRONMENT THEMES (mountains /
+ * WARBOARD CHESS — a REGULAR 3D chess game on the ffg_kernel_3d substrate. The
+ * pieces are a classic Staunton set built procedurally with Three.js/WebGL2:
+ * turned LatheGeometry silhouettes for pawn/rook/bishop/queen/king + a sculpted
+ * (extruded) knight (see buildChessPiece), ivory vs ebony. A move LIFTS the piece,
+ * glides it to the square, and sets it down; a capture SINKS the taken piece away.
+ * The board sits in one of several ENVIRONMENT THEMES (mountains /
  * forest / desert / snow) chosen per match — each swaps the sky gradient, the
  * ground tint/material, and the kernel IBL tint (setEnvironment).
  *
@@ -393,6 +394,66 @@ register3d("chess3d", async (kernel, content) => {
 
   function resolveClip(char, name) { return (name && char.actions[name]) ? name : null; }
 
+  // ── PROCEDURAL classic (Staunton) chess set ──────────────────────────────────
+  // A REAL chess set built with Three.js/WebGL2: turned lathe silhouettes for the
+  // pawn/rook/bishop/queen/king + a sculpted (extruded) knight. No character models.
+  const PIECE_MAT = {
+    w: new THREE.MeshStandardMaterial({ color: 0xf1e8d0, roughness: 0.42, metalness: 0.06, envMapIntensity: 0.9 }),  // ivory
+    b: new THREE.MeshStandardMaterial({ color: 0x2a2932, roughness: 0.38, metalness: 0.14, envMapIntensity: 0.7 }),  // ebony
+  };
+  const PIECE_H = { P: 1.06, N: 1.28, B: 1.46, R: 1.12, Q: 1.70, K: 1.86 };   // heights in units of T
+  // normalized silhouettes [radiusFrac, heightFrac]; r in base-radius units, y in piece-height units
+  const PIECE_PROF = {
+    P: [[0,0],[0.42,0],[0.42,0.05],[0.30,0.10],[0.22,0.15],[0.20,0.19],[0.27,0.23],[0.19,0.27],[0.13,0.34],[0.115,0.50],[0.21,0.56],[0.15,0.61],[0.235,0.71],[0.20,0.81],[0.11,0.91],[0,0.97]],
+    R: [[0,0],[0.46,0],[0.46,0.06],[0.33,0.11],[0.27,0.16],[0.25,0.20],[0.31,0.24],[0.25,0.28],[0.25,0.32],[0.27,0.66],[0.35,0.70],[0.35,0.82],[0.30,0.84],[0.30,0.92],[0,0.92]],
+    B: [[0,0],[0.43,0],[0.43,0.05],[0.31,0.10],[0.22,0.15],[0.20,0.19],[0.26,0.23],[0.19,0.27],[0.13,0.35],[0.12,0.44],[0.23,0.56],[0.24,0.64],[0.16,0.74],[0.185,0.78],[0.12,0.82],[0.165,0.88],[0.09,0.95],[0,0.99]],
+    Q: [[0,0],[0.47,0],[0.47,0.06],[0.34,0.11],[0.25,0.17],[0.22,0.21],[0.29,0.25],[0.20,0.29],[0.15,0.37],[0.13,0.57],[0.22,0.67],[0.24,0.73],[0.18,0.82],[0.26,0.86],[0.24,0.90],[0,0.90]],
+    K: [[0,0],[0.48,0],[0.48,0.06],[0.35,0.11],[0.26,0.17],[0.23,0.21],[0.30,0.25],[0.21,0.29],[0.16,0.37],[0.14,0.60],[0.23,0.72],[0.25,0.78],[0.19,0.86],[0.25,0.89],[0.23,0.92],[0,0.92]],
+    N: [[0,0],[0.45,0],[0.45,0.06],[0.32,0.11],[0.26,0.16],[0.24,0.20],[0.30,0.24],[0.24,0.28],[0.22,0.33]],   // knight = base only; horse head added separately
+  };
+  function _latheMesh(prof, mat) {
+    const pts = prof.map((p) => new THREE.Vector2(Math.max(0.0001, p[0]), p[1]));
+    const g = new THREE.LatheGeometry(pts, 44); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true; return m;
+  }
+  function _knightHead(mat, H) {
+    // stylized horse head+neck silhouette in x(forward)-y(up), extruded along z
+    const s = new THREE.Shape();
+    const P = [[0.06,0.00],[0.10,0.20],[0.06,0.34],[0.30,0.40],[0.36,0.50],[0.30,0.56],[0.22,0.60],[0.18,0.70],[0.24,0.83],[0.14,0.74],[0.08,0.87],[0.00,0.72],[-0.10,0.50],[-0.16,0.24],[-0.10,0.00]];
+    s.moveTo(P[0][0], P[0][1]); for (let i = 1; i < P.length; i++) s.lineTo(P[i][0], P[i][1]); s.closePath();
+    const depth = 0.30;
+    const geo = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 2, steps: 1 });
+    geo.translate(0, 0, -depth / 2); geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true;
+    const k = (0.70 * H) / 0.87;                 // shape y-range ~0.87 -> occupy top 0.70 of the piece
+    m.scale.setScalar(k); m.position.set(-0.02 * T, 0.30 * H, 0);   // sit on the base, balanced slightly back
+    return m;
+  }
+  function buildChessPiece(type, side) {
+    const mat = PIECE_MAT[side] || PIECE_MAT.w;
+    const grp = new THREE.Group();
+    const H = (PIECE_H[type] || 1) * T, R = T * 0.44;
+    const prof = (PIECE_PROF[type] || PIECE_PROF.P).map((p) => [p[0] * R, p[1] * H]);
+    grp.add(_latheMesh(prof, mat));
+    if (type === "R") {                          // castle crenellations
+      const merl = 8, rr = 0.24 * R, ry = 0.88 * H;
+      for (let i = 0; i < merl; i += 2) { const a = (i / merl) * Math.PI * 2; const b = new THREE.Mesh(new THREE.BoxGeometry(0.13 * R, 0.10 * H, 0.13 * R), mat); b.position.set(Math.cos(a) * rr, ry, Math.sin(a) * rr); b.castShadow = true; grp.add(b); }
+    } else if (type === "B") {                   // mitre finial
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.09 * R, 16, 12), mat); ball.position.y = 1.0 * H; ball.castShadow = true; grp.add(ball);
+    } else if (type === "Q") {                    // coronet points + center jewel
+      const pts = 7, rr = 0.20 * R, ry = 0.90 * H;
+      for (let i = 0; i < pts; i++) { const a = (i / pts) * Math.PI * 2; const sp = new THREE.Mesh(new THREE.SphereGeometry(0.07 * R, 12, 10), mat); sp.position.set(Math.cos(a) * rr, ry, Math.sin(a) * rr); sp.castShadow = true; grp.add(sp); }
+      const top = new THREE.Mesh(new THREE.SphereGeometry(0.10 * R, 16, 12), mat); top.position.y = 0.97 * H; top.castShadow = true; grp.add(top);
+    } else if (type === "K") {                    // surmounting cross
+      const arm = 0.10 * R, up = new THREE.Mesh(new THREE.BoxGeometry(arm, 0.22 * H, arm), mat); up.position.y = 1.02 * H; up.castShadow = true; grp.add(up);
+      const cross = new THREE.Mesh(new THREE.BoxGeometry(0.24 * R, arm, arm), mat); cross.position.y = 1.05 * H; cross.castShadow = true; grp.add(cross);
+    } else if (type === "N") {                    // sculpted horse head
+      grp.add(_knightHead(mat, H));
+    }
+    grp.userData.pieceH = H;
+    return grp;
+  }
+
   // ── piece views ──────────────────────────────────────────────────────────────
   // pieceViews keyed by a stable piece id (we assign one per starting piece and
   // carry it through moves). value: { group, char, clips, ring, side, type, dead }
@@ -402,8 +463,6 @@ register3d("chess3d", async (kernel, content) => {
 
   async function makePieceView(side, type, x, y) {
     const id = nextPieceId++;
-    const def = TYPE_TO_MODEL[type];
-    const model = PIECE_MODELS[def.model];
     const g = new THREE.Group();
     const w = cell(x, y);
     g.position.set(w.x, 0, w.z);
@@ -413,63 +472,25 @@ register3d("chess3d", async (kernel, content) => {
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(T * 0.42, T * 0.42, 0.12, 28), ringMat);
     ring.position.y = FT + 0.13; g.add(ring);
 
-    let char = null;
-    try { char = await kernel.loadCharacter(CHAR_BASE + model.url); } catch (e) { char = null; }
-    const clips = { idle: null, walk: null, run: null, die: null, attack: null, attack2: null, hurt: null };
-    if (char) {
-      for (const k in model.clips) clips[k] = resolveClip(char, model.clips[k]);
-      if (!clips.idle) clips.idle = (char.animations[0] && char.animations[0].name) || null;
-      const mdl = char.scene;
-      g.add(mdl);
-      mdl.traverse((o) => { if (o.isMesh || o.isSkinnedMesh) o.frustumCulled = false; });
-      const targetH = model.th * def.scale;
-      mdl.scale.setScalar(targetH / model.h);
-      mdl.position.y = FT + 0.18 + (model.hover ? model.hover : 0); // feet on the square (drones hover)
-      // tint by side: lerp materials toward the team colour + faint emissive so
-      // the two armies read clearly against any theme.
-      const tint = new THREE.Color(SIDE_TINT[side]);
-      const isW = side === "w";
-      mdl.traverse((o) => {
-        if ((o.isMesh || o.isSkinnedMesh) && o.material) {
-          o.material = o.material.clone();
-          if (o.material.color) o.material.color.lerp(tint, 0.9); // dominate the GLB tan -> clearly ivory / ebony
-          // ivory carries a faint warm glow; ebony stays dark but NOT a void, with a
-          // touch of sheen so the key/rim light reveals the sculpt instead of a blob.
-          o.material.emissive = tint.clone().multiplyScalar(isW ? 0.05 : 0.015);
-          if (o.material.roughness != null) o.material.roughness = isW ? 0.62 : 0.5;
-          if (o.material.metalness != null) o.material.metalness = isW ? 0.05 : 0.12;
-          o.material.envMapIntensity = isW ? 0.8 : 0.55;
-        }
-      });
-      if (clips.idle) char.play(clips.idle, { fade: 0, timeScale: 0.5 + Math.random() * 0.12 }); // calm, REGULAR idle (was twitchy/fast) + slight desync so the army doesn't breathe in lockstep
-    } else {
-      // fallback: a coloured obelisk so the piece still exists if a GLB fails
-      const body = new THREE.Mesh(new THREE.ConeGeometry(T * 0.26, T * 0.9, 6), new THREE.MeshStandardMaterial({ color: SIDE_TINT[side] }));
-      body.position.y = FT + 0.6; g.add(body);
-    }
-
-    // a small floating crown/marker for the King so it's identifiable
-    if (type === "K") {
-      const crown = new THREE.Mesh(new THREE.TorusGeometry(T * 0.16, T * 0.04, 8, 16), new THREE.MeshStandardMaterial({ color: 0xffd24a, emissive: 0xffb000, emissiveIntensity: 0.5, metalness: 0.8, roughness: 0.3 }));
-      crown.position.set(0, model.th * def.scale + FT + 0.5, 0); crown.rotation.x = Math.PI / 2; g.add(crown);
-      kernel.onUpdate((dt, t) => { crown.rotation.z = t * 0.8; });
-    }
+    // the procedural chess piece (turned lathe silhouette / sculpted knight)
+    const piece = buildChessPiece(type, side);
+    piece.position.y = FT + 0.14;
+    g.add(piece);
 
     scene.add(g);
-    const view = { id, group: g, char, clips, ring, side, type, dead: false, x, y, model: def.model };
+    const view = { id, group: g, char: null, piece, clips: {}, ring, side, type, dead: false, x, y };
     pieceViews[id] = view;
     faceForward(view);
     return view;
   }
 
-  // white pieces look toward +z (up the board at black); black looks toward -z.
-  function faceForward(v) { if (v.char) v.char.scene.rotation.y = v.side === "w" ? 0 : Math.PI; }
-  function faceToward(v, tx, ty) {
-    if (!v.char) return;
-    const a = Math.atan2(tx - v.x, ty - v.y); // +z is "up the board"; model faces +z at rot 0
-    v.char.scene.rotation.y = a;
-  }
-  function anim(v, intent, opts) { if (v && v.char && v.clips[intent]) v.char.play(v.clips[intent], opts); }
+  // only the KNIGHT visibly faces a direction (its head); the turned pieces are
+  // radially symmetric so their rotation is irrelevant. White knight faces +z (up
+  // the board toward black), black faces -z. Head is modelled with the muzzle at +x,
+  // so +z needs a -90° yaw.
+  function faceForward(v) { if (!v.piece) return; v.piece.rotation.y = (v.type === "N") ? (v.side === "w" ? -Math.PI / 2 : Math.PI / 2) : 0; }
+  function faceToward(v, tx, ty) { /* pieces glide without turning in regular chess; knight keeps its forward facing */ }
+  function anim(v, intent, opts) { if (v && v.char && v.clips && v.clips[intent]) v.char.play(v.clips[intent], opts); }   // inert now (procedural pieces carry no clips) but kept so callers don't throw
 
   // ── game state ────────────────────────────────────────────────────────────────
   let sim = null;
@@ -596,61 +617,22 @@ register3d("chess3d", async (kernel, content) => {
       const capturedId = (capturedSq != null && capturedSq >= 0) ? squareToId[fileOf(capturedSq) + "," + rankOf(capturedSq)] : null;
       const defender = capturedId != null ? pieceViews[capturedId] : null;
 
-      faceToward(v, toX, toY);
-      anim(v, "walk", { fade: 0.12 });
-      // (per-click select blip removed — SFX kept minimal; capture/check/win sounds remain)
-
-      if (defender) {
-        // ── THE FIGHT ──────────────────────────────────────────────────────────
-        // Attacker advances to JUST SHORT of the defender's square, plays an
-        // attack clip; defender plays its death clip; then the defender is
-        // removed and the attacker finishes onto the square.
-        const dv = cell(toX, toY);
-        // a staging point ~0.55 tile back from the target along the approach
-        const ax = v.x, ay = v.y;
-        const dirx = Math.sign(toX - ax), diry = Math.sign(toY - ay);
-        const stageX = dv.x - dirx * T * 0.5, stageZ = dv.z - diry * T * 0.5;
-        const walkDur = Math.max(0.7, Math.min(2.2, (Math.abs(toX - ax) + Math.abs(toY - ay)) * 0.42)); // SAIL/walk pace, not a zip
-        kernel.tween({
-          target: v.group.position, to: { x: stageX, z: stageZ }, duration: walkDur,
-          onComplete: () => {
-            // face the defender + attack
-            faceToward(v, toX, toY);
-            const atkClip = v.clips.attack ? "attack" : "idle";
-            anim(v, atkClip, { once: true, fade: 0.08 });
-            sfx("hit_heavy", 0.6);
-            screenShake(7);
-            // defender reacts then dies
-            if (defender.clips.hurt) anim(defender, "hurt", { once: true, fade: 0.06 });
-            // strike impact ~ partway through the attack clip
-            setTimeout(() => {
-              clashFx(cell(toX, toY));
-              sfx("hit", 0.6);
-              defender.dead = true;
-              anim(defender, defender.clips.die ? "die" : "idle", { once: true, fade: 0.12 });
-              floatText(cell(toX, toY), "CAPTURED", 0xff7a5a);
-              // remove the captured view after its death plays
-              const removeDelay = defender.clips.die ? 900 : 300;
-              setTimeout(() => { fadeOutAndRemove(defender); }, removeDelay);
-              // attacker steps onto the now-empty square + returns to idle
-              setTimeout(() => {
-                anim(v, "walk", { fade: 0.12, timeScale: 0.85 });
-                kernel.tween({
-                  target: v.group.position, to: { x: targetW.x, z: targetW.z }, duration: 0.5,
-                  onComplete: () => { anim(v, "idle", { fade: 0.2 }); faceForward(v); finalize(); }
-                });
-              }, 360);
-            }, 260);
-          }
-        });
-      } else {
-        // quiet move: walk to the square
-        const walkDur = Math.max(0.7, Math.min(2.4, (Math.abs(toX - v.x) + Math.abs(toY - v.y)) * 0.42)); // proper walking pace
-        kernel.tween({
-          target: v.group.position, to: { x: targetW.x, z: targetW.z }, duration: walkDur,
-          onComplete: () => { anim(v, "idle", { fade: 0.2 }); faceForward(v); finalize(); }
-        });
-      }
+      // ── clean chess move: LIFT → glide → PLACE (no marching/fighting). A capture
+      // sinks the taken piece as the mover arrives; the knight hops higher. ──
+      const dist = Math.abs(toX - v.x) + Math.abs(toY - v.y);
+      const dur = Math.max(0.34, Math.min(0.72, dist * 0.12));
+      const lift = (v.type === "N" ? 0.95 : 0.5) * T;
+      const baseY = v.group.position.y;
+      if (defender) { defender.dead = true; sfx("hit", 0.5); fadeOutAndRemove(defender); }
+      kernel.tween({
+        target: v.group.position, to: { x: targetW.x, z: targetW.z }, duration: dur, ease: (x) => x * x * (3 - 2 * x),
+        onUpdate: (e) => { v.group.position.y = baseY + Math.sin(Math.min(1, e) * Math.PI) * lift; },   // parabolic lift-and-place arc
+        onComplete: () => {
+          v.group.position.y = baseY;
+          if (defender) { sfx("hit_heavy", 0.45); screenShake(4); clashFx(cell(toX, toY)); floatText(cell(toX, toY), "CAPTURED", 0xff8a5a); }
+          faceForward(v); finalize();
+        },
+      });
 
       function finalize() {
         // update the view bookkeeping: mover now on (toX,toY)
@@ -681,14 +663,11 @@ register3d("chess3d", async (kernel, content) => {
   }
 
   function fadeOutAndRemove(v) {
-    // sink + fade then remove from scene + maps
-    kernel.tween({ target: v.group.position, to: { y: v.group.position.y - 0.5 }, duration: 0.6 });
-    v.group.traverse((o) => { if ((o.isMesh || o.isSkinnedMesh) && o.material) { o.material.transparent = true; kernel.tween({ target: o.material, to: { opacity: 0 }, duration: 0.6 }); } });
-    setTimeout(() => {
-      scene.remove(v.group);
-      if (v.char) kernel.disposeMixer(v.char.mixer);
-      delete pieceViews[v.id];
-    }, 700);
+    // a captured piece SINKS into the board + shrinks away, then is removed. We
+    // transform the GROUP (per-instance) rather than fade materials — the piece
+    // materials are SHARED across the army, so an opacity fade would dim them all.
+    kernel.tween({ target: v.group.position, to: { y: v.group.position.y - T * 0.7 }, duration: 0.5, ease: (x) => x * x });
+    kernel.tween({ target: v.group.scale, to: { x: 0.02, y: 0.02, z: 0.02 }, duration: 0.5, onComplete: () => { scene.remove(v.group); if (v.char) kernel.disposeMixer(v.char.mixer); delete pieceViews[v.id]; } });
   }
 
   // ── small VFX (no runtime lights) ─────────────────────────────────────────────
@@ -944,6 +923,27 @@ register3d("chess3d", async (kernel, content) => {
     wasdPan: true, panSpeed: span * 0.5, // W/A/S/D glide the camera around the board (was off)
   });
 
+  // ── F3 DEBUG overlay: FPS + DPR + draw calls + triangles + live piece count ──
+  (function setupDebugOverlay() {
+    const el = document.createElement("div");
+    el.style.cssText = "position:fixed;left:10px;top:10px;z-index:9999;font:12px/1.55 ui-monospace,Menlo,Consolas,monospace;color:#8effc0;background:rgba(6,12,20,.74);border:1px solid rgba(120,220,180,.35);border-radius:8px;padding:7px 11px;pointer-events:none;white-space:pre;display:none";
+    (kernel.parent || document.body).appendChild(el);
+    let on = false, frames = 0, acc = 0, fps = 0, lo = 999;
+    kernel.onUpdate((dt) => {
+      if (!on) return;
+      frames++; acc += dt; const inst = dt > 0 ? 1 / dt : 0; if (inst < lo) lo = inst;
+      if (acc >= 0.5) { fps = Math.round(frames / acc); frames = 0; acc = 0; const _lo = Math.round(lo); lo = 999;
+        const r = kernel.renderer, info = r && r.info;
+        el.textContent = "FPS " + fps + "  (low " + _lo + ")\nDPR " + (r ? r.getPixelRatio().toFixed(2) : "?") +
+          "\ndraw calls " + (info ? info.render.calls : "?") + "\ntriangles " + (info ? info.render.triangles.toLocaleString() : "?") +
+          "\npieces " + Object.keys(pieceViews).length; }
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "F3" || e.code === "F3") { e.preventDefault(); on = !on; el.style.display = on ? "block" : "none"; if (on) el.textContent = "FPS …"; }
+    });
+    window.__CHESS_DEBUG__ = { toggle: () => { on = !on; el.style.display = on ? "block" : "none"; return on; }, fps: () => fps };
+  })();
+
   // ── shell wiring ────────────────────────────────────────────────────────────
   let shell = null;
   async function beginGame() {
@@ -954,6 +954,11 @@ register3d("chess3d", async (kernel, content) => {
     for (const k in squareToId) delete squareToId[k];
     moveLog = []; selected = null; busy = false;
     if (orbit) orbit.autoRotate = false; // stop the menu spin once playing
+    // ALWAYS start square-on. The menu slowly auto-rotates the camera, so on Play we
+    // reset to the straight look STRAIGHT up the board — otherwise the board "starts
+    // tilted" at whatever azimuth the menu spin happened to reach.
+    kernel.camera.position.set(0, span * 1.18, startZ);
+    if (orbit) { orbit.target.set(0, 0, 0); orbit.update(); }
     // gentle classical piano. The ?mode=ai launcher deep-link auto-starts WITHOUT a
     // user gesture on this page, so the AudioContext is suspended and start() can't
     // resume — arm a one-shot gesture (any click/key) to resume it. A normal Play
