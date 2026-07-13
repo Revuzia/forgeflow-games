@@ -303,7 +303,7 @@ export function createUI(container, handlers) {
         const skyColor = '#' + b.sky.toString(16).padStart(6, '0');
         card.style.setProperty('--bcol', cssColor + '88');
         card.innerHTML = `
-          <div class="bswatch" style="background:linear-gradient(160deg,${skyColor},${cssColor})"></div>
+          <div class="bswatch" style="background:url(assets/ui/realm_${bi + 1}.jpg?v=1) center/cover no-repeat,linear-gradient(160deg,${skyColor},${cssColor})"></div>
           <h3>${b.name}</h3>
           <div class="tag">${b.tagline}</div>
           <div class="stars">${unlocked ? `⭐ ${biomeStars(bi)}/27` : '🔒 Clear the previous realm'}</div>`;
