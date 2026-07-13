@@ -970,6 +970,17 @@ export class UI {
     toggle('💡 Gameplay tips for new players', 'tips', (on) => {
       if (on) { this.store.tipsSeen = []; Store.save(); this.toast('Tips reset — they\'ll show again in your next match.'); }
     });
+    // fullscreen (F) — the one standard control this game was missing entirely
+    {
+      const row = this.el('div', 'set-row');
+      const btn = this.el('button', 'btn small', document.fullscreenElement ? '🗗 Exit fullscreen' : '⛶ Fullscreen (F)');
+      btn.onclick = () => {
+        if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {});
+        setTimeout(() => { btn.textContent = document.fullscreenElement ? '🗗 Exit fullscreen' : '⛶ Fullscreen (F)'; }, 300);
+      };
+      row.append(this.el('label', null, '🖥 Display'), btn);
+      wrap.append(row);
+    }
     // playable-card highlight color
     {
       const row = this.el('div', 'set-row');
@@ -1188,8 +1199,17 @@ export class UI {
     while (this.toastEl.children.length > 3) this.toastEl.firstChild.remove();
   }
 
-  // mode: 'attack' (ember gold) | 'spell' (arcane gold→cyan). Solid glowing arc.
-  showArrow(x1, y1, x2, y2, mode = 'attack') {
+  // arrow tint helpers — element-colored targeting arrows
+  _shade(c, f) { // c: int or '#hex'; f ∈ [-1,1]: blend toward black (−) / white (+)
+    const n = typeof c === 'number' ? c : parseInt(String(c).replace('#', ''), 16);
+    const ch = (v) => Math.round(Math.max(0, Math.min(255, f >= 0 ? v + (255 - v) * f : v * (1 + f))));
+    return '#' + (((ch(n >> 16 & 255)) << 16) | ((ch(n >> 8 & 255)) << 8) | ch(n & 255)).toString(16).padStart(6, '0');
+  }
+
+  // mode: 'attack' | 'spell'. Solid glowing arc. Pass `color` (the acting
+  // card's REALM color) to tint the whole arrow per element — fire attacks
+  // burn orange, frost runs blue, nature green, and so on.
+  showArrow(x1, y1, x2, y2, mode = 'attack', color = null) {
     const dx = x2 - x1, dy = y2 - y1;
     const dist = Math.hypot(dx, dy) || 1;
     const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - Math.min(150, dist * 0.24) - 26;
@@ -1201,16 +1221,24 @@ export class UI {
     this.arcGrad.setAttribute('x2', x2); this.arcGrad.setAttribute('y2', y2);
     const stops = this.arcGrad.querySelectorAll('stop');
     const head = this.arcHead.querySelector('.ah-main');
-    if (mode === 'spell') {
+    if (color != null) {
+      stops[0].setAttribute('stop-color', this._shade(color, 0.6));
+      stops[1].setAttribute('stop-color', this._shade(color, 0.05));
+      this.arcGlowPath.setAttribute('stroke', this._shade(color, 0));
+      head.setAttribute('fill', this._shade(color, 0.5));
+      head.setAttribute('stroke', this._shade(color, -0.6));
+    } else if (mode === 'spell') {
       stops[0].setAttribute('stop-color', '#ffe9a8');
       stops[1].setAttribute('stop-color', '#6fd8ff');
       this.arcGlowPath.setAttribute('stroke', '#5fc0f0');
       head.setAttribute('fill', '#bfeaff');
+      head.setAttribute('stroke', '#8a5a13');
     } else {
       stops[0].setAttribute('stop-color', '#ffe9a8');
       stops[1].setAttribute('stop-color', '#ffb43d');
       this.arcGlowPath.setAttribute('stroke', '#ffb43d');
       head.setAttribute('fill', '#ffe9a8');
+      head.setAttribute('stroke', '#8a5a13');
     }
     const ang = Math.atan2(y2 - my, x2 - mx) * 180 / Math.PI;
     this.arcHead.setAttribute('transform', `translate(${x2} ${y2}) rotate(${ang})`);
@@ -1219,7 +1247,9 @@ export class UI {
   hideArrow() { this.arcGroup.setAttribute('visibility', 'hidden'); }
 
   // ── multi-attack: persistent "committed" arrows for queued attacks ──
-  addQueuedArrow(qid, x1, y1, x2, y2) {
+  // `color` = the attacking creature's REALM color, so every attacker's arrow
+  // carries its element (defaults keep the classic ember-orange).
+  addQueuedArrow(qid, x1, y1, x2, y2, color = null) {
     const NS = 'http://www.w3.org/2000/svg';
     const dx = x2 - x1, dy = y2 - y1;
     const dist = Math.hypot(dx, dy) || 1;
@@ -1229,17 +1259,21 @@ export class UI {
     g.dataset.qid = qid;
     const glow = document.createElementNS(NS, 'path');
     glow.setAttribute('d', d); glow.setAttribute('fill', 'none');
-    glow.setAttribute('stroke', '#ff5f3d'); glow.setAttribute('stroke-width', '11');
+    glow.setAttribute('stroke', color != null ? this._shade(color, 0) : '#ff5f3d');
+    glow.setAttribute('stroke-width', '11');
     glow.setAttribute('stroke-linecap', 'round'); glow.setAttribute('opacity', '0.35');
     glow.setAttribute('filter', 'url(#arcGlow)');
     const core = document.createElementNS(NS, 'path');
     core.setAttribute('d', d); core.setAttribute('fill', 'none');
-    core.setAttribute('stroke', '#ff8a3d'); core.setAttribute('stroke-width', '4');
+    core.setAttribute('stroke', color != null ? this._shade(color, 0.18) : '#ff8a3d');
+    core.setAttribute('stroke-width', '4');
     core.setAttribute('stroke-linecap', 'round');
     const ang = Math.atan2(y2 - my, x2 - mx) * 180 / Math.PI;
     const head = document.createElementNS(NS, 'polygon');
     head.setAttribute('points', '0,-11 20,0 0,11 5,0');
-    head.setAttribute('fill', '#ffcf6a'); head.setAttribute('stroke', '#8a3a10'); head.setAttribute('stroke-width', '1.5');
+    head.setAttribute('fill', color != null ? this._shade(color, 0.45) : '#ffcf6a');
+    head.setAttribute('stroke', color != null ? this._shade(color, -0.55) : '#8a3a10');
+    head.setAttribute('stroke-width', '1.5');
     head.setAttribute('transform', `translate(${x2} ${y2}) rotate(${ang})`);
     g.append(glow, core, head);
     this.arrowSvg.append(g);
@@ -1523,6 +1557,15 @@ export class UI {
     mkToggle('📳 Screen shake', 'shake', speed);
     mkToggle('⚡ Fast animations', 'fastAnim', speed);
     mkToggle('💡 Gameplay tips', 'tips', () => {});
+    // fullscreen (F): the one standard control this game was missing entirely
+    const fsRow = this.el('div', 'set-row');
+    const fsBtn = this.el('button', 'btn small', document.fullscreenElement ? '🗗 Exit fullscreen' : '⛶ Fullscreen (F)');
+    fsBtn.onclick = () => {
+      if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {});
+      setTimeout(() => { fsBtn.textContent = document.fullscreenElement ? '🗗 Exit fullscreen' : '⛶ Fullscreen (F)'; }, 300);
+    };
+    fsRow.append(this.el('label', null, '🖥 Display'), fsBtn);
+    m.append(fsRow);
     // ── action row: Resume / Concede / Main Menu ──
     const row = this.el('div');
     row.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:20px';
