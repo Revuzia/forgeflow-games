@@ -207,6 +207,22 @@ const CSS = `
 .tut .dots i{width:9px;height:9px;border-radius:50%;background:#2c2150;border:1px solid #4a3a78}
 .tut .dots i.on{background:linear-gradient(180deg,#ffe9a8,#d4952b);border-color:#ffe9a8}
 #turnbtns{position:absolute;right:18px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:10px;pointer-events:auto}
+/* turn clock — depleting ring + countdown, amber under 20s, red pulse under 10s */
+#turntimer{display:flex;align-items:center;gap:8px;justify-content:center;padding:5px 10px;border-radius:12px;
+  border:1px solid #3a2a5c;background:rgba(23,18,38,.9);transition:opacity .3s,border-color .3s;user-select:none}
+#turntimer.hidden{opacity:0;pointer-events:none}
+#turntimer svg{width:24px;height:24px;transform:rotate(-90deg);flex:0 0 auto}
+#turntimer .tt-bg{fill:none;stroke:#2c2150;stroke-width:4.5}
+#turntimer .tt-arc{fill:none;stroke:#5fc978;stroke-width:4.5;stroke-linecap:round;stroke-dasharray:100.53;transition:stroke .3s}
+#turntimer .tt-txt{font-weight:800;font-size:15px;letter-spacing:.04em;color:var(--dim);min-width:38px;text-align:center;font-variant-numeric:tabular-nums}
+#turntimer.warn .tt-arc{stroke:#f0b93a}
+#turntimer.warn .tt-txt{color:#ffd45f}
+#turntimer.crit{border-color:#8a2f2f;animation:ttpulse .8s ease-in-out infinite}
+#turntimer.crit .tt-arc{stroke:#e0483f}
+#turntimer.crit .tt-txt{color:#ff6a5f}
+#turntimer.foe .tt-arc{stroke:#8a7ab0}
+#turntimer.foe .tt-txt{color:#8a7ab0}
+@keyframes ttpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
 #matchtools{position:absolute;top:14px;right:16px;display:flex;gap:8px;pointer-events:auto}
 .tool{cursor:pointer;width:38px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid #3a2a5c;background:rgba(23,18,38,.9);font-size:17px;color:var(--dim)}
 .tool:hover{border-color:var(--gold);color:var(--gold-hi)}
@@ -1020,10 +1036,19 @@ export class UI {
     // teach the ordering rule instead
     const btns = this.el('div');
     btns.id = 'turnbtns';
+    // turn clock (ring + countdown) sits above the End Turn button
+    this.timerEl = this.el('div');
+    this.timerEl.id = 'turntimer';
+    this.timerEl.className = 'hidden';
+    this.timerEl.innerHTML = `
+      <svg viewBox="0 0 40 40"><circle class="tt-bg" cx="20" cy="20" r="16"/><circle class="tt-arc" cx="20" cy="20" r="16"/></svg>
+      <span class="tt-txt">1:00</span>`;
+    this._ttArc = this.timerEl.querySelector('.tt-arc');
+    this._ttTxt = this.timerEl.querySelector('.tt-txt');
     // multi-attack is now gang-up (pick attackers, click one target) — no button
     this.endBtn = this.el('button', 'btn small primary', 'End Turn');
     this.endBtn.onclick = () => this.match?.endTurn();
-    btns.append(this.endBtn);
+    btns.append(this.timerEl, this.endBtn);
     // tools
     const tools = this.el('div');
     tools.id = 'matchtools';
@@ -1110,6 +1135,20 @@ export class UI {
     const myTurn = state.active === mySide && state.winner === null && !match.busy;
     this.endBtn.disabled = !myTurn;
     this.endBtn.textContent = state.active === mySide ? 'End Turn' : (match.mode === 'online' ? 'Opponent…' : 'Enemy Turn…');
+  }
+
+  // turn clock display — driven by match._timerTick (5×/s)
+  timerSet(remainMs, totalMs, mine, visible) {
+    if (!this.timerEl) return;
+    this.timerEl.classList.toggle('hidden', !visible);
+    if (!visible) return;
+    const frac = Math.max(0, Math.min(1, remainMs / totalMs));
+    this._ttArc.style.strokeDashoffset = (100.53 * (1 - frac)).toFixed(1);
+    const s = Math.ceil(remainMs / 1000);
+    this._ttTxt.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    this.timerEl.classList.toggle('foe', !mine);
+    this.timerEl.classList.toggle('warn', mine && s <= 20 && s > 10);
+    this.timerEl.classList.toggle('crit', mine && s <= 10);
   }
 
   heroHit(p) {

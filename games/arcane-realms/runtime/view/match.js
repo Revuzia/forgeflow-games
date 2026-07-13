@@ -64,6 +64,13 @@ export class Match {
     scene.setHeroPortrait(1, heroes[this.foeSide]);
     scene.setCardBacks(cardbacks?.[0], cardbacks?.[1]);
     this.heroesAbs = heroes;
+    // 60s turn clock (HS-style): enforced for MY turn (auto end), shown for the
+    // opponent's turn online. AI turns resolve instantly → clock hidden.
+    this.turnMs = 60000;
+    this._turnEndsAt = 0;
+    this._timerVis = false;
+    this._timerMine = false;
+    this._timerIv = setInterval(() => this._timerTick(), 200);
     this.bindInput();
     if (this.net) this.bindNet();
 
@@ -81,6 +88,7 @@ export class Match {
     await this.ui.banner(this.myTurn() ? 'YOUR TURN' : 'ENEMY TURN', this.myTurn());
     Audio2.playMusic(Math.random() < 0.5 ? 'battle' : 'battle2');
     this.busy = false;
+    this._startTurnTimer(this.state.active);
     this.refreshLegal();
     this.ui.coach('welcome', 'Play a card: <b>click or drag a creature</b> onto the table, or click a spell and pick its target. Mana 💎 refills every turn — spend it all!');
     if (!this.myTurn()) this.startFoeTurn();
@@ -197,6 +205,7 @@ export class Match {
       switch (ev.t) {
         case 'turn-start': {
           Audio2.sfx('turn');
+          this._startTurnTimer(ev.p);
           await this.ui.banner(ev.p === this.mySide ? 'YOUR TURN' : 'ENEMY TURN', ev.p === this.mySide);
           if (ev.p === this.mySide &&
               this.state.players[this.mySide].board.some((u) => !u.sick && !u.tapped && !u.frozen)) {
@@ -372,13 +381,14 @@ export class Match {
       detonate(tgt);
       await this.wait(170);
     } else if (isAoe) {
-      // wave crashes across the enemy board
+      // wave of element matter crashes across the enemy board
       const foeUnits = this.state.players[this.foeSide].board
         .map((u) => scene.posOf(u.iid)).filter(Boolean);
       const mid = new THREE.Vector3(0, 0.5, scene.heroPos(1).z + 1.9);
       await scene.fx.projectile(caster, foeUnits[0] || mid, { color: col, size: 0.55, dur: 0.34, arc: 2.1 });
       if (def.realm === 'ember') scene.shake(0.22);
-      await scene.fx.aoeSweep(foeUnits.length ? foeUnits : [mid], col, { stepMs: 85 });
+      const SWEEP = { ember: { cell: 1, spin: 4 }, tide: { cell: 3, spin: 2 }, grove: { cell: 2, spin: 3 }, dawn: { cell: 1, spin: 1 } };
+      await scene.fx.aoeSweep(foeUnits.length ? foeUnits : [mid], col, { stepMs: 85, ...(SWEEP[def.realm] || {}) });
       await this.wait(90);
     } else if (has('heal') && tgt) {
       if (def.realm === 'dawn') scene.fx.holyPillar(tgt);
@@ -579,21 +589,23 @@ export class Match {
     Audio2.sfx('click');
   }
 
-  // targeted spell: the card rises to a "casting position" and stays there
-  // while the arcane arrow follows the cursor — no dragging required
+  // targeted spell: the card slides to a casting pose on its NEAR FLANK —
+  // small, out of the way, never covering the board or the targets — while
+  // the arcane arrow follows the cursor. No dragging required.
   beginSpellSelect(hit, plays) {
     this.clearSelect();
     const entry = hit.entry;
     this.select = { kind: 'spell', iid: hit.iid, cardId: entry.cardId, plays, moved: false };
     this.scene.setHoverFront(hit.iid, true);
     this.scene.tweens.killOf(entry.group.position);
+    const castPos = new THREE.Vector3(entry.group.position.x >= 0 ? 5.45 : -5.45, 1.5, 4.25);
     this.scene.applyTransform(entry, {
-      pos: new THREE.Vector3(entry.group.position.x * 0.55, 2.35, 3.55),
-      rotX: -0.5, rotZ: 0, scale: 1.28,
+      pos: castPos,
+      rotX: this.scene.faceCamRotX(castPos.y, castPos.z), rotZ: 0, scale: 0.98,
     }, 0.18, 'backOut');
     this.scene.setGlow(hit.iid, 0x6fd8ff, true);
     this.highlightPlays(plays);
-    const from = this.scene.worldToScreen(new THREE.Vector3(entry.group.position.x * 0.55, 2.35, 3.55));
+    const from = this.scene.worldToScreen(castPos);
     this.ui.showArrow(from.x, from.y, from.x, from.y - 30, 'spell');
     Audio2.sfx('click');
   }
@@ -744,6 +756,15 @@ export class Match {
       const valid = tgt && this.attackQueue.some((item) => item.attacks.some((a) => this.sameTarget(a.target, tgt)));
       if (valid) { this.resolveSelectedAttacks(tgt); return; }
       if (hit && hit.kind === 'board' && hit.side === 0) { this.trySelectAttacker(hit); return; }
+      // clicked an evasive Flyer with grounded attackers → explain the rule
+      if (tgt && tgt.kind === 'unit') {
+        const u = this.findUnit(tgt.iid);
+        if (u && !u.silenced && (u.kw || []).includes('flying') && !u.tapped && !(u.kw || []).includes('guard')) {
+          Audio2.sfx('error');
+          this.ui.toast('≋ Flying — only Flying attackers can reach it. (Exhausted or Guarding Flyers lose this.)');
+          return; // keep the selection so they can pick a legal target
+        }
+      }
       if (tgt && this.enemyHasGuard() &&
           (tgt.kind === 'hero' ? tgt.p === this.foeSide : !this.isGuard(this.findUnit(tgt.iid)))) {
         Audio2.sfx('error');
@@ -841,7 +862,7 @@ export class Match {
       const pt = hit && hit.point ? hit.point : null;
       if (pt) {
         entry.group.position.set(pt.x, 0.9, pt.z);
-        entry.inner.rotation.x = -1.05;
+        entry.inner.rotation.x = this.scene.faceCamRotX(0.9, pt.z); // billboard while dragging
         entry.group.scale.setScalar(0.9);
       }
       if (d.def.type === 'creature') {
@@ -1004,6 +1025,29 @@ export class Match {
     Audio2.sfx('click');
     await this.doAction({ type: 'end' });
   }
+
+  // ── turn clock ───────────────────────────────────────────────
+  _startTurnTimer(absSide) {
+    this._turnEndsAt = performance.now() + this.turnMs;
+    this._timerMine = absSide === this.mySide;
+    // my turn: always shown + enforced. Foe's turn: shown online (their clock
+    // runs on their client), hidden vs the instant AI.
+    this._timerVis = this._timerMine || this.mode === 'online';
+    this.ui.timerSet?.(this.turnMs, this.turnMs, this._timerMine, this._timerVis);
+  }
+
+  _timerTick() {
+    if (this.over) { this.ui.timerSet?.(0, this.turnMs, false, false); return; }
+    const remain = Math.max(0, this._turnEndsAt - performance.now());
+    this.ui.timerSet?.(remain, this.turnMs, this._timerMine, this._timerVis);
+    if (remain > 0 || !this._timerMine || !this.myTurn()) return;
+    if (this.busy) return; // mid-animation — the next tick retries
+    // time's up: drop any half-done input, then end the turn
+    if (this.drag) { this.drag = null; this.scene.hideGhost(); this.ui.hideArrow(); this.scene.syncFromState(this.state, this.mySide); }
+    this.clearSelect();
+    this.ui.toast('⏳ Time! Turn ended.');
+    this.endTurn();
+  }
   async concede() {
     if (this.over) return;
     await this.doAction({ type: 'concede' });
@@ -1013,6 +1057,8 @@ export class Match {
     this.unbindInput();
     if (this.net) { try { this.net.leave(); } catch { /* gone */ } }
     clearTimeout(this._dcTimer);
+    clearInterval(this._timerIv);
+    this.ui.timerSet?.(0, 1, false, false);
     this.over = true;
   }
 }
