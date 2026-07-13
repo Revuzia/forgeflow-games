@@ -890,8 +890,47 @@ export function makeBookshelf() {
   }
   return grp;
 }
+// A treasure chest whose LID is a separate group hinged at the BACK-TOP edge, so
+// opening rotates only the lid up-and-back (grp.userData.lid.rotation.x negative),
+// NOT the whole chest. Built at final size (base at y=0); ~1.05 units tall.
+export function makeChest(theme) {
+  const scifi = theme === "scifi";
+  const grp = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: scifi ? 0x39434f : 0x6b4523, roughness: 0.75, metalness: scifi ? 0.5 : 0.05 });
+  const wood2 = new THREE.MeshStandardMaterial({ color: scifi ? 0x2e3742 : 0x7d5329, roughness: 0.7, metalness: scifi ? 0.5 : 0.05 });
+  const trim = new THREE.MeshStandardMaterial({ color: scifi ? 0x9fb4c8 : 0xd9a441, metalness: 0.9, roughness: 0.32 });
+  const W = 1.3, Dp = 0.95, baseH = 0.6, lidH = 0.46;
+  // base box
+  const base = new THREE.Mesh(new THREE.BoxGeometry(W, baseH, Dp), wood);
+  base.position.y = baseH / 2; grp.add(base);
+  // two vertical metal straps wrapping the base
+  const strap = (x) => { const s = new THREE.Mesh(new THREE.BoxGeometry(0.12, baseH + 0.02, Dp + 0.03), trim); s.position.set(x, baseH / 2, 0); grp.add(s); };
+  strap(-W / 2 + 0.17); strap(W / 2 - 0.17);
+  // front lock plate + keyhole
+  const lock = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.36, 0.08), trim);
+  lock.position.set(0, baseH * 0.58, Dp / 2 + 0.02); grp.add(lock);
+  const keyhole = new THREE.Mesh(new THREE.CircleGeometry(0.055, 12), new THREE.MeshStandardMaterial({ color: 0x140d06 }));
+  keyhole.position.set(0, baseH * 0.52, Dp / 2 + 0.07); grp.add(keyhole);
+  // LID — hinge group pivots at the back-top edge (z = -Dp/2, y = baseH)
+  const lidPivot = new THREE.Group();
+  lidPivot.position.set(0, baseH, -Dp / 2);
+  grp.add(lidPivot);
+  const lidMain = new THREE.Mesh(new THREE.BoxGeometry(W, lidH * 0.66, Dp), wood2);
+  lidMain.position.set(0, lidH * 0.33, Dp / 2); lidPivot.add(lidMain);
+  const lidTop = new THREE.Mesh(new THREE.BoxGeometry(W * 0.82, lidH * 0.5, Dp * 0.66), wood2);
+  lidTop.position.set(0, lidH * 0.72, Dp / 2); lidPivot.add(lidTop);
+  // metal straps carried up over the lid, aligned with the base straps
+  const lstrap = (x) => {
+    const s = new THREE.Mesh(new THREE.BoxGeometry(0.12, lidH * 0.66 + 0.02, Dp + 0.03), trim); s.position.set(x, lidH * 0.33, Dp / 2); lidPivot.add(s);
+    const s2 = new THREE.Mesh(new THREE.BoxGeometry(0.12, lidH * 0.5 + 0.02, Dp * 0.66 + 0.03), trim); s2.position.set(x, lidH * 0.72, Dp / 2); lidPivot.add(s2);
+  };
+  lstrap(-W / 2 + 0.17); lstrap(W / 2 - 0.17);
+  if (scifi) { const g = new THREE.Mesh(new THREE.BoxGeometry(W * 0.55, 0.05, 0.18), new THREE.MeshStandardMaterial({ color: 0x35e0e8, emissive: 0x35e0e8, emissiveIntensity: 1.6 })); g.position.set(0, baseH * 0.5, Dp / 2 + 0.02); grp.add(g); }
+  grp.userData.lid = lidPivot;
+  return grp;
+}
 // One place that turns a decor dtype into a mesh — procedural for the broken GLBs
-// (torch/wall-torch/barrel/bookshelf), the GLB clone otherwise. `clone` clones a
+// (torch/wall-torch/barrel/bookshelf/chest), the GLB clone otherwise. `clone` clones a
 // loaded template; `props` is the loaded prop set. Returns {mesh, foot} where
 // foot is the target height (null = use the mesh as built).
 export function decorMesh(dtype, theme, props, clone) {
@@ -899,6 +938,7 @@ export function decorMesh(dtype, theme, props, clone) {
   if (dtype === "torch") return { mesh: makeTorch(theme), foot: null };
   if (dtype === "barrel") return { mesh: makeBarrel(theme), foot: null };
   if (dtype === "bookshelf") return { mesh: makeBookshelf(), foot: null };
+  if (dtype === "chest") return { mesh: makeChest(theme), foot: null };
   const tpl = (props && props[dtype]) || (props && props.crate);
   return { mesh: tpl ? clone(tpl) : null, foot: "glb" };
 }

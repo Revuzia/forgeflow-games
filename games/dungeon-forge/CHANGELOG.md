@@ -1,5 +1,15 @@
 # Dungeon Forge — CHANGELOG
 
+## v1.11.2 — 2026-07-13 (chest lid animation + enemies count badge)
+- **Chest open animation**: chests are now a procedural model (`makeChest`) whose
+  **lid is a separate group hinged at the back-top edge**. Opening eases only the
+  lid up-and-back (~0.35s, frame-rate independent) instead of tilting the whole
+  chest over. Already-looted chests render pre-opened on (re)join. `chest` decor
+  also uses the new model.
+- **Enemies HUD**: replaced the per-type remaining-enemies list with a single
+  compact **count badge** (top-left) — "👹 Enemies left N", turns green "Clear!"
+  when the floor is cleared and the exit unlocks.
+
 ## v1.0 — 2026-07-07
 Initial release.
 - **Builder**: cell-grid painting + room stamping across up to 5 floors, doors with

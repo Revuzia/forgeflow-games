@@ -11,11 +11,12 @@ import * as THREE from "three";
 const V = new URL(import.meta.url).search;
 const D = await import("../sim/dungeon.js" + V);
 const E = await import("../sim/escape_sim.js" + V);
-const { makeInstanced, Assets, charClips, makeTorch, makeWallTorch, makeCellSurfaces, makeNpc, findArmBones, relaxArms, makeDoor, makeSpikes, decorMesh } = await import("./assets.js" + V);
+const { makeInstanced, Assets, charClips, makeTorch, makeWallTorch, makeCellSurfaces, makeNpc, findArmBones, relaxArms, makeDoor, makeSpikes, decorMesh, makeChest } = await import("./assets.js" + V);
 const { EnemyPool } = await import("./enemies.js" + V);
 
 const FLOOR_H = 4.4;
 const CELL = D.CELL;
+const CHEST_OPEN_ANGLE = -1.95; // lid hinge angle when a chest is fully open (~112°)
 const c2w = E.c2w;
 const { landingMarker } = await import("./stair_marker.js" + V);
 const _swingAxis = new THREE.Vector3(); // scratch: character right-vector for gait arm-swing
@@ -278,8 +279,16 @@ export class Escape {
         break;
       }
       case "chest": {
-        const m = add(this.props.chest || this.props.chestShared, 1.5);
-        grp.userData.lid = m;
+        // Procedural chest with a real hinged LID (grp.userData.lid pivots at the
+        // back-top edge) — opening swings ONLY the lid up, not the whole chest.
+        const chest = makeChest(this.d.theme);
+        grp.add(chest);
+        grp.userData.lid = chest.userData.lid;
+        grp.userData.lidTarget = 0;             // closed; open event sets CHEST_OPEN_ANGLE
+        // if this chest was already looted (rejoin / mid-run render), show it open
+        if (this.run && this.run.openedChests && this.run.openedChests.has(o.id)) {
+          grp.userData.lid.rotation.x = CHEST_OPEN_ANGLE; grp.userData.lidTarget = CHEST_OPEN_ANGLE;
+        }
         // a soft gold glow ring so unopened chests visibly invite "press E"
         const glow = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.07, 8, 24),
           new THREE.MeshBasicMaterial({ color: 0xffd769, transparent: true, opacity: 0.7 }));
@@ -959,7 +968,8 @@ export class Escape {
           break;
         case "chest": {
           const m = this.objMeshes.get(ev.id);
-          if (m && m.userData.lid) { m.userData.lid.rotation.x = -0.6; }
+          // set the lid's TARGET angle — update() eases the hinge open (no snap)
+          if (m && m.userData.lid) { m.userData.lidTarget = CHEST_OPEN_ANGLE; }
           g.audio.sfx("chest");
           if (ev.by === this.myId) {
             const labels = ev.items.map((i) => i.kind === "gold" ? `💰 ${i.n} gold` : i.kind === "potion" ? "🧪 potion" : i.kind === "mana" ? "🔷 energy" : i.kind === "charm" ? "✨ charm (+20% dmg)" : "🗝️ KEY").join("  ·  ");
@@ -1419,9 +1429,15 @@ export class Escape {
     for (const m of this.waterMats) if (m.uniforms) m.uniforms.uTime.value = t;
     // pulse the gold ring under unopened chests
     const pulse = 0.55 + 0.35 * (0.5 + 0.5 * Math.sin(t * 3));
+    const lidK = 1 - Math.pow(0.0015, dt); // frame-rate independent ease (~0.35s open)
     for (const [id, m] of this.objMeshes) {
       const glow = m.userData && m.userData.chestGlow;
       if (glow) { const opened = this.run.openedChests && this.run.openedChests.has(id); glow.visible = !opened; if (!opened) { glow.material.opacity = pulse; glow.scale.setScalar(1 + 0.06 * Math.sin(t * 3)); } }
+      // ease the chest lid toward its target angle (open swings only the lid up)
+      const lid = m.userData && m.userData.lid;
+      if (lid && m.userData.lidTarget !== undefined && Math.abs(lid.rotation.x - m.userData.lidTarget) > 0.001) {
+        lid.rotation.x += (m.userData.lidTarget - lid.rotation.x) * lidK;
+      }
     }
     if (this.lavaSpots.length && Math.random() < 0.3) {
       const s = this.lavaSpots[(Math.random() * this.lavaSpots.length) | 0];

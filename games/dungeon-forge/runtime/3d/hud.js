@@ -417,8 +417,7 @@ export class Hud {
         <button class="df-btn ghost" data-a="quit">✕</button>
       </div>
       <div class="df-foespanel" data-a="foespanel">
-        <div class="df-foeshead" data-a="foeshead"><span class="df-foestitle" data-a="foestitle">👹 Enemies</span><span class="df-foestoggle" data-a="foestoggle">▾</span></div>
-        <div class="df-foeslist" data-a="foes"></div>
+        <span class="df-foesicon">👹</span><span class="df-foeslabel">Enemies left</span><span class="df-foescount" data-a="foescount">0</span>
       </div>
       <div class="df-targetplate" data-a="tplate" style="display:none">
         <div class="df-tname" data-a="tname"></div>
@@ -434,9 +433,6 @@ export class Hud {
     this.root.appendChild(this.eWrap);
     this.eWrap.querySelector('[data-a="quit"]').onclick = () => { this.g.audio.sfx("ui"); this.g.menu.confirmQuitRun(); };
     this.eWrap.querySelector('[data-a="settings"]').onclick = () => { this.g.audio.sfx("ui"); this.g.showSettings(); };
-    // collapsible enemies panel
-    const foesHead = this.eWrap.querySelector('[data-a="foeshead"]'), foesPanel = this.eWrap.querySelector('[data-a="foespanel"]');
-    if (foesHead) foesHead.onclick = () => { this.g.audio.sfx("ui"); const c = foesPanel.classList.toggle("collapsed"); this.eWrap.querySelector('[data-a="foestoggle"]').textContent = c ? "▸" : "▾"; };
     this.mapCtx = this.eWrap.querySelector('[data-a="map"]').getContext("2d");
     this.explored = new Set();
     const obj = this.eWrap.querySelector('[data-a="obj"]');
@@ -522,26 +518,17 @@ export class Hud {
     const at = q('[data-a="at"]'); at.style.display = p.armorTier ? "" : "none"; at.textContent = "🛡 " + ROM[p.armorTier || 0];
     at.style.color = rHex(eq.armor) || ""; at.title = gearTip(eq.armor) || "Armor tier";
     q('[data-a="timer"]').textContent = fmtTime(esc_.run.time);
-    // remaining enemies: kinds + counts, EXCEPT bosses (their presence shows
-    // only as a mystery "+?" — players shouldn't see a boss coming)
-    // remaining enemies — a compact stacked list (top-left, collapsible); bosses
-    // stay hidden ("+?"). Rendered as rows: name · ×count.
-    const foes = q('[data-a="foes"]');
-    if (foes) {
-      const roster = D.ENEMIES[esc_.d.theme] || {};
-      const byKind = {}; let hidden = 0, total = 0;
-      for (const e2 of esc_.run.enemies) {
-        if (!e2.alive) continue;
-        total++;
-        if (roster[e2.etype] && roster[e2.etype].boss) { hidden++; continue; }
-        byKind[e2.etype] = (byKind[e2.etype] || 0) + 1;
+    // remaining enemies — just the COUNT (all alive foes incl. bosses), not a
+    // per-type list. The exit unlocks when this hits 0.
+    const foesCount = q('[data-a="foescount"]'), foesPanel = q('[data-a="foespanel"]');
+    if (foesCount) {
+      let total = 0;
+      for (const e2 of esc_.run.enemies) if (e2.alive) total++;
+      const txt = total > 0 ? String(total) : "Clear!";
+      if (foesCount._t !== txt) {
+        foesCount.textContent = txt; foesCount._t = txt;
+        if (foesPanel) foesPanel.classList.toggle("cleared", total === 0);
       }
-      const rows = Object.keys(byKind).map((k) => `<div class="df-foerow"><span>${esc(roster[k] ? roster[k].label : k)}</span><b>×${byKind[k]}</b></div>`);
-      if (hidden) rows.push(`<div class="df-foerow ghost"><span>…something stirs</span><b>+?</b></div>`);
-      const html = rows.length ? rows.join("") : `<div class="df-foerow done">✓ Cleared — exit open!</div>`;
-      if (foes._html !== html) { foes.innerHTML = html; foes._html = html; }
-      const ttl = q('[data-a="foestitle"]');
-      if (ttl) ttl.textContent = `👹 Enemies${total ? " (" + (total - 0) + ")" : ""}`;
     }
     // action hotbar — real slots with Digit1-N keys, cooldown overlays + counts
     const ab = q('[data-a="abilities"]');
@@ -787,15 +774,13 @@ function injectStyle() {
   .df-topright{position:absolute;top:12px;right:12px;display:flex;gap:8px;align-items:center}
   .df-topcenter{position:absolute;top:12px;left:50%;transform:translateX(-50%);pointer-events:none}
   .df-timer{font-variant-numeric:tabular-nums;font-size:15px;padding:8px 16px;background:rgba(10,13,22,.9);border-color:rgba(150,170,255,.3)}
-  /* collapsible enemies panel — top-left */
-  .df-foespanel{position:absolute;top:12px;left:12px;width:190px;background:rgba(10,13,22,.86);border:1px solid rgba(255,110,90,.32);border-radius:12px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.4)}
-  .df-foeshead{display:flex;justify-content:space-between;align-items:center;padding:7px 11px;cursor:pointer;font-size:12px;font-weight:800;letter-spacing:.4px;color:#ffd0c4;background:rgba(255,110,90,.1)}
-  .df-foeshead:hover{background:rgba(255,110,90,.18)}
-  .df-foestoggle{font-size:11px;opacity:.8}
-  .df-foeslist{max-height:38vh;overflow-y:auto;padding:4px 6px 6px;display:flex;flex-direction:column;gap:2px;scrollbar-width:thin}
-  .df-foespanel.collapsed .df-foeslist{display:none}
-  .df-foerow{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;padding:3px 7px;border-radius:6px;color:#dfe4f2;background:rgba(30,26,34,.4)}
-  .df-foerow b{color:#ff9a8a} .df-foerow.ghost{color:#9aa6cf;font-style:italic} .df-foerow.done{color:#7dffb0;font-weight:800;justify-content:center}
+  /* compact enemies-remaining badge — top-left */
+  .df-foespanel{position:absolute;top:12px;left:12px;display:flex;align-items:center;gap:8px;padding:7px 12px;background:rgba(10,13,22,.86);border:1px solid rgba(255,110,90,.32);border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.4);font-size:13px;font-weight:800;color:#ffd0c4}
+  .df-foesicon{font-size:15px;line-height:1}
+  .df-foeslabel{letter-spacing:.3px}
+  .df-foescount{min-width:22px;text-align:center;padding:2px 9px;border-radius:8px;background:rgba(255,110,90,.22);color:#ffd0c4;font-variant-numeric:tabular-nums}
+  .df-foespanel.cleared{border-color:rgba(125,255,176,.5);color:#7dffb0}
+  .df-foespanel.cleared .df-foescount{background:rgba(125,255,176,.2);color:#7dffb0}
   /* framed minimap */
   .df-mapframe{position:absolute;top:56px;right:12px;padding:5px;background:linear-gradient(160deg,rgba(30,38,64,.92),rgba(12,15,26,.92));border:1px solid rgba(150,170,255,.42);border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.05)}
   .df-minimap{display:block;border-radius:9px;background:rgba(6,8,14,.6)}
@@ -840,7 +825,7 @@ function injectStyle() {
   .df-shopinfo b{font-size:14px}
   .df-shopdesc{font-size:11.5px;opacity:.7}
   .df-shoprow .df-btn{min-width:78px;font-weight:800}
-  @media (max-width:820px){ .df-tool .lbl{display:none} .df-tool{min-width:44px} .df-name{width:130px} .df-minimap{width:120px;height:120px} .df-foespanel{width:150px} }
+  @media (max-width:820px){ .df-tool .lbl{display:none} .df-tool{min-width:44px} .df-name{width:130px} .df-minimap{width:120px;height:120px} .df-foeslabel{display:none} }
   `;
   const st = document.createElement("style");
   st.textContent = css;
