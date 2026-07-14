@@ -31,9 +31,9 @@ const MAP_POS = {
   ch4b1: [56, 50], ch4b2: [61, 57], ch4b3: [67, 52], ch4b4: [64, 44],
   // ch5 — Celestial Spires: the cliffs climbing the far-right edge to the citadel
   ch5b1: [80, 46], ch5b2: [85, 35], ch5b3: [90, 24], ch5b4: [95, 13],
-  // ch6 — Sundered Nexus = the maelstrom itself; hug the right edge DOWN from the
-  // spires then spiral into the vortex (no more chain crossing Ashen/Drowned)
-  ch6b1: [78, 60], ch6b2: [72, 72], ch6b3: [62, 80], ch6b4: [67, 70],
+  // ch6 — Sundered Nexus = the maelstrom itself; a tight spiral CENTERED in the
+  // vortex, under its label (its link back to the Spires is skipped above)
+  ch6b1: [61, 66], ch6b2: [67, 78], ch6b3: [74, 71], ch6b4: [69, 67],
 };
 const MAP_LABEL = {
   ch1: [15, 10], ch2: [16, 60], ch3: [45, 9], ch4: [63, 37], ch5: [90, 7],
@@ -200,6 +200,10 @@ export class CampaignUI {
       const a = MAP_POS[allB[i].b.id];
       const c = MAP_POS[allB[i + 1].b.id];
       if (!a || !c) continue;
+      // don't draw a CROSS-chapter link that would streak a long line across the
+      // map (the Celestial Spires → Sundered-Nexus descent). Adjacent regions
+      // still connect; the far final chapter stands alone in the maelstrom.
+      if (allB[i].ci !== allB[i + 1].ci && Math.hypot(a[0] - c[0], (a[1] - c[1]) * 0.5625) > 30) continue;
       const seg = `M ${a[0]} ${a[1] * 0.5625} Q ${(a[0] + c[0]) / 2} ${((a[1] + c[1]) / 2) * 0.5625 - 2} ${c[0]} ${c[1] * 0.5625} `;
       const done = this.store.data.battlesWon[allB[i].b.id];
       if (done) solid += seg; else dotted += seg;
