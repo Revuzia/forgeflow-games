@@ -1,0 +1,19 @@
+{
+  "title": "Valebound",
+  "short_description": "A full open-world action RPG — explore a 2×2km vale of six biomes, fight through 4 dungeons, and unravel the Barrow King's return across 13 quests.",
+  "description": "Valebound is a complete open-world action RPG in the browser. Explore Emberbrook Vale — a seamless 2×2km world spanning meadow, forest, lake, swamp, highland moor, and the frozen Frosthelm Peak — under a living day/night cycle with weather, biome music, and villagers who keep schedules. Fight with combos, kicks, dodges, blocks, fireballs, and chain lightning; missed swings clang off the ground and splash in the shallows. Delve four handcrafted dungeons — the Barrow of the First King, the Spinneret, the Drowned Vault, and Frosthelm Depths — each with its own creatures, loot, levers, and a boss. Follow the main quest from an uneasy morning in Emberbrook to the Barrow King's throne (8 chapters), pick up 5 side quests and notice-board bounties, trade with vendors, and portal back to town Diablo-style with a twin-gate town portal. Level up, gear up from loot chests, and respawning monsters keep every region dangerous. Full inventory, journal, and world-map screens; save/load with autosave; 3-5 hours of content.",
+  "genre": "rpg",
+  "sub_genre": "action-rpg",
+  "difficulty": "medium",
+  "controls_keyboard": "WASD move · Mouse camera · LMB attack (combos) · F kick · RMB block · SPACE dodge · R fireball · C chain lightning · E interact · 1-4 hotbar · I inventory · J journal · M map",
+  "tags": [
+    "rpg",
+    "action-rpg",
+    "open-world",
+    "3d",
+    "quests",
+    "dungeons",
+    "bosses",
+    "singleplayer"
+  ]
+}
