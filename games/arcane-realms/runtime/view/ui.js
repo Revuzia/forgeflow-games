@@ -130,6 +130,18 @@ const CSS = `
 .cardcell.dim canvas{filter:grayscale(.7) brightness(.55)}
 .cardcell.locked canvas{filter:grayscale(1) brightness(.38)}
 .cardcell.locked:hover{transform:translateY(-6px) scale(1.2)}
+/* ── holographic foil: pointer-tracked glare + shifting rainbow + 3D tilt ──
+   applied to browse tiles (renderGrid) and the inspect card. The tilt transform
+   is set inline by _holo; .tilt kills the base transition so it tracks live. */
+.cardcell.tilt{transition:none}
+.holo-glare,.holo-foil{position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .2s;z-index:2}
+.holo-glare{background:radial-gradient(circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.85),rgba(255,255,255,.16) 26%,transparent 54%);mix-blend-mode:overlay}
+.holo-foil{background:repeating-linear-gradient(105deg,#ff5f6d 0%,#ffd93d 9%,#5fffa6 18%,#4dc9ff 27%,#c86bff 36%,#ff5f6d 45%);background-size:230% 230%;background-position:var(--fx,50%) var(--fy,50%);mix-blend-mode:color-dodge;filter:brightness(.5) contrast(1.5) saturate(1.2)}
+.tilt .holo-glare{opacity:1}
+.tilt .holo-foil{opacity:.42}
+.holo-card{position:relative;border-radius:14px;transition:transform .16s ease;will-change:transform;align-self:flex-start}
+.holo-card.tilt{transition:none}
+.holo-card canvas{display:block;border-radius:14px}
 .cardcell .lockico{position:absolute;top:42%;left:50%;transform:translate(-50%,-50%);font-size:34px;filter:drop-shadow(0 3px 6px #000)}
 .deck-side{width:320px;display:flex;flex-direction:column;background:#140e24;border-left:1px solid #2c2148}
 .deck-side .dhead{padding:12px 14px;border-bottom:1px solid #251b40}
@@ -776,6 +788,31 @@ export class UI {
     }).sort((a, b) => a.cost - b.cost || (RARITY_ORDER[a.rarity] - RARITY_ORDER[b.rarity]) || a.name.localeCompare(b.name));
   }
 
+  // holographic foil: pointer-tracked light glare + shifting rainbow + a 3D
+  // tilt toward the cursor, so the card wiggles and reflects as you move over
+  // it. `tiltEl` is the element that tilts (and holds the card); lift/scale
+  // compose with the browse hover so tiles keep their pop.
+  _holo(tiltEl, { lift = 0, scale = 1, locked = false } = {}) {
+    tiltEl.append(this.el('div', 'holo-glare'), this.el('div', 'holo-foil'));
+    const MAX = locked ? 7 : 14; // max tilt degrees
+    const upd = (e) => {
+      const r = tiltEl.getBoundingClientRect();
+      if (!r.width) return;
+      const px = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+      const py = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+      tiltEl.style.setProperty('--mx', (px * 100).toFixed(1) + '%');
+      tiltEl.style.setProperty('--my', (py * 100).toFixed(1) + '%');
+      tiltEl.style.setProperty('--fx', (px * 130 - 15).toFixed(1) + '%');
+      tiltEl.style.setProperty('--fy', (py * 130 - 15).toFixed(1) + '%');
+      const rx = (0.5 - py) * MAX, ry = (px - 0.5) * MAX;
+      tiltEl.style.transform =
+        `translateY(${-lift}px) scale(${scale}) perspective(760px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`;
+    };
+    tiltEl.addEventListener('pointerenter', (e) => { tiltEl.classList.add('tilt'); upd(e); });
+    tiltEl.addEventListener('pointermove', upd);
+    tiltEl.addEventListener('pointerleave', () => { tiltEl.classList.remove('tilt'); tiltEl.style.transform = ''; });
+  }
+
   renderGrid() {
     const grid = this.gridEl;
     grid.innerHTML = '';
@@ -786,6 +823,7 @@ export class UI {
       const cell = this.el('div', 'cardcell');
       cell.append(cardThumb(c.id, 210));
       const owned = this.isOwned(c.id);
+      this._holo(cell, owned ? { lift: 16, scale: 1.52 } : { lift: 6, scale: 1.2, locked: true });
       if (!owned) {
         cell.classList.add('locked');
         cell.append(this.el('div', 'lockico', '🔒'));
@@ -1436,7 +1474,10 @@ export class UI {
     close.style.marginTop = 'auto';
     close.onclick = () => wrap.remove();
     right.append(close);
-    m.append(cv, right);
+    const cardWrap = this.el('div', 'holo-card');
+    cardWrap.append(cv);
+    this._holo(cardWrap, { lift: 0, scale: 1.03 });
+    m.append(cardWrap, right);
     wrap.append(m);
     wrap.onclick = (e) => { if (e.target === wrap) wrap.remove(); };
     this.root.append(wrap);
