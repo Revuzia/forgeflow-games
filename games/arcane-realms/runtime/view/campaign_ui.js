@@ -26,16 +26,18 @@ const MAP_POS = {
   ch1b1: [7, 55], ch1b2: [13, 37], ch1b3: [22, 24], ch1b4: [30, 33],
   ch2b1: [12, 72], ch2b2: [20, 84], ch2b3: [30, 89], ch2b4: [38, 72],
   ch3b1: [41, 55], ch3b2: [46, 39], ch3b3: [52, 23], ch3b4: [55, 40],
-  // ch4 — the Drowned Depths: the glowing coral shelf along the map's south edge
-  ch4b1: [55, 63], ch4b2: [61, 80], ch4b3: [72, 87], ch4b4: [79, 74],
-  ch5b1: [77, 50], ch5b2: [83, 38], ch5b3: [88, 27], ch5b4: [93, 15],
-  // ch6 — descent from the spires INTO the maelstrom: the Sundered Nexus is the
-  // vortex itself (owner 07-13: the old mid-map chain trampled Ashen/Drowned)
-  ch6b1: [84, 44], ch6b2: [76, 52], ch6b3: [69, 59], ch6b4: [64, 68],
+  // ch4 — the Drowned Depths: tidy arc in the center coast, below Ashen, above
+  // the vortex (each chapter kept to its own region — owner 07-13)
+  ch4b1: [56, 50], ch4b2: [61, 57], ch4b3: [67, 52], ch4b4: [64, 44],
+  // ch5 — Celestial Spires: the cliffs climbing the far-right edge to the citadel
+  ch5b1: [80, 46], ch5b2: [85, 35], ch5b3: [90, 24], ch5b4: [95, 13],
+  // ch6 — Sundered Nexus = the maelstrom itself; hug the right edge DOWN from the
+  // spires then spiral into the vortex (no more chain crossing Ashen/Drowned)
+  ch6b1: [78, 60], ch6b2: [72, 72], ch6b3: [62, 80], ch6b4: [67, 70],
 };
 const MAP_LABEL = {
-  ch1: [15, 10], ch2: [17, 62], ch3: [47, 9], ch4: [63, 44], ch5: [87, 8],
-  ch6: [54, 66],
+  ch1: [15, 10], ch2: [16, 60], ch3: [45, 9], ch4: [63, 37], ch5: [90, 7],
+  ch6: [49, 62],
 };
 
 const CSS = `
