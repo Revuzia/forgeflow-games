@@ -428,6 +428,53 @@ export function getBoardCard(cardId, golden = false) {
   return c;
 }
 
+// ── board STANDEE: the creature's ART as an upright figure whose base dissolves
+// into the board — so EVERY minion (not just the 3D-mini legendaries) stands up
+// and "pops out" of its card instead of lying flat (owner: characters IN the
+// game). Pure canvas → transparent CanvasTexture; no external models.
+const standeeCache = new Map();
+export function getStandee(cardId) {
+  let c = standeeCache.get(cardId);
+  if (c) return c;
+  const W = 384, H = 486;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  const draw = () => {
+    const a = artCache.get(cardId);
+    const img = a && a.loaded ? a.img : null;
+    const g = canvas.getContext('2d');
+    g.clearRect(0, 0, W, H);
+    if (!img) return;
+    g.save();
+    // rounded-top silhouette (bottom left open — it dissolves into the base)
+    const r = 40;
+    g.beginPath();
+    g.moveTo(0, H); g.lineTo(0, r); g.arcTo(0, 0, r, 0, r);
+    g.lineTo(W - r, 0); g.arcTo(W, 0, W, r, r); g.lineTo(W, H); g.closePath();
+    g.clip();
+    // cover-fit the art, biased slightly up so the figure/face reads
+    const s = Math.max(W / img.width, H / img.height) * 1.04;
+    const dw = img.width * s, dh = img.height * s;
+    g.drawImage(img, (W - dw) / 2, -dh * 0.03, dw, dh);
+    // erase the BOTTOM into transparency → the figure stands, no hard edge
+    g.globalCompositeOperation = 'destination-out';
+    const grad = g.createLinearGradient(0, H * 0.6, 0, H);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(0,0,0,1)');
+    g.fillStyle = grad; g.fillRect(0, H * 0.6, W, H * 0.4);
+    g.restore();
+    tex.needsUpdate = true;
+  };
+  draw();
+  loadArt(cardId, draw);
+  c = { canvas, tex };
+  standeeCache.set(cardId, c);
+  return c;
+}
+
 // cached full-size canvas + THREE texture
 export function getCard(cardId, golden = false) {
   const key = cardId + (golden ? ':g' : '');

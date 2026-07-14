@@ -2,7 +2,7 @@
 // highlights, picking. Pure presentation — match.js drives it from engine events.
 
 import * as THREE from 'three';
-import { getCard, getBoardCard, getCardBack, CARD_W, CARD_H } from './cardtex.js?v=24';
+import { getCard, getBoardCard, getCardBack, getStandee, CARD_W, CARD_H } from './cardtex.js?v=24';
 import { REALMS, cardById } from '../sim/cards.js?v=24';
 import { FX } from './fx.js?v=24';
 
@@ -361,38 +361,9 @@ export class BoardScene {
     floor.position.y = -1.55;
     this.scene.add(floor);
 
-    // ── mid-board DIVIDER: a raised, glowing 3D ridge cleanly separating the
-    // two halves (the old hairline glow read as part of the playmat art)
-    const ridgeMat = new THREE.MeshStandardMaterial({
-      color: 0x4a3358, roughness: 0.55, metalness: 0.55,
-      emissive: 0x2a1440, emissiveIntensity: 0.7,
-    });
-    const ridge = new THREE.Mesh(new THREE.BoxGeometry(21.4, 0.09, 0.3), ridgeMat);
-    ridge.position.set(0, 0.005, -0.08);
-    this.scene.add(ridge);
-    const ridgeGlow = new THREE.Mesh(
-      new THREE.PlaneGeometry(21.0, 0.17),
-      new THREE.MeshBasicMaterial({ color: 0xa06cff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }),
-    );
-    ridgeGlow.rotation.x = -Math.PI / 2;
-    ridgeGlow.position.set(0, 0.056, -0.08);
-    this.scene.add(ridgeGlow);
-    this._ridgeGlow = ridgeGlow; // breathes in update()
-    // zone TRAYS: soft glowing outlines around each creature row so "their
-    // half / my half" reads at a glance — purple for the foe, gold for me
-    const mkTray = (z, color) => {
-      const shp = roundRectShape(16.9, 2.55, 0.5);
-      shp.holes.push(roundRectShape(16.62, 2.28, 0.42));
-      const m = new THREE.Mesh(
-        new THREE.ShapeGeometry(shp),
-        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }),
-      );
-      m.rotation.x = -Math.PI / 2;
-      m.position.set(0, 0.012, z);
-      this.scene.add(m);
-    };
-    mkTray(LAYOUT.enemyBoardZ, 0xb45cff);
-    mkTray(LAYOUT.playerBoardZ, 0xd4952b);
+    // (NO center divider / zone trays — owner: the purple mid line read as
+    // clutter; the two halves are conveyed by hero positions + the YOU/ENEMY
+    // recent-play strips instead.)
 
     // hero plates — compact discs that stay clear of the card rows
     this.heroMeshes = [];
@@ -466,7 +437,8 @@ export class BoardScene {
     }
 
     // 3D minis for legendaries (lazy-loaded GLBs — zero upfront payload)
-    this.minis = new Map();       // unit iid -> {group, mixer, offset}
+    this.minis = new Map();       // unit iid -> {group, mixer, offset}  (legendary/epic 3D)
+    this.standees = new Map();    // unit iid -> {grp, fig, ...}  (art figures for the rest)
     this._miniBuf = new Map();    // file -> Promise<ArrayBuffer>
     this._gltfLoaderP = null;
 
@@ -553,6 +525,7 @@ export class BoardScene {
     this.tweens.killOf(e.group.rotation);
     this.fx.clearEmitter('aura' + iid);
     this.despawnMini(iid);
+    this.despawnStandee(iid);
     // scene-space nameplate (orbs + badges) lives outside e.group — remove it
     if (e.chips) { e.chips.atk.remove(); e.chips.hp.remove(); }
     for (const b of e.badges) b.remove();
@@ -809,6 +782,7 @@ export class BoardScene {
           e.group.position.set(LAYOUT.deckX, 0.3, dz);
         }
         e.zone = 'hand'; e.side = rel; e.cardId = h.card;
+        this.despawnStandee(h.iid); // bounced back to hand → drop its board figure
         e.li = i; e.ln = pl.hand.length; // remembered so _retiltCards can re-face the camera
         // enemy hand shows card BACKS
         const face = rel === 0 ? getCard(h.card).tex : this.backs[1].tex;
@@ -846,10 +820,12 @@ export class BoardScene {
           const el = ELEMENT_FX[def.realm] || ELEMENT_FX.neutral;
           this.fx.setEmitter('aura' + u.iid, e.group.position, el.color, el.rate, el.style);
         }
-        // lazy 3D mini — any mapped card (legendaries + curated epics).
-        // Legendaries idle-animate (grander); epics stay static (tier).
-        const mspec = this.use3d !== false ? MINI_MAP[u.card] : null; // grunts: flat card only
-        if (mspec && !this.minis.has(u.iid)) this.spawnMini(u.iid, mspec, rel, def.rarity === 'legendary');
+        // 3D presence for every creature: legendaries/epics get a full Meshy
+        // mini; everyone else gets an art STANDEE that stands up from the card —
+        // so no creature is just a flat rectangle on the board.
+        const mspec = this.use3d !== false ? MINI_MAP[u.card] : null;
+        if (mspec) { if (!this.minis.has(u.iid)) this.spawnMini(u.iid, mspec, rel, def.rarity === 'legendary'); }
+        else if (this.use3d !== false && def.type === 'creature' && !this.standees.has(u.iid)) this.spawnStandee(u.iid, u.card, rel);
         // exhausted creatures rest dimmed; summon-sick get a lighter sheen
         e.mesh.material.color.setScalar(u.tapped ? 0.48 : u.sick ? 0.82 : 1);
       });
@@ -990,6 +966,46 @@ export class BoardScene {
     this.tweens.add(tmp.mesh.material, { opacity: 0 }, 0.26);
     await this.tweens.add(tmp.group.scale, { x: 0.4, y: 0.4, z: 0.4 }, 0.26, 'sineIn');
     this.removeEntry(tmp.iid);
+  }
+
+  // ── board STANDEE: an upright art figure that stands up FROM a creature's
+  // flat card (the card stays as the base plate + stats + hover). Every minion
+  // without a 3D mini gets one, so they all "pop out" of the board.
+  spawnStandee(iid, cardId, side) {
+    if (this.standees.has(iid)) return;
+    const entry = this.cards.get(iid);
+    if (!entry) return;
+    const { tex } = getStandee(cardId);
+    const grp = new THREE.Group();
+    const SW = 1.25, SH = SW * (486 / 384);
+    const fig = new THREE.Mesh(
+      new THREE.PlaneGeometry(SW, SH),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, alphaTest: 0.03 }),
+    );
+    fig.position.y = SH * 0.5 + 0.04; // base on the table
+    fig.renderOrder = 6;
+    grp.add(fig);
+    // soft contact shadow so the figure is grounded, not floating
+    const shadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(SW * 1.15, SW * 0.5),
+      new THREE.MeshBasicMaterial({ map: miniGlowTex(), color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false }),
+    );
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.02;
+    grp.add(shadow);
+    grp.position.copy(entry.group.position);
+    grp.scale.setScalar(0.01);
+    this.scene.add(grp);
+    this.standees.set(iid, { grp, fig, side, seed: (iid * 1.7) % 6.28 });
+    this.tweens.add(grp.scale, { x: 1, y: 1, z: 1 }, 0.34, 'backOut');
+  }
+
+  despawnStandee(iid) {
+    const s = this.standees.get(iid);
+    this.standees.delete(iid);
+    if (!s) return;
+    this.scene.remove(s.grp);
+    s.grp.traverse((o) => { o.geometry?.dispose?.(); if (o.material && o.material !== this._sharedGlow) o.material.dispose?.(); });
   }
 
   playFxAt(pos, kind, realmColor) {
@@ -1375,6 +1391,21 @@ export class BoardScene {
         }
       }
     }
+    // standees follow their card, face the camera (yaw only → stay upright), and
+    // gently bob so they read as living figures standing on the board
+    for (const [iid, s] of this.standees) {
+      const e = this.cards.get(iid);
+      if (!e) continue;
+      const p = e.group.position;
+      s.grp.position.x += (p.x - s.grp.position.x) * Math.min(1, dt * 12);
+      s.grp.position.z += (p.z - s.grp.position.z) * Math.min(1, dt * 12);
+      s.grp.rotation.y = Math.atan2(this.camera.position.x - s.grp.position.x, this.camera.position.z - s.grp.position.z);
+      s.fig.position.y = s.fig.geometry.parameters.height * 0.5 + 0.04 + (Math.sin(this.time * 1.5 + s.seed) + 1) * 0.02;
+      // fade the figure out while its own card is hover-enlarged (card takes over)
+      const target = e.boardHover ? 0 : 1;
+      s.fig.material.opacity += (target - s.fig.material.opacity) * Math.min(1, dt * 12);
+      s.fig.visible = s.fig.material.opacity > 0.02;
+    }
     // hero characters: gentle idle sway around their facing; feet stay planted.
     // when hit, they recoil (stagger back + pitch + shudder) and flash red.
     if (this.heroModels) for (const hm of this.heroModels) if (hm) {
@@ -1404,7 +1435,6 @@ export class BoardScene {
       const ro = 0.22 + (Math.sin(this.time * 1.4) + 1) * 0.07;
       for (const s of this.runeStrips) s.material.opacity = ro;
     }
-    if (this._ridgeGlow) this._ridgeGlow.material.opacity = 0.42 + (Math.sin(this.time * 1.1) + 1) * 0.1;
     this._brazierAcc = (this._brazierAcc || 0) + dt;
     if (this._brazierAcc > 0.09) {
       this._brazierAcc = 0;
