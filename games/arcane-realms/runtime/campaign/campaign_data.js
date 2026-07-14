@@ -399,6 +399,12 @@ export const SELL_VALUES = { common: 5, uncommon: 10, rare: 20, epic: 45, legend
 export const GOLD_CHANCE = { common: 0.04, uncommon: 0.04, rare: 0.06, epic: 0.08, legendary: 0.10, token: 0 };
 export const GOLDEN_SELL = { common: 10, uncommon: 20, rare: 60, epic: 200, legendary: 600, token: 0 };
 export const GOLDEN_PITY = 20; // guaranteed a golden at least this often
+// HOLO — a SECOND rare foil variant (interactive rainbow) alongside golden; a
+// touch rarer + worth more, and mutually exclusive with golden per card, so
+// collectors chase both a GOLD and a HOLO of every card.
+export const HOLO_CHANCE = { common: 0.02, uncommon: 0.022, rare: 0.035, epic: 0.05, legendary: 0.07, token: 0 };
+export const HOLO_SELL = { common: 15, uncommon: 30, rare: 85, epic: 260, legendary: 800, token: 0 };
+export const HOLO_PITY = 35;
 
 export function allBattles() {
   return CHAPTERS.flatMap((c) => c.battles.map((b) => ({ ...b, chapter: c })));

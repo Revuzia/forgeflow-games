@@ -851,6 +851,16 @@ section('aetherbound (dual-realm expansion)');
   for (const id in gstore.data.golden) if (gstore.data.golden[id] > (gstore.data.owned[id] || 0)) invOk = false;
   ok(sawGolden, 'golden cards drop from packs');
   ok(invOk, 'golden copies never exceed total owned copies');
+  // HOLO — the second collectible foil tier (rarer than golden, mutually exclusive)
+  ok(P.holoSellValue('legendary') > P.sellValue('legendary'), 'holo cards sell for more than normal');
+  let sawHolo = false, holoInv = true, mutexOk = true;
+  const hstore = { data: { record: {} }, save() { /* noop */ } }; P.initProgress(hstore);
+  for (let i = 0; i < 120; i++) { const r = P.rollPack(hstore, 5, EXPANSION2_IDS); for (const c of r) { if (c.holo) sawHolo = true; if (c.holo && c.golden) mutexOk = false; } }
+  for (const id in hstore.data.holo) if (hstore.data.holo[id] > (hstore.data.owned[id] || 0)) holoInv = false;
+  ok(sawHolo, 'holo cards drop from packs');
+  ok(holoInv, 'holo copies never exceed total owned copies');
+  ok(mutexOk, 'a card is never both golden AND holo');
+  ok(!P.anyHolo(gstore, '__nope__'), 'anyHolo false for unpulled cards');
   // gold shop for card backs
   const buyableId = Object.keys(CBI).find((id) => CBI[id].price);
   ok(buyableId, 'the card-back gold shop has priced entries');

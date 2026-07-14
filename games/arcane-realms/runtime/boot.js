@@ -13,7 +13,7 @@ import { chooseAction, runAiTurn } from './sim/ai.js?v=24';
 import { CampaignUI } from './view/campaign_ui.js?v=24';
 import { openPackReveal } from './view/packreveal.js?v=24';
 import { CARDBACK_INFO } from './campaign/campaign_data.js?v=24';
-import { initProgress, isOwned, ownedCount, copiesOf, sellCard, sellValue, anyGolden, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=24';
+import { initProgress, isOwned, ownedCount, copiesOf, sellCard, sellValue, anyGolden, anyHolo, grantBattleRewards, checkAchievements, applyBattleMods } from './campaign/progression.js?v=24';
 
 const container = document.getElementById('game-container');
 const splash = document.getElementById('boot-splash');
@@ -70,6 +70,7 @@ async function boot() {
   ui.isOwnedFn = (id) => isOwned(Store, id);
   ui.copiesOf = (id) => copiesOf(Store, id);
   ui.anyGolden = (id) => anyGolden(Store, id);
+  ui.anyHolo = (id) => anyHolo(Store, id);
   ui.sellCard = (id) => sellCard(Store, id);
   ui.sellValueOf = (rarity) => sellValue(rarity);
   ui.onGoldChange = () => campaignUI.refreshGold();

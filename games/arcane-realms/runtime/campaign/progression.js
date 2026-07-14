@@ -4,11 +4,12 @@
 
 import { CARDS, COLLECTIBLE, EXPANSION_IDS, EXPANSION2_IDS, cardById } from '../sim/cards.js?v=24';
 import { STARTER_DECKS } from '../sim/decks.js?v=24';
-import { CHAPTERS, ACHIEVEMENTS, CARDBACK_INFO, PACK_COST, PACK_SIZE, PACK_WEIGHTS, DUPE_FACTOR, SELL_VALUES, GOLD_CHANCE, GOLDEN_SELL, GOLDEN_PITY, allBattles } from './campaign_data.js?v=24';
+import { CHAPTERS, ACHIEVEMENTS, CARDBACK_INFO, PACK_COST, PACK_SIZE, PACK_WEIGHTS, DUPE_FACTOR, SELL_VALUES, GOLD_CHANCE, GOLDEN_SELL, GOLDEN_PITY, HOLO_CHANCE, HOLO_SELL, HOLO_PITY, allBattles } from './campaign_data.js?v=24';
 
 export { PACK_COST, PACK_SIZE, SELL_VALUES };
 export function sellValue(rarity) { return SELL_VALUES[rarity] ?? 5; }
 export function goldenSellValue(rarity) { return GOLDEN_SELL[rarity] ?? 10; }
+export function holoSellValue(rarity) { return HOLO_SELL[rarity] ?? 15; }
 
 // ── setup / migration ────────────────────────────────────────────
 export function initProgress(store) {
@@ -23,6 +24,8 @@ export function initProgress(store) {
   for (const k in d.owned) if (d.owned[k] === true) d.owned[k] = 1;
   d.golden = d.golden || {};                // cardId -> number of foil (golden) copies
   d.packsSinceGolden = d.packsSinceGolden || 0;
+  d.holo = d.holo || {};                    // cardId -> number of holo (rainbow) copies
+  d.packsSinceHolo = d.packsSinceHolo || 0;
   d.gold = d.gold ?? 0;
   d.battlesWon = d.battlesWon || {};        // battleId -> winCount
   d.achievements = d.achievements || {};    // achId -> true (claimed)
@@ -42,6 +45,8 @@ export function copiesOf(store, cardId) {
 }
 export function goldenCount(store, cardId) { return (store.data.golden && store.data.golden[cardId]) || 0; }
 export function anyGolden(store, cardId) { return goldenCount(store, cardId) > 0; }
+export function holoCount(store, cardId) { return (store.data.holo && store.data.holo[cardId]) || 0; }
+export function anyHolo(store, cardId) { return holoCount(store, cardId) > 0; }
 export function ownedCount(store) {
   return Object.keys(store.data.owned).length;
 }
@@ -145,7 +150,10 @@ export function rollPack(store, count = PACK_SIZE, idSet = EXPANSION_IDS) {
     d.owned[pick.id] = copiesOf(store, pick.id) + 1;
     const golden = Math.random() < (GOLD_CHANCE[pick.rarity] || 0); // foil roll, per-card
     if (golden) d.golden[pick.id] = (d.golden[pick.id] || 0) + 1;
-    out.push({ id: pick.id, isNew, rarity: pick.rarity, golden });
+    // holo is a SEPARATE variant — only roll it if the card didn't come up golden
+    const holo = !golden && Math.random() < (HOLO_CHANCE[pick.rarity] || 0);
+    if (holo) d.holo[pick.id] = (d.holo[pick.id] || 0) + 1;
+    out.push({ id: pick.id, isNew, rarity: pick.rarity, golden, holo });
   }
   store.save();
   return out;
@@ -161,16 +169,24 @@ export function buyPack(store, which = 'arcane') {
   if (!unowned.length) return { ok: false, reason: 'Collection complete — no new cards to find!' };
   d.gold -= PACK_COST;
   const cards = rollPack(store, PACK_SIZE, idSet);
+  const ord = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 };
   // golden pity: guarantee a golden at least every GOLDEN_PITY packs
   if (cards.some((c) => c.golden)) d.packsSinceGolden = 0;
   else if ((d.packsSinceGolden = (d.packsSinceGolden || 0) + 1) >= GOLDEN_PITY) {
-    const ord = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 };
     let best = cards[0];
     for (const c of cards) if ((ord[c.rarity] || 0) >= (ord[best.rarity] || 0)) best = c;
-    if (best) { best.golden = true; d.golden[best.id] = (d.golden[best.id] || 0) + 1; }
+    if (best) { best.golden = true; best.holo = false; d.golden[best.id] = (d.golden[best.id] || 0) + 1; }
     d.packsSinceGolden = 0;
   }
-  const cardsOut = cards.map((c) => ({ ...c, dupGold: c.isNew ? 0 : (c.golden ? goldenSellValue(c.rarity) : sellValue(c.rarity)) }));
+  // holo pity: guarantee a holo at least every HOLO_PITY packs (on a non-golden card)
+  if (cards.some((c) => c.holo)) d.packsSinceHolo = 0;
+  else if ((d.packsSinceHolo = (d.packsSinceHolo || 0) + 1) >= HOLO_PITY) {
+    let best = null;
+    for (const c of cards) if (!c.golden && (!best || (ord[c.rarity] || 0) >= (ord[best.rarity] || 0))) best = c;
+    if (best) { best.holo = true; d.holo[best.id] = (d.holo[best.id] || 0) + 1; }
+    d.packsSinceHolo = 0;
+  }
+  const cardsOut = cards.map((c) => ({ ...c, dupGold: c.isNew ? 0 : (c.golden ? goldenSellValue(c.rarity) : c.holo ? holoSellValue(c.rarity) : sellValue(c.rarity)) }));
   store.save();
   return { ok: true, cards: cardsOut };
 }
