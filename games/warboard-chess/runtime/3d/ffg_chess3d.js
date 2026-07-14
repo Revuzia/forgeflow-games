@@ -132,7 +132,7 @@ register3d("chess3d", async (kernel, content) => {
   kernel.renderer.toneMappingExposure = theme.exposure * 0.98;   // brightened for the calm regular-chess look (was 0.74 → pieces read too dark)
   // SSAO was the main chess choppiness — a heavy full-screen depth pass for little gain
   // on a clean board. Drop it; keep cinematic bloom + SMAA (cheap) for the glow + edges.
-  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.26, radius: 0.6, threshold: 0.88, ssao: false, gtao: false, smaa: true });
+  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.26, radius: 0.6, threshold: 0.88, ssao: true, ssaoRadius: 0.9, gtao: false, smaa: true });
 
   // distant horizon ring (a big inverted cone of theme colour) so the board isn't
   // floating in a void — recedes into the fog. Cheap, single mesh.
@@ -429,7 +429,7 @@ register3d("chess3d", async (kernel, content) => {
     m.scale.setScalar(k); m.position.set(-0.02 * T, 0.30 * H, 0);   // sit on the base, balanced slightly back
     return m;
   }
-  function buildChessPiece(type, side) {
+  function buildProceduralPiece(type, side) {
     const mat = PIECE_MAT[side] || PIECE_MAT.w;
     const grp = new THREE.Group();
     const H = (PIECE_H[type] || 1) * T, R = T * 0.44;
@@ -451,6 +451,39 @@ register3d("chess3d", async (kernel, content) => {
       grp.add(_knightHead(mat, H));
     }
     grp.userData.pieceH = H;
+    return grp;
+  }
+
+  // ── ornate 3D piece models (Meshy image-to-3d, optimized ~0.5MB each) + procedural fallback ──
+  const PIECE_GLB = {};
+  let _modelsPromise = null;
+  function loadPieceModels() {
+    if (_modelsPromise) return _modelsPromise;
+    const names = { P: "pawn", N: "knight", B: "bishop", R: "rook", Q: "queen", K: "king" };
+    const base = new URL("../../assets/pieces/", import.meta.url).href;
+    _modelsPromise = Promise.all(Object.entries(names).map(([t, name]) =>
+      kernel.loader.loadAsync(base + name + ".glb")
+        .then((gltf) => { PIECE_GLB[t] = gltf.scene; })
+        .catch((e) => { console.warn("[chess] piece model " + name + " failed, using procedural:", e && e.message); })));
+    return _modelsPromise;
+  }
+  function buildChessPiece(type, side) {
+    const src = PIECE_GLB[type];
+    if (!src) return buildProceduralPiece(type, side);   // fallback if a model failed to load
+    const inner = src.clone(true);
+    let box = new THREE.Box3().setFromObject(inner);
+    const H = (PIECE_H[type] || 1) * T, sy = Math.max(1e-4, box.getSize(new THREE.Vector3()).y);
+    inner.scale.setScalar(H / sy); inner.updateMatrixWorld(true);
+    box = new THREE.Box3().setFromObject(inner);
+    const c = box.getCenter(new THREE.Vector3());
+    inner.position.set(-c.x, -box.min.y, -c.z);          // centre x/z, base at local y=0
+    const dark = side === "b";
+    inner.traverse((o) => {
+      if (!o.isMesh) return;
+      o.castShadow = true; o.receiveShadow = true; o.material = o.material.clone(); o.material.envMapIntensity = 0.85;
+      if (dark) { o.material.map = null; o.material.color = new THREE.Color(0x2b2531); o.material.metalness = 0.18; o.material.roughness = 0.42; if (o.material.emissive) o.material.emissive.setHex(0x070608); }
+    });
+    const grp = new THREE.Group(); grp.add(inner); grp.userData.pieceH = H; grp.userData.glb = true;
     return grp;
   }
 
@@ -488,7 +521,11 @@ register3d("chess3d", async (kernel, content) => {
   // radially symmetric so their rotation is irrelevant. White knight faces +z (up
   // the board toward black), black faces -z. Head is modelled with the muzzle at +x,
   // so +z needs a -90° yaw.
-  function faceForward(v) { if (!v.piece) return; v.piece.rotation.y = (v.type === "N") ? (v.side === "w" ? -Math.PI / 2 : Math.PI / 2) : 0; }
+  function faceForward(v) {
+    if (!v.piece) return;
+    if (v.piece.userData.glb) { v.piece.rotation.y = (v.side === "w" ? 0 : Math.PI) + (v.type === "N" ? Math.PI / 2 : 0); }
+    else { v.piece.rotation.y = (v.type === "N") ? (v.side === "w" ? -Math.PI / 2 : Math.PI / 2) : 0; }
+  }
   function faceToward(v, tx, ty) { /* pieces glide without turning in regular chess; knight keeps its forward facing */ }
   function anim(v, intent, opts) { if (v && v.char && v.clips && v.clips[intent]) v.char.play(v.clips[intent], opts); }   // inert now (procedural pieces carry no clips) but kept so callers don't throw
 
@@ -522,8 +559,9 @@ register3d("chess3d", async (kernel, content) => {
 
   function sfx(name, vol) { const u = content.sfx && content.sfx[name]; if (u) kernel.playSound(u, vol == null ? 0.55 : vol); }
 
-  function buildGame() {
+  async function buildGame() {
     sim = new Chess({ allowCastling: true, allowEnPassant: true });
+    await loadPieceModels();
     // spawn a view for every piece on the board, recording its id by square
     const tasks = [];
     for (let s = 0; s < 64; s++) {
@@ -912,8 +950,8 @@ register3d("chess3d", async (kernel, content) => {
   // start behind the player's back rank looking up the board
   // Proper chess look-DOWN (~58°) so the whole board + grid read — not the old
   // near-horizontal angle that foreshortened it. Stable (no auto-rotate in play).
-  const startZ = playerSide === "w" ? -span * 0.72 : span * 0.72;
-  kernel.camera.position.set(0, span * 1.18, startZ);
+  const startZ = playerSide === "w" ? -span * 1.0 : span * 1.0;   // pulled back so BOTH back ranks fit (ornate pieces are tall)
+  kernel.camera.position.set(0, span * 1.32, startZ);
   const orbit = kernel.enableOrbit({
     target: { x: 0, y: 0, z: 0 },
     minDistance: T * 6, maxDistance: span * 2.4,
@@ -957,7 +995,7 @@ register3d("chess3d", async (kernel, content) => {
     // ALWAYS start square-on. The menu slowly auto-rotates the camera, so on Play we
     // reset to the straight look STRAIGHT up the board — otherwise the board "starts
     // tilted" at whatever azimuth the menu spin happened to reach.
-    kernel.camera.position.set(0, span * 1.18, startZ);
+    kernel.camera.position.set(0, span * 1.32, startZ);
     if (orbit) { orbit.target.set(0, 0, 0); orbit.update(); }
     // gentle classical piano. The ?mode=ai launcher deep-link auto-starts WITHOUT a
     // user gesture on this page, so the AudioContext is suspended and start() can't

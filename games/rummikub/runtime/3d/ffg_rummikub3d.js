@@ -45,11 +45,15 @@ function makeSky(top, bot) {
   return tex;
 }
 
+// ── the premium casino-table look: one warm environment, a lit felt pooling out of the dark ──
 const THEME = {
-  sky_top: 0x39433f, sky_bot: 0x20272a,
-  felt: 0x1f6b46, feltEdge: 0x6b4a2e, rim: 0x5a3a24,
-  fog: 0x232a29, fogD: 0.009,
-  key: 0xfff2df, keyI: 1.3, hemiSky: 0xbfe0d2, hemiGround: 0x3a2f22, hemiI: 0.7, ambI: 0.52, exposure: 1.03,
+  sky_top: 0x241a12, sky_bot: 0x0e0905,               // warm dark casino ambiance — makes the lit table pop
+  felt: 0x1a7d43, feltEdge: 0x115730, frame: 0x3a2414, ring: 0x241610, ringRough: 0.5,   // rich poker-green + dark wood
+  fog: 0x120c07, fogD: 0.0055,
+  key: 0xffe9c4, keyI: 2.4, hemiSky: 0x705e46, hemiGround: 0x241a12, hemiI: 0.5, ambI: 0.24, exposure: 1.06,
+  rim: 0xbfd2ff, rimI: 0.55, env: 0.4,                // cool back-rim light: edge sheen + separation
+  spot: 0xfff1d6, spotI: 6.0,                         // warm overhead spotlight pooling on the felt
+  ivory: 0xf3ecd6, gold: 0xd8b348,                    // bright bone tiles, rich gold trim
 };
 
 // small seedable RNG so __test / autoResolve are reproducible
@@ -65,38 +69,85 @@ function mulberry32(a) {
 register3d("rummikub3d", async (kernel, content) => {
   const scene = kernel.scene;
   const music = createClassicalMusic(0.14);
+  const maxAniso = (kernel.renderer.capabilities && kernel.renderer.capabilities.getMaxAnisotropy) ? kernel.renderer.capabilities.getMaxAnisotropy() : 1;
 
   // ── environment ──
   scene.background = makeSky(THEME.sky_top, THEME.sky_bot);
-  if (kernel.setEnvironment) kernel.setEnvironment(scene.background, 0.5);
+  if (kernel.setEnvironment) kernel.setEnvironment(scene.background, THEME.env);
   scene.fog = new THREE.FogExp2(THEME.fog, THEME.fogD);
   if (kernel.sun) { kernel.sun.color = new THREE.Color(THEME.key); kernel.sun.intensity = THEME.keyI; kernel.sun.position.set(TABLE_W * 0.3, TABLE_D * 1.2, TABLE_D * 0.5); }
   scene.add(new THREE.HemisphereLight(THEME.hemiSky, THEME.hemiGround, THEME.hemiI));
   scene.add(new THREE.AmbientLight(0xffffff, THEME.ambI));
+  { const rim = new THREE.DirectionalLight(THEME.rim, THEME.rimI); rim.position.set(-TABLE_W * 0.42, TABLE_D * 0.85, -TABLE_D * 0.95); scene.add(rim); }  // cool back-rim: edge sheen + separation
+  { const spot = new THREE.SpotLight(THEME.spot, THEME.spotI, 0, Math.PI * 0.33, 0.62, 1.1); spot.position.set(0, 27, 3); spot.target.position.set(0, 0, 0.4); scene.add(spot.target); scene.add(spot); }  // warm spotlight pooling on the felt — the casino-table look
   kernel.renderer.toneMappingExposure = THEME.exposure;
-  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.12, radius: 0.5, threshold: 0.92 });
+  // AO (contact shadows) grounds the tiles on the felt — the biggest not-flat-lit jump
+  if (kernel.enableBloom) kernel.enableBloom({ ssao: true, ssaoRadius: 0.9, ssaoMin: 0.002, ssaoMax: 0.07, strength: 0.2, radius: 0.6, threshold: 0.86 });
+
+  // ── procedural surface textures: fabric weave + wood grain = tactile, not flat-colored ──
+  function feltTex() {
+    const s = 512, cv = document.createElement("canvas"); cv.width = cv.height = s; const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#" + THEME.felt.toString(16).padStart(6, "0"); ctx.fillRect(0, 0, s, s);
+    const img = ctx.getImageData(0, 0, s, s), d = img.data;
+    for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 26; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+    ctx.putImageData(img, 0, 0);
+    ctx.globalAlpha = 0.06; ctx.strokeStyle = "#000";
+    for (let x = 0; x < s; x += 3) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, s); ctx.stroke(); }
+    ctx.globalAlpha = 0.045; ctx.strokeStyle = "#dfeee6";
+    for (let y = 0; y < s; y += 3) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(s, y); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(12, 10); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; return t;
+  }
+  function woodTex(base) {
+    const s = 512, cv = document.createElement("canvas"); cv.width = cv.height = s; const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#" + base.toString(16).padStart(6, "0"); ctx.fillRect(0, 0, s, s);
+    for (let i = 0; i < 90; i++) {
+      const y = Math.random() * s, dark = Math.random() < 0.55;
+      ctx.strokeStyle = dark ? "rgba(0,0,0,0.15)" : "rgba(255,228,196,0.07)"; ctx.lineWidth = 0.6 + Math.random() * 2.6;
+      ctx.beginPath(); ctx.moveTo(0, y);
+      for (let x = 0; x <= s; x += 14) ctx.lineTo(x, y + Math.sin(x * 0.018 + i) * 3.5 + (Math.random() - 0.5) * 2.4);
+      ctx.stroke();
+    }
+    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 3); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; return t;
+  }
 
   // ── table ──
   (function buildTable() {
-    const rim = new THREE.Mesh(new THREE.BoxGeometry(TABLE_W + 3.2, 1.0, TABLE_D + 3.2),
-      new THREE.MeshStandardMaterial({ color: THEME.rim, roughness: 0.72, metalness: 0.12 }));
-    rim.position.set(0, -0.5, 0); rim.receiveShadow = true; scene.add(rim);
+    // deep wood plinth — grounds the table with real depth
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(TABLE_W + 4.0, 1.4, TABLE_D + 4.0),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: woodTex(shade(THEME.frame, -0.25)), roughness: THEME.ringRough, metalness: 0.12, envMapIntensity: 0.3 }));
+    plinth.position.set(0, -1.0, 0); plinth.receiveShadow = true; scene.add(plinth);
+    // dark-wood frame ring around the felt
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(TABLE_W + 2.2, 0.6, TABLE_D + 2.2),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: woodTex(THEME.frame), roughness: THEME.ringRough * 0.68, metalness: 0.2, envMapIntensity: 0.45 }));
+    frame.position.set(0, -0.2, 0); frame.receiveShadow = true; scene.add(frame);
+    // rich green felt play surface
     const felt = new THREE.Mesh(new THREE.BoxGeometry(TABLE_W, 0.5, TABLE_D),
-      new THREE.MeshStandardMaterial({ color: THEME.felt, roughness: 0.96, metalness: 0.0, emissive: new THREE.Color(THEME.felt).multiplyScalar(0.12) }));
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: feltTex(), emissive: new THREE.Color(THEME.felt).multiplyScalar(0.05), roughness: 0.78, metalness: 0.0, envMapIntensity: 0.3 }));
     felt.position.set(0, -0.02, 0); felt.receiveShadow = true; scene.add(felt);
-    // player rack tray (a warm wooden ledge under the hand)
+    // player rack tray (a dark-wood ledge under the hand) — position/size unchanged
     const tray = new THREE.Mesh(new THREE.BoxGeometry(TABLE_W - 4, 0.5, TD + 1.2),
-      new THREE.MeshStandardMaterial({ color: shade(THEME.rim, 0.08), roughness: 0.6, metalness: 0.15 }));
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: woodTex(shade(THEME.frame, 0.06)), roughness: 0.6, metalness: 0.15, envMapIntensity: 0.35 }));
     tray.position.set(0, 0.06, RACK_Z + 0.2); tray.receiveShadow = true; scene.add(tray);
     const lip = new THREE.Mesh(new THREE.BoxGeometry(TABLE_W - 4, 0.5, 0.35),
-      new THREE.MeshStandardMaterial({ color: shade(THEME.rim, -0.1), roughness: 0.55, metalness: 0.2 }));
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: woodTex(shade(THEME.frame, -0.12)), roughness: 0.55, metalness: 0.2, envMapIntensity: 0.4 }));
     lip.position.set(0, 0.28, RACK_Z + (TD + 1.2) / 2); scene.add(lip);
+    // warm wooden floor beneath the table — grounds the scene, turns the dead void into a room receding into fog
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(160, 160),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: woodTex(0x241811), roughness: 0.82, metalness: 0.0, envMapIntensity: 0.2 }));
+    floor.rotation.x = -Math.PI / 2; floor.position.set(0, -1.5, 0); floor.receiveShadow = true; scene.add(floor);
+    // gold inlaid border framing the play area — premium casino trim that glints under the spotlight
+    const goldMat = new THREE.MeshStandardMaterial({ color: THEME.gold, roughness: 0.26, metalness: 0.92, envMapIntensity: 1.1 });
+    const iw = TABLE_W - 1.8, idp = TABLE_D - 1.8, gt = 0.2;
+    for (const [w, dp, x, z] of [[iw, gt, 0, idp / 2], [iw, gt, 0, -idp / 2], [gt, idp + gt, iw / 2, 0], [gt, idp + gt, -iw / 2, 0]]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(w, 0.06, dp), goldMat); bar.position.set(x, 0.25, z); bar.castShadow = true; scene.add(bar);
+    }
   })();
 
   // ── shared tile resources ──
   const bodyGeo = new THREE.BoxGeometry(TW, TTH, TD);
   const faceGeo = new THREE.PlaneGeometry(TW * 0.92, TD * 0.92);
-  const IVORY = new THREE.MeshStandardMaterial({ color: 0xf3ead2, roughness: 0.55, metalness: 0.04, envMapIntensity: 0.5 });
+  const IVORY = new THREE.MeshStandardMaterial({ color: THEME.ivory, roughness: 0.2, metalness: 0.02, envMapIntensity: 0.6 });
   const _faceMat = {};   // key -> MeshBasicMaterial (cached; crisp, always legible)
   function faceKey(t) { return t.joker ? "J" : (t.c + "-" + t.n); }
   function faceTexture(t) {
@@ -117,11 +168,11 @@ register3d("rummikub3d", async (kernel, content) => {
       // suit dot
       x.beginPath(); x.arc(64, 138, 11, 0, Math.PI * 2); x.fillStyle = col; x.fill();
     }
-    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
     return tex;
   }
   function roundRect(x, X, Y, W, H, r) { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + W, Y, X + W, Y + H, r); x.arcTo(X + W, Y + H, X, Y + H, r); x.arcTo(X, Y + H, X, Y, r); x.arcTo(X, Y, X + W, Y, r); x.closePath(); }
-  function faceMat(t) { const k = faceKey(t); if (!_faceMat[k]) _faceMat[k] = new THREE.MeshBasicMaterial({ map: faceTexture(t) }); return _faceMat[k]; }
+  function faceMat(t) { const k = faceKey(t); if (!_faceMat[k]) _faceMat[k] = new THREE.MeshStandardMaterial({ map: faceTexture(t), roughness: 0.22, metalness: 0.02, envMapIntensity: 0.55 }); return _faceMat[k]; }
   let _backMat = null;
   function backMat() {
     if (_backMat) return _backMat;
@@ -130,8 +181,8 @@ register3d("rummikub3d", async (kernel, content) => {
     x.fillStyle = g; roundRect(x, 4, 4, 120, 160, 16); x.fill();
     x.strokeStyle = "rgba(150,190,255,0.35)"; x.lineWidth = 3; roundRect(x, 14, 14, 100, 140, 12); x.stroke();
     x.fillStyle = "rgba(150,190,255,0.55)"; x.font = "bold 40px Georgia, serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText("FF", 64, 84);
-    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-    _backMat = new THREE.MeshBasicMaterial({ map: tex }); return _backMat;
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
+    _backMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.24, metalness: 0.02, envMapIntensity: 0.55 }); return _backMat;
   }
   function makeTile(t, faceUp) {
     const grp = new THREE.Group();

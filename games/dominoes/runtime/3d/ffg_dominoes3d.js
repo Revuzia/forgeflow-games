@@ -38,12 +38,13 @@ function makeSky(top, bot) {
 
 // ── the calm parlour-table look (one warm environment, no themes) ──
 const THEME = {
-  sky_top: 0x2c3a40, sky_bot: 0x141c1e,
-  felt: 0x2f5642, feltEdge: 0x24463a, frame: 0x5a3a24, ring: 0x6b4a2e, ringRough: 0.7,
-  fog: 0x162420, fogD: 0.006,
-  key: 0xfff3df, keyI: 1.7, hemiSky: 0xbfd8cf, hemiGround: 0x33463a, hemiI: 0.85, ambI: 0.58, exposure: 1.18,
-  rim: 0x9fc0ff, rimI: 1.0,
-  ivory: 0xe7dfca, pip: 0x241d17, gold: 0xcaa14e,
+  sky_top: 0x241a12, sky_bot: 0x0e0905,          // warm dark casino ambiance — makes the lit table pop
+  felt: 0x1a8046, feltEdge: 0x115730, frame: 0x3a2414, ring: 0x241610, ringRough: 0.5,   // rich poker-green + dark wood
+  fog: 0x120c07, fogD: 0.0055,
+  key: 0xffe9c4, keyI: 2.4, hemiSky: 0x705e46, hemiGround: 0x241a12, hemiI: 0.5, ambI: 0.24, exposure: 1.06,
+  rim: 0xbfd2ff, rimI: 0.55, env: 0.4,
+  spot: 0xfff1d6, spotI: 6.0,                     // warm overhead spotlight pooling on the table
+  ivory: 0xf3ecd6, pip: 0x110e0a, gold: 0xd8b348, // bright bone, near-black crisp pips, rich gold trim
 };
 
 // tile geometry (world units): a domino is 2:1, laid flat, pips up.
@@ -70,12 +71,13 @@ register3d("dominoes3d", async (kernel, content) => {
 
   // ── environment ──
   scene.background = makeSky(THEME.sky_top, THEME.sky_bot);
-  if (kernel.setEnvironment) kernel.setEnvironment(scene.background, 0.5);
+  if (kernel.setEnvironment) kernel.setEnvironment(scene.background, THEME.env);
   scene.fog = new THREE.FogExp2(THEME.fog, THEME.fogD);
   if (kernel.sun) { kernel.sun.color = new THREE.Color(THEME.key); kernel.sun.intensity = THEME.keyI; kernel.sun.position.set(TABLE_W * 0.25, TABLE_D * 1.4, TABLE_D * 0.55); }
   scene.add(new THREE.HemisphereLight(THEME.hemiSky, THEME.hemiGround, THEME.hemiI));
   scene.add(new THREE.AmbientLight(0xffffff, THEME.ambI));
   { const rim = new THREE.DirectionalLight(THEME.rim, THEME.rimI); rim.position.set(-TABLE_W * 0.42, TABLE_D * 0.85, -TABLE_D * 0.95); scene.add(rim); }  // cool back-rim: edge sheen + separation
+  { const spot = new THREE.SpotLight(THEME.spot, THEME.spotI, 0, Math.PI * 0.33, 0.62, 1.1); spot.position.set(0, 27, 3); spot.target.position.set(0, 0, 0.4); scene.add(spot.target); scene.add(spot); }  // warm spotlight pooling on the felt — the casino-table look
   kernel.renderer.toneMappingExposure = THEME.exposure;
   // AO (contact shadows) grounds the tiles on the felt — the biggest not-flat-lit jump
   if (kernel.enableBloom) kernel.enableBloom({ ssao: true, ssaoRadius: 0.9, ssaoMin: 0.002, ssaoMax: 0.07, strength: 0.2, radius: 0.6, threshold: 0.86 });
@@ -120,11 +122,14 @@ register3d("dominoes3d", async (kernel, content) => {
     felt.position.set(0, -0.02, 0); felt.receiveShadow = true; scene.add(felt);
     // warm wooden floor beneath the table — grounds the scene, turns the dead void into a room receding into fog
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(120, 120),
-      new THREE.MeshStandardMaterial({ color: 0x2a1c12, roughness: 0.92, metalness: 0.0, envMapIntensity: 0.15 }));
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: woodTex(0x241811), roughness: 0.82, metalness: 0.0, envMapIntensity: 0.2 }));
     floor.rotation.x = -Math.PI / 2; floor.position.set(0, -1.5, 0); floor.receiveShadow = true; scene.add(floor);
-    // subtle inlaid border line on the felt
-    const inlay = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.1, 4), new THREE.MeshBasicMaterial({ visible: false }));
-    scene.add(inlay);
+    // gold inlaid border framing the play area — premium casino trim that glints under the spotlight
+    const goldMat = new THREE.MeshStandardMaterial({ color: THEME.gold, roughness: 0.26, metalness: 0.92, envMapIntensity: 1.1 });
+    const iw = TABLE_W - 2.2, idp = TABLE_D - 2.2, gt = 0.16;
+    for (const [w, dp, x, z] of [[iw, gt, 0, idp / 2], [iw, gt, 0, -idp / 2], [gt, idp + gt, iw / 2, 0], [gt, idp + gt, -iw / 2, 0]]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, dp), goldMat); bar.position.set(x, 0.175, z); bar.castShadow = true; scene.add(bar);
+    }
   })();
 
   // ── tile textures (canvas → crisp pips) ──────────────────────────────────
@@ -179,10 +184,10 @@ register3d("dominoes3d", async (kernel, content) => {
 
   // shared materials + geometry (one geo for all 28 tiles; scale handles fit)
   const boxGeo = new THREE.BoxGeometry(TILE_L, TILE_TH, TILE_W);
-  const ivoryMat = new THREE.MeshStandardMaterial({ color: THEME.ivory, roughness: 0.29, metalness: 0.02, envMapIntensity: 1.0 });
-  const backMat = new THREE.MeshStandardMaterial({ map: backTex(), roughness: 0.36, metalness: 0.02, envMapIntensity: 0.85 });
+  const ivoryMat = new THREE.MeshStandardMaterial({ color: THEME.ivory, roughness: 0.2, metalness: 0.02, envMapIntensity: 0.6 });
+  const backMat = new THREE.MeshStandardMaterial({ map: backTex(), roughness: 0.24, metalness: 0.02, envMapIntensity: 0.55 });
   const _faceMatCache = {};
-  function faceMat(a, b) { const id = tid(a, b); if (!_faceMatCache[id]) _faceMatCache[id] = new THREE.MeshStandardMaterial({ map: faceTex(a, b), roughness: 0.36, metalness: 0.02, envMapIntensity: 0.85 }); return _faceMatCache[id]; }
+  function faceMat(a, b) { const id = tid(a, b); if (!_faceMatCache[id]) _faceMatCache[id] = new THREE.MeshStandardMaterial({ map: faceTex(a, b), roughness: 0.24, metalness: 0.02, envMapIntensity: 0.55 }); return _faceMatCache[id]; }
   function buildTileMesh(a, b) {
     // BoxGeometry material order: [px, nx, py, ny, pz, nz]; +Y (index 2) is the pip face.
     const mats = [ivoryMat, ivoryMat, backMat, ivoryMat, ivoryMat, ivoryMat];

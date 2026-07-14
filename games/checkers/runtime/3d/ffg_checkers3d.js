@@ -32,20 +32,26 @@ function makeSky(top, bot) {
   return tex;
 }
 
-// ── the calm board-room look (one warm environment, no battlefield themes) ──
+// ── the premium casino-table look (warm dark ambiance, gold trim, green felt) ──
 const THEME = {
-  sky_top: 0x3b4454, sky_bot: 0x232830,
-  light_sq: 0xe8d9b5, dark_sq: 0x5a3a24,   // cream vs warm walnut
-  ring: 0x6b4a2e, ringRough: 0.7, fog: 0x262b33, fogD: 0.010,
-  key: 0xfff3df, keyI: 1.35, hemiSky: 0xbfd2e6, hemiGround: 0x4a3a2a, hemiI: 0.7, ambI: 0.5, exposure: 1.02,
+  sky_top: 0x241a12, sky_bot: 0x0e0905,          // warm dark casino ambiance — makes the lit table pop
+  light_sq: 0xe4d8bc, dark_sq: 0x5a3a24,         // warm ivory vs rich walnut
+  felt: 0x1a7d43, feltEdge: 0x115730,            // rich poker-green table surface
+  frame: 0x3a2414, ring: 0x241610, ringRough: 0.5,   // dark wood frame + base
+  fog: 0x120c07, fogD: 0.0055,
+  key: 0xffe9c4, keyI: 2.4, hemiSky: 0x705e46, hemiGround: 0x241a12, hemiI: 0.5, ambI: 0.24, exposure: 1.06,
+  rim: 0xbfd2ff, rimI: 0.55, env: 0.4,
+  spot: 0xfff1d6, spotI: 6.0,                     // warm overhead spotlight pooling on the table
+  gold: 0xd8b348,                                 // rich gold inlay trim
 };
-// piece colours — classic warm red vs charcoal, calm-toned
-const SIDE_COL = { r: 0xb24232, b: 0x2b2830 };
+// piece colours — glossy warm red vs charcoal
+const SIDE_COL = { r: 0xb23b2e, b: 0x26242c };
 const SIDE_NAME = { r: "Red", b: "Black" };
 
 register3d("checkers3d", async (kernel, content) => {
   const scene = kernel.scene;
   const music = createClassicalMusic(0.15);   // gentle procedural piano
+  const maxAniso = (kernel.renderer.capabilities && kernel.renderer.capabilities.getMaxAnisotropy) ? kernel.renderer.capabilities.getMaxAnisotropy() : 1;
 
   const W = BOARD_N * T, Hd = BOARD_N * T;
   const cell = (x, y) => new THREE.Vector3((x + 0.5) * T - W / 2, 0, (y + 0.5) * T - Hd / 2);
@@ -53,26 +59,72 @@ register3d("checkers3d", async (kernel, content) => {
 
   // ── environment ──
   scene.background = makeSky(THEME.sky_top, THEME.sky_bot);
-  if (kernel.setEnvironment) kernel.setEnvironment(scene.background, 0.5);
+  if (kernel.setEnvironment) kernel.setEnvironment(scene.background, THEME.env);
   scene.fog = new THREE.FogExp2(THEME.fog, THEME.fogD);
-  if (kernel.sun) { kernel.sun.color = new THREE.Color(THEME.key); kernel.sun.intensity = THEME.keyI; kernel.sun.position.set(W * 0.4, Hd * 1.15, -Hd * 0.3); }
+  if (kernel.sun) { kernel.sun.color = new THREE.Color(THEME.key); kernel.sun.intensity = THEME.keyI; kernel.sun.position.set(W * 0.25, Hd * 1.4, Hd * 0.55); }
   scene.add(new THREE.HemisphereLight(THEME.hemiSky, THEME.hemiGround, THEME.hemiI));
   scene.add(new THREE.AmbientLight(0xffffff, THEME.ambI));
+  { const rim = new THREE.DirectionalLight(THEME.rim, THEME.rimI); rim.position.set(-W * 0.42, Hd * 0.85, -Hd * 0.95); scene.add(rim); }  // cool back-rim: edge sheen + separation
+  { const spot = new THREE.SpotLight(THEME.spot, THEME.spotI, 0, Math.PI * 0.33, 0.62, 1.1); spot.position.set(0, 27, 3); spot.target.position.set(0, 0, 0); scene.add(spot.target); scene.add(spot); }  // warm overhead spotlight pooling on the table — the casino look
   kernel.renderer.toneMappingExposure = THEME.exposure;
-  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.16, radius: 0.5, threshold: 0.9 });
+  // AO (contact shadows) grounds the discs on the board — the biggest not-flat-lit jump
+  if (kernel.enableBloom) kernel.enableBloom({ ssao: true, ssaoRadius: 0.9, ssaoMin: 0.002, ssaoMax: 0.07, strength: 0.2, radius: 0.6, threshold: 0.86 });
 
-  // ── board ──
+  // ── procedural surface textures: felt weave + wood grain (tactile, not flat) ──
+  function feltTex() {
+    const s = 512, cv = document.createElement("canvas"); cv.width = cv.height = s; const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#" + THEME.felt.toString(16).padStart(6, "0"); ctx.fillRect(0, 0, s, s);
+    const img = ctx.getImageData(0, 0, s, s), d = img.data;
+    for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 26; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+    ctx.putImageData(img, 0, 0);
+    ctx.globalAlpha = 0.06; ctx.strokeStyle = "#000";
+    for (let x = 0; x < s; x += 3) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, s); ctx.stroke(); }
+    ctx.globalAlpha = 0.045; ctx.strokeStyle = "#dfeee6";
+    for (let y = 0; y < s; y += 3) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(s, y); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(6, 6); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; return t;
+  }
+  function woodTex(base) {
+    const s = 512, cv = document.createElement("canvas"); cv.width = cv.height = s; const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#" + base.toString(16).padStart(6, "0"); ctx.fillRect(0, 0, s, s);
+    for (let i = 0; i < 90; i++) {
+      const y = Math.random() * s, dark = Math.random() < 0.55;
+      ctx.strokeStyle = dark ? "rgba(0,0,0,0.15)" : "rgba(255,228,196,0.07)"; ctx.lineWidth = 0.6 + Math.random() * 2.6;
+      ctx.beginPath(); ctx.moveTo(0, y);
+      for (let x = 0; x <= s; x += 14) ctx.lineTo(x, y + Math.sin(x * 0.018 + i) * 3.5 + (Math.random() - 0.5) * 2.4);
+      ctx.stroke();
+    }
+    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 3); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; return t;
+  }
+
+  // ── board + casino table ──
   const squareMeshes = {};
   (function buildBoard() {
+    // warm wooden floor beneath — grounds the scene into a room receding into fog
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(160, 160),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: woodTex(0x241811), roughness: 0.82, metalness: 0.0, envMapIntensity: 0.2 }));
+    floor.rotation.x = -Math.PI / 2; floor.position.set(0, -1.5, 0); floor.receiveShadow = true; scene.add(floor);
+    // rich green felt table the checkerboard sits on
+    const felt = new THREE.Mesh(new THREE.BoxGeometry(W + T * 4, 1.46, Hd + T * 4),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: feltTex(), emissive: new THREE.Color(THEME.felt).multiplyScalar(0.05), roughness: 0.78, metalness: 0.0, envMapIntensity: 0.3 }));
+    felt.position.set(0, -0.75, 0); felt.receiveShadow = true; scene.add(felt);
+    // board base + frame — dark wood, grain-textured
     const plinth = new THREE.Mesh(new THREE.BoxGeometry(W + T * 0.8, T * 0.5, Hd + T * 0.8),
-      new THREE.MeshStandardMaterial({ color: shade(THEME.ring, -0.2), roughness: THEME.ringRough, metalness: 0.12 }));
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: woodTex(shade(THEME.frame, -0.25)), roughness: THEME.ringRough, metalness: 0.12, envMapIntensity: 0.3 }));
     plinth.position.set(0, -T * 0.25 + FT, 0); plinth.receiveShadow = true; scene.add(plinth);
     const frame = new THREE.Mesh(new THREE.BoxGeometry(W + T * 0.4, T * 0.12, Hd + T * 0.4),
-      new THREE.MeshStandardMaterial({ color: THEME.ring, roughness: THEME.ringRough * 0.8, metalness: 0.18 }));
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: woodTex(THEME.frame), roughness: THEME.ringRough * 0.68, metalness: 0.2, envMapIntensity: 0.45 }));
     frame.position.set(0, FT - 0.22, 0); frame.receiveShadow = true; scene.add(frame);
+    // gold inlaid border framing the board — premium casino trim that glints under the spotlight
+    const goldMat = new THREE.MeshStandardMaterial({ color: THEME.gold, roughness: 0.26, metalness: 0.92, envMapIntensity: 1.1 });
+    const gi = W * 0.5 + T * 0.62, gt = 0.16;
+    for (const [gw, gd, gx, gz] of [[gi * 2 + gt, gt, 0, gi], [gi * 2 + gt, gt, 0, -gi], [gt, gi * 2 + gt, gi, 0], [gt, gi * 2 + gt, -gi, 0]]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(gw, 0.06, gd), goldMat); bar.position.set(gx, 0.06, gz); bar.castShadow = true; scene.add(bar);
+    }
+    // playing squares — clean warm ivory & rich walnut, lit by the scene (was self-glowing)
     const lc = new THREE.Color(THEME.light_sq), dc = new THREE.Color(THEME.dark_sq);
-    const lightMat = new THREE.MeshStandardMaterial({ color: lc, emissive: lc.clone().multiplyScalar(0.22), roughness: 0.9, metalness: 0, envMapIntensity: 0.12 });
-    const darkMat = new THREE.MeshStandardMaterial({ color: dc, emissive: dc.clone().multiplyScalar(0.18), roughness: 0.85, metalness: 0, envMapIntensity: 0.12 });
+    const lightMat = new THREE.MeshStandardMaterial({ color: lc, emissive: lc.clone().multiplyScalar(0.10), roughness: 0.6, metalness: 0.02, envMapIntensity: 0.3 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: dc, emissive: dc.clone().multiplyScalar(0.10), roughness: 0.55, metalness: 0.03, envMapIntensity: 0.35 });
     const geo = new THREE.BoxGeometry(T * 0.98, T * 0.12, T * 0.98);
     for (let y = 0; y < BOARD_N; y++) for (let x = 0; x < BOARD_N; x++) {
       const isLight = (x + y) % 2 === 1;
@@ -167,8 +219,8 @@ register3d("checkers3d", async (kernel, content) => {
   }
 
   // ── piece VIEWS ──────────────────────────────────────────────────────────────
-  const DISC_MAT = { r: new THREE.MeshStandardMaterial({ color: SIDE_COL.r, roughness: 0.45, metalness: 0.05, envMapIntensity: 0.8 }),
-                     b: new THREE.MeshStandardMaterial({ color: SIDE_COL.b, roughness: 0.4, metalness: 0.12, envMapIntensity: 0.6 }) };
+  const DISC_MAT = { r: new THREE.MeshStandardMaterial({ color: SIDE_COL.r, roughness: 0.22, metalness: 0.03, envMapIntensity: 0.9 }),
+                     b: new THREE.MeshStandardMaterial({ color: SIDE_COL.b, roughness: 0.22, metalness: 0.03, envMapIntensity: 0.85 }) };
   const CROWN_MAT = new THREE.MeshStandardMaterial({ color: 0xf3c964, roughness: 0.3, metalness: 0.75, emissive: 0x5a3d00, emissiveIntensity: 0.35 });
   const discGeo = new THREE.CylinderGeometry(T * 0.34, T * 0.36, T * 0.15, 40);
   const ridgeGeo = new THREE.TorusGeometry(T * 0.30, T * 0.028, 8, 40);

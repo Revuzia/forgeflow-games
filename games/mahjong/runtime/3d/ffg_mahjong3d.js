@@ -32,6 +32,17 @@ function makeSky(top, bot) {
   return tex;
 }
 
+// ── warm dark "casino table" palette — the premium lit-table look ────────────
+const THEME = {
+  sky_top: 0x241a12, sky_bot: 0x0e0905,           // warm dark ambiance — makes the lit table pop
+  felt: 0x1a7d43, frame: 0x3a2414, ringRough: 0.5, // rich poker-green + dark wood
+  fog: 0x120c07, fogD: 0.0055,
+  key: 0xffe9c4, keyI: 2.4, hemiSky: 0x705e46, hemiGround: 0x241a12, hemiI: 0.5, ambI: 0.24, exposure: 1.06,
+  rim: 0xbfd2ff, rimI: 0.55, env: 0.4,
+  spot: 0xfff1d6, spotI: 6.0,                      // warm overhead spotlight pooling on the felt
+  ivory: 0xf3ecd6, gold: 0xd8b348,                 // bright bone tiles, rich gold trim
+};
+
 // ── the classic 144-tile TURTLE, in half-tile grid units ─────────────────────
 // Each tile occupies a 2×2 footprint from (gx,gy) to (gx+2,gy+2); gz = layer
 // (0 = bottom). 87 + 36 + 16 + 4 + 1 = 144.
@@ -69,7 +80,7 @@ function tileFaceTexture(faceKey) {
   if (_faceTexCache[faceKey]) return _faceTexCache[faceKey];
   const W = 220, H = 260, g = (() => { const c = document.createElement("canvas"); c.width = W; c.height = H; return c.getContext("2d"); })();
   // ivory panel + soft sheen + inner frame
-  rr(g, 5, 5, W - 10, H - 10, 26); g.fillStyle = "#efe7d1"; g.fill();
+  rr(g, 5, 5, W - 10, H - 10, 26); g.fillStyle = "#f3ecd6"; g.fill();
   const grad = g.createLinearGradient(0, 0, 0, H);
   grad.addColorStop(0, "rgba(255,255,255,0.55)"); grad.addColorStop(0.14, "rgba(255,255,255,0)"); grad.addColorStop(1, "rgba(120,100,70,0.12)");
   g.fillStyle = grad; g.fill();
@@ -197,17 +208,47 @@ function drawSeason(g, n, W, H) {
 register3d("mahjong3d", async (kernel, content) => {
   const scene = kernel.scene;
   const music = createClassicalMusic(0.15);
+  const maxAniso = (kernel.renderer.capabilities && kernel.renderer.capabilities.getMaxAnisotropy) ? kernel.renderer.capabilities.getMaxAnisotropy() : 1;
 
-  // ── environment (calm, warm) ──
-  const SKY_TOP = 0x3b4454, SKY_BOT = 0x232830;
-  scene.background = makeSky(SKY_TOP, SKY_BOT);
-  if (kernel.setEnvironment) kernel.setEnvironment(scene.background, 0.55);
-  scene.fog = new THREE.FogExp2(0x262b33, 0.008);
-  if (kernel.sun) { kernel.sun.color = new THREE.Color(0xfff3df); kernel.sun.intensity = 1.35; kernel.sun.position.set(40, 90, -20); }
-  scene.add(new THREE.HemisphereLight(0xbfd2e6, 0x4a3a2a, 0.72));
-  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-  kernel.renderer.toneMappingExposure = 1.04;
-  if (kernel.enableBloom) kernel.enableBloom({ strength: 0.12, radius: 0.5, threshold: 0.92 });
+  // ── environment: warm dark "casino table" ambiance (premium lit-table look) ──
+  scene.background = makeSky(THEME.sky_top, THEME.sky_bot);
+  if (kernel.setEnvironment) kernel.setEnvironment(scene.background, THEME.env);
+  scene.fog = new THREE.FogExp2(THEME.fog, THEME.fogD);
+  if (kernel.sun) { kernel.sun.color = new THREE.Color(THEME.key); kernel.sun.intensity = THEME.keyI; kernel.sun.position.set(12, 44, 16); }
+  scene.add(new THREE.HemisphereLight(THEME.hemiSky, THEME.hemiGround, THEME.hemiI));
+  scene.add(new THREE.AmbientLight(0xffffff, THEME.ambI));
+  { const rim = new THREE.DirectionalLight(THEME.rim, THEME.rimI); rim.position.set(-16, 26, -20); scene.add(rim); }  // cool back-rim: edge sheen + separation
+  { const spot = new THREE.SpotLight(THEME.spot, THEME.spotI, 0, Math.PI * 0.33, 0.62, 1.1); spot.position.set(0, 27, 3); spot.target.position.set(0, 0, 0.4); scene.add(spot.target); scene.add(spot); }  // warm spotlight pooling on the felt — the casino-table look
+  kernel.renderer.toneMappingExposure = THEME.exposure;
+  // AO (contact shadows) grounds the tiles on the felt — the biggest not-flat-lit jump
+  if (kernel.enableBloom) kernel.enableBloom({ ssao: true, ssaoRadius: 0.9, ssaoMin: 0.002, ssaoMax: 0.07, strength: 0.2, radius: 0.6, threshold: 0.86 });
+
+  // ── procedural surface textures: fabric weave + wood grain = tactile, not flat-colored ──
+  function feltTex() {
+    const s = 512, cv = document.createElement("canvas"); cv.width = cv.height = s; const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#" + THEME.felt.toString(16).padStart(6, "0"); ctx.fillRect(0, 0, s, s);
+    const img = ctx.getImageData(0, 0, s, s), d = img.data;
+    for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 26; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+    ctx.putImageData(img, 0, 0);
+    ctx.globalAlpha = 0.06; ctx.strokeStyle = "#000";
+    for (let x = 0; x < s; x += 3) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, s); ctx.stroke(); }
+    ctx.globalAlpha = 0.045; ctx.strokeStyle = "#dfeee6";
+    for (let y = 0; y < s; y += 3) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(s, y); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(7, 5); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; return t;
+  }
+  function woodTex(base) {
+    const s = 512, cv = document.createElement("canvas"); cv.width = cv.height = s; const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#" + base.toString(16).padStart(6, "0"); ctx.fillRect(0, 0, s, s);
+    for (let i = 0; i < 90; i++) {
+      const y = Math.random() * s, dark = Math.random() < 0.55;
+      ctx.strokeStyle = dark ? "rgba(0,0,0,0.15)" : "rgba(255,228,196,0.07)"; ctx.lineWidth = 0.6 + Math.random() * 2.6;
+      ctx.beginPath(); ctx.moveTo(0, y);
+      for (let x = 0; x <= s; x += 14) ctx.lineTo(x, y + Math.sin(x * 0.018 + i) * 3.5 + (Math.random() - 0.5) * 2.4);
+      ctx.stroke();
+    }
+    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 3); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; return t;
+  }
 
   // ── layout + geometry ──
   const slots = buildTurtleLayout();
@@ -311,11 +352,11 @@ register3d("mahjong3d", async (kernel, content) => {
   // so a uniform ivory body keeps the tile count light (~2 draws/tile).
   const geo = new THREE.BoxGeometry(TILE_W, TILE_H, TILE_D);
   const facePlaneGeo = new THREE.PlaneGeometry(TILE_W * 0.96, TILE_D * 0.96);
-  const ivoryMat = new THREE.MeshStandardMaterial({ color: 0xe9ddc2, roughness: 0.6, metalness: 0.02, envMapIntensity: 0.5 });
+  const ivoryMat = new THREE.MeshStandardMaterial({ color: THEME.ivory, roughness: 0.2, metalness: 0.02, envMapIntensity: 0.6 });
   const _faceMatCache = {};
   function faceMaterial(faceKey) {
     if (_faceMatCache[faceKey]) return _faceMatCache[faceKey];
-    const m = new THREE.MeshStandardMaterial({ map: tileFaceTexture(faceKey), roughness: 0.66, metalness: 0.02, envMapIntensity: 0.5 });
+    const m = new THREE.MeshStandardMaterial({ map: tileFaceTexture(faceKey), roughness: 0.28, metalness: 0.02, envMapIntensity: 0.55 });
     _faceMatCache[faceKey] = m; return m;
   }
   function buildTileMesh(i) {
@@ -335,16 +376,31 @@ register3d("mahjong3d", async (kernel, content) => {
     currentSolution = deal.solution;
   }
 
-  // ── table ──
+  // ── table (warm casino: green felt, dark-wood frame, gold inlay, wooden floor) ──
   (function buildTable() {
     const W = spanX + 6, D = spanZ + 6;
-    const mat = new THREE.MeshStandardMaterial({ color: 0x5a3a24, roughness: 0.72, metalness: 0.12 });
-    const slab = new THREE.Mesh(new THREE.BoxGeometry(W + 4, 1.2, D + 4), new THREE.MeshStandardMaterial({ color: shade(0x5a3a24, -0.25), roughness: 0.8, metalness: 0.1 }));
-    slab.position.set(0, BASE_Y - 0.62, 0); slab.receiveShadow = true; scene.add(slab);
-    const felt = new THREE.Mesh(new THREE.BoxGeometry(W, 0.24, D), new THREE.MeshStandardMaterial({ color: 0x2c5844, roughness: 0.95, metalness: 0, emissive: 0x0e2018, emissiveIntensity: 0.25 }));
-    felt.position.set(0, BASE_Y - 0.02, 0); felt.receiveShadow = true; scene.add(felt);
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(W + 2.4, 0.5, D + 2.4), mat);
+    // deep wooden plinth
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(W + 4, 1.2, D + 4),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: woodTex(shade(THEME.frame, -0.25)), roughness: THEME.ringRough, metalness: 0.12, envMapIntensity: 0.3 }));
+    plinth.position.set(0, BASE_Y - 0.62, 0); plinth.receiveShadow = true; scene.add(plinth);
+    // dark-wood frame rail
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(W + 2.4, 0.5, D + 2.4),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: woodTex(THEME.frame), roughness: THEME.ringRough * 0.68, metalness: 0.2, envMapIntensity: 0.45 }));
     frame.position.set(0, BASE_Y - 0.18, 0); frame.receiveShadow = true; scene.add(frame);
+    // rich green felt play surface
+    const felt = new THREE.Mesh(new THREE.BoxGeometry(W, 0.24, D),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: feltTex(), emissive: new THREE.Color(THEME.felt).multiplyScalar(0.05), roughness: 0.78, metalness: 0.0, envMapIntensity: 0.3 }));
+    felt.position.set(0, BASE_Y - 0.02, 0); felt.receiveShadow = true; scene.add(felt);
+    // warm wooden floor beneath the table — grounds the scene into a room receding into fog
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(160, 160),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: woodTex(0x241811), roughness: 0.82, metalness: 0.0, envMapIntensity: 0.2 }));
+    floor.rotation.x = -Math.PI / 2; floor.position.set(0, BASE_Y - 1.5, 0); floor.receiveShadow = true; scene.add(floor);
+    // gold inlaid border framing the play area — premium casino trim that glints under the spotlight
+    const goldMat = new THREE.MeshStandardMaterial({ color: THEME.gold, roughness: 0.26, metalness: 0.92, envMapIntensity: 1.1 });
+    const iw = W - 2.2, idp = D - 2.2, gt = 0.16;
+    for (const [bw, bd, x, z] of [[iw, gt, 0, idp / 2], [iw, gt, 0, -idp / 2], [gt, idp + gt, iw / 2, 0], [gt, idp + gt, -iw / 2, 0]]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.05, bd), goldMat); bar.position.set(x, BASE_Y + 0.12, z); bar.castShadow = true; scene.add(bar);
+    }
   })();
 
   // ── highlight halos (never touch shared tile materials) ──
@@ -445,7 +501,7 @@ register3d("mahjong3d", async (kernel, content) => {
     if (!res) { toast("Shuffle failed — retry"); return; }
     shufflesLeft = shufflesLeft === Infinity ? Infinity : shufflesLeft - 1;
     deselect();
-    for (let i = 0; i < N; i++) if (live[i]) { face[i] = res.faceOf[i]; if (view[i]) view[i].material = [matSide, matSide, faceMaterial(face[i].face), matBase, matSide, matSide]; }
+    for (let i = 0; i < N; i++) if (live[i]) { face[i] = res.faceOf[i]; if (view[i] && view[i].children[1]) view[i].children[1].material = faceMaterial(face[i].face); }
     currentSolution = res.solution;
     sfx("confirm", 0.5); toast("Shuffled — still solvable"); updateToolbar();
   }
