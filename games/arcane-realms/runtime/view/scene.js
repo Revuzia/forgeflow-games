@@ -285,56 +285,15 @@ export class BoardScene {
     this.scene.add(table);
     this.table = table;
 
-    // ── 3D table build (pure three.js — no external models) ────────
+    // ── 3D table body (pure three.js — no external models) ────────
     // The flat art plane above stays the play surface + pick target; beneath
-    // and around it: a thick stone body, a carved rim with gold corner caps,
-    // glowing rune inlays, a plinth, and a vignetted chamber floor, so the
-    // board reads as a real object in a space instead of a floating image.
+    // it sits a thick stone slab (so the board reads as a solid object), a
+    // plinth, and a vignetted chamber floor. No rim/border trim — the owner
+    // found the carved rails + gold caps ugly; the bare slab reads cleaner.
     const stoneMat = new THREE.MeshStandardMaterial({ color: 0x2a2036, roughness: 0.88, metalness: 0.18 });
     const body = new THREE.Mesh(new THREE.BoxGeometry(21.4, 0.62, 12.6), stoneMat);
     body.position.y = -0.36;
     this.scene.add(body);
-    const trimMat = new THREE.MeshStandardMaterial({
-      color: 0x4a3358, roughness: 0.55, metalness: 0.55,
-      emissive: 0x1a0f26, emissiveIntensity: 0.5,
-    });
-    for (const [w, h2, d, x, z] of [
-      [22.6, 0.26, 0.62, 0, -6.6], [22.6, 0.26, 0.62, 0, 6.6],   // long rails
-      [0.62, 0.26, 13.8, -11.0, 0], [0.62, 0.26, 13.8, 11.0, 0], // side rails
-    ]) {
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(w, h2, d), trimMat);
-      rail.position.set(x, 0.05, z);
-      this.scene.add(rail);
-    }
-    const goldMat = new THREE.MeshStandardMaterial({
-      color: 0x8a6a2a, roughness: 0.4, metalness: 0.75,
-      emissive: 0x332008, emissiveIntensity: 0.6,
-    });
-    for (const [x, z] of [[-11.0, -6.6], [11.0, -6.6], [-11.0, 6.6], [11.0, 6.6]]) {
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.4, 1.05), goldMat);
-      cap.position.set(x, 0.1, z);
-      this.scene.add(cap);
-    }
-    // rune inlays: soft additive strips along the rails that slowly breathe
-    this.runeStrips = [];
-    const runeMat = () => new THREE.MeshBasicMaterial({
-      color: 0x8a5fd4, transparent: true, opacity: 0.3,
-      blending: THREE.AdditiveBlending, depthWrite: false,
-    });
-    for (const z of [-6.6, 6.6]) {
-      const strip = new THREE.Mesh(new THREE.PlaneGeometry(20.9, 0.16), runeMat());
-      strip.rotation.x = -Math.PI / 2;
-      strip.position.set(0, 0.185, z);
-      this.scene.add(strip);
-      this.runeStrips.push(strip);
-    }
-    for (const x of [-11.0, 11.0]) {
-      const strip = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 12.1), runeMat());
-      strip.rotation.x = -Math.PI / 2;
-      strip.position.set(x, 0.185, 0);
-      this.scene.add(strip);
-      this.runeStrips.push(strip);
-    }
     const plinth = new THREE.Mesh(
       new THREE.BoxGeometry(23.8, 0.5, 14.8),
       new THREE.MeshStandardMaterial({ color: 0x1b1426, roughness: 0.94, metalness: 0.1 }),
@@ -1412,12 +1371,8 @@ export class BoardScene {
         for (const mt of hm.glowMats) mt.emissiveIntensity = gi + flash * 0.5;
       }
     }
-    // diorama: crystals spin, braziers flicker embers, rune inlays breathe
+    // diorama: crystals spin, braziers flicker embers
     for (const c of this.dioramaSpin) { c.rotation.y += dt * 0.5; c.position.y = 1.5 + Math.sin(this.time * 1.2 + c.position.x) * 0.1; }
-    if (this.runeStrips) {
-      const ro = 0.22 + (Math.sin(this.time * 1.4) + 1) * 0.07;
-      for (const s of this.runeStrips) s.material.opacity = ro;
-    }
     this._brazierAcc = (this._brazierAcc || 0) + dt;
     if (this._brazierAcc > 0.09) {
       this._brazierAcc = 0;

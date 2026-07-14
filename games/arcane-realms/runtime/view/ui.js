@@ -2,7 +2,7 @@
 // match HUD (hero plates, phase bar, banners, floaters, arrow, tooltips).
 
 import { CARDS, COLLECTIBLE, REALMS, KEYWORD_INFO, cardById, realmsOf } from '../sim/cards.js?v=24';
-import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES } from '../sim/decks.js?v=24';
+import { STARTER_DECKS, validateDeck, DECK_SIZE, MAX_COPIES, MAX_LEGENDARY_COPIES, MAX_REALMS } from '../sim/decks.js?v=24';
 import { DIFFICULTIES } from '../sim/ai.js?v=24';
 import { drawCard, cardThumb, CARD_W, CARD_H } from './cardtex.js?v=24';
 import { Audio2 } from './audio.js?v=24';
@@ -495,7 +495,7 @@ export class UI {
       { t: 'GROW YOUR LEGEND', h: `
         <p><b>🏰 Campaign</b> — battle across five realms. Every victory earns <b>gold</b> and unlocks new cards for your collection; bosses grant card backs.</p>
         <p><b>🃏 Arcane Packs</b> — spend gold in the Collection on packs weighted toward cards you don't own yet.</p>
-        <p><b>🛠 Deck Builder</b> — craft 30-card decks from up to <b>two realms</b> (plus Neutral). Smart Fill finishes a deck for you.</p>
+        <p><b>🛠 Deck Builder</b> — craft 30-card decks from a <b>single realm</b> (plus Neutral). Smart Fill finishes a deck for you.</p>
         <p><b>🌐 Play vs Other Players</b> — duel a friend live with a room code.</p>` },
     ];
     let page = 0;
@@ -863,12 +863,12 @@ export class UI {
       if (this.working) {
         const cap = c.rarity === 'legendary' ? MAX_LEGENDARY_COPIES : MAX_COPIES;
         const cardRealms = realmsOf(c).filter((r) => r !== 'neutral');
-        const realmLocked = new Set([...deckRealms, ...cardRealms]).size > 2; // dual counts for both realms
+        const realmLocked = new Set([...deckRealms, ...cardRealms]).size > MAX_REALMS; // one realm + Neutral only
         if (n >= cap || realmLocked || this.working.cards.length >= DECK_SIZE) cell.classList.add('dim');
         cell.onclick = () => {
           if (this.working.cards.length >= DECK_SIZE) return this.toast('Deck is full (30).');
           if (n >= cap) return this.toast(`Max ${cap} cop${cap > 1 ? 'ies' : 'y'} of ${c.name}.`);
-          if (realmLocked) return this.toast('Two realms already chosen — only those + Neutral allowed.');
+          if (realmLocked) return this.toast('A realm is already chosen — only that realm + Neutral allowed.');
           Audio2.sfx('click');
           this.working.cards.push(c.id);
           this.renderDeckPanel();
@@ -923,7 +923,7 @@ export class UI {
     const realms = new Set(d.cards.map((id) => CARDS[id].realm).filter((r) => r !== 'neutral'));
     if (realms.size === 0) { realms.add(['ember', 'tide', 'grove', 'dawn', 'grave'][Math.floor(Math.random() * 5)]); }
     const pool = COLLECTIBLE.filter((c) => this.isOwned(c.id))
-      .filter((c) => c.realm === 'neutral' || realms.has(c.realm) || (realms.size < 2 && c.realm !== 'neutral'))
+      .filter((c) => c.realm === 'neutral' || realms.has(c.realm) || (realms.size < MAX_REALMS && c.realm !== 'neutral'))
       .sort((a, b) => a.cost - b.cost);
     const counts = {};
     for (const id of d.cards) counts[id] = (counts[id] || 0) + 1;

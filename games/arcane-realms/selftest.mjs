@@ -9,7 +9,7 @@ import {
   effAtk, hasKw, makeUnit, unitByIid, opponentOf, validTargets,
   MAX_BOARD, MAX_HAND, HERO_HP,
 } from './runtime/sim/engine.js?v=13';
-import { validateDeck, STARTER_DECKS, starterDeckErrors, DECK_SIZE } from './runtime/sim/decks.js?v=13';
+import { validateDeck, STARTER_DECKS, starterDeckErrors, DECK_SIZE, MAX_REALMS } from './runtime/sim/decks.js?v=13';
 import { chooseAction, runAiTurn, findLethal, evaluate, DIFFICULTIES } from './runtime/sim/ai.js?v=13';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -831,11 +831,19 @@ section('aetherbound (dual-realm expansion)');
   // steal-corpse (rally, enemy grave): tv05 reanimates the enemy's fallen creature
   { const s = mk(); s.players[0].mana = 9; s.players[1].grave.push('nt01'); applyAction(s, { type: 'play', iid: give(s, 0, 'tv05').iid }); ok(s.players[0].board.some((u) => u.card === 'nt01') && !s.players[1].grave.includes('nt01'), 'steal-corpse pulls the enemy corpse onto your board'); }
 
-  // deck legality: a dual card counts for BOTH realms (et01 = ember+tide)
+  // deck legality: a dual card counts for BOTH realms (et01 = ember+tide).
+  // Gated on MAX_REALMS — the base game is single-realm (1), so any dual card is
+  // illegal; the Aetherbound expansion re-enables 2-realm decks (flip to 2).
   const realmErr = (ids) => validateDeck(ids).errors.some((e) => e.includes('realms'));
-  ok(!realmErr(['et01', 'ef01', 'tc02']), 'ember+tide dual is legal alongside mono-ember + mono-tide');
-  ok(realmErr(['et01', 'ef01', 'tc02', 'wg01']), 'adding a Grove card to an Ember/Tide deck is rejected (3 realms)');
-  ok(realmErr(['et01', 'ef01', 'wg01']), 'an Ember+Tide dual is illegal in an Ember/Grove shell');
+  if (MAX_REALMS >= 2) {
+    ok(!realmErr(['et01', 'ef01', 'tc02']), 'ember+tide dual is legal alongside mono-ember + mono-tide');
+    ok(realmErr(['et01', 'ef01', 'tc02', 'wg01']), 'adding a Grove card to an Ember/Tide deck is rejected (3 realms)');
+    ok(realmErr(['et01', 'ef01', 'wg01']), 'an Ember+Tide dual is illegal in an Ember/Grove shell');
+  } else {
+    ok(realmErr(['et01', 'ef01', 'tc02']), 'single-realm base rule: an ember+tide dual card is illegal (counts as 2 realms)');
+    ok(!realmErr(['ef01', 'ef02', 'nt01']), 'single-realm base rule: mono-ember + Neutral is legal');
+    ok(realmErr(['ef01', 'tc02']), 'single-realm base rule: mixing two mono realms is rejected');
+  }
 
   // golden cards + second pack + card-back gold shop
   const P = await import('./runtime/campaign/progression.js?v=13');

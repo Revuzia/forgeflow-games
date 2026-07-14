@@ -160,7 +160,7 @@ function startCampaignBattle(chapter, battle, deckDef) {
     heroes,
     settings: Store.data.settings,
     cardbacks: [myBackFile(), 'cardback.jpg'],
-    use3d: !!battle.boss, // ONLY boss fights get 3D minis + hero models; grunts stay flat
+    use3d: true, // every campaign battle gets the 3D Meshy heroes + minis (not just bosses)
     onGameOver: (won, stats) => {
       Store.data.record[won ? 'wins' : 'losses']++;
       Store.save();

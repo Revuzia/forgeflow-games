@@ -123,16 +123,16 @@ const CSS = `
 #dlg-hint{color:#6f5f96;font-size:12.5px;letter-spacing:.08em}
 /* rewards */
 #rw-overlay{position:absolute;inset:0;background:rgba(5,3,10,.86);display:flex;align-items:center;justify-content:center;z-index:72;pointer-events:auto}
-#rw-box{text-align:center;max-width:min(94vw,900px);max-height:92vh;overflow-y:auto;padding:10px}
-#rw-title{font-size:44px;font-weight:800;letter-spacing:.2em;background:linear-gradient(180deg,#fff3c9,#f0b93a 60%,#8a5a13);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 16px rgba(212,149,43,.45))}
-#rw-sub{color:#c9b8ec;margin:6px 0 18px;font-size:16px}
-#rw-cards{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin:10px 0 8px}
-.rw-card{width:172px;animation:rwpop .5s cubic-bezier(.2,1.6,.4,1) backwards}
+#rw-box{text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;max-width:min(96vw,940px);max-height:96vh;padding:8px 10px}
+#rw-title{font-size:clamp(26px,5.4vh,44px);font-weight:800;letter-spacing:.2em;background:linear-gradient(180deg,#fff3c9,#f0b93a 60%,#8a5a13);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 16px rgba(212,149,43,.45))}
+#rw-sub{color:#c9b8ec;margin:4px 0 10px;font-size:clamp(12.5px,2vh,16px);line-height:1.35}
+#rw-cards{display:flex;gap:clamp(8px,1.6vh,16px);justify-content:center;flex-wrap:wrap;margin:6px 0 4px}
+.rw-card{width:clamp(102px,16.5vh,172px);animation:rwpop .5s cubic-bezier(.2,1.6,.4,1) backwards}
 .rw-card canvas{width:100%;border-radius:12px;box-shadow:0 12px 34px rgba(0,0,0,.75)}
-.rw-card .rw-tag{margin-top:6px;font-size:12.5px;letter-spacing:.12em;color:#6ae08a;text-transform:uppercase}
+.rw-card .rw-tag{margin-top:5px;font-size:clamp(10px,1.6vh,12.5px);letter-spacing:.12em;color:#6ae08a;text-transform:uppercase}
 .rw-card .rw-tag.back{color:#ffd45f}
 @keyframes rwpop{0%{opacity:0;transform:translateY(26px) scale(.7)}100%{opacity:1;transform:none}}
-.rw-backimg{width:172px;border-radius:12px;border:2px solid var(--gold);box-shadow:0 12px 34px rgba(0,0,0,.75)}
+.rw-backimg{width:clamp(102px,16.5vh,172px);border-radius:12px;border:2px solid var(--gold);box-shadow:0 12px 34px rgba(0,0,0,.75)}
 /* achievements */
 .ach-row{display:flex;align-items:center;gap:14px;border:1px solid #2c2148;border-radius:10px;padding:10px 16px;margin-bottom:8px;background:#1b1330}
 .ach-row.done{border-color:#3f7a4a;background:#14231a}
@@ -393,7 +393,7 @@ export class CampaignUI {
       box.append(ui.el('div', 'hint', 'Replay reward — first clears grant new cards.'));
     }
     const cont = ui.el('button', 'btn primary', 'Continue');
-    cont.style.marginTop = '18px';
+    cont.style.marginTop = 'clamp(8px,1.8vh,18px)';
     cont.onclick = () => { Audio2.sfx('click'); overlay.remove(); onDone && onDone(); };
     box.append(cont);
     overlay.append(box);
