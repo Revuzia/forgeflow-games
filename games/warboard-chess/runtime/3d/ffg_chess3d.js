@@ -72,8 +72,16 @@ const THEMES = {
     light_sq: 0xeef4fa, dark_sq: 0x8fa6bc, ring: 0x7088a0, ringRough: 0.7,
     accent: 0x9fe6ff, ground: 0xccd8e2, groundRough: 0.7, mote: 0xffffff,
   },
+  casino: {   // the unified "grand parlour" table look — warm dark room, spotlit board, gold trim
+    name: "Grand Parlour",
+    sky: ["#2a1f15", "#1c140d", "#120c07", "#0c0805"],
+    light: { key: 0xffe9c4, keyI: 2.4, hemiSky: 0x6a5844, hemiGround: 0x241a12, hemiI: 0.7, ambI: 0.34 },
+    fog: 0x120c07, fogD: 0.0042, ibl: 0.4, exposure: 1.06,
+    light_sq: 0xbf9d60, dark_sq: 0x3a2413, ring: 0x2a1c12, ringRough: 0.55,   // deeper tan / walnut — bright ivory pieces pop
+    accent: 0xd8b348, ground: 0x1a7d43, groundRough: 0.85, mote: 0xffe9c4,
+  },
 };
-const THEME_ORDER = ["mountains", "forest", "desert", "snow"];
+const THEME_ORDER = ["casino"];   // unified casino table for all matches
 
 // a tall vertical sky CanvasTexture from a 4-stop gradient (also feeds IBL)
 function makeSkyTexture(stops) {
@@ -97,10 +105,10 @@ register3d("chess3d", async (kernel, content) => {
   const chessMusic = createClassicalMusic(0.16); // procedural classical piano (no naval track)
   const { fileOf, rankOf, algebraic } = H;
 
-  // pick a theme: explicit content.theme, else cycle by a persisted match counter
-  let themeKey = content.theme && THEMES[content.theme] ? content.theme
-    : THEME_ORDER[(matchCounter() | 0) % THEME_ORDER.length];
+  // unified casino table look for every match (was per-match themed environments)
+  let themeKey = "casino";
   let theme = THEMES[themeKey];
+  matchCounter();   // keep advancing the counter (used elsewhere) without picking a theme from it
 
   function matchCounter() {
     try { const k = "warboard_match_n"; const n = (parseInt(localStorage.getItem(k) || "0", 10) || 0); localStorage.setItem(k, String(n + 1)); return n; }
@@ -133,6 +141,9 @@ register3d("chess3d", async (kernel, content) => {
   // SSAO was the main chess choppiness — a heavy full-screen depth pass for little gain
   // on a clean board. Drop it; keep cinematic bloom + SMAA (cheap) for the glow + edges.
   if (kernel.enableBloom) kernel.enableBloom({ strength: 0.26, radius: 0.6, threshold: 0.88, ssao: true, ssaoRadius: 0.9, gtao: false, smaa: true });
+  // warm overhead spotlight pooling on the board + cool back-rim — the casino-table look
+  { const spot = new THREE.SpotLight(0xfff1d6, 5.0, 0, Math.PI * 0.34, 0.58, 1.0); spot.position.set(0, W * 1.45, 2); spot.target.position.set(0, 0, 0); scene.add(spot.target); scene.add(spot); }
+  { const rim = new THREE.DirectionalLight(0xbfd2ff, 0.5); rim.position.set(-W * 0.4, W * 0.85, -Hd * 0.6); scene.add(rim); }
 
   // distant horizon ring (a big inverted cone of theme colour) so the board isn't
   // floating in a void — recedes into the fog. Cheap, single mesh.
@@ -157,6 +168,19 @@ register3d("chess3d", async (kernel, content) => {
     const frame = new THREE.Mesh(new THREE.BoxGeometry(W + T * 0.4, T * 0.12, Hd + T * 0.4),
       new THREE.MeshStandardMaterial({ color: theme.ring, roughness: theme.ringRough * 0.8, metalness: 0.2, envMapIntensity: 0.5 }));
     frame.position.set(0, FT - 0.22, 0); frame.receiveShadow = true; scene.add(frame);
+    // the board sits on a spotlit green felt table over a dark floor (casino look)
+    const felt = new THREE.Mesh(new THREE.BoxGeometry(W * 1.75, 0.5, Hd * 1.75),
+      new THREE.MeshStandardMaterial({ color: theme.ground, roughness: 0.86, metalness: 0.0, envMapIntensity: 0.25 }));
+    felt.position.set(0, FT - 1.6, 0); felt.receiveShadow = true; scene.add(felt);
+    const cfloor = new THREE.Mesh(new THREE.PlaneGeometry(W * 6, Hd * 6),
+      new THREE.MeshStandardMaterial({ color: 0x241811, roughness: 0.9 }));
+    cfloor.rotation.x = -Math.PI / 2; cfloor.position.set(0, FT - 2.0, 0); cfloor.receiveShadow = true; scene.add(cfloor);
+    // gold inlaid trim framing the board — glints under the spotlight
+    const goldMat = new THREE.MeshStandardMaterial({ color: theme.accent, roughness: 0.26, metalness: 0.92, envMapIntensity: 1.1 });
+    const gw = W + 0.5, gd = Hd + 0.5, gt = 0.24;
+    for (const [bw, bd, bx, bz] of [[gw, gt, 0, gd / 2], [gw, gt, 0, -gd / 2], [gt, gd + gt, gw / 2, 0], [gt, gd + gt, -gw / 2, 0]]) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.1, bd), goldMat); bar.position.set(bx, FT + 0.08, bz); bar.castShadow = true; scene.add(bar);
+    }
 
     // 64 square tiles (checker pattern). Slight bevel via inset top box.
     // De-shined + high-contrast so the CHECKER reads (metal/IBL was mirroring the
@@ -168,10 +192,10 @@ register3d("chess3d", async (kernel, content) => {
     // pixel-sampling). Opt the squares OUT of IBL (envMapIntensity 0) and give each
     // an EMISSIVE tint of its own colour so the cream/dark checker renders no matter
     // the lighting — guaranteed contrast, the industry-standard board read.
-    const lc = new THREE.Color(0xece2cb).lerp(new THREE.Color(theme.light_sq), 0.1);
-    const dc = new THREE.Color(0x231d15).lerp(new THREE.Color(theme.dark_sq), 0.1);
-    const lightMat = new THREE.MeshStandardMaterial({ color: lc, emissive: lc.clone().multiplyScalar(0.28), roughness: 0.9, metalness: 0.0, envMapIntensity: 0.12 });
-    const darkMat = new THREE.MeshStandardMaterial({ color: dc, emissive: dc.clone().multiplyScalar(0.35), roughness: 0.85, metalness: 0.0, envMapIntensity: 0.12 });
+    const lc = new THREE.Color(theme.light_sq);   // warm tan — bright ivory pieces + their AO shadows read against it
+    const dc = new THREE.Color(theme.dark_sq);
+    const lightMat = new THREE.MeshStandardMaterial({ color: lc, emissive: lc.clone().multiplyScalar(0.1), roughness: 0.66, metalness: 0.0, envMapIntensity: 0.3 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: dc, emissive: dc.clone().multiplyScalar(0.14), roughness: 0.6, metalness: 0.0, envMapIntensity: 0.3 });
     const geo = new THREE.BoxGeometry(T * 0.98, T * 0.12, T * 0.98);
     for (let y = 0; y < BOARD_N; y++) {
       for (let x = 0; x < BOARD_N; x++) {
@@ -197,7 +221,7 @@ register3d("chess3d", async (kernel, content) => {
     groundPlane.rotation.x = -Math.PI / 2; groundPlane.position.set(0, FT + 0.13, 0); scene.add(groundPlane);
 
     // rank/file labels as small emissive markers? Keep it clean — skip for now.
-    buildScatterDecor();
+    if (themeKey !== "casino") buildScatterDecor();   // no forest/desert scatter on the casino table
   }
 
   // theme-specific scatter beyond the board (rocks / trees / dunes / drifts) so
@@ -953,7 +977,7 @@ register3d("chess3d", async (kernel, content) => {
   const startZ = playerSide === "w" ? -span * 1.0 : span * 1.0;   // pulled back so BOTH back ranks fit (ornate pieces are tall)
   kernel.camera.position.set(0, span * 1.32, startZ);
   const orbit = kernel.enableOrbit({
-    target: { x: 0, y: 0, z: 0 },
+    target: { x: 0, y: 0, z: playerSide === "w" ? -2.6 : 2.6 },   // aim toward the player's back rank so YOUR pieces sit comfortably in frame
     minDistance: T * 6, maxDistance: span * 2.4,
     minPolarAngle: 0.12, maxPolarAngle: Math.PI * 0.44,
     rotateButton: "right",
