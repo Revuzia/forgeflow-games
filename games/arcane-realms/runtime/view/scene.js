@@ -820,12 +820,10 @@ export class BoardScene {
           const el = ELEMENT_FX[def.realm] || ELEMENT_FX.neutral;
           this.fx.setEmitter('aura' + u.iid, e.group.position, el.color, el.rate, el.style);
         }
-        // 3D presence for every creature: legendaries/epics get a full Meshy
-        // mini; everyone else gets an art STANDEE that stands up from the card —
-        // so no creature is just a flat rectangle on the board.
+        // lazy 3D mini — legendaries + curated epics only (owner: no standees,
+        // grunts stay flat cards). Legendaries idle-animate; epics hold still.
         const mspec = this.use3d !== false ? MINI_MAP[u.card] : null;
-        if (mspec) { if (!this.minis.has(u.iid)) this.spawnMini(u.iid, mspec, rel, def.rarity === 'legendary'); }
-        else if (this.use3d !== false && def.type === 'creature' && !this.standees.has(u.iid)) this.spawnStandee(u.iid, u.card, rel);
+        if (mspec && !this.minis.has(u.iid)) this.spawnMini(u.iid, mspec, rel, def.rarity === 'legendary');
         // exhausted creatures rest dimmed; summon-sick get a lighter sheen
         e.mesh.material.color.setScalar(u.tapped ? 0.48 : u.sick ? 0.82 : 1);
       });
@@ -1390,21 +1388,6 @@ export class BoardScene {
           m.disc.material.opacity = m.discT * (0.52 + Math.sin(this.time * 2 + iid) * 0.12);
         }
       }
-    }
-    // standees follow their card, face the camera (yaw only → stay upright), and
-    // gently bob so they read as living figures standing on the board
-    for (const [iid, s] of this.standees) {
-      const e = this.cards.get(iid);
-      if (!e) continue;
-      const p = e.group.position;
-      s.grp.position.x += (p.x - s.grp.position.x) * Math.min(1, dt * 12);
-      s.grp.position.z += (p.z - s.grp.position.z) * Math.min(1, dt * 12);
-      s.grp.rotation.y = Math.atan2(this.camera.position.x - s.grp.position.x, this.camera.position.z - s.grp.position.z);
-      s.fig.position.y = s.fig.geometry.parameters.height * 0.5 + 0.04 + (Math.sin(this.time * 1.5 + s.seed) + 1) * 0.02;
-      // fade the figure out while its own card is hover-enlarged (card takes over)
-      const target = e.boardHover ? 0 : 1;
-      s.fig.material.opacity += (target - s.fig.material.opacity) * Math.min(1, dt * 12);
-      s.fig.visible = s.fig.material.opacity > 0.02;
     }
     // hero characters: gentle idle sway around their facing; feet stay planted.
     // when hit, they recoil (stagger back + pitch + shudder) and flash red.
