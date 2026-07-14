@@ -143,7 +143,7 @@ export class Kernel3D {
   _resize() {
     const w = this.parent.clientWidth || window.innerWidth;
     const h = this.parent.clientHeight || window.innerHeight;
-    this.renderer.setSize(w, h, false);
+    this.renderer.setSize(w, h, true);   // updateStyle:true — canvas CSS must match window, else it displays at drawing-buffer size (DPR×) and overflows/cuts off on HiDPI
     this.camera.aspect = w / Math.max(1, h);
     this.camera.updateProjectionMatrix();
     if (this.composer) this.composer.setSize(w, h);
