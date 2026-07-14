@@ -139,6 +139,9 @@ const CSS = `
 .holo-foil{background:repeating-linear-gradient(105deg,#ff5f6d 0%,#ffd93d 9%,#5fffa6 18%,#4dc9ff 27%,#c86bff 36%,#ff5f6d 45%);background-size:230% 230%;background-position:var(--fx,50%) var(--fy,50%);mix-blend-mode:color-dodge;filter:brightness(.5) contrast(1.5) saturate(1.2)}
 .tilt .holo-glare{opacity:1}
 .tilt .holo-foil{opacity:.42}
+/* HOLO collectible tier (rare pack-pull, like golden): rainbow rim + ❖ badge */
+.cardcell.is-holo{box-shadow:0 0 0 2px #7fd8ff,0 0 16px rgba(120,200,255,.5)}
+.holo-badge{background:linear-gradient(135deg,#ff7ad9,#7fd8ff);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 6px rgba(150,210,255,.9))}
 .holo-card{position:relative;border-radius:14px;transition:transform .16s ease;will-change:transform;align-self:flex-start}
 .holo-card.tilt{transition:none}
 .holo-card canvas{display:block;border-radius:14px}
@@ -168,7 +171,13 @@ const CSS = `
 #hist-foe,#hist-me{position:absolute;left:16px;display:flex;flex-direction:column;gap:6px;pointer-events:auto;z-index:9}
 #hist-foe{top:110px}
 #hist-me{bottom:110px}
-.hist-tile{width:46px;border-radius:6px;overflow:hidden;border:1px solid #3a2a5c;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer;opacity:0;transform:translateX(-14px);transition:opacity .25s,transform .25s;background:#171226}
+/* strip captions + color-coding so MY recent plays (gold) read apart from the ENEMY's (red) */
+.hist-cap{font-size:10px;font-weight:800;letter-spacing:.13em;text-align:center;padding:2px 0;border-radius:6px;user-select:none;width:46px}
+#hist-foe .hist-cap{color:#ff9a9a;background:rgba(120,30,30,.5);border:1px solid #7a3030}
+#hist-me .hist-cap{color:#ffe08a;background:rgba(90,66,20,.5);border:1px solid #7a5a20}
+.hist-tile{width:46px;border-radius:6px;overflow:hidden;border:1.5px solid #3a2a5c;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer;opacity:0;transform:translateX(-14px);transition:opacity .25s,transform .25s;background:#171226}
+#hist-foe .hist-tile{border-color:#9a4040;box-shadow:0 2px 8px rgba(0,0,0,.5),0 0 0 1px rgba(210,90,90,.35)}
+#hist-me .hist-tile{border-color:#9a7a34;box-shadow:0 2px 8px rgba(0,0,0,.5),0 0 0 1px rgba(212,160,60,.4)}
 .hist-tile.in{opacity:.92;transform:none}
 .hist-tile:hover{opacity:1;border-color:var(--gold)}
 .hist-tile canvas{display:block;width:100%;height:auto}
@@ -788,12 +797,13 @@ export class UI {
     }).sort((a, b) => a.cost - b.cost || (RARITY_ORDER[a.rarity] - RARITY_ORDER[b.rarity]) || a.name.localeCompare(b.name));
   }
 
-  // holographic foil: pointer-tracked light glare + shifting rainbow + a 3D
-  // tilt toward the cursor, so the card wiggles and reflects as you move over
-  // it. `tiltEl` is the element that tilts (and holds the card); lift/scale
-  // compose with the browse hover so tiles keep their pop.
-  _holo(tiltEl, { lift = 0, scale = 1, locked = false } = {}) {
-    tiltEl.append(this.el('div', 'holo-glare'), this.el('div', 'holo-foil'));
+  // card light + 3D lean: a pointer-tracked GLARE (the moving reflection) and a
+  // TILT toward the cursor — applied to EVERY card so they catch the light and
+  // move (owner). The rainbow HOLO foil is added ONLY for holo-variant collectibles
+  // (opts.holo) — a rare pack-pull tier alongside golden, so people chase both.
+  _holo(tiltEl, { lift = 0, scale = 1, locked = false, holo = false } = {}) {
+    tiltEl.append(this.el('div', 'holo-glare'));
+    if (holo) { tiltEl.classList.add('is-holo'); tiltEl.append(this.el('div', 'holo-foil')); }
     const MAX = locked ? 7 : 14; // max tilt degrees
     const upd = (e) => {
       const r = tiltEl.getBoundingClientRect();
@@ -823,7 +833,9 @@ export class UI {
       const cell = this.el('div', 'cardcell');
       cell.append(cardThumb(c.id, 210));
       const owned = this.isOwned(c.id);
-      this._holo(cell, owned ? { lift: 16, scale: 1.52 } : { lift: 6, scale: 1.2, locked: true });
+      const isHolo = !this.working && owned && this.anyHolo && this.anyHolo(c.id);
+      this._holo(cell, owned ? { lift: 16, scale: 1.52, holo: isHolo } : { lift: 6, scale: 1.2, locked: true });
+      if (isHolo) cell.append(this.el('div', 'foil-badge holo-badge', '❖'));
       if (!owned) {
         cell.classList.add('locked');
         cell.append(this.el('div', 'lockico', '🔒'));
@@ -1075,9 +1087,11 @@ export class UI {
     };
     this.plateMe = mkPlate('me');
     this.plateFoe = mkPlate('foe');
-    // recent-plays history strips (see histAdd)
+    // recent-plays history strips (see histAdd) — each with a persistent caption
     this.histFoe = this.el('div'); this.histFoe.id = 'hist-foe';
+    this.histFoe.append(this.el('div', 'hist-cap', 'ENEMY'));      // caption at TOP (plays grow down)
     this.histMe = this.el('div'); this.histMe.id = 'hist-me';
+    this.histMe.append(this.el('div', 'hist-cap', 'YOU'));         // caption at BOTTOM (plays grow up)
     // buttons — no phase strip: attacking auto-enters combat, coach tips
     // teach the ordering rule instead
     const btns = this.el('div');
@@ -1165,13 +1179,15 @@ export class UI {
       t.onmouseleave = () => this.hoverPreview(null);
       t.onclick = () => this.showInspect(cardId);
     }
-    if (rel === 0) wrap.prepend(t); else wrap.append(t);
+    // insert nearest mid-screen (foe: append below cap; me: prepend above cap)
+    if (rel === 0) wrap.insertBefore(t, wrap.firstChild); else wrap.append(t);
     requestAnimationFrame(() => t.classList.add('in'));
-    while (wrap.children.length > 5) (rel === 0 ? wrap.lastChild : wrap.firstChild).remove();
+    // trim to 5, keeping the caption — drop the OLDEST tile (me: last, foe: first)
+    const tiles = wrap.querySelectorAll('.hist-tile');
+    if (tiles.length > 5) (rel === 0 ? tiles[tiles.length - 1] : tiles[0]).remove();
   }
   histClear() {
-    if (this.histFoe) this.histFoe.innerHTML = '';
-    if (this.histMe) this.histMe.innerHTML = '';
+    for (const w of [this.histFoe, this.histMe]) if (w) w.querySelectorAll('.hist-tile').forEach((t) => t.remove());
   }
 
   hudUpdate(state, match) {
@@ -1476,7 +1492,7 @@ export class UI {
     right.append(close);
     const cardWrap = this.el('div', 'holo-card');
     cardWrap.append(cv);
-    this._holo(cardWrap, { lift: 0, scale: 1.03 });
+    this._holo(cardWrap, { lift: 0, scale: 1.03, holo: this.anyHolo && this.anyHolo(cardId) });
     m.append(cardWrap, right);
     wrap.append(m);
     wrap.onclick = (e) => { if (e.target === wrap) wrap.remove(); };
