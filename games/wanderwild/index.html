@@ -1206,7 +1206,8 @@ function _buildWorldImpl(){
       if(Math.abs(x)<6||Math.abs(z)<6) continue; if(x>-16&&x<16&&z>4&&z<28) continue;
       if(isInWater(x,z,7)) continue;   // never plant a tree on/at a lake or river (7u = trunk + a dry bank)
       if(swampMask(x,z)>0.35||desertMask(x,z)>0.35||iceMask(x,z)>0.35||darkMask(x,z)>0.35) continue;   // 🗺️ no leafy green forest trees in the swamp/desert/ICE/dark rings — those biomes get their own props
-      const h=rand(5,8.5); _treeSpecs.push({x,z,h}); trunkSolid(x,z,0.6,h*0.42); }   // collect specs + keep the trunk colliders
+      const h=rand(5,8.5); _treeSpecs.push({x,z,h}); trunkSolid(x,z,0.6,h*0.42);
+      const _cp=new THREE.Group(); _cp.position.set(x,h*0.5,z); world.add(_cp); addNode(_cp,x,z,{item:'wood',amount:2,respawn:30,label:'🪓 Chop for wood'}); }   // every green (non-fruit) forest tree is now choppable for wood — the merged VISUAL stays for perf, an invisible proxy carries the chop interaction
     mergeDecorTrees(_treeSpecs);   // -> 2 merged meshes instead of ~4,800 individual ones
   }
   for(let i=0;i<560;i++){ const a=rand(0,TAU), rad=rand(8,606); const x=Math.cos(a)*rad, z=Math.sin(a)*rad;
@@ -1221,7 +1222,7 @@ function _buildWorldImpl(){
       if(isInWater(nx,nz,5) || Math.hypot(nx,nz)<56 || (typeof inTrainingZone==='function'&&inTrainingZone(nx,nz))) continue;   // keep the (expanded) town core, water & practice yard clear
       if(desertMask(nx,nz)>0.35 || iceMask(nx,nz)>0.35 || darkMask(nx,nz)>0.35) continue;   // green meadow/hills only
       const big=Math.random()<0.5, nm=big?pick(_NT):pick(_NL); const o=place(nm,nx,nz,{targetH:big?rand(4.2,6.2):rand(0.9,1.9),rotY:rand(0,TAU),tint:null});
-      if(o && big){ solids.push({minX:nx-0.45,maxX:nx+0.45,minZ:nz-0.45,maxZ:nz+0.45,top:1.2,mesh:o,stand:false}); } } }   // big trees get a tight trunk collider
+      if(o && big){ solids.push({minX:nx-0.45,maxX:nx+0.45,minZ:nz-0.45,maxZ:nz+0.45,top:1.2,mesh:o,stand:false}); addNode(o,nx,nz,{item:'wood',amount:2,respawn:30,label:'🪓 Chop for wood'}); } } }   // big trees get a tight trunk collider + are choppable for wood (non-fruit)
   // street lanterns along the main roads — each gets a warm GLOWING bulb (+ a real point light up to the cap)
   function streetLamp(x,z){ const o=place("Lantern",x,z,{targetH:2.6,tint:'#39312a'}); const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8),new THREE.MeshStandardMaterial({color:'#ffd98a',emissive:new THREE.Color('#ffd98a'),emissiveIntensity:1.4,toneMapped:false})); bulb.position.set(x,2.5,z); world.add(bulb); return o; }   // emissive bulb crosses the bloom threshold -> actually GLOWS at night (was a dead flat dot)   // dark-iron post (was white) + glowing warm bulb (no PointLight — the 8-slot dynamic-light cap stays reserved for craftable lanterns)
   // owner: "too many lampposts" — was 62 every 14u. Now ~20, only where lamps belong: flanking the two main avenues at each cross-street + framing the town plaza.
