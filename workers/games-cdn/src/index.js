@@ -53,19 +53,12 @@ export default {
       headers.set("content-type", MIME[ext]);
     }
 
-    // Unity WebGL compressed streams (.unityweb = gzip). Serve with
-    // Content-Encoding: gzip so the browser decompresses NATIVELY — fast, and
-    // it avoids Unity's JS decompression-fallback, which holds compressed +
-    // decompressed copies at once and caused intermittent "memory access out of
-    // bounds" on first load of the 149MB Valebound build. Content-Type is the
-    // DECOMPRESSED type (by inner extension). Only Unity games ship .unityweb,
-    // so this branch never affects the native web games.
-    if (key.endsWith(".unityweb")) {
-      headers.set("content-encoding", "gzip");
-      if (key.endsWith(".wasm.unityweb")) headers.set("content-type", "application/wasm");
-      else if (key.endsWith(".js.unityweb")) headers.set("content-type", "application/javascript");
-      else headers.set("content-type", "application/octet-stream"); // .data / .symbols
-    }
+    // Unity WebGL streams (.unityweb) are gzip-compressed and the build ships a
+    // JS decompression FALLBACK, so we deliberately do NOT set Content-Encoding:
+    // gzip here — letting the browser also decompress would double-decompress and
+    // corrupt the module (Maximum call stack size / bad wasm). Unity's own JS
+    // decoder handles it. (The faster native-gzip path needs a build with
+    // decompressionFallback OFF + .gz filenames — a separate, tested change.)
 
     // CORS — allow embedding from forgeflowgames.com
     headers.set("access-control-allow-origin", "*");
@@ -80,6 +73,12 @@ export default {
       headers.set("cache-control", "no-store, no-cache, must-revalidate, private");
       headers.set("pragma", "no-cache");
       headers.set("expires", "0");
+    } else if (key.endsWith(".unityweb")) {
+      // Unity Build streams: revalidate against R2's ETag every load so a redeploy
+      // can never serve a stale wasm/framework/data against fresh siblings (that
+      // mismatch = invoke-table corruption / call-stack overflow). 304 when
+      // unchanged keeps it cheap; switch to immutable+hashed names for ship.
+      headers.set("cache-control", "no-cache, must-revalidate");
     } else {
       headers.set("cache-control", "public, max-age=86400");
     }
