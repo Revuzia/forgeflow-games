@@ -66,7 +66,7 @@
   #quests .obj{margin-left:4px; opacity:.92} #quests .done{text-decoration:line-through; opacity:.5} #quests .tick{color:#2bb673; font-weight:bold}
   #goalbox{font-size:12.5px; line-height:1.4} #goalbox .dayhdr{font-weight:bold; font-size:14px; color:var(--pop); margin-bottom:5px} #goalbox .obj{margin-left:2px}
   .jdiv{height:2px; background:rgba(34,26,46,.18); border-radius:2px; margin:9px 0}
-  #prompt{left:50%; bottom:132px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:9px 16px; border-radius:30px; font-weight:bold; font-size:15px; opacity:0; transition:opacity .15s; box-shadow:0 6px 0 rgba(0,0,0,.25); z-index:31}
+  #prompt{left:50%; top:84px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:9px 16px; border-radius:30px; font-weight:bold; font-size:15px; opacity:0; transition:opacity .15s; box-shadow:0 6px 0 rgba(0,0,0,.25); z-index:31}
   #prompt .key{display:inline-block; background:var(--sun); color:var(--ink); border-radius:7px; padding:1px 8px; margin-right:6px}
   #toasts{left:50%; bottom:150px; transform:translateX(-50%); display:flex; flex-direction:column; gap:7px; align-items:center}
   .toast{background:#fff; border:3px solid var(--ink); border-radius:14px; padding:8px 16px; font-weight:bold; font-size:14px; box-shadow:3px 3px 0 rgba(34,26,46,.25); animation:pop .3s ease; max-width:70vw; text-align:center}
@@ -1185,7 +1185,7 @@ function _buildWorldImpl(){
   for(const [m,x,z,r,t] of lots){ const o=place(m,x,z,{targetH:rand(5.2,6.8),rotY:r,tint:t}); if(o){ texturizeHouse(o, (m==='HouseWooden'||m==='Hut')?'wood':'plaster', x, z); const sld=addSolid(o,0.2,false); registerHome(o,sld,_hi++); } }  // cozier height (owner: some homes rendered wall-like) — registerHome makes it enterable (Stage A)
   // landmarks
   { const ml=place("MillBuilding1",-92,-54,{targetH:6.6,tint:'#e0b27a'}); if(ml){ texturizeHouse(ml,'wood',-92,-54); const s1=addSolid(ml,0.2,false); registerHome(ml,s1,_hi++); } const bn=place("Barn",86,-40,{targetH:6.2,tint:'#d65f4a'}); if(bn){ texturizeHouse(bn,'wood',86,-40); const s2=addSolid(bn,0.2,false); registerHome(bn,s2,_hi++); } }   // landmark buildings pushed out with the expanded town   // owner: big wooden buildings -> normal enterable homes (was oversized non-enterable walls)
-  for(const [wx,wz] of [[-10,22],[24,-30],[-40,40]]){ const w=place("Well",wx,wz,{targetH:3,tint:'#9a948a'}); if(w) addSolid(w); makeWater(0.85,wx,wz,1.7); }   // solid + standable (jump on it!) + real water in the shaft
+  for(const [wx,wz] of [[-10,22],[24,-30],[-40,40]]){ const w=place("Well",wx,wz,{targetH:1.7,tint:'#9a948a'}); if(w) addSolid(w); makeWater(0.85,wx,wz,1.05); }   // solid + standable (jump on it!) + real water in the shaft
   for(const [rx,rz] of [[-22,8],[27,18],[-30,-12],[34,-6],[14,42],[-16,46]]){ if(isInWater(rx,rz,4))continue; const rk=makeRock(rx,rz,rand(1.4,2.2)); world.add(rk); addNode(rk,rx,rz,{item:'stone',amount:2,respawn:26,label:'Mine for stone',solid:true}); }   // owner: mineable boulders near town so stone is reachable without trekking to the east biome
   // 🏖️ real animated pond at the beach; the bridge is SOLID so you walk/jump on it (no more sinking through), boat floats
   makeWater(17,0,84);   // showcase reflective pond near town
@@ -1503,7 +1503,7 @@ function buildHamlets(startIdx){   // 5 hamlets of 2-4 enterable homes scattered
     for(let i=0;i<14;i++){ const a=rand(0,TAU), rr=rand(6,30), gx=hcx+Math.cos(a)*rr, gz=hcz+Math.sin(a)*rr; if(isInWater(gx,gz,3))continue; const _ht={Grass:'#5fae3e',Grass3:'#6bbf4a',Flower1:'#d65a7a',Flower2:'#ffd23f',Flower3:'#ff8a4c',MushroomRed:'#d24a4a'}, _hn=pick(Object.keys(_ht)); place(_hn,gx,gz,{targetH:rand(0.5,1.2),rotY:rand(0,TAU),tint:_ht[_hn]}); }
     // 🏘️ FANTASY-TOWN PROPS — a focal fountain + market stalls + cart + lanterns make each hamlet read as a real village (Kenney CC0, embedded atlas, no tint)
     { const _far=(x,z)=>!used.some(u=>Math.hypot(u.x-x,u.z-z)<6);
-      if(typeof MODELS!=='undefined' && MODELS['ft-fountain'] && !isInWater(hcx,hcz,4) && _far(hcx,hcz)){ const fo=place('ft-fountain',hcx,hcz,{targetH:2.0}); if(fo){ addSolid(fo); used.push({x:hcx,z:hcz}); } }
+      if(typeof MODELS!=='undefined' && MODELS['ft-fountain'] && !isInWater(hcx,hcz,4) && _far(hcx,hcz)){ const fo=place('ft-fountain',hcx,hcz,{targetH:1.1}); if(fo){ addSolid(fo); used.push({x:hcx,z:hcz}); } }
       const _stalls=['ft-stall','ft-stall-green','ft-stall-red']; const _ns=2+Math.floor(Math.random()*3);
       for(let s=0;s<_ns;s++){ const a=rand(0,TAU), rr=rand(8,16), px=hcx+Math.cos(a)*rr, pz=hcz+Math.sin(a)*rr; if(isInWater(px,pz,3)||!_far(px,pz))continue; const so=place(pick(_stalls),px,pz,{targetH:2.2,rotY:Math.atan2(hcx-px,hcz-pz)}); if(so){ addSolid(so); used.push({x:px,z:pz}); } }
       if(Math.random()<0.7){ const a=rand(0,TAU), px=hcx+Math.cos(a)*14, pz=hcz+Math.sin(a)*14; if(!isInWater(px,pz,3)&&_far(px,pz)){ const co=place('ft-cart',px,pz,{targetH:1.8,rotY:rand(0,TAU)}); if(co){ addSolid(co); used.push({x:px,z:pz}); } } }
@@ -1934,31 +1934,29 @@ function _armorTier(id){ if(!id) return ''; if(ATIER.includes(id)) return id; if
 function setArmorVisual(){ const id=state.armor||''; if(id===_armorShown) return; _armorShown=id;
   while(armorGroup.children.length) armorGroup.remove(armorGroup.children[0]);
   if(player.userData.model && QCLASS.has(state.charModel)){ _classArmor(id); return; }   // CLASS models: tint the sculpted outfit + bolt-on pieces (a box over them looks like cardboard)
-  if(id && ARMORS[id]){
-    const cls=playerClass(), tier=_armorTier(id);
-    const pal = cls==='mage'?ARMOR_COL_ROBE : cls==='ranger'?ARMOR_COL_LEATHER : ARMOR_COL;
-    const col = state.armorDye || pal[tier] || ARMOR_COL[tier] || '#8a7a5a';   // 🎨 dye > CLASS-TIER hue (was ARMOR_COL[id] — armor ids like 'apprentice_robe' never matched the tier keys, so everything fell back to grey)
-    if(cls==='mage'){
-      // 🧙 flowing wizard ROBE (not plate): fitted chest + a wide tapered skirt to the floor + collar + sash + faint arcane glow; no bulky pauldrons
-      const chest=box(0.58,0.42,0.40,col); chest.position.y=1.08; armorGroup.add(chest);
-      const skirt=box(0.78,0.68,0.56,col); skirt.position.y=0.48; armorGroup.add(skirt);
-      const collar=box(0.5,0.16,0.44, tier==='gold'||tier==='titan'?'#fff7d0':'#efe6ff'); collar.position.y=1.30; armorGroup.add(collar);
-      const sash=box(0.6,0.1,0.42,'#2a2050'); sash.position.y=0.82; armorGroup.add(sash);
-      armorGroup.traverse(m=>{ if(m.isMesh && m.material && m.material.emissive){ m.material.emissive.set(col); m.material.emissiveIntensity=0.14; } });
-    } else if(cls==='ranger'){
-      // 🏹 light leather: slim vest + belt + small bracers (no heavy pauldrons)
-      const chest=box(0.62,0.5,0.42,col); chest.position.y=1.02; armorGroup.add(chest);
-      const belt=box(0.64,0.1,0.44,'#3a2a1a'); belt.position.y=0.74; armorGroup.add(belt);
-      for(const sx of [0.4,-0.4]){ const br=box(0.16,0.18,0.36,col); br.position.set(sx,0.86,0); armorGroup.add(br); }
-    } else {
-      // ⚔️ warrior plate: bulky chest + pauldrons + belt + trim
-      const chest=box(0.66,0.52,0.44,col); chest.position.y=1.02; armorGroup.add(chest);
-      const belt=box(0.66,0.12,0.46,'#3a2a1a'); belt.position.y=0.74; armorGroup.add(belt);
-      for(const sx of [0.42,-0.42]){ const sh=box(0.24,0.2,0.4,col); sh.position.set(sx,1.26,0); armorGroup.add(sh); }
-      const trim=box(0.7,0.08,0.48, tier==='gold'||tier==='titan'?'#fff7d0':'#5a4632'); trim.position.y=1.25; armorGroup.add(trim);
-    }
-    armorGroup.traverse(m=>{ if(m.isMesh){ m.castShadow=true; m.receiveShadow=true; } });
-  } }
+  _bodyArmor(id);   // char_player: the armor RECOLOURS the body itself (fitted, on-skin) — no chunky boxes
+}
+// On-skin armor for the block hero: recolour + re-material the BODY meshes (torso/arms/legs), leave the head/face as skin.
+// Mage = silk robe hue + faint arcane sheen; warrior = shiny metallic plate; ranger = matte leather. Restores on unequip.
+function _bodyArmor(id){ const pm=player.userData.model; if(!pm)return; const cls=playerClass();
+  const tier=id?_armorTier(id):'';
+  const pal = cls==='mage'?ARMOR_COL_ROBE : cls==='ranger'?ARMOR_COL_LEATHER : ARMOR_COL;
+  const hue = (id&&ARMORS[id]&&pal[tier])?pal[tier]:null;
+  const feel = cls==='mage'?{r:0.5,m:0.16,e:0.10} : cls==='ranger'?{r:0.85,m:0.05,e:0} : {r:0.3,m:0.8,e:0};   // silk / leather / shiny-plate
+  if(pm.userData._mh===undefined){ const bb=new THREE.Box3().setFromObject(pm); pm.userData._mlo=bb.min.y; pm.userData._mh=(bb.max.y-bb.min.y)||1; }
+  pm.traverse(m=>{ if(!(m.isMesh && m.material))return;
+    if(/face|head|hair|eye|brow|beard|mouth|nose|tooth|ear|hat|cap|sword|staff|bow|wand|weapon|hand|glove/i.test(m.name||''))return;   // keep skin/face/held
+    const mb=new THREE.Box3().setFromObject(m); const cy=(mb.min.y+mb.max.y)/2, rel=(cy-pm.userData._mlo)/pm.userData._mh;
+    if(rel>0.72)return;   // top ~28% is the head — leave it skin (no blue head)
+    if(!m.userData._bodyOrig){ m.userData._bodyOrig={ c:m.material.color?m.material.color.getHex():null, r:m.material.roughness, mt:m.material.metalness, e:m.material.emissive?m.material.emissive.getHex():null, ei:m.material.emissiveIntensity }; }
+    if(!m.userData._bodyCloned){ m.material=m.material.clone(); m.userData._bodyCloned=true; }
+    if(hue){ if(m.material.color) m.material.color.set(state.armorDye||hue);
+      if(m.material.roughness!=null) m.material.roughness=feel.r;
+      if(m.material.metalness!=null) m.material.metalness=feel.m;
+      if(m.material.emissive){ if(feel.e>0){ m.material.emissive.set(state.armorDye||hue); m.material.emissiveIntensity=feel.e; } else m.material.emissiveIntensity=0; }
+    } else { const o=m.userData._bodyOrig; if(o){ if(m.material.color&&o.c!=null)m.material.color.setHex(o.c); if(o.r!=null)m.material.roughness=o.r; if(o.mt!=null)m.material.metalness=o.mt; if(m.material.emissive){ if(o.e!=null)m.material.emissive.setHex(o.e); if(o.ei!=null)m.material.emissiveIntensity=o.ei; } } }
+  });
+}
 // armor on a Quaternius CLASS model: TINT the outfit body-mesh by tier (color×map keeps every sculpted detail) + a few bolt-on pieces grown on the real bones. Class-flavoured: warrior plate, ranger leather, wizard robe (+arcane emissive).
 function _classArmor(id){ const pm=player.userData.model; if(!pm)return; const cls=playerClass();
   const tier=id?_armorTier(id):''; const tierIdx=tier?Math.max(0,ATIER.indexOf(tier)):0;
@@ -3199,7 +3197,7 @@ function tryInteract(){ if(state.running&&nearest){ SFX.play('interact'); emote(
 /* ONE button (E) does it all (owner: "too many random buttons"): interact with the thing you're facing, OR — if
    nothing's in reach — USE the SELECTED hotbar item (eat the food you have selected). Replaces the old Q-eat. */
 function useSelected(){ return eatBestFood(); }   // R eats the best food from your bag (the hotbar now holds equipment, not food)
-function useE(){ if(!state.running)return; if(nearest){ tryInteract(); } else { toast('🤚 Nothing here to interact with — walk up to a thing. (R uses your selected item; 🖱️ left-click targets a foe, then 1 to auto-attack.)'); } }   // E = interact with the WORLD only; R = use the held hotbar item; left-click = attack
+function useE(){ if(!state.running)return; if(nearest){ tryInteract(); } else { const _n=performance.now(); if(_n-(window.__noIntT||0)>3000){ window.__noIntT=_n; toast('🤚 Nothing here to interact with — walk up to a thing. (R uses your selected item; 🖱️ left-click targets a foe, then 1 to auto-attack.)'); } } }   // debounce: spamming E no longer spams this message   // E = interact with the WORLD only; R = use the held hotbar item; left-click = attack
 
 /* ---------- movement / camera / cutaway ---------- */
 let vy=0,grounded=true,stepT=0,jumpHeld=false,airJumps=0,flipT=0,_jumpCD=0;
