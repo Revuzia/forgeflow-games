@@ -1934,12 +1934,31 @@ function _armorTier(id){ if(!id) return ''; if(ATIER.includes(id)) return id; if
 function setArmorVisual(){ const id=state.armor||''; if(id===_armorShown) return; _armorShown=id;
   while(armorGroup.children.length) armorGroup.remove(armorGroup.children[0]);
   if(player.userData.model && QCLASS.has(state.charModel)){ _classArmor(id); return; }   // CLASS models: tint the sculpted outfit + bolt-on pieces (a box over them looks like cardboard)
-  if(id && ARMORS[id]){ const col=state.armorDye||ARMOR_COL[id]||'#cccccc';   // 🎨 dye recolors the box-armor too (non-class models)
-    const chest=box(0.66,0.52,0.44,col); chest.position.y=1.02; armorGroup.add(chest);
-    const belt=box(0.66,0.12,0.46,'#3a2a1a'); belt.position.y=0.74; armorGroup.add(belt);
-    for(const sx of [0.42,-0.42]){ const sh=box(0.24,0.2,0.4,col); sh.position.set(sx,1.26,0); armorGroup.add(sh); }
-    const trim=box(0.7,0.08,0.48, id==='gold'||id==='titan'?'#fff7d0':'#5a4632'); trim.position.y=1.25; armorGroup.add(trim);
-    armorGroup.traverse(m=>{ if(m.isMesh){ m.castShadow=true; m.receiveShadow=true; } }); } }
+  if(id && ARMORS[id]){
+    const cls=playerClass(), tier=_armorTier(id);
+    const pal = cls==='mage'?ARMOR_COL_ROBE : cls==='ranger'?ARMOR_COL_LEATHER : ARMOR_COL;
+    const col = state.armorDye || pal[tier] || ARMOR_COL[tier] || '#8a7a5a';   // 🎨 dye > CLASS-TIER hue (was ARMOR_COL[id] — armor ids like 'apprentice_robe' never matched the tier keys, so everything fell back to grey)
+    if(cls==='mage'){
+      // 🧙 flowing wizard ROBE (not plate): fitted chest + a wide tapered skirt to the floor + collar + sash + faint arcane glow; no bulky pauldrons
+      const chest=box(0.58,0.42,0.40,col); chest.position.y=1.08; armorGroup.add(chest);
+      const skirt=box(0.78,0.68,0.56,col); skirt.position.y=0.48; armorGroup.add(skirt);
+      const collar=box(0.5,0.16,0.44, tier==='gold'||tier==='titan'?'#fff7d0':'#efe6ff'); collar.position.y=1.30; armorGroup.add(collar);
+      const sash=box(0.6,0.1,0.42,'#2a2050'); sash.position.y=0.82; armorGroup.add(sash);
+      armorGroup.traverse(m=>{ if(m.isMesh && m.material && m.material.emissive){ m.material.emissive.set(col); m.material.emissiveIntensity=0.14; } });
+    } else if(cls==='ranger'){
+      // 🏹 light leather: slim vest + belt + small bracers (no heavy pauldrons)
+      const chest=box(0.62,0.5,0.42,col); chest.position.y=1.02; armorGroup.add(chest);
+      const belt=box(0.64,0.1,0.44,'#3a2a1a'); belt.position.y=0.74; armorGroup.add(belt);
+      for(const sx of [0.4,-0.4]){ const br=box(0.16,0.18,0.36,col); br.position.set(sx,0.86,0); armorGroup.add(br); }
+    } else {
+      // ⚔️ warrior plate: bulky chest + pauldrons + belt + trim
+      const chest=box(0.66,0.52,0.44,col); chest.position.y=1.02; armorGroup.add(chest);
+      const belt=box(0.66,0.12,0.46,'#3a2a1a'); belt.position.y=0.74; armorGroup.add(belt);
+      for(const sx of [0.42,-0.42]){ const sh=box(0.24,0.2,0.4,col); sh.position.set(sx,1.26,0); armorGroup.add(sh); }
+      const trim=box(0.7,0.08,0.48, tier==='gold'||tier==='titan'?'#fff7d0':'#5a4632'); trim.position.y=1.25; armorGroup.add(trim);
+    }
+    armorGroup.traverse(m=>{ if(m.isMesh){ m.castShadow=true; m.receiveShadow=true; } });
+  } }
 // armor on a Quaternius CLASS model: TINT the outfit body-mesh by tier (color×map keeps every sculpted detail) + a few bolt-on pieces grown on the real bones. Class-flavoured: warrior plate, ranger leather, wizard robe (+arcane emissive).
 function _classArmor(id){ const pm=player.userData.model; if(!pm)return; const cls=playerClass();
   const tier=id?_armorTier(id):''; const tierIdx=tier?Math.max(0,ATIER.indexOf(tier)):0;
