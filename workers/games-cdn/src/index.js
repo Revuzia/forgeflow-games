@@ -53,6 +53,20 @@ export default {
       headers.set("content-type", MIME[ext]);
     }
 
+    // Unity WebGL compressed streams (.unityweb = gzip). Serve with
+    // Content-Encoding: gzip so the browser decompresses NATIVELY — fast, and
+    // it avoids Unity's JS decompression-fallback, which holds compressed +
+    // decompressed copies at once and caused intermittent "memory access out of
+    // bounds" on first load of the 149MB Valebound build. Content-Type is the
+    // DECOMPRESSED type (by inner extension). Only Unity games ship .unityweb,
+    // so this branch never affects the native web games.
+    if (key.endsWith(".unityweb")) {
+      headers.set("content-encoding", "gzip");
+      if (key.endsWith(".wasm.unityweb")) headers.set("content-type", "application/wasm");
+      else if (key.endsWith(".js.unityweb")) headers.set("content-type", "application/javascript");
+      else headers.set("content-type", "application/octet-stream"); // .data / .symbols
+    }
+
     // CORS — allow embedding from forgeflowgames.com
     headers.set("access-control-allow-origin", "*");
     headers.set("access-control-allow-methods", "GET, HEAD, OPTIONS");
