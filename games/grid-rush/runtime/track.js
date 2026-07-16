@@ -40,12 +40,16 @@ export class Track {
 
     for (let i = 0; i < N; i++) {
       const t = (i / N) * Math.PI * 2;
+      // Harmonics MUST be integers or the loop won't close (f(0) !== f(2pi)),
+      // leaving a position/height cliff at the start/finish seam. Round waves and
+      // use an integer height harmonic so the parametric curve is 2pi-periodic.
+      const waves = Math.round(def.waves) || 1;
       const r =
         def.radius *
-        (0.82 + 0.18 * Math.sin(t * def.waves + def.seed * 0.01) + 0.06 * Math.sin(t * 5));
+        (0.82 + 0.18 * Math.sin(t * waves + def.seed * 0.01) + 0.06 * Math.sin(t * 5));
       const x = Math.cos(t) * r + Math.sin(t * 2) * (def.radius * 0.1);
       const z = Math.sin(t) * r * 0.72 + Math.cos(t * 3) * (def.radius * 0.07);
-      const y = 4 + Math.sin(t * def.waves) * def.heightAmp + Math.cos(t * 2.3) * (def.heightAmp * 0.35);
+      const y = 4 + Math.sin(t * waves) * def.heightAmp + Math.cos(t * 2) * (def.heightAmp * 0.35);
       pts.push(new THREE.Vector3(x, y, z));
     }
 
