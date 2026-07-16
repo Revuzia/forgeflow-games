@@ -266,8 +266,10 @@ export function applyStun(racer, time, speedKill) {
     return 'blocked';
   }
   if (racer.phasing) return 'phased';
-  racer.stun = Math.max(racer.stun, time);
-  racer.velocity.multiplyScalar(1 - speedKill);
+  // Heavier chassis (Mag-Drill, weight 1.35) resist gadget/hazard stuns.
+  const resist = racer.vehicle && racer.vehicle.weight ? Math.min(1, 1 / racer.vehicle.weight) : 1;
+  racer.stun = Math.max(racer.stun, time * resist);
+  racer.velocity.multiplyScalar(1 - speedKill * resist);
   racer.speed = racer.velocity.length();
   return 'hit';
 }

@@ -885,9 +885,10 @@ export class GridRushGame {
       r.turbine = Math.max(0, r.turbine - PHYSICS.turbineDrain * dt);
       r.velocity.addScaledVector(r.forward, PHYSICS.accel * 0.85 * PHYSICS.burstMul * dt);
     } else {
+      const tMul = (r.vehicle && r.vehicle.turbineMul) || 1; // Nova Disc: wild turbine recovery
       r.turbine = Math.min(
         PHYSICS.turbineMax,
-        r.turbine + PHYSICS.turbineRegen * dt + (r.drifting ? PHYSICS.turbineDriftGain * dt : 0)
+        r.turbine + (PHYSICS.turbineRegen * dt + (r.drifting ? PHYSICS.turbineDriftGain * dt : 0)) * tMul
       );
     }
 
@@ -1242,6 +1243,9 @@ export class GridRushGame {
       this.els.item.classList.toggle('has-item', !!idef);
     }
     if (this.els.itemName) this.els.itemName.textContent = idef ? idef.name : 'NO GADGET';
+    // Static Veil active → light the item panel so the shield is visible on the HUD
+    if (!this._itemPanelEl) this._itemPanelEl = document.getElementById('item-panel');
+    if (this._itemPanelEl) this._itemPanelEl.classList.toggle('has-veil', !!p.veil);
 
     if (this.els.leaders) {
       this.els.leaders.innerHTML = rank

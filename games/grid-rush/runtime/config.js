@@ -109,6 +109,7 @@ export const VEHICLES = {
     accel: 1.08,
     handle: 0.95,
     weight: 0.95,
+    turbineMul: 1.6,
     shape: 'disc',
   },
 };
