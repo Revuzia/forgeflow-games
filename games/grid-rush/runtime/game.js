@@ -1162,14 +1162,14 @@ export class GridRushGame {
   }
 
   updateProgress() {
-    const L = this.track.totalLength;
     for (const r of this.racers) {
       if (r.finished) {
-        r.progress = LAPS * L + 1e6 - r.finishTime;
+        r.progress = 1e9 - r.finishTime;
       } else {
-        const base = (r.lap - 1) * L;
-        const proj = this.track.project(r.position);
-        r.progress = base + (((proj.s % L) + L) % L);
+        // Monotonic cumulative arc-length (projectRacer already computed it and
+        // handled the lap wrap), so ranking never jumps a full lap at the last
+        // checkpoint / start line. Also drops the redundant per-frame project().
+        r.progress = r.trackS;
       }
     }
   }

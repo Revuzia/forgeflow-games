@@ -237,12 +237,18 @@ export function useItem(racer, racers, world, track, placeOf) {
     }
     case 'warp_anchor': {
       const hop = 38;
-      racer.trackS += hop;
-      const samp = track.sampleAt(racer.trackS);
+      const L = track.totalLength;
+      // Warp along the rail by `hop`. Advance trackS by exactly hop and keep
+      // _lastS in sync so projectRacer does NOT re-count the position jump next
+      // frame (it previously double-counted, leaving trackS ~2x ahead).
+      const targetS = racer._lastS + hop;
+      const samp = track.sampleAt(targetS);
       racer.position.copy(samp.pos).addScaledVector(samp.side, clamp(racer.lateral, -7, 7));
       racer.position.y += 1.15;
       racer.velocity.copy(samp.tangent).multiplyScalar(Math.max(racer.speed, 30));
       racer.yaw = Math.atan2(samp.tangent.x, samp.tangent.z);
+      racer.trackS += hop;
+      racer._lastS = ((targetS % L) + L) % L;
       events.push({ kind: 'toast', text: 'WARP ANCHOR', who: racer.id });
       break;
     }
