@@ -4,7 +4,7 @@ import { mulberry32 } from './math.js';
 
 /**
  * Closed ribbon track with sampled centerline, gates, item pads, hazards.
- * Road is TRACK_HALF_WIDTH (1.5× original) for roomier racing lines.
+ * Road is TRACK_HALF_WIDTH (widened for roomier racing lines).
  */
 export class Track {
   constructor(scene, def) {

@@ -19,7 +19,7 @@ function showBootError(err) {
 
 try {
   // eslint-disable-next-line no-new
-  new GridRushGame();
+  window.__GR__ = new GridRushGame();
   console.info('%cGrid Rush', 'color:#00f0ff;font-size:16px;font-weight:bold', '— hover circuits · original gadgets');
 } catch (err) {
   showBootError(err);

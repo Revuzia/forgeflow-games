@@ -704,13 +704,15 @@ export class GridRushGame {
     const p = this.player;
     if (!p || p.finished) return;
 
-    // W = throttle, S = brake/reverse, A = left, D = right — no inversions
+    // Steering convention: +steer yaws the car screen-LEFT (verified via a
+    // camera-space turn test), so A/Left = +1 and D/Right = -1.
+    // W = throttle, S = brake/reverse, SPACE = jump.
     let steer = 0;
     let throttle = 0;
     let brake = 0;
     let reverse = 0;
-    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) steer -= 1;
-    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) steer += 1;
+    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) steer += 1; // left
+    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) steer -= 1; // right
     if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) throttle = 1;
     if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) {
       // Going forward → brake; stopped/backward → reverse
@@ -873,7 +875,10 @@ export class GridRushGame {
 
     const latVel = r.velocity.dot(r.right);
     const grip = r.drifting ? PHYSICS.driftGrip : PHYSICS.grip;
-    r.velocity.addScaledVector(r.right, -latVel * grip);
+    // dt-normalized: lateral grip (drift/slide feel) is now identical at any
+    // refresh rate. Equals `grip` exactly at 60fps so existing tuning is kept.
+    const gripK = 1 - Math.pow(1 - grip, dt * 60);
+    r.velocity.addScaledVector(r.right, -latVel * gripK);
 
     const wantBurst = burst && r.turbine > 2 && !r.airborne;
     if (wantBurst) {
@@ -1085,8 +1090,10 @@ export class GridRushGame {
       r.velocity.addScaledVector(n, knock * 0.55);
       r.velocity.addScaledVector(samp.tangent, knock * 0.55);
       r.speed = r.velocity.length();
-      // Pop slightly off so we clear the collider
-      r.position.addScaledVector(n, Math.max(0.8, h.radius * 0.35));
+      // Pop FULLY outside the collider (not a fixed nudge) so a stunned kart
+      // can't re-settle inside a large hazard and get wedged there.
+      const dh = Math.hypot(r.position.x - c.x, r.position.z - c.z);
+      r.position.addScaledVector(n, Math.max(0.8, h.radius - dh) + 1.2);
       r.position.addScaledVector(samp.tangent, 1.2);
 
       if (r.isPlayer && res === 'hit') {
@@ -1115,7 +1122,7 @@ export class GridRushGame {
     if (slow && nearHazard) r.stuckT += dt;
     else r.stuckT = Math.max(0, r.stuckT - dt * 0.5);
 
-    if (r.stuckT > 0.7) {
+    if (r.stuckT > 0.45) {
       r.stuckT = 0;
       r.stun = 0;
       r.hazardIFrames = PHYSICS.hazardIFrames;

@@ -31,7 +31,7 @@ Or any static server. Requires HTTP (not `file://`) for ES modules + Three.js CD
 | A / D or ← → | Steer |
 | W / ↑ | Throttle |
 | S / ↓ | Brake |
-| SPACE | Drift |
+| SPACE | Jump (drift is automatic when cornering hard) |
 | SHIFT | Turbine burst |
 | E / LMB | Use gadget |
 | Esc | Pause |

@@ -3,8 +3,8 @@
 export const TITLE = 'Grid Rush';
 export const LAPS = 3;
 export const RIVAL_COUNT = 5;
-/** Road half-width — 1.5× original for roomier circuits */
-export const TRACK_HALF_WIDTH = 14.25;
+/** Road half-width — widened 1.5× again (owner 2026-07-16) for roomier lines */
+export const TRACK_HALF_WIDTH = 21.375;
 export const ITEM_COOLDOWN = 0.35;
 
 export const PHYSICS = {

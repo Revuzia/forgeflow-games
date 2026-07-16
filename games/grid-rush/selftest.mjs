@@ -113,9 +113,9 @@ if (gameBlob.includes('reverse') && gameBlob.includes('PHYSICS.reverseAccel')) o
 else fail('reverse control missing');
 
 const cfg = fs.readFileSync(path.join(__dirname, 'runtime/config.js'), 'utf8');
-if (cfg.includes('TRACK_HALF_WIDTH = 14.25') || /TRACK_HALF_WIDTH\s*=\s*14\.25/.test(cfg))
-  ok('road 1.5x (half-width 14.25)');
-else fail('road width not 1.5x');
+if (/TRACK_HALF_WIDTH\s*=\s*21\.375/.test(cfg))
+  ok('road widened (half-width 21.375)');
+else fail('road width not widened to 21.375');
 
 const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 if (html.includes('chassis-preview') && html.includes('circuit-map') && html.includes('menu-landscape'))

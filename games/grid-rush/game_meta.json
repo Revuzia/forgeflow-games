@@ -6,7 +6,7 @@
   "genre": "racing",
   "sub_genre": "hover-kart-racer",
   "difficulty": "medium",
-  "controls_keyboard": "A/D or ←/→ steer · W throttle · S brake · SPACE drift · E / LMB use item · SHIFT burst · Esc pause",
+  "controls_keyboard": "A/D or ←/→ steer · W throttle · S brake/reverse · SPACE jump · E / LMB use item · SHIFT burst · Esc pause",
   "controls_gamepad": "Not required — full keyboard + mouse.",
   "has_mobile_support": false,
   "tags": [
