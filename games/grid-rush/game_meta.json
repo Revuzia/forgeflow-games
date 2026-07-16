@@ -1,0 +1,25 @@
+{
+  "title": "Grid Rush",
+  "slug": "grid-rush",
+  "short_description": "Neon hover-circuit racer — drift the prism rails, snag Data Orbs, deploy original tech gadgets, and outrun AI crews across five cyber arenas.",
+  "description": "Grid Rush is a premium browser hover-kart racer. Pilot original chassis (Prism Sled, Volt Runner, Glass Phantom, Mag-Drill, Echo Wedge, Nova Disc) on luminous ribbon tracks. Grab Data Orbs for tech gadgets that are NOT Mario Kart clones — Pulse Mines, Phase Skate, Volt Lash, Gravity Wells, Mirror Fog, Overclock, EMP Bloom, Data Siphon, Warp Anchor, Static Veil. Drift for turbine charge, rubber-band AI rivals, three-lap circuits, standings HUD, and synthwave presentation. Standalone game — not Neon Veil.",
+  "genre": "racing",
+  "sub_genre": "hover-kart-racer",
+  "difficulty": "medium",
+  "controls_keyboard": "A/D or ←/→ steer · W throttle · S brake · SPACE drift · E / LMB use item · SHIFT burst · Esc pause",
+  "controls_gamepad": "Not required — full keyboard + mouse.",
+  "has_mobile_support": false,
+  "tags": [
+    "racing",
+    "arcade",
+    "3d",
+    "neon",
+    "cyberpunk",
+    "hover",
+    "kart",
+    "items",
+    "threejs",
+    "singleplayer"
+  ],
+  "art_direction": "Premium synthwave hover-circuit key art: prism sleds on glowing magenta/cyan rails over a night megacity, Data Orb crates, drift sparks, cinematic browser-game poster."
+}
