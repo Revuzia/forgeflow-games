@@ -881,11 +881,17 @@ export class GridRushGame {
     r.velocity.addScaledVector(r.right, -latVel * gripK);
 
     const wantBurst = burst && r.turbine > 2 && !r.airborne;
+    const overclocking = r.overclockTimer > 0 && !r.airborne;
+    const tMul = (r.vehicle && r.vehicle.turbineMul) || 1; // Nova Disc: wild turbine recovery
     if (wantBurst) {
       r.turbine = Math.max(0, r.turbine - PHYSICS.turbineDrain * dt);
       r.velocity.addScaledVector(r.forward, PHYSICS.accel * 0.85 * PHYSICS.burstMul * dt);
+    } else if (overclocking) {
+      // Overclock is a sustained boost: real forward thrust (no turbine cost)
+      // toward the raised cap, so it feels like a boost, not just a higher limit.
+      r.velocity.addScaledVector(r.forward, PHYSICS.accel * 0.7 * dt);
+      r.turbine = Math.min(PHYSICS.turbineMax, r.turbine + PHYSICS.turbineRegen * 0.5 * dt * tMul);
     } else {
-      const tMul = (r.vehicle && r.vehicle.turbineMul) || 1; // Nova Disc: wild turbine recovery
       r.turbine = Math.min(
         PHYSICS.turbineMax,
         r.turbine + (PHYSICS.turbineRegen * dt + (r.drifting ? PHYSICS.turbineDriftGain * dt : 0)) * tMul
@@ -909,7 +915,10 @@ export class GridRushGame {
     }
 
     r.speed = r.velocity.length();
-    const cap = (r.onTrack === false ? PHYSICS.offTrackMax : maxSp) * rb;
+    // SHIFT burst may briefly exceed the normal top speed (that's the point of a
+    // boost); overclock's higher cap is already baked into maxSp.
+    const boostCap = maxSp * (wantBurst ? PHYSICS.burstMul : 1);
+    const cap = (r.onTrack === false ? PHYSICS.offTrackMax : boostCap) * rb;
     if (r.speed > cap && along > 0) {
       r.velocity.multiplyScalar(cap / r.speed);
       r.speed = cap;
@@ -954,11 +963,13 @@ export class GridRushGame {
         const d = a.position.distanceTo(b.position);
         const min = 2.4;
         if (d >= min || d < 1e-4) continue;
-        if (a._bumpT > 0 || b._bumpT > 0) continue;
         const n = this.tmp.copy(a.position).sub(b.position).normalize();
+        // ALWAYS depenetrate positionally so packs of 3+ karts can't interpenetrate
+        // and pile up; the bump cooldown below only gates the bounce impulse.
         const push = (min - d) * 0.5;
         a.position.addScaledVector(n, push);
         b.position.addScaledVector(n, -push);
+        if (a._bumpT > 0 || b._bumpT > 0) continue;
         const wa = a.vehicle.weight;
         const wb = b.vehicle.weight;
         const rel = this.tmp2.copy(a.velocity).sub(b.velocity);
@@ -1073,8 +1084,19 @@ export class GridRushGame {
 
     for (const h of this.track.hazards) {
       const c = h.mesh.position;
-      const d = r.position.distanceTo(c);
-      if (d >= h.radius) continue;
+      if (h.type === 'spin') {
+        // Rotation-accurate: hit only near the actual spinning bar, not anywhere
+        // in a static disc. Perpendicular distance to the current bar segment.
+        const th = h.mesh.rotation.y;
+        const halfLen = h.len ? h.len * 0.5 : h.radius;
+        const bx = Math.cos(th), bz = -Math.sin(th);
+        const px = r.position.x - c.x, pz = r.position.z - c.z;
+        const t = clamp(px * bx + pz * bz, -halfLen, halfLen);
+        const ox = px - bx * t, oz = pz - bz * t;
+        if (ox * ox + oz * oz >= 2.6 * 2.6) continue;
+      } else if (r.position.distanceTo(c) >= h.radius) {
+        continue;
+      }
 
       // i-frames first so continuous overlap cannot re-stun forever
       r.hazardIFrames = PHYSICS.hazardIFrames;

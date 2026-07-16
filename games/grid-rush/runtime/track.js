@@ -234,6 +234,7 @@ export class Track {
         this.hazards.push({
           type: 'spin',
           mesh: spin,
+          len: barLen,
           radius: barLen * 0.42,
           pos: p.clone(),
           speed: 1.1 + rnd() * 1.6,
