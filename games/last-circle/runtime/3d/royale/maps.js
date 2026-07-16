@@ -16,7 +16,7 @@ import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js"
 // Practice uses a random battle map (no dedicated range — owner direction).
 export const MAPS = {
   isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#7fd4f0", fog: 0.0006, themeColor: "#22d3a0", water: true },
-  ashgrid:   { name: "Ashgrid", theme: "urban", sky: "#aab6c4", fog: 0.0007, themeColor: "#e0685a", water: false },
+  ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e7cf98", fog: 0.0007, themeColor: "#e0854a", water: false },
   deepwood:  { name: "Deepwood", theme: "forest", sky: "#9fc7e8", fog: 0.0009, themeColor: "#7fb069", water: true },
 };
 
@@ -102,9 +102,12 @@ function colorAt(mapId, h, x, z, seed) {
     return [0.18 + n * 0.15, 0.62 + n * 0.18, 0.28];              // lush grass
   }
   if (mapId === "ashgrid") {
-    const g = 0.42 + n * 0.14;
-    if (h > 18) return [0.5, 0.47, 0.44];
-    return [g, g, g + 0.02];                                      // asphalt/concrete
+    // warm golden SAVANNA (was flat grey asphalt — owner read it as "no colour").
+    // acacia trees already dot this map, so dry golden grass + green/ochre variation fits.
+    const m = fbm(x / 130, z / 130, seed + 77, 2, 2, 0.5);        // broad green/gold patches
+    if (h < 0.5) return [0.83, 0.72, 0.46];                       // sandy dry wash
+    if (h > 28) return [0.55 + n * 0.08, 0.44, 0.31];             // sun-baked bluffs
+    return [0.66 + n * 0.14, 0.56 + m * 0.20, 0.26 + n * 0.08];   // golden grass, greener in the hollows
   }
   if (mapId === "deepwood") {
     if (h < 0.6) return [0.55, 0.5, 0.38];                        // river mud
@@ -617,7 +620,7 @@ export async function buildMap(W, mapId) {
   }
   {
     const nIsl = 5 + Math.floor(rng() * 3);
-    const grassC = mapId === "ashgrid" ? "#8a9484" : mapId === "deepwood" ? "#3f7a3f" : "#3fae62";
+    const grassC = mapId === "ashgrid" ? "#a7ad55" : mapId === "deepwood" ? "#3f7a3f" : "#3fae62";
     const rockC = "#7a6a58";
     for (let i = 0; i < nIsl; i++) {
       const ang = rng() * Math.PI * 2;

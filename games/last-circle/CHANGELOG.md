@@ -3,6 +3,48 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-12 — v4.10 Savanna recolor (grey→colour) + aim-pitch un-invert (?v=16, LIVE)
+
+Owner playtest: dropped into the old `ashgrid` map and reported "you've removed
+all colours from the game." Investigated live + in code — NO global desaturation
+(isla_viva/deepwood stay fully colourful, verified live). The grey was `ashgrid`
+itself: `colorAt` returned `[g,g,g]` pure grey (asphalt) under a grey sky
+`#aab6c4` — grey BY DESIGN, predating v4.9. The v4.9 fog thinning just made the
+whole grey expanse visible (denser fog used to hide it in haze). A lifeless grey
+map is still bad, so:
+
+- **`ashgrid` → "Savanna" (maps.js:19, 104-110, 623):** warm golden-hour sky
+  `#e7cf98`, and `colorAt` now returns golden savanna grass with green/ochre
+  variation (`fbm`-driven patches) instead of `[g,g,g]`; sandy washes low, warm
+  sun-baked bluffs high; island grass tops `#a7ad55`; themeColor warmed to
+  `#e0854a`. Fits the acacia trees already on the map. Verified live ground-level
+  + drop-in: warm, colourful, alive (was flat grey). mapId key stays `ashgrid`.
+- **Aim-pitch UN-INVERTED (player.js:794):** the armed pose layer was called with
+  `-a.pitch`, but `input.pitch > 0` = looking UP (verified: mouse-up → +pitch; a
+  live mouse-look test read +0.106 on up-look; `aimDir`/camera both use
+  `sin(pitch)`), and `tiltDir(+)` raises the muzzle — so the gun/torso tilted the
+  WRONG way (down when you looked up) for every armed player. Now passes `a.pitch`
+  un-negated. Verified live: look up → pistol raises & points up; look down →
+  pistol lowers to the hip.
+- Sim selftest 45/45.
+
+**Gap review (multi-agent, this session) — OPEN items, not yet fixed:** HIGH:
+semi-auto fire is defeated — the every-frame input rebuild (player.js input
+updater) overwrites weapons.js's `inp.fire=false`, so pistol/sniper/shotgun/
+launcher auto-repeat while LMB is held (needs a mousedown-EDGE gate). MEDIUM:
+sniper round has gravity while all other bullets are hitscan-fast → drops below
+the reticle at 200-300m (drop `gravity:true` or add holdover); grenade detonates
+on boxes but bounces on terrain (box branch checks `splash` before `bounce`);
+menu render-state (bloom + exposure 1.12 + warm sun 1.85) leaks into matches
+because buildMap never restores it (architectural — the established look, changing
+it is a judgement call); per-match `kernel.onUpdate` closures (cloud/bird/water)
+never removed → leak that compounds each match; cloud sprites read as flat cards
+at 130-230m (raise altitude + fade near camera); sky dome (r=1312) clips the 2000
+far-plane at map corners + parallaxes (recenter on camera). LOW: no low-ready
+pose (gun always at chest); emote-holster not restored if killed mid-emote;
+muzzle flash originates at the eye not the barrel. Movement/UI-HUD/Bots audits
+did not finish (session limit) — re-run needed.
+
 ## 2026-07-12 — v4.9 real sky + proper freefall/canopy + click-to-play menu (?v=15, LIVE)
 
 Owner round: "do the falling boneless, realsky and clouds and birds, run to

@@ -790,8 +790,9 @@ function syncObj(W, a, dt, far) {
       const wantW = mode ? 1 : 0;
       a._armW = (a._armW == null ? wantW : a._armW + (wantW - a._armW) * Math.min(1, dt * 8));
       if (mode) a._armMode = mode;
-      // camera pitch > 0 = looking down; the pose layer wants aim-up positive
-      if (a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, a._armMode, a._armW, -a.pitch);
+      // input.pitch > 0 = looking UP (verified: mouse-up → +pitch; aimDir/camera use sin(pitch));
+      // tiltDir(+) raises the muzzle, so pass pitch un-negated or the gun tilts the wrong way
+      if (a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, a._armMode, a._armW, a.pitch);
       // (per-frame barrel aiming removed — it was fragile and unverifiable;
       //  weapon orientation now uses the per-skin calibration set at load)
     }
