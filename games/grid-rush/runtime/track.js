@@ -24,6 +24,7 @@ export class Track {
   dispose() {
     this.scene.remove(this.group);
     this.group.traverse((o) => {
+      if (o.isInstancedMesh) o.dispose(); // frees instanceMatrix / instanceColor buffers
       if (o.geometry) o.geometry.dispose();
       if (o.material) {
         if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose());
@@ -49,7 +50,16 @@ export class Track {
         (0.82 + 0.18 * Math.sin(t * waves + def.seed * 0.01) + 0.06 * Math.sin(t * 5));
       const x = Math.cos(t) * r + Math.sin(t * 2) * (def.radius * 0.1);
       const z = Math.sin(t) * r * 0.72 + Math.cos(t * 3) * (def.radius * 0.07);
-      const y = 4 + Math.sin(t * waves) * def.heightAmp + Math.cos(t * 2) * (def.heightAmp * 0.35);
+      let y = 4 + Math.sin(t * waves) * def.heightAmp + Math.cos(t * 2) * (def.heightAmp * 0.35);
+      if (def.id === 'null_spire') {
+        // NULL SPIRE finally lives up to its "vertical figure-eight": extra INTEGER
+        // harmonics (2·waves and 4) stack towering climbs and dives onto the base
+        // loop, upward-biased via (1 - cos). Integer harmonics keep f(0) === f(2pi),
+        // so the start/finish seam stays perfectly closed (no height cliff).
+        y +=
+          Math.sin(t * 2 * waves) * def.heightAmp * 0.35 +
+          (1 - Math.cos(t * 4)) * def.heightAmp * 0.6;
+      }
       pts.push(new THREE.Vector3(x, y, z));
     }
 
@@ -99,47 +109,68 @@ export class Track {
       toneMapped: false,
     });
 
+    // PERF: build the whole road ribbon as ONE merged BufferGeometry, and merge
+    // every rail beam and centerline stripe into a single mesh each. This collapses
+    // ~730 per-segment draw calls (road quad + 2 rails + 1/3 stripe, per segment)
+    // down to 3 — with pixel-identical geometry: same corner positions, and
+    // computeVertexNormals on the (non-shared-vertex) ribbon yields the same flat
+    // per-quad normals the old per-quad geometries had.
+    const roadPos = new Float32Array(N * 18);
+    const railGeos = [];
+    const stripeGeos = [];
+    const c0 = new THREE.Vector3();
+    const c1 = new THREE.Vector3();
+    const c2 = new THREE.Vector3();
+    const c3 = new THREE.Vector3();
     for (let i = 0; i < N; i++) {
       const s0 = this.samples[i];
       const s1 = this.samples[(i + 1) % N];
-      const corners = [
-        s0.pos.clone().addScaledVector(s0.side, -half),
-        s0.pos.clone().addScaledVector(s0.side, half),
-        s1.pos.clone().addScaledVector(s1.side, half),
-        s1.pos.clone().addScaledVector(s1.side, -half),
-      ];
-      for (const c of corners) c.y += 0.02;
-      const geo = new THREE.BufferGeometry();
-      const verts = new Float32Array([
-        ...corners[0].toArray(),
-        ...corners[1].toArray(),
-        ...corners[2].toArray(),
-        ...corners[0].toArray(),
-        ...corners[2].toArray(),
-        ...corners[3].toArray(),
-      ]);
-      geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-      geo.computeVertexNormals();
-      const mesh = new THREE.Mesh(geo, roadMat);
-      this.group.add(mesh);
-      this.roadMeshes.push(mesh);
+      c0.copy(s0.pos).addScaledVector(s0.side, -half);
+      c1.copy(s0.pos).addScaledVector(s0.side, half);
+      c2.copy(s1.pos).addScaledVector(s1.side, half);
+      c3.copy(s1.pos).addScaledVector(s1.side, -half);
+      c0.y += 0.02;
+      c1.y += 0.02;
+      c2.y += 0.02;
+      c3.y += 0.02;
+      const o = i * 18;
+      roadPos[o] = c0.x; roadPos[o + 1] = c0.y; roadPos[o + 2] = c0.z;
+      roadPos[o + 3] = c1.x; roadPos[o + 4] = c1.y; roadPos[o + 5] = c1.z;
+      roadPos[o + 6] = c2.x; roadPos[o + 7] = c2.y; roadPos[o + 8] = c2.z;
+      roadPos[o + 9] = c0.x; roadPos[o + 10] = c0.y; roadPos[o + 11] = c0.z;
+      roadPos[o + 12] = c2.x; roadPos[o + 13] = c2.y; roadPos[o + 14] = c2.z;
+      roadPos[o + 15] = c3.x; roadPos[o + 16] = c3.y; roadPos[o + 17] = c3.z;
 
       for (const sign of [-1, 1]) {
         const a = s0.pos.clone().addScaledVector(s0.side, sign * half);
         const b = s1.pos.clone().addScaledVector(s1.side, sign * half);
         a.y += 0.35;
         b.y += 0.35;
-        const rail = this.makeBeam(a, b, 0.2, edgeMat);
-        this.group.add(rail);
+        railGeos.push(this._beamGeo(a, b, 0.2));
       }
       if (i % 3 === 0) {
         const mid0 = s0.pos.clone();
         mid0.y += 0.06;
         const mid1 = s0.pos.clone().addScaledVector(s0.tangent, 2.2);
         mid1.y += 0.06;
-        this.group.add(this.makeBeam(mid0, mid1, 0.12, stripeMat));
+        stripeGeos.push(this._beamGeo(mid0, mid1, 0.12));
       }
     }
+
+    const roadGeo = new THREE.BufferGeometry();
+    roadGeo.setAttribute('position', new THREE.BufferAttribute(roadPos, 3));
+    roadGeo.computeVertexNormals();
+    const roadMesh = new THREE.Mesh(roadGeo, roadMat);
+    this.group.add(roadMesh);
+    this.roadMeshes.push(roadMesh);
+
+    const railMesh = new THREE.Mesh(this._mergePositions(railGeos), edgeMat);
+    this.group.add(railMesh);
+    this.roadMeshes.push(railMesh);
+
+    const stripeMesh = new THREE.Mesh(this._mergePositions(stripeGeos), stripeMat);
+    this.group.add(stripeMesh);
+    this.roadMeshes.push(stripeMesh);
 
     // Gates scaled to wider road
     const gateR = half * 0.95;
@@ -318,24 +349,164 @@ export class Track {
     return g;
   }
 
-  buildScenery(def, rnd) {
-    for (let i = 0; i < 36; i++) {
-      const a = rnd() * Math.PI * 2;
-      const r = def.radius * (1.35 + rnd() * 1.1);
-      const h = 18 + rnd() * 90;
-      const tower = new THREE.Mesh(
-        new THREE.BoxGeometry(5 + rnd() * 10, h, 5 + rnd() * 10),
-        new THREE.MeshStandardMaterial({
-          color: 0x0c0614,
-          metalness: 0.55,
-          roughness: 0.45,
-          emissive: rnd() < 0.5 ? def.rail : def.accent,
-          emissiveIntensity: 0.1 + rnd() * 0.12,
-        })
-      );
-      tower.position.set(Math.cos(a) * r, h * 0.45, Math.sin(a) * r);
-      this.group.add(tower);
+  /** Baked cylinder beam geometry (transform pre-applied) — ready to be merged. */
+  _beamGeo(a, b, radius) {
+    const dir = b.clone().sub(a);
+    const len = dir.length();
+    const geo = new THREE.CylinderGeometry(radius, radius, len, 6);
+    const q = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      dir.normalize()
+    );
+    const m = new THREE.Matrix4().compose(
+      a.clone().add(b).multiplyScalar(0.5),
+      q,
+      new THREE.Vector3(1, 1, 1)
+    );
+    geo.applyMatrix4(m);
+    return geo;
+  }
+
+  /**
+   * Merge an array of position-bearing geometries (basic-material beams — no
+   * lighting, so positions are all we need) into one non-indexed BufferGeometry.
+   * Source geometries are disposed as they are consumed. No BufferGeometryUtils
+   * dependency: the import map exposes only "three".
+   */
+  _mergePositions(geos) {
+    let total = 0;
+    const parts = geos.map((g) => {
+      const ng = g.index ? g.toNonIndexed() : g;
+      if (ng !== g) g.dispose();
+      total += ng.attributes.position.count;
+      return ng;
+    });
+    const arr = new Float32Array(total * 3);
+    let off = 0;
+    for (const g of parts) {
+      arr.set(g.attributes.position.array, off);
+      off += g.attributes.position.array.length;
+      g.dispose();
     }
+    const merged = new THREE.BufferGeometry();
+    merged.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    return merged;
+  }
+
+  /** Per-track scenery density + feature flags — makes each circuit read distinct. */
+  _sceneryProfile(def) {
+    const base = {
+      towerCount: 36,
+      towerW: 5,
+      towerWRand: 10,
+      towerH: 18,
+      towerHRand: 90,
+      spreadMin: 1.35,
+      spreadRange: 1.1,
+      boardCount: 14,
+      ringCount: 6,
+      spire: false,
+    };
+    switch (def.id) {
+      case 'prism_boulevard': // dense downtown wall of glass towers
+        return { ...base, towerCount: 52, towerH: 22, towerHRand: 95, spreadMin: 1.25, spreadRange: 1.05, boardCount: 16 };
+      case 'volt_canyon': // tight gorge — few, very tall towers hugging the track
+        return { ...base, towerCount: 22, towerW: 6, towerWRand: 7, towerH: 44, towerHRand: 70, spreadMin: 1.1, spreadRange: 0.5, boardCount: 8, ringCount: 8 };
+      case 'glass_harbor': // wide, sparse, low — more billboards drifting over the fog
+        return { ...base, towerCount: 18, towerW: 6, towerWRand: 12, towerH: 10, towerHRand: 34, spreadMin: 1.5, spreadRange: 1.6, boardCount: 22, ringCount: 5 };
+      case 'null_spire': // dead antenna — thin vertical masts + a towering central spire
+        return { ...base, towerCount: 34, towerW: 3, towerWRand: 5, towerH: 40, towerHRand: 120, spreadMin: 1.2, spreadRange: 0.75, boardCount: 8, ringCount: 7, spire: true };
+      case 'echo_yards': // industrial freight — stocky cargo blocks + many cargo ghosts
+        return { ...base, towerCount: 46, towerW: 8, towerWRand: 9, towerH: 12, towerHRand: 40, spreadMin: 1.2, spreadRange: 0.9, boardCount: 26, ringCount: 5 };
+      default:
+        return base;
+    }
+  }
+
+  /** NULL SPIRE centerpiece: the towering dead antenna the circuit loops around. */
+  _buildSpire(def) {
+    const g = new THREE.Group();
+    const mastMat = new THREE.MeshStandardMaterial({
+      color: 0x0a0612,
+      metalness: 0.6,
+      roughness: 0.4,
+      emissive: def.rail,
+      emissiveIntensity: 0.12,
+    });
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 7, 210, 10), mastMat);
+    mast.position.y = 105;
+    g.add(mast);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: def.accent,
+      transparent: true,
+      opacity: 0.55,
+      toneMapped: false,
+    });
+    for (let i = 0; i < 8; i++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(6 - i * 0.4, 0.5, 6, 24), ringMat);
+      ring.position.y = 30 + i * 22;
+      ring.rotation.x = Math.PI / 2;
+      g.add(ring);
+    }
+    const strutMat = new THREE.MeshBasicMaterial({
+      color: def.rail,
+      transparent: true,
+      opacity: 0.5,
+      toneMapped: false,
+    });
+    for (let k = 0; k < 4; k++) {
+      const a = (k / 4) * Math.PI * 2;
+      const foot = new THREE.Vector3(Math.cos(a) * 34, 0, Math.sin(a) * 34);
+      g.add(this.makeBeam(foot, new THREE.Vector3(0, 150, 0), 0.4, strutMat));
+    }
+    const beacon = new THREE.Mesh(
+      new THREE.OctahedronGeometry(4, 0),
+      new THREE.MeshBasicMaterial({ color: def.rail, transparent: true, opacity: 0.85, toneMapped: false })
+    );
+    beacon.position.y = 214;
+    g.add(beacon);
+    return g;
+  }
+
+  buildScenery(def, rnd) {
+    const prof = this._sceneryProfile(def);
+    const dummy = new THREE.Object3D();
+
+    // Towers — one InstancedMesh per emissive bucket (rail / accent). A shared unit
+    // box is scaled per instance, so N towers cost 2 draw calls instead of N meshes.
+    // (Per-tower emissiveIntensity jitter is dropped in favor of a fixed 0.16 — an
+    // imperceptible change on distant background props, and this scenery is being
+    // re-densified per track anyway.)
+    const towerGeo = new THREE.BoxGeometry(1, 1, 1);
+    const towerMats = {
+      rail: new THREE.MeshStandardMaterial({ color: 0x0c0614, metalness: 0.55, roughness: 0.45, emissive: def.rail, emissiveIntensity: 0.16 }),
+      accent: new THREE.MeshStandardMaterial({ color: 0x0c0614, metalness: 0.55, roughness: 0.45, emissive: def.accent, emissiveIntensity: 0.16 }),
+    };
+    const railT = [];
+    const accentT = [];
+    for (let i = 0; i < prof.towerCount; i++) {
+      const a = rnd() * Math.PI * 2;
+      const r = def.radius * (prof.spreadMin + rnd() * prof.spreadRange);
+      const h = prof.towerH + rnd() * prof.towerHRand;
+      const w = prof.towerW + rnd() * prof.towerWRand;
+      const d = prof.towerW + rnd() * prof.towerWRand;
+      dummy.position.set(Math.cos(a) * r, h * 0.45, Math.sin(a) * r);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(w, h, d);
+      dummy.updateMatrix();
+      (rnd() < 0.5 ? railT : accentT).push(dummy.matrix.clone());
+    }
+    for (const [key, mats] of [['rail', railT], ['accent', accentT]]) {
+      if (!mats.length) {
+        towerMats[key].dispose();
+        continue;
+      }
+      const inst = new THREE.InstancedMesh(towerGeo, towerMats[key], mats.length);
+      mats.forEach((m, i) => inst.setMatrixAt(i, m));
+      inst.instanceMatrix.needsUpdate = true;
+      this.group.add(inst);
+    }
+
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(def.radius * 2.6, 56),
       new THREE.MeshStandardMaterial({
@@ -350,40 +521,51 @@ export class Track {
     ground.position.y = -2;
     this.group.add(ground);
 
-    for (let i = 0; i < 14; i++) {
-      const a = rnd() * Math.PI * 2;
-      const r = def.radius * (1.15 + rnd() * 0.35);
-      const h = 12 + rnd() * 28;
-      const board = new THREE.Mesh(
-        new THREE.BoxGeometry(8 + rnd() * 10, 3 + rnd() * 4, 0.4),
-        new THREE.MeshBasicMaterial({
-          color: rnd() < 0.5 ? def.rail : def.accent,
-          transparent: true,
-          opacity: 0.55,
-          toneMapped: false,
-        })
-      );
-      board.position.set(Math.cos(a) * r, h, Math.sin(a) * r);
-      board.lookAt(0, h, 0);
-      this.group.add(board);
+    // Billboards — one InstancedMesh. Per-instance instanceColor lets a single white
+    // MeshBasicMaterial render both rail- and accent-tinted boards (white × tint).
+    if (prof.boardCount > 0) {
+      const boardGeo = new THREE.BoxGeometry(1, 1, 0.4);
+      const boardMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, toneMapped: false });
+      const boards = new THREE.InstancedMesh(boardGeo, boardMat, prof.boardCount);
+      const col = new THREE.Color();
+      for (let i = 0; i < prof.boardCount; i++) {
+        const a = rnd() * Math.PI * 2;
+        const r = def.radius * (1.15 + rnd() * 0.35);
+        const h = 12 + rnd() * 28;
+        dummy.position.set(Math.cos(a) * r, h, Math.sin(a) * r);
+        dummy.scale.set(8 + rnd() * 10, 3 + rnd() * 4, 1);
+        dummy.lookAt(0, h, 0);
+        dummy.updateMatrix();
+        boards.setMatrixAt(i, dummy.matrix);
+        boards.setColorAt(i, col.setHex(rnd() < 0.5 ? def.rail : def.accent));
+      }
+      boards.instanceMatrix.needsUpdate = true;
+      if (boards.instanceColor) boards.instanceColor.needsUpdate = true;
+      this.group.add(boards);
     }
-    for (let i = 0; i < 6; i++) {
-      const idx = Math.floor((i / 6) * this.samples.length) % this.samples.length;
-      const s = this.samples[idx];
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(TRACK_HALF_WIDTH * 1.15, 0.12, 6, 36),
-        new THREE.MeshBasicMaterial({
-          color: def.accent,
-          transparent: true,
-          opacity: 0.35,
-          toneMapped: false,
-        })
-      );
-      ring.position.copy(s.pos);
-      ring.position.y += 6;
-      ring.lookAt(s.pos.clone().add(s.tangent));
-      this.group.add(ring);
+
+    // Floating accent rings over the centerline — one InstancedMesh.
+    if (prof.ringCount > 0) {
+      const ringGeo = new THREE.TorusGeometry(TRACK_HALF_WIDTH * 1.15, 0.12, 6, 36);
+      const ringMat = new THREE.MeshBasicMaterial({ color: def.accent, transparent: true, opacity: 0.35, toneMapped: false });
+      const rings = new THREE.InstancedMesh(ringGeo, ringMat, prof.ringCount);
+      const look = new THREE.Vector3();
+      for (let i = 0; i < prof.ringCount; i++) {
+        const idx = Math.floor((i / prof.ringCount) * this.samples.length) % this.samples.length;
+        const s = this.samples[idx];
+        dummy.position.copy(s.pos);
+        dummy.position.y += 6;
+        dummy.scale.set(1, 1, 1);
+        dummy.lookAt(look.copy(s.pos).add(s.tangent));
+        dummy.updateMatrix();
+        rings.setMatrixAt(i, dummy.matrix);
+      }
+      rings.instanceMatrix.needsUpdate = true;
+      this.group.add(rings);
     }
+
+    // NULL SPIRE's signature feature: the dead antenna the circuit loops around.
+    if (prof.spire) this.group.add(this._buildSpire(def));
 
     const grid = new THREE.GridHelper(def.radius * 3.5, 48, def.rail, 0x1a0a28);
     grid.position.y = -1.9;
