@@ -148,6 +148,7 @@ def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> dict:
     failures are collected and summarised at the end instead of aborting on the first one."""
     count = 0
     failures = []              # [{"key": r2_key, "err": "..."}]
+    uploaded_keys = []         # r2 keys actually pushed this run — for a targeted cache purge
     ALWAYS = {"index.html", "game_meta.json", "content.json"}   # code/metadata: always re-push
     # 2026-07-02 INCREMENTAL MODE: a local manifest (state/r2_manifest_{slug}.json) records what we
     # have successfully uploaded (md5 per key). New/changed assets upload WITHOUT --force (the CDN
@@ -203,6 +204,7 @@ def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> dict:
             continue
         if result.returncode == 0:
             count += 1
+            uploaded_keys.append(r2_key)
             _manifest[r2_key] = _h if _h is not None else _md5(file_path)
             print(f"  [r2] Uploaded: {r2_key}")
         else:
@@ -218,7 +220,70 @@ def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> dict:
         _safe_print(f"  [r2] {len(failures)} file(s) failed to upload:")
         for f in failures:
             _safe_print(f"        - {f['key']}: {(f['err'] or '')[:120]}")
-    return {"uploaded": count, "failed": failures, "critical_failed": critical_failed}
+    return {"uploaded": count, "failed": failures, "critical_failed": critical_failed,
+            "uploaded_keys": uploaded_keys}
+
+
+def _cf_purge_token():
+    """A token with Zone.Cache-Purge permission — SEPARATE from the R2-Edit deploy token,
+    which cannot purge. env CF_PURGE_TOKEN → .secrets/cf_purge_token.txt → api_config
+    providers.cloudflare.purge_token. Returns None if none configured."""
+    import os
+    if os.environ.get("CF_PURGE_TOKEN"):
+        return os.environ["CF_PURGE_TOKEN"].strip()
+    p = Path(__file__).resolve().parent.parent / ".secrets" / "cf_purge_token.txt"
+    if p.exists():
+        t = p.read_text(encoding="utf-8").strip()
+        if t:
+            return t
+    cf = (_read_api_config().get("providers", {}).get("cloudflare", {}) or {})
+    return cf.get("purge_token")
+
+
+FORGEFLOWGAMES_ZONE_ID = "949db249da898ce7ceb3edb1fbeac2b1"
+
+
+def purge_cf_cache(uploaded_keys, host="forgeflowgames.com"):
+    """Purge the CDN cache for the files just uploaded so a deploy is visible immediately.
+    Ashwall (and any unbundled game with stable module filenames) otherwise serves stale JS
+    for ~4h — the worker caches by path and ignores query strings, so there is no other bust.
+    No-op with a clear note if no purge-capable token exists (the R2-Edit deploy token can't
+    purge); the deploy still succeeds, changes just wait for the cache to expire."""
+    import os, json as _j, urllib.request as _u, urllib.error as _ue
+    token = _cf_purge_token()
+    if not token:
+        print("  [purge] SKIPPED — no cache-purge token. Drop a token with Zone.Cache-Purge at "
+              "forgeflow-games/.secrets/cf_purge_token.txt (or set CF_PURGE_TOKEN) to auto-purge; "
+              "until then, changed files serve stale until the ~4h CDN cache expires.")
+        return False
+    zone = os.environ.get("CF_ZONE_ID") or FORGEFLOWGAMES_ZONE_ID
+    urls = [f"https://{host}/games/{k}" for k in uploaded_keys]
+    if not urls:
+        return True
+
+    def _post(body):
+        req = _u.Request(f"https://api.cloudflare.com/client/v4/zones/{zone}/purge_cache",
+                         data=_j.dumps(body).encode(), method="POST",
+                         headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+        try:
+            with _u.urlopen(req, timeout=30) as r:
+                return bool(_j.loads(r.read().decode()).get("success"))
+        except _ue.HTTPError as e:
+            print(f"  [purge] HTTP {e.code}: {e.read().decode()[:160]}")
+            return False
+        except Exception as e:
+            print(f"  [purge] error: {e}")
+            return False
+
+    ok = True
+    if len(urls) > 200:                       # huge deploy → one zone-wide purge
+        ok = _post({"purge_everything": True})
+    else:
+        for i in range(0, len(urls), 30):     # CF caps files-purge at 30 URLs/call
+            if not _post({"files": urls[i:i + 30]}):
+                ok = False
+    print(f"  [purge] {'OK' if ok else 'FAILED'} — {len(urls)} file(s) purged from {host} cache")
+    return ok
 
 
 def insert_game_metadata(slug: str, metadata: dict):
@@ -456,6 +521,11 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, r
         print("       portal isn't left pointing at a broken game. Re-run (add --force) to retry.")
         return {"ok": False, "uploaded": uploaded, "total": total, "url": None,
                 "reason": f"critical file upload failed: {joined}"}
+
+    # Purge the CDN cache for the files just uploaded so the deploy is visible immediately
+    # (unbundled, stable-named modules otherwise serve stale ~4h — see purge_cf_cache).
+    if uploaded:
+        purge_cf_cache(up.get("uploaded_keys", []))
 
     metadata["game_url"] = f"{CDN_BASE}/{slug}/index.html"
     _tv = ""
