@@ -85,7 +85,7 @@ export class GridRushGame {
     this.renderer.shadowMap.enabled = false;
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, 0.1, 1800);
+    this.camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, 0.1, 6000);
     this.clock = new THREE.Clock();
     this.ambient = new THREE.AmbientLight(0x3a2260, 0.75);
     this.sun = new THREE.DirectionalLight(0xffaa88, 1.25);
@@ -487,7 +487,9 @@ export class GridRushGame {
   applyAtmosphere(def) {
     const c = new THREE.Color(def.skyTop);
     this.scene.background = c;
-    this.scene.fog = new THREE.Fog(def.fog, 55, 520);
+    // Fog scales with circuit size so a long track reads with depth (near clear,
+    // far side fades out) instead of being either fully fogged or flatly clear.
+    this.scene.fog = new THREE.Fog(def.fog, def.radius * 0.22, def.radius * 2.8);
     this.ambient.color.setHex(def.ambient);
     this.sun.color.setHex(def.sun);
     this.rim.color.setHex(def.rail);

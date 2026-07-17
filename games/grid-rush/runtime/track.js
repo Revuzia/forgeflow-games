@@ -89,12 +89,15 @@ export class Track {
     this.totalLength = len;
 
     const half = TRACK_HALF_WIDTH;
+    // Road must read as a clearly SOLID lane, not a near-black void between the
+    // glowing edge rails (that made it feel see-through / hard to drive). Lighter
+    // slate surface + a faint rail-tinted glow so the drivable lane is obvious.
     const roadMat = new THREE.MeshStandardMaterial({
-      color: 0x0c0a16,
-      metalness: 0.55,
-      roughness: 0.45,
+      color: 0x2b2850,
+      metalness: 0.35,
+      roughness: 0.6,
       emissive: def.rail,
-      emissiveIntensity: 0.08,
+      emissiveIntensity: 0.3,
     });
     const edgeMat = new THREE.MeshBasicMaterial({
       color: def.rail,
@@ -105,7 +108,7 @@ export class Track {
     const stripeMat = new THREE.MeshBasicMaterial({
       color: def.accent,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.85,
       toneMapped: false,
     });
 
@@ -195,7 +198,8 @@ export class Track {
     }
 
     // Item pads — wider lane spread
-    const padCount = 10;
+    // Scale item pads with track length so a 60-90s lap isn't item-starved.
+    const padCount = Math.max(10, Math.round(this.totalLength / 200));
     const laneSpread = half * 0.45;
     for (let i = 0; i < padCount; i++) {
       const idx = Math.floor(((i + 0.5) / padCount) * N) % N;
@@ -216,7 +220,8 @@ export class Track {
     }
 
     // Hazards: edge pillars + short side spinners — never block the full road
-    for (let i = 0; i < 14; i++) {
+    const hazardCount = Math.max(14, Math.round(this.totalLength / 180));
+    for (let i = 0; i < hazardCount; i++) {
       const idx = Math.floor(rnd() * N);
       const s = this.samples[idx];
       const kind = rnd();
@@ -407,20 +412,28 @@ export class Track {
       ringCount: 6,
       spire: false,
     };
+    let prof;
     switch (def.id) {
       case 'prism_boulevard': // dense downtown wall of glass towers
-        return { ...base, towerCount: 52, towerH: 22, towerHRand: 95, spreadMin: 1.25, spreadRange: 1.05, boardCount: 16 };
+        prof = { ...base, towerCount: 52, towerH: 22, towerHRand: 95, spreadMin: 1.25, spreadRange: 1.05, boardCount: 16 }; break;
       case 'volt_canyon': // tight gorge — few, very tall towers hugging the track
-        return { ...base, towerCount: 22, towerW: 6, towerWRand: 7, towerH: 44, towerHRand: 70, spreadMin: 1.1, spreadRange: 0.5, boardCount: 8, ringCount: 8 };
+        prof = { ...base, towerCount: 22, towerW: 6, towerWRand: 7, towerH: 44, towerHRand: 70, spreadMin: 1.1, spreadRange: 0.5, boardCount: 8, ringCount: 8 }; break;
       case 'glass_harbor': // wide, sparse, low — more billboards drifting over the fog
-        return { ...base, towerCount: 18, towerW: 6, towerWRand: 12, towerH: 10, towerHRand: 34, spreadMin: 1.5, spreadRange: 1.6, boardCount: 22, ringCount: 5 };
+        prof = { ...base, towerCount: 18, towerW: 6, towerWRand: 12, towerH: 10, towerHRand: 34, spreadMin: 1.5, spreadRange: 1.6, boardCount: 22, ringCount: 5 }; break;
       case 'null_spire': // dead antenna — thin vertical masts + a towering central spire
-        return { ...base, towerCount: 34, towerW: 3, towerWRand: 5, towerH: 40, towerHRand: 120, spreadMin: 1.2, spreadRange: 0.75, boardCount: 8, ringCount: 7, spire: true };
+        prof = { ...base, towerCount: 34, towerW: 3, towerWRand: 5, towerH: 40, towerHRand: 120, spreadMin: 1.2, spreadRange: 0.75, boardCount: 8, ringCount: 7, spire: true }; break;
       case 'echo_yards': // industrial freight — stocky cargo blocks + many cargo ghosts
-        return { ...base, towerCount: 46, towerW: 8, towerWRand: 9, towerH: 12, towerHRand: 40, spreadMin: 1.2, spreadRange: 0.9, boardCount: 26, ringCount: 5 };
+        prof = { ...base, towerCount: 46, towerW: 8, towerWRand: 9, towerH: 12, towerHRand: 40, spreadMin: 1.2, spreadRange: 0.9, boardCount: 26, ringCount: 5 }; break;
       default:
-        return base;
+        prof = base;
     }
+    // Scale scenery density with circuit size (baseline radius ~150) so the now
+    // ~5x-longer 60-90s circuits stay full of things to see, not sparse.
+    const mul = Math.max(1, def.radius / 150);
+    prof.towerCount = Math.round(prof.towerCount * mul);
+    prof.boardCount = Math.round(prof.boardCount * mul);
+    prof.ringCount = Math.round(prof.ringCount * mul);
+    return prof;
   }
 
   /** NULL SPIRE centerpiece: the towering dead antenna the circuit loops around. */
