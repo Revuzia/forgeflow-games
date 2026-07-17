@@ -159,7 +159,7 @@ html, body, #app {
 }
 .circuit-card {
   display: grid;
-  grid-template-columns: 88px 1fr;
+  grid-template-columns: 120px 1fr;
   grid-template-rows: auto auto;
   column-gap: 0.55rem;
   row-gap: 0.1rem;
@@ -176,10 +176,11 @@ html, body, #app {
 }
 .circuit-card .circuit-map {
   grid-row: 1 / span 2;
-  width: 88px; height: 56px;
+  width: 120px; height: 76px;
   border-radius: 6px;
   background: #04020c;
   border: 1px solid rgba(0,240,255,0.2);
+  object-fit: cover;
 }
 .circuit-card .circuit-title {
   font-size: 0.62rem; letter-spacing: 0.08em; color: #dcebff;
