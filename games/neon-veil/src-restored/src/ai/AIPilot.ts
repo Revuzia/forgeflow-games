@@ -148,7 +148,8 @@ export class AIPilot {
     bounds: number,
     minAlt: number,
     maxAlt: number,
-    onFire: (origin: THREE.Vector3, dir: THREE.Vector3, weapon: WeaponId) => void
+    onFire: (origin: THREE.Vector3, dir: THREE.Vector3, weapon: WeaponId) => void,
+    losFn?: (from: THREE.Vector3, to: THREE.Vector3) => boolean
   ) {
     if (!this.state.alive) {
       this.pawn.group.visible = false;
@@ -267,7 +268,7 @@ export class AIPilot {
     // Combat fire
     if (targetPos && (this.mood === 'engage' || this.mood === 'defend' || this.mood === 'hunt')) {
       const maxFireDist = this.persona.type === 'sniper' ? 200 : 150;
-      if (dist < maxFireDist && this.fireCd <= 0 && this.hasRoughLos(pos, targetPos)) {
+      if (dist < maxFireDist && this.fireCd <= 0 && this.hasRoughLos(pos, targetPos, losFn)) {
         this.tryShot(pos, targetPos, dist, onFire);
       }
     }
@@ -424,11 +425,13 @@ export class AIPilot {
     );
   }
 
-  private hasRoughLos(from: THREE.Vector3, to: THREE.Vector3): boolean {
-    // Cheap LOS: if very far horizontally through dense core, slight miss chance handled in accuracy
-    void from;
-    void to;
-    return true;
+  private hasRoughLos(
+    from: THREE.Vector3,
+    to: THREE.Vector3,
+    losFn?: (a: THREE.Vector3, b: THREE.Vector3) => boolean
+  ): boolean {
+    // Real line-of-sight through the city — AI can no longer fire through towers.
+    return losFn ? losFn(from, to) : true;
   }
 
   private tryShot(

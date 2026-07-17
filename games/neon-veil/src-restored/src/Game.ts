@@ -1031,9 +1031,13 @@ export class Game {
       }
     }
 
+    if (!best) return;
+    // Cover blocks hitscan: rail/laser can't pass through solid buildings.
+    const targetPos = best === 'local' ? this.flight.position : best.pawn.group.position;
+    if (!this.map.city.lineOfSight(origin, targetPos)) return;
     if (best === 'local') {
       this.applyDamageToLocal(damage, ownerId, weapon);
-    } else if (best) {
+    } else {
       const hitPos = best.pawn.group.position.clone();
       hitPos.y += 1.5;
       const killed = best.takeDamage(damage);
@@ -1270,6 +1274,7 @@ export class Game {
       bot.update(dt, players, this.map.def.bounds, this.map.def.minAlt, this.map.def.maxAlt, (origin, dir, weapon) => {
         // Temporary switch weapon defs for NPC shot (don't drain player ammo)
         const prev = this.weapons.current;
+        const wasUnlocked = this.weapons.unlocked.has(weapon);
         this.weapons.unlocked.add(weapon);
         this.weapons.select(weapon);
         const ammo = this.weapons.ammo[weapon];
@@ -1285,12 +1290,13 @@ export class Game {
         (this.weapons as unknown as { cooldown: number }).cooldown = cd;
         this.weapons.ammo[weapon] = ammo;
         this.weapons.select(prev);
+        if (!wasUnlocked) this.weapons.unlocked.delete(weapon); // don't leak AI weapons into the player's arsenal
         if (result?.hitscan) {
           for (const h of result.hitscan) {
             this.resolveHitscan(bot.state.id, origin, dir, h.damage, weapon);
           }
         }
-      });
+      }, (from, to) => this.map.city.lineOfSight(from, to));
       // Solid building collision — multi-pass depenetration (no fly-through)
       const bpos = bot.pawn.group.position;
       for (let iter = 0; iter < 5; iter++) {
