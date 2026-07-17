@@ -19,7 +19,7 @@
       };
     </script>
     <script src="./game_controls.js"></script>
-<script type="module" crossorigin src="./assets/index-WaTM7jig.js"></script>
+<script type="module" crossorigin src="./assets/index-DbtEIzSO.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-QJtMcDGf.css">
   </head>
   <body>
@@ -170,10 +170,6 @@
         <div id="mode-banner"></div>
 
         <div id="bottom-cluster">
-          <div class="inst radar-panel">
-            <div class="inst-label">RADAR</div>
-            <canvas id="radar-canvas" width="120" height="120"></canvas>
-          </div>
           <div class="inst">
             <div class="inst-label">ALTITUDE</div>
             <div id="hud-alt" class="inst-value">000<span class="unit">m</span></div>
@@ -213,6 +209,14 @@
             <div class="bar-track burn"><div id="bar-burn" class="bar-fill"></div></div>
             <span id="bar-burn-n" class="bar-num">100</span>
           </div>
+        </div>
+
+        <!-- Minimap (radar) — standalone bottom-left panel. Must be a direct
+             child of #hud so its absolute left/bottom anchor to the viewport,
+             not to the centered #bottom-cluster. -->
+        <div class="inst radar-panel">
+          <div class="inst-label">MINIMAP</div>
+          <canvas id="radar-canvas" width="120" height="120"></canvas>
         </div>
       </div>
 

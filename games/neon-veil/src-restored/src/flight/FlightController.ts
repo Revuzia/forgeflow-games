@@ -3,6 +3,20 @@ import { FLIGHT } from '../core/config';
 import type { Input } from '../core/Input';
 import type { Settings } from '../core/types';
 
+// Body-frame axes for local-space rotation integration (shared, never mutated).
+const AXIS_RIGHT = new THREE.Vector3(1, 0, 0); // local +X (right wing)
+const AXIS_UP = new THREE.Vector3(0, 1, 0); // local +Y (canopy up)
+const AXIS_FWD = new THREE.Vector3(0, 0, -1); // local -Z (nose)
+/** Pitch clamp — the nose stops just short of vertical so the view never
+ *  gimbal-flips past straight up/down (fixes the old stuck-sideways attitude). */
+const MAX_PITCH = THREE.MathUtils.degToRad(82);
+/** Max cosmetic bank (visual roll) when hard-turning or holding Q/E. */
+const MAX_BANK = THREE.MathUtils.degToRad(28);
+/** How strongly yaw-rate leans the bank into a turn. */
+const BANK_PER_YAWRATE = 0.16;
+/** Bank ease + auto-level responsiveness (higher = snappier return to level). */
+const BANK_LERP = 5;
+
 export class FlightController {
   position = new THREE.Vector3(0, 40, 0);
   velocity = new THREE.Vector3();
@@ -21,22 +35,69 @@ export class FlightController {
   private right = new THREE.Vector3();
   private up = new THREE.Vector3();
   private tmp = new THREE.Vector3();
-  private desiredRoll = 0;
+  // Reused per-axis delta rotation (no per-frame allocation).
+  private qDelta = new THREE.Quaternion();
+  // 180° about local up — rear-view flip that stays correct while looping/inverted.
+  private lookBackFlip = new THREE.Quaternion().setFromAxisAngle(AXIS_UP, Math.PI);
 
-  update(dt: number, input: Input, settings: Settings, minAlt: number, maxAlt: number, bounds: number) {
+  /**
+   * @param roll Optional manual roll axis in [-1, 1] (positive = roll right /
+   *   bank right). Wired from Game.ts (Q/E) — see integration notes. Combines
+   *   additively with the built-in Q/E read below and is clamped, so double
+   *   binding never runs away. Defaults to 0 so existing callers still compile.
+   */
+  update(
+    dt: number,
+    input: Input,
+    settings: Settings,
+    minAlt: number,
+    maxAlt: number,
+    bounds: number,
+    roll = 0
+  ) {
     this.stunTimer = Math.max(0, this.stunTimer - dt);
     const stunned = this.stunTimer > 0;
     const sens = settings.mouseSens * 0.0022;
     const inv = settings.invertY ? -1 : 1;
 
-    // Steer whenever engaged (pointer lock preferred but not required)
+    // --- Orientation: world-up yaw + clamped pitch, with an auto-leveling bank.
+    // The euler (YXZ) is the authority: euler.y = heading (world up), euler.x =
+    // pitch (clamped short of vertical), euler.z = cosmetic bank that always eases
+    // back to level. The old unclamped body-frame 6DOF model coupled yaw+pitch
+    // into roll, which left the camera stuck sideways and never cleanly looped.
+    // (Owner 2026-07-17.)
+    let bankTarget = 0;
     if (input.isControlActive() && !this.lookBack && !stunned) {
-      this.euler.y -= input.mouseDX * sens * FLIGHT.mouseYaw;
-      this.euler.x -= input.mouseDY * sens * FLIGHT.mousePitch * inv;
-      this.euler.x = THREE.MathUtils.clamp(this.euler.x, -Math.PI * 0.45, Math.PI * 0.45);
-    }
+      const yawDelta = -input.mouseDX * sens * FLIGHT.mouseYaw;
+      const pitchDelta = -input.mouseDY * sens * FLIGHT.mousePitch * inv;
 
-    this.lookBack = !stunned && input.isDown('KeyE');
+      // Optional intentional roll (Q/E + external axis) leans the bank harder but
+      // still auto-levels — never a permanent sideways attitude.
+      let rollAxis = 0;
+      if (input.isDown('KeyQ')) rollAxis -= 1;
+      if (input.isDown('KeyE')) rollAxis += 1;
+      rollAxis = THREE.MathUtils.clamp(rollAxis + roll, -1, 1);
+
+      this.euler.y += yawDelta;
+      this.euler.x = THREE.MathUtils.clamp(this.euler.x + pitchDelta, -MAX_PITCH, MAX_PITCH);
+
+      const yawRate = yawDelta / Math.max(dt, 1e-4);
+      bankTarget = THREE.MathUtils.clamp(
+        -yawRate * BANK_PER_YAWRATE + rollAxis * MAX_BANK,
+        -MAX_BANK,
+        MAX_BANK
+      );
+    }
+    // Bank (visual roll) always eases toward its target — 0 when not turning — so
+    // the horizon can never stick sideways. euler stays the source of truth.
+    const bankK = 1 - Math.exp(-BANK_LERP * dt);
+    this.euler.z = THREE.MathUtils.lerp(this.euler.z, bankTarget, bankK);
+    this.quaternion.setFromEuler(this.euler);
+
+    // Look-back (rear glance) moved to KeyC — E is now roll-right. Read after
+    // steering so this frame's roll/steer use the prior lookBack state (matches
+    // the original one-frame ordering).
+    this.lookBack = !stunned && input.isDown('KeyC');
     this.zooming = !stunned && input.isMouseDown(1);
     // RMB = afterburner (button 2)
     const wantBoost = !stunned && (input.isMouseDown(2) || input.isDown('KeyB'));
@@ -49,8 +110,7 @@ export class FlightController {
       this.energy = Math.min(FLIGHT.energyMax, this.energy + FLIGHT.energyRegen * dt);
     }
 
-    // Orientation basis
-    this.quaternion.setFromEuler(this.euler);
+    // Orientation basis (after the rotation update above)
     this.forward.set(0, 0, -1).applyQuaternion(this.quaternion);
     this.right.set(1, 0, 0).applyQuaternion(this.quaternion);
     this.up.set(0, 1, 0).applyQuaternion(this.quaternion);
@@ -93,12 +153,6 @@ export class FlightController {
     // so high-speed ships don't tunnel through buildings. Still soft-clamp here as fallback.
     this.position.addScaledVector(this.velocity, dt);
     this.clampWorld(minAlt, maxAlt, bounds);
-
-    // Visual roll from yaw rate / strafe
-    const yawRate = -input.mouseDX * sens;
-    this.desiredRoll = THREE.MathUtils.clamp(strafe * 0.35 + yawRate * 8, -0.5, 0.5);
-    this.euler.z = THREE.MathUtils.lerp(this.euler.z, this.desiredRoll * FLIGHT.rollFromYaw, 1 - Math.exp(-6 * dt));
-    this.quaternion.setFromEuler(this.euler);
   }
 
   bounce(normal: THREE.Vector3, damageScale = 1) {
@@ -139,10 +193,9 @@ export class FlightController {
 
   getCameraQuaternion(out: THREE.Quaternion) {
     if (this.lookBack) {
-      const e = this.euler.clone();
-      e.y += Math.PI;
-      e.z = -e.z;
-      out.setFromEuler(e);
+      // Rear view: 180° about the ship's own up axis. Works in any attitude
+      // (looping / inverted), unlike the old euler-based flip.
+      out.copy(this.quaternion).multiply(this.lookBackFlip);
     } else {
       out.copy(this.quaternion);
     }
