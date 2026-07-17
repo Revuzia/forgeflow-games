@@ -43,6 +43,14 @@ export class HUD {
   private helpVisible = true;
   private debugVisible = false;
 
+  // --- Situational-awareness extras (self-contained; DOM + CSS built lazily) ---
+  private extraStyleInjected = false;
+  private dmgDirLayer: HTMLElement | null = null;
+  private incomingEl: HTMLElement | null = null;
+  private incomingActive = false;
+  private incomingToneCb: (() => void) | null = null;
+  private incomingToneTimer: number | null = null;
+
   constructor() {
     this.radarCtx = this.els.radar.getContext('2d')!;
   }
@@ -324,6 +332,139 @@ export class HUD {
       ctx.arc(cx + px, cy + py, b.isPlayer ? 3.5 : 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+
+  // ============================================================
+  //  Directional damage indicator
+  // ============================================================
+  /**
+   * Flash a neon-red arc at the screen edge pointing toward where the damage
+   * came from. Self-contained: builds its own DOM + CSS on first use, and each
+   * call spawns a transient arc that auto-removes, so simultaneous hits from
+   * different directions stack cleanly (same pattern as the kill feed).
+   *
+   * @param screenAngleRad  On-screen bearing to the attacker, in radians.
+   *   0 = dead ahead (arc at top), +PI/2 = right, +PI or -PI = behind (bottom),
+   *   -PI/2 = left. Clockwise-positive. See integrationNeeded for the exact
+   *   camera-space formula that produces this angle.
+   * @param intensity  0..1 — scales arc thickness + glow (default 1).
+   */
+  showDamageFrom(screenAngleRad: number, intensity = 1): void {
+    if (!Number.isFinite(screenAngleRad)) return;
+    this.ensureExtraStyles();
+    const layer = this.ensureDmgDirLayer();
+    const i = Math.max(0.15, Math.min(1, intensity));
+
+    const wrap = document.createElement('div');
+    wrap.className = 'nv-dmg-arc';
+    const deg = (screenAngleRad * 180) / Math.PI;
+    wrap.style.transform = `translate(-50%, -50%) rotate(${deg}deg)`;
+
+    const arc = document.createElement('i');
+    arc.style.borderTopWidth = `${(3 + 3 * i).toFixed(1)}px`;
+    arc.style.boxShadow = `0 0 ${Math.round(10 + 14 * i)}px ${Math.round(1 + 2 * i)}px rgba(255,20,50,${(0.4 + 0.4 * i).toFixed(2)})`;
+    wrap.appendChild(arc);
+
+    layer.appendChild(wrap);
+    // Remove once the .72s flash animation has finished.
+    window.setTimeout(() => wrap.remove(), 820);
+  }
+
+  // ============================================================
+  //  Incoming missile-lock warning (an ENEMY is locking YOU)
+  // ============================================================
+  /**
+   * Optional tone hook — invoked once when the warning turns on and once per
+   * pulse cycle (~0.6s) while it stays on. Wire this to your audio layer for a
+   * repeating warning beep. Pass null to clear. No-op if never set.
+   */
+  setIncomingLockToneHook(cb: (() => void) | null): void {
+    this.incomingToneCb = cb;
+  }
+
+  /**
+   * Show / hide a pulsing red "MISSILE LOCK — INCOMING" warning. This is
+   * distinct from updateMissileLock(): that renders the player's OWN heat-seek
+   * latch on a target; this warns that an enemy has acquired a lock on the
+   * player. Self-contained DOM + CSS. Safe to call every frame — only edge
+   * transitions do work.
+   */
+  setIncomingLock(on: boolean): void {
+    if (on === this.incomingActive) {
+      // Re-assert the visible state in case the DOM was rebuilt underneath us.
+      if (on && this.incomingEl && !this.incomingEl.classList.contains('on')) {
+        this.incomingEl.classList.add('on');
+      }
+      return;
+    }
+    this.incomingActive = on;
+    this.ensureExtraStyles();
+    const el = this.ensureIncomingEl();
+    el.classList.toggle('on', on);
+
+    if (this.incomingToneTimer !== null) {
+      window.clearInterval(this.incomingToneTimer);
+      this.incomingToneTimer = null;
+    }
+    if (on) {
+      // Fire immediately, then once per pulse cycle for as long as the lock holds.
+      this.incomingToneCb?.();
+      this.incomingToneTimer = window.setInterval(() => {
+        if (!this.incomingActive) return;
+        this.incomingToneCb?.();
+      }, 600);
+    }
+  }
+
+  private ensureDmgDirLayer(): HTMLElement {
+    if (this.dmgDirLayer && this.dmgDirLayer.isConnected) return this.dmgDirLayer;
+    const layer = document.createElement('div');
+    layer.className = 'nv-dmg-layer';
+    this.els.hud.appendChild(layer);
+    this.dmgDirLayer = layer;
+    return layer;
+  }
+
+  private ensureIncomingEl(): HTMLElement {
+    if (this.incomingEl && this.incomingEl.isConnected) return this.incomingEl;
+    const box = document.createElement('div');
+    box.className = 'nv-incoming';
+    const warn = document.createElement('div');
+    warn.className = 'nv-inc-warn';
+    warn.textContent = '⚠ MISSILE LOCK';
+    const sub = document.createElement('div');
+    sub.className = 'nv-inc-sub';
+    sub.textContent = 'INCOMING — EVADE';
+    box.appendChild(warn);
+    box.appendChild(sub);
+    this.els.hud.appendChild(box);
+    this.incomingEl = box;
+    return box;
+  }
+
+  private ensureExtraStyles(): void {
+    if (this.extraStyleInjected) return;
+    if (document.getElementById('nv-hud-extra-style')) {
+      this.extraStyleInjected = true;
+      return;
+    }
+    const style = document.createElement('style');
+    style.id = 'nv-hud-extra-style';
+    style.textContent = [
+      // Directional damage indicator ---------------------------------------
+      '.nv-dmg-layer{position:absolute;inset:0;pointer-events:none;z-index:13;overflow:hidden}',
+      '.nv-dmg-arc{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none;will-change:transform}',
+      '.nv-dmg-arc>i{position:absolute;left:50%;bottom:30vmin;transform:translateX(-50%);width:30vmin;height:9vmin;border:0 solid transparent;border-top:5px solid #ff2b3c;border-radius:50%;box-shadow:0 0 16px 2px rgba(255,20,50,.6);opacity:0;animation:nv-dmg-flash .72s ease-out forwards}',
+      '@keyframes nv-dmg-flash{0%{opacity:0;transform:translateX(-50%) scale(.82)}12%{opacity:1}100%{opacity:0;transform:translateX(-50%) scale(1.06)}}',
+      // Incoming missile-lock warning --------------------------------------
+      '.nv-incoming{position:absolute;top:20%;left:50%;transform:translateX(-50%);z-index:16;display:none;flex-direction:column;align-items:center;gap:4px;pointer-events:none;font-family:"Orbitron",system-ui,sans-serif;text-align:center}',
+      '.nv-incoming.on{display:flex;animation:nv-inc-pulse .6s ease-in-out infinite}',
+      '.nv-inc-warn{font-size:1.15rem;font-weight:800;letter-spacing:.26em;color:#ff2f3f;text-shadow:0 0 12px rgba(255,20,40,.85),0 0 3px #000;border:2px solid #ff2f3f;padding:5px 14px 5px 18px;background:rgba(30,0,8,.55);box-shadow:0 0 18px rgba(255,20,40,.5),inset 0 0 12px rgba(255,0,30,.3);border-radius:3px}',
+      '.nv-inc-sub{font-size:.56rem;letter-spacing:.3em;color:#ff8080;text-shadow:0 0 8px rgba(255,40,60,.7)}',
+      '@keyframes nv-inc-pulse{0%,100%{opacity:.55}50%{opacity:1}}',
+    ].join('');
+    (document.head || document.documentElement).appendChild(style);
+    this.extraStyleInjected = true;
   }
 }
 

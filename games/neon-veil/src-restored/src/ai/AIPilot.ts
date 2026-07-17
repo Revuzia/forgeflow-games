@@ -33,6 +33,12 @@ export class AIPilot {
   marker: THREE.Group;
   persona: Persona;
   mood: AIMood = 'hunt';
+  /**
+   * Difficulty scalar (menu-selectable). 1 = normal, <1 easier, >1 harder.
+   * Scales shot accuracy, aggression (mood bias + strafe + fire cadence),
+   * and turn-speed. A difficulty menu sets this per-bot after construction.
+   */
+  difficulty = 1;
 
   private velocity = new THREE.Vector3();
   /** Current chase / attack focus (for AI rocket latch). */
@@ -211,8 +217,9 @@ export class AIPilot {
     const targetYaw = Math.atan2(-this.tmp.x, -this.tmp.z);
     const targetPitch = Math.asin(THREE.MathUtils.clamp(this.tmp.y, -0.85, 0.85));
     this.euler.setFromQuaternion(this.pawn.group.quaternion, 'YXZ');
-    // Snappy turns — should feel like skilled human pilots
-    const turnRate = this.mood === 'flee' ? 3.4 : this.mood === 'engage' ? 2.85 : 2.2;
+    // Snappy turns — should feel like skilled human pilots. Difficulty scales agility.
+    const dTurn = THREE.MathUtils.clamp(this.difficulty, 0.6, 1.6);
+    const turnRate = (this.mood === 'flee' ? 3.4 : this.mood === 'engage' ? 2.85 : 2.2) * dTurn;
     this.euler.y = THREE.MathUtils.lerp(this.euler.y, targetYaw, 1 - Math.exp(-turnRate * dt));
     this.euler.x = THREE.MathUtils.lerp(this.euler.x, -targetPitch * 0.75, 1 - Math.exp(-2.4 * dt));
     // Bank into turns
@@ -221,11 +228,11 @@ export class AIPilot {
     this.quat.setFromEuler(this.euler);
     this.pawn.group.quaternion.copy(this.quat);
 
-    // Speed by mood
+    // Speed by mood. Hunt/engage push harder so idle bots CLOSE on prey, not drift.
     let speed = 44 * this.persona.speedMul;
     if (this.mood === 'flee') speed = 100 * this.persona.speedMul;
-    else if (this.mood === 'engage') speed = 74 * this.persona.speedMul;
-    else if (this.mood === 'hunt') speed = 60 * this.persona.speedMul;
+    else if (this.mood === 'engage') speed = 78 * this.persona.speedMul;
+    else if (this.mood === 'hunt') speed = 68 * this.persona.speedMul;
     else if (this.mood === 'hide') speed = 38;
     else if (this.mood === 'defend') speed = 52;
 
@@ -233,7 +240,7 @@ export class AIPilot {
     // Sharp lateral juke in a fight
     if (this.mood === 'engage' || this.mood === 'defend') {
       const right = this.tmp2.set(1, 0, 0).applyQuaternion(this.quat);
-      forward.addScaledVector(right, this.strafeSign * 0.38 * this.persona.aggression);
+      forward.addScaledVector(right, this.strafeSign * 0.38 * this.effAggression());
       if (this.jukeTimer <= 0) {
         this.strafeSign *= -1;
         this.jukeTimer = 0.55 + Math.random() * 0.95;
@@ -280,10 +287,21 @@ export class AIPilot {
     this.writeState();
   }
 
+  /**
+   * Effective aggression = persona aggression scaled by difficulty, clamped to a
+   * usable range. Drives mood bias, strafe amplitude and fire cadence so a
+   * difficulty menu makes bots meaner without touching the persona table.
+   */
+  private effAggression(): number {
+    return THREE.MathUtils.clamp(this.persona.aggression * this.difficulty, 0.05, 1);
+  }
+
   private reassessMood(bounds: number, minAlt: number, maxAlt: number) {
     const hp = this.state.health / 100;
-    const threat = this.targetId ? 1 : 0;
-    const fleeThreshold = 0.28 + (1 - this.persona.courage) * 0.35;
+    const aggr = this.effAggression();
+    // Braver bots (and higher difficulty) hold the fight longer before fleeing.
+    const courage = THREE.MathUtils.clamp(this.persona.courage * (0.7 + this.difficulty * 0.3), 0, 1);
+    const fleeThreshold = 0.28 + (1 - courage) * 0.35;
 
     if (hp < fleeThreshold || (hp < 0.4 && this.lastDamaged > 0)) {
       // Low: hide or flee
@@ -305,20 +323,28 @@ export class AIPilot {
       }
     }
 
+    // No target yet: HUNT (drive toward the arena / whatever we lock next tick),
+    // never idle. Short timer so we flip to engage the instant a target is found.
     if (!this.targetId) {
       this.mood = 'hunt';
+      this.moodTimer = 0.6 + Math.random() * 0.8;
       return;
     }
 
-    // High aggression → engage hard; low → defend / snipe
-    if (this.persona.aggression > 0.75 && hp > 0.45) {
+    // We have a target and enough HP → be purposeful. Baseline is to close and
+    // fight; only snipers/guardians occasionally hold an orbit, and even they
+    // mostly engage. This is what stops bots "floating around".
+    if (this.persona.type === 'sniper') {
+      // Snipers kite at range but still press when their preferred lane is clear.
+      this.mood = Math.random() < 0.3 ? 'defend' : 'engage';
+    } else if (this.persona.type === 'guardian') {
+      this.mood = Math.random() < 0.3 ? 'defend' : 'engage';
+    } else if (aggr > 0.6 || hp > 0.5) {
+      // Aggressive or healthy → straight into the merge.
       this.mood = 'engage';
-    } else if (this.persona.type === 'guardian' || this.persona.type === 'sniper') {
-      this.mood = Math.random() < 0.4 ? 'defend' : 'engage';
-    } else if (this.persona.aggression < 0.5 && hp < 0.6) {
-      this.mood = Math.random() < 0.5 ? 'defend' : 'engage';
     } else {
-      this.mood = threat ? 'engage' : 'hunt';
+      // Hurt-but-not-fleeing skirmishers → HUNT (still closing), not defend.
+      this.mood = 'hunt';
     }
     this.moodTimer = 1.2 + Math.random() * 1.5;
   }
@@ -408,12 +434,21 @@ export class AIPilot {
     maxAlt: number
   ) {
     if (target) {
-      // Intercept through city — aim ahead of target path-ish
-      out.copy(target);
-      out.y += 10;
-      // Weave between buildings by offsetting laterally
-      out.x += Math.sin(performance.now() * 0.0008 + this.orbitAngle) * 25;
-      out.z += Math.cos(performance.now() * 0.0008 + this.orbitAngle) * 25;
+      // SEEK: drive straight at the enemy and close to weapon range. Aim at a
+      // point just short of the target so the bot commits into the merge instead
+      // of drifting/orbiting. Weave shrinks with distance — far bots fly a nearly
+      // straight intercept, only jinking once they're in the fight.
+      const dir = this.tmp.copy(target).sub(pos);
+      const d = dir.length();
+      if (d > 1) dir.multiplyScalar(1 / d);
+      const closeTo = Math.max(0, d - this.persona.preferredRange * 0.6);
+      out.copy(pos).addScaledVector(dir, closeTo);
+      // Attack from slightly above, matched to target altitude.
+      out.y = target.y + 8;
+      // Weave for building-avoidance / unpredictability, scaled by distance.
+      const weave = THREE.MathUtils.clamp(d * 0.12, 4, 22);
+      out.x += Math.sin(performance.now() * 0.0008 + this.orbitAngle) * weave;
+      out.z += Math.cos(performance.now() * 0.0008 + this.orbitAngle) * weave;
       return;
     }
     // Patrol 3D volume
@@ -441,9 +476,10 @@ export class AIPilot {
     onFire: (origin: THREE.Vector3, dir: THREE.Vector3, weapon: WeaponId) => void
   ) {
     const dir = this.tmp.copy(targetPos).sub(pos).normalize();
-    // Mid–high accuracy: still human error, not spray
+    // Mid–high accuracy: still human error, not spray. Difficulty tightens the
+    // spread (harder = deadlier aim, easier = sloppier).
     const lead = dist / 155;
-    const miss = (1 - this.persona.accuracy) * 0.2;
+    const miss = ((1 - this.persona.accuracy) * 0.2) / THREE.MathUtils.clamp(this.difficulty, 0.5, 2.2);
     dir.x += (Math.random() - 0.5) * miss;
     dir.y += (Math.random() - 0.5) * miss * 0.7 + lead * 0.025;
     dir.z += (Math.random() - 0.5) * miss;
@@ -471,6 +507,8 @@ export class AIPilot {
               : weapon === 'torpedo'
                 ? 1.85
                 : 1.55;
+    // Aggression/difficulty trims the reload — harder bots fire more often.
+    this.fireCd *= THREE.MathUtils.clamp(1.15 - this.difficulty * 0.15, 0.7, 1.25);
   }
 
   private pickTarget(others: PlayerState[]) {
@@ -481,14 +519,16 @@ export class AIPilot {
       if (o.id === this.state.id || !o.alive) continue;
       if (this.state.team !== 0 && o.team === this.state.team) continue;
       const d = Math.sqrt(pos.distanceToSquared(this.tmp.fromArray(o.position)));
-      // Equal aggro on every pilot (human or NPC) — range + mild health, no player bias.
-      let score = 1000 - d;
-      score += (100 - o.health) * 0.35;
+      // Equal aggro on every pilot (human or NPC) — no player bias. Distance is
+      // weighted hard so an idle bot commits to the NEAREST fight instead of
+      // dithering between far contacts.
+      let score = 1400 - d * 1.4;
+      score += (100 - o.health) * 0.4; // finish wounded prey
       if (o.shieldDeployed) score -= 40;
       // Stick to current target so packs don't thrash focus every think tick
       if (o.id === this.targetId) score += 90;
       // Small random so multiple AIs don't all lock the same nearest ship
-      score += (Math.random() - 0.5) * 55;
+      score += (Math.random() - 0.5) * 45;
       if (score > bestScore) {
         bestScore = score;
         best = o;
