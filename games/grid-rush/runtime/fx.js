@@ -7,6 +7,15 @@ export class RaceFX {
     this.particles = [];
     this.rings = [];
     this.shake = 0;
+    // Shared geometries for the repeated particle types (trail fires ~25x/s PER
+    // racer). Reusing one GPU vertex buffer each — instead of allocating+freeing
+    // a BufferGeometry every spawn — removes the per-frame create/dispose churn
+    // that was a primary cause of the driving stutter. Tagged so _disposeMesh
+    // never frees them.
+    this._geoTrail = new THREE.SphereGeometry(0.22, 6, 6);
+    this._geoBurst = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+    this._geoSpark = new THREE.SphereGeometry(0.08, 4, 4);
+    for (const g of [this._geoTrail, this._geoBurst, this._geoSpark]) g.__shared = true;
   }
 
   clear() {
@@ -20,7 +29,7 @@ export class RaceFX {
   _disposeMesh(mesh) {
     if (!mesh) return;
     this.scene.remove(mesh);
-    mesh.geometry?.dispose?.();
+    if (mesh.geometry && !mesh.geometry.__shared) mesh.geometry.dispose();
     if (mesh.material) {
       if (Array.isArray(mesh.material)) mesh.material.forEach((m) => m.dispose());
       else mesh.material.dispose();
@@ -31,7 +40,7 @@ export class RaceFX {
     const col = new THREE.Color(color);
     for (let i = 0; i < count; i++) {
       const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 0.12, 0.12),
+        this._geoBurst,
         new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.95, toneMapped: false })
       );
       mesh.position.copy(pos);
@@ -50,7 +59,7 @@ export class RaceFX {
     const col = new THREE.Color(color);
     for (let i = 0; i < count; i++) {
       const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.08, 4, 4),
+        this._geoSpark,
         new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.9, toneMapped: false })
       );
       mesh.position.copy(pos);
@@ -66,7 +75,7 @@ export class RaceFX {
 
   trail(pos, color = 0xff6622) {
     const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(0.22, 6, 6),
+      this._geoTrail,
       new THREE.MeshBasicMaterial({
         color,
         transparent: true,
