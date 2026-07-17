@@ -51,3 +51,10 @@ pipeline/engine/*.png.lit
 asset_gen/
 .claude/worktrees/
 .wrangler/
+
+# 2026-07-16 — Neon Veil local rebuild project (games/neon-veil): buildable Vite/TS
+# project that recompiles the restored sources in src-restored/src. node_modules is
+# already ignored above; keep the separate rebuild output out of git too. The live
+# bundle (games/neon-veil/assets/index-*.js/.css) IS tracked and must stay.
+games/neon-veil/node_modules/
+games/neon-veil/dist-rebuild/

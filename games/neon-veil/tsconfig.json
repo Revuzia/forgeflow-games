@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "skipLibCheck": true,
+
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+
+    // Restored sources come from a sourcemap reconstruction; do not fail the
+    // build on stylistic unused-symbol lint. Real type errors still fail.
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["src-restored/src"]
+}

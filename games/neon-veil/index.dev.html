@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neon Veil — Outlaw Skies (dev rebuild)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- ForgeFlow shell bar: fullscreen / mute / pause (before game module so Audio wraps) -->
+    <script>
+      window.GAME_CONFIG = window.GAME_CONFIG || {
+        hide_bug_button: true,
+        fs_hotkey: false /* F = shield in Neon Veil */,
+      };
+    </script>
+    <script src="./game_controls.js"></script>
+
+    <!--
+      DEV/REBUILD ENTRY — loads the restored TypeScript directly via Vite.
+      NOTE: the live game's CSS (assets/index-QJtMcDGf.css) is NOT imported here
+      because no CSS source was recovered from the sourcemap; the rebuild
+      regenerates the JS bundle only. See package.json for build commands.
+    -->
+    <script type="module" src="/src-restored/src/main.ts"></script>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- Main Menu -->
+      <div id="menu" class="screen">
+        <div class="menu-bg"></div>
+        <div class="menu-panel">
+          <div class="menu-badge">OPEN ALPHA · ZERO VOICE · PURE DOGFIGHT</div>
+          <h1 class="title">Neon Veil</h1>
+          <p class="tagline">NEON SKIES · OUTLAW HUNTS · DOGFIGHTS</p>
+
+          <label class="callsign-label" for="callsign">CALLSIGN</label>
+          <input
+            id="callsign"
+            class="callsign-input"
+            type="text"
+            maxlength="16"
+            placeholder="ENTER CALLSIGN"
+            autocomplete="off"
+            spellcheck="false"
+          />
+
+          <div id="pilot-chip" class="pilot-chip">
+            <span class="pulse"></span>
+            <span id="pilot-count">0</span> PILOTS FLYING
+          </div>
+
+          <p id="menu-status" class="menu-status">SELECT A MODE TO LAUNCH</p>
+
+          <div class="mode-grid">
+            <button class="mode-btn multi" data-mode="multiplayer" type="button">
+              <span class="mode-icon">⚔</span>
+              MULTIPLAYER
+            </button>
+            <button class="mode-btn hunt" data-mode="outlaw" type="button">
+              <span class="mode-icon">☠</span>
+              OUTLAW HUNT
+            </button>
+            <button class="mode-btn roam" data-mode="freeroam" type="button">
+              <span class="mode-icon">✈</span>
+              FREE ROAM
+            </button>
+</div>
+
+          <div class="map-row">
+            <span class="map-row-label">STARTING SECTOR</span>
+            <button class="map-pill active" data-map="sky-city">SKY CITY</button>
+            <button class="map-pill" data-map="the-pit">THE PIT</button>
+            <button class="map-pill" data-map="cloud-sea">CLOUD SEA</button>
+            <button class="map-pill" data-map="upper-atmo">UPPER ATMO</button>
+            <button class="map-pill" data-map="deep-space">DEEP SPACE</button>
+          </div>
+
+          <p class="menu-help">
+            Each sector is its own instance with its own pilots. Menu = join starting sector ·
+            neon rings = travel (locals stay). FFA ~6 rivals · Roam ~5 · Esc pause · M mute
+          </p>
+
+          <div class="menu-footer">
+            <button id="btn-settings-menu" class="link-btn">SETTINGS</button>
+            <span class="sep">·</span>
+            <span class="ver">v1.0.0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div id="loading" class="screen hidden">
+        <div class="loading-inner">
+          <div class="loading-title">SPINNING UP THRUSTERS</div>
+          <div class="loading-bar"><div id="loading-fill"></div></div>
+          <div id="loading-text" class="loading-text">Building neon skyline…</div>
+        </div>
+      </div>
+
+      <!-- Engage (start) = simple click · Esc pause = full menu -->
+      <div id="click-to-play" class="overlay pause-overlay hidden mode-engage" role="dialog" aria-label="Flight control" tabindex="-1">
+        <div class="ctp-box pause-box">
+          <div id="ctp-title" class="ctp-title">CLICK TO ENGAGE</div>
+          <div id="ctp-sub" class="ctp-sub">Click or Enter to take the stick</div>
+          <div class="pause-actions">
+            <button type="button" id="btn-resume" class="mode-btn roam pause-btn">CLICK TO FLY</button>
+            <button type="button" id="btn-pause-settings" class="mode-btn multi pause-btn pause-only">SETTINGS</button>
+            <button type="button" id="btn-pause-menu" class="mode-btn hunt pause-btn pause-only">MAIN MENU</button>
+          </div>
+          <div id="ctp-keys" class="ctp-keys">Enter / Click · WASD fly · LMB fire · Esc pause · M mute</div>
+          <div id="ctp-hint" class="ctp-hint"></div>
+        </div>
+      </div>
+
+      <!-- In-game HUD -->
+      <div id="hud" class="hidden">
+        <div id="cockpit-frame"></div>
+        <div id="mirror-left" class="mirror"></div>
+        <div id="mirror-right" class="mirror"></div>
+
+        <div id="reticle">
+          <div class="ret-ring"></div>
+          <div class="ret-dot"></div>
+          <div class="ret-h ret-h1"></div>
+          <div class="ret-h ret-h2"></div>
+          <div class="ret-v ret-v1"></div>
+          <div class="ret-v ret-v2"></div>
+        </div>
+        <!-- Rocket heat latch (red) — only while ROCKET selected -->
+        <div id="missile-lock" class="hidden">
+          <div class="mlock-diamond"></div>
+          <div class="mlock-corners"></div>
+          <div id="missile-lock-label" class="mlock-label">SEEK</div>
+          <div class="mlock-bar"><div id="missile-lock-fill"></div></div>
+        </div>
+        <div id="shield-prompt" class="hidden">SHIELD CHARGED — HOLD [F] TO DEPLOY</div>
+        <div id="hit-marker" class="hidden"></div>
+        <div id="damage-vignette"></div>
+        <div id="dmg-floats" aria-hidden="true"></div>
+
+        <div id="help-card" class="hidden">
+          <div class="help-title">CONTROLS</div>
+          <div class="help-grid">
+            <span>W / S</span><span>Thrust / Brake</span>
+            <span>A / D</span><span>Strafe</span>
+            <span>SPACE</span><span>Climb</span>
+            <span>SHIFT</span><span>Descend</span>
+            <span>MOUSE</span><span>Steer &amp; Aim</span>
+            <span>LMB</span><span>Fire</span>
+            <span>RMB</span><span>Afterburner</span>
+            <span>MMB</span><span>Zoom</span>
+            <span>E</span><span>Look Back</span>
+            <span>F</span><span>Deploy Shield</span>
+            <span>1–6</span><span>Weapons</span>
+            <span>TAB</span><span>Scoreboard</span>
+            <span>H</span><span>Toggle Help</span>
+            <span>F3</span><span>Debug Overlay</span>
+            <span>ESC</span><span>Pause / Menu</span>
+          </div>
+          <div class="help-note">Rockets: hold aim to LOCK (red + beeps) then fire · rings = sectors · crates 20s</div>
+        </div>
+
+        <div id="debug-panel" class="hidden">
+          <pre id="debug-text">DEBUG</pre>
+        </div>
+        <div id="biome-toast" class="hidden"></div>
+
+        <div id="kill-feed"></div>
+        <div id="mode-banner"></div>
+
+        <div id="bottom-cluster">
+          <div class="inst radar-panel">
+            <div class="inst-label">RADAR</div>
+            <canvas id="radar-canvas" width="120" height="120"></canvas>
+          </div>
+          <div class="inst">
+            <div class="inst-label">ALTITUDE</div>
+            <div id="hud-alt" class="inst-value">000<span class="unit">m</span></div>
+          </div>
+          <div class="inst weapon-panel">
+            <div class="inst-label">WEAPON</div>
+            <div id="hud-weapon" class="inst-value weapon-name">PLASMA</div>
+            <div id="hud-ammo" class="inst-sub">∞</div>
+          </div>
+          <div class="inst">
+            <div class="inst-label">SPEED</div>
+            <div id="hud-speed" class="inst-value">000<span class="unit">km/h</span></div>
+          </div>
+          <div class="inst">
+            <div class="inst-label">TIME</div>
+            <div id="hud-time" class="inst-value">00:00</div>
+          </div>
+          <div class="inst leader-panel">
+            <div class="inst-label">LEADERBOARD</div>
+            <div id="hud-leaders" class="leaders"></div>
+          </div>
+        </div>
+
+        <div id="bars">
+          <div class="bar-row">
+            <span class="bar-label">HULL</span>
+            <div class="bar-track health"><div id="bar-health" class="bar-fill"></div></div>
+            <span id="bar-health-n" class="bar-num">100</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">SHIELD</span>
+            <div class="bar-track shield"><div id="bar-shield" class="bar-fill"></div></div>
+            <span id="bar-shield-n" class="bar-num">100</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label">BURN</span>
+            <div class="bar-track burn"><div id="bar-burn" class="bar-fill"></div></div>
+            <span id="bar-burn-n" class="bar-num">100</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scoreboard -->
+      <div id="scoreboard" class="overlay hidden">
+        <div class="sb-panel">
+          <div class="sb-title">SCOREBOARD</div>
+          <table id="sb-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>CALLSIGN</th>
+                <th>K</th>
+                <th>D</th>
+                <th>SCORE</th>
+                <th>PING</th>
+              </tr>
+            </thead>
+            <tbody id="sb-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div id="results" class="screen hidden">
+        <div class="results-panel">
+          <div id="results-title" class="results-title">BOUNTY COMPLETE</div>
+          <div id="results-stats" class="results-stats"></div>
+          <button id="btn-results-menu" class="mode-btn multi">RETURN TO MENU</button>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div id="settings" class="overlay hidden">
+        <div class="settings-panel">
+          <div class="settings-title">SETTINGS</div>
+          <label>Mouse Sensitivity
+            <input id="set-sens" type="range" min="0.1" max="3" step="0.05" value="1" />
+          </label>
+          <label>Master Volume
+            <input id="set-vol" type="range" min="0" max="1" step="0.05" value="0.6" />
+          </label>
+          <label class="check">
+            <input id="set-invert" type="checkbox" /> Invert Y
+          </label>
+          <label class="check">
+            <input id="set-mute" type="checkbox" /> Mute Audio
+          </label>
+          <button id="btn-settings-close" class="mode-btn roam">CLOSE</button>
+        </div>
+      </div>
+
+      <!-- Death overlay -->
+      <div id="death" class="overlay hidden">
+        <div class="death-box">
+          <div class="death-title">HULL BREACHED</div>
+          <div id="death-sub" class="death-sub">Respawning…</div>
+        </div>
+      </div>
+    </div>
+
+  </body>
+</html>
