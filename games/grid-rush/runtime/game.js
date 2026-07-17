@@ -20,6 +20,7 @@ import { Track } from './track.js';
 import { buildVehicleMesh, setBoostVisual } from './vehicles.js';
 import { installSettings } from './settings.js';
 import { createGrandPrix } from './modes/grand-prix.js';
+import { createTimeTrial } from './modes/time-trial.js';
 
 class Racer {
   constructor(id, callsign, vehicleId, isPlayer) {
@@ -420,6 +421,11 @@ export class GridRushGame {
       this.mode.setup(this); // seeds the 5-circuit cup; forces trackId to race 1
       this.startRace();
     });
+    document.getElementById('btn-time-trial')?.addEventListener('click', () => {
+      this.sfx.resume();
+      this.mode = createTimeTrial(); // solo vs your ghost; onRaceStart runs inside startRace
+      this.startRace();
+    });
     document.getElementById('btn-resume')?.addEventListener('click', () => this.resume());
     document.getElementById('btn-quit')?.addEventListener('click', () => this.returnMenu());
     document.getElementById('btn-results-menu')?.addEventListener('click', () => this.returnMenu());
@@ -498,6 +504,7 @@ export class GridRushGame {
   }
 
   clearRace() {
+    this.mode?.teardown?.(this); // release mode-owned scene objects (e.g. TIME TRIAL ghost)
     if (this.track) {
       this.track.dispose();
       this.track = null;
@@ -534,7 +541,8 @@ export class GridRushGame {
     this.track = new Track(this.scene, def);
     this.applyAtmosphere(def);
 
-    const total = 1 + RIVAL_COUNT;
+    const rivalCount = this.mode?.rivalCount ?? RIVAL_COUNT; // TIME TRIAL sets 0 (solo)
+    const total = 1 + rivalCount;
     this.racers = [];
     const player = new Racer('local', cs, this.vehicleId, true);
     this.placeOnGrid(player, 0, total);
@@ -542,11 +550,11 @@ export class GridRushGame {
     this.racers.push(player);
     this.scene.add(player.mesh);
 
-    for (let i = 0; i < RIVAL_COUNT; i++) {
+    for (let i = 0; i < rivalCount; i++) {
       const vids = Object.keys(VEHICLES);
       const vid = vids[(i + 1) % vids.length];
       const r = new Racer(`bot-${i}`, AI_NAMES[i % AI_NAMES.length], vid, false);
-      r.skill = 0.78 + (i / RIVAL_COUNT) * 0.28;
+      r.skill = 0.78 + (i / Math.max(1, rivalCount)) * 0.28;
       const marker = new THREE.Mesh(
         new THREE.ConeGeometry(0.35, 0.7, 3),
         new THREE.MeshBasicMaterial({ color: AI_COLORS[i % AI_COLORS.length] })
@@ -573,6 +581,7 @@ export class GridRushGame {
     this.els.pause?.classList.add('hidden');
     this.els.hud?.classList.remove('hidden');
     if (this.els.banner) this.els.banner.textContent = `${def.name} · ${LAPS} LAPS · DATA ORBS LIVE`;
+    this.mode?.onRaceStart?.(this); // per-race mode init (e.g. TIME TRIAL ghost); may override the banner
     this.playMusic();
     this.clock.start();
   }
@@ -672,11 +681,11 @@ export class GridRushGame {
   }
 
   returnMenu() {
-    this.mode = null; // abandoning a mode (pause → QUIT) drops it
     this.playing = false;
     this.phase = 'menu';
     this.paused = false;
-    this.clearRace();
+    this.clearRace(); // runs the active mode's teardown (e.g. TIME TRIAL ghost) FIRST…
+    this.mode = null; // …then drop the mode, so teardown isn't skipped
     this.els.hud?.classList.add('hidden');
     this.els.pause?.classList.add('hidden');
     this.els.results?.classList.add('hidden');
@@ -1461,6 +1470,7 @@ export class GridRushGame {
 
   /** Live results — refreshed each frame while the field finishes; DNF once over. */
   refreshResults() {
+    if (this.mode?.results) { this.mode.results(this); return; } // TIME TRIAL owns its results panel
     const rank = this.ranking();
     const place = rank.findIndex((r) => r.id === this.player.id) + 1;
     const titles = ['GRID CROWN — 1st', 'SILVER RAIL — 2nd', 'BRONZE SPARK — 3rd'];
