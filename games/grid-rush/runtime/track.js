@@ -89,15 +89,16 @@ export class Track {
     this.totalLength = len;
 
     const half = TRACK_HALF_WIDTH;
-    // Road must read as a clearly SOLID lane, not a near-black void between the
-    // glowing edge rails (that made it feel see-through / hard to drive). Lighter
-    // slate surface + a faint rail-tinted glow so the drivable lane is obvious.
+    // Road must read as a clearly SOLID, self-lit neon lane — not a near-black
+    // void between the glowing rails (which made it feel like driving on empty
+    // space). Brighter slate base + strong rail-tinted emissive so the ribbon
+    // glows and is unmistakable against the dark ground.
     const roadMat = new THREE.MeshStandardMaterial({
-      color: 0x2b2850,
-      metalness: 0.35,
-      roughness: 0.6,
+      color: 0x413e78,
+      metalness: 0.2,
+      roughness: 0.5,
       emissive: def.rail,
-      emissiveIntensity: 0.3,
+      emissiveIntensity: 0.55,
     });
     const edgeMat = new THREE.MeshBasicMaterial({
       color: def.rail,
