@@ -2,8 +2,10 @@ import * as THREE from 'three';
 import {
   AI_COLORS,
   AI_NAMES,
+  CIRCUIT_MUSIC,
   ITEMS,
   LAPS,
+  MENU_MUSIC,
   PHYSICS,
   RIVAL_COUNT,
   TRACK_HALF_WIDTH,
@@ -166,6 +168,7 @@ export class GridRushGame {
     });
     this.wirePauseShell();
     this.wireMute();
+    this._wireMenuAudio();
     this.animate();
   }
 
@@ -577,26 +580,48 @@ export class GridRushGame {
     this.syncMesh(racer);
   }
 
-  playMusic() {
+  /** Swap to `src`; no-op (just re-sets volume) if it's already the playing track. */
+  _setMusic(src, vol) {
     try {
+      if (this.music && this._musicSrc === src) {
+        this.music.volume = vol;
+        if (this.music.paused) void this.music.play().catch(() => {});
+        return;
+      }
       if (this.music) {
         this.music.pause();
         this.music = null;
       }
-      const tracks = [
-        './music/arcade-pursuit.mp3',
-        './music/neon-turbine.mp3',
-        './music/vice-highway.mp3',
-        './music/eclipse-overdrive.mp3',
-        './music/nightdrive-mainframe.mp3',
-      ];
-      this.music = new Audio(tracks[Math.floor(Math.random() * tracks.length)]);
-      this.music.loop = true;
-      this.music.volume = 0.3;
-      void this.music.play().catch(() => {});
+      this._musicSrc = src;
+      const a = new Audio(src);
+      a.loop = true;
+      a.volume = vol;
+      this.music = a;
+      void a.play().catch(() => {});
     } catch {
       /* ignore */
     }
+  }
+
+  /** Race music — each circuit has its OWN track (config CIRCUIT_MUSIC). */
+  playMusic() {
+    this._setMusic(CIRCUIT_MUSIC[this.trackId] || MENU_MUSIC, 0.32);
+  }
+
+  /** Chill menu bed (a touch quieter than race music). */
+  playMenuMusic() {
+    this._setMusic(MENU_MUSIC, 0.22);
+  }
+
+  /** Menu music can't autoplay before a user gesture; start it now and on first input. */
+  _wireMenuAudio() {
+    const kick = () => {
+      this.sfx?.resume?.();
+      if (this.phase === 'menu' && (!this.music || this.music.paused)) this.playMenuMusic();
+    };
+    window.addEventListener('pointerdown', kick);
+    window.addEventListener('keydown', kick);
+    this.playMenuMusic();
   }
 
   returnMenu() {
@@ -611,10 +636,7 @@ export class GridRushGame {
     this.els.countdown?.classList.remove('show');
     this.scene.background = new THREE.Color(0x0a0618);
     this.scene.fog = null;
-    if (this.music) {
-      this.music.pause();
-      this.music = null;
-    }
+    this.playMenuMusic();
     this.resizeChassisPreview();
   }
 

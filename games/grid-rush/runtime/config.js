@@ -311,3 +311,17 @@ export const AI_NAMES = [
 ];
 
 export const AI_COLORS = [0xff2bd6, 0xff6b2b, 0x39ff88, 0xffe566, 0xaa66ff, 0x00aaff];
+
+/**
+ * Music (synthwave/darksynth). A chill menu bed lifts into energetic per-circuit
+ * tracks; GLASS HARBOR — the wide chill coastal cruise — shares the menu's
+ * nightdrive by design. Each circuit now has its OWN track (was random before).
+ */
+export const MENU_MUSIC = './music/nightdrive-mainframe.mp3';
+export const CIRCUIT_MUSIC = {
+  prism_boulevard: './music/vice-highway.mp3', // Miami downtown neon
+  volt_canyon: './music/eclipse-overdrive.mp3', // dark/intense for the punishing gorge
+  glass_harbor: './music/nightdrive-mainframe.mp3', // chill coastal (shares menu bed)
+  null_spire: './music/neon-turbine.mp3', // driving, for the vertical figure-eight
+  echo_yards: './music/arcade-pursuit.mp3', // upbeat arcade chase for the freight yard
+};
