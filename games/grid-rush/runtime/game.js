@@ -19,6 +19,7 @@ import { clamp, formatTime, lerp, ordinal, wrapAngle } from './math.js';
 import { Track } from './track.js';
 import { buildVehicleMesh, setBoostVisual } from './vehicles.js';
 import { installSettings } from './settings.js';
+import { createGrandPrix } from './modes/grand-prix.js';
 
 class Racer {
   constructor(id, callsign, vehicleId, isPlayer) {
@@ -109,6 +110,7 @@ export class GridRushGame {
     this.racers = [];
     this.player = null;
     this.phase = 'menu';
+    this.mode = null; // active game mode (Grand Prix etc.); null = single race
     this.playing = false;
     this.paused = false;
     this.countdown = 0;
@@ -408,7 +410,14 @@ export class GridRushGame {
     });
 
     document.getElementById('btn-start')?.addEventListener('click', () => {
+      this.mode = null; // a normal launch clears any leftover cup
       this.sfx.resume();
+      this.startRace();
+    });
+    document.getElementById('btn-grand-prix')?.addEventListener('click', () => {
+      this.sfx.resume();
+      this.mode = createGrandPrix();
+      this.mode.setup(this); // seeds the 5-circuit cup; forces trackId to race 1
       this.startRace();
     });
     document.getElementById('btn-resume')?.addEventListener('click', () => this.resume());
@@ -662,6 +671,7 @@ export class GridRushGame {
   }
 
   returnMenu() {
+    this.mode = null; // abandoning a mode (pause → QUIT) drops it
     this.playing = false;
     this.phase = 'menu';
     this.paused = false;
@@ -748,6 +758,7 @@ export class GridRushGame {
       this.updateProgress();
       this.updateCamera(dt);
       this.updateHud();
+      this.mode?.update?.(this, dt);
       this.drawMinimap();
 
       // Show results the MOMENT the player finishes; the AI keep racing behind
@@ -764,7 +775,10 @@ export class GridRushGame {
           this._raceOver = true;
         }
         this.refreshResults();
-        if (this._raceOver) this.playing = false;
+        if (this._raceOver) {
+          this.playing = false;
+          this.mode?.checkEnd?.(this);
+        }
       }
     }
   }
@@ -1132,6 +1146,7 @@ export class GridRushGame {
             r.finishTime = this.raceTime;
             r.lap = LAPS;
             if (!this.finishedOrder.includes(r.id)) this.finishedOrder.push(r.id);
+            this.mode?.onRacerFinish?.(this, r);
             if (r.isPlayer) {
               this.flashToast('FINISH!');
               this.sfx.finish();
@@ -1371,6 +1386,7 @@ export class GridRushGame {
         })
         .join('');
     }
+    this.mode?.hudExtra?.(this);
   }
 
   drawMinimap() {

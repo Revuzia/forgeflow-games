@@ -124,6 +124,21 @@ else fail('landscape menu markup missing');
 if (html.includes('SPACE') && html.toLowerCase().includes('jump')) ok('help lists jump');
 else fail('help missing jump');
 
+// Mode registry — guarded hooks must be present and single-race play untouched
+const modeHooks = ['this.mode?.checkEnd?.', 'this.mode?.onRacerFinish?.', 'this.mode?.update?.', 'this.mode?.hudExtra?.'];
+if (modeHooks.every((h) => gameBlob.includes(h)) && gameBlob.includes('this.mode = null'))
+  ok('mode registry hooks wired (guarded)');
+else fail('mode registry hooks missing');
+const gpPath = path.join(__dirname, 'runtime/modes/grand-prix.js');
+if (fs.existsSync(gpPath)) {
+  const gp = fs.readFileSync(gpPath, 'utf8');
+  if (gp.includes('export function createGrandPrix') && /setup\(/.test(gp) && /checkEnd\(/.test(gp))
+    ok('grand-prix module present');
+  else fail('grand-prix module malformed');
+} else fail('grand-prix module missing');
+if (html.includes('btn-grand-prix')) ok('menu has grand-prix launch');
+else fail('grand-prix menu button missing');
+
 // Ensure neon-veil no longer links race
 const nvIndex = path.join(__dirname, '..', 'neon-veil', 'index.html');
 if (fs.existsSync(nvIndex)) {
