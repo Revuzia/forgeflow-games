@@ -535,6 +535,7 @@ export class GridRushGame {
     }
 
     this.finishedOrder = [];
+    this._raceOver = false;
     this.raceTime = 0;
     this.phase = 'countdown';
     this.countdown = 3.4;
@@ -713,13 +714,21 @@ export class GridRushGame {
       this.updateHud();
       this.drawMinimap();
 
+      // Show results the MOMENT the player finishes; the AI keep racing behind
+      // the overlay and their times fill in live. Freeze the world once everyone
+      // is in (or after a grace period — remaining racers become DNF).
       if (this.phase === 'racing' && this.player?.finished) {
+        this.endRace();
+      }
+      if (this.phase === 'finished') {
         if (
           this.finishedOrder.length >= this.racers.length ||
-          this.raceTime - this.player.finishTime > 5
+          this.raceTime - this.player.finishTime > 18
         ) {
-          this.endRace();
+          this._raceOver = true;
         }
+        this.refreshResults();
+        if (this._raceOver) this.playing = false;
       }
     }
   }
@@ -1362,19 +1371,29 @@ export class GridRushGame {
   }
 
   endRace() {
+    if (this.phase === 'finished') return; // fire once, the moment the player finishes
     this.phase = 'finished';
+    this.sfx.finish();
+    this.refreshResults();
+    this.els.results?.classList.remove('hidden');
+  }
+
+  /** Live results — refreshed each frame while the field finishes; DNF once over. */
+  refreshResults() {
     const rank = this.ranking();
     const place = rank.findIndex((r) => r.id === this.player.id) + 1;
     const titles = ['GRID CROWN — 1st', 'SILVER RAIL — 2nd', 'BRONZE SPARK — 3rd'];
-    this.els.resultsTitle.textContent = titles[place - 1] || `FINISH · ${ordinal(place)}`;
+    if (this.els.resultsTitle) this.els.resultsTitle.textContent = titles[place - 1] || `FINISH · ${ordinal(place)}`;
+    if (!this.els.resultsStats) return;
     this.els.resultsStats.innerHTML = rank
       .map((r, i) => {
-        const t = r.finished ? formatTime(r.finishTime) : r.id === this.player.id ? formatTime(this.raceTime) : 'DNF';
+        let t;
+        if (r.finished) t = formatTime(r.finishTime);
+        else if (r.id === this.player.id) t = formatTime(this.player.finishTime);
+        else t = this._raceOver ? 'DNF' : 'racing…';
         return `<div>${i + 1}. ${r.callsign} — ${t} · ${r.vehicle.name}</div>`;
       })
       .join('');
-    this.els.results.classList.remove('hidden');
-    this.sfx.finish();
   }
 
   render() {

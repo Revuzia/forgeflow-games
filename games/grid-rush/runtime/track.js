@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { TRACK_HALF_WIDTH } from './config.js';
 import { mulberry32 } from './math.js';
+import { buildTheme } from './scenery/index.js';
 
 /**
  * Closed ribbon track with sampled centerline, gates, item pads, hazards.
@@ -483,6 +484,20 @@ export class Track {
   }
 
   buildScenery(def, rnd) {
+    // Per-circuit AAA themed environment (runtime/scenery/*.js). Falls back to the
+    // generic scenery below if a theme module is missing or throws.
+    const themed = buildTheme({
+      group: this.group,
+      samples: this.samples,
+      def,
+      rnd,
+      HALF: TRACK_HALF_WIDTH,
+      totalLength: this.totalLength,
+    });
+    if (themed) {
+      if (def.id === 'null_spire') this.group.add(this._buildSpire(def));
+      return;
+    }
     const prof = this._sceneryProfile(def);
     const dummy = new THREE.Object3D();
 
