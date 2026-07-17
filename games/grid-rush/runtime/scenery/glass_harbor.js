@@ -43,20 +43,29 @@ export function buildScene(ctx) {
   const sunDir = new THREE.Vector3(-0.35, 0.09, -0.93).normalize(); // low dusk angle
 
   const water = new Water(waterGeo, {
-    textureWidth: 512,
-    textureHeight: 512,
+    textureWidth: 1024,
+    textureHeight: 1024,
     waterNormals,
     sunDirection: sunDir,
     sunColor: def.sun, // warm dusk glint (0xfff0c8)
-    waterColor: 0x0a2f38, // deep cyan-teal harbor water
-    distortionScale: 2.6, // calm, not choppy
+    waterColor: 0x0b3b47, // richer cyan-teal harbor water
+    distortionScale: 3.4, // livelier glinting swell (was a flat, tiled calm)
     fog: true, // respect the scene's harbor fog so the sea meets the misty horizon
     alpha: 1.0,
   });
   water.rotation.x = -Math.PI / 2;
   water.position.y = WATER_Y;
-  // A little more ripple density than the default across this enormous plane.
-  water.material.uniforms['size'].value = 4.5;
+  // Larger ripple features so the swell reads organic, not a repeating grid.
+  water.material.uniforms['size'].value = 2.6;
+
+  // Upgrade to the real detailed ripple normal map (the classic waternormals.jpg).
+  // The procedural sine map above tiled into an obvious checkerboard; this loads
+  // organic ripples and swaps them in the instant the texture arrives. If the load
+  // fails, the procedural map already in place stays — the sea is never flat-lit.
+  new THREE.TextureLoader().load(new URL('./textures/waternormals.jpg', import.meta.url).href, (tex) => {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    water.material.uniforms['normalSampler'].value = tex;
+  });
   // Drive the ripple animation (and drifting mist, below) from the water's own
   // per-render callback — the module has no other update hook. During Water's
   // reflection pass the plane is hidden, so this fires exactly once per frame.
