@@ -527,6 +527,7 @@ export class GridRushGame {
     this.callsign = cs;
     localStorage.setItem('gridrush_callsign', cs);
     this.sfx.resume();
+    this._hudCache = {}; // fresh HUD-write cache each race so nothing is skipped stale
 
     this.clearRace();
     const def = TRACKS[this.trackId] || TRACKS.prism_boulevard;
@@ -1359,9 +1360,15 @@ export class GridRushGame {
     if (!p) return;
     const rank = this.ranking();
     const place = rank.findIndex((r) => r.id === p.id) + 1;
-    if (this.els.pos) this.els.pos.innerHTML = `${ordinal(place)}<span class="unit">/ ${this.racers.length}</span>`;
-    if (this.els.lap) this.els.lap.innerHTML = `${Math.min(p.lap, LAPS)}<span class="unit">/ ${LAPS}</span>`;
-    if (this.els.speed) this.els.speed.innerHTML = `${Math.round(p.speed * 4.2)}<span class="unit">km/h</span>`;
+    // Gate DOM writes on change — rebuilding innerHTML every frame thrashes
+    // layout/reflow and desyncs from rAF (a real cause of visible frame skipping).
+    const hc = (this._hudCache ||= {});
+    const posHtml = `${ordinal(place)}<span class="unit">/ ${this.racers.length}</span>`;
+    if (this.els.pos && hc.pos !== posHtml) { this.els.pos.innerHTML = posHtml; hc.pos = posHtml; }
+    const lapHtml = `${Math.min(p.lap, LAPS)}<span class="unit">/ ${LAPS}</span>`;
+    if (this.els.lap && hc.lap !== lapHtml) { this.els.lap.innerHTML = lapHtml; hc.lap = lapHtml; }
+    const speedHtml = `${Math.round(p.speed * 4.2)}<span class="unit">km/h</span>`;
+    if (this.els.speed && hc.speed !== speedHtml) { this.els.speed.innerHTML = speedHtml; hc.speed = speedHtml; }
     if (this.els.time) this.els.time.textContent = formatTime(this.raceTime);
     if (this.els.turbine) this.els.turbine.style.width = `${p.turbine}%`;
     if (this.els.turbineN) this.els.turbineN.textContent = String(Math.round(p.turbine));
@@ -1378,13 +1385,14 @@ export class GridRushGame {
     if (this._itemPanelEl) this._itemPanelEl.classList.toggle('has-veil', !!p.veil);
 
     if (this.els.leaders) {
-      this.els.leaders.innerHTML = rank
+      const leadersHtml = rank
         .map((r, i) => {
           const me = r.id === p.id ? ' me' : '';
           const tag = r.finished ? ' ✓' : r.item ? ' ◈' : '';
           return `<div class="${me}"><span class="pos">${i + 1}</span>${r.callsign}${tag}</div>`;
         })
         .join('');
+      if (hc.leaders !== leadersHtml) { this.els.leaders.innerHTML = leadersHtml; hc.leaders = leadersHtml; }
     }
     this.mode?.hudExtra?.(this);
   }
@@ -1398,23 +1406,25 @@ export class GridRushGame {
     ctx.fillStyle = 'rgba(4,2,12,0.78)';
     ctx.fillRect(0, 0, w, h);
     const samp = this.track.samples;
-    let minX = Infinity,
-      maxX = -Infinity,
-      minZ = Infinity,
-      maxZ = -Infinity;
-    for (const s of samp) {
-      minX = Math.min(minX, s.pos.x);
-      maxX = Math.max(maxX, s.pos.x);
-      minZ = Math.min(minZ, s.pos.z);
-      maxZ = Math.max(maxZ, s.pos.z);
+    // Track bounds are static — compute once per track/canvas size, not every frame.
+    let mb = this._miniBounds;
+    if (!mb || mb.track !== this.track || mb.w !== w || mb.h !== h) {
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      for (const s of samp) {
+        minX = Math.min(minX, s.pos.x);
+        maxX = Math.max(maxX, s.pos.x);
+        minZ = Math.min(minZ, s.pos.z);
+        maxZ = Math.max(maxZ, s.pos.z);
+      }
+      const pad = 12;
+      const sx = (w - pad * 2) / (maxX - minX + 1e-6);
+      const sz = (h - pad * 2) / (maxZ - minZ + 1e-6);
+      const sc = Math.min(sx, sz);
+      mb = this._miniBounds = { track: this.track, w, h, minX, minZ, pad, sc };
     }
-    const pad = 12;
-    const sx = (w - pad * 2) / (maxX - minX + 1e-6);
-    const sz = (h - pad * 2) / (maxZ - minZ + 1e-6);
-    const sc = Math.min(sx, sz);
     const map = (x, z) => ({
-      x: pad + (x - minX) * sc,
-      y: pad + (z - minZ) * sc,
+      x: mb.pad + (x - mb.minX) * mb.sc,
+      y: mb.pad + (z - mb.minZ) * mb.sc,
     });
     ctx.strokeStyle = 'rgba(0,240,255,0.7)';
     ctx.lineWidth = 2.5;
