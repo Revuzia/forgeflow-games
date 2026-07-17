@@ -18,6 +18,7 @@ import { ItemWorld, rollItem, useItem, applyStun } from './items.js';
 import { clamp, formatTime, lerp, ordinal, wrapAngle } from './math.js';
 import { Track } from './track.js';
 import { buildVehicleMesh, setBoostVisual } from './vehicles.js';
+import { installSettings } from './settings.js';
 
 class Racer {
   constructor(id, callsign, vehicleId, isPlayer) {
@@ -123,6 +124,10 @@ export class GridRushGame {
     this.music = null;
     this.time = 0;
     this._spaceWasDown = false;
+    this._mouseX = (typeof innerWidth === 'number' ? innerWidth : 1280) / 2;
+    this._cruising = false;
+    this._cruiseAnchorX = 0;
+    this.settings = null; // set by installSettings()
 
     this.els = {
       menu: document.getElementById('menu'),
@@ -156,6 +161,11 @@ export class GridRushGame {
     this.minimapCtx = this.els.minimap?.getContext('2d') || null;
 
     this.initChassisPreview();
+    installSettings(this); // sets this.settings (live values object)
+    this.applyGraphics(this.settings.graphics);
+    this.camera.fov = this.settings.fov;
+    this.camera.updateProjectionMatrix();
+    this.applyVolume();
     this.bindUI();
     this.drawAllCircuitMaps();
     this.refreshSelectionUI();
@@ -425,11 +435,16 @@ export class GridRushGame {
       }
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    window.addEventListener('mousemove', (e) => { this._mouseX = e.clientX; });
     window.addEventListener('mousedown', (e) => {
       this.mouseDown.add(e.button);
       if (e.button === 0 && this.playing && !this.paused) this.tryUseItem(this.player);
+      if (e.button === 2) { this._cruising = true; this._cruiseAnchorX = e.clientX; } // RMB cruise-steer
     });
-    window.addEventListener('mouseup', (e) => this.mouseDown.delete(e.button));
+    window.addEventListener('mouseup', (e) => {
+      this.mouseDown.delete(e.button);
+      if (e.button === 2) this._cruising = false;
+    });
   }
 
   refreshSelectionUI() {
@@ -584,8 +599,10 @@ export class GridRushGame {
   /** Swap to `src`; no-op (just re-sets volume) if it's already the playing track. */
   _setMusic(src, vol) {
     try {
+      const scale = this.settings ? this.settings.masterVol * this.settings.musicVol : 1;
+      this._musicBase = vol;
       if (this.music && this._musicSrc === src) {
-        this.music.volume = vol;
+        this.music.volume = vol * scale;
         if (this.music.paused) void this.music.play().catch(() => {});
         return;
       }
@@ -596,12 +613,31 @@ export class GridRushGame {
       this._musicSrc = src;
       const a = new Audio(src);
       a.loop = true;
-      a.volume = vol;
+      a.volume = vol * scale;
       this.music = a;
       void a.play().catch(() => {});
     } catch {
       /* ignore */
     }
+  }
+
+  /** Push master×bus volumes into the SFX gain + current music element (settings sliders). */
+  applyVolume() {
+    const s = this.settings;
+    if (!s) return;
+    this.sfx.setMasterVolume(s.masterVol * s.sfxVol);
+    if (this.music) this.music.volume = (this._musicBase ?? 0.3) * s.masterVol * s.musicVol;
+  }
+
+  /** Graphics preset — render resolution is the biggest perf lever (Low renders at
+   *  75% and upscales; High caps DPR at 2). */
+  applyGraphics(preset) {
+    this._gfxPreset = preset;
+    const dpr = preset === 'low' ? 0.75 : preset === 'medium' ? 1.25 : Math.min(devicePixelRatio || 1, 2);
+    try {
+      this.renderer.setPixelRatio(dpr);
+      this.renderer.setSize(innerWidth, innerHeight);
+    } catch (e) {}
   }
 
   /** Race music — each circuit has its OWN track (config CIRCUIT_MUSIC). */
@@ -746,6 +782,22 @@ export class GridRushGame {
     let reverse = 0;
     if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) steer += 1; // left
     if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) steer -= 1; // right
+
+    const s = this.settings;
+    // Position-based mouse steer: cursor right of center → steer right (-).
+    if (s?.mouseSteer && !this._cruising) {
+      const half = innerWidth / 2;
+      let norm = (this._mouseX - half) / half; // -1 far-left .. +1 far-right
+      if (Math.abs(norm) < 0.06) norm = 0; // center deadzone
+      steer += -norm * (s.mouseSens || 1);
+    }
+    // Right-click cruise: proportional to drag from the press anchor (mouse LEFT = +steer/left).
+    if (this._cruising && s?.cruiseSteer) {
+      steer += ((this._cruiseAnchorX - this._mouseX) / 240) * (s.mouseSens || 1);
+    }
+    if (s?.invertSteer) steer = -steer;
+    steer = clamp(steer, -1, 1);
+
     if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) throttle = 1;
     if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) {
       // Going forward → brake; stopped/backward → reverse
@@ -889,6 +941,7 @@ export class GridRushGame {
     const steerRate =
       lerp(PHYSICS.steerBase, PHYSICS.steerHighSpeed, clamp(r.speed / maxSp, 0, 1)) *
       v.handle *
+      (r.isPlayer ? (this.settings?.steerSens ?? 1) : 1) *
       (r.drifting ? PHYSICS.driftSteerMul : 1) *
       (r.airborne ? 0.55 : 1);
     // A = left (negative yaw), D = right (positive yaw) — matches camera chase
@@ -1260,17 +1313,19 @@ export class GridRushGame {
     const p = this.player;
     if (!p) return;
     this.forwardFromYaw(p);
-    const behind = p.forward.clone().multiplyScalar(-12 - Math.min(4, p.speed * 0.05));
+    const distMul = this.settings?.cameraDist ?? 1;
+    const behind = p.forward.clone().multiplyScalar((-12 - Math.min(4, p.speed * 0.05)) * distMul);
     behind.y = 4.5 + Math.min(1.5, p.speed * 0.02) + p.hopY * 0.35;
     this.camPos.copy(p.position).add(behind);
     this.camera.position.lerp(this.camPos, 1 - Math.exp(-7 * dt));
     const look = p.position.clone().addScaledVector(p.forward, 14);
     look.y += 1.2;
     this.camera.lookAt(look);
+    const baseFov = this.settings?.fov ?? 68;
     const fovT =
       p.overclockTimer > 0 || ((this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) && p.turbine > 2)
-        ? 78
-        : 68;
+        ? baseFov + 10
+        : baseFov;
     this.camera.fov = lerp(this.camera.fov, fovT, 1 - Math.exp(-5 * dt));
     this.camera.updateProjectionMatrix();
     this.fx.applyCameraShake(this.camera);

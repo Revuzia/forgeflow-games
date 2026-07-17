@@ -5,6 +5,8 @@ export class RaceAudio {
     this.muted = false;
     this._thruster = null;
     this._gain = null;
+    this._master = 1;
+    this._baseGain = 0.22;
   }
 
   ensure() {
@@ -13,7 +15,7 @@ export class RaceAudio {
     if (!AC) return null;
     this.ctx = new AC();
     this._gain = this.ctx.createGain();
-    this._gain.gain.value = 0.22;
+    this._gain.gain.value = this.muted ? 0 : this._baseGain * this._master;
     this._gain.connect(this.ctx.destination);
     return this.ctx;
   }
@@ -25,7 +27,12 @@ export class RaceAudio {
 
   setMuted(m) {
     this.muted = !!m;
-    if (this._gain) this._gain.gain.value = this.muted ? 0 : 0.22;
+    if (this._gain) this._gain.gain.value = this.muted ? 0 : this._baseGain * this._master;
+  }
+
+  setMasterVolume(scale) {
+    this._master = Math.max(0, Math.min(1, scale));
+    if (this._gain && !this.muted) this._gain.gain.value = this._baseGain * this._master;
   }
 
   tone(freq, dur = 0.08, type = 'square', vol = 0.35, slide = 0) {
