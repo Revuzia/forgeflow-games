@@ -227,7 +227,7 @@ export const TRACKS = {
     accent: 0xff2bd6,
     radius: 808,
     waves: 2.0,
-    heightAmp: 8,
+    heightAmp: 3,
   },
   volt_canyon: {
     id: 'volt_canyon',
@@ -244,7 +244,7 @@ export const TRACKS = {
     accent: 0xff6b2b,
     radius: 698,
     waves: 3.2,
-    heightAmp: 14,
+    heightAmp: 4,
   },
   glass_harbor: {
     id: 'glass_harbor',
@@ -261,7 +261,7 @@ export const TRACKS = {
     accent: 0x00f0ff,
     radius: 1034,
     waves: 1.4,
-    heightAmp: 6,
+    heightAmp: 3,
   },
   null_spire: {
     id: 'null_spire',
@@ -278,7 +278,7 @@ export const TRACKS = {
     accent: 0xff2bd6,
     radius: 756,
     waves: 2.6,
-    heightAmp: 22,
+    heightAmp: 12,
   },
   echo_yards: {
     id: 'echo_yards',
@@ -295,7 +295,7 @@ export const TRACKS = {
     accent: 0xffe566,
     radius: 942,
     waves: 1.8,
-    heightAmp: 10,
+    heightAmp: 5,
   },
 };
 
