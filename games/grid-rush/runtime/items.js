@@ -125,6 +125,7 @@ export class ItemWorld {
             break;
           }
         } else if (e.type === 'gravity_well') {
+          if (r.id === e.ownerId) continue; // your own well never sucks you in
           if (d < e.radius && d > 0.2) {
             const pull = e.pos.clone().sub(r.position).normalize().multiplyScalar(e.pull * dt * (1 - d / e.radius));
             r.velocity.add(pull);
@@ -185,8 +186,14 @@ export function useItem(racer, racers, world, track, placeOf) {
       const myP = placeOf(racer);
       const ahead = sorted.find((x) => placeOf(x) === myP - 1) || sorted.filter((x) => placeOf(x) < myP).sort((a, b) => placeOf(b) - placeOf(a))[0];
       if (ahead && ahead.id !== racer.id) {
-        ahead.steerInvert = Math.max(ahead.steerInvert, 3.5);
-        events.push({ kind: 'toast', text: `MIRROR FOG → ${ahead.callsign}`, who: racer.id });
+        if (ahead.veil) {
+          ahead.veil = false;
+          ahead.veilTimer = 0;
+          events.push({ kind: 'toast', text: `${ahead.callsign} VEIL BLOCKED FOG`, who: ahead.id });
+        } else {
+          ahead.steerInvert = Math.max(ahead.steerInvert, 3.5);
+          events.push({ kind: 'toast', text: `MIRROR FOG → ${ahead.callsign}`, who: racer.id });
+        }
       } else {
         events.push({ kind: 'toast', text: 'MIRROR FOG — NO TARGET', who: racer.id });
       }
@@ -226,7 +233,11 @@ export function useItem(racer, racers, world, track, placeOf) {
           best = o;
         }
       }
-      if (best) {
+      if (best && best.veil) {
+        best.veil = false;
+        best.veilTimer = 0;
+        events.push({ kind: 'toast', text: `${best.callsign} VEIL BLOCKED SIPHON`, who: best.id });
+      } else if (best) {
         racer.item = best.item;
         best.item = null;
         events.push({ kind: 'toast', text: `SIPHONED ${ITEMS[racer.item]?.name || 'GADGET'}`, who: racer.id });
@@ -265,8 +276,10 @@ export function useItem(racer, racers, world, track, placeOf) {
   return { def, events };
 }
 
-export function applyStun(racer, time, speedKill) {
-  if (racer.veil) {
+export function applyStun(racer, time, speedKill, ignoreVeil = false) {
+  // Static Veil absorbs one OFFENSIVE gadget hit; environmental hazards pass
+  // ignoreVeil=true so clipping a pillar doesn't waste a saved veil.
+  if (!ignoreVeil && racer.veil) {
     racer.veil = false;
     racer.veilTimer = 0;
     return 'blocked';

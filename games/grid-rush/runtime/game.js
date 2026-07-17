@@ -809,7 +809,9 @@ export class GridRushGame {
 
     // Jump impulse
     if (jump && !r.airborne && r.hopCd <= 0 && r.stun <= 0) {
-      r.vy = PHYSICS.hopForce / Math.max(0.85, r.vehicle.weight);
+      // Cap the weight divisor so even the heaviest chassis (Mag-Drill, 1.35)
+      // reliably clears the hopY>1.4 hazard threshold at any frame rate.
+      r.vy = PHYSICS.hopForce / Math.max(0.85, Math.min(1.2, r.vehicle.weight));
       r.airborne = true;
       r.hopCd = PHYSICS.hopCooldown;
       if (r.isPlayer) {
@@ -963,7 +965,10 @@ export class GridRushGame {
         const d = a.position.distanceTo(b.position);
         const min = 2.4;
         if (d >= min || d < 1e-4) continue;
-        const n = this.tmp.copy(a.position).sub(b.position).normalize();
+        const n = this.tmp.copy(a.position).sub(b.position);
+        n.y = 0; // keep bumps horizontal — no injected vertical velocity on slopes
+        if (n.lengthSq() < 1e-6) n.set(1, 0, 0);
+        n.normalize();
         // ALWAYS depenetrate positionally so packs of 3+ karts can't interpenetrate
         // and pile up; the bump cooldown below only gates the bounce impulse.
         const push = (min - d) * 0.5;
@@ -1101,7 +1106,7 @@ export class GridRushGame {
       // i-frames first so continuous overlap cannot re-stun forever
       r.hazardIFrames = PHYSICS.hazardIFrames;
 
-      const res = applyStun(r, PHYSICS.hazardStun, 0.22);
+      const res = applyStun(r, PHYSICS.hazardStun, 0.22, true);
       // Knock away from hazard + along track so there's always a way out
       const n = this.tmp.copy(r.position).sub(c);
       if (n.lengthSq() < 1e-4) n.copy(r.forward);
