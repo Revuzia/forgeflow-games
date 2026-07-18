@@ -433,6 +433,10 @@ export class GridRushGame {
       this.mode = createBattle(); // arena combat; reads this.battleRules in onRaceStart
       this.startRace();
     });
+    document.getElementById('btn-online')?.addEventListener('click', () => {
+      this.sfx.resume();
+      import('./net/online-mode.js').then((m) => m.openOnlineLobby(this)); // lazy: no supabase-js unless online
+    });
     document.querySelectorAll('[data-rules]').forEach((btn) => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('[data-rules]').forEach((b) => b.classList.remove('active'));
@@ -581,6 +585,7 @@ export class GridRushGame {
       this.scene.add(r.mesh);
     }
 
+    this.racers.forEach((r, i) => (r.slot = i)); // slot == grid index (wire id for online)
     this.finishedOrder = [];
     this._raceOver = false;
     this.raceTime = 0;
@@ -759,10 +764,11 @@ export class GridRushGame {
       this.track.update(dt, this.time);
       this.updatePlayer(dt);
       this.updateAI(dt);
+      this.mode?.netInterp?.(this, dt); // online: drive remote karts by interpolation before collisions
       this.resolveCollisions();
       for (const r of this.racers) {
         if (!laps && !r.alive) { this.syncMesh(r); continue; } // Battle: KO'd karts just freeze
-        if (!r.finished) {
+        if (!r.finished && !r.netRemote) { // online: remote karts driven by interpolation, not local sim
           if (laps) this.checkCheckpoints(r); // no lap/finish logic in a no-lap mode
           this.checkItemPads(r);
           this.checkHazards(r);
@@ -772,6 +778,7 @@ export class GridRushGame {
         }
       }
       this.itemWorld.update(dt, this.racers, (r, kind, ownerId) => {
+        if (this.mode?.ownsRacer && !this.mode.ownsRacer(this, r)) return; // only an owned kart's mine hit counts locally
         const res = applyStun(r, 1.0, 0.45);
         if (res === 'hit') this.mode?.onGadgetHit?.(this, r, ownerId, kind || 'pulse_mine');
         if (r.isPlayer && res === 'hit') {
@@ -861,7 +868,7 @@ export class GridRushGame {
 
   updateAI(dt) {
     for (const r of this.racers) {
-      if (r.isPlayer || r.finished) continue;
+      if (r.isPlayer || r.finished || r.netRemote) continue; // host drives only its own bots
       const look = this.track.sampleAt(r.trackS + 18 + r.skill * 10);
       // Stay nearer center on wider road; dodge hazards via lateral target
       const idealLat = Math.sin(this.time * 0.7 + r.skill * 8) * (TRACK_HALF_WIDTH * 0.22 * (1.1 - r.skill));
@@ -1202,6 +1209,7 @@ export class GridRushGame {
         pad.respawn = 7;
         pad.mesh.visible = false;
         r.item = rollItem(this.placeOf(r), this.racers.length);
+        this.mode?.onItemPickup?.(this, r, pad); // online: owner broadcasts pad-down + rolled item
         if (r.isPlayer) {
           this.flashToast(`DATA ORB · ${ITEMS[r.item]?.name || 'GADGET'}`);
           this.sfx.pickup();
@@ -1321,6 +1329,7 @@ export class GridRushGame {
         if (racer.isPlayer) this.fx.addShake(0.3);
       }
     }
+    this.mode?.onGadgetUse?.(this, racer, result); // online: broadcast gadget FX to remotes
   }
 
   updateProgress() {
