@@ -21,6 +21,7 @@ import { buildVehicleMesh, setBoostVisual } from './vehicles.js';
 import { installSettings } from './settings.js';
 import { createGrandPrix } from './modes/grand-prix.js';
 import { createTimeTrial } from './modes/time-trial.js';
+import { createBattle } from './modes/battle-arena.js';
 
 class Racer {
   constructor(id, callsign, vehicleId, isPlayer) {
@@ -112,6 +113,7 @@ export class GridRushGame {
     this.player = null;
     this.phase = 'menu';
     this.mode = null; // active game mode (Grand Prix etc.); null = single race
+    this.battleRules = 'kos'; // Battle Arena ruleset selected in the menu: 'kos' | 'survival'
     this.playing = false;
     this.paused = false;
     this.countdown = 0;
@@ -425,6 +427,18 @@ export class GridRushGame {
       this.sfx.resume();
       this.mode = createTimeTrial(); // solo vs your ghost; onRaceStart runs inside startRace
       this.startRace();
+    });
+    document.getElementById('btn-battle')?.addEventListener('click', () => {
+      this.sfx.resume();
+      this.mode = createBattle(); // arena combat; reads this.battleRules in onRaceStart
+      this.startRace();
+    });
+    document.querySelectorAll('[data-rules]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-rules]').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.battleRules = btn.dataset.rules; // 'kos' | 'survival'
+      });
     });
     document.getElementById('btn-resume')?.addEventListener('click', () => this.resume());
     document.getElementById('btn-quit')?.addEventListener('click', () => this.returnMenu());
@@ -741,13 +755,15 @@ export class GridRushGame {
 
     if (this.phase === 'racing' || this.phase === 'finished') {
       this.raceTime += dt;
+      const laps = this.mode?.usesLaps !== false; // Battle Arena = false (no laps)
       this.track.update(dt, this.time);
       this.updatePlayer(dt);
       this.updateAI(dt);
       this.resolveCollisions();
       for (const r of this.racers) {
+        if (!laps && !r.alive) { this.syncMesh(r); continue; } // Battle: KO'd karts just freeze
         if (!r.finished) {
-          this.checkCheckpoints(r);
+          if (laps) this.checkCheckpoints(r); // no lap/finish logic in a no-lap mode
           this.checkItemPads(r);
           this.checkHazards(r);
           this.unstickIfNeeded(r, dt);
@@ -755,8 +771,9 @@ export class GridRushGame {
           this.syncMesh(r);
         }
       }
-      this.itemWorld.update(dt, this.racers, (r) => {
+      this.itemWorld.update(dt, this.racers, (r, kind, ownerId) => {
         const res = applyStun(r, 1.0, 0.45);
+        if (res === 'hit') this.mode?.onGadgetHit?.(this, r, ownerId, kind || 'pulse_mine');
         if (r.isPlayer && res === 'hit') {
           this.flashToast('HIT — PULSE MINE');
           this.sfx.hit();
@@ -774,11 +791,14 @@ export class GridRushGame {
       // Show results the MOMENT the player finishes; the AI keep racing behind
       // the overlay and their times fill in live. Freeze the world once everyone
       // is in (or after a grace period — remaining racers become DNF).
-      if (this.phase === 'racing' && this.player?.finished) {
+      const matchOver = this.mode?.isOver ? this.mode.isOver(this) : this.player?.finished;
+      if (this.phase === 'racing' && matchOver) {
         this.endRace();
       }
       if (this.phase === 'finished') {
-        if (
+        if (!laps) {
+          this._raceOver = true; // Battle: match ended → freeze immediately, keep overlay
+        } else if (
           this.finishedOrder.length >= this.racers.length ||
           this.raceTime - this.player.finishTime > 18
         ) {
@@ -1284,6 +1304,10 @@ export class GridRushGame {
     if (!result) return;
     if (racer.isPlayer) this.sfx.useItem();
     for (const ev of result.events) {
+      if (ev.kind === 'hit') {
+        const v = this.racers.find((x) => x.id === ev.to);
+        if (v) this.mode?.onGadgetHit?.(this, v, ev.by, ev.gadget);
+      }
       if (ev.kind === 'toast' && (ev.who === this.player?.id || racer.isPlayer)) {
         this.flashToast(ev.text);
       }
@@ -1375,7 +1399,7 @@ export class GridRushGame {
     const posHtml = `${ordinal(place)}<span class="unit">/ ${this.racers.length}</span>`;
     if (this.els.pos && hc.pos !== posHtml) { this.els.pos.innerHTML = posHtml; hc.pos = posHtml; }
     const lapHtml = `${Math.min(p.lap, LAPS)}<span class="unit">/ ${LAPS}</span>`;
-    if (this.els.lap && hc.lap !== lapHtml) { this.els.lap.innerHTML = lapHtml; hc.lap = lapHtml; }
+    if (this.els.lap && this.mode?.usesLaps !== false && hc.lap !== lapHtml) { this.els.lap.innerHTML = lapHtml; hc.lap = lapHtml; }
     const speedHtml = `${Math.round(p.speed * 4.2)}<span class="unit">km/h</span>`;
     if (this.els.speed && hc.speed !== speedHtml) { this.els.speed.innerHTML = speedHtml; hc.speed = speedHtml; }
     if (this.els.time) this.els.time.textContent = formatTime(this.raceTime);

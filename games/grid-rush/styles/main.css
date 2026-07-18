@@ -512,3 +512,17 @@ html, body, #app {
   .chassis-stage { max-height: 200px; }
   .chassis-cards { grid-template-columns: 1fr 1fr; }
 }
+
+/* Battle Arena rules toggle (shown under the DATA DUEL button) */
+.rules-select { display: flex; gap: 0.4rem; margin-top: 0.35rem; }
+.rules-pick {
+  flex: 1; padding: 0.4rem 0.5rem; border-radius: 6px; cursor: pointer;
+  font-family: inherit; font-size: 0.58rem; letter-spacing: 0.12em; color: #9fb4c8;
+  border: 1px solid rgba(0, 240, 255, 0.22); background: rgba(4, 8, 20, 0.6);
+  transition: border-color 0.12s, color 0.12s, box-shadow 0.12s;
+}
+.rules-pick:hover { color: #d8ecff; border-color: rgba(0, 240, 255, 0.5); }
+.rules-pick.active {
+  color: #fff; border-color: var(--magenta);
+  background: rgba(255, 43, 214, 0.16); box-shadow: 0 0 10px rgba(255, 43, 214, 0.28);
+}

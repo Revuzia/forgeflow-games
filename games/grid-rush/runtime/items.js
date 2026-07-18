@@ -168,8 +168,9 @@ export function useItem(racer, racers, world, track, placeOf) {
       const myPlace = placeOf(racer);
       const target = sorted.find((x) => placeOf(x) === myPlace - 1) || sorted.find((x) => placeOf(x) < myPlace);
       if (target && target.id !== racer.id) {
-        applyStun(target, 1.1, 0.35);
+        const res = applyStun(target, 1.1, 0.35);
         events.push({ kind: 'lash', from: racer.id, to: target.id });
+        if (res === 'hit') events.push({ kind: 'hit', to: target.id, by: racer.id, gadget: 'volt_lash' });
         events.push({ kind: 'toast', text: `VOLT LASH → ${target.callsign}`, who: racer.id });
       } else {
         events.push({ kind: 'toast', text: 'VOLT LASH — NO TARGET', who: racer.id });
@@ -214,7 +215,8 @@ export function useItem(racer, racers, world, track, placeOf) {
             applyStun(racer, 0.4, 0.15);
             events.push({ kind: 'toast', text: `${o.callsign} VEIL REFLECT`, who: o.id });
           } else {
-            applyStun(o, 1.35, 0.5);
+            const res = applyStun(o, 1.35, 0.5);
+            if (res === 'hit') events.push({ kind: 'hit', to: o.id, by: racer.id, gadget: 'emp_bloom' });
           }
         }
       }
