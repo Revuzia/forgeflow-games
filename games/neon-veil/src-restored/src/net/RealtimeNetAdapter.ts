@@ -1,10 +1,11 @@
 // net/RealtimeNetAdapter.ts — real online multiplayer for Neon Veil over the
 // shared FFG Supabase Realtime relay (Broadcast/Presence, no Postgres, $0).
 // Owner-authority: each human sims + broadcasts its OWN ship; remote humans are
-// rendered from wire packets (netRemote, skip local AI). v1: local AI bots stay
-// per-client (humans are synced — the core feature); host-authoritative bots are
-// a v2 refinement. Implements the same INetAdapter surface as LocalBotAdapter so
-// free-roam / outlaw are untouched.
+// rendered from wire packets (netRemote, skip local AI). Bots are HOST-AUTHORITATIVE
+// and SHARED: deterministic ids, the host simulates them and broadcasts their state,
+// guests render them — so the whole room sees ONE consistent set of pilots (humans +
+// bots filling to TARGET_PILOTS). Implements the same INetAdapter surface as
+// LocalBotAdapter so free-roam / outlaw are untouched.
 import type { INetAdapter } from './INetAdapter';
 import type { KillEvent, PlayerState, TeamId, WeaponId } from '../core/types';
 // @ts-expect-error — plain-JS relay, no type decls (bundled by Vite)
@@ -16,6 +17,8 @@ const SUPABASE_ANON_KEY =
 
 const BOT_NAMES = ['VEX-9', 'NULLSTAR', 'KITE', 'PHANTOM', 'RYU-0', 'GHOSTLINE', 'HEXA', 'ORBIT', 'SAKURA', 'DRIFT', 'NOVA', 'REDLINE'];
 const STATE_MS = 66; // ~15 Hz own-ship broadcast
+const BOTS_MS = 83; // ~12 Hz host bot batch
+const TARGET_PILOTS = 8; // shared pilots per map: humans + host-simulated bots fill to this
 
 type Roster = { peer: string; name: string }[];
 
@@ -30,6 +33,8 @@ export class RealtimeNetAdapter implements INetAdapter {
   private interp = new Map<string, { a: any; b: any }>();
   private lastSeen = new Map<string, number>();
   private tState = 0;
+  private tBots = 0;
+  private _hostFlag: boolean | null = null;
   private base = 8 + Math.floor(Math.random() * 10);
   private started = false;
   private sessionMap: string;
@@ -64,13 +69,20 @@ export class RealtimeNetAdapter implements INetAdapter {
     this.interp.clear();
   }
 
-  spawnBots(count: number, teamMode: boolean) {
-    // v1: local AI bots per client (not synced). Humans are synced separately.
+  spawnBots(_count: number, teamMode: boolean) {
+    // Host-authoritative SHARED bots: deterministic ids (the same bot on every
+    // client) that fill the map to TARGET_PILOTS total (humans + one shared bot
+    // set). The host simulates them and broadcasts their state; guests render them
+    // from the wire (netRemote). So the whole room sees ONE consistent set of bots.
     for (const [id, p] of this.players) if (p.isBot) this.players.delete(id);
-    for (let i = 0; i < count; i++) {
-      const id = `bot-${this.localId}-${i}`;
+    const host = this.net.isHost();
+    const want = Math.max(0, TARGET_PILOTS - this.roster.length);
+    for (let i = 0; i < want; i++) {
+      const id = `bot-${i}`; // deterministic → identical on host + every guest
       const team: TeamId = teamMode ? (((i % 2) + 1) as TeamId) : 0;
-      this.players.set(id, this._make(id, BOT_NAMES[i % BOT_NAMES.length] + (i >= BOT_NAMES.length ? `-${i}` : ''), true, team));
+      const p = this._make(id, BOT_NAMES[i % BOT_NAMES.length] + (i >= BOT_NAMES.length ? `-${i}` : ''), true, team);
+      p.netRemote = !host; // host simulates the bots; guests wire-render them
+      this.players.set(id, p);
     }
   }
 
@@ -102,7 +114,13 @@ export class RealtimeNetAdapter implements INetAdapter {
 
   tick(dt: number) {
     const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-    // 1) interpolate remote humans toward their latest packet
+    // host migration: a newly-promoted host adopts the shared bots (simulates them).
+    const host = this.net.isHost();
+    if (host !== this._hostFlag) {
+      this._hostFlag = host;
+      if (host) for (const p of this.players.values()) if (p.isBot) p.netRemote = false;
+    }
+    // 1) interpolate remote humans + wire-driven bots toward their latest packet
     for (const p of this.players.values()) {
       if (!p.netRemote) continue;
       const buf = this.interp.get(p.id);
@@ -119,6 +137,13 @@ export class RealtimeNetAdapter implements INetAdapter {
         h: Math.round(me.health), s: Math.round(me.shield), w: me.weapon, a: me.alive ? 1 : 0,
         k: me.kills, d: me.deaths, sc: me.score,
       });
+    }
+    // 3) host broadcasts the shared bots (one batched message) @~12 Hz
+    if (host && now - this.tBots > BOTS_MS) {
+      this.tBots = now;
+      const list: any[] = [];
+      for (const p of this.players.values()) if (p.isBot && !p.netRemote) list.push(this._packBot(p));
+      if (list.length) this.net.send('bots', { list });
     }
     // ping display
     for (const p of this.players.values()) p.ping = p.netRemote ? 24 + Math.floor(Math.random() * 30) : 14 + Math.floor(Math.random() * 8);
@@ -143,11 +168,33 @@ export class RealtimeNetAdapter implements INetAdapter {
       const k = this.players.get(d.k), v = this.players.get(d.v);
       if (k) { k.kills++; k.score += 100; }
       if (v) { v.deaths++; v.alive = false; v.health = 0; }
+    } else if (t === 'bots') {
+      if (this.net.isHost()) return; // I own the bots
+      for (const b of d.list || []) {
+        const p = this.players.get(b.id);
+        if (!p || !p.netRemote) continue;
+        p.health = b.h;
+        p.alive = b.a === 1;
+        let buf = this.interp.get(b.id);
+        if (!buf) this.interp.set(b.id, (buf = { a: null, b: null }));
+        buf.a = buf.b;
+        buf.b = { pos: [b.x, b.y, b.z], rot: [b.qx, b.qy, b.qz, b.qw], vel: [b.vx, b.vy, b.vz], at: now };
+      }
     } else if (t === 'bye') {
       // remote human left → mark dead + drop (their pawn will be cleaned by the game on death)
       const p = this.players.get(from);
       if (p) { p.alive = false; }
     }
+  }
+
+  private _packBot(p: PlayerState) {
+    return {
+      id: p.id,
+      x: +p.position[0].toFixed(2), y: +p.position[1].toFixed(2), z: +p.position[2].toFixed(2),
+      qx: +p.rotation[0].toFixed(3), qy: +p.rotation[1].toFixed(3), qz: +p.rotation[2].toFixed(3), qw: +p.rotation[3].toFixed(3),
+      vx: +p.velocity[0].toFixed(2), vy: +p.velocity[1].toFixed(2), vz: +p.velocity[2].toFixed(2),
+      h: Math.round(p.health), a: p.alive ? 1 : 0,
+    };
   }
 
   private _interp(p: PlayerState, buf: { a: any; b: any }, now: number) {
