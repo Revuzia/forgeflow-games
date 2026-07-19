@@ -108,6 +108,8 @@ export interface PlayerState {
   alive: boolean;
   isBot: boolean;
   ping: number;
+  /** Online: true = a remote human, driven by wire packets (skip local AI/sim). */
+  netRemote?: boolean;
 }
 
 /** Launch parameters handed from the menu to Game.startSession. */

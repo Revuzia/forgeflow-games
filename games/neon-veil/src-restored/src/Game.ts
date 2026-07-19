@@ -16,6 +16,8 @@ import { Effects } from './fx/Effects';
 import { DamageFloats } from './fx/DamageFloats';
 import { HUD } from './hud/HUD';
 import { LocalBotAdapter } from './net/LocalBotAdapter';
+import { RealtimeNetAdapter } from './net/RealtimeNetAdapter';
+import type { INetAdapter } from './net/INetAdapter';
 import { Menu, SettingsUI, ResultsUI, LoadingUI } from './ui/Menu';
 
 /** Per-sector rival snapshot (one instance per biome). */
@@ -53,7 +55,7 @@ export class Game {
   private hud = new HUD();
   private audio: AudioSystem;
 
-  private net = new LocalBotAdapter();
+  private net: INetAdapter = new LocalBotAdapter();
   private map: ArenaMap;
   private flight = new FlightController();
   private localPawn: VehiclePawn;
@@ -303,7 +305,15 @@ export class Game {
     try {
       // Yield so the loading screen can paint before heavy work.
       await nextFrame();
+      // Online multiplayer uses the Realtime adapter (its connect() hosts the
+      // lobby + waits for the match); other modes keep the offline bot adapter.
+      this.net = cfg.mode === 'multiplayer' ? new RealtimeNetAdapter(cfg.mapId) : new LocalBotAdapter();
+      (window as unknown as { __NV?: unknown }).__NV = { game: this, net: this.net };
       await this.net.connect(cfg.callsign);
+      if (cfg.mode === 'multiplayer') {
+        const rm = (this.net as RealtimeNetAdapter).roomMapId;
+        if (rm) cfg.mapId = rm; // every player shares the host's sector
+      }
       this.loading.set(0.25, 'Building neon skyline…');
       await nextFrame();
 
@@ -417,7 +427,7 @@ export class Game {
     const colors = [0xff2bd6, 0xff6b2b, 0x39ff88, 0xffe566, 0xaa66ff, 0x00aaff, 0xff88cc, 0x66ffcc];
     let i = 0;
     for (const p of this.net.getPlayers()) {
-      if (!p.isBot) continue;
+      if (!p.isBot && !p.netRemote) continue; // pawns for AI bots AND remote humans
       const bot = new AIPilot(p, colors[i % colors.length], i);
       const sp = this.map.randomSpawn();
       bot.respawn(sp);
@@ -1271,6 +1281,7 @@ export class Game {
   private updateBots(dt: number) {
     const players = this.net.getPlayers();
     for (const bot of this.bots) {
+      if (bot.state.netRemote) { bot.syncFromState(); continue; } // remote human: render from wire, no local AI
       bot.update(dt, players, this.map.def.bounds, this.map.def.minAlt, this.map.def.maxAlt, (origin, dir, weapon) => {
         // Temporary switch weapon defs for NPC shot (don't drain player ammo)
         const prev = this.weapons.current;
