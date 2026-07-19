@@ -7,6 +7,12 @@ export class Input {
   keys = new Set<string>();
   mouseDX = 0;
   mouseDY = 0;
+  /** Absolute cursor position (screen px) + normalized offset from screen center
+   *  [-1,1]. The free mouse IS the aiming reticle (cursor-aim). */
+  mouseX = 0;
+  mouseY = 0;
+  mouseNX = 0;
+  mouseNY = 0;
   mouseButtons = new Set<number>();
   wheel = 0;
   /** True while document.pointerLockElement === canvas */
@@ -49,7 +55,7 @@ export class Input {
   /** Enter combat control — always succeeds even if pointer lock fails. */
   engage() {
     this.engaged = true;
-    this.requestLock();
+    // Cursor-aim: no pointer lock — the mouse stays a free, visible reticle.
   }
 
   /** Leave combat control (Esc / menu / death pause). */
@@ -168,10 +174,13 @@ export class Input {
   };
 
   private onMouseMove = (e: MouseEvent) => {
-    // Accept movement whenever engaged — pointer lock optional
-    if (!this.engaged) return;
     this.mouseDX += e.movementX;
     this.mouseDY += e.movementY;
+    // Absolute cursor → the on-screen reticle + cursor-relative steering.
+    this.mouseX = e.clientX;
+    this.mouseY = e.clientY;
+    this.mouseNX = (e.clientX / window.innerWidth) * 2 - 1;
+    this.mouseNY = (e.clientY / window.innerHeight) * 2 - 1;
   };
 
   private onWheel = (e: WheelEvent) => {

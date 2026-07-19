@@ -90,6 +90,7 @@ export class Game {
   private tmpQ = new THREE.Quaternion();
   private aimOrigin = new THREE.Vector3();
   private aimDir = new THREE.Vector3();
+  private _reticleEl: HTMLElement | null = null;
   private collNormal = new THREE.Vector3();
   private prevWeaponKeys = new Set<string>();
   private frame = 0;
@@ -657,6 +658,16 @@ export class Game {
     if (this.input.isMouseDown(0) && this.input.isControlActive()) {
       this.tryPlayerFire();
     }
+
+    // Cursor-aim: the free mouse cursor IS the reticle — move the reticle onto the
+    // cursor and hide the OS pointer while flying, so the two are one and the same.
+    if (!this._reticleEl) this._reticleEl = document.getElementById('reticle');
+    const flying = this.input.isControlActive() && !this.dead;
+    if (this._reticleEl && flying) {
+      this._reticleEl.style.left = `${this.input.mouseX}px`;
+      this._reticleEl.style.top = `${this.input.mouseY}px`;
+    }
+    document.body.style.cursor = flying ? 'none' : '';
 
     // Pickups
     this.pickups.update(dt);

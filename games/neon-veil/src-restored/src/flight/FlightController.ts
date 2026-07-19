@@ -57,7 +57,6 @@ export class FlightController {
   ) {
     this.stunTimer = Math.max(0, this.stunTimer - dt);
     const stunned = this.stunTimer > 0;
-    const sens = settings.mouseSens * 0.0022;
     const inv = settings.invertY ? -1 : 1;
 
     // --- Orientation: world-up yaw + clamped pitch, with an auto-leveling bank.
@@ -68,8 +67,17 @@ export class FlightController {
     // (Owner 2026-07-17.)
     let bankTarget = 0;
     if (input.isControlActive() && !this.lookBack && !stunned) {
-      const yawDelta = -input.mouseDX * sens * FLIGHT.mouseYaw;
-      const pitchDelta = -input.mouseDY * sens * FLIGHT.mousePitch * inv;
+      // Cursor-aim: the ship steers TOWARD the free mouse cursor (the reticle).
+      // The cursor's offset from screen center drives the turn RATE — cursor near
+      // center flies straight (dead-zone), toward an edge turns that way. Full
+      // turn is reached before the very edge (gain), so it feels responsive.
+      const DEAD = 0.05;
+      const GAIN = 1.7;
+      const nx = THREE.MathUtils.clamp((Math.abs(input.mouseNX) < DEAD ? 0 : input.mouseNX) * GAIN, -1, 1);
+      const ny = THREE.MathUtils.clamp((Math.abs(input.mouseNY) < DEAD ? 0 : input.mouseNY) * GAIN, -1, 1);
+      const rate = settings.mouseSens * dt;
+      const yawDelta = -nx * FLIGHT.mouseYaw * rate;
+      const pitchDelta = -ny * FLIGHT.mousePitch * rate * inv;
 
       // Optional intentional roll (Q/E + external axis) leans the bank harder but
       // still auto-levels — never a permanent sideways attitude.
