@@ -768,35 +768,17 @@ function syncObj(W, a, dt, far) {
         const back = (a.vel.x * -Math.sin(a._bodyYaw - Math.PI) + a.vel.z * -Math.cos(a._bodyYaw - Math.PI)) < -0.5;
         const dirK = back ? -0.9 : 1;
         if (gs > 7 && !back) {
-          // SPRINT (Shift, ~9.6 m/s): the real Meshy RUN clip — long strides +
-          // airborne phase + an athletic forward lean. The clip leans ~53°, so the
-          // spine counter-rotation below brings the head up (looks where it's going).
+          // SPRINT (Shift, ~9.6 m/s): a proper UPRIGHT Meshy run — action 510
+          // "Standard_Forward_Charge", measured ~3-12° athletic lean across the 5
+          // rigs. Replaced the old "RunFast" (action 16, ~53° "running bent over")
+          // and its per-frame spine counter-rotation hack, both now removed.
           playAnim(a, "run", { timeScale: K.clamp(gs / 6.5, 0.9, 1.5) });
-          a._runLean = true;
         } else {
           // WALK/JOG (~6 m/s): the upright walk clip, sped up by ground speed.
           playAnim(a, "walk", { timeScale: dirK * K.clamp(gs / 3.0, 0.85, 2.0) });
-          a._runLean = false;
         }
       }
-      else { playAnim(a, "idle"); a._runLean = false; }
-      // straighten the sprint hunch: counter-rotate the spine so the head comes
-      // up over the hips (verified live: lean 53°->43°, head up) — runs after the
-      // mixer keyed the clip, re-applied each frame so it never accumulates.
-      if (a._runLean && a.armBones) {
-        const b = a.armBones;
-        // straighten the sprint hunch: nudge the spine chain up over the hips. These
-        // are RELATIVE deltas (not absolute targets) on purpose — the Meshy bind pose
-        // dominates each bone's absolute rotation.x (~-2.9 rad), so an "absolute lean
-        // measurement" reads bind-pose noise, not the clip's lean (tried + reverted
-        // this session). The deltas are calibrated to the shared Meshy run clip
-        // (~53°->43°, verified live); a per-rig-different run clip would need
-        // recalibration — the real fix is a proper upright run clip (Meshy regen,
-        // still gated on owner approval).
-        if (b.spine2) b.spine2.rotation.x -= 0.34;
-        if (b.spine1) b.spine1.rotation.x -= 0.24;
-        if (b.spine) b.spine.rotation.x -= 0.10;
-      }
+      else { playAnim(a, "idle"); }
 
       // ── ARM-POSE LAYER (pose.js) — after the mixer, before render ────────
       // clips own legs/torso; arms are steered per state so they always read

@@ -3,6 +3,26 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — proper UPRIGHT run animation (?v=29, LIVE) — Meshy regen
+
+The gated D10 item, now done (owner authorized the Meshy spend). The shipped run was
+Meshy action **16 "RunFast"** which leaned ~55° ("running bent over"), band-aided by a
+per-frame spine counter-rotation. Replaced with a proper upright run and the hack deleted.
+
+Pipeline: `pipeline/meshy_lc_run.py` (adapts meshy_rig_anims_v2.py). The 5 rig_task_ids
+were gone (expired), so re-rigged from the shipped base GLBs.
+- **Bake-off** on soldier: re-rig (5cr) + 5 candidate run actions [14,15,510,534,538]
+  (15cr), each measured for torso lean (Hips→Neck world tilt) + foot motion. Pixel-free
+  ruler validated first: old RunFast = 54.7° avg, walk = 5.5°.
+- Winner: **action 510 "Standard_Forward_Charge"** — 11.7° lean, strongest stride,
+  clean retarget onto the shipped base (so a run-clip-only swap works, no full re-rig).
+- **Rollout** (32cr): re-rig the other 4 skins + animate 510 + swap all 5 `<skin>_run.glb`.
+  Verified shipped: soldier 11.7° / athlete 5.7° / wraith 3.0° / juggernaut 2.9° /
+  viper 11.4° avg lean (all upright, foot motion 0.59–0.80 = clean legs).
+- Removed the `_runLean` spine counter-rotation block + flags in player.js (at ~3-12°
+  it would over-straighten and tip the model backward).
+Meshy spend: 20 (bake-off) + 32 (rollout) = 52 credits; balance 5195 → 5143.
+
 ## 2026-07-20 — Final Drop parity build (?v=18 → 28, LIVE)
 
 Multi-session /loop closing the gap to the Final Drop reference the owner benchmarks
