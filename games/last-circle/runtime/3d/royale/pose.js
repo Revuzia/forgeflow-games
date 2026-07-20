@@ -88,6 +88,9 @@ export const POSES = {
   // two-handed gun at chest: right forearm forward (gun points +Z), left hand
   // reaches to the weapon's fore-end
   gunReady: [[-0.22, -0.85, 0.42], [-0.06, 0.1, 0.99], [0.3, -0.8, 0.42], [-0.42, 0.16, 0.88]],
+  // relaxed carry OUT of combat: gun lowered ~30° muzzle-down, both hands still on it
+  // (snaps up to gunReady on ADS/fire) — 50 actors all holding a rigid ready-pose read robotic
+  lowReady: [[-0.2, -0.92, 0.30], [-0.05, -0.52, 0.85], [0.26, -0.86, 0.32], [-0.34, -0.42, 0.83]],
   // belly-down skydive "box/arch": upper arms out to the sides at shoulder
   // level, forearms bent ~90° at the elbow so the hands come up & forward
   // (not one rigid spread-eagle line); thighs splayed back, knees bent so the
@@ -123,8 +126,11 @@ export function applyArmPose(obj, bones, mode, weight, pitch) {
   // vertical aim — only for weapon poses, capped so the spine stays sane
   const pk = (mode === "gunReady" || mode === "reload") ? Math.max(-0.9, Math.min(0.9, pitch || 0)) : 0;
   const T = pk ? P.map((d) => tiltDir(d, pk * 0.85)) : P;
-  if (pk && bones.spine2) bones.spine2.rotation.x += pk * 0.3;
-  if (pk && bones.spine1) bones.spine1.rotation.x += pk * 0.18;
+  // scale the spine aim-bend by the pose weight so it fades in/out with the arms
+  // (the mixer re-keys Spine01/02 each frame, so the += stays bounded)
+  const sw = Math.min(1, weight);
+  if (pk && bones.spine2) bones.spine2.rotation.x += pk * 0.3 * sw;
+  if (pk && bones.spine1) bones.spine1.rotation.x += pk * 0.18 * sw;
   const bl = 0.92 * Math.min(1, weight);
   aim(bones.rArm, bones.rFore, _oq, T[0][0], T[0][1], T[0][2], bl);
   aim(bones.lArm, bones.lFore, _oq, T[2][0], T[2][1], T[2][2], bl);

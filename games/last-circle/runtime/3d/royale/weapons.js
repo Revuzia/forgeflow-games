@@ -268,25 +268,28 @@ function stepWeapon(W, a, dt) {
     return;
   }
 
-  // firing — no shooting while gliding, healing, or swimming (weapon's wet)
-  if (inp.fire && wpn.cd <= 0 && !a.gliding && !a.healing && !a.swimming) {
+  // firing — no shooting while gliding, healing, or swimming (weapon's wet).
+  // AUTO weapons (SMG/AR) fire while the trigger is HELD; SEMI weapons (pistol/
+  // shotgun/sniper/launcher) fire once per CLICK. The human input is rebuilt from
+  // the live button every frame, so a held-state guard (inp.fire=false) is
+  // overwritten next frame → auto-cycle. Gate semi weapons on the mousedown EDGE
+  // (W._fireEdge, set on click, cleared on release/consume) so one click = one shot.
+  const isAuto = def.cls === "smg" || def.cls === "ar";
+  const wantFire = (a.isBot || isAuto) ? inp.fire : !!W._fireEdge;
+  if (wantFire && wpn.cd <= 0 && !a.gliding && !a.healing && !a.swimming) {
     if (def.mag > 0 && wpn.magAmmo <= 0) {
       // auto reload attempt
       if (a.inventory.ammo[def.ammo] > 0) { inp.reload = true; }
       else W.events.emit("dryFire", a);
       wpn.cd = 0.25;
+      if (!a.isBot && !isAuto) W._fireEdge = false;   // the click is spent even on a dry trigger
       return;
     }
     fire(W, a, def);
     wpn.magAmmo--;
     if (wpn.slotRef) wpn.slotRef.mag = wpn.magAmmo;
     wpn.cd = 60 / def.rpm;
-    if (!a.isBot && def.cls !== "shotgun" && def.cls !== "sniper" && def.cls !== "launcher") {
-      // semi/auto: keep firing while held (auto weapons); pistol/sniper need re-click
-      if (def.cls === "pistol") inp.fire = false;
-    } else if (!a.isBot) {
-      inp.fire = false;
-    }
+    if (!a.isBot && !isAuto) W._fireEdge = false;      // one shot per click for semi weapons
   }
 }
 
@@ -471,8 +474,22 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
   for (const c of cols) {
     if (c.kind !== "box") continue;
     if (bx > c.minX && bx < c.maxX && by > c.minY && by < c.maxY && bz > c.minZ && bz < c.maxZ) {
-      if (p.splash) { explode(W, bx, by, bz, p.weaponId, p.rarity, p.ownerId); p.dead = true; return true; }
-      if (p.bounce) { bounceOff(p, 0, 1, 0); return false; }
+      // fused shells BOUNCE off walls/crates too (they burst on the fuse) — this
+      // branch used to explode on any splash round while terrain bounced it, so
+      // bank-shots around cover were unreliable and map-dependent.
+      if (p.splash && !p.bounce) { explode(W, bx, by, bz, p.weaponId, p.rarity, p.ownerId); p.dead = true; return true; }
+      if (p.bounce) {
+        // reflect off the nearest box face (smallest-penetration axis)
+        const penX = Math.min(bx - c.minX, c.maxX - bx);
+        const penY = Math.min(by - c.minY, c.maxY - by);
+        const penZ = Math.min(bz - c.minZ, c.maxZ - bz);
+        let nx = 0, ny = 0, nz = 0;
+        if (penX <= penY && penX <= penZ)  { nx = bx < (c.minX + c.maxX) / 2 ? -1 : 1; p.x += nx * (penX + 0.06); }
+        else if (penY <= penZ)             { ny = by < (c.minY + c.maxY) / 2 ? -1 : 1; p.y += ny * (penY + 0.06); }
+        else                               { nz = bz < (c.minZ + c.maxZ) / 2 ? -1 : 1; p.z += nz * (penZ + 0.06); }
+        bounceOff(p, nx, ny, nz);
+        return false;
+      }
       W.events.emit("impact", { x: bx, y: by, z: bz }, "stone");
       p.dead = true; return true;
     }

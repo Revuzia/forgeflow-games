@@ -3,6 +3,48 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-12 — v4.11 gap-review fixes: semi-auto, sniper, grenade, sky, poses, savanna structures (?v=17, LIVE)
+
+Acted on the multi-agent gap review (all 6 subsystem audits completed this session).
+Fixes shipped + verified (sim selftest 45/45):
+
+- **Semi-auto fire (weapons.js + player.js):** held LMB used to auto-cycle the
+  pistol/sniper/shotgun/launcher (the every-frame input rebuild overwrote the
+  single-shot guard). Now auto weapons (SMG/AR) fire while HELD; semi weapons fire
+  once per CLICK, gated on a mousedown edge `W._fireEdge` (set on click, cleared on
+  release/consume). VERIFIED LIVE frame-by-frame: held pistol → mag 16→15 (ONE shot)
+  then flat while held; held SMG → 14 shots. 
+- **Sniper (royale.js):** removed `gravity:true` (speed 500→700) — it was the only
+  bullet that dropped, so a center hold missed at its own 200-400m band; now hitscan-
+  straight like the arsenal, aim = impact.
+- **Grenade launcher (weapons.js):** was exploding on walls/crates but bouncing on
+  terrain; now bounces off box faces too (detonates on the 2s fuse) — consistent bank-shots.
+- **Held-SPACE (player.js):** edge-gated (`!e.repeat`) — key auto-repeat was strobing
+  the chute (deploy/cut/deploy) and multi-firing swim strokes.
+- **Sky (maps.js):** clouds raised 130-230m→320-460m (no longer pass THROUGH them as
+  flat cards during the drop); bird flocks 75-130m→120-180m (clear of islands); sky
+  dome now recenters on the camera each frame (no parallax, no far-plane clip at map edges).
+- **Per-match updater leak (maps.js):** cloud/bird/water `onUpdate` closures were never
+  removed on rebuild → ran forever over detached sprites. Now tracked + spliced out of the
+  kernel loop each `buildMap` (self-contained, no shared-kernel change).
+- **Poses (pose.js + player.js):** added a `lowReady` carry (gun lowered out of combat,
+  snaps to gunReady on ADS/fire — verified live on deepwood); restore the weapon if an actor
+  is killed mid-emote (was leaving corpses empty-handed); weighted the spine aim-bend.
+- **Savanna structures (maps.js):** warmed the old grey concrete palette (C_CONC/CONC2/
+  METAL) to sandstone/adobe so the buildings read as a weathered savanna outpost, not grey
+  city blocks. Texture sweep of all 3 maps: every object properly coloured/complete.
+
+**Gap review — remaining OPEN items (filed, not yet fixed):** Movement: interior tower
+ramps dead-end into the upper-floor slab (un-climbable, maps.js tower()); overpass ramp
+under-shoots the deck; sky-island collider is 0.86× the visible grass (rim fall-through).
+UI: two uncoordinated graphics-settings systems (kernel ffg_settings.quality vs LC
+lc_settings.graphics) — LC tier never applies at boot; orphaned keybind capture; ESC over
+open Settings un-pauses under the modal; spectate shows the corpse's HUD. MP-only: host-bot
+chest-opens not mirrored to guests (net.js:36 `a===W.player` → `!a.netRemote`); grenade
+splash + remote gunfire fx bypass the net-authority path. Menu bloom/exposure still leaks
+into matches (judgement call — established look). Cosmetic: muzzle flash spawns at the eye
+not the barrel.
+
 ## 2026-07-12 — v4.10 Savanna recolor (grey→colour) + aim-pitch un-invert (?v=16, LIVE)
 
 Owner playtest: dropped into the old `ashgrid` map and reported "you've removed

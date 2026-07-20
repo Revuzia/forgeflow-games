@@ -300,7 +300,7 @@ function installHumanInput(W) {
     const inp = W.player.input;
     if (e.code === "KeyR") inp.reload = true;
     if (e.code === "KeyE") { inp.interact = true; inp.interactDown = true; }
-    if (e.code === "Space") { inp.jump = true; e.preventDefault(); }
+    if (e.code === "Space" && !e.repeat) { inp.jump = true; e.preventDefault(); } // edge-gate: key-repeat was strobing the chute (deploy/cut/deploy) + multi-firing swim strokes
     if (e.code === "Digit1") inp.slot = 0;
     if (e.code === "Digit2") inp.slot = 1;
     if (e.code === "Digit3") inp.slot = 2;
@@ -334,12 +334,13 @@ function installHumanInput(W) {
     tryLock();                     // ANY click grabs the mouse for looking
     if (e.button === 0) {
       W._lmbDown = true;
+      W._fireEdge = true;           // fresh click — semi-auto weapons fire on this EDGE only
       W.player.input.fire = true;   // never swallow the shot
     }
     if (e.button === 2) { W._rmbDown = true; W.player.input.ads = true; rmbDrag = document.pointerLockElement !== dom; }
   });
   window.addEventListener("mouseup", (e) => {
-    if (e.button === 0) W._lmbDown = false;
+    if (e.button === 0) { W._lmbDown = false; W._fireEdge = false; }
     if (e.button === 2) { W._rmbDown = false; rmbDrag = false; }
     if (!W.player) return;
     if (e.button === 0) W.player.input.fire = false;
@@ -781,6 +782,7 @@ function syncObj(W, a, dt, far) {
       else if (a.gliding) mode = "hang";
       else if (a.swimming) mode = null;
       else if (armed && a.weapon.state === "reloading") mode = "reload";
+      else if (armed && !combat) mode = "lowReady";   // out of combat: relaxed carry (combat = ADS or fired <1.5s ago)
       else if (armed) mode = "gunReady";
       else mode = "relax";
       // straighten a slouched rig BEFORE the arm layer (arms hang off the
@@ -885,6 +887,9 @@ function hurtActor(W, victim, dmg, attackerId, weaponId, isHead) {
 export function killActor(W, victim, killerId, weaponId) {
   if (!victim.alive) return;
   victim.alive = false;
+  // if killed mid-emote, un-holster: the emote hid the weapon (player.js ~524) and
+  // only the emote-timeout restores it, so a one-shot kill left the corpse empty-handed
+  if (victim.emoting) { victim.emoting = null; if (victim.hand) victim.hand.visible = true; }
   const killer = killerId ? W.actorById.get(killerId) : null;
   if (killer) killer.kills++;
   W.match.eliminate(victim.id, killerId, weaponId, W.t);

@@ -127,6 +127,15 @@ export async function buildMap(W, mapId) {
 
   const g = W.group("map");
   g.clear();
+  // remove the PREVIOUS map's per-frame updaters (cloud/bird/water drift) before
+  // rebuilding — g.clear() drops the sprites but the kernel keeps the closures,
+  // which then run every frame over detached arrays and retain them (leak/CPU
+  // that compounds each match). trackUpdater registers + records for next cleanup.
+  if (W._mapUpdaters && W.kernel._updaters) {
+    for (const fn of W._mapUpdaters) { const idx = W.kernel._updaters.indexOf(fn); if (idx >= 0) W.kernel._updaters.splice(idx, 1); }
+  }
+  W._mapUpdaters = [];
+  const trackUpdater = (fn) => { W._mapUpdaters.push(fn); W.kernel.onUpdate(fn); };
   W.scene.background = new THREE.Color(K.sky);
   if (W.scene.fog) { W.scene.fog.color = new THREE.Color(K.sky); W.scene.fog.density = K.fog; }
 
@@ -162,7 +171,7 @@ export async function buildMap(W, mapId) {
     water.position.y = waterY;
     water.name = "water";
     g.add(water);
-    W.kernel.onUpdate((dt, t) => { water.position.y = waterY + Math.sin(t * 0.7) * 0.12; });
+    trackUpdater((dt, t) => { water.position.y = waterY + Math.sin(t * 0.7) * 0.12; });
   }
 
   // ── SKY: gradient dome + drifting clouds + looping birds ──────────────────
@@ -200,7 +209,7 @@ export async function buildMap(W, mapId) {
         grp.add(s);
       }
       const ang = rng() * Math.PI * 2, rad = 180 + rng() * (HALF * 0.85);
-      grp.position.set(Math.cos(ang) * rad, 130 + rng() * 100, Math.sin(ang) * rad);
+      grp.position.set(Math.cos(ang) * rad, 320 + rng() * 140, Math.sin(ang) * rad); // 320-460m: above the drop/portal ceiling so you never pass THROUGH a cloud (billboards read as cards up close; fluffy from below)
       grp.userData.drift = 2.5 + rng() * 4;
       g.add(grp); clouds.push(grp);
     }
@@ -220,11 +229,14 @@ export async function buildMap(W, mapId) {
         s.userData.ph = rng() * Math.PI * 2; s.userData.ix = b;
         flock.add(s);
       }
-      flock.userData = { cx: (rng() - 0.5) * HALF, cz: (rng() - 0.5) * HALF, cy: 75 + rng() * 55, fr: 22 + rng() * 34, spd: 0.05 + rng() * 0.05, ph: rng() * Math.PI * 2 };
+      flock.userData = { cx: (rng() - 0.5) * HALF, cz: (rng() - 0.5) * HALF, cy: 120 + rng() * 60, fr: 22 + rng() * 34, spd: 0.05 + rng() * 0.05, ph: rng() * Math.PI * 2 }; // 120-180m: clear of the sky-islands (~52m) and the volcano
       g.add(flock); flocks.push(flock);
     }
 
-    W.kernel.onUpdate((dt, t) => {
+    trackUpdater((dt, t) => {
+      // keep the sky dome centered on the camera — a skybox should follow the viewer,
+      // else it parallaxes as you move and its far shell clips the 2000m far-plane at map corners
+      if (W.camera) sky.position.copy(W.camera.position);
       for (const c of clouds) { c.position.x += c.userData.drift * dt; if (c.position.x > HALF * 1.15) c.position.x = -HALF * 1.15; }
       for (const fl of flocks) {
         const u = fl.userData, a = t * u.spd + u.ph;
@@ -426,7 +438,8 @@ export async function buildMap(W, mapId) {
     scatterTrees("bush", 200, 0.6, 30, null);
     scatterTrees("rocks", 90, 1, 70, "brick");
   } else if (mapId === "ashgrid") {
-    const C_CONC = "#9aa0a6", C_CONC2 = "#7d8489", C_BRICKB = "#9c6b5a", C_METAL = "#6f7d8a";
+    // warm sandstone/adobe outpost palette (was cold grey concrete — clashed with the golden savanna)
+    const C_CONC = "#c3ad84", C_CONC2 = "#a68f62", C_BRICKB = "#a5705a", C_METAL = "#93805e";
     poi("downtown", "Downtown Core", 0, 0, 150);
     poi("metro", "Metro Plaza", 60, -430, 110);
     poi("overpass", "The Overpass", 430, 80, 120);
