@@ -40,6 +40,16 @@ export function init(W) {
   W.events.on("chestOpened", (a, c) => { if (S && a && !a.netRemote) send("chest", { id: c.id }); });
   // pickups by anything simulated locally (own player + host's bots) despawn everywhere
   W.events.on("pickedUp", (a, data, id) => { if (S && a && !a.netRemote) send("take", { id }); });
+  // relay OUR gunfire so guests see remote muzzle flash + tracers and HEAR the shot
+  // (remote actors aren't simulated locally, so their FX never fired online). Throttled
+  // for full-auto. Replayed on the other clients via the "fire" case in onMsg.
+  W.events.on("shotFired", (a, weaponId, muzzle, dir) => {
+    if (!S || !a || a.netRemote) return;
+    const now = performance.now();
+    if (now - (a._fireRelayT || 0) < 90) return;
+    a._fireRelayT = now;
+    send("fire", { id: a.id, w: weaponId, x: +muzzle.x.toFixed(2), y: +muzzle.y.toFixed(2), z: +muzzle.z.toFixed(2), dx: +dir.x.toFixed(3), dy: +dir.y.toFixed(3), dz: +dir.z.toFixed(3) });
+  });
   W.events.on("netDropItem", (d) => { if (S) send("drop", d); });
   W.events.on("actorDied", (victim, killerId, weaponId) => {
     if (!S) return;
@@ -177,6 +187,17 @@ function onMsg(W, { from, t, d }) {
     // I own this actor if it's me, or I'm the host and it's a live bot
     const mine = victim === W.player || (S.net.isHost() && victim.isBot && !victim.netRemote);
     if (mine && victim.alive) W.hurtActor(victim, d.dmg, d.attacker, d.weapon, d.isHead);
+    return;
+  }
+  if (t === "fire") {
+    // a remote-owned actor fired — replay the cosmetic FX locally (muzzle flash +
+    // gunfire indicator + positional gunshot via shotFired, plus a flying tracer).
+    // No damage here (that's the authoritative hitYou path); this is FX only.
+    const a = W.actorById.get(d.id);
+    if (!a || !a.netRemote) return;
+    const dir = { x: d.dx, y: d.dy, z: d.dz };
+    W.events.emit("shotFired", a, d.w, { x: d.x, y: d.y, z: d.z }, dir);
+    W.events.emit("tracer", { x: d.x, y: d.y, z: d.z, vx: d.dx * 180, vy: d.dy * 180, vz: d.dz * 180, weaponId: d.w });
     return;
   }
   if (t === "drop") { W.netSpawnItem && W.netSpawnItem(d); return; }

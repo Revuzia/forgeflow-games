@@ -31,16 +31,16 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done+verified · `[!]` b
 
 ## Pass D — Everything Else / Polish
 - [x] D1 Menu lighting/exposure leak — snapshot kernel defaults at init, restore in buildMap (bloom left as established look)
-- [ ] D2 Remote gunfire FX relay (fired event → tracer/muzzle/sound on guests)
+- [x] D2 Remote gunfire FX relay — net.js relays a throttled "fire" msg for locally-simulated shooters; guests replay muzzle flash + gunfire indicator + positional gunshot (shotFired) + a flying tracer. FX-only (damage stays on the authoritative hitYou path). Code+syntax verified; needs a live 2-client MP test to confirm end-to-end.
 - [x] D3 Hit feedback: headshot hitmarker (yellow, 34px, longer) vs body (white, 26px) + a hitmarker ping in audio.js (1400Hz head / 950Hz body). Verified live: headshot marker turns yellow/34px.
 - [x] D4 Glider — canopy deploys at 110m (was 60m) so most of the descent glides; gentle auto forward-glide (0.15x) even inputless so the umbrella glides not drops (kept small to avoid the old AFK-into-sea drift). Verified live: deploys ~105m AGL, auto-fwd 0.83 m/s, fall slows -17.9→-8.4 on deploy.
 - [x] (B2 follow-up) Ashgrid savanna outpost town — new POI (220,250) + town() with adobe/sandstone walls + terracotta roofs. Verified live: 9 POIs, adobe roof meshes, 18 loot pts near outpost.
 - [x] D5 coverReflex determinism (setTimeout → sim-time `coverReflexUntil`)
 - [x] D6 Supply-drop cadence (one early ~phase 2, one late ~phase 5+)
-- [ ] D7 Selftest: quick tier-mix assert + factor bot decision helpers for node coverage
-- [ ] D8 Full keybind rebind list (move/fire/ADS/slots)
+- [x] D7 Selftest: added BOT_TIER_MIX.quick sum assert (now 46/46). (Factoring bot decision helpers into royale.js deferred — a larger refactor with storm-balance regression risk; not done blind.)
+- [x] D8 Full keybind rebind list — added Move F/B/L/R + Weapon 1-5 to the Settings rebind list (14 actions, verified 14/14 render). Fire/ADS are mouse buttons, not keyboard-rebindable here.
 - [x] D9 Compass ribbon HUD — top-center canvas, scrolling cardinal heading (N/E/S/W + ticks) from the camera facing + center marker. Verified live ?v=23 (320x18 canvas, drawCompass runs clean).
-- [!] D10 Real upright RUN clip — GATED (Meshy credit spend). Ship code-only rig-agnostic lean-correction; regen awaits explicit owner OK.
+- [!] D10 Real upright RUN clip — GATED (Meshy credit spend). Code-only "measured/rig-agnostic lean" was TRIED and REVERTED: on these Meshy rigs each spine bone's absolute rotation.x is bind-pose-dominated (~-2.9 rad), so an absolute-lean measurement reads noise, not the clip's lean — the correction clamped to 0 (no straightening). Kept the working RELATIVE fixed-delta nudge (-0.34/-0.24/-0.10, ~53°->43° verified). Real fix = a proper upright run clip (Meshy regen), awaits explicit owner OK.
 
 ## MILESTONE 2026-07-20 — ?v=19 deployed + render-verified on live CDN
 Deployed to R2/CDN (12 files, cache PURGED — purge token IS configured, no 4h staleness).

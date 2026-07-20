@@ -785,6 +785,14 @@ function syncObj(W, a, dt, far) {
       // mixer keyed the clip, re-applied each frame so it never accumulates.
       if (a._runLean && a.armBones) {
         const b = a.armBones;
+        // straighten the sprint hunch: nudge the spine chain up over the hips. These
+        // are RELATIVE deltas (not absolute targets) on purpose — the Meshy bind pose
+        // dominates each bone's absolute rotation.x (~-2.9 rad), so an "absolute lean
+        // measurement" reads bind-pose noise, not the clip's lean (tried + reverted
+        // this session). The deltas are calibrated to the shared Meshy run clip
+        // (~53°->43°, verified live); a per-rig-different run clip would need
+        // recalibration — the real fix is a proper upright run clip (Meshy regen,
+        // still gated on owner approval).
         if (b.spine2) b.spine2.rotation.x -= 0.34;
         if (b.spine1) b.spine1.rotation.x -= 0.24;
         if (b.spine) b.spine.rotation.x -= 0.10;
