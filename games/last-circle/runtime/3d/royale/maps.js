@@ -15,9 +15,9 @@ import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js"
 
 // Practice uses a random battle map (no dedicated range — owner direction).
 export const MAPS = {
-  isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#7fd4f0", fog: 0.0006, themeColor: "#22d3a0", water: true },
-  ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e7cf98", fog: 0.0007, themeColor: "#e0854a", water: false },
-  deepwood:  { name: "Deepwood", theme: "forest", sky: "#9fc7e8", fog: 0.0009, themeColor: "#7fb069", water: true },
+  isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#7fd4f0", fog: 0.00042, themeColor: "#22d3a0", water: true },
+  ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e7cf98", fog: 0.00045, themeColor: "#e0854a", water: false },
+  deepwood:  { name: "Deepwood", theme: "forest", sky: "#9fc7e8", fog: 0.00052, themeColor: "#7fb069", water: true },
 };
 
 const SIZE = 1600;               // meters, square
