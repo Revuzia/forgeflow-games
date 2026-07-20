@@ -89,6 +89,44 @@ register3d("royale", async function (kernel, content) {
   botsMod.init(W);
   netMod.init(W);
 
+  // ── unified graphics authority ──────────────────────────────────────────────
+  // ONE place owns visual fidelity so the shell-kernel key (ffg_settings.quality)
+  // and the LC key (lc_settings.graphics) can never diverge again. Applied at BOOT
+  // (the previous LC "high" only took effect if you re-opened Settings and re-clicked)
+  // and drives REAL fidelity per tier — DPR, shadow on/off, shadow-map resolution,
+  // and texture anisotropy — not just supersampling. maps.js reads W._texAniso when
+  // it builds the terrain/structure/water textures.
+  W._texAniso = 4;
+  W.applyGraphics = function (tier) {
+    tier = tier || W.settings.graphics || "medium";
+    const r = kernel.renderer;
+    const DPR = { low: 1, medium: 1.5, high: 2 };
+    const SHADOW = { low: 0, medium: 2048, high: 4096 };
+    const ANISO = { low: 1, medium: 4, high: 8 };
+    const maxA = (r.capabilities && r.capabilities.getMaxAnisotropy) ? r.capabilities.getMaxAnisotropy() : 8;
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, DPR[tier] || 1.5));
+    const shadows = tier !== "low";
+    r.shadowMap.enabled = shadows;
+    if (shadows && kernel.sun) {
+      const sz = SHADOW[tier] || 2048;
+      if (kernel.sun.shadow.mapSize.x !== sz) {
+        kernel.sun.shadow.mapSize.set(sz, sz);
+        if (kernel.sun.shadow.map) { kernel.sun.shadow.map.dispose(); kernel.sun.shadow.map = null; }
+      }
+    }
+    r.shadowMap.needsUpdate = true;
+    W._texAniso = Math.min(ANISO[tier] || 4, maxA);
+    // push anisotropy onto already-built textures + refresh materials
+    W.scene.traverse((o) => {
+      const m = o.material; if (!m) return;
+      const mats = Array.isArray(m) ? m : [m];
+      for (const mm of mats) for (const slot of ["map", "normalMap", "roughnessMap"]) if (mm[slot]) { mm[slot].anisotropy = W._texAniso; mm[slot].needsUpdate = true; }
+    });
+    // keep the kernel's own quality key in sync (shell buttons + next boot)
+    try { const s = JSON.parse(localStorage.getItem("ffg_settings") || "{}"); s.quality = tier === "medium" ? "med" : tier; localStorage.setItem("ffg_settings", JSON.stringify(s)); } catch (e) {}
+  };
+  W.applyGraphics();          // BOOT-apply the stored tier (the fix)
+
   // ── match lifecycle ─────────────────────────────────────────────────────────
   async function startMatch(opts) {
     opts = opts || {};

@@ -1449,11 +1449,10 @@ function applyAudio(W) {
   import("./audio.js" + (new URL(import.meta.url).search || "")).then((m) => m.setVolumes(W));
 }
 function applyGraphics(W) {
-  const r = W.kernel.renderer;
-  if (W.settings.graphics === "low") { r.setPixelRatio(1); r.shadowMap.enabled = false; }
-  else if (W.settings.graphics === "high") { r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); r.shadowMap.enabled = true; }
-  else { r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5)); r.shadowMap.enabled = true; }
-  W.scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
+  // Single source of truth lives on W.applyGraphics (ffg_royale3d.js) so the
+  // shell-kernel quality key and the LC graphics key stay unified and the tier
+  // drives real fidelity (DPR + shadow res + anisotropy), not just DPR.
+  if (W.applyGraphics) W.applyGraphics(W.settings.graphics);
 }
 function save(W) {
   try { localStorage.setItem("lc_settings", JSON.stringify(W.settings)); } catch (e) {}

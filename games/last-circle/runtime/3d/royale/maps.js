@@ -46,6 +46,72 @@ function fbm(x, z, seed, octaves, lac, gain) {
   return sum / norm;
 }
 
+// ── procedural surface textures (canvas → CanvasTexture) ──────────────────────
+// Built once, cached, reused across matches. Gives the flat vertex-colored world
+// real texel detail + normal-mapped relief ("high textures") with NO external
+// assets and NO credit spend. Albedo is near-WHITE grain so it MULTIPLIES the
+// existing per-vertex biome colour / structure colour instead of replacing it.
+const _texCache = {};
+function _thash(x, y, s) { let h = (x * 374761393 + y * 668265263 + s * 1442695041) | 0; h = (h ^ (h >> 13)) | 0; h = Math.imul(h, 1274126177); return ((h ^ (h >> 16)) >>> 0) / 4294967296; }
+function _tfbm(x, y, s, oct) {
+  let a = 1, f = 1, sum = 0, n = 0;
+  for (let i = 0; i < oct; i++) {
+    const ix = Math.floor(x * f), iy = Math.floor(y * f), fx = x * f - ix, fy = y * f - iy;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const s00 = _thash(ix, iy, s + i), s10 = _thash(ix + 1, iy, s + i), s01 = _thash(ix, iy + 1, s + i), s11 = _thash(ix + 1, iy + 1, s + i);
+    sum += ((s00 + (s10 - s00) * sx) * (1 - sy) + (s01 + (s11 - s01) * sx) * sy) * a;
+    n += a; a *= 0.5; f *= 2;
+  }
+  return sum / n;
+}
+// Build a tiling height field [0..1], then derive a grayscale albedo + a normal
+// map (Sobel, wrap-around so tiles seam). Returns { map, normal } CanvasTextures.
+function _fieldTex(key, size, heightFn, albedoFn, aniso, normalStrength) {
+  if (_texCache[key]) return _texCache[key];
+  const H = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) H[y * size + x] = heightFn(x / size, y / size);
+  const mk = () => { const c = document.createElement("canvas"); c.width = c.height = size; return c; };
+  // albedo
+  const ca = mk(), ga = ca.getContext("2d"), ida = ga.createImageData(size, size);
+  for (let i = 0; i < size * size; i++) { const g = Math.max(0, Math.min(255, Math.round(albedoFn(H[i]) * 255))); ida.data[i * 4] = g; ida.data[i * 4 + 1] = g; ida.data[i * 4 + 2] = g; ida.data[i * 4 + 3] = 255; }
+  ga.putImageData(ida, 0, 0);
+  const map = new THREE.CanvasTexture(ca); map.wrapS = map.wrapT = THREE.RepeatWrapping; map.anisotropy = aniso || 4;
+  // normal from height (wrap-around Sobel)
+  const cn = mk(), gn = cn.getContext("2d"), idn = gn.createImageData(size, size);
+  const at = (x, y) => H[((y % size) + size) % size * size + (((x % size) + size) % size)];
+  const st = normalStrength != null ? normalStrength : 2.0;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const dx = (at(x - 1, y) - at(x + 1, y)) * st, dy = (at(x, y - 1) - at(x, y + 1)) * st;
+    let nx = dx, ny = dy, nz = 1; const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+    const i = (y * size + x) * 4; idn.data[i] = (nx * 0.5 + 0.5) * 255; idn.data[i + 1] = (ny * 0.5 + 0.5) * 255; idn.data[i + 2] = (nz * 0.5 + 0.5) * 255; idn.data[i + 3] = 255;
+  }
+  gn.putImageData(idn, 0, 0);
+  const normal = new THREE.CanvasTexture(cn); normal.wrapS = normal.wrapT = THREE.RepeatWrapping; normal.anisotropy = aniso || 4;
+  const out = { map, normal }; _texCache[key] = out; return out;
+}
+function groundTex(aniso) {
+  return _fieldTex("ground", 256,
+    (u, v) => _tfbm(u * 9, v * 9, 11, 4) * 0.7 + _tfbm(u * 44, v * 44, 17, 2) * 0.3,
+    (h) => 0.84 + h * 0.16, aniso, 3.2);                 // grain 0.84..1.0
+}
+function structTex(aniso) {
+  return _fieldTex("struct", 256,
+    (u, v) => {                                          // brick/panel relief
+      const R = 6, row = Math.floor(v * R), off = (row % 2) * 0.5, bu = u * 3 + off;
+      const mortar = (Math.abs(((v * R) % 1) - 0.5) > 0.42 || Math.abs(((bu % 1) + 1) % 1 - 0.5) > 0.45) ? 1 : 0;
+      const grain = _tfbm(u * 16, v * 16, 23, 3);
+      return (1 - mortar) * (0.58 + grain * 0.42);
+    },
+    (h) => 0.88 + h * 0.12, aniso, 4.2);                 // grain 0.88..1.0, brick faces bright
+}
+function waterNormalTex(aniso) {
+  if (_texCache.waterN) return _texCache.waterN;
+  const t = _fieldTex("water_f", 256,
+    (u, v) => _tfbm(u * 6, v * 6, 31, 3) * 0.6 + (Math.sin(u * 22 + v * 15) * 0.5 + 0.5) * 0.4,
+    (h) => h, aniso, 1.4).normal;
+  _texCache.waterN = t; return t;
+}
+
 // ── height functions per map ────────────────────────────────────────────────
 function mkHeightFn(mapId, seed) {
   if (mapId === "isla_viva") {
@@ -139,22 +205,32 @@ export async function buildMap(W, mapId) {
   W.scene.background = new THREE.Color(K.sky);
   if (W.scene.fog) { W.scene.fog.color = new THREE.Color(K.sky); W.scene.fog.density = K.fog; }
 
-  // ── terrain mesh (vertex-colored) ─────────────────────────────────────────
+  // ── terrain mesh (vertex-colored biome tint × tiled grain texture) ────────
+  const aniso = W._texAniso || 4;
   const SEG = 220;
   const terrGeo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
   terrGeo.rotateX(-Math.PI / 2);
   const pos = terrGeo.attributes.position;
+  const uv = terrGeo.attributes.uv;
   const cols = new Float32Array(pos.count * 3);
+  const TILE = 8;                                   // meters per texture tile
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i);
     const h = heightAt0(x, z);
     pos.setY(i, h);
     const c = colorAt(mapId, h, x, z, seed);
     cols[i * 3] = c[0]; cols[i * 3 + 1] = c[1]; cols[i * 3 + 2] = c[2];
+    uv.setXY(i, x / TILE, z / TILE);               // world-planar UV → texture tiles every 8m
   }
   terrGeo.setAttribute("color", new THREE.BufferAttribute(cols, 3));
+  uv.needsUpdate = true;
   terrGeo.computeVertexNormals();
-  const terrMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94, metalness: 0 });
+  const terrMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0 });
+  try {
+    const gt = groundTex(aniso);
+    terrMat.map = gt.map; terrMat.normalMap = gt.normal;
+    terrMat.normalScale = new THREE.Vector2(0.55, 0.55);
+  } catch (e) { /* canvas unavailable → flat vertex-color fallback */ }
   const terrain = new THREE.Mesh(terrGeo, terrMat);
   terrain.receiveShadow = true;
   terrain.name = "terrain";
@@ -165,13 +241,22 @@ export async function buildMap(W, mapId) {
     const wgeo = new THREE.PlaneGeometry(SIZE * 1.6, SIZE * 1.6, 1, 1);
     wgeo.rotateX(-Math.PI / 2);
     const wmat = new THREE.MeshStandardMaterial({
-      color: mapId === "isla_viva" ? 0x1899b8 : 0x2a6b7a, transparent: true, opacity: 0.82, roughness: 0.25, metalness: 0.1,
+      color: mapId === "isla_viva" ? 0x1899b8 : 0x2a6b7a, transparent: true, opacity: 0.85, roughness: 0.16, metalness: 0.32,
     });
+    let wN = null;
+    try {
+      wN = waterNormalTex(aniso);
+      wN.repeat.set(90, 90);
+      wmat.normalMap = wN; wmat.normalScale = new THREE.Vector2(0.35, 0.35);
+    } catch (e) { /* no canvas → flat water */ }
     const water = new THREE.Mesh(wgeo, wmat);
     water.position.y = waterY;
     water.name = "water";
     g.add(water);
-    trackUpdater((dt, t) => { water.position.y = waterY + Math.sin(t * 0.7) * 0.12; });
+    trackUpdater((dt, t) => {
+      water.position.y = waterY + Math.sin(t * 0.7) * 0.12;
+      if (wN) { wN.offset.x = t * 0.015; wN.offset.y = t * 0.011; }   // drifting ripples
+    });
   }
 
   // ── SKY: gradient dome + drifting clouds + looping birds ──────────────────
@@ -696,10 +781,13 @@ export async function buildMap(W, mapId) {
     if (rng() < 0.12) chest(x, y + 0.6, z, null);
   }
 
-  // ── merge batched boxes into one mesh per color ───────────────────────────
+  // ── merge batched boxes into one mesh per color (colour × tiled brick/panel) ─
+  let _st = null;
+  try { _st = structTex(aniso); } catch (e) { _st = null; }
   for (const color in batches) {
     const merged = BufferGeometryUtils.mergeGeometries(batches[color], false);
-    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.05 });
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.88, metalness: 0.04 });
+    if (_st) { mat.map = _st.map; mat.normalMap = _st.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5); }
     const mesh = new THREE.Mesh(merged, mat);
     mesh.castShadow = true; mesh.receiveShadow = true;
     g.add(mesh);
