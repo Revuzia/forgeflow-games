@@ -218,13 +218,21 @@ export async function buildMap(W, mapId) {
   const trackUpdater = (fn) => { W._mapUpdaters.push(fn); W.kernel.onUpdate(fn); };
   W.scene.background = new THREE.Color(K.sky);
   if (W.scene.fog) { W.scene.fog.color = new THREE.Color(K.sky); W.scene.fog.density = K.fog; }
-  // restore match daylight the cinematic menu overrode (warm golden sun + raised
-  // exposure) — without this every match rendered under menu light. Bloom is left
-  // as-is (the established look; toggling it is an aesthetic call, not a bug).
+  // BRIGHT daytime match lighting. The render looked dim/muddy vs the bright, vibrant
+  // Final Drop reference — a bright blue sky over dark green ground. Strong warm sun +
+  // a much brighter, lighter-ground hemisphere fill so shadowed sides read as daylight
+  // (not dusk), plus a touch more exposure. Also overrides any leaked menu light (D1).
   if (W._lightDefaults) {
-    const L = W._lightDefaults, kn = W.kernel;
-    kn.sun.intensity = L.sunIntensity; kn.sun.color.setHex(L.sunColor);
-    kn.sun.position.copy(L.sunPos); kn.renderer.toneMappingExposure = L.exposure;
+    const kn = W.kernel;
+    // ACES Filmic tonemapping was crushing + desaturating the whole scene into a
+    // muddy dusk. NoToneMapping keeps colours bright + saturated like the reference.
+    kn.renderer.toneMapping = THREE.NoToneMapping;
+    kn.renderer.toneMappingExposure = 1.0;
+    kn.sun.intensity = 2.05; kn.sun.color.setHex(0xfff4e0);
+    kn.sun.position.set(90, 130, 60);
+    let hemi = null; W.scene.traverse((o) => { if (o.isHemisphereLight) hemi = o; });
+    if (hemi) { hemi.intensity = 1.25; hemi.color.setHex(0xdcefff); hemi.groundColor.setHex(0x7c8672); }
+    if (kn.bloom) kn.bloom.strength = 0.14;   // crisp match — minimal bloom haze
   }
 
   // ── terrain mesh (vertex-colored biome tint × tiled grain texture) ────────

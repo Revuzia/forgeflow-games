@@ -3,6 +3,23 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — BRIGHT lighting + street furniture + landmarks (?v=32, LIVE)
+
+Visual polish, now that offscreen-render-target capture unlocked real pixel review
+(a background browser tab blacks out the default framebuffer, but rendering to a
+WebGLRenderTarget + readPixels bypasses the throttle — captures POSTed to a local
+cap_server for viewing).
+
+- **LIGHTING (biggest win):** the scene rendered as a muddy dusk — ACES Filmic
+  tonemapping was crushing + desaturating everything. Switched matches to
+  NoToneMapping with rebalanced lights (sun 2.05 warm, hemisphere 1.25 with a
+  lighter ground colour, exposure 1.0) + reduced in-match bloom to 0.14. Result:
+  bright vibrant daylight — green grass, tan sand, red roofs read clearly, like the
+  reference. Verified by capture on isla + deepwood.
+- **Street furniture:** lamp posts, market stalls, benches, hydrants along town
+  streets (cosmetic). Towns now read as lived-in settlements.
+- **Hero landmarks:** isla lighthouse, ashgrid water tower, deepwood chapel steeple.
+
 ## 2026-07-20 — proper UPRIGHT run animation (?v=29, LIVE) — Meshy regen
 
 The gated D10 item, now done (owner authorized the Meshy spend). The shipped run was
