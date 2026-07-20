@@ -3,6 +3,42 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — Final Drop parity build (?v=18 → 28, LIVE)
+
+Multi-session /loop closing the gap to the Final Drop reference the owner benchmarks
+against. Item-by-item tracker: `PARITY_PROGRESS.md`. Each item was gate-verified (ESM
+syntax + sim selftest 46/46) and live-verified on the CDN by driving the frame
+pipeline via `k._updaters` and inspecting scene/DOM/state (a hidden/background browser
+tab throttles WebGL to black, so pixel screenshots weren't possible — visual QA of the
+actual look is pending the owner opening the live URL).
+
+- **Textures (Pass A):** procedural CanvasTexture PBR (grain albedo + Sobel normal maps)
+  on terrain (world-planar UV, over the vertex-colour biome tint), all structures
+  (brick/panel), and water (ripple). Unified graphics authority `W.applyGraphics` —
+  applied at BOOT, drives DPR + shadow-map res + anisotropy per tier and syncs the
+  shell `ffg_settings.quality` key, so "High" finally takes effect on load (was inert).
+- **World density (Pass B):** road network (nearest-neighbour tree over POIs → textured
+  asphalt ribbons) + town-builder (houses on streets, front doors to the road, terracotta
+  roofs, parking lots) on isla + deepwood + a new ashgrid savanna outpost; farmland
+  (crop rows + barn + silo + fence) for the Farm POIs (isla Banana Farm relocated inland
+  off the waterline); distinct biome zones — a deepwood northern SNOW biome + an ashgrid
+  eastern DESERT; traversal fixes (interior tower ramp now emerges through a cut
+  stairwell hole, overpass ramp reaches its deck, sky-island rim collider 0.86→0.92·rad).
+- **Meta + MP (Pass C):** XP/level bar + rotating in-match challenge cards (persistent
+  `lc_progress`, match-end XP); both MP MUST desyncs fixed (host-bot chest-opens mirror
+  to guests; grenade/barrel splash routes through net authority); barrel-anchored muzzle
+  flash; spectator HUD follows `W._camFocus` not the corpse.
+- **Polish (Pass D):** menu golden-hour light no longer leaks into matches; headshot
+  hitmarker + ping; compass ribbon; umbrella glide (canopy deploys at 110m + gentle auto
+  forward-glide); bot coverReflex on sim-time (fastForward determinism); supply-drop
+  cadence spread late; remote gunfire FX relay (guests see/hear remote shots); full
+  keybind rebind list; +1 selftest (quick tier-mix).
+- **Gated / deferred:** D10 real upright RUN clip needs a Meshy regen ($ spend, awaits
+  owner OK) — a code-only "measured lean" was tried and reverted (Meshy spine
+  `rotation.x` is bind-pose-dominated so an absolute-lean measure reads noise; kept the
+  working relative fixed-delta nudge). B5 ramp terracing + B4 street-furniture props are
+  optional feel refinements.
+
 ## 2026-07-12 — v4.12 destructible world: barrel collision + explosive barrels + shootable trees (?v=18, LIVE)
 
 Owner playtest (vs Final Drop reference): "walked through a barrel — these should be
