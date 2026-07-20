@@ -958,7 +958,10 @@ function hideHUD() {
 let mmT = 0, srT = 0;
 export function update(W, dt) {
   if (!R.hud || !W.player) return;
-  const p = W.player;
+  // when the local player is dead we SPECTATE — source the HUD from the spectated
+  // actor (W._camFocus, set by updateCamera each frame) instead of the corpse,
+  // which read HP 0% / shield 0% / empty inventory for the whole spectate phase.
+  const p = W._camFocus || W.player;
   const C = R._hudCache;
 
   const hpPct = Math.max(0, Math.min(100, p.hp)) + "%";
@@ -978,14 +981,16 @@ export function update(W, dt) {
   let ammoT = "";
   if (wpn && !wpn.id.startsWith("consumable")) {
     const def = K.WEAPONS[wpn.id];
-    if (def) ammoT = wpn.state === "reloading" ? "RELOADING…" : wpn.magAmmo + " / " + (p.inventory.ammo[def.ammo] || 0);
+    if (def) ammoT = wpn.state === "reloading" ? "RELOADING…" : wpn.magAmmo + " / " + ((p.inventory && p.inventory.ammo[def.ammo]) || 0);
   }
   if (p.swimming) ammoT = "SWIMMING";
   if (C.ammo !== ammoT) { R.ammoText.textContent = ammoT; C.ammo = ammoT; }
 
-  const ammoSig = Object.values(p.inventory.ammo).join(",");
-  const slotSig = p.inventory.slots.map((s, i) => (s ? s.id + (s.count || "") + (s.rarity || 0) : "-") + (i === p.inventory.active ? "*" : "")).join("|") + "#" + ammoSig;
-  if (C.slots !== slotSig) { paintSlots(W, p); C.slots = slotSig; }
+  if (p.inventory) {   // spectated remote actors can have a partial inventory
+    const ammoSig = Object.values(p.inventory.ammo).join(",");
+    const slotSig = p.inventory.slots.map((s, i) => (s ? s.id + (s.count || "") + (s.rarity || 0) : "-") + (i === p.inventory.active ? "*" : "")).join("|") + "#" + ammoSig;
+    if (C.slots !== slotSig) { paintSlots(W, p); C.slots = slotSig; }
+  }
 
   // storm timer + alive
   srT += dt;
@@ -1328,10 +1333,13 @@ function drawMinimap(W, ctx, size, big) {
 
 // ═══ events, pause, death, stats, settings ══════════════════════════════════
 function wireEvents(W) {
-  W.events.on("hitMarker", (owner) => {
+  W.events.on("hitMarker", (owner, target, dmg, isHead) => {
     if (owner !== W.player || !R.hitmark) return;
+    // headshots get a bigger yellow marker (audio.js adds a higher-pitched ping)
+    R.hitmark.style.color = isHead ? "#ffd54a" : "#ffffff";
+    R.hitmark.style.fontSize = isHead ? "34px" : "26px";
     R.hitmark.style.opacity = "1";
-    setTimeout(() => { if (R.hitmark) R.hitmark.style.opacity = "0"; }, 120);
+    setTimeout(() => { if (R.hitmark) R.hitmark.style.opacity = "0"; }, isHead ? 170 : 120);
   });
   // gunfire direction (industry-standard ~250m audible range)
   W.events.on("shotFired", (shooter, weaponId, eye) => {

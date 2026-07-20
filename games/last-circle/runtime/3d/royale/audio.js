@@ -204,6 +204,8 @@ function wire(W) {
     setTimeout(() => blip(620, 0.35, own ? 0.22 : 0.12, "sine", own ? null : a.pos, 70), 120);
     setTimeout(() => blip(980, 0.3, own ? 0.18 : 0.1, "sine", own ? null : a.pos, 70), 260);
   });
+  // hitmarker ping: a short click when YOU land a hit (higher pitch on a headshot)
+  on("hitMarker", (owner, target, dmg, isHead) => { if (W.player && owner === W.player) blip(isHead ? 1400 : 950, 0.045, 0.16, "square"); });
   // kill confirm: rising two-tone when YOUR target drops
   on("actorDied", (victim, killerId) => {
     if (W.player && killerId === W.player.id) { blip(700, 0.09, 0.2, "triangle"); setTimeout(() => blip(1050, 0.14, 0.22, "triangle"), 90); }

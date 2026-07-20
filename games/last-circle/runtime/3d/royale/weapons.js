@@ -390,7 +390,17 @@ function fire(W, a, def) {
     W.stats.shotsFired += pellets;
   }
   a.lastShotT = W.t;
-  W.events.emit("shotFired", a, a.weapon.id, eye, _d.clone());
+  // muzzle world position from the held weapon (right-hand bone) so the flash
+  // erupts at the BARREL, not the eye/body-centre (the third-person "fire from
+  // the face" issue). Physics/aim stay eye-based; only the FX origin moves.
+  let muzzle = eye;
+  if (a.hand) {
+    a.hand.updateWorldMatrix(true, false);
+    const m = a.hand.matrixWorld.elements;
+    const bl = { pistol: 0.5, smg: 0.7, ar: 0.95, shotgun: 0.85, sniper: 1.15, glauncher: 0.8 }[a.weapon.id] || 0.8;
+    muzzle = { x: m[12] + _d.x * bl, y: m[13] + _d.y * bl, z: m[14] + _d.z * bl };
+  }
+  W.events.emit("shotFired", a, a.weapon.id, muzzle, _d.clone());
 }
 
 // ── projectiles ──────────────────────────────────────────────────────────────

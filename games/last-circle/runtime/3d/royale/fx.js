@@ -78,9 +78,10 @@ function burst(o) {
 
 // ── event wiring ─────────────────────────────────────────────────────────────
 function wireEvents(W) {
-  W.events.on("shotFired", (a, weaponId, eye, dir) => {
-    // muzzle flash — bright and chunky enough to register at gameplay FOV
-    const mx = eye.x + dir.x * 0.9, my = eye.y + dir.y * 0.9 - 0.05, mz = eye.z + dir.z * 0.9;
+  W.events.on("shotFired", (a, weaponId, muzzle, dir) => {
+    // muzzle flash at the BARREL (weapons.js now passes the weapon muzzle world
+    // position, not the eye) — bright and chunky enough to register at gameplay FOV
+    const mx = muzzle.x + dir.x * 0.12, my = muzzle.y + dir.y * 0.12, mz = muzzle.z + dir.z * 0.12;
     burst({ x: mx, y: my, z: mz, n: 6, color: [0xffffff, 0xfff2b0, 0xffb84d], speed: 3, up: 0.5, size: 0.17, life: 0.1, gravity: 0, drag: 5 });
   });
 

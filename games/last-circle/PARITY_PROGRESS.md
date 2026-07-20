@@ -25,14 +25,14 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done+verified · `[!]` b
 - [x] C1 XP/level bar + in-match challenge card (top-center, matches the Final Drop screenshots). Persistent lc_progress {level,xp}; rotating 3-challenge queue per match off W.match/W.t counters; completing a challenge awards XP + advances; match-end XP (kills+damage+placement+survival+victory) on the post screen. Verified live at ?v=21: survive→DONE at t≥180 awards +150 XP, bar shows LVL 12 / 250/8500, card advances to "Get 1 elimination".
 - [x] C2 MP: mirror host-bot chest-opens to guests (net.js:36 `a===W.player` → `!a.netRemote`)
 - [x] C3 MP: grenade/barrel splash routes through net authority (explode() netRemote gate)
-- [ ] C4 Barrel-anchored muzzle FX (muzzle world pos from the held weapon, not the eye)
-- [ ] C5 Spectator HUD (source from W._camFocus, not the corpse)
+- [x] C4 Barrel-anchored muzzle FX — muzzle world pos from the held weapon (right-hand bone + per-weapon barrel len), not the eye. Verified live: shot muzzle offset +0.23 right / +1.02 up / -0.75 fwd from body axis (was body-centre).
+- [x] C5 Spectator HUD — HUD sources from W._camFocus (spectated actor) not the corpse; inventory reads guarded for partial remote inventories. Code-verified (no throw); full spectate needs a multi-actor match.
 - [x] C6 Settings/ESC modal stack fix + clear orphaned keybind capture (ESC closes settings; Esc cancels capture; captureKey cleared on close/rerender)
 
 ## Pass D — Everything Else / Polish
 - [x] D1 Menu lighting/exposure leak — snapshot kernel defaults at init, restore in buildMap (bloom left as established look)
 - [ ] D2 Remote gunfire FX relay (fired event → tracer/muzzle/sound on guests)
-- [ ] D3 Hit feedback: headshot marker + hitmarker SFX
+- [x] D3 Hit feedback: headshot hitmarker (yellow, 34px, longer) vs body (white, 26px) + a hitmarker ping in audio.js (1400Hz head / 950Hz body). Verified live: headshot marker turns yellow/34px.
 - [ ] D4 Glider/umbrella descent (earlier deploy + forward glide feel)
 - [x] D5 coverReflex determinism (setTimeout → sim-time `coverReflexUntil`)
 - [x] D6 Supply-drop cadence (one early ~phase 2, one late ~phase 5+)
