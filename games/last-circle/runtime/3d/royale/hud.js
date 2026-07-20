@@ -831,6 +831,23 @@ function pickChallenges(W) {
   return [CHAL_POOL[0], CHAL_POOL[1], extra].map((c) => Object.assign({}, c, { done: false, awarded: false }));
 }
 
+// compass ribbon — scrolling cardinal heading from the camera's facing
+const _cmpDir = new THREE.Vector3();
+function drawCompass(W, ctx, wpx) {
+  const H = 18; ctx.clearRect(0, 0, wpx, H);
+  if (!W.player || !W.camera) return;
+  W.camera.getWorldDirection(_cmpDir);
+  const bearing = (Math.atan2(_cmpDir.x, _cmpDir.z) * 180 / Math.PI + 360) % 360;   // 0 = +Z (N)
+  const cx = wpx / 2, pxPerDeg = wpx / 130;
+  ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0, 0, wpx, H);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.strokeStyle = "rgba(255,255,255,0.22)"; ctx.lineWidth = 1;
+  for (let deg = 0; deg < 360; deg += 15) { const d = ((deg - bearing + 540) % 360) - 180; if (Math.abs(d) > 64) continue; const x = cx + d * pxPerDeg; ctx.beginPath(); ctx.moveTo(x, H - 4); ctx.lineTo(x, H); ctx.stroke(); }
+  const marks = [["N", 0], ["NE", 45], ["E", 90], ["SE", 135], ["S", 180], ["SW", 225], ["W", 270], ["NW", 315]];
+  for (const m of marks) { const d = ((m[1] - bearing + 540) % 360) - 180; if (Math.abs(d) > 64) continue; const x = cx + d * pxPerDeg; ctx.font = m[0].length === 1 ? "bold 12px sans-serif" : "10px sans-serif"; ctx.fillStyle = m[0].length === 1 ? "#ffffff" : "#9fb6cc"; ctx.fillText(m[0], x, H / 2 + 1); }
+  ctx.fillStyle = "#ffd873"; ctx.beginPath(); ctx.moveTo(cx - 5, 0); ctx.lineTo(cx + 5, 0); ctx.lineTo(cx, 6); ctx.closePath(); ctx.fill();
+}
+
 // ═══ HUD ═════════════════════════════════════════════════════════════════════
 export function showHUD(W) {
   const L = layer("hud");
@@ -858,8 +875,13 @@ export function showHUD(W) {
   R.slotsRow = h("div", { display: "flex", gap: "6px" }, null, br);
   R.ammoText = h("div", { fontSize: "22px", fontWeight: "900", textShadow: "0 2px 4px #000" }, "", br);
 
+  // compass ribbon (very top center) — cardinal heading like the reference
+  const cmpWrap = h("div", { position: "absolute", top: "4px", left: "50%", transform: "translateX(-50%)", width: "320px", height: "18px" }, null, L);
+  R.compass = h("canvas", { display: "block", borderRadius: "4px" }, null, cmpWrap);
+  R.compass.width = 320; R.compass.height = 18;
+
   // top center: storm timer + alive
-  const tc = h("div", { position: "absolute", top: "12px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "18px", alignItems: "center", background: "rgba(0,0,0,0.4)", padding: "6px 18px", borderRadius: "10px" }, null, L);
+  const tc = h("div", { position: "absolute", top: "28px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "18px", alignItems: "center", background: "rgba(0,0,0,0.4)", padding: "6px 18px", borderRadius: "10px" }, null, L);
   R.stormIcon = h("div", { fontSize: "15px" }, "⛈", tc);
   R.stormTimer = h("div", { fontSize: "17px", fontWeight: "800", minWidth: "72px" }, "", tc);
   h("div", { width: "1px", height: "18px", background: "rgba(255,255,255,0.25)" }, null, tc);
@@ -869,7 +891,7 @@ export function showHUD(W) {
   // XP/level bar + active challenge card (Final Drop-style meta), below the storm bar
   if (!W.progress) W.progress = loadProgress();
   W._challenges = pickChallenges(W); W._chalIdx = 0; W._xpDirty = true;
-  const meta = h("div", { position: "absolute", top: "50px", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", width: "352px" }, null, L);
+  const meta = h("div", { position: "absolute", top: "66px", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", width: "352px" }, null, L);
   const xpRow = h("div", { display: "flex", alignItems: "center", gap: "8px", width: "100%", background: "rgba(0,0,0,0.42)", padding: "4px 10px", borderRadius: "8px" }, null, meta);
   R.xpLevel = h("div", { fontSize: "12px", fontWeight: "900", color: "#ffd873", minWidth: "48px", textShadow: "0 1px 2px #000" }, "LVL 1", xpRow);
   const xpBarWrap = h("div", { flex: "1", height: "10px", background: "rgba(0,0,0,0.55)", borderRadius: "5px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }, null, xpRow);
@@ -1016,7 +1038,7 @@ export function update(W, dt) {
 
   // minimap 10Hz
   mmT += dt;
-  if (mmT > 0.1) { mmT = 0; drawMinimap(W, R.mmCanvas.getContext("2d"), 180, false); }
+  if (mmT > 0.1) { mmT = 0; drawMinimap(W, R.mmCanvas.getContext("2d"), 180, false); if (R.compass) drawCompass(W, R.compass.getContext("2d"), 320); }
 
   // interact hint + chest channel ring
   const hint = W.interactHint;

@@ -19,7 +19,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done+verified · `[!]` b
 - [ ] B3 Farmland builder (crop grid, barn, silo, fences) for the Farm POIs
 - [ ] B4 Prop-kit expansion (procedural house/vehicle/street-furniture/landmark variants — no Meshy spend); house() gable roofs are a start
 - [~] B5 Traversal fixes DONE: interior tower ramp now emerges via a stairwell hole (addSlabHole); overpass ramp reaches deck top; sky-island collider 0.86×→0.92×. Terrace helper for over-steep ramps (rangerTower 60°/crane 39°) DEFERRED (feel refinement, not a bug).
-- [ ] B6 Multi-zone biome masks + snow zone — DEFER to after render-verify (blind colorAt redefinition risks the "removed the colours" regression; must see it)
+- [x] B6 Multi-zone biomes + snow: deepwood = green forest (south) + SNOW biome (north, geographic mask w/ organic edge); ashgrid = golden savanna (west) + sand DESERT (east). Verified live ?v=23 via colorAt sampling w/ position: deepwood far-north 255/255 snow + 616 green, ashgrid far-east 245/254 sand; ZERO grey on both (no regression).
 
 ## Pass C — Meta + Multiplayer
 - [x] C1 XP/level bar + in-match challenge card (top-center, matches the Final Drop screenshots). Persistent lc_progress {level,xp}; rotating 3-challenge queue per match off W.match/W.t counters; completing a challenge awards XP + advances; match-end XP (kills+damage+placement+survival+victory) on the post screen. Verified live at ?v=21: survive→DONE at t≥180 awards +150 XP, bar shows LVL 12 / 250/8500, card advances to "Get 1 elimination".
@@ -38,7 +38,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done+verified · `[!]` b
 - [x] D6 Supply-drop cadence (one early ~phase 2, one late ~phase 5+)
 - [ ] D7 Selftest: quick tier-mix assert + factor bot decision helpers for node coverage
 - [ ] D8 Full keybind rebind list (move/fire/ADS/slots)
-- [ ] D9 Compass ribbon HUD
+- [x] D9 Compass ribbon HUD — top-center canvas, scrolling cardinal heading (N/E/S/W + ticks) from the camera facing + center marker. Verified live ?v=23 (320x18 canvas, drawCompass runs clean).
 - [!] D10 Real upright RUN clip — GATED (Meshy credit spend). Ship code-only rig-agnostic lean-correction; regen awaits explicit owner OK.
 
 ## MILESTONE 2026-07-20 — ?v=19 deployed + render-verified on live CDN

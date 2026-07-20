@@ -168,17 +168,31 @@ function colorAt(mapId, h, x, z, seed) {
     return [0.18 + n * 0.15, 0.62 + n * 0.18, 0.28];              // lush grass
   }
   if (mapId === "ashgrid") {
-    // warm golden SAVANNA (was flat grey asphalt — owner read it as "no colour").
-    // acacia trees already dot this map, so dry golden grass + green/ochre variation fits.
-    const m = fbm(x / 130, z / 130, seed + 77, 2, 2, 0.5);        // broad green/gold patches
-    if (h < 0.5) return [0.83, 0.72, 0.46];                       // sandy dry wash
-    if (h > 28) return [0.55 + n * 0.08, 0.44, 0.31];             // sun-baked bluffs
-    return [0.66 + n * 0.14, 0.56 + m * 0.20, 0.26 + n * 0.08];   // golden grass, greener in the hollows
+    // SAVANNA split into a green west and an arid DESERT east — a GEOGRAPHIC zone
+    // (guaranteed every seed) with an organic noisy boundary. Final Drop-style.
+    const edge = fbm(x / 260, z / 260, seed + 61, 2, 2, 0.5) * 120;
+    const desert = Math.max(0, Math.min(1, (x - 40 + edge) / 320));   // 1 = desert dunes (east)
+    const m = fbm(x / 130, z / 130, seed + 77, 2, 2, 0.5);            // local green/gold patches
+    if (h < 0.5) return [0.85, 0.74, 0.5];                            // sandy dry wash
+    if (h > 28) return [0.55 + n * 0.08, 0.44, 0.31];                 // sun-baked bluffs
+    const green = [0.62 + n * 0.12, 0.58 + m * 0.22, 0.28 + n * 0.08]; // savanna grass
+    const sand = [0.88 + n * 0.07, 0.75 + n * 0.06, 0.49];            // desert sand
+    return [green[0] + (sand[0] - green[0]) * desert, green[1] + (sand[1] - green[1]) * desert, green[2] + (sand[2] - green[2]) * desert];
   }
   if (mapId === "deepwood") {
-    if (h < 0.6) return [0.55, 0.5, 0.38];                        // river mud
-    if (h > 44) return [0.5, 0.48, 0.45];                         // rocky tops
-    return [0.12 + n * 0.1, 0.4 + n * 0.14, 0.16];                // deep green
+    // FOREST with a distinct northern SNOW biome — a GEOGRAPHIC zone (guaranteed
+    // every seed) with an organic noisy edge. Snow is intentionally bright bluish-white.
+    const edge = fbm(x / 240, z / 240, seed + 91, 2, 2, 0.5) * 90;
+    const snow = Math.max(0, Math.min(1, (-z - 100 + edge) / 260));   // 1 = deep snow (far north)
+    let base;
+    if (h < 0.6) base = [0.55, 0.5, 0.38];                            // river mud
+    else if (h > 44) base = [0.5, 0.48, 0.45];                        // rocky tops
+    else base = [0.12 + n * 0.1, 0.4 + n * 0.14, 0.16];              // deep green
+    if (snow > 0.01) {
+      const sc = [0.84 + n * 0.08, 0.88 + n * 0.06, 0.95];           // snow (bright, faint blue)
+      return [base[0] + (sc[0] - base[0]) * snow, base[1] + (sc[1] - base[1]) * snow, base[2] + (sc[2] - base[2]) * snow];
+    }
+    return base;
   }
   return [0.5 + n * 0.1, 0.62, 0.42];
 }
