@@ -127,6 +127,16 @@ register3d("royale", async function (kernel, content) {
   };
   W.applyGraphics();          // BOOT-apply the stored tier (the fix)
 
+  // Snapshot the kernel's DEFAULT match lighting now, before the cinematic menu
+  // (buildMenuWorld) warms the sun to golden-hour + raises exposure. buildMap
+  // restores these each match so every map shows its own daylight, not menu light.
+  W._lightDefaults = {
+    sunIntensity: kernel.sun.intensity,
+    sunColor: kernel.sun.color.getHex(),
+    sunPos: kernel.sun.position.clone(),
+    exposure: kernel.renderer.toneMappingExposure,
+  };
+
   // ── match lifecycle ─────────────────────────────────────────────────────────
   async function startMatch(opts) {
     opts = opts || {};

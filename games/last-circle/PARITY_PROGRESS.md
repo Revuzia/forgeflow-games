@@ -30,7 +30,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done+verified · `[!]` b
 - [x] C6 Settings/ESC modal stack fix + clear orphaned keybind capture (ESC closes settings; Esc cancels capture; captureKey cleared on close/rerender)
 
 ## Pass D — Everything Else / Polish
-- [ ] D1 Menu lighting/bloom/exposure leak — snapshot at init, restore in buildMap
+- [x] D1 Menu lighting/exposure leak — snapshot kernel defaults at init, restore in buildMap (bloom left as established look)
 - [ ] D2 Remote gunfire FX relay (fired event → tracer/muzzle/sound on guests)
 - [ ] D3 Hit feedback: headshot marker + hitmarker SFX
 - [ ] D4 Glider/umbrella descent (earlier deploy + forward glide feel)

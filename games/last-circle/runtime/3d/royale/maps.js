@@ -204,6 +204,14 @@ export async function buildMap(W, mapId) {
   const trackUpdater = (fn) => { W._mapUpdaters.push(fn); W.kernel.onUpdate(fn); };
   W.scene.background = new THREE.Color(K.sky);
   if (W.scene.fog) { W.scene.fog.color = new THREE.Color(K.sky); W.scene.fog.density = K.fog; }
+  // restore match daylight the cinematic menu overrode (warm golden sun + raised
+  // exposure) — without this every match rendered under menu light. Bloom is left
+  // as-is (the established look; toggling it is an aesthetic call, not a bug).
+  if (W._lightDefaults) {
+    const L = W._lightDefaults, kn = W.kernel;
+    kn.sun.intensity = L.sunIntensity; kn.sun.color.setHex(L.sunColor);
+    kn.sun.position.copy(L.sunPos); kn.renderer.toneMappingExposure = L.exposure;
+  }
 
   // ── terrain mesh (vertex-colored biome tint × tiled grain texture) ────────
   const aniso = W._texAniso || 4;
