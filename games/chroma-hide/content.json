@@ -1,0 +1,16 @@
+{
+  "title": "CHROMA HIDE",
+  "tagline": "Paint yourself invisible.",
+  "howToPlay": [
+    "HIDERS: press F to open paint mode. Eyedrop a nearby surface (SPACE), match its colour, then set the metallic and roughness sliders so your sheen matches too — a glossy body shines wrong against a matte wall.",
+    "Pick a hiding spot, choose a pose (R), and hold still. You can keep painting after the hunt starts, but moving is what gets you spotted.",
+    "SEEKERS: hunt with a gun, but ammo is limited — every miss costs a shot and every hit refunds one. Seeing a hider isn't enough; you have to shoot them.",
+    "Hiders score points for time spent in a seeker's line of sight without being caught. Whistle (1) to bait a seeker closer for more points.",
+    "Hiders win if at least one survives the timer. Seekers win by catching everyone."
+  ],
+  "tips": [
+    "Match brightness first, then hue, then material feel, then pose.",
+    "Sample several colours across the surface — lighting shifts colour across a room.",
+    "The cube body shape blends into boxes and fences; the round body suits soft props."
+  ]
+}
