@@ -805,6 +805,32 @@ export function showLobby(W, onDone) {
   }, W.mode === "practice" ? 30 : 140);
 }
 
+// ═══ progression + challenges (Final Drop-style meta) ════════════════════════
+// A persistent level/XP bar + one active in-match challenge card, fed off the
+// existing W.match / W.t / W.stats counters. Progress persists in localStorage.
+function loadProgress() { try { return Object.assign({ level: 1, xp: 0 }, JSON.parse(localStorage.getItem("lc_progress") || "{}")); } catch (e) { return { level: 1, xp: 0 }; } }
+function saveProgress(p) { try { localStorage.setItem("lc_progress", JSON.stringify(p)); } catch (e) {} }
+function xpForLevel(lvl) { return 800 + (lvl - 1) * 700; }   // rising curve
+function addXP(W, amt) {
+  const p = W.progress; if (!p || !amt) return;
+  p.xp += amt;
+  while (p.xp >= xpForLevel(p.level)) { p.xp -= xpForLevel(p.level); p.level++; if (W.events) W.events.emit("levelUp", p.level); }
+  saveProgress(p); W._xpDirty = true;
+}
+const CHAL_POOL = [
+  { id: "survive", label: "Survive 3 minutes", goal: 180, xp: 150, prog: (W) => Math.floor(W.t) },
+  { id: "elim", label: "Get 1 elimination", goal: 1, xp: 175, prog: (W) => (W.match && W.match.kills[W.player.id]) || 0 },
+  { id: "dmg", label: "Deal 300 damage", goal: 300, xp: 140, prog: (W) => Math.round((W.match && W.match.damage[W.player.id]) || 0) },
+  { id: "top10", label: "Reach the final 10", goal: 1, xp: 200, prog: (W) => (W.match && W.match.aliveCount() <= 10 ? 1 : 0) },
+  { id: "elim3", label: "Get 3 eliminations", goal: 3, xp: 300, prog: (W) => (W.match && W.match.kills[W.player.id]) || 0 },
+];
+function pickChallenges(W) {
+  // the two the reference shows, plus one rotating by the player's level
+  const rot = (W.progress ? W.progress.level : 1) % 3;
+  const extra = [CHAL_POOL[2], CHAL_POOL[3], CHAL_POOL[4]][rot];
+  return [CHAL_POOL[0], CHAL_POOL[1], extra].map((c) => Object.assign({}, c, { done: false, awarded: false }));
+}
+
 // ═══ HUD ═════════════════════════════════════════════════════════════════════
 export function showHUD(W) {
   const L = layer("hud");
@@ -839,6 +865,24 @@ export function showHUD(W) {
   h("div", { width: "1px", height: "18px", background: "rgba(255,255,255,0.25)" }, null, tc);
   R.aliveText = h("div", { fontSize: "17px", fontWeight: "800" }, "", tc);
   R.killsText = h("div", { fontSize: "15px", fontWeight: "700", opacity: "0.85" }, "", tc);
+
+  // XP/level bar + active challenge card (Final Drop-style meta), below the storm bar
+  if (!W.progress) W.progress = loadProgress();
+  W._challenges = pickChallenges(W); W._chalIdx = 0; W._xpDirty = true;
+  const meta = h("div", { position: "absolute", top: "50px", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", width: "352px" }, null, L);
+  const xpRow = h("div", { display: "flex", alignItems: "center", gap: "8px", width: "100%", background: "rgba(0,0,0,0.42)", padding: "4px 10px", borderRadius: "8px" }, null, meta);
+  R.xpLevel = h("div", { fontSize: "12px", fontWeight: "900", color: "#ffd873", minWidth: "48px", textShadow: "0 1px 2px #000" }, "LVL 1", xpRow);
+  const xpBarWrap = h("div", { flex: "1", height: "10px", background: "rgba(0,0,0,0.55)", borderRadius: "5px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }, null, xpRow);
+  R.xpFill = h("div", { width: "0%", height: "100%", background: "linear-gradient(90deg,#4aa8ff,#7ad0ff)", transition: "width .3s" }, null, xpBarWrap);
+  R.xpText = h("div", { fontSize: "10px", fontWeight: "700", opacity: "0.85", minWidth: "74px", textAlign: "right" }, "", xpRow);
+  R.chalCard = h("div", Object.assign({ display: "none", alignItems: "center", gap: "10px", width: "100%", padding: "7px 12px" }, PANEL), null, meta);
+  R.chalIcon = h("div", { fontSize: "16px" }, "🎯", R.chalCard);
+  const chalMid = h("div", { flex: "1" }, null, R.chalCard);
+  R.chalLabel = h("div", { fontSize: "13px", fontWeight: "800" }, "", chalMid);
+  const chalBarWrap = h("div", { height: "6px", background: "rgba(0,0,0,0.5)", borderRadius: "3px", overflow: "hidden", marginTop: "4px" }, null, chalMid);
+  R.chalFill = h("div", { width: "0%", height: "100%", background: "#4ade80", transition: "width .2s" }, null, chalBarWrap);
+  R.chalProg = h("div", { fontSize: "11px", fontWeight: "800", opacity: "0.8", minWidth: "44px", textAlign: "right" }, "", R.chalCard);
+  R.chalXp = h("div", { fontSize: "11px", fontWeight: "900", color: "#ffd873" }, "", R.chalCard);
 
   // minimap top left
   const mmWrap = h("div", { position: "absolute", top: "12px", left: "14px", width: "180px", height: "180px", borderRadius: "12px", overflow: "hidden", border: "2px solid rgba(120,180,255,0.35)", boxShadow: "0 4px 18px rgba(0,0,0,0.5)" }, null, L);
@@ -938,6 +982,36 @@ export function update(W, dt) {
     R.killsText.textContent = "☠ " + (W.match ? (W.match.kills[p.id] || 0) : 0);
     // hurt tint decay
     R.hurtTint.style.opacity = W.t - p.lastDamageT < 0.7 ? "1" : "0";
+
+    // XP/level bar (re-rendered when XP changes)
+    const pr = W.progress;
+    if (pr && R.xpFill && W._xpDirty) {
+      const need = xpForLevel(pr.level);
+      R.xpLevel.textContent = "LVL " + pr.level;
+      R.xpFill.style.width = Math.min(100, 100 * pr.xp / need) + "%";
+      R.xpText.textContent = pr.xp + " / " + need + " XP";
+      W._xpDirty = false;
+    }
+    // active challenge card — advance past completed ones, award XP once
+    const chs = W._challenges;
+    if (chs && R.chalCard) {
+      while (W._chalIdx < chs.length && chs[W._chalIdx].done) W._chalIdx++;
+      const ch = chs[W._chalIdx];
+      if (ch && W.match) {
+        const cur = Math.min(ch.goal, ch.prog(W));
+        if (cur >= ch.goal && !ch.awarded) { ch.awarded = true; ch.done = true; addXP(W, ch.xp); flashMsg("CHALLENGE COMPLETE  +" + ch.xp + " XP"); }
+        R.chalCard.style.display = "flex";
+        const sig = ch.id + ":" + cur;
+        if (C.chal !== sig) {
+          R.chalIcon.textContent = ch.id.indexOf("elim") === 0 ? "💀" : ch.id === "survive" ? "⏱" : ch.id === "dmg" ? "🔥" : "🏆";
+          R.chalLabel.textContent = ch.label;
+          R.chalFill.style.width = (100 * cur / ch.goal) + "%";
+          R.chalProg.textContent = cur + "/" + ch.goal;
+          R.chalXp.textContent = "+" + ch.xp + " XP";
+          C.chal = sig;
+        }
+      } else { R.chalCard.style.display = "none"; }
+    }
   }
 
   // minimap 10Hz
@@ -1358,6 +1432,14 @@ export function showPostMatch(W, res) {
   stat(grid, "Damage dealt", res.damage);
   stat(grid, "Accuracy", res.accuracy + "%");
   stat(grid, "Survived", fmtT(res.timeS));
+  // match XP → progression (kills + damage + placement + survival + victory bonus)
+  if (W.progress) {
+    const gained = (res.kills || 0) * 100 + Math.round((res.damage || 0) * 0.2)
+      + Math.max(0, (W.match ? W.match.totalPlayers : 50) - (res.placement || 50)) * 6
+      + (res.victory ? 500 : 0) + Math.round((res.timeS || 0) / 4);
+    addXP(W, gained);
+    stat(grid, "XP earned", "+" + gained);
+  }
   const row = h("div", { display: "flex", gap: "12px", justifyContent: "center", marginTop: "24px" }, null, box);
   const menu = h("button", Object.assign({}, BTN, {
     fontFamily: "Orbitron, " + FONT_DISPLAY,

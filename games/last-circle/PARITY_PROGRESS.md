@@ -22,7 +22,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done+verified · `[!]` b
 - [ ] B6 Multi-zone biome masks + snow zone — DEFER to after render-verify (blind colorAt redefinition risks the "removed the colours" regression; must see it)
 
 ## Pass C — Meta + Multiplayer
-- [ ] C1 XP/level bar + in-match challenge cards (fed by W.match counters, persist to localStorage)
+- [x] C1 XP/level bar + in-match challenge card (top-center, matches the Final Drop screenshots). Persistent lc_progress {level,xp}; rotating 3-challenge queue per match off W.match/W.t counters; completing a challenge awards XP + advances; match-end XP (kills+damage+placement+survival+victory) on the post screen. Verified live at ?v=21: survive→DONE at t≥180 awards +150 XP, bar shows LVL 12 / 250/8500, card advances to "Get 1 elimination".
 - [x] C2 MP: mirror host-bot chest-opens to guests (net.js:36 `a===W.player` → `!a.netRemote`)
 - [x] C3 MP: grenade/barrel splash routes through net authority (explode() netRemote gate)
 - [ ] C4 Barrel-anchored muzzle FX (muzzle world pos from the held weapon, not the eye)
