@@ -498,6 +498,72 @@ export async function buildMap(W, mapId) {
   }
   function poi(id, name, x, z, r) { pois.push({ id, name, x, z, r }); }
 
+  // ── roads + towns (Final-Drop density) ────────────────────────────────────
+  // Roads are COSMETIC flat ribbons laid on the terrain (no collider — you walk
+  // over them). Towns place houses in lots along a street with front doors to the
+  // road + a coloured roof, replacing the old "identical huts at random offsets".
+  const roadGeos = [];                                  // merged into one asphalt mesh after structures
+  function road(x0, z0, x1, z1, width) {
+    const dx = x1 - x0, dz = z1 - z0, len = Math.hypot(dx, dz);
+    if (len < 1) return;
+    const steps = Math.max(1, Math.ceil(len / 9));
+    const ang = Math.atan2(dx, dz);                     // rotate the run (local +Z) onto the segment dir
+    for (let s = 0; s < steps; s++) {
+      const t = (s + 0.5) / steps, mx = x0 + dx * t, mz = z0 + dz * t;
+      const geo = new THREE.BoxGeometry(width, 0.14, len / steps + 0.5);
+      geo.rotateY(ang); geo.translate(mx, heightAt0(mx, mz) + 0.07, mz);
+      roadGeos.push(geo);
+    }
+  }
+  // greedy nearest-neighbour tree over the POIs → a connected road network
+  function buildRoads(width) {
+    for (let i = 1; i < pois.length; i++) {
+      let best = -1, bd = 1e9;
+      for (let j = 0; j < i; j++) { const d = Math.hypot(pois[i].x - pois[j].x, pois[i].z - pois[j].z); if (d < bd) { bd = d; best = j; } }
+      if (best >= 0) road(pois[i].x, pois[i].z, pois[best].x, pois[best].z, width || 7);
+    }
+  }
+  function parkingLot(cx, cz, w, d, poi) {
+    const geo = new THREE.BoxGeometry(w, 0.12, d); geo.translate(cx, heightAt0(cx, cz) + 0.07, cz); roadGeos.push(geo);
+    for (let i = 0; i < 4; i++) {
+      const px = cx - w / 2 + 3 + (i % 2) * (w - 6), pz = cz - d / 2 + 3 + Math.floor(i / 2) * (d - 6);
+      props.car.push({ x: px, y: heightAt0(px, pz), z: pz, s: 2.1, ry: 0 });
+    }
+  }
+  // a house: textured walls + a distinct COLOURED roof (reads as a town from the air)
+  function house(x, z, w, d, rot, wallC, roofC, poiId) {
+    const y = heightAt0(x, z), H = 3.4, T = 0.32, doorW = 1.4;
+    addBox(x, y + H / 2, z - d / 2, w, H, T, wallC, { rotY: rot });                 // back
+    addBox(x - w / 2, y + H / 2, z, T, H, d, wallC, { rotY: rot });                 // left
+    addBox(x + w / 2, y + H / 2, z, T, H, d, wallC, { rotY: rot });                 // right
+    addBox(x - w / 4 - doorW / 4, y + H / 2, z + d / 2, w / 2 - doorW / 2, H, T, wallC, { rotY: rot });  // front L of door
+    addBox(x + w / 4 + doorW / 4, y + H / 2, z + d / 2, w / 2 - doorW / 2, H, T, wallC, { rotY: rot });  // front R of door
+    addBox(x, y + H - 0.35, z + d / 2, doorW, 0.7, T, wallC, { rotY: rot });        // door lintel
+    addBox(x, y + H + 0.35, z, w + 0.7, 0.3, d + 0.7, roofC, { rotY: rot });        // roof deck (overhangs)
+    addBox(x, y + H + 0.85, z, w * 0.5, 0.7, d + 0.5, shade(roofC, 0.88), { rotY: rot }); // ridge cap
+    loot(x, y + 0.5, z, poiId);
+    if (rng() < 0.5) chest(x + (rng() - 0.5) * w * 0.4, y + 0.6, z + (rng() - 0.5) * d * 0.4, poiId);
+  }
+  // a town: a main street through the POI with houses in lots on both sides facing
+  // the road, plus a parking lot. `along` = street axis ("x" or "z").
+  function town(p, wallCs, roofC, opts) {
+    opts = opts || {};
+    const R = p.r, minH = opts.minH != null ? opts.minH : 0.8, A = (opts.along || "x") === "x", nPer = opts.nPer || 4;
+    if (A) road(p.x - R * 0.95, p.z, p.x + R * 0.95, p.z, 7); else road(p.x, p.z - R * 0.95, p.x, p.z + R * 0.95, 7);
+    const span = R * 1.5, step = span / nPer;
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < nPer; i++) {
+        const a0 = -span / 2 + (i + 0.5) * step + (rng() - 0.5) * 3, set = side * (11.5 + rng() * 2);
+        const hx = A ? p.x + a0 : p.x + set, hz = A ? p.z + set : p.z + a0;
+        if (heightAt0(hx, hz) < minH) continue;
+        const rot = A ? (side > 0 ? Math.PI : 0) : (side > 0 ? -Math.PI / 2 : Math.PI / 2);   // door faces the street
+        house(hx, hz, 6 + rng() * 2, 5 + rng() * 1.5, rot, wallCs[i % wallCs.length], roofC, p.id);
+      }
+    }
+    parkingLot(A ? p.x + R * 0.78 : p.x, A ? p.z : p.z + R * 0.78, 15, 13, p);
+    for (let i = 0; i < 2; i++) chest(p.x + (rng() - 0.5) * R * 0.6, heightAt0(p.x, p.z) + 0.6, p.z + (rng() - 0.5) * R * 0.6, p.id);
+  }
+
   if (mapId === "isla_viva") {
     const C_BAMBOO = "#c9a86a", C_STONE = "#8f8a80", C_WOODP = "#a8794f";
     poi("palm_bay", "Palm Bay", -520, 90, 90);
@@ -508,17 +574,11 @@ export async function buildMap(W, mapId) {
     poi("lagoon_docks", "Lagoon Docks", 120, 620, 100);
     poi("jungle_market", "Jungle Market", -350, -380, 100);
     poi("banana_farm", "Banana Farm", -430, 480, 90);
-    // villages/shacks
-    for (const p of [pois[0], pois[1], pois[6], pois[7]]) {
-      const n = 4 + Math.floor(rng() * 4);
-      for (let i = 0; i < n; i++) {
-        const a = rng() * Math.PI * 2, d = rng() * p.r * 0.7;
-        const x = p.x + Math.cos(a) * d, z = p.z + Math.sin(a) * d;
-        if (heightAt0(x, z) < 0.8) continue;
-        hut(x, z, 4.5 + rng() * 2.5, 4 + rng() * 2, 0, i % 2 ? C_BAMBOO : C_WOODP, p.id);
-      }
-      for (let i = 0; i < 3; i++) chest(p.x + (rng() - 0.5) * p.r, heightAt0(p.x, p.z) + 0.6, p.z + (rng() - 0.5) * p.r, p.id);
-    }
+    // villages → real towns (houses on a street with front doors to the road)
+    town(pois[0], [C_WOODP, C_BAMBOO], "#c0563a", { along: "z", nPer: 4 });   // Palm Bay
+    town(pois[1], [C_BAMBOO, C_WOODP], "#cf6b3a", { along: "x", nPer: 5 });   // Coco Village
+    town(pois[6], [C_WOODP, C_BAMBOO], "#b5503a", { along: "x", nPer: 4 });   // Jungle Market
+    town(pois[7], [C_BAMBOO, C_WOODP], "#c8a24a", { along: "z", nPer: 4 });   // Banana Farm
     // cliff temples: stone block structures
     {
       const p = pois[4];
@@ -660,28 +720,23 @@ export async function buildMap(W, mapId) {
     poi("mill", "Riverside Mill", 40, 40, 90);
     poi("firewatch", "Fire Watch", 60, -520, 80);
     poi("meadow", "Meadow Farm", 430, 430, 100);
-    // logging camp
+    // logging camp → a small mill town (+ its signature log piles)
+    town(pois[0], [C_LOG, C_PLANK], "#7a4a2a", { along: "x", nPer: 4 });
     {
       const p = pois[0];
-      for (let i = 0; i < 4; i++) hut(p.x + (rng() - 0.5) * p.r, p.z + (rng() - 0.5) * p.r, 6, 5, 0, C_LOG, p.id);
       for (let i = 0; i < 8; i++) {
         const x = p.x + (rng() - 0.5) * p.r * 1.5, z = p.z + (rng() - 0.5) * p.r * 1.5;
         const y = heightAt0(x, z);
         addBox(x, y + 0.5, z, 1, 1, 4.5, shade(C_LOG, 0.9), { rotY: rng() * Math.PI }); // log piles
       }
-      chest(p.x, heightAt0(p.x, p.z) + 0.6, p.z, p.id);
     }
     // ranger ridge + fire watch towers
     rangerTower(pois[1].x - 20, pois[1].z, C_PLANK, "ranger");
     rangerTower(pois[1].x + 45, pois[1].z + 35, C_PLANK, "ranger");
     rangerTower(pois[6].x, pois[6].z, C_PLANK, "firewatch");
-    // lakeside cabins
-    {
-      const p = pois[2];
-      for (let i = 0; i < 5; i++) hut(p.x + (rng() - 0.5) * p.r, p.z + (rng() - 0.5) * p.r * 0.6, 5.5, 4.5, 0, C_PLANK, p.id);
-      pier(p.x + 40, p.z + 60, 18, 0.3, C_PLANK, p.id);
-      chest(p.x, heightAt0(p.x, p.z) + 0.6, p.z, p.id);
-    }
+    // lakeside cabins → a lakeside town (+ its pier)
+    town(pois[2], [C_PLANK, C_LOG], "#6a4028", { along: "x", nPer: 4, minH: waterY + 0.6 });
+    pier(pois[2].x + 40, pois[2].z + 60, 18, 0.3, C_PLANK, pois[2].id);
     // hunter's hollow: blinds (elevated boxes)
     {
       const p = pois[3];
@@ -725,6 +780,9 @@ export async function buildMap(W, mapId) {
     scatterTrees("bush", 220, 0.8, 40, null);
     scatterTrees("rocks", 80, 2, 60, "brick");
   }
+
+  // connect every POI into a road network (cosmetic ribbons on the terrain)
+  buildRoads(mapId === "ashgrid" ? 8 : 7);
 
   // ── FLOATING SKY-ISLANDS (Final Drop's signature look) ────────────────────
   // Hovering rock islands with grassy tops, trees, and premium loot. Each one
@@ -832,6 +890,17 @@ export async function buildMap(W, mapId) {
     const mesh = new THREE.Mesh(merged, mat);
     mesh.castShadow = true; mesh.receiveShadow = true;
     g.add(mesh);
+  }
+
+  // ── merge roads + parking lots into one flat asphalt ribbon mesh ──────────
+  if (roadGeos.length) {
+    const roadCol = mapId === "ashgrid" ? "#3d4045" : mapId === "deepwood" ? "#5f4f3c" : "#7c6a4e";
+    const rmerged = BufferGeometryUtils.mergeGeometries(roadGeos, false);
+    const rmat = new THREE.MeshStandardMaterial({ color: roadCol, roughness: 0.98, metalness: 0 });
+    try { const gt = groundTex(aniso); rmat.map = gt.map; rmat.normalMap = gt.normal; rmat.normalScale = new THREE.Vector2(0.3, 0.3); } catch (e) {}
+    const rmesh = new THREE.Mesh(rmerged, rmat);
+    rmesh.receiveShadow = true; rmesh.name = "roads";
+    g.add(rmesh);
   }
 
   // ── instanced props from GLBs ─────────────────────────────────────────────

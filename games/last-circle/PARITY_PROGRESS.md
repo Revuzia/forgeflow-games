@@ -14,10 +14,10 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done+verified · `[!]` b
 - NOTE: gates passed (ESM syntax clean ×3, sim selftest 45/45). Render-verify pending at the Pass-A deploy milestone (pump pipeline). Commit afffe5e is LOCAL — push to GitHub is blocked on the env's Git Credential Manager (interactive auth); needs owner to push/authorize. Does not block build or deploy (games deploy via deploy_game.py).
 
 ## Pass B — World Density (fixes "gets boring")
-- [ ] B1 Road network pass (POI→POI spline graph, asphalt band in colorAt + ribbon meshes)
-- [ ] B2 Town-builder (houses on a road, front-to-street, yards, parking aprons)
+- [x] B1 Road network (greedy nearest-neighbour tree over POIs → cosmetic textured asphalt ribbons, no colliders). Verified live: 5352-tri road mesh on isla.
+- [x] B2 Town-builder (town/house/parkingLot helpers): houses in lots along a street, front doors to the road, coloured (terracotta) roofs, parking lot + cars. Wired to isla (4 villages) + deepwood (logging, lakeside). Verified live: builds w/o exceptions, red-roof meshes present. TUNING: towns on over-water POIs (e.g. isla banana_farm ~-1.5m) build the street but skip houses — refine POI snap-to-land later. TODO: ashgrid savanna outpost town.
 - [ ] B3 Farmland builder (crop grid, barn, silo, fences) for the Farm POIs
-- [ ] B4 Prop-kit expansion (procedural house/vehicle/street-furniture/landmark variants — no Meshy spend)
+- [ ] B4 Prop-kit expansion (procedural house/vehicle/street-furniture/landmark variants — no Meshy spend); house() gable roofs are a start
 - [~] B5 Traversal fixes DONE: interior tower ramp now emerges via a stairwell hole (addSlabHole); overpass ramp reaches deck top; sky-island collider 0.86×→0.92×. Terrace helper for over-steep ramps (rangerTower 60°/crane 39°) DEFERRED (feel refinement, not a bug).
 - [ ] B6 Multi-zone biome masks + snow zone — DEFER to after render-verify (blind colorAt redefinition risks the "removed the colours" regression; must see it)
 
