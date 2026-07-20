@@ -374,6 +374,20 @@ export async function buildMap(W, mapId) {
     colliders.push({ kind: "ramp", minX: cx - hx, maxX: cx + hx, minY: cy, maxY: cy + h, minZ: cz - hz, maxZ: cz + hz, dir });
   }
 
+  // A square floor slab MINUS a rectangular stairwell hole (world coords), built
+  // as ≤4 border strips so the hole has no geometry AND no collider — the player
+  // can climb an interior ramp up through it. Falls back to a full slab if the
+  // hole misses the footprint.
+  function addSlabHole(cx, cy, cz, size, thick, color, hx0, hx1, hz0, hz1) {
+    const x0 = cx - size / 2, x1 = cx + size / 2, z0 = cz - size / 2, z1 = cz + size / 2;
+    hx0 = Math.max(x0, hx0); hx1 = Math.min(x1, hx1); hz0 = Math.max(z0, hz0); hz1 = Math.min(z1, hz1);
+    if (hx1 <= hx0 || hz1 <= hz0) { addBox(cx, cy, cz, size, thick, size, color); return; }
+    if (hx0 > x0) addBox((x0 + hx0) / 2, cy, cz, hx0 - x0, thick, size, color);              // left of hole
+    if (hx1 < x1) addBox((hx1 + x1) / 2, cy, cz, x1 - hx1, thick, size, color);              // right of hole
+    if (hz0 > z0) addBox((hx0 + hx1) / 2, cy, (z0 + hz0) / 2, hx1 - hx0, thick, hz0 - z0, color); // in front of hole
+    if (hz1 < z1) addBox((hx0 + hx1) / 2, cy, (hz1 + z1) / 2, hx1 - hx0, thick, z1 - hz1, color); // behind hole
+  }
+
   const lootPoints = [];
   const chestPoints = [];
   function loot(x, y, z, poi) { lootPoints.push({ x, y, z, kind: "floor", poi }); }
@@ -401,8 +415,18 @@ export async function buildMap(W, mapId) {
     const FH = 4, T = 0.4, W2 = fw / 2;
     for (let f = 0; f < floors; f++) {
       const fy = y + f * FH;
-      // slab (skip ground floor slab)
-      if (f > 0) addBox(x, fy + 0.15, z, fw, 0.3, fw, shade(color, 0.8));
+      // slab (skip ground floor slab). For upper floors, cut a stairwell hole over
+      // the interior ramp that climbs from the floor below (built during f-1) —
+      // the old full-footprint slab dead-ended that ramp into its underside, so
+      // interiors were unreachable and towers were roof-only (via the exterior ramp).
+      if (f > 0) {
+        const pdir = (f - 1) % 2 ? 3 : 2;                       // ramp below: up-end -Z (3) or +Z (2)
+        const rx = x + ((f - 1) % 2 ? -fw / 4 : fw / 4);        // its X offset
+        const rrun = fw * 0.7;                                  // its Z run
+        const hz0 = pdir === 2 ? z + 0.2 : z - rrun * 0.55;
+        const hz1 = pdir === 2 ? z + rrun * 0.55 : z - 0.2;
+        addSlabHole(x, fy + 0.15, z, fw, 0.3, shade(color, 0.8), rx - 1.6, rx + 1.6, hz0, hz1);
+      }
       // 4 walls with window band gap + door gap on ground
       const wallH = FH - (f > 0 ? 1.2 : 0);  // upper floors leave open window band
       const wy = fy + wallH / 2 + (f > 0 ? 0 : 0);
@@ -559,7 +583,14 @@ export async function buildMap(W, mapId) {
         addBox(x, heightAt0(x, p.z) + 4, p.z, 3, 8, 3, C_CONC2);
         addBox(x, heightAt0(x, p.z) + 8.6, p.z, 32, 1.2, 9, C_CONC);
       }
-      addRamp(p.x - 78, heightAt0(p.x - 78, p.z), p.z, 9, 8.2, 26, 0, C_CONC);
+      // ramp must reach the DECK TOP (nearest pillar deck center+8.6 + half-thick 0.6
+      // ≈ ground+9.2); the old fixed 8.2 climb left a ~1m step > STEP_UP so the deck
+      // + its rooftop loot were unreachable on foot.
+      {
+        const gBase = heightAt0(p.x - 78, p.z);
+        const deckTop = heightAt0(p.x - 60, p.z) + 9.2;
+        addRamp(p.x - 78, gBase, p.z, 9, Math.max(8.2, deckTop - gBase), 26, 0, C_CONC);
+      }
       chest(p.x, heightAt0(p.x, p.z) + 9.9, p.z, p.id);
       loot(p.x + 30, heightAt0(p.x + 30, p.z) + 9.9, p.z, p.id);
     }
@@ -753,8 +784,10 @@ export async function buildMap(W, mapId) {
       rock.position.set(ix, topY - 1.4 - rad * 0.75, iz);
       rock.castShadow = true;
       g.add(rock);
-      // walkable top collider (octagon ≈ box), plus a small rim lip
-      colliders.push({ kind: "box", minX: ix - rad * 0.86, maxX: ix + rad * 0.86, minY: topY - 2.2, maxY: topY, minZ: iz - rad * 0.86, maxZ: iz + rad * 0.86 });
+      // walkable top collider — 0.92·rad matches the visible disc's octagon flat-to-flat
+      // (was 0.86·rad, leaving the outer ~14% of grass unsupported → rim fall-through on
+      // a hero feature that carries premium loot).
+      colliders.push({ kind: "box", minX: ix - rad * 0.92, maxX: ix + rad * 0.92, minY: topY - 2.2, maxY: topY, minZ: iz - rad * 0.92, maxZ: iz + rad * 0.92 });
       // premium loot: every island gets a chest + a couple of floor items
       chest(ix + (rng() - 0.5) * rad * 0.6, topY + 0.4, iz + (rng() - 0.5) * rad * 0.6, "sky_island");
       loot(ix + (rng() - 0.5) * rad, topY + 0.3, iz + (rng() - 0.5) * rad, "sky_island");

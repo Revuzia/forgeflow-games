@@ -18,8 +18,8 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done+verified · `[!]` b
 - [ ] B2 Town-builder (houses on a road, front-to-street, yards, parking aprons)
 - [ ] B3 Farmland builder (crop grid, barn, silo, fences) for the Farm POIs
 - [ ] B4 Prop-kit expansion (procedural house/vehicle/street-furniture/landmark variants — no Meshy spend)
-- [ ] B5 Ramp/terracing helper + fix: interior tower ramp slab dead-end, overpass ramp under-shoot, sky-island collider 0.86×, steep 39–60° ramps
-- [ ] B6 Multi-zone biome masks + a snow zone
+- [~] B5 Traversal fixes DONE: interior tower ramp now emerges via a stairwell hole (addSlabHole); overpass ramp reaches deck top; sky-island collider 0.86×→0.92×. Terrace helper for over-steep ramps (rangerTower 60°/crane 39°) DEFERRED (feel refinement, not a bug).
+- [ ] B6 Multi-zone biome masks + snow zone — DEFER to after render-verify (blind colorAt redefinition risks the "removed the colours" regression; must see it)
 
 ## Pass C — Meta + Multiplayer
 - [ ] C1 XP/level bar + in-match challenge cards (fed by W.match counters, persist to localStorage)
