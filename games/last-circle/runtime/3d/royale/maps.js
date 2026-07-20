@@ -558,6 +558,34 @@ export async function buildMap(W, mapId) {
     loot(x, y + 0.5, z, poiId);
     if (rng() < 0.5) chest(x + (rng() - 0.5) * w * 0.4, y + 0.6, z + (rng() - 0.5) * d * 0.4, poiId);
   }
+  // street dressing along a town's main street: lamp posts, market stalls, benches,
+  // hydrants (all cosmetic — collide:false — so they add life without snagging players).
+  function streetFurniture(cx, cz, A, span, minH) {
+    const half = span / 2;
+    for (const s of [-1, 1]) {
+      for (let t = -half + 8; t <= half - 8; t += 16) {
+        const lx = A ? cx + t : cx + s * 5.5, lz = A ? cz + s * 5.5 : cz + t, y = heightAt0(lx, lz);
+        if (y < minH) continue;
+        addBox(lx, y + 2.4, lz, 0.22, 4.8, 0.22, "#3a3d42", { collide: false });   // lamp pole
+        addBox(lx, y + 4.9, lz, 0.5, 0.3, 0.5, "#ffe9a8", { collide: false });      // warm lamp head
+      }
+    }
+    for (let i = 0; i < 2; i++) {                                                    // market stalls
+      const sx = A ? cx + (i ? 12 : -12) : cx + 9, sz = A ? cz + 9 : cz + (i ? 12 : -12), y = heightAt0(sx, sz);
+      if (y < minH) continue;
+      for (const [dx, dz] of [[-1.5, -1], [1.5, -1], [-1.5, 1], [1.5, 1]]) addBox(sx + dx, y + 1.1, sz + dz, 0.15, 2.2, 0.15, "#8a6a3a", { collide: false });
+      addBox(sx, y + 2.4, sz, 3.6, 0.2, 2.6, i ? "#c0563a" : "#3a7a9a", { collide: false });  // awning
+      addBox(sx, y + 0.9, sz - 1, 3.4, 0.7, 0.5, "#a8794f", { collide: false });               // counter
+      loot(sx, y + 0.5, sz, null);
+    }
+    for (let i = 0; i < 4; i++) {                                                    // benches + hydrants
+      const t = -half + rng() * span, s = rng() < 0.5 ? -1 : 1;
+      const bx = A ? cx + t : cx + s * 7.5, bz = A ? cz + s * 7.5 : cz + t, y = heightAt0(bx, bz);
+      if (y < minH) continue;
+      if (rng() < 0.55) { addBox(bx, y + 0.5, bz, 2, 0.28, 0.6, "#8a6a3a", { collide: false }); addBox(bx, y + 0.9, bz - 0.25, 2, 0.55, 0.15, "#8a6a3a", { collide: false }); }
+      else addBox(bx, y + 0.5, bz, 0.4, 1.0, 0.4, "#c23b3b", { collide: false });    // hydrant
+    }
+  }
   // a town: a main street through the POI with houses in lots on both sides facing
   // the road, plus a parking lot. `along` = street axis ("x" or "z").
   function town(p, wallCs, roofC, opts) {
@@ -575,7 +603,35 @@ export async function buildMap(W, mapId) {
       }
     }
     parkingLot(A ? p.x + R * 0.78 : p.x, A ? p.z : p.z + R * 0.78, 15, 13, p);
+    streetFurniture(p.x, p.z, A, span, minH);
     for (let i = 0; i < 2; i++) chest(p.x + (rng() - 0.5) * R * 0.6, heightAt0(p.x, p.z) + 0.6, p.z + (rng() - 0.5) * R * 0.6, p.id);
+  }
+  // ── hero landmarks (one distinctive silhouette per biome, like Final Drop's
+  //    lighthouse / domes) — procedural, textured via the batch, with a base chest.
+  function lighthouse(x, z, poi) {
+    const y = heightAt0(x, z), H = 22, seg = 6, sh = H / seg;
+    for (let i = 0; i < seg; i++) { const w = 6.2 - i * 0.7; addBox(x, y + i * sh + sh / 2, z, w, sh + 0.12, w, i % 2 ? "#dcdcdc" : "#c23b3b"); }  // red/white bands
+    addBox(x, y + H + 1.2, z, 4, 2.4, 4, "#2a3138");                    // light room
+    addBox(x, y + H + 1.2, z, 3, 1.3, 3, "#fff2b0");                    // the light
+    addBox(x, y + H + 2.7, z, 5, 0.6, 5, shade("#2a3138", 0.8));        // cap
+    chest(x + 4, y + 0.6, z, poi); loot(x - 4, y + 0.5, z, poi);
+  }
+  function waterTower(x, z, poi) {
+    const y = heightAt0(x, z), legH = 12;
+    for (const [dx, dz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) addBox(x + dx, y + legH / 2, z + dz, 0.5, legH, 0.5, "#8a8378");
+    addBox(x, y + legH * 0.55, z - 3, 6.6, 0.3, 0.3, "#8a8378", { collide: false });
+    addBox(x, y + legH * 0.55, z + 3, 6.6, 0.3, 0.3, "#8a8378", { collide: false });
+    addBox(x, y + legH + 2.6, z, 8.2, 5.2, 8.2, "#b6ad8c");            // tank
+    addBox(x, y + legH + 5.5, z, 8.8, 1, 8.8, shade("#b6ad8c", 0.78)); // roof
+    chest(x, y + 0.6, z, poi); loot(x + 5, y + 0.5, z, poi);
+  }
+  function steeple(x, z, poi) {
+    const y = heightAt0(x, z);
+    addBox(x, y + 4, z, 8, 8, 11, "#8f8a80");                          // church body
+    addBox(x, y + 8.6, z, 8.6, 1, 11.6, "#7a4a2a");                    // roof
+    addBox(x, y + 9, z - 4.5, 4.2, 18, 4.2, "#9a9488");                // bell tower
+    for (let i = 0; i < 4; i++) addBox(x, y + 18 + i * 1.6, z - 4.5, 3.2 - i * 0.75, 1.7, 3.2 - i * 0.75, "#6a4028");  // tapered spire
+    chest(x, y + 0.6, z, poi); loot(x + 4, y + 0.5, z, poi);
   }
   // a farm: a fenced field of crop rows + a red barn (hay-ramp roof chest) + a silo.
   // Gives the "Farm" POIs actual farmland (they had farm names but no farm geometry).
@@ -622,6 +678,7 @@ export async function buildMap(W, mapId) {
     town(pois[1], [C_BAMBOO, C_WOODP], "#cf6b3a", { along: "x", nPer: 5 });   // Coco Village
     town(pois[6], [C_WOODP, C_BAMBOO], "#b5503a", { along: "x", nPer: 4 });   // Jungle Market
     farmland(pois[7], { minH: 0.6 });                                          // Banana Farm → actual farmland
+    lighthouse(pois[3].x - 55, pois[3].z + 55, pois[3].id);                     // Shipwreck Cove lighthouse (coastal landmark)
     // cliff temples: stone block structures
     {
       const p = pois[4];
@@ -754,6 +811,7 @@ export async function buildMap(W, mapId) {
     }
     // savanna outpost: an adobe/sandstone residential town on a street
     town(pois[8], ["#c8a06a", "#b98f5a"], "#b5643c", { along: "x", nPer: 5 });
+    waterTower(pois[0].x + 100, pois[0].z + 70, pois[0].id);                    // Downtown water tower (skyline landmark)
     scatterTrees("tree", 110, 1, 25, "wood");
     scatterTrees("rocks", 60, 1, 40, "brick");
   } else if (mapId === "deepwood") {
@@ -815,6 +873,7 @@ export async function buildMap(W, mapId) {
     }
     // meadow farm → actual farmland (crop rows + barn + silo + fence)
     farmland(pois[7], { minH: 0.6 });
+    steeple(pois[5].x + 48, pois[5].z + 42, pois[5].id);                        // Riverside Mill chapel steeple (landmark)
     scatterTrees("pine", 720, 1.2, 46, "wood");
     scatterTrees("birch", 260, 1.2, 40, "wood");
     scatterTrees("bush", 220, 0.8, 40, null);
