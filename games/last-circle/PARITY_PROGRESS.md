@@ -41,6 +41,17 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done+verified · `[!]` b
 - [ ] D9 Compass ribbon HUD
 - [!] D10 Real upright RUN clip — GATED (Meshy credit spend). Ship code-only rig-agnostic lean-correction; regen awaits explicit owner OK.
 
+## MILESTONE 2026-07-20 — ?v=19 deployed + render-verified on live CDN
+Deployed to R2/CDN (12 files, cache PURGED — purge token IS configured, no 4h staleness).
+Live: https://forgeflow-games-cdn.isimcha85.workers.dev/last-circle/index.html (status stays draft).
+Live verification (browser pane, rAF-shim revived the hidden tab):
+- Boots clean, ZERO console errors; boot-time applyGraphics ran (W._texAniso=4) → "high graphics never applied" bug FIXED.
+- Full match builds to phase "match" with ZERO exceptions → exercises the texture code, B5 slab-hole/ramp geometry, D1 lighting restore.
+- Terrain material: CanvasTexture map + normalMap over vertexColors, world-planar UVs (~8m tiles). Structures: all 23 merged meshes textured. Water: ripple normalMap. All confirmed via scene inspection.
+- Terrain vertex colours sampled COLOURFUL (sand/rock/grass, 0/7 greyish) → no "removed the colours" regression.
+- LIMITATION: actual pixel appearance NOT capturable — a hidden/background browser tab throttles the WebGL buffer to black. Visual "does it look good" is PENDING a foregrounded browser (owner opens the live URL). Code/mechanism fully verified; aesthetic pending human eyes.
+- B6 strategy unblocked: verify biome colours by sampling colorAt outputs programmatically (colourful + not grey), no pixels needed.
+
 ## Deploy / verify notes
 - Verify each edited .js with `node --check`; sim via `node runtime/sim/royale.selftest.cjs` (must stay 45/45).
 - Deploy at pass milestones with `deploy_game.py`; bump the two `?v=` tags in index.html each redeploy.
