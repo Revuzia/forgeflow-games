@@ -115,7 +115,7 @@ export const MAPS = {
     bounds: { minX: -14, maxX: 14, minZ: -10, maxZ: 10 },
     wallHeight: 5,
     ground: { color: 0x5a5550, roughness: 0.95, metalness: 0.0 },
-    ambient: { sky: 0xdfe6ef, ground: 0x3a3d40, intensity: 0.9 },
+    ambient: { sky: 0xdfe6ef, ground: 0x3a3d40, intensity: 1.28 },
     perimeter: { color: 0x6b6660, roughness: 0.9, thickness: 0.5 },
     // themed floor zones (visual — distinct palette per room)
     rooms: [
@@ -159,9 +159,13 @@ export const MAPS = {
       { id: "forklift", x: 11, z: 4, w: 1.4, d: 2.4, h: 1.8, color: 0xe07a20, rough: 0.55, metal: 0.25 },
     ],
     lights: [
-      { type: "point", x: -9.5, y: 4.5, z: 0, color: 0xfff0d8, intensity: 26, dist: 26 },
-      { type: "point", x: 0.5, y: 4.5, z: 0, color: 0xfff4e0, intensity: 24, dist: 26 },
-      { type: "point", x: 10, y: 4.5, z: 0, color: 0xe4eeff, intensity: 26, dist: 28 },
+      // two lamps down each 20-deep room so the far ends aren't murky (decay=2)
+      { type: "point", x: -9.5, y: 4.5, z: -5.5, color: 0xfff0d8, intensity: 21, dist: 26 },
+      { type: "point", x: -9.5, y: 4.5, z: 5.5, color: 0xfff0d8, intensity: 21, dist: 26 },
+      { type: "point", x: 0.5, y: 4.5, z: -5.5, color: 0xfff4e0, intensity: 20, dist: 26 },
+      { type: "point", x: 0.5, y: 4.5, z: 5.5, color: 0xfff4e0, intensity: 20, dist: 26 },
+      { type: "point", x: 10, y: 4.5, z: -5.5, color: 0xe4eeff, intensity: 21, dist: 28 },
+      { type: "point", x: 10, y: 4.5, z: 5.5, color: 0xe4eeff, intensity: 21, dist: 28 },
     ],
     spawn: { seeker: { x: 0.5, z: -9 }, hider: { x: 0.5, z: 0 } },
     spots: [
@@ -181,7 +185,7 @@ export const MAPS = {
     bounds: { minX: -14, maxX: 14, minZ: -10, maxZ: 10 },
     wallHeight: 5,
     ground: { color: 0x6a625a, roughness: 0.95, metalness: 0.0 },
-    ambient: { sky: 0xf0e6d4, ground: 0x3d3a34, intensity: 0.95 },
+    ambient: { sky: 0xf0e6d4, ground: 0x3d3a34, intensity: 1.28 },
     perimeter: { color: 0x8a7d6a, roughness: 0.9, thickness: 0.5 },
     rooms: [
       { id: "garage", name: "Garage", x: -9.5, z: 0, w: 9, d: 20, floor: 0x50545a },
@@ -216,9 +220,13 @@ export const MAPS = {
       { id: "tv", x: 12.5, z: 6.5, w: 1.8, d: 0.4, h: 1.1, color: 0x14161a, rough: 0.3, metal: 0.3 },
     ],
     lights: [
-      { type: "point", x: -9.5, y: 4.5, z: 0, color: 0xdfe8ff, intensity: 24, dist: 26 },
-      { type: "point", x: 0.5, y: 4.5, z: 0, color: 0xfff6e6, intensity: 28, dist: 26 },
-      { type: "point", x: 10, y: 4.5, z: 0, color: 0xffe6c8, intensity: 26, dist: 28 },
+      // two lamps down each 20-deep room so the far ends aren't murky (decay=2)
+      { type: "point", x: -9.5, y: 4.5, z: -5.5, color: 0xdfe8ff, intensity: 20, dist: 26 },
+      { type: "point", x: -9.5, y: 4.5, z: 5.5, color: 0xdfe8ff, intensity: 20, dist: 26 },
+      { type: "point", x: 0.5, y: 4.5, z: -5.5, color: 0xfff6e6, intensity: 22, dist: 26 },
+      { type: "point", x: 0.5, y: 4.5, z: 5.5, color: 0xfff6e6, intensity: 22, dist: 26 },
+      { type: "point", x: 10, y: 4.5, z: -5.5, color: 0xffe6c8, intensity: 21, dist: 28 },
+      { type: "point", x: 10, y: 4.5, z: 5.5, color: 0xffe6c8, intensity: 21, dist: 28 },
     ],
     spawn: { seeker: { x: 0.5, z: -9 }, hider: { x: 0.5, z: 0 } },
     spots: [
