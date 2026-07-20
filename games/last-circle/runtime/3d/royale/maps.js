@@ -175,8 +175,8 @@ function colorAt(mapId, h, x, z, seed) {
     const m = fbm(x / 130, z / 130, seed + 77, 2, 2, 0.5);            // local green/gold patches
     if (h < 0.5) return [0.85, 0.74, 0.5];                            // sandy dry wash
     if (h > 28) return [0.55 + n * 0.08, 0.44, 0.31];                 // sun-baked bluffs
-    const green = [0.62 + n * 0.12, 0.58 + m * 0.22, 0.28 + n * 0.08]; // savanna grass
-    const sand = [0.88 + n * 0.07, 0.75 + n * 0.06, 0.49];            // desert sand
+    const green = [0.58 + n * 0.12, 0.70 + m * 0.20, 0.30 + n * 0.08]; // savanna grass (brighter, greener)
+    const sand = [0.90 + n * 0.07, 0.78 + n * 0.06, 0.50];            // desert sand (bright)
     return [green[0] + (sand[0] - green[0]) * desert, green[1] + (sand[1] - green[1]) * desert, green[2] + (sand[2] - green[2]) * desert];
   }
   if (mapId === "deepwood") {
@@ -189,7 +189,7 @@ function colorAt(mapId, h, x, z, seed) {
     else if (h > 44) base = [0.5, 0.48, 0.45];                        // rocky tops
     else base = [0.12 + n * 0.1, 0.4 + n * 0.14, 0.16];              // deep green
     if (snow > 0.01) {
-      const sc = [0.84 + n * 0.08, 0.88 + n * 0.06, 0.95];           // snow (bright, faint blue)
+      const sc = [0.90 + n * 0.06, 0.94 + n * 0.05, 0.98];           // snow (crisp bright white, faint blue)
       return [base[0] + (sc[0] - base[0]) * snow, base[1] + (sc[1] - base[1]) * snow, base[2] + (sc[2] - base[2]) * snow];
     }
     return base;
