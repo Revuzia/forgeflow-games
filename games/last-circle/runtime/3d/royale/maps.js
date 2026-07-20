@@ -707,7 +707,10 @@ export async function buildMap(W, mapId) {
 
   // ── instanced props from GLBs ─────────────────────────────────────────────
   const instRefs = {};   // kind -> [{inst, baseMatrixes}]
-  const propColliderKinds = { palm: 0.5, tree: 0.6, pine: 0.55, birch: 0.5, rocks: 1.4, car: 1.6, container: 2.2 };
+  const propColliderKinds = { palm: 0.5, tree: 0.6, pine: 0.55, birch: 0.5, rocks: 1.4, car: 1.6, container: 2.2, barrel: 0.55 };
+  // destructible props: hp per prop; 0/undefined = indestructible cover (rock/car/container).
+  // barrel hp 1 = pops on any hit (explodes); trees take a few rounds then fall.
+  const propHP = { barrel: 1, tree: 46, pine: 58, palm: 42, birch: 40 };
   for (const kind in props) {
     const list = props[kind];
     if (!list.length) continue;
@@ -747,8 +750,10 @@ export async function buildMap(W, mapId) {
     // colliders for solid props
     const rad = propColliderKinds[kind];
     if (rad) {
-      for (const it of list) {
-        colliders.push({ kind: "box", minX: it.x - rad, maxX: it.x + rad, minY: it.y, maxY: it.y + (kind === "car" ? 1.6 : kind === "container" ? 2.8 : 6), minZ: it.z - rad, maxZ: it.z + rad, prop: kind });
+      for (let i = 0; i < list.length; i++) {
+        const it = list[i];
+        const topY = it.y + (kind === "car" ? 1.6 : kind === "container" ? 2.8 : kind === "barrel" ? 1.6 : 6);
+        colliders.push({ kind: "box", minX: it.x - rad, maxX: it.x + rad, minY: it.y, maxY: topY, minZ: it.z - rad, maxZ: it.z + rad, prop: kind, idx: i, hp: propHP[kind] || 0 });
       }
     }
   }
@@ -790,7 +795,7 @@ export async function buildMap(W, mapId) {
     const seen = new Set();
     for (let cx = x0; cx <= x1; cx++) for (let cz = z0; cz <= z1; cz++) {
       const l = chash.get(cKey(cx, cz));
-      if (l) for (const c of l) { if (!seen.has(c)) { seen.add(c); out.push(c); } }
+      if (l) for (const c of l) { if (!c.dead && !seen.has(c)) { seen.add(c); out.push(c); } }
     }
     return out;
   }
@@ -841,11 +846,22 @@ export async function buildMap(W, mapId) {
     return { x: 0, y: heightAt0(0, 0), z: 0 };
   }
 
+  // runtime prop destruction: shrink the instanced mesh at this collider's idx to
+  // nothing and kill the collider (queryColliders now skips it, so shots + players
+  // pass through the gap). Weapons/explosions call this on shootable props.
+  const _propZeroM = new THREE.Matrix4().makeScale(1e-4, 1e-4, 1e-4);
+  function destroyProp(col) {
+    if (!col || col.dead || col.prop == null) return;
+    col.dead = true;
+    const refs = instRefs[col.prop];
+    if (refs) for (const inst of refs) { inst.setMatrixAt(col.idx, _propZeroM); inst.instanceMatrix.needsUpdate = true; }
+  }
+
   const lootAll = lootPoints.concat(chestPoints);
   return {
     id: mapId, K, half: HALF * 0.98, size: SIZE, waterY,
     heightAt: heightAt0, groundAt: heightAt0,
-    colliders, queryColliders,
+    colliders, queryColliders, destroyProp,
     lootPoints: lootAll, pois, portals,
     randomGroundPos, losBlocked,
     minimap: mm, themeColor: K.themeColor,

@@ -490,6 +490,22 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
         bounceOff(p, nx, ny, nz);
         return false;
       }
+      // destructible prop (barrel/tree): a direct hit chips its hp; barrels detonate
+      // on any hit, trees drop once their hp is gone (then the collider is removed).
+      if (c.prop && c.hp > 0 && W.map.destroyProp) {
+        const cx = (c.minX + c.maxX) / 2, cz = (c.minZ + c.maxZ) / 2;
+        c.hp -= K.hitDamage(p.weaponId, p.rarity, 0, false);
+        if (c.prop === "barrel") {
+          W.map.destroyProp(c);
+          explode(W, cx, c.minY + 0.8, cz, "glauncher", 0, p.ownerId);   // barrel blows up (splash + knockback)
+        } else if (c.hp <= 0) {
+          W.map.destroyProp(c);
+          W.events.emit("propBreak", { x: cx, y: c.minY, z: cz, kind: c.prop });
+        } else {
+          W.events.emit("impact", { x: bx, y: by, z: bz }, "wood");
+        }
+        p.dead = true; return true;
+      }
       W.events.emit("impact", { x: bx, y: by, z: bz }, "stone");
       p.dead = true; return true;
     }
@@ -522,7 +538,8 @@ function bounceOff(p, nx, ny, nz) {
 }
 
 // ── explosions ───────────────────────────────────────────────────────────────
-function explode(W, x, y, z, weaponId, rarity, ownerId) {
+function explode(W, x, y, z, weaponId, rarity, ownerId, depth) {
+  depth = depth || 0;
   const def = K.WEAPONS[weaponId] || K.WEAPONS.glauncher;
   const R = def.splashR || 3.5;
   for (const t of W.actors) {
@@ -539,6 +556,18 @@ function explode(W, x, y, z, weaponId, rarity, ownerId) {
       t.vel.y += 4 * k;
       t.vel.z += ((t.pos.z - z) / dl) * kb;
       t.onGround = false;
+    }
+  }
+  // environment: level nearby trees, detonate nearby barrels (chain reaction, depth-capped)
+  if (W.map.destroyProp && W.map.queryColliders) {
+    const near = W.map.queryColliders(x, z, R + 1.5);
+    for (const c of near) {
+      if (c.dead || !c.prop || !c.hp) continue;
+      const cx = (c.minX + c.maxX) / 2, cy = (c.minY + c.maxY) / 2, cz = (c.minZ + c.maxZ) / 2;
+      if (Math.hypot(cx - x, cy - y, cz - z) > R + 1.2) continue;
+      W.map.destroyProp(c);
+      if (c.prop === "barrel" && depth < 3) explode(W, cx, cy, cz, "glauncher", 0, ownerId, depth + 1);
+      else W.events.emit("propBreak", { x: cx, y: c.minY, z: cz, kind: c.prop });
     }
   }
   W.events.emit("explosion", { x, y, z }, R);

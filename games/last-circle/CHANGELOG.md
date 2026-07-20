@@ -3,6 +3,37 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-12 — v4.12 destructible world: barrel collision + explosive barrels + shootable trees (?v=18, LIVE)
+
+Owner playtest (vs Final Drop reference): "walked through a barrel — these should be
+explosive; shooting trees should damage them; explosives should damage the things
+around them." Root cause: `propColliderKinds` (maps.js) listed palm/tree/pine/birch/
+rocks/car/container but NOT barrel → barrels had zero collision. Built a destructible-
+props system:
+
+- **maps.js:** added `barrel` to `propColliderKinds` (collision restored); each prop
+  collider now carries its instance `idx` + `hp` (`propHP`: barrel 1, tree 46, pine 58,
+  palm 42, birch 40; rocks/car/container = indestructible cover). New `W.map.destroyProp(col)`
+  shrinks the InstancedMesh instance to nothing + marks the collider dead; `queryColliders`
+  now skips dead colliders so shots + players pass through the gap.
+- **weapons.js:** a direct bullet hit on a destructible prop chips its hp — barrels
+  DETONATE on any hit (full splash + knockback), trees drop once hp is gone. `explode()`
+  now also levels nearby trees and CHAIN-detonates nearby barrels (depth-capped at 3 to
+  bound recursion) — explosions damage the environment, not just actors.
+
+VERIFIED LIVE (ashgrid, 40 barrels/80 trees): destroyProp flips dead false→true and the
+collider leaves queryColliders; shooting a barrel point-blank → 2 pistol shots → barrel
+destroyed + player HP 100→55 (45 blast dmg). Mouse confirmed 1:1 (HUD reticle `mousePx`
+and shot ray `mouseNDC` derive from the same mousemove; point-blank shot landed dead-center).
+Sim selftest 45/45.
+
+**Still staged (owner's Final Drop-parity list):** real towns per biome (houses/roads/
+cars — currently only trees+sky-islands, "gets boring"); tower/ramp redesign (ramps too
+vertical for BR — match Final Drop terracing) — folds in the un-climbable-ramp + platforms-
+in-water/steep items from task #40; grenades as a throwable; distinct RUN animation (sprint
+exists at 9.6 m/s but plays the walk clip sped up — Meshy run clip leans ~30°, needs
+investigation before regen per owner's no-guess rule); scorch/crater decals + tree-fall FX.
+
 ## 2026-07-12 — v4.11 gap-review fixes: semi-auto, sniper, grenade, sky, poses, savanna structures (?v=17, LIVE)
 
 Acted on the multi-agent gap review (all 6 subsystem audits completed this session).
