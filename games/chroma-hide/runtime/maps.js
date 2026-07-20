@@ -173,6 +173,60 @@ export const MAPS = {
       { x: 13, z: -5, faceYaw: 1.57 }, { x: 8, z: -4.7, faceYaw: 0.0 }, { x: 11, z: -2.9, faceYaw: 3.14 }, { x: 8, z: 4.2, faceYaw: 3.14 },
     ],
   },
+
+  residence: {
+    id: "residence",
+    name: "The Residence",
+    blurb: "A house — garage, kitchen and living room. Cool concrete, warm wood, cosy carpet: three palettes, one home.",
+    bounds: { minX: -14, maxX: 14, minZ: -10, maxZ: 10 },
+    wallHeight: 5,
+    ground: { color: 0x6a625a, roughness: 0.95, metalness: 0.0 },
+    ambient: { sky: 0xf0e6d4, ground: 0x3d3a34, intensity: 0.95 },
+    perimeter: { color: 0x8a7d6a, roughness: 0.9, thickness: 0.5 },
+    rooms: [
+      { id: "garage", name: "Garage", x: -9.5, z: 0, w: 9, d: 20, floor: 0x50545a },
+      { id: "kitchen", name: "Kitchen", x: 0.5, z: 0, w: 9, d: 20, floor: 0xcfc9bc },
+      { id: "living", name: "Living Room", x: 10, z: 0, w: 8, d: 20, floor: 0x8a5a44 },
+    ],
+    walls: [
+      { id: "wgk1", x: -4.5, z: -8, w: 0.4, d: 4 }, { id: "wgk2", x: -4.5, z: 3.5, w: 0.4, d: 13 },
+      { id: "wkl1", x: 5.5, z: -3.5, w: 0.4, d: 13 }, { id: "wkl2", x: 5.5, z: 8, w: 0.4, d: 4 },
+    ],
+    props: [
+      { id: "car", x: -11, z: 1, w: 3.2, d: 1.5, h: 1.3, color: 0x9c2f2f, rough: 0.35, metal: 0.4, model: "sedan.glb", rot: 1.57 },
+      { id: "bench", x: -9, z: -8, w: 3.0, d: 1.2, h: 1.0, color: 0x7a5a3a, rough: 0.8, metal: 0.05, model: "table.glb" },
+      { id: "gshelf", x: -13.6, z: 0, w: 0.7, d: 4.0, h: 3.2, color: 0x8a9099, rough: 0.5, metal: 0.5, model: "bookcaseClosed.glb", rot: 1.57 },
+      { id: "gbin", x: -8, z: 3.5, w: 1.2, d: 1.2, h: 1.5, color: 0x3a6a3a, rough: 0.55, metal: 0.3, model: "dumpster-quaternius.glb" },
+      { id: "gcrate", x: -7, z: -3, w: 1.4, d: 1.4, h: 1.4, color: 0xb79a68, rough: 0.8, metal: 0.0, model: "cardboardBoxClosed.glb" },
+      { id: "toolbox", x: -13, z: -3.5, w: 1.2, d: 0.8, h: 1.2, color: 0xc23020, rough: 0.4, metal: 0.35 },
+      { id: "tires", x: -12.5, z: 4, w: 1.1, d: 1.1, h: 1.0, color: 0x1c1c1e, rough: 0.85, metal: 0.0 },
+      { id: "cab1", x: -3.6, z: -6.5, w: 0.9, d: 0.9, h: 1.6, color: 0xe8e4dc, rough: 0.4, metal: 0.1, model: "kitchenCabinet.glb" },
+      { id: "cab2", x: -3.6, z: 6.5, w: 0.9, d: 0.9, h: 1.6, color: 0xe8e4dc, rough: 0.4, metal: 0.1, model: "kitchenCabinet.glb" },
+      { id: "cab3", x: 4, z: -2, w: 0.9, d: 0.9, h: 1.6, color: 0xd8d2c8, rough: 0.4, metal: 0.1, model: "kitchenCabinet.glb", rot: 3.14 },
+      { id: "island", x: 0, z: 0, w: 2.4, d: 1.2, h: 0.95, color: 0x9a8a6a, rough: 0.5, metal: 0.05, model: "table.glb" },
+      { id: "fridge", x: 4, z: 5, w: 1.0, d: 1.0, h: 2.0, color: 0xc8ccd2, rough: 0.3, metal: 0.5, model: "ac-unit-quaternius.glb" },
+      { id: "pantry", x: 2, z: -6, w: 1.3, d: 1.3, h: 1.3, color: 0xa98858, rough: 0.8, metal: 0.0, model: "cardboardBoxClosed.glb" },
+      { id: "kstool", x: -1.5, z: 2, w: 0.6, d: 0.6, h: 1.0, color: 0x2a2c30, rough: 0.5, metal: 0.2 },
+      { id: "sofa1", x: 8, z: 3, w: 2.4, d: 1.0, h: 0.9, color: 0x3f5f7a, rough: 0.85, metal: 0.0, model: "loungeSofa.glb", rot: 1.57 },
+      { id: "sofa2", x: 12, z: -3, w: 2.4, d: 1.0, h: 0.9, color: 0x7a4a5a, rough: 0.85, metal: 0.0, model: "loungeSofa.glb", rot: -1.57 },
+      { id: "shelf", x: 13.5, z: 5, w: 0.8, d: 3.0, h: 2.6, color: 0x5a3f2a, rough: 0.75, metal: 0.0, model: "bookcaseClosed.glb", rot: -1.57 },
+      { id: "coffee", x: 9, z: 0, w: 1.6, d: 1.0, h: 0.6, color: 0x6b4a30, rough: 0.6, metal: 0.05, model: "table.glb" },
+      { id: "plant1", x: 8, z: -6, w: 0.9, d: 0.9, h: 1.8, color: 0x2f7d3a, rough: 0.85, metal: 0.0, model: "tree-small.glb" },
+      { id: "plant2", x: 13, z: -6, w: 0.9, d: 0.9, h: 1.6, color: 0x3f8d4a, rough: 0.85, metal: 0.0, model: "tree-small.glb" },
+      { id: "tv", x: 12.5, z: 6.5, w: 1.8, d: 0.4, h: 1.1, color: 0x14161a, rough: 0.3, metal: 0.3 },
+    ],
+    lights: [
+      { type: "point", x: -9.5, y: 4.5, z: 0, color: 0xdfe8ff, intensity: 24, dist: 26 },
+      { type: "point", x: 0.5, y: 4.5, z: 0, color: 0xfff6e6, intensity: 28, dist: 26 },
+      { type: "point", x: 10, y: 4.5, z: 0, color: 0xffe6c8, intensity: 26, dist: 28 },
+    ],
+    spawn: { seeker: { x: 0.5, z: -9 }, hider: { x: 0.5, z: 0 } },
+    spots: [
+      { x: -11, z: 2.4, faceYaw: 0.0 }, { x: -13.6, z: 1.6, faceYaw: 1.57 }, { x: -8, z: 4.4, faceYaw: 3.14 }, { x: -13, z: -4.4, faceYaw: 1.57 },
+      { x: -3.6, z: -5.2, faceYaw: 3.14 }, { x: -3.6, z: 5.2, faceYaw: 3.14 }, { x: 0, z: 1.3, faceYaw: 0.0 }, { x: 4, z: 3.8, faceYaw: 3.14 },
+      { x: 8, z: 4.2, faceYaw: 0.0 }, { x: 12, z: -4.2, faceYaw: 3.14 }, { x: 13.5, z: 3.4, faceYaw: -1.57 }, { x: 8, z: -4.8, faceYaw: 0.0 },
+    ],
+  },
 };
 
 /** Interior props -> 2D collision/occlusion AABBs {x,z,hw,hd}. */
@@ -192,5 +246,10 @@ export function toSimMap(map) {
   };
 }
 
-export function getMap(id) { return MAPS[id] || MAPS.manor; }
-export function mapList() { return Object.values(MAPS).map((m) => ({ id: m.id, name: m.name, blurb: m.blurb })); }
+export function getMap(id) { return MAPS[id] || MAPS.depot; }
+
+// Only the fully-overhauled multi-room stages ship in the picker. The older
+// single-room maps (manor/understage/hollow) remain defined for compatibility
+// but are excluded until they're rebuilt to the multi-room standard.
+const SHIPPED = ["depot", "residence"];
+export function mapList() { return SHIPPED.filter((id) => MAPS[id]).map((id) => { const m = MAPS[id]; return { id: m.id, name: m.name, blurb: m.blurb }; }); }

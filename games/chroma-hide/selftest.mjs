@@ -162,7 +162,15 @@ assert(manor.id === "manor" && manor.props.length >= 6, "map: manor loaded with 
   const sm = maps.toSimMap(manor);
   assert(sm.obstacles.length === manor.props.length, "map: toSimMap obstacle per prop");
   assert(sm.spawn.seeker && sm.spawn.hider && sm.spots.length >= 6, "map: toSimMap spawn + spots");
-  assert(maps.mapList().length === 4, "map: 4 stages available");
+  assert(maps.mapList().length === 2, "map: 2 multi-room stages shipped");
+  assert(maps.mapList().every((m) => ["depot", "residence"].includes(m.id)), "map: only multi-room stages in picker");
+}
+{
+  // The Residence: second multi-room map (garage/kitchen/living), GLB-furnished
+  const res = maps.getMap("residence");
+  assert(res.rooms.length === 3 && res.walls.length === 4 && res.props.filter((p) => p.model).length >= 12, "residence: 3 rooms, walls, GLB furniture");
+  const sm = maps.toSimMap(res);
+  assert(sm.obstacles.length === res.props.length + res.walls.length && sm.spots.length >= 10, "residence: toSimMap walls+props+spots");
 }
 for (const id of ["understage", "hollow"]) {
   const m = maps.getMap(id);
