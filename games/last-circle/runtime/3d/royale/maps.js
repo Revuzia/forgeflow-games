@@ -577,6 +577,35 @@ export async function buildMap(W, mapId) {
     parkingLot(A ? p.x + R * 0.78 : p.x, A ? p.z : p.z + R * 0.78, 15, 13, p);
     for (let i = 0; i < 2; i++) chest(p.x + (rng() - 0.5) * R * 0.6, heightAt0(p.x, p.z) + 0.6, p.z + (rng() - 0.5) * R * 0.6, p.id);
   }
+  // a farm: a fenced field of crop rows + a red barn (hay-ramp roof chest) + a silo.
+  // Gives the "Farm" POIs actual farmland (they had farm names but no farm geometry).
+  function farmland(p, opts) {
+    opts = opts || {};
+    const R = p.r * 0.75, cx = p.x, cz = p.z, minH = opts.minH != null ? opts.minH : 0.6;
+    const N = 8, step = (R * 1.5) / N;                                   // crop-row grid of low bushes
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+      const x = cx - R * 0.75 + i * step + (rng() - 0.5), z = cz - R * 0.75 + j * step + (rng() - 0.5);
+      const y = heightAt0(x, z);
+      if (y < minH) continue;
+      props.bush.push({ x, y, z, s: 0.45 + rng() * 0.3, ry: rng() * Math.PI });
+    }
+    const bx = cx + R * 0.9, bz = cz, by = heightAt0(bx, bz);
+    if (by >= minH) {
+      addBox(bx, by + 2.4, bz, 8, 4.8, 12, "#b0623c");                   // red barn
+      addBox(bx, by + 5.4, bz, 8.5, 1.2, 12.5, shade("#b0623c", 0.8));   // barn roof
+      addRamp(bx, by, bz + 7, 3, 5.1, 9, 3, "#8a4d2f");                  // hay ramp to the roof chest
+      chest(bx, by + 5.4, bz, p.id);
+      const sx = bx, sz = bz - 15, sy = heightAt0(sx, sz);
+      addBox(sx, sy + 5, sz, 4, 10, 4, "#c8b48a");                       // silo
+      addBox(sx, sy + 10.4, sz, 4.6, 1.2, 4.6, shade("#c8b48a", 0.72));
+    }
+    const F = R * 0.95, fh = 1.0;                                        // cosmetic fence (never traps players)
+    addBox(cx, heightAt0(cx, cz - F) + fh / 2, cz - F, F * 2, fh, 0.2, "#9a7a4a", { collide: false });
+    addBox(cx, heightAt0(cx, cz + F) + fh / 2, cz + F, F * 2, fh, 0.2, "#9a7a4a", { collide: false });
+    addBox(cx - F, heightAt0(cx - F, cz) + fh / 2, cz, 0.2, fh, F * 2, "#9a7a4a", { collide: false });
+    addBox(cx + F, heightAt0(cx + F, cz) + fh / 2, cz, 0.2, fh, F * 2, "#9a7a4a", { collide: false });
+    for (let i = 0; i < 2; i++) chest(cx + (rng() - 0.5) * R, heightAt0(cx, cz) + 0.6, cz + (rng() - 0.5) * R, p.id);
+  }
 
   if (mapId === "isla_viva") {
     const C_BAMBOO = "#c9a86a", C_STONE = "#8f8a80", C_WOODP = "#a8794f";
@@ -587,12 +616,12 @@ export async function buildMap(W, mapId) {
     poi("cliff_temples", "Cliff Temples", 480, 60, 110);
     poi("lagoon_docks", "Lagoon Docks", 120, 620, 100);
     poi("jungle_market", "Jungle Market", -350, -380, 100);
-    poi("banana_farm", "Banana Farm", -430, 480, 90);
+    poi("banana_farm", "Banana Farm", -340, 360, 90);   // pulled inland — the old -430,480 sat on the waterline (farmland skipped)
     // villages → real towns (houses on a street with front doors to the road)
     town(pois[0], [C_WOODP, C_BAMBOO], "#c0563a", { along: "z", nPer: 4 });   // Palm Bay
     town(pois[1], [C_BAMBOO, C_WOODP], "#cf6b3a", { along: "x", nPer: 5 });   // Coco Village
     town(pois[6], [C_WOODP, C_BAMBOO], "#b5503a", { along: "x", nPer: 4 });   // Jungle Market
-    town(pois[7], [C_BAMBOO, C_WOODP], "#c8a24a", { along: "z", nPer: 4 });   // Banana Farm
+    farmland(pois[7], { minH: 0.6 });                                          // Banana Farm → actual farmland
     // cliff temples: stone block structures
     {
       const p = pois[4];
@@ -639,6 +668,7 @@ export async function buildMap(W, mapId) {
     poi("crane", "Crane Heights", -380, -430, 90);
     poi("rubble", "Rubble Row", -60, 430, 110);
     poi("motorpool", "Motor Pool", -430, 380, 90);
+    poi("outpost", "Savanna Outpost", 220, 250, 95);
     // downtown towers
     const dt = pois[0];
     for (let i = 0; i < 6; i++) {
@@ -722,6 +752,8 @@ export async function buildMap(W, mapId) {
       const y = heightAt0(x, z);
       props.barrel.push({ x, y, z, s: 1.4, ry: rng() * Math.PI });
     }
+    // savanna outpost: an adobe/sandstone residential town on a street
+    town(pois[8], ["#c8a06a", "#b98f5a"], "#b5643c", { along: "x", nPer: 5 });
     scatterTrees("tree", 110, 1, 25, "wood");
     scatterTrees("rocks", 60, 1, 40, "brick");
   } else if (mapId === "deepwood") {
@@ -781,14 +813,8 @@ export async function buildMap(W, mapId) {
       tower(p.x, p.z, 2, 10, C_PLANK, p.id);
       hut(p.x - 24, p.z + 14, 6, 5, 0, C_LOG, p.id);
     }
-    // meadow farm
-    {
-      const p = pois[7];
-      hut(p.x, p.z, 9, 7, 0, C_PLANK, p.id);
-      addBox(p.x - 30, heightAt0(p.x - 30, p.z) + 2.4, p.z, 8, 4.8, 12, "#b0623c"); // barn
-      addRamp(p.x - 30, heightAt0(p.x - 30, p.z), p.z + 11, 3, 5.1, 10, 3, "#8a4d2f"); // hay ramp to the roof chest
-      chest(p.x - 30, heightAt0(p.x - 30, p.z) + 5.4, p.z, p.id);
-    }
+    // meadow farm → actual farmland (crop rows + barn + silo + fence)
+    farmland(pois[7], { minH: 0.6 });
     scatterTrees("pine", 720, 1.2, 46, "wood");
     scatterTrees("birch", 260, 1.2, 40, "wood");
     scatterTrees("bush", 220, 0.8, 40, null);

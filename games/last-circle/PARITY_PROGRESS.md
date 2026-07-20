@@ -16,7 +16,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done+verified · `[!]` b
 ## Pass B — World Density (fixes "gets boring")
 - [x] B1 Road network (greedy nearest-neighbour tree over POIs → cosmetic textured asphalt ribbons, no colliders). Verified live: 5352-tri road mesh on isla.
 - [x] B2 Town-builder (town/house/parkingLot helpers): houses in lots along a street, front doors to the road, coloured (terracotta) roofs, parking lot + cars. Wired to isla (4 villages) + deepwood (logging, lakeside). Verified live: builds w/o exceptions, red-roof meshes present. TUNING: towns on over-water POIs (e.g. isla banana_farm ~-1.5m) build the street but skip houses — refine POI snap-to-land later. TODO: ashgrid savanna outpost town.
-- [ ] B3 Farmland builder (crop grid, barn, silo, fences) for the Farm POIs
+- [x] B3 Farmland builder — farmland(): crop-row grid (bushes) + red barn (hay-ramp roof chest) + silo + cosmetic fence. Wired to isla Banana Farm (relocated inland from the -430,480 waterline) + deepwood Meadow Farm. Verified live: barn/silo/fence meshes present on deepwood meadow.
 - [ ] B4 Prop-kit expansion (procedural house/vehicle/street-furniture/landmark variants — no Meshy spend); house() gable roofs are a start
 - [~] B5 Traversal fixes DONE: interior tower ramp now emerges via a stairwell hole (addSlabHole); overpass ramp reaches deck top; sky-island collider 0.86×→0.92×. Terrace helper for over-steep ramps (rangerTower 60°/crane 39°) DEFERRED (feel refinement, not a bug).
 - [x] B6 Multi-zone biomes + snow: deepwood = green forest (south) + SNOW biome (north, geographic mask w/ organic edge); ashgrid = golden savanna (west) + sand DESERT (east). Verified live ?v=23 via colorAt sampling w/ position: deepwood far-north 255/255 snow + 616 green, ashgrid far-east 245/254 sand; ZERO grey on both (no regression).
@@ -33,7 +33,8 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done+verified · `[!]` b
 - [x] D1 Menu lighting/exposure leak — snapshot kernel defaults at init, restore in buildMap (bloom left as established look)
 - [ ] D2 Remote gunfire FX relay (fired event → tracer/muzzle/sound on guests)
 - [x] D3 Hit feedback: headshot hitmarker (yellow, 34px, longer) vs body (white, 26px) + a hitmarker ping in audio.js (1400Hz head / 950Hz body). Verified live: headshot marker turns yellow/34px.
-- [ ] D4 Glider/umbrella descent (earlier deploy + forward glide feel)
+- [x] D4 Glider — canopy deploys at 110m (was 60m) so most of the descent glides; gentle auto forward-glide (0.15x) even inputless so the umbrella glides not drops (kept small to avoid the old AFK-into-sea drift). Verified live: deploys ~105m AGL, auto-fwd 0.83 m/s, fall slows -17.9→-8.4 on deploy.
+- [x] (B2 follow-up) Ashgrid savanna outpost town — new POI (220,250) + town() with adobe/sandstone walls + terracotta roofs. Verified live: 9 POIs, adobe roof meshes, 18 loot pts near outpost.
 - [x] D5 coverReflex determinism (setTimeout → sim-time `coverReflexUntil`)
 - [x] D6 Supply-drop cadence (one early ~phase 2, one late ~phase 5+)
 - [ ] D7 Selftest: quick tier-mix assert + factor bot decision helpers for node coverage

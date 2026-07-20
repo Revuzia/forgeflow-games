@@ -489,17 +489,21 @@ function stepActor(W, a, dt, far) {
       else if (agl > 14) { deployChute(W, a); a.chuteToggled = true; }
       inp.jump = false;
     }
-    if (!a.chute && agl < (a.chuteToggled ? 22 : 60)) deployChute(W, a);
+    // deploy the canopy high (110m) the first time so most of the descent is a
+    // gliding UMBRELLA (Final Drop feel), not a long freefall then a short chute.
+    if (!a.chute && agl < (a.chuteToggled ? 22 : 110)) deployChute(W, a);
 
     const chuted = !!a.chute;
-    const speed = chuted ? 7.5 : 15;                        // canopy drifts, freefall carries
+    const speed = chuted ? 8.5 : 15;                        // canopy glides, freefall carries
     const fallTarget = chuted ? -5.5 : (inp.sprint ? -34 : -20);
     const dirX = Math.sin(a.yaw) * -1, dirZ = Math.cos(a.yaw) * -1;
     const fwd = K.clamp(inp.mz, -0.3, 1);
-    // no forced drift: an untouched player must land where they spawned
-    // (forced 0.35 forward pushed AFK players ~100m off the island into the sea)
-    const txv = dirX * speed * Math.max(0, fwd) + Math.cos(a.yaw) * speed * 0.5 * inp.mx;
-    const tzv = dirZ * speed * Math.max(0, fwd) + Math.sin(a.yaw) * speed * 0.5 * inp.mx;
+    // the umbrella glides forward gently even with no input (glide ratio), so it
+    // reads as gliding not dropping. Kept SMALL (0.15x) so an AFK player drifts
+    // only a little — the old 0.35x forced drift pushed them ~100m into the sea.
+    const glideF = chuted ? Math.max(0.15, Math.max(0, fwd)) : Math.max(0, fwd);
+    const txv = dirX * speed * glideF + Math.cos(a.yaw) * speed * 0.5 * inp.mx;
+    const tzv = dirZ * speed * glideF + Math.sin(a.yaw) * speed * 0.5 * inp.mx;
     a.vel.x += (txv - a.vel.x) * Math.min(1, dt * 2.2);      // air has inertia
     a.vel.z += (tzv - a.vel.z) * Math.min(1, dt * 2.2);
     a.vel.y += (fallTarget - a.vel.y) * Math.min(1, dt * (chuted ? 3 : 1.4));
@@ -760,17 +764,31 @@ function syncObj(W, a, dt, far) {
       else if (a.swimming) playAnim(a, "swim", { timeScale: gs > 4.5 ? 1.25 : 1 });
       else if (!a.onGround) playAnim(a, "jump", { once: true });
       else if (gs > 0.7) {
-        // ALWAYS the UPRIGHT walk clip, sped up to a jog/sprint by ground
-        // speed. The Meshy "run" clip (RunFast, action 16) leans ~30° forward
-        // — the "running bent over" the owner kept flagging — so we don't use
-        // it for the player-facing locomotion. Movement speed is unchanged
-        // (9.6 m/s sprint); only the animation posture is upright now.
         // BACKPEDALING plays the stride in REVERSE (no moonwalking).
         const back = (a.vel.x * -Math.sin(a._bodyYaw - Math.PI) + a.vel.z * -Math.cos(a._bodyYaw - Math.PI)) < -0.5;
         const dirK = back ? -0.9 : 1;
-        playAnim(a, "walk", { timeScale: dirK * K.clamp(gs / 3.0, 0.85, 2.0) });
+        if (gs > 7 && !back) {
+          // SPRINT (Shift, ~9.6 m/s): the real Meshy RUN clip — long strides +
+          // airborne phase + an athletic forward lean. The clip leans ~53°, so the
+          // spine counter-rotation below brings the head up (looks where it's going).
+          playAnim(a, "run", { timeScale: K.clamp(gs / 6.5, 0.9, 1.5) });
+          a._runLean = true;
+        } else {
+          // WALK/JOG (~6 m/s): the upright walk clip, sped up by ground speed.
+          playAnim(a, "walk", { timeScale: dirK * K.clamp(gs / 3.0, 0.85, 2.0) });
+          a._runLean = false;
+        }
       }
-      else playAnim(a, "idle");
+      else { playAnim(a, "idle"); a._runLean = false; }
+      // straighten the sprint hunch: counter-rotate the spine so the head comes
+      // up over the hips (verified live: lean 53°->43°, head up) — runs after the
+      // mixer keyed the clip, re-applied each frame so it never accumulates.
+      if (a._runLean && a.armBones) {
+        const b = a.armBones;
+        if (b.spine2) b.spine2.rotation.x -= 0.34;
+        if (b.spine1) b.spine1.rotation.x -= 0.24;
+        if (b.spine) b.spine.rotation.x -= 0.10;
+      }
 
       // ── ARM-POSE LAYER (pose.js) — after the mixer, before render ────────
       // clips own legs/torso; arms are steered per state so they always read
