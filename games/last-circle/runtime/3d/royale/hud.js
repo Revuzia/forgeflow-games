@@ -1265,6 +1265,7 @@ function wireEvents(W) {
   W.events.on("scopeState", (on) => { if (R.scope) R.scope.style.display = on ? "block" : "none"; });
   W.events.on("toggleBigMap", () => toggleBigMap(W));
   W.events.on("escPressed", () => {
+    if (R.settings) { closeSettings(W); return; }   // close the topmost modal first
     if (R.bigmap) { toggleBigMap(W); return; }
     if (W.phase === "match" || W.phase === "drop") togglePause(W);
   });
@@ -1390,6 +1391,7 @@ const ACTIONS = [
   ["Reload", "KeyR"], ["Map", "KeyM"],
 ];
 function showSettings(W) {
+  W.captureKey = null;   // drop any armed keybind capture when (re)rendering the modal
   if (R.settings) { R.settings.remove(); R.settings = null; }
   const L = layer("settings", { pointerEvents: "auto", background: "rgba(4,8,16,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60 });
   const box = h("div", Object.assign({ padding: "28px 36px", width: "560px", maxHeight: "82vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px" }, PANEL), null, L);
@@ -1420,9 +1422,10 @@ function showSettings(W) {
     for (const k2 in (W.settings.remap || {})) if (W.settings.remap[k2] === canonical) phys = k2;
     const kb = h("button", Object.assign({}, BTN, { padding: "4px 12px", fontSize: "12px", background: "rgba(255,255,255,0.12)", color: "#dfeaff", minWidth: "84px" }), keyLabel(phys), row);
     kb.onclick = () => {
-      kb.textContent = "press key…";
+      kb.textContent = "press key… (Esc = cancel)";
       W.captureKey = (code) => {
         W.captureKey = null;
+        if (code === "Escape") { kb.textContent = keyLabel(phys); return; }   // cancel, don't bind to Esc
         W.settings.remap = W.settings.remap || {};
         for (const k3 in W.settings.remap) if (W.settings.remap[k3] === canonical) delete W.settings.remap[k3];
         if (code !== canonical) W.settings.remap[code] = canonical;
@@ -1433,7 +1436,12 @@ function showSettings(W) {
   }
 
   const closeB = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff", marginTop: "10px" }), "DONE", box);
-  closeB.onclick = () => { L.remove(); R.settings = null; save(W); };
+  closeB.onclick = () => closeSettings(W);
+}
+function closeSettings(W) {
+  W.captureKey = null;                              // never leave a keybind capture armed
+  if (R.settings) { R.settings.remove(); R.settings = null; }
+  save(W);
 }
 function keyLabel(code) { return code.replace("Key", "").replace("Digit", "").replace("Left", " L").replace("Control", "CTRL"); }
 function slider(box, label, val, onChange) {

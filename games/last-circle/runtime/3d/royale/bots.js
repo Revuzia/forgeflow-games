@@ -339,13 +339,14 @@ function act(W, b, dt) {
 
   // suppression reflex: shot recently by someone unseen → sprint to lateral
   // cover instead of standing there soaking damage
-  if (W.t - a.lastDamageT < 0.9 && !bb.coverReflex && b.state !== "ENGAGE") {
+  if (W.t - a.lastDamageT < 0.9 && W.t >= (bb.coverReflexUntil || 0) && b.state !== "ENGAGE") {
     const att = a.lastAttacker && W.actorById.get(a.lastAttacker);
     if (att) {
       const ang = Math.atan2(a.pos.x - att.pos.x, a.pos.z - att.pos.z) + (Math.random() < 0.5 ? 1 : -1) * 1.2;
       bb.moveTo = { x: a.pos.x + Math.sin(ang) * 18, z: a.pos.z + Math.cos(ang) * 18 };
-      bb.coverReflex = true;
-      setTimeout(() => { bb.coverReflex = false; }, 1500);
+      // sim-time gate (was a wall-clock setTimeout → broke synchronous fastForward
+      // determinism: the macrotask never drained mid-soak so the reflex stuck on).
+      bb.coverReflexUntil = W.t + 1.5;
     }
   }
 }

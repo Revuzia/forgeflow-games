@@ -548,8 +548,14 @@ function explode(W, x, y, z, weaponId, rarity, ownerId, depth) {
     const k = K.splashScale(d, R + 0.8);
     if (k > 0) {
       const dmg = Math.round(K.hitDamage(weaponId, rarity, 0, false) * k);
-      W.hurtActor(t, dmg, ownerId === t.id ? null : ownerId, weaponId, false);
-      // knockback
+      if (t.netRemote) {
+        // remote-owned actor: its own client is authoritative over its HP — route
+        // splash through the same path as direct hits so it isn't double-counted.
+        if (W.reportRemoteHit) W.reportRemoteHit(t, dmg, weaponId, false);
+      } else {
+        W.hurtActor(t, dmg, ownerId === t.id ? null : ownerId, weaponId, false);
+      }
+      // knockback (cosmetic; remote actors are corrected by the next net snapshot)
       const kb = 7 * k;
       const dl = Math.max(0.1, d);
       t.vel.x += ((t.pos.x - x) / dl) * kb;

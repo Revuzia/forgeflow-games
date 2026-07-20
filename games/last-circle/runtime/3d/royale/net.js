@@ -32,8 +32,12 @@ export function init(W) {
   W.reportRemoteHit = (target, dmg, weaponId, isHead) => {
     if (S && W.player) send("hitYou", { target: target.id, dmg, attacker: W.player.id, weapon: weaponId, isHead });
   };
-  // mirror local events out
-  W.events.on("chestOpened", (a, c) => { if (S && a && a === W.player) send("chest", { id: c.id }); });
+  // mirror local events out. Broadcast chests opened by ANYTHING simulated locally
+  // (own player + the host's bots) — matches the pickup handler below. The old
+  // `a === W.player` guard dropped host-bot opens, so guest clients kept those
+  // chests interactable (loot beam + re-open) and the shared world diverged.
+  // Replayed opens (loot.js netOpenChest) pass a=null → filtered by the `a &&` guard.
+  W.events.on("chestOpened", (a, c) => { if (S && a && !a.netRemote) send("chest", { id: c.id }); });
   // pickups by anything simulated locally (own player + host's bots) despawn everywhere
   W.events.on("pickedUp", (a, data, id) => { if (S && a && !a.netRemote) send("take", { id }); });
   W.events.on("netDropItem", (d) => { if (S) send("drop", d); });

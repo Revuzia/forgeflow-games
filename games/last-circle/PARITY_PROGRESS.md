@@ -4,13 +4,14 @@ Working tracker for the multi-pass upgrade to reach the Final Drop quality bar.
 Source audit: session 2026-07-20 (9-agent workflow, all MUST-fixes verified).
 Status legend: `[ ]` todo · `[~]` in progress · `[x]` done+verified · `[!]` blocked/gated
 
-## Pass A — High Textures (the "high textures" ask)
-- [~] A1 Unify graphics settings → single `W.applyGraphics` authority, boot-applied, persists (fixes: LC "high" never applied; two systems)
-- [~] A2 Quality tiers drive REAL fidelity (shadow map 2048/4096, anisotropy, per-tier) — folded into A1
-- [~] A3 Procedural tiling PBR terrain (grain albedo + normal map, world-planar UV, keeps vertex-color biome tint)
-- [~] A4 Textured structures (grain/brick albedo + normal map on every merged mesh)
-- [~] A5 Water normal map + scroll (procedural ripple; retires the dead waternormals.jpg question)
+## Pass A — High Textures (the "high textures" ask)  [code-complete, committed afffe5e]
+- [x] A1 Unify graphics settings → single `W.applyGraphics` authority, boot-applied, persists (fixes: LC "high" never applied; two systems)
+- [x] A2 Quality tiers drive REAL fidelity (shadow map 2048/4096, anisotropy, per-tier) — folded into A1
+- [x] A3 Procedural tiling PBR terrain (grain albedo + normal map, world-planar UV, keeps vertex-color biome tint)
+- [x] A4 Textured structures (grain/brick albedo + normal map on every merged mesh)
+- [x] A5 Water normal map + scroll (procedural ripple; retires the dead waternormals.jpg question)
 - [ ] A6 Red-roof meshes + road/parking decals (overlaps B roads) — defer into B
+- NOTE: gates passed (ESM syntax clean ×3, sim selftest 45/45). Render-verify pending at the Pass-A deploy milestone (pump pipeline). Commit afffe5e is LOCAL — push to GitHub is blocked on the env's Git Credential Manager (interactive auth); needs owner to push/authorize. Does not block build or deploy (games deploy via deploy_game.py).
 
 ## Pass B — World Density (fixes "gets boring")
 - [ ] B1 Road network pass (POI→POI spline graph, asphalt band in colorAt + ribbon meshes)
@@ -22,19 +23,19 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done+verified · `[!]` b
 
 ## Pass C — Meta + Multiplayer
 - [ ] C1 XP/level bar + in-match challenge cards (fed by W.match counters, persist to localStorage)
-- [ ] C2 MP: mirror host-bot chest-opens to guests (net.js:36)
-- [ ] C3 MP: grenade/barrel splash routes through net authority (explode() netRemote gate)
+- [x] C2 MP: mirror host-bot chest-opens to guests (net.js:36 `a===W.player` → `!a.netRemote`)
+- [x] C3 MP: grenade/barrel splash routes through net authority (explode() netRemote gate)
 - [ ] C4 Barrel-anchored muzzle FX (muzzle world pos from the held weapon, not the eye)
 - [ ] C5 Spectator HUD (source from W._camFocus, not the corpse)
-- [ ] C6 Settings/ESC modal stack fix + clear orphaned keybind capture
+- [x] C6 Settings/ESC modal stack fix + clear orphaned keybind capture (ESC closes settings; Esc cancels capture; captureKey cleared on close/rerender)
 
 ## Pass D — Everything Else / Polish
 - [ ] D1 Menu lighting/bloom/exposure leak — snapshot at init, restore in buildMap
 - [ ] D2 Remote gunfire FX relay (fired event → tracer/muzzle/sound on guests)
 - [ ] D3 Hit feedback: headshot marker + hitmarker SFX
 - [ ] D4 Glider/umbrella descent (earlier deploy + forward glide feel)
-- [ ] D5 coverReflex determinism (setTimeout → sim-time)
-- [ ] D6 Supply-drop cadence (spread one drop to the late game)
+- [x] D5 coverReflex determinism (setTimeout → sim-time `coverReflexUntil`)
+- [x] D6 Supply-drop cadence (one early ~phase 2, one late ~phase 5+)
 - [ ] D7 Selftest: quick tier-mix assert + factor bot decision helpers for node coverage
 - [ ] D8 Full keybind rebind list (move/fire/ADS/slots)
 - [ ] D9 Compass ribbon HUD

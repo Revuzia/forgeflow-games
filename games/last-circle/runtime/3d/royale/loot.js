@@ -220,7 +220,11 @@ function spawnChest(W, x, y, z) {
 function maybeSupplyDrop(W, dt) {
   if (W.mode === "practice" || !W.stormCtl) return;
   const st = W.stormCtl.storm.stateAt(W.t);
-  if (st.phase >= 2 && supplyState.dropped < 2 && !supplyState.falling && supplyState.dropped < st.phase - 1) {
+  // one drop early (~phase 2), one late (~phase 5+). The old `dropped < phase-1`
+  // gate front-loaded BOTH into phases 2-3, leaving the tense endgame with none.
+  if (st.phase >= 2 && supplyState.dropped < 2 && !supplyState.falling &&
+      st.phase - (supplyState.lastDropPhase == null ? -99 : supplyState.lastDropPhase) >= 3) {
+    supplyState.lastDropPhase = st.phase;
     // spawn a crate drifting down inside the next circle
     const rng = K.mulberry32((W.seed ^ 0xd209) + supplyState.dropped * 77);
     const ang = rng() * Math.PI * 2, rr = (st.nextRadius || st.radius) * 0.6 * rng();
