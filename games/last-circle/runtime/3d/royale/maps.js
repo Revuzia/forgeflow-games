@@ -271,7 +271,7 @@ export async function buildMap(W, mapId) {
     const wgeo = new THREE.PlaneGeometry(SIZE * 1.6, SIZE * 1.6, 1, 1);
     wgeo.rotateX(-Math.PI / 2);
     const wmat = new THREE.MeshStandardMaterial({
-      color: mapId === "isla_viva" ? 0x1899b8 : 0x2a6b7a, transparent: true, opacity: 0.85, roughness: 0.16, metalness: 0.32,
+      color: mapId === "isla_viva" ? 0x2ec9d6 : 0x2f7d8a, transparent: true, opacity: 0.86, roughness: 0.13, metalness: 0.3,
     });
     let wN = null;
     try {
@@ -720,8 +720,8 @@ export async function buildMap(W, mapId) {
     hut(90, 590, 5, 4.4, 0, C_WOODP, "lagoon_docks");
     scatterTrees("palm", 420, 0.6, 26, "wood");
     scatterTrees("tree", 260, 2, 40, "wood");
-    scatterTrees("bush", 200, 0.6, 30, null);
-    scatterTrees("rocks", 90, 1, 70, "brick");
+    scatterTrees("bush", 280, 0.6, 30, null);
+    scatterTrees("rocks", 120, 1, 70, "brick");
   } else if (mapId === "ashgrid") {
     // warm sandstone/adobe outpost palette (was cold grey concrete — clashed with the golden savanna)
     const C_CONC = "#c3ad84", C_CONC2 = "#a68f62", C_BRICKB = "#a5705a", C_METAL = "#93805e";
@@ -820,8 +820,9 @@ export async function buildMap(W, mapId) {
     // savanna outpost: an adobe/sandstone residential town on a street
     town(pois[8], ["#c8a06a", "#b98f5a"], "#b5643c", { along: "x", nPer: 5 });
     waterTower(pois[0].x + 100, pois[0].z + 70, pois[0].id);                    // Downtown water tower (skyline landmark)
-    scatterTrees("tree", 110, 1, 25, "wood");
-    scatterTrees("rocks", 60, 1, 40, "brick");
+    scatterTrees("tree", 190, 1, 25, "wood");
+    scatterTrees("bush", 160, 0.6, 26, null);
+    scatterTrees("rocks", 110, 1, 40, "brick");
   } else if (mapId === "deepwood") {
     const C_LOG = "#8a5a33", C_PLANK = "#a8794f", C_STONE = "#8f8a80";
     poi("logging", "Logging Camp", -430, -380, 110);
