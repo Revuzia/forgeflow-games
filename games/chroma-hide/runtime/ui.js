@@ -30,57 +30,154 @@ const overlayCss = (z) => [
   "color:#eaf2ff", "pointer-events:auto", "text-align:center",
 ].join(";");
 
-// ── Title / main menu ────────────────────────────────────────────────────────
+// ── Shared brand stylesheet (one source of truth for every overlay) ──────────
+let _stylesInjected = false;
+export function injectChromaStyles() {
+  if (_stylesInjected || typeof document === "undefined") return;
+  _stylesInjected = true;
+  const s = document.createElement("style"); s.id = "ct-styles";
+  s.textContent = `
+  :root{--ct-teal:#7fe3c4;--ct-violet:#c8a6ff;--ct-ink:#eaf2ff;--ct-dim:rgba(234,242,255,.62);
+    --ct-panel:rgba(12,16,24,.55);--ct-brd:rgba(255,255,255,.12);--ct-chip:rgba(255,255,255,.06);
+    --ct-grad:linear-gradient(90deg,var(--ct-teal),var(--ct-violet));--ct-font:system-ui,-apple-system,'Segoe UI',sans-serif;}
+  .ct-root{position:absolute;inset:0;z-index:60;overflow:hidden;display:grid;place-items:center;pointer-events:auto;font-family:var(--ct-font);color:var(--ct-ink)}
+  .ct-bg{position:absolute;inset:-4%;background:#0b0f16 center/cover no-repeat;transform:scale(1.06);animation:ctKen 45s ease-in-out infinite alternate;pointer-events:none}
+  @keyframes ctKen{from{transform:scale(1.06) translate3d(0,0,0)}to{transform:scale(1.13) translate3d(-1.5%,-1%,0)}}
+  .ct-scrim{position:absolute;inset:0;pointer-events:none;background:
+    radial-gradient(120% 85% at 50% 12%,transparent 40%,rgba(6,9,14,.55) 100%),
+    linear-gradient(180deg,rgba(6,9,14,.34) 0%,rgba(6,9,14,.12) 42%,rgba(6,9,14,.82) 100%)}
+  .ct-blob{position:absolute;border-radius:50%;filter:blur(60px);opacity:.4;z-index:1;pointer-events:none;mix-blend-mode:screen}
+  .ct-blob.a{width:340px;height:340px;background:var(--ct-teal);left:-6%;top:16%;animation:ctFloat 15s ease-in-out infinite alternate}
+  .ct-blob.b{width:300px;height:300px;background:var(--ct-violet);right:-4%;bottom:4%;animation:ctFloat 19s ease-in-out infinite alternate-reverse}
+  @keyframes ctFloat{to{transform:translate3d(4%,-6%,0) scale(1.15)}}
+  .ct-content{position:relative;z-index:2;width:min(1120px,92vw);display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(24px,4vw,56px);align-items:center}
+  .ct-hero{text-align:left}
+  .ct-kicker{font:800 13px/1 var(--ct-font);letter-spacing:.42em;color:var(--ct-teal);opacity:.9;margin-bottom:14px}
+  .ct-wordmark{margin:0;font:900 clamp(50px,7.5vw,98px)/.9 var(--ct-font);letter-spacing:-.02em;background:var(--ct-grad);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 6px 30px rgba(127,227,196,.28));animation:ctSheen 8s ease-in-out infinite}
+  @keyframes ctSheen{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+  .ct-tag{margin-top:18px;max-width:40ch;line-height:1.5;color:var(--ct-dim);font-size:clamp(14px,1.5vw,17px)}
+  .ct-panel{position:relative;padding:clamp(18px,2.2vw,26px);border-radius:18px;background:var(--ct-panel);backdrop-filter:blur(22px) saturate(1.2);-webkit-backdrop-filter:blur(22px) saturate(1.2);border:1px solid var(--ct-brd);box-shadow:0 24px 60px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);animation:ctRise .5s cubic-bezier(.2,.7,.2,1) both}
+  @keyframes ctRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .ct-label{font:700 11px var(--ct-font);letter-spacing:.16em;text-transform:uppercase;color:var(--ct-dim);margin:14px 0 6px}
+  .ct-label:first-child{margin-top:0}
+  .ct-seg{display:flex;gap:4px;padding:4px;border-radius:11px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.07)}
+  .ct-seg.wrap{flex-wrap:wrap}
+  .ct-seg button{flex:1;border:0;border-radius:8px;padding:10px 8px;cursor:pointer;background:transparent;color:var(--ct-dim);font:700 13px var(--ct-font);transition:background .15s,color .15s,transform .08s}
+  .ct-seg.wrap button{flex:1 1 46%}
+  .ct-seg button:hover{color:var(--ct-ink)}
+  .ct-seg button:active{transform:scale(.97)}
+  .ct-seg button.on-hider{background:var(--ct-teal);color:#04140f}
+  .ct-seg button.on-seeker{background:var(--ct-violet);color:#160a2b}
+  .ct-seg button.on{background:rgba(127,227,196,.2);color:#eaf2ff;box-shadow:inset 0 0 0 1px rgba(127,227,196,.5)}
+  .ct-maps{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+  .ct-map{flex:0 0 118px;text-align:left;cursor:pointer;border-radius:12px;padding:9px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.3);transition:border-color .15s,transform .1s;color:var(--ct-ink)}
+  .ct-map:hover{transform:translateY(-2px)}
+  .ct-map.on{border-color:var(--ct-teal);box-shadow:0 0 0 1px var(--ct-teal),0 8px 24px rgba(127,227,196,.15)}
+  .ct-map .sw{height:44px;border-radius:8px;margin-bottom:7px}
+  .ct-map h4{margin:0 0 2px;font:800 12px var(--ct-font)}
+  .ct-map p{margin:0;font:400 10.5px/1.35 var(--ct-font);color:var(--ct-dim);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .ct-slrow{display:flex;align-items:center;gap:12px}
+  .ct-slider{flex:1;height:6px;border-radius:99px;appearance:none;-webkit-appearance:none;background:linear-gradient(90deg,var(--ct-teal) var(--fill,50%),rgba(255,255,255,.14) var(--fill,50%));outline:none}
+  .ct-slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.4),0 0 0 4px rgba(127,227,196,.25);cursor:pointer}
+  .ct-val{font:800 13px var(--ct-font);color:var(--ct-teal);min-width:74px;text-align:right}
+  .ct-actions{display:flex;gap:10px;margin-top:16px}
+  .ct-play{flex:1;border:0;border-radius:12px;padding:15px 20px;cursor:pointer;font:800 17px var(--ct-font);color:#04140f;background:var(--ct-grad);background-size:180% 100%;box-shadow:0 10px 30px rgba(127,227,196,.28);transition:transform .1s,box-shadow .2s;animation:ctGrad 6s ease infinite}
+  .ct-play:hover{transform:translateY(-2px);box-shadow:0 14px 36px rgba(127,227,196,.4)}
+  @keyframes ctGrad{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+  .ct-online{border:1px solid var(--ct-violet);background:rgba(200,166,255,.12);color:var(--ct-violet);border-radius:12px;padding:15px 16px;font:800 14px var(--ct-font);cursor:pointer}
+  .ct-online:hover{background:rgba(200,166,255,.2)}
+  .ct-foot{display:flex;gap:6px;margin-top:12px;justify-content:center}
+  .ct-foot button{background:none;border:0;color:var(--ct-dim);font:600 13px var(--ct-font);cursor:pointer;padding:6px 10px;border-radius:8px}
+  .ct-foot button:hover{color:var(--ct-ink);background:rgba(255,255,255,.06)}
+  .ct-root :focus-visible{outline:2px solid var(--ct-teal);outline-offset:2px}
+  @media (max-width:900px),(max-aspect-ratio:1/1){.ct-content{grid-template-columns:1fr;width:min(560px,92vw);gap:16px;max-height:94vh}.ct-panel{overflow:auto}.ct-hero{text-align:center}}
+  @media (prefers-reduced-motion:reduce){.ct-bg,.ct-wordmark,.ct-play,.ct-panel,.ct-blob{animation:none!important}}
+  `;
+  document.head.appendChild(s);
+}
+function mapTint(m) {
+  const named = { manor: ["#8a5a44", "#3f7d6e"], understage: ["#39424a", "#5a3b2a"], hollow: ["#c9ba52", "#b2a44e"] };
+  if (named[m.id]) return `linear-gradient(135deg,${named[m.id][0]},${named[m.id][1]})`;
+  let h = 0; for (const c of (m.name || m.id || "x")) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `linear-gradient(135deg,hsl(${h} 45% 45%),hsl(${(h + 40) % 360} 45% 35%))`;
+}
+
+// ── Title / main menu (cover-art layout) ─────────────────────────────────────
 export function createTitleMenu(host, cb, maps) {
-  const root = el("div", overlayCss(60) + ";background:radial-gradient(ellipse at 50% 30%,rgba(30,50,44,.6),rgba(6,10,14,.94))");
-  root.appendChild(el("div", "font:800 15px system-ui;letter-spacing:.4em;color:" + ACCENT + ";opacity:.8", "FORGEFLOW GAMES"));
-  root.appendChild(el("h1", "font:800 62px system-ui;letter-spacing:.02em;margin:6px 0 2px;background:linear-gradient(90deg,#7fe3c4,#c8a6ff);-webkit-background-clip:text;background-clip:text;color:transparent", "CHROMA HIDE"));
-  root.appendChild(el("div", "opacity:.7;max-width:460px;margin-bottom:24px;line-height:1.5", "Paint your blank body to melt into the room. Hold a pose, hide in plain sight, and outlast the hunt."));
+  injectChromaStyles();
+  const root = el("div", "", ""); root.className = "ct-root";
+  const bg = el("div", "", ""); bg.className = "ct-bg"; bg.style.backgroundImage = "url('thumbnail.png')";
+  const scrim = el("div", "", ""); scrim.className = "ct-scrim";
+  const blobA = el("div", "", ""); blobA.className = "ct-blob a";
+  const blobB = el("div", "", ""); blobB.className = "ct-blob b";
+  root.append(bg, scrim, blobA, blobB);
 
-  const roleRow = el("div", "display:flex;gap:8px;margin-bottom:8px");
-  let role = "hider";
-  const rH = btn("🎨 Play as Hider", () => setRole("hider"), true);
-  const rS = btn("🔫 Play as Seeker", () => setRole("seeker"), false);
-  function setRole(r) { role = r; rH.style.background = r === "hider" ? ACCENT : "rgba(255,255,255,.1)"; rH.style.color = r === "hider" ? "#04140f" : "#eaf2ff"; rS.style.background = r === "seeker" ? ACCENT : "rgba(255,255,255,.1)"; rS.style.color = r === "seeker" ? "#04140f" : "#eaf2ff"; }
-  roleRow.append(rH, rS); root.appendChild(roleRow);
+  const content = el("div", "", ""); content.className = "ct-content";
+  const hero = el("div", "", `<div class="ct-kicker">FORGEFLOW GAMES</div><h1 class="ct-wordmark">CHROMA&nbsp;HIDE</h1><p class="ct-tag">Paint your blank‑white body to melt into the room, hold a pose, and hide in plain sight — while seekers hunt with a gun and limited ammo.</p>`);
+  hero.className = "ct-hero";
+  const panel = el("div", "", ""); panel.className = "ct-panel";
 
-  const modeRow = el("div", "display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:6px;max-width:520px");
-  let mode = "normal";
-  const modes = [["normal", "Normal"], ["infection", "Infection"], ["double", "Double"], ["reverse", "Reverse Chicken Race"]];
-  const modeBtns = {};
-  for (const [id, name] of modes) {
-    const b = btn(name, () => { mode = id; for (const k in modeBtns) { modeBtns[k].style.background = k === id ? "rgba(127,227,196,.25)" : "rgba(255,255,255,.07)"; } }, false);
-    b.style.padding = "7px 12px"; b.style.font = "600 13px system-ui"; modeBtns[id] = b; modeRow.appendChild(b);
+  let role = "hider", mode = "normal", mapId = "depot";
+
+  // Role segmented control
+  panel.appendChild(el("div", "", "Play as")).className = "ct-label";
+  const roleSeg = el("div", "", ""); roleSeg.className = "ct-seg";
+  const roleBtns = {};
+  for (const [id, lbl] of [["hider", "🎨 Hider"], ["seeker", "🔫 Seeker"]]) {
+    const b = el("button", "", lbl); b.onclick = () => { role = id; syncRole(); };
+    roleBtns[id] = b; roleSeg.appendChild(b);
   }
-  modeBtns.normal.style.background = "rgba(127,227,196,.25)";
-  root.appendChild(modeRow);
+  function syncRole() { for (const k in roleBtns) roleBtns[k].className = k === role ? ("on-" + k) : ""; }
+  panel.appendChild(roleSeg);
 
-  const botRow = el("div", "display:flex;align-items:center;gap:10px;margin:10px 0 18px;opacity:.85");
-  botRow.appendChild(el("span", "font-size:13px", "Lobby size"));
-  const botSel = el("input", "accent-color:" + ACCENT); botSel.type = "range"; botSel.min = 2; botSel.max = 10; botSel.value = 6;
-  const botLbl = el("span", "font:600 13px system-ui;min-width:64px", "6 players");
-  botSel.oninput = () => botLbl.textContent = botSel.value + " players";
-  botRow.append(botSel, botLbl); root.appendChild(botRow);
+  // Mode segmented control
+  panel.appendChild(el("div", "", "Mode")).className = "ct-label";
+  const modeSeg = el("div", "", ""); modeSeg.className = "ct-seg wrap";
+  const modeBtns = {};
+  for (const [id, name] of [["normal", "Normal"], ["infection", "Infection"], ["double", "Double"], ["reverse", "Reverse Chicken Race"]]) {
+    const b = el("button", "", name); b.onclick = () => { mode = id; for (const k in modeBtns) modeBtns[k].className = k === id ? "on" : ""; };
+    modeBtns[id] = b; modeSeg.appendChild(b);
+  }
+  panel.appendChild(modeSeg);
 
-  const mapRow = el("div", "display:flex;align-items:center;gap:10px;margin:0 0 6px;opacity:.85");
-  mapRow.appendChild(el("span", "font-size:13px", "Stage"));
-  const mapSel = el("select", "padding:8px;border-radius:8px;background:rgba(0,0,0,.35);color:#fff;border:1px solid rgba(255,255,255,.15);font-size:13px");
-  [{ id: "random", name: "🎲 Random" }].concat(maps || []).forEach((m) => { const o = document.createElement("option"); o.value = m.id; o.textContent = m.name; mapSel.appendChild(o); });
-  mapRow.appendChild(mapSel); root.appendChild(mapRow);
+  // Stage cards
+  panel.appendChild(el("div", "", "Stage")).className = "ct-label";
+  const mapWrap = el("div", "", ""); mapWrap.className = "ct-maps";
+  const mapCards = {};
+  const allMaps = [{ id: "random", name: "🎲 Random", blurb: "A surprise stage each match." }].concat(maps || []);
+  for (const m of allMaps) {
+    const card = el("div", "", `<div class="sw"></div><h4>${m.name}</h4><p>${m.blurb || ""}</p>`);
+    card.className = "ct-map"; card.querySelector(".sw").style.background = m.id === "random" ? "var(--ct-grad)" : mapTint(m);
+    card.onclick = () => { mapId = m.id; for (const k in mapCards) mapCards[k].classList.toggle("on", k === mapId); };
+    mapCards[m.id] = card; mapWrap.appendChild(card);
+  }
+  panel.appendChild(mapWrap);
 
-  const playRow = el("div", "display:flex;gap:8px;align-items:center;margin-top:10px");
-  const play = btn("▶  PLAY", () => cb.onPlay({ role, mode, players: parseInt(botSel.value, 10), mapId: mapSel.value }), true);
-  play.style.font = "700 18px system-ui"; play.style.padding = "14px 40px";
-  const online = btn("🌐 Play Online", () => cb.onOnline && cb.onOnline());
-  online.style.padding = "14px 20px";
-  playRow.append(play, online); root.appendChild(playRow);
-  const controls = el("div", "display:flex;gap:6px;margin-top:14px");
-  controls.appendChild(btn("How to Play", () => cb.onHelp && cb.onHelp()));
-  controls.appendChild(btn("Settings", () => cb.onSettings && cb.onSettings()));
-  root.appendChild(controls);
+  // Lobby size
+  panel.appendChild(el("div", "", "Lobby size")).className = "ct-label";
+  const slRow = el("div", "", ""); slRow.className = "ct-slrow";
+  const slider = el("input", ""); slider.type = "range"; slider.min = 2; slider.max = 10; slider.value = 6; slider.className = "ct-slider";
+  const valEl = el("span", "", "6 players"); valEl.className = "ct-val";
+  const setFill = () => { slider.style.setProperty("--fill", ((slider.value - 2) / 8 * 100) + "%"); valEl.textContent = slider.value + " players"; };
+  slider.oninput = setFill; slRow.append(slider, valEl); panel.appendChild(slRow);
 
-  host.appendChild(root); setRole("hider");
-  return { el: root, show: () => (root.style.display = "flex"), hide: () => (root.style.display = "none") };
+  // Actions
+  const actions = el("div", "", ""); actions.className = "ct-actions";
+  const play = el("button", "", "▶  PLAY"); play.className = "ct-play";
+  play.onclick = () => cb.onPlay({ role, mode, players: parseInt(slider.value, 10), mapId });
+  const online = el("button", "", "🌐 Online"); online.className = "ct-online";
+  online.onclick = () => cb.onOnline && cb.onOnline();
+  actions.append(play, online); panel.appendChild(actions);
+
+  const foot = el("div", "", ""); foot.className = "ct-foot";
+  const help = el("button", "", "How to Play"); help.onclick = () => cb.onHelp && cb.onHelp();
+  const settings = el("button", "", "Settings"); settings.onclick = () => cb.onSettings && cb.onSettings();
+  foot.append(help, settings); panel.appendChild(foot);
+
+  content.append(hero, panel); root.appendChild(content);
+  host.appendChild(root);
+  syncRole(); modeBtns.normal.className = "on"; (mapCards.depot || mapCards.random).classList.add("on"); setFill();
+  return { el: root, show: () => (root.style.display = "grid"), hide: () => (root.style.display = "none") };
 }
 
 // ── In-match HUD ─────────────────────────────────────────────────────────────

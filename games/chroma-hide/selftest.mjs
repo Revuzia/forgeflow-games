@@ -39,13 +39,14 @@ const files = [
   "runtime/sim/paint_buffer.js",
   "runtime/sim/match_sim.js",
   "runtime/sim/net_protocol.js",
+  "runtime/sim/nav.js",
 ];
 for (const f of files) {
   assert(fs.existsSync(path.join(__dirname, f)), `exists ${f}`);
 }
 
 // ── syntax check every JS file (parses, imports not resolved) ───────────────
-for (const f of ["game_controls.js", "runtime/main.js", "runtime/engine.js", "runtime/paint.js", "runtime/paint_ui.js", "runtime/game.js", "runtime/ui.js", "runtime/maps.js", "runtime/audio.js", "runtime/net/ffg_netplay.js", "runtime/net/chromanet.js", "runtime/net/loopback.js", "runtime/sim/util.js", "runtime/sim/match_core.js", "runtime/sim/paint_buffer.js", "runtime/sim/match_sim.js", "runtime/sim/net_protocol.js"]) {
+for (const f of ["game_controls.js", "runtime/main.js", "runtime/engine.js", "runtime/paint.js", "runtime/paint_ui.js", "runtime/game.js", "runtime/ui.js", "runtime/maps.js", "runtime/audio.js", "runtime/net/ffg_netplay.js", "runtime/net/chromanet.js", "runtime/net/loopback.js", "runtime/sim/util.js", "runtime/sim/match_core.js", "runtime/sim/paint_buffer.js", "runtime/sim/match_sim.js", "runtime/sim/net_protocol.js", "runtime/sim/nav.js"]) {
   const r = spawnSync(process.execPath, ["--check", path.join(__dirname, f)], { encoding: "utf8" });
   assert(r.status === 0, `node --check ${f}` + (r.status === 0 ? "" : `: ${(r.stderr || r.stdout || "").trim()}`));
 }
@@ -161,7 +162,7 @@ assert(manor.id === "manor" && manor.props.length >= 6, "map: manor loaded with 
   const sm = maps.toSimMap(manor);
   assert(sm.obstacles.length === manor.props.length, "map: toSimMap obstacle per prop");
   assert(sm.spawn.seeker && sm.spawn.hider && sm.spots.length >= 6, "map: toSimMap spawn + spots");
-  assert(maps.mapList().length === 3, "map: 3 stages available");
+  assert(maps.mapList().length === 4, "map: 4 stages available");
 }
 for (const id of ["understage", "hollow"]) {
   const m = maps.getMap(id);
@@ -208,6 +209,36 @@ function mkMatch(skill, huntSeconds, seed, extra) {
   ms.setLocalInput(s, h.id, { mx: 1, mz: 0 });
   for (let i = 0; i < 20; i++) ms.stepMatch(s, 1 / 20);   // 1s of movement
   assert(h.x > 2 && h.alive, "sim: local input moves the actor");
+}
+
+// ── nav.js grid pathfinding (multi-room doorway navigation) ──────────────────
+const nav = await import(pathToFileURL(path.join(__dirname, "runtime/sim/nav.js")).href);
+{
+  // full-height wall, no doorway -> the two sides are disconnected (fallback path)
+  const gBlocked = nav.buildNavGrid({ minX: 0, maxX: 10, minZ: 0, maxZ: 6 }, [{ x: 5, z: 3, hw: 0.3, hd: 3.5 }], 1.0, 0.4);
+  assert(nav.findPath(gBlocked, 1, 3, 9, 3).length === 1, "nav: fully-walled -> no through-path (fallback)");
+  // wall with a doorway gap at the bottom -> a path is found that routes through it
+  const gDoor = nav.buildNavGrid({ minX: 0, maxX: 10, minZ: 0, maxZ: 6 }, [{ x: 5, z: 3.5, hw: 0.3, hd: 2.5 }], 1.0, 0.4);
+  const p = nav.findPath(gDoor, 1, 3, 9, 3);
+  assert(p.length >= 2, "nav: doorway -> path found");
+  assert(Math.min(...p.map((w) => w.z)) < 2.2, "nav: path routes through the low doorway");
+  assert(Math.hypot(p[p.length - 1].x - 9, p[p.length - 1].z - 3) < 1.6, "nav: path reaches the target");
+}
+{
+  // The Depot: multi-room map, bots must navigate rooms via doorways to a verdict
+  const depot = maps.getMap("depot");
+  assert(depot.rooms.length === 3 && depot.walls.length === 4 && depot.props.length >= 20, "depot: 3 rooms, interior walls, dense props");
+  const sm = maps.toSimMap(depot);
+  assert(sm.obstacles.length === depot.props.length + depot.walls.length, "depot: interior walls added to obstacles");
+  const players = [{ id: "S", isBot: true, role: "seeker" }, { id: "H1", isBot: true, role: "hider" }, { id: "H2", isBot: true, role: "hider" }, { id: "H3", isBot: true, role: "hider" }];
+  const s = ms.createMatch({ players, settings: { ...mc.DEFAULTS, mode: "normal", prepSeconds: 1, huntSeconds: 150, tauntIntervalSeconds: 0 }, map: sm, seed: 4, seekerCount: 1, skill: { identifyTime: 0.4, detectRange: 70, fovHalf: 3.2, seekerSpeed: 4.5 } });
+  assert(s.nav && s.nav.grid.length > 0, "depot: nav grid built at match start");
+  // let hiders reach their (dispersed) spots
+  for (let i = 0; i < 100; i++) ms.stepMatch(s, 1 / 20);
+  const hx = ms.hiders(s).map((h) => h.x);
+  assert(Math.max(...hx) - Math.min(...hx) > 6, "depot: hiders disperse across rooms (x-spread " + (Math.max(...hx) - Math.min(...hx)).toFixed(1) + ")");
+  const r = ms.runToEnd(s, 1 / 20);
+  assert(r && (r.winner === "hiders" || r.winner === "seekers"), "depot: multi-room bot match resolves (" + (r && r.winner) + ")");
 }
 
 // ── all four modes reach a valid verdict (M4 gate) ──────────────────────────

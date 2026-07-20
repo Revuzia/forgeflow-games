@@ -12,6 +12,7 @@
  */
 import { PHASE, ROLE, MODE, MODE_INFO, applyShot, losPoints, checkWin, assignRoles, computeSeekerCount } from "./match_core.js";
 import { makeRng, clamp } from "./util.js";
+import { buildNavGrid, findPath } from "./nav.js";
 
 // ── 2D geometry helpers ─────────────────────────────────────────────────────
 function dist2(ax, az, bx, bz) { const dx = ax - bx, dz = az - bz; return Math.hypot(dx, dz); }
@@ -109,6 +110,7 @@ export function createMatch(config) {
   return {
     phase: PHASE.PREP, timeLeft: settings.prepSeconds, settings, map, rng, skill,
     bounds: map.bounds, obstacles: map.obstacles, spots,
+    nav: buildNavGrid(map.bounds, map.obstacles),   // walkability grid for bot pathing through doorways
     actors, mode: settings.mode, events: [], result: null, elapsed: 0, reverseMark: null,
   };
 }
@@ -149,11 +151,8 @@ function stepHiderPrep(s, a, dt) {
   if (!a.isBot) { moveLocal(s, a, dt); return; }
   if (!a.spot) a.spot = pickSpot(s, a);
   const d = dist2(a.x, a.z, a.spot.x, a.spot.z);
-  if (d > 0.4) {
-    const step = SIM.hiderSpeed * dt;
-    a.yaw = yawTo(a.x, a.z, a.spot.x, a.spot.z);
-    const nx = a.x + Math.sin(a.yaw) * step, nz = a.z + Math.cos(a.yaw) * step;
-    const c = resolveCollision(nx, nz, SIM.actorRadius, s.bounds, s.obstacles); a.x = c.x; a.z = c.z;
+  if (d > 0.5) {
+    moveToward(s, a, a.spot.x, a.spot.z, SIM.hiderSpeed, dt);
   } else if (!a.hidden) {
     a.hidden = true; a.pose = pickPose(s, a); a.yaw = a.spot.faceYaw != null ? a.spot.faceYaw : a.yaw;
     s.events.push({ t: "hidden", id: a.id });
@@ -183,11 +182,20 @@ function stepHiderHunt(s, a, dt) {
 }
 
 function pickSpot(s, a) {
-  if (s.spots.length) {
-    // claim the nearest unclaimed authored spot
-    let best = null, bd = Infinity;
-    for (const sp of s.spots) { if (sp._claimed) continue; const d = dist2(a.x, a.z, sp.x, sp.z); if (d < bd) { bd = d; best = sp; } }
-    if (best) { best._claimed = true; return best; }
+  // FARTHEST-POINT dispersal: each hider claims the unclaimed spot farthest from
+  // already-taken ones, so hiders spread across all rooms (different palettes) —
+  // the multi-room point — instead of clustering near spawn.
+  const avail = s.spots.filter((sp) => !sp._claimed);
+  if (avail.length) {
+    const claimed = s.spots.filter((sp) => sp._claimed);
+    let best = avail[0], bestScore = -1;
+    for (const sp of avail) {
+      let nearest = Infinity;
+      for (const c of claimed) nearest = Math.min(nearest, dist2(sp.x, sp.z, c.x, c.z));
+      const score = (claimed.length ? nearest : s.rng() * 10) + s.rng() * 0.5;
+      if (score > bestScore) { bestScore = score; best = sp; }
+    }
+    best._claimed = true; return best;
   }
   // fallback: hug a random obstacle edge
   const o = s.obstacles[(s.rng() * s.obstacles.length) | 0] || { x: 0, z: 0, hw: 1, hd: 1 };
@@ -289,9 +297,20 @@ function seekerShoot(s, a) {
 }
 
 function moveToward(s, a, tx, tz, speed, dt) {
-  const d = dist2(a.x, a.z, tx, tz); if (d < 1e-3) return;
-  a.yaw = yawTo(a.x, a.z, tx, tz);
-  const step = Math.min(speed * dt, d);
+  const d = dist2(a.x, a.z, tx, tz); if (d < 0.12) return;
+  // path around interior walls / doorways; recompute when the goal moves or the path goes stale
+  a._pathAge = (a._pathAge || 0) + dt;
+  if (!a._path || dist2(a._pgx || 0, a._pgz || 0, tx, tz) > 1.5 || a._pathAge > 1.2) {
+    a._path = s.nav ? findPath(s.nav, a.x, a.z, tx, tz) : null;
+    a._pgx = tx; a._pgz = tz; a._pathAge = 0; a._pi = 0;
+  }
+  let wx = tx, wz = tz;
+  if (a._path && a._path.length) {
+    while (a._pi < a._path.length - 1 && dist2(a.x, a.z, a._path[a._pi].x, a._path[a._pi].z) < 0.8) a._pi++;
+    wx = a._path[a._pi].x; wz = a._path[a._pi].z;
+  }
+  a.yaw = yawTo(a.x, a.z, wx, wz);
+  const step = Math.min(speed * dt, Math.max(dist2(a.x, a.z, wx, wz), 0.001));
   const nx = a.x + Math.sin(a.yaw) * step, nz = a.z + Math.cos(a.yaw) * step;
   const c = resolveCollision(nx, nz, SIM.actorRadius, s.bounds, s.obstacles); a.x = c.x; a.z = c.z;
 }

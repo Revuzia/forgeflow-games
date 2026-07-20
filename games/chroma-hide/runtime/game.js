@@ -11,6 +11,7 @@
  * pane can drive the local player and assert a round resolves.
  */
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { createMatch, stepMatch, setLocalInput, seekers, hiders, SIM } from "./sim/match_sim.js";
 import { PHASE, ROLE, MODE, sanitizeSettings, DEFAULTS, computeSeekerCount, MODE_INFO } from "./sim/match_core.js";
 import { getMap, toSimMap } from "./maps.js";
@@ -105,6 +106,12 @@ export class Game {
     floor.receiveShadow = true; g.add(floor); this.floor = floor;
     this.paintable = [floor];
 
+    // per-room themed floor zones (distinct palette per room — the multi-room look)
+    if (m.rooms) for (const r of m.rooms) {
+      const tile = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.d), new THREE.MeshStandardMaterial({ color: r.floor, roughness: 0.92, metalness: 0.02 }));
+      tile.rotation.x = -Math.PI / 2; tile.position.set(r.x, 0.02, r.z); tile.receiveShadow = true; g.add(tile);
+    }
+
     // perimeter walls
     const wh = m.wallHeight, th = m.perimeter.thickness, wm = () => new THREE.MeshStandardMaterial({ color: m.perimeter.color, roughness: m.perimeter.roughness, metalness: 0 });
     const cx = (m.bounds.minX + m.bounds.maxX) / 2, cz = (m.bounds.minZ + m.bounds.maxZ) / 2;
@@ -115,11 +122,15 @@ export class Game {
     addWall(m.bounds.minX - th / 2, cz, th, D);
     addWall(m.bounds.maxX + th / 2, cz, th, D);
 
+    // interior dividing walls with doorway gaps (multi-room maps)
+    if (m.walls) for (const iw of m.walls) addWall(iw.x, iw.z, iw.w, iw.d);
+
     // props (paintable cover)
     for (const p of m.props) {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(p.w, p.h, p.d), new THREE.MeshStandardMaterial({ color: p.color, roughness: p.rough, metalness: p.metal || 0 }));
       mesh.position.set(p.x, p.h / 2, p.z); mesh.castShadow = true; mesh.receiveShadow = true; mesh.userData.prop = p;
       g.add(mesh); this.paintable.push(mesh);
+      if (p.model) this._loadProp(p, mesh);   // swap the box for a real furniture GLB when it loads
     }
 
     // seeker alcove marker
@@ -133,6 +144,33 @@ export class Game {
     this.engine.hemi.intensity = m.ambient.intensity;
     this.engine.hemi.color.setHex(m.ambient.sky); this.engine.hemi.groundColor.setHex(m.ambient.ground);
     this.engine.scene.background = new THREE.Color(m.ambient.ground).multiplyScalar(0.4);
+  }
+
+  /** Load a furniture GLB for a prop, auto-scale to its height, seat on the floor,
+   *  and replace the placeholder box. The box stays as a fallback if the load fails. */
+  _loadProp(p, placeholder) {
+    if (!this._gltf) this._gltf = new GLTFLoader();
+    this._gltf.load("assets/models/" + p.model, (gltf) => {
+      if (!this._alive) return;
+      const root = gltf.scene;
+      root.traverse((o) => {
+        if (o.isLight && o.parent) o.parent.remove(o);         // FFG rule: strip embedded lights
+        if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.material) o.material.side = THREE.FrontSide; }
+      });
+      root.rotation.y = p.rot || 0;
+      root.updateMatrixWorld(true);
+      let box = new THREE.Box3().setFromObject(root);
+      const size = box.getSize(new THREE.Vector3());
+      root.scale.setScalar(p.h / Math.max(0.05, size.y));       // fit the prop's height
+      root.updateMatrixWorld(true);
+      box = new THREE.Box3().setFromObject(root);
+      root.position.set(p.x, -box.min.y, p.z);                  // seat bottom on the floor
+      root.userData.prop = p;
+      this.root.add(root);
+      const i = this.paintable.indexOf(placeholder); if (i >= 0) this.paintable[i] = root; else this.paintable.push(root);
+      this.root.remove(placeholder); if (placeholder.geometry) placeholder.geometry.dispose();
+      this._collidables = null;                                 // recompute camera-collision set to include the model
+    }, undefined, (err) => { console.warn("[chroma] GLB load failed:", p.model, err && err.message); });
   }
 
   _nearestPropColor(x, z) {
@@ -206,11 +244,12 @@ export class Game {
       const s = this._sens();
       if (this.paintMode) {
         if (this._painting) this.paint.paintAtPointer();
-        else if (this._orbiting) { this.camYaw -= dx * 0.006 * s; this.camPitch = clamp(this.camPitch - dy * 0.006 * s, 0.15, 1.4); }
+        else if (this._orbiting) { this.camYaw += dx * 0.006 * s; this.camPitch = clamp(this.camPitch - dy * 0.006 * s, 0.15, 1.4); }
         else if (this._sizing) { this.paint.nudgeSize(dx * 0.6); this.paintPanel && this.paintPanel.refresh(); }
         return;
       }
-      if (this._dragging || this.localRole === ROLE.SEEKER) { this.camYaw -= dx * 0.004 * s; this.camPitch = clamp(this.camPitch - dy * 0.004 * s, -0.4, 1.2); }
+      // drag-to-look (no pointer lock in-browser). Drag right -> turn right (was inverted).
+      if (this._dragging || this.localRole === ROLE.SEEKER) { this.camYaw += dx * 0.004 * s; this.camPitch = clamp(this.camPitch - dy * 0.004 * s, -0.4, 1.2); }
     };
     this._wheel = (e) => { if (this.paintMode || this.thirdPerson) { this.camDist = clamp(this.camDist + e.deltaY * 0.006, 2.5, 12); e.preventDefault(); } };
     dom.addEventListener("pointerdown", this._pd); window.addEventListener("pointerup", this._pu);
@@ -221,9 +260,16 @@ export class Game {
     if (this.local.role !== ROLE.HIDER || !this.local.alive) return;
     this.paintMode = !this.paintMode;
     if (this.paintMode) {
+      // frame the body up-close so it's obvious you paint yourself
+      this._savedCam = { dist: this.camDist, pitch: this.camPitch };
+      this.camDist = 3.4; this.camPitch = 0.42;
       if (!this.paintPanel) { this.paintPanel = createPaintPanel(this.paint, { onEyedrop: () => { this.paint.eyedropAtPointer(this.paintable); this.paintPanel.refresh(); } }); this.engine.container.appendChild(this.paintPanel.el); }
-      this.paintPanel.el.style.display = "block"; this.hud.setHint("<b>F</b> exit paint · <b>LMB</b> paint · <b>Space</b> eyedrop · <b>RMB</b> size · <b>MMB</b> orbit");
-    } else if (this.paintPanel) { this.paintPanel.el.style.display = "none"; this.hud.setHint(this._defaultHint()); }
+      this.paintPanel.el.style.display = "block"; this.hud.setHint("<b>drag LMB</b> on yourself to paint · <b>Space</b> eyedrop a surface · <b>RMB‑drag</b> brush size · <b>MMB‑drag</b> rotate · <b>F</b> done");
+    } else if (this.paintPanel) {
+      this.paintPanel.el.style.display = "none";
+      if (this._savedCam) { this.camDist = this._savedCam.dist; this.camPitch = this._savedCam.pitch; }
+      this.hud.setHint(this._defaultHint());
+    }
   }
 
   _whistle() {
@@ -237,8 +283,8 @@ export class Game {
   _sens() { try { const v = parseFloat(localStorage.getItem("chroma_sens")); return isNaN(v) ? 1 : v; } catch (e) { return 1; } }
 
   _defaultHint() {
-    if (this.localRole === ROLE.SEEKER) return this.sim.phase === PHASE.HUNT ? "<b>WASD</b> move · <b>mouse</b> look · <b>LMB</b> shoot · <b>RMB</b> 3rd-person · <b>E</b> emote" : "Wait for the hunt to begin…";
-    return this.sim.phase === PHASE.PREP ? "<b>WASD</b> move · <b>F</b> paint · <b>1</b> whistle · <b>E</b> emote" : "<b>WASD</b> move · <b>1</b> whistle · <b>E</b> emote · stay hidden!";
+    if (this.localRole === ROLE.SEEKER) return this.sim.phase === PHASE.HUNT ? "<b>WASD</b> move · <b>drag mouse</b> to look · <b>LMB</b> shoot · <b>E</b> emote" : "Get ready — the hunt is about to begin…";
+    return this.sim.phase === PHASE.PREP ? "<b>F</b> to paint yourself · <b>WASD</b> move to a hiding spot · <b>drag mouse</b> to look" : "Hold still & blend in — you whistle automatically. <b>E</b> emote";
   }
 
   // ── phase transitions ────────────────────────────────────────────────────────
@@ -475,10 +521,25 @@ export class Game {
       cam.lookAt(bx + fx, by + 0.55 + fy, bz + fz);
       const gun = this.meshes.get(this.local.id); if (gun) gun.visible = false;
     } else {
-      // third-person / paint-orbit follow
+      // third-person / paint-orbit follow, WITH camera collision so walls never
+      // clip the view (the D-grade "void" bug: hiding near a wall put the camera
+      // behind it). Raycast body->desired-camera; pull the camera in on a hit.
       const cp = Math.cos(this.camPitch), d = this.camDist;
-      cam.position.set(bx - Math.sin(this.camYaw) * d * cp, by + 0.6 + d * Math.sin(this.camPitch), bz - Math.cos(this.camYaw) * d * cp);
-      cam.lookAt(bx, by + 0.5, bz);
+      const tx = bx, ty = by + 0.55, tz = bz;
+      let camx = bx - Math.sin(this.camYaw) * d * cp;
+      let camy = by + 0.7 + d * Math.sin(this.camPitch);
+      let camz = bz - Math.cos(this.camYaw) * d * cp;
+      const cols = this._collidables || (this._collidables = this.paintable.filter((m) => m !== this.floor));
+      const dir = new THREE.Vector3(camx - tx, camy - ty, camz - tz);
+      const want = dir.length(); dir.normalize();
+      const hit = this.engine.raycast(new THREE.Vector3(tx, ty, tz), dir, cols, want)[0];
+      let dd = want;
+      if (hit) dd = Math.max(0.5, hit.distance - 0.3);   // never sit past/inside the wall
+      camx = tx + dir.x * dd; camy = ty + dir.y * dd; camz = tz + dir.z * dd;
+      // when jammed close to a wall there's no room behind — lift up and look down so the body stays clear
+      if (dd < 2.2) camy = Math.max(camy, ty + (2.2 - dd) * 0.95);
+      cam.position.set(camx, Math.max(0.5, camy), camz);
+      cam.lookAt(tx, by + 0.4, tz);
       const me = this.meshes.get(this.local.id); if (me) me.visible = true;
     }
     if (this._flashlight) {

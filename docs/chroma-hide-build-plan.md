@@ -339,4 +339,13 @@ Rough total: **~2 weeks** of focused build; M1–M2 are the risk-bearing core.
 
 ---
 
-*Ready to build. Recommended first action: M0 scaffold + a spike of the M1 paint system (the make-or-break piece), then reassess timers and bot fun in a live playtest before committing to M3+.*
+## ✅ BUILD COMPLETE — M0→M6 all done & verified (2026-07-20)
+
+- **M6 — deploy COMPLETE & verified 2026-07-20.** $0 branded thumbnail generated with Pillow (no xAI spend — the cover script costs ~$0.02/call, which hits the approval gate). Game committed to master locally (`a66751e`); `git push` timed out on non-interactive credentials (7 pre-existing unpushed commits show this is the environment's normal state — the commit is durable locally). Deployed via `deploy_game.py --game-dir games/chroma-hide --slug chroma-hide --no-portal`: **23/23 files uploaded to R2, cache purged, Supabase row inserted as unpublished**. `--no-portal` used so the shared live portal was not rebuilt (the game is invisible until published anyway). **Verified live**: all CDN files serve 200 (index/thumbnail/main.js/chromanet.js), the deployed build boots from `forgeflow-games-cdn.isimcha85.workers.dev/chroma-hide/index.html` — menu renders, a full bot round starts + resolves, no console errors; the anon (public) role cannot see the registry row (RLS → confirms it's unpublished, invisible to the public).
+- **Owner follow-ups** (not done — owner's gates): (1) **Publish** the game via the portal admin toggle when ready (this also rebuilds the portal so `/games/chroma-hide` prerenders). (2) The local commit `a66751e` still needs a **`git push`** from an environment with repo credentials.
+
+**Final state:** CHROMA HIDE is a complete hide-and-seek painting game — single-player vs AI bots + online multiplayer (live 2-tab verified over real Supabase), the crown-jewel paint system, 4 distinct modes, 3 stages, Answer-Check reveal, emotes, procedural audio, settings, and full menus/HUD/results/pause. 104-check static selftest + pure-logic node tests + live browser + live-network verification throughout. ~12 real bugs found and fixed across the build. Deployed unpublished for the owner to publish.
+
+---
+
+*Historical: Recommended first action was M0 scaffold + a spike of the M1 paint system (the make-or-break piece), then reassess timers and bot fun in a live playtest before committing to M3+. All milestones since completed.*

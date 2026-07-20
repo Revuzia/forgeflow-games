@@ -107,6 +107,72 @@ export const MAPS = {
       { x: -8, z: 0, faceYaw: -1.57 }, { x: 9, z: -2, faceYaw: 1.57 },
     ],
   },
+
+  depot: {
+    id: "depot",
+    name: "The Depot",
+    blurb: "Three connected rooms — a garage, an office and a warehouse — each with its own palette. Blend in one, you'll stand out in the next.",
+    bounds: { minX: -14, maxX: 14, minZ: -10, maxZ: 10 },
+    wallHeight: 5,
+    ground: { color: 0x5a5550, roughness: 0.95, metalness: 0.0 },
+    ambient: { sky: 0xdfe6ef, ground: 0x3a3d40, intensity: 0.9 },
+    perimeter: { color: 0x6b6660, roughness: 0.9, thickness: 0.5 },
+    // themed floor zones (visual — distinct palette per room)
+    rooms: [
+      { id: "garage", name: "Garage", x: -9.5, z: 0, w: 9, d: 20, floor: 0x4c4f52 },
+      { id: "office", name: "Office", x: 0.5, z: 0, w: 9, d: 20, floor: 0x7a6a4e },
+      { id: "warehouse", name: "Warehouse", x: 10, z: 0, w: 8, d: 20, floor: 0x66605a },
+    ],
+    // interior dividing walls with doorway gaps (garage|office door z=-6..-3, office|warehouse door z=3..6)
+    walls: [
+      { id: "wgo1", x: -4.5, z: -8, w: 0.4, d: 4 }, { id: "wgo2", x: -4.5, z: 3.5, w: 0.4, d: 13 },
+      { id: "wow1", x: 5.5, z: -3.5, w: 0.4, d: 13 }, { id: "wow2", x: 5.5, z: 8, w: 0.4, d: 4 },
+    ],
+    props: [
+      // GARAGE — grey concrete, red/steel/black
+      { id: "car", x: -11, z: 1, w: 3.2, d: 1.5, h: 1.3, color: 0x2f5db0, rough: 0.35, metal: 0.4, model: "sedan.glb", rot: 1.57 },
+      { id: "toolbox", x: -13, z: -3, w: 1.2, d: 0.8, h: 1.4, color: 0xb02a2a, rough: 0.4, metal: 0.3 },
+      { id: "workbench", x: -9, z: -8, w: 3.0, d: 1.2, h: 1.0, color: 0x7a5a3a, rough: 0.8, metal: 0.05, model: "table.glb" },
+      { id: "tires", x: -12.5, z: 4, w: 1.1, d: 1.1, h: 1.2, color: 0x1c1c1e, rough: 0.85, metal: 0.0 },
+      { id: "gshelf", x: -13.6, z: 0, w: 0.7, d: 4.0, h: 3.2, color: 0x8a9099, rough: 0.5, metal: 0.5, model: "bookcaseClosed.glb", rot: 1.57 },
+      { id: "gbin", x: -8, z: 3.5, w: 1.2, d: 1.2, h: 1.5, color: 0x2f6fa0, rough: 0.55, metal: 0.35, model: "dumpster-quaternius.glb" },
+      { id: "gcrate", x: -7, z: -3, w: 1.4, d: 1.4, h: 1.4, color: 0xb79a68, rough: 0.8, metal: 0.0, model: "cardboardBoxClosed.glb" },
+      { id: "ghydrant", x: -11, z: -6, w: 0.7, d: 0.7, h: 1.1, color: 0xc23020, rough: 0.6, metal: 0.2, model: "hydrant-quaternius.glb" },
+      // OFFICE — warm wood, beige/green/black
+      { id: "desk1", x: -2, z: -4, w: 2.2, d: 1.2, h: 0.9, color: 0x6b4a30, rough: 0.6, metal: 0.05, model: "desk.glb" },
+      { id: "desk2", x: 2, z: 4, w: 2.2, d: 1.2, h: 0.9, color: 0x6b4a30, rough: 0.6, metal: 0.05, model: "desk.glb", rot: 3.14 },
+      { id: "cabinet", x: -3.6, z: 6.5, w: 0.9, d: 0.9, h: 1.6, color: 0xa9a08c, rough: 0.5, metal: 0.2, model: "kitchenCabinet.glb" },
+      { id: "bookshelf", x: 3.6, z: -6.5, w: 0.8, d: 2.0, h: 2.4, color: 0x5a3f2a, rough: 0.75, metal: 0.0, model: "bookcaseClosed.glb", rot: 1.57 },
+      { id: "chair1", x: -2, z: -2.4, w: 0.7, d: 0.7, h: 1.2, color: 0x24262b, rough: 0.5, metal: 0.15 },
+      { id: "chair2", x: 2, z: 2.4, w: 0.7, d: 0.7, h: 1.2, color: 0x24262b, rough: 0.5, metal: 0.15 },
+      { id: "plant", x: 0, z: 6.5, w: 0.9, d: 0.9, h: 1.7, color: 0x2f7d3a, rough: 0.85, metal: 0.0, model: "tree-small.glb" },
+      { id: "cooler", x: 4, z: 0, w: 0.8, d: 0.8, h: 1.2, color: 0x8fd0e0, rough: 0.3, metal: 0.1, model: "ac-unit-quaternius.glb" },
+      { id: "sofa", x: -3, z: 0, w: 2.4, d: 1.0, h: 0.9, color: 0x3f6a6a, rough: 0.85, metal: 0.0, model: "loungeSofa.glb", rot: 1.57 },
+      // WAREHOUSE — concrete, brown/yellow/steel
+      { id: "wshelf1", x: 13.4, z: -5, w: 0.8, d: 3.0, h: 3.4, color: 0x7d838b, rough: 0.5, metal: 0.5, model: "bookcaseClosed.glb", rot: -1.57 },
+      { id: "wshelf2", x: 13.4, z: 5, w: 0.8, d: 3.0, h: 3.4, color: 0x7d838b, rough: 0.5, metal: 0.5, model: "bookcaseClosed.glb", rot: -1.57 },
+      { id: "cratebig1", x: 8, z: -6, w: 1.9, d: 1.9, h: 2.2, color: 0x9c7a48, rough: 0.8, metal: 0.0, model: "cardboardBoxClosed.glb" },
+      { id: "cratebig2", x: 10, z: 6, w: 1.9, d: 1.9, h: 2.0, color: 0xb79a68, rough: 0.8, metal: 0.0, model: "cardboardBoxClosed.glb" },
+      { id: "pallet", x: 9, z: 0, w: 1.6, d: 1.2, h: 0.4, color: 0x8a6a44, rough: 0.85, metal: 0.0 },
+      { id: "hazbarrel", x: 11, z: -2, w: 1.0, d: 1.0, h: 1.5, color: 0xe0b820, rough: 0.5, metal: 0.2 },
+      { id: "container", x: 8, z: 3, w: 2.6, d: 2.0, h: 2.4, color: 0x2f6a8a, rough: 0.6, metal: 0.3, model: "shipping-container-quaternius.glb", rot: 1.57 },
+      { id: "forklift", x: 11, z: 4, w: 1.4, d: 2.4, h: 1.8, color: 0xe07a20, rough: 0.55, metal: 0.25 },
+    ],
+    lights: [
+      { type: "point", x: -9.5, y: 4.5, z: 0, color: 0xfff0d8, intensity: 26, dist: 26 },
+      { type: "point", x: 0.5, y: 4.5, z: 0, color: 0xfff4e0, intensity: 24, dist: 26 },
+      { type: "point", x: 10, y: 4.5, z: 0, color: 0xe4eeff, intensity: 26, dist: 28 },
+    ],
+    spawn: { seeker: { x: 0.5, z: -9 }, hider: { x: 0.5, z: 0 } },
+    spots: [
+      // garage
+      { x: -11, z: 2.4, faceYaw: 0.0 }, { x: -13, z: -3.9, faceYaw: 1.57 }, { x: -13.6, z: 1.6, faceYaw: 1.57 }, { x: -8, z: 4.4, faceYaw: 3.14 },
+      // office
+      { x: -2, z: -3, faceYaw: 3.14 }, { x: 2, z: 3, faceYaw: 0.0 }, { x: 3.6, z: -5.2, faceYaw: 1.57 }, { x: -3, z: 0.9, faceYaw: 3.14 },
+      // warehouse
+      { x: 13, z: -5, faceYaw: 1.57 }, { x: 8, z: -4.7, faceYaw: 0.0 }, { x: 11, z: -2.9, faceYaw: 3.14 }, { x: 8, z: 4.2, faceYaw: 3.14 },
+    ],
+  },
 };
 
 /** Interior props -> 2D collision/occlusion AABBs {x,z,hw,hd}. */
@@ -114,13 +180,14 @@ export function mapObstacles(map) {
   return map.props.map((p) => ({ id: p.id, x: p.x, z: p.z, hw: p.w / 2, hd: p.d / 2 }));
 }
 
-/** The subset the pure sim needs. */
+/** The subset the pure sim needs — props AND interior walls become 2D obstacles. */
 export function toSimMap(map) {
+  const obstacles = mapObstacles(map);
+  for (const w of (map.walls || [])) obstacles.push({ id: w.id || "wall", x: w.x, z: w.z, hw: w.w / 2, hd: w.d / 2 });
   return {
     bounds: map.bounds,
-    obstacles: mapObstacles(map),
+    obstacles,
     spawn: { seeker: { ...map.spawn.seeker }, hider: { ...map.spawn.hider } },
-    // fresh copies of spots (sim mutates _claimed)
     spots: (map.spots || []).map((s) => ({ ...s })),
   };
 }
