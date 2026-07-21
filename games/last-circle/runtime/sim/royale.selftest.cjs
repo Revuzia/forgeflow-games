@@ -228,7 +228,17 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
 
   // stance modifiers, each isolated
   ok(approx(E("ar", 0, S({ ads: true })), 1.5 * 0.5), "spread: ADS halves it");
-  ok(approx(E("ar", 0, S({ moving: true })), 1.5 * 1.4), "spread: moving costs 1.4x");
+  // movement penalty is GRADED BY SPEED now: sprinting must cost more than
+  // walking, or sprint is free and walking is a strictly dominated state
+  ok(approx(E("ar", 0, S({ speed: 0 })), 1.5), "spread: standing still has no movement penalty");
+  ok(approx(E("ar", 0, S({ speed: 6 })), 1.5 * 1.45), "spread: walking (6 m/s) costs 1.45x");
+  ok(approx(E("ar", 0, S({ speed: 9.6 })), 1.5 * 1.72), "spread: sprinting (9.6 m/s) costs 1.72x");
+  ok(E("ar", 0, S({ speed: 9.6 })) > E("ar", 0, S({ speed: 6 })),
+     "spread: sprinting is strictly worse than walking (walking is no longer dominated)");
+  ok(E("ar", 0, S({ speed: 2.7 })) < E("ar", 0, S({ speed: 6 })),
+     "spread: crouch-walk pace is tighter than a full walk");
+  ok(approx(E("ar", 0, S({ speed: 40 })), 1.5 * 1.8), "spread: movement penalty caps at 1.8x");
+  ok(approx(E("ar", 0, S({ moving: true })), 1.5 * 1.45), "spread: legacy moving:true maps to walk speed");
   ok(approx(E("ar", 0, S({ airborne: true })), 1.5 * 2), "spread: airborne costs 2x");
   ok(approx(E("ar", 0, S({ crouching: true })), 1.5 * R.CROUCH.spreadMult), "spread: crouch applies CROUCH.spreadMult");
   ok(E("ar", 0, S({ crouching: true })) < E("ar", 0, S({})), "spread: crouching is strictly tighter than standing");
@@ -236,12 +246,14 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   // first-shot accuracy: the biggest term, and shotguns are excluded
   ok(approx(E("ar", 0, S({ sinceLastShotS: 1 })), 1.5 * 0.15), "spread: first shot standing still is 0.15x");
   ok(approx(E("shotgun", 0, S({ sinceLastShotS: 1 })), 4.0), "spread: shotguns get NO first-shot bonus");
-  ok(approx(E("ar", 0, S({ sinceLastShotS: 1, moving: true })), 1.5 * 1.4), "spread: moving forfeits the first-shot bonus");
+  ok(approx(E("ar", 0, S({ sinceLastShotS: 1, speed: 6 })), 1.5 * 1.45), "spread: moving forfeits the first-shot bonus");
+  ok(approx(E("ar", 0, S({ sinceLastShotS: 1, speed: 0.3 })), 1.5 * (1 + 0.3 * 0.075) * 0.15),
+     "spread: a slow creep still keeps the first-shot bonus (tolerance, not exact-equals)");
   ok(approx(E("ar", 0, S({ sinceLastShotS: 1, airborne: true })), 1.5 * 2), "spread: airborne forfeits the first-shot bonus");
 
   // combined, exactly as fire() chained them
-  ok(approx(E("ar", 2, S({ ads: true, moving: true, crouching: true })),
-            1.5 * R.RARITY_SPREAD_MULT[2] * 0.5 * 1.4 * R.CROUCH.spreadMult),
+  ok(approx(E("ar", 2, S({ ads: true, speed: 6, crouching: true })),
+            1.5 * R.RARITY_SPREAD_MULT[2] * 0.5 * 1.45 * R.CROUCH.spreadMult),
      "spread: modifiers compose in the original order");
   ok(E("ar", 0, S({})) > 0 && E("glauncher", 0, S({})) > 0, "spread: every weapon returns a positive cone");
   ok(R.effectiveSpread("nonexistent", 0, S({})) === 1, "spread: unknown weapon falls back to 1deg, never NaN");

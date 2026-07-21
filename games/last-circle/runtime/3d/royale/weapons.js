@@ -381,7 +381,7 @@ function fire(W, a, def) {
   // SAME number this fires with — it used to guess with a cruder formula
   const spread = K.effectiveSpread(a.weapon.id, a.weapon.rarity, {
     ads: !!a.input.ads,
-    moving: Math.hypot(a.vel.x, a.vel.z) > 1,
+    speed: Math.hypot(a.vel.x, a.vel.z),
     airborne: !a.onGround,
     crouching: !!a.crouching,
     sinceLastShotS: W.t - a.lastShotT,

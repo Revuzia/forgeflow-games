@@ -3,6 +3,31 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — Sprint was free, so walking was pointless (?v=76, LIVE)
+
+A DELIBERATE BALANCE CHANGE, not a bug fix — stating that plainly because it
+changes how every fight and all 49 bots behave.
+
+- The movement spread penalty was a flat 1.4x for any speed over 1 m/s. Walking
+  and sprinting therefore cost EXACTLY the same accuracy, so sprint was free and
+  plain walking was a strictly dominated state: there was never a reason to
+  choose it. (Crouch, added in ?v=49, made that worse by giving a third option
+  that beat walking outright.)
+- The penalty is now graded by actual speed: still 1.00x, crouch-walk pace
+  (~2.7 m/s) 1.20x, walk (6.0) 1.45x, sprint (9.6) 1.72x, capped at 1.8x. Walking
+  is now the deliberate middle option it was always supposed to be, and closing
+  ground at full sprint costs you the first exchange.
+- The first-shot-accuracy test used an exact `movePen === 1` compare, which a
+  continuous penalty would have broken silently; it is now a speed tolerance
+  (< 0.6 m/s), so a slow creep keeps the bonus.
+- Cheap to do safely only because ?v=73 had already collapsed fire() and the
+  reticle onto ONE model — the crosshair picked this up for free and shows it.
+
+Verified live: reticle scale still 1.18 / walk 1.55 / sprint 1.77, with
+crouch-walk at 0.97; sim spread agrees at 2.175deg walking vs 2.58deg sprinting.
+7 new selftest assertions pin the curve and its cap (89 passing, was 82).
+DRAFT.
+
 ## 2026-07-21 — First-run onboarding (?v=75, LIVE)
 
 - There was no onboarding of ANY kind. This is a browser BR: it gets opened cold

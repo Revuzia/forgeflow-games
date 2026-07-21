@@ -1482,7 +1482,7 @@ export function update(W, dt) {
   const spreadNow = (p.weapon && K.WEAPONS[p.weapon.id])
     ? K.effectiveSpread(p.weapon.id, p.weapon.rarity, {
         ads: !!p.input.ads,
-        moving: Math.hypot(p.vel.x, p.vel.z) > 1,
+        speed: Math.hypot(p.vel.x, p.vel.z),
         airborne: !p.onGround,
         crouching: !!p.crouching,
         sinceLastShotS: W.t - (p.lastShotT == null ? -9 : p.lastShotT),   // 0 is a REAL time, not 'missing'

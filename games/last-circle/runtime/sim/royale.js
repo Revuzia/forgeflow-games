@@ -137,13 +137,20 @@
     st = st || {};
     var spread = (def.spreadDeg || 1) * (RARITY_SPREAD_MULT[rarity] || 1);
     if (st.ads) spread *= 0.5;
-    var movePen = st.moving ? 1.4 : 1;
+    // Movement penalty GRADED BY SPEED, not a binary "are you moving".
+    // It used to be a flat 1.4x for anything over 1 m/s, which meant walking and
+    // sprinting cost exactly the same accuracy — so sprint was free and plain
+    // walking was a strictly dominated state with no reason to ever use it.
+    // Now: still 1.00, crouch-walk (~2.7) 1.20, walk (6.0) 1.45, sprint (9.6) 1.72.
+    var sp = st.speed != null ? st.speed : (st.moving ? MOVE.walk : 0);
+    var movePen = 1 + Math.min(0.8, Math.max(0, sp) * 0.075);
     var airPen = st.airborne ? 2 : 1;
     spread *= movePen * airPen;
     if (st.crouching) spread *= CROUCH.spreadMult;
     // FIRST-SHOT ACCURACY: a deliberate single shot while standing still goes
-    // exactly where the reticle points — no bloom lottery
-    if (def.cls !== "shotgun" && !st.airborne && movePen === 1 && (st.sinceLastShotS || 0) > 0.5) spread *= 0.15;
+    // exactly where the reticle points — no bloom lottery. Tolerance rather than
+    // an exact compare now that movePen is continuous.
+    if (def.cls !== "shotgun" && !st.airborne && sp < 0.6 && (st.sinceLastShotS || 0) > 0.5) spread *= 0.15;
     return spread;
   }
 
