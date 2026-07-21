@@ -131,7 +131,19 @@ function wireEvents(W) {
   W.events.on("actorHurt", (victim, info) => {
     burst({ x: victim.pos.x, y: victim.pos.y + 1.2, z: victim.pos.z, n: 4, color: info.toShield > 0 ? 0x4aa8ff : 0xc23b3b, speed: 2.4, size: 0.08, life: 0.35 });
     if (info.attackerId === (W.player && W.player.id)) {
-      dmgNumber(W, victim.pos.x, victim.pos.y + 2.1, victim.pos.z, String(info.dmg), info.isHead ? "#ffd54a" : info.toShield > 0 ? "#6db9ff" : "#ffffff", 1);
+      // Coalesce: one shotgun blast fires this nine times in a single frame at
+      // identical world coords, so it printed nine overlapping "10"s instead of
+      // one readable "90". Summed and flushed once per frame in update().
+      const b = hurtBuf.get(victim);
+      if (b) {
+        b.dmg += info.dmg;
+        b.isHead = b.isHead || !!info.isHead;
+        b.toShield = b.toShield || info.toShield || 0;
+      } else {
+        hurtBuf.set(victim, { dmg: info.dmg, isHead: !!info.isHead, toShield: info.toShield || 0 });
+      }
+      // fastForward skips fx update entirely — never let the buffer run away
+      if (hurtBuf.size > 64) hurtBuf.clear();
     }
     if (victim === W.player) W.camShake = Math.max(W.camShake, 0.12);
   });
@@ -147,6 +159,8 @@ function wireEvents(W) {
 
 /** floating damage number (world → screen projection each frame until dead) */
 const dmgNums = [];
+// victim -> accumulated damage for THIS frame (see the actorHurt handler)
+const hurtBuf = new Map();
 function dmgNumber(W, x, y, z, text, color, scale) {
   const el = document.createElement("div");
   el.textContent = text;
@@ -167,9 +181,18 @@ const proj = new THREE.Vector3();
 export function reset() {
   for (const d of dmgNums) { if (d.el) d.el.remove(); }
   dmgNums.length = 0;
+  hurtBuf.clear();
 }
 
 export function update(W, dt) {
+  // flush this frame's coalesced damage numbers (colour precedence: head > shield > body)
+  if (hurtBuf.size) {
+    for (const [victim, b] of hurtBuf) {
+      dmgNumber(W, victim.pos.x, victim.pos.y + 2.1, victim.pos.z, String(Math.round(b.dmg)),
+        b.isHead ? "#ffd54a" : b.toShield > 0 ? "#6db9ff" : "#ffffff", 1);
+    }
+    hurtBuf.clear();
+  }
   // startMatch clears every scene group — re-adopt the particle mesh or NO
   // particle (muzzle flash / tracer / impact / explosion) ever renders
   // in a match (root cause of "when shooting i dont see bullets")

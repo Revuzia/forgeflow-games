@@ -20,6 +20,7 @@ Line anchors were correct at the time of writing but drift — re-locate by cont
 - [x] #5 Challenges evaluated strictly in order + awardable while dead (?v=57)
 - [x] #6 Rebinding never released the old default and silently orphaned actions (?v=57)
 - [x] #8 Shadow volume was a 160m box pinned to world origin (?v=58)
+- [x] #10 Hit feedback doubled (2 hitmarker listeners) and per-pellet numbers stacked (?v=59)
 - [ ] everything else below
 
 # LAST CIRCLE — BUILD ORDER

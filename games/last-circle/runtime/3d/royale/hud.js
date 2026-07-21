@@ -1668,6 +1668,12 @@ function drawMinimap(W, ctx, size, big) {
 function wireEvents(W) {
   W.events.on("hitMarker", (owner, target, dmg, isHead) => {
     if (owner !== W.player || !R.hitmark) return;
+    // A shotgun blast fires this once per pellet in one frame; a body pellet
+    // landing after a head pellet used to overwrite the marker back to plain
+    // white, so headshots inside a blast were invisible.
+    const nowMs = performance.now();
+    if (!isHead && nowMs < (R._hitHeadUntil || 0)) return;
+    if (isHead) R._hitHeadUntil = nowMs + 170;
     // headshots get a bigger yellow marker (audio.js adds a higher-pitched ping)
     R.hitmark.style.color = isHead ? "#ffd54a" : "#ffffff";
     R.hitmark.style.fontSize = isHead ? "34px" : "26px";

@@ -3,6 +3,29 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — Hit feedback doubled and collapsed (?v=59, LIVE)
+
+Build-order #10. Three defects in the feedback for a single shot.
+
+- **TWO live hitMarker listeners** were registered on the same event (audio.js
+  had a sine 1000/1300 ping AND a square 950/1400 one), so every hit played a
+  detuned flam — and a 9-pellet shotgun blast fired 18 phase-coherent
+  oscillators into a destination with no limiter, which audibly clipped. Removed
+  the unguarded duplicate; the surviving one has the null guard and the wider
+  headshot pitch split.
+- **Per-pellet damage numbers stacked on one pixel.** fx.js spawned a number per
+  actorHurt, so a 90-damage blast printed nine coincident "10"s instead of one
+  readable "90". Now coalesced per victim per frame — summed, headshot ORed,
+  colour precedence head > shield > body — and flushed in update(). The buffer
+  is capped because fastForward skips fx.update entirely.
+- **A headshot inside a blast was invisible.** The HUD marker was last-write-wins,
+  so a body pellet landing after a head pellet reset it to plain white 26px.
+  Headshot styling now holds for its duration.
+
+Verified live with a point-blank 9-pellet blast: exactly ONE damage number
+reading "90" (matching the 90 dealt), a single registered hitMarker listener,
+and a head-then-body pellet sequence leaving the marker yellow at 34px. DRAFT.
+
 ## 2026-07-20 — Shadows existed on ~1% of the map (?v=58, LIVE)
 
 Build-order #8.

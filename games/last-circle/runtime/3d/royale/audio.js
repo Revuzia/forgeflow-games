@@ -184,7 +184,10 @@ function wire(W) {
   });
   on("reloadDone", (a) => { if (a === W.player) thump(1800, 0.03, 0.14); });
   on("dryFire", (a) => { if (a === W.player) blip(300, 0.05, 0.12, "square"); });
-  on("hitMarker", (owner, t2, dmg, isHead) => { if (owner === W.player) blip(isHead ? 1300 : 1000, 0.05, 0.16, "sine"); });
+  // (the hitmarker ping lives in ONE place further down — two listeners were
+  //  registered on this event, so every hit played a detuned sine+square flam
+  //  and a 9-pellet shotgun blast summed 18 phase-coherent oscillators into a
+  //  destination with no limiter, which audibly clipped)
   on("actorHurt", (victim, info) => {
     if (victim === W.player) thump(600, 0.12, 0.3);
     if (info.broke) blip(1800, 0.25, 0.2, "sawtooth", victim === W.player ? null : victim.pos, 50);
