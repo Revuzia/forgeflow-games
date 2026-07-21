@@ -3,6 +3,37 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — Challenge XP you could never earn + keybinds that ate each other (?v=57, LIVE)
+
+Build-order #5 and #6.
+
+- **CHALLENGES WERE EVALUATED STRICTLY IN ORDER.** The update polled only
+  chs[W._chalIdx] and advanced that pointer solely when the CURRENT challenge
+  completed — and pickChallenges always puts CHAL_POOL[0] ("Survive 3 minutes")
+  in slot 0. So a player who died at 2:30 with four kills and 600 damage earned
+  ZERO challenge XP: the elimination and damage cards were never even polled.
+  That withheld 465-625 XP from exactly the player whose match awards ~100-355.
+  All three are now evaluated independently; the card still shows one at a time.
+- Gated on being ALIVE, which the same change makes newly necessary: dying does
+  not end the match and W.t keeps running, so a parallel pass would let a corpse
+  in the spectator seat bank "Survive 3 minutes" and "Reach the final 10"
+  without playing — the same exploit class already closed for practice mode.
+- **REBINDING A KEY NEVER RELEASED THE OLD DEFAULT.** canon() maps physical ->
+  canonical and falls through to identity, so after rebinding Map to Q, BOTH Q
+  and M opened the map — forever, persisted to lc_settings. The action's default
+  key now gets an explicit __unbound sentinel.
+- **AND IT SILENTLY KILLED WHATEVER OWNED THE NEW KEY.** Rebinding Move Forward
+  onto D left strafe-right unreachable while the settings row still displayed
+  "D". Conflicts are now refused with "already: <action>" instead of stealing.
+  Unbound actions display "—", and there is a RESET TO DEFAULTS button — until
+  now only devtools could undo a bad rebind.
+
+Verified live: at t=150 with 2 kills the elim challenge awards while survive
+does not; after dying, t=400 still does not award survive. Rebinding Map to Q
+yields {KeyM:"__unbound", KeyQ:"KeyM"} so Q opens the map and M does nothing;
+rebinding Forward onto Q is refused with "already: Map" and leaves the remap
+untouched; RESET clears it. Selftest 66/66. DRAFT.
+
 ## 2026-07-20 — Match teardown leaked ~55 animation mixers PER MATCH (?v=56, LIVE)
 
 Build-order #7. Frame time degraded monotonically the longer you played, with

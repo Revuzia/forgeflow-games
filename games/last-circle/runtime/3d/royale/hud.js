@@ -1330,11 +1330,27 @@ export function update(W, dt) {
     // active challenge card — advance past completed ones, award XP once
     const chs = W._challenges;
     if (chs && R.chalCard) {
-      while (W._chalIdx < chs.length && chs[W._chalIdx].done) W._chalIdx++;
-      const ch = chs[W._chalIdx];
+      // Evaluate ALL of them, independently. This used to poll only
+      // chs[W._chalIdx] and advance that pointer solely when the CURRENT
+      // challenge completed — and slot 0 is always "Survive 3 minutes", so a
+      // player who died at 2:30 with four kills and 600 damage banked nothing
+      // from the other two. The card still shows one at a time.
+      // Guarded on being ALIVE: dying does not end the match and W.t keeps
+      // running, so a corpse in the spectator seat could otherwise bank
+      // "Survive 3 minutes" and "Reach the final 10" without playing.
+      if (W.match && W.player && W.player.alive) {
+        for (const c of chs) {
+          if (c.awarded) continue;
+          if (c.prog(W) >= c.goal) {
+            c.awarded = true; c.done = true;
+            addXP(W, c.xp);
+            flashMsg("CHALLENGE COMPLETE  +" + c.xp + " XP");
+          }
+        }
+      }
+      const ch = chs.find((c) => !c.done) || null;
       if (ch && W.match) {
         const cur = Math.min(ch.goal, ch.prog(W));
-        if (cur >= ch.goal && !ch.awarded) { ch.awarded = true; ch.done = true; addXP(W, ch.xp); flashMsg("CHALLENGE COMPLETE  +" + ch.xp + " XP"); }
         R.chalCard.style.display = "flex";
         const sig = ch.id + ":" + cur;
         if (C.chal !== sig) {
@@ -1903,6 +1919,16 @@ const ACTIONS = [
   ["Weapon 1", "Digit1"], ["Weapon 2", "Digit2"], ["Weapon 3", "Digit3"],
   ["Weapon 4", "Digit4"], ["Weapon 5", "Digit5"],
 ];   // fire/ADS are mouse buttons — not keyboard-rebindable here
+// Sentinel parked on an action's DEFAULT key once that key is no longer supposed
+// to trigger it. canon() maps physical -> canonical and falls through to
+// identity, so without this a rebound action stayed reachable from its old key.
+const UNBOUND = "__unbound";
+/** The physical key currently driving `canonical`, or null if nothing does. */
+function physFor(W, canonical) {
+  const rm = (W.settings && W.settings.remap) || {};
+  for (const k in rm) if (rm[k] === canonical) return k;
+  return rm[canonical] === UNBOUND ? null : canonical;
+}
 function showSettings(W) {
   W.captureKey = null;   // drop any armed keybind capture when (re)rendering the modal
   if (R.settings) { R.settings.remove(); R.settings = null; }
@@ -1947,23 +1973,46 @@ function showSettings(W) {
   for (const [label, canonical] of ACTIONS) {
     const row = h("div", { display: "flex", justifyContent: "space-between", alignItems: "center" }, null, kGrid);
     h("div", { fontSize: "13px", opacity: "0.8" }, label, row);
-    // find current physical key for this canonical
-    let phys = canonical;
-    for (const k2 in (W.settings.remap || {})) if (W.settings.remap[k2] === canonical) phys = k2;
-    const kb = h("button", Object.assign({}, BTN, { padding: "4px 12px", fontSize: "12px", background: "rgba(255,255,255,0.12)", color: "#dfeaff", minWidth: "84px" }), keyLabel(phys), row);
+    // current physical key for this action — UNBOUND if its default was released
+    const phys = physFor(W, canonical);
+    const kb = h("button", Object.assign({}, BTN, { padding: "4px 12px", fontSize: "12px", background: "rgba(255,255,255,0.12)", color: phys ? "#dfeaff" : "#ffb3a7", minWidth: "84px" }), phys ? keyLabel(phys) : "—", row);
     kb.onclick = () => {
       kb.textContent = "press key… (Esc = cancel)";
       W.captureKey = (code) => {
         W.captureKey = null;
-        if (code === "Escape") { kb.textContent = keyLabel(phys); return; }   // cancel, don't bind to Esc
-        W.settings.remap = W.settings.remap || {};
-        for (const k3 in W.settings.remap) if (W.settings.remap[k3] === canonical) delete W.settings.remap[k3];
-        if (code !== canonical) W.settings.remap[code] = canonical;
+        const restore = () => { kb.textContent = phys ? keyLabel(phys) : "—"; };
+        if (code === "Escape") { restore(); return; }   // cancel, don't bind to Esc
+        const rm = W.settings.remap = W.settings.remap || {};
+        // Which action does the chosen key drive right now? canon() falls
+        // through to identity, so an unmapped key drives its own default.
+        const owner = rm[code] !== undefined ? rm[code] : code;
+        if (owner !== canonical && owner !== UNBOUND && ACTIONS.some((a) => a[1] === owner)) {
+          // Refuse instead of silently stealing it: rebinding Forward onto D used
+          // to kill strafe-right while its row still proudly displayed "D".
+          const other = ACTIONS.find((a) => a[1] === owner);
+          kb.textContent = "already: " + other[0];
+          setTimeout(restore, 1400);
+          return;
+        }
+        for (const k3 in rm) if (rm[k3] === canonical) delete rm[k3];
+        delete rm[code];
+        if (code === canonical) {
+          delete rm[canonical];                  // back to its own default
+        } else {
+          rm[code] = canonical;
+          rm[canonical] = UNBOUND;               // RELEASE the old default: without
+          // this, canon() identity-mapped it and BOTH keys fired the action
+          // (rebind Map to Q and M kept opening the map forever).
+        }
         save(W);
-        kb.textContent = keyLabel(code);
+        showSettings(W);                          // repaint every row's truth
       };
     };
   }
+
+  const resetRow = h("div", { display: "flex", justifyContent: "flex-end", marginTop: "4px" }, null, box);
+  const resetB = h("button", Object.assign({}, BTN, { padding: "5px 14px", fontSize: "12px" }), "RESET TO DEFAULTS", resetRow);
+  resetB.onclick = () => { W.settings.remap = {}; save(W); showSettings(W); };
 
   const closeB = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff", marginTop: "10px" }), "DONE", box);
   closeB.onclick = () => closeSettings(W);
