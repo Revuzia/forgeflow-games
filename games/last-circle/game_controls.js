@@ -215,7 +215,7 @@
   window.addEventListener("keydown", function (e) {
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
     if (e.code === "KeyF" && CFG.fs_hotkey !== false) { toggleFullscreen(); e.preventDefault(); }
-    else if (e.code === "KeyM") { toggleMute(); e.preventDefault(); }
+    else if (e.code === "KeyM" && CFG.mute_hotkey !== false) { toggleMute(); e.preventDefault(); }
   });
 
   // Sync fullscreen icon on change (F11/ESC too) + ESC lock lifecycle

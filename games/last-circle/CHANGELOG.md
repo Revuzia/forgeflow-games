@@ -3,6 +3,38 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — Two real defects from the adversarial gap scan (?v=52, LIVE)
+
+A 131-agent scan (8 dimensions, every finding then run past a "prove it already
+exists" refuter and a "is it worth building" judge) raised 61 findings; 6 were
+refuted as already shipped. These are the first two fixes, both verified against
+the source before touching anything.
+
+- **M OPENED THE MAP *AND* MUTED THE GAME — PERMANENTLY.** Two window keydown
+  listeners both owned KeyM: game_controls.js toggleMute and player.js
+  toggleBigMap. Close the map with ESC and the game stayed muted, across
+  reloads, for the whole portal origin. Confirmed live: the test browser was
+  still muted from an earlier press. FIXED AT THE GENERATOR: the mute hotkey now
+  honours CFG.mute_hotkey (mirroring the fs_hotkey pattern that was already
+  there) in pipeline/engine/runtime/game_controls.js and
+  pipeline/templates/shared/game_controls.js as well as this game's copy — that
+  file ships in 35 games. Last Circle sets mute_hotkey:false because M is its
+  map key. The corner mute button is untouched.
+- **PARACHUTE A/D STEERING WAS MIRRORED.** The glide derived its strafe axis
+  inline as (cos, +sin) while ground movement uses (cos, -sin). The two axes
+  were therefore not perpendicular — their dot product is -sin(2*yaw) — so
+  holding D under the canopy pulled partly backwards at every non-cardinal
+  heading, and sweeping the mouse rotated the drift at double rate. This is the
+  opening 30 seconds of every match. Both call sites now consume one shared
+  sim.moveBasis(yaw).
+- The suite passed 46/46 with that bug live, so the basis is now asserted
+  directly in the node selftest (perpendicularity and unit length at 32 headings,
+  plus right = forward rotated -90 degrees). 51 passed, 0 failed.
+
+Verified live: holding D at yaw 0 / 0.7 / 2.1 / -1.3 gives right 5.82 and
+forward 0.00 at every heading (previously forward went to -3.75 off-axis);
+pressing M leaves the mute state unchanged. DRAFT.
+
 ## 2026-07-20 — Crouch, finished: authored clip + honest hit capsule (?v=51, LIVE)
 
 Completes the crouch shipped at ?v=49, which deliberately left the hit capsule

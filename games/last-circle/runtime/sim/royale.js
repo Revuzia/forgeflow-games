@@ -108,6 +108,17 @@
   /** Eye height, accounting for crouch (camera + muzzle origin). */
   function actorEyeY(a) { return PLAYERK.eyeY * (a && a.crouching ? CROUCH.eyeMult : 1); }
 
+  /** The ONE movement basis for a given yaw: forward (f*) and strafe-right (r*).
+   *  Ground movement and the glide each derived this inline, and the glide got
+   *  the strafe sign wrong — it used (cos, +sin) where the ground uses
+   *  (cos, -sin), so the two axes were not perpendicular (dot = -sin(2*yaw)) and
+   *  A/D under the parachute pulled the wrong way at every non-cardinal heading.
+   *  Sharing it here also makes the error testable from the node selftest. */
+  function moveBasis(yaw) {
+    var s = Math.sin(yaw), c = Math.cos(yaw);
+    return { fx: -s, fz: -c, rx: c, rz: -s };
+  }
+
   // Storm phase tables per mode. radiusFrac × (map halfsize) = target radius.
   // Final Drop pacing (owner: circle "shrinks too much too quickly") —
   // gentler early cuts (~58-64% radius kept per phase vs ~46% before), longer
@@ -375,7 +386,7 @@
     RARITY: RARITY, RARITY_COLOR: RARITY_COLOR, RARITY_DMG_MULT: RARITY_DMG_MULT, RARITY_SPREAD_MULT: RARITY_SPREAD_MULT,
     WEAPONS: WEAPONS, WEAPON_IDS: WEAPON_IDS, AMMO: AMMO, CONSUMABLES: CONSUMABLES, START_LOADOUT: START_LOADOUT,
     MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH,
-    actorHeight: actorHeight, actorEyeY: actorEyeY,
+    actorHeight: actorHeight, actorEyeY: actorEyeY, moveBasis: moveBasis,
     STORM_PHASES: STORM_PHASES, MODE: MODE, LOOT_WEIGHTS: LOOT_WEIGHTS,
     BOT_TIERS: BOT_TIERS, BOT_TIER_MIX: BOT_TIER_MIX, BOT_PERSONALITIES: BOT_PERSONALITIES, BOT_NAMES: BOT_NAMES,
     Storm: Storm, Match: Match,

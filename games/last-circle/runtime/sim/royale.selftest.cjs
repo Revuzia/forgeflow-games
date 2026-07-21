@@ -154,5 +154,28 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(R.BOT_TIERS.length === 5 && R.BOT_TIERS[4].aimErrDeg < R.BOT_TIERS[0].aimErrDeg, "bots: higher tier = better aim");
 }
 
+// ── Movement basis ───────────────────────────────────────────────────────────
+// The glide derived its strafe axis inline as (cos, +sin) against a ground basis
+// of (cos, -sin): not perpendicular, so A/D under the parachute pulled the wrong
+// way at every non-cardinal heading. The whole suite passed 46/46 with that bug
+// live, so it is asserted here directly.
+{
+  let worstDot = 0, worstLen = 0;
+  for (let i = 0; i < 32; i++) {
+    const yaw = (i / 32) * Math.PI * 2;
+    const b = R.moveBasis(yaw);
+    worstDot = Math.max(worstDot, Math.abs(b.fx * b.rx + b.fz * b.rz));
+    worstLen = Math.max(worstLen, Math.abs(Math.hypot(b.fx, b.fz) - 1), Math.abs(Math.hypot(b.rx, b.rz) - 1));
+  }
+  ok(worstDot < 1e-12, "move basis: forward ⟂ strafe at every yaw (worst dot " + worstDot.toExponential(1) + ")");
+  ok(worstLen < 1e-12, "move basis: both axes unit length");
+  const b0 = R.moveBasis(0);
+  ok(Math.abs(b0.fx) < 1e-12 && Math.abs(b0.fz + 1) < 1e-12, "move basis: yaw 0 faces -Z");
+  ok(Math.abs(b0.rx - 1) < 1e-12 && Math.abs(b0.rz) < 1e-12, "move basis: yaw 0 strafes +X");
+  // right = forward rotated -90° about Y, at every heading
+  const q = R.moveBasis(0.7);
+  ok(Math.abs(q.rx - -q.fz) < 1e-12 && Math.abs(q.rz - q.fx) < 1e-12, "move basis: right is forward rotated -90°");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

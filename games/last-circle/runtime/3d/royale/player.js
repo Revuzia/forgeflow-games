@@ -555,14 +555,17 @@ function stepActor(W, a, dt, far) {
     const chuted = !!a.chute;
     const speed = chuted ? 8.5 : 15;                        // canopy glides, freefall carries
     const fallTarget = chuted ? -5.5 : (inp.sprint ? -34 : -20);
-    const dirX = Math.sin(a.yaw) * -1, dirZ = Math.cos(a.yaw) * -1;
+    const B = K.moveBasis(a.yaw);
+    const dirX = B.fx, dirZ = B.fz;
     const fwd = K.clamp(inp.mz, -0.3, 1);
     // the umbrella glides forward gently even with no input (glide ratio), so it
     // reads as gliding not dropping. Kept SMALL (0.15x) so an AFK player drifts
     // only a little — the old 0.35x forced drift pushed them ~100m into the sea.
     const glideF = chuted ? Math.max(0.15, Math.max(0, fwd)) : Math.max(0, fwd);
-    const txv = dirX * speed * glideF + Math.cos(a.yaw) * speed * 0.5 * inp.mx;
-    const tzv = dirZ * speed * glideF + Math.sin(a.yaw) * speed * 0.5 * inp.mx;
+    // strafe uses the SAME basis as forward — it previously used (cos, +sin)
+    // against a (cos, -sin) ground basis, so A/D steered wrong off-axis
+    const txv = dirX * speed * glideF + B.rx * speed * 0.5 * inp.mx;
+    const tzv = dirZ * speed * glideF + B.rz * speed * 0.5 * inp.mx;
     a.vel.x += (txv - a.vel.x) * Math.min(1, dt * 2.2);      // air has inertia
     a.vel.z += (tzv - a.vel.z) * Math.min(1, dt * 2.2);
     a.vel.y += (fallTarget - a.vel.y) * Math.min(1, dt * (chuted ? 3 : 1.4));
@@ -658,8 +661,8 @@ function stepActor(W, a, dt, far) {
     : inp.ads ? K.MOVE.ads : (inp.sprint && inp.mz > 0.5 && !a.inWater) ? K.MOVE.sprint : K.MOVE.walk;
   let wspd = (a.inWater && !a.swimming) ? spd * 0.55 : spd;   // wading is slow
   if (a.crouching) wspd *= K.CROUCH.speedMult;
-  const sin = Math.sin(a.yaw), cos = Math.cos(a.yaw);
-  const dx = (inp.mx * cos - inp.mz * sin), dz = (-inp.mx * sin - inp.mz * cos);
+  const GB = K.moveBasis(a.yaw);
+  const dx = GB.rx * inp.mx + GB.fx * inp.mz, dz = GB.rz * inp.mx + GB.fz * inp.mz;
   const dl = Math.hypot(dx, dz) || 1;
   const tx = (dx / dl) * wspd * (Math.abs(inp.mx) + Math.abs(inp.mz) > 0 ? 1 : 0);
   const tz = (dz / dl) * wspd * (Math.abs(inp.mx) + Math.abs(inp.mz) > 0 ? 1 : 0);

@@ -172,7 +172,7 @@
   window.addEventListener("keydown", function (e) {
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
     if (e.code === "KeyF") { toggleFullscreen(); e.preventDefault(); }
-    else if (e.code === "KeyM") { toggleMute(); e.preventDefault(); }
+    else if (e.code === "KeyM" && CFG.mute_hotkey !== false) { toggleMute(); e.preventDefault(); }
   });
 
   // Sync fullscreen icon when user presses F11 or ESC
