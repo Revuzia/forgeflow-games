@@ -103,6 +103,7 @@ register3d("royale", async function (kernel, content) {
     const DPR = { low: 1, medium: 1.5, high: 2 };
     const SHADOW = { low: 0, medium: 2048, high: 4096 };
     const ANISO = { low: 1, medium: 4, high: 8 };
+    const BLOOM = { low: 0, medium: 0.14, high: 0.14 };
     const maxA = (r.capabilities && r.capabilities.getMaxAnisotropy) ? r.capabilities.getMaxAnisotropy() : 8;
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, DPR[tier] || 1.5));
     const shadows = tier !== "low";
@@ -118,7 +119,10 @@ register3d("royale", async function (kernel, content) {
       const sc = kernel.sun.shadow.camera;
       if (sc.right !== ext) {
         sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext;
-        sc.near = 1; sc.far = 400;
+        // far was 400, and Isla Viva's high ground already eats ~338 m of that
+        // when you stand on it — one hill short of the whole depth pass going
+        // dark. 600 leaves real headroom for the ground-anchored focus below.
+        sc.near = 1; sc.far = 600;
         sc.updateProjectionMatrix();
       }
       // acne/peter-panning control — neither was ever set
@@ -138,8 +142,18 @@ register3d("royale", async function (kernel, content) {
     W.scene.traverse((o) => {
       const m = o.material; if (!m) return;
       const mats = Array.isArray(m) ? m : [m];
-      for (const mm of mats) for (const slot of ["map", "normalMap", "roughnessMap"]) if (mm[slot]) { mm[slot].anisotropy = W._texAniso; mm[slot].needsUpdate = true; }
+      for (const mm of mats) for (const slot of ["map", "normalMap", "roughnessMap", "emissiveMap"]) if (mm[slot]) { mm[slot].anisotropy = W._texAniso; mm[slot].needsUpdate = true; }
     });
+    // Bloom was the one fidelity knob the tier tables never touched: "low"
+    // disabled shadows and dropped DPR to 1 but still paid for the full
+    // UnrealBloomPass blur chain every frame, even though maps.js turns match
+    // bloom down to 0.14 where it is nearly invisible. EffectComposer skips a
+    // pass whose `enabled` is false, so the composer stays allocated and
+    // medium/high keep the menu's 0.45-strength storm-ring glow. kernel.bloom
+    // only exists once the menu world has called enableBloom, hence the guard —
+    // the BOOT-time applyGraphics() below runs before that, and the per-match
+    // re-apply in _startMatch is what actually lands the low tier's setting.
+    if (kernel.bloom) kernel.bloom.enabled = (BLOOM[tier] || 0) > 0;
     // keep the kernel's own quality key in sync (shell buttons + next boot)
     try { const s = JSON.parse(localStorage.getItem("ffg_settings") || "{}"); s.quality = tier === "medium" ? "med" : tier; localStorage.setItem("ffg_settings", JSON.stringify(s)); } catch (e) {}
   };
@@ -170,7 +184,13 @@ register3d("royale", async function (kernel, content) {
     const ext = W._shadowExt || 55;
     const texels = (sun.shadow.mapSize && sun.shadow.mapSize.x) || 2048;
     const step = (ext * 2) / texels;
-    _sunFocus.set(Math.round(f.pos.x / step) * step, f.pos.y, Math.round(f.pos.z / step) * step);
+    // Anchor the volume's HEIGHT to the terrain under the focus, not to the
+    // focus itself. The glider drop starts at 240-270 m, and the sun offset is
+    // only ~169 m long, so following the player's raw Y lifted the whole shadow
+    // camera above the world and the entire descent — the part of the match you
+    // spend looking straight down at the map — rendered with no shadows at all.
+    const gy = W.map && W.map.groundAt ? W.map.groundAt(f.pos.x, f.pos.z) : 0;
+    _sunFocus.set(Math.round(f.pos.x / step) * step, Math.min(f.pos.y, gy + 8), Math.round(f.pos.z / step) * step);
     sun.target.position.copy(_sunFocus);
     sun.target.updateMatrixWorld();
     sun.position.copy(_sunFocus).add(W._sunOff);
@@ -269,6 +289,14 @@ register3d("royale", async function (kernel, content) {
     // practice range dummies must exist BEFORE models load or they get no rig
     if (W.mode === "practice") playerMod.createPracticeRange(W);
     await playerMod.loadActorModels(W);
+    // Re-apply the tier now that the map's textures and the actor GLBs are in
+    // the scene. applyGraphics only ever ran at BOOT and on a Settings click, and
+    // its anisotropy pass is a one-shot traverse of whatever is in the scene at
+    // that moment — so every character and prop texture loaded afterwards kept
+    // the GLTFLoader default of 1, and "high" only ever sharpened the terrain.
+    // The kernel caches by URL and clones share texture objects, so one traverse
+    // here fixes every present and future clone of those assets.
+    W.applyGraphics(W.settings.graphics);
 
     playerMod.spawnAll(W);          // positions actors (glider line or ground by mode)
     if (W.mode === "practice") playerMod.placePracticeRange(W);  // ...then line the range up

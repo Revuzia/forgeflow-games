@@ -314,10 +314,18 @@ export function update(W, dt) {
   if (S.net.isHost() && now - S.lastBots > 100) {
     S.lastBots = now;
     S.botsTick = (S.botsTick || 0) + 1;
+    // "near a human" used to mean near W.player.pos — which on the host is the
+    // HOST's own actor. A guest fighting a bot on the far side of the map got
+    // that bot at 2 Hz, i.e. a lerp target up to 500 ms stale, and their hit
+    // tests resolve against the rendered position. Measure from every live human
+    // instead: at most 7 extra distanceToSquared per bot, and the worst case is
+    // only a higher outbound rate (the 24-per-message chunking below caps size).
+    const eyes = [W.player.pos];
+    for (const h of W.actors) if (h.netRemote && !h.isBot && h.alive) eyes.push(h.netTarget ? h.netTarget.pos : h.pos);
     const list = [];
     for (const a of W.actors) {
       if (!a.isBot || !a.alive || a.netRemote) continue;
-      const far = a.pos.distanceToSquared(W.player.pos) > 300 * 300;
+      const far = eyes.every((p) => a.pos.distanceToSquared(p) > 300 * 300);
       if (far && S.botsTick % 5 !== 0) continue;
       list.push(pack(a));
       if (list.length >= 24) { send("bots", { list }); list.length = 0; }

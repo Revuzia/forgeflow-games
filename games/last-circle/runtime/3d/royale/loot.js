@@ -577,7 +577,24 @@ export function update(W, dt) {
       if (n.data.kind === "weapon" && gunCount() >= 3) continue;
       pickup(W, a, n.id);
     }
-    const target = near.find((n) => !n.taken && (n.type === "chest" || items.has(n.id))) || null;
+    // nearby() sorts ascending by distance, so picking the nearest thing meant a
+    // ground item ALWAYS beat a chest it stood in front of — and the reset below
+    // then wiped chestChannel.t every frame, so HOLD-E could never reach the 2 s
+    // open. Durable because walkover refuses guns at the 3-gun cap and dropItem
+    // scatters your swapped-out gun within 0.7 m of your own feet: swap a weapon
+    // beside a chest and that chest becomes unopenable for the rest of the match.
+    // While E is HELD the chest wins; otherwise the nearest item still leads.
+    //
+    // "Held" has to mean held for a WHILE, not merely down. player.js:470 sets
+    // interact and interactDown on the SAME keydown, so testing interactDown
+    // alone made the chest win on the tap frame too — which meant that standing
+    // near an unopened chest silently disabled tap-E item swapping entirely,
+    // trading one lockout for another. Anything past ~0.18 s is a deliberate
+    // hold; below that it is a tap and the item keeps priority.
+    a._eHoldT = a.input.interactDown ? (a._eHoldT || 0) + dt : 0;
+    const chestNear = near.find((n) => n.type === "chest") || null;
+    const itemNear = near.find((n) => n.type === "item" && items.has(n.id)) || null;
+    const target = ((a._eHoldT || 0) > 0.18 && chestNear) ? chestNear : (itemNear || chestNear);
     // chest channel
     if (target && target.type === "chest" && a.input.interactDown) {
       if (chestChannel.id !== target.id) { chestChannel.id = target.id; chestChannel.t = 0; }

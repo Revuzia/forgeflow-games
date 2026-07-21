@@ -53,7 +53,13 @@
     pistol:   { cls: "pistol", damage: 24, headMult: 1.5, rpm: 400, mag: 16, reloadS: 1.3, ammo: "light", speed: 999, falloff: [25, 50], spreadDeg: 1.3, adsFov: 48 },
     smg:      { cls: "smg", damage: 17, headMult: 1.5, rpm: 720, mag: 30, reloadS: 2.0, ammo: "light", speed: 999, falloff: [18, 40], spreadDeg: 2.2, adsFov: 47 },
     ar:       { cls: "ar", damage: 30, headMult: 1.5, rpm: 330, mag: 30, reloadS: 2.4, ammo: "medium", speed: 300, falloff: [60, 120], spreadDeg: 1.5, adsFov: 42 },
-    shotgun:  { cls: "shotgun", damage: 10, headMult: 1.75, rpm: 70, mag: 5, reloadS: 4.0, ammo: "shells", speed: 999, falloff: [8, 20], pellets: 9, spreadDeg: 4.0, adsFov: 49 },
+    // Shotgun was 10 dmg / 70 rpm / 4.0 s reload = 90 per blast, 105 DPS: the WORST
+    // gun in the table at its own 7 m preferred range (SMG 204, AR 165, pistol 160)
+    // and 3 blasts to break a 200 EHP bar in 1.71 s vs the SMG's 0.92 s. 13 dmg is
+    // 117 per blast — a clean 2-blast kill at 156 DPS, still under the SMG's sustained
+    // lane. It also un-collapses the rarity ladder: hitDamage rounds PER PELLET, so
+    // base 10 gave 10/11/12/12/13 (rare and epic identical); base 13 gives 13/14/15/16/17.
+    shotgun:  { cls: "shotgun", damage: 13, headMult: 1.75, rpm: 80, mag: 5, reloadS: 3.0, ammo: "shells", speed: 999, falloff: [8, 20], pellets: 9, spreadDeg: 4.0, adsFov: 49 },
     sniper:   { cls: "sniper", damage: 105, headMult: 2.5, rpm: 35, mag: 1, reloadS: 3.0, ammo: "heavy", speed: 700, falloff: [200, 400], spreadDeg: 0.15, scope: true, adsFov: 20 },
     glauncher:{ cls: "launcher", damage: 95, headMult: 1.0, rpm: 55, mag: 4, reloadS: 3.2, ammo: "grenades", speed: 26, arc: true, fuseS: 2.0, splashR: 3.5, spreadDeg: 0.8, adsFov: 45 },
   };

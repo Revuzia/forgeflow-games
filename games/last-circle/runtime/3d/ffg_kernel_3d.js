@@ -36,7 +36,14 @@ export class Kernel3D {
     // preserveDrawingBuffer:true lets toDataURL()/the vision fidelity gate
     // capture the rendered frame (default false returns a blank canvas for
     // WebGL). Negligible perf cost at our scale; unlocks automated visual QA.
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    // antialias:false because the scene never reaches the default framebuffer:
+    // hud.js enables the bloom composer on the menu and it stays up for the
+    // whole session, so RenderPass draws into EffectComposer's own
+    // WebGLRenderTarget (built with no `samples`, i.e. single-sampled) and the
+    // only thing the MSAA backbuffer ever received was OutputPass's fullscreen
+    // quad — a quad has no interior edges, so the 4x buffer was allocated and
+    // resolved every frame for zero pixels of coverage. Output is identical.
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
     // QUALITY preset (shell settings → ffg_settings.quality): low = 1.0 DPR +
     // no shadows, med = 1.5 + shadows (the old fixed cap), high = 2.0 + shadows.
     const QDPR = { low: 1.0, med: 1.5, high: 2.0 };

@@ -2,11 +2,13 @@
  * royale/weapons.js — the 6-gun BR arsenal: pistol, SMG, AR, shotgun, sniper,
  * grenade launcher. Firing, projectiles, recoil, reload, splash.
  *
- * Projectiles are REAL (position + velocity + optional gravity), stepped in
+ * Projectiles are REAL (position + velocity), stepped in
  * segments each frame and tested against static world boxes → terrain → actor
  * capsules — nearest hit wins. "Hitscan-fast" weapons are just very fast
- * projectiles, so travel time and drop come free for sniper; the grenade
- * launcher lobs arcing shells that burst on a body hit or after a short fuse.
+ * projectiles, so travel time comes free for the sniper. Bullets fly FLAT:
+ * no weapon definition ever carried a `gravity` field, so the drop this header
+ * used to promise was never actually simulated. Only the grenade launcher arcs,
+ * lobbing shells that burst on a body hit or after a short fuse.
  *
  * No firing while swimming (industry standard). No melee, no throwables, no
  * building — this is a pure BR shooter.
@@ -413,7 +415,10 @@ function fire(W, a, def) {
       vx: dir.x * def.speed, vy: dir.y * def.speed + (def.arc ? 3 : 0), vz: dir.z * def.speed,
       weaponId: a.weapon.id,
       rarity: a.weapon.rarity, ownerId: a.id,
-      gravity: def.arc ? -18 : def.gravity ? -9.8 : 0,
+      // only the launcher arcs. The old `def.gravity ? -9.8 : 0` fallback was
+      // dead code — none of the six WEAPONS entries in sim/royale.js has a
+      // gravity key, so it always resolved to 0 and bullets were always flat.
+      gravity: def.arc ? -18 : 0,
       tLeft: def.arc ? def.fuseS : 3.5,
       splash: def.splashR || 0, bounce: !!def.arc, mesh: !!def.arc,
       origin: { x: eye.x, y: eye.y, z: eye.z },
@@ -507,7 +512,14 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
     if (dh < K.PLAYERK.radius + 0.12 && py > feetY - 0.05 && py < headY + 0.12) {
       if (p.splash) { explode(W, px, py, pz, p.weaponId, p.rarity, p.ownerId); p.dead = true; return true; }
       const distFromOrigin = Math.hypot(px - p.origin.x, py - p.origin.y, pz - p.origin.z);
-      const isHead = py > feetY + (headY - feetY) * 0.8;
+      // The 2.5x head zone used to be the ENTIRE body cylinder above 0.8 height:
+      // dh was never re-tested, so a 1.14 m wide disc (radius 0.45 + 0.12 slop)
+      // paid headshot damage on a rig whose shoulders are ~0.5 m across — a
+      // sniper round passing half a metre clear of the model still dealt
+      // 105 * 2.5 = 263 and one-shot a full 100 shield + 100 HP bar. Body
+      // registration on the line above is deliberately left as forgiving as it
+      // was; only the multiplier tightens, to a 0.4 m band in the top 14%.
+      const isHead = py > feetY + (headY - feetY) * 0.86 && dh < 0.2;
       const dmg = K.hitDamage(p.weaponId, p.rarity, distFromOrigin, isHead);
       if (t.netRemote) {
         // remote-owned actor: its client (or the host, for bots) applies damage

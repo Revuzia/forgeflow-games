@@ -14,6 +14,9 @@ const parts = [];         // {alive, pos, vel, life, life0, size, gravity, drag,
 let inst = null;
 const dummy = new THREE.Object3D();
 const noRot = new THREE.Quaternion();
+// tracer stretch axis — hoisted because the update loop used to build a fresh
+// Vector3(0,0,1) for EVERY live tracer EVERY frame, straight into the GC
+const _Z = new THREE.Vector3(0, 0, 1);
 let dmgLayer = null;
 
 export function init(W) {
@@ -42,6 +45,11 @@ export function init(W) {
 
 let cursor = 0;
 function spawn(o) {
+  // The slot index IS the pre-bump cursor. This used to be `parts.indexOf(p)`,
+  // a 1024-entry linear scan to recover an index we were already holding — a
+  // 26-particle explosion paid 26 of them. Capture BEFORE the bump: reading
+  // cursor after it would colour the next slot instead of this one.
+  const i = cursor;
   const p = parts[cursor];
   cursor = (cursor + 1) % N;
   p.alive = true;
@@ -53,8 +61,7 @@ function spawn(o) {
   p.drag = o.drag != null ? o.drag : 0.5;
   p.dir = o.dir || null;      // stretch along dir (tracers)
   p.stretch = o.stretch || 0;
-  p.idx = parts.indexOf(p);
-  const i = p.idx;
+  p.idx = i;
   const c = new THREE.Color(o.color != null ? o.color : 0xffcc66);
   inst.instanceColor.setXYZ(i, c.r, c.g, c.b);
   inst.instanceColor.needsUpdate = true;
@@ -108,8 +115,14 @@ function wireEvents(W) {
     });
   });
 
+  // weapons.js emits exactly four surfaces: flesh, wood, stone, dirt. The old
+  // ternary chain tested "build" — dead residue of the removed building system —
+  // and had no "wood" arm at all, so tree hits fell through to the dirt default
+  // and threw brown chips while audio.js played the wood tick. The pale 0xd7c08a
+  // the dead branch was sitting on is the right wood tone, so it just moves over.
+  const IMPACT_COLOR = { flesh: 0xc23b3b, wood: 0xd7c08a, stone: 0xa9a9a9, dirt: 0x9a7f4f };
   W.events.on("impact", (pos, surface) => {
-    const c = surface === "flesh" ? 0xc23b3b : surface === "build" ? 0xd7c08a : surface === "stone" ? 0xa9a9a9 : 0x9a7f4f;
+    const c = IMPACT_COLOR[surface] || 0x9a7f4f;
     burst({ x: pos.x, y: pos.y, z: pos.z, n: 5, color: c, speed: 3.5, size: 0.08, life: 0.4 });
   });
 
@@ -171,7 +184,10 @@ function dmgNumber(W, x, y, z, text, color, scale) {
     WebkitTextStroke: "1px rgba(0,0,0,0.55)",
   });
   dmgLayer.appendChild(el);
-  dmgNums.push({ el, pos: new THREE.Vector3(x, y, z), t: 0, life: 1.05 });
+  // per-number rise speed: with a shared constant 0.9 every number climbed the
+  // same 0.945 m at the same rate, so a 720 RPM SMG's ~12 concurrent numbers
+  // stayed welded in one column no matter how far apart they spawned
+  dmgNums.push({ el, pos: new THREE.Vector3(x, y, z), t: 0, life: 1.05, riseV: 0.7 + Math.random() * 0.5 });
 }
 
 // ── frame update ─────────────────────────────────────────────────────────────
@@ -188,8 +204,12 @@ export function update(W, dt) {
   // flush this frame's coalesced damage numbers (colour precedence: head > shield > body)
   if (hurtBuf.size) {
     for (const [victim, b] of hurtBuf) {
-      dmgNumber(W, victim.pos.x, victim.pos.y + 2.1, victim.pos.z, String(Math.round(b.dmg)),
-        b.isHead ? "#ffd54a" : b.toShield > 0 ? "#6db9ff" : "#ffffff", 1);
+      // Jitter the spawn point. The coalescing above merges one shotgun blast
+      // but the Map is cleared every frame, so sustained fire still stacks a
+      // number per frame at the SAME world point — 12/s from an SMG piled into
+      // one illegible column. +/-0.35 m of spread is enough to read them apart.
+      dmgNumber(W, victim.pos.x + (Math.random() - 0.5) * 0.7, victim.pos.y + 2.1 + Math.random() * 0.35, victim.pos.z + (Math.random() - 0.5) * 0.7,
+        String(Math.round(b.dmg)), b.isHead ? "#ffd54a" : b.toShield > 0 ? "#6db9ff" : "#ffffff", 1);
     }
     hurtBuf.clear();
   }
@@ -198,6 +218,7 @@ export function update(W, dt) {
   // in a match (root cause of "when shooting i dont see bullets")
   if (inst && !inst.parent) W.group("fx").add(inst);
   // particles
+  let nLive = 0;
   for (let i = 0; i < N; i++) {
     const p = parts[i];
     if (!p.alive) continue;
@@ -208,13 +229,14 @@ export function update(W, dt) {
       inst.setMatrixAt(i, dummy.matrix);
       continue;
     }
+    nLive++;
     p.vel.y += p.gravity * dt;
     p.vel.multiplyScalar(Math.max(0, 1 - p.drag * dt));
     p.pos.addScaledVector(p.vel, dt);
     const k = p.life / p.life0;
     dummy.position.copy(p.pos);
     if (p.dir) {
-      dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), p.dir);
+      dummy.quaternion.setFromUnitVectors(_Z, p.dir);
       dummy.scale.set(p.size, p.size, p.stretch);
     } else {
       dummy.quaternion.copy(noRot);
@@ -224,7 +246,20 @@ export function update(W, dt) {
     dummy.updateMatrix();
     inst.setMatrixAt(i, dummy.matrix);
   }
-  inst.instanceMatrix.needsUpdate = true;
+  // The pool used to submit all 1024 boxes (12,288 tris) and re-upload the full
+  // 64 KB instance matrix EVERY frame — ~3.9 MB/s at 60 fps sitting on the menu
+  // with not one particle alive. count 0 makes three.js skip the draw call
+  // outright, and the upload now only costs anything on a frame that actually
+  // wrote a matrix. Parked matrices written on a skipped frame are still in the
+  // CPU-side array, so the next needsUpdate ships them. It has to be all-or-
+  // nothing (N, not a live high-water mark): spawn() wraps around the ring, so
+  // live particles are scattered across the whole index range, not packed low.
+  if (nLive === 0) {
+    inst.count = 0;
+  } else {
+    inst.count = N;
+    inst.instanceMatrix.needsUpdate = true;
+  }
 
   // damage numbers
   const cam = W.camera, rect = W.kernel.renderer.domElement;
@@ -233,7 +268,7 @@ export function update(W, dt) {
     const d = dmgNums[i];
     d.t += dt;
     if (d.t > d.life) { d.el.remove(); dmgNums.splice(i, 1); continue; }
-    proj.copy(d.pos); proj.y += d.t * 0.9;
+    proj.copy(d.pos); proj.y += d.t * d.riseV;
     proj.project(cam);
     if (proj.z > 1) { d.el.style.opacity = "0"; continue; }
     const sx = (proj.x * 0.5 + 0.5) * w2, sy = (-proj.y * 0.5 + 0.5) * h2;

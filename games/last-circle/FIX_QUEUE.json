@@ -1,0 +1,832 @@
+{
+ "runtime/net/ffg_netplay.js": [
+  {
+   "title": "[multiplayer-net] The transport is configured with a turn-based 12 events/sec budget while the host emits 22-100+ broadcasts/sec, and the gunfire relay has no distance cull",
+   "line": "43",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "Line 43 is exactly as cited: `this.sb = createClient(this.url, this.anonKey, { realtime: { params: { eventsPerSecond: 12 } } });` — the only eventsPerSecond in the whole game (grep 1), so 12/s is the declared client budget with no override. Actual host outbound, all read from runtime/3d/royale/net.js: (a) own state at 12 Hz — `if (now - S.lastState > 83) { S.lastState = now; ... send(\"state\", pack(p)); }` (net.js:287-290); (b) bot snapshots at 10 Hz, and each tick is CHUNKED into up to 24 actors per message — `if (list.length >= 24) { send(\"bots\", { list }); list.length = 0; }` (net.js:323), so 49 live bots emit 3 frames per tick = up to 30 msgs/s on the every-5th 'far' tick (`if (far && S.botsTick % 5 !== 0) continue;`, net.js:321); (c) the gunfire relay, throttled per-actor only by time — `if (now - (a._fireRelayT || 0) < 90) return;` (net.js:49) = ~11 msgs/s PER FIRING ACTOR, and the ",
+   "fix": "Three changes, smallest first. (1) ffg_netplay.js:43 — make the budget a constructor option instead of a constant so the shared module keeps its turn-based default: `constructor(url, anonKey, gameId, opts)` … `{ realtime: { params: { eventsPerSecond: (opts && opts.eps) || 12 } } }`, and pass `{ eps: 60 }` from `new NetPlay(SUPABASE_URL, SUPABASE_ANON_KEY, \"last-circle\")` at net.js:115. Apply the same parameterisation to pipeline/engine/runtime/net/ffg_netplay.js (verified identical constant at its line 43) so the next generated game inherits it rather than needing a hand-edit. (2) Distance-cull the fire relay at net.js:47 — but do NOT use the audit's literal `a.pos.distanceToSquared(W.player.pos) > 250*250`: that culls against the HOST's viewpoint, so a guest standing next to a far-from-host bot would lose that bot's muzzle flash and gunshot entirely (the same recipient-vs-sender mistake"
+  }
+ ],
+ "runtime/3d/royale/loot.js": [
+  {
+   "title": "[polish-juice] Ground loot has no rarity beam — only chests do, and the chest's beam is deleted the instant it spills its loot",
+   "line": "122 (itemMesh, still accurate)",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "itemMesh's entire long-range signature is one flat torus: loot.js:122 `grp.add(rarityRing(data.kind === \"weapon\" ? data.rarity : 0));` over `new THREE.TorusGeometry(0.55, 0.05, 6, 24)` (loot.js:101) laid flat (`m.rotation.x = -Math.PI / 2`, loot.js:107). The beam+glow exist only for chests (loot.js:219-227) and openChest strips all three at 323-325: `if (c.glow) c.group.remove(c.glow); if (c.beam) c.group.remove(c.beam); if (c.ring) c.group.remove(c.ring);` — so chest payout, supply-drop burst (spawnItem at 273) and full death-drop kits (spawnItem at 527) all get ring-only. grep for beam/pillar/lootBeam across runtime/ found no ground-item beam anywhere, and hud.js draws no ground-loot minimap markers (only the supply-drop mark at 1878-1889). Note the finding's claim is about world readability only — the supply drop's LOCATION does get a HUD marker.",
+   "fix": "Give itemMesh the chest treatment tinted by rarity: parameterize chestGlow() to take a rarity hex (cache one CanvasTexture, tint via SpriteMaterial.color rather than redrawing the canvas per rarity) and add a short additive cylinder — one shared `CylinderGeometry(0.10, 0.20, 2.6, 6, 1, true)` plus a per-rarity cached MeshBasicMaterial keyed exactly like ringMats at loot.js:102-105, scaling scale.y/opacity by rarity (common ~1.2 m / 0.10 → legendary ~3.2 m / 0.26). Add a visibility cull in update() alongside the existing `if (dx*dx + dz*dz > 90*90) continue;` at loot.js:549 — that check currently only skips bob/spin, it does NOT hide the mesh, so beams must be explicitly `beam.visible = false` past range."
+  },
+  {
+   "title": "[inventory-loot] A ground item nearer than a chest permanently blocks the HOLD-E chest channel",
+   "line": "557 (drifted → 580-588)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Target selection is nearest-wins with no chest preference: loot.js:580 `const target = near.find((n) => !n.taken && (n.type === \"chest\" || items.has(n.id))) || null;` where `near` comes from nearby() which sorts ascending by distance (loot.js:315 `out.sort((a, b) => a.d - b.d);`). The channel is then gated on the type: loot.js:582 `if (target && target.type === \"chest\" && a.input.interactDown) {` — with the `else if (chestChannel.id) { chestChannel.id = null; chestChannel.t = 0; }` at 586-588 resetting progress every frame an item is nearer. The blocker is durable because walkover refuses guns at cap: loot.js:577 `if (n.data.kind === \"weapon\" && gunCount() >= 3) continue;`. Self-inflicted case confirmed: dropItem scatters the outgoing gun at `a.pos.x + (Math.random() - 0.5) * 1.4` (loot.js:512), i.e. ≤0.99 m from your feet — nearer than any chest you are channeling. HUD sees the same wro",
+   "fix": "Prefer the chest while E is HELD, keep tap-nearest semantics. Replace line 580 with: `const chestNear = near.find((n) => n.type === \"chest\"); const itemNear = near.find((n) => n.type === \"item\" && items.has(n.id)); const target = (a.input.interactDown && chestNear) ? chestNear : (itemNear || chestNear) || null;`. Cheap complement (fixes the un-takeable-item case generally): when choosing itemNear, skip items `!W.wouldAcceptItem(a, n.data)` would refuse and that E-swap also cannot take. Two lines, no state, no netcode surface. (Aside, out of scope: `!n.taken` in the current predicate is dead — nearby() returns `{type,id,data,pos,d}` objects with no `taken` field.)"
+  },
+  {
+   "title": "[gameplay-loop] Supply drops draw nobody: no bot brain has any concept of them, and the crate bursts into loose floor loot the instant it lands",
+   "line": "271 (drifted → 264-279)",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "Bot-awareness half: grep -i for supply|crate|airdrop|beacon|care package over runtime/3d/royale/bots.js returned ZERO hits, and bots.js registers exactly two listeners — `W.events.on(\"actorDied\"...)` (29) and `W.events.on(\"shotFired\"...)` (36). The only consumers of the two emits (loot.js:258 supplyDropSpawned, loot.js:276 supplyDropLanded) are audio.js:271/282 and hud.js:1881/1886. Instant-burst half: loot.js:264-275 `if (f.crate.position.y <= gy) { ... for (const d of drops) { spawnItem(W, d, f.x + Math.cos(a) * 1.6, gy + 0.2, ...) } }` — no channel, no chest object, no CHEST_OPEN_S equivalent. Partial mitigation the audit omits: a bot already in LOOT state queries `W.nearbyLoot(a.pos, 90)` (bots.js:230) and can incidentally collect burst items, but nothing routes it there and LOOT scores only 20-35 once upgraded (bots.js:166), below ENGAGE/ROTATE — so the late-match drop in particular",
+   "fix": "Two independent changes, ship them separately. (a) Bot magnet: in bots.js init add `W.events.on(\"supplyDropSpawned\", (p) => { for (const b of brains) { if (!b.actor.alive) continue; if (Math.hypot(b.actor.pos.x - p.x, b.actor.pos.z - p.z) < 260) b.bb.supplyMark = { x: p.x, z: p.z, t: W.t }; } });` plus a scored `s.SUPPLY` in think() that sits above LOOT (20-45) and WANDER but strictly BELOW ENGAGE (80-88) and ROTATE (95), expiring after ~75 s, with onEnter setting bb.moveTo. (b) Contest window: keep the landed crate as a 2 s hold-E channel reusing the CHEST_OPEN_S path (loot.js:597) instead of the instant burst, so arriving second is a fight rather than an empty patch of grass. Neither touches building/harvesting or map selection."
+  }
+ ],
+ "runtime/3d/royale/fx.js": [
+  {
+   "title": "[polish-juice] Every tracer evaporates at 44 m, so sniper and AR shots have no visible streak at the ranges those weapons are tuned for",
+   "line": "101",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "fx.js:101 `const vs = Math.min(speed, 200);` and fx.js:106 `size: 0.13, life: 0.22, gravity: 0, drag: 0,` — with drag 0 and gravity 0 the bolt travels exactly vs*life = 200*0.22 = 44 m, plus the stretch at fx.js:97 `const len = pr.weaponId === \"sniper\" ? 7 : pr.weaponId === \"glauncher\" ? 3 : 4;` ~= 51 m of visible streak. Verified against the real weapon table in runtime/sim/royale.js:57 `sniper: {... speed: 700, falloff: [200, 400], ... adsFov: 20}` and royale.js:55 `ar: {... speed: 300, falloff: [60, 120] ...}`. So the sniper's streak dies at ~13% of its falloff-max range. Emission verified at weapons.js:460 `W.events.emit(\"tracer\", p);` (every local shot) and net.js:207 (remote shots), so this applies to bots and remote players too. NOTE the audit overstates the AR case: 51 m of streak vs the AR's 60 m first-falloff stop is most of the way there — the real loss is sniper-only, which i",
+   "fix": "Derive the bolt's life from the weapon's own range instead of a flat 0.22 s. fx.js has no sim access yet, so first adopt the existing module pattern (player.js:19/22, weapons.js:19/25, loot.js:12/35): add `let K = null;` at module scope and `K = W.SIM;` as the first line of init(W). Then in the tracer handler: `const reach = (K.WEAPONS[pr.weaponId] && K.WEAPONS[pr.weaponId].falloff && K.WEAPONS[pr.weaponId].falloff[1]) || 60; const vs = Math.min(speed, 260); const life = Math.max(0.22, Math.min(reach / vs, 1.1));` and pass `life`. Sniper -> 1.1 s ~= 286 m; AR -> 0.46 s ~= 120 m; SMG/shotgun/pistol stay at the 0.22 s floor. RISK medium for one reason the audit misses: the particle pool is a 1024-slot ring buffer (fx.js:12 `const N = 1024;`, fx.js:46 `cursor = (cursor + 1) % N;`) with silent overwrite. Multiplying sniper/AR tracer lifetime by up to 5x with 50 bots firing raises the concurr"
+  },
+  {
+   "title": "[polish-juice] Damage numbers spawn at the identical world point with no jitter, so sustained fire stacks ~12 of them into one illegible column",
+   "line": "191",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "fx.js:191 verbatim: `dmgNumber(W, victim.pos.x, victim.pos.y + 2.1, victim.pos.z, String(Math.round(b.dmg)),` — zero jitter on any of the three axes. The rise is likewise fixed at fx.js:236 `proj.copy(d.pos); proj.y += d.t * 0.9;` and the life is a constant at fx.js:174 `dmgNums.push({ el, pos: new THREE.Vector3(x, y, z), t: 0, life: 1.05 });`, so total rise is 0.945 m for every number with no per-number variation. The per-frame coalescing the audit credits is real and does work (fx.js:137-146 hurtBuf merge, flushed at fx.js:189-195), but it is keyed on a Map that is cleared every frame (`hurtBuf.clear();` fx.js:194), so it merges one shotgun blast and nothing across frames. SMG rate verified at royale.js:54 `smg: { cls: \"smg\", damage: 17, headMult: 1.5, rpm: 720, ...}` = 12 shots/s, so ~12.6 numbers are alive simultaneously in the same 0.945 m column. The colour coding at fx.js:192 (`b.",
+   "fix": "Cheapest correct version, entirely inside fx.js and low risk: (a) jitter the spawn point at fx.js:191 — `dmgNumber(W, victim.pos.x + (Math.random()-0.5)*0.7, victim.pos.y + 2.1 + Math.random()*0.35, victim.pos.z + (Math.random()-0.5)*0.7, ...)`; (b) store a per-number rise speed — push `riseV: 0.7 + Math.random()*0.5` in the dmgNums record at fx.js:174 and change fx.js:236 to `proj.y += d.t * d.riseV;`. Two lines, no new state, no cross-module coupling. The Apex-style accumulate-into-one-growing-number variant is nicer but needs a per-victim live-number registry with its own invalidation (victim dies / match resets via reset() at fx.js:181) — treat that as the follow-up, not the first change."
+  },
+  {
+   "title": "[polish-juice] Camera shake is vestigial: it never fires for anything YOU do, and the one hit-taken shake lasts ~61 ms",
+   "line": "148",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "fx.js:148 verbatim: `if (victim === W.player) W.camShake = Math.max(W.camShake, 0.12);`. `grep -rn \"camShake\" runtime/` returns exactly two writes in the whole tree — fx.js:120 `if (d < 40) W.camShake = Math.max(W.camShake, (1 - d / 40) * 0.5);` (explosion) and fx.js:148 (hurt). The shotFired handler at fx.js:81-86 sets no shake, and actorDied at fx.js:151 `W.events.on(\"actorDied\", (victim) => {` drops the killer argument that player.js:1135 actually sends: `W.events.emit(\"actorDied\", victim, killerId, weaponId);`. Duration maths verified: decay at fx.js:245 `W.camShake = Math.max(0, W.camShake - dt * 1.8);` against the render gate at player.js:1062 `if (W.camShake > 0.01) {` gives (0.12-0.01)/1.8 = 0.061 s, and the amplitude at player.js:1063 `cam.position.x += (Math.random() - 0.5) * W.camShake;` is +/-0.06 m against the 4.2 m boom at player.js:1036 (`const dist = focus.gliding ? ... :",
+   "fix": "(1) Make the hurt shake register: change fx.js:245 decay to `dt * 1.1` and scale the impulse by damage at fx.js:148 — `if (victim === W.player) W.camShake = Math.max(W.camShake, Math.min(0.45, 0.10 + info.dmg * 0.004));`. (2) Add the missing self-feedback: in the shotFired handler (fx.js:81) `if (a === W.player) W.camShake = Math.max(W.camShake, ({ sniper: 0.30, shotgun: 0.24, glauncher: 0.26, ar: 0.09, smg: 0.05, pistol: 0.07 })[weaponId] || 0.07);` and widen the actorDied signature to `(victim, killerId) =>` and add `if (killerId === (W.player && W.player.id)) W.camShake = Math.max(W.camShake, 0.18);` — player.js:1135 already passes it. RISK medium and NOT purely cosmetic: `grep -rniE \"reduceMotion|screenShake|shakeAmt|settings.shake\" runtime/` returns ZERO, so there is currently no way for a player to turn shake down. Adding per-shot camera punch to a 720 RPM SMG with no opt-out is a "
+  },
+  {
+   "title": "[polish-juice] No impact decals exist anywhere in the runtime, so all trace of where your shots landed is gone in 0.4 s",
+   "line": "111",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "fx.js:111-113 is the entire impact response: `W.events.on(\"impact\", (pos, surface) => { ... burst({ x: pos.x, y: pos.y, z: pos.z, n: 5, color: c, speed: 3.5, size: 0.08, life: 0.4 }); });` — 5 particles, 0.4 s, no persistent mark. The absence claim holds under five spellings: `grep -rniE \"decal|bullethole|bullet_hole|scorch|splatter|impactMark|bulletMark\" --include=*.js .` returns ZERO hits across the entire game directory; `grep -rn \"Hole\" --include=*.js runtime/` returns only maps.js:469 `function addSlabHole(...)` and its one call at maps.js:516 (a floor opening in the building generator, not a bullet mark); `grep -rn \"PlaneGeometry\" fx.js weapons.js` returns nothing. Positional data is available and discarded: weapons.js emits `impact` with a precise point at four sites (521 flesh, 561 wood, 565 stone, 582 dirt).",
+   "fix": "Add a pooled decal InstancedMesh in fx.js next to the particle pool: ~120 instances of `new THREE.PlaneGeometry(0.16, 0.16)` with a small radial-alpha CanvasTexture, `MeshBasicMaterial({ transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, toneMapped: false })`, ring-buffered like `parts`, opacity faded over ~8 s, skipped for surface === \"flesh\". Add it to `W.group(\"fx\")` in init and re-adopt it in update() alongside the existing guard at fx.js:199 (`if (inst && !inst.parent) W.group(\"fx\").add(inst);`) — startMatch clears scene groups, and forgetting this is exactly the bug that comment documents. RISK medium because it is not self-contained: correct orientation needs a surface normal that the `impact` event does not currently carry, so weapons.js must be changed to pass the normal it already computes on the bounce path. A cheap lower-risk first cut is grou"
+  },
+  {
+   "title": "[polish-juice] The impact colour table has a dead \"build\" branch and misroutes \"wood\" to the dirt colour",
+   "line": "112",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "fx.js:112 verbatim: `const c = surface === \"flesh\" ? 0xc23b3b : surface === \"build\" ? 0xd7c08a : surface === \"stone\" ? 0xa9a9a9 : 0x9a7f4f;` — there is no \"wood\" test, so wood falls through to the 0x9a7f4f dirt default. `grep -rn 'emit(\"impact\"' runtime/` returns exactly four emitters and none of them is \"build\": weapons.js:521 \"flesh\", weapons.js:561 \"wood\", weapons.js:565 \"stone\", weapons.js:582 \"dirt\". `grep -rn '\"build\"' runtime/` finds the string ONLY at fx.js:112 — it is dead residue of the removed building system. The audio side does handle wood correctly (audio.js:265 `else if (surface === \"wood\") blip(900, 0.06, 0.07, \"triangle\", pos, 55);`), so shooting a tree currently sounds like wood and looks like dirt. Trees are the common case: maps.js:791/792/893/956/957 all call `scatterTrees(..., \"wood\")`.",
+   "fix": "Replace the chain at fx.js:112 with a lookup that matches what is actually emitted: `const IMPACT_COLOR = { flesh: 0xc23b3b, wood: 0xd7c08a, stone: 0xa9a9a9, dirt: 0x9a7f4f };` at module scope, then `const c = IMPACT_COLOR[surface] || 0x9a7f4f;`. The pale 0xd7c08a the dead \"build\" branch was carrying is exactly the right wood tone, so no new colour is picked and the building-era branch is deleted in the same edit (consistent with building being permanently removed). One-line behavioural change, no new state, no cross-module coupling — lowest-risk item on this file."
+  },
+  {
+   "title": "[performance] The particle pool draws all 1024 instances and re-uploads its full 64 KB instance-matrix buffer every frame, even when zero particles are alive",
+   "line": "25",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "All four sub-claims are directly readable. fx.js:25 `inst.count = N;` with fx.js:12 `const N = 1024;` and fx.js:26 `inst.frustumCulled = false;` — the draw always submits 1024 boxes; BoxGeometry(1,1,1) is 12 triangles, so 12,288 triangles/frame regardless of activity, with dead slots parked by fx.js:29/207 `dummy.position.set(0, -9999, 0); dummy.scale.setScalar(0.0001);`. fx.js:227 `inst.instanceMatrix.needsUpdate = true;` sits outside any dirty check, so the full Float32Array(1024*16) = 65,536-byte matrix re-uploads every frame (~3.9 MB/s at 60 fps) even on a frame where the loop wrote nothing. fx.js:56 `p.idx = parts.indexOf(p);` is a linear scan for an index the function already had — and note cursor was already advanced at fx.js:46, so the naive `p.idx = cursor` substitution would be off by one. fx.js:217 `dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), p.dir);` alloc",
+   "fix": "Three independent edits, all inside fx.js, all low risk. (1) Index: capture the slot before the bump — `const i = cursor; cursor = (cursor + 1) % N; ... p.idx = i;` (replaces the indexOf at fx.js:56). (2) Hoist the tracer axis next to the existing `const noRot` at fx.js:16: `const _Z = new THREE.Vector3(0, 0, 1);` and use `dummy.quaternion.setFromUnitVectors(_Z, p.dir);` at fx.js:217. (3) Idle cost: count live particles in the update loop and, after it, `if (nLive === 0) { inst.count = 0; } else { inst.count = N; inst.instanceMatrix.needsUpdate = true; }` — three.js skips the draw entirely at count 0, which kills the menu/idle cost, and the upload only happens on frames that actually wrote a matrix. IMPORTANT: do NOT use the audit's `inst.count = liveMax` high-water-mark verbatim — because spawn() is a wrapping ring buffer (fx.js:46), live particles are scattered across the whole index r"
+  }
+ ],
+ "runtime/3d/royale/audio.js": [
+  {
+   "title": "[audio] Every gunshot of a class is a bit-identical waveform — cached noise buffer, always started at offset 0, zero pitch/gain randomization",
+   "line": "120-140 (audit cited :119)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Source is the shared cached buffer — L120 `const n = ctx.createBufferSource(); n.buffer = noiseBuf();` against noiseBuf's memo L76 `if (noiseBuf._b) return noiseBuf._b;`. It is started with no offset argument, L133: `n.start(t); n.stop(t + P[1] * 2.4);`. Every shaping value is a constant from the per-class table L125-128 (`smg: [1800, 0.06, 0.28]` etc.) applied verbatim at L129-131: `f.frequency.setValueAtTime(P[0], t);` / `g.gain.setValueAtTime(P[2], t);`, and the rifle crack layer is fixed too (L137 `o.frequency.setValueAtTime(190, t);`). Greps for `detune`, `playbackRate` and `Math.random` inside shot() return nothing — the only randomness in the file is the noise fill (L79) and footstep pitch (L239). Consecutive shots are therefore identical sample-for-sample; at the SMG's 720 rpm (runtime/sim/royale.js:54) tails of 0.132 s overlap, so copies comb rather than read as separate reports",
+   "fix": "Four in-place edits inside shot(): (1) `n.playbackRate.value = 0.93 + Math.random() * 0.14;` before connect; (2) read a different window of the 1 s buffer per shot — `n.start(t, Math.random() * 0.7);` (buffer is 1 s, tail is <0.8 s, so no wrap risk); (3) jitter the cutoff `f.frequency.setValueAtTime(P[0] * (0.92 + Math.random() * 0.16), t);`; (4) jitter the level `g.gain.setValueAtTime(P[2] * (0.9 + Math.random() * 0.2), t);`. No new assets, no signal-graph change."
+  },
+  {
+   "title": "[audio] No distance-dependent filtering — a 250 m shot is timbrally identical to a point-blank one, contradicting the module's own docblock",
+   "line": "85-118 (spatial/shot) — audit cited :116",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "spatial() computes the distance at L90 `const d = Math.hypot(dx, dz, (pos.y || 0) - cam.position.y);` and uses it for amplitude only — L93 `vol = Math.pow(1 - d / maxD, 1.4);` — then discards it: the returned node carries no distance (L108-113 build a GainNode plus a StereoPanner and `return g;`). shot() calls `const out = spatial(pos, 260); if (!out) return;` (L118) and sets its cutoff from the class constant alone (L129-130 `f.frequency.setValueAtTime(P[0], t); f.frequency.exponentialRampToValueAtTime(Math.max(80, P[0] * 0.2), t + P[1]);`) — nothing in that expression references `d`. The 190 Hz rifle crack at L135-141 also fires at every range. Greps for `muffle|reverb|convolver|distanc|__d|dist` in the file hit only the docblock prose at L7-8: \"attenuates by distance ... so distant shots stay audible to ~250m with a muffled tail\" — the muffled tail is never implemented, so the module ",
+   "fix": "Have spatial() tag the node with what it already computed — add `g.__d = d; g.__maxD = maxD;` immediately before `return g;` (L113). In shot(), after L118: `const df = out.__d != null ? Math.max(0.12, 1 - out.__d / 260) : 1;` then multiply both cutoff writes by `(0.25 + 0.75 * df)` / `df`, and gate the crack layer on near field by wrapping L135 as `if ((cls === \"ar\" || cls === \"sniper\") && (out.__d || 0) < 80)`. Purely additive; the `__d != null` guard keeps the player's own shots (pos === null) at full brightness."
+  },
+  {
+   "title": "[audio] No limiter and no voice cap on the master bus — the clipping the code diagnosed in a comment was never actually fixed, and the impact listener re-creates the phase-coherent 9-way sum",
+   "line": "29-35 (ensureCtx) — audit cited :28",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "The master bus goes straight to the hardware with nothing in between — L29-31: `master = ctx.createGain(); master.gain.value = W.settings.masterVol; master.connect(ctx.destination);`. A grep for `DynamicsCompressor|createWaveShaper|createDynamics` across every .js/.html in the game directory returns ZERO hits; the only match for `limiter` in runtime/ is the prose at L230 diagnosing the problem (\"a destination with no limiter, which audibly clipped\") — that fix removed the duplicate hitmarker listener, it never added the node. No voice budget either: `voiceCap|activeVoices|maxVoices|voiceCount` and `throttle|lastImpact|cooldown|budget|concurren` all return zero. The 9-way sum is real and current: shotgun is `pellets: 9` (runtime/sim/royale.js:56), weapons.js:406 `for (let p = 0; p < pellets; p++)` spawns each as its own projectile, and each emits its own impact (weapons.js:561/565/582), w",
+   "fix": "Two changes. (1) Brickwall the master in ensureCtx — replace L31 with `const lim = ctx.createDynamicsCompressor(); lim.threshold.value = -6; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.003; lim.release.value = 0.12; master.connect(lim); lim.connect(ctx.destination);`. Note `window.__AUDIO_CTX__` (L28) and the page mute bar are unaffected, since they act on the context, not the graph. (2) Collapse the pellet burst — add `let lastImpactT = 0;` at module scope and open the L262 impact handler with `if (ctx.currentTime - lastImpactT < 0.035) return; lastImpactT = ctx.currentTime;`, which costs simultaneous impacts from two different shooters inside a 35 ms window (acceptable; the visual in fx.js still fires for each)."
+  }
+ ],
+ "game_controls.js": [
+  {
+   "title": "[menu-ux] The always-visible page Pause button is wired to window.__PAUSE__, which Last Circle never defines",
+   "line": "199",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "game_controls.js:198-200 is verbatim `pause: _makeBtn(\"Pause / Menu\",   SVG.pause,   function () {` / `      if (window.__PAUSE__ && window.__PAUSE__.toggle) window.__PAUSE__.toggle();` / `    }),` — the handler's entire body is that guarded call. A repo-wide grep for `__PAUSE__` returns exactly four lines, ALL inside game_controls.js itself (the docblock at :17, the click handler at :199, and the fullscreen-exit hook at :229-230); nothing in runtime/ ever assigns `window.__PAUSE__`. The button is nonetheless mounted unconditionally: index.html:12 loads `game_controls.js?v=98` and index.html:11 sets `window.GAME_CONFIG={hide_bug_button:true,mute_hotkey:false}` — `hide_controls` is not set, so the early-return at game_controls.js:67 (`if (CFG.hide_controls === true) return;`) does not fire and the bar (with `bar.appendChild(btns.pause)` at :205) is visible on the menu, in the drop and mid",
+   "fix": "Export a phase-gated wrapper from hud.js next to togglePause: `export function requestPause(W, forceOpen) { if (W.phase !== \"match\" && W.phase !== \"drop\") return; if (forceOpen && R.pause) return; togglePause(W); }` (R is module-scope in hud.js, so the already-open check is free, and routing through togglePause preserves its online branch at hud.js:1961-1963 that keeps the sim running so the host's silent-guest watchdog cannot eject you). Then in ffg_royale3d.js immediately after `hudMod.init(W);` (line 84) add `window.__PAUSE__ = { toggle: () => hudMod.requestPause(W), pause: () => hudMod.requestPause(W, true) };`. One code path then serves ESC, the page Pause button and the fullscreen-exit hook. Risk is low: purely additive, no existing call site changes, and the phase gate means clicks on the menu/post-match screens stay no-ops by design rather than by accident. The only thing to chec"
+  }
+ ],
+ "runtime/3d/royale/net.js": [
+  {
+   "title": "Host-simulated bot hits on a guest are credited to the HOST player (wrong killer name, wrong kill count, wrong spectate target)",
+   "line": "32",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "net.js:32-34 hard-codes the attacker: `W.reportRemoteHit = (target, dmg, weaponId, isHead) => {` / `if (S && W.player) send(\"hitYou\", { target: target.id, dmg, attacker: W.player.id, weapon: weaponId, isHead });` — the signature has no owner parameter at all. The only two call sites drop the real owner even though they hold it: weapons.js:514 `if (W.reportRemoteHit) W.reportRemoteHit(t, dmg, p.weaponId, isHead);` (the very next line, 516, uses `p.ownerId` for the local path) and weapons.js:609 `if (W.reportRemoteHit) W.reportRemoteHit(t, dmg, weaponId, false);` (line 611 uses `ownerId`). The exported duplicate has the same defect: net.js:341 `send(\"hitYou\", { target: target.id, dmg, attacker: W.player.id, weapon: weaponId, isHead });`. Downstream consumption confirmed: net.js:196 `if (mine && victim.alive) W.hurtActor(victim, d.dmg, d.attacker, d.weapon, d.isHead);` → player.js:1093 `if ",
+   "fix": "Add a fifth parameter and use it: `W.reportRemoteHit = (target, dmg, weaponId, isHead, attackerId) => { if (S) send(\"hitYou\", { target: target.id, dmg, attacker: attackerId || (W.player && W.player.id), weapon: weaponId, isHead }); };` then pass `p.ownerId` at weapons.js:514 and `ownerId` at weapons.js:609, and apply the identical change to the exported `reportHit` (net.js:339-342). Purely additive — the `|| W.player.id` fallback preserves current behaviour for any caller not updated, and offline play never enters this branch."
+  },
+  {
+   "title": "A friend who opens the lobby and backs out before START still gets a roster slot — an unsimulated, storm-immune actor at 240 m that wins the match",
+   "line": "140",
+   "sev": "severe",
+   "risk": "medium",
+   "evidence": "The roster is built from a join log that is never reconciled against presence: net.js:140-142 `const ids = Object.keys(S.peers).sort();` / `ids.forEach((pid, i) => roster.push({ peerId: pid, slot: i + 1, name: S.peers[pid] || \"Friend\" }));`. `S.peers` is written in exactly one place — net.js:173 `if (t === \"hello\") { S.peers[from] = d.name; return; }` — and my grep for `S.peers|delete S.` across runtime/ returned no delete anywhere. The transport does supply the live roster: ffg_netplay.js:72 `this._emit(\"peer\", { present: present, count: ids.length, ids: ids.slice() });`, but net.js:123 destructures only `net.on(\"peer\", ({ count }) => {` and its body writes to `status` text. The cancel path sends nothing: net.js:105 `closeB.onclick = () => { if (S) { S.net.leave(); S = null; W.net = null; } root.remove(); };`. The resulting phantom slot is spawned as a remote human (ffg_royale3d.js:258-",
+   "fix": "Two-part. (1) Prune on presence: change net.js:123 to `net.on(\"peer\", ({ count, ids }) => { if (ids) for (const pid in S.peers) if (!ids.includes(pid)) delete S.peers[pid]; ... })`. (2) Make the watchdog able to reap a never-reporting slot: in beginOnlineMatch seed `S.lastSeen = {}; cfg.roster.forEach(r => { if (r.peerId !== S.net.id) S.lastSeen[\"s\" + r.slot] = performance.now(); });`. Medium risk because of (2): the watchdog gate is `W.phase === \"match\" || W.phase === \"drop\"` on the HOST's phase (net.js:305), while a guest may still be in loadActorModels/showLobby — seed the timestamps in onMatchStart (net.js:276) rather than at roster build, or raise the threshold to ~20 s, or a guest on a slow connection gets bot-swapped before it ever spawns. Part (1) alone is low-risk and removes the reported failure mode."
+  },
+  {
+   "title": "The 12 s silent-guest watchdog ejects you without telling you — you keep playing an actor nobody else can see, while still dealing damage",
+   "line": "233",
+   "sev": "severe",
+   "risk": "medium",
+   "evidence": "The takeover handler explicitly skips the victim: net.js:233-236 `if (t === \"takeover\") { const a = W.actorById.get(d.slot); if (a && W.player && a !== W.player) { a.netRemote = true; a.isBot = true; } return; }` — no branch, no UI, no teardown for the `a === W.player` case, and grep for `DISCONNECT|disconnected|replaced you|connection lost` across runtime/ and index.html returned 0 hits. The eject itself is real: net.js:305-311 `if (S.net.isHost() && S.lastSeen && (W.phase === \"match\" || W.phase === \"drop\")) { for (const id in S.lastSeen) { if (now - S.lastSeen[id] > 12000) { delete S.lastSeen[id]; onMsg(W, { from: \"watchdog\", t: \"bye\", d: { slot: id } }); } } }` → the bye branch at net.js:226-229 sets `a.netRemote = false; a.isBot = true;` and attaches a brain. After that the host silently drops the real player's packets, because net.js:181 requires `if (a && a.netRemote)`. The broadca",
+   "fix": "(1) Handle the self case at net.js:235: `if (a === W.player) { S.started = false; hud panel 'DISCONNECTED — the host replaced you with a bot'; leave(W); return; }` so the ejected client stops broadcasting and stops applying damage. (2) Keep the link alive while hidden — drive the 12 Hz state send from a `setInterval(() => update(W, 0), 83)` started in beginOnlineMatch and cleared in leave(), instead of relying solely on rAF, plus a `visibilitychange` keepalive send. Medium risk: the interval must be idempotent with the rAF call (both gate on `now - S.lastState > 83`, so double-driving is safe) and must be cleared in `leave()` or an offline match will broadcast into a dead room — the exact bug net.js:260-274 was written to fix."
+  },
+  {
+   "title": "Bot-snapshot LOD is measured from the HOST's player, so a guest fighting a bot far from the host receives it at 2 Hz",
+   "line": "320",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "net.js:314-324: `if (S.net.isHost() && now - S.lastBots > 100) { ... for (const a of W.actors) { if (!a.isBot || !a.alive || a.netRemote) continue; const far = a.pos.distanceToSquared(W.player.pos) > 300 * 300; if (far && S.botsTick % 5 !== 0) continue;` — the only reference point is `W.player.pos`, which on the host is the host's own actor; there is no per-recipient relevancy anywhere in the file. The tick is 100 ms and the skip is `% 5`, so a far bot transmits at 2 Hz exactly as described. The guest's rendering of that bot is a fixed-rate lerp toward the last snapshot (player.js:1015 `a.pos.lerp(a.netTarget.pos, Math.min(1, dt * 10));`), and hit tests run against the rendered position (weapons.js:496-507 iterates `W.actors` using `t.pos`), so a guest's shots resolve against stale positions. The host does have the data needed for a per-recipient test — each guest's position arrives via ",
+   "fix": "Cull against the nearest human rather than the sender. Once per bot tick build `const eyes = [W.player.pos]; for (const a of W.actors) if (a.netRemote && !a.isBot && a.alive) eyes.push(a.netTarget ? a.netTarget.pos : a.pos);` then `const far = eyes.every(p => a.pos.distanceToSquared(p) > 300 * 300);`. Low risk: same loop, at most 7 extra distance tests per bot; worst case it only raises outbound rate, and the 24-entry chunking at net.js:323 already bounds message size. Note it interacts with the ffg_netplay.js:43 `eventsPerSecond: 12` budget flagged in the separate transport finding."
+  },
+  {
+   "title": "The match clock free-runs per client and is synced exactly once, so the storm circle is in a different place and phase on every machine",
+   "line": "276",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "The only clock sync is one-shot at match start: net.js:276-281 `export function onMatchStart(W) { if (S && S.net.isHost()) { send(\"sync\", { t: W.t, loot: W.lootSyncState() }); } }`, called once from ffg_royale3d.js:281 `if (W.net) netMod.onMatchStart(W);`, and consumed once at net.js:238-240 `if (t === \"sync\" && !S.net.isHost()) { W.t = d.t;`. My grep for `\"clock\"` / `W.t +=` across runtime/ found no periodic correction — the only advance is ffg_royale3d.js:336-338 `const step = Math.min(dt, 0.05);` / `if (W.phase !== \"over\") W.t += step;`, which discards real time below 20 fps and stops entirely when rAF is suspended. The storm is derived purely from that local clock: storm.js:70 `const st = ctl.storm.stateAt(W.t);` drives the wall transform, the phase/closing warnings and the damage loop. CORRECTION to the audit's stated consequence: a player does NOT take damage on ground their own sc",
+   "fix": "Have the host broadcast `send(\"clock\", { t: W.t })` every ~2 s from update(), and in the guest handler slew instead of snapping: `const err = d.t - W.t; W.t += Math.abs(err) > 2 ? err : err * 0.1;`. Medium risk, and the reason matters: W.t is also the timestamp base for per-actor timers (player.js:1093 `victim.lastHurtByActorT = W.t;`, storm.js:113 `a.lastDamageT = W.t;`, plus lastShotT/cooldowns), so a backwards jump puts recorded events in the future and can suppress damage-credit or re-fire storm warnings. Make the correction forward-only (`if (err > 0) W.t += ...`) or re-base the affected timers when a hard snap occurs, and verify the storm phase warnings (`ctl.warned` keys in storm.js:85-95) do not double-fire across a snap."
+  }
+ ],
+ "C:/Users/TestRun/Claude Claw/forgeflow-games/games/last-circle/runtime/3d/royale/bots.js": [
+  {
+   "title": "Re-peeking a bot is free: reaction delay AND acquire overshoot both key off bb.acquireT, which is only stamped when the target ID changes",
+   "line": "218",
+   "sev": "severe",
+   "risk": "medium",
+   "evidence": "bots.js:218 is verbatim as cited: `if (bb.target !== best.id) { bb.target = best.id; bb.acquireT = W.t; }` — acquireT is stamped ONLY on an ID change, and target memory survives 8s of no sighting (l.221 `else if (bb.target && W.t - bb.targetSeenT > 8) { bb.target = null; }`). Both humanising terms read that one stamp: l.588-589 `const sinceAcq = W.t - bb.acquireT; const acquireMul = sinceAcq < 0.6 ? 3 - (sinceAcq / 0.6) * 2 : 1;` and l.603 `const reacted = sinceAcq > b.tierK.reactionMs / 1000;`. So after 3s behind a wall sinceAcq=3.0 -> acquireMul=1 and reacted=true on the exact frame you reappear; actEngage's only other gate is l.532 `const seen = W.t - bb.targetSeenT < 0.4`, which flips true the same frame. The compounding cone-bypass at l.212 is also real: `if (dd > 1.4 && d > 15 && !heardHim && bb.target !== t.id) continue;` — once you are bb.target the ~160deg cone test is skipped e",
+   "fix": "In perceive(), re-stamp on re-acquisition, not just on switch: `if (bb.target !== best.id || W.t - bb.targetSeenT > 0.35) { const cold = bb.target !== best.id; bb.target = best.id; bb.acquireT = cold ? W.t : W.t - (b.tierK.reactionMs / 1000) * 0.5; }` (perceive() would need `b` passed, or read `a.brain.tierK`) — a re-peek owes a half-cost reaction so repeated peeking degrades gracefully instead of resetting to a cold 700ms. Separately gate the l.212 cone bypass on recency: `... && !(bb.target === t.id && W.t - bb.targetSeenT < 1.5)`. RISK MEDIUM: this is a global combat-difficulty change touching all 49 bots — the cone-bypass half in particular can make bots drop targets they are legitimately chasing, so ship the acquireT re-stamp first and the cone gate second, and re-tune BOT_TIERS reactionMs only after playing it."
+  },
+  {
+   "title": "inp.sprint is dead code inside ENGAGE — inp.ads wins player.js's speed ternary, so bots close on you at 3.8 m/s, slower than a walking player",
+   "line": "560",
+   "sev": "severe",
+   "risk": "medium",
+   "evidence": "The ternary orders ADS ahead of sprint — player.js:773: `: inp.ads ? K.MOVE.ads : (inp.sprint && inp.mz > 0.5 && !a.inWater) ? K.MOVE.sprint : K.MOVE.walk;` with sim/royale.js:98 `walk: 6.0, sprint: 9.6, ads: 3.8`. In actEngage the bot sets both: l.560 `if (dist > prefer * 1.5) { inp.mz = 1; inp.sprint = dist > prefer * 3; }` and l.606 `inp.ads = dist > 25;`. Preferred ranges at l.542 `{ shotgun: 7, smg: 14, pistol: 16, ar: 30, sniper: 90, glauncher: 26 }` put prefer*3 at 90/42/48/270/78 m — all above the 25m ADS threshold, so whenever sprint is true ads is also true and the bot is pinned to 3.8 m/s, below the player's 6.0 walk. Only the shotgun (prefer*3 = 21m) has a live sprint band, and only between 21 and 25m. The reload-break claim also holds: l.554-556 `inp.mx = bb.strafeDir; inp.mz = -0.5; inp.sprint = true;` while player.js:777 requires `inp.mz > 0.5` — `const sprinting = inp.spr",
+   "fix": "In actEngage: set sprint on the real closing band and suppress ADS while repositioning — `inp.sprint = dist > prefer * 1.8;` at l.560 and l.606 becomes `inp.ads = dist > 25 && !inp.sprint && Math.hypot(a.vel.x, a.vel.z) < 5;`. For the reload break (l.553-558) either commit to a real retreat (`inp.mz = 1` on the away-vector with sprint true) or drop `inp.sprint` and stop claiming a sprint the movement code cannot honour. NOTE: this touches only the bot brain's input struct — it does NOT go near player.js:455/557-558, where SHIFT stays a sprint TOGGLE per owner direction. RISK MEDIUM: bots become materially more aggressive, and dropping ADS during the approach doubles their hipfire cone (sim/royale.js:151 `if (st.ads) spread *= 0.5;`) plus the graded move penalty at :157-158 — expect a net accuracy drop while closing that partly self-balances, but tier aimErrDeg should be re-checked after."
+  },
+  {
+   "title": "A bot at 59 HP pops an 8-second medkit and becomes a rooted, non-firing, non-abortable target — while the human can move freely while healing",
+   "line": "147",
+   "sev": "severe",
+   "risk": "medium",
+   "evidence": "PARTIALLY superseded but the bot-side defect is fully live. The asymmetry clause IS already fixed — sim/royale.js:122 `var HEAL = { speedMult: 0.45, blocksSprint: true };` applied at player.js:776-783 (`const healingNow = !!a.healing;` ... `if (healingNow) wspd *= K.HEAL.speedMult;`), so the human no longer chugs at full speed. Everything else stands. Trigger: bots.js:165 `s.HEAL = (a.hp < 45 || ...) ... : (a.hp < 60 && heals && W.t - a.lastDamageT > 6 ? 45 : 0);` — 59 HP with no recent damage scores 45, beating LOOT 20 (l.166, mid-game upgraded) and WANDER 12. Weapon choice: l.314 `const order = a.shield < 40 ? [...] : [\"medkit\", \"bandage\", \"big_shield\", \"mini_shield\"];` picks medkit first at shield>=40, and sim/royale.js:90 `medkit: { heals: \"hp\", amount: 100, cap: 100, useS: 8, stack: 3 }` — an 8-second channel to restore 41 HP. Rooted: l.501 `a.input.mz = 0; a.input.mx = 0;` hard-zer",
+   "fix": "Three parts. (1) Cheapest-sufficient heal in startHeal (l.314): reserve the medkit for `a.hp < 40` and prefer bandage/mini_shield above that (bandage caps at 75, sim/royale.js:89). (2) Add a cancel path: `export function cancelHeal(W, a) { ... }` beside useConsumable and wire it into hurtActor — but it MUST refund, because player.js:1164 does `slot.count--` before `a.healing = { id, tLeft: c.useS }` at :1178, so a naive `a.healing = null` burns the item (and the slot may already have been nulled at :1165-1167, so the refund has to re-create it). (3) Change l.147 to bail out when a threat appears: `if (a.healing) { if (bb.target && W.t - bb.targetSeenT < 0.5) W.cancelHeal(a); else { b.state = \"HEAL\"; return; } }`, and delete l.501's manual stand-still now that K.HEAL.speedMult enforces the tempo cost for everyone. RISK MEDIUM — part (3) alone is low risk and fixes the worst of it; the ref"
+  },
+  {
+   "title": "No bot ever crouches — the tighter-cone / smaller-hitbox verb is player-exclusive, including for the sniper and camper personalities",
+   "line": "347",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Absence verified by three greps (see greps_run 1-2): `crouch` appears ZERO times in bots.js, and the only assignment anywhere in runtime/ is player.js:561 `inp.crouch = !!keys.KeyC;` — the human keyboard path. bots.js:347 resets the struct without it: `inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.fire = false; inp.ads = false;`. The verb is fully built: sim/royale.js:117 `var CROUCH = { speedMult: 0.45, heightMult: 0.86, eyeMult: 0.60, spreadMult: 0.62 };`, the capsule genuinely shrinks via sim/royale.js:127 `return PLAYERK.height * (a && a.crouching && a.hasCrouchClip ? CROUCH.heightMult : 1);`, and the per-actor guard is set in the SHARED rig loader (player.js:238 `a.hasCrouchClip = !!a.clips.crouch;`), so it is already populated for bots — enabling crouch on them is safe as the audit claims. The turret pose is real: actCamp l.509-516 walks to bb.campSpot then does `a.input.ads = tr",
+   "fix": "Set inp.crouch in three spots, all additive: in actCamp after arriving, `a.input.crouch = true;`; in actEngage for a held firing position, `inp.crouch = dist > 30 && Math.abs(inp.mz) < 0.1 && a.tier >= 3;`; and inside the sniper fire branch (l.618) which already zeroes mx/mz. RISK LOW: player.js:770 `a.crouching = !!inp.crouch && a.onGround && !a.swimming && !a.gliding && !(inp.sprint && inp.mz > 0.5);` already resolves every conflict, and CROUCH.speedMult 0.45 only applies where the bot has chosen to hold still. Watch one thing: a crouching bot's head drops to 1.55m, which interacts with finding 5's 1.44m head threshold — do these two together, not separately."
+  },
+  {
+   "title": "Bots cannot land a deliberate headshot: the fixed aim point sits 0.29m below the head hitbox threshold",
+   "line": "567",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "bots.js:567 is verbatim: `const aimY = tp.y + 1.15 + (seen ? (t.vel ? 0 : 0) : 0);` — a fixed 1.15m above the target's feet for every tier, plus a dead expression that always evaluates to 0. The head band starts higher: weapons.js:498 `const feetY = t.pos.y, headY = t.pos.y + (t.swimming ? 0.9 : K.actorHeight(t));` and :510 `const isHead = py > feetY + (headY - feetY) * 0.8;` — with PLAYERK.height 1.8 (sim/royale.js:103) that is feetY + 1.44, exactly 0.29m above the aim point. The vertical error term cannot reliably bridge it: l.597 `wantPitch += Math.cos(bb.errPhase * 0.83) * err * 0.6`, and tier-5 aimErrDeg is 0.9 (sim/royale.js:296) so pitch wander is ~0.54deg. One correction to the finding's wording: headshots are not mathematically impossible, because weapon spread is applied to bot shots too through the shared fire path (weapons.js:398 `const spread = K.effectiveSpread(...)`), so a",
+   "fix": "Make the aim point tier-dependent and re-rolled per burst so it does not shimmer frame to frame: `const headChance = [0, 0, 0.1, 0.25, 0.45][a.tier - 1] || 0;` and set `bb.aimHigh = Math.random() < headChance;` where the burst is armed at l.609, then `const aimY = tp.y + (bb.aimHigh ? 1.62 : 1.15);` (1.62 = K.PLAYERK.eyeY, comfortably inside the isHead band). Delete the dead `+ (seen ? (t.vel ? 0 : 0) : 0)` while there. RISK LOW mechanically, but it is a real DIFFICULTY increase — a tier-5 sniper headshot is 105 * 2.5 = 262 damage, which kills through a full 100+100 bar, so start the top-tier chance nearer 0.25 than 0.45 and confirm the aim point still lands on the body when the target is crouching (head at 1.55m if finding 4 ships)."
+  },
+  {
+   "title": "Bots have zero awareness of supply drops — the two legendary crates per match are uncontested",
+   "line": "36",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Absence verified: `grep -n \"events.on|supply|Supply|drop\" bots.js` returns only the two subscriptions at l.29 `W.events.on(\"actorDied\", ...)` and l.36 `W.events.on(\"shotFired\", ...)`; every other hit is `bb.dropTarget`, the glide landing zone. A repo-wide grep for supplyDrop/supplyMark/airdrop/carePackage/crate finds the feature alive everywhere EXCEPT bots.js: loot.js:258 `W.events.emit(\"supplyDropSpawned\", { x: cx, z: cz });` and loot.js:276 `W.events.emit(\"supplyDropLanded\", { x: f.x, z: f.z });`, consumed by hud.js:1881/1886 (minimap marker) and audio.js:271/282 (stings). The payload is genuinely top-tier — loot.js:268 `const drops = K.rollSupplyDrop(rng);` burst as ground items — and there are two per match (loot.js:241 `supplyState.dropped < 2`). A bot can only collect one by coincidence, via l.230 `const near = W.nearbyLoot(a.pos, 90);` while already in LOOT, which scores just 20 ",
+   "fix": "~12 lines. Add a third subscription in init(): `W.events.on(\"supplyDropLanded\", (p) => { for (const b of brains) { if (!b.actor.alive) continue; const d = Math.hypot(b.actor.pos.x - p.x, b.actor.pos.z - p.z); if (d < 220) { b.bb.supply = { x: p.x, z: p.z, t: b.W.t }; b.nextThink = 0; } } });` Then in think() add `s.SUPPLY = bb.supply && W.t - bb.supply.t < 90 ? (a.personality === \"loot_goblin\" ? 78 : 58) - Math.hypot(a.pos.x - bb.supply.x, a.pos.z - bb.supply.z) * 0.12 : 0;` — above LOOT/WANDER, below ENGAGE (80-88) and a pressing ROTATE (95). onEnter sets `bb.moveTo = bb.supply`, the act switch routes SUPPLY to actLoot, and bb.supply clears on arrival within 4m or at the 90s expiry. RISK LOW: purely additive, no existing branch changes, and the scoring band is chosen so it cannot outrank storm rotation. The one thing to get right is the clear-on-arrival — without it a bot orbits an empt"
+  },
+  {
+   "title": "A bot with no consumables can never retreat: s.FLEE is gated on `heals`, so low-HP bots always fight to the death",
+   "line": "164",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "bots.js:164 verbatim: `s.FLEE = bb.target && outnumbered && !lastFew && heals ? 86 : 0;   // disengage to heal, not to hide forever` — and `heals` is defined at l.143 as `a.inventory.slots.some((s2) => s2 && s2.kind === \"consumable\" && s2.count > 0)`. s.HEAL at l.165 is gated on the same flag. So an empty-inventory bot at 15 HP scores FLEE 0 and HEAL 0 against ENGAGE 88 at close range (l.160-162, `tDist < 40 ? 88 : 80` plus personality/endgame bonuses) and stands and trades until it dies. No other escape hatch reaches it: the suppression reflex at l.383 is explicitly excluded during a fight (`&& b.state !== \"ENGAGE\"`), and the fight-fatigue break at l.527 requires `W.t - a.lastDamageT > 6`, i.e. it only fires in a stalemate where nobody is landing shots — never while the bot is being cracked. The audit's side note is also correct: `outnumbered` at l.155 is `const outnumbered = a.hp + a.s",
+   "fix": "Split the flee motive from the heal motive at l.164: `s.FLEE = bb.target && outnumbered && !lastFew ? (heals ? 86 : 72) : 0;` — 72 still loses to a close-range ENGAGE 88 but beats the 80 mid-range case, so a cracked bot breaks contact instead of trading. Then make the heal-less retreat productive: in onEnter(\"FLEE\"), when `!heals`, bias bb.moveTo toward the nearest chest/consumable from `W.nearbyLoot(a.pos, 120)` inside the next circle rather than the pure away-vector at l.271-280 (which already correctly blends toward the storm centre — keep that blend). Rename `outnumbered` to `lowEffectiveHp` while there. RISK LOW-MEDIUM: the score is the whole risk surface — set it too high and wounded bots kite forever, which is a worse feel than dying bravely. Ship the 72 first, verify a cracked bot actually disengages and returns, and only then add the loot-seeking destination."
+  }
+ ],
+ "C:/Users/TestRun/Claude Claw/forgeflow-games/games/last-circle/runtime/3d/ffg_kernel_3d.js": [
+  {
+   "title": "[animation-rig] Clip transitions zero the stride phase, so walk→run pops the feet",
+   "line": "278",
+   "sev": "polish",
+   "risk": "medium",
+   "evidence": "Line 278 matches exactly, no drift — `      next.reset();` — followed at 288 by `      if (current && current !== next) { next.crossFadeFrom(current, opts.fade != null ? opts.fade : 0.2, false); }`. THREE.AnimationAction.reset() sets time = 0, so the incoming clip always enters the 0.2 s crossfade at frame 0 while the outgoing clip sits at an arbitrary phase. Nothing compensates: `grep -rn \"syncWith\"` and `grep -rn \"\\.warp(\"` both returned ZERO hits repo-wide. The royale locomotion really does run through this function — player.js:323 `  a.rig.play(clip, Object.assign({ timeScale: ts }, opts));` where a.rig comes from `W.kernel.loadCharacter(url)` (player.js:125/161) — and the walk↔run switch is player.js:970 `        if (gs > 7 && !back) {` with sim/royale.js:98 `    walk: 6.0, sprint: 9.6, ads: 3.8,`, so the 7 m/s boundary is crossed on every sprint toggle. The only manual seek that ex",
+   "fix": "Do NOT apply the audit's one-liner unconditionally — phase-syncing every transition would also start one-shot clips mid-way (death, jump, and the locker's `rig.play(\"cheer_menu\", { once: true })` at hud.js:733), a visible regression. Gate it: after `next.reset()` add `if (opts.syncPhase && current && current !== next && !opts.once) { const cd = current.getClip().duration, nd = next.getClip().duration; if (cd > 0 && nd > 0) next.time = ((current.time / cd) % 1) * nd; }`, and pass `syncPhase: true` only from the two locomotion calls in player.js (:975 run, :978 walk). This file is a per-game COPY of the generator (15 copies exist; master is pipeline/engine/runtime/3d/ffg_kernel_3d.js, whose play() at :359-375 is identical on this point), so per the never-patch-games rule the fix lands in the engine copy and propagates. Medium risk: it touches the shared animation entry point used by all 14"
+  },
+  {
+   "title": "[performance] antialias:true allocates a 4x MSAA backbuffer that the scene never renders into, because everything goes through the bloom composer",
+   "line": "39",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Line 39 matches exactly — `    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });`. enableBloom builds the composer with no render target: line 146 `    const composer = new EffectComposer(this.renderer);`. I fetched the exact build index.html:7 pins (`https://cdn.jsdelivr.net/npm/three@0.172.0/...`): EffectComposer's no-target branch is `renderTarget = new WebGLRenderTarget( this._width * this._pixelRatio, this._height * this._pixelRatio, { type: HalfFloatType } );` — no `samples`, so the scene target is single-sampled. `grep -rn \"samples\" --include=*.js .` finds no render-target samples anywhere in the game. The composer is live for the whole session, not just the menu: hud.js:369 `    if (!W.kernel.composer) W.kernel.enableBloom({ strength: 0.45, radius: 0.55, threshold: 0.72 });` is the ONLY call site, it is never nulled or disposed (grep for `",
+   "fix": "Minimal, provably visual-no-op: change line 39 to `{ antialias: false, preserveDrawingBuffer: true }` — the default framebuffer only ever receives OutputPass, so output is pixel-identical and the MSAA backbuffer is freed. Keep preserveDrawingBuffer (the vision fidelity gate reads the canvas). To actually remove the jaggies, the generator already solved this upstream: pipeline/engine/runtime/3d/ffg_kernel_3d.js:24 imports SMAAPass and :203 adds it (`if (opts.smaa !== false && typeof SMAAPass !== \"undefined\")`); last-circle's copy predates that and has neither SMAA nor a multisampled target. Port that pass across rather than hand-rolling `new THREE.WebGLRenderTarget(w*dpr, h*dpr, { type: THREE.HalfFloatType, samples: 4 })`, which costs real bandwidth and would need gating off the `low` tier. Risk low for the antialias:false line — one narrow corner case: hud.js:369 sits inside a try/catch,"
+  }
+ ],
+ "runtime/3d/royale/weapons.js": [
+  {
+   "title": "[combat-weapons] Projectiles resolve against actors BEFORE world geometry, so any target within ~2.4m of the far side of a wall can be shot through it",
+   "line": "480 (cited) / real defect at 494-534",
+   "sev": "severe",
+   "risk": "medium",
+   "evidence": "testSegment resolves actors first and returns unconditionally on the first capsule pass, before any collider query. weapons.js:496 `for (const t of W.actors) {` ... weapons.js:507 `if (dh < K.PLAYERK.radius + 0.12 && py > feetY - 0.05 && py < headY + 0.12) {` ... weapons.js:522 `p.dead = true; return true;`. Only AFTER that does the world get queried: weapons.js:533 `const cols = W.map.queryColliders(midX, midZ, halfLen + 0.6);` / :534 `const sh = K.segmentColliders(ax, ay, az, bx, by, bz, cols);`. Sub-step length verified from weapons.js:474 `const steps = Math.max(1, Math.min(8, Math.ceil((speed * dt) / 2.5)));` with sim/royale.js:53-58 speeds: pistol/smg/shotgun speed 999 -> 999/60=16.65m/frame -> 7 steps -> 2.38m per sub-step; sniper 700 -> 2.33m; ar 300 -> 2.50m. Any wall crossed inside that same sub-step is never even queried. grep for wallT|occlu|lineOfSight|hasLOS|losBlocked in w",
+   "fix": "In testSegment, hoist the world query above the actor loop and use it as a range clamp. Compute `const cols = W.map.queryColliders(midX, midZ, halfLen + 0.6); const sh = K.segmentColliders(ax, ay, az, bx, by, bz, cols); const wallT = sh ? sh.t : 1;` first (K.segmentColliders already returns the nearest hit with a normalised `t` — sim/royale.js:237-248). Then in the actor loop track the nearest candidate instead of returning inside it: keep `bestU`/`bestT`, skip any candidate whose clamped `u > wallT`, and apply damage once after the loop. If no actor survives the clamp, fall through to the existing static-world block reusing the already-computed `sh` (do not re-query) so the splash/bounce/destructible-prop branches at 539-566 stay in their current order. Terrain can keep its endpoint test at 569 (it is already evaluated at the segment end, i.e. t=1)."
+  },
+  {
+   "title": "[combat-weapons] The head hitbox is the full 1.14m-wide body cylinder, so 2.5x sniper headshots register on shots that visibly miss the character",
+   "line": "494 (cited) / real code at 507 and 510",
+   "sev": "severe",
+   "risk": "low",
+   "evidence": "The head zone reuses the body cylinder's horizontal radius verbatim — the only extra condition is vertical. weapons.js:507 `if (dh < K.PLAYERK.radius + 0.12 && py > feetY - 0.05 && py < headY + 0.12) {` and weapons.js:510 `const isHead = py > feetY + (headY - feetY) * 0.8;` — `isHead` constrains py only, never `dh`. PLAYERK.radius verified at sim/royale.js:103 `var PLAYERK = { hp: 100, shield: 100, radius: 0.45, height: 1.8, eyeY: 1.62, swimDepth: 1.1 };` -> 0.45 + 0.12 = 0.57m radius = 1.14m-wide multiplier disc, on a 1.8m rig whose shoulders are ~0.5m across. Damage figure verified: sim/royale.js:57 `sniper: { ... damage: 105, headMult: 2.5, ... falloff: [200, 400] ... }` with hitDamage (sim/royale.js:390-400) applying `if (isHead) dmg *= w.headMult; return Math.round(dmg);` -> 263 inside 200m, which one-shots a full 100 shield + 100 HP bar. Band height also as filed: 0.8 * 1.8 = 1.44m",
+   "fix": "Split the multiplier zone from the registration volume at weapons.js:510: `const hTop = headY - feetY; const isHead = py > feetY + hTop * 0.86 && dh < 0.20;`. Leave line 507 alone so body hit registration stays as forgiving as it is today — only the 2.5x zone tightens. Export the two constants (HEAD_BAND 0.86, HEAD_R 0.20) from sim/royale.js next to PLAYERK so the node selftest can assert them and the crouch case (heightMult 0.86, royale.js:108-116) scales with actorHeight automatically."
+  },
+  {
+   "title": "[combat-weapons] Recoil never accumulates — recovery outpaces every automatic weapon's fire rate, so there is no spray pattern to control",
+   "line": "236 (cited) / real code at 251-255 and 427-432",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "Recovery is a flat 0.12 rad/s regardless of weapon: weapons.js:252 `const r = Math.min(a.recoilPitch, dt * 0.12);`, fed by weapons.js:427 `const kick = { pistol: 0.008, smg: 0.006, ar: 0.011, shotgun: 0.03, sniper: 0.05, glauncher: 0.035 }[a.weapon.id] || 0.01;` and :431 `a.recoilPitch = (a.recoilPitch || 0) + kick;`. Arithmetic against the real fire rates (sim/royale.js:54-55: smg rpm 720, ar rpm 330): AR = 5.5 shots/s * 0.011 = 0.061 rad/s of kick vs 0.12 rad/s of recovery; SMG = 12 shots/s * 0.006 = 0.072 rad/s vs 0.12. Both automatics are cancelled roughly 2x faster than they build, so the accumulator can never hold more than one shot's kick — 0.63 deg peak for the AR, 0.34 deg for the SMG, exactly as filed. The kick does reach the player's aim (it is not dead code): player.js:532 `W.player.input.pitch = K.clamp(W.player.input.pitch - my2 * sens, -1.35, 1.35);` shows input.pitch is a",
+   "fix": "Make recovery per-weapon and gate it on trigger release. In fire(), store `a.recoilRate = kick / 0.30;` alongside the existing accumulator writes (weapons.js:431-432); at weapons.js:252 use `const r = Math.min(a.recoilPitch, dt * (a.recoilRate || 0.12));` and skip the recovery block entirely while `W.t - a.lastShotT < 0.12` so a burst can build. Cap the accumulator at ~0.09 rad (`a.recoilPitch = Math.min(a.recoilPitch + kick, 0.09)`) — the cap is what prevents a repeat of the documented pre-fix regression at weapons.js:422-425 (permanent kick made the crosshair climb forever, owner reported \"my pistol doesn't work\"). Optionally give the AR/SMG alternating rather than pure-random yawKick (weapons.js:428) so the two automatics get learnable, distinguishable patterns."
+  },
+  {
+   "title": "[combat-weapons] No weapon has bullet drop — `def.gravity` is never defined — yet the module header and the sniper reticle both advertise it",
+   "line": "400 (cited) / real code at 416",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "The ternary is dead: weapons.js:416 `gravity: def.arc ? -18 : def.gravity ? -9.8 : 0,`. No weapon definition carries a gravity field — sim/royale.js:52-59 lists all six (pistol/smg/ar/shotgun/sniper/glauncher) with no `gravity` key, and `grep -rn \"gravity\" runtime/sim/` returns exactly one line, royale.js:100 `jumpV: 7.8, gravity: -22, ...` which is MOVE (player movement), not a weapon. `grep -rn \"BALLISTIC|dropRate|bulletDrop|projectileGravity|def\\.gravity\" runtime/` returns only weapons.js:416. So every non-arc round flies perfectly flat. Three places state otherwise: weapons.js:5-8 `Projectiles are REAL (position + velocity + optional gravity) ... so travel time and drop come free for sniper`, and hud.js:1660 `else if (cls === \"sniper\") { dot(2); line(-1, 10, 2, 8); }  // fine dot + drop hint (scope overlay on ADS)` — an 8px tick 10px under the dot, labelled a drop reference in its ow",
+   "fix": "Take option (b) — declare flat ballistics and make all three places agree: delete the `line(-1, 10, 2, 8)` drop tick from hud.js:1660 (keep the dot), simplify weapons.js:416 to `gravity: def.arc ? -18 : 0,`, and correct the weapons.js:5-9 header so it no longer promises drop. Do NOT take option (a) (wiring real gravity for sniper/ar) without also fixing bot aim: bots.js:581 `if (wdef && wdef.arc) { ... wantPitch = arcPitch(wdef, dHoriz, aimY - eye.y); }` compensates for arc weapons only, so adding drop to the sniper/AR would make every bot shoot low at range."
+  }
+ ],
+ "runtime/3d/ffg_royale3d.js": [
+  {
+   "title": "[lighting-daynight] Shadow volume is anchored to the player's ALTITUDE, so the entire 240-270 m glider descent renders with zero shadows",
+   "line": "173",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "ffg_royale3d.js:173 passes the player's raw Y straight into the shadow focus: `_sunFocus.set(Math.round(f.pos.x / step) * step, f.pos.y, Math.round(f.pos.z / step) * step);` — no groundAt clamp, and followShadow is the only writer of the shadow focus in the file. The four supporting facts all check out in source: (a) the drop altitude is 240-270 m — player.js:361 `a.pos.set(p.x, 240 + rng() * 30, p.z);`; (b) followShadow runs during the drop — line 335 gates on `W.phase !== \"match\" && W.phase !== \"drop\" && W.phase !== \"over\"` and line 337 then calls `followShadow();`; (c) the sun offset is (90,130,60) — maps.js:273 `kn.sun.position.set(90, 130, 60);` captured at ffg_royale3d.js:243 `W._sunOff = kernel.sun.position.clone();` after the target is zeroed at :241, giving |off| = 169.1 and unit-Y 0.7688; (d) the far plane is 400 — line 121 `sc.near = 1; sc.far = 400;`. Depth needed to reach y=",
+   "fix": "In followShadow (line 165-177), anchor the focus to the terrain under the player rather than to the player: `const gy = W.map && W.map.groundAt ? W.map.groundAt(f.pos.x, f.pos.z) : 0;` then `_sunFocus.set(Math.round(f.pos.x/step)*step, Math.min(f.pos.y, gy + 8), Math.round(f.pos.z/step)*step);`. W.map.groundAt exists — maps.js:1253 `heightAt: heightAt0, groundAt: heightAt0,` (the audit's cited line 1224 has drifted to 1253). Also raise line 121 to `sc.far = 600;` — Isla Viva's high ground already eats ~338 of the 400 m budget when you stand on it, so the current value has almost no headroom. Risk is low: the sun is directional so moving its position only relocates the shadow camera, not the lighting; near=1 stays safe with the +8 m offset; W.map is null-guarded for the menu phase."
+  },
+  {
+   "title": "[lighting-daynight] Shadows hard-terminate at a 55 m radius (70 m on high) with no cascade and no distance fade — enemies past 55 m cast no contact shadow",
+   "line": "115",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "Line 115 reads exactly `const SHADOW_EXT = { low: 55, medium: 55, high: 70 };` and line 117-123 apply it as the whole ortho extent: `const ext = SHADOW_EXT[tier] || 55; ... sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext;`. There is no second cascade and no fade anywhere: `grep -rniE \"cascade|csm|shadowFade|secondSun|sun2\"` → 0 hits; `grep -rn \"DirectionalLight\"` → the only world-scene one is ffg_kernel_3d.js:64 `const sun = new THREE.DirectionalLight(0xffffff, 1.6);` (hud.js:664-666 and :1596 are the locker/preview scenes); `grep -rn \"onBeforeCompile|getShadow|shadowIntensity\"` → 0 hits, so nothing softens the frustum boundary. three.js returns fully-lit outside a DirectionalLightShadow frustum, so the boundary is a crisp circle at 55 m. Fog cannot hide it — maps.js:18-20 sets fog 0.00042 / 0.00045 / 0.00052, i.e. a few percent at 400 m. The finding's texel-density arithm",
+   "fix": "Widen the single light rather than adding a second one: `const SHADOW_EXT = { low: 55, medium: 110, high: 160 };`, which is still 10.7 cm and 7.8 cm per texel. Draw-call cost is near zero because props are already map-wide InstancedMeshes that are submitted to the depth pass regardless of extent (maps.js:1110-1111 `const inst = new THREE.InstancedMesh(...); inst.castShadow = kind !== \"bush\";`) — widening changes texel density, not batch count. Risk is medium because the existing `kernel.sun.shadow.bias = -0.0004; normalBias = 0.02` (lines 125-126) were tuned at 5.4 cm/texel and will need re-checking for acne/peter-panning at 2-3x the texel size; also re-verify against the pending sc.far change from finding #1. Skip the 2-light pseudo-cascade in the audit's first proposal — splitting the key light's intensity across two directional lights risks double-lighting the scene and is materially "
+  },
+  {
+   "title": "[menu-ux] playerName exists in the settings schema and is read in two places, but no screen ever lets the player set it",
+   "line": "254",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "The read site is line 254 verbatim: `const humans = opts.humans || [{ slot: 0, name: W.settings.playerName || \"You\", self: true }];`, and the schema entry is on line 392: `const def = { masterVol: 0.8, ..., graphics: \"medium\", playerName: \"You\", keys: {}, ... };`. Absence of any UI is established by four greps: `playerName` returns only 4 hits (ffg_royale3d.js:254, :392, net.js:117, :118) with zero in hud.js; `nickname|gamertag|nameInput|yourName|callsign|setName|changeName|displayName` returns nothing; `createElement(\"input\")` returns exactly one hit, net.js:98, and the next three lines prove it is the room code not a name — `codeInp.placeholder = \"CODE\"; codeInp.maxLength = 8;`; and the only <input> hud.js ever builds is hud.js:2315 `inp.type = \"range\"` (the volume slider). I also read showSettings (hud.js:2196-2235) directly: five sliders, a graphics row, an FOV slider and the sprint/",
+   "fix": "Add one text row at the top of showSettings (hud.js, just before the Master volume slider at :2204): a `document.createElement(\"input\")` with `maxLength = 16`, value `W.settings.playerName`, and `oninput = () => { W.settings.playerName = inp.value.trim().slice(0,16) || \"You\"; save(W); }`. Mirror it on the SQUAD UP panel next to the existing code field (net.js:98) so a player naming themselves before going online is not forced through Settings. Risk is low and the keyboard-collision hazard is already handled — player.js:441 `if (ev.target && (ev.target.tagName === \"INPUT\" || ev.target.tagName === \"TEXTAREA\")) return;` (the audit's cited player.js:402 has drifted to 441), so typing into the field will not drive movement or rebinds. Note showSettings re-renders itself on several button clicks, so read the live value into the input on every build rather than caching it."
+  },
+  {
+   "title": "[textures-materials] GLB textures never receive the quality tier's anisotropy — applyGraphics only runs at boot and on settings clicks",
+   "line": "141",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "The traverse at line 138-142 is a one-shot over whatever is in the scene at call time: `W.scene.traverse((o) => { const m = o.material; if (!m) return; ... for (const mm of mats) for (const slot of [\"map\", \"normalMap\", \"roughnessMap\"]) if (mm[slot]) { mm[slot].anisotropy = W._texAniso; ... } });`. `grep -rn \"applyGraphics\"` finds only two invocation sites — ffg_royale3d.js:146 `W.applyGraphics();          // BOOT-apply the stored tier (the fix)` and hud.js:2215 `b.onclick = () => { W.settings.graphics = g2; applyGraphics(W); save(W); showSettings(W); };` — and neither buildMap (line 233) nor loadActorModels (line 271) is followed by a re-apply. The load path confirms the other half: ffg_kernel_3d.js:249 `root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } else if (o.isLight) _lts.push(o); });` and the identical line at :263 in loadCharacter set shadow fl",
+   "fix": "Cheapest and lowest-risk: add `W.applyGraphics(W.settings.graphics);` at the end of _startMatch, after `await playerMod.loadActorModels(W);` (line 271). Because ffg_kernel_3d.js:245 caches per URL (`if (this._gltfCache[url]) return this._gltfCache[url].clone(true);`) and clones share texture objects, one traverse fixes every present and future clone of those assets. Also add `\"emissiveMap\"` to the slot list on line 141 while touching it. The audit's preferred generator-level fix — setting anisotropy inside the kernel's loadGLTF/loadCharacter traverse — is better in principle but carries the higher risk here: ffg_kernel_3d.js is a per-game vendored copy (the comment at line 110 calls it \"the vendored kernel\"), so a kernel edit is a divergence the games pipeline may regenerate away, and it belongs upstream in the engine template rather than in this game."
+  },
+  {
+   "title": "[performance] The graphics preset controls DPR, shadows and anisotropy but never touches bloom, so the \"low\" tier still runs the full UnrealBloomPass",
+   "line": "103",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "applyGraphics (lines 100-145) contains exactly three tier tables — line 103 `const DPR = { low: 1, medium: 1.5, high: 2 };`, line 104 `const SHADOW = { low: 0, medium: 2048, high: 4096 };`, line 105 `const ANISO = { low: 1, medium: 4, high: 8 };` — and `grep -rn \"bloom\"` returns zero hits anywhere inside the function; the whole file has no reference to kernel.bloom or kernel.composer. The pass is nonetheless live: hud.js:369 `if (!W.kernel.composer) W.kernel.enableBloom({ strength: 0.45, radius: 0.55, threshold: 0.72 });` builds it during the menu world, ffg_kernel_3d.js:146-153 assembles `EffectComposer → RenderPass → UnrealBloomPass → OutputPass`, ffg_kernel_3d.js:352 renders through it unconditionally (`if (this.composer) this.composer.render(dt); else this.renderer.render(this.scene, this.camera);`), and maps.js:276 turns the match strength down to a near-invisible level: `if (kn.blo",
+   "fix": "Add a fourth tier table beside the other three and honour it at the end of applyGraphics: `const BLOOM = { low: 0, medium: 0.14, high: 0.14 };` then `if (kernel.bloom) kernel.bloom.enabled = BLOOM[tier] > 0;`. EffectComposer skips a pass with `enabled === false`, so the composer stays allocated and the menu's 0.45-strength glow (hud.js:369-370) still works on medium/high. Risk is low; the only behavioural consequence is that a low-tier player loses the menu storm-ring glow, which is the correct trade for that tier. Optional follow-on, also low risk: halve `kernel.bloom.resolution` — at strength 0.14 it is visually indistinguishable and quarters the blur fill cost on medium too."
+  }
+ ],
+ "runtime/sim/royale.js": [
+  {
+   "title": "[combat-weapons] gunScore ranks the sniper below the starter pistol, so bots effectively never wield the game's strongest weapon",
+   "line": "75 (unchanged; def spans 72-76)",
+   "sev": "severe",
+   "risk": "medium",
+   "evidence": "royale.js:75 reads `return (d.damage * (d.pellets || 1) * d.rpm / 60) + (rarity || 0) * 20;`. Arithmetic on the live table (royale.js:53-58): pistol 24*1*400/60 = 160; sniper 105*1*35/60 = 61.25. A LEGENDARY sniper scores 61.25+80 = 141.25, still under a COMMON pistol's 160 — the sniper is last in the table at every rarity (smg 204 > ar 165 > pistol 160 > shotgun 105 > glauncher 87 > sniper 61). I verified this actually drives bot behaviour rather than being cosmetic. bots.js:463-469 slotScore is a byte-identical formula (`return (def.damage * pellets * def.rpm / 60) + (s.rarity || 0) * 20;`) and bots.js:496 `if (holdingConsumable || curDry || bs > curScore * 1.15) W.equipSlot(a, bestIdx);` is the ONLY equipSlot call in bots.js (grep 3) — there is no range- or situation-based weapon switch anywhere. So a bot holding an epic sniper (121.25) with a common pistol in a slot re-equips the pis",
+   "fix": "Stop scoring burst weapons by sustained DPS, and unify the two scorers so they cannot drift. Lowest-risk version: add an explicit `value` to each WEAPONS entry (pistol 40, smg 80, ar 100, shotgun 90, sniper 120, glauncher 95) and make royale.js:72-76 `return (d.value || (d.damage*(d.pellets||1)*d.rpm/60)) + (rarity||0)*15;`, then replace the duplicated body of bots.js slotScore with `return K.gunScore(s.id, s.rarity || 0);` keeping its existing `if (slotAmmo(a,s) <= 0) return 0;` dry-gun guard. Risk is MEDIUM, not low: this re-ranks every bot's loadout lobby-wide (45 actors), and fixing royale.js alone WITHOUT bots.js would be worse than the status quo — capped bots would start accepting snipers via botWouldTradeUp and then still refuse to hold them via slotScore, so they would carry dead weight. Change both in one commit and validate by observing an actual match (a bot firing a sniper),"
+  },
+  {
+   "title": "[gameplay-loop] Quick Match ground-spawns ~48% of the lobby OUTSIDE the pre-shrunk starting circle, and corner spawns physically cannot reach circle 1",
+   "line": "279 (audit cited 274; +5 drift)",
+   "sev": "severe",
+   "risk": "low",
+   "evidence": "royale.js:279 `quick:    { players: 50, startRadiusFrac: 0.75, lootMult: 1.8, drop: \"ground\" },`. The spawn path ignores that circle entirely: player.js:364-366 `} else { const p = W.map.randomGroundPos(rng); a.pos.set(p.x, p.y + 0.1, p.z);` and maps.js:1230-1236 samples `const x = (rng2() * 2 - 1) * (HALF - 80), z = (rng2() * 2 - 1) * (HALF - 80);` with water as its ONLY rejection test (`if (y > waterY + 0.6) return`). HALF = 800 (maps.js:23-24), and storm.js:19 passes `half: W.map.half` = maps.js:1252 `half: HALF * 0.98` = 784. So the start circle is 0.75*784 = 588 m while spawns are uniform over a 1440x1440 m square: inside fraction = pi*588^2 / 1440^2 = 52.4%, i.e. 47.6% of the lobby spawns OUTSIDE the live safe zone — the audit's ~48% is exact. Corner check: (720,720) is 1018 m from origin; circle 1 is 0.28*784 = 219.5 m radius and the whole approach window is wait 30 + shrink 35 = ",
+   "fix": "Constrain the ground spawn to the mode's own first circle. In player.js spawnAll's else-branch (currently lines 364-367), wrap randomGroundPos in a rejection loop against `W.stormCtl.storm.circles[0]`: retry ~30 times until `Math.hypot(p.x - c0.x, p.z - c0.z) < c0.r * 0.85`, else push the last sample radially inward to 0.85*r and re-sample y with `W.map.heightAt`. I verified the ordering constraint the fix depends on: ffg_royale3d.js:247 `W.stormCtl = stormMod.createStorm(W);` runs before ffg_royale3d.js:273 `playerMod.spawnAll(W);`, and storm.js:59 returns `{ storm, wall, tex, ... }` so `W.stormCtl.storm.circles[0]` resolves. Risk LOW — additive, confined to one branch, and standard/practice (startRadiusFrac 1.35 => r 1058 m, larger than the 720 m sample bound) are unaffected because every sample already passes. Guard with `if (c0)` so practice mode (empty phase table) cannot throw. Ver"
+  },
+  {
+   "title": "[combat-weapons] Shotgun is the weakest weapon at its own optimal range — 105 DPS vs the SMG's 204, and 3 point-blank blasts to break a full health bar",
+   "line": "56 (unchanged)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "royale.js:56 `shotgun:  { cls: \"shotgun\", damage: 10, headMult: 1.75, rpm: 70, mag: 5, reloadS: 4.0, ammo: \"shells\", speed: 999, falloff: [8, 20], pellets: 9, spreadDeg: 4.0, adsFov: 49 },` vs royale.js:54 `smg: { ... damage: 17, ... rpm: 720, mag: 30, reloadS: 2.0, ... falloff: [18, 40] ... }`. At the shotgun's own preferred 7 m (bots.js:542 `shotgun: 7`) every gun is inside its falloff start, so the numbers are directly comparable: shotgun 10*9 = 90 per blast * 70/60 = 105 DPS; SMG 17*720/60 = 204; AR 165; pistol 160. The shotgun is last of the four common guns at knife range, and TTK against a full 200 EHP bar is 3 blasts (90/180/270) at a 0.857 s cycle = 1.71 s versus the SMG's 12 rounds at 0.083 s = 0.92 s — the SMG kills roughly twice as fast at the shotgun's own optimal range, exactly as claimed. It also carries the worst reload in the table (4.0 s for 5 shells vs the SMG's 2.0 s ",
+   "fix": "Edit the table row at royale.js:56 to `damage: 13, rpm: 80, reloadS: 3.0` — 117 per common blast (a clean 2-shot on a full 200 EHP bar), 156 DPS, still under the SMG's 204 so the SMG keeps the sustained lane. Risk LOW: it is a pure data edit and I checked the node selftest for collisions — `grep -n \"shotgun\" runtime/sim/royale.selftest.cjs` returns only lines 101 (id list), 140 (kill-feed string), 226 and 248 (spread assertions on spreadDeg 4.0, which this edit does not touch). No damage or rpm assertion exists to break. Note the intended side effects: gunScore/slotScore for the shotgun go 105 -> 156 (it re-ranks above the pistol, which is desirable), and this single edit also fixes the rarity-rounding finding below."
+  },
+  {
+   "title": "[combat-weapons] Per-pellet Math.round collapses the shotgun rarity ladder — rare and epic shotguns deal identical damage",
+   "line": "399 (audit cited 394; +5 drift)",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "royale.js:399 `return Math.round(dmg);` closing hitDamage, whose body is `var dmg = w.damage * (RARITY_DMG_MULT[rarityTier || 0] || 1);` (royale.js:392) against royale.js:48 `var RARITY_DMG_MULT = [1.0, 1.08, 1.16, 1.24, 1.32];`. It is applied PER PELLET, not per blast: weapons.js:406 spawns one projectile per pellet and each resolves independently at weapons.js:511 `const dmg = K.hitDamage(p.weaponId, p.rarity, distFromOrigin, isHead);`. With base damage 10 the ladder is 10 / 10.8 / 11.6 / 12.4 / 13.2 -> rounded 10 / 11 / 12 / 12 / 13 -> per blast 90 / 99 / 108 / 108 / 117. Rare and epic are bit-identical at 108, confirmed. The secondary claim also holds: uncommon lands on 99, so two blasts = 198, one point short of a 200 EHP kill — the +8% tier buys literally nothing in shots-to-kill. Only the shotgun is affected; every other base damage is 17-105, where rounding is under 1%.",
+   "fix": "Take option (b), not (a). Option (b) is the same royale.js:56 edit recommended for the shotgun-balance finding — base 13 yields 13/14/15/16/17 per pellet, a strictly monotonic ladder, and it costs one line; risk LOW. Option (a) (the generator-level fix — delete Math.round from hitDamage and round only at display, since fx.js already does `String(Math.round(b.dmg))` and applyDamage handles fractions) is cleaner but is MEDIUM risk because it breaks the node selftest: line 80 `ok(R.hitDamage(\"ar\", 4, 10, false) === Math.round(30 * 1.32), ...)` would compare 39.6 === 40, and line 85 `ok(R.hitDamage(\"sniper\", 0, 50, true) === Math.round(105 * 2.5), ...)` would compare 262.5 === 263 — both fail, so (a) requires updating those assertions to a tolerance compare in the same commit. Taking (b) resolves this finding and the shotgun-balance finding with one edit and zero test churn."
+  }
+ ],
+ "index.html": [
+  {
+   "title": "[input-accessibility] The shell's global F = fullscreen hotkey is left enabled, so any action rebound to F also flips fullscreen — including while the rebind capture is armed",
+   "line": "11",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "index.html:11 reads verbatim: `<script>window.GAME_CONFIG={hide_bug_button:true,mute_hotkey:false};</script>` — `fs_hotkey` is NOT set. game_controls.js:217 gates the hotkey with a strict test that an absent flag passes: `if (e.code === \"KeyF\" && CFG.fs_hotkey !== false) { toggleFullscreen(); e.preventDefault(); }`, registered on a bare `window.addEventListener(\"keydown\", ...)` (game_controls.js:215) whose only guard is INPUT/TEXTAREA targets (:216) — no pointer-lock, phase or modal gating. The rebind capture at hud.js:2266-2294 accepts any physical code except `Escape` (:2269) and codes already owned by another ACTION (:2274) — there is no reserved-key list, so KeyF is bindable. player.js:442 (`if (W.captureKey) { W.captureKey(ev.code); ev.preventDefault(); return; }`) cannot suppress the shell listener: preventDefault does not stop other listeners on the same target, and game_controls.",
+   "fix": "Add the flag to index.html:11: `<script>window.GAME_CONFIG={hide_bug_button:true,mute_hotkey:false,fs_hotkey:false};</script>`. This mirrors the existing mute_hotkey precedent and is the escape hatch game_controls.js:19-20 documents (\"set fs_hotkey:false when the game itself binds the F key\"). Players keep fullscreen via the on-screen control-bar button (built at game_controls.js:203, `bar.appendChild(btns.fs)`) and via browser F11; the fullscreenchange icon sync at :222-224 is unaffected. Risk is low: one added property on a config object read once at game_controls.js:27, no shared-module change, no other game touched, and no ?v= bump needed because index.html is not a hashed asset and no JS changes. Belt-and-braces option (not required): also refuse KeyF inside the hud.js:2266 capture with `if (code === \"KeyF\") { kb.textContent = \"reserved: fullscreen\"; setTimeout(restore, 1400); retur"
+  }
+ ],
+ "runtime/3d/royale/hud.js": [
+  {
+   "title": "[progression-meta] The entire reward track is 3 unlocks and it is empty forever after level 10",
+   "line": "139",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "MENU_SKINS (hud.js:119-125) is 5 entries with unlockLevel 1,1,3,6,10 — two are owned at level 1, so 3 unlocks total. grep for any other unlock table (banner|emblem|achievement|trophy|prestige|weaponSkin|unlocks[) across runtime/ returns only MENU_SKINS. hud.js:139 `return next ? \"NEXT UNLOCK · \" + next.name + \" AT LEVEL \" + next.unlockLevel : \"RANK UP\";` — past 10 every level-up banner says the bare string \"RANK UP\". hud.js:516-520 `const nextSkin = MENU_SKINS.filter((sk) => (sk.unlockLevel || 1) > pr.level)...; if (nextSkin) { ... }` has no else branch, so the menu's \"NEXT: <SKIN> @ LVL n\" strip silently disappears at level 10+. xpForLevel (1103) keeps charging 800+(lvl-1)*700 forever. Also verified hud.js:478 hardcodes \"SEASON 1  ·  FREE TO PLAY\" and grep season over runtime/ returns that one string only.",
+   "fix": "Two contained edits, no new assets. (1) Give hud.js:517 an else branch that renders a lifetime-milestone goal (e.g. \"MAX RANK · LVL n · NEXT: 100 CAREER KILLS\") driven off the career counters already in W.progress.career, so the goal slot is never blank. (2) In levelUpSub, replace the \"RANK UP\" fallback with the same milestone string. Optional third: delete the \"SEASON 1\" label at hud.js:478 or make it real. Do NOT let this grow into a building/harvesting or map-picker feature."
+  },
+  {
+   "title": "[progression-meta] Nothing in the game can tell what day it is, so there is no reason to come back tomorrow",
+   "line": "1078",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "CAREER0 at hud.js:1078 is `{ matches: 0, wins: 0, kills: 0, damage: 0, bestPlacement: 0, top10s: 0, timeAliveS: 0 }` — no timestamp. loadProgress (1079-1085) merges only `{ level: 1, xp: 0 }` plus career. grep -rn \"new Date|toDateString|toISOString|toLocaleDate|86400|lastPlayed|dayStreak|daily|dailies|loginStreak|consecutive\" over runtime/ returns 0 hits; the only three Date.now hits are hud.js:981 (drop-select pulse), hud.js:1757 (supply-mark pulse) and ffg_netplay.js:30 (peer id). The absence is real. Rating this moderate rather than severe: it is a missing retention FEATURE, not a malfunction — nothing the player does today is broken by it.",
+   "fix": "Add `lastPlayedDay` (YYYY-MM-DD) and `dayStreak` to the object built in loadProgress (hud.js:1081) and stamp them in recordMatch (hud.js:1088-1101). Cheapest hook on top: regenerate pickChallenges (1121) when lastPlayedDay changes and show \"RESETS IN Xh\" on the menu XP strip at 502-521. Reuses the existing addXP/saveProgress plumbing; no schema migration needed because loadProgress already Object.assigns over defaults."
+  },
+  {
+   "title": "[progression-meta] Survival XP, the 'Survived' stat and lifetime timeAlive all measure MATCH length, not how long you lived",
+   "line": "2080",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "ffg_royale3d.js:318 `timeS: Math.round(W.t),` inside buildPostMatch, and ffg_royale3d.js:338 `if (W.phase !== \"over\") W.t += step;` — the clock keeps running through the whole spectate phase because death leaves W.phase at \"match\". That single value feeds all three consumers: hud.js:2074 `stat(grid, \"Survived\", fmtT(res.timeS));`, hud.js:2084 `+ Math.round((res.timeS || 0) / 4)` in the XP formula, and hud.js:1096 `c.timeAliveS += Math.round(res.timeS || 0);`. The file already knows this hazard — the comment at hud.js:1441-1443 says \"dying does not end the match and W.t keeps running\" and the challenge loop was guarded with `W.player.alive` at 1444; the three sites above were not. A player who dies at 3:00 of a 775 s standard match (STORM_PHASES.standard, sim/royale.js:254-271, waits+shrinks sum to 775) is shown Survived 12:55 and paid 193 survival XP instead of 45.",
+   "fix": "The death timestamp already exists: sim/royale.js:496 `this.feed.push({ t: t || 0, killer: killerId, victim: victimId, weapon: weaponId || \"storm\" });`. In ffg_royale3d.js buildPostMatch replace `timeS: Math.round(W.t),` with `timeS: Math.round((W.match.feed.find(f => f.victim === W.player.id) || {}).t ?? W.t),` — victory and quit-while-alive correctly fall through to W.t because no feed entry exists for them. One line, one file, and it fixes the display, the XP and the career counter together."
+  },
+  {
+   "title": "[hud-readability] The \"I'm being shot\" red vignette is driven from a 4 Hz block",
+   "line": "1422",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "hud.js:1422 `R.hurtTint.style.opacity = W.t - p.lastDamageT < 0.7 ? \"1\" : \"0\";` sits inside the `srT += dt; if (srT > 0.25) { srT = 0; ...` block opened at 1380-1382, so it is evaluated at most 4x/sec. R.hurtTint's own transition is `opacity .3s` (hud.js:1251), so worst case is ~250 ms of tick latency + 300 ms fade = ~550 ms to full strength, and the same line clears it at 0.7 s. The event-driven path exists and is not used: the actorHurt handler at hud.js:1827-1831 only adds a direction indicator and never touches R.hurtTint, while the correct instant pattern is right there at hud.js:1869 for stormTint.",
+   "fix": "In the actorHurt handler (hud.js:1827), before the `if (victim !== W.player || !info.attackerId) return;` guard, add `if (victim === W.player && R.hurtTint) { R.hurtTint.style.transition = \"opacity .07s ease-out\"; R.hurtTint.style.opacity = \"1\"; }`. Then change hud.js:1422 to a clear-only path: `if (W.t - p.lastDamageT >= 0.7) { R.hurtTint.style.transition = \"opacity .3s\"; R.hurtTint.style.opacity = \"0\"; }` so the 4 Hz block no longer fights the instant set. Putting it before the attackerId guard also makes storm ticks flash it."
+  },
+  {
+   "title": "[inventory-loot] The interact prompt always reads \"Pick up\" even when E will throw your active slot on the ground",
+   "line": "1459",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "hud.js:1481 renders `: \"[E] \" + labelFor(hint.data);` and labelFor (hud.js:1717-1721) has exactly two returns, both starting \"Pick up \". Meanwhile loot.js:592 `if (target && target.type === \"item\") pickup(W, a, target.id, { swap: true });` — E is unconditionally a swap, and the hint object built at loot.js:594 (`W.interactHint = target ? Object.assign({}, target, { progress: ... }) : null;`) carries no swap/outgoing information for the HUD to render. The predicate needed is already exported: loot.js:59 `W.wouldAcceptItem = (a, data) => wouldAccept(W, a, data);`.",
+   "fix": "At loot.js:594 stamp the outcome onto the hint: `const full = target && target.type === \"item\" && !W.wouldAcceptItem(a, target.data); W.interactHint = target ? Object.assign({}, target, { progress: ..., swap: !!full, outgoing: full ? a.inventory.slots[a.inventory.active] : null }) : null;`. Then in hud.js:1481 branch: `hint.swap ? \"[E] Swap for \" + labelFor(hint.data).replace(\"Pick up \", \"\") + (hint.outgoing ? \" — drops \" + shortName(hint.outgoing) : \"\") : \"[E] \" + labelFor(hint.data)`. shortName is already in this file at 1713."
+  },
+  {
+   "title": "[menu-ux] Every settings toggle and every rebind rebuilds the whole panel, throwing scroll back to the top",
+   "line": "2289",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "showSettings starts with `if (R.settings) { R.settings.remove(); R.settings = null; }` (hud.js:2199) and rebuilds the scroll container fresh at 2201: `const box = h(\"div\", Object.assign({ padding: \"28px 36px\", width: \"560px\", maxHeight: \"82vh\", overflowY: \"auto\", ... }));`. It is re-entered from five places — graphics buttons (2215), sprint/ADS toggles (2234), perf toggle (2251), every successful rebind (2293) and RESET TO DEFAULTS (2300). grep -rn scrollTop over runtime/ returns 0 hits, so nothing saves or restores the offset. The keybind grid is 17 ACTIONS (2140-2147) below five sliders, the graphics row, the FOV slider and three toggle rows, i.e. below the fold at 82vh on a 1080p screen.",
+   "fix": "Cheapest correct fix: capture before the teardown and restore after the build. At the top of showSettings add `const prevScroll = (R.settings && R.settings.firstChild) ? R.settings.firstChild.scrollTop : 0;` and immediately before the function returns (after closeB is appended, hud.js:2303) add `box.scrollTop = prevScroll;`. Structurally better but larger: mutate the single affected row in place instead of re-entering showSettings."
+  },
+  {
+   "title": "[menu-ux] The three mode cards are non-focusable <div>s, so a keyboard user can never start a match",
+   "line": "537",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "hud.js:537 `const c = h(\"div\", Object.assign({ padding: \"14px 20px 14px 16px\", cursor: \"pointer\", ... }, PANEL), null, leftCol);` with only a mouse handler at 561 `c.onclick = () => { ... startMatch({ mapId: randomMap(), mode: m.id }); };`. grep -n \"tabIndex|tabindex|role=|aria|onkeydown|addEventListener(\\\"keydown\\\"\" over hud.js returns zero DOM hits (the two setAttribute matches at 233/336 are THREE.BufferAttribute). The secondary controls ARE real buttons — mkGhost builds `h(\"button\", ...)` at 586 for SQUAD UP / SETTINGS / HOW TO PLAY, and mkArrow at 644 for the locker — so Tab reaches everything except the only three controls that launch a match. hud.js:583 also renders \"◂  CHOOSE A MODE TO DEPLOY  ▸\", implying arrow navigation that does not exist.",
+   "fix": "At hud.js:537, after the card is created, add `c.tabIndex = 0; c.setAttribute(\"role\", \"button\"); c.onkeydown = (e) => { if (e.key === \"Enter\" || e.key === \" \") { e.preventDefault(); c.onclick(); } };`. Since the hint already promises arrows, optionally bind ArrowUp/ArrowDown on the menu layer to move selMode and call the existing paint() at 568. Note startMatch is still called with `mapId: randomMap()` — the random-map rotation must stay; do not add a picker."
+  },
+  {
+   "title": "[progression-meta] Post-match 'XP earned' silently omits every point of challenge XP",
+   "line": "2083",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "hud.js:2082-2084 computes `const gained = (res.kills || 0) * 100 + Math.round((res.damage || 0) * 0.2) + Math.max(0, (W.match ? W.match.totalPlayers : 50) - (res.placement || 50)) * 6 + (res.victory ? 500 : 0) + Math.round((res.timeS || 0) / 4);` — every term reads `res`, none reads challenges. Challenge XP is paid separately and immediately at hud.js:1449 `addXP(W, c.xp);` inside the per-frame loop. hud.js:2087 then prints `stat(grid, \"XP earned\", \"+\" + gained);`. grep -rn \"_challenges|_chalXp\" over runtime/ returns exactly two hits, hud.js:1200 and hud.js:1434, so showPostMatch never sees the challenge state and there is no recap either. With the elim3 rotation the three cards are worth 150+175+300 = 625 XP against a typical ~390 payout.",
+   "fix": "Accumulate at the award site — add `W._chalXp = (W._chalXp || 0) + c.xp;` next to hud.js:1449, and reset it in showHUD next to `W._challenges = pickChallenges(W)` (1200). Then in showPostMatch either add the term to `gained` and itemize with extra stat() rows, or (clearer) keep `gained` as the match total and add one more row: `stat(grid, \"Challenges\", \"+\" + (W._chalXp || 0));` plus a TOTAL row. Do not call addXP on it again — it was already banked at 1449."
+  },
+  {
+   "title": "[progression-meta] Challenges are deterministic by level, so the same three cards repeat for 7-9 matches",
+   "line": "1123",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "hud.js:1121-1126 in full: `function pickChallenges(W) { const rot = (W.progress ? W.progress.level : 1) % 3; const extra = [CHAL_POOL[2], CHAL_POOL[3], CHAL_POOL[4]][rot]; return [CHAL_POOL[0], CHAL_POOL[1], extra].map((c) => Object.assign({}, c, { done: false, awarded: false })); }`. Slots 0 and 1 are literally CHAL_POOL[0] (\"Survive 3 minutes\") and CHAL_POOL[1] (\"Get 1 elimination\") for every match ever played; the third varies only with player level. CHAL_POOL (1114-1120) is 5 entries, of which 3 are reachable at any given level. xpForLevel (1103) means level 9 alone costs 6,400 XP, so the set is byte-identical for many consecutive matches. No seed, no RNG, no match state feeds this.",
+   "fix": "W.seed and K.mulberry32 already exist for the match; use them. Replace pickChallenges' body with a seeded shuffle picking 3 distinct entries from CHAL_POOL: `const rnd = K.mulberry32(W.seed >>> 0); const pool = CHAL_POOL.slice(); for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; } return pool.slice(0, 3).map(...)`. Verify K.mulberry32 is exported from sim/royale.js before shipping; if not, use a local xorshift over W.seed. Growing CHAL_POOL past 5 is a separate, larger change."
+  },
+  {
+   "title": "[progression-meta] Career record is write-only for two of its seven fields and has no screen",
+   "line": "1095",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "hud.js:1095-1096 `c.damage += Math.round(res.damage || 0); c.timeAliveS += Math.round(res.timeS || 0);`. grep -rn \"timeAliveS|c.damage\" over runtime/ returns exactly three lines: the CAREER0 declaration (1078) and those two accumulators — nothing ever reads them. Both render sites omit them: the menu strip at hud.js:514 prints `c.matches + \" matches · \" + c.wins + \" wins · \" + c.kills + \" kills\" + (c.bestPlacement ? ...)` and the post-match line at 2092 prints matches/wins/kills/top10s/bestPlacement. Lifetime accuracy is unrecoverable because W.stats.shotsFired/shotsHit (ffg_royale3d.js:317) are used per-match and never folded into CAREER0. And there is no career screen: the menu's only buttons are the three mkGhost calls at hud.js:592-597 (SQUAD UP / SETTINGS / HOW TO PLAY).",
+   "fix": "Minimum honest fix, one line each: add damage and hours to the two existing render strings (hud.js:514 and 2092) so the collected data is visible — e.g. `+ \" · \" + Math.round(c.damage/1000) + \"k dmg · \" + (c.timeAliveS/3600).toFixed(1) + \"h\"`. If a career panel is wanted later, add shotsFired/shotsHit to CAREER0 (1078) and accumulate them in recordMatch first, since lifetime accuracy cannot be back-filled."
+  },
+  {
+   "title": "[progression-meta] Quick Match pays roughly 3x the XP per hour of the flagship Battle Royale mode",
+   "line": "2079",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "The XP formula at hud.js:2082-2084 has no mode term, and its two big fixed rewards are mode-independent: placement `Math.max(0, totalPlayers - placement) * 6` (up to 294) and `(res.victory ? 500 : 0)`. Both modes run 50 players (sim/royale.js MODE table: standard players 50, quick players 50). Match length is not equal: summing STORM_PHASES.standard (sim/royale.js:254-271) wait+shrink gives 160+130+110+95+85+70+60+65 = 775 s, and STORM_PHASES.quick (267-273) gives 65+54+44+36+40 = 239 s — a 3.24x ratio. Quick additionally ships lootMult 1.8, so kill/damage XP also accrues faster. The mode the menu lists first and calls BATTLE ROYALE (hud.js:111) is therefore the worst XP/hour in the game.",
+   "fix": "Weight only the two fixed terms by mode where `gained` is computed (hud.js:2082): `const mk = W.mode === \"quick\" ? 0.35 : 1;` then apply mk to the placement term and the victory bonus. Leave kills/damage/survival unscaled — they are already rate-based and self-normalising. This is a balance change, so it wants a quick sanity pass on typical payouts before shipping."
+  },
+  {
+   "title": "[textures-materials] No scene.environment / envMap exists anywhere, so metalness>0 materials lose diffuse and gain nothing",
+   "line": "670",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "grep -rn \"scene.environment|PMREM|RoomEnvironment|envMap\" over runtime/ returns only two live lines, both in this file and both dead: hud.js:243 the menu ocean `new THREE.MeshStandardMaterial({ color: 0x1488b0, ... roughness: 0.18, metalness: 0.22, envMapIntensity: 1.2 })` and hud.js:670 the locker stage floor `new THREE.MeshStandardMaterial({ color: 0x152a42, roughness: 0.35, metalness: 0.65, envMapIntensity: 1.2 })`. No PMREMGenerator, no RoomEnvironment, no scene.environment assignment exists in the codebase; three separate comments (player.js:181, player.js:193, weapons.js:165) independently state \"scene.environment null\". The locker's pvScene (created at hud.js:660) likewise never gets one. Scoping severity to hud.js only: the two affected surfaces here are the menu diorama's ocean and a 280x280 preview disc. The world-scale version of this belongs to the maps.js filing.",
+   "fix": "For hud.js specifically, one line after the pvScene lights are added (~hud.js:666): `const _pm = new THREE.PMREMGenerator(pvR); pvScene.environment = _pm.fromScene(new THREE.Scene(), 0.04).texture;` is not enough on its own — you need an actual source. Simplest self-contained option: drop metalness on the disc from 0.65 to ~0.1 and delete the two dead envMapIntensity lines, so the material claims match the render. A real PMREM should be landed once, at kernel level, as part of the maps.js finding — not twice."
+  },
+  {
+   "title": "[animation-rig] The locker preview renders the character in bind pose until two extra GLB fetches resolve",
+   "line": "718",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "hud.js:714-718 `const rig = await W.kernel.loadCharacter(...); if (pvRig) {...} pvRig = rig; rig.scene.position.set(0,0,0); pvScene.add(rig.scene);` — the rig is in the scene here. The first rig.play() is at 733 (`rig.play(\"cheer_menu\", { once: true })`), 736 or 741, all of which sit AFTER the loop at 721-730 that does `await W.kernel.loader.loadAsync(...)` twice. kernel.loadCharacter (ffg_kernel_3d.js:259-291) returns `{ scene, mixer, actions, play, animations }` with `let current = null;` and never auto-plays a clip. The render loop is already running over it: pvLoop (749-767) calls `pvR.render(pvScene, pvCam)` every frame from the moment the menu mounts. player.js:231 records that these rigs' un-driven SkinnedMesh \"reads ~0.1m (tiny armature node scales)\", so the window shows a collapsed miniature, not a neutral T-pose. pvIdleRelax is false at 658 so even the relax arm pose is not app",
+   "fix": "One line immediately after hud.js:718: `const base = rig.animations[0]; if (base) rig.play(base.name);`. The later cheer/dance play() crossfades off it normally (kernel play() does `next.crossFadeFrom(current, ...)`), and the both-fetches-failed fallback at 740-742 becomes redundant rather than load-bearing."
+  },
+  {
+   "title": "[hud-readability] There is no critical-health state at all: the HP bar is the same green at 6 HP as at 100 HP",
+   "line": "1160",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "hud.js:1160 `const hb = mkBar(\"❤\", \"#4ade80\");` — the colour is baked into the fill at creation (mkBar line 1154 `const fill = h(\"div\", { width: \"0%\", height: \"100%\", background: color, transition: \"width .15s\" }, null, wrap);`). The only per-frame update is hud.js:1329 `if (C.hp !== hpPct) { R.hpBar.style.width = hpPct; R.hpPct.textContent = ...; C.hp = hpPct; }` — width and label only, never background or animation. grep -rn lcPulse over runtime/ returns exactly one hit, the @keyframes definition at hud.js:58; it is attached to nothing. So there is no colour ramp, no pulse and no low-HP cue anywhere.",
+   "fix": "Inside the already change-gated branch at hud.js:1329, append: `R.hpBar.style.background = p.hp <= 25 ? \"#ff5544\" : p.hp <= 40 ? \"#ffd166\" : \"#4ade80\"; R.hpBar.style.animation = p.hp <= 25 ? \"lcPulse .55s ease-in-out infinite\" : \"\";`. Zero per-frame cost because the branch only runs when the percentage changes, and lcPulse is already defined in ensureAAAStyles."
+  },
+  {
+   "title": "[hud-readability] The reload progress bar is half-hidden behind the opaque interact hint below ~1160px viewport height",
+   "line": "1177",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "hud.js:1177 `R.reloadBar = h(\"div\", { position: \"absolute\", left: \"50%\", top: \"62.5%\", ... width: \"180px\", height: \"8px\", ... border: \"1px solid rgba(255,255,255,0.15)\" }, null, L);` versus hud.js:1230 `R.interact = h(\"div\", { position: \"absolute\", left: \"50%\", top: \"60%\", ... background: \"rgba(0,0,0,0.55)\", padding: \"6px 14px\", ... fontSize: \"14px\", display: \"none\" }, \"\", L);`. The hint is created 53 lines LATER in the same z-index-free layer (grep zIndex: no hits inside the hud layer), so it paints on top. Pill height = 6+6 padding + ~17px line box at 14px ≈ 29px; overlap occurs whenever 0.60H + 29 > 0.625H, i.e. H < 1160px. At a maximized 1080p browser (~950px): pill 570-599, reload bar 594-604 — the top half of a 10px bar is covered, and the pill is wider than the 180px bar so it covers it edge to edge. loot.js:594 sets the hint for anything inside nearby(a.pos, 2.4), and reloading b",
+   "fix": "Change hud.js:1177 `top: \"62.5%\"` to `top: \"55%\"`. Verified clear of both neighbours: R.healBar is at 58% / 10px tall (1164) and R.sprintPip at 66.5% (1172), so at H=950 the reload bar occupies 522-532 and the heal bar 551-561. A z-index bump is the wrong fix — it would just invert which element is unreadable."
+  },
+  {
+   "title": "[hud-readability] Opening the map (M) hides the storm countdown, HP and ammo behind a 90%-opaque overlay",
+   "line": "1946",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "hud.js:1946 `const L = layer(\"bigmap\", { pointerEvents: \"auto\", background: \"rgba(4,8,16,0.9)\", display: \"flex\", alignItems: \"center\", justifyContent: \"center\" });` — layer() (99-103) creates a `position:absolute; inset:0` node appended to R.root after the \"hud\" layer, so a 90%-black full-screen fill sits over every HUD widget. The big map draws the current and next storm rings (drawMinimap 1735-1743) but nothing renders the countdown that makes them actionable, even though hud.js:1388 already computes `(st.phaseState === \"waiting\" ? \"shrinks \" : \"closing \") + fmtT(st.tToNext)` every 250 ms. Nothing in toggleBigMap (1944-1954) pauses the sim either, so the player must close the map, read the clock and reopen it while the match runs.",
+   "fix": "In toggleBigMap append a header strip to L and refresh it inside the existing 400 ms interval at hud.js:1953, reading the values the HUD already has: `W.stormCtl.storm.stateAt(W.t)` → fmtT(st.tToNext), `W.match.aliveCount()`, and W.player.hp/shield. About six lines, no new state, and fmtT/drawMinimap are both already in scope."
+  },
+  {
+   "title": "[hud-readability] The compass ribbon repaints at 10 Hz because it is gated behind the minimap's throttle",
+   "line": "1473",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "hud.js:1471-1473: `mmT += dt; if (mmT > 0.1) { mmT = 0; drawMinimap(W, R.mmCanvas.getContext(\"2d\"), 180, false); if (R.compass) drawCompass(W, R.compass.getContext(\"2d\"), 320); }` — one gate, both draws. drawCompass (1130-1143) derives its entire content from the live camera each call: `W.camera.getWorldDirection(_cmpDir); const bearing = (Math.atan2(_cmpDir.x, _cmpDir.z) * 180 / Math.PI + 360) % 360;`, so heading is a per-frame quantity being sampled at 10 Hz. Position (what the minimap shows) changes slowly and is correctly throttled; heading is not. Rating polish rather than moderate: the ribbon remains fully readable and no information is lost — it judders.",
+   "fix": "Hoist the compass out of the gate — put `if (R.compass) drawCompass(W, R.compass.getContext(\"2d\"), 320);` on its own line immediately before the `if (mmT > 0.1)` block, leaving drawMinimap throttled. The compass canvas is 320x18 with a handful of strokes, negligible next to the 180x180 minimap that already does a drawImage of a 512x512 source every tick."
+  },
+  {
+   "title": "[lighting-daynight] Returning to the menu restores the sun and tone mapper but never the hemisphere light",
+   "line": "184",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "buildMenuWorld restores exactly three things — hud.js:184-188 `if (W.kernel.sun) { W.kernel.sun.position.set(60, 48, 28); W.kernel.sun.intensity = 1.85; W.kernel.sun.color.set(0xfff0d8); }` and 192-193 `W.kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping; W.kernel.renderer.toneMappingExposure = 1.12;` — and never touches the hemisphere. The kernel creates it at ffg_kernel_3d.js:62 `const hemi = new THREE.HemisphereLight(0xbfe3ff, 0x223344, 0.9);` and every match overwrites it at maps.js:274-275 `let hemi = null; W.scene.traverse((o) => { if (o.isHemisphereLight) hemi = o; }); if (hemi) { hemi.intensity = 1.25; hemi.color.setHex(0xdcefff); hemi.groundColor.setHex(0x7c8672); }`. So the menu diorama is lit at 0.9/cool-blue/near-black-ground on first boot and 1.25/0xdcefff/0x7c8672 after any match. The audit's supporting claim also checks out: W._lightDefaults (ffg_royale3d.js:151-15",
+   "fix": "In buildMenuWorld next to the sun block (hud.js:184-188), find and set the hemisphere the same way maps.js does: `let _hemi = null; W.scene.traverse((o) => { if (o.isHemisphereLight) _hemi = o; }); if (_hemi) { _hemi.intensity = 0.8; _hemi.color.setHex(0xffe0b8); _hemi.groundColor.setHex(0x2e3a30); }` — warm values so the diorama actually reads as the golden hour the sky gradient at 201-203 is authored for. Separately worth doing: either populate _lightDefaults with the values buildMap wants and read them, or delete the snapshot and the false comment."
+  },
+  {
+   "title": "[input-accessibility] The fullscreen map (M) neither suppresses fire/ADS nor releases the cursor",
+   "line": "1952",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "toggleBigMap (hud.js:1944-1954) does not call releaseCursor — grep -n \"releaseCursor(\" over hud.js returns the definition at 94 plus five callsites (907 dropsel, 1980 showDeath, 2039 showPostMatch, 2161 showHowToPlay, 2197 showSettings), none of them toggleBigMap — and it never sets W.paused. Meanwhile player.js:463 gates mousedown only on `if (!W.player || W.phase === \"menu\" || W.paused) return;`, and the ADS-latch listener at player.js:566 `dom.addEventListener(\"mousedown\", (ev2) => { if (ev2.button === 2 && W.settings.adsToggle) W._adsLatch = !W._adsLatch; });` has no guard at all. mousemove (player.js:528) likewise only bails on paused/menu, so yaw keeps spinning while you read the map. With pointer lock held, every event routes to the canvas and `L.onclick = () => toggleBigMap(W);` (hud.js:1952) is dead code. NOTE: the finding overstates one detail — the on-screen hint at hud.js:195",
+   "fix": "Set `W.uiModal = true` when the bigmap layer opens and false when it closes (hud.js:1944-1946), and add `|| W.uiModal` to the guards at player.js:463 (mousedown), 528 (mousemove) and to the unguarded ADS-latch listener at player.js:566. Keep pointer lock held so no re-lock click is needed, and delete the dead L.onclick at hud.js:1952. Do not add a pause here — pausing on map open would change online behaviour (togglePause deliberately never freezes the sim when W.net is set, hud.js:1961-1963)."
+  },
+  {
+   "title": "[menu-ux] The first-run How To Play modal fires on a 500ms timer that is never cancelled",
+   "line": "602",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "hud.js:601-603 `try { if (!localStorage.getItem(\"lc_seen_intro\")) setTimeout(() => showHowToPlay(W), 500); } catch (e) {}` — the handle is discarded, so nothing can cancel it. showLoading's teardown list at hud.js:786 is `[\"post\", \"death\", \"pause\", \"settings\", \"bigmap\", \"menu\", \"hud\"].forEach((n) => { if (R[n]) { R[n].remove(); R[n] = null; } });` — \"howto\" is not in it. showHowToPlay (2160-2163) does no phase check and builds `layer(\"howto\", { pointerEvents: \"auto\", background: \"rgba(4,8,16,0.92)\", ... zIndex: 70 })`, i.e. a blocking full-screen modal above everything. The drop-select's own auto-lock interval (hud.js:1063-1067, `left = 12`) keeps counting behind it, so a first-run player who clicks a mode card inside that 500 ms window reads the tutorial and loses their landing-zone pick to the timer.",
+   "fix": "Store and clear the handle: `R._introT = setTimeout(...)` at hud.js:602; `if (R._introT) { clearTimeout(R._introT); R._introT = null; }` at the top of showLoading (785) and in the mode-card onclick (561). Add \"howto\" to the teardown array at 786. Optionally early-return from showHowToPlay when W.phase !== \"menu\" unless a flag says it was opened from the button at 597."
+  },
+  {
+   "title": "[menu-ux] How To Play hard-codes the default keys while promising they are rebindable",
+   "line": "2177",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "showHowToPlay renders literal strings — hud.js:2173-2183 `kb(\"W A S D\", \"Move\"); kb(\"SHIFT\", \"Sprint — a CLICK toggles it on and off\"); kb(\"C\", ...); kb(\"E\", \"Loot — hold on a chest to open it\"); kb(\"R\", \"Reload\"); kb(\"M\", \"Map\"); kb(\"B / N\", ...)` — and never reads W.settings.remap, while its own closing line at 2185 says \"Every key here can be rebound in Settings.\" The two helpers needed are already in this file: physFor at hud.js:2153 and keyLabel at hud.js:2310. The menu control strip at hud.js:778 has the identical problem (\"…SHIFT SPRINT (TOGGLE)…\"). Line 2174 also states the sprint mode as fact while showSettings (2225-2236) offers a HOLD option for the same action.",
+   "fix": "Replace the literals with `keyLabel(physFor(W, \"KeyM\"))` etc., rendering \"—\" when physFor returns null (it already returns null for an UNBOUND default). For the sprint line derive the text from the setting: `W.settings.sprintToggle ? \"Sprint — a CLICK toggles it on and off\" : \"Sprint — hold\"`. Same treatment for hud.js:778. CONSTRAINT GUARD: this is a display fix only — sprintToggle must stay defaulted to true (ffg_royale3d.js:392 defaults it true with the comment \"SHIFT = click on / click off (owner direction 2026-07-21)\"). Do not change the default or remove the toggle."
+  },
+  {
+   "title": "[hud-readability] Minimap, compass and big map ignore devicePixelRatio",
+   "line": "1219",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "hud.js:1218-1219 `R.mmCanvas = h(\"canvas\", { width: \"180px\", height: \"180px\" }, null, mmWrap); R.mmCanvas.width = 180; R.mmCanvas.height = 180;` — backing store equals the CSS box. Same for the compass at 1187-1188 (`R.compass.width = 320; R.compass.height = 18;`) and the big map at 1948-1949 (`cv.width = cv.height = size;`). Meanwhile the 3D renderer honours DPR (ffg_royale3d.js:107 `r.setPixelRatio(Math.min(window.devicePixelRatio || 1, DPR[tier] || 1.5));`) and the locker preview explicitly supersamples 2x (hud.js:633-634 `const pvCv = h(\"canvas\", { width: \"280px\", height: \"280px\", ... }); pvCv.width = 560; pvCv.height = 560;` plus setPixelRatio 2 at 689). So on a HiDPI panel the 2D HUD is the softest thing on screen, worst on the 10px compass marks (hud.js:1141) and the 13px big-map POI labels (1780).",
+   "fix": "Compute `const dpr = Math.min(window.devicePixelRatio || 1, 2)` once, set each backing store to logicalSize*dpr while pinning the CSS box via style.width/style.height, and call `ctx.setTransform(dpr, 0, 0, dpr, 0, 0)` at the top of drawMinimap (1728) and drawCompass (1130). Both functions already take a logical size/wpx argument, so no other arithmetic inside them changes."
+  },
+  {
+   "title": "[hud-readability] With the FPS readout enabled, the perf chip paints over the second row of the kill feed",
+   "line": "1261",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "hud.js:1260-1266 `R.perf = h(\"div\", { position: \"absolute\", right: \"12px\", top: \"96px\", padding: \"4px 9px\", ... fontSize: \"12px\", ... border: \"1px solid rgba(120,180,255,0.18)\", ... })` versus hud.js:1222 `R.feed = h(\"div\", { position: \"absolute\", right: \"16px\", top: \"70px\", display: \"flex\", flexDirection: \"column\", gap: \"4px\", alignItems: \"flex-end\", fontSize: \"12px\" }, null, L);`. Feed entries are `padding: \"3px 10px\"` (1835) at 12px → ~20px tall with a 4px gap, so row 1 = y70-90 and row 2 = y94-114; the chip is 1+4+~14+4+1 ≈ 24px tall at y96-120 and is created 38 lines after the feed in the same z-index-free layer, so it paints over ~18 of row 2's 20px. Online the string is longest (1316 appends \"  ·  SYNC \" + ms). Rated polish because it is opt-in — showPerf defaults false (ffg_royale3d.js:392).",
+   "fix": "Change hud.js:1261 `top: \"96px\"` to `top: \"44px\"`. The chip then occupies y44-68 and clears the feed which starts at 70; nothing else lives in the top-right corner (the storm bar at top:28 and the XP strip at top:66 are both centre-anchored with a 352px max width, hud.js:1191 and 1201)."
+  }
+ ],
+ "runtime/3d/royale/player.js": [
+  {
+   "title": "[animation-rig] Every network-remote actor is permanently stuck in the jump clip — onGround is never replicated",
+   "line": "959 / 1012-1019 (audit: 912)",
+   "sev": "severe",
+   "risk": "low",
+   "evidence": "net.js:329-336 `function pack(a) { return { id, x, y, z, yw, hp, sh, gl: a.gliding ? 1 : 0, wp: ... }; }` — no onGround, no velocity. net.js:247-256 applyRemoteState writes only `a.netTarget.pos`, `a.netTarget.yaw`, `a.hp`, `a.shield`, `a.gliding`, `a.weapon` — it never assigns a.onGround or a.vel. createActor player.js:57 `onGround: false, sprinting: false, gliding: false, ...` so onGround is false forever. syncObj player.js:959 `else if (!a.onGround) playAnim(a, \"jump\", { once: true, startAt: JUMP_TAKEOFF_S });` therefore always wins for a landed peer, and playAnim's same-key guard (player.js:311 `if (a.anim === realKey && !(opts && opts.force)) ... return;`) blocks every later call. interpRemote player.js:1012-1019 lerps pos/yaw and calls syncObj without ever writing a.vel, so `gs = Math.hypot(a.vel.x, a.vel.z)` is 0 as well.",
+   "fix": "Cheapest correct fix, no protocol change, entirely inside interpRemote (player.js:1012): capture `const px = a.pos.x, pz = a.pos.z;` before the lerp, then after it `a.vel.set((a.pos.x-px)/Math.max(dt,1e-3), 0, (a.pos.z-pz)/Math.max(dt,1e-3));` and `a.onGround = !a.gliding && a.pos.y <= supportAt(W, a.pos.x, a.pos.z, a.pos.y) + 0.2;`. That alone restores idle/walk/run/backpedal selection from the existing syncObj chain. Clamp the derived velocity (e.g. 12 m/s) so a snapshot jump does not spike it."
+  },
+  {
+   "title": "[animation-rig] Remote emotes are overwritten one frame after they start — the relay is dead on arrival",
+   "line": "950-981 (audit: 903)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "syncObj's clip chain has no emoting guard: player.js:950-959 reads `if (a.rig) { a.rig.mixer.timeScale = far ? 0 : 1; if (!far) { const gs = ...; if (a.gliding && !a.chute) playAnim(a, \"run\", ...); else if (a.gliding) playAnim(a, \"idle\"); ... else if (!a.onGround) playAnim(a, \"jump\", ...)` — the only a.emoting test is further down in the arm layer at player.js:988 `if (!a.alive || a.emoting) mode = null;`. The LOCAL path is safe only because stepActor returns inside the emote branch (player.js:723 `a.obj.position.copy(a.pos); return;`); the REMOTE path calls syncObj unconditionally (player.js:1017 inside interpRemote). W.playRemoteEmote (player.js:28-44) sets `a.emoting = { t: 2.4, remote: kind }` and calls playAnim(..., {once:true, force:true}), which the very next syncObj clobbers with a different key.",
+   "fix": "Wrap the clip-selection chain in an emoting guard, leaving the LOD line outside it: at player.js:952 change `if (!far) {` to `if (!far && !a.emoting) {` — one token. The arm layer below already nulls its mode while emoting, so nothing else needs touching."
+  },
+  {
+   "title": "[animation-rig] Arm-pose layer has no pose-to-pose blending — every ADS, shot and reload snaps the arms in one frame",
+   "line": "985-1005 / pose.js:133-150 (audit: 955)",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "player.js:1001 `a._armW = (a._armW == null ? wantW : a._armW + (wantW - a._armW) * Math.min(1, dt * 8));` blends only the LAYER weight, and `wantW = mode ? 1 : 0` stays 1 across a lowReady->gunReady flip, so _armW never moves. The mode itself is assigned with no interpolation: player.js:1002 `if (mode) a._armMode = mode;`, consumed at :1005 `if (a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, a._armMode, a._armW, a.pitch);`. pose.js:133-135 `export function applyArmPose(obj, bones, mode, weight, pitch) { ... const P = POSES[mode];` accepts a single mode, and pose.js:147 `const bl = 0.92 * Math.min(1, weight);` slerps 92% toward the new target per frame — complete in ~2 frames. Grep for `_armPrev` / any second-mode plumbing: 0 hits.",
+   "fix": "Add `a._armPrevMode` + `a._armBlend` (0->1 over ~0.18s) in syncObj, pass both keys to applyArmPose, and lerp the direction triples `P_prev[i]` -> `P_next[i]` (normalize after) before `aim()`. Drop `bl` from 0.92 to ~0.35 for temporal smoothing."
+  },
+  {
+   "title": "[animation-rig] Animation LOD hard-freezes the mixer at 250m, and death never un-freezes it — long-range kills produce a mid-stride statue, not a death animation",
+   "line": "951 / 1126-1144 (audit: 904)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "player.js:951 `a.rig.mixer.timeScale = far ? 0 : 1;` — and grep `mixer.timeScale` across the whole runtime returns exactly this one line, so nothing ever restores it. `far` is player.js:617 `const far = a.isBot && humanPos && a.pos.distanceToSquared(humanPos) > 250 * 250;` while stepActor still integrates position for those actors (player.js:618), i.e. they move with a stopped clock. On death, update() abandons the actor at player.js:615 `if (!a.alive) continue;`, and killActor (player.js:1126-1144) plays the death clip at :1137 `if (victim.rig && victim.clips.death) { playAnim(victim, \"death\", { once: true }); }` without touching timeScale — a mixer at timeScale 0 never advances that action.",
+   "fix": "Two changes. (1) One line in killActor, immediately before player.js:1137: `if (victim.rig && victim.rig.mixer) victim.rig.mixer.timeScale = 1;`. (2) Raise the freeze threshold past scoped-sniper engagement range, or replace the binary freeze with a reduced update rate. Do (1) regardless — it is the visible half."
+  },
+  {
+   "title": "[multiplayer-net] Remote actors never animate — every other player and (on a guest) all 45 bots slide across the map frozen in the jump clip's landing pose",
+   "line": "959 / net.js:329-336 (audit: 965)",
+   "sev": "severe",
+   "risk": "medium",
+   "evidence": "Same root cause as the finding above, verified independently: net.js:329-336 pack() emits exactly `{ id, x, y, z, yw, hp, sh, gl, wp }`. The two EXTRA sub-claims also hold. Pitch: pack() has no pitch field and applyRemoteState (net.js:247-256) never assigns a.pitch, so a remote actor's `combat` test in syncObj (player.js:922 `const combat = a.input.ads || (W.t - a.lastShotT < 1.5);`) is never true — a.input.ads and a.lastShotT are never written remotely — pinning remote arms at lowReady. Crouch: pack() has no crouch field and applyRemoteState never assigns a.crouching, so a remote crouching enemy renders standing. NOTE: this entry substantially duplicates the animation-rig 'stuck in jump clip' finding; treat them as one work item.",
+   "fix": "Fix the locomotion half in interpRemote as described above (no protocol change). For pitch/crouch parity add `pi: +a.pitch.toFixed(2), cr: a.crouching ? 1 : 0, og: a.onGround ? 1 : 0` to pack() (net.js:329) and the matching assignments in applyRemoteState (net.js:247). Additive JSON fields, ~9 bytes/snapshot; older clients ignore unknown keys, so read them defensively (`a.pitch = d.pi || 0`)."
+  },
+  {
+   "title": "[input-accessibility] The SPACE key-repeat edge gate is dead code — `e.repeat` reads off a synthetic object that has no `repeat` property, so holding SPACE still strobes the parachute",
+   "line": "443 / 449 (audit: 410)",
+   "sev": "severe",
+   "risk": "low",
+   "evidence": "player.js:443 builds the synthetic event with exactly two keys: `const e = { code: canon(ev.code), preventDefault: () => ev.preventDefault() };`. player.js:449 then tests it: `if (e.code === \"Space\" && !e.repeat) { inp.jump = true; e.preventDefault(); } // edge-gate: key-repeat was strobing the chute (deploy/cut/deploy) + multi-firing swim strokes`. `e.repeat` is undefined, so `!e.repeat` is permanently true and the guard the comment claims never fires. Six lines below, player.js:455 gets it right by reading the REAL event: `... && !ev.repeat && W.settings.sprintToggle`. Consequences all reachable: glide branch player.js:658-662 `if (inp.jump) { if (a.chute) { removeChute(a); ... } else if (agl > 14) { deployChute(W, a); ... } inp.jump = false; }`; swim stroke player.js:800; ground jump player.js:817.",
+   "fix": "One token at player.js:443: `const e = { code: canon(ev.code), repeat: ev.repeat, preventDefault: () => ev.preventDefault() };`. Prefer this over changing :449 to `!ev.repeat` so every future `e.*` read stays correct."
+  },
+  {
+   "title": "[polish-juice] Landing produces zero FX — 50 parachute touchdowns per match and every roof drop are visually silent",
+   "line": "690 / 845 (audit: 651)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Both events are emitted: player.js:690 `W.events.emit(\"landed\", a);` (inside the glide touchdown branch) and player.js:845 `if (a.vel.y < -16) W.events.emit(\"hardLand\", a, -a.vel.y);`. fx.js registers exactly nine handlers — grep `events.on(` in fx.js returns lines 81 shotFired, 92 tracer, 111 impact, 116 explosion, 123 swimState, 127 swimStroke, 131 actorHurt, 151 actorDied, 155 chestOpened — neither landing event among them. Repo-wide grep for `\"landed\"|hardLand` finds only the two player.js emits and audio.js:269/283, which play a thump; nothing visual. The water case also holds: player.js:652 `const landY = Math.max(g, W.map.waterY);` means an ocean landing ends the glide with `a.swimming` still false, so fx.js:123's swimState burst never runs on that frame.",
+   "fix": "Add two handlers in fx.js wireEvents reusing the existing `burst()` — a dust/water ring on `landed` (choose colour by `a.pos.y <= W.map.waterY + 0.4`) and a bigger one plus a camera dip on `hardLand`. Self-contained in fx.js, no player.js change."
+  },
+  {
+   "title": "[gameplay-loop] Bots never cut their canopy and cannot shoot while gliding, so a human who taps SPACE gets an 11.6–16.8 s window to farm defenceless targets floating overhead",
+   "line": "658-669 / bots.js:349-356 (audit: 626)",
+   "sev": "severe",
+   "risk": "low",
+   "evidence": "bots.js:349-356 is the entire bot glide brain: `if (a.gliding) { const t = bb.dropTarget || { x: 0, z: 0 }; steerYaw(a, ..., dt, 3); inp.mz = 1; const d = Math.hypot(t.x - a.pos.x, t.z - a.pos.z); inp.sprint = d < 60; // dive / return; }` — `inp.jump` is never set, and inp.jump is the ONLY chute toggle (player.js:658 `if (inp.jump) { if (a.chute) { removeChute(a); ... } else if (agl > 14) { deployChute(W, a); ... } }`). The bots' 'dive' does nothing once chuted: player.js:669 `const fallTarget = chuted ? -5.5 : (inp.sprint ? -34 : -20);`, and the canopy auto-opens at player.js:665 `if (!a.chute && agl < (a.chuteToggled ? 22 : 110)) deployChute(W, a);`. Firing is gated on the SHOOTER only — weapons.js:322 `if (wantFire && wpn.cd <= 0 && !a.gliding && !a.healing && !a.swimming)` — and hurtActor (player.js:1088) has no gliding immunity, so a grounded human can freely shoot floaters who cann",
+   "fix": "(a) Give bots the verb: in the bots.js:349 glide branch track `bb.chuteCut` and set `inp.jump = true` once when `a.chute && (a.pos.y - W.map.heightAt(a.pos.x, a.pos.z)) > 60 && d < 120`, so they dive-cut like a human. (b) Optionally make the drop symmetric by adding `if (victim.gliding && W.phase === \"drop\") return;` at the top of hurtActor (player.js:1089), matching the shooter-side gate. Do (a) regardless; (b) is a balance choice."
+  },
+  {
+   "title": "[menu-ux] ESC is dead on the main menu — Settings and How To Play can only be closed with their own button",
+   "line": "445 / 473 (audit: 406)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "The Escape emit sits below the menu guard in the same keydown handler. player.js:445 `if (!W.player || W.phase === \"menu\") return;` and player.js:473 `if (e.code === \"Escape\") W.events.emit(\"escPressed\");`. Both guard conditions bite on the menu — W.player is null before the first match and W.phase is \"menu\" after one — so escPressed can never fire from the menu. In-match ESC works, which is what makes it read as a bug.",
+   "fix": "Hoist the Escape check above the guard: move `if (canon(ev.code) === \"Escape\") { W.events.emit(\"escPressed\"); return; }` to just after player.js:443. One caveat to check on the receiving side — hud.js's escPressed handler must not assume W.player exists when invoked from the menu."
+  },
+  {
+   "title": "[animation-rig] Crouch idle freezes the crouch-WALK clip on whatever frame it happened to be on — a camping player holds one foot in mid-air",
+   "line": "964 (audit: 917)",
+   "sev": "polish",
+   "risk": "medium",
+   "evidence": "player.js:962-964: `else if (a.crouching && a.clips.crouch) { // one clip covers both crouch stances ... playAnim(a, \"crouch\", { timeScale: gs > 0.7 ? K.clamp(gs / 2.7, 0.55, 1.4) : 0 }); }` — the standing case passes timeScale 0 with no `startAt`, so the held pose is wherever the walk cycle happened to stop. There is no crouch-idle clip to fall back to: player.js:120 `const MESHY_CLIPS = [\"walk\", \"run\", \"death\", \"dance\", \"cheer\", \"jump\", \"swim\", \"crouch\"];`. Grep `CROUCH_IDLE|crouchIdle|crouch_idle` across runtime/ -> 0 hits.",
+   "fix": "Measure one planted-feet phase off <skin>_crouch.glb, add `const CROUCH_IDLE_T = <t>;`, and in the freeze branch pass `{ timeScale: 0, startAt: CROUCH_IDLE_T }`. Note playAnim only honours startAt on the clip-CHANGE path (player.js:326 `if (opts && opts.startAt != null)` runs after `a.rig.play`, which the same-key early return at :311 skips) — so the same-key branch must also ease `act.time` toward CROUCH_IDLE_T."
+  },
+  {
+   "title": "[input-accessibility] Right Shift is an invisible second sprint key that survives rebinding and RESET — the same duplicate-bind class the M/Q fix closed",
+   "line": "455 / 553 (audit: 514)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Both reads bypass the remap table. player.js:455 `if ((e.code === \"ShiftLeft\" || e.code === \"ShiftRight\") && !ev.repeat && W.settings.sprintToggle) W._sprintLatch = !W._sprintLatch;` and player.js:553 `const sprintHeld = !!keys.ShiftLeft || !!keys.ShiftRight;`. The remap table has no ShiftRight entry — hud.js:2142 `[\"Jump\", \"Space\"], [\"Sprint\", \"ShiftLeft\"], [\"Crouch\", \"KeyC\"], [\"Loot / Interact\", \"KeyE\"],` and the full ACTIONS list (hud.js:2140-2147) contains ShiftLeft only — so `canon(\"ShiftRight\")` identity-maps and Right Shift keeps toggling sprint after a rebind, with nothing in `remap` for RESET TO DEFAULTS to clear. Repo-wide grep for ShiftRight returns only these two player.js lines. NOT a constraint violation: the fix preserves SHIFT-as-toggle, it only routes the alternate physical key through canon().",
+   "fix": "Make canon() fold `ShiftRight -> ShiftLeft` by default (player.js:439), then drop the raw `|| keys.ShiftRight` at :553 and `|| e.code === \"ShiftRight\"` at :455 so one canonical action has exactly one physical owner and the remap/UNBOUND/RESET machinery governs it."
+  },
+  {
+   "title": "[input-accessibility] No invert-Y option anywhere — vertical look is hardcoded, in a game that ships a full remap screen",
+   "line": "532 (audit: 493)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "The sign is baked into the only pitch write: player.js:532 `W.player.input.pitch = K.clamp(W.player.input.pitch - my2 * sens, -1.35, 1.35);`. Absence verified with five spellings across runtime/, index.html and game_controls.js — `invertY`, `invertLook`, `lookInvert`, `invert_y`, `invertPitch` — all 0 hits.",
+   "fix": "Add `invertY: false` to the settings defaults (ffg_royale3d.js:392), one OFF/ON pair in showSettings copying the existing toggle pattern at hud.js:2221-2232, and change player.js:532 to `... - my2 * sens * (W.settings.invertY ? -1 : 1) ...`."
+  },
+  {
+   "title": "[input-accessibility] Camera shake has no intensity or off control, and `prefers-reduced-motion` is never consulted",
+   "line": "1070-1072 (audit: 1023)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Shake is applied raw, with no scale factor, at the single sink: player.js:1070-1072 `if (W.camShake > 0.01) { cam.position.x += (Math.random() - 0.5) * W.camShake; cam.position.y += (Math.random() - 0.5) * W.camShake * 0.6; }`. Emitters confirm the magnitudes the audit cites: fx.js:120 `if (d < 40) W.camShake = Math.max(W.camShake, (1 - d / 40) * 0.5);` and fx.js:148 `if (victim === W.player) W.camShake = Math.max(W.camShake, 0.12);` — the latter on every hit taken, i.e. continuously during a sustained fight. Absence verified: `shakeScale`, `screenShake`, `camShakeScale`, `settings.shake`, `shake:` -> 0 hits; `prefers-reduced-motion`, `reducedMotion`, `motionReduce` -> 0 hits across runtime/ and index.html.",
+   "fix": "Add `shake: 1` to the settings defaults (ffg_royale3d.js:392), seed it to 0 when `window.matchMedia('(prefers-reduced-motion: reduce)').matches`, add one slider row in showSettings, and multiply at the single sink: player.js:1071-1072 `* W.camShake * (W.settings.shake ?? 1)`. One multiplier covers both emitters without touching fx.js."
+  },
+  {
+   "title": "[gameplay-loop] The default drop is 26 s, 19 s of which is a 5.5 m/s canopy hanging directly over an LZ the player was teleported onto — zero inputs required",
+   "line": "665 / 669 / 421-429 (audit: 629)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Every constant checks out. Spawn altitude player.js:361 `a.pos.set(p.x, 240 + rng() * 30, p.z);`. First-time canopy floor player.js:665 `if (!a.chute && agl < (a.chuteToggled ? 22 : 110)) deployChute(W, a);`. Canopy descent rate player.js:669 `const fallTarget = chuted ? -5.5 : (inp.sprint ? -34 : -20);` — 110 m at 5.5 m/s is 20.0 s of canopy on its own, which matches the audit's 19.0 s figure once the terrain offset is applied. And the human is teleported directly over the LZ with zero lateral offset: setDropTarget player.js:425-427 `a.pos.x = W.SIM.clamp(t.x, -lim, lim); a.pos.z = W.SIM.clamp(t.z, -lim, lim); a.obj.position.copy(a.pos);` — contrast bots.js:98 which does offset (`const ang = rng() * Math.PI * 2, off = 60 + rng() * 120;`). I did not re-run the audit's 26.1 s end-to-end simulation, but the inputs to it are all as stated. Not a constraint violation — this changes drop paci",
+   "fix": "Two independent one-line levers. (a) Lower the first-time auto-deploy floor at player.js:665 from 110 to ~55, leaving the 22 m manual-cut floor alone — halves the dead canopy leg. (b) Offset the human's glide start in setDropTarget the way bots.js:98 does, so the 8.5 m/s glide has ~150 m to cover and steering becomes a real input. (b) needs the existing `lim` clamp kept and a water check, or players get offset into the sea."
+  },
+  {
+   "title": "[animation-rig] The corpse is deleted in a single frame with no sink or fade, contradicting the code's own comment",
+   "line": "1136-1138 (audit: 1089)",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "player.js:1136-1138: `// death anim then sink away` / `if (victim.rig && victim.clips.death) { playAnim(victim, \"death\", { once: true }); }` / `setTimeout(() => { if (victim.obj.parent) victim.obj.parent.remove(victim.obj); }, 4500);` — the comment promises a sink and the code unparents the group in one frame. No tween, no opacity ramp, no scale-down anywhere in killActor. The machinery the fix needs already exists: ffg_kernel_3d.js:308 `tween(opts)` with a per-frame driver at :321-327.",
+   "fix": "Replace the bare setTimeout with a hold-then-sink: keep the clamped death pose ~3.0 s, then `W.kernel.tween({ target: victim.obj, to: { \"position.y\": victim.pos.y - 1.2 }, duration: 1.2, onComplete: () => victim.obj.parent && victim.obj.parent.remove(victim.obj) })`. The kernel tween already supports dotted paths, so it is ~3 lines. Make sure the match-teardown path still force-removes the group if a tween is mid-flight."
+  },
+  {
+   "title": "[performance] \"Animation LOD\" freezes far bots' mixers with timeScale=0, which measurably saves only 39% of the cost — and their rigs are never hidden",
+   "line": "951 / pose.js:141 (audit: 904)",
+   "sev": "polish",
+   "risk": "medium",
+   "evidence": "Structural claims all verified. player.js:951 `a.rig.mixer.timeScale = far ? 0 : 1;` is the only mixer-throttling line in the entire runtime (repo grep `mixer.timeScale` -> 1 hit), and zeroing timeScale stops clip TIME only — AnimationAction._update still evaluates interpolants and property bindings, so the mixer loop still pays per-bone cost. No distance cull of actor rigs exists: grep `.visible = ` in player.js returns :35, :40, :702, :714, :1131 (weapon hand), :126 (preload throwaway clone), :630 (nameTag `a.nameTag.visible = a.alive && a !== W._camFocus && d2 > 12 && d2 < 70 * 70;`) and :1058 (first-person self-hide) — nothing touching `a.rig.scene.visible` by distance. The per-frame allocation is real too: pose.js:141 `const T = pk ? P.map((d) => tiltDir(d, pk * 0.85)) : P;` with pose.js:128-131 `function tiltDir(d, pitch) { ... return [d[0], d[1] * c + d[2] * s, d[2] * c - d[1] * s",
+   "fix": "Set a skip flag instead of a zero timescale — `a.rig.mixer.userData.paused = far;` at player.js:951 plus a `continue` guard in the kernel's mixer loop — and preallocate pose.js:141's scratch arrays at module scope. DO NOT ship the audit's proposed `a.rig.scene.visible = d2 < 250*250` render cull as written: a scoped sniper (adsFov 20-22) routinely engages past 250 m, so that would make distant enemies literally invisible. If a visibility cull is wanted, gate it on frustum + a range well beyond sniper reach, or cull only the shadow pass (`castShadow = false`)."
+  }
+ ],
+ "runtime/3d/royale/maps.js": [
+  {
+   "title": "[lighting-daynight] `scene.environment` is never set anywhere, so every metalness>0 surface reflects pure black — water loses 30% of its albedo",
+   "line": "315",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "Grep over every .js in the game for `scene.environment|PMREM|envMap|RoomEnvironment|CubeCamera` returns zero assignments — only three prose comments acknowledging the gap (player.js:181 \"With no scene.environment to reflect,\", player.js:193 \"scene.environment null.\", weapons.js:165) and two dead `envMapIntensity: 1.2` settings (hud.js:243, hud.js:670) that do nothing without an env map. The water material at maps.js:314-316 is `new THREE.MeshStandardMaterial({ color: mapId === \"isla_viva\" ? 0x2ec9d6 : 0x2f7d8a, transparent: true, opacity: 0.86, roughness: 0.13, metalness: 0.3, })` — the 0.3 metal fraction is removed from diffuse and reflects black.",
+   "fix": "After the sky dome is built (maps.js:345), render it once into a PMREM and assign `W.scene.environment`, then add that texture to disposeMapResources so it is freed per match. Cheap interim that costs nothing: set the water material's `metalness: 0` at line 315 so the 30% is not simply discarded (this also fixes the glint finding below)."
+  },
+  {
+   "title": "[map-poi-dungeons] Palm Bay's 8 houses are geometrically scrambled — rotY spins each wall in place but never moves it, so `town({along:\"z\"})` produces a pinwheel of loose slabs",
+   "line": "411 (now 434)",
+   "sev": "severe",
+   "risk": "medium",
+   "evidence": "addBox rotates before it translates: line 434 `if (opts.rotY) geo.rotateY(opts.rotY);` then line 435 `geo.translate(cx, cy, cz);`. BoxGeometry is origin-centred, so rotateY only re-orients the slab about its own centre; the world offset passed in by house() is never rotated. house() passes pre-offset world centres — line 628 `addBox(x, y + H / 2, z - d / 2, w, H, T, wallC, { rotY: rot });` (back wall) and 629-630 (side walls at x ± w/2). town() line 679: `const rot = A ? (side > 0 ? Math.PI : 0) : (side > 0 ? -Math.PI / 2 : Math.PI / 2);`. Line 755 `town(pois[0], [C_WOODP, C_BAMBOO], \"#c0563a\", { along: \"z\", nPer: 4 });   // Palm Bay` is the ONLY along:\"z\" town (grep of all six town() calls: 755 z, 756/757/891/907/921 all x). So Palm Bay's 8 houses (2 sides x nPer 4) get rot ±PI/2: a back wall of size (w,H,T) becomes (T,H,w) still centred at (x, z-d/2) — a ~7 m plank running perpendicula",
+   "fix": "Rotate the offset as well as the geometry. Add `function addBoxR(x,z,dx,dz,cy,w,h,d,color,rot){const c=Math.cos(rot),s=Math.sin(rot);addBox(x+dx*c+dz*s, cy, z-dx*s+dz*c, w,h,d,color,{rotY:rot});}` next to addBox and rewrite house() (626-638) to pass local-space (dx,dz) — back wall becomes `addBoxR(x,z, 0,-d/2, y+H/2, w,H,T, wallC, rot)`. hut() (485-499) has the same latent bug but every current call site passes rot=0, so it is unexposed."
+  },
+  {
+   "title": "[map-poi-dungeons] No structure on any map has an opening at eye level — the tower \"window band\" starts 0.88 m above the player's eye",
+   "line": "494 (now 519)",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "Arithmetic reproduces the audit exactly. Line 519 `const wallH = FH - (f > 0 ? 1.2 : 0);  // upper floors leave open window band` and 520 `const wy = fy + wallH / 2 + (f > 0 ? 0 : 0);` — with FH=4 the upper-floor wall spans fy+0.00 to fy+2.80 and the 1.2 m gap sits at fy+2.80..fy+4.00. The floor the player stands on is the slab at line 516 `addSlabHole(x, fy + 0.15, z, fw, 0.3, ...)` → walking surface fy+0.30. Eye height is 1.62 (runtime/sim/royale.js:103 `var PLAYERK = { hp: 100, shield: 100, radius: 0.45, height: 1.8, eyeY: 1.62, swimDepth: 1.1 };`), so the eye sits at fy+1.92 and the opening begins 0.88 m above it; even the 1.8 m head-top (fy+2.10) is behind solid wall. Grep for `window` in maps.js returns only the two comment lines — no window geometry exists in any generator. CORRECTION to the finding: the title's absolute claim is overstated. Every building DOES have one eye-level ",
+   "fix": "Split each upper-floor wall into a sill + header pair so the gap straddles the eye: `addBox(x, fy+0.50, z+W2, fw, 1.00, T, color)` and `addBox(x, fy+3.15, z+W2, fw, 1.70, T, color)`, leaving fy+1.00..fy+2.30 open. Do two of the four walls in house()/hut() the same way. Note this also opens bot LOS (losBlocked at 1180 tests the same colliders), so interior fights change on both sides — that is the intent, but it should be playtested, not just shipped."
+  },
+  {
+   "title": "[map-poi-dungeons] Lakeside Cabins' pier is buried 2.3-8.4 m inside the terrain on every seed — pier() hardcodes the deck at sea level",
+   "line": "539 (now 563)",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "pier() hardcodes its deck: line 563-564 `function pier(x, z, len, rot, color, poi) {` / `const y = waterY + 0.5;` — heightAt0 is never consulted. Called for Deepwood at line 922 `pier(pois[2].x + 40, pois[2].z + 60, 18, 0.3, C_PLANK, pois[2].id);` → world (-220, 490). I reimplemented maps.js's hash2/vnoise/fbm/mkHeightFn('deepwood') verbatim in Node and swept 200 seeds: terrain at (-220,490) = min 2.72 / median 6.92 / max 11.22 m, i.e. the deck (y=0.5) is buried 2.22-10.72 m on 200/200 seeds. Same run measured the lake: the contiguous water disc around (-260,430) has radius min 19 / median 24 / max 39 m — the audit's '~21-31 m pond' is right, because the carve at line 152 `if (dl < 150) h -= (1 - dl / 150) * (h + 4);` is proportional, so it only reaches below 0 near the exact centre. Its floor item (566) and 60%-chance chest (567) are therefore inside rock. Isla Viva's two piers (788-789",
+   "fix": "(a) Make pier() terrain-aware: `const gy = heightAt0(x, z); if (gy > waterY - 0.3) return;` before building, so a pier is never buried. (b) Make the lake an absolute carve so it holds water: replace line 152 with `if (dl < 150) h = Math.min(h, -4 + Math.pow(dl / 150, 2) * 14);`. Note (b) changes Deepwood terrain, which shifts every heightAt0-dependent placement on that map (town minH guards, scatterTrees, loot) — regenerate and re-walk the POI after."
+  },
+  {
+   "title": "[performance] Every tree/rock/car on the 1600 m map is one map-wide InstancedMesh, so 2.85 M of the frame's 3.01 M triangles are props that are never culled",
+   "line": "1081 (now 1110)",
+   "sev": "severe",
+   "risk": "medium",
+   "evidence": "Line 1110 `const inst = new THREE.InstancedMesh(m.geometry, m.material, list.length);` — one instanced mesh per prop kind per GLB submesh, sized to the WHOLE map's placement list (`props[kind]`, filled by scatterTrees over `(rng()*2-1)*(HALF-40)`, line 575). Deepwood alone scatters 720 pine + 260 birch + 220 bush + 80 rocks (lines 956-959). three.js derives one bounding sphere spanning all 1600 m, so per-object frustum culling can never reject it. Grep for `THREE.LOD|setDrawRange|frustumCulled|boundingSphere|computeBoundingSphere` over runtime/ returns only two `frustumCulled = false` lines (fx.js:26, maps.js:346) — no LOD, no chunking, no per-instance culling anywhere. I could not independently reproduce the audit's live 3,013,518-tri measurement, but the structural claim is unambiguous in the source.",
+   "fix": "Bucket each `props[kind]` list into 200 m world cells before building instances and emit one InstancedMesh per non-empty cell; each cell then gets a tight bounding sphere and three's existing cull works for free. CAUTION: destroyProp() at 1243-1248 resolves `instRefs[col.prop]` by the flat `col.idx` written at line 1132 — chunking must store {cell, localIdx} on the collider or shot props will vanish at the wrong index."
+  },
+  {
+   "title": "[performance] The shadow pass redraws every prop on the map into a ±55 m shadow box: 1.41 M extra triangles and 21 extra draw calls per frame",
+   "line": "1082 (now 1111)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Line 1111 `inst.castShadow = kind !== \"bush\";` sets every non-bush map-wide InstancedMesh as a shadow caster, and (per the previous finding) its bounds span 1600 m so the shadow camera's frustum test can never reject it. `shadowMap.autoUpdate` appears nowhere (grep over runtime/ → 0 hits), so the full depth pass re-runs every frame. Same root cause as the InstancedMesh finding; the live triangle deltas are the audit's measurement, not mine.",
+   "fix": "Interim, one line and zero risk: keep castShadow only on the tree kinds and clear it on car/container/barrel/rocks (`inst.castShadow = kind !== \"bush\" && !(kind in {car:1,container:1,barrel:1,rocks:1})`) — those read as ground clutter and their shadows are barely visible. Full fix rides on the chunking above: set `chunk.castShadow` per frame from W._shadowExt inside followShadow (ffg_royale3d.js:165)."
+  },
+  {
+   "title": "[textures-materials] The sky islands — the one feature the code calls 'Final Drop's signature look' — are the only surfaces in the world with no texture at all",
+   "line": "980 (now 1009)",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "Line 1009 `new THREE.MeshStandardMaterial({ color: grassC, roughness: 0.95 })` for the grass disc and 1017 `new THREE.MeshStandardMaterial({ color: rockC, roughness: 1 })` for the hanging cone — neither takes `map` or `normalMap`, while every other surface in the file does (terrain 302, structures 1067, roads 1078, water 321). 5-8 islands per match at 9-17 m radius (995, 1005), each carrying a chest and a launch portal. The shadow half of the claim is also true: line 1021 `rock.castShadow = true;` with no `rock.receiveShadow`, so the cone never darkens under the overhanging disc.",
+   "fix": "Give both meshes the cached groundTex and scale the UVs to the island's real size. Prefer scaling the GEOMETRY's uv attribute by rad*2/8 over cloning the texture — a clone shares `.source` with the _texCache entry, and disposeMapResources (218-234) would dispose the clone as non-shared, which risks freeing the shared GPU upload the next match still needs. Add `rock.receiveShadow = true;` at 1021."
+  },
+  {
+   "title": "[lighting-daynight] All three maps share one hard-coded sun and hemisphere — map identity is carried only by a sky hex and a 24% fog-density spread",
+   "line": "272",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "Lines 272-275 are literals with no map lookup: `kn.sun.intensity = 2.05; kn.sun.color.setHex(0xfff4e0);` / `kn.sun.position.set(90, 130, 60);` / `if (hemi) { hemi.intensity = 1.25; hemi.color.setHex(0xdcefff); hemi.groundColor.setHex(0x7c8672); }`. The MAPS table at 17-21 carries only name/theme/sky/fog/themeColor/water — there is no sun or hemi field to read. Fog spread confirmed: 0.00042 / 0.00045 / 0.00052 across the three entries. So the tropical island, the savanna-desert and the snow-capped forest all get the same near-noon key and the same grey-green ground bounce.",
+   "fix": "Add `sun:{pos,color,intensity}` and `hemi:{sky,ground,intensity}` to each MAPS entry and read them at 272-275 instead of the literals. ffg_royale3d.js re-captures `W._sunOff` after buildMap, so followShadow inherits whatever angle the map picks — no other change needed."
+  },
+  {
+   "title": "[lighting-daynight] Sky dome is a two-stop vertical ramp with no sun disc and no directional term; the zenith computes to grey #9d9dac on Savanna",
+   "line": "337",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "Line 337 `const zenith = horizon.clone().lerp(new THREE.Color(0x2f74c8), 0.55).multiplyScalar(0.9);` and the fragment shader at 343 `float h = clamp(normalize(vp).y, 0.0, 1.0); gl_FragColor = vec4(mix(bot, top, pow(h, 0.62)), 1.0);` — a pure Y ramp with no sun direction uniform. I recomputed the Savanna zenith independently in three's linear working space (ColorManagement is on by default in r172): #e7cf98 → linear (0.799, 0.624, 0.314), lerp 0.55 toward linear 0x2f74c8 (0.0284, 0.1747, 0.5771), × 0.9 → (0.338, 0.339, 0.413), back to sRGB = rgb(157,157,172) = #9d9dac. That matches the audit's figure digit for digit — Savanna's sky really does go sand at the horizon to grey-lavender overhead.",
+   "fix": "Author `zenith` per MAPS entry (Savanna wants ~#4f86bd, not a lerp of its own sand horizon) and add a `sunDir` uniform with a Mie lobe plus a ~1° disc in the fragment shader. It is fragment-only on a 24x16 dome — effectively free."
+  },
+  {
+   "title": "[lighting-daynight] NoToneMapping plus a roughness-0.13 metallic water plane clips the sun glint to a hard-edged pure-white patch that swims",
+   "line": "270",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "Line 270 `kn.renderer.toneMapping = THREE.NoToneMapping;` with 271 `kn.renderer.toneMappingExposure = 1.0;` (inert under NoToneMapping — the renderer has no brightness control during a match). Water at 315 `roughness: 0.13, metalness: 0.3` with a scrolling normal map at 329 `wN.offset.x = t * 0.015; wN.offset.y = t * 0.011;`. GGX at roughness 0.13 gives alpha² ≈ 2.9e-4 and a peak D ≈ 1.1e3, so the specular lobe passes 1.0 far from the mirror direction and, with no tone curve, everything above 1.0 clamps to identical #ffffff — a flat white region with a hard boundary that crawls as the normals scroll. Structurally separate from the missing env map: an IBL would not stop the clip.",
+   "fix": "Do NOT revert the deliberate NoToneMapping decision (line 268-269 documents why ACES was removed). Fix it at the material: water `roughness: 0.30, metalness: 0.0` at line 315 — this pulls the peak under 1.0, keeps a wide sheen, and simultaneously removes the black metal lobe from the env-map finding above."
+  },
+  {
+   "title": "[map-poi-dungeons] The only building at Lagoon Docks is built below sea level — hut() sits on terrain that is -0.7 to -4.1 m across every seed tested",
+   "line": "761 (now 790)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Line 790 `hut(90, 590, 5, 4.4, 0, C_WOODP, \"lagoon_docks\");` and hut() line 486 `const y = heightAt0(x, z);` with no water guard anywhere in the function. I swept 200 seeds through a verbatim Node reimplementation of mkHeightFn('isla_viva'): h(90,590) = min -5.20 / p10 -3.90 / median -2.73 / max -0.55 — below sea level on 200/200 seeds. The audit's -0.7..-4.1 range is right and my sweep is slightly wider. The hut's walls are only 3.2 m (487 `const H = 3.2, T = 0.35;`) so on the deeper seeds the roof is submerged too, and its floor loot at y+0.5 (497) is underwater. town() already guards this exact case at line 678 `if (heightAt0(hx, hz) < minH) continue;` — hut() was never given the same treatment, and the comment at 753 shows the identical bug was already fixed once for Banana Farm.",
+   "fix": "Add a water guard at the top of hut(): `const y = heightAt0(x, z); if (y < waterY + 0.6) return;`, and relocate the Lagoon Docks call — either move it inland (heightAt0 goes positive around (60,520) on the seeds I sampled) or ring-search a 40 m radius around (90,590) for the first point with heightAt0 > waterY + 0.8. The guard alone silently deletes the POI's only building, so ship both halves together."
+  },
+  {
+   "title": "[map-poi-dungeons] Ranger Ridge / Fire Watch tower decks are ringed by a solid 1.2 m railing on ALL FOUR sides and the access ramp arrives head-on into one",
+   "line": "531 (now 556)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Lines 556-557 build all four rails unconditionally: `for (const [dx, dz, w, d] of [[0, -(P + 1.2) / 2, P + 1.4, 0.3], [0, (P + 1.2) / 2, P + 1.4, 0.3], [-(P + 1.2) / 2, 0, 0.3, P + 1.4], [(P + 1.2) / 2, 0, 0.3, P + 1.4]]) addBox(x + dx, y + H + 0.9, z + dz, w, 1.2, d, color);`. With P=3.4 the deck (555) spans z±2.4, the +Z rail occupies z+2.15..z+2.45 topping out at y+H+1.5, and the ramp at 559 `addRamp(x, y, z + P + 3.4, 2.0, H + 0.3, 6.4, 3, ...)` has its collider running z+3.6..z+10 — so the ramp top ends 1.15 m short of the rail with nothing but air in between, then a 1.2 m wall. STEP_UP is 0.55 (player.js:572 `const STEP_UP = 0.55;`), so no step-over; jump apex is jumpV²/2g = 7.8²/44 = 1.38 m (sim/royale.js:100 `jumpV: 7.8, gravity: -22`), so a human clears it only by jumping the gap AND the rail. Three of these are built every Deepwood match (917-919) and each carries a deck chest ",
+   "fix": "Gate the +Z rail: replace the `[0, (P + 1.2) / 2, P + 1.4, 0.3]` entry with two 1.6 m stubs `[-(P + 1.4) / 2 + 0.8, (P + 1.2) / 2, 1.6, 0.3]` and `[(P + 1.4) / 2 - 0.8, (P + 1.2) / 2, 1.6, 0.3]`, and extend the ramp to reach the deck edge: `addRamp(x, y, z + P + 2.2, 2.0, H + 0.3, 6.4, 3, ...)`."
+  },
+  {
+   "title": "[map-poi-dungeons] Isla Viva has zero multi-storey interiors — the branch contains no tower()/rangerTower() call at all",
+   "line": "715 (now 744)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Grepped `tower\\(|rangerTower\\(` over lines 744-794 — the entire `if (mapId === \"isla_viva\") {` branch, which ends at line 795 `} else if (mapId === \"ashgrid\") {` — result: NONE. The branch builds only town() (755-757), farmland (758), lighthouse (759), five solid stone blocks at Cliff Temples (763-771), volcano chests, a shipwreck hull, two piers and one hut. Every one of those is a 3.2-3.4 m single room or a solid block. The landmark half of the claim also holds: lighthouse is solid stacked addBox bands (691-694), waterTower's tank is one solid box (702), steeple's body is one solid box (708-711) — none has a wall/slab/ramp interior.",
+   "fix": "Cheapest real fix is two calls in the isla_viva branch, since tower() already emits per-floor slabs, stairwell holes and interior ramps: `tower(pois[4].x, pois[4].z, 3, 12, C_STONE, pois[4].id);` at Cliff Temples and `tower(pois[1].x, pois[1].z - 40, 2, 14, C_BAMBOO, pois[1].id);` as a Coco Village market hall. Hollowing the landmarks is a much larger job — treat it separately."
+  },
+  {
+   "title": "[performance] The structure batcher keys batches by colour string and one call site feeds it a random float, shattering Rubble Row into 16 one-cube draw calls",
+   "line": "835 (now 864)",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Line 864 (inside `for (let i = 0; i < 16; i++)` at 861): `addBox(x, y + 0.9, z, 3.5 + rng() * 3, 1.8 + rng() * 1.6, 0.5, shade(C_BRICKB, 0.8 + rng() * 0.3), { rotY: rng() * Math.PI });`. shade() (1262-1266) returns `\"#\" + c.getHexString()`, and addBox keys on that string at 436 `(batches[color] = batches[color] || []).push(geo);`. The merge loop at 1064-1070 then emits one mesh + one MeshStandardMaterial + a map and normalMap per key, so 16 rubble walls become up to 16 draw calls and 16 textured materials. Grepped `shade\\(.*rng\\(\\)` over the whole file: two hits, and only this one passes a random MULTIPLIER (913 is `shade(C_LOG, 0.9)`, fixed). The audit's finding is precisely scoped — one call site.",
+   "fix": "Quantise so the key can only take a few values: `shade(C_BRICKB, 0.8 + Math.floor(rng() * 4) * 0.1)` collapses 16 batches into at most 4. Better: bake the per-piece tint as a vertex-colour attribute and set `vertexColors: true` on one C_BRICKB material — one draw call with the variation preserved. Consider making shade() snap to 0.05 steps so no future call site can reintroduce a continuous key."
+  },
+  {
+   "title": "[performance] Every cloud puff, bird and nametag gets its own SpriteMaterial — 151 sprites and 151 distinct materials — and each launch portal builds three fresh geometries and materials",
+   "line": "361",
+   "sev": "moderate",
+   "risk": "low",
+   "evidence": "Line 361, inside the per-puff loop (360) inside the 24-cloud loop (357): `const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.8, depthWrite: false, fog: false }));` — 24 groups x 3-5 puffs = ~96 identical materials. Line 383 does the same for birds (3 flocks x 5-9 = ~21). Grep for `new THREE.SpriteMaterial` across runtime/ confirms all four sprite sites allocate per-instance, including player.js:344 for nametags (one per actor, up to 50) — that plus maps.js accounts for the audit's measured 151. addPortal (972-993) allocates two TorusGeometry, one CircleGeometry and three MeshStandardMaterials on EVERY call, and it is called once per island (1039, 5-8 islands) plus up to four more on the ground (1042-1047) = 9-12 times per match.",
+   "fix": "Hoist the shared materials: build one cloudMat before line 357 and one birdMat before 379 and pass the same instance to every sprite. Build the portal's three geometries and three materials once per buildMap and have addPortal reuse them. disposeMapResources (218-238) already dedupes by identity via its seen Sets, so teardown stays correct with shared instances."
+  },
+  {
+   "title": "[creatures-bots] There are no creatures or wildlife of any kind — the only living non-player element is a decorative sky-bird sprite",
+   "line": "373",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "Grepped `wildlife|creature|critter|fauna|animal|deer|boar|chicken|prowler|fish` case-insensitively over all of runtime/ — the only hits are bot NAMES in sim/royale.js:303-311 (\"BoxedLikeAFish\", \"FishstickFan\") and unrelated comments (\"keyboard\", \"blackboard\"). The birds at 374-390 are pure decoration: sprite quads on a fixed circular path (399 `fl.position.set(u.cx + Math.cos(a) * u.fr * 6, ...)`) with no collider, no actor entry and no reaction to anything. NOTE: this is a feature request, not a defect — nothing is broken. It does NOT violate the no-harvesting constraint; the audit explicitly scopes it as ambient-only with 'no drops... do not give them loot tables'.",
+   "fix": "If wanted: a small ambient.js with 3-5 instanced ground-bird flocks per map that burst upward when an actor comes within 12 m, reusing the existing bird texture (377) and registering through the trackUpdater list (259) so it tears down per match. Strictly optional — I would not spend the round on it ahead of the confirmed geometry bugs."
+  },
+  {
+   "title": "[textures-materials] A single material template serves all ~30 structure colors, so lamps and the lighthouse beacon are diffuse boxes wearing a brick normal map",
+   "line": "1037 (now 1066)",
+   "sev": "polish",
+   "risk": "low",
+   "evidence": "Lines 1066-1067 are the whole material story for every batched structure: `const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.88, metalness: 0.04 });` / `if (_st) { mat.map = _st.map; mat.normalMap = _st.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5); }`. So the 28 m crane (852 `\"#c8b24a\"`), the water-tower steel (699 `\"#8a8378\"`), canvas awnings (655), adobe walls and timber benches all shade identically — and the two light-emitting objects, the lamp heads (648 `\"#ffe9a8\"`) and the lighthouse lens (693 `\"#fff2b0\"`), render as dull cream boxes with brick relief. CORRECTION: the sub-claim 'there is a bloom pass running and literally nothing in the world feeds it' is FALSE. maps.js:976 and 981 give the launch-portal rings `emissive: 0x1ec8f0, emissiveIntensity: 1.6` and `emissive: 0x9b4dff, emissiveIntensity: 1.4`, and loot.js:203 adds AdditiveBlending glow sprites — t",
+   "fix": "Give the batch loop a small per-colour profile keyed off the constants already in the file: an EMIT map for \"#ffe9a8\"/\"#fff2b0\" (set emissive + toneMapped:false and skip the brick map — a lamp lens should not wear mortar lines) and a METAL map for \"#c8b24a\"/\"#8a8378\"/\"#93805e\" (roughness ~0.42, metalness ~0.6). Metal only pays off once an env map exists, so sequence it after the scene.environment finding."
+  },
+  {
+   "title": "[lighting-daynight] Shadow depth pass has no culling granularity — every structure and every tree on the whole 1600 m map is re-rendered into the shadow map each frame",
+   "line": "1036 (now 1065)",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "Lines 1065-1069: `const merged = BufferGeometryUtils.mergeGeometries(batches[color], false);` ... `mesh.castShadow = true; mesh.receiveShadow = true;` — every merged structure mesh spans the full map (its members are scattered across all POIs), so its bounding volume intersects the ±55 m shadow frustum from anywhere and three submits it whole. Combined with `inst.castShadow` at 1111 for the props. No spatial keying exists (grep: no chunk/cell/grid keying of `batches`; no shadowMap.autoUpdate). DUPLICATE NOTE: this is the same root cause as the ±55 m shadow-box finding filed at line 1082 — that one covers props, this one covers merged structures. Fix them as one change; do not count the win twice.",
+   "fix": "Key `batches` by `color + '|' + cellX + '_' + cellZ` on a 200 m grid before the merge loop at 1064, and split each `props[kind]` into the same cells before 1110. 64 cells on a 1600 m map; a 110 m shadow box then touches at most 4. Same destroyProp index caveat as the InstancedMesh finding applies."
+  },
+  {
+   "title": "[map-poi-dungeons] Exterior roof ramps run 45-63 degrees — the generator divides the climb by a run derived from the building's WIDTH",
+   "line": "522 (now 547)",
+   "sev": "moderate",
+   "risk": "medium",
+   "evidence": "Line 547: `addRamp(x + W2 + 1.15, y, z - 0.8, 2.2, floors * FH + 0.45, fw - 1.6, 2, shade(color, 0.72));` — climb = floors*4 + 0.45, run = fw - 1.6, so the run comes from the building's width and the angle is whatever falls out. Downtown builds `tower(x, z, 2 + Math.floor(rng() * 3), 10 + rng() * 4, ...)` (812), so the worst case is floors=4, fw=10: atan(16.45 / 8.4) = 62.9°. rangerTower's ramp (559) is atan(11.3 / 6.4) = 60.5°. The mechanical half checks out too: STEP_UP = 0.55 (player.js:572), sprint = 9.6 m/s (sim/royale.js:98 `walk: 6.0, sprint: 9.6, ads: 3.8`), and blockedHoriz explicitly skips ramps (player.js:602 `if (c.kind === \"ramp\") continue;`) — so at 30 fps a sprinting player needs 0.32 * tan(63°) = 0.63 m of rise per frame against a 0.55 m step budget, supportAt drops the ramp, and nothing stops the slide back down. This is the only on-foot route to the tower's roof chest (",
+   "fix": "Derive the run from the climb: `const climb = floors * FH + 0.45; const run = Math.max(fw - 1.6, climb / Math.tan(38 * Math.PI / 180)); addRamp(x + W2 + 1.15, y, z - 0.8, 2.2, climb, run, 2, shade(color, 0.72));` and the same at 559 for rangerTower. Watch for the longer run clipping neighbouring geometry in Downtown, where six towers sit 55-125 m apart — a switchback of two half-height ramps is the fallback."
+  }
+ ]
+}

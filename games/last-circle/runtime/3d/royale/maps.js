@@ -14,10 +14,24 @@ import * as THREE from "three";
 import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js";
 
 // Practice uses a random battle map (no dedicated range — owner direction).
+// `sun` / `hemi` / `zenith` are per map because all three maps used to share ONE
+// hard-coded key light (2.05 warm sun from (90,130,60), grey-green ground bounce)
+// — the tropical island, the savanna-desert and the snow-capped forest were lit
+// identically, so map identity was carried by a sky hex and a 24% fog spread and
+// nothing else. Two constraints on these numbers:
+//   • the sun vector must stay ~170 m long — ffg_royale3d.js:263 clones it as the
+//     shadow offset and the shadow camera's far plane is 250 (ffg_kernel_3d.js:78),
+//     so a longer vector silently drops every shadow in the match.
+//   • `zenith` used to be DERIVED as lerp(sky, 0x2f74c8, 0.55) * 0.9. Feeding
+//     Savanna's sand horizon (#e7cf98) through that lands on #9d9dac — a grey-
+//     lavender ceiling instead of sky. Authored per map now.
 export const MAPS = {
-  isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#7fd4f0", fog: 0.00042, themeColor: "#22d3a0", water: true },
-  ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e7cf98", fog: 0.00045, themeColor: "#e0854a", water: false },
-  deepwood:  { name: "Deepwood", theme: "forest", sky: "#9fc7e8", fog: 0.00052, themeColor: "#7fb069", water: true },
+  isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#7fd4f0", zenith: "#2f8fd8", fog: 0.00042, themeColor: "#22d3a0", water: true,
+    sun: { pos: [90, 130, 60], color: 0xfff4e0, intensity: 2.05 }, hemi: { sky: 0xdcefff, ground: 0x86a06a, intensity: 1.25 } },
+  ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e7cf98", zenith: "#4f86bd", fog: 0.00045, themeColor: "#e0854a", water: false,
+    sun: { pos: [-120, 105, 45], color: 0xffe6b4, intensity: 2.25 }, hemi: { sky: 0xf0e3c4, ground: 0xb59a63, intensity: 1.15 } },
+  deepwood:  { name: "Deepwood", theme: "forest", sky: "#9fc7e8", zenith: "#3a6fae", fog: 0.00052, themeColor: "#7fb069", water: true,
+    sun: { pos: [-60, 150, -80], color: 0xfff6e6, intensity: 1.95 }, hemi: { sky: 0xd2e7ff, ground: 0x63705a, intensity: 1.35 } },
 };
 
 const SIZE = 1600;               // meters, square
@@ -275,10 +289,11 @@ export async function buildMap(W, mapId) {
     // muddy dusk. NoToneMapping keeps colours bright + saturated like the reference.
     kn.renderer.toneMapping = THREE.NoToneMapping;
     kn.renderer.toneMappingExposure = 1.0;
-    kn.sun.intensity = 2.05; kn.sun.color.setHex(0xfff4e0);
-    kn.sun.position.set(90, 130, 60);
+    const sunK = K.sun || MAPS.isla_viva.sun, hemiK = K.hemi || MAPS.isla_viva.hemi;
+    kn.sun.intensity = sunK.intensity; kn.sun.color.setHex(sunK.color);
+    kn.sun.position.set(sunK.pos[0], sunK.pos[1], sunK.pos[2]);
     let hemi = null; W.scene.traverse((o) => { if (o.isHemisphereLight) hemi = o; });
-    if (hemi) { hemi.intensity = 1.25; hemi.color.setHex(0xdcefff); hemi.groundColor.setHex(0x7c8672); }
+    if (hemi) { hemi.intensity = hemiK.intensity; hemi.color.setHex(hemiK.sky); hemi.groundColor.setHex(hemiK.ground); }
     if (kn.bloom) kn.bloom.strength = 0.14;   // crisp match — minimal bloom haze
   }
 
@@ -317,8 +332,15 @@ export async function buildMap(W, mapId) {
   if (K.water) {
     const wgeo = new THREE.PlaneGeometry(SIZE * 1.6, SIZE * 1.6, 1, 1);
     wgeo.rotateX(-Math.PI / 2);
+    // roughness 0.13 + metalness 0.3 was two bugs at once. (a) With NoToneMapping
+    // (line 276) nothing compresses highlights, and GGX at roughness 0.13 pushes
+    // the specular lobe well past 1.0 over a wide angle — everything above 1.0
+    // clamps to the same #ffffff, so the sun glint read as a hard-edged flat white
+    // patch that crawled as the normal map scrolled. (b) scene.environment is never
+    // set anywhere in this game, so the 0.3 metal fraction was subtracted from the
+    // diffuse and reflected pure black. 0.30/0.0 keeps a wide sheen under 1.0.
     const wmat = new THREE.MeshStandardMaterial({
-      color: mapId === "isla_viva" ? 0x2ec9d6 : 0x2f7d8a, transparent: true, opacity: 0.86, roughness: 0.13, metalness: 0.3,
+      color: mapId === "isla_viva" ? 0x2ec9d6 : 0x2f7d8a, transparent: true, opacity: 0.86, roughness: 0.30, metalness: 0.0,
     });
     let wN = null;
     try {
@@ -340,13 +362,20 @@ export async function buildMap(W, mapId) {
   // (owner: "we should have a real sky, with real clouds, and birds")
   {
     const horizon = new THREE.Color(K.sky);
-    const zenith = horizon.clone().lerp(new THREE.Color(0x2f74c8), 0.55).multiplyScalar(0.9);
+    // Zenith is AUTHORED per map now (MAPS table) — deriving it as
+    // lerp(sky, 0x2f74c8, 0.55) * 0.9 turned Savanna's sand horizon into a grey
+    // #9d9dac ceiling. The ramp also had no directional term at all, so the sky
+    // gave you no cue where the sun was even though every shadow on the ground
+    // pointed at it; the disc + halo below is fragment-only on a 24x16 dome.
+    const zenith = new THREE.Color(K.zenith || MAPS.isla_viva.zenith);
+    const sp = (K.sun || MAPS.isla_viva.sun).pos;
+    const sunDir = new THREE.Vector3(sp[0], sp[1], sp[2]).normalize();
     const skyGeo = new THREE.SphereGeometry(SIZE * 0.82, 24, 16);
     const skyMat = new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
-      uniforms: { top: { value: zenith }, bot: { value: horizon } },
+      uniforms: { top: { value: zenith }, bot: { value: horizon }, sunDir: { value: sunDir } },
       vertexShader: "varying vec3 vp; void main(){ vp = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
-      fragmentShader: "varying vec3 vp; uniform vec3 top; uniform vec3 bot; void main(){ float h = clamp(normalize(vp).y, 0.0, 1.0); gl_FragColor = vec4(mix(bot, top, pow(h, 0.62)), 1.0); }",
+      fragmentShader: "varying vec3 vp; uniform vec3 top; uniform vec3 bot; uniform vec3 sunDir; void main(){ vec3 d = normalize(vp); float h = clamp(d.y, 0.0, 1.0); vec3 col = mix(bot, top, pow(h, 0.62)); float s = max(dot(d, sunDir), 0.0); col += vec3(1.0, 0.94, 0.80) * (pow(s, 1200.0) * 1.6 + pow(s, 10.0) * 0.18); gl_FragColor = vec4(col, 1.0); }",
     });
     const sky = new THREE.Mesh(skyGeo, skyMat);
     sky.renderOrder = -10; sky.frustumCulled = false; sky.name = "sky";
@@ -359,12 +388,17 @@ export async function buildMap(W, mapId) {
     cgrad.addColorStop(0, "rgba(255,255,255,0.95)"); cgrad.addColorStop(0.5, "rgba(255,255,255,0.45)"); cgrad.addColorStop(1, "rgba(255,255,255,0)");
     cx2.fillStyle = cgrad; cx2.fillRect(0, 0, 128, 128);
     const cloudTex = new THREE.CanvasTexture(ccv); cloudTex.colorSpace = THREE.SRGBColorSpace;
+    // ONE material for all ~96 puffs. Every puff used to allocate its own
+    // identical SpriteMaterial (24 clouds x 3-5 puffs), which is 96 distinct
+    // materials and 96 shader-program lookups a frame for what is one billboard.
+    // disposeMapResources dedupes by identity, so teardown is unaffected.
+    const cloudMat = new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.8, depthWrite: false, fog: false });
     const clouds = [];
     for (let i = 0; i < 24; i++) {
       const grp = new THREE.Group();
       const puffs = 3 + Math.floor(rng() * 3);
       for (let p = 0; p < puffs; p++) {
-        const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, transparent: true, opacity: 0.8, depthWrite: false, fog: false }));
+        const s = new THREE.Sprite(cloudMat);
         const sc = 46 + rng() * 70;
         s.scale.set(sc, sc * 0.58, 1);
         s.position.set((rng() - 0.5) * sc * 1.7, (rng() - 0.5) * sc * 0.28, (rng() - 0.5) * sc * 1.3);
@@ -381,12 +415,13 @@ export async function buildMap(W, mapId) {
     const bx = bcv.getContext("2d"); bx.strokeStyle = "rgba(38,40,52,0.92)"; bx.lineWidth = 3; bx.lineCap = "round";
     bx.beginPath(); bx.moveTo(4, 21); bx.lineTo(16, 11); bx.lineTo(28, 21); bx.stroke();
     const birdTex = new THREE.CanvasTexture(bcv); birdTex.colorSpace = THREE.SRGBColorSpace;
+    const birdMat = new THREE.SpriteMaterial({ map: birdTex, transparent: true, depthWrite: false, fog: false });  // shared, same reason as cloudMat
     const flocks = [];
     for (let f = 0; f < 3; f++) {
       const flock = new THREE.Group();
       const n = 5 + Math.floor(rng() * 5);
       for (let b = 0; b < n; b++) {
-        const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: birdTex, transparent: true, depthWrite: false, fog: false }));
+        const s = new THREE.Sprite(birdMat);
         s.scale.setScalar(3 + rng() * 2.5);
         s.userData.ph = rng() * Math.PI * 2; s.userData.ix = b;
         flock.add(s);
@@ -489,8 +524,33 @@ export async function buildMap(W, mapId) {
 
   // — building generators (shared) —
   function hut(x, z, w, d, rot, color, poi) {
-    const y = heightAt0(x, z);
-    const H = 3.2, T = 0.35;
+    const ground = heightAt0(x, z);
+    // hut() never guarded the waterline, so the Lagoon Docks hut — the only
+    // building at that POI — was built on terrain measured at -0.55 to -5.20 m
+    // on every seed: floor loot underwater, walls submerged on the deep ones.
+    //
+    // The first attempt at this simply refused to build under water, which is
+    // worse than the bug it replaced: measured over 2000 seeds, Deepwood's
+    // Riverside Mill anchor is dry on ZERO of them and Lagoon Docks on 10.8%,
+    // so the guard silently deleted a POI's only building — and its floor loot —
+    // on essentially every match. A ring-search for dry land does not rescue it
+    // either (still underwater on 89.2% of seeds at a 56 m radius) and drags the
+    // building away from the dock it belongs to.
+    //
+    // So build it on STILTS instead: deck at the waterline, posts down to the
+    // seabed. The building always exists, its loot is always reachable, and a
+    // shack on posts over the water is what a dock should have looked like.
+    const submerged = ground < waterY + 0.6;
+    const y = submerged ? waterY + 0.35 : ground;
+    const T = 0.35;
+    if (submerged) {
+      const legY = (ground + y) / 2, legH = Math.max(0.6, y - ground);
+      for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        addBox(x + sx * (w / 2 - 0.3), legY, z + sz * (d / 2 - 0.3), 0.32, legH, 0.32, shade(color, 0.7));
+      }
+      addBox(x, y - 0.12, z, w + 0.5, 0.24, d + 0.5, shade(color, 0.85));   // deck
+    }
+    const H = 3.2;
     // 4 walls with a door gap on the front
     addBox(x, y + H / 2, z - d / 2, w, H, T, color, { rotY: rot });          // back
     addBox(x - w / 2, y + H / 2, z, T, H, d, color, { rotY: rot });          // left
@@ -559,10 +619,16 @@ export async function buildMap(W, mapId) {
     for (const [dx, dz] of [[-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4], [1.4, 1.4]])
       addBox(x + dx, y + H / 2, z + dz, 0.4, H, 0.4, color);
     addBox(x, y + H + 0.15, z, P + 1.4, 0.3, P + 1.4, shade(color, 0.85));    // deck
-    for (const [dx, dz, w, d] of [[0, -(P + 1.2) / 2, P + 1.4, 0.3], [0, (P + 1.2) / 2, P + 1.4, 0.3], [-(P + 1.2) / 2, 0, 0.3, P + 1.4], [(P + 1.2) / 2, 0, 0.3, P + 1.4]])
+    // The +Z rail is split into two 1.6 m stubs to leave a gateway where the ramp
+    // arrives. It used to be one solid 4.8 m rail across all four sides: the ramp
+    // top ended at z+3.6 while the deck edge is z+2.4, so you climbed 11 m, hit a
+    // 1.15 m gap of air and then a 1.2 m wall. STEP_UP is 0.55 (player.js) and the
+    // jump apex is 1.38 m, so the deck chest on all three Deepwood towers was
+    // unreachable on foot. The ramp start moves to z+P+2.2 to meet the deck edge.
+    for (const [dx, dz, w, d] of [[0, -(P + 1.2) / 2, P + 1.4, 0.3], [-(P + 1.4) / 2 + 0.8, (P + 1.2) / 2, 1.6, 0.3], [(P + 1.4) / 2 - 0.8, (P + 1.2) / 2, 1.6, 0.3], [-(P + 1.2) / 2, 0, 0.3, P + 1.4], [(P + 1.2) / 2, 0, 0.3, P + 1.4]])
       addBox(x + dx, y + H + 0.9, z + dz, w, 1.2, d, color);
     addBox(x, y + H + 2.6, z, P + 2, 0.25, P + 2, shade(color, 0.7), { collide: false }); // little roof
-    addRamp(x, y, z + P + 3.4, 2.0, H + 0.3, 6.4, 3, shade(color, 0.8));      // access ramp
+    addRamp(x, y, z + P + 2.2, 2.0, H + 0.3, 6.4, 3, shade(color, 0.8));      // access ramp
     chest(x, y + H + 0.6, z, poi);
   }
 
@@ -776,6 +842,14 @@ export async function buildMap(W, mapId) {
         addRamp(x, y, z + s / 2 + s * 0.75, 2.4, s, s * 1.5, 3, shade(C_STONE, 0.9));
       }
     }
+    // Isla Viva had NOT ONE multi-storey interior: the whole branch was towns of
+    // 3.4 m single rooms, solid landmark blocks and five solid temple cubes, so
+    // the map had no interior vertical fight at all while Savanna and Deepwood
+    // both do. tower() already emits per-floor slabs, a stairwell hole over each
+    // interior ramp and a roof chest. Guarded on dry ground so these do not
+    // repeat the Lagoon Docks waterline bug — the coast is close at both spots.
+    if (heightAt0(pois[4].x, pois[4].z) > waterY + 0.8) tower(pois[4].x, pois[4].z, 3, 12, C_STONE, pois[4].id);          // Cliff Temples keep
+    if (heightAt0(pois[1].x, pois[1].z - 40) > waterY + 0.8) tower(pois[1].x, pois[1].z - 40, 2, 14, C_BAMBOO, pois[1].id); // Coco Village market hall
     // volcano rim chests (high-risk high ground)
     for (let i = 0; i < 4; i++) {
       const a = rng() * Math.PI * 2;
@@ -793,6 +867,9 @@ export async function buildMap(W, mapId) {
     // docks
     pier(120, 640, 22, 0.2, C_WOODP, "lagoon_docks");
     pier(160, 610, 16, -0.3, C_WOODP, "lagoon_docks");
+    // (90,590) is below sea level on every seed sampled; hut() now stilts itself
+    // over water, so the shack stays ON the dock instead of being ring-searched
+    // up to 56 m inland (which still landed in water on 89.2% of seeds anyway).
     hut(90, 590, 5, 4.4, 0, C_WOODP, "lagoon_docks");
     scatterTrees("palm", 420, 0.6, 26, "wood");
     scatterTrees("tree", 260, 2, 40, "wood");
@@ -867,7 +944,12 @@ export async function buildMap(W, mapId) {
       for (let i = 0; i < 16; i++) {
         const x = p.x + (rng() - 0.5) * p.r * 1.7, z = p.z + (rng() - 0.5) * p.r * 1.7;
         const y = heightAt0(x, z);
-        addBox(x, y + 0.9, z, 3.5 + rng() * 3, 1.8 + rng() * 1.6, 0.5, shade(C_BRICKB, 0.8 + rng() * 0.3), { rotY: rng() * Math.PI });
+        // The tint is QUANTISED to 4 steps on purpose: addBox keys its batches by
+        // the colour string and shade() returns a hex, so a continuous multiplier
+        // gave all 16 walls a unique key — 16 separate merged meshes, each with
+        // its own MeshStandardMaterial + map + normalMap, for one pile of rubble.
+        // This is the only shade() call site in the file that passes a random k.
+        addBox(x, y + 0.9, z, 3.5 + rng() * 3, 1.8 + rng() * 1.6, 0.5, shade(C_BRICKB, 0.8 + Math.floor(rng() * 4) * 0.1), { rotY: rng() * Math.PI });
       }
       for (let i = 0; i < 2; i++) chest(p.x + (rng() - 0.5) * p.r, heightAt0(p.x, p.z) + 0.6, p.z + (rng() - 0.5) * p.r, p.id);
     }
@@ -975,23 +1057,29 @@ export async function buildMap(W, mapId) {
   // the stylish exit).
   const islandTrees = [];   // {kind, x, y, z, s, ry} — cloned GLBs, placed later
   const portals = [];       // {x, y, z} — walk-in launch rings
+  // Every portal is the identical three meshes, and addPortal runs 9-12 times a
+  // match (one per sky island plus up to four on the ground) — it used to build
+  // two fresh TorusGeometry, a CircleGeometry and three materials on every call.
+  // Built once per map instead; disposeMapResources dedupes by identity, so the
+  // shared instances are still freed exactly once at teardown.
+  let _pGeo = null, _pMat = null;
   function addPortal(px, py, pz, faceYaw) {
+    if (!_pGeo) {
+      _pGeo = {
+        ring: new THREE.TorusGeometry(1.5, 0.16, 10, 28),
+        ring2: new THREE.TorusGeometry(1.22, 0.06, 8, 26),
+        swirl: new THREE.CircleGeometry(1.35, 24),
+      };
+      _pMat = {
+        ring: new THREE.MeshStandardMaterial({ color: 0x37e0ff, emissive: 0x1ec8f0, emissiveIntensity: 1.6, roughness: 0.4 }),
+        ring2: new THREE.MeshStandardMaterial({ color: 0xb26bff, emissive: 0x9b4dff, emissiveIntensity: 1.4, roughness: 0.4 }),
+        swirl: new THREE.MeshBasicMaterial({ color: 0x9fefff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }),
+      };
+    }
     const grp = new THREE.Group();
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(1.5, 0.16, 10, 28),
-      new THREE.MeshStandardMaterial({ color: 0x37e0ff, emissive: 0x1ec8f0, emissiveIntensity: 1.6, roughness: 0.4 })
-    );
-    grp.add(ring);
-    const ring2 = new THREE.Mesh(
-      new THREE.TorusGeometry(1.22, 0.06, 8, 26),
-      new THREE.MeshStandardMaterial({ color: 0xb26bff, emissive: 0x9b4dff, emissiveIntensity: 1.4, roughness: 0.4 })
-    );
-    grp.add(ring2);
-    const swirl = new THREE.Mesh(
-      new THREE.CircleGeometry(1.35, 24),
-      new THREE.MeshBasicMaterial({ color: 0x9fefff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false })
-    );
-    grp.add(swirl);
+    grp.add(new THREE.Mesh(_pGeo.ring, _pMat.ring));
+    grp.add(new THREE.Mesh(_pGeo.ring2, _pMat.ring2));
+    grp.add(new THREE.Mesh(_pGeo.swirl, _pMat.swirl));
     grp.position.set(px, py + 1.8, pz);
     grp.rotation.y = faceYaw;
     g.add(grp);
@@ -1001,6 +1089,24 @@ export async function buildMap(W, mapId) {
     const nIsl = 5 + Math.floor(rng() * 3);
     const grassC = mapId === "ashgrid" ? "#a7ad55" : mapId === "deepwood" ? "#3f7a3f" : "#3fae62";
     const rockC = "#7a6a58";
+    // The islands were the ONLY untextured surfaces in the world — terrain, roads,
+    // water and every structure carry the procedural grain + normal map, these two
+    // carried flat vertex colour. On the feature the code calls the signature look.
+    // UVs are scaled on the GEOMETRY (below) rather than by cloning the texture: a
+    // clone shares .source with the _texCache entry and disposeMapResources would
+    // free it as non-shared, killing the GPU upload the NEXT match still needs.
+    let _islTex = null;
+    try { _islTex = groundTex(aniso); } catch (e) { _islTex = null; }
+    const islMat = (color, rough, geo, span) => {
+      const m = new THREE.MeshStandardMaterial({ color, roughness: rough });
+      if (_islTex) {
+        m.map = _islTex.map; m.normalMap = _islTex.normal;
+        m.normalScale = new THREE.Vector2(0.5, 0.5);
+        const uv = geo.attributes.uv;
+        if (uv) { for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * span, uv.getY(i) * span); uv.needsUpdate = true; }
+      }
+      return m;
+    };
     for (let i = 0; i < nIsl; i++) {
       const ang = rng() * Math.PI * 2;
       const rr = 180 + rng() * (HALF - 320);
@@ -1009,22 +1115,20 @@ export async function buildMap(W, mapId) {
       if (groundH < waterY - 2) continue;                      // not over deep ocean
       const topY = Math.max(groundH, waterY) + 26 + rng() * 26; // 26-52m up
       const rad = 9 + rng() * 8;
-      // grassy top disc
-      const top = new THREE.Mesh(
-        new THREE.CylinderGeometry(rad, rad * 0.92, 1.6, 9),
-        new THREE.MeshStandardMaterial({ color: grassC, roughness: 0.95 })
-      );
+      // grassy top disc — TILE = 8 m per texture tile, same density as the terrain
+      const topGeo = new THREE.CylinderGeometry(rad, rad * 0.92, 1.6, 9);
+      const top = new THREE.Mesh(topGeo, islMat(grassC, 0.95, topGeo, (rad * 2) / TILE));
       top.position.set(ix, topY - 0.8, iz);
       top.castShadow = true; top.receiveShadow = true;
       g.add(top);
       // hanging rock cone underneath
-      const rock = new THREE.Mesh(
-        new THREE.ConeGeometry(rad * 0.9, rad * 1.5, 8),
-        new THREE.MeshStandardMaterial({ color: rockC, roughness: 1 })
-      );
+      const rockGeo = new THREE.ConeGeometry(rad * 0.9, rad * 1.5, 8);
+      const rock = new THREE.Mesh(rockGeo, islMat(rockC, 1, rockGeo, (rad * 2) / TILE));
       rock.rotation.x = Math.PI;
       rock.position.set(ix, topY - 1.4 - rad * 0.75, iz);
-      rock.castShadow = true;
+      // receiveShadow was missing, so the cone never darkened under the disc that
+      // physically overhangs it — the island read as two unrelated lit objects.
+      rock.castShadow = true; rock.receiveShadow = true;
       g.add(rock);
       // walkable top collider — 0.92·rad matches the visible disc's octagon flat-to-flat
       // (was 0.86·rad, leaving the outer ~14% of grass unsupported → rim fall-through on
@@ -1067,10 +1171,20 @@ export async function buildMap(W, mapId) {
   // ── merge batched boxes into one mesh per color (colour × tiled brick/panel) ─
   let _st = null;
   try { _st = structTex(aniso); } catch (e) { _st = null; }
+  // Two of the ~30 batch colours are LIGHT SOURCES, not surfaces: the street-lamp
+  // heads (streetFurniture) and the lighthouse lens. One material template served
+  // every colour, so both rendered as dull cream boxes wearing the brick normal
+  // map — mortar lines on a lamp lens — and neither fed the bloom pass.
+  // Deliberately NOT doing the metal half of this (crane/water-tower steel at
+  // roughness 0.42 / metalness 0.6): scene.environment is still null everywhere in
+  // this game, so a metal lobe would reflect pure black and look worse, not better.
+  const EMIT = { "#ffe9a8": 0xffe9a8, "#fff2b0": 0xfff2b0 };
   for (const color in batches) {
     const merged = BufferGeometryUtils.mergeGeometries(batches[color], false);
-    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.88, metalness: 0.04 });
-    if (_st) { mat.map = _st.map; mat.normalMap = _st.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5); }
+    const emit = EMIT[color];
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: emit ? 0.5 : 0.88, metalness: emit ? 0 : 0.04 });
+    if (emit) { mat.emissive = new THREE.Color(emit); mat.emissiveIntensity = 1.4; mat.toneMapped = false; }
+    else if (_st) { mat.map = _st.map; mat.normalMap = _st.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5); }
     const mesh = new THREE.Mesh(merged, mat);
     mesh.castShadow = true; mesh.receiveShadow = true;
     g.add(mesh);
@@ -1114,7 +1228,13 @@ export async function buildMap(W, mapId) {
     instRefs[kind] = [];
     for (const m of meshes) {
       const inst = new THREE.InstancedMesh(m.geometry, m.material, list.length);
-      inst.castShadow = kind !== "bush";
+      // Only the TREE kinds cast. Each of these InstancedMeshes is sized to the
+      // whole 1600 m map, so three derives one bounding sphere spanning the map
+      // and the shadow camera's ±55 m frustum can never reject it — every car,
+      // container, barrel and rock on the map was re-rendered into the depth pass
+      // every frame for shadows that read as ground clutter. Trees keep theirs;
+      // their canopy shadow is the one that actually matters for readability.
+      inst.castShadow = kind === "palm" || kind === "tree" || kind === "pine" || kind === "birch";
       inst.receiveShadow = true;
       const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3();
       const meshLocal = new THREE.Matrix4().copy(m.matrixWorld); // transform within GLB

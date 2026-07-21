@@ -436,12 +436,34 @@ function installHumanInput(W) {
 
   // Keybind remap: settings.remap maps a custom physical key → the canonical
   // default code, so all logic below stays written against the defaults.
-  const canon = (c) => (W.settings.remap && W.settings.remap[c]) || c;
+  // ShiftRight aliases ShiftLeft THROUGH the table, not around it: the sprint
+  // toggle and the held-sprint read both used to test the raw "ShiftRight" code,
+  // so right shift was a second, invisible sprint key that survived rebinding
+  // AND "reset to defaults" (nothing in remap ever referred to it) — the same
+  // duplicate-bind class the M/Q fix closed. Routing it through rm.ShiftLeft
+  // means UNBOUND and RESET govern it like every other key, while an explicit
+  // binding captured ON ShiftRight still wins.
+  const canon = (c) => {
+    const rm = W.settings.remap || {};
+    if (rm[c]) return rm[c];
+    return c === "ShiftRight" ? (rm.ShiftLeft || "ShiftLeft") : c;
+  };
   window.addEventListener("keydown", (ev) => {
     if (ev.target && (ev.target.tagName === "INPUT" || ev.target.tagName === "TEXTAREA")) return;
     if (W.captureKey) { W.captureKey(ev.code); ev.preventDefault(); return; }
-    const e = { code: canon(ev.code), preventDefault: () => ev.preventDefault() };
+    // `repeat` has to be copied across: the SPACE edge-gate below reads e.repeat,
+    // and on a synthetic object with only {code, preventDefault} that is
+    // undefined, so `!e.repeat` was permanently true and the gate it documents
+    // never once fired — holding SPACE still strobed the chute.
+    const e = { code: canon(ev.code), repeat: ev.repeat, preventDefault: () => ev.preventDefault() };
     keys[e.code] = true;
+    // ESC before the guard: W.player is null until the first match and phase is
+    // "menu" after one, so the guard swallowed Escape on exactly the screen where
+    // Settings / How To Play are opened — they could only be closed with their
+    // own button. hud's escPressed handler closes the topmost modal first and
+    // only reaches togglePause while phase is "match"/"drop", so this is inert
+    // on the menu by design rather than by accident.
+    if (e.code === "Escape") { W.events.emit("escPressed"); return; }
     if (!W.player || W.phase === "menu") return;
     const inp = W.player.input;
     if (e.code === "KeyR") inp.reload = true;
@@ -452,7 +474,7 @@ function installHumanInput(W) {
     if (e.code === "Digit3") inp.slot = 2;
     if (e.code === "Digit4") inp.slot = 3;
     if (e.code === "Digit5") inp.slot = 4;
-    if ((e.code === "ShiftLeft" || e.code === "ShiftRight") && !ev.repeat && W.settings.sprintToggle) W._sprintLatch = !W._sprintLatch;
+    if (e.code === "ShiftLeft" && !ev.repeat && W.settings.sprintToggle) W._sprintLatch = !W._sprintLatch;
     // Spectate cycling. On death you were pinned to your KILLER's camera with no
     // way to look at anyone else — including the friend still alive in your
     // room. A/D (or the arrows) now step through the survivors.
@@ -470,7 +492,6 @@ function installHumanInput(W) {
     if (e.code === "KeyM") W.events.emit("toggleBigMap");
     if (e.code === "KeyB") inp.emote = "dance";
     if (e.code === "KeyN") inp.emote = "cheer";
-    if (e.code === "Escape") W.events.emit("escPressed");
   });
   window.addEventListener("keyup", (ev) => {
     const code = canon(ev.code);
@@ -559,7 +580,7 @@ function installHumanInput(W) {
     const inp = W.player.input;
     inp.mx = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
     inp.mz = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
-    const sprintHeld = !!keys.ShiftLeft || !!keys.ShiftRight;
+    const sprintHeld = !!keys.ShiftLeft;   // canon() folds ShiftRight into this
     // SHIFT toggles sprint on and off (owner direction). The latch drops when
     // you stop moving forward, so you never wander back into a fight still
     // sprinting from three minutes ago with no way to notice.
@@ -958,7 +979,12 @@ function syncObj(W, a, dt, far) {
   // animation LOD: far actors freeze mixers
   if (a.rig) {
     a.rig.mixer.timeScale = far ? 0 : 1;
-    if (!far) {
+    // `!a.emoting` guards the CLIP chain only (the LOD line above still runs):
+    // the local path returns inside stepActor's emote branch before it ever gets
+    // here, but interpRemote calls syncObj unconditionally — so a peer's relayed
+    // wave was overwritten by idle/walk on the very next frame and the whole
+    // remote-emote relay was dead on arrival.
+    if (!far && !a.emoting) {
       const gs = Math.hypot(a.vel.x, a.vel.z);
       // freefall: NEARLY-FROZEN mid-stride = limbs spread like a skydive
       // (0.35 looked like the character was jogging through the sky)
@@ -1021,8 +1047,19 @@ function syncObj(W, a, dt, far) {
 function interpRemote(W, a, dt) {
   // network remote actors lerp toward their last snapshot (net.js sets a.netTarget)
   if (a.netTarget) {
+    const px = a.pos.x, pz = a.pos.z;
     a.pos.lerp(a.netTarget.pos, Math.min(1, dt * 10));
     a.yaw += (a.netTarget.yaw - a.yaw) * Math.min(1, dt * 10);
+    // net.js pack() sends {id,x,y,z,yw,hp,sh,gl,wp} — no velocity, no onGround.
+    // So a remote actor kept createActor's `onGround: false` FOREVER and syncObj's
+    // `!a.onGround` branch pinned every peer (and, on a guest, all 45 bots) in the
+    // jump clip, with vel 0,0,0 also starving the walk/run selection. Derive both
+    // from the interpolated motion instead of widening the protocol. The 12 m/s
+    // clamp keeps a snapshot catch-up (a lerp toward a far-away target on the
+    // first packet after a stall) from reading as a sprint.
+    const inv = 1 / Math.max(dt, 1e-3);
+    a.vel.set(K.clamp((a.pos.x - px) * inv, -12, 12), 0, K.clamp((a.pos.z - pz) * inv, -12, 12));
+    a.onGround = !a.gliding && a.pos.y <= supportAt(W, a.pos.x, a.pos.z, a.pos.y) + 0.2;
     syncObj(W, a, dt, false);
   }
 }
@@ -1143,8 +1180,26 @@ export function killActor(W, victim, killerId, weaponId) {
   W.match.eliminate(victim.id, killerId, weaponId, W.t);
   W.events.emit("actorDied", victim, killerId, weaponId);
   // death anim then sink away
+  // A bot killed past 250m had its mixer frozen at timeScale 0 by syncObj's
+  // animation LOD, and NOTHING ever restored it — so a long-range kill left a
+  // mid-stride statue instead of a death animation. update() skips dead actors,
+  // so this is the only place that can un-freeze it.
+  if (victim.rig && victim.rig.mixer) victim.rig.mixer.timeScale = 1;
   if (victim.rig && victim.clips.death) { playAnim(victim, "death", { once: true }); }
-  setTimeout(() => { if (victim.obj.parent) victim.obj.parent.remove(victim.obj); }, 4500);
+  // "sink away" was a lie the code told: the group was unparented in ONE frame,
+  // so the corpse popped out of existence. Hold the clamped death pose, then sink
+  // it under the terrain and remove on completion. Actors are rebuilt from
+  // scratch each match and every group is cleared at match start, so a tween
+  // still in flight across a restart writes into a discarded object and its
+  // parent-guarded remove is a no-op.
+  setTimeout(() => {
+    if (!victim.obj.parent) return;
+    W.kernel.tween({
+      target: victim.obj, duration: 1.2,
+      to: { "position.y": victim.obj.position.y - 1.6 },
+      onComplete: () => { if (victim.obj.parent) victim.obj.parent.remove(victim.obj); },
+    });
+  }, 3000);
   // player death → spectate killer
   if (victim === W.player) {
     victim.spectating = killerId || null;

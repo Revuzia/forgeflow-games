@@ -13,6 +13,7 @@
 
 let ctx = null, master = null, sfxBus = null, musicEl = null;
 let W_ = null;
+let lastImpactT = 0;      // voice budget for the impact listener — see wire()
 
 export function init(W) {
   W_ = W;
@@ -28,7 +29,16 @@ function ensureCtx(W) {
   window.__AUDIO_CTX__ = ctx;   // page mute-bar integration
   master = ctx.createGain();
   master.gain.value = W.settings.masterVol;
-  master.connect(ctx.destination);
+  // The master used to feed ctx.destination directly. Nothing in the graph
+  // constrained the peak, so a 9-pellet shotgun blast (sim: shotgun.pellets 9)
+  // or an explosion landing on top of a burst summed past 0 dBFS and clipped in
+  // hardware — the "destination with no limiter" the impact comment below
+  // diagnosed but never actually fixed. Brickwall it: -6 dBFS, hard knee, 20:1,
+  // 3 ms attack so transients are caught but the gunshot crack survives.
+  const lim = ctx.createDynamicsCompressor();
+  lim.threshold.value = -6; lim.knee.value = 0; lim.ratio.value = 20;
+  lim.attack.value = 0.003; lim.release.value = 0.12;
+  master.connect(lim); lim.connect(ctx.destination);
   sfxBus = ctx.createGain();
   sfxBus.gain.value = W.settings.sfxVol;
   sfxBus.connect(master);
@@ -84,12 +94,13 @@ function noiseBuf() {
 /** panner+gain by world position relative to camera */
 function spatial(pos, maxD) {
   const cam = W_.camera;
-  let vol = 1, pan = 0;
+  let vol = 1, pan = 0, dist = null;
   if (pos) {
     const dx = pos.x - cam.position.x, dz = pos.z - cam.position.z;
     const d = Math.hypot(dx, dz, (pos.y || 0) - cam.position.y);
     maxD = maxD || 60;
     if (d > maxD) return null;
+    dist = d;
     vol = Math.pow(1 - d / maxD, 1.4);
     // Pan: project onto the camera's RIGHT vector.
     // This computed right as (fwd.z, -fwd.x) — the exact NEGATION of the right
@@ -110,6 +121,12 @@ function spatial(pos, maxD) {
   const p = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
   if (p) { p.pan.value = pan; g.connect(p); p.connect(sfxBus); }
   else g.connect(sfxBus);
+  // The distance was computed here and then thrown away, so callers could only
+  // vary LEVEL with range — a 250 m shot was a bit-identical waveform to a
+  // point-blank one, just quieter, which is the opposite of what the docblock
+  // above promises. Hand it back so shot() can roll off the high end too. null
+  // means "own player", i.e. no distance, so callers keep those at full bright.
+  g.__d = dist;
   return g;
 }
 
@@ -120,19 +137,37 @@ function shot(cls, pos) {
   const n = ctx.createBufferSource(); n.buffer = noiseBuf();
   const f = ctx.createBiquadFilter(); f.type = "lowpass";
   const g = ctx.createGain();
+  // Every shot of a class was bit-identical: one cached 1 s noise buffer, always
+  // read from offset 0, every filter/gain value a constant from the table below.
+  // At the SMG's 720 rpm the 0.13 s tails overlap, and identical copies comb
+  // instead of reading as separate reports — full auto sounded like one buzz.
+  // Four cheap decorrelators: rate, read window, cutoff, level.
+  const rate = 0.93 + Math.random() * 0.14;
+  n.playbackRate.value = rate;
+  // Brightness by range: 1.0 point-blank falling to 0.12 at the 260 m cutoff.
+  // Air eats treble long before it eats loudness, so distance has to move the
+  // filter, not just the fader — that muffled far-off report is what the
+  // docblock at the top of this file promised and never delivered. Own shots
+  // (pos null, so __d null) stay fully bright.
+  const df = out.__d != null ? Math.max(0.12, 1 - out.__d / 260) : 1;
   n.connect(f); f.connect(g); g.connect(out);
   // gains trimmed ~35% (owner: shooting audio slightly lower)
   const P = {
     pistol: [1400, 0.09, 0.32], smg: [1800, 0.06, 0.28], ar: [1100, 0.12, 0.4],
     shotgun: [700, 0.2, 0.6], sniper: [500, 0.32, 0.66], launcher: [420, 0.24, 0.56],
   }[cls] || [1200, 0.1, 0.34];
-  f.frequency.setValueAtTime(P[0], t);
-  f.frequency.exponentialRampToValueAtTime(Math.max(80, P[0] * 0.2), t + P[1]);
-  g.gain.setValueAtTime(P[2], t);
+  f.frequency.setValueAtTime(P[0] * (0.92 + Math.random() * 0.16) * (0.25 + 0.75 * df), t);
+  f.frequency.exponentialRampToValueAtTime(Math.max(80, P[0] * 0.2 * df), t + P[1]);
+  g.gain.setValueAtTime(P[2] * (0.9 + Math.random() * 0.2), t);
   g.gain.linearRampToValueAtTime(0.0001, t + P[1] * 2.2);
-  n.start(t); n.stop(t + P[1] * 2.4);
-  // crack layer for rifles
-  if (cls === "ar" || cls === "sniper") {
+  // Start at a random window of the buffer, but only as late as the whole tail
+  // still fits inside the 1 s of samples — the sniper runs to stop() at t+0.768 s
+  // and reads it up to 1.07x fast, so a flat 0..0.7 s offset would have run off
+  // the end of the buffer and cut the tail dead mid-envelope on most shots.
+  n.start(t, Math.random() * Math.max(0, 1 - P[1] * 2.4 * rate)); n.stop(t + P[1] * 2.4);
+  // crack layer for rifles — near field only: the supersonic crack is a local
+  // event, and past ~80 m you should be hearing the muffled report, not the snap
+  if ((cls === "ar" || cls === "sniper") && (out.__d || 0) < 80) {
     const o = ctx.createOscillator(), og = ctx.createGain();
     o.type = "square"; o.frequency.setValueAtTime(190, t);
     o.frequency.exponentialRampToValueAtTime(60, t + 0.05);
@@ -261,6 +296,13 @@ function wire(W) {
   // of noise: the hitmarker still owns "you hit them".
   on("impact", (pos, surface) => {
     if (surface === "flesh") return;            // the hitmarker already covers this
+    // A shotgun is 9 pellets (sim: shotgun.pellets 9) each travelling as its own
+    // projectile, so one blast into a wall fired 9 impact voices in the same
+    // millisecond — the identical phase-coherent stack this file's comment above
+    // already diagnosed once. One voice per 35 ms window; fx.js still draws the
+    // particle burst for every pellet, so the visual spread is unchanged.
+    if (!ctx || ctx.currentTime - lastImpactT < 0.035) return;
+    lastImpactT = ctx.currentTime;
     if (surface === "stone") blip(2100, 0.045, 0.07, "square", pos, 55);
     else if (surface === "wood") blip(900, 0.06, 0.07, "triangle", pos, 55);
     else thump(260, 0.07, 0.06, pos, 45);       // dirt

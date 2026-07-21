@@ -40,6 +40,19 @@ export function init(W) {
       if (d < 250) b.bb.heard = { x: pos.x, z: pos.z, t: b.W.t, d, shooterId: shooter.id };
     }
   });
+  // supply drops: no brain had ANY concept of the two per-match crates, so the
+  // best loot in the game was uncontested. A bot could only collect one by
+  // coincidence — via the 90m scan inside LOOT, which scores 20-35 mid-game and
+  // loses to ENGAGE/ROTATE every time. This mark is what routes them there.
+  W.events.on("supplyDropLanded", (p) => {
+    for (const b of brains) {
+      if (!b.actor.alive) continue;
+      if (Math.hypot(b.actor.pos.x - p.x, b.actor.pos.z - p.z) < 220) {
+        b.bb.supply = { x: p.x, z: p.z, t: b.W.t };
+        b.nextThink = 0;
+      }
+    }
+  });
 }
 
 // startMatch must clear the previous match's brains — they hold references to
@@ -161,7 +174,12 @@ function think(W, b) {
   s.ENGAGE = bb.target
     ? engageBase + (a.personality === "rusher" ? 15 : 0) + (endgame ? 20 : 0) + (lastFew ? 25 : 0)
     : 0;
-  s.FLEE = bb.target && outnumbered && !lastFew && heals ? 86 : 0;   // disengage to heal, not to hide forever
+  // FLEE used to also require `heals`, so a bot at 15 HP with an empty inventory
+  // scored 0 here — the exact case where running is most obviously right — and
+  // stood trading against ENGAGE 88 until it died. 72 still loses to a close
+  // ENGAGE (88) but beats the 80 mid-range case, so a cracked bot breaks contact
+  // instead of dying bravely; with heals in the bag it keeps the old 86.
+  s.FLEE = bb.target && outnumbered && !lastFew ? (heals ? 86 : 72) : 0;   // disengage to heal, not to hide forever
   s.HEAL = (a.hp < 45 || (a.shield < 30 && a.hp < 80)) && heals && !bb.target ? 75 : (a.hp < 60 && heals && W.t - a.lastDamageT > 6 ? 45 : 0);
   s.LOOT = !upgraded ? 64 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
   // BATTLE-ROYALE PRIORITY MODEL (owner: "run from storms but FIGHT once
@@ -180,6 +198,13 @@ function think(W, b) {
   s.ROTATE = rotScore;
   s.CAMP = (a.personality === "camper" || a.personality === "sniper") && !outsideNext && !bb.target && !endgame ? 34 : 0;
   s.PUSH = bb.heard && W.t - bb.heard.t < 6 && (a.personality === "rusher" || a.personality === "rotator" || a.personality === "flanker") && !endgame ? 48 : 0;
+  // a landed supply drop is worth crossing the map for, never worth dying for:
+  // sits above LOOT/WANDER, below ENGAGE (80-88) and a pressing ROTATE (95).
+  // The 0.12/m falloff is what stops a bot 200m out abandoning what it is doing
+  // for a crate that whoever was standing next to it has already emptied.
+  s.SUPPLY = bb.supply && W.t - bb.supply.t < 90
+    ? (a.personality === "loot_goblin" ? 78 : 58) - Math.hypot(a.pos.x - bb.supply.x, a.pos.z - bb.supply.z) * 0.12
+    : 0;
   s.WANDER = 12;
 
   // pick best
@@ -259,6 +284,8 @@ function onEnter(W, b, state) {
     bb.moveTo = bb.campSpot;
   } else if (state === "PUSH") {
     bb.moveTo = bb.heard ? { x: bb.heard.x, z: bb.heard.z } : randNear(W, a, 60);
+  } else if (state === "SUPPLY") {
+    bb.moveTo = bb.supply ? { x: bb.supply.x, z: bb.supply.z } : randNear(W, a, 40);
   } else if (state === "WANDER") {
     bb.moveTo = randNear(W, a, 50);
   } else if (state === "HEAL") {
@@ -344,7 +371,10 @@ const _v = new THREE.Vector3();
 function act(W, b, dt) {
   const a = b.actor, bb = b.bb, inp = a.input;
   if (a.emoting) { inp.mx = 0; inp.mz = 0; inp.fire = false; return; }   // let the taunt play
-  inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.fire = false; inp.ads = false;
+  // crouch joins the per-frame reset: the states below only ever set it TRUE,
+  // so without a clear here a bot that crouched once at a camp spot would stay
+  // crouched — and at CROUCH.speedMult 0.45 — for the rest of the match.
+  inp.mx = 0; inp.mz = 0; inp.sprint = false; inp.fire = false; inp.ads = false; inp.crouch = false;
 
   if (a.gliding) {
     // steer toward drop target, dive (sprint) when above it
@@ -369,6 +399,7 @@ function act(W, b, dt) {
     case "FLEE": actMove(W, b, dt, true); break;
     case "HEAL": actHeal(W, b, dt); break;
     case "LOOT": actLoot(W, b, dt); break;
+    case "SUPPLY": actSupply(W, b, dt); break;
     case "ROTATE": case "PUSH": case "WANDER": actMove(W, b, dt, b.state === "ROTATE"); break;
     case "CAMP": actCamp(W, b, dt); break;
   }
@@ -452,6 +483,17 @@ function actLoot(W, b, dt) {
   }
 }
 
+/** Walk to a marked supply drop, then hand off to the normal loot grab.
+ *  Clearing bb.supply on ARRIVAL is the whole trick: the mark has no owner and
+ *  nothing else retires it before the 90s expiry, so without this a bot that got
+ *  there second would orbit an empty patch of grass for a minute and a half. */
+function actSupply(W, b, dt) {
+  const a = b.actor, bb = b.bb;
+  if (!bb.supply) { b.state = "WANDER"; b.nextThink = 0; return; }
+  if (Math.hypot(a.pos.x - bb.supply.x, a.pos.z - bb.supply.z) < 4) { bb.supply = null; b.nextThink = 0; }
+  actLoot(W, b, dt);
+}
+
 /** Ammo a slot can actually put downrange right now (mag + matching reserve). */
 function slotAmmo(a, s) {
   const def = K.WEAPONS[s.id];
@@ -510,19 +552,33 @@ function actCamp(W, b, dt) {
     const d = Math.hypot(bb.campSpot.x - a.pos.x, bb.campSpot.z - a.pos.z);
     if (d > 4) { moveToward(W, b, bb.campSpot.x, bb.campSpot.z, dt, false); return; }
   }
-  // hold position + slow scan (ADS for the tighter cone read)
+  // hold position + slow scan (ADS for the tighter cone read). Crouch too: the
+  // verb was keyboard-only (player.js KeyC), so campers and snipers stood bolt
+  // upright at their spot, paying none of CROUCH's 0.62 spread and giving away
+  // the full 1.8m capsule when they had already chosen not to move.
   a.input.ads = true;
+  a.input.crouch = true;
   a.input.yaw += dt * 0.25;
 }
 
 // ── combat ───────────────────────────────────────────────────────────────────
+// Odds a bot deliberately aims for the head, by tier. Every bot used to aim at a
+// flat 1.15m, but weapons.js only counts a hit as a headshot above 0.86 of the
+// target's capsule = 1.548m standing, so every "headshot" a bot ever landed was
+// spread luck. Top tier is held at 0.25 and not higher on purpose: a tier-5
+// sniper head hit is 105 * 2.5 = 262 damage, straight through a full 100+100 bar.
+const HEAD_CHANCE = [0, 0, 0.1, 0.2, 0.25];
+
 function actEngage(W, b, dt) {
   const a = b.actor, bb = b.bb, inp = a.input;
   const t = bb.target && W.actorById.get(bb.target);
   if (!t || !t.alive) { bb.target = null; bb.fightT = 0; b.nextThink = 0; return; }
   // fight fatigue: humans don't trade pistol whiffs forever — after ~14s of
-  // stalemate, break off to reposition/loot (prevents map-wide pistol gridlock)
-  if (bb.fightTarget !== bb.target) { bb.fightTarget = bb.target; bb.fightT = 0; }
+  // stalemate, break off to reposition/loot (prevents map-wide pistol gridlock).
+  // The same edge also rolls the aim height: per TARGET here and per burst below,
+  // never per frame — a per-frame roll would shimmer the aim point between chest
+  // and head and land in neither.
+  if (bb.fightTarget !== bb.target) { bb.fightTarget = bb.target; bb.fightT = 0; bb.aimHigh = Math.random() < (HEAD_CHANCE[a.tier - 1] || 0); }
   bb.fightT = (bb.fightT || 0) + dt;
   if (bb.fightT > 14 && W.t - a.lastDamageT > 6 && W.match.aliveCount() > 6) {
     bb.avoidId = bb.target; bb.avoidUntil = W.t + 6;   // don't instantly re-lock the same stalemate
@@ -564,7 +620,15 @@ function actEngage(W, b, dt) {
 
   // aiming with human error model
   const eye = eyePos(a);
-  const aimY = tp.y + 1.15 + (seen ? (t.vel ? 0 : 0) : 0);
+  // Aim as a FRACTION of the target's real capsule instead of a fixed 1.15m,
+  // which was hard-coded for a standing 1.8m actor. weapons.js scores a headshot
+  // above 0.86 of actorHeight — 1.548m standing — so 1.15m could only ever land
+  // on the body. A fixed 1.62m head point would work standing but sits just
+  // 0.05m under a crouched capsule's 1.668m ceiling and a full 0.6m OVER a
+  // swimmer's 1.02m one, so scale it: 0.94 stays inside the head band at every
+  // stance, 0.64 reproduces the old ~1.15m chest point when standing.
+  const th = t.swimming ? 0.9 : K.actorHeight(t);
+  const aimY = tp.y + th * (bb.aimHigh ? 0.94 : 0.64);
   // lead for projectile weapons
   let lead = 0;
   if (def.speed && def.speed < 600 && seen && t.vel) lead = dist / def.speed;
@@ -604,9 +668,14 @@ function actEngage(W, b, dt) {
   const inRange = dist < (def.falloff ? def.falloff[1] * 1.3 : 30);
   const canSee = seen;
   inp.ads = dist > 25;
+  // Take the crouched stance only when already holding a range position, not
+  // while closing: player.js resolves crouch-vs-sprint in the sprint's favour,
+  // so this can never fight the approach, and CROUCH.speedMult 0.45 is only
+  // paid on a frame the bot had chosen to stand still anyway.
+  inp.crouch = seen && dist > 30 && Math.abs(inp.mz) < 0.1 && a.tier >= 3;
   if (reacted && canSee && inRange) {
     if (def.cls === "ar" || def.cls === "smg" || def.cls === "pistol") {
-      if (bb.burstLeft <= 0 && bb.burstPause <= 0) { bb.burstLeft = def.cls === "ar" ? 4 : 8; }
+      if (bb.burstLeft <= 0 && bb.burstPause <= 0) { bb.burstLeft = def.cls === "ar" ? 4 : 8; bb.aimHigh = Math.random() < (HEAD_CHANCE[a.tier - 1] || 0); }
       if (bb.burstLeft > 0) {
         inp.fire = true;
         bb.burstLeft -= dt * (def.rpm / 60);
@@ -615,7 +684,7 @@ function actEngage(W, b, dt) {
       bb.burstPause -= dt;
     } else if (def.cls === "sniper") {
       // only when still-ish
-      if (Math.hypot(a.vel.x, a.vel.z) < 1.5) { inp.fire = true; inp.mx = 0; inp.mz = 0; }
+      if (Math.hypot(a.vel.x, a.vel.z) < 1.5) { inp.fire = true; inp.mx = 0; inp.mz = 0; inp.crouch = true; }
     } else {
       inp.fire = true;
     }

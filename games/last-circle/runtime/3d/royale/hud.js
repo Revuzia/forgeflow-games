@@ -13,6 +13,11 @@ import * as THREE from "three";
 let R = {};            // element registry
 let K = null;
 let feedTimer = [];
+// Backing-store scale for the 2D canvases (minimap, compass, big map). They used
+// to be sized 1:1 with their CSS box while the WebGL renderer honoured DPR and
+// the locker preview supersampled 2x, so the HUD was the blurriest thing on a
+// HiDPI screen. Capped at 2 — past that it is fill-rate for nothing.
+const HUD_DPR = Math.min((typeof window !== "undefined" && window.devicePixelRatio) || 1, 2);
 
 const css = (el, o) => { Object.assign(el.style, o); return el; };
 function h(tag, styles, text, parent) {
@@ -127,16 +132,27 @@ export function skinUnlocked(W, meta) {
   const lvl = (W && W.progress && W.progress.level) || 1;
   return (meta.unlockLevel || 1) <= lvl;
 }
+/** The lifetime goal to chase once every skin is unlocked. The reward track is
+ *  five skins and the last one lands at level 10, after which the goal slot on
+ *  the menu vanished entirely and the level-up banner just said "RANK UP" —
+ *  forever, on the account that had played the most. Reads the career counters
+ *  the game already keeps, so it costs no new state. */
+export function careerGoal(c) {
+  const kills = (c && c.kills) || 0;
+  const next = [100, 250, 500, 1000, 2500, 5000].find((n) => kills < n);
+  return next ? next + " CAREER KILLS · " + kills + "/" + next : kills + " CAREER KILLS";
+}
 /** Subtitle for the level-up banner: name the reward when this level pays one
  *  out, otherwise point at the next one. Pure so it is testable without a
  *  built world. */
-export function levelUpSub(lvl) {
+export function levelUpSub(lvl, career) {
   const won = MENU_SKINS.filter((s) => s.unlockLevel === lvl);
   if (won.length) return "SKIN UNLOCKED · " + won.map((s) => s.name).join(" · ");
   const next = MENU_SKINS
     .filter((s) => (s.unlockLevel || 1) > lvl)
     .sort((a, b) => a.unlockLevel - b.unlockLevel)[0];
-  return next ? "NEXT UNLOCK · " + next.name + " AT LEVEL " + next.unlockLevel : "RANK UP";
+  if (next) return "NEXT UNLOCK · " + next.name + " AT LEVEL " + next.unlockLevel;
+  return "MAX RANK · NEXT: " + careerGoal(career);
 }
 export function getChosenSkin() { try { return localStorage.getItem("lc_skin"); } catch (e) { return null; } }
 /** The stored pick, but never a locked one — progress can be cleared while a
@@ -186,6 +202,14 @@ function buildMenuWorld(W) {
     W.kernel.sun.intensity = 1.85;
     W.kernel.sun.color.set(0xfff0d8);
   }
+  // Restore the HEMISPHERE light too. The kernel builds it at 0.9 / cool blue /
+  // near-black ground and maps.js overwrites it on every match start (1.25 /
+  // 0xdcefff / 0x7c8672) — nothing ever put it back, so the diorama was lit by
+  // whatever the last map wanted, and by a cold blue sky-fill on first boot,
+  // against the golden-hour gradient the sky dome below is authored for.
+  let _hemi = null;
+  W.scene.traverse((o) => { if (o.isHemisphereLight) _hemi = o; });
+  if (_hemi) { _hemi.intensity = 0.8; _hemi.color.setHex(0xffe0b8); _hemi.groundColor.setHex(0x2e3a30); }
   // Restore the TONE MAPPER too, not just the exposure: a match sets
   // NoToneMapping (maps.js) for its bright-daylight look and nothing ever put it
   // back, so from the second visit onward the cinematic menu rendered unlit.
@@ -240,7 +264,9 @@ function buildMenuWorld(W) {
   // ocean
   const water = new THREE.Mesh(
     new THREE.PlaneGeometry(900, 900, 1, 1).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: 0x1488b0, transparent: true, opacity: 0.88, roughness: 0.18, metalness: 0.22, envMapIntensity: 1.2 })
+    // no envMapIntensity: nothing in the game ever assigns scene.environment or
+    // an envMap, so it multiplied a reflection that does not exist
+    new THREE.MeshStandardMaterial({ color: 0x1488b0, transparent: true, opacity: 0.88, roughness: 0.18, metalness: 0.22 })
   );
   water.position.y = 0;
   water.receiveShadow = true;
@@ -509,15 +535,23 @@ export function showMenu(W, startMatch) {
     h("div", { width: Math.min(100, (pr.xp / need) * 100) + "%", height: "100%", background: "linear-gradient(90deg,#4aa8ff,#7ad0ff)" }, null, barW);
     h("div", { fontSize: "11px", opacity: "0.75", letterSpacing: "1px" }, pr.xp + " / " + need + " XP", strip);
     if (c.matches) {
+      // damage and timeAliveS were accumulated every match and read by NOTHING —
+      // two of the seven career fields were write-only. Show them.
       h("div", {
         fontSize: "11.5px", opacity: "0.8", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px",
-      }, c.matches + " matches · " + c.wins + " wins · " + c.kills + " kills" + (c.bestPlacement ? " · best #" + c.bestPlacement : ""), strip);
+      }, c.matches + " matches · " + c.wins + " wins · " + c.kills + " kills" + (c.bestPlacement ? " · best #" + c.bestPlacement : "")
+         + (c.damage ? " · " + Math.round(c.damage / 1000) + "k dmg" : "") + (c.timeAliveS ? " · " + (c.timeAliveS / 3600).toFixed(1) + "h" : ""), strip);
+    }
+    // Coming back tomorrow rather than in a month is worth naming.
+    if (pr.dayStreak > 1) {
+      h("div", { fontSize: "11.5px", color: "#ffb36a", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px" },
+        "🔥 " + pr.dayStreak + "-DAY STREAK", strip);
     }
     const nextSkin = MENU_SKINS.filter((sk) => (sk.unlockLevel || 1) > pr.level).sort((a, b) => a.unlockLevel - b.unlockLevel)[0];
-    if (nextSkin) {
-      h("div", { fontSize: "11.5px", color: "#9fd7ff", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px" },
-        "NEXT: " + nextSkin.name + " @ LVL " + nextSkin.unlockLevel, strip);
-    }
+    h("div", { fontSize: "11.5px", color: "#9fd7ff", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px" },
+      // there was no else branch: past level 10 the goal slot silently
+      // disappeared, so the menu named no target at all for a maxed account
+      nextSkin ? "NEXT: " + nextSkin.name + " @ LVL " + nextSkin.unlockLevel : "MAX RANK · NEXT: " + careerGoal(c), strip);
   }
   h("div", {
     fontFamily: "Rajdhani, " + FONT, fontSize: "15px", fontWeight: "600",
@@ -563,6 +597,13 @@ export function showMenu(W, startMatch) {
       teardownMenuWorld(W);
       startMatch({ mapId: randomMap(), mode: m.id });
     };
+    // Tab-reachable. SQUAD UP / SETTINGS / HOW TO PLAY and the locker arrows are
+    // real <button>s, so the keyboard reached everything on this screen EXCEPT
+    // the only three controls that start a match — these cards were plain divs
+    // with a mouse handler. (Map stays random; this is focus, not a picker.)
+    c.tabIndex = 0;
+    c.setAttribute("role", "button");
+    c.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); c.onclick(); } };
     return { m, c };
   });
   function paint() {
@@ -598,8 +639,12 @@ export function showMenu(W, startMatch) {
   // First run gets it unprompted. A browser BR is opened cold from a link with
   // no manual and no install — there was no onboarding of ANY kind, and two of
   // the verbs (the emotes) appeared nowhere at all until ?v=67.
+  // The handle used to be discarded, so nothing could cancel it: click a mode
+  // card inside that 500 ms window and the tutorial opened as a blocking
+  // zIndex-70 modal OVER the drop-select — whose 12 s auto-lock kept counting
+  // behind it, so a first-run player lost their landing zone to a timer.
   try {
-    if (!localStorage.getItem("lc_seen_intro")) setTimeout(() => showHowToPlay(W), 500);
+    if (!localStorage.getItem("lc_seen_intro")) R._introT = setTimeout(() => { R._introT = null; showHowToPlay(W); }, 500);
   } catch (e) {}
 
   // — SKIN BAY: premium 3D turntable —
@@ -667,7 +712,10 @@ export function showMenu(W, startMatch) {
   // reflective stage floor
   const disc = new THREE.Mesh(
     new THREE.CylinderGeometry(1.05, 1.15, 0.08, 48),
-    new THREE.MeshStandardMaterial({ color: 0x152a42, roughness: 0.35, metalness: 0.65, envMapIntensity: 1.2 })
+    // metalness 0.65 + envMapIntensity was a claim the renderer could not honour:
+    // with no scene.environment a metal surface loses its diffuse and gains no
+    // reflection back, so the "reflective" stage disc rendered as a black hole.
+    new THREE.MeshStandardMaterial({ color: 0x152a42, roughness: 0.35, metalness: 0.1 })
   );
   disc.position.y = -0.04;
   pvScene.add(disc);
@@ -716,6 +764,12 @@ export function showMenu(W, startMatch) {
       pvRig = rig;
       rig.scene.position.set(0, 0, 0);
       pvScene.add(rig.scene);
+      // Drive the rig IMMEDIATELY. kernel.loadCharacter() never auto-plays a
+      // clip, and the cheer/dance actions below are two awaited GLB fetches away
+      // — until they land the preview loop was rendering an undriven SkinnedMesh,
+      // which reads as a collapsed ~0.1 m armature (see player.js:231), not a
+      // neutral T-pose. The later play() calls crossfade off this one normally.
+      if (rig.animations && rig.animations[0]) rig.play(rig.animations[0].name);
       pvBones = poseMod ? poseMod.findArmBones(rig.scene) : null;
       let cheerClip = null, danceClip = null;
       for (const c of ["cheer", "dance"]) {
@@ -767,7 +821,10 @@ export function showMenu(W, startMatch) {
   })();
   R._menuStopPv = () => { pvRunning = false; };
 
-  // bottom controls strip
+  // bottom controls strip — the LIVE bindings, not the defaults. This string was
+  // hardcoded, so after a rebind (and after switching sprint to HOLD in
+  // Settings) the menu confidently taught keys that no longer did anything.
+  const mk = (canonical) => { const ph = physFor(W, canonical); return ph ? keyLabel(ph) : "—"; };
   h("div", {
     fontFamily: "Rajdhani, " + FONT, fontSize: "13px", fontWeight: "600",
     opacity: "0.6", maxWidth: "820px", textAlign: "center", lineHeight: "1.7",
@@ -775,15 +832,19 @@ export function showMenu(W, startMatch) {
     textShadow: "0 2px 8px rgba(0,0,0,0.9)",
     animation: "lcPanelIn .6s .4s both",
   },
-  "WASD MOVE  ·  MOUSE AIM/FIRE  ·  RMB ADS  ·  SPACE JUMP / CHUTE  ·  SHIFT SPRINT (TOGGLE)  ·  R RELOAD  ·  E LOOT  ·  1–5 WEAPONS  ·  M MAP",
+  mk("KeyW") + mk("KeyA") + mk("KeyS") + mk("KeyD") + " MOVE  ·  MOUSE AIM/FIRE  ·  RMB ADS  ·  " +
+  mk("Space") + " JUMP / CHUTE  ·  " + mk("ShiftLeft") + " SPRINT (" + (W.settings && W.settings.sprintToggle ? "TOGGLE" : "HOLD") + ")  ·  " +
+  mk("KeyR") + " RELOAD  ·  " + mk("KeyE") + " LOOT  ·  " + mk("Digit1") + "–" + mk("Digit5") + " WEAPONS  ·  " + mk("KeyM") + " MAP",
   wrap);
 
   import("./audio.js" + (new URL(import.meta.url).search || "")).then((m) => m.startMenuMusic(W));
 }
 
 export function showLoading(W, text) {
-  // a new match must clear every stray screen from the previous one
-  ["post", "death", "pause", "settings", "bigmap", "menu", "hud"].forEach((n) => { if (R[n]) { R[n].remove(); R[n] = null; } });
+  // a new match must clear every stray screen from the previous one — including
+  // the first-run How To Play, which was neither in this list nor cancellable
+  if (R._introT) { clearTimeout(R._introT); R._introT = null; }
+  ["post", "death", "pause", "settings", "bigmap", "howto", "menu", "hud"].forEach((n) => { if (R[n]) { R[n].remove(); R[n] = null; } });
   teardownMenuWorld(W);
   W.paused = false;
   ensureAAAStyles();
@@ -1078,10 +1139,17 @@ export function showDropSelect(W, onDone) {
 const CAREER0 = { matches: 0, wins: 0, kills: 0, damage: 0, bestPlacement: 0, top10s: 0, timeAliveS: 0 };
 function loadProgress() {
   try {
-    const p = Object.assign({ level: 1, xp: 0 }, JSON.parse(localStorage.getItem("lc_progress") || "{}"));
+    const p = Object.assign({ level: 1, xp: 0, lastPlayedDay: null, dayStreak: 0 }, JSON.parse(localStorage.getItem("lc_progress") || "{}"));
     p.career = Object.assign({}, CAREER0, p.career || {});
     return p;
-  } catch (e) { return { level: 1, xp: 0, career: Object.assign({}, CAREER0) }; }
+  } catch (e) { return { level: 1, xp: 0, lastPlayedDay: null, dayStreak: 0, career: Object.assign({}, CAREER0) }; }
+}
+/** YYYY-MM-DD in LOCAL time. A UTC stamp rolls the day over mid-evening for
+ *  anyone west of Greenwich, which would break the streak of a player who did
+ *  nothing wrong. */
+function dayKey(d) {
+  const t = d || new Date();
+  return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0");
 }
 function saveProgress(p) { try { localStorage.setItem("lc_progress", JSON.stringify(p)); } catch (e) {} }
 // fold a finished match into the lifetime record (best placement = LOWEST number)
@@ -1097,6 +1165,14 @@ function recordMatch(W, res) {
   const pl = res.placement || 99;
   if (!c.bestPlacement || pl < c.bestPlacement) c.bestPlacement = pl;
   if (pl <= 10) c.top10s++;
+  // Nothing in the game knew what day it was — no timestamp anywhere in the
+  // save — so tomorrow was worth exactly as much as next month. One field.
+  const today = dayKey();
+  if (p.lastPlayedDay !== today) {
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    p.dayStreak = p.lastPlayedDay === dayKey(y) ? (p.dayStreak || 0) + 1 : 1;
+    p.lastPlayedDay = today;
+  }
   saveProgress(p);
   return c;
 }
@@ -1128,6 +1204,11 @@ function pickChallenges(W) {
 // compass ribbon — scrolling cardinal heading from the camera's facing
 const _cmpDir = new THREE.Vector3();
 function drawCompass(W, ctx, wpx) {
+  // The backing store is wpx*dpr (see showHUD); scale so every coordinate below
+  // stays in logical px. Derived from the canvas rather than read fresh off
+  // window.devicePixelRatio, so it can never disagree with the buffer we have.
+  const dpr = ctx.canvas.width / wpx || 1;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const H = 18; ctx.clearRect(0, 0, wpx, H);
   if (!W.player || !W.camera) return;
   W.camera.getWorldDirection(_cmpDir);
@@ -1184,7 +1265,11 @@ export function showHUD(W) {
     color: "#8ef5c8", textShadow: "0 1px 3px #000", opacity: "0", transition: "opacity 140ms linear",
     pointerEvents: "none", whiteSpace: "nowrap" }, "▶ SPRINT", L);
 
-  R.reloadBar = h("div", { position: "absolute", left: "50%", top: "62.5%", transform: "translateX(-50%)", width: "180px", height: "8px", background: "rgba(0,0,0,0.55)", borderRadius: "4px", display: "none", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }, null, L);
+  // top 55%, not 62.5%: the interact hint (top 60%, opaque, ~29px tall, created
+  // 53 lines later in the same z-index-free layer so it paints on top) covered
+  // the top half of this bar on any viewport under ~1160px — i.e. a maximised
+  // 1080p browser — exactly while you stand over loot and reload.
+  R.reloadBar = h("div", { position: "absolute", left: "50%", top: "55%", transform: "translateX(-50%)", width: "180px", height: "8px", background: "rgba(0,0,0,0.55)", borderRadius: "4px", display: "none", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }, null, L);
   R.reloadFill = h("div", { width: "0%", height: "100%", background: "#ffd166" }, null, R.reloadBar);
 
   // slots bottom right
@@ -1194,8 +1279,8 @@ export function showHUD(W) {
 
   // compass ribbon (very top center) — cardinal heading like the reference
   const cmpWrap = h("div", { position: "absolute", top: "4px", left: "50%", transform: "translateX(-50%)", width: "320px", height: "18px" }, null, L);
-  R.compass = h("canvas", { display: "block", borderRadius: "4px" }, null, cmpWrap);
-  R.compass.width = 320; R.compass.height = 18;
+  R.compass = h("canvas", { display: "block", borderRadius: "4px", width: "320px", height: "18px" }, null, cmpWrap);
+  R.compass.width = Math.round(320 * HUD_DPR); R.compass.height = Math.round(18 * HUD_DPR);
 
   // top center: storm timer + alive
   const tc = h("div", { position: "absolute", top: "28px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "18px", alignItems: "center", background: "rgba(0,0,0,0.4)", padding: "6px 18px", borderRadius: "10px" }, null, L);
@@ -1207,7 +1292,7 @@ export function showHUD(W) {
 
   // XP/level bar + active challenge card (Final Drop-style meta), below the storm bar
   if (!W.progress) W.progress = loadProgress();
-  W._challenges = pickChallenges(W); W._chalIdx = 0; W._xpDirty = true;
+  W._challenges = pickChallenges(W); W._chalIdx = 0; W._xpDirty = true; W._chalXp = 0;
   const meta = h("div", { position: "absolute", top: "66px", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", width: "352px" }, null, L);
   const xpRow = h("div", { display: "flex", alignItems: "center", gap: "8px", width: "100%", background: "rgba(0,0,0,0.42)", padding: "4px 10px", borderRadius: "8px" }, null, meta);
   R.xpLevel = h("div", { fontSize: "12px", fontWeight: "900", color: "#ffd873", minWidth: "48px", textShadow: "0 1px 2px #000" }, "LVL 1", xpRow);
@@ -1226,7 +1311,7 @@ export function showHUD(W) {
   // minimap top left
   const mmWrap = h("div", { position: "absolute", top: "12px", left: "14px", width: "180px", height: "180px", borderRadius: "12px", overflow: "hidden", border: "2px solid rgba(120,180,255,0.35)", boxShadow: "0 4px 18px rgba(0,0,0,0.5)" }, null, L);
   R.mmCanvas = h("canvas", { width: "180px", height: "180px" }, null, mmWrap);
-  R.mmCanvas.width = 180; R.mmCanvas.height = 180;
+  R.mmCanvas.width = Math.round(180 * HUD_DPR); R.mmCanvas.height = Math.round(180 * HUD_DPR);
 
   // kill feed right
   R.feed = h("div", { position: "absolute", right: "16px", top: "70px", display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-end", fontSize: "12px" }, null, L);
@@ -1264,8 +1349,11 @@ export function showHUD(W) {
   // perf readout (opt-in): FPS always, plus link freshness when online. This is
   // deliberately NOT labelled "ping" — net.js records lastSeen timestamps, not
   // round-trip time, so calling it ping would be a lie.
+  // top 44px, not 96px: the kill feed starts at top 70px and its rows are ~20px
+  // + 4px gap, so a 24px chip at 96 painted over almost all of feed row 2 — and
+  // the chip is created 38 lines later in the same z-index-free layer, so it won.
   R.perf = h("div", {
-    position: "absolute", right: "12px", top: "96px", padding: "4px 9px", borderRadius: "6px",
+    position: "absolute", right: "12px", top: "44px", padding: "4px 9px", borderRadius: "6px",
     fontFamily: "ui-monospace, Consolas, monospace", fontSize: "12px", fontWeight: "700",
     color: "#9fe6c0", background: "rgba(4,10,20,0.55)", border: "1px solid rgba(120,180,255,0.18)",
     letterSpacing: "0.5px", pointerEvents: "none",
@@ -1333,7 +1421,16 @@ export function update(W, dt) {
   const C = R._hudCache;
 
   const hpPct = Math.max(0, Math.min(100, p.hp)) + "%";
-  if (C.hp !== hpPct) { R.hpBar.style.width = hpPct; R.hpPct.textContent = Math.ceil(Math.max(0, Math.min(100, p.hp))) + "%"; C.hp = hpPct; }
+  if (C.hp !== hpPct) {
+    R.hpBar.style.width = hpPct; R.hpPct.textContent = Math.ceil(Math.max(0, Math.min(100, p.hp))) + "%";
+    // The colour was baked in at creation, so the bar was the same green at 6 HP
+    // as at 100 and "am I one shot from dead" was a two-digit number you had to
+    // read in the bottom-left corner mid-fight. Free: this branch only runs when
+    // the percentage actually changes, and lcPulse is already in ensureAAAStyles.
+    R.hpBar.style.background = p.hp <= 25 ? "#ff5544" : p.hp <= 40 ? "#ffd166" : "#4ade80";
+    R.hpBar.style.animation = p.hp <= 25 ? "lcPulse .55s ease-in-out infinite" : "";
+    C.hp = hpPct;
+  }
   const shPct = Math.max(0, Math.min(100, p.shield)) + "%";
   if (C.sh !== shPct) { R.shieldBar.style.width = shPct; R.shieldPct.textContent = Math.ceil(Math.max(0, Math.min(100, p.shield))) + "%"; C.sh = shPct; }
 
@@ -1425,8 +1522,11 @@ export function update(W, dt) {
         else announce(al + " REMAIN", tier === 25 ? "THE CIRCLE TIGHTENS" : tier === 10 ? "TOP 10 — STAY SHARP" : "FINAL 5", "#ffd54a", 2400, ANN_PRIO.milestone);
       }
     }
-    // hurt tint decay
-    R.hurtTint.style.opacity = W.t - p.lastDamageT < 0.7 ? "1" : "0";
+    // hurt tint: CLEAR only. It is set instantly by the actorHurt handler now —
+    // driving the "1" from this 4Hz block cost up to 250ms of tick latency on
+    // top of the element's own 300ms fade, so the screen took ~550ms to tell you
+    // you were being shot, out of a 700ms window.
+    if (W.t - p.lastDamageT >= 0.7) { R.hurtTint.style.transition = "opacity .3s"; R.hurtTint.style.opacity = "0"; }
 
     // XP/level bar (re-rendered when XP changes)
     const pr = W.progress;
@@ -1454,6 +1554,7 @@ export function update(W, dt) {
           if (c.prog(W) >= c.goal) {
             c.awarded = true; c.done = true;
             addXP(W, c.xp);
+            W._chalXp = (W._chalXp || 0) + c.xp;   // banked here; the post-match screen only knew about `res`
             flashMsg("CHALLENGE COMPLETE  +" + c.xp + " XP");
           }
         }
@@ -1475,9 +1576,14 @@ export function update(W, dt) {
     }
   }
 
-  // minimap 10Hz
+  // Compass EVERY frame; minimap at 10Hz. These used to share one gate, but the
+  // ribbon's whole content is the camera's heading — a per-frame quantity that
+  // changes with every mouse move — so sampling it at 10Hz made it judder while
+  // you turned. It is a 320x18 canvas with a handful of strokes, next to nothing
+  // beside the 180x180 minimap's drawImage of a 512x512 source.
+  if (R.compass) drawCompass(W, R.compass.getContext("2d"), 320);
   mmT += dt;
-  if (mmT > 0.1) { mmT = 0; drawMinimap(W, R.mmCanvas.getContext("2d"), 180, false); if (R.compass) drawCompass(W, R.compass.getContext("2d"), 320); }
+  if (mmT > 0.1) { mmT = 0; drawMinimap(W, R.mmCanvas.getContext("2d"), 180, false); }
 
   // interact hint + chest channel ring
   const hint = W.interactHint;
@@ -1485,7 +1591,7 @@ export function update(W, dt) {
     R.interact.style.display = "block";
     R.interact.textContent = hint.type === "chest"
       ? (hint.progress > 0 ? "Opening…" : "[HOLD E] Open chest")
-      : "[E] " + labelFor(hint.data);
+      : interactLabel(W, hint.data);
   } else R.interact.style.display = "none";
   if (hint && hint.type === "chest" && hint.progress > 0) {
     R.chestRing.style.display = "block";
@@ -1726,6 +1832,31 @@ function labelFor(d) {
   if (d.kind === "weapon") return "Pick up " + shortName(d) + (d.id !== "grenade" ? " (" + K.RARITY[d.rarity || 0] + ")" : "");
   return "Pick up " + shortName(d);
 }
+/** Guns any actor may CARRY — mirrors GUN_CAP in loot.js, which is module-private
+ *  there. Only the wording of this prompt depends on it, so a drift costs a
+ *  slightly-off label, never wrong behaviour. */
+const HUD_GUN_CAP = 3;
+/** The prompt has to name the OUTCOME. E is unconditionally a swap
+ *  (loot.js: pickup(..., { swap: true })), and give()'s swap branch DROPS
+ *  whatever is in your active slot — but the hint always read "Pick up", so at
+ *  five full slots the button that looked like a pickup threw your legendary AR
+ *  on the ground for a common pistol you meant to walk past. */
+function interactLabel(W, data) {
+  const me = W.player, inv = me && me.inventory;
+  if (!data || !inv || !W.wouldAcceptItem || W.wouldAcceptItem(me, data)) return "[E] " + labelFor(data);
+  const what = labelFor(data).replace("Pick up ", "");
+  // Three cases where the swap itself is refused by give() and E does nothing:
+  // ammo has no swap branch at all, a same-kind consumable stack already at max
+  // returns before it reads data.swap, and a weapon swap off a NON-gun slot is
+  // refused at the carry cap because it would push you past it.
+  const out = inv.slots[inv.active];
+  const guns = inv.slots.filter((s) => s && s.kind === "weapon").length;
+  const blocked = data.kind === "ammo"
+    || (data.kind === "consumable" && inv.slots.some((s) => s && s.kind === "consumable" && s.id === data.id))
+    || (data.kind === "weapon" && (!out || out.kind !== "weapon") && guns >= HUD_GUN_CAP);
+  if (blocked) return "FULL — no room for " + what;
+  return "[E] Swap for " + what + (out ? " — drops " + shortName(out) : "");
+}
 function fmtT(s) {
   s = Math.max(0, Math.ceil(s));
   return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
@@ -1734,6 +1865,12 @@ function fmtT(s) {
 // ═══ minimap ═════════════════════════════════════════════════════════════════
 function drawMinimap(W, ctx, size, big) {
   if (!W.map) return;
+  // Backing store is size*dpr; draw in logical px. The 3D renderer has honoured
+  // devicePixelRatio all along and the locker preview supersamples 2x, so on a
+  // HiDPI panel the 2D HUD was the softest thing on screen — worst on the 13px
+  // POI labels below, which is the map's whole point.
+  const dpr = ctx.canvas.width / size || 1;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size, size);
   ctx.drawImage(W.map.minimap, 0, 0, size, size);
   const S = W.map.size;
@@ -1832,6 +1969,12 @@ function wireEvents(W) {
   });
   // damage direction (red arc toward the attacker)
   W.events.on("actorHurt", (victim, info) => {
+    // Flash the vignette HERE, before the attackerId guard, so a storm tick
+    // registers too. The per-frame HUD block only clears it now.
+    if (victim === W.player && R.hurtTint) {
+      R.hurtTint.style.transition = "opacity .07s ease-out";
+      R.hurtTint.style.opacity = "1";
+    }
     if (victim !== W.player || !info.attackerId) return;
     const att = W.actorById.get(info.attackerId);
     if (att) addIndicator(W, att.pos.x, att.pos.z, "damage");
@@ -1855,7 +1998,7 @@ function wireEvents(W) {
   // bar filled, the level ticked over, and the player was never told.
   W.events.on("levelUp", (lvl) => {
     const won = MENU_SKINS.some((s) => s.unlockLevel === lvl);
-    announce("LEVEL " + lvl, levelUpSub(lvl), "#ffd54a", won ? 3600 : 3000, ANN_PRIO.level);
+    announce("LEVEL " + lvl, levelUpSub(lvl, W.progress && W.progress.career), "#ffd54a", won ? 3600 : 3000, ANN_PRIO.level);
   });
   // Picking something up was silent apart from a blip — you could not tell a
   // legendary from a common without opening the inventory.
@@ -1952,12 +2095,36 @@ function toggleBigMap(W) {
   if (R.bigmap) { R.bigmap.remove(); R.bigmap = null; return; }
   const L = layer("bigmap", { pointerEvents: "auto", background: "rgba(4,8,16,0.9)", display: "flex", alignItems: "center", justifyContent: "center" });
   const size = Math.min(window.innerHeight - 100, 640);
-  const cv = h("canvas", { borderRadius: "14px", border: "2px solid rgba(120,180,255,0.35)" }, null, L);
-  cv.width = cv.height = size;
+  const cv = h("canvas", { borderRadius: "14px", border: "2px solid rgba(120,180,255,0.35)", width: size + "px", height: size + "px" }, null, L);
+  cv.width = cv.height = Math.round(size * HUD_DPR);
   drawMinimap(W, cv.getContext("2d"), size, true);
+  // This overlay is a 90%-opaque full-screen fill over the whole HUD layer, so
+  // opening it hid the storm countdown, the alive count and your own HP — the
+  // three numbers that make the rings drawn below actionable. The sim does not
+  // pause, so you had to close the map, read the clock and reopen it.
+  const head = h("div", {
+    position: "absolute", top: "18px", left: "50%", transform: "translateX(-50%)",
+    padding: "8px 22px", borderRadius: "10px", whiteSpace: "nowrap",
+    background: "rgba(4,10,20,0.6)", border: "1px solid rgba(140,200,255,0.25)",
+    fontFamily: "Rajdhani, " + FONT, fontSize: "15px", fontWeight: "700", letterSpacing: "1.5px",
+  }, "", L);
+  const paintHead = () => {
+    const bits = [];
+    if (W.stormCtl && W.mode !== "practice") {
+      const st = W.stormCtl.storm.stateAt(W.t);
+      bits.push("⛈ " + (st.done ? "CLOSED" : (st.phaseState === "waiting" ? "SHRINKS " : "CLOSING ") + fmtT(st.tToNext)));
+    }
+    if (W.match) bits.push("👥 " + W.match.aliveCount() + " ALIVE");
+    if (W.player) bits.push("❤ " + Math.max(0, Math.ceil(W.player.hp)) + "  🛡 " + Math.max(0, Math.ceil(W.player.shield)));
+    head.textContent = bits.join("   ·   ");
+  };
+  paintHead();
   h("div", { position: "absolute", bottom: "26px", fontSize: "13px", opacity: "0.7" }, "M / ESC to close", L);
   L.onclick = () => toggleBigMap(W);
-  R._bigIv = setInterval(() => { if (R.bigmap) drawMinimap(W, cv.getContext("2d"), size, true); else clearInterval(R._bigIv); }, 400);
+  R._bigIv = setInterval(() => {
+    if (R.bigmap) { drawMinimap(W, cv.getContext("2d"), size, true); paintHead(); }
+    else clearInterval(R._bigIv);
+  }, 400);
 }
 
 function togglePause(W) {
@@ -2092,11 +2259,21 @@ export function showPostMatch(W, res) {
     const lvlBefore = W.progress.level;
     addXP(W, gained);
     stat(grid, "XP earned", "+" + gained);
+    // Challenge XP is banked the instant a card completes, in the per-frame HUD
+    // loop, so it appeared NOWHERE on this screen — and with the elim3 rotation
+    // the three cards are worth 625 XP against a typical ~390 match payout, i.e.
+    // most of the session's progress was invisible. Report it; do NOT re-award it.
+    const chalXp = W._chalXp || 0;
+    if (chalXp) {
+      stat(grid, "Challenges", "+" + chalXp);
+      stat(grid, "Total XP", "+" + (gained + chalXp));
+    }
     // fold into the LIFETIME record (these numbers used to be discarded)
     const c = recordMatch(W, res);
     if (c) {
       h("div", { fontSize: "12.5px", opacity: "0.8", marginTop: "14px", letterSpacing: "1px", fontFamily: "Rajdhani, " + FONT },
-        "CAREER · " + c.matches + " matches · " + c.wins + " wins · " + c.kills + " kills · top-10s " + c.top10s + " · best #" + (c.bestPlacement || "—"), box);
+        "CAREER · " + c.matches + " matches · " + c.wins + " wins · " + c.kills + " kills · top-10s " + c.top10s + " · best #" + (c.bestPlacement || "—")
+        + " · " + Math.round(c.damage / 1000) + "k dmg · " + (c.timeAliveS / 3600).toFixed(1) + "h", box);
     }
     if (W.progress.level > lvlBefore) {
       h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "17px", fontWeight: "900", color: "#ffd54a", marginTop: "8px", letterSpacing: "2px", textShadow: "0 0 18px rgba(255,213,74,0.5)" },
@@ -2177,16 +2354,20 @@ export function showHowToPlay(W) {
     h("div", { fontWeight: "900", color: "#9fd7ff", letterSpacing: "1px", whiteSpace: "nowrap" }, k, grid);
     h("div", { opacity: "0.85" }, what, grid);
   };
-  kb("W A S D", "Move");
-  kb("SHIFT", "Sprint — a CLICK toggles it on and off");
-  kb("C", "Crouch — slower, but a much tighter cone");
-  kb("SPACE", "Jump · re-open the parachute in a long fall");
+  // Read the LIVE bindings. This card closes with "Every key here can be rebound
+  // in Settings" while printing hardcoded defaults, so the moment anyone took it
+  // up on that, the only onboarding screen in the game taught the wrong keys.
+  const kx = (canonical) => { const ph = physFor(W, canonical); return ph ? keyLabel(ph) : "—"; };
+  kb(kx("KeyW") + " " + kx("KeyA") + " " + kx("KeyS") + " " + kx("KeyD"), "Move");
+  kb(kx("ShiftLeft"), (W.settings && W.settings.sprintToggle) ? "Sprint — a CLICK toggles it on and off" : "Sprint — hold");
+  kb(kx("KeyC"), "Crouch — slower, but a much tighter cone");
+  kb(kx("Space"), "Jump · re-open the parachute in a long fall");
   kb("LMB / RMB", "Fire · aim down sights");
-  kb("E", "Loot — hold on a chest to open it");
-  kb("R", "Reload");
-  kb("1 – 5", "Weapon and item slots");
-  kb("M", "Map");
-  kb("B / N", "Emote — dance · cheer");
+  kb(kx("KeyE"), "Loot — hold on a chest to open it");
+  kb(kx("KeyR"), "Reload");
+  kb(kx("Digit1") + " – " + kx("Digit5"), "Weapon and item slots");
+  kb(kx("KeyM"), "Map");
+  kb(kx("KeyB") + " / " + kx("KeyN"), "Emote — dance · cheer");
   kb("ESC", "Pause and settings");
   h("div", { fontSize: "12px", opacity: "0.7", marginTop: "6px", lineHeight: "1.5", fontFamily: "Rajdhani, " + FONT },
     "The reticle grows when your shots will scatter and tightens when they will not — standing still and crouching both help. Every key here can be rebound in Settings.", box);
@@ -2203,6 +2384,12 @@ export function showHowToPlay(W) {
 function showSettings(W) {
   releaseCursor(W);
   W.captureKey = null;   // drop any armed keybind capture when (re)rendering the modal
+  // Every graphics button, every sprint/ADS toggle, the perf toggle, RESET and
+  // each successful rebind re-enter this function, which tears the panel down
+  // and builds a fresh scroll container — so the offset went back to the top and
+  // the 17-row keybind grid (below the fold at maxHeight 82vh) threw you back up
+  // to the volume sliders after every single bind.
+  const prevScroll = (R.settings && R.settings.firstChild) ? R.settings.firstChild.scrollTop : 0;
   if (R.settings) { R.settings.remove(); R.settings = null; }
   const L = layer("settings", { pointerEvents: "auto", background: "rgba(4,8,16,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60 });
   const box = h("div", Object.assign({ padding: "28px 36px", width: "560px", maxHeight: "82vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px" }, PANEL), null, L);
@@ -2308,6 +2495,7 @@ function showSettings(W) {
 
   const closeB = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff", marginTop: "10px" }), "DONE", box);
   closeB.onclick = () => closeSettings(W);
+  if (prevScroll) box.scrollTop = prevScroll;
 }
 function closeSettings(W) {
   W.captureKey = null;                              // never leave a keybind capture armed
