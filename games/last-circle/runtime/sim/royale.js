@@ -58,6 +58,15 @@
     glauncher:{ cls: "launcher", damage: 95, headMult: 1.0, rpm: 55, mag: 4, reloadS: 3.2, ammo: "grenades", speed: 26, arc: true, fuseS: 2.0, splashR: 3.5, spreadDeg: 0.8, adsFov: 45 },
   };
   var WEAPON_IDS = ["pistol", "smg", "ar", "shotgun", "sniper", "glauncher"]; // lootable guns
+  // Display names. The kill feed threw away the weaponId it was handed and the
+  // death screen printed the raw internal id ("glauncher"), so the one place a
+  // player learns what killed them showed them a variable name.
+  var WEAPON_NAMES = {
+    pistol: "Pistol", smg: "SMG", ar: "Assault Rifle",
+    shotgun: "Shotgun", sniper: "Sniper", glauncher: "Grenade Launcher",
+    storm: "the Storm",
+  };
+  function weaponName(id) { return WEAPON_NAMES[id] || String(id || "?"); }
 
   var AMMO = {
     light:    { box: 24, max: 300 },
@@ -460,7 +469,7 @@
   var api = {
     mulberry32: mulberry32, clamp: clamp, dist2d: dist2d, lerp: lerp,
     RARITY: RARITY, RARITY_COLOR: RARITY_COLOR, RARITY_DMG_MULT: RARITY_DMG_MULT, RARITY_SPREAD_MULT: RARITY_SPREAD_MULT,
-    WEAPONS: WEAPONS, WEAPON_IDS: WEAPON_IDS, AMMO: AMMO, CONSUMABLES: CONSUMABLES, START_LOADOUT: START_LOADOUT,
+    WEAPONS: WEAPONS, WEAPON_IDS: WEAPON_IDS, WEAPON_NAMES: WEAPON_NAMES, weaponName: weaponName, AMMO: AMMO, CONSUMABLES: CONSUMABLES, START_LOADOUT: START_LOADOUT,
     MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH,
     actorHeight: actorHeight, actorEyeY: actorEyeY, moveBasis: moveBasis,
     segmentBox: segmentBox, rampTopAt: rampTopAt, segmentRamp: segmentRamp,

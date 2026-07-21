@@ -1139,6 +1139,11 @@ export function showHUD(W) {
   // heal channel
   R.healBar = h("div", { position: "absolute", left: "50%", top: "58%", transform: "translateX(-50%)", width: "220px", height: "10px", background: "rgba(0,0,0,0.5)", borderRadius: "5px", display: "none", overflow: "hidden" }, null, L);
   R.healFill = h("div", { width: "0%", height: "100%", background: "#4ade80" }, null, R.healBar);
+  // Reload had NO progress UI at all — just the word "RELOADING…" — while both
+  // healing and chest-opening show a bar. A 4-second shotgun reload with no
+  // sense of how far along you are is the difference between pushing and dying.
+  R.reloadBar = h("div", { position: "absolute", left: "50%", top: "62.5%", transform: "translateX(-50%)", width: "180px", height: "8px", background: "rgba(0,0,0,0.55)", borderRadius: "4px", display: "none", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }, null, L);
+  R.reloadFill = h("div", { width: "0%", height: "100%", background: "#ffd166" }, null, R.reloadBar);
 
   // slots bottom right
   const br = h("div", { position: "absolute", right: "18px", bottom: "16px", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }, null, L);
@@ -1291,6 +1296,15 @@ export function update(W, dt) {
     const c = K.CONSUMABLES[p.healing.id];
     R.healFill.style.width = (100 * (1 - p.healing.tLeft / c.useS)) + "%";
   } else R.healBar.style.display = "none";
+
+  // reload progress
+  if (R.reloadBar) {
+    const rw = p.weapon, rdef = rw && K.WEAPONS[rw.id];
+    if (rw && rw.state === "reloading" && rdef && rdef.reloadS > 0) {
+      R.reloadBar.style.display = "block";
+      R.reloadFill.style.width = (100 * (1 - Math.max(0, rw.reloadT) / rdef.reloadS)) + "%";
+    } else R.reloadBar.style.display = "none";
+  }
 
   // ammo + slots
   const wpn = p.weapon;
@@ -1747,7 +1761,7 @@ function wireEvents(W) {
     if (!R.feed) return;
     const killer = killerId ? W.actorById.get(killerId) : null;
     const el = h("div", { background: "rgba(0,0,0,0.5)", padding: "3px 10px", borderRadius: "6px" },
-      (killer ? killer.name + " ⚔ " : "⛈ ") + victim.name, R.feed);
+      (killer ? killer.name + " ⚔ " : "⛈ ") + victim.name + (weaponId ? "  ·  " + K.weaponName(weaponId) : ""), R.feed);
     if (victim === W.player || killer === W.player) el.style.color = "#ffd54a";
     setTimeout(() => el.remove(), 6000);
     while (R.feed.children.length > 6) R.feed.firstChild.remove();
@@ -1897,7 +1911,7 @@ function showDeath(W, killerId, weaponId) {
   h("div", { fontSize: "38px", fontWeight: "900", color: "#ff7a7a", textShadow: "0 3px 12px #000", letterSpacing: "3px" }, "ELIMINATED", box);
   const place = W.match.placementOf(W.player.id);
   h("div", { fontSize: "17px", marginTop: "8px", textShadow: "0 2px 6px #000" },
-    "#" + place + " of " + W.match.totalPlayers + (killer ? "  ·  by " + killer.name + " (" + (weaponId || "?") + ")" : "  ·  the storm got you"), box);
+    "#" + place + " of " + W.match.totalPlayers + (killer ? "  ·  by " + killer.name + " (" + K.weaponName(weaponId) + ")" : "  ·  the storm got you"), box);
 
   // DEATH RECAP — "by <name>" alone answers none of the questions you actually
   // have when you die: how far away were they, did they headshot me, how close

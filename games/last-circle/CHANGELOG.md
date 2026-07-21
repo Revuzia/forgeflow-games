@@ -3,6 +3,26 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — Reload progress + kill attribution names the weapon (?v=71, LIVE)
+
+- **Reload had no progress UI at all** — just the word "RELOADING…" in the ammo
+  readout — while healing and chest-opening both show a filling bar. A 4-second
+  shotgun reload with no sense of how far along you are is the difference
+  between pushing and dying. Added a bar under the crosshair.
+- **Kill attribution threw the weapon away.** The kill feed was handed a
+  weaponId and built "killer ⚔ victim" without it, and the death screen printed
+  the RAW INTERNAL ID — "by CoachCarter (glauncher)". The one place a player
+  learns what killed them showed them a variable name. Display names now live in
+  sim/royale.js next to the weapon table (WEAPON_NAMES + weaponName()), so the
+  feed, the death screen and anything added later share one source.
+
+Verified live: sim maps the six ids plus "storm" to Pistol / SMG / Assault Rifle
+/ Shotgun / Sniper / Grenade Launcher / the Storm; the feed row reads
+"You ⚔ CoachCarter · Grenade Launcher"; the reload bar is hidden before, fills
+0% -> 50% -> 90% across a 4 s shotgun reload, and hides again on ready; and a
+real death (driven through hurtActor, not a synthetic event) reads
+"#50 of 50 · by CoachCarter (Sniper)". Selftest 66/66. DRAFT.
+
 ## 2026-07-21 — Swimming ignored every collider (?v=70, LIVE)
 
 - The swim branch integrated straight into position — `a.pos.x += a.vel.x * dt`
