@@ -695,8 +695,17 @@ function stepActor(W, a, dt, far) {
     if (inp.jump) { a.vel.x *= 1.6; a.vel.z *= 1.6; W.events.emit("swimStroke", a); }
     inp.jump = false;
     a.onGround = false;
-    a.pos.x += a.vel.x * dt;
-    a.pos.z += a.vel.z * dt;
+    // Swimming ignored collision entirely: this branch integrated straight into
+    // pos, so you swam THROUGH the shipwreck hull and through piers. Use the
+    // same axis-separated test the ground branch uses. The +0.45 on the probe
+    // height widens blockedHoriz's built-in step allowance for a swimmer, so a
+    // low deck near the waterline is something you can haul out onto rather
+    // than a wall you bounce off — while a hull still stops you dead.
+    const swimH = K.PLAYERK.height, swimStep = a.pos.y + 0.45;
+    let sx = a.pos.x + a.vel.x * dt;
+    if (!blockedHoriz(W, sx, a.pos.z, swimStep, swimH)) a.pos.x = sx; else a.vel.x = 0;
+    let sz = a.pos.z + a.vel.z * dt;
+    if (!blockedHoriz(W, a.pos.x, sz, swimStep, swimH)) a.pos.z = sz; else a.vel.z = 0;
   } else {
     // jump — and SPACE in mid-air with enough height re-opens the parachute
     // (stepping off a sky island must be an escape, not a death sentence)

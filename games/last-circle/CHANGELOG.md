@@ -3,6 +3,24 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — Swimming ignored every collider (?v=70, LIVE)
+
+- The swim branch integrated straight into position — `a.pos.x += a.vel.x * dt`
+  with no collision test at all, while the ground branch right below it does an
+  axis-separated blockedHoriz check. So you swam THROUGH the shipwreck hull and
+  through piers, and solid geometry simply did not exist in water.
+- Now uses the same axis-separated test. The probe height is raised 0.45 m,
+  which widens blockedHoriz's built-in step allowance for a swimmer: a low deck
+  near the waterline stays something you can haul out onto, while a hull stops
+  you dead. (blockedHoriz already ignores colliders whose top is within STEP_UP,
+  so this is a nudge to that existing rule, not a new mechanism.)
+
+Verified live against the real shipwreck hull on isla_viva (15.1 x 18.2 x 3.2 m,
+minX 462.44): starting 5 m outside and swimming into it travels 4.55 m and stops
+at x 461.99 — 0.45 m short, exactly the player capsule radius — and never enters
+the box. Control in the opposite direction covers 9.54 m freely, so swimming
+itself is untouched. Selftest 66/66. DRAFT.
+
 ## 2026-07-21 — Loot proximity queries were an unindexed full scan (?v=69, LIVE)
 
 - nearby() walked EVERY item and EVERY chest, hypot'ing each one, on every call.
