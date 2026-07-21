@@ -3,6 +3,29 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — Levels now pay out: skin unlocks (?v=43, LIVE)
+
+Levelling granted nothing. The bar filled, the number went up, and the game
+handed back no reward — so the whole progression loop (which the previous batch
+had just given career stats and a level-up banner) still terminated in nothing.
+
+- MENU_SKINS gained unlockLevel: SGT. BRICK / DASH free, NIGHTFALL at 3,
+  BULWARK at 6, STINGER at 10.
+- The locker still lets you browse locked skins — seeing what level 10 buys is
+  the point — but shows "🔒 LOCKED · REACHES LEVEL n", tints the dot amber, and
+  does not equip or persist them.
+- player.js reads lc_skin straight from localStorage, so rather than teach it
+  about unlocks (and import hud), showMenu sanitises the stored value: a locked
+  skin left over from cleared progress is rewritten to the first unlocked one.
+- The level-up banner now names the reward — "SKIN UNLOCKED · NIGHTFALL" — or
+  points at the next one ("NEXT UNLOCK · BULWARK AT LEVEL 6"). Extracted as the
+  pure levelUpSub(lvl) so it is testable without a built world.
+
+Verified live: at level 1 exactly SGT. BRICK + DASH read OPEN and the other
+three LOCKED; at level 10 all five OPEN; a seeded lc_skin of "viper" at level 1
+was rewritten to "soldier" on boot; levelUpSub returns the right line for levels
+1–11. Selftest 46/46. DRAFT.
+
 ## 2026-07-20 — PRACTICE RANGE (it was advertised but never existed) (?v=41, LIVE)
 
 The practice lobby promised "RANGE TARGETS SOUTH, MOVEMENT COURSE EAST". Grep

@@ -102,14 +102,41 @@ const MODE_CARDS = [
   { id: "practice", name: "PRACTICE", sub: "No storm · random map · full loadout" },
 ];
 
+// unlockLevel gives the XP bar something to pay out. Levelling used to grant
+// nothing at all: the bar filled, the number went up, and the game handed back
+// no reward for it.
 export const MENU_SKINS = [
-  { key: "soldier", name: "SGT. BRICK", sub: "Commando" },
-  { key: "athlete", name: "DASH", sub: "Track star" },
-  { key: "wraith", name: "NIGHTFALL", sub: "Spec-ops · all black" },
-  { key: "juggernaut", name: "BULWARK", sub: "Heavy armor" },
-  { key: "viper", name: "STINGER", sub: "Venom suit" },
+  { key: "soldier", name: "SGT. BRICK", sub: "Commando", unlockLevel: 1 },
+  { key: "athlete", name: "DASH", sub: "Track star", unlockLevel: 1 },
+  { key: "wraith", name: "NIGHTFALL", sub: "Spec-ops · all black", unlockLevel: 3 },
+  { key: "juggernaut", name: "BULWARK", sub: "Heavy armor", unlockLevel: 6 },
+  { key: "viper", name: "STINGER", sub: "Venom suit", unlockLevel: 10 },
 ];
+export function skinUnlocked(W, meta) {
+  const lvl = (W && W.progress && W.progress.level) || 1;
+  return (meta.unlockLevel || 1) <= lvl;
+}
+/** Subtitle for the level-up banner: name the reward when this level pays one
+ *  out, otherwise point at the next one. Pure so it is testable without a
+ *  built world. */
+export function levelUpSub(lvl) {
+  const won = MENU_SKINS.filter((s) => s.unlockLevel === lvl);
+  if (won.length) return "SKIN UNLOCKED · " + won.map((s) => s.name).join(" · ");
+  const next = MENU_SKINS
+    .filter((s) => (s.unlockLevel || 1) > lvl)
+    .sort((a, b) => a.unlockLevel - b.unlockLevel)[0];
+  return next ? "NEXT UNLOCK · " + next.name + " AT LEVEL " + next.unlockLevel : "RANK UP";
+}
 export function getChosenSkin() { try { return localStorage.getItem("lc_skin"); } catch (e) { return null; } }
+/** The stored pick, but never a locked one — progress can be cleared while a
+ *  high-level skin is still saved. */
+export function getPlayableSkin(W) {
+  const stored = getChosenSkin();
+  const meta = MENU_SKINS.find((s) => s.key === stored);
+  if (meta && skinUnlocked(W, meta)) return stored;
+  const first = MENU_SKINS.find((s) => skinUnlocked(W, s)) || MENU_SKINS[0];
+  return first.key;
+}
 
 // ═══ CINEMATIC MENU WORLD (live Three.js on the main kernel canvas) ══════════
 export function teardownMenuWorld(W) {
@@ -395,6 +422,13 @@ export function updateMenuWorld(W, dt) {
 export function showMenu(W, startMatch) {
   W.phase = "menu";
   W.paused = false;
+  if (!W.progress) W.progress = loadProgress();   // the locker needs your level
+  // player.js reads lc_skin straight out of localStorage, so keep the stored
+  // value honest here rather than teaching it about unlocks (and importing hud)
+  try {
+    const ok = getPlayableSkin(W);
+    if (ok !== getChosenSkin()) localStorage.setItem("lc_skin", ok);
+  } catch (e) {}
   document.exitPointerLock && document.exitPointerLock();
   W.kernel.renderer.domElement.style.cursor = "";
   hideHUD();
@@ -611,14 +645,21 @@ export function showMenu(W, startMatch) {
   async function setSkin(i) {
     skinIdx = (i + MENU_SKINS.length) % MENU_SKINS.length;
     const meta = MENU_SKINS[skinIdx];
-    nameEl.textContent = meta.name; subEl.textContent = meta.sub.toUpperCase();
+    // Locked skins stay browsable — seeing what level 10 buys you is the point
+    // of a locker — but they are not equipped and not persisted.
+    const unlocked = skinUnlocked(W, meta);
+    nameEl.textContent = meta.name;
+    nameEl.style.opacity = unlocked ? "1" : "0.55";
+    subEl.textContent = unlocked ? meta.sub.toUpperCase() : "🔒 LOCKED · REACHES LEVEL " + meta.unlockLevel;
+    subEl.style.color = unlocked ? "" : "#ffcc66";
     dotEls.forEach((d, j) => {
       const on = j === skinIdx;
-      d.style.background = on ? "#57b0ff" : "rgba(255,255,255,0.22)";
-      d.style.boxShadow = on ? "0 0 10px rgba(87,176,255,0.8)" : "none";
+      const jUnlocked = skinUnlocked(W, MENU_SKINS[j]);
+      d.style.background = on ? (unlocked ? "#57b0ff" : "#ffcc66") : jUnlocked ? "rgba(255,255,255,0.22)" : "rgba(255,204,102,0.28)";
+      d.style.boxShadow = on ? "0 0 10px " + (unlocked ? "rgba(87,176,255,0.8)" : "rgba(255,204,102,0.8)") : "none";
       d.style.transform = on ? "scale(1.25)" : "scale(1)";
     });
-    try { localStorage.setItem("lc_skin", meta.key); } catch (e) {}
+    if (unlocked) { try { localStorage.setItem("lc_skin", meta.key); } catch (e) {} }
     try {
       const rig = await W.kernel.loadCharacter(W.assetBase + "assets/chars/meshy/" + meta.key + ".glb");
       if (pvRig) { pvScene.remove(pvRig.scene); W.kernel.disposeMixer(pvRig.mixer); }
@@ -1622,7 +1663,8 @@ function wireEvents(W) {
   // LEVEL UP — this event was emitted every level and had ZERO listeners, so the
   // bar filled, the level ticked over, and the player was never told.
   W.events.on("levelUp", (lvl) => {
-    announce("LEVEL " + lvl, "RANK UP", "#ffd54a", 3000);
+    const won = MENU_SKINS.some((s) => s.unlockLevel === lvl);
+    announce("LEVEL " + lvl, levelUpSub(lvl), "#ffd54a", won ? 3600 : 3000);
   });
   W.events.on("stormWarning", () => flashMsg("STORM SHRINKS IN 10 SECONDS"));
   W.events.on("stormClosing", () => flashMsg("THE STORM IS CLOSING"));
