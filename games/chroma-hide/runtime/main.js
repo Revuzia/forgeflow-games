@@ -18,6 +18,14 @@ const audio = new GameAudio(); audio.loadVolume();
 const pickMap = (id) => (id && id !== "random") ? id : MAPS[(Math.random() * MAPS.length) | 0].id;
 
 const container = document.getElementById("game-container") || document.body;
+ui.setUiAudio(audio, container);   // one delegated binding covers every menu, card and chip
+// Menu theme is lazy AND gated on first interaction: browsers block autoplay before a
+// gesture, and fetching it eagerly would spend 508 KB on a player who hits Play at once.
+addEventListener("pointerdown", function menuTheme() {
+  removeEventListener("pointerdown", menuTheme);
+  if (!window.__CHROMA__ || window.__CHROMA__.phase !== "menu") return;
+  audio.playTrack("menu_theme", { gain: 0.22 });
+}, { once: false });
 const engine = new Engine(container);
 engine.start();
 
@@ -49,7 +57,7 @@ const lobby = ui.createOnlineLobby(container, {
   onBack: () => leaveOnline(),
 }, MAPS);
 const title = ui.createTitleMenu(container, {
-  onPlay: (cfg) => startGame({ ...cfg, mapId: pickMap(cfg.mapId) }),
+  onPlay: (cfg) => { audio.select(); audio.stopTrack(0.8); startGame({ ...cfg, mapId: pickMap(cfg.mapId) }); },
   onOnline: () => { title.hide(); lobby.show(); window.__CHROMA__.phase = "lobby"; },
   onHelp: () => alert("HIDERS: paint your body (F) to match a surface, hold still, survive the hunt.\nSEEKERS: find and shoot every hider before the timer — but ammo is limited."),
   onSettings: () => settings.show(),

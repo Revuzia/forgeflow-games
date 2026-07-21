@@ -103,6 +103,36 @@ function mapTint(m) {
 }
 
 // ── Title / main menu (cover-art layout) ─────────────────────────────────────
+/**
+ * UI sound. Bound once by delegation on the UI root rather than at twenty call sites, so
+ * every button, map card and mode chip — including any added later — speaks automatically.
+ * The UI deliberately has its own vocabulary (click/hover/select/back) separate from the
+ * gameplay cues, which all share the world's spatial bus.
+ */
+let _uiAudio = null;
+export function setUiAudio(audio, root) {
+  _uiAudio = audio;
+  if (!root || root.__uiSound) return;
+  root.__uiSound = true;
+  const hit = (t) => t && t.closest && t.closest("button, .card, .chip, [role=button]");
+  root.addEventListener("pointerdown", (e) => {
+    if (!_uiAudio || !hit(e.target)) return;
+    const el = hit(e.target);
+    const back = /back|cancel|close|quit|menu/i.test(el.textContent || "");
+    back ? _uiAudio.back() : _uiAudio.click();
+  }, true);
+  root.addEventListener("pointerover", (e) => {
+    const el = hit(e.target);
+    if (!_uiAudio || !el || el === root.__lastHover) return;
+    root.__lastHover = el; _uiAudio.hover();
+  }, true);
+  root.addEventListener("change", (e) => {
+    const t = e.target;
+    if (!_uiAudio || !t) return;
+    if (t.type === "checkbox" || t.tagName === "SELECT") _uiAudio.toggle();
+  }, true);
+}
+
 export function createTitleMenu(host, cb, maps) {
   injectChromaStyles();
   const root = el("div", "", ""); root.className = "ct-root";

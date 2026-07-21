@@ -272,6 +272,40 @@ export class GameAudio {
     try { a.parts.forEach((p) => p.stop()); a.g.disconnect(); } catch (e) {}
   }
 
+  /**
+   * Phase music. The only place sample audio earns its bytes: a menu theme and a hunt
+   * theme, 1.22 MB of CC0 total, fetched lazily so nothing blocks the first frame and a
+   * player who dives straight into a round never pays for the menu track.
+   * Crossfades, so the pivot into HUNT is a musical event rather than a hard cut.
+   */
+  async playTrack(name, { loop = true, gain = 0.32, fade = 1.5 } = {}) {
+    const c = this._ensure(); if (!c) return;
+    if (this._trackName === name) return;
+    this._trackName = name;
+    if (!this._trackBus) { this._trackBus = c.createGain(); this._trackBus.gain.value = 0; this._trackBus.connect(this.master); }
+    if (!name) return this.stopTrack(fade);
+    this._buffers = this._buffers || {};
+    if (!this._buffers[name]) {
+      try {
+        const res = await fetch(`assets/music/${name}.ogg`);
+        this._buffers[name] = await c.decodeAudioData(await res.arrayBuffer());
+      } catch (e) { this._trackName = null; return; }        // music is never load-bearing
+      if (this._trackName !== name) return;                  // phase moved on while decoding
+    }
+    const t = c.currentTime;
+    if (this._track) { const old = this._track; try { old.g.gain.cancelScheduledValues(t); old.g.gain.setValueAtTime(old.g.gain.value, t); old.g.gain.linearRampToValueAtTime(0.0001, t + fade); old.src.stop(t + fade + 0.1); } catch (e) {} }
+    const src = c.createBufferSource(); src.buffer = this._buffers[name]; src.loop = loop;
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(gain, t + fade);
+    src.connect(g); g.connect(this._trackBus); this._trackBus.gain.value = 1; src.start(t);
+    this._track = { src, g };
+  }
+  stopTrack(fade = 1.0) {
+    const c = this.ctx; if (!c || !this._track) { this._trackName = null; return; }
+    const t = c.currentTime, old = this._track;
+    this._track = null; this._trackName = null;
+    try { old.g.gain.cancelScheduledValues(t); old.g.gain.setValueAtTime(old.g.gain.value, t); old.g.gain.linearRampToValueAtTime(0.0001, t + fade); old.src.stop(t + fade + 0.1); } catch (e) {}
+  }
+
   // Ambient music bed — a soft detuned drone + occasional pentatonic notes.
   startMusic() {
     const c = this._ensure(); if (!c || this._music) return;

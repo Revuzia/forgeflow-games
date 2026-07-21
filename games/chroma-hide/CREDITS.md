@@ -1,17 +1,30 @@
 # CHROMA HIDE — Asset Credits
 
-CHROMA HIDE ships **69 GLB models (2.18 MB)** and **no audio, image or font files at all**.
-Everything you hear and every surface you see is generated at runtime.
+CHROMA HIDE ships **69 GLB models (2.18 MB)**, **two music tracks (1.22 MB, lazy)** and
+**no sound-effect, image or font files at all**. Every effect you hear and every surface
+you see is generated at runtime.
 
-## Audio — none shipped
+## Sound effects — none shipped
 
-There are no sound files in this game. The entire soundtrack is synthesised in
-`runtime/audio.js` with the Web Audio API: oscillator and filtered-noise voices for
-footsteps, gunshots, the taunt whistle, the paint kit, cling, jump, UI, phase stings,
-the proximity heartbeat, and the per-map room tone. Positional cues route through
-`PannerNode`s driven by a listener that follows the camera.
+There is not one SFX file in this game. Every effect is synthesised in `runtime/audio.js`
+with the Web Audio API: oscillator and filtered-noise voices for footsteps (per floor
+surface), gunshots, the dry-fire click, the taunt whistle, the paint kit (aerosol hiss,
+brush swish, can rattle), cling, jump, the UI family, phase stings, the proximity
+heartbeat, and the per-map room tone. Positional cues route through `PannerNode`s driven
+by a listener that follows the camera.
 
 © ForgeFlow Labs. Zero download cost, nothing to attribute.
+
+## Music — 2 tracks, CC0
+
+Fetched lazily (never blocking the first frame) and only on demand, from
+`pipeline/assets/music/`, whose `manifest.json` records
+**CC0 1.0 Universal (Public Domain Dedication)**, sourced from **OpenGameArt.org**:
+
+- `menu_theme.ogg` (508,118 B) — title screen. https://opengameart.org/sites/default/files/title.ogg
+- `cinematic_epic.ogg` (713,586 B) — the hunt phase.
+
+The in-round bed under them is still procedural (`startMusic()` in `runtime/audio.js`).
 
 ## Textures — none shipped
 

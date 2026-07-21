@@ -776,7 +776,7 @@ export class Game {
 
   _handleEvents(events) {
     for (const e of events) {
-      if (e.t === "phase" && e.phase === PHASE.HUNT) { this.audio.huntStart(); this.hud.toast("HUNT!", "#ff6b6b"); if (this.paintMode) this._togglePaintMode(); this.hud.setHint(this._defaultHint()); }
+      if (e.t === "phase" && e.phase === PHASE.HUNT) { this.audio.huntStart(); this.audio.playTrack("cinematic_epic", { gain: 0.26 }); this.hud.toast("HUNT!", "#ff6b6b"); if (this.paintMode) this._togglePaintMode(); this.hud.setHint(this._defaultHint()); }
       else if (e.t === "caught") {
         { const a = this._actor(e.id); this.audio.gunshot(a?.x, a?.z); this.audio.catchSound(a?.x, a?.z); }
         if (e.id === this.local?.id) this.hud.toast("Caught!", "#ff6b6b");
@@ -912,7 +912,7 @@ export class Game {
   destroy() {
     if (this._helpEl && this._helpEl.parentNode) this._helpEl.parentNode.removeChild(this._helpEl);
     this._alive = false;
-    if (this.audio) { try { this.audio.stopMusic(); this.audio.stopAmbience(); this.audio.spray(false); } catch (e) {} }
+    if (this.audio) { try { this.audio.stopMusic(); this.audio.stopAmbience(); this.audio.spray(false); this.audio.stopTrack(0.6); } catch (e) {} }
     if (this.online && this.net) { try { this.net.leave(); } catch (e) {} }
     if (this._unsub) this._unsub();
     window.removeEventListener("keydown", this._kd); window.removeEventListener("keyup", this._ku);
