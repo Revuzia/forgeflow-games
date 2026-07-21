@@ -1233,6 +1233,14 @@ export function showHUD(W) {
     display: W.settings && W.settings.showPerf ? "block" : "none",
   }, "— FPS", L);
   R._fpsAcc = 0; R._fpsFrames = 0; R._fpsShown = 0;
+  // who you are watching once you are out, and how to change it
+  R.specBar = h("div", {
+    position: "absolute", left: "50%", bottom: "84px", transform: "translateX(-50%)",
+    padding: "6px 16px", borderRadius: "8px", background: "rgba(4,10,20,0.6)",
+    border: "1px solid rgba(140,200,255,0.25)", fontFamily: "Rajdhani, " + FONT,
+    fontSize: "13px", fontWeight: "700", letterSpacing: "1.5px", color: "#cfe4ff",
+    display: "none", pointerEvents: "none", whiteSpace: "nowrap",
+  }, "", L);
   // practice: a live range readout, so the dummies are a measurement and not
   // just something to shoot at
   R.rangePanel = null;
@@ -1337,6 +1345,14 @@ export function update(W, dt) {
     }
     R.aliveText.textContent = "👥 " + (W.match ? W.match.aliveCount() : "—");
     R.killsText.textContent = "☠ " + (W.match ? (W.match.kills[p.id] || 0) : 0);
+    if (R.specBar) {
+      const me = W.player;
+      if (me && !me.alive && W._camFocus && W._camFocus !== me) {
+        const n = W.match ? W.match.aliveCount() : 0;
+        R.specBar.style.display = "block";
+        R.specBar.textContent = "SPECTATING  " + W._camFocus.name.toUpperCase() + "   ·   " + n + " ALIVE   ·   [A] / [D] TO SWITCH";
+      } else R.specBar.style.display = "none";
+    }
     if (R.rangePanel) {
       const s = W.stats, ds = W.rangeDummies || [];
       let dmg = 0, pops = 0, hs = 0;

@@ -3,6 +3,22 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — You were locked to your killer's camera (?v=74, LIVE)
+
+- On death, spectating was pinned to whoever killed you and only ever moved on
+  when THEY died. With friends in the room that is the worst possible default:
+  you sit watching the stranger who shot you while your friend is still playing.
+- A / D (or the arrow keys) now step through the survivors, and a readout shows
+  who you are watching, how many are left, and the keys. The initial pin to the
+  killer is kept — that first moment is worth seeing — it is just no longer a
+  cage. Dummies are excluded, so the practice range never appears in the list.
+
+Verified live after a real death (driven through hurtActor): spectating starts
+on the killer, D steps s2 -> s3 -> s4, A steps back to s3, the camera focus
+follows each change, every target is alive, and the bar reads
+"SPECTATING HIGHGROUNDHERA · 49 ALIVE · [A] / [D] TO SWITCH". Selftest 82/82.
+DRAFT.
+
 ## 2026-07-21 — The crosshair now tells the truth (?v=73, LIVE)
 
 The item the earlier synthesis called "the highest-value one not in the twelve",

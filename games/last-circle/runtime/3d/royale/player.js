@@ -370,6 +370,20 @@ function installHumanInput(W) {
     if (e.code === "Digit4") inp.slot = 3;
     if (e.code === "Digit5") inp.slot = 4;
     if ((e.code === "ShiftLeft" || e.code === "ShiftRight") && !ev.repeat && W.settings.sprintToggle) W._sprintLatch = !W._sprintLatch;
+    // Spectate cycling. On death you were pinned to your KILLER's camera with no
+    // way to look at anyone else — including the friend still alive in your
+    // room. A/D (or the arrows) now step through the survivors.
+    if (!W.player.alive && (e.code === "KeyA" || e.code === "KeyD" || ev.code === "ArrowLeft" || ev.code === "ArrowRight")) {
+      const alive = W.actors.filter((x) => x.alive && !x.isDummy);
+      if (alive.length) {
+        const dir = (e.code === "KeyD" || ev.code === "ArrowRight") ? 1 : -1;
+        const cur = alive.findIndex((x) => x.id === W.player.spectating);
+        const nxt = alive[(((cur < 0 ? 0 : cur + dir) % alive.length) + alive.length) % alive.length];
+        W.player.spectating = nxt.id;
+        W.events.emit("spectateChanged", nxt);
+      }
+      ev.preventDefault();
+    }
     if (e.code === "KeyM") W.events.emit("toggleBigMap");
     if (e.code === "KeyB") inp.emote = "dance";
     if (e.code === "KeyN") inp.emote = "cheer";

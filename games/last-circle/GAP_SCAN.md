@@ -44,6 +44,7 @@ Line anchors were correct at the time of writing but drift — re-locate by cont
 - [x] combat: reload had no progress indicator (?v=71)
 - [x] juice: kill attribution never named the weapon (?v=71)
 - [x] combat: the crosshair did not represent the real spread model ("just below the cut" item) (?v=73)
+- [x] social: after death you were locked to your killer's camera (?v=74)
 - [ ] remaining: the other lower-ranked surviving findings listed by dimension below
 
 # LAST CIRCLE — BUILD ORDER
