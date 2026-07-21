@@ -775,7 +775,7 @@ export function showMenu(W, startMatch) {
     textShadow: "0 2px 8px rgba(0,0,0,0.9)",
     animation: "lcPanelIn .6s .4s both",
   },
-  "WASD MOVE  ·  MOUSE AIM/FIRE  ·  RMB ADS  ·  SPACE JUMP / CHUTE  ·  SHIFT SPRINT  ·  R RELOAD  ·  E LOOT  ·  1–5 WEAPONS  ·  M MAP",
+  "WASD MOVE  ·  MOUSE AIM/FIRE  ·  RMB ADS  ·  SPACE JUMP / CHUTE  ·  SHIFT SPRINT (TOGGLE)  ·  R RELOAD  ·  E LOOT  ·  1–5 WEAPONS  ·  M MAP",
   wrap);
 
   import("./audio.js" + (new URL(import.meta.url).search || "")).then((m) => m.startMenuMusic(W));
@@ -1166,6 +1166,14 @@ export function showHUD(W) {
   // Reload had NO progress UI at all — just the word "RELOADING…" — while both
   // healing and chest-opening show a bar. A 4-second shotgun reload with no
   // sense of how far along you are is the difference between pushing and dying.
+  // SHIFT is a TOGGLE (owner direction), so the latch state must be visible —
+  // with hold-to-sprint your finger is the indicator; with a toggle nothing tells
+  // you you are still sprinting into a fight with wide hipfire spread.
+  R.sprintPip = h("div", { position: "absolute", left: "50%", top: "66.5%", transform: "translateX(-50%)",
+    font: "700 11px ui-monospace,Menlo,Consolas,monospace", letterSpacing: "0.16em",
+    color: "#8ef5c8", textShadow: "0 1px 3px #000", opacity: "0", transition: "opacity 140ms linear",
+    pointerEvents: "none", whiteSpace: "nowrap" }, "▶ SPRINT", L);
+
   R.reloadBar = h("div", { position: "absolute", left: "50%", top: "62.5%", transform: "translateX(-50%)", width: "180px", height: "8px", background: "rgba(0,0,0,0.55)", borderRadius: "4px", display: "none", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }, null, L);
   R.reloadFill = h("div", { width: "0%", height: "100%", background: "#ffd166" }, null, R.reloadBar);
 
@@ -1328,6 +1336,20 @@ export function update(W, dt) {
     const c = K.CONSUMABLES[p.healing.id];
     R.healFill.style.width = (100 * (1 - p.healing.tLeft / c.useS)) + "%";
   } else R.healBar.style.display = "none";
+
+  // sprint pip: show while the toggle is latched. Dim when latched but not
+  // actually sprinting (ADS, mid-air, walking backwards) so the pip never lies
+  // about the speed you are really moving at.
+  if (R.sprintPip) {
+    const latched = !!(W.settings && W.settings.sprintToggle) && !!W._sprintLatch && p === W.player && !p.dead;
+    const live = latched && !!p.sprinting;
+    const sig = latched ? (live ? 2 : 1) : 0;
+    if (C.sprint !== sig) {
+      R.sprintPip.style.opacity = sig === 2 ? "0.95" : sig === 1 ? "0.4" : "0";
+      R.sprintPip.style.color = sig === 2 ? "#8ef5c8" : "#cfe4da";
+      C.sprint = sig;
+    }
+  }
 
   // reload progress
   if (R.reloadBar) {

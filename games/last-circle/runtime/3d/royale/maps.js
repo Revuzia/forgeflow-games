@@ -198,6 +198,47 @@ function colorAt(mapId, h, x, z, seed) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+/** Release the GPU resources the LAST map allocated.
+ *  Match teardown was `group.clear()`, which detaches meshes but frees nothing:
+ *  the 221x221 terrain plane (~2.1 MB of vertex data), every merged structure
+ *  batch, the road mesh, the sky dome and its ShaderMaterial and a fresh cloud
+ *  CanvasTexture were orphaned EVERY match — and ?v=65 made PLAY AGAIN the
+ *  expected flow, so it compounds without ever passing through a reload.
+ *
+ *  Scoped deliberately: maps.js writes only into W.group("map"), while fx, loot,
+ *  weapons and player own their own groups, so nothing pooled or shared lives
+ *  under here. The one thing that DOES survive across matches is the procedural
+ *  texture cache (_texCache, built once per page session on purpose) — those are
+ *  excluded by identity, because disposing them would leave the next match
+ *  rendering with dead GPU handles. */
+export function disposeMapResources(W) {
+  const g = W._groups && W._groups.map;
+  if (!g) return { geometries: 0, materials: 0, textures: 0 };
+  const shared = new Set();
+  for (const k in _texCache) {
+    const v = _texCache[k];
+    if (!v) continue;
+    if (v.isTexture) shared.add(v);
+    else { if (v.map) shared.add(v.map); if (v.normal) shared.add(v.normal); }
+  }
+  const seenG = new Set(), seenM = new Set(), seenT = new Set();
+  let geometries = 0, materials = 0, textures = 0;
+  g.traverse((o) => {
+    if (o.geometry && !seenG.has(o.geometry)) { seenG.add(o.geometry); o.geometry.dispose(); geometries++; }
+    const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+    for (const m of mats) {
+      if (!m || seenM.has(m)) continue;
+      seenM.add(m);
+      for (const slot of ["map", "normalMap", "roughnessMap", "alphaMap", "emissiveMap", "aoMap"]) {
+        const t = m[slot];
+        if (t && t.isTexture && !shared.has(t) && !seenT.has(t)) { seenT.add(t); t.dispose(); textures++; }
+      }
+      m.dispose(); materials++;
+    }
+  });
+  return { geometries, materials, textures };
+}
+
 export async function buildMap(W, mapId) {
   const K = MAPS[mapId] || MAPS.isla_viva;
   const seed = W.seed;

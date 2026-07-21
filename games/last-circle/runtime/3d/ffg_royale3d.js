@@ -22,7 +22,7 @@ const V = new URL(import.meta.url).search;
 // a bare "./ffg_kernel_3d.js" would be a SECOND module instance with its own
 // (empty) genre registry, and boot3d would never see "royale" registered.
 const { register3d } = await import("./ffg_kernel_3d.js" + V);
-const [{ MAPS, buildMap }, playerMod, weaponsMod, lootMod, stormMod, botsMod, hudMod, audioMod, fxMod, netMod] =
+const [{ MAPS, buildMap, disposeMapResources }, playerMod, weaponsMod, lootMod, stormMod, botsMod, hudMod, audioMod, fxMod, netMod] =
   await Promise.all([
     import("./royale/maps.js" + V),
     import("./royale/player.js" + V),
@@ -216,6 +216,9 @@ register3d("royale", async function (kernel, content) {
         tag.material.dispose();
       }
     }
+    // free the PREVIOUS map's GPU resources before detaching them (clear() only
+    // unparents — geometries, materials and per-match textures stayed resident)
+    W._lastMapDispose = disposeMapResources(W);
     for (const name in W._groups) { const g = W._groups[name]; g.clear(); }
     W.actors.length = 0; W.actorById.clear();
     W.rangeDummies = null;          // stale refs into the cleared roster
