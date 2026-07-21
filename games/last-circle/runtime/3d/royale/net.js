@@ -245,6 +245,22 @@ function applyRemoteState(W, a, d) {
 }
 
 // ── frame update: outbound state ─────────────────────────────────────────────
+/** Tear the session down. W.net/S were cleared in exactly ONE place — the lobby
+ *  CANCEL button — so after a single online match every subsequent OFFLINE match
+ *  kept broadcasting 12 Hz player state and 10 Hz bot snapshots into the dead
+ *  room, replaying phantom kills against deterministic s0..s49 ids that collide
+ *  by construction. Worse for solo players: togglePause reads !!W.net, so ESC
+ *  stopped pausing offline matches for the rest of the page session.
+ *  Called on MAIN MENU rather than inside endMatch, so a future REMATCH can
+ *  still reuse the room. */
+export function leave(W) {
+  if (S) {
+    try { S.net.leave(); } catch (e) {}
+    S = null;
+  }
+  W.net = null;
+}
+
 export function onMatchStart(W) {
   // host sends world sync for any guest that joined at the boundary
   if (S && S.net.isHost()) {

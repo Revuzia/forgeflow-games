@@ -24,7 +24,8 @@ Line anchors were correct at the time of writing but drift — re-locate by cont
 - [x] #9 announce() had no priority; the winning kill's banner died in the frame it was born (?v=60)
 - [x] #11 PARTIAL: bots never re-evaluated their gun / dry-fired forever (?v=62).
       Still open from that item: the bot 3-gun carry cap and the pickLoot re-select twitch loop (both loot.js).
-- [ ] everything else below
+- [x] #12 Online session never torn down; lobby count frozen at 2 (?v=63)
+- [ ] remaining: the 36 lower-ranked surviving findings listed by dimension below
 
 # LAST CIRCLE — BUILD ORDER
 

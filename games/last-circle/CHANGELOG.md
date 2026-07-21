@@ -3,6 +3,32 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — Online session was never torn down (?v=63, LIVE)
+
+Build-order #12 — the last of the ranked twelve.
+
+- **W.net and the session object were cleared in exactly ONE place: the lobby
+  CANCEL button.** Finish an online match, return to the menu, and the session
+  stayed live — so every subsequent OFFLINE match kept broadcasting 12 Hz player
+  state and 10 Hz bot snapshots into a dead room, replaying phantom events
+  against deterministic s0..s49 slot ids that collide by construction.
+- Worse for solo players, and a direct consequence of this morning's online-pause
+  fix: togglePause reads `!!W.net`, so with a stale session ESC stopped pausing
+  OFFLINE matches for the rest of the page session. Reproduced, then fixed.
+- Teardown is on the MAIN MENU click rather than inside endMatch, so a future
+  REMATCH can still reuse the room.
+- **Lobby player count was edge-triggered on a boolean.** ffg_netplay emitted
+  "peer" only when `ids.length >= 2` CHANGED, so a room going 2 -> 3 -> 4 never
+  re-fired and the lobby sat on its first reading — the host started blind. The
+  payload already carried `count`; nobody was ever told about it. Now emits on
+  count change too (and on someone leaving), without spamming duplicate syncs.
+
+Verified live: with a stale session ESC leaves paused=false (the symptom),
+net.leave() nulls W.net, and offline pause then works again. The real presence
+handler — captured out of ffg_netplay.js through a stubbed transport — emits
+counts [1,2,3,4,3] across a filling-then-draining room and 0 duplicates on
+repeated syncs at the same count. Selftest 66/66. DRAFT.
+
 ## 2026-07-20 — Bots stood in the open pulling a dead trigger (?v=62, LIVE)
 
 Build-order #11, first half.

@@ -62,7 +62,15 @@ export class NetPlay {
       const state = ch.presenceState(); const ids = Object.keys(state);
       const present = ids.length >= 2;
       if (present && this.host == null) this.host = this.id === ids.slice().sort()[0]; // deterministic
-      if (present !== this.peerPresent) { this.peerPresent = present; this._emit("peer", { present: present, count: ids.length }); }
+      // Emit on COUNT change too, not just the boolean flip: going 2 -> 3 -> 4
+      // never re-fired, so a room of 3-8 sat on the lobby's first reading and
+      // the host started blind. The payload already carried `count`; nobody was
+      // ever told about it.
+      if (present !== this.peerPresent || ids.length !== this.peerCount) {
+        this.peerPresent = present;
+        this.peerCount = ids.length;
+        this._emit("peer", { present: present, count: ids.length, ids: ids.slice() });
+      }
     });
     await new Promise((res) => {
       ch.subscribe(async (status) => {

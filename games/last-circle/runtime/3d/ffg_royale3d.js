@@ -306,7 +306,7 @@ register3d("royale", async function (kernel, content) {
       damage: Math.round(W.match.damage[W.player.id] || 0),
       accuracy: W.stats.shotsFired ? Math.round((W.stats.shotsHit / W.stats.shotsFired) * 100) : 0,
       timeS: Math.round(W.t),
-      onMenu: () => { W.phase = "menu"; hudMod.showMenu(W, startMatch); },
+      onMenu: () => { W.phase = "menu"; netMod.leave(W); hudMod.showMenu(W, startMatch); },
     };
   }
   W.endMatch = endMatch;
