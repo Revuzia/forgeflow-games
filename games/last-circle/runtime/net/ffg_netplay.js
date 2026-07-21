@@ -40,7 +40,19 @@ export class NetPlay {
     if (this.sb) return this.sb;
     const mod = await import("https://esm.sh/@supabase/supabase-js@2");
     const createClient = mod.createClient || (mod.default && mod.default.createClient);
-    this.sb = createClient(this.url, this.anonKey, { realtime: { params: { eventsPerSecond: 12 } } });
+    // eventsPerSecond is the rate this client DECLARES to the Realtime server (it
+    // rides in the socket URL; the server rate-limits the connection to it). It
+    // throttles nothing locally, so under-declaring just gets the overflow dropped
+    // server-side. Last Circle's host sends ~22 msg/s from timers alone (12 Hz own
+    // state + 10 Hz bot snapshots, royale/net.js:287 and :314, the latter chunked at
+    // 24 actors per message) plus relayed gunfire, hits, chests, pickups and emotes —
+    // 12 has been under-declaring by roughly half since the game shipped, which also
+    // made every capacity estimate against this transport ~2x optimistic. 30 is the
+    // honest number for the CURRENT send rates; re-check it if those change.
+    // Declaring a higher ceiling sends no extra traffic, so the free-quota math in
+    // the header stands. This file is a PER-GAME COPY (`find games -name
+    // ffg_netplay.js` → 14 of them): Iron Tide and the rest are unaffected.
+    this.sb = createClient(this.url, this.anonKey, { realtime: { params: { eventsPerSecond: 30 } } });
     return this.sb;
   }
 

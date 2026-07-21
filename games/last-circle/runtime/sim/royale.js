@@ -488,9 +488,23 @@
     this.feed = [];         // {t, killer, victim, weapon}
     this.over = false;
     this.winner = null;
+    // Squads: optional teamOf(id) -> team key. Left null for solo, where every
+    // player is their own team and _teamsAlive() collapses back to alive.size.
+    this.teamOf = (opts && opts.teamOf) || null;
+    this.winners = null;    // every surviving member of the winning squad
   }
   Match.prototype.register = function (id) { this.alive.add(id); this.kills[id] = 0; this.damage[id] = 0; };
   Match.prototype.aliveCount = function () { return this.alive.size; };
+  /** Distinct squads still alive. Solo (no teamOf) = one squad per player. */
+  Match.prototype._teamsAlive = function () {
+    if (!this.teamOf) return this.alive.size;
+    var seen = Object.create(null), n = 0, self = this;
+    this.alive.forEach(function (id) {
+      var t = self.teamOf(id);
+      if (!seen[t]) { seen[t] = 1; n++; }
+    });
+    return n;
+  };
   Match.prototype.recordDamage = function (attackerId, amount) {
     if (attackerId != null && this.damage[attackerId] != null) this.damage[attackerId] += amount;
   };
@@ -500,18 +514,28 @@
     this.placements.push(victimId);
     if (killerId != null && killerId !== victimId && this.kills[killerId] != null) this.kills[killerId]++;
     this.feed.push({ t: t || 0, killer: killerId, victim: victimId, weapon: weaponId || "storm" });
-    if (this.alive.size === 1) {
+    if (this._teamsAlive() === 1) {
       this.over = true;
-      this.winner = this.alive.values().next().value;
-      this.placements.push(this.winner);
+      // The whole surviving squad wins, so all of them go on the placement list.
+      // winner stays the first survivor for callers that still read the scalar.
+      this.winners = Array.from(this.alive);
+      this.winner = this.winners[0];
+      for (var i = 0; i < this.winners.length; i++) this.placements.push(this.winners[i]);
     }
     return { placement: this.totalPlayers - this.placements.length + 1 };
   };
   /** 1 = winner. For an id that died: position at elimination. */
   Match.prototype.placementOf = function (id) {
+    // A winning squad shares placement 1. Without this the second member sits one
+    // slot further down `placements` and would read as #0.
+    if (this.winners && this.winners.indexOf(id) >= 0) return 1;
     var idx = this.placements.indexOf(id);
     if (idx < 0) return null;
     return this.totalPlayers - idx;
+  };
+  /** True for every member of the winning squad, not just the scalar winner. */
+  Match.prototype.isWinner = function (id) {
+    return this.winners ? this.winners.indexOf(id) >= 0 : this.winner === id;
   };
 
   // exports -------------------------------------------------------------------

@@ -260,6 +260,18 @@ export function update(W, dt) {
       a.input.yaw -= r;
       a.recoilYaw -= r;
     }
+    // VIEW-MODEL punch. refreshWeaponMesh (weapons.js:217) parents a static
+    // proto.clone() to the hand and never touches it again, so the gun itself
+    // never moved when it fired. Local units under a.hand are metres — the hand
+    // group divides out the bone's world scale (player.js:257-259) — so this is
+    // a 5 cm slide back down the barrel axis (+Z is barrel-forward, weapons.js:56).
+    // A camera-PITCH kick is deliberately not used: crosshairPoint derives the
+    // human's aim ray from the camera direction (weapons.js:353-357), so pitching
+    // the camera moves the shots — it would be a second aim recoil, not a visual.
+    if (a.vmKick > 0) {
+      a.vmKick = Math.max(0, a.vmKick - dt * 6);
+      if (a.weaponMesh) a.weaponMesh.position.z = -a.vmKick * 0.05;
+    }
   }
   stepProjectiles(W, dt);
 }
@@ -424,6 +436,7 @@ function fire(W, a, def) {
       origin: { x: eye.x, y: eye.y, z: eye.z },
     });
   }
+  a.vmKick = 1;   // view-model punch, all actors — a bot's gun is on screen too
   // recoil kick (human only — bots model error separately). The kick is
   // tracked in recover-accumulators and re-centers over ~0.3s — permanent
   // kick made the crosshair CLIMB forever (aim drifted ~2m high after a few
@@ -452,10 +465,25 @@ function fire(W, a, def) {
 }
 
 // ── projectiles ──────────────────────────────────────────────────────────────
+const _whizPt = { x: 0, y: 0, z: 0 };
+/** distance from point c to segment a->b, writing the closest point to out */
+function segPointDist(ax, ay, az, bx, by, bz, cx, cy, cz, out) {
+  const dx = bx - ax, dy = by - ay, dz = bz - az;
+  const l2 = dx * dx + dy * dy + dz * dz;
+  let t = l2 > 0 ? ((cx - ax) * dx + (cy - ay) * dy + (cz - az) * dz) / l2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  out.x = ax + dx * t; out.y = ay + dy * t; out.z = az + dz * t;
+  return Math.hypot(out.x - cx, out.y - cy, out.z - cz);
+}
+
 function spawnProjectile(W, o) {
   const p = POOL.pop() || {};
   Object.assign(p, o);
   p.dead = false;
+  // POOL entries are recycled through the Object.assign above, which does NOT
+  // clear fields the new spawn object omits — a stale `true` here would mute
+  // the whiz-by on every reused round.
+  p.whizzed = false;
   if (o.mesh && !p.m) {
     // grenade-launcher shell: visible arcing round with a hot tracer tint
     p.m = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 6), new THREE.MeshStandardMaterial({ color: 0x3d5a3a, emissive: 0xff6622, emissiveIntensity: 0.4 }));
@@ -477,6 +505,7 @@ function stepProjectiles(W, dt) {
     // sub-steps so fast bullets don't tunnel
     const speed = Math.hypot(p.vx, p.vy, p.vz);
     const steps = Math.max(1, Math.min(8, Math.ceil((speed * dt) / 2.5)));
+    const sx = p.x, sy = p.y, sz = p.z;
     let hit = false;
     for (let s = 0; s < steps && !hit; s++) {
       const h = dt / steps;
@@ -484,6 +513,18 @@ function stepProjectiles(W, dt) {
       const nx = p.x + p.vx * h, ny = p.y + p.vy * h, nz = p.z + p.vz * h;
       hit = testSegment(W, p, p.x, p.y, p.z, nx, ny, nz);
       if (!hit) { p.x = nx; p.y = ny; p.z = nz; }
+    }
+    // Whiz-by: a round passing close is the ONLY cue that you are under fire —
+    // the impact tick tells you where it LANDED (audio.js: dirt 0.06 gain at
+    // 45 m, stone/wood 0.07 at 55 m) and a round into open air said nothing at
+    // all, so sniper fire read as "I died" rather than "someone is shooting
+    // from my left". Tested once per frame against the whole step segment, not
+    // per sub-step, so a 999 m/s round costs one distance calc; only for rounds
+    // you did not fire.
+    if (!p.dead && !p.whizzed && W.player && W.player.alive && p.ownerId !== W.player.id) {
+      const c = W.camera.position;
+      const miss = segPointDist(sx, sy, sz, p.x, p.y, p.z, c.x, c.y, c.z, _whizPt);
+      if (miss < 3.5) { p.whizzed = true; W.events.emit("whizBy", { x: _whizPt.x, y: _whizPt.y, z: _whizPt.z }, miss); }
     }
     if (p.m && !p.dead) p.m.position.set(p.x, p.y, p.z);
     if (hit || p.dead) kill(W, i, p);
@@ -522,8 +563,12 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
       const isHead = py > feetY + (headY - feetY) * 0.86 && dh < 0.2;
       const dmg = K.hitDamage(p.weaponId, p.rarity, distFromOrigin, isHead);
       if (t.netRemote) {
-        // remote-owned actor: its client (or the host, for bots) applies damage
-        if (W.reportRemoteHit) W.reportRemoteHit(t, dmg, p.weaponId, isHead);
+        // remote-owned actor: its client (or the host, for bots) applies damage.
+        // The owner id has to ride along: without it net.js stamped every hit as
+        // `attacker: W.player.id`, so a host-simulated BOT's kill showed up on the
+        // guest as the host eliminating them (wrong kill-feed name, wrong death-cam
+        // spectate target, inflated host kill count on every other screen).
+        if (W.reportRemoteHit) W.reportRemoteHit(t, dmg, p.weaponId, isHead, p.ownerId);
       } else {
         W.hurtActor(t, dmg, p.ownerId, p.weaponId, isHead);
       }
@@ -618,7 +663,9 @@ function explode(W, x, y, z, weaponId, rarity, ownerId, depth) {
       if (t.netRemote) {
         // remote-owned actor: its own client is authoritative over its HP — route
         // splash through the same path as direct hits so it isn't double-counted.
-        if (W.reportRemoteHit) W.reportRemoteHit(t, dmg, weaponId, false);
+        // ownerId travels with it for the same attribution reason as the direct-hit
+        // site above (host bots were credited to the host).
+        if (W.reportRemoteHit) W.reportRemoteHit(t, dmg, weaponId, false, ownerId);
       } else {
         W.hurtActor(t, dmg, ownerId === t.id ? null : ownerId, weaponId, false);
       }

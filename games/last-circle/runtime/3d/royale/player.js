@@ -54,6 +54,10 @@ export function createActor(W, opts) {
     pos: new THREE.Vector3(), vel: new THREE.Vector3(),
     yaw: 0, pitch: 0,
     hp: K.PLAYERK.hp, shield: 0, alive: true, downedAt: 0,
+    // squads: null = its own side, so every bot and every offline match is
+    // unchanged by construction. Only the friends path (net.js) ever sets it,
+    // and hurtActor is the single place that reads it.
+    teamId: opts.teamId || null,
     onGround: false, sprinting: false, gliding: false, inWater: false, swimming: false,
     input: mkInput(),
     inventory: {
@@ -120,21 +124,37 @@ const JUMP_TAKEOFF_S = 1.70;
 const MESHY_CLIPS = ["walk", "run", "death", "dance", "cheer", "jump", "swim", "crouch"];
 const _v3 = new THREE.Vector3();
 
-async function preloadMeshySkin(W, key) {
+async function preloadMeshySkin(W, key, tick) {
   const url = W.assetBase + "assets/chars/meshy/" + key + ".glb";
   const rig = await W.kernel.loadCharacter(url);   // caches gltf; registers this throwaway clone's mixer
+  if (tick) tick();
   rig.scene.visible = false;
   const cached = W.kernel._charCache[url];
   if (cached && !cached.__lcMerged) {
     cached.__lcMerged = true;
     if (cached.animations && cached.animations[0]) cached.animations[0].name = "idle";
-    for (const clip of MESHY_CLIPS) {
-      try {
-        const g = await W.kernel.loader.loadAsync(W.assetBase + "assets/chars/meshy/" + key + "_" + clip + ".glb");
-        if (g.animations && g.animations[0]) { g.animations[0].name = clip; cached.animations.push(g.animations[0]); }
-      } catch (e) { console.warn("[chars] clip load failed", key, clip, e); }
+    // These 8 clip GLBs were fetched with an `await` INSIDE the loop, and this
+    // runs once per skin: 8 round trips deep, five times over, sitting directly
+    // on the path to the drop. They do not depend on each other — same bytes,
+    // one round trip deep. Results are APPLIED in MESHY_CLIPS order after all
+    // settle so the merged clip list stays deterministic, and the "idle" rename
+    // above still happens first so animations[0] remains idle for classifyClips'
+    // names[0] fallbacks. allSettled keeps the old per-clip failure tolerance:
+    // a clip that 404s drops out and the rest of the skin still loads.
+    const loaded = await Promise.allSettled(MESHY_CLIPS.map(async (clip) => {
+      // async wrapper, not a bare .finally(): it turns a SYNCHRONOUS throw out of
+      // the loader into a rejection too, which is the tolerance the old per-clip
+      // try/catch had.
+      try { return await W.kernel.loader.loadAsync(W.assetBase + "assets/chars/meshy/" + key + "_" + clip + ".glb"); }
+      finally { if (tick) tick(); }
+    }));
+    for (let i = 0; i < loaded.length; i++) {
+      const r = loaded[i];
+      if (r.status !== "fulfilled") { console.warn("[chars] clip load failed", key, MESHY_CLIPS[i], r.reason); continue; }
+      const g = r.value;
+      if (g.animations && g.animations[0]) { g.animations[0].name = MESHY_CLIPS[i]; cached.animations.push(g.animations[0]); }
     }
-  }
+  } else if (tick) tick(MESHY_CLIPS.length);   // warm cache: those files are already done, say so
   // The warm-up clone exists only to populate the gltf cache, but
   // kernel.loadCharacter registers ITS mixer in the per-frame update list too.
   // loadActorModels runs every match, so this leaked 5 mixers per match — the
@@ -146,8 +166,19 @@ async function preloadMeshySkin(W, key) {
 }
 
 export async function loadActorModels(W) {
+  // 5 skins x (1 mesh GLB + 8 clip GLBs) is EVERY file this function fetches,
+  // counted — and these fetches are essentially the whole pre-match wait (the
+  // map build measures 302-701 ms against them), so the loading bar has no
+  // excuse for guessing. W.loadProgress is a hook: absent = nothing to report
+  // to, so this costs one null check. Clips merge into the cached gltf on the
+  // first match only (__lcMerged), so on a requeue the skipped ones tick
+  // straight through and the bar completes fast instead of pretending to work.
+  const total = SKINS.length * (1 + MESHY_CLIPS.length);
+  let done = 0;
+  const tick = (n) => { done += (n || 1); if (W.loadProgress) W.loadProgress(done, total); };
+  if (W.loadProgress) W.loadProgress(0, total);
   // tolerant preload: a still-baking skin just drops out of rotation
-  const settled = await Promise.allSettled(SKINS.map((k) => preloadMeshySkin(W, k)));
+  const settled = await Promise.allSettled(SKINS.map((k) => preloadMeshySkin(W, k, tick)));
   const urls = settled.filter((r) => r.status === "fulfilled").map((r) => r.value);
   if (!urls.length) throw new Error("no character skins available");
   const vr = K.mulberry32(W.seed ^ 0xfaceb);
@@ -221,6 +252,46 @@ export async function loadActorModels(W) {
           if (m.emissive) m.emissive.setHex(0x000000);
         }
         if (m.color) m.color.setHSL(hue, sat, lig).multiplyScalar(BODY_GAIN);
+        // ONE hue over the whole body still reads as ten tinted copies of each
+        // skin in a 50-player lobby. Splitting the albedo by material is not
+        // available on this cast: every skin GLB carries exactly one mesh and
+        // one material (parsed the glTF JSON chunk of all five —
+        // meshes 1 | materials 1 | prims [1]), so there is no second slot to
+        // tint. The zones come from BIND-POSE vertex height instead: `position`
+        // is read before skinning, so the bands stay welded to the body while
+        // the limbs animate. The thresholds are real metres — the POSITION
+        // accessor of all five skins measures min.y ~0 (|y| < 3e-8) and max.y
+        // 1.7999999, i.e. feet at the origin and 1.8 m tall, which is the
+        // authoring convention noted below. Legs/torso/head take independently
+        // rolled hues off the SAME seeded stream, so it stays deterministic per
+        // seed while giving ~125x the silhouette variety for no new assets.
+        // The patch divides m.color back out and multiplies the zone tint in, so
+        // if this block is ever deleted the look degrades to exactly the wash
+        // above rather than to something new.
+        const zc = [new THREE.Color(), new THREE.Color(), new THREE.Color()];
+        for (let z = 0; z < 3; z++) zc[z].setHSL((hue + (vr() - 0.5) * 0.28 + 1) % 1, sat, lig).multiplyScalar(BODY_GAIN);
+        // every actor gets its own material clone (the wash above needs one), so
+        // without a shared cache key this is 50 identical shader COMPILES on the
+        // load path. Only the uniform VALUES differ between them, so a constant
+        // key is correct — three still folds in maps/skinning/lights itself.
+        m.customProgramCacheKey = () => "lcZoneTint";
+        m.onBeforeCompile = (sh) => {
+          sh.uniforms.zLegs = { value: zc[0] }; sh.uniforms.zTorso = { value: zc[1] }; sh.uniforms.zHead = { value: zc[2] };
+          // The zone tint below divides `diffuse` (= material.color) back out, so
+          // ANYTHING animating material.color on these actors cancels algebraically
+          // and renders zero pixels — fx.js's hit flash did exactly that and
+          // shipped dead on 100% of actors. Give the flash its own uniform.
+          sh.uniforms.zFlash = { value: new THREE.Vector3(1, 1, 1) };
+          m.userData.zFlash = sh.uniforms.zFlash;
+          sh.vertexShader = "varying float vZoneY;\n" + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n  vZoneY = position.y;");
+          // injected AFTER <color_fragment>, which in three r172's meshphysical
+          // fragment runs after <map_fragment> — so diffuseColor is already
+          // (diffuse * texture) and dividing `diffuse` out leaves the texture.
+          sh.fragmentShader = "varying float vZoneY;\nuniform vec3 zLegs;\nuniform vec3 zTorso;\nuniform vec3 zHead;\nuniform vec3 zFlash;\n" + sh.fragmentShader.replace(
+            "#include <color_fragment>",
+            "#include <color_fragment>\n  vec3 zTint = mix(zLegs, zTorso, smoothstep(0.80, 1.00, vZoneY));\n  zTint = mix(zTint, zHead, smoothstep(1.45, 1.60, vZoneY));\n  diffuseColor.rgb = diffuseColor.rgb / max(vec3(0.0001), diffuse) * zTint * zFlash;"
+          );
+        };
         m.needsUpdate = true;
         seen.set(o.material, m);
       }
@@ -335,10 +406,19 @@ function mkNameTag(W, a) {
   const ctx = cv.getContext("2d");
   ctx.font = "bold 26px system-ui";
   ctx.textAlign = "center";
-  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  // Bots carry deliberately human-looking handles (BOT_NAMES: "SweatySteve",
+  // "ClutchClara"), and every tag was the same white-on-black pill — so in a
+  // mode whose menu button says SQUAD UP there was no way to tell your friend
+  // from the 46 bots. Humans get a blue pill + outline; bots keep the original
+  // colours byte for byte. Known edge: this texture is baked once at model load,
+  // so a peer slot handed to a bot mid-match (net.js "bye" flips isBot) keeps
+  // the friendly tint — acceptable, it is still that peer's slot.
+  const human = !a.isBot;
+  ctx.fillStyle = human ? "rgba(6,40,70,0.55)" : "rgba(0,0,0,0.45)";
   const w = Math.min(240, ctx.measureText(a.name).width + 22);
   ctx.beginPath(); ctx.roundRect(128 - w / 2, 4, w, 38, 8); ctx.fill();
-  ctx.fillStyle = "#fff";
+  if (human) { ctx.strokeStyle = "rgba(110,196,255,0.9)"; ctx.lineWidth = 2; ctx.stroke(); }
+  ctx.fillStyle = human ? "#8fd8ff" : "#fff";
   ctx.fillText(a.name, 128, 32);
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: true, transparent: true }));
@@ -654,10 +734,27 @@ export function update(W, dt) {
   // nametags: hide the camera-focus actor's own tag (it fills the screen when
   // spectating) and cull tags beyond readable range
   const camPos = W.camera.position;
+  const wl = W.wpnLOD || 110, wl2 = wl * wl;
   for (const a of W.actors) {
-    if (!a.nameTag) continue;
     const d2 = a.pos.distanceToSquared(camPos);
-    a.nameTag.visible = a.alive && a !== W._camFocus && d2 > 12 && d2 < 70 * 70;
+    // GEOMETRY LOD for held weapons. Animation LOD already existed (syncObj
+    // freezes mixers past 250 m) but the guns had none: every actor's weapon is
+    // a full-detail model (5,943-6,169 tris) whether its holder is 3 m or 400 m
+    // away, so the drop cluster paid ~300k triangles and ~50 extra meshes for
+    // objects a few pixels across — in the heaviest frame of the match (measured
+    // 1,010 draw calls / 4,456,503 tris / 17.77 ms). HIDDEN rather than swapped
+    // for the composed box protos in weapons.js: those are 4-5 separate meshes
+    // with their own materials, so a proxy would ADD draw calls to a frame that
+    // is draw-call bound. The local player is ~4 m from the camera, so their own
+    // weapon is always inside the radius.
+    if (a.weaponMesh) a.weaponMesh.visible = d2 < wl2;
+    if (!a.nameTag) continue;
+    // Peers stay tagged out to 250 m — the game's own gunfire-audible radius
+    // (hud.js: `if (d < 12 || d > 250) return;` on the direction chevrons), so a
+    // friend you can HEAR is a friend you can find. Bots keep 70 m, otherwise
+    // the horizon fills with 46 labels.
+    const range = a.isBot ? 70 : 250;
+    a.nameTag.visible = a.alive && a !== W._camFocus && d2 > 12 && d2 < range * range;
   }
 }
 
@@ -904,7 +1001,18 @@ function clampToMap(W, a) {
 const CHUTE_COLORS = [0xe0685a, 0x57b0ff, 0xf2c14e, 0x7fb069, 0xb05cf0, 0x22d3a0];
 function deployChute(W, a) {
   const grp = new THREE.Group();
-  const color = CHUTE_COLORS[Math.abs(hashCode(a.id)) % CHUTE_COLORS.length];
+  // The drop is the first ~30 s of every match and it is played in third person
+  // with the camera pulled back to 10 m, so the canopy is the most-looked-at
+  // surface in the game — worth owning. The locker writes a swatch INDEX into
+  // settings.chuteColor (same shape as settings.crossColor); CHUTE_COLORS here
+  // is the palette that row indexes into, so its ORDER is load-bearing. An index
+  // the array does not have falls back to the hash rather than throwing.
+  // Guarded on `a === W.player` and not `!a.isBot`, so netRemote humans keep
+  // their own id-hashed canopy instead of all wearing the local player's pick.
+  const own = a === W.player && W.settings ? W.settings.chuteColor : null;
+  const color = (own != null && CHUTE_COLORS[own | 0] != null)
+    ? CHUTE_COLORS[own | 0]
+    : CHUTE_COLORS[Math.abs(hashCode(a.id)) % CHUTE_COLORS.length];
   // dome: top half-sphere squashed
   const dome = new THREE.Mesh(
     new THREE.SphereGeometry(1.7, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2),
@@ -1048,8 +1156,12 @@ function interpRemote(W, a, dt) {
   // network remote actors lerp toward their last snapshot (net.js sets a.netTarget)
   if (a.netTarget) {
     const px = a.pos.x, pz = a.pos.z;
-    a.pos.lerp(a.netTarget.pos, Math.min(1, dt * 10));
-    a.yaw += (a.netTarget.yaw - a.yaw) * Math.min(1, dt * 10);
+    // Follow the SNAPSHOT rate rather than a hardcoded one: net.js drops the
+    // broadcast rate when the room fills, and a fixed dt*10 converges in ~100 ms
+    // and then sits still until the next packet, which reads as stutter at 6 Hz.
+    const lk = W._netLerpK || 10;
+    a.pos.lerp(a.netTarget.pos, Math.min(1, dt * lk));
+    a.yaw += (a.netTarget.yaw - a.yaw) * Math.min(1, dt * lk);
     // net.js pack() sends {id,x,y,z,yw,hp,sh,gl,wp} — no velocity, no onGround.
     // So a remote actor kept createActor's `onGround: false` FOREVER and syncObj's
     // `!a.onGround` branch pinned every peer (and, on a guest, all 45 bots) in the
@@ -1060,12 +1172,24 @@ function interpRemote(W, a, dt) {
     const inv = 1 / Math.max(dt, 1e-3);
     a.vel.set(K.clamp((a.pos.x - px) * inv, -12, 12), 0, K.clamp((a.pos.z - pz) * inv, -12, 12));
     a.onGround = !a.gliding && a.pos.y <= supportAt(W, a.pos.x, a.pos.z, a.pos.y) + 0.2;
+    // syncObj branches on `a.chute` for the canopy pose and the upright body,
+    // but a.chute is only ever created inside stepActor — which netRemote actors
+    // skip. So a peer under canopy rendered in the belly-down freefall pose with
+    // NO parachute mesh at all, for the whole ~25 s descent: the longest single
+    // stretch of a match. net.js sends the canopy state as a.netChute; both
+    // helpers are module-local, so consuming it here needs no new export.
+    if (a.gliding && a.netChute && !a.chute) deployChute(W, a);
+    else if ((!a.netChute || !a.gliding) && a.chute) removeChute(a);
     syncObj(W, a, dt, false);
   }
 }
 
 // ── camera ───────────────────────────────────────────────────────────────────
 const camTarget = new THREE.Vector3(), camPos = new THREE.Vector3(), camDir = new THREE.Vector3();
+// shake state lives here, not on W: shakeT drives coherent noise (see below) and
+// _shakeOff is last frame's offset, which has to be undone before the lerp.
+let shakeT = 0;
+const _shakeOff = new THREE.Vector3();
 function updateCamera(W, dt) {
   const cam = W.camera;
   let focus = W.player;
@@ -1087,14 +1211,22 @@ function updateCamera(W, dt) {
   const firstPerson = scope;
   // AR/non-scope ADS pulls in tight over the RIGHT shoulder so the body sits
   // left of the reticle instead of covering it
-  const dist = focus.gliding ? (focus.chute ? 10 : 9) : firstPerson ? 0.02 : ads ? 1.7 : 4.2;
+  // _winDist is the victory hold's slow pull-back (ffg_royale3d.js advances it
+  // only while W._winHold), so it is 0 in every normal frame.
+  const dist = (focus.gliding ? (focus.chute ? 10 : 9) : firstPerson ? 0.02 : ads ? 1.7 : 4.2) + (W._winDist || 0);
   const sh = firstPerson ? 0 : ads ? 0.95 : 0.7;
   // crouch dips the camera, but SMOOTHLY — snapping the eye 0.65m is nauseating
   const wantEye = focus.swimming ? 0.7 : K.actorEyeY(focus);
   focus._eyeY = focus._eyeY == null ? wantEye : focus._eyeY + (wantEye - focus._eyeY) * Math.min(1, dt * 12);
   const eye = focus.pos.y + focus._eyeY;
   camTarget.set(focus.pos.x, eye, focus.pos.z);
-  const sy = Math.sin(focus.yaw), cy = Math.cos(focus.yaw);
+  // the victory hold ORBITS the camera around the winner (W._winOrbit is
+  // advanced by the frame pipeline while phase is "over") — camTarget stays on
+  // the actor, so the shot circles them rather than panning off them. It also
+  // rotates the aim ray with the camera, which is harmless: hurtActor returns
+  // immediately once W.phase === "over".
+  const camYaw = focus.yaw + (W._winOrbit || 0);
+  const sy = Math.sin(camYaw), cy = Math.cos(camYaw);
   // during freefall the camera tracks the dive (looks down at the island)
   const pitchBias = focus.gliding ? (focus.chute ? -0.18 : -0.62) : 0;
   const effPitch = K.clamp(focus.pitch + pitchBias, -1.35, 1.35);
@@ -1112,12 +1244,34 @@ function updateCamera(W, dt) {
     const minY = W.map.heightAt(camPos.x, camPos.z) + 0.35;
     if (camPos.y < minY) camPos.y = minY;
   }
+  // The shake used to be written straight into cam.position, which is ALSO the
+  // source of next frame's lerp — so each frame's jitter fed back through the
+  // smoothing and the effective amplitude depended on framerate twice over.
+  // Undo last frame's offset before the lerp, then re-apply this frame's.
+  cam.position.sub(_shakeOff);
   cam.position.lerp(camPos, Math.min(1, firstPerson ? 1 : dt * 18));
+  shakeT += dt;
+  _shakeOff.set(0, 0, 0);
+  let roll = 0;
   if (W.camShake > 0.01) {
-    cam.position.x += (Math.random() - 0.5) * W.camShake;
-    cam.position.y += (Math.random() - 0.5) * W.camShake * 0.6;
+    // A fresh Math.random() per frame is 144 Hz buzz on a fast machine and a
+    // visible stutter on a slow one — the same camShake value produced a
+    // different sensation on different hardware. Two sine sums at incommensurate
+    // frequencies are temporally coherent, cost nothing, and the ROLL term is
+    // what actually sells the impact.
+    const s = W.camShake * (W.settings.shake != null ? W.settings.shake : 1);
+    const nx = Math.sin(shakeT * 41.3) * 0.6 + Math.sin(shakeT * 27.1) * 0.4;
+    const ny = Math.sin(shakeT * 33.7 + 1.7) * 0.6 + Math.sin(shakeT * 19.9 + 0.6) * 0.4;
+    _shakeOff.set(nx * s, ny * s * 0.6, 0);
+    cam.position.add(_shakeOff);
+    roll = nx * s * 0.11;
   }
   cam.lookAt(camTarget.x + camDir.x * 8, camTarget.y + camDir.y * 8, camTarget.z + camDir.z * 8);
+  if (roll) cam.rotateZ(roll);   // lookAt zeroes roll, so it has to go on after
+  // Decay HERE rather than in fx.update: fx runs AFTER weapons in the frame
+  // order (ffg_royale3d.js), so a shake set by this frame's shot was decayed
+  // once before the camera ever saw it.
+  if (W.camShake > 0) W.camShake = Math.max(0, W.camShake - dt * 1.8);
   // vertical FOV ≈ industry BR (Fortnite ~55-60v): wider view + stronger
   // sprint kick = the speed reads on screen (raw m/s already beats Apex).
   // ADS zoom is PER WEAPON (sim adsFov): sniper 20 + scope overlay, AR 42,
@@ -1125,7 +1279,16 @@ function updateCamera(W, dt) {
   const adsDef = ads && K.WEAPONS[focus.weapon.id];
   const baseFov = W.settings.fov || 57;                       // user-set (50-85)
   const wantFov = scope ? (adsDef.adsFov || 22) : ads ? (adsDef.adsFov || 42) : focus.sprinting ? baseFov + 13 : baseFov;
-  cam.fov += (wantFov - cam.fov) * Math.min(1, dt * 10);
+  // Track the SMOOTHED base separately from the shot punch (fx.js sets
+  // W.fovPunch and says so: "inert until updateCamera consumes it"). Adding the
+  // punch to wantFov lets the dt*10 lerp swallow it — only ~17% of it lands in
+  // one frame — and adding it to cam.fov AFTER the lerp makes it next frame's
+  // starting value, so it never settles. The scope scale keeps a 5 deg shotgun
+  // punch from being a 25% zoom jump at the sniper's adsFov 20. 45 deg/s decay =
+  // a 2 deg SMG punch lasts 44 ms and a 5 deg shotgun/sniper punch 111 ms.
+  W._fovBase = W._fovBase == null ? wantFov : W._fovBase + (wantFov - W._fovBase) * Math.min(1, dt * 10);
+  if (W.fovPunch > 0.01) W.fovPunch = Math.max(0, W.fovPunch - dt * 45); else W.fovPunch = 0;
+  cam.fov = W._fovBase + (W.fovPunch || 0) * Math.min(1, W._fovBase / 57);
   cam.updateProjectionMatrix();
   W.events.emit("scopeState", !!scope);
 }
@@ -1133,6 +1296,14 @@ function updateCamera(W, dt) {
 // ── damage / death ───────────────────────────────────────────────────────────
 function hurtActor(W, victim, dmg, attackerId, weaponId, isHead) {
   if (!victim.alive || W.phase === "over") return;
+  // SQUADS: the menu button says SQUAD UP and friends were nonetheless obliged
+  // to shoot each other — nothing anywhere assigned or checked a team. One guard
+  // here covers direct fire, splash and the network path alike, because
+  // weapons.js routes remote hits to the victim's own client and that client
+  // calls this function. `att !== victim` preserves self-splash, and storm
+  // damage passes a null attackerId so it is untouched.
+  const att = attackerId ? W.actorById.get(attackerId) : null;
+  if (att && att !== victim && att.teamId && att.teamId === victim.teamId) return;
   const res = K.applyDamage(victim.shield, victim.hp, dmg);
   victim.shield = res.shield; victim.hp = res.hp;
   victim.lastDamageT = W.t;
@@ -1142,7 +1313,9 @@ function hurtActor(W, victim, dmg, attackerId, weaponId, isHead) {
   // only, so "you had them down to 12 HP" was not answerable; the death recap
   // needs the exchange between these two actors specifically.
   if (attackerId) {
-    const att = W.actorById.get(attackerId);
+    // `att` is resolved once by the friendly-fire guard above — this used to
+    // re-look it up, and two bindings of the same name in one function is how a
+    // later edit ends up reading the wrong one.
     victim.dmgFrom = victim.dmgFrom || {};
     victim.dmgFrom[attackerId] = (victim.dmgFrom[attackerId] || 0) + res.dealt;
     victim.lastHit = {

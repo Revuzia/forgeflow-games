@@ -21,6 +21,16 @@ const { supportAt } = await import("./player.js" + V);
 let K = null;
 const brains = [];
 
+// First-run protection. BOT_TIER_MIX.standard is [8,12,14,10,5] over 49 bots and
+// nothing here ever read the player's record, so match one shipped 5 tier-5 bots
+// (210 ms reaction, 0.9° aim error) and 10 tier-4 (300 ms, 1.8°) at someone who
+// had never fired the gun. Same five tiers, same seeded draw — just weighted down
+// for the first three RECORDED matches (career.matches is incremented by
+// recordMatch on the post-match screen, so practice and abandoned matches don't
+// spend one). Offline only: bots simulate on the authority in online play, and a
+// per-client skew would desync the roster.
+const ROOKIE_TIER_MIX = [18, 16, 10, 4, 1];
+
 export function init(W) {
   K = W.SIM;
   brains.length = 0;
@@ -62,7 +72,8 @@ export function resetBrains() { brains.length = 0; }
 export function attachBrain(W, actor) {
   // tier/personality assignment from the seeded mix
   const rng = K.mulberry32((W.seed ^ 0xb0b) + W.actors.length * 31);
-  const mix = K.BOT_TIER_MIX[W.mode] || K.BOT_TIER_MIX.standard;
+  const rookie = !W.net && W.mode !== "practice" && W.progress && W.progress.career && W.progress.career.matches < 3;
+  const mix = rookie ? ROOKIE_TIER_MIX : (K.BOT_TIER_MIX[W.mode] || K.BOT_TIER_MIX.standard);
   // draw tier ∝ remaining mix
   const assigned = brains.length;
   let tier = 3, acc = 0;

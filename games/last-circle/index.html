@@ -2,13 +2,75 @@
 <html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Last Circle — ForgeFlow Games</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;overflow:hidden;background:#08131f}#game-container{width:100%;height:100%;position:relative}canvas{display:block}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;overflow:hidden;background:#08131f}#game-container{width:100%;height:100%;position:relative}canvas{display:block}
+#lc-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center;background:radial-gradient(ellipse at 50% 40%,#12263f 0%,#08131f 70%);color:#eaf2ff;font-family:'Segoe UI',system-ui,-apple-system,sans-serif}
+#lc-splash .wm{font-size:clamp(30px,6vw,58px);font-weight:900;letter-spacing:10px;color:#bcdcff;text-shadow:0 0 28px rgba(80,160,255,.45)}
+#lc-splash .track{width:min(320px,70vw);height:4px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}
+#lc-splash .bar{height:100%;width:8%;border-radius:2px;background:linear-gradient(90deg,#2f7fd6,#6ec4ff);animation:lcBootBar 9s cubic-bezier(.2,.7,.3,1) forwards}
+#lc-splash .tip{font-size:14px;letter-spacing:1.5px;opacity:.72;max-width:520px;line-height:1.6}
+@keyframes lcBootBar{0%{width:8%}35%{width:52%}75%{width:78%}100%{width:92%}}</style>
+<!-- three.module.js is the first blocking dependency of the whole module graph, and
+     its fetch used to start only after ffg_boot3d.js had been downloaded and parsed.
+     This starts it during HTML parse instead. Same host, same URL, same CORS mode as
+     the importmap resolution below — no new request, just an earlier one. The addons
+     (ffg_kernel_3d.js:12-18, maps.js:14) are deliberately NOT listed: they are pulled
+     transitively and a hand-written list here would go stale the next time the kernel
+     imports one more. -->
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js" crossorigin>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/" } }
 </script>
 </head><body>
+<!-- First-paint splash. Before this existed the pre-menu window was a flat #08131f
+     rectangle: ffg_boot3d.js awaits ffg_kernel_3d.js and ffg_royale3d.js, which pull
+     three.module.js plus eight addon modules off cdn.jsdelivr.net (ffg_kernel_3d.js:12-18,
+     maps.js:14), then ten royale/* modules (ffg_royale3d.js:27-37), sim/royale.js and
+     content.json — and NOTHING paints until hudMod.showMenu() runs at ffg_royale3d.js:384.
+     No wordmark, no bar, no error path: on a cold load it reads as a broken page.
+     The bar is a TIME-BASED estimate, not byte progress — the module graph gives us no
+     progress events to hang a real one on. The determinate bar is the match loading
+     screen; do not "fix" this one to be accurate, it can't be.
+     System font stack ONLY: hud.js:56 requests Orbitron/Rajdhani from fonts.googleapis.com
+     inside ensureAAAStyles(), which does not run until the menu is already up. -->
+<div id="lc-splash"><div class="wm">LAST CIRCLE</div><div class="track"><div class="bar"></div></div><div class="tip" id="lc-splash-tip">Loading — 50 drop in, one walks out. SHIFT toggles sprint · SPACE toggles your parachute, cut it to dive faster.</div></div>
+<script>
+// The splash has to take itself down: nothing under runtime/ knows it exists (that
+// tree is the SHARED FFG runtime, this file is the only per-game page). Poll for
+// window.__LC__ — ffg_royale3d.js:384 calls showMenu() and assigns __LC__ 23 lines
+// later with no await between, so it is the tightest "menu is actually painted"
+// signal reachable from here. Watching for the canvas instead would fire at kernel
+// mount (ffg_kernel_3d.js:123), seconds early, onto an empty frame.
+(function () {
+  var el = document.getElementById("lc-splash");
+  if (!el) return;
+  var tip = document.getElementById("lc-splash-tip"), t0 = Date.now();
+  var iv = setInterval(function () {
+    if (window.__LC__) {
+      clearInterval(iv);
+      el.style.pointerEvents = "none";
+      el.style.transition = "opacity .45s ease";
+      el.style.opacity = "0";
+      setTimeout(function () { el.remove(); }, 500);
+      return;
+    }
+    // A failed boot was indistinguishable from a slow one: ffg_boot3d.js logs
+    // "[FFG3D] boot failed" to the console and the screen never changes. Rewrite the
+    // tip instead of parking the bar at 92% forever. The poll deliberately KEEPS
+    // running — a genuinely slow CDN still clears the splash when it finally lands.
+    if (tip && Date.now() - t0 > 30000) {
+      tip.textContent = "Still loading. If this doesn't clear, reload — the 3D runtime is fetched from a CDN and that request may have been blocked.";
+      tip = null;
+    }
+  }, 120);
+})();
+</script>
 <div id="game-container"></div>
 <script>window.GAME_CONFIG={hide_bug_button:true,mute_hotkey:false};</script>
-<script src="game_controls.js?v=101"></script>
-<script type="module" src="runtime/3d/ffg_boot3d.js?v=101"></script>
+<!-- One bump per fix batch busts the WHOLE runtime: ffg_boot3d.js:10 reads
+     new URL(import.meta.url).search and appends it to ffg_kernel_3d.js and
+     ffg_royale3d.js, which appends it again to every royale/* import
+     (ffg_royale3d.js:20-37) and to sim/royale.js. Editing a runtime module without
+     moving this number ships the new index.html against CDN-cached stale JS. -->
+<script src="game_controls.js?v=103"></script>
+<script type="module" src="runtime/3d/ffg_boot3d.js?v=103"></script>
 </body></html>

@@ -18,6 +18,14 @@
  *
  * Config: window.GAME_CONFIG.hide_controls / .hide_bug_button / .fs_hotkey=false
  * (set fs_hotkey:false when the game itself binds the F key).
+ *  - hide_fullscreen_button:true suppresses BOTH the FS button and the F
+ *    hotkey. Portals that supply their own fullscreen chrome prohibit a
+ *    custom one (CrazyGames: "Custom in-game fullscreen buttons are
+ *    prohibited"), and a hotkey calling requestFullscreen() is the same
+ *    prohibited surface as the button, so one flag has to kill both --
+ *    gating only the button would still fail QA. Left unset here:
+ *    forgeflowgames.com removed its portal-level button (see above), so
+ *    on that build this bar is the ONLY fullscreen entry point.
  */
 (function () {
   "use strict";
@@ -200,7 +208,7 @@
     }),
     bug:   _makeBtn("Report a bug",   SVG.bug,     reportBug),
   };
-  bar.appendChild(btns.fs);
+  if (CFG.hide_fullscreen_button !== true) bar.appendChild(btns.fs);
   bar.appendChild(btns.mute);
   bar.appendChild(btns.pause);
   if (CFG.hide_bug_button !== true) bar.appendChild(btns.bug);
@@ -214,7 +222,7 @@
   // Keyboard shortcuts: F = fullscreen (unless the game claims F), M = mute
   window.addEventListener("keydown", function (e) {
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
-    if (e.code === "KeyF" && CFG.fs_hotkey !== false) { toggleFullscreen(); e.preventDefault(); }
+    if (e.code === "KeyF" && CFG.fs_hotkey !== false && CFG.hide_fullscreen_button !== true) { toggleFullscreen(); e.preventDefault(); }
     else if (e.code === "KeyM" && CFG.mute_hotkey !== false) { toggleMute(); e.preventDefault(); }
   });
 

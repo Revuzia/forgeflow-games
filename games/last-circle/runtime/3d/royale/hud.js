@@ -128,9 +128,48 @@ export const MENU_SKINS = [
   { key: "juggernaut", name: "BULWARK", sub: "Heavy armor", unlockLevel: 6 },
   { key: "viper", name: "STINGER", sub: "Venom suit", unlockLevel: 10 },
 ];
+// The reward track ABOVE the skins. MENU_SKINS runs out at level 10 (~32,400
+// cumulative XP), and from there the bar still filled and the level still ticked
+// but nothing was ever GRANTED again. A reticle colour costs no art, no new
+// asset and no pipeline, and it is the one piece of UI a player stares at for
+// the whole match.
+export const CROSS_COLORS = [
+  { name: "WHITE", css: "rgba(255,255,255,0.95)", unlockLevel: 1 },
+  { name: "ICE", css: "rgba(120,215,255,0.95)", unlockLevel: 4 },
+  { name: "LIME", css: "rgba(150,240,150,0.95)", unlockLevel: 8 },
+  { name: "AMBER", css: "rgba(255,198,90,0.95)", unlockLevel: 12 },
+  { name: "MAGENTA", css: "rgba(255,120,215,0.95)", unlockLevel: 16 },
+  { name: "CRIMSON", css: "rgba(255,86,74,0.95)", unlockLevel: 22 },
+];
 export function skinUnlocked(W, meta) {
   const lvl = (W && W.progress && W.progress.level) || 1;
   return (meta.unlockLevel || 1) <= lvl;
+}
+/** Named rank per level, so a level that pays no cosmetic still pays a title.
+ *  Above 30 the five-step blocks stop and APEX just counts. Pure — testable
+ *  without a built world, like careerGoal/levelUpSub below. */
+const RANKS = ["RECRUIT", "OPERATIVE", "VETERAN", "ELITE", "VANGUARD", "WARLORD"];
+const ROMAN = ["I", "II", "III", "IV", "V"];
+export function rankFor(lvl) {
+  if (lvl > 30) return { name: "APEX", step: lvl - 29 };
+  return { name: RANKS[Math.min(RANKS.length - 1, Math.floor((lvl - 1) / 5))], step: ((lvl - 1) % 5) + 1 };
+}
+export function rankLabel(lvl) {
+  const r = rankFor(lvl);
+  return r.name + " " + (r.step <= ROMAN.length ? ROMAN[r.step - 1] : r.step);
+}
+/** Every level-gated cosmetic, flattened, so the level-up banner and the "next
+ *  unlock" strip read one list instead of only knowing about skins. */
+function rewardTable() {
+  return MENU_SKINS.map((s) => ({ kind: "SKIN", name: s.name, lvl: s.unlockLevel || 1 }))
+    .concat(CROSS_COLORS.map((c) => ({ kind: "RETICLE", name: c.name, lvl: c.unlockLevel || 1 })));
+}
+/** A stored cosmetic index, but never a locked one — progress can be cleared
+ *  while a high-level pick is still saved. Same guard getPlayableSkin applies to
+ *  skins, generalised so the reticle table gets it for free. */
+function playableColor(table, idx, W) {
+  const m = table[idx | 0];
+  return (m && (m.unlockLevel || 1) <= ((W && W.progress && W.progress.level) || 1)) ? m : table[0];
 }
 /** The lifetime goal to chase once every skin is unlocked. The reward track is
  *  five skins and the last one lands at level 10, after which the goal slot on
@@ -146,13 +185,16 @@ export function careerGoal(c) {
  *  out, otherwise point at the next one. Pure so it is testable without a
  *  built world. */
 export function levelUpSub(lvl, career) {
-  const won = MENU_SKINS.filter((s) => s.unlockLevel === lvl);
-  if (won.length) return "SKIN UNLOCKED · " + won.map((s) => s.name).join(" · ");
-  const next = MENU_SKINS
-    .filter((s) => (s.unlockLevel || 1) > lvl)
-    .sort((a, b) => a.unlockLevel - b.unlockLevel)[0];
-  if (next) return "NEXT UNLOCK · " + next.name + " AT LEVEL " + next.unlockLevel;
-  return "MAX RANK · NEXT: " + careerGoal(career);
+  const tbl = rewardTable();
+  const won = tbl.filter((e) => e.lvl === lvl);
+  if (won.length) return won.map((e) => e.kind + " UNLOCKED · " + e.name).join("  ·  ");
+  // No cosmetic at this level → name the rank, which every level now has. This
+  // branch used to be reachable only between skin unlocks; past level 10 it fell
+  // straight through to the literal string "MAX RANK", forever, on the account
+  // that had played the most.
+  const next = tbl.filter((e) => e.lvl > lvl).sort((a, b) => a.lvl - b.lvl)[0];
+  if (next) return rankLabel(lvl) + " · NEXT " + next.kind + " " + next.name + " AT LEVEL " + next.lvl;
+  return rankLabel(lvl) + " · NEXT: " + careerGoal(career);
 }
 export function getChosenSkin() { try { return localStorage.getItem("lc_skin"); } catch (e) { return null; } }
 /** The stored pick, but never a locked one — progress can be cleared while a
@@ -464,6 +506,7 @@ export function showMenu(W, startMatch) {
   W.phase = "menu";
   W.paused = false;
   if (!W.progress) W.progress = loadProgress();   // the locker needs your level
+  W.daily = loadDaily();                          // unconditional — it re-validates against today
   // player.js reads lc_skin straight out of localStorage, so keep the stored
   // value honest here rather than teaching it about unlocks (and importing hud)
   try {
@@ -531,6 +574,10 @@ export function showMenu(W, startMatch) {
       border: "1px solid rgba(120,180,255,0.18)", fontFamily: "Rajdhani, " + FONT,
     }, null, titleBlock);
     h("div", { fontSize: "13px", fontWeight: "900", color: "#ffd873", letterSpacing: "1px" }, "LVL " + pr.level, strip);
+    // The rank is what a level MEANS once the skin track has run out at 10.
+    // Deliberately not in the kill feed — that line is already name + weapon at
+    // 12px and a title makes it unreadable.
+    h("div", { fontSize: "11px", fontWeight: "800", color: "#9fd7ff", letterSpacing: "1.5px", opacity: "0.9" }, rankLabel(pr.level), strip);
     const barW = h("div", { width: "120px", height: "8px", background: "rgba(0,0,0,0.55)", borderRadius: "4px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }, null, strip);
     h("div", { width: Math.min(100, (pr.xp / need) * 100) + "%", height: "100%", background: "linear-gradient(90deg,#4aa8ff,#7ad0ff)" }, null, barW);
     h("div", { fontSize: "11px", opacity: "0.75", letterSpacing: "1px" }, pr.xp + " / " + need + " XP", strip);
@@ -547,11 +594,31 @@ export function showMenu(W, startMatch) {
       h("div", { fontSize: "11.5px", color: "#ffb36a", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px" },
         "🔥 " + pr.dayStreak + "-DAY STREAK", strip);
     }
-    const nextSkin = MENU_SKINS.filter((sk) => (sk.unlockLevel || 1) > pr.level).sort((a, b) => a.unlockLevel - b.unlockLevel)[0];
+    // Reads the whole reward table, not just MENU_SKINS: the skins are exhausted
+    // at level 10, so a skins-only lookup named no target for anyone past it.
+    const nextRw = rewardTable().filter((e) => e.lvl > pr.level).sort((a, b) => a.lvl - b.lvl)[0];
     h("div", { fontSize: "11.5px", color: "#9fd7ff", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px" },
-      // there was no else branch: past level 10 the goal slot silently
-      // disappeared, so the menu named no target at all for a maxed account
-      nextSkin ? "NEXT: " + nextSkin.name + " @ LVL " + nextSkin.unlockLevel : "MAX RANK · NEXT: " + careerGoal(c), strip);
+      nextRw ? "NEXT: " + nextRw.kind + " " + nextRw.name + " @ LVL " + nextRw.lvl : "MAX RANK · NEXT: " + careerGoal(c), strip);
+  }
+  // DAILIES — the only thing on any screen that is different because it is a new
+  // day. Computed once at render: the menu is rebuilt on every entry, so there
+  // is no interval here to leak.
+  if (W.daily) {
+    const dp = h("div", {
+      display: "flex", flexDirection: "column", gap: "3px", marginTop: "8px",
+      padding: "8px 14px", borderRadius: "10px", background: "rgba(4,12,24,0.5)",
+      border: "1px solid rgba(255,190,110,0.22)", fontFamily: "Rajdhani, " + FONT,
+    }, null, titleBlock);
+    const mins = Math.max(0, Math.round(msToMidnight() / 60000));
+    h("div", { fontSize: "10.5px", fontWeight: "900", letterSpacing: "2.5px", color: "#ffb36a" },
+      "DAILY CHALLENGES  ·  RESETS IN " + Math.floor(mins / 60) + "h " + (mins % 60) + "m", dp);
+    for (const c of dailyChallenges(W)) {
+      const row = h("div", { display: "flex", gap: "10px", alignItems: "center", fontSize: "12px" }, null, dp);
+      h("div", { width: "14px", opacity: c.done ? "1" : "0.75" }, c.done ? "✔" : (CHAL_ICON[c.id] || "🎯"), row);
+      h("div", { flex: "1", textAlign: "left", opacity: c.done ? "0.55" : "0.95", textDecoration: c.done ? "line-through" : "none" }, c.label, row);
+      h("div", { fontWeight: "900", color: c.done ? "#8fa4bb" : "#ffd873" }, "+" + c.xp + " XP", row);
+    }
+    if (!W.daily.firstWin) h("div", { fontSize: "11px", opacity: "0.75", color: "#9fd7ff", textAlign: "left" }, "First win today  ·  +750 XP", dp);
   }
   h("div", {
     fontFamily: "Rajdhani, " + FONT, fontSize: "15px", fontWeight: "600",
@@ -565,9 +632,17 @@ export function showMenu(W, startMatch) {
   }, null, wrap);
   const leftCol = h("div", { display: "flex", flexDirection: "column", gap: "10px", justifyContent: "center", minWidth: "300px" }, null, cols);
 
-  let selMode = W.mode === "practice" ? "practice" : (W.mode || "standard");
+  // A first-time visitor clicks the TOP card, and the top card was the 50-player
+  // standard drop: lobby, then a 12 s landing-zone map, then a ~26 s parachute
+  // before the first trigger pull. QUICK MATCH is the same game with the transit
+  // removed (SIM.MODE.quick: ground drop, startRadiusFrac 0.75, lootMult 1.8,
+  // storm phase 1 at 30 s against standard's 80 s). Sort order and a string — no
+  // mode added, none removed, map still random.
+  const rookie = !(W.progress && W.progress.career && W.progress.career.matches > 0);
+  const cards = rookie ? [MODE_CARDS[1], MODE_CARDS[0], MODE_CARDS[2]] : MODE_CARDS;
+  let selMode = rookie ? "quick" : (W.mode === "practice" ? "practice" : (W.mode || "standard"));
   const modeIcons = { standard: "⚔", quick: "⚡", practice: "◎" };
-  const modeEls = MODE_CARDS.map((m, i) => {
+  const modeEls = cards.map((m, i) => {
     const c = h("div", Object.assign({
       padding: "14px 20px 14px 16px", cursor: "pointer", minWidth: "300px",
       position: "relative", overflow: "hidden", animation: `lcPanelIn .55s ${0.2 + i * 0.06}s both`,
@@ -586,6 +661,13 @@ export function showMenu(W, startMatch) {
       letterSpacing: "2px", color: "#eaf4ff",
     }, m.name, txt);
     h("div", { fontFamily: "Rajdhani, " + FONT, fontSize: "14px", fontWeight: "500", opacity: "0.72", marginTop: "2px", color: "#b8d0ea" }, m.sub, txt);
+    if (rookie && m.id === "quick") {
+      h("div", {
+        fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "10px", fontWeight: "900",
+        letterSpacing: "1.6px", color: "#0a1a2c", background: "linear-gradient(180deg,#8fe0ff,#3fa9e8)",
+        borderRadius: "5px", padding: "3px 7px", marginTop: "5px", display: "inline-block",
+      }, "START HERE · FIGHTING IN 10 SECONDS", txt);
+    }
     // the card IS the play button — one click launches this mode (no separate DROP IN)
     h("div", {
       fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "16px", fontWeight: "900",
@@ -636,6 +718,11 @@ export function showMenu(W, startMatch) {
   settings.onclick = () => { W.events.emit("uiClick"); showSettings(W); };
   const howTo = mkGhost("❔  HOW TO PLAY", subRow);
   howTo.onclick = () => { W.events.emit("uiClick"); showHowToPlay(W); };
+  // Own row: the three above are already ~93px wide inside a 300px column and a
+  // fourth would wrap "SQUAD UP" onto two lines.
+  const subRow2 = h("div", { display: "flex", gap: "10px" }, null, leftCol);
+  const career = mkGhost("📊  CAREER", subRow2);
+  career.onclick = () => { W.events.emit("uiClick"); showCareer(W); };
   // First run gets it unprompted. A browser BR is opened cold from a link with
   // no manual and no install — there was no onboarding of ANY kind, and two of
   // the verbs (the emotes) appeared nowhere at all until ?v=67.
@@ -645,6 +732,30 @@ export function showMenu(W, startMatch) {
   // behind it, so a first-run player lost their landing zone to a timer.
   try {
     if (!localStorage.getItem("lc_seen_intro")) R._introT = setTimeout(() => { R._introT = null; showHowToPlay(W); }, 500);
+  } catch (e) {}
+  // Touch-only visitors get told the truth instead of an unplayable match. A grep
+  // for touchstart|touchmove|ontouchstart|maxTouchPoints across runtime/,
+  // game_controls.js and index.html returns exactly one hit — the pointerdown
+  // autoplay unlock in audio.js — so a phone visitor gets a tappable menu and
+  // then a match they cannot move in. BOTH pointer queries are tested, not
+  // maxTouchPoints: a touch-capable laptop reports touch points but also reports
+  // a fine pointer and must not see this. Sits above the How To Play modal
+  // (zIndex 70) and never blocks booting.
+  try {
+    const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches
+      && !window.matchMedia("(pointer: fine)").matches;
+    if (coarse && !localStorage.getItem("lc_seen_kbm")) {
+      const KL = layer("kbm", {
+        pointerEvents: "auto", background: "rgba(4,8,16,0.92)", display: "flex",
+        alignItems: "center", justifyContent: "center", zIndex: 71,
+      });
+      const kbox = h("div", Object.assign({ padding: "26px 34px", maxWidth: "440px", display: "flex", flexDirection: "column", gap: "12px", textAlign: "center" }, PANEL), null, KL);
+      h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "17px", fontWeight: "900", letterSpacing: "2px" }, "KEYBOARD + MOUSE REQUIRED", kbox);
+      h("div", { fontSize: "13.5px", opacity: "0.85", lineHeight: "1.55", fontFamily: "Rajdhani, " + FONT },
+        "Last Circle needs a keyboard and mouse. Movement, aiming, looting and the parachute are all key-bound — there is no touch control scheme yet.", kbox);
+      const kgo = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff", alignSelf: "center" }), "CONTINUE ANYWAY", kbox);
+      kgo.onclick = () => { try { localStorage.setItem("lc_seen_kbm", "1"); } catch (e2) {} KL.remove(); R.kbm = null; };
+    }
   } catch (e) {}
 
   // — SKIN BAY: premium 3D turntable —
@@ -698,6 +809,42 @@ export function showMenu(W, startMatch) {
     boxShadow: "0 0 0 0 rgba(87,176,255,0)",
   }, null, dots));
   const next = mkArrow("›");
+
+  // RETICLE swatches — the level 11-30 reward content. Locked ones stay visible
+  // and browsable for the same reason locked skins do: seeing what level 22 buys
+  // you is the point of a locker.
+  h("div", {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "10px", letterSpacing: "2.5px",
+    opacity: "0.6", fontWeight: "800", color: "#9fd0ff", marginTop: "6px",
+  }, "RETICLE", bay);
+  const swRow = h("div", { display: "flex", gap: "7px", alignItems: "center" }, null, bay);
+  const swEls = CROSS_COLORS.map((cc, i) => {
+    const b = h("button", {
+      width: "26px", height: "26px", borderRadius: "7px", cursor: "pointer", padding: "0",
+      background: cc.css, border: "1px solid rgba(255,255,255,0.25)",
+    }, null, swRow);
+    b.title = cc.name + ((cc.unlockLevel || 1) > 1 ? " · LVL " + cc.unlockLevel : "");
+    b.onclick = () => {
+      if ((cc.unlockLevel || 1) > ((W.progress && W.progress.level) || 1)) return;
+      W.settings.crossColor = i; save(W);
+      R._crossFor = null;        // forces paintCrosshair to rebuild next frame
+      W.events.emit("uiClick");
+      paintSwatches();
+    };
+    return b;
+  });
+  function paintSwatches() {
+    const lvl = (W.progress && W.progress.level) || 1;
+    const sel = CROSS_COLORS.indexOf(playableColor(CROSS_COLORS, W.settings.crossColor, W));
+    swEls.forEach((b, i) => {
+      const ok = (CROSS_COLORS[i].unlockLevel || 1) <= lvl;
+      b.style.opacity = ok ? "1" : "0.28";
+      b.style.cursor = ok ? "pointer" : "not-allowed";
+      b.style.border = i === sel ? "2px solid #ffffff" : "1px solid rgba(255,255,255,0.25)";
+      b.style.boxShadow = i === sel ? "0 0 10px rgba(255,255,255,0.55)" : "none";
+    });
+  }
+  paintSwatches();
 
   let skinIdx = Math.max(0, MENU_SKINS.findIndex((s) => s.key === getChosenSkin()));
   let pvRig = null, pvRunning = true, pvBones = null, poseMod = null, pvIdleRelax = false;
@@ -844,7 +991,7 @@ export function showLoading(W, text) {
   // a new match must clear every stray screen from the previous one — including
   // the first-run How To Play, which was neither in this list nor cancellable
   if (R._introT) { clearTimeout(R._introT); R._introT = null; }
-  ["post", "death", "pause", "settings", "bigmap", "howto", "menu", "hud"].forEach((n) => { if (R[n]) { R[n].remove(); R[n] = null; } });
+  ["post", "death", "pause", "settings", "bigmap", "howto", "career", "kbm", "menu", "hud"].forEach((n) => { if (R[n]) { R[n].remove(); R[n] = null; } });
   teardownMenuWorld(W);
   W.paused = false;
   ensureAAAStyles();
@@ -871,13 +1018,32 @@ export function showLoading(W, text) {
     borderRadius: "2px", transition: "width .4s", animation: "lcShimmer 1.6s linear infinite",
     boxShadow: "0 0 12px rgba(87,176,255,0.6)",
   }, null, bar);
-  let p = 30;
+  // The bar was pure animation — seeded at 30% and adding 8% every 300 ms up to a
+  // 92% ceiling, tied to nothing — so it always parked at 92% while the real GLB
+  // requests were still in flight, which reads as a hang. W.loadProgress is the
+  // honest hook; the first real report cancels the creep so the two can never
+  // fight over fill.style.width, and the creep survives as the fallback for the
+  // case where nothing reports at all. The first 12% is the map build, which
+  // reports nothing but only costs a few hundred ms.
+  const sub = h("div", {
+    fontFamily: "Rajdhani, " + FONT, fontSize: "12px", fontWeight: "600", opacity: "0.6",
+    letterSpacing: "1.5px", marginTop: "10px", color: "#9fd0ff",
+  }, "BUILDING TERRAIN…", box);
+  let p = 12;
+  fill.style.width = "12%";
   R._loadIv = setInterval(() => { p = Math.min(92, p + 8); fill.style.width = p + "%"; }, 300);
+  W.loadProgress = (loaded, total) => {
+    if (!total) return;
+    if (R._loadIv) { clearInterval(R._loadIv); R._loadIv = null; }
+    fill.style.width = (12 + Math.round(86 * Math.min(1, loaded / total))) + "%";
+    sub.textContent = "LOADING OPERATIVES  " + Math.min(loaded, total) + "/" + total;
+  };
 }
 
 // ═══ LOBBY ═══════════════════════════════════════════════════════════════════
 export function showLobby(W, onDone) {
   if (R._loadIv) { clearInterval(R._loadIv); R._loadIv = null; }
+  W.loadProgress = null;        // the bar it wrote to is about to be removed
   if (R.loading) { R.loading.remove(); R.loading = null; }
   if (R.menu) { R.menu.remove(); R.menu = null; }
   teardownMenuWorld(W);
@@ -930,9 +1096,21 @@ export function showLobby(W, onDone) {
   cells[0].style.background = "rgba(87,176,255,0.22)";
   cells[0].style.borderColor = "rgba(87,176,255,0.45)";
   cells[0].style.boxShadow = "0 0 12px rgba(87,176,255,0.25)";
+  // Driven by ELAPSED TIME, not a random 3-7 cells per 140 ms tick. The random
+  // step made the lobby's DURATION random (0.98-2.38 s for a 50-slot roster), so
+  // online clients left for the drop at different wall-clock times and their
+  // match clocks were offset from the first frame. Shortened at the same time:
+  // loadActorModels has already resolved (ffg_royale3d.js:291) before showLobby
+  // is called at :304, so nothing is loading behind this screen and the fill
+  // reads the same at 0.7 s as it did at 1.4 s. The 900 ms countdown below is
+  // NOT touched — the 3-count is an audible beat (countdownBeep) and shortening
+  // it desyncs the beeps from the numbers.
+  const FILL_MS = W.mode === "practice" ? 200 : 700;
+  const t0 = performance.now();
+  let cdIv = null, ended = false;
   const fillIv = setInterval(() => {
-    const step = 3 + Math.floor(Math.random() * 5);
-    for (let i = 0; i < step && filled < cells.length; i++, filled++) {
+    const want = Math.min(cells.length, 1 + Math.round((cells.length - 1) * (performance.now() - t0) / FILL_MS));
+    for (; filled < want; filled++) {
       cells[filled].style.color = "#dfeaff";
       cells[filled].style.background = "rgba(255,255,255,0.07)";
       cells[filled].style.borderColor = "rgba(140,180,220,0.18)";
@@ -944,17 +1122,42 @@ export function showLobby(W, onDone) {
       let n = W.mode === "practice" ? 1 : 3;
       cd.textContent = n;
       W.events.emit("countdownBeep", false);
-      const cdIv = setInterval(() => {
+      cdIv = setInterval(() => {
         n--;
         if (n <= 0) {
-          clearInterval(cdIv);
           W.events.emit("countdownBeep", true);
-          L.remove(); R.lobby = null;
-          onDone();
+          finishLobby();
         } else { cd.textContent = n; W.events.emit("countdownBeep", false); }
       }, 900);
     }
-  }, W.mode === "practice" ? 30 : 140);
+  }, W.mode === "practice" ? 30 : 60);
+  // ONE exit point. There used to be none — the natural completion inlined its
+  // own teardown and there was no skip handler of any kind, on every single
+  // match including a replay.
+  function finishLobby() {
+    if (ended) return;
+    ended = true;
+    clearInterval(fillIv);
+    if (cdIv) clearInterval(cdIv);
+    window.removeEventListener("keydown", onKey);
+    L.remove(); R.lobby = null;
+    onDone();
+  }
+  // e.repeat is rejected: a held ENTER auto-repeats at ~30 ms, and the drop-select
+  // screen this hands off to arms its own ENTER listener — so a player who simply
+  // leant on the key would skip straight past choosing a landing zone.
+  const onKey = (e) => { if (!e.repeat && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); finishLobby(); } };
+  // Offline ONLY. Online keeps the fixed timer because guests have to leave this
+  // screen on the same clock as the host.
+  if (!W.net) {
+    L.style.cursor = "pointer";
+    L.onclick = finishLobby;
+    window.addEventListener("keydown", onKey);
+    h("div", {
+      fontFamily: "Rajdhani, " + FONT, fontSize: "12px", fontWeight: "700",
+      letterSpacing: "2.5px", opacity: "0.6", color: "#9fd0ff",
+    }, "CLICK OR PRESS ENTER TO DROP IN NOW", wrap);
+  }
 }
 
 // ═══ DROP SELECT ═════════════════════════════════════════════════════════════
@@ -1054,7 +1257,7 @@ export function showDropSelect(W, onDone) {
   const info = h("div", {
     fontFamily: "Rajdhani, " + FONT, fontSize: "17px", fontWeight: "700",
     letterSpacing: "1px", color: "#c8dff8", minHeight: "22px",
-  }, "CLICK THE MAP TO CHOOSE YOUR LANDING ZONE", wrap);
+  }, "CLICK THE MAP TO CHOOSE YOUR LANDING ZONE  ·  ENTER DROPS NOW", wrap);
 
   function choose(wx, wz) {
     let best = -1, bd = 1e9;
@@ -1085,7 +1288,7 @@ export function showDropSelect(W, onDone) {
     padding: "11px 26px", borderRadius: "9px", cursor: "pointer", color: "#03121f",
     border: "1px solid rgba(140,220,255,0.6)", background: "linear-gradient(180deg,#8fe0ff,#3fa9e8)",
     boxShadow: "0 8px 26px rgba(60,170,235,0.35)",
-  }, "DROP", row);
+  }, "DROP  [ENTER]", row);
   const legend = h("div", {
     display: "flex", gap: "15px", alignItems: "center", fontSize: "11px",
     letterSpacing: "1px", opacity: "0.85", fontFamily: "Rajdhani, " + FONT, fontWeight: "600",
@@ -1106,9 +1309,18 @@ export function showDropSelect(W, onDone) {
   let left = W.mode === "practice" ? 1 : 12;
   timerEl.textContent = "AUTO " + left;
   const anim = setInterval(draw, 90);
+  // The 12 s auto-lock exists so online clients leave the screen together, but a
+  // solo player who had already picked their zone had no keyboard way out — only
+  // a mouse trip to the DROP button. This hands the keyboard that button's
+  // existing behaviour; it adds no new early-exit semantics for online play.
+  const onKey = (e) => { if (!e.repeat && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); finish(); } };
+  window.addEventListener("keydown", onKey);
   function finish() {
     if (done) return;
     done = true;
+    // Must come off BEFORE onDone() fires, or the listener outlives this screen
+    // and rides into the drop, where SPACE is the chute toggle.
+    window.removeEventListener("keydown", onKey);
     clearInterval(anim); clearInterval(iv);
     if (!pick) {
       // never picked → the quietest named zone beats the old random dump
@@ -1136,13 +1348,25 @@ export function showDropSelect(W, onDone) {
 // existing W.match / W.t / W.stats counters. Progress persists in localStorage.
 // lifetime career record — the post-match screen already computes every one of
 // these numbers and used to throw them away, so nothing accrued between matches.
-const CAREER0 = { matches: 0, wins: 0, kills: 0, damage: 0, bestPlacement: 0, top10s: 0, timeAliveS: 0 };
+// placementSum / mapWins / killsByCls feed the CAREER panel: an average
+// placement is the one number that says "are you getting better", and the raw
+// totals the menu already printed cannot answer it.
+const CAREER0 = { matches: 0, wins: 0, kills: 0, damage: 0, bestPlacement: 0, top10s: 0, timeAliveS: 0, placementSum: 0, mapWins: {}, killsByCls: {} };
+/** Merge stored career over the defaults. The nested objects MUST be re-created:
+ *  a plain Object.assign hands every save the SAME mapWins/killsByCls reference
+ *  that lives on CAREER0, so the first recorded win would mutate the default. */
+function newCareer(stored) {
+  const c = Object.assign({}, CAREER0, stored || {});
+  c.mapWins = Object.assign({}, c.mapWins);
+  c.killsByCls = Object.assign({}, c.killsByCls);
+  return c;
+}
 function loadProgress() {
   try {
     const p = Object.assign({ level: 1, xp: 0, lastPlayedDay: null, dayStreak: 0 }, JSON.parse(localStorage.getItem("lc_progress") || "{}"));
-    p.career = Object.assign({}, CAREER0, p.career || {});
+    p.career = newCareer(p.career);
     return p;
-  } catch (e) { return { level: 1, xp: 0, lastPlayedDay: null, dayStreak: 0, career: Object.assign({}, CAREER0) }; }
+  } catch (e) { return { level: 1, xp: 0, lastPlayedDay: null, dayStreak: 0, career: newCareer(null) }; }
 }
 /** YYYY-MM-DD in LOCAL time. A UTC stamp rolls the day over mid-evening for
  *  anyone west of Greenwich, which would break the streak of a player who did
@@ -1156,7 +1380,7 @@ function saveProgress(p) { try { localStorage.setItem("lc_progress", JSON.string
 function recordMatch(W, res) {
   if (W.mode === "practice") return null;   // sandbox stats are not a career
   const p = W.progress; if (!p) return null;
-  const c = p.career || (p.career = Object.assign({}, CAREER0));
+  const c = p.career || (p.career = newCareer(null));
   c.matches++;
   if (res.victory) c.wins++;
   c.kills += res.kills || 0;
@@ -1165,6 +1389,14 @@ function recordMatch(W, res) {
   const pl = res.placement || 99;
   if (!c.bestPlacement || pl < c.bestPlacement) c.bestPlacement = pl;
   if (pl <= 10) c.top10s++;
+  // Old saves come through newCareer with zeros/empties, so these are safe to
+  // accumulate blind.
+  c.placementSum = (c.placementSum || 0) + pl;
+  if (!c.mapWins) c.mapWins = {};
+  if (res.victory && W.mapId) c.mapWins[W.mapId] = (c.mapWins[W.mapId] || 0) + 1;
+  if (!c.killsByCls) c.killsByCls = {};
+  const kbc = (W.stats && W.stats.killsByCls) || null;
+  if (kbc) for (const k in kbc) c.killsByCls[k] = (c.killsByCls[k] || 0) + kbc[k];
   // Nothing in the game knew what day it was — no timestamp anywhere in the
   // save — so tomorrow was worth exactly as much as next month. One field.
   const today = dayKey();
@@ -1187,18 +1419,93 @@ function addXP(W, amt) {
   while (p.xp >= xpForLevel(p.level)) { p.xp -= xpForLevel(p.level); p.level++; if (W.events) W.events.emit("levelUp", p.level); }
   saveProgress(p); W._xpDirty = true;
 }
+// The pool used to be five entries and pickChallenges hardcoded slots 0 and 1,
+// so "Survive 3 minutes" and "Get 1 elimination" appeared in EVERY match and the
+// third slot only moved when level % 3 changed — a player had seen the whole
+// system by their third match. The struct was already generic; this is data.
+// Every prog() below reads a counter verified live this session: W.t,
+// W.match.kills/damage/aliveCount, and W.stats.shotsHit (weapons.js:576).
+const _kills = (W) => (W.match && W.match.kills[W.player.id]) || 0;
+const _dmg = (W) => Math.round((W.match && W.match.damage[W.player.id]) || 0);
 const CHAL_POOL = [
   { id: "survive", label: "Survive 3 minutes", goal: 180, xp: 150, prog: (W) => Math.floor(W.t) },
-  { id: "elim", label: "Get 1 elimination", goal: 1, xp: 175, prog: (W) => (W.match && W.match.kills[W.player.id]) || 0 },
-  { id: "dmg", label: "Deal 300 damage", goal: 300, xp: 140, prog: (W) => Math.round((W.match && W.match.damage[W.player.id]) || 0) },
+  { id: "survive5", label: "Survive 5 minutes", goal: 300, xp: 200, prog: (W) => Math.floor(W.t) },
+  { id: "survive8", label: "Survive 8 minutes", goal: 480, xp: 280, prog: (W) => Math.floor(W.t) },
+  { id: "elim", label: "Get 1 elimination", goal: 1, xp: 175, prog: _kills },
+  { id: "elim2", label: "Get 2 eliminations", goal: 2, xp: 240, prog: _kills },
+  { id: "elim3", label: "Get 3 eliminations", goal: 3, xp: 300, prog: _kills },
+  { id: "elim5", label: "Get 5 eliminations", goal: 5, xp: 300, prog: _kills },
+  { id: "dmg", label: "Deal 300 damage", goal: 300, xp: 140, prog: _dmg },
+  { id: "dmg600", label: "Deal 600 damage", goal: 600, xp: 210, prog: _dmg },
+  { id: "dmg1000", label: "Deal 1000 damage", goal: 1000, xp: 300, prog: _dmg },
   { id: "top10", label: "Reach the final 10", goal: 1, xp: 200, prog: (W) => (W.match && W.match.aliveCount() <= 10 ? 1 : 0) },
-  { id: "elim3", label: "Get 3 eliminations", goal: 3, xp: 300, prog: (W) => (W.match && W.match.kills[W.player.id]) || 0 },
+  { id: "top5", label: "Reach the final 5", goal: 1, xp: 260, prog: (W) => (W.match && W.match.aliveCount() <= 5 ? 1 : 0) },
+  { id: "hits40", label: "Land 40 shots", goal: 40, xp: 190, prog: (W) => (W.stats && W.stats.shotsHit) || 0 },
+  { id: "hits80", label: "Land 80 shots", goal: 80, xp: 290, prog: (W) => (W.stats && W.stats.shotsHit) || 0 },
 ];
+// One icon per id family; the old inline ternary is the fallback for anything
+// not listed, so an id added later still renders something sensible.
+const CHAL_ICON = { survive: "⏱", survive5: "⏱", survive8: "⏱", dmg: "🔥", dmg600: "🔥", dmg1000: "🔥", top10: "🏆", top5: "🏆", hits40: "🎯", hits80: "🎯" };
+
+// ── DAILIES ─────────────────────────────────────────────────────────────────
+// Nothing in the game changed because it was a new day: pickChallenges is called
+// from showHUD, i.e. per MATCH, and the only persisted keys were lc_progress,
+// lc_skin, lc_seen_intro and lc_settings. These sit ON TOP of the per-match trio
+// rather than replacing it — daily-only would leave the 4th match of a day
+// paying zero challenge XP, a regression against today.
+const DAILY_KEY = "lc_daily";
+/** Today's three ids, DERIVED from the date rather than stored — so clearing
+ *  lc_daily cannot reroll the day, and yesterday's set stays computable instead
+ *  of remembered. */
+function dailyIdsFor(dstr) {
+  const n = String(dstr).split("-");
+  const rnd = K.mulberry32(((+n[0] * 10000 + +n[1] * 100 + +n[2]) >>> 0) ^ 0x9e3779b9);
+  const ids = CHAL_POOL.map((c) => c.id);
+  for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
+  return ids.slice(0, 3);
+}
+function saveDaily(d) { try { localStorage.setItem(DAILY_KEY, JSON.stringify(d)); } catch (e) {} }
+/** ALWAYS re-validated against today on read (never `if (!W.daily)`), so a tab
+ *  left open overnight rolls over instead of replaying yesterday's set. */
+function loadDaily() {
+  const day = dayKey();
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(DAILY_KEY) || "null"); } catch (e) {}
+  if (!d || d.day !== day || !Array.isArray(d.ids)) {
+    d = { day: day, ids: dailyIdsFor(day), done: {}, firstWin: false };
+    saveDaily(d);
+  }
+  if (!d.done) d.done = {};
+  return d;
+}
+function dailyChallenges(W) {
+  const d = W.daily;
+  if (!d) return [];
+  return d.ids
+    .map((id) => CHAL_POOL.find((c) => c.id === id))
+    .filter(Boolean)
+    .map((c) => Object.assign({}, c, {
+      label: c.label, xp: Math.round(c.xp * 2.5), daily: true,
+      // pre-set from the stored record so a daily already banked earlier today
+      // never pays twice
+      done: !!d.done[c.id], awarded: !!d.done[c.id],
+    }));
+}
+/** ms to the next LOCAL midnight — same reason dayKey() is local: a UTC reset
+ *  rolls the day over mid-evening for anyone west of Greenwich. */
+function msToMidnight() {
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1).getTime() - n.getTime();
+}
 function pickChallenges(W) {
-  // the two the reference shows, plus one rotating by the player's level
-  const rot = (W.progress ? W.progress.level : 1) % 3;
-  const extra = [CHAL_POOL[2], CHAL_POOL[3], CHAL_POOL[4]][rot];
-  return [CHAL_POOL[0], CHAL_POOL[1], extra].map((c) => Object.assign({}, c, { done: false, awarded: false }));
+  // Three at random per match, EXCLUDING today's dailies so no single action can
+  // pay twice and so the `ch.id + ":" + cur` card signature stays unique.
+  const skip = (W.daily && W.daily.ids) || [];
+  const pool = CHAL_POOL.filter((c) => skip.indexOf(c.id) < 0);
+  const pick = [];
+  const bag = pool.slice();
+  for (let i = 0; i < 3 && bag.length; i++) pick.push(bag.splice(Math.floor(Math.random() * bag.length), 1)[0]);
+  return pick.map((c) => Object.assign({}, c, { done: false, awarded: false }));
 }
 
 // compass ribbon — scrolling cardinal heading from the camera's facing
@@ -1292,7 +1599,11 @@ export function showHUD(W) {
 
   // XP/level bar + active challenge card (Final Drop-style meta), below the storm bar
   if (!W.progress) W.progress = loadProgress();
-  W._challenges = pickChallenges(W); W._chalIdx = 0; W._xpDirty = true; W._chalXp = 0;
+  // Re-read every match, not once per session: loadDaily re-validates against
+  // today, so a tab left open across midnight rolls onto the new set.
+  W.daily = loadDaily();
+  W._challenges = pickChallenges(W).concat(dailyChallenges(W));
+  W._chalIdx = 0; W._xpDirty = true; W._chalXp = 0; W._elimXp = 0;
   const meta = h("div", { position: "absolute", top: "66px", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", width: "352px" }, null, L);
   const xpRow = h("div", { display: "flex", alignItems: "center", gap: "8px", width: "100%", background: "rgba(0,0,0,0.42)", padding: "4px 10px", borderRadius: "8px" }, null, meta);
   R.xpLevel = h("div", { fontSize: "12px", fontWeight: "900", color: "#ffd873", minWidth: "48px", textShadow: "0 1px 2px #000" }, "LVL 1", xpRow);
@@ -1332,6 +1643,13 @@ export function showHUD(W) {
   R.chuteBtn = h("div", { position: "absolute", right: "40px", bottom: "120px", width: "84px", height: "84px", borderRadius: "50%", background: "rgba(10,19,31,0.75)", border: "2px solid rgba(140,190,255,0.6)", display: "none", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", boxShadow: "0 4px 18px rgba(0,0,0,0.5)" }, null, L);
   R.chuteGlyph = h("div", { fontSize: "26px", lineHeight: "1.1" }, "🪂", R.chuteBtn);
   R.chuteLabel = h("div", { fontSize: "10px", fontWeight: "900", letterSpacing: "0.5px", marginTop: "2px" }, "[SPACE]", R.chuteBtn);
+  // First-drops-only centre hint for the CUT (see the gliding branch in update).
+  R.chuteHint = h("div", {
+    position: "absolute", left: "50%", top: "58%", transform: "translateX(-50%)",
+    fontFamily: "Rajdhani, " + FONT, fontSize: "15px", fontWeight: "700", letterSpacing: "2px",
+    color: "#cfe4ff", textShadow: "0 2px 10px rgba(0,0,0,0.9)", display: "none", pointerEvents: "none",
+    whiteSpace: "nowrap",
+  }, "PRESS " + (physFor(W, "Space") ? keyLabel(physFor(W, "Space")) : "SPACE") + " TO CUT THE CHUTE AND DIVE", L);
 
   // storm messages center
   R.stormMsg = h("div", { position: "absolute", left: "50%", top: "22%", transform: "translateX(-50%)", fontSize: "22px", fontWeight: "900", letterSpacing: "1px", textShadow: "0 2px 8px #000", opacity: "0", transition: "opacity .4s", color: "#d9b3ff" }, "", L);
@@ -1344,6 +1662,12 @@ export function showHUD(W) {
   // tints
   R.stormTint = h("div", { position: "absolute", inset: "0", background: "radial-gradient(ellipse at center, rgba(130,60,200,0) 55%, rgba(130,60,200,0.35) 100%)", opacity: "0", transition: "opacity .5s", pointerEvents: "none" }, null, L);
   R.hurtTint = h("div", { position: "absolute", inset: "0", background: "radial-gradient(ellipse at center, rgba(200,30,30,0) 60%, rgba(200,30,30,0.4) 100%)", opacity: "0", transition: "opacity .3s", pointerEvents: "none" }, null, L);
+  // Nothing on screen ever said "you are nearly dead". The only low-HP cue was
+  // the HP bar going red down in the bottom-left (see the hp branch in update()),
+  // which you have to look away from the fight to read. Players carry 100 HP +
+  // 100 shield (SIM.PLAYERK), so a persistent tint is the difference between
+  // pushing and backing off.
+  R.lowHpTint = h("div", { position: "absolute", inset: "0", background: "radial-gradient(ellipse at center, rgba(180,20,20,0) 45%, rgba(180,20,20,0.5) 100%)", opacity: "0", transition: "opacity .45s", pointerEvents: "none" }, null, L);
 
   R._hudCache = {};
   // perf readout (opt-in): FPS always, plus link freshness when online. This is
@@ -1429,6 +1753,11 @@ export function update(W, dt) {
     // the percentage actually changes, and lcPulse is already in ensureAAAStyles.
     R.hpBar.style.background = p.hp <= 25 ? "#ff5544" : p.hp <= 40 ? "#ffd166" : "#4ade80";
     R.hpBar.style.animation = p.hp <= 25 ? "lcPulse .55s ease-in-out infinite" : "";
+    // Deliberately NOT the lcPulse keyframe the bar uses: that keyframe animates
+    // opacity 0.55<->1 and would override the inline opacity carrying the ramp.
+    // Driven from this branch because it only runs when the percentage actually
+    // changes, so healing back over 35 clears it for free.
+    if (R.lowHpTint) R.lowHpTint.style.opacity = p.hp < 35 ? String(Math.min(1, (35 - p.hp) / 30) * 0.6) : "0";
     C.hp = hpPct;
   }
   const shPct = Math.max(0, Math.min(100, p.shield)) + "%";
@@ -1555,7 +1884,13 @@ export function update(W, dt) {
             c.awarded = true; c.done = true;
             addXP(W, c.xp);
             W._chalXp = (W._chalXp || 0) + c.xp;   // banked here; the post-match screen only knew about `res`
-            flashMsg("CHALLENGE COMPLETE  +" + c.xp + " XP");
+            // A daily is marked spent in localStorage the instant it lands, not
+            // at match end — quitting mid-match must not hand it back. NOT in
+            // practice: addXP no-ops there (unlimited damage on no-death dummies),
+            // so burning the day's card for zero XP would be worse than not
+            // offering it.
+            if (c.daily && W.daily && W.mode !== "practice") { W.daily.done[c.id] = true; saveDaily(W.daily); }
+            flashMsg((c.daily ? "DAILY COMPLETE  +" : "CHALLENGE COMPLETE  +") + c.xp + " XP");
           }
         }
       }
@@ -1565,8 +1900,8 @@ export function update(W, dt) {
         R.chalCard.style.display = "flex";
         const sig = ch.id + ":" + cur;
         if (C.chal !== sig) {
-          R.chalIcon.textContent = ch.id.indexOf("elim") === 0 ? "💀" : ch.id === "survive" ? "⏱" : ch.id === "dmg" ? "🔥" : "🏆";
-          R.chalLabel.textContent = ch.label;
+          R.chalIcon.textContent = CHAL_ICON[ch.id] || (ch.id.indexOf("elim") === 0 ? "💀" : "🏆");
+          R.chalLabel.textContent = ch.daily ? "★ DAILY — " + ch.label : ch.label;
           R.chalFill.style.width = (100 * cur / ch.goal) + "%";
           R.chalProg.textContent = cur + "/" + ch.goal;
           R.chalXp.textContent = "+" + ch.xp + " XP";
@@ -1605,7 +1940,24 @@ export function update(W, dt) {
     const open = !!p.chute;
     R.chuteLabel.textContent = (open ? "CUT" : "OPEN") + " [SPACE]";
     R.chuteBtn.style.borderColor = open ? "rgba(255,190,90,0.8)" : "rgba(140,190,255,0.8)";
-  } else if (R.chuteBtn.style.display !== "none") R.chuteBtn.style.display = "none";
+    // Teach the cut where the player is actually looking. The CUT [SPACE] button
+    // above is correct but it lives at right:40px bottom:120px — the corner — on
+    // the one screen where a first-timer is watching the ground rush up. The
+    // canopy owns 110 m of a ~245 m descent at 5.5 m/s, the slowest speed in the
+    // game, so cutting it is worth ~6.6 s. Stops appearing after three recorded
+    // matches.
+    if (R.chuteHint) {
+      const green = ((W.progress && W.progress.career && W.progress.career.matches) || 0) < 3;
+      const want = open && green && !p.chuteToggled;
+      if (C.chuteHint !== want) {
+        R.chuteHint.style.display = want ? "block" : "none";
+        C.chuteHint = want;
+      }
+    }
+  } else if (R.chuteBtn.style.display !== "none") {
+    R.chuteBtn.style.display = "none";
+    if (R.chuteHint) { R.chuteHint.style.display = "none"; C.chuteHint = false; }
+  }
 
   // directional indicators: fade + footstep scan
   stepIndicators(W, dt);
@@ -1652,7 +2004,7 @@ export function update(W, dt) {
 const inds = [];      // {el, ang, t, life}
 const stepMarks = new Map(); // actorId -> last footstep indicator time
 function addIndicator(W, worldX, worldZ, kind) {
-  if (!R.indicators || !W.player) return;
+  if (!R.indicators || !W.player || (W.settings && W.settings.soundVis === false)) return;
   const p = W.player;
   const ang = Math.atan2(worldX - p.pos.x, worldZ - p.pos.z);   // world bearing
   const el = h("div", { position: "absolute", left: "50%", top: "50%", willChange: "transform, opacity", fontSize: kind === "damage" ? "34px" : "20px", fontWeight: "900", textShadow: "0 1px 4px #000" }, null, R.indicators);
@@ -1664,6 +2016,12 @@ function addIndicator(W, worldX, worldZ, kind) {
 }
 function stepIndicators(W, dt) {
   if (!R.indicators) return;
+  // Turning the ring off mid-match has to clear what is already on screen —
+  // otherwise whatever was showing freezes there until it ages out.
+  if (W.settings && W.settings.soundVis === false) {
+    while (inds.length) inds.pop().el.remove();
+    return;
+  }
   const p = W.player;
   if (!p) return;
   // footstep scan at 3Hz: moving actors within 30m (visualized sound)
@@ -1752,7 +2110,11 @@ function paintCrosshair(W, weaponId) {
   if (!R.cross) return;
   clear(R.cross);
   const CENTER = 28;
-  const mk = (styles) => h("div", Object.assign({ position: "absolute", background: "rgba(255,255,255,0.95)", boxShadow: "0 0 2px rgba(0,0,0,0.9)" }, styles), null, R.cross);
+  // Reticle colour is a level-gated cosmetic (CROSS_COLORS). The launcher's
+  // amber chevron below is deliberately NOT recoloured — that colour is a
+  // trajectory hint, not chrome.
+  const CC = playableColor(CROSS_COLORS, W.settings && W.settings.crossColor, W).css;
+  const mk = (styles) => h("div", Object.assign({ position: "absolute", background: CC, boxShadow: "0 0 2px rgba(0,0,0,0.9)" }, styles), null, R.cross);
   const dot = (r) => mk({ left: (CENTER - r) + "px", top: (CENTER - r) + "px", width: r * 2 + "px", height: r * 2 + "px", borderRadius: "50%" });
   const line = (x, y, w, hh) => mk({ left: (CENTER + x) + "px", top: (CENTER + y) + "px", width: w + "px", height: hh + "px", borderRadius: "1px" });
   const cross4 = (gap, len, th) => {
@@ -1767,7 +2129,7 @@ function paintCrosshair(W, weaponId) {
   else if (cls === "ar") { cross4(8, 11, 2); dot(1.5); }
   else if (cls === "shotgun") {
     // ring ≈ the real pellet cone at mid-range
-    h("div", { position: "absolute", left: (CENTER - 16) + "px", top: (CENTER - 16) + "px", width: "32px", height: "32px", borderRadius: "50%", border: "2px solid rgba(255,255,255,0.9)", boxShadow: "0 0 2px rgba(0,0,0,0.9), inset 0 0 2px rgba(0,0,0,0.9)" }, null, R.cross);
+    h("div", { position: "absolute", left: (CENTER - 16) + "px", top: (CENTER - 16) + "px", width: "32px", height: "32px", borderRadius: "50%", border: "2px solid " + CC, boxShadow: "0 0 2px rgba(0,0,0,0.9), inset 0 0 2px rgba(0,0,0,0.9)" }, null, R.cross);
     dot(1.5);
   }
   else if (cls === "sniper") { dot(2); line(-1, 10, 2, 8); }  // fine dot + drop hint (scope overlay on ADS)
@@ -1930,6 +2292,24 @@ function drawMinimap(W, ctx, size, big) {
       ctx.fillText(p.name, toPx(p.x), toPx(p.z));
     }
   }
+  // Human blips. The map drew storm rings, the supply drop, the landing zone and
+  // your own arrow — and nothing at all for the humans you are supposedly
+  // playing WITH, who are invisible past the nametag cull. Gated on W.net so the
+  // offline path is byte-identical; the positions already arrive in the `state`
+  // packets, so this costs nothing extra. Drawn before the local arrow so your
+  // own marker always wins the overlap.
+  if (W.net) {
+    const br2 = big ? 6 : 4;
+    if (big) { ctx.font = "700 11px system-ui"; ctx.textAlign = "center"; }
+    for (const a of W.actors) {
+      if (a.isBot || !a.alive || a === W.player) continue;
+      const ax = toPx(a.pos.x), az = toPx(a.pos.z);
+      ctx.fillStyle = "#6ec4ff";
+      ctx.beginPath(); ctx.arc(ax, az, br2, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.8)"; ctx.lineWidth = 1; ctx.stroke();
+      if (big) { ctx.fillStyle = "#dfeaff"; ctx.fillText(a.name, ax, az - br2 - 2); }
+    }
+  }
   // player arrow
   const p = W.player;
   if (p) {
@@ -1958,7 +2338,11 @@ function wireEvents(W) {
     R.hitmark.style.color = isHead ? "#ffd54a" : "#ffffff";
     R.hitmark.style.fontSize = isHead ? "34px" : "26px";
     R.hitmark.style.opacity = "1";
-    setTimeout(() => { if (R.hitmark) R.hitmark.style.opacity = "0"; }, isHead ? 170 : 120);
+    // Cancellable: the kill-confirm marker in the actorDied handler below has to
+    // be able to kill the hide-timer armed by the hit that actually landed the
+    // kill, or it is wiped 120 ms into its own window.
+    clearTimeout(R._hitT);
+    R._hitT = setTimeout(() => { if (R.hitmark) R.hitmark.style.opacity = "0"; }, isHead ? 170 : 120);
   });
   // gunfire direction (industry-standard ~250m audible range)
   W.events.on("shotFired", (shooter, weaponId, eye) => {
@@ -1973,13 +2357,28 @@ function wireEvents(W) {
     // registers too. The per-frame HUD block only clears it now.
     if (victim === W.player && R.hurtTint) {
       R.hurtTint.style.transition = "opacity .07s ease-out";
-      R.hurtTint.style.opacity = "1";
+      // Binary before: a 5-damage graze and a 105-damage sniper body shot drew
+      // the identical screen. info.dmg is the APPLIED amount (player.js:1155
+      // passes res.dealt), so it is the right number to read.
+      R.hurtTint.style.opacity = String(Math.max(0.3, Math.min(1, (info.dmg || 0) / 60)));
     }
     if (victim !== W.player || !info.attackerId) return;
     const att = W.actorById.get(info.attackerId);
     if (att) addIndicator(W, att.pos.x, att.pos.z, "damage");
   });
   W.events.on("actorDied", (victim, killerId, weaponId) => {
+    // The killing blow looked identical to chipping someone for 13 — the same
+    // white marker. The kill was confirmed only in audio (audio.js, a 700->1050
+    // Hz two-tone). BOTH latches have to be cleared or the hide-timer armed by
+    // the hit that actually killed them wipes this 120 ms in.
+    if (R.hitmark && W.player && killerId === W.player.id && victim !== W.player) {
+      clearTimeout(R._hitT);
+      R._hitHeadUntil = 0;
+      R.hitmark.style.color = "#ff4d4d";
+      R.hitmark.style.fontSize = "40px";
+      R.hitmark.style.opacity = "1";
+      R._hitT = setTimeout(() => { if (R.hitmark) R.hitmark.style.opacity = "0"; }, 280);
+    }
     if (!R.feed) return;
     const killer = killerId ? W.actorById.get(killerId) : null;
     const el = h("div", { background: "rgba(0,0,0,0.5)", padding: "3px 10px", borderRadius: "6px" },
@@ -1989,6 +2388,14 @@ function wireEvents(W) {
     while (R.feed.children.length > 6) R.feed.firstChild.remove();
     // YOUR elimination gets a banner + streak escalation (kills used to land silently)
     if (killer === W.player && victim !== W.player) {
+      // Bank the elimination's XP NOW. The kills/damage/placement/victory/time
+      // formula runs once, inside showPostMatch, so closing the tab at 11:00 of a
+      // 12:55 match lost everything except challenge XP. Challenge XP already
+      // flows live through this same addXP (which persists on every award), so
+      // the incremental pattern is proven here — it was just never used for
+      // kills. showPostMatch subtracts W._elimXp so nothing double-counts.
+      W._elimXp = (W._elimXp || 0) + 100;
+      addXP(W, 100);
       const n = (W.match && W.match.kills[W.player.id]) || 0;
       const streak = n >= 5 ? "RAMPAGE" : n === 4 ? "QUAD KILL" : n === 3 ? "TRIPLE KILL" : n === 2 ? "DOUBLE KILL" : null;
       announce("ELIMINATED " + victim.name.toUpperCase(), streak ? streak + " · " + n + " KILLS" : n + (n === 1 ? " KILL" : " KILLS"), "#ff8f6a", 1900, ANN_PRIO.elim);
@@ -1999,6 +2406,10 @@ function wireEvents(W) {
   W.events.on("levelUp", (lvl) => {
     const won = MENU_SKINS.some((s) => s.unlockLevel === lvl);
     announce("LEVEL " + lvl, levelUpSub(lvl, W.progress && W.progress.career), "#ffd54a", won ? 3600 : 3000, ANN_PRIO.level);
+    // Exactly levels 3, 6 and 10 — no new detection logic. Guarded call site;
+    // W.hooks.achievement is not defined today, so this is inert (see the same
+    // note in showPostMatch).
+    if (won && W.hooks && W.hooks.achievement) W.hooks.achievement("skin_level_" + lvl);
   });
   // Picking something up was silent apart from a blip — you could not tell a
   // legendary from a common without opening the inventory.
@@ -2127,6 +2538,22 @@ function toggleBigMap(W) {
   }, 400);
 }
 
+/** window.__PAUSE__ is read in three places in game_controls.js (:199 the Pause
+ *  button, :229-230 the auto-pause when the player leaves fullscreen) and was
+ *  never assigned anywhere in the game, so the always-visible Pause button was
+ *  inert on every screen and ESC-out-of-fullscreen mid-firefight left the player
+ *  standing in the open. This is the single entry point the shell bridge binds
+ *  to; it mirrors the escPressed handler above so the key, the button and the
+ *  fullscreen hook can never diverge. forceOn only ever OPENS: the fullscreen
+ *  hook must not un-pause a player who paused deliberately a moment earlier. */
+export function requestPause(W, forceOn) {
+  if (R.settings) { if (!forceOn) closeSettings(W); return; }   // topmost modal first
+  if (R.bigmap) { if (!forceOn) toggleBigMap(W); return; }
+  if (W.phase !== "match" && W.phase !== "drop") return;
+  if (forceOn && R.pause) return;
+  togglePause(W);
+}
+
 function togglePause(W) {
   // ONLINE: never freeze the sim. W.paused early-returns the whole frame pipeline,
   // which also skips netMod.update — the 12Hz state broadcast stops and the host's
@@ -2229,6 +2656,7 @@ export function showPostMatch(W, res) {
       textShadow: "0 0 36px rgba(255,213,74,0.55)", letterSpacing: "4px",
     }, "VICTORY ROYALE", box);
     confetti(L);
+    if (W.hooks && W.hooks.celebrate) W.hooks.celebrate();
   } else {
     h("div", {
       fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "34px", fontWeight: "900", letterSpacing: "4px",
@@ -2253,11 +2681,20 @@ export function showPostMatch(W, res) {
       fontFamily: "Rajdhani, " + FONT, color: "#9fd7ff",
     }, "PRACTICE — NO XP OR CAREER PROGRESS FROM THE SANDBOX", box);
   } else if (W.progress) {
-    const gained = (res.kills || 0) * 100 + Math.round((res.damage || 0) * 0.2)
+    const raw = (res.kills || 0) * 100 + Math.round((res.damage || 0) * 0.2)
       + Math.max(0, (W.match ? W.match.totalPlayers : 50) - (res.placement || 50)) * 6
       + (res.victory ? 500 : 0) + Math.round((res.timeS || 0) / 4);
+    // One formula across a 12:55 mode and a 4:00 mode made the flagship mode the
+    // WORST way to progress: standard's storm runs 775 s against quick's 239 s
+    // (royale.js STORM_PHASES) but only the timeS/4 term scaled with it, so the
+    // 13-minute mode paid ~146 XP/min against quick's ~217. Do not shorten
+    // standard — fix the rate.
+    const gained = Math.round(raw * (W.mode === "standard" ? 1.6 : 1));
     const lvlBefore = W.progress.level;
-    addXP(W, gained);
+    // Eliminations were already paid the instant they landed (see the actorDied
+    // handler). `gained` stays the full match value for DISPLAY; only the unpaid
+    // remainder is awarded here, so the two numbers differ on purpose.
+    addXP(W, Math.max(0, gained - (W._elimXp || 0)));
     stat(grid, "XP earned", "+" + gained);
     // Challenge XP is banked the instant a card completes, in the per-frame HUD
     // loop, so it appeared NOWHERE on this screen — and with the elim3 rotation
@@ -2270,6 +2707,34 @@ export function showPostMatch(W, res) {
     }
     // fold into the LIFETIME record (these numbers used to be discarded)
     const c = recordMatch(W, res);
+    // First win of the day. The one reason to come back tomorrow that does not
+    // depend on any daily card being finishable inside a single match.
+    if (res.victory && W.daily && !W.daily.firstWin) {
+      W.daily.firstWin = true;
+      saveDaily(W.daily);
+      addXP(W, 750);
+      stat(grid, "First win today", "+750");
+    }
+    // Bridge CALL SITES, per-method guarded and INERT today: W.hooks
+    // (ffg_royale3d.js) currently exposes only the four lifecycle no-ops, so
+    // none of these four fire. They exist so the one place a match's result is
+    // known does not have to be re-derived later — every value below is already
+    // on this screen and nothing is computed twice. Wiring them to anything that
+    // leaves the machine is an owner decision, not a parity change.
+    if (W.hooks) {
+      const total = W.match ? W.match.totalPlayers : 50;
+      if (W.hooks.score) {
+        W.hooks.score((res.kills || 0) * 100 + Math.round(res.damage || 0)
+          + Math.max(0, total - (res.placement || total)) * 25 + (res.victory ? 1000 : 0));
+      }
+      if (W.hooks.save) W.hooks.save({ progress: W.progress, skin: getChosenSkin() });
+      if (W.hooks.achievement) {
+        if (res.victory) W.hooks.achievement("first_win");
+        if ((res.kills || 0) >= 5) W.hooks.achievement("five_kill_game");
+        // dayStreak lives on W.progress, NOT on the career object `c`
+        if ((W.progress.dayStreak || 0) >= 7) W.hooks.achievement("streak_7");
+      }
+    }
     if (c) {
       h("div", { fontSize: "12.5px", opacity: "0.8", marginTop: "14px", letterSpacing: "1px", fontFamily: "Rajdhani, " + FONT },
         "CAREER · " + c.matches + " matches · " + c.wins + " wins · " + c.kills + " kills · top-10s " + c.top10s + " · best #" + (c.bestPlacement || "—")
@@ -2361,7 +2826,10 @@ export function showHowToPlay(W) {
   kb(kx("KeyW") + " " + kx("KeyA") + " " + kx("KeyS") + " " + kx("KeyD"), "Move");
   kb(kx("ShiftLeft"), (W.settings && W.settings.sprintToggle) ? "Sprint — a CLICK toggles it on and off" : "Sprint — hold");
   kb(kx("KeyC"), "Crouch — slower, but a much tighter cone");
-  kb(kx("Space"), "Jump · re-open the parachute in a long fall");
+  // The cut is the move that halves the descent (player.js: -5.5 m/s under the
+  // canopy against -20, or -34 sprinting) and this card described the redeploy
+  // instead — the only half of the verb that does not help.
+  kb(kx("Space"), "Jump · in the air, CUT the chute to dive — tap again to re-open");
   kb("LMB / RMB", "Fire · aim down sights");
   kb(kx("KeyE"), "Loot — hold on a chest to open it");
   kb(kx("KeyR"), "Reload");
@@ -2381,6 +2849,56 @@ export function showHowToPlay(W) {
   };
 }
 
+/** Lifetime record. Every headline number below was already persisted and merely
+ *  never computed — the menu strip prints raw totals but no RATE, so nothing on
+ *  any screen told a player whether they were getting better. Same layer/PANEL/
+ *  close-button shape as showHowToPlay above. */
+export function showCareer(W) {
+  releaseCursor(W);
+  ensureAAAStyles();
+  if (!W.progress) W.progress = loadProgress();
+  const p = W.progress, c = p.career || newCareer(null);
+  const L = layer("career", { pointerEvents: "auto", background: "rgba(4,8,16,0.92)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 70 });
+  const box = h("div", Object.assign({ padding: "26px 34px", width: "520px", maxHeight: "82vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px" }, PANEL), null, L);
+  h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "20px", fontWeight: "900", letterSpacing: "3px" }, "CAREER", box);
+  h("div", { fontSize: "13px", opacity: "0.8", fontFamily: "Rajdhani, " + FONT, letterSpacing: "1px" },
+    "LVL " + p.level + "  ·  " + rankLabel(p.level) + (p.dayStreak > 1 ? "  ·  🔥 " + p.dayStreak + "-DAY STREAK" : ""), box);
+  const grid = h("div", { display: "grid", gridTemplateColumns: "1fr auto", gap: "5px 16px", marginTop: "6px", fontFamily: "Rajdhani, " + FONT, fontSize: "13.5px" }, null, box);
+  const row = (label, val) => {
+    h("div", { opacity: "0.72" }, label, grid);
+    h("div", { fontWeight: "800", textAlign: "right" }, String(val), grid);
+  };
+  const m = c.matches || 0;
+  if (!m) {
+    h("div", { fontSize: "13px", opacity: "0.75", fontFamily: "Rajdhani, " + FONT }, "No ranked matches yet — practice does not count toward the career record.", box);
+  } else {
+    row("Matches", m);
+    row("Wins", c.wins + "  (" + (100 * c.wins / m).toFixed(1) + "%)");
+    // K/D against DEATHS, not matches: a won match is a match you did not die in.
+    row("K / D", (c.kills / Math.max(1, m - c.wins)).toFixed(2));
+    row("Eliminations", c.kills);
+    row("Average placement", c.placementSum ? "#" + (c.placementSum / m).toFixed(1) : "—");
+    row("Best placement", c.bestPlacement ? "#" + c.bestPlacement : "—");
+    row("Top 10 finishes", c.top10s);
+    row("Damage dealt", Math.round(c.damage).toLocaleString());
+    row("Time alive", (c.timeAliveS / 3600).toFixed(1) + " h");
+    const mw = c.mapWins || {};
+    const mapKeys = Object.keys(mw).filter((k) => mw[k] > 0);
+    if (mapKeys.length) row("Wins by map", mapKeys.map((k) => k.replace(/_/g, " ") + " " + mw[k]).join("  ·  "));
+    const kb = c.killsByCls || {};
+    const kbKeys = Object.keys(kb).filter((k) => kb[k] > 0).sort((a, b) => kb[b] - kb[a]);
+    // Only rendered when something wrote it — W.stats.killsByCls exists but no
+    // increment has landed yet, so an empty map means "not measured", not zero.
+    if (kbKeys.length) row("Favourite weapon", kbKeys[0].toUpperCase() + " (" + kb[kbKeys[0]] + " kills)");
+  }
+  h("div", { fontSize: "12px", opacity: "0.7", marginTop: "6px", fontFamily: "Rajdhani, " + FONT }, careerGoal(c), box);
+  const go = h("button", Object.assign({}, BTN, {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, background: "linear-gradient(180deg,#6ec4ff,#2f7fd6)",
+    color: "#fff", fontSize: "15px", padding: "12px 34px", letterSpacing: "2px", marginTop: "10px", alignSelf: "center",
+  }), "CLOSE", box);
+  go.onclick = () => { L.remove(); R.career = null; };
+}
+
 function showSettings(W) {
   releaseCursor(W);
   W.captureKey = null;   // drop any armed keybind capture when (re)rendering the modal
@@ -2394,6 +2912,37 @@ function showSettings(W) {
   const L = layer("settings", { pointerEvents: "auto", background: "rgba(4,8,16,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60 });
   const box = h("div", Object.assign({ padding: "28px 36px", width: "560px", maxHeight: "82vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px" }, PANEL), null, L);
   h("div", { fontSize: "22px", fontWeight: "900", letterSpacing: "2px" }, "SETTINGS", box);
+
+  // Every kill-feed line, the lobby cell and the name tags read actor.name, and
+  // playerName has been a settings default since ffg_royale3d.js:420 with NO UI
+  // anywhere that writes it — so you were "You" in your own kill feed while the
+  // 68 hand-written bot names gave every opponent more identity than the player.
+  // net.js papers over it online with "Player-XXX".
+  // Wired on `change`/`blur`, never on every keystroke: showSettings rebuilds
+  // itself on most interactions, so a per-keystroke re-render would lose focus
+  // mid-word. player.js already ignores keydown on INPUT targets, so the field
+  // cannot drive the character or steal a keybind capture.
+  const nRow = h("div", { display: "flex", gap: "10px", alignItems: "center" }, null, box);
+  h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, "Player name", nRow);
+  const nInp = h("input", {
+    flex: "1", padding: "7px 10px", borderRadius: "8px", background: "rgba(0,0,0,0.4)",
+    border: "1px solid rgba(255,255,255,0.2)", color: "#eaf2ff", fontWeight: "700",
+    fontFamily: "Rajdhani, " + FONT,
+  }, null, nRow);
+  nInp.type = "text"; nInp.maxLength = 14; nInp.placeholder = "You";
+  nInp.value = (W.settings.playerName && W.settings.playerName !== "You") ? W.settings.playerName : "";
+  const commitName = () => {
+    const clean = String(nInp.value).replace(/[^A-Za-z0-9_\-. ]/g, "").replace(/\s+/g, " ").trim().slice(0, 14);
+    nInp.value = clean;
+    W.settings.playerName = clean || "You";
+    save(W);
+  };
+  nInp.onchange = commitName;
+  nInp.onblur = commitName;
+  h("div", { fontSize: "11px", opacity: "0.6", marginTop: "-4px", fontFamily: "Rajdhani, " + FONT },
+    // the name is baked into the actor at match start (ffg_royale3d.js: `name:
+    // W.settings.playerName || "You"`), so a mid-match change must not look inert
+    "Applies from the next match.", box);
 
   slider(box, "Master volume", W.settings.masterVol, (v) => { W.settings.masterVol = v; applyAudio(W); });
   slider(box, "Music volume", W.settings.musicVol, (v) => { W.settings.musicVol = v; applyAudio(W); });
@@ -2427,6 +2976,35 @@ function showSettings(W) {
       }), o[0], row2);
       b.onclick = () => { W.settings[e[1]] = o[1]; save(W); showSettings(W); };
     });
+  });
+
+  // Screen shake (W.camShake, consumed by the camera in player.js) had no control
+  // at all. Motion sensitivity is the same accommodation the FOV slider above
+  // answers, and it is the one effect a player cannot opt out of by looking away.
+  const shRow = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
+  h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, "Screen shake", shRow);
+  [["OFF", 0], ["HALF", 0.5], ["FULL", 1]].forEach((o) => {
+    const on = (W.settings.shake == null ? 1 : W.settings.shake) === o[1];
+    const b = h("button", Object.assign({}, BTN, {
+      padding: "7px 16px", fontSize: "13px",
+      background: on ? "#57b0ff" : "rgba(255,255,255,0.1)", color: on ? "#fff" : "#cfe4ff",
+    }), o[0], shRow);
+    b.onclick = () => { W.settings.shake = o[1]; save(W); showSettings(W); };
+  });
+
+  // Sound indicators — the screen-edge footstep/gunfire/damage ring was hard-on
+  // with nothing behind it. Opt-OUT rather than opt-in (Fortnite ships Visualize
+  // Sound Effects opt-in) because it has always been on here and removing it by
+  // default would be a regression against today.
+  const svRow = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
+  h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, "Sound indicators", svRow);
+  [["OFF", false], ["ON", true]].forEach((o) => {
+    const on = (W.settings.soundVis !== false) === o[1];
+    const b = h("button", Object.assign({}, BTN, {
+      padding: "7px 16px", fontSize: "13px",
+      background: on ? "#57b0ff" : "rgba(255,255,255,0.1)", color: on ? "#fff" : "#cfe4ff",
+    }), o[0], svRow);
+    b.onclick = () => { W.settings.soundVis = o[1]; save(W); showSettings(W); };
   });
 
   // performance readout — a browser game runs on unknown hardware, so "is it me
@@ -2492,6 +3070,55 @@ function showSettings(W) {
   const resetRow = h("div", { display: "flex", justifyContent: "flex-end", marginTop: "4px" }, null, box);
   const resetB = h("button", Object.assign({}, BTN, { padding: "5px 14px", fontSize: "12px" }), "RESET TO DEFAULTS", resetRow);
   resetB.onclick = () => { W.settings.remap = {}; save(W); showSettings(W); };
+
+  // LOCAL career transfer code. Progress is localStorage-only, so clearing site
+  // data wipes the career and nothing crosses browsers. Real cross-device sync
+  // needs a backend and is flagged for the owner; a copyable code covers the two
+  // cases a browser player actually hits — clearing site data, and moving to
+  // another browser on the same machine — with no network call, no account and
+  // no identifier generated or transmitted.
+  h("div", { fontSize: "15px", fontWeight: "800", marginTop: "8px" }, "CAREER TRANSFER CODE", box);
+  const xRow = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
+  const xInp = h("input", {
+    flex: "1", padding: "6px 9px", borderRadius: "8px", background: "rgba(0,0,0,0.4)",
+    border: "1px solid rgba(255,255,255,0.2)", color: "#cfe4ff", fontSize: "11px",
+    fontFamily: "ui-monospace, Consolas, monospace",
+  }, null, xRow);
+  xInp.type = "text"; xInp.placeholder = "EXPORT to generate · paste a code and IMPORT to restore";
+  const xMsg = h("div", { fontSize: "11.5px", opacity: "0.75", fontFamily: "Rajdhani, " + FONT, minHeight: "15px" }, "", box);
+  const expB = h("button", Object.assign({}, BTN, { padding: "5px 14px", fontSize: "12px" }), "EXPORT", xRow);
+  expB.onclick = () => {
+    try {
+      if (!localStorage.getItem("lc_progress")) { xMsg.textContent = "No career to export yet — finish a match first."; return; }
+      xInp.value = btoa(JSON.stringify({
+        p: localStorage.getItem("lc_progress"),
+        d: localStorage.getItem("lc_daily"),
+        s: localStorage.getItem("lc_skin"),
+      }));
+      xInp.select();
+      xMsg.textContent = "Copy this code and keep it somewhere safe.";
+    } catch (e) { xMsg.textContent = "This browser would not produce a code."; }
+  };
+  const impB = h("button", Object.assign({}, BTN, { padding: "5px 14px", fontSize: "12px" }), "IMPORT", xRow);
+  impB.onclick = () => {
+    // Validate the SHAPE. A bad paste has to produce a message — never a thrown
+    // exception, and never a wiped career.
+    let blob = null, prog = null;
+    try { blob = JSON.parse(atob(String(xInp.value).trim())); } catch (e) { blob = null; }
+    try { prog = JSON.parse((blob && blob.p) || "null"); } catch (e) { prog = null; }
+    if (!prog || typeof prog.level !== "number" || typeof prog.xp !== "number" || !prog.career || typeof prog.career !== "object") {
+      xMsg.textContent = "That is not a Last Circle career code.";
+      return;
+    }
+    try {
+      localStorage.setItem("lc_progress", blob.p);
+      if (blob.d) localStorage.setItem(DAILY_KEY, blob.d);
+      if (blob.s) localStorage.setItem("lc_skin", blob.s);
+    } catch (e) { xMsg.textContent = "This browser refused to store the career."; return; }
+    W.progress = loadProgress();
+    W.daily = loadDaily();      // re-validated, so an imported stale day rolls over
+    xMsg.textContent = "Career restored — LVL " + W.progress.level + " · " + rankLabel(W.progress.level) + ". The menu updates when you close settings.";
+  };
 
   const closeB = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff", marginTop: "10px" }), "DONE", box);
   closeB.onclick = () => closeSettings(W);

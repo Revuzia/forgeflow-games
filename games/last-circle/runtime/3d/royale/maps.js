@@ -25,12 +25,19 @@ import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js"
 //   • `zenith` used to be DERIVED as lerp(sky, 0x2f74c8, 0.55) * 0.9. Feeding
 //     Savanna's sand horizon (#e7cf98) through that lands on #9d9dac — a grey-
 //     lavender ceiling instead of sky. Authored per map now.
+// fog is FogExp2: blend = 1 - exp(-(d·density)^2). At the old 0.00045 a POI 800 m
+// out was 12% blended — no aerial perspective at all, so the horizon rendered as
+// saturated as your feet and distant terrain cut a hard line against the sky.
+// At 0.0018: 4.6% at 120 m (engagement range), 12% at 200 m (sniper full-damage
+// range), 25% at 300 m, 87% at 800 m. The per-map ORDERING is preserved.
+// Nothing gameplay-critical hides behind it — the storm wall, the sky dome and the
+// cloud/bird sprites all set `fog: false`, and both maps are 2D canvases.
 export const MAPS = {
-  isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#7fd4f0", zenith: "#2f8fd8", fog: 0.00042, themeColor: "#22d3a0", water: true,
+  isla_viva: { name: "Isla Viva", theme: "tropical", sky: "#7fd4f0", zenith: "#2f8fd8", fog: 0.0018, themeColor: "#22d3a0", water: true,
     sun: { pos: [90, 130, 60], color: 0xfff4e0, intensity: 2.05 }, hemi: { sky: 0xdcefff, ground: 0x86a06a, intensity: 1.25 } },
-  ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e7cf98", zenith: "#4f86bd", fog: 0.00045, themeColor: "#e0854a", water: false,
+  ashgrid:   { name: "Savanna", theme: "savanna", sky: "#e7cf98", zenith: "#4f86bd", fog: 0.0019, themeColor: "#e0854a", water: false,
     sun: { pos: [-120, 105, 45], color: 0xffe6b4, intensity: 2.25 }, hemi: { sky: 0xf0e3c4, ground: 0xb59a63, intensity: 1.15 } },
-  deepwood:  { name: "Deepwood", theme: "forest", sky: "#9fc7e8", zenith: "#3a6fae", fog: 0.00052, themeColor: "#7fb069", water: true,
+  deepwood:  { name: "Deepwood", theme: "forest", sky: "#9fc7e8", zenith: "#3a6fae", fog: 0.0020, themeColor: "#7fb069", water: true,
     sun: { pos: [-60, 150, -80], color: 0xfff6e6, intensity: 1.95 }, hemi: { sky: 0xd2e7ff, ground: 0x63705a, intensity: 1.35 } },
 };
 
@@ -131,6 +138,24 @@ function waterNormalTex(aniso) {
     (h) => h, aniso, 1.4).normal;
   _texCache.waterN = t; return t;
 }
+// Grass-tuft alpha card for the ground-clutter layer. Cached in _texCache like the
+// other procedural textures, so disposeMapResources treats it as SHARED and does
+// not free it between matches (freeing it would leave the next match sampling a
+// dead GPU handle — the same reason groundTex/structTex are cached).
+function clutterTex() {
+  if (_texCache.clutter) return _texCache.clutter;
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const g2 = c.getContext("2d");
+  g2.clearRect(0, 0, 64, 64);
+  g2.fillStyle = "#ffffff";
+  for (let i = 0; i < 7; i++) {                     // tapered blades fanning from the base
+    const bx = 8 + i * 7.5, lean = (i - 3) * 3.2;
+    g2.beginPath(); g2.moveTo(bx - 2.2, 64); g2.quadraticCurveTo(bx + lean * 0.4, 34, bx + lean, 6 + (i % 3) * 7);
+    g2.quadraticCurveTo(bx + lean * 0.4 + 2.4, 34, bx + 2.2, 64); g2.closePath(); g2.fill();
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  _texCache.clutter = t; return t;
+}
 
 // ── height functions per map ────────────────────────────────────────────────
 function mkHeightFn(mapId, seed) {
@@ -154,6 +179,17 @@ function mkHeightFn(mapId, seed) {
     return (x, z) => {
       let h = fbm(x / 340, z / 340, seed, 3, 2.0, 0.5) * 9 + 2;
       h += fbm(x / 40, z / 40, seed + 7, 2, 2.0, 0.5) * 1.6;   // rubble roughness
+      // Measured relief across the full 1600 m span was 29.9 m at a mean 0.12 m per
+      // 7.27 m heightfield quad — a 1.7% grade, the flattest map in the game and the
+      // one with the most open ground beyond cover range. Crossing it broke no line
+      // of sight anywhere. A ridged octave adds berms AND gullies at a ~28 m
+      // wavelength; +/-2.5 m fully hides a standing 1.8 m capsule. The MEAN (~0.25)
+      // is subtracted deliberately — without that this raises the whole map ~1.25 m,
+      // and ASHGRID ONLY for the same reason: every waterline guard in this file
+      // (hut() stilts, town() minH, the tower guards, randomGroundPos, the minimap
+      // water test) is calibrated against the coastline of the two WATER maps.
+      const rg = 0.5 - Math.abs(fbm(x / 28, z / 28, seed + 9, 2, 2, 0.5) - 0.5);
+      h += (rg - 0.25) * 10;
       // gentle bowl so downtown reads as the low arena
       const d = Math.sqrt(x * x + z * z) / HALF;
       h += d * d * 14;
@@ -268,6 +304,15 @@ export async function buildMap(W, mapId) {
 
   const g = W.group("map");
   g.clear();
+  // The match build blocks the main thread for ~1,934 ms warm (all GLBs cached) with
+  // exactly one await in front of it, so the loading screen's shimmer bar and its
+  // 300 ms progress interval are frozen for the whole build — the tab looks hung,
+  // and PLAY AGAIN makes that the expected flow rather than a once-per-session cost.
+  // Yielding between phases does not make the build faster, it makes it ANIMATE, and
+  // it lets the browser service input instead of banking a jank score. Safe to yield
+  // here because the royale frame gate returns early unless phase is match/drop/over,
+  // so nothing steps the world inside the gaps.
+  const yieldPhase = () => new Promise((r) => setTimeout(r, 0));
   // remove the PREVIOUS map's per-frame updaters (cloud/bird/water drift) before
   // rebuilding — g.clear() drops the sprites but the kernel keeps the closures,
   // which then run every frame over detached arrays and retain them (leak/CPU
@@ -285,10 +330,19 @@ export async function buildMap(W, mapId) {
   // (not dusk), plus a touch more exposure. Also overrides any leaked menu light (D1).
   if (W._lightDefaults) {
     const kn = W.kernel;
-    // ACES Filmic tonemapping was crushing + desaturating the whole scene into a
-    // muddy dusk. NoToneMapping keeps colours bright + saturated like the reference.
-    kn.renderer.toneMapping = THREE.NoToneMapping;
-    kn.renderer.toneMappingExposure = 1.0;
+    // ACES Filmic was crushing + desaturating the whole scene into a muddy dusk, so
+    // this was set to NoToneMapping — which fixed the mud but removed the highlight
+    // roll-off entirely: everything above 1.0 clamps to the same #ffffff, so the
+    // Deepwood snow biome renders as a featureless blown sheet and lit skin goes
+    // flat. NeutralToneMapping (Khronos PBR Neutral, three r165+) is the middle
+    // term: near-identity below ~0.76 and far more saturation-preserving than ACES,
+    // but it compresses instead of clipping above it. Note NoToneMapping also meant
+    // toneMappingExposure was ignored outright — with the composer active the tone
+    // map is applied by OutputPass, whose NoToneMapping path never multiplies by
+    // exposure at all — so 1.15 is a real +15% mid-tone lift, not a re-statement.
+    // The menu is untouched: hud.js restores ACES 1.12 for the menu diorama.
+    kn.renderer.toneMapping = THREE.NeutralToneMapping;
+    kn.renderer.toneMappingExposure = 1.15;
     const sunK = K.sun || MAPS.isla_viva.sun, hemiK = K.hemi || MAPS.isla_viva.hemi;
     kn.sun.intensity = sunK.intensity; kn.sun.color.setHex(sunK.color);
     kn.sun.position.set(sunK.pos[0], sunK.pos[1], sunK.pos[2]);
@@ -299,7 +353,15 @@ export async function buildMap(W, mapId) {
 
   // ── terrain mesh (vertex-colored biome tint × tiled grain texture) ────────
   const aniso = W._texAniso || 4;
-  const SEG = 220;
+  // 220 segments over 1600 m is 7.27 m per vertex — coarse enough that the grid
+  // stairstep is visible on the Isla Viva volcano silhouette from the air. 300 is
+  // 5.33 m/vertex for ~180k triangles on the SAME single draw call. The mesh is
+  // PURELY VISUAL: gameplay reads the analytic heightAt0 (returned as heightAt /
+  // groundAt) and nothing in runtime/ consumes map.terrain, so raising this cannot
+  // move a collision surface. Do NOT go past ~320 — the per-vertex loop calls
+  // heightAt0 + colorAt (both fbm) and geometry is ~44 bytes/vertex (301² ≈ 4.0 MB
+  // here vs 2.1 MB at 220).
+  const SEG = 300;
   const terrGeo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
   terrGeo.rotateX(-Math.PI / 2);
   const pos = terrGeo.attributes.position;
@@ -327,6 +389,7 @@ export async function buildMap(W, mapId) {
   terrain.receiveShadow = true;
   terrain.name = "terrain";
   g.add(terrain);
+  await yieldPhase();                                // phase 1/3 done — let the loader paint
 
   // ── water ─────────────────────────────────────────────────────────────────
   if (K.water) {
@@ -370,7 +433,15 @@ export async function buildMap(W, mapId) {
     const zenith = new THREE.Color(K.zenith || MAPS.isla_viva.zenith);
     const sp = (K.sun || MAPS.isla_viva.sun).pos;
     const sunDir = new THREE.Vector3(sp[0], sp[1], sp[2]).normalize();
-    const skyGeo = new THREE.SphereGeometry(SIZE * 0.82, 24, 16);
+    // The dome is recentred on the camera every frame but the water plane is
+    // SIZE*1.6 wide, so at radius SIZE*0.82 (1312 m) the sphere intersected the
+    // waterline in a visible 24-gon — a hard-edged pale polygon floating on the
+    // Isla Viva horizon. 1.15 (1840 m) pushes the intersection past anything that
+    // reads, and 48x24 kills the faceted gradient banding. Ceiling is the camera's
+    // 2000 m far plane: anything at or above SIZE*1.25 gets clipped into a hole in
+    // the sky. Do not enlarge the water plane to compensate — at the current fog
+    // density water past ~1500 m is fully blended to the dome's own horizon stop.
+    const skyGeo = new THREE.SphereGeometry(SIZE * 1.15, 48, 24);
     const skyMat = new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
       uniforms: { top: { value: zenith }, bot: { value: horizon }, sunDir: { value: sunDir } },
@@ -482,6 +553,18 @@ export async function buildMap(W, mapId) {
       colliders.push({ kind: "box", minX: cx - hw, maxX: cx + hw, minY: cy - h / 2, maxY: cy + h / 2, minZ: cz - hd, maxZ: cz + hd });
     }
   }
+  // addBox rotates a box about its OWN centre (rotateY then translate on an
+  // origin-centred BoxGeometry), so a caller that also wants the box MOVED around
+  // an anchor has to rotate the offset itself. house() passed pre-offset WORLD
+  // centres, so its rot was applied to the slabs but never to their positions:
+  // Palm Bay (town along:"z", rot ±PI/2) came out as a pinwheel of loose
+  // intersecting planks under a mismatched roof, and rot=PI — a geometric no-op on
+  // a symmetric box — left the door gap on +Z, so every x-aligned town presented a
+  // blank wall to its own street on one side. ax/az = anchor, dx/dz = LOCAL offset.
+  function addBoxR(ax, az, dx, dz, cy, w, h, d, color, rot, opts) {
+    const c = Math.cos(rot), s = Math.sin(rot);   // matches THREE rotateY: x' = x·cos + z·sin, z' = -x·sin + z·cos
+    addBox(ax + dx * c + dz * s, cy, az - dx * s + dz * c, w, h, d, color, Object.assign({ rotY: rot }, opts || {}));
+  }
   function addRamp(cx, cy, cz, w, h, d, dir, color) {
     // w = width across, d = run length along the travel axis, h = climb.
     // The rendered slab MUST rise the same way supportAt's math does
@@ -519,8 +602,15 @@ export async function buildMap(W, mapId) {
 
   const lootPoints = [];
   const chestPoints = [];
-  function loot(x, y, z, poi) { lootPoints.push({ x, y, z, kind: "floor", poi }); }
-  function chest(x, y, z, poi) { chestPoints.push({ x, y, z, kind: "chest", poi }); }
+  // loot.js clamps anything that would SINK (spawnItem/spawnChest both Math.max
+  // against heightAt), but it has no notion of the waterline at all — measured over
+  // 300 seeds, 64% of Palm Bay's, 40% of Lakeside Cabins' and 39% of Banana Farm's
+  // town chests spawned under the sea. Guarding on the AUTHORED y rather than on the
+  // ground under it is deliberate: it drops the submerged town/farm placements while
+  // keeping every INTENTIONAL over-water one — pier loot sits at waterY+1.1, the
+  // stilt hut's at waterY+0.85/0.95 and the shipwreck's at waterY+0.8 and +3.4.
+  function loot(x, y, z, poi) { if (y < waterY + 0.4) return; lootPoints.push({ x, y, z, kind: "floor", poi }); }
+  function chest(x, y, z, poi) { if (y < waterY + 0.4) return; chestPoints.push({ x, y, z, kind: "chest", poi }); }
 
   // — building generators (shared) —
   function hut(x, z, w, d, rot, color, poi) {
@@ -551,10 +641,20 @@ export async function buildMap(W, mapId) {
       addBox(x, y - 0.12, z, w + 0.5, 0.24, d + 0.5, shade(color, 0.85));   // deck
     }
     const H = 3.2;
-    // 4 walls with a door gap on the front
+    // 4 walls with a door gap on the front and a window band in each side wall.
+    // Same aperture as house(): 1.20 m sill (standing eye y+1.62 clears it, crouched
+    // eye y+0.97 does not), header from y+2.30, so it is a firing port you cannot
+    // step or jump through. NOTE these still use addBox, not addBoxR: hut() has the
+    // same rotate-the-offset latency as house() had, but all 6+ call sites pass
+    // rot = 0, so it is unexposed and rewriting it would be churn.
+    const winW = 1.2, segD = d / 2 - winW / 2, jamb = d / 4 + winW / 4;
     addBox(x, y + H / 2, z - d / 2, w, H, T, color, { rotY: rot });          // back
-    addBox(x - w / 2, y + H / 2, z, T, H, d, color, { rotY: rot });          // left
-    addBox(x + w / 2, y + H / 2, z, T, H, d, color, { rotY: rot });          // right
+    for (const sx of [-1, 1]) {
+      addBox(x + sx * w / 2, y + H / 2, z - jamb, T, H, segD, color, { rotY: rot });
+      addBox(x + sx * w / 2, y + H / 2, z + jamb, T, H, segD, color, { rotY: rot });
+      addBox(x + sx * w / 2, y + 0.60, z, T, 1.20, winW, color, { rotY: rot });   // sill
+      addBox(x + sx * w / 2, y + 2.75, z, T, 0.90, winW, color, { rotY: rot });   // header (y+2.30..y+3.20)
+    }
     const doorW = 1.4;
     addBox(x - w / 4 - doorW / 4, y + H / 2, z + d / 2, w / 2 - doorW / 2, H, T, color, { rotY: rot });
     addBox(x + w / 4 + doorW / 4, y + H / 2, z + d / 2, w / 2 - doorW / 2, H, T, color, { rotY: rot });
@@ -581,9 +681,22 @@ export async function buildMap(W, mapId) {
         const hz1 = pdir === 2 ? z + rrun * 0.55 : z - 0.2;
         addSlabHole(x, fy + 0.15, z, fw, 0.3, shade(color, 0.8), rx - 1.6, rx + 1.6, hz0, hz1);
       }
-      // 4 walls with window band gap + door gap on ground
-      const wallH = FH - (f > 0 ? 1.2 : 0);  // upper floors leave open window band
-      const wy = fy + wallH / 2 + (f > 0 ? 0 : 0);
+      // 4 walls with a window band on upper floors + a door gap on the ground floor.
+      //
+      // The band used to be one wall of height FH-1.2 = 2.80 sitting at fy..fy+2.80,
+      // leaving the gap at fy+2.80..fy+4.00. addSlabHole puts the floor SURFACE at
+      // fy+0.30, so the standing eyeline is fy+1.92 and the crouched one fy+1.27 —
+      // the opening was 0.88 m above the tallest thing that could look through it.
+      // No tower interior in the game could be seen or shot out of, and tower() is
+      // the only multi-floor generator (12 calls a match). Split into a SILL and a
+      // HEADER so the aperture lands on the eyeline instead: fy+1.40..fy+2.50 is
+      // 0.52 m below standing eye and 0.13 m above crouched, so crouching behind the
+      // sill is real cover. It stays a firing port, not an exit: the 1.10 m sill top
+      // is over STEP_UP (0.55) so you cannot step out, and at the 1.38 m jump apex
+      // the capsule spans fy+1.68..fy+3.48, which overlaps the header (minY fy+2.50)
+      // so blockedHoriz still stops you.
+      const SILL_H = 1.40, SILL_Y = fy + 0.70;      // spans fy+0.00..fy+1.40
+      const HEAD_H = 1.50, HEAD_Y = fy + 3.25;      // spans fy+2.50..fy+4.00
       if (f === 0) {
         const dw = 1.8;
         addBox(x - W2 / 2 - dw / 4, fy + FH / 2, z + W2, W2 - dw / 2, FH, T, color);
@@ -593,10 +706,10 @@ export async function buildMap(W, mapId) {
         addBox(x - W2, fy + FH / 2, z, T, FH, fw, color);
         addBox(x + W2, fy + FH / 2, z, T, FH, fw, color);
       } else {
-        addBox(x, wy, z + W2, fw, wallH, T, color);
-        addBox(x, wy, z - W2, fw, wallH, T, color);
-        addBox(x - W2, wy, z, T, wallH, fw, color);
-        addBox(x + W2, wy, z, T, wallH, fw, color);
+        addBox(x, SILL_Y, z + W2, fw, SILL_H, T, color); addBox(x, HEAD_Y, z + W2, fw, HEAD_H, T, color);
+        addBox(x, SILL_Y, z - W2, fw, SILL_H, T, color); addBox(x, HEAD_Y, z - W2, fw, HEAD_H, T, color);
+        addBox(x - W2, SILL_Y, z, T, SILL_H, fw, color); addBox(x - W2, HEAD_Y, z, T, HEAD_H, fw, color);
+        addBox(x + W2, SILL_Y, z, T, SILL_H, fw, color); addBox(x + W2, HEAD_Y, z, T, HEAD_H, fw, color);
       }
       // interior ramp to next floor
       if (f < floors - 1) addRamp(x + (f % 2 ? -fw / 4 : fw / 4), fy, z, 2.2, FH, fw * 0.7, f % 2 ? 3 : 2, shade(color, 0.7));
@@ -641,13 +754,25 @@ export async function buildMap(W, mapId) {
 
   // ── per-map POIs + props plan (props = pure scenery + cover collision) ────
   const pois = [];
+  const landmarks = [];             // {x,z,r} unnamed inter-POI structures — trees keep clear
+  const lampPts = [];               // {x,y,z} emissive lamp heads — the near-lamp light pool follows these
   const props = { palm: [], tree: [], pine: [], birch: [], bush: [], rocks: [], car: [], container: [], barrel: [] };
-  function scatterTrees(kind, n, minH, maxH) {
-    for (let i = 0; i < n; i++) {
-      const x = (rng() * 2 - 1) * (HALF - 40), z = (rng() * 2 - 1) * (HALF - 40);
+  // Scatter is STRATIFIED (grid-jittered), not uniform-random: `g` is a grid
+  // dimension, not an attempt count. Uniform placement left huge holes — measured
+  // on Ashgrid seed 1234, mean distance from open ground to the nearest solid-collider
+  // prop was 48 m with 56% of open ground more than 40 m from any cover. Stratifying
+  // bounds the worst case (one candidate per cell) and measures 23 m / 8% at the grid
+  // dims the call sites now pass. Deliberately NOT clustered: replicating the
+  // generator with the audit's "40-60 cluster seeds of 6-12 props" measured 143 m and
+  // 88% — 3x WORSE — because ~42 clusters over 2.56 km² sit ~247 m apart, not the
+  // 40 m the recommendation assumed.
+  function scatterTrees(kind, g, minH, maxH) {
+    const EX = HALF - 40, step = (EX * 2) / g;
+    for (let i = 0; i < g; i++) for (let j = 0; j < g; j++) {
+      const x = -EX + (i + rng()) * step, z = -EX + (j + rng()) * step;
       const h = heightAt0(x, z);
       if (h < minH || h > maxH) continue;
-      if (nearPoi(x, z, 26)) continue;
+      if (nearPoi(x, z, 26) || nearLandmark(x, z)) continue;
       const s = 0.8 + rng() * 0.9;
       props[kind].push({ x, y: h, z, s, ry: rng() * Math.PI * 2 });
     }
@@ -656,26 +781,99 @@ export async function buildMap(W, mapId) {
     for (const p of pois) { const d = Math.hypot(x - p.x, z - p.z); if (d < p.r + pad) return true; }
     return false;
   }
+  function nearLandmark(x, z) {
+    for (const l of landmarks) { if (Math.hypot(x - l.x, z - l.z) < l.r) return true; }
+    return false;
+  }
   function poi(id, name, x, z, r) { pois.push({ id, name, x, z, r }); }
+  // The POI table is HARDCODED but the terrain is seeded, so most of Isla Viva's
+  // named landing zones sit under water on most seeds — measured across 8 seeds,
+  // Palm Bay's centre ground ranges -3.8..+0.9 m and Cliff Temples' -2.4..+2.0 m.
+  // Consequence measured over 40 seeds: Palm Bay built 13% of its 8 houses and
+  // Jungle Market 23%, and the Cliff Temples keep built on 2 of 8 seeds. Snapping
+  // the centre to the nearest mostly-dry lot takes those to 69% / 63% / 8-of-8 at a
+  // mean move of 78-88 m. Deterministic (no Math.random) — the map must stay
+  // seed-reproducible because every multiplayer client rebuilds it from W.seed.
+  function dryFrac(cx, cz, R, minH) {
+    let k = 0, n = 0;
+    for (let ring = 1; ring <= 3; ring++) for (let i = 0; i < 8; i++) {
+      const a = i / 8 * Math.PI * 2 + ring * 0.4, rr = R * ring / 3;
+      if (heightAt0(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr) > minH) k++;
+      n++;
+    }
+    if (heightAt0(cx, cz) > minH) k++;
+    n++;
+    return k / n;
+  }
+  function snapPoiToLand(p, minH) {
+    const R = p.r * 0.6;
+    if (dryFrac(p.x, p.z, R, minH) >= 0.6) return;
+    for (let ring = 20; ring <= 260; ring += 20) for (let i = 0; i < 16; i++) {
+      const a = i / 16 * Math.PI * 2 + ring * 0.11;
+      const cx = p.x + Math.cos(a) * ring, cz = p.z + Math.sin(a) * ring;
+      if (dryFrac(cx, cz, R, minH) >= 0.6) { p.x = cx; p.z = cz; return; }
+    }
+  }
 
   // ── roads + towns (Final-Drop density) ────────────────────────────────────
   // Roads are COSMETIC flat ribbons laid on the terrain (no collider — you walk
   // over them). Towns place houses in lots along a street with front doors to the
   // road + a coloured roof, replacing the old "identical huts at random offsets".
   const roadGeos = [];                                  // merged into one asphalt mesh after structures
+  // The rendered terrain is a LINEAR interpolation of heightAt0 sampled on the SEG
+  // grid, not heightAt0 itself — over one 5.3 m cell the two differ by up to ~0.12 m
+  // on curved ground. Ground-hugging geometry that samples heightAt0 directly
+  // therefore buries itself in every ridge; sample the same bilinear surface the
+  // terrain mesh actually draws.
+  const CELLW = SIZE / SEG;
+  function meshY(x, z) {
+    const gx = (x + HALF) / CELLW, gz = (z + HALF) / CELLW;
+    const i0 = Math.floor(gx), j0 = Math.floor(gz);
+    const fx = gx - i0, fz = gz - j0;
+    const x0 = i0 * CELLW - HALF, z0 = j0 * CELLW - HALF, x1 = x0 + CELLW, z1 = z0 + CELLW;
+    const h00 = heightAt0(x0, z0), h10 = heightAt0(x1, z0), h01 = heightAt0(x0, z1), h11 = heightAt0(x1, z1);
+    return (h00 + (h10 - h00) * fx) * (1 - fz) + (h01 + (h11 - h01) * fx) * fz;
+  }
+  // Roads used to be a chain of BoxGeometry slabs, one per ~9 m, each rotated in
+  // YAW ONLY and dropped at heightAt0(midpoint)+0.07. On anything but flat ground
+  // that is a staircase of floating rectangles: the Ranger Ridge network read as
+  // scattered brown slabs and the Isla Viva volcano climb as a dashed line. One
+  // conforming ribbon instead — the terrain is sampled at EVERY cross-section
+  // vertex, so the surface bends with the ground and no edge can float. Roads carry
+  // no collider (they only ever reach roadGeos), so this is pure render.
+  const ROAD_STEP = 4;      // metres between cross-sections
+  const ROAD_LIFT = 0.06;   // above the mesh; well under STEP_UP (0.55) either way
+  const ROAD_XS = [-1, -0.5, 0, 0.5, 1];   // cross-section offsets, x half-width
   function road(x0, z0, x1, z1, width) {
     const dx = x1 - x0, dz = z1 - z0, len = Math.hypot(dx, dz);
     if (len < 1) return;
-    const steps = Math.max(1, Math.ceil(len / 9));
-    const ang = Math.atan2(dx, dz);                     // rotate the run (local +Z) onto the segment dir
-    for (let s = 0; s < steps; s++) {
-      const t = (s + 0.5) / steps, mx = x0 + dx * t, mz = z0 + dz * t;
-      const seg = len / steps + 0.5;
-      const geo = new THREE.BoxGeometry(width, 0.14, seg);
-      scaleBoxUV(geo, width, 0.14, seg, ROAD_TILE);
-      geo.rotateY(ang); geo.translate(mx, heightAt0(mx, mz) + 0.07, mz);
-      roadGeos.push(geo);
+    const n = Math.max(1, Math.ceil(len / ROAD_STEP));
+    const ux = dx / len, uz = dz / len;      // along
+    const px = -uz, pz = ux;                 // perpendicular
+    const hw = width / 2, W2 = ROAD_XS.length;
+    const posA = new Float32Array((n + 1) * W2 * 3);
+    const uvA = new Float32Array((n + 1) * W2 * 2);
+    const idx = [];
+    let k = 0;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, cx = x0 + dx * t, cz = z0 + dz * t;
+      for (let j = 0; j < W2; j++) {
+        const vx = cx + px * ROAD_XS[j] * hw, vz = cz + pz * ROAD_XS[j] * hw;
+        posA[k * 3] = vx; posA[k * 3 + 1] = meshY(vx, vz) + ROAD_LIFT; posA[k * 3 + 2] = vz;
+        uvA[k * 2] = vx / ROAD_TILE; uvA[k * 2 + 1] = vz / ROAD_TILE;   // world-planar, same texel density as before
+        k++;
+      }
     }
+    for (let i = 0; i < n; i++) for (let j = 0; j < W2 - 1; j++) {
+      const a = i * W2 + j, b = a + 1, c = a + W2, dI = c + 1;
+      idx.push(a, b, c, b, dI, c);           // winding gives +Y normals (p x u = +Y)
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(posA, 3));
+    geo.setAttribute("uv", new THREE.BufferAttribute(uvA, 2));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    roadGeos.push(geo);
   }
   // greedy nearest-neighbour tree over the POIs → a connected road network
   function buildRoads(width) {
@@ -686,25 +884,56 @@ export async function buildMap(W, mapId) {
     }
   }
   function parkingLot(cx, cz, w, d, poi) {
-    const geo = new THREE.BoxGeometry(w, 0.12, d);
-    scaleBoxUV(geo, w, 0.12, d, ROAD_TILE);
-    geo.translate(cx, heightAt0(cx, cz) + 0.07, cz); roadGeos.push(geo);
+    // Same defect as road(): one flat slab dropped at the centre's height floated
+    // (or buried) at every corner on a sloped lot. A subdivided conforming plane.
+    const nx = Math.max(2, Math.round(w / 4)), nz = Math.max(2, Math.round(d / 4));
+    const geo = new THREE.PlaneGeometry(w, d, nx, nz);
+    geo.rotateX(-Math.PI / 2);
+    const pp = geo.attributes.position, pu = geo.attributes.uv;
+    for (let i = 0; i < pp.count; i++) {
+      const vx = cx + pp.getX(i), vz = cz + pp.getZ(i);
+      pp.setY(i, meshY(vx, vz) + ROAD_LIFT);
+      pu.setXY(i, vx / ROAD_TILE, vz / ROAD_TILE);
+    }
+    geo.translate(cx, 0, cz);
+    geo.computeVertexNormals();
+    roadGeos.push(geo);
     for (let i = 0; i < 4; i++) {
       const px = cx - w / 2 + 3 + (i % 2) * (w - 6), pz = cz - d / 2 + 3 + Math.floor(i / 2) * (d - 6);
       props.car.push({ x: px, y: heightAt0(px, pz), z: pz, s: 2.1, ry: 0 });
     }
   }
   // a house: textured walls + a distinct COLOURED roof (reads as a town from the air)
+  // Every wall goes through addBoxR in LOCAL space so `rot` moves the slab as well
+  // as turning it (see addBoxR). Two structural changes on top of that: the side
+  // walls carry a real window aperture and the back wall carries a second door.
+  // Before, a house was four solid walls with ONE door — a blind box with a single
+  // entrance, unroofable (the roof deck spans y+3.60..y+3.90 against a maximum
+  // mountable height of jumpV²/2|g| + STEP_UP = 7.8²/44 + 0.55 = 1.93 m) and, with
+  // building permanently removed, impossible to hold or push. Aperture geometry:
+  // standing eye y+1.62 clears the 1.20 m sill by 0.42 m while crouched eye y+0.97
+  // is 0.23 m below it, so crouching behind the wall is real cover; the sill top
+  // exceeds STEP_UP (0.55) so you cannot step through, and a 1.38 m jump apex puts
+  // the capsule at y+1.38..y+3.18, overlapping the header at y+2.30 — blockedHoriz
+  // still blocks. It is a firing port; the back door is the second entrance.
   function house(x, z, w, d, rot, wallC, roofC, poiId) {
-    const y = heightAt0(x, z), H = 3.4, T = 0.32, doorW = 1.4;
-    addBox(x, y + H / 2, z - d / 2, w, H, T, wallC, { rotY: rot });                 // back
-    addBox(x - w / 2, y + H / 2, z, T, H, d, wallC, { rotY: rot });                 // left
-    addBox(x + w / 2, y + H / 2, z, T, H, d, wallC, { rotY: rot });                 // right
-    addBox(x - w / 4 - doorW / 4, y + H / 2, z + d / 2, w / 2 - doorW / 2, H, T, wallC, { rotY: rot });  // front L of door
-    addBox(x + w / 4 + doorW / 4, y + H / 2, z + d / 2, w / 2 - doorW / 2, H, T, wallC, { rotY: rot });  // front R of door
-    addBox(x, y + H - 0.35, z + d / 2, doorW, 0.7, T, wallC, { rotY: rot });        // door lintel
-    addBox(x, y + H + 0.35, z, w + 0.7, 0.3, d + 0.7, roofC, { rotY: rot });        // roof deck (overhangs)
-    addBox(x, y + H + 0.85, z, w * 0.5, 0.7, d + 0.5, shade(roofC, 0.88), { rotY: rot }); // ridge cap
+    const y = heightAt0(x, z), H = 3.4, T = 0.32, doorW = 1.4, winW = 1.2;
+    const segW = w / 2 - doorW / 2, segD = d / 2 - winW / 2;
+    const jamb = d / 4 + winW / 4, pier = w / 4 + doorW / 4;
+    addBoxR(x, z, -pier, -d / 2, y + H / 2, segW, H, T, wallC, rot);                // back, L of back door
+    addBoxR(x, z, pier, -d / 2, y + H / 2, segW, H, T, wallC, rot);                 // back, R of back door
+    addBoxR(x, z, 0, -d / 2, y + H - 0.35, doorW, 0.7, T, wallC, rot);              // back door lintel
+    for (const sx of [-1, 1]) {                                                     // side walls with a window band
+      addBoxR(x, z, sx * w / 2, -jamb, y + H / 2, T, H, segD, wallC, rot);
+      addBoxR(x, z, sx * w / 2, jamb, y + H / 2, T, H, segD, wallC, rot);
+      addBoxR(x, z, sx * w / 2, 0, y + 0.60, T, 1.20, winW, wallC, rot);            // sill  (y+0.00..y+1.20)
+      addBoxR(x, z, sx * w / 2, 0, y + 2.85, T, 1.10, winW, wallC, rot);            // header (y+2.30..y+3.40)
+    }
+    addBoxR(x, z, -pier, d / 2, y + H / 2, segW, H, T, wallC, rot);                 // front L of door
+    addBoxR(x, z, pier, d / 2, y + H / 2, segW, H, T, wallC, rot);                  // front R of door
+    addBoxR(x, z, 0, d / 2, y + H - 0.35, doorW, 0.7, T, wallC, rot);               // door lintel
+    addBoxR(x, z, 0, 0, y + H + 0.35, w + 0.7, 0.3, d + 0.7, roofC, rot);           // roof deck (overhangs)
+    addBoxR(x, z, 0, 0, y + H + 0.85, w * 0.5, 0.7, d + 0.5, shade(roofC, 0.88), rot); // ridge cap
     loot(x, y + 0.5, z, poiId);
     if (rng() < 0.5) chest(x + (rng() - 0.5) * w * 0.4, y + 0.6, z + (rng() - 0.5) * d * 0.4, poiId);
   }
@@ -718,6 +947,7 @@ export async function buildMap(W, mapId) {
         if (y < minH) continue;
         addBox(lx, y + 2.4, lz, 0.22, 4.8, 0.22, "#3a3d42", { collide: false });   // lamp pole
         addBox(lx, y + 4.9, lz, 0.5, 0.3, 0.5, "#ffe9a8", { collide: false });      // warm lamp head
+        lampPts.push({ x: lx, y: y + 4.9, z: lz });
       }
     }
     for (let i = 0; i < 2; i++) {                                                    // market stalls
@@ -742,29 +972,141 @@ export async function buildMap(W, mapId) {
     opts = opts || {};
     const R = p.r, minH = opts.minH != null ? opts.minH : 0.8, A = (opts.along || "x") === "x", nPer = opts.nPer || 4;
     if (A) road(p.x - R * 0.95, p.z, p.x + R * 0.95, p.z, 7); else road(p.x, p.z - R * 0.95, p.x, p.z + R * 0.95, 7);
-    const span = R * 1.5, step = span / nPer;
+    const span = R * 1.5;
+    // town() and farmland() between them build 8 of the 25 POIs across all three
+    // maps, and the only per-call variation was colours, street axis and house
+    // count — so beyond the one hero landmark each map gets, no town had a
+    // silhouette of its own on approach. `layout` and `signature` are the two
+    // cheapest knobs that fix that without a new generator.
+    const cross = opts.layout === "crossroads";
+    if (cross) { if (A) road(p.x, p.z - R * 0.95, p.x, p.z + R * 0.95, 7); else road(p.x - R * 0.95, p.z, p.x + R * 0.95, p.z, 7); }
+    houseRow(A, cross ? Math.max(2, Math.ceil(nPer / 2)) : nPer);
+    if (cross) houseRow(!A, Math.max(2, Math.floor(nPer / 2)));
+    function houseRow(A, nPer) {
+    const step = span / nPer;
     for (const side of [-1, 1]) {
       for (let i = 0; i < nPer; i++) {
-        const a0 = -span / 2 + (i + 0.5) * step + (rng() - 0.5) * 3, set = side * (11.5 + rng() * 2);
-        const hx = A ? p.x + a0 : p.x + set, hz = A ? p.z + set : p.z + a0;
-        if (heightAt0(hx, hz) < minH) continue;
+        const a0 = -span / 2 + (i + 0.5) * step + (rng() - 0.5) * 3, base = 11.5 + rng() * 2;
+        // Retry the SETBACK outward before giving up on a house. A lot that steps
+        // into the lake used to just drop the house and leave a gap in the street:
+        // measured over 40 seeds, Lakeside Cabins built 64% of its 8 houses that way
+        // (the POI snap does not help it — its centre is dry, its lots are not).
+        // With the retry it builds 98%, and dry towns never enter the loop's second
+        // iteration at all (Logging Camp and Savanna Outpost measure 100% either way).
+        let hx = 0, hz = 0, okSet = false;
+        for (const mul of [1, 1.5, 2.1, 2.7]) {
+          const set = side * base * mul;
+          const tx = A ? p.x + a0 : p.x + set, tz = A ? p.z + set : p.z + a0;
+          if (heightAt0(tx, tz) >= minH) { hx = tx; hz = tz; okSet = true; break; }
+        }
+        if (!okSet) continue;
         const rot = A ? (side > 0 ? Math.PI : 0) : (side > 0 ? -Math.PI / 2 : Math.PI / 2);   // door faces the street
         house(hx, hz, 6 + rng() * 2, 5 + rng() * 1.5, rot, wallCs[i % wallCs.length], roofC, p.id);
       }
     }
+    }
     parkingLot(A ? p.x + R * 0.78 : p.x, A ? p.z : p.z + R * 0.78, 15, 13, p);
     streetFurniture(p.x, p.z, A, span, minH);
-    for (let i = 0; i < 2; i++) chest(p.x + (rng() - 0.5) * R * 0.6, heightAt0(p.x, p.z) + 0.6, p.z + (rng() - 0.5) * R * 0.6, p.id);
+    if (cross) streetFurniture(p.x, p.z, !A, span, minH);
+    // one distinctive structure per town, drawn from the kit already in this file
+    const sy = heightAt0(p.x, p.z);
+    if (opts.signature === "clocktower" && sy >= minH) {
+      tower(p.x, p.z - 26, 2, 7, wallCs[0], p.id);
+      addBox(p.x, heightAt0(p.x, p.z - 26) + 8.9, p.z - 26 + 3.6, 3, 3, 0.3, "#e8e0c8");   // clock face, visible down the street
+    } else if (opts.signature === "depot" && sy >= minH) {
+      for (let c = 0; c < 3; c++) {
+        const dx = p.x + (c - 1) * 7, dz = p.z - 30;
+        for (let b = 0; b < 4; b++) props.barrel.push({ x: dx + (b % 2) * 1.6, y: heightAt0(dx, dz), z: dz + Math.floor(b / 2) * 1.6, s: 1.4, ry: rng() * Math.PI });
+      }
+      for (const [cx2, cz2] of [[-8, -36], [8, -36], [-8, -24], [8, -24]]) addBox(p.x + cx2, heightAt0(p.x + cx2, p.z + cz2) + 2.4, p.z + cz2, 0.3, 4.8, 0.3, "#6a6258");
+      addBox(p.x, heightAt0(p.x, p.z - 30) + 5.0, p.z - 30, 18, 0.35, 13, "#8a8378");        // canopy
+      chest(p.x, heightAt0(p.x, p.z - 30) + 0.6, p.z - 30, p.id);
+    }
+    // Sample the CHEST's own ground, not the POI centre's. loot.js clamps anything
+    // that would sink but nothing pulls a chest DOWN, so an offset chest on a slope
+    // hovered: measured over 300 seeds, 10% of Palm Bay's, 20% of Coco Village's and
+    // 25% of Logging Camp's chests floated more than 1 m, worst case 5.3 m.
+    for (let i = 0; i < 2; i++) {
+      const cx = p.x + (rng() - 0.5) * R * 0.6, cz = p.z + (rng() - 0.5) * R * 0.6;
+      chest(cx, heightAt0(cx, cz) + 0.6, cz, p.id);
+    }
+  }
+  // ── unnamed inter-POI landmarks ───────────────────────────────────────────
+  // Summing pi*r^2 over Isla Viva's eight POIs gives 271,200 m2 = 10.6% of the
+  // 2.56 km2 map, and every structure-emitting call in this file is anchored to a
+  // pois[i] — so 89% of the square had no built content at all beyond sky islands
+  // and loose loot points. Rotations were a walk across nothing. These are drawn
+  // ONLY from generators that already exist, are seeded off the same rng, and are
+  // recorded in `landmarks` so scatterTrees does not grow a pine through the roof.
+  // MUST be called after every poi() and BEFORE that branch's scatterTrees block.
+  function minorLandmarks(n, wallCs, roofC, opts) {
+    opts = opts || {};
+    const minH = opts.minH != null ? opts.minH : waterY + 1.0;
+    let placed = 0;
+    for (let tries = 0; tries < n * 14 && placed < n; tries++) {
+      const x = (rng() * 2 - 1) * (HALF - 90), z = (rng() * 2 - 1) * (HALF - 90);
+      if (heightAt0(x, z) < minH) continue;
+      if (nearPoi(x, z, 60)) continue;
+      let tooClose = false;
+      for (const l of landmarks) { if (Math.hypot(x - l.x, z - l.z) < 120) { tooClose = true; break; } }
+      if (tooClose) continue;
+      landmarks.push({ x, z, r: 22 });
+      placed++;
+      const kind = Math.floor(rng() * 5), y = heightAt0(x, z);
+      if (kind === 0) {
+        house(x, z, 6 + rng() * 2, 5 + rng() * 1.5, Math.floor(rng() * 4) * Math.PI / 2, wallCs[0], roofC, null);
+      } else if (kind === 1) {                              // two-hut camp
+        hut(x, z, 5, 4.4, 0, wallCs[0], null);
+        hut(x + 9 + rng() * 4, z + 6, 4.5, 4, 0, wallCs[1 % wallCs.length], null);
+      } else if (kind === 2) {
+        rangerTower(x, z, wallCs[1 % wallCs.length], null);
+      } else if (kind === 3) {                              // ruin — same fragment pattern as Rubble Row
+        for (let i = 0; i < 4; i++) {
+          const rx = x + (rng() - 0.5) * 14, rz = z + (rng() - 0.5) * 14, ry2 = heightAt0(rx, rz);
+          addBox(rx, ry2 + 1.1, rz, 3.5 + rng() * 3, 2.2 + rng() * 1.4, 0.5, shade(wallCs[0], 0.8 + Math.floor(rng() * 4) * 0.1), { rotY: rng() * Math.PI });
+        }
+        loot(x, y + 0.5, z, null);
+      } else {                                              // fenced paddock (cosmetic, never traps)
+        const F = 11, fh = 1.0;
+        addBox(x, heightAt0(x, z - F) + fh / 2, z - F, F * 2, fh, 0.2, "#9a7a4a", { collide: false });
+        addBox(x, heightAt0(x, z + F) + fh / 2, z + F, F * 2, fh, 0.2, "#9a7a4a", { collide: false });
+        addBox(x - F, heightAt0(x - F, z) + fh / 2, z, 0.2, fh, F * 2, "#9a7a4a", { collide: false });
+        addBox(x + F, heightAt0(x + F, z) + fh / 2, z, 0.2, fh, F * 2, "#9a7a4a", { collide: false });
+        hut(x, z, 4.5, 4, 0, wallCs[0], null);
+      }
+      const lx = x + (rng() - 0.5) * 16, lz = z + (rng() - 0.5) * 16;
+      loot(lx, heightAt0(lx, lz) + 0.5, lz, null);
+      if (rng() < 0.25) chest(x + 8, heightAt0(x + 8, z) + 0.6, z, null);
+    }
   }
   // ── hero landmarks (one distinctive silhouette per biome, like Final Drop's
   //    lighthouse / domes) — procedural, textured via the batch, with a base chest.
+  // The most memorable silhouette on the map used to be six stacked SOLID boxes —
+  // visible from anywhere and impossible to do anything with, which inverts the
+  // reason a landmark is valuable. Each band is now a shell of 4 slabs around a
+  // hollow core with a door at the base, so it is an enclosed room a fight can be
+  // predicted inside. Deliberately NOT stairs to the light room: the shaft tapers
+  // to 2.7 m by the top band, which only fits a ~66-degree flight — a wall you
+  // happen to be able to walk up. The interior loot is on the floor.
   function lighthouse(x, z, poi) {
-    const y = heightAt0(x, z), H = 22, seg = 6, sh = H / seg;
-    for (let i = 0; i < seg; i++) { const w = 6.2 - i * 0.7; addBox(x, y + i * sh + sh / 2, z, w, sh + 0.12, w, i % 2 ? "#dcdcdc" : "#c23b3b"); }  // red/white bands
+    const y = heightAt0(x, z), H = 22, seg = 6, sh = H / seg, T = 0.4;
+    for (let i = 0; i < seg; i++) {
+      const w = 6.2 - i * 0.7, hw = w / 2, c = i % 2 ? "#dcdcdc" : "#c23b3b", cy = y + i * sh + sh / 2;
+      if (i === 0) {                                    // door gap on the -Z face of the bottom band
+        const dw = 1.5, sw = (w - dw) / 2;
+        addBox(x - (dw + sw) / 2, cy, z - hw, sw, sh + 0.12, T, c);
+        addBox(x + (dw + sw) / 2, cy, z - hw, sw, sh + 0.12, T, c);
+        addBox(x, y + sh - 0.35, z - hw, dw, 0.7, T, c);
+      } else addBox(x, cy, z - hw, w, sh + 0.12, T, c);
+      addBox(x, cy, z + hw, w, sh + 0.12, T, c);
+      addBox(x - hw, cy, z, T, sh + 0.12, w, c);
+      addBox(x + hw, cy, z, T, sh + 0.12, w, c);
+    }
     addBox(x, y + H + 1.2, z, 4, 2.4, 4, "#2a3138");                    // light room
-    addBox(x, y + H + 1.2, z, 3, 1.3, 3, "#fff2b0");                    // the light
+    addBox(x, y + H + 1.2, z, 3, 1.3, 3, "#fff2b0", { collide: false }); // the light
+    lampPts.push({ x, y: y + H + 1.2, z });
     addBox(x, y + H + 2.7, z, 5, 0.6, 5, shade("#2a3138", 0.8));        // cap
-    chest(x + 4, y + 0.6, z, poi); loot(x - 4, y + 0.5, z, poi);
+    chest(x, y + 0.6, z, poi); loot(x - 4, y + 0.5, z, poi); loot(x, y + 0.5, z, poi);
   }
   function waterTower(x, z, poi) {
     const y = heightAt0(x, z), legH = 12;
@@ -775,13 +1117,31 @@ export async function buildMap(W, mapId) {
     addBox(x, y + legH + 5.5, z, 8.8, 1, 8.8, shade("#b6ad8c", 0.78)); // roof
     chest(x, y + 0.6, z, poi); loot(x + 5, y + 0.5, z, poi);
   }
+  // Was a SOLID 8x8x11 block plus a solid bell tower — the biggest silhouette on
+  // Deepwood and you could not get inside it. Four walls around an 8 x 11 nave with
+  // a door at each gable end, and a ramp inside the bell tower up to a deck.
   function steeple(x, z, poi) {
-    const y = heightAt0(x, z);
-    addBox(x, y + 4, z, 8, 8, 11, "#8f8a80");                          // church body
-    addBox(x, y + 8.6, z, 8.6, 1, 11.6, "#7a4a2a");                    // roof
-    addBox(x, y + 9, z - 4.5, 4.2, 18, 4.2, "#9a9488");                // bell tower
-    for (let i = 0; i < 4; i++) addBox(x, y + 18 + i * 1.6, z - 4.5, 3.2 - i * 0.75, 1.7, 3.2 - i * 0.75, "#6a4028");  // tapered spire
-    chest(x, y + 0.6, z, poi); loot(x + 4, y + 0.5, z, poi);
+    const y = heightAt0(x, z), T = 0.4, NW = 8, ND = 11, WH = 8, dw = 2;
+    const sw = (NW - dw) / 2;
+    for (const sz of [-1, 1]) {                                         // gable ends, door gap in each
+      addBox(x - (dw + sw) / 2, y + WH / 2, z + sz * ND / 2, sw, WH, T, "#8f8a80");
+      addBox(x + (dw + sw) / 2, y + WH / 2, z + sz * ND / 2, sw, WH, T, "#8f8a80");
+      addBox(x, y + WH - 1.6, z + sz * ND / 2, dw, 3.2, T, "#8f8a80");  // over the 4.8 m doorway
+    }
+    addBox(x - NW / 2, y + WH / 2, z, T, WH, ND, "#8f8a80");            // nave sides
+    addBox(x + NW / 2, y + WH / 2, z, T, WH, ND, "#8f8a80");
+    addBox(x, y + 8.6, z, 8.6, 1, 11.6, "#7a4a2a");                     // roof
+    // Bell tower is a SHELL rather than 18 m of solid stone — its ground floor opens
+    // into the nave, so the interior is one connected room. Deliberately NOT ramped
+    // to the belfry: a 4.2 m footprint can only fit a ~70-degree flight, which reads
+    // as a wall you happen to be able to walk up. The reward stays on the floor.
+    const TW = 4.2, TH = 18, tz = z - 4.5;
+    addBox(x, y + 9, tz - TW / 2, TW, TH, T, "#9a9488");
+    addBox(x - TW / 2, y + 9, tz, T, TH, TW, "#9a9488");
+    addBox(x + TW / 2, y + 9, tz, T, TH, TW, "#9a9488");
+    addBox(x, y + 13.5, tz + TW / 2, TW, 9, T, "#9a9488");              // open below y+9 so the nave feeds it
+    for (let i = 0; i < 4; i++) addBox(x, y + 19 + i * 1.6, tz, 3.2 - i * 0.75, 1.7, 3.2 - i * 0.75, "#6a4028", { collide: false });  // tapered spire (cosmetic cap)
+    chest(x, y + 0.6, z, poi); loot(x, y + 0.5, z, poi); loot(x + 4, y + 0.5, z, poi);
   }
   // a farm: a fenced field of crop rows + a red barn (hay-ramp roof chest) + a silo.
   // Gives the "Farm" POIs actual farmland (they had farm names but no farm geometry).
@@ -797,10 +1157,27 @@ export async function buildMap(W, mapId) {
     }
     const bx = cx + R * 0.9, bz = cz, by = heightAt0(bx, bz);
     if (by >= minH) {
-      addBox(bx, by + 2.4, bz, 8, 4.8, 12, "#b0623c");                   // red barn
+      // Was a SOLID 8 x 4.8 x 12 box whose only affordance was the hay ramp to a
+      // roof chest — the barn you can see from the whole field and not walk into.
+      // Four walls around the same footprint with a 3 m cart door on the +Z gable,
+      // plus a hayloft slab at by+2.6 reached by the existing hay ramp (addSlabHole
+      // so the ramp is not dead-ended into the loft's underside).
+      const BW = 8, BD = 12, BH = 4.8, BT = 0.35, cart = 3, bs = (BW - cart) / 2;
+      addBox(bx, by + BH / 2, bz - BD / 2, BW, BH, BT, "#b0623c");       // back gable
+      addBox(bx - BW / 2, by + BH / 2, bz, BT, BH, BD, "#b0623c");       // sides
+      addBox(bx + BW / 2, by + BH / 2, bz, BT, BH, BD, "#b0623c");
+      addBox(bx - (cart + bs) / 2, by + BH / 2, bz + BD / 2, bs, BH, BT, "#b0623c");   // front, L of cart door
+      addBox(bx + (cart + bs) / 2, by + BH / 2, bz + BD / 2, bs, BH, BT, "#b0623c");   // front, R
+      addBox(bx, by + BH - 0.6, bz + BD / 2, cart, 1.2, BT, "#b0623c");  // header over the 3.6 m opening
+      addBox(bx, by + 2.6, bz - 3, BW - BT * 2, 0.3, 6, shade("#b0623c", 0.9));       // hayloft over the back half
+      addRamp(bx, by, bz + 3, 2.2, 2.75, 5.5, 3, "#8a4d2f");             // loft ramp, in the open front half
       addBox(bx, by + 5.4, bz, 8.5, 1.2, 12.5, shade("#b0623c", 0.8));   // barn roof
-      addRamp(bx, by, bz + 7, 3, 5.1, 9, 3, "#8a4d2f");                  // hay ramp to the roof chest
+      // The hay ramp used to start at bz+7 and run 9 m, which put its top INSIDE the
+      // barn — fine against a solid block, but it now cuts straight through the cart
+      // door and the front gable. Pushed out so its top lands at the wall face.
+      addRamp(bx, by, bz + 11, 3, 5.1, 9, 3, "#8a4d2f");                 // hay ramp to the roof chest
       chest(bx, by + 5.4, bz, p.id);
+      loot(bx, by + 0.5, bz + 3, p.id); loot(bx, by + 3.1, bz - 3, p.id);   // barn floor + hayloft
       const sx = bx, sz = bz - 15, sy = heightAt0(sx, sz);
       addBox(sx, sy + 5, sz, 4, 10, 4, "#c8b48a");                       // silo
       addBox(sx, sy + 10.4, sz, 4.6, 1.2, 4.6, shade("#c8b48a", 0.72));
@@ -810,7 +1187,12 @@ export async function buildMap(W, mapId) {
     addBox(cx, heightAt0(cx, cz + F) + fh / 2, cz + F, F * 2, fh, 0.2, "#9a7a4a", { collide: false });
     addBox(cx - F, heightAt0(cx - F, cz) + fh / 2, cz, 0.2, fh, F * 2, "#9a7a4a", { collide: false });
     addBox(cx + F, heightAt0(cx + F, cz) + fh / 2, cz, 0.2, fh, F * 2, "#9a7a4a", { collide: false });
-    for (let i = 0; i < 2; i++) chest(cx + (rng() - 0.5) * R, heightAt0(cx, cz) + 0.6, cz + (rng() - 0.5) * R, p.id);
+    // per-chest ground sample — Meadow Farm measured the worst floaters in the game
+    // (27% of its chests over 1 m up, worst case 5.3 m) off the POI-centre height
+    for (let i = 0; i < 2; i++) {
+      const kx = cx + (rng() - 0.5) * R, kz = cz + (rng() - 0.5) * R;
+      chest(kx, heightAt0(kx, kz) + 0.6, kz, p.id);
+    }
   }
 
   if (mapId === "isla_viva") {
@@ -823,10 +1205,19 @@ export async function buildMap(W, mapId) {
     poi("lagoon_docks", "Lagoon Docks", 120, 620, 100);
     poi("jungle_market", "Jungle Market", -350, -380, 100);
     poi("banana_farm", "Banana Farm", -340, 360, 90);   // pulled inland — the old -430,480 sat on the waterline (farmland skipped)
+    // Snap the INLAND POIs onto land before anything is built on them (see
+    // snapPoiToLand). Shipwreck Cove and Lagoon Docks are deliberately coastal — a
+    // hull and a stilt hut on a pier — and Volcano Rim is always ~50 m up, so those
+    // three are left where the table puts them. pois[] is only read afterwards
+    // (bots.js, the drop-screen heat map, the minimap), so each picks up the move.
+    for (const id of ["palm_bay", "coco_village", "cliff_temples", "jungle_market", "banana_farm"]) {
+      const p = pois.find((q) => q.id === id);
+      if (p) snapPoiToLand(p, waterY + 0.8);
+    }
     // villages → real towns (houses on a street with front doors to the road)
-    town(pois[0], [C_WOODP, C_BAMBOO], "#c0563a", { along: "z", nPer: 4 });   // Palm Bay
-    town(pois[1], [C_BAMBOO, C_WOODP], "#cf6b3a", { along: "x", nPer: 5 });   // Coco Village
-    town(pois[6], [C_WOODP, C_BAMBOO], "#b5503a", { along: "x", nPer: 4 });   // Jungle Market
+    town(pois[0], [C_WOODP, C_BAMBOO], "#c0563a", { along: "z", nPer: 4, signature: "depot" });        // Palm Bay
+    town(pois[1], [C_BAMBOO, C_WOODP], "#cf6b3a", { along: "x", nPer: 5 });                            // Coco Village (its market hall is the tower below)
+    town(pois[6], [C_WOODP, C_BAMBOO], "#b5503a", { along: "x", nPer: 4, layout: "crossroads" });       // Jungle Market
     farmland(pois[7], { minH: 0.6 });                                          // Banana Farm → actual farmland
     lighthouse(pois[3].x - 55, pois[3].z + 55, pois[3].id);                     // Shipwreck Cove lighthouse (coastal landmark)
     // cliff temples: stone block structures
@@ -850,10 +1241,28 @@ export async function buildMap(W, mapId) {
     // repeat the Lagoon Docks waterline bug — the coast is close at both spots.
     if (heightAt0(pois[4].x, pois[4].z) > waterY + 0.8) tower(pois[4].x, pois[4].z, 3, 12, C_STONE, pois[4].id);          // Cliff Temples keep
     if (heightAt0(pois[1].x, pois[1].z - 40) > waterY + 0.8) tower(pois[1].x, pois[1].z - 40, 2, 14, C_BAMBOO, pois[1].id); // Coco Village market hall
-    // volcano rim chests (high-risk high ground)
-    for (let i = 0; i < 4; i++) {
-      const a = rng() * Math.PI * 2;
-      chest(40 + Math.cos(a) * 150, heightAt0(40 + Math.cos(a) * 150, -60 + Math.sin(a) * 150) + 0.6, -60 + Math.sin(a) * 150, "volcano_rim");
+    // Volcano Rim: an r=130 named landing zone that emitted FOUR CHESTS and no
+    // geometry at all — and because scatterTrees rejects nearPoi(x, z, 26) it also
+    // cleared every tree out to 156 m, so the drop screen advertised a place that
+    // was bare open slope. Worse, the chests sat on a 150 m ring, i.e. OUTSIDE the
+    // circle they belong to. Obsidian slabs on the rim for cover (Rubble Row's
+    // fragment pattern retinted, same quantised shade so the batch key stays
+    // stable), an observatory to hold, and the chests pulled inside the POI.
+    {
+      const p = pois[2], C_OBS = "#5a5048";
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2 + rng() * 0.5, rr = 60 + rng() * 50;
+        const x = p.x + Math.cos(a) * rr, z = p.z + Math.sin(a) * rr, y = heightAt0(x, z);
+        addBox(x, y + 1.1, z, 3.5 + rng() * 3, 2.2 + rng() * 1.6, 0.6, shade(C_OBS, 0.8 + Math.floor(rng() * 4) * 0.1), { rotY: rng() * Math.PI });
+        if (i % 3 === 0) loot(x + 2, y + 0.5, z, p.id);
+      }
+      const ox = p.x - 88, oz = p.z + 30;
+      if (heightAt0(ox, oz) > waterY + 0.8) tower(ox, oz, 2, 11, C_STONE, p.id);   // rim observatory
+      for (let i = 0; i < 4; i++) {
+        const a = rng() * Math.PI * 2, rr = p.r * 0.6;
+        const cx = p.x + Math.cos(a) * rr, cz = p.z + Math.sin(a) * rr;
+        chest(cx, heightAt0(cx, cz) + 0.6, cz, p.id);
+      }
     }
     // shipwreck: hull from planks
     {
@@ -871,10 +1280,14 @@ export async function buildMap(W, mapId) {
     // over water, so the shack stays ON the dock instead of being ring-searched
     // up to 56 m inland (which still landed in water on 89.2% of seeds anyway).
     hut(90, 590, 5, 4.4, 0, C_WOODP, "lagoon_docks");
-    scatterTrees("palm", 420, 0.6, 26, "wood");
-    scatterTrees("tree", 260, 2, 40, "wood");
-    scatterTrees("bush", 280, 0.6, 30, null);
-    scatterTrees("rocks", 120, 1, 70, "brick");
+    minorLandmarks(14, [C_WOODP, C_BAMBOO], "#b5503a", { minH: waterY + 1.2 });
+    // grid dims, not attempt counts (see scatterTrees). Measured on 2 seeds:
+    // 134 -> 263 props, mean distance to nearest cover 36 m -> 22 m, open ground
+    // beyond 40 m from any prop 37% -> 7%.
+    scatterTrees("palm", 30, 0.6, 26, "wood");
+    scatterTrees("tree", 22, 2, 40, "wood");
+    scatterTrees("bush", 22, 0.6, 30, null);
+    scatterTrees("rocks", 14, 1, 70, "brick");
   } else if (mapId === "ashgrid") {
     // warm sandstone/adobe outpost palette (was cold grey concrete — clashed with the golden savanna)
     const C_CONC = "#c3ad84", C_CONC2 = "#a68f62", C_BRICKB = "#a5705a", C_METAL = "#93805e";
@@ -915,16 +1328,35 @@ export async function buildMap(W, mapId) {
       }
       chest(p.x, heightAt0(p.x, p.z) + 9.9, p.z, p.id);
       loot(p.x + 30, heightAt0(p.x + 30, p.z) + 9.9, p.z, p.id);
+      // a station building under the deck — the POI was five pillars and a slab,
+      // i.e. nothing to fight over once you had taken the deck. Slotted between the
+      // pillars at p.x and p.x+30 (both 3 m square) so it fouls neither.
+      hut(p.x + 15, p.z, 8, 6, 0, C_BRICKB, p.id);
     }
     // container yard (metal farm)
     {
       const p = pois[3];
-      for (let i = 0; i < 14; i++) {
+      // 14 containers over ~38,000 m2 was a name, not a place. ~40 on the ground and
+      // a second tier over a third of them, each stack given a ramp so the high
+      // ground is holdable on foot. The +2.8 lift matches the collider top offset
+      // the instancing loop already uses for this kind.
+      const base = [];
+      for (let i = 0; i < 40; i++) {
         const x = p.x + (rng() - 0.5) * p.r * 1.6, z = p.z + (rng() - 0.5) * p.r * 1.6;
         const y = heightAt0(x, z);
         props.container.push({ x, y, z, s: 1.6 + rng() * 0.6, ry: Math.floor(rng() * 4) * Math.PI / 2 });
+        base.push({ x, y, z });
       }
-      for (let i = 0; i < 3; i++) chest(p.x + (rng() - 0.5) * p.r, heightAt0(p.x, p.z) + 0.6, p.z + (rng() - 0.5) * p.r, p.id);
+      for (let i = 0; i < base.length; i += 3) {
+        const b = base[i];
+        props.container.push({ x: b.x, y: b.y + 2.8, z: b.z, s: 1.6 + rng() * 0.6, ry: Math.floor(rng() * 4) * Math.PI / 2 });
+        addRamp(b.x, b.y, b.z + 6.5, 2.2, 2.8, 6, 3, shade(C_METAL, 0.8));
+        if (i % 6 === 0) loot(b.x, b.y + 3.0, b.z, p.id);
+      }
+      for (let i = 0; i < 3; i++) {
+        const cx = p.x + (rng() - 0.5) * p.r, cz = p.z + (rng() - 0.5) * p.r;
+        chest(cx, heightAt0(cx, cz) + 0.6, cz, p.id);       // was sampled at the POI centre — floated on the slope
+      }
     }
     // mall: big box with internal slabs
     tower(pois[4].x, pois[4].z, 2, 22, C_BRICKB, "mall");
@@ -941,17 +1373,29 @@ export async function buildMap(W, mapId) {
     // rubble row: broken walls (cover playground)
     {
       const p = pois[6];
-      for (let i = 0; i < 16; i++) {
-        const x = p.x + (rng() - 0.5) * p.r * 1.7, z = p.z + (rng() - 0.5) * p.r * 1.7;
-        const y = heightAt0(x, z);
-        // The tint is QUANTISED to 4 steps on purpose: addBox keys its batches by
-        // the colour string and shade() returns a hex, so a continuous multiplier
-        // gave all 16 walls a unique key — 16 separate merged meshes, each with
-        // its own MeshStandardMaterial + map + normalMap, for one pile of rubble.
-        // This is the only shade() call site in the file that passes a random k.
-        addBox(x, y + 0.9, z, 3.5 + rng() * 3, 1.8 + rng() * 1.6, 0.5, shade(C_BRICKB, 0.8 + Math.floor(rng() * 4) * 0.1), { rotY: rng() * Math.PI });
+      // 16 fragments spread over +/-93 m is ~46 m of mean spacing — every piece of
+      // cover on its own, which is scattered debris rather than a fight space. ~35
+      // in 6 KNOTS of 5-7 instead: inside a knot the pieces interlock, and the gaps
+      // between knots are the rotations.
+      for (let k = 0; k < 6; k++) {
+        const kx = p.x + (rng() - 0.5) * p.r * 1.6, kz = p.z + (rng() - 0.5) * p.r * 1.6;
+        const n = 5 + Math.floor(rng() * 3);
+        for (let i = 0; i < n; i++) {
+          const x = kx + (rng() - 0.5) * 22, z = kz + (rng() - 0.5) * 22;
+          const y = heightAt0(x, z);
+          // The tint is QUANTISED to 4 steps on purpose: addBox keys its batches by
+          // the colour string and shade() returns a hex, so a continuous multiplier
+          // gave every wall a unique key — one merged mesh each, with its own
+          // MeshStandardMaterial + map + normalMap, for one pile of rubble.
+          // This is the only shade() call site in the file that passes a random k.
+          addBox(x, y + 0.9, z, 3.5 + rng() * 3, 1.8 + rng() * 1.6, 0.5, shade(C_BRICKB, 0.8 + Math.floor(rng() * 4) * 0.1), { rotY: rng() * Math.PI });
+        }
+        if (k % 2 === 0) loot(kx, heightAt0(kx, kz) + 0.5, kz, p.id);
       }
-      for (let i = 0; i < 2; i++) chest(p.x + (rng() - 0.5) * p.r, heightAt0(p.x, p.z) + 0.6, p.z + (rng() - 0.5) * p.r, p.id);
+      for (let i = 0; i < 2; i++) {
+        const cx = p.x + (rng() - 0.5) * p.r, cz = p.z + (rng() - 0.5) * p.r;
+        chest(cx, heightAt0(cx, cz) + 0.6, cz, p.id);       // was sampled at the POI centre — floated on the slope
+      }
     }
     // motor pool (cars = metal)
     {
@@ -976,11 +1420,16 @@ export async function buildMap(W, mapId) {
       props.barrel.push({ x, y, z, s: 1.4, ry: rng() * Math.PI });
     }
     // savanna outpost: an adobe/sandstone residential town on a street
-    town(pois[8], ["#c8a06a", "#b98f5a"], "#b5643c", { along: "x", nPer: 5 });
+    town(pois[8], ["#c8a06a", "#b98f5a"], "#b5643c", { along: "x", nPer: 5, signature: "clocktower" });
     waterTower(pois[0].x + 100, pois[0].z + 70, pois[0].id);                    // Downtown water tower (skyline landmark)
-    scatterTrees("tree", 190, 1, 25, "wood");
-    scatterTrees("bush", 160, 0.6, 26, null);
-    scatterTrees("rocks", 110, 1, 40, "brick");
+    minorLandmarks(14, [C_CONC2, C_BRICKB], "#b5643c", { minH: 1.0 });
+    // grid dims, not attempt counts. Measured on 2 seeds: 232 -> 821 props, mean
+    // distance to nearest cover 48 m -> 23 m, open ground beyond 40 m 56% -> 8%.
+    // 821 is BELOW Deepwood's already-shipping 845, so it is inside the proven
+    // performance envelope rather than new ground.
+    scatterTrees("tree", 26, 1, 25, "wood");
+    scatterTrees("bush", 16, 0.6, 26, null);
+    scatterTrees("rocks", 20, 1, 40, "brick");
   } else if (mapId === "deepwood") {
     const C_LOG = "#8a5a33", C_PLANK = "#a8794f", C_STONE = "#8f8a80";
     poi("logging", "Logging Camp", -430, -380, 110);
@@ -1006,7 +1455,7 @@ export async function buildMap(W, mapId) {
     rangerTower(pois[1].x + 45, pois[1].z + 35, C_PLANK, "ranger");
     rangerTower(pois[6].x, pois[6].z, C_PLANK, "firewatch");
     // lakeside cabins → a lakeside town (+ its pier)
-    town(pois[2], [C_PLANK, C_LOG], "#6a4028", { along: "x", nPer: 4, minH: waterY + 0.6 });
+    town(pois[2], [C_PLANK, C_LOG], "#6a4028", { along: "x", nPer: 4, minH: waterY + 0.6, layout: "crossroads" });
     pier(pois[2].x + 40, pois[2].z + 60, 18, 0.3, C_PLANK, pois[2].id);
     // hunter's hollow: blinds (elevated boxes)
     {
@@ -1041,10 +1490,17 @@ export async function buildMap(W, mapId) {
     // meadow farm → actual farmland (crop rows + barn + silo + fence)
     farmland(pois[7], { minH: 0.6 });
     steeple(pois[5].x + 48, pois[5].z + 42, pois[5].id);                        // Riverside Mill chapel steeple (landmark)
-    scatterTrees("pine", 720, 1.2, 46, "wood");
-    scatterTrees("birch", 260, 1.2, 40, "wood");
-    scatterTrees("bush", 220, 0.8, 40, null);
-    scatterTrees("rocks", 80, 2, 60, "brick");
+    minorLandmarks(14, [C_LOG, C_PLANK], "#6a4028", { minH: waterY + 1.2 });
+    // grid dims, not attempt counts. Deepwood was already the densest map (845
+    // props, mean distance to cover 26 m), so it is the one map where stratifying
+    // ADDS load rather than fixing a hole. pine is 26 rather than the 30 the other
+    // measurements used: that lands ~900 total instead of ~1,160, keeping this map
+    // near its shipped prop budget while the same pass adds a clutter layer and a
+    // lamp-light pool. Cover distance still improves (26 m -> ~21 m).
+    scatterTrees("pine", 26, 1.2, 46, "wood");
+    scatterTrees("birch", 20, 1.2, 40, "wood");
+    scatterTrees("bush", 16, 0.8, 40, null);
+    scatterTrees("rocks", 12, 2, 60, "brick");
   }
 
   // connect every POI into a road network (cosmetic ribbons on the terrain)
@@ -1088,7 +1544,12 @@ export async function buildMap(W, mapId) {
   {
     const nIsl = 5 + Math.floor(rng() * 3);
     const grassC = mapId === "ashgrid" ? "#a7ad55" : mapId === "deepwood" ? "#3f7a3f" : "#3fae62";
-    const rockC = "#7a6a58";
+    // #7a6a58 is linear ~(0.19, 0.14, 0.10). The cone is rotated 180 degrees below,
+    // so its lit faces all point DOWN and the only light reaching them is the
+    // hemisphere's groundColor — at that albedo the signature feature of the map
+    // read as a flat black triangle in the sky. ~60% brighter here, plus a fixed
+    // skylight term on the material (below).
+    const rockC = "#9a8a75";
     // The islands were the ONLY untextured surfaces in the world — terrain, roads,
     // water and every structure carry the procedural grain + normal map, these two
     // carried flat vertex colour. On the feature the code calls the signature look.
@@ -1122,8 +1583,13 @@ export async function buildMap(W, mapId) {
       top.castShadow = true; top.receiveShadow = true;
       g.add(top);
       // hanging rock cone underneath
-      const rockGeo = new THREE.ConeGeometry(rad * 0.9, rad * 1.5, 8);
+      const rockGeo = new THREE.ConeGeometry(rad * 0.9, rad * 1.5, 14);   // 8 radial segments read as a paper dart from below; +12 tris each
       const rock = new THREE.Mesh(rockGeo, islMat(rockC, 1, rockGeo, (rad * 2) / TILE));
+      // A fixed skylight term at ~6% of the map's horizon colour lifts the fully
+      // downward-facing underside without touching the rest of the scene's lighting,
+      // and costs no extra light in the shader.
+      rock.material.emissive.set(K.sky);
+      rock.material.emissiveIntensity = 0.12;
       rock.rotation.x = Math.PI;
       rock.position.set(ix, topY - 1.4 - rad * 0.75, iz);
       // receiveShadow was missing, so the cone never darkened under the disc that
@@ -1183,11 +1649,56 @@ export async function buildMap(W, mapId) {
     const merged = BufferGeometryUtils.mergeGeometries(batches[color], false);
     const emit = EMIT[color];
     const mat = new THREE.MeshStandardMaterial({ color, roughness: emit ? 0.5 : 0.88, metalness: emit ? 0 : 0.04 });
-    if (emit) { mat.emissive = new THREE.Color(emit); mat.emissiveIntensity = 1.4; mat.toneMapped = false; }
+    // 1.4 already clipped to white on screen, so the extra headroom costs nothing
+    // visible on the lamp itself — but the bloom pass samples the HDR render target
+    // BEFORE OutputPass tonemaps it, so values above the 0.72 threshold are what
+    // actually produce the glow. 2.8 makes street lamps and the lighthouse lens read
+    // as light sources at distance. Do NOT chase this with kn.bloom.strength instead:
+    // a global raise blooms the Deepwood snow and the Savanna sand, which is exactly
+    // the "bloom haze" that 0.14 was tuned to prevent.
+    if (emit) { mat.emissive = new THREE.Color(emit); mat.emissiveIntensity = 2.8; mat.toneMapped = false; }
     else if (_st) { mat.map = _st.map; mat.normalMap = _st.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5); }
     const mesh = new THREE.Mesh(merged, mat);
     mesh.castShadow = true; mesh.receiveShadow = true;
     g.add(mesh);
+  }
+  await yieldPhase();                                // phase 2/3 done
+
+  // ── near-lamp point-light pool ────────────────────────────────────────────
+  // Every emissive-looking prop in the world was an unlit box: a match scene holds
+  // exactly one DirectionalLight and one HemisphereLight (grep for PointLight over
+  // runtime/ returns one hit, the MENU diorama's fill), so a street lamp lit nothing
+  // and POIs read as props rather than places. A FIXED-SIZE pool is what makes this
+  // affordable — three recompiles every lit material when the light COUNT changes,
+  // so the lights are created once and only ever MOVED, and intensity 0 is used to
+  // park a spare rather than .visible (which would change the count). Capped at 4
+  // rather than the 8 the audit suggested, and off entirely on 'low', because in a
+  // forward renderer each one is evaluated per fragment on every lit material and
+  // the performance dimension is also below parity.
+  const NLAMP = (W.settings && W.settings.graphics === "low") ? 0 : 4;
+  if (NLAMP && lampPts.length) {
+    const pool = [];
+    for (let i = 0; i < NLAMP; i++) {
+      const pl = new THREE.PointLight(0xffdc9a, 0, 17, 2);   // intensity set per tick; distance bounds the falloff
+      pl.castShadow = false; pl.position.set(0, -999, 0);
+      g.add(pl); pool.push(pl);
+    }
+    let lampT = 9;
+    trackUpdater((dt) => {
+      lampT += dt; if (lampT < 0.5) return; lampT = 0;
+      const cam = W.camera; if (!cam) return;
+      const near = [];
+      for (const p of lampPts) {
+        const d2 = (p.x - cam.position.x) ** 2 + (p.z - cam.position.z) ** 2;
+        if (d2 < 3600) near.push({ p, d2 });        // 60 m
+      }
+      near.sort((a, b) => a.d2 - b.d2);
+      for (let i = 0; i < NLAMP; i++) {
+        const n = near[i];
+        if (n) { pool[i].position.set(n.p.x, n.p.y, n.p.z); pool[i].intensity = 6; }
+        else pool[i].intensity = 0;
+      }
+    });
   }
 
   // ── merge roads + parking lots into one flat asphalt ribbon mesh ──────────
@@ -1207,6 +1718,8 @@ export async function buildMap(W, mapId) {
   // destructible props: hp per prop; 0/undefined = indestructible cover (rock/car/container).
   // barrel hp 1 = pops on any hit (explodes); trees take a few rounds then fall.
   const propHP = { barrel: 1, tree: 46, pine: 58, palm: 42, birch: 40 };
+  const SHADOW_KINDS = { palm: 1, tree: 1, pine: 1, birch: 1 };
+  const shadowSrc = [];   // {kind, list, geo, mat, mats} — source for the near-caster proxies
   for (const kind in props) {
     const list = props[kind];
     if (!list.length) continue;
@@ -1228,26 +1741,34 @@ export async function buildMap(W, mapId) {
     instRefs[kind] = [];
     for (const m of meshes) {
       const inst = new THREE.InstancedMesh(m.geometry, m.material, list.length);
-      // Only the TREE kinds cast. Each of these InstancedMeshes is sized to the
-      // whole 1600 m map, so three derives one bounding sphere spanning the map
-      // and the shadow camera's ±55 m frustum can never reject it — every car,
-      // container, barrel and rock on the map was re-rendered into the depth pass
-      // every frame for shadows that read as ground clutter. Trees keep theirs;
-      // their canopy shadow is the one that actually matters for readability.
-      inst.castShadow = kind === "palm" || kind === "tree" || kind === "pine" || kind === "birch";
+      // NOTHING map-wide casts any more. Each of these InstancedMeshes is sized to
+      // the whole 1600 m map (measured bounding radii 850-1,011 m), so three derives
+      // one bounding sphere spanning the map and the shadow camera's ±55 m frustum
+      // can never reject it — the depth pass re-rendered EVERY car, container,
+      // barrel, rock AND tree on the map every frame. The cars/rocks half was
+      // already fixed by exempting them; trees were the deliberate exception,
+      // because their canopy shadow is the one that matters for readability.
+      // Toggling shadowMap.enabled on the Deepwood ground view moved the frame from
+      // 3,716,659 to 2,379,359 triangles — 1,337,300 of them, which is the pine
+      // (943,605) plus birch (344,208) instance totals almost exactly. A small mesh
+      // rebuilt around the camera focus casts instead (built after this loop).
+      inst.castShadow = false;
       inst.receiveShadow = true;
       const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), P = new THREE.Vector3();
       const meshLocal = new THREE.Matrix4().copy(m.matrixWorld); // transform within GLB
+      const mats = SHADOW_KINDS[kind] ? [] : null;
       for (let i = 0; i < list.length; i++) {
         const it = list[i];
         const s = norm * it.s;
         M.compose(P.set(it.x, it.y - bbox.min.y * s, it.z), Q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), it.ry || 0), S.set(s, s, s));
         M.multiply(meshLocal);
         inst.setMatrixAt(i, M);
+        if (mats) mats.push(M.clone());
       }
       inst.instanceMatrix.needsUpdate = true;
       g.add(inst);
       instRefs[kind].push(inst);
+      if (mats) shadowSrc.push({ kind, list, geo: m.geometry, mat: m.material, mats });
     }
     // colliders for solid props
     const rad = propColliderKinds[kind];
@@ -1259,6 +1780,100 @@ export async function buildMap(W, mapId) {
       }
     }
   }
+  // ── near-field foliage shadow casters ────────────────────────────────────
+  // The proxies HAVE to be `visible` — three only renders casters that are — so
+  // each also draws in the colour pass. That is free in practice: the geometry is
+  // coincident with the map-wide mesh it was copied from and every foliage GLB is
+  // alphaMode OPAQUE, so the second draw is depth-equal and changes no pixel. The
+  // trade is ~8 extra instances and 2-6 extra draw calls against 1.3 M triangles
+  // and ~20 draw calls of depth pass. Chunking the map-wide meshes instead would
+  // buy the same triangles with far MORE colour-pass calls, on a frame the
+  // scorecard proves is draw-call bound (64x36 costs the same as 1280x720).
+  {
+    const NEAR_N = 64, NEAR_R2 = 110 * 110;
+    const nearCasters = shadowSrc.map((ref) => {
+      const im = new THREE.InstancedMesh(ref.geo, ref.mat, NEAR_N);
+      im.castShadow = true; im.receiveShadow = false; im.count = 0;
+      im.frustumCulled = false;   // rebuilt around the focus; its own bounding sphere is stale by design
+      g.add(im);
+      return { im, ref };
+    });
+    let _fx = 1e9, _fz = 1e9;
+    W._foliageDirty = true;
+    if (nearCasters.length) trackUpdater(() => {
+      const f = W._camFocus || W.player; if (!f) return;
+      const dx = f.pos.x - _fx, dz = f.pos.z - _fz;
+      if (!W._foliageDirty && dx * dx + dz * dz < 400) return;    // 20 m threshold
+      _fx = f.pos.x; _fz = f.pos.z; W._foliageDirty = false;
+      for (const nc of nearCasters) {
+        const { list, mats } = nc.ref;
+        let n = 0;
+        for (let i = 0; i < list.length && n < NEAR_N; i++) {
+          const it = list[i];
+          if (it.dead) continue;
+          const ax = it.x - _fx, az = it.z - _fz;
+          if (ax * ax + az * az > NEAR_R2) continue;
+          nc.im.setMatrixAt(n++, mats[i]);
+        }
+        nc.im.count = n;
+        nc.im.instanceMatrix.needsUpdate = true;
+      }
+    });
+  }
+  await yieldPhase();                                // phase 3/3 done
+
+  // ── ground clutter ────────────────────────────────────────────────────────
+  // Every frame captured for the benchmark showed empty coloured expanses: the
+  // ground carries a grain normal map and nothing else, so at 1.7 m eye height
+  // there is no near-field detail at all. A cross-quad tuft layer instanced in a
+  // ring around the camera fills it for ~5,600 triangles and ONE draw call — this
+  // is the highest visual return per triangle available in the whole file.
+  // Refreshed on a timer rather than per frame, and only when the camera moved.
+  {
+    const CL_N = 1400, CL_R = 55;
+    const q1 = new THREE.PlaneGeometry(0.55, 0.45); q1.translate(0, 0.225, 0);
+    const q2 = q1.clone(); q2.rotateY(Math.PI / 2);
+    const clGeo = BufferGeometryUtils.mergeGeometries([q1, q2], false);
+    q1.dispose(); q2.dispose();
+    // three's color_fragment chunk multiplies diffuseColor only under USE_COLOR /
+    // USE_COLOR_ALPHA — USE_INSTANCING_COLOR alone feeds vColor in the VERTEX stage
+    // and the fragment stage then ignores it. So per-instance tint needs
+    // vertexColors AND a real color attribute; without the all-ones attribute the
+    // unbound `color` input reads the WebGL generic default (0,0,0) and every tuft
+    // renders black.
+    clGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(clGeo.attributes.position.count * 3).fill(1), 3));
+    const clMat = new THREE.MeshStandardMaterial({ map: clutterTex(), alphaTest: 0.5, roughness: 1, metalness: 0, side: THREE.DoubleSide, vertexColors: true });
+    const clutter = new THREE.InstancedMesh(clGeo, clMat, CL_N);
+    clutter.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CL_N * 3), 3);
+    clutter.castShadow = false; clutter.receiveShadow = false;
+    clutter.frustumCulled = false; clutter.name = "clutter";
+    g.add(clutter);
+    const _cm = new THREE.Matrix4(), _cq = new THREE.Quaternion(), _cs = new THREE.Vector3(), _cp = new THREE.Vector3();
+    const _cy = new THREE.Vector3(0, 1, 0), _hide = new THREE.Matrix4().makeScale(1e-4, 1e-4, 1e-4);
+    let clT = 9, clX = 1e9, clZ = 1e9;
+    trackUpdater((dt) => {
+      clT += dt;
+      const cam = W.camera; if (!cam) return;
+      if (clT < 0.75) return;
+      if (Math.hypot(cam.position.x - clX, cam.position.z - clZ) < 10 && clT < 6) return;
+      clT = 0; clX = cam.position.x; clZ = cam.position.z;
+      const GA = 2.399963;                            // golden angle — even ring coverage, no clumping
+      for (let i = 0; i < CL_N; i++) {
+        const r = CL_R * Math.sqrt((i + 0.5) / CL_N), a = i * GA;
+        const x = clX + Math.cos(a) * r, z = clZ + Math.sin(a) * r;
+        const y = heightAt0(x, z);
+        if (y < waterY + 0.35 || Math.abs(x) > HALF - 4 || Math.abs(z) > HALF - 4) { clutter.setMatrixAt(i, _hide); continue; }
+        const s = 0.75 + ((i * 2654435761) % 1000) / 1000 * 0.7;
+        _cm.compose(_cp.set(x, y, z), _cq.setFromAxisAngle(_cy, (i * 1.7) % 6.283), _cs.set(s, s, s));
+        clutter.setMatrixAt(i, _cm);
+        const c = colorAt(mapId, y, x, z, seed);
+        clutter.instanceColor.setXYZ(i, c[0] * 0.82, c[1] * 0.82, c[2] * 0.82);   // darker than the ground it stands on = contact darkening
+      }
+      clutter.instanceMatrix.needsUpdate = true;
+      clutter.instanceColor.needsUpdate = true;
+    });
+  }
+
   // ── sky-island decor: few enough to clone directly ───────────────────────
   for (const t of islandTrees) {
     try {
@@ -1371,6 +1986,13 @@ export async function buildMap(W, mapId) {
     col.dead = true;
     const refs = instRefs[col.prop];
     if (refs) for (const inst of refs) { inst.setMatrixAt(col.idx, _propZeroM); inst.instanceMatrix.needsUpdate = true; }
+    // The near-caster proxies hold their own copy of the matrices, so a felled tree
+    // would keep casting until the focus moved 20 m. col.idx is the index into
+    // props[kind] (the collider loop pushes `idx: i` over that same list), so the
+    // entry can be marked directly and the proxies forced to rebuild next frame.
+    const lst = props[col.prop];
+    if (lst && lst[col.idx]) lst[col.idx].dead = true;
+    W._foliageDirty = true;
   }
 
   const lootAll = lootPoints.concat(chestPoints);

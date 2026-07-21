@@ -84,12 +84,103 @@ function burst(o) {
 }
 
 // ── event wiring ─────────────────────────────────────────────────────────────
+// Per-weapon firing kick. Firing had NO physical feedback at all: `camShake =`
+// existed in exactly two places in this file (explosion, player-hurt) and neither
+// is your own gun, so at the SMG's 720 rpm you pulled a trigger every 83 ms and
+// nothing on screen moved. Magnitudes track the audio gains, and the 1.8/s decay
+// keeps every one of them SHORTER than that weapon's own fire interval (smg 25 ms
+// vs 83 ms, ar 39 ms vs 182 ms, sniper 144 ms vs 1714 ms), so sustained fire
+// punches instead of accumulating into a permanent wobble.
+const SHOT_SHAKE = { pistol: 0.06, smg: 0.045, ar: 0.07, shotgun: 0.20, sniper: 0.26, glauncher: 0.18 };
+const SHOT_FOV   = { pistol: 2, smg: 2, ar: 2.5, shotgun: 5, sniper: 5, glauncher: 4.5 };
+
+// Explosion flash. A 95-damage launcher round with a 3.5 m splash resolved as 40
+// cubes and a low-passed thump. A real PointLight would force a shader recompile
+// across every material in the scene on the first blast (a visible hitch on a
+// browser GPU) — at the match bloom of 0.14 an additive sprite reads as a flash
+// for free. loot.js builds its chest glow the same way.
+let flashTex = null, blastCursor = 0;
+const blasts = [];
+function ensureBlasts(W) {
+  if (blasts.length) return;
+  const cv = document.createElement("canvas"); cv.width = cv.height = 128;
+  const c2 = cv.getContext("2d");
+  const gr = c2.createRadialGradient(64, 64, 2, 64, 64, 62);
+  gr.addColorStop(0, "rgba(255,255,235,1)");
+  gr.addColorStop(0.35, "rgba(255,190,90,0.55)");
+  gr.addColorStop(1, "rgba(255,120,30,0)");
+  c2.fillStyle = gr; c2.fillRect(0, 0, 128, 128);
+  flashTex = new THREE.CanvasTexture(cv); flashTex.colorSpace = THREE.SRGBColorSpace;
+  // RingGeometry lies in XY, so rotation.x = -PI/2 is what lays the shockwave
+  // flat on the ground; its outer radius is 1, so the scale IS the world radius.
+  const rg = new THREE.RingGeometry(0.82, 1, 28);
+  for (let i = 0; i < 4; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false }));
+    const ring = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false, toneMapped: false }));
+    ring.rotation.x = -Math.PI / 2;
+    sp.visible = false; ring.visible = false;
+    blasts.push({ sp, ring, t: 99, R: 3.5 });
+  }
+}
+
+// Enemies never reacted to being hit: 4 cubes at size 0.08 and a floating number,
+// nothing on the body itself. Two traps here, both already paid for in player.js.
+//   * NOT emissive — player.js records that Meshy's emissiveMap was
+//     deliberately stripped (it re-added albedo through an unlit path and made
+//     every actor fullbright in shade); raising it back is that bug renamed.
+//   * NOT a lerp toward white — player.js multiplies each actor's base
+//     colour by BODY_GAIN 3.2, so channels sit around 1.6-2.9 and blending toward
+//     (1,1,1) would DARKEN the model. Scale the saved colour UP instead.
+// Safe per-actor because player.js clones every source material into a
+// per-actor Map, so writing .color on one actor cannot tint another wearing the
+// same skin. Colour split (shield blue / health red) is the one the particles use.
+const FLASH_S = 0.07;
+const flashing = [];
+function flashActor(a, toShield) {
+  if (!a || !a.rig || !a.rig.scene) return;
+  if (!a._flashMats) {
+    const seen = new Set(); a._flashMats = [];
+    a.rig.scene.traverse((o) => {
+      if (!(o.isMesh || o.isSkinnedMesh) || !o.material || !o.material.color || seen.has(o.material)) return;
+      seen.add(o.material);
+      // player.js's zone-tint shader divides material.color back out, so writing
+      // .color here changed nothing at all — the flash shipped invisible on 100%
+      // of actors. Tinted materials expose userData.zFlash; drive that uniform
+      // and keep the .color path only for meshes that have no zone tint.
+      a._flashMats.push({ m: o.material, c: o.material.color.clone(),
+                          u: (o.material.userData && o.material.userData.zFlash) || null });
+    });
+  }
+  if (!a._flashMats.length) return;
+  a._flashT = FLASH_S; a._flashShield = !!toShield;
+  if (flashing.indexOf(a) < 0) flashing.push(a);
+}
+
 function wireEvents(W) {
   W.events.on("shotFired", (a, weaponId, muzzle, dir) => {
     // muzzle flash at the BARREL (weapons.js now passes the weapon muzzle world
     // position, not the eye) — bright and chunky enough to register at gameplay FOV
     const mx = muzzle.x + dir.x * 0.12, my = muzzle.y + dir.y * 0.12, mz = muzzle.z + dir.z * 0.12;
     burst({ x: mx, y: my, z: mz, n: 6, color: [0xffffff, 0xfff2b0, 0xffb84d], speed: 3, up: 0.5, size: 0.17, life: 0.1, gravity: 0, drag: 5 });
+    // Gating on `a === W.player` is mandatory: shotFired is the GLOBAL event and
+    // all 49 bots fire through it (audio.js gates its own gunshot the same way), so an
+    // ungated kick would shake the camera on every gunshot on the island.
+    // fovPunch is the camera's kick channel — inert until updateCamera consumes it.
+    if (a === W.player) {
+      W.camShake = Math.max(W.camShake, SHOT_SHAKE[weaponId] || 0.05);
+      W.fovPunch = Math.max(W.fovPunch || 0, SHOT_FOV[weaponId] || 2);
+    }
+    // One brass casing per shot — the only thing this game leaves behind after a
+    // firefight. Ejected right-and-back: right = dir x up(0,1,0) = (-dz, 0, dx).
+    // Fires once per trigger pull, not per pellet, because weapons.js emits
+    // shotFired once per fire() — so a shotgun throws one shell, correctly.
+    if (weaponId !== "glauncher") {
+      spawn({
+        x: mx, y: my - 0.05, z: mz,
+        vx: -dir.z * 1.6 - dir.x * 0.8, vy: 1.7, vz: dir.x * 1.6 - dir.z * 0.8,
+        color: 0xc9a227, size: 0.045, life: 1.5, gravity: -9, drag: 0.2,
+      });
+    }
   });
 
   // one bright bolt PER PROJECTILE that FLIES with the round (owner: "when
@@ -129,8 +220,18 @@ function wireEvents(W) {
   W.events.on("explosion", (pos, R) => {
     burst({ x: pos.x, y: pos.y, z: pos.z, n: 26, color: [0xffd28a, 0xff8a3c, 0xff5522], speed: 11, up: 5, size: 0.28, life: 0.8, drag: 1.5 });
     burst({ x: pos.x, y: pos.y + 0.5, z: pos.z, n: 14, color: [0x555555, 0x333333], speed: 4, up: 4, size: 0.4, life: 1.4, gravity: -1.5, drag: 1.2 });
+    ensureBlasts(W);
+    const b = blasts[(blastCursor++) % blasts.length];
+    b.t = 0; b.R = R || 3.5;
+    b.sp.position.set(pos.x, pos.y + 0.4, pos.z);
+    b.ring.position.set(pos.x, pos.y + 0.12, pos.z);
+    b.sp.visible = true; b.ring.visible = true;
+    // startMatch clears every scene group — re-adopt, the
+    // same reason the particle InstancedMesh is re-parented in update()
+    if (!b.sp.parent) W.group("fx").add(b.sp, b.ring);
     const d = W.player ? Math.hypot(W.player.pos.x - pos.x, W.player.pos.z - pos.z) : 999;
     if (d < 40) W.camShake = Math.max(W.camShake, (1 - d / 40) * 0.5);
+    if (d < 8) W.hitstopT = Math.max(W.hitstopT || 0, 0.07);
   });
 
   W.events.on("swimState", (a, swimming) => {
@@ -143,7 +244,9 @@ function wireEvents(W) {
 
   W.events.on("actorHurt", (victim, info) => {
     burst({ x: victim.pos.x, y: victim.pos.y + 1.2, z: victim.pos.z, n: 4, color: info.toShield > 0 ? 0x4aa8ff : 0xc23b3b, speed: 2.4, size: 0.08, life: 0.35 });
+    flashActor(victim, info.toShield > 0);
     if (info.attackerId === (W.player && W.player.id)) {
+      if (info.isHead) W.hitstopT = Math.max(W.hitstopT || 0, 0.03);
       // Coalesce: one shotgun blast fires this nine times in a single frame at
       // identical world coords, so it printed nine overlapping "10"s instead of
       // one readable "90". Summed and flushed once per frame in update().
@@ -161,8 +264,34 @@ function wireEvents(W) {
     if (victim === W.player) W.camShake = Math.max(W.camShake, 0.12);
   });
 
-  W.events.on("actorDied", (victim) => {
+  // player.js emits actorDied as (victim, killerId, weaponId); this listener only ever
+  // declared (victim), so the kill's owner was thrown away here.
+  W.events.on("actorDied", (victim, killerId) => {
     burst({ x: victim.pos.x, y: victim.pos.y + 1, z: victim.pos.z, n: 12, color: [0xffffff, 0x9fd7ff], speed: 5, up: 4, size: 0.14, life: 0.8 });
+    // your own kill gets the longest beat — 50 ms at 0.12x is ~6 ms of world time
+    if (W.player && killerId === W.player.id && victim !== W.player) W.hitstopT = Math.max(W.hitstopT || 0, 0.05);
+  });
+
+  // propBreak had NO fx listener — this file wires nine events and it was not
+  // among them, so a felled tree vanished with only audio.js's two-blip break
+  // to mark it. Only TREE kinds can reach here: maps.js gives hp to
+  // barrel/tree/pine/palm/birch and nothing else, and barrels take the explosion
+  // path in weapons.js, so the palette is trunk + foliage, never stone.
+  const nearCam = (x, z, max) => !W.player || Math.hypot(W.player.pos.x - x, W.player.pos.z - z) < max;
+  W.events.on("propBreak", (p2) => {
+    if (!nearCam(p2.x, p2.z, 120)) return;
+    burst({ x: p2.x, y: p2.y + 1.4, z: p2.z, n: 14, color: [0x9a7f4f, 0x6b5335, 0x4e7a3a], speed: 4.5, up: 3, size: 0.18, life: 1.1, drag: 1.2 });
+  });
+  // hardLand and landed (both emitted from player.js) already had audio
+  // and no visual at all. Distance-gated because "landed" fires once for every
+  // one of 50 actors at the end of the drop.
+  W.events.on("hardLand", (a, speed) => {
+    if (!nearCam(a.pos.x, a.pos.z, 60)) return;
+    burst({ x: a.pos.x, y: a.pos.y + 0.06, z: a.pos.z, n: Math.min(12, 4 + Math.round(speed * 0.3)), color: [0xa08b63, 0x8a7550], speed: 2.2, up: 0.8, size: 0.1, life: 0.5, gravity: -5, drag: 2 });
+  });
+  W.events.on("landed", (a) => {
+    if (!nearCam(a.pos.x, a.pos.z, 45)) return;
+    burst({ x: a.pos.x, y: a.pos.y + 0.05, z: a.pos.z, n: 6, color: 0x9a8562, speed: 1.6, up: 0.6, size: 0.09, life: 0.45, gravity: -5, drag: 2.5 });
   });
 
   W.events.on("chestOpened", (a, c) => {
@@ -192,12 +321,29 @@ function dmgNumber(W, x, y, z, text, color, scale) {
 
 // ── frame update ─────────────────────────────────────────────────────────────
 const proj = new THREE.Vector3();
+// last frame's camShake, so the decay below can tell "still ringing" from
+// "raised by an event that the camera has not read yet" (see update())
+let shakePrev = 0;
+
+/** World-space celebration burst for the victory hold — same particle pool, no
+ *  new subsystem. Exported because burst() is module-private and the orchestrator
+ *  owns the victory beat. */
+let fwCursor = 0;
+const FW_COLORS = [[0xffd54a, 0xfff2b0], [0x7ad0ff, 0xbfe8f5], [0x4ade80, 0xbdf5cf], [0xff7ab8, 0xffd0e6]];
+export function fireworks(W, x, y, z) {
+  burst({ x, y, z, n: 30, color: FW_COLORS[(fwCursor++) % FW_COLORS.length], speed: 9, up: 1.5, size: 0.16, life: 1.6, gravity: -4, drag: 0.6 });
+}
+
 /** Remove any damage numbers still floating when a match ends — they are DOM
  *  nodes, so they otherwise hang over the menu until their life expires. */
 export function reset() {
   for (const d of dmgNums) { if (d.el) d.el.remove(); }
   dmgNums.length = 0;
   hurtBuf.clear();
+  // actors are rebuilt every match, so a live entry would pin a discarded roster
+  flashing.length = 0;
+  for (const b of blasts) { b.t = 99; b.sp.visible = false; b.ring.visible = false; }
+  shakePrev = 0;
 }
 
 export function update(W, dt) {
@@ -261,6 +407,40 @@ export function update(W, dt) {
     inst.instanceMatrix.needsUpdate = true;
   }
 
+  // explosion flash + ground shockwave (pooled, 4 concurrent)
+  for (const b of blasts) {
+    if (b.t > 0.45) continue;
+    b.t += dt;
+    const k = Math.min(1, b.t / 0.09);
+    const s = b.R * 2.2 * (0.25 + 0.75 * k);
+    b.sp.scale.set(s, s, 1);
+    b.sp.material.opacity = b.t < 0.09 ? 1 : Math.max(0, 1 - (b.t - 0.09) / 0.16);
+    const rk = Math.min(1, b.t / 0.25);
+    const rs = b.R * (0.2 + 1.4 * rk);
+    b.ring.scale.set(rs, rs, rs);
+    b.ring.material.opacity = 0.55 * (1 - rk);
+    if (b.t > 0.45) { b.sp.visible = false; b.ring.visible = false; }
+  }
+
+  // hit flash — scale the SAVED colour up (never lerp to white: BODY_GAIN 3.2
+  // already puts these channels above 1, so blending toward white darkens them)
+  for (let i = flashing.length - 1; i >= 0; i--) {
+    const a = flashing[i];
+    a._flashT -= dt;
+    const k = Math.max(0, a._flashT / FLASH_S);
+    for (const e of a._flashMats) {
+      const g  = k > 0 ? 1 + 1.1 * k : 1;
+      const mb = k > 0 && a._flashShield ? 1 + 0.5 * k : 1;
+      const mr = k > 0 && !a._flashShield ? 1 + 0.6 * k : 1;
+      if (e.u) { e.u.value.set(g * mr, g, g * mb); }        // zone-tinted: uniform
+      else {                                                 // untinted: legacy path
+        e.m.color.copy(e.c);
+        if (k > 0) { e.m.color.multiplyScalar(g); e.m.color.r *= mr; e.m.color.b *= mb; }
+      }
+    }
+    if (k <= 0) flashing.splice(i, 1);
+  }
+
   // damage numbers
   const cam = W.camera, rect = W.kernel.renderer.domElement;
   const w2 = rect.clientWidth, h2 = rect.clientHeight;
@@ -276,6 +456,18 @@ export function update(W, dt) {
     d.el.style.opacity = String(1 - (d.t / d.life) * 0.9);
   }
 
-  // camera shake decay is consumed by player.js camera; just decay here
-  if (W.camShake > 0) W.camShake = Math.max(0, W.camShake - dt * 1.8);
+  // Camera shake is CONSUMED by player.js's updateCamera and decayed here, and the frame
+  // order in ffg_royale3d.js is player(camera) → weapons(emits shotFired,
+  // which raises camShake) → fx. So a kick raised this frame is not read by the
+  // camera until the NEXT frame, and the decay used to run unconditionally in
+  // between: at 60 fps an SMG kick of 0.045 reached the camera as 0.015 (67%
+  // eaten), and at 20 fps the decay term is 0.09 — every pistol/SMG/AR kick was
+  // erased to zero before it ever rendered. Skipping the decay on the frame the
+  // value ROSE gives the camera one full-strength read. Explosion and hurt shake
+  // lost the same frame before; they were just large enough to hide it.
+  // Decay lives in player.js updateCamera, which runs BEFORE fx in the frame
+  // order, so a kick raised this frame reaches the camera undecayed. Decaying
+  // here as well ran it twice per frame and halved every shake's DURATION —
+  // measured: sniper 150ms -> 83ms, explosion 283ms -> 150ms. Peak was correct;
+  // only the tail was being eaten.
 }

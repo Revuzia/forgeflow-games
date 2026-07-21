@@ -85,6 +85,10 @@ export class Kernel3D {
     this.loader = new GLTFLoader();
     this._gltfCache = {};
     this._charCache = {};
+    // Parked PROMISES for URLs still loading — see loadGLTF for why the result
+    // caches above are not enough on their own.
+    this._gltfInflight = {};
+    this._charInflight = {};
     this._mixers = [];
     this._updaters = [];
     this._tweens = [];
@@ -250,12 +254,27 @@ export class Kernel3D {
 
   async loadGLTF(url) {
     if (this._gltfCache[url]) return this._gltfCache[url].clone(true);
-    const gltf = await this.loader.loadAsync(url);
-    const root = gltf.scene;
-    const _lts = [];
-    root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } else if (o.isLight) _lts.push(o); });
-    _lts.forEach((l) => l.parent && l.parent.remove(l)); // PERF: drop model-embedded lights
-    this._gltfCache[url] = root;
+    // The cache above is only written AFTER the await, so N callers hitting one
+    // COLD url in the same tick all missed and each ran its own loadAsync — N
+    // parses and N independent THREE.Source objects for the same image. Measured
+    // in the running game: five concurrent loadGLTF() calls on a cold url gave 5
+    // distinct Sources, five sequential calls on the warm url gave 1. A live
+    // match ended up with 202 unique Sources against 46 cached models — 156
+    // duplicates, ~200 MB of texture residency where ~65 MB covers it. Callers
+    // do the same pre-await check one level up (loot.js:39 W.itemProto), which
+    // is why the loot group alone carried 134 of them. Park the PROMISE, not
+    // just the result, so concurrent callers share one parse and one upload.
+    if (!this._gltfInflight[url]) {
+      this._gltfInflight[url] = this.loader.loadAsync(url).then((gltf) => {
+        const root = gltf.scene;
+        const _lts = [];
+        root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } else if (o.isLight) _lts.push(o); });
+        _lts.forEach((l) => l.parent && l.parent.remove(l)); // PERF: drop model-embedded lights
+        this._gltfCache[url] = root;
+        return root;
+      }).finally(() => { delete this._gltfInflight[url]; });
+    }
+    const root = await this._gltfInflight[url];
     return root.clone(true);
   }
 
@@ -265,11 +284,20 @@ export class Kernel3D {
    * per-frame updates. `play(name)` crossfades to a clip (loops by default). */
   async loadCharacter(url) {
     if (!this._charCache[url]) {
-      const gltf = await this.loader.loadAsync(url);
-      const _lts = [];
-      gltf.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } else if (o.isLight) _lts.push(o); });
-      _lts.forEach((l) => l.parent && l.parent.remove(l)); // PERF: drop model-embedded lights
-      this._charCache[url] = gltf;
+      // Same cold-cache stampede as loadGLTF (see the note there): the actor
+      // group carried 57 unique texture Sources for 5 distinct skins because
+      // every concurrent spawn on a cold url ran its own loadAsync before the
+      // first one could fill the cache. All callers await one shared promise.
+      if (!this._charInflight[url]) {
+        this._charInflight[url] = this.loader.loadAsync(url).then((g) => {
+          const _lts = [];
+          g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } else if (o.isLight) _lts.push(o); });
+          _lts.forEach((l) => l.parent && l.parent.remove(l)); // PERF: drop model-embedded lights
+          this._charCache[url] = g;
+          return g;
+        }).finally(() => { delete this._charInflight[url]; });
+      }
+      await this._charInflight[url];
     }
     const gltf = this._charCache[url];
     const scene = skeletonClone(gltf.scene);

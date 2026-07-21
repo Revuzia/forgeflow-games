@@ -225,7 +225,15 @@ function spawnChest(W, x, y, z) {
   );
   beam.position.y = 3.6;
   group.add(beam);
-  ensureChestProto(W).then((proto) => { if (group.parent) group.add(proto.clone()); });
+  // keep a handle on the loaded model so update() can cull it by distance —
+  // chests.set below runs synchronously, long before this promise resolves.
+  ensureChestProto(W).then((proto) => {
+    if (!group.parent) return;
+    const m = proto.clone();
+    group.add(m);
+    const rec = chests.get(id);
+    if (rec) rec.model = m;
+  });
   W.group("loot").add(group);
   chests.set(id, { id, pos: { x, y: gy, z }, group, opened: false, glow, beam, ring });
   gridAdd("chest", id, { x, z });
@@ -524,7 +532,13 @@ function deathDrop(W, victim) {
   let k = 0;
   const drop = (data) => {
     const ang = rng() * Math.PI * 2, r = 0.5 + rng() * 1.1;
-    spawnItem(W, data, victim.pos.x + Math.cos(ang) * r, victim.pos.y + 0.2, victim.pos.z + Math.sin(ang) * r, "dd:" + victim.id + ":" + (k++));
+    const iid = spawnItem(W, data, victim.pos.x + Math.cos(ang) * r, victim.pos.y + 0.2, victim.pos.z + Math.sin(ang) * r, "dd:" + victim.id + ":" + (k++));
+    // Death loot got no burst, no beam and no glow, while an untouched CHEST
+    // gets a glow sprite plus a 7 m additive beam (spawnChest, above) — so the
+    // gun a kill just dropped was harder to spot than loot nobody had touched.
+    // Scaled to 1.3 (chests use 3.2): a marker, not a beacon.
+    const it = items.get(iid);
+    if (it) { const g2 = chestGlow(); g2.scale.set(1.3, 1.3, 1); g2.position.y = 0.55; it.group.add(g2); }
   };
   // EVERY carried weapon (including the equipped one) + consumables + ammo
   for (let i = 0; i < inv.slots.length; i++) {
@@ -543,10 +557,23 @@ export function update(W, dt) {
   bobT += dt;
   // bob + spin (only items near the camera to save time)
   const cp = W.camera.position;
+  // Loot was DRAWN at unlimited range: on Deepwood that is 134 groups, median
+  // 1,132 m from the camera, each a rarity torus plus a ~6,000-tri Meshy clone
+  // whose sub-meshes are individual draw calls. three.js only frustum-tests
+  // leaf meshes and the far plane is 2,000 m on a 1,600 m map, so nothing
+  // upstream rejected them — 505 of the frame's 763 draw calls and ~7.3 of its
+  // 12.6 ms were loot. Nothing raycasts or picks against these Object3Ds (bots
+  // query the spatial hash via W.nearbyLoot), so visibility is render-only.
+  // Distance is 3D on purpose: the old horizontal test called everything under
+  // the 240-270 m glider flight path "near".
+  const cull = W.lootCull || 150, cull2 = cull * cull;
   for (const [, it] of items) {
     if (it.taken) continue;
-    const dx = it.pos.x - cp.x, dz = it.pos.z - cp.z;
-    if (dx * dx + dz * dz > 90 * 90) continue;
+    const dx = it.pos.x - cp.x, dy = it.pos.y - cp.y, dz = it.pos.z - cp.z;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    const vis = d2 < cull2;
+    if (it.group.visible !== vis) it.group.visible = vis;
+    if (!vis || d2 > 90 * 90) continue;
     it.group.rotation.y = bobT * 1.4;
     it.group.position.y = it.pos.y + Math.sin(bobT * 2 + it.pos.x) * 0.08 + 0.08;
   }
@@ -554,8 +581,14 @@ export function update(W, dt) {
 
   // chest glow pulse (only near camera)
   for (const [, c] of chests) {
+    const cdx = c.pos.x - cp.x, cdy = c.pos.y - cp.y, cdz = c.pos.z - cp.z;
+    const d2 = cdx * cdx + cdy * cdy + cdz * cdz;
+    // Cull the chest MODEL and its rarity ring only. The glow sprite and the
+    // light beam stay lit at any range — they are the beacon you steer the
+    // glider toward, and hiding them would make chests unfindable on descent.
+    if (c.model) c.model.visible = d2 < cull2;
+    if (c.ring) c.ring.visible = d2 < cull2;
     if (c.opened || !c.glow) continue;
-    const d2 = (c.pos.x - cp.x) ** 2 + (c.pos.z - cp.z) ** 2;
     if (d2 > 160 * 160) continue;
     const k = 0.85 + Math.sin(bobT * 2.4 + c.pos.x) * 0.15;
     c.glow.scale.set(3.2 * k, 3.2 * k, 1);

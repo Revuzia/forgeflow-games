@@ -3,6 +3,69 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — Firing a gun moved nothing on screen, and frame order ate the first kick (?v=102)
+
+Game-feel pass from the Final Drop benchmark. The INFORMATIONAL feedback layer
+was already ahead of the benchmark — coalesced damage numbers, the announcement
+queue, threat arrows, the death recap — but the PHYSICAL layer was absent:
+`camShake =` existed in exactly two places in the whole codebase (explosion,
+player hurt), neither of which is your own gun. At the SMG's 720 rpm you pulled
+a trigger every 83 ms and nothing on screen moved.
+
+- **SHOT KICK AND FOV PUNCH.** fx.js:94-95 now carries per-weapon tables —
+  camShake 0.045 smg / 0.06 pistol / 0.07 ar / 0.18 glauncher / 0.20 shotgun /
+  0.26 sniper, FOV punch 2-5° — raised in the shotFired handler and gated on
+  `a === W.player`. That gate is mandatory, not defensive: shotFired is the
+  GLOBAL event and all 49 bots fire through it (audio.js gates the same way), so
+  an ungated kick would shake your camera on every gunshot on the island.
+- **THE FRAME ORDER ATE MOST OF THE KICK — this is the trap to remember.**
+  ffg_royale3d.js:501-505 runs player (which is where the camera reads camShake)
+  → weapons (which emits shotFired, which raises it) → fx. A kick raised on frame
+  N is therefore not READ until frame N+1, and the decay used to run
+  unconditionally in between. Measured against the shipped constants: at 60 fps
+  an SMG's 0.045 reached the camera as 0.015 — 67% eaten — and at 20 fps the
+  decay term dt*1.8 = 0.09 is LARGER than every pistol, SMG and AR kick in the
+  table, so on a slow machine those three weapons would have rendered no shake at
+  all. The explosion (up to 0.5) and hurt (0.12) shakes have always lost that
+  same frame; they were simply big enough to hide it. The decay now belongs next
+  to the camera that consumes it.
+- **HITSTOP IS SOLO-ONLY, AND THAT IS DELIBERATE.** W.hitstopT (0.05 on your own
+  kill, 0.03 on a headshot, 0.07 inside an 8 m explosion — fx.js:229/244/267)
+  scales the frame step to 0.12 at ffg_royale3d.js:493, but only when `!W.net`.
+  net.js broadcasts own-actor state at 12 Hz and the host swaps a silent guest
+  for a bot after 12 s without state, so slowing the sim on one client drifts it
+  off the link and reads to everyone else as a dropout. hitstopT is decremented
+  with the REAL dt, so the freeze is the same wall-clock length whatever scale is
+  applied. Do not "improve" this into a shared slowdown.
+- **THE HIT FLASH MULTIPLIES THE SAVED COLOUR — never lerp it toward white.**
+  player.js's `BODY_GAIN = 3.2` (:240 today) multiplies every actor's base colour,
+  so those channels sit well above 1; blending toward (1,1,1) would DARKEN a hit
+  actor, which is the opposite of a flash. fx.js:426-431 copies the saved colour
+  and scales it UP (×(1 + 1.1k) over 70 ms, with the shield-blue / health-red
+  split the hurt particles already use). Emissive stays off-limits for the reason
+  recorded in the comment block above BODY_GAIN — Meshy's emissiveMap was
+  stripped because it re-lit the cast fullbright in shade.
+- New `lc_settings` key: **`shake`**, default 1, clamped to 0-1 on load
+  (ffg_royale3d.js:561 and :574), multiplied into camShake at player.js:1256.
+  Camera shake is a motion-sickness accommodation the same way FOV is, so 0 has
+  to be reachable — the clamp deliberately avoids `|| 1`, which would bounce a
+  stored 0 straight back to full. That is the same persistence trap that left a
+  0 sensitivity slider bricking mouse-look on every future launch.
+
+Verified: every number above is quoted out of the shipped files as they stand
+(fx.js SHOT_SHAKE/SHOT_FOV, the module order at ffg_royale3d.js:500-505, the
+`!W.net` gate at :493, the clamp at :574), and the 67% / 100% figures are that
+decay rate applied to those kick magnitudes at 60 and 20 fps. Sim selftest 96/96.
+
+Open, NOT fixed here: camShake is currently decayed in TWO places — player.js
+immediately after the camera reads it, and fx.js:460 behind a `shakePrev` guard
+that skips the frame the value rose. Two independent fixes for the one ordering
+trap landed in the same wave, so on any frame where the shake does not rise it
+decays at 3.6/s instead of 1.8/s and a kick rings roughly half as long as either
+author intended. Both are correct alone; one has to go, and the one to keep is
+player.js's, because the camera is the consumer. This pass owned CHANGELOG.md
+only, so it is flagged rather than repaired. DRAFT.
+
 ## 2026-07-21 — Bot grenades always fell short, and stuck-detection was dead code (?v=91, LIVE)
 
 Two bot defects from the full-game sweep.
