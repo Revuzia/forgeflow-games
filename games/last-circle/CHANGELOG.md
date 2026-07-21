@@ -3,6 +3,28 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — SHIFT toggles sprint on and off (?v=68, LIVE)
+
+Owner direction: "Make SHIFT click activate sprint/run, on and off."
+
+- ?v=67 added a HOLD/TOGGLE option but defaulted to HOLD. TOGGLE is now the
+  DEFAULT: one press starts running, another stops it, and you never hold the
+  key down. HOLD is still available in Settings for anyone who prefers it.
+- The latch clears when you stop moving forward, so you cannot wander back into
+  a fight still sprinting from three minutes ago with no way to notice, and it
+  is cleared with the rest of the input state between matches.
+
+Verified live through the real frame path (input rebuild + world step): walking
+covers 5.32 m in one second, one SHIFT press with the key RELEASED covers
+8.51 m with input.sprint true, a second press returns it to 5.32 m, and
+releasing forward clears the latch.
+
+(Note for future testing: the input struct is rebuilt inside the KERNEL's
+updater list, so calling player.update() directly does not exercise the
+keyboard path at all — the first two attempts at this verification measured
+walking three times and then measured a stale latch left on by the attempt
+before. Drive kernel._updaters and zero the latch first.)
+
 ## 2026-07-21 — Accessibility + control settings (?v=67, LIVE)
 
 Four UX findings from the gap scan, all of them table stakes for the genre.

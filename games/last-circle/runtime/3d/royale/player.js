@@ -454,6 +454,10 @@ function installHumanInput(W) {
     inp.mx = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
     inp.mz = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
     const sprintHeld = !!keys.ShiftLeft || !!keys.ShiftRight;
+    // SHIFT toggles sprint on and off (owner direction). The latch drops when
+    // you stop moving forward, so you never wander back into a fight still
+    // sprinting from three minutes ago with no way to notice.
+    if (W.settings.sprintToggle && W._sprintLatch && inp.mz <= 0.1) W._sprintLatch = false;
     inp.sprint = W.settings.sprintToggle ? !!W._sprintLatch : sprintHeld;
     // Crouch defaults to C, NOT Ctrl: this runs in a browser next to WASD, and
     // Ctrl+W closes the tab. Rebindable like any other action.
