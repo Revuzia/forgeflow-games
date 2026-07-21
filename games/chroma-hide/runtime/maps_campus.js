@@ -176,6 +176,29 @@ const DRESS = {
   ],
 };
 
+
+// Wall decor (noCollide, hung at height). Bare walls were the loudest visual gap —
+// and a framed picture is exactly the kind of flat surface this game asks you to
+// impersonate.  `w` = width along the wall, `thick` = how far it stands proud.
+const DECOR = {
+  office: [
+    { w: 1.10, h: 0.72, thick: 0.10, colors: [0x2a2c30, 0x14161a], rough: 0.35, metal: 0.25 },   // wall screen / TV
+    { w: 0.82, h: 0.58, thick: 0.08, colors: [0x8a6038, 0xc9b98a, 0x5c4a36], rough: 0.7 },       // framed picture
+    { w: 0.46, h: 0.46, thick: 0.09, colors: [0xe8e4dc, 0x8a94a6], rough: 0.5 },                 // wall clock
+    { w: 1.70, h: 1.05, thick: 0.09, colors: [0xeef0f2, 0xdfe6ef], rough: 0.4 },                 // whiteboard
+  ],
+  retail: [
+    { w: 1.30, h: 0.50, thick: 0.09, colors: [0xc23b3b, 0x2fa36b, 0x3a6ea5, 0xe0b83a], rough: 0.6 }, // aisle sign
+    { w: 0.70, h: 0.52, thick: 0.08, colors: [0x8a6038, 0xb07a3a], rough: 0.7 },                      // framed print
+    { w: 0.44, h: 0.24, thick: 0.07, colors: [0x2fa36b, 0xd83a3a], rough: 0.45, metal: 0.2 },         // EXIT sign
+  ],
+  street: [
+    { w: 1.05, h: 0.62, thick: 0.10, colors: [0xc23b3b, 0xd0a020, 0x3a6ea5], rough: 0.65 },      // shop sign
+    { w: 0.52, h: 0.72, thick: 0.08, colors: [0x8a8a90, 0x6a6a70], rough: 0.8 },                  // meter box
+    { w: 0.44, h: 0.24, thick: 0.07, colors: [0x2fa36b], rough: 0.45, metal: 0.2 },               // EXIT sign
+  ],
+};
+
 export const CAMPUS_MAPS = {
   office: buildCampus({
     id: "office", name: "The Firm",
@@ -196,12 +219,12 @@ export const CAMPUS_MAPS = {
           { x: -20, z: -13, w: 32, d: 0.4, doorWidth: 3.2, doorAts: [-8, 8] },
         ],
         rooms: [
-          { id: "reception", name: "Reception", x: -28, z: 2, w: 16, d: 10, floor: 0x8a5a34, tex: "wood", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x8791a1, 0x5a6473] }, scatter: { palette: PAL.recep, count: 16, dressing: { palette: DRESS.office, max: 3 } } },
-          { id: "lounge", name: "Lounge", x: -12, z: 2, w: 16, d: 10, floor: 0x7a5230, tex: "wood", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x9c8f79, 0x566173] }, scatter: { palette: PAL.recep, count: 15, dressing: { palette: DRESS.office, max: 3 } } },
-          { id: "bullpenW", name: "Bullpen West", x: -28, z: -8, w: 16, d: 10, floor: 0x5b6470, tex: "carpet", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x7d8899, 0x5f6a78] }, scatter: { palette: PAL.bullpen, count: 18, dressing: { palette: DRESS.office, max: 3 } } },
-          { id: "bullpenE", name: "Bullpen East", x: -12, z: -8, w: 16, d: 10, floor: 0x59626e, tex: "carpet", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x8a94a6, 0x5f6a78] }, scatter: { palette: PAL.bullpen, count: 18, dressing: { palette: DRESS.office, max: 3 } } },
-          { id: "officeW", name: "Offices West", x: -28, z: -18, w: 16, d: 10, floor: 0x6a7280, tex: "carpet", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x5a3f2a, 0x8a9099] }, scatter: { palette: PAL.offices, count: 16, dressing: { palette: DRESS.office, max: 3 } } },
-          { id: "officeE", name: "Offices East", x: -12, z: -18, w: 16, d: 10, floor: 0x66707d, tex: "carpet", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x8a9099, 0x5a6473] }, scatter: { palette: PAL.offices, count: 16, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "reception", wallTex: "wallpaper", wallColor: 0xb9c6d6, wallTrim: 0x2f3a46, name: "Reception", x: -28, z: 2, w: 16, d: 10, floor: 0x8a5a34, tex: "wood", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x8791a1, 0x5a6473] }, scatter: { palette: PAL.recep, count: 16, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "lounge", wallTex: "wallpaper", wallColor: 0xc8b49a, wallTrim: 0x4a3a2c, name: "Lounge", x: -12, z: 2, w: 16, d: 10, floor: 0x7a5230, tex: "wood", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x9c8f79, 0x566173] }, scatter: { palette: PAL.recep, count: 15, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "bullpenW", wallTex: "plaster", wallColor: 0xd7dbe0, wallTrim: 0x36404a, name: "Bullpen West", x: -28, z: -8, w: 16, d: 10, floor: 0x5b6470, tex: "carpet", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x7d8899, 0x5f6a78] }, scatter: { palette: PAL.bullpen, count: 18, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "bullpenE", wallTex: "plaster", wallColor: 0xcfd8dd, wallTrim: 0x36404a, name: "Bullpen East", x: -12, z: -8, w: 16, d: 10, floor: 0x59626e, tex: "carpet", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x8a94a6, 0x5f6a78] }, scatter: { palette: PAL.bullpen, count: 18, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "officeW", wallTex: "panel", wallColor: 0x8a6038, wallTrim: 0x5c4028, name: "Offices West", x: -28, z: -18, w: 16, d: 10, floor: 0x6a7280, tex: "carpet", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x5a3f2a, 0x8a9099] }, scatter: { palette: PAL.offices, count: 16, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "officeE", wallTex: "plaster", wallColor: 0xb4c4a8, wallTrim: 0x3d4a36, name: "Offices East", x: -12, z: -18, w: 16, d: 10, floor: 0x66707d, tex: "carpet", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x8a9099, 0x5a6473] }, scatter: { palette: PAL.offices, count: 16, dressing: { palette: DRESS.office, max: 3 } } },
         ],
       },
       {
@@ -212,17 +235,17 @@ export const CAMPUS_MAPS = {
           { x: 20, z: -8, w: 28, d: 0.4, doorWidth: 3.2, doorAts: [-7, 7] },
         ],
         rooms: [
-          { id: "breakroom", name: "Break Room", x: 13, z: -0.5, w: 14, d: 15, floor: 0x9098a0, tex: "checker", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x9c8f79, 0x566173] }, scatter: { palette: PAL.brk, count: 17, dressing: { palette: DRESS.office, max: 3 } } },
-          { id: "meeting", name: "Meeting Room", x: 27, z: -0.5, w: 14, d: 15, floor: 0x7a5230, tex: "wood", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x6a7280, 0xa8845c] }, scatter: { palette: PAL.brk, count: 15, dressing: { palette: DRESS.office, max: 3 } } },
-          { id: "copyit", name: "Copy / IT", x: 13, z: -15.5, w: 14, d: 15, floor: 0x5f6a78, tex: "carpet", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x5f6a78, 0xc9b98a] }, scatter: { palette: PAL.offices, count: 17, dressing: { palette: DRESS.office, max: 3 } } },
-          { id: "server", name: "Server Room", x: 27, z: -15.5, w: 14, d: 15, floor: 0x4e565f, tex: "concrete", breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x3d5a7a, 0x7a828a] }, scatter: { palette: PAL.offices, count: 15, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "breakroom", wallTex: "tile", wallColor: 0xdfe7ea, wallTrim: 0x6a7278, name: "Break Room", x: 13, z: -0.5, w: 14, d: 15, floor: 0x9098a0, tex: "checker", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x9c8f79, 0x566173] }, scatter: { palette: PAL.brk, count: 17, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "meeting", wallTex: "panel", wallColor: 0x7a5a3c, wallTrim: 0x50381f, name: "Meeting Room", x: 27, z: -0.5, w: 14, d: 15, floor: 0x7a5230, tex: "wood", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x6a7280, 0xa8845c] }, scatter: { palette: PAL.brk, count: 15, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "copyit", wallTex: "plaster", wallColor: 0xc2c6cc, wallTrim: 0x3a3f45, name: "Copy / IT", x: 13, z: -15.5, w: 14, d: 15, floor: 0x5f6a78, tex: "carpet", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x5f6a78, 0xc9b98a] }, scatter: { palette: PAL.offices, count: 17, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "server", wallTex: "block", wallColor: 0x8f979e, wallTrim: 0x333940, name: "Server Room", x: 27, z: -15.5, w: 14, d: 15, floor: 0x4e565f, tex: "concrete", decor: { count: 6, palette: DECOR.office }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x3d5a7a, 0x7a828a] }, scatter: { palette: PAL.offices, count: 15, dressing: { palette: DRESS.office, max: 3 } } },
         ],
       },
     ],
     zones: [
       { id: "lot", name: "Parking Lot", x: 0, z: 20, w: 76, d: 24, floor: 0x55555a, tex: "concrete", breakers: { count: 5, w: 1.6, d: 1.6, h: 2.8, colors: [0x6a7280, 0x55555a, 0x8a94a6] }, scatter: { palette: PAL.lot, count: 34, margin: 2.6, dressing: { palette: DRESS.yard, max: 3 } } },
       { id: "breezeway", name: "Breezeway", x: 1, z: -8, w: 10, d: 30, floor: 0x606068, tex: "concrete", breakers: { count: 3, w: 1.4, d: 1.4, h: 2.6, colors: [0x2f7d3a, 0x606068] }, scatter: { palette: PAL.breez, count: 10, margin: 2.2, dressing: { palette: DRESS.yard, max: 2 } } },
-      { id: "alley", name: "Rear Alley", x: 0, z: -27.5, w: 76, d: 9, floor: 0x3d4048, tex: "concrete", breakers: { count: 4, w: 2.2, d: 2.2, h: 2.7, colors: [0x8a8a90, 0xb5622a] }, scatter: { palette: PAL.alley, count: 20, margin: 2.2, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "alley", wallTex: "brick", wallColor: 0x6f6a63, wallTrim: 0x2e2b28, name: "Rear Alley", x: 0, z: -27.5, w: 76, d: 9, floor: 0x3d4048, tex: "concrete", decor: { count: 8, palette: DECOR.street }, breakers: { count: 4, w: 2.2, d: 2.2, h: 2.7, colors: [0x8a8a90, 0xb5622a] }, scatter: { palette: PAL.alley, count: 20, margin: 2.2, dressing: { palette: DRESS.yard, max: 3 } } },
     ],
     spawn: { seeker: { x: 0, z: 28 }, hider: { x: 1, z: -8 } },
     spotCount: 56,
@@ -243,8 +266,8 @@ export const CAMPUS_MAPS = {
         doors: [{ side: "E", at: 0, width: 3.2 }, { side: "W", at: 0, width: 2.6 }],
         dividers: [{ x: -24, z: -26.5, w: 16, d: 0.4, doorWidth: 2.8, doorAts: [0] }],
         rooms: [
-          { id: "grocer", name: "Grocer", x: -24, z: -21.5, w: 16, d: 10, floor: 0x8a6038, tex: "wood", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0xc23b3b, 0x8f897a] }, scatter: { palette: PAL.grocer, count: 15, dressing: { palette: DRESS.retail, max: 3 } } },
-          { id: "grocer_back", name: "Grocer Store", x: -24, z: -29.0, w: 16, d: 5, floor: 0x6b5236, tex: "concrete", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x7a828a, 0xb07a3a] }, scatter: { palette: PAL.stock, count: 9, margin: 1.6, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "grocer", wallTex: "brick", wallColor: 0x9c6350, wallTrim: 0x3d2a22, name: "Grocer", x: -24, z: -21.5, w: 16, d: 10, floor: 0x8a6038, tex: "wood", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0xc23b3b, 0x8f897a] }, scatter: { palette: PAL.grocer, count: 15, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "grocer_back", wallTex: "block", wallColor: 0x9aa0a4, wallTrim: 0x333940, name: "Grocer Store", x: -24, z: -29.0, w: 16, d: 5, floor: 0x6b5236, tex: "concrete", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x7a828a, 0xb07a3a] }, scatter: { palette: PAL.stock, count: 9, margin: 1.6, dressing: { palette: DRESS.retail, max: 3 } } },
         ],
       },
       {
@@ -252,8 +275,8 @@ export const CAMPUS_MAPS = {
         doors: [{ side: "E", at: 0, width: 3.2 }, { side: "W", at: 0, width: 2.6 }],
         dividers: [{ x: -24, z: -10.5, w: 16, d: 0.4, doorWidth: 2.8, doorAts: [0] }],
         rooms: [
-          { id: "cafe", name: "Cafe", x: -24, z: -5.5, w: 16, d: 10, floor: 0x8f887c, tex: "checker", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0xc23b3b, 0x8f897a] }, scatter: { palette: PAL.cafe, count: 15, dressing: { palette: DRESS.retail, max: 3 } } },
-          { id: "cafe_back", name: "Cafe Kitchen", x: -24, z: -13.0, w: 16, d: 5, floor: 0x6f6a62, tex: "concrete", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x7a828a, 0xb07a3a] }, scatter: { palette: PAL.stock, count: 9, margin: 1.6, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "cafe", wallTex: "plaster", wallColor: 0xd4c0a2, wallTrim: 0x4a3c2a, name: "Cafe", x: -24, z: -5.5, w: 16, d: 10, floor: 0x8f887c, tex: "checker", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0xc23b3b, 0x8f897a] }, scatter: { palette: PAL.cafe, count: 15, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "cafe_back", wallTex: "tile", wallColor: 0xcfd8d4, wallTrim: 0x5a6260, name: "Cafe Kitchen", x: -24, z: -13.0, w: 16, d: 5, floor: 0x6f6a62, tex: "concrete", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x7a828a, 0xb07a3a] }, scatter: { palette: PAL.stock, count: 9, margin: 1.6, dressing: { palette: DRESS.retail, max: 3 } } },
         ],
       },
       {
@@ -261,8 +284,8 @@ export const CAMPUS_MAPS = {
         doors: [{ side: "E", at: 0, width: 3.2 }, { side: "W", at: 0, width: 2.6 }],
         dividers: [{ x: -24, z: 5.5, w: 16, d: 0.4, doorWidth: 2.8, doorAts: [0] }],
         rooms: [
-          { id: "hardware", name: "Hardware", x: -24, z: 10.5, w: 16, d: 10, floor: 0x6f6a62, tex: "concrete", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0xc23b3b, 0x8f897a] }, scatter: { palette: PAL.hardware, count: 15, dressing: { palette: DRESS.retail, max: 3 } } },
-          { id: "hardware_back", name: "Hardware Back", x: -24, z: 3.0, w: 16, d: 5, floor: 0x5f5a54, tex: "concrete", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x7a828a, 0xb07a3a] }, scatter: { palette: PAL.stock, count: 9, margin: 1.6, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "hardware", wallTex: "brick", wallColor: 0x7a6a58, wallTrim: 0x322c24, name: "Hardware", x: -24, z: 10.5, w: 16, d: 10, floor: 0x6f6a62, tex: "concrete", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0xc23b3b, 0x8f897a] }, scatter: { palette: PAL.hardware, count: 15, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "hardware_back", wallTex: "block", wallColor: 0x93999e, wallTrim: 0x333940, name: "Hardware Back", x: -24, z: 3.0, w: 16, d: 5, floor: 0x5f5a54, tex: "concrete", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x7a828a, 0xb07a3a] }, scatter: { palette: PAL.stock, count: 9, margin: 1.6, dressing: { palette: DRESS.retail, max: 3 } } },
         ],
       },
       {
@@ -270,15 +293,15 @@ export const CAMPUS_MAPS = {
         doors: [{ side: "E", at: 0, width: 3.2 }, { side: "W", at: 0, width: 2.6 }],
         dividers: [{ x: -24, z: 21.5, w: 16, d: 0.4, doorWidth: 2.8, doorAts: [0] }],
         rooms: [
-          { id: "laundry", name: "Laundry", x: -24, z: 26.5, w: 16, d: 10, floor: 0x8f8a80, tex: "checker", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0xc23b3b, 0x8f897a] }, scatter: { palette: PAL.cafe, count: 15, dressing: { palette: DRESS.retail, max: 3 } } },
-          { id: "laundry_back", name: "Laundry Back", x: -24, z: 19.0, w: 16, d: 5, floor: 0x6a655e, tex: "concrete", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x7a828a, 0xb07a3a] }, scatter: { palette: PAL.stock, count: 9, margin: 1.6, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "laundry", wallTex: "tile", wallColor: 0xd8e2e6, wallTrim: 0x5e6a70, name: "Laundry", x: -24, z: 26.5, w: 16, d: 10, floor: 0x8f8a80, tex: "checker", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0xc23b3b, 0x8f897a] }, scatter: { palette: PAL.cafe, count: 15, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "laundry_back", wallTex: "block", wallColor: 0x9aa0a4, wallTrim: 0x333940, name: "Laundry Back", x: -24, z: 19.0, w: 16, d: 5, floor: 0x6a655e, tex: "concrete", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x7a828a, 0xb07a3a] }, scatter: { palette: PAL.stock, count: 9, margin: 1.6, dressing: { palette: DRESS.retail, max: 3 } } },
         ],
       },
     ],
     zones: [
       { id: "alley", name: "Service Alley", x: -35, z: 0, w: 6, d: 64, floor: 0x3a3844, tex: "concrete", breakers: { count: 4, w: 1.3, d: 1.3, h: 2.5, colors: [0x8a8a90, 0x3a6a3a] } },
-      { id: "mainst", name: "Main Street", x: -4, z: 0, w: 24, d: 64, floor: 0x50505a, tex: "concrete", breakers: { count: 6, w: 2.0, d: 2.0, h: 2.8, colors: [0x7a4636, 0xc23b3b, 0x5f9a3a] }, scatter: { palette: PAL.street, count: 30, margin: 2.6, dressing: { palette: DRESS.yard, max: 3 } } },
-      { id: "yard", name: "Loading Yard", x: 23, z: 0, w: 30, d: 64, floor: 0x5a5a62, tex: "concrete", breakers: { count: 6, w: 2.4, d: 2.4, h: 2.8, colors: [0xb5622a, 0x2f6a8a, 0x6b7a52] }, scatter: { palette: PAL.yard, count: 40, margin: 2.8, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "mainst", wallTex: "brick", wallColor: 0x8a5a4a, wallTrim: 0x3a2a24, name: "Main Street", x: -4, z: 0, w: 24, d: 64, floor: 0x50505a, tex: "concrete", decor: { count: 8, palette: DECOR.street }, breakers: { count: 6, w: 2.0, d: 2.0, h: 2.8, colors: [0x7a4636, 0xc23b3b, 0x5f9a3a] }, scatter: { palette: PAL.street, count: 30, margin: 2.6, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "yard", wallTex: "concrete", wallColor: 0x8b8e92, wallTrim: 0x33363a, name: "Loading Yard", x: 23, z: 0, w: 30, d: 64, floor: 0x5a5a62, tex: "concrete", decor: { count: 8, palette: DECOR.street }, breakers: { count: 6, w: 2.4, d: 2.4, h: 2.8, colors: [0xb5622a, 0x2f6a8a, 0x6b7a52] }, scatter: { palette: PAL.yard, count: 40, margin: 2.8, dressing: { palette: DRESS.yard, max: 3 } } },
     ],
     spawn: { seeker: { x: 23, z: 27 }, hider: { x: -4, z: 0 } },
     spotCount: 56,
@@ -303,12 +326,12 @@ export const CAMPUS_MAPS = {
           { x: -12, z: -12, w: 44, d: 0.4, doorWidth: 3.4, doorAts: [-14, 0, 14] },
         ],
         rooms: [
-          { id: "vestibule", name: "Vestibule", x: -23, z: 6, w: 22, d: 12, floor: 0x9aa0a6, tex: "checker", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x8a8375, 0x2fa36b] }, scatter: { palette: PAL.produce, count: 16, dressing: { palette: DRESS.retail, max: 3 } } },
-          { id: "aisles", name: "Aisles", x: -1, z: 6, w: 22, d: 12, floor: 0xa8aeb4, tex: "checker", breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0xb8523a, 0x3a6ea5] }, scatter: { palette: PAL.aisles, count: 20, dressing: { palette: DRESS.retail, max: 3 } } },
-          { id: "produce", name: "Produce & Deli", x: -23, z: -6, w: 22, d: 12, floor: 0x8fa07a, tex: "checker", breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0xc96b3a, 0x5f9a3a] }, scatter: { palette: PAL.produce, count: 19, dressing: { palette: DRESS.retail, max: 3 } } },
-          { id: "chilled", name: "Chilled", x: -1, z: -6, w: 22, d: 12, floor: 0x9fb0bc, tex: "checker", breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0xbcd4e0, 0x46525a] }, scatter: { palette: PAL.produce, count: 18, dressing: { palette: DRESS.retail, max: 3 } } },
-          { id: "stockroom", name: "Stockroom", x: -23, z: -18, w: 22, d: 12, floor: 0x55575a, tex: "concrete", breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x55575a, 0x7a828a] }, scatter: { palette: PAL.stock, count: 19, dressing: { palette: DRESS.retail, max: 3 } } },
-          { id: "backdock", name: "Back Dock", x: -1, z: -18, w: 22, d: 12, floor: 0x5d6064, tex: "concrete", breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x6b7a52, 0xb5622a] }, scatter: { palette: PAL.stock, count: 17, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "vestibule", wallTex: "tile", wallColor: 0xe2e8ec, wallTrim: 0x5e666c, name: "Vestibule", x: -23, z: 6, w: 22, d: 12, floor: 0x9aa0a6, tex: "checker", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x8a8375, 0x2fa36b] }, scatter: { palette: PAL.produce, count: 16, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "aisles", wallTex: "plaster", wallColor: 0xe6e9ec, wallTrim: 0x3f4750, name: "Aisles", x: -1, z: 6, w: 22, d: 12, floor: 0xa8aeb4, tex: "checker", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0xb8523a, 0x3a6ea5] }, scatter: { palette: PAL.aisles, count: 20, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "produce", wallTex: "tile", wallColor: 0xc9e0cf, wallTrim: 0x46604f, name: "Produce & Deli", x: -23, z: -6, w: 22, d: 12, floor: 0x8fa07a, tex: "checker", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0xc96b3a, 0x5f9a3a] }, scatter: { palette: PAL.produce, count: 19, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "chilled", wallTex: "tile", wallColor: 0xcfdde8, wallTrim: 0x455663, name: "Chilled", x: -1, z: -6, w: 22, d: 12, floor: 0x9fb0bc, tex: "checker", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0xbcd4e0, 0x46525a] }, scatter: { palette: PAL.produce, count: 18, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "stockroom", wallTex: "block", wallColor: 0x969ca1, wallTrim: 0x333940, name: "Stockroom", x: -23, z: -18, w: 22, d: 12, floor: 0x55575a, tex: "concrete", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x55575a, 0x7a828a] }, scatter: { palette: PAL.stock, count: 19, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "backdock", wallTex: "concrete", wallColor: 0x82868b, wallTrim: 0x2f3236, name: "Back Dock", x: -1, z: -18, w: 22, d: 12, floor: 0x5d6064, tex: "concrete", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x6b7a52, 0xb5622a] }, scatter: { palette: PAL.stock, count: 17, dressing: { palette: DRESS.retail, max: 3 } } },
         ],
       },
     ],

@@ -24,6 +24,21 @@ import { clamp, hashStr } from "./sim/util.js";
 
 const BODY_R = 0.42, BODY_LEN = 0.9, BODY_Y = BODY_R + BODY_LEN / 2 + 0.02;
 
+/** Pose table. `s` = non-uniform body scale, `yOff` lifts/drops the centre so the pose
+ *  still rests on the floor. Mirrored by POSE_HEIGHT in the sim, so a flat body really
+ *  does hide behind low cover and a stretched one gives you away over it. */
+const POSES = {
+  stand:   { label: "Stand",   s: [1.00, 1.00, 1.00], yOff: 0.00 },
+  crouch:  { label: "Crouch",  s: [1.05, 0.62, 1.05], yOff: -0.02 },
+  curl:    { label: "Curl",    s: [0.90, 0.52, 0.90], yOff: -0.04 },
+  ball:    { label: "Ball",    s: [0.78, 0.45, 0.78], yOff: -0.03 },
+  flat:    { label: "Flat",    s: [1.20, 0.26, 1.20], yOff: -0.02 },
+  stretch: { label: "Stretch", s: [0.52, 1.40, 0.52], yOff: 0.06 },
+  lean:    { label: "Lean",    s: [0.85, 1.05, 0.55], yOff: 0.01, rot: 0.22 },
+  wide:    { label: "Wide",    s: [1.35, 0.85, 0.70], yOff: -0.01 },
+};
+const POSE_IDS = Object.keys(POSES);
+
 export class Game {
   constructor(engine, config, hud, callbacks) {
     this.engine = engine;
@@ -129,14 +144,42 @@ export class Game {
       roughness: m.perimeter.roughness, metalness: 0 });
     const cx = (m.bounds.minX + m.bounds.maxX) / 2, cz = (m.bounds.minZ + m.bounds.maxZ) / 2;
     const W = m.bounds.maxX - m.bounds.minX, D = m.bounds.maxZ - m.bounds.minZ;
-    const addWall = (x, z, w, d) => { const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, wh, d), wm(Math.max(w, d))); mesh.position.set(x, wh / 2, z); mesh.receiveShadow = true; g.add(mesh); this.paintable.push(mesh); };
+    // Each room paints its own walls: an office reads as painted drywall, a stockroom as
+    // breeze block, a street as brick. A single shared wall material was the "grey stone
+    // everywhere" defect.
+    const wmCache = new Map();
+    const wmFor = (kind, color, len) => {
+      const k = `${kind}|${color}|${Math.round(len / 4)}`;
+      let mm = wmCache.get(k);
+      if (!mm) {
+        mm = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          map: surfaceTexture(kind, color, Math.max(1, Math.round(len / 4)), Math.max(1, Math.round(wh / 2.5))),
+          roughness: m.perimeter.roughness, metalness: 0 });
+        wmCache.set(k, mm);
+      }
+      return mm;
+    };
+    const addWall = (x, z, w, d, style) => {
+      const len = Math.max(w, d);
+      const st = style || {};
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, wh, d),
+        wmFor(st.tex || wallKind, st.color != null ? st.color : m.perimeter.color, len));
+      mesh.position.set(x, wh / 2, z); mesh.receiveShadow = true; g.add(mesh); this.paintable.push(mesh);
+      // skirting / wainscot band — cheap, and it stops walls reading as flat slabs
+      if (st.trim != null) {
+        const tb = new THREE.Mesh(new THREE.BoxGeometry(w + 0.04, 0.34, d + 0.04),
+          new THREE.MeshStandardMaterial({ color: st.trim, roughness: 0.6, metalness: 0.04 }));
+        tb.position.set(x, 0.17, z); tb.receiveShadow = true; g.add(tb);
+      }
+    };
     addWall(cx, m.bounds.minZ - th / 2, W + th * 2, th);
     addWall(cx, m.bounds.maxZ + th / 2, W + th * 2, th);
     addWall(m.bounds.minX - th / 2, cz, th, D);
     addWall(m.bounds.maxX + th / 2, cz, th, D);
 
     // interior dividing walls with doorway gaps (multi-room maps)
-    if (m.walls) for (const iw of m.walls) addWall(iw.x, iw.z, iw.w, iw.d);
+    if (m.walls) for (const iw of m.walls) addWall(iw.x, iw.z, iw.w, iw.d, iw);
 
     // props (paintable cover). Dense campus maps carry 250-400 props, so share box
     // geometries + materials by value — otherwise every dressing cube allocates its
@@ -146,7 +189,8 @@ export class Game {
     const boxMat = (c, r, mt) => { const k = `${c}|${r}|${mt}`; let m2 = matCache.get(k); if (!m2) { m2 = new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: mt }); matCache.set(k, m2); } return m2; };
     for (const p of m.props) {
       const mesh = new THREE.Mesh(boxGeo(p.w, p.h, p.d), boxMat(p.color, p.rough, p.metal || 0));
-      mesh.position.set(p.x, p.h / 2, p.z); mesh.castShadow = true; mesh.receiveShadow = true; mesh.userData.prop = p;
+      // p.y = height of the prop's BASE (dressing sits on furniture, decor hangs on walls).
+      mesh.position.set(p.x, (p.y != null ? p.y : 0) + p.h / 2, p.z); mesh.castShadow = true; mesh.receiveShadow = true; mesh.userData.prop = p;
       g.add(mesh); this.paintable.push(mesh);
       if (p.model) this._loadProp(p, mesh);   // swap the box for a real furniture GLB when it loads
     }
@@ -199,7 +243,7 @@ export class Game {
       root.scale.setScalar(p.h / baseH);                        // fit the prop's height
       root.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(root);
-      root.position.set(p.x, -box.min.y, p.z);                  // seat bottom on the floor
+      root.position.set(p.x, (p.y != null ? p.y : 0) - box.min.y, p.z);   // seat on floor, or at p.y
       root.userData.prop = p;
       this.root.add(root);
       const i = this.paintable.indexOf(placeholder); if (i >= 0) this.paintable[i] = root; else this.paintable.push(root);
@@ -266,15 +310,21 @@ export class Game {
         if (e.code === "KeyV") { this.thirdPerson = !this.thirdPerson; e.preventDefault(); return; }
         if (e.code === "KeyR" && this.localRole === ROLE.HIDER) { this._cyclePose(); e.preventDefault(); return; }
         if (e.code === "Digit1") { this._whistle(); }
-        if (e.code === "KeyE") { this._toggleEmoteBar(); e.preventDefault(); return; }
-        if (e.code === "Space" && !this.paintMode) { this._jump(); e.preventDefault(); return; }
+        if (e.code === "KeyE" && this.localRole === ROLE.HIDER) { this._toggleStick(); e.preventDefault(); return; }
+        if (e.code === "KeyQ") { this._toggleEmoteBar(); e.preventDefault(); return; }
+        if (e.code === "Space" && !this.paintMode) { if (this._stuck) this._stickUp = true; else this._jump(); e.preventDefault(); return; }
+        if (e.code >= "Digit1" && e.code <= "Digit4" && this.paintMode) {
+          const T = ["brush", "spray", "marker", "sponge"][+e.code.slice(5) - 1];
+          this.paint.setTool(T); this.paintPanel && this.paintPanel.refresh();
+          this.hud && this.hud.toast && this.hud.toast("tool: " + T, "#7fe3c4"); e.preventDefault(); return;
+        }
       }
       if (e.code === "ControlLeft" || e.code === "ControlRight") {
         this._crouch = down; if (this.local) this.local.pose = down ? "crouch" : "stand";
       }
       const map = { KeyW: "f", ArrowUp: "f", KeyS: "b", ArrowDown: "b", KeyA: "l", ArrowLeft: "l", KeyD: "r", ArrowRight: "r" };
       if (map[e.code]) { down ? this.keys.add(map[e.code]) : this.keys.delete(map[e.code]); }
-      if (e.code === "Space") e.preventDefault();
+      if (e.code === "Space") { if (!down) this._stickUp = false; e.preventDefault(); }
     };
     this._kd = (e) => this._onKey(e, true); this._ku = (e) => this._onKey(e, false);
     window.addEventListener("keydown", this._kd); window.addEventListener("keyup", this._ku);
@@ -323,6 +373,52 @@ export class Game {
     window.addEventListener("pointermove", this._pm); dom.addEventListener("wheel", this._wheel, { passive: false });
   }
 
+  /** Cling to a wall or a tall prop. This is the mechanic that makes painting pay off:
+   *  a painted body flat against a matching wall is genuinely hard to pick out. Ray is
+   *  short and horizontal, so you must actually walk up to a surface and face it. */
+  _toggleStick() {
+    if (this._stuck) return this._releaseStick();
+    if (!this.local || this.local.role !== ROLE.HIDER || !this.local.alive) return;
+    const eye = new THREE.Vector3(this.local.x, 1.45, this.local.z);
+    const dir = new THREE.Vector3(Math.sin(this.local.yaw), 0, Math.cos(this.local.yaw)).normalize();
+    const ray = new THREE.Raycaster(eye, dir, 0.05, 1.9);
+    const hits = ray.intersectObjects(this.paintable, false);
+    for (const h of hits) {
+      if (h.object === this.floor) continue;
+      // vertical faces only — you cannot cling to a table top
+      if (h.face && Math.abs(h.face.normal.y) > 0.55) continue;
+      let n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : dir.clone().negate();
+      n.y = 0;
+      if (n.lengthSq() < 1e-6) n.copy(dir).negate();
+      n.normalize();
+      const px = h.point.x + n.x * 0.30, pz = h.point.z + n.z * 0.30;
+      this._stuck = true;
+      this._stickY = clamp(h.point.y, 0.55, 2.6);
+      this.local.x = px; this.local.z = pz;
+      this.local.yaw = Math.atan2(n.x, n.z);     // face out of the wall
+      this.hud && this.hud.toast && this.hud.toast("stuck — A/D turn · Space/Ctrl height · E release", "#7fe3c4");
+      this.audio && this.audio.blip && this.audio.blip();
+      return;
+    }
+    this.hud && this.hud.toast && this.hud.toast("face a wall to cling (E)", "#ffb46b");
+  }
+
+  _releaseStick() {
+    if (!this._stuck) return;
+    this._stuck = false; this._stickY = 0;
+    this.hud && this.hud.toast && this.hud.toast("released", "#9fb4c8");
+  }
+
+  /** While stuck: A/D spin the body, Space/Ctrl slide it up and down the wall. */
+  _stepStick(dt) {
+    if (!this._stuck || !this.local) return;
+    if (!this.local.alive) return this._releaseStick();
+    if (this.keys.has("l")) this.local.yaw += 2.4 * dt;
+    if (this.keys.has("r")) this.local.yaw -= 2.4 * dt;
+    if (this._stickUp) this._stickY = clamp(this._stickY + 1.6 * dt, 0.55, 2.9);
+    if (this._crouch) this._stickY = clamp(this._stickY - 1.6 * dt, 0.35, 2.9);
+  }
+
   /** Always-visible control legend. The paint mechanic is the whole game and there was
    *  nothing on screen telling anyone that F opens it. */
   _buildControlHelp() {
@@ -335,9 +431,10 @@ export class Game {
     ].join(";");
     const k = (s2) => `<kbd style="background:rgba(255,255,255,.13);border-radius:3px;padding:0 4px;font:inherit">${s2}</kbd>`;
     const hider = this.localRole === ROLE.HIDER
-      ? `<div style="color:#7fe3c4;font-weight:700;margin-top:3px">${k("F")} PAINT YOURSELF &nbsp;·&nbsp; ${k("R")} pose</div>
-         <div>${k("Space")} jump · ${k("Ctrl")} crouch · ${k("V")} 1st/3rd · ${k("E")} emote</div>
-         <div style="opacity:.72">In paint mode: drag <b>LMB</b> on your body · <b>Space</b> eyedrop a surface · <b>MMB</b> orbit · <b>wheel</b> zoom</div>`
+      ? `<div style="color:#7fe3c4;font-weight:700;margin-top:3px">${k("F")} PAINT YOURSELF &nbsp;·&nbsp; ${k("R")} pose &nbsp;·&nbsp; ${k("E")} cling to wall</div>
+         <div>${k("Space")} jump · ${k("Ctrl")} crouch · ${k("V")} 1st/3rd · ${k("Q")} emote</div>
+         <div style="opacity:.72">Stuck: ${k("A")}${k("D")} turn · ${k("Space")}/${k("Ctrl")} height · ${k("E")} release</div>
+         <div style="opacity:.72">Paint mode: drag <b>LMB</b> on your body · ${k("1")}-${k("4")} brush/spray/marker/sponge · <b>Space</b> eyedrop · <b>MMB</b> orbit · <b>wheel</b> zoom</div>`
       : `<div style="color:#ff9d6b;font-weight:700;margin-top:3px">${k("LMB")} TAG a suspect</div>
          <div>${k("Space")} jump · ${k("V")} 1st/3rd</div>`;
     el.innerHTML = `<div>${k("WASD")} move · <b>mouse</b> look (click to lock, ${k("Esc")} release)</div>${hider}`;
@@ -364,10 +461,9 @@ export class Game {
 
   _cyclePose() {
     if (!this.local || this.local.role !== ROLE.HIDER) return;
-    const POSES = ["stand", "crouch", "flat", "ball"];
-    const i = POSES.indexOf(this.local.pose || "stand");
-    this.local.pose = POSES[(i + 1) % POSES.length];
-    this.hud && this.hud.toast && this.hud.toast("pose: " + this.local.pose, "#7fe3c4");
+    const i = POSE_IDS.indexOf(this.local.pose || "stand");
+    this.local.pose = POSE_IDS[(i + 1) % POSE_IDS.length];
+    this.hud && this.hud.toast && this.hud.toast("pose: " + POSES[this.local.pose].label, "#7fe3c4");
   }
 
   _togglePaintMode() {
@@ -481,6 +577,9 @@ export class Game {
   _computeLocalInput() {
     let mx = 0, mz = 0;
     const seekerLocked = this.localRole === ROLE.SEEKER && this.sim.phase === PHASE.PREP;
+    // clinging to a wall: no walking, and A/D spin the body instead of strafing, so the
+    // stick yaw must survive the input round-trip
+    if (this._stuck) { this._moving = false; return { mx: 0, mz: 0, yaw: this.local ? this.local.yaw : this.camYaw, shoot: false }; }
     if (!this.paintMode && !seekerLocked && this.local && this.local.alive) {
       const f = (this.keys.has("f") ? 1 : 0) - (this.keys.has("b") ? 1 : 0);
       const r = (this.keys.has("r") ? 1 : 0) - (this.keys.has("l") ? 1 : 0);
@@ -509,6 +608,7 @@ export class Game {
     this._updateEmotes(dt);
     this._syncPaintBlend();
     this._stepJump(dt);
+    this._stepStick(dt);
     this._updateCamera(dt);
     this._updateHUD();
     if (this.sim.phase === PHASE.RESULTS && !this._ended) { this._ended = true; this._finish(); }
@@ -614,17 +714,18 @@ export class Game {
       const mesh = this.meshes.get(a.id); if (!mesh) continue;
       mesh.position.x = a.x; mesh.position.z = a.z;
       // pose
-      let sy = 1, py = BODY_Y, rot = 0;
+      let sx = 1, sy = 1, sz = 1, py = BODY_Y, rot = 0;
       // poses apply whether or not the bot has "settled" — the local player picks one
       // with R and it must show immediately (and it changes hiderHeight, so low cover
-      // actually hides a crouched body).
+      // actually hides a crouched body). Non-uniform scale is the whole trick: a
+      // squashed body reads as a crate, a stretched one as a pillar.
       if (a.role === ROLE.HIDER) {
-        if (a.pose === "crouch") { sy = 0.62; py = BODY_Y * 0.7; }
-        else if (a.pose === "ball") { sy = 0.75; py = BODY_R + 0.1; }
-        else if (a.pose === "flat" || a.pose === "lie") { rot = Math.PI / 2; py = BODY_R + 0.05; }
+        const P = POSES[a.pose];
+        if (P) { sx = P.s[0]; sy = P.s[1]; sz = P.s[2]; py = BODY_Y * P.s[1] + P.yOff; rot = P.rot || 0; }
       }
       if (a.isLocal && this._jumpY) py += this._jumpY;   // visual hop
-      mesh.scale.y = sy; mesh.position.y = py; mesh.rotation.set(rot, a.yaw, 0);
+      if (a.isLocal && this._stuck) py = this._stickY;   // clinging to a wall
+      mesh.scale.set(sx, sy, sz); mesh.position.y = py; mesh.rotation.set(rot, a.yaw, 0);
       if (a.caught && a.role === ROLE.HIDER) { mesh.material.transparent = true; mesh.material.opacity = 0.35; }
       // infection: a converted hider now renders like a seeker (tint)
       if (a.role === ROLE.SEEKER && a._wasHider !== true && a.caught === false && a.isBot && a._converted) { }

@@ -1,3 +1,4 @@
+import { PAINT_TOOLS } from "./paint.js";
 /**
  * CHROMA HIDE — runtime/paint_ui.js
  * The paint HUD panel: colour picker, metallic/roughness sliders, brush size,
@@ -35,6 +36,31 @@ export function createPaintPanel(paint, opts = {}) {
   colorInput.style.cssText = "position:absolute;opacity:0;width:0;height:0;";
   swatch.addEventListener("click", () => colorInput.click());
   colorInput.addEventListener("input", () => { paint.setColorHex(colorInput.value); refresh(); });
+  // TOOL ROW — brush / spray / marker / sponge (also hotkeys 1-4)
+  const toolLabel = document.createElement("div");
+  toolLabel.textContent = "TOOL";
+  toolLabel.style.cssText = "opacity:.65;font-size:9.5px;letter-spacing:.08em;margin:2px 0 4px;";
+  el.appendChild(toolLabel);
+  const toolRow = document.createElement("div");
+  toolRow.style.cssText = "display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:6px;";
+  const toolBtns = {};
+  Object.values(PAINT_TOOLS).forEach((t, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = `${t.label}`; b.title = `${t.label} (${i + 1})`;
+    b.style.cssText = "border:1px solid rgba(255,255,255,.14);border-radius:6px;padding:5px 2px;cursor:pointer;font-size:10px;background:rgba(255,255,255,.06);color:#dfe7f2;";
+    b.addEventListener("click", () => { paint.setTool(t.id); refresh(); });
+    toolBtns[t.id] = b; toolRow.appendChild(b);
+  });
+  el.appendChild(toolRow);
+  const syncTools = () => {
+    const cur = paint.getTool().id;
+    for (const [id, b] of Object.entries(toolBtns)) {
+      b.style.background = id === cur ? "rgba(127,227,196,.24)" : "rgba(255,255,255,.06)";
+      b.style.color = id === cur ? "#bff5e4" : "#dfe7f2";
+      b.style.borderColor = id === cur ? "rgba(127,227,196,.5)" : "rgba(255,255,255,.14)";
+    }
+  };
+
   el.appendChild(swatch); el.appendChild(colorInput);
 
   // "All colours" — opens the OS picker (full spectrum)
@@ -67,6 +93,7 @@ export function createPaintPanel(paint, opts = {}) {
     pal.appendChild(b);
   }
   el.appendChild(pal);
+  syncTools();
 
   // Metallic / Roughness / Size sliders
   const mkSlider = (min, max, val, step, on) => {

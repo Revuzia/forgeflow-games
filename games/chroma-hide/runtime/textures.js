@@ -39,6 +39,39 @@ function speckle(ctx, size, n, alpha, seed) {
   }
 }
 
+
+/** Wear layer: damp stains, drips, hairline cracks and scuffs. Applied on top of a
+ *  finished surface so every wall kind gets the same believable age. */
+function grime(x, size, seed, amount = 0.2) {
+  const R = rnd((seed ^ 0xa17c3) >>> 0);
+  const n = Math.round(amount * 22);
+  for (let i = 0; i < n; i++) {                       // damp blooms
+    const r = size * (0.06 + R() * 0.20), px = R() * size, py = R() * size;
+    const g = x.createRadialGradient(px, py, 0, px, py, r);
+    const dark = R() < 0.7;
+    g.addColorStop(0, `rgba(${dark ? "40,34,28" : "255,255,255"},${0.05 + R() * 0.09})`);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    x.fillStyle = g; x.fillRect(px - r, py - r, r * 2, r * 2);
+  }
+  for (let i = 0; i < Math.round(amount * 9); i++) {  // drips from the top edge
+    const px = R() * size, len = size * (0.08 + R() * 0.3);
+    x.fillStyle = `rgba(30,26,22,${0.05 + R() * 0.07})`;
+    x.fillRect(px, 0, 1 + R() * 2, len);
+  }
+  for (let i = 0; i < Math.round(amount * 7); i++) {  // hairline cracks
+    let px = R() * size, py = R() * size;
+    x.strokeStyle = `rgba(0,0,0,${0.10 + R() * 0.14})`; x.lineWidth = 0.6 + R() * 0.9;
+    x.beginPath(); x.moveTo(px, py);
+    const steps = 3 + Math.floor(R() * 5);
+    for (let k = 0; k < steps; k++) { px += (R() - 0.5) * size * 0.16; py += (R() - 0.3) * size * 0.14; x.lineTo(px, py); }
+    x.stroke();
+  }
+  for (let i = 0; i < Math.round(amount * 14); i++) { // scuffs near floor level
+    x.fillStyle = `rgba(20,18,16,${0.04 + R() * 0.06})`;
+    x.fillRect(R() * size, size * (0.72 + R() * 0.26), size * (0.03 + R() * 0.12), 1 + R() * 3);
+  }
+}
+
 const BUILD = {
   brick(base, size) {
     const { c, x } = makeCanvas(size);
@@ -55,6 +88,7 @@ const BUILD = {
       }
     }
     speckle(x, size, 900, 0.06, base);
+    grime(x, size, base, 0.3);
     return c;
   },
   wood(base, size) {
@@ -131,12 +165,76 @@ const BUILD = {
       x.beginPath(); const sx = R() * size, sy = R() * size;
       x.moveTo(sx, sy); x.lineTo(sx + (R() - 0.5) * size * 0.6, sy + (R() - 0.5) * size * 0.6); x.stroke();
     }
+    grime(x, size, base, 0.24);
     return c;
   },
   carpet(base, size) {
     const { c, x } = makeCanvas(size);
     x.fillStyle = hex(base); x.fillRect(0, 0, size, size);
     speckle(x, size, 6000, 0.12, base);
+    return c;
+  },
+  /** Glazed wall tile with grout — kitchens, washrooms, laundromat, chilled aisles. */
+  tile(base, size) {
+    const { c, x } = makeCanvas(size);
+    const R = rnd(base ^ 0x71ca3);
+    x.fillStyle = hex(shade(base, 0.72)); x.fillRect(0, 0, size, size);   // grout
+    const n = 6, cell = size / n, gap = Math.max(1.5, size / 150);
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      x.fillStyle = hex(shade(base, 0.94 + R() * 0.12));
+      x.fillRect(i * cell + gap, j * cell + gap, cell - gap * 2, cell - gap * 2);
+      if (R() < 0.30) {                                    // specular sheen on some tiles
+        const g = x.createLinearGradient(i * cell, j * cell, i * cell + cell, j * cell + cell);
+        g.addColorStop(0, "rgba(255,255,255,.13)"); g.addColorStop(0.55, "rgba(255,255,255,0)");
+        x.fillStyle = g; x.fillRect(i * cell + gap, j * cell + gap, cell - gap * 2, cell - gap * 2);
+      }
+    }
+    grime(x, size, base ^ 0x1a, 0.16);
+    return c;
+  },
+  /** Painted breeze block — stockrooms, back-of-house, service corridors. */
+  block(base, size) {
+    const { c, x } = makeCanvas(size);
+    const R = rnd(base ^ 0x3d1a7);
+    x.fillStyle = hex(shade(base, 0.80)); x.fillRect(0, 0, size, size);
+    const rows = 5, rh = size / rows, cw = size / 2.5;
+    for (let j = 0; j < rows; j++) {
+      const off = (j % 2) * cw * 0.5;
+      for (let i = -1; i < 4; i++) {
+        x.fillStyle = hex(shade(base, 0.93 + R() * 0.14));
+        x.fillRect(i * cw + off + 1.5, j * rh + 1.5, cw - 3, rh - 3);
+      }
+    }
+    speckle(x, size, 2600, 0.05, base);
+    grime(x, size, base, 0.22);
+    return c;
+  },
+  /** Striped wallpaper — reception, lounges, anywhere that should feel decorated. */
+  wallpaper(base, size) {
+    const { c, x } = makeCanvas(size);
+    const R = rnd(base ^ 0x9e2b1);
+    x.fillStyle = hex(base); x.fillRect(0, 0, size, size);
+    const sw = size / 8;
+    for (let i = 0; i < 8; i += 2) { x.fillStyle = hex(shade(base, 1.10)); x.fillRect(i * sw, 0, sw, size); }
+    for (let i = 0; i < 8; i++) {                       // hairline between stripes
+      x.fillStyle = `rgba(0,0,0,.05)`; x.fillRect(i * sw, 0, 1, size);
+    }
+    if (R() < 0.9) grime(x, size, base, 0.10);
+    return c;
+  },
+  /** Vertical timber panelling / wainscot boards. */
+  panel(base, size) {
+    const { c, x } = makeCanvas(size);
+    const R = rnd(base ^ 0x4c8f2);
+    x.fillStyle = hex(base); x.fillRect(0, 0, size, size);
+    const bw = size / 5;
+    for (let i = 0; i < 5; i++) {
+      x.fillStyle = hex(shade(base, 0.92 + R() * 0.16));
+      x.fillRect(i * bw, 0, bw - 1, size);
+      x.fillStyle = "rgba(0,0,0,.22)"; x.fillRect(i * bw + bw - 2, 0, 2, size);   // groove
+      x.fillStyle = "rgba(255,255,255,.07)"; x.fillRect(i * bw, 0, 1.5, size);
+    }
+    grime(x, size, base, 0.12);
     return c;
   },
   plaster(base, size) {
@@ -151,12 +249,13 @@ const BUILD = {
       x.fillStyle = g; x.fillRect(0, 0, size, size);
     }
     speckle(x, size, 1800, 0.05, base);
+    grime(x, size, base, 0.26);
     return c;
   },
 };
 
 /**
- * Get a cached CanvasTexture. kind = brick|wood|checker|damask|ceiling|concrete|carpet|plaster
+ * Get a cached CanvasTexture. kind = brick|wood|checker|damask|ceiling|concrete|carpet|plaster|tile|block|wallpaper|panel
  * `repeat` tiles it across the surface (world-size driven by the caller).
  */
 export function surfaceTexture(kind, baseColor, repeatX = 1, repeatY = 1, size = 256) {

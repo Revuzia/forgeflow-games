@@ -22,6 +22,7 @@ function solidSegments(a, b, gaps) {
 // wall segments for a rectangle perimeter (footprint) with door gaps, corners overlapped
 function rectWalls(b, t, doors, idp) {
   const out = [];
+  const sty = { tex: b.wallTex, color: b.wallColor, trim: b.wallTrim };
   const x0 = b.x - b.w / 2, x1 = b.x + b.w / 2, z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
   const gapsFor = (side) => (doors || []).filter((d) => d.side === side).map((d) => {
     const w = d.width || 2.0, at = d.at || 0;
@@ -29,30 +30,31 @@ function rectWalls(b, t, doors, idp) {
   });
   for (const [side, z] of [["N", z0], ["S", z1]])
     for (const [s0, s1] of solidSegments(x0 - t / 2, x1 + t / 2, gapsFor(side)))
-      out.push({ id: `${idp}${side}${out.length}`, x: +((s0 + s1) / 2).toFixed(2), z, w: +(s1 - s0).toFixed(2), d: t });
+      out.push({ id: `${idp}${side}${out.length}`, x: +((s0 + s1) / 2).toFixed(2), z, w: +(s1 - s0).toFixed(2), d: t, ...sty });
   for (const [side, x] of [["W", x0], ["E", x1]])
     for (const [s0, s1] of solidSegments(z0 - t / 2, z1 + t / 2, gapsFor(side)))
-      out.push({ id: `${idp}${side}${out.length}`, x, z: +((s0 + s1) / 2).toFixed(2), w: t, d: +(s1 - s0).toFixed(2) });
+      out.push({ id: `${idp}${side}${out.length}`, x, z: +((s0 + s1) / 2).toFixed(2), w: t, d: +(s1 - s0).toFixed(2), ...sty });
   return out;
 }
 
 // a straight interior divider with an optional centered door gap
 function dividerWalls(dv, t, idp, i) {
   const horiz = dv.w >= dv.d;
+  const sty = { tex: dv.wallTex, color: dv.wallColor, trim: dv.wallTrim };
   const gap = dv.doorWidth || 2.4;
   const ats = dv.doorAts || (dv.door ? [dv.doorAt || 0] : []);
-  if (!ats.length) return [{ id: `${idp}d${i}`, x: dv.x, z: dv.z, w: dv.w, d: dv.d }];
+  if (!ats.length) return [{ id: `${idp}d${i}`, x: dv.x, z: dv.z, w: dv.w, d: dv.d, ...sty }];
   const out = [];
   if (horiz) {
     const a = dv.x - dv.w / 2, b = dv.x + dv.w / 2;
     const gaps = ats.map((at) => [dv.x + at - gap / 2, dv.x + at + gap / 2]);
     for (const [s0, s1] of solidSegments(a, b, gaps))
-      out.push({ id: `${idp}d${i}_${out.length}`, x: +((s0 + s1) / 2).toFixed(2), z: dv.z, w: +(s1 - s0).toFixed(2), d: t });
+      out.push({ id: `${idp}d${i}_${out.length}`, x: +((s0 + s1) / 2).toFixed(2), z: dv.z, w: +(s1 - s0).toFixed(2), d: t, ...sty });
   } else {
     const a = dv.z - dv.d / 2, b = dv.z + dv.d / 2;
     const gaps = ats.map((at) => [dv.z + at - gap / 2, dv.z + at + gap / 2]);
     for (const [s0, s1] of solidSegments(a, b, gaps))
-      out.push({ id: `${idp}d${i}_${out.length}`, x: dv.x, z: +((s0 + s1) / 2).toFixed(2), w: t, d: +(s1 - s0).toFixed(2) });
+      out.push({ id: `${idp}d${i}_${out.length}`, x: dv.x, z: +((s0 + s1) / 2).toFixed(2), w: t, d: +(s1 - s0).toFixed(2), ...sty });
   }
   return out;
 }
@@ -124,8 +126,9 @@ function scatterProps(area, palette, count, rng, idp, margin, opts = {}) {
           const di = dr.palette[Math.floor(rng() * dr.palette.length)];
           props.push({
             id: `${idp}${n}d${q}`,
-            x: +(px + (rng() - 0.5) * it.w * 0.7).toFixed(2),
-            z: +(pz + (rng() - 0.5) * it.d * 0.7).toFixed(2),
+            x: +(px + (rng() - 0.5) * it.w * 0.55).toFixed(2),
+            z: +(pz + (rng() - 0.5) * it.d * 0.55).toFixed(2),
+            y: it.h,                      // sit ON the parent's top face, not inside it
             w: di.w, d: di.d, h: di.h,
             color: di.colors[Math.floor(rng() * di.colors.length)],
             rough: di.rough, metal: di.metal, noCollide: true,
@@ -175,6 +178,45 @@ function placeBreakers(area, b, rng, idp) {
   return out;
 }
 
+
+/** Hang decor flat against a room's walls — framed pictures, screens, signage, clocks.
+ *  Only possible now that props carry `y`. All noCollide: they are visual surface, never
+ *  obstacles, and they give the paint mechanic something to imitate on a wall.
+ *  Items alternate around the room's four edges and sit a few cm proud of the surface. */
+function placeWallDecor(area, dec, rng, idp) {
+  const out = [];
+  const items = dec.palette || [];
+  if (!items.length) return out;
+  const n = dec.count || 4;
+  const x0 = area.x - area.w / 2, x1 = area.x + area.w / 2;
+  const z0 = area.z - area.d / 2, z1 = area.z + area.d / 2;
+  const INSET = 0.22;                       // proud of the wall face
+  for (let i = 0; i < n; i++) {
+    const it = items[Math.floor(rng() * items.length)];
+    const side = i % 4;                     // N, S, W, E in turn
+    const t = 0.18 + rng() * 0.64;          // position along that wall
+    const y = (dec.y ?? 1.55) + (rng() - 0.5) * 0.25;
+    let x, z, w, d;
+    if (side === 0 || side === 1) {         // walls running along X
+      x = x0 + t * (x1 - x0);
+      z = side === 0 ? z0 + INSET : z1 - INSET;
+      w = it.w; d = it.thick ?? 0.12;
+    } else {                                // walls running along Z
+      z = z0 + t * (z1 - z0);
+      x = side === 2 ? x0 + INSET : x1 - INSET;
+      w = it.thick ?? 0.12; d = it.w;
+    }
+    out.push({
+      id: `${idp}wd${i}`, x: +x.toFixed(2), z: +z.toFixed(2), y: +y.toFixed(2),
+      w, d, h: it.h,
+      color: it.colors[Math.floor(rng() * it.colors.length)],
+      rough: it.rough ?? 0.6, metal: it.metal ?? 0.1,
+      noCollide: true, isDecor: true,
+    });
+  }
+  return out;
+}
+
 /** Auto-place hiding spots next to scattered props: a spot sits in open floor just
  *  off a prop, facing it (so the bot poses against the blend surface). Deterministic. */
 function autoSpots(bounds, props, walls, count, rng) {
@@ -212,6 +254,105 @@ function autoSpots(bounds, props, walls, count, rng) {
   return spots;
 }
 
+
+/** Push props out of walls and out of each other. Cluster packing deliberately ABUTS
+ *  props (touching merges them into a single inflated nav blob), so only genuine
+ *  penetration past EPS is corrected; anything that cannot be resolved is dropped.
+ *  Dressing is exempt from prop-vs-prop (it rides on top via `y`) but still must not
+ *  be buried in a wall. */
+function resolveOverlaps(props, walls, bounds) {
+  const EPS = 0.07;
+  const pen = (a, b) => {
+    const dx = (a.w + b.w) / 2 - Math.abs(a.x - b.x);
+    const dz = (a.d + b.d) / 2 - Math.abs(a.z - b.z);
+    return (dx > EPS && dz > EPS) ? { dx, dz } : null;
+  };
+  const inB = (q) => q.x > bounds.minX + 0.6 && q.x < bounds.maxX - 0.6 && q.z > bounds.minZ + 0.6 && q.z < bounds.maxZ - 0.6;
+  let moved = 0, dropped = 0;
+
+  // walls first — a prop embedded in a wall always looks wrong
+  for (let pass = 0; pass < 3; pass++) {
+    for (const a of props) {
+      for (const w of walls) {
+        const o = pen(a, { x: w.x, z: w.z, w: w.w, d: w.d });
+        if (!o) continue;
+        if (o.dx < o.dz) a.x += (a.x >= w.x ? o.dx : -o.dx);
+        else a.z += (a.z >= w.z ? o.dz : -o.dz);
+        a.x = +a.x.toFixed(2); a.z = +a.z.toFixed(2); moved++;
+      }
+    }
+  }
+  // then prop-vs-prop for solids
+  const solid = props.filter((q) => !q.noCollide);
+  for (let pass = 0; pass < 6; pass++) {
+    for (let i = 0; i < solid.length; i++) {
+      for (let j = i + 1; j < solid.length; j++) {
+        const a = solid[i], b = solid[j];
+        const o = pen(a, b);
+        if (!o) continue;
+        if (o.dx < o.dz) { const s2 = a.x >= b.x ? 1 : -1; a.x = +(a.x + s2 * o.dx / 2).toFixed(2); b.x = +(b.x - s2 * o.dx / 2).toFixed(2); }
+        else { const s2 = a.z >= b.z ? 1 : -1; a.z = +(a.z + s2 * o.dz / 2).toFixed(2); b.z = +(b.z - s2 * o.dz / 2).toFixed(2); }
+        moved++;
+      }
+    }
+  }
+  // drop anything still buried in a wall, out of bounds, or still interpenetrating
+  const kept = [];
+  for (const a of props) {
+    if (!inB(a)) { dropped++; continue; }
+    let bad = false;
+    for (const w of walls) if (pen(a, { x: w.x, z: w.z, w: w.w, d: w.d })) { bad = true; break; }
+    if (!bad && !a.noCollide) {
+      for (const b of kept) { if (b.noCollide) continue; if (pen(a, b)) { bad = true; break; } }
+    }
+    if (bad) { dropped++; continue; }
+    kept.push(a);
+  }
+  return { props: kept, moved, dropped };
+}
+
+
+/** Give every wall segment the surface of the room it borders. Footprint walls and
+ *  dividers are generated from BUILDING geometry, so without this pass a 13-room office
+ *  renders every wall in one shared colour — the "it's all grey stone" defect. A wall
+ *  between two styled rooms takes the nearer one; ties go to the first, which is stable
+ *  because room order is authored. */
+function styleWalls(walls, rooms) {
+  const styled = rooms.filter((r) => r.wallTex || r.wallColor != null);
+  if (!styled.length) return;
+  for (const w of walls) {
+    if (w.tex || w.color != null) continue;            // explicit override wins
+    let best = null, bestD = Infinity;
+    for (const r of styled) {
+      // distance from the wall's centre to the room's rectangle (0 when inside)
+      const dx = Math.max(0, Math.abs(w.x - r.x) - r.w / 2);
+      const dz = Math.max(0, Math.abs(w.z - r.z) - r.d / 2);
+      const d = dx * dx + dz * dz;
+      if (d < bestD) { bestD = d; best = r; }
+    }
+    if (best && bestD <= 4.0) {                        // only walls actually touching a room
+      w.tex = best.wallTex; w.color = best.wallColor; w.trim = best.wallTrim;
+    }
+  }
+}
+
+
+/** Decor is hung on a room's EDGE, but a room edge is not always a wall — doorway gaps
+ *  and open-plan boundaries leave nothing behind the picture, so it floats in mid-air.
+ *  Keep only decor that actually has masonry behind it. */
+function pruneFloatingDecor(props, walls) {
+  const PAD = 0.55;                     // decor stands 0.22 proud; allow for wall thickness
+  const backed = (q) => walls.some((w) =>
+    Math.abs(q.x - w.x) < w.w / 2 + PAD && Math.abs(q.z - w.z) < w.d / 2 + PAD);
+  let dropped = 0;
+  const kept = props.filter((q) => {
+    if (!q.isDecor) return true;
+    if (backed(q)) return true;
+    dropped++; return false;
+  });
+  return { props: kept, dropped };
+}
+
 /** Expand a campus spec into a full map-def. */
 export function buildCampus(spec) {
   const t = spec.wallThickness || 0.4;
@@ -222,12 +363,14 @@ export function buildCampus(spec) {
   const addArea = (a, idp) => {
     for (const p of a.props || []) props.push(p);
     if (a.breakers) props.push(...placeBreakers(a, a.breakers, rng, idp));
+    if (a.decor) props.push(...placeWallDecor(a, a.decor, rng, idp));
     if (a.scatter) props.push(...scatterProps(a, a.scatter.palette, a.scatter.count, rng, idp, a.scatter.margin, a.scatter));
   };
 
   // outdoor connective zones (floor tiles + props/scatter)
   for (const z of spec.zones || []) {
-    rooms.push({ id: z.id, name: z.name, x: z.x, z: z.z, w: z.w, d: z.d, floor: z.floor });
+    rooms.push({ id: z.id, name: z.name, x: z.x, z: z.z, w: z.w, d: z.d, floor: z.floor,
+      wallTex: z.wallTex, wallColor: z.wallColor, wallTrim: z.wallTrim });
     addArea(z, `${z.id}_s`);
   }
 
@@ -235,14 +378,17 @@ export function buildCampus(spec) {
   for (const b of spec.buildings || []) {
     const idp = (b.id || "b") + "_";
     if (b.rooms) for (const r of b.rooms) {
-      rooms.push({ id: r.id || `${b.id}_${r.name}`, name: r.name, x: r.x, z: r.z, w: r.w, d: r.d, floor: r.floor ?? b.floor });
+      rooms.push({ id: r.id || `${b.id}_${r.name}`, name: r.name, x: r.x, z: r.z, w: r.w, d: r.d, floor: r.floor ?? b.floor,
+        wallTex: r.wallTex ?? b.wallTex, wallColor: r.wallColor ?? b.wallColor, wallTrim: r.wallTrim ?? b.wallTrim });
       addArea(r, `${b.id}_${(r.id || r.name)}_s`);
     } else {
-      rooms.push({ id: b.id, name: b.name, x: b.x, z: b.z, w: b.w, d: b.d, floor: b.floor });
+      rooms.push({ id: b.id, name: b.name, x: b.x, z: b.z, w: b.w, d: b.d, floor: b.floor,
+        wallTex: b.wallTex, wallColor: b.wallColor, wallTrim: b.wallTrim });
       addArea(b, `${b.id}_s`);
     }
     walls.push(...rectWalls(b, t, b.doors, idp));
-    (b.dividers || []).forEach((dv, i) => walls.push(...dividerWalls(dv, t, idp, i)));
+    (b.dividers || []).forEach((dv, i) => walls.push(...dividerWalls(
+      { wallTex: b.wallTex, wallColor: b.wallColor, wallTrim: b.wallTrim, ...dv }, t, idp, i)));
     for (const p of b.props || []) props.push(p);
   }
 
@@ -269,6 +415,13 @@ export function buildCampus(spec) {
       props.push(mk(i++, b.maxX - inset, z + (k % 2 ? -1.4 : 1.4)));
     }
   }
+
+  styleWalls(walls, rooms);
+  const pruned = pruneFloatingDecor(props, walls);
+  props.length = 0; props.push(...pruned.props);
+
+  const fixed = resolveOverlaps(props, walls, spec.bounds);
+  props.length = 0; props.push(...fixed.props);
 
   return {
     id: spec.id,

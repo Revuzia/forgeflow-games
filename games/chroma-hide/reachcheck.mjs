@@ -61,6 +61,20 @@ for (const id of ids) {
     let run = 0; const x = nav.minX + (i + 0.5) * nav.cell;
     for (let j = 0; j < nav.h; j++) { const z = nav.minZ + (j + 0.5) * nav.cell; run = blocks(x, z) ? 0 : run + nav.cell; if (run > maxSight) maxSight = run; }
   }
+  // ── overlap audit: nothing may sit inside a wall, and solid props must not
+  // interpenetrate (touching is intended; real penetration is a defect the owner spotted)
+  const EPS = 0.07;
+  const pen = (a, b, aw, ad, bw, bd) => ((aw + bw) / 2 - Math.abs(a.x - b.x) > EPS) && ((ad + bd) / 2 - Math.abs(a.z - b.z) > EPS);
+  let inWall = 0, propPen = 0;
+  for (const q of m.props) for (const w of (m.walls || [])) if (pen(q, w, q.w, q.d, w.w, w.d)) { inWall++; break; }
+  const sol = m.props.filter((q) => !q.noCollide);
+  for (let i = 0; i < sol.length; i++) for (let j = i + 1; j < sol.length; j++) {
+    if (pen(sol[i], sol[j], sol[i].w, sol[i].d, sol[j].w, sol[j].d)) { propPen++; break; }
+  }
+  const dressOnTop = m.props.filter((q) => q.noCollide && q.y > 0).length;
+  const dressTotal = m.props.filter((q) => q.noCollide).length;
+  console.log(`     [overlap] props-in-walls ${inWall} (want 0), solid interpenetrations ${propPen} (want 0), dressing raised onto surfaces ${dressOnTop}/${dressTotal}`);
+  if (inWall || propPen) fail++;
   console.log(`     [brief] props ${m.props.length} (solid ${solid.length} / dressing ${dress}), tall h>=1.7 ${tall} (target 110-150), navigable ${navFrac}% (target 45-55), max sightline ${maxSight.toFixed(0)}m (target <=24, cap 32)`);
   // hard: hider spawn reachable + seeker reaches most of the map. Soft: a few
   // auto-spots may be unreachable (the sim filters those at match start).

@@ -14,6 +14,19 @@ import * as THREE from "three";
 import { PaintBuffer, PAINT_FILLS } from "./sim/paint_buffer.js";
 import { clamp, rgbToHex, hexToRgb } from "./sim/util.js";
 
+/**
+ * Paint tools. One colour and one brush was never enough to actually imitate a surface:
+ * spray gives you soft mottling, marker gives you hard edges (labels, stripes), sponge
+ * gives you broken texture. Each tool only re-shapes the dab — the stroke record format
+ * is unchanged, so netcode and replay keep working.
+ */
+export const PAINT_TOOLS = {
+  brush:  { id: "brush",  label: "Brush",  icon: "B", sizeMul: 1.00, hardness: 0.60, dabs: 1,  spread: 0 },
+  spray:  { id: "spray",  label: "Spray",  icon: "S", sizeMul: 1.15, hardness: 0.06, dabs: 14, spread: 0.95 },
+  marker: { id: "marker", label: "Marker", icon: "M", sizeMul: 0.72, hardness: 0.99, dabs: 1,  spread: 0 },
+  sponge: { id: "sponge", label: "Sponge", icon: "P", sizeMul: 1.40, hardness: 0.28, dabs: 7,  spread: 1.35 },
+};
+
 export class PaintSystem {
   constructor(engine, opts = {}) {
     this.engine = engine;
@@ -55,6 +68,7 @@ export class PaintSystem {
       rough: 0.8,
       size: this.res * 0.05, // ~50px on 1024
       hardness: 0.6,
+      tool: "brush",
     };
     this.strokes = [];      // recorded strokes (net replay + determinism)
     this.palette = [];      // saved swatches (hex)
@@ -79,20 +93,34 @@ export class PaintSystem {
   setRough(r) { this.brush.rough = clamp(r, 0, 1); }
   setSize(px) { this.brush.size = clamp(px, 2, this.res * 0.5); }
   nudgeSize(dpx) { this.setSize(this.brush.size + dpx); }
+  setTool(id) { if (PAINT_TOOLS[id]) this.brush.tool = id; return this.brush.tool; }
+  getTool() { return PAINT_TOOLS[this.brush.tool] || PAINT_TOOLS.brush; }
   savePaletteColor() { const h = this.colorHex(); if (!this.palette.includes(h)) this.palette.push(h); return h; }
 
   // ── painting ──────────────────────────────────────────────────────────────
   /** Paint at a UV coordinate (records the stroke + updates all three maps). */
   paintAtUV(u, v) {
-    const b = this.brush;
-    const s = { u, v, size: b.size, r: b.color.r, g: b.color.g, b: b.color.b, metal: b.metal, rough: b.rough };
-    this._applyStroke(s);
-    this.strokes.push(s);
-    return s;
+    const b = this.brush, t = this.getTool();
+    const mk = (uu, vv, size) => {
+      const s = { u: uu, v: vv, size, r: b.color.r, g: b.color.g, b: b.color.b,
+                  metal: b.metal, rough: b.rough, hard: t.hardness };
+      this._applyStroke(s); this.strokes.push(s); return s;
+    };
+    const base = b.size * t.sizeMul;
+    if (t.dabs <= 1) return mk(u, v, base);
+    // scatter over a disk in UV space — spread is in units of the dab radius
+    const rad = (base / this.res) * t.spread;
+    let last = null;
+    for (let i = 0; i < t.dabs; i++) {
+      const ang = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * rad;
+      last = mk(clamp(u + Math.cos(ang) * d, 0, 1), clamp(v + Math.sin(ang) * d, 0, 1),
+                base * (0.20 + Math.random() * 0.35));
+    }
+    return last;
   }
 
   _applyStroke(s) {
-    const h = this.brush.hardness;
+    const h = (s.hard != null) ? s.hard : this.brush.hardness;
     const drA = this.buf.albedo.stamp(s.u, s.v, s.size, { r: s.r, g: s.g, b: s.b }, h);
     const mv = Math.round((s.metal ?? 0) * 255), rv = Math.round((s.rough ?? 0.8) * 255);
     const drM = this.buf.metal.stamp(s.u, s.v, s.size, { r: mv, g: mv, b: mv }, h);

@@ -39,9 +39,18 @@ function segHitsBox(x0, z0, x1, z1, box) {
 
 /** Visible height of a hider: a posed/crouched body hides behind low cover, a standing
  *  one does not. Drives which obstacles can actually occlude it. */
+/** Silhouette height per pose — drives LOS occlusion, so a flat body genuinely hides
+ *  behind low cover while a stretched one gives you away over it. Mirrors the POSES
+ *  scale table in game.js (kept here as plain data so the sim stays node-testable). */
+export const POSE_HEIGHT = {
+  stand: 1.55, crouch: 0.96, curl: 0.81, ball: 0.70, flat: 0.40,
+  stretch: 2.17, lean: 1.63, wide: 1.32,
+};
+
 export function hiderHeight(h) {
-  if (h && h.hidden && h.pose && h.pose !== "stand") return 0.85;
-  return 1.55;
+  if (!h) return 1.55;
+  const p = POSE_HEIGHT[h.pose];
+  return p != null ? p : 1.55;
 }
 
 /** Is `to` visible from `from`? An obstacle only occludes when it is at least as TALL
