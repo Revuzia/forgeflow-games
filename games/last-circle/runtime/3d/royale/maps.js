@@ -402,12 +402,35 @@ export async function buildMap(W, mapId) {
     });
   }
 
+  // ── constant texel density ────────────────────────────────────────────────
+  // BoxGeometry gives every face UV 0..1 no matter how big the box is, and all
+  // boxes of a colour merge into ONE mesh sharing ONE brick/panel texture. So a
+  // 0.22m lamp post wore the entire brick pattern crushed onto it while a 24m
+  // warehouse wall wore that same pattern stretched across the whole face — the
+  // texture read as noise up close and as flat colour at distance. Rescaling UVs
+  // by world size gives every surface the same metres-per-tile.
+  // Vertex order for a 1-segment box is +X,-X,+Y,-Y,+Z,-Z, 4 verts per face.
+  const UV_FACE_SPANS = [[2, 1], [2, 1], [0, 2], [0, 2], [0, 1], [0, 1]];   // indices into [w,h,d]
+  function scaleBoxUV(geo, w, h, d, tile) {
+    const uv = geo.attributes.uv;
+    if (!uv || uv.count < 24) return;                    // not a plain 1-segment box
+    const dim = [w, h, d];
+    for (let f = 0; f < 6; f++) {
+      const su = dim[UV_FACE_SPANS[f][0]] / tile, sv = dim[UV_FACE_SPANS[f][1]] / tile;
+      for (let i = f * 4; i < f * 4 + 4; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
+    }
+    uv.needsUpdate = true;
+  }
+  const STRUCT_TILE = 2.6;    // metres of wall per brick/panel tile
+  const ROAD_TILE = 6.0;      // asphalt tiles slower — it is a broad flat surface
+
   // ── structures: batched boxes + colliders ─────────────────────────────────
   const colliders = [];             // {kind:'box'|'ramp', minX..maxZ, dir?, top}
   const batches = {};               // colorHex -> geometry list
   function addBox(cx, cy, cz, w, h, d, color, opts) {
     opts = opts || {};
     const geo = new THREE.BoxGeometry(w, h, d);
+    scaleBoxUV(geo, w, h, d, STRUCT_TILE);
     if (opts.rotY) geo.rotateY(opts.rotY);
     geo.translate(cx, cy, cz);
     (batches[color] = batches[color] || []).push(geo);
@@ -424,7 +447,9 @@ export async function buildMap(W, mapId) {
     // (dir 0=+X, 1=−X, 2=+Z, 3=−Z) — the old version rendered dir 2/3
     // inverted and dir 0/1 flat, so players "walked inside walls" while the
     // (correct) collider carried them.
-    const geo = new THREE.BoxGeometry(w, 0.3, Math.sqrt(d * d + h * h));
+    const run = Math.sqrt(d * d + h * h);
+    const geo = new THREE.BoxGeometry(w, 0.3, run);
+    scaleBoxUV(geo, w, 0.3, run, STRUCT_TILE);
     geo.rotateX(-Math.atan2(h, d));              // +Z end rises
     if (dir === 0) geo.rotateY(Math.PI / 2);     // up-end → +X
     else if (dir === 1) geo.rotateY(-Math.PI / 2); // up-end → −X
@@ -573,7 +598,9 @@ export async function buildMap(W, mapId) {
     const ang = Math.atan2(dx, dz);                     // rotate the run (local +Z) onto the segment dir
     for (let s = 0; s < steps; s++) {
       const t = (s + 0.5) / steps, mx = x0 + dx * t, mz = z0 + dz * t;
-      const geo = new THREE.BoxGeometry(width, 0.14, len / steps + 0.5);
+      const seg = len / steps + 0.5;
+      const geo = new THREE.BoxGeometry(width, 0.14, seg);
+      scaleBoxUV(geo, width, 0.14, seg, ROAD_TILE);
       geo.rotateY(ang); geo.translate(mx, heightAt0(mx, mz) + 0.07, mz);
       roadGeos.push(geo);
     }
@@ -587,7 +614,9 @@ export async function buildMap(W, mapId) {
     }
   }
   function parkingLot(cx, cz, w, d, poi) {
-    const geo = new THREE.BoxGeometry(w, 0.12, d); geo.translate(cx, heightAt0(cx, cz) + 0.07, cz); roadGeos.push(geo);
+    const geo = new THREE.BoxGeometry(w, 0.12, d);
+    scaleBoxUV(geo, w, 0.12, d, ROAD_TILE);
+    geo.translate(cx, heightAt0(cx, cz) + 0.07, cz); roadGeos.push(geo);
     for (let i = 0; i < 4; i++) {
       const px = cx - w / 2 + 3 + (i % 2) * (w - 6), pz = cz - d / 2 + 3 + Math.floor(i / 2) * (d - 6);
       props.car.push({ x: px, y: heightAt0(px, pz), z: pz, s: 2.1, ry: 0 });

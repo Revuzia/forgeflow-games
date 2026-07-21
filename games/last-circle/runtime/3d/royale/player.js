@@ -170,19 +170,58 @@ export async function loadActorModels(W) {
     // skin: #ffffff, #fbfbfb, #fcfcfc, #fefefe, #f8f8f8 ... — the darkest was
     // 97.3% white, i.e. indistinguishable. baseColor MULTIPLIES the texture, so
     // the tint has to be an actual colour, not a nudge away from white.
-    // Tuned against a render of four actors sharing one skin: at sat 0.16-0.30 /
-    // lightness 0.82-0.94 they were still indistinguishable on screen even
-    // though the hex values differed. baseColor MULTIPLIES, so the wash has to
-    // commit to a real colour to survive the texture underneath it.
+    // Two rounds of "raise the saturation" never worked (see the history above)
+    // because the tint's output channel was DEAD. Meshy exports two things that
+    // together make every character render fullbright and untintable, and both
+    // have to be undone here before the wash means anything:
+    //
+    //   metalness — the GLBs omit metallicFactor entirely, and glTF 2.0 says an
+    //     absent metallicFactor is 1.0, so GLTFLoader hands us metalness = 1. A
+    //     metal MeshStandardMaterial has NO diffuse term: baseColor stops being
+    //     albedo and becomes specular F0. With no scene.environment to reflect,
+    //     m.color was multiplying into nothing, which is exactly why actors that
+    //     had visibly different hex values still looked identical on screen.
+    //   emissive — the GLBs ship emissiveFactor [1,1,1] with the emissiveTexture
+    //     pointing at the SAME image as baseColorTexture. That is Meshy's
+    //     self-illuminated preview look: it re-adds the albedo through the
+    //     unlit, unshadowed emissive path, so a fighter standing inside a
+    //     building was exactly as bright as one in open sun. In a BR, shade is
+    //     supposed to be cover — this deleted that whole readability channel and
+    //     made the cast read as flat cutouts pasted over a correctly-lit world.
+    //
+    // Verified on the live build before changing anything: all 5 skins reported
+    // metalness 1, emissive #ffffff, emissiveMap === map, scene.environment null.
+    // Removing the emissive costs real brightness, because these albedo textures
+    // were BAKED DARK on the assumption that the emissive pass would light them.
+    // The gain below multiplies the DIFFUSE path (colour multiplies the texture),
+    // so brightness comes back through the lit channel and shade still means
+    // something — as opposed to raising emissive, which would just restore the
+    // fullbright bug under a different name. Colour is allowed to exceed 1.
+    //
+    // Calibrated by rendering a grounded actor offscreen and comparing its median
+    // pixel luminance against the terrain around it, sun on vs sun occluded:
+    //   as shipped      sun 66.5   shade 78.0   = 17% BRIGHTER in shade (fullbright)
+    //   gain 2.2        sun 44.9   shade 20.0   = 55% darker,  0.4% clipped
+    //   gain 3.2 (here) sun ~60    shade ~24    = ~60% darker, ~2.5% clipped
+    //   gain 3.4        sun 67.4   shade 26.1   = 61% darker,  3.3% clipped
+    // 3.2 sits just under the shipped brightness while keeping blown highlights
+    // low enough that texture detail survives.
+    const BODY_GAIN = 3.2;
     const hue = vr();                                   // full wheel
-    const sat = 0.38 + vr() * 0.20;                     // 0.38-0.58
-    const lig = 0.60 + vr() * 0.18;                     // 0.60-0.78, keeps detail readable
+    const sat = 0.22 + vr() * 0.16;                     // 0.22-0.38 — reads now that diffuse is live
+    const lig = 0.68 + vr() * 0.12;                     // 0.68-0.80 before gain
     const seen = new Map();
     rig.scene.traverse((o) => {
       if (!(o.isMesh || o.isSkinnedMesh) || !o.material) return;
       if (!seen.has(o.material)) {
         const m = o.material.clone();
-        if (m.color) m.color.setHSL(hue, sat, lig);
+        m.metalness = 0;                                // glTF default 1.0 killed the diffuse term
+        if (m.emissiveMap) {                            // strip Meshy's self-illum preview hack
+          m.emissiveMap = null;
+          if (m.emissive) m.emissive.setHex(0x000000);
+        }
+        if (m.color) m.color.setHSL(hue, sat, lig).multiplyScalar(BODY_GAIN);
+        m.needsUpdate = true;
         seen.set(o.material, m);
       }
       o.material = seen.get(o.material);

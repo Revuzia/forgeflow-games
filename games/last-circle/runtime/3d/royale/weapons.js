@@ -160,6 +160,22 @@ async function buildProtos(W) {
       // sits a touch forward of the rearmost grip so the stock clears the arm.
       grip.z += (WPN_LEN[id] > 0.55 ? 0.06 : 0.0);
       m.position.sub(grip);                 // grip → hand origin
+      // Same Meshy export defect the characters had (see player.js): metallicFactor
+      // is omitted, and glTF 2.0 defaults an absent metallicFactor to 1.0. A gun at
+      // metalness 1 / roughness 1 with no scene.environment has no diffuse term AND
+      // nothing to reflect, so it renders as a near-black silhouette in the hand
+      // instead of a readable weapon. Verified on the live build: every weapon
+      // material under RightHand reported metalness 1, roughness 1, colour #ffffff.
+      m.traverse((o) => {
+        if (!o.isMesh || !o.material) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        for (const mat of mats) {
+          if (mat.metalness === 1) mat.metalness = 0.35;   // gunmetal, not mirror
+          if (mat.roughness === 1) mat.roughness = 0.55;
+          if (mat.emissiveMap) { mat.emissiveMap = null; if (mat.emissive) mat.emissive.setHex(0x000000); }
+          mat.needsUpdate = true;
+        }
+      });
       const g = new THREE.Group();
       g.add(m);
       protos[id] = g;
