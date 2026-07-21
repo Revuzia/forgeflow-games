@@ -161,11 +161,28 @@ register3d("royale", async function (kernel, content) {
     W.paused = false;
     W.stats = { shotsFired: 0, shotsHit: 0 };
 
-    // clear previous world
+    // clear previous world.
+    // DISPOSE BEFORE DROPPING THE ROSTER: every actor registers an
+    // AnimationMixer with the kernel, and the kernel only ever removes one on an
+    // explicit disposeMixer. Clearing the group detaches the meshes but leaves
+    // the mixers in the per-frame update list, so each match played added ~50
+    // more skeletons to tick — frame time degraded monotonically, match over
+    // match, with no in-game recovery. Nametags are per-actor CanvasTextures
+    // and leak the same way.
+    for (const a of W.actors) {
+      if (a.rig && a.rig.mixer && kernel.disposeMixer) kernel.disposeMixer(a.rig.mixer);
+      const tag = a.nameTag;
+      if (tag && tag.material) {
+        if (tag.material.map) tag.material.map.dispose();
+        tag.material.dispose();
+      }
+    }
     for (const name in W._groups) { const g = W._groups[name]; g.clear(); }
     W.actors.length = 0; W.actorById.clear();
     W.rangeDummies = null;          // stale refs into the cleared roster
     botsMod.resetBrains();
+    weaponsMod.reset(W);            // live rounds otherwise fly on into the next match
+    fxMod.reset();                  // damage numbers are DOM nodes; they outlive the match
     if (W.resetInputState) W.resetInputState();
 
     // build the world

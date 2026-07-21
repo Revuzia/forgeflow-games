@@ -110,6 +110,13 @@ async function preloadMeshySkin(W, key) {
       } catch (e) { console.warn("[chars] clip load failed", key, clip, e); }
     }
   }
+  // The warm-up clone exists only to populate the gltf cache, but
+  // kernel.loadCharacter registers ITS mixer in the per-frame update list too.
+  // loadActorModels runs every match, so this leaked 5 mixers per match — the
+  // roster teardown in ffg_royale3d.js does not see these because they are
+  // never actors. Measured: kernel mixer count climbed 61 -> 66 -> 71 -> 76
+  // across four matches until this was disposed.
+  if (W.kernel.disposeMixer && rig.mixer) W.kernel.disposeMixer(rig.mixer);
   return url;
 }
 

@@ -214,6 +214,18 @@ export function aimDir(a, out) {
 }
 
 // ── update loop ──────────────────────────────────────────────────────────────
+/** Drop every live round back into the pool. The projectile list is
+ *  module-level, so without this rounds fired in one match kept flying in the
+ *  next one — and their meshes stayed parented to a cleared group. */
+export function reset(W) {
+  for (const p of projectiles) {
+    if (p.m && p.m.parent) p.m.parent.remove(p.m);
+    p.dead = true;
+    POOL.push(p);
+  }
+  projectiles.length = 0;
+}
+
 export function update(W, dt) {
   for (const a of W.actors) {
     if (!a.alive || a.netRemote) continue;

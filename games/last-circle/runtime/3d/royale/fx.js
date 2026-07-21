@@ -162,6 +162,13 @@ function dmgNumber(W, x, y, z, text, color, scale) {
 
 // ── frame update ─────────────────────────────────────────────────────────────
 const proj = new THREE.Vector3();
+/** Remove any damage numbers still floating when a match ends — they are DOM
+ *  nodes, so they otherwise hang over the menu until their life expires. */
+export function reset() {
+  for (const d of dmgNums) { if (d.el) d.el.remove(); }
+  dmgNums.length = 0;
+}
+
 export function update(W, dt) {
   // startMatch clears every scene group — re-adopt the particle mesh or NO
   // particle (muzzle flash / tracer / impact / explosion) ever renders

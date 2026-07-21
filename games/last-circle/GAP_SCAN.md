@@ -16,6 +16,7 @@ Line anchors were correct at the time of writing but drift — re-locate by cont
 - [x] #3 Parachute A/D steering mirrored (fixed + selftest assert, ?v=52)
 - [x] #1 Swept bullet collision — cover actually stops bullets (?v=53)
 - [x] #4 Weapon swap fired a hybrid weapon and reset the fire-rate cooldown (?v=54)
+- [x] #7 Match teardown leaked mixers/textures/projectiles (?v=56)
 - [ ] everything else below
 
 # LAST CIRCLE — BUILD ORDER

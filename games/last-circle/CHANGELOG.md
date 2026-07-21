@@ -3,6 +3,32 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — Match teardown leaked ~55 animation mixers PER MATCH (?v=56, LIVE)
+
+Build-order #7. Frame time degraded monotonically the longer you played, with
+no in-game recovery — only a page reload.
+
+- The whole teardown was `group.clear()` + `actors.length = 0` + resetBrains().
+  Clearing a group detaches meshes but the kernel keeps every AnimationMixer in
+  its per-frame update list until an explicit disposeMixer — which nothing
+  called. 50 skeletons per match accumulated and kept being ticked forever.
+- Teardown now disposes each actor's mixer and its nametag CanvasTexture BEFORE
+  the roster is dropped (dispose first, or the references are already gone).
+- weapons.reset() returns live rounds to the pool — the projectile list is
+  module-level, so rounds fired in one match kept flying in the next with their
+  meshes parented to a cleared group. fx.reset() clears floating damage numbers,
+  which are DOM nodes and otherwise hang over the menu.
+- **A SECOND leak the scan did not catch, found only by measuring:** after
+  fixing the roster the count STILL climbed by exactly 5 a match. Five is the
+  skin count — preloadMeshySkin builds a throwaway clone per skin purely to warm
+  the gltf cache, and kernel.loadCharacter registers that clone's mixer too (its
+  own comment says so). Those are never actors, so the roster teardown could not
+  see them. Now disposed at the end of the preload.
+
+Verified live across five back-to-back matches: kernel mixer count is 51 every
+time (50 rigged actors + 1 baseline), growth 0. Before the second fix the same
+measurement read 61 -> 66 -> 71 -> 76. Selftest 66/66. DRAFT.
+
 ## 2026-07-20 — Weapon swap fired a hybrid weapon (?v=54, LIVE)
 
 Build-order #4. Two bugs in one code path.
