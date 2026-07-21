@@ -305,7 +305,19 @@ function convertDouble(s) {
 // ── seeker behavior ──────────────────────────────────────────────────────────
 function stepSeeker(s, a, dt) {
   if (a.cooldown > 0) a.cooldown -= dt;
-  if (!a.isBot) { moveLocal(s, a, dt); if (a._in.shoot) { seekerShoot(s, a); a._in.shoot = false; } return; }
+  if (!a.isBot) {
+    moveLocal(s, a, dt);
+    if (a._in.shoot) {
+      // The human path used to fire unconditionally while bots were gated on ammo and
+      // cooldown. That made "run dry and the hiders win" (checkWin's all-seekers-at-0
+      // branch) unreachable against a human seeker — the whole risk half of the loop.
+      const dry = s.settings.ammoLimit && a.ammo <= 0;
+      if (dry) s.events.push({ t: "dryfire", by: a.id });
+      else if (a.cooldown <= 0) seekerShoot(s, a);
+      a._in.shoot = false;
+    }
+    return;
+  }
 
   // detection: pick the best-seen hider. CAMOUFLAGE COUNTS — a body painted to match
   // its cover has to be approached much closer and takes far longer to pick out. This

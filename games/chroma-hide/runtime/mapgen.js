@@ -389,7 +389,7 @@ export function buildCampus(spec) {
 
   // outdoor connective zones (floor tiles + props/scatter)
   for (const z of spec.zones || []) {
-    rooms.push({ id: z.id, name: z.name, x: z.x, z: z.z, w: z.w, d: z.d, floor: z.floor,
+    rooms.push({ id: z.id, name: z.name, x: z.x, z: z.z, w: z.w, d: z.d, floor: z.floor, tex: z.tex,
       wallTex: z.wallTex, wallColor: z.wallColor, wallTrim: z.wallTrim });
     addArea(z, `${z.id}_s`);
   }
@@ -398,11 +398,11 @@ export function buildCampus(spec) {
   for (const b of spec.buildings || []) {
     const idp = (b.id || "b") + "_";
     if (b.rooms) for (const r of b.rooms) {
-      rooms.push({ id: r.id || `${b.id}_${r.name}`, name: r.name, x: r.x, z: r.z, w: r.w, d: r.d, floor: r.floor ?? b.floor,
+      rooms.push({ id: r.id || `${b.id}_${r.name}`, name: r.name, x: r.x, z: r.z, w: r.w, d: r.d, floor: r.floor ?? b.floor, tex: r.tex ?? b.tex,
         wallTex: r.wallTex ?? b.wallTex, wallColor: r.wallColor ?? b.wallColor, wallTrim: r.wallTrim ?? b.wallTrim });
       addArea(r, `${b.id}_${(r.id || r.name)}_s`);
     } else {
-      rooms.push({ id: b.id, name: b.name, x: b.x, z: b.z, w: b.w, d: b.d, floor: b.floor,
+      rooms.push({ id: b.id, name: b.name, x: b.x, z: b.z, w: b.w, d: b.d, floor: b.floor, tex: b.tex,
         wallTex: b.wallTex, wallColor: b.wallColor, wallTrim: b.wallTrim });
       addArea(b, `${b.id}_s`);
     }

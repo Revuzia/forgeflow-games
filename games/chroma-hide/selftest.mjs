@@ -249,6 +249,37 @@ const nav = await import(pathToFileURL(path.join(__dirname, "runtime/sim/nav.js"
   assert(r && (r.winner === "hiders" || r.winner === "seekers"), "depot: multi-room bot match resolves (" + (r && r.winner) + ")");
 }
 
+// ── the ammo economy binds for a HUMAN seeker too ───────────────────────────
+// It used to bind only for bots: the human branch of stepSeeker fired with no ammo
+// check, so "run the seeker dry and the hiders win" could never trigger against a
+// real player — the entire risk half of the seeker loop was inert.
+{
+  const players = [{ id: "S", isBot: false, role: "seeker" }, { id: "H1", isBot: true, role: "hider" }, { id: "H2", isBot: true, role: "hider" }];
+  // shotCooldownMs 1, not 0 — seekerShoot reads `|| 1500`, so a 0 here silently
+  // restores the full cooldown and the magazine never empties.
+  const s = ms.createMatch({ players, settings: { ...mc.DEFAULTS, mode: "normal", prepSeconds: 0.2, huntSeconds: 600, tauntIntervalSeconds: 0, ammoLimit: true, startAmmo: 4, shotCooldownMs: 1 }, map: simMap(), seed: 11, seekerCount: 1 });
+  for (let i = 0; i < 12; i++) ms.stepMatch(s, 1 / 20);       // clear PREP
+  const me = ms.seekers(s)[0];
+  for (let i = 0; i < 6; i++) { ms.setLocalInput(s, me.id, { shoot: true }); ms.stepMatch(s, 1 / 20); }
+  assert(me.ammo === 0, "human seeker: firing past the magazine empties it (ammo " + me.ammo + ", want 0)");
+  assert(s.result && s.result.winner === "hiders",
+    "human seeker: running the last seeker dry ends the match for the hiders (" + (s.result && s.result.winner) + ")");
+
+  // Dry-fire itself only observable while the match continues — i.e. with a second
+  // seeker still holding ammo. One dry seeker must click, not shoot.
+  const p2 = [{ id: "S", isBot: false, role: "seeker" }, { id: "S2", isBot: true, role: "seeker" }, { id: "H1", isBot: true, role: "hider" }, { id: "H2", isBot: true, role: "hider" }];
+  const s2 = ms.createMatch({ players: p2, settings: { ...mc.DEFAULTS, mode: "normal", prepSeconds: 0.2, huntSeconds: 600, tauntIntervalSeconds: 0, ammoLimit: true, startAmmo: 3, shotCooldownMs: 1 }, map: simMap(), seed: 12, seekerCount: 2 });
+  for (let i = 0; i < 12; i++) ms.stepMatch(s2, 1 / 20);
+  const human = ms.seekers(s2).find((a) => !a.isBot);
+  for (let i = 0; i < 5; i++) { ms.setLocalInput(s2, human.id, { shoot: true }); ms.stepMatch(s2, 1 / 20); }
+  assert(human.ammo === 0, "dry-fire: the human seeker is empty (ammo " + human.ammo + ")");
+  s2.events.length = 0;
+  ms.setLocalInput(s2, human.id, { shoot: true }); ms.stepMatch(s2, 1 / 20);
+  const ev = s2.events.filter((e) => e.by === human.id).map((e) => e.t);
+  assert(ev.includes("dryfire") && !ev.includes("miss"),
+    "dry-fire: a shot at 0 ammo clicks instead of firing (events " + JSON.stringify(ev) + ")");
+}
+
 // ── all four modes reach a valid verdict (M4 gate) ──────────────────────────
 for (const mode of ["normal", "infection", "double", "reverse"]) {
   const players = [{ id: "S", isBot: true, role: "seeker" }, { id: "H1", isBot: true, role: "hider" }, { id: "H2", isBot: true, role: "hider" }, { id: "H3", isBot: true, role: "hider" }];
@@ -300,6 +331,26 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
   assert(r.players.filter((p) => !p.isBot).length === 2 && r.players.filter((p) => p.isBot).length === 4, "net: roster 2 humans + 4 bots");
   assert(r.players.filter((p) => p.role === "seeker").length === 2, "net: roster seekerCount honored");
   assert(r.players.find((p) => p.id === "peerA").isLocal === true, "net: roster marks local player");
+}
+
+
+// ── every referenced model must exist on disk ────────────────────────────────
+// A missing GLB used to fail silently: game.js console.warns and leaves the grey
+// placeholder box in place, so a car or a tree renders as a flat slab and nothing
+// in CI notices. 12 placements across 4 maps shipped that way.
+{
+  const fs = await import("node:fs");
+  // Resolve through import.meta.url — a hand-built Windows path from URL.pathname
+  // silently yields empty reads, which would make this guard pass vacuously.
+  const rel = (f) => new URL(f, import.meta.url);
+  const src = ["runtime/maps.js", "runtime/maps_campus.js", "runtime/mapgen.js"]
+    .map((f) => { try { return fs.readFileSync(rel(f), "utf8"); } catch { return ""; } })
+    .join(" ");
+  const refs = [...new Set([...src.matchAll(/model: *"([^"]+)"/g)].map((m) => m[1]))];
+  const missing = refs.filter((r) => !fs.existsSync(rel("assets/models/" + r)));
+  assert(refs.length > 0, "model guard: found model references to check (" + refs.length + ")");
+  assert(missing.length === 0, "every referenced model exists on disk" +
+    (missing.length ? " — MISSING: " + missing.join(", ") : " (" + refs.length + " checked)"));
 }
 
 console.log(fails === 0 ? "\nSELFTEST PASS" : `\nSELFTEST FAIL (${fails})`);

@@ -14,7 +14,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { createMatch, stepMatch, setLocalInput, seekers, hiders, SIM } from "./sim/match_sim.js";
 import { PHASE, ROLE, MODE, sanitizeSettings, DEFAULTS, computeSeekerCount, MODE_INFO } from "./sim/match_core.js";
-import { getMap, toSimMap } from "./maps.js";
+import { getMap, toSimMap, surfaceAt} from "./maps.js";
 import { PaintSystem } from "./paint.js";
 import { createPaintPanel } from "./paint_ui.js";
 import { makeBodyGeo, addBodyFeatures } from "./body.js";
@@ -102,6 +102,7 @@ export class Game {
     this._unsub = engine.onFrame((dt) => this._update(dt));
     this.hud.show(); this.hud.setRole(this.localRole);
     this.audio.startMusic();
+    this.audio.startAmbience(this.mapDef.id);
   }
 
   _roster(n, seekerCount) {
@@ -320,6 +321,7 @@ export class Game {
         if (e.code >= "Digit1" && e.code <= "Digit4" && this.paintMode) {
           const T = ["brush", "spray", "marker", "sponge"][+e.code.slice(5) - 1];
           this.paint.setTool(T); this.paintPanel && this.paintPanel.refresh();
+          this.audio && this.audio.canShake && this.audio.canShake();
           this.hud && this.hud.toast && this.hud.toast("tool: " + T, "#7fe3c4"); e.preventDefault(); return;
         }
       }
@@ -347,12 +349,12 @@ export class Game {
 
     this._pd = (e) => {
       if (window.__PAUSE__ && window.__PAUSE__.isPaused()) return;
-      if (this.paintMode) { if (e.button === 0) this._painting = true; if (e.button === 1) this._orbiting = true; if (e.button === 2) this._sizing = true; this._lx = e.clientX; this._ly = e.clientY; return; }
+      if (this.paintMode) { if (e.button === 0) { this._painting = true; this._paintVoice(true); } if (e.button === 1) this._orbiting = true; if (e.button === 2) this._sizing = true; this._lx = e.clientX; this._ly = e.clientY; return; }
       if (!this._locked && e.button === 0) { try { dom.requestPointerLock(); } catch (err) { /* ignore */ } }
       if (this.localRole === ROLE.SEEKER && e.button === 0 && this.sim.phase === PHASE.HUNT) { this._shootRequested = true; }
       this._dragging = true; this._lx = e.clientX; this._ly = e.clientY;
     };
-    this._pu = () => { this._painting = this._orbiting = this._sizing = this._dragging = false; };
+    this._pu = () => { if (this._painting) this._paintVoice(false); this._painting = this._orbiting = this._sizing = this._dragging = false; };
     this._pm = (e) => {
       const s2 = this._sens();
       if (this.paintMode) {
@@ -375,6 +377,39 @@ export class Game {
     this._wheel = (e) => { if (this.paintMode || this.thirdPerson) { this.camDist = clamp(this.camDist + e.deltaY * 0.006, 2.0, 10); e.preventDefault(); } };
     dom.addEventListener("pointerdown", this._pd); window.addEventListener("pointerup", this._pu);
     window.addEventListener("pointermove", this._pm); dom.addEventListener("wheel", this._wheel, { passive: false });
+  }
+
+  /** Give the signature verb a sound: aerosol hiss for spray/sponge, a swish per stroke
+   *  for brush/marker. Painting was completely silent, which read as unfinished. */
+  _paintVoice(on) {
+    if (!this.audio || !this.paint) return;
+    const t = this.paint.getTool ? this.paint.getTool() : null;
+    const aerosol = t && (t.id === "spray" || t.id === "sponge");
+    if (aerosol) this.audio.spray(on);
+    else if (on && this.audio.brush) this.audio.brush();
+  }
+
+  /** Find an actor by id — event payloads carry ids, spatial audio needs coordinates. */
+  _actor(id) { return id ? this.sim.actors.find((a) => a.id === id) : null; }
+
+  /**
+   * Per-frame audio state: put the listener behind the player's eyes so every positional
+   * cue has a direction, and pulse a heartbeat that tightens as a seeker closes in. The
+   * heartbeat is the hider's early-warning sense — genre standard is that you feel the
+   * threat before you see it, and it is the only thing that makes staying still tense.
+   */
+  _updateAudioState() {
+    if (!this.audio || !this.local) return;
+    this.audio.setListener(this.local.x, this.local.z, this.camYaw);
+    if (this.localRole !== ROLE.HIDER || !this.local.alive || this.sim.phase !== PHASE.HUNT) return;
+    let near = Infinity;
+    for (const k of this.sim.actors) {
+      if (k.role !== ROLE.SEEKER) continue;
+      const d = Math.hypot(k.x - this.local.x, k.z - this.local.z);
+      if (d < near) near = d;
+    }
+    const RANGE = 16;                                   // beyond this you feel nothing
+    if (near < RANGE) this.audio.heartbeat(1 - near / RANGE);
   }
 
   /** Cling to ANY surface — this is the core hiding verb, not a wall-only trick.
@@ -412,7 +447,7 @@ export class Game {
         this.local.pose = "flat";                     // lie down on it
         const what = h.object === this.floor ? "lying down" : "on top — you are exposed up here";
         this.hud && this.hud.toast && this.hud.toast(what + " · A/D turn · Space stand · E off", "#7fe3c4");
-        this.audio && this.audio.blip && this.audio.blip();
+        this.audio && this.audio.stick && this.audio.stick();
         return;
       }
       if (Math.abs(n.y) <= 0.55) {
@@ -428,7 +463,7 @@ export class Game {
         this.local._elev = 0;
         this.local.pose = "stand";
         this.hud && this.hud.toast && this.hud.toast("clinging · A/D turn · Space/Ctrl height · E off", "#7fe3c4");
-        this.audio && this.audio.blip && this.audio.blip();
+        this.audio && this.audio.stick && this.audio.stick();
         return;
       }
     }
@@ -487,7 +522,7 @@ export class Game {
   _jump() {
     if (!this.local || !this.local.alive) return;
     if (this._jumpV == null) this._jumpV = 0;
-    if ((this._jumpY || 0) <= 0.001) { this._jumpV = 4.4; this.audio && this.audio.blip && this.audio.blip(); }
+    if ((this._jumpY || 0) <= 0.001) { this._jumpV = 4.4; this.audio && this.audio.jump && this.audio.jump(); }
   }
 
   _stepJump(dt) {
@@ -643,12 +678,15 @@ export class Game {
     else this._stepGuest(dt);
 
     if (this.sim.phase !== this._lastPhase) { this._onPhaseChange(this._lastPhase, this.sim.phase); this._lastPhase = this.sim.phase; }
-    if (this._moving && this.local && this.local.alive && this.sim.phase !== PHASE.RESULTS) this.audio.footstep();
+    if (this._moving && this.local && this.local.alive && this.sim.phase !== PHASE.RESULTS) {
+      this.audio.footstep(surfaceAt(this.mapDef, this.local.x, this.local.z), this.local.x, this.local.z);
+    }
     this._syncActors();
     this._updateEmotes(dt);
     this._syncPaintBlend();
     this._stepJump(dt);
     this._stepStick(dt);
+    this._updateAudioState();
     this._updateCamera(dt);
     this._updateHUD();
     if (this.sim.phase === PHASE.RESULTS && !this._ended) { this._ended = true; this._finish(); }
@@ -709,10 +747,10 @@ export class Game {
   _applyNetEvent(ev) {
     if (ev.t === "win") { this.sim.result = { winner: ev.winner, reason: ev.reason }; }
     else if (ev.t === "phase" && ev.phase === PHASE.HUNT) { this.hud.toast("HUNT!", "#ff6b6b"); if (this.paintMode) this._togglePaintMode(); }
-    else if (ev.t === "caught") { this.audio.gunshot(); this.audio.catchSound(); if (ev.id === this.local?.id) this.hud.toast("Caught!", "#ff6b6b"); }
-    else if (ev.t === "miss") this.audio.gunshot();
+    else if (ev.t === "caught") { const a = this._actor(ev.id); this.audio.gunshot(a?.x, a?.z); this.audio.catchSound(a?.x, a?.z); if (ev.id === this.local?.id) this.hud.toast("Caught!", "#ff6b6b"); }
+    else if (ev.t === "miss") { const a = this._actor(ev.by); this.audio.gunshot(a?.x, a?.z); }
     else if (ev.t === "emote") this.floatEmote(ev.id, ev.emoji);
-    else if (ev.t === "whistle") this.audio.whistle();
+    else if (ev.t === "whistle") { const a = this._actor(ev.id || ev.by); this.audio.whistle(a?.x, a?.z); }
   }
 
   _streamPaint() {
@@ -738,14 +776,18 @@ export class Game {
 
   _handleEvents(events) {
     for (const e of events) {
-      if (e.t === "phase" && e.phase === PHASE.HUNT) { this.hud.toast("HUNT!", "#ff6b6b"); if (this.paintMode) this._togglePaintMode(); this.hud.setHint(this._defaultHint()); }
+      if (e.t === "phase" && e.phase === PHASE.HUNT) { this.audio.huntStart(); this.hud.toast("HUNT!", "#ff6b6b"); if (this.paintMode) this._togglePaintMode(); this.hud.setHint(this._defaultHint()); }
       else if (e.t === "caught") {
-        this.audio.gunshot(); this.audio.catchSound();
+        { const a = this._actor(e.id); this.audio.gunshot(a?.x, a?.z); this.audio.catchSound(a?.x, a?.z); }
         if (e.id === this.local?.id) this.hud.toast("Caught!", "#ff6b6b");
         else if (e.by === this.local?.id) this.hud.toast("Got one!", ACCENT_G);
-      } else if (e.t === "miss") { this.audio.gunshot(); if (e.by === this.local?.id) { this.hud.toast("miss", "#ff9d6b"); this._muzzle = 0.08; } }
-      else if (e.t === "whistle") { this.audio.whistle(); }
-      else if (e.t === "win") { /* handled by phase RESULTS */ }
+      } else if (e.t === "miss") { const a = this._actor(e.by); this.audio.gunshot(a?.x, a?.z); if (e.by === this.local?.id) { this.hud.toast("miss", "#ff9d6b"); this._muzzle = 0.08; } }
+      else if (e.t === "dryfire") { const a = this._actor(e.by); this.audio.dryfire(a?.x, a?.z); if (e.by === this.local?.id) this.hud.toast("out of ammo", "#ff9d6b"); }
+      else if (e.t === "whistle") { const a = this._actor(e.id || e.by); this.audio.whistle(a?.x, a?.z); }
+      else if (e.t === "win") {
+        const meHider = this.localRole === ROLE.HIDER;
+        ((e.winner === "hiders") === meHider) ? this.audio.win() : this.audio.lose();
+      }
     }
   }
 
@@ -870,7 +912,7 @@ export class Game {
   destroy() {
     if (this._helpEl && this._helpEl.parentNode) this._helpEl.parentNode.removeChild(this._helpEl);
     this._alive = false;
-    if (this.audio) { try { this.audio.stopMusic(); } catch (e) {} }
+    if (this.audio) { try { this.audio.stopMusic(); this.audio.stopAmbience(); this.audio.spray(false); } catch (e) {} }
     if (this.online && this.net) { try { this.net.leave(); } catch (e) {} }
     if (this._unsub) this._unsub();
     window.removeEventListener("keydown", this._kd); window.removeEventListener("keyup", this._ku);

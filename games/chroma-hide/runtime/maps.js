@@ -132,7 +132,7 @@ export const MAPS = {
     ],
     props: [
       // GARAGE — grey concrete, red/steel/black
-      { id: "car", x: -11, z: 1, w: 3.2, d: 1.5, h: 1.3, color: 0x2f5db0, rough: 0.35, metal: 0.4, model: "sedan.glb", rot: 1.57 },
+      { id: "car", x: -11, z: 1, w: 3.2, d: 1.5, h: 1.3, color: 0x2f5db0, rough: 0.35, metal: 0.4, model: "car/sedan.glb", rot: 1.57 },
       { id: "toolbox", x: -13, z: -3, w: 1.2, d: 0.8, h: 1.4, color: 0xb02a2a, rough: 0.4, metal: 0.3 },
       { id: "workbench", x: -9, z: -8, w: 3.0, d: 1.2, h: 1.0, color: 0x7a5a3a, rough: 0.8, metal: 0.05, model: "table.glb" },
       { id: "tires", x: -12.5, z: 4, w: 1.1, d: 1.1, h: 1.2, color: 0x1c1c1e, rough: 0.85, metal: 0.0 },
@@ -147,7 +147,7 @@ export const MAPS = {
       { id: "bookshelf", x: 3.6, z: -6.5, w: 0.8, d: 2.0, h: 2.4, color: 0x5a3f2a, rough: 0.75, metal: 0.0, model: "bookcaseClosed.glb", rot: 1.57 },
       { id: "chair1", x: -2, z: -2.4, w: 0.7, d: 0.7, h: 1.2, color: 0x24262b, rough: 0.5, metal: 0.15 },
       { id: "chair2", x: 2, z: 2.4, w: 0.7, d: 0.7, h: 1.2, color: 0x24262b, rough: 0.5, metal: 0.15 },
-      { id: "plant", x: 0, z: 6.5, w: 0.9, d: 0.9, h: 1.7, color: 0x2f7d3a, rough: 0.85, metal: 0.0, model: "tree-small.glb" },
+      { id: "plant", x: 0, z: 6.5, w: 0.9, d: 0.9, h: 1.7, color: 0x2f7d3a, rough: 0.85, metal: 0.0, model: "suburb/tree-small.glb" },
       { id: "cooler", x: 4, z: 0, w: 0.8, d: 0.8, h: 1.2, color: 0x8fd0e0, rough: 0.3, metal: 0.1, model: "ac-unit-quaternius.glb" },
       { id: "sofa", x: -3, z: 0, w: 2.4, d: 1.0, h: 0.9, color: 0x3f6a6a, rough: 0.85, metal: 0.0, model: "loungeSofa.glb", rot: 1.57 },
       // WAREHOUSE — concrete, brown/yellow/steel
@@ -199,7 +199,7 @@ export const MAPS = {
       { id: "wkl1", x: 5.5, z: -3.5, w: 0.4, d: 13 }, { id: "wkl2", x: 5.5, z: 8, w: 0.4, d: 4 },
     ],
     props: [
-      { id: "car", x: -11, z: 1, w: 3.2, d: 1.5, h: 1.3, color: 0x9c2f2f, rough: 0.35, metal: 0.4, model: "sedan.glb", rot: 1.57 },
+      { id: "car", x: -11, z: 1, w: 3.2, d: 1.5, h: 1.3, color: 0x9c2f2f, rough: 0.35, metal: 0.4, model: "car/sedan.glb", rot: 1.57 },
       { id: "bench", x: -9, z: -8, w: 3.0, d: 1.2, h: 1.0, color: 0x7a5a3a, rough: 0.8, metal: 0.05, model: "table.glb" },
       { id: "gshelf", x: -13.6, z: 0, w: 0.7, d: 4.0, h: 3.2, color: 0x8a9099, rough: 0.5, metal: 0.5, model: "bookcaseClosed.glb", rot: 1.57 },
       { id: "gbin", x: -8, z: 3.5, w: 1.2, d: 1.2, h: 1.5, color: 0x3a6a3a, rough: 0.55, metal: 0.3, model: "dumpster-quaternius.glb" },
@@ -217,8 +217,8 @@ export const MAPS = {
       { id: "sofa2", x: 12, z: -3, w: 2.4, d: 1.0, h: 0.9, color: 0x7a4a5a, rough: 0.85, metal: 0.0, model: "loungeSofa.glb", rot: -1.57 },
       { id: "shelf", x: 13.5, z: 5, w: 0.8, d: 3.0, h: 2.6, color: 0x5a3f2a, rough: 0.75, metal: 0.0, model: "bookcaseClosed.glb", rot: -1.57 },
       { id: "coffee", x: 9, z: 0, w: 1.6, d: 1.0, h: 0.6, color: 0x6b4a30, rough: 0.6, metal: 0.05, model: "table.glb" },
-      { id: "plant1", x: 8, z: -6, w: 0.9, d: 0.9, h: 1.8, color: 0x2f7d3a, rough: 0.85, metal: 0.0, model: "tree-small.glb" },
-      { id: "plant2", x: 13, z: -6, w: 0.9, d: 0.9, h: 1.6, color: 0x3f8d4a, rough: 0.85, metal: 0.0, model: "tree-small.glb" },
+      { id: "plant1", x: 8, z: -6, w: 0.9, d: 0.9, h: 1.8, color: 0x2f7d3a, rough: 0.85, metal: 0.0, model: "suburb/tree-small.glb" },
+      { id: "plant2", x: 13, z: -6, w: 0.9, d: 0.9, h: 1.6, color: 0x3f8d4a, rough: 0.85, metal: 0.0, model: "suburb/tree-small.glb" },
       { id: "tv", x: 12.5, z: 6.5, w: 1.8, d: 0.4, h: 1.1, color: 0x14161a, rough: 0.3, metal: 0.3 },
     ],
     lights: [
@@ -262,8 +262,8 @@ export const MAPS = {
       { id: "lobby-sofa", x: -11.5, z: 6.2, w: 2.4, d: 1, h: 0.9, color: 0x35406b, rough: 0.85, metal: 0, model: "loungeSofa.glb" },
       { id: "coffee-table", x: -9.3, z: 6.2, w: 1.6, d: 1, h: 0.45, color: 0x7d8899, rough: 0.5, metal: 0.1 },
       { id: "magazine-rack", x: -7.8, z: 6.5, w: 0.7, d: 0.5, h: 0.6, color: 0xb5623f, rough: 0.6, metal: 0.1 },
-      { id: "lobby-plant-a", x: -12.2, z: 8, w: 0.9, d: 0.9, h: 1.6, color: 0x4a7c3f, rough: 0.9, metal: 0, model: "tree-small.glb" },
-      { id: "lobby-plant-b", x: -12.2, z: -7.5, w: 0.9, d: 0.9, h: 1.6, color: 0x3f6e46, rough: 0.9, metal: 0, model: "tree-small.glb" },
+      { id: "lobby-plant-a", x: -12.2, z: 8, w: 0.9, d: 0.9, h: 1.6, color: 0x4a7c3f, rough: 0.9, metal: 0, model: "suburb/tree-small.glb" },
+      { id: "lobby-plant-b", x: -12.2, z: -7.5, w: 0.9, d: 0.9, h: 1.6, color: 0x3f6e46, rough: 0.9, metal: 0, model: "suburb/tree-small.glb" },
       { id: "file-cabinet-lobby", x: -12.2, z: -3.5, w: 0.9, d: 0.9, h: 1.6, color: 0xc9b98a, rough: 0.45, metal: 0.5, model: "kitchenCabinet.glb" },
       { id: "lobby-side-table", x: -8.5, z: -6, w: 1, d: 0.8, h: 0.5, color: 0xa8845c, rough: 0.5, metal: 0.1 },
       // Open-Plan Bullpen
@@ -322,11 +322,11 @@ export const MAPS = {
       // Storefront Strip
       { id: "r0_produce_stall", x: -11.3, z: -6.8, w: 2.5, d: 1.5, h: 2.2, color: 0xc23b3b, rough: 0.8, metal: 0, model: "market-stalls-quaternius.glb" },
       { id: "r0_produce_bins", x: -11.7, z: -3.9, w: 1.6, d: 1, h: 0.7, color: 0x3f9f57, rough: 0.7, metal: 0.1 },
-      { id: "r0_planter_tree_a", x: -12.1, z: -0.9, w: 0.9, d: 0.9, h: 1.6, color: 0x4f8a3f, rough: 0.9, metal: 0, model: "tree-small.glb" },
+      { id: "r0_planter_tree_a", x: -12.1, z: -0.9, w: 0.9, d: 0.9, h: 1.6, color: 0x4f8a3f, rough: 0.9, metal: 0, model: "suburb/tree-small.glb" },
       { id: "r0_bench", x: -11.4, z: 2.3, w: 2.4, d: 1, h: 0.9, color: 0x2f7f9f, rough: 0.8, metal: 0, model: "loungeSofa.glb" },
       { id: "r0_mailbox", x: -12.2, z: 5.2, w: 0.7, d: 0.6, h: 1.1, color: 0x2b5fd0, rough: 0.4, metal: 0.7 },
       { id: "r0_awning_crates", x: -11.8, z: 7.5, w: 1.3, d: 1.3, h: 1.3, color: 0xc8a066, rough: 0.9, metal: 0, model: "cardboardBoxClosed.glb" },
-      { id: "r0_planter_tree_b", x: -7, z: -6.6, w: 0.9, d: 0.9, h: 1.6, color: 0x6a9a3a, rough: 0.9, metal: 0, model: "tree-small.glb" },
+      { id: "r0_planter_tree_b", x: -7, z: -6.6, w: 0.9, d: 0.9, h: 1.6, color: 0x6a9a3a, rough: 0.9, metal: 0, model: "suburb/tree-small.glb" },
       { id: "r0_kiosk", x: -7, z: -3.7, w: 1, d: 0.9, h: 1.5, color: 0xd08a2a, rough: 0.6, metal: 0.2 },
       { id: "r0_stall_table", x: -7.3, z: -0.8, w: 1.8, d: 1, h: 0.75, color: 0x7a4a2a, rough: 0.7, metal: 0, model: "table.glb" },
       { id: "r0_checkout_counter", x: -8.6, z: 7.6, w: 1.8, d: 0.8, h: 1, color: 0x8a5a3a, rough: 0.6, metal: 0.2 },
@@ -337,12 +337,12 @@ export const MAPS = {
       { id: "r1_hydrant", x: -2.3, z: 2.5, w: 0.4, d: 0.4, h: 0.9, color: 0xc0342a, rough: 0.5, metal: 0.4, model: "hydrant-quaternius.glb" },
       { id: "r1_ac_b", x: -2.15, z: 5.2, w: 1, d: 1, h: 2, color: 0x7a7a80, rough: 0.5, metal: 0.6, model: "ac-unit-quaternius.glb" },
       { id: "r1_dumpster_b", x: -2.05, z: 7.7, w: 1.2, d: 1.2, h: 1.5, color: 0x5a5a3a, rough: 0.6, metal: 0.5, model: "dumpster-quaternius.glb" },
-      { id: "r1_alley_tree", x: 3.1, z: -6.3, w: 0.9, d: 0.9, h: 1.6, color: 0x6a9a3a, rough: 0.9, metal: 0, model: "tree-small.glb" },
+      { id: "r1_alley_tree", x: 3.1, z: -6.3, w: 0.9, d: 0.9, h: 1.6, color: 0x6a9a3a, rough: 0.9, metal: 0, model: "suburb/tree-small.glb" },
       { id: "r1_boxes_b", x: 3, z: -3.3, w: 1.3, d: 1.3, h: 1.3, color: 0xc8a860, rough: 0.9, metal: 0, model: "cardboardBoxClosed.glb" },
       { id: "r1_pallet", x: 3.05, z: -1, w: 1.2, d: 1, h: 0.3, color: 0x8a5a2a, rough: 0.9, metal: 0 },
       { id: "r1_dumpster_c", x: 3.05, z: 2.9, w: 1.2, d: 1.2, h: 1.5, color: 0x3a6a4a, rough: 0.6, metal: 0.5, model: "dumpster-quaternius.glb" },
       // Loading Lot
-      { id: "r2_sedan", x: 8.5, z: -4, w: 3.2, d: 1.5, h: 1.3, color: 0x3a5a8a, rough: 0.3, metal: 0.6, model: "sedan.glb", rot: 1.57 },
+      { id: "r2_sedan", x: 8.5, z: -4, w: 3.2, d: 1.5, h: 1.3, color: 0x3a5a8a, rough: 0.3, metal: 0.6, model: "car/sedan.glb", rot: 1.57 },
       { id: "r2_container", x: 11.7, z: 4.6, w: 6, d: 2.4, h: 2.6, color: 0xb5622a, rough: 0.6, metal: 0.5, model: "shipping-container-quaternius.glb", rot: 1.57 },
       { id: "r2_barrier_a", x: 9.4, z: -8, w: 1.8, d: 0.5, h: 1, color: 0xd0a020, rough: 0.7, metal: 0.1, model: "barrier-traffic-quaternius.glb" },
       { id: "r2_barrier_b", x: 9.4, z: -6.7, w: 1.8, d: 0.5, h: 1, color: 0xd0a020, rough: 0.7, metal: 0.1, model: "barrier-traffic-quaternius.glb" },
@@ -392,7 +392,7 @@ export const MAPS = {
       { id: "stock-boxes-magenta", x: -12, z: 1.8, w: 1.3, d: 1.3, h: 1.3, color: 0xd94f8a, rough: 0.9, metal: 0, model: "cardboardBoxClosed.glb" },
       { id: "endcap-display-green", x: -7, z: -2.2, w: 1.3, d: 1.3, h: 1.3, color: 0x2fa36b, rough: 0.85, metal: 0, model: "cardboardBoxClosed.glb" },
       { id: "checkout-counter", x: -9.5, z: 7.5, w: 2, d: 0.9, h: 1, color: 0x444b52, rough: 0.5, metal: 0.2 },
-      { id: "entry-potted-plant", x: -6.8, z: 7.9, w: 0.9, d: 0.9, h: 1.6, color: 0x3b7a3b, rough: 0.85, metal: 0, model: "tree-small.glb" },
+      { id: "entry-potted-plant", x: -6.8, z: 7.9, w: 0.9, d: 0.9, h: 1.6, color: 0x3b7a3b, rough: 0.85, metal: 0, model: "suburb/tree-small.glb" },
       // Produce & Deli
       { id: "produce-stall-warm", x: -1, z: -5, w: 2.5, d: 1.5, h: 2.2, color: 0xc96b3a, rough: 0.75, metal: 0.05, model: "market-stalls-quaternius.glb" },
       { id: "produce-stall-green", x: 2.2, z: -5, w: 2.5, d: 1.5, h: 2.2, color: 0x5f9a3a, rough: 0.75, metal: 0.05, model: "market-stalls-quaternius.glb" },
@@ -433,6 +433,26 @@ export const MAPS = {
 Object.assign(MAPS, CAMPUS_MAPS);
 
 /** Interior props -> 2D collision/occlusion AABBs {x,z,hw,hd}. */
+
+/** Which authored room contains (x,z)? Drives per-surface footsteps: the room already
+ *  declares its floor texture, so walking on supermarket tile and office carpet can
+ *  sound different without any new data. Returns null outdoors / between rooms. */
+export function roomAt(map, x, z) {
+  const rs = map.rooms || [];
+  for (let i = rs.length - 1; i >= 0; i--) {          // later rooms are drawn on top
+    const r = rs[i];
+    if (Math.abs(x - r.x) <= r.w / 2 && Math.abs(z - r.z) <= r.d / 2) return r;
+  }
+  return null;
+}
+
+/** The surface you are standing on, as an audio key. */
+export function surfaceAt(map, x, z) {
+  const r = roomAt(map, x, z);
+  const tex = (r && r.tex) || (map.ground && map.ground.tex) || "concrete";
+  return tex === "checker" ? "tile" : tex;
+}
+
 export function mapObstacles(map) {
   // `noCollide` props are pure visual DRESSING (clutter on/beside real furniture):
   // rendered, paintable, but never nav/LOS obstacles — so a map can carry hundreds of
