@@ -578,6 +578,14 @@ export function showMenu(W, startMatch) {
   online.onclick = () => { W.events.emit("uiClick"); W.events.emit("openOnline", { mode: selMode }); };
   const settings = mkGhost("⚙  SETTINGS", subRow);
   settings.onclick = () => { W.events.emit("uiClick"); showSettings(W); };
+  const howTo = mkGhost("❔  HOW TO PLAY", subRow);
+  howTo.onclick = () => { W.events.emit("uiClick"); showHowToPlay(W); };
+  // First run gets it unprompted. A browser BR is opened cold from a link with
+  // no manual and no install — there was no onboarding of ANY kind, and two of
+  // the verbs (the emotes) appeared nowhere at all until ?v=67.
+  try {
+    if (!localStorage.getItem("lc_seen_intro")) setTimeout(() => showHowToPlay(W), 500);
+  } catch (e) {}
 
   // — SKIN BAY: premium 3D turntable —
   const bay = h("div", Object.assign({
@@ -2103,6 +2111,43 @@ function physFor(W, canonical) {
   for (const k in rm) if (rm[k] === canonical) return k;
   return rm[canonical] === UNBOUND ? null : canonical;
 }
+/** First-run controls card. Deliberately NOT a forced tutorial: one screen, the
+ *  verbs that are not guessable, and a button. Reachable any time from the menu. */
+export function showHowToPlay(W) {
+  ensureAAAStyles();
+  const L = layer("howto", { pointerEvents: "auto", background: "rgba(4,8,16,0.92)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 70 });
+  const box = h("div", Object.assign({ padding: "26px 34px", width: "520px", display: "flex", flexDirection: "column", gap: "10px" }, PANEL), null, L);
+  h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "20px", fontWeight: "900", letterSpacing: "3px" }, "HOW TO PLAY", box);
+  h("div", { fontSize: "13px", opacity: "0.8", lineHeight: "1.5", fontFamily: "Rajdhani, " + FONT },
+    "50 drop in, one walks out. Pick a landing zone, loot a weapon, stay inside the circle.", box);
+  const grid = h("div", { display: "grid", gridTemplateColumns: "auto 1fr", gap: "5px 16px", marginTop: "6px", fontFamily: "Rajdhani, " + FONT, fontSize: "13px" }, null, box);
+  const kb = (k, what) => {
+    h("div", { fontWeight: "900", color: "#9fd7ff", letterSpacing: "1px", whiteSpace: "nowrap" }, k, grid);
+    h("div", { opacity: "0.85" }, what, grid);
+  };
+  kb("W A S D", "Move");
+  kb("SHIFT", "Sprint — a CLICK toggles it on and off");
+  kb("C", "Crouch — slower, but a much tighter cone");
+  kb("SPACE", "Jump · re-open the parachute in a long fall");
+  kb("LMB / RMB", "Fire · aim down sights");
+  kb("E", "Loot — hold on a chest to open it");
+  kb("R", "Reload");
+  kb("1 – 5", "Weapon and item slots");
+  kb("M", "Map");
+  kb("B / N", "Emote — dance · cheer");
+  kb("ESC", "Pause and settings");
+  h("div", { fontSize: "12px", opacity: "0.7", marginTop: "6px", lineHeight: "1.5", fontFamily: "Rajdhani, " + FONT },
+    "The reticle grows when your shots will scatter and tightens when they will not — standing still and crouching both help. Every key here can be rebound in Settings.", box);
+  const go = h("button", Object.assign({}, BTN, {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, background: "linear-gradient(180deg,#6ec4ff,#2f7fd6)",
+    color: "#fff", fontSize: "15px", padding: "12px 34px", letterSpacing: "2px", marginTop: "10px", alignSelf: "center",
+  }), "GOT IT", box);
+  go.onclick = () => {
+    try { localStorage.setItem("lc_seen_intro", "1"); } catch (e) {}
+    L.remove(); R.howto = null;
+  };
+}
+
 function showSettings(W) {
   W.captureKey = null;   // drop any armed keybind capture when (re)rendering the modal
   if (R.settings) { R.settings.remove(); R.settings = null; }

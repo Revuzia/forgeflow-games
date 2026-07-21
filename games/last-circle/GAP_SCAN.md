@@ -45,6 +45,7 @@ Line anchors were correct at the time of writing but drift — re-locate by cont
 - [x] juice: kill attribution never named the weapon (?v=71)
 - [x] combat: the crosshair did not represent the real spread model ("just below the cut" item) (?v=73)
 - [x] social: after death you were locked to your killer's camera (?v=74)
+- [x] meta/ux: no first-session onboarding of any kind (?v=75)
 - [ ] remaining: the other lower-ranked surviving findings listed by dimension below
 
 # LAST CIRCLE — BUILD ORDER

@@ -3,6 +3,25 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — First-run onboarding (?v=75, LIVE)
+
+- There was no onboarding of ANY kind. This is a browser BR: it gets opened cold
+  from a link, with no install, no manual and nobody to ask. Several verbs were
+  simply undiscoverable — the parachute redeploy, crouch, and both emotes (which
+  appeared in no control surface at all until ?v=67).
+- A first-run HOW TO PLAY card now opens once, listing the eleven things that are
+  not guessable, and explains the two mechanics a new player will otherwise
+  misread: that SHIFT is a toggle, and that the reticle grows when shots will
+  scatter. Dismissal is remembered, and the card is reachable any time from the
+  menu.
+- Deliberately NOT a forced tutorial or a scripted first match — one screen and a
+  button. A player who already knows battle royales loses two seconds.
+
+Verified live: first run auto-opens with all 11 key rows and the SHIFT-toggle,
+crouch and emote lines present; GOT IT dismisses it and stores the flag; a second
+showMenu does NOT auto-open it; the menu button re-opens it on demand.
+Selftest 82/82. DRAFT.
+
 ## 2026-07-21 — You were locked to your killer's camera (?v=74, LIVE)
 
 - On death, spectating was pinned to whoever killed you and only ever moved on
