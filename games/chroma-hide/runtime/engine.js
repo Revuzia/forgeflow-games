@@ -36,10 +36,12 @@ export class Engine {
     this.renderer.domElement.style.display = "block";
 
     // Base light rig — a map may add/replace via setLighting().
-    this.hemi = new THREE.HemisphereLight(0xdfe9ff, 0x2a2f38, 0.75);
+    this.hemi = new THREE.HemisphereLight(0xdfe9ff, 0x2a2f38, 0.95);
     this.scene.add(this.hemi);
-    this.sun = new THREE.DirectionalLight(0xffffff, 2.0);
-    this.sun.position.set(18, 30, 12);
+    this.sun = new THREE.DirectionalLight(0xffffff, 2.5);
+    // steep & mostly overhead so the 5-tall room walls cast only short shadows and
+    // every open-top room floor gets even key light (rooms were dim from a low sun).
+    this.sun.position.set(9, 44, 7);
     this.sun.castShadow = q !== "low";
     this.sun.shadow.mapSize.set(1024, 1024);
     const d = 40;

@@ -162,8 +162,8 @@ assert(manor.id === "manor" && manor.props.length >= 6, "map: manor loaded with 
   const sm = maps.toSimMap(manor);
   assert(sm.obstacles.length === manor.props.length, "map: toSimMap obstacle per prop");
   assert(sm.spawn.seeker && sm.spawn.hider && sm.spots.length >= 6, "map: toSimMap spawn + spots");
-  assert(maps.mapList().length === 2, "map: 2 multi-room stages shipped");
-  assert(maps.mapList().every((m) => ["depot", "residence"].includes(m.id)), "map: only multi-room stages in picker");
+  assert(maps.mapList().length === 5, "map: 5 multi-room stages shipped");
+  assert(maps.mapList().every((m) => (maps.getMap(m.id).rooms || []).length >= 3), "map: every shipped stage is multi-room (>=3 rooms)");
 }
 {
   // The Residence: second multi-room map (garage/kitchen/living), GLB-furnished

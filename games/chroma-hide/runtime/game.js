@@ -17,6 +17,7 @@ import { PHASE, ROLE, MODE, sanitizeSettings, DEFAULTS, computeSeekerCount, MODE
 import { getMap, toSimMap } from "./maps.js";
 import { PaintSystem } from "./paint.js";
 import { createPaintPanel } from "./paint_ui.js";
+import { makeChameleonGeo, addChameleonFace } from "./chameleon.js";
 import { GameAudio } from "./audio.js";
 import { clamp, hashStr } from "./sim/util.js";
 
@@ -180,9 +181,9 @@ export class Game {
   }
 
   _spawnActors() {
+    const geo = makeChameleonGeo();   // shared chameleon body (one merged, UV-atlased mesh)
     for (const a of this.sim.actors) {
       let mesh;
-      const geo = new THREE.CapsuleGeometry(BODY_R, BODY_LEN, 6, 16);
       if (!a.isBot && a.role === ROLE.HIDER) {
         // every HUMAN hider gets a paint surface — the local one is interactive,
         // remote ones receive streamed strokes so their disguise renders too.
@@ -190,15 +191,17 @@ export class Game {
         this.paintByActor.set(a.id, ps);
         if (a.isLocal) this.paint = ps;
         mesh = new THREE.Mesh(geo, ps.material); ps.attachBody(mesh);
+        addChameleonFace(mesh);
       } else if (a.role === ROLE.HIDER) {
         const c = new THREE.Color(this._nearestPropColor(a.x, a.z)).offsetHSL(0, 0, (Math.random() - 0.5) * 0.06);
         mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: c, roughness: 0.7, metalness: 0.05 }));
+        addChameleonFace(mesh);
       } else {
-        mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: a.isLocal ? 0x2b3242 : 0x3a2f2f, roughness: 0.5, metalness: 0.2 }));
-        const visor = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.2), new THREE.MeshStandardMaterial({ color: 0xff9d6b, emissive: 0x5a2a10, emissiveIntensity: 0.6 }));
-        visor.position.set(0, 0.55, 0.32); mesh.add(visor);
+        // Seeker — a dark "Hunter" chameleon carrying a gun.
+        mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: a.isLocal ? 0x2b3242 : 0x39303a, roughness: 0.55, metalness: 0.15 }));
+        addChameleonFace(mesh, { seeker: true });
         const gun = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.7), new THREE.MeshStandardMaterial({ color: 0x1a1a1e, metalness: 0.6, roughness: 0.4 }));
-        gun.position.set(0.28, 0.15, 0.42); mesh.add(gun); mesh.userData.gun = gun;
+        gun.position.set(0.5, -0.1, 0.5); mesh.add(gun); mesh.userData.gun = gun;
       }
       mesh.castShadow = true; mesh.position.set(a.x, BODY_Y, a.z);
       this.root.add(mesh); this.meshes.set(a.id, mesh);
