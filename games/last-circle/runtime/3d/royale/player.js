@@ -1115,7 +1115,19 @@ export function useConsumable(W, a, id) {
   if (c.heals === "hp" && a.hp >= c.cap) return false;
   if (c.heals === "shield" && a.shield >= c.cap) return false;
   slot.count--;
-  if (slot.count <= 0) inv.slots[inv.slots.indexOf(slot)] = null;
+  if (slot.count <= 0) {
+    const idx = inv.slots.indexOf(slot);
+    inv.slots[idx] = null;
+    // Using your LAST bandage emptied the slot but left a.weapon pointing at
+    // "consumable:<id>" with a dangling slotRef, so the next click routed back
+    // into useConsumable and returned false: the human was left holding nothing
+    // and literally unable to shoot until they pressed a number key. Bots
+    // recovered via ensureGunOut; the human had no equivalent.
+    if (inv.active === idx) {
+      const gun = inv.slots.findIndex((s2) => s2 && s2.kind === "weapon");
+      if (gun >= 0) W.equipSlot(a, gun);
+    }
+  }
   a.healing = { id, tLeft: c.useS };
   W.events.emit("healStart", a, id, c.useS);
   return true;

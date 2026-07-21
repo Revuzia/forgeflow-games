@@ -3,6 +3,30 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — Ammo eaten at cap, and no gun after your last bandage (?v=89, LIVE)
+
+Two inventory defects from the full-game sweep.
+
+- **AMMO BOXES AT THE RESERVE CAP WERE DESTROYED AND ANNOUNCED AS A PICKUP.**
+  give() clamped the reserve and returned true regardless, so pickup() marked
+  the box taken and deleted it while the HUD flashed "PICKED UP MEDIUM AMMO" —
+  you watched ammo you could not carry vanish off the floor, and it was gone for
+  the rest of the match. The correct predicate already existed in wouldAccept()
+  two functions above; only bots ever consulted it. give() now refuses, so the
+  box stays put until you have spent some rounds.
+- **USING YOUR LAST BANDAGE LEFT YOU UNABLE TO SHOOT.** The slot is emptied at
+  the START of the heal channel, but nothing re-equipped, so a.weapon still read
+  "consumable:<id>" with a slotRef pointing at an orphaned object — the next
+  click routed straight back into useConsumable, which returned false. The human
+  was stuck holding nothing until they thought to press a number key. Bots
+  recovered through ensureGunOut; the human had no equivalent. Emptying the
+  ACTIVE slot now auto-equips the first gun you are carrying.
+
+Verified live: an ammo box at 240/240 is refused and wouldAccept agrees with
+give (planner and taker consistent), while below cap it is accepted and clamps
+to 240; using a 1-count bandage empties the slot and moves the active slot from
+3 to 0 holding the AR, ready to fire. Selftest 89/89. DRAFT.
+
 ## 2026-07-21 — "50 distinct opponents" was 10 clones of each skin (?v=88, LIVE)
 
 From the full-game sweep, and confirmed by measuring before touching anything.

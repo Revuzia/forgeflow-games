@@ -416,7 +416,13 @@ function give(W, a, data) {
   const inv = a.inventory;
   if (data.kind === "ammo") {
     const cap = K.AMMO[data.id].max;
-    inv.ammo[data.id] = Math.min(cap, (inv.ammo[data.id] || 0) + (data.count || K.AMMO[data.id].box));
+    const before = inv.ammo[data.id] || 0;
+    // At the reserve cap this returned true anyway, so pickup() marked the box
+    // taken and DELETED it while the HUD announced a successful pickup — you
+    // watched ammo you could not carry disappear off the floor. wouldAccept()
+    // two functions up already had the right predicate; only bots consulted it.
+    if (before >= cap) return false;
+    inv.ammo[data.id] = Math.min(cap, before + (data.count || K.AMMO[data.id].box));
     return true;
   }
   if (data.kind === "weapon") {
