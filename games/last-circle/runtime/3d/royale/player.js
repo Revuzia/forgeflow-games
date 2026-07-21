@@ -23,6 +23,25 @@ export function init(W) {
   W.hurtActor = (victim, dmg, attackerId, weaponId, isHead) => hurtActor(W, victim, dmg, attackerId, weaponId, isHead);
   W.killActor = (victim, killerId, weaponId) => killActor(W, victim, killerId, weaponId);
   W.useConsumable = (a, id) => useConsumable(W, a, id);
+  // net.js replays peers' emotes through the SAME path the local one uses, so a
+  // remote wave looks identical to your own rather than being a second system
+  W.playRemoteEmote = (a, kind) => {
+    if (!a || !a.clips || a.emoting) return;
+    // SAME SHAPE as the local path ({t}), not a bare string: netRemote actors
+    // skip stepActor today, but this game hands a slot back to a BOT when a peer
+    // drops — and stepActor does `a.emoting.t -= dt`, which throws on a string
+    // in strict mode. Matching the shape keeps that takeover safe.
+    a.emoting = { t: 2.4, remote: kind };
+    if (a.hand) a.hand.visible = false;
+    playAnim(a, a.clips[kind] ? kind : "cheer", { once: true, force: true });
+    setTimeout(() => {
+      if (a.emoting && a.emoting.remote === kind) {
+        a.emoting = null; a.anim = null;
+        if (a.hand) a.hand.visible = true;
+        playAnim(a, "idle", { force: true });
+      }
+    }, 2400);
+  };
   W.events.on("useConsumable", (a, id) => useConsumable(W, a, id));
   installHumanInput(W);
 }

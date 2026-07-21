@@ -47,6 +47,7 @@ Line anchors were correct at the time of writing but drift — re-locate by cont
 - [x] social: after death you were locked to your killer's camera (?v=74)
 - [x] meta/ux: no first-session onboarding of any kind (?v=75)
 - [x] movement: sprint cost nothing, so plain walking was strictly dominated (?v=76)
+- [x] social: emotes were never relayed to peers — the only expressive act online (?v=78)
 - [ ] remaining: the other lower-ranked surviving findings listed by dimension below
 
 # LAST CIRCLE — BUILD ORDER

@@ -3,6 +3,28 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — Emotes now reach the people you are playing with (?v=78, LIVE)
+
+- Online play has no voice and no text chat, so the two emotes ARE the
+  communication channel — and they were never relayed. A friend waving at you
+  from a rooftop simply did not happen on your screen. The "emote" event was one
+  of the handlers-with-no-listener found earlier today.
+- Relayed both ways now, following the same shape as the existing gunfire relay:
+  only locally-simulated actors broadcast, and peers replay through the SAME
+  playback path the local emote uses, so a remote wave looks identical to yours
+  rather than being a second, subtly different system.
+- **A hazard caught during verification:** my first version stored
+  `a.emoting = "cheer"` (a bare string) while the local path stores `{t: 4.2}`
+  and stepActor does `a.emoting.t -= dt`. netRemote actors skip stepActor, so it
+  tested clean — but this game deliberately hands a slot back to a BOT when a
+  peer disconnects, and that bot WOULD run stepActor and throw on a string in
+  strict mode. Now the same {t} shape, and the takeover case is asserted.
+
+Verified live: emoting locally fires the event net.js relays; a peer's emote
+plays on their actor with anim "cheer" and the matching {t} shape; and flipping
+that peer to a bot mid-emote runs 10 frames of stepActor with NO throw, the
+timer correctly ticking 2.40 -> 2.23. Selftest 89/89. DRAFT.
+
 ## 2026-07-21 — Sprint was free, so walking was pointless (?v=76, LIVE)
 
 A DELIBERATE BALANCE CHANGE, not a bug fix — stating that plainly because it

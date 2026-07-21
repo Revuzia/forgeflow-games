@@ -50,6 +50,11 @@ export function init(W) {
     a._fireRelayT = now;
     send("fire", { id: a.id, w: weaponId, x: +muzzle.x.toFixed(2), y: +muzzle.y.toFixed(2), z: +muzzle.z.toFixed(2), dx: +dir.x.toFixed(3), dy: +dir.y.toFixed(3), dz: +dir.z.toFixed(3) });
   });
+  // Emotes are the ONLY expressive act this game has and they were never
+  // relayed — with no voice and no text chat, a friend waving at you across a
+  // rooftop simply did not happen on their screen. Same shape as the gunfire
+  // relay above: only things simulated locally are broadcast.
+  W.events.on("emote", (a, kind) => { if (S && a && !a.netRemote) send("emote", { id: a.id, k: kind }); });
   W.events.on("netDropItem", (d) => { if (S) send("drop", d); });
   W.events.on("actorDied", (victim, killerId, weaponId) => {
     if (!S) return;
@@ -198,6 +203,11 @@ function onMsg(W, { from, t, d }) {
     const dir = { x: d.dx, y: d.dy, z: d.dz };
     W.events.emit("shotFired", a, d.w, { x: d.x, y: d.y, z: d.z }, dir);
     W.events.emit("tracer", { x: d.x, y: d.y, z: d.z, vx: d.dx * 180, vy: d.dy * 180, vz: d.dz * 180, weaponId: d.w });
+    return;
+  }
+  if (t === "emote") {
+    const a = W.actorById.get(d.id);
+    if (a && a.netRemote && a.alive) W.playRemoteEmote && W.playRemoteEmote(a, d.k);
     return;
   }
   if (t === "drop") { W.netSpawnItem && W.netSpawnItem(d); return; }
