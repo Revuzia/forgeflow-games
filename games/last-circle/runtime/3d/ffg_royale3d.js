@@ -164,6 +164,7 @@ register3d("royale", async function (kernel, content) {
     // clear previous world
     for (const name in W._groups) { const g = W._groups[name]; g.clear(); }
     W.actors.length = 0; W.actorById.clear();
+    W.rangeDummies = null;          // stale refs into the cleared roster
     botsMod.resetBrains();
     if (W.resetInputState) W.resetInputState();
 
@@ -196,9 +197,12 @@ register3d("royale", async function (kernel, content) {
       }
       W.match.register("s" + i);
     }
+    // practice range dummies must exist BEFORE models load or they get no rig
+    if (W.mode === "practice") playerMod.createPracticeRange(W);
     await playerMod.loadActorModels(W);
 
     playerMod.spawnAll(W);          // positions actors (glider line or ground by mode)
+    if (W.mode === "practice") playerMod.placePracticeRange(W);  // ...then line the range up
     botsMod.assignDrops(W);
     hudMod.showLobby(W, () => {     // lobby → drop select → drop
       const begin = () => {

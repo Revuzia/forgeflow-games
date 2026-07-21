@@ -770,7 +770,7 @@ export function showLobby(W, onDone) {
     fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "56px", fontWeight: "900",
     color: "#6ec4ff", minHeight: "64px", textShadow: "0 0 32px rgba(87,176,255,0.55)",
   }, "", wrap);
-  if (W.mode === "practice") h("div", { fontSize: "13px", opacity: "0.7", letterSpacing: "1px" }, "SANDBOX — NO STORM. RANGE TARGETS SOUTH, MOVEMENT COURSE EAST.", wrap);
+  if (W.mode === "practice") h("div", { fontSize: "13px", opacity: "0.7", letterSpacing: "1px" }, "SANDBOX — NO STORM · FULL LOADOUT · FIVE RANGE DUMMIES AT 12–80M, DUE SOUTH OF SPAWN", wrap);
 
   // fill animation then countdown
   let filled = 1;
@@ -994,6 +994,7 @@ function loadProgress() {
 function saveProgress(p) { try { localStorage.setItem("lc_progress", JSON.stringify(p)); } catch (e) {} }
 // fold a finished match into the lifetime record (best placement = LOWEST number)
 function recordMatch(W, res) {
+  if (W.mode === "practice") return null;   // sandbox stats are not a career
   const p = W.progress; if (!p) return null;
   const c = p.career || (p.career = Object.assign({}, CAREER0));
   c.matches++;
@@ -1009,6 +1010,10 @@ function recordMatch(W, res) {
 }
 function xpForLevel(lvl) { return 800 + (lvl - 1) * 700; }   // rising curve
 function addXP(W, amt) {
+  // Practice is a sandbox with a no-death dummy range: damage there is
+  // unlimited, so paying XP or challenge rewards for it would make levelling
+  // a matter of standing still and holding the trigger.
+  if (W.mode === "practice") return;
   const p = W.progress; if (!p || !amt) return;
   p.xp += amt;
   while (p.xp >= xpForLevel(p.level)) { p.xp -= xpForLevel(p.level); p.level++; if (W.events) W.events.emit("levelUp", p.level); }
@@ -1144,9 +1149,21 @@ export function showHUD(W) {
   h("div", { position: "absolute", left: "50%", top: "50%", width: "1px", height: "40%", background: "rgba(255,255,255,0.5)", transform: "translate(-50%,-50%)" }, null, R.scope);
 
   R._hudCache = {};
+  // practice: a live range readout, so the dummies are a measurement and not
+  // just something to shoot at
+  R.rangePanel = null;
+  if (W.mode === "practice") {
+    R.rangePanel = h("div", Object.assign({
+      position: "absolute", left: "50%", top: "10px", transform: "translateX(-50%)",
+      padding: "7px 16px", borderRadius: "8px", fontFamily: "Rajdhani, " + FONT,
+      fontSize: "13px", fontWeight: "700", letterSpacing: "1.5px", color: "#cfe6ff",
+      whiteSpace: "nowrap",
+    }, PANEL), "RANGE — OPEN FIRE", L);
+  }
   // deployment beat — the match used to just… start, with no moment marking it
   const tot = W.match ? W.match.totalPlayers : 50;
-  setTimeout(() => announce("DEPLOY", tot + " PLAYERS · LAST ONE STANDING WINS", "#9fd7ff", 2600), 250);
+  if (W.mode === "practice") setTimeout(() => announce("PRACTICE", "FIVE DUMMIES DUE SOUTH · 12–80M", "#9fd7ff", 2600), 250);
+  else setTimeout(() => announce("DEPLOY", tot + " PLAYERS · LAST ONE STANDING WINS", "#9fd7ff", 2600), 250);
 }
 
 function bar(parent, color) {
@@ -1212,6 +1229,14 @@ export function update(W, dt) {
     }
     R.aliveText.textContent = "👥 " + (W.match ? W.match.aliveCount() : "—");
     R.killsText.textContent = "☠ " + (W.match ? (W.match.kills[p.id] || 0) : 0);
+    if (R.rangePanel) {
+      const s = W.stats, ds = W.rangeDummies || [];
+      let dmg = 0, pops = 0, hs = 0;
+      for (const d of ds) { dmg += d.dummyDamage || 0; pops += d.dummyPops || 0; hs += d.dummyHeadshots || 0; }
+      const acc = s.shotsFired ? Math.round((s.shotsHit / s.shotsFired) * 100) : 0;
+      R.rangePanel.textContent = "RANGE  ·  SHOTS " + s.shotsFired + "  ·  HITS " + s.shotsHit +
+        "  ·  ACC " + acc + "%  ·  HEADSHOTS " + hs + "  ·  DMG " + Math.round(dmg) + "  ·  DOWNS " + pops;
+    }
     // alive-count milestones — the match had no rising arc, just a flat counter
     if (W.match && W.phase === "match" && W.mode !== "practice") {
       const al = W.match.aliveCount();
@@ -1722,7 +1747,12 @@ export function showPostMatch(W, res) {
   stat(grid, "Accuracy", res.accuracy + "%");
   stat(grid, "Survived", fmtT(res.timeS));
   // match XP → progression (kills + damage + placement + survival + victory bonus)
-  if (W.progress) {
+  if (W.mode === "practice") {
+    h("div", {
+      fontSize: "12.5px", opacity: "0.75", marginTop: "14px", letterSpacing: "1px",
+      fontFamily: "Rajdhani, " + FONT, color: "#9fd7ff",
+    }, "PRACTICE — NO XP OR CAREER PROGRESS FROM THE SANDBOX", box);
+  } else if (W.progress) {
     const gained = (res.kills || 0) * 100 + Math.round((res.damage || 0) * 0.2)
       + Math.max(0, (W.match ? W.match.totalPlayers : 50) - (res.placement || 50)) * 6
       + (res.victory ? 500 : 0) + Math.round((res.timeS || 0) / 4);

@@ -282,6 +282,40 @@ export function spawnAll(W) {
   }
 }
 
+// The practice lobby advertised "RANGE TARGETS SOUTH, MOVEMENT COURSE EAST"
+// and neither existed — the only match for that string in the whole runtime was
+// the advertisement itself. This builds the range it promised: a row of dummies
+// at real engagement distances, laid out south of wherever practice dropped you
+// and sat on the terrain. They are deliberately NOT registered with W.match, so
+// they cannot touch alive-count, placement or the victory check.
+// Creation and placement are separate because models load BEFORE spawnAll runs:
+// a dummy created after loadActorModels would have no rig, and one positioned
+// before spawnAll would immediately be scattered by it.
+export const RANGE_DISTANCES = [12, 22, 35, 55, 80];
+export function createPracticeRange(W) {
+  W.rangeDummies = RANGE_DISTANCES.map((d, i) => {
+    const a = createActor(W, { id: "dummy" + i, name: d + "m", isBot: true });
+    a.isDummy = true;
+    a.netRemote = true;          // never brain-driven, never net-authoritative
+    return a;
+  });
+  return W.rangeDummies;
+}
+export function placePracticeRange(W) {
+  const p = W.player;
+  if (!p || !W.rangeDummies) return;
+  W.rangeDummies.forEach((a, i) => {
+    const x = W.SIM.clamp(p.pos.x + (i - 2) * 3.5, -W.map.half + 10, W.map.half - 10);
+    const z = W.SIM.clamp(p.pos.z - RANGE_DISTANCES[i], -W.map.half + 10, W.map.half - 10);
+    a.pos.set(x, W.map.heightAt(x, z) + 0.1, z);
+    a.yaw = Math.PI;             // face the shooter
+    a.gliding = false;
+    a.vel.set(0, 0, 0);
+    a.obj.position.copy(a.pos);
+    a.obj.rotation.y = a.yaw;
+  });
+}
+
 // Move the human's glide start over a chosen landing zone (the drop-select
 // screen). Bots already get this in bots.assignDrops — the player was the only
 // actor on the field still falling on a random point. Altitude is untouched, so
@@ -903,6 +937,19 @@ function hurtActor(W, victim, dmg, attackerId, weaponId, isHead) {
   if (attackerId) { victim.lastAttacker = attackerId; victim.lastHurtByActorT = W.t; }
   W.match.recordDamage(attackerId, res.dealt);
   W.events.emit("actorHurt", victim, { dmg: res.dealt, attackerId, weaponId, isHead, broke: res.broke, toShield: res.toShield });
+  // Practice-range dummies absorb and reset rather than die — the hit feedback
+  // (damage numbers, hitmarker) has already fired above, and a range you can
+  // permanently delete in six seconds is not a range.
+  if (victim.isDummy) {
+    victim.dummyDamage = (victim.dummyDamage || 0) + res.dealt;
+    if (isHead) victim.dummyHeadshots = (victim.dummyHeadshots || 0) + 1;
+    if (res.dead) {
+      victim.dummyPops = (victim.dummyPops || 0) + 1;
+      victim.hp = K.PLAYERK.hp; victim.shield = 0;
+      W.events.emit("dummyPopped", victim);
+    }
+    return;
+  }
   if (res.dead) killActor(W, victim, attackerId, weaponId);
 }
 

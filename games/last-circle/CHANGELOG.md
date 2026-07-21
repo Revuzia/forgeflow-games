@@ -3,6 +3,34 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — PRACTICE RANGE (it was advertised but never existed) (?v=41, LIVE)
+
+The practice lobby promised "RANGE TARGETS SOUTH, MOVEMENT COURSE EAST". Grep
+for either string across the whole runtime returned exactly one hit: the
+advertisement itself. Practice mode was an empty map with a full loadout.
+
+- **Range built:** five dummies at 12/22/35/55/80m, laid out due south of
+  wherever practice drops you and sat on the terrain. They take damage through
+  the real pipeline (W.hurtActor), so hitmarkers, damage numbers and headshot
+  detection all work — then they reset instead of dying, because a range you can
+  permanently delete in six seconds is not a range.
+- Dummies are deliberately NOT registered with W.match: they cannot touch
+  alive-count, placement, or the victory check (verified: aliveCount stays 1 and
+  match.over stays false after 470 damage across all five).
+- **Live range readout:** SHOTS · HITS · ACC · HEADSHOTS · DMG · DOWNS.
+- **XP/career exploit closed (found while building this):** XP was awarded from
+  damage regardless of mode, and the new career record folded in every match.
+  With a no-death dummy range that makes levelling a matter of standing still
+  and holding the trigger. Practice now earns no XP, completes no challenges and
+  banks no career stats, and the post-match screen says so.
+- Lobby line now describes what actually exists (no movement course is claimed).
+
+Verified live: 5 dummies rigged and in-scene at the right distances/bearing;
+alive after 120 damage with hp reset and pops counted; hurt events still fire per
+hit; XP frozen at level 3/120 and career frozen at 7 matches after farming 2400
+damage; readout renders "SHOTS 15 · HITS 12 · ACC 80% · HEADSHOTS 3 · DMG 470 ·
+DOWNS 2". Selftest 46/46. DRAFT.
+
 ## 2026-07-20 — DROP SELECT + match re-entrancy guard (?v=39, LIVE)
 
 The biggest remaining structural gap vs Final Drop and the genre generally: the
