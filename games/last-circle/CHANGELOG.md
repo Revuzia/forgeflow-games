@@ -3,6 +3,36 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — Supply drops you can find, loot you can read (?v=66, LIVE)
+
+More lower-ranked gap-scan findings, plus a systematic sweep that found the real
+scope of one of them.
+
+- **Supply drops were invisible.** They are the ONLY source of legendary loot,
+  and the entire presentation was one flashed line at spawn: no map marker, no
+  world beacon, no landed cue. Now tracked and drawn on the minimap and the big
+  map — a pulsing gold ring while it falls, a filled diamond once it is down —
+  with an announcement on the way in and a flash when it lands.
+- **Pickups never said what you picked up.** A blip played and that was all, so
+  a legendary was indistinguishable from a common without opening the inventory.
+  Now named: "PICKED UP LEGENDARY SNIPER", "PICKED UP BIG SHIELD x2",
+  "PICKED UP HEAVY AMMO".
+- **Three feedback events were emitted into the void.** A diff of every
+  emit("x") against every listener showed hardLand, propBreak and
+  supplyDropLanded had no handler anywhere — a heavy landing, a barrel bursting
+  and the legendary crate touching down were all silent. All three now have
+  positional audio.
+  (First pass of that diff reported 22 dead events; that was a bad regex —
+  audio.js registers through a bare `on("x")` helper with no dot, so nearly
+  every listener in the file was missed. Corrected count was 6, of which these
+  three were real gaps; the other three are covered elsewhere or duplicate an
+  existing cue.)
+
+Verified live: audio registers exactly one listener for each of the three; the
+supply marker tracks spawn -> landed and paints 16 gold pixels on the minimap;
+inbound and landed flashes both fire; all three pickup kinds name themselves
+correctly. Selftest 66/66. DRAFT.
+
 ## 2026-07-21 — Requeue without the round-trip + a career you can see (?v=65, LIVE)
 
 First two of the lower-ranked gap-scan findings.

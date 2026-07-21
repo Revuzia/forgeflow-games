@@ -32,6 +32,9 @@ Line anchors were correct at the time of writing but drift — re-locate by cont
       fabricate a hollow reward. Cheapest real option if wanted: level-gated COLOUR
       VARIANTS of the existing five, reusing the per-actor hue/lightness tinting
       loadActorModels already applies to bots (the human currently loads untinted).
+- [x] juice/pacing: supply drops had no marker, beacon or landed cue (?v=66)
+- [x] juice: picking loot up never told you what you picked up (?v=66)
+- [x] juice: propBreak / hardLand / supplyDropLanded emitted into the void (?v=66)
 - [ ] remaining: the other lower-ranked surviving findings listed by dimension below
 
 # LAST CIRCLE — BUILD ORDER

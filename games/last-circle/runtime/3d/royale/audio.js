@@ -213,6 +213,10 @@ function wire(W) {
   on("actorDied", (victim, killerId) => {
     if (W.player && killerId === W.player.id) { blip(700, 0.09, 0.2, "triangle"); setTimeout(() => blip(1050, 0.14, 0.22, "triangle"), 90); }
   });
+  // these three were emitted into the void — no listener anywhere
+  on("hardLand", (a, speed) => thump(180, 0.22, Math.min(0.4, 0.12 + speed * 0.008), a === W.player ? null : a.pos, 60));
+  on("propBreak", (p2) => { blip(320, 0.16, 0.22, "square", p2, 60); setTimeout(() => blip(210, 0.2, 0.16, "square", p2, 60), 70); });
+  on("supplyDropLanded", (p2) => { thump(140, 0.5, 0.4, p2, 240); setTimeout(() => blip(880, 0.5, 0.18, "triangle", p2, 240), 160); });
   on("chestOpened", (a, c) => { blip(660, 0.3, 0.14, "triangle", a === W.player ? null : c.pos, 40); setTimeout(() => blip(990, 0.4, 0.12, "triangle", a === W.player ? null : c.pos, 40), 120); });
   on("pickedUp", (a) => { if (a === W.player) blip(840, 0.07, 0.12, "sine"); });
   on("healStart", (a) => { if (a === W.player) blip(520, 0.3, 0.1, "sine"); });

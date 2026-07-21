@@ -1657,6 +1657,21 @@ function drawMinimap(W, ctx, size, big) {
     ctx.fill();
     ctx.restore();
   }
+  // supply drop: hollow ring while it falls, filled diamond once it is down
+  if (W._supplyMark) {
+    const sx = toPx(W._supplyMark.x), sz = toPx(W._supplyMark.z), r = big ? 9 : 6;
+    const pulse = 0.55 + 0.45 * Math.sin(Date.now() / 260);
+    ctx.strokeStyle = "rgba(255,209,102," + pulse.toFixed(2) + ")";
+    ctx.lineWidth = big ? 2.6 : 1.8;
+    ctx.beginPath(); ctx.arc(sx, sz, r, 0, Math.PI * 2); ctx.stroke();
+    if (W._supplyMark.landed) {
+      ctx.fillStyle = "rgba(255,209,102,0.9)";
+      ctx.beginPath();
+      ctx.moveTo(sx, sz - r * 0.6); ctx.lineTo(sx + r * 0.6, sz);
+      ctx.lineTo(sx, sz + r * 0.6); ctx.lineTo(sx - r * 0.6, sz);
+      ctx.closePath(); ctx.fill();
+    }
+  }
   // your chosen landing zone, while you are still falling toward it
   if (W.dropTarget && W.phase === "drop") {
     const dx = toPx(W.dropTarget.x), dz = toPx(W.dropTarget.z), s = big ? 13 : 8;
@@ -1741,6 +1756,20 @@ function wireEvents(W) {
     const won = MENU_SKINS.some((s) => s.unlockLevel === lvl);
     announce("LEVEL " + lvl, levelUpSub(lvl), "#ffd54a", won ? 3600 : 3000, ANN_PRIO.level);
   });
+  // Picking something up was silent apart from a blip — you could not tell a
+  // legendary from a common without opening the inventory.
+  W.events.on("pickedUp", (a, data) => {
+    if (a !== W.player || !data) return;
+    const RAR = K.RARITY || [];
+    if (data.kind === "weapon") {
+      const rar = RAR[data.rarity || 0] || "";
+      flashMsg("PICKED UP  " + rar.toUpperCase() + " " + String(data.id).toUpperCase());
+    } else if (data.kind === "consumable") {
+      flashMsg("PICKED UP  " + String(data.id).replace(/_/g, " ").toUpperCase() + (data.count > 1 ? " x" + data.count : ""));
+    } else if (data.kind === "ammo") {
+      flashMsg("PICKED UP  " + String(data.id).toUpperCase() + " AMMO");
+    }
+  });
   W.events.on("stormWarning", () => flashMsg("STORM SHRINKS IN 10 SECONDS"));
   W.events.on("stormClosing", () => flashMsg("THE STORM IS CLOSING"));
   W.events.on("playerStormState", (inStorm) => { if (R.stormTint) R.stormTint.style.opacity = inStorm ? "1" : "0"; });
@@ -1752,7 +1781,19 @@ function wireEvents(W) {
     if (W.phase === "match" || W.phase === "drop") togglePause(W);
   });
   W.events.on("playerDied", (killerId, weaponId) => showDeath(W, killerId, weaponId));
-  W.events.on("supplyDropSpawned", () => flashMsg("SUPPLY DROP INBOUND"));
+  // Supply drops are the ONLY source of legendary loot and had no marker, no
+  // beacon and no landed cue — a message flashed once and then the single most
+  // valuable event in the match was invisible. Track it and draw it.
+  W.events.on("supplyDropSpawned", (p2) => {
+    W._supplyMark = { x: p2.x, z: p2.z, landed: false, t: 0 };
+    flashMsg("SUPPLY DROP INBOUND");
+    announce("SUPPLY DROP", "LEGENDARY LOOT INBOUND — CHECK YOUR MAP", "#ffd166", 2400, ANN_PRIO.milestone);
+  });
+  W.events.on("supplyDropLanded", (p2) => {
+    if (W._supplyMark) { W._supplyMark.x = p2.x; W._supplyMark.z = p2.z; W._supplyMark.landed = true; }
+    else W._supplyMark = { x: p2.x, z: p2.z, landed: true, t: 0 };
+    flashMsg("SUPPLY DROP HAS LANDED");
+  });
 }
 
 function flashMsg(text) {
