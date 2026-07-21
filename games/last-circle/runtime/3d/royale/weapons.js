@@ -195,7 +195,7 @@ async function refreshWeaponMesh(W, a) {
 // ── aim helpers ──────────────────────────────────────────────────────────────
 const _dir = new THREE.Vector3();
 export function eyePos(a) {
-  return { x: a.pos.x, y: a.pos.y + (a.swimming ? 0.7 : K.PLAYERK.eyeY), z: a.pos.z };
+  return { x: a.pos.x, y: a.pos.y + (a.swimming ? 0.7 : K.actorEyeY(a)), z: a.pos.z };
 }
 export function aimDir(a, out) {
   const sy = Math.sin(a.yaw), cy = Math.cos(a.yaw);
@@ -324,7 +324,7 @@ function crosshairPoint(W, shooter, out) {
     const px = o.x + _camDir.x * u, pz = o.z + _camDir.z * u, py = o.y + _camDir.y * u;
     const r = W.SIM.PLAYERK.radius + 0.15;
     if ((px - t.pos.x) ** 2 + (pz - t.pos.z) ** 2 > r * r) continue;
-    if (py < t.pos.y - 0.1 || py > t.pos.y + W.SIM.PLAYERK.height + 0.15) continue;
+    if (py < t.pos.y - 0.1 || py > t.pos.y + W.SIM.actorHeight(t) + 0.15) continue;
     bestT = u;
   }
   // terrain + static boxes: coarse march (0.75m steps up to bestT)
@@ -356,6 +356,7 @@ function fire(W, a, def) {
   const movePen = Math.hypot(a.vel.x, a.vel.z) > 1 ? 1.4 : 1;
   const airPen = a.onGround ? 1 : 2;
   spread *= movePen * airPen;
+  if (a.crouching) spread *= K.CROUCH.spreadMult;   // the reward for giving up mobility
   // FIRST-SHOT ACCURACY (industry standard): a deliberate single shot while
   // standing goes exactly where the crosshair points — no bloom lottery
   if (def.cls !== "shotgun" && a.onGround && movePen === 1 && W.t - a.lastShotT > 0.5) spread *= 0.15;
@@ -452,7 +453,7 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
   // 1) actors (capsule vs segment, coarse: sample closest point)
   for (const t of W.actors) {
     if (!t.alive || t.id === p.ownerId) continue;
-    const feetY = t.pos.y, headY = t.pos.y + (t.swimming ? 0.9 : K.PLAYERK.height);
+    const feetY = t.pos.y, headY = t.pos.y + (t.swimming ? 0.9 : K.actorHeight(t));
     // closest point of segment to vertical axis of capsule
     const cx = t.pos.x, cz = t.pos.z;
     const dx = bx - ax, dz = bz - az;

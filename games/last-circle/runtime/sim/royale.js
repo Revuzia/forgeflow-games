@@ -86,6 +86,23 @@
 
   var PLAYERK = { hp: 100, shield: 100, radius: 0.45, height: 1.8, eyeY: 1.62, swimDepth: 1.1 };
 
+  // Crouch: the one basic shooter verb the game did not have. Today it trades
+  // 55% of your movement speed for a markedly tighter hipfire cone and a lower
+  // camera.
+  // heightMult is deliberately 1: the hit capsule does NOT shrink yet. These
+  // rigs have no crouch clip, and a procedural leg-fold was tried and rejected
+  // (captures showed the character kneeling in mid-air — no IK to plant the
+  // feet). Shrinking the capsule under a model that still visibly stands would
+  // mean shots at a plainly visible head passing through it, which is worse
+  // than not having the crouch profile at all. The unblocking step is an
+  // authored crouch clip from the Meshy animation library, the same route the
+  // run animation took; heightMult goes to ~0.62 in the same change.
+  var CROUCH = { speedMult: 0.45, heightMult: 1, eyeMult: 0.60, spreadMult: 0.62 };
+  /** Height of an actor's hit capsule (crouch-aware once a crouch clip exists). */
+  function actorHeight(a) { return PLAYERK.height * (a && a.crouching ? CROUCH.heightMult : 1); }
+  /** Eye height, accounting for crouch (camera + muzzle origin). */
+  function actorEyeY(a) { return PLAYERK.eyeY * (a && a.crouching ? CROUCH.eyeMult : 1); }
+
   // Storm phase tables per mode. radiusFrac × (map halfsize) = target radius.
   // Final Drop pacing (owner: circle "shrinks too much too quickly") —
   // gentler early cuts (~58-64% radius kept per phase vs ~46% before), longer
@@ -352,7 +369,8 @@
     mulberry32: mulberry32, clamp: clamp, dist2d: dist2d, lerp: lerp,
     RARITY: RARITY, RARITY_COLOR: RARITY_COLOR, RARITY_DMG_MULT: RARITY_DMG_MULT, RARITY_SPREAD_MULT: RARITY_SPREAD_MULT,
     WEAPONS: WEAPONS, WEAPON_IDS: WEAPON_IDS, AMMO: AMMO, CONSUMABLES: CONSUMABLES, START_LOADOUT: START_LOADOUT,
-    MOVE: MOVE, PLAYERK: PLAYERK,
+    MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH,
+    actorHeight: actorHeight, actorEyeY: actorEyeY,
     STORM_PHASES: STORM_PHASES, MODE: MODE, LOOT_WEIGHTS: LOOT_WEIGHTS,
     BOT_TIERS: BOT_TIERS, BOT_TIER_MIX: BOT_TIER_MIX, BOT_PERSONALITIES: BOT_PERSONALITIES, BOT_NAMES: BOT_NAMES,
     Storm: Storm, Match: Match,

@@ -61,7 +61,7 @@ export function createActor(W, opts) {
 
 function mkInput() {
   return {
-    mx: 0, mz: 0, jump: false, sprint: false,
+    mx: 0, mz: 0, jump: false, sprint: false, crouch: false,
     yaw: 0, pitch: 0, fire: false, ads: false, reload: false,
     interact: false, interactDown: false, slot: -1,
   };
@@ -438,6 +438,9 @@ function installHumanInput(W) {
     inp.mx = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
     inp.mz = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
     inp.sprint = !!keys.ShiftLeft || !!keys.ShiftRight;
+    // Crouch defaults to C, NOT Ctrl: this runs in a browser next to WASD, and
+    // Ctrl+W closes the tab. Rebindable like any other action.
+    inp.crouch = !!keys.KeyC;
     inp.fire = !!W._lmbDown;
     inp.ads = !!W._rmbDown;
   });
@@ -640,10 +643,13 @@ function stepActor(W, a, dt, far) {
   if (a.swimming !== wasSwimming) W.events.emit("swimState", a, a.swimming);
 
   // desired horizontal velocity (local axes → world by yaw)
+  // crouch: ground-only, and sprinting always wins (you stand up to run)
+  a.crouching = !!inp.crouch && a.onGround && !a.swimming && !a.gliding && !(inp.sprint && inp.mz > 0.5);
   const spd = a.swimming
     ? (inp.sprint && inp.mz > 0.5 ? K.MOVE.swimSprint : K.MOVE.swim)
     : inp.ads ? K.MOVE.ads : (inp.sprint && inp.mz > 0.5 && !a.inWater) ? K.MOVE.sprint : K.MOVE.walk;
-  const wspd = (a.inWater && !a.swimming) ? spd * 0.55 : spd;   // wading is slow
+  let wspd = (a.inWater && !a.swimming) ? spd * 0.55 : spd;   // wading is slow
+  if (a.crouching) wspd *= K.CROUCH.speedMult;
   const sin = Math.sin(a.yaw), cos = Math.cos(a.yaw);
   const dx = (inp.mx * cos - inp.mz * sin), dz = (-inp.mx * sin - inp.mz * cos);
   const dl = Math.hypot(dx, dz) || 1;
@@ -891,7 +897,10 @@ function updateCamera(W, dt) {
   // left of the reticle instead of covering it
   const dist = focus.gliding ? (focus.chute ? 10 : 9) : firstPerson ? 0.02 : ads ? 1.7 : 4.2;
   const sh = firstPerson ? 0 : ads ? 0.95 : 0.7;
-  const eye = focus.pos.y + (focus.swimming ? 0.7 : K.PLAYERK.eyeY);
+  // crouch dips the camera, but SMOOTHLY — snapping the eye 0.65m is nauseating
+  const wantEye = focus.swimming ? 0.7 : K.actorEyeY(focus);
+  focus._eyeY = focus._eyeY == null ? wantEye : focus._eyeY + (wantEye - focus._eyeY) * Math.min(1, dt * 12);
+  const eye = focus.pos.y + focus._eyeY;
   camTarget.set(focus.pos.x, eye, focus.pos.z);
   const sy = Math.sin(focus.yaw), cy = Math.cos(focus.yaw);
   // during freefall the camera tracks the dive (looks down at the island)

@@ -1898,7 +1898,7 @@ function confetti(L) {
 // ═══ settings ════════════════════════════════════════════════════════════════
 const ACTIONS = [
   ["Move Forward", "KeyW"], ["Move Back", "KeyS"], ["Move Left", "KeyA"], ["Move Right", "KeyD"],
-  ["Jump", "Space"], ["Sprint", "ShiftLeft"], ["Loot / Interact", "KeyE"],
+  ["Jump", "Space"], ["Sprint", "ShiftLeft"], ["Crouch", "KeyC"], ["Loot / Interact", "KeyE"],
   ["Reload", "KeyR"], ["Map", "KeyM"],
   ["Weapon 1", "Digit1"], ["Weapon 2", "Digit2"], ["Weapon 3", "Digit3"],
   ["Weapon 4", "Digit4"], ["Weapon 5", "Digit5"],

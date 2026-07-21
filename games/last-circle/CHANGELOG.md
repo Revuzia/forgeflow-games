@@ -3,6 +3,38 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — Crouch (?v=49, LIVE)
+
+grep for crouch|slide|mantle|vault|prone across runtime/ returned nothing (the
+only "climb" was a portal-ascent comment, the only "Vaulted" a bot name). The
+game had no crouch at all.
+
+- Crouch is a stance with a real trade: 45% movement speed for a 38% tighter
+  hipfire cone and a lower camera. Ground-only, and sprinting always wins so you
+  stand up to run.
+- Bound to C, NOT Ctrl — this is a browser game sitting next to WASD, and
+  Ctrl+W closes the tab. Rebindable like any other action (added to ACTIONS).
+- Camera dip is eased, not snapped; sim exports actorEyeY()/actorHeight() so
+  stance is computed in one place for camera, muzzle origin and hit capsule.
+
+WHAT IS NOT IN THIS CHANGE, and why: the crouch does NOT shrink your hit
+capsule. It was built that way first (0.62x profile), which requires the model
+to visibly come down. These Meshy rigs have no crouch clip, so a procedural
+leg-fold was written and then REJECTED on the evidence: offscreen captures of
+standing-vs-crouched showed the character kneeling in mid-air, and a second
+attempt with automatic foot re-planting still would not read as a crouch —
+there is no IK here to keep the feet planted. Shipping a 1.12m capsule under a
+model that plainly still stands would mean shots at a visible head passing
+through it, which is worse than having no crouch profile. heightMult is pinned
+at 1 with the reasoning recorded in sim/royale.js; it goes to ~0.62 in the same
+change that lands an authored crouch clip from the Meshy animation library (the
+route the run animation already took).
+
+Verified live by driving real movement frames: 5.32m walking vs 2.39m crouched
+in one second (ratio 0.449 against a 0.45 spec), sprint-while-holding-crouch
+travels 8.51m with crouching=false, eye height 1.62 -> 0.97, capsule 1.80 in
+both stances. Selftest 46/46. DRAFT.
+
 ## 2026-07-20 — Death recap (?v=45, LIVE)
 
 The death screen said "#37 of 50 · by CraftyKat (sniper)" and stopped there,

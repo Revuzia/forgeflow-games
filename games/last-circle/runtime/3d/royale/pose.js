@@ -53,6 +53,19 @@ export function measureLean(bones) {
 // Rotate the base Spine so the head sits back over the hips — straightens a
 // slouched rig to a natural ~4° stance. Runs after the mixer, before render.
 const _upTarget = [0, 1, 0.07];   // actor-local: mostly up, hair of forward lean
+/**
+ * Crouch stance, applied AFTER the mixer like every other layer here.
+ *
+ * The sim shrinks a crouching actor's hit capsule to 62% of standing height, so
+ * the model has to actually come down — otherwise you would be shooting at a
+ * head that is no longer hittable. There is no crouch clip in the Meshy library
+ * for these rigs, so it is authored procedurally: drop the hips, fold the legs,
+ * settle the torso forward over them.
+ *
+ * Deltas are RELATIVE to whatever the animation posed this frame (the same
+ * approach as the sprint straightening), because the bind poses differ per skin
+ * and absolute angles do not transfer.
+ */
 export function uprightTorso(obj, bones, weight) {
   if (!bones || !bones.spine || !bones.neck || weight <= 0) return;
   obj.getWorldQuaternion(_oq);
