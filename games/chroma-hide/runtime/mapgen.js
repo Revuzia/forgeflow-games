@@ -68,31 +68,72 @@ function mulberry32(seed) {
   };
 }
 
-/** Scatter `count` themed props into an area (room/zone), jittered on a grid, from a
- *  palette [{model?, w,d,h, colors:[hex], rough, metal, rots?}]. Deterministic via rng.
- *  Leaves a margin from the walls so props don't block doorways at the edges. */
-function scatterProps(area, palette, count, rng, idp, margin) {
+// k=2 lane: obstacles inflate by 0.55 each side and nav cells are 1.0, so two boxes
+// need (sizeA+sizeB)/2 + 1.10 + 2.0 between centres for a turnable 2-cell lane.
+const LANE = 2.2;
+
+/** Scatter themed props into an area (room/zone) as ROW-PACKED CLUSTERS.
+ *  Props inside a cluster ABUT — touching boxes merge into one inflated nav blob, so a
+ *  cluster costs the same walkable area as a single prop. Lanes (LANE) sit only between
+ *  clusters. That is ~3.6x the density of a uniform jittered grid at zero nav cost, and
+ *  reads better (clutter clumps; it never spreads evenly).
+ *  Optional `dressing` adds small noCollide detail props on/around each cluster — pure
+ *  visuals, never nav/LOS obstacles, so detail is unbounded.
+ *  Deterministic via rng. Palette: [{model?, w,d,h, colors:[hex], rough, metal, rots?}]. */
+function scatterProps(area, palette, count, rng, idp, margin, opts = {}) {
   const props = [];
-  const mg = margin ?? 1.3;
+  const mg = margin ?? 2.0;   // keep props off walls/doorways (was 1.3 — too close)
   const x0 = area.x - area.w / 2 + mg, x1 = area.x + area.w / 2 - mg;
   const z0 = area.z - area.d / 2 + mg, z1 = area.z + area.d / 2 - mg;
   if (x1 <= x0 || z1 <= z0 || count <= 0) return props;
-  const aspect = (x1 - x0) / (z1 - z0);
-  const cols = Math.max(1, Math.round(Math.sqrt(count * aspect)));
-  const rows = Math.max(1, Math.ceil(count / cols));
+
+  const per = opts.perCluster || 3;
+  const avgW = palette.reduce((a, b) => a + b.w, 0) / palette.length;
+  const avgD = palette.reduce((a, b) => a + b.d, 0) / palette.length;
+  // cluster runs along x; pitch leaves a k=2 lane between clusters on both axes
+  const pitchX = per * avgW + LANE, pitchZ = avgD + LANE;
+  const cols = Math.max(1, Math.floor((x1 - x0 + LANE) / pitchX));
+  const rows = Math.max(1, Math.floor((z1 - z0 + LANE) / pitchZ));
+
   let n = 0;
   for (let r = 0; r < rows && n < count; r++) for (let c = 0; c < cols && n < count; c++) {
-    const cxc = x0 + (c + 0.5) / cols * (x1 - x0), czc = z0 + (r + 0.5) / rows * (z1 - z0);
-    const jx = (rng() - 0.5) * ((x1 - x0) / cols) * 0.55, jz = (rng() - 0.5) * ((z1 - z0) / rows) * 0.55;
+    const cxc = x0 + (c + 0.5) / cols * (x1 - x0);
+    const czc = z0 + (r + 0.5) / rows * (z1 - z0);
+    const jx = (rng() - 0.5) * Math.min(0.8, pitchX * 0.12), jz = (rng() - 0.5) * Math.min(0.8, pitchZ * 0.12);
+    // one palette item per cluster -> the run reads as a shelf bank / desk row
     const it = palette[Math.floor(rng() * palette.length)];
-    const p = {
-      id: `${idp}${n}`, x: +(cxc + jx).toFixed(2), z: +(czc + jz).toFixed(2),
-      w: it.w, d: it.d, h: it.h, color: it.colors[Math.floor(rng() * it.colors.length)],
-      rough: it.rough, metal: it.metal,
-    };
-    if (it.model) p.model = it.model;
-    if (it.rots) p.rot = it.rots[Math.floor(rng() * it.rots.length)];
-    props.push(p); n++;
+    const m = Math.min(per, count - n);
+    const step = it.w + 0.05;                     // abutting
+    const start = -((m - 1) / 2) * step;
+    for (let i = 0; i < m; i++) {
+      const px = cxc + jx + start + i * step, pz = czc + jz;
+      if (px < x0 || px > x1 || pz < z0 || pz > z1) continue;
+      const p = {
+        id: `${idp}${n}`, x: +px.toFixed(2), z: +pz.toFixed(2),
+        w: it.w, d: it.d, h: it.h, color: it.colors[Math.floor(rng() * it.colors.length)],
+        rough: it.rough, metal: it.metal,
+      };
+      if (it.model) p.model = it.model;
+      if (it.rots) p.rot = it.rots[Math.floor(rng() * it.rots.length)];
+      props.push(p); n++;
+      // visual-only dressing riding on this prop (never an obstacle)
+      const dr = opts.dressing;
+      if (dr && dr.palette && dr.palette.length) {
+        const k = Math.floor(rng() * ((dr.max ?? 2) + 1));
+        for (let q = 0; q < k; q++) {
+          const di = dr.palette[Math.floor(rng() * dr.palette.length)];
+          props.push({
+            id: `${idp}${n}d${q}`,
+            x: +(px + (rng() - 0.5) * it.w * 0.7).toFixed(2),
+            z: +(pz + (rng() - 0.5) * it.d * 0.7).toFixed(2),
+            w: di.w, d: di.d, h: di.h,
+            color: di.colors[Math.floor(rng() * di.colors.length)],
+            rough: di.rough, metal: di.metal, noCollide: true,
+            ...(di.model ? { model: di.model } : {}),
+          });
+        }
+      }
+    }
   }
   return props;
 }
@@ -107,16 +148,45 @@ function autoLights(bounds, o = {}) {
   return out;
 }
 
+/** Place full-height occluders (h >= 1.7 = tallest body) across a zone's LONG axis so
+ *  no unbroken sightline exceeds the seeker's 22m detect cone. Staggered left/right of
+ *  centre so the lane still walks. Deterministic. */
+function placeBreakers(area, b, rng, idp) {
+  const out = [];
+  const horiz = area.w >= area.d;
+  const L = horiz ? area.w : area.d, S = horiz ? area.d : area.w;
+  const n = b.count || Math.max(2, Math.round(L / 18));
+  for (let i = 0; i < n; i++) {
+    const t = (i + 1) / (n + 1);
+    const along = (horiz ? area.x : area.z) - L / 2 + t * L;
+    const side = (i % 2 === 0 ? -1 : 1) * Math.min(S * 0.26, 4.5);
+    const across = (horiz ? area.z : area.x) + side;
+    const p = {
+      id: `${idp}bk${i}`,
+      x: +(horiz ? along : across).toFixed(2), z: +(horiz ? across : along).toFixed(2),
+      w: b.w ?? 1.6, d: b.d ?? 1.6, h: b.h ?? 2.4,
+      color: b.colors[Math.floor(rng() * b.colors.length)],
+      rough: b.rough ?? 0.7, metal: b.metal ?? 0.2,
+    };
+    if (b.model) p.model = b.model;
+    if (b.rots) p.rot = b.rots[Math.floor(rng() * b.rots.length)];
+    out.push(p);
+  }
+  return out;
+}
+
 /** Auto-place hiding spots next to scattered props: a spot sits in open floor just
  *  off a prop, facing it (so the bot poses against the blend surface). Deterministic. */
 function autoSpots(bounds, props, walls, count, rng) {
-  const cand = props.filter((p) => Math.max(p.w, p.d) >= 0.6 && p.h >= 0.4);
+  // dressing (noCollide) neither blocks a body nor makes a hiding anchor
+  const solid = props.filter((p) => !p.noCollide);
+  const cand = solid.filter((p) => Math.max(p.w, p.d) >= 0.6 && p.h >= 0.4);
   if (!cand.length) return [];
   // body radius (0.55) + half a nav cell (0.5) + slack: guarantees the spot's nav
   // cell centre is walkable, not just the exact point.
   const CLR = 1.3;
   const blocked = (x, z) => {
-    for (const p of props) if (Math.abs(x - p.x) < p.w / 2 + CLR && Math.abs(z - p.z) < p.d / 2 + CLR) return true;
+    for (const p of solid) if (Math.abs(x - p.x) < p.w / 2 + CLR && Math.abs(z - p.z) < p.d / 2 + CLR) return true;
     for (const w of walls) if (Math.abs(x - w.x) < w.w / 2 + CLR && Math.abs(z - w.z) < w.d / 2 + CLR) return true;
     return false;
   };
@@ -134,7 +204,7 @@ function autoSpots(bounds, props, walls, count, rng) {
     for (const [dx, dz] of dirs) {
       const sx = +(p.x + dx * off).toFixed(2), sz = +(p.z + dz * off).toFixed(2);
       if (!inside(sx, sz) || blocked(sx, sz)) continue;
-      if (spots.some((s) => (s.x - sx) ** 2 + (s.z - sz) ** 2 < 9)) continue;
+      if (spots.some((s) => (s.x - sx) ** 2 + (s.z - sz) ** 2 < 4.5)) continue;
       spots.push({ x: sx, z: sz, faceYaw: +Math.atan2(p.x - sx, p.z - sz).toFixed(2) });
       break;
     }
@@ -151,7 +221,8 @@ export function buildCampus(spec) {
   const props = [];
   const addArea = (a, idp) => {
     for (const p of a.props || []) props.push(p);
-    if (a.scatter) props.push(...scatterProps(a, a.scatter.palette, a.scatter.count, rng, idp, a.scatter.margin));
+    if (a.breakers) props.push(...placeBreakers(a, a.breakers, rng, idp));
+    if (a.scatter) props.push(...scatterProps(a, a.scatter.palette, a.scatter.count, rng, idp, a.scatter.margin, a.scatter));
   };
 
   // outdoor connective zones (floor tiles + props/scatter)
@@ -175,6 +246,30 @@ export function buildCampus(spec) {
     for (const p of b.props || []) props.push(p);
   }
 
+  // Edge breakers: scatter margins leave thin empty bands hugging the perimeter and
+  // zone seams, and a ray down one of those runs the full 64m — ~3x the seeker's 22m
+  // detect cone. Stud those bands with full-height occluders.
+  if (spec.edgeBreak) {
+    const eb = spec.edgeBreak, b = spec.bounds, inset = eb.inset ?? 1.6;
+    const nX = eb.countX ?? 5, nZ = eb.countZ ?? 4;
+    const mk = (i, x, z) => ({
+      id: `eb${i}`, x: +x.toFixed(2), z: +z.toFixed(2),
+      w: eb.w ?? 1.6, d: eb.d ?? 1.6, h: eb.h ?? 2.6,
+      color: eb.colors[Math.floor(rng() * eb.colors.length)], rough: eb.rough ?? 0.75, metal: eb.metal ?? 0.15,
+    });
+    let i = 0;
+    for (let k = 0; k < nX; k++) {
+      const t = (k + 1) / (nX + 1), x = b.minX + t * (b.maxX - b.minX);
+      props.push(mk(i++, x + (k % 2 ? 1.4 : -1.4), b.minZ + inset));
+      props.push(mk(i++, x + (k % 2 ? -1.4 : 1.4), b.maxZ - inset));
+    }
+    for (let k = 0; k < nZ; k++) {
+      const t = (k + 1) / (nZ + 1), z = b.minZ + t * (b.maxZ - b.minZ);
+      props.push(mk(i++, b.minX + inset, z + (k % 2 ? 1.4 : -1.4)));
+      props.push(mk(i++, b.maxX - inset, z + (k % 2 ? -1.4 : 1.4)));
+    }
+  }
+
   return {
     id: spec.id,
     name: spec.name,
@@ -189,6 +284,6 @@ export function buildCampus(spec) {
     props,
     lights: spec.lights || autoLights(spec.bounds, spec.autoLight || {}),
     spawn: spec.spawn,
-    spots: spec.spots || autoSpots(spec.bounds, props, walls, spec.spotCount || 32, rng),
+    spots: spec.spots || autoSpots(spec.bounds, props, walls, spec.spotCount || 48, rng),
   };
 }

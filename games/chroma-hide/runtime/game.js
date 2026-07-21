@@ -64,7 +64,10 @@ export class Game {
     this.meshes = new Map();
     this.paint = null; this.paintPanel = null; this.paintMode = false;
     this.keys = new Set();
-    this.camYaw = 0; this.camPitch = 0.32; this.camDist = 6; this.thirdPerson = this.localRole === ROLE.HIDER;
+    // camDist 6 was too far for 8m-deep rooms: the target sat outside the wall, so
+    // collision pulled the camera in and the lift flipped it to a top-down view.
+    this.camYaw = 0; this.camPitch = 0.34; this.camDist = 4.2;
+    this.thirdPerson = this.localRole === ROLE.HIDER;
     this._alive = true; this._ended = false; this._lastPhase = null;
     this._muzzle = 0;
 
@@ -126,9 +129,14 @@ export class Game {
     // interior dividing walls with doorway gaps (multi-room maps)
     if (m.walls) for (const iw of m.walls) addWall(iw.x, iw.z, iw.w, iw.d);
 
-    // props (paintable cover)
+    // props (paintable cover). Dense campus maps carry 250-400 props, so share box
+    // geometries + materials by value — otherwise every dressing cube allocates its
+    // own GPU buffers and the context dies.
+    const geoCache = new Map(), matCache = new Map();
+    const boxGeo = (w, h, d) => { const k = `${w}|${h}|${d}`; let g2 = geoCache.get(k); if (!g2) { g2 = new THREE.BoxGeometry(w, h, d); geoCache.set(k, g2); } return g2; };
+    const boxMat = (c, r, mt) => { const k = `${c}|${r}|${mt}`; let m2 = matCache.get(k); if (!m2) { m2 = new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: mt }); matCache.set(k, m2); } return m2; };
     for (const p of m.props) {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(p.w, p.h, p.d), new THREE.MeshStandardMaterial({ color: p.color, roughness: p.rough, metalness: p.metal || 0 }));
+      const mesh = new THREE.Mesh(boxGeo(p.w, p.h, p.d), boxMat(p.color, p.rough, p.metal || 0));
       mesh.position.set(p.x, p.h / 2, p.z); mesh.castShadow = true; mesh.receiveShadow = true; mesh.userData.prop = p;
       g.add(mesh); this.paintable.push(mesh);
       if (p.model) this._loadProp(p, mesh);   // swap the box for a real furniture GLB when it loads
@@ -147,31 +155,48 @@ export class Game {
     this.engine.scene.background = new THREE.Color(m.ambient.ground).multiplyScalar(0.4);
   }
 
-  /** Load a furniture GLB for a prop, auto-scale to its height, seat on the floor,
-   *  and replace the placeholder box. The box stays as a fallback if the load fails. */
-  _loadProp(p, placeholder) {
+  /** Parse each furniture GLB ONCE and hand back a shared template. Cloning the
+   *  template shares geometry + material references, so a model costs one GPU upload
+   *  no matter how many props use it. (Loading per-prop parsed a fresh copy every
+   *  time — with the dense campus maps that exhausted the GPU and lost the WebGL
+   *  context: 200+ duplicate geometry/texture sets.) */
+  _glbTemplate(name) {
+    if (!this._glbCache) this._glbCache = new Map();
+    if (this._glbCache.has(name)) return this._glbCache.get(name);
     if (!this._gltf) this._gltf = new GLTFLoader();
-    this._gltf.load("assets/models/" + p.model, (gltf) => {
+    const pr = new Promise((resolve, reject) => {
+      this._gltf.load("assets/models/" + name, (gltf) => {
+        const tpl = gltf.scene;
+        tpl.traverse((o) => {
+          if (o.isLight && o.parent) o.parent.remove(o);       // FFG rule: strip embedded lights
+          if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.material) o.material.side = THREE.FrontSide; }
+        });
+        tpl.updateMatrixWorld(true);
+        const size = new THREE.Box3().setFromObject(tpl).getSize(new THREE.Vector3());
+        resolve({ tpl, baseH: Math.max(0.05, size.y) });
+      }, undefined, reject);
+    });
+    this._glbCache.set(name, pr);
+    return pr;
+  }
+
+  /** Swap a prop's placeholder box for a clone of its GLB, scaled to the prop height
+   *  and seated on the floor. The box stays as a fallback if the load fails. */
+  _loadProp(p, placeholder) {
+    this._glbTemplate(p.model).then(({ tpl, baseH }) => {
       if (!this._alive) return;
-      const root = gltf.scene;
-      root.traverse((o) => {
-        if (o.isLight && o.parent) o.parent.remove(o);         // FFG rule: strip embedded lights
-        if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.material) o.material.side = THREE.FrontSide; }
-      });
+      const root = tpl.clone(true);                             // shares geometry + material
       root.rotation.y = p.rot || 0;
+      root.scale.setScalar(p.h / baseH);                        // fit the prop's height
       root.updateMatrixWorld(true);
-      let box = new THREE.Box3().setFromObject(root);
-      const size = box.getSize(new THREE.Vector3());
-      root.scale.setScalar(p.h / Math.max(0.05, size.y));       // fit the prop's height
-      root.updateMatrixWorld(true);
-      box = new THREE.Box3().setFromObject(root);
+      const box = new THREE.Box3().setFromObject(root);
       root.position.set(p.x, -box.min.y, p.z);                  // seat bottom on the floor
       root.userData.prop = p;
       this.root.add(root);
       const i = this.paintable.indexOf(placeholder); if (i >= 0) this.paintable[i] = root; else this.paintable.push(root);
-      this.root.remove(placeholder); if (placeholder.geometry) placeholder.geometry.dispose();
+      this.root.remove(placeholder);   // NOTE: don't dispose — box geo/material are shared by value
       this._collidables = null;                                 // recompute camera-collision set to include the model
-    }, undefined, (err) => { console.warn("[chroma] GLB load failed:", p.model, err && err.message); });
+    }).catch((err) => { console.warn("[chroma] GLB load failed:", p.model, err && err.message); });
   }
 
   _nearestPropColor(x, z) {
@@ -532,7 +557,12 @@ export class Game {
       let camx = bx - Math.sin(this.camYaw) * d * cp;
       let camy = by + 0.7 + d * Math.sin(this.camPitch);
       let camz = bz - Math.cos(this.camYaw) * d * cp;
-      const cols = this._collidables || (this._collidables = this.paintable.filter((m) => m !== this.floor));
+      // WALLS ONLY. Colliding the camera with furniture is unusable on prop-dense
+      // maps — any cluster between body and camera pulled it in and the lift flipped
+      // it to a top-down view. Walls still block (that's the original void-bug fix);
+      // clutter may briefly occlude, which is normal third-person behaviour.
+      const cols = this._collidables || (this._collidables = this.paintable.filter(
+        (mm) => mm !== this.floor && !(mm.userData && mm.userData.prop)));
       const dir = new THREE.Vector3(camx - tx, camy - ty, camz - tz);
       const want = dir.length(); dir.normalize();
       const hit = this.engine.raycast(new THREE.Vector3(tx, ty, tz), dir, cols, want)[0];
@@ -540,7 +570,7 @@ export class Game {
       if (hit) dd = Math.max(0.5, hit.distance - 0.3);   // never sit past/inside the wall
       camx = tx + dir.x * dd; camy = ty + dir.y * dd; camz = tz + dir.z * dd;
       // when jammed close to a wall there's no room behind — lift up and look down so the body stays clear
-      if (dd < 2.2) camy = Math.max(camy, ty + (2.2 - dd) * 0.95);
+      if (dd < 1.5) camy = Math.max(camy, ty + (1.5 - dd) * 0.75);   // softer lift — only when genuinely flush
       cam.position.set(camx, Math.max(0.5, camy), camz);
       cam.lookAt(tx, by + 0.4, tz);
       const me = this.meshes.get(this.local.id); if (me) me.visible = true;

@@ -45,6 +45,23 @@ for (const id of ids) {
   const spots = m.spots || [];
   const badSpots = spots.filter((s) => !cellReached(s.x, s.z));
   const reachPct = ((count / walk) * 100).toFixed(0);
+  // ── design-brief metrics ───────────────────────────────────────────────────
+  const gross = (sim.bounds.maxX - sim.bounds.minX) * (sim.bounds.maxZ - sim.bounds.minZ);
+  const solid = m.props.filter((p) => !p.noCollide), dress = m.props.length - solid.length;
+  const tall = solid.filter((p) => p.h >= 1.7).length;
+  const navFrac = ((walk * nav.cell * nav.cell) / gross * 100).toFixed(0);
+  // longest unbroken sightline: sample axis-aligned rays through walkable space
+  const blocks = (x, z) => sim.obstacles.some((o) => Math.abs(x - o.x) < o.hw && Math.abs(z - o.z) < o.hd);
+  let maxSight = 0;
+  for (let j = 0; j < nav.h; j += 2) {           // horizontal rays
+    let run = 0; const z = nav.minZ + (j + 0.5) * nav.cell;
+    for (let i = 0; i < nav.w; i++) { const x = nav.minX + (i + 0.5) * nav.cell; run = blocks(x, z) ? 0 : run + nav.cell; if (run > maxSight) maxSight = run; }
+  }
+  for (let i = 0; i < nav.w; i += 2) {           // vertical rays
+    let run = 0; const x = nav.minX + (i + 0.5) * nav.cell;
+    for (let j = 0; j < nav.h; j++) { const z = nav.minZ + (j + 0.5) * nav.cell; run = blocks(x, z) ? 0 : run + nav.cell; if (run > maxSight) maxSight = run; }
+  }
+  console.log(`     [brief] props ${m.props.length} (solid ${solid.length} / dressing ${dress}), tall h>=1.7 ${tall} (target 110-150), navigable ${navFrac}% (target 45-55), max sightline ${maxSight.toFixed(0)}m (target <=24, cap 32)`);
   // hard: hider spawn reachable + seeker reaches most of the map. Soft: a few
   // auto-spots may be unreachable (the sim filters those at match start).
   const ok = hOK && count > walk * 0.5 && badSpots.length <= Math.ceil(spots.length * 0.25);

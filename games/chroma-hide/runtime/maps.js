@@ -434,7 +434,12 @@ Object.assign(MAPS, CAMPUS_MAPS);
 
 /** Interior props -> 2D collision/occlusion AABBs {x,z,hw,hd}. */
 export function mapObstacles(map) {
-  return map.props.map((p) => ({ id: p.id, x: p.x, z: p.z, hw: p.w / 2, hd: p.d / 2 }));
+  // `noCollide` props are pure visual DRESSING (clutter on/beside real furniture):
+  // rendered, paintable, but never nav/LOS obstacles — so a map can carry hundreds of
+  // detail props without shrinking the walkable grid. `h` is carried through so LOS
+  // can respect prop height (a 0.9m pipe must not occlude like a 3m shelf).
+  return map.props.filter((p) => !p.noCollide)
+    .map((p) => ({ id: p.id, x: p.x, z: p.z, hw: p.w / 2, hd: p.d / 2, h: p.h }));
 }
 
 /** The subset the pure sim needs — props AND interior walls become 2D obstacles. */
