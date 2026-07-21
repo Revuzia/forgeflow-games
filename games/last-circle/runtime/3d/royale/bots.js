@@ -228,7 +228,7 @@ function onEnter(W, b, state) {
   const rng = Math.random;
   if (state === "LOOT") {
     const near = W.nearbyLoot(a.pos, 90);
-    const pick = pickLoot(a, near);
+    const pick = pickLoot(W, a, near);
     bb.lootId = pick ? pick.id : null;
     bb.lootType = pick ? pick.type : null;
     if (pick) bb.moveTo = { x: pick.pos.x, z: pick.pos.z };
@@ -282,11 +282,15 @@ function onEnter(W, b, state) {
   }
 }
 
-function pickLoot(a, near) {
+function pickLoot(W, a, near) {
   const upgraded = a.inventory.slots.some((s, i) => s && s.kind === "weapon" && !(i === 0 && s.id === "pistol" && s.rarity === 0));
   let best = null, bs = -1;
   for (const n of near) {
     let score = 0;
+    // Skip anything give() would refuse. Without this a bot at the gun cap kept
+    // re-selecting the same weapon, walking to it, being refused, and re-planning
+    // to it again — a twitch loop in the open, next to loot it could not take.
+    if (n.type === "item" && W.wouldAcceptItem && !W.wouldAcceptItem(a, n.data)) continue;
     if (n.type === "chest") score = upgraded ? 55 : 72;
     else if (n.data.kind === "weapon") score = upgraded ? 30 + n.data.rarity * 8 : 66 + n.data.rarity * 6;
     else if (n.data.kind === "consumable") score = n.data.id.includes("shield") ? 45 : 34;

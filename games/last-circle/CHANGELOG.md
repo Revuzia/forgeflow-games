@@ -3,6 +3,32 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — Bots hoarded five guns and twitched beside loot (?v=64, LIVE)
+
+Closes the half of build-order #11 that ?v=62 deliberately left open.
+
+- **The 3-gun carry cap was HUMAN-ONLY.** It lived inside the `a = W.player`
+  walkover branch — its own comment explains why it exists ("hoarding 5 guns
+  left NO room for shield potions, which read as 'shields don't work'") — while
+  give() itself had no cap at all. So a well-looted bot filled all five slots
+  with guns and could never pick up a shield or a heal again for the rest of the
+  match. The cap now lives in give(), so it applies to every actor. An explicit
+  E-swap still works at the cap: it REPLACES the active weapon, so it can never
+  raise the count.
+- **pickLoot re-selected exactly what give() had just refused.** It scored loot
+  by type and distance with no idea whether the item could be taken, so a
+  fully-kitted bot walked to a gun, was refused, re-planned, and walked to the
+  same gun again — twitching in the open next to loot it could not hold. Both
+  now consult one shared predicate (W.wouldAcceptItem) that mirrors give()'s
+  rules, so the planner and the taker can never disagree.
+
+Verified live: a bot offered five guns accepts exactly three, and a shield then
+FITS (slots read ar / smg / shotgun / mini_shield x2 / empty) — the actual point
+of the cap. The predicate agrees with give() on refuse-gun, accept-swap and
+accept-ammo. The human is still capped at three and an E-swap at the cap leaves
+the count at three. And a capped bot stood directly on a floor AR targeted it 0
+times across 12 thinks. Selftest 66/66. DRAFT.
+
 ## 2026-07-21 — Online session was never torn down (?v=63, LIVE)
 
 Build-order #12 — the last of the ranked twelve.

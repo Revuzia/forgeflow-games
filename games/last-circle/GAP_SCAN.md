@@ -22,8 +22,7 @@ Line anchors were correct at the time of writing but drift — re-locate by cont
 - [x] #8 Shadow volume was a 160m box pinned to world origin (?v=58)
 - [x] #10 Hit feedback doubled (2 hitmarker listeners) and per-pellet numbers stacked (?v=59)
 - [x] #9 announce() had no priority; the winning kill's banner died in the frame it was born (?v=60)
-- [x] #11 PARTIAL: bots never re-evaluated their gun / dry-fired forever (?v=62).
-      Still open from that item: the bot 3-gun carry cap and the pickLoot re-select twitch loop (both loot.js).
+- [x] #11 COMPLETE: bot gun re-evaluation (?v=62) + carry cap and pickLoot twitch loop (?v=64)
 - [x] #12 Online session never torn down; lobby count frozen at 2 (?v=63)
 - [ ] remaining: the 36 lower-ranked surviving findings listed by dimension below
 

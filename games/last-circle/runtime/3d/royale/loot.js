@@ -43,6 +43,7 @@ export function init(W) {
   W.pickupItem = (a, id) => pickup(W, a, id);
   W.openChest = (a, id) => openChest(W, a, id);
   W.giveItem = (a, data) => give(W, a, data);
+  W.wouldAcceptItem = (a, data) => wouldAccept(W, a, data);
   W.events.on("actorDied", (victim) => deathDrop(W, victim));
 
   // network mirrors + join-sync
@@ -317,6 +318,34 @@ function pickup(W, a, id, opts) {
 }
 
 /** Add item data to an actor's inventory. Returns false if no room. */
+/** Max guns any actor may CARRY. Beyond this a weapon pickup is refused so the
+ *  remaining slots stay available for shields and heals. */
+const GUN_CAP = 3;
+/** Would give() accept this item right now? Bots ask before walking to it —
+ *  pickLoot used to re-select the exact item give() had just refused, so a
+ *  fully-kitted bot twitched in place beside a gun it could not take. */
+function wouldAccept(W, a, data) {
+  const inv = a.inventory;
+  if (!inv || !data) return false;
+  if (data.kind === "ammo") {
+    const cap = K.AMMO[data.id].max;
+    return (inv.ammo[data.id] || 0) < cap;
+  }
+  if (data.kind === "weapon") {
+    if (data.swap) return true;
+    const empty = inv.slots.findIndex((s) => !s);
+    const guns = inv.slots.filter((s) => s && s.kind === "weapon").length;
+    return empty >= 0 && guns < GUN_CAP;
+  }
+  if (data.kind === "consumable") {
+    const cs = K.CONSUMABLES[data.id];
+    const st = inv.slots.find((s) => s && s.kind === "consumable" && s.id === data.id);
+    if (st) return st.count < cs.stack;
+    return inv.slots.findIndex((s) => !s) >= 0;
+  }
+  return false;
+}
+
 function give(W, a, data) {
   const inv = a.inventory;
   if (data.kind === "ammo") {
@@ -326,8 +355,13 @@ function give(W, a, data) {
   }
   if (data.kind === "weapon") {
     const empty = inv.slots.findIndex((s) => !s);
+    const guns = inv.slots.filter((s) => s && s.kind === "weapon").length;
     const slot = { kind: "weapon", id: data.id, rarity: data.rarity || 0, mag: K.WEAPONS[data.id].mag };
-    if (empty >= 0) {
+    // The 3-gun cap used to live ONLY in the human's walkover branch, so bots
+    // filled all five slots with guns and could then never pick up a shield or
+    // a heal for the rest of the match. An explicit E-swap still works below:
+    // it REPLACES the active weapon, so it never raises the count.
+    if (empty >= 0 && guns < GUN_CAP) {
       inv.slots[empty] = slot;
       // auto-upgrade: if still on the starter common pistol, switch to the pickup
       const cur = inv.slots[inv.active];
