@@ -3,6 +3,37 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — BR parity: career stats, match moments + 2 real defects (?v=36, LIVE)
+
+From a code-verified gap analysis vs Final Drop (fetched its shipped 1309-asset
+manifest + script bundle) and BR genre conventions. This batch = retention + game
+feel + defects. NOTE: building/harvesting stays OUT (owner decision) even though
+Final Drop ships it.
+
+- **CAREER STATS (new):** showPostMatch computed kills/damage/accuracy/placement every
+  match and threw them away — only {level,xp} persisted. Added a lifetime `career`
+  record (matches, wins, kills, damage, bestPlacement, top10s, timeAliveS) folded in
+  at match end and surfaced on the post-match screen.
+- **LEVEL-UP now exists (DEFECT):** `W.events.emit("levelUp")` fired on every level and
+  had ZERO listeners — the bar filled, the level ticked over, and the player was never
+  told. Added a "LEVEL n" banner + a post-match LEVEL UP line.
+- **MATCH MOMENTS (new):** a big centre-screen announcement layer — "DEPLOY · N PLAYERS"
+  at match start, alive-count milestones (25/10/5 remain, FINAL 2), and per-kill
+  "ELIMINATED <name>" with streak escalation (DOUBLE/TRIPLE/QUAD KILL, RAMPAGE). The
+  match had a flat counter and no rising arc.
+- **ONLINE PAUSE EJECT (DEFECT):** ESC set W.paused, which early-returns the whole frame
+  pipeline INCLUDING netMod.update — the 12Hz state broadcast stopped and the host's
+  silent-guest watchdog swapped you for a bot after 12s. Opening the menu ejected you
+  from a match with friends. Online now shows a non-blocking overlay and never freezes
+  the sim; offline behaviour unchanged.
+- **Docs hazard:** sim/royale.js's header still claimed it owned "the building grid…
+  and harvesting". Rewrote it with an explicit NO BUILDING / NO HARVESTING —
+  do-not-reintroduce note so a future parity pass can't read it as a spec.
+
+Verified live: career keys present, DEPLOY / LEVEL 7 / ELIMINATED+DOUBLE KILL banners
+all render, online pause leaves paused=false with the online note, offline pause still
+pauses. Sim selftest 46/46.
+
 ## 2026-07-20 — BRIGHT lighting + street furniture + landmarks (?v=32, LIVE)
 
 Visual polish, now that offscreen-render-target capture unlocked real pixel review

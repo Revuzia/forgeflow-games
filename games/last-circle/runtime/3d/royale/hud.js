@@ -808,8 +808,32 @@ export function showLobby(W, onDone) {
 // ═══ progression + challenges (Final Drop-style meta) ════════════════════════
 // A persistent level/XP bar + one active in-match challenge card, fed off the
 // existing W.match / W.t / W.stats counters. Progress persists in localStorage.
-function loadProgress() { try { return Object.assign({ level: 1, xp: 0 }, JSON.parse(localStorage.getItem("lc_progress") || "{}")); } catch (e) { return { level: 1, xp: 0 }; } }
+// lifetime career record — the post-match screen already computes every one of
+// these numbers and used to throw them away, so nothing accrued between matches.
+const CAREER0 = { matches: 0, wins: 0, kills: 0, damage: 0, bestPlacement: 0, top10s: 0, timeAliveS: 0 };
+function loadProgress() {
+  try {
+    const p = Object.assign({ level: 1, xp: 0 }, JSON.parse(localStorage.getItem("lc_progress") || "{}"));
+    p.career = Object.assign({}, CAREER0, p.career || {});
+    return p;
+  } catch (e) { return { level: 1, xp: 0, career: Object.assign({}, CAREER0) }; }
+}
 function saveProgress(p) { try { localStorage.setItem("lc_progress", JSON.stringify(p)); } catch (e) {} }
+// fold a finished match into the lifetime record (best placement = LOWEST number)
+function recordMatch(W, res) {
+  const p = W.progress; if (!p) return null;
+  const c = p.career || (p.career = Object.assign({}, CAREER0));
+  c.matches++;
+  if (res.victory) c.wins++;
+  c.kills += res.kills || 0;
+  c.damage += Math.round(res.damage || 0);
+  c.timeAliveS += Math.round(res.timeS || 0);
+  const pl = res.placement || 99;
+  if (!c.bestPlacement || pl < c.bestPlacement) c.bestPlacement = pl;
+  if (pl <= 10) c.top10s++;
+  saveProgress(p);
+  return c;
+}
 function xpForLevel(lvl) { return 800 + (lvl - 1) * 700; }   // rising curve
 function addXP(W, amt) {
   const p = W.progress; if (!p || !amt) return;
@@ -933,6 +957,11 @@ export function showHUD(W) {
 
   // storm messages center
   R.stormMsg = h("div", { position: "absolute", left: "50%", top: "22%", transform: "translateX(-50%)", fontSize: "22px", fontWeight: "900", letterSpacing: "1px", textShadow: "0 2px 8px #000", opacity: "0", transition: "opacity .4s", color: "#d9b3ff" }, "", L);
+  // BIG match announcements (deploy, alive-count milestones, eliminations, level-up)
+  R.annWrap = h("div", { position: "absolute", left: "50%", top: "14%", transform: "translateX(-50%)", textAlign: "center", opacity: "0", transition: "opacity .35s, transform .35s", pointerEvents: "none" }, null, L);
+  R.annTitle = h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "34px", fontWeight: "900", letterSpacing: "4px", textShadow: "0 3px 14px #000, 0 0 26px rgba(90,170,255,0.5)" }, "", R.annWrap);
+  R.annSub = h("div", { fontSize: "14px", fontWeight: "700", letterSpacing: "2px", opacity: "0.85", marginTop: "4px", textShadow: "0 2px 6px #000" }, "", R.annWrap);
+  R._annUntil = 0; R._aliveMark = 0;
 
   // tints
   R.stormTint = h("div", { position: "absolute", inset: "0", background: "radial-gradient(ellipse at center, rgba(130,60,200,0) 55%, rgba(130,60,200,0.35) 100%)", opacity: "0", transition: "opacity .5s", pointerEvents: "none" }, null, L);
@@ -942,6 +971,9 @@ export function showHUD(W) {
   h("div", { position: "absolute", left: "50%", top: "50%", width: "1px", height: "40%", background: "rgba(255,255,255,0.5)", transform: "translate(-50%,-50%)" }, null, R.scope);
 
   R._hudCache = {};
+  // deployment beat — the match used to just… start, with no moment marking it
+  const tot = W.match ? W.match.totalPlayers : 50;
+  setTimeout(() => announce("DEPLOY", tot + " PLAYERS · LAST ONE STANDING WINS", "#9fd7ff", 2600), 250);
 }
 
 function bar(parent, color) {
@@ -1007,6 +1039,17 @@ export function update(W, dt) {
     }
     R.aliveText.textContent = "👥 " + (W.match ? W.match.aliveCount() : "—");
     R.killsText.textContent = "☠ " + (W.match ? (W.match.kills[p.id] || 0) : 0);
+    // alive-count milestones — the match had no rising arc, just a flat counter
+    if (W.match && W.phase === "match" && W.mode !== "practice") {
+      const al = W.match.aliveCount();
+      let tier = 0;
+      for (const m of [2, 5, 10, 25]) { if (al <= m) { tier = m; break; } }   // tightest first
+      if (tier && (!R._aliveMark || tier < R._aliveMark)) {
+        R._aliveMark = tier;
+        if (tier === 2) announce("FINAL 2", "ONE KILL FROM THE WIN", "#ffd54a", 2800);
+        else announce(al + " REMAIN", tier === 25 ? "THE CIRCLE TIGHTENS" : tier === 10 ? "TOP 10 — STAY SHARP" : "FINAL 5", "#ffd54a", 2400);
+      }
+    }
     // hurt tint decay
     R.hurtTint.style.opacity = W.t - p.lastDamageT < 0.7 ? "1" : "0";
 
@@ -1362,6 +1405,17 @@ function wireEvents(W) {
     if (victim === W.player || killer === W.player) el.style.color = "#ffd54a";
     setTimeout(() => el.remove(), 6000);
     while (R.feed.children.length > 6) R.feed.firstChild.remove();
+    // YOUR elimination gets a banner + streak escalation (kills used to land silently)
+    if (killer === W.player && victim !== W.player) {
+      const n = (W.match && W.match.kills[W.player.id]) || 0;
+      const streak = n >= 5 ? "RAMPAGE" : n === 4 ? "QUAD KILL" : n === 3 ? "TRIPLE KILL" : n === 2 ? "DOUBLE KILL" : null;
+      announce("ELIMINATED " + victim.name.toUpperCase(), streak ? streak + " · " + n + " KILLS" : n + (n === 1 ? " KILL" : " KILLS"), "#ff8f6a", 1900);
+    }
+  });
+  // LEVEL UP — this event was emitted every level and had ZERO listeners, so the
+  // bar filled, the level ticked over, and the player was never told.
+  W.events.on("levelUp", (lvl) => {
+    announce("LEVEL " + lvl, "RANK UP", "#ffd54a", 3000);
   });
   W.events.on("stormWarning", () => flashMsg("STORM SHRINKS IN 10 SECONDS"));
   W.events.on("stormClosing", () => flashMsg("THE STORM IS CLOSING"));
@@ -1383,6 +1437,22 @@ function flashMsg(text) {
   R.stormMsg.style.opacity = "1";
   setTimeout(() => { if (R.stormMsg) R.stormMsg.style.opacity = "0"; }, 2600);
 }
+// big centre-screen announcement (deploy / milestones / eliminations / level-up).
+// Higher-priority calls override a showing one so the important beat always wins.
+function announce(text, sub, color, ms) {
+  if (!R.annWrap) return;
+  R.annTitle.textContent = text;
+  R.annTitle.style.color = color || "#eaf2ff";
+  R.annSub.textContent = sub || "";
+  R.annWrap.style.opacity = "1";
+  R.annWrap.style.transform = "translateX(-50%) translateY(0)";
+  clearTimeout(R._annT);
+  R._annT = setTimeout(() => {
+    if (!R.annWrap) return;
+    R.annWrap.style.opacity = "0";
+    R.annWrap.style.transform = "translateX(-50%) translateY(-12px)";
+  }, ms || 2200);
+}
 
 function toggleBigMap(W) {
   if (R.bigmap) { R.bigmap.remove(); R.bigmap = null; return; }
@@ -1397,8 +1467,13 @@ function toggleBigMap(W) {
 }
 
 function togglePause(W) {
-  if (R.pause) { R.pause.remove(); R.pause = null; W.paused = false; return; }
-  W.paused = true;
+  // ONLINE: never freeze the sim. W.paused early-returns the whole frame pipeline,
+  // which also skips netMod.update — the 12Hz state broadcast stops and the host's
+  // silent-guest watchdog swaps you for a bot after 12s, i.e. opening the menu used
+  // to EJECT you from a match with friends. Online shows a non-blocking overlay.
+  const online = !!W.net;
+  if (R.pause) { R.pause.remove(); R.pause = null; if (!online) W.paused = false; return; }
+  if (!online) W.paused = true;
   document.exitPointerLock && document.exitPointerLock();
   const L = layer("pause", { pointerEvents: "auto", background: "rgba(4,8,16,0.82)", display: "flex", alignItems: "center", justifyContent: "center" });
   const box = h("div", Object.assign({ padding: "34px 44px", textAlign: "center", display: "flex", flexDirection: "column", gap: "14px", minWidth: "300px" }, PANEL), null, L);
@@ -1408,8 +1483,10 @@ function togglePause(W) {
   const st = h("button", Object.assign({}, BTN, { background: "rgba(255,255,255,0.1)", color: "#cfe4ff" }), "SETTINGS", box);
   st.onclick = () => showSettings(W);
   const quit = h("button", Object.assign({}, BTN, { background: "rgba(255,80,80,0.2)", color: "#ff9f9f" }), "QUIT TO MENU", box);
-  quit.onclick = () => { R.pause.remove(); R.pause = null; W.paused = false; W.endMatch(false); };
-  h("div", { fontSize: "11px", opacity: "0.6" }, "Note: the match keeps running in a real BR — here it pauses (single-player).", box);
+  quit.onclick = () => { R.pause.remove(); R.pause = null; if (!online) W.paused = false; W.endMatch(false); };
+  h("div", { fontSize: "11px", opacity: "0.6" },
+    online ? "ONLINE — the match keeps running while this is open. Stay sharp."
+           : "Note: the match keeps running in a real BR — here it pauses (single-player).", box);
 }
 
 function showDeath(W, killerId, weaponId) {
@@ -1467,8 +1544,19 @@ export function showPostMatch(W, res) {
     const gained = (res.kills || 0) * 100 + Math.round((res.damage || 0) * 0.2)
       + Math.max(0, (W.match ? W.match.totalPlayers : 50) - (res.placement || 50)) * 6
       + (res.victory ? 500 : 0) + Math.round((res.timeS || 0) / 4);
+    const lvlBefore = W.progress.level;
     addXP(W, gained);
     stat(grid, "XP earned", "+" + gained);
+    // fold into the LIFETIME record (these numbers used to be discarded)
+    const c = recordMatch(W, res);
+    if (c) {
+      h("div", { fontSize: "12.5px", opacity: "0.8", marginTop: "14px", letterSpacing: "1px", fontFamily: "Rajdhani, " + FONT },
+        "CAREER · " + c.matches + " matches · " + c.wins + " wins · " + c.kills + " kills · top-10s " + c.top10s + " · best #" + (c.bestPlacement || "—"), box);
+    }
+    if (W.progress.level > lvlBefore) {
+      h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "17px", fontWeight: "900", color: "#ffd54a", marginTop: "8px", letterSpacing: "2px", textShadow: "0 0 18px rgba(255,213,74,0.5)" },
+        "LEVEL UP  →  " + W.progress.level, box);
+    }
   }
   const row = h("div", { display: "flex", gap: "12px", justifyContent: "center", marginTop: "24px" }, null, box);
   const menu = h("button", Object.assign({}, BTN, {

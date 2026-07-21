@@ -4,10 +4,16 @@
  * the single source of truth consumed by the 3D genre module (ffg_royale3d.js),
  * the bot brains (royale/bots.js), and the node selftest.
  *
- * Owns: seeded RNG, the weapon/material/consumable tables, storm phase math,
- * damage resolution, the building grid (placement, support graph, cascade
- * destroy), loot rolls, harvesting, and match bookkeeping (alive count,
- * placements, kill feed entries).
+ * Owns: seeded RNG, the weapon/consumable tables, storm phase math, damage
+ * resolution, loot rolls, and match bookkeeping (alive count, placements,
+ * kill feed entries).
+ *
+ * !! NO BUILDING / NO HARVESTING — removed by owner decision; do NOT reintroduce.
+ * There is no build grid, no support graph, no pickaxe and no materials, and the
+ * exports below carry no build/harvest functions. Benchmark games (Fortnite, and
+ * Final Drop, which does ship building) are NOT parity targets on this axis —
+ * a parity pass must skip it. Historical CHANGELOG entries mentioning builds are
+ * history, not a spec.
  *
  * Design numbers come from forgeflow-games/state/research_battle_royale.json
  * (Fortnite building/storm, PUBG ballistics/loot, Apex shields/feedback,
