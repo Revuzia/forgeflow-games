@@ -438,6 +438,9 @@ export function mapObstacles(map) {
   // rendered, paintable, but never nav/LOS obstacles — so a map can carry hundreds of
   // detail props without shrinking the walkable grid. `h` is carried through so LOS
   // can respect prop height (a 0.9m pipe must not occlude like a 3m shelf).
+  // ONE CONVENTION: w/d on a prop is always its FINAL world-space footprint. Generated
+  // props resolve rotation when they are placed (see mapgen), hand-authored maps state it
+  // directly. Resolving it again here would double-count and shrink corridors.
   return map.props.filter((p) => !p.noCollide)
     .map((p) => ({ id: p.id, x: p.x, z: p.z, hw: p.w / 2, hd: p.d / 2, h: p.h, color: p.color }));
 }

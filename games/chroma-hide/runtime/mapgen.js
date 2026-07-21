@@ -181,6 +181,7 @@ function placeBreakers(area, b, rng, idp) {
       if (m.color != null) p.color = m.color;
     } else if (b.model) p.model = b.model;
     if (!p.rot && b.rots) p.rot = b.rots[Math.floor(rng() * b.rots.length)];
+    applyRotFootprint(p);
     out.push(p);
   }
   return out;
@@ -359,6 +360,17 @@ function pruneFloatingDecor(props, walls) {
     dropped++; return false;
   });
   return { props: kept, dropped };
+}
+
+
+/** A quarter-turned model occupies a swapped footprint. Resolve it HERE, at placement,
+ *  so every prop that leaves this file already states its final world-space w/d --
+ *  the sim, the overlap resolver and the nav grid then all agree without special cases. */
+function applyRotFootprint(p) {
+  if (!p.rot) return p;
+  const q = ((p.rot % Math.PI) + Math.PI) % Math.PI / Math.PI;   // 0 = aligned, 0.5 = quarter turn
+  if (Math.abs(q - 0.5) < 0.25) { const w = p.w; p.w = p.d; p.d = w; }
+  return p;
 }
 
 /** Expand a campus spec into a full map-def. */

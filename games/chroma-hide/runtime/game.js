@@ -38,6 +38,10 @@ const POSES = {
   wide:    { label: "Wide",    s: [1.35, 0.85, 0.70], yOff: -0.01 },
 };
 const POSE_IDS = Object.keys(POSES);
+// How far you can reach to cling, and the highest surface you can haul yourself onto.
+// 2.6m reach lets you aim at the floor a couple of paces ahead to lie down.
+const STICK_REACH = 2.6;
+const STICK_MAX_MOUNT = 2.2;
 
 export class Game {
   constructor(engine, config, hud, callbacks) {
@@ -373,50 +377,86 @@ export class Game {
     window.addEventListener("pointermove", this._pm); dom.addEventListener("wheel", this._wheel, { passive: false });
   }
 
-  /** Cling to a wall or a tall prop. This is the mechanic that makes painting pay off:
-   *  a painted body flat against a matching wall is genuinely hard to pick out. Ray is
-   *  short and horizontal, so you must actually walk up to a surface and face it. */
+  /** Cling to ANY surface — this is the core hiding verb, not a wall-only trick.
+   *  You aim with the camera and press E:
+   *    · a vertical face (wall, cabinet side, container flank) -> press flat against it
+   *    · an upward face (crate lid, desk top, shelf, the floor itself) -> mount it and lie down
+   *  Mounting a prop genuinely raises your silhouette, so the sim is told about the
+   *  elevation and seekers can spot you over cover you are standing on. */
   _toggleStick() {
     if (this._stuck) return this._releaseStick();
     if (!this.local || this.local.role !== ROLE.HIDER || !this.local.alive) return;
+    const cam = this.engine.camera;
     const eye = new THREE.Vector3(this.local.x, 1.45, this.local.z);
-    const dir = new THREE.Vector3(Math.sin(this.local.yaw), 0, Math.cos(this.local.yaw)).normalize();
-    const ray = new THREE.Raycaster(eye, dir, 0.05, 1.9);
-    const hits = ray.intersectObjects(this.paintable, false);
+    // aim along the real camera direction so looking DOWN targets the floor/prop tops
+    const dir = new THREE.Vector3();
+    cam.getWorldDirection(dir);
+    if (dir.lengthSq() < 1e-6) dir.set(Math.sin(this.local.yaw), 0, Math.cos(this.local.yaw));
+    dir.normalize();
+    const ray = new THREE.Raycaster(eye, dir, 0.05, STICK_REACH);
+    // RECURSIVE: once a prop's GLB loads it is a Group, and a non-recursive test skips
+    // its child meshes entirely -- which silently limited clinging to plain boxes and
+    // walls, i.e. to almost none of the furniture you can actually see.
+    const hits = ray.intersectObjects(this.paintable, true);
     for (const h of hits) {
-      if (h.object === this.floor) continue;
-      // vertical faces only — you cannot cling to a table top
-      if (h.face && Math.abs(h.face.normal.y) > 0.55) continue;
       let n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : dir.clone().negate();
-      n.y = 0;
-      if (n.lengthSq() < 1e-6) n.copy(dir).negate();
       n.normalize();
-      const px = h.point.x + n.x * 0.30, pz = h.point.z + n.z * 0.30;
-      this._stuck = true;
-      this._stickY = clamp(h.point.y, 0.55, 2.6);
-      this.local.x = px; this.local.z = pz;
-      this.local.yaw = Math.atan2(n.x, n.z);     // face out of the wall
-      this.hud && this.hud.toast && this.hud.toast("stuck — A/D turn · Space/Ctrl height · E release", "#7fe3c4");
-      this.audio && this.audio.blip && this.audio.blip();
-      return;
+      if (n.y > 0.55) {
+        // ── mount an upward face: prop lid, desk top, shelf, or the ground ──────
+        const top = h.point.y;
+        if (top > STICK_MAX_MOUNT) continue;          // too high to climb onto
+        this._stuck = true; this._stickMode = "top";
+        this._stickY = Math.max(0, top);
+        this.local.x = h.point.x; this.local.z = h.point.z;
+        this.local._elev = this._stickY;              // sim: your silhouette is raised
+        this.local.pose = "flat";                     // lie down on it
+        const what = h.object === this.floor ? "lying down" : "on top — you are exposed up here";
+        this.hud && this.hud.toast && this.hud.toast(what + " · A/D turn · Space stand · E off", "#7fe3c4");
+        this.audio && this.audio.blip && this.audio.blip();
+        return;
+      }
+      if (Math.abs(n.y) <= 0.55) {
+        // ── press flat against a vertical face ─────────────────────────────────
+        n.y = 0;
+        if (n.lengthSq() < 1e-6) n.copy(dir).negate();
+        n.normalize();
+        this._stuck = true; this._stickMode = "wall";
+        this._stickY = clamp(h.point.y, 0.55, 2.6);
+        this.local.x = h.point.x + n.x * 0.30;
+        this.local.z = h.point.z + n.z * 0.30;
+        this.local.yaw = Math.atan2(n.x, n.z);        // face out of the surface
+        this.local._elev = 0;
+        this.local.pose = "stand";
+        this.hud && this.hud.toast && this.hud.toast("clinging · A/D turn · Space/Ctrl height · E off", "#7fe3c4");
+        this.audio && this.audio.blip && this.audio.blip();
+        return;
+      }
     }
-    this.hud && this.hud.toast && this.hud.toast("face a wall to cling (E)", "#ffb46b");
+    this.hud && this.hud.toast && this.hud.toast("nothing to cling to — aim at a surface (E)", "#ffb46b");
   }
 
   _releaseStick() {
     if (!this._stuck) return;
-    this._stuck = false; this._stickY = 0;
+    this._stuck = false; this._stickMode = null; this._stickY = 0;
+    if (this.local) { this.local._elev = 0; this.local.pose = "stand"; }
     this.hud && this.hud.toast && this.hud.toast("released", "#9fb4c8");
   }
 
-  /** While stuck: A/D spin the body, Space/Ctrl slide it up and down the wall. */
+  /** While clung: A/D spin the body. On a wall, Space/Ctrl slide you up and down it.
+   *  On top of something, Space stands you up and Ctrl flattens you back down. */
   _stepStick(dt) {
     if (!this._stuck || !this.local) return;
     if (!this.local.alive) return this._releaseStick();
     if (this.keys.has("l")) this.local.yaw += 2.4 * dt;
     if (this.keys.has("r")) this.local.yaw -= 2.4 * dt;
-    if (this._stickUp) this._stickY = clamp(this._stickY + 1.6 * dt, 0.55, 2.9);
-    if (this._crouch) this._stickY = clamp(this._stickY - 1.6 * dt, 0.35, 2.9);
+    if (this._stickMode === "wall") {
+      if (this._stickUp) this._stickY = clamp(this._stickY + 1.6 * dt, 0.55, 2.9);
+      if (this._crouch) this._stickY = clamp(this._stickY - 1.6 * dt, 0.35, 2.9);
+    } else {
+      if (this._stickUp) this.local.pose = "stand";
+      if (this._crouch) this.local.pose = "flat";
+    }
+    this.local._elev = this._stickMode === "top" ? this._stickY : 0;
   }
 
   /** Always-visible control legend. The paint mechanic is the whole game and there was
@@ -431,9 +471,9 @@ export class Game {
     ].join(";");
     const k = (s2) => `<kbd style="background:rgba(255,255,255,.13);border-radius:3px;padding:0 4px;font:inherit">${s2}</kbd>`;
     const hider = this.localRole === ROLE.HIDER
-      ? `<div style="color:#7fe3c4;font-weight:700;margin-top:3px">${k("F")} PAINT YOURSELF &nbsp;·&nbsp; ${k("R")} pose &nbsp;·&nbsp; ${k("E")} cling to wall</div>
+      ? `<div style="color:#7fe3c4;font-weight:700;margin-top:3px">${k("F")} PAINT YOURSELF &nbsp;·&nbsp; ${k("R")} pose &nbsp;·&nbsp; ${k("E")} cling to anything</div>
          <div>${k("Space")} jump · ${k("Ctrl")} crouch · ${k("V")} 1st/3rd · ${k("Q")} emote</div>
-         <div style="opacity:.72">Stuck: ${k("A")}${k("D")} turn · ${k("Space")}/${k("Ctrl")} height · ${k("E")} release</div>
+         <div style="opacity:.72">Aim at a wall, a crate top, a shelf or the floor and press ${k("E")} — on a wall ${k("Space")}/${k("Ctrl")} slide you up and down, on top of something they stand you up or flatten you. ${k("A")}${k("D")} turn, ${k("E")} lets go.</div>
          <div style="opacity:.72">Paint mode: drag <b>LMB</b> on your body · ${k("1")}-${k("4")} brush/spray/marker/sponge · <b>Space</b> eyedrop · <b>MMB</b> orbit · <b>wheel</b> zoom</div>`
       : `<div style="color:#ff9d6b;font-weight:700;margin-top:3px">${k("LMB")} TAG a suspect</div>
          <div>${k("Space")} jump · ${k("V")} 1st/3rd</div>`;
@@ -724,7 +764,10 @@ export class Game {
         if (P) { sx = P.s[0]; sy = P.s[1]; sz = P.s[2]; py = BODY_Y * P.s[1] + P.yOff; rot = P.rot || 0; }
       }
       if (a.isLocal && this._jumpY) py += this._jumpY;   // visual hop
-      if (a.isLocal && this._stuck) py = this._stickY;   // clinging to a wall
+      if (a.isLocal && this._stuck) {
+        // wall: body centre sits at the cling height. top: body RESTS on the surface.
+        py = this._stickMode === "top" ? this._stickY + BODY_Y * sy : this._stickY;
+      }
       mesh.scale.set(sx, sy, sz); mesh.position.y = py; mesh.rotation.set(rot, a.yaw, 0);
       if (a.caught && a.role === ROLE.HIDER) { mesh.material.transparent = true; mesh.material.opacity = 0.35; }
       // infection: a converted hider now renders like a seeker (tint)

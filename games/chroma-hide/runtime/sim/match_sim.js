@@ -50,7 +50,10 @@ export const POSE_HEIGHT = {
 export function hiderHeight(h) {
   if (!h) return 1.55;
   const p = POSE_HEIGHT[h.pose];
-  return p != null ? p : 1.55;
+  // Climbing onto a crate or a desk raises your whole silhouette: cover that used to
+  // hide you no longer does. That trade -- better vantage for worse concealment -- is
+  // what makes mounting props a real decision rather than a free upgrade.
+  return (p != null ? p : 1.55) + (h._elev || 0);
 }
 
 /** Is `to` visible from `from`? An obstacle only occludes when it is at least as TALL
