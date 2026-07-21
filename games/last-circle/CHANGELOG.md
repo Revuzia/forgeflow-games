@@ -3,6 +3,34 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — The kill you just made was the one beat you never saw (?v=60, LIVE)
+
+Build-order #9.
+
+- **announce() had no priority at all.** It was last-write-wins over one shared
+  node and one timer, and R._annUntil was assigned once and never read — the
+  comment above it claiming "higher-priority calls override" was simply untrue.
+  Because match.eliminate() drops the alive count BEFORE the actorDied emit, and
+  weapons.update runs before hud.update in the same frame, the "ELIMINATED X"
+  banner for the kill that took the lobby to 10/5/2 was overwritten by
+  "10 REMAIN" before the browser ever painted it. Zero paints, every time.
+- Now prioritised (victory 3 > elimination/level-up 2 > milestone/deploy 1) and
+  equal-or-lower calls QUEUE rather than drop — the alive milestone marks itself
+  spent in R._aliveMark BEFORE announcing, so a dropped "FINAL 2" was gone for
+  the rest of the match. Queue is capped so a kill spree cannot back up forever.
+- **The winning kill's banner was destroyed in the frame it was born:** endMatch
+  went straight to showPostMatch, which calls hideHUD() and removes the layer the
+  announcement lives in. The match cut from a firefight to a DOM panel. Now the
+  live world holds ~2.6s on "VICTORY ROYALE" first (phase "over" is already
+  whitelisted in the frame gate and already blocks damage), and any key or click
+  skips straight to the stats.
+
+Verified live. Ordering: DEPLOY -> kill emitted -> "ELIMINATED WKEYWARRIOR"
+survives the same-frame milestone -> at t+2.2s the queued "10 REMAIN" plays.
+Victory beat on a clean page: at t+0 and t+1.2s the banner reads VICTORY ROYALE
+with the stats grid still absent; by t+3.2s the stats are up. Selftest 66/66.
+DRAFT.
+
 ## 2026-07-20 — Hit feedback doubled and collapsed (?v=59, LIVE)
 
 Build-order #10. Three defects in the feedback for a single shot.

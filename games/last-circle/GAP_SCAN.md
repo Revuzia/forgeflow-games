@@ -21,6 +21,7 @@ Line anchors were correct at the time of writing but drift — re-locate by cont
 - [x] #6 Rebinding never released the old default and silently orphaned actions (?v=57)
 - [x] #8 Shadow volume was a 160m box pinned to world origin (?v=58)
 - [x] #10 Hit feedback doubled (2 hitmarker listeners) and per-pellet numbers stacked (?v=59)
+- [x] #9 announce() had no priority; the winning kill's banner died in the frame it was born (?v=60)
 - [ ] everything else below
 
 # LAST CIRCLE — BUILD ORDER

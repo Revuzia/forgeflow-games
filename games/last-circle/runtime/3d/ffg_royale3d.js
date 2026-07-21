@@ -282,7 +282,24 @@ register3d("royale", async function (kernel, content) {
     if (W.phase === "over") return;
     W.phase = "over";
     const placement = W.match.placementOf(W.player.id) || W.match.aliveCount() + 1;
-    hudMod.showPostMatch(W, {
+    // Hold the live world for a beat first. showPostMatch calls hideHUD(), which
+    // removes the layer the announcement lives in — so the banner and kill feed
+    // for the WINNING kill were created and destroyed in the same frame and the
+    // match cut straight from a firefight to a DOM panel. Phase "over" is
+    // already whitelisted in the frame gate and already blocks all damage.
+    hudMod.announceVictory(W, victory);
+    audioMod.onMatchEnd(W, victory);
+    const showStats = () => hudMod.showPostMatch(W, buildPostMatch(victory, placement));
+    if (W._overT) clearTimeout(W._overT);
+    W._overT = setTimeout(showStats, 2600);
+    // any key/click skips the beat
+    const skip = () => { if (W._overT) { clearTimeout(W._overT); W._overT = null; showStats(); } cleanup(); };
+    const cleanup = () => { window.removeEventListener("keydown", skip); window.removeEventListener("mousedown", skip); };
+    window.addEventListener("keydown", skip); window.addEventListener("mousedown", skip);
+    setTimeout(cleanup, 2700);
+  }
+  function buildPostMatch(victory, placement) {
+    return {
       victory,
       placement,
       kills: W.match.kills[W.player.id] || 0,
@@ -290,8 +307,7 @@ register3d("royale", async function (kernel, content) {
       accuracy: W.stats.shotsFired ? Math.round((W.stats.shotsHit / W.stats.shotsFired) * 100) : 0,
       timeS: Math.round(W.t),
       onMenu: () => { W.phase = "menu"; hudMod.showMenu(W, startMatch); },
-    });
-    audioMod.onMatchEnd(W, victory);
+    };
   }
   W.endMatch = endMatch;
 

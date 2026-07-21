@@ -1180,7 +1180,7 @@ export function showHUD(W) {
   R.annWrap = h("div", { position: "absolute", left: "50%", top: "14%", transform: "translateX(-50%)", textAlign: "center", opacity: "0", transition: "opacity .35s, transform .35s", pointerEvents: "none" }, null, L);
   R.annTitle = h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "34px", fontWeight: "900", letterSpacing: "4px", textShadow: "0 3px 14px #000, 0 0 26px rgba(90,170,255,0.5)" }, "", R.annWrap);
   R.annSub = h("div", { fontSize: "14px", fontWeight: "700", letterSpacing: "2px", opacity: "0.85", marginTop: "4px", textShadow: "0 2px 6px #000" }, "", R.annWrap);
-  R._annUntil = 0; R._aliveMark = 0;
+  R._annUntil = 0; R._aliveMark = 0; R._annPrio = 0; R._annQ = [];
 
   // tints
   R.stormTint = h("div", { position: "absolute", inset: "0", background: "radial-gradient(ellipse at center, rgba(130,60,200,0) 55%, rgba(130,60,200,0.35) 100%)", opacity: "0", transition: "opacity .5s", pointerEvents: "none" }, null, L);
@@ -1214,8 +1214,8 @@ export function showHUD(W) {
   }
   // deployment beat — the match used to just… start, with no moment marking it
   const tot = W.match ? W.match.totalPlayers : 50;
-  if (W.mode === "practice") setTimeout(() => announce("PRACTICE", "FIVE DUMMIES DUE SOUTH · 12–80M", "#9fd7ff", 2600), 250);
-  else setTimeout(() => announce("DEPLOY", tot + " PLAYERS · LAST ONE STANDING WINS", "#9fd7ff", 2600), 250);
+  if (W.mode === "practice") setTimeout(() => announce("PRACTICE", "FIVE DUMMIES DUE SOUTH · 12–80M", "#9fd7ff", 2600, ANN_PRIO.deploy), 250);
+  else setTimeout(() => announce("DEPLOY", tot + " PLAYERS · LAST ONE STANDING WINS", "#9fd7ff", 2600, ANN_PRIO.deploy), 250);
 }
 
 function bar(parent, color) {
@@ -1311,8 +1311,8 @@ export function update(W, dt) {
       for (const m of [2, 5, 10, 25]) { if (al <= m) { tier = m; break; } }   // tightest first
       if (tier && (!R._aliveMark || tier < R._aliveMark)) {
         R._aliveMark = tier;
-        if (tier === 2) announce("FINAL 2", "ONE KILL FROM THE WIN", "#ffd54a", 2800);
-        else announce(al + " REMAIN", tier === 25 ? "THE CIRCLE TIGHTENS" : tier === 10 ? "TOP 10 — STAY SHARP" : "FINAL 5", "#ffd54a", 2400);
+        if (tier === 2) announce("FINAL 2", "ONE KILL FROM THE WIN", "#ffd54a", 2800, ANN_PRIO.milestone);
+        else announce(al + " REMAIN", tier === 25 ? "THE CIRCLE TIGHTENS" : tier === 10 ? "TOP 10 — STAY SHARP" : "FINAL 5", "#ffd54a", 2400, ANN_PRIO.milestone);
       }
     }
     // hurt tint decay
@@ -1705,14 +1705,14 @@ function wireEvents(W) {
     if (killer === W.player && victim !== W.player) {
       const n = (W.match && W.match.kills[W.player.id]) || 0;
       const streak = n >= 5 ? "RAMPAGE" : n === 4 ? "QUAD KILL" : n === 3 ? "TRIPLE KILL" : n === 2 ? "DOUBLE KILL" : null;
-      announce("ELIMINATED " + victim.name.toUpperCase(), streak ? streak + " · " + n + " KILLS" : n + (n === 1 ? " KILL" : " KILLS"), "#ff8f6a", 1900);
+      announce("ELIMINATED " + victim.name.toUpperCase(), streak ? streak + " · " + n + " KILLS" : n + (n === 1 ? " KILL" : " KILLS"), "#ff8f6a", 1900, ANN_PRIO.elim);
     }
   });
   // LEVEL UP — this event was emitted every level and had ZERO listeners, so the
   // bar filled, the level ticked over, and the player was never told.
   W.events.on("levelUp", (lvl) => {
     const won = MENU_SKINS.some((s) => s.unlockLevel === lvl);
-    announce("LEVEL " + lvl, levelUpSub(lvl), "#ffd54a", won ? 3600 : 3000);
+    announce("LEVEL " + lvl, levelUpSub(lvl), "#ffd54a", won ? 3600 : 3000, ANN_PRIO.level);
   });
   W.events.on("stormWarning", () => flashMsg("STORM SHRINKS IN 10 SECONDS"));
   W.events.on("stormClosing", () => flashMsg("THE STORM IS CLOSING"));
@@ -1736,19 +1736,47 @@ function flashMsg(text) {
 }
 // big centre-screen announcement (deploy / milestones / eliminations / level-up).
 // Higher-priority calls override a showing one so the important beat always wins.
-function announce(text, sub, color, ms) {
+// PRIO: victory 3 > elimination / level-up 2 > milestone / deploy 1.
+// This was last-write-wins over one node and one timer (R._annUntil was assigned
+// and never read). Because match.eliminate() drops the alive count BEFORE the
+// actorDied emit, and weapons.update runs before hud.update in the same frame,
+// the "ELIMINATED X" banner for the kill that took the lobby to 10 was
+// overwritten by "10 REMAIN" before the browser ever painted it — the kill you
+// just made was the one beat you never saw.
+// Equal-or-lower priority QUEUES rather than dropping: the alive milestone marks
+// itself spent (R._aliveMark) before it announces, so a dropped "FINAL 2" is
+// gone for the rest of the match.
+const ANN_PRIO = { victory: 3, elim: 2, level: 2, milestone: 1, deploy: 1 };
+function announce(text, sub, color, ms, prio) {
   if (!R.annWrap) return;
+  const p = prio || 0;
+  const now = performance.now();
+  if (now < (R._annUntil || 0)) {
+    if (p > (R._annPrio || 0)) { showAnnouncement(text, sub, color, ms, p, now); return; }
+    (R._annQ = R._annQ || []).push({ text, sub, color, ms, prio: p });
+    if (R._annQ.length > 6) R._annQ.length = 6;   // a 50-kill spree must not queue forever
+    return;
+  }
+  showAnnouncement(text, sub, color, ms, p, now);
+}
+function showAnnouncement(text, sub, color, ms, p, now) {
+  const dur = ms || 2200;
   R.annTitle.textContent = text;
   R.annTitle.style.color = color || "#eaf2ff";
   R.annSub.textContent = sub || "";
   R.annWrap.style.opacity = "1";
   R.annWrap.style.transform = "translateX(-50%) translateY(0)";
+  R._annPrio = p;
+  R._annUntil = now + dur;
   clearTimeout(R._annT);
   R._annT = setTimeout(() => {
     if (!R.annWrap) return;
     R.annWrap.style.opacity = "0";
     R.annWrap.style.transform = "translateX(-50%) translateY(-12px)";
-  }, ms || 2200);
+    R._annPrio = 0; R._annUntil = 0;
+    const q = R._annQ && R._annQ.shift();
+    if (q) setTimeout(() => announce(q.text, q.sub, q.color, q.ms, q.prio), 200);
+  }, dur);
 }
 
 function toggleBigMap(W) {
@@ -1828,6 +1856,16 @@ function showDeath(W, killerId, weaponId) {
   if (killer && killer.alive) h("div", { fontSize: "13px", opacity: "0.8", alignSelf: "center" }, "Spectating " + killer.name, row);
   const btn = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff" }), "MATCH STATS", row);
   btn.onclick = () => W.endMatch(false);
+}
+
+/** The winning kill's banner + feed used to be destroyed in the frame they were
+ *  born: endMatch -> showPostMatch -> hideHUD() removed the whole layer. Phase
+ *  "over" is already whitelisted in the frame gate and already blocks damage, so
+ *  the world can safely hold for a beat first. */
+export function announceVictory(W, victory) {
+  announce(victory ? "VICTORY ROYALE" : "ELIMINATED",
+    victory ? "LAST ONE STANDING" : "BETTER LUCK NEXT DROP",
+    victory ? "#ffd54a" : "#ff8f6a", 2600, ANN_PRIO.victory);
 }
 
 export function showPostMatch(W, res) {
