@@ -10,7 +10,7 @@
  * Local (human) actors set their own x/z/yaw/shoot each tick via setLocalInput();
  * everything else is bot-driven here so single-player and headless share one brain.
  */
-import { PHASE, ROLE, MODE, MODE_INFO, applyShot, losPoints, checkWin, assignRoles, computeSeekerCount } from "./match_core.js";
+import { PHASE, ROLE, MODE, MODE_INFO, applyShot, losPoints, checkWin, assignRoles, computeSeekerCount, POSE_IDS, POSE_HEIGHT } from "./match_core.js";
 import { makeRng, clamp } from "./util.js";
 import { buildNavGrid, findPath } from "./nav.js";
 
@@ -39,13 +39,7 @@ function segHitsBox(x0, z0, x1, z1, box) {
 
 /** Visible height of a hider: a posed/crouched body hides behind low cover, a standing
  *  one does not. Drives which obstacles can actually occlude it. */
-/** Silhouette height per pose — drives LOS occlusion, so a flat body genuinely hides
- *  behind low cover while a stretched one gives you away over it. Mirrors the POSES
- *  scale table in game.js (kept here as plain data so the sim stays node-testable). */
-export const POSE_HEIGHT = {
-  stand: 1.55, crouch: 0.96, curl: 0.81, ball: 0.70, flat: 0.40,
-  stretch: 2.17, lean: 1.63, wide: 1.32,
-};
+export { POSE_IDS, POSE_HEIGHT };
 
 export function hiderHeight(h) {
   if (!h) return 1.55;
@@ -70,13 +64,28 @@ function hasLOS(fx, fz, tx, tz, obstacles, minH = 0) {
 
 /** Colour of the nearest cover to (x,z), optionally jittered by +/-`jit` per channel.
  *  Used to give bot hiders an imperfect paint job. */
-export function coverRGB(s, x, z, jit = 0, rng = null) {
+/** Distance (squared) from a point to an obstacle's RECTANGLE, not its centre. A 12m
+ *  wall you are pressed against has its centre 6m away, so centre-distance picked a
+ *  small crate across the room as "the thing you are blending with". */
+function surfDist2(x, z, o) {
+  const dx = Math.max(0, Math.abs(x - o.x) - o.hw);
+  const dz = Math.max(0, Math.abs(z - o.z) - o.hd);
+  return dx * dx + dz * dz;
+}
+
+/** The surface a hider is actually against. */
+function nearestSurface(s, x, z) {
   let best = null, bd = Infinity;
   for (const o of s.obstacles) {
     if (o.color == null) continue;
-    const d = dist2(x, z, o.x, o.z);
+    const d = surfDist2(x, z, o);
     if (d < bd) { bd = d; best = o; }
   }
+  return { best, bd };
+}
+
+export function coverRGB(s, x, z, jit = 0, rng = null) {
+  const { best } = nearestSurface(s, x, z);
   if (!best) return null;
   const j = () => (jit && rng ? (rng() - 0.5) * 2 * jit : 0);
   return {
@@ -91,18 +100,23 @@ export function coverRGB(s, x, z, jit = 0, rng = null) {
  *  An unpainted (white) body scores 0. */
 export function blendScore(s, h) {
   if (!h.paintRGB) return 0;
-  let best = null, bd = Infinity;
-  for (const o of s.obstacles) {
-    if (o.color == null) continue;
-    const d = dist2(h.x, h.z, o.x, o.z);
-    if (d < bd) { bd = d; best = o; }
-  }
-  if (!best || bd > 7) return 0;                       // nothing to blend against
+  const { best, bd } = nearestSurface(s, h.x, h.z);
+  // within ~1.25m of the surface: you have to actually BE against it
+  if (!best || bd > 1.6) return 0;
   const c = best.color;
   const dr = ((c >> 16) & 255) - h.paintRGB.r, dg = ((c >> 8) & 255) - h.paintRGB.g, db = (c & 255) - h.paintRGB.b;
   // steep falloff: colour PRECISION is the skill. ~90 units of RGB error (a visibly
   // wrong shade) already drops you to zero camouflage.
   let blend = clamp(1 - Math.sqrt(dr * dr + dg * dg + db * db) / 90, 0, 1);
+  // Material match. The how-to-play tells players that matching a surface's finish
+  // matters, and it did nothing at all: a mirror-metal body against matt concrete scored
+  // exactly like a matt one. Colour still dominates; finish moves the last 20%.
+  if (h.paintRough != null && best.rough != null) {
+    const dRough = Math.abs(best.rough - h.paintRough);
+    const dMetal = Math.abs((best.metal || 0) - (h.paintMetal || 0));
+    const material = clamp(1 - (dRough * 0.7 + dMetal * 1.0), 0, 1);
+    blend *= 0.80 + 0.20 * material;
+  }
   if (h._moving) blend *= 0.25;                        // walking gives you away
   else if (h.hidden) blend = Math.min(1, blend * 1.06); // posed and still
   return blend;
@@ -276,7 +290,10 @@ function pickSpot(s, a) {
   const side = s.rng() * Math.PI * 2;
   return { x: o.x + Math.sin(side) * (o.hw + 0.6), z: o.z + Math.cos(side) * (o.hd + 0.6) };
 }
-function pickPose(s, a) { return ["stand", "crouch", "ball", "lie"][(s.rng() * 4) | 0]; }
+// Bots draw from the SAME pose set a human has. The old literal included "lie",
+// which is in neither the height table nor the render table, so those bots stood
+// at full height while believing they were hidden.
+function pickPose(s, a) { const P = POSE_IDS.filter((p) => p !== "stand" && p !== "stretch"); return P[(s.rng() * P.length) | 0]; }
 
 /** Reverse Chicken Race: reveal one hider as the mark; everyone else hunts it. */
 function convertReverse(s) {

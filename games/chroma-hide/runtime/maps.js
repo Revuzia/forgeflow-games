@@ -462,7 +462,8 @@ export function mapObstacles(map) {
   // props resolve rotation when they are placed (see mapgen), hand-authored maps state it
   // directly. Resolving it again here would double-count and shrink corridors.
   return map.props.filter((p) => !p.noCollide)
-    .map((p) => ({ id: p.id, x: p.x, z: p.z, hw: p.w / 2, hd: p.d / 2, h: p.h, color: p.color }));
+    .map((p) => ({ id: p.id, x: p.x, z: p.z, hw: p.w / 2, hd: p.d / 2, h: p.h,
+      color: p.color, rough: p.rough, metal: p.metal }));
 }
 
 /** The subset the pure sim needs — props AND interior walls become 2D obstacles. */
@@ -471,7 +472,14 @@ export function toSimMap(map) {
   // walls carry the room height so they ALWAYS occlude (props only occlude when they
   // are at least as tall as what they'd be hiding — see hasLOS)
   const wallH = map.wallHeight || 5;
-  for (const w of (map.walls || [])) obstacles.push({ id: w.id || "wall", x: w.x, z: w.z, hw: w.w / 2, hd: w.d / 2, h: wallH, color: map.perimeter && map.perimeter.color });
+    // Each wall reports ITS OWN surface colour. Handing every wall the perimeter colour
+  // meant a player who eyedropped the reception wallpaper and matched it perfectly was
+  // still scored against the outside brick.
+  const perim = map.perimeter || {};
+  for (const w of (map.walls || [])) obstacles.push({ id: w.id || "wall", x: w.x, z: w.z,
+    hw: w.w / 2, hd: w.d / 2, h: wallH,
+    color: w.color != null ? w.color : perim.color,
+    rough: w.rough != null ? w.rough : perim.roughness, metal: 0 });
   return {
     bounds: map.bounds,
     obstacles,

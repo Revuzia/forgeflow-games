@@ -362,5 +362,62 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
     (orphan.length ? " — " + orphan.length + " orphaned: " + orphan.slice(0, 6).join(", ") : " (" + shipped.length + " shipped)"));
 }
 
+
+// ── camouflage model ─────────────────────────────────────────────────────────
+// Locks in three defects that shipped live: the blend was scored against the nearest
+// obstacle CENTRE (a 12m wall you were touching lost to a distant crate), every interior
+// wall reported the PERIMETER colour, and coverage was ignored -- one 2-pixel dab of the
+// right colour camouflaged an otherwise white body perfectly.
+{
+  const { MAPS, toSimMap } = await import("./runtime/maps.js");
+  const { blendScore, coverRGB } = await import("./runtime/sim/match_sim.js");
+  const m = MAPS.office, sim = toSimMap(m);
+
+  const perim = m.perimeter.color;
+  const own = m.walls.filter((w) => w.color != null && w.color !== perim);
+  assert(own.length > 0, "walls carry their own colour into the sim (" + own.length + " differ from perimeter)");
+  const W = own[0];
+  const got = coverRGB(sim, W.x, W.z + 0.7);
+  const asHex = (got.r << 16) | (got.g << 8) | got.b;
+  assert(asHex === W.color, "blending against a wall samples THAT wall (0x" + asHex.toString(16) + " vs 0x" + W.color.toString(16) + ")");
+
+  const at = (rgb, extra = {}) => blendScore(sim, { x: W.x, z: W.z + 0.7, paintRGB: rgb, ...extra });
+  const exact = { r: (W.color >> 16) & 255, g: (W.color >> 8) & 255, b: W.color & 255 };
+  assert(at(exact) > 0.9, "an exactly matched body blends (" + at(exact).toFixed(2) + ")");
+  assert(at({ r: 255, g: 255, b: 255 }) < 0.4, "a white body does not blend against a coloured wall");
+  assert(at({ r: 255, g: 42, b: 212 }) === 0, "a magenta body does not blend");
+  assert(at(exact, { _moving: true }) < at(exact), "movement breaks camouflage");
+
+  const roughWall = sim.obstacles.find((o) => o.color != null && o.rough != null);
+  if (roughWall) {
+    const pr = { r: (roughWall.color >> 16) & 255, g: (roughWall.color >> 8) & 255, b: roughWall.color & 255 };
+    const spot = { x: roughWall.x, z: roughWall.z + roughWall.hd + 0.5, paintRGB: pr };
+    const near = blendScore(sim, { ...spot, paintRough: roughWall.rough, paintMetal: 0 });
+    const far = blendScore(sim, { ...spot, paintRough: Math.abs(1 - roughWall.rough), paintMetal: 1 });
+    assert(near > far, "matching a surface's finish beats mismatching it (" + near.toFixed(2) + " > " + far.toFixed(2) + ")");
+  }
+}
+
+// ── the pose set is ONE set everywhere ───────────────────────────────────────
+// Bots drew from a literal containing "lie" -- a pose in neither the height table nor
+// the renderer -- and the wire codec knew only 4 of the 8 poses, so a flattened,
+// clinging player looked upright to every remote client.
+{
+  const { POSE_IDS, POSE_HEIGHT } = await import("./runtime/sim/match_core.js");
+  const { packActor, unpackActor } = await import("./runtime/sim/net_protocol.js");
+  const game = fs.readFileSync(new URL("runtime/game.js", import.meta.url), "utf8");
+  const rendered = [...game.matchAll(/^  (\w+):\s*\{ label:/gm)].map((x) => x[1]);
+  assert(POSE_IDS.every((p) => POSE_HEIGHT[p] != null), "every pose has a silhouette height");
+  assert(POSE_IDS.every((p) => rendered.includes(p)),
+    "every pose has a render entry — missing: " + POSE_IDS.filter((p) => !rendered.includes(p)).join(", "));
+  let allRound = true;
+  for (const p of POSE_IDS) {
+    if (unpackActor(packActor({ x: 1, z: 2, yaw: 0, pose: p, ammo: 3, score: 0 }, 0)).pose !== p) allRound = false;
+  }
+  assert(allRound, "all " + POSE_IDS.length + " poses survive the wire round trip");
+  const elev = unpackActor(packActor({ x: 0, z: 0, yaw: 0, pose: "flat", ammo: 0, score: 0, _elev: 1.75 }, 0))._elev;
+  assert(Math.abs(elev - 1.75) < 0.02, "cling elevation replicates over the wire (" + elev + ")");
+}
+
 console.log(fails === 0 ? "\nSELFTEST PASS" : `\nSELFTEST FAIL (${fails})`);
 process.exit(fails === 0 ? 0 : 1);

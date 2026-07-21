@@ -314,19 +314,38 @@ export class Game {
         if (e.code === "KeyF" && this.localRole === ROLE.HIDER) { this._togglePaintMode(); e.preventDefault(); return; }
         if (e.code === "KeyV") { this.thirdPerson = !this.thirdPerson; e.preventDefault(); return; }
         if (e.code === "KeyR" && this.localRole === ROLE.HIDER) { this._cyclePose(); e.preventDefault(); return; }
-        if (e.code === "Digit1") { this._whistle(); }
         if (e.code === "KeyE" && this.localRole === ROLE.HIDER) { this._toggleStick(); e.preventDefault(); return; }
         if (e.code === "KeyQ") { this._toggleEmoteBar(); e.preventDefault(); return; }
-        if (e.code === "Space" && !this.paintMode) { if (this._stuck) this._stickUp = true; else this._jump(); e.preventDefault(); return; }
-        if (e.code >= "Digit1" && e.code <= "Digit4" && this.paintMode) {
-          const T = ["brush", "spray", "marker", "sponge"][+e.code.slice(5) - 1];
-          this.paint.setTool(T); this.paintPanel && this.paintPanel.refresh();
-          this.audio && this.audio.canShake && this.audio.canShake();
-          this.hud && this.hud.toast && this.hud.toast("tool: " + T, "#7fe3c4"); e.preventDefault(); return;
+        if (e.code === "Space") {
+          // Documented in the legend AND the paint hint as "eyedrop a surface" -- and bound to
+          // nothing, so the core sampling verb only worked via the panel button.
+          if (this.paintMode) { this.paint.eyedropAtPointer(this.paintable); this.paintPanel && this.paintPanel.refresh(); }
+          else if (this._stuck) this._stickUp = true;
+          else this._jump();
+          e.preventDefault(); return;
+        }
+        // 1-4 pick a paint tool INSIDE paint mode and whistle outside it. Both used to fire:
+        // reaching for the brush handed every seeker your exact position.
+        if (e.code >= "Digit1" && e.code <= "Digit4") {
+          if (this.paintMode) {
+            const T = ["brush", "spray", "marker", "sponge"][+e.code.slice(5) - 1];
+            this.paint.setTool(T); this.paintPanel && this.paintPanel.refresh();
+            this.audio && this.audio.canShake && this.audio.canShake();
+            this.hud && this.hud.toast && this.hud.toast("tool: " + T, "#7fe3c4");
+          } else if (e.code === "Digit1") {
+            this._whistle();
+          }
+          e.preventDefault(); return;
         }
       }
       if (e.code === "ControlLeft" || e.code === "ControlRight") {
-        this._crouch = down; if (this.local) this.local.pose = down ? "crouch" : "stand";
+        // Crouch must not erase a pose chosen with R: remember what it replaced and restore
+        // it on release, and leave the pose alone entirely while clung.
+        this._crouch = down;
+        if (this.local && !this._stuck) {
+          if (down) { if (this._poseBeforeCrouch == null) this._poseBeforeCrouch = this.local.pose || "stand"; this.local.pose = "crouch"; }
+          else if (this._poseBeforeCrouch != null) { this.local.pose = this._poseBeforeCrouch; this._poseBeforeCrouch = null; }
+        }
       }
       const map = { KeyW: "f", ArrowUp: "f", KeyS: "b", ArrowDown: "b", KeyA: "l", ArrowLeft: "l", KeyD: "r", ArrowRight: "r" };
       if (map[e.code]) { down ? this.keys.add(map[e.code]) : this.keys.delete(map[e.code]); }
@@ -470,6 +489,13 @@ export class Game {
     this.hud && this.hud.toast && this.hud.toast("nothing to cling to — aim at a surface (E)", "#ffb46b");
   }
 
+  /** Hand the cursor back. Pointer lock outlived the match, so every button on the
+   *  results screen was unclickable until the player thought to press Escape. */
+  _releasePointer() {
+    try { if (document.pointerLockElement) document.exitPointerLock(); } catch (e) { /* ignore */ }
+    this._locked = false;
+  }
+
   _releaseStick() {
     if (!this._stuck) return;
     this._stuck = false; this._stickMode = null; this._stickY = 0;
@@ -491,7 +517,9 @@ export class Game {
       if (this._stickUp) this.local.pose = "stand";
       if (this._crouch) this.local.pose = "flat";
     }
-    this.local._elev = this._stickMode === "top" ? this._stickY : 0;
+    // Height is height: hanging 2.9 m up a wall exposes you over cover exactly as standing
+    // on a crate does. Scoring only the "top" case made wall-cling free upside.
+    this.local._elev = this._stickY || 0;
   }
 
   /** Always-visible control legend. The paint mechanic is the whole game and there was
@@ -568,8 +596,15 @@ export class Game {
   _sens() { try { const v = parseFloat(localStorage.getItem("chroma_sens")); return isNaN(v) ? 1 : v; } catch (e) { return 1; } }
 
   _defaultHint() {
-    if (this.localRole === ROLE.SEEKER) return this.sim.phase === PHASE.HUNT ? "<b>WASD</b> move · <b>drag mouse</b> to look · <b>LMB</b> shoot · <b>E</b> emote" : "Get ready — the hunt is about to begin…";
-    return this.sim.phase === PHASE.PREP ? "<b>F</b> to paint yourself · <b>WASD</b> move to a hiding spot · <b>drag mouse</b> to look" : "Hold still & blend in — you whistle automatically. <b>E</b> emote";
+    // Keep this honest: E is cling for hiders and unbound for seekers, emote moved to Q.
+    if (this.localRole === ROLE.SEEKER) {
+      return this.sim.phase === PHASE.HUNT
+        ? "<b>WASD</b> move · <b>mouse</b> look · <b>LMB</b> shoot · <b>Q</b> emote"
+        : "Get ready — the hunt is about to begin…";
+    }
+    return this.sim.phase === PHASE.PREP
+      ? "<b>F</b> paint yourself · <b>E</b> cling to any surface · <b>R</b> pose · <b>WASD</b> find a spot"
+      : "Hold still & blend in · <b>E</b> cling · <b>R</b> pose · <b>1</b> whistle · <b>Q</b> emote";
   }
 
   // ── phase transitions ────────────────────────────────────────────────────────
@@ -689,7 +724,7 @@ export class Game {
     this._updateAudioState();
     this._updateCamera(dt);
     this._updateHUD();
-    if (this.sim.phase === PHASE.RESULTS && !this._ended) { this._ended = true; this._finish(); }
+    if (this.sim.phase === PHASE.RESULTS && !this._ended) { this._ended = true; this._releasePointer(); this._finish(); }
   }
 
   _stepOffline(dt) {
@@ -863,8 +898,15 @@ export class Game {
   }
 
   /** Feed the player's ACTUAL paint job into the sim's camouflage model, so a careful
-   *  colour match really does make bot seekers look past you. Averages the recorded
-   *  strokes (what's actually on the body) and only recomputes when they change. */
+   *  colour match really does make bot seekers look past you.
+   *
+   *  This reads the BODY TEXTURE, not the stroke list. Averaging strokes meant one
+   *  2-pixel dab of the right colour on an otherwise white body scored a perfect blend
+   *  — coverage was worth nothing. Sampling the albedo buffer counts every unpainted
+   *  white texel against you, which is what a seeker actually sees. The buffer starts
+   *  opaque white, so a sparse grid sample is the true visible body colour.
+   *  Metalness and roughness are averaged the same way and now feed the material term.
+   */
   _syncPaintBlend() {
     for (const [id, ps] of this.paintByActor) {
       const a = this.sim.actors.find((x) => x.id === id);
@@ -872,12 +914,23 @@ export class Game {
       const n = ps.strokes.length;
       if (a._paintSyncN === n) continue;
       a._paintSyncN = n;
-      if (!n) { a.paintRGB = null; continue; }
-      // weight the most recent strokes — that's what's visible on top
-      const take = ps.strokes.slice(-60);
-      let r = 0, g = 0, b = 0;
-      for (const st of take) { r += st.r; g += st.g; b += st.b; }
-      a.paintRGB = { r: Math.round(r / take.length), g: Math.round(g / take.length), b: Math.round(b / take.length) };
+      if (!n) { a.paintRGB = null; a.paintRough = null; a.paintMetal = null; continue; }
+      const res = ps.res, alb = ps.buf.albedo.data, met = ps.buf.metal.data, rgh = ps.buf.rough.data;
+      // every 8th texel on both axes -> ~1/64th of the buffer, plenty for an average
+      const STEP = 8;
+      let r = 0, g = 0, b = 0, m = 0, ro = 0, count = 0;
+      for (let y = 0; y < res; y += STEP) {
+        for (let x = 0; x < res; x += STEP) {
+          const i = (y * res + x) * 4;
+          r += alb[i]; g += alb[i + 1]; b += alb[i + 2];
+          m += met[i]; ro += rgh[i];
+          count++;
+        }
+      }
+      if (!count) continue;
+      a.paintRGB = { r: Math.round(r / count), g: Math.round(g / count), b: Math.round(b / count) };
+      a.paintMetal = (m / count) / 255;
+      a.paintRough = (ro / count) / 255;
     }
   }
 
@@ -916,6 +969,9 @@ export class Game {
     if (this.online && this.net) { try { this.net.leave(); } catch (e) {} }
     if (this._unsub) this._unsub();
     window.removeEventListener("keydown", this._kd); window.removeEventListener("keyup", this._ku);
+    if (this._blur) window.removeEventListener("blur", this._blur);
+    if (this._lockChange) document.removeEventListener("pointerlockchange", this._lockChange);
+    this._releasePointer();
     const dom = this.engine.renderer.domElement;
     dom.removeEventListener("pointerdown", this._pd); dom.removeEventListener("pointermove", this._pm); dom.removeEventListener("wheel", this._wheel);
     window.removeEventListener("pointerup", this._pu);

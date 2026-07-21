@@ -5,7 +5,7 @@
  * are quantized to keep messages small at 10 Hz; roster assignment maps connected
  * peers + fill bots onto slots with roles. chromanet.js does only transport glue.
  */
-import { assignRoles, ROLE } from "./match_core.js";
+import { assignRoles, ROLE, POSE_IDS } from "./match_core.js";
 import { makeRng } from "./util.js";
 
 // message types on the wire
@@ -14,7 +14,10 @@ export const MSG = Object.freeze({
   SNAP: "snap", PAINT: "pnt", SHOT: "shot", EVENT: "ev", CHAT: "chat",
 });
 
-const POSES = ["stand", "crouch", "ball", "lie"];
+// The wire pose index keys off the canonical list, so all 8 poses survive the
+// round trip. The old 4-entry literal collapsed flat/curl/stretch/lean/wide to
+// "stand" -- a clinging, flattened player looked upright to every remote client.
+const POSES = POSE_IDS;
 const POSE_CODE = (p) => Math.max(0, POSES.indexOf(p));
 const CODE_POSE = (c) => POSES[c] || "stand";
 
@@ -27,13 +30,14 @@ const Q = 100; // position: centimetre resolution
 /** Pack one actor to a compact fixed array (index-addressed). */
 export function packActor(a, idx) {
   const flags = (a.alive ? 1 : 0) | (a.caught ? 2 : 0) | (a.fleeing ? 4 : 0) | (a.hidden ? 8 : 0) | (a.role === ROLE.SEEKER ? 16 : 0);
-  return [idx, Math.round(a.x * Q), Math.round(a.z * Q), yawToByte(a.yaw), POSE_CODE(a.pose), flags, a.ammo | 0, Math.round(a.score) | 0];
+  return [idx, Math.round(a.x * Q), Math.round(a.z * Q), yawToByte(a.yaw), POSE_CODE(a.pose), flags, a.ammo | 0, Math.round(a.score) | 0,
+    Math.round((a._elev || 0) * Q)];   // cling height: without it a clinging player renders on the floor for everyone else
 }
 export function unpackActor(arr) {
-  const [idx, x, z, yb, pose, flags, ammo, score] = arr;
+  const [idx, x, z, yb, pose, flags, ammo, score, elev] = arr;
   return { idx, x: x / Q, z: z / Q, yaw: byteToYaw(yb), pose: CODE_POSE(pose),
     alive: !!(flags & 1), caught: !!(flags & 2), fleeing: !!(flags & 4), hidden: !!(flags & 8),
-    role: (flags & 16) ? ROLE.SEEKER : ROLE.HIDER, ammo, score };
+    role: (flags & 16) ? ROLE.SEEKER : ROLE.HIDER, ammo, score, _elev: (elev || 0) / Q };
 }
 
 /** Full authoritative snapshot the host broadcasts each tick. */

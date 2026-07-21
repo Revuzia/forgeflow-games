@@ -162,3 +162,16 @@ export const MODE_INFO = Object.freeze({
     convertOnCatch: false, everyoneHides: true, reveal: true,
   },
 });
+
+/** The canonical pose set. Single source of truth: the renderer's scale table, the
+ *  sim's silhouette heights and the wire codec's index all key off THIS order, so a
+ *  pose can never mean one thing locally and another over the network. */
+export const POSE_IDS = Object.freeze([
+  "stand", "crouch", "curl", "ball", "flat", "stretch", "lean", "wide",
+]);
+
+/** Silhouette height per pose, metres. Drives LOS occlusion. */
+export const POSE_HEIGHT = Object.freeze({
+  stand: 1.55, crouch: 0.96, curl: 0.81, ball: 0.70, flat: 0.40,
+  stretch: 2.17, lean: 1.63, wide: 1.32,
+});
