@@ -11,6 +11,10 @@ import { buildCampus } from "./mapgen.js";
 const PAL = {
   // office
   recep: [
+    { model: "loungeChair.glb", w: 0.96, d: 0.8, h: 0.9, colors: [0x7a4a5a, 0x35406b, 0x8fa07a], rough: 0.85, metal: 0, rots: [0, 1.57, 3.14] },
+    { model: "loungeSofaCorner.glb", w: 1.81, d: 1.81, h: 0.85, colors: [0x3f6a6a, 0x5c4a36], rough: 0.85, metal: 0, rots: [0, 1.57] },
+    { model: "lampSquareFloor.glb", w: 0.22, d: 0.22, h: 1.6, colors: [0xd8dce0, 0x8a94a6], rough: 0.5, metal: 0.2 },
+    { model: "tableCoffeeGlass.glb", w: 1.29, d: 0.78, h: 0.45, colors: [0xbcd4e0, 0x8791a1], rough: 0.25, metal: 0.3 },
     { model: "loungeSofa.glb", w: 1.92, d: 0.8, h: 0.9, colors: [0x35406b, 0x3f6a6a, 0x7a4a5a], rough: 0.85, metal: 0, rots: [0, 1.57, 3.14] },
     { model: "suburb/tree-small.glb", w: 0.67, d: 0.77, h: 1.8, colors: [0x2f7d3a, 0x3f6e46, 0x4a7c3f], rough: 0.9, metal: 0 },
     { w: 1.6, d: 1.0, h: 0.45, colors: [0x7d8899, 0xa8845c], rough: 0.5, metal: 0.1 },
@@ -22,6 +26,8 @@ const PAL = {
     { model: "bookcaseClosedWide.glb", w: 1.92, d: 0.60, h: 1.90, colors: [0x5a3f2a, 0x8a9099], rough: 0.55, metal: 0.2, rots: [0, 1.57] },
   ],
   bullpen: [
+    { model: "chairModernCushion.glb", w: 0.41, d: 0.41, h: 0.95, colors: [0x35406b, 0x3f4348, 0x2f7d3a], rough: 0.8, metal: 0.05, rots: [0, 1.57, 3.14, 4.71] },
+    { model: "cabinetTelevision.glb", w: 1.94, d: 0.6, h: 0.75, colors: [0x5c4a36, 0x8a6038], rough: 0.6, metal: 0.05 },
     { model: "desk.glb", w: 1.43, d: 0.77, h: 0.75, colors: [0x6b7688, 0x5f6a78], rough: 0.6, metal: 0.1, rots: [0, 3.14] },
     { w: 0.6, d: 0.6, h: 1.05, colors: [0xe07b39, 0xc0453a, 0x2f9e8f, 0x3b6fb0], rough: 0.6, metal: 0.1 },
     { w: 0.5, d: 0.4, h: 0.5, colors: [0x14161a, 0x24262b], rough: 0.3, metal: 0.3 },
@@ -32,6 +38,8 @@ const PAL = {
     { model: "bookcaseClosedDoors.glb", w: 0.94, d: 0.59, h: 2.00, colors: [0x8a9099, 0x5a6473, 0x7a828a], rough: 0.5, metal: 0.35, rots: [0, 1.57] },
   ],
   offices: [
+    { model: "chairModernCushion.glb", w: 0.41, d: 0.41, h: 0.95, colors: [0x7a4a5a, 0x3f4348], rough: 0.8, metal: 0.05, rots: [0, 1.57, 3.14] },
+    { model: "lampSquareFloor.glb", w: 0.22, d: 0.22, h: 1.55, colors: [0xc9b98a, 0xd8dce0], rough: 0.5, metal: 0.2 },
     { model: "desk.glb", w: 1.43, d: 0.77, h: 0.75, colors: [0x6b4a30, 0x5c4a36], rough: 0.6, metal: 0.05, rots: [0, 1.57, 3.14] },
     { w: 0.6, d: 0.6, h: 1.05, colors: [0x2f9e8f, 0xc0453a, 0x3b6fb0], rough: 0.6, metal: 0.1 },
     { model: "bookcaseClosed.glb", w: 1.13, d: 0.71, h: 2.4, colors: [0x5a3f2a, 0x8a9099], rough: 0.6, metal: 0.2, rots: [0, 1.57] },
@@ -41,6 +49,8 @@ const PAL = {
     { model: "sideTableDrawers.glb", w: 0.97, d: 0.40, h: 0.70, colors: [0xc9b98a, 0x6b4a30], rough: 0.55, metal: 0.1, rots: [0, 1.57] },
   ],
   brk: [
+    { model: "stoolBarSquare.glb", w: 0.4, d: 0.38, h: 1.05, colors: [0x8a6038, 0x3f4348], rough: 0.7, metal: 0.1, rots: [0, 1.57] },
+    { model: "kitchenFridgeSmall.glb", w: 1.04, d: 0.71, h: 1.45, colors: [0xd8dce0, 0x8a94a6], rough: 0.35, metal: 0.5 },
     { model: "table.glb", w: 1.93, d: 1.03, h: 0.75, colors: [0xa8845c, 0x5c4a36], rough: 0.5, metal: 0.1 },
     { w: 0.6, d: 0.6, h: 1.05, colors: [0xe07b39, 0x2f9e8f, 0xc0453a], rough: 0.6, metal: 0.1 },
     { model: "ac-unit-quaternius.glb", w: 3.03, d: 2.25, h: 2.0, colors: [0xd8dce0, 0xc8ccd2], rough: 0.4, metal: 0.5 },
@@ -82,6 +92,8 @@ const PAL = {
     { model: "bookcaseOpenLow.glb", w: 1.10, d: 0.69, h: 1.10, colors: [0xe0b83a, 0x2fa36b, 0xc23b3b], rough: 0.6, metal: 0.25, rots: [0, 1.57] },
   ],
   cafe: [
+    { model: "stoolBarSquare.glb", w: 0.38, d: 0.37, h: 1.0, colors: [0x8a6038, 0xc23b3b], rough: 0.7, metal: 0.1, rots: [0, 1.57] },
+    { model: "bench.glb", w: 0.72, d: 0.36, h: 0.85, colors: [0x5c4a36], rough: 0.85, metal: 0.05, rots: [0, 1.57] },
     { model: "table.glb", w: 1.93, d: 1.03, h: 0.75, colors: [0x6b4a30, 0xa8845c], rough: 0.55, metal: 0.05 },
     { model: "loungeSofa.glb", w: 1.92, d: 0.8, h: 0.9, colors: [0x7a4a5a, 0x3f6a6a, 0x8a5a3a], rough: 0.85, metal: 0, rots: [0, 1.57] },
     { model: "kitchenCabinet.glb", w: 1.82, d: 1.9, h: 1.9, colors: [0xe8e4dc, 0x566173], rough: 0.45, metal: 0.3 },
@@ -101,6 +113,8 @@ const PAL = {
     { model: "cardboardBoxOpen.glb", w: 0.93, d: 0.53, h: 0.70, colors: [0xb79a68, 0xc8a066], rough: 0.9, metal: 0, rots: [0, 1.57] },
   ],
   street: [
+    { model: "bench.glb", w: 0.77, d: 0.38, h: 0.9, colors: [0x5c4a36, 0x3f6a6a], rough: 0.85, metal: 0.05, rots: [0, 1.57] },
+    { model: "benchCushion.glb", w: 0.78, d: 0.39, h: 0.9, colors: [0x7a4a5a, 0x2f7d3a], rough: 0.85, metal: 0.05, rots: [0, 1.57] },
     { model: "car/sedan.glb", w: 1.5, d: 2.55, h: 1.3, colors: [0x2f5db0, 0x883333, 0x333a44], rough: 0.35, metal: 0.5, rots: [0, 1.57] },
     { model: "hydrant-quaternius.glb", w: 0.6, d: 0.47, h: 0.9, colors: [0xc0342a], rough: 0.5, metal: 0.3 },
     { model: "suburb/tree-small.glb", w: 0.67, d: 0.77, h: 1.8, colors: [0x4f8a3f, 0x6a9a3a], rough: 0.9, metal: 0 },
@@ -156,6 +170,10 @@ const PAL = {
 // obstacles, so detail is unbounded — this is where the prop-count budget actually goes.
 const DRESS = {
   office: [
+    { model: "laptop.glb", w: 0.36, d: 0.33, h: 0.22, colors: [0x2a2c30, 0x8a94a6], rough: 0.35, metal: 0.4, rots: [0, 1.57, 3.14] },
+    { model: "computerKeyboard.glb", w: 0.3, d: 0.13, h: 0.03, colors: [0x24262b, 0xd8dce0], rough: 0.6, metal: 0.1 },
+    { model: "plantSmall2.glb", w: 0.2, d: 0.2, h: 0.3, colors: [0x2f7d3a, 0x3f6e46], rough: 0.9, metal: 0 },
+    { model: "radio.glb", w: 0.33, d: 0.1, h: 0.24, colors: [0x3f4348, 0xc0453a], rough: 0.5, metal: 0.25 },
     { w: 0.36, d: 0.28, h: 0.32, colors: [0x14161a, 0xc0453a, 0x2f9e8f, 0xe07b39], rough: 0.5, metal: 0.2 },
     { w: 0.22, d: 0.22, h: 0.26, colors: [0xd8dce0, 0x8a94a6, 0x3f8fc0], rough: 0.6, metal: 0.1 },
     { w: 0.5, d: 0.34, h: 0.12, colors: [0xeef0f2, 0xc9b98a], rough: 0.7, metal: 0 },
@@ -164,6 +182,9 @@ const DRESS = {
     { model: "plantSmall1.glb", w: 0.14, d: 0.14, h: 0.20, colors: [0x2f7d3a, 0x4a7c3f], rough: 0.9, metal: 0 },
   ],
   retail: [
+    { model: "kitchenMicrowave.glb", w: 0.48, d: 0.38, h: 0.3, colors: [0xd8dce0, 0x3f4348], rough: 0.4, metal: 0.4 },
+    { model: "kitchenCoffeeMachine.glb", w: 0.38, d: 0.47, h: 0.35, colors: [0x2a2c30, 0xc23b3b], rough: 0.45, metal: 0.3 },
+    { model: "plantSmall3.glb", w: 0.22, d: 0.19, h: 0.32, colors: [0x5f9a3a, 0x2f7d3a], rough: 0.9, metal: 0 },
     { w: 0.32, d: 0.3, h: 0.34, colors: [0xe0b83a, 0xd94f8a, 0x2fa36b, 0x3a6ea5, 0xd83a3a], rough: 0.8, metal: 0 },
     { w: 0.24, d: 0.24, h: 0.26, colors: [0xe0951f, 0x7a3aa0, 0x3f9f57, 0xc23b3b], rough: 0.6, metal: 0 },
     { w: 0.45, d: 0.3, h: 0.16, colors: [0xc8a066, 0xb07a3a], rough: 0.85, metal: 0 },

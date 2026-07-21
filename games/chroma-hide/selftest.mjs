@@ -351,6 +351,15 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
   assert(refs.length > 0, "model guard: found model references to check (" + refs.length + ")");
   assert(missing.length === 0, "every referenced model exists on disk" +
     (missing.length ? " — MISSING: " + missing.join(", ") : " (" + refs.length + " checked)"));
+
+  // ...and the reverse: shipped bytes must be reachable bytes. 97 models (1.66 MB, 43%
+  // of the payload) were once downloaded by every player and placed by no map.
+  const walk = (dir, pre) => fs.readdirSync(new URL(dir, import.meta.url), { withFileTypes: true })
+    .flatMap((e) => e.isDirectory() ? walk(dir + e.name + "/", pre + e.name + "/") : (e.name.endsWith(".glb") ? [pre + e.name] : []));
+  const shipped = walk("assets/models/", "");
+  const orphan = shipped.filter((f) => !refs.includes(f));
+  assert(orphan.length === 0, "no shipped model is unreachable" +
+    (orphan.length ? " — " + orphan.length + " orphaned: " + orphan.slice(0, 6).join(", ") : " (" + shipped.length + " shipped)"));
 }
 
 console.log(fails === 0 ? "\nSELFTEST PASS" : `\nSELFTEST FAIL (${fails})`);
