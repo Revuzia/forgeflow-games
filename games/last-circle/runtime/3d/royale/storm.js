@@ -38,7 +38,7 @@ export function createStorm(W) {
     ctx.lineTo(x + (Math.random() - 0.5) * 40, Math.random() * 160);
     ctx.stroke();
   }
-  const tex = new THREE.CanvasTexture(cv);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
   tex.repeat.set(12, 1);
 
@@ -63,6 +63,8 @@ export function createStorm(W) {
   return ctl;
 }
 
+const STORM_TILE_M = 26;   // world metres of wall per texture tile
+
 export function update(W, dt) {
   const ctl = W.stormCtl;
   if (!ctl) return;
@@ -78,6 +80,17 @@ export function update(W, dt) {
     ctl.wall.position.x = st.center.x;
     ctl.wall.position.z = st.center.z;
     ctl.wall.scale.set(st.radius, 1, st.radius);
+    // The wall is a unit cylinder SCALED to the storm radius, but tex.repeat was
+    // fixed at 12 for the whole match. At the opening radius (~739m) that is a
+    // 4.6km circumference cut into 12 tiles — each streak smeared ~390m wide, so
+    // the "wall" painted thin vertical stripes across the entire sky instead of
+    // reading as a wall. By the final circle the same 12 tiles were packed into
+    // ~125m. Lock the tile to a constant world width so the wall looks the same
+    // at every radius; the lower clamp keeps the last tiny circle from tiling
+    // into moire.
+    const tiles = Math.round((2 * Math.PI * st.radius) / STORM_TILE_M);
+    const want = Math.max(8, Math.min(256, tiles));
+    if (want !== ctl.tex.repeat.x) ctl.tex.repeat.x = want;
   } else {
     ctl.wall.visible = false;
   }

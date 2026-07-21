@@ -198,7 +198,7 @@ function chestGlow() {
     gr.addColorStop(1, "rgba(255,180,40,0)");
     ctx.fillStyle = gr;
     ctx.fillRect(0, 0, 128, 128);
-    glowTex = new THREE.CanvasTexture(cv);
+    glowTex = new THREE.CanvasTexture(cv); glowTex.colorSpace = THREE.SRGBColorSpace;
   }
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   sp.scale.set(3.2, 3.2, 1);

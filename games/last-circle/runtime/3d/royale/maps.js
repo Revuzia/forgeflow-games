@@ -76,6 +76,12 @@ function _fieldTex(key, size, heightFn, albedoFn, aniso, normalStrength) {
   for (let i = 0; i < size * size; i++) { const g = Math.max(0, Math.min(255, Math.round(albedoFn(H[i]) * 255))); ida.data[i * 4] = g; ida.data[i * 4 + 1] = g; ida.data[i * 4 + 2] = g; ida.data[i * 4 + 3] = 255; }
   ga.putImageData(ida, 0, 0);
   const map = new THREE.CanvasTexture(ca); map.wrapS = map.wrapT = THREE.RepeatWrapping; map.anisotropy = aniso || 4;
+  // Three r152+ defaults a CanvasTexture to NoColorSpace, i.e. it is sampled as
+  // LINEAR. These canvases are painted in sRGB, so every albedo in the game was
+  // being fed to the shader un-decoded: the ground and every structure rendered
+  // washed out and flat, which is why the "procedural PBR terrain" read as a
+  // single pale green plane on screen. Normal maps must STAY linear (below).
+  map.colorSpace = THREE.SRGBColorSpace;
   // normal from height (wrap-around Sobel)
   const cn = mk(), gn = cn.getContext("2d"), idn = gn.createImageData(size, size);
   const at = (x, y) => H[((y % size) + size) % size * size + (((x % size) + size) % size)];
@@ -352,7 +358,7 @@ export async function buildMap(W, mapId) {
     const cgrad = cx2.createRadialGradient(64, 64, 4, 64, 64, 62);
     cgrad.addColorStop(0, "rgba(255,255,255,0.95)"); cgrad.addColorStop(0.5, "rgba(255,255,255,0.45)"); cgrad.addColorStop(1, "rgba(255,255,255,0)");
     cx2.fillStyle = cgrad; cx2.fillRect(0, 0, 128, 128);
-    const cloudTex = new THREE.CanvasTexture(ccv);
+    const cloudTex = new THREE.CanvasTexture(ccv); cloudTex.colorSpace = THREE.SRGBColorSpace;
     const clouds = [];
     for (let i = 0; i < 24; i++) {
       const grp = new THREE.Group();
@@ -374,7 +380,7 @@ export async function buildMap(W, mapId) {
     const bcv = document.createElement("canvas"); bcv.width = bcv.height = 32;
     const bx = bcv.getContext("2d"); bx.strokeStyle = "rgba(38,40,52,0.92)"; bx.lineWidth = 3; bx.lineCap = "round";
     bx.beginPath(); bx.moveTo(4, 21); bx.lineTo(16, 11); bx.lineTo(28, 21); bx.stroke();
-    const birdTex = new THREE.CanvasTexture(bcv);
+    const birdTex = new THREE.CanvasTexture(bcv); birdTex.colorSpace = THREE.SRGBColorSpace;
     const flocks = [];
     for (let f = 0; f < 3; f++) {
       const flock = new THREE.Group();

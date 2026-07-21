@@ -115,6 +115,11 @@
   // (A procedural leg-fold was tried first and rejected — captures showed the
   // character kneeling in mid-air; there is no IK here to plant the feet.)
   var CROUCH = { speedMult: 0.45, heightMult: 0.86, eyeMult: 0.60, spreadMult: 0.62 };
+  // Drinking/bandaging used to be COMPLETELY free — you could chug an 8s medkit
+  // at full sprint while closing on someone, so the heal carried no cost and no
+  // tell. Using one now slows you to a walk-shuffle and locks sprint out for the
+  // duration: you can still reposition behind cover, you just cannot run.
+  var HEAL = { speedMult: 0.45, blocksSprint: true };
   /** Height of an actor's hit capsule. Only shrinks for an actor that actually
    *  HAS the crouch clip loaded — if a skin's clip failed to bake it still
    *  stands upright, and shrinking its capsule would reintroduce the lie. */
@@ -508,7 +513,7 @@
     mulberry32: mulberry32, clamp: clamp, dist2d: dist2d, lerp: lerp,
     RARITY: RARITY, RARITY_COLOR: RARITY_COLOR, RARITY_DMG_MULT: RARITY_DMG_MULT, RARITY_SPREAD_MULT: RARITY_SPREAD_MULT,
     WEAPONS: WEAPONS, WEAPON_IDS: WEAPON_IDS, WEAPON_NAMES: WEAPON_NAMES, weaponName: weaponName, gunScore: gunScore, AMMO: AMMO, CONSUMABLES: CONSUMABLES, START_LOADOUT: START_LOADOUT,
-    MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH, effectiveSpread: effectiveSpread,
+    MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH, HEAL: HEAL, effectiveSpread: effectiveSpread,
     actorHeight: actorHeight, actorEyeY: actorEyeY, moveBasis: moveBasis,
     segmentBox: segmentBox, rampTopAt: rampTopAt, segmentRamp: segmentRamp,
     segmentColliders: segmentColliders,

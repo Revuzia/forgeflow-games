@@ -340,7 +340,7 @@ function mkNameTag(W, a) {
   ctx.beginPath(); ctx.roundRect(128 - w / 2, 4, w, 38, 8); ctx.fill();
   ctx.fillStyle = "#fff";
   ctx.fillText(a.name, 128, 32);
-  const tex = new THREE.CanvasTexture(cv);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: true, transparent: true }));
   sp.scale.set(2.6, 0.49, 1);
   sp.position.y = 2.25;
@@ -768,11 +768,19 @@ function stepActor(W, a, dt, far) {
   // desired horizontal velocity (local axes → world by yaw)
   // crouch: ground-only, and sprinting always wins (you stand up to run)
   a.crouching = !!inp.crouch && a.onGround && !a.swimming && !a.gliding && !(inp.sprint && inp.mz > 0.5);
+  // Using a heal LOCKS OUT SPRINT for the whole channel (owner direction): you
+  // may keep moving and reposition behind cover, you just cannot run while you
+  // drink. Sprint is gated here rather than by clearing inp.sprint, so the
+  // sprint TOGGLE latch survives the heal — you are not silently un-toggled and
+  // left walking once the medkit finishes.
+  const healingNow = !!a.healing;
+  const sprinting = inp.sprint && inp.mz > 0.5 && !(healingNow && K.HEAL.blocksSprint);
   const spd = a.swimming
-    ? (inp.sprint && inp.mz > 0.5 ? K.MOVE.swimSprint : K.MOVE.swim)
-    : inp.ads ? K.MOVE.ads : (inp.sprint && inp.mz > 0.5 && !a.inWater) ? K.MOVE.sprint : K.MOVE.walk;
+    ? (sprinting ? K.MOVE.swimSprint : K.MOVE.swim)
+    : inp.ads ? K.MOVE.ads : (sprinting && !a.inWater) ? K.MOVE.sprint : K.MOVE.walk;
   let wspd = (a.inWater && !a.swimming) ? spd * 0.55 : spd;   // wading is slow
   if (a.crouching) wspd *= K.CROUCH.speedMult;
+  if (healingNow) wspd *= K.HEAL.speedMult;                   // heals cost tempo
   const GB = K.moveBasis(a.yaw);
   const dx = GB.rx * inp.mx + GB.fx * inp.mz, dz = GB.rz * inp.mx + GB.fz * inp.mz;
   const dl = Math.hypot(dx, dz) || 1;
@@ -782,7 +790,7 @@ function stepActor(W, a, dt, far) {
   a.vel.x += (tx - a.vel.x) * k;
   a.vel.z += (tz - a.vel.z) * k;
 
-  a.sprinting = inp.sprint && inp.mz > 0.5;
+  a.sprinting = sprinting;   // heal-gated, so the run anim + FOV kick match the real speed
 
   if (a.swimming) {
     // buoyancy: settle chest-deep at the surface with a gentle bob; jump = stroke hop

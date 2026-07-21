@@ -259,5 +259,18 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(R.effectiveSpread("nonexistent", 0, S({})) === 1, "spread: unknown weapon falls back to 1deg, never NaN");
 }
 
+// -- heal tempo cost (owner direction 2026-07-21) ---------------------------
+// Using a medkit/shield must SLOW you and must lock sprint out for the channel.
+// Healing was previously free at full sprint: no cost, no tell, no counterplay.
+{
+  ok(R.HEAL && typeof R.HEAL.speedMult === "number", "heal: HEAL constant is exported from the sim");
+  ok(R.HEAL.speedMult > 0 && R.HEAL.speedMult < 1, "heal: slows you but never freezes you in place");
+  ok(R.HEAL.blocksSprint === true, "heal: sprint is locked out for the channel");
+  ok(R.MOVE.walk * R.HEAL.speedMult < R.MOVE.walk, "heal: healing walk is slower than a normal walk");
+  ok(R.MOVE.walk * R.HEAL.speedMult < R.MOVE.sprint, "heal: healing can never out-pace a sprint");
+  ok(R.MOVE.walk * R.HEAL.speedMult > 1.0, "heal: you can still walk to cover, not rooted");
+  ok(R.MOVE.walk * R.HEAL.speedMult * R.CROUCH.speedMult > 0, "heal: crouch-healing stays positive");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
