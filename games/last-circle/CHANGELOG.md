@@ -3,6 +3,40 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — Bots stood in the open pulling a dead trigger (?v=62, LIVE)
+
+Build-order #11, first half.
+
+- **ensureGunOut's scoring body was dead code.** Its guard read
+  `if (a.weapon && !a.weapon.id.startsWith("consumable")) return;` — and every
+  actor is CREATED holding a pistol, so it returned immediately for every bot in
+  every match. A bot locked onto the first gun it ever touched, never upgraded,
+  and once mag AND reserve hit zero it aimed correctly and pulled a dead trigger
+  forever while a loaded pistol sat in slot 0.
+- **It was also called from the wrong place** — only actLoot and actEngage — so
+  a bot rotating across the map with a dry gun did not re-evaluate until it
+  happened to engage someone, which is exactly the moment it needed to already
+  be holding a loaded gun. Now runs once per think() for every state (and off
+  the per-frame act path entirely).
+- **Scoring gained pellets and ammo.** Raw `damage` is PER PELLET, so a
+  legendary shotgun scored below the starter pistol; and a dry gun now scores 0
+  so it can never win. Verified: a bot holding a pistol upgrades to a loaded
+  legendary shotgun.
+- **Guarded against thrash:** it never re-equips the slot already held, and only
+  acts on a real reason (consumable out, gun dry, or >15% better available).
+  equipSlot rebuilds the weapon object, so an unguarded call every think would
+  cancel reloads and re-clone the weapon mesh.
+
+Verified live: a bot holding a dry AR swaps to its loaded pistol; a bot holding
+a pistol upgrades to a legendary shotgun; 30 thinks while already holding the
+best gun produce 0 equip calls, and 20 thinks with EVERY slot dry also produce 0.
+
+STILL OPEN from this build-order item (not attempted here): bots have no 3-gun
+carry cap (the human's is inside an `if (a === W.player)` block in loot.js), so a
+well-looted bot fills all five slots with guns and can never pick up shields or
+heals; and pickLoot re-selects an item give() just refused, producing a twitch
+loop. Both are loot.js changes and are tracked in GAP_SCAN.md. DRAFT.
+
 ## 2026-07-20 — The kill you just made was the one beat you never saw (?v=60, LIVE)
 
 Build-order #9.

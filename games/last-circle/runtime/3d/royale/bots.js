@@ -126,6 +126,11 @@ function think(W, b) {
   if (a.gliding) { b.state = "DROP"; return; }
 
   perceive(W, b);
+  // Weapon choice belongs on the think cadence, not inside two act states. It
+  // used to be called only from actLoot and actEngage, so a bot rotating across
+  // the map with a dry gun never re-evaluated until it happened to engage —
+  // by which point it was already pulling a dead trigger at someone.
+  ensureGunOut(W, a);
 
   const st = W.stormCtl ? W.stormCtl.storm.stateAt(W.t) : null;
   const inStorm = st && st.dps > 0 && Math.hypot(a.pos.x - st.center.x, a.pos.z - st.center.z) > st.radius;
@@ -409,22 +414,50 @@ function actLoot(W, b, dt) {
     // re-run explicitly or the bot stands idle forever)
     onEnter(W, b, "LOOT");
   }
-  // equip best gun if fists out
-  ensureGunOut(W, a);
 }
 
+/** Ammo a slot can actually put downrange right now (mag + matching reserve). */
+function slotAmmo(a, s) {
+  const def = K.WEAPONS[s.id];
+  if (!def) return 0;
+  const mag = s.mag != null ? s.mag : 0;
+  return mag + (a.inventory.ammo[def.ammo] || 0);
+}
+/** Sustained DPS of a slot, rarity-weighted. */
+function slotScore(a, s) {
+  const def = K.WEAPONS[s.id];
+  if (!def) return -1;
+  if (slotAmmo(a, s) <= 0) return 0;                       // a dry gun is worth nothing
+  const pellets = def.pellets || 1;                        // without this a legendary
+  // shotgun scored BELOW the starter pistol, because raw `damage` is per pellet
+  return (def.damage * pellets * def.rpm / 60) + (s.rarity || 0) * 20;
+}
 function ensureGunOut(W, a) {
-  // holding a consumable (or an empty hand) mid-world → switch to the best gun
-  if (a.weapon && !a.weapon.id.startsWith("consumable")) return;
+  // Old guard: `if (a.weapon && !a.weapon.id.startsWith("consumable")) return;`
+  // Every actor is created holding a pistol, so this returned immediately for
+  // every bot in every match and the scoring below was dead code. A bot locked
+  // onto the first gun it ever touched, never upgraded, and — once mag AND
+  // reserve hit zero — stood in the open aiming correctly and pulling a dead
+  // trigger while a loaded pistol sat in slot 0.
+  const cur = a.weapon;
+  const holdingConsumable = !cur || cur.id.startsWith("consumable");
+  const curSlot = a.inventory.slots[a.inventory.active];
+  const curDry = !holdingConsumable && curSlot && curSlot.kind === "weapon" && slotAmmo(a, curSlot) <= 0;
   let bestIdx = -1, bs = -1;
   for (let i = 0; i < a.inventory.slots.length; i++) {
     const s = a.inventory.slots[i];
-    if (s && s.kind === "weapon") {
-      const score = (K.WEAPONS[s.id].damage * K.WEAPONS[s.id].rpm / 60) + s.rarity * 20;
-      if (score > bs) { bs = score; bestIdx = i; }
-    }
+    if (!s || s.kind !== "weapon") continue;
+    const score = slotScore(a, s);
+    if (score > bs) { bs = score; bestIdx = i; }
   }
-  if (bestIdx >= 0) W.equipSlot(a, bestIdx);
+  if (bestIdx < 0) return;
+  // Only act when there is a REASON to: holding a consumable, holding a dry gun,
+  // or a meaningfully better gun is available. And never re-equip the slot we
+  // already hold — equipSlot rebuilds the weapon object, so calling it every
+  // think would cancel reloads and re-clone the mesh forever.
+  if (bestIdx === a.inventory.active) return;
+  const curScore = holdingConsumable ? -1 : (curSlot ? slotScore(a, curSlot) : -1);
+  if (holdingConsumable || curDry || bs > curScore * 1.15) W.equipSlot(a, bestIdx);
 }
 
 function actHeal(W, b, dt) {
@@ -466,7 +499,6 @@ function actEngage(W, b, dt) {
   const dx = tp.x - a.pos.x, dz = tp.z - a.pos.z;
   const dist = Math.hypot(dx, dz);
 
-  ensureGunOut(W, a);
   const wid = a.weapon ? a.weapon.id : "pistol";
   const def = K.WEAPONS[wid] || K.WEAPONS.pistol;
 
