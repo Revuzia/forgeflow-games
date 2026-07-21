@@ -390,7 +390,18 @@ function mkEmitter() {
 }
 function loadSettings() {
   const def = { masterVol: 0.8, musicVol: 0.5, sfxVol: 0.9, sensitivity: 1.0, adsSensitivity: 0.8, graphics: "medium", playerName: "You", keys: {}, showPerf: false, fov: 57, sprintToggle: true, adsToggle: false };   // SHIFT = click on / click off (owner direction 2026-07-21)
-  try { return Object.assign(def, JSON.parse(localStorage.getItem("lc_settings") || "{}")); } catch (e) { return def; }
+  try {
+    const s = Object.assign(def, JSON.parse(localStorage.getItem("lc_settings") || "{}"));
+    // Settings persist, so a value dragged to an unusable extreme STAYS broken
+    // across reloads — a sensitivity slider pulled to 0 left the mouse unable to
+    // turn at all, on every future launch, with no way back except clearing site
+    // data. Clamp on load so a bad stored value self-heals.
+    s.sensitivity = Math.min(3, Math.max(0.15, +s.sensitivity || 1));
+    s.adsSensitivity = Math.min(3, Math.max(0.15, +s.adsSensitivity || 0.8));
+    s.fov = Math.min(85, Math.max(50, +s.fov || 57));
+    for (const k of ["masterVol", "musicVol", "sfxVol"]) s[k] = Math.min(1, Math.max(0, +s[k] || 0));
+    return s;
+  } catch (e) { return def; }
 }
 function shuffledNames(W) {
   const pool = window.FFG.sim.Royale.BOT_NAMES.slice();

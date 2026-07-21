@@ -492,7 +492,16 @@ function installHumanInput(W) {
   let rmbDrag = false;
   dom.addEventListener("mousedown", (e) => {
     if (!W.player || W.phase === "menu" || W.paused) return;
+    // Whether the mouse was ALREADY captured decides what this click means. Any
+    // click re-acquires pointer lock, and the trigger used to be armed on the
+    // same event — so the click you use to resume after ESC, after a settings
+    // panel, or after the browser drops the lock also fired your weapon. That is
+    // a wasted round and a position giveaway every single time you tab back in.
+    // Swallow the LEFT button on the acquiring click only; button 2 is left
+    // alone so the RMB-drag look fallback still works when lock is denied.
+    const wasLocked = document.pointerLockElement === dom;
     tryLock();                     // ANY click grabs the mouse for looking
+    if (e.button === 0 && !wasLocked) return;
     if (e.button === 0) {
       W._lmbDown = true;
       W._fireEdge = true;           // fresh click — semi-auto weapons fire on this EDGE only

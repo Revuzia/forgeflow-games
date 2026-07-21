@@ -1145,6 +1145,16 @@ function drawCompass(W, ctx, wpx) {
 // ═══ HUD ═════════════════════════════════════════════════════════════════════
 export function showHUD(W) {
   const L = layer("hud");
+  // The scope surround is a 92%-black radial fill over the WHOLE screen. Nothing
+  // in the hud layer sets a z-index, so paint order is pure DOM order — created
+  // last, it covered health, shields, ammo, the storm clock, the minimap, the
+  // kill feed and the damage chevrons. Scoping a sniper blacked out every piece
+  // of information you need to decide whether to take the shot. Created FIRST,
+  // it sits underneath them all; its own crosshair lines are at screen centre
+  // where no widget draws, and R.cross is already hidden while scoped.
+  R.scope = h("div", { position: "absolute", inset: "0", display: "none", background: "radial-gradient(circle at center, rgba(0,0,0,0) 26%, rgba(0,0,0,0.92) 27%)", pointerEvents: "none" }, null, L);
+  const scLine = h("div", { position: "absolute", left: "50%", top: "50%", width: "40%", height: "1px", background: "rgba(255,255,255,0.5)", transform: "translate(-50%,-50%)" }, null, R.scope);
+  h("div", { position: "absolute", left: "50%", top: "50%", width: "1px", height: "40%", background: "rgba(255,255,255,0.5)", transform: "translate(-50%,-50%)" }, null, R.scope);
   const bottomLeft = h("div", { position: "absolute", left: "18px", bottom: "16px", width: "300px" }, null, L);
   // hp/shield — Final Drop style: icon + bar with % inside
   const mkBar = (icon, color) => {
@@ -1249,9 +1259,6 @@ export function showHUD(W) {
   // tints
   R.stormTint = h("div", { position: "absolute", inset: "0", background: "radial-gradient(ellipse at center, rgba(130,60,200,0) 55%, rgba(130,60,200,0.35) 100%)", opacity: "0", transition: "opacity .5s", pointerEvents: "none" }, null, L);
   R.hurtTint = h("div", { position: "absolute", inset: "0", background: "radial-gradient(ellipse at center, rgba(200,30,30,0) 60%, rgba(200,30,30,0.4) 100%)", opacity: "0", transition: "opacity .3s", pointerEvents: "none" }, null, L);
-  R.scope = h("div", { position: "absolute", inset: "0", display: "none", background: "radial-gradient(circle at center, rgba(0,0,0,0) 26%, rgba(0,0,0,0.92) 27%)", pointerEvents: "none" }, null, L);
-  const scLine = h("div", { position: "absolute", left: "50%", top: "50%", width: "40%", height: "1px", background: "rgba(255,255,255,0.5)", transform: "translate(-50%,-50%)" }, null, R.scope);
-  h("div", { position: "absolute", left: "50%", top: "50%", width: "1px", height: "40%", background: "rgba(255,255,255,0.5)", transform: "translate(-50%,-50%)" }, null, R.scope);
 
   R._hudCache = {};
   // perf readout (opt-in): FPS always, plus link freshness when online. This is
@@ -2204,8 +2211,8 @@ function showSettings(W) {
   slider(box, "Master volume", W.settings.masterVol, (v) => { W.settings.masterVol = v; applyAudio(W); });
   slider(box, "Music volume", W.settings.musicVol, (v) => { W.settings.musicVol = v; applyAudio(W); });
   slider(box, "SFX volume", W.settings.sfxVol, (v) => { W.settings.sfxVol = v; applyAudio(W); });
-  slider(box, "Mouse sensitivity", W.settings.sensitivity / 2, (v) => { W.settings.sensitivity = v * 2; save(W); });
-  slider(box, "ADS sensitivity", W.settings.adsSensitivity / 2, (v) => { W.settings.adsSensitivity = v * 2; save(W); });
+  slider(box, "Mouse sensitivity", W.settings.sensitivity / 2, (v) => { W.settings.sensitivity = v * 2; save(W); }, { min: 0.075 });   // never draggable to 0 — that killed mouse-look, and it persisted
+  slider(box, "ADS sensitivity", W.settings.adsSensitivity / 2, (v) => { W.settings.adsSensitivity = v * 2; save(W); }, { min: 0.075 });
 
   // graphics
   const gRow = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
@@ -2308,11 +2315,11 @@ function closeSettings(W) {
   save(W);
 }
 function keyLabel(code) { return code.replace("Key", "").replace("Digit", "").replace("Left", " L").replace("Control", "CTRL"); }
-function slider(box, label, val, onChange) {
+function slider(box, label, val, onChange, opts) {
   const row = h("div", { display: "flex", gap: "10px", alignItems: "center" }, null, box);
   h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, label, row);
   const inp = h("input", { flex: "1" }, null, row);
-  inp.type = "range"; inp.min = 0; inp.max = 1; inp.step = 0.01; inp.value = val;
+  inp.type = "range"; inp.min = (opts && opts.min != null) ? opts.min : 0; inp.max = 1; inp.step = 0.01; inp.value = val;
   const num = h("div", { fontSize: "12px", width: "40px", textAlign: "right" }, Math.round(val * 100) + "%", row);
   inp.oninput = () => { onChange(parseFloat(inp.value)); num.textContent = Math.round(inp.value * 100) + "%"; };
 }
