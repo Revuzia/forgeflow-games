@@ -39,6 +39,7 @@ Line anchors were correct at the time of writing but drift — re-locate by cont
 - [x] ux: sprint and ADS were hold-only, no toggle (?v=67)
 - [x] ux: emote keys B/N appeared in no control surface and could not be rebound (?v=67)
 - [x] ux: rarity was communicated by HUE ALONE — tier numerals added (?v=67)
+- [x] pacing/perf: loot proximity queries were an unindexed full scan every frame per looting bot (?v=69)
 - [ ] remaining: the other lower-ranked surviving findings listed by dimension below
 
 # LAST CIRCLE — BUILD ORDER

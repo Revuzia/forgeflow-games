@@ -12,6 +12,19 @@ import * as THREE from "three";
 let K = null;
 const items = new Map();      // id -> {id, data, pos, group, taken}
 const chests = new Map();     // id -> {id, pos, group, opened}
+// Spatial hash over loot, same idea maps.js already uses for colliders. nearby()
+// used to walk EVERY item and EVERY chest and hypot each one — and bots call it
+// once per frame while looting, on top of a 90 m planning query per think, with
+// up to 49 bots looting at once early in a match.
+const LOOT_CELL = 24;
+const lootGrid = new Map();
+const lkey = (cx, cz) => cx + "," + cz;
+function gridAdd(kind, id, pos) {
+  const k = lkey(Math.floor(pos.x / LOOT_CELL), Math.floor(pos.z / LOOT_CELL));
+  let l = lootGrid.get(k);
+  if (!l) { l = []; lootGrid.set(k, l); }
+  l.push({ kind, id });
+}
 let nextId = 1;
 let supplyState = null;
 
@@ -61,7 +74,7 @@ const takenIds = [];
 export function resetSync() { takenIds.length = 0; }
 
 export function populate(W) {
-  items.clear(); chests.clear();
+  items.clear(); chests.clear(); lootGrid.clear();
   takenIds.length = 0;
   nextId = 1;
   supplyState = { dropped: 0, next: null };
@@ -142,6 +155,7 @@ export function spawnItem(W, data, x, y, z, id) {
   group.position.set(x, gy, z);
   W.group("loot").add(group);
   items.set(id, { id, data, pos: { x, y: gy, z }, group, taken: false });
+  gridAdd("item", id, { x, z });
   return id;
 }
 
@@ -214,6 +228,7 @@ function spawnChest(W, x, y, z) {
   ensureChestProto(W).then((proto) => { if (group.parent) group.add(proto.clone()); });
   W.group("loot").add(group);
   chests.set(id, { id, pos: { x, y: gy, z }, group, opened: false, glow, beam, ring });
+  gridAdd("chest", id, { x, z });
   return id;
 }
 
@@ -268,15 +283,34 @@ function maybeSupplyDrop(W, dt) {
 // ── queries / interaction ────────────────────────────────────────────────────
 function nearby(pos, r) {
   const out = [];
-  for (const [, it] of items) {
-    if (it.taken) continue;
-    const d = Math.hypot(it.pos.x - pos.x, it.pos.z - pos.z);
-    if (d < r && Math.abs(it.pos.y - pos.y) < 4) out.push({ type: "item", id: it.id, data: it.data, pos: it.pos, d });
-  }
-  for (const [, c] of chests) {
-    if (c.opened) continue;
-    const d = Math.hypot(c.pos.x - pos.x, c.pos.z - pos.z);
-    if (d < r && Math.abs(c.pos.y - pos.y) < 4) out.push({ type: "chest", id: c.id, pos: c.pos, d });
+  const r2 = r * r;
+  const x0 = Math.floor((pos.x - r) / LOOT_CELL), x1 = Math.floor((pos.x + r) / LOOT_CELL);
+  const z0 = Math.floor((pos.z - r) / LOOT_CELL), z1 = Math.floor((pos.z + r) / LOOT_CELL);
+  for (let cx = x0; cx <= x1; cx++) {
+    for (let cz = z0; cz <= z1; cz++) {
+      const l = lootGrid.get(lkey(cx, cz));
+      if (!l) continue;
+      for (let i = 0; i < l.length; i++) {
+        const e = l[i];
+        if (e.kind === "item") {
+          const it = items.get(e.id);
+          if (!it || it.taken) continue;
+          const dx = it.pos.x - pos.x, dz = it.pos.z - pos.z;
+          const d2 = dx * dx + dz * dz;                     // squared compare: no sqrt per candidate
+          if (d2 < r2 && Math.abs(it.pos.y - pos.y) < 4) {
+            out.push({ type: "item", id: it.id, data: it.data, pos: it.pos, d: Math.sqrt(d2) });
+          }
+        } else {
+          const c = chests.get(e.id);
+          if (!c || c.opened) continue;
+          const dx = c.pos.x - pos.x, dz = c.pos.z - pos.z;
+          const d2 = dx * dx + dz * dz;
+          if (d2 < r2 && Math.abs(c.pos.y - pos.y) < 4) {
+            out.push({ type: "chest", id: c.id, pos: c.pos, d: Math.sqrt(d2) });
+          }
+        }
+      }
+    }
   }
   out.sort((a, b) => a.d - b.d);
   return out;

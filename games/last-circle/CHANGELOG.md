@@ -3,6 +3,31 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — Loot proximity queries were an unindexed full scan (?v=69, LIVE)
+
+- nearby() walked EVERY item and EVERY chest, hypot'ing each one, on every call.
+  Bots call it once per frame while looting (bots.js actLoot) on top of a 90 m
+  planning query per think, and early in a match dozens of bots are looting at
+  once. Now a spatial hash over loot (24 m cells), the same technique maps.js
+  already uses for colliders, so a query only touches the cells inside its
+  radius. Distance compares are squared, with one sqrt per surviving candidate.
+- Items are indexed on spawn (including runtime drops via dropItem) and the grid
+  clears with the rest of the loot state between matches.
+
+Verified live: a query centred exactly on each indexed item finds it (0 misses),
+and cell-boundary offsets in five directions all still find it (0 misses) —
+those are the two tests that are NOT circular. Sorted nearest-first order is
+preserved, which callers rely on. Measured cost after the change: 2.4 µs for the
+per-frame r=2.4 query and 14.9 µs for the r=90 planning query.
+
+Honest limits of this measurement: I did not keep a before-number for the old
+full scan, so no speedup FACTOR is claimed here — the argument is structural
+(cells within the radius instead of every entry) plus the absolute costs above.
+Two earlier verification attempts also produced false "mismatch" counts because
+the reference set was built from nearby() itself at y=0, and nearby() applies a
+|dy| < 4 filter — so the reference silently excluded everything not near sea
+level. Selftest 66/66. DRAFT.
+
 ## 2026-07-21 — SHIFT toggles sprint on and off (?v=68, LIVE)
 
 Owner direction: "Make SHIFT click activate sprint/run, on and off."
