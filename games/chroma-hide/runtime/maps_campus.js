@@ -199,6 +199,24 @@ const DECOR = {
   ],
 };
 
+
+// Outdoor occluders as real objects. GLBs scale by HEIGHT, so w/d below are the measured
+// bounding box scaled by (target h / base h) -- measured in-browser, not guessed.
+const YARD_VEHICLES = [
+  { model: "car/van.glb",      w: 1.78, d: 3.26, h: 1.60, rots: [0, Math.PI, 1.5708] },
+  { model: "car/sedan.glb",    w: 1.73, d: 2.94, h: 1.50, rots: [0, Math.PI, 1.5708] },
+  { model: "car/truck.glb",    w: 1.85, d: 3.63, h: 1.60, rots: [0, Math.PI] },
+  { model: "car/delivery.glb", w: 2.00, d: 4.33, h: 2.20, rots: [0, Math.PI] },
+];
+const YARD_BARRIERS = [
+  { model: "barrier-large-quaternius.glb", w: 3.36, d: 0.59, h: 2.80, rots: [0, 1.5708] },
+  { model: "ac-unit-quaternius.glb",       w: 1.51, d: 1.12, h: 1.00 },
+];
+const GARDEN_GREEN = [
+  { model: "suburb/tree-large.glb", w: 0.87, d: 1.00, h: 3.20 },
+  { model: "suburb/tree-small.glb", w: 0.94, d: 1.08, h: 2.55 },
+];
+
 export const CAMPUS_MAPS = {
   office: buildCampus({
     id: "office", name: "The Firm",
@@ -243,9 +261,9 @@ export const CAMPUS_MAPS = {
       },
     ],
     zones: [
-      { id: "lot", name: "Parking Lot", x: 0, z: 20, w: 76, d: 24, floor: 0x55555a, tex: "concrete", breakers: { count: 5, w: 1.6, d: 1.6, h: 2.8, colors: [0x6a7280, 0x55555a, 0x8a94a6] }, scatter: { palette: PAL.lot, count: 34, margin: 2.6, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "lot", name: "Parking Lot", x: 0, z: 20, w: 76, d: 24, floor: 0x55555a, tex: "concrete", breakers: { pick: YARD_VEHICLES, count: 5, w: 1.6, d: 1.6, h: 2.8, colors: [0x6a7280, 0x55555a, 0x8a94a6] }, scatter: { palette: PAL.lot, count: 34, margin: 2.6, dressing: { palette: DRESS.yard, max: 3 } } },
       { id: "breezeway", name: "Breezeway", x: 1, z: -8, w: 10, d: 30, floor: 0x606068, tex: "concrete", breakers: { count: 3, w: 1.4, d: 1.4, h: 2.6, colors: [0x2f7d3a, 0x606068] }, scatter: { palette: PAL.breez, count: 10, margin: 2.2, dressing: { palette: DRESS.yard, max: 2 } } },
-      { id: "alley", wallTex: "brick", wallColor: 0x6f6a63, wallTrim: 0x2e2b28, name: "Rear Alley", x: 0, z: -27.5, w: 76, d: 9, floor: 0x3d4048, tex: "concrete", decor: { count: 8, palette: DECOR.street }, breakers: { count: 4, w: 2.2, d: 2.2, h: 2.7, colors: [0x8a8a90, 0xb5622a] }, scatter: { palette: PAL.alley, count: 20, margin: 2.2, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "alley", wallTex: "brick", wallColor: 0x6f6a63, wallTrim: 0x2e2b28, name: "Rear Alley", x: 0, z: -27.5, w: 76, d: 9, floor: 0x3d4048, tex: "concrete", decor: { count: 8, palette: DECOR.street }, breakers: { pick: YARD_BARRIERS, count: 4, w: 2.2, d: 2.2, h: 2.7, colors: [0x8a8a90, 0xb5622a] }, scatter: { palette: PAL.alley, count: 20, margin: 2.2, dressing: { palette: DRESS.yard, max: 3 } } },
     ],
     spawn: { seeker: { x: 0, z: 28 }, hider: { x: 1, z: -8 } },
     spotCount: 56,
@@ -299,9 +317,9 @@ export const CAMPUS_MAPS = {
       },
     ],
     zones: [
-      { id: "alley", name: "Service Alley", x: -35, z: 0, w: 6, d: 64, floor: 0x3a3844, tex: "concrete", breakers: { count: 4, w: 1.3, d: 1.3, h: 2.5, colors: [0x8a8a90, 0x3a6a3a] } },
-      { id: "mainst", wallTex: "brick", wallColor: 0x8a5a4a, wallTrim: 0x3a2a24, name: "Main Street", x: -4, z: 0, w: 24, d: 64, floor: 0x50505a, tex: "concrete", decor: { count: 8, palette: DECOR.street }, breakers: { count: 6, w: 2.0, d: 2.0, h: 2.8, colors: [0x7a4636, 0xc23b3b, 0x5f9a3a] }, scatter: { palette: PAL.street, count: 30, margin: 2.6, dressing: { palette: DRESS.yard, max: 3 } } },
-      { id: "yard", wallTex: "concrete", wallColor: 0x8b8e92, wallTrim: 0x33363a, name: "Loading Yard", x: 23, z: 0, w: 30, d: 64, floor: 0x5a5a62, tex: "concrete", decor: { count: 8, palette: DECOR.street }, breakers: { count: 6, w: 2.4, d: 2.4, h: 2.8, colors: [0xb5622a, 0x2f6a8a, 0x6b7a52] }, scatter: { palette: PAL.yard, count: 40, margin: 2.8, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "alley", name: "Service Alley", x: -35, z: 0, w: 6, d: 64, floor: 0x3a3844, tex: "concrete", breakers: { pick: YARD_BARRIERS, count: 4, w: 1.3, d: 1.3, h: 2.5, colors: [0x8a8a90, 0x3a6a3a] } },
+      { id: "mainst", wallTex: "brick", wallColor: 0x8a5a4a, wallTrim: 0x3a2a24, name: "Main Street", x: -4, z: 0, w: 24, d: 64, floor: 0x50505a, tex: "concrete", decor: { count: 8, palette: DECOR.street }, breakers: { pick: YARD_VEHICLES, count: 6, w: 2.0, d: 2.0, h: 2.8, colors: [0x7a4636, 0xc23b3b, 0x5f9a3a] }, scatter: { palette: PAL.street, count: 30, margin: 2.6, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "yard", wallTex: "concrete", wallColor: 0x8b8e92, wallTrim: 0x33363a, name: "Loading Yard", x: 23, z: 0, w: 30, d: 64, floor: 0x5a5a62, tex: "concrete", decor: { count: 8, palette: DECOR.street }, breakers: { pick: [...YARD_VEHICLES, ...YARD_BARRIERS], count: 6, w: 2.4, d: 2.4, h: 2.8, colors: [0xb5622a, 0x2f6a8a, 0x6b7a52] }, scatter: { palette: PAL.yard, count: 40, margin: 2.8, dressing: { palette: DRESS.yard, max: 3 } } },
     ],
     spawn: { seeker: { x: 23, z: 27 }, hider: { x: -4, z: 0 } },
     spotCount: 56,
@@ -336,9 +354,9 @@ export const CAMPUS_MAPS = {
       },
     ],
     zones: [
-      { id: "parking", name: "Parking", x: -12, z: 22, w: 52, d: 20, floor: 0x55555a, tex: "concrete", breakers: { count: 5, w: 1.6, d: 1.6, h: 2.8, colors: [0xbfc4c9, 0x55555a] }, scatter: { palette: PAL.lot, count: 30, margin: 2.6, dressing: { palette: DRESS.yard, max: 3 } } },
-      { id: "dock", name: "Loading Yard", x: 25, z: -2, w: 26, d: 60, floor: 0x5a5a62, tex: "concrete", breakers: { count: 5, w: 2.4, d: 2.4, h: 2.8, colors: [0x6b7a52, 0xb5622a] }, scatter: { palette: PAL.yard, count: 34, margin: 2.8, dressing: { palette: DRESS.yard, max: 3 } } },
-      { id: "gardenctr", name: "Garden Centre", x: -12, z: -28, w: 52, d: 8, floor: 0x3f5a3a, tex: "carpet", breakers: { count: 4, w: 1.4, d: 1.4, h: 2.4, colors: [0x3b7a3b, 0x5f9a3a] }, scatter: { palette: PAL.garden, count: 18, margin: 2.2, dressing: { palette: DRESS.retail, max: 3 } } },
+      { id: "parking", name: "Parking", x: -12, z: 22, w: 52, d: 20, floor: 0x55555a, tex: "concrete", breakers: { pick: YARD_VEHICLES, count: 5, w: 1.6, d: 1.6, h: 2.8, colors: [0xbfc4c9, 0x55555a] }, scatter: { palette: PAL.lot, count: 30, margin: 2.6, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "dock", name: "Loading Yard", x: 25, z: -2, w: 26, d: 60, floor: 0x5a5a62, tex: "concrete", breakers: { pick: [...YARD_VEHICLES, ...YARD_BARRIERS], count: 5, w: 2.4, d: 2.4, h: 2.8, colors: [0x6b7a52, 0xb5622a] }, scatter: { palette: PAL.yard, count: 34, margin: 2.8, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "gardenctr", name: "Garden Centre", x: -12, z: -28, w: 52, d: 8, floor: 0x3f5a3a, tex: "carpet", breakers: { pick: GARDEN_GREEN, count: 4, w: 1.4, d: 1.4, h: 2.4, colors: [0x3b7a3b, 0x5f9a3a] }, scatter: { palette: PAL.garden, count: 18, margin: 2.2, dressing: { palette: DRESS.retail, max: 3 } } },
     ],
     spawn: { seeker: { x: -12, z: 28 }, hider: { x: -12, z: 6 } },
     spotCount: 56,

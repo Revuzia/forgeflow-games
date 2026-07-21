@@ -171,8 +171,16 @@ function placeBreakers(area, b, rng, idp) {
       color: b.colors[Math.floor(rng() * b.colors.length)],
       rough: b.rough ?? 0.7, metal: b.metal ?? 0.2,
     };
-    if (b.model) p.model = b.model;
-    if (b.rots) p.rot = b.rots[Math.floor(rng() * b.rots.length)];
+    // `pick` supplies a pool of real models (each with its own measured footprint) so a
+    // car park reads as parked cars instead of identical coloured slabs. GLBs scale by
+    // HEIGHT only, so w/d here must already be the measured bbox scaled to h.
+    if (b.pick && b.pick.length) {
+      const m = b.pick[Math.floor(rng() * b.pick.length)];
+      p.model = m.model; p.w = m.w; p.d = m.d; p.h = m.h;
+      if (m.rots) p.rot = m.rots[Math.floor(rng() * m.rots.length)];
+      if (m.color != null) p.color = m.color;
+    } else if (b.model) p.model = b.model;
+    if (!p.rot && b.rots) p.rot = b.rots[Math.floor(rng() * b.rots.length)];
     out.push(p);
   }
   return out;
