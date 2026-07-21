@@ -307,6 +307,9 @@ register3d("royale", async function (kernel, content) {
       accuracy: W.stats.shotsFired ? Math.round((W.stats.shotsHit / W.stats.shotsFired) * 100) : 0,
       timeS: Math.round(W.t),
       onMenu: () => { W.phase = "menu"; netMod.leave(W); hudMod.showMenu(W, startMatch); },
+      // requeue straight into a fresh match (new random map, same mode) without
+      // rebuilding the cinematic menu world and re-reading the skin GLBs
+      onAgain: () => { netMod.leave(W); startMatch({ mapId: hudMod.randomMap(), mode: W.mode }); },
     };
   }
   W.endMatch = endMatch;

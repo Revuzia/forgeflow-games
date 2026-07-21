@@ -477,6 +477,33 @@ export function showMenu(W, startMatch) {
     WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
     filter: "drop-shadow(0 0 32px rgba(80,160,255,0.55)) drop-shadow(0 6px 4px rgba(0,0,0,0.55))",
   }, "LAST CIRCLE", titleBlock);
+  // Level / XP / career on the MENU. All of it existed already but was only ever
+  // visible on the one post-match screen, so between sessions the game showed
+  // the player no evidence they had ever played it.
+  if (!W.progress) W.progress = loadProgress();
+  {
+    const pr = W.progress, c = pr.career || {};
+    const need = xpForLevel(pr.level);
+    const strip = h("div", {
+      display: "flex", alignItems: "center", gap: "10px", marginTop: "10px",
+      padding: "6px 14px", borderRadius: "10px", background: "rgba(4,12,24,0.5)",
+      border: "1px solid rgba(120,180,255,0.18)", fontFamily: "Rajdhani, " + FONT,
+    }, null, titleBlock);
+    h("div", { fontSize: "13px", fontWeight: "900", color: "#ffd873", letterSpacing: "1px" }, "LVL " + pr.level, strip);
+    const barW = h("div", { width: "120px", height: "8px", background: "rgba(0,0,0,0.55)", borderRadius: "4px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }, null, strip);
+    h("div", { width: Math.min(100, (pr.xp / need) * 100) + "%", height: "100%", background: "linear-gradient(90deg,#4aa8ff,#7ad0ff)" }, null, barW);
+    h("div", { fontSize: "11px", opacity: "0.75", letterSpacing: "1px" }, pr.xp + " / " + need + " XP", strip);
+    if (c.matches) {
+      h("div", {
+        fontSize: "11.5px", opacity: "0.8", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px",
+      }, c.matches + " matches · " + c.wins + " wins · " + c.kills + " kills" + (c.bestPlacement ? " · best #" + c.bestPlacement : ""), strip);
+    }
+    const nextSkin = MENU_SKINS.filter((sk) => (sk.unlockLevel || 1) > pr.level).sort((a, b) => a.unlockLevel - b.unlockLevel)[0];
+    if (nextSkin) {
+      h("div", { fontSize: "11.5px", color: "#9fd7ff", letterSpacing: "1px", borderLeft: "1px solid rgba(255,255,255,0.18)", paddingLeft: "10px" },
+        "NEXT: " + nextSkin.name + " @ LVL " + nextSkin.unlockLevel, strip);
+    }
+  }
   h("div", {
     fontFamily: "Rajdhani, " + FONT, fontSize: "15px", fontWeight: "600",
     letterSpacing: "6px", color: "#b8d8ff", opacity: "0.85", marginTop: "6px",
@@ -1929,10 +1956,23 @@ export function showPostMatch(W, res) {
     }
   }
   const row = h("div", { display: "flex", gap: "12px", justifyContent: "center", marginTop: "24px" }, null, box);
+  // Requeue without the menu round-trip. Going back to the menu tears the match
+  // down, rebuilds the cinematic 3D menu world and re-reads the skin GLBs, just
+  // to press PLAY again — a long wait between two matches of a browser BR.
+  if (res.onAgain) {
+    const again = h("button", Object.assign({}, BTN, {
+      fontFamily: "Orbitron, " + FONT_DISPLAY,
+      background: "linear-gradient(180deg,#7ef0b0,#2fae76)", color: "#04231a",
+      fontSize: "16px", padding: "14px 44px", letterSpacing: "2px",
+      boxShadow: "0 0 24px rgba(70,220,150,0.35)",
+    }), "PLAY AGAIN", row);
+    again.className = "lc-btn-play";
+    again.onclick = () => { L.remove(); R.post = null; res.onAgain(); };
+  }
   const menu = h("button", Object.assign({}, BTN, {
     fontFamily: "Orbitron, " + FONT_DISPLAY,
     background: "linear-gradient(180deg,#6ec4ff,#2f7fd6)", color: "#fff",
-    fontSize: "16px", padding: "14px 48px", letterSpacing: "2px",
+    fontSize: "16px", padding: "14px 44px", letterSpacing: "2px",
     boxShadow: "0 0 24px rgba(60,150,255,0.4)",
   }), "MAIN MENU", row);
   menu.className = "lc-btn-play";

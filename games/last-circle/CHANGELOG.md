@@ -3,6 +3,35 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — Requeue without the round-trip + a career you can see (?v=65, LIVE)
+
+First two of the lower-ranked gap-scan findings.
+
+- **No PLAY AGAIN.** The post-match screen offered only MAIN MENU, so playing a
+  second match meant tearing the world down, rebuilding the cinematic 3D menu
+  world, re-reading the skin GLBs, and pressing PLAY — a long wait between two
+  matches of a browser BR, at exactly the moment the player most wants another
+  go. PLAY AGAIN now requeues straight into a fresh random map in the same mode
+  (and tears down any net session first, so it cannot inherit a dead room).
+- **The career was invisible outside one screen.** Level, XP and the lifetime
+  record were computed and stored but only ever rendered on the post-match
+  panel, so on returning the next day the menu showed no evidence the player had
+  ever played. The menu now carries a compact strip: level, XP bar with the
+  exact threshold, lifetime matches/wins/kills/best placement, and the next skin
+  unlock with its level.
+
+NOT attempted, deliberately: the unlock track still dead-ends at level 10. There
+are only five skin GLBs, so any further reward needs new cosmetic assets — a
+Meshy spend and an owner decision about adding characters — and inventing a
+hollow reward would be worse than the dead end. The cheapest real option, if
+wanted, is level-gated colour variants of the existing five, reusing the
+per-actor hue/lightness tinting loadActorModels already applies to bots.
+
+Verified live: menu reads LVL 4, "900 / 2900 XP", "12 matches · 2 wins · 31
+kills · best #1", "NEXT: BULWARK @ LVL 6"; the post-match screen offers PLAY
+AGAIN and MAIN MENU, and PLAY AGAIN lands in phase "lobby" without passing
+through the menu. Selftest 66/66. DRAFT.
+
 ## 2026-07-21 — Bots hoarded five guns and twitched beside loot (?v=64, LIVE)
 
 Closes the half of build-order #11 that ?v=62 deliberately left open.

@@ -24,7 +24,15 @@ Line anchors were correct at the time of writing but drift — re-locate by cont
 - [x] #9 announce() had no priority; the winning kill's banner died in the frame it was born (?v=60)
 - [x] #11 COMPLETE: bot gun re-evaluation (?v=62) + carry cap and pickLoot twitch loop (?v=64)
 - [x] #12 Online session never torn down; lobby count frozen at 2 (?v=63)
-- [ ] remaining: the 36 lower-ranked surviving findings listed by dimension below
+- [x] meta: no PLAY AGAIN on the post-match screen (?v=65)
+- [x] meta: career/level invisible outside the one post-match screen (?v=65)
+- [ ] meta: unlock track dead-ends at level 10 — NOT ATTEMPTED ON PURPOSE. There are
+      only five skin GLBs, so any further reward needs new cosmetic assets, which
+      means a Meshy spend AND an owner decision about adding characters. Do not
+      fabricate a hollow reward. Cheapest real option if wanted: level-gated COLOUR
+      VARIANTS of the existing five, reusing the per-actor hue/lightness tinting
+      loadActorModels already applies to bots (the human currently loads untinted).
+- [ ] remaining: the other lower-ranked surviving findings listed by dimension below
 
 # LAST CIRCLE — BUILD ORDER
 
