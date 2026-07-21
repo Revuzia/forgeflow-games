@@ -3,6 +3,33 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — Accessibility + control settings (?v=67, LIVE)
+
+Four UX findings from the gap scan, all of them table stakes for the genre.
+
+- **Field of view had no control at all** — hardcoded 57 (70 sprinting). An FOV
+  slider is both standard and a motion-sickness accommodation. Now 50-85, and
+  the sprint kick rides on top of whatever you pick.
+- **Sprint and ADS were hold-only.** Holding a key or a mouse button for a whole
+  match is an accessibility problem, not a preference. Both now offer
+  HOLD / TOGGLE. Latches clear with the rest of the input state between matches,
+  and HOLD mode ignores a stale latch entirely.
+- **Emotes were invisible.** The game ships two (dance on B, cheer on N) and
+  they appeared in no control surface and could not be rebound. They are now
+  first-class entries in the keybind list, so they route through the same
+  remap/conflict/reset machinery as everything else.
+- **Rarity was communicated by HUE ALONE**, which is exactly the thing a
+  red-green colourblind player cannot read — a legendary and a common differed
+  only by the colour of a 3px strip. Weapon slots now carry the tier as a
+  numeral (I-V) as well. The pickup line added in ?v=66 already names the tier
+  in words, so rarity is now legible three ways.
+
+Verified live: camera FOV follows the slider (57 -> 57, 80 -> 80); a Shift press
+latches sprint on and a second press off, while HOLD mode ignores a set latch;
+settings lists Field of view, Sprint, Aim down sights and both Emote rows (bound
+to B and N); slot chips render I / III / V for rarities 0 / 2 / 4 and consumables
+get no numeral. Selftest 66/66. DRAFT.
+
 ## 2026-07-21 — Supply drops you can find, loot you can read (?v=66, LIVE)
 
 More lower-ranked gap-scan findings, plus a systematic sweep that found the real

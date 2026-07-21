@@ -1595,6 +1595,14 @@ function paintSlots(W, p) {
     if (s) {
       const rc = s.kind === "weapon" ? (K.RARITY_COLOR[K.RARITY[s.rarity || 0]] || "#9da5b4") : "#8fd3a0";
       h("div", { position: "absolute", left: "0", right: "0", bottom: "0", height: "3px", background: rc }, null, cell);
+      // Rarity was communicated by HUE ALONE. Add the tier as a numeral so it
+      // survives any colour-vision deficiency (and reads faster for everyone).
+      if (s.kind === "weapon") {
+        h("div", {
+          position: "absolute", left: "3px", top: "2px", fontSize: "9px", fontWeight: "900",
+          color: rc, textShadow: "0 1px 2px #000", letterSpacing: "0.5px",
+        }, ["I", "II", "III", "IV", "V"][s.rarity || 0], cell);
+      }
       if (s.kind === "weapon") {
         const img = h("img", { width: "52px", height: "38px", objectFit: "contain", display: "none" }, null, cell);
         const txt = h("div", {}, shortName(s), cell);
@@ -2040,6 +2048,7 @@ function confetti(L) {
 const ACTIONS = [
   ["Move Forward", "KeyW"], ["Move Back", "KeyS"], ["Move Left", "KeyA"], ["Move Right", "KeyD"],
   ["Jump", "Space"], ["Sprint", "ShiftLeft"], ["Crouch", "KeyC"], ["Loot / Interact", "KeyE"],
+  ["Emote — Dance", "KeyB"], ["Emote — Cheer", "KeyN"],
   ["Reload", "KeyR"], ["Map", "KeyM"],
   ["Weapon 1", "Digit1"], ["Weapon 2", "Digit2"], ["Weapon 3", "Digit3"],
   ["Weapon 4", "Digit4"], ["Weapon 5", "Digit5"],
@@ -2073,6 +2082,26 @@ function showSettings(W) {
   ["low", "medium", "high"].forEach((g2) => {
     const b = h("button", Object.assign({}, BTN, { padding: "7px 16px", fontSize: "13px", background: W.settings.graphics === g2 ? "#57b0ff" : "rgba(255,255,255,0.1)", color: W.settings.graphics === g2 ? "#fff" : "#cfe4ff" }), g2.toUpperCase(), gRow);
     b.onclick = () => { W.settings.graphics = g2; applyGraphics(W); save(W); showSettings(W); };
+  });
+
+  // FOV: hardcoded at 57 (70 sprinting) with no control, in a genre where an FOV
+  // slider is table stakes AND a motion-sickness accommodation.
+  slider(box, "Field of view", (( W.settings.fov || 57) - 50) / 35, (v) => {
+    W.settings.fov = Math.round(50 + v * 35);   // 50–85
+    save(W);
+  });
+  // Sprint and ADS were hold-only. Toggle is an accessibility need, not a taste.
+  [["Sprint", "sprintToggle"], ["Aim down sights", "adsToggle"]].forEach((e) => {
+    const row2 = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
+    h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, e[0], row2);
+    [["HOLD", false], ["TOGGLE", true]].forEach((o) => {
+      const on = !!W.settings[e[1]] === o[1];
+      const b = h("button", Object.assign({}, BTN, {
+        padding: "7px 16px", fontSize: "13px",
+        background: on ? "#57b0ff" : "rgba(255,255,255,0.1)", color: on ? "#fff" : "#cfe4ff",
+      }), o[0], row2);
+      b.onclick = () => { W.settings[e[1]] = o[1]; save(W); showSettings(W); };
+    });
   });
 
   // performance readout — a browser game runs on unknown hardware, so "is it me

@@ -369,6 +369,7 @@ function installHumanInput(W) {
     if (e.code === "Digit3") inp.slot = 2;
     if (e.code === "Digit4") inp.slot = 3;
     if (e.code === "Digit5") inp.slot = 4;
+    if ((e.code === "ShiftLeft" || e.code === "ShiftRight") && !ev.repeat && W.settings.sprintToggle) W._sprintLatch = !W._sprintLatch;
     if (e.code === "KeyM") W.events.emit("toggleBigMap");
     if (e.code === "KeyB") inp.emote = "dance";
     if (e.code === "KeyN") inp.emote = "cheer";
@@ -452,15 +453,18 @@ function installHumanInput(W) {
     const inp = W.player.input;
     inp.mx = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
     inp.mz = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
-    inp.sprint = !!keys.ShiftLeft || !!keys.ShiftRight;
+    const sprintHeld = !!keys.ShiftLeft || !!keys.ShiftRight;
+    inp.sprint = W.settings.sprintToggle ? !!W._sprintLatch : sprintHeld;
     // Crouch defaults to C, NOT Ctrl: this runs in a browser next to WASD, and
     // Ctrl+W closes the tab. Rebindable like any other action.
     inp.crouch = !!keys.KeyC;
     inp.fire = !!W._lmbDown;
-    inp.ads = !!W._rmbDown;
+    inp.ads = W.settings.adsToggle ? !!W._adsLatch : !!W._rmbDown;
   });
+  // ADS toggle latch: flip on the RMB press edge (hold mode ignores it)
+  dom.addEventListener("mousedown", (ev2) => { if (ev2.button === 2 && W.settings.adsToggle) W._adsLatch = !W._adsLatch; });
   W.pointerLocked = () => document.pointerLockElement === dom;
-  W.resetInputState = () => { for (const k in keys) keys[k] = false; W._lmbDown = false; W._rmbDown = false; };
+  W.resetInputState = () => { for (const k in keys) keys[k] = false; W._lmbDown = false; W._rmbDown = false; W._sprintLatch = false; W._adsLatch = false; };
 }
 
 // ── movement + physics ──────────────────────────────────────────────────────
@@ -955,7 +959,8 @@ function updateCamera(W, dt) {
   // ADS zoom is PER WEAPON (sim adsFov): sniper 20 + scope overlay, AR 42,
   // launcher 45, SMG 47, pistol 48, shotgun 49.
   const adsDef = ads && K.WEAPONS[focus.weapon.id];
-  const wantFov = scope ? (adsDef.adsFov || 22) : ads ? (adsDef.adsFov || 42) : focus.sprinting ? 70 : 57;
+  const baseFov = W.settings.fov || 57;                       // user-set (50-85)
+  const wantFov = scope ? (adsDef.adsFov || 22) : ads ? (adsDef.adsFov || 42) : focus.sprinting ? baseFov + 13 : baseFov;
   cam.fov += (wantFov - cam.fov) * Math.min(1, dt * 10);
   cam.updateProjectionMatrix();
   W.events.emit("scopeState", !!scope);
