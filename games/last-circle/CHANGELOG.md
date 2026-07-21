@@ -3,6 +3,24 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — Death recap (?v=45, LIVE)
+
+The death screen said "#37 of 50 · by CraftyKat (sniper)" and stopped there,
+which answers none of the questions you actually have when you die.
+
+- Recap block: FINAL BLOW (range in metres, HEADSHOT when it was one),
+  YOU DEALT (damage you did to the person who killed you), THEY HAD LEFT
+  (their remaining HP/shield), plus a "SO CLOSE." line when you had them at
+  25 HP or less. That last number is the whole point of a death screen.
+- W.match.damage only holds per-ATTACKER totals, so "you had them down to 12"
+  was not answerable from existing state. hurtActor now also records per-PAIR
+  damage (victim.dmgFrom[attackerId]) and the last hit's detail (range,
+  headshot, attacker HP/shield at the moment of the blow).
+
+Verified live with a staged fight: foe placed 47m out and chunked to 12 HP,
+then killing the player with a headshot produced exactly "47m · HEADSHOT",
+"88 damage", "12 HP", and the SO CLOSE line. Selftest 46/46. DRAFT.
+
 ## 2026-07-20 — Performance readout (?v=44, LIVE)
 
 A browser game runs on unknown hardware and an unknown network, and the player

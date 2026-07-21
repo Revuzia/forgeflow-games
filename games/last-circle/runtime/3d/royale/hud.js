@@ -1772,6 +1772,36 @@ function showDeath(W, killerId, weaponId) {
   const place = W.match.placementOf(W.player.id);
   h("div", { fontSize: "17px", marginTop: "8px", textShadow: "0 2px 6px #000" },
     "#" + place + " of " + W.match.totalPlayers + (killer ? "  ·  by " + killer.name + " (" + (weaponId || "?") + ")" : "  ·  the storm got you"), box);
+
+  // DEATH RECAP — "by <name>" alone answers none of the questions you actually
+  // have when you die: how far away were they, did they headshot me, how close
+  // did I come to winning that fight.
+  const hit = W.player.lastHit;
+  const lines = [];
+  if (killer) {
+    const parts = [];
+    if (hit && hit.attackerId === killerId && hit.dist != null) parts.push(hit.dist + "m");
+    if (hit && hit.attackerId === killerId && hit.isHead) parts.push("HEADSHOT");
+    if (parts.length) lines.push({ t: "FINAL BLOW", v: parts.join("  ·  "), c: "#ffb3a7" });
+    // how close you came — the single most-wanted number on a death screen
+    const dealt = Math.round((killer.dmgFrom && killer.dmgFrom[W.player.id]) || 0);
+    const left = Math.max(0, Math.round(killer.hp)) + (killer.shield > 0 ? " + " + Math.round(killer.shield) + " shield" : "");
+    lines.push({ t: "YOU DEALT", v: dealt + " damage", c: dealt > 0 ? "#9fd7ff" : "#8fa4bb" });
+    lines.push({ t: "THEY HAD LEFT", v: killer.alive ? left + " HP" : "nothing — they died too", c: killer.alive && killer.hp <= 25 ? "#ffd166" : "#cfe4ff" });
+    if (killer.alive && killer.hp <= 25 && dealt > 0) lines.push({ t: "", v: "SO CLOSE.", c: "#ffd166" });
+  }
+  if (lines.length) {
+    const recap = h("div", {
+      marginTop: "14px", display: "inline-grid", gridTemplateColumns: "auto auto", gap: "4px 14px",
+      padding: "10px 18px", borderRadius: "10px", background: "rgba(6,14,28,0.55)",
+      border: "1px solid rgba(140,200,255,0.18)", fontFamily: "Rajdhani, " + FONT, textAlign: "left",
+    }, null, box);
+    for (const l of lines) {
+      h("div", { fontSize: "12px", opacity: "0.65", letterSpacing: "1.5px", alignSelf: "center" }, l.t, recap);
+      h("div", { fontSize: "15px", fontWeight: "700", letterSpacing: "1px", color: l.c }, l.v, recap);
+    }
+  }
+
   const row = h("div", { display: "flex", gap: "12px", justifyContent: "center", marginTop: "16px" }, null, box);
   if (killer && killer.alive) h("div", { fontSize: "13px", opacity: "0.8", alignSelf: "center" }, "Spectating " + killer.name, row);
   const btn = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff" }), "MATCH STATS", row);

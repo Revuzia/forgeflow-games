@@ -936,6 +936,20 @@ function hurtActor(W, victim, dmg, attackerId, weaponId, isHead) {
   victim.lastDamageT = W.t;
   if (attackerId) { victim.lastAttacker = attackerId; victim.lastHurtByActorT = W.t; }
   W.match.recordDamage(attackerId, res.dealt);
+  // per-PAIR damage + last-hit detail. W.match.damage is per-attacker totals
+  // only, so "you had them down to 12 HP" was not answerable; the death recap
+  // needs the exchange between these two actors specifically.
+  if (attackerId) {
+    const att = W.actorById.get(attackerId);
+    victim.dmgFrom = victim.dmgFrom || {};
+    victim.dmgFrom[attackerId] = (victim.dmgFrom[attackerId] || 0) + res.dealt;
+    victim.lastHit = {
+      attackerId, weaponId, isHead,
+      dist: att ? Math.round(att.pos.distanceTo(victim.pos)) : null,
+      attHp: att ? Math.max(0, Math.round(att.hp)) : null,
+      attShield: att ? Math.max(0, Math.round(att.shield)) : null,
+    };
+  }
   W.events.emit("actorHurt", victim, { dmg: res.dealt, attackerId, weaponId, isHead, broke: res.broke, toShield: res.toShield });
   // Practice-range dummies absorb and reset rather than die — the hit feedback
   // (damage numbers, hitmarker) has already fired above, and a range you can
