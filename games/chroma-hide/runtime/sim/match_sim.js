@@ -83,6 +83,7 @@ export function createMatch(config) {
   const seekerCount = config.seekerCount != null ? config.seekerCount : computeSeekerCount(players.length);
   const roleInfo = assignRoles(players.map((p) => p.id), seekerCount, config.lastSeekers || [], rng);
 
+  const nav = buildNavGrid(map.bounds, map.obstacles);
   const spots = (map.spots || []).slice();
   const actors = players.map((p) => {
     const role = p.role || roleInfo.roles[p.id];
@@ -110,7 +111,7 @@ export function createMatch(config) {
   return {
     phase: PHASE.PREP, timeLeft: settings.prepSeconds, settings, map, rng, skill,
     bounds: map.bounds, obstacles: map.obstacles, spots,
-    nav: buildNavGrid(map.bounds, map.obstacles),   // walkability grid for bot pathing through doorways
+    nav,   // walkability grid for bot pathing through doorways (built above)
     actors, mode: settings.mode, events: [], result: null, elapsed: 0, reverseMark: null,
   };
 }

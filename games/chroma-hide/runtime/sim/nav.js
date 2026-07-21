@@ -49,6 +49,27 @@ function nearestWalkable(nav, x, z) {
 
 const NB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
+/** True if (tx,tz)'s cell is reachable from (sx,sz)'s cell across walkable cells. */
+export function isReachable(nav, sx, sz, tx, tz) {
+  const [si, sj] = nearestWalkable(nav, sx, sz);
+  const [ti, tj] = nearestWalkable(nav, tx, tz);
+  if (si === ti && sj === tj) return true;
+  const seen = new Uint8Array(nav.w * nav.h);
+  const q = [[si, sj]]; seen[sj * nav.w + si] = 1;
+  let head = 0;
+  while (head < q.length) {
+    const [ci, cj] = q[head++];
+    if (ci === ti && cj === tj) return true;
+    for (const [di, dj] of NB) {
+      const ni = ci + di, nj = cj + dj;
+      if (!walkable(nav, ni, nj) || seen[nj * nav.w + ni]) continue;
+      if (di && dj && (!walkable(nav, ci + di, cj) || !walkable(nav, ci, cj + dj))) continue;
+      seen[nj * nav.w + ni] = 1; q.push([ni, nj]);
+    }
+  }
+  return false;
+}
+
 /** BFS path from (sx,sz) to (tx,tz). Returns simplified waypoints [{x,z}] incl. the
  *  final target, or a single-point [{target}] if already there / unreachable. */
 export function findPath(nav, sx, sz, tx, tz) {

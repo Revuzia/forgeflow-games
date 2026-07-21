@@ -9,6 +9,8 @@
  * entries here — a map is data (+ a GLB later), not code.
  */
 
+import { CAMPUS_MAPS } from "./maps_campus.js";
+
 export const MAPS = {
   manor: {
     id: "manor",
@@ -427,6 +429,9 @@ export const MAPS = {
   },
 };
 
+// Full-scale campus maps (multi-building) replace the small same-id stages in place.
+Object.assign(MAPS, CAMPUS_MAPS);
+
 /** Interior props -> 2D collision/occlusion AABBs {x,z,hw,hd}. */
 export function mapObstacles(map) {
   return map.props.map((p) => ({ id: p.id, x: p.x, z: p.z, hw: p.w / 2, hd: p.d / 2 }));
@@ -449,5 +454,6 @@ export function getMap(id) { return MAPS[id] || MAPS.depot; }
 // Only the fully-overhauled multi-room stages ship in the picker. The older
 // single-room maps (manor/understage/hollow) remain defined for compatibility
 // but are excluded until they're rebuilt to the multi-room standard.
-const SHIPPED = ["depot", "residence", "office", "street", "supermarket"];
+// only FULL-SCALE campus stages ship; the small legacy 3-room maps stay defined for compat
+const SHIPPED = ["office", "street", "supermarket"];
 export function mapList() { return SHIPPED.filter((id) => MAPS[id]).map((id) => { const m = MAPS[id]; return { id: m.id, name: m.name, blurb: m.blurb }; }); }

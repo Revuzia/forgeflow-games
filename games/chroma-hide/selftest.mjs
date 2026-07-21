@@ -162,7 +162,7 @@ assert(manor.id === "manor" && manor.props.length >= 6, "map: manor loaded with 
   const sm = maps.toSimMap(manor);
   assert(sm.obstacles.length === manor.props.length, "map: toSimMap obstacle per prop");
   assert(sm.spawn.seeker && sm.spawn.hider && sm.spots.length >= 6, "map: toSimMap spawn + spots");
-  assert(maps.mapList().length === 5, "map: 5 multi-room stages shipped");
+  assert(maps.mapList().length === 3, "map: 3 full-scale campus stages shipped");
   assert(maps.mapList().every((m) => (maps.getMap(m.id).rooms || []).length >= 3), "map: every shipped stage is multi-room (>=3 rooms)");
 }
 {
