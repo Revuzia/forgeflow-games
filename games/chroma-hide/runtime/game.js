@@ -17,7 +17,8 @@ import { PHASE, ROLE, MODE, sanitizeSettings, DEFAULTS, computeSeekerCount, MODE
 import { getMap, toSimMap } from "./maps.js";
 import { PaintSystem } from "./paint.js";
 import { createPaintPanel } from "./paint_ui.js";
-import { makeChameleonGeo, addChameleonFace } from "./chameleon.js";
+import { makeBodyGeo, addBodyFeatures } from "./body.js";
+import { surfaceTexture } from "./textures.js";
 import { GameAudio } from "./audio.js";
 import { clamp, hashStr } from "./sim/util.js";
 
@@ -104,23 +105,30 @@ export class Game {
   _buildMap() {
     const m = this.mapDef, g = this.root;
     // floor
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry((m.bounds.maxX - m.bounds.minX) + 2, (m.bounds.maxZ - m.bounds.minZ) + 2),
-      new THREE.MeshStandardMaterial({ color: m.ground.color, roughness: m.ground.roughness, metalness: 0 }));
+    const gw = (m.bounds.maxX - m.bounds.minX) + 2, gd = (m.bounds.maxZ - m.bounds.minZ) + 2;
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(gw, gd),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, map: surfaceTexture(m.ground.tex || "concrete", m.ground.color, gw / 4, gd / 4), roughness: m.ground.roughness, metalness: 0 }));
     floor.rotation.x = -Math.PI / 2; floor.position.set((m.bounds.minX + m.bounds.maxX) / 2, 0, (m.bounds.minZ + m.bounds.maxZ) / 2);
     floor.receiveShadow = true; g.add(floor); this.floor = floor;
     this.paintable = [floor];
 
     // per-room themed floor zones (distinct palette per room — the multi-room look)
     if (m.rooms) for (const r of m.rooms) {
-      const tile = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.d), new THREE.MeshStandardMaterial({ color: r.floor, roughness: 0.92, metalness: 0.02 }));
+      const tile = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.d), new THREE.MeshStandardMaterial({
+        color: 0xffffff, map: surfaceTexture(r.tex || "concrete", r.floor, Math.max(1, r.w / 3.2), Math.max(1, r.d / 3.2)),
+        roughness: 0.92, metalness: 0.02 }));
       tile.rotation.x = -Math.PI / 2; tile.position.set(r.x, 0.02, r.z); tile.receiveShadow = true; g.add(tile);
     }
 
     // perimeter walls
-    const wh = m.wallHeight, th = m.perimeter.thickness, wm = () => new THREE.MeshStandardMaterial({ color: m.perimeter.color, roughness: m.perimeter.roughness, metalness: 0 });
+    const wh = m.wallHeight, th = m.perimeter.thickness;
+    const wallKind = m.perimeter.tex || "plaster";
+    const wm = (len) => new THREE.MeshStandardMaterial({
+      color: 0xffffff, map: surfaceTexture(wallKind, m.perimeter.color, Math.max(1, Math.round(len / 4)), Math.max(1, Math.round(wh / 2.5))),
+      roughness: m.perimeter.roughness, metalness: 0 });
     const cx = (m.bounds.minX + m.bounds.maxX) / 2, cz = (m.bounds.minZ + m.bounds.maxZ) / 2;
     const W = m.bounds.maxX - m.bounds.minX, D = m.bounds.maxZ - m.bounds.minZ;
-    const addWall = (x, z, w, d) => { const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, wh, d), wm()); mesh.position.set(x, wh / 2, z); mesh.receiveShadow = true; g.add(mesh); this.paintable.push(mesh); };
+    const addWall = (x, z, w, d) => { const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, wh, d), wm(Math.max(w, d))); mesh.position.set(x, wh / 2, z); mesh.receiveShadow = true; g.add(mesh); this.paintable.push(mesh); };
     addWall(cx, m.bounds.minZ - th / 2, W + th * 2, th);
     addWall(cx, m.bounds.maxZ + th / 2, W + th * 2, th);
     addWall(m.bounds.minX - th / 2, cz, th, D);
@@ -206,7 +214,7 @@ export class Game {
   }
 
   _spawnActors() {
-    const geo = makeChameleonGeo();   // shared chameleon body (one merged, UV-atlased mesh)
+    const geo = makeBodyGeo();   // shared blank mannequin (one merged, UV-atlased mesh)
     for (const a of this.sim.actors) {
       let mesh;
       if (!a.isBot && a.role === ROLE.HIDER) {
@@ -216,15 +224,15 @@ export class Game {
         this.paintByActor.set(a.id, ps);
         if (a.isLocal) this.paint = ps;
         mesh = new THREE.Mesh(geo, ps.material); ps.attachBody(mesh);
-        addChameleonFace(mesh);
+        addBodyFeatures(mesh);
       } else if (a.role === ROLE.HIDER) {
         const c = new THREE.Color(this._nearestPropColor(a.x, a.z)).offsetHSL(0, 0, (Math.random() - 0.5) * 0.06);
         mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: c, roughness: 0.7, metalness: 0.05 }));
-        addChameleonFace(mesh);
+        addBodyFeatures(mesh);
       } else {
-        // Seeker — a dark "Hunter" chameleon carrying a gun.
+        // Seeker — a dark "Hunter" mannequin carrying a gun.
         mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: a.isLocal ? 0x2b3242 : 0x39303a, roughness: 0.55, metalness: 0.15 }));
-        addChameleonFace(mesh, { seeker: true });
+        addBodyFeatures(mesh, { seeker: true });
         const gun = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.7), new THREE.MeshStandardMaterial({ color: 0x1a1a1e, metalness: 0.6, roughness: 0.4 }));
         gun.position.set(0.5, -0.1, 0.5); mesh.add(gun); mesh.userData.gun = gun;
       }
