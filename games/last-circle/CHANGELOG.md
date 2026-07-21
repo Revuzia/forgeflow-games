@@ -3,6 +3,23 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — E-swap silently destroyed a consumable stack (?v=81, LIVE)
+
+Found by the full-game sweep. Straight data loss.
+
+- The E-swap branch dropped the outgoing item only `if (old.kind === "weapon")`,
+  but the overwrite on the very next line was unguarded. So pressing E on a floor
+  gun while a CONSUMABLE stack was the active slot replaced the stack with the
+  weapon and never spawned it — up to 15 bandages, 6 mini shields or 3 medkits
+  gone, with no drop and no warning. The swap branch is reached exactly when you
+  are full, which is the normal mid-match state.
+- Now the outgoing item is dropped whatever it is, stack count intact.
+
+Verified live: with 15 bandages active and a full inventory, E-swapping onto a
+floor sniper puts the sniper in the slot AND leaves a 15-count bandage stack on
+the ground (count preserved exactly); swapping while a weapon is active still
+drops that weapon. Selftest 89/89. DRAFT.
+
 ## 2026-07-21 — REGRESSION FIX: the ?v=64 gun cap froze every bot's loadout (?v=80, LIVE)
 
 Caught by the full-game sweep, and it was mine: a side effect of the carry cap

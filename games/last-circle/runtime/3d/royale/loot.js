@@ -444,9 +444,19 @@ function give(W, a, data) {
       return true;
     }
     if (data.swap) {
-      // explicit E-swap: drop the ACTIVE weapon, take the new one
+      // Explicit E-swap: drop whatever is in the ACTIVE slot, take the new one.
+      // The drop used to be guarded on `old.kind === "weapon"` while the
+      // overwrite below it was not — so swapping onto a floor gun while a
+      // CONSUMABLE stack was active silently destroyed the whole stack (up to
+      // 15 bandages / 6 shields / 3 medkits), with no drop and no warning. The
+      // swap branch is reached exactly when you are full, which is the normal
+      // mid-match state.
       const old = inv.slots[inv.active];
-      if (old && old.kind === "weapon") dropItem(W, a, { kind: "weapon", id: old.id, rarity: old.rarity });
+      if (old && old.kind === "weapon") {
+        dropItem(W, a, { kind: "weapon", id: old.id, rarity: old.rarity });
+      } else if (old && old.kind === "consumable") {
+        dropItem(W, a, { kind: "consumable", id: old.id, count: old.count || 1 });
+      }
       inv.slots[inv.active] = slot;
       W.equipSlot(a, inv.active);
       return true;
