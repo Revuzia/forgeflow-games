@@ -92,7 +92,7 @@ const HAND_AIM_ROT = {
 // armed clips (Alert / Walk_Forward_While_Shooting / Run_and_Shoot) retarget
 // badly on these rigs — arms folded over the face ("broken bone" screenshots).
 // Arms are posed at runtime (pose.js); locomotion + jump/swim clips load.
-const MESHY_CLIPS = ["walk", "run", "death", "dance", "cheer", "jump", "swim"];
+const MESHY_CLIPS = ["walk", "run", "death", "dance", "cheer", "jump", "swim", "crouch"];
 const _v3 = new THREE.Vector3();
 
 async function preloadMeshySkin(W, key) {
@@ -150,6 +150,8 @@ export async function loadActorModels(W) {
     rig.scene.position.y = 0;
     a.obj.add(rig.scene);
     a.clips = classifyClips(rig);
+    // the capsule only shrinks when this actor can actually be SEEN crouching
+    a.hasCrouchClip = !!a.clips.crouch;
     a.armBones = findArmBones(rig.scene);   // runtime arm-pose layer (pose.js)
     // detect a defective slouching rig (Meshy shipped drifter at ~27°; the
     // rest sit at 1-5°) → straighten its torso every frame
@@ -207,6 +209,10 @@ function classifyClips(rig) {
     shoot: find([/shoot|attack|punch|slash|hit/i]),
     dance: find([/^dance$/i, /dance/i]),
     cheer: find([/^cheer$/i, /cheer|wave|victory/i]),
+    // Meshy action 524 "Cautious_Crouch_Walk_Forward". Falls back to walk so a
+    // skin whose crouch clip failed to bake still animates (and actorHeight()
+    // keeps its capsule honest via hasCrouchClip below).
+    crouch: find([/^crouch$/i, /crouch/i]),
   };
 }
 
@@ -215,7 +221,9 @@ function playAnim(a, key, opts) {
   const realKey = key;
   const clip = a.clips[realKey] || a.clips.idle;
   if (!clip) return;
-  const ts = (opts && opts.timeScale) || 1;
+  // `|| 1` swallowed an explicit timeScale of 0 (falsy), so "freeze this clip"
+  // silently played at full speed — a crouching player marched in place.
+  const ts = opts && opts.timeScale != null ? opts.timeScale : 1;
   if (a.anim === realKey && !(opts && opts.force)) {
     // same clip, new pace → retune the live action, never restart (restart
     // every frame while speed varies = visible stutter)
@@ -817,6 +825,12 @@ function syncObj(W, a, dt, far) {
       else if (a.gliding) playAnim(a, "idle");
       else if (a.swimming) playAnim(a, "swim", { timeScale: gs > 4.5 ? 1.25 : 1 });
       else if (!a.onGround) playAnim(a, "jump", { once: true });
+      else if (a.crouching && a.clips.crouch) {
+        // one clip covers both crouch stances: crouch-walk plays at a pace set
+        // by ground speed, and standing still freezes it on a crouched pose
+        // rather than marching in place
+        playAnim(a, "crouch", { timeScale: gs > 0.7 ? K.clamp(gs / 2.7, 0.55, 1.4) : 0 });
+      }
       else if (gs > 0.7) {
         // BACKPEDALING plays the stride in REVERSE (no moonwalking).
         const back = (a.vel.x * -Math.sin(a._bodyYaw - Math.PI) + a.vel.z * -Math.cos(a._bodyYaw - Math.PI)) < -0.5;

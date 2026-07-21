@@ -89,17 +89,22 @@
   // Crouch: the one basic shooter verb the game did not have. Today it trades
   // 55% of your movement speed for a markedly tighter hipfire cone and a lower
   // camera.
-  // heightMult is deliberately 1: the hit capsule does NOT shrink yet. These
-  // rigs have no crouch clip, and a procedural leg-fold was tried and rejected
-  // (captures showed the character kneeling in mid-air — no IK to plant the
-  // feet). Shrinking the capsule under a model that still visibly stands would
-  // mean shots at a plainly visible head passing through it, which is worse
-  // than not having the crouch profile at all. The unblocking step is an
-  // authored crouch clip from the Meshy animation library, the same route the
-  // run animation took; heightMult goes to ~0.62 in the same change.
-  var CROUCH = { speedMult: 0.45, heightMult: 1, eyeMult: 0.60, spreadMult: 0.62 };
-  /** Height of an actor's hit capsule (crouch-aware once a crouch clip exists). */
-  function actorHeight(a) { return PLAYERK.height * (a && a.crouching ? CROUCH.heightMult : 1); }
+  // heightMult is MEASURED off the shipped crouch clip, not chosen. Meshy action
+  // 524 "Cautious_Crouch_Walk_Forward" puts the head bone at 1.34m (max 1.36
+  // across the cycle) against 1.62m standing; the standing capsule sits 0.18m
+  // above the head bone, so the crouched capsule is 1.36+0.18 = 1.54m -> 0.86.
+  // An earlier guess of 0.62 would have been a lie: it is a cautious crouch
+  // walk, not a deep tactical squat, and a capsule shorter than the visible
+  // head means shots passing through a head the player can plainly see.
+  // (A procedural leg-fold was tried first and rejected — captures showed the
+  // character kneeling in mid-air; there is no IK here to plant the feet.)
+  var CROUCH = { speedMult: 0.45, heightMult: 0.86, eyeMult: 0.60, spreadMult: 0.62 };
+  /** Height of an actor's hit capsule. Only shrinks for an actor that actually
+   *  HAS the crouch clip loaded — if a skin's clip failed to bake it still
+   *  stands upright, and shrinking its capsule would reintroduce the lie. */
+  function actorHeight(a) {
+    return PLAYERK.height * (a && a.crouching && a.hasCrouchClip ? CROUCH.heightMult : 1);
+  }
   /** Eye height, accounting for crouch (camera + muzzle origin). */
   function actorEyeY(a) { return PLAYERK.eyeY * (a && a.crouching ? CROUCH.eyeMult : 1); }
 

@@ -3,6 +3,40 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — Crouch, finished: authored clip + honest hit capsule (?v=51, LIVE)
+
+Completes the crouch shipped at ?v=49, which deliberately left the hit capsule
+at full height because the model could not visibly crouch.
+
+- **Meshy crouch clip.** There is no endpoint to enumerate the action library
+  (/openapi/v1/animations/actions parses "actions" as a task id and 400s), so
+  candidates came from the published Animation Library Reference: 524
+  Cautious_Crouch_Walk_Forward, 523 (backward), 527 Crouch_Walk_Left_with_Gun,
+  54 Squat_Stance. Baked all four on soldier and measured them.
+  - 54 DISQUALIFIED: head sweeps 1.60 -> 1.27 -> 0.72 over 4.8s. It is a
+    squat-down-and-up motion, not a stance you can hold.
+  - 527 is a LEFT strafe; 523 is backward. 524 is the forward crouch walk and won.
+  Rolled out to all five skins as <skin>_crouch.glb (49 Meshy credits total).
+- **heightMult is measured, not guessed: 0.86.** 524 puts the head bone at 1.34m
+  (max 1.36 across the cycle) vs 1.62 standing, and the standing capsule sits
+  0.18m above the head bone -> 1.36+0.18 = 1.54m -> 0.86. The original 0.62 guess
+  would have been a lie: this is a cautious crouch walk, not a deep squat.
+- **The capsule only shrinks for an actor that actually HAS the clip**
+  (a.hasCrouchClip). If a skin's clip ever fails to bake it still stands upright,
+  and shrinking its capsule would reintroduce exactly the shoot-through problem
+  this work existed to avoid.
+- One clip covers both stances: crouch-walk paced by ground speed, and standing
+  still freezes it on a crouched pose instead of marching in place.
+- **DEFECT found while wiring it:** playAnim did `(opts && opts.timeScale) || 1`,
+  so an explicit timeScale of 0 (falsy) silently became full speed — "freeze this
+  clip" did the opposite. Now null-checked.
+
+Verified live: clip resolves on all five skins; capsule 1.80 standing / 1.548
+crouched / 1.80 when crouching without the clip; anim = "crouch" moving and
+still, timeScale 0.97 moving and 0 still; and a side-by-side capture through the
+real input path shows the model visibly folded with its feet on the ground.
+Selftest 46/46. DRAFT.
+
 ## 2026-07-20 — Crouch (?v=49, LIVE)
 
 grep for crouch|slide|mantle|vault|prone across runtime/ returned nothing (the
