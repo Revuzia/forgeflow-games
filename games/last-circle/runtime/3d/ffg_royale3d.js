@@ -107,7 +107,25 @@ register3d("royale", async function (kernel, content) {
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, DPR[tier] || 1.5));
     const shadows = tier !== "low";
     r.shadowMap.enabled = shadows;
+    // Shadow VOLUME lives here rather than in the vendored kernel literal, which
+    // hard-codes a +/-80 m box (160 m) around world origin on a 1600 m map — about
+    // 1% of the playable area had shadows at all, and the depth pass ran every
+    // frame regardless. Tighter extents + a volume that FOLLOWS the player (see
+    // the frame pipeline) means medium now looks better than high used to.
+    const SHADOW_EXT = { low: 55, medium: 55, high: 70 };
     if (shadows && kernel.sun) {
+      const ext = SHADOW_EXT[tier] || 55;
+      const sc = kernel.sun.shadow.camera;
+      if (sc.right !== ext) {
+        sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext;
+        sc.near = 1; sc.far = 400;
+        sc.updateProjectionMatrix();
+      }
+      // acne/peter-panning control — neither was ever set
+      kernel.sun.shadow.bias = -0.0004;
+      kernel.sun.shadow.normalBias = 0.02;
+      W._shadowExt = ext;
+      if (!kernel.sun.target.parent) W.scene.add(kernel.sun.target);
       const sz = SHADOW[tier] || 2048;
       if (kernel.sun.shadow.mapSize.x !== sz) {
         kernel.sun.shadow.mapSize.set(sz, sz);
@@ -136,6 +154,27 @@ register3d("royale", async function (kernel, content) {
     sunPos: kernel.sun.position.clone(),
     exposure: kernel.renderer.toneMappingExposure,
   };
+
+  // ── shadow volume follows the player ────────────────────────────────────────
+  // The kernel points its sun at (0,0,0) and nothing ever moved the target, so
+  // the shadow box sat over world origin for the whole match. Keep the same sun
+  // DIRECTION (offset captured per match, since buildMap re-aims the sun for
+  // each map's daylight) and slide the volume with the camera focus. The centre
+  // is snapped to whole shadow-texel steps or the map shimmers as you walk.
+  const _sunFocus = new THREE.Vector3();
+  function followShadow() {
+    const sun = kernel.sun;
+    if (!sun || !sun.castShadow || !W._sunOff) return;
+    const f = W._camFocus || W.player;
+    if (!f) return;
+    const ext = W._shadowExt || 55;
+    const texels = (sun.shadow.mapSize && sun.shadow.mapSize.x) || 2048;
+    const step = (ext * 2) / texels;
+    _sunFocus.set(Math.round(f.pos.x / step) * step, f.pos.y, Math.round(f.pos.z / step) * step);
+    sun.target.position.copy(_sunFocus);
+    sun.target.updateMatrixWorld();
+    sun.position.copy(_sunFocus).add(W._sunOff);
+  }
 
   // ── match lifecycle ─────────────────────────────────────────────────────────
   async function startMatch(opts) {
@@ -189,6 +228,9 @@ register3d("royale", async function (kernel, content) {
     hudMod.showLoading(W, "Building " + (MAPS[W.mapId] ? MAPS[W.mapId].name : W.mapId) + "…");
     await nextFrame(); // let the loading screen paint
     W.map = await buildMap(W, W.mapId);
+    // buildMap re-aims the sun per map; capture the direction as an offset from
+    // whatever the target currently is, so followShadow preserves it
+    W._sunOff = kernel.sun.position.clone().sub(kernel.sun.target.position);
 
     const modeK = SIM.MODE[W.mode] || SIM.MODE.standard;
     W.match = new SIM.Match({ players: modeK.players, mode: W.mode });
@@ -263,6 +305,7 @@ register3d("royale", async function (kernel, content) {
     if (W.paused) return;
     if (W.phase !== "match" && W.phase !== "drop" && W.phase !== "over") return;
     const step = Math.min(dt, 0.05);
+    followShadow();
     if (W.phase !== "over") W.t += step;
 
     botsMod.update(W, step);        // brains → bot input structs (staggered)

@@ -19,6 +19,7 @@ Line anchors were correct at the time of writing but drift — re-locate by cont
 - [x] #7 Match teardown leaked mixers/textures/projectiles (?v=56)
 - [x] #5 Challenges evaluated strictly in order + awardable while dead (?v=57)
 - [x] #6 Rebinding never released the old default and silently orphaned actions (?v=57)
+- [x] #8 Shadow volume was a 160m box pinned to world origin (?v=58)
 - [ ] everything else below
 
 # LAST CIRCLE — BUILD ORDER

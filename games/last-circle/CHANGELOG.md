@@ -3,6 +3,35 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — Shadows existed on ~1% of the map (?v=58, LIVE)
+
+Build-order #8.
+
+- The kernel builds the sun with `const d = 80`, so the shadow camera covered a
+  160 m box — and NOTHING in the entire runtime ever touched `sun.target`
+  (grep: zero references), so that box sat over world origin (0,0,0) for the
+  whole match. The maps are 1600 m. Roughly 1% of the playable area had shadows;
+  everywhere the player actually fights, characters and buildings rendered as
+  flat cutouts — while the 2048/4096 depth pass ran every frame regardless.
+- The volume now FOLLOWS the camera focus, keeping the sun's direction (captured
+  per match as an offset, because buildMap re-aims the sun for each map's
+  daylight). Centre is snapped to whole shadow-texel steps or the world shimmers
+  as you walk.
+- Extents tightened to 55 m (70 m on high) and set in W.applyGraphics, which
+  already owns tier fidelity, rather than in the vendored kernel literal — so
+  medium now resolves better than high did before. Added shadow bias
+  (-0.0004) and normalBias (0.02); neither was set anywhere.
+- No kernel edit was needed: the game's orchestrator adds sun.target to the
+  scene and drives it. Last Circle's kernel copy already diverges from the
+  pipeline template and 14 games vendor their own, so this keeps the blast
+  radius at zero.
+
+Verified live: with the player parked at (600,600) — 848 m from origin, where
+there was previously no shadow at all — the character casts a contact shadow on
+the sand; moving to (-320,140) the volume tracks within 2 m, the sun direction
+is unchanged (0.53, 0.77, 0.35), the centre lands on exact 0.054 m texel steps,
+and a palm shadows the grass. DRAFT.
+
 ## 2026-07-20 — Challenge XP you could never earn + keybinds that ate each other (?v=57, LIVE)
 
 Build-order #5 and #6.
