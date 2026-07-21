@@ -377,16 +377,15 @@ function fire(W, a, def) {
     _d.set(_camPt.x - eye.x, _camPt.y - eye.y, _camPt.z - eye.z).normalize();
   }
   const pellets = def.pellets || 1;
-  // spread: base × rarity × stance modifiers
-  let spread = (def.spreadDeg || 1) * (K.RARITY_SPREAD_MULT[a.weapon.rarity] || 1);
-  if (a.input.ads) spread *= 0.5;
-  const movePen = Math.hypot(a.vel.x, a.vel.z) > 1 ? 1.4 : 1;
-  const airPen = a.onGround ? 1 : 2;
-  spread *= movePen * airPen;
-  if (a.crouching) spread *= K.CROUCH.spreadMult;   // the reward for giving up mobility
-  // FIRST-SHOT ACCURACY (industry standard): a deliberate single shot while
-  // standing goes exactly where the crosshair points — no bloom lottery
-  if (def.cls !== "shotgun" && a.onGround && movePen === 1 && W.t - a.lastShotT > 0.5) spread *= 0.15;
+  // spread: one shared model (sim.effectiveSpread) so the crosshair can draw the
+  // SAME number this fires with — it used to guess with a cruder formula
+  const spread = K.effectiveSpread(a.weapon.id, a.weapon.rarity, {
+    ads: !!a.input.ads,
+    moving: Math.hypot(a.vel.x, a.vel.z) > 1,
+    airborne: !a.onGround,
+    crouching: !!a.crouching,
+    sinceLastShotS: W.t - a.lastShotT,
+  });
 
   for (let p = 0; p < pellets; p++) {
     const sr = (spread * Math.PI / 180);

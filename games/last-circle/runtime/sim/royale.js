@@ -123,6 +123,30 @@
    *  (cos, -sin), so the two axes were not perpendicular (dot = -sin(2*yaw)) and
    *  A/D under the parachute pulled the wrong way at every non-cardinal heading.
    *  Sharing it here also makes the error testable from the node selftest. */
+  /** The ONE spread model, in degrees. fire() computed this inline and the
+   *  crosshair guessed at it with a different, much cruder formula that knew
+   *  only about moving and ADS — so the reticle never showed crouch (a 38%
+   *  tighter cone), airborne (a 2x penalty), rarity, first-shot accuracy (0.15x,
+   *  the biggest term of all), or even the weapon's own base spread: a shotgun
+   *  and a sniper drew the same reticle. The player was never shown when they
+   *  were actually accurate. Both now read from here.
+   *  st: {ads, moving, airborne, crouching, sinceLastShotS} */
+  function effectiveSpread(weaponId, rarity, st) {
+    var def = WEAPONS[weaponId];
+    if (!def) return 1;
+    st = st || {};
+    var spread = (def.spreadDeg || 1) * (RARITY_SPREAD_MULT[rarity] || 1);
+    if (st.ads) spread *= 0.5;
+    var movePen = st.moving ? 1.4 : 1;
+    var airPen = st.airborne ? 2 : 1;
+    spread *= movePen * airPen;
+    if (st.crouching) spread *= CROUCH.spreadMult;
+    // FIRST-SHOT ACCURACY: a deliberate single shot while standing still goes
+    // exactly where the reticle points — no bloom lottery
+    if (def.cls !== "shotgun" && !st.airborne && movePen === 1 && (st.sinceLastShotS || 0) > 0.5) spread *= 0.15;
+    return spread;
+  }
+
   function moveBasis(yaw) {
     var s = Math.sin(yaw), c = Math.cos(yaw);
     return { fx: -s, fz: -c, rx: c, rz: -s };
@@ -470,7 +494,7 @@
     mulberry32: mulberry32, clamp: clamp, dist2d: dist2d, lerp: lerp,
     RARITY: RARITY, RARITY_COLOR: RARITY_COLOR, RARITY_DMG_MULT: RARITY_DMG_MULT, RARITY_SPREAD_MULT: RARITY_SPREAD_MULT,
     WEAPONS: WEAPONS, WEAPON_IDS: WEAPON_IDS, WEAPON_NAMES: WEAPON_NAMES, weaponName: weaponName, AMMO: AMMO, CONSUMABLES: CONSUMABLES, START_LOADOUT: START_LOADOUT,
-    MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH,
+    MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH, effectiveSpread: effectiveSpread,
     actorHeight: actorHeight, actorEyeY: actorEyeY, moveBasis: moveBasis,
     segmentBox: segmentBox, rampTopAt: rampTopAt, segmentRamp: segmentRamp,
     segmentColliders: segmentColliders,

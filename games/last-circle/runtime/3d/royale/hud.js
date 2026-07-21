@@ -1454,7 +1454,17 @@ export function update(W, dt) {
     R.cross.style.left = "50%"; R.cross.style.top = "50%";
     R.cross.style.transform = `translate(-50%,-50%) scale(${C.bloom || 1})`;
   }
-  const bloom = (Math.hypot(p.vel.x, p.vel.z) > 1 ? 1.3 : 1) * (p.input.ads ? 0.8 : 1);
+  // Reticle size from the ACTUAL spread the next shot will use, not a guess.
+  const spreadNow = (p.weapon && K.WEAPONS[p.weapon.id])
+    ? K.effectiveSpread(p.weapon.id, p.weapon.rarity, {
+        ads: !!p.input.ads,
+        moving: Math.hypot(p.vel.x, p.vel.z) > 1,
+        airborne: !p.onGround,
+        crouching: !!p.crouching,
+        sinceLastShotS: W.t - (p.lastShotT == null ? -9 : p.lastShotT),   // 0 is a REAL time, not 'missing'
+      })
+    : 1;
+  const bloom = Math.max(0.4, Math.min(3.2, 0.35 + spreadNow * 0.55));
   if (C.bloom !== bloom) {
     C.bloom = bloom;
     if (!R._crossAtCursor) R.cross.style.transform = `translate(-50%,-50%) scale(${bloom})`;

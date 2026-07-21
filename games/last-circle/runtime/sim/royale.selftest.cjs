@@ -210,5 +210,42 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
      "sweep: destroyed colliders are ignored");
 }
 
+// ── Spread model ─────────────────────────────────────────────────────────────
+// fire() computed spread inline and the crosshair guessed with a DIFFERENT
+// formula, so the reticle never showed crouch, airborne, rarity, first-shot
+// accuracy, or even the weapon's own base spread. Both read effectiveSpread now,
+// so these assertions pin the exact behaviour fire() had before the extraction.
+{
+  const E = (id, rar, st) => R.effectiveSpread(id, rar, st);
+  const still = { ads: false, moving: false, airborne: false, crouching: false, sinceLastShotS: 0 };
+  const S = (o) => Object.assign({}, still, o);
+
+  // base = spreadDeg x rarity multiplier
+  ok(approx(E("ar", 0, S({})), 1.5), "spread: AR common base is 1.5deg");
+  ok(approx(E("ar", 4, S({})), 1.5 * R.RARITY_SPREAD_MULT[4]), "spread: legendary tightens by the rarity table");
+  ok(approx(E("shotgun", 0, S({})), 4.0), "spread: shotgun base is 4.0deg (a sniper is 0.15 - they must NOT draw alike)");
+  ok(approx(E("sniper", 0, S({})), 0.15), "spread: sniper base is 0.15deg");
+
+  // stance modifiers, each isolated
+  ok(approx(E("ar", 0, S({ ads: true })), 1.5 * 0.5), "spread: ADS halves it");
+  ok(approx(E("ar", 0, S({ moving: true })), 1.5 * 1.4), "spread: moving costs 1.4x");
+  ok(approx(E("ar", 0, S({ airborne: true })), 1.5 * 2), "spread: airborne costs 2x");
+  ok(approx(E("ar", 0, S({ crouching: true })), 1.5 * R.CROUCH.spreadMult), "spread: crouch applies CROUCH.spreadMult");
+  ok(E("ar", 0, S({ crouching: true })) < E("ar", 0, S({})), "spread: crouching is strictly tighter than standing");
+
+  // first-shot accuracy: the biggest term, and shotguns are excluded
+  ok(approx(E("ar", 0, S({ sinceLastShotS: 1 })), 1.5 * 0.15), "spread: first shot standing still is 0.15x");
+  ok(approx(E("shotgun", 0, S({ sinceLastShotS: 1 })), 4.0), "spread: shotguns get NO first-shot bonus");
+  ok(approx(E("ar", 0, S({ sinceLastShotS: 1, moving: true })), 1.5 * 1.4), "spread: moving forfeits the first-shot bonus");
+  ok(approx(E("ar", 0, S({ sinceLastShotS: 1, airborne: true })), 1.5 * 2), "spread: airborne forfeits the first-shot bonus");
+
+  // combined, exactly as fire() chained them
+  ok(approx(E("ar", 2, S({ ads: true, moving: true, crouching: true })),
+            1.5 * R.RARITY_SPREAD_MULT[2] * 0.5 * 1.4 * R.CROUCH.spreadMult),
+     "spread: modifiers compose in the original order");
+  ok(E("ar", 0, S({})) > 0 && E("glauncher", 0, S({})) > 0, "spread: every weapon returns a positive cone");
+  ok(R.effectiveSpread("nonexistent", 0, S({})) === 1, "spread: unknown weapon falls back to 1deg, never NaN");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

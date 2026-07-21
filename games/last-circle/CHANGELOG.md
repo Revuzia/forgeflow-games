@@ -3,6 +3,35 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — The crosshair now tells the truth (?v=73, LIVE)
+
+The item the earlier synthesis called "the highest-value one not in the twelve",
+and it turned out to be quietly hiding work shipped earlier today.
+
+- fire() computed spread inline; the crosshair guessed with a DIFFERENT, cruder
+  formula that knew only `moving` and `ads`. So the reticle never showed:
+  crouch (the 38% tighter cone sold in ?v=49 — byte-identical to standing on
+  screen), airborne (a 2x penalty), rarity, first-shot accuracy (0.15x, the
+  single biggest term), or even the weapon's own base spread — a shotgun (4.0deg)
+  and a sniper (0.15deg) drew the SAME reticle. The player was never shown when
+  they were accurate.
+- Both now read one shared sim.effectiveSpread(). 16 new selftest assertions pin
+  the exact behaviour fire() had before the extraction, term by term and in
+  combination, so this stayed a refactor and not a balance change (82 passing,
+  was 66).
+- Rejected on purpose, per the original review: the ADS-settle half of that
+  proposal. It is a sniper balance change wearing a HUD fix's clothes and it
+  would retune 49 bots.
+- **Found while verifying:** my first version wrote `p.lastShotT || -9`, which
+  treats a legitimate lastShotT of 0 as missing — so every shot looked like a
+  first shot. Same falsy-zero class as the playAnim timeScale bug fixed earlier
+  today. The verification caught it because the first-shot reticle and the
+  spraying reticle came back identical.
+
+Verified live, reticle scale per state: AR first shot 0.47 vs spraying 1.18;
+crouched first shot 0.43; airborne+moving 2.66 vs moving 1.50; shotgun 2.55 vs
+sniper first shot 0.40. Selftest 82/82. DRAFT.
+
 ## 2026-07-21 — Reload progress + kill attribution names the weapon (?v=71, LIVE)
 
 - **Reload had no progress UI at all** — just the word "RELOADING…" in the ammo
