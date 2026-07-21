@@ -37,6 +37,37 @@ export function createPaintPanel(paint, opts = {}) {
   colorInput.addEventListener("input", () => { paint.setColorHex(colorInput.value); refresh(); });
   el.appendChild(swatch); el.appendChild(colorInput);
 
+  // "All colours" — opens the OS picker (full spectrum)
+  const allBtn = document.createElement("button");
+  allBtn.type = "button"; allBtn.textContent = "🎨  All colours…";
+  allBtn.style.cssText = "width:100%;margin-top:6px;border:none;border-radius:6px;padding:7px;cursor:pointer;background:rgba(127,227,196,.16);color:#bff5e4;font-size:11px;font-weight:600;";
+  allBtn.addEventListener("click", () => colorInput.click());
+  el.appendChild(allBtn);
+
+  // Quick palette — the shades you actually need to match this game's surfaces,
+  // plus saturated accents. One click = ready to paint.
+  const PRESETS = [
+    "#ffffff", "#d8dce0", "#9aa0a6", "#6a7280", "#3f4348", "#14161a",
+    "#8a5a34", "#b07a3a", "#c9a24a", "#e0b83a", "#8a6038", "#5c4a36",
+    "#b8523a", "#c0453a", "#d83a3a", "#e07b39", "#e0951f", "#d94f8a",
+    "#2fa36b", "#5f9a3a", "#3f9f57", "#2f7d3a", "#3a6ea5", "#3b6fb0",
+    "#2f9e8f", "#8fa07a", "#bcd4e0", "#8791a1", "#7a4a5a", "#35406b",
+  ];
+  const palLabel = document.createElement("div");
+  palLabel.textContent = "QUICK PALETTE";
+  palLabel.style.cssText = "opacity:.65;font-size:9.5px;letter-spacing:.08em;margin:8px 0 4px;";
+  el.appendChild(palLabel);
+  const pal = document.createElement("div");
+  pal.style.cssText = "display:grid;grid-template-columns:repeat(6,1fr);gap:3px;margin-bottom:2px;";
+  for (const hex of PRESETS) {
+    const b = document.createElement("button");
+    b.type = "button"; b.title = hex;
+    b.style.cssText = `height:17px;border-radius:4px;border:1px solid rgba(255,255,255,.14);cursor:pointer;background:${hex};`;
+    b.addEventListener("click", () => { paint.setColorHex(hex); refresh(); });
+    pal.appendChild(b);
+  }
+  el.appendChild(pal);
+
   // Metallic / Roughness / Size sliders
   const mkSlider = (min, max, val, step, on) => {
     const i = document.createElement("input");

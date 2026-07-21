@@ -78,6 +78,7 @@ export class Game {
     this._buildMap();
     this._spawnActors();
     this._setupInput();
+    this._buildControlHelp();
     this._buildEmoteBar();
     this._unsub = engine.onFrame((dt) => this._update(dt));
     this.hud.show(); this.hud.setRole(this.localRole);
@@ -254,42 +255,119 @@ export class Game {
   _setupInput() {
     const dom = this.engine.renderer.domElement;
     this._onKey = (e, down) => {
-      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+      const t = e.target, tag = (t && t.tagName) || "";
+      const isForm = tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA";
+      // game keys must still work while a paint slider has focus
+      const GAME = ["KeyF", "KeyV", "KeyR", "KeyE", "KeyQ", "Space", "Escape"];
+      if (isForm && !GAME.includes(e.code)) return;
+      if (isForm && down && t.blur) { try { t.blur(); } catch (err) { /* ignore */ } }
       if (down) {
         if (e.code === "KeyF" && this.localRole === ROLE.HIDER) { this._togglePaintMode(); e.preventDefault(); return; }
+        if (e.code === "KeyV") { this.thirdPerson = !this.thirdPerson; e.preventDefault(); return; }
+        if (e.code === "KeyR" && this.localRole === ROLE.HIDER) { this._cyclePose(); e.preventDefault(); return; }
         if (e.code === "Digit1") { this._whistle(); }
         if (e.code === "KeyE") { this._toggleEmoteBar(); e.preventDefault(); return; }
-        if (e.code === "KeyR" && this.paintMode) { /* pose cycle hook (M2.1) */ }
+        if (e.code === "Space" && !this.paintMode) { this._jump(); e.preventDefault(); return; }
+      }
+      if (e.code === "ControlLeft" || e.code === "ControlRight") {
+        this._crouch = down; if (this.local) this.local.pose = down ? "crouch" : "stand";
       }
       const map = { KeyW: "f", ArrowUp: "f", KeyS: "b", ArrowDown: "b", KeyA: "l", ArrowLeft: "l", KeyD: "r", ArrowRight: "r" };
       if (map[e.code]) { down ? this.keys.add(map[e.code]) : this.keys.delete(map[e.code]); }
+      if (e.code === "Space") e.preventDefault();
     };
     this._kd = (e) => this._onKey(e, true); this._ku = (e) => this._onKey(e, false);
     window.addEventListener("keydown", this._kd); window.addEventListener("keyup", this._ku);
+    this._blur = () => this.keys.clear();
+    window.addEventListener("blur", this._blur);
+
+    // POINTER LOCK — look with the mouse like any first/third-person game. Without it
+    // you had to hold a drag to turn, which reads as broken.
+    this._lockChange = () => {
+      this._locked = document.pointerLockElement === dom;
+      if (this.hud && this.hud.setHint && !this.paintMode) {
+        this.hud.setHint(this._locked ? this._defaultHint() : "<b>Click</b> to look around · <b>Esc</b> releases the cursor");
+      }
+    };
+    document.addEventListener("pointerlockchange", this._lockChange);
 
     this._pd = (e) => {
       if (window.__PAUSE__ && window.__PAUSE__.isPaused()) return;
       if (this.paintMode) { if (e.button === 0) this._painting = true; if (e.button === 1) this._orbiting = true; if (e.button === 2) this._sizing = true; this._lx = e.clientX; this._ly = e.clientY; return; }
+      if (!this._locked && e.button === 0) { try { dom.requestPointerLock(); } catch (err) { /* ignore */ } }
       if (this.localRole === ROLE.SEEKER && e.button === 0 && this.sim.phase === PHASE.HUNT) { this._shootRequested = true; }
-      if (e.button === 2) this.thirdPerson = !this.thirdPerson;
       this._dragging = true; this._lx = e.clientX; this._ly = e.clientY;
     };
     this._pu = () => { this._painting = this._orbiting = this._sizing = this._dragging = false; };
     this._pm = (e) => {
-      const dx = e.clientX - (this._lx || e.clientX), dy = e.clientY - (this._ly || e.clientY); this._lx = e.clientX; this._ly = e.clientY;
-      const s = this._sens();
+      const s2 = this._sens();
       if (this.paintMode) {
+        const dx = e.clientX - (this._lx || e.clientX), dy = e.clientY - (this._ly || e.clientY);
+        this._lx = e.clientX; this._ly = e.clientY;
         if (this._painting) this.paint.paintAtPointer();
-        else if (this._orbiting) { this.camYaw += dx * 0.006 * s; this.camPitch = clamp(this.camPitch - dy * 0.006 * s, 0.15, 1.4); }
+        else if (this._orbiting) { this.camYaw -= dx * 0.006 * s2; this.camPitch = clamp(this.camPitch - dy * 0.006 * s2, 0.15, 1.4); }
         else if (this._sizing) { this.paint.nudgeSize(dx * 0.6); this.paintPanel && this.paintPanel.refresh(); }
         return;
       }
-      // drag-to-look (no pointer lock in-browser). Drag right -> turn right (was inverted).
-      if (this._dragging || this.localRole === ROLE.SEEKER) { this.camYaw += dx * 0.004 * s; this.camPitch = clamp(this.camPitch - dy * 0.004 * s, -0.4, 1.2); }
+      // locked -> raw movement deltas; unlocked -> drag still works as a fallback
+      let dx, dy;
+      if (this._locked) { dx = e.movementX || 0; dy = e.movementY || 0; }
+      else if (this._dragging) { dx = e.clientX - (this._lx || e.clientX); dy = e.clientY - (this._ly || e.clientY); this._lx = e.clientX; this._ly = e.clientY; }
+      else { this._lx = e.clientX; this._ly = e.clientY; return; }
+      // mouse-right turns right; mouse-down looks down (both were inverted)
+      this.camYaw -= dx * 0.0032 * s2;
+      this.camPitch = clamp(this.camPitch + dy * 0.0032 * s2, -0.55, 1.25);
     };
-    this._wheel = (e) => { if (this.paintMode || this.thirdPerson) { this.camDist = clamp(this.camDist + e.deltaY * 0.006, 2.5, 12); e.preventDefault(); } };
+    this._wheel = (e) => { if (this.paintMode || this.thirdPerson) { this.camDist = clamp(this.camDist + e.deltaY * 0.006, 2.0, 10); e.preventDefault(); } };
     dom.addEventListener("pointerdown", this._pd); window.addEventListener("pointerup", this._pu);
-    dom.addEventListener("pointermove", this._pm); dom.addEventListener("wheel", this._wheel, { passive: false });
+    window.addEventListener("pointermove", this._pm); dom.addEventListener("wheel", this._wheel, { passive: false });
+  }
+
+  /** Always-visible control legend. The paint mechanic is the whole game and there was
+   *  nothing on screen telling anyone that F opens it. */
+  _buildControlHelp() {
+    const el = document.createElement("div");
+    el.style.cssText = [
+      "position:absolute", "left:10px", "bottom:10px", "z-index:40", "pointer-events:none",
+      "font:11px/1.55 system-ui,-apple-system,sans-serif", "color:#dfe7f2",
+      "background:rgba(12,16,22,.72)", "border:1px solid rgba(255,255,255,.10)",
+      "border-radius:9px", "padding:8px 10px", "max-width:340px", "backdrop-filter:blur(4px)",
+    ].join(";");
+    const k = (s2) => `<kbd style="background:rgba(255,255,255,.13);border-radius:3px;padding:0 4px;font:inherit">${s2}</kbd>`;
+    const hider = this.localRole === ROLE.HIDER
+      ? `<div style="color:#7fe3c4;font-weight:700;margin-top:3px">${k("F")} PAINT YOURSELF &nbsp;·&nbsp; ${k("R")} pose</div>
+         <div>${k("Space")} jump · ${k("Ctrl")} crouch · ${k("V")} 1st/3rd · ${k("E")} emote</div>
+         <div style="opacity:.72">In paint mode: drag <b>LMB</b> on your body · <b>Space</b> eyedrop a surface · <b>MMB</b> orbit · <b>wheel</b> zoom</div>`
+      : `<div style="color:#ff9d6b;font-weight:700;margin-top:3px">${k("LMB")} TAG a suspect</div>
+         <div>${k("Space")} jump · ${k("V")} 1st/3rd</div>`;
+    el.innerHTML = `<div>${k("WASD")} move · <b>mouse</b> look (click to lock, ${k("Esc")} release)</div>${hider}`;
+    this.engine.container.appendChild(el);
+    this._helpEl = el;
+  }
+
+  /** Visual hop. The sim is 2D (x,z) so this never changes collision — it is a tell
+   *  for other players and a way to see over cover, nothing more. */
+  _jump() {
+    if (!this.local || !this.local.alive) return;
+    if (this._jumpV == null) this._jumpV = 0;
+    if ((this._jumpY || 0) <= 0.001) { this._jumpV = 4.4; this.audio && this.audio.blip && this.audio.blip(); }
+  }
+
+  _stepJump(dt) {
+    if (this._jumpY == null) { this._jumpY = 0; this._jumpV = 0; }
+    if (this._jumpY > 0 || this._jumpV > 0) {
+      this._jumpV -= 11 * dt;
+      this._jumpY = Math.max(0, this._jumpY + this._jumpV * dt);
+      if (this._jumpY === 0) this._jumpV = 0;
+    }
+  }
+
+  _cyclePose() {
+    if (!this.local || this.local.role !== ROLE.HIDER) return;
+    const POSES = ["stand", "crouch", "flat", "ball"];
+    const i = POSES.indexOf(this.local.pose || "stand");
+    this.local.pose = POSES[(i + 1) % POSES.length];
+    this.hud && this.hud.toast && this.hud.toast("pose: " + this.local.pose, "#7fe3c4");
   }
 
   _togglePaintMode() {
@@ -406,8 +484,10 @@ export class Game {
     if (!this.paintMode && !seekerLocked && this.local && this.local.alive) {
       const f = (this.keys.has("f") ? 1 : 0) - (this.keys.has("b") ? 1 : 0);
       const r = (this.keys.has("r") ? 1 : 0) - (this.keys.has("l") ? 1 : 0);
-      mx = Math.sin(this.camYaw) * f + Math.cos(this.camYaw) * r;
-      mz = Math.cos(this.camYaw) * f - Math.sin(this.camYaw) * r;
+      // camYaw now decreases as the mouse moves right, so the strafe basis flips too:
+      // A must step screen-left and D screen-right relative to where you are looking.
+      mx = Math.sin(this.camYaw) * f - Math.cos(this.camYaw) * r;
+      mz = Math.cos(this.camYaw) * f + Math.sin(this.camYaw) * r;
     }
     this._moving = (mx !== 0 || mz !== 0);
     return { mx, mz, yaw: this.camYaw, shoot: !!this._shootRequested };
@@ -428,6 +508,7 @@ export class Game {
     this._syncActors();
     this._updateEmotes(dt);
     this._syncPaintBlend();
+    this._stepJump(dt);
     this._updateCamera(dt);
     this._updateHUD();
     if (this.sim.phase === PHASE.RESULTS && !this._ended) { this._ended = true; this._finish(); }
@@ -534,11 +615,15 @@ export class Game {
       mesh.position.x = a.x; mesh.position.z = a.z;
       // pose
       let sy = 1, py = BODY_Y, rot = 0;
-      if (a.role === ROLE.HIDER && a.hidden) {
+      // poses apply whether or not the bot has "settled" — the local player picks one
+      // with R and it must show immediately (and it changes hiderHeight, so low cover
+      // actually hides a crouched body).
+      if (a.role === ROLE.HIDER) {
         if (a.pose === "crouch") { sy = 0.62; py = BODY_Y * 0.7; }
         else if (a.pose === "ball") { sy = 0.75; py = BODY_R + 0.1; }
-        else if (a.pose === "lie") { rot = Math.PI / 2; py = BODY_R + 0.05; }
+        else if (a.pose === "flat" || a.pose === "lie") { rot = Math.PI / 2; py = BODY_R + 0.05; }
       }
+      if (a.isLocal && this._jumpY) py += this._jumpY;   // visual hop
       mesh.scale.y = sy; mesh.position.y = py; mesh.rotation.set(rot, a.yaw, 0);
       if (a.caught && a.role === ROLE.HIDER) { mesh.material.transparent = true; mesh.material.opacity = 0.35; }
       // infection: a converted hider now renders like a seeker (tint)
@@ -639,6 +724,7 @@ export class Game {
   }
 
   destroy() {
+    if (this._helpEl && this._helpEl.parentNode) this._helpEl.parentNode.removeChild(this._helpEl);
     this._alive = false;
     if (this.audio) { try { this.audio.stopMusic(); } catch (e) {} }
     if (this.online && this.net) { try { this.net.leave(); } catch (e) {} }
