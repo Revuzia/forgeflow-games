@@ -458,6 +458,12 @@ function give(W, a, data) {
       // swap branch is reached exactly when you are full, which is the normal
       // mid-match state.
       const old = inv.slots[inv.active];
+      // Swapping REPLACES the active slot, which only keeps the gun count level
+      // when the outgoing slot was itself a gun. With a consumable active at 3
+      // guns it ADDED a fourth, permanently past GUN_CAP — and the cap is what
+      // stops you from filling every slot with guns and never being able to pick
+      // up a shield again. Refuse instead of quietly breaking the invariant.
+      if ((!old || old.kind !== "weapon") && guns >= GUN_CAP) return false;
       if (old && old.kind === "weapon") {
         dropItem(W, a, { kind: "weapon", id: old.id, rarity: old.rarity });
       } else if (old && old.kind === "consumable") {
@@ -472,9 +478,28 @@ function give(W, a, data) {
   if (data.kind === "consumable") {
     const st = inv.slots.find((s) => s && s.kind === "consumable" && s.id === data.id);
     const cs = K.CONSUMABLES[data.id];
-    if (st) { st.count = Math.min(cs.stack, st.count + (data.count || 1)); return true; }
+    if (st) {
+      // Returning true at a FULL stack told the caller the pickup succeeded, so
+      // it deleted the item off the floor and played the pickup line — while the
+      // player gained nothing. Walking over your own dropped bandages at 15/15
+      // destroyed them. Leave it on the ground instead.
+      if (st.count >= cs.stack) return false;
+      st.count = Math.min(cs.stack, st.count + (data.count || 1));
+      return true;
+    }
     const empty = inv.slots.findIndex((s) => !s);
     if (empty >= 0) { inv.slots[empty] = { kind: "consumable", id: data.id, count: Math.min(cs.stack, data.count || 1) }; return true; }
+    // The consumable branch never read data.swap, so a player with no free slot
+    // could NEVER acquire a new consumable type — no shields for the rest of the
+    // match, with the prompt still inviting the swap. Mirror the weapon path.
+    if (data.swap) {
+      const old = inv.slots[inv.active];
+      if (old && old.kind === "weapon") dropItem(W, a, { kind: "weapon", id: old.id, rarity: old.rarity });
+      else if (old && old.kind === "consumable") dropItem(W, a, { kind: "consumable", id: old.id, count: old.count || 1 });
+      inv.slots[inv.active] = { kind: "consumable", id: data.id, count: Math.min(cs.stack, data.count || 1) };
+      W.equipSlot(a, inv.active);
+      return true;
+    }
     return false;
   }
   return false;

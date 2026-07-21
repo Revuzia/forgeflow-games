@@ -1980,7 +1980,11 @@ function showDeath(W, killerId, weaponId) {
   releaseCursor(W);          // its MATCH STATS button is otherwise unclickable
   const killer = killerId ? W.actorById.get(killerId) : null;
   const L = layer("death", { pointerEvents: "auto" });
-  const box = h("div", { position: "absolute", top: "14%", left: "50%", transform: "translateX(-50%)", textAlign: "center" }, null, L);
+  // The big match announcement (R.annWrap) is pinned at top:14% too, and dying
+  // FIRES one ("<killer> eliminated you"), so for the ~2.6s the announcement
+  // holds, ELIMINATED and the announcement painted straight through each other
+  // — at the single most-screenshotted moment of the match. Sit below it.
+  const box = h("div", { position: "absolute", top: "26%", left: "50%", transform: "translateX(-50%)", textAlign: "center" }, null, L);
   h("div", { fontSize: "38px", fontWeight: "900", color: "#ff7a7a", textShadow: "0 3px 12px #000", letterSpacing: "3px" }, "ELIMINATED", box);
   const place = W.match.placementOf(W.player.id);
   h("div", { fontSize: "17px", marginTop: "8px", textShadow: "0 2px 6px #000" },

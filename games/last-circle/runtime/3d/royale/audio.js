@@ -19,6 +19,9 @@ export function init(W) {
   wire(W);
 }
 
+let musicBase = 1;        // the current track's own mix level (menu .9 / match .55)
+let _blockedTrack = null; // a track the autoplay policy refused, awaiting a gesture
+
 function ensureCtx(W) {
   if (ctx) return ctx;
   ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -35,19 +38,30 @@ function ensureCtx(W) {
 export function setVolumes(W) {
   if (master) master.gain.value = W.settings.masterVol;
   if (sfxBus) sfxBus.gain.value = W.settings.sfxVol;
-  if (musicEl) musicEl.volume = W.settings.musicVol * W.settings.masterVol;
+  // playTrack mixes each track at its own level (menu 0.9, match 0.55, endgame
+  // 0.8). setVolumes used to recompute the element volume WITHOUT that factor,
+  // so the first nudge of any slider — even the SFX one, even nudging it down —
+  // snapped match music from 0.55 to 1.0, a ~1.8x jump in the middle of a fight.
+  if (musicEl) musicEl.volume = musicBase * W.settings.musicVol * W.settings.masterVol;
 }
 
 // ── music ────────────────────────────────────────────────────────────────────
 function playTrack(W, name, vol) {
   try {
     if (musicEl) { musicEl.pause(); musicEl = null; }
+    musicBase = (vol != null ? vol : 1);
     musicEl = new Audio(W.assetBase + "assets/audio/" + name);
     musicEl.loop = true;
-    musicEl.volume = (vol != null ? vol : 1) * W.settings.musicVol * W.settings.masterVol;
+    musicEl.volume = musicBase * W.settings.musicVol * W.settings.masterVol;
     window.__GAME_AUDIO__ = window.__GAME_AUDIO__ || [];
     window.__GAME_AUDIO__.push(musicEl);
-    const p = musicEl.play(); if (p && p.catch) p.catch(() => {});
+    // On a COLD load there has been no user gesture yet, so this play() is
+    // rejected by the autoplay policy and the whole 4.9 MB menu track was
+    // downloaded and then silently thrown away — the game opened in silence and
+    // never recovered, because nothing ever retried. Remember the failure and
+    // let the first real gesture start it (see wire()).
+    const p = musicEl.play();
+    if (p && p.catch) p.catch(() => { _blockedTrack = musicEl; });
   } catch (e) {}
 }
 export function startMenuMusic(W) { playTrack(W, "music_menu.mp3", 0.9); }
@@ -163,7 +177,7 @@ function sting(victory) {
     g.gain.setValueAtTime(0.0001, t + i * 0.16);
     g.gain.linearRampToValueAtTime(0.25, t + i * 0.16 + 0.03);
     g.gain.linearRampToValueAtTime(0.0001, t + i * 0.16 + 0.5);
-    o.connect(g); g.connect(master);
+    o.connect(g); g.connect(sfxBus || master);
     o.start(t + i * 0.16); o.stop(t + i * 0.16 + 0.55);
   });
 }
@@ -172,7 +186,26 @@ function sting(victory) {
 function wire(W) {
   const on = W.events.on;
   // first user gesture unlocks the context
-  window.addEventListener("pointerdown", () => { ensureCtx(W); if (ctx.state === "suspended") ctx.resume(); }, { once: false });
+  const unlock = () => {
+    ensureCtx(W);
+    if (ctx.state === "suspended") ctx.resume();
+    // the WebAudio context resuming was never enough: the HTMLAudioElement that
+    // the autoplay policy rejected is a separate object and needed its own retry.
+    if (_blockedTrack && _blockedTrack.paused) {
+      const p = _blockedTrack.play();
+      if (p && p.catch) p.catch(() => {});
+      else _blockedTrack = null;
+    } else if (_blockedTrack) _blockedTrack = null;
+  };
+  window.addEventListener("pointerdown", unlock, { once: false });
+  window.addEventListener("keydown", unlock, { once: false });
+  // A backgrounded tab kept playing at full volume — you alt-tab away and the
+  // match music follows you. Suspend on hide, restore on show.
+  document.addEventListener("visibilitychange", () => {
+    const hidden = document.visibilityState === "hidden";
+    if (musicEl) musicEl.volume = hidden ? 0 : musicBase * W.settings.musicVol * W.settings.masterVol;
+    if (ctx) { if (hidden) { try { ctx.suspend(); } catch (e) {} } else { try { ctx.resume(); } catch (e) {} } }
+  });
 
   on("shotFired", (a, weaponId, eye) => {
     const def = W.SIM.WEAPONS[weaponId];
@@ -264,7 +297,7 @@ function siren(W, n) {
     g.gain.setValueAtTime(0.0001, t + i * 0.5);
     g.gain.linearRampToValueAtTime(0.16, t + i * 0.5 + 0.05);
     g.gain.linearRampToValueAtTime(0.0001, t + i * 0.5 + 0.45);
-    o.connect(g); g.connect(master);
+    o.connect(g); g.connect(sfxBus || master);
     o.start(t + i * 0.5); o.stop(t + i * 0.5 + 0.5);
   }
 }
