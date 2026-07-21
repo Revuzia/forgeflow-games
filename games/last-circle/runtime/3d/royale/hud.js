@@ -85,6 +85,17 @@ export function init(W) {
 }
 
 function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+/** Give the mouse back. Pointer lock routes EVERY mouse event to the locked
+ *  canvas, so any overlay the player must click is dead until the lock is
+ *  released. It was released in only two places — showMenu and togglePause —
+ *  which left the death screen and the post-match screen (the two screens that
+ *  end every single match) with unclickable buttons until the player happened
+ *  to press Esc. Nothing told them to. */
+function releaseCursor(W) {
+  try { document.exitPointerLock && document.exitPointerLock(); } catch (e) {}
+  try { if (W && W.kernel) W.kernel.renderer.domElement.style.cursor = ""; } catch (e) {}
+}
+
 function layer(name, styles) {
   if (R[name]) { clear(R[name]); R[name].remove(); }
   R[name] = h("div", Object.assign({ position: "absolute", inset: "0", pointerEvents: "none" }, styles || {}), null, R.root);
@@ -889,6 +900,7 @@ export function showLobby(W, onDone) {
 // bots' actual declared targets, lock it in. It always auto-locks on the timer
 // so online clients advance together.
 export function showDropSelect(W, onDone) {
+  releaseCursor(W);          // you pick your landing zone by CLICKING the map
   ensureAAAStyles();
   const L = layer("dropsel", {
     pointerEvents: "auto",
@@ -1939,6 +1951,7 @@ function togglePause(W) {
 }
 
 function showDeath(W, killerId, weaponId) {
+  releaseCursor(W);          // its MATCH STATS button is otherwise unclickable
   const killer = killerId ? W.actorById.get(killerId) : null;
   const L = layer("death", { pointerEvents: "auto" });
   const box = h("div", { position: "absolute", top: "14%", left: "50%", transform: "translateX(-50%)", textAlign: "center" }, null, L);
@@ -1993,6 +2006,7 @@ export function announceVictory(W, victory) {
 }
 
 export function showPostMatch(W, res) {
+  releaseCursor(W);          // PLAY AGAIN / MAIN MENU are otherwise unclickable
   hideHUD();
   ["pause", "death"].forEach((n) => { if (R[n]) { R[n].remove(); R[n] = null; } });
   ensureAAAStyles();
@@ -2114,6 +2128,7 @@ function physFor(W, canonical) {
 /** First-run controls card. Deliberately NOT a forced tutorial: one screen, the
  *  verbs that are not guessable, and a button. Reachable any time from the menu. */
 export function showHowToPlay(W) {
+  releaseCursor(W);
   ensureAAAStyles();
   const L = layer("howto", { pointerEvents: "auto", background: "rgba(4,8,16,0.92)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 70 });
   const box = h("div", Object.assign({ padding: "26px 34px", width: "520px", display: "flex", flexDirection: "column", gap: "10px" }, PANEL), null, L);
@@ -2149,6 +2164,7 @@ export function showHowToPlay(W) {
 }
 
 function showSettings(W) {
+  releaseCursor(W);
   W.captureKey = null;   // drop any armed keybind capture when (re)rendering the modal
   if (R.settings) { R.settings.remove(); R.settings = null; }
   const L = layer("settings", { pointerEvents: "auto", background: "rgba(4,8,16,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60 });

@@ -70,6 +70,8 @@ function send(t, d) { if (S) S.net.send(t, d); }
 
 // ── lobby UI ─────────────────────────────────────────────────────────────────
 function openLobby(W, sel) {
+  // clickable overlay: pointer lock would send every click to the canvas
+  try { document.exitPointerLock && document.exitPointerLock(); } catch (e) {}
   const root = document.createElement("div");
   Object.assign(root.style, {
     position: "absolute", inset: "0", zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center",

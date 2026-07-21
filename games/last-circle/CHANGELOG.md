@@ -3,6 +3,32 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — The two screens that END every match had unclickable buttons (?v=82, LIVE)
+
+The full-game sweep's headline finding, and the worst thing it found.
+
+- Pointer lock is requested on any canvas click (player.js:425) — i.e. the first
+  time you shoot. It was released in exactly TWO places in the whole runtime:
+  showMenu and togglePause (grep for exitPointerLock returned 2 hits). Neither
+  showDeath NOR showPostMatch released it. While pointer lock is held every mouse
+  event is delivered to the locked canvas, so the buttons on the death screen
+  ("MATCH STATS") and the post-match screen ("PLAY AGAIN" / "MAIN MENU") could not
+  be clicked at all. The player had to guess that Esc frees the mouse; nothing
+  said so. Those are the two screens that terminate EVERY match.
+- Now released by one helper on every overlay the player is expected to click:
+  the death screen, the post-match screen, drop select (you choose your landing
+  zone by clicking the map), the how-to card, settings, and the online lobby.
+
+Verified live by instrumenting document.exitPointerLock and driving a REAL death
+through hurtActor: the death screen releases it (with MATCH STATS present),
+endMatch's post-match screen releases it (PLAY AGAIN + MAIN MENU present), and
+drop select releases it (map canvas present).
+
+Honest limit: a synthetic test cannot ACQUIRE pointer lock — the browser
+requires a real user gesture — so what is verified here is that the release now
+fires on those paths, plus the source fact that it previously did not fire at
+all. Selftest 89/89. DRAFT.
+
 ## 2026-07-21 — E-swap silently destroyed a consumable stack (?v=81, LIVE)
 
 Found by the full-game sweep. Straight data loss.
