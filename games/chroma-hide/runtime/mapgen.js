@@ -204,7 +204,7 @@ function autoSpots(bounds, props, walls, count, rng) {
     for (const [dx, dz] of dirs) {
       const sx = +(p.x + dx * off).toFixed(2), sz = +(p.z + dz * off).toFixed(2);
       if (!inside(sx, sz) || blocked(sx, sz)) continue;
-      if (spots.some((s) => (s.x - sx) ** 2 + (s.z - sz) ** 2 < 4.5)) continue;
+      if (spots.some((s) => (s.x - sx) ** 2 + (s.z - sz) ** 2 < 3.0)) continue;
       spots.push({ x: sx, z: sz, faceYaw: +Math.atan2(p.x - sx, p.z - sz).toFixed(2) });
       break;
     }
