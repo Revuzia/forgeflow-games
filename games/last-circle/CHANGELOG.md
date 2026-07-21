@@ -3,6 +3,36 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — Sound came from the wrong ear, and bullets hit in silence (?v=85, LIVE)
+
+Two audio defects from the full-game sweep.
+
+- **POSITIONAL AUDIO PANNED BACKWARDS.** audio.js derived the camera's right
+  vector as `(fwd.z, -fwd.x)` — the exact NEGATION of the right vector the rest
+  of the game uses (sim.moveBasis: fwd (-sin,-cos), right (cos,-sin), i.e.
+  `(-fwd.z, fwd.x)`; player.js builds its shoulder offset from the sim's
+  version). Every positional sound therefore played in the WRONG EAR at every
+  heading — gunfire actively told you to look the wrong way, which in a battle
+  royale is worse than no positional audio at all.
+- Same three lines: the horizontal projection was not normalised, so looking up
+  or down shrank fwd's xz length and silently flattened the pan toward centre.
+- **BULLET IMPACTS WERE ENTIRELY SILENT.** weapons.js emits four impact surfaces
+  (flesh / stone / wood / dirt) and only fx.js listened — for the visual. In a
+  shooter the impact is how you learn you MISSED and what you hit instead; rounds
+  cracking off a wall beside you are the texture of a firefight. Now voiced,
+  short and quiet so full-auto does not become a wall of noise, with flesh left
+  to the hitmarker that already owns "you hit them".
+
+Verified live: replicating the shipped pan maths against the sim's canonical
+right vector gives +0.8 for a source on your right at yaw 0 / 1.57 / 3.14 /
+-1.05 / 2.40 and -0.8 on your left (the sweep measured -0.800 for a right-hand
+source before this), and looking up or down no longer flattens it. The impact
+listener count is now 1 where it was 0.
+
+Honest limit: a synthetic browser tab cannot start an AudioContext without a
+user gesture, so what is verified is registration and the pan MATHS, not audible
+output. Selftest 89/89. DRAFT.
+
 ## 2026-07-21 — REGRESSION FIX: every match after the first was lit wrong (?v=83, LIVE)
 
 Two lighting defects the full-game sweep caught. The first is mine, from ?v=58.

@@ -77,10 +77,17 @@ function spatial(pos, maxD) {
     maxD = maxD || 60;
     if (d > maxD) return null;
     vol = Math.pow(1 - d / maxD, 1.4);
-    // pan: project onto camera right vector
+    // Pan: project onto the camera's RIGHT vector.
+    // This computed right as (fwd.z, -fwd.x) — the exact NEGATION of the right
+    // vector the rest of the game uses (sim.moveBasis gives fwd (-sin,-cos) and
+    // right (cos,-sin), i.e. (-fwd.z, fwd.x)), so every positional sound played
+    // in the WRONG EAR, at every heading. Gunfire told you to look the wrong way.
+    // Also normalise the horizontal projection: looking up or down shrinks
+    // fwd's xz length and was silently flattening the pan toward centre.
     const fwd = new W_.THREE.Vector3();
     cam.getWorldDirection(fwd);
-    const rightX = fwd.z, rightZ = -fwd.x;
+    const fl = Math.hypot(fwd.x, fwd.z) || 1;
+    const rightX = -fwd.z / fl, rightZ = fwd.x / fl;
     const dl = Math.hypot(dx, dz) || 1;
     pan = Math.max(-1, Math.min(1, (dx * rightX + dz * rightZ) / dl * 0.8));
   }
@@ -212,6 +219,18 @@ function wire(W) {
   // kill confirm: rising two-tone when YOUR target drops
   on("actorDied", (victim, killerId) => {
     if (W.player && killerId === W.player.id) { blip(700, 0.09, 0.2, "triangle"); setTimeout(() => blip(1050, 0.14, 0.22, "triangle"), 90); }
+  });
+  // Bullet impacts were entirely silent: weapons.js emits four surfaces
+  // (flesh / stone / wood / dirt) and only fx.js listened, for the visual. In a
+  // shooter the impact is how you learn you MISSED and what you hit instead —
+  // near-misses cracking off a wall beside you are the whole texture of a
+  // firefight. Kept short and quiet so a full-auto burst does not become a wall
+  // of noise: the hitmarker still owns "you hit them".
+  on("impact", (pos, surface) => {
+    if (surface === "flesh") return;            // the hitmarker already covers this
+    if (surface === "stone") blip(2100, 0.045, 0.07, "square", pos, 55);
+    else if (surface === "wood") blip(900, 0.06, 0.07, "triangle", pos, 55);
+    else thump(260, 0.07, 0.06, pos, 45);       // dirt
   });
   // these three were emitted into the void — no listener anywhere
   on("hardLand", (a, speed) => thump(180, 0.22, Math.min(0.4, 0.12 + speed * 0.008), a === W.player ? null : a.pos, 60));
