@@ -3,6 +3,36 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — DROP SELECT + match re-entrancy guard (?v=39, LIVE)
+
+The biggest remaining structural gap vs Final Drop and the genre generally: the
+opening decision did not exist for the player.
+
+- **DROP SELECT (new):** every bot picks a named POI to land at (bots.assignDrops),
+  while the human was dropped "high over a random point" (player.js spawnAll) —
+  simultaneously the worst loot odds on the field and the removal of the choice
+  every battle royale opens with. New landing-zone map between lobby and drop:
+  click any zone (clicks snap to a POI), lock in with DROP, 12s auto-lock so
+  online clients advance together. If you never pick, you get the QUIETEST named
+  zone instead of a random dump.
+- **Contested-zone heat:** the rings are coloured off the bots' ACTUAL declared
+  drop targets (assignDrops runs before the lobby), not a guess — QUIET / LIGHT /
+  CONTESTED / HOT with the inbound count drawn inside each ring. Verified on
+  isla_viva: Banana Farm 10, Jungle Market 9, Volcano Rim 6, Palm Bay 2.
+- Chosen LZ is marked on the minimap while you fall (drawMinimap, drop phase only).
+- **DEFECT — startMatch re-entrancy:** it clears the world (actors, brains) and
+  THEN awaits the map build and model load. A second call landing inside those
+  awaits interleaves with the first, and the match ends up with two full rosters.
+  Reproduced: two concurrent calls gave 98 actors in a 50-player match. Reachable
+  from a fast double-click on PLAY / PLAY AGAIN. Now guarded — verified two
+  concurrent calls yield 50 actors on the first call's map.
+- Drop-map labels: names moved onto backing pills and counts moved inside the
+  rings after a capture showed four labels colliding at the south of the island.
+
+Verified live: player lands at exactly the chosen POI coords with the glide
+intact (playerXZ === poiXZ, alt 269, gliding true), 49/49 bots declare targets,
+screen opens and closes, phase advances to drop. Sim selftest 46/46. DRAFT.
+
 ## 2026-07-20 — BR parity: career stats, match moments + 2 real defects (?v=36, LIVE)
 
 From a code-verified gap analysis vs Final Drop (fetched its shipped 1309-asset

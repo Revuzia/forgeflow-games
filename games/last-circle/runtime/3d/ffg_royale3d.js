@@ -139,6 +139,18 @@ register3d("royale", async function (kernel, content) {
 
   // ── match lifecycle ─────────────────────────────────────────────────────────
   async function startMatch(opts) {
+    // re-entrancy guard: this function clears the world and then awaits (map
+    // build, model load). A second call landing inside those awaits clears
+    // nothing the first one has yet to add, so the two interleave and the
+    // match ends up with two full rosters of actors. Double-fire is reachable
+    // from a fast double-click on PLAY / PLAY AGAIN.
+    if (W._starting) return;
+    W._starting = true;
+    try {
+      return await _startMatch(opts || {});
+    } finally { W._starting = false; }
+  }
+  async function _startMatch(opts) {
     opts = opts || {};
     W.mapId = opts.mapId || W.mapId;
     W.mode = opts.mode || W.mode;
@@ -188,11 +200,18 @@ register3d("royale", async function (kernel, content) {
 
     playerMod.spawnAll(W);          // positions actors (glider line or ground by mode)
     botsMod.assignDrops(W);
-    hudMod.showLobby(W, () => {     // lobby screen → countdown → drop
-      W.phase = W.mode === "practice" ? "match" : "drop";
-      hudMod.showHUD(W);
-      audioMod.startMatchMusic(W);
-      if (W.net) netMod.onMatchStart(W);
+    hudMod.showLobby(W, () => {     // lobby → drop select → drop
+      const begin = () => {
+        W.phase = W.mode === "practice" ? "match" : "drop";
+        hudMod.showHUD(W);
+        audioMod.startMatchMusic(W);
+        if (W.net) netMod.onMatchStart(W);
+      };
+      // glider modes get the landing-zone map; it auto-locks on a fixed timer
+      // so online clients leave the screen together
+      if (modeK.drop === "glider" && W.mode !== "practice") {
+        hudMod.showDropSelect(W, (t) => { playerMod.setDropTarget(W, t); begin(); });
+      } else { W.dropTarget = null; begin(); }   // ground modes: no LZ marker
     });
   }
 

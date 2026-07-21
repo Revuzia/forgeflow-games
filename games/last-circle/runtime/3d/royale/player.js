@@ -282,6 +282,20 @@ export function spawnAll(W) {
   }
 }
 
+// Move the human's glide start over a chosen landing zone (the drop-select
+// screen). Bots already get this in bots.assignDrops — the player was the only
+// actor on the field still falling on a random point. Altitude is untouched, so
+// there is still a full glide to steer.
+export function setDropTarget(W, t) {
+  const a = W.player;
+  if (!a || !t) return;
+  const lim = W.map.half - 12;
+  a.pos.x = W.SIM.clamp(t.x, -lim, lim);
+  a.pos.z = W.SIM.clamp(t.z, -lim, lim);
+  a.obj.position.copy(a.pos);
+  W.dropTarget = { x: a.pos.x, z: a.pos.z, name: t.name || "" };
+}
+
 // ── human input ──────────────────────────────────────────────────────────────
 function installHumanInput(W) {
   const dom = W.kernel.renderer.domElement;

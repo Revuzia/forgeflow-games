@@ -805,6 +805,179 @@ export function showLobby(W, onDone) {
   }, W.mode === "practice" ? 30 : 140);
 }
 
+// ═══ DROP SELECT ═════════════════════════════════════════════════════════════
+// Every bot picks a named POI to land at (bots.assignDrops runs before the
+// lobby) while the human was dumped over a random ground point — the worst loot
+// odds on the field, and it skipped the decision every battle royale opens
+// with. This is the map screen: pick a spot, read how contested it is from the
+// bots' actual declared targets, lock it in. It always auto-locks on the timer
+// so online clients advance together.
+export function showDropSelect(W, onDone) {
+  ensureAAAStyles();
+  const L = layer("dropsel", {
+    pointerEvents: "auto",
+    background: "radial-gradient(ellipse at 50% 40%, rgba(10,24,48,0.72) 0%, rgba(3,8,16,0.94) 100%)",
+  });
+  const wrap = h("div", {
+    position: "absolute", inset: "0", display: "flex", flexDirection: "column",
+    alignItems: "center", justifyContent: "center", gap: "10px",
+  }, null, L);
+  h("div", {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "13px", fontWeight: "800",
+    letterSpacing: "4px", color: "#8ec8ff", opacity: "0.85",
+  }, "SELECT LANDING ZONE", wrap);
+
+  // contest heat — bots stash their choice on brain.bb.dropTarget, so this is
+  // the real inbound count, not a guess
+  const pois = (W.map && W.map.pois) || [];
+  const heat = pois.map((p) => {
+    let n = 0;
+    for (const a of W.actors) {
+      const t = a.brain && a.brain.bb && a.brain.bb.dropTarget;
+      if (!t) continue;
+      const dx = t.x - p.x, dz = t.z - p.z;
+      if (dx * dx + dz * dz <= (p.r * 1.35) * (p.r * 1.35)) n++;
+    }
+    return n;
+  });
+  const heatCol = (n) => (n >= 5 ? "#ff6b5a" : n >= 2 ? "#ffcc66" : n >= 1 ? "#9fd7ff" : "#6fe3a0");
+  const heatWord = (n) => (n >= 5 ? "HOT" : n >= 2 ? "CONTESTED" : n >= 1 ? "LIGHT" : "QUIET");
+
+  const size = Math.max(260, Math.min(window.innerHeight * 0.60, window.innerWidth * 0.60));
+  const cv = h("canvas", {
+    borderRadius: "10px", cursor: "crosshair",
+    border: "1px solid rgba(140,200,255,0.35)", boxShadow: "0 18px 60px rgba(0,0,0,0.55)",
+  }, null, wrap);
+  cv.width = size; cv.height = size;
+  cv.style.width = size + "px"; cv.style.height = size + "px";
+  const ctx = cv.getContext("2d");
+  const S = W.map.size;
+  const toPx = (v) => (v / S + 0.5) * size;
+  const toWorld = (px) => (px / size - 0.5) * S;
+
+  let pick = null;
+  function draw() {
+    ctx.clearRect(0, 0, size, size);
+    if (W.map.minimap) ctx.drawImage(W.map.minimap, 0, 0, size, size);
+    ctx.fillStyle = "rgba(4,10,20,0.22)"; ctx.fillRect(0, 0, size, size);
+    ctx.textAlign = "center";
+    pois.forEach((p, i) => {
+      const x = toPx(p.x), z = toPx(p.z), r = Math.max(10, (p.r / S) * size);
+      const c = heatCol(heat[i]);
+      ctx.globalAlpha = 0.85; ctx.strokeStyle = c; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(x, z, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 0.12; ctx.fillStyle = c;
+      ctx.beginPath(); ctx.arc(x, z, r, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      // inbound count goes INSIDE the ring — a count under the ring collides
+      // with the next POI's name wherever zones sit close together
+      ctx.font = "800 13px system-ui";
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillText(heat[i] || "0", x + 1, z + 5);
+      ctx.fillStyle = c;
+      ctx.fillText(heat[i] || "0", x, z + 4);
+      // name on a backing pill so it stays legible over any terrain
+      ctx.font = "700 12px system-ui";
+      const tw = ctx.measureText(p.name).width, ty = z - r - 7;
+      ctx.fillStyle = "rgba(3,10,20,0.74)";
+      if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x - tw/2 - 5, ty - 11, tw + 10, 15, 4); ctx.fill(); }
+      else ctx.fillRect(x - tw/2 - 5, ty - 11, tw + 10, 15);
+      ctx.fillStyle = "#fff"; ctx.fillText(p.name, x, ty);
+    });
+    if (pick) {
+      const x = toPx(pick.x), z = toPx(pick.z);
+      const t = (Date.now() % 900) / 900;
+      ctx.strokeStyle = "#6ec4ff"; ctx.lineWidth = 2.4;
+      ctx.globalAlpha = 1 - t;
+      ctx.beginPath(); ctx.arc(x, z, 7 + t * 12, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.moveTo(x - 9, z); ctx.lineTo(x + 9, z);
+      ctx.moveTo(x, z - 9); ctx.lineTo(x, z + 9); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, z, 4, 0, Math.PI * 2); ctx.fillStyle = "#6ec4ff"; ctx.fill();
+    }
+  }
+
+  const info = h("div", {
+    fontFamily: "Rajdhani, " + FONT, fontSize: "17px", fontWeight: "700",
+    letterSpacing: "1px", color: "#c8dff8", minHeight: "22px",
+  }, "CLICK THE MAP TO CHOOSE YOUR LANDING ZONE", wrap);
+
+  function choose(wx, wz) {
+    let best = -1, bd = 1e9;
+    pois.forEach((p, i) => {
+      const d = Math.hypot(wx - p.x, wz - p.z);
+      if (d < p.r * 1.15 && d < bd) { bd = d; best = i; }
+    });
+    if (best >= 0) { wx = pois[best].x; wz = pois[best].z; }
+    pick = { x: wx, z: wz, name: best >= 0 ? pois[best].name : "OPEN GROUND", poi: best };
+    info.textContent = "LZ: " + pick.name + "  ·  " +
+      (best >= 0 ? heatWord(heat[best]) + (heat[best] ? " (" + heat[best] + " INBOUND)" : "") : "QUIET · NO LOOT CLUSTER");
+    info.style.color = best >= 0 ? heatCol(heat[best]) : "#6fe3a0";
+    draw();
+  }
+  cv.addEventListener("click", (ev) => {
+    const b = cv.getBoundingClientRect();
+    choose(toWorld((ev.clientX - b.left) * (size / b.width)),
+           toWorld((ev.clientY - b.top) * (size / b.height)));
+  });
+
+  const row = h("div", { display: "flex", gap: "16px", alignItems: "center", marginTop: "2px" }, null, wrap);
+  const timerEl = h("div", {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "22px", fontWeight: "900",
+    color: "#6ec4ff", letterSpacing: "2px", minWidth: "104px", textAlign: "right",
+  }, "", row);
+  const go = h("button", {
+    fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "15px", fontWeight: "900", letterSpacing: "2px",
+    padding: "11px 26px", borderRadius: "9px", cursor: "pointer", color: "#03121f",
+    border: "1px solid rgba(140,220,255,0.6)", background: "linear-gradient(180deg,#8fe0ff,#3fa9e8)",
+    boxShadow: "0 8px 26px rgba(60,170,235,0.35)",
+  }, "DROP", row);
+  const legend = h("div", {
+    display: "flex", gap: "15px", alignItems: "center", fontSize: "11px",
+    letterSpacing: "1px", opacity: "0.85", fontFamily: "Rajdhani, " + FONT, fontWeight: "600",
+  }, null, wrap);
+  [["QUIET", 0], ["LIGHT", 1], ["CONTESTED", 2], ["HOT", 5]].forEach((e) => {
+    const it = h("div", { display: "flex", gap: "5px", alignItems: "center" }, null, legend);
+    h("span", {
+      width: "9px", height: "9px", borderRadius: "50%", display: "inline-block",
+      background: heatCol(e[1]), boxShadow: "0 0 7px " + heatCol(e[1]),
+    }, null, it);
+    h("span", null, e[0], it);
+  });
+  h("div", {
+    fontSize: "11px", opacity: "0.55", letterSpacing: "1px", fontFamily: "Rajdhani, " + FONT,
+  }, "THE NUMBER IN EACH ZONE IS HOW MANY OPERATIVES DECLARED IT. YOU STEER FREELY ON THE WAY DOWN.", wrap);
+
+  let done = false;
+  let left = W.mode === "practice" ? 1 : 12;
+  timerEl.textContent = "AUTO " + left;
+  const anim = setInterval(draw, 90);
+  function finish() {
+    if (done) return;
+    done = true;
+    clearInterval(anim); clearInterval(iv);
+    if (!pick) {
+      // never picked → the quietest named zone beats the old random dump
+      let q = -1, qn = 1e9;
+      heat.forEach((n, i) => { if (n < qn) { qn = n; q = i; } });
+      pick = q >= 0
+        ? { x: pois[q].x, z: pois[q].z, name: pois[q].name, poi: q }
+        : null;
+    }
+    L.remove(); R.dropsel = null;
+    onDone(pick);
+  }
+  const iv = setInterval(() => {
+    left--;
+    timerEl.textContent = left > 0 ? "AUTO " + left : "DROPPING";
+    if (left <= 0) finish();
+  }, 1000);
+  go.addEventListener("click", finish);
+  draw();
+  return { finish };
+}
+
 // ═══ progression + challenges (Final Drop-style meta) ════════════════════════
 // A persistent level/XP bar + one active in-match challenge card, fed off the
 // existing W.match / W.t / W.stats counters. Progress persists in localStorage.
@@ -1348,6 +1521,15 @@ function drawMinimap(W, ctx, size, big) {
     ctx.fillStyle = "rgba(90,30,140,0.28)";
     ctx.fill();
     ctx.restore();
+  }
+  // your chosen landing zone, while you are still falling toward it
+  if (W.dropTarget && W.phase === "drop") {
+    const dx = toPx(W.dropTarget.x), dz = toPx(W.dropTarget.z), s = big ? 13 : 8;
+    ctx.strokeStyle = "#6ec4ff"; ctx.lineWidth = big ? 2.2 : 1.5;
+    ctx.beginPath(); ctx.arc(dx, dz, big ? 9 : 5, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(dx - s, dz); ctx.lineTo(dx + s, dz);
+    ctx.moveTo(dx, dz - s); ctx.lineTo(dx, dz + s); ctx.stroke();
   }
   // POI names on big map
   if (big) {
