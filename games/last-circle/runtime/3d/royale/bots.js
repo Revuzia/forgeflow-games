@@ -317,6 +317,29 @@ function startHeal(W, a) {
 }
 
 // ── action layer (every frame) ───────────────────────────────────────────────
+/** Launch angle for an ARCING weapon, matching how weapons.js actually fires it:
+ *  vx = cos(p)*speed, vy = sin(p)*speed + 3 (the launch boost), gravity -18.
+ *  A textbook ballistic formula gets this wrong because of that +3 — solving
+ *  without it overshot by ~8 m at every range (measured against the game's own
+ *  integration). Bisect instead, on a CLOSED-FORM range so there is no
+ *  integration loop: t = (vy + sqrt(vy^2 - 2*g*dy)) / g, range = vx * t. */
+function arcPitch(wdef, dHoriz, dy) {
+  const v = wdef.speed || 26, g = 18, boost = 3;
+  const rangeAt = (p) => {
+    const vx = Math.cos(p) * v, vy = Math.sin(p) * v + boost;
+    const disc = vy * vy - 2 * g * dy;
+    if (disc < 0) return -1;                       // never reaches that height
+    return vx * ((vy + Math.sqrt(disc)) / g);
+  };
+  let lo = 0, hi = 1.35;                           // 0 to ~77 degrees
+  if (rangeAt(hi) < dHoriz && rangeAt(0.7) < dHoriz) return 0.7;   // out of reach: max lob
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (rangeAt(mid) < dHoriz) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
 const _v = new THREE.Vector3();
 function act(W, b, dt) {
   const a = b.actor, bb = b.bb, inp = a.input;
@@ -333,8 +356,12 @@ function act(W, b, dt) {
     return;
   }
 
-  // stuck detection → jump / sidestep
-  if (bb.lastPos.distanceToSquared(a.pos) < 0.02 * 0.02 && (inp.mz || inp.mx)) bb.stuckT += dt; else bb.stuckT = 0;
+  // Stuck detection. This used to sit HERE, testing `inp.mz || inp.mx` — the
+  // values zeroed 13 lines above, because the switch that sets them runs below.
+  // The && could never hold, so stuckT never accumulated and a bot that walked
+  // into a wall ground against it for the rest of the match. Now evaluated
+  // AFTER the state has expressed its movement intent (see below).
+  const _wasStuckPos = _v.copy(bb.lastPos);
   bb.lastPos.copy(a.pos);
 
   switch (b.state) {
@@ -345,6 +372,11 @@ function act(W, b, dt) {
     case "ROTATE": case "PUSH": case "WANDER": actMove(W, b, dt, b.state === "ROTATE"); break;
     case "CAMP": actCamp(W, b, dt); break;
   }
+
+  // now inp.mx / inp.mz carry this frame's intent: barely moved while TRYING to
+  // move => stuck
+  if (_wasStuckPos.distanceToSquared(a.pos) < 0.02 * 0.02 && (inp.mz || inp.mx)) bb.stuckT += dt;
+  else bb.stuckT = 0;
 
   // suppression reflex: shot recently by someone unseen → sprint to lateral
   // cover instead of standing there soaking damage
@@ -540,6 +572,17 @@ function actEngage(W, b, dt) {
   const pz = tp.z + (seen && t.vel ? t.vel.z * lead : 0);
   let wantYaw = Math.atan2(-(px - eye.x), -(pz - eye.z));
   let wantPitch = Math.atan2(aimY - eye.y, Math.hypot(px - eye.x, pz - eye.z));
+  // ARCING WEAPONS need a ballistic solution, not a straight line. The grenade
+  // launcher flies at speed 26 under gravity -18 (sim/royale.js, weapons.js), so
+  // a flat aim drops every bot-fired shell well short — bots holding one were
+  // harmless. Solve the low-arc launch angle for the horizontal range.
+  {
+    const wdef = K.WEAPONS[a.weapon && a.weapon.id];
+    if (wdef && wdef.arc) {
+      const dHoriz = Math.hypot(px - eye.x, pz - eye.z);
+      if (dHoriz > 0.5) wantPitch = arcPitch(wdef, dHoriz, aimY - eye.y);
+    }
+  }
 
   // error: base tier error × acquire overshoot (3× decaying 0.6s) × target-motion penalty
   const sinceAcq = W.t - bb.acquireT;

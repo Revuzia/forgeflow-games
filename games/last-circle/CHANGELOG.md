@@ -3,6 +3,35 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — Bot grenades always fell short, and stuck-detection was dead code (?v=91, LIVE)
+
+Two bot defects from the full-game sweep.
+
+- **BOTS AIMED AN ARCING WEAPON ALONG A STRAIGHT LINE.** bots.js computed a flat
+  firing solution with no arc term anywhere in the file, while weapons.js
+  launches the grenade launcher at speed 26 with gravity -18 and a +3 vertical
+  boost. Measured against the game's own integration, a flat aim lands at 8.56 m
+  NO MATTER the target range — 25 m short at 34 m. Every bot holding a launcher
+  was harmless.
+- Now solved properly. The textbook ballistic formula is WRONG here because of
+  that +3 launch boost: solving without it overshot by ~8 m at every range
+  (measured, before I shipped it). The solver bisects on a closed-form range that
+  includes the boost — no integration loop, 24 cheap iterations, run on the
+  think cadence.
+- **STUCK-DETECTION COULD NEVER FIRE.** The test read `inp.mz || inp.mx`, but
+  those are zeroed 13 lines above it and only set by the state switch BELOW it,
+  so the `&&` never held, stuckT never accumulated, and a bot that walked into a
+  wall ground against it for the rest of the match. The test now runs after the
+  state has expressed its movement intent.
+
+Verified live against the shipped launch parameters: level shots land 11.90 /
+19.91 / 27.94 / 33.98 m for 12 / 20 / 28 / 34 m targets, uphill (+3 m, +6 m) and
+downhill (-3 m, -5 m) all within 0.95 m, versus a flat aim's fixed 8.56 m.
+
+(My first verification of the uphill case reported a 19 m error — that was the
+TEST terminating on `y <= dy`, which is true throughout the ascent. Corrected to
+"crosses the target height while descending".) Selftest 89/89. DRAFT.
+
 ## 2026-07-21 — Ammo eaten at cap, and no gun after your last bandage (?v=89, LIVE)
 
 Two inventory defects from the full-game sweep.
