@@ -119,6 +119,82 @@
     return { fx: -s, fz: -c, rx: c, rz: -s };
   }
 
+  // ── swept collision (bullets + bot line-of-sight) ──────────────────────────
+  // Bullets used to test only whether a sub-step's END POINT landed inside a
+  // box. Sub-steps are capped at 2.5 m, so a 0.32 m wall was missed roughly
+  // 87% of the time and ramps (kind !== "box") were skipped outright: cover did
+  // not stop bullets, and bot LOS shared the flaw. These are the swept tests
+  // both paths now use — pure, so the node selftest can hold them honest.
+
+  /** Segment (a→b) vs AABB, slab method. null on miss, else {t, tExit, nx,ny,nz}
+   *  where t is the ENTRY fraction along a→b and n* the entry face normal
+   *  (0,0,0 when the segment starts already inside). */
+  function segmentBox(ax, ay, az, bx, by, bz, box) {
+    var o = [ax, ay, az];
+    var d = [bx - ax, by - ay, bz - az];
+    var lo = [box.minX, box.minY, box.minZ];
+    var hi = [box.maxX, box.maxY, box.maxZ];
+    var tmin = 0, tmax = 1, axis = -1;
+    for (var i = 0; i < 3; i++) {
+      if (Math.abs(d[i]) < 1e-9) {
+        if (o[i] < lo[i] || o[i] > hi[i]) return null;   // parallel to the slab and outside it
+        continue;
+      }
+      var inv = 1 / d[i];
+      var t1 = (lo[i] - o[i]) * inv, t2 = (hi[i] - o[i]) * inv;
+      if (t1 > t2) { var sw = t1; t1 = t2; t2 = sw; }
+      if (t1 > tmin) { tmin = t1; axis = i; }
+      if (t2 < tmax) tmax = t2;
+      if (tmin > tmax) return null;
+    }
+    var n = [0, 0, 0];
+    if (axis >= 0) n[axis] = d[axis] > 0 ? -1 : 1;
+    return { t: tmin, tExit: tmax, nx: n[0], ny: n[1], nz: n[2] };
+  }
+
+  /** Top surface of a ramp collider at (x,z) — same formula the movement
+   *  support test uses, shared so the two can never disagree. */
+  function rampTopAt(c, x, z) {
+    var f;
+    if (c.dir === 0) f = (x - c.minX) / Math.max(0.01, c.maxX - c.minX);
+    else if (c.dir === 1) f = (c.maxX - x) / Math.max(0.01, c.maxX - c.minX);
+    else if (c.dir === 2) f = (z - c.minZ) / Math.max(0.01, c.maxZ - c.minZ);
+    else f = (c.maxZ - z) / Math.max(0.01, c.maxZ - c.minZ);
+    return c.minY + (c.maxY - c.minY) * clamp(f, 0, 1);
+  }
+
+  /** Segment vs a sloped ramp: clip to the ramp's box, then walk the clipped
+   *  span looking for the first sample under the sloped surface. */
+  function segmentRamp(ax, ay, az, bx, by, bz, c, samples) {
+    var box = segmentBox(ax, ay, az, bx, by, bz, c);
+    if (!box) return null;
+    var n = samples || 8;
+    var dx = bx - ax, dy = by - ay, dz = bz - az;
+    for (var i = 0; i <= n; i++) {
+      var t = box.t + (box.tExit - box.t) * (i / n);
+      var x = ax + dx * t, y = ay + dy * t, z = az + dz * t;
+      if (y <= rampTopAt(c, x, z) && y >= c.minY - 0.05) {
+        return { t: t, nx: 0, ny: 1, nz: 0 };   // treat the slope as ground-ish
+      }
+    }
+    return null;
+  }
+
+  /** First blocking collider along a segment. `cols` is any iterable of
+   *  colliders (boxes and ramps). Returns the nearest {t, n*, c} or null. */
+  function segmentColliders(ax, ay, az, bx, by, bz, cols) {
+    var best = null;
+    for (var i = 0; i < cols.length; i++) {
+      var c = cols[i];
+      if (c.dead) continue;
+      var h = c.kind === "ramp"
+        ? segmentRamp(ax, ay, az, bx, by, bz, c)
+        : c.kind === "box" ? segmentBox(ax, ay, az, bx, by, bz, c) : null;
+      if (h && (!best || h.t < best.t)) { best = h; best.c = c; }
+    }
+    return best;
+  }
+
   // Storm phase tables per mode. radiusFrac × (map halfsize) = target radius.
   // Final Drop pacing (owner: circle "shrinks too much too quickly") —
   // gentler early cuts (~58-64% radius kept per phase vs ~46% before), longer
@@ -387,6 +463,8 @@
     WEAPONS: WEAPONS, WEAPON_IDS: WEAPON_IDS, AMMO: AMMO, CONSUMABLES: CONSUMABLES, START_LOADOUT: START_LOADOUT,
     MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH,
     actorHeight: actorHeight, actorEyeY: actorEyeY, moveBasis: moveBasis,
+    segmentBox: segmentBox, rampTopAt: rampTopAt, segmentRamp: segmentRamp,
+    segmentColliders: segmentColliders,
     STORM_PHASES: STORM_PHASES, MODE: MODE, LOOT_WEIGHTS: LOOT_WEIGHTS,
     BOT_TIERS: BOT_TIERS, BOT_TIER_MIX: BOT_TIER_MIX, BOT_PERSONALITIES: BOT_PERSONALITIES, BOT_NAMES: BOT_NAMES,
     Storm: Storm, Match: Match,

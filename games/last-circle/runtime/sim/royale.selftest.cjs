@@ -177,5 +177,38 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(Math.abs(q.rx - -q.fz) < 1e-12 && Math.abs(q.rz - q.fx) < 1e-12, "move basis: right is forward rotated -90°");
 }
 
+// ── Swept collision (cover has to stop bullets) ──────────────────────────────
+// Bullets used to test only whether a sub-step's END POINT sat inside a box.
+// Sub-steps run up to 2.5 m, so a 0.32 m wall was missed ~87% of the time and
+// ramps were skipped outright. These assert the sweep, at the real dimensions.
+{
+  const wall = { kind: "box", minX: -0.16, maxX: 0.16, minY: 0, maxY: 3, minZ: -5, maxZ: 5 };
+  const through = R.segmentBox(-1.25, 1.5, 0, 1.25, 1.5, 0, wall);   // a full 2.5 m sub-step
+  ok(!!through, "sweep: a 2.5m step across a 0.32m wall is blocked (endpoint test missed this)");
+  ok(through && through.nx === -1 && through.ny === 0 && through.nz === 0, "sweep: normal is the ENTRY face");
+  ok(through && Math.abs(through.t - 0.436) < 0.01, "sweep: entry fraction lands on the near face");
+  ok(R.segmentBox(-1.25, 4, 0, 1.25, 4, 0, wall) === null, "sweep: a shot over the wall misses");
+  ok(R.segmentBox(-1.25, 1.5, 0, -0.5, 1.5, 0, wall) === null, "sweep: a shot stopping short misses");
+  ok(R.segmentBox(-1.25, 1.5, 9, 1.25, 1.5, 9, wall) === null, "sweep: a shot past the wall's end misses");
+  // inside-out: a projectile born inside a box reports t=0
+  const inside = R.segmentBox(0, 1.5, 0, 2, 1.5, 0, wall);
+  ok(inside && inside.t === 0, "sweep: a segment starting inside reports t=0");
+
+  const ramp = { kind: "ramp", dir: 0, minX: 0, maxX: 4, minY: 0, maxY: 3, minZ: -2, maxZ: 2 };
+  ok(Math.abs(R.rampTopAt(ramp, 2, 0) - 1.5) < 1e-9, "ramp: surface is half height at half length");
+  ok(Math.abs(R.rampTopAt(ramp, -5, 0) - 0) < 1e-9, "ramp: clamps below the low end");
+  ok(Math.abs(R.rampTopAt(ramp, 99, 0) - 3) < 1e-9, "ramp: clamps above the high end");
+  ok(!!R.segmentRamp(-1, 0.5, 0, 5, 0.5, 0, ramp), "ramp: a shot into the slope is blocked (was skipped entirely)");
+  ok(R.segmentRamp(-1, 3.5, 0, 5, 3.5, 0, ramp) === null, "ramp: a shot clearing the slope passes");
+
+  // nearest-wins across a mixed collider list
+  const far = { kind: "box", minX: 2, maxX: 3, minY: 0, maxY: 3, minZ: -5, maxZ: 5 };
+  const best = R.segmentColliders(-1.25, 1.5, 0, 4, 1.5, 0, [far, wall]);
+  ok(best && best.c === wall, "sweep: nearest collider wins regardless of list order");
+  ok(R.segmentColliders(-1.25, 4, 0, 4, 4, 0, [far, wall]) === null, "sweep: clean miss returns null");
+  ok(R.segmentColliders(-1.25, 1.5, 0, 4, 1.5, 0, [{ kind: "box", dead: true, minX: -1, maxX: 1, minY: 0, maxY: 3, minZ: -5, maxZ: 5 }]) === null,
+     "sweep: destroyed colliders are ignored");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

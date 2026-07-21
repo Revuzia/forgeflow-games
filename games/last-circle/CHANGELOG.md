@@ -3,6 +3,39 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — COVER NOW STOPS BULLETS (?v=53, LIVE)
+
+Build-order #1 from the gap scan, and the biggest gameplay defect in the game:
+positioning, peeking and holding a building — the load-bearing BR mechanic —
+did not actually exist.
+
+- **The bug:** testSegment only asked whether a sub-step's END POINT landed
+  inside a box. Sub-steps run up to 2.5 m (an AR at 300 m/s covers 5 m per frame
+  at 60 fps), so a 0.32 m wall — the real thickness on these maps — was only
+  caught when the endpoint happened to land inside it, roughly 13% of the time.
+  Ramps were worse: `if (c.kind !== "box") continue` skipped every ramp
+  collider, so tower interior ramps stopped 0% of shots.
+- **The fix:** a proper swept segment-vs-AABB (slab) test, plus a sloped test
+  for ramps, both living in sim/royale.js so they are pure and node-testable.
+  Impact FX and grenade bounces now use the ENTRY point and the ENTRY FACE
+  normal; the old bounce derived its normal from the overshot endpoint.
+- Colliders are queried along the WHOLE sub-step, not just around its endpoint —
+  otherwise a wall crossed mid-step was never even a candidate.
+- **Bot line-of-sight shared the identical flaw** (maps.js losBlocked
+  point-sampled every ~3 m and skipped ramps), so bots shot through cover too.
+  It now uses the same sweep, chunked into 24 m spans: the collider grid is
+  16 m, so sweeping a 200 m sightline in one query would pull ~169 cells and
+  slab-test everything in them for every bot against every candidate target.
+  Measured after chunking: 0.024 ms per LOS call.
+- 15 new selftest assertions (66 total, was 51): the 2.5 m step across a 0.32 m
+  wall, entry-face normal, shots over/short/past, segments starting inside,
+  ramp surface clamping, ramp hit/clear, nearest-wins, and dead colliders.
+
+Verified live on a real 7 x 3.4 x 0.32 m map wall with shooter and target 10 m
+apart across it: firing a full AR burst through the wall deals **0 damage** and
+leaves 9 impacts on the wall face, while the same burst at the same range on
+open ground deals **100 and kills**. DRAFT.
+
 ## 2026-07-20 — Two real defects from the adversarial gap scan (?v=52, LIVE)
 
 A 131-agent scan (8 dimensions, every finding then run past a "prove it already

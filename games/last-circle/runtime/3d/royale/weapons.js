@@ -480,46 +480,48 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
       p.dead = true; return true;
     }
   }
-  // 2) static world boxes
-  const cols = W.map.queryColliders(bx, bz, 0.4);
-  for (const c of cols) {
-    if (c.kind !== "box") continue;
-    if (bx > c.minX && bx < c.maxX && by > c.minY && by < c.maxY && bz > c.minZ && bz < c.maxZ) {
-      // fused shells BOUNCE off walls/crates too (they burst on the fuse) — this
-      // branch used to explode on any splash round while terrain bounced it, so
-      // bank-shots around cover were unreliable and map-dependent.
-      if (p.splash && !p.bounce) { explode(W, bx, by, bz, p.weaponId, p.rarity, p.ownerId); p.dead = true; return true; }
-      if (p.bounce) {
-        // reflect off the nearest box face (smallest-penetration axis)
-        const penX = Math.min(bx - c.minX, c.maxX - bx);
-        const penY = Math.min(by - c.minY, c.maxY - by);
-        const penZ = Math.min(bz - c.minZ, c.maxZ - bz);
-        let nx = 0, ny = 0, nz = 0;
-        if (penX <= penY && penX <= penZ)  { nx = bx < (c.minX + c.maxX) / 2 ? -1 : 1; p.x += nx * (penX + 0.06); }
-        else if (penY <= penZ)             { ny = by < (c.minY + c.maxY) / 2 ? -1 : 1; p.y += ny * (penY + 0.06); }
-        else                               { nz = bz < (c.minZ + c.maxZ) / 2 ? -1 : 1; p.z += nz * (penZ + 0.06); }
-        bounceOff(p, nx, ny, nz);
-        return false;
+  // 2) static world: SWEPT segment vs colliders.
+  // This used to test only whether the sub-step's END POINT landed inside a box.
+  // Sub-steps run up to 2.5 m, so a 0.32 m wall was missed ~87% of the time, and
+  // ramps (kind !== "box") were skipped entirely — cover did not stop bullets.
+  // Query along the WHOLE segment, not just around the endpoint, or a wall
+  // crossed mid-step is never even a candidate.
+  const midX = (ax + bx) / 2, midZ = (az + bz) / 2;
+  const halfLen = Math.hypot(bx - ax, bz - az) / 2;
+  const cols = W.map.queryColliders(midX, midZ, halfLen + 0.6);
+  const sh = K.segmentColliders(ax, ay, az, bx, by, bz, cols);
+  if (sh) {
+    const c = sh.c;
+    // impact at the ENTRY point on the face, not the overshot endpoint
+    const hx = ax + (bx - ax) * sh.t, hy = ay + (by - ay) * sh.t, hz = az + (bz - az) * sh.t;
+    if (p.splash && !p.bounce) { explode(W, hx, hy, hz, p.weaponId, p.rarity, p.ownerId); p.dead = true; return true; }
+    if (p.bounce) {
+      // reflect off the face we actually entered through (the old code derived
+      // the normal from the overshot endpoint's smallest penetration axis)
+      let nx = sh.nx, ny = sh.ny, nz = sh.nz;
+      if (!nx && !ny && !nz) ny = 1;                 // started inside: shove it up
+      p.x = hx + nx * 0.06; p.y = hy + ny * 0.06; p.z = hz + nz * 0.06;
+      bounceOff(p, nx, ny, nz);
+      return false;
+    }
+    // destructible prop (barrel/tree): a direct hit chips its hp; barrels detonate
+    // on any hit, trees drop once their hp is gone (then the collider is removed).
+    if (c.prop && c.hp > 0 && W.map.destroyProp) {
+      const cx = (c.minX + c.maxX) / 2, cz = (c.minZ + c.maxZ) / 2;
+      c.hp -= K.hitDamage(p.weaponId, p.rarity, 0, false);
+      if (c.prop === "barrel") {
+        W.map.destroyProp(c);
+        explode(W, cx, c.minY + 0.8, cz, "glauncher", 0, p.ownerId);   // barrel blows up (splash + knockback)
+      } else if (c.hp <= 0) {
+        W.map.destroyProp(c);
+        W.events.emit("propBreak", { x: cx, y: c.minY, z: cz, kind: c.prop });
+      } else {
+        W.events.emit("impact", { x: hx, y: hy, z: hz }, "wood");
       }
-      // destructible prop (barrel/tree): a direct hit chips its hp; barrels detonate
-      // on any hit, trees drop once their hp is gone (then the collider is removed).
-      if (c.prop && c.hp > 0 && W.map.destroyProp) {
-        const cx = (c.minX + c.maxX) / 2, cz = (c.minZ + c.maxZ) / 2;
-        c.hp -= K.hitDamage(p.weaponId, p.rarity, 0, false);
-        if (c.prop === "barrel") {
-          W.map.destroyProp(c);
-          explode(W, cx, c.minY + 0.8, cz, "glauncher", 0, p.ownerId);   // barrel blows up (splash + knockback)
-        } else if (c.hp <= 0) {
-          W.map.destroyProp(c);
-          W.events.emit("propBreak", { x: cx, y: c.minY, z: cz, kind: c.prop });
-        } else {
-          W.events.emit("impact", { x: bx, y: by, z: bz }, "wood");
-        }
-        p.dead = true; return true;
-      }
-      W.events.emit("impact", { x: bx, y: by, z: bz }, "stone");
       p.dead = true; return true;
     }
+    W.events.emit("impact", { x: hx, y: hy, z: hz }, "stone");
+    p.dead = true; return true;
   }
   // 3) terrain
   const th = W.map.heightAt(bx, bz);

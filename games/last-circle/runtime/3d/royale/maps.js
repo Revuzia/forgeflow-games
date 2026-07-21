@@ -1110,16 +1110,30 @@ export async function buildMap(W, mapId) {
   function losBlocked(ax, ay, az, bx, by, bz) {
     const dx = bx - ax, dy = by - ay, dz = bz - az;
     const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    // Terrain still needs sampling (it is a heightfield, not a solid), but
+    // colliders are now SWEPT: the old point-sampled containment test shared the
+    // bullet path's flaw, so a bot could see — and shoot — through any wall its
+    // ~3 m samples happened to straddle, and through every ramp (kind !== box).
+    const S = window.FFG.sim.Royale;
+    // Sweep in SPANS rather than one query over the whole sightline: the grid is
+    // 16 m, so a 200 m line queried whole would pull ~169 cells and slab-test
+    // every collider in them, for every bot against every candidate target.
+    // A span slightly larger than the cell keeps each query to a couple of cells
+    // while the test stays a true sweep (no sampling gaps).
+    const SPAN = 24;
+    const spans = Math.max(1, Math.ceil(len / SPAN));
+    for (let i = 0; i < spans; i++) {
+      const t0 = i / spans, t1 = (i + 1) / spans;
+      const x0 = ax + dx * t0, y0 = ay + dy * t0, z0 = az + dz * t0;
+      const x1 = ax + dx * t1, y1 = ay + dy * t1, z1 = az + dz * t1;
+      const r = Math.hypot(x1 - x0, z1 - z0) / 2 + 0.6;
+      const cols = queryColliders((x0 + x1) / 2, (z0 + z1) / 2, r);
+      if (cols.length && S.segmentColliders(x0, y0, z0, x1, y1, z1, cols)) return true;
+    }
     const steps = Math.min(60, Math.max(6, Math.floor(len / 3)));
     for (let i = 1; i < steps; i++) {
       const t = i / steps;
-      const x = ax + dx * t, y = ay + dy * t, z = az + dz * t;
-      if (heightAt0(x, z) > y) return true;
-      const near = queryColliders(x, z, 0.5);
-      for (const c of near) {
-        if (c.kind !== "box") continue;
-        if (x > c.minX && x < c.maxX && y > c.minY && y < c.maxY && z > c.minZ && z < c.maxZ) return true;
-      }
+      if (heightAt0(ax + dx * t, az + dz * t) > ay + dy * t) return true;
     }
     return false;
   }
