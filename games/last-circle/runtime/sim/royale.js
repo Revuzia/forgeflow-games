@@ -67,6 +67,13 @@
     storm: "the Storm",
   };
   function weaponName(id) { return WEAPON_NAMES[id] || String(id || "?"); }
+  /** Rough sustained-DPS worth of a gun, rarity weighted. `damage` is PER PELLET,
+   *  so a shotgun scores below a pistol without the pellet term. */
+  function gunScore(id, rarity) {
+    var d = WEAPONS[id];
+    if (!d) return -1;
+    return (d.damage * (d.pellets || 1) * d.rpm / 60) + (rarity || 0) * 20;
+  }
 
   var AMMO = {
     light:    { box: 24, max: 300 },
@@ -500,7 +507,7 @@
   var api = {
     mulberry32: mulberry32, clamp: clamp, dist2d: dist2d, lerp: lerp,
     RARITY: RARITY, RARITY_COLOR: RARITY_COLOR, RARITY_DMG_MULT: RARITY_DMG_MULT, RARITY_SPREAD_MULT: RARITY_SPREAD_MULT,
-    WEAPONS: WEAPONS, WEAPON_IDS: WEAPON_IDS, WEAPON_NAMES: WEAPON_NAMES, weaponName: weaponName, AMMO: AMMO, CONSUMABLES: CONSUMABLES, START_LOADOUT: START_LOADOUT,
+    WEAPONS: WEAPONS, WEAPON_IDS: WEAPON_IDS, WEAPON_NAMES: WEAPON_NAMES, weaponName: weaponName, gunScore: gunScore, AMMO: AMMO, CONSUMABLES: CONSUMABLES, START_LOADOUT: START_LOADOUT,
     MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH, effectiveSpread: effectiveSpread,
     actorHeight: actorHeight, actorEyeY: actorEyeY, moveBasis: moveBasis,
     segmentBox: segmentBox, rampTopAt: rampTopAt, segmentRamp: segmentRamp,

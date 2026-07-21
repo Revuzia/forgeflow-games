@@ -3,6 +3,34 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — REGRESSION FIX: the ?v=64 gun cap froze every bot's loadout (?v=80, LIVE)
+
+Caught by the full-game sweep, and it was mine: a side effect of the carry cap
+shipped this morning, not a pre-existing bug.
+
+- ?v=64 moved the 3-gun cap into give() so it applied to bots as well as the
+  human. But bots have NO swap path — grep for "swap" across the runtime returns
+  only the human's E-swap call sites — so once a bot held three guns (the
+  starter pistol from spawn plus the first two it touched) wouldAccept refused
+  every weapon forever and pickLoot skipped them entirely. About a minute into
+  every match, 49 of 50 arsenals were permanently frozen: chest rolls that are
+  55% rare-or-better were wasted, and supply drops — the game's only legendary
+  source and its one deliberate contested-POI event — were contested by nobody.
+  The endgame got EASIER the longer a match ran, which is backwards.
+- Bots may now trade UP at the cap: the worst gun is dropped for a clearly
+  better one. The human is untouched — walking over a gun at the cap still
+  refuses, and E-swap still swaps the ACTIVE slot.
+- **A second bug found while verifying the first:** picking the "worst" gun by
+  sustained DPS nominated a LEGENDARY SNIPER (35 rpm) over a common SMG, so a
+  bot would have thrown away the best gun it will ever find for a common pistol.
+  Worst is now rarity-first, and a trade may never go DOWN in rarity.
+
+Verified live: a bot capped on three commons takes a legendary sniper and stays
+at three; a bot holding a legendary sniper REFUSES a common pistol and keeps the
+sniper; a same-rarity upgrade (AR over shotgun) still trades; the human is never
+auto-traded by walkover and E-swap still works at the cap. Selftest 89/89.
+DRAFT.
+
 ## 2026-07-21 — Emotes now reach the people you are playing with (?v=78, LIVE)
 
 - Online play has no voice and no text chat, so the two emotes ARE the

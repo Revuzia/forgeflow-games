@@ -358,6 +358,37 @@ const GUN_CAP = 3;
 /** Would give() accept this item right now? Bots ask before walking to it —
  *  pickLoot used to re-select the exact item give() had just refused, so a
  *  fully-kitted bot twitched in place beside a gun it could not take. */
+/** Index of the least valuable gun carried, or -1. */
+function worstGunIdx(a) {
+  // RARITY FIRST, then score: picking purely by sustained DPS nominates a
+  // legendary sniper (35 rpm) as "worst" over a common SMG, which would have a
+  // bot throwing away the best gun it will ever find.
+  let idx = -1, wr = Infinity, ws = Infinity;
+  const sl = a.inventory.slots;
+  for (let i = 0; i < sl.length; i++) {
+    const s2 = sl[i];
+    if (!s2 || s2.kind !== "weapon") continue;
+    const r = s2.rarity || 0, sc = K.gunScore(s2.id, r);
+    if (r < wr || (r === wr && sc < ws)) { wr = r; ws = sc; idx = i; }
+  }
+  return idx;
+}
+/** At the cap, a BOT may trade up: it has no E-swap, so without this the ?v=64
+ *  carry cap froze every bot's arsenal at "starter pistol + first two guns I
+ *  touched" for the rest of the match — chest rolls wasted on 49 of 50 actors
+ *  and supply drops, the only legendary source, contested by nobody. The human
+ *  keeps explicit E-swap semantics and is never auto-traded by walking over loot. */
+function botWouldTradeUp(W, a, data) {
+  if (a === W.player || data.kind !== "weapon") return -1;
+  const idx = worstGunIdx(a);
+  if (idx < 0) return -1;
+  const cur = a.inventory.slots[idx];
+  const inRar = data.rarity || 0, curRar = cur.rarity || 0;
+  if (inRar < curRar) return -1;                    // never trade DOWN in rarity
+  const better = K.gunScore(data.id, inRar) > K.gunScore(cur.id, curRar) * 1.1;
+  return better ? idx : -1;
+}
+
 function wouldAccept(W, a, data) {
   const inv = a.inventory;
   if (!inv || !data) return false;
@@ -369,7 +400,8 @@ function wouldAccept(W, a, data) {
     if (data.swap) return true;
     const empty = inv.slots.findIndex((s) => !s);
     const guns = inv.slots.filter((s) => s && s.kind === "weapon").length;
-    return empty >= 0 && guns < GUN_CAP;
+    if (empty >= 0 && guns < GUN_CAP) return true;
+    return botWouldTradeUp(W, a, data) >= 0;
   }
   if (data.kind === "consumable") {
     const cs = K.CONSUMABLES[data.id];
@@ -400,6 +432,15 @@ function give(W, a, data) {
       // auto-upgrade: if still on the starter common pistol, switch to the pickup
       const cur = inv.slots[inv.active];
       if (cur && cur.id === "pistol" && cur.rarity === 0 && data.id !== "pistol") W.equipSlot(a, empty);
+      return true;
+    }
+    // bot trade-up at the cap: drop its worst gun, take the better one
+    const tradeIdx = botWouldTradeUp(W, a, data);
+    if (tradeIdx >= 0) {
+      const old2 = inv.slots[tradeIdx];
+      dropItem(W, a, { kind: "weapon", id: old2.id, rarity: old2.rarity });
+      inv.slots[tradeIdx] = slot;
+      if (inv.active === tradeIdx) W.equipSlot(a, tradeIdx);
       return true;
     }
     if (data.swap) {
