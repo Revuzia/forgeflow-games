@@ -3,6 +3,34 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — The jump animation never played, and the crouch freeze was undone (?v=86, LIVE)
+
+Two animation defects from the full-game sweep, both verified against the actual
+shipped GLB rather than taken on trust.
+
+- **THE JUMP CLIP SHOWED ONLY ITS STANDING LEAD-IN.** Decoding
+  soldier_jump.glb directly: Meshy's "Basic_Jump" runs 5.93s and the Hips
+  translation sits flat at baseline Y 94.7 until t=1.73s, peaking at 253.0 at
+  t=2.07s. The game's airtime is 2*jumpV/|gravity| = 2*7.8/22 = 0.709s and the
+  clip was played from t=0 — so ONE HUNDRED PERCENT of every visible jump was
+  the clip standing still, and the character never appeared to leave the ground.
+  playAnim gained a `startAt` seek and jump now begins at t=1.70.
+- **THE ?v=51 CROUCH FREEZE WAS BEING UNDONE ONE CALL LATER.** playAnim's
+  falsy-zero fix was real, but the vendored kernel's play() then did
+  `setEffectiveTimeScale(opts.timeScale || 1)` — the same bug one layer down —
+  which only bites when the clip CHANGES, i.e. exactly when you crouch from
+  standing. So a stationary crouching player still marched in place. FIXED AT
+  THE GENERATOR as well (pipeline/engine/runtime/3d/ffg_kernel_3d.js); 14 games
+  vendor a copy of this kernel.
+
+That is the third falsy-zero timeScale of this session (player.js ?v=51,
+hud.js ?v=73, kernel here) — same pattern, three layers.
+
+Verified live: crouching from standing leaves the crouch action at timeScale 0
+(genuinely frozen); the jump action starts at t=1.70 of a 5.93s clip, so the
+0.709s of airtime shows 1.70 -> 2.41 and covers the peak at 2.07.
+Selftest 89/89. DRAFT.
+
 ## 2026-07-21 — Sound came from the wrong ear, and bullets hit in silence (?v=85, LIVE)
 
 Two audio defects from the full-game sweep.

@@ -111,6 +111,12 @@ const HAND_AIM_ROT = {
 // armed clips (Alert / Walk_Forward_While_Shooting / Run_and_Shoot) retarget
 // badly on these rigs — arms folded over the face ("broken bone" screenshots).
 // Arms are posed at runtime (pose.js); locomotion + jump/swim clips load.
+// Meshy "Basic_Jump" is 5.93s and the hips do not leave the ground until
+// t=1.73s (decoded from soldier_jump.glb: baseline Y 94.7 flat to 1.73, peak
+// 253.0 at 2.07). Game airtime is 2*jumpV/|gravity| = 2*7.8/22 = 0.709s, so
+// playing from t=0 showed ONE HUNDRED PERCENT standing lead-in — the character
+// never visibly left the ground. Seek to just before takeoff instead.
+const JUMP_TAKEOFF_S = 1.70;
 const MESHY_CLIPS = ["walk", "run", "death", "dance", "cheer", "jump", "swim", "crouch"];
 const _v3 = new THREE.Vector3();
 
@@ -263,6 +269,12 @@ function playAnim(a, key, opts) {
   a.anim = realKey;
   a._animTS = ts;
   a.rig.play(clip, Object.assign({ timeScale: ts }, opts));
+  // startAt: seek into the clip. Meshy's library clips carry long standing
+  // lead-ins, so a short game action can otherwise show none of the motion.
+  if (opts && opts.startAt != null) {
+    const act = a.rig.actions[clip];
+    if (act) act.time = opts.startAt;
+  }
 }
 
 function mkNameTag(W, a) {
@@ -884,7 +896,7 @@ function syncObj(W, a, dt, far) {
       if (a.gliding && !a.chute) playAnim(a, "run", { timeScale: 0.05 });
       else if (a.gliding) playAnim(a, "idle");
       else if (a.swimming) playAnim(a, "swim", { timeScale: gs > 4.5 ? 1.25 : 1 });
-      else if (!a.onGround) playAnim(a, "jump", { once: true });
+      else if (!a.onGround) playAnim(a, "jump", { once: true, startAt: JUMP_TAKEOFF_S });
       else if (a.crouching && a.clips.crouch) {
         // one clip covers both crouch stances: crouch-walk plays at a pace set
         // by ground speed, and standing still freezes it on a crouched pose

@@ -278,7 +278,13 @@ export class Kernel3D {
       next.reset();
       next.setLoop(opts.once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
       next.clampWhenFinished = !!opts.once;
-      next.enabled = true; next.setEffectiveTimeScale(opts.timeScale || 1); next.setEffectiveWeight(1);
+      next.enabled = true;
+      // `|| 1` swallowed an explicit timeScale of 0 (falsy), so "freeze this
+      // clip on a pose" played at full speed instead — a crouching player
+      // marched in place. Only bit when the clip CHANGED, which is exactly
+      // when you crouch from standing.
+      next.setEffectiveTimeScale(opts.timeScale != null ? opts.timeScale : 1);
+      next.setEffectiveWeight(1);
       if (current && current !== next) { next.crossFadeFrom(current, opts.fade != null ? opts.fade : 0.2, false); }
       next.play(); current = next; return next;
     }
