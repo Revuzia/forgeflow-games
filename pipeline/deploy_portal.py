@@ -47,6 +47,21 @@ ROOT = Path("C:/Users/TestRun/Claude Claw/forgeflow-games")
 TOKEN_PATH = Path("C:/Users/TestRun/Claude Claw/.claude/settings.local.json")
 
 
+def _load_pages_creds():
+    """The api_config `cloudflare.tokens.isimcha85` token carries Pages:Edit (verified
+    2026-07-20 — it lists/deploys forgeflow-games + forgeflow-portal). Returns
+    (token, account_id) or (None, None). Preferred over wrangler OAuth, which expires
+    every ~90 days and then needs an interactive `wrangler login`."""
+    try:
+        cfg = json.loads((Path(os.path.expanduser("~")) / "AppData" / "Roaming" / "Nomi" / "api_config.json").read_text(encoding="utf-8"))
+    except Exception:
+        return (None, None)
+    prov = (cfg.get("providers", {}) or {}).get("cloudflare", {}) or {}
+    acct = prov.get("account_id_isimcha85") or prov.get("account_id")
+    tok = (((cfg.get("cloudflare", {}) or {}).get("tokens", {}) or {}).get("isimcha85", {}) or {}).get("token")
+    return (tok, acct) if tok and acct else (None, None)
+
+
 def _load_cf_token() -> str:
     """Find a CF token in known locations. Falls back to env var."""
     if os.environ.get("CLOUDFLARE_API_TOKEN"):
@@ -98,15 +113,24 @@ def main():
                 print(f"  {line.encode('ascii', 'replace').decode('ascii')}")
 
     # Step 2: wrangler pages deploy.
-    # 2026-05-05 — DON'T set CLOUDFLARE_API_TOKEN here. The available cfut_*
-    # tokens are scoped to Workers/R2 but lack Pages write. Wrangler's OAuth
-    # token (from `wrangler login`, stored in ~/.wrangler/config/default.toml)
-    # has Pages scope. If we set CLOUDFLARE_API_TOKEN, wrangler uses the
-    # weaker token and fails with 10000 Authentication error. Letting OAuth
-    # take precedence Just Works.
+    # 2026-07-20 — supersedes the 2026-05-05 note below. The api_config
+    # `cloudflare.tokens.isimcha85` token NOW carries Pages:Edit (verified against
+    # /accounts/{id}/pages/projects), so prefer it: wrangler's OAuth token expires
+    # (~90d) and then this step dies with "Failed to fetch auth token: 400 / Not
+    # logged in", needing an interactive `wrangler login`. Only fall back to OAuth
+    # when no Pages-capable API token is available.
+    #   (old note: cfut_* tokens are Workers/R2-scoped and lack Pages write — still
+    #    true, which is why we read the isimcha85 token, not _load_cf_token().)
     print("\n[2/2] Uploading to Cloudflare Pages (master branch)...")
     env = os.environ.copy()
-    env.pop("CLOUDFLARE_API_TOKEN", None)
+    _pg_tok, _pg_acct = _load_pages_creds()
+    if _pg_tok:
+        env["CLOUDFLARE_API_TOKEN"] = _pg_tok
+        env["CLOUDFLARE_ACCOUNT_ID"] = _pg_acct
+        print("  [cf] using api_config isimcha85 token (Pages:Edit)")
+    else:
+        env.pop("CLOUDFLARE_API_TOKEN", None)
+        print("  [cf] no Pages API token found — falling back to wrangler OAuth")
     cmd = [
         "npx", "wrangler", "pages", "deploy", "dist/client",
         "--project-name", "forgeflow-games",
