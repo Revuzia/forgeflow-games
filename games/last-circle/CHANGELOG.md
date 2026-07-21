@@ -3,6 +3,30 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — Weapon swap fired a hybrid weapon (?v=54, LIVE)
+
+Build-order #4. Two bugs in one code path.
+
+- **Hybrid weapon.** stepWeapon cached `const wpn = a.weapon` BEFORE applying
+  inp.slot, so after a swap every read for the rest of that frame — def, cd,
+  magAmmo, state — came from the OUTGOING weapon object, while fire() stamps
+  `a.weapon.id` and `.rarity` (the INCOMING weapon) onto the projectile.
+  Swapping shotgun -> sniper on a live trigger therefore spawned def.pellets = 9
+  projectiles each resolving as 105 sniper damage against 200 EHP, and the
+  outgoing object's ammo decrement was written to an orphan. The slot switch now
+  happens first, and a runtime invariant asserts def describes the weapon whose
+  id will be stamped.
+- **Swap cancelled the fire-rate timer.** equipSlot handed back a weapon with
+  cd: 0, so tap-2-tap-1 double-pumped the shotgun past its 0.857 s cycle. Each
+  slot now remembers its own remaining cooldown AND the incoming weapon inherits
+  whatever the outgoing one still owed — a timer cannot be dodged by swapping.
+
+Verified live: a plain shotgun shot deals 106 and sets cd 0.857; swapping
+shotgun->sniper on the fire edge now deals exactly 105 (one sniper round, not a
+9-pellet sniper burst); and fire -> tap 2 -> tap 1 carries the cooldown
+0.857 -> 0.84 -> 0.84 with 0 extra damage from the second pump. Selftest 66/66.
+DRAFT.
+
 ## 2026-07-20 — COVER NOW STOPS BULLETS (?v=53, LIVE)
 
 Build-order #1 from the gap scan, and the biggest gameplay defect in the game:

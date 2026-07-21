@@ -172,11 +172,19 @@ function equipSlot(W, a, idx) {
   const inv = a.inventory;
   const slot = inv.slots[idx];
   if (!slot) return;
+  // Swapping used to hand back a weapon with cd: 0, so tap-2-tap-1 cancelled the
+  // fire-rate timer and double-pumped the shotgun. Each slot remembers its own
+  // remaining cooldown, and the incoming weapon also inherits whatever the
+  // outgoing one still owed — you cannot dodge a timer by swapping off it.
+  const prev = a.weapon;
+  if (prev && prev.slotRef) prev.slotRef.cd = Math.max(0, prev.cd || 0);
+  const carry = prev ? Math.max(0, prev.cd || 0) : 0;
+  const startCd = Math.max(carry, Math.max(0, slot.cd || 0));
   inv.active = idx;
   if (slot.kind === "weapon") {
-    a.weapon = { id: slot.id, rarity: slot.rarity || 0, magAmmo: slot.mag != null ? slot.mag : 0, state: "ready", cd: 0, reloadT: 0, slotRef: slot };
+    a.weapon = { id: slot.id, rarity: slot.rarity || 0, magAmmo: slot.mag != null ? slot.mag : 0, state: "ready", cd: startCd, reloadT: 0, slotRef: slot };
   } else {
-    a.weapon = { id: "consumable:" + slot.id, rarity: 0, magAmmo: 0, state: "ready", cd: 0, reloadT: 0, slotRef: slot };
+    a.weapon = { id: "consumable:" + slot.id, rarity: 0, magAmmo: 0, state: "ready", cd: startCd, reloadT: 0, slotRef: slot };
   }
   refreshWeaponMesh(W, a);
   W.events.emit("weaponEquipped", a, a.weapon);
@@ -227,12 +235,16 @@ export function update(W, dt) {
 }
 
 function stepWeapon(W, a, dt) {
+  const inp = a.input;
+  // Slot switching runs FIRST. It used to run after `const wpn = a.weapon`, so
+  // for the rest of that frame every read (def, cd, magAmmo, state) came from
+  // the OUTGOING weapon object while fire() stamped the INCOMING id and rarity
+  // onto the projectile: swapping shotgun -> sniper on a live trigger spawned
+  // 9 pellets each resolving as sniper damage, and the outgoing object's ammo
+  // decrement was written to an orphan.
+  if (inp.slot >= 0) { equipSlot(W, a, inp.slot); inp.slot = -1; }
   const wpn = a.weapon;
   if (!wpn) return;
-  const inp = a.input;
-
-  // slot switching
-  if (inp.slot >= 0) { equipSlot(W, a, inp.slot); inp.slot = -1; }
 
   // consumable "weapon" — fire = use
   if (wpn.id.startsWith("consumable:")) {
@@ -246,6 +258,9 @@ function stepWeapon(W, a, dt) {
 
   const def = K.WEAPONS[wpn.id];
   if (!def) return;
+  // invariant: the definition driving pellets/spread must describe the weapon
+  // whose id fire() stamps on the projectile (see the swap bug above)
+  if (def !== K.WEAPONS[a.weapon.id]) { console.warn("[weapons] def/weapon mismatch", wpn.id, a.weapon.id); return; }
   wpn.cd -= dt;
 
   // reload

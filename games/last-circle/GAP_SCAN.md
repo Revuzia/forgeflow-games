@@ -15,6 +15,7 @@ Line anchors were correct at the time of writing but drift — re-locate by cont
 - [x] #2 KeyM opened the map AND muted the game (fixed generator-level, ?v=52)
 - [x] #3 Parachute A/D steering mirrored (fixed + selftest assert, ?v=52)
 - [x] #1 Swept bullet collision — cover actually stops bullets (?v=53)
+- [x] #4 Weapon swap fired a hybrid weapon and reset the fire-rate cooldown (?v=54)
 - [ ] everything else below
 
 # LAST CIRCLE — BUILD ORDER
