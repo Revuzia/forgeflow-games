@@ -37,10 +37,63 @@ function segHitsBox(x0, z0, x1, z1, box) {
   return true;
 }
 
-/** Is `to` visible from `from` (no obstacle blocks the segment)? */
-function hasLOS(fx, fz, tx, tz, obstacles) {
-  for (const o of obstacles) if (segHitsBox(fx, fz, tx, tz, o)) return false;
+/** Visible height of a hider: a posed/crouched body hides behind low cover, a standing
+ *  one does not. Drives which obstacles can actually occlude it. */
+export function hiderHeight(h) {
+  if (h && h.hidden && h.pose && h.pose !== "stand") return 0.85;
+  return 1.55;
+}
+
+/** Is `to` visible from `from`? An obstacle only occludes when it is at least as TALL
+ *  as `minH` — otherwise you see straight over it. (Before this, a 0.3m pallet blocked
+ *  sight exactly like a 3m shelf, so ~80% of props falsely occluded.) Obstacles with no
+ *  height recorded are treated as full-height for safety. */
+function hasLOS(fx, fz, tx, tz, obstacles, minH = 0) {
+  for (const o of obstacles) {
+    if (minH > 0 && o.h != null && o.h < minH) continue;
+    if (segHitsBox(fx, fz, tx, tz, o)) return false;
+  }
   return true;
+}
+
+/** Colour of the nearest cover to (x,z), optionally jittered by +/-`jit` per channel.
+ *  Used to give bot hiders an imperfect paint job. */
+export function coverRGB(s, x, z, jit = 0, rng = null) {
+  let best = null, bd = Infinity;
+  for (const o of s.obstacles) {
+    if (o.color == null) continue;
+    const d = dist2(x, z, o.x, o.z);
+    if (d < bd) { bd = d; best = o; }
+  }
+  if (!best) return null;
+  const j = () => (jit && rng ? (rng() - 0.5) * 2 * jit : 0);
+  return {
+    r: clamp(Math.round(((best.color >> 16) & 255) + j()), 0, 255),
+    g: clamp(Math.round(((best.color >> 8) & 255) + j()), 0, 255),
+    b: clamp(Math.round((best.color & 255) + j()), 0, 255),
+  };
+}
+
+/** How well a hider is camouflaged, 0..1. Colour match against the nearest cover plus
+ *  stillness — MOVEMENT breaks camouflage, which is the genre's core counterplay.
+ *  An unpainted (white) body scores 0. */
+export function blendScore(s, h) {
+  if (!h.paintRGB) return 0;
+  let best = null, bd = Infinity;
+  for (const o of s.obstacles) {
+    if (o.color == null) continue;
+    const d = dist2(h.x, h.z, o.x, o.z);
+    if (d < bd) { bd = d; best = o; }
+  }
+  if (!best || bd > 7) return 0;                       // nothing to blend against
+  const c = best.color;
+  const dr = ((c >> 16) & 255) - h.paintRGB.r, dg = ((c >> 8) & 255) - h.paintRGB.g, db = (c & 255) - h.paintRGB.b;
+  // steep falloff: colour PRECISION is the skill. ~90 units of RGB error (a visibly
+  // wrong shade) already drops you to zero camouflage.
+  let blend = clamp(1 - Math.sqrt(dr * dr + dg * dg + db * db) / 90, 0, 1);
+  if (h._moving) blend *= 0.25;                        // walking gives you away
+  else if (h.hidden) blend = Math.min(1, blend * 1.06); // posed and still
+  return blend;
 }
 
 /** Push a point out of any obstacle it's inside + clamp to bounds. */
@@ -96,6 +149,8 @@ export function createMatch(config) {
       ammo: settings.startAmmo, score: 0,
       // hider state
       spot: null, hidden: false, tauntTimer: settings.tauntIntervalSeconds || 0, pose: "stand",
+      paintRGB: null,          // {r,g,b} of the painted body — drives blendScore()
+      _moving: false,          // movement breaks camouflage
       // seeker state
       patrol: null, target: null, dwell: 0, cooldown: 0,
       _in: { mx: 0, mz: 0, yaw: null, shoot: false }, // local input
@@ -131,12 +186,15 @@ export function stepMatch(s, dt) {
   s.events = [];
   s.elapsed += dt;
   s.timeLeft -= dt;
+  for (const a of s.actors) { a._px = a.x; a._pz = a.z; }   // for the movement tell
 
   if (s.phase === PHASE.PREP) {
     for (const a of hiders(s)) stepHiderPrep(s, a, dt);
     if (s.timeLeft <= 0) { s.phase = PHASE.HUNT; s.timeLeft = s.settings.huntSeconds; if (s.mode === MODE.REVERSE) convertReverse(s); else if (s.mode === MODE.DOUBLE) convertDouble(s); s.events.push({ t: "phase", phase: PHASE.HUNT }); }
   } else if (s.phase === PHASE.HUNT) {
     for (const a of hiders(s)) if (a.alive) stepHiderHunt(s, a, dt);
+    // resolve the movement tell BEFORE seekers look: a walking hider is easy to spot
+    for (const a of hiders(s)) { const dx = a.x - a._px, dz = a.z - a._pz; a._moving = (dx * dx + dz * dz) > 1e-4; }
     for (const a of seekers(s)) stepSeeker(s, a, dt);
     accrueScores(s, dt);
     const w = checkWin({ mode: s.mode, timeLeft: s.timeLeft, hiders: hiders(s).map((h) => ({ id: h.id, alive: h.alive })), seekers: seekers(s).map((k) => ({ ammo: k.ammo })), ammoLimit: s.settings.ammoLimit });
@@ -156,6 +214,9 @@ function stepHiderPrep(s, a, dt) {
     moveToward(s, a, a.spot.x, a.spot.z, SIM.hiderSpeed, dt);
   } else if (!a.hidden) {
     a.hidden = true; a.pose = pickPose(s, a); a.yaw = a.spot.faceYaw != null ? a.spot.faceYaw : a.yaw;
+    // a bot "paints" itself to its cover, imperfectly — jitter keeps bots beatable and
+    // means a careful human paint job is genuinely better than theirs
+    a.paintRGB = coverRGB(s, a.x, a.z, 34, s.rng);
     s.events.push({ t: "hidden", id: a.id });
   }
 }
@@ -171,7 +232,7 @@ function stepHiderHunt(s, a, dt) {
   let threat = null, tb = SIM.fleeRange;
   for (const k of seekers(s)) {
     const d = dist2(a.x, a.z, k.x, k.z);
-    if (d < tb && hasLOS(k.x, k.z, a.x, a.z, s.obstacles)) { tb = d; threat = k; }
+    if (d < tb && hasLOS(k.x, k.z, a.x, a.z, s.obstacles, hiderHeight(a))) { tb = d; threat = k; }
   }
   if (threat) {
     a.fleeing = true;
@@ -234,15 +295,19 @@ function stepSeeker(s, a, dt) {
   if (a.cooldown > 0) a.cooldown -= dt;
   if (!a.isBot) { moveLocal(s, a, dt); if (a._in.shoot) { seekerShoot(s, a); a._in.shoot = false; } return; }
 
-  // detection: pick the best-seen hider
-  let seen = null, sBest = Infinity;
+  // detection: pick the best-seen hider. CAMOUFLAGE COUNTS — a body painted to match
+  // its cover has to be approached much closer and takes far longer to pick out. This
+  // is what makes the paint mechanic mean anything against bots (they used to detect
+  // on range+FOV+LOS alone, so paint quality was cosmetic).
+  let seen = null, sBest = Infinity, seenBlend = 0;
   for (const h of aliveHiders(s)) {
     const d = dist2(a.x, a.z, h.x, h.z);
-    if (d > s.skill.detectRange) continue;
+    const b = blendScore(s, h);
+    if (d > s.skill.detectRange * (1 - 0.6 * b)) continue;    // good paint shrinks the cone
     const facing = angDiff(a.yaw, yawTo(a.x, a.z, h.x, h.z));
     if (facing > s.skill.fovHalf) continue;
-    if (!hasLOS(a.x, a.z, h.x, h.z, s.obstacles)) continue;
-    if (d < sBest) { sBest = d; seen = h; }
+    if (!hasLOS(a.x, a.z, h.x, h.z, s.obstacles, hiderHeight(h))) continue;
+    if (d < sBest) { sBest = d; seen = h; seenBlend = b; }
   }
 
   if (seen) {
@@ -251,8 +316,10 @@ function stepSeeker(s, a, dt) {
     a.yaw = yawTo(a.x, a.z, seen.x, seen.z);
     // approach until in comfortable shoot range
     if (sBest > 8) moveToward(s, a, seen.x, seen.z, s.skill.seekerSpeed, dt);
-    // identified + ready => shoot
-    if (a.dwell >= s.skill.identifyTime && a.cooldown <= 0 && a.ammo > 0 && sBest <= SIM.shootRange) {
+    // identified + ready => shoot. Blending stretches the identify dwell up to 4x, so a
+    // well-painted hider often survives a seeker walking past.
+    const needDwell = s.skill.identifyTime * (1 + 3 * seenBlend);
+    if (a.dwell >= needDwell && a.cooldown <= 0 && a.ammo > 0 && sBest <= SIM.shootRange) {
       seekerShoot(s, a);
     }
   } else {
@@ -282,7 +349,7 @@ function seekerShoot(s, a) {
     const d = dist2(a.x, a.z, h.x, h.z);
     if (d > SIM.shootRange) continue;
     if (angDiff(a.yaw, yawTo(a.x, a.z, h.x, h.z)) > 0.14) continue; // tight aim
-    if (!hasLOS(a.x, a.z, h.x, h.z, s.obstacles)) continue;
+    if (!hasLOS(a.x, a.z, h.x, h.z, s.obstacles, hiderHeight(h))) continue;
     if (d < best) { best = d; hit = h; fleeing = !!h.fleeing; }
   }
   const didHit = !!hit;
@@ -334,7 +401,7 @@ function accrueScores(s, dt) {
       const d = dist2(k.x, k.z, h.x, h.z);
       if (d > s.settings.losMaxDist) continue;
       if (angDiff(k.yaw, yawTo(k.x, k.z, h.x, h.z)) > s.skill.fovHalf) continue;
-      if (!hasLOS(k.x, k.z, h.x, h.z, s.obstacles)) continue;
+      if (!hasLOS(k.x, k.z, h.x, h.z, s.obstacles, hiderHeight(h))) continue;
       bestPts = Math.max(bestPts, losPoints(d, dt, s.settings));
     }
     h.score += bestPts;

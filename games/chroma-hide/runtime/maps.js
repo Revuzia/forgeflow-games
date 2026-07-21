@@ -439,13 +439,16 @@ export function mapObstacles(map) {
   // detail props without shrinking the walkable grid. `h` is carried through so LOS
   // can respect prop height (a 0.9m pipe must not occlude like a 3m shelf).
   return map.props.filter((p) => !p.noCollide)
-    .map((p) => ({ id: p.id, x: p.x, z: p.z, hw: p.w / 2, hd: p.d / 2, h: p.h }));
+    .map((p) => ({ id: p.id, x: p.x, z: p.z, hw: p.w / 2, hd: p.d / 2, h: p.h, color: p.color }));
 }
 
 /** The subset the pure sim needs — props AND interior walls become 2D obstacles. */
 export function toSimMap(map) {
   const obstacles = mapObstacles(map);
-  for (const w of (map.walls || [])) obstacles.push({ id: w.id || "wall", x: w.x, z: w.z, hw: w.w / 2, hd: w.d / 2 });
+  // walls carry the room height so they ALWAYS occlude (props only occlude when they
+  // are at least as tall as what they'd be hiding — see hasLOS)
+  const wallH = map.wallHeight || 5;
+  for (const w of (map.walls || [])) obstacles.push({ id: w.id || "wall", x: w.x, z: w.z, hw: w.w / 2, hd: w.d / 2, h: wallH, color: map.perimeter && map.perimeter.color });
   return {
     bounds: map.bounds,
     obstacles,

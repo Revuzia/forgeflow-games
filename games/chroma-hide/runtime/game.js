@@ -419,6 +419,7 @@ export class Game {
     if (this._moving && this.local && this.local.alive && this.sim.phase !== PHASE.RESULTS) this.audio.footstep();
     this._syncActors();
     this._updateEmotes(dt);
+    this._syncPaintBlend();
     this._updateCamera(dt);
     this._updateHUD();
     if (this.sim.phase === PHASE.RESULTS && !this._ended) { this._ended = true; this._finish(); }
@@ -579,6 +580,25 @@ export class Game {
       const on = this.localRole === ROLE.SEEKER && this.sim.phase === PHASE.HUNT;
       this._flashlight.intensity = on ? 22 : 0;
       if (on) this._flashlight.position.set(bx + Math.sin(this.camYaw) * 1.5, by + 0.6, bz + Math.cos(this.camYaw) * 1.5);
+    }
+  }
+
+  /** Feed the player's ACTUAL paint job into the sim's camouflage model, so a careful
+   *  colour match really does make bot seekers look past you. Averages the recorded
+   *  strokes (what's actually on the body) and only recomputes when they change. */
+  _syncPaintBlend() {
+    for (const [id, ps] of this.paintByActor) {
+      const a = this.sim.actors.find((x) => x.id === id);
+      if (!a || a.role !== ROLE.HIDER) continue;
+      const n = ps.strokes.length;
+      if (a._paintSyncN === n) continue;
+      a._paintSyncN = n;
+      if (!n) { a.paintRGB = null; continue; }
+      // weight the most recent strokes — that's what's visible on top
+      const take = ps.strokes.slice(-60);
+      let r = 0, g = 0, b = 0;
+      for (const st of take) { r += st.r; g += st.g; b += st.b; }
+      a.paintRGB = { r: Math.round(r / take.length), g: Math.round(g / take.length), b: Math.round(b / take.length) };
     }
   }
 
