@@ -489,6 +489,33 @@ export class Game {
     this.hud && this.hud.toast && this.hud.toast("nothing to cling to — aim at a surface (E)", "#ffb46b");
   }
 
+  /** Keep the local role in step with the ACTOR's role.
+   *
+   *  localRole was latched once at the PREP->HUNT edge. Infection converts a caught
+   *  hider into a seeker mid-hunt, so a converted human kept a hider's control scheme
+   *  for the rest of the round: LMB never fired, and the whole mode was a dead end for
+   *  the player. Reverse and Double reassign roles at hunt start too. */
+  _syncLocalRole() {
+    if (!this.local || this.local.role === this.localRole) return;
+    const was = this.localRole;
+    this.localRole = this.local.role;
+    if (this.localRole === ROLE.SEEKER) {
+      // a converted player is no longer hiding: drop the hider-only verbs cleanly
+      if (this.paintMode) this._togglePaintMode();
+      if (this._stuck) this._releaseStick();
+      this.local.pose = "stand";
+      this.thirdPerson = false;
+      this.hud && this.hud.toast && this.hud.toast("You have been converted — hunt them down!", "#ff9d6b");
+    } else {
+      this.thirdPerson = true;
+    }
+    this.hud && this.hud.setRole && this.hud.setRole(this.localRole);
+    this.hud && this.hud.setHint && this.hud.setHint(this._defaultHint());
+    if (this._helpEl && this._helpEl.parentNode) { this._helpEl.parentNode.removeChild(this._helpEl); this._helpEl = null; }
+    this._buildControlHelp();
+    void was;
+  }
+
   /** Hand the cursor back. Pointer lock outlived the match, so every button on the
    *  results screen was unclickable until the player thought to press Escape. */
   _releasePointer() {
@@ -718,6 +745,7 @@ export class Game {
     }
     this._syncActors();
     this._updateEmotes(dt);
+    this._syncLocalRole();
     this._syncPaintBlend();
     this._stepJump(dt);
     this._stepStick(dt);

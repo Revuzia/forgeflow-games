@@ -126,8 +126,12 @@ export function losPoints(dist, dt, opts) {
  */
 export function checkWin(state) {
   const aliveHiders = state.hiders.filter((h) => h.alive).length;
-  // Seekers catch everyone.
-  if (aliveHiders === 0 && state.hiders.length > 0) {
+  // Seekers catch everyone. The `hidersAtStart` term matters for Infection: converting
+  // the LAST hider empties the hiders list entirely, and the old `hiders.length > 0`
+  // guard then blocked the win, so the mode idled out the full hunt timer with nobody
+  // left to find. The guard exists only to avoid declaring a winner before roles are
+  // assigned, which `hidersAtStart` expresses correctly.
+  if (aliveHiders === 0 && (state.hiders.length > 0 || (state.hidersAtStart || 0) > 0)) {
     return { winner: "seekers", reason: "all_found" };
   }
   // All seekers exhausted (ammo economy).

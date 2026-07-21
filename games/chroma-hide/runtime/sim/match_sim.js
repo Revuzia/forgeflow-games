@@ -194,6 +194,10 @@ export function createMatch(config) {
     bounds: map.bounds, obstacles: map.obstacles, spots,
     nav,   // walkability grid for bot pathing through doorways (built above)
     actors, mode: settings.mode, events: [], result: null, elapsed: 0, reverseMark: null,
+    // How many hiders the match STARTED with. Infection converts caught hiders into
+    // seekers, so the live hider list legitimately empties -- checkWin needs this to
+    // tell "everyone has been caught" from "roles are not assigned yet".
+    hidersAtStart: actors.filter((a) => a.role === ROLE.HIDER).length,
   };
 }
 
@@ -223,7 +227,7 @@ export function stepMatch(s, dt) {
     for (const a of hiders(s)) { const dx = a.x - a._px, dz = a.z - a._pz; a._moving = (dx * dx + dz * dz) > 1e-4; }
     for (const a of seekers(s)) stepSeeker(s, a, dt);
     accrueScores(s, dt);
-    const w = checkWin({ mode: s.mode, timeLeft: s.timeLeft, hiders: hiders(s).map((h) => ({ id: h.id, alive: h.alive })), seekers: seekers(s).map((k) => ({ ammo: k.ammo })), ammoLimit: s.settings.ammoLimit });
+    const w = checkWin({ mode: s.mode, timeLeft: s.timeLeft, hiders: hiders(s).map((h) => ({ id: h.id, alive: h.alive })), seekers: seekers(s).map((k) => ({ ammo: k.ammo })), ammoLimit: s.settings.ammoLimit, hidersAtStart: s.hidersAtStart || 0 });
     if (w) { s.result = w; s.phase = PHASE.ANSWER_CHECK; s.timeLeft = SIM.answerSeconds; s.events.push({ t: "win", winner: w.winner, reason: w.reason }); }
   } else if (s.phase === PHASE.ANSWER_CHECK) {
     if (s.timeLeft <= 0) { s.phase = PHASE.RESULTS; s.events.push({ t: "phase", phase: PHASE.RESULTS }); }
@@ -372,9 +376,22 @@ function stepSeeker(s, a, dt) {
       if (mark) { moveToward(s, a, mark.x, mark.z, s.skill.seekerSpeed, dt); return; }
     }
     // patrol toward last whistle, else a roaming waypoint
-    if (a._whistleTarget) { moveToward(s, a, a._whistleTarget.x, a._whistleTarget.z, s.skill.seekerSpeed, dt); if (dist2(a.x, a.z, a._whistleTarget.x, a._whistleTarget.z) < 1.5) a._whistleTarget = null; }
+    if (a._whistleTarget) {
+      moveToward(s, a, a._whistleTarget.x, a._whistleTarget.z, s.skill.seekerSpeed, dt);
+      a._whistleAge = (a._whistleAge || 0) + dt;
+      // give up on a lure we cannot reach, for the same reason patrol times out
+      if (dist2(a.x, a.z, a._whistleTarget.x, a._whistleTarget.z) < 1.5 || a._whistleAge > 10) {
+        a._whistleTarget = null; a._whistleAge = 0;
+      }
+    }
     else {
-      if (!a.patrol || dist2(a.x, a.z, a.patrol.x, a.patrol.z) < 1.5) a.patrol = { x: s.bounds.minX + s.rng() * (s.bounds.maxX - s.bounds.minX), z: s.bounds.minZ + s.rng() * (s.bounds.maxZ - s.bounds.minZ) };
+      // Arrival OR a timeout picks the next waypoint. Without the timeout an
+      // unreachable target wedges the bot permanently, because "am I there yet" is the
+      // only thing that ever cleared it.
+      a._patrolAge = (a._patrolAge || 0) + dt;
+      const arrived = a.patrol && dist2(a.x, a.z, a.patrol.x, a.patrol.z) < 1.5;
+      const stuck = a._patrolAge > 12;
+      if (!a.patrol || arrived || stuck) { a.patrol = patrolPoint(s); a._patrolAge = 0; }
       moveToward(s, a, a.patrol.x, a.patrol.z, s.skill.seekerSpeed, dt);
     }
   }
@@ -397,12 +414,43 @@ function seekerShoot(s, a) {
   a.ammo = applyShot(a.ammo, { hit: didHit, fleeing, ammoLimit: s.settings.ammoLimit, startAmmo: s.settings.startAmmo });
   if (didHit) {
     hit.alive = false; hit.caught = true; a.dwell = 0; a.target = null;
+    // Every catch scores. Only the Reverse mark used to, so Double -- whose stated win
+    // condition is "Most finds wins" -- counted nothing and every seeker finished on 0.
+    a.score += 1;
+    a.finds = (a.finds || 0) + 1;
     if (s.mode === MODE.REVERSE && hit.id === s.reverseMark) a.score += s.settings.reverseFindReward;
     s.events.push({ t: "caught", id: hit.id, by: a.id });
     if (MODE_INFO[s.mode] && MODE_INFO[s.mode].convertOnCatch) { hit.role = ROLE.SEEKER; hit.alive = true; hit.caught = false; hit.ammo = s.settings.startAmmo; s.events.push({ t: "convert", id: hit.id }); }
   } else {
     s.events.push({ t: "miss", by: a.id });
   }
+}
+
+/** A patrol waypoint the bot can actually walk to.
+ *
+ *  Waypoints used to be any random point in bounds. On a dense campus map most random
+ *  points land inside a wall, a shelf or a sealed pocket, and the arrival test
+ *  (`within 1.5m`) then never fires -- the seeker walks into the obstacle for the rest
+ *  of the match. That is the stalemate: hunts ran to the timer with hiders in plain
+ *  sight. Prefer a known hiding spot (where hiders actually are), else a walkable nav
+ *  cell, and fall back to open bounds only if the grid is missing.
+ */
+function patrolPoint(s) {
+  if (s.spots && s.spots.length && s.rng() < 0.55) {
+    const sp = s.spots[(s.rng() * s.spots.length) | 0];
+    if (sp) return { x: sp.x, z: sp.z };
+  }
+  const nav = s.nav;
+  if (nav && nav.grid) {
+    for (let tries = 0; tries < 40; tries++) {
+      const i = (s.rng() * nav.w) | 0, j = (s.rng() * nav.h) | 0;
+      if (nav.grid[j * nav.w + i] === 1) {
+        return { x: nav.minX + (i + 0.5) * nav.cell, z: nav.minZ + (j + 0.5) * nav.cell };
+      }
+    }
+  }
+  return { x: s.bounds.minX + s.rng() * (s.bounds.maxX - s.bounds.minX),
+           z: s.bounds.minZ + s.rng() * (s.bounds.maxZ - s.bounds.minZ) };
 }
 
 function moveToward(s, a, tx, tz, speed, dt) {

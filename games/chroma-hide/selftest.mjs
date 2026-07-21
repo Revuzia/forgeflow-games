@@ -419,5 +419,47 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
   assert(Math.abs(elev - 1.75) < 0.02, "cling elevation replicates over the wire (" + elev + ")");
 }
 
+
+// ── bots actually hunt, and finds are actually scored ────────────────────────
+// Patrol waypoints were any random point in bounds. On a dense map most land inside
+// geometry, and "am I there yet" was the only thing that ever cleared one -- so a
+// seeker could walk into a wall for the whole match and hunts stalemated to the timer.
+// Separately, only the Reverse mark scored, so Double ("Most finds wins") counted nothing.
+{
+  const { createMatch, stepMatch, seekers } = await import("./runtime/sim/match_sim.js");
+  const { DEFAULTS, PHASE, ROLE } = await import("./runtime/sim/match_core.js");
+  const { MAPS, toSimMap } = await import("./runtime/maps.js");
+
+  const play = (mode, seed) => {
+    const players = [...Array(8)].map((_, i) => ({ id: "p" + i, isBot: true, role: i < 2 ? ROLE.SEEKER : ROLE.HIDER }));
+    const s = createMatch({ players, settings: { ...DEFAULTS, mode }, map: toSimMap(MAPS.office), seed, seekerCount: 2 });
+    const dt = 1 / 30, travel = {}, last = {};
+    let t = 0;
+    while (s.phase !== PHASE.RESULTS && t < 400) {
+      stepMatch(s, dt); t += dt;
+      if (s.phase === PHASE.HUNT) for (const k of seekers(s)) {
+        if (last[k.id]) travel[k.id] = (travel[k.id] || 0) + Math.hypot(k.x - last[k.id].x, k.z - last[k.id].z);
+        last[k.id] = { x: k.x, z: k.z };
+      }
+    }
+    return { s, travel: Object.values(travel), finds: seekers(s).reduce((a, k) => a + (k.finds || 0), 0) };
+  };
+
+  const runs = [1, 2, 3, 4].map((sd) => play("normal", sd));
+  assert(runs.every((r) => r.s.result != null), "every match reaches a result");
+  const moved = runs.flatMap((r) => r.travel);
+  const wedged = moved.filter((d) => d < 20).length;
+  assert(wedged === 0, "no seeker wedges on an unreachable patrol target (" + wedged + "/" + moved.length +
+    " moved <20m; median " + moved.sort((a, b) => a - b)[(moved.length / 2) | 0].toFixed(0) + "m)");
+  assert(runs.reduce((a, r) => a + r.finds, 0) > 0, "bot seekers actually catch hiders");
+
+  const dbl = [1, 2, 3].map((sd) => play("double", sd));
+  const scored = dbl.some((r) => seekers(r.s).some((k) => k.score > 0));
+  assert(scored, "Double scores finds — its stated win condition is 'Most finds wins'");
+
+  const inf = play("infection", 2);
+  assert(inf.s.result != null, "Infection reaches a result rather than idling out the timer");
+}
+
 console.log(fails === 0 ? "\nSELFTEST PASS" : `\nSELFTEST FAIL (${fails})`);
 process.exit(fails === 0 ? 0 : 1);
