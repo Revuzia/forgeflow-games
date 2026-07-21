@@ -186,6 +186,10 @@ function buildMenuWorld(W) {
     W.kernel.sun.intensity = 1.85;
     W.kernel.sun.color.set(0xfff0d8);
   }
+  // Restore the TONE MAPPER too, not just the exposure: a match sets
+  // NoToneMapping (maps.js) for its bright-daylight look and nothing ever put it
+  // back, so from the second visit onward the cinematic menu rendered unlit.
+  W.kernel.renderer.toneMapping = THREE.ACESFilmicToneMapping;
   W.kernel.renderer.toneMappingExposure = 1.12;
 
   // soft sky dome (gradient-ish via large inverted sphere)

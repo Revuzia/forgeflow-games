@@ -3,6 +3,32 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — REGRESSION FIX: every match after the first was lit wrong (?v=83, LIVE)
+
+Two lighting defects the full-game sweep caught. The first is mine, from ?v=58.
+
+- **Stale sun target.** ?v=58 made the shadow volume follow the player and
+  captured the sun's DIRECTION per match as
+  `sun.position - sun.target.position`. But `sun.target` was never reset — it
+  sat wherever followShadow parked it at the end of the previous match. The
+  sweep replayed the shipped storm math over 3000 seeds and put the final circle
+  a median 178 m from origin, which turned the intended ~50deg near-noon key into
+  a median ~31deg raking light pointing in a random compass direction, and in
+  5.8% of matches pushed the focus past the shadow camera's 400 m far plane so
+  the match rendered with NO shadows at all. Correct only on the first match of
+  a session. The target is now reset to origin before the direction is taken.
+- **The menu never got its tone mapper back.** A match sets NoToneMapping for
+  its bright-daylight look (maps.js) and the menu restored only the EXPOSURE, so
+  from the second visit onward the cinematic menu rendered unlit. It now restores
+  ACESFilmicToneMapping too.
+
+Verified live across four consecutive matches, walking the player far from
+origin each time so a stale target would show: sun elevation is 50.2deg every
+match with a spread of 0.00deg, while the shadow target still tracks the player
+to a different place each match (460,-340 / 520,-380 / 580,-420). Tone mapping
+reads 0 (None) in a match and 4 (ACESFilmic) once back in the menu.
+Selftest 89/89. DRAFT.
+
 ## 2026-07-21 — The two screens that END every match had unclickable buttons (?v=82, LIVE)
 
 The full-game sweep's headline finding, and the worst thing it found.

@@ -228,9 +228,16 @@ register3d("royale", async function (kernel, content) {
     hudMod.showLoading(W, "Building " + (MAPS[W.mapId] ? MAPS[W.mapId].name : W.mapId) + "…");
     await nextFrame(); // let the loading screen paint
     W.map = await buildMap(W, W.mapId);
-    // buildMap re-aims the sun per map; capture the direction as an offset from
-    // whatever the target currently is, so followShadow preserves it
-    W._sunOff = kernel.sun.position.clone().sub(kernel.sun.target.position);
+    // buildMap re-aims the sun per map. Reset the TARGET to origin first: this
+    // subtracted `sun.target.position`, which followShadow had parked at the
+    // previous match's player location — a median ~178 m from origin. So from
+    // match 2 onward every map was lit from a low raking angle in a random
+    // compass direction instead of its intended near-noon key, and when that
+    // stale focus exceeded the shadow camera's far plane the match rendered
+    // with no shadows at all. Only correct on the first match of a session.
+    kernel.sun.target.position.set(0, 0, 0);
+    kernel.sun.target.updateMatrixWorld();
+    W._sunOff = kernel.sun.position.clone();
 
     const modeK = SIM.MODE[W.mode] || SIM.MODE.standard;
     W.match = new SIM.Match({ players: modeK.players, mode: W.mode });
