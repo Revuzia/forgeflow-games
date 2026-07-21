@@ -488,7 +488,10 @@ export function toSimMap(map) {
   };
 }
 
-export function getMap(id) { return MAPS[id] || MAPS.depot; }
+// Fall back to a SHIPPED map. The old fallback was `depot`, a legacy single-room map
+// that is not in the lobby and not in the model-reachability guard, so any caller with
+// a stale or missing id silently dropped the player into an 8-prop test box.
+export function getMap(id) { return MAPS[id] || MAPS[SHIPPED[0]] || MAPS.depot; }
 
 // Only the fully-overhauled multi-room stages ship in the picker. The older
 // single-room maps (manor/understage/hollow) remain defined for compatibility

@@ -12,7 +12,7 @@
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { createMatch, stepMatch, setLocalInput, seekers, hiders, SIM } from "./sim/match_sim.js";
+import { createMatch, stepMatch, setLocalInput, seekers, hiders, SIM, requestWhistle } from "./sim/match_sim.js";
 import { PHASE, ROLE, MODE, sanitizeSettings, DEFAULTS, computeSeekerCount, MODE_INFO } from "./sim/match_core.js";
 import { getMap, toSimMap, surfaceAt} from "./maps.js";
 import { PaintSystem } from "./paint.js";
@@ -48,7 +48,7 @@ export class Game {
     this.engine = engine;
     this.hud = hud;
     this.cb = callbacks || {};
-    this.mapDef = getMap(config.mapId || "manor");
+    this.mapDef = getMap(config.mapId);
     this.settings = sanitizeSettings({ ...DEFAULTS, mode: config.mode || MODE.NORMAL });
     this.localRole = config.role || ROLE.HIDER;
 
@@ -61,7 +61,7 @@ export class Game {
 
     if (this.online) {
       const r = config.roster;
-      this.mapDef = getMap(r.mapId || "manor");
+      this.mapDef = getMap(r.mapId);
       this.settings = sanitizeSettings(r.settings || { ...DEFAULTS });
       this.seed = r.seed >>> 0;
       const myId = this.net.myId();
@@ -614,9 +614,10 @@ export class Game {
 
   _whistle() {
     if (this.local.role !== ROLE.HIDER || !this.local.alive) return;
-    this.sim.events.push({ t: "whistle", id: this.local.id, x: this.local.x, z: this.local.z });
-    // give nearby seekers a nudge toward us
-    for (const k of seekers(this.sim)) k._whistleTarget = { x: this.local.x, z: this.local.z };
+    // Route it through the sim. Pushing onto sim.events here was wiped at the top of the
+    // next tick, and hard-setting every seeker's target made a human whistle a perfect
+    // map-wide beacon while a bot's was a 30m approximate lure. Same rule for both now.
+    requestWhistle(this.sim, this.local.id);
     this.hud.toast("whistle!", "#ffd479");
   }
 

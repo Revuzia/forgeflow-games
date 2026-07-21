@@ -201,6 +201,15 @@ export function createMatch(config) {
   };
 }
 
+/** Queue a whistle from a human player. Emitted on the next tick so every consumer --
+ *  bot lure logic, audio, netcode -- sees it exactly as it sees a bot's. */
+export function requestWhistle(s, id) {
+  const a = s.actors.find((x) => x.id === id);
+  if (!a || a.role !== ROLE.HIDER || !a.alive) return false;
+  (s._pendingWhistles || (s._pendingWhistles = [])).push({ t: "whistle", id: a.id, x: a.x, z: a.z });
+  return true;
+}
+
 export function seekers(s) { return s.actors.filter((a) => a.role === ROLE.SEEKER); }
 export function hiders(s) { return s.actors.filter((a) => a.role === ROLE.HIDER); }
 function aliveHiders(s) { return s.actors.filter((a) => a.role === ROLE.HIDER && a.alive); }
@@ -214,6 +223,14 @@ export function setLocalInput(s, id, input) {
 /** Advance the whole match by dt seconds. Returns the events emitted this tick. */
 export function stepMatch(s, dt) {
   s.events = [];
+  // A human whistle used to be pushed straight onto s.events from the input handler and
+  // was wiped by this very line before a single bot could read it -- the hider's one
+  // active verb was a no-op. Queue it instead and emit it INSIDE the tick, so it lures
+  // seekers by exactly the same 30m-with-jitter rule a bot whistle does.
+  if (s._pendingWhistles && s._pendingWhistles.length) {
+    for (const w of s._pendingWhistles) s.events.push(w);
+    s._pendingWhistles.length = 0;
+  }
   s.elapsed += dt;
   s.timeLeft -= dt;
   for (const a of s.actors) { a._px = a.x; a._pz = a.z; }   // for the movement tell
@@ -237,7 +254,14 @@ export function stepMatch(s, dt) {
 
 // ── hider behavior ───────────────────────────────────────────────────────────
 function stepHiderPrep(s, a, dt) {
-  if (!a.isBot) { moveLocal(s, a, dt); return; }
+  if (!a.isBot) {
+    moveLocal(s, a, dt);
+    // Parity with bots: `hidden` gates blendScore's stillness bonus, and the human path
+    // returned before it was ever set -- so the bonus was literally unreachable for the
+    // player. Standing still in a deliberate pose IS being hidden.
+    a.hidden = !a._moving && a.pose !== "stand";
+    return;
+  }
   if (!a.spot) a.spot = pickSpot(s, a);
   const d = dist2(a.x, a.z, a.spot.x, a.spot.z);
   if (d > 0.5) {
@@ -257,7 +281,20 @@ function stepHiderHunt(s, a, dt) {
     a.tauntTimer -= dt;
     if (a.tauntTimer <= 0) { a.tauntTimer = s.settings.tauntIntervalSeconds; s.events.push({ t: "whistle", id: a.id, x: a.x, z: a.z }); a._whistled = true; }
   }
-  if (!a.isBot) { moveLocal(s, a, dt); return; }
+  if (!a.isBot) {
+    moveLocal(s, a, dt);
+    a.hidden = !a._moving && a.pose !== "stand";
+    // `fleeing` drives the "a shot at a moving, exposed target is free" ammo rule. It was
+    // set only on the bot path, so the rule silently did not exist against a human.
+    let exposed = false;
+    if (a._moving) {
+      for (const k of seekers(s)) {
+        if (dist2(a.x, a.z, k.x, k.z) < SIM.fleeRange && hasLOS(k.x, k.z, a.x, a.z, s.obstacles, hiderHeight(a))) { exposed = true; break; }
+      }
+    }
+    a.fleeing = exposed;
+    return;
+  }
   // flee if a seeker is very close and can see us (this exposes us => free shot)
   let threat = null, tb = SIM.fleeRange;
   for (const k of seekers(s)) {
