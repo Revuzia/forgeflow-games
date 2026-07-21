@@ -3,6 +3,32 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-21 — "50 distinct opponents" was 10 clones of each skin (?v=88, LIVE)
+
+From the full-game sweep, and confirmed by measuring before touching anything.
+
+- The per-actor variety tint was `color.offsetHSL(hue, 0.02, +/-0.07)`. Every
+  Meshy GLB ships a baseColorTexture with NO baseColorFactor, so material.color
+  starts at pure white (H0 S0 L1) and an offset from L1 clamps. MEASURED across
+  the ten actors sharing the soldier skin: #ffffff, #fbfbfb, #fcfcfc, #fefefe,
+  #f8f8f8, #fdfdfd, #faf9f9 — the darkest was 97.3% white. Ten identical
+  soldiers, and the same for every other skin.
+- baseColor MULTIPLIES the texture, so the tint has to be an actual colour
+  rather than a nudge away from white. Now setHSL across the full hue wheel at
+  sat 0.38-0.58 / lightness 0.60-0.78.
+- Tuned by RENDERING it, not by reading the numbers: the first attempt (sat
+  0.16-0.30, lightness 0.82-0.94) produced hex values that differed but actors
+  that still looked identical on screen. The capture is what rejected it.
+
+Honest scope: this is a subtle per-actor WASH, not dramatic team colours. The
+uniform is dark olive and a pale tint multiplied against dark fabric stays dark,
+so the separation reads most on skin and light fabric. Real at-a-glance identity
+would need per-skin accent materials, which is an asset job, not a code one.
+
+Verified live: five actors sharing the soldier skin now carry #e2afeb / #c6e9ef
+/ #e8e9b7 / #efd7e6 / #f3f0cf and are visibly distinct in a render.
+Selftest 89/89. DRAFT.
+
 ## 2026-07-21 — The jump animation never played, and the crouch freeze was undone (?v=86, LIVE)
 
 Two animation defects from the full-game sweep, both verified against the actual

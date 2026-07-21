@@ -161,15 +161,28 @@ export async function loadActorModels(W) {
     const rig = await W.kernel.loadCharacter(url);
     a.rig = rig;
     a.skin = url.split("/").pop().replace(/\.glb.*/, "");
-    // PROCEDURAL VARIETY: 4 base rigs × per-actor hue/lightness tints on
-    // cloned materials — 50 visually distinct opponents.
-    const hueShift = (vr() - 0.5) * 0.2, lightShift = (vr() - 0.5) * 0.14;
+    // PROCEDURAL VARIETY: 5 base rigs x a per-actor colour wash, so a lobby of
+    // 50 does not read as ten clones of each skin.
+    // This used to be `color.offsetHSL(hue, 0.02, +/-0.07)`, which is a no-op on
+    // these models: every Meshy GLB ships a baseColorTexture with NO
+    // baseColorFactor, so material.color starts at pure white (H0 S0 L1) and an
+    // offset from L1 clamps. Measured across the 10 actors sharing the soldier
+    // skin: #ffffff, #fbfbfb, #fcfcfc, #fefefe, #f8f8f8 ... — the darkest was
+    // 97.3% white, i.e. indistinguishable. baseColor MULTIPLIES the texture, so
+    // the tint has to be an actual colour, not a nudge away from white.
+    // Tuned against a render of four actors sharing one skin: at sat 0.16-0.30 /
+    // lightness 0.82-0.94 they were still indistinguishable on screen even
+    // though the hex values differed. baseColor MULTIPLIES, so the wash has to
+    // commit to a real colour to survive the texture underneath it.
+    const hue = vr();                                   // full wheel
+    const sat = 0.38 + vr() * 0.20;                     // 0.38-0.58
+    const lig = 0.60 + vr() * 0.18;                     // 0.60-0.78, keeps detail readable
     const seen = new Map();
     rig.scene.traverse((o) => {
       if (!(o.isMesh || o.isSkinnedMesh) || !o.material) return;
       if (!seen.has(o.material)) {
         const m = o.material.clone();
-        if (m.color) m.color.offsetHSL(hueShift, 0.02, lightShift);
+        if (m.color) m.color.setHSL(hue, sat, lig);
         seen.set(o.material, m);
       }
       o.material = seen.get(o.material);
