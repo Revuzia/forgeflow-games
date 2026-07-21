@@ -3,6 +3,24 @@
 Source of truth for this game's history and design decisions.
 Design research: `forgeflow-games/state/research_battle_royale.json` (Fortnite building/storm, Final Drop browser formula, PUBG ballistics/loot, Apex shields/feedback).
 
+## 2026-07-20 — Performance readout (?v=44, LIVE)
+
+A browser game runs on unknown hardware and an unknown network, and the player
+had no way to tell a bad connection from a bad GPU from a bad game.
+
+- Opt-in FPS readout (Settings -> Performance readout), colour-coded: green >=50,
+  amber 30-49, red <30. Averaged over ~0.5s so it reads as a number, not a strobe.
+- Online it also shows SYNC — the age of the freshest state packet from any peer,
+  published by net.js as W._netStats.lastSeenAgeMs. Deliberately NOT called
+  "ping": net.js records lastSeen timestamps, not round-trip time, so labelling
+  it ping would be a lie.
+- Defaults to off; persists with the rest of settings.
+
+Verified live by driving hud.update at fixed frame deltas: 60/40/24/12 fps all
+read back exactly, colours cross at the right thresholds, SYNC segment appears
+only when a net session and stats exist, and the toggle hides the element.
+Selftest 46/46. DRAFT.
+
 ## 2026-07-20 — Levels now pay out: skin unlocks (?v=43, LIVE)
 
 Levelling granted nothing. The bar filled, the number went up, and the game

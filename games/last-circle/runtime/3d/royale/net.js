@@ -261,6 +261,18 @@ export function update(W, dt) {
     const p = W.player;
     send("state", pack(p));
   }
+  // link freshness for the HUD perf readout: age of the most recent state we
+  // received from ANY peer. Not RTT — the HUD labels it SYNC, not ping.
+  if (S.lastSeen) {
+    let freshest = null;
+    for (const id in S.lastSeen) {
+      const age = now - S.lastSeen[id];
+      if (freshest == null || age < freshest) freshest = age;
+    }
+    W._netStats = W._netStats || {};
+    W._netStats.lastSeenAgeMs = freshest;
+    W._netStats.peers = Object.keys(S.lastSeen).length;
+  }
   // host: silent-guest watchdog — no state for 12s mid-match → bot takes over
   if (S.net.isHost() && S.lastSeen && (W.phase === "match" || W.phase === "drop")) {
     for (const id in S.lastSeen) {

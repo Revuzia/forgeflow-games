@@ -1190,6 +1190,17 @@ export function showHUD(W) {
   h("div", { position: "absolute", left: "50%", top: "50%", width: "1px", height: "40%", background: "rgba(255,255,255,0.5)", transform: "translate(-50%,-50%)" }, null, R.scope);
 
   R._hudCache = {};
+  // perf readout (opt-in): FPS always, plus link freshness when online. This is
+  // deliberately NOT labelled "ping" — net.js records lastSeen timestamps, not
+  // round-trip time, so calling it ping would be a lie.
+  R.perf = h("div", {
+    position: "absolute", right: "12px", top: "96px", padding: "4px 9px", borderRadius: "6px",
+    fontFamily: "ui-monospace, Consolas, monospace", fontSize: "12px", fontWeight: "700",
+    color: "#9fe6c0", background: "rgba(4,10,20,0.55)", border: "1px solid rgba(120,180,255,0.18)",
+    letterSpacing: "0.5px", pointerEvents: "none",
+    display: W.settings && W.settings.showPerf ? "block" : "none",
+  }, "— FPS", L);
+  R._fpsAcc = 0; R._fpsFrames = 0; R._fpsShown = 0;
   // practice: a live range readout, so the dummies are a measurement and not
   // just something to shoot at
   R.rangePanel = null;
@@ -1221,6 +1232,21 @@ function hideHUD() {
 let mmT = 0, srT = 0;
 export function update(W, dt) {
   if (!R.hud || !W.player) return;
+  // perf readout: average over ~0.5s so the number is readable, not a strobe
+  if (R.perf && W.settings && W.settings.showPerf) {
+    if (R.perf.style.display === "none") R.perf.style.display = "block";
+    R._fpsAcc += dt; R._fpsFrames++;
+    if (R._fpsAcc >= 0.5) {
+      const fps = Math.round(R._fpsFrames / R._fpsAcc);
+      R._fpsAcc = 0; R._fpsFrames = 0;
+      let txt = fps + " FPS";
+      if (W.net && W._netStats && W._netStats.lastSeenAgeMs != null) {
+        txt += "  ·  SYNC " + Math.round(W._netStats.lastSeenAgeMs) + "ms";
+      }
+      if (txt !== R._fpsShown) { R.perf.textContent = txt; R._fpsShown = txt; }
+      R.perf.style.color = fps >= 50 ? "#9fe6c0" : fps >= 30 ? "#ffd166" : "#ff8a7a";
+    }
+  } else if (R.perf && R.perf.style.display !== "none") R.perf.style.display = "none";
   // when the local player is dead we SPECTATE — source the HUD from the spectated
   // actor (W._camFocus, set by updateCamera each frame) instead of the corpse,
   // which read HP 0% / shield 0% / empty inventory for the whole spectate phase.
@@ -1866,6 +1892,23 @@ function showSettings(W) {
   ["low", "medium", "high"].forEach((g2) => {
     const b = h("button", Object.assign({}, BTN, { padding: "7px 16px", fontSize: "13px", background: W.settings.graphics === g2 ? "#57b0ff" : "rgba(255,255,255,0.1)", color: W.settings.graphics === g2 ? "#fff" : "#cfe4ff" }), g2.toUpperCase(), gRow);
     b.onclick = () => { W.settings.graphics = g2; applyGraphics(W); save(W); showSettings(W); };
+  });
+
+  // performance readout — a browser game runs on unknown hardware, so "is it me
+  // or is it the game" needs an answer the player can read
+  const pRow = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
+  h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, "Performance readout", pRow);
+  [["OFF", false], ["ON", true]].forEach((o) => {
+    const on = !!W.settings.showPerf === o[1];
+    const b = h("button", Object.assign({}, BTN, {
+      padding: "7px 16px", fontSize: "13px",
+      background: on ? "#57b0ff" : "rgba(255,255,255,0.1)", color: on ? "#fff" : "#cfe4ff",
+    }), o[0], pRow);
+    b.onclick = () => {
+      W.settings.showPerf = o[1];
+      if (R.perf) R.perf.style.display = o[1] ? "block" : "none";
+      save(W); showSettings(W);
+    };
   });
 
   // keybinds

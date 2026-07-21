@@ -300,7 +300,7 @@ function mkEmitter() {
   };
 }
 function loadSettings() {
-  const def = { masterVol: 0.8, musicVol: 0.5, sfxVol: 0.9, sensitivity: 1.0, adsSensitivity: 0.8, graphics: "medium", playerName: "You", keys: {} };
+  const def = { masterVol: 0.8, musicVol: 0.5, sfxVol: 0.9, sensitivity: 1.0, adsSensitivity: 0.8, graphics: "medium", playerName: "You", keys: {}, showPerf: false };
   try { return Object.assign(def, JSON.parse(localStorage.getItem("lc_settings") || "{}")); } catch (e) { return def; }
 }
 function shuffledNames(W) {
