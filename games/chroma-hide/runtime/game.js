@@ -325,6 +325,7 @@ export class Game {
         if (e.code === "KeyE" && this.localRole === ROLE.HIDER) { this._toggleStick(); e.preventDefault(); return; }
         if (e.code === "KeyQ") { this._toggleEmoteBar(); e.preventDefault(); return; }
         if (e.code === "KeyC" && this.localRole === ROLE.HIDER) { this._dropDecoy(); e.preventDefault(); return; }
+        if (this._spectating && (e.code === "KeyA" || e.code === "KeyD")) { this._cycleSpectate(e.code === "KeyD" ? 1 : -1); e.preventDefault(); return; }
         if (e.code === "Space") {
           // Documented in the legend AND the paint hint as "eyedrop a surface" -- and bound to
           // nothing, so the core sampling verb only worked via the panel button.
@@ -523,6 +524,38 @@ export class Game {
     if (this._helpEl && this._helpEl.parentNode) { this._helpEl.parentNode.removeChild(this._helpEl); this._helpEl = null; }
     this._buildControlHelp();
     void was;
+  }
+
+  /** Spectator. Once you are out, the round keeps going for everyone else — watching it
+   *  is the difference between "still playing" and "waiting". Cycles the survivors. */
+  _specTarget() {
+    if (!this._spectating) return null;
+    const pool = this.sim.actors.filter((a) => a.role === ROLE.HIDER && a.alive && !a.isDecoy);
+    if (!pool.length) return null;
+    this._specIdx = ((this._specIdx || 0) % pool.length + pool.length) % pool.length;
+    return pool[this._specIdx];
+  }
+
+  _cycleSpectate(dir) {
+    const pool = this.sim.actors.filter((a) => a.role === ROLE.HIDER && a.alive && !a.isDecoy);
+    if (!pool.length) return;
+    this._specIdx = (((this._specIdx || 0) + dir) % pool.length + pool.length) % pool.length;
+    const who = this._names[pool[this._specIdx].id] || "a survivor";
+    this.hud && this.hud.toast && this.hud.toast("watching " + who, "#9fb4c8");
+  }
+
+  _enterSpectate() {
+    if (this._spectating) return;
+    this._spectating = true; this._specIdx = 0;
+    this.thirdPerson = true;
+    if (this.paintMode) this._togglePaintMode();
+    if (this._stuck) this._releaseStick();
+    this._releasePointer();
+    const alive = this.sim.actors.filter((a) => a.role === ROLE.HIDER && a.alive && !a.isDecoy).length;
+    this.hud && this.hud.setHint && this.hud.setHint(
+      alive ? "Caught — spectating. <b>A</b>/<b>D</b> switch survivor · <b>V</b> angle"
+            : "Caught — no survivors left");
+    this.hud && this.hud.toast && this.hud.toast("Caught! Spectating…", "#ff6b6b");
   }
 
   /** Drop a decoy clone (C). A frozen copy of you wearing YOUR paint — the bluff only
@@ -866,7 +899,7 @@ export class Game {
     this._updateAudioState();
     this._updateCamera(dt);
     this._updateHUD();
-    if (this.sim.phase === PHASE.RESULTS && !this._ended) { this._ended = true; this._releasePointer(); this._finish(); }
+    if (this.sim.phase === PHASE.RESULTS && !this._ended) { this._ended = true; this._spectating = false; this._releasePointer(); this._finish(); }
   }
 
   _stepOffline(dt) {
@@ -990,7 +1023,7 @@ export class Game {
       if (e.t === "phase" && e.phase === PHASE.HUNT) { this.audio.huntStart(); this.audio.playTrack("cinematic_epic", { gain: 0.26 }); this.hud.toast("HUNT!", "#ff6b6b"); if (this.paintMode) this._togglePaintMode(); this.hud.setHint(this._defaultHint()); }
       else if (e.t === "caught") {
         { const a = this._actor(e.id); this.audio.gunshot(a?.x, a?.z); this.audio.catchSound(a?.x, a?.z); }
-        if (e.id === this.local?.id) this.hud.toast("Caught!", "#ff6b6b");
+        if (e.id === this.local?.id) { this.hud.toast("Caught!", "#ff6b6b"); this._enterSpectate(); }
         else if (e.by === this.local?.id) this.hud.toast("Got one!", ACCENT_G);
       } else if (e.t === "miss") { const a = this._actor(e.by); this.audio.gunshot(a?.x, a?.z); if (e.by === this.local?.id) { this.hud.toast("miss", "#ff9d6b"); this._muzzle = 0.08; } }
       else if (e.t === "decoy_hit") {
@@ -1043,7 +1076,10 @@ export class Game {
 
   _updateCamera(dt) {
     const cam = this.engine.camera; if (!this.local) return;
-    const bx = this.local.x, by = BODY_Y, bz = this.local.z;
+    // Being caught used to leave you staring at your own corpse for the rest of the
+    // round. Follow a survivor instead — you stay in the match as an audience.
+    const subj = this._specTarget() || this.local;
+    const bx = subj.x, by = BODY_Y, bz = subj.z;
     if (this.localRole === ROLE.SEEKER && !this.thirdPerson && this.sim.phase !== PHASE.RESULTS) {
       // first-person
       cam.position.set(bx, by + 0.55, bz);
