@@ -768,14 +768,28 @@ export class Game {
     this._shootRequested = false;
     for (const a of this.sim.actors) {
       if (a.isBot || a.isLocal) continue;
-      const inp = this.net.takeInput(a.id); if (inp) setLocalInput(this.sim, a.id, { mx: inp.mx, mz: inp.mz, yaw: inp.yaw });
+      const inp = this.net.takeInput(a.id);
+      if (inp) {
+        setLocalInput(this.sim, a.id, { mx: inp.mx, mz: inp.mz, yaw: inp.yaw });
+        // apply the guest's declared pose/cling to the authoritative actor, so blend,
+        // silhouette height and LOS all use what that player is actually doing
+        if (inp.pose) a.pose = inp.pose;
+        a._elev = inp.elev || 0;
+      }
     }
     for (const from of this._pendingShots) setLocalInput(this.sim, from, { shoot: true });
     this._pendingShots.length = 0;
 
     const events = stepMatch(this.sim, dt);
     this._handleEvents(events);
-    for (const e of events) if (e.t === "caught" || e.t === "whistle" || e.t === "win" || e.t === "phase" || e.t === "convert") this.net.sendEvent(e);
+    // miss/dryfire carry the ammo economy's entire feedback: without them a remote
+    // seeker fires into silence and never learns they are dry.
+    for (const e of events) {
+      if (e.t === "caught" || e.t === "whistle" || e.t === "win" || e.t === "phase" ||
+          e.t === "convert" || e.t === "miss" || e.t === "dryfire" || e.t === "hidden") {
+        this.net.sendEvent(e);
+      }
+    }
 
     this._snapAccum += dt;
     if (this._snapAccum >= 0.1) { this._snapAccum = 0; this.net.sendSnapshot(this.sim); }
@@ -785,7 +799,13 @@ export class Game {
   _stepGuest(dt) {
     // send my intent to the host; shooting goes as a discrete SHOT
     const inp = this._computeLocalInput();
-    this.net.sendInput({ mx: inp.mx, mz: inp.mz, yaw: inp.yaw });
+    // Pose and cling are INTENT too. Sending only movement meant a guest's R-pose and
+    // E-cling never reached the authoritative sim: they changed nothing about how that
+    // player was detected, and every other client drew them standing upright.
+    this.net.sendInput({ mx: inp.mx, mz: inp.mz, yaw: inp.yaw,
+      pose: this.local ? this.local.pose : "stand",
+      elev: this._stuck ? (this._stickY || 0) : 0,
+      stuck: !!this._stuck });
     if (this._shootRequested) { this.net.sendShot(); this._shootRequested = false; }
     // Keep interpolating toward the LATEST snapshot every frame (entity
     // interpolation) — don't discard it, so the guest still converges smoothly
@@ -835,6 +855,20 @@ export class Game {
     if (this.isHost) {
       this.net.on("shot", ({ from }) => { this._pendingShots.push(from); });
       // inputs are pooled inside chromanet (net.takeInput); nothing to do here
+
+      // A player who drops out leaves a body behind. It kept standing in the map, kept
+      // counting as a live hider (so the round could not resolve) and kept a seeker slot
+      // idle. Hand the actor to the AI instead: the match stays whole and still ends.
+      this.net.on("peerLeft", ({ ids }) => {
+        for (const id of ids || []) {
+          const a = this.sim.actors.find((x) => x.id === id);
+          if (!a || a.isBot) continue;
+          a.isBot = true;
+          a.spot = null; a.patrol = null; a._path = null;   // let the AI plan afresh
+          const who = this._names[id] || "A player";
+          this.hud && this.hud.toast && this.hud.toast(who + " left — AI took over", "#9fb4c8");
+        }
+      });
     }
   }
 

@@ -461,5 +461,25 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
   assert(inf.s.result != null, "Infection reaches a result rather than idling out the timer");
 }
 
+
+// ── netcode authority ────────────────────────────────────────────────────────
+// Every peer's EVENT and SNAP messages used to be applied unquestioned, so any client
+// could broadcast a forged win/caught/phase or overwrite the authoritative simulation.
+{
+  const P = await import("./runtime/sim/net_protocol.js");
+  const HOST = "h1", GUEST = "g2", ATTACKER = "x9";
+  const asGuest = { isHost: false, hostId: HOST }, asHost = { isHost: true, hostId: HOST };
+  assert(P.authorizeMsg(P.MSG.EVENT, HOST, asGuest) === true, "net: a guest accepts EVENT from the host");
+  assert(P.authorizeMsg(P.MSG.EVENT, ATTACKER, asGuest) === false, "net: a forged EVENT from a peer is rejected");
+  assert(P.authorizeMsg(P.MSG.SNAP, ATTACKER, asGuest) === false, "net: a snapshot from a non-host is rejected");
+  assert(P.authorizeMsg(P.MSG.SNAP, HOST, asGuest) === true, "net: the host's snapshot is accepted");
+  assert(P.authorizeMsg(P.MSG.INPUT, GUEST, asHost) === true, "net: the host consumes guest input");
+  assert(P.authorizeMsg(P.MSG.INPUT, GUEST, asGuest) === false, "net: a guest ignores another guest's input");
+  assert(P.authorizeMsg(P.MSG.SHOT, GUEST, asHost) === true, "net: the host adjudicates guest shots");
+  assert(P.authorizeMsg(P.MSG.SHOT, ATTACKER, asGuest) === false, "net: a guest never adjudicates a shot");
+  assert(P.authorizeMsg(P.MSG.EVENT, ATTACKER, { isHost: false, hostId: null }) === false,
+    "net: before a host is known, no EVENT is trusted");
+}
+
 console.log(fails === 0 ? "\nSELFTEST PASS" : `\nSELFTEST FAIL (${fails})`);
 process.exit(fails === 0 ? 0 : 1);

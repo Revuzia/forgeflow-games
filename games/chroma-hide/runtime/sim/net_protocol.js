@@ -77,3 +77,35 @@ export function buildRoster(peerIds, lobbySize, seekerCount, seed, localPeerId) 
   const players = slots.map((s) => ({ id: s.id, isBot: s.isBot, role: roleInfo.roles[s.id], name: s.name, isLocal: s.id === localPeerId }));
   return { players, seed };
 }
+
+/**
+ * Who is allowed to say what. PURE, so it is node-testable and so the transport and the
+ * loopback double cannot drift apart on it.
+ *
+ * The host owns world state; a guest owns only its own intent. Without this every peer
+ * could broadcast a forged `win`, `caught` or `phase` EVENT and each client would apply
+ * it without question, and a guest could push snapshots that overwrite the authoritative
+ * simulation.
+ *
+ * Returns true when the message should be processed.
+ */
+export function authorizeMsg(type, from, { isHost, hostId }) {
+  switch (type) {
+    // world state: the host's word only
+    case MSG.SNAP:
+    case MSG.EVENT:
+      return hostId != null && from === hostId;
+    // intent: only the host acts on it
+    case MSG.INPUT:
+    case MSG.SHOT:
+      return !!isHost;
+    // lobby handshake, paint streams and chat are peer-to-peer by design
+    case MSG.LOBBY:
+    case MSG.START:
+    case MSG.PAINT:
+    case MSG.CHAT:
+      return true;
+    default:
+      return false;
+  }
+}

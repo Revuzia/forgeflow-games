@@ -27,10 +27,15 @@ export class ChromaNet {
     this.handlers = {};
     this.started = false;
     this.pendingInput = new Map(); // peerId -> latest input (host consumes)
+    // Who is allowed to speak authoritatively. Snapshots and match events are the host's
+    // word; without this check ANY peer could broadcast a forged win, catch or phase
+    // change and every client would apply it unquestioned.
+    this.hostId = null;
+    this._known = [];              // last seen peer list, for detecting departures
     this.net
       .on("open", (d) => { this._refresh(); this._emit("open", d); })
       .on("matched", (d) => { this._refresh(); this._emit("open", d); })
-      .on("peer", (d) => { this._refresh(); this._emit("peer", d); })
+      .on("peer", (d) => { this._onPeers(); this._emit("peer", d); })
       .on("msg", (m) => this._onMsg(m))
       .on("timeout", () => this._emit("timeout", {}))
       .on("error", (e) => this._emit("error", e));
@@ -42,6 +47,16 @@ export class ChromaNet {
   myId() { return this.net.id; }
   peerIds() { try { return Object.keys(this.net.channel.presenceState()); } catch (e) { return [this.myId()]; } }
   _refresh() { this._peers = this.peerIds(); }
+
+  /** Detect peers that have dropped out. A disconnected player's actor otherwise keeps
+   *  standing in the map, still counts as a live hider, and can stall the win check. */
+  _onPeers() {
+    const now = this.peerIds();
+    const gone = this._known.filter((id) => !now.includes(id));
+    this._known = now;
+    this._peers = now;
+    if (gone.length) this._emit("peerLeft", { ids: gone });
+  }
 
   // ── connection ──────────────────────────────────────────────────────────────
   async hostRoom() { await this.net.connect(); const code = randomRoomCode(); await this.net.joinRoom(code, true); return code; }
@@ -57,6 +72,8 @@ export class ChromaNet {
     const roster = P.buildRoster(peerIds, lobbySize, seekerCount, seed, this.myId());
     const payload = { players: roster.players.map((p) => ({ id: p.id, isBot: p.isBot, role: p.role, name: p.name })), seed, settings, mapId, lobbySize, seekerCount };
     this.net.send(P.MSG.START, payload);
+    this.hostId = this.myId();      // we are the authority for this match
+    this._known = peerIds.slice();
     this.started = true;
     return payload;
   }
@@ -71,14 +88,31 @@ export class ChromaNet {
 
   _onMsg(m) {
     const { from, t, d } = m;
+    // Authority rules. The host owns world state (START/SNAP/EVENT); guests own only
+    // their own intent (INPUT/SHOT), and only the host acts on it. Anything arriving
+    // from the wrong side is dropped rather than trusted.
+    if (t !== P.MSG.START && !P.authorizeMsg(t, from, { isHost: this.isHost(), hostId: this.hostId })) return;
     switch (t) {
       case P.MSG.LOBBY: this._emit("lobby", d); break;
-      case P.MSG.START: this._emit("start", d); break;
-      case P.MSG.INPUT: this.pendingInput.set(from, d); this._emit("input", { from, input: d }); break;
-      case P.MSG.SNAP: this._emit("snapshot", P.unpackSnapshot(d)); break;
+      case P.MSG.START:
+        // the peer that starts the match IS the host, for the rest of the session
+        this.hostId = from;
+        this._known = this.peerIds();
+        this._emit("start", d);
+        break;
+      case P.MSG.INPUT:
+        this.pendingInput.set(from, d); this._emit("input", { from, input: d });
+        break;
+      case P.MSG.SNAP:
+        this._emit("snapshot", P.unpackSnapshot(d));
+        break;
       case P.MSG.PAINT: this._emit("paint", { id: d.id, strokes: P.unpackStrokes(d.s || []) }); break;
-      case P.MSG.SHOT: this._emit("shot", { from }); break;
-      case P.MSG.EVENT: this._emit("event", d); break;
+      case P.MSG.SHOT:
+        this._emit("shot", { from });
+        break;
+      case P.MSG.EVENT:
+        this._emit("event", d);
+        break;
       case P.MSG.CHAT: this._emit("chat", { from, text: d.text }); break;
       default: break;
     }
