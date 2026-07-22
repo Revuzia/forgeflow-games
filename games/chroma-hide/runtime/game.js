@@ -1454,13 +1454,21 @@ export class Game {
     this.hud.hide();
     // Double is decided by finds, not by team. Hand the results screen the individual
     // winner so it can say so rather than declaring a side that the mode does not have.
-    let topScorer = null, totalFinds = 0;
+    let topScorer = null, totalFinds = 0, topReason = null;
+    if (this.sim.mode === MODE.REVERSE && this.sim.reverseCatcher) {
+      // Reverse is a race for one marked hider. Name whoever won it — "Seekers win" is
+      // meaningless when everyone except the mark is a seeker. If nobody caught the mark
+      // there is no catcher, and the normal "Hiders win / a hider survived" line is right.
+      const c = this.sim.actors.find((a) => a.id === this.sim.reverseCatcher);
+      topScorer = { name: this._names[this.sim.reverseCatcher] || this.sim.reverseCatcher, finds: null, isLocal: !!(c && c.isLocal) };
+      topReason = "Caught the marked hider.";
+    }
     if (this.sim.mode === MODE.DOUBLE) {
       totalFinds = this.sim.actors.reduce((n, a) => n + (a.finds || 0), 0);
       const best = this.sim.actors.slice().sort((a, b) => (b.finds || 0) - (a.finds || 0) || b.score - a.score)[0];
       if (best) topScorer = { name: this._names[best.id] || best.id, finds: best.finds || 0, isLocal: !!best.isLocal };
     }
-    if (this.cb.onEnd) this.cb.onEnd({ winner: res.winner, reason: res.reason, scores, topScorer, totalFinds });
+    if (this.cb.onEnd) this.cb.onEnd({ winner: res.winner, reason: res.reason, scores, topScorer, totalFinds, topReason });
   }
 
   // ── test hooks (headless/backgrounded verification) ─────────────────────────

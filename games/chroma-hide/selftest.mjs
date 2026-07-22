@@ -811,6 +811,25 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
   assert(avgFinds >= 0.6,
     `balance: seekers find most of the lobby — ${(avgFinds * 100).toFixed(0)}% of hiders (want >=60%)`);
 
+  // Reverse is a RACE for one marked hider, so the sim has to remember WHO caught them.
+  // Without it the end screen fell back to the normal-mode line — "Seekers win / Every
+  // hider was found" — in a mode where seven of eight players are seekers and that
+  // sentence names nobody and says nothing.
+  {
+    let caughtRuns = 0, namedRuns = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      const sm = maps.toSimMap(maps.getMap("supermarket"));
+      const players = [...Array(8)].map((_, i) => ({ id: "p" + i, isBot: true, role: "hider" }));
+      const st = ms.createMatch({ players, settings: mc.sanitizeSettings({ ...mc.DEFAULTS, mode: "reverse" }), map: sm, seed, seekerCount: 0 });
+      let t = 0;
+      while (st.phase !== mc.PHASE.RESULTS && t < 700) { ms.stepMatch(st, 1 / 30); t += 1 / 30; }
+      const mark = st.actors.find((a) => a.id === st.reverseMark);
+      if (mark && !mark.alive) { caughtRuns++; if (st.reverseCatcher) namedRuns++; }
+    }
+    assert(caughtRuns > 0 && namedRuns === caughtRuns,
+      `reverse: the racer who caught the mark is named (${namedRuns}/${caughtRuns} runs)`);
+  }
+
   // Bots must actually USE the hider verbs. Decoys and mounting were reachable only from
   // a human keypress, so across 72 bot hider-lives ZERO decoys were dropped and not one
   // bot ever left the floor — meaning single-player, which is bot-filled, could never show

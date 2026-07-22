@@ -229,7 +229,7 @@ export function createMatch(config) {
     phase: PHASE.PREP, timeLeft: settings.prepSeconds, settings, map, rng, skill,
     bounds: map.bounds, obstacles: map.obstacles, spots,
     nav,   // walkability grid for bot pathing through doorways (built above)
-    actors, mode: settings.mode, events: [], result: null, elapsed: 0, reverseMark: null,
+    actors, mode: settings.mode, events: [], result: null, elapsed: 0, reverseMark: null, reverseCatcher: null,
     // How many hiders the match STARTED with. Infection converts caught hiders into
     // seekers, so the live hider list legitimately empties -- checkWin needs this to
     // tell "everyone has been caught" from "roles are not assigned yet".
@@ -603,7 +603,11 @@ function seekerShoot(s, a) {
     // condition is "Most finds wins" -- counted nothing and every seeker finished on 0.
     a.score += 1;
     a.finds = (a.finds || 0) + 1;
-    if (s.mode === MODE.REVERSE && hit.id === s.reverseMark) a.score += s.settings.reverseFindReward;
+    // Remember the catcher, not just the points. Reverse is a RACE — who got there first
+    // is the whole result — but the end screen had no way to name them and fell back to
+    // the normal-mode line, "Seekers win / Every hider was found", in a mode where seven
+    // of eight players are seekers and that sentence says nothing.
+    if (s.mode === MODE.REVERSE && hit.id === s.reverseMark) { a.score += s.settings.reverseFindReward; s.reverseCatcher = a.id; }
     s.events.push({ t: "caught", id: hit.id, by: a.id });
     if (MODE_INFO[s.mode] && MODE_INFO[s.mode].convertOnCatch) { hit.role = ROLE.SEEKER; hit.alive = true; hit.caught = false; hit.ammo = s.settings.startAmmo; s.events.push({ t: "convert", id: hit.id }); }
   } else {

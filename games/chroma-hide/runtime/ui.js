@@ -336,9 +336,10 @@ export function createResults(host, cb) {
       if (data.topScorer) {
         title.textContent = "🏆 " + data.topScorer.name + " wins";
         title.style.color = ACCENT;
-        reason.textContent = data.topScorer.finds != null
-          ? `Most finds — ${data.topScorer.finds} of ${data.totalFinds || data.topScorer.finds}.`
-          : "Highest score.";
+        reason.textContent = data.topReason
+          || (data.topScorer.finds != null
+            ? `Most finds — ${data.topScorer.finds} of ${data.totalFinds || data.topScorer.finds}.`
+            : "Highest score.");
       } else {
         title.textContent = data.winner === "seekers" ? "🔫 Seekers win" : "🎨 Hiders win";
         title.style.color = data.winner === "seekers" ? "#ff9d6b" : ACCENT;
