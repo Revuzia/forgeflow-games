@@ -77,7 +77,7 @@ export function injectChromaStyles() {
   .ct-seg button.on-seeker{background:var(--ct-violet);color:#160a2b}
   .ct-seg button.on{background:rgba(127,227,196,.2);color:#eaf2ff;box-shadow:inset 0 0 0 1px rgba(127,227,196,.5)}
   .ct-maps{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
-  .ct-map{flex:0 0 118px;text-align:left;cursor:pointer;border-radius:12px;padding:9px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.3);transition:border-color .15s,transform .1s;color:var(--ct-ink)}
+  .ct-map{flex:0 0 118px;min-height:44px;text-align:left;cursor:pointer;border-radius:12px;padding:9px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.3);transition:border-color .15s,transform .1s;color:var(--ct-ink)}
   .ct-map:hover{transform:translateY(-2px)}
   .ct-map.on{border-color:var(--ct-teal);box-shadow:0 0 0 1px var(--ct-teal),0 8px 24px rgba(127,227,196,.15)}
   .ct-map .sw{height:44px;border-radius:8px;margin-bottom:7px}
@@ -220,9 +220,16 @@ export function createTitleMenu(host, cb, maps, modeInfo) {
   const mapCards = {};
   const allMaps = [{ id: "random", name: "🎲 Random", blurb: "A surprise stage each match." }].concat(maps || []);
   for (const m of allMaps) {
-    const card = el("div", "", `<div class="sw"></div><h4>${m.name}</h4><p>${m.blurb || ""}</p>`);
+    // A <button>, not a <div>: these were the only unreachable control in the menu, so a
+    // keyboard-only player could pick role, mode, size and lobby but never the stage.
+    const card = el("button", "", `<div class="sw"></div><h4>${m.name}</h4><p>${m.blurb || ""}</p>`);
+    card.type = "button";
     card.className = "ct-map"; card.querySelector(".sw").style.background = m.id === "random" ? "var(--ct-grad)" : mapTint(m);
-    card.onclick = () => { mapId = m.id; for (const k in mapCards) mapCards[k].classList.toggle("on", k === mapId); };
+    card.setAttribute("aria-pressed", String(m.id === mapId));
+    card.onclick = () => {
+      mapId = m.id;
+      for (const k in mapCards) { mapCards[k].classList.toggle("on", k === mapId); mapCards[k].setAttribute("aria-pressed", String(k === mapId)); }
+    };
     mapCards[m.id] = card; mapWrap.appendChild(card);
   }
   panel.appendChild(mapWrap);
@@ -286,7 +293,15 @@ export function createHUD(host) {
     setPhase: (t) => (phase.textContent = t),
     setTimer: (sec) => { const m = Math.floor(sec / 60), s = Math.max(0, Math.floor(sec % 60)); timer.textContent = m + ":" + (s < 10 ? "0" : "") + s; timer.style.color = sec <= 10 ? "#ff6b6b" : "#fff"; },
     setRole: (r) => { role.textContent = r === "seeker" ? "🔫 SEEKER" : "🎨 HIDER"; role.style.color = r === "seeker" ? "#ff9d6b" : ACCENT; },
-    setAmmo: (a, max) => { stat.innerHTML = "🔫 " + "▮".repeat(Math.max(0, a)) + "<span style='opacity:.3'>" + "▮".repeat(Math.max(0, max - a)) + "</span>"; },
+    // Pips alone encode the count as "identical glyphs at two opacities", which is both a
+    // colour/contrast dependency and genuinely hard to count at a glance under pressure.
+    // The number is the readable channel; the pips stay as the at-a-glance one.
+    setAmmo: (a, max) => {
+      const n = Math.max(0, a);
+      stat.innerHTML = `<span style="font-variant-numeric:tabular-nums">🔫 ${n}/${max}</span> ` +
+        "▮".repeat(n) + "<span style='opacity:.3'>" + "▮".repeat(Math.max(0, max - n)) + "</span>";
+      stat.setAttribute("aria-label", `${n} of ${max} shots left`);
+    },
     setScore: (n) => (stat.textContent = "★ " + Math.round(n)),
     setHint: (t) => (hint.innerHTML = t),
     showCrosshair: (on) => (cross.style.display = on ? "block" : "none"),
@@ -386,6 +401,38 @@ export function createOnlineLobby(host, cb, maps) {
 }
 
 // ── Pause menu (wired to window.__PAUSE__ so the control bar's ⏸ works) ───────
+/**
+ * How to Play. This was a two-line browser alert() — which meant the scoring model, the
+ * verb list and the ammo economy were nowhere in the game at all. A player could finish
+ * three rounds without learning that hiders score for TIME SPENT IN A SEEKER'S SIGHT, i.e.
+ * that the whole risk/reward loop rewards being seen and not caught. `sections` is passed
+ * in so this file keeps its zero-import rule (cache-busting).
+ */
+export function createHelpOverlay(host, sections) {
+  const root = el("div", overlayCss(62) + ";background:rgba(6,10,14,.88);display:none;overflow:auto;padding:20px 0");
+  const card = el("div", `background:${PANEL_BG};border-radius:16px;padding:24px 28px;max-width:min(680px,92vw);margin:auto;color:#dfe7f2`);
+  card.appendChild(el("h2", "font:800 24px system-ui;margin:0 0 4px", "How to Play"));
+  card.appendChild(el("p", "font:400 12px system-ui;opacity:.6;margin:0 0 16px", "Paint yourself into the room. Hold still. Don't get shot."));
+  for (const sec of sections) {
+    card.appendChild(el("h3", "font:800 12px system-ui;letter-spacing:.1em;text-transform:uppercase;color:#7fe3c4;margin:16px 0 6px", sec.title));
+    const ul = el("ul", "margin:0;padding-left:18px;font:400 13px/1.6 system-ui");
+    for (const line of sec.lines) ul.appendChild(el("li", "margin:0 0 4px", line));
+    card.appendChild(ul);
+  }
+  const close = btn("Got it", () => api.hide(), true);
+  close.style.marginTop = "20px";
+  card.appendChild(close);
+  root.appendChild(card); host.appendChild(root);
+  const onKey = (e) => { if (e.code === "Escape" && root.style.display !== "none") { api.hide(); e.stopPropagation(); } };
+  window.addEventListener("keydown", onKey);
+  const api = {
+    show: () => { root.style.display = "flex"; root.scrollTop = 0; close.focus(); },
+    hide: () => { root.style.display = "none"; },
+    destroy: () => { window.removeEventListener("keydown", onKey); root.remove(); },
+  };
+  return api;
+}
+
 export function createPauseMenu(host, cb) {
   const root = el("div", overlayCss(58) + ";background:rgba(6,10,14,.8);display:none");
   const card = el("div", `background:${PANEL_BG};border-radius:16px;padding:26px 34px;text-align:center`);

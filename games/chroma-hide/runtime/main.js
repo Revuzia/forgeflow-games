@@ -46,6 +46,8 @@ const settings = ui.createSettings(container, {
   onColorAssist: (on) => { if (game) game._colorAssist = !!on; },
   onClose: () => settings.hide(),
 });
+const { HELP_SECTIONS } = await import("./help_text.js" + V);
+const help = ui.createHelpOverlay(container, HELP_SECTIONS);
 const pause = ui.createPauseMenu(container, {
   // resume puts the cursor back where it was, so play continues without an extra click
   onResume: () => { try { engine.renderer.domElement.requestPointerLock(); } catch (e) {} }, onPause: () => {},
@@ -62,7 +64,7 @@ const title = ui.createTitleMenu(container, {
   // pass the CHOICE through ("random" stays "random"); startGame resolves it per match
   onPlay: (cfg) => { audio.select(); audio.stopTrack(0.8); startGame(cfg); },
   onOnline: () => { title.hide(); lobby.show(); window.__CHROMA__.phase = "lobby"; },
-  onHelp: () => alert("HIDERS: paint your body (F) to match a surface, hold still, survive the hunt.\nSEEKERS: find and shoot every hider before the timer — but ammo is limited."),
+  onHelp: () => help.show(),
   onSettings: () => settings.show(),
 }, MAPS, MODE_INFO);
 

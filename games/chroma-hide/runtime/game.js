@@ -444,8 +444,12 @@ export class Game {
     this._pd = (e) => {
       if (window.__PAUSE__ && window.__PAUSE__.isPaused()) return;
       if (this.paintMode) { if (e.button === 0) { this._painting = true; this._paintVoice(true); } if (e.button === 1) this._orbiting = true; if (e.button === 2) this._sizing = true; this._lx = e.clientX; this._ly = e.clientY; return; }
-      if (!this._locked && e.button === 0) { try { dom.requestPointerLock(); } catch (err) { /* ignore */ } }
-      if (this.localRole === ROLE.SEEKER && e.button === 0 && this.sim.phase === PHASE.HUNT) { this._shootRequested = true; }
+      // Re-acquiring the cursor is not a shot. This click used to do both, so every time
+      // you clicked back into the game after Esc or a menu you burned a bullet from a
+      // limited magazine while not even aiming yet.
+      const reacquiring = !this._locked && e.button === 0;
+      if (reacquiring) { try { dom.requestPointerLock(); } catch (err) { /* ignore */ } }
+      if (!reacquiring && this.localRole === ROLE.SEEKER && e.button === 0 && this.sim.phase === PHASE.HUNT) { this._shootRequested = true; }
       this._dragging = true; this._lx = e.clientX; this._ly = e.clientY;
     };
     this._pu = () => { if (this._painting) this._paintVoice(false); this._painting = this._orbiting = this._sizing = this._dragging = false; };

@@ -47,7 +47,7 @@ export function createPaintPanel(paint, opts = {}) {
   Object.values(PAINT_TOOLS).forEach((t, i) => {
     const b = document.createElement("button");
     b.type = "button"; b.textContent = `${t.label}`; b.title = `${t.label} (${i + 1})`;
-    b.style.cssText = "border:1px solid rgba(255,255,255,.14);border-radius:6px;padding:5px 2px;cursor:pointer;font-size:10px;background:rgba(255,255,255,.06);color:#dfe7f2;";
+    b.style.cssText = "border:1px solid rgba(255,255,255,.14);border-radius:6px;padding:9px 2px;min-height:34px;cursor:pointer;font-size:10.5px;background:rgba(255,255,255,.06);color:#dfe7f2;";
     b.addEventListener("click", () => { paint.setTool(t.id); refresh(); });
     toolBtns[t.id] = b; toolRow.appendChild(b);
   });
@@ -88,7 +88,8 @@ export function createPaintPanel(paint, opts = {}) {
   for (const hex of PRESETS) {
     const b = document.createElement("button");
     b.type = "button"; b.title = hex;
-    b.style.cssText = `height:17px;border-radius:4px;border:1px solid rgba(255,255,255,.14);cursor:pointer;background:${hex};`;
+    // 17px swatches were a precision-mouse target; 26 is still compact but actually hittable
+    b.style.cssText = `height:26px;border-radius:4px;border:1px solid rgba(255,255,255,.14);cursor:pointer;background:${hex};`;
     b.addEventListener("click", () => { paint.setColorHex(hex); refresh(); });
     pal.appendChild(b);
   }
