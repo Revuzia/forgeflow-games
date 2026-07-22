@@ -212,7 +212,10 @@ export class Game {
     // of every wall, floor and prop whether they reach it or not. No preset reduced them,
     // which made "low" barely cheaper than "high" on the campus maps. Cap by quality and
     // keep the brightest, then lift the ambient to pay back the lost fill.
-    const LIGHT_CAP = { low: 8, medium: 16, high: 30 };
+    // Keys must match the engine's quality vocabulary EXACTLY — QDPR uses "med", and a
+    // "medium" key here silently fell through to the uncapped default, so the cap did
+    // nothing at the setting most players are on.
+    const LIGHT_CAP = { low: 8, med: 16, high: 30 };
     const cap = LIGHT_CAP[this.engine.quality] ?? 30;
     const pts = m.lights.filter((l) => l.type === "point")
       .slice()

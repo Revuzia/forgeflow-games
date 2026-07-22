@@ -560,5 +560,26 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
   assert(k.dwell < built, "ai: switching target resets dwell (no tab-targeting past the camouflage stretch)");
 }
 
+
+// ── quality vocabulary is ONE vocabulary ─────────────────────────────────────
+// The point-light cap keyed on "medium" while the engine's quality value is "med", so
+// LIGHT_CAP[q] was undefined and fell through to the uncapped default — the optimisation
+// did nothing at the setting most players are on. A silent lookup miss, invisible to
+// review and to node --check.
+{
+  const src = (f) => fs.readFileSync(new URL(f, import.meta.url), "utf8");
+  const keys = (text, name) => {
+    const m = text.match(new RegExp(name + " = \{([^}]*)\}"));
+    return m ? m[1].split(",").map((x) => x.split(":")[0].trim()).filter(Boolean) : null;
+  };
+  const cap = keys(src("runtime/game.js"), "LIGHT_CAP");
+  const qdpr = keys(src("runtime/engine.js"), "QDPR");
+  assert(cap && qdpr, "quality: found both LIGHT_CAP and QDPR tables");
+  assert(JSON.stringify(cap) === JSON.stringify(qdpr),
+    `quality: the light cap and the renderer share one vocabulary (${cap} vs ${qdpr})`);
+  assert(src("runtime/engine.js").includes("shadowMap.autoUpdate = false"),
+    "quality: static shadow map is set at construction, not only in applyQuality");
+}
+
 console.log(fails === 0 ? "\nSELFTEST PASS" : `\nSELFTEST FAIL (${fails})`);
 process.exit(fails === 0 ? 0 : 1);
