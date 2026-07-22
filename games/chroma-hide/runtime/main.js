@@ -42,7 +42,8 @@ const settings = ui.createSettings(container, {
   onQuality: (q) => engine.applyQuality(q),
   onVolume: (v) => audio.setVolume(v),
   onSensitivity: () => {}, // game reads chroma_sens live from localStorage
-  onColorAssist: () => {},
+  // live-toggle the numeric match readout without needing a restart
+  onColorAssist: (on) => { if (game) game._colorAssist = !!on; },
   onClose: () => settings.hide(),
 });
 const pause = ui.createPauseMenu(container, {

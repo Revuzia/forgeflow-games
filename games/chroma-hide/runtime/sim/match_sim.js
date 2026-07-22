@@ -245,7 +245,10 @@ export function stepMatch(s, dt) {
     for (const a of seekers(s)) stepSeeker(s, a, dt);
     accrueScores(s, dt);
     const w = checkWin({ mode: s.mode, timeLeft: s.timeLeft, hiders: hiders(s).map((h) => ({ id: h.id, alive: h.alive })), seekers: seekers(s).map((k) => ({ ammo: k.ammo })), ammoLimit: s.settings.ammoLimit, hidersAtStart: s.hidersAtStart || 0 });
-    if (w) { s.result = w; s.phase = PHASE.ANSWER_CHECK; s.timeLeft = SIM.answerSeconds; s.events.push({ t: "win", winner: w.winner, reason: w.reason }); }
+    if (w) { s.result = w; s.phase = PHASE.ANSWER_CHECK;
+      // honour the host's setting -- it was clamped to 5..30 in validateSettings and
+      // then thrown away for a hard-coded 4, so the reveal was always too short to read
+      s.timeLeft = s.settings.answerSeconds || SIM.answerSeconds; s.events.push({ t: "win", winner: w.winner, reason: w.reason }); }
   } else if (s.phase === PHASE.ANSWER_CHECK) {
     if (s.timeLeft <= 0) { s.phase = PHASE.RESULTS; s.events.push({ t: "phase", phase: PHASE.RESULTS }); }
   }

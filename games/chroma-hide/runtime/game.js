@@ -12,7 +12,7 @@
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { createMatch, stepMatch, setLocalInput, seekers, hiders, SIM, requestWhistle } from "./sim/match_sim.js";
+import { createMatch, stepMatch, setLocalInput, seekers, hiders, SIM, requestWhistle, coverRGB } from "./sim/match_sim.js";
 import { PHASE, ROLE, MODE, sanitizeSettings, DEFAULTS, computeSeekerCount, MODE_INFO } from "./sim/match_core.js";
 import { getMap, toSimMap, surfaceAt} from "./maps.js";
 import { PaintSystem } from "./paint.js";
@@ -98,6 +98,8 @@ export class Game {
     this._spawnActors();
     this._setupInput();
     this._buildControlHelp();
+    try { this._colorAssist = !!JSON.parse(localStorage.getItem("ffg_settings") || "{}").colorAssist; } catch (e) { this._colorAssist = false; }
+    this._buildMatchMeter();
     this._buildEmoteBar();
     this._unsub = engine.onFrame((dt) => this._update(dt));
     this.hud.show(); this.hud.setRole(this.localRole);
@@ -516,6 +518,48 @@ export class Game {
     void was;
   }
 
+  /** Colour-blind assist: a NUMERIC match readout.
+   *
+   *  The setting existed in the menu and called an empty callback. In a game whose entire
+   *  skill is matching a hue, "judge the colour by eye" is the one thing a colour-blind
+   *  player cannot do — so the assist is not a palette swap, it is the score itself, in
+   *  numbers: your body colour vs the surface you are against, and how well it reads.
+   *  Shown live while painting, which is when the information is actionable. */
+  _buildMatchMeter() {
+    if (this._meterEl) return;
+    const el = document.createElement("div");
+    el.style.cssText = [
+      "position:absolute", "right:10px", "top:74px", "z-index:41", "pointer-events:none",
+      "font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace", "color:#dfe7f2",
+      "background:rgba(12,16,22,.78)", "border:1px solid rgba(255,255,255,.10)",
+      "border-radius:9px", "padding:8px 10px", "min-width:172px", "display:none",
+    ].join(";");
+    this.engine.container.appendChild(el);
+    this._meterEl = el;
+  }
+
+  _updateMatchMeter() {
+    const el = this._meterEl; if (!el) return;
+    const on = this._colorAssist && this.paintMode && this.localRole === ROLE.HIDER && this.local;
+    el.style.display = on ? "block" : "none";
+    if (!on) return;
+    const surf = coverRGB(this.sim, this.local.x, this.local.z);
+    const mine = this.local.paintRGB;
+    const hex = (c) => c ? "#" + [c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("") : "—";
+    let line = "no surface in range";
+    if (surf && mine) {
+      const d = Math.sqrt((surf.r - mine.r) ** 2 + (surf.g - mine.g) ** 2 + (surf.b - mine.b) ** 2);
+      const pct = Math.round(clamp(1 - d / 90, 0, 1) * 100);
+      const bars = "█".repeat(Math.round(pct / 10)) + "░".repeat(10 - Math.round(pct / 10));
+      const verdict = pct > 85 ? "EXCELLENT" : pct > 60 ? "GOOD" : pct > 30 ? "WEAK" : "NO MATCH";
+      line = `${bars} ${String(pct).padStart(3)}%  ${verdict}`;
+    }
+    el.innerHTML =
+      `<div style="opacity:.6;letter-spacing:.08em;font-size:9.5px;margin-bottom:4px">COLOUR MATCH</div>` +
+      `<div>surface ${hex(surf)}</div><div>body&nbsp;&nbsp;&nbsp; ${hex(mine)}</div>` +
+      `<div style="margin-top:4px">${line}</div>`;
+  }
+
   /** Hand the cursor back. Pointer lock outlived the match, so every button on the
    *  results screen was unclickable until the player thought to press Escape. */
   _releasePointer() {
@@ -638,6 +682,7 @@ export class Game {
   // ── phase transitions ────────────────────────────────────────────────────────
   _onPhaseChange(from, to) {
     if (to === PHASE.ANSWER_CHECK) this._revealHiders();
+    if (to === PHASE.HUNT && this.sim.mode === MODE.REVERSE) this._markReverseTarget();
     else if (to === PHASE.HUNT) {
       // Double/Reverse decide/flip the local role at hunt start.
       if (this.local && this.local.role !== this.localRole) {
@@ -671,6 +716,31 @@ export class Game {
         ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; mesh.add(ring); mesh.userData._beacon = ring;
       }
     }
+  }
+
+  /** Reverse Chicken Race: show the mark to HUMAN seekers.
+   *
+   *  The mode's whole premise is "one painted hider is revealed — race to find them",
+   *  and the reveal existed only inside the bot AI (which homes on s.reverseMark). A
+   *  human seeker was told to race for a target the game never pointed at, which reads
+   *  as the mode being broken. The mark gets a bright pillar visible through geometry
+   *  plus a HUD callout; the mark themself is told they are it. */
+  _markReverseTarget() {
+    const id = this.sim.reverseMark; if (!id) return;
+    const mesh = this.meshes.get(id); if (!mesh || mesh.userData._markPillar) return;
+    const isMe = this.local && this.local.id === id;
+    const col = 0xffc14d;
+    const pillar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.16, 24, 10, 1, true),
+      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.30, side: THREE.DoubleSide, depthTest: false }));
+    pillar.position.y = 12; pillar.renderOrder = 999;
+    mesh.add(pillar); mesh.userData._markPillar = pillar;
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.75, 1.0, 24),
+      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthTest: false }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06; ring.renderOrder = 999;
+    mesh.add(ring);
+    this.hud && this.hud.toast && this.hud.toast(
+      isMe ? "You are the MARK — everyone is coming for you!" : "The MARK is revealed — race to find them!", "#ffc14d");
   }
 
   // ── emotes (radial bar; E to open) ───────────────────────────────────────────
@@ -748,6 +818,7 @@ export class Game {
     this._updateEmotes(dt);
     this._syncLocalRole();
     this._syncPaintBlend();
+    this._updateMatchMeter();
     this._stepJump(dt);
     this._stepStick(dt);
     this._updateAudioState();
@@ -1027,6 +1098,7 @@ export class Game {
 
   destroy() {
     if (this._helpEl && this._helpEl.parentNode) this._helpEl.parentNode.removeChild(this._helpEl);
+    if (this._meterEl && this._meterEl.parentNode) this._meterEl.parentNode.removeChild(this._meterEl);
     this._alive = false;
     if (this.audio) { try { this.audio.stopMusic(); this.audio.stopAmbience(); this.audio.spray(false); this.audio.stopTrack(0.6); } catch (e) {} }
     if (this.online && this.net) { try { this.net.leave(); } catch (e) {} }
