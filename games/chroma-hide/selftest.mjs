@@ -648,6 +648,24 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
   const avgFinds = finds / total;
   assert(rate >= 0.25 && rate <= 0.8,
     `balance: neither side dominates — seekers win ${(rate * 100).toFixed(0)}% of ${total} matches (want 25-80%)`);
+
+  // Infection compresses the round — measured, seekers go 2 -> 7 by t=45s. Asking hiders to
+  // survive the same 150s budget as Normal made it 94% seeker-favoured, so the mode scales
+  // its own hunt. Guard the pacing, not the exact number.
+  let infSeek = 0, infTotal = 0;
+  for (const map of ["office", "street", "supermarket"]) {
+    for (let seed = 1; seed <= 4; seed++) {
+      const players = [...Array(8)].map((_, i) => ({ id: "p" + i, isBot: true, role: i < 2 ? ROLE.SEEKER : ROLE.HIDER }));
+      const s2 = createMatch({ players, settings: { ...DEFAULTS, mode: "infection" }, map: toSimMap(MAPS[map]), seed, seekerCount: 2 });
+      let t2 = 0; const dt2 = 1 / 30;
+      while (s2.phase !== PHASE.RESULTS && t2 < 420) { stepMatch(s2, dt2); t2 += dt2; }
+      infTotal++;
+      if (s2.result && s2.result.winner === "seekers") infSeek++;
+    }
+  }
+  const infRate = infSeek / infTotal;
+  assert(infRate <= 0.85,
+    `balance: Infection is a snowball, not a formality — seekers win ${(infRate * 100).toFixed(0)}% (want <=85%)`);
   assert(avgFinds >= 4.0,
     `balance: seekers find most of the lobby — ${avgFinds.toFixed(1)} of 6 (want >=4.0)`);
 }

@@ -296,7 +296,7 @@ export function stepMatch(s, dt) {
 
   if (s.phase === PHASE.PREP) {
     for (const a of hiders(s)) stepHiderPrep(s, a, dt);
-    if (s.timeLeft <= 0) { s.phase = PHASE.HUNT; s.timeLeft = s.settings.huntSeconds; if (s.mode === MODE.REVERSE) convertReverse(s); else if (s.mode === MODE.DOUBLE) convertDouble(s); s.events.push({ t: "phase", phase: PHASE.HUNT }); }
+    if (s.timeLeft <= 0) { s.phase = PHASE.HUNT; s.timeLeft = s.settings.huntSeconds * ((MODE_INFO[s.mode] && MODE_INFO[s.mode].huntScale) || 1); if (s.mode === MODE.REVERSE) convertReverse(s); else if (s.mode === MODE.DOUBLE) convertDouble(s); s.events.push({ t: "phase", phase: PHASE.HUNT }); }
   } else if (s.phase === PHASE.HUNT) {
     for (const a of hiders(s)) if (a.alive) stepHiderHunt(s, a, dt);
     // resolve the movement tell BEFORE seekers look: a walking hider is easy to spot

@@ -156,6 +156,11 @@ export const MODE_INFO = Object.freeze({
   [MODE.INFECTION]: {
     name: "Infection", blurb: "Caught hiders join the hunt. Snowballs to the last hider.",
     convertOnCatch: true, everyoneHides: false, reveal: false,
+    // A snowball compresses the round: measured, the seeker count goes 2 -> 3.9 in the
+    // first 15s and reaches 7 by t=90s, and the last hider falls at 76s on average. Asking
+    // hiders to survive the shared 150s budget against that made the mode 94%
+    // seeker-favoured — they were being asked for twice the time the mode actually lasts.
+    huntScale: 0.6,
   },
   [MODE.DOUBLE]: {
     name: "Double", blurb: "Everyone paints & hides, then everyone hunts. Most finds wins.",
