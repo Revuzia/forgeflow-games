@@ -29,6 +29,11 @@ export class Engine {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, QDPR[q] || 1.5));
     this.renderer.shadowMap.enabled = q !== "low";
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Set at CONSTRUCTION, not only in applyQuality(): nothing calls applyQuality at
+    // boot, so the static-shadow optimisation was inert until the player happened to
+    // change the quality setting. Verified against the deployed build.
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.needsUpdate = true;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
