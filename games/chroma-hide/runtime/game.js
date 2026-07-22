@@ -12,7 +12,7 @@
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { createMatch, stepMatch, setLocalInput, seekers, hiders, SIM, requestWhistle, coverRGB, dropDecoy } from "./sim/match_sim.js";
+import { createMatch, stepMatch, setLocalInput, seekers, hiders, SIM, requestWhistle, coverRGB, dropDecoy, coverInfo } from "./sim/match_sim.js";
 import { PHASE, ROLE, MODE, sanitizeSettings, DEFAULTS, computeSeekerCount, MODE_INFO } from "./sim/match_core.js";
 import { getMap, toSimMap, surfaceAt} from "./maps.js";
 import { PaintSystem } from "./paint.js";
@@ -559,7 +559,11 @@ export class Game {
         if (n.lengthSq() < 1e-6) n.copy(dir).negate();
         n.normalize();
         this._stuck = true; this._stickMode = "wall";
-        this._stickY = clamp(h.point.y, 0.55, 2.6);
+        // Stand ON THE FLOOR against the wall, not at the height the ray happened to
+        // hit. The ray leaves the eye at 1.45m, so using its hit point left the body
+        // hovering with its feet in mid-air and a shadow underneath — it read as a bug
+        // rather than as clinging. Space climbs from here if you want height.
+        this._stickY = BODY_Y;
         this.local.x = h.point.x + n.x * 0.30;
         this.local.z = h.point.z + n.z * 0.30;
         this.local.yaw = Math.atan2(n.x, n.z);        // face out of the surface
@@ -715,11 +719,16 @@ export class Game {
     const on = this.paintMode && this.localRole === ROLE.HIDER && this.local;
     el.style.display = on ? "block" : "none";
     if (!on) return;
-    const surf = coverRGB(this.sim, this.local.x, this.local.z);
+    const info = coverInfo(this.sim, this.local.x, this.local.z);
+    const surf = info.rgb;
     const mine = this.local.paintRGB;
     const hex = (c) => c ? "#" + [c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("") : "—";
     let line = "no surface in range";
-    if (surf && mine) {
+    if (surf && mine && !info.inRange) {
+      // Do NOT report a match the sim will not honour. Standing 4m from the wall you
+      // matched used to read "100% EXCELLENT" while blendScore returned 0.
+      line = `<span style="color:#ff9d6b">${info.dist.toFixed(1)}m away — get against it</span>`;
+    } else if (surf && mine) {
       const d = Math.sqrt((surf.r - mine.r) ** 2 + (surf.g - mine.g) ** 2 + (surf.b - mine.b) ** 2);
       const pct = Math.round(clamp(1 - d / 90, 0, 1) * 100);
       const bars = "█".repeat(Math.round(pct / 10)) + "░".repeat(10 - Math.round(pct / 10));
@@ -759,8 +768,8 @@ export class Game {
     if (this.keys.has("l")) this.local.yaw += 2.4 * dt;
     if (this.keys.has("r")) this.local.yaw -= 2.4 * dt;
     if (this._stickMode === "wall") {
-      if (this._stickUp) this._stickY = clamp(this._stickY + 1.6 * dt, 0.55, 2.9);
-      if (this._crouch) this._stickY = clamp(this._stickY - 1.6 * dt, 0.35, 2.9);
+      if (this._stickUp) this._stickY = clamp(this._stickY + 1.6 * dt, BODY_Y, 2.9);
+      if (this._crouch) this._stickY = clamp(this._stickY - 1.6 * dt, BODY_Y, 2.9);
     } else {
       if (this._stickUp) this.local.pose = "stand";
       if (this._crouch) this.local.pose = "flat";
@@ -1033,7 +1042,15 @@ export class Game {
     this._updateAudioState();
     this._updateCamera(dt);
     this._updateHUD();
-    if (this.sim.phase === PHASE.RESULTS && !this._ended) { this._ended = true; this._spectating = false; this._releasePointer(); this._finish(); }
+    if (this.sim.phase === PHASE.RESULTS && !this._ended) {
+      this._ended = true; this._spectating = false; this._releasePointer();
+      // The control legend is for playing, and the round is over: it was sitting on top
+      // of the results scoreboard telling you which key paints. The status line and the
+      // match meter already hid themselves; this one did not.
+      if (this._helpEl) this._helpEl.style.display = "none";
+      if (this._vigEl) this._vigEl.style.opacity = "0";
+      this._finish();
+    }
   }
 
   _stepOffline(dt) {

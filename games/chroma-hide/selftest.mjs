@@ -581,5 +581,42 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
     "quality: static shadow map is set at construction, not only in applyQuality");
 }
 
+
+// ── the HUD readout and the sim must agree ───────────────────────────────────
+// Found by actually playing: the colour-match meter reported "100% EXCELLENT" while
+// blendScore returned 0, because the meter sampled the nearest surface at ANY distance
+// and the sim only counts one within BLEND_RANGE2. Telling a player they are perfectly
+// hidden while scoring them as exposed is worse than showing nothing.
+{
+  const { MAPS, toSimMap } = await import("./runtime/maps.js");
+  const { blendScore, coverInfo, BLEND_RANGE2 } = await import("./runtime/sim/match_sim.js");
+  const m = MAPS.office, sim = toSimMap(m);
+  const W = m.walls.filter((w) => w.color != null)[0];
+  const exact = { r: (W.color >> 16) & 255, g: (W.color >> 8) & 255, b: W.color & 255 };
+
+  const near = { x: W.x, z: W.z + 0.7 };
+  // These maps are dense, so "6m from THAT wall" is usually 0.5m from something else.
+  // Search the bounds for a genuinely open spot instead of assuming one.
+  let far = null;
+  for (let x = sim.bounds.minX + 2; x < sim.bounds.maxX - 2 && !far; x += 1.5) {
+    for (let z = sim.bounds.minZ + 2; z < sim.bounds.maxZ - 2; z += 1.5) {
+      if (!coverInfo(sim, x, z).inRange) { far = { x, z }; break; }
+    }
+  }
+  assert(far != null, "hud: the map has at least one spot away from every surface");
+  const nearInfo = coverInfo(sim, near.x, near.z);
+  const farInfo = coverInfo(sim, far.x, far.z);
+  assert(nearInfo.inRange, "hud: pressed against a wall counts as in range");
+  assert(!farInfo.inRange, "hud: an open spot is reported out of range (" + farInfo.dist.toFixed(1) + "m)");
+
+  const nearScore = blendScore(sim, { ...near, paintRGB: exact });
+  const farScore = blendScore(sim, { ...far, paintRGB: exact });
+  assert(nearScore > 0.9, "hud: the sim scores a matched body that IS against the wall");
+  assert(farScore === 0, "hud: the sim scores 0 when out of range");
+  assert(nearInfo.inRange === (nearScore > 0) && farInfo.inRange === (farScore > 0),
+    "hud: the readout's in-range verdict matches whether the sim actually scores you");
+  assert(typeof BLEND_RANGE2 === "number", "hud: the range threshold is shared, not duplicated");
+}
+
 console.log(fails === 0 ? "\nSELFTEST PASS" : `\nSELFTEST FAIL (${fails})`);
 process.exit(fails === 0 ? 0 : 1);

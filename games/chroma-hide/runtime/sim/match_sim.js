@@ -74,6 +74,12 @@ function surfDist2(x, z, o) {
   return dx * dx + dz * dz;
 }
 
+/** How close you must be for a surface to count as the thing you are blending with.
+ *  EXPORTED because the HUD readout has to gate on exactly this: the meter used to score
+ *  the nearest surface at any distance and report "100% EXCELLENT" while blendScore
+ *  returned 0 because the player was standing 4m away from the wall they had matched. */
+export const BLEND_RANGE2 = 1.6;
+
 /** The surface a hider is actually against. */
 function nearestSurface(s, x, z) {
   let best = null, bd = Infinity;
@@ -83,6 +89,18 @@ function nearestSurface(s, x, z) {
     if (d < bd) { bd = d; best = o; }
   }
   return { best, bd };
+}
+
+/** The surface a hider is against AND whether they are close enough for it to count.
+ *  The HUD needs both; scoring a colour match the sim will ignore is worse than no readout. */
+export function coverInfo(s, x, z) {
+  const { best, bd } = nearestSurface(s, x, z);
+  if (!best) return { rgb: null, inRange: false, dist: Infinity };
+  return {
+    rgb: { r: (best.color >> 16) & 255, g: (best.color >> 8) & 255, b: best.color & 255 },
+    inRange: bd <= BLEND_RANGE2,
+    dist: Math.sqrt(bd),
+  };
 }
 
 export function coverRGB(s, x, z, jit = 0, rng = null) {
@@ -103,7 +121,7 @@ export function blendScore(s, h) {
   if (!h.paintRGB) return 0;
   const { best, bd } = nearestSurface(s, h.x, h.z);
   // within ~1.25m of the surface: you have to actually BE against it
-  if (!best || bd > 1.6) return 0;
+  if (!best || bd > BLEND_RANGE2) return 0;
   const c = best.color;
   const dr = ((c >> 16) & 255) - h.paintRGB.r, dg = ((c >> 8) & 255) - h.paintRGB.g, db = (c & 255) - h.paintRGB.b;
   // steep falloff: colour PRECISION is the skill. ~90 units of RGB error (a visibly
