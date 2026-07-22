@@ -12,7 +12,7 @@
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { createMatch, stepMatch, setLocalInput, seekers, hiders, SIM, requestWhistle, coverRGB } from "./sim/match_sim.js";
+import { createMatch, stepMatch, setLocalInput, seekers, hiders, SIM, requestWhistle, coverRGB, dropDecoy } from "./sim/match_sim.js";
 import { PHASE, ROLE, MODE, sanitizeSettings, DEFAULTS, computeSeekerCount, MODE_INFO } from "./sim/match_core.js";
 import { getMap, toSimMap, surfaceAt} from "./maps.js";
 import { PaintSystem } from "./paint.js";
@@ -266,7 +266,9 @@ export class Game {
   }
 
   _spawnActors() {
-    const geo = makeBodyGeo();   // shared blank mannequin (one merged, UV-atlased mesh)
+    // one merged, UV-atlased mannequin shared by every body in the match, decoys
+    // included — a decoy allocating its own copy is pure waste for an identical mesh
+    const geo = this._bodyGeo || (this._bodyGeo = makeBodyGeo());
     for (const a of this.sim.actors) {
       let mesh;
       if (!a.isBot && a.role === ROLE.HIDER) {
@@ -309,7 +311,11 @@ export class Game {
       const t = e.target, tag = (t && t.tagName) || "";
       const isForm = tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA";
       // game keys must still work while a paint slider has focus
-      const GAME = ["KeyF", "KeyV", "KeyR", "KeyE", "KeyQ", "Space", "Escape"];
+      // Every gameplay verb, so it still fires while a paint slider holds focus. C was
+      // missing, which meant "drop decoy" silently did nothing right after you painted --
+      // exactly when you would use it.
+      const GAME = ["KeyF", "KeyV", "KeyR", "KeyE", "KeyQ", "KeyC", "Space", "Escape",
+                    "Digit1", "Digit2", "Digit3", "Digit4"];
       if (isForm && !GAME.includes(e.code)) return;
       if (isForm && down && t.blur) { try { t.blur(); } catch (err) { /* ignore */ } }
       if (down) {
@@ -318,6 +324,7 @@ export class Game {
         if (e.code === "KeyR" && this.localRole === ROLE.HIDER) { this._cyclePose(); e.preventDefault(); return; }
         if (e.code === "KeyE" && this.localRole === ROLE.HIDER) { this._toggleStick(); e.preventDefault(); return; }
         if (e.code === "KeyQ") { this._toggleEmoteBar(); e.preventDefault(); return; }
+        if (e.code === "KeyC" && this.localRole === ROLE.HIDER) { this._dropDecoy(); e.preventDefault(); return; }
         if (e.code === "Space") {
           // Documented in the legend AND the paint hint as "eyedrop a surface" -- and bound to
           // nothing, so the core sampling verb only worked via the panel button.
@@ -518,6 +525,41 @@ export class Game {
     void was;
   }
 
+  /** Drop a decoy clone (C). A frozen copy of you wearing YOUR paint — the bluff only
+   *  works if it is indistinguishable, so it shares the live paint material rather than
+   *  an approximation. A seeker must spend a bullet to find out which one is real. */
+  _dropDecoy() {
+    if (!this.local || this.localRole !== ROLE.HIDER || !this.local.alive) return;
+    const r = dropDecoy(this.sim, this.local.id);
+    if (!r) return;
+    if (r.error === "no_clones_left") return this.hud.toast("no decoys left", "#ff9d6b");
+    if (r.error === "cooling_down") return this.hud.toast(`decoy ready in ${Math.ceil(r.wait)}s`, "#ff9d6b");
+    this._buildDecoyMesh(r);
+    const left = (this.sim.settings.maxClones | 0) - (this.local._clonesUsed || 0);
+    this.hud.toast(`decoy dropped — ${left} left`, "#7fe3c4");
+    this.audio && this.audio.blip && this.audio.blip();
+    if (this.online && this.net) this.net.sendEvent({ t: "decoy", id: r.id, by: this.local.id, x: r.x, z: r.z, pose: r.pose, yaw: r.yaw });
+  }
+
+  _buildDecoyMesh(d) {
+    if (this.meshes.get(d.id)) return;
+    const owner = this.paintByActor.get(d.ownerId);
+    const geo = this._bodyGeo || (this._bodyGeo = makeBodyGeo());
+    const mat = owner ? owner.material
+      : new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.7, metalness: 0.05 });
+    const mesh = new THREE.Mesh(geo, mat);
+    addBodyFeatures(mesh);
+    mesh.position.set(d.x, BODY_Y, d.z); mesh.rotation.y = d.yaw || 0;
+    mesh.castShadow = true; mesh.userData.decoy = true;
+    this.root.add(mesh); this.meshes.set(d.id, mesh);
+  }
+
+  _removeDecoyMesh(id) {
+    const m = this.meshes.get(id); if (!m) return;
+    this.root.remove(m); this.meshes.delete(id);
+    // geometry and material are shared with the owner — never dispose them here
+  }
+
   /** Colour-blind assist: a NUMERIC match readout.
    *
    *  The setting existed in the menu and called an empty callback. In a game whose entire
@@ -605,7 +647,7 @@ export class Game {
     ].join(";");
     const k = (s2) => `<kbd style="background:rgba(255,255,255,.13);border-radius:3px;padding:0 4px;font:inherit">${s2}</kbd>`;
     const hider = this.localRole === ROLE.HIDER
-      ? `<div style="color:#7fe3c4;font-weight:700;margin-top:3px">${k("F")} PAINT YOURSELF &nbsp;·&nbsp; ${k("R")} pose &nbsp;·&nbsp; ${k("E")} cling to anything</div>
+      ? `<div style="color:#7fe3c4;font-weight:700;margin-top:3px">${k("F")} PAINT &nbsp;·&nbsp; ${k("R")} pose &nbsp;·&nbsp; ${k("E")} cling &nbsp;·&nbsp; ${k("C")} decoy</div>
          <div>${k("Space")} jump · ${k("Ctrl")} crouch · ${k("V")} 1st/3rd · ${k("Q")} emote</div>
          <div style="opacity:.72">Aim at a wall, a crate top, a shelf or the floor and press ${k("E")} — on a wall ${k("Space")}/${k("Ctrl")} slide you up and down, on top of something they stand you up or flatten you. ${k("A")}${k("D")} turn, ${k("E")} lets go.</div>
          <div style="opacity:.72">Paint mode: drag <b>LMB</b> on your body · ${k("1")}-${k("4")} brush/spray/marker/sponge · <b>Space</b> eyedrop · <b>MMB</b> orbit · <b>wheel</b> zoom</div>`
@@ -951,6 +993,17 @@ export class Game {
         if (e.id === this.local?.id) this.hud.toast("Caught!", "#ff6b6b");
         else if (e.by === this.local?.id) this.hud.toast("Got one!", ACCENT_G);
       } else if (e.t === "miss") { const a = this._actor(e.by); this.audio.gunshot(a?.x, a?.z); if (e.by === this.local?.id) { this.hud.toast("miss", "#ff9d6b"); this._muzzle = 0.08; } }
+      else if (e.t === "decoy_hit") {
+        this._removeDecoyMesh(e.id);
+        const k = this._actor(e.by); this.audio.gunshot(k?.x, k?.z);
+        if (e.by === this.local?.id) this.hud.toast("a decoy! shot wasted", "#ff9d6b");
+        else if (e.owner === this.local?.id) this.hud.toast("your decoy took the bullet", ACCENT_G);
+      }
+      else if (e.t === "decoy" && e.by !== this.local?.id) {
+        // a remote player dropped one — render it so it can fool us too
+        const d = this.sim.actors.find((a) => a.id === e.id);
+        if (d) this._buildDecoyMesh(d);
+      }
       else if (e.t === "dryfire") { const a = this._actor(e.by); this.audio.dryfire(a?.x, a?.z); if (e.by === this.local?.id) this.hud.toast("out of ammo", "#ff9d6b"); }
       else if (e.t === "whistle") { const a = this._actor(e.id || e.by); this.audio.whistle(a?.x, a?.z); }
       else if (e.t === "win") {

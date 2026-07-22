@@ -211,8 +211,44 @@ export function requestWhistle(s, id) {
 }
 
 export function seekers(s) { return s.actors.filter((a) => a.role === ROLE.SEEKER); }
-export function hiders(s) { return s.actors.filter((a) => a.role === ROLE.HIDER); }
+// hiders() feeds win checks and per-hider stepping, so it must never see a decoy --
+// otherwise a dropped clone counts as a survivor and the seekers can never win.
+// aliveHiders() is what a SEEKER can perceive, and fooling it is the entire point.
+export function hiders(s) { return s.actors.filter((a) => a.role === ROLE.HIDER && !a.isDecoy); }
 function aliveHiders(s) { return s.actors.filter((a) => a.role === ROLE.HIDER && a.alive); }
+
+/** Drop a decoy: a frozen, identically-painted copy of you.
+ *
+ *  The store copy promised "drop decoy clones" and the settings reserved maxClones and
+ *  cloneCooldownSeconds, but nothing implemented it. A decoy is a full actor so it
+ *  inherits detection, LOS, camouflage scoring and shooting for free -- a seeker cannot
+ *  tell it from you without spending a shot, which is exactly the bluff the mechanic is
+ *  for. It never moves, never scores, and never counts toward the win.
+ */
+export function dropDecoy(s, ownerId) {
+  const o = s.actors.find((a) => a.id === ownerId);
+  if (!o || o.role !== ROLE.HIDER || !o.alive || o.isDecoy) return null;
+  const max = s.settings.maxClones | 0;
+  if (max <= 0) return null;
+  if ((o._clonesUsed || 0) >= max) return { error: "no_clones_left" };
+  if ((o._cloneCd || 0) > 0) return { error: "cooling_down", wait: o._cloneCd };
+  o._clonesUsed = (o._clonesUsed || 0) + 1;
+  o._cloneCd = s.settings.cloneCooldownSeconds || 30;
+  const d = {
+    id: `${ownerId}~decoy${o._clonesUsed}`, ownerId, isDecoy: true, isBot: true, isLocal: false,
+    role: ROLE.HIDER, alive: true, caught: false,
+    x: o.x, z: o.z, yaw: o.yaw, pose: o.pose, ammo: 0, score: 0,
+    // it wears your paint, so it scores camouflage exactly as you do
+    paintRGB: o.paintRGB ? { ...o.paintRGB } : null,
+    paintRough: o.paintRough, paintMetal: o.paintMetal,
+    spot: null, hidden: true, tauntTimer: 0, _moving: false, _elev: o._elev || 0,
+    patrol: null, target: null, dwell: 0, cooldown: 0,
+    _in: { mx: 0, mz: 0, yaw: null, shoot: false },
+  };
+  s.actors.push(d);
+  s.events.push({ t: "decoy", id: d.id, by: ownerId, x: d.x, z: d.z });
+  return d;
+}
 
 /** Set a local (human) actor's intent for this tick. */
 export function setLocalInput(s, id, input) {
@@ -242,6 +278,7 @@ export function stepMatch(s, dt) {
     for (const a of hiders(s)) if (a.alive) stepHiderHunt(s, a, dt);
     // resolve the movement tell BEFORE seekers look: a walking hider is easy to spot
     for (const a of hiders(s)) { const dx = a.x - a._px, dz = a.z - a._pz; a._moving = (dx * dx + dz * dz) > 1e-4; }
+    for (const a of hiders(s)) if (a._cloneCd > 0) a._cloneCd = Math.max(0, a._cloneCd - dt);
     for (const a of seekers(s)) stepSeeker(s, a, dt);
     accrueScores(s, dt);
     const w = checkWin({ mode: s.mode, timeLeft: s.timeLeft, hiders: hiders(s).map((h) => ({ id: h.id, alive: h.alive })), seekers: seekers(s).map((k) => ({ ammo: k.ammo })), ammoLimit: s.settings.ammoLimit, hidersAtStart: s.hidersAtStart || 0 });
@@ -449,6 +486,16 @@ function seekerShoot(s, a) {
     if (angDiff(a.yaw, yawTo(a.x, a.z, h.x, h.z)) > 0.14) continue; // tight aim
     if (!hasLOS(a.x, a.z, h.x, h.z, s.obstacles, hiderHeight(h))) continue;
     if (d < best) { best = d; hit = h; fleeing = !!h.fleeing; }
+  }
+  // A decoy eats the shot. It is destroyed and the seeker pays full price -- scored as a
+  // MISS, because being fooled has to cost something or the bluff is free.
+  if (hit && hit.isDecoy) {
+    const i = s.actors.indexOf(hit);
+    if (i >= 0) s.actors.splice(i, 1);
+    a.ammo = applyShot(a.ammo, { hit: false, fleeing: false, ammoLimit: s.settings.ammoLimit, startAmmo: s.settings.startAmmo });
+    a.dwell = 0; a.target = null;
+    s.events.push({ t: "decoy_hit", by: a.id, id: hit.id, owner: hit.ownerId, x: hit.x, z: hit.z });
+    return;
   }
   const didHit = !!hit;
   a.ammo = applyShot(a.ammo, { hit: didHit, fleeing, ammoLimit: s.settings.ammoLimit, startAmmo: s.settings.startAmmo });

@@ -481,5 +481,39 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
     "net: before a host is known, no EVENT is trusted");
 }
 
+
+// ── decoy clones ─────────────────────────────────────────────────────────────
+// The store copy promised "drop decoy clones" and maxClones/cloneCooldownSeconds were
+// validated settings, but nothing implemented them.
+{
+  const { createMatch, stepMatch, setLocalInput, hiders, seekers, dropDecoy } = await import("./runtime/sim/match_sim.js");
+  const { DEFAULTS, PHASE, ROLE } = await import("./runtime/sim/match_core.js");
+  const { MAPS, toSimMap } = await import("./runtime/maps.js");
+  const players = [{ id: "me", isBot: false, role: ROLE.HIDER, isLocal: true },
+    ...[...Array(5)].map((_, i) => ({ id: "b" + i, isBot: true, role: i < 2 ? ROLE.SEEKER : ROLE.HIDER }))];
+  const s = createMatch({ players, settings: { ...DEFAULTS }, map: toSimMap(MAPS.office), seed: 11, seekerCount: 2 });
+  let t = 0; while (s.phase !== PHASE.HUNT && t < 400) { stepMatch(s, 1 / 30); t += 1 / 30; }
+  const me = s.actors.find((a) => a.id === "me");
+
+  const d1 = dropDecoy(s, "me");
+  assert(!!(d1 && d1.id), "decoy: dropping one works");
+  assert(dropDecoy(s, "me").error === "cooling_down", "decoy: the cooldown is enforced");
+  me._cloneCd = 0; dropDecoy(s, "me"); me._cloneCd = 0;
+  assert(dropDecoy(s, "me").error === "no_clones_left", "decoy: maxClones is enforced");
+  assert(hiders(s).every((h) => !h.isDecoy), "decoy: a clone never counts as a hider (or seekers could never win)");
+
+  me.x = d1.x + 14; me.z = d1.z + 14;                       // walk away, the point of a decoy
+  for (const h of hiders(s)) if (h.id !== "me") { h.x = d1.x + 22; h.z = d1.z + 22; }
+  const k = seekers(s)[0];
+  k.isBot = false; k.ammo = 8; k.cooldown = 0; k.x = d1.x; k.z = d1.z - 1.2;
+  const n0 = s.actors.length;
+  setLocalInput(s, k.id, { mx: 0, mz: 0, yaw: Math.atan2(d1.x - k.x, d1.z - k.z), shoot: true });
+  stepMatch(s, 1 / 30);
+  assert(s.events.some((e) => e.t === "decoy_hit"), "decoy: shooting one is reported as a decoy hit");
+  assert(s.actors.length === n0 - 1, "decoy: it is destroyed by the shot");
+  assert(k.ammo === 7, "decoy: being fooled costs the seeker a shot (" + k.ammo + ")");
+  assert(me.alive, "decoy: the owner is untouched");
+}
+
 console.log(fails === 0 ? "\nSELFTEST PASS" : `\nSELFTEST FAIL (${fails})`);
 process.exit(fails === 0 ? 0 : 1);

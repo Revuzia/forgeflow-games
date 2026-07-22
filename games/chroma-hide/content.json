@@ -5,6 +5,7 @@
     "HIDERS: press F to open paint mode. Eyedrop a nearby surface (SPACE), match its colour, then set the metallic and roughness sliders so your sheen matches too — a glossy body shines wrong against a matte wall.",
     "Pick a hiding spot, choose a pose (R), and hold still. You can keep painting after the hunt starts, but moving is what gets you spotted.",
     "SEEKERS: hunt with a gun, but ammo is limited — every miss costs a shot and every hit refunds one. Seeing a hider isn't enough; you have to shoot them.",
+    "Drop a decoy clone (C) and walk away — it wears your exact paint and pose, so a seeker has to spend a bullet to learn it is not you. Two per round.",
     "Hiders score points for time spent in a seeker's line of sight without being caught. Whistle (1) to bait a seeker closer for more points.",
     "Hiders win if at least one survives the timer. Seekers win by catching everyone."
   ],
