@@ -38,6 +38,11 @@ const POSES = {
   wide:    { label: "Wide",    s: [1.35, 0.85, 0.70], yOff: -0.01 },
 };
 const POSE_IDS = Object.keys(POSES);
+
+// Parsed GLB templates live for the page, not the match. Instances are cloned from these;
+// the templates themselves are never mutated, so sharing is safe and each kit's colormap
+// atlas is uploaded exactly once instead of once per match.
+const GLB_CACHE = new Map();
 // How far you can reach to cling, and the highest surface you can haul yourself onto.
 // 2.6m reach lets you aim at the floor a couple of paces ahead to lie down.
 const STICK_REACH = 2.6;
@@ -242,9 +247,17 @@ export class Game {
    *  no matter how many props use it. (Loading per-prop parsed a fresh copy every
    *  time — with the dense campus maps that exhausted the GPU and lost the WebGL
    *  context: 200+ duplicate geometry/texture sets.) */
+  /** Parsed GLB templates, cached at MODULE scope on purpose.
+   *
+   *  This cache used to live on the Game instance, so every match re-parsed every GLB and
+   *  built a fresh copy of each kit's colormap atlas. Those atlases are not in the scene
+   *  graph by the time destroy() traverses it, so nothing ever released them: a soak of
+   *  ten matches leaked exactly four GPU textures per match (the four kit atlases) and
+   *  ~7 MB of heap. Sharing them across matches fixes the leak AND removes the re-parse
+   *  from every match start. They are immutable templates — instances are .clone(true)d.
+   */
   _glbTemplate(name) {
-    if (!this._glbCache) this._glbCache = new Map();
-    if (this._glbCache.has(name)) return this._glbCache.get(name);
+    if (GLB_CACHE.has(name)) return GLB_CACHE.get(name);
     if (!this._gltf) this._gltf = new GLTFLoader();
     const pr = new Promise((resolve, reject) => {
       this._gltf.load("assets/models/" + name, (gltf) => {
@@ -258,7 +271,7 @@ export class Game {
         resolve({ tpl, baseH: Math.max(0.05, size.y) });
       }, undefined, reject);
     });
-    this._glbCache.set(name, pr);
+    GLB_CACHE.set(name, pr);
     return pr;
   }
 
