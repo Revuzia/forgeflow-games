@@ -207,13 +207,31 @@ export class Game {
     const cage = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 0.1, 20), new THREE.MeshStandardMaterial({ color: 0x2a3550, roughness: 0.6, emissive: 0x14203a }));
     cage.position.set(m.spawn.seeker.x, 0.06, m.spawn.seeker.z); g.add(cage);
 
-    // lights
-    for (const l of m.lights) {
-      if (l.type === "point") { const pl = new THREE.PointLight(l.color, l.intensity, l.dist, 2); pl.position.set(l.x, l.y, l.z); g.add(pl); }
+    // Lights. three.js is a FORWARD renderer: NUM_POINT_LIGHTS is compiled into every
+    // MeshStandardMaterial shader, so all 30 map lights are evaluated for every fragment
+    // of every wall, floor and prop whether they reach it or not. No preset reduced them,
+    // which made "low" barely cheaper than "high" on the campus maps. Cap by quality and
+    // keep the brightest, then lift the ambient to pay back the lost fill.
+    const LIGHT_CAP = { low: 8, medium: 16, high: 30 };
+    const cap = LIGHT_CAP[this.engine.quality] ?? 30;
+    const pts = m.lights.filter((l) => l.type === "point")
+      .slice()
+      .sort((a, b) => (b.intensity * b.dist) - (a.intensity * a.dist))
+      .slice(0, cap);
+    for (const l of pts) {
+      const pl = new THREE.PointLight(l.color, l.intensity, l.dist, 2);
+      pl.position.set(l.x, l.y, l.z); g.add(pl);
     }
-    this.engine.hemi.intensity = m.ambient.intensity;
+    this._litCount = pts.length;
+    const lost = m.lights.filter((l) => l.type === "point").length - pts.length;
+    // Pay back only PART of the lost fill: the dropped lights were the dimmest, so a
+    // full refund makes `low` brighter than `high`, which reads as a different game
+    // rather than a cheaper one. Tuned so all three presets land within ~8% luminance.
+    this._ambientLift = lost > 0 ? 1 + Math.min(0.22, lost * 0.009) : 1;
+    this.engine.hemi.intensity = m.ambient.intensity * (this._ambientLift || 1);
     this.engine.hemi.color.setHex(m.ambient.sky); this.engine.hemi.groundColor.setHex(m.ambient.ground);
     this.engine.scene.background = new THREE.Color(m.ambient.ground).multiplyScalar(0.4);
+    this._shadowDirty = true;   // the world just appeared
   }
 
   /** Parse each furniture GLB ONCE and hand back a shared template. Cloning the
@@ -256,6 +274,7 @@ export class Game {
       this.root.add(root);
       const i = this.paintable.indexOf(placeholder); if (i >= 0) this.paintable[i] = root; else this.paintable.push(root);
       this.root.remove(placeholder);   // NOTE: don't dispose — box geo/material are shared by value
+      this._shadowDirty = true;        // a GLB just replaced a box: the caster set changed
       this._collidables = null;                                 // recompute camera-collision set to include the model
     }).catch((err) => { console.warn("[chroma] GLB load failed:", p.model, err && err.message); });
   }
@@ -921,6 +940,15 @@ export class Game {
       }
     }
     this._syncActors();
+    // Shadow-map cadence. autoUpdate is off (the world is static), but ACTORS move and
+    // their shadows are a genuine tell — a frozen shadow is worse than none. Re-render
+    // only while something is actually moving, and only every 3rd frame: bodies are slow
+    // enough that 20Hz shadows are indistinguishable, at a third of the cost.
+    this._shadowTick = (this._shadowTick || 0) + 1;
+    if (this._shadowTick % 3 === 0) {
+      const moving = this.sim.actors.some((a) => a.alive && a._moving);
+      if (moving || this._shadowDirty) { this.engine.invalidateShadows(); this._shadowDirty = false; }
+    }
     this._updateEmotes(dt);
     this._syncLocalRole();
     this._syncPaintBlend();

@@ -91,8 +91,16 @@ export class Engine {
     const on = q !== "low";
     this.renderer.shadowMap.enabled = on;
     this.sun.castShadow = on;
+    // The sun is static and the map never moves, so the shadow map is identical every
+    // frame. Rendering the whole scene into it 60 times a second was pure waste; draw it
+    // once and re-arm only when the scene actually changes (see invalidateShadows()).
+    this.renderer.shadowMap.autoUpdate = false;
     this.renderer.shadowMap.needsUpdate = true;
   }
+
+  /** Re-render the shadow map once on the next frame. Call after anything that changes
+   *  what casts shadows — a map built, a prop's GLB swapping in, actors spawning. */
+  invalidateShadows() { this.renderer.shadowMap.needsUpdate = true; }
 
   add(obj) { this.scene.add(obj); return obj; }
   remove(obj) { this.scene.remove(obj); }
