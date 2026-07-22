@@ -121,6 +121,35 @@ const HAND_AIM_ROT = {
 // playing from t=0 showed ONE HUNDRED PERCENT standing lead-in — the character
 // never visibly left the ground. Seek to just before takeoff instead.
 const JUMP_TAKEOFF_S = 1.70;
+/** Meshy bakes ROOT TRANSLATION into its clips: Swim_Forward carries ~2.3 m of
+ *  forward travel on the Hips position track, and the sprint clip carries its
+ *  own stride displacement. The game drives position itself from the sim, so
+ *  playing these in place makes the body surge away from its own collider and
+ *  snap back once per loop — read on screen as "lagging back and forth" while
+ *  sprinting, and as a rigid prop being dragged through the water while
+ *  swimming. The rotation tracks are what we actually want from these clips.
+ *
+ *  Strip the HORIZONTAL component of the root position track and keep Y, so a
+ *  jump still leaves the ground and a swimmer still bobs. Done here, at the one
+ *  point every Meshy clip passes through, so all five skins and every clone
+ *  inherit it — the alternative is per-clip fixes forever, and this is the
+ *  generator. */
+function stripRootMotion(clip) {
+  if (!clip || !clip.tracks) return clip;
+  for (const tr of clip.tracks) {
+    if (!/\.position$/.test(tr.name || "")) continue;
+    const node = tr.name.replace(/\.position$/, "");
+    // only the ROOT drives the body through the world; other bones' translation
+    // is legitimate skeletal animation and must be left alone
+    if (!/(^|:|\|)(Hips|Root|Armature|mixamorig:?Hips)$/i.test(node)) continue;
+    const v = tr.values;
+    if (!v || v.length < 3) continue;
+    const x0 = v[0], z0 = v[2];
+    for (let i = 0; i < v.length; i += 3) { v[i] = x0; v[i + 2] = z0; }  // pin XZ, keep Y
+  }
+  return clip;
+}
+
 const MESHY_CLIPS = ["walk", "run", "death", "dance", "cheer", "jump", "swim", "crouch"];
 const _v3 = new THREE.Vector3();
 
@@ -152,7 +181,11 @@ async function preloadMeshySkin(W, key, tick) {
       const r = loaded[i];
       if (r.status !== "fulfilled") { console.warn("[chars] clip load failed", key, MESHY_CLIPS[i], r.reason); continue; }
       const g = r.value;
-      if (g.animations && g.animations[0]) { g.animations[0].name = MESHY_CLIPS[i]; cached.animations.push(g.animations[0]); }
+      if (g.animations && g.animations[0]) {
+        g.animations[0].name = MESHY_CLIPS[i];
+        stripRootMotion(g.animations[0]);
+        cached.animations.push(g.animations[0]);
+      }
     }
   } else if (tick) tick(MESHY_CLIPS.length);   // warm cache: those files are already done, say so
   // The warm-up clone exists only to populate the gltf cache, but
@@ -730,7 +763,16 @@ function blockedHoriz(W, x, z, y, h) {
 }
 
 export function update(W, dt) {
-  const humanPos = W.player ? W.player.pos : null;
+  // LOD is a VISIBILITY question, so it measures from the render viewpoint. It
+  // used to measure from W.player.pos — which STOPS MOVING the moment you die
+  // (killActor tweens obj.position, never pos), while the camera moves on to
+  // whoever you are spectating. Any bot more than 250 m from your corpse then
+  // had its mixer pinned at timeScale 0 AND was skipped by the whole
+  // clip-selection block, so it slid across the ground in a frozen mid-stride
+  // pose. On a 1600 m map that is the normal case, not the edge case — it is
+  // why the spectated fighter appeared to have no run animation at all.
+  // The weapon LOD a few lines below already keyed off the camera.
+  const humanPos = (W.camera && W.camera.position) || (W.player ? W.player.pos : null);
   let anyDrop = false;
   for (const a of W.actors) {
     if (!a.alive) continue;
@@ -1147,8 +1189,15 @@ function syncObj(W, a, dt, far) {
         // BACKPEDALING plays the stride in REVERSE (no moonwalking).
         const back = (a.vel.x * -Math.sin(a._bodyYaw - Math.PI) + a.vel.z * -Math.cos(a._bodyYaw - Math.PI)) < -0.5;
         const dirK = back ? -0.9 : 1;
-        if (gs > 7 && !back) {
-          // SPRINT (Shift, ~9.6 m/s): a proper UPRIGHT Meshy run — action 510
+        // Was `gs > 7`, chosen when sprint was 9.6 m/s. Sprint is 8.0 now, so a
+        // 7.0 gate leaves 1.0 m/s of headroom against an exponential approach —
+        // a slope, a wall graze that zeroes one velocity axis, wading (x0.55), a
+        // bot's constant re-aim, or the new stamina exhaust lock all drop under
+        // it and swap the run cycle back to a walk mid-stride. Drive the run
+        // clip off the authoritative sprint FLAG instead, with a floor that
+        // still keeps it off during the initial accel ramp.
+        if (a.sprinting && gs > 5.5 && !back) {
+          // SPRINT (Shift toggle, 8.0 m/s): a proper UPRIGHT Meshy run — action 510
           // "Standard_Forward_Charge", measured ~3-12° athletic lean across the 5
           // rigs. Replaced the old "RunFast" (action 16, ~53° "running bent over")
           // and its per-frame spine counter-rotation hack, both now removed.

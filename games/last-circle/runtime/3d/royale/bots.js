@@ -164,7 +164,20 @@ function think(W, b) {
   const endgame = alive <= 10;
   // everyone spawns with a pistol; "upgraded" = anything beyond it
   const upgraded = a.inventory.slots.some((s2, i) => s2 && s2.kind === "weapon" && !(i === 0 && s2.id === "pistol" && s2.rarity === 0));
-  const heals = a.inventory.slots.some((s2) => s2 && s2.kind === "consumable" && s2.count > 0);
+  // "Do I want to heal" and "can I actually heal" MUST agree, or the machine
+  // livelocks: actHeal's failure path sets WANDER with nextThink 0, think()
+  // re-scores immediately, HEAL wins again, and the input stays zeroed — the bot
+  // stands motionless for the rest of the match. Reproducible case: 78 HP, 20
+  // shield, bandages only. s.HEAL fires on (shield < 30 && hp < 80) = true, but
+  // useConsumable refuses every bandage because bandage cap is 75 and hp is 78,
+  // and there is no shield item to fall back to. So test USABILITY, not mere
+  // presence — mirroring useConsumable's own cap checks (player.js).
+  const usable = (id) => {
+    const c = K.CONSUMABLES[id];
+    if (!c) return false;
+    return c.heals === "hp" ? a.hp < c.cap : a.shield < c.cap;
+  };
+  const heals = a.inventory.slots.some((s2) => s2 && s2.kind === "consumable" && s2.count > 0 && usable(s2.id));
 
   // hard overrides
   if (inStorm) { b.state = "ROTATE"; bb.moveTo = { x: st.center.x, z: st.center.z }; return; }
@@ -191,7 +204,8 @@ function think(W, b) {
   // ENGAGE (88) but beats the 80 mid-range case, so a cracked bot breaks contact
   // instead of dying bravely; with heals in the bag it keeps the old 86.
   s.FLEE = bb.target && outnumbered && !lastFew ? (heals ? 86 : 72) : 0;   // disengage to heal, not to hide forever
-  s.HEAL = (a.hp < 45 || (a.shield < 30 && a.hp < 80)) && heals && !bb.target ? 75 : (a.hp < 60 && heals && W.t - a.lastDamageT > 6 ? 45 : 0);
+  const healOk = heals && !(bb.healBlockedUntil > W.t);
+  s.HEAL = (a.hp < 45 || (a.shield < 30 && a.hp < 80)) && healOk && !bb.target ? 75 : (a.hp < 60 && healOk && W.t - a.lastDamageT > 6 ? 45 : 0);
   s.LOOT = !upgraded ? 64 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
   // BATTLE-ROYALE PRIORITY MODEL (owner: "run from storms but FIGHT once
   // safe"): rotation urgency = how far past safety you are vs time left.
@@ -552,7 +566,14 @@ function ensureGunOut(W, a) {
 function actHeal(W, b, dt) {
   const a = b.actor, bb = b.bb;
   if (!a.healing) {
-    if (!startHeal(W, a)) { b.state = "WANDER"; b.nextThink = 0; }
+    if (!startHeal(W, a)) {
+      // Second line of defence behind the usability predicate above: if a heal
+      // ever fails anyway, refuse to re-enter HEAL for a few seconds instead of
+      // re-deciding on the very next tick. nextThink 0 + an unchanged score is
+      // precisely the shape of an infinite loop.
+      b.bb.healBlockedUntil = W.t + 4;
+      b.state = "WANDER"; b.nextThink = 0.35 + Math.random() * 0.4;
+    }
     return;
   }
   // Healing used to zero movement outright, which pinned a bot in the open for
