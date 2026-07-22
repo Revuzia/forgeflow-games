@@ -542,7 +542,15 @@ function wire(W) {
   on("stormKill", () => {});
   on("supplyDropSpawned", () => { blip(880, 0.2, 0.16, "triangle"); setTimeout(() => blip(1100, 0.3, 0.14, "triangle"), 200); });
   on("landed", (a) => { if (a === W.player) thump(500, 0.15, 0.25); });
-  on("jump", () => {});
+  // this was a REGISTERED EMPTY HANDLER — player.js:944 emits "jump" on every
+  // takeoff and nothing listened, so jumping made no sound at all. Same story
+  // for ordinary landings: "landed" only fires on the parachute touchdown, so
+  // the thump below it was a once-per-match sound pretending to be a footfall.
+  on("jump", (a) => { if (a === W.player) thump(300, 0.09, 0.16); });
+  on("touchdown", (a, speed) => {
+    const k = Math.min(1, (speed || 4) / 14);
+    thump(360 - k * 120, 0.10 + k * 0.06, 0.12 + k * 0.14, a === W.player ? null : a.pos, 40);
+  });
   on("uiClick", () => blip(900, 0.04, 0.12, "square"));
   on("countdownBeep", (final) => blip(final ? 1200 : 800, final ? 0.3 : 0.12, 0.2, "square"));
 }

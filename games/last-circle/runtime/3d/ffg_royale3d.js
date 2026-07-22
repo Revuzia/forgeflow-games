@@ -303,6 +303,7 @@ register3d("royale", async function (kernel, content) {
     // free the PREVIOUS map's GPU resources before detaching them (clear() only
     // unparents — geometries, materials and per-match textures stayed resident)
     W._lastMapDispose = disposeMapResources(W);
+    W._lastLootDispose = lootMod.disposeLootResources ? lootMod.disposeLootResources(W) : null;
     for (const name in W._groups) { const g = W._groups[name]; g.clear(); }
     W.actors.length = 0; W.actorById.clear();
     W.rangeDummies = null;          // stale refs into the cleared roster

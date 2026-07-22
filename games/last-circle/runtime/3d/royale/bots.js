@@ -550,11 +550,29 @@ function ensureGunOut(W, a) {
 }
 
 function actHeal(W, b, dt) {
-  const a = b.actor;
-  a.input.mz = 0; a.input.mx = 0;
+  const a = b.actor, bb = b.bb;
   if (!a.healing) {
     if (!startHeal(W, a)) { b.state = "WANDER"; b.nextThink = 0; }
+    return;
   }
+  // Healing used to zero movement outright, which pinned a bot in the open for
+  // the whole channel — up to 8s for a medkit — as a free stationary target.
+  // The sim now charges the tempo cost itself (HEAL.speedMult 0.45 + sprint
+  // locked out in player.js), so a bot that keeps walking is already slowed by
+  // the same rule the human pays. Zeroing input on top of that made the penalty
+  // human-only: the player could back behind cover mid-heal and no bot ever
+  // could. Break line of sight instead of standing still.
+  const away = bb.lastThreat || (bb.target && bb.target.pos) || null;
+  if (away) {
+    const dx = a.pos.x - away.x, dz = a.pos.z - away.z;
+    const d = Math.hypot(dx, dz) || 1;
+    a.yaw = Math.atan2(-dx / d, -dz / d);   // face the threat while backing off
+    a.input.mz = -1;                        // retreat, at the slowed heal speed
+    a.input.mx = 0;
+  } else {
+    a.input.mz = 0; a.input.mx = 0;
+  }
+  a.input.sprint = false;                   // the sim blocks it anyway; be explicit
 }
 
 function actCamp(W, b, dt) {

@@ -73,6 +73,64 @@ const takenIds = [];
 
 export function resetSync() { takenIds.length = 0; }
 
+/** Release the GPU resources the LAST match's loot allocated.
+ *  disposeMapResources is deliberately scoped to W._groups.map, and match
+ *  teardown only .clear()s the other groups — so every chest's glow SpriteMaterial
+ *  (a fresh one per chest, chestGlow()), every beam CylinderGeometry +
+ *  MeshBasicMaterial, and every death-drop glow was orphaned on the GPU each
+ *  match. With ~130 chests a map and PLAY AGAIN as the expected flow, that
+ *  compounds without ever passing through a reload.
+ *
+ *  The prototypes are shared across matches ON PURPOSE (itemProtoCache holds the
+ *  loaded GLBs; ringGeo/kindGeos/kindMats/ringMats/glowTex are built once, and
+ *  THREE's clone() shares geometry and material by reference) — so anything
+ *  reachable from them is excluded BY IDENTITY. Disposing those would leave the
+ *  next match drawing with dead handles. */
+export function disposeLootResources(W) {
+  const g = W._groups && W._groups.loot;
+  if (!g) return { geometries: 0, materials: 0, textures: 0 };
+  const keepG = new Set(), keepM = new Set(), keepT = new Set();
+  const keep = (o) => {
+    if (!o) return;
+    if (o.isTexture) { keepT.add(o); return; }
+    if (o.isMaterial) {
+      keepM.add(o);
+      for (const k in o) { const v = o[k]; if (v && v.isTexture) keepT.add(v); }
+      return;
+    }
+    if (o.isBufferGeometry) { keepG.add(o); return; }
+    if (o.traverse) o.traverse((n) => {
+      if (n.geometry) keepG.add(n.geometry);
+      const mm = Array.isArray(n.material) ? n.material : (n.material ? [n.material] : []);
+      for (const m of mm) keep(m);
+    });
+  };
+  keep(ringGeo); keep(glowTex); keep(chestProto);
+  for (const k in ringMats) keep(ringMats[k]);
+  for (const k in kindGeos) keep(kindGeos[k]);
+  for (const k in kindMats) keep(kindMats[k]);
+  for (const k in itemProtoCache) keep(itemProtoCache[k]);
+
+  const seenG = new Set(), seenM = new Set(), seenT = new Set();
+  let geometries = 0, materials = 0, textures = 0;
+  g.traverse((o) => {
+    if (o.geometry && !keepG.has(o.geometry) && !seenG.has(o.geometry)) {
+      seenG.add(o.geometry); o.geometry.dispose(); geometries++;
+    }
+    const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+    for (const m of mats) {
+      if (!m || keepM.has(m) || seenM.has(m)) continue;
+      seenM.add(m);
+      for (const k in m) {
+        const t = m[k];
+        if (t && t.isTexture && !keepT.has(t) && !seenT.has(t)) { seenT.add(t); t.dispose(); textures++; }
+      }
+      m.dispose(); materials++;
+    }
+  });
+  return { geometries, materials, textures };
+}
+
 export function populate(W) {
   items.clear(); chests.clear(); lootGrid.clear();
   takenIds.length = 0;

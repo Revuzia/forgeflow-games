@@ -286,8 +286,25 @@ function wireEvents(W) {
   // and no visual at all. Distance-gated because "landed" fires once for every
   // one of 50 actors at the end of the drop.
   W.events.on("hardLand", (a, speed) => {
+    // the impact speed was already being passed and used for particle count, but
+    // nothing ever moved the CAMERA — so a 20 m drop and a 2 m hop felt identical
+    // from behind the eyes. Player-only: a bot's landing must not shake your view.
+    if (a === W.player) W.camShake = Math.max(W.camShake, Math.min(0.22, 0.05 + speed * 0.006));
     if (!nearCam(a.pos.x, a.pos.z, 60)) return;
     burst({ x: a.pos.x, y: a.pos.y + 0.06, z: a.pos.z, n: Math.min(12, 4 + Math.round(speed * 0.3)), color: [0xa08b63, 0x8a7550], speed: 2.2, up: 0.8, size: 0.1, life: 0.5, gravity: -5, drag: 2 });
+  });
+  // ordinary touchdown — every jump, every step off a roof. Scales with impact so
+  // a hop kicks up almost nothing and a two-storey drop actually puffs.
+  W.events.on("touchdown", (a, speed) => {
+    if (!nearCam(a.pos.x, a.pos.z, 40)) return;
+    const k = Math.min(1, speed / 14);
+    burst({ x: a.pos.x, y: a.pos.y + 0.05, z: a.pos.z, n: 2 + Math.round(k * 5), color: [0x9a8562, 0xb0a184],
+            speed: 1.1 + k * 1.2, up: 0.35 + k * 0.5, size: 0.07 + k * 0.03, life: 0.3 + k * 0.2, gravity: -5, drag: 2.6 });
+  });
+  // takeoff — nothing was drawn here at all
+  W.events.on("jump", (a) => {
+    if (!nearCam(a.pos.x, a.pos.z, 34)) return;
+    burst({ x: a.pos.x, y: a.pos.y + 0.04, z: a.pos.z, n: 3, color: 0x9a8562, speed: 1.0, up: 0.5, size: 0.06, life: 0.26, gravity: -5, drag: 3 });
   });
   W.events.on("landed", (a) => {
     if (!nearCam(a.pos.x, a.pos.z, 45)) return;

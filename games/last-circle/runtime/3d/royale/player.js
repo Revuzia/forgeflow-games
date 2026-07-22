@@ -969,7 +969,15 @@ function stepActor(W, a, dt, far) {
     if (deepWater && a.pos.y <= wy + 0.05) {
       a.pos.y = wy - 0.55;   // enter swim next frame
     } else if (a.pos.y <= sup + 0.02) {
-      if (a.vel.y < -16) W.events.emit("hardLand", a, -a.vel.y);
+      // "landed" is emitted ONLY from the glide branch (the parachute touchdown),
+      // so it fires once per actor per match and never for a jump — which left
+      // fx.js's dust burst and audio.js's landing thump wired to a once-a-match
+      // event while the second-most-used movement verb in the game landed in
+      // total silence with nothing on screen. hardLand only covers vy < -16,
+      // and a normal jump touches down around -8. Emit the ordinary case too.
+      const impactV = -a.vel.y;
+      if (impactV > 16) W.events.emit("hardLand", a, impactV);
+      else if (impactV > 2.5) W.events.emit("touchdown", a, impactV);
       a.pos.y = sup; a.vel.y = 0; a.onGround = true;
     } else if (a.pos.y - sup > 0.1) {
       a.onGround = false;
