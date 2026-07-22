@@ -302,6 +302,7 @@ export function stepMatch(s, dt) {
     // resolve the movement tell BEFORE seekers look: a walking hider is easy to spot
     for (const a of hiders(s)) { const dx = a.x - a._px, dz = a.z - a._pz; a._moving = (dx * dx + dz * dz) > 1e-4; }
     for (const a of hiders(s)) if (a._cloneCd > 0) a._cloneCd = Math.max(0, a._cloneCd - dt);
+    markSearched(s, dt);
     for (const a of seekers(s)) stepSeeker(s, a, dt);
     accrueScores(s, dt);
     const w = checkWin({ mode: s.mode, timeLeft: s.timeLeft, hiders: hiders(s).map((h) => ({ id: h.id, alive: h.alive })), seekers: seekers(s).map((k) => ({ ammo: k.ammo })), ammoLimit: s.settings.ammoLimit, hidersAtStart: s.hidersAtStart || 0 });
@@ -559,20 +560,65 @@ function seekerShoot(s, a) {
  *  sight. Prefer a known hiding spot (where hiders actually are), else a walkable nav
  *  cell, and fall back to open bounds only if the grid is missing.
  */
-function patrolPoint(s) {
-  if (s.spots && s.spots.length && s.rng() < 0.55) {
-    const sp = s.spots[(s.rng() * s.spots.length) | 0];
-    if (sp) return { x: sp.x, z: sp.z };
+/** Coarse search memory, shared by the whole seeker team.
+ *
+ *  Waypoints were picked at random from spots and walkable cells, so two seekers happily
+ *  re-swept the same aisle while a third of the map went unvisited — they were finding
+ *  4.6 of 6 hiders and running out of TIME, not out of leads. Hiders won 79% of matches.
+ *  Sweeping is a coverage problem, so give the team a shared grid of where it has already
+ *  been and bias waypoint choice toward the coldest region. Deliberately coarse (8m
+ *  cells): the point is "we have not been over THERE", not perfect coverage.
+ */
+const SEARCH_CELL = 8;
+
+function searchGrid(s) {
+  if (!s._search) {
+    const w = Math.max(1, Math.ceil((s.bounds.maxX - s.bounds.minX) / SEARCH_CELL));
+    const h = Math.max(1, Math.ceil((s.bounds.maxZ - s.bounds.minZ) / SEARCH_CELL));
+    s._search = { w, h, seen: new Float32Array(w * h) };
   }
-  const nav = s.nav;
-  if (nav && nav.grid) {
-    for (let tries = 0; tries < 40; tries++) {
-      const i = (s.rng() * nav.w) | 0, j = (s.rng() * nav.h) | 0;
-      if (nav.grid[j * nav.w + i] === 1) {
-        return { x: nav.minX + (i + 0.5) * nav.cell, z: nav.minZ + (j + 0.5) * nav.cell };
+  return s._search;
+}
+
+/** Mark where the seekers currently are as freshly searched, and let old sweeps decay so
+ *  a long hunt eventually revisits somewhere it cleared early. */
+function markSearched(s, dt) {
+  const g = searchGrid(s);
+  for (const k of seekers(s)) {
+    if (!k.alive) continue;
+    const i = clamp(Math.floor((k.x - s.bounds.minX) / SEARCH_CELL), 0, g.w - 1);
+    const j = clamp(Math.floor((k.z - s.bounds.minZ) / SEARCH_CELL), 0, g.h - 1);
+    g.seen[j * g.w + i] = 1;
+  }
+  const decay = 0.02 * dt;
+  for (let n = 0; n < g.seen.length; n++) if (g.seen[n] > 0) g.seen[n] = Math.max(0, g.seen[n] - decay);
+}
+
+function patrolPoint(s) {
+  const g = searchGrid(s);
+  // sample several candidates and take the one in the least-recently-searched region;
+  // sampling beats scanning because candidates must be reachable, and the nav grid
+  // already answers that cheaply
+  let best = null, bestScore = Infinity;
+  for (let tries = 0; tries < 24; tries++) {
+    let p = null;
+    if (s.spots && s.spots.length && s.rng() < 0.5) {
+      const sp = s.spots[(s.rng() * s.spots.length) | 0];
+      if (sp) p = { x: sp.x, z: sp.z };
+    }
+    if (!p && s.nav && s.nav.grid) {
+      const i = (s.rng() * s.nav.w) | 0, j = (s.rng() * s.nav.h) | 0;
+      if (s.nav.grid[j * s.nav.w + i] === 1) {
+        p = { x: s.nav.minX + (i + 0.5) * s.nav.cell, z: s.nav.minZ + (j + 0.5) * s.nav.cell };
       }
     }
+    if (!p) continue;
+    const gi = clamp(Math.floor((p.x - s.bounds.minX) / SEARCH_CELL), 0, g.w - 1);
+    const gj = clamp(Math.floor((p.z - s.bounds.minZ) / SEARCH_CELL), 0, g.h - 1);
+    const score = g.seen[gj * g.w + gi] + s.rng() * 0.15;   // jitter breaks ties//lockstep
+    if (score < bestScore) { bestScore = score; best = p; }
   }
+  if (best) return best;
   return { x: s.bounds.minX + s.rng() * (s.bounds.maxX - s.bounds.minX),
            z: s.bounds.minZ + s.rng() * (s.bounds.maxZ - s.bounds.minZ) };
 }

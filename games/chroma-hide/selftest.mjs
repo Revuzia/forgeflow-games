@@ -618,5 +618,39 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
   assert(typeof BLEND_RANGE2 === "number", "hud: the range threshold is shared, not duplicated");
 }
 
+
+// ── the match is actually competitive ────────────────────────────────────────
+// Bot seekers used to pick waypoints at random, so two of them re-swept the same aisle
+// while a third of the map went unvisited: they found 4.6 of 6 hiders, ran out of TIME
+// rather than leads, and hiders won 79% of matches. A shared coarse search grid fixed the
+// coverage problem. This guards the BAND, not an exact number — balance should be free to
+// drift, but not back to one-sided.
+{
+  const { createMatch, stepMatch, seekers, hiders } = await import("./runtime/sim/match_sim.js");
+  const { DEFAULTS, PHASE, ROLE } = await import("./runtime/sim/match_core.js");
+  const { MAPS, toSimMap } = await import("./runtime/maps.js");
+  const play = (map, seed) => {
+    const players = [...Array(8)].map((_, i) => ({ id: "p" + i, isBot: true, role: i < 2 ? ROLE.SEEKER : ROLE.HIDER }));
+    const s = createMatch({ players, settings: { ...DEFAULTS }, map: toSimMap(MAPS[map]), seed, seekerCount: 2 });
+    let t = 0; const dt = 1 / 30;
+    while (s.phase !== PHASE.RESULTS && t < 420) { stepMatch(s, dt); t += dt; }
+    return { winner: s.result && s.result.winner, finds: seekers(s).reduce((a, k) => a + (k.finds || 0), 0) };
+  };
+  let seekWins = 0, total = 0, finds = 0;
+  for (const map of ["office", "street", "supermarket"]) {
+    for (let seed = 1; seed <= 6; seed++) {
+      const r = play(map, seed);
+      total++; finds += r.finds;
+      if (r.winner === "seekers") seekWins++;
+    }
+  }
+  const rate = seekWins / total;
+  const avgFinds = finds / total;
+  assert(rate >= 0.25 && rate <= 0.8,
+    `balance: neither side dominates — seekers win ${(rate * 100).toFixed(0)}% of ${total} matches (want 25-80%)`);
+  assert(avgFinds >= 4.0,
+    `balance: seekers find most of the lobby — ${avgFinds.toFixed(1)} of 6 (want >=4.0)`);
+}
+
 console.log(fails === 0 ? "\nSELFTEST PASS" : `\nSELFTEST FAIL (${fails})`);
 process.exit(fails === 0 ? 0 : 1);
