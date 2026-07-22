@@ -53,10 +53,15 @@ const codePhase = (c) => PHASES[c] || "prep";
 
 /** Paint strokes: [u12,v12,size,r,g,b,metal8,rough8]. u/v in 1/4096ths. */
 export function packStroke(s) {
-  return [Math.round(s.u * 4095), Math.round(s.v * 4095), Math.round(s.size), s.r | 0, s.g | 0, s.b | 0, Math.round((s.metal ?? 0) * 255), Math.round((s.rough ?? 0.8) * 255)];
+  // `hard` is the dab's falloff and it is what separates a spray from a marker. Dropping it
+  // from the wire meant a remote client re-rendered every stroke at the default brush
+  // hardness -- the disguise other players saw was not the one the painter made.
+  return [Math.round(s.u * 4095), Math.round(s.v * 4095), Math.round(s.size), s.r | 0, s.g | 0, s.b | 0,
+    Math.round((s.metal ?? 0) * 255), Math.round((s.rough ?? 0.8) * 255), Math.round((s.hard ?? 0.6) * 255)];
 }
 export function unpackStroke(a) {
-  return { u: a[0] / 4095, v: a[1] / 4095, size: a[2], r: a[3], g: a[4], b: a[5], metal: a[6] / 255, rough: a[7] / 255 };
+  return { u: a[0] / 4095, v: a[1] / 4095, size: a[2], r: a[3], g: a[4], b: a[5], metal: a[6] / 255, rough: a[7] / 255,
+    hard: a[8] != null ? a[8] / 255 : 0.6 };
 }
 export function packStrokes(list) { return list.map(packStroke); }
 export function unpackStrokes(list) { return list.map(unpackStroke); }

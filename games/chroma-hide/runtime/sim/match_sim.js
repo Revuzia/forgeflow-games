@@ -10,7 +10,7 @@
  * Local (human) actors set their own x/z/yaw/shoot each tick via setLocalInput();
  * everything else is bot-driven here so single-player and headless share one brain.
  */
-import { PHASE, ROLE, MODE, MODE_INFO, applyShot, losPoints, checkWin, assignRoles, computeSeekerCount, POSE_IDS, POSE_HEIGHT } from "./match_core.js";
+import { PHASE, ROLE, MODE, MODE_INFO, applyShot, losPoints, checkWin, assignRoles, computeSeekerCount, POSE_IDS, POSE_HEIGHT, BODY_SIZES } from "./match_core.js";
 import { makeRng, clamp } from "./util.js";
 import { buildNavGrid, findPath } from "./nav.js";
 
@@ -43,11 +43,12 @@ export { POSE_IDS, POSE_HEIGHT };
 
 export function hiderHeight(h) {
   if (!h) return 1.55;
+  const size = h.bodySize || 1.4;   // 1.4 is the standard build, not 1
   const p = POSE_HEIGHT[h.pose];
   // Climbing onto a crate or a desk raises your whole silhouette: cover that used to
   // hide you no longer does. That trade -- better vantage for worse concealment -- is
   // what makes mounting props a real decision rather than a free upgrade.
-  return (p != null ? p : 1.55) + (h._elev || 0);
+  return (p != null ? p : 1.55) * (size / 1.4) + (h._elev || 0);   // 1.4 is the standard build
 }
 
 /** Is `to` visible from `from`? An obstacle only occludes when it is at least as TALL
@@ -164,12 +165,15 @@ export function createMatch(config) {
 
   const nav = buildNavGrid(map.bounds, map.obstacles);
   const spots = (map.spots || []).slice();
-  const actors = players.map((p) => {
+  const actors = players.map((p, pi) => {
     const role = p.role || roleInfo.roles[p.id];
     const isSeeker = role === ROLE.SEEKER;
     const base = isSeeker ? map.spawn.seeker : map.spawn.hider;
     return {
       id: p.id, role, isBot: !!p.isBot, isLocal: !!p.isLocal,
+      // bodySize drives silhouette height, so bots get a spread of builds too --
+      // a lobby of identical mannequins reads as placeholder
+      bodySize: p.bodySize || BODY_SIZES[pi % BODY_SIZES.length] || 1.4,
       alive: true, caught: false,
       x: base.x + (rng() - 0.5) * 2, z: base.z + (rng() - 0.5) * 2, yaw: rng() * Math.PI * 2,
       ammo: settings.startAmmo, score: 0,
@@ -242,6 +246,7 @@ export function dropDecoy(s, ownerId) {
     paintRGB: o.paintRGB ? { ...o.paintRGB } : null,
     paintRough: o.paintRough, paintMetal: o.paintMetal,
     spot: null, hidden: true, tauntTimer: 0, _moving: false, _elev: o._elev || 0,
+    bodySize: o.bodySize || 1.4,   // a clone that is a different size is no clone at all
     patrol: null, target: null, dwell: 0, cooldown: 0,
     _in: { mx: 0, mz: 0, yaw: null, shoot: false },
   };
@@ -433,6 +438,11 @@ function stepSeeker(s, a, dt) {
   }
 
   if (seen) {
+    // Dwell belongs to the TARGET, not the seeker. Accumulating it on the seeker meant
+    // you could stare at an easy, badly-painted hider to build up the timer, then swing
+    // onto a well-camouflaged one and shoot instantly -- tab-targeting straight past the
+    // 4x dwell stretch that good paint is supposed to buy.
+    if (!a.target || a.target.id !== seen.id) a.dwell = 0;
     a.dwell += dt;
     a.target = seen;
     a.yaw = yawTo(a.x, a.z, seen.x, seen.z);
@@ -478,6 +488,15 @@ function stepSeeker(s, a, dt) {
 
 function seekerShoot(s, a) {
   a.cooldown = (s.settings.shotCooldownMs || 1500) / 1000;
+  // The sim is 2D, so a shot used to connect no matter where the crosshair pointed
+  // vertically -- you could stare at the ceiling and still tag someone. Bots aim level by
+  // construction; a human's pitch is real input, so require it to be roughly level.
+  const pitch = a._in && a._in.pitch;
+  if (!a.isBot && pitch != null && Math.abs(pitch) > 0.45) {
+    a.ammo = applyShot(a.ammo, { hit: false, fleeing: false, ammoLimit: s.settings.ammoLimit, startAmmo: s.settings.startAmmo });
+    s.events.push({ t: "miss", by: a.id });
+    return;
+  }
   // find the hider under the crosshair (closest in a tight cone with LOS)
   let hit = null, best = SIM.shootRange, fleeing = false;
   for (const h of aliveHiders(s)) {

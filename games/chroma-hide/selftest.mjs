@@ -515,5 +515,50 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
   assert(me.alive, "decoy: the owner is untouched");
 }
 
+
+// ── body size, per-target dwell, stroke hardness, aim pitch ──────────────────
+{
+  const M = await import("./runtime/sim/match_sim.js");
+  const { DEFAULTS, PHASE, ROLE, BODY_SIZES } = await import("./runtime/sim/match_core.js");
+  const { MAPS, toSimMap } = await import("./runtime/maps.js");
+  const P = await import("./runtime/sim/net_protocol.js");
+
+  // body size: the tips promised a choice that did not exist
+  assert(M.hiderHeight({ pose: "stand" }) === 1.55, "size: a body with no size set is the standard build");
+  const small = M.hiderHeight({ pose: "stand", bodySize: 1.0 });
+  const large = M.hiderHeight({ pose: "stand", bodySize: 1.7 });
+  assert(small < 1.55 && large > 1.55, `size: build changes the silhouette (${small.toFixed(2)} < 1.55 < ${large.toFixed(2)})`);
+  assert(M.hiderHeight({ pose: "flat", bodySize: 1.0 }) < M.hiderHeight({ pose: "stand", bodySize: 1.0 }),
+    "size: pose still composes on top of build");
+
+  const players = [{ id: "me", isBot: false, isLocal: true, role: ROLE.HIDER, bodySize: 1.0 },
+    ...[...Array(5)].map((_, i) => ({ id: "b" + i, isBot: true, role: i < 2 ? ROLE.SEEKER : ROLE.HIDER }))];
+  const s = M.createMatch({ players, settings: { ...DEFAULTS }, map: toSimMap(MAPS.office), seed: 4, seekerCount: 2 });
+  assert(s.actors.find((a) => a.id === "me").bodySize === 1.0, "size: the player's choice reaches the sim");
+  assert(new Set(s.actors.filter((a) => a.isBot).map((a) => a.bodySize)).size > 1, "size: bots get a spread of builds");
+  const dec = M.dropDecoy(s, "me");
+  assert(dec.bodySize === 1.0, "size: a decoy inherits the owner's build (or it is not a clone)");
+
+  // stroke hardness is what separates a spray from a marker
+  const rt = P.unpackStroke(P.packStroke({ u: .5, v: .5, size: 20, r: 1, g: 2, b: 3, metal: 0, rough: .8, hard: 0.06 }));
+  assert(Math.abs(rt.hard - 0.06) < 0.01, "paint: stroke hardness survives the wire (" + rt.hard.toFixed(2) + ")");
+  assert(P.unpackStroke([1, 2, 3, 4, 5, 6, 7, 8]).hard === 0.6, "paint: a stroke without hardness defaults sanely");
+
+  // identify dwell must belong to the target, not the seeker
+  const s2 = M.createMatch({ players: [...Array(6)].map((_, i) => ({ id: "p" + i, isBot: true, role: i < 1 ? ROLE.SEEKER : ROLE.HIDER })),
+    settings: { ...DEFAULTS }, map: toSimMap(MAPS.office), seed: 5, seekerCount: 1 });
+  let t = 0; while (s2.phase !== PHASE.HUNT && t < 400) { M.stepMatch(s2, 1 / 30); t += 1 / 30; }
+  const k = M.seekers(s2)[0], hs = M.hiders(s2).filter((h) => h.alive);
+  const A = hs[0], B = hs[1];
+  A.x = k.x + 3; A.z = k.z + 0.2; B.x = k.x + 400; B.z = k.z + 400;
+  k.yaw = Math.atan2(A.x - k.x, A.z - k.z);
+  for (let n = 0; n < 12; n++) M.stepMatch(s2, 1 / 30);
+  const built = k.dwell;
+  A.x = k.x + 400; A.z = k.z + 400; B.x = k.x + 3; B.z = k.z + 0.2;
+  M.stepMatch(s2, 1 / 30);
+  assert(built > 0.2, "ai: dwell accumulates on a watched target");
+  assert(k.dwell < built, "ai: switching target resets dwell (no tab-targeting past the camouflage stretch)");
+}
+
 console.log(fails === 0 ? "\nSELFTEST PASS" : `\nSELFTEST FAIL (${fails})`);
 process.exit(fails === 0 ? 0 : 1);

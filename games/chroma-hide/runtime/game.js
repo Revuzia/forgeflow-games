@@ -51,6 +51,7 @@ export class Game {
     this.mapDef = getMap(config.mapId);
     this.settings = sanitizeSettings({ ...DEFAULTS, mode: config.mode || MODE.NORMAL });
     this.localRole = config.role || ROLE.HIDER;
+    this.bodySize = config.bodySize || 1.4;
 
     // online plumbing
     this.online = !!config.online;
@@ -111,8 +112,8 @@ export class Game {
     const players = [];
     let seekersLeft = seekerCount, hidersLeft = n - seekerCount;
     // local first, with its chosen role
-    if (this.localRole === ROLE.SEEKER) { players.push({ id: "you", isLocal: true, role: ROLE.SEEKER }); seekersLeft--; }
-    else { players.push({ id: "you", isLocal: true, role: ROLE.HIDER }); hidersLeft--; }
+    if (this.localRole === ROLE.SEEKER) { players.push({ id: "you", isLocal: true, role: ROLE.SEEKER, bodySize: this.bodySize }); seekersLeft--; }
+    else { players.push({ id: "you", isLocal: true, role: ROLE.HIDER, bodySize: this.bodySize }); hidersLeft--; }
     const names = ["Vex", "Rune", "Mica", "Pip", "Sol", "Wisp", "Bram", "Kite", "Fen", "Ivo", "Zed"];
     for (let i = 0; i < n - 1; i++) {
       const role = seekersLeft > 0 ? (ROLE.SEEKER) : ROLE.HIDER;
@@ -872,7 +873,8 @@ export class Game {
       mz = Math.cos(this.camYaw) * f + Math.sin(this.camYaw) * r;
     }
     this._moving = (mx !== 0 || mz !== 0);
-    return { mx, mz, yaw: this.camYaw, shoot: !!this._shootRequested };
+    // pitch goes to the sim so a seeker aiming at the floor or ceiling does not connect
+    return { mx, mz, yaw: this.camYaw, pitch: this.camPitch, shoot: !!this._shootRequested };
   }
 
   // ── per-frame ───────────────────────────────────────────────────────────────
@@ -1065,7 +1067,8 @@ export class Game {
         // wall: body centre sits at the cling height. top: body RESTS on the surface.
         py = this._stickMode === "top" ? this._stickY + BODY_Y * sy : this._stickY;
       }
-      mesh.scale.set(sx, sy, sz); mesh.position.y = py; mesh.rotation.set(rot, a.yaw, 0);
+      const bs = (a.bodySize || 1.4) / 1.4;   // pose scale AND body size, or the pose wipes the size
+      mesh.scale.set(sx * bs, sy * bs, sz * bs); mesh.position.y = py * bs; mesh.rotation.set(rot, a.yaw, 0);
       if (a.caught && a.role === ROLE.HIDER) { mesh.material.transparent = true; mesh.material.opacity = 0.35; }
       // infection: a converted hider now renders like a seeker (tint)
       if (a.role === ROLE.SEEKER && a._wasHider !== true && a.caught === false && a.isBot && a._converted) { }

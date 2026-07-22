@@ -149,6 +149,8 @@ export function createTitleMenu(host, cb, maps) {
 
   let role = "hider", mode = "normal", mapId = "depot";
 
+  let bodySize = 1.4;   // metres-ish scale; BODY_SIZES in match_core
+
   // Role segmented control
   panel.appendChild(el("div", "", "Play as")).className = "ct-label";
   const roleSeg = el("div", "", ""); roleSeg.className = "ct-seg";
@@ -169,6 +171,20 @@ export function createTitleMenu(host, cb, maps) {
     modeBtns[id] = b; modeSeg.appendChild(b);
   }
   panel.appendChild(modeSeg);
+
+  // Body size. A real trade, not a cosmetic: a small body tucks behind cover a large one
+  // cannot use, but hiders score for time spent in a seeker's sight without being caught,
+  // and a big body banks those points far faster.
+  panel.appendChild(el("div", "", "Body")).className = "ct-label";
+  const sizeSeg = el("div", "", ""); sizeSeg.className = "ct-seg";
+  const sizeBtns = {};
+  for (const [v, name] of [["1", "Small · hides easily"], ["1.4", "Standard"], ["1.7", "Large · scores faster"]]) {
+    const b = el("button", "", name);
+    b.onclick = () => { bodySize = parseFloat(v); for (const k in sizeBtns) sizeBtns[k].className = k === v ? "on" : ""; };
+    sizeBtns[v] = b; sizeSeg.appendChild(b);
+  }
+  sizeBtns["1.4"].className = "on";
+  panel.appendChild(sizeSeg);
 
   // Stage cards
   panel.appendChild(el("div", "", "Stage")).className = "ct-label";
@@ -194,7 +210,7 @@ export function createTitleMenu(host, cb, maps) {
   // Actions
   const actions = el("div", "", ""); actions.className = "ct-actions";
   const play = el("button", "", "▶  PLAY"); play.className = "ct-play";
-  play.onclick = () => cb.onPlay({ role, mode, players: parseInt(slider.value, 10), mapId });
+  play.onclick = () => cb.onPlay({ role, mode, players: parseInt(slider.value, 10), mapId, bodySize });
   const online = el("button", "", "🌐 Online"); online.className = "ct-online";
   online.onclick = () => cb.onOnline && cb.onOnline();
   actions.append(play, online); panel.appendChild(actions);
