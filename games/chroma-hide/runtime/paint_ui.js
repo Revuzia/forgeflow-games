@@ -120,9 +120,12 @@ export function createPaintPanel(paint, opts = {}) {
   const actions = document.createElement("div");
   actions.style.cssText = "display:flex;gap:5px;margin-top:8px;flex-wrap:wrap;";
   const btnDrop = mkBtn("Eyedrop · Space", () => opts.onEyedrop && opts.onEyedrop());
-  const btnXray = mkBtn("X-ray · 3", () => { const on = paint.toggleXray(); btnXray.style.background = on ? "#2b6b58" : ""; });
-  const btnShadow = mkBtn("Shadow · V", () => { paint.toggleShadow(); });
-  const btnClear = mkBtn("Clear · C", () => { if (confirm("Clear all paint? (no undo)")) { paint.clear(); refresh(); } });
+  // These used to advertise "3", "V" and "C". All three now do something else in paint
+  // mode — 3 picks the marker, V is the camera flag, and C SPENDS A DECOY — so reading
+  // the panel and pressing the key it names cost you a clone. Buttons only.
+  const btnXray = mkBtn("X-ray", () => { const on = paint.toggleXray(); btnXray.style.background = on ? "#2b6b58" : ""; });
+  const btnShadow = mkBtn("Shadow", () => { paint.toggleShadow(); });
+  const btnClear = mkBtn("Clear paint", () => { if (confirm("Clear all paint? (no undo)")) { paint.clear(); refresh(); } });
   [btnDrop, btnXray, btnShadow, btnClear].forEach((b) => { b.style.flex = "1 1 46%"; actions.appendChild(b); });
   el.appendChild(actions);
 

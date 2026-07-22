@@ -370,9 +370,22 @@ export class Game {
     // POINTER LOCK — look with the mouse like any first/third-person game. Without it
     // you had to hold a drag to turn, which reads as broken.
     this._lockChange = () => {
+      const was = this._locked;
       this._locked = document.pointerLockElement === dom;
       if (this.hud && this.hud.setHint && !this.paintMode) {
-        this.hud.setHint(this._locked ? this._defaultHint() : "<b>Click</b> to look around · <b>Esc</b> releases the cursor");
+        this.hud.setHint(this._locked ? this._defaultHint() : "<b>Click</b> to look around · <b>Esc</b> pauses");
+      }
+      // Esc PAUSES. It cannot be a keydown branch: the browser swallows the Escape that
+      // exits pointer lock, so the key never reaches us while locked. Losing the lock is
+      // the signal. Previously Esc just freed the cursor while the match ran on at full
+      // speed — timer ticking, bots still hunting — and the only real pause was a 26px
+      // glyph you could not reach while locked.
+      if (was && !this._locked && !this.online && !this.paintMode && !this._ended &&
+          this.sim.phase !== PHASE.RESULTS &&
+          window.__PAUSE__ && !window.__PAUSE__.isPaused()) {
+        // online is excluded on purpose: pausing only freezes YOUR sim while the host
+        // keeps advancing, which desyncs you rather than pausing anything
+        window.__PAUSE__.pause();
       }
     };
     document.addEventListener("pointerlockchange", this._lockChange);
@@ -687,7 +700,7 @@ export class Game {
          <div style="opacity:.72">Paint mode: drag <b>LMB</b> on your body · ${k("1")}-${k("4")} brush/spray/marker/sponge · <b>Space</b> eyedrop · <b>MMB</b> orbit · <b>wheel</b> zoom</div>`
       : `<div style="color:#ff9d6b;font-weight:700;margin-top:3px">${k("LMB")} TAG a suspect</div>
          <div>${k("Space")} jump · ${k("V")} 1st/3rd</div>`;
-    el.innerHTML = `<div>${k("WASD")} move · <b>mouse</b> look (click to lock, ${k("Esc")} release)</div>${hider}`;
+    el.innerHTML = `<div>${k("WASD")} move · <b>mouse</b> look (click to lock, ${k("Esc")} pause)</div>${hider}`;
     this.engine.container.appendChild(el);
     this._helpEl = el;
   }
@@ -888,8 +901,24 @@ export class Game {
     else this._stepGuest(dt);
 
     if (this.sim.phase !== this._lastPhase) { this._onPhaseChange(this._lastPhase, this.sim.phase); this._lastPhase = this.sim.phase; }
-    if (this._moving && this.local && this.local.alive && this.sim.phase !== PHASE.RESULTS) {
-      this.audio.footstep(surfaceAt(this.mapDef, this.local.x, this.local.z), this.local.x, this.local.z);
+    // Footsteps for EVERY actor, not just you. In a hide-and-seek game positional
+    // hearing is the seeker's primary sense and the hider's main risk, and only the local
+    // player was ever audible — a seeker could walk straight past a moving hider in
+    // silence. Each actor keeps its own stride timer so the sounds do not machine-gun,
+    // and the panner (audio.js) handles distance falloff.
+    if (this.sim.phase !== PHASE.RESULTS) {
+      for (const a of this.sim.actors) {
+        if (!a.alive || a.isDecoy) continue;
+        const dx = a.x - (a._sfx_px ?? a.x), dz = a.z - (a._sfx_pz ?? a.z);
+        const moved = Math.hypot(dx, dz);
+        a._sfx_px = a.x; a._sfx_pz = a.z;
+        if (moved < 1e-3) { a._stride = 0; continue; }
+        // stride length rather than a timer, so a slow crouch-walk is quieter per metre
+        a._stride = (a._stride || 0) + moved;
+        if (a._stride < 1.15) continue;
+        a._stride = 0;
+        this.audio.footstep(surfaceAt(this.mapDef, a.x, a.z), a.x, a.z);
+      }
     }
     this._syncActors();
     this._updateEmotes(dt);
@@ -1188,6 +1217,39 @@ export class Game {
       if (this.local.role === ROLE.SEEKER) { this.hud.setAmmo(this.local.ammo, this.settings.startAmmo); this.hud.showCrosshair(!this.thirdPerson && this.sim.phase === PHASE.HUNT); }
       else { this.hud.setScore(this.local.score); this.hud.showCrosshair(false); }
     }
+    this._updateStatusLine();
+  }
+
+  /** The two facts nobody could see. A seeker in a 6-player lobby had no idea whether one
+   *  hider was left or five, and the hider's only limited resource — decoys — appeared
+   *  solely inside a 1.4s toast, with its cooldown invisible entirely. */
+  _updateStatusLine() {
+    if (!this._statusEl) {
+      const el = document.createElement("div");
+      el.style.cssText = [
+        "position:absolute", "top:74px", "left:50%", "transform:translateX(-50%)", "z-index:40",
+        "pointer-events:none", "font:600 12px/1.4 system-ui,-apple-system,sans-serif",
+        "color:#dfe7f2", "background:rgba(12,16,22,.72)", "border:1px solid rgba(255,255,255,.10)",
+        "border-radius:8px", "padding:5px 11px", "letter-spacing:.02em", "white-space:nowrap",
+      ].join(";");
+      this.engine.container.appendChild(el);
+      this._statusEl = el;
+    }
+    const el = this._statusEl;
+    if (!this.local || this.sim.phase === PHASE.RESULTS) { el.style.display = "none"; return; }
+    el.style.display = "block";
+    const left = this.sim.actors.filter((a) => a.role === ROLE.HIDER && a.alive && !a.isDecoy).length;
+    const parts = [`<span style="color:#7fe3c4">${left}</span> hider${left === 1 ? "" : "s"} left`];
+    if (this.localRole === ROLE.HIDER) {
+      const max = this.sim.settings.maxClones | 0;
+      const used = this.local._clonesUsed || 0;
+      const cd = Math.ceil(this.local._cloneCd || 0);
+      const stock = Math.max(0, max - used);
+      parts.push(cd > 0
+        ? `decoys <span style="color:#ff9d6b">${stock}</span> · ready in ${cd}s`
+        : `decoys <span style="color:${stock ? "#7fe3c4" : "#ff9d6b"}">${stock}</span>/${max}`);
+    }
+    el.innerHTML = parts.join(" &nbsp;·&nbsp; ");
   }
 
   _finish() {
@@ -1212,6 +1274,12 @@ export class Game {
   destroy() {
     if (this._helpEl && this._helpEl.parentNode) this._helpEl.parentNode.removeChild(this._helpEl);
     if (this._meterEl && this._meterEl.parentNode) this._meterEl.parentNode.removeChild(this._meterEl);
+    if (this._statusEl && this._statusEl.parentNode) this._statusEl.parentNode.removeChild(this._statusEl);
+    // PaintSystem owns three 1024x1024 CanvasTextures each and dispose() had NO call
+    // sites, so every rematch stranded ~17 MB of GPU memory that traverse-and-dispose
+    // could not reach (the textures hang off the PaintSystem, not the scene graph).
+    for (const [, ps] of this.paintByActor) { try { ps.dispose(); } catch (e) { /* ignore */ } }
+    this.paintByActor.clear();
     this._alive = false;
     if (this.audio) { try { this.audio.stopMusic(); this.audio.stopAmbience(); this.audio.spray(false); this.audio.stopTrack(0.6); } catch (e) {} }
     if (this.online && this.net) { try { this.net.leave(); } catch (e) {} }

@@ -47,7 +47,8 @@ const settings = ui.createSettings(container, {
   onClose: () => settings.hide(),
 });
 const pause = ui.createPauseMenu(container, {
-  onResume: () => {}, onPause: () => {},
+  // resume puts the cursor back where it was, so play continues without an extra click
+  onResume: () => { try { engine.renderer.domElement.requestPointerLock(); } catch (e) {} }, onPause: () => {},
   onSettings: () => settings.show(), onQuit: () => toMenu(),
 });
 const lobby = ui.createOnlineLobby(container, {
