@@ -105,8 +105,12 @@ function startOnlineGame(roster, netRole) {
   window.__CHROMA__.game = game; window.__CHROMA__.phase = "playing-online";
 }
 function leaveOnline() {
-  if (net) { try { net.leave(); } catch (e) {} net = null; }
-  lobby.hide(); title.show(); window.__CHROMA__.phase = "menu";
+  // Leaving an online match is leaving a MATCH. This used to drop the socket and show the
+  // title while leaving the Game object alive — its listeners, paint canvases and GPU
+  // resources all still allocated and its updater still ticking — and leaving the results
+  // overlay displayed underneath the menu, where only z-order hid it. toMenu() already
+  // does the right teardown, so do exactly that and don't keep two divergent exit paths.
+  toMenu();
 }
 
 function startGame(cfg) {
