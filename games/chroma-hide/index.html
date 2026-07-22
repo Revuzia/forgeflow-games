@@ -3,13 +3,53 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CHROMA HIDE — ForgeFlow Games</title>
 <style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;overflow:hidden;background:#0c1016}#game-container{width:100%;height:100%;position:relative}canvas{display:block}</style>
+<!-- three is ~1.2 MB from a CDN and nothing renders until it lands, so start the fetch
+     during HTML parse instead of waiting for main.js -> engine.js to resolve. -->
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js" crossorigin>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/" } }
 </script>
 </head><body>
 <div id="game-container"></div>
+<!-- First load used to be a solid #0c1016 page with nothing on it while the module graph
+     downloaded: indistinguishable from a broken tab, so people close it. The module graph
+     exposes no byte progress, hence a time-based bar plus an honest message if it stalls. -->
+<div id="ch-splash">
+  <div class="ch-mark">CHROMA<span>HIDE</span></div>
+  <div class="ch-sub">paint yourself into the room</div>
+  <div class="ch-bar"><i></i></div>
+  <div class="ch-tip" id="ch-tip">Loading the 3D runtime…</div>
+</div>
+<style>
+#ch-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  background:radial-gradient(120% 90% at 50% 40%,#141b26 0%,#0c1016 70%);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+  transition:opacity .45s ease}
+#ch-splash.gone{opacity:0;pointer-events:none}
+#ch-splash .ch-mark{font-size:clamp(30px,7vw,58px);font-weight:800;letter-spacing:.12em;color:#eaf3ff}
+#ch-splash .ch-mark span{color:#7fe3c4;margin-left:.35em}
+#ch-splash .ch-sub{font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;color:#7d8ba0}
+#ch-splash .ch-bar{width:min(300px,54vw);height:3px;border-radius:2px;background:rgba(255,255,255,.10);overflow:hidden}
+#ch-splash .ch-bar i{display:block;height:100%;width:0;border-radius:2px;background:linear-gradient(90deg,#7fe3c4,#4fb7ff);animation:chload 9s cubic-bezier(.15,.75,.3,1) forwards}
+@keyframes chload{0%{width:4%}45%{width:62%}80%{width:86%}100%{width:95%}}
+#ch-splash .ch-tip{font-size:11.5px;color:#5f6b7d;max-width:min(420px,84vw);text-align:center;line-height:1.5}
+@media (prefers-reduced-motion:reduce){#ch-splash .ch-bar i{animation:none;width:60%}}
+</style>
+<script>
+(function () {
+  var el = document.getElementById("ch-splash"), tip = document.getElementById("ch-tip"), t0 = Date.now();
+  // __CHROMA__.ready is set immediately after the title menu is built and appended, which
+  // makes it the tightest "there is actually something to look at" signal available.
+  var iv = setInterval(function () {
+    if (window.__CHROMA__ && window.__CHROMA__.ready) {
+      clearInterval(iv); el.className = "gone"; setTimeout(function () { el.remove(); }, 500);
+    } else if (Date.now() - t0 > 30000 && tip) {
+      tip.textContent = "Still loading. If this doesn't clear, reload — the 3D runtime is fetched from a CDN and that request may have been blocked.";
+    }
+  }, 120);
+})();
+</script>
 <!-- The game binds F for Paint Mode, so the page control bar must NOT claim F. -->
 <script>window.GAME_CONFIG={fs_hotkey:false,hide_bug_button:true};</script>
 <script src="game_controls.js?v=1"></script>
-<script type="module" src="runtime/main.js?v=35"></script>
+<script type="module" src="runtime/main.js?v=36"></script>
 </body></html>

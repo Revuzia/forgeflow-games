@@ -133,7 +133,10 @@ export function setUiAudio(audio, root) {
   }, true);
 }
 
-export function createTitleMenu(host, cb, maps) {
+// modeInfo is PASSED IN rather than imported: ui.js deliberately has zero imports so
+// every module can be loaded with a ?v= cache-buster, and a static import here would
+// ship an uncacheable second copy of match_core.
+export function createTitleMenu(host, cb, maps, modeInfo) {
   injectChromaStyles();
   const root = el("div", "", ""); root.className = "ct-root";
   const bg = el("div", "", ""); bg.className = "ct-bg"; bg.style.backgroundImage = "url('thumbnail.png')";
@@ -166,11 +169,26 @@ export function createTitleMenu(host, cb, maps) {
   panel.appendChild(el("div", "", "Mode")).className = "ct-label";
   const modeSeg = el("div", "", ""); modeSeg.className = "ct-seg wrap";
   const modeBtns = {};
+  // The map cards below render a blurb each; the modes rendered four bare words, so three
+  // of the four were never explained anywhere in the game even though MODE_INFO has had
+  // the text all along.
+  const MI = modeInfo || {};
+  const blurbFor = (id) => {
+    const m = MI[id]; if (!m) return "";
+    // Double and Reverse put EVERYONE in hiding first, silently overriding the Play-as
+    // control directly above — say so rather than letting the player discover it.
+    return m.blurb + (m.everyoneHides ? " Everyone hides first, so your Play-as pick doesn't apply." : "");
+  };
   for (const [id, name] of [["normal", "Normal"], ["infection", "Infection"], ["double", "Double"], ["reverse", "Reverse Chicken Race"]]) {
-    const b = el("button", "", name); b.onclick = () => { mode = id; for (const k in modeBtns) modeBtns[k].className = k === id ? "on" : ""; };
+    const b = el("button", "", name);
+    b.title = blurbFor(id);
+    b.onclick = () => { mode = id; for (const k in modeBtns) modeBtns[k].className = k === id ? "on" : ""; modeDesc.textContent = blurbFor(id); };
     modeBtns[id] = b; modeSeg.appendChild(b);
   }
   panel.appendChild(modeSeg);
+  const modeDesc = el("div", "", blurbFor("normal"));
+  modeDesc.style.cssText = "margin:6px 2px 0;font:400 11.5px/1.45 system-ui,-apple-system,sans-serif;color:#8b97a8;min-height:2.6em";
+  panel.appendChild(modeDesc);
 
   // Body size. A real trade, not a cosmetic: a small body tucks behind cover a large one
   // cannot use, but hiders score for time spent in a seeker's sight without being caught,

@@ -9,7 +9,7 @@ const { Engine } = await import("./engine.js" + V);
 const { Game } = await import("./game.js" + V);
 const ui = await import("./ui.js" + V);
 const { ChromaNet } = await import("./net/chromanet.js" + V);
-const { computeSeekerCount, sanitizeSettings, DEFAULTS } = await import("./sim/match_core.js" + V);
+const { computeSeekerCount, sanitizeSettings, DEFAULTS, MODE_INFO } = await import("./sim/match_core.js" + V);
 const { mapList } = await import("./maps.js" + V);
 const { GameAudio } = await import("./audio.js" + V);
 const THREE = await import("three");
@@ -64,7 +64,7 @@ const title = ui.createTitleMenu(container, {
   onOnline: () => { title.hide(); lobby.show(); window.__CHROMA__.phase = "lobby"; },
   onHelp: () => alert("HIDERS: paint your body (F) to match a surface, hold still, survive the hunt.\nSEEKERS: find and shoot every hider before the timer — but ammo is limited."),
   onSettings: () => settings.show(),
-}, MAPS);
+}, MAPS, MODE_INFO);
 
 let net = null;
 function wireNet() {
