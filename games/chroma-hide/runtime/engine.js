@@ -78,7 +78,12 @@ export class Engine {
   _resize() {
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
-    this.renderer.setSize(w, h, false);
+    // updateStyle MUST be true. With false, three.js sets canvas.width/height (CSS px x
+    // pixelRatio) but never canvas.style.*, so the canvas LAYS OUT at its attribute size:
+    // at DPR 1.25 that is 1600x900 inside a 1280x720 container and only 64% of the frame
+    // is on screen; at DPR 2 it is 25%. Invisible to readPixels-based screenshots, which
+    // read the drawing buffer and not the page — this survived a whole session of them.
+    this.renderer.setSize(w, h, true);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }

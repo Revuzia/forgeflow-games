@@ -43,6 +43,12 @@ const POSE_IDS = Object.keys(POSES);
 // the templates themselves are never mutated, so sharing is safe and each kit's colormap
 // atlas is uploaded exactly once instead of once per match.
 const GLB_CACHE = new Map();
+// Geometry and materials owned by those page-lifetime templates. Object3D.clone(true)
+// copies both BY REFERENCE, so a clone in this match's scene graph points at the very
+// buffers the cache is meant to keep alive — and destroy()'s blanket traverse would
+// delete them, silently cancelling the cache and forcing a re-upload every match. Identity
+// set rather than a userData flag, because clone() copies userData too.
+const GLB_SHARED = new Set();
 // How far you can reach to cling, and the highest surface you can haul yourself onto.
 // 2.6m reach lets you aim at the floor a couple of paces ahead to lie down.
 const STICK_REACH = 2.6;
@@ -265,6 +271,11 @@ export class Game {
         tpl.traverse((o) => {
           if (o.isLight && o.parent) o.parent.remove(o);       // FFG rule: strip embedded lights
           if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.material) o.material.side = THREE.FrontSide; }
+        });
+        // register everything the template owns, so per-match teardown leaves it alone
+        tpl.traverse((o) => {
+          if (o.geometry) GLB_SHARED.add(o.geometry);
+          if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m && GLB_SHARED.add(m));
         });
         tpl.updateMatrixWorld(true);
         const size = new THREE.Box3().setFromObject(tpl).getSize(new THREE.Vector3());
@@ -1379,6 +1390,7 @@ export class Game {
     // could not reach (the textures hang off the PaintSystem, not the scene graph).
     for (const [, ps] of this.paintByActor) { try { ps.dispose(); } catch (e) { /* ignore */ } }
     this.paintByActor.clear();
+    this.paint = null;   // don't hold the 512² paint canvases if anything still references us
     this._alive = false;
     if (this.audio) { try { this.audio.stopMusic(); this.audio.stopAmbience(); this.audio.spray(false); this.audio.stopTrack(0.6); } catch (e) {} }
     if (this.online && this.net) { try { this.net.leave(); } catch (e) {} }
@@ -1388,12 +1400,25 @@ export class Game {
     if (this._lockChange) document.removeEventListener("pointerlockchange", this._lockChange);
     this._releasePointer();
     const dom = this.engine.renderer.domElement;
-    dom.removeEventListener("pointerdown", this._pd); dom.removeEventListener("pointermove", this._pm); dom.removeEventListener("wheel", this._wheel);
+    dom.removeEventListener("pointerdown", this._pd); dom.removeEventListener("wheel", this._wheel);
+    // _pm is added to WINDOW (see _setupInput); removing it from the canvas is a silent
+    // no-op, so it survived every match and its closure pinned the whole dead Game --
+    // scene graph, sim and paint canvases included. This is the JS heap growth a soak
+    // showed that I could not account for.
+    window.removeEventListener("pointermove", this._pm);
     window.removeEventListener("pointerup", this._pu);
     if (this.paintPanel && this.paintPanel.el.parentNode) this.paintPanel.el.parentNode.removeChild(this.paintPanel.el);
     if (this._emoteBar && this._emoteBar.parentNode) this._emoteBar.parentNode.removeChild(this._emoteBar);
     this.engine.scene.remove(this.root);
-    this.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { const mats = Array.isArray(o.material) ? o.material : [o.material]; mats.forEach((m) => m.dispose && m.dispose()); } });
+    // Dispose everything this match owns, but never what the page-lifetime GLB templates
+    // own — clones share those buffers by reference (see GLB_SHARED).
+    this.root.traverse((o) => {
+      if (o.geometry && !GLB_SHARED.has(o.geometry)) o.geometry.dispose();
+      if (o.material) {
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        mats.forEach((m) => { if (m && m.dispose && !GLB_SHARED.has(m)) m.dispose(); });
+      }
+    });
   }
 }
 
