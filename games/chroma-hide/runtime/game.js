@@ -1452,7 +1452,15 @@ export class Game {
     const res = this.sim.result || { winner: this.sim.actors.some((a) => a.role === ROLE.HIDER && a.alive) ? "hiders" : "seekers", reason: "time_survived" };
     const scores = this.sim.actors.map((a) => ({ name: this._names[a.id] || a.id, role: a.role, score: a.score, caught: a.caught, isLocal: a.isLocal }));
     this.hud.hide();
-    if (this.cb.onEnd) this.cb.onEnd({ winner: res.winner, reason: res.reason, scores });
+    // Double is decided by finds, not by team. Hand the results screen the individual
+    // winner so it can say so rather than declaring a side that the mode does not have.
+    let topScorer = null, totalFinds = 0;
+    if (this.sim.mode === MODE.DOUBLE) {
+      totalFinds = this.sim.actors.reduce((n, a) => n + (a.finds || 0), 0);
+      const best = this.sim.actors.slice().sort((a, b) => (b.finds || 0) - (a.finds || 0) || b.score - a.score)[0];
+      if (best) topScorer = { name: this._names[best.id] || best.id, finds: best.finds || 0, isLocal: !!best.isLocal };
+    }
+    if (this.cb.onEnd) this.cb.onEnd({ winner: res.winner, reason: res.reason, scores, topScorer, totalFinds });
   }
 
   // ── test hooks (headless/backgrounded verification) ─────────────────────────

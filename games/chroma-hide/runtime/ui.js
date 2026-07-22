@@ -324,9 +324,20 @@ export function createResults(host, cb) {
   return {
     el: root,
     show: (data) => {
-      title.textContent = data.winner === "seekers" ? "🔫 Seekers win" : "🎨 Hiders win";
-      title.style.color = data.winner === "seekers" ? "#ff9d6b" : ACCENT;
-      reason.textContent = ({ all_found: "Every hider was found.", time_survived: "A hider survived the hunt.", seekers_out_of_ammo: "The seekers ran out of ammo." })[data.reason] || "";
+      // Double's stated win condition is "Most finds wins" — an individual race, not a
+      // team result. It was reporting "Seekers win", which contradicts the mode blurb the
+      // player picked it from. Name the actual winner instead.
+      if (data.topScorer) {
+        title.textContent = "🏆 " + data.topScorer.name + " wins";
+        title.style.color = ACCENT;
+        reason.textContent = data.topScorer.finds != null
+          ? `Most finds — ${data.topScorer.finds} of ${data.totalFinds || data.topScorer.finds}.`
+          : "Highest score.";
+      } else {
+        title.textContent = data.winner === "seekers" ? "🔫 Seekers win" : "🎨 Hiders win";
+        title.style.color = data.winner === "seekers" ? "#ff9d6b" : ACCENT;
+        reason.textContent = ({ all_found: "Every hider was found.", time_survived: "A hider survived the hunt.", seekers_out_of_ammo: "The seekers ran out of ammo." })[data.reason] || "";
+      }
       board.innerHTML = "";
       const sorted = data.scores.slice().sort((a, b) => b.score - a.score);
       for (const p of sorted) {

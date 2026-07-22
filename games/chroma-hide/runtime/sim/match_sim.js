@@ -654,6 +654,28 @@ function moveLocal(s, a, dt) {
 
 // ── scoring ──────────────────────────────────────────────────────────────────
 function accrueScores(s, dt) {
+  // Reverse Chicken Race scores the CHASE, not just the kill. Everyone but the mark is a
+  // seeker, and the base rule only pays alive hiders — so exactly one player (whoever
+  // landed the shot) scored and the other six finished on zero, having spent the whole
+  // round hunting. Sight of the mark pays, pressure pays, and the mark itself banks
+  // survival time for being 1-against-7. The 500 bounty for the actual find is untouched.
+  if (s.mode === MODE.REVERSE && s.reverseMark) {
+    const mark = s.actors.find((x) => x.id === s.reverseMark && x.alive);
+    if (mark) {
+      mark.score += s.settings.losBasePerSec * dt * 1.5;   // surviving the pack is the mark's job
+      for (const k of seekers(s)) {
+        if (!k.alive) continue;
+        const d = dist2(k.x, k.z, mark.x, mark.z);
+        if (d > s.settings.losMaxDist) continue;
+        // PROXIMITY, not line of sight. Requiring LOS+FOV left five of eight players on
+        // zero: seven hunters converge and the mark dies in ~108s, so most of the pack
+        // never gets clean eyes on it. Closing the distance IS the chase, and closer pays
+        // more; the 500 bounty still goes to whoever actually lands it.
+        k.score += losPoints(d, dt, s.settings) * 0.75;
+      }
+    }
+    return;
+  }
   for (const h of aliveHiders(s)) {
     let bestPts = 0;
     for (const k of seekers(s)) {
