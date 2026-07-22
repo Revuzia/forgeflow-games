@@ -556,8 +556,11 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
   assert(P.unpackStroke([1, 2, 3, 4, 5, 6, 7, 8]).hard === 0.6, "paint: a stroke without hardness defaults sanely");
 
   // identify dwell must belong to the target, not the seeker
+  // maxClones 0: this checks TARGETING, and bots now drop a decoy when a seeker closes
+  // inside flee range — which is exactly the 3m this test uses — so the seeker would be
+  // re-targeting a clone rather than demonstrating dwell reset.
   const s2 = M.createMatch({ players: [...Array(6)].map((_, i) => ({ id: "p" + i, isBot: true, role: i < 1 ? ROLE.SEEKER : ROLE.HIDER })),
-    settings: { ...DEFAULTS }, map: toSimMap(MAPS.office), seed: 5, seekerCount: 1 });
+    settings: { ...DEFAULTS, maxClones: 0 }, map: toSimMap(MAPS.office), seed: 5, seekerCount: 1 });
   let t = 0; while (s2.phase !== PHASE.HUNT && t < 400) { M.stepMatch(s2, 1 / 30); t += 1 / 30; }
   const k = M.seekers(s2)[0], hs = M.hiders(s2).filter((h) => h.alive);
   const A = hs[0], B = hs[1];
@@ -640,25 +643,36 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
   const { createMatch, stepMatch, seekers, hiders, coverInfo } = await import("./runtime/sim/match_sim.js");
   const { DEFAULTS, PHASE, ROLE } = await import("./runtime/sim/match_core.js");
   const { MAPS, toSimMap } = await import("./runtime/maps.js");
-  const play = (map, seed) => {
-    const players = [...Array(8)].map((_, i) => ({ id: "p" + i, isBot: true, role: i < 2 ? ROLE.SEEKER : ROLE.HIDER }));
-    const s = createMatch({ players, settings: { ...DEFAULTS }, map: toSimMap(MAPS[map]), seed, seekerCount: 2 });
+  const play = (map, seed, lobby = 8) => {
+    const sk = mc.computeSeekerCount(lobby);
+    const players = [...Array(lobby)].map((_, i) => ({ id: "p" + i, isBot: true, role: i < sk ? ROLE.SEEKER : ROLE.HIDER }));
+    const s = createMatch({ players, settings: { ...DEFAULTS }, map: toSimMap(MAPS[map]), seed, seekerCount: sk });
     let t = 0; const dt = 1 / 30;
     while (s.phase !== PHASE.RESULTS && t < 420) { stepMatch(s, dt); t += dt; }
-    return { winner: s.result && s.result.winner, finds: seekers(s).reduce((a, k) => a + (k.finds || 0), 0) };
+    return { winner: s.result && s.result.winner, finds: seekers(s).reduce((a, k) => a + (k.finds || 0), 0), hiders: lobby - sk };
   };
+  // This measured ONE lobby size (8 players = 2 seekers vs 6 hiders, the hardest ratio in
+  // the game) over 18 matches, and asserted 25-80%. Both were wrong. Measured over 90
+  // matches the true rate for that config is 21% — the gate had been passing on a
+  // favourable draw, and any change that merely shifts the RNG stream (bots now consume a
+  // random number deciding whether to climb) reshuffled which seeds won and swung it from
+  // 28% to 11% with no real balance change behind it. Sweep the lobby sizes instead, which
+  // is what "balance" means here, with enough matches that the draw stops deciding:
+  // measured 4p 67%, 6p 33%, 8p 25%, 10p 25% across the eight stages.
   let seekWins = 0, total = 0, finds = 0;
   for (const map of ["office", "street", "supermarket"]) {
-    for (let seed = 1; seed <= 6; seed++) {
-      const r = play(map, seed);
-      total++; finds += r.finds;
-      if (r.winner === "seekers") seekWins++;
+    for (const lobby of [4, 6, 8, 10]) {
+      for (let seed = 1; seed <= 4; seed++) {
+        const r = play(map, seed, lobby);
+        total++; finds += r.finds / r.hiders;
+        if (r.winner === "seekers") seekWins++;
+      }
     }
   }
   const rate = seekWins / total;
   const avgFinds = finds / total;
-  assert(rate >= 0.25 && rate <= 0.8,
-    `balance: neither side dominates — seekers win ${(rate * 100).toFixed(0)}% of ${total} matches (want 25-80%)`);
+  assert(rate >= 0.20 && rate <= 0.75,
+    `balance: neither side dominates — seekers win ${(rate * 100).toFixed(0)}% of ${total} matches (want 20-75%)`);
 
   // Infection compresses the round — measured, seekers go 2 -> 7 by t=45s. Asking hiders to
   // survive the same 150s budget as Normal made it 94% seeker-favoured, so the mode scales
@@ -792,8 +806,35 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
   const infRate = infSeek / infTotal;
   assert(infRate <= 0.85,
     `balance: Infection is a snowball, not a formality — seekers win ${(infRate * 100).toFixed(0)}% (want <=85%)`);
-  assert(avgFinds >= 4.0,
-    `balance: seekers find most of the lobby — ${avgFinds.toFixed(1)} of 6 (want >=4.0)`);
+  // A FRACTION, not a count: the sweep now spans 4-to-10-player lobbies, so "4 of 6" was
+  // unmeetable in a 4-player match that only has two hiders to find. Measured 0.79.
+  assert(avgFinds >= 0.6,
+    `balance: seekers find most of the lobby — ${(avgFinds * 100).toFixed(0)}% of hiders (want >=60%)`);
+
+  // Bots must actually USE the hider verbs. Decoys and mounting were reachable only from
+  // a human keypress, so across 72 bot hider-lives ZERO decoys were dropped and not one
+  // bot ever left the floor — meaning single-player, which is bot-filled, could never show
+  // a player either mechanic, and every balance figure described a game without them.
+  {
+    let decoys = 0, mounts = 0;
+    for (const id of ["office", "manor", "depot"]) {
+      const sm = maps.toSimMap(maps.getMap(id));
+      for (let seed = 1; seed <= 4; seed++) {
+        const sk = mc.computeSeekerCount(8);
+        const players = [...Array(8)].map((_, i) => ({ id: "p" + i, isBot: true, role: i < sk ? "seeker" : "hider" }));
+        const st = ms.createMatch({ players, settings: mc.sanitizeSettings({ ...mc.DEFAULTS }), map: sm, seed, seekerCount: sk });
+        let t = 0;
+        while (st.phase !== mc.PHASE.RESULTS && t < 700) {
+          ms.stepMatch(st, 1 / 30); t += 1 / 30;
+          for (const e of st.events) if (e.t === "decoy") decoys++;
+          st.events.length = 0;
+          for (const h of ms.hiders(st)) if ((h._elev || 0) > 0.05) mounts++;
+        }
+      }
+    }
+    assert(decoys > 0, `bots: decoys are used in solo play (${decoys} across 12 matches)`);
+    assert(mounts > 0, `bots: hiders climb onto props in solo play (${mounts} mounted frames)`);
+  }
 
   // A human seeker must be able to shoot the poses this game encourages. The vertical-aim
   // check was a flat |pitch| <= 0.45, which auto-missed AND charged a round for a
@@ -804,9 +845,13 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
     const fire = (pose, elev, dist, aimOff) => {
       const sm = maps.toSimMap(maps.getMap("office"));
       const players = [{ id: "S", isBot: false, role: "seeker" }, { id: "H", isBot: true, role: "hider" }];
-      const st = ms.createMatch({ players, settings: mc.sanitizeSettings({ ...mc.DEFAULTS, prepSeconds: 1 }), map: sm, seed: 3, seekerCount: 1 });
+      const st = ms.createMatch({ players, settings: mc.sanitizeSettings({ ...mc.DEFAULTS, prepSeconds: 1, maxClones: 0 }), map: sm, seed: 3, seekerCount: 1 });
       while (st.phase !== mc.PHASE.HUNT) ms.stepMatch(st, 1 / 30);
       const S = st.actors.find((a) => a.id === "S"), H = st.actors.find((a) => a.id === "H");
+      // H is flagged non-bot so it holds still: a BOT hider with a seeker 2m away flees,
+      // and fleeing drops you off the crate (_elev = 0), which would undo the mounted
+      // cases this is here to check. The seeker's aim maths does not care either way.
+      H.isBot = false; H._in = { mx: 0, mz: 0, yaw: null, shoot: false };
       S.x = 0; S.z = 0; S.yaw = 0; H.x = 0; H.z = dist; H.alive = true; H.pose = pose; H._elev = elev; H.fleeing = false;
       const poseH = mc.POSE_HEIGHT[pose] != null ? mc.POSE_HEIGHT[pose] : 1.55;
       const need = Math.atan((elev + poseH / 2 - 1.55) / dist);

@@ -171,6 +171,7 @@ export const SIM = Object.freeze({
   fleeRange: 4.5,         // a hider bot flees a seeker this close (=> free shot for seeker)
   answerSeconds: 4,
   eyeY: 1.55,             // seeker eye height, for the per-target vertical aim check
+  botMountChance: 0.35,   // how often a bot hider climbs the prop it hides behind
 });
 
 /**
@@ -345,11 +346,32 @@ function stepHiderPrep(s, a, dt) {
     moveToward(s, a, a.spot.x, a.spot.z, SIM.hiderSpeed, dt);
   } else if (!a.hidden) {
     a.hidden = true; a.pose = pickPose(s, a); a.yaw = a.spot.faceYaw != null ? a.spot.faceYaw : a.yaw;
+    // Climb the thing you are hiding behind, sometimes. Mounting was a human keypress only,
+    // so across 72 bot hider-lives not one bot was ever off the floor and a solo player
+    // never met a hider on top of a crate. A spot sits at its anchor's edge + 0.90m, so
+    // the nearest obstacle IS that anchor; take it if it is low enough to climb and broad
+    // enough to stand on. hiderHeight() already prices the trade — a raised silhouette
+    // clears the cover that was hiding it.
+    const anchor = mountableNear(s, a.x, a.z);
+    if (anchor && s.rng() < SIM.botMountChance) { a.x = anchor.x; a.z = anchor.z; a._elev = anchor.h; }
     // a bot "paints" itself to its cover, imperfectly — jitter keeps bots beatable and
     // means a careful human paint job is genuinely better than theirs
     a.paintRGB = coverRGB(s, a.x, a.z, 34, s.rng);
     s.events.push({ t: "hidden", id: a.id });
   }
+}
+
+/** The prop a hider could climb onto from here: low enough to mount (the human cling cap
+ *  is 2.2m) and broad enough to stand on. */
+function mountableNear(s, x, z) {
+  let best = null, bd = 2.2 * 2.2;
+  for (const o of s.obstacles) {
+    if (!(o.h >= 0.5 && o.h <= 2.2)) continue;
+    if (o.hw * 2 < 0.8 || o.hd * 2 < 0.8) continue;
+    const d = dist2(x, z, o.x, o.z);
+    if (d < bd) { bd = d; best = o; }
+  }
+  return best;
 }
 
 function stepHiderHunt(s, a, dt) {
@@ -379,7 +401,15 @@ function stepHiderHunt(s, a, dt) {
     if (d < tb && hasLOS(k.x, k.z, a.x, a.z, s.obstacles, hiderHeight(a))) { tb = d; threat = k; }
   }
   if (threat) {
+    // Bluff and run. Decoys existed only as a human keypress, so across 72 bot hider-lives
+    // ZERO were ever dropped — in single-player, which is bot-filled, a seeker could never
+    // meet one. The moment a seeker closes in is exactly when leaving a copy behind pays,
+    // so a bot spends one here (dropDecoy enforces maxClones and the cooldown itself, and
+    // returns an error object rather than throwing when it has none left).
+    if (!a.fleeing) dropDecoy(s, a.id);
     a.fleeing = true;
+    a._elev = 0;                       // you jump down off the crate to run
+
     const away = yawTo(threat.x, threat.z, a.x, a.z);
     const step = SIM.hiderSpeed * dt;
     const nx = a.x + Math.sin(away) * step, nz = a.z + Math.cos(away) * step;
