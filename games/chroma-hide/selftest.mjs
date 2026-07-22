@@ -197,6 +197,15 @@ for (const entry of maps.mapList()) {
   assert(sm.obstacles.length === solid + m.walls.length, `map: ${m.id} toSimMap = solid props + walls`);
   assert(sm.spots.length === 56 && sm.spawn.seeker && sm.spawn.hider, `map: ${m.id} spawns + 56 spots`);
   assert(m.spawn.seeker.x > m.bounds.minX && m.spawn.seeker.x < m.bounds.maxX && m.spawn.hider.z > m.bounds.minZ && m.spawn.hider.z < m.bounds.maxZ, `map: ${m.id} spawns in bounds`);
+  // A stage has to be LIT. Measured in-browser from room centres, the shipped range is
+  // understage 58 mean luminance (the dark stage, deliberately) up to supermarket 146
+  // (a fluorescent night store), and those come from 25-30 placed lights plus ambient
+  // 0.52-1.35. Rendering needs a browser, but the DECLARATION is data: a stage that
+  // shipped with no lights or a black ambient would be unplayable and is worth refusing
+  // here rather than discovering by eye.
+  assert((m.lights || []).length >= 10, `map: ${m.id} is lit (${(m.lights || []).length} lights)`);
+  assert(m.ambient && m.ambient.intensity >= 0.4 && m.ambient.intensity <= 2.0,
+    `map: ${m.id} ambient in a playable band (${m.ambient && m.ambient.intensity})`);
 }
 
 {
