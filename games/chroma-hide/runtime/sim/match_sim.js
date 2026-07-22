@@ -283,7 +283,10 @@ export function dropDecoy(s, ownerId) {
     _in: { mx: 0, mz: 0, yaw: null, shoot: false },
   };
   s.actors.push(d);
-  s.events.push({ t: "decoy", id: d.id, by: ownerId, x: d.x, z: d.z });
+  // yaw/pose/elev ride along because a GUEST has no decoy actor to read them from — the
+  // decoy is appended to the host's actor list, so it has no index in the guest's roster
+  // and never arrives by snapshot. The guest rebuilds the body from this event alone.
+  s.events.push({ t: "decoy", id: d.id, by: ownerId, ownerId, x: d.x, z: d.z, yaw: d.yaw, pose: d.pose, elev: d._elev || 0 });
   return d;
 }
 

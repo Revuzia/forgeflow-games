@@ -662,13 +662,29 @@ export class Game {
 
   _buildDecoyMesh(d) {
     if (this.meshes.get(d.id)) return;
-    const owner = this.paintByActor.get(d.ownerId);
+    // A guest gets the EVENT, not the actor, and the event calls the owner `by`. Looking
+    // only at `ownerId` meant the paint lookup missed and every remote decoy rendered as a
+    // plain grey standing body — the one thing a decoy must never be, since it exists to
+    // be mistaken for the player whose paint it wears.
+    const ownerId = d.ownerId ?? d.by;
+    const owner = this.paintByActor.get(ownerId);
     const geo = this._bodyGeo || (this._bodyGeo = makeBodyGeo());
+    // paintByActor only holds HUMAN paint canvases. A bot wears a flat colour that lives
+    // on its own mesh material, so a bot-dropped decoy fell through to the grey fallback
+    // and stood there in default white — the one thing a decoy must never be, since it
+    // exists to be mistaken for the body whose paint it copies. Fall back to the owner's
+    // mesh material before the grey. It is shared, never disposed (see _removeDecoyMesh).
+    const ownerMesh = this.meshes.get(ownerId);
     const mat = owner ? owner.material
+      : (ownerMesh && ownerMesh.material) ? ownerMesh.material
       : new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.7, metalness: 0.05 });
     const mesh = new THREE.Mesh(geo, mat);
     addBodyFeatures(mesh);
-    mesh.position.set(d.x, BODY_Y, d.z); mesh.rotation.y = d.yaw || 0;
+    const P = POSES[d.pose];
+    const sy = P ? P.s[1] : 1;
+    if (P) mesh.scale.set(P.s[0], P.s[1], P.s[2]);
+    mesh.position.set(d.x, restingBodyY(d.elev || d._elev || 0, BODY_Y * (P ? P.s[1] : 1), 1, 1), d.z);
+    mesh.rotation.set(P && P.rot ? P.rot : 0, d.yaw || 0, 0);
     mesh.castShadow = true; mesh.userData.decoy = true;
     this.root.add(mesh); this.meshes.set(d.id, mesh);
   }
@@ -1089,9 +1105,16 @@ export class Game {
     this._handleEvents(events);
     // miss/dryfire carry the ammo economy's entire feedback: without them a remote
     // seeker fires into silence and never learns they are dry.
+    // decoy/decoy_hit are on this list for two reasons. A decoy is APPENDED to the host's
+    // actor array, so it has no index in a guest's roster and never arrives by snapshot —
+    // without the event a guest simply never sees one, and since bots started dropping them
+    // that is most decoys in the game. And without decoy_hit a decoy that has been shot is
+    // never removed on the guest, so the clone stands there for the rest of the round —
+    // including your OWN decoy, which you would watch survive a bullet you saw it take.
     for (const e of events) {
       if (e.t === "caught" || e.t === "whistle" || e.t === "win" || e.t === "phase" ||
-          e.t === "convert" || e.t === "miss" || e.t === "dryfire" || e.t === "hidden") {
+          e.t === "convert" || e.t === "miss" || e.t === "dryfire" || e.t === "hidden" ||
+          e.t === "decoy" || e.t === "decoy_hit") {
         this.net.sendEvent(e);
       }
     }
