@@ -897,6 +897,13 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
     const honest = [["flat", 0, 2], ["ball", 0, 2], ["curl", 2.2, 2], ["stand", 0, 2], ["crouch", 1.9, 3]];
     const missed = honest.filter(([p, e, d]) => !fire(p, e, d, 0).caught).map(([p]) => p);
     assert(missed.length === 0, `shot: point-blank aim connects on every pose${missed.length ? " — failed " + missed.join(",") : ""}`);
+    // A guest's pitch travels in its input message. When it was missing the vertical check
+    // was skipped outright, so a remote seeker could fire with the crosshair anywhere
+    // vertically and still connect while the host had to aim. The host now defaults absent
+    // pitch to 0 (level), which must actually REFUSE a shot at a hider up on a shelf.
+    const levelAtMounted = fire("curl", 2.2, 3, -Math.atan((2.2 + 0.81 / 2 - 1.55) / 3));
+    assert(!levelAtMounted.caught && levelAtMounted.ammo === 7,
+      "shot: aiming level at a hider on a 2.2m shelf misses and costs a round");
     const ceiling = fire("stand", 0, 10, 1.0);
     assert(!ceiling.caught && ceiling.ammo === 7, "shot: staring at the ceiling still misses and costs a round");
   }

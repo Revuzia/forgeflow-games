@@ -1091,7 +1091,10 @@ export class Game {
       if (a.isBot || a.isLocal) continue;
       const inp = this.net.takeInput(a.id);
       if (inp) {
-        setLocalInput(this.sim, a.id, { mx: inp.mx, mz: inp.mz, yaw: inp.yaw });
+        // Default to 0 (level) rather than leaving it undefined: absent pitch disables the
+        // vertical check, so falling back to "unknown" would hand any client that omits it
+        // a free pass. Level is the honest, fail-closed assumption.
+        setLocalInput(this.sim, a.id, { mx: inp.mx, mz: inp.mz, yaw: inp.yaw, pitch: inp.pitch != null ? inp.pitch : 0 });
         // apply the guest's declared pose/cling to the authoritative actor, so blend,
         // silhouette height and LOS all use what that player is actually doing
         if (inp.pose) a.pose = inp.pose;
@@ -1141,7 +1144,12 @@ export class Game {
     this._inputThrottle = (this._inputThrottle || 0) + 1;
     if (changed || this._inputThrottle >= 4) {
       this._inputThrottle = 0; this._lastSentDiscrete = discrete;
-      this.net.sendInput({ mx: inp.mx, mz: inp.mz, yaw: inp.yaw, pose, elev, stuck: !!this._stuck });
+      // pitch rides along because the shot check needs it. Vertical aim is verified per
+      // target (see seekerShoot), and that check is skipped entirely when pitch is absent —
+      // so a guest seeker who never sent one could fire with the crosshair anywhere
+      // vertically and still connect, while the host was held to aiming. Measured: host
+      // staring at the ceiling missed and paid a round; guest hit.
+      this.net.sendInput({ mx: inp.mx, mz: inp.mz, yaw: inp.yaw, pitch: inp.pitch, pose, elev, stuck: !!this._stuck });
     }
     if (this._shootRequested) { this.net.sendShot(); this._shootRequested = false; }
     // Keep interpolating toward the LATEST snapshot every frame (entity
