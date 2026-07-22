@@ -630,7 +630,7 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
 // coverage problem. This guards the BAND, not an exact number — balance should be free to
 // drift, but not back to one-sided.
 {
-  const { createMatch, stepMatch, seekers, hiders } = await import("./runtime/sim/match_sim.js");
+  const { createMatch, stepMatch, seekers, hiders, coverInfo } = await import("./runtime/sim/match_sim.js");
   const { DEFAULTS, PHASE, ROLE } = await import("./runtime/sim/match_core.js");
   const { MAPS, toSimMap } = await import("./runtime/maps.js");
   const play = (map, seed) => {
@@ -711,6 +711,40 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
     assert(caught > 0, "fairness: the sample actually caught someone (" + caught + ")");
     assert(caughtUnseen === 0,
       `fairness: no hider is killed without being seen first — ${caughtUnseen} of ${caught} died unseen`);
+  }
+
+  // THE central mechanic: a good paint job must buy time before the shot. Measured
+  // acquisition-to-shot tracks identifyTime * (1 + 3*blend) exactly — 1.07s at blend 0,
+  // 4.40s at blend 1, a 4x payoff. Everything else in this game exists to make that
+  // trade interesting, so it must never silently degrade.
+  {
+    const at = (blend) => {
+      const players = [{ id: "k", isBot: true, role: ROLE.SEEKER }, { id: "h", isBot: true, role: ROLE.HIDER }];
+      const s5 = createMatch({ players, settings: { ...DEFAULTS }, map: toSimMap(MAPS.office), seed: 3, seekerCount: 1 });
+      while (s5.phase !== PHASE.HUNT) stepMatch(s5, 1 / 30);
+      const k = s5.actors.find((a) => a.id === "k"), h = s5.actors.find((a) => a.id === "h");
+      const W = MAPS.office.walls.find((w) => w.color != null && Math.max(w.w, w.d) > 8);
+      const horiz = W.w >= W.d;
+      h.x = horiz ? W.x : W.x + 0.8; h.z = horiz ? W.z + 0.8 : W.z;
+      k.x = horiz ? h.x : h.x + 6;   k.z = horiz ? h.z + 6 : h.z;
+      const kx = k.x, kz = k.z, hx = h.x, hz = h.z;
+      const info = coverInfo(s5, hx, hz);
+      if (!info.inRange) return null;
+      h.pose = "stand"; h.hidden = true; h._moving = false;
+      const off = Math.round((1 - blend) * 90 / Math.sqrt(3));
+      h.paintRGB = { r: Math.min(255, info.rgb.r + off), g: Math.min(255, info.rgb.g + off), b: Math.min(255, info.rgb.b + off) };
+      let t = 0, acq = null;
+      while (h.alive && t < 60) {
+        k.x = kx; k.z = kz; k.yaw = Math.atan2(hx - kx, hz - kz); h.x = hx; h.z = hz;
+        stepMatch(s5, 1 / 30); t += 1 / 30;
+        if (acq === null && k.target && k.target.id === "h") acq = t;
+      }
+      return h.alive ? null : t - (acq ?? t);
+    };
+    const bare = at(0), full = at(1);
+    assert(bare != null && full != null, "camouflage: both trials resolved");
+    assert(full > bare * 2.5,
+      `camouflage: a matched body survives far longer than a white one — ${full.toFixed(2)}s vs ${bare.toFixed(2)}s (want >2.5x)`);
   }
 
   const infRate = infSeek / infTotal;
