@@ -1996,9 +1996,31 @@ export async function buildMap(W, mapId) {
   }
 
   const lootAll = lootPoints.concat(chestPoints);
+  // What is underfoot, for footstep audio. The recorded Kenney steps are per
+  // surface, and a boardwalk that sounds like grass is worse than no sample at
+  // all. Cheap by construction: it reuses the SAME snow term the vertex colour
+  // uses (deepwood's northern zone, maps.js colorAt), so what you hear always
+  // matches what you see, and falls back to the map's base ground otherwise.
+  // Structures are checked first — standing on a deck or a roof reads as wood.
+  const BASE_SURF = { isla_viva: "grass", ashgrid: "concrete", deepwood: "grass" };
+  function surfaceAt(x, z) {
+    const gy = heightAt0(x, z);
+    const near = queryColliders(x, z, 0.6);
+    for (const c of near) {
+      // only count something we could actually be standing ON, not a wall beside us
+      if (c.maxY > gy + 0.35 && c.maxY < gy + 6) return "wood";
+    }
+    if (mapId === "deepwood") {
+      const edge = 0;
+      const snow = Math.max(0, Math.min(1, (-z - 100 + edge) / 260));
+      if (snow > 0.35) return "snow";
+    }
+    return BASE_SURF[mapId] || "grass";
+  }
+
   return {
     id: mapId, K, half: HALF * 0.98, size: SIZE, waterY,
-    heightAt: heightAt0, groundAt: heightAt0,
+    heightAt: heightAt0, groundAt: heightAt0, surfaceAt,
     colliders, queryColliders, destroyProp,
     lootPoints: lootAll, pois, portals,
     randomGroundPos, losBlocked,

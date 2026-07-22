@@ -30,6 +30,88 @@ export function init(W) {
   wire(W);
 }
 
+// ── recorded one-shots (Kenney, CC0) ────────────────────────────────────────
+// Everything in this file was synthesised, which is fine for tonal cues (blips,
+// stings, the storm bed) but obviously fake for the physical ones: a footstep is
+// broadband contact noise with a texture that says "grass" or "wood", and no
+// amount of filtered noise sells that. These 45 clips are Kenney CC0 (public
+// domain, commercial use fine, no attribution required — assets/audio/sfx/,
+// 472 KB total), covering exactly the categories synthesis is worst at.
+//
+// Weapon reports are DELIBERATELY still synthesised: shot() already does
+// per-shot decorrelation, range-dependent filtering and a near-field crack
+// layer, and a single flat recorded bang would be a downgrade on all three.
+//
+// Every call site keeps its synth path as a fallback, so a failed decode, a
+// blocked fetch or an old cache degrades to exactly today's behaviour rather
+// than to silence.
+const SFX = {
+  step_grass:    ["step_grass_000", "step_grass_001", "step_grass_002", "step_grass_003"],
+  step_concrete: ["step_concrete_000", "step_concrete_001", "step_concrete_002", "step_concrete_003"],
+  step_wood:     ["step_wood_000", "step_wood_001", "step_wood_002", "step_wood_003"],
+  step_snow:     ["step_snow_000", "step_snow_001", "step_snow_002", "step_snow_003"],
+  imp_stone:     ["impactPlate_light_000", "impactPlate_light_001", "impactPlate_light_002"],
+  imp_wood:      ["impactPlank_medium_000", "impactPlank_medium_001", "impactPlank_medium_002"],
+  imp_metal:     ["impactMetal_light_000", "impactMetal_light_001", "impactMetal_light_002"],
+  imp_glass:     ["impactGlass_light_000", "impactGlass_light_001", "impactGlass_light_002"],
+  imp_dirt:      ["impactGeneric_light_000", "impactGeneric_light_001", "impactGeneric_light_002"],
+  mag_out:       ["dropLeather", "beltHandle1"],
+  mag_in:        ["metalClick", "beltHandle2"],
+  rack:          ["metalLatch"],
+  equip:         ["drawKnife1", "cloth1"],
+  cloth:         ["cloth1", "cloth2"],
+  ui_click:      ["ui_click_001", "ui_click_002"],
+  ui_back:       ["ui_back_001"],
+  ui_close:      ["ui_close_001"],
+  ui_ok:         ["ui_confirmation_001"],
+  ui_err:        ["ui_error_001"],
+};
+const sfxBuf = {};       // filename -> AudioBuffer
+let sfxReady = false;
+
+/** Decode the pack once, after the context exists. Failures are silent by
+ *  design: every caller falls back to the synth path it used before. */
+async function loadSfx(W) {
+  if (sfxReady || !ctx) return;
+  sfxReady = true;
+  const names = [];
+  for (const k in SFX) for (const n of SFX[k]) if (names.indexOf(n) < 0) names.push(n);
+  await Promise.all(names.map(async (n) => {
+    try {
+      const r = await fetch(W.assetBase + "assets/audio/sfx/" + n + ".ogg");
+      if (!r.ok) return;
+      sfxBuf[n] = await ctx.decodeAudioData(await r.arrayBuffer());
+    } catch (e) { /* fall back to synth */ }
+  }));
+}
+
+/** Play one variant of a logical cue. Returns false if unavailable, so the
+ *  caller can run its synth line instead. Routes through the same spatial()
+ *  panner + sfxBus as everything else, so sliders and mute still apply. */
+function sample(key, pos, gain, maxD, rate) {
+  if (!ctx || !sfxBus) return false;
+  const list = SFX[key];
+  if (!list || !list.length) return false;
+  const pick = list[(Math.random() * list.length) | 0];
+  const buf = sfxBuf[pick];
+  if (!buf) return false;
+  // spatial() hands back a GainNode already wired through the HRTF panner into
+  // sfxBus, with the distance stashed on __d — so connect straight to it and the
+  // clip inherits the same distance curve, panning, mute and slider behaviour as
+  // every synthesised voice. null means out of earshot: report handled, because
+  // the synth fallback would be inaudible too and must not double-fire.
+  const out = spatial(pos, maxD);
+  if (!out) return true;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = (rate || 1) * (0.94 + Math.random() * 0.12);
+  const g = ctx.createGain();
+  g.gain.value = (gain == null ? 0.5 : gain) * (0.9 + Math.random() * 0.2);
+  src.connect(g); g.connect(out);
+  src.start();
+  return true;
+}
+
 let musicBase = 1;        // the current track's own mix level (menu .9 / match .55)
 let _blockedTrack = null; // a track the autoplay policy refused, awaiting a gesture
 let _pendingMusic = null; // a track whose DOWNLOAD is deferred — see startMenuMusic()
@@ -380,6 +462,8 @@ function wire(W) {
   const unlock = () => {
     ensureCtx(W);
     if (ctx.state === "suspended") ctx.resume();
+    loadSfx(W);                 // 472 KB of CC0 one-shots, decoded once
+
     // the WebAudio context resuming was never enough: the HTMLAudioElement that
     // the autoplay policy rejected is a separate object and needed its own retry.
     if (_blockedTrack && _blockedTrack.paused) {
@@ -453,11 +537,19 @@ function wire(W) {
   on("footstep", (a) => {
     const s = a.crouching ? STEP.crouch : a.sprinting ? STEP.sprint : STEP.walk;
     const own = a === W.player;
+    // recorded contact noise beats filtered noise here by a wide margin — a
+    // footstep's whole identity is its surface texture. Surface comes from the
+    // map so grass, boardwalk and snow read differently underfoot.
+    const surf = (W.map && W.map.surfaceAt) ? W.map.surfaceAt(a.pos.x, a.pos.z) : null;
+    const keyed = surf === "wood" ? "step_wood" : surf === "snow" ? "step_snow"
+                : surf === "stone" || surf === "concrete" ? "step_concrete" : "step_grass";
+    if (sample(keyed, own ? null : a.pos, own ? s.own : s.g, s.d, s.f)) return;
     thump((300 + Math.random() * 90) * s.f, 0.055, own ? s.own : s.g, own ? null : a.pos, s.d);
   });
   on("weaponEquipped", (a) => {
     const own = a === W.player;
     if (own) cancelReload();     // weapons.js replaces a.weapon wholesale mid-reload
+    if (sample("equip", own ? null : a.pos, own ? 0.22 : 0.14, 18)) return;
     blip(640, 0.05, own ? 0.12 : 0.08, "square", own ? null : a.pos, 18);
   });
   on("chuteDeployed", (a) => thump(1300, 0.35, a === W.player ? 0.3 : 0.2, a === W.player ? null : a.pos, 60));
@@ -494,6 +586,9 @@ function wire(W) {
     // burst and stack coherently into a metallic zap. +/-12% on the pitch is
     // enough to decorrelate them, same trick as the four decorrelators in shot().
     const jf = 0.88 + Math.random() * 0.24;
+    const impKey = surface === "stone" ? "imp_stone" : surface === "wood" ? "imp_wood"
+                 : surface === "metal" ? "imp_metal" : surface === "glass" ? "imp_glass" : "imp_dirt";
+    if (sample(impKey, pos, 0.09, 55, jf)) return;
     if (surface === "stone") blip(2100 * jf, 0.045, 0.07, "square", pos, 55);
     else if (surface === "wood") blip(900 * jf, 0.06, 0.07, "triangle", pos, 55);
     else thump(260 * jf, 0.07, 0.06, pos, 45);  // dirt
