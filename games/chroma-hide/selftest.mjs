@@ -747,6 +747,22 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
       `camouflage: a matched body survives far longer than a white one — ${full.toFixed(2)}s vs ${bare.toFixed(2)}s (want >2.5x)`);
   }
 
+  // THE bug this guard exists for: every authored hiding spot was outside camouflage range.
+  // autoSpots kept 1.3m clearance from all solids INCLUDING the anchor, and blending needed
+  // <=1.26m, so 0 of 97 designated hiding places let you hide. The game's own hiding spots
+  // were the one place hiding did not work, and nothing detected it because both rules were
+  // individually reasonable.
+  {
+    let total = 0, blendable = 0;
+    for (const map of ["office", "street", "supermarket"]) {
+      const m = MAPS[map], sim = toSimMap(m);
+      for (const sp of (m.spots || [])) { total++; if (coverInfo(sim, sp.x, sp.z).inRange) blendable++; }
+    }
+    assert(total > 0, "spots: the shipped maps have authored hiding spots (" + total + ")");
+    assert(blendable / total >= 0.85,
+      `spots: a designated hiding spot lets you hide — ${blendable}/${total} are within camouflage range (want >=85%)`);
+  }
+
   const infRate = infSeek / infTotal;
   assert(infRate <= 0.85,
     `balance: Infection is a snowball, not a formality — seekers win ${(infRate * 100).toFixed(0)}% (want <=85%)`);

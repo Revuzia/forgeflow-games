@@ -236,8 +236,17 @@ function autoSpots(bounds, props, walls, count, rng) {
   // body radius (0.55) + half a nav cell (0.5) + slack: guarantees the spot's nav
   // cell centre is walkable, not just the exact point.
   const CLR = 1.3;
-  const blocked = (x, z) => {
-    for (const p of solid) if (Math.abs(x - p.x) < p.w / 2 + CLR && Math.abs(z - p.z) < p.d / 2 + CLR) return true;
+  // The ANCHOR is exempt. A hiding spot is defined by the thing you hide against, and
+  // demanding 1.3m of clearance from it too pushed every spot out of camouflage range:
+  // measured, 0 of 97 authored spots on the shipped maps were within the 1.26m the blend
+  // model needs, so the game's own designated hiding places were the one place hiding did
+  // not work. Clearance from OTHER solids still applies — that is what keeps the spot on
+  // a walkable nav cell.
+  const blocked = (x, z, anchor) => {
+    for (const p of solid) {
+      if (p === anchor) continue;
+      if (Math.abs(x - p.x) < p.w / 2 + CLR && Math.abs(z - p.z) < p.d / 2 + CLR) return true;
+    }
     for (const w of walls) if (Math.abs(x - w.x) < w.w / 2 + CLR && Math.abs(z - w.z) < w.d / 2 + CLR) return true;
     return false;
   };
@@ -248,13 +257,16 @@ function autoSpots(bounds, props, walls, count, rng) {
   const spots = [];
   for (let k = 0; k < idx.length && spots.length < count; k++) {
     const p = cand[idx[k]];
-    const off = Math.max(p.w, p.d) / 2 + 0.95;
+    // Hug the anchor: body radius plus a little, measured from its edge along the offset
+    // axis. Far enough not to intersect it, close enough that its surface is what you are
+    // blending with.
+    const off = Math.max(p.w, p.d) / 2 + 0.7;
     let tx = cx - p.x, tz = cz - p.z; const L = Math.hypot(tx, tz) || 1;
     // try toward map centre first, then the four cardinals
     const dirs = [[tx / L, tz / L], [1, 0], [-1, 0], [0, 1], [0, -1]];
     for (const [dx, dz] of dirs) {
       const sx = +(p.x + dx * off).toFixed(2), sz = +(p.z + dz * off).toFixed(2);
-      if (!inside(sx, sz) || blocked(sx, sz)) continue;
+      if (!inside(sx, sz) || blocked(sx, sz, p)) continue;
       if (spots.some((s) => (s.x - sx) ** 2 + (s.z - sz) ** 2 < 3.0)) continue;
       spots.push({ x: sx, z: sz, faceYaw: +Math.atan2(p.x - sx, p.z - sz).toFixed(2) });
       break;

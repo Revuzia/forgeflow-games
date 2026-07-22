@@ -78,7 +78,12 @@ function surfDist2(x, z, o) {
  *  EXPORTED because the HUD readout has to gate on exactly this: the meter used to score
  *  the nearest surface at any distance and report "100% EXCELLENT" while blendScore
  *  returned 0 because the player was standing 4m away from the wall they had matched. */
-export const BLEND_RANGE2 = 1.6;
+// 2.25 = 1.5m. Sized so that standing at an AUTHORED hiding spot reliably blends: after
+// the spot generator was fixed to hug its anchor, spot-to-surface distance runs 0.43-2.1m
+// with a 0.70m median, and 1.26m still left ~8% of designated spots unable to camouflage.
+// A 0.42m-radius body 1.5m from a surface is roughly a metre of gap — visually "at" the
+// cover, not across the room from it.
+export const BLEND_RANGE2 = 2.25;
 
 /** The surface a hider is actually against. */
 function nearestSurface(s, x, z) {
@@ -469,7 +474,13 @@ function stepSeeker(s, a, dt) {
     if (sBest > 8) moveToward(s, a, seen.x, seen.z, s.skill.seekerSpeed, dt);
     // identified + ready => shoot. Blending stretches the identify dwell up to 4x, so a
     // well-painted hider often survives a seeker walking past.
-    const needDwell = s.skill.identifyTime * (1 + 3 * seenBlend);
+    // Camouflage stretches identification. The multiplier was 3 (a 4x payoff) while it was
+    // being tuned against spots where blend measured ZERO — the authored hiding places were
+    // all outside blend range, so it never actually applied. With that fixed and bots
+    // genuinely hiding at blend ~0.68, a 4x stretch swung 8-player matches to 20% seeker.
+    // 1.8 keeps camouflage decisive (a perfect match still nearly triples the time to
+    // identify) without making a well-painted hider effectively invisible.
+    const needDwell = s.skill.identifyTime * (1 + 1.8 * seenBlend);
     if (a.dwell >= needDwell && a.cooldown <= 0 && a.ammo > 0 && sBest <= SIM.shootRange) {
       seekerShoot(s, a);
     }
