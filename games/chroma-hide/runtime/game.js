@@ -950,10 +950,19 @@ export class Game {
     // Pose and cling are INTENT too. Sending only movement meant a guest's R-pose and
     // E-cling never reached the authoritative sim: they changed nothing about how that
     // player was detected, and every other client drew them standing upright.
-    this.net.sendInput({ mx: inp.mx, mz: inp.mz, yaw: inp.yaw,
-      pose: this.local ? this.local.pose : "stand",
-      elev: this._stuck ? (this._stickY || 0) : 0,
-      stuck: !!this._stuck });
+    const pose = this.local ? this.local.pose : "stand";
+    const elev = this._stuck ? (this._stickY || 0) : 0;
+    // The channel is provisioned for ~12 messages/second and this ran every frame, so a
+    // 60fps guest was overrunning it 5x and its own input was the thing getting dropped.
+    // Throttle the continuous stream, but send IMMEDIATELY when a discrete state flips --
+    // a pose or a cling must not wait up to four frames to become true.
+    const discrete = `${pose}|${!!this._stuck}`;
+    const changed = discrete !== this._lastSentDiscrete;
+    this._inputThrottle = (this._inputThrottle || 0) + 1;
+    if (changed || this._inputThrottle >= 4) {
+      this._inputThrottle = 0; this._lastSentDiscrete = discrete;
+      this.net.sendInput({ mx: inp.mx, mz: inp.mz, yaw: inp.yaw, pose, elev, stuck: !!this._stuck });
+    }
     if (this._shootRequested) { this.net.sendShot(); this._shootRequested = false; }
     // Keep interpolating toward the LATEST snapshot every frame (entity
     // interpolation) — don't discard it, so the guest still converges smoothly
@@ -987,8 +996,16 @@ export class Game {
 
   _streamPaint() {
     if (!this.paint || this.local.role !== ROLE.HIDER) return;
-    this._paintThrottle++;
     const total = this.paint.strokes.length;
+    // A clear() empties the stroke list, and the send cursor was left pointing past the
+    // end: `total > _paintSent` then never held again, so the guest stopped streaming
+    // paint FOREVER and remote clients kept showing the erased disguise. Detect the
+    // shrink, tell everyone to wipe, and start the cursor over.
+    if (total < this._paintSent) {
+      this._paintSent = 0;
+      if (this.online && this.net) this.net.sendPaintClear(this.local.id);
+    }
+    this._paintThrottle++;
     if (total > this._paintSent && this._paintThrottle >= 6) {
       this._paintThrottle = 0;
       this.net.sendStrokes(this.local.id, this.paint.strokes.slice(this._paintSent));
@@ -998,7 +1015,11 @@ export class Game {
 
   _wireNet() {
     this.net.on("snapshot", (s) => { this._lastSnap = s; });
-    this.net.on("paint", ({ id, strokes }) => { if (id !== this.local?.id) { const ps = this.paintByActor.get(id); if (ps) ps.applyStrokes(strokes); } });
+    this.net.on("paint", ({ id, clear, strokes }) => {
+      if (id === this.local?.id) return;
+      const ps = this.paintByActor.get(id); if (!ps) return;
+      if (clear) ps.clear(); else ps.applyStrokes(strokes);
+    });
     this.net.on("event", (ev) => this._applyNetEvent(ev));
     if (this.isHost) {
       this.net.on("shot", ({ from }) => { this._pendingShots.push(from); });

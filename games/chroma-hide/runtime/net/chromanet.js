@@ -82,6 +82,9 @@ export class ChromaNet {
   sendInput(input) { this.net.send(P.MSG.INPUT, input); }               // guest -> host
   sendSnapshot(state) { this.net.send(P.MSG.SNAP, P.packSnapshot(state)); } // host -> all
   sendStrokes(actorId, strokes) { if (strokes && strokes.length) this.net.send(P.MSG.PAINT, { id: actorId, s: P.packStrokes(strokes) }); }
+  /** Wipe a body. Rides the PAINT channel because paint is peer-to-peer — as an EVENT
+   *  the host-authority gate would silently drop a guest's own clear. */
+  sendPaintClear(actorId) { this.net.send(P.MSG.PAINT, { id: actorId, clear: true }); }
   sendShot() { this.net.send(P.MSG.SHOT, {}); }                          // guest seeker -> host
   sendEvent(ev) { this.net.send(P.MSG.EVENT, ev); }                     // host -> all
   takeInput(peerId) { const i = this.pendingInput.get(peerId); return i || null; }
@@ -106,7 +109,7 @@ export class ChromaNet {
       case P.MSG.SNAP:
         this._emit("snapshot", P.unpackSnapshot(d));
         break;
-      case P.MSG.PAINT: this._emit("paint", { id: d.id, strokes: P.unpackStrokes(d.s || []) }); break;
+      case P.MSG.PAINT: this._emit("paint", { id: d.id, clear: !!d.clear, strokes: P.unpackStrokes(d.s || []) }); break;
       case P.MSG.SHOT:
         this._emit("shot", { from });
         break;
