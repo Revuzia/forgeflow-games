@@ -125,16 +125,44 @@ export class PaintSystem {
     const mv = Math.round((s.metal ?? 0) * 255), rv = Math.round((s.rough ?? 0.8) * 255);
     const drM = this.buf.metal.stamp(s.u, s.v, s.size, { r: mv, g: mv, b: mv }, h);
     const drR = this.buf.rough.stamp(s.u, s.v, s.size, { r: rv, g: rv, b: rv }, h);
-    this._blit("albedo", drA); this._blit("metal", drM); this._blit("rough", drR);
+    this._blit("albedo", drA);
+    // Two thirds of the upload budget went on the metalness and roughness maps, which
+    // most players never move off the defaults. While every stroke so far has used the
+    // default finish, those two textures already hold exactly the values being written,
+    // so uploading them changes nothing — skip until a stroke actually differs, then
+    // stay on permanently.
+    const DEF_M = PAINT_FILLS.metal.r, DEF_R = PAINT_FILLS.rough.r;
+    if (!this._materialUsed && (mv !== DEF_M || rv !== DEF_R)) this._materialUsed = true;
+    if (this._materialUsed) { this._blit("metal", drM); this._blit("rough", drR); }
   }
 
   /** Push a dirty sub-rect of a buffer into its canvas + flag the texture. */
+  /** Push a dirty sub-rect into the 2D canvas and FLAG the texture — but do not upload.
+   *
+   *  three.js re-uploads a whole CanvasTexture on needsUpdate: there is no partial path.
+   *  At 1024² × 4 bytes × three maps that is 12 MB per painting frame, measured at 12.4ms
+   *  on top of a 1.15ms idle frame — a stall landing squarely on the core mechanic.
+   *  Uploading on a cadence instead (see flushTextures) costs at most ~50ms of latency
+   *  before your own dab appears, which is imperceptible, for a 3x cut.
+   */
   _blit(k, dr) {
     if (!dr || dr.w <= 0) return;
     const buf = this.buf[k];
     const img = new ImageData(buf.data, this.res, this.res);
     buf._ctx.putImageData(img, 0, 0, dr.x, dr.y, dr.w, dr.h);
-    this.tex[k].needsUpdate = true;
+    (this._dirty || (this._dirty = {}))[k] = true;
+  }
+
+  /** Upload whatever changed. Called on a cadence by the game loop, and unconditionally
+   *  at moments where the player must see the result immediately (leaving paint mode,
+   *  clearing, the hunt starting). */
+  flushTextures() {
+    if (!this._dirty) return false;
+    let any = false;
+    for (const k of ["albedo", "metal", "rough"]) {
+      if (this._dirty[k]) { this.tex[k].needsUpdate = true; this._dirty[k] = false; any = true; }
+    }
+    return any;
   }
 
   /** Replay a remote/AI stroke list onto this body (chromanet + bots). */
@@ -209,7 +237,7 @@ export class PaintSystem {
     this.buf.rough.fillAll(PAINT_FILLS.rough);
     for (const k of ["albedo", "metal", "rough"]) {
       this.buf[k]._ctx.putImageData(new ImageData(this.buf[k].data, this.res, this.res), 0, 0);
-      this.tex[k].needsUpdate = true;
+      this.tex[k].needsUpdate = true;   // a wipe is instant, never deferred
     }
   }
 

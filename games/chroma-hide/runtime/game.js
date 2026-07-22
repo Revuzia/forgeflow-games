@@ -297,7 +297,12 @@ export class Game {
       if (!a.isBot && a.role === ROLE.HIDER) {
         // every HUMAN hider gets a paint surface — the local one is interactive,
         // remote ones receive streamed strokes so their disguise renders too.
-        const ps = new PaintSystem(this.engine, { res: a.isLocal ? 1024 : 512 });
+        // 512 locally, 384 for remote bodies. three.js re-uploads a whole CanvasTexture
+        // on change and a single 1024² upload measured 12.8ms — the texture SIZE is the
+        // cost, not the number of uploads. 512² is a quarter of that and still well above
+        // the original game's 384² per limb, for a mechanic about matching flat colour
+        // rather than fine detail.
+        const ps = new PaintSystem(this.engine, { res: a.isLocal ? 512 : 384 });
         this.paintByActor.set(a.id, ps);
         if (a.isLocal) this.paint = ps;
         mesh = new THREE.Mesh(geo, ps.material); ps.attachBody(mesh);
@@ -753,6 +758,7 @@ export class Game {
   }
 
   _togglePaintMode() {
+    if (this.paintMode && this.paint) this.paint.flushTextures();   // never exit on a stale texture
     if (this.local.role !== ROLE.HIDER || !this.local.alive) return;
     this.paintMode = !this.paintMode;
     if (this.paintMode) {
@@ -956,6 +962,11 @@ export class Game {
     this._updateEmotes(dt);
     this._syncLocalRole();
     this._syncPaintBlend();
+    // Upload paint at ~20Hz rather than every frame. See PaintSystem.flushTextures — the
+    // full-texture re-upload is 12.4ms/frame and this is the cheapest honest mitigation
+    // short of rewriting the buffers onto DataTexture + texSubImage2D.
+    this._paintFlush = (this._paintFlush || 0) + 1;
+    if (this._paintFlush % 3 === 0) for (const [, ps] of this.paintByActor) ps.flushTextures();
     this._updateMatchMeter();
     this._stepJump(dt);
     this._stepStick(dt);
