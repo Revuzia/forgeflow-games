@@ -497,5 +497,10 @@ export function getMap(id) { return MAPS[id] || MAPS[SHIPPED[0]] || MAPS.depot; 
 // single-room maps (manor/understage/hollow) remain defined for compatibility
 // but are excluded until they're rebuilt to the multi-room standard.
 // only FULL-SCALE campus stages ship; the small legacy 3-room maps stay defined for compat
-const SHIPPED = ["office", "street", "supermarket"];
+// All eight stages ship. Five of them were 22x18m PROTOTYPES carrying 8 hand-placed
+// props, held back from the lobby for good reason: measured at every lobby size from 4
+// to 10 players, seekers won 100%% of 30 matches on each, because 252-560 m2 with eight
+// props has nowhere to hide. They are campus-scale now, built by the same generator and
+// palettes as the original three and held to the same reachability and balance gates.
+const SHIPPED = ["office", "street", "supermarket", "manor", "understage", "depot", "residence", "hollow"];
 export function mapList() { return SHIPPED.filter((id) => MAPS[id]).map((id) => { const m = MAPS[id]; return { id: m.id, name: m.name, blurb: m.blurb }; }); }

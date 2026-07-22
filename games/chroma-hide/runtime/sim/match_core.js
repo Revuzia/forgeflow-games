@@ -32,7 +32,11 @@ export const MODE = Object.freeze({
 export const DEFAULTS = Object.freeze({
   mode: MODE.NORMAL,
   prepSeconds: 90,        // range 30..180 step 15
-  huntSeconds: 150,       // range 90..300 step 30
+  // 120, not 150. Sealed buildings used to hand hiders 12-18%% of several maps that no
+  // seeker could path into; with that fixed, seekers won 65%% of 192 matches at a 150s
+  // hunt. Re-measured across all 8 stages x {4,6,8,10} players x 6 seeds: 120s = 49%%,
+  // 150s = 65%%, 180s = 69%%. A hider survives by hiding, not by the clock running out.
+  huntSeconds: 120,       // range 120..300 step 30 (below 120 seekers cannot win — see sanitize)
   answerSeconds: 12,
   ammoLimit: true,        // the post-launch ammo economy, on by default
   startAmmo: 8,           // range 4..999 (999 ≈ launch "unlimited")
@@ -53,7 +57,12 @@ export const BODY_SIZES = Object.freeze([1.0, 1.4, 1.7]);
 export function sanitizeSettings(s) {
   s = Object.assign({}, DEFAULTS, s || {});
   s.prepSeconds = clamp(Math.round(s.prepSeconds / 15) * 15, 30, 180);
-  s.huntSeconds = clamp(Math.round(s.huntSeconds / 30) * 30, 90, 300);
+  // Floor of 120, not 90. Measured across 15 matches per setting, seekers win 0% at a 90s
+  // hunt — not disfavoured, unable to win at all, because they need roughly 150s to work
+  // through six hiders and find only 3.9 of them in ninety. 120s is 20%: a short, tense,
+  // hider-leaning round that a seeker can still take. The rest of the range is a real
+  // choice — 150s 33%, 180s 47%, 240s 73%, 300s 80%.
+  s.huntSeconds = clamp(Math.round(s.huntSeconds / 30) * 30, 120, 300);
   s.answerSeconds = clamp(s.answerSeconds | 0, 5, 30);
   s.startAmmo = clamp(s.startAmmo | 0, 1, 999);
   s.tauntIntervalSeconds = s.forcedTaunt ? clamp(s.tauntIntervalSeconds | 0, 15, 120) : 0;

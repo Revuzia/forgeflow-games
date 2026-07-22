@@ -37,6 +37,38 @@ function rectWalls(b, t, doors, idp) {
   return out;
 }
 
+/** A divider that runs into an exterior doorway SEALS it. A door's clear span is its
+ *  width minus twice the nav radius (a 3.2m door leaves 2.1m), and a 0.4m divider landing
+ *  in the middle of that leaves 0.3m slivers no nav cell centre can occupy. Measured on
+ *  The Firm, whose Annex authored S/W/N doors at offset 0 — the same lines its two
+ *  dividers run on: the whole four-room building was unreachable, 12% of the map, with 11
+ *  hiding spots no seeker could ever walk to. Rather than trust every future spec to keep
+ *  door offsets clear of divider lines, open the divider where it meets such a door. */
+function doorClearAts(dv, b, t) {
+  const horiz = dv.w >= dv.d;
+  const gap = dv.doorWidth || 2.4;
+  const x0 = b.x - b.w / 2, x1 = b.x + b.w / 2, z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
+  const extra = [];
+  for (const d of b.doors || []) {
+    const dw = d.width || 2.0, at = d.at || 0;
+    // Only a door on a wall PERPENDICULAR to the divider can be blocked by it.
+    if (horiz) {
+      if (d.side !== "W" && d.side !== "E") continue;
+      if (Math.abs((b.z + at) - dv.z) > dw / 2 + t) continue;          // opening misses this divider
+      const end = d.side === "W" ? x0 : x1;
+      if (Math.abs(end - (dv.x - dv.w / 2)) > 0.6 && Math.abs(end - (dv.x + dv.w / 2)) > 0.6) continue;
+      extra.push(end + (d.side === "W" ? 1 : -1) * (gap / 2) - dv.x);
+    } else {
+      if (d.side !== "N" && d.side !== "S") continue;
+      if (Math.abs((b.x + at) - dv.x) > dw / 2 + t) continue;
+      const end = d.side === "N" ? z0 : z1;
+      if (Math.abs(end - (dv.z - dv.d / 2)) > 0.6 && Math.abs(end - (dv.z + dv.d / 2)) > 0.6) continue;
+      extra.push(end + (d.side === "N" ? 1 : -1) * (gap / 2) - dv.z);
+    }
+  }
+  return extra;
+}
+
 // a straight interior divider with an optional centered door gap
 function dividerWalls(dv, t, idp, i) {
   const horiz = dv.w >= dv.d;
@@ -339,6 +371,94 @@ function resolveOverlaps(props, walls, bounds) {
 }
 
 
+/** Scatter keeps props clear of EACH OTHER but never checks that the gaps it leaves are
+ *  still connected, so it can wall off a corner. After the doorway fix three stages still
+ *  had pockets - 42 cells of The Manor's Gallery, 59 of The Hollow's West Meadow -
+ *  walkable, carrying auto-spots, and impossible for a seeker to path into: a hider who
+ *  stands in one cannot be found, which is an unlosable round rather than a good hide.
+ *
+ *  Remove the FEWEST props that reconnect each pocket, found by a breadth-first search
+ *  from the reachable area through prop-blocked cells to the pocket - the cheapest gate.
+ *  The first version of this deleted every prop near a pocket instead, which cascaded:
+ *  freeing cells exposed more unreachable ones, and four passes stripped Understage from
+ *  546 props to ZERO. Walls are never broken (a pocket sealed by masonry is a spec bug,
+ *  and reachcheck should report it, not have it silently furnished away). */
+function openSealedPockets(props, walls, bounds, spawn) {
+  const CELL = 1.0, RAD = 0.55;                 // must match the sim's nav grid
+  const removed = [];
+  // Always hand back a NEW array. The caller empties its own array and re-pushes from
+  // ours; returning the SAME reference made that clear-then-refill a self-wipe, and the
+  // two maps that needed no removals (Understage, The Hollow) shipped with zero props —
+  // which reachcheck passed, because an empty map is trivially fully reachable.
+  props = props.slice();
+  if (!spawn || !spawn.seeker) return { props, removed };
+  const gw = Math.max(1, Math.ceil((bounds.maxX - bounds.minX) / CELL));
+  const gh = Math.max(1, Math.ceil((bounds.maxZ - bounds.minZ) / CELL));
+  const cx = (i) => bounds.minX + (i + 0.5) * CELL, cz = (j) => bounds.minZ + (j + 0.5) * CELL;
+  const hits = (o, x, z) => Math.abs(x - o.x) < o.w / 2 + RAD && Math.abs(z - o.z) < o.d / 2 + RAD;
+
+  for (let pass = 0; pass < 6; pass++) {
+    const solid = props.filter((p) => !p.noCollide);
+    const byWall = new Uint8Array(gw * gh), byProp = new Uint8Array(gw * gh);
+    for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+      const x = cx(i), z = cz(j), k = j * gw + i;
+      for (const w of walls) if (hits(w, x, z)) { byWall[k] = 1; break; }
+      if (byWall[k]) continue;
+      for (const p of solid) if (hits(p, x, z)) { byProp[k] = 1; break; }
+    }
+    const free = (k) => byWall[k] === 0 && byProp[k] === 0;
+    const reached = new Uint8Array(gw * gh);
+    let si = Math.min(gw - 1, Math.max(0, Math.floor((spawn.seeker.x - bounds.minX) / CELL)));
+    let sj = Math.min(gh - 1, Math.max(0, Math.floor((spawn.seeker.z - bounds.minZ) / CELL)));
+    if (!free(sj * gw + si)) break;
+    const q = [[si, sj]]; reached[sj * gw + si] = 1;
+    while (q.length) {
+      const [i, j] = q.pop();
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const a = i + di, b = j + dj;
+        if (a < 0 || b < 0 || a >= gw || b >= gh) continue;
+        const k = b * gw + a;
+        if (reached[k] || !free(k)) continue;
+        reached[k] = 1; q.push([a, b]);
+      }
+    }
+    let pocket = false;
+    for (let k = 0; k < gw * gh; k++) if (free(k) && !reached[k]) { pocket = true; break; }
+    if (!pocket) break;
+
+    // cheapest gate: BFS out of the reachable region, crossing PROP-blocked cells only
+    const prev = new Int32Array(gw * gh).fill(-1);
+    const seen = new Uint8Array(gw * gh);
+    const front = [];
+    for (let k = 0; k < gw * gh; k++) if (reached[k]) { seen[k] = 1; front.push(k); }
+    let goal = -1;
+    for (let head = 0; head < front.length && goal < 0; head++) {
+      const k = front[head], i = k % gw, j = (k - i) / gw;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const a = i + di, b = j + dj;
+        if (a < 0 || b < 0 || a >= gw || b >= gh) continue;
+        const n = b * gw + a;
+        if (seen[n] || byWall[n]) continue;      // never tunnel through masonry
+        seen[n] = 1; prev[n] = k; front.push(n);
+        if (free(n) && !reached[n]) { goal = n; break; }
+      }
+    }
+    if (goal < 0) break;                         // pocket is walled in — a spec bug, not scatter
+    const gate = [];
+    for (let k = goal; k >= 0 && !reached[k]; k = prev[k]) if (byProp[k]) gate.push(k);
+    if (!gate.length) break;
+    const kill = new Set();
+    for (const k of gate) {
+      const i = k % gw, j = (k - i) / gw, x = cx(i), z = cz(j);
+      for (const p of solid) if (hits(p, x, z)) kill.add(p);
+    }
+    if (!kill.size) break;
+    for (const p of kill) removed.push(p.id);
+    props = props.filter((p) => !kill.has(p));
+  }
+  return { props, removed };
+}
+
 /** Give every wall segment the surface of the room it borders. Footprint walls and
  *  dividers are generated from BUILDING geometry, so without this pass a 13-room office
  *  renders every wall in one shared colour — the "it's all grey stone" defect. A wall
@@ -425,8 +545,12 @@ export function buildCampus(spec) {
       addArea(b, `${b.id}_s`);
     }
     walls.push(...rectWalls(b, t, b.doors, idp));
-    (b.dividers || []).forEach((dv, i) => walls.push(...dividerWalls(
-      { wallTex: b.wallTex, wallColor: b.wallColor, wallTrim: b.wallTrim, ...dv }, t, idp, i)));
+    (b.dividers || []).forEach((dv, i) => {
+      const merged = { wallTex: b.wallTex, wallColor: b.wallColor, wallTrim: b.wallTrim, ...dv };
+      const extra = doorClearAts(dv, b, t);
+      if (extra.length) merged.doorAts = [...(dv.doorAts || (dv.door ? [dv.doorAt || 0] : [])), ...extra];
+      walls.push(...dividerWalls(merged, t, idp, i));
+    });
     for (const p of b.props || []) props.push(p);
   }
 
@@ -461,7 +585,10 @@ export function buildCampus(spec) {
   const fixed = resolveOverlaps(props, walls, spec.bounds);
   props.length = 0; props.push(...fixed.props);
 
-  return {
+  const opened = openSealedPockets(props, walls, spec.bounds, spec.spawn);
+  props.length = 0; props.push(...opened.props);
+
+  const built = {
     id: spec.id,
     name: spec.name,
     blurb: spec.blurb,
@@ -477,4 +604,5 @@ export function buildCampus(spec) {
     spawn: spec.spawn,
     spots: spec.spots || autoSpots(spec.bounds, props, walls, spec.spotCount || 48, rng),
   };
+  return built;
 }

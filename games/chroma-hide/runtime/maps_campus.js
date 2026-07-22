@@ -382,4 +382,228 @@ export const CAMPUS_MAPS = {
     spawn: { seeker: { x: -12, z: 28 }, hider: { x: -12, z: 6 } },
     spotCount: 56,
   }),
+
+  // ── The five below were 22x18m PROTOTYPE maps with 8 hand-placed props. Measured at
+  // every lobby size from 4 to 10 players, seekers won 100% of 30 matches on each: with
+  // 252-560 m2 and eight props there was nowhere to hide, so no tuning could rescue them.
+  // Rebuilt here at campus scale (4864 m2, the footprint of the three maps that do
+  // balance) from the same generator and palettes, keeping each one's original theme. ──
+
+  manor: buildCampus({
+    id: "manor", name: "The Manor",
+    blurb: "A country estate - a six-room manor house of wood, damask and brass, a coach house of stables and cellars, joined by a colonnade over the south lawn.",
+    seed: 0x0a11e5,
+    bounds: { minX: -38, maxX: 38, minZ: -32, maxZ: 32 }, wallHeight: 5,
+    ground: { color: 0x4c5a3f, roughness: 0.95, tex: "concrete" },
+    ambient: { sky: 0xe9dcc4, ground: 0x2a241d, intensity: 1.25 },
+    perimeter: { color: 0x8a5a44, roughness: 0.9, thickness: 0.5, tex: "brick" },
+    autoLight: { spacing: 12, intensity: 15, dist: 16, color: 0xffe9c8 },
+    buildings: [
+      {
+        id: "H", name: "Manor House", x: -20, z: -8, w: 32, d: 30, floor: 0x7a5230,
+        doors: [{ side: "S", at: -8, width: 3.4 }, { side: "S", at: 8, width: 3.4 }, { side: "N", at: 0, width: 3.0 }],
+        dividers: [
+          { x: -20, z: -8, w: 0.4, d: 30, doorWidth: 3.2, doorAts: [-10, 10] },
+          { x: -20, z: -3, w: 32, d: 0.4, doorWidth: 3.2, doorAts: [-8, 8] },
+          { x: -20, z: -13, w: 32, d: 0.4, doorWidth: 3.2, doorAts: [-8, 8] },
+        ],
+        rooms: [
+          { id: "greathall", wallTex: "damask", wallColor: 0x9c6b4a, wallTrim: 0x4a2f20, name: "Great Hall", x: -28, z: 2, w: 16, d: 10, floor: 0x8a5a34, tex: "wood", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x5a3f2a, 0xa8845c] }, scatter: { palette: PAL.recep, count: 14, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "library", wallTex: "panel", wallColor: 0x6b4a30, wallTrim: 0x3f2c1c, name: "Library", x: -12, z: 2, w: 16, d: 10, floor: 0x7a5230, tex: "wood", decor: { count: 6, palette: DECOR.office }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x5a3f2a, 0x8a6038] }, scatter: { palette: PAL.offices, count: 14, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "dining", wallTex: "damask", wallColor: 0xb08a5c, wallTrim: 0x513a24, name: "Dining Room", x: -28, z: -8, w: 16, d: 10, floor: 0x8a6b46, tex: "wood", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x9c8f79, 0x5c4a36] }, scatter: { palette: PAL.brk, count: 14, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "drawing", wallTex: "wallpaper", wallColor: 0xc8b49a, wallTrim: 0x4a3a2c, name: "Drawing Room", x: -12, z: -8, w: 16, d: 10, floor: 0x7a5230, tex: "wood", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x7a4a5a, 0x5c4a36] }, scatter: { palette: PAL.recep, count: 14, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "kitchen", wallTex: "tile", wallColor: 0xdfe7ea, wallTrim: 0x6a7278, name: "Kitchen", x: -28, z: -18, w: 16, d: 10, floor: 0x9098a0, tex: "checker", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0xc9b98a, 0x566173] }, scatter: { palette: PAL.brk, count: 14, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "gallery", wallTex: "plaster", wallColor: 0xd7cdb8, wallTrim: 0x4a3f2c, name: "Gallery", x: -12, z: -18, w: 16, d: 10, floor: 0x6b5d4f, tex: "carpet", decor: { count: 8, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0xb0a48c, 0x5a3f2a] }, scatter: { palette: PAL.recep, count: 13, dressing: { palette: DRESS.office, max: 3 } } },
+        ],
+      },
+      {
+        id: "C", name: "Coach House", x: 20, z: -8, w: 28, d: 30, floor: 0x6b5d4f,
+        doors: [{ side: "S", at: 0, width: 3.4 }, { side: "W", at: 0, width: 3.2 }, { side: "N", at: 0, width: 3.0 }],
+        dividers: [
+          { x: 20, z: -8, w: 0.4, d: 30, doorWidth: 3.2, doorAts: [-10, 10] },
+          { x: 20, z: -8, w: 28, d: 0.4, doorWidth: 3.2, doorAts: [-7, 7] },
+        ],
+        rooms: [
+          { id: "stables", wallTex: "timber", wallColor: 0x8a6038, wallTrim: 0x4a3120, name: "Stables", x: 13, z: -0.5, w: 14, d: 15, floor: 0x6b4a30, tex: "wood", decor: { count: 6, palette: DECOR.street }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x5c4a36, 0x8a6038] }, scatter: { palette: PAL.hardware, count: 13, dressing: { palette: DRESS.yard, max: 3 } } },
+          { id: "tackroom", wallTex: "timber", wallColor: 0x7a5a3c, wallTrim: 0x50381f, name: "Tack Room", x: 27, z: -0.5, w: 14, d: 15, floor: 0x5c4a36, tex: "wood", decor: { count: 6, palette: DECOR.street }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x6b4a30, 0xa8845c] }, scatter: { palette: PAL.hardware, count: 12, dressing: { palette: DRESS.yard, max: 3 } } },
+          { id: "cellar", wallTex: "block", wallColor: 0x8f8479, wallTrim: 0x33302b, name: "Wine Cellar", x: 13, z: -15.5, w: 14, d: 15, floor: 0x4e4a45, tex: "concrete", decor: { count: 6, palette: DECOR.street }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x4a3a2c, 0x7a828a] }, scatter: { palette: PAL.stock, count: 13, dressing: { palette: DRESS.yard, max: 3 } } },
+          { id: "servants", wallTex: "plaster", wallColor: 0xc2bcae, wallTrim: 0x3a3f45, name: "Servant Quarters", x: 27, z: -15.5, w: 14, d: 15, floor: 0x6a6258, tex: "carpet", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x9c8f79, 0x5a4a3a] }, scatter: { palette: PAL.offices, count: 13, dressing: { palette: DRESS.office, max: 3 } } },
+        ],
+      },
+    ],
+    zones: [
+      { id: "lawn", name: "South Lawn", x: 0, z: 20, w: 76, d: 24, floor: 0x4c5a3f, tex: "carpet", breakers: { pick: GARDEN_GREEN, count: 6, w: 1.4, d: 1.4, h: 2.8, colors: [0x3b7a3b, 0x2f7d3a] }, scatter: { palette: PAL.garden, count: 34, margin: 2.6, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "colonnade", name: "Colonnade", x: 1, z: -8, w: 10, d: 30, floor: 0x9c8f79, tex: "concrete", breakers: { count: 3, w: 1.4, d: 1.4, h: 2.6, colors: [0xb0a48c, 0x8a5a44] }, scatter: { palette: PAL.breez, count: 10, margin: 2.2, dressing: { palette: DRESS.yard, max: 2 } } },
+      { id: "servicelane", wallTex: "brick", wallColor: 0x6f6a63, wallTrim: 0x2e2b28, name: "Service Lane", x: 0, z: -27.5, w: 76, d: 9, floor: 0x3d4048, tex: "concrete", decor: { count: 8, palette: DECOR.street }, breakers: { pick: YARD_BARRIERS, count: 4, w: 2.2, d: 2.2, h: 2.7, colors: [0x8a8a90, 0xb5622a] }, scatter: { palette: PAL.alley, count: 20, margin: 2.2, dressing: { palette: DRESS.yard, max: 3 } } },
+    ],
+    spawn: { seeker: { x: 0, z: 28 }, hider: { x: 1, z: -8 } },
+    spotCount: 56,
+  }),
+
+  understage: buildCampus({
+    id: "understage", name: "Understage",
+    blurb: "The working guts of a theatre - scene dock, prop store, wardrobe and dressing rooms off a ring corridor, with the orchestra pit and the get-in yard beyond.",
+    seed: 0x51a6e0,
+    bounds: { minX: -38, maxX: 38, minZ: -32, maxZ: 32 }, wallHeight: 5,
+    ground: { color: 0x2c2f2c, roughness: 0.98, tex: "concrete" },
+    ambient: { sky: 0x5a6470, ground: 0x141613, intensity: 0.95 },
+    perimeter: { color: 0x4a4f52, roughness: 0.95, thickness: 0.5, tex: "block" },
+    autoLight: { spacing: 11, intensity: 17, dist: 15, color: 0xffe0b0 },
+    buildings: [
+      {
+        id: "U", name: "Under the Stage", x: -12, z: -6, w: 44, d: 36, floor: 0x3a3d3a,
+        doors: [{ side: "S", at: -10, width: 3.6 }, { side: "S", at: 10, width: 3.6 }, { side: "E", at: -12, width: 3.4 }],
+        dividers: [
+          { x: -12, z: -6, w: 0.4, d: 36, doorWidth: 3.4, doorAts: [-12, 0, 12] },
+          { x: -12, z: 0, w: 44, d: 0.4, doorWidth: 3.4, doorAts: [-14, 0, 14] },
+          { x: -12, z: -12, w: 44, d: 0.4, doorWidth: 3.4, doorAts: [-14, 0, 14] },
+        ],
+        rooms: [
+          { id: "scenedock", wallTex: "block", wallColor: 0x6e7472, wallTrim: 0x2b2f2e, name: "Scene Dock", x: -23, z: 6, w: 22, d: 12, floor: 0x4a4d4a, tex: "concrete", decor: { count: 6, palette: DECOR.street }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x55575a, 0x7a828a] }, scatter: { palette: PAL.stock, count: 19, dressing: { palette: DRESS.yard, max: 3 } } },
+          { id: "propstore", wallTex: "block", wallColor: 0x77706a, wallTrim: 0x2e2b28, name: "Prop Store", x: -1, z: 6, w: 22, d: 12, floor: 0x45443f, tex: "concrete", decor: { count: 6, palette: DECOR.street }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x6b7a52, 0xb5622a] }, scatter: { palette: PAL.stock, count: 20, dressing: { palette: DRESS.yard, max: 3 } } },
+          { id: "wardrobe", wallTex: "wallpaper", wallColor: 0x8a5a6a, wallTrim: 0x3a2430, name: "Wardrobe", x: -23, z: -6, w: 22, d: 12, floor: 0x5a4a52, tex: "carpet", decor: { count: 6, palette: DECOR.office }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x7a4a5a, 0x5a3f2a] }, scatter: { palette: PAL.offices, count: 18, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "dressing", wallTex: "plaster", wallColor: 0xcfc4b4, wallTrim: 0x3f3830, name: "Dressing Rooms", x: -1, z: -6, w: 22, d: 12, floor: 0x6a6258, tex: "carpet", decor: { count: 6, palette: DECOR.office }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0xc9b98a, 0x566173] }, scatter: { palette: PAL.offices, count: 18, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "boiler", wallTex: "block", wallColor: 0x6a6055, wallTrim: 0x2a2520, name: "Boiler Room", x: -23, z: -18, w: 22, d: 12, floor: 0x3d3a35, tex: "concrete", decor: { count: 6, palette: DECOR.street }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x8a5a2a, 0x55575a] }, scatter: { palette: PAL.hardware, count: 19, dressing: { palette: DRESS.yard, max: 3 } } },
+          { id: "traproom", wallTex: "timber", wallColor: 0x5c4a36, wallTrim: 0x2c2318, name: "Trap Room", x: -1, z: -18, w: 22, d: 12, floor: 0x4a3f30, tex: "wood", decor: { count: 6, palette: DECOR.street }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x5c4a36, 0x7a828a] }, scatter: { palette: PAL.stock, count: 18, dressing: { palette: DRESS.yard, max: 3 } } },
+        ],
+      },
+    ],
+    zones: [
+      { id: "pit", name: "Orchestra Pit", x: -12, z: 22, w: 52, d: 20, floor: 0x33373a, tex: "concrete", breakers: { count: 5, w: 1.6, d: 1.6, h: 2.6, colors: [0x2a2c30, 0x4a4f52] }, scatter: { palette: PAL.alley, count: 30, margin: 2.6, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "ringcorr", name: "Ring Corridor", x: 25, z: -2, w: 26, d: 60, floor: 0x44403a, tex: "concrete", breakers: { pick: YARD_BARRIERS, count: 5, w: 2.4, d: 2.4, h: 2.8, colors: [0x6b7a52, 0x8a8a90] }, scatter: { palette: PAL.alley, count: 34, margin: 2.8, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "getin", name: "Get-in Yard", x: -12, z: -28, w: 52, d: 8, floor: 0x3a3d40, tex: "concrete", breakers: { pick: YARD_VEHICLES, count: 4, w: 1.6, d: 1.6, h: 2.8, colors: [0x55555a, 0x6b7280] }, scatter: { palette: PAL.yard, count: 18, margin: 2.2, dressing: { palette: DRESS.yard, max: 3 } } },
+    ],
+    spawn: { seeker: { x: -12, z: 28 }, hider: { x: -12, z: 6 } },
+    spotCount: 56,
+  }),
+
+  depot: buildCampus({
+    id: "depot", name: "The Depot",
+    blurb: "A freight depot - a four-hall warehouse of sorting racks, cold store, workshop and crew room, ringed by a container yard, a rail apron and a fuel bay.",
+    seed: 0xde9070,
+    bounds: { minX: -38, maxX: 38, minZ: -32, maxZ: 32 }, wallHeight: 5,
+    ground: { color: 0x45484c, roughness: 0.95, tex: "concrete" },
+    ambient: { sky: 0xb8c2cc, ground: 0x3a3e42, intensity: 1.28 },
+    perimeter: { color: 0x7a828a, roughness: 0.9, thickness: 0.5, tex: "block" },
+    autoLight: { spacing: 12, intensity: 16, dist: 17, color: 0xeaf0ff },
+    buildings: [
+      {
+        id: "W", name: "Warehouse", x: -12, z: 0, w: 44, d: 24, floor: 0x5d6064,
+        doors: [{ side: "S", at: -11, width: 3.6 }, { side: "S", at: 11, width: 3.6 }, { side: "E", at: 0, width: 3.4 }, { side: "N", at: 0, width: 3.4 }],
+        dividers: [
+          { x: -12, z: 0, w: 0.4, d: 24, doorWidth: 3.4, doorAts: [-6, 6] },
+          { x: -12, z: 0, w: 44, d: 0.4, doorWidth: 3.4, doorAts: [-11, 11] },
+        ],
+        rooms: [
+          { id: "sorting", wallTex: "block", wallColor: 0x969ca1, wallTrim: 0x333940, name: "Sorting Hall", x: -23, z: 6, w: 22, d: 12, floor: 0x55575a, tex: "concrete", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x55575a, 0x7a828a] }, scatter: { palette: PAL.stock, count: 20, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "coldstore", wallTex: "tile", wallColor: 0xcfdde8, wallTrim: 0x455663, name: "Cold Store", x: -1, z: 6, w: 22, d: 12, floor: 0x9fb0bc, tex: "checker", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0xbcd4e0, 0x46525a] }, scatter: { palette: PAL.stock, count: 19, dressing: { palette: DRESS.retail, max: 3 } } },
+          { id: "workshop", wallTex: "block", wallColor: 0x8a8078, wallTrim: 0x2f2b28, name: "Workshop", x: -23, z: -6, w: 22, d: 12, floor: 0x4e4a45, tex: "concrete", decor: { count: 6, palette: DECOR.street }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x8a5a2a, 0x6b7a52] }, scatter: { palette: PAL.hardware, count: 19, dressing: { palette: DRESS.yard, max: 3 } } },
+          { id: "crew", wallTex: "plaster", wallColor: 0xd2d6da, wallTrim: 0x3a3f45, name: "Crew Room", x: -1, z: -6, w: 22, d: 12, floor: 0x6a7280, tex: "carpet", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x9c8f79, 0x566173] }, scatter: { palette: PAL.brk, count: 18, dressing: { palette: DRESS.office, max: 3 } } },
+        ],
+      },
+    ],
+    zones: [
+      { id: "containers", name: "Container Yard", x: -12, z: 22, w: 52, d: 20, floor: 0x50545a, tex: "concrete", breakers: { pick: [...YARD_BARRIERS, ...YARD_VEHICLES], count: 6, w: 2.4, d: 2.4, h: 2.8, colors: [0x6b7a52, 0xb5622a] }, scatter: { palette: PAL.yard, count: 32, margin: 2.6, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "railapron", name: "Rail Apron", x: 25, z: 0, w: 26, d: 64, floor: 0x4a4a50, tex: "concrete", breakers: { pick: [...YARD_VEHICLES, ...YARD_BARRIERS], count: 6, w: 2.4, d: 2.4, h: 2.8, colors: [0x8a8a90, 0x55555a] }, scatter: { palette: PAL.yard, count: 36, margin: 2.8, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "fuelbay", wallTex: "brick", wallColor: 0x6f6a63, wallTrim: 0x2e2b28, name: "Fuel Bay", x: -12, z: -22, w: 52, d: 20, floor: 0x3d4048, tex: "concrete", decor: { count: 8, palette: DECOR.street }, breakers: { pick: YARD_BARRIERS, count: 5, w: 2.2, d: 2.2, h: 2.7, colors: [0x8a8a90, 0xb5622a] }, scatter: { palette: PAL.lot, count: 30, margin: 2.4, dressing: { palette: DRESS.yard, max: 3 } } },
+    ],
+    spawn: { seeker: { x: -12, z: 28 }, hider: { x: -12, z: 6 } },
+    spotCount: 56,
+  }),
+
+  residence: buildCampus({
+    id: "residence", name: "The Residence",
+    blurb: "A suburban plot - a four-room main house and a guest house with garage and utility, split by a side path, with a driveway out front and a deep back garden.",
+    seed: 0x2e51de,
+    bounds: { minX: -38, maxX: 38, minZ: -32, maxZ: 32 }, wallHeight: 5,
+    ground: { color: 0x4c5a3f, roughness: 0.95, tex: "concrete" },
+    ambient: { sky: 0xdfe8f0, ground: 0x3c4438, intensity: 1.3 },
+    perimeter: { color: 0x9c8f79, roughness: 0.9, thickness: 0.5, tex: "plaster" },
+    autoLight: { spacing: 12, intensity: 15, dist: 16, color: 0xfff2e0 },
+    buildings: [
+      {
+        id: "M", name: "Main House", x: -20, z: 2, w: 32, d: 24, floor: 0x7a5230,
+        doors: [{ side: "S", at: 0, width: 3.4 }, { side: "E", at: 6, width: 3.2 }, { side: "N", at: -8, width: 3.0 }],
+        dividers: [
+          { x: -20, z: 2, w: 0.4, d: 24, doorWidth: 3.2, doorAts: [-6, 6] },
+          { x: -20, z: 2, w: 32, d: 0.4, doorWidth: 3.2, doorAts: [-8, 8] },
+        ],
+        rooms: [
+          { id: "living", wallTex: "wallpaper", wallColor: 0xc8b49a, wallTrim: 0x4a3a2c, name: "Living Room", x: -28, z: 8, w: 16, d: 12, floor: 0x7a5230, tex: "wood", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x5a3f2a, 0x8a9099] }, scatter: { palette: PAL.recep, count: 17, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "kitchen", wallTex: "tile", wallColor: 0xdfe7ea, wallTrim: 0x6a7278, name: "Kitchen", x: -12, z: 8, w: 16, d: 12, floor: 0x9098a0, tex: "checker", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0xc9b98a, 0x566173] }, scatter: { palette: PAL.brk, count: 18, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "study", wallTex: "panel", wallColor: 0x8a6038, wallTrim: 0x5c4028, name: "Study", x: -28, z: -4, w: 16, d: 12, floor: 0x6a7280, tex: "carpet", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.13, d: 0.71, h: 2.5, colors: [0x5a3f2a, 0x8a9099] }, scatter: { palette: PAL.offices, count: 17, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "bedroom", wallTex: "wallpaper", wallColor: 0xb4c4a8, wallTrim: 0x3d4a36, name: "Bedroom", x: -12, z: -4, w: 16, d: 12, floor: 0x66707d, tex: "carpet", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x7a4a5a, 0x5c4a36] }, scatter: { palette: PAL.recep, count: 16, dressing: { palette: DRESS.office, max: 3 } } },
+        ],
+      },
+      {
+        id: "G", name: "Guest House", x: 20, z: 2, w: 28, d: 24, floor: 0x6a7280,
+        doors: [{ side: "S", at: 0, width: 3.4 }, { side: "W", at: 0, width: 3.2 }, { side: "N", at: 0, width: 3.0 }],
+        dividers: [
+          { x: 20, z: 2, w: 0.4, d: 24, doorWidth: 3.2, doorAts: [-6, 6] },
+          { x: 20, z: 2, w: 28, d: 0.4, doorWidth: 3.2, doorAts: [-7, 7] },
+        ],
+        rooms: [
+          { id: "guestlounge", wallTex: "wallpaper", wallColor: 0xd0c0a8, wallTrim: 0x4a3a2c, name: "Guest Lounge", x: 13, z: 8, w: 14, d: 12, floor: 0x8a5a34, tex: "wood", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0x9c8f79, 0x5c4a36] }, scatter: { palette: PAL.recep, count: 16, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "guestkitchen", wallTex: "tile", wallColor: 0xe2e8ec, wallTrim: 0x5e666c, name: "Guest Kitchen", x: 27, z: 8, w: 14, d: 12, floor: 0x9aa0a6, tex: "checker", decor: { count: 6, palette: DECOR.office }, breakers: { count: 2, model: "bookcaseOpen.glb", w: 1.09, d: 0.69, h: 2.4, colors: [0xc9b98a, 0x566173] }, scatter: { palette: PAL.brk, count: 16, dressing: { palette: DRESS.office, max: 3 } } },
+          { id: "garage", wallTex: "block", wallColor: 0x8f979e, wallTrim: 0x333940, name: "Garage", x: 13, z: -4, w: 14, d: 12, floor: 0x55575a, tex: "concrete", decor: { count: 6, palette: DECOR.street }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x8a5a2a, 0x6b7a52] }, scatter: { palette: PAL.hardware, count: 17, dressing: { palette: DRESS.yard, max: 3 } } },
+          { id: "utility", wallTex: "plaster", wallColor: 0xc2c6cc, wallTrim: 0x3a3f45, name: "Utility", x: 27, z: -4, w: 14, d: 12, floor: 0x5f6a78, tex: "concrete", decor: { count: 6, palette: DECOR.retail }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x5f6a78, 0xc9b98a] }, scatter: { palette: PAL.stock, count: 16, dressing: { palette: DRESS.retail, max: 3 } } },
+        ],
+      },
+    ],
+    zones: [
+      { id: "driveway", name: "Driveway", x: 0, z: 23, w: 76, d: 18, floor: 0x55555a, tex: "concrete", breakers: { pick: YARD_VEHICLES, count: 5, w: 1.6, d: 1.6, h: 2.8, colors: [0x6a7280, 0x55555a] }, scatter: { palette: PAL.lot, count: 30, margin: 2.6, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "sidepath", name: "Side Path", x: 1, z: 2, w: 10, d: 24, floor: 0x8a8a80, tex: "concrete", breakers: { count: 3, w: 1.4, d: 1.4, h: 2.6, colors: [0x2f7d3a, 0x9c8f79] }, scatter: { palette: PAL.breez, count: 10, margin: 2.2, dressing: { palette: DRESS.yard, max: 2 } } },
+      { id: "backgarden", name: "Back Garden", x: 0, z: -21, w: 76, d: 22, floor: 0x4c5a3f, tex: "carpet", breakers: { pick: GARDEN_GREEN, count: 7, w: 1.4, d: 1.4, h: 2.8, colors: [0x3b7a3b, 0x5f9a3a] }, scatter: { palette: PAL.garden, count: 34, margin: 2.5, dressing: { palette: DRESS.yard, max: 3 } } },
+    ],
+    spawn: { seeker: { x: 0, z: 28 }, hider: { x: 1, z: 2 } },
+    spotCount: 56,
+  }),
+
+  hollow: buildCampus({
+    id: "hollow", name: "The Hollow",
+    blurb: "A wooded hollow - a ruined chapel in the trees, a stone barn out in the meadow, deep cover on both flanks and a river bank to the south. The one map that is mostly outdoors.",
+    seed: 0x40110e,
+    bounds: { minX: -38, maxX: 38, minZ: -32, maxZ: 32 }, wallHeight: 5,
+    ground: { color: 0x3f5a3a, roughness: 0.98, tex: "carpet" },
+    ambient: { sky: 0xbfd4c0, ground: 0x24301f, intensity: 1.15 },
+    perimeter: { color: 0x5a6a4a, roughness: 0.95, thickness: 0.5, tex: "brick" },
+    autoLight: { spacing: 13, intensity: 14, dist: 18, color: 0xdfe8d0 },
+    buildings: [
+      {
+        id: "K", name: "Ruined Chapel", x: 0, z: -6, w: 24, d: 16, floor: 0x6b6558,
+        doors: [{ side: "N", at: 0, width: 3.4 }, { side: "S", at: 0, width: 3.4 }, { side: "W", at: 0, width: 3.2 }, { side: "E", at: 0, width: 3.2 }],
+        dividers: [
+          { x: 0, z: -6, w: 0.4, d: 16, doorWidth: 3.2, doorAts: [-4, 4] },
+        ],
+        rooms: [
+          { id: "nave", wallTex: "block", wallColor: 0x8f8479, wallTrim: 0x33302b, name: "Nave", x: -6, z: -6, w: 12, d: 16, floor: 0x6b6558, tex: "concrete", decor: { count: 6, palette: DECOR.street }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x7a828a, 0x5a5348] }, scatter: { palette: PAL.stock, count: 16, dressing: { palette: DRESS.yard, max: 3 } } },
+          { id: "vestry", wallTex: "block", wallColor: 0x807668, wallTrim: 0x2e2b26, name: "Vestry", x: 6, z: -6, w: 12, d: 16, floor: 0x5f5a50, tex: "concrete", decor: { count: 6, palette: DECOR.street }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x5a3f2a, 0x7a828a] }, scatter: { palette: PAL.hardware, count: 16, dressing: { palette: DRESS.yard, max: 3 } } },
+        ],
+      },
+      // The meadow was 76x30 of open grass: trees alone never broke the sightlines, and
+      // seekers won 94% there. This barn puts real walls in the middle of the open half.
+      {
+        id: "B", name: "Stone Barn", x: 0, z: 17, w: 28, d: 18, floor: 0x6b6558,
+        doors: [{ side: "S", at: 0, width: 3.6 }, { side: "N", at: 0, width: 3.6 }, { side: "W", at: 0, width: 3.2 }, { side: "E", at: 0, width: 3.2 }],
+        dividers: [
+          { x: 0, z: 17, w: 0.4, d: 18, doorWidth: 3.2, doorAts: [-5, 5] },
+        ],
+        rooms: [
+          { id: "byre", wallTex: "timber", wallColor: 0x7a5a3c, wallTrim: 0x3f2c1c, name: "Byre", x: -7, z: 17, w: 14, d: 18, floor: 0x5c4a36, tex: "wood", decor: { count: 6, palette: DECOR.street }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x5c4a36, 0x8a6038] }, scatter: { palette: PAL.hardware, count: 18, dressing: { palette: DRESS.yard, max: 3 } } },
+          { id: "hayloft", wallTex: "timber", wallColor: 0x8a6038, wallTrim: 0x4a3120, name: "Hay Store", x: 7, z: 17, w: 14, d: 18, floor: 0x6b4a30, tex: "wood", decor: { count: 6, palette: DECOR.street }, breakers: { count: 3, model: "bookcaseOpen.glb", w: 1.18, d: 0.74, h: 2.6, colors: [0x8a6038, 0x7a828a] }, scatter: { palette: PAL.stock, count: 18, dressing: { palette: DRESS.yard, max: 3 } } },
+        ],
+      },
+    ],
+    zones: [
+      { id: "westwood", name: "West Wood", x: -25, z: -6, w: 26, d: 16, floor: 0x3a5433, tex: "carpet", breakers: { pick: GARDEN_GREEN, count: 9, w: 1.4, d: 1.4, h: 3.0, colors: [0x2f7d3a, 0x3b7a3b] }, scatter: { palette: PAL.garden, count: 30, margin: 2.2, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "eastwood", name: "East Wood", x: 25, z: -6, w: 26, d: 16, floor: 0x3d5836, tex: "carpet", breakers: { pick: GARDEN_GREEN, count: 9, w: 1.4, d: 1.4, h: 3.0, colors: [0x3f6e46, 0x4a7c3f] }, scatter: { palette: PAL.garden, count: 30, margin: 2.2, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "meadowW", name: "West Meadow", x: -26, z: 17, w: 24, d: 30, floor: 0x4c5a3f, tex: "carpet", breakers: { pick: GARDEN_GREEN, count: 8, w: 1.4, d: 1.4, h: 3.0, colors: [0x3b7a3b, 0x5f9a3a] }, scatter: { palette: PAL.garden, count: 26, margin: 2.2, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "meadowE", name: "East Meadow", x: 26, z: 17, w: 24, d: 30, floor: 0x4a5a3c, tex: "carpet", breakers: { pick: GARDEN_GREEN, count: 8, w: 1.4, d: 1.4, h: 3.0, colors: [0x3f6e46, 0x5f9a3a] }, scatter: { palette: PAL.garden, count: 26, margin: 2.2, dressing: { palette: DRESS.yard, max: 3 } } },
+      { id: "meadowS", name: "Chapel Green", x: 0, z: 5, w: 28, d: 6, floor: 0x46543a, tex: "carpet", breakers: { pick: GARDEN_GREEN, count: 3, w: 1.4, d: 1.4, h: 2.8, colors: [0x3b7a3b, 0x2f7d3a] }, scatter: { palette: PAL.garden, count: 10, margin: 2.0, dressing: { palette: DRESS.yard, max: 2 } } },
+      { id: "meadowN", name: "North Track", x: 0, z: 29, w: 28, d: 6, floor: 0x4a5240, tex: "carpet", breakers: { pick: GARDEN_GREEN, count: 3, w: 1.4, d: 1.4, h: 2.8, colors: [0x3f6e46, 0x4a7c3f] }, scatter: { palette: PAL.garden, count: 10, margin: 2.0, dressing: { palette: DRESS.yard, max: 2 } } },
+      { id: "riverbank", name: "River Bank", x: 0, z: -23, w: 76, d: 18, floor: 0x4a5240, tex: "carpet", breakers: { pick: [...GARDEN_GREEN, ...YARD_BARRIERS], count: 13, w: 2.0, d: 2.0, h: 2.8, colors: [0x3f6e46, 0x6b7a52] }, scatter: { palette: PAL.garden, count: 42, margin: 2.2, dressing: { palette: DRESS.yard, max: 3 } } },
+    ],
+    spawn: { seeker: { x: 0, z: 29 }, hider: { x: 0, z: -6 } },
+    spotCount: 56,
+  }),
 };

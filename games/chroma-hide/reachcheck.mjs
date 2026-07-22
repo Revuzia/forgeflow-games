@@ -78,7 +78,13 @@ for (const id of ids) {
   console.log(`     [brief] props ${m.props.length} (solid ${solid.length} / dressing ${dress}), tall h>=1.7 ${tall} (target 110-150), navigable ${navFrac}% (target 45-55), max sightline ${maxSight.toFixed(0)}m (target <=24, cap 32)`);
   // hard: hider spawn reachable + seeker reaches most of the map. Soft: a few
   // auto-spots may be unreachable (the sim filters those at match start).
-  const ok = hOK && count > walk * 0.5 && badSpots.length <= Math.ceil(spots.length * 0.25);
+  // The cover floor is not padding: a generator bug emptied two stages of ALL 546 and 573
+  // props, and every reachability test passed them — an empty box is trivially 100%
+  // reachable with zero bad spots. A stage with no cover and no spots is the single worst
+  // thing this file can be handed, so say so explicitly rather than scoring it perfect.
+  const furnished = m.props.length >= 150 && solid.length >= 60 && spots.length >= 24;
+  if (!furnished) console.log(`     [cover] FAIL — ${m.props.length} props (${solid.length} solid), ${spots.length} spots: a stage with no cover cannot be hidden in`);
+  const ok = hOK && furnished && count > walk * 0.5 && badSpots.length <= Math.ceil(spots.length * 0.25);
   if (!ok) fail++;
   console.log(`${ok ? "OK  " : "FAIL"} ${id}: bounds ${sim.bounds.maxX - sim.bounds.minX}x${sim.bounds.maxZ - sim.bounds.minZ}, rooms ${m.rooms.length}, walls ${m.walls.length}, props ${m.props.length}, lights ${m.lights.length}, spots ${spots.length}`);
   console.log(`     walkable cells ${walk}, seeker-reachable ${count} (${reachPct}%), hider-spawn ${hOK ? "reachable" : "UNREACHABLE"}, bad-spots ${badSpots.length}${badSpots.length ? " " + JSON.stringify(badSpots.slice(0, 4)) : ""}`);

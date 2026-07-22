@@ -90,7 +90,10 @@ assert(mc.computeSeekerCount(4) === 2 && mc.computeSeekerCount(5) === 2, "seeker
 assert(mc.computeSeekerCount(8) === 2 && mc.computeSeekerCount(10) === 3, "seeker count: 1-per-4 above the floor");
 {
   const s = mc.sanitizeSettings({ prepSeconds: 200, huntSeconds: 40, startAmmo: 9999, tauntIntervalSeconds: 5 });
-  assert(s.prepSeconds === 180 && s.huntSeconds === 90 && s.startAmmo === 999, "sanitizeSettings clamps");
+  // The hunt floor is 120, not 90. Measured 15 matches per setting: at a 90s hunt seekers
+  // win 0% — they need roughly 150s to work through six hiders and find 3.9 of them in
+  // ninety. A host could pick a length one side could not win at.
+  assert(s.prepSeconds === 180 && s.huntSeconds === 120 && s.startAmmo === 999, "sanitizeSettings clamps");
   assert(s.tauntIntervalSeconds === 15, "sanitizeSettings taunt floor");
 }
 {
@@ -161,28 +164,28 @@ const { PaintBuffer, replayStrokes, PAINT_FILLS } = pb;
 // ── maps.js (pure map data) ──────────────────────────────────────────────────
 const maps = await import(pathToFileURL(path.join(__dirname, "runtime/maps.js")).href);
 const manor = maps.getMap("manor");
-assert(manor.id === "manor" && manor.props.length >= 6, "map: manor loaded with cover");
-{
-  const sm = maps.toSimMap(manor);
-  assert(sm.obstacles.length === manor.props.length, "map: toSimMap obstacle per prop");
-  assert(sm.spawn.seeker && sm.spawn.hider && sm.spots.length >= 6, "map: toSimMap spawn + spots");
-  assert(maps.mapList().length === 3, "map: 3 full-scale campus stages shipped");
-  assert(maps.mapList().every((m) => (maps.getMap(m.id).rooms || []).length >= 3), "map: every shipped stage is multi-room (>=3 rooms)");
-}
-{
-  // The Residence: second multi-room map (garage/kitchen/living), GLB-furnished
-  const res = maps.getMap("residence");
-  assert(res.rooms.length === 3 && res.walls.length === 4 && res.props.filter((p) => p.model).length >= 12, "residence: 3 rooms, walls, GLB furniture");
-  const sm = maps.toSimMap(res);
-  assert(sm.obstacles.length === res.props.length + res.walls.length && sm.spots.length >= 10, "residence: toSimMap walls+props+spots");
-}
-for (const id of ["understage", "hollow"]) {
-  const m = maps.getMap(id);
-  assert(m.id === id && m.props.length >= 5 && m.spots.length >= 6, `map: ${id} authored with cover + spots`);
+// Five of the eight stages used to be 22x18m PROTOTYPES with 8 hand-placed props, and
+// the assertions here described that shape (3 rooms, 4 walls, obstacles == props). They
+// passed while the maps themselves were unplayable: measured at every lobby size from 4
+// to 10 players, seekers won 100% of 30 matches on each — 252-560 m2 with eight props
+// leaves nowhere to hide. All eight are campus-scale now, so assert that uniformly:
+// a per-map assertion could only ever cover the map someone remembered to name.
+assert(maps.mapList().length === 8, "map: 8 full-scale stages shipped");
+for (const entry of maps.mapList()) {
+  const m = maps.getMap(entry.id);
   const sm = maps.toSimMap(m);
-  assert(sm.bounds && sm.obstacles.length === m.props.length && sm.spawn.seeker && sm.spawn.hider, `map: ${id} toSimMap valid`);
-  // spawns must be inside bounds
-  assert(m.spawn.seeker.x > m.bounds.minX && m.spawn.seeker.x < m.bounds.maxX && m.spawn.hider.z > m.bounds.minZ && m.spawn.hider.z < m.bounds.maxZ, `map: ${id} spawns in bounds`);
+  const area = (m.bounds.maxX - m.bounds.minX) * (m.bounds.maxZ - m.bounds.minZ);
+  assert(area >= 4000, `map: ${m.id} is campus-scale (${Math.round(area)} m2, want >=4000)`);
+  assert((m.rooms || []).length >= 7, `map: ${m.id} is multi-room (${(m.rooms || []).length}, want >=7)`);
+  assert(m.walls.length >= 10, `map: ${m.id} has interior structure (${m.walls.length} walls)`);
+  assert(m.props.filter((p) => p.model).length >= 100, `map: ${m.id} is GLB-furnished`);
+  // every wall AND every prop must become a sim obstacle: a wall the sim cannot see is a
+  // wall bots walk through, and a prop it cannot see gives no cover and no camouflage.
+  // dressing props are noCollide (rendered + paintable, never nav/LOS blockers)
+  const solid = m.props.filter((p) => !p.noCollide).length;
+  assert(sm.obstacles.length === solid + m.walls.length, `map: ${m.id} toSimMap = solid props + walls`);
+  assert(sm.spots.length === 56 && sm.spawn.seeker && sm.spawn.hider, `map: ${m.id} spawns + 56 spots`);
+  assert(m.spawn.seeker.x > m.bounds.minX && m.spawn.seeker.x < m.bounds.maxX && m.spawn.hider.z > m.bounds.minZ && m.spawn.hider.z < m.bounds.maxZ, `map: ${m.id} spawns in bounds`);
 }
 
 // ── match_sim.js (full match brain — the M2 gate) ────────────────────────────
@@ -239,16 +242,20 @@ const nav = await import(pathToFileURL(path.join(__dirname, "runtime/sim/nav.js"
 {
   // The Depot: multi-room map, bots must navigate rooms via doorways to a verdict
   const depot = maps.getMap("depot");
-  assert(depot.rooms.length === 3 && depot.walls.length === 4 && depot.props.length >= 20, "depot: 3 rooms, interior walls, dense props");
+  assert(depot.rooms.length >= 7 && depot.walls.length >= 10 && depot.props.length >= 200, "depot: multi-room, interior walls, dense props");
   const sm = maps.toSimMap(depot);
-  assert(sm.obstacles.length === depot.props.length + depot.walls.length, "depot: interior walls added to obstacles");
+  assert(sm.obstacles.length === depot.props.filter((p) => !p.noCollide).length + depot.walls.length, "depot: interior walls added to obstacles");
   const players = [{ id: "S", isBot: true, role: "seeker" }, { id: "H1", isBot: true, role: "hider" }, { id: "H2", isBot: true, role: "hider" }, { id: "H3", isBot: true, role: "hider" }];
-  const s = ms.createMatch({ players, settings: { ...mc.DEFAULTS, mode: "normal", prepSeconds: 1, huntSeconds: 150, tauntIntervalSeconds: 0 }, map: sm, seed: 4, seekerCount: 1, skill: { identifyTime: 0.4, detectRange: 70, fovHalf: 3.2, seekerSpeed: 4.5 } });
+  const s = ms.createMatch({ players, settings: { ...mc.DEFAULTS, mode: "normal", prepSeconds: 25, huntSeconds: 150, tauntIntervalSeconds: 0 }, map: sm, seed: 4, seekerCount: 1, skill: { identifyTime: 0.4, detectRange: 70, fovHalf: 3.2, seekerSpeed: 4.5 } });
   assert(s.nav && s.nav.grid.length > 0, "depot: nav grid built at match start");
   // let hiders reach their (dispersed) spots
-  for (let i = 0; i < 100; i++) ms.stepMatch(s, 1 / 20);
+  // Hiders walk to their spots during PREP only — they hold still once the hunt starts,
+  // because stillness IS camouflage. The old 1-second prep let them disperse across a
+  // 22x18m prototype; on a 76x64m campus it pinned all three within 3.8m of spawn and
+  // the assertion read that as the sim failing to disperse them.
+  for (let i = 0; i < 700; i++) ms.stepMatch(s, 1 / 20);
   const hx = ms.hiders(s).map((h) => h.x);
-  assert(Math.max(...hx) - Math.min(...hx) > 6, "depot: hiders disperse across rooms (x-spread " + (Math.max(...hx) - Math.min(...hx)).toFixed(1) + ")");
+  assert(Math.max(...hx) - Math.min(...hx) > 12, "depot: hiders disperse across rooms (x-spread " + (Math.max(...hx) - Math.min(...hx)).toFixed(1) + ")");
   const r = ms.runToEnd(s, 1 / 20);
   assert(r && (r.winner === "hiders" || r.winner === "seekers"), "depot: multi-room bot match resolves (" + (r && r.winner) + ")");
 }
