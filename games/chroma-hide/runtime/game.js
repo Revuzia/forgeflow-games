@@ -1114,7 +1114,7 @@ export class Game {
     for (const e of events) {
       if (e.t === "caught" || e.t === "whistle" || e.t === "win" || e.t === "phase" ||
           e.t === "convert" || e.t === "miss" || e.t === "dryfire" || e.t === "hidden" ||
-          e.t === "decoy" || e.t === "decoy_hit") {
+          e.t === "decoy" || e.t === "decoy_hit" || e.t === "reveal") {
         this.net.sendEvent(e);
       }
     }
@@ -1211,6 +1211,15 @@ export class Game {
       this._removeDecoyMesh(ev.id);
       const a = this._actor(ev.by); this.audio.gunshot(a?.x, a?.z);
       if (ev.by === this.local?.id) this.hud.toast("a decoy! shot wasted", "#ff9d6b");
+    }
+    else if (ev.t === "reveal") {
+      // Reverse Chicken Race points every seeker at ONE marked hider, and the mark is
+      // chosen inside the host's convertReverse — a guest never runs it, so sim.reverseMark
+      // stayed null there and _markReverseTarget bailed on its first line. Verified on two
+      // tabs: the guest was converted to a seeker and sent hunting with no pillar, no
+      // callout and no idea who the mark was. The mode's whole premise, missing online.
+      this.sim.reverseMark = ev.id;
+      this._markReverseTarget();
     }
     else if (ev.t === "decoy") {
       const d = this.sim.actors.find((a) => a.id === ev.id);
