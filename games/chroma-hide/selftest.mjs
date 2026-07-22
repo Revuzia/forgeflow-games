@@ -690,6 +690,29 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
       `balance: the smallest lobby still plays like a game — ${rate2.toFixed(1)} seeker contacts per hunt (want >=2.5)`);
   }
 
+  // Nobody dies to a seeker who never saw them. A hider losing to something off-screen and
+  // unannounced is the single most unfair thing this genre can do, and it is the kind of
+  // regression a range or aim change could introduce silently. Measured across 3 maps:
+  // every caught hider had been acquired as a target first.
+  {
+    let caught = 0, caughtUnseen = 0;
+    for (const map of ["office", "street", "supermarket"]) {
+      for (let seed = 1; seed <= 3; seed++) {
+        const players = [...Array(8)].map((_, i) => ({ id: "p" + i, isBot: true, role: i < 2 ? ROLE.SEEKER : ROLE.HIDER }));
+        const s4 = createMatch({ players, settings: { ...DEFAULTS }, map: toSimMap(MAPS[map]), seed, seekerCount: 2 });
+        const seen = {}; let t4 = 0; const dt4 = 1 / 30;
+        while (s4.phase !== PHASE.RESULTS && t4 < 420) {
+          stepMatch(s4, dt4); t4 += dt4;
+          for (const k of seekers(s4)) if (k.target) seen[k.target.id] = true;
+        }
+        for (const h of hiders(s4)) if (!h.alive) { caught++; if (!seen[h.id]) caughtUnseen++; }
+      }
+    }
+    assert(caught > 0, "fairness: the sample actually caught someone (" + caught + ")");
+    assert(caughtUnseen === 0,
+      `fairness: no hider is killed without being seen first — ${caughtUnseen} of ${caught} died unseen`);
+  }
+
   const infRate = infSeek / infTotal;
   assert(infRate <= 0.85,
     `balance: Infection is a snowball, not a formality — seekers win ${(infRate * 100).toFixed(0)}% (want <=85%)`);
