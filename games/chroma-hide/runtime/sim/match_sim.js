@@ -170,6 +170,7 @@ export const SIM = Object.freeze({
   shootRange: 32,
   fleeRange: 4.5,         // a hider bot flees a seeker this close (=> free shot for seeker)
   answerSeconds: 4,
+  eyeY: 1.55,             // seeker eye height, for the per-target vertical aim check
 });
 
 /**
@@ -525,21 +526,32 @@ function stepSeeker(s, a, dt) {
 
 function seekerShoot(s, a) {
   a.cooldown = (s.settings.shotCooldownMs || 1500) / 1000;
-  // The sim is 2D, so a shot used to connect no matter where the crosshair pointed
-  // vertically -- you could stare at the ceiling and still tag someone. Bots aim level by
-  // construction; a human's pitch is real input, so require it to be roughly level.
+  // The sim is 2D, so a shot connects regardless of where the crosshair points
+  // vertically. Bots aim level by construction; a human's pitch is real input, so it has
+  // to be checked -- but checking it as a FLAT LIMIT (|pitch| <= 0.45) punished the two
+  // poses this game most encourages. Measured: a human standing 2m from a correctly
+  // identified hider who was lying flat (needs -0.59), curled (-0.54), or clinging to a
+  // 2.2m shelf (+0.49) auto-MISSED and paid a round for it, every time, while a STANDING
+  // hider at the same range was caught. Looking right at someone point-blank and having
+  // the gun only drain is the worst feel a shot can have.
+  //
+  // Check the crosshair against THIS target instead: the pitch that centres them, with a
+  // tolerance equal to their angular half-height. That still refuses the ceiling shot it
+  // was written for (a hider 10m off needs -0.08 +/- 0.14; staring up at 1.0 matches
+  // nobody, finds no candidate, and pays the miss) while allowing every honest one.
   const pitch = a._in && a._in.pitch;
-  if (!a.isBot && pitch != null && Math.abs(pitch) > 0.45) {
-    a.ammo = applyShot(a.ammo, { hit: false, fleeing: false, ammoLimit: s.settings.ammoLimit, startAmmo: s.settings.startAmmo });
-    s.events.push({ t: "miss", by: a.id });
-    return;
-  }
   // find the hider under the crosshair (closest in a tight cone with LOS)
   let hit = null, best = SIM.shootRange, fleeing = false;
   for (const h of aliveHiders(s)) {
     const d = dist2(a.x, a.z, h.x, h.z);
     if (d > SIM.shootRange) continue;
     if (angDiff(a.yaw, yawTo(a.x, a.z, h.x, h.z)) > 0.14) continue; // tight aim
+    if (!a.isBot && pitch != null) {                                 // vertical aim, per target
+      const poseH = (POSE_HEIGHT[h.pose] != null ? POSE_HEIGHT[h.pose] : 1.55) * ((h.bodySize || 1.4) / 1.4);
+      const range = Math.max(0.6, d);
+      const need = Math.atan(((h._elev || 0) + poseH / 2 - SIM.eyeY) / range);
+      if (Math.abs(pitch - need) > Math.atan((poseH / 2) / range) + 0.06) continue;
+    }
     if (!hasLOS(a.x, a.z, h.x, h.z, s.obstacles, hiderHeight(h))) continue;
     if (d < best) { best = d; hit = h; fleeing = !!h.fleeing; }
   }

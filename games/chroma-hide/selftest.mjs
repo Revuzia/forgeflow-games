@@ -795,6 +795,32 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
   assert(avgFinds >= 4.0,
     `balance: seekers find most of the lobby — ${avgFinds.toFixed(1)} of 6 (want >=4.0)`);
 
+  // A human seeker must be able to shoot the poses this game encourages. The vertical-aim
+  // check was a flat |pitch| <= 0.45, which auto-missed AND charged a round for a
+  // point-blank shot at a hider lying flat (needs -0.59), curled (-0.54) or clinging to a
+  // 2.2m shelf (+0.49) — while a STANDING hider at the same 2m was caught. Bots pass
+  // pitch:null so no bot measurement could ever see it.
+  {
+    const fire = (pose, elev, dist, aimOff) => {
+      const sm = maps.toSimMap(maps.getMap("office"));
+      const players = [{ id: "S", isBot: false, role: "seeker" }, { id: "H", isBot: true, role: "hider" }];
+      const st = ms.createMatch({ players, settings: mc.sanitizeSettings({ ...mc.DEFAULTS, prepSeconds: 1 }), map: sm, seed: 3, seekerCount: 1 });
+      while (st.phase !== mc.PHASE.HUNT) ms.stepMatch(st, 1 / 30);
+      const S = st.actors.find((a) => a.id === "S"), H = st.actors.find((a) => a.id === "H");
+      S.x = 0; S.z = 0; S.yaw = 0; H.x = 0; H.z = dist; H.alive = true; H.pose = pose; H._elev = elev; H.fleeing = false;
+      const poseH = mc.POSE_HEIGHT[pose] != null ? mc.POSE_HEIGHT[pose] : 1.55;
+      const need = Math.atan((elev + poseH / 2 - 1.55) / dist);
+      S.ammo = 8; S.cooldown = 0; S._in = { pitch: need + aimOff, yaw: 0, shoot: true };
+      ms.stepMatch(st, 1 / 30);
+      return { ammo: S.ammo, caught: !H.alive };
+    };
+    const honest = [["flat", 0, 2], ["ball", 0, 2], ["curl", 2.2, 2], ["stand", 0, 2], ["crouch", 1.9, 3]];
+    const missed = honest.filter(([p, e, d]) => !fire(p, e, d, 0).caught).map(([p]) => p);
+    assert(missed.length === 0, `shot: point-blank aim connects on every pose${missed.length ? " — failed " + missed.join(",") : ""}`);
+    const ceiling = fire("stand", 0, 10, 1.0);
+    assert(!ceiling.caught && ceiling.ammo === 7, "shot: staring at the ceiling still misses and costs a round");
+  }
+
   // A match must not write back onto the map it was handed. Hiders claim a spot by
   // setting _claimed on the spot object, and createMatch used to shallow-copy the array,
   // so the flags leaked to the caller: reusing one simMap across 12 matches on The Depot
