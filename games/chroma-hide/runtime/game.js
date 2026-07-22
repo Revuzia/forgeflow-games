@@ -84,7 +84,7 @@ export class Game {
       this._names = {}; players.forEach((p) => { this._names[p.id] = p.isLocal ? "You" : (p.name || ("Player-" + String(p.id).slice(-3))); });
       this._wireNet();
     } else {
-      const nPlayers = clamp(config.players || 6, 2, 10);
+      const nPlayers = clamp(config.players || 6, 4, 10);   // see the lobby slider: below 4 the match degenerates
       const seekerCount = computeSeekerCount(nPlayers);
       const players = this._roster(nPlayers, seekerCount);
       this.seed = (hashStr(config.seed || "chroma") + Date.now()) >>> 0;

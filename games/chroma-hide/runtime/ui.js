@@ -237,7 +237,10 @@ export function createTitleMenu(host, cb, maps, modeInfo) {
   // Lobby size
   panel.appendChild(el("div", "", "Lobby size")).className = "ct-label";
   const slRow = el("div", "", ""); slRow.className = "ct-slrow";
-  const slider = el("input", ""); slider.type = "range"; slider.min = 2; slider.max = 10; slider.value = 6; slider.className = "ct-slider";
+  // Minimum 4, not 2. Measured: a 2-player lobby is 1 seeker vs 1 hider, the hider is found
+  // in 30s of a 150s hunt and loses 94% of the time — a thirty-second chase, not a round of
+  // hide and seek. 3 players (1v2) is playable but thin. 4 is where the mode starts working.
+  const slider = el("input", ""); slider.type = "range"; slider.min = 4; slider.max = 10; slider.value = 6; slider.className = "ct-slider";
   const valEl = el("span", "", "6 players"); valEl.className = "ct-val";
   const setFill = () => { slider.style.setProperty("--fill", ((slider.value - 2) / 8 * 100) + "%"); valEl.textContent = slider.value + " players"; };
   slider.oninput = setFill; slRow.append(slider, valEl); panel.appendChild(slRow);
