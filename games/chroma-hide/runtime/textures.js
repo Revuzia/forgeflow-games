@@ -261,8 +261,14 @@ const BUILD = {
 export function surfaceTexture(kind, baseColor, repeatX = 1, repeatY = 1, size = 256) {
   const key = `${kind}|${baseColor}|${repeatX}|${repeatY}|${size}`;
   if (_cache.has(key)) return _cache.get(key);
-  const build = BUILD[kind];
-  if (!build) return null;
+  // An unknown kind used to return null, and callers build walls as color:0xffffff with
+  // the colour baked into the MAP — so a null map renders the wall pure white while the
+  // sim still scores camouflage against its declared colour. A player eyedropping what
+  // they saw got white, matched it perfectly, and scored zero. Nineteen walls shipped
+  // that way because the map specs asked for "timber", which was never a builder.
+  // Fall back to a real surface, and shout, so a typo is loud instead of invisible.
+  const build = BUILD[kind] || BUILD.plaster;
+  if (!BUILD[kind] && typeof console !== "undefined") console.warn(`[textures] unknown surface "${kind}" — falling back to plaster`);
   const tex = new THREE.CanvasTexture(build(baseColor, size));
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeatX, repeatY);

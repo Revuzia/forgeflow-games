@@ -204,11 +204,27 @@ export class PaintSystem {
     return this.colorHex();
   }
 
+  /** Sample a PATCH, not a pixel. One texel is a coin flip on any patterned surface: the
+   *  sim scores camouflage against the surface's declared colour, but a single sample can
+   *  land on a mortar line or a dark grain and hand back something 90+ RGB units away —
+   *  zero blend for a player who did exactly what the game told them to do. Measured on
+   *  wood, a typical texel gives 0.56 blend and an unlucky one gives 0.00. Averaging a
+   *  small patch converges on the colour the surface actually reads as, which is both
+   *  what the player sees and what the sim scores. Real eyedroppers have a sample size. */
   _sampleTexture(tex, u, v) {
     try {
+      const PATCH = 9;                       // source texels averaged, per axis
       if (!this._scratch) { this._scratch = document.createElement("canvas"); this._scratch.width = this._scratch.height = 1; }
       const sc = this._scratch, sx = sc.getContext("2d");
-      sx.drawImage(tex.image, (u % 1) * tex.image.width, ((1 - (v % 1))) * tex.image.height, 1, 1, 0, 0, 1, 1);
+      sx.imageSmoothingEnabled = true; sx.imageSmoothingQuality = "high";
+      const iw = tex.image.width, ih = tex.image.height;
+      const px = (u % 1) * iw, py = (1 - (v % 1)) * ih;
+      const half = PATCH / 2;
+      // clamp the patch inside the image so the average is never padded with transparent
+      const sx0 = Math.max(0, Math.min(iw - PATCH, px - half));
+      const sy0 = Math.max(0, Math.min(ih - PATCH, py - half));
+      sx.clearRect(0, 0, 1, 1);
+      sx.drawImage(tex.image, sx0, sy0, PATCH, PATCH, 0, 0, 1, 1);
       const p = sx.getImageData(0, 0, 1, 1).data;
       return { r: p[0], g: p[1], b: p[2] };
     } catch (e) { return null; }

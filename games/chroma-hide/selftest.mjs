@@ -199,6 +199,28 @@ for (const entry of maps.mapList()) {
   assert(m.spawn.seeker.x > m.bounds.minX && m.spawn.seeker.x < m.bounds.maxX && m.spawn.hider.z > m.bounds.minZ && m.spawn.hider.z < m.bounds.maxZ, `map: ${m.id} spawns in bounds`);
 }
 
+{
+  // Every surface a map asks for must have a builder. textures.js used to return null for
+  // an unknown kind, and walls are built as color:0xffffff with the colour baked into the
+  // MAP — so a missing builder rendered the wall pure WHITE while the sim went on scoring
+  // camouflage against its declared colour. Nineteen walls shipped like that asking for
+  // "timber", which never existed. The renderer needs a browser, but the KIND NAMES are
+  // just data on both sides, so the cross-reference is checkable here.
+  const texSrc = fs.readFileSync(path.join(__dirname, "runtime/textures.js"), "utf8");
+  const built = new Set([...texSrc.slice(texSrc.indexOf("const BUILD = {")).matchAll(/^  ([a-zA-Z]+)\(base, size\)/gm)].map((m) => m[1]));
+  assert(built.size >= 8, `textures: builder list parsed (${built.size} kinds)`);
+  const asked = new Set();
+  for (const entry of maps.mapList()) {
+    const m = maps.getMap(entry.id);
+    for (const w of m.walls || []) if (w.tex) asked.add(w.tex);
+    for (const r of m.rooms || []) if (r.tex) asked.add(r.tex);
+    if (m.ground && m.ground.tex) asked.add(m.ground.tex);
+    if (m.perimeter && m.perimeter.tex) asked.add(m.perimeter.tex);
+  }
+  const missing = [...asked].filter((k) => !built.has(k));
+  assert(missing.length === 0, `textures: every surface a map asks for has a builder${missing.length ? " — MISSING " + missing.join(", ") : ""}`);
+}
+
 // ── match_sim.js (full match brain — the M2 gate) ────────────────────────────
 const ms = await import(pathToFileURL(path.join(__dirname, "runtime/sim/match_sim.js")).href);
 const simMap = () => maps.toSimMap(manor);
