@@ -1128,8 +1128,17 @@ export class Game {
     this._streamPaint();
   }
 
+  /** Phases only ever move FORWARD. Snapshots are broadcast continuously while events are
+   *  discrete, so the authoritative "phase: results" event routinely lands a beat before a
+   *  snapshot that was already in flight — and applying that stale snapshot dragged the
+   *  guest back to ANSWER_CHECK, stranding it on the reveal screen at 0:00 with no
+   *  scoreboard for the rest of the session. A snapshot may never rewind the match. */
+  static _phaseOrder(p) { return [PHASE.PREP, PHASE.HUNT, PHASE.ANSWER_CHECK, PHASE.RESULTS].indexOf(p); }
+
   _applySnapshot(snap) {
-    this.sim.phase = snap.phase; this.sim.timeLeft = snap.timeLeft;
+    if (Game._phaseOrder(snap.phase) >= Game._phaseOrder(this.sim.phase)) {
+      this.sim.phase = snap.phase; this.sim.timeLeft = snap.timeLeft;
+    }
     for (const ua of snap.actors) {
       const a = this.sim.actors[ua.idx]; if (!a) continue;
       if (a.isLocal) { // trust host for role/alive/ammo/score but keep our own smooth position feel
@@ -1151,6 +1160,14 @@ export class Game {
       const iWon = (ev.winner === "hiders") === (this.localRole === ROLE.HIDER);
       iWon ? this.audio.win() : this.audio.lose();
       this.audio.stopTrack(0.8);
+    }
+    else if (ev.t === "phase" && ev.phase !== PHASE.HUNT) {
+      // EVERY phase transition, not just the hunt. The sim broadcasts phase RESULTS, the
+      // host forwards it, and the guest dropped it on the floor — so when the host finished
+      // and its snapshot stream stopped, the guest sat on the reveal screen at 0:00 forever
+      // with no scoreboard, despite having been told who won.
+      this.sim.phase = ev.phase;
+      if (ev.phase === PHASE.ANSWER_CHECK) this._revealHiders();
     }
     else if (ev.t === "phase" && ev.phase === PHASE.HUNT) {
       this.hud.toast("HUNT!", "#ff6b6b");
