@@ -257,10 +257,16 @@ function autoSpots(bounds, props, walls, count, rng) {
   const spots = [];
   for (let k = 0; k < idx.length && spots.length < count; k++) {
     const p = cand[idx[k]];
-    // Hug the anchor: body radius plus a little, measured from its edge along the offset
-    // axis. Far enough not to intersect it, close enough that its surface is what you are
-    // blending with.
-    const off = Math.max(p.w, p.d) / 2 + 0.7;
+    // This offset has to satisfy TWO systems at once, and they pull opposite ways:
+    //   camouflage wants <=1.5m to the surface (BLEND_RANGE2), so you can blend
+    //   the nav grid inflates obstacles by 0.55m and snaps to 1.0m cells, so a spot too
+    //     close lands in an unwalkable cell and no bot can ever path to it
+    // Swept rather than guessed, scoring how many spots satisfy BOTH:
+    //   +0.70 -> blend 95% walkable 73%  both 68%
+    //   +0.90 -> blend 94% walkable 89%  both 83%   <- chosen
+    //   +1.05 -> blend 79% walkable 98%  both 77%
+    // Both of my guesses (0.70, then 1.05) scored worse than the optimum between them.
+    const off = Math.max(p.w, p.d) / 2 + 0.90;
     let tx = cx - p.x, tz = cz - p.z; const L = Math.hypot(tx, tz) || 1;
     // try toward map centre first, then the four cardinals
     const dirs = [[tx / L, tz / L], [1, 0], [-1, 0], [0, 1], [0, -1]];

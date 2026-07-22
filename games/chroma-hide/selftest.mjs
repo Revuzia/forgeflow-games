@@ -761,6 +761,25 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
     assert(total > 0, "spots: the shipped maps have authored hiding spots (" + total + ")");
     assert(blendable / total >= 0.85,
       `spots: a designated hiding spot lets you hide — ${blendable}/${total} are within camouflage range (want >=85%)`);
+
+    // And it has to be somewhere a body can actually STAND. These two pull opposite ways —
+    // camouflage wants the spot close to the surface, the nav grid inflates obstacles by
+    // 0.55m and snaps to 1.0m cells so too close is unreachable. Guarding either alone just
+    // moves the dead zone: at +0.70m offset 95% could blend but only 73% were walkable; at
+    // +1.05m, 98% walkable but only 79% could blend. Assert the INTERSECTION.
+    const nav = await import("./runtime/sim/nav.js");
+    let both = 0;
+    for (const map of ["office", "street", "supermarket"]) {
+      const m = MAPS[map], sim = toSimMap(m);
+      const grid = nav.buildNavGrid(sim.bounds, sim.obstacles, 1.0, 0.55);
+      for (const sp of (m.spots || [])) {
+        const [i, j] = nav.cellOf(grid, sp.x, sp.z);
+        const walkable = i >= 0 && j >= 0 && i < grid.w && j < grid.h && grid.grid[j * grid.w + i] === 1;
+        if (walkable && coverInfo(sim, sp.x, sp.z).inRange) both++;
+      }
+    }
+    assert(both / total >= 0.75,
+      `spots: usable — ${both}/${total} can both blend AND be stood on (want >=75%)`);
   }
 
   const infRate = infSeek / infTotal;
