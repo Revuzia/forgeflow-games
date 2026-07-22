@@ -593,7 +593,15 @@ export class Game {
       if (this._stuck) this._releaseStick();
       this.local.pose = "stand";
       this.thirdPerson = false;
-      this.hud && this.hud.toast && this.hud.toast("You have been converted — hunt them down!", "#ff9d6b");
+      // Mode-aware wording. Reverse and Double turn everyone into a seeker BY DESIGN at
+      // hunt start; announcing that as "you have been converted" is Infection's language
+      // and reads as the wrong mode having started.
+      const msg = this.sim.mode === MODE.INFECTION
+        ? "You have been converted — hunt them down!"
+        : this.sim.mode === MODE.REVERSE
+          ? "You're a seeker now — find the mark!"
+          : "Everyone hunts now — find the others!";
+      this.hud && this.hud.toast && this.hud.toast(msg, "#ff9d6b");
     } else {
       this.thirdPerson = true;
     }
