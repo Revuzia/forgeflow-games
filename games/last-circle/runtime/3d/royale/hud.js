@@ -99,6 +99,11 @@ function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
 function releaseCursor(W) {
   try { document.exitPointerLock && document.exitPointerLock(); } catch (e) {}
   try { if (W && W.kernel) W.kernel.renderer.domElement.style.cursor = ""; } catch (e) {}
+  // The click that re-grabs the pointer after an INTENTIONAL release (a menu,
+  // the map, an end-of-match panel) must not also fire the weapon. Flagging it
+  // here — rather than inferring it from pointerLockElement in the mousedown
+  // handler — is what makes the suppression precise: see player.js.
+  if (W) W._suppressNextShot = true;
 }
 
 function layer(name, styles) {
@@ -543,7 +548,7 @@ export function showMenu(W, startMatch) {
   h("div", {
     fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "13px", fontWeight: "800",
     letterSpacing: "4px", color: "#8ec8ff", textShadow: "0 0 18px rgba(80,160,255,0.5)",
-  }, "FORGEFLOW  ·  LAST CIRCLE", topBar);
+  }, "LAST CIRCLE", topBar);   // no studio/site branding inside the game itself
   h("div", { fontSize: "12px", opacity: "0.55", letterSpacing: "2px", fontWeight: "600" }, "SEASON 1  ·  FREE TO PLAY", topBar);
 
   // center stack
@@ -608,17 +613,22 @@ export function showMenu(W, startMatch) {
       display: "flex", flexDirection: "column", gap: "3px", marginTop: "8px",
       padding: "8px 14px", borderRadius: "10px", background: "rgba(4,12,24,0.5)",
       border: "1px solid rgba(255,190,110,0.22)", fontFamily: "Rajdhani, " + FONT,
+      // titleBlock runs lcTitleIn, which ENDS on letter-spacing:10px with
+      // fill-mode both — so every descendant inherited 10px tracking and the
+      // challenge lines rendered as "G e t   3   e l i m i n a t i o n s".
+      // Reset it here; the header below re-asserts its own deliberate spacing.
+      letterSpacing: "normal",
     }, null, titleBlock);
     const mins = Math.max(0, Math.round(msToMidnight() / 60000));
     h("div", { fontSize: "10.5px", fontWeight: "900", letterSpacing: "2.5px", color: "#ffb36a" },
       "DAILY CHALLENGES  ·  RESETS IN " + Math.floor(mins / 60) + "h " + (mins % 60) + "m", dp);
     for (const c of dailyChallenges(W)) {
-      const row = h("div", { display: "flex", gap: "10px", alignItems: "center", fontSize: "12px" }, null, dp);
+      const row = h("div", { display: "flex", gap: "10px", alignItems: "center", fontSize: "12.5px", letterSpacing: "0.2px" }, null, dp);
       h("div", { width: "14px", opacity: c.done ? "1" : "0.75" }, c.done ? "✔" : (CHAL_ICON[c.id] || "🎯"), row);
       h("div", { flex: "1", textAlign: "left", opacity: c.done ? "0.55" : "0.95", textDecoration: c.done ? "line-through" : "none" }, c.label, row);
-      h("div", { fontWeight: "900", color: c.done ? "#8fa4bb" : "#ffd873" }, "+" + c.xp + " XP", row);
+      h("div", { fontWeight: "900", color: c.done ? "#8fa4bb" : "#ffd873", whiteSpace: "nowrap", marginLeft: "auto" }, "+" + c.xp + " XP", row);
     }
-    if (!W.daily.firstWin) h("div", { fontSize: "11px", opacity: "0.75", color: "#9fd7ff", textAlign: "left" }, "First win today  ·  +750 XP", dp);
+    if (!W.daily.firstWin) h("div", { fontSize: "11px", opacity: "0.75", color: "#9fd7ff", textAlign: "left", letterSpacing: "0.2px" }, "First win today  ·  +750 XP", dp);
   }
   h("div", {
     fontFamily: "Rajdhani, " + FONT, fontSize: "15px", fontWeight: "600",
@@ -1567,6 +1577,14 @@ export function showHUD(W) {
   // SHIFT is a TOGGLE (owner direction), so the latch state must be visible —
   // with hold-to-sprint your finger is the indicator; with a toggle nothing tells
   // you you are still sprinting into a fight with wide hipfire spread.
+  // Stamina has to be VISIBLE or its first appearance reads as the sprint
+  // randomly breaking. Sits directly under the sprint pip, fades out when full
+  // so it is not permanent clutter, and turns amber when you are nearly out.
+  R.staWrap = h("div", { position: "absolute", left: "50%", top: "69.5%", transform: "translateX(-50%)",
+    width: "132px", height: "5px", background: "rgba(0,0,0,0.45)", borderRadius: "3px",
+    overflow: "hidden", opacity: "0", transition: "opacity 180ms linear", pointerEvents: "none" }, null, L);
+  R.staBar = h("div", { width: "100%", height: "100%", background: "#8ef5c8", transition: "width 90ms linear" }, null, R.staWrap);
+
   R.sprintPip = h("div", { position: "absolute", left: "50%", top: "66.5%", transform: "translateX(-50%)",
     font: "700 11px ui-monospace,Menlo,Consolas,monospace", letterSpacing: "0.16em",
     color: "#8ef5c8", textShadow: "0 1px 3px #000", opacity: "0", transition: "opacity 140ms linear",
@@ -1769,6 +1787,20 @@ export function update(W, dt) {
     const c = K.CONSUMABLES[p.healing.id];
     R.healFill.style.width = (100 * (1 - p.healing.tLeft / c.useS)) + "%";
   } else R.healBar.style.display = "none";
+
+  // stamina bar — hidden at full, amber when low, red while locked out
+  if (R.staWrap && p === W.player) {
+    const SN = K.STAMINA, st = p.stamina == null ? SN.max : p.stamina;
+    const pct = Math.max(0, Math.min(100, (st / SN.max) * 100));
+    const locked = (p._exhaust || 0) > 0;
+    const sig = Math.round(pct) + (locked ? "L" : "");
+    if (C.sta !== sig) {
+      R.staBar.style.width = pct + "%";
+      R.staBar.style.background = locked ? "#ff7a6a" : pct < 30 ? "#ffd166" : "#8ef5c8";
+      R.staWrap.style.opacity = (pct > 99 && !locked) ? "0" : "0.9";
+      C.sta = sig;
+    }
+  }
 
   // sprint pip: show while the toggle is latched. Dim when latched but not
   // actually sprinting (ADS, mid-air, walking backwards) so the pip never lies

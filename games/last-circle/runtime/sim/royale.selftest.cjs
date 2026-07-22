@@ -272,5 +272,24 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(R.MOVE.walk * R.HEAL.speedMult * R.CROUCH.speedMult > 0, "heal: crouch-healing stays positive");
 }
 
+// -- sprint stamina (owner direction 2026-07-22) ----------------------------
+// Sprint was endless, so 9.6 m/s was the game's real movement speed rather than
+// its burst speed. Stamina makes it a resource with a recovery cost.
+{
+  const S = R.STAMINA;
+  ok(S && S.max > 0, "stamina: STAMINA exported from the sim");
+  ok(S.drainPerS > 0 && S.regenPerS > 0, "stamina: drains and regenerates");
+  const sprintS = S.max / S.drainPerS;
+  ok(sprintS > 4 && sprintS < 12, "stamina: a full bar buys 4-12s of sprint (" + sprintS.toFixed(1) + "s)");
+  const refillS = S.max / S.regenPerS;
+  ok(refillS > 3, "stamina: refilling is slower than a single burst is long");
+  ok(S.minToStart > 0 && S.minToStart < S.max, "stamina: needs a floor to re-start, preventing stutter-sprint");
+  ok(S.regenDelayS > 0, "stamina: there is a rest beat before regen begins");
+  ok(S.exhaustedLockS > 0, "stamina: bottoming out forces a walk");
+  // sprint must still be a real gain over walking, or the resource is pointless
+  ok(R.MOVE.sprint > R.MOVE.walk * 1.2, "stamina: sprint is still meaningfully faster than walking");
+  ok(R.MOVE.sprint <= 9.0, "stamina: sprint speed reined in from the 9.6 that outran the camera");
+}
+
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);

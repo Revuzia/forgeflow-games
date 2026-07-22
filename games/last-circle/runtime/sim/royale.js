@@ -101,7 +101,7 @@
   // arcade-BR speeds (owner: "not industry standard" at 8.4 — browser BRs
   // like Final Drop run ~9-10 sprint with a strong FOV kick)
   var MOVE = {
-    walk: 6.0, sprint: 9.6, ads: 3.8,
+    walk: 6.0, sprint: 8.0, ads: 3.8,
     swim: 4.0, swimSprint: 5.6,
     jumpV: 7.8, gravity: -22, accelT: 0.13, airControl: 0.4,
   };
@@ -126,6 +126,23 @@
   // tell. Using one now slows you to a walk-shuffle and locks sprint out for the
   // duration: you can still reposition behind cover, you just cannot run.
   var HEAL = { speedMult: 0.45, blocksSprint: true };
+  // Sprint was ENDLESS, so there was never a reason not to hold it — which made
+  // 9.6 m/s the game's real movement speed rather than its burst speed, and left
+  // the camera permanently trailing a runner it could not catch. Stamina turns
+  // sprint back into a resource: ~7.5 s of continuous sprint, a beat of recovery
+  // before it refills, and a floor you must clear to start again so you cannot
+  // stutter-sprint on fumes. drainPerS/regenPerS are per SECOND.
+  var STAMINA = {
+    max: 100,
+    drainPerS: 13.5,      // 100 / 13.5 = 7.4 s of continuous sprint
+    regenPerS: 16.0,      // ~6.3 s from empty to full
+    regenDelayS: 1.1,     // pause after you stop sprinting before it refills
+    minToStart: 32,       // must have this much to BEGIN a sprint. Measured at
+                          // 15 the loop was: rest ~1.6s, sprint ~1.1s, bottom
+                          // out, repeat — stutter-sprinting on fumes. 32 buys
+                          // ~2.4s of sprint per rest, so recovery is a real beat.
+    exhaustedLockS: 1.4,  // forced walk after bottoming out
+  };
   /** Height of an actor's hit capsule. Only shrinks for an actor that actually
    *  HAS the crouch clip loaded — if a skin's clip failed to bake it still
    *  stands upright, and shrinking its capsule would reintroduce the lie. */
@@ -543,7 +560,7 @@
     mulberry32: mulberry32, clamp: clamp, dist2d: dist2d, lerp: lerp,
     RARITY: RARITY, RARITY_COLOR: RARITY_COLOR, RARITY_DMG_MULT: RARITY_DMG_MULT, RARITY_SPREAD_MULT: RARITY_SPREAD_MULT,
     WEAPONS: WEAPONS, WEAPON_IDS: WEAPON_IDS, WEAPON_NAMES: WEAPON_NAMES, weaponName: weaponName, gunScore: gunScore, AMMO: AMMO, CONSUMABLES: CONSUMABLES, START_LOADOUT: START_LOADOUT,
-    MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH, HEAL: HEAL, effectiveSpread: effectiveSpread,
+    MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH, HEAL: HEAL, STAMINA: STAMINA, effectiveSpread: effectiveSpread,
     actorHeight: actorHeight, actorEyeY: actorEyeY, moveBasis: moveBasis,
     segmentBox: segmentBox, rampTopAt: rampTopAt, segmentRamp: segmentRamp,
     segmentColliders: segmentColliders,

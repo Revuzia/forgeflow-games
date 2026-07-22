@@ -600,9 +600,20 @@ function installHumanInput(W) {
     // a wasted round and a position giveaway every single time you tab back in.
     // Swallow the LEFT button on the acquiring click only; button 2 is left
     // alone so the RMB-drag look fallback still works when lock is denied.
-    const wasLocked = document.pointerLockElement === dom;
+    // This used to swallow the shot whenever pointer lock was not ALREADY held:
+    //     const wasLocked = document.pointerLockElement === dom;
+    //     tryLock(); if (e.button === 0 && !wasLocked) return;
+    // requestPointerLock is ASYNC, so pointerLockElement is still null on the
+    // click that requests it — and on any click after the browser silently drops
+    // the lock (tab-out, focus loss, the user never granting it at all). The
+    // early return happens BEFORE _lmbDown / _fireEdge / input.fire are set, so
+    // those clicks did nothing whatsoever: the reported "I couldn't shoot my
+    // pistol" is exactly this, and it hit every weapon, not just the pistol.
+    // Semi-autos just show it worse because each one is a discrete lost shot.
+    // Now only a click following a DELIBERATE release (menu, map, end panel —
+    // see releaseCursor in hud.js) is swallowed.
     tryLock();                     // ANY click grabs the mouse for looking
-    if (e.button === 0 && !wasLocked) return;
+    if (e.button === 0 && W._suppressNextShot) { W._suppressNextShot = false; return; }
     if (e.button === 0) {
       W._lmbDown = true;
       W._fireEdge = true;           // fresh click — semi-auto weapons fire on this EDGE only
@@ -901,7 +912,25 @@ function stepActor(W, a, dt, far) {
   // sprint TOGGLE latch survives the heal — you are not silently un-toggled and
   // left walking once the medkit finishes.
   const healingNow = !!a.healing;
-  const sprinting = inp.sprint && inp.mz > 0.5 && !(healingNow && K.HEAL.blocksSprint);
+  // ── stamina ───────────────────────────────────────────────────────────────
+  // Applies to every actor, so bots pay the same price the player does and a
+  // chase has a natural rhythm instead of being a constant-speed conveyor.
+  const SN = K.STAMINA;
+  if (a.stamina == null) { a.stamina = SN.max; a._staRest = 0; a._exhaust = 0; }
+  const wantsSprint = inp.sprint && inp.mz > 0.5 && !(healingNow && K.HEAL.blocksSprint);
+  if (a._exhaust > 0) a._exhaust = Math.max(0, a._exhaust - dt);
+  // you must clear minToStart to BEGIN, but only reach 0 to be forced to stop —
+  // otherwise sprint flickers on and off around the threshold every frame
+  const canSprint = a._exhaust <= 0 && (a.sprinting ? a.stamina > 0 : a.stamina >= SN.minToStart);
+  const sprinting = wantsSprint && canSprint;
+  if (sprinting) {
+    a.stamina = Math.max(0, a.stamina - SN.drainPerS * dt);
+    a._staRest = SN.regenDelayS;
+    if (a.stamina <= 0) a._exhaust = SN.exhaustedLockS;   // forced walk, briefly
+  } else {
+    if (a._staRest > 0) a._staRest = Math.max(0, a._staRest - dt);
+    else a.stamina = Math.min(SN.max, a.stamina + SN.regenPerS * dt);
+  }
   const spd = a.swimming
     ? (sprinting ? K.MOVE.swimSprint : K.MOVE.swim)
     : inp.ads ? K.MOVE.ads : (sprinting && !a.inWater) ? K.MOVE.sprint : K.MOVE.walk;
@@ -1257,7 +1286,17 @@ function updateCamera(W, dt) {
   // smoothing and the effective amplitude depended on framerate twice over.
   // Undo last frame's offset before the lerp, then re-apply this frame's.
   cam.position.sub(_shakeOff);
-  cam.position.lerp(camPos, Math.min(1, firstPerson ? 1 : dt * 18));
+  // `dt * 18` is a first-order lag: the camera settles a constant v/k behind the
+  // player, which at the old 9.6 m/s sprint was 0.53 m of permanent trail — read
+  // on screen as the camera "not keeping up". It also scaled with framerate, so
+  // a dip made the trail worse exactly when the game already felt bad.
+  // 1 - exp(-k*dt) is the same filter sampled correctly: identical response at
+  // any dt, and k raised to 26 pulls the steady-state trail to ~0.31 m at the
+  // new 8.0 m/s sprint. Snap outright if we are ever more than 4 m adrift
+  // (teleport, respawn, spectate switch) so it never visibly reels itself in.
+  const camK = firstPerson ? 1 : 1 - Math.exp(-26 * dt);
+  if (!firstPerson && cam.position.distanceToSquared(camPos) > 16) cam.position.copy(camPos);
+  else cam.position.lerp(camPos, Math.min(1, camK));
   shakeT += dt;
   _shakeOff.set(0, 0, 0);
   let roll = 0;
