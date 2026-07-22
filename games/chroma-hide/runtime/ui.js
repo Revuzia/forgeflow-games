@@ -40,7 +40,14 @@ export function injectChromaStyles() {
   :root{--ct-teal:#7fe3c4;--ct-violet:#c8a6ff;--ct-ink:#eaf2ff;--ct-dim:rgba(234,242,255,.62);
     --ct-panel:rgba(12,16,24,.55);--ct-brd:rgba(255,255,255,.12);--ct-chip:rgba(255,255,255,.06);
     --ct-grad:linear-gradient(90deg,var(--ct-teal),var(--ct-violet));--ct-font:system-ui,-apple-system,'Segoe UI',sans-serif;}
-  .ct-root{position:absolute;inset:0;z-index:60;overflow:hidden;display:grid;place-items:center;pointer-events:auto;font-family:var(--ct-font);color:var(--ct-ink)}
+  /* The ROOT is the scroller. It was overflow:hidden over a grid that centres a panel
+     taller than the viewport, and html/body cannot scroll either, so on a short window
+     (900x430 measured: PLAY sat 407px below the fold) the primary button was simply
+     unreachable. safe centring is required as well — a centred grid item taller than
+     its scroll container overflows ABOVE the scroll origin, which no amount of scrolling
+     can reach. The panel's own overflow:auto never fired because an auto grid row keeps
+     its max-content height, so scrollHeight always equalled clientHeight. */
+  .ct-root{position:absolute;inset:0;z-index:60;overflow:auto;overscroll-behavior:contain;display:grid;place-items:safe center;padding:16px 0;pointer-events:auto;font-family:var(--ct-font);color:var(--ct-ink)}
   .ct-bg{position:absolute;inset:-4%;background:#0b0f16 center/cover no-repeat;transform:scale(1.06);animation:ctKen 45s ease-in-out infinite alternate;pointer-events:none}
   @keyframes ctKen{from{transform:scale(1.06) translate3d(0,0,0)}to{transform:scale(1.13) translate3d(-1.5%,-1%,0)}}
   .ct-scrim{position:absolute;inset:0;pointer-events:none;background:
@@ -90,7 +97,10 @@ export function injectChromaStyles() {
   .ct-foot button{background:none;border:0;color:var(--ct-dim);font:600 13px var(--ct-font);cursor:pointer;padding:6px 10px;border-radius:8px}
   .ct-foot button:hover{color:var(--ct-ink);background:rgba(255,255,255,.06)}
   .ct-root :focus-visible{outline:2px solid var(--ct-teal);outline-offset:2px}
-  @media (max-width:900px),(max-aspect-ratio:1/1){.ct-content{grid-template-columns:1fr;width:min(560px,92vw);gap:16px;max-height:94vh}.ct-panel{overflow:auto}.ct-hero{text-align:center}}
+  @media (max-width:900px),(max-aspect-ratio:1/1){.ct-content{grid-template-columns:1fr;width:min(560px,92vw);gap:16px}.ct-hero{text-align:center}}
+  /* Short-and-wide windows never matched the query above, yet they are exactly where the
+     menu ran out of room. Height is the axis that matters here, so key off it. */
+  @media (max-height:620px){.ct-content{grid-template-columns:1fr;width:min(560px,92vw);gap:12px}.ct-hero{text-align:center}.ct-wordmark{font-size:clamp(26px,5vw,40px)}}
   @media (prefers-reduced-motion:reduce){.ct-bg,.ct-wordmark,.ct-play,.ct-panel,.ct-blob{animation:none!important}}
   `;
   document.head.appendChild(s);

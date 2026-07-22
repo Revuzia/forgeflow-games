@@ -504,7 +504,11 @@ export class Game {
       if (d < near) near = d;
     }
     const RANGE = 16;                                   // beyond this you feel nothing
-    if (near < RANGE) this.audio.heartbeat(1 - near / RANGE);
+    const prox = near < RANGE ? 1 - near / RANGE : 0;
+    if (prox > 0) this.audio.heartbeat(prox);
+    // The heartbeat is the hider's early-warning sense and it existed ONLY as sound — no
+    // use to a deaf player, or anyone with the tab muted. Same value, second channel.
+    this._setProximityVignette(prox);
   }
 
   /** Cling to ANY surface — this is the core hiding verb, not a wall-only trick.
@@ -659,6 +663,25 @@ export class Game {
     // geometry and material are shared with the owner — never dispose them here
   }
 
+  /** Edge-of-screen warning that mirrors the heartbeat. Audio-only cues are invisible to
+   *  a player who has the tab muted, and this one carries the most important information
+   *  a hider gets. */
+  _setProximityVignette(p) {
+    if (!this._vigEl) {
+      const el = document.createElement("div");
+      el.style.cssText = [
+        "position:absolute", "inset:0", "z-index:30", "pointer-events:none", "opacity:0",
+        "transition:opacity .18s linear",
+        "background:radial-gradient(ellipse at center, rgba(255,60,60,0) 52%, rgba(255,45,45,.55) 100%)",
+      ].join(";");
+      this.engine.container.appendChild(el);
+      this._vigEl = el;
+    }
+    // only for a live hider — a seeker does not get a proximity sense
+    const show = p > 0.02 && this.localRole === ROLE.HIDER && this.local && this.local.alive;
+    this._vigEl.style.opacity = show ? String(Math.min(1, p * 1.15).toFixed(2)) : "0";
+  }
+
   /** Colour-blind assist: a NUMERIC match readout.
    *
    *  The setting existed in the menu and called an empty callback. In a game whose entire
@@ -681,7 +704,11 @@ export class Game {
 
   _updateMatchMeter() {
     const el = this._meterEl; if (!el) return;
-    const on = this._colorAssist && this.paintMode && this.localRole === ROLE.HIDER && this.local;
+    // Shown to EVERYONE in paint mode. Gating the only feedback on whether your paint job
+    // is any good behind an accessibility checkbox meant most players never saw it — they
+    // were matching colour by eye with no score at all. The colour-blind setting now only
+    // controls whether the exact hex values are spelled out.
+    const on = this.paintMode && this.localRole === ROLE.HIDER && this.local;
     el.style.display = on ? "block" : "none";
     if (!on) return;
     const surf = coverRGB(this.sim, this.local.x, this.local.z);
@@ -695,10 +722,15 @@ export class Game {
       const verdict = pct > 85 ? "EXCELLENT" : pct > 60 ? "GOOD" : pct > 30 ? "WEAK" : "NO MATCH";
       line = `${bars} ${String(pct).padStart(3)}%  ${verdict}`;
     }
+    const hexRows = this._colorAssist
+      ? `<div>surface ${hex(surf)}</div><div>body&nbsp;&nbsp;&nbsp; ${hex(mine)}</div>`
+      : `<div style="display:flex;gap:6px;align-items:center"><span style="opacity:.6">surface</span>
+           <span style="width:26px;height:11px;border-radius:3px;display:inline-block;background:${hex(surf)}"></span>
+           <span style="opacity:.6;margin-left:6px">you</span>
+           <span style="width:26px;height:11px;border-radius:3px;display:inline-block;background:${hex(mine)}"></span></div>`;
     el.innerHTML =
       `<div style="opacity:.6;letter-spacing:.08em;font-size:9.5px;margin-bottom:4px">COLOUR MATCH</div>` +
-      `<div>surface ${hex(surf)}</div><div>body&nbsp;&nbsp;&nbsp; ${hex(mine)}</div>` +
-      `<div style="margin-top:4px">${line}</div>`;
+      hexRows + `<div style="margin-top:4px">${line}</div>`;
   }
 
   /** Hand the cursor back. Pointer lock outlived the match, so every button on the
@@ -1185,7 +1217,14 @@ export class Game {
         if (d) this._buildDecoyMesh(d);
       }
       else if (e.t === "dryfire") { const a = this._actor(e.by); this.audio.dryfire(a?.x, a?.z); if (e.by === this.local?.id) this.hud.toast("out of ammo", "#ff9d6b"); }
-      else if (e.t === "whistle") { const a = this._actor(e.id || e.by); this.audio.whistle(a?.x, a?.z); }
+      else if (e.t === "whistle") {
+        const id = e.id || e.by, a = this._actor(id);
+        this.audio.whistle(a?.x, a?.z);
+        // Forced taunt is ON by default at 45s: your own body gives your position away on
+        // a timer and the game never told you. Being scored for it while not knowing it
+        // happens is the difference between a mechanic and a mystery.
+        if (id === this.local?.id) this.hud.toast("You whistled — seekers heard that", "#ffd479");
+      }
       else if (e.t === "win") {
         const meHider = this.localRole === ROLE.HIDER;
         ((e.winner === "hiders") === meHider) ? this.audio.win() : this.audio.lose();
@@ -1385,6 +1424,7 @@ export class Game {
     if (this._helpEl && this._helpEl.parentNode) this._helpEl.parentNode.removeChild(this._helpEl);
     if (this._meterEl && this._meterEl.parentNode) this._meterEl.parentNode.removeChild(this._meterEl);
     if (this._statusEl && this._statusEl.parentNode) this._statusEl.parentNode.removeChild(this._statusEl);
+    if (this._vigEl && this._vigEl.parentNode) this._vigEl.parentNode.removeChild(this._vigEl);
     // PaintSystem owns three 1024x1024 CanvasTextures each and dispose() had NO call
     // sites, so every rematch stranded ~17 MB of GPU memory that traverse-and-dispose
     // could not reach (the textures hang off the PaintSystem, not the scene graph).
