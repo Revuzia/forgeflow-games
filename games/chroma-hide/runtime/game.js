@@ -109,6 +109,7 @@ export class Game {
     this._buildMap();
     this._spawnActors();
     this._setupInput();
+    this._buildTouchControls();
     this._buildControlHelp();
     try { this._colorAssist = !!JSON.parse(localStorage.getItem("ffg_settings") || "{}").colorAssist; } catch (e) { this._colorAssist = false; }
     this._buildMatchMeter();
@@ -667,6 +668,73 @@ export class Game {
     // geometry and material are shared with the owner — never dispose them here
   }
 
+  /** Touch controls. The game was keyboard-only, so on a phone you could look around and
+   *  do literally nothing else — no movement and not one verb. Built only when a touch
+   *  device is detected, so desktop pays nothing and gains no clutter. */
+  _buildTouchControls() {
+    const touch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+    if (!touch || this._touchEl) return;
+    this._stick = { x: 0, z: 0 };
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "position:absolute;inset:0;z-index:36;pointer-events:none;touch-action:none";
+
+    // ── left thumb: movement ────────────────────────────────────────────────
+    const pad = document.createElement("div");
+    pad.style.cssText = [
+      "position:absolute", "left:18px", "bottom:18px", "width:132px", "height:132px",
+      "border-radius:50%", "border:1px solid rgba(255,255,255,.18)",
+      "background:rgba(12,16,22,.42)", "pointer-events:auto", "touch-action:none",
+    ].join(";");
+    const nub = document.createElement("div");
+    nub.style.cssText = "position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;background:rgba(127,227,196,.55);pointer-events:none";
+    pad.appendChild(nub); wrap.appendChild(pad);
+    let padId = null;
+    const setNub = (dx, dy) => { nub.style.transform = `translate(${dx}px, ${dy}px)`; };
+    const onPad = (e) => {
+      const r = pad.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const R = r.width / 2 - 26;
+      let dx = e.clientX - cx, dy = e.clientY - cy;
+      const d = Math.hypot(dx, dy);
+      if (d > R) { dx = dx / d * R; dy = dy / d * R; }
+      setNub(dx, dy);
+      // screen-down is +z forward in this basis, matching the W key
+      this._stick.x = +(dx / R).toFixed(3);
+      this._stick.z = +(-dy / R).toFixed(3);
+    };
+    pad.addEventListener("pointerdown", (e) => { padId = e.pointerId; pad.setPointerCapture(e.pointerId); onPad(e); e.preventDefault(); });
+    pad.addEventListener("pointermove", (e) => { if (e.pointerId === padId) { onPad(e); e.preventDefault(); } });
+    const endPad = (e) => { if (e.pointerId === padId) { padId = null; this._stick.x = this._stick.z = 0; setNub(0, 0); } };
+    pad.addEventListener("pointerup", endPad); pad.addEventListener("pointercancel", endPad);
+
+    // ── right thumb: the verbs ──────────────────────────────────────────────
+    const col = document.createElement("div");
+    col.style.cssText = "position:absolute;right:14px;bottom:14px;display:grid;grid-template-columns:repeat(2,60px);gap:8px;pointer-events:auto";
+    const mk = (label, title, fn) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = label; b.title = title; b.setAttribute("aria-label", title);
+      b.style.cssText = "width:60px;height:52px;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:rgba(12,16,22,.62);color:#dfe7f2;font:700 11px system-ui;touch-action:manipulation";
+      b.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); fn(); });
+      return b;
+    };
+    const hider = this.localRole === ROLE.HIDER;
+    const btns = hider
+      ? [mk("PAINT", "Paint mode", () => this._togglePaintMode()),
+         mk("POSE", "Change pose", () => this._cyclePose()),
+         mk("CLING", "Cling to a surface", () => this._toggleStick()),
+         mk("DECOY", "Drop a decoy", () => this._dropDecoy()),
+         mk("JUMP", "Jump", () => { if (this._stuck) this._stickUp = true; else this._jump(); }),
+         mk("WHISTLE", "Whistle", () => this._whistle())]
+      : [mk("FIRE", "Shoot", () => { this._shootRequested = true; }),
+         mk("VIEW", "First / third person", () => { this.thirdPerson = !this.thirdPerson; }),
+         mk("JUMP", "Jump", () => this._jump()),
+         mk("EMOTE", "Emote", () => this._toggleEmoteBar())];
+    btns.forEach((b) => col.appendChild(b));
+    wrap.appendChild(col);
+
+    this.engine.container.appendChild(wrap);
+    this._touchEl = wrap;
+  }
+
   /** Edge-of-screen warning that mirrors the heartbeat. Audio-only cues are invisible to
    *  a player who has the tab muted, and this one carries the most important information
    *  a hider gets. */
@@ -967,8 +1035,13 @@ export class Game {
     // stick yaw must survive the input round-trip
     if (this._stuck) { this._moving = false; return { mx: 0, mz: 0, yaw: this.local ? this.local.yaw : this.camYaw, shoot: false }; }
     if (!this.paintMode && !seekerLocked && this.local && this.local.alive) {
-      const f = (this.keys.has("f") ? 1 : 0) - (this.keys.has("b") ? 1 : 0);
-      const r = (this.keys.has("r") ? 1 : 0) - (this.keys.has("l") ? 1 : 0);
+      // Touch stick and WASD share one basis — a second movement path would drift out of
+      // sync with every camera change made here.
+      const st = this._stick || { x: 0, z: 0 };
+      let f = (this.keys.has("f") ? 1 : 0) - (this.keys.has("b") ? 1 : 0) + st.z;
+      let r = (this.keys.has("r") ? 1 : 0) - (this.keys.has("l") ? 1 : 0) + st.x;
+      const mag = Math.hypot(f, r);
+      if (mag > 1) { f /= mag; r /= mag; }   // stick + keys must not exceed full speed
       // camYaw now decreases as the mouse moves right, so the strafe basis flips too:
       // A must step screen-left and D screen-right relative to where you are looking.
       mx = Math.sin(this.camYaw) * f - Math.cos(this.camYaw) * r;
@@ -1429,6 +1502,7 @@ export class Game {
     if (this._meterEl && this._meterEl.parentNode) this._meterEl.parentNode.removeChild(this._meterEl);
     if (this._statusEl && this._statusEl.parentNode) this._statusEl.parentNode.removeChild(this._statusEl);
     if (this._vigEl && this._vigEl.parentNode) this._vigEl.parentNode.removeChild(this._vigEl);
+    if (this._touchEl && this._touchEl.parentNode) this._touchEl.parentNode.removeChild(this._touchEl);
     // PaintSystem owns three 1024x1024 CanvasTextures each and dispose() had NO call
     // sites, so every rematch stranded ~17 MB of GPU memory that traverse-and-dispose
     // could not reach (the textures hang off the PaintSystem, not the scene graph).
