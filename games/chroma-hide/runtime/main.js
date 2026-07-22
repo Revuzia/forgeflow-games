@@ -35,7 +35,14 @@ const hud = ui.createHUD(container); hud.hide();
 let game = null, lastConfig = null;
 
 const results = ui.createResults(container, {
-  onRematch: () => { if (game && game.online) leaveOnline(); else startGame(lastConfig); },
+  // Online, "Rematch" used to call leaveOnline() — the button said Rematch and did Leave,
+  // dropping the socket and dumping you at the title screen away from the people you were
+  // playing with. It now returns the whole room to the waiting screen with the connection
+  // intact, so the host can immediately start another round.
+  onRematch: () => {
+    if (game && game.online) toLobby();
+    else startGame(lastConfig);
+  },
   onMenu: () => { if (net) leaveOnline(); else toMenu(); },
 });
 const settings = ui.createSettings(container, {
@@ -100,10 +107,30 @@ function startOnlineGame(roster, netRole) {
   lobby.hide(); title.hide(); results.hide();
   if (game) { game.destroy(); game = null; }
   game = new Game(engine, { online: true, net, netRole, roster }, hud, {
-    onEnd: (r) => { results.show(r); window.__CHROMA__.phase = "results"; window.__CHROMA__.lastResult = r; }, audio,
+    onEnd: (r) => { results.show(r); window.__CHROMA__.phase = "results"; window.__CHROMA__.lastResult = r; },
+    // the host pressing Rematch sends the whole room back to the waiting screen
+    onToLobby: () => toLobby(),
+    audio,
   });
   window.__CHROMA__.game = game; window.__CHROMA__.phase = "playing-online";
 }
+/** Back to the waiting room WITHOUT dropping the session — the online equivalent of a
+ *  rematch. Tears the match down exactly as toMenu() does, but keeps `net` alive and shows
+ *  the lobby instead of the title. */
+function toLobby() {
+  // Tell the room first. Without this the host walks back to the waiting screen and every
+  // guest is left inside a dead match — sim finished, HUD frozen on stale prep text, no
+  // scoreboard and no way out. Announce, THEN tear down.
+  if (net && net.isHost()) { try { net.sendEvent({ t: "to_lobby" }); } catch (e) {} }
+  if (game) { game.destroy(); game = null; }
+  results.hide(); hud.hide(); title.hide();
+  if (net) { try { net.allowRestart(); } catch (e) { /* older builds */ } }
+  lobby.show();
+  lobby.showWaiting({ host: net ? net.isHost() : false, code: net && net.net ? net.net.room : null });
+  if (net) lobby.updatePeers(net.peerIds().length);
+  window.__CHROMA__.game = null; window.__CHROMA__.phase = "lobby";
+}
+
 function leaveOnline() {
   // Leaving an online match is leaving a MATCH. This used to drop the socket and show the
   // title while leaving the Game object alive — its listeners, paint canvases and GPU

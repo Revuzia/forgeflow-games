@@ -121,5 +121,9 @@ export class ChromaNet {
     }
   }
 
+  /** Permit another startMatch on the same room. `started` latches on the first match so
+   *  a stray START cannot restart a running game; a deliberate rematch has to clear it. */
+  allowRestart() { this.started = false; }
+
   leave() { try { this.net.leave(); } catch (e) {} }
 }

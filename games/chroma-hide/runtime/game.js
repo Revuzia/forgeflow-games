@@ -1192,6 +1192,7 @@ export class Game {
       const d = this.sim.actors.find((a) => a.id === ev.id);
       if (d) this._buildDecoyMesh(d); else if (ev.x != null) this._buildDecoyMesh(ev);
     }
+    else if (ev.t === "to_lobby") { if (this.cb.onToLobby) this.cb.onToLobby(); }
     else if (ev.t === "emote") this.floatEmote(ev.id, ev.emoji);
     else if (ev.t === "whistle") { const a = this._actor(ev.id || ev.by); this.audio.whistle(a?.x, a?.z); }
   }
@@ -1479,7 +1480,11 @@ export class Game {
     this.paint = null;   // don't hold the 512² paint canvases if anything still references us
     this._alive = false;
     if (this.audio) { try { this.audio.stopMusic(); this.audio.stopAmbience(); this.audio.spray(false); this.audio.stopTrack(0.6); } catch (e) {} }
-    if (this.online && this.net) { try { this.net.leave(); } catch (e) {} }
+    // NOT this.net.leave(). A Game is one MATCH; the connection outlives it. Dropping the
+    // socket here meant returning to the lobby for a rematch also destroyed the channel —
+    // presence emptied, both peers saw only themselves, and the next round filled with bots
+    // instead of the people you were playing with. main.js owns the socket: toMenu() leaves,
+    // toLobby() keeps it.
     if (this._unsub) this._unsub();
     window.removeEventListener("keydown", this._kd); window.removeEventListener("keyup", this._ku);
     if (this._blur) window.removeEventListener("blur", this._blur);
