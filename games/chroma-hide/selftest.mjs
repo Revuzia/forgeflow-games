@@ -161,6 +161,17 @@ const { PaintBuffer, replayStrokes, PAINT_FILLS } = pb;
   assert(hE.albedo !== hF.albedo, "paint: overlapping stroke order affects result");
 }
 
+{
+  // Cling height is WORLD space: scaling it by build size sank a small body BELOW the
+  // shelf it was standing on (1.95m shelf -> rendered at 1.72).
+  const BY = 0.89;
+  const small = util.restingBodyY(1.95, BY, 0.37, 1.0 / 1.4);
+  const std = util.restingBodyY(1.95, BY, 0.37, 1.0);
+  assert(small > 1.95 && std > 1.95, `body sits ON the surface for every build (small ${small.toFixed(2)}, std ${std.toFixed(2)})`);
+  assert(Math.abs((small - 1.95) - (std - 1.95) * (1.0 / 1.4)) < 1e-9, "only the body offset scales with build, never the elevation");
+  assert(util.restingBodyY(0, BY, 1, 1) === BY, "on the floor, resting height is just the body centre");
+}
+
 // ── maps.js (pure map data) ──────────────────────────────────────────────────
 const maps = await import(pathToFileURL(path.join(__dirname, "runtime/maps.js")).href);
 const manor = maps.getMap("manor");
@@ -426,6 +437,11 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
     if (unpackActor(packActor({ x: 1, z: 2, yaw: 0, pose: p, ammo: 3, score: 0 }, 0)).pose !== p) allRound = false;
   }
   assert(allRound, "all " + POSE_IDS.length + " poses survive the wire round trip");
+  // NOTE: this only proves the wire CARRIES cling height. It passed for months while the
+  // guest threw the value away — _applySnapshot never copied _elev onto the actor and
+  // _syncActors only ever lifted the LOCAL mesh, so every other player and every mounted
+  // bot was drawn standing on the floor inside the prop. Testing a value survives packing
+  // says nothing about anyone reading it; restingBodyY below covers the consuming maths.
   const elev = unpackActor(packActor({ x: 0, z: 0, yaw: 0, pose: "flat", ammo: 0, score: 0, _elev: 1.75 }, 0))._elev;
   assert(Math.abs(elev - 1.75) < 0.02, "cling elevation replicates over the wire (" + elev + ")");
 }

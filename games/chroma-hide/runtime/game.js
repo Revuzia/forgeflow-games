@@ -20,7 +20,7 @@ import { createPaintPanel } from "./paint_ui.js";
 import { makeBodyGeo, addBodyFeatures } from "./body.js";
 import { surfaceTexture } from "./textures.js";
 import { GameAudio } from "./audio.js";
-import { clamp, hashStr } from "./sim/util.js";
+import { clamp, hashStr, restingBodyY } from "./sim/util.js";
 
 const BODY_R = 0.42, BODY_LEN = 0.9, BODY_Y = BODY_R + BODY_LEN / 2 + 0.02;
 
@@ -1147,6 +1147,7 @@ export class Game {
       } else {
         a.x += (ua.x - a.x) * 0.5; a.z += (ua.z - a.z) * 0.5; a.yaw = ua.yaw; a.pose = ua.pose;
         a.alive = ua.alive; a.caught = ua.caught; a.hidden = ua.hidden; a.role = ua.role; a.ammo = ua.ammo; a.score = ua.score;
+        a._elev = ua._elev || 0;   // the wire carries it; applying it is what puts them on the crate
       }
     }
   }
@@ -1294,12 +1295,26 @@ export class Game {
         if (P) { sx = P.s[0]; sy = P.s[1]; sz = P.s[2]; py = BODY_Y * P.s[1] + P.yOff; rot = P.rot || 0; }
       }
       if (a.isLocal && this._jumpY) py += this._jumpY;   // visual hop
+      const bs = (a.bodySize || 1.4) / 1.4;   // pose scale AND body size, or the pose wipes the size
+      // Cling height is WORLD space and must not be scaled by body size. The old line
+      // multiplied the whole thing — `position.y = py * bs` — so a SMALL body on a 1.95m
+      // shelf rendered at 1.72, sunk below the surface it was standing on, while a
+      // standard body on the same shelf sat correctly. Only the body-local offset scales.
+      let y = py * bs;
       if (a.isLocal && this._stuck) {
         // wall: body centre sits at the cling height. top: body RESTS on the surface.
-        py = this._stickMode === "top" ? this._stickY + BODY_Y * sy : this._stickY;
+        y = this._stickMode === "top" ? restingBodyY(this._stickY, BODY_Y, sy, bs) : this._stickY;
+      } else if (!a.isLocal && (a._elev || 0) > 0.01) {
+        // EVERYONE else's cling height was ignored. packActor puts _elev on the wire with
+        // the note "without it a clinging player renders on the floor for everyone else",
+        // and the sim raises the silhouette by it — but only the local mesh was ever
+        // lifted. Measured: a bot standing on a 1.75m prop was drawn at y=0.75, sunk a
+        // metre inside the crate it was on. Worse since the aim check went per-target: a
+        // human aiming at the body they could SEE was aiming a metre under the body the
+        // shot resolves against. _elev is the surface height, so the body rests on top.
+        y = restingBodyY(a._elev, BODY_Y, sy, bs);
       }
-      const bs = (a.bodySize || 1.4) / 1.4;   // pose scale AND body size, or the pose wipes the size
-      mesh.scale.set(sx * bs, sy * bs, sz * bs); mesh.position.y = py * bs; mesh.rotation.set(rot, a.yaw, 0);
+      mesh.scale.set(sx * bs, sy * bs, sz * bs); mesh.position.y = y; mesh.rotation.set(rot, a.yaw, 0);
       if (a.caught && a.role === ROLE.HIDER) { mesh.material.transparent = true; mesh.material.opacity = 0.35; }
       // infection: a converted hider now renders like a seeker (tint)
       if (a.role === ROLE.SEEKER && a._wasHider !== true && a.caught === false && a.isBot && a._converted) { }

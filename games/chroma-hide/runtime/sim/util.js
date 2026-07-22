@@ -70,3 +70,15 @@ export function hsvToRgb(h, s, v) {
   else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
   return { r: (r + m) * 255, g: (g + m) * 255, b: (b + m) * 255 };
 }
+
+/** Where a body's centre sits, in WORLD metres, when it is standing on a surface `elev`
+ *  metres up (0 = the floor). `bodyY` is the body-local centre height, scaled by the pose
+ *  (poseScaleY) and the build (bodyScale).
+ *
+ *  The elevation term is deliberately OUTSIDE the scaling. The renderer used to compute
+ *  `position.y = py * bodyScale` with the cling height folded into py, which scaled the
+ *  world elevation too: a SMALL build standing on a 1.95m shelf rendered at 1.72 — below
+ *  the surface it was on — while a standard build on the same shelf sat correctly. */
+export function restingBodyY(elev, bodyY, poseScaleY, bodyScale) {
+  return (elev || 0) + bodyY * (poseScaleY || 1) * (bodyScale || 1);
+}
