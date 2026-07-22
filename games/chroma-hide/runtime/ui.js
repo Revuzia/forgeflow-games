@@ -414,7 +414,10 @@ export function createOnlineLobby(host, cb, maps) {
       guestMsg.style.display = isHost ? "none" : "block";
     },
     updatePeers: (n) => (peers.textContent = "Players: " + n),
-    setError: (m) => (err.textContent = m || ""),
+    // audio.error() was written and never called. The lobby's three failure paths — no
+    // match found, connection error, could not connect — set a line of small text and
+    // otherwise fail in complete silence, which reads as the button having done nothing.
+    setError: (m) => { err.textContent = m || ""; if (m && _uiAudio && _uiAudio.error) _uiAudio.error(); },
   };
 }
 

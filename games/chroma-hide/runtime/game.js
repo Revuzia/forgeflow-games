@@ -1213,7 +1213,7 @@ export class Game {
       const a = this._actor(ev.id); this.audio.gunshot(a?.x, a?.z); this.audio.catchSound(a?.x, a?.z);
       if (ev.id === this.local?.id) { this.hud.toast("Caught!", "#ff6b6b"); this._enterSpectate(); }
     }
-    else if (ev.t === "miss") { const a = this._actor(ev.by); this.audio.gunshot(a?.x, a?.z); if (ev.by === this.local?.id) this.hud.toast("miss", "#ff9d6b"); }
+    else if (ev.t === "miss") { const a = this._actor(ev.by); this.audio.gunshot(a?.x, a?.z); this.audio.miss(a?.x, a?.z); if (ev.by === this.local?.id) this.hud.toast("miss", "#ff9d6b"); }
     else if (ev.t === "dryfire") { const a = this._actor(ev.by); this.audio.dryfire(a?.x, a?.z); if (ev.by === this.local?.id) this.hud.toast("out of ammo", "#ff9d6b"); }
     else if (ev.t === "decoy_hit") {
       this._removeDecoyMesh(ev.id);
@@ -1292,7 +1292,14 @@ export class Game {
         { const a = this._actor(e.id); this.audio.gunshot(a?.x, a?.z); this.audio.catchSound(a?.x, a?.z); }
         if (e.id === this.local?.id) { this.hud.toast("Caught!", "#ff6b6b"); this._enterSpectate(); }
         else if (e.by === this.local?.id) this.hud.toast("Got one!", ACCENT_G);
-      } else if (e.t === "miss") { const a = this._actor(e.by); this.audio.gunshot(a?.x, a?.z); if (e.by === this.local?.id) { this.hud.toast("miss", "#ff9d6b"); this._muzzle = 0.08; } }
+      } else if (e.t === "miss") {
+        // audio.miss() is the falling counterpart to catchSound's rising sting, written
+        // deliberately and never called: a miss played the bare gunshot, so it was only
+        // the ABSENCE of the catch cue. A miss costs a round, so it should say so out
+        // loud — the ammo economy is the one system with no other running readout.
+        const a = this._actor(e.by); this.audio.gunshot(a?.x, a?.z); this.audio.miss(a?.x, a?.z);
+        if (e.by === this.local?.id) { this.hud.toast("miss", "#ff9d6b"); this._muzzle = 0.08; }
+      }
       else if (e.t === "decoy_hit") {
         this._removeDecoyMesh(e.id);
         const k = this._actor(e.by); this.audio.gunshot(k?.x, k?.z);
