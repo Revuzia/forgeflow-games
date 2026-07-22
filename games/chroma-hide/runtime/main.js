@@ -59,7 +59,8 @@ const lobby = ui.createOnlineLobby(container, {
   onBack: () => leaveOnline(),
 }, MAPS);
 const title = ui.createTitleMenu(container, {
-  onPlay: (cfg) => { audio.select(); audio.stopTrack(0.8); startGame({ ...cfg, mapId: pickMap(cfg.mapId) }); },
+  // pass the CHOICE through ("random" stays "random"); startGame resolves it per match
+  onPlay: (cfg) => { audio.select(); audio.stopTrack(0.8); startGame(cfg); },
   onOnline: () => { title.hide(); lobby.show(); window.__CHROMA__.phase = "lobby"; },
   onHelp: () => alert("HIDERS: paint your body (F) to match a surface, hold still, survive the hunt.\nSEEKERS: find and shoot every hider before the timer — but ammo is limited."),
   onSettings: () => settings.show(),
@@ -107,7 +108,11 @@ function leaveOnline() {
 }
 
 function startGame(cfg) {
+  // Remember what the player PICKED, not what it resolved to. lastConfig used to store the
+  // already-resolved map, so choosing "Random" and hitting Rematch replayed the identical
+  // stage forever — the one control whose entire purpose is variety.
   lastConfig = cfg;
+  cfg = { ...cfg, mapId: pickMap(cfg.mapId) };
   results.hide(); title.hide();
   if (game) { game.destroy(); game = null; }
   game = new Game(engine, cfg, hud, {
@@ -118,6 +123,10 @@ function startGame(cfg) {
 }
 function toMenu() {
   if (game) { game.destroy(); game = null; }
+  // The menu theme started once per page load behind the autoplay gate and nothing ever
+  // restarted it, so the title screen was silent for every visit after the first match.
+  // By now the context is unlocked, so this can just play.
+  try { audio.playTrack("menu_theme", { gain: 0.22 }); } catch (e) { /* music is never load-bearing */ }
   if (net) { try { net.leave(); } catch (e) {} net = null; }
   results.hide(); hud.hide(); lobby.hide(); title.show();
   window.__CHROMA__.game = null; window.__CHROMA__.phase = "menu";

@@ -437,6 +437,7 @@ export class Game {
       this.camPitch = clamp(this.camPitch + dy * 0.0032 * s2, -0.55, 1.25);
     };
     this._wheel = (e) => { if (this.paintMode || this.thirdPerson) { this.camDist = clamp(this.camDist + e.deltaY * 0.006, 2.0, 10); e.preventDefault(); } };
+    // (wheel only zooms in third person by design — in first person there is nothing to orbit)
     dom.addEventListener("pointerdown", this._pd); window.addEventListener("pointerup", this._pu);
     window.addEventListener("pointermove", this._pm); dom.addEventListener("wheel", this._wheel, { passive: false });
   }
@@ -1042,11 +1043,39 @@ export class Game {
     }
   }
 
+  /** A guest is driven from here, NOT from _handleEvents, so every cue the host plays
+   *  locally had to be mirrored — otherwise an online player never heard the hunt sting,
+   *  never got the music, and the round simply ended in silence. */
   _applyNetEvent(ev) {
-    if (ev.t === "win") { this.sim.result = { winner: ev.winner, reason: ev.reason }; }
-    else if (ev.t === "phase" && ev.phase === PHASE.HUNT) { this.hud.toast("HUNT!", "#ff6b6b"); if (this.paintMode) this._togglePaintMode(); }
-    else if (ev.t === "caught") { const a = this._actor(ev.id); this.audio.gunshot(a?.x, a?.z); this.audio.catchSound(a?.x, a?.z); if (ev.id === this.local?.id) this.hud.toast("Caught!", "#ff6b6b"); }
-    else if (ev.t === "miss") { const a = this._actor(ev.by); this.audio.gunshot(a?.x, a?.z); }
+    if (ev.t === "win") {
+      this.sim.result = { winner: ev.winner, reason: ev.reason };
+      const iWon = (ev.winner === "hiders") === (this.localRole === ROLE.HIDER);
+      iWon ? this.audio.win() : this.audio.lose();
+      this.audio.stopTrack(0.8);
+    }
+    else if (ev.t === "phase" && ev.phase === PHASE.HUNT) {
+      this.hud.toast("HUNT!", "#ff6b6b");
+      this.audio.huntStart();
+      this.audio.roundStart();
+      this.audio.playTrack("cinematic_epic", { gain: 0.26 });
+      if (this.paintMode) this._togglePaintMode();
+      this.hud.setHint(this._defaultHint());
+    }
+    else if (ev.t === "caught") {
+      const a = this._actor(ev.id); this.audio.gunshot(a?.x, a?.z); this.audio.catchSound(a?.x, a?.z);
+      if (ev.id === this.local?.id) { this.hud.toast("Caught!", "#ff6b6b"); this._enterSpectate(); }
+    }
+    else if (ev.t === "miss") { const a = this._actor(ev.by); this.audio.gunshot(a?.x, a?.z); if (ev.by === this.local?.id) this.hud.toast("miss", "#ff9d6b"); }
+    else if (ev.t === "dryfire") { const a = this._actor(ev.by); this.audio.dryfire(a?.x, a?.z); if (ev.by === this.local?.id) this.hud.toast("out of ammo", "#ff9d6b"); }
+    else if (ev.t === "decoy_hit") {
+      this._removeDecoyMesh(ev.id);
+      const a = this._actor(ev.by); this.audio.gunshot(a?.x, a?.z);
+      if (ev.by === this.local?.id) this.hud.toast("a decoy! shot wasted", "#ff9d6b");
+    }
+    else if (ev.t === "decoy") {
+      const d = this.sim.actors.find((a) => a.id === ev.id);
+      if (d) this._buildDecoyMesh(d); else if (ev.x != null) this._buildDecoyMesh(ev);
+    }
     else if (ev.t === "emote") this.floatEmote(ev.id, ev.emoji);
     else if (ev.t === "whistle") { const a = this._actor(ev.id || ev.by); this.audio.whistle(a?.x, a?.z); }
   }
@@ -1100,7 +1129,7 @@ export class Game {
 
   _handleEvents(events) {
     for (const e of events) {
-      if (e.t === "phase" && e.phase === PHASE.HUNT) { this.audio.huntStart(); this.audio.playTrack("cinematic_epic", { gain: 0.26 }); this.hud.toast("HUNT!", "#ff6b6b"); if (this.paintMode) this._togglePaintMode(); this.hud.setHint(this._defaultHint()); }
+      if (e.t === "phase" && e.phase === PHASE.HUNT) { this.audio.huntStart(); this.audio.roundStart(); this.audio.playTrack("cinematic_epic", { gain: 0.26 }); this.hud.toast("HUNT!", "#ff6b6b"); if (this.paintMode) this._togglePaintMode(); this.hud.setHint(this._defaultHint()); }
       else if (e.t === "caught") {
         { const a = this._actor(e.id); this.audio.gunshot(a?.x, a?.z); this.audio.catchSound(a?.x, a?.z); }
         if (e.id === this.local?.id) { this.hud.toast("Caught!", "#ff6b6b"); this._enterSpectate(); }
@@ -1161,13 +1190,22 @@ export class Game {
     // round. Follow a survivor instead — you stay in the match as an audience.
     const subj = this._specTarget() || this.local;
     const bx = subj.x, by = BODY_Y, bz = subj.z;
-    if (this.localRole === ROLE.SEEKER && !this.thirdPerson && this.sim.phase !== PHASE.RESULTS) {
+    // First person for EITHER role. The branch used to require SEEKER, so a hider
+    // pressing the V the legend advertises got no camera change — and lost wheel zoom,
+    // because that is gated on thirdPerson. Peeking from first person is a real hider
+    // capability, so honour the key instead of removing it.
+    if (!this.thirdPerson && !this.paintMode && !this._spectating && this.sim.phase !== PHASE.RESULTS) {
       // first-person
       cam.position.set(bx, by + 0.55, bz);
       const fx = Math.sin(this.camYaw) * Math.cos(this.camPitch), fy = Math.sin(this.camPitch), fz = Math.cos(this.camYaw) * Math.cos(this.camPitch);
       cam.lookAt(bx + fx, by + 0.55 + fy, bz + fz);
-      const gun = this.meshes.get(this.local.id); if (gun) gun.visible = false;
+      const own = this.meshes.get(this.local.id); if (own) own.visible = false;   // don't render your own head from inside it
     } else {
+      // Put the body back. Only the first-person branch ever set visible=false and
+      // nothing restored it, so toggling back out of first person left you invisible
+      // to yourself for the rest of the round.
+      const own = this.meshes.get(this.local.id);
+      if (own && !own.visible && !this.local.caught) own.visible = true;
       // third-person / paint-orbit follow, WITH camera collision so walls never
       // clip the view (the D-grade "void" bug: hiding near a wall put the camera
       // behind it). Raycast body->desired-camera; pull the camera in on a hit.
@@ -1240,6 +1278,12 @@ export class Game {
 
   _updateHUD() {
     this.hud.setTimer(this.sim.timeLeft);
+    // The last seconds of PREP were silent. countdown() was written for exactly this and
+    // never called, so nothing told a hider their time was nearly up.
+    if (this.sim.phase === PHASE.PREP) {
+      const secs = Math.ceil(this.sim.timeLeft);
+      if (secs <= 3 && secs > 0 && secs !== this._lastCountdown) { this._lastCountdown = secs; this.audio.countdown(secs); }
+    } else this._lastCountdown = null;
     this.hud.setPhase(this.sim.phase === PHASE.PREP ? "PREP · paint & hide" : this.sim.phase === PHASE.HUNT ? "HUNT" : this.sim.phase === PHASE.ANSWER_CHECK ? "REVEAL" : "");
     if (this.local) {
       if (this.local.role === ROLE.SEEKER) { this.hud.setAmmo(this.local.ammo, this.settings.startAmmo); this.hud.showCrosshair(!this.thirdPerson && this.sim.phase === PHASE.HUNT); }
