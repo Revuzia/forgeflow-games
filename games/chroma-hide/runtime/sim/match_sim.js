@@ -187,7 +187,14 @@ export function createMatch(config) {
   const roleInfo = assignRoles(players.map((p) => p.id), seekerCount, config.lastSeekers || [], rng);
 
   const nav = buildNavGrid(map.bounds, map.obstacles);
-  const spots = (map.spots || []).slice();
+  // DEEP copy: hiders claim a spot by writing _claimed onto the spot OBJECT, so a shallow
+  // .slice() (new array, same objects) leaks those flags back to the caller's map. Any
+  // caller that reuses one simMap across matches then starts each new match with the
+  // previous match's spots already taken, and hider placement degrades run over run —
+  // measured on The Depot at 8 players, 12 seeds: 5/12 seeker wins with a fresh map per
+  // match, 11/12 when one map was reused. The shipped game rebuilds via toSimMap (which
+  // clones) so it was never hit, but the sim should not depend on its caller for that.
+  const spots = (map.spots || []).map((sp) => ({ ...sp }));
   const actors = players.map((p, pi) => {
     const role = p.role || roleInfo.roles[p.id];
     const isSeeker = role === ROLE.SEEKER;

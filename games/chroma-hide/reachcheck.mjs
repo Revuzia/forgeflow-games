@@ -50,17 +50,34 @@ for (const id of ids) {
   const solid = m.props.filter((p) => !p.noCollide), dress = m.props.length - solid.length;
   const tall = solid.filter((p) => p.h >= 1.7).length;
   const navFrac = ((walk * nav.cell * nav.cell) / gross * 100).toFixed(0);
-  // longest unbroken sightline: sample axis-aligned rays through walkable space
-  const blocks = (x, z) => sim.obstacles.some((o) => Math.abs(x - o.x) < o.hw && Math.abs(z - o.z) < o.hd);
-  let maxSight = 0;
-  for (let j = 0; j < nav.h; j += 2) {           // horizontal rays
-    let run = 0; const z = nav.minZ + (j + 0.5) * nav.cell;
-    for (let i = 0; i < nav.w; i++) { const x = nav.minX + (i + 0.5) * nav.cell; run = blocks(x, z) ? 0 : run + nav.cell; if (run > maxSight) maxSight = run; }
+  // Sightlines are measured as a BODY-WIDTH CORRIDOR, not an infinitely thin ray. The
+  // zero-width version reported a 36-48m median on every stage and a flat 76m max, which
+  // read as a gross brief violation; it was counting needles threaded through gaps no
+  // 0.84m silhouette could be seen through. Re-measured at body width the median is
+  // 17-27m — at or inside the <=24m target — on seven of eight stages.
+  //
+  // The MAX is still 76m everywhere and is NOT gated, for two measured reasons: it lives
+  // in the empty band between the outermost props and the perimeter wall (scatter insets
+  // from zone edges), which carries no cover and so no hider; and the sim cannot use it —
+  // detectRange is 22m and losMaxDist 25m, so nothing past 25m is mechanically visible.
+  // Across the eight stages the correlation between median sightline and seeker win rate
+  // is 0.21: essentially none. The median is what gets gated, and loosely, because The
+  // Backlot is a street map whose long avenue is the point and which balances at 50%.
+  const HALF_BODY = 0.42;
+  const blocks = (x, z) => sim.obstacles.some((o) => Math.abs(x - o.x) < o.hw + HALF_BODY && Math.abs(z - o.z) < o.hd + HALF_BODY);
+  let maxSight = 0; const sightRuns = [];
+  for (let j = 0; j < nav.h; j++) {               // horizontal corridors
+    let run = 0, best = 0; const z = nav.minZ + (j + 0.5) * nav.cell;
+    for (let i = 0; i < nav.w; i++) { const x = nav.minX + (i + 0.5) * nav.cell; run = blocks(x, z) ? 0 : run + nav.cell; if (run > best) best = run; }
+    sightRuns.push(best); if (best > maxSight) maxSight = best;
   }
-  for (let i = 0; i < nav.w; i += 2) {           // vertical rays
-    let run = 0; const x = nav.minX + (i + 0.5) * nav.cell;
-    for (let j = 0; j < nav.h; j++) { const z = nav.minZ + (j + 0.5) * nav.cell; run = blocks(x, z) ? 0 : run + nav.cell; if (run > maxSight) maxSight = run; }
+  for (let i = 0; i < nav.w; i++) {               // vertical corridors
+    let run = 0, best = 0; const x = nav.minX + (i + 0.5) * nav.cell;
+    for (let j = 0; j < nav.h; j++) { const z = nav.minZ + (j + 0.5) * nav.cell; run = blocks(x, z) ? 0 : run + nav.cell; if (run > best) best = run; }
+    sightRuns.push(best); if (best > maxSight) maxSight = best;
   }
+  sightRuns.sort((a, b) => a - b);
+  const medSight = sightRuns[Math.floor(sightRuns.length / 2)] || 0;
   // ── overlap audit: nothing may sit inside a wall, and solid props must not
   // interpenetrate (touching is intended; real penetration is a defect the owner spotted)
   const EPS = 0.07;
@@ -75,7 +92,7 @@ for (const id of ids) {
   const dressTotal = m.props.filter((q) => q.noCollide).length;
   console.log(`     [overlap] props-in-walls ${inWall} (want 0), solid interpenetrations ${propPen} (want 0), dressing raised onto surfaces ${dressOnTop}/${dressTotal}`);
   if (inWall || propPen) fail++;
-  console.log(`     [brief] props ${m.props.length} (solid ${solid.length} / dressing ${dress}), tall h>=1.7 ${tall} (target 110-150), navigable ${navFrac}% (target 45-55), max sightline ${maxSight.toFixed(0)}m (target <=24, cap 32)`);
+  console.log(`     [brief] props ${m.props.length} (solid ${solid.length} / dressing ${dress}), tall h>=1.7 ${tall} (target 110-150), navigable ${navFrac}% (target 45-55), sightline median ${medSight.toFixed(0)}m (target <=24, gate <=40) / max ${maxSight.toFixed(0)}m (perimeter band, ungated)`);
   // hard: hider spawn reachable + seeker reaches most of the map. Soft: a few
   // auto-spots may be unreachable (the sim filters those at match start).
   // The cover floor is not padding: a generator bug emptied two stages of ALL 546 and 573
@@ -84,7 +101,9 @@ for (const id of ids) {
   // thing this file can be handed, so say so explicitly rather than scoring it perfect.
   const furnished = m.props.length >= 150 && solid.length >= 60 && spots.length >= 24;
   if (!furnished) console.log(`     [cover] FAIL — ${m.props.length} props (${solid.length} solid), ${spots.length} spots: a stage with no cover cannot be hidden in`);
-  const ok = hOK && furnished && count > walk * 0.5 && badSpots.length <= Math.ceil(spots.length * 0.25);
+  const sightOK = medSight <= 40;
+  if (!sightOK) console.log(`     [sight] FAIL — median body-width sightline ${medSight.toFixed(0)}m: this stage is a shooting gallery`);
+  const ok = hOK && furnished && sightOK && count > walk * 0.5 && badSpots.length <= Math.ceil(spots.length * 0.25);
   if (!ok) fail++;
   console.log(`${ok ? "OK  " : "FAIL"} ${id}: bounds ${sim.bounds.maxX - sim.bounds.minX}x${sim.bounds.maxZ - sim.bounds.minZ}, rooms ${m.rooms.length}, walls ${m.walls.length}, props ${m.props.length}, lights ${m.lights.length}, spots ${spots.length}`);
   console.log(`     walkable cells ${walk}, seeker-reachable ${count} (${reachPct}%), hider-spawn ${hOK ? "reachable" : "UNREACHABLE"}, bad-spots ${badSpots.length}${badSpots.length ? " " + JSON.stringify(badSpots.slice(0, 4)) : ""}`);

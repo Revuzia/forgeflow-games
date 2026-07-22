@@ -794,6 +794,48 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
     `balance: Infection is a snowball, not a formality — seekers win ${(infRate * 100).toFixed(0)}% (want <=85%)`);
   assert(avgFinds >= 4.0,
     `balance: seekers find most of the lobby — ${avgFinds.toFixed(1)} of 6 (want >=4.0)`);
+
+  // A match must not write back onto the map it was handed. Hiders claim a spot by
+  // setting _claimed on the spot object, and createMatch used to shallow-copy the array,
+  // so the flags leaked to the caller: reusing one simMap across 12 matches on The Depot
+  // took seekers from 5/12 to 11/12 as spots silently ran out. It never hit the game
+  // (toSimMap clones per match) but it made this file report a false failure.
+  {
+    const sm = maps.toSimMap(maps.getMap("depot"));
+    const before = JSON.stringify(sm.spots);
+    const sk = mc.computeSeekerCount(8);
+    const players = [...Array(8)].map((_, i) => ({ id: "p" + i, isBot: true, role: i < sk ? "seeker" : "hider" }));
+    const st = ms.createMatch({ players, settings: mc.sanitizeSettings({ ...mc.DEFAULTS }), map: sm, seed: 1, seekerCount: sk });
+    let t = 0;
+    while (st.phase !== mc.PHASE.RESULTS && t < 700) { ms.stepMatch(st, 1 / 30); t += 1 / 30; }
+    assert(JSON.stringify(sm.spots) === before, "sim: a match leaves the input map untouched");
+  }
+
+  // EVERY shipped stage must be survivable. Five stages shipped for months at a flat 100%
+  // seeker win — 30 matches each, every hider found every time, at every lobby size from
+  // 4 to 10 — and nothing in this file noticed, because balance was only ever asserted
+  // against one map. A clean sweep in EVERY sampled match is the signature of a stage with
+  // nowhere to hide (the prototypes swept 6.0/6 every single run); a healthy stage leaks a
+  // survivor sometimes. Cheap enough to run per-map: 4 seeds x 8 stages.
+  {
+    const bad = [];
+    for (const entry of maps.mapList()) {
+      const sm = maps.toSimMap(maps.getMap(entry.id));
+      let sweeps = 0;
+      for (let seed = 1; seed <= 4; seed++) {
+        const sk = mc.computeSeekerCount(8);
+        const players = [...Array(8)].map((_, i) => ({ id: "p" + i, isBot: true, role: i < sk ? "seeker" : "hider" }));
+        const st = ms.createMatch({ players, settings: mc.sanitizeSettings({ ...mc.DEFAULTS }), map: sm, seed, seekerCount: sk });
+        let t = 0;
+        while (st.phase !== mc.PHASE.RESULTS && t < 700) { ms.stepMatch(st, 1 / 30); t += 1 / 30; }
+        const finds = ms.seekers(st).reduce((a, x) => a + (x.finds || 0), 0);
+        if (finds >= 6) sweeps++;
+      }
+      if (sweeps === 4) bad.push(entry.id);
+    }
+    assert(bad.length === 0,
+      `balance: no stage is a clean sweep every match${bad.length ? " — " + bad.join(", ") : ""}`);
+  }
 }
 
 console.log(fails === 0 ? "\nSELFTEST PASS" : `\nSELFTEST FAIL (${fails})`);

@@ -446,9 +446,13 @@ export const CAMPUS_MAPS = {
     seed: 0x51a6e0,
     bounds: { minX: -38, maxX: 38, minZ: -32, maxZ: 32 }, wallHeight: 5,
     ground: { color: 0x2c2f2c, roughness: 0.98, tex: "concrete" },
-    ambient: { sky: 0x5a6470, ground: 0x141613, intensity: 0.95 },
+    // Understage is the DARK stage — the seeker flashlight exists for it. At intensity
+    // 0.95 with lights every 11m it rendered at mean luminance 139, BRIGHTER than the
+    // daylight depot (110) and the brightest of the eight, which inverted its whole
+    // identity. Measured back down below every other stage.
+    ambient: { sky: 0x4a525c, ground: 0x0e100e, intensity: 0.52 },
     perimeter: { color: 0x4a4f52, roughness: 0.95, thickness: 0.5, tex: "block" },
-    autoLight: { spacing: 11, intensity: 17, dist: 15, color: 0xffe0b0 },
+    autoLight: { spacing: 14, intensity: 11, dist: 12, color: 0xffd79a },
     buildings: [
       {
         id: "U", name: "Under the Stage", x: -12, z: -6, w: 44, d: 36, floor: 0x3a3d3a,
