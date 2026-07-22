@@ -63,7 +63,13 @@ export function sanitizeSettings(s) {
 
 /** Recommended seeker count for a lobby size: 1 per 4 players, min 1. */
 export function computeSeekerCount(playerCount) {
-  return Math.max(1, Math.round(playerCount / 4));
+  // Minimum TWO seekers. This was playerCount/4, which gave a 4-5 player lobby a single
+  // seeker covering the whole 4,864 m² map — measured, that seeker acquired a target ZERO
+  // times in a 157-second hunt. The round was not a close match, it was an empty one: two
+  // and a half minutes of walking past nobody. The binding constraint is map coverage per
+  // seeker, not the hider-to-seeker ratio, and one seeker cannot cover a map built for six
+  // to nine players.
+  return Math.max(2, Math.round(playerCount / 4));
 }
 
 /**

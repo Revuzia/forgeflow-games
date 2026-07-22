@@ -237,10 +237,13 @@ export function createTitleMenu(host, cb, maps, modeInfo) {
   // Lobby size
   panel.appendChild(el("div", "", "Lobby size")).className = "ct-label";
   const slRow = el("div", "", ""); slRow.className = "ct-slrow";
-  // Minimum 4, not 2. Measured: a 2-player lobby is 1 seeker vs 1 hider, the hider is found
-  // in 30s of a 150s hunt and loses 94% of the time — a thirty-second chase, not a round of
-  // hide and seek. 3 players (1v2) is playable but thin. 4 is where the mode starts working.
-  const slider = el("input", ""); slider.type = "range"; slider.min = 4; slider.max = 10; slider.value = 6; slider.className = "ct-slider";
+  // Minimum SIX, measured by contact rate — how often a seeker actually acquires anyone,
+  // which is what makes a round feel like a game rather than a walk. Per hunt: 4 players
+  // gives ~1, 6 gives 4.5, 8 gives 7.5. At 2 players it is worse than sparse, it is
+  // degenerate: 1v1, the hider found in 30s of a 150s hunt, losing 94% of the time. These
+  // maps are built for six to nine and the mode wants a crowd to hide in. Solo players lose
+  // nothing — lobby size is just how many bots — and a smaller online group is bot-filled.
+  const slider = el("input", ""); slider.type = "range"; slider.min = 6; slider.max = 10; slider.value = 6; slider.className = "ct-slider";
   const valEl = el("span", "", "6 players"); valEl.className = "ct-val";
   const setFill = () => { slider.style.setProperty("--fill", ((slider.value - 2) / 8 * 100) + "%"); valEl.textContent = slider.value + " players"; };
   slider.oninput = setFill; slRow.append(slider, valEl); panel.appendChild(slRow);

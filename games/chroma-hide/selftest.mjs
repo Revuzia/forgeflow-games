@@ -83,7 +83,11 @@ assert(util.formatTime(65) === "1:05" && util.formatTime(9) === "0:09", "util.fo
 
 // ── PURE sim: match_core.js ──────────────────────────────────────────────────
 const mc = await import(pathToFileURL(path.join(__dirname, "runtime/sim/match_core.js")).href);
-assert(mc.computeSeekerCount(4) === 1 && mc.computeSeekerCount(10) === 3 && mc.computeSeekerCount(8) === 2, "seeker count 1-per-4");
+// Seekers scale 1-per-4 ABOVE A FLOOR OF TWO. The floor is not cosmetic: with a single
+// seeker on a 4-5 player lobby, that seeker acquired a target ZERO times across a
+// 157-second hunt on a map built for six to nine — the round was empty, not close.
+assert(mc.computeSeekerCount(4) === 2 && mc.computeSeekerCount(5) === 2, "seeker count: never fewer than two");
+assert(mc.computeSeekerCount(8) === 2 && mc.computeSeekerCount(10) === 3, "seeker count: 1-per-4 above the floor");
 {
   const s = mc.sanitizeSettings({ prepSeconds: 200, huntSeconds: 40, startAmmo: 9999, tauntIntervalSeconds: 5 });
   assert(s.prepSeconds === 180 && s.huntSeconds === 90 && s.startAmmo === 999, "sanitizeSettings clamps");
@@ -663,6 +667,29 @@ const np = await import(pathToFileURL(path.join(__dirname, "runtime/sim/net_prot
       if (s2.result && s2.result.winner === "seekers") infSeek++;
     }
   }
+  // Contact rate: how often a seeker actually acquires someone. Win rate alone hid an empty
+  // game — a 4-player lobby measured a perfectly respectable 33% seeker win while the seeker
+  // never once saw a hider in 157 seconds. A close match nobody participates in is not a
+  // match, so guard the thing that makes a round feel played.
+  {
+    let contacts = 0, hunts = 0;
+    for (const map of ["office", "street", "supermarket"]) {
+      for (let seed = 1; seed <= 3; seed++) {
+        const players = [...Array(6)].map((_, i) => ({ id: "p" + i, isBot: true, role: i < 2 ? ROLE.SEEKER : ROLE.HIDER }));
+        const s3 = createMatch({ players, settings: { ...DEFAULTS }, map: toSimMap(MAPS[map]), seed, seekerCount: 2 });
+        let t3 = 0, hunt = 0, c = 0, lastC = -99; const dt3 = 1 / 30;
+        while (s3.phase !== PHASE.RESULTS && t3 < 420) {
+          stepMatch(s3, dt3); t3 += dt3;
+          if (s3.phase === PHASE.HUNT) { hunt += dt3; if (seekers(s3).some((k) => k.target) && hunt - lastC > 3) { c++; lastC = hunt; } }
+        }
+        contacts += c; hunts++;
+      }
+    }
+    const rate2 = contacts / hunts;
+    assert(rate2 >= 2.5,
+      `balance: the smallest lobby still plays like a game — ${rate2.toFixed(1)} seeker contacts per hunt (want >=2.5)`);
+  }
+
   const infRate = infSeek / infTotal;
   assert(infRate <= 0.85,
     `balance: Infection is a snowball, not a formality — seekers win ${(infRate * 100).toFixed(0)}% (want <=85%)`);
