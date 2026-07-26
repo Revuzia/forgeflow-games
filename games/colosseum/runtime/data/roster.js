@@ -377,12 +377,33 @@ export function canonicalOpponent(playerArmaturaId, rng = Math.random) {
   return pool.length ? pool[Math.floor(rng() * pool.length)] : "thraex";
 }
 
-/** A named, origin-flavoured opponent. Origin is background, never a style. */
-export function makeOpponent(armaturaId, { skill = "gregarius", originId = null, rng = Math.random } = {}) {
+/**
+ * A named, origin-flavoured opponent. Origin is background, never a style.
+ *
+ * `taken` is a Set of names already used this match. Without it two fighters on
+ * the same sand can share a name — with only 4-5 names per origin a 6-man team
+ * bout collides often, and "Marbod kills Marbod" destroys the fiction instantly.
+ */
+export function makeOpponent(armaturaId, { skill = "gregarius", originId = null, rng = Math.random, taken = null } = {}) {
   const a = ARMATURA_ROSTER[armaturaId] || ARMATURA_ROSTER.thraex;
   const keys = Object.keys(ORIGINS);
-  const origin = ORIGINS[originId] || ORIGINS[keys[Math.floor(rng() * keys.length)]];
-  const name = origin.names[Math.floor(rng() * origin.names.length)];
+  let origin = ORIGINS[originId] || ORIGINS[keys[Math.floor(rng() * keys.length)]];
+
+  let name = origin.names[Math.floor(rng() * origin.names.length)];
+  if (taken) {
+    // Try this origin's remaining names, then any origin, then add a cognomen.
+    let tries = 0;
+    while (taken.has(name) && tries < 60) {
+      tries++;
+      if (tries > 24) origin = ORIGINS[keys[Math.floor(rng() * keys.length)]];
+      name = origin.names[Math.floor(rng() * origin.names.length)];
+    }
+    if (taken.has(name)) {
+      const cognomina = ["Maior", "Minor", "Secundus", "Tertius", "Ferox", "Celer", "Niger"];
+      name = `${name} ${cognomina[Math.floor(rng() * cognomina.length)]}`;
+    }
+    taken.add(name);
+  }
   return {
     name, armatura: a.id, armaturaName: a.name,
     origin: origin.id, originName: origin.name, region: origin.region,

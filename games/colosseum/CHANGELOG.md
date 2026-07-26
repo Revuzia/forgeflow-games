@@ -455,3 +455,52 @@ All four probes still green.
 ### Still placeholder
 The bout still uses the shared Meshy KNIGHT body, not the pilot murmillo — the
 pilot GLB is 7.9 MB and needs texture compression before it can ship.
+
+## 2026-07-26 — the knights are gone
+
+**`tools/gen_gladiators.py`** — the full roster pipeline, 20 credits a fighter:
+xAI T-pose art -> Meshy smart-topology mesh -> auto-rig -> gltf-transform
+compression -> shared combat clips copied in. Eight armaturae queued: murmillo,
+secutor, retiarius, thraex, hoplomachus, dimachaerus, provocator, crupellarius.
+
+Every body is generated WITHOUT a helmet, because the galea is an equipment
+piece that attaches to the Head bone at runtime — one body serves helmeted and
+bare, and the armoury can take it off.
+
+**Compression: 7.9 MB -> 161 KB per fighter** (gltf-transform optimize,
+texture-size 1024 + webp + draco, `--simplify false` because decimating a
+skinned mesh destroys its weights). A complete character folder — rigged body,
+walk, run and 7 shared combat clips — is ~620 KB.
+
+### Fixed
+- **Draco models did not load at all.** `gltf-transform --compress draco`
+  produces GLBs that throw "No DRACOLoader instance provided" from a plain
+  GLTFLoader. Caught on the FIRST character, before the other seven baked with
+  the same flag. actors.js now configures a DRACOLoader once, for every
+  consumer, from the same CDN and version as the three importmap.
+- **Armour was sized for the knight's skeleton.** Equipment carried hardcoded
+  metre dimensions, so the first newly-generated body wore a manica twice the
+  length of his forearm. Pieces are now FITTED: length and radius come from the
+  bone they ride.
+- **`boneLength` measured in the wrong space.** `child.position.length()` is in
+  the bone's LOCAL units, and these rigs are authored centimetre-scale then
+  scaled down — a forearm reads 26.8 locally but 0.282 m in the world. Fitting
+  to the local number made armour a hundred times too big. Now measured from
+  world matrices. Verified anatomically: forearm 0.282 m, shin 0.422 m on a
+  1.82 m fighter.
+- **Shield orientation solved against the bind pose.** The Actor now LEAVES its
+  rest clip running after measuring, so anything attached afterwards sees a
+  settled idle rather than a T-pose — solving a scutum against T-posed arms
+  slabbed it across the body.
+- **Two fighters could share a name.** With 4-5 names per origin a 6-man team
+  bout collided often, and "Marbod kills Marbod" destroys the fiction. Names are
+  now unique per match, falling back through other origins and then a Roman
+  cognomen. Verified: 0 collisions in 40 team bouts.
+
+### Verified
+Multi-enemy battles work: `p1` "Troupe Against Troupe" puts SIX fighters on the
+sand (player + 2 allies vs 3 opponents) at **74 draw calls / 1.18 ms**, with
+weapon reach genuinely differentiating them — hasta 2.35 m, gladius 1.35 m,
+sica 1.18 m, dimachaerus 1.25 m. The shared combat clips drive the newly
+generated bodies (slash1 moves the murmillo's hand 0.453 units). All four
+probes green.

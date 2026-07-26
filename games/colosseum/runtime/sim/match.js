@@ -104,7 +104,9 @@ export class Match {
       }
     }
 
-    const o = makeOpponent(spec.armatura, { skill: spec.skill, rng: this.rng });
+    // Names must be unique on the sand — see makeOpponent's `taken`.
+    this._names = this._names || new Set([this.inv?.name].filter(Boolean));
+    const o = makeOpponent(spec.armatura, { skill: spec.skill, rng: this.rng, taken: this._names });
     const base = ARMATURAE[spec.armatura] || ARMATURAE.thraex;
     const ang = (index / 3) * Math.PI - Math.PI / 2;
     const f = new Fighter({

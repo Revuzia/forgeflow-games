@@ -206,7 +206,7 @@ export function makeBalteus({ radius = 0.155, height = 0.10 } = {}) {
 }
 
 /** Subligaculum — the loincloth, worn by everyone under everything. */
-export function makeSubligaculum({ radius = 0.16, length = 0.26, color = CLOTH_RED } = {}) {
+export function makeSubligaculum({ radius = 0.16, length = 0.26, color = CLOTH_RED } = {}) {  // fitted from the Hips bone
   const parts = [];
   const skirt = new THREE.CylinderGeometry(radius * 0.98, radius * 1.22, length, 12, 1, true);
   skirt.translate(0, -length * 0.5, 0);
@@ -261,6 +261,38 @@ export const SLOTS = {
 };
 
 /**
+ * Length of a bone, measured to its first child joint, in the bone's own local
+ * units. This is what lets armour FIT a skeleton instead of assuming one.
+ *
+ * Armour authored against one body and hardcoded in metres looks correct on
+ * that body and absurd on any other — the first gladiator generated after the
+ * knight wore a manica twice the length of his forearm.
+ */
+export function boneLength(bone, fallback = 0.3) {
+  if (!bone || !bone.children || !bone.children.length) return fallback;
+  const child = bone.children.find((c) => c.isBone);
+  if (!child) return fallback;
+
+  // MEASURE IN WORLD SPACE. `child.position.length()` is in the bone's LOCAL
+  // units, and these rigs are authored in centimetre-scale units then scaled
+  // down by the Actor — a forearm reads 26.8 locally but 0.27 m in the world.
+  // Fitting armour to the local number makes it a hundred times too big.
+  bone.updateWorldMatrix(true, false);
+  child.updateWorldMatrix(true, false);
+  const a = new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld);
+  const b = new THREE.Vector3().setFromMatrixPosition(child.matrixWorld);
+  const d = a.distanceTo(b);
+  return d > 0.0001 ? d : fallback;
+}
+
+/** Find a bone by regex. */
+export function findBone(model, re) {
+  let hit = null;
+  model.traverse((o) => { if (!hit && o.isBone && re.test(o.name)) hit = o; });
+  return hit;
+}
+
+/**
  * Attach a prebuilt mesh to a named bone, countering the bone's inherited
  * scale so the piece keeps its authored size (the same correction attachWeapon
  * makes — a bone deep in a scaled hierarchy carries that scale).
@@ -268,8 +300,7 @@ export const SLOTS = {
  * @returns {THREE.Group|null} the mount, or null if the bone is absent
  */
 export function attachToBone(model, boneRe, mesh, { offset = [0, 0, 0], rot = [0, 0, 0], scale = 1 } = {}) {
-  let bone = null;
-  model.traverse((o) => { if (!bone && o.isBone && boneRe.test(o.name)) bone = o; });
+  const bone = findBone(model, boneRe);
   if (!bone) return null;
 
   bone.updateWorldMatrix(true, false);
@@ -297,14 +328,53 @@ export class Equipment {
     this.mounts = new Map();      // slot -> mount Group
   }
 
-  /** Equip a slot, replacing whatever was there. `opts` reaches the builder. */
+  /**
+   * Equip a slot, replacing whatever was there.
+   *
+   * Pieces are FITTED to the skeleton: limb armour takes its length and radius
+   * from the bone it rides, and head/torso pieces scale off the rig's actual
+   * proportions. Hardcoded metre dimensions only ever fit the one body they
+   * were authored against.
+   */
   equip(slot, opts = {}) {
     const def = SLOTS[slot];
     if (!def) return null;
     this.unequip(slot);
-    const mesh = def.build(opts);
-    const mount = attachToBone(this.actor.model, def.bone, mesh, {
-      offset: def.offset, rot: def.rot, scale: opts.fit || 1,
+
+    const model = this.actor.model;
+    const bone = findBone(model, def.bone);
+    if (!bone) return null;
+    const L = boneLength(bone, 0.3);
+
+    // Per-slot fit derived from the real skeleton.
+    const fitted = { ...opts };
+    if (slot === "armArmour") {
+      fitted.length = L * 0.92;
+      fitted.radius = L * 0.20;
+    } else if (slot === "legArmourL" || slot === "legArmourR") {
+      fitted.length = L * 0.88;
+      fitted.radius = L * 0.185;
+    } else if (slot === "helmet") {
+      // The head bone is short; scale off the neck-to-head span instead.
+      const head = findBone(model, /^Head$/i);
+      const hl = boneLength(head, 0.16);
+      fitted.scale = Math.max(0.7, Math.min(1.5, hl / 0.16));
+    } else if (slot === "torso") {
+      const spine = findBone(model, /^Spine01$/i);
+      fitted.height = boneLength(spine, 0.18) * 2.6;
+      fitted.radius = boneLength(spine, 0.18) * 1.05;
+    } else if (slot === "belt" || slot === "loincloth") {
+      const hips = findBone(model, /^Hips$/i);
+      const hl = boneLength(hips, 0.11);
+      fitted.radius = Math.max(0.11, hl * 1.25);
+      if (slot === "loincloth") fitted.length = hl * 2.1;
+    }
+
+    const mesh = def.build(fitted);
+    const mount = attachToBone(model, def.bone, mesh, {
+      offset: [def.offset[0], def.offset[1] * (L / 0.3), def.offset[2]],
+      rot: def.rot,
+      scale: fitted.scale || 1,
     });
     if (mount) this.mounts.set(slot, mount);
     else mesh.geometry.dispose();

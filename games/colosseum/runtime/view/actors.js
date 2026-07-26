@@ -11,11 +11,22 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { clone as skeletonClone } from "three/addons/utils/SkeletonUtils.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { dampAngle, clamp } from "../core/util.js";
 
+// Character GLBs are Draco-compressed (gltf-transform optimize), which cuts a
+// rigged gladiator from ~7.9 MB to ~165 KB. Draco needs its decoder wired in or
+// GLTFLoader throws "No DRACOLoader instance provided" and every character
+// silently fails to load — so it is configured ONCE here, for every consumer.
+// The decoder is fetched from the same CDN and version as the three importmap.
 const loader = new GLTFLoader();
+const draco = new DRACOLoader();
+draco.setDecoderPath("https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/libs/draco/");
+draco.setDecoderConfig({ type: "js" });   // js decoder: no wasm MIME/CORS surprises
+loader.setDRACOLoader(draco);
+
 const CACHE = new Map();
 
 function load(url) {
@@ -204,12 +215,21 @@ export class Actor {
     // MEASURE UNDER A CLIP, NOT IN BIND POSE. Several of these rigs bind in a
     // pose that is nothing like the animated silhouette, so measuring first and
     // animating later produces wildly wrong scale.
+    //
+    // The rest pose is then LEFT RUNNING rather than stopped. Anything attached
+    // afterwards — a shield whose orientation is solved from the arm's actual
+    // direction — must see a settled idle, not a T-pose. Solving a scutum
+    // against a T-pose arm points it straight out sideways and it ends up
+    // slabbed across the body.
     const rest = this._resolve(restClip);
     if (rest) {
       const a = this.actions[rest];
-      a.reset(); a.play();
+      a.reset();
+      a.play();
       this.mixer.update(0.4);
-      a.stop();
+      this.current = a;
+      this.currentName = rest;
+      this.model.updateMatrixWorld(true);
     }
 
     const m = measureRig(this.model);
@@ -377,6 +397,10 @@ export function attachWeapon(actor, mesh, {
   holder.scale.setScalar(counter);
 
   if (align === "shield") {
+    // Make sure the rig is in its settled pose before reading the bone.
+    actor.model.updateMatrixWorld(true);
+    target.updateWorldMatrix(true, false);
+    target.matrixWorld.decompose(bonePos, boneQuat, boneScale);
     // SOLVE the mount orientation rather than hand-tuning Euler angles.
     //
     // A scutum must satisfy two constraints in WORLD space: its face normal

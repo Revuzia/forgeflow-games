@@ -1,3 +1,6 @@
 tools/shots/
 assets/chars/_pilot/*.fbx
 assets/chars/_pilot/*_raw.glb
+assets/chars/_src/
+tools/_gladiator_state.json
+tools/_meshy_pilot_state.json
