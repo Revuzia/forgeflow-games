@@ -13,9 +13,10 @@
 // makes it visible; the combat sim consumes the derived loadout.
 
 import { WEAPONS, SHIELDS, ARMOUR, ARMATURAE, mobility, loadoutWeight } from "../data/weapons.js";
+import { Attributes, modifiers } from "./attributes.js";
 
 export const SAVE_KEY = "colosseum_save_v1";
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /** Equipment slots the armoury exposes, in display order. */
 export const SLOT_ORDER = ["weapon", "shield", "helmet", "arm", "legs", "torso"];
@@ -71,7 +72,11 @@ export class Inventory {
     this.equipped = { weapon: "gladius", shield: "none", helmet: null, arm: null, legs: null, torso: null };
     this.settings = {};
     this.createdAt = null;        // stamped by the caller (no clock in here)
+    this.attrs = new Attributes();
   }
+
+  /** Attribute modifiers for the combat layer, after fatigue. */
+  mods() { return modifiers(this.attrs.effectiveAll()); }
 
   // -- derived ------------------------------------------------------------
 
@@ -91,7 +96,7 @@ export class Inventory {
     };
   }
 
-  mobility() { return mobility(this.loadout()); }
+  mobility() { return mobility(this.loadout(), this.mods()); }
   weight() { return loadoutWeight(this.loadout()); }
   rank() { return rankFor(this.wins); }
 
@@ -228,6 +233,10 @@ export class Inventory {
     if (won) this.wins++; else this.losses++;
     if (won && matchId) this.completed[matchId] = true;
 
+    // A bout is exhausting, and it refreshes the training slots before the next.
+    this.attrs.addMatchFatigue(won ? 20 : 28);
+    this.attrs.onMatchComplete();
+
     const newRank = this.rank();
     return {
       purse, gold: this.gold, won,
@@ -246,6 +255,7 @@ export class Inventory {
       matchesPlayed: this.matchesPlayed, completed: this.completed,
       owned: this.owned, equipped: this.equipped,
       settings: this.settings, createdAt: this.createdAt,
+      attrs: this.attrs.toJSON(),
     };
   }
 
@@ -267,6 +277,7 @@ export class Inventory {
     this.completed = migrated.completed || {};
     this.settings = migrated.settings || {};
     this.createdAt = migrated.createdAt || null;
+    this.attrs = new Attributes(migrated.attrs || null);
 
     const validW = (migrated.owned?.weapon || ["gladius"]).filter((i) => WEAPONS[i]);
     const validS = (migrated.owned?.shield || ["none"]).filter((i) => SHIELDS[i]);
@@ -297,6 +308,12 @@ export class Inventory {
     if (v < 1) {
       if (Array.isArray(d.armour)) { d.owned = d.owned || {}; d.owned.armour = d.armour; delete d.armour; }
       v = 1;
+    }
+    // v1 -> v2: attributes and training were added. An existing career simply
+    // starts at the baseline, which is exactly how it was already playing.
+    if (v < 2) {
+      if (!d.attrs) d.attrs = null;
+      v = 2;
     }
     d.v = v;
     return d;

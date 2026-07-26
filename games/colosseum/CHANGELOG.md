@@ -504,3 +504,50 @@ weapon reach genuinely differentiating them — hasta 2.35 m, gladius 1.35 m,
 sica 1.18 m, dimachaerus 1.25 m. The shared combat clips drive the newly
 generated bodies (slash1 moves the murmillo's hand 0.453 units). All four
 probes green.
+
+## 2026-07-26 — attributes, training and fatigue
+
+**`runtime/sim/attributes.js`** — four attributes, and the rule that governs
+them: **no attribute may be cosmetic.** Every point modifies a number combat.js
+or weapons.js already uses.
+
+| | effect at level 20 |
+|---|---|
+| Strength (Vis) | damage x1.48, carried weight counts x0.45 |
+| Endurance (Robur) | max HP x1.38, stamina x1.33, regen x1.45 |
+| Agility (Celeritas) | move speed x1.27, dodge distance x1.38 |
+| Skill (Ars) | attack windup x0.76, parry window x1.45 |
+
+Measured through the actual sim: strength took damage over 10 s from 620 to
+**917**; agility took move speed from 4.33 to **5.50 m/s**.
+
+**Training is a decision, not a grind.** The genre failure mode is a menu you
+click twenty times between fights, so:
+- only **3 training slots** between matches
+- every regimen costs gold AND fatigue, and fatigue follows you onto the sand —
+  at maximum it strips a trained 20 back to the baseline 5, so over-training
+  before a champion bout is worse than resting
+- hard diminishing returns (40 XP for the first point, **2,535** for the last)
+- a **rank-gated ceiling** — a Tiro grinding the easiest bout forever reaches 9,
+  not 25
+Nine regimens, including Rest and the Physician, which cost fatigue instead of
+granting it.
+
+Strength deliberately does NOT make armour lighter — it makes you *carry* it
+better. The mobility-vs-protection trade-off survives; training just moves where
+you sit on it.
+
+### Compatibility
+The baseline is a strict no-op: a fresh fighter with 5 in everything produces
+byte-identical numbers to the game before attributes existed, which is why all
+four previous probes stayed green without edits. Save migrated v1 -> v2; an
+existing career starts at the baseline.
+
+### Verified — `probe_attributes.mjs`, 35 checks
+Baseline no-op, every attribute mechanical, modifiers reaching the sim, slot
+limits, fatigue teeth, rank ceiling reachable-but-not-passable, diminishing
+returns, inventory integration, save round-trip, and v1 migration.
+
+### Roster
+6 of 8 gladiators generated and compressed: murmillo, secutor, retiarius,
+thraex, hoplomachus, dimachaerus.

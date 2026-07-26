@@ -213,16 +213,21 @@ export function loadoutWeight({ weapon, shield, armour = [] }) {
  * secutor carries ~24 kg and gives up roughly a third of his speed and half
  * his stamina recovery for it.
  */
-export function mobility(loadout) {
+export function mobility(loadout, mods = null) {
   const w = loadoutWeight(loadout);
-  const t = Math.min(1, w / 26);                  // 0 = naked, 1 = maximum load
+  // Strength does not make armour lighter — it makes you carry it better, so
+  // the trade-off survives while training still pays.
+  const effW = mods ? w * (mods.weightRelief ?? 1) : w;
+  const t = Math.min(1, effW / 26);               // 0 = naked, 1 = maximum load
+  const m = mods || {};
   return {
-    weight: w,
-    moveSpeed: +(4.4 - 1.55 * t).toFixed(2),      // m/s
-    dodgeDistance: +(3.6 - 1.5 * t).toFixed(2),   // m
-    staminaMax: +(100 - 18 * t).toFixed(1),
-    staminaRegen: +(17 - 8.5 * t).toFixed(2),     // per second
-    turnRate: +(9.0 - 3.4 * t).toFixed(2),        // rad/s
+    weight: w,                                    // TRUE weight, for the UI
+    effectiveWeight: +effW.toFixed(2),
+    moveSpeed: +((4.4 - 1.55 * t) * (m.moveSpeed ?? 1)).toFixed(2),      // m/s
+    dodgeDistance: +((3.6 - 1.5 * t) * (m.dodgeDistance ?? 1)).toFixed(2),
+    staminaMax: +((100 - 18 * t) * (m.staminaMax ?? 1)).toFixed(1),
+    staminaRegen: +((17 - 8.5 * t) * (m.staminaRegen ?? 1)).toFixed(2),   // per second
+    turnRate: +((9.0 - 3.4 * t) * (m.turnRate ?? 1)).toFixed(2),          // rad/s
   };
 }
 

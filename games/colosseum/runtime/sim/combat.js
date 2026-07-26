@@ -65,7 +65,7 @@ export class Fighter {
     id = null, name = "fighter", team = 0,
     weapon = "gladius", shield = "none", armour = [],
     hp = 100, x = 0, z = 0, facing = 0, height = 1.82,
-    isBeast = false, beastProfile = null, radius = null,
+    isBeast = false, beastProfile = null, radius = null, mods = null,
   } = {}) {
     this.id = id || `f${_uid++}`;
     this.name = name;
@@ -88,11 +88,15 @@ export class Fighter {
     // zero damage. A big cat is LONG, not wide: ~0.35 m across the shoulder.
     this.radius = radius !== null ? radius : (isBeast ? 0.36 : 0.42);
 
-    const mob = mobility({ weapon, shield, armour });
+    // Attribute modifiers. A fighter with none behaves exactly as before —
+    // every modifier is 1.0 at the baseline, which keeps the existing balance
+    // and every existing probe valid.
+    this.mods = mods || null;
+    const mob = mobility({ weapon, shield, armour }, this.mods);
     this.mob = mob;
 
-    this.maxHp = hp;
-    this.hp = hp;
+    this.maxHp = Math.round(hp * (this.mods ? this.mods.maxHp : 1));
+    this.hp = this.maxHp;
     this.stamina = mob.staminaMax;
     this.maxStamina = mob.staminaMax;
 
@@ -308,7 +312,9 @@ export class Combat {
 
   /** Windup, lengthened by arm wounds — a cut arm is a slower arm. */
   _windup(f) {
-    return f.weapon.windup * (1 + clamp(f.wounds.arms * 0.18, 0, 0.6));
+    // Skill shortens the wind; a cut arm lengthens it.
+    const skill = f.mods ? f.mods.windup : 1;
+    return f.weapon.windup * skill * (1 + clamp(f.wounds.arms * 0.18, 0, 0.6));
   }
 
   /**
@@ -368,7 +374,8 @@ export class Combat {
     if (target.blocking && covers && facingIt && !target.shieldBroken) {
       // A block begun within the parry window is a PARRY: free, and it
       // staggers the attacker. Holding block forever gets you a plain block.
-      if (target.blockHeldT <= FEEL.parryWindow) {
+      const parryWin = FEEL.parryWindow * (target.mods ? target.mods.parryWindow : 1);
+      if (target.blockHeldT <= parryWin) {
         parried = true;
       } else {
         blocked = true;
@@ -441,6 +448,7 @@ export class Combat {
     const effMult = armourMult + (1 - armourMult) * pierce;
 
     let dmg = w.damage * ZONES[zone].crit * effMult;
+    if (attacker.mods) dmg *= attacker.mods.damage;   // Strength
     if (fromBehind) dmg *= FEEL.backstabMultiplier;
     else if (fromFlank) dmg *= FEEL.flankMultiplier;
     if (attacker.comboCount > 0) dmg *= 1 + Math.min(0.35, attacker.comboCount * 0.09);
