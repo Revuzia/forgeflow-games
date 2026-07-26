@@ -318,3 +318,40 @@ authority over colour, rake furrows and every blood stain.
 ### Note
 `sand_bloodied` is permanently removed — xAI content-moderation rejects
 blood-stained ground (and still bills the attempt). It was redundant anyway.
+
+## 2026-07-26 — match director + input
+
+**Match director** (`runtime/sim/match.js`)
+- Runs one bout as a real munus rather than a skirmish:
+  ENTRY (the Triumphalis grinds open) -> SALUTE (a beat to read your opponent,
+  during which nothing can hurt anyone) -> FIGHT -> VERDICT (ad digitum) ->
+  EXIT (the dead leave by the Porta Libitinaria). Those beats cost almost
+  nothing because the gate and lift systems already existed.
+- Spawns from a ladder entry: opponents, allies, beasts, named champions, the
+  tertiarius surprise third fighter, and survival waves that scale with depth.
+- Crowd favour moves on things the player controls — heavy hits, kills, parries
+  — and is real money at settlement.
+- Missio decided per the history: a well-fought bout is far likelier to earn a
+  reprieve, and death stays the exception.
+
+**Input** (`runtime/core/input.js`)
+- Keyboard + mouse + gamepad, emitting the SAME command struct the AI Brain
+  emits, so the sim cannot tell a human from a bot — which is also what lets a
+  network client or a replay drive the player slot.
+- Directional attacks read the movement vector at the moment of input
+  (forward = thrust, sideways = the matching cut, neutral/back = high),
+  the convention fighting games settled on. No extra buttons, discoverable in
+  one bout.
+- Rebindable, persisted, with a blur handler so a key can never stick.
+
+### Verified — `probe_match.mjs`, 25 checks
+All 25 ladder entries resolve with ZERO stalls. Ceremony order confirmed and no
+damage lands before the salute ends. Team munus spawns 1 player + 3 opponents +
+2 allies; 2v2 spawns 1 ally against 2. The tertiarius appears on a win.
+Survival reaches wave 3 of 5. Across 30 bouts missio was granted 23 and refused
+7 — close to the historical rate without being hard-coded. Same seed, same bout.
+
+### Balance note (not a defect)
+Champion bouts were won 6/6 by a veteranus-skill player brain. Their hpMult is
+1.15-1.5 but that is evidently not enough to make a named fight feel like one.
+Needs a tuning pass once the player is human rather than a bot.
