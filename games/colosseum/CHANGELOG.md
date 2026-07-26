@@ -45,3 +45,50 @@
 ### Measured
 20 draw calls, 605,696 triangles, 0.75 ms/frame at 1280x720, GPU-inclusive via
 `gl.finish()` on an RTX A2000 Laptop, WebGL2.
+
+## 2026-07-26 — hypogeum + ceremonial gates
+
+**Hypogeum** (`runtime/view/hypogeum.js`)
+- 8 working beast lifts on an inner ellipse. Each is a pit, a stone collar, a
+  hinged pair of planked trap leaves, a counterweighted platform and a barred
+  cage with a drop-away front door.
+- One normalised 0..1 timeline per lift sequences the whole entrance — doors
+  swing down, platform rises (starting before the doors finish, which reads as
+  urgency), cage door drops — so the beat is readable in one place instead of
+  a pile of independent tweens.
+- Emits `doors` / `rising` / `released` / `closed` events for the audio and
+  crowd systems to react on exactly the right frame.
+
+**Gates** (`runtime/view/gates.js`)
+- Porta Triumphalis and Porta Libitinaria as heavy inward-swinging double
+  doors; north and south beast gates as grinding portcullises. 3.4 s to open,
+  2.6 s to shut — deliberately slower than feels efficient, because the weight
+  IS the drama.
+- Each gate has an unlit passage void behind it, so an open gate reads as a
+  black mouth rather than a hole showing sky through the far side.
+
+**Cue routing** (`runtime/boot.js`)
+- Gate and lift events drive the crowd: the Triumphalis grinding open hushes
+  the mob to 0.12 excitement, and the reveal detonates it into a roar plus a
+  travelling wave. Cage release does the same, harder.
+
+### Fixed
+- `__test.step()` advanced ONLY the crowd, so every automated check watched
+  gates and lifts sit frozen at t=0 while reporting "opening". There is now one
+  `stepSim(dt)` that both the rAF loop and the harness call — what a check
+  exercises is exactly what a player gets. (This is also the multiplayer seam:
+  a server tick calls the same function.)
+- One open trap made the ENTIRE hypogeum visible — 8 lifts x 7 meshes = 56 draw
+  calls for a single beast entrance. Visibility is now per-lift.
+- Gate yaw was `atan2(-x,-z) + PI`, which pointed each gate's local -z (its
+  passage void and surround depth) at the arena centre — the whole assembly
+  stood out on the sand instead of piercing the wall. Dropped the `+ PI`.
+- The gate surround was 8.2 m tall against a 4.0 m podium, punching through the
+  first tier of seating. The opening and its header are now clamped inside the
+  podium, letting the podium cornice serve as the lintel.
+
+### Measured
+32 draw calls idle, 39 peak with the Triumphalis open AND a beast lift raised,
+0.67 ms/frame at 1400x800 GPU-inclusive. Sequence verified by driving real
+frames: gate start 0.03 s, lift rising 0.78 s, cage released 3.05 s, gate fully
+open 3.43 s, crowd excitement 0.8 on release.

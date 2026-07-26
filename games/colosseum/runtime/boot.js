@@ -13,6 +13,8 @@ import * as THREE from "three";
 import { Colosseum } from "./view/colosseum.js";
 import { Crowd } from "./view/crowd.js";
 import { Sky } from "./view/sky.js";
+import { Hypogeum } from "./view/hypogeum.js";
+import { Gates } from "./view/gates.js";
 import { ARENA } from "./data/arena_spec.js";
 import { clamp, damp, TAU } from "./core/util.js";
 
@@ -125,7 +127,11 @@ renderer.toneMappingExposure = sky.exposure();
 setProgress(0.35, "Cutting the travertine…");
 const colosseum = new Colosseum({ scene, quality: QUALITY, seed: 20260724 }).build();
 
-setProgress(0.72, "Seating the mob…");
+setProgress(0.62, "Hanging the gates…");
+const gates = new Gates(colosseum.group, { materials: colosseum.mat, colosseum });
+const hypogeum = new Hypogeum(colosseum.group, { quality: QUALITY, seed: 20260724, materials: colosseum.mat });
+
+setProgress(0.75, "Seating the mob…");
 const crowd = new Crowd(colosseum.group, { quality: QUALITY, seed: 20260724 });
 
 // Bake the sky into an environment map. Must happen AFTER the geometry exists
@@ -180,6 +186,50 @@ renderer.domElement.addEventListener("wheel", (e) => {
 }, { passive: false });
 
 // ---------------------------------------------------------------------------
+// Spectacle cues. The gate and lift systems emit events on exact beats; this
+// is where they turn into crowd reactions (and, once audio lands, horns).
+// ---------------------------------------------------------------------------
+const cueLog = [];
+
+/**
+ * ONE fixed simulation step. Both the requestAnimationFrame loop and the
+ * verification harness drive the world through here, so what an automated
+ * check exercises is exactly what a player gets. (These were briefly two
+ * separate code paths, and the harness silently advanced nothing but the
+ * crowd — gates and lifts sat frozen at t=0 while every check reported
+ * "opening".)
+ *
+ * This is also the multiplayer seam: a server tick calls exactly this.
+ */
+function stepSim(dt) {
+  crowd.update(dt);
+  // Gate and lift events are the cues the audio and crowd systems react to
+  // (horn on gate-start, roar on cage-release), so they are dispatched here
+  // rather than polled.
+  for (const ev of gates.update(dt)) onGateEvent(ev);
+  for (const ev of hypogeum.update(dt)) onLiftEvent(ev);
+}
+
+function onGateEvent(ev) {
+  cueLog.push({ t: +(frames / 60).toFixed(2), kind: "gate", id: ev.id, event: ev.event });
+  if (ev.event === "start") {
+    // The grind of the Triumphalis opening is what quiets a crowd and then
+    // detonates it — anticipation first, roar on the reveal.
+    crowd.setExcitement(0.12, true);
+  } else if (ev.event === "done") {
+    crowd.react(0.85);
+    if (ev.id === "triumphalis") crowd.startWave({ laps: 1, speed: 2.8, strength: 1 });
+  }
+}
+
+function onLiftEvent(ev) {
+  cueLog.push({ t: +(frames / 60).toFixed(2), kind: "lift", index: ev.lift.index, event: ev.event });
+  if (ev.event === "doors") crowd.setExcitement(0.2, true);   // hush as the sand splits
+  else if (ev.event === "rising") crowd.react(0.5);
+  else if (ev.event === "released") { crowd.react(1.0); crowd.startWave({ laps: 1, speed: 3.4, strength: 1 }); }
+}
+
+// ---------------------------------------------------------------------------
 // Perf monitor — a rolling frame-time average that can demote quality.
 // ---------------------------------------------------------------------------
 const perf = {
@@ -217,7 +267,7 @@ function frame(now) {
   acc += dt;
   let steps = 0;
   while (acc >= FIXED_DT && steps < 5) {
-    crowd.update(FIXED_DT);
+    stepSim(FIXED_DT);
     acc -= FIXED_DT;
     steps++;
   }
@@ -243,7 +293,7 @@ requestAnimationFrame(frame);
 // these, because WebGL screenshots hang the preview harness).
 // ---------------------------------------------------------------------------
 window.__FFG3D__ = {
-  renderer, scene, camera, colosseum, crowd, sky,
+  renderer, scene, camera, colosseum, crowd, sky, gates, hypogeum,
   quality: QUALITY,
   stats: () => ({
     quality: QUALITY,
@@ -256,6 +306,8 @@ window.__FFG3D__ = {
     geometries: renderer.info.memory.geometries,
     textures: renderer.info.memory.textures,
     crowd: crowd.stats(),
+    gates: gates.stats(),
+    hypogeum: hypogeum.stats(),
     arenaDrawCalls: colosseum.drawCallEstimate(),
     camera: { x: +camera.position.x.toFixed(1), y: +camera.position.y.toFixed(1), z: +camera.position.z.toFixed(1) },
     timeOfDay: sky.todKey,
@@ -279,7 +331,7 @@ window.__FFG3D__ = {
       const gl = renderer.getContext();
       const t0 = performance.now();
       for (let i = 0; i < n; i++) {
-        crowd.update(dt);
+        stepSim(dt);              // the SAME step the rAF loop runs
         updateCamera(dt);
         renderer.render(scene, camera);
         frames++;
@@ -349,6 +401,12 @@ window.__FFG3D__ = {
     },
     wave: () => { crowd.startWave({ laps: 1 }); return true; },
     excite: (v) => { crowd.setExcitement(v, true); return v; },
+    openGate: (id) => { gates.open(id); return gates.stats(); },
+    closeGate: (id) => { gates.close(id); return gates.stats(); },
+    openLift: (i) => { hypogeum.open(i); return hypogeum.stats(); },
+    closeLift: (i) => { hypogeum.close(i); return hypogeum.stats(); },
+    cues: () => cueLog.slice(-40),
+    clearCues: () => { cueLog.length = 0; return true; },
     dims: () => ({
       floor: { a: ARENA.floor.a, b: ARENA.floor.b },
       outer: colosseum.outer,
