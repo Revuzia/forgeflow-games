@@ -92,3 +92,60 @@
 0.67 ms/frame at 1400x800 GPU-inclusive. Sequence verified by driving real
 frames: gate start 0.03 s, lift rising 0.78 s, cage released 3.05 s, gate fully
 open 3.43 s, crowd excitement 0.8 on release.
+
+## 2026-07-26 — actors on the sand
+
+**Actor system** (`runtime/view/actors.js`)
+- One interface over two rig families: Meshy humanoids (base.glb + armature-only
+  clip GLBs retargeted by bone name) and Sketchfab quadrupeds (clips embedded).
+- Animation state machine with cross-fades, one-shots, and foot-slide correction
+  that scales loco clip timeScale by real ground velocity.
+- Procedural Roman weapons — gladius, scutum, trident — each welded into ONE
+  mesh with vertex colours. Built naively these are 5-9 primitives apiece; a
+  sword and shield alone cost 15 draw calls before the merge.
+
+### Species audit — the clip name is not the animal
+`leopard.glb` and `jaguar.glb` ship clips called `LeopardAttack`/`LeopardIdle`
+and are ANTHROPOMORPHIC BEAST-MEN, not cats. Rendering them is the only thing
+that revealed it. `tools/ingest_assets.mjs anatomy` now classifies rigs by
+bone naming (tail/paw/hind-leg vs arm/hand/shoulder) and bind-pose elongation,
+though shared tokens like `Spine`/`Head` make it advisory, not conclusive —
+a render is still the deciding test. Verified by eye:
+
+| asset | verdict |
+|---|---|
+| tiger.glb | true quadruped, 1 draw call, Attack + Run — the arena beast |
+| panther.glb | true quadruped, 1 draw call, but bright blue (needs retexture) |
+| lion.glb | true quadruped and looks right, BUT 8 primitives and only 3 clips (no attack, no run) — cannot fight as shipped |
+| leopard/jaguar | humanoid beast-men — unusable as arena cats |
+| cheetah.glb | 18 clips but its animated bbox collapses to ~0 — measurement bug, unresolved |
+
+lion.glb and leopard.glb were removed from `assets/` rather than shipped
+failing; the draw-call gate flags the lion on sight.
+
+### Fixed
+- Quadrupeds were scaled by HEIGHT, turning a big cat into a house cat. Rigs are
+  now normalised by body LENGTH when a length is given (tiger = 2.05 m nose to
+  tail-base), and measured UNDER A CLIP rather than in bind pose, because
+  several of these rigs bind in a pose unlike anything they animate to.
+- Characters hovered above the sand with a detached shadow: the lowest BONE is
+  the ankle, not the sole. Grounding now samples real skinned vertex positions
+  via `SkinnedMesh.getVertexPosition`, which applies live skinning where
+  `Box3.setFromObject` only transforms the bind-pose box. Soles now land within
+  4 cm of y=0.
+- The scutum was built as N independently rotated boxes, which splay apart at
+  their edges and read as a venetian blind. It is now a continuous ring-segment
+  sweep, so staves meet by construction.
+- `mergeGeometries` silently returns null when inputs disagree on attributes
+  (a hand-built geometry had no `uv`), surfacing three frames later as an
+  opaque "cannot read morphAttributes of null". `paint()` now normalises every
+  part to position/normal/uv/color and `weld()` throws with the actual
+  mismatch.
+- Shield orientation was hand-guessed in Euler angles and wrong twice. It is
+  now SOLVED: build the desired world rotation (face along the fighter's
+  forward, long axis up) and express it in the bone's frame.
+
+### Known gap
+The player model is the shared Meshy **knight** — white plate, gold cross, red
+cape. It is a crusader standing in a Roman amphitheatre. No code fixes this;
+it needs real gladiator archetypes.

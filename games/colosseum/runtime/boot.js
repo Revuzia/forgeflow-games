@@ -15,6 +15,7 @@ import { Crowd } from "./view/crowd.js";
 import { Sky } from "./view/sky.js";
 import { Hypogeum } from "./view/hypogeum.js";
 import { Gates } from "./view/gates.js";
+import { loadFighter, loadBeast, Actor, attachWeapon, makeGladius, makeScutum, measureRigHeight } from "./view/actors.js";
 import { ARENA } from "./data/arena_spec.js";
 import { clamp, damp, TAU } from "./core/util.js";
 
@@ -140,6 +141,54 @@ const crowd = new Crowd(colosseum.group, { quality: QUALITY, seed: 20260724 });
 setProgress(0.9, "Catching the light…");
 sky.bakeEnvironment(renderer);
 
+// ---------------------------------------------------------------------------
+// Actors. Loaded after the world so the loading bar reflects real work, and
+// awaited before the first frame so nothing pops in.
+// ---------------------------------------------------------------------------
+setProgress(0.94, "Arming the fighters…");
+
+const actors = { player: null, beast: null };
+try {
+  const [fighterLib, beastLib] = await Promise.all([
+    loadFighter("assets/chars/gladiator"),
+    // TIGER, not leopard: leopard.glb and jaguar.glb are anthropomorphic
+    // beast-MEN despite their clip names, verified by rendering them. The
+    // tiger is a true quadruped, one draw call, and the only cat in the
+    // library shipping both an Attack and a Run clip.
+    loadBeast("assets/beasts/tiger.glb"),
+  ]);
+
+  actors.player = new Actor(fighterLib, { height: 1.82, name: "player" });
+  actors.player.pos.set(-16, 0, 4);
+  actors.player.facing = Math.PI * 0.5;
+  actors.player.play("idle");
+  attachWeapon(actors.player, makeGladius(), { palm: 0.055 });
+  // The scutum rides on the forearm facing forward: its local +z (the convex
+  // face) must point away from the body, and its long axis runs down the arm.
+  attachWeapon(actors.player, makeScutum(), {
+    bone: /LeftHand|Hand_L|mixamorig.*LeftHand/i,
+    palm: 0.04,
+    align: "shield",
+  });
+  scene.add(actors.player.root);
+
+  actors.beast = new Actor(beastLib, {
+    // Quadrupeds are sized by BODY LENGTH. A Bengal tiger is ~2.0 m nose to
+    // tail-base; sizing by "height" turns a big cat into a house cat.
+    length: 2.05,
+    name: "beast",
+    restClip: "Idle",
+    clipMap: { idle: "Idle_Lie Prone", walk: "Walk", run: "Run", attack: "Attack", howl: "Howl" },
+  });
+  actors.beast.pos.set(2, 0, 6);
+  actors.beast.facing = -Math.PI * 0.5;
+  actors.beast.play("idle");
+  scene.add(actors.beast.root);
+} catch (e) {
+  console.error("[boot] actor load failed:", e);
+  window.__ACTOR_ERR__ = String(e && e.message || e);
+}
+
 setProgress(1.0, "Ready.");
 
 // ---------------------------------------------------------------------------
@@ -203,6 +252,8 @@ const cueLog = [];
  */
 function stepSim(dt) {
   crowd.update(dt);
+  if (actors.player) actors.player.update(dt, actors.player.speed);
+  if (actors.beast) actors.beast.update(dt, actors.beast.speed);
   // Gate and lift events are the cues the audio and crowd systems react to
   // (horn on gate-start, roar on cage-release), so they are dispatched here
   // rather than polled.
@@ -293,7 +344,7 @@ requestAnimationFrame(frame);
 // these, because WebGL screenshots hang the preview harness).
 // ---------------------------------------------------------------------------
 window.__FFG3D__ = {
-  renderer, scene, camera, colosseum, crowd, sky, gates, hypogeum,
+  renderer, scene, camera, colosseum, crowd, sky, gates, hypogeum, actors,
   quality: QUALITY,
   stats: () => ({
     quality: QUALITY,
@@ -407,6 +458,35 @@ window.__FFG3D__ = {
     closeLift: (i) => { hypogeum.close(i); return hypogeum.stats(); },
     cues: () => cueLog.slice(-40),
     clearCues: () => { cueLog.length = 0; return true; },
+    /** Rig diagnostics — proves clips actually bound, not just that files loaded. */
+    actors: () => {
+      const d = {};
+      for (const k of ["player", "beast"]) {
+        const a = actors[k];
+        if (!a) { d[k] = null; continue; }
+        d[k] = {
+          clips: Object.keys(a.actions),
+          playing: a.currentName,
+          height: +a.height.toFixed(2),
+          rawRigHeight: +a.rawHeight.toFixed(3),
+          pos: [+a.pos.x.toFixed(2), +a.pos.y.toFixed(2), +a.pos.z.toFixed(2)],
+          weaponMounts: (() => { let n = 0; a.model.traverse((o) => { if (o.name === "weapon_mount") n++; }); return n; })(),
+        };
+      }
+      return d;
+    },
+    anim: (who, logical, once = false) => {
+      const a = actors[who];
+      if (!a) return null;
+      return once ? a.playOnce(logical) : a.play(logical);
+    },
+    placeActor: (who, x, z, facing) => {
+      const a = actors[who];
+      if (!a) return null;
+      a.pos.set(x, 0, z);
+      if (facing !== undefined) { a.facing = facing; a.visualFacing = facing; }
+      return [x, z];
+    },
     dims: () => ({
       floor: { a: ARENA.floor.a, b: ARENA.floor.b },
       outer: colosseum.outer,

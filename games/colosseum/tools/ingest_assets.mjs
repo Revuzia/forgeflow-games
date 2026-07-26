@@ -143,6 +143,71 @@ function report(files) {
   return { rows, bad };
 }
 
+// ---------------------------------------------------------------------------
+// Anatomy classification
+// ---------------------------------------------------------------------------
+//
+// A clip called "LeopardAttack" tells you nothing about whether the thing on
+// screen walks on four legs. leopard.glb turned out to be an anthropomorphic
+// leopard-MAN — correct clips, correct name, wrong species for an arena beast.
+// That cost a full diagnostic round to discover by eye, so it is now a check.
+//
+// Bone naming is the cheap decisive signal: humanoid rigs carry arm/hand/
+// shoulder/upleg chains, quadruped rigs carry tail/paw/front-back leg chains.
+
+const HUMANOID_TOKENS = [
+  /upperarm|forearm|\barm\b|shoulder|clavicle|hand[_.]?(l|r)?$|thumb|index|middle|pinky/i,
+  /upleg|thigh[_.]?(l|r)?$|calf|spine\d|neck|head/i,
+];
+const QUADRUPED_TOKENS = [
+  /tail/i,
+  /(front|fore|hind|rear|back)[_ .-]?(leg|paw|foot|knee|ankle)/i,
+  /paw|hoof|fetlock|hock|withers|muzzle|snout/i,
+];
+
+export function anatomy(file) {
+  const { json } = parseGLB(file);
+  const names = (json.nodes || []).map((n) => n.name || "");
+  const jointIdx = new Set();
+  for (const s of json.skins || []) for (const j of s.joints || []) jointIdx.add(j);
+  const boneNames = names.filter((_, i) => jointIdx.has(i));
+
+  let humanoid = 0;
+  let quad = 0;
+  const hits = { humanoid: [], quadruped: [] };
+  for (const n of boneNames) {
+    for (const re of HUMANOID_TOKENS) if (re.test(n)) { humanoid++; if (hits.humanoid.length < 6) hits.humanoid.push(n); break; }
+    for (const re of QUADRUPED_TOKENS) if (re.test(n)) { quad++; if (hits.quadruped.length < 6) hits.quadruped.push(n); break; }
+  }
+
+  // Bind-pose extent from the POSITION accessors' declared min/max — free, and
+  // a standing quadruped is markedly longer than it is tall.
+  let lo = [Infinity, Infinity, Infinity];
+  let hi = [-Infinity, -Infinity, -Infinity];
+  for (const m of json.meshes || []) {
+    for (const p of m.primitives || []) {
+      const acc = json.accessors[p.attributes && p.attributes.POSITION];
+      if (!acc || !acc.min || !acc.max) continue;
+      for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], acc.min[i]); hi[i] = Math.max(hi[i], acc.max[i]); }
+    }
+  }
+  const span = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]].map((v) => (isFinite(v) ? +v.toFixed(2) : 0));
+  const sorted = [...span].sort((a, b) => b - a);
+  const elongation = sorted[1] > 0 ? +(sorted[0] / sorted[1]).toFixed(2) : 0;
+
+  let verdict;
+  if (quad > humanoid) verdict = "QUADRUPED";
+  else if (humanoid > quad) verdict = "HUMANOID";
+  else verdict = "UNCLEAR";
+
+  return {
+    name: path.basename(file), bones: boneNames.length,
+    humanoidHits: humanoid, quadrupedHits: quad,
+    sampleHumanoid: hits.humanoid, sampleQuadruped: hits.quadruped,
+    bindSpan: span, elongation, verdict,
+  };
+}
+
 function walkGLB(dir) {
   const out = [];
   const stack = [dir];
@@ -169,6 +234,20 @@ const [, , cmd, ...args] = process.argv;
 if (cmd === "report") {
   const files = args.flatMap((a) => (fs.existsSync(a) && fs.statSync(a).isDirectory() ? walkGLB(a) : [a]));
   report(files);
+} else if (cmd === "anatomy") {
+  const files = args.flatMap((a) => (fs.existsSync(a) && fs.statSync(a).isDirectory() ? walkGLB(a) : [a]));
+  console.log(`\n${pad("asset", 18)}${padl("bones", 6)}${padl("human", 7)}${padl("quad", 6)}${padl("elong", 7)}  bind span        verdict`);
+  console.log("-".repeat(104));
+  for (const f of files) {
+    try {
+      const a = anatomy(f);
+      console.log(
+        pad(a.name, 18) + padl(a.bones, 6) + padl(a.humanoidHits, 7) + padl(a.quadrupedHits, 6) +
+        padl(a.elongation, 7) + "  " + pad(a.bindSpan.join(" x "), 17) + a.verdict +
+        (a.verdict === "QUADRUPED" ? "" : `   [${(a.sampleHumanoid[0] || "")}]`)
+      );
+    } catch (e) { console.log(`  !! ${f}: ${e.message}`); }
+  }
 } else if (cmd === "gate") {
   const dir = args[0] || "assets";
   const files = walkGLB(dir);
