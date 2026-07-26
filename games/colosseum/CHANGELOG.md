@@ -225,3 +225,43 @@ it needs real gladiator archetypes.
   single attack line was simply blocked until it was spent. Stats could not fix
   it. Charging animals now sometimes go over the rim entirely and cost 2.6x
   stamina to block. Tiger now wins 5/20 against a veteranus murmillo.
+
+## 2026-07-26 — armoury, economy and VISIBLE equipment
+
+**Visible equipment** (`runtime/view/equipment.js`)
+- Bone-attached procedural Roman armour: galea (crested, brimmed, cheek pieces,
+  neck guard), segmented manica, bronze ocreae with knee cops and straps,
+  lorica squamata built from ~100 individual scales, studded balteus,
+  subligaculum. Each welds to ONE mesh with vertex colours = one draw call.
+- Chose bone attachment over modular body meshes deliberately: modular bodies
+  need a whole wardrobe authored against one skeleton, and we have one rigged
+  body. Rigid armour IS rigid, so it reads correctly parented to a bone and
+  animates for free. Verified against the real 24-bone rig read out of base.glb.
+
+**Economy + save** (`runtime/sim/inventory.js`)
+- Gold, owned items, six equipment slots, purchase/equip flow, purse settlement
+  with crowd-favour and flawless bonuses, six historically-grounded ranks
+  (Tiro -> Gregarius -> Veteranus -> Primus Palus -> Champion -> Legend).
+- Versioned localStorage save with forward migration, and it FAILS SOFT:
+  unknown item ids are dropped rather than throwing, corrupt JSON restores a
+  fresh career. A rebalance must never brick someone's ludus.
+- Recognises when a loadout matches a classical armatura and names it.
+
+**Armoury UI** (`runtime/ui/armoury.js`)
+- Three-column DOM overlay over the live scene, so the PAPER DOLL is the actual
+  fighter in the actual arena wearing exactly what was just bought.
+- Never shows a bare stat — every shop entry shows the DELTA against what is
+  currently worn, because that is the only question the player is asking.
+- Carried-weight gauge running mobility -> protection.
+
+### Verified end to end
+6 wins -> purses 82/82/82/150/150/150 (the jump is the Gregarius rank-up) ->
+846 gold -> bought galea + manica + ocreae -> equipped -> 6 armour pieces
+visible on the body -> speed 4.33 -> 3.77 m/s, load 1.2 -> 10.5 kg.
+`probe_inventory.mjs`: 45 checks green, covering the affordability gate, slot
+rules, preview deltas that do not mutate state, rank progression, save
+round-trip, v0 migration and hostile/corrupt saves.
+
+### Note
+One probe "failure" was again the test, not the code: it asserted 777 gold
+after a 340-gold purchase. The save had round-tripped correctly.

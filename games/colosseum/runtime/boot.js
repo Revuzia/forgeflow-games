@@ -15,8 +15,11 @@ import { Crowd } from "./view/crowd.js";
 import { Sky } from "./view/sky.js";
 import { Hypogeum } from "./view/hypogeum.js";
 import { Gates } from "./view/gates.js";
-import { loadFighter, loadBeast, Actor, attachWeapon, makeGladius, makeScutum } from "./view/actors.js";
+import { loadFighter, loadBeast, Actor, attachWeapon, makeGladius, makeScutum, makeTrident } from "./view/actors.js";
 import { makeSand } from "./view/sand.js";
+import { Equipment } from "./view/equipment.js";
+import { Inventory } from "./sim/inventory.js";
+import { Armoury } from "./ui/armoury.js";
 import { ARENA } from "./data/arena_spec.js";
 import { clamp, damp, TAU } from "./core/util.js";
 
@@ -155,6 +158,10 @@ sky.bakeEnvironment(renderer);
 // ---------------------------------------------------------------------------
 setProgress(0.94, "Arming the fighters…");
 
+// The career save. Restored before actors so the fighter is built already
+// wearing whatever the player last equipped.
+const inventory = Inventory.restore();
+
 const actors = { player: null, beast: null };
 try {
   const [fighterLib, beastLib] = await Promise.all([
@@ -178,6 +185,10 @@ try {
     palm: 0.04,
     align: "shield",
   });
+  // Visible equipment: bone-attached Roman armour that the armoury drives.
+  actors.player.equipment = new Equipment(actors.player);
+  actors.player.equipment.applyLoadout({ armour: inventory.armourList() });
+
   scene.add(actors.player.root);
 
   actors.beast = new Actor(beastLib, {
@@ -200,6 +211,44 @@ try {
 setProgress(1.0, "Ready.");
 
 // ---------------------------------------------------------------------------
+// Armoury. The paper doll IS the live fighter, so a purchase is visible on the
+// body the instant it is made.
+// ---------------------------------------------------------------------------
+const armoury = new Armoury(document.getElementById("hud"), inventory, {
+  onEquip: (slot, id, inv) => {
+    if (actors.player && actors.player.equipment) {
+      actors.player.equipment.applyLoadout({ armour: inv.armourList() });
+    }
+    // Weapon and shield live on hand bones and are rebuilt by the actor layer.
+    syncHeldGear(inv);
+  },
+  onPreviewRotate: (on) => { camRig.preview = on; },
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Tab") { e.preventDefault(); armoury.toggle(); }
+});
+
+/** Rebuild the held weapon/shield to match the inventory. */
+function syncHeldGear(inv) {
+  const p = actors.player;
+  if (!p) return;
+  // Drop existing hand mounts.
+  const kill = [];
+  p.model.traverse((o) => { if (o.name === "weapon_mount") kill.push(o); });
+  kill.forEach((m) => { m.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }); m.removeFromParent(); });
+
+  const wid = inv.equipped.weapon;
+  const maker = { gladius: makeGladius, spatha: makeGladius, sica: makeGladius, trident: makeTrident, hasta: makeTrident, dimachaerus: makeGladius }[wid] || makeGladius;
+  attachWeapon(p, maker(), { palm: 0.055 });
+  if (inv.equipped.shield && inv.equipped.shield !== "none") {
+    attachWeapon(p, makeScutum(inv.equipped.shield === "parmula" ? { w: 0.44, h: 0.46, curve: 0.10 } : {}), {
+      bone: /LeftHand|Hand_L|mixamorig.*LeftHand/i, palm: 0.04, align: "shield",
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Camera rig — a cinematic orbit until gameplay takes over.
 // ---------------------------------------------------------------------------
 const camRig = {
@@ -211,7 +260,14 @@ const camRig = {
 };
 
 function updateCamera(dt) {
-  if (camRig.auto) camRig.theta += dt * 0.055;
+  // Armoury preview: orbit the fighter close and slow so the player can see
+  // what they just bought from every side.
+  if (camRig.preview && actors.player) {
+    camRig.theta += dt * 0.35;
+    camRig.target.set(actors.player.pos.x, 1.02, actors.player.pos.z);
+    camRig.dist = damp(camRig.dist, 3.4, 4, dt);
+    camRig.phi = damp(camRig.phi, 0.12, 4, dt);
+  } else if (camRig.auto) camRig.theta += dt * 0.055;
   const ce = Math.cos(camRig.phi);
   camera.position.set(
     camRig.target.x + Math.cos(camRig.theta) * camRig.dist * ce,
@@ -353,6 +409,7 @@ requestAnimationFrame(frame);
 // ---------------------------------------------------------------------------
 window.__FFG3D__ = {
   renderer, scene, camera, colosseum, crowd, sky, gates, hypogeum, actors,
+  inventory, armoury,
   quality: QUALITY,
   stats: () => ({
     quality: QUALITY,
@@ -463,6 +520,30 @@ window.__FFG3D__ = {
     openGate: (id) => { gates.open(id); return gates.stats(); },
     closeGate: (id) => { gates.close(id); return gates.stats(); },
     openLift: (i) => { hypogeum.open(i); return hypogeum.stats(); },
+    /** Equip/unequip on the live model — proves purchases become visible. */
+    equip: (armour) => {
+      if (!actors.player || !actors.player.equipment) return null;
+      const worn = actors.player.equipment.applyLoadout({ armour: armour || [] });
+      return { worn, drawCalls: actors.player.equipment.drawCalls() };
+    },
+    worn: () => (actors.player && actors.player.equipment ? actors.player.equipment.worn() : null),
+    armoury: (open) => { open ? armoury.show() : armoury.hide(); return armoury.open; },
+    buy: (kind, id) => { const r = inventory.buy(kind, id); armoury.render(); return r; },
+    equipItem: (slot, id) => {
+      const r = inventory.equip(slot, id);
+      if (r.ok && actors.player && actors.player.equipment) {
+        actors.player.equipment.applyLoadout({ armour: inventory.armourList() });
+        syncHeldGear(inventory);
+      }
+      armoury.render();
+      return r;
+    },
+    inv: () => ({
+      gold: inventory.gold, wins: inventory.wins, rank: inventory.rank().name,
+      equipped: { ...inventory.equipped }, owned: JSON.parse(JSON.stringify(inventory.owned)),
+      mobility: inventory.mobility(), armatura: inventory.matchedArmatura()?.name || null,
+    }),
+    settle: (o) => inventory.settle(o),
     blood: (x, z, r = 0.5, s = 1) => sandDamage.splat(x, z, r, "blood", s),
     scuff: (x, z, r = 0.4, s = 0.7) => sandDamage.splat(x, z, r, "scuff", s),
     dragTrail: (x0, z0, x1, z1) => { sandDamage.trail(x0, z0, x1, z1); return sandDamage.splats; },
