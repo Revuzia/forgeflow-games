@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _scratch import scratch_dir  # noqa: E402
 import build_target  # noqa: E402
 
 n = 0
@@ -53,7 +54,7 @@ chk("allowlist shmup: platformer -> Phaser", build_target.choose_target("platfor
 chk("allowlist shmup: shmup -> engine", build_target.choose_target("shmup") is True)
 
 # config-file opt-in (the committed flip, NOT a Task Scheduler env change)
-_cfg = Path(tempfile.mkdtemp()) / "engine_target.json"
+_cfg = scratch_dir() / "engine_target.json"
 _cfg.write_text(json.dumps({"enabled": True, "genres": ["platformer"]}), encoding="utf-8")
 setenv(config=str(_cfg))                    # env target unset; only the config enables
 chk("config enabled: platformer -> engine", build_target.choose_target("platformer") is True)
@@ -70,7 +71,7 @@ chk("authoring default OFF", build_target.authoring_enabled() is False)
 setenv()
 os.environ["FFG_ENGINE_AUTHOR"] = "1"
 chk("FFG_ENGINE_AUTHOR=1 -> authoring on", build_target.authoring_enabled() is True)
-_acfg = Path(tempfile.mkdtemp()) / "engine_target.json"
+_acfg = scratch_dir() / "engine_target.json"
 _acfg.write_text(json.dumps({"enabled": True, "author": True}), encoding="utf-8")
 setenv(config=str(_acfg))
 chk("config author:true -> authoring on", build_target.authoring_enabled() is True)
@@ -154,7 +155,7 @@ chk("unsupported genre -> phaser (no engine attempt)", gdir == "PHASER_DIR" and 
 
 # ── engine_verify: structural gate ─────────────────────────────────────────────────────────────
 def make_game_dir(good=True):
-    d = Path(tempfile.mkdtemp())
+    d = scratch_dir()
     (d / "src").mkdir()
     (d / "assets" / "audio").mkdir(parents=True)
     (d / "src" / "engine.js").write_text("// engine", encoding="utf-8")

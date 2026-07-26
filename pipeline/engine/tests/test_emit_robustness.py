@@ -25,6 +25,7 @@ from pathlib import Path
 ENGINE = Path(__file__).resolve().parents[1]
 GAMES = ENGINE.parents[1]
 sys.path.insert(0, str(ENGINE))
+from _scratch import scratch_dir  # noqa: E402
 import engine_game_emit as emit  # noqa: E402
 
 GENRES = [("platformer", "platformer.content.json"), ("shmup", "shmup.content.json")]
@@ -39,7 +40,7 @@ def _ok(cond, msg):
 
 
 def _build(slug, content_file):
-    out = Path(tempfile.mkdtemp()) / slug
+    out = scratch_dir() / slug
     emit.build(str(ENGINE / "golden" / content_file), out, slug=slug)
     return out
 

@@ -13,6 +13,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))                 # gates (emit_integrity_gate)
 sys.path.insert(0, str(HERE.parent))          # engine (engine_game_emit)
+from _scratch import scratch_dir  # noqa: E402
 import emit_integrity_gate as eig             # noqa: E402
 import engine_game_emit as emit               # noqa: E402
 
@@ -38,7 +39,7 @@ node_seen = False
 for genre, content in GOLDEN.items():
     if not content.exists():
         chk(f"golden exists: {genre}", False, str(content)); continue
-    out = Path(tempfile.mkdtemp()) / genre
+    out = scratch_dir() / genre
     emit.build(str(content), out, slug=genre)
     r = eig.check_emit_integrity(out)
     chk(f"{genre}: emit integrity PASS", r["ok"], r["reason"])

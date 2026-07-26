@@ -21,6 +21,7 @@ from pathlib import Path
 
 ENGINE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(ENGINE_DIR))
+from _scratch import scratch_dir  # noqa: E402
 import engine_game_emit as emit  # noqa: E402
 
 GAMES = ENGINE_DIR.parent.parent
@@ -85,7 +86,7 @@ GENRE_GOLDEN = {
 for genre, content in GENRE_GOLDEN.items():
     if not content.exists():
         need(f"golden exists: {genre}", False, str(content)); continue
-    out = Path(tempfile.mkdtemp()) / genre
+    out = scratch_dir() / genre
     emit.build(str(content), out, slug=genre)
     js = (out / "game.js").read_text(encoding="utf-8")
     ok, bad = actors_ok(js)
@@ -133,7 +134,7 @@ if tas.root():
     need("selector deterministic", tas.select_asset_set("platformer", "lumen-run") == tas.select_asset_set("platformer", "lumen-run"))
     # integration: variety reaches the emitter — two slugs copy different hero sprites
     if GENRE_GOLDEN["platformer"].exists():
-        oa = Path(tempfile.mkdtemp()) / "a"; ob = Path(tempfile.mkdtemp()) / "b"
+        oa = scratch_dir() / "a"; ob = scratch_dir() / "b"
         ca = json.loads(GENRE_GOLDEN["platformer"].read_text(encoding="utf-8")); ca["slug"] = "variety-a"
         cb = dict(ca); cb["slug"] = "variety-zzz"
         fa = oa.parent / "a.json"; fb = ob.parent / "b.json"

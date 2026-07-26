@@ -1544,6 +1544,28 @@ def throughput_loop(force=False, deploy=False, once=False):
 
 def main():
     args = sys.argv[1:]
+
+    # SCRATCH SWEEP (2026-07-26). Harnesses use _scratch.scratch_dir(), which
+    # removes itself via atexit — but atexit cannot fire if a run is hard-killed
+    # (os._exit, SIGKILL, a machine reboot mid-build). This reclaims those
+    # orphans at the start of every run, so a crashed night cannot accumulate.
+    #
+    # History: bare tempfile.mkdtemp() in the test harnesses leaked one full
+    # game build per run (each carrying a ~60 MB foe2.glb). run_all_tests.py
+    # fires on every nightly AND every git push, so by 2026-07-25 there were
+    # 3,652 orphans holding 30.7 GB and C: was down to 0.13 GB free — which is
+    # enough to make `git push` fail outright.
+    try:
+        from _scratch import sweep_stale, free_bytes
+        _n, _b = sweep_stale()
+        if _n:
+            log(f"scratch sweep: removed {_n} stale ffg_* dirs, reclaimed {_b / 1048576:.0f} MB")
+        _free_gb = free_bytes() / 2 ** 30
+        if _free_gb < 5:
+            log(f"WARNING: only {_free_gb:.2f} GB free on the temp volume - builds and git push may fail")
+    except Exception as _e:  # never let housekeeping stop a build
+        log(f"scratch sweep skipped: {type(_e).__name__}: {_e}")
+
     if "--selftest" in args:
         sys.exit(selftest(args[args.index("--selftest") + 1]))
     if "--smoke" in args:

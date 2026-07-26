@@ -9,6 +9,8 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # engine (_scratch)
+from _scratch import scratch_dir  # noqa: E402
 import ai_qa_panel as A  # noqa: E402
 
 n = 0
@@ -89,7 +91,7 @@ chk("policy default -> per-flag (vision blocking, code_review advisory)",
     A._blocking(V) is True and A._blocking(insp("code_review")) is False)
 
 # ── run_panel end-to-end (no claude -p: all code deferred, vision no-shot -> deferred) -> ship ───
-tmp = Path(tempfile.mkdtemp())
+tmp = scratch_dir()
 (tmp / "game.js").write_text("export const GAME = { sprites:{}, setup(ctx){}, update(dt,ctx){ ctx.win(); } };", encoding="utf-8")
 rep = A.run_panel(tmp, "platformer", run=False)
 chk("run_panel no-claude -> ship (nothing blocking failed)", rep["verdict"] == "ship")

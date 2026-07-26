@@ -20,6 +20,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _scratch import scratch_dir  # noqa: E402
 import v2_pipeline as v2  # noqa: E402
 import build_target       # noqa: E402
 
@@ -50,7 +51,7 @@ PROD = {p: (p.stat().st_mtime_ns, hashlib.md5(p.read_bytes()).hexdigest())
 PROD_JOURNALS = {p: p.stat().st_mtime_ns for p in (Path(__file__).parent / "dev_journal").glob("*.json")}
 
 # ── 1. run lock ─────────────────────────────────────────────────────────────────────────────────
-tmp = Path(tempfile.mkdtemp())
+tmp = scratch_dir()
 v2.RUN_LOCK = tmp / ".ffg_nightly.lock"
 chk("lock: first acquire", v2.acquire_run_lock() is True)
 chk("lock: second acquire blocked", v2.acquire_run_lock() is False)

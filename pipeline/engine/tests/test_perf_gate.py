@@ -11,6 +11,8 @@ from pathlib import Path
 
 GATES = Path(__file__).resolve().parents[1] / "gates"
 sys.path.insert(0, str(GATES))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # engine (_scratch)
+from _scratch import scratch_dir  # noqa: E402
 from perf_gate import fps_verdict, static_perf_scan, GLOW_BUDGET  # noqa: E402
 
 
@@ -48,7 +50,7 @@ def test_fps_no_samples_skips():
 
 
 def test_static_glow_clean_passes():
-    d = Path(tempfile.mkdtemp())
+    d = scratch_dir()
     (d / "game.js").write_text("ctx.spawn('coin'); ctx.glow(player); ctx.glow(goal);", encoding="utf-8")
     r = static_perf_scan(d)
     assert r["ok"] and r["verdict"] == "pass", r
@@ -56,7 +58,7 @@ def test_static_glow_clean_passes():
 
 
 def test_static_glow_over_budget_warns():
-    d = Path(tempfile.mkdtemp())
+    d = scratch_dir()
     (d / "game.js").write_text("\n".join(f"e{i}.glow();" for i in range(GLOW_BUDGET + 10)), encoding="utf-8")
     r = static_perf_scan(d)
     assert not r["ok"] and r["verdict"] == "warn", r
@@ -64,7 +66,7 @@ def test_static_glow_over_budget_warns():
 
 
 def test_static_no_gamejs_skips():
-    d = Path(tempfile.mkdtemp())
+    d = scratch_dir()
     r = static_perf_scan(d)
     assert r["verdict"] == "skip" and r["ok"], r
 

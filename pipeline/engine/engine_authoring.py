@@ -29,6 +29,7 @@ API_DOC = FORGE_ENGINE / "ENGINE_GAME_API.md"
 
 if str(ENGINE_DIR) not in sys.path:
     sys.path.insert(0, str(ENGINE_DIR))
+from _scratch import scratch_dir  # noqa: E402
 import engine_game_emit as _emit                          # reuse staging (_stage_assets, INDEX_HTML, src/assets copy)
 
 # FALLBACK bundle (used only when the library index is unavailable) — the proven-existing files the
@@ -290,7 +291,7 @@ def validate(js_text, workdir=None):
         return False, "no win condition (ctx.win not called)"
     # node --check (ESM syntax) — write to a temp .mjs
     try:
-        d = Path(workdir) if workdir else Path(tempfile.mkdtemp())
+        d = Path(workdir) if workdir else scratch_dir()
         f = d / "_authored_check.mjs"
         f.write_text(js_text, encoding="utf-8")
         r = subprocess.run(["node", "--check", str(f)], capture_output=True, text=True, timeout=30)

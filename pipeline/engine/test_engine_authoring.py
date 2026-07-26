@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _scratch import scratch_dir  # noqa: E402
 import engine_authoring as A  # noqa: E402
 
 n = 0
@@ -72,7 +73,7 @@ for needle in ("export const GAME", "./assets/sprites/hero.png", "Neon Drift", "
     chk(f"prompt contains {needle!r}", needle in pr)
 
 # ── stage + author paths (use temp out dirs; don't pollute games/_engine) ──────────────────────
-tmp = Path(tempfile.mkdtemp())
+tmp = scratch_dir()
 out, sref = A.stage("_unit-stage", tmp / "_unit-stage")
 chk("stage: engine src copied", (out / "src" / "engine.js").exists())
 chk("stage: real sprites staged + exist", all((out / "assets" / "sprites").joinpath(Path(u).name).exists()
@@ -98,7 +99,7 @@ ok2, out2, det2 = A.author_engine_game({"slug": "_bad", "genre": "arcade", "titl
 chk("author garbage -> ok=False (" + det2 + ")", ok2 is False)
 
 # ── ITERATIVE REVISION (the multi-hour real-game path) — both ways ──────────────────────────────
-rev_dir = Path(tempfile.mkdtemp()) / "_rev"
+rev_dir = scratch_dir() / "_rev"
 rev_dir.mkdir(parents=True)
 ORIG = GOOD_GAME_JS + "\nGAME.audio = {\"hit\": \"./assets/audio/sfx_hit.ogg\"};\n"
 (rev_dir / "game.js").write_text(ORIG, encoding="utf-8")
@@ -132,13 +133,13 @@ chk("invalid revision (no win) rejected, file kept (" + det_r3[:40] + ")", ok_r3
     (rev_dir / "game.js").read_text(encoding="utf-8") == after1)
 
 # missing game.js -> clean failure
-ok_r4, _, det_r4 = A.revise_engine_game(Path(tempfile.mkdtemp()), {"title": "T"}, goal="g", _raw_override="x")
+ok_r4, _, det_r4 = A.revise_engine_game(scratch_dir(), {"title": "T"}, goal="g", _raw_override="x")
 chk("revise without game.js -> False", ok_r4 is False and "no game.js" in det_r4)
 
 # ── 2026-06-11 NIGHT-KILLER REGRESSION: multi-line GAME.audio re-attach must stay loadable ──────
 # The old single-line regex appended a dangling 'GAME.audio = {' AFTER validation -> every written
 # game.js failed to module-load and the tester crashed reportless all night (38 claude calls burned).
-nk_dir = Path(tempfile.mkdtemp()) / "_nk"
+nk_dir = scratch_dir() / "_nk"
 nk_dir.mkdir(parents=True)
 MULTI = GOOD_GAME_JS + '\nGAME.audio = {\n  "hit": "./assets/audio/sfx_hit.ogg",\n  "win": "./assets/audio/sfx_win.ogg"\n};\n'
 (nk_dir / "game.js").write_text(MULTI, encoding="utf-8")
@@ -151,7 +152,7 @@ chk("night-killer: FULL audio block re-attached (closing brace + semicolon)",
 chk("night-killer: written file still validates (no dangler)", A.validate(after_nk, nk_dir)[0] is True)
 
 # ── write_validated_js: THE write gate (audit T4) — both ways ───────────────────────────────────
-wv = Path(tempfile.mkdtemp())
+wv = scratch_dir()
 ok_w1, _ = A.write_validated_js(wv / "game.js", GOOD_GAME_JS, wv)
 chk("write gate: valid js written", ok_w1 is True and (wv / "game.js").exists())
 ok_w2, det_w2 = A.write_validated_js(wv / "bad.js", GOOD_GAME_JS + "\nGAME.audio = {\n", wv)
