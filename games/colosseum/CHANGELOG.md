@@ -176,3 +176,52 @@ it needs real gladiator archetypes.
 ### Measured
 35 draw calls with both actors and 69 accumulated splats, 1.10 ms/frame at
 1400x850 GPU-inclusive.
+
+## 2026-07-26 — combat core
+
+**Data** (`runtime/data/weapons.js`)
+- 6 weapon classes, 3 shields, 5 armour pieces, 6 classical armaturae, 4 hit
+  zones. Every field in real units.
+- The mobility-vs-protection trade-off is CONCRETE, not flavour: `weight` feeds
+  `mobility()` which derives move speed, dodge distance, stamina pool, stamina
+  regen and turn rate. A retiarius carries 4.5 kg and moves 4.13 m/s; a secutor
+  carries 23.5 kg and moves 3.0 m/s with 40% worse stamina recovery.
+- Armour is per-ZONE, which is what makes weak points real — a galea takes head
+  damage to 0.22x and does nothing for the legs, which is exactly why beast
+  fights are won and lost at shin height.
+
+**Simulation** (`runtime/sim/combat.js`)
+- Directional attacks with real windup/active/recover windows, directional
+  blocking, parry on a 0.16 s window, guard break, shield integrity, dodge
+  i-frames, hit-stop, stagger, wound accumulation, combo scaling, backstab and
+  flank multipliers, and slow-motion on a kill.
+- Touches no THREE, no DOM and no wall clock: it advances on fixed dt from an
+  explicit command struct with all randomness from a seeded generator. Same
+  seed, same fight — verified. That is the multiplayer seam.
+
+**AI** (`runtime/sim/ai.js`)
+- Utility scoring rather than a behaviour tree. Difficulty is NOT a stat
+  multiplier — six skill bands scale reaction latency, decision noise and how
+  reliably the AI punishes a recovery window. A tiro genuinely fights worse.
+- Style personalities (pressure/spacer/flanker/aggressor/beast) and three beast
+  profiles.
+
+**Harness** (`tools/probe_combat.mjs`) — 22 checks, headless, ~1 s.
+
+### Fixed (all four found BY the probe)
+- Two "failures" were bugs in the TEST, not the sim: the defender was left
+  facing away, so every blow landed as a rear backstab no shield could cover.
+  Armour and shields had been working the whole time.
+- AI bouts stalled 28/40 times. Circling used a pull threshold of `reach * 1.6`
+  and two circling fighters settled at almost exactly that distance, then
+  actively pushed each other apart. Now 0/40 stall, average 33 s.
+- **The separation solver made beasts unkillable.** A flat 1.5x beast collision
+  radius set the human-vs-beast floor at 1.375 m against a gladius reaching
+  1.35 m. Measured: the murmillo spent 0 of 1362 ticks in range and dealt 0
+  damage across a full bout. Radius is now a real per-fighter field, and
+  `probe_combat` asserts the floor stays inside the shortest weapon's reach.
+- The scutum alone decided the beast matchup: across a 16-cell sweep of tiger
+  hp (110-170) x damage (26-38) the tiger never won more than 21%, because its
+  single attack line was simply blocked until it was spent. Stats could not fix
+  it. Charging animals now sometimes go over the rim entirely and cost 2.6x
+  stamina to block. Tiger now wins 5/20 against a veteranus murmillo.
