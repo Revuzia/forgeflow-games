@@ -20,6 +20,12 @@ import { makeSand } from "./view/sand.js";
 import { Equipment } from "./view/equipment.js";
 import { Inventory } from "./sim/inventory.js";
 import { Armoury } from "./ui/armoury.js";
+import { Match, STATE } from "./sim/match.js";
+import { BoutView, CombatCamera } from "./view/bout.js";
+import { VFX } from "./view/vfx.js";
+import { HUD } from "./ui/hud.js";
+import { Input } from "./core/input.js";
+import { LADDER } from "./data/roster.js";
 import { ARENA } from "./data/arena_spec.js";
 import { clamp, damp, TAU } from "./core/util.js";
 
@@ -163,6 +169,8 @@ setProgress(0.94, "Arming the fighters…");
 const inventory = Inventory.restore();
 
 const actors = { player: null, beast: null };
+// Shared libraries the bout view clones combatants from.
+const actorLibs = { fighter: null, beasts: {} };
 try {
   const [fighterLib, beastLib] = await Promise.all([
     loadFighter("assets/chars/gladiator"),
@@ -172,6 +180,11 @@ try {
     // library shipping both an Attack and a Run clip.
     loadBeast("assets/beasts/tiger.glb"),
   ]);
+
+  actorLibs.fighter = fighterLib;
+  actorLibs.beasts.tiger = beastLib;
+  actorLibs.beasts.panther = beastLib;   // until panther is staged separately
+  actorLibs.beasts.lion = beastLib;
 
   actors.player = new Actor(fighterLib, { height: 1.82, name: "player" });
   actors.player.pos.set(-16, 0, 4);
@@ -209,6 +222,95 @@ try {
 }
 
 setProgress(1.0, "Ready.");
+
+// ---------------------------------------------------------------------------
+// Bout runtime — the pieces that turn the headless sim into a fight you watch.
+// ---------------------------------------------------------------------------
+const vfx = new VFX(scene, { sand: sandDamage, camera });
+const hud = new HUD(document.getElementById("hud"));
+const input = new Input();
+const combatCam = new CombatCamera(camera);
+
+let bout = null;        // BoutView
+let match = null;       // Match
+
+/** Start one ladder entry. */
+function startMatch(matchId) {
+  endMatch();
+  const def = LADDER.find((m) => m.id === matchId) || LADDER[0];
+
+  bout = new BoutView(scene, actorLibs, { sand: sandDamage, crowd, gates, hypogeum, vfx });
+
+  match = new Match({
+    def, inventory, seed: (Date.now() ^ 0x9e3779b9) >>> 0,
+    hooks: {
+      onSpawn: (list) => {
+        for (const s of list) {
+          // Stamp the armatura so the view can pick the right helmet crest.
+          s.fighter.armaturaId = s.fighter.armaturaId || (s.fighter.champion && s.fighter.champion.armatura) || null;
+          bout.spawn(s.fighter, s.role);
+        }
+      },
+      onEvent: (e) => {
+        bout.onEvent(e);
+        if (e.type === "hit") combatCam.addShake(e.heavy ? 0.55 : 0.28);
+        else if (e.type === "death") combatCam.addShake(0.8);
+        else if (e.type === "shield_break" || e.type === "guard_break") combatCam.addShake(0.5);
+      },
+      onCue: onMatchCue,
+      onState: (s, m) => {
+        if (s === STATE.SALUTE) hud.banner(def.name.toUpperCase(), def.desc || "", 2.6);
+        else if (s === STATE.FIGHT) hud.banner("BEGIN", "", 1.1);
+        else if (s === STATE.VERDICT) {
+          const v = m.verdict || {};
+          hud.banner(v.playerWon ? "VICTORIA" : (v.spared ? "MISSIO" : "DEFEAT"),
+            v.playerWon ? "" : (v.spared ? "The mob grants you your life" : ""), 3.0);
+        }
+      },
+      onResult: (r) => {
+        hud.banner(r.playerWon ? "VICTORIA" : "DEFEAT",
+          `${r.purse} aurei${r.rankUp ? `  ·  ${r.rankUp.toUpperCase()}` : ""}`, 4.0);
+      },
+    },
+  });
+
+  // Hide the idle showcase actors while a real bout owns the sand.
+  if (actors.player) actors.player.root.visible = false;
+  if (actors.beast) actors.beast.root.visible = false;
+
+  match.start();
+  combatCam.enabled = true;
+  hud.show();
+  camRig.auto = false;
+  return match;
+}
+
+function endMatch() {
+  if (bout) { bout.clear(); bout = null; }
+  match = null;
+  combatCam.enabled = false;
+  hud.hide();
+  if (actors.player) actors.player.root.visible = true;
+  if (actors.beast) actors.beast.root.visible = true;
+}
+
+/** Match cues drive the building: gates, lifts, horns. */
+function onMatchCue(name, data) {
+  cueLog.push({ t: +(frames / 60).toFixed(2), kind: "match", name, ...data });
+  if (name === "gate_open") {
+    gates.open(data.gate);
+    // Beasts come up out of the hypogeum instead of walking through a door.
+    if (match && (match.def.beasts || []).length && data.gate === "triumphalis") hypogeum.open(0);
+  } else if (name === "horn") {
+    crowd.react(data.kind === "begin" ? 0.85 : 0.55);
+    if (data.kind === "fanfare") crowd.startWave({ laps: 1, speed: 2.6, strength: 1 });
+  } else if (name === "verdict") {
+    crowd.react(data.playerWon ? 1.0 : 0.6);
+  } else if (name === "wave") {
+    hud.banner(`WAVE ${data.wave}`, `of ${data.of}`, 1.8);
+    crowd.react(0.8);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Armoury. The paper doll IS the live fighter, so a purchase is visible on the
@@ -260,6 +362,21 @@ const camRig = {
 };
 
 function updateCamera(dt) {
+  // A live bout owns the camera: it frames the player and the nearest threat,
+  // pulls back as they separate, and drops low during a kill's slow motion.
+  if (combatCam.enabled && match && match.player) {
+    const p = match.player;
+    const foes = match.combat.living(1);
+    const f = foes.length
+      ? foes.reduce((a, b) => (Math.hypot(a.x - p.x, a.z - p.z) < Math.hypot(b.x - p.x, b.z - p.z) ? a : b))
+      : null;
+    combatCam.update(dt,
+      new THREE.Vector3(p.x, 0, p.z),
+      f ? new THREE.Vector3(f.x, 0, f.z) : null,
+      { slowMo: match.combat.slowMo });
+    return;
+  }
+
   // Armoury preview: orbit the fighter close and slow so the player can see
   // what they just bought from every side.
   if (camRig.preview && actors.player) {
@@ -316,8 +433,34 @@ const cueLog = [];
  */
 function stepSim(dt) {
   crowd.update(dt);
-  if (actors.player) actors.player.update(dt, actors.player.speed);
-  if (actors.beast) actors.beast.update(dt, actors.beast.speed);
+
+  // --- the live bout ------------------------------------------------------
+  if (match && bout) {
+    // The player's intent, in camera space, aimed at the nearest threat.
+    const p = match.player;
+    let targetAngle = null;
+    if (p && p.alive) {
+      const foes = match.combat.living(1);
+      if (foes.length) {
+        const f = foes.reduce((a, b) =>
+          (Math.hypot(a.x - p.x, a.z - p.z) < Math.hypot(b.x - p.x, b.z - p.z) ? a : b));
+        targetAngle = Math.atan2(f.x - p.x, f.z - p.z);
+      }
+    }
+    const cmd = input.command({ cameraYaw: combatCam.yaw, targetAngle });
+    match.update(dt, cmd);
+    input.consume();
+
+    bout.update(dt);
+    if (match.state === "exit") bout.dragCorpses(dt, gates.entryPoint("libitinaria", 2.0));
+    crowd.lookAt(new THREE.Vector3(p ? p.x : 0, 1, p ? p.z : 0));
+    hud.update(match.hudState(), dt);
+  } else {
+    if (actors.player) actors.player.update(dt, actors.player.speed);
+    if (actors.beast) actors.beast.update(dt, actors.beast.speed);
+  }
+
+  vfx.update(dt);
   // Gate and lift events are the cues the audio and crowd systems react to
   // (horn on gate-start, roar on cage-release), so they are dispatched here
   // rather than polled.
@@ -409,7 +552,9 @@ requestAnimationFrame(frame);
 // ---------------------------------------------------------------------------
 window.__FFG3D__ = {
   renderer, scene, camera, colosseum, crowd, sky, gates, hypogeum, actors,
-  inventory, armoury,
+  inventory, armoury, vfx, hud, input, combatCam,
+  get match() { return match; },
+  get bout() { return bout; },
   quality: QUALITY,
   stats: () => ({
     quality: QUALITY,
@@ -552,6 +697,23 @@ window.__FFG3D__ = {
     closeLift: (i) => { hypogeum.close(i); return hypogeum.stats(); },
     cues: () => cueLog.slice(-40),
     clearCues: () => { cueLog.length = 0; return true; },
+    /** Start a ladder match by id (default: the first). */
+    startMatch: (id) => {
+      const m = startMatch(id || LADDER[0].id);
+      return { id: m.def.id, name: m.def.name, type: m.def.type, spawned: m.spawned.length };
+    },
+    endMatch: () => { endMatch(); return true; },
+    matchState: () => (match ? match.snapshot() : null),
+    hudState: () => (match ? match.hudState() : null),
+    boutStats: () => (bout ? bout.stats() : null),
+    vfxStats: () => vfx.stats(),
+    ladder: () => LADDER.map((m) => ({ id: m.id, rank: m.rank, type: m.type, name: m.name })),
+    /** Drive N sim steps with a synthetic player command (for verification). */
+    fight: (n = 60, cmd = {}) => {
+      if (!match) return null;
+      for (let i = 0; i < n; i++) { match.update(1 / 60, cmd); bout.update(1 / 60); vfx.update(1 / 60); }
+      return match.hudState();
+    },
     /** Rig diagnostics — proves clips actually bound, not just that files loaded. */
     actors: () => {
       const d = {};

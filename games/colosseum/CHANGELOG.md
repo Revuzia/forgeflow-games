@@ -400,3 +400,58 @@ red subligaculum.
   NOT currently installed.
 - The manica and greave baked slightly olive rather than bronze.
 - The FBX duplicates and the raw pre-rig mesh are gitignored, not shipped.
+
+## 2026-07-26 — THE BOUT IS PLAYABLE
+
+The combat sim, the AI, the match director and input were all proven headlessly
+but drove nothing on screen. They do now.
+
+**`runtime/view/bout.js`** — the sim -> view bridge, and the ONLY file allowed
+to read the sim and write the scene. Keeping that one-directional is what stops
+a visual effect from quietly changing gameplay.
+- Every combat Fighter gets a pooled Actor, with visible kit built from the
+  same loadout the fight uses — what you see is what is being simulated.
+- Animation is driven by PHASE, not by events: a WINDUP plays an attack wind
+  (alternating slash1/slash2 so a flurry does not look looped, time-scaled to
+  the fighter's real windup+active window so the swing lands on the frame the
+  sim says it lands), STAGGER plays the hit, death plays once and clamps.
+- `CombatCamera` frames the player and the nearest threat, pulls back as they
+  separate, drops low during a kill's slow-motion, and shakes on impact —
+  everything damped, because a camera that snaps makes a fight unreadable.
+
+**`runtime/view/vfx.js`** — blood, sparks and dust from ONE pooled
+InstancedMesh: 1 draw call no matter how violent the bout. Simulated on the CPU
+so droplets can hand off to the persistent damage layer — a GPU-only system
+could not tell sand.js where blood landed.
+
+**`runtime/ui/hud.js`** — vitals bottom-left, opponent and crowd mood top-centre,
+banners centre. Stamina changes COLOUR below 18% because it gates attacking and
+dodging and must never be ambiguous in peripheral vision.
+
+Match cues now drive the building: the Triumphalis opens on entry, beasts come
+up the hypogeum lift, the crowd waves on the fanfare, the Libitinaria opens for
+the exit and corpses are dragged toward it leaving a trail in the sand.
+
+### Verified live in-browser
+Started `g1` "Scutum and Sica" against **Ambiorix, Gaul · Thraex** (generated
+from the roster). Ceremony ran entry -> salute -> fight. Real exchanges: a 19.9
+head hit, dodges, blood staining the sand, crowd favour climbing 0.60 -> 0.66 as
+the player landed blows, player down to 34/105 HP and 21 stamina in a genuinely
+hard fight. **38 draw calls, 0.70 ms/frame** with a live bout and 86 particles.
+All four probes still green.
+
+### Fixed
+- VFX rendered as BLACK RECTANGLES. Two causes: `vertexColors: true` defines
+  USE_COLOR, and three's fragment stage only applies vColor under USE_COLOR —
+  but the vertex stage then multiplies by a `color` attribute the quad did not
+  have, so every particle read zero. And the custom billboard patched
+  gl_Position inside begin_vertex, which three's own project_vertex chunk
+  overwrites. Now: a white color attribute, and CPU billboarding from the
+  camera quaternion, which cannot silently break.
+- Particles were hard squares; dust grew into pale slabs the size of a man.
+  Added a procedurally generated radial alpha ramp (no texture shipped) and cut
+  dust to a quarter of its size.
+
+### Still placeholder
+The bout still uses the shared Meshy KNIGHT body, not the pilot murmillo — the
+pilot GLB is 7.9 MB and needs texture compression before it can ship.
