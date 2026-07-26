@@ -1,1 +1,3 @@
 tools/shots/
+assets/chars/_pilot/*.fbx
+assets/chars/_pilot/*_raw.glb

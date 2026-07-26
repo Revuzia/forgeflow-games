@@ -355,3 +355,48 @@ Survival reaches wave 3 of 5. Across 30 bouts missio was granted 23 and refused
 Champion bouts were won 6/6 by a veteranus-skill player brain. Their hpMult is
 1.15-1.5 but that is evidently not enough to make a named fight feel like one.
 Needs a tuning pass once the player is human rather than a bot.
+
+## 2026-07-26 — Meshy Smart Topology pilot: PASS
+
+Spent 20 credits (4547 -> 4527, ledgered) to answer the one question the docs
+do not: **can Smart Topology output be auto-rigged?**
+
+**Yes.** `model_type: smart-topology` + `ai_model: meshy-t2` + `should_texture:
+true` at `target_polycount: 12000` produced a clean mesh that auto-rigged first
+try, and the rig came back with walk and run clips bundled free.
+
+| | result |
+|---|---|
+| image-to-3d (T2, textured) | 15 credits |
+| auto-rig | 5 credits |
+| remesh | **NOT NEEDED** — T2 caps at 15k faces, far under the 300k rig limit |
+| mesh | 12,042 tris, **1 draw call, 1 material** — passes the asset gate |
+| rig | 24 bones |
+
+**The finding that matters most is free:** the T2 rig's bone names are
+IDENTICAL to the existing ForgeFlow Meshy rig — Hips / Spine / Spine01 /
+Spine02 / Left+RightShoulder / Arm / ForeArm / Hand / UpLeg / Leg / Foot /
+ToeBase / neck / Head. So:
+- the existing combat clips (slash1, slash2, parry, hit, death, finisher)
+  address 24/24 bones on the new body. Verified by applying anim_slash1 and
+  measuring the right hand move 0.781 units. The only unmatched tracks are the
+  `Armature`/`char1` container nodes.
+- `equipment.js` slot definitions bind unchanged — the galea, manica, ocreae
+  and balteus attach to the new gladiator with no edits.
+
+That means **no animation credits are needed per archetype**, and six
+gladiators cost ~120 credits rather than the ~240 the meshy-6 path would have.
+
+Source art from xAI (~$0.02) using the strict T-pose recipe: fingers together,
+empty hands, NO cape (a known deterministic auto-rig failure), plain
+background. The murmillo came out historically correct — bare torso, segmented
+manica on the RIGHT arm, single greave on the LEFT shin, studded balteus over a
+red subligaculum.
+
+### Open issues
+- The rigged GLB is **7.9 MB** — far too heavy for web. The texture is the
+  bulk. Needs `gltf-transform optimize --texture-size 1024 --texture-compress
+  webp --simplify false` (simplify OFF preserves skinning). gltf-transform is
+  NOT currently installed.
+- The manica and greave baked slightly olive rather than bronze.
+- The FBX duplicates and the raw pre-rig mesh are gitignored, not shipped.
