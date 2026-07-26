@@ -149,3 +149,30 @@ failing; the draw-call gate flags the lion on sight.
 The player model is the shared Meshy **knight** — white plate, gold cross, red
 cape. It is a crusader standing in a Roman amphitheatre. No code fixes this;
 it needs real gladiator archetypes.
+
+## 2026-07-26 — the harena
+
+**Sand** (`runtime/view/sand.js`)
+- Procedural surface in the fragment shader: warm ochre base, fbm grain, broad
+  damp/dry patchiness, and concentric rake furrows following the ellipse (the
+  harena was raked between bouts, and the furrows give the eye scale on what
+  is otherwise a featureless plane). No texture fetch, resolution-independent.
+- **Persistent damage layer**: a single 1024x1024 render target holding blood
+  (r), scuffs (g) and wetness (b), stamped by additive splat quads and sampled
+  by the sand shader. 500 blood pools cost exactly what one costs. Decal meshes
+  were rejected — a draw call each, and they z-fight on an undulating surface.
+- `splat()`, `trail()` for a body dragged to the Porta Libitinaria, and
+  `clear()` between matches.
+
+### Fixed
+- The sand disc was a `CircleGeometry` — a triangle fan with ONE interior
+  vertex — so the per-vertex height ripple only ever moved the rim. Now a ring
+  with 24 radial divisions. Still one draw call.
+- Blood rendered as a glowing GOLD puddle, brighter than the sand it stained:
+  roughness had been dropped to 0.45 over blood, so the sun's specular lobe
+  blew out through ACES. Soaked sand is damp granular material, not standing
+  liquid — roughness now stays above 0.78 and the colour is a deep matte oxide.
+
+### Measured
+35 draw calls with both actors and 69 accumulated splats, 1.10 ms/frame at
+1400x850 GPU-inclusive.

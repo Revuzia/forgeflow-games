@@ -15,7 +15,8 @@ import { Crowd } from "./view/crowd.js";
 import { Sky } from "./view/sky.js";
 import { Hypogeum } from "./view/hypogeum.js";
 import { Gates } from "./view/gates.js";
-import { loadFighter, loadBeast, Actor, attachWeapon, makeGladius, makeScutum, measureRigHeight } from "./view/actors.js";
+import { loadFighter, loadBeast, Actor, attachWeapon, makeGladius, makeScutum } from "./view/actors.js";
+import { makeSand } from "./view/sand.js";
 import { ARENA } from "./data/arena_spec.js";
 import { clamp, damp, TAU } from "./core/util.js";
 
@@ -125,8 +126,15 @@ const sky = new Sky(scene, { timeOfDay: "afternoon" });
 sky.setShadowQuality(QUALITY);
 renderer.toneMappingExposure = sky.exposure();
 
+setProgress(0.3, "Raking the harena…");
+// The sand carries procedural grain plus a persistent damage layer (blood,
+// scuffs, drag trails) composited in the shader — one draw call, no decals.
+const { material: sandMaterial, damage: sandDamage } = makeSand(renderer, {
+  size: QUALITY === "low" ? 512 : 1024,
+});
+
 setProgress(0.35, "Cutting the travertine…");
-const colosseum = new Colosseum({ scene, quality: QUALITY, seed: 20260724 }).build();
+const colosseum = new Colosseum({ scene, quality: QUALITY, seed: 20260724, sandMaterial }).build();
 
 setProgress(0.62, "Hanging the gates…");
 const gates = new Gates(colosseum.group, { materials: colosseum.mat, colosseum });
@@ -455,6 +463,11 @@ window.__FFG3D__ = {
     openGate: (id) => { gates.open(id); return gates.stats(); },
     closeGate: (id) => { gates.close(id); return gates.stats(); },
     openLift: (i) => { hypogeum.open(i); return hypogeum.stats(); },
+    blood: (x, z, r = 0.5, s = 1) => sandDamage.splat(x, z, r, "blood", s),
+    scuff: (x, z, r = 0.4, s = 0.7) => sandDamage.splat(x, z, r, "scuff", s),
+    dragTrail: (x0, z0, x1, z1) => { sandDamage.trail(x0, z0, x1, z1); return sandDamage.splats; },
+    clearSand: () => { sandDamage.clear(); return true; },
+    sandSplats: () => sandDamage.splats,
     closeLift: (i) => { hypogeum.close(i); return hypogeum.stats(); },
     cues: () => cueLog.slice(-40),
     clearCues: () => { cueLog.length = 0; return true; },

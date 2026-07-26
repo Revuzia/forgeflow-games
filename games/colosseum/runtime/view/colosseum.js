@@ -287,8 +287,9 @@ export class Colosseum {
    * @param {string} opts.quality  'low' | 'medium' | 'high' | 'ultra'
    * @param {number} opts.seed     deterministic stone jitter / statue placement
    */
-  constructor({ scene, quality = "high", seed = 1337, spec = ARENA } = {}) {
+  constructor({ scene, quality = "high", seed = 1337, spec = ARENA, sandMaterial = null } = {}) {
     this.scene = scene;
+    this.sandMaterial = sandMaterial;
     this.spec = spec;
     this.quality = quality;
     this.rnd = mulberry32(seed);
@@ -321,9 +322,11 @@ export class Colosseum {
   // -- the sand -------------------------------------------------------------
   _buildSand() {
     const { floor } = this.spec;
-    // A dense-ish disc so the sand can take a subtle height ripple and so
-    // decals projected onto it do not swim. 1 draw call.
-    const g = new THREE.CircleGeometry(1, 128);
+    // A RING, not a CircleGeometry: a circle is a triangle fan with a single
+    // centre vertex and no interior points, so a per-vertex height ripple only
+    // ever moves the rim. 24 radial divisions give the surface something to
+    // undulate with. 1 draw call either way.
+    const g = new THREE.RingGeometry(0.0015, 1, 128, 24);
     g.rotateX(-Math.PI / 2);
     g.scale(floor.a, 1, floor.b);
 
@@ -341,7 +344,9 @@ export class Colosseum {
     }
     g.computeVertexNormals();
 
-    const mesh = new THREE.Mesh(g, this.mat.sand);
+    // A caller-supplied harena material (procedural grain + persistent damage)
+    // overrides the plain fallback.
+    const mesh = new THREE.Mesh(g, this.sandMaterial || this.mat.sand);
     mesh.name = "arena_sand";
     mesh.receiveShadow = true;
     mesh.castShadow = false;
