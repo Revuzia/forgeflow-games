@@ -1,0 +1,27 @@
+{
+  "title": "Colosseum: Sands of Glory",
+  "slug": "colosseum",
+  "genre": "arena-combat",
+  "renderer": "three",
+  "tagline": "Win the sand. Win the mob. Win your freedom.",
+  "view": { "width": 1280, "height": 720, "background": "#0d0906" },
+  "setup": {
+    "arena": "Flavian Amphitheatre, historically scaled (87 x 55 m harena, 4 tiers, 80 bays)",
+    "ranks": 6,
+    "armaturae": 6,
+    "beasts": 6,
+    "matchTypes": ["beast-hunt", "1v1", "1v2", "2v2", "free-for-all", "survival", "champion", "joust"],
+    "crowd": 17974,
+    "hypogeum": true,
+    "jousting": true,
+    "campaign": true,
+    "multiplayerReady": true
+  },
+  "credits": {
+    "architecture": "Procedural — travertine cavea, arcaded facade, attic and velarium generated from the real dimensions of the Flavian Amphitheatre",
+    "beasts": "Sketchfab CC-BY animated animal set (attribution in CREDITS.md)",
+    "characters": "Meshy auto-rigged humanoids (ForgeFlow shared set)",
+    "art": "xAI-generated 2D UI and key art",
+    "audio": "Procedural WebAudio cornu, crowd and impact synthesis; music from the owner's own Suno generations"
+  }
+}

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Colosseum: Sands of Glory — ForgeFlow Games</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#0d0906;font-family:'Segoe UI',system-ui,sans-serif;touch-action:none}
+#game-container{width:100%;height:100%;position:relative}
+canvas{display:block}
+#hud{position:absolute;inset:0;pointer-events:none;overflow:hidden;user-select:none;-webkit-user-select:none}
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/" } }
+</script>
+<style id="ffg-guard">/* no text/image highlighting inside the game */
+*{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,[contenteditable]{-webkit-user-select:text;user-select:text}
+img{-webkit-user-drag:none}
+</style>
+</head><body>
+<div id="game-container"></div>
+<div id="hud"></div>
+<script>window.GAME_CONFIG={hide_bug_button:true,fs_hotkey:false};</script>
+<script src="game_controls.js?v=1"></script>
+<script type="module" src="runtime/boot.js?v=1"></script>
+</body></html>
