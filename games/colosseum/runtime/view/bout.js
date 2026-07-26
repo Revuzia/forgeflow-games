@@ -64,8 +64,13 @@ export class BoutView {
         clipMap: { idle: "Idle_Lie Prone", walk: "Walk", run: "Run", attack: "Attack", hit: "Howl", death: "Eat" },
       });
     } else {
-      if (!this.libs.fighter) return null;
-      actor = new Actor(this.libs.fighter, { height: 1.82, name: fighter.id });
+      // Each armatura has its OWN generated body — a retiarius is bare-chested
+      // with a shoulder guard, a crupellarius is encased in iron. Falling back
+      // to a shared body only happens if that armatura has not been generated.
+      const lib = (fighter.armaturaId && this.libs.armaturae && this.libs.armaturae[fighter.armaturaId])
+        || this.libs.fighter;
+      if (!lib) return null;
+      actor = new Actor(lib, { height: 1.82, name: fighter.id });
       // Visible kit straight from the sim's loadout — what the fight uses is
       // what you see.
       const eq = new Equipment(actor);

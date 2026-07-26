@@ -170,7 +170,30 @@ const inventory = Inventory.restore();
 
 const actors = { player: null, beast: null };
 // Shared libraries the bout view clones combatants from.
-const actorLibs = { fighter: null, beasts: {} };
+const actorLibs = { fighter: null, beasts: {}, armaturae: {} };
+
+/**
+ * The eight generated armatura bodies. Loaded lazily and in parallel: a bout
+ * only ever needs the two or three types actually on the card, so paying ~600 KB
+ * for all eight up front would be wasted on a 1v1.
+ */
+const ARMATURA_BODIES = [
+  "murmillo", "secutor", "retiarius", "thraex",
+  "hoplomachus", "dimachaerus", "provocator", "crupellarius",
+];
+
+async function ensureArmaturaBodies(ids) {
+  const want = [...new Set(ids)].filter((id) => ARMATURA_BODIES.includes(id) && !actorLibs.armaturae[id]);
+  if (!want.length) return actorLibs.armaturae;
+  const libs = await Promise.all(want.map((id) =>
+    loadFighter(`assets/chars/${id}`).catch((e) => {
+      console.warn(`[boot] armatura body '${id}' failed to load:`, e && e.message);
+      return null;
+    })));
+  want.forEach((id, i) => { if (libs[i]) actorLibs.armaturae[id] = libs[i]; });
+  return actorLibs.armaturae;
+}
+
 try {
   const [fighterLib, beastLib] = await Promise.all([
     loadFighter("assets/chars/gladiator"),
@@ -234,8 +257,13 @@ const combatCam = new CombatCamera(camera);
 let bout = null;        // BoutView
 let match = null;       // Match
 
-/** Start one ladder entry. */
-function startMatch(matchId) {
+/**
+ * Start one ladder entry.
+ *
+ * Async because the armatura bodies this card needs are loaded on demand —
+ * a 1v1 pulls two bodies, not all eight.
+ */
+async function startMatch(matchId) {
   endMatch();
   const def = LADDER.find((m) => m.id === matchId) || LADDER[0];
 
@@ -277,6 +305,10 @@ function startMatch(matchId) {
   // Hide the idle showcase actors while a real bout owns the sand.
   if (actors.player) actors.player.root.visible = false;
   if (actors.beast) actors.beast.root.visible = false;
+
+  // Load exactly the bodies this card calls for BEFORE anyone is spawned,
+  // otherwise the view silently falls back to the shared placeholder.
+  await ensureArmaturaBodies(match.requiredBodies());
 
   match.start();
   combatCam.enabled = true;
@@ -698,10 +730,15 @@ window.__FFG3D__ = {
     cues: () => cueLog.slice(-40),
     clearCues: () => { cueLog.length = 0; return true; },
     /** Start a ladder match by id (default: the first). */
-    startMatch: (id) => {
-      const m = startMatch(id || LADDER[0].id);
-      return { id: m.def.id, name: m.def.name, type: m.def.type, spawned: m.spawned.length };
+    startMatch: async (id) => {
+      const m = await startMatch(id || LADDER[0].id);
+      return {
+        id: m.def.id, name: m.def.name, type: m.def.type, spawned: m.spawned.length,
+        bodies: m.requiredBodies(),
+        loaded: Object.keys(actorLibs.armaturae),
+      };
     },
+    loadBodies: (ids) => ensureArmaturaBodies(ids).then(() => Object.keys(actorLibs.armaturae)),
     endMatch: () => { endMatch(); return true; },
     matchState: () => (match ? match.snapshot() : null),
     hudState: () => (match ? match.hudState() : null),

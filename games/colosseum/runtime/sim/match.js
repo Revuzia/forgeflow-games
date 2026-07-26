@@ -70,6 +70,27 @@ export class Match {
 
   // -- setup ---------------------------------------------------------------
 
+  /**
+   * Which armatura bodies this card needs. The view preloads exactly these
+   * rather than all eight — a 1v1 should not pay for six unused bodies.
+   */
+  requiredBodies() {
+    const d = this.def;
+    const ids = new Set();
+    const arm = this.inv && this.inv.matchedArmatura();
+    ids.add(arm ? arm.id : "murmillo");
+    for (const s of d.opponents || []) if (s.armatura) ids.add(s.armatura);
+    for (const s of d.allies || (d.ally ? [d.ally] : [])) if (s.armatura) ids.add(s.armatura);
+    if (d.tertiarius && d.tertiarius.armatura) ids.add(d.tertiarius.armatura);
+    if (d.champion) {
+      const c = CHAMPIONS.find((x) => x.id === d.champion);
+      if (c) ids.add(c.armatura);
+    }
+    // Survival waves draw from a fixed pool.
+    if (d.type === "survival") ["thraex", "murmillo", "hoplomachus", "dimachaerus"].forEach((x) => ids.add(x));
+    return [...ids];
+  }
+
   /** Build the player fighter from the live inventory loadout. */
   _makePlayer() {
     const lw = this.inv.loadout();
@@ -81,6 +102,9 @@ export class Match {
       x: -14, z: 0, facing: Math.PI / 2,
     });
     f.isPlayer = true;
+    // The player's BODY follows the kit they are wearing: assemble a murmillo's
+    // loadout and you look like a murmillo on the sand.
+    f.armaturaId = arm ? arm.id : "murmillo";
     return f;
   }
 
@@ -99,6 +123,7 @@ export class Match {
           x: 14, z: 0, facing: -Math.PI / 2,
         });
         f.champion = c;
+        f.armaturaId = c.armatura;
         f.displayTitle = c.title;
         return { fighter: f, skill: c.skill, style: a.style };
       }
@@ -116,6 +141,7 @@ export class Match {
       x: 13 + index * 1.6, z: Math.sin(ang) * 4.5, facing: -Math.PI / 2,
     });
     f.origin = o;
+    f.armaturaId = o.armatura;
     f.displayTitle = `${o.originName} · ${o.armaturaName}`;
     return { fighter: f, skill: o.skill, style: o.style };
   }

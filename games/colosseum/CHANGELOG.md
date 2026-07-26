@@ -551,3 +551,41 @@ returns, inventory integration, save round-trip, and v1 migration.
 ### Roster
 6 of 8 gladiators generated and compressed: murmillo, secutor, retiarius,
 thraex, hoplomachus, dimachaerus.
+
+## 2026-07-26 — full roster wired + the blacksmith
+
+**All 8 armaturae generated and in play.** Each fighter now uses its OWN body —
+murmillo, secutor, retiarius, thraex, hoplomachus, dimachaerus, provocator,
+crupellarius. Verified in a live 6-man team bout: 5 distinct meshes
+(12,174–12,659 tris each), and only the 5 the card actually needed were loaded,
+not all 8. 62 draw calls / 1.13 ms. The player's body follows the KIT they are
+wearing, so assembling a murmillo's loadout makes you look like one.
+
+**`runtime/sim/blacksmith.js`** — condition, repair and reinforcement, designed
+against what the reference games got wrong:
+- *Road to Freedom* was reviewed as "a slave to the grind", and its crowd metric
+  actively PUNISHED decisive play. Nothing here rewards dragging a fight out.
+- *Gladiator Begins* let you reinforce gear where combining pieces could REDUCE
+  WEIGHT — upgrades traded against an encumbrance budget instead of being
+  strictly better. That is the model used.
+- *We Who Are About To Die* keeps training, gear and medical care competing for
+  one purse. Repair costs here are sized to bite against training costs.
+
+**THE RULE: no upgrade may be strictly better.** Six reinforcement paths, each
+gaining one axis and costing another — Weighted Core (+9% damage, +0.35 kg, 4%
+slower) against Rebalanced (−5% damage, −0.18 kg, 7% faster); Case-Hardened
+(+10% protection, +0.7 kg) against Lightened (−0.9 kg, −7% protection).
+
+Gear degrades through five condition bands. A shield wears fastest because it
+eats what it stops, which makes the smith a recurring cost rather than a one-off
+shop. **A ruined masterwork (x0.74 damage) is worse than a pristine plain blade
+(x1.00)** — maintenance is never optional. Reworking metal costs condition, and
+a smith refuses to work a ruined piece until it is repaired.
+
+### Verified — `probe_blacksmith.mjs`, 49 checks
+Every path proven to both gain and cost; wear rates; repair pricing scaling with
+damage (23 gold at 90% condition, 185 at 20%); tier cost growth and caps;
+opposing paths genuinely opposing; save round-trip; v2 -> v3 migration; and a
+hostile save with unknown items dropped.
+
+Save is now v3. Six probes green.

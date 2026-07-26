@@ -14,9 +14,10 @@
 
 import { WEAPONS, SHIELDS, ARMOUR, ARMATURAE, mobility, loadoutWeight } from "../data/weapons.js";
 import { Attributes, modifiers } from "./attributes.js";
+import { Smithy } from "./blacksmith.js";
 
 export const SAVE_KEY = "colosseum_save_v1";
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /** Equipment slots the armoury exposes, in display order. */
 export const SLOT_ORDER = ["weapon", "shield", "helmet", "arm", "legs", "torso"];
@@ -73,6 +74,7 @@ export class Inventory {
     this.settings = {};
     this.createdAt = null;        // stamped by the caller (no clock in here)
     this.attrs = new Attributes();
+    this.smithy = new Smithy();
   }
 
   /** Attribute modifiers for the combat layer, after fatigue. */
@@ -97,7 +99,7 @@ export class Inventory {
   }
 
   mobility() { return mobility(this.loadout(), this.mods()); }
-  weight() { return loadoutWeight(this.loadout()); }
+  weight() { return +(loadoutWeight(this.loadout()) + this.smithy.weightDelta(this.loadout())).toFixed(2); }
   rank() { return rankFor(this.wins); }
 
   /** Does this fighter's kit match a classical armatura? Flavour + titles. */
@@ -256,6 +258,7 @@ export class Inventory {
       owned: this.owned, equipped: this.equipped,
       settings: this.settings, createdAt: this.createdAt,
       attrs: this.attrs.toJSON(),
+      smithy: this.smithy.toJSON(),
     };
   }
 
@@ -278,6 +281,7 @@ export class Inventory {
     this.settings = migrated.settings || {};
     this.createdAt = migrated.createdAt || null;
     this.attrs = new Attributes(migrated.attrs || null);
+    this.smithy = new Smithy(migrated.smithy || null);
 
     const validW = (migrated.owned?.weapon || ["gladius"]).filter((i) => WEAPONS[i]);
     const validS = (migrated.owned?.shield || ["none"]).filter((i) => SHIELDS[i]);
@@ -314,6 +318,12 @@ export class Inventory {
     if (v < 2) {
       if (!d.attrs) d.attrs = null;
       v = 2;
+    }
+    // v2 -> v3: the blacksmith added condition and reinforcement. Everything
+    // an existing career owns is simply treated as pristine and unmodified.
+    if (v < 3) {
+      if (!d.smithy) d.smithy = null;
+      v = 3;
     }
     d.v = v;
     return d;
