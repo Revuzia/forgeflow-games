@@ -213,20 +213,30 @@ const SAND_FRAG = /* glsl */ `
   col *= (0.94 + grain);
   col -= rake;
 
+  // --- texture grain, applied BEFORE damage --------------------------------
+  // At this point diffuseColor holds the tiled sand photo (map_fragment ran
+  // above). Take only its LUMINANCE as a detail multiplier so the photo
+  // supplies grain while the procedural layer keeps authority over colour.
+  //
+  // Order matters: damage must land LAST. Multiplying the bright sand photo
+  // over the blood washed every stain out to a faint smudge.
+  float texLuma = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+  col *= (0.68 + 0.52 * texLuma);
+
   // --- accumulated damage --------------------------------------------------
   vec2 duv = wp / (uArena * 2.0) + 0.5;
   vec4 dmg = texture2D(uDamage, duv);
 
   // Scuffed sand is turned over: slightly darker and less even, not a stain.
   float scuff = clamp(dmg.g, 0.0, 1.0);
-  col = mix(col, damp * 0.92, scuff * 0.45);
+  col = mix(col, damp * 0.88, scuff * 0.5);
 
   // Blood soaks INTO sand rather than pooling on it, so it is a deep matte
   // oxide brown-red, not a liquid surface. It must never be the brightest
   // thing on the ground.
   float blood = clamp(dmg.r, 0.0, 1.0);
   vec3 bloodCol = mix(vec3(0.230, 0.052, 0.038), vec3(0.092, 0.017, 0.014), blood);
-  col = mix(col, bloodCol, smoothstep(0.04, 0.75, blood) * 0.95);
+  col = mix(col, bloodCol, smoothstep(0.03, 0.6, blood) * 0.96);
 
   diffuseColor.rgb = col;
 `;
@@ -247,12 +257,38 @@ const SAND_ROUGH = /* glsl */ `
  * Build the sand material and its damage layer.
  * @returns {{material: THREE.Material, damage: DamageLayer}}
  */
-export function makeSand(renderer, { size = 1024 } = {}) {
+export function makeSand(renderer, { size = 1024, textures = true } = {}) {
   const damage = new DamageLayer(renderer, { size });
 
   const mat = new THREE.MeshStandardMaterial({
     color: 0xffffff, roughness: 1.0, metalness: 0.0, name: "harena",
   });
+
+  // Real grain from a generated PBR set, tiled across the arena, MULTIPLIED
+  // with the procedural colour underneath. The procedural layer still supplies
+  // the rake furrows, the damp/dry variation and all the accumulated damage —
+  // the texture only supplies grain and relief, which is exactly the part
+  // procedural noise is worst at.
+  if (textures) {
+    const load = new THREE.TextureLoader();
+    const tile = (t, srgb) => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      // ~7 m per tile: fine enough to read as grains underfoot, coarse enough
+      // that the mirror symmetry never becomes visible at 87 m across.
+      t.repeat.set(ARENA.floor.a * 2 / 7, ARENA.floor.b * 2 / 7);
+      t.anisotropy = 8;
+      if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    };
+    mat.map = tile(load.load("assets/tex/sand_arena_albedo.webp"), true);
+    mat.normalMap = tile(load.load("assets/tex/sand_arena_normal.webp"), false);
+    mat.normalScale = new THREE.Vector2(0.65, 0.65);
+    mat.aoMap = tile(load.load("assets/tex/sand_arena_ao.webp"), false);
+    // aoMap defaults to the SECOND uv set; the arena disc only has one, so
+    // point it at channel 0 or the AO silently does nothing.
+    mat.aoMap.channel = 0;
+    mat.aoMapIntensity = 0.5;
+  }
 
   mat.userData.uniforms = {
     uDamage: { value: damage.texture },

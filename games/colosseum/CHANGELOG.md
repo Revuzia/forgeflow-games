@@ -265,3 +265,56 @@ round-trip, v0 migration and hostile/corrupt saves.
 ### Note
 One probe "failure" was again the test, not the code: it asserted 777 gold
 after a 340-gold purchase. The save had round-tripped correctly.
+
+## 2026-07-26 — historical roster + generated PBR materials
+
+**Roster** (`runtime/data/roster.js`) — built from sourced scholarship, and it
+corrects several things the popular picture gets wrong:
+- 10 armaturae with their CANONICAL pairings. Pairings were engineered, not
+  random: big shield against small shield, reach against armour.
+- The retiarius does NOT normally fight the murmillo — the SECUTOR was invented
+  as his counter, with a smooth helmet so the net cannot catch.
+- Four types fought only their own kind (provocator, eques, essedarius,
+  paegniarius).
+- **Ethnic types were costumes, not ethnicities.** A captured Dacian was
+  retrained into a standard Roman armatura, not left in native kit; Samnite and
+  Gallus had died out before the Colosseum was built. So `ORIGINS` supplies
+  name, colouring and crowd bias — never a fighting style.
+- Noxii were not gladiators and did not fight them (midday executions);
+  bestiarii and venatores trained at a separate school entirely.
+- Surrender is AD DIGITUM — a raised finger to the summa rudis. "Thumbs down"
+  is not established. Missio was the norm, ~1 in 10 bouts ended in death.
+- 6 named champions from the record (Flamma's Lilybaeum tombstone, Priscus and
+  Verus from Martial), 6 beasts, 10 match types, and a **25-match ladder**
+  across 6 ranks including 2v2 gregatim, team munus, 1v2, the tertiarius
+  surprise third fighter, sine missione survival, and the attested pons
+  spectacle (a retiarius on a bridge against two secutores).
+
+**Generated PBR materials** (`pipeline/art/gen_pbr_materials.py`)
+- 18 seamless tileable material sets from xAI, each yielding FOUR maps —
+  albedo, tangent-space normal, roughness, AO — derived locally with
+  numpy/scipy. Closes the gap `texture_transcode.py` left: there was no path
+  from a generated image to a full PBR material.
+- Shared at `pipeline/assets/generated-materials/` so any ForgeFlow game can
+  use them. Roman set plus general-purpose grass/dirt/snow/rock/water.
+- Two tiling strategies: `offset` (wrap-shift + feathered seam heal) preserves
+  structure for brick and flagstone; `mirror` only for fine isotropic grain,
+  because a mirror-fold on structured stone is glaringly symmetric.
+- Total cost 19 images, ~$0.38.
+
+**Harena now textured** — real grain and relief tiled at ~7 m, with the photo
+supplying only LUMINANCE as a detail multiplier so the procedural layer keeps
+authority over colour, rake furrows and every blood stain.
+
+### Fixed
+- `sand_arena` generated as WOOD PLANKING: "raked into fine parallel furrows"
+  made the parallel-line cue beat the material. Reworded to describe grains and
+  to name the failure ("NOT wood, NOT planks").
+- Texture detail was multiplied over the damage layer, washing every stain to a
+  faint smudge. Grain is now applied BEFORE damage so blood lands last.
+- `aoMap` defaults to the second UV set; the arena disc has only one, so it was
+  silently doing nothing until pinned to channel 0.
+
+### Note
+`sand_bloodied` is permanently removed — xAI content-moderation rejects
+blood-stained ground (and still bills the attempt). It was redundant anyway.
