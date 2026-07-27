@@ -436,7 +436,12 @@ function fire(W, a, def) {
       origin: { x: eye.x, y: eye.y, z: eye.z },
     });
   }
-  a.vmKick = 1;   // view-model punch, all actors — a bot's gun is on screen too
+  // View-model punch, all actors — a bot's gun is on screen too. Was a flat 1
+  // (= 5 cm setback) for every weapon, so a sniper and an SMG kicked the gun
+  // identically. Per-class multiplier onto the SAME 0.05 m axis and 6/s decay:
+  // pistol 3.5 cm, smg 2.5, ar 3.75, shotgun 8, sniper 9.5, launcher 6 — and a
+  // sniper's recovery stretches to ~0.32 s, which reads as the bolt cycling.
+  a.vmKick = ({ pistol: 0.7, smg: 0.5, ar: 0.75, shotgun: 1.6, sniper: 1.9, launcher: 1.2 })[def.cls] || 1;
   // recoil kick (human only — bots model error separately). The kick is
   // tracked in recover-accumulators and re-centers over ~0.3s — permanent
   // kick made the crosshair CLIMB forever (aim drifted ~2m high after a few
