@@ -16,6 +16,19 @@ import { clone as skeletonClone } from "three/addons/utils/SkeletonUtils.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { dampAngle, clamp } from "../core/util.js";
 
+// Scratch objects for _spineFlex, which runs per actor per frame. Allocating
+// these inside the loop would put six THREE objects per fighter per frame on
+// the GC in the middle of combat.
+const DEG = Math.PI / 180;
+const _sfA = new THREE.Vector3();
+const _sfB = new THREE.Vector3();
+const _sfLean = new THREE.Vector3();
+const _sfAxis = new THREE.Vector3();
+const _sfUp = new THREE.Vector3(0, 1, 0);
+const _sfQ = new THREE.Quaternion();
+const _sfPQ = new THREE.Quaternion();
+const _sfM = new THREE.Quaternion();
+
 // Character GLBs are Draco-compressed (gltf-transform optimize), which cuts a
 // rigged gladiator from ~7.9 MB to ~165 KB. Draco needs its decoder wired in or
 // GLTFLoader throws "No DRACOLoader instance provided" and every character
@@ -423,6 +436,7 @@ export class Actor {
       this.current.timeScale = clamp(groundSpeed / nominal, 0.35, 2.2);
     }
     this.mixer.update(dt);
+    this._spineFlex();
 
     // Turning is damped so a fighter pivots with weight instead of snapping.
     this.visualFacing = dampAngle(this.visualFacing, this.facing, 12, dt);
@@ -430,6 +444,121 @@ export class Actor {
     this.root.rotation.y = this.visualFacing;
 
     this._combatIdle(dt, groundSpeed);
+  }
+
+  /**
+   * Cap how far the trunk pitches forward. This is why gladiators looked like
+   * they were folding in half to reach rather than swinging.
+   *
+   * MEASURED IN THE RUNNING GAME, world angle of hips->neck away from vertical,
+   * sampled every frame across a full clip:
+   *
+   *     idle      4.4 -> 16.0 deg, settles ~15.3
+   *     slash1   22.7 -> 46.8 deg peak, holds 45-46 for ~20 frames
+   *     slash2   23.5 -> 48.8 deg peak, holds 47-48.5 for the WHOLE clip
+   *
+   * A swordsman's trunk lean is ~5-10 deg on guard and 20-30 deg at the
+   * extreme of a lunge. Forty-eight degrees held flat across an entire swing is
+   * a man falling over. slash2 never recovers — it starts bent and stays bent,
+   * so there is no pitch-into-the-blow at all.
+   *
+   * Two earlier Blender measurements of these same clips disagreed with each
+   * other (19.0/19.5 deg) and with the research pass (23.2/36.0 deg), and BOTH
+   * disagree with the 46.8/48.8 the renderer actually produces. Blender is
+   * Z-up, the export is Y-up, and an armature-space angle is not the angle the
+   * camera sees; a correction baked to a Blender-space target would not land on
+   * the runtime target. So the correction is applied HERE, in the space where
+   * the defect is visible and where the same probe can verify it — and it
+   * covers all 8 archetypes and every clip at once, including any clip added
+   * later, rather than re-baking 24 animation files.
+   *
+   * Only ever REDUCES pitch, never adds it, so a clip already inside the human
+   * band is untouched.
+   */
+  _spineFlex() {
+    const chain = this._spineChain || (this._spineChain = (() => {
+      // The rig is REVERSE-NAMED: Hips -> Spine02 -> Spine01 -> Spine -> neck.
+      // Spine02 is the LOWEST spine joint. Weighting the bend toward it makes
+      // the correction read as a hip hinge instead of a chest hunch — the
+      // chest-heavy split is what made it look like folding rather than leaning.
+      const want = [["Spine02", 0.45], ["Spine01", 0.33], ["Spine", 0.22]];
+      const found = [];
+      for (const [name, w] of want) {
+        let b = null;
+        this.model.traverse((o) => { if (!b && o.isBone && o.name === name) b = o; });
+        if (b) found.push({ bone: b, w });
+      }
+      let hips = null, neck = null, head = null;
+      this.model.traverse((o) => {
+        if (!o.isBone) return;
+        if (!hips && /^Hips$/i.test(o.name)) hips = o;
+        if (!neck && /^neck$/i.test(o.name)) neck = o;
+        if (!head && /^Head$/i.test(o.name)) head = o;
+      });
+      return (found.length && hips && neck) ? { spine: found, hips, neck, head } : null;
+    })());
+    if (!chain) return;
+
+    const A = _sfA, B = _sfB, lean = _sfLean, axis = _sfAxis, q = _sfQ, pq = _sfPQ;
+    this.model.updateMatrixWorld(true);
+    A.setFromMatrixPosition(chain.hips.matrixWorld);
+    B.setFromMatrixPosition(chain.neck.matrixWorld);
+    lean.subVectors(B, A);
+    if (lean.lengthSq() < 1e-8) return;
+    lean.normalize();
+
+    const tilt = Math.acos(clamp(lean.y, -1, 1));          // radians from world up
+    const target = this._spineTarget();
+    if (tilt <= target + 0.005) return;                     // already human
+    const delta = tilt - target;
+
+    // Axis that rotates the lean back toward vertical: cross(leanDir, up).
+    axis.set(lean.x, 0, lean.z);
+    if (axis.lengthSq() < 1e-8) return;
+    axis.normalize().cross(_sfUp).normalize();
+
+    for (const { bone, w } of chain.spine) {
+      q.setFromAxisAngle(axis, delta * w);
+      bone.parent.getWorldQuaternion(pq);
+      // Apply a WORLD rotation to a bone: local = inv(parentWorld) * Q * world
+      bone.quaternion.premultiply(_sfM.copy(pq).invert().multiply(q).multiply(pq));
+      bone.updateMatrixWorld(true);
+    }
+    // Bring the head back part-way so straightening the trunk does not leave
+    // the fighter staring at the sky.
+    if (chain.head) {
+      q.setFromAxisAngle(axis, -delta * 0.55);
+      chain.head.parent.getWorldQuaternion(pq);
+      chain.head.quaternion.premultiply(_sfM.copy(pq).invert().multiply(q).multiply(pq));
+      chain.head.updateMatrixWorld(true);
+    }
+  }
+
+  /**
+   * Target trunk pitch in radians for whatever is playing right now.
+   *
+   * A real swing pitches INTO the blow and recovers; it does not begin folded
+   * and stay there. Keyed on normalised clip time so the shape survives the
+   * per-weapon timeScale that STRIKE_FRAC applies.
+   */
+  _spineTarget() {
+    const name = this.currentName || "idle";
+    const ATTACK = { slash1: 1, slash2: 1, finisher: 1, stab: 1, cleave: 1 };
+    if (!ATTACK[name]) return 12 * DEG;      // guard, walk, run, parry, hit
+    let u = 0;
+    if (this.current && this.current.getClip) {
+      const d = this.current.getClip().duration || 1;
+      u = clamp((this.current.time || 0) / d, 0, 1);
+    }
+    // deg: ease in low, pitch through the strike, peak on follow-through, recover
+    const curve = [[0, 8], [0.22, 6], [0.40, 18], [0.55, 22], [0.80, 14], [1, 9]];
+    for (let i = 1; i < curve.length; i++) {
+      if (u <= curve[i][0]) {
+        const [t0, v0] = curve[i - 1], [t1, v1] = curve[i];
+        return (v0 + (v1 - v0) * ((u - t0) / Math.max(1e-6, t1 - t0))) * DEG;
+      }
+    }
+    return curve[curve.length - 1][1] * DEG;
   }
 
   /**
