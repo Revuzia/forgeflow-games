@@ -1330,7 +1330,14 @@ function syncObj(W, a, dt, far) {
       if (a.hand && a.weaponMesh && a.armBones && a.armBones.lArm && !a.emoting &&
           a._armMode === "gunReady" && a._armW > 0.5 &&
           (!a.rig.mixer || a.rig.mixer.timeScale !== 0)) {
-        if (a._gripFor !== a.weapon.id) {
+        // the wid stamp gate: equipSlot changes a.weapon.id synchronously but
+        // the mesh swap is microtask-deferred, and bots equip BEFORE this
+        // updater runs — without the stamp check the measure below read the
+        // OUTGOING gun's geometry, applied the NEW class fraction, and cached
+        // the wrong grip for the whole hold (adversarial review finding,
+        // confirmed 2/2). Stamp mismatch -> skip, re-measure after the flush.
+        if (a._gripFor !== a.weapon.id &&
+            a.weaponMesh.userData.wid === a.weapon.id) {
           // foregrip point, HOLDER space, measured once per weapon swap: the
           // proto is normalized/centered with +Z the barrel, so the support
           // palm cups forward of center by a class fraction of the front half,
@@ -1372,7 +1379,11 @@ function syncObj(W, a, dt, far) {
           // game" tell. Real shooters shorten the hold instead: slide the
           // grip back along the barrel toward the receiver until reachable.
           // Sphere(shoulder, 0.94*reach) ∩ barrel line, largest t in [0, gz].
-          _fgA.setFromMatrixPosition(a.armBones.lArm.matrixWorld);
+          // getWorldPosition (not setFromMatrixPosition): it refreshes the
+          // ancestor chain, and the LEFT arm is not covered by the hand-chain
+          // update above — after this frame's spine-aim writes the left
+          // shoulder's cached matrixWorld is stale by the aim delta.
+          a.armBones.lArm.getWorldPosition(_fgA);
           a.armBones.lFore.getWorldPosition(_fgB);
           a.armBones.lHand.getWorldPosition(_fgC);
           const _reach = (_fgA.distanceTo(_fgB) + _fgB.distanceTo(_fgC)) * 0.94;
@@ -1383,14 +1394,28 @@ function syncObj(W, a, dt, far) {
             _fgW.copy(_fgL).sub(_fgA);                                   // H - S
             const bq = 2 * _fgS.dot(_fgW), cq = _fgW.lengthSq() - _reach * _reach;
             const disc = bq * bq - 4 * gz2 * cq;
+            // disc<=0: the barrel line never enters the reach sphere. Fall back
+            // to the CLOSEST point on the segment (perpendicular foot -bq/2a),
+            // NOT t=0 — the receiver end can itself sit beyond reach (the right
+            // hand measured 1.04x the LEFT arm's extension on this rig), so
+            // t=0 could pick the segment's FARTHEST point and discard a
+            // solvable mid-gun grip (adversarial review finding, confirmed 2/2).
             let t = 0;
-            if (disc > 0 && gz2 > 1e-8) t = K.clamp((-bq + Math.sqrt(disc)) / (2 * gz2), 0, 1);
+            if (gz2 > 1e-8) t = disc > 0
+              ? K.clamp((-bq + Math.sqrt(disc)) / (2 * gz2), 0, 1)
+              : K.clamp(-bq / (2 * gz2), 0, 1);
             _fgW.copy(_fgL).addScaledVector(_fgS, t);
           }
+          // pole: elbow points down and out to the character's LEFT (left dir
+          // for yaw = (-cos, 0, +sin)) — the bend real support stances produce.
+          // Without it the bend plane is whatever the clip left, and the elbow
+          // can read as jutting up/inward on some animation frames.
+          _fgL.copy(_fgA);
+          _fgL.x -= Math.cos(a.yaw) * 0.25; _fgL.y -= 0.45; _fgL.z += Math.sin(a.yaw) * 0.25;
           // blend follows the arm-pose weight so the hand eases on/off with the
           // gunReady transition instead of snapping
           twoBoneIK(a.armBones.lArm, a.armBones.lFore, a.armBones.lHand, _fgW,
-                    K.clamp((a._armW - 0.5) * 2, 0, 1));
+                    K.clamp((a._armW - 0.5) * 2, 0, 1), _fgL);
         }
       }
     }

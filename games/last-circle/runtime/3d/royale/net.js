@@ -470,6 +470,12 @@ function applyRemoteState(W, a, d) {
   a.netChute = !!(f & 16);   // canopy vs freefall; player.js owns the mesh
   if (d.wp && (!a.weapon || a.weapon.id !== d.wp)) {
     a.weapon = { id: d.wp, rarity: 0, magAmmo: 0, state: (f & 4) ? "reloading" : "ready", cd: 0, reloadT: 0 };
+    // remotes never pass through equipSlot, so without this their rendered gun
+    // stayed the SPAWN PISTOL all match while a.weapon.id advanced — every peer
+    // and, on a guest, all ~45 host-driven bots (adversarial review finding).
+    // Also keeps the support-hand foregrip measure coherent: it gates on the
+    // mesh's wid stamp, which only this refresh updates.
+    if (W.refreshWeaponMesh) W.refreshWeaponMesh(a);
   } else if (a.weapon) {
     a.weapon.state = (f & 4) ? "reloading" : "ready";
   }

@@ -170,8 +170,14 @@ function rotateBoneWorld(bone, worldQ) {
 }
 
 /** Solve root->mid->tip so `tip` reaches `target` (a world Vector3).
+ *  Optional `pole` (world Vector3): after solving, the arm plane is spun
+ *  about the shoulder->tip axis so the elbow points toward it — without a
+ *  pole the bend plane is inherited from whatever the clip left, and the
+ *  support elbow can read as pointing up/inward (Unity's TwoBoneIKConstraint
+ *  hint and ozz's pole vector exist for exactly this). The spin axis passes
+ *  through the tip, so the hand stays ON the target.
  *  Returns the residual distance from tip to target after solving. */
-export function twoBoneIK(root, mid, tip, target, blend) {
+export function twoBoneIK(root, mid, tip, target, blend, pole) {
   if (!root || !mid || !tip || !target || blend <= 0) return -1;
   // (true, TRUE): parents for a correct world transform AND children, so the
   // mid/tip positions we sample are this frame's, not last frame's.
@@ -231,6 +237,32 @@ export function twoBoneIK(root, mid, tip, target, blend) {
     if (blend < 1) _ikQ.slerp(_IDENT, 1 - blend);
     rotateBoneWorld(root, _ikQ);
     root.updateWorldMatrix(true, true);
+  }
+  // 3) pole spin — rotate the whole arm about the shoulder->tip line so the
+  //    elbow lands on the pole side. Signed angle via atan2 so a 179-degree
+  //    correction doesn't pick the wrong direction.
+  if (pole) {
+    tip.getWorldPosition(_ikC); mid.getWorldPosition(_ikB);
+    _ikAxis.copy(_ikC).sub(_ikA);
+    const axLen2 = _ikAxis.lengthSq();
+    if (axLen2 > IK.eps) {
+      _ikAxis.multiplyScalar(1 / Math.sqrt(axLen2));
+      // elbow and pole, each projected off the axis
+      _ikAB.copy(_ikB).sub(_ikA);
+      _ikAB.addScaledVector(_ikAxis, -_ikAB.dot(_ikAxis));
+      _ikCB.copy(pole).sub(_ikA);
+      _ikCB.addScaledVector(_ikAxis, -_ikCB.dot(_ikAxis));
+      if (_ikAB.lengthSq() > IK.eps && _ikCB.lengthSq() > IK.eps) {
+        _ikAB.normalize(); _ikCB.normalize();
+        _ikAC.crossVectors(_ikAB, _ikCB);
+        const spin = Math.atan2(_ikAC.dot(_ikAxis), _ikAB.dot(_ikCB));
+        if (Math.abs(spin) > 1e-3) {
+          _ikQ.setFromAxisAngle(_ikAxis, spin * blend);
+          rotateBoneWorld(root, _ikQ);
+          root.updateWorldMatrix(true, true);
+        }
+      }
+    }
   }
   tip.getWorldPosition(_ikC);
   return _ikC.distanceTo(target);

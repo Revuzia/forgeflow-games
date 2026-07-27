@@ -26,6 +26,10 @@ let protosPromise = null;
 export function init(W) {
   K = W.SIM;
   W.equipSlot = (a, idx) => equipSlot(W, a, idx);
+  // net.js needs this for remote actors: their a.weapon comes from snapshots,
+  // never through equipSlot, so without this hook a remote's rendered gun
+  // stayed the spawn pistol for the whole match no matter what they carried
+  W.refreshWeaponMesh = (a) => refreshWeaponMesh(W, a);
   W.explode = (x, y, z, weaponId, rarity, ownerId) => explode(W, x, y, z, weaponId, rarity, ownerId);
   protosPromise = null;
   W.weaponProto = (id) => protos(W).then((p) => p[id]);
@@ -219,6 +223,12 @@ async function refreshWeaponMesh(W, a) {
   const proto = P[id];
   if (!proto || !a.hand) return;
   a.weaponMesh = proto.clone();
+  // identity stamp: a.weapon.id changes SYNCHRONOUSLY in equipSlot but this
+  // mesh swap is microtask-deferred (the await above), so for the rest of the
+  // frame the actor holds the OUTGOING gun's geometry under the incoming id.
+  // Anything measuring the held mesh (support-hand foregrip) must check this
+  // stamp against a.weapon.id or a bot's same-frame swap measures the wrong gun.
+  a.weaponMesh.userData.wid = id;
   a.hand.add(a.weaponMesh);
 }
 
