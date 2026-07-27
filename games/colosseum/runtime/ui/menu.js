@@ -288,7 +288,9 @@ export class Menu {
     c.innerHTML = `<div style="font-size:10px;letter-spacing:4px;color:${FAINT};margin-bottom:8px">CONTROLS</div>
       <div><b style="color:${STONE}">WASD</b> move · <b style="color:${STONE}">Mouse</b> aim ·
       <b style="color:${STONE}">LMB</b> attack (direction from movement) ·
-      <b style="color:${STONE}">RMB / Shift</b> block · <b style="color:${STONE}">Space</b> dodge ·
+      <b style="color:${STONE}">RMB</b> heavy overhead ·
+      <b style="color:${STONE}">Hold SHIFT</b> block (direction from movement) ·
+      <b style="color:${STONE}">Space</b> dodge ·
       <b style="color:${STONE}">TAB</b> armoury · <b style="color:${STONE}">ESC</b> pause</div>
       <div style="margin-top:6px;font-style:italic;color:${FAINT}">Push toward your enemy as you strike to thrust; push sideways to cut.</div>`;
     body.appendChild(c);

@@ -138,6 +138,7 @@ export class Match {
           id: `champ_${c.id}`, name: c.name, team,
           weapon: a.loadout.weapon, shield: a.loadout.shield, armour: a.loadout.armour,
           hp: Math.round((base.hp || 110) * (c.hpMult || 1)),
+          bulk: base.bulk || 0,
           x: 14, z: 0, facing: -Math.PI / 2,
         });
         f.champion = c;
@@ -156,6 +157,7 @@ export class Match {
       id: `opp${index}_${o.armatura}`, name: o.name, team,
       weapon: o.loadout.weapon, shield: o.loadout.shield, armour: o.loadout.armour,
       hp: base.hp || 100,
+      bulk: base.bulk || 0,
       x: 13 + index * 1.6, z: Math.sin(ang) * 4.5, facing: -Math.PI / 2,
     });
     f.origin = o;

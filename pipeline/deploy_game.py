@@ -56,6 +56,23 @@ NOMI = Path(os.path.expandvars("%APPDATA%")) / "Nomi"
 R2_BUCKET = "forgeflow-games"
 R2_PUBLIC_URL = "https://forgeflow-games.pages.dev"  # Will be updated once R2 custom domain is set
 
+# Directories inside a game folder that are development-only and must never be
+# uploaded to the public CDN. Matched against the FIRST path segment, so a
+# legitimate runtime path like "assets/tools_ui.png" is unaffected.
+DEV_ONLY_DIRS = {"tools", "_src", "__pycache__", ".git"}
+# Individual dev artefacts that can sit at a game's root.
+DEV_ONLY_NAMES = {".gitignore", ".DS_Store", "Thumbs.db"}
+
+
+def _is_dev_only(relative):
+    """True if this game-relative path is a dev artefact, not a shipped file."""
+    parts = relative.parts
+    if parts and parts[0] in DEV_ONLY_DIRS:
+        return True
+    if any(p == "__pycache__" for p in parts):
+        return True
+    return relative.name in DEV_ONLY_NAMES
+
 
 SECRETS_DIR = ROOT / ".secrets"
 
@@ -147,6 +164,7 @@ def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> dict:
     The module-level utf-8 reconfigure + _safe_print now make that print un-crashable, and
     failures are collected and summarised at the end instead of aborting on the first one."""
     count = 0
+    skipped_dev = 0            # dev-only files never offered to the CDN (see _is_dev_only)
     failures = []              # [{"key": r2_key, "err": "..."}]
     uploaded_keys = []         # r2 keys actually pushed this run — for a targeted cache purge
     ALWAYS = {"index.html", "game_meta.json", "content.json"}   # code/metadata: always re-push
@@ -176,6 +194,13 @@ def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> dict:
         if file_path.is_dir():
             continue
         relative = file_path.relative_to(game_dir)
+        # Dev-only trees never belong on a public CDN. `tools/` holds build
+        # scripts, generator state and screenshot dumps — colosseum's alone is
+        # ~40 MB of PNGs, which would more than double its transfer and ship
+        # our asset-generation scripts to anyone who guesses the URL.
+        if _is_dev_only(relative):
+            skipped_dev += 1
+            continue
         r2_key = f"{slug}/{relative.as_posix()}"
         # skip immutable assets already on the CDN unless forced. NOTE: the CDN worker
         # does NOT answer HEAD (returns non-200) -> use a GET and read only the status
@@ -213,6 +238,10 @@ def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> dict:
             failures.append({"key": r2_key, "err": err})
 
     _save_manifest()
+    # Say what was withheld. A silent skip reads as "everything shipped".
+    if skipped_dev:
+        _safe_print(f"  [r2] {skipped_dev} dev-only file(s) withheld from the CDN "
+                    f"({'/'.join(sorted(DEV_ONLY_DIRS))})")
     # A single failed file is never fatal here — collect + summarise, and let the caller
     # decide (0 uploaded, or a CRITICAL file failed -> skip Supabase and exit non-zero).
     critical_failed = [f["key"] for f in failures if Path(f["key"]).name in CRITICAL_FILES]
@@ -221,7 +250,7 @@ def upload_to_r2(game_dir: Path, slug: str, force: bool = False) -> dict:
         for f in failures:
             _safe_print(f"        - {f['key']}: {(f['err'] or '')[:120]}")
     return {"uploaded": count, "failed": failures, "critical_failed": critical_failed,
-            "uploaded_keys": uploaded_keys}
+            "uploaded_keys": uploaded_keys, "skipped_dev": skipped_dev}
 
 
 def _cf_purge_token():

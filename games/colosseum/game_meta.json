@@ -5,7 +5,7 @@
   "genre": "action",
   "sub_genre": "arena-combat",
   "difficulty": "medium",
-  "controls_keyboard": "WASD move · Mouse aim · LMB attack (direction from movement) · RMB / Hold block · Shift dodge · Space sprint · Q swap weapon · E interact · TAB loadout · ESC pause",
+  "controls_keyboard": "WASD move · Mouse aim · LMB attack (direction from movement) · RMB heavy overhead · Hold SHIFT block (direction from movement) · SPACE dodge · TAB armoury · ESC pause",
   "tags": [
     "action",
     "arena",

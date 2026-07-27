@@ -66,6 +66,7 @@ export class Fighter {
     weapon = "gladius", shield = "none", armour = [],
     hp = 100, x = 0, z = 0, facing = 0, height = 1.82,
     isBeast = false, beastProfile = null, radius = null, mods = null,
+    bulk = 0,
   } = {}) {
     this.id = id || `f${_uid++}`;
     this.name = name;
@@ -92,7 +93,7 @@ export class Fighter {
     // every modifier is 1.0 at the baseline, which keeps the existing balance
     // and every existing probe valid.
     this.mods = mods || null;
-    const mob = mobility({ weapon, shield, armour }, this.mods);
+    const mob = mobility({ weapon, shield, armour, bulk }, this.mods);
     this.mob = mob;
 
     this.maxHp = Math.round(hp * (this.mods ? this.mods.maxHp : 1));

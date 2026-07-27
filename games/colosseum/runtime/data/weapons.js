@@ -186,6 +186,29 @@ export const ARMATURAE = {
     hp: 92, style: "aggressor",
     desc: "Two blades and no guard. Overwhelms, or is overwhelmed.",
   },
+  provocator: {
+    id: "provocator", name: "Provocator",
+    weapon: "gladius", shield: "scutum", armour: ["galea", "manica", "ocreae"],
+    // The one type that fought only its own kind, so this number is only ever
+    // read against itself. The cardiophylax — a breastplate no other armatura
+    // wears — is worth the five points over a murmillo's 115; it is not a
+    // purchasable piece, so it lives here rather than in the armour list.
+    hp: 120, style: "pressure", bulk: 1.8,
+    desc: "The closest thing to a legionary duel. Breastplate, big shield, and no asymmetry to exploit.",
+  },
+  crupellarius: {
+    id: "crupellarius", name: "Crupellarius",
+    weapon: "gladius", shield: "none", armour: ["galea", "manica", "ocreae", "lorica"],
+    // The tankiest thing on the sand, and the Champion-rank boss "Iron Gaul".
+    // He carried thraex's 100 hp until now because he had no block at all.
+    //
+    // The 9 kg of bulk is the iron shell Tacitus describes. Without it he
+    // totals 16.8 kg against a secutor's 23.5 and would be the FASTER of the
+    // two — the exact opposite of "no agility whatsoever". With it he is the
+    // heaviest fighter in the game and pays for 145 hp in speed and stamina.
+    hp: 145, style: "pressure", bulk: 9.0,
+    desc: "Gaulish, encased head to foot in iron. An immovable object that wins by outlasting.",
+  },
 };
 
 /** Hit zones, with the vertical band each occupies as a fraction of height. */
@@ -196,9 +219,18 @@ export const ZONES = {
   legs: { lo: 0.00, hi: 0.48, crit: 0.75 },
 };
 
-/** Total carried weight for a loadout. */
-export function loadoutWeight({ weapon, shield, armour = [] }) {
-  let w = 0;
+/**
+ * Total carried weight for a loadout.
+ *
+ * `bulk` is extra kilos an armatura carries that are NOT one of the five
+ * purchasable pieces — currently only the crupellarius, whose sources describe
+ * a full iron encasement rather than a set of straps. Without it he carries
+ * less than a secutor (no shield) and would move FASTER than the man he is
+ * supposed to out-lumber, which makes "no agility whatsoever" a lie.
+ * Defaults to 0, so every existing loadout weighs exactly what it always did.
+ */
+export function loadoutWeight({ weapon, shield, armour = [], bulk = 0 }) {
+  let w = bulk;
   if (weapon && WEAPONS[weapon]) w += WEAPONS[weapon].weight;
   if (shield && SHIELDS[shield]) w += SHIELDS[shield].weight;
   for (const a of armour) if (ARMOUR[a]) w += ARMOUR[a].weight;

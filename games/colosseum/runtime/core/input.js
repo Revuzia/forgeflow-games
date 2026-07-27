@@ -26,11 +26,16 @@ const DEFAULT_BINDS = {
   dodge: ["Space"],
   attack: ["Mouse0", "KeyJ"],
   heavy: ["Mouse2", "KeyK"],
-  swap: ["KeyQ"],
-  interact: ["KeyE"],
+  // `armoury` and `pause` are declared so the rebinding store knows the key
+  // names, but boot.js handles Tab and Escape as raw key events because they
+  // must work while the sim is paused and emitting no commands.
   armoury: ["Tab"],
   pause: ["Escape"],
 };
+// Removed: `swap` (KeyQ) and `interact` (KeyE). Both were declared here and
+// read by nothing — command() never emitted them and no consumer looked. A
+// loadout has one weapon and the arena has nothing to interact with, so there
+// was no verb behind either key; they only ever appeared in the store page.
 
 export class Input {
   constructor({ binds = null, storage = null } = {}) {
