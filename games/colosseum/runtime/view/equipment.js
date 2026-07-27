@@ -302,6 +302,59 @@ export function boneLength(bone, fallback = 0.3) {
   return d > 0.0001 ? d : fallback;
 }
 
+// Scratch for the per-frame body-armour re-solve.
+const _abY = new THREE.Vector3();
+const _abZ = new THREE.Vector3();
+const _abX = new THREE.Vector3();
+const _abM = new THREE.Matrix4();
+const _abFwd = new THREE.Vector3();
+const _abQ = new THREE.Quaternion();
+const _abBoneQ = new THREE.Quaternion();
+const _abTmp = new THREE.Vector3();
+const _abUp = new THREE.Vector3(0, 1, 0);
+
+/**
+ * Build a FULL orthonormal basis: +Y along `yDir`, +Z as near `fwd` as the
+ * primary axis allows. Returns `out`.
+ *
+ * THE MINIMAL-ARC VERSION OF THIS WAS THE "HELMET LOOKS SIDEWAYS" BUG.
+ * Aiming a single axis with setFromUnitVectors gives the SHORTEST rotation from
+ * +Y to yDir, which leaves the roll ABOUT that axis entirely arbitrary — it
+ * falls out of whatever the bone's frame happened to be, and these are Meshy
+ * auto-rigs whose bone roll differs per bone AND per archetype. On the greaves
+ * and manica that is invisible because they are round. On the galea it decides
+ * which way the face opening and the crest point, so the helmet sat rotated,
+ * and rotated differently on every body.
+ *
+ * Pinning both axes is well defined because every builder here shares one
+ * authoring convention — +Y up, +Z forward (galea: face guard at +z 0.108,
+ * neck guard at -z 0.10, crest elongated along z; lorica and subligaculum are
+ * radially symmetric so only +Y binds).
+ */
+export function alignBasis(yDir, fwd, out) {
+  const y = _abY.copy(yDir).normalize();
+  const z = _abZ.copy(fwd).addScaledVector(y, -_abZ.dot(y));   // project perp. to y
+  if (z.lengthSq() < 1e-8) {
+    // fwd parallel to the primary axis (a limb pointing dead ahead): any
+    // perpendicular will do, so derive one rather than emit NaN.
+    z.set(0, 0, 1).addScaledVector(y, -y.z);
+    if (z.lengthSq() < 1e-8) z.set(1, 0, 0).addScaledVector(y, -y.x);
+  }
+  z.normalize();
+  _abX.crossVectors(y, z);                                     // right-handed
+  return out.setFromRotationMatrix(_abM.makeBasis(_abX, y, z));
+}
+
+/** The body's forward, horizontal, taken off the model root. */
+function bodyForward(model, out) {
+  model.updateWorldMatrix(true, false);
+  model.matrixWorld.decompose(_abTmp, _abQ, _abTmp);
+  out.set(0, 0, 1).applyQuaternion(_abQ);
+  out.y = 0;
+  if (out.lengthSq() < 1e-6) out.set(0, 0, 1);
+  return out.normalize();
+}
+
 /**
  * Put the skeleton into its REST pose, returning a function that restores
  * whatever pose was live. Lets equipment solve attachment frames against one
@@ -395,56 +448,45 @@ export function attachToBone(model, boneRe, mesh, {
     bone.updateWorldMatrix(true, false);
     bone.matrixWorld.decompose(new THREE.Vector3(), boneQ, new THREE.Vector3());
 
-    const want = new THREE.Quaternion();
+    // The body's forward, taken off the model root — the bone's own frame is
+    // precisely the thing that cannot be trusted here.
+    model.updateWorldMatrix(true, false);
+    const rootQ = new THREE.Quaternion();
+    model.matrixWorld.decompose(new THREE.Vector3(), rootQ, new THREE.Vector3());
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(rootQ);
+    fwd.y = 0;
+    if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, 1);
+    fwd.normalize();
+
+    // Where the piece's +Y must point, per mode.
+    const yDir = new THREE.Vector3();
     if (align === "limb") {
-      // Limb armour runs ALONG the bone: point the piece's +Y (its long axis as
-      // modelled, origin at the parent joint) at the first child joint.
+      // Limb armour runs ALONG the bone: +Y at the first child joint.
       const child = bone.children.find((c) => c.isBone);
       const from = new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld);
-      const to = new THREE.Vector3();
       if (child) {
         child.updateWorldMatrix(true, false);
-        to.setFromMatrixPosition(child.matrixWorld);
-      } else {
-        to.copy(from).add(new THREE.Vector3(0, 1, 0).applyQuaternion(boneQ));
+        yDir.setFromMatrixPosition(child.matrixWorld).sub(from);
       }
-      const d = to.sub(from);
-      if (d.lengthSq() > 1e-9) {
-        want.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
-      } else {
-        want.copy(boneQ);
-      }
+      if (yDir.lengthSq() < 1e-9) yDir.set(0, 1, 0).applyQuaternion(boneQ);
     } else if (align === "tip") {
-      // A LEAF bone has no child to aim at, so the axis continues the chain:
-      // +Y along parent -> bone. For Head (parent `neck`) that is the skull
-      // axis, which is what a helmet sits on. Measured Head-bone tilt ranges
-      // 22.8 deg (provocator) to 43.2 deg (crupellarius) across the roster, so
-      // inheriting it put the galea visibly crooked and differently crooked on
-      // every body.
+      // A LEAF bone has no child, so the axis continues the chain: +Y along
+      // parent -> bone. For Head (parent `neck`) that is the skull axis.
+      // Measured Head-bone tilt runs 22.8 deg (provocator) to 43.2 deg
+      // (crupellarius) across the roster, so inheriting it put the galea
+      // crooked, and differently crooked on every body.
       const par = bone.parent && bone.parent.isBone ? bone.parent : null;
       if (par) {
         par.updateWorldMatrix(true, false);
-        const a = new THREE.Vector3().setFromMatrixPosition(par.matrixWorld);
-        const b = new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld);
-        const d = b.sub(a);
-        if (d.lengthSq() > 1e-9) {
-          want.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
-        } else want.copy(boneQ);
-      } else want.copy(boneQ);
+        yDir.setFromMatrixPosition(bone.matrixWorld)
+          .sub(new THREE.Vector3().setFromMatrixPosition(par.matrixWorld));
+      }
+      if (yDir.lengthSq() < 1e-9) yDir.set(0, 1, 0).applyQuaternion(boneQ);
     } else {
-      // Body armour is world-oriented: long axis UP, plate facing the body's
-      // forward. Forward comes off the model root, because the bone's frame is
-      // exactly the thing that cannot be trusted here.
-      model.updateWorldMatrix(true, false);
-      const rootQ = new THREE.Quaternion();
-      model.matrixWorld.decompose(new THREE.Vector3(), rootQ, new THREE.Vector3());
-      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(rootQ);
-      fwd.y = 0;
-      if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, 1);
-      want.setFromRotationMatrix(new THREE.Matrix4().lookAt(
-        new THREE.Vector3(), fwd.normalize(), new THREE.Vector3(0, 1, 0)
-      ));
+      yDir.set(0, 1, 0);                       // body armour: straight up
     }
+
+    const want = alignBasis(yDir, fwd, new THREE.Quaternion());
 
     // Express the desired WORLD rotation in the bone's local frame:
     //   local = inverse(boneWorld) * want
@@ -540,9 +582,38 @@ export class Equipment {
       align: def.align,
     });
     restorePose();
-    if (mount) this.mounts.set(slot, mount);
+    if (mount) { mount.userData.align = def.align; this.mounts.set(slot, mount); }
     else mesh.geometry.dispose();
     return mount;
+  }
+
+  /**
+   * Re-solve the world orientation of BODY-aligned pieces, every frame.
+   *
+   * "body" means world-oriented BY DEFINITION — a belt is level and a cuirass
+   * faces where the man faces. Solving that once at attach and then letting the
+   * piece inherit the bone was the error: measured live in the idle clip, the
+   * Hips mount ended up 58.4 deg off vertical and 77.0 deg off forward, which
+   * is why the balteus and subligaculum read as slabs jutting off one hip. The
+   * animation moves the pelvis; a belt does not go with it that far.
+   *
+   * Limb and tip pieces are deliberately NOT re-solved — a greave must follow
+   * the shin and a galea must follow the skull. Only the trunk is world-locked.
+   */
+  refresh() {
+    if (!this.mounts.size) return;
+    const model = this.actor.model;
+    let fwd = null;
+    for (const mount of this.mounts.values()) {
+      if (mount.userData.align !== "body") continue;
+      if (!fwd) fwd = bodyForward(model, _abFwd);
+      const bone = mount.parent;
+      if (!bone) continue;
+      bone.updateWorldMatrix(true, false);
+      bone.matrixWorld.decompose(_abTmp, _abBoneQ, _abTmp);
+      alignBasis(_abUp, fwd, _abQ);
+      mount.quaternion.copy(_abBoneQ.invert().multiply(_abQ));
+    }
   }
 
   unequip(slot) {

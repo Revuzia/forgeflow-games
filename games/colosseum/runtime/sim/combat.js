@@ -49,6 +49,14 @@ export const FEEL = {
   // the rim, and blocking one drains far more than blocking a sword.
   beastBypass: 0.30,
   beastBlockCost: 2.6,
+  // ATTACK LUNGE — a swing steps into the blow instead of being thrown from a
+  // standstill. Without this the defender simply backs out of every windup;
+  // measured, 67% of active frames had the target beyond reach and only 6 of 30
+  // swings landed. See the lunge block in _stepFighter for the full numbers.
+  lungeSpeedMult: 0.95,          // of the fighter's own walk speed
+  lungeStopFraction: 0.80,       // stop at 80% of reach — never walk through them
+  lungeAcquireReach: 2.1,        // commit cone: how far out a target can be claimed
+  lungeAcquireArc: 0.9,          // radians, half-angle
   // Stamina gates: you cannot attack with nothing left.
   minAttackStamina: 6,
   exhaustedThreshold: 15,
@@ -297,6 +305,19 @@ export class Combat {
 
     if (cmd.attack && f.canAttack()) {
       const dir = cmd.attackDir && w.dirs.includes(cmd.attackDir) ? cmd.attackDir : w.dirs[0];
+      // Lock the man this swing is aimed at, so the lunge has something to step
+      // toward. Nearest hostile inside a generous commit cone — generous because
+      // the player is choosing a target with a mouse, not a tracking reticle.
+      f._lungeTarget = null;
+      let best = Infinity;
+      for (const t of this.fighters) {
+        if (t === f || !t.alive || t.team === f.team) continue;
+        const dx = t.x - f.x, dz = t.z - f.z;
+        const d = Math.hypot(dx, dz);
+        if (d > w.reach * FEEL.lungeAcquireReach) continue;
+        if (Math.abs(angleDelta(f.facing, Math.atan2(dx, dz))) > FEEL.lungeAcquireArc) continue;
+        if (d < best) { best = d; f._lungeTarget = t; }
+      }
       f.phase = PHASE.WINDUP; f.phaseT = 0;
       f.attackDir = dir;
       f.stamina -= w.stamina;
@@ -317,6 +338,37 @@ export class Combat {
     let vx = 0, vz = 0;
     if (f.phase === PHASE.DODGE) {
       vx = f._dodgeVX; vz = f._dodgeVZ;
+    } else if (f.phase === PHASE.WINDUP || f.phase === PHASE.ACTIVE) {
+      // ATTACK LUNGE — step INTO the blow.
+      //
+      // Velocity used to be computed only for IDLE/RECOVER/DODGE, so the moment
+      // a fighter committed to a swing they were rooted to the spot for the
+      // whole windup and active window while the defender walked freely
+      // backwards. Measured over the tutorial bout with a player that always
+      // faces, always closes and always swings in range:
+      //
+      //   gladius reach            1.35 m
+      //   distance at commit       1.46 m average
+      //   distance at ACTIVE       1.09 m BEYOND reach, average
+      //   active frames unreachable  67%   (0% ever fell outside the arc)
+      //   swings landing              6 of 30
+      //   result                      0 wins in 6, player dead every time,
+      //                               opponent losing 32 of 96 hp
+      //
+      // The arc was never the problem and neither was target selection: the
+      // enemy simply opened a metre of gap during a windup the attacker could
+      // not answer. A step-and-cut closes it. Capped at 80% of reach so a lunge
+      // never walks through the man it is aimed at.
+      const t = f._lungeTarget;
+      if (t && t.alive) {
+        const dx = t.x - f.x, dz = t.z - f.z;
+        const d = Math.hypot(dx, dz);
+        const stop = f.weapon.reach * FEEL.lungeStopFraction;
+        if (d > stop && d > 1e-4) {
+          const sp = Math.min(f.currentSpeed() * FEEL.lungeSpeedMult, (d - stop) / Math.max(dt, 1e-3));
+          vx = (dx / d) * sp; vz = (dz / d) * sp;
+        }
+      }
     } else if (f.phase === PHASE.IDLE || f.phase === PHASE.RECOVER) {
       const mx = cmd.moveX || 0, mz = cmd.moveZ || 0;
       const len = Math.hypot(mx, mz);

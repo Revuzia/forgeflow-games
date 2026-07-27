@@ -29,6 +29,22 @@ const _sfQ = new THREE.Quaternion();
 const _sfPQ = new THREE.Quaternion();
 const _sfM = new THREE.Quaternion();
 
+// Scratch for twoBoneIK / the guard pose, same reason.
+const _ikA = new THREE.Vector3();
+const _ikB = new THREE.Vector3();
+const _ikC = new THREE.Vector3();
+const _ikT = new THREE.Vector3();
+const _ikU = new THREE.Vector3();
+const _ikV = new THREE.Vector3();
+const _ikN = new THREE.Vector3();
+const _ikGoal = new THREE.Vector3();
+const _ikQ = new THREE.Quaternion();
+const _ikQA = new THREE.Quaternion();
+const _ikQB = new THREE.Quaternion();
+const _ikPQ = new THREE.Quaternion();
+const _ikM = new THREE.Quaternion();
+const _ikMat = new THREE.Matrix4();
+
 // Character GLBs are Draco-compressed (gltf-transform optimize), which cuts a
 // rigged gladiator from ~7.9 MB to ~165 KB. Draco needs its decoder wired in or
 // GLTFLoader throws "No DRACOLoader instance provided" and every character
@@ -140,6 +156,80 @@ function repairMeshyMaterial(mat) {
     if (m.specularColor && m.specularColor.setRGB) m.specularColor.setRGB(1, 1, 1);
     m.userData.__meshyRepaired = true;
     m.needsUpdate = true;
+  }
+}
+
+/**
+ * Rotate a bone by a WORLD-space rotation, preserving its parent chain.
+ *
+ * A bone's stored quaternion is relative to its parent, so a world rotation Q
+ * becomes  local = inv(parentWorld) * Q * parentWorld * local.
+ */
+function rotateBoneWorld(bone, q) {
+  bone.parent.getWorldQuaternion(_ikPQ);
+  bone.quaternion.premultiply(_ikM.copy(_ikPQ).invert().multiply(q).multiply(_ikPQ));
+  bone.updateMatrixWorld(true);
+}
+
+/**
+ * Two-bone IK: swing `upper` and bend `fore` so `hand` reaches a world target.
+ *
+ * These rigs ship no IK of any kind, which is why a shield tracks wherever the
+ * shared idle clip happens to leave the hand instead of being held where a
+ * shield is useful. Standard law-of-cosines solve: set the elbow's interior
+ * angle from the target distance, then swing the whole arm onto the target.
+ *
+ * `weight` blends the solved pose against the animated one, so an attack can
+ * take the arm back without a snap.
+ */
+function twoBoneIK(upper, fore, hand, target, weight) {
+  if (weight <= 0.001) return;
+  const upQ0 = _ikQA.copy(upper.quaternion);
+  const foQ0 = _ikQB.copy(fore.quaternion);
+
+  const A = _ikA.setFromMatrixPosition(upper.matrixWorld);
+  const B = _ikB.setFromMatrixPosition(fore.matrixWorld);
+  const C = _ikC.setFromMatrixPosition(hand.matrixWorld);
+
+  const L1 = A.distanceTo(B), L2 = B.distanceTo(C);
+  if (L1 < 1e-5 || L2 < 1e-5) return;
+
+  const toT = _ikT.copy(target).sub(A);
+  // Never let the target exceed reach, or the solve produces a NaN angle and
+  // the arm detaches entirely.
+  const d = clamp(toT.length(), Math.abs(L1 - L2) + 1e-4, L1 + L2 - 1e-4);
+
+  // --- elbow: law of cosines gives the interior angle at B for distance d ---
+  const cosDes = clamp((L1 * L1 + L2 * L2 - d * d) / (2 * L1 * L2), -1, 1);
+  const u = _ikU.copy(A).sub(B).normalize();          // B -> A
+  const v = _ikV.copy(C).sub(B).normalize();          // B -> C
+  const cosCur = clamp(u.dot(v), -1, 1);
+  // Rotating v about cross(v, u) by a POSITIVE angle swings v toward u, i.e.
+  // closes the elbow — so the delta is current-minus-desired, not the reverse.
+  const bend = _ikN.copy(v).cross(u);
+  if (bend.lengthSq() > 1e-10) {
+    bend.normalize();
+    rotateBoneWorld(fore, _ikQ.setFromAxisAngle(bend, Math.acos(cosCur) - Math.acos(cosDes)));
+  }
+
+  // --- shoulder: swing the (now correctly bent) arm onto the target ---
+  C.setFromMatrixPosition(hand.matrixWorld);
+  const cur = _ikU.copy(C).sub(A);
+  const want = _ikV.copy(target).sub(A);
+  if (cur.lengthSq() > 1e-10 && want.lengthSq() > 1e-10) {
+    cur.normalize(); want.normalize();
+    const axis = _ikN.copy(cur).cross(want);
+    if (axis.lengthSq() > 1e-10) {
+      rotateBoneWorld(upper, _ikQ.setFromAxisAngle(
+        axis.normalize(), Math.acos(clamp(cur.dot(want), -1, 1))
+      ));
+    }
+  }
+
+  if (weight < 0.999) {
+    upper.quaternion.slerpQuaternions(upQ0, upper.quaternion, weight);
+    fore.quaternion.slerpQuaternions(foQ0, fore.quaternion, weight);
+    upper.updateMatrixWorld(true);
   }
 }
 
@@ -443,7 +533,74 @@ export class Actor {
     this.root.position.copy(this.pos);
     this.root.rotation.y = this.visualFacing;
 
+    this._guardPose(dt);
+    // Body armour is world-oriented by definition, so it is re-solved every
+    // frame rather than inheriting the pelvis. Runs after root.rotation.y is
+    // set, because the solve reads the body's forward off the root.
+    if (this.equipment && this.equipment.refresh) this.equipment.refresh();
     this._combatIdle(dt, groundSpeed);
+  }
+
+  /**
+   * Hold the shield where a shield is actually useful.
+   *
+   * Nothing in the shared clip vocabulary is a guard stance, so the shield arm
+   * simply went wherever anim_idle left it — measured in the running game with
+   * the fighter at the origin, the scutum's 0.66 m board spanned x 0.06 to 0.72
+   * while the torso sits at x ~= 0. It covered NONE of the body: a shield held
+   * out to one side at arm's length, which is what "not held properly" looks
+   * like from the front.
+   *
+   * Rather than author eight guard clips, drive the shield arm with IK to a
+   * target in the fighter's own frame — slightly across the centreline, chest
+   * height, forward of the chest — so the board covers shoulder to thigh. The
+   * target is in ROOT space, so it follows facing for free.
+   *
+   * Fades out during attacks so a swing still throws the arm, and fades back in
+   * over ~0.18 s rather than snapping.
+   */
+  _guardPose(dt) {
+    const arm = this._shieldArm !== undefined ? this._shieldArm : (this._shieldArm = (() => {
+      // Only rigs actually carrying a shield get posed.
+      let mount = null;
+      this.model.traverse((o) => {
+        if (!mount && o.name === "weapon_mount" && o.parent && /^LeftHand$/i.test(o.parent.name)) mount = o;
+      });
+      if (!mount) return null;
+      const find = (n) => { let b = null; this.model.traverse((o) => { if (!b && o.isBone && o.name === n) b = o; }); return b; };
+      const upper = find("LeftArm"), fore = find("LeftForeArm"), hand = find("LeftHand");
+      return (upper && fore && hand) ? { upper, fore, hand, mount } : null;
+    })());
+    if (!arm) return;
+
+    const ATTACK = { slash1: 1, slash2: 1, finisher: 1, stab: 1, cleave: 1, death: 1, hit: 1 };
+    const want = ATTACK[this.currentName] ? 0 : 1;
+    const k = clamp(dt / 0.18, 0, 1);
+    this._guardW = (this._guardW === undefined ? want : this._guardW + (want - this._guardW) * k);
+    if (this._guardW <= 0.01) return;
+
+    // Fighter frame: +Z forward, +X his left (verified against the sim, which
+    // defines facing = atan2(dx, dz)).
+    _ikGoal.set(0.14, 1.16, 0.34);
+    this.root.localToWorld(_ikGoal);
+    twoBoneIK(arm.upper, arm.fore, arm.hand, _ikGoal, this._guardW);
+
+    // Stand the shield UP. Putting the hand in the right place is not enough:
+    // the mount inherits the hand bone's roll, which in the shared idle clip
+    // left the scutum canted about 25 degrees like a dropped door. Solve the
+    // board's world orientation — face along the fighter's forward, long axis
+    // vertical, with a slight inward cant so it reads as braced rather than
+    // parade-flat — then express it in the hand's frame.
+    if (arm.mount) {
+      arm.hand.updateWorldMatrix(true, false);
+      arm.hand.matrixWorld.decompose(_ikA, _ikPQ, _ikB);
+      const fwd = _ikU.set(Math.sin(this.visualFacing), 0, Math.cos(this.visualFacing));
+      _ikMat.lookAt(_ikV.set(0, 0, 0), _ikN.copy(fwd).negate(), _sfUp);
+      _ikQ.setFromRotationMatrix(_ikMat);
+      // 10 deg top-inward cant, about the fighter's forward axis.
+      _ikQ.multiply(_ikQA.setFromAxisAngle(_ikV.set(0, 0, 1), -10 * DEG));
+      arm.mount.quaternion.slerp(_ikQB.copy(_ikPQ).invert().multiply(_ikQ), this._guardW);
+    }
   }
 
   /**
@@ -774,8 +931,23 @@ export function makeGladius() {
  * about their own centres, so adjacent edges splay apart) and read as a
  * venetian blind. Sweeping a continuous strip guarantees the staves meet.
  *
- * Local frame: the shield face is centred on the origin in XY, curving away
- * along -z, so attachWeapon's forearm rotation presents it forwards.
+ * Local frame: the shield face is centred on the origin in XY and bulges along
+ * +z, which attachWeapon presents along the bearer's forward.
+ *
+ * THE BOARD USED TO BULGE THE OTHER WAY, and that is the "shield is backwards"
+ * everyone could see. Measured in the running game with the fighter at the
+ * origin: the shield mount sits at x +0.291 and the sword at x -0.542, and the
+ * sim defines facing = atan2(dx, dz) — verified against a live match where the
+ * player faced 1.571 with the opponent at dx +27 / dz -4.5 — so forward is
+ * world +Z. The board's bounding box ran z -0.21 .. 0 (apex at -curve, rims at
+ * 0), i.e. the CONVEX face pointed at the bearer's own back and the enemy was
+ * shown the hollow. The umbo, at z +0.172, then floated in the middle of that
+ * hollow instead of capping the boss.
+ *
+ * Flipping the sweep fixes both at once, which is the tell that the sign was
+ * always the bug: the apex moves to +curve (0.16), the umbo at +0.172 lands
+ * just proud of it, the shell's back face at z-thick falls behind the front
+ * toward the bearer, and the rails' outward offset follows the same normal.
  */
 export function makeScutum({ w = 0.66, h = 1.02, curve = 0.16 } = {}) {
   const parts = [];
@@ -785,7 +957,7 @@ export function makeScutum({ w = 0.66, h = 1.02, curve = 0.16 } = {}) {
 
   const pos = [];
   const nor = [];
-  const at = (t) => [R * Math.sin(t), -(R * Math.cos(t) - (R - curve))];
+  const at = (t) => [R * Math.sin(t), R * Math.cos(t) - (R - curve)];
 
   const thick = 0.028;
   for (let i = 0; i < N; i++) {
@@ -794,7 +966,7 @@ export function makeScutum({ w = 0.66, h = 1.02, curve = 0.16 } = {}) {
     const [x0, z0] = at(t0);
     const [x1, z1] = at(t1);
     const nx = Math.sin((t0 + t1) / 2);
-    const nz = -Math.cos((t0 + t1) / 2);
+    const nz = Math.cos((t0 + t1) / 2);   // outward: the board bulges toward +z
     // front face
     quadTri(pos, nor, [x0, -h / 2, z0], [x1, -h / 2, z1], [x1, h / 2, z1], [x0, h / 2, z0], [nx, 0, nz]);
     // back face
@@ -808,9 +980,12 @@ export function makeScutum({ w = 0.66, h = 1.02, curve = 0.16 } = {}) {
   board.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
   parts.push(paint(board, BOARD));
 
-  // umbo (the iron boss over the hand grip)
+  // Umbo — the iron boss over the hand grip. SphereGeometry's cap apex is at
+  // +Y, so it needs +90 deg about X to point along +z, out of the board's
+  // convex face. At -90 the dome pointed straight into the board and the
+  // scutum rendered with a bare face and a faint seam where the boss sank in.
   const boss = new THREE.SphereGeometry(0.088, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2);
-  boss.rotateX(-Math.PI / 2);
+  boss.rotateX(Math.PI / 2);
   boss.translate(0, 0, curve + 0.012);
   parts.push(paint(boss, BRASS));
 
@@ -835,7 +1010,7 @@ export function makeScutum({ w = 0.66, h = 1.02, curve = 0.16 } = {}) {
       const [x0, z0] = at(t0);
       const [x1, z1] = at(t1);
       const nx = Math.sin((t0 + t1) / 2);
-      const nz = -Math.cos((t0 + t1) / 2);
+      const nz = Math.cos((t0 + t1) / 2);   // outward: the board bulges toward +z
       // Proud of the board by railT along the local surface normal.
       const ox = nx * railT, oz = nz * railT;
       // outer face
