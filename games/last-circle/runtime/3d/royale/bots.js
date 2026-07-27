@@ -583,7 +583,15 @@ function actHeal(W, b, dt) {
   // the same rule the human pays. Zeroing input on top of that made the penalty
   // human-only: the player could back behind cover mid-heal and no bot ever
   // could. Break line of sight instead of standing still.
-  const away = bb.lastThreat || (bb.target && bb.target.pos) || null;
+  // bb.target is an ID STRING, so bb.target.pos was always undefined, and
+  // bb.lastThreat is never set anywhere — so `away` was always null and the bot
+  // stood still through the entire heal channel, exactly the freeze this code
+  // was meant to end. bb.targetPos is the RESOLVED last-seen position the rest
+  // of the brain already maintains (see s.ENGAGE tRef at the top of think);
+  // fall back to the storm centre so a bot with no known threat still drifts to
+  // safety while healing rather than rooting in the open.
+  let away = bb.targetPos || null;
+  if (!away && W.stormCtl) { const st = W.stormCtl.storm.stateAt(W.t); away = st.nextCenter || st.center; away = { x: 2 * a.pos.x - away.x, z: 2 * a.pos.z - away.z }; }
   if (away) {
     const dx = a.pos.x - away.x, dz = a.pos.z - away.z;
     const d = Math.hypot(dx, dz) || 1;

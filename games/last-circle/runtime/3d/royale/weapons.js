@@ -488,7 +488,15 @@ function spawnProjectile(W, o) {
     // grenade-launcher shell: visible arcing round with a hot tracer tint
     p.m = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 6), new THREE.MeshStandardMaterial({ color: 0x3d5a3a, emissive: 0xff6622, emissiveIntensity: 0.4 }));
   }
-  if (p.m) { p.m.visible = true; W.group("projectiles").add(p.m); }
+  // Only SHOW the mesh when THIS spawn is a mesh projectile. kill() removes p.m
+  // from the scene but keeps it on the pooled object for the next grenade to
+  // reuse — so a plain hitscan bullet popping that same pool slot used to re-add
+  // the grenade sphere and drag it across the map. Gate on o.mesh, and hide a
+  // cached mesh the current spawn does not want.
+  if (p.m) {
+    if (o.mesh) { p.m.visible = true; W.group("projectiles").add(p.m); }
+    else { p.m.visible = false; }
+  }
   projectiles.push(p);
   W.events.emit("tracer", p);
 }

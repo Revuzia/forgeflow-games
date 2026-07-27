@@ -807,7 +807,12 @@ export function update(W, dt) {
     // friend you can HEAR is a friend you can find. Bots keep 70 m, otherwise
     // the horizon fills with 46 labels.
     const range = a.isBot ? 70 : 250;
-    a.nameTag.visible = a.alive && a !== W._camFocus && d2 > 12 && d2 < range * range;
+    // Practice dummies' nametags ARE their distance labels ("12m".."80m"), so
+    // they must show at their own range — the 55 m and 80 m markers sit past the
+    // 70 m bot cull-squared and were invisible exactly where they teach the most.
+    a.nameTag.visible = a.isDummy
+      ? (a.alive && a !== W._camFocus)
+      : (a.alive && a !== W._camFocus && d2 > 12 && d2 < range * range);
   }
 }
 

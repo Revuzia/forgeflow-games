@@ -1671,11 +1671,19 @@ export function showHUD(W) {
 
   // storm messages center
   R.stormMsg = h("div", { position: "absolute", left: "50%", top: "22%", transform: "translateX(-50%)", fontSize: "22px", fontWeight: "900", letterSpacing: "1px", textShadow: "0 2px 8px #000", opacity: "0", transition: "opacity .4s", color: "#d9b3ff" }, "", L);
+  // Pickups used to share stormMsg with storm warnings and supply alerts, so
+  // grabbing loot as the storm warned clobbered whichever fired second. Loot is
+  // frequent+low-priority; the storm line is rare+important — separate them.
+  R.pickupMsg = h("div", { position: "absolute", left: "50%", top: "27.5%", transform: "translateX(-50%)", fontSize: "15px", fontWeight: "800", letterSpacing: "1px", textShadow: "0 2px 6px #000", opacity: "0", transition: "opacity .3s", color: "#bfe9d2", whiteSpace: "nowrap" }, "", L);
   // BIG match announcements (deploy, alive-count milestones, eliminations, level-up)
   R.annWrap = h("div", { position: "absolute", left: "50%", top: "14%", transform: "translateX(-50%)", textAlign: "center", opacity: "0", transition: "opacity .35s, transform .35s", pointerEvents: "none" }, null, L);
   R.annTitle = h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "34px", fontWeight: "900", letterSpacing: "4px", textShadow: "0 3px 14px #000, 0 0 26px rgba(90,170,255,0.5)" }, "", R.annWrap);
   R.annSub = h("div", { fontSize: "14px", fontWeight: "700", letterSpacing: "2px", opacity: "0.85", marginTop: "4px", textShadow: "0 2px 6px #000" }, "", R.annWrap);
   R._annUntil = 0; R._aliveMark = 0; R._annPrio = 0; R._annQ = [];
+  // stepMarks stores absolute W.t; W.t resets to 0 each match, so a stale match-1
+  // time (larger than any match-2 time) made `W.t - last < 1.4` permanently true
+  // and the footstep chevrons vanished for the first ~2 min of every later match.
+  stepMarks.clear();
 
   // tints
   R.stormTint = h("div", { position: "absolute", inset: "0", background: "radial-gradient(ellipse at center, rgba(130,60,200,0) 55%, rgba(130,60,200,0.35) 100%)", opacity: "0", transition: "opacity .5s", pointerEvents: "none" }, null, L);
@@ -2450,11 +2458,11 @@ function wireEvents(W) {
     const RAR = K.RARITY || [];
     if (data.kind === "weapon") {
       const rar = RAR[data.rarity || 0] || "";
-      flashMsg("PICKED UP  " + rar.toUpperCase() + " " + String(data.id).toUpperCase());
+      pickupMsg("PICKED UP  " + rar.toUpperCase() + " " + String(data.id).toUpperCase());
     } else if (data.kind === "consumable") {
-      flashMsg("PICKED UP  " + String(data.id).replace(/_/g, " ").toUpperCase() + (data.count > 1 ? " x" + data.count : ""));
+      pickupMsg("PICKED UP  " + String(data.id).replace(/_/g, " ").toUpperCase() + (data.count > 1 ? " x" + data.count : ""));
     } else if (data.kind === "ammo") {
-      flashMsg("PICKED UP  " + String(data.id).toUpperCase() + " AMMO");
+      pickupMsg("PICKED UP  " + String(data.id).toUpperCase() + " AMMO");
     }
   });
   W.events.on("stormWarning", () => flashMsg("STORM SHRINKS IN 10 SECONDS"));
@@ -2487,7 +2495,15 @@ function flashMsg(text) {
   if (!R.stormMsg) return;
   R.stormMsg.textContent = text;
   R.stormMsg.style.opacity = "1";
-  setTimeout(() => { if (R.stormMsg) R.stormMsg.style.opacity = "0"; }, 2600);
+  clearTimeout(R._stormMsgT);
+  R._stormMsgT = setTimeout(() => { if (R.stormMsg) R.stormMsg.style.opacity = "0"; }, 2600);
+}
+function pickupMsg(text) {
+  if (!R.pickupMsg) return;
+  R.pickupMsg.textContent = text;
+  R.pickupMsg.style.opacity = "1";
+  clearTimeout(R._pickupMsgT);
+  R._pickupMsgT = setTimeout(() => { if (R.pickupMsg) R.pickupMsg.style.opacity = "0"; }, 1800);
 }
 // big centre-screen announcement (deploy / milestones / eliminations / level-up).
 // Higher-priority calls override a showing one so the important beat always wins.
