@@ -180,8 +180,22 @@ export class Match {
     const o = makeOpponent(spec.armatura, { skill: spec.skill, rng: this.rng, taken: this._names });
     const base = ARMATURAE[spec.armatura] || ARMATURAE.thraex;
     const ang = (index / 3) * Math.PI - Math.PI / 2;
+    // The id carries a monotonic sequence, NOT the spawn index.
+    //
+    // _spawnWave() restarts its loop index at 0 for every wave and draws from a
+    // 4-armatura pool, so wave 2's `opp0_thraex` collided with wave 1's DEAD
+    // `opp0_thraex`. combat.get() is a linear `.find()` (combat.js:171), so it
+    // returned the corpse, and `brains.set(f.id, ...)` overwrote the live
+    // fighter's brain with the same key.
+    //
+    // The result: a fresh enemy that receives no commands, is given no body by
+    // bout.js, and is still counted alive by combat.living() — so the wave can
+    // never clear. Measured on 39 of 40 seeds for p3 "Sine Missione" and 40 of
+    // 40 for l1 "Thirty-Four Fights", which is two of the six bouts that read
+    // as unwinnable. Those two were never a balance problem.
+    this._spawnSeq = (this._spawnSeq || 0) + 1;
     const f = new Fighter({
-      id: `opp${index}_${o.armatura}`, name: o.name, team,
+      id: `opp${this._spawnSeq}_${o.armatura}`, name: o.name, team,
       weapon: o.loadout.weapon, shield: o.loadout.shield, armour: o.loadout.armour,
       hp: base.hp || 100,
       bulk: base.bulk || 0,
@@ -350,6 +364,24 @@ export class Match {
   }
 
   _spawnWave() {
+    // THE BREATHER BETWEEN WAVES.
+    //
+    // Survival ran continuously: no stamina back, no wound relief, waves
+    // growing from 1 to 4 opponents. With the id collision fixed the bout
+    // stopped hanging and started simply killing the player at wave 2 of 5 —
+    // still 0% across 20 seeds, because there is no way to out-fight an
+    // escalating queue while your own resources only ever go down.
+    //
+    // Real munera had intervals. Water, sponges, the sand raked, sometimes the
+    // hydraulis playing — a fighter was a valuable animal and was not run to
+    // death without pause. Stamina fully returns and a little health with it;
+    // wounds stay, so the fight still accumulates and a long survival still
+    // ends you.
+    if (this.player && this.player.alive && this.wave > 0) {
+      this.player.stamina = this.player.maxStamina;
+      this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * 0.18);
+      this._cue("interval", { wave: this.wave + 1 });
+    }
     const pool = ["thraex", "murmillo", "hoplomachus", "dimachaerus"];
     const n = 1 + Math.floor(this.wave / 2);
     const fresh = [];
