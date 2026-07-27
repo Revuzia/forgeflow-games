@@ -51,8 +51,25 @@ export const WEAPONS = {
     stamina: 16, poise: 18,
     dirs: [DIR.HIGH, DIR.LEFT, DIR.RIGHT, DIR.THRUST],
     armourPierce: { [DIR.THRUST]: 0.45, [DIR.HIGH]: 0.25, [DIR.LEFT]: 0.25, [DIR.RIGHT]: 0.25 },
+    // CLEAVE. A long blade swung in a wide arc takes everyone standing in it.
+    //
+    // `arc` is the half-angle of the swing cone in radians; the default is
+    // 0.62 (a 71-degree cone). At 1.15 the spatha sweeps 132 degrees, so a
+    // side cut genuinely catches two men who have closed on you at once, and
+    // `cleaveFalloff` means the second and third take less than the first —
+    // a blade slows as it passes through.
+    //
+    // This is the weapon answer to being outnumbered. The measured problem
+    // with N-vs-1 was never scheduling or positioning, it was OUTPUT: the
+    // player deals enough for one opponent and half of what two require. A
+    // cleaving weapon is how a fighter converts being surrounded from a death
+    // sentence into an opportunity — which is exactly what the arena's
+    // reputation is built on.
+    arc: 1.15,
+    cleave: 3,
+    cleaveFalloff: 0.62,
     price: 320, tier: 1,
-    desc: "A cavalry longsword. More reach than a gladius, slower to recover.",
+    desc: "A cavalry longsword. More reach than a gladius, and a swing wide enough to take two men at once.",
   },
   sica: {
     id: "sica", name: "Sica", kind: "curved", hands: 1,

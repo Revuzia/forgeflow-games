@@ -382,12 +382,16 @@ export function buildLadder() {
                    [{ armatura: "dimachaerus", skill: "gregarius" }, { armatura: "retiarius", skill: "tiro" }]],
         purse: 420,
         desc: "Two troupes turned loose at once. Five men, three sides, one door out." });
-  add({ id: "k3", rank: "champion", type: "catervarii", name: "The Last Standing",
-        factions: [[{ armatura: "secutor", skill: "veteranus" }, { armatura: "murmillo", skill: "gregarius" }],
-                   [{ armatura: "crupellarius", skill: "veteranus" }],
-                   [{ armatura: "provocator", skill: "gregarius" }, { armatura: "thraex", skill: "gregarius" }]],
+  // 3-vs-3. Not a scatter of four parties — two troupes and a line, which is
+  // what a catervarii actually was when the editor wanted a spectacle rather
+  // than a scramble. The player fights WITH two and against three.
+  add({ id: "k3", rank: "champion", type: "catervarii", name: "Troupe Against Troupe",
+        allies: [{ armatura: "murmillo", skill: "veteranus" }, { armatura: "hoplomachus", skill: "veteranus" }],
+        factions: [[{ armatura: "secutor", skill: "veteranus" },
+                    { armatura: "crupellarius", skill: "gregarius" },
+                    { armatura: "thraex", skill: "veteranus" }]],
         purse: 900,
-        desc: "Four parties. The editor has stopped pretending this is a contest of skill." });
+        desc: "Three a side. Pick your man, trust the two beside you, and do not get surrounded." });
 
   add({ id: "c4", rank: "champion", type: "champion", name: "Priscus", champion: "priscus", purse: 800,
         desc: "The other half of the draw that Titus refused to break." });

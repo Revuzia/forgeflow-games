@@ -348,8 +348,18 @@ export class Combat {
   _resolveSwing(attacker, dt) {
     const w = attacker.weapon;
     const reach = w.reach * (1 + (attacker.isBeast ? 0 : 0));
-    const halfAngle = w.kind === "polearm" ? 0.35 : 0.62;
+    // A weapon may declare its own swing arc. Polearms thrust in a narrow
+    // line; a long blade sweeps wide enough to take more than one man.
+    const halfAngle = w.arc !== undefined ? w.arc : (w.kind === "polearm" ? 0.35 : 0.62);
+    // How many bodies one swing may touch, and how much the blade loses as it
+    // passes through each. Undeclared = 1, so every existing weapon behaves
+    // exactly as it did.
+    const maxTargets = w.cleave || 1;
+    const falloff = w.cleaveFalloff !== undefined ? w.cleaveFalloff : 1;
 
+    // Nearest first, so the man you actually aimed at takes the full blow and
+    // the cleave carries into whoever else is standing in the arc.
+    const inArc = [];
     for (const target of this.fighters) {
       if (target === attacker || !target.alive) continue;
       if (target.team === attacker.team) continue;
@@ -362,14 +372,21 @@ export class Combat {
 
       const toTarget = Math.atan2(dx, dz);
       if (Math.abs(angleDelta(attacker.facing, toTarget)) > halfAngle) continue;
+      inArc.push({ target, dist });
+    }
+    inArc.sort((a, b) => a.dist - b.dist);
 
+    let n = 0;
+    for (const { target, dist } of inArc) {
+      if (n >= maxTargets) break;
       attacker._hitThisSwing.add(target.id);
-      this._applyHit(attacker, target, dist);
+      this._applyHit(attacker, target, dist, null, null, Math.pow(falloff, n));
+      n++;
     }
   }
 
   /** Resolve one connect: block, parry, armour, zone, wound, death. */
-  _applyHit(attacker, target, dist) {
+  _applyHit(attacker, target, dist, wOverride = null, dirOverride = null, damageScale = 1) {
     const w = attacker.weapon;
     const dir = attacker.attackDir;
 
@@ -482,6 +499,8 @@ export class Combat {
     // masterwork lands softer than a pristine plain blade, which is the rule
     // blacksmith.js was written around and never got to enforce.
     if (attacker.gear) dmg *= attacker.gear.damage;
+    // Cleave falloff — the blade slows as it passes through each body.
+    dmg *= damageScale;
     if (fromBehind) dmg *= FEEL.backstabMultiplier;
     else if (fromFlank) dmg *= FEEL.flankMultiplier;
     if (attacker.comboCount > 0) dmg *= 1 + Math.min(0.35, attacker.comboCount * 0.09);

@@ -410,6 +410,49 @@ export class Actor {
     this.visualFacing = dampAngle(this.visualFacing, this.facing, 12, dt);
     this.root.position.copy(this.pos);
     this.root.rotation.y = this.visualFacing;
+
+    this._combatIdle(dt, groundSpeed);
+  }
+
+  /**
+   * A living stance. Nobody in an arena stands still.
+   *
+   * anim_idle is effectively a statue — measured in Blender it moves 0.819 m
+   * of total bone path across all 24 bones over 2.37 s, about 3.4 cm per bone
+   * per loop, and every archetype ships the same byte-identical clip. So a
+   * fighter who is circling slowly, waiting for an opening, or holding an
+   * attack token reads as someone who has stopped playing the game, even
+   * though the sim has them moving 73-83% of ticks and attacking 17-22%.
+   *
+   * Rather than author eight new idles, this adds motion the clip lacks: a
+   * slow weight shift from foot to foot, a breathing rise, and a small guard
+   * sway, applied to the ROOT so it layers over whatever the mixer is doing
+   * and costs nothing. It fades out as the fighter picks up speed, because a
+   * run clip already carries its own weight.
+   *
+   * Each actor gets its own phase offset so a line of gladiators never bobs in
+   * unison — the single thing that makes a crowd of NPCs look mechanical.
+   */
+  _combatIdle(dt, groundSpeed) {
+    if (this._idlePhase === undefined) this._idlePhase = Math.random() * Math.PI * 2;
+    this._idleT = (this._idleT || 0) + dt;
+    // Full strength when standing, gone by a walk.
+    const w = clamp(1 - groundSpeed / 1.6, 0, 1);
+    if (w <= 0.001) return;
+    const t = this._idleT;
+    const p = this._idlePhase;
+    // Weight shift: a slow lateral lean, the way a man rests one leg then the
+    // other while watching someone who wants to kill him.
+    const shift = Math.sin(t * 0.9 + p) * 0.035 * w;
+    // Breathing: a small vertical rise, faster than the weight shift.
+    const breath = Math.sin(t * 2.1 + p * 1.7) * 0.012 * w;
+    // Guard sway: the torso turning fractionally as the eyes track.
+    const sway = Math.sin(t * 0.7 + p * 0.6) * 0.045 * w;
+
+    this.root.position.y += breath;
+    this.root.position.x += Math.cos(this.visualFacing) * shift;
+    this.root.position.z -= Math.sin(this.visualFacing) * shift;
+    this.root.rotation.y += sway;
   }
 
   dispose() {
