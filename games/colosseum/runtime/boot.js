@@ -66,7 +66,6 @@ loadEl.style.cssText = `position:absolute;inset:0;display:flex;flex-direction:co
   justify-content:center;background:radial-gradient(ellipse at 50% 40%,#2a1c10,#0d0906 78%);
   z-index:10;color:#e8dcc0;font-family:Georgia,'Times New Roman',serif;transition:opacity .6s`;
 loadEl.innerHTML = `
-  <div style="font-size:15px;letter-spacing:9px;color:#a8916a;margin-bottom:10px">FORGEFLOW GAMES</div>
   <div style="font-size:52px;font-weight:900;letter-spacing:5px;
     background:linear-gradient(180deg,#ffeec4,#e0b558 52%,#a8471f);-webkit-background-clip:text;
     background-clip:text;color:transparent;text-align:center">COLOSSEUM</div>
@@ -460,6 +459,8 @@ const menu = new Menu(document.getElementById("hud"), {
   inventory, audio, ladder: LADDER,
   hooks: {
     onStartMatch: (id) => { startMatch(id); audio.play("confirm"); },
+    // Settings needs the live Input to read and flip strafe handedness.
+    getInput: () => input,
     onArmoury: () => { armoury.show(); },
     onBlacksmith: () => { armoury.show("smith"); },
     onTraining: () => { armoury.show("training"); },

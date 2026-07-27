@@ -112,7 +112,6 @@ export class Menu {
     wrap.style.cssText = `min-height:100%;display:flex;flex-direction:column;align-items:center;
       justify-content:center;background:radial-gradient(ellipse at 50% 45%,rgba(10,7,4,.55),rgba(6,4,2,.94) 75%)`;
     wrap.innerHTML = `
-      <div style="font-size:13px;letter-spacing:11px;color:${DIM}">FORGEFLOW GAMES</div>
       <div style="font-size:74px;font-weight:900;letter-spacing:9px;margin-top:6px;
         background:linear-gradient(180deg,#ffeec4,${GOLD} 52%,#a8471f);-webkit-background-clip:text;
         background-clip:text;color:transparent">COLOSSEUM</div>
@@ -281,6 +280,25 @@ export class Menu {
     note.textContent = "Crowd density and shadows change with quality. Takes effect on the next bout.";
     q.appendChild(note);
     body.appendChild(q);
+
+    // Strafe handedness. A/D were mirrored; this is the fix exposed as a
+    // preference, because which way "strafe right" should feel is genuinely
+    // personal and some players will want it the other way regardless.
+    const strafeWrap = document.createElement("div");
+    strafeWrap.style.cssText = `margin-top:16px;padding-top:14px;
+      border-top:1px solid rgba(216,173,78,.18)`;
+    strafeWrap.innerHTML = `<div style="font-size:10px;letter-spacing:4px;color:${FAINT};margin-bottom:8px">MOVEMENT</div>`;
+    const inp = this.hooks.getInput ? this.hooks.getInput() : null;
+    const sBtn = this._btn(
+      inp && inp.invertStrafe ? "Strafe: INVERTED  (A = right, D = left)"
+                              : "Strafe: NORMAL  (A = left, D = right)",
+      "Click to swap which way A and D carry you",
+      () => {
+        if (inp && inp.setInvertStrafe) inp.setInvertStrafe(!inp.invertStrafe);
+        this.show(SCREEN.SETTINGS);          // redraw with the new label
+      });
+    strafeWrap.appendChild(sBtn);
+    body.appendChild(strafeWrap);
 
     const c = document.createElement("div");
     c.style.cssText = `margin-top:18px;padding-top:14px;border-top:1px solid rgba(216,173,78,.18);

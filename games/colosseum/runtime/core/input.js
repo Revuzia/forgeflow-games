@@ -51,6 +51,12 @@ export class Input {
 
     // Camera-relative movement needs the camera's yaw; the owner writes it.
     this.cameraYaw = 0;
+    // Strafe handedness, persisted through Settings. false = the fixed default.
+    this.invertStrafe = false;
+    try {
+      const v = localStorage.getItem("colosseum_invert_strafe");
+      if (v !== null) this.invertStrafe = JSON.parse(v);
+    } catch (e) { /* first run */ }
 
     this._onKeyDown = (e) => {
       if (!this.enabled) return;
@@ -159,6 +165,19 @@ export class Input {
     const st = this._stick(pad);
     if (st && (st.x || st.y)) { mx += st.x; mz -= st.y; }
 
+    // STRAFE WAS MIRRORED: A walked right and D walked left.
+    //
+    // Same class of bug as the forward/back inversion — the lateral basis
+    // vector derived from cameraYaw comes out as the player's LEFT under this
+    // atan2(x, z) convention, not their right. Reported from play, which beats
+    // deriving it from the trigonometry a second time and getting the same
+    // sign wrong.
+    //
+    // `invertStrafe` exposes it in Settings anyway, because handedness
+    // preference is real and some players will want it the other way round
+    // regardless of which one is "correct".
+    mx = this.invertStrafe ? mx : -mx;
+
     // Rotate the input into world space so "forward" means "away from camera".
     const cos = Math.cos(cameraYaw), sin = Math.sin(cameraYaw);
     const wx = mx * cos + mz * sin;
@@ -215,6 +234,12 @@ export class Input {
   }
 
   /** Clear edge-triggered state. Call once per frame AFTER command(). */
+  /** Persisted so the choice survives a reload. */
+  setInvertStrafe(on) {
+    this.invertStrafe = !!on;
+    try { localStorage.setItem("colosseum_invert_strafe", JSON.stringify(this.invertStrafe)); } catch (e) {}
+  }
+
   consume() {
     this.pressed.clear();
     this.mouse.dx = 0;
