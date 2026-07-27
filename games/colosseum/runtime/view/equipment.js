@@ -144,18 +144,26 @@ export function makeManica({ length = 0.30, radius = 0.062, bands = 7, metal = I
 /** Ocrea — a bronze greave covering the shin, open at the back. */
 export function makeOcrea({ length = 0.36, radius = 0.072, metal = BRONZE } = {}) {
   const parts = [];
-  // front shell: a half-cylinder, so it reads as strapped on rather than a tube
-  const shell = new THREE.CylinderGeometry(radius, radius * 0.82, length, 12, 1, true, -Math.PI * 0.62, Math.PI * 1.24);
+  // LIMB-ARMOUR CONVENTION: origin sits at the PARENT joint and the piece
+  // extends along +Y toward the child joint — the same convention makeManica
+  // uses (wide elbow end at the origin, narrow wrist end at +Y). The ocrea used
+  // to be built the other way up, knee cop at +Y, which put the knee cop on the
+  // ANKLE once attachToBone(align:"limb") aimed +Y down the shin. Two limb
+  // pieces with opposite conventions is the bug; one convention is the fix.
+  //
+  // So: knee (wide, capped) at the origin, ankle (narrow) at +Y = length.
+  const shell = new THREE.CylinderGeometry(radius * 0.82, radius, length, 12, 1, true, -Math.PI * 0.62, Math.PI * 1.24);
   shell.translate(0, length * 0.5, 0);
   parts.push(paint(shell, metal));
 
-  // knee cop
+  // knee cop — a dome over the knee, so it faces back up the leg (-Y)
   const knee = new THREE.SphereGeometry(radius * 1.12, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.55);
-  knee.translate(0, length * 0.97, 0);
+  knee.rotateX(Math.PI);
+  knee.translate(0, length * 0.03, 0);
   parts.push(paint(knee, metal));
 
   // two straps
-  for (const f of [0.3, 0.68]) {
+  for (const f of [0.32, 0.7]) {
     const strap = new THREE.TorusGeometry(radius * 1.02, 0.008, 5, 12);
     strap.rotateX(Math.PI / 2);
     strap.translate(0, length * f, 0);
@@ -221,40 +229,49 @@ export function makeSubligaculum({ radius = 0.16, length = 0.26, color = CLOTH_R
 /**
  * `offset` and `rot` are tuned against the verified rig. `scaleTo` optionally
  * fits a piece to the measured limb length so armour tracks body size.
+ *
+ * `align` picks how attachToBone orients the piece:
+ *   "limb" — +Y aimed at the bone's CHILD joint (armour running along a limb)
+ *   "tip"  — +Y along PARENT -> bone, for a leaf bone with no child (the head)
+ *   "body" — +Y world up, +Z the body's forward (armour girdling the trunk)
+ *   omitted — inherit the bone's frame verbatim
+ *
+ * Nothing inherits any more. Every one of these bones carries arbitrary roll
+ * from the Meshy auto-rig, and it differs per body — see verify_equipment.mjs.
  */
 export const SLOTS = {
   helmet: {
-    bone: /^Head$/i, build: makeGalea,
+    bone: /^Head$/i, build: makeGalea, align: "tip",
     offset: [0, 0.085, 0.012], rot: [0, 0, 0],
     desc: "Galea, on the head bone.",
   },
   armArmour: {
-    bone: /^RightForeArm$/i, build: makeManica,
+    bone: /^RightForeArm$/i, build: makeManica, align: "limb",
     offset: [0, 0.02, 0], rot: [0, 0, 0],
     desc: "Manica down the sword forearm.",
   },
   legArmourL: {
-    bone: /^LeftLeg$/i, build: makeOcrea,
+    bone: /^LeftLeg$/i, build: makeOcrea, align: "limb",
     offset: [0, 0.02, 0], rot: [0, 0, 0],
     desc: "Ocrea on the left shin.",
   },
   legArmourR: {
-    bone: /^RightLeg$/i, build: makeOcrea,
+    bone: /^RightLeg$/i, build: makeOcrea, align: "limb",
     offset: [0, 0.02, 0], rot: [0, 0, 0],
     desc: "Ocrea on the right shin.",
   },
   torso: {
-    bone: /^Spine01$/i, build: makeLorica,
+    bone: /^Spine01$/i, build: makeLorica, align: "body",
     offset: [0, -0.05, 0], rot: [0, 0, 0],
     desc: "Lorica over the chest.",
   },
   belt: {
-    bone: /^Hips$/i, build: makeBalteus,
+    bone: /^Hips$/i, build: makeBalteus, align: "body",
     offset: [0, 0.04, 0], rot: [0, 0, 0],
     desc: "Balteus at the waist.",
   },
   loincloth: {
-    bone: /^Hips$/i, build: makeSubligaculum,
+    bone: /^Hips$/i, build: makeSubligaculum, align: "body",
     offset: [0, 0.0, 0], rot: [0, 0, 0],
     desc: "Subligaculum.",
   },
@@ -285,6 +302,45 @@ export function boneLength(bone, fallback = 0.3) {
   return d > 0.0001 ? d : fallback;
 }
 
+/**
+ * Put the skeleton into its REST pose, returning a function that restores
+ * whatever pose was live. Lets equipment solve attachment frames against one
+ * stable reference instead of against whichever animation frame is showing.
+ *
+ * Uses the rest TRS that Actor snapshots at construction, NOT Skeleton.pose().
+ * pose() rebuilds bone transforms from the inverse-bind matrices, and on these
+ * Meshy rigs those are degenerate — measured live, it collapsed Head, Hips,
+ * LeftLeg and RightForeArm into a 1 cm ball and flattened the X axis to a
+ * single value. Solving a greave's direction against that gives a shin vector
+ * with no lateral component.
+ *
+ * No snapshot (a model not built by Actor) means no restore and no rest pose:
+ * the caller gets the live pose, which is the old behaviour.
+ */
+export function restBoneChain(model) {
+  const rest = model.userData && model.userData.restPose;
+  if (!rest || !rest.length) return () => {};
+
+  const saved = rest.map((t) => ({
+    b: t.b, p: t.b.position.clone(), q: t.b.quaternion.clone(), s: t.b.scale.clone(),
+  }));
+  for (const t of rest) {
+    t.b.position.copy(t.p);
+    t.b.quaternion.copy(t.q);
+    t.b.scale.copy(t.s);
+  }
+  model.updateMatrixWorld(true);
+
+  return () => {
+    for (const t of saved) {
+      t.b.position.copy(t.p);
+      t.b.quaternion.copy(t.q);
+      t.b.scale.copy(t.s);
+    }
+    model.updateMatrixWorld(true);
+  };
+}
+
 /** Find a bone by regex. */
 export function findBone(model, re) {
   let hit = null;
@@ -299,20 +355,118 @@ export function findBone(model, re) {
  *
  * @returns {THREE.Group|null} the mount, or null if the bone is absent
  */
-export function attachToBone(model, boneRe, mesh, { offset = [0, 0, 0], rot = [0, 0, 0], scale = 1 } = {}) {
+export function attachToBone(model, boneRe, mesh, {
+  offset = [0, 0, 0], rot = [0, 0, 0], scale = 1, align = null,
+} = {}) {
   const bone = findBone(model, boneRe);
   if (!bone) return null;
 
   bone.updateWorldMatrix(true, false);
   const s = new THREE.Vector3();
-  bone.matrixWorld.decompose(new THREE.Vector3(), new THREE.Quaternion(), s);
+  const boneQ = new THREE.Quaternion();
+  bone.matrixWorld.decompose(new THREE.Vector3(), boneQ, s);
   const counter = s.x > 0.0001 ? 1 / s.x : 1;
 
   const mount = new THREE.Group();
   mount.name = "equip_mount";
   mount.scale.setScalar(counter * scale);
   mount.position.set(offset[0] * counter, offset[1] * counter, offset[2] * counter);
-  mount.rotation.set(rot[0], rot[1], rot[2]);
+
+  if (align) {
+    // SOLVE THE ORIENTATION INSTEAD OF INHERITING IT.
+    //
+    // Every slot used to attach with rot [0,0,0], which silently assumes each
+    // bone's local frame already matches the frame the piece was modelled in.
+    // Meshy auto-rigs carry arbitrary bone roll, so that is wrong per-bone and
+    // per-archetype. Measured over all 8 shipped bodies by verify_equipment.mjs:
+    // 34 of 48 attachment points off-axis, 16 FULLY INVERTED — the greaves sat
+    // upside down on BOTH legs of EVERY body (169-171 deg, knee cop on the
+    // ankle) and the manica was rolled 89 deg across the forearm.
+    //
+    // This is the solve attachWeapon(align:"shield") already uses: build the
+    // orientation the piece needs in WORLD space, then express it in the bone's
+    // frame, so it survives whatever roll that bone happens to carry.
+    //
+    // Solved against the BIND pose, not the live pose. A bout builds equipment
+    // while actors are already idling (bout.js), so the live bone frame is
+    // wherever the current animation frame put it — baking that in would make
+    // a greave's fit depend on when the player opened the armoury.
+    const restore = restBoneChain(model);
+    bone.updateWorldMatrix(true, false);
+    bone.matrixWorld.decompose(new THREE.Vector3(), boneQ, new THREE.Vector3());
+
+    const want = new THREE.Quaternion();
+    if (align === "limb") {
+      // Limb armour runs ALONG the bone: point the piece's +Y (its long axis as
+      // modelled, origin at the parent joint) at the first child joint.
+      const child = bone.children.find((c) => c.isBone);
+      const from = new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld);
+      const to = new THREE.Vector3();
+      if (child) {
+        child.updateWorldMatrix(true, false);
+        to.setFromMatrixPosition(child.matrixWorld);
+      } else {
+        to.copy(from).add(new THREE.Vector3(0, 1, 0).applyQuaternion(boneQ));
+      }
+      const d = to.sub(from);
+      if (d.lengthSq() > 1e-9) {
+        want.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+      } else {
+        want.copy(boneQ);
+      }
+    } else if (align === "tip") {
+      // A LEAF bone has no child to aim at, so the axis continues the chain:
+      // +Y along parent -> bone. For Head (parent `neck`) that is the skull
+      // axis, which is what a helmet sits on. Measured Head-bone tilt ranges
+      // 22.8 deg (provocator) to 43.2 deg (crupellarius) across the roster, so
+      // inheriting it put the galea visibly crooked and differently crooked on
+      // every body.
+      const par = bone.parent && bone.parent.isBone ? bone.parent : null;
+      if (par) {
+        par.updateWorldMatrix(true, false);
+        const a = new THREE.Vector3().setFromMatrixPosition(par.matrixWorld);
+        const b = new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld);
+        const d = b.sub(a);
+        if (d.lengthSq() > 1e-9) {
+          want.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+        } else want.copy(boneQ);
+      } else want.copy(boneQ);
+    } else {
+      // Body armour is world-oriented: long axis UP, plate facing the body's
+      // forward. Forward comes off the model root, because the bone's frame is
+      // exactly the thing that cannot be trusted here.
+      model.updateWorldMatrix(true, false);
+      const rootQ = new THREE.Quaternion();
+      model.matrixWorld.decompose(new THREE.Vector3(), rootQ, new THREE.Vector3());
+      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(rootQ);
+      fwd.y = 0;
+      if (fwd.lengthSq() < 1e-6) fwd.set(0, 0, 1);
+      want.setFromRotationMatrix(new THREE.Matrix4().lookAt(
+        new THREE.Vector3(), fwd.normalize(), new THREE.Vector3(0, 1, 0)
+      ));
+    }
+
+    // Express the desired WORLD rotation in the bone's local frame:
+    //   local = inverse(boneWorld) * want
+    mount.quaternion.copy(boneQ.clone().invert().multiply(want));
+    // Per-slot tweaks apply ON TOP of the solved frame, not instead of it.
+    if (rot[0] || rot[1] || rot[2]) {
+      mount.quaternion.multiply(new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(rot[0], rot[1], rot[2])
+      ));
+    }
+    // The offset was tuned as "up/forward on the PIECE" — re-express it in the
+    // solved frame too, or a 4 cm belt rise becomes 4 cm sideways on a hip bone
+    // whose +Y is 91 deg off vertical.
+    mount.position.copy(
+      new THREE.Vector3(offset[0], offset[1], offset[2])
+        .applyQuaternion(mount.quaternion).multiplyScalar(counter)
+    );
+    restore();
+  } else {
+    mount.rotation.set(rot[0], rot[1], rot[2]);
+  }
+
   mount.add(mesh);
   bone.add(mount);
   return mount;
@@ -344,6 +498,14 @@ export class Equipment {
     const model = this.actor.model;
     const bone = findBone(model, def.bone);
     if (!bone) return null;
+
+    // FIT AND ORIENT AGAINST THE BIND POSE. boneLength() measures to the child
+    // joint in world space, so a knee bent by the live animation frame reports
+    // a shorter shin and the greave is built too small. Equipping happens both
+    // at bout setup and from the armoury mid-career, so "whatever pose it is in"
+    // is not a stable reference. attachToBone rest-poses too; nesting is a
+    // no-op, and this restore returns the real pose.
+    const restorePose = restBoneChain(model);
     const L = boneLength(bone, 0.3);
 
     // Per-slot fit derived from the real skeleton.
@@ -375,7 +537,9 @@ export class Equipment {
       offset: [def.offset[0], def.offset[1] * (L / 0.3), def.offset[2]],
       rot: def.rot,
       scale: fitted.scale || 1,
+      align: def.align,
     });
+    restorePose();
     if (mount) this.mounts.set(slot, mount);
     else mesh.geometry.dispose();
     return mount;

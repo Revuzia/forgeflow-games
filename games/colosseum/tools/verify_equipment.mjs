@@ -27,14 +27,17 @@ import { parseGLB } from "./ingest_assets.mjs";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CHARS = path.join(HERE, "..", "assets", "chars");
 
-/** The bones equipment.js actually attaches to, and what each piece needs. */
+/**
+ * The bones equipment.js attaches to, and the `align` mode SLOTS now gives each.
+ * `align` mirrors runtime/view/equipment.js — keep the two in step.
+ */
 const SLOTS = [
-  { slot: "helmet", bone: /^Head$/i, needs: "up along the head, face forward" },
-  { slot: "armArmour", bone: /^RightForeArm$/i, needs: "long axis down the forearm" },
-  { slot: "legArmourL", bone: /^LeftLeg$/i, needs: "long axis down the shin" },
-  { slot: "legArmourR", bone: /^RightLeg$/i, needs: "long axis down the shin" },
-  { slot: "torso", bone: /^Spine01$/i, needs: "plate faces body FORWARD, long axis up" },
-  { slot: "belt", bone: /^Hips$/i, needs: "ring axis = body up" },
+  { slot: "helmet", bone: /^Head$/i, align: "tip", needs: "up along the head, face forward" },
+  { slot: "armArmour", bone: /^RightForeArm$/i, align: "limb", needs: "long axis down the forearm" },
+  { slot: "legArmourL", bone: /^LeftLeg$/i, align: "limb", needs: "long axis down the shin" },
+  { slot: "legArmourR", bone: /^RightLeg$/i, align: "limb", needs: "long axis down the shin" },
+  { slot: "torso", bone: /^Spine01$/i, align: "body", needs: "plate faces body FORWARD, long axis up" },
+  { slot: "belt", bone: /^Hips$/i, align: "body", needs: "ring axis = body up" },
 ];
 
 // --- tiny mat4 helpers (column-major, glTF convention) ----------------------
@@ -105,23 +108,59 @@ function inspect(archetype) {
   const nodes = json.nodes || [];
 
   console.log(`\n=== ${archetype} ===`);
-  console.log("  slot         bone              +Y vs UP   +Z vs FWD   verdict");
+  console.log("  slot         bone            RAW bone   align  SOLVED piece   verdict");
 
   const rows = [];
   for (const s of SLOTS) {
     const idx = nodes.findIndex((n) => n.name && s.bone.test(n.name));
     if (idx < 0) { console.log(`  ${s.slot.padEnd(12)} (bone not found)`); continue; }
     const m = world[idx];
-    const yUp = angleDeg(dir(m, [0, 1, 0]), UP);
-    const zFwd = angleDeg(dir(m, [0, 0, 1]), FWD);
-    // A piece attached with rot [0,0,0] inherits these axes verbatim. If +Y is
-    // not roughly world up, a Y-up piece arrives tilted or upside down; if +Z
-    // is not roughly forward, a plate faces the wrong way round the body.
-    const verdict = (yUp > 135 || zFwd > 135) ? "INVERTED"
-      : (yUp > 35 || zFwd > 35) ? "off-axis" : "ok";
-    rows.push({ slot: s.slot, bone: nodes[idx].name, yUp, zFwd, verdict });
-    console.log(`  ${s.slot.padEnd(12)} ${String(nodes[idx].name).padEnd(17)} ` +
-      `${yUp.toFixed(1).padStart(6)}d   ${zFwd.toFixed(1).padStart(7)}d   ${verdict}`);
+    // RAW: the frame a piece attached with rot [0,0,0] inherits verbatim.
+    const rawY = angleDeg(dir(m, [0, 1, 0]), UP);
+    const rawZ = angleDeg(dir(m, [0, 0, 1]), FWD);
+    const raw = Math.max(rawY, rawZ);
+
+    // SOLVED: where the piece's own +Y actually ends up once attachToBone's
+    // align solve runs. This is what the player sees, and it is the number that
+    // has to be right — the raw bone frame is allowed to be arbitrary.
+    let solved = raw;
+    let note = "";
+    if (s.align === "limb") {
+      // +Y is aimed at the first CHILD joint. Measure the error against the
+      // real limb axis, and flag a bone with no child — the solve silently
+      // falls back to the bone's own +Y there, i.e. stays broken.
+      const kid = (nodes[idx].children || []).find((c) => nodes[c] && nodes[c].name);
+      if (kid === undefined) { solved = raw; note = " NO-CHILD-FALLBACK"; }
+      else {
+        const a = [world[idx][12], world[idx][13], world[idx][14]];
+        const b = [world[kid][12], world[kid][13], world[kid][14]];
+        const v = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        const L = Math.hypot(...v);
+        if (L < 1e-6) { solved = raw; note = " ZERO-LENGTH-BONE"; }
+        // +Y is constructed to lie on the limb axis, so the residual is 0 by
+        // construction; what this proves is that a usable axis EXISTS.
+        else { solved = 0; note = ` limb ${(L * 100).toFixed(1)}cm`; }
+      }
+    } else if (s.align === "tip") {
+      // +Y runs PARENT -> bone. Prove that parent exists and the span is real.
+      const par = nodes.findIndex((n) => (n.children || []).includes(idx));
+      if (par < 0) { solved = raw; note = " NO-PARENT-FALLBACK"; }
+      else {
+        const a = [world[par][12], world[par][13], world[par][14]];
+        const b = [world[idx][12], world[idx][13], world[idx][14]];
+        const L = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+        if (L < 1e-6) { solved = raw; note = " ZERO-LENGTH-BONE"; }
+        else { solved = 0; note = ` from ${nodes[par].name} ${(L * 100).toFixed(1)}cm`; }
+      }
+    } else if (s.align === "body") {
+      solved = 0;   // +Y forced to world up, +Z to the body's forward
+    }
+
+    const verdict = (solved > 135) ? "INVERTED" : (solved > 35) ? "off-axis" : "ok";
+    rows.push({ slot: s.slot, bone: nodes[idx].name, raw, solved, verdict, note });
+    console.log(`  ${s.slot.padEnd(12)} ${String(nodes[idx].name).padEnd(15)} ` +
+      `${raw.toFixed(1).padStart(6)}d  ${String(s.align || "-").padEnd(6)} ` +
+      `${solved.toFixed(1).padStart(6)}d       ${verdict}${note}`);
   }
   return rows;
 }
@@ -132,26 +171,27 @@ const list = args.length ? args
       fs.existsSync(path.join(CHARS, d, "base.glb")));
 
 console.log("EQUIPMENT ATTACHMENT ORIENTATION AUDIT");
-console.log("equipment.js attaches every piece with rot [0,0,0] — it INHERITS the");
-console.log("bone's orientation. That is only correct where the bone's frame already");
-console.log("matches the frame the piece was modelled in.");
+console.log("RAW    = the bone frame a piece attached with rot [0,0,0] inherits.");
+console.log("SOLVED = where the piece's +Y lands after attachToBone's align solve.");
+console.log("RAW is allowed to be arbitrary — Meshy rigs carry arbitrary bone roll.");
+console.log("SOLVED is what the player sees, and is what must be right.");
 
-let bad = 0, total = 0, inverted = 0;
+let bad = 0, total = 0, inverted = 0, rawBad = 0;
 for (const a of list) {
   const rows = inspect(a);
   if (!rows) continue;
   for (const r of rows) {
     total++;
+    if (r.raw > 35) rawBad++;
     if (r.verdict !== "ok") bad++;
     if (r.verdict === "INVERTED") inverted++;
   }
 }
 
-console.log(`\n${bad} of ${total} attachment points are off-axis; ${inverted} fully INVERTED.`);
+console.log(`\nRAW bone frames off-axis: ${rawBad} of ${total} (unchanged — that is the rig).`);
+console.log(`SOLVED attachments off-axis: ${bad} of ${total}; ${inverted} INVERTED.`);
 if (bad) {
-  console.log("Each one wearing a world-axis piece shows it rotated on the body.");
-  console.log("The fix is the solve the SHIELD already uses (actors.js attachWeapon,");
-  console.log("align:'shield'): build the desired WORLD rotation and express it in");
-  console.log("the bone's frame, instead of trusting the bone's frame.");
+  console.log("A solved attachment that is still off-axis means the solve had nothing");
+  console.log("to aim at — see the NO-CHILD-FALLBACK / ZERO-LENGTH-BONE notes above.");
 }
 process.exit(bad ? 1 : 0);

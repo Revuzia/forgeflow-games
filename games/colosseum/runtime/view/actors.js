@@ -263,6 +263,24 @@ export class Actor {
     this.model = skeletonClone(lib.scene);
     this.root.add(this.model);
 
+    // SNAPSHOT THE REST POSE BEFORE THE MIXER EXISTS.
+    //
+    // Equipment solves each attachment's orientation against a reference pose,
+    // and the obvious way to get one — THREE.Skeleton.pose() — does not work on
+    // these rigs. Measured live: pose() crushes Head, Hips, LeftLeg and
+    // RightForeArm to within 1 cm of each other in Y and to an IDENTICAL X,
+    // losing the lateral axis outright. That is the same degenerate bind pose
+    // prepScene already disables frustum culling for.
+    //
+    // The glTF node TRS is the real rest pose, and right here — cloned, before
+    // any AnimationMixer has touched a bone — is the last moment it is
+    // guaranteed intact. Keep it, and solve against this instead.
+    const restPose = [];
+    this.model.traverse((o) => {
+      if (o.isBone) restPose.push({ b: o, p: o.position.clone(), q: o.quaternion.clone(), s: o.scale.clone() });
+    });
+    this.model.userData.restPose = restPose;
+
     this.mixer = new THREE.AnimationMixer(this.model);
     this.actions = {};
     this.clipMap = clipMap || {};
