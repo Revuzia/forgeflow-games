@@ -153,33 +153,54 @@ export class Brain {
     // --- reactive layer: block/dodge can fire between decisions -----------
     // A threat is an enemy in an ACTIVE or late-WINDUP attack that can reach.
     const threatened = t.phase === PHASE.WINDUP && dist <= t.weapon.reach * 1.15;
-    if (threatened) {
-      const roll = this.rng();
-      const canBlock = s.shieldId !== "none" && !s.shieldBroken;
-      if (canBlock && roll < this.skill.blockChance) {
-        cmd.block = true;
+    // ONE REACTION, DECIDED ONCE PER INCOMING SWING, THEN HELD.
+    //
+    // This layer sits outside the `think <= 0` latency gate, so it re-rolled
+    // EVERY TICK of the windup. One roll per tick against a fixed threshold
+    // turns a per-tick probability p into 1-(1-p)^12 over a 12-tick windup,
+    // which saturates every band above tiro at ~100% block and ~97% dodge: the
+    // SKILL table became decorative and the player's swing was answered on
+    // essentially every commitment, at every difficulty.
+    //
+    // Rolling once and LATCHING is what makes the table mean what it says. The
+    // choice has to persist for the rest of the swing, not fire for a single
+    // tick — a block is a held stance, and issuing it on one tick would leave
+    // the guard down when the blow actually lands.
+    if (!threatened) {
+      this._reaction = null;
+    } else {
+      const key = t.id + ":" + t.swingSeq;
+      if (!this._reaction || this._reaction.key !== key) {
+        const roll = this.rng();
+        const canBlock = s.shieldId !== "none" && !s.shieldBroken;
+        let kind = "none";
+        if (canBlock && roll < this.skill.blockChance) {
+          kind = "block";
+        } else if (roll >= this.skill.blockChance &&
+                   roll < this.skill.blockChance + this.skill.dodgeChance &&
+                   s.stamina > FEEL.dodgeStamina) {
+          // Dodge occupies its OWN band, [blockChance, +dodgeChance).
+          //
+          // Without the lower bound a SHIELDLESS fighter skips the block branch
+          // and then dodges on every roll below blockChance+dodgeChance — 0.80
+          // for a veteranus against the 0.25 the table declares. The block band
+          // silently became extra dodging for exactly the fighters who cannot
+          // block: paegniarius ("blunt stick, no shield, no armour", the
+          // TUTORIAL opponent) and retiarius among them. Measured over 4,402
+          // fight frames it left the enemy dodging 24.2% of the bout and
+          // committing to an attack 0.6% of it, which stalemated the fight.
+          kind = "dodge";
+        }
+        this._reaction = { key, kind, fired: false };
+      }
+      const r = this._reaction;
+      if (r.kind === "block") {
+        cmd.block = true;                       // HELD for the whole swing
         cmd.blockDir = t.attackDir || DIR.HIGH;
         return cmd;
       }
-      // Dodge occupies its OWN probability band, [blockChance, +dodgeChance).
-      //
-      // Without the lower bound a SHIELDLESS fighter skips the block branch and
-      // then dodges on every roll below blockChance+dodgeChance — 0.80 for a
-      // veteranus instead of the 0.25 the table declares. The block band
-      // silently converted into extra dodging for exactly the fighters who
-      // cannot block: paegniarius ("blunt stick, no shield, no armour") and
-      // retiarius among them.
-      //
-      // Measured in the tutorial bout before this fix — phase occupancy over
-      // 4,402 fight frames:
-      //     enemy idle 74.1%  dodge 24.2%  windup 0.6%  active 0.6%
-      // An opponent that dodges a quarter of the fight and commits to an attack
-      // 0.6% of the time is not fighting, and the bout stalemated: foe stuck at
-      // 20 hp and player at 39 hp from t=30s to t=70s with no time limit to end
-      // it. That is the "combat seems completely broken" the player reported.
-      if (roll >= this.skill.blockChance &&
-          roll < this.skill.blockChance + this.skill.dodgeChance &&
-          s.stamina > FEEL.dodgeStamina) {
+      if (r.kind === "dodge" && !r.fired && s.stamina > FEEL.dodgeStamina) {
+        r.fired = true;                         // one-shot: a roll, not a stance
         cmd.dodge = true;
         // Sidestep rather than backpedal — retreating just invites the follow-up.
         cmd.moveX = Math.cos(face) * this.circleDir;

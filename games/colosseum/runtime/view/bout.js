@@ -28,8 +28,10 @@ import { damp, clamp } from "../core/util.js";
  * Where in each attack clip the blade actually connects, as a fraction of the
  * clip's own duration.
  *
- * Measured in headless Blender off peak hand extension from the body, not
- * guessed. Every archetype ships byte-identical clips (one MD5 each across all
+ * Measured by sampling the blade axis through each clip and testing it against
+ * the sim's own hit cone — NOT off "peak hand extension", which is what the
+ * first version of this comment claimed while shipping numbers that did not
+ * match it. Every archetype ships byte-identical clips (one MD5 each across all
  * eight), so one table covers the roster.
  *
  * This is the number the view needs and never had — `grep` for
@@ -39,8 +41,21 @@ import { damp, clamp } from "../core/util.js";
  * try: it stretched the clip across the window and saturated its own clamp.
  */
 const STRIKE_FRAC = {
-  slash1: 0.365,
-  slash2: 0.435,
+  // RE-MEASURED against the clips themselves, by sampling the blade axis and
+  // testing it against the sim's OWN hit cone (combat.js halfAngle 0.62 rad).
+  //
+  // The previous values were attributed to "peak hand extension" and were not
+  // that. slash1 shipped at 0.365: a 200-sample sweep puts peak extension at
+  // 0.41-0.44 by all four metrics (from hips, spine, shoulder, and forward of
+  // hips), and 0.365 fell in the one narrow gap, 0.280-0.410, where the blade
+  // is OUTSIDE the cone — so the sim resolved damage with the sword still
+  // cocked back at bearing -143 deg, behind the fighter. At 0.42 it reads
+  // bearing -12.1, elevation +3.5: forward and level.
+  //
+  // slash2 shipped at 0.435, which put the blade past the cone before ACTIVE
+  // even opened; its true pass is 0.249.
+  slash1: 0.414,
+  slash2: 0.249,
   attack: 0.400,   // beast lunge
   finisher: 0.500,
 };
@@ -208,8 +223,20 @@ export class BoutView {
           // the damage, slash1's arrived up to 252 ms before it, and because
           // the two alternate the same weapon swung 389 ms differently on
           // consecutive attacks.
+          // ALIGN TO THE WINDUP THE SIM ACTUALLY USES, NOT THE TABLE VALUE.
+          //
+          // This divided by the RAW f.weapon.windup, but combat.js _windup()
+          // returns weapon.windup * mods.windup * (1 + clamp(wounds.arms*0.18,
+          // 0, 0.6)), and the hit resolves ceil(windup/dt)+1 ticks after the
+          // phase edge. Neither the attribute/training modifier nor the tick lag
+          // was here, so the view and the sim disagreed by -150 ms to +33 ms
+          // across the game's own modifier range — and NO STRIKE_FRAC table can
+          // be right for more than one fighter state while that is true. Fixing
+          // the denominator is what makes the table mean something.
           const strikeAt = dur * (STRIKE_FRAC[clip] ?? 0.4);
-          const ts = clamp(strikeAt / Math.max(0.05, f.weapon.windup), 0.5, 14);
+          const simWind = f.weapon.windup * (f.mods ? f.mods.windup : 1) *
+                          (1 + clamp((f.wounds ? f.wounds.arms : 0) * 0.18, 0, 0.6));
+          const ts = clamp(strikeAt / Math.max(0.05, simWind + 2 / 60), 0.5, 14);
           a.playOnce(clip, { timeScale: ts, then: null, fade: 0.05 });
           // Remember it so RECOVER can let the follow-through finish rather
           // than cutting to idle mid-swing.

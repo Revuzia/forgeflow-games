@@ -319,6 +319,10 @@ export class Combat {
         if (d < best) { best = d; f._lungeTarget = t; }
       }
       f.phase = PHASE.WINDUP; f.phaseT = 0;
+      // Monotonic per-swing id. Defenders latch their block/dodge decision to
+      // this so they react ONCE per incoming attack instead of re-rolling every
+      // tick of the windup — see the reactive layer in ai.js.
+      f.swingSeq = (f.swingSeq || 0) + 1;
       f.attackDir = dir;
       f.stamina -= w.stamina;
       // Carry the swing's geometry so the view can draw the actual arc this

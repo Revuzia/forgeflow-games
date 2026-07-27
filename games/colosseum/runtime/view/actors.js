@@ -227,8 +227,20 @@ function twoBoneIK(upper, fore, hand, target, weight) {
   }
 
   if (weight < 0.999) {
-    upper.quaternion.slerpQuaternions(upQ0, upper.quaternion, weight);
-    fore.quaternion.slerpQuaternions(foQ0, fore.quaternion, weight);
+    // BLEND TOWARD THE ORIGINAL, NOT slerpQuaternions(orig, this, w).
+    //
+    // three implements slerpQuaternions(qa, qb, t) as `this.copy(qa).slerp(qb, t)`.
+    // Passing the bone's own quaternion as qb aliases it with `this`, so
+    // copy(qa) overwrites qb BEFORE the slerp reads it and the result is
+    // slerp(qa, qa, t) = qa — the animated pose, with the entire IK solve
+    // silently thrown away. _guardW only equals 1 on the very first frame; it
+    // decays during every attack and then climbs back asymptotically, so this
+    // discarded the guard pose on the overwhelming majority of combat frames.
+    //
+    // slerp(solved -> original, 1 - weight) is the same interpolation with no
+    // aliasing: upQ0/foQ0 are module scratch, distinct from the bone's own.
+    upper.quaternion.slerp(upQ0, 1 - weight);
+    fore.quaternion.slerp(foQ0, 1 - weight);
     upper.updateMatrixWorld(true);
   }
 }
@@ -924,6 +936,37 @@ export function makeGladius() {
 }
 
 /**
+ * Make every triangle's winding agree with the normal it declares.
+ *
+ * These swept surfaces are built by pushing explicit positions and explicit
+ * normals, so "the normal is right, the winding must follow" is well defined —
+ * and it is the only part of the pair that is easy to get wrong. Flipping the
+ * sign of the scutum's z sweep reversed the handedness of the (x, z) pair and
+ * left 32 of 270 triangles wound against their own normals; with the material
+ * on FrontSide those strips were culled, so the board showed gaps.
+ *
+ * Repairing it by construction beats hand-auditing eight quad literals for
+ * handedness every time a sign changes — which I did twice, wrongly, before
+ * writing this.
+ *
+ * Operates on a non-indexed position/normal pair, which is what quadTri emits.
+ */
+function fixWinding(pos, nor) {
+  for (let i = 0; i + 8 < pos.length; i += 9) {
+    const ux = pos[i + 3] - pos[i], uy = pos[i + 4] - pos[i + 1], uz = pos[i + 5] - pos[i + 2];
+    const vx = pos[i + 6] - pos[i], vy = pos[i + 7] - pos[i + 1], vz = pos[i + 8] - pos[i + 2];
+    const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+    if (cx * nor[i] + cy * nor[i + 1] + cz * nor[i + 2] >= 0) continue;
+    // Swap vertices 1 and 2 — reverses winding, leaves the normals alone.
+    for (let k = 0; k < 3; k++) {
+      const a = i + 3 + k, b = i + 6 + k;
+      const t = pos[a]; pos[a] = pos[b]; pos[b] = t;
+      const s = nor[a]; nor[a] = nor[b]; nor[b] = s;
+    }
+  }
+}
+
+/**
  * A scutum: the big curved rectangular shield. One draw call.
  *
  * Built as a ring-segment sweep rather than N independent rotated boxes. The
@@ -967,6 +1010,15 @@ export function makeScutum({ w = 0.66, h = 1.02, curve = 0.16 } = {}) {
     const [x1, z1] = at(t1);
     const nx = Math.sin((t0 + t1) / 2);
     const nz = Math.cos((t0 + t1) / 2);   // outward: the board bulges toward +z
+    // Front and back faces, wound to MATCH their declared normals.
+    //
+    // Flipping the sweep's z sign (above) also flipped the handedness of the
+    // (x, z) pair, so these two quads' winding no longer agreed with the normals
+    // they declare. Measured on the built mesh: 32 of 270 triangles inverted —
+    // exactly 8 staves x 2 quads x 2 triangles — and the material is FrontSide,
+    // so the enemy-facing surface of the board was being culled. The top and
+    // bottom edge quads are unaffected because their order is driven by +/-h/2,
+    // not by z, which is why the count came out at precisely these two.
     // front face
     quadTri(pos, nor, [x0, -h / 2, z0], [x1, -h / 2, z1], [x1, h / 2, z1], [x0, h / 2, z0], [nx, 0, nz]);
     // back face
@@ -975,6 +1027,7 @@ export function makeScutum({ w = 0.66, h = 1.02, curve = 0.16 } = {}) {
     quadTri(pos, nor, [x0, h / 2, z0], [x1, h / 2, z1], [x1, h / 2, z1 - thick], [x0, h / 2, z0 - thick], [0, 1, 0]);
     quadTri(pos, nor, [x0, -h / 2, z0 - thick], [x1, -h / 2, z1 - thick], [x1, -h / 2, z1], [x0, -h / 2, z0], [0, -1, 0]);
   }
+  fixWinding(pos, nor);
   const board = new THREE.BufferGeometry();
   board.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   board.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
@@ -1019,6 +1072,7 @@ export function makeScutum({ w = 0.66, h = 1.02, curve = 0.16 } = {}) {
       quadTri(rp, rn, [x0, y1, z0], [x1, y1, z1], [x1 + ox, y1, z1 + oz], [x0 + ox, y1, z0 + oz], [0, sy, 0]);
       quadTri(rp, rn, [x0 + ox, y0, z0 + oz], [x1 + ox, y0, z1 + oz], [x1, y0, z1], [x0, y0, z0], [0, -sy, 0]);
     }
+    fixWinding(rp, rn);
     const rail = new THREE.BufferGeometry();
     rail.setAttribute("position", new THREE.Float32BufferAttribute(rp, 3));
     rail.setAttribute("normal", new THREE.Float32BufferAttribute(rn, 3));
