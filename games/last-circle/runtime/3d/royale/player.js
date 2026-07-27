@@ -1315,26 +1315,84 @@ function syncObj(W, a, dt, far) {
         // local = inverse(parent world) * desired world; parent IS the hand bone
         a.hand.quaternion.copy(_gq.invert()).multiply(_gd);
       }
-      // ── SUPPORT HAND — SOLVER READY, CALL DISABLED ───────────────────
-      // pose.js twoBoneIK is correct and PROVEN: invoked directly on this rig it
-      // moved the off hand 0.437 m and left a 0.066 m residual, i.e. the hand
-      // lands on the weapon. Wiring the same call into syncObj produced
-      // byte-identical frames — the hand never moved — so something later in the
-      // frame re-poses the arm and I have not yet identified what. Rather than
-      // ship an integration I cannot demonstrate, the call stays out.
+      // ── SUPPORT HAND — two-bone IK onto the foregrip ─────────────────────
+      // History, so nobody hunts ghosts: this call spent weeks disabled under
+      // the theory that "something later in the frame re-poses the arm". Wrong.
+      // The kernel order is mixers -> updaters -> render, nothing runs after
+      // syncObj that touches bones. The real fault was twoBoneIK's elbow-bend
+      // sign driving the elbow AWAY from the target by the intended magnitude
+      // every call (live-measured 94.3 -> 116.8 -> 161.8 deg across passes);
+      // the shoulder swing partially recovered, so standalone probes looked
+      // convergent while per-frame solves oscillated. Fixed in pose.js.
       //
-      // Groundwork that IS in place and verified:
-      //   • gunReady firing elbow tucked (pose.js): right hand 0.628 -> 0.579 m
-      //     from the left shoulder, which moves a natural 50%-along grip point
-      //     inside the 0.558 m arm envelope for the first time.
-      //   • foregrip measured in HOLDER space, not mesh space (that bug put the
-      //     target at z +0.039 instead of -0.058).
-      //   • updateWorldMatrix(true, TRUE) so the tip is resampled after the elbow
-      //     rotates, instead of reading last frame's position.
-      //   • _IDENT hoisted above twoBoneIK so the blend<1 path cannot depend on
-      //     declaration order.
-      // Next step is to find the writer that runs after syncObj and clobbers the
-      // arm, then re-enable this single call.
+      // gunReady only: the reload pose owns the left arm (mag change), lowReady
+      // carries relaxed, and swim/glide/emote clips own the whole body.
+      if (a.hand && a.weaponMesh && a.armBones && a.armBones.lArm && !a.emoting &&
+          a._armMode === "gunReady" && a._armW > 0.5 &&
+          (!a.rig.mixer || a.rig.mixer.timeScale !== 0)) {
+        if (a._gripFor !== a.weapon.id) {
+          // foregrip point, HOLDER space, measured once per weapon swap: the
+          // proto is normalized/centered with +Z the barrel, so the support
+          // palm cups forward of center by a class fraction of the front half,
+          // on the underside. Async proto: no geometry yet -> retry next frame.
+          // matrixWorld refresh first — same stale-matrix trap validateAttachments
+          // hit (a 0.62 m AR measured 0.01 m against a not-yet-baked holder).
+          a.obj.updateMatrixWorld(true);
+          _ikM.copy(a.hand.matrixWorld).invert();
+          let zMax = 0, yMin = 0, found = false;
+          a.weaponMesh.traverse((o) => {
+            if (!(o.isMesh || o.isSkinnedMesh) || !o.geometry) return;
+            if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+            const bb = o.geometry.boundingBox;
+            _ikM2.copy(_ikM).multiply(o.matrixWorld);
+            for (let ci = 0; ci < 8; ci++) {
+              _fgS.set(ci & 1 ? bb.max.x : bb.min.x, ci & 2 ? bb.max.y : bb.min.y,
+                       ci & 4 ? bb.max.z : bb.min.z).applyMatrix4(_ikM2);
+              if (!found) { zMax = _fgS.z; yMin = _fgS.y; found = true; }
+              else { zMax = Math.max(zMax, _fgS.z); yMin = Math.min(yMin, _fgS.y); }
+            }
+          });
+          if (found) {
+            const cls = (K.WEAPONS[a.weapon.id] || {}).cls;
+            // pistol: support hand cups the firing hand at the grip, not the
+            // muzzle; long guns grip the front half; pump/bolt sit further out
+            const zF = cls === "pistol" ? 0.05 : cls === "shotgun" ? 0.55
+                     : cls === "launcher" ? 0.3 : cls === "sniper" ? 0.5 : 0.45;
+            a._gripLocal = new THREE.Vector3(0, yMin * 0.6, zMax * zF);
+            a._gripFor = a.weapon.id;
+          }
+        }
+        if (a._gripLocal && a._gripFor === a.weapon.id) {
+          a.hand.updateWorldMatrix(true, false);
+          _fgW.copy(a._gripLocal); a.hand.localToWorld(_fgW);
+          // REACH-AWARE GRIP SLIDE: at full ADS the class foregrip can sit
+          // beyond the support arm's envelope (measured: AR grip 0.83 m from
+          // the left shoulder vs 0.65 m of arm) — solving anyway leaves a
+          // fully extended arm floating short of the rail, the exact "AI
+          // game" tell. Real shooters shorten the hold instead: slide the
+          // grip back along the barrel toward the receiver until reachable.
+          // Sphere(shoulder, 0.94*reach) ∩ barrel line, largest t in [0, gz].
+          _fgA.setFromMatrixPosition(a.armBones.lArm.matrixWorld);
+          a.armBones.lFore.getWorldPosition(_fgB);
+          a.armBones.lHand.getWorldPosition(_fgC);
+          const _reach = (_fgA.distanceTo(_fgB) + _fgB.distanceTo(_fgC)) * 0.94;
+          if (_fgA.distanceTo(_fgW) > _reach) {
+            _fgL.set(0, a._gripLocal.y, 0); a.hand.localToWorld(_fgL);   // receiver end
+            _fgS.copy(_fgW).sub(_fgL);                                   // barrel run
+            const gz2 = _fgS.lengthSq();
+            _fgW.copy(_fgL).sub(_fgA);                                   // H - S
+            const bq = 2 * _fgS.dot(_fgW), cq = _fgW.lengthSq() - _reach * _reach;
+            const disc = bq * bq - 4 * gz2 * cq;
+            let t = 0;
+            if (disc > 0 && gz2 > 1e-8) t = K.clamp((-bq + Math.sqrt(disc)) / (2 * gz2), 0, 1);
+            _fgW.copy(_fgL).addScaledVector(_fgS, t);
+          }
+          // blend follows the arm-pose weight so the hand eases on/off with the
+          // gunReady transition instead of snapping
+          twoBoneIK(a.armBones.lArm, a.armBones.lFore, a.armBones.lHand, _fgW,
+                    K.clamp((a._armW - 0.5) * 2, 0, 1));
+        }
+      }
     }
   }
 }

@@ -206,8 +206,17 @@ export function twoBoneIK(root, mid, tip, target, blend) {
   if (_ikAxis.lengthSq() < IK.eps) return -1;
   _ikAxis.normalize();
 
-  // 1) bend the elbow to the desired interior angle
-  const dElbow = (wantDeg - curDeg) * Math.PI / 180;
+  // 1) bend the elbow to the desired interior angle. Sign convention, verified
+  //    numerically on the live rig: +rotation of the forearm about the arm-plane
+  //    normal (AB x CB) CLOSES the interior angle (Rodrigues on CB: interior
+  //    goes 90-d for +d). So closing from cur to want needs +(cur - want). The
+  //    original (want - cur) drove the elbow the WRONG WAY by exactly the
+  //    intended magnitude every call (measured live: 94.3 -> 116.8 -> 161.8
+  //    across passes, each +|want-cur| instead of -). The shoulder swing then
+  //    partially recovered, which made the standalone test look convergent
+  //    (0.511 -> 0.128) while in-game per-frame solves oscillated and the
+  //    integration read as "the hand never moved".
+  const dElbow = (curDeg - wantDeg) * Math.PI / 180;
   if (Math.abs(dElbow) > IK.eps) {
     _ikQ.setFromAxisAngle(_ikAxis, dElbow * blend);
     rotateBoneWorld(mid, _ikQ);

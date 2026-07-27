@@ -132,10 +132,33 @@ All verified end-to-end this session (a full 50→1 match played to VICTORY,
 - **Movement**: stamina-gated sprint, crouch, swim with haul-out (water is no
   longer a one-way trapdoor), glide/parachute, underwater treatment.
 
+## 9. Support-hand two-bone IK — SHIPPED (and the false theory retired)
+
+The support hand now grips the weapon in gunReady via `pose.js twoBoneIK`,
+called from syncObj with a class-based foregrip point measured in holder space
+once per weapon swap, plus a reach-aware slide (grip point moves back along
+the barrel toward the receiver when the class foregrip exceeds the arm
+envelope — the short-stock hold real shooters use, instead of a fully
+extended arm floating short of the rail).
+
+The weeks-old "frame-order clobber" theory was WRONG: kernel order is
+mixers → updaters → render and nothing after syncObj touches bones. The real
+fault was twoBoneIK's elbow-bend sign driving the elbow AWAY from the target
+by the intended magnitude every call (live-measured 94.3° → 116.8° → 161.8°
+across passes — each off by exactly +|want−cur|); the shoulder swing then
+partially recovered, so standalone probes looked convergent while per-frame
+solves oscillated (0.86/0.336/0.418/0.674 m). Sign fixed in pose.js with the
+Rodrigues derivation in the comment.
+
+Verified live: pistol hand-to-weapon 0.021 m (cups the grip), AR 0 m with a
+natural 105.3° elbow, shotgun/sniper on the fore-end at extension (correct
+technique for those classes); screenshots from three angles show a true
+two-handed hold; standard-mode 50-bot match runs clean, zero errors.
+
 ## Still open (tracked, not hidden)
 
-Tower interior ramps dead-end into the floor slab; cliff-temple chests
-unreachable on foot; support-hand two-bone IK (solver written and proven in
-isolation — `pose.js twoBoneIK` — integration blocked on a frame-order clobber,
-documented at the disabled call site); MP host-departure trio; the owner-call
-calibration pair above.
+Mid-match MP REJOIN (host-departure recovery shipped; a returning peer still
+gets a new id, no slot re-mapping — design change, deferred); the owner-call
+calibration pair above (bandage 3→4 s + big shield 4→5 s; crouch speed
+0.45× vs ~0.72–0.76×). Tower interior ramps and cliff-temple chest access
+were fixed and walk-verified in earlier iterations (see commit log).
