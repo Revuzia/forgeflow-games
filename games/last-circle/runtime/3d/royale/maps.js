@@ -683,8 +683,16 @@ export async function buildMap(W, mapId) {
         const pdir = (f - 1) % 2 ? 3 : 2;                       // ramp below: up-end -Z (3) or +Z (2)
         const rx = x + ((f - 1) % 2 ? -fw / 4 : fw / 4);        // its X offset
         const rrun = fw * 0.7;                                  // its Z run
-        const hz0 = pdir === 2 ? z + 0.2 : z - rrun * 0.55;
-        const hz1 = pdir === 2 ? z + rrun * 0.55 : z - 0.2;
+        // The hole must begin where a climber's HEAD is still below the slab,
+        // or blockedHoriz jams the capsule against the hole's near edge and the
+        // ramp dead-ends 1.4 m short of the floor above. Worked example (fw 12,
+        // rrun 8.4, FH 4): the capsule (r 0.45, h 1.85) reaches the old z+0.2
+        // edge at z+0.65, where the ramp has risen only 2.31 m — head at 4.16,
+        // slab top at 4.30, overlap -> stuck. Starting the hole at z-0.1*rrun
+        // puts the edge where the capsule top is still UNDER the slab (3.66 <
+        // 4.00), so you pass beneath the lip and rise through the opening.
+        const hz0 = pdir === 2 ? z - rrun * 0.10 : z - rrun * 0.55;
+        const hz1 = pdir === 2 ? z + rrun * 0.55 : z + rrun * 0.10;
         addSlabHole(x, fy + 0.15, z, fw, 0.3, shade(color, 0.8), rx - 1.6, rx + 1.6, hz0, hz1);
       }
       // 4 walls with a window band on upper floors + a door gap on the ground floor.
@@ -1236,7 +1244,16 @@ export async function buildMap(W, mapId) {
         addBox(x, y + s / 2, z, s, s, s, C_STONE);
         addBox(x, y + s + 0.8, z, s * 1.3, 1.6, s * 1.3, shade(C_STONE, 0.85));
         if (i % 2 === 0) chest(x, y + s + 1.9, z, p.id);
-        addRamp(x, y, z + s / 2 + s * 0.75, 2.4, s, s * 1.5, 3, shade(C_STONE, 0.9));
+        // The old ramp rose only to the CUBE top (height s) — but the cap sits
+        // directly on that top, 1.6 m tall and 30% wider, so the ramp's last
+        // metre ran UNDER the cap's overhang with headroom shrinking to zero:
+        // every even-index temple chest (three per match) was visible, marked,
+        // and physically unreachable on foot. The ramp now rises to the CAP TOP
+        // (s + 1.6) and its up-end lands at the cap's face (z + 0.65s), flush
+        // with the top surface, so the walk-off steps straight onto the cap.
+        // Run lengthened to keep the old ~34-degree slope.
+        const trun = s * 1.5 + 2.4;
+        addRamp(x, y, z + s * 0.65 + trun / 2, 2.4, s + 1.6, trun, 3, shade(C_STONE, 0.9));
       }
     }
     // Isla Viva had NOT ONE multi-storey interior: the whole branch was towns of
