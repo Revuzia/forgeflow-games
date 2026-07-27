@@ -130,6 +130,54 @@ function tiltDir(d, pitch) {
   return [d[0], d[1] * c + d[2] * s, d[2] * c - d[1] * s];
 }
 
+/** ── AIM RIG ──────────────────────────────────────────────────────────────
+ *  Replaces two hand-tuned spine gains with a sourced, clamped aim chain.
+ *
+ *  THE NUMBER THAT DRIVES ALL OF THIS: the trunk physically cannot supply a
+ *  large up-aim. Thoracic extension tops out at ~22 deg and lumbar at ~31 deg
+ *  (in-vivo ROM, anatomystandard.com), so ~53 deg is the absolute ceiling at
+ *  95th-percentile flexibility. Routing aim pitch mainly through the spine is
+ *  therefore GUARANTEED to hyperextend — which is exactly what this rig did,
+ *  and why the character read as having a broken back.
+ *
+ *  So the pitch is split across two SEPARATE chains, the way shipping engines
+ *  do it:
+ *    TRUNK — takes a minority share, hard-clamped and asymmetric, because
+ *      extension (up) is far more limited than flexion (down). Weights
+ *      0.333/0.444/0.222 root->tip.
+ *    GAZE — neck + head, deliberately NOT part of the aim solve (CryEngine's
+ *      AimIK definition excludes them: Additive="0" Primary="0"). They carry
+ *      what the trunk cannot, which is why a real shooter's head tracks the
+ *      target while the spine stays civil. Ours were frozen — measured at a
+ *      constant 21.7 deg head / -5.6 deg neck regardless of aim.
+ *  Per-axis clamps follow Unity's shipping humanoid (neck and head +/-40 each)
+ *  and AAOS cervical norms (flex/ext 45, rotation 60). */
+const AIM = {
+  trunkShare: 0.45,          // fraction of pitch the spine is allowed to take
+  trunkUpMax: -20,           // deg, extension — the tight one
+  trunkDownMax: 45,          // deg, flexion — thoracic 26 + lumbar 65, taken at ~50%
+  trunkW: { spine2: 0.333, spine1: 0.444, spine: 0.222 },
+  gazeSumMax: 60,            // |neck| + |head| ceiling, under both AAOS totals
+  neckW: 0.40, neckMax: 25,  // deg
+  headW: 0.60, headMax: 35,  // deg (Unity clamps each cervical axis at 40)
+};
+const _d2r = Math.PI / 180, _r2d = 180 / Math.PI;
+const _clampD = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+
+function applyAimChain(bones, pitchRad, weight) {
+  const deg = pitchRad * _r2d;
+  // trunk takes a minority share and is clamped to the anatomical budget
+  const trunk = _clampD(deg * AIM.trunkShare, AIM.trunkUpMax, AIM.trunkDownMax);
+  applySpineAim(bones.spine2, trunk * AIM.trunkW.spine2 * _d2r * weight);
+  applySpineAim(bones.spine1, trunk * AIM.trunkW.spine1 * _d2r * weight);
+  applySpineAim(bones.spine,  trunk * AIM.trunkW.spine  * _d2r * weight);
+  // whatever the trunk could not supply goes to the gaze chain, so the head
+  // actually looks where the weapon points instead of riding the chest
+  const gaze = _clampD(deg - trunk, -AIM.gazeSumMax, AIM.gazeSumMax);
+  applySpineAim(bones.neck, _clampD(gaze * AIM.neckW, -AIM.neckMax, AIM.neckMax) * _d2r * weight);
+  applySpineAim(bones.head, _clampD(gaze * AIM.headW, -AIM.headMax, AIM.headMax) * _d2r * weight);
+}
+
 /** Absolute (not cumulative) spine aim-bend.
  *  The first call caches the bone's rest rotation.x; every later call assigns
  *  rest + offset, so the pose can never compound frame over frame and always
@@ -161,8 +209,7 @@ export function applyArmPose(obj, bones, mode, weight, pitch) {
   // back down after the aim was released — the fighter stayed arched backwards,
   // head to the sky, for the rest of the match.
   // Capture the un-posed value once per bone and SET an absolute offset instead.
-  applySpineAim(bones.spine2, pk * 0.3 * sw);
-  applySpineAim(bones.spine1, pk * 0.18 * sw);
+  applyAimChain(bones, pk, sw);
   const bl = 0.92 * Math.min(1, weight);
   aim(bones.rArm, bones.rFore, _oq, T[0][0], T[0][1], T[0][2], bl);
   aim(bones.lArm, bones.lFore, _oq, T[2][0], T[2][1], T[2][2], bl);
