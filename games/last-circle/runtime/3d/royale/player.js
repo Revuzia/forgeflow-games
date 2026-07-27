@@ -1250,8 +1250,39 @@ function syncObj(W, a, dt, far) {
       // input.pitch > 0 = looking UP (verified: mouse-up → +pitch; aimDir/camera use sin(pitch));
       // tiltDir(+) raises the muzzle, so pass pitch un-negated or the gun tilts the wrong way
       if (a._armW > 0.02 && a._armMode) applyArmPose(a.obj, a.armBones, a._armMode, a._armW, a.pitch);
-      // (per-frame barrel aiming removed — it was fragile and unverifiable;
-      //  weapon orientation now uses the per-skin calibration set at load)
+      // ── BARREL AIM ────────────────────────────────────────────────────────
+      // HAND_AIM_ROT is a STATIC local rotation grid-searched against ONE frame
+      // of the idle clip. But applyArmPose aims the arm CHAIN (rArm->rFore,
+      // rFore->rHand) and never sets the hand bone's own rotation — so the hand
+      // bone's world orientation is whatever the current clip keyed it to, and a
+      // fixed local offset cannot hold the barrel forward across clips. Measured
+      // before this: mean 32.7 deg of barrel error, and SOLDIER — the default
+      // player skin — 49.9 deg off.
+      //
+      // A previous attempt at per-frame aiming was reverted as "fragile and
+      // unverifiable". The fragility was reading a STALE hand matrix: the mixer
+      // advances between syncObj and any later evaluation. updateWorldMatrix on
+      // the bone immediately before sampling is what makes this sound, and the
+      // result is verified by screenshot, not by a cross-frame numeric probe.
+      //
+      // Only while a gun is actually up: emotes, death, swim and the glide poses
+      // must keep the clip's own arms.
+      if (a.hand && a.handBone && !a.emoting &&
+          (a._armMode === "gunReady" || a._armMode === "reload") && a._armW > 0.5) {
+        a.handBone.updateWorldMatrix(true, false);          // fresh, not stale
+        a.handBone.getWorldQuaternion(_gq);
+        const cp = Math.cos(a.pitch), sp = Math.sin(a.pitch);
+        _gf.set(-Math.sin(a.yaw) * cp, sp, -Math.cos(a.yaw) * cp).normalize();
+        // explicit basis (not setFromUnitVectors) so the gun cannot roll: +Z is
+        // the barrel, +Y stays world-up-ish, +X is right.
+        _gr.crossVectors(_gUp, _gf);
+        if (_gr.lengthSq() < 1e-6) _gr.set(1, 0, 0); else _gr.normalize();
+        _gu.crossVectors(_gf, _gr).normalize();
+        _gm.makeBasis(_gr, _gu, _gf);
+        _gd.setFromRotationMatrix(_gm);
+        // local = inverse(parent world) * desired world; parent IS the hand bone
+        a.hand.quaternion.copy(_gq.invert()).multiply(_gd);
+      }
     }
   }
 }
@@ -1290,6 +1321,10 @@ function interpRemote(W, a, dt) {
 
 // ── camera ───────────────────────────────────────────────────────────────────
 const camTarget = new THREE.Vector3(), camPos = new THREE.Vector3(), camDir = new THREE.Vector3();
+// barrel-aim scratch (reused every actor, every frame — never allocate here)
+const _gq = new THREE.Quaternion(), _gd = new THREE.Quaternion();
+const _gf = new THREE.Vector3(), _gr = new THREE.Vector3(), _gu = new THREE.Vector3();
+const _gUp = new THREE.Vector3(0, 1, 0), _gm = new THREE.Matrix4();
 const _uwCol = new THREE.Color(), _uwDeep = new THREE.Color(0x0d4a63);   // underwater fog/bg target
 // shake state lives here, not on W: shakeT drives coherent noise (see below) and
 // _shakeOff is last frame's offset, which has to be undone before the lerp.

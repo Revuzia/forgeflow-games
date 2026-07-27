@@ -314,9 +314,17 @@ function spatial(pos, maxD) {
     const dx = pos.x - cam.position.x, dz = pos.z - cam.position.z;
     const d = Math.hypot(dx, dz, (pos.y || 0) - cam.position.y);
     maxD = maxD || 60;
-    if (d > maxD) return null;
+    // `d > maxD` FAILS OPEN on NaN — every comparison with NaN is false — so a
+    // single non-finite coordinate (an actor mid-teleport, a camera between
+    // handovers) sailed past this guard, made vol NaN via Math.pow, and then
+    // threw "AudioParam: non-finite value" out of g.gain.value. That exception
+    // escapes through the event emit and kills the whole frame update: one bad
+    // sound position stopped the entire game. A sound we cannot place is a sound
+    // we skip, never a crash.
+    if (!isFinite(d) || d > maxD) return null;
     dist = d;
-    vol = Math.pow(1 - d / maxD, 1.4);
+    vol = Math.pow(Math.max(0, 1 - d / maxD), 1.4);
+    if (!isFinite(vol)) return null;
   }
   const g = ctx.createGain();
   g.gain.value = vol;

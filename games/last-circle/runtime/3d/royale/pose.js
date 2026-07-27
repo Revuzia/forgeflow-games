@@ -130,6 +130,16 @@ function tiltDir(d, pitch) {
   return [d[0], d[1] * c + d[2] * s, d[2] * c - d[1] * s];
 }
 
+/** Absolute (not cumulative) spine aim-bend.
+ *  The first call caches the bone's rest rotation.x; every later call assigns
+ *  rest + offset, so the pose can never compound frame over frame and always
+ *  returns to rest when the offset is 0. */
+function applySpineAim(bone, off) {
+  if (!bone) return;
+  if (bone.userData._aimBaseX === undefined) bone.userData._aimBaseX = bone.rotation.x;
+  bone.rotation.x = bone.userData._aimBaseX + (off || 0);
+}
+
 export function applyArmPose(obj, bones, mode, weight, pitch) {
   if (!bones || weight <= 0) return;
   const P = POSES[mode];
@@ -142,8 +152,17 @@ export function applyArmPose(obj, bones, mode, weight, pitch) {
   // scale the spine aim-bend by the pose weight so it fades in/out with the arms
   // (the mixer re-keys Spine01/02 each frame, so the += stays bounded)
   const sw = Math.min(1, weight);
-  if (pk && bones.spine2) bones.spine2.rotation.x += pk * 0.3 * sw;
-  if (pk && bones.spine1) bones.spine1.rotation.x += pk * 0.18 * sw;
+  // These used to be `+=`, on the stated assumption that "the mixer re-keys
+  // Spine01/02 each frame, so the += stays bounded". That assumption is FALSE on
+  // these Meshy rigs — the locomotion clips do not key the spine chain at all,
+  // so nothing ever restored it and the offset compounded every single frame.
+  // Measured while holding an upward aim: spine2.rotation.x ran 3.8 -> 14.6 ->
+  // 25.4 -> ... -> 68.6 radians (~3930 deg, ten full revolutions) and NEVER came
+  // back down after the aim was released — the fighter stayed arched backwards,
+  // head to the sky, for the rest of the match.
+  // Capture the un-posed value once per bone and SET an absolute offset instead.
+  applySpineAim(bones.spine2, pk * 0.3 * sw);
+  applySpineAim(bones.spine1, pk * 0.18 * sw);
   const bl = 0.92 * Math.min(1, weight);
   aim(bones.rArm, bones.rFore, _oq, T[0][0], T[0][1], T[0][2], bl);
   aim(bones.lArm, bones.lFore, _oq, T[2][0], T[2][1], T[2][2], bl);
