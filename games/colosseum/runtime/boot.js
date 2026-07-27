@@ -105,6 +105,12 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, DPR_CAP));
   const { w, h } = viewportSize();
   renderer.setSize(w, h);
 }
+// Count per FRAME, not per render() call — see the reset() in frame(). Without
+// this, three zeroes the counters at the top of every pass and the reported
+// cost is whatever the last full-screen quad happened to be. It also means the
+// SHADOW pass is finally included, which it never was: the audit found the
+// real per-frame cost was ~2x what this game had been reporting.
+renderer.info.autoReset = false;
 renderer.shadowMap.enabled = QUALITY !== "low";
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -711,6 +717,15 @@ function frame(now) {
   // with the stains. Capped well below 1 — this is atmosphere, not fog.
   post.setDust(match ? Math.min(0.55, sandDamage.splats / 900) : 0);
   post.update(dt);
+
+  // renderer.info.autoReset is OFF (set at construction). three resets the
+  // counters at the start of every render() call, so with a composer in play
+  // the numbers left standing afterwards describe only the LAST pass — one
+  // full-screen triangle — and every draw-call reading becomes "1 call, 1
+  // triangle". Resetting once per FRAME instead makes info accumulate across
+  // the shadow pass, the scene pass and each post pass, which is the number
+  // that actually matters.
+  renderer.info.reset();
   post.render();
 
   // Demo choreography for the arena preview: periodic crowd swells and a wave.

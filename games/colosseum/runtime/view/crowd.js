@@ -24,7 +24,7 @@
 //     separating a crowd from a texture.
 
 import * as THREE from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { SPECTATOR_LODS } from "./spectator_geo.js";
 import { ARENA, caveaLayout } from "../data/arena_spec.js";
 import { TAU, mulberry32, ellipsePerimeter } from "../core/util.js";
 
@@ -33,37 +33,31 @@ import { TAU, mulberry32, ellipsePerimeter } from "../core/util.js";
 // ---------------------------------------------------------------------------
 
 /**
- * Seated figure: legs folded forward, torso, head. ~30 tris.
- * NOTE: OctahedronGeometry is non-indexed while Box/Cylinder are indexed, and
- * mergeGeometries refuses a mixed set — so every part is flattened to
- * non-indexed first. (Cost is nil at this vertex count and it keeps the
- * instanced attribute layout uniform across near/far meshes.)
+ * Seated-spectator geometry, one of three LODs.
+ *
+ * Authored in Blender (tools/gen_spectator.py) and baked to a JS module
+ * (tools/bake_spectator.mjs) so the crowd builds synchronously at boot with no
+ * fetch — an amphitheatre that visibly populates late looks far worse than a
+ * slightly cruder figure that is simply there from the first frame.
+ *
+ * These replace two hand-stacked primitive figures. The old near figure was a
+ * box thigh + 5-gon cylinder torso + octahedron head (~30 tris); the old far
+ * figure — 73.8% of all 17,974 spectators — was a single 4-sided tapered
+ * cylinder. A 4-gon prism has no head break, no shoulder line and no lap, so
+ * the far cavea read as coloured confetti rather than as people.
+ *
+ * Silhouette is the only thing that survives to this distance, and all three
+ * LODs keep the three cues that make one: a head separated by a real neck gap,
+ * shoulders clearly wider than the head, and a lap projecting forward.
+ *
+ * Flat-shaded and non-indexed, matching the instanced vertex-colour material
+ * and keeping the attribute layout identical across all three meshes.
  */
-function spectatorNear() {
-  const parts = [];
-  const thigh = new THREE.BoxGeometry(0.34, 0.16, 0.36);
-  thigh.translate(0, 0.08, 0.14);
-  parts.push(thigh.toNonIndexed());
-  thigh.dispose();
-
-  const torso = new THREE.CylinderGeometry(0.16, 0.20, 0.46, 5);
-  torso.translate(0, 0.39, 0);
-  parts.push(torso.toNonIndexed());
-  torso.dispose();
-
-  const head = new THREE.OctahedronGeometry(0.105, 0);
-  head.translate(0, 0.70, 0);
-  parts.push(head.index ? head.toNonIndexed() : head);
-
-  const g = mergeGeometries(parts, false);
-  parts.forEach((p) => p.dispose());
-  return g;
-}
-
-/** Far blob: a tapered prism that still reads as "a person" in silhouette. */
-function spectatorFar() {
-  const g = new THREE.CylinderGeometry(0.13, 0.21, 0.62, 4);
-  g.translate(0, 0.31, 0);
+function spectatorLOD(level) {
+  const src = SPECTATOR_LODS[level];
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(src.position.slice(), 3));
+  g.setAttribute("normal", new THREE.BufferAttribute(src.normal.slice(), 3));
   return g;
 }
 
@@ -221,12 +215,22 @@ export class Crowd {
     const scale = Math.min(1, this.budget / Math.max(1, wanted));
     // Near tiers = first two; they get the detailed mesh.
     const NEAR_TIERS = 2;
+    // Tiers past NEAR that still get a recognisable figure (LOD1) instead of
+    // dropping straight to the cheapest silhouette.
+    const MID_TIERS = 1;
 
     const nearSeats = [];
+    const midSeats = [];
     const farSeats = [];
     for (const row of rowsMeta) {
       const n = Math.max(0, Math.floor(row.cap * scale));
-      const bucket = row.tierIndex < NEAR_TIERS ? nearSeats : farSeats;
+      // THREE tiers, not two. The old split put 73.8% of the crowd on a
+      // 4-gon prism, which has no head break and no shoulder line and so read
+      // as coloured confetti from the sand. The middle tier costs one extra
+      // draw call and moves the confetti back to where nobody can resolve it.
+      const bucket = row.tierIndex < NEAR_TIERS ? nearSeats
+        : row.tierIndex < NEAR_TIERS + MID_TIERS ? midSeats
+        : farSeats;
       // Random angular offset per row so columns of people don't line up.
       const off = rnd() * TAU;
       for (let i = 0; i < n; i++) {
@@ -243,9 +247,10 @@ export class Crowd {
     }
 
     this.parts = {};
-    this.parts.near = this._makeInstanced(spectatorNear(), nearSeats, palette, "crowd_near");
-    this.parts.far = this._makeInstanced(spectatorFar(), farSeats, palette, "crowd_far");
-    this.count = nearSeats.length + farSeats.length;
+    this.parts.near = this._makeInstanced(spectatorLOD(0), nearSeats, palette, "crowd_near");
+    this.parts.mid = this._makeInstanced(spectatorLOD(1), midSeats, palette, "crowd_mid");
+    this.parts.far = this._makeInstanced(spectatorLOD(2), farSeats, palette, "crowd_far");
+    this.count = nearSeats.length + midSeats.length + farSeats.length;
   }
 
   _makeInstanced(geo, seats, palette, name) {
@@ -380,15 +385,19 @@ export class Crowd {
       count: this.count,
       budget: this.budget,
       near: this.parts.near ? this.parts.near.count : 0,
+      mid: this.parts.mid ? this.parts.mid.count : 0,
       far: this.parts.far ? this.parts.far.count : 0,
-      drawCalls: (this.parts.near ? 1 : 0) + (this.parts.far ? 1 : 0),
+      drawCalls: (this.parts.near ? 1 : 0) + (this.parts.mid ? 1 : 0) + (this.parts.far ? 1 : 0),
+      tris: (this.parts.near ? this.parts.near.count * 150 : 0)
+          + (this.parts.mid ? this.parts.mid.count * 52 : 0)
+          + (this.parts.far ? this.parts.far.count * 15 : 0),
       excitement: +this.excitement.toFixed(3),
       wave: this.wave.active,
     };
   }
 
   dispose() {
-    for (const k of ["near", "far"]) {
+    for (const k of ["near", "mid", "far"]) {
       const p = this.parts[k];
       if (p) { p.geometry.dispose(); this.group.remove(p); }
     }

@@ -28,6 +28,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 // ---------------------------------------------------------------------------
 // GLB container parsing
@@ -419,9 +420,18 @@ function walkGLB(dir) {
 // CLI
 // ---------------------------------------------------------------------------
 
-const [, , cmd, ...args] = process.argv;
+// Only dispatch when RUN, not when imported. bake_spectator.mjs imports
+// parseGLB from here and was getting the usage banner printed at it, because
+// the CLI block executed on import.
+const _invokedDirectly = process.argv[1]
+  && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 
-if (cmd === "report") {
+const [, , cmd, ...args] = _invokedDirectly ? process.argv : [null, null, null];
+
+if (!_invokedDirectly) {
+  // Imported as a library (bake_spectator.mjs uses parseGLB) — no CLI, no
+  // usage banner, no exit codes.
+} else if (cmd === "report") {
   const files = args.flatMap((a) => (fs.existsSync(a) && fs.statSync(a).isDirectory() ? walkGLB(a) : [a]));
   report(files);
 } else if (cmd === "anatomy") {
