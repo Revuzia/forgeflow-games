@@ -515,7 +515,7 @@ function updateCamera(dt) {
   // pulls back as they separate, and drops low during a kill's slow motion.
   if (combatCam.enabled && match && match.player) {
     const p = match.player;
-    const foes = match.combat.living(1);
+    const foes = match.combat.hostilesTo(match.player ? match.player.team : 0);
     const f = foes.length
       ? foes.reduce((a, b) => (Math.hypot(a.x - p.x, a.z - p.z) < Math.hypot(b.x - p.x, b.z - p.z) ? a : b))
       : null;
@@ -589,7 +589,7 @@ function stepSim(dt) {
     const p = match.player;
     let targetAngle = null;
     if (p && p.alive) {
-      const foes = match.combat.living(1);
+      const foes = match.combat.hostilesTo(match.player ? match.player.team : 0);
       if (foes.length) {
         const f = foes.reduce((a, b) =>
           (Math.hypot(a.x - p.x, a.z - p.z) < Math.hypot(b.x - p.x, b.z - p.z) ? a : b));

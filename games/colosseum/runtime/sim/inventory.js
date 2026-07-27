@@ -14,7 +14,7 @@
 
 import { WEAPONS, SHIELDS, ARMOUR, ARMATURAE, mobility, loadoutWeight } from "../data/weapons.js";
 import { Attributes, modifiers } from "./attributes.js";
-import { Smithy } from "./blacksmith.js";
+import { Smithy, conditionOf } from "./blacksmith.js";
 
 export const SAVE_KEY = "colosseum_save_v1";
 export const SAVE_VERSION = 3;
@@ -101,6 +101,53 @@ export class Inventory {
 
   /** Attribute modifiers for the combat layer, after fatigue. */
   mods() { return modifiers(this.attrs.effectiveAll()); }
+
+  /**
+   * What the smith's work is actually worth, as combat multipliers.
+   *
+   * THE ENTIRE BLACKSMITH WAS DISCONNECTED. `Smithy.modifiersFor` and
+   * `Smithy.wearFromMatch` had call sites only inside blacksmith.js itself —
+   * nothing in the sim ever read either. So six reinforcement paths costing up
+   * to 8,490 aurei changed no number, and gear never wore, which also made the
+   * repair economy — the thing that is supposed to make the smith a recurring
+   * cost rather than a one-off shop — completely inert.
+   *
+   * Both halves of the design were already written and correct. Neither was
+   * plugged in.
+   *
+   * Condition and reinforcement combine here: a ruined masterwork should be
+   * worse than a pristine plain blade, which is blacksmith.js's own stated
+   * rule, and it only holds if both terms reach the same number.
+   */
+  gearMods() {
+    const s = this.smithy;
+    if (!s) return null;
+    const lw = this.loadout();
+    const wearMult = (id) => (id && id !== "none" ? conditionOf(s.cond(id)).mult : 1);
+    const reinf = (id) => (id && id !== "none" ? s.modifiersFor(id) : null);
+
+    const w = reinf(lw.weapon);
+    const sh = reinf(lw.shield);
+    // Armour protection is the product of every worn piece's condition and
+    // reinforcement, so neglecting one piece is felt.
+    let armourProt = 1, armourCond = 1;
+    for (const a of lw.armour || []) {
+      const m = reinf(a);
+      if (m) armourProt *= m.protection;
+      armourCond *= wearMult(a);
+    }
+
+    return {
+      // A blunt, notched blade hits softer; a weighted core hits harder.
+      damage: (w ? w.damage : 1) * wearMult(lw.weapon),
+      windup: w ? w.windup : 1,
+      pierce: w ? w.pierce : 0,
+      // Lower is better for the target's armour multiplier, so protection
+      // above 1 must REDUCE incoming damage — combat.js applies it that way.
+      protection: armourProt * armourCond,
+      shieldIntegrity: (sh ? sh.integrity : 1) * wearMult(lw.shield),
+    };
+  }
 
   // -- derived ------------------------------------------------------------
 
@@ -242,7 +289,19 @@ export class Inventory {
    * Settle a finished match.
    * @param {object} r { won, kills, flawless, crowdFavour 0..1, matchId, bonus }
    */
-  settle({ won = false, kills = 0, flawless = false, crowdFavour = 0.5, matchId = null, bonus = 0 } = {}) {
+  settle({ won = false, kills = 0, flawless = false, crowdFavour = 0.5, matchId = null, bonus = 0,
+           damageDealt = 0, damageTaken = 0, blocks = 0 } = {}) {
+    // GEAR WEARS. Smithy.wearFromMatch existed, was correct, and had no caller
+    // outside blacksmith.js — so nothing ever degraded, every item stayed
+    // pristine forever, and the repair economy that is supposed to make the
+    // smith a recurring cost rather than a one-off shop never charged anyone a
+    // single aureus.
+    //
+    // The shield takes the worst of it because it eats what it stops, which is
+    // exactly the rate blacksmith.js already encodes.
+    if (this.smithy && this.smithy.wearFromMatch) {
+      this.lastWear = this.smithy.wearFromMatch(this.loadout(), { damageDealt, damageTaken, blocks });
+    }
     const rank = this.rank();
     let purse = won ? rank.purse : Math.round(rank.purse * 0.25);
     purse += kills * Math.round(rank.purse * 0.18);

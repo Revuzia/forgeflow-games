@@ -316,8 +316,18 @@ export class Brain {
     // How many may commit at once, by how many are actually engaged. One
     // attacker for a duel or a pair; two once it is a real melee, so a crowd
     // still feels dangerous without being unanswerable.
+    // Count only fighters actually ENGAGED WITH THIS TARGET — alive, hostile
+    // to it, and close enough to swing.
+    //
+    // The first version counted every fighter not on the target's team. In a
+    // two-sided bout that is the same thing, but a catervarii free-for-all has
+    // three or four mutually hostile factions, so it counted men across the
+    // arena who were busy fighting each other, inflated the engaged number,
+    // and raised the concurrent-attacker cap everywhere at once — the crowd
+    // control silently switching itself off in exactly the fight it exists for.
     const engaged = c.fighters.filter(
-      (f) => f.alive && f.team !== target.team && f.team !== undefined
+      (f) => f.alive && f.team !== target.team &&
+        Math.hypot(f.x - target.x, f.z - target.z) <= 4.0
     ).length;
     const cap = engaged >= 3 ? 2 : 1;
 

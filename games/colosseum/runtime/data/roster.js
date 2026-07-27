@@ -296,6 +296,13 @@ export const MATCH_TYPES = {
   tertiarius: { id: "tertiarius", name: "Tertiarius",    desc: "Win, and a fresh unadvertised third fighter walks out to meet you." },
   survival:   { id: "survival",   name: "Sine Missione", desc: "Wave after wave, no reprieve. Officially banned under Augustus — which is why the crowd loves it." },
   venatio:    { id: "venatio",    name: "Venatio",       desc: "The beast hunt. They come up out of the hypogeum." },
+  // Gladiators normally fought paired — ORDINARII. Sometimes they were sent in
+  // as CATERVARII, "in tumultuous bodies", without science: several mutually
+  // hostile parties on the sand at once, every man for his own side. It is the
+  // one attested format where being outnumbered is the point rather than a
+  // mistake, and where the pressure on any one fighter divides because
+  // everybody else has their own enemy to worry about.
+  catervarii: { id: "catervarii", name: "Catervarii",    desc: "Not a pairing — a melee. Several parties, all hostile, and the sand decides." },
   pons:       { id: "pons",       name: "The Pons",      desc: "A retiarius on a raised bridge with a pile of stones, against two secutores below. An attested spectacle variant." },
   champion:   { id: "champion",   name: "Named Bout",    desc: "A champion whose name the crowd already knows." },
   paegniarius:{ id: "paegniarius",name: "Paegniarii",    desc: "Blunted weapons, played for laughs in the midday interval. Nobody dies." },
@@ -360,6 +367,28 @@ export function buildLadder() {
         desc: "Germania sent something that does not circle and does not stop." });
   add({ id: "c3", rank: "champion", type: "team", name: "The Great Munus", opponents: [{ armatura: "secutor", skill: "champion" }, { armatura: "murmillo", skill: "primus" }, { armatura: "retiarius", skill: "primus" }, { armatura: "thraex", skill: "primus" }], allies: [{ armatura: "murmillo", skill: "primus" }, { armatura: "hoplomachus", skill: "primus" }], purse: 750,
         desc: "Four against three. The editor is spending a fortune and expects blood for it." });
+  // --- Catervarii: the free-for-all -------------------------------------
+  // Two rival parties AND the player, all mutually hostile. Nobody is anyone's
+  // ally: the two AI factions fight each other as readily as they fight you,
+  // which is precisely what makes being outnumbered survivable — the incoming
+  // attention divides instead of all landing on one man.
+  add({ id: "k1", rank: "gregarius", type: "catervarii", name: "Tumultuous Bodies",
+        factions: [[{ armatura: "thraex", skill: "tiro" }],
+                   [{ armatura: "murmillo", skill: "tiro" }]],
+        purse: 200,
+        desc: "Three on the sand and no pairing. Let them find each other first." });
+  add({ id: "k2", rank: "veteranus", type: "catervarii", name: "The Scattered School",
+        factions: [[{ armatura: "hoplomachus", skill: "gregarius" }, { armatura: "thraex", skill: "tiro" }],
+                   [{ armatura: "dimachaerus", skill: "gregarius" }, { armatura: "retiarius", skill: "tiro" }]],
+        purse: 420,
+        desc: "Two troupes turned loose at once. Five men, three sides, one door out." });
+  add({ id: "k3", rank: "champion", type: "catervarii", name: "The Last Standing",
+        factions: [[{ armatura: "secutor", skill: "veteranus" }, { armatura: "murmillo", skill: "gregarius" }],
+                   [{ armatura: "crupellarius", skill: "veteranus" }],
+                   [{ armatura: "provocator", skill: "gregarius" }, { armatura: "thraex", skill: "gregarius" }]],
+        purse: 900,
+        desc: "Four parties. The editor has stopped pretending this is a contest of skill." });
+
   add({ id: "c4", rank: "champion", type: "champion", name: "Priscus", champion: "priscus", purse: 800,
         desc: "The other half of the draw that Titus refused to break." });
 

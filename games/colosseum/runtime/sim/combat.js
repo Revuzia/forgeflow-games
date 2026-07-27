@@ -66,7 +66,7 @@ export class Fighter {
     weapon = "gladius", shield = "none", armour = [],
     hp = 100, x = 0, z = 0, facing = 0, height = 1.82,
     isBeast = false, beastProfile = null, radius = null, mods = null,
-    bulk = 0,
+    bulk = 0, gear = null,
   } = {}) {
     this.id = id || `f${_uid++}`;
     this.name = name;
@@ -93,6 +93,10 @@ export class Fighter {
     // every modifier is 1.0 at the baseline, which keeps the existing balance
     // and every existing probe valid.
     this.mods = mods || null;
+    // Smith modifiers: reinforcement paths and wear condition, folded into
+    // combat multipliers by inventory.gearMods(). Null for anyone without a
+    // smith — every AI opponent — so their numbers are unchanged.
+    this.gear = gear || null;
     const mob = mobility({ weapon, shield, armour, bulk }, this.mods);
     this.mob = mob;
 
@@ -112,7 +116,9 @@ export class Fighter {
     this.blocking = false;
     this.blockDir = DIR.HIGH;
     this.blockHeldT = 0;
-    this.shieldHp = SHIELDS[shield] ? SHIELDS[shield].integrity : 0;
+    this.shieldHp = SHIELDS[shield]
+      ? Math.round(SHIELDS[shield].integrity * (this.gear ? this.gear.shieldIntegrity : 1))
+      : 0;
     this.shieldBroken = false;
 
     this.iframes = 0;
@@ -171,6 +177,22 @@ export class Combat {
   get(id) { return this.fighters.find((f) => f.id === id); }
   living(team = null) {
     return this.fighters.filter((f) => f.alive && (team === null || f.team === team));
+  }
+
+  /**
+   * Everyone alive who is NOT on this team — i.e. everyone who would swing at
+   * them. `living(1)` was the old idiom for "the enemy", and it silently
+   * assumed there are exactly two sides. In a catervarii free-for-all with
+   * three or four mutually hostile factions that reads only faction 1 and
+   * misses the rest, so the bout can neither be lost nor won correctly.
+   */
+  hostilesTo(team) {
+    return this.fighters.filter((f) => f.alive && f.team !== team);
+  }
+
+  /** Living allies of a team, excluding an optional fighter (usually self). */
+  alliesOf(team, exclude = null) {
+    return this.fighters.filter((f) => f.alive && f.team === team && f !== exclude);
   }
 
   emit(type, data) {
@@ -443,13 +465,23 @@ export class Combat {
 
     // --- zone ------------------------------------------------------------
     const zone = this._pickZone(dir, attacker, target);
-    const armourMult = zoneMultiplier(target.armour, zone);
-    const pierce = (w.armourPierce && w.armourPierce[dir]) || 0;
+    // The smith's work on the TARGET's armour reduces what gets through, and
+    // the wear on it gives that protection back. `gear.protection` above 1 is
+    // better armour, so it divides the multiplier toward zero.
+    const tProt = target.gear ? Math.max(0.2, target.gear.protection) : 1;
+    const armourMult = zoneMultiplier(target.armour, zone) / tProt;
+    const basePierce = (w.armourPierce && w.armourPierce[dir]) || 0;
+    // A honed edge finds the gap a blunt one does not.
+    const pierce = clamp(basePierce + (attacker.gear ? attacker.gear.pierce : 0), 0, 0.95);
     // Piercing lifts the effective armour multiplier toward 1.
-    const effMult = armourMult + (1 - armourMult) * pierce;
+    const effMult = clamp(armourMult + (1 - armourMult) * pierce, 0, 1);
 
     let dmg = w.damage * ZONES[zone].crit * effMult;
     if (attacker.mods) dmg *= attacker.mods.damage;   // Strength
+    // Reinforcement and condition on the ATTACKER's weapon. A ruined
+    // masterwork lands softer than a pristine plain blade, which is the rule
+    // blacksmith.js was written around and never got to enforce.
+    if (attacker.gear) dmg *= attacker.gear.damage;
     if (fromBehind) dmg *= FEEL.backstabMultiplier;
     else if (fromFlank) dmg *= FEEL.flankMultiplier;
     if (attacker.comboCount > 0) dmg *= 1 + Math.min(0.35, attacker.comboCount * 0.09);

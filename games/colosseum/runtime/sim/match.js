@@ -145,6 +145,8 @@ export class Match {
       // inventory.mods() already returns exactly the struct Fighter wants,
       // fatigue applied. It simply was never handed over.
       mods: this.inv.mods ? this.inv.mods() : null,
+      // Reinforcement + wear. See inventory.gearMods().
+      gear: this.inv.gearMods ? this.inv.gearMods() : null,
     });
     f.isPlayer = true;
     // The player's BODY follows the kit they are wearing: assemble a murmillo's
@@ -245,7 +247,41 @@ export class Match {
       return f;
     };
 
-    this._opponentSpecs().forEach((spec, i) => enroll(this._makeOpponent(spec, i, 1), "opponent"));
+    // CATERVARII — the free-for-all.
+    //
+    // A ladder entry may declare `factions: [[spec,...],[spec,...],...]`.
+    // Faction n becomes team n+1 (the player is always team 0) and every team
+    // is hostile to every other, because Brain.target() already picks the
+    // nearest fighter of ANY other team and combat.js already refuses to let a
+    // swing land on your own team. The sim was N-faction all along; only the
+    // resolution and the HUD ever assumed two sides.
+    //
+    // Roman name and Roman format: gladiators normally fought paired as
+    // ORDINARII, but were sometimes sent in as CATERVARII — "in tumultuous
+    // bodies", without science. That is also the licence for fielding more
+    // opponents at lower skill, which is the difficulty lever an outnumbered
+    // fight actually needs.
+    //
+    // Placement is RADIAL rather than two facing lines, or three factions all
+    // spawn on top of each other on the same axis.
+    if (d.factions && d.factions.length) {
+      const teams = d.factions.length + 1;                 // +1 for the player
+      d.factions.forEach((group, gi) => {
+        const team = gi + 1;
+        group.forEach((spec, i) => {
+          const made = this._makeOpponent(spec, i, team);
+          // Player sits at angle 0 (x = -14); spread the rest evenly around.
+          const ang = ((gi + 1) / teams) * Math.PI * 2;
+          const rad = 15 + i * 1.7;
+          made.fighter.x = -Math.cos(ang) * rad;
+          made.fighter.z = Math.sin(ang) * rad + (i - (group.length - 1) / 2) * 2.0;
+          made.fighter.facing = Math.atan2(-made.fighter.x, -made.fighter.z);
+          enroll(made, "opponent");
+        });
+      });
+    } else {
+      this._opponentSpecs().forEach((spec, i) => enroll(this._makeOpponent(spec, i, 1), "opponent"));
+    }
     (d.beasts || []).forEach((b, i) => enroll(this._makeBeast(b, i), "beast"));
 
     // Allies fight on the player's side (2v2 and team munera).
@@ -333,10 +369,30 @@ export class Match {
     this.crowdFavour += (target - this.crowdFavour) * Math.min(1, 0.5 * dt);
 
     // --- resolution -------------------------------------------------------
-    const foesLeft = this.combat.living(1).length;
-    const alliesLeft = this.combat.living(0).length;
+    // Faction-agnostic. `living(1)` assumed exactly two sides, which is wrong
+    // the moment a catervarii free-for-all fields three or four mutually
+    // hostile factions: it counted only faction 1 and let the bout resolve as
+    // a win while two other factions were still on their feet.
+    const foesLeft = this.combat.hostilesTo(this.player.team).length;
+    const alliesLeft = this.combat.living(this.player.team).length;
 
     if (!this.player.alive) { this._decide(false); return; }
+
+    // Stalemate clock, for catervarii only.
+    //
+    // With three or more mutually hostile factions two AI parties can grind
+    // each other indefinitely while the player circles the edge, and nothing
+    // in the two-sided resolution ever fires. Measured: 1 stall in 20 seeds of
+    // k2 before this existed. The summa rudis could and did stop a bout; the
+    // fighter still standing with the most kills takes it.
+    if (this.def.factions && this.stateT > 180) {
+      const mine = this.playerKills;
+      let best = 0;
+      for (const f of this.combat.fighters) if (f.team !== this.player.team) best = Math.max(best, f.kills || 0);
+      this._cue("summa_rudis", { reason: "time" });
+      this._decide(mine >= best);
+      return;
+    }
 
     if (foesLeft === 0) {
       // Survival waves and the tertiarius surprise both reuse this hook.
@@ -430,6 +486,11 @@ export class Match {
       crowdFavour: this.crowdFavour,
       matchId: this.def.id,
       bonus: this.def.purse ? Math.round(this.def.purse * 0.35) : 0,
+      // Wear inputs. Tallied from the bout's own hit events so a long, bloody
+      // fight costs more at the smith than a quick clean one.
+      damageDealt: this._dmgDealt || 0,
+      damageTaken: this._dmgTaken || 0,
+      blocks: this._blocks || 0,
     });
     this.result = {
       ...v, flawless, kills: this.playerKills,
@@ -447,13 +508,21 @@ export class Match {
 
   _onCombatEvent(e) {
     if (e.type === "hit") {
-      if (e.target === "player") this.tookDamage = true;
-      if (e.attacker === "player") this.crowdFavour = clamp(this.crowdFavour + (e.heavy ? 0.05 : 0.02), 0, 1);
+      // Tally what the smith will charge for. A shield that stopped a lot and
+      // a blade that did a lot of work both come home needing attention.
+      if (e.target === "player") { this.tookDamage = true; this._dmgTaken = (this._dmgTaken || 0) + (e.damage || 0); }
+      if (e.attacker === "player") {
+        this._dmgDealt = (this._dmgDealt || 0) + (e.damage || 0);
+        this.crowdFavour = clamp(this.crowdFavour + (e.heavy ? 0.05 : 0.02), 0, 1);
+      }
+    } else if ((e.type === "block" || e.type === "parry") && e.target === "player") {
+      this._blocks = (this._blocks || 0) + 1;
+      if (e.type === "parry") this.crowdFavour = clamp(this.crowdFavour + 0.06, 0, 1);
     } else if (e.type === "death") {
       if (e.by === "player") { this.playerKills++; this.crowdFavour = clamp(this.crowdFavour + 0.16, 0, 1); }
-    } else if (e.type === "parry" && e.target === "player") {
-      this.crowdFavour = clamp(this.crowdFavour + 0.06, 0, 1);   // the mob loves a parry
     }
+    // (the old standalone parry branch lived here and is now unreachable — the
+    // block/parry case above catches it and awards the same favour)
     if (this.hooks.onEvent) this.hooks.onEvent(e);
   }
 
@@ -472,7 +541,7 @@ export class Match {
   /** HUD-facing view of the player and the current primary threat. */
   hudState() {
     const p = this.player;
-    const foes = this.combat.living(1);
+    const foes = this.combat.hostilesTo(p ? p.team : 0);
     const foe = foes.length
       ? foes.reduce((a, b) => (Math.hypot(a.x - p.x, a.z - p.z) < Math.hypot(b.x - p.x, b.z - p.z) ? a : b))
       : null;
