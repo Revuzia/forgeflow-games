@@ -589,3 +589,47 @@ opposing paths genuinely opposing; save round-trip; v2 -> v3 migration; and a
 hostile save with unknown items dropped.
 
 Save is now v3. Six probes green.
+
+## 2026-07-26 — audio, and the game opens on a menu
+
+**Audio** (`core/audio.js`, `core/synth.js`, `tools/stage_audio.py`)
+- 35 SFX staged from the F: drive and transcoded (swords, shield impacts, sand
+  footsteps, beast roars, iron gate, stone grind, UI, and male combat vocals
+  from two actors), plus 8 music tracks from albums verified unused by any
+  other ForgeFlow title.
+- **The cornu and the crowd are SYNTHESISED**, because a regex over all 6,481
+  audio files on F: found exactly zero of either.
+  - The cornu is a conical-bore G-horn: 7 partials falling as ~1/n through a
+    formant filter, with vibrato that arrives 250 ms into the note — starting
+    it immediately is the single thing that makes synth brass sound fake.
+    Six calls: fanfare, begin, tertiarius, wave, death, victory.
+  - The crowd is a pink-noise bed through three band-passes at the formant
+    regions of massed voice, driven by the SAME excitement value as the visual
+    crowd — so what you hear and what you see cannot drift apart. It hushes,
+    swells and surges.
+- Four mixer buses, a decode cache so a clash of steel never allocates
+  mid-fight, cheap pan+rolloff spatialisation, and a pending-queue so cues fired
+  before the browser's autoplay gesture still sound at the right moment.
+
+**Menus** (`ui/menu.js`) — the game no longer drops you into a free-look arena.
+Title -> new/continue -> **Ludus hub** -> match select -> bout -> results -> hub.
+The hub shows rank, purse, record, load, fatigue and all four attributes with
+their rank caps. Match select gates by rank and marks what is already won.
+Settings has five volume sliders, four quality tiers and the control reference.
+Everything composites over the live arena.
+
+### Verified in-browser
+Audio measured through an AnalyserNode rather than assumed: 35/35 SFX decoded,
+the synthesised fanfare produced a 3.7 s call at peak bin 172, the crowd bed
+registered 14,161 energy. Full loop confirmed: title -> `g1` -> ceremony ->
+combat with music playing and crowd favour at 0.66. 39 draw calls, 1.01 ms.
+
+### Fixed
+- The title screen was gated on `frames === 12`, an exact-equality check that is
+  skipped forever if frames are ever batched or dropped — the menu then never
+  appears at all. Latched to `>=` with an idempotent `revealTitle()`.
+
+### Payload
+Cut from **85 MB to 29 MB**: removed the 52 MB pilot experiment (its finding is
+recorded, the artefact is not needed) and the old 1.3 MB knight body, now that
+every armatura has its own. The murmillo is the fallback body.

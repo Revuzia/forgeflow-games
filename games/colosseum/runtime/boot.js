@@ -26,6 +26,8 @@ import { VFX } from "./view/vfx.js";
 import { HUD } from "./ui/hud.js";
 import { Input } from "./core/input.js";
 import { LADDER } from "./data/roster.js";
+import { Audio } from "./core/audio.js";
+import { Menu, SCREEN } from "./ui/menu.js";
 import { ARENA } from "./data/arena_spec.js";
 import { clamp, damp, TAU } from "./core/util.js";
 
@@ -196,7 +198,7 @@ async function ensureArmaturaBodies(ids) {
 
 try {
   const [fighterLib, beastLib] = await Promise.all([
-    loadFighter("assets/chars/gladiator"),
+    loadFighter("assets/chars/murmillo"),
     // TIGER, not leopard: leopard.glb and jaguar.glb are anthropomorphic
     // beast-MEN despite their clip names, verified by rendering them. The
     // tiger is a true quadruped, one draw call, and the only cat in the
@@ -250,6 +252,9 @@ setProgress(1.0, "Ready.");
 // Bout runtime — the pieces that turn the headless sim into a fight you watch.
 // ---------------------------------------------------------------------------
 const vfx = new VFX(scene, { sand: sandDamage, camera });
+const audio = new Audio({ volumes: inventory.settings.volumes || null });
+// Decode the SFX as soon as the browser lets us; music streams separately.
+audio.preload().then((r) => console.log(`[audio] ${r.loaded}/${r.loaded + r.failed} sfx decoded`));
 const hud = new HUD(document.getElementById("hud"));
 const input = new Input();
 const combatCam = new CombatCamera(camera);
@@ -281,12 +286,15 @@ async function startMatch(matchId) {
       },
       onEvent: (e) => {
         bout.onEvent(e);
+        onCombatSound(e);
         if (e.type === "hit") combatCam.addShake(e.heavy ? 0.55 : 0.28);
         else if (e.type === "death") combatCam.addShake(0.8);
         else if (e.type === "shield_break" || e.type === "guard_break") combatCam.addShake(0.5);
       },
       onCue: onMatchCue,
       onState: (s, m) => {
+        if (s === STATE.ENTRY) { audio.crowdStart(); audio.music("prematch", { fade: 1.0 }); }
+        else if (s === STATE.FIGHT) audio.music(def.type === "champion" ? "boss" : "combat", { fade: 1.6 });
         if (s === STATE.SALUTE) hud.banner(def.name.toUpperCase(), def.desc || "", 2.6);
         else if (s === STATE.FIGHT) hud.banner("BEGIN", "", 1.1);
         else if (s === STATE.VERDICT) {
@@ -298,6 +306,12 @@ async function startMatch(matchId) {
       onResult: (r) => {
         hud.banner(r.playerWon ? "VICTORIA" : "DEFEAT",
           `${r.purse} aurei${r.rankUp ? `  ·  ${r.rankUp.toUpperCase()}` : ""}`, 4.0);
+        // Let the banner and the crowd land before the results card appears.
+        setTimeout(() => {
+          endMatch();
+          menu.showResult(r, def.name);
+          audio.music("ludus", { fade: 2.0 });
+        }, 3200);
       },
     },
   });
@@ -314,6 +328,7 @@ async function startMatch(matchId) {
   combatCam.enabled = true;
   hud.show();
   camRig.auto = false;
+  audio.crowdStart();
   return match;
 }
 
@@ -322,8 +337,49 @@ function endMatch() {
   match = null;
   combatCam.enabled = false;
   hud.hide();
+  audio.crowdStop();
   if (actors.player) actors.player.root.visible = true;
   if (actors.beast) actors.beast.root.visible = true;
+}
+
+/**
+ * Combat events -> sound. Kept separate from the visual routing in bout.js so
+ * neither can silently change the other.
+ */
+function onCombatSound(e) {
+  const at = (id) => {
+    const f = match && match.combat.get(id);
+    return f ? { x: f.x, z: f.z } : {};
+  };
+  switch (e.type) {
+    case "swing":
+      audio.play("swing", { ...at(e.id), gain: 0.55 });
+      // The grunt of effort is what makes a swing feel like it costs something.
+      if (Math.random() < 0.45) audio.play("effort", { ...at(e.id), gain: 0.5 });
+      break;
+    case "hit":
+      audio.play("hit", { x: e.x, z: e.z, gain: e.heavy ? 1.0 : 0.75 });
+      audio.play("hurt", { x: e.x, z: e.z, gain: e.heavy ? 0.85 : 0.55 });
+      audio.crowdSurge(e.heavy ? 0.55 : 0.25, 0.12);
+      break;
+    case "block":
+      audio.play("block", { ...at(e.target), gain: 0.7 });
+      break;
+    case "parry":
+      audio.play("parry", { ...at(e.target), gain: 0.9, rate: 1.15 });
+      audio.crowdSurge(0.5, 0.1);
+      break;
+    case "shield_break":
+    case "guard_break":
+      audio.play("shield_break", { ...at(e.id), gain: 1.0 });
+      audio.crowdSurge(0.7, 0.1);
+      break;
+    case "death":
+      audio.play("death", { x: e.x, z: e.z, gain: 1.0 });
+      audio.crowdSurge(1.0, 0.08);
+      break;
+    default: break;
+  }
 }
 
 /** Match cues drive the building: gates, lifts, horns. */
@@ -331,13 +387,24 @@ function onMatchCue(name, data) {
   cueLog.push({ t: +(frames / 60).toFixed(2), kind: "match", name, ...data });
   if (name === "gate_open") {
     gates.open(data.gate);
+    audio.play("gate", { gain: 0.7 });
+    audio.crowdHush(0.6, 1.1);
     // Beasts come up out of the hypogeum instead of walking through a door.
     if (match && (match.def.beasts || []).length && data.gate === "triumphalis") hypogeum.open(0);
   } else if (name === "horn") {
+    // The cornu is the signature sound of the games — synthesised, because no
+    // library on the F: drive contains a Roman brass instrument.
+    audio.horn(data.kind === "begin" ? "begin"
+      : data.kind === "tertiarius" ? "tertiarius"
+      : data.kind === "wave" ? "wave" : "fanfare");
     crowd.react(data.kind === "begin" ? 0.85 : 0.55);
+    audio.crowdSurge(data.kind === "begin" ? 0.9 : 0.6, 0.5);
     if (data.kind === "fanfare") crowd.startWave({ laps: 1, speed: 2.6, strength: 1 });
   } else if (name === "verdict") {
     crowd.react(data.playerWon ? 1.0 : 0.6);
+    audio.horn(data.playerWon ? "victory" : "death", 0.46);
+    audio.crowdSurge(data.playerWon ? 1.0 : 0.5, data.playerWon ? 0.12 : 0.6);
+    audio.music(data.playerWon ? "victory" : "defeat", { loop: false });
   } else if (name === "wave") {
     hud.banner(`WAVE ${data.wave}`, `of ${data.of}`, 1.8);
     crowd.react(0.8);
@@ -359,8 +426,36 @@ const armoury = new Armoury(document.getElementById("hud"), inventory, {
   onPreviewRotate: (on) => { camRig.preview = on; },
 });
 
+// ---------------------------------------------------------------------------
+// Menus. The game now OPENS on the title screen instead of a free-look arena.
+// ---------------------------------------------------------------------------
+const menu = new Menu(document.getElementById("hud"), {
+  inventory, audio, ladder: LADDER,
+  hooks: {
+    onStartMatch: (id) => { startMatch(id); audio.play("confirm"); },
+    onArmoury: () => { armoury.show(); },
+    onBlacksmith: () => { armoury.show("smith"); },
+    onTraining: () => { armoury.show("training"); },
+    onNewCareer: () => {
+      if (actors.player && actors.player.equipment) {
+        actors.player.equipment.applyLoadout({ armour: inventory.armourList() });
+      }
+    },
+    onQuality: () => { /* applied on the next boot; the note in Settings says so */ },
+  },
+});
+
+// Returning from the armoury/blacksmith/training goes back to the hub.
+armoury.hooks.onClose = () => { if (!match) menu.show(SCREEN.HUB); };
+
 window.addEventListener("keydown", (e) => {
-  if (e.code === "Tab") { e.preventDefault(); armoury.toggle(); }
+  if (e.code === "Tab") { e.preventDefault(); if (!menu.screen || menu.screen === SCREEN.NONE) armoury.toggle(); }
+  if (e.code === "Escape") {
+    e.preventDefault();
+    if (armoury.open) { armoury.hide(); return; }
+    if (match) { endMatch(); menu.show(SCREEN.HUB); return; }
+    menu.show(menu.screen === SCREEN.NONE ? SCREEN.HUB : SCREEN.NONE);
+  }
 });
 
 /** Rebuild the held weapon/shield to match the inventory. */
@@ -487,6 +582,14 @@ function stepSim(dt) {
     if (match.state === "exit") bout.dragCorpses(dt, gates.entryPoint("libitinaria", 2.0));
     crowd.lookAt(new THREE.Vector3(p ? p.x : 0, 1, p ? p.z : 0));
     hud.update(match.hudState(), dt);
+
+    // Audio follows the player and the crowd's visible mood, so what is heard
+    // and what is seen cannot drift apart.
+    if (p) {
+      audio.setListener(p.x, p.z, combatCam.yaw);
+      audio.step(p.x, p.z, p.speed);
+    }
+    audio.crowdExcitement(crowd.excitement);
   } else {
     if (actors.player) actors.player.update(dt, actors.player.speed);
     if (actors.beast) actors.beast.update(dt, actors.beast.speed);
@@ -545,6 +648,23 @@ const FIXED_DT = 1 / 60;
 let acc = 0;
 let last = performance.now();
 let frames = 0;
+let bootRevealed = false;
+
+/**
+ * Drop the loading overlay and open the title screen. Idempotent, so a
+ * verification harness can call it directly without racing the frame loop.
+ */
+function revealTitle() {
+  bootRevealed = true;
+  loadEl.style.opacity = "0";
+  setTimeout(() => {
+    loadEl.remove();
+    // The game OPENS on the title screen. Everything — armoury, blacksmith,
+    // training, the ladder — is reachable from here without a console.
+    menu.show(SCREEN.TITLE);
+    audio.music("menu", { fade: 2.2 });
+  }, 700);
+}
 
 function frame(now) {
   requestAnimationFrame(frame);
@@ -567,13 +687,19 @@ function frame(now) {
 
   // Demo choreography for the arena preview: periodic crowd swells and a wave.
   frames++;
-  if (frames % 600 === 120) crowd.startWave({ laps: 1, speed: 2.4, strength: 1 });
-  if (frames % 300 === 0) crowd.react(0.55);
-  crowd.lookAt(camRig.target);
+  // Idle arena ambience, only while no bout owns the sand.
+  if (!match) {
+    if (frames % 600 === 120) crowd.startWave({ laps: 1, speed: 2.4, strength: 1 });
+    if (frames % 300 === 0) crowd.react(0.55);
+    crowd.lookAt(camRig.target);
+  }
 
-  if (frames === 12) {
-    loadEl.style.opacity = "0";
-    setTimeout(() => loadEl.remove(), 700);
+  // LATCHED, not `frames === 12`. An exact-equality check is skipped forever if
+  // frames are ever batched or dropped (a stepped verification run, a stalled
+  // tab), and the title screen then never appears at all.
+  if (!bootRevealed && frames >= 12) {
+    bootRevealed = true;
+    revealTitle();
   }
 }
 requestAnimationFrame(frame);
@@ -584,7 +710,7 @@ requestAnimationFrame(frame);
 // ---------------------------------------------------------------------------
 window.__FFG3D__ = {
   renderer, scene, camera, colosseum, crowd, sky, gates, hypogeum, actors,
-  inventory, armoury, vfx, hud, input, combatCam,
+  inventory, armoury, vfx, hud, input, combatCam, audio,
   get match() { return match; },
   get bout() { return bout; },
   quality: QUALITY,
@@ -727,6 +853,16 @@ window.__FFG3D__ = {
     clearSand: () => { sandDamage.clear(); return true; },
     sandSplats: () => sandDamage.splats,
     closeLift: (i) => { hypogeum.close(i); return hypogeum.stats(); },
+    menu: (screen) => { menu.show(screen); return menu.screen; },
+    menuText: () => (menu.el.innerText || "").replace(/\s+/g, " ").trim().slice(0, 400),
+    menuButtons: () => [...menu.el.querySelectorAll("button")].map((b) => b.textContent.trim().split(/\r?\n/)[0]),
+    clickMenu: (txt) => {
+      const b = [...menu.el.querySelectorAll("button")].find((x) => x.textContent.trim().startsWith(txt));
+      if (!b) return false;
+      b.click();
+      return menu.screen;
+    },
+    reveal: () => { revealTitle(); return true; },
     cues: () => cueLog.slice(-40),
     clearCues: () => { cueLog.length = 0; return true; },
     /** Start a ladder match by id (default: the first). */
@@ -744,6 +880,11 @@ window.__FFG3D__ = {
     hudState: () => (match ? match.hudState() : null),
     boutStats: () => (bout ? bout.stats() : null),
     vfxStats: () => vfx.stats(),
+    audioStats: () => audio.stats(),
+    horn: (call) => audio.horn(call || "fanfare"),
+    sfx: (cue, o) => !!audio.play(cue, o || {}),
+    setVolume: (bus, v) => { audio.setVolume(bus, v); return audio.stats().volumes; },
+    playMusic: (n) => { audio.music(n); return audio.currentMusic; },
     ladder: () => LADDER.map((m) => ({ id: m.id, rank: m.rank, type: m.type, name: m.name })),
     /** Drive N sim steps with a synthetic player command (for verification). */
     fight: (n = 60, cmd = {}) => {
