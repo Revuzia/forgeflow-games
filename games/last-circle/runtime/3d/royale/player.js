@@ -1027,6 +1027,22 @@ function stepActor(W, a, dt, far) {
     if (!blockedHoriz(W, sx, a.pos.z, swimStep, swimH)) a.pos.x = sx; else a.vel.x = 0;
     let sz = a.pos.z + a.vel.z * dt;
     if (!blockedHoriz(W, a.pos.x, sz, swimStep, swimH)) a.pos.z = sz; else a.vel.z = 0;
+    // HAUL OUT. This branch pins pos.y to the water surface every single frame
+    // and never consulted supportAt, so water was a ONE-WAY TRAPDOOR: every
+    // pier, boat deck, shipwreck and stilt hut could be dropped onto from the
+    // sky but never re-boarded on foot. Anything you swam to was a dead end.
+    // Probe for a ledge and climb onto it. supportAt already returns the
+    // structure top when one is within STEP_UP of the probe height, so passing
+    // the swimmer's chest gives exactly "a surface I could pull myself onto";
+    // requiring it to sit above the waterline keeps the SEABED from qualifying,
+    // which would otherwise beach the swimmer in open water.
+    const ledge = supportAt(W, a.pos.x, a.pos.z, a.pos.y + 0.9);
+    if (ledge > wy - 0.25 && ledge <= a.pos.y + 0.9) {
+      a.pos.y = ledge;
+      a.onGround = true; a.swimming = false; a.inWater = false;
+      a.vel.y = 0;
+      W.events.emit("swimState", a, false);
+    }
   } else {
     // jump — and SPACE in mid-air with enough height re-opens the parachute
     // (stepping off a sky island must be an escape, not a death sentence)
