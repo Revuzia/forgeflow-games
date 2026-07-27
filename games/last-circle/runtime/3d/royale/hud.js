@@ -2035,7 +2035,7 @@ export function update(W, dt) {
   // Reticle size from the ACTUAL spread the next shot will use, not a guess.
   const spreadNow = (p.weapon && K.WEAPONS[p.weapon.id])
     ? K.effectiveSpread(p.weapon.id, p.weapon.rarity, {
-        ads: !!p.input.ads,
+        ads: !!p.input.ads && (p._adsT || 0) >= ((K.WEAPONS[p.weapon.id].adsTimeS) || 0),   // reticle must not promise accuracy fire() won't give
         speed: Math.hypot(p.vel.x, p.vel.z),
         airborne: !p.onGround,
         crouching: !!p.crouching,

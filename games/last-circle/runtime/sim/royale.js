@@ -60,7 +60,11 @@
     // lane. It also un-collapses the rarity ladder: hitDamage rounds PER PELLET, so
     // base 10 gave 10/11/12/12/13 (rare and epic identical); base 13 gives 13/14/15/16/17.
     shotgun:  { cls: "shotgun", damage: 13, headMult: 1.75, rpm: 80, mag: 5, reloadS: 3.0, ammo: "shells", speed: 999, falloff: [8, 20], pellets: 9, spreadDeg: 4.0, adsFov: 49 },
-    sniper:   { cls: "sniper", damage: 105, headMult: 2.5, rpm: 35, mag: 1, reloadS: 3.0, ammo: "heavy", speed: 700, falloff: [200, 400], spreadDeg: 0.15, scope: true, adsFov: 20 },
+    // adsTimeS: scope-in gate. Instant full-accuracy zoom on a 2.5x-headshot
+    // one-tap breaks the genre contract hardest on this weapon — Warzone sniper
+    // ADS runs 520-650ms vs AR 240-280ms (COMBAT_CALIBRATION.md, secondary).
+    // The 0.5x ADS spread bonus, the scope camera and the overlay all gate on it.
+    sniper:   { cls: "sniper", damage: 105, headMult: 2.5, rpm: 35, mag: 1, reloadS: 3.0, ammo: "heavy", speed: 700, falloff: [200, 400], spreadDeg: 0.15, scope: true, adsFov: 20, adsTimeS: 0.5 },
     glauncher:{ cls: "launcher", damage: 95, headMult: 1.0, rpm: 55, mag: 4, reloadS: 3.2, ammo: "grenades", speed: 26, arc: true, fuseS: 2.0, splashR: 3.5, spreadDeg: 0.8, adsFov: 45 },
   };
   var WEAPON_IDS = ["pistol", "smg", "ar", "shotgun", "sniper", "glauncher"]; // lootable guns
@@ -282,10 +286,14 @@
       { wait: 45, shrink: 50, radiusFrac: 0.28,  dps: 3 },
       { wait: 40, shrink: 45, radiusFrac: 0.17,  dps: 5 },
       { wait: 30, shrink: 40, radiusFrac: 0.09,  dps: 7 },
-      { wait: 25, shrink: 35, radiusFrac: 0.04,  dps: 9 },
+      // Late phases trade WAIT for SHRINK, same per-phase totals (60s / 65s):
+      // Fortnite's circles 7-9 have zero wait — the endgame storm never stops
+      // moving, which is what makes final circles frantic instead of campy.
+      // Ours idled 25s then 20s at exactly the moment the genre goes continuous.
+      { wait: 10, shrink: 50, radiusFrac: 0.04,  dps: 9 },
       // final circle HOLDS at ~10m — closing to zero storm-killed every
       // survivor simultaneously and crowned a corpse; someone must WIN the fight
-      { wait: 20, shrink: 45, radiusFrac: 0.012, dps: 12 },
+      { wait: 0, shrink: 65, radiusFrac: 0.012, dps: 12 },
     ],
     quick: [
       { wait: 30, shrink: 35, radiusFrac: 0.28, dps: 2 },

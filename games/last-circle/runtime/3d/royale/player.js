@@ -971,6 +971,10 @@ function stepActor(W, a, dt, far) {
   // drink. Sprint is gated here rather than by clearing inp.sprint, so the
   // sprint TOGGLE latch survives the heal — you are not silently un-toggled and
   // left walking once the medkit finishes.
+  // ADS hold-time: the sniper's scope (camera + overlay + accuracy bonus) gates
+  // on this rather than snapping on the first RMB frame. Accrued here so bots
+  // pay the same scope-in the player does.
+  a._adsT = inp.ads ? (a._adsT || 0) + dt : 0;
   const healingNow = !!a.healing;
   // ── stamina ───────────────────────────────────────────────────────────────
   // Applies to every actor, so bots pay the same price the player does and a
@@ -1385,7 +1389,8 @@ function updateCamera(W, dt) {
   }
   W._camFocus = focus;
   const ads = focus.input.ads && focus.weapon && K.WEAPONS[focus.weapon.id] && !K.WEAPONS[focus.weapon.id].harvest;
-  const scope = ads && K.WEAPONS[focus.weapon.id] && K.WEAPONS[focus.weapon.id].scope;
+  const _wdef = K.WEAPONS[focus.weapon.id];
+  const scope = ads && _wdef && _wdef.scope && (focus._adsT || 0) >= (_wdef.adsTimeS || 0);
   // FIRST-PERSON down the scope: your own body must not block the shot
   // (owner: "when sniping im in the way of the cursor and can see myself")
   const firstPerson = scope;

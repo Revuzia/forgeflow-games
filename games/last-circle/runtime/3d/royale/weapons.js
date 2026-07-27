@@ -197,7 +197,11 @@ function equipSlot(W, a, idx) {
   const prev = a.weapon;
   if (prev && prev.slotRef) prev.slotRef.cd = Math.max(0, prev.cd || 0);
   const carry = prev ? Math.max(0, prev.cd || 0) : 0;
-  const startCd = Math.max(carry, Math.max(0, slot.cd || 0));
+  // READY DELAY: both benchmarks charge one and we charged none — PUBG lists
+  // a 400-500ms Ready Delay on every weapon page fetched, and Fortnite added
+  // equip times for the same anti-swap-cheese reason (COMBAT_CALIBRATION.md).
+  // Applies to spawns, pickups and swaps alike; bots inherit it automatically.
+  const startCd = Math.max(carry, Math.max(0, slot.cd || 0), 0.4);
   inv.active = idx;
   if (slot.kind === "weapon") {
     a.weapon = { id: slot.id, rarity: slot.rarity || 0, magAmmo: slot.mag != null ? slot.mag : 0, state: "ready", cd: startCd, reloadT: 0, slotRef: slot };
@@ -410,7 +414,9 @@ function fire(W, a, def) {
   // spread: one shared model (sim.effectiveSpread) so the crosshair can draw the
   // SAME number this fires with — it used to guess with a cruder formula
   const spread = K.effectiveSpread(a.weapon.id, a.weapon.rarity, {
-    ads: !!a.input.ads,
+    // the ADS accuracy bonus is EARNED at adsTimeS, not on the frame RMB lands —
+    // player.js accrues a._adsT while ads is held (bots included)
+    ads: !!a.input.ads && (a._adsT || 0) >= (def.adsTimeS || 0),
     speed: Math.hypot(a.vel.x, a.vel.z),
     airborne: !a.onGround,
     crouching: !!a.crouching,
