@@ -50,9 +50,20 @@ const CUE = {
   coin: ["coin"],
   equip: ["equip"],
   effort: ["vo_effort_1", "vo_effort_2", "vo_effort_3", "vo_effort_4"],
+  // NOTE: DRY_CUES below excludes the UI cues from the arena reverb.
   hurt: ["vo_hurt_1", "vo_hurt_2", "vo_hurt_3", "vo_hurt_4"],
   death: ["vo_death_1", "vo_death_2", "vo_death_3", "vo_death_4"],
 };
+/**
+ * Cues that must NOT be sent to the arena reverb.
+ *
+ * The convolver models an 87 x 55 m stone bowl. That is right for anything
+ * happening ON the sand and wrong for anything happening in the player's
+ * interface — a menu click with a 2.6 s tail sounds like the UI is being
+ * operated from inside the building.
+ */
+const DRY_CUES = new Set(["click", "confirm", "back", "coin", "equip"]);
+
 
 export class Audio {
   constructor({ base = "assets/audio", volumes = null } = {}) {
@@ -91,7 +102,18 @@ export class Audio {
 
     this.master = this.ctx.createGain();
     this.master.gain.value = this.volumes.master;
-    this.master.connect(this.ctx.destination);
+
+    // A limiter on the master. Peaks were running hot — the verdict fanfare
+    // stacked over a crowd surge clips a naive chain — and clipping in a
+    // browser is a nasty crackle rather than a warm squash.
+    this.limiter = this.ctx.createDynamicsCompressor();
+    this.limiter.threshold.value = -3.0;
+    this.limiter.knee.value = 0.0;
+    this.limiter.ratio.value = 20.0;   // brick wall
+    this.limiter.attack.value = 0.003;
+    this.limiter.release.value = 0.18;
+    this.master.connect(this.limiter);
+    this.limiter.connect(this.ctx.destination);
 
     this.bus = {};
     for (const b of ["music", "sfx", "crowd", "voice"]) {
@@ -100,6 +122,8 @@ export class Audio {
       g.connect(this.master);
       this.bus[b] = g;
     }
+
+    this._buildReverb();
 
     this.crowd = new CrowdVoice(this.ctx, this.bus.crowd);
     this.unlocked = true;
@@ -132,6 +156,84 @@ export class Audio {
       if (onProgress) onProgress((loaded + failed) / SFX.length);
     }));
     return { loaded, failed };
+  }
+
+  /**
+   * Convolution reverb for the bowl, with the impulse response SYNTHESISED
+   * rather than shipped.
+   *
+   * The game was bone dry. Every sword hit, every footfall and every shout
+   * landed as if it happened in a padded room, inside an 87 x 55 m stone
+   * ellipse walled by four tiers of travertine — the one acoustic fact a
+   * player would notice without being able to name it.
+   *
+   * Generating the IR beats shipping one on every axis that matters here: a
+   * decent hall IR is 200-500 KB of WAV, it would need a licence entry, and a
+   * generated one can be DERIVED FROM THE ARENA'S OWN DIMENSIONS. The model:
+   *
+   *  - Predelay from the real geometry. The near cavea wall is ~27 m off the
+   *    centre of the sand, so the first reflection arrives at 2 x 27 / 343 =
+   *    ~157 ms. That gap is what makes a space read as large rather than
+   *    merely wet.
+   *  - A handful of discrete early reflections at the ellipse's major and
+   *    minor axis distances, because an ellipse has strong specular returns
+   *    that a pure noise tail does not reproduce.
+   *  - An exponentially decaying noise tail, RT60 ~2.6 s. Stone is
+   *    reflective, but 40,000 bodies and a sand floor absorb enormously — a
+   *    bare stone bowl would ring for 6 s and be unlistenable under gameplay.
+   *  - Low-passed progressively through the tail, since air and soft bodies
+   *    eat high frequencies faster than lows. Without this the tail hisses.
+   *  - Decorrelated L/R so it images wide instead of collapsing to a point.
+   */
+  _buildReverb() {
+    try {
+      const ctx = this.ctx;
+      const sr = ctx.sampleRate;
+      const rt60 = 2.6;
+      const preDelay = 0.157;                      // 2 x 27 m / 343 m/s
+      const len = Math.floor(sr * (preDelay + rt60));
+      const ir = ctx.createBuffer(2, len, sr);
+      const pre = Math.floor(sr * preDelay);
+
+      // Early reflections: distance in metres -> delay, amplitude by 1/r.
+      const early = [27, 34, 43.5, 55, 62, 78];
+
+      for (let ch = 0; ch < 2; ch++) {
+        const d = ir.getChannelData(ch);
+        let lp = 0;
+        for (let i = pre; i < len; i++) {
+          const t = (i - pre) / sr;
+          // -60 dB over rt60 seconds.
+          const env = Math.pow(10, (-3 * t) / rt60);
+          const white = Math.random() * 2 - 1;
+          // Progressive low-pass: coefficient tightens as the tail ages.
+          const a = 0.30 - 0.22 * Math.min(1, t / rt60);
+          lp += a * (white - lp);
+          d[i] = lp * env;
+        }
+        for (const metres of early) {
+          // Slight per-channel offset decorrelates the image.
+          const idx = Math.floor((2 * metres / 343) * sr) + pre + (ch ? 61 : 0);
+          if (idx < len) d[idx] += (ch ? -0.55 : 0.55) / (metres / 27);
+        }
+      }
+
+      this.convolver = ctx.createConvolver();
+      this.convolver.buffer = ir;
+      this.reverbSend = ctx.createGain();
+      this.reverbSend.gain.value = 0.34;          // wet trim
+      this.reverbSend.connect(this.convolver);
+      // Post-master so the wet path is limited alongside the dry.
+      this.convolver.connect(this.master);
+      this.reverbTailSeconds = rt60;
+      return true;
+    } catch (e) {
+      // No reverb is survivable; a dead AudioContext is not.
+      console.warn("[audio] reverb unavailable:", e && e.message);
+      this.convolver = null;
+      this.reverbSend = null;
+      return false;
+    }
   }
 
   setVolume(bus, v) {
@@ -185,7 +287,23 @@ export class Audio {
 
     g.gain.value = clamp(gain, 0, 2);
     src.connect(g);
-    node.connect(this.bus[opts.bus || (cue.startsWith("vo_") || ["effort", "hurt", "death"].includes(cue) ? "voice" : "sfx")]);
+    const busName = opts.bus || (cue.startsWith("vo_") || ["effort", "hurt", "death"].includes(cue) ? "voice" : "sfx");
+    node.connect(this.bus[busName]);
+
+    // Reverb send. The wet/dry ratio rises with distance, which is what
+    // actually communicates depth: a blow at your feet is nearly dry, the same
+    // blow across the sand is mostly the bowl answering it. `dry: true` opts a
+    // cue out entirely — UI clicks must not sound like they happen in a
+    // cathedral.
+    if (this.reverbSend && !opts.dry && !DRY_CUES.has(cue)) {
+      const dist = (opts.x !== undefined && opts.z !== undefined)
+        ? Math.hypot(opts.x - this.listener.x, opts.z - this.listener.z) : 8;
+      const wet = clamp(0.16 + dist * 0.020, 0.16, 0.62) * (opts.wet ?? 1);
+      const sendGain = this.ctx.createGain();
+      sendGain.gain.value = clamp(gain, 0, 2) * wet;
+      node.connect(sendGain);
+      sendGain.connect(this.reverbSend);
+    }
     src.start();
     return src;
   }

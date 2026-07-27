@@ -596,7 +596,10 @@ function stepSim(dt) {
     match.update(dt, cmd);
     input.consume();
 
-    bout.update(dt);
+    // The sim scales its own step during a kill; the view has to move at the
+    // same rate or bodies sprint through a slow-motion death.
+    const simScale = match.combat.slowMo > 0 ? match.combat.slowMoScale : 1;
+    bout.update(dt, simScale);
     if (match.state === "exit") bout.dragCorpses(dt, gates.entryPoint("libitinaria", 2.0));
     crowd.lookAt(new THREE.Vector3(p ? p.x : 0, 1, p ? p.z : 0));
     hud.update(match.hudState(), dt);
@@ -613,7 +616,9 @@ function stepSim(dt) {
     if (actors.beast) actors.beast.update(dt, actors.beast.speed);
   }
 
-  vfx.update(dt);
+  // Particles ride the same clock as the bodies — blood hanging in the air at
+  // full speed during a slow-motion kill is the tell that breaks the shot.
+  vfx.update(dt * (match && match.combat.slowMo > 0 ? match.combat.slowMoScale : 1));
   // Gate and lift events are the cues the audio and crowd systems react to
   // (horn on gate-start, roar on cage-release), so they are dispatched here
   // rather than polled.

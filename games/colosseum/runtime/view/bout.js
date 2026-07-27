@@ -113,7 +113,16 @@ export class BoutView {
 
   // -- per-frame ------------------------------------------------------------
 
-  update(dt) {
+  /**
+   * @param {number} dt        real seconds
+   * @param {number} timeScale sim time-scale (kill slow-motion). The sim has
+   *   ALREADY scaled its own step by this; the mixer had not, so during the
+   *   1.05 s slow-motion the sim ran at 0.35x while every body animated at
+   *   1.0x — a 2.9x desync at the exact moment the camera drops to 1.9 m to
+   *   watch the kill. Both of the game's impact features were implemented and
+   *   invisible.
+   */
+  update(dt, timeScale = 1) {
     for (const rec of this.actors.values()) {
       const f = rec.fighter;
       const a = rec.actor;
@@ -124,7 +133,12 @@ export class BoutView {
       a.speed = f.speed;
 
       this._driveAnimation(rec, dt);
-      a.update(dt, f.speed);
+      // A fighter in hit-stop is FROZEN in the sim (combat.js:218 returns
+      // early with speed 0). Freezing the mixer too is what turns a hit from
+      // a number into a felt impact — 0.04 rather than 0 so the pose still
+      // settles a hair instead of hard-locking, which reads as a dropped frame.
+      const ts = (f.hitStop > 0 ? 0.04 : 1) * timeScale;
+      a.update(dt * ts, f.speed);
     }
   }
 
