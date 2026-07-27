@@ -100,7 +100,17 @@ export const POSES = {
   relax: [[-0.28, -1, 0.02], [-0.1, -1, 0.06], [0.28, -1, 0.02], [0.1, -1, 0.06]],
   // two-handed gun at chest: right forearm forward (gun points +Z), left hand
   // reaches to the weapon's fore-end
-  gunReady: [[-0.22, -0.85, 0.42], [-0.06, 0.1, 0.99], [0.3, -0.8, 0.42], [-0.42, 0.16, 0.88]],
+  // rArm was [-0.22,-0.85,0.42]: the firing elbow floated forward and away from
+  // the ribs, which held the weapon at arm's length — measured, the right hand
+  // sat 0.628 m from the LEFT shoulder while that arm is only 0.558 m long, so
+  // the support hand could not reach the handguard at all and hung in mid-air.
+  // Tucking the elbow toward the side (the real rifle carry: stock in the
+  // shoulder pocket, weapon close to the chest) pulls the hand to 0.579 m and
+  // makes a natural 50%-along grip point reachable. Measured across candidates:
+  //   [-0.22,-0.85,0.42] -> 0.628 m, only 35% along reachable
+  //   [-0.14,-0.97,0.18] -> 0.579 m, 50% along reachable   <- chosen
+  //   [-0.10,-0.99,0.08] -> 0.557 m, 55% (elbow pinned vertical, reads stiff)
+  gunReady: [[-0.14, -0.97, 0.18], [-0.06, 0.1, 0.99], [0.3, -0.8, 0.42], [-0.42, 0.16, 0.88]],
   // relaxed carry OUT of combat: gun lowered ~30° muzzle-down, both hands still on it
   // (snaps up to gunReady on ADS/fire) — 50 actors all holding a rigid ready-pose read robotic
   lowReady: [[-0.2, -0.92, 0.30], [-0.05, -0.52, 0.85], [0.26, -0.86, 0.32], [-0.34, -0.42, 0.83]],
@@ -148,6 +158,7 @@ const _ikA = new THREE.Vector3(), _ikB = new THREE.Vector3(), _ikC = new THREE.V
 const _ikAB = new THREE.Vector3(), _ikCB = new THREE.Vector3(), _ikAC = new THREE.Vector3();
 const _ikAT = new THREE.Vector3(), _ikAxis = new THREE.Vector3();
 const _ikQ = new THREE.Quaternion(), _ikPW = new THREE.Quaternion(), _ikBW = new THREE.Quaternion();
+const _IDENT = new THREE.Quaternion();   // hoisted: the blend<1 path slerps toward it
 
 /** Rotate a bone by a world-space quaternion, converting into its parent space. */
 function rotateBoneWorld(bone, worldQ) {
@@ -215,7 +226,6 @@ export function twoBoneIK(root, mid, tip, target, blend) {
   tip.getWorldPosition(_ikC);
   return _ikC.distanceTo(target);
 }
-const _IDENT = new THREE.Quaternion();
 
 /** ── AIM RIG ──────────────────────────────────────────────────────────────
  *  Replaces two hand-tuned spine gains with a sourced, clamped aim chain.

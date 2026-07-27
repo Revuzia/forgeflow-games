@@ -1283,22 +1283,26 @@ function syncObj(W, a, dt, far) {
         // local = inverse(parent world) * desired world; parent IS the hand bone
         a.hand.quaternion.copy(_gq.invert()).multiply(_gd);
       }
-      // ── SUPPORT HAND — DISABLED, NOT SHIPPED ────────────────────────────
-      // The two-bone IK solver (pose.js twoBoneIK) is correct and verified in
-      // isolation: driven directly it pulled the off hand from 0.511 m to
-      // 0.128 m of its target. But it cannot solve THIS pose, and the reason is
-      // structural rather than a bug in the solver:
-      //   left upper arm 0.277 m + forearm 0.281 m = 0.558 m of reach
-      //   foregrip sits                              0.613 m from that shoulder
-      // The firing pose holds the weapon further from the body than the off arm
-      // is long, so no IK can put the hand on it. Sliding the grip point back
-      // along the handguard did not rescue it either — it bottomed out at the
-      // receiver still short, and the elbow folded to 15.5 deg, well inside the
-      // 30 deg AAOS minimum, which looks worse than the original floating hand.
-      // The real fix is to bring the WEAPON closer to the chest in the gunReady
-      // arm pose so both hands can reach it, then re-enable this. Wiring it up
-      // against an unreachable target only trades one wrong pose for another.
-      // Solver retained in pose.js; re-enable once the pose is corrected.
+      // ── SUPPORT HAND — SOLVER READY, CALL DISABLED ───────────────────
+      // pose.js twoBoneIK is correct and PROVEN: invoked directly on this rig it
+      // moved the off hand 0.437 m and left a 0.066 m residual, i.e. the hand
+      // lands on the weapon. Wiring the same call into syncObj produced
+      // byte-identical frames — the hand never moved — so something later in the
+      // frame re-poses the arm and I have not yet identified what. Rather than
+      // ship an integration I cannot demonstrate, the call stays out.
+      //
+      // Groundwork that IS in place and verified:
+      //   • gunReady firing elbow tucked (pose.js): right hand 0.628 -> 0.579 m
+      //     from the left shoulder, which moves a natural 50%-along grip point
+      //     inside the 0.558 m arm envelope for the first time.
+      //   • foregrip measured in HOLDER space, not mesh space (that bug put the
+      //     target at z +0.039 instead of -0.058).
+      //   • updateWorldMatrix(true, TRUE) so the tip is resampled after the elbow
+      //     rotates, instead of reading last frame's position.
+      //   • _IDENT hoisted above twoBoneIK so the blend<1 path cannot depend on
+      //     declaration order.
+      // Next step is to find the writer that runs after syncObj and clobbers the
+      // arm, then re-enable this single call.
     }
   }
 }
