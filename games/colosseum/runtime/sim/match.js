@@ -71,6 +71,22 @@ export class Match {
   // -- setup ---------------------------------------------------------------
 
   /**
+   * The opponents this card fields, as a flat spec list.
+   *
+   * A ladder entry can name its enemy two ways: `opponents: [{armatura}]`, or a
+   * top-level `champion: "flamma"` shorthand. Every consumer MUST read them
+   * through here. Spawning and body-preloading each used to derive the list
+   * themselves and disagreed — `start()` read only `opponents`, so all six
+   * champion bouts spawned an empty arena and auto-won.
+   */
+  _opponentSpecs() {
+    const d = this.def;
+    const specs = (d.opponents || []).slice();
+    if (d.champion) specs.unshift({ champion: d.champion });
+    return specs;
+  }
+
+  /**
    * Which armatura bodies this card needs. The view preloads exactly these
    * rather than all eight — a 1v1 should not pay for six unused bodies.
    */
@@ -79,13 +95,15 @@ export class Match {
     const ids = new Set();
     const arm = this.inv && this.inv.matchedArmatura();
     ids.add(arm ? arm.id : "murmillo");
-    for (const s of d.opponents || []) if (s.armatura) ids.add(s.armatura);
+    for (const s of this._opponentSpecs()) {
+      if (s.armatura) ids.add(s.armatura);
+      if (s.champion) {
+        const c = CHAMPIONS.find((x) => x.id === s.champion);
+        if (c) ids.add(c.armatura);
+      }
+    }
     for (const s of d.allies || (d.ally ? [d.ally] : [])) if (s.armatura) ids.add(s.armatura);
     if (d.tertiarius && d.tertiarius.armatura) ids.add(d.tertiarius.armatura);
-    if (d.champion) {
-      const c = CHAMPIONS.find((x) => x.id === d.champion);
-      if (c) ids.add(c.armatura);
-    }
     // Survival waves draw from a fixed pool.
     if (d.type === "survival") ["thraex", "murmillo", "hoplomachus", "dimachaerus"].forEach((x) => ids.add(x));
     return [...ids];
@@ -184,7 +202,7 @@ export class Match {
       return f;
     };
 
-    (d.opponents || []).forEach((spec, i) => enroll(this._makeOpponent(spec, i, 1), "opponent"));
+    this._opponentSpecs().forEach((spec, i) => enroll(this._makeOpponent(spec, i, 1), "opponent"));
     (d.beasts || []).forEach((b, i) => enroll(this._makeBeast(b, i), "beast"));
 
     // Allies fight on the player's side (2v2 and team munera).

@@ -76,16 +76,27 @@ ok(!dmgEarly, "no damage is dealt during ENTRY or SALUTE");
 console.log("\n-- every ladder entry resolves --");
 const byType = {};
 let stalls = 0;
+let empty = 0;
 for (const def of LADDER) {
   const r = runMatch(def, { seed: def.index * 13 + 1 });
   const done = r.m.state === STATE.DONE;
   if (!done) { stalls++; console.log(`  STALL: ${def.id} ${def.name} (${def.type}) after ${r.t}s`); }
-  byType[def.type] = byType[def.type] || { n: 0, won: 0 };
+  // An EMPTY arena is not a pass. All six champion bouts once spawned nobody
+  // and the player auto-won in 13s; `stalls === 0` was green throughout,
+  // because an empty bout resolves FASTER than a real one. Resolving is not
+  // the property that matters — having an enemy to resolve against is.
+  const hostiles = r.m.spawned.filter((s) => s.role === "opponent" || s.role === "beast").length;
+  if (hostiles < 1) { empty++; console.log(`  EMPTY: ${def.id} ${def.name} (${def.type}) spawned 0 hostiles`); }
+  byType[def.type] = byType[def.type] || { n: 0, won: 0, minHostiles: Infinity };
   byType[def.type].n++;
+  byType[def.type].minHostiles = Math.min(byType[def.type].minHostiles, hostiles);
   if (r.m.result && r.m.result.playerWon) byType[def.type].won++;
 }
-for (const [k, v] of Object.entries(byType)) console.log(`  ${k.padEnd(13)} ${v.n} run, player won ${v.won}`);
+for (const [k, v] of Object.entries(byType)) {
+  console.log(`  ${k.padEnd(13)} ${v.n} run, player won ${v.won}, min hostiles ${v.minHostiles}`);
+}
 ok(stalls === 0, `every one of the ${LADDER.length} ladder matches resolves (stalls: ${stalls})`);
+ok(empty === 0, `every one of the ${LADDER.length} ladder matches spawns at least one hostile (empty: ${empty})`);
 ok(Object.keys(byType).length >= 8, "the ladder exercises at least 8 distinct match types");
 
 // --- 3. multi-combatant types actually spawn everyone -----------------------
