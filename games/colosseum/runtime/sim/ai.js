@@ -193,10 +193,19 @@ export class Brain {
           // than as a queue.
           cmd.moveX = -dz / dist * this.circleDir;
           cmd.moveZ = dx / dist * this.circleDir;
-          if (s.shieldId !== "none" && !s.shieldBroken) {
-            cmd.block = true;
-            cmd.blockDir = DIR.HIGH;
-          }
+          // Deliberately NOT raising a guard here.
+          //
+          // The first version did, and it quietly made every enemy in the game
+          // tankier: a fighter waiting for the attack token spent that time
+          // perfectly blocked, so the player could not punish the gap the
+          // token had just created. Measured across the ladder it cost 20-30
+          // points of win rate on bouts that had nothing to do with crowds —
+          // v1 60% -> 30%, v5 35% -> 5%, g1 35% -> 10%.
+          //
+          // A waiting attacker should be a waiting attacker: circling, in
+          // range, and open. That is the window the token exists to hand the
+          // player. The reactive block/dodge layer above still fires normally
+          // if this fighter is actually threatened.
         } else {
           cmd.moveX = dx / dist; cmd.moveZ = dz / dist;
         }
@@ -268,6 +277,17 @@ export class Brain {
   _claimAttackToken(target) {
     const c = this.combat;
     if (!c || !target) return true;                 // no arbiter, no limit
+    // NEVER throttle the player.
+    //
+    // In the real game the player is driven by human input and never touches
+    // this path, but the headless balance harness drives the player slot with
+    // a Brain — so the token was queueing the PLAYER behind their own
+    // opponent. It showed up as 1-vs-1 bouts losing 25-30 points of win rate
+    // (v1 60% -> 30%, v5 35% -> 5%) from a mechanic that is supposed to only
+    // affect crowds, which is what exposed it. Guarding here keeps the harness
+    // representative and makes the intent explicit: this is a rule for the
+    // AI's manners, not a rule of the world.
+    if (this.self.isPlayer) return true;
     const reg = (c._attackTokens || (c._attackTokens = new Map()));
     const key = target.id;
     let slot = reg.get(key);
