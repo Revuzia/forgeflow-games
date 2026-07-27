@@ -174,7 +174,7 @@ export class Brain {
 
     switch (d.kind) {
       case "attack": {
-        if (dist <= reach * 0.95) {
+        if (dist <= reach * 0.95 && this._claimAttackToken(t)) {
           cmd.attack = true;
           cmd.attackDir = d.dir;
           // A BEAST COMMITS. It does not strike from the edge of its reach and
@@ -186,6 +186,17 @@ export class Brain {
           // kited forever. Measured: the murmillo spent 0 of 1362 ticks in
           // range and dealt 0 damage across a full bout.
           if (s.isBeast) { cmd.moveX = dx / dist; cmd.moveZ = dz / dist; }
+        } else if (dist <= reach * 0.95) {
+          // In range but holding — someone else has the token. Circle and
+          // keep the guard up rather than shuffling into the target's back,
+          // which is what makes a waiting attacker read as a threat rather
+          // than as a queue.
+          cmd.moveX = -dz / dist * this.circleDir;
+          cmd.moveZ = dx / dist * this.circleDir;
+          if (s.shieldId !== "none" && !s.shieldBroken) {
+            cmd.block = true;
+            cmd.blockDir = DIR.HIGH;
+          }
         } else {
           cmd.moveX = dx / dist; cmd.moveZ = dz / dist;
         }
@@ -223,6 +234,78 @@ export class Brain {
   }
 
   /** Score the options and latch the best. */
+  /**
+   * The attack token — how a crowd of enemies stops being a firing squad.
+   *
+   * Every brain decided independently, so everyone who was in range swung at
+   * the same moment. A defender can face and block exactly ONE direction, so
+   * the second simultaneous attacker was unblockable by construction and the
+   * third and fourth were free damage. Measured across 5 seeds each with a
+   * fully-kitted veteranus player:
+   *
+   *   bout                foes  won   max simultaneous attackers  damage taken
+   *   t2  First Sand        1    4/5            1                      35
+   *   v2  Two Against One   2    0/5            2                     103
+   *   p1  Troupe            3    1/5            3                      90
+   *   c3  The Great Munus   4    0/5            3        100, and only 59
+   *                                                      player swings — the
+   *                                                      player was locked down
+   *
+   * Six ladder bouts sat at a flat 0% win rate and every one of them was
+   * multi-opponent or survival. This is not a tuning problem; a 1-vs-4 where
+   * all four commit at once has no counterplay at any skill level.
+   *
+   * The fix is the one every AAA melee game uses — Arkham, Shadow of Mordor,
+   * Assassin's Creed all do it: only a limited number of attackers may commit
+   * at a time. The rest circle and posture, which is also what a real group
+   * does, because four men with swords do not all step in together either.
+   *
+   * The token lives on the shared Combat object and is keyed by TARGET, so
+   * pressure on the player is capped while two AI allies fighting each other
+   * elsewhere are unaffected. Determinism is preserved: the registry is only
+   * written from brain updates, which already run in a fixed order.
+   */
+  _claimAttackToken(target) {
+    const c = this.combat;
+    if (!c || !target) return true;                 // no arbiter, no limit
+    const reg = (c._attackTokens || (c._attackTokens = new Map()));
+    const key = target.id;
+    let slot = reg.get(key);
+    // Drop holders who died, disengaged, or finished their swing.
+    //
+    // The grace window is load-bearing. A brain claims the token and sets
+    // cmd.attack on THIS tick, but combat.js does not move the fighter into
+    // WINDUP until it processes that command on the NEXT tick. Filtering
+    // purely on phase therefore evicted every holder one tick after it
+    // claimed, freeing the slot instantly and letting all four enemies swing
+    // anyway — the cap measured as no cap at all.
+    const now = c.time || 0;
+    if (slot) {
+      slot.holders = slot.holders.filter((h) => {
+        const f = c.fighters.find((x) => x.id === h.id);
+        if (!f || !f.alive) return false;
+        if (now - h.t < 0.35) return true;                    // just claimed
+        return f.phase === PHASE.WINDUP || f.phase === PHASE.ACTIVE;
+      });
+    } else {
+      slot = { holders: [] };
+      reg.set(key, slot);
+    }
+    if (slot.holders.some((h) => h.id === this.self.id)) return true;   // already swinging
+
+    // How many may commit at once, by how many are actually engaged. One
+    // attacker for a duel or a pair; two once it is a real melee, so a crowd
+    // still feels dangerous without being unanswerable.
+    const engaged = c.fighters.filter(
+      (f) => f.alive && f.team !== target.team && f.team !== undefined
+    ).length;
+    const cap = engaged >= 3 ? 2 : 1;
+
+    if (slot.holders.length >= cap) return false;   // wait your turn — circle
+    slot.holders.push({ id: this.self.id, t: now });
+    return true;
+  }
+
   _decide(t, dist) {
     const s = this.self;
     const sk = this.skill;
