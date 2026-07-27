@@ -63,6 +63,196 @@ export function parseGLB(file) {
 }
 
 // ---------------------------------------------------------------------------
+// Merge — collapse an N-primitive mesh to ONE
+// ---------------------------------------------------------------------------
+
+const COMP = { 5120: Int8Array, 5121: Uint8Array, 5122: Int16Array, 5123: Uint16Array, 5125: Uint32Array, 5126: Float32Array };
+const NCOMP = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
+
+/** Read an accessor into a plain typed array, honouring bufferView byteStride. */
+function readAccessor(json, bin, index) {
+  const acc = json.accessors[index];
+  const TA = COMP[acc.componentType];
+  const n = NCOMP[acc.type];
+  const out = new TA(acc.count * n);
+  if (acc.bufferView === undefined) return out;         // sparse/zero-filled
+  const bv = json.bufferViews[acc.bufferView];
+  const base = (bv.byteOffset || 0) + (acc.byteOffset || 0);
+  const stride = bv.byteStride || n * TA.BYTES_PER_ELEMENT;
+  for (let i = 0; i < acc.count; i++) {
+    const src = new TA(bin.buffer, bin.byteOffset + base + i * stride, n);
+    out.set(src, i * n);
+  }
+  return out;
+}
+
+/**
+ * Merge every primitive of every mesh into a single primitive per mesh.
+ *
+ * Poly Pizza / Quaternius rigs arrive split one-primitive-per-material with no
+ * textures at all — the horse is 8 primitives purely because it has 8 flat
+ * colours. That is 8 draw calls for one animal. Since the colours are flat,
+ * they collapse into a COLOR_0 attribute with no loss, which is the same
+ * vertex-colour trick actors.js already uses to weld a gladius and a scutum
+ * down to one mesh each.
+ *
+ * JOINTS_n / WEIGHTS_n are carried through untouched and the skin is left
+ * alone, so the rig and every clip keep working — decimating or re-indexing a
+ * skinned mesh is what destroys weights, and we do neither.
+ */
+export function mergeGLB(inFile, outFile) {
+  const { json, bin } = parseGLB(inFile);
+  if (!bin) throw new Error(`${inFile}: no BIN chunk to merge`);
+
+  const chunks = [];          // Buffer pieces for the new BIN
+  let byteLen = 0;
+  const newViews = [];
+  const newAccessors = [];
+
+  const pushAccessor = (typedArray, componentType, type, extra = {}) => {
+    const buf = Buffer.from(typedArray.buffer, typedArray.byteOffset, typedArray.byteLength);
+    const pad = (4 - (byteLen % 4)) % 4;
+    if (pad) { chunks.push(Buffer.alloc(pad)); byteLen += pad; }
+    newViews.push({ buffer: 0, byteOffset: byteLen, byteLength: buf.length });
+    chunks.push(buf);
+    byteLen += buf.length;
+    newAccessors.push({
+      bufferView: newViews.length - 1, componentType, count: typedArray.length / NCOMP[type],
+      type, ...extra,
+    });
+    return newAccessors.length - 1;
+  };
+
+  let merged = 0;
+  const newMeshes = [];
+  for (const mesh of json.meshes || []) {
+    const prims = mesh.primitives || [];
+    // Only TRIANGLES with matching attribute sets can be concatenated.
+    const semantics = [...new Set(prims.flatMap((p) => Object.keys(p.attributes)))];
+    const uniform = prims.every((p) => (p.mode === undefined || p.mode === 4)
+      && semantics.every((s) => p.attributes[s] !== undefined));
+    if (prims.length <= 1 || !uniform) { newMeshes.push(mesh); continue; }
+
+    const acc = {};                       // semantic -> array of chunks
+    for (const s of semantics) acc[s] = [];
+    const colours = [];
+    const indices = [];
+    let vertexBase = 0;
+
+    for (const p of prims) {
+      const posCount = json.accessors[p.attributes.POSITION].count;
+      for (const s of semantics) acc[s].push(readAccessor(json, bin, p.attributes[s]));
+      // Bake this primitive's flat base colour into per-vertex colour.
+      const mat = p.material !== undefined ? (json.materials || [])[p.material] : null;
+      const bcf = (mat && mat.pbrMetallicRoughness && mat.pbrMetallicRoughness.baseColorFactor) || [1, 1, 1, 1];
+      for (let i = 0; i < posCount; i++) colours.push(bcf[0], bcf[1], bcf[2], bcf[3] === undefined ? 1 : bcf[3]);
+      // Concatenating vertices shifts every index by the running vertex count.
+      const idx = p.indices !== undefined
+        ? readAccessor(json, bin, p.indices)
+        : Uint32Array.from({ length: posCount }, (_, i) => i);
+      for (let i = 0; i < idx.length; i++) indices.push(idx[i] + vertexBase);
+      vertexBase += posCount;
+    }
+
+    const attributes = {};
+    for (const s of semantics) {
+      const src = json.accessors[prims[0].attributes[s]];
+      const TA = COMP[src.componentType];
+      const flat = new TA(acc[s].reduce((n, a) => n + a.length, 0));
+      let o = 0;
+      for (const a of acc[s]) { flat.set(a, o); o += a.length; }
+      const extra = {};
+      if (s === "POSITION") {                       // POSITION min/max are required
+        const n = 3, mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+        for (let i = 0; i < flat.length; i += n) {
+          for (let c = 0; c < n; c++) { mn[c] = Math.min(mn[c], flat[i + c]); mx[c] = Math.max(mx[c], flat[i + c]); }
+        }
+        extra.min = mn; extra.max = mx;
+      }
+      if (src.normalized) extra.normalized = true;
+      attributes[s] = pushAccessor(flat, src.componentType, src.type, extra);
+    }
+    attributes.COLOR_0 = pushAccessor(new Float32Array(colours), 5126, "VEC4");
+    // u16 overflows past 65,535 vertices; pick the width the data needs.
+    const wide = vertexBase > 65535;
+    const idxArr = wide ? new Uint32Array(indices) : new Uint16Array(indices);
+
+    newMeshes.push({
+      ...mesh,
+      primitives: [{ attributes, indices: pushAccessor(idxArr, wide ? 5125 : 5123, "SCALAR"), material: 0, mode: 4 }],
+    });
+    merged += prims.length;
+  }
+
+  // Mesh primitives are not the only things that index into `accessors`:
+  // skins[].inverseBindMatrices and every animation sampler's input/output do
+  // too. Rebuilding the accessor array without remapping those leaves them
+  // pointing at rewritten slots — which our own parser happily accepts and
+  // GLTFLoader rejects with "Cannot read properties of undefined". Carry each
+  // one across and record the new index.
+  const carried = new Map();                      // old accessor index -> new
+  const carry = (oldIndex) => {
+    if (oldIndex === undefined || oldIndex === null) return undefined;
+    if (carried.has(oldIndex)) return carried.get(oldIndex);
+    const src = json.accessors[oldIndex];
+    const data = readAccessor(json, bin, oldIndex);
+    const extra = {};
+    if (src.normalized) extra.normalized = true;
+    if (src.min) extra.min = src.min;
+    if (src.max) extra.max = src.max;
+    const idx = pushAccessor(data, src.componentType, src.type, extra);
+    carried.set(oldIndex, idx);
+    return idx;
+  };
+
+  const newSkins = (json.skins || []).map((s) => ({
+    ...s,
+    ...(s.inverseBindMatrices !== undefined ? { inverseBindMatrices: carry(s.inverseBindMatrices) } : {}),
+  }));
+  const newAnimations = (json.animations || []).map((a) => ({
+    ...a,
+    samplers: (a.samplers || []).map((sm) => ({ ...sm, input: carry(sm.input), output: carry(sm.output) })),
+  }));
+
+  const out = {
+    ...json, meshes: newMeshes, accessors: newAccessors, bufferViews: newViews,
+    skins: newSkins, animations: newAnimations,
+  };
+  out.materials = [{
+    name: "merged", doubleSided: true,
+    pbrMetallicRoughness: { baseColorFactor: [1, 1, 1, 1], metallicFactor: 0.0, roughnessFactor: 0.82 },
+  }];
+  delete out.textures; delete out.images; delete out.samplers;
+  const newBin = Buffer.concat(chunks);
+  out.buffers = [{ byteLength: newBin.length }];
+
+  writeGLB(outFile, out, newBin);
+  return { merged, primitives: newMeshes.reduce((n, m) => n + m.primitives.length, 0), bytes: fs.statSync(outFile).size };
+}
+
+/** Write { json, bin } back out as a valid GLB. */
+export function writeGLB(file, json, bin) {
+  const jsonBuf = Buffer.from(JSON.stringify(json), "utf8");
+  const jsonPad = (4 - (jsonBuf.length % 4)) % 4;
+  const jsonChunk = Buffer.concat([jsonBuf, Buffer.alloc(jsonPad, 0x20)]);   // pad with spaces
+  const binPad = (4 - (bin.length % 4)) % 4;
+  const binChunk = Buffer.concat([bin, Buffer.alloc(binPad, 0)]);
+  const total = 12 + 8 + jsonChunk.length + 8 + binChunk.length;
+  const head = Buffer.alloc(12);
+  head.writeUInt32LE(GLB_MAGIC, 0); head.writeUInt32LE(2, 4); head.writeUInt32LE(total, 8);
+  const jh = Buffer.alloc(8); jh.writeUInt32LE(jsonChunk.length, 0); jh.writeUInt32LE(CHUNK_JSON, 4);
+  const bh = Buffer.alloc(8); bh.writeUInt32LE(binChunk.length, 0); bh.writeUInt32LE(CHUNK_BIN, 4);
+  fs.writeFileSync(file, Buffer.concat([head, jh, jsonChunk, bh, binChunk]));
+}
+
+/** Drop animation clips by predicate — dedupes the `Armature|Foo` twins. */
+export function filterClips(json, keep) {
+  const anims = json.animations || [];
+  json.animations = anims.filter((a) => keep(a.name || ""));
+  return anims.length - json.animations.length;
+}
+
+// ---------------------------------------------------------------------------
 // Inventory
 // ---------------------------------------------------------------------------
 
@@ -248,6 +438,31 @@ if (cmd === "report") {
       );
     } catch (e) { console.log(`  !! ${f}: ${e.message}`); }
   }
+} else if (cmd === "merge") {
+  const [src, dst, ...rest] = args;
+  if (!src || !dst) { console.log("usage: merge <in.glb> <out.glb> [--drop-clip-prefix <str>]"); process.exit(2); }
+  const before = inventory(src);
+  const r = mergeGLB(src, dst);
+  // Optional clip pruning: exporters emit `Armature|Gallop` twins of every clip.
+  const pi = rest.indexOf("--drop-clip-prefix");
+  if (pi !== -1 && rest[pi + 1]) {
+    const { json, bin } = parseGLB(dst);
+    const dropped = filterClips(json, (n) => !n.startsWith(rest[pi + 1]));
+    writeGLB(dst, json, bin);
+    if (dropped) console.log(`  dropped ${dropped} clip(s) prefixed "${rest[pi + 1]}"`);
+  }
+  const after = inventory(dst);
+  console.log(`\nmerge ${before.name} -> ${path.basename(dst)}`);
+  console.log(`  primitives ${before.primitives} -> ${after.primitives}   (draw calls)`);
+  console.log(`  triangles  ${before.triangles} -> ${after.triangles}`);
+  console.log(`  clips      ${before.clipCount} -> ${after.clipCount}`);
+  console.log(`  joints     ${before.joints} -> ${after.joints}`);
+  console.log(`  size       ${before.mb} MB -> ${after.mb} MB`);
+  if (after.primitives !== 1) { console.log("  !! still more than one primitive"); process.exit(1); }
+  if (after.joints !== before.joints || after.triangles !== before.triangles) {
+    console.log("  !! rig or geometry changed — refusing to call this a success"); process.exit(1);
+  }
+  console.log("  OK — one draw call, rig and geometry intact.");
 } else if (cmd === "gate") {
   const dir = args[0] || "assets";
   const files = walkGLB(dir);
