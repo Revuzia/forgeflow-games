@@ -127,6 +127,24 @@ export class Match {
       weapon, shield, armour: training ? [] : lw.armour,
       hp: arm ? arm.hp : 105,
       x: -14, z: 0, facing: Math.PI / 2,
+      // THE ATTRIBUTES AND THE ENTIRE TRAINING GROUND WERE DOING NOTHING.
+      //
+      // Fighter takes a `mods` option and combat.js:95 reads it as
+      // `this.mods = mods || null`, feeding every derived number — damage,
+      // max hp, stamina pool and regen, move speed, dodge distance, attack
+      // windup, parry window. This call never passed it. Not once, for the
+      // whole life of the file.
+      //
+      // So Strength, Endurance, Agility and Skill were inert; the nine
+      // training regimens, the fatigue that follows you onto the sand, the
+      // rank-gated ceilings and the 2,535-XP cost of the last point all
+      // resolved to a multiplier of exactly 1.0. attributes.js:5 states the
+      // rule the system was built around — "no attribute may be cosmetic" —
+      // and every one of them was.
+      //
+      // inventory.mods() already returns exactly the struct Fighter wants,
+      // fatigue applied. It simply was never handed over.
+      mods: this.inv.mods ? this.inv.mods() : null,
     });
     f.isPlayer = true;
     // The player's BODY follows the kit they are wearing: assemble a murmillo's

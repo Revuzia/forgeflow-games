@@ -30,14 +30,36 @@ export const SLOT_ARMOUR = {
   torso: ["lorica"],
 };
 
-/** Rank ladder. Historically grounded: the palus system plus tiro/veteranus. */
+/**
+ * Rank ladder. Historically grounded: the palus system plus tiro/veteranus.
+ *
+ * THE THRESHOLDS USED TO EXCEED THE CONTENT. Legend required 36 wins and the
+ * ladder contains 25 bouts; Champion required 24 against 22 available by that
+ * point. The career could not be finished — not "was hard to finish", could
+ * not be finished — and menu.js disables the only route to the match list
+ * exactly when no uncompleted rank-eligible bout remains, which is precisely
+ * the state a player reaches at each of those walls.
+ *
+ * Bouts per rank are 4 / 5 / 5 / 4 / 4 / 3, so the cumulative supply is:
+ *
+ *   after tiro       4        gregarius needs  3   ok, 1 spare
+ *   after gregarius  9        veteranus needs  7   ok, 2 spare
+ *   after veteranus 14        primus    needs 12   ok, 2 spare
+ *   after primus    18        champion  needs 16   ok, 2 spare
+ *   after champion  22        legend    needs 20   ok, 2 spare
+ *   after legend    25
+ *
+ * Every threshold now sits at least two wins below the bouts available to
+ * reach it, so a player who drops a couple of fights still advances, and one
+ * who wins everything arrives at Legend with five bouts left to fight.
+ */
 export const RANKS = [
   { id: "tiro", name: "Tiro", title: "The Untried", minWins: 0, purse: 60, desc: "Your first sand. Nobody knows your name yet." },
   { id: "gregarius", name: "Gregarius", title: "Of the Crowd", minWins: 3, purse: 110, desc: "One of the many. You have survived enough to be counted." },
-  { id: "veteranus", name: "Veteranus", title: "The Proven", minWins: 8, purse: 190, desc: "You have lived through more bouts than most men see." },
-  { id: "primus", name: "Primus Palus", title: "First Sword", minWins: 15, purse: 320, desc: "The first stake of the ludus. The crowd shouts for you now." },
-  { id: "champion", name: "Champion", title: "Of the Flavian", minWins: 24, purse: 520, desc: "They paint your name on the walls of the city." },
-  { id: "legend", name: "Legend", title: "Immortal", minWins: 36, purse: 800, desc: "Emperors have watched you fight. The rudis is within reach." },
+  { id: "veteranus", name: "Veteranus", title: "The Proven", minWins: 7, purse: 190, desc: "You have lived through more bouts than most men see." },
+  { id: "primus", name: "Primus Palus", title: "First Sword", minWins: 12, purse: 320, desc: "The first stake of the ludus. The crowd shouts for you now." },
+  { id: "champion", name: "Champion", title: "Of the Flavian", minWins: 16, purse: 520, desc: "They paint your name on the walls of the city." },
+  { id: "legend", name: "Legend", title: "Immortal", minWins: 20, purse: 800, desc: "Emperors have watched you fight. The rudis is within reach." },
 ];
 
 /** Rank for a given win count. */
